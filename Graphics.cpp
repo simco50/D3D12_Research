@@ -4,6 +4,7 @@
 #include "LinearAllocator.h"
 #include "Timer.h"
 #include <map>
+#include <fstream>
 
 #pragma comment(lib, "dxguid.lib")
 
@@ -14,15 +15,15 @@ Graphics::Graphics(UINT width, UINT height, std::wstring name):
 {
 }
 
-void Graphics::Initialize()
+void Graphics::Initialize(Windows::UI::Core::CoreWindow^ window)
 {
-	MakeWindow();
-	InitD3D();
+	//MakeWindow();
+	InitD3D(window);
 	OnResize();
 
 	InitializeAssets();
 
-	//Game loop
+	/*//Game loop
 	MSG msg = {};
 	while (msg.message != WM_QUIT)
 	{
@@ -36,7 +37,7 @@ void Graphics::Initialize()
 			Update();
 			Render();
 		}
-	}
+	}*/
 	return;
 }
 
@@ -63,7 +64,7 @@ void Graphics::Update()
 
 	m_pCommandList->OMSetRenderTargets(1, &GetCurrentBackBufferView(), true, &GetDepthStencilView());
 
-	const float clearColor[] = { 0.4f, 0.4f, 0.4f, 1.0f };
+	const float clearColor[] = { 1.0f, 0.0f, 0.0f, 1.0f };
 	m_pCommandList->ClearRenderTargetView(GetCurrentBackBufferView(), clearColor, 0, nullptr);
 	m_pCommandList->ClearDepthStencilView(GetDepthStencilView(), D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, nullptr);
 	
@@ -134,7 +135,7 @@ D3D12_CPU_DESCRIPTOR_HANDLE Graphics::GetDepthStencilView() const
 	return m_pDsvHeap->GetCPUDescriptorHandleForHeapStart();
 }
 
-void Graphics::MakeWindow()
+/*void Graphics::MakeWindow()
 {
 	WNDCLASSW wc;
 
@@ -188,9 +189,9 @@ void Graphics::MakeWindow()
 	ShowWindow(m_Hwnd, SW_SHOWDEFAULT);
 	if (!UpdateWindow(m_Hwnd))
 		return;
-}
+}*/
 
-void Graphics::InitD3D()
+void Graphics::InitD3D(Windows::UI::Core::CoreWindow^ pWindow)
 {
 #ifdef _DEBUG
 	//Enable debug
@@ -226,7 +227,7 @@ void Graphics::InitD3D()
 		return;
 
 	CreateCommandObjects();
-	CreateSwapchain();
+	CreateSwapchain(pWindow);
 	CreateRtvAndDsvHeaps();
 }
 
@@ -249,30 +250,26 @@ void Graphics::CreateCommandObjects()
 	HR(m_pCommandList->Close());
 }
 
-void Graphics::CreateSwapchain()
+void Graphics::CreateSwapchain(Windows::UI::Core::CoreWindow^ pWindow)
 {
 	m_pSwapchain.Reset();
 
-	DXGI_SWAP_CHAIN_DESC swapchainDesc = {};
-	swapchainDesc.BufferDesc.Width = m_WindowWidth;
-	swapchainDesc.BufferDesc.Height = m_WindowHeight;
-	swapchainDesc.BufferDesc.RefreshRate.Denominator = 60;
-	swapchainDesc.BufferDesc.RefreshRate.Numerator = 1;
-	swapchainDesc.BufferDesc.Format = m_RenderTargetFormat;
-	swapchainDesc.BufferDesc.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED;
-	swapchainDesc.BufferDesc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
+	DXGI_SWAP_CHAIN_DESC1 swapchainDesc = {};
+	swapchainDesc.Width = m_WindowWidth;
+	swapchainDesc.Height = m_WindowHeight;
+	swapchainDesc.Format = m_RenderTargetFormat;
 	swapchainDesc.SampleDesc.Count = 1;
 	swapchainDesc.SampleDesc.Quality = 0;
 	swapchainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
 	swapchainDesc.BufferCount = FRAME_COUNT;
-	swapchainDesc.OutputWindow = m_Hwnd;
-	swapchainDesc.Windowed = true;
 	swapchainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
 	swapchainDesc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
 
-	HR(m_pFactory->CreateSwapChain(
+	HR(m_pFactory->CreateSwapChainForCoreWindow(
 		m_pCommandQueue.Get(),
+		reinterpret_cast<IUnknown*>(pWindow),
 		&swapchainDesc,
+		nullptr,
 		&m_pSwapchain));
 }
 
@@ -396,7 +393,7 @@ void Graphics::OnResize()
 	m_ScissorRect.bottom = m_WindowHeight;
 }
 
-LRESULT CALLBACK Graphics::WndProcStatic(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
+/*LRESULT CALLBACK Graphics::WndProcStatic(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	Graphics* pThis = nullptr;
 
@@ -493,7 +490,7 @@ LRESULT Graphics::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 
 	return DefWindowProc(hWnd, message, wParam, lParam);
-}
+}*/
 
 void Graphics::InitializeAssets()
 {
@@ -589,8 +586,10 @@ void Graphics::BuildShadersAndInputLayout()
 	UINT compileFlags = 0;
 #endif
 
+	std::string data = "cbuffer Data : register(b0) { float4 Color; } struct VSInput { float3 position : POSITION; float4 color : COLOR; }; struct PSInput { float4 position : SV_POSITION; float4 color : COLOR; }; PSInput VSMain(VSInput input) { PSInput result; result.position = float4(input.position, 1.0f); result.color = input.color; return result; } float4 PSMain(PSInput input) : SV_TARGET{ return input.color; }";
+
 	ComPtr<ID3DBlob> pErrorBlob;
-	D3DCompileFromFile(L"shaders.hlsl", nullptr, nullptr, "VSMain", "vs_5_0", compileFlags, 0, m_pVertexShaderCode.GetAddressOf(), pErrorBlob.GetAddressOf());
+	D3DCompile2(data.data(), data.size(), nullptr, nullptr, nullptr, "VSMain", "vs_5_0", compileFlags, 0, 0, nullptr, 0, m_pVertexShaderCode.GetAddressOf(), pErrorBlob.GetAddressOf());
 	if (pErrorBlob != nullptr)
 	{
 		wstring errorMsg = wstring((char*)pErrorBlob->GetBufferPointer(), (char*)pErrorBlob->GetBufferPointer() + pErrorBlob->GetBufferSize());
@@ -598,7 +597,7 @@ void Graphics::BuildShadersAndInputLayout()
 		return;
 	}
 	pErrorBlob.Reset();
-	D3DCompileFromFile(L"shaders.hlsl", nullptr, nullptr, "PSMain", "ps_5_0", compileFlags, 0, m_pPixelShaderCode.GetAddressOf(), pErrorBlob.GetAddressOf());
+	D3DCompile2(data.data(), data.size(), nullptr, nullptr, nullptr, "PSMain", "ps_5_0", compileFlags, 0, 0, nullptr, 0, m_pPixelShaderCode.GetAddressOf(), pErrorBlob.GetAddressOf());
 	if (pErrorBlob != nullptr)
 	{
 		wstring errorMsg = wstring((char*)pErrorBlob->GetBufferPointer(), (char*)pErrorBlob->GetBufferPointer() + pErrorBlob->GetBufferSize());

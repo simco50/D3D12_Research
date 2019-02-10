@@ -8,13 +8,14 @@ class Graphics
 public:
 	Graphics(UINT width, UINT height, std::wstring name);
 
-	virtual void Initialize();
+	virtual void Initialize(Windows::UI::Core::CoreWindow^ window);
 	virtual void Update();
 	virtual void Render();
 	virtual void Shutdown();
 
 	ID3D12Device* GetDevice() const { return m_pDevice.Get(); }
 	bool IsFenceComplete(const UINT64 fenceValue) const { return false; }
+	void OnResize();
 
 private:
 	static const UINT FRAME_COUNT = 2;
@@ -23,7 +24,7 @@ private:
 	D3D12_VIEWPORT m_Viewport;
 	D3D12_RECT m_ScissorRect;
 	ComPtr<IDXGIFactory4> m_pFactory;
-	ComPtr<IDXGISwapChain> m_pSwapchain;
+	ComPtr<IDXGISwapChain1> m_pSwapchain;
 	ComPtr<ID3D12Device> m_pDevice;
 	array<ComPtr<ID3D12Resource>, FRAME_COUNT> m_RenderTargets;
 	ComPtr<ID3D12Resource> m_pDepthStencilBuffer;
@@ -54,19 +55,18 @@ private:
 	unsigned int m_WindowWidth;
 	unsigned int m_WindowHeight;
 
-	void MakeWindow();
-	void InitD3D();
+	//void MakeWindow();
+	void InitD3D(Windows::UI::Core::CoreWindow^ pWindow);
 	void CreateCommandObjects();
-	void CreateSwapchain();
+	void CreateSwapchain(Windows::UI::Core::CoreWindow^ pWindow);
 	void CreateRtvAndDsvHeaps();
 	void WaitForGPU();
 
 	void MoveToNextFrame();
 
-	void OnResize();
 
-	static LRESULT CALLBACK WndProcStatic(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
-	LRESULT WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
+	//static LRESULT CALLBACK WndProcStatic(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
+	//LRESULT WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 	bool mMaximized = false;
 	bool mResizing = false;
 	bool mMinimized = false;

@@ -54,4 +54,7 @@
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
+  <ItemGroup>
+    <Xml Include="AppxManifest.xml" />
+  </ItemGroup>
 </Project>
