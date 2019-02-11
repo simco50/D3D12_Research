@@ -1,10 +1,10 @@
 #include "stdafx.h"
 #include "Graphics.h"
 #include "GpuResource.h"
-#include "LinearAllocator.h"
 #include "Timer.h"
 #include <map>
 #include <fstream>
+#include "CommandAllocatorPool.h"
 
 #pragma comment(lib, "dxguid.lib")
 
@@ -15,37 +15,24 @@ Graphics::Graphics(UINT width, UINT height, std::wstring name):
 {
 }
 
+Graphics::~Graphics()
+{
+}
+
 void Graphics::Initialize(Windows::UI::Core::CoreWindow^ window)
 {
-	//MakeWindow();
 	InitD3D(window);
-	OnResize();
+	OnResize(m_WindowWidth, m_WindowHeight);
 
 	InitializeAssets();
-
-	/*//Game loop
-	MSG msg = {};
-	while (msg.message != WM_QUIT)
-	{
-		if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE))
-		{
-			TranslateMessage(&msg);
-			DispatchMessage(&msg);
-		}
-		else
-		{
-			Update();
-			Render();
-		}
-	}*/
 	return;
 }
 
 void Graphics::Update()
 {
 	Timer(L"Update");
-	m_CommandAllocators[m_CurrentBackBufferIndex]->Reset();
-	m_pCommandList->Reset(m_CommandAllocators[m_CurrentBackBufferIndex].Get(), m_pPipelineStateObject.Get());
+	ID3D12CommandAllocator* pAllocator = m_AllocatorPool->GetAllocator(m_FenceValues[m_CurrentBackBufferIndex]);
+	m_pCommandList->Reset(pAllocator, m_pPipelineStateObject.Get());
 
 	m_pCommandList->SetGraphicsRootSignature(m_pRootSignature.Get());
 
@@ -80,6 +67,7 @@ void Graphics::Update()
 			D3D12_RESOURCE_STATE_PRESENT));
 
 	m_pCommandList->Close();
+	m_AllocatorPool->FreeAllocator(pAllocator, m_FenceValues[m_CurrentBackBufferIndex == 1 ? 0 : 1]);
 }
 
 void Graphics::CreateRtvAndDsvHeaps()
@@ -135,62 +123,6 @@ D3D12_CPU_DESCRIPTOR_HANDLE Graphics::GetDepthStencilView() const
 	return m_pDsvHeap->GetCPUDescriptorHandleForHeapStart();
 }
 
-/*void Graphics::MakeWindow()
-{
-	WNDCLASSW wc;
-
-	wc.hInstance = GetModuleHandle(0);
-	wc.cbClsExtra = 0;
-	wc.cbWndExtra = 0;
-	wc.hIcon = 0;
-	wc.hbrBackground = (HBRUSH)GetStockObject(WHITE_BRUSH);
-	wc.lpfnWndProc = WndProcStatic;
-	wc.style = CS_HREDRAW | CS_VREDRAW;
-	wc.lpszClassName = L"wndClass";
-	wc.lpszMenuName = nullptr;
-	wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
-
-	if (!RegisterClass(&wc))
-	{
-		auto error = GetLastError();
-		return;
-	}
-
-	int displayWidth = GetSystemMetrics(SM_CXSCREEN);
-	int displayHeight = GetSystemMetrics(SM_CYSCREEN);
-
-	DWORD windowStyle = WS_OVERLAPPEDWINDOW;
-
-	RECT windowRect = { 0, 0, (LONG)m_WindowWidth, (LONG)m_WindowHeight };
-	AdjustWindowRect(&windowRect, windowStyle, false);
-	unsigned int windowWidth = windowRect.right - windowRect.left;
-	unsigned int windowHeight = windowRect.bottom - windowRect.top;
-
-	int x = (displayWidth - windowWidth) / 2;
-	int y = (displayHeight - windowHeight) / 2;
-
-	m_Hwnd = CreateWindow(
-		L"wndClass",
-		L"Hello World",
-		windowStyle,
-		x,
-		y,
-		windowWidth,
-		windowHeight,
-		nullptr,
-		nullptr,
-		GetModuleHandle(0),
-		this
-	);
-
-	if (m_Hwnd == nullptr)
-		return;
-
-	ShowWindow(m_Hwnd, SW_SHOWDEFAULT);
-	if (!UpdateWindow(m_Hwnd))
-		return;
-}*/
-
 void Graphics::InitD3D(Windows::UI::Core::CoreWindow^ pWindow)
 {
 #ifdef _DEBUG
@@ -239,14 +171,10 @@ void Graphics::CreateCommandObjects()
 	queueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
 	HR(m_pDevice->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&m_pCommandQueue)));
 
-	//Create the command allocator
-	for (int i = 0; i < m_CommandAllocators.size(); ++i)
-	{
-		HR(m_pDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(m_CommandAllocators[i].GetAddressOf())));
-	}
+	m_AllocatorPool = std::make_unique<CommandAllocatorPool>(m_pDevice.Get(), D3D12_COMMAND_LIST_TYPE_DIRECT);
 
 	//Create the command list
-	m_pDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_CommandAllocators[m_CurrentBackBufferIndex].Get(), nullptr, IID_PPV_ARGS(m_pCommandList.GetAddressOf()));
+	m_pDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_AllocatorPool->GetAllocator(0), nullptr, IID_PPV_ARGS(m_pCommandList.GetAddressOf()));
 	HR(m_pCommandList->Close());
 }
 
@@ -265,12 +193,14 @@ void Graphics::CreateSwapchain(Windows::UI::Core::CoreWindow^ pWindow)
 	swapchainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
 	swapchainDesc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
 
+	ComPtr<IDXGISwapChain1> swapChain;
 	HR(m_pFactory->CreateSwapChainForCoreWindow(
 		m_pCommandQueue.Get(),
 		reinterpret_cast<IUnknown*>(pWindow),
 		&swapchainDesc,
 		nullptr,
-		&m_pSwapchain));
+		&swapChain));
+	swapChain.As(&m_pSwapchain);
 }
 
 void Graphics::WaitForGPU()
@@ -294,7 +224,7 @@ void Graphics::MoveToNextFrame()
 
 	m_pCommandQueue->Signal(m_pFence.Get(), currentFenceValue);
 
-	m_CurrentBackBufferIndex = (m_CurrentBackBufferIndex + 1) % 2;
+	m_CurrentBackBufferIndex = m_pSwapchain->GetCurrentBackBufferIndex();
 
 	if (m_pFence->GetCompletedValue() < m_FenceValues[m_CurrentBackBufferIndex])
 	{
@@ -311,10 +241,12 @@ void Graphics::MoveToNextFrame()
 	m_FenceValues[m_CurrentBackBufferIndex] = currentFenceValue + 1;
 }
 
-void Graphics::OnResize()
+void Graphics::OnResize(int width, int height)
 {
+	m_WindowWidth = width;
+	m_WindowHeight = height;
+
 	WaitForGPU();
-	m_pCommandList->Reset(m_CommandAllocators[m_CurrentBackBufferIndex].Get(), nullptr);
 
 	for (int i = 0; i < FRAME_COUNT; ++i)
 		m_RenderTargets[i].Reset();
@@ -366,6 +298,8 @@ void Graphics::OnResize()
 		IID_PPV_ARGS(&m_pDepthStencilBuffer)));
 	m_pDevice->CreateDepthStencilView(m_pDepthStencilBuffer.Get(), nullptr, GetDepthStencilView());
 
+	m_pCommandList->Reset(m_AllocatorPool->GetAllocator(m_FenceValues[m_CurrentBackBufferIndex]), nullptr);
+
 	m_pCommandList->ResourceBarrier(
 		1, 
 		&CD3DX12_RESOURCE_BARRIER::Transition(
@@ -393,108 +327,9 @@ void Graphics::OnResize()
 	m_ScissorRect.bottom = m_WindowHeight;
 }
 
-/*LRESULT CALLBACK Graphics::WndProcStatic(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
-{
-	Graphics* pThis = nullptr;
-
-	if (message == WM_NCCREATE)
-	{
-		pThis = static_cast<Graphics*>(reinterpret_cast<CREATESTRUCT*>(lParam)->lpCreateParams);
-		SetLastError(0);
-		if (!SetWindowLongPtr(hWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(pThis)))
-		{
-			if (GetLastError() != 0)
-				return 0;
-		}
-	}
-	else
-	{
-		pThis = reinterpret_cast<Graphics*>(GetWindowLongPtr(hWnd, GWLP_USERDATA));
-	}
-	if (pThis)
-	{
-		LRESULT callback = pThis->WndProc(hWnd, message, wParam, lParam);
-		return callback;
-	}
-	return DefWindowProc(hWnd, message, wParam, lParam);
-}
-
-LRESULT Graphics::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
-{
-	switch (message)
-	{
-		// WM_SIZE is sent when the user resizes the window.  
-	case WM_SIZE:
-		// Save the new client area dimensions.
-		m_WindowWidth = LOWORD(lParam);
-		m_WindowHeight = HIWORD(lParam);
-		if (m_pDevice)
-		{
-			if (wParam == SIZE_MINIMIZED)
-			{
-				mMinimized = true;
-				mMaximized = false;
-			}
-			else if (wParam == SIZE_MAXIMIZED)
-			{
-				mMinimized = false;
-				mMaximized = true;
-				OnResize();
-			}
-			else if (wParam == SIZE_RESTORED)
-			{
-
-				// Restoring from minimized state?
-				if (mMinimized)
-				{
-					mMinimized = false;
-					OnResize();
-				}
-
-				// Restoring from maximized state?
-				else if (mMaximized)
-				{
-					mMaximized = false;
-					OnResize();
-				}
-				else if (mResizing)
-				{
-					// If user is dragging the resize bars, we do not resize 
-					// the buffers here because as the user continuously 
-					// drags the resize bars, a stream of WM_SIZE messages are
-					// sent to the window, and it would be pointless (and slow)
-					// to resize for each WM_SIZE message received from dragging
-					// the resize bars.  So instead, we reset after the user is 
-					// done resizing the window and releases the resize bars, which 
-					// sends a WM_EXITSIZEMOVE message.
-				}
-				else // API call such as SetWindowPos or mSwapChain->SetFullscreenState.
-				{
-					OnResize();
-				}
-			}
-			return 0;
-		}
-	case WM_KEYUP:
-		if (wParam == VK_ESCAPE)
-		{
-			PostQuitMessage(0);
-		}
-		return 0;
-
-	// WM_DESTROY is sent when the window is being destroyed.
-	case WM_DESTROY:
-		PostQuitMessage(0);
-		return 0;
-	}
-
-
-	return DefWindowProc(hWnd, message, wParam, lParam);
-}*/
-
 void Graphics::InitializeAssets()
 {
-	m_pCommandList->Reset(m_CommandAllocators[m_CurrentBackBufferIndex].Get(), nullptr);
+	m_pCommandList->Reset(m_AllocatorPool->GetAllocator(m_FenceValues[m_CurrentBackBufferIndex]), nullptr);
 	BuildDescriptorHeaps();
 	BuildConstantBuffers();
 	BuildRootSignature();

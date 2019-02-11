@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:mp="http://schemas.microsoft.com/appx/2014/phone/manifest"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  IgnorableNamespaces="uap mp">
+  <Identity
+    Name="83A1EA0C-EFB5-12BE-B837-B61D240B0FEF"
+    Publisher="CN=Publisher"
+    Version="1.0.0.0" />
+  <mp:PhoneIdentity
+    PhoneProductId="83A1EA0C-EFB5-12BE-B837-B61D240B0FEF"
+    PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
+  <Properties>
+    <DisplayName>D3D12</DisplayName>
+    <PublisherDisplayName>PublisherDisplayName</PublisherDisplayName>
+    <Logo>D3D12\StoreLogo.png</Logo>
+    <Description>D3D12</Description>
+  </Properties>
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Universal" MinVersion="10.0.10069.0" MaxVersionTested="10.0.10069.0" />
+  </Dependencies>
+  <Resources>
+    <Resource Language="en-us"/>
+  </Resources>
+  <Applications>
+    <Application Id="App"
+      Executable="$targetnametoken$.exe"
+      EntryPoint="D3D12.App">
+      <uap:VisualElements
+        DisplayName="D3D12"
+        Square150x150Logo="D3D12\Logo.png"
+        Square44x44Logo="D3D12\SmallLogo.png"
+        Description="D3D12"
+        BackgroundColor="transparent">
+        <uap:SplashScreen Image="D3D12\SplashScreen.png" />
+      </uap:VisualElements>
+    </Application>
+  </Applications>
+</Package>

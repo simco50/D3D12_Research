@@ -1,12 +1,12 @@
 #pragma once
-#include "LinearAllocator.h"
 
-class UploadBuffer;
+class CommandAllocatorPool;
 
 class Graphics
 {
 public:
 	Graphics(UINT width, UINT height, std::wstring name);
+	~Graphics();
 
 	virtual void Initialize(Windows::UI::Core::CoreWindow^ window);
 	virtual void Update();
@@ -15,7 +15,7 @@ public:
 
 	ID3D12Device* GetDevice() const { return m_pDevice.Get(); }
 	bool IsFenceComplete(const UINT64 fenceValue) const { return false; }
-	void OnResize();
+	void OnResize(int width, int height);
 
 private:
 	static const UINT FRAME_COUNT = 2;
@@ -24,11 +24,11 @@ private:
 	D3D12_VIEWPORT m_Viewport;
 	D3D12_RECT m_ScissorRect;
 	ComPtr<IDXGIFactory4> m_pFactory;
-	ComPtr<IDXGISwapChain1> m_pSwapchain;
+	ComPtr<IDXGISwapChain3> m_pSwapchain;
 	ComPtr<ID3D12Device> m_pDevice;
 	array<ComPtr<ID3D12Resource>, FRAME_COUNT> m_RenderTargets;
 	ComPtr<ID3D12Resource> m_pDepthStencilBuffer;
-	array<ComPtr<ID3D12CommandAllocator>, FRAME_COUNT> m_CommandAllocators;
+	std::unique_ptr<CommandAllocatorPool> m_AllocatorPool;
 	ComPtr<ID3D12CommandQueue> m_pCommandQueue;
 
 	D3D12_CPU_DESCRIPTOR_HANDLE GetCurrentBackBufferView() const;
