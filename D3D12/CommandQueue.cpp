@@ -2,6 +2,44 @@
 #include "CommandQueue.h"
 #include "CommandAllocatorPool.h"
 
+CommandQueueManager::CommandQueueManager(ID3D12Device* pDevice)
+	: m_pDevice(pDevice)
+{
+	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_DIRECT] = std::make_unique<CommandQueue>(pDevice, CommandQueueType::Graphics);
+}
+
+CommandQueue* CommandQueueManager::GetMainCommandQueue() const
+{
+	return m_CommandQueues.at(D3D12_COMMAND_LIST_TYPE_DIRECT).get();
+}
+
+CommandContext* CommandQueueManager::AllocatorCommandList(D3D12_COMMAND_LIST_TYPE type)
+{
+	unsigned long long fenceValue = m_CommandQueues[type]->GetLastCompletedFence();
+	ID3D12CommandAllocator* pAllocator = m_CommandQueues[type]->GetAllocatorPool()->GetAllocator(fenceValue);
+	if (m_FreeCommandLists.size() > 0)
+	{
+		CommandContext* pCommandList = m_FreeCommandLists.front();
+		m_FreeCommandLists.pop();
+		pCommandList->pCommandList->Reset(pAllocator, nullptr);
+		pCommandList->pAllocator = pAllocator;
+		return pCommandList;
+	}
+	else
+	{
+		ID3D12CommandList* pCommandList;
+		m_pDevice->CreateCommandList(0, type, pAllocator, nullptr, IID_PPV_ARGS(&pCommandList));
+		std::unique_ptr<ID3D12GraphicsCommandList> pCmd = std::unique_ptr<ID3D12GraphicsCommandList>(static_cast<ID3D12GraphicsCommandList*>(pCommandList));
+		m_CommandListPool.push_back(CommandContext{ std::move(pCmd), pAllocator });
+		return &m_CommandListPool.back();
+	}
+}
+
+void CommandQueueManager::FreeCommandList(CommandContext* pCommandList)
+{
+	m_FreeCommandLists.push(pCommandList);
+}
+
 CommandQueue::CommandQueue(ID3D12Device* pDevice, CommandQueueType type)
 {
 	D3D12_COMMAND_QUEUE_DESC desc = {};
@@ -40,15 +78,15 @@ CommandQueue::~CommandQueue()
 	CloseHandle(m_pFenceEventHandle);
 }
 
-uint64 CommandQueue::ExecuteCommandList(ID3D12GraphicsCommandList* pCommandList)
+uint64 CommandQueue::ExecuteCommandList(CommandContext* pCommandList)
 {
-	HR(pCommandList->Close());
-	ID3D12CommandList* pCommandLists[] = { pCommandList };
+	HR(pCommandList->pCommandList->Close());
+	ID3D12CommandList* pCommandLists[] = { pCommandList->pCommandList.get() };
 	m_pCommandQueue->ExecuteCommandLists(1, pCommandLists);
-
 	std::lock_guard<std::mutex> lock(m_FenceMutex);
 	m_pCommandQueue->Signal(m_pFence.Get(), m_NextFenceValue);
 	m_NextFenceValue++;
+	m_pAllocatorPool->FreeAllocator(pCommandList->pAllocator, m_NextFenceValue);
 	return m_NextFenceValue;
 }
 
@@ -101,9 +139,4 @@ uint64 CommandQueue::PollCurrentFenceValue()
 {
 	m_LastCompletedFenceValue = max(m_LastCompletedFenceValue, m_pFence->GetCompletedValue());
 	return m_LastCompletedFenceValue;
-}
-
-ID3D12CommandAllocator* CommandQueue::GetAllocator()
-{
-	return m_pAllocatorPool->GetAllocator(m_Type);
 }

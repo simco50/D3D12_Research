@@ -1,7 +1,6 @@
 #pragma once
 
-class CommandAllocatorPool;
-class CommandQueue;
+class CommandQueueManager;
 
 class Graphics
 {
@@ -11,7 +10,6 @@ public:
 
 	virtual void Initialize(Windows::UI::Core::CoreWindow^ window);
 	virtual void Update();
-	virtual void Render();
 	virtual void Shutdown();
 
 	ID3D12Device* GetDevice() const { return m_pDevice.Get(); }
@@ -29,8 +27,7 @@ private:
 	ComPtr<ID3D12Device> m_pDevice;
 	array<ComPtr<ID3D12Resource>, FRAME_COUNT> m_RenderTargets;
 	ComPtr<ID3D12Resource> m_pDepthStencilBuffer;
-	std::unique_ptr<CommandQueue> m_pCommandQueue;
-	std::array<ID3D12CommandAllocator*, FRAME_COUNT> m_pAllocators;
+	std::unique_ptr<CommandQueueManager> m_pQueueManager;
 
 	D3D12_CPU_DESCRIPTOR_HANDLE GetCurrentBackBufferView() const;
 	D3D12_CPU_DESCRIPTOR_HANDLE GetDepthStencilView() const;
@@ -44,7 +41,6 @@ private:
 
 	ComPtr<ID3D12DescriptorHeap> m_pRtvHeap;
 	ComPtr<ID3D12DescriptorHeap> m_pDsvHeap;
-	ComPtr<ID3D12GraphicsCommandList> m_pCommandList;
 
 	// Synchronization objects.
 	UINT m_CurrentBackBufferIndex = 0;
