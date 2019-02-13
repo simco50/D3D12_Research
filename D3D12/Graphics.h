@@ -1,6 +1,7 @@
 #pragma once
 
 class CommandAllocatorPool;
+class CommandQueue;
 
 class Graphics
 {
@@ -28,8 +29,8 @@ private:
 	ComPtr<ID3D12Device> m_pDevice;
 	array<ComPtr<ID3D12Resource>, FRAME_COUNT> m_RenderTargets;
 	ComPtr<ID3D12Resource> m_pDepthStencilBuffer;
-	std::unique_ptr<CommandAllocatorPool> m_AllocatorPool;
-	ComPtr<ID3D12CommandQueue> m_pCommandQueue;
+	std::unique_ptr<CommandQueue> m_pCommandQueue;
+	std::array<ID3D12CommandAllocator*, FRAME_COUNT> m_pAllocators;
 
 	D3D12_CPU_DESCRIPTOR_HANDLE GetCurrentBackBufferView() const;
 	D3D12_CPU_DESCRIPTOR_HANDLE GetDepthStencilView() const;
@@ -60,7 +61,6 @@ private:
 	void CreateCommandObjects();
 	void CreateSwapchain(Windows::UI::Core::CoreWindow^ pWindow);
 	void CreateRtvAndDsvHeaps();
-	void WaitForGPU();
 
 	void MoveToNextFrame();
 

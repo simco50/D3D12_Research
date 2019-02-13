@@ -5,6 +5,7 @@
 #include <map>
 #include <fstream>
 #include "CommandAllocatorPool.h"
+#include "CommandQueue.h"
 
 #pragma comment(lib, "dxguid.lib")
 
@@ -31,8 +32,8 @@ void Graphics::Initialize(Windows::UI::Core::CoreWindow^ window)
 void Graphics::Update()
 {
 	Timer(L"Update");
-	ID3D12CommandAllocator* pAllocator = m_AllocatorPool->GetAllocator(m_FenceValues[m_CurrentBackBufferIndex]);
-	m_pCommandList->Reset(pAllocator, m_pPipelineStateObject.Get());
+	m_pAllocators[m_CurrentBackBufferIndex]->Reset();
+	m_pCommandList->Reset(m_pAllocators[m_CurrentBackBufferIndex], m_pPipelineStateObject.Get());
 
 	m_pCommandList->SetGraphicsRootSignature(m_pRootSignature.Get());
 
@@ -65,9 +66,6 @@ void Graphics::Update()
 			m_RenderTargets[m_CurrentBackBufferIndex].Get(),
 			D3D12_RESOURCE_STATE_RENDER_TARGET,
 			D3D12_RESOURCE_STATE_PRESENT));
-
-	m_pCommandList->Close();
-	m_AllocatorPool->FreeAllocator(pAllocator, m_FenceValues[m_CurrentBackBufferIndex == 1 ? 0 : 1]);
 }
 
 void Graphics::CreateRtvAndDsvHeaps()
@@ -91,18 +89,19 @@ void Graphics::CreateRtvAndDsvHeaps()
 
 void Graphics::Render()
 {
-	ID3D12CommandList* ppCommandLists[] = { m_pCommandList.Get() };
-	m_pCommandQueue->ExecuteCommandLists(1, ppCommandLists);
+	const UINT64 currentFenceValue = m_pCommandQueue->ExecuteCommandList(m_pCommandList.Get());
 
 	m_pSwapchain->Present(1, 0);
 
-	MoveToNextFrame();
+	m_pCommandQueue->WaitForFenceBlock(m_FenceValues[m_CurrentBackBufferIndex]);
+	m_CurrentBackBufferIndex = m_pSwapchain->GetCurrentBackBufferIndex();
+	m_FenceValues[m_CurrentBackBufferIndex] = currentFenceValue;
 }
 
 void Graphics::Shutdown()
 {
 	// Wait for the GPU to be done with all resources.
-	WaitForGPU();
+	m_pCommandQueue->WaitForIdle();
 }
 
 ID3D12Resource* Graphics::CurrentBackBuffer() const
@@ -166,15 +165,12 @@ void Graphics::InitD3D(Windows::UI::Core::CoreWindow^ pWindow)
 void Graphics::CreateCommandObjects()
 {
 	//Create command queue
-	D3D12_COMMAND_QUEUE_DESC queueDesc = {};
-	queueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
-	queueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
-	HR(m_pDevice->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&m_pCommandQueue)));
-
-	m_AllocatorPool = std::make_unique<CommandAllocatorPool>(m_pDevice.Get(), D3D12_COMMAND_LIST_TYPE_DIRECT);
+	m_pCommandQueue = std::make_unique<CommandQueue>(m_pDevice.Get(), CommandQueueType::Graphics);
+	m_pAllocators[0] = m_pCommandQueue->GetAllocator();
+	m_pAllocators[1] = m_pCommandQueue->GetAllocator();
 
 	//Create the command list
-	m_pDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_AllocatorPool->GetAllocator(0), nullptr, IID_PPV_ARGS(m_pCommandList.GetAddressOf()));
+	m_pDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_pAllocators[0], nullptr, IID_PPV_ARGS(m_pCommandList.GetAddressOf()));
 	HR(m_pCommandList->Close());
 }
 
@@ -195,7 +191,7 @@ void Graphics::CreateSwapchain(Windows::UI::Core::CoreWindow^ pWindow)
 
 	ComPtr<IDXGISwapChain1> swapChain;
 	HR(m_pFactory->CreateSwapChainForCoreWindow(
-		m_pCommandQueue.Get(),
+		m_pCommandQueue->GetCommandQueue(),
 		reinterpret_cast<IUnknown*>(pWindow),
 		&swapchainDesc,
 		nullptr,
@@ -203,42 +199,9 @@ void Graphics::CreateSwapchain(Windows::UI::Core::CoreWindow^ pWindow)
 	swapChain.As(&m_pSwapchain);
 }
 
-void Graphics::WaitForGPU()
-{
-	// Schedule a Signal command in the queue.
-	HR(m_pCommandQueue->Signal(m_pFence.Get(), m_FenceValues[m_CurrentBackBufferIndex]));
-
-	// Wait until the fence has been processed.
-	HANDLE eventHandle = CreateEventEx(nullptr, false, false, EVENT_ALL_ACCESS);
-	HR(m_pFence->SetEventOnCompletion(m_FenceValues[m_CurrentBackBufferIndex], eventHandle));
-	WaitForSingleObjectEx(eventHandle, INFINITE, FALSE);
-	CloseHandle(eventHandle);
-
-	// Increment the fence value for the current frame.
-	m_FenceValues[m_CurrentBackBufferIndex]++;
-}
-
 void Graphics::MoveToNextFrame()
 {
-	const UINT64 currentFenceValue = m_FenceValues[m_CurrentBackBufferIndex];
 
-	m_pCommandQueue->Signal(m_pFence.Get(), currentFenceValue);
-
-	m_CurrentBackBufferIndex = m_pSwapchain->GetCurrentBackBufferIndex();
-
-	if (m_pFence->GetCompletedValue() < m_FenceValues[m_CurrentBackBufferIndex])
-	{
-		HANDLE eventHandle = CreateEventEx(nullptr, false, false, EVENT_ALL_ACCESS);
-
-		HR(m_pFence->SetEventOnCompletion(m_FenceValues[m_CurrentBackBufferIndex], eventHandle));
-		{
-			Timer a(L"Wait for next frame");
-			WaitForSingleObject(eventHandle, INFINITE);
-		}
-		CloseHandle(eventHandle);
-	}
-
-	m_FenceValues[m_CurrentBackBufferIndex] = currentFenceValue + 1;
 }
 
 void Graphics::OnResize(int width, int height)
@@ -246,7 +209,7 @@ void Graphics::OnResize(int width, int height)
 	m_WindowWidth = width;
 	m_WindowHeight = height;
 
-	WaitForGPU();
+	m_pCommandQueue->WaitForIdle();
 
 	for (int i = 0; i < FRAME_COUNT; ++i)
 		m_RenderTargets[i].Reset();
@@ -298,7 +261,7 @@ void Graphics::OnResize(int width, int height)
 		IID_PPV_ARGS(&m_pDepthStencilBuffer)));
 	m_pDevice->CreateDepthStencilView(m_pDepthStencilBuffer.Get(), nullptr, GetDepthStencilView());
 
-	m_pCommandList->Reset(m_AllocatorPool->GetAllocator(m_FenceValues[m_CurrentBackBufferIndex]), nullptr);
+	m_pCommandList->Reset(m_pAllocators[0], nullptr);
 
 	m_pCommandList->ResourceBarrier(
 		1, 
@@ -308,11 +271,8 @@ void Graphics::OnResize(int width, int height)
 			D3D12_RESOURCE_STATE_DEPTH_WRITE)
 	);
 
-	m_pCommandList->Close();
-	ID3D12CommandList* pCommandList[] = { m_pCommandList.Get() };
-	m_pCommandQueue->ExecuteCommandLists(1, pCommandList);
-
-	WaitForGPU();
+	m_pCommandQueue->ExecuteCommandList(m_pCommandList.Get());
+	m_pCommandQueue->WaitForIdle();
 
 	m_Viewport.Height = (float)m_WindowHeight;
 	m_Viewport.Width = (float)m_WindowWidth;
@@ -329,19 +289,16 @@ void Graphics::OnResize(int width, int height)
 
 void Graphics::InitializeAssets()
 {
-	m_pCommandList->Reset(m_AllocatorPool->GetAllocator(m_FenceValues[m_CurrentBackBufferIndex]), nullptr);
+	m_pCommandList->Reset(m_pAllocators[0], nullptr);
 	BuildDescriptorHeaps();
 	BuildConstantBuffers();
 	BuildRootSignature();
 	BuildShadersAndInputLayout();
 	BuildGeometry();
 	BuildPSO();
-	m_pCommandList->Close();
 
-	ID3D12CommandList* ppCommandLists[] = { m_pCommandList.Get() };
-	m_pCommandQueue->ExecuteCommandLists(1, ppCommandLists);
-
-	WaitForGPU();
+	m_pCommandQueue->ExecuteCommandList(m_pCommandList.Get());
+	m_pCommandQueue->WaitForIdle();
 }
 
 void Graphics::BuildDescriptorHeaps()
