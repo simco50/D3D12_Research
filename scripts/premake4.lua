@@ -43,8 +43,9 @@ solution (engineName)
 		action.vstudio.windowsTargetPlatformVersion    = windowsPlatform
 		action.vstudio.windowsTargetPlatformMinVersion = windowsPlatform
 
-		premake.vstudio.toolset = "v141"
-		premake.vstudio.storeapp = "10.0"
+		--defines { "UWP" }
+		--premake.vstudio.toolset = "v141"
+		--premake.vstudio.storeapp = "10.0"
 
 		files
 		{ 

@@ -1,31 +1,28 @@
 cbuffer Data : register(b0)
 {
-	float4 Color;
+	float4x4 WorldViewProjection;
 }
 
 struct VSInput
 {
 	float3 position : POSITION;
-	float4 color : COLOR;
 };
 
 struct PSInput
 {
 	float4 position : SV_POSITION;
-	float4 color : COLOR;
 };
 
 PSInput VSMain(VSInput input)
 {
 	PSInput result;
 	
-	result.position = float4(input.position, 1.0f);
-	result.color = input.color;
+	result.position = mul(float4(input.position, 1.0f), WorldViewProjection);
 
 	return result;
 }
 
 float4 PSMain(PSInput input) : SV_TARGET
 {
-	return input.color;
+	return float4(1,0,1,1);
 }
