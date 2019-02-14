@@ -41,7 +41,7 @@ public:
 	CommandQueue(ID3D12Device* pDevice, CommandQueueType type);
 	~CommandQueue();
 
-	uint64 ExecuteCommandList(CommandContext* pCommandContext);
+	uint64 ExecuteCommandList(CommandContext* pCommandContext, bool waitForCompletion = false);
 	ID3D12CommandQueue* GetCommandQueue() const { return m_pCommandQueue.Get(); }
 
 	bool IsFenceComplete(uint64 fenceValue);

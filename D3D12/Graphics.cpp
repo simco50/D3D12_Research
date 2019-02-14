@@ -267,9 +267,8 @@ void Graphics::OnResize(int width, int height)
 			D3D12_RESOURCE_STATE_DEPTH_WRITE)
 	);
 
-	m_pQueueManager->GetMainCommandQueue()->ExecuteCommandList(pC);
+	m_pQueueManager->GetMainCommandQueue()->ExecuteCommandList(pC, true);
 	m_pQueueManager->FreeCommandList(pC);
-	m_pQueueManager->GetMainCommandQueue()->WaitForIdle();
 
 	m_Viewport.Height = (float)m_WindowHeight;
 	m_Viewport.Width = (float)m_WindowWidth;
@@ -541,9 +540,8 @@ void Graphics::BuildGeometry()
 		m_IndexBufferView.Format = DXGI_FORMAT_R32_UINT;
 	}
 
-	m_pQueueManager->GetMainCommandQueue()->ExecuteCommandList(pC);
+	m_pQueueManager->GetMainCommandQueue()->ExecuteCommandList(pC, true);
 	m_pQueueManager->FreeCommandList(pC);
-	m_pQueueManager->GetMainCommandQueue()->WaitForIdle();
 }
 
 void Graphics::BuildPSO()

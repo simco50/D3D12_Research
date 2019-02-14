@@ -78,15 +78,20 @@ CommandQueue::~CommandQueue()
 	CloseHandle(m_pFenceEventHandle);
 }
 
-uint64 CommandQueue::ExecuteCommandList(CommandContext* pCommandList)
+uint64 CommandQueue::ExecuteCommandList(CommandContext* pCommandList, bool waitForCompletion)
 {
 	HR(pCommandList->pCommandList->Close());
 	ID3D12CommandList* pCommandLists[] = { pCommandList->pCommandList.get() };
 	m_pCommandQueue->ExecuteCommandLists(1, pCommandLists);
 	std::lock_guard<std::mutex> lock(m_FenceMutex);
 	m_pCommandQueue->Signal(m_pFence.Get(), m_NextFenceValue);
-	m_NextFenceValue++;
 	m_pAllocatorPool->FreeAllocator(pCommandList->pAllocator, m_NextFenceValue);
+	if (waitForCompletion)
+	{
+		WaitForFenceBlock(m_NextFenceValue);
+	}
+	m_NextFenceValue++;
+
 	return m_NextFenceValue;
 }
 
