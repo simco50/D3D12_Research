@@ -9,21 +9,21 @@ public:
 	CommandQueue(ID3D12Device* pDevice, D3D12_COMMAND_LIST_TYPE type);
 	~CommandQueue();
 
-	unsigned long long ExecuteCommandList(CommandContext* pCommandContext, bool waitForCompletion = false);
+	uint64 ExecuteCommandList(CommandContext* pCommandContext, bool waitForCompletion = false);
 	ID3D12CommandQueue* GetCommandQueue() const { return m_pCommandQueue.Get(); }
 
-	bool IsFenceComplete(unsigned long long fenceValue);
-	void InsertWait(unsigned long long fenceValue);
-	void InsertWaitForQueueFence(CommandQueue* pQueue, unsigned long long fenceValue);
+	bool IsFenceComplete(uint64 fenceValue);
+	void InsertWait(uint64 fenceValue);
+	void InsertWaitForQueueFence(CommandQueue* pQueue, uint64 fenceValue);
 	void InsertWaitForQueue(CommandQueue* pQueue);
-	unsigned long long IncrementFence();
+	uint64 IncrementFence();
 
-	void WaitForFenceBlock(unsigned long long fenceValue);
+	void WaitForFenceBlock(uint64 fenceValue);
 	void WaitForIdle();
 
-	unsigned long long PollCurrentFenceValue();
-	unsigned long long GetLastCompletedFence() const { return m_LastCompletedFenceValue; }
-	unsigned long long GetNextFenceValue() const { return m_NextFenceValue; }
+	uint64 PollCurrentFenceValue();
+	uint64 GetLastCompletedFence() const { return m_LastCompletedFenceValue; }
+	uint64 GetNextFenceValue() const { return m_NextFenceValue; }
 	ID3D12Fence* GetFence() const { return m_pFence.Get(); }
 
 	CommandAllocatorPool* GetAllocatorPool() const { return m_pAllocatorPool.get(); }
@@ -36,8 +36,8 @@ private:
     std::mutex m_FenceMutex;
     std::mutex m_EventMutex;
 
-	unsigned long long m_NextFenceValue = 0;
-	unsigned long long m_LastCompletedFenceValue = 0;
+	uint64 m_NextFenceValue = 0;
+	uint64 m_LastCompletedFenceValue = 0;
 
     ComPtr<ID3D12Fence> m_pFence;
 	HANDLE m_pFenceEventHandle = nullptr;

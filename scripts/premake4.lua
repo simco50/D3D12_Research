@@ -66,6 +66,10 @@ solution (engineName)
 			"dxgi",
 			"d3dcompiler"
 		}
+
+		--includedirs (ROOT .. "Libraries/Assimp/include")
+		--libdirs	(ROOT .. "Libraries/Assimp/lib/%{cfg.platform}")
+		--postbuildcommands { "{COPY} \"$(SolutionDir)Libraries\\Assimp\\bin\\%{cfg.platform}\\assimp-vc140-mt.dll\" \"$(OutDir)\"" }
 		
 		includedirs { "$(ProjectDir)" }
 		configuration {}

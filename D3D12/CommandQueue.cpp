@@ -25,7 +25,7 @@ CommandQueue::~CommandQueue()
 	CloseHandle(m_pFenceEventHandle);
 }
 
-unsigned long long CommandQueue::ExecuteCommandList(CommandContext* pCommandList, bool waitForCompletion)
+uint64 CommandQueue::ExecuteCommandList(CommandContext* pCommandList, bool waitForCompletion)
 {
 	HR(pCommandList->pCommandList->Close());
 	ID3D12CommandList* pCommandLists[] = { pCommandList->pCommandList };
@@ -40,7 +40,7 @@ unsigned long long CommandQueue::ExecuteCommandList(CommandContext* pCommandList
 	return m_NextFenceValue++;
 }
 
-bool CommandQueue::IsFenceComplete(unsigned long long fenceValue)
+bool CommandQueue::IsFenceComplete(uint64 fenceValue)
 {
 	if (fenceValue > m_LastCompletedFenceValue)
 	{
@@ -50,12 +50,12 @@ bool CommandQueue::IsFenceComplete(unsigned long long fenceValue)
 	return fenceValue <= m_LastCompletedFenceValue;
 }
 
-void CommandQueue::InsertWait(unsigned long long fenceValue)
+void CommandQueue::InsertWait(uint64 fenceValue)
 {
 	m_pCommandQueue->Wait(m_pFence.Get(), fenceValue);
 }
 
-void CommandQueue::InsertWaitForQueueFence(CommandQueue* pQueue, unsigned long long fenceValue)
+void CommandQueue::InsertWaitForQueueFence(CommandQueue* pQueue, uint64 fenceValue)
 {
 	m_pCommandQueue->Wait(pQueue->GetFence(), fenceValue);
 }
@@ -65,14 +65,14 @@ void CommandQueue::InsertWaitForQueue(CommandQueue* pQueue)
 	m_pCommandQueue->Wait(pQueue->GetFence(), pQueue->GetNextFenceValue() - 1);
 }
 
-unsigned long long CommandQueue::IncrementFence()
+uint64 CommandQueue::IncrementFence()
 {
 	std::lock_guard<std::mutex> LockGuard(m_FenceMutex);
 	m_pCommandQueue->Signal(m_pFence.Get(), m_NextFenceValue);
 	return m_NextFenceValue++;
 }
 
-void CommandQueue::WaitForFenceBlock(unsigned long long fenceValue)
+void CommandQueue::WaitForFenceBlock(uint64 fenceValue)
 {
 	if (IsFenceComplete(fenceValue))
 	{
@@ -93,8 +93,8 @@ void CommandQueue::WaitForIdle()
 	WaitForFenceBlock(IncrementFence());
 }
 
-unsigned long long CommandQueue::PollCurrentFenceValue()
+uint64 CommandQueue::PollCurrentFenceValue()
 {
-	m_LastCompletedFenceValue = max(m_LastCompletedFenceValue, m_pFence->GetCompletedValue());
+	m_LastCompletedFenceValue = std::max(m_LastCompletedFenceValue, m_pFence->GetCompletedValue());
 	return m_LastCompletedFenceValue;
 }

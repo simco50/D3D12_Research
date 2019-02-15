@@ -1,6 +1,5 @@
 #include "stdafx.h"
 #include "Graphics.h"
-#include "Timer.h"
 #include <map>
 #include <fstream>
 #include "CommandAllocatorPool.h"
@@ -8,9 +7,9 @@
 
 #pragma comment(lib, "dxguid.lib")
 
-const UINT Graphics::FRAME_COUNT;
+const uint32 Graphics::FRAME_COUNT;
 
-Graphics::Graphics(UINT width, UINT height)
+Graphics::Graphics(uint32 width, uint32 height)
 	: m_WindowWidth(width), m_WindowHeight(height)
 {
 }
@@ -30,8 +29,6 @@ void Graphics::Initialize(WindowHandle window)
 
 void Graphics::Update()
 {
-	Timer(L"Update");
-
 	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_DIRECT]->WaitForFenceBlock(m_FenceValues[m_CurrentBackBufferIndex]);
 
 	CommandContext* pC = AllocatorCommandList(D3D12_COMMAND_LIST_TYPE_DIRECT);
@@ -47,11 +44,8 @@ void Graphics::Update()
 	pCommandList->RSSetViewports(1, &m_Viewport);
 	pCommandList->RSSetScissorRects(1, &m_ScissorRect);
 
-	pCommandList->ResourceBarrier(1,
-		&CD3DX12_RESOURCE_BARRIER::Transition(
-			m_RenderTargets[m_CurrentBackBufferIndex].Get(),
-			D3D12_RESOURCE_STATE_PRESENT,
-			D3D12_RESOURCE_STATE_RENDER_TARGET));
+	D3D12_RESOURCE_BARRIER rtvBarrier = CD3DX12_RESOURCE_BARRIER::Transition(m_RenderTargets[m_CurrentBackBufferIndex].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
+	pCommandList->ResourceBarrier(1, &rtvBarrier);
 
 	pCommandList->OMSetRenderTargets(1, &GetCurrentBackBufferView(), true, &GetDepthStencilView());
 
@@ -64,11 +58,8 @@ void Graphics::Update()
 	pCommandList->IASetIndexBuffer(&m_IndexBufferView);
 	pCommandList->DrawIndexedInstanced(m_IndexCount, 1, 0, 0, 0);
 
-	pCommandList->ResourceBarrier(1,
-		&CD3DX12_RESOURCE_BARRIER::Transition(
-			m_RenderTargets[m_CurrentBackBufferIndex].Get(),
-			D3D12_RESOURCE_STATE_RENDER_TARGET,
-			D3D12_RESOURCE_STATE_PRESENT));
+	D3D12_RESOURCE_BARRIER presentBarrier = CD3DX12_RESOURCE_BARRIER::Transition(m_RenderTargets[m_CurrentBackBufferIndex].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
+	pCommandList->ResourceBarrier(1, &presentBarrier);
 
 	m_FenceValues[m_CurrentBackBufferIndex] = ExecuteCommandList(pC);
 
@@ -123,9 +114,9 @@ void Graphics::InitD3D(WindowHandle pWindow)
 {
 #ifdef _DEBUG
 	//Enable debug
-	//ComPtr<ID3D12Debug> pDebugController;
-	//HR(D3D12GetDebugInterface(IID_PPV_ARGS(&pDebugController)));
-	//pDebugController->EnableDebugLayer();
+	ComPtr<ID3D12Debug> pDebugController;
+	HR(D3D12GetDebugInterface(IID_PPV_ARGS(&pDebugController)));
+	pDebugController->EnableDebugLayer();
 #endif
 
 	//Create the factory
@@ -133,9 +124,6 @@ void Graphics::InitD3D(WindowHandle pWindow)
 
 	//Create the device
 	HR(D3D12CreateDevice(nullptr, D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&m_pDevice)));
-
-	//Create the fence
-	HR(m_pDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_pFence)));
 
 	//Cache the decriptor sizes
 	m_RtvDescriptorSize = m_pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
@@ -372,9 +360,9 @@ void Graphics::BuildShadersAndInputLayout()
 {
 #if defined(_DEBUG)
 	// Enable better shader debugging with the graphics debugging tools.
-	UINT compileFlags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
+	uint32 compileFlags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
 #else
-	UINT compileFlags = 0;
+	uint32 compileFlags = 0;
 #endif
 
 	std::string data = "\
@@ -405,16 +393,16 @@ void Graphics::BuildShadersAndInputLayout()
 	D3DCompile2(data.data(), data.size(), nullptr, nullptr, nullptr, "VSMain", "vs_5_0", compileFlags, 0, 0, nullptr, 0, m_pVertexShaderCode.GetAddressOf(), pErrorBlob.GetAddressOf());
 	if (pErrorBlob != nullptr)
 	{
-		wstring errorMsg = wstring((char*)pErrorBlob->GetBufferPointer(), (char*)pErrorBlob->GetBufferPointer() + pErrorBlob->GetBufferSize());
-		wcout << errorMsg << endl;
+		std::wstring errorMsg = std::wstring((char*)pErrorBlob->GetBufferPointer(), (char*)pErrorBlob->GetBufferPointer() + pErrorBlob->GetBufferSize());
+		std::wcout << errorMsg << std::endl;
 		return;
 	}
 	pErrorBlob.Reset();
 	D3DCompile2(data.data(), data.size(), nullptr, nullptr, nullptr, "PSMain", "ps_5_0", compileFlags, 0, 0, nullptr, 0, m_pPixelShaderCode.GetAddressOf(), pErrorBlob.GetAddressOf());
 	if (pErrorBlob != nullptr)
 	{
-		wstring errorMsg = wstring((char*)pErrorBlob->GetBufferPointer(), (char*)pErrorBlob->GetBufferPointer() + pErrorBlob->GetBufferSize());
-		wcout << errorMsg << endl;
+		std::wstring errorMsg = std::wstring((char*)pErrorBlob->GetBufferPointer(), (char*)pErrorBlob->GetBufferPointer() + pErrorBlob->GetBufferSize());
+		std::wcout << errorMsg << std::endl;
 		return;
 	}
 
@@ -427,95 +415,45 @@ void Graphics::BuildGeometry()
 	CommandContext* pC = AllocatorCommandList(D3D12_COMMAND_LIST_TYPE_DIRECT);
 	ID3D12GraphicsCommandList* pCommandList = pC->pCommandList;
 
-	{
-		vector<XMFLOAT3> vertices = {
-			XMFLOAT3(0, 0, 0),
-			XMFLOAT3(1, 0, 0),
-			XMFLOAT3(1, 1, 0),
-			XMFLOAT3(0, 1, 0),
-			XMFLOAT3(0, 1, 1),
-			XMFLOAT3(1, 1, 1),
-			XMFLOAT3(1, 0, 1),
-			XMFLOAT3(0, 0, 1),
-		};
+	ComPtr<ID3D12Resource> pVertexUploadBuffer;
+	ComPtr<ID3D12Resource> pIndexUploadBuffer;
 
-		m_pDevice->CreateCommittedResource(
-			&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
-			D3D12_HEAP_FLAG_NONE,
-			&CD3DX12_RESOURCE_DESC::Buffer(sizeof(vertices) * sizeof(XMFLOAT3)),
-			D3D12_RESOURCE_STATE_GENERIC_READ,
-			nullptr,
-			IID_PPV_ARGS(m_pVertexBuffer.GetAddressOf()));
+	std::vector<Vector3> vertices = {
+		Vector3(0, 0, 0),
+		Vector3(1, 0, 0),
+		Vector3(1, 1, 0),
+		Vector3(0, 1, 0),
+		Vector3(0, 1, 1),
+		Vector3(1, 1, 1),
+		Vector3(1, 0, 1),
+		Vector3(0, 0, 1),
+	};
 
-		m_pDevice->CreateCommittedResource(
-			&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
-			D3D12_HEAP_FLAG_NONE,
-			&CD3DX12_RESOURCE_DESC::Buffer(sizeof(vertices) * sizeof(XMFLOAT3)),
-			D3D12_RESOURCE_STATE_GENERIC_READ,
-			nullptr,
-			IID_PPV_ARGS(pVertexUploadBuffer.GetAddressOf()));
+	m_pVertexBuffer = CreateDefaultBuffer(m_pDevice.Get(), pCommandList, vertices.data(), vertices.size() * sizeof(Vector3), pVertexUploadBuffer);
+	m_VertexBufferView.BufferLocation = m_pVertexBuffer->GetGPUVirtualAddress();
+	m_VertexBufferView.SizeInBytes = sizeof(Vector3) * (uint32)vertices.size();
+	m_VertexBufferView.StrideInBytes = sizeof(Vector3);
 
-		D3D12_SUBRESOURCE_DATA subResourceData = {};
-		subResourceData.pData = vertices.data();
-		subResourceData.RowPitch = vertices.size() * sizeof(XMFLOAT3);
-		subResourceData.SlicePitch = subResourceData.RowPitch;
+	std::vector<unsigned int> indices = {
+		0, 2, 1, //face front
+		0, 3, 2,
+		2, 3, 4, //face top
+		2, 4, 5,
+		1, 2, 5, //face right
+		1, 5, 6,
+		0, 7, 4, //face left
+		0, 4, 3,
+		5, 4, 7, //face back
+		5, 7, 6,
+		0, 6, 7, //face bottom
+		0, 1, 6
+	};
+	m_IndexCount = (int)indices.size();
+	m_pIndexBuffer = CreateDefaultBuffer(m_pDevice.Get(), pCommandList, indices.data(), indices.size() * sizeof(unsigned int), pIndexUploadBuffer);
 
-		pCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(m_pVertexBuffer.Get(), D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_COPY_DEST));
-		UpdateSubresources(pCommandList, m_pVertexBuffer.Get(), pVertexUploadBuffer.Get(), 0, 0, 1, &subResourceData);
-		pCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(m_pVertexBuffer.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_GENERIC_READ));
-
-		m_VertexBufferView.BufferLocation = m_pVertexBuffer->GetGPUVirtualAddress();
-		m_VertexBufferView.SizeInBytes = sizeof(XMFLOAT3) * vertices.size();
-		m_VertexBufferView.StrideInBytes = sizeof(XMFLOAT3);
-
-	}
-
-	{
-		vector<unsigned int> indices = {
-			0, 2, 1, //face front
-			0, 3, 2,
-			2, 3, 4, //face top
-			2, 4, 5,
-			1, 2, 5, //face right
-			1, 5, 6,
-			0, 7, 4, //face left
-			0, 4, 3,
-			5, 4, 7, //face back
-			5, 7, 6,
-			0, 6, 7, //face bottom
-			0, 1, 6
-		};
-		m_IndexCount = (int)indices.size();
-
-		m_pDevice->CreateCommittedResource(
-			&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
-			D3D12_HEAP_FLAG_NONE,
-			&CD3DX12_RESOURCE_DESC::Buffer(indices.size() * sizeof(unsigned int)),
-			D3D12_RESOURCE_STATE_GENERIC_READ,
-			nullptr,
-			IID_PPV_ARGS(m_pIndexBuffer.GetAddressOf()));
-
-		m_pDevice->CreateCommittedResource(
-			&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
-			D3D12_HEAP_FLAG_NONE,
-			&CD3DX12_RESOURCE_DESC::Buffer(indices.size() * sizeof(unsigned int)),
-			D3D12_RESOURCE_STATE_GENERIC_READ,
-			nullptr,
-			IID_PPV_ARGS(pIndexUploadBuffer.GetAddressOf()));
-
-		D3D12_SUBRESOURCE_DATA subResourceData = {};
-		subResourceData.pData = indices.data();
-		subResourceData.RowPitch = indices.size() * sizeof(unsigned int);
-		subResourceData.SlicePitch = subResourceData.RowPitch;
-
-		pCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(m_pIndexBuffer.Get(), D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_COPY_DEST));
-		UpdateSubresources(pCommandList, m_pIndexBuffer.Get(), pIndexUploadBuffer.Get(), 0, 0, 1, &subResourceData);
-		pCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(m_pIndexBuffer.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_GENERIC_READ));
-
-		m_IndexBufferView.BufferLocation = m_pIndexBuffer->GetGPUVirtualAddress();
-		m_IndexBufferView.SizeInBytes = sizeof(unsigned int) * indices.size();
-		m_IndexBufferView.Format = DXGI_FORMAT_R32_UINT;
-	}
+	m_IndexBufferView.BufferLocation = m_pIndexBuffer->GetGPUVirtualAddress();
+	m_IndexBufferView.SizeInBytes = sizeof(unsigned int) * (uint32)indices.size();
+	m_IndexBufferView.Format = DXGI_FORMAT_R32_UINT;
 
 	ExecuteCommandList(pC, true);
 }
@@ -527,7 +465,7 @@ void Graphics::BuildPSO()
 	desc.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
 	desc.DSVFormat = m_DepthStencilFormat;
 	desc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
-	desc.InputLayout.NumElements = m_InputElements.size();
+	desc.InputLayout.NumElements = (uint32)m_InputElements.size();
 	desc.InputLayout.pInputElementDescs = m_InputElements.data();
 	desc.NodeMask = 0;
 	desc.NumRenderTargets = 1;
