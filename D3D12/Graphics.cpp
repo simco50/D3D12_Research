@@ -1,6 +1,5 @@
 #include "stdafx.h"
 #include "Graphics.h"
-#include "GpuResource.h"
 #include "Timer.h"
 #include <map>
 #include <fstream>
@@ -11,8 +10,8 @@
 
 const UINT Graphics::FRAME_COUNT;
 
-Graphics::Graphics(UINT width, UINT height, std::string name):
-	m_WindowWidth(width), m_WindowHeight(height)
+Graphics::Graphics(UINT width, UINT height)
+	: m_WindowWidth(width), m_WindowHeight(height)
 {
 }
 
@@ -71,8 +70,7 @@ void Graphics::Update()
 			D3D12_RESOURCE_STATE_RENDER_TARGET,
 			D3D12_RESOURCE_STATE_PRESENT));
 
-	const UINT64 currentFenceValue = ExecuteCommandList(pC);
-	m_FenceValues[m_CurrentBackBufferIndex] = currentFenceValue;
+	m_FenceValues[m_CurrentBackBufferIndex] = ExecuteCommandList(pC);
 
 	m_pSwapchain->Present(1, 0);
 	m_CurrentBackBufferIndex = m_pSwapchain->GetCurrentBackBufferIndex();
@@ -184,7 +182,7 @@ void Graphics::CreateSwapchain(WindowHandle pWindow)
 	swapchainDesc.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
 	swapchainDesc.Stereo = false;
 	ComPtr<IDXGISwapChain1> swapChain;
-#ifdef UWP
+#ifdef PLATFORM_UWP
 	HR(m_pFactory->CreateSwapChainForCoreWindow(
 		m_CommandQueues[D3D12_COMMAND_LIST_TYPE_DIRECT]->GetCommandQueue(),
 		reinterpret_cast<IUnknown*>(pWindow),
@@ -355,7 +353,7 @@ void Graphics::BuildRootSignature()
 	CD3DX12_ROOT_PARAMETER1 rootParameters[1];
 	CD3DX12_DESCRIPTOR_RANGE1 range[1];
 	range[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
-	rootParameters[0].InitAsDescriptorTable(1, range, D3D12_SHADER_VISIBILITY_ALL);
+	rootParameters[0].InitAsDescriptorTable(1, range, D3D12_SHADER_VISIBILITY_VERTEX);
 
 	D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
 		D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
@@ -422,69 +420,6 @@ void Graphics::BuildShadersAndInputLayout()
 
 	//Input layout
 	m_InputElements.push_back(D3D12_INPUT_ELEMENT_DESC{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 });
-
-
-	//Shader reflection reference
-	ComPtr<ID3D12ShaderReflection> pShaderReflection;
-	D3D12_SHADER_DESC shaderDesc;
-	D3DReflect(m_pPixelShaderCode->GetBufferPointer(), m_pPixelShaderCode->GetBufferSize(), IID_ID3D11ShaderReflection, (void**)pShaderReflection.GetAddressOf());
-	pShaderReflection->GetDesc(&shaderDesc);
-
-	std::map<std::string, int> cbRegisterMap;
-
-	for (unsigned i = 0; i < shaderDesc.BoundResources; ++i)
-	{
-		D3D12_SHADER_INPUT_BIND_DESC resourceDesc;
-		pShaderReflection->GetResourceBindingDesc(i, &resourceDesc);
-
-		switch (resourceDesc.Type)
-		{
-		case D3D_SIT_CBUFFER:
-		case D3D_SIT_TBUFFER:
-			cbRegisterMap[resourceDesc.Name] = resourceDesc.BindPoint;
-			break;
-		case D3D_SIT_TEXTURE:
-		case D3D_SIT_SAMPLER:
-		case D3D_SIT_UAV_RWTYPED:
-		case D3D_SIT_STRUCTURED:
-		case D3D_SIT_UAV_RWSTRUCTURED:
-		case D3D_SIT_BYTEADDRESS:
-		case D3D_SIT_UAV_RWBYTEADDRESS:
-		case D3D_SIT_UAV_APPEND_STRUCTURED:
-		case D3D_SIT_UAV_CONSUME_STRUCTURED:
-		case D3D_SIT_UAV_RWSTRUCTURED_WITH_COUNTER:
-		default:
-			break;
-		}
-	}
-
-	for (unsigned int c = 0; c < shaderDesc.ConstantBuffers; ++c)
-	{
-		ID3D12ShaderReflectionConstantBuffer* pReflectionConstantBuffer = pShaderReflection->GetConstantBufferByIndex(c);
-		D3D12_SHADER_BUFFER_DESC bufferDesc;
-		pReflectionConstantBuffer->GetDesc(&bufferDesc);
-		unsigned int cbRegister = cbRegisterMap[std::string(bufferDesc.Name)];
-
-		//ConstantBuffer* pConstantBuffer = pGraphics->GetOrCreateConstantBuffer(cbRegister, bufferDesc.Size);
-		//m_ConstantBuffers[cbRegister] = pConstantBuffer;
-		//m_ConstantBufferSizes[cbRegister] = bufferDesc.Size;
-
-		for (unsigned v = 0; v < bufferDesc.Variables; ++v)
-		{
-			ID3D12ShaderReflectionVariable* pVariable = pReflectionConstantBuffer->GetVariableByIndex(v);
-			D3D12_SHADER_VARIABLE_DESC variableDesc;
-			pVariable->GetDesc(&variableDesc);
-			std::string name = variableDesc.Name;
-
-			//ShaderParameter parameter = {};
-			//parameter.Name = variableDesc.Name;
-			//parameter.Offset = variableDesc.StartOffset;
-			//parameter.Size = variableDesc.Size;
-			//parameter.Buffer = cbRegister;
-			//parameter.pBuffer = pConstantBuffer;
-			//m_ShaderParameters[StringHash(variableDesc.Name)] = parameter;
-		}
-	}
 }
 
 void Graphics::BuildGeometry()

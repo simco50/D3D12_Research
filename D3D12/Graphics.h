@@ -1,6 +1,6 @@
 #pragma once
 
-#ifdef UWP
+#ifdef PLATFORM_UWP
 using WindowHandle = Windows::UI::Core::CoreWindow^;
 #else
 using WindowHandle = HWND;
@@ -19,7 +19,7 @@ public:
 class Graphics
 {
 public:
-	Graphics(UINT width, UINT height, std::string name);
+	Graphics(UINT width, UINT height);
 	~Graphics();
 
 	virtual void Initialize(WindowHandle window);
@@ -27,7 +27,6 @@ public:
 	virtual void Shutdown();
 
 	ID3D12Device* GetDevice() const { return m_pDevice.Get(); }
-	bool IsFenceComplete(const UINT64 fenceValue) const { return false; }
 	void OnResize(int width, int height);
 
 	CommandQueue* GetMainCommandQueue() const;

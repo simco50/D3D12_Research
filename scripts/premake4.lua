@@ -36,16 +36,19 @@ solution (engineName)
 
 		pchheader ("stdafx.h")
 		pchsource (ROOT .. engineName .. "/stdafx.cpp")
-		kind (WindowedApp)
 
 		local windowsPlatform = "10.0.17763.0"
 		local action = premake.action.current()
 		action.vstudio.windowsTargetPlatformVersion    = windowsPlatform
 		action.vstudio.windowsTargetPlatformMinVersion = windowsPlatform
 
-		--defines { "UWP" }
-		--premake.vstudio.toolset = "v141"
-		--premake.vstudio.storeapp = "10.0"
+		if _OPTIONS["base"] == "uwp" then
+			defines { "PLATFORM_UWP" }
+			premake.vstudio.toolset = "v141"
+			premake.vstudio.storeapp = "10.0"
+		else
+			defines { "PLATFORM_WINDOWS" }
+		end
 
 		files
 		{ 
@@ -66,3 +69,14 @@ solution (engineName)
 		
 		includedirs { "$(ProjectDir)" }
 		configuration {}
+
+newoption {
+	trigger     = "base",
+	value       = "API",
+	description = "Choose a particular 3D API for rendering",
+	default     = "windows",
+	allowed = {
+		{ "windows", "Windows" },
+		{ "uwp", "Universal Windows Platform" },
+	}
+}
