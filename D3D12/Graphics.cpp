@@ -10,6 +10,7 @@
 #include "assimp/postprocess.h"
 #include "assimp/scene.h"
 #include <assert.h>
+#include "DescriptorAllocator.h"
 
 #pragma comment(lib, "dxguid.lib")
 
@@ -43,21 +44,19 @@ void Graphics::Update()
 	pCommandList->SetPipelineState(m_pPipelineStateObject.Get());
 	pCommandList->SetGraphicsRootSignature(m_pRootSignature.Get());
 
-	ID3D12DescriptorHeap* ppHeaps[] = { m_pCbvSrvHeap.Get() };
-	pCommandList->SetDescriptorHeaps(1, ppHeaps);
-	pCommandList->SetGraphicsRootDescriptorTable(0, m_pCbvSrvHeap->GetGPUDescriptorHandleForHeapStart());
+	pCommandList->SetGraphicsRootConstantBufferView(0, m_pConstantBuffer->GetGPUVirtualAddress());
 
 	pContext->SetViewport(m_Viewport);
 	pContext->SetScissorRect(m_ScissorRect);
 
 	pContext->InsertResourceBarrier(CD3DX12_RESOURCE_BARRIER::Transition(m_RenderTargets[m_CurrentBackBufferIndex].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET), true);
 
-	pContext->SetRenderTarget(&GetCurrentBackBufferView());
-	pContext->SetDepthStencil(&GetDepthStencilView());
+	pContext->SetRenderTarget(&m_RenderTargetHandles[m_CurrentBackBufferIndex]);
+	pContext->SetDepthStencil(&m_DepthStencilHandle);
 
 	Color clearColor = Color(0.1f, 0.1f, 0.1f, 1.0f);
-	pContext->ClearRenderTarget(GetCurrentBackBufferView(), clearColor);
-	pContext->ClearDepth(GetDepthStencilView(), D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0);
+	pContext->ClearRenderTarget(m_RenderTargetHandles[m_CurrentBackBufferIndex], clearColor);
+	pContext->ClearDepth(m_DepthStencilHandle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0);
 
 	pContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	pContext->SetVertexBuffer(m_VertexBufferView);
@@ -74,53 +73,17 @@ void Graphics::Update()
 
 void Graphics::CreateDescriptorHeaps()
 {
-	//Create rtv heap
-	D3D12_DESCRIPTOR_HEAP_DESC rtvHeapDesc = {};
-	rtvHeapDesc.NumDescriptors = FRAME_COUNT;
-	rtvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
-	rtvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
-	rtvHeapDesc.NodeMask = 0;
-	HR(m_pDevice->CreateDescriptorHeap(&rtvHeapDesc, IID_PPV_ARGS(m_pRtvHeap.GetAddressOf())));
-
-	//create dsv heap
-	D3D12_DESCRIPTOR_HEAP_DESC dsvHeapDesc = {};
-	dsvHeapDesc.NumDescriptors = 1;
-	dsvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
-	dsvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
-	dsvHeapDesc.NodeMask = 0;
-	HR(m_pDevice->CreateDescriptorHeap(&dsvHeapDesc, IID_PPV_ARGS(m_pDsvHeap.GetAddressOf())));
-
-	//create cbv/srv heap
-	D3D12_DESCRIPTOR_HEAP_DESC heapDesc = {};
-	heapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-	heapDesc.NumDescriptors = 2;
-	heapDesc.NodeMask = 0;
-	heapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-	HR(m_pDevice->CreateDescriptorHeap(&heapDesc, IID_PPV_ARGS(m_pCbvSrvHeap.GetAddressOf())));
+	assert(m_DescriptorHeaps.size() == D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES);
+	for (size_t i = 0; i < D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES; ++i)
+	{
+		m_DescriptorHeaps[i] = std::make_unique<DescriptorAllocator>(m_pDevice.Get(), (D3D12_DESCRIPTOR_HEAP_TYPE)i);
+	}
 }
 
 void Graphics::Shutdown()
 {
 	// Wait for the GPU to be done with all resources.
 	IdleGPU();
-}
-
-ID3D12Resource* Graphics::CurrentBackBuffer() const
-{
-	return m_RenderTargets[m_CurrentBackBufferIndex].Get();
-}
-
-D3D12_CPU_DESCRIPTOR_HANDLE Graphics::GetCurrentBackBufferView() const
-{
-	return CD3DX12_CPU_DESCRIPTOR_HANDLE(
-		m_pRtvHeap->GetCPUDescriptorHandleForHeapStart(), 
-		m_CurrentBackBufferIndex, 
-		m_RtvDescriptorSize);
-}
-
-D3D12_CPU_DESCRIPTOR_HANDLE Graphics::GetDepthStencilView() const
-{
-	return m_pDsvHeap->GetCPUDescriptorHandleForHeapStart();
 }
 
 void Graphics::InitD3D(WindowHandle pWindow)
@@ -137,11 +100,6 @@ void Graphics::InitD3D(WindowHandle pWindow)
 
 	//Create the device
 	HR(D3D12CreateDevice(nullptr, D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&m_pDevice)));
-
-	//Cache the decriptor sizes
-	m_RtvDescriptorSize = m_pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
-	m_DsvDescriptorSize = m_pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
-	m_CbvSrvDescriptorSize = m_pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
 	//Check 4x MSAA support
 	D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS qualityLevels;
@@ -223,12 +181,11 @@ void Graphics::OnResize(int width, int height)
 	m_CurrentBackBufferIndex = 0;
 
 	//Recreate the render target views
-	CD3DX12_CPU_DESCRIPTOR_HANDLE handle(m_pRtvHeap->GetCPUDescriptorHandleForHeapStart());
 	for (int i = 0; i < FRAME_COUNT; ++i)
 	{
+		m_RenderTargetHandles[i] = m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_RTV]->AllocateDescriptor();
 		HR(m_pSwapchain->GetBuffer(i, IID_PPV_ARGS(&m_RenderTargets[i])));
-		m_pDevice->CreateRenderTargetView(m_RenderTargets[i].Get(), nullptr, handle);
-		handle.Offset(1, m_RtvDescriptorSize);
+		m_pDevice->CreateRenderTargetView(m_RenderTargets[i].Get(), nullptr, m_RenderTargetHandles[i]);
 	}
 
 	//Recreate the depth stencil buffer and view
@@ -256,14 +213,15 @@ void Graphics::OnResize(int width, int height)
 		D3D12_RESOURCE_STATE_COMMON,
 		&clearValue,
 		IID_PPV_ARGS(&m_pDepthStencilBuffer)));
-	m_pDevice->CreateDepthStencilView(m_pDepthStencilBuffer.Get(), nullptr, GetDepthStencilView());
+	m_DepthStencilHandle = m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_DSV]->AllocateDescriptor();
+	m_pDevice->CreateDepthStencilView(m_pDepthStencilBuffer.Get(), nullptr, m_DepthStencilHandle);
 
 	CommandContext* pContext = AllocateCommandList(D3D12_COMMAND_LIST_TYPE_DIRECT);
 	pContext->InsertResourceBarrier(CD3DX12_RESOURCE_BARRIER::Transition(m_pDepthStencilBuffer.Get(), D3D12_RESOURCE_STATE_COMMON,	D3D12_RESOURCE_STATE_DEPTH_WRITE));
 	pContext->Execute(true);
 
-	m_Viewport.height = (float)m_WindowHeight;
-	m_Viewport.width = (float)m_WindowWidth;
+	m_Viewport.height = m_WindowHeight;
+	m_Viewport.width = m_WindowWidth;
 	m_Viewport.x = 0;
 	m_Viewport.y = 0;
 	
@@ -305,12 +263,6 @@ void Graphics::BuildConstantBuffers()
 		nullptr,
 		IID_PPV_ARGS(&m_pConstantBuffer));
 
-	// Describe and create a constant buffer view.
-	D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
-	cbvDesc.BufferLocation = m_pConstantBuffer->GetGPUVirtualAddress();
-	cbvDesc.SizeInBytes = size;    // CB size is required to be 256-byte aligned.
-	m_pDevice->CreateConstantBufferView(&cbvDesc, m_pCbvSrvHeap->GetCPUDescriptorHandleForHeapStart());
-
 	// Map and initialize the constant buffer. We don't unmap this until the
 	// app closes. Keeping things mapped for the lifetime of the resource is okay.
 	// We do not intend to read from this resource on the CPU.
@@ -327,7 +279,7 @@ void Graphics::BuildRootSignature()
 	CD3DX12_ROOT_PARAMETER1 rootParameters[1];
 	CD3DX12_DESCRIPTOR_RANGE1 range[1];
 	range[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
-	rootParameters[0].InitAsDescriptorTable(1, range, D3D12_SHADER_VISIBILITY_VERTEX);
+	rootParameters[0].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_VERTEX);
 
 	D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
 		D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
