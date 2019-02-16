@@ -4,6 +4,12 @@
 #include <fstream>
 #include "CommandAllocatorPool.h"
 #include "CommandQueue.h"
+#include "CommandContext.h"
+
+#include "assimp/Importer.hpp"
+#include "assimp/postprocess.h"
+#include "assimp/scene.h"
+#include <assert.h>
 
 #pragma comment(lib, "dxguid.lib")
 
@@ -29,10 +35,10 @@ void Graphics::Initialize(WindowHandle window)
 
 void Graphics::Update()
 {
-	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_DIRECT]->WaitForFenceBlock(m_FenceValues[m_CurrentBackBufferIndex]);
+	WaitForFence(m_FenceValues[m_CurrentBackBufferIndex]);
 
-	CommandContext* pC = AllocatorCommandList(D3D12_COMMAND_LIST_TYPE_DIRECT);
-	ID3D12GraphicsCommandList* pCommandList = pC->pCommandList;
+	CommandContext* pContext = AllocateCommandList(D3D12_COMMAND_LIST_TYPE_DIRECT);
+	ID3D12GraphicsCommandList* pCommandList = pContext->GetCommandList();
 
 	pCommandList->SetPipelineState(m_pPipelineStateObject.Get());
 	pCommandList->SetGraphicsRootSignature(m_pRootSignature.Get());
@@ -41,33 +47,32 @@ void Graphics::Update()
 	pCommandList->SetDescriptorHeaps(1, ppHeaps);
 	pCommandList->SetGraphicsRootDescriptorTable(0, m_pCbvSrvHeap->GetGPUDescriptorHandleForHeapStart());
 
-	pCommandList->RSSetViewports(1, &m_Viewport);
-	pCommandList->RSSetScissorRects(1, &m_ScissorRect);
+	pContext->SetViewport(m_Viewport);
+	pContext->SetScissorRect(m_ScissorRect);
 
-	D3D12_RESOURCE_BARRIER rtvBarrier = CD3DX12_RESOURCE_BARRIER::Transition(m_RenderTargets[m_CurrentBackBufferIndex].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
-	pCommandList->ResourceBarrier(1, &rtvBarrier);
+	pContext->InsertResourceBarrier(CD3DX12_RESOURCE_BARRIER::Transition(m_RenderTargets[m_CurrentBackBufferIndex].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET), true);
 
-	pCommandList->OMSetRenderTargets(1, &GetCurrentBackBufferView(), true, &GetDepthStencilView());
+	pContext->SetRenderTarget(&GetCurrentBackBufferView());
+	pContext->SetDepthStencil(&GetDepthStencilView());
 
-	const float clearColor[] = { 0.1f, 0.1f, 0.1f, 1.0f };
-	pCommandList->ClearRenderTargetView(GetCurrentBackBufferView(), clearColor, 0, nullptr);
-	pCommandList->ClearDepthStencilView(GetDepthStencilView(), D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, nullptr);
-	
-	pCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	pCommandList->IASetVertexBuffers(0, 1, &m_VertexBufferView);
-	pCommandList->IASetIndexBuffer(&m_IndexBufferView);
-	pCommandList->DrawIndexedInstanced(m_IndexCount, 1, 0, 0, 0);
+	Color clearColor = Color(0.1f, 0.1f, 0.1f, 1.0f);
+	pContext->ClearRenderTarget(GetCurrentBackBufferView(), clearColor);
+	pContext->ClearDepth(GetDepthStencilView(), D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0);
 
-	D3D12_RESOURCE_BARRIER presentBarrier = CD3DX12_RESOURCE_BARRIER::Transition(m_RenderTargets[m_CurrentBackBufferIndex].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
-	pCommandList->ResourceBarrier(1, &presentBarrier);
+	pContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	pContext->SetVertexBuffer(m_VertexBufferView);
+	pContext->SetIndexBuffer(m_IndexBufferView);
+	pContext->DrawIndexed(m_IndexCount, 0);
 
-	m_FenceValues[m_CurrentBackBufferIndex] = ExecuteCommandList(pC);
+	pContext->InsertResourceBarrier(CD3DX12_RESOURCE_BARRIER::Transition(m_RenderTargets[m_CurrentBackBufferIndex].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT));
+
+	m_FenceValues[m_CurrentBackBufferIndex] = pContext->Execute(false);
 
 	m_pSwapchain->Present(1, 0);
 	m_CurrentBackBufferIndex = m_pSwapchain->GetCurrentBackBufferIndex();
 }
 
-void Graphics::CreateRtvAndDsvHeaps()
+void Graphics::CreateDescriptorHeaps()
 {
 	//Create rtv heap
 	D3D12_DESCRIPTOR_HEAP_DESC rtvHeapDesc = {};
@@ -84,6 +89,14 @@ void Graphics::CreateRtvAndDsvHeaps()
 	dsvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
 	dsvHeapDesc.NodeMask = 0;
 	HR(m_pDevice->CreateDescriptorHeap(&dsvHeapDesc, IID_PPV_ARGS(m_pDsvHeap.GetAddressOf())));
+
+	//create cbv/srv heap
+	D3D12_DESCRIPTOR_HEAP_DESC heapDesc = {};
+	heapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+	heapDesc.NumDescriptors = 2;
+	heapDesc.NodeMask = 0;
+	heapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+	HR(m_pDevice->CreateDescriptorHeap(&heapDesc, IID_PPV_ARGS(m_pCbvSrvHeap.GetAddressOf())));
 }
 
 void Graphics::Shutdown()
@@ -140,17 +153,14 @@ void Graphics::InitD3D(WindowHandle pWindow)
 
 	m_MsaaQuality = qualityLevels.NumQualityLevels;
 	if (m_MsaaQuality <= 0)
+	{
 		return;
+	}
 
-	CreateCommandObjects();
+	m_CommandQueues[0] = std::make_unique<CommandQueue>(this, D3D12_COMMAND_LIST_TYPE_DIRECT);
+
 	CreateSwapchain(pWindow);
-	CreateRtvAndDsvHeaps();
-}
-
-void Graphics::CreateCommandObjects()
-{
-	//Create command queue
-	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_DIRECT] = std::make_unique<CommandQueue>(m_pDevice.Get(), D3D12_COMMAND_LIST_TYPE_DIRECT);
+	CreateDescriptorHeaps();
 }
 
 void Graphics::CreateSwapchain(WindowHandle pWindow)
@@ -189,7 +199,6 @@ void Graphics::CreateSwapchain(WindowHandle pWindow)
 	swapChain.As(&m_pSwapchain);
 }
 
-
 void Graphics::OnResize(int width, int height)
 {
 	m_WindowWidth = width;
@@ -198,7 +207,9 @@ void Graphics::OnResize(int width, int height)
 	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_DIRECT]->WaitForIdle();
 
 	for (int i = 0; i < FRAME_COUNT; ++i)
+	{
 		m_RenderTargets[i].Reset();
+	}
 	m_pDepthStencilBuffer.Reset();
 
 	//Resize the buffers
@@ -247,35 +258,23 @@ void Graphics::OnResize(int width, int height)
 		IID_PPV_ARGS(&m_pDepthStencilBuffer)));
 	m_pDevice->CreateDepthStencilView(m_pDepthStencilBuffer.Get(), nullptr, GetDepthStencilView());
 
-	CommandContext* pC = AllocatorCommandList(D3D12_COMMAND_LIST_TYPE_DIRECT);
-	ID3D12GraphicsCommandList* pCommandList = pC->pCommandList;
+	CommandContext* pContext = AllocateCommandList(D3D12_COMMAND_LIST_TYPE_DIRECT);
+	pContext->InsertResourceBarrier(CD3DX12_RESOURCE_BARRIER::Transition(m_pDepthStencilBuffer.Get(), D3D12_RESOURCE_STATE_COMMON,	D3D12_RESOURCE_STATE_DEPTH_WRITE));
+	pContext->Execute(true);
 
-	pCommandList->ResourceBarrier(
-		1, 
-		&CD3DX12_RESOURCE_BARRIER::Transition(
-			m_pDepthStencilBuffer.Get(),
-			D3D12_RESOURCE_STATE_COMMON, 
-			D3D12_RESOURCE_STATE_DEPTH_WRITE)
-	);
-
-	ExecuteCommandList(pC, true);
-
-	m_Viewport.Height = (float)m_WindowHeight;
-	m_Viewport.Width = (float)m_WindowWidth;
-	m_Viewport.MaxDepth = 1.0f;
-	m_Viewport.MinDepth = 0.0f;
-	m_Viewport.TopLeftX = 0.0f;
-	m_Viewport.TopLeftY = 0.0f;
+	m_Viewport.height = (float)m_WindowHeight;
+	m_Viewport.width = (float)m_WindowWidth;
+	m_Viewport.x = 0;
+	m_Viewport.y = 0;
 	
-	m_ScissorRect.left = 0;
-	m_ScissorRect.top = 0;
-	m_ScissorRect.right = m_WindowWidth;
-	m_ScissorRect.bottom = m_WindowHeight;
+	m_ScissorRect.x = 0;
+	m_ScissorRect.y = 0;
+	m_ScissorRect.width = m_WindowWidth;
+	m_ScissorRect.height = m_WindowHeight;
 }
 
 void Graphics::InitializeAssets()
 {
-	BuildDescriptorHeaps();
 	BuildConstantBuffers();
 	BuildRootSignature();
 	BuildShadersAndInputLayout();
@@ -283,55 +282,42 @@ void Graphics::InitializeAssets()
 	BuildPSO();
 }
 
-void Graphics::BuildDescriptorHeaps()
-{
-	D3D12_DESCRIPTOR_HEAP_DESC heapDesc = {};
-	heapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-	heapDesc.NumDescriptors = 2;
-	heapDesc.NodeMask = 0;
-	heapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-
-	HR(m_pDevice->CreateDescriptorHeap(&heapDesc, IID_PPV_ARGS(m_pCbvSrvHeap.GetAddressOf())));
-}
-
 void Graphics::BuildConstantBuffers()
 {
 	// Create the constant buffer.
+	struct ConstantBufferData
 	{
-		using namespace SimpleMath;
-		using namespace DirectX;
-		struct ConstantBufferData
-		{
-			Matrix WorldViewProjection;
-		} Data;
-		Matrix proj = XMMatrixPerspectiveFovLH(XM_PIDIV4, 1240.0f / 720, 0.001f, 100);
-		Matrix view = XMMatrixLookAtLH(Vector3(0, 0, 0), Vector3(0, 0, 1), Vector3(0, 1, 0));
-		Matrix world = XMMatrixTranslation(0, 0, 10);
-		Data.WorldViewProjection = world * view * proj;
+		Matrix World;
+		Matrix WorldViewProjection;
+	} Data;
+	Matrix proj = XMMatrixPerspectiveFovLH(XM_PIDIV4, 1240.0f / 720, 0.1f, 1000);
+	Matrix view = XMMatrixLookAtLH(Vector3(0, 50, 0), Vector3(0, 0, 500), Vector3(0, 1, 0));
+	Matrix world = XMMatrixTranslation(0, -50, 500);
+	Data.World = world;
+	Data.WorldViewProjection = world * view * proj;
+	int size = (sizeof(ConstantBufferData) + 255) & ~255;
 
-		int size = (sizeof(ConstantBufferData) + 255) & ~255;
+	m_pDevice->CreateCommittedResource(
+		&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
+		D3D12_HEAP_FLAG_NONE,
+		&CD3DX12_RESOURCE_DESC::Buffer(size),
+		D3D12_RESOURCE_STATE_GENERIC_READ,
+		nullptr,
+		IID_PPV_ARGS(&m_pConstantBuffer));
 
-		m_pDevice->CreateCommittedResource(
-			&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
-			D3D12_HEAP_FLAG_NONE,
-			&CD3DX12_RESOURCE_DESC::Buffer(size),
-			D3D12_RESOURCE_STATE_GENERIC_READ,
-			nullptr,
-			IID_PPV_ARGS(&m_pConstantBuffer));
+	// Describe and create a constant buffer view.
+	D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
+	cbvDesc.BufferLocation = m_pConstantBuffer->GetGPUVirtualAddress();
+	cbvDesc.SizeInBytes = size;    // CB size is required to be 256-byte aligned.
+	m_pDevice->CreateConstantBufferView(&cbvDesc, m_pCbvSrvHeap->GetCPUDescriptorHandleForHeapStart());
 
-		// Describe and create a constant buffer view.
-		D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
-		cbvDesc.BufferLocation = m_pConstantBuffer->GetGPUVirtualAddress();
-		cbvDesc.SizeInBytes = size;    // CB size is required to be 256-byte aligned.
-		m_pDevice->CreateConstantBufferView(&cbvDesc, m_pCbvSrvHeap->GetCPUDescriptorHandleForHeapStart());
-
-		// Map and initialize the constant buffer. We don't unmap this until the
-		// app closes. Keeping things mapped for the lifetime of the resource is okay.
-		CD3DX12_RANGE readRange(0, 0);        // We do not intend to read from this resource on the CPU.
-		void* pData = nullptr;
-		m_pConstantBuffer->Map(0, &readRange, reinterpret_cast<void**>(&pData));
-		memcpy(pData, &Data, sizeof(Data));
-	}
+	// Map and initialize the constant buffer. We don't unmap this until the
+	// app closes. Keeping things mapped for the lifetime of the resource is okay.
+	// We do not intend to read from this resource on the CPU.
+	CD3DX12_RANGE readRange(0, 0);
+	void* pData = nullptr;
+	m_pConstantBuffer->Map(0, &readRange, reinterpret_cast<void**>(&pData));
+	memcpy(pData, &Data, sizeof(Data));
 }
 
 void Graphics::BuildRootSignature()
@@ -364,30 +350,18 @@ void Graphics::BuildShadersAndInputLayout()
 #else
 	uint32 compileFlags = 0;
 #endif
+	compileFlags |= D3DCOMPILE_PACK_MATRIX_ROW_MAJOR;
 
-	std::string data = "\
-	cbuffer Data : register(b0) \
-	{ \
-		float4x4 WorldViewProjection; \
-	} \
-	struct VSInput \
-	{ \
-		float3 position : POSITION; \
-	}; \
-	struct PSInput \
-	{ \
-		float4 position : SV_POSITION; \
-	}; \
-	PSInput VSMain(VSInput input) \
-	{ \
-		PSInput result; \
-		result.position = mul(float4(input.position, 1.0f), WorldViewProjection); \
-		return result; \
-	} \
-	float4 PSMain(PSInput input) : SV_TARGET \
-	{ \
-		return float4(1,0,1,1); \
-	}";
+	std::ifstream file("shaders.hlsl", std::ios::ate);
+	if (file.fail())
+	{
+		static int a = 0;
+	}
+	int size = (int)file.tellg();
+	std::vector<char> data(size);
+	file.seekg(0);
+	file.read(data.data(), data.size());
+	file.close();
 
 	ComPtr<ID3DBlob> pErrorBlob;
 	D3DCompile2(data.data(), data.size(), nullptr, nullptr, nullptr, "VSMain", "vs_5_0", compileFlags, 0, 0, nullptr, 0, m_pVertexShaderCode.GetAddressOf(), pErrorBlob.GetAddressOf());
@@ -398,6 +372,7 @@ void Graphics::BuildShadersAndInputLayout()
 		return;
 	}
 	pErrorBlob.Reset();
+
 	D3DCompile2(data.data(), data.size(), nullptr, nullptr, nullptr, "PSMain", "ps_5_0", compileFlags, 0, 0, nullptr, 0, m_pPixelShaderCode.GetAddressOf(), pErrorBlob.GetAddressOf());
 	if (pErrorBlob != nullptr)
 	{
@@ -408,46 +383,55 @@ void Graphics::BuildShadersAndInputLayout()
 
 	//Input layout
 	m_InputElements.push_back(D3D12_INPUT_ELEMENT_DESC{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 });
+	m_InputElements.push_back(D3D12_INPUT_ELEMENT_DESC{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 });
 }
 
 void Graphics::BuildGeometry()
 {
-	CommandContext* pC = AllocatorCommandList(D3D12_COMMAND_LIST_TYPE_DIRECT);
-	ID3D12GraphicsCommandList* pCommandList = pC->pCommandList;
+	struct Vertex
+	{
+		Vector3 Position;
+		Vector3 Normal;
+	};
+
+	Assimp::Importer importer;
+	const aiScene* pScene = importer.ReadFile("Man.dae",
+		aiProcess_Triangulate |
+		aiProcess_ConvertToLeftHanded |
+		aiProcess_GenSmoothNormals |
+		aiProcess_CalcTangentSpace |
+		aiProcess_LimitBoneWeights
+	);
+
+	std::vector<Vertex> vertices(pScene->mMeshes[0]->mNumVertices);
+	for (size_t i = 0; i < vertices.size(); ++i)
+	{
+		Vertex& vertex = vertices[i];
+		vertex.Position = *reinterpret_cast<Vector3*>(&pScene->mMeshes[0]->mVertices[i]);
+		vertex.Normal = *reinterpret_cast<Vector3*>(&pScene->mMeshes[0]->mNormals[i]);
+	}
+
+	std::vector<uint32> indices(pScene->mMeshes[0]->mNumFaces * 3);
+	for (size_t i = 0; i < pScene->mMeshes[0]->mNumFaces; ++i)
+	{
+		for (size_t j = 0; j < 3; ++j)
+		{
+			assert(pScene->mMeshes[0]->mFaces[i].mNumIndices == 3);
+			indices[i * 3 + j] = pScene->mMeshes[0]->mFaces[i].mIndices[j];
+		}
+	}
+
+	CommandContext* pC = AllocateCommandList(D3D12_COMMAND_LIST_TYPE_DIRECT);
+	ID3D12GraphicsCommandList* pCommandList = pC->GetCommandList();
 
 	ComPtr<ID3D12Resource> pVertexUploadBuffer;
 	ComPtr<ID3D12Resource> pIndexUploadBuffer;
 
-	std::vector<Vector3> vertices = {
-		Vector3(0, 0, 0),
-		Vector3(1, 0, 0),
-		Vector3(1, 1, 0),
-		Vector3(0, 1, 0),
-		Vector3(0, 1, 1),
-		Vector3(1, 1, 1),
-		Vector3(1, 0, 1),
-		Vector3(0, 0, 1),
-	};
-
-	m_pVertexBuffer = CreateDefaultBuffer(m_pDevice.Get(), pCommandList, vertices.data(), vertices.size() * sizeof(Vector3), pVertexUploadBuffer);
+	m_pVertexBuffer = CreateDefaultBuffer(m_pDevice.Get(), pCommandList, vertices.data(), vertices.size() * sizeof(Vertex), pVertexUploadBuffer);
 	m_VertexBufferView.BufferLocation = m_pVertexBuffer->GetGPUVirtualAddress();
-	m_VertexBufferView.SizeInBytes = sizeof(Vector3) * (uint32)vertices.size();
-	m_VertexBufferView.StrideInBytes = sizeof(Vector3);
+	m_VertexBufferView.SizeInBytes = sizeof(Vertex) * (uint32)vertices.size();
+	m_VertexBufferView.StrideInBytes = sizeof(Vertex);
 
-	std::vector<unsigned int> indices = {
-		0, 2, 1, //face front
-		0, 3, 2,
-		2, 3, 4, //face top
-		2, 4, 5,
-		1, 2, 5, //face right
-		1, 5, 6,
-		0, 7, 4, //face left
-		0, 4, 3,
-		5, 4, 7, //face back
-		5, 7, 6,
-		0, 6, 7, //face bottom
-		0, 1, 6
-	};
 	m_IndexCount = (int)indices.size();
 	m_pIndexBuffer = CreateDefaultBuffer(m_pDevice.Get(), pCommandList, indices.data(), indices.size() * sizeof(unsigned int), pIndexUploadBuffer);
 
@@ -455,7 +439,7 @@ void Graphics::BuildGeometry()
 	m_IndexBufferView.SizeInBytes = sizeof(unsigned int) * (uint32)indices.size();
 	m_IndexBufferView.Format = DXGI_FORMAT_R32_UINT;
 
-	ExecuteCommandList(pC, true);
+	pC->Execute(true);
 }
 
 void Graphics::BuildPSO()
@@ -481,31 +465,36 @@ void Graphics::BuildPSO()
 	HR(m_pDevice->CreateGraphicsPipelineState(&desc, IID_PPV_ARGS(m_pPipelineStateObject.GetAddressOf())));
 }
 
-CommandQueue* Graphics::GetMainCommandQueue() const
+CommandQueue* Graphics::GetCommandQueue(D3D12_COMMAND_LIST_TYPE type) const
 {
-	return m_CommandQueues.at(D3D12_COMMAND_LIST_TYPE_DIRECT).get();
+	return m_CommandQueues.at(type).get();
 }
 
-CommandContext* Graphics::AllocatorCommandList(D3D12_COMMAND_LIST_TYPE type)
+CommandContext* Graphics::AllocateCommandList(D3D12_COMMAND_LIST_TYPE type)
 {
-	unsigned long long fenceValue = m_CommandQueues[type]->GetLastCompletedFence();
-	ID3D12CommandAllocator* pAllocator = m_CommandQueues[type]->GetAllocatorPool()->GetAllocator(fenceValue);
 	if (m_FreeCommandLists.size() > 0)
 	{
 		CommandContext* pCommandList = m_FreeCommandLists.front();
 		m_FreeCommandLists.pop();
-		pCommandList->pCommandList->Reset(pAllocator, nullptr);
-		pCommandList->pAllocator = pAllocator;
+		pCommandList->Reset();
 		return pCommandList;
 	}
 	else
 	{
 		ComPtr<ID3D12CommandList> pCommandList;
+		ID3D12CommandAllocator* pAllocator = m_CommandQueues[type]->RequestAllocator();
 		m_pDevice->CreateCommandList(0, type, pAllocator, nullptr, IID_PPV_ARGS(pCommandList.GetAddressOf()));
 		m_CommandLists.push_back(std::move(pCommandList));
-		m_CommandListPool.push_back(CommandContext{ static_cast<ID3D12GraphicsCommandList*>(m_CommandLists.back().Get()), pAllocator, type });
-		return &m_CommandListPool.back();
+		m_CommandListPool.emplace_back(std::make_unique<CommandContext>(this, static_cast<ID3D12GraphicsCommandList*>(m_CommandLists.back().Get()), pAllocator, type));
+		return m_CommandListPool.back().get();
 	}
+}
+
+void Graphics::WaitForFence(uint64 fenceValue)
+{
+	D3D12_COMMAND_LIST_TYPE type = (D3D12_COMMAND_LIST_TYPE)(fenceValue >> 56);
+	CommandQueue* pQueue = GetCommandQueue(type);
+	pQueue->WaitForFence(fenceValue);
 }
 
 void Graphics::FreeCommandList(CommandContext* pCommandList)
@@ -513,18 +502,10 @@ void Graphics::FreeCommandList(CommandContext* pCommandList)
 	m_FreeCommandLists.push(pCommandList);
 }
 
-unsigned long long Graphics::ExecuteCommandList(CommandContext* pContext, bool waitForCompletion /*= false*/)
-{
-	CommandQueue* pOwningQueue = m_CommandQueues[pContext->QueueType].get();
-	unsigned long long fenceValue = pOwningQueue->ExecuteCommandList(pContext, waitForCompletion);
-	FreeCommandList(pContext);
-	return fenceValue;
-}
-
 void Graphics::IdleGPU()
 {
 	for (auto& pCommandQueue : m_CommandQueues)
 	{
-		pCommandQueue.second->WaitForIdle();
+		pCommandQueue->WaitForIdle();
 	}
 }

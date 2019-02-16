@@ -67,9 +67,19 @@ solution (engineName)
 			"d3dcompiler"
 		}
 
-		--includedirs (ROOT .. "Libraries/Assimp/include")
-		--libdirs	(ROOT .. "Libraries/Assimp/lib/%{cfg.platform}")
-		--postbuildcommands { "{COPY} \"$(SolutionDir)Libraries\\Assimp\\bin\\%{cfg.platform}\\assimp-vc140-mt.dll\" \"$(OutDir)\"" }
+		nopch
+		{
+			("../" .. engineName .. "/External/**")
+		}
+
+		includedirs (ROOT .. "Libraries/Assimp/include")
+		local p = platforms()
+		for j = 1, #p do
+			configuration { p[j] }
+				libdirs	(ROOT .. "Libraries/Assimp/lib/" .. p[j])
+				postbuildcommands { ("copy \"$(SolutionDir)Libraries\\Assimp\\bin\\" .. p[j] .. "\\assimp-vc140-mt.dll\" \"$(OutDir)\"") }
+		end
+		links { "assimp-vc140-mt" }
 		
 		includedirs { "$(ProjectDir)" }
 		configuration {}

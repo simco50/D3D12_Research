@@ -1,34 +1,37 @@
 #pragma once
 
 class CommandAllocatorPool;
-class CommandContext;
+class Graphics;
 
 class CommandQueue
 {
 public:
-	CommandQueue(ID3D12Device* pDevice, D3D12_COMMAND_LIST_TYPE type);
+	CommandQueue(Graphics* pGraphics, D3D12_COMMAND_LIST_TYPE type);
 	~CommandQueue();
 
-	uint64 ExecuteCommandList(CommandContext* pCommandContext, bool waitForCompletion = false);
+	uint64 ExecuteCommandList(ID3D12CommandList* pCommandContext);
 	ID3D12CommandQueue* GetCommandQueue() const { return m_pCommandQueue.Get(); }
 
-	bool IsFenceComplete(uint64 fenceValue);
-	void InsertWait(uint64 fenceValue);
-	void InsertWaitForQueueFence(CommandQueue* pQueue, uint64 fenceValue);
+	//Inserts a stall/wait in the queue so it blocks the GPU
+	void InsertWaitForFence(uint64 fenceValue);
 	void InsertWaitForQueue(CommandQueue* pQueue);
-	uint64 IncrementFence();
 
-	void WaitForFenceBlock(uint64 fenceValue);
+	//Block on the CPU side
+	void WaitForFence(uint64 fenceValue);
 	void WaitForIdle();
 
-	uint64 PollCurrentFenceValue();
+	bool IsFenceComplete(uint64 fenceValue);
+	uint64 IncrementFence();
+
 	uint64 GetLastCompletedFence() const { return m_LastCompletedFenceValue; }
 	uint64 GetNextFenceValue() const { return m_NextFenceValue; }
 	ID3D12Fence* GetFence() const { return m_pFence.Get(); }
 
-	CommandAllocatorPool* GetAllocatorPool() const { return m_pAllocatorPool.get(); }
+	ID3D12CommandAllocator* RequestAllocator();
+	void FreeAllocator(uint64 fenceValue, ID3D12CommandAllocator* pAllocator);
 
 private:
+	Graphics* m_pGraphics;
 	std::unique_ptr<CommandAllocatorPool> m_pAllocatorPool;
 
     ComPtr<ID3D12CommandQueue> m_pCommandQueue;

@@ -3,21 +3,23 @@
 #include "CommandAllocatorPool.h"
 #include "Graphics.h"
 
-CommandQueue::CommandQueue(ID3D12Device* pDevice, D3D12_COMMAND_LIST_TYPE type)
+CommandQueue::CommandQueue(Graphics* pGraphics, D3D12_COMMAND_LIST_TYPE type)
+	: m_pGraphics(pGraphics),
+	m_NextFenceValue((uint64)type << 56 | 1),
+	m_LastCompletedFenceValue((uint64)type << 56),
+	m_Type(type)
 {
+	m_pAllocatorPool = std::make_unique<CommandAllocatorPool>(pGraphics->GetDevice(), type);
+
 	D3D12_COMMAND_QUEUE_DESC desc = {};
 	desc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
 	desc.NodeMask = 0;
 	desc.Priority = 0;
-	m_Type = type;
 
-	HR(pDevice->CreateCommandQueue(&desc, IID_PPV_ARGS(m_pCommandQueue.GetAddressOf())));
-	HR(pDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(m_pFence.GetAddressOf())));
-	m_pFence->Signal(m_LastCompletedFenceValue);
+	HR(pGraphics->GetDevice()->CreateCommandQueue(&desc, IID_PPV_ARGS(m_pCommandQueue.GetAddressOf())));
+	HR(pGraphics->GetDevice()->CreateFence(m_LastCompletedFenceValue, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(m_pFence.GetAddressOf())));
 
 	m_pFenceEventHandle = CreateEventEx(nullptr, nullptr, 0, EVENT_ALL_ACCESS);
-
-	m_pAllocatorPool = std::make_unique<CommandAllocatorPool>(pDevice, m_Type);
 }
 
 CommandQueue::~CommandQueue()
@@ -25,18 +27,12 @@ CommandQueue::~CommandQueue()
 	CloseHandle(m_pFenceEventHandle);
 }
 
-uint64 CommandQueue::ExecuteCommandList(CommandContext* pCommandList, bool waitForCompletion)
+uint64 CommandQueue::ExecuteCommandList(ID3D12CommandList* pCommandList)
 {
-	HR(pCommandList->pCommandList->Close());
-	ID3D12CommandList* pCommandLists[] = { pCommandList->pCommandList };
-	m_pCommandQueue->ExecuteCommandLists(1, pCommandLists);
 	std::lock_guard<std::mutex> lock(m_FenceMutex);
+	static_cast<ID3D12GraphicsCommandList*>(pCommandList)->Close();
+	m_pCommandQueue->ExecuteCommandLists(1, &pCommandList);
 	m_pCommandQueue->Signal(m_pFence.Get(), m_NextFenceValue);
-	m_pAllocatorPool->FreeAllocator(pCommandList->pAllocator, m_NextFenceValue);
-	if (waitForCompletion)
-	{
-		WaitForFenceBlock(m_NextFenceValue);
-	}
 	return m_NextFenceValue++;
 }
 
@@ -50,14 +46,10 @@ bool CommandQueue::IsFenceComplete(uint64 fenceValue)
 	return fenceValue <= m_LastCompletedFenceValue;
 }
 
-void CommandQueue::InsertWait(uint64 fenceValue)
+void CommandQueue::InsertWaitForFence(uint64 fenceValue)
 {
-	m_pCommandQueue->Wait(m_pFence.Get(), fenceValue);
-}
-
-void CommandQueue::InsertWaitForQueueFence(CommandQueue* pQueue, uint64 fenceValue)
-{
-	m_pCommandQueue->Wait(pQueue->GetFence(), fenceValue);
+	CommandQueue* pFenceValueOwner = m_pGraphics->GetCommandQueue((D3D12_COMMAND_LIST_TYPE)(fenceValue >> 56));
+	m_pCommandQueue->Wait(pFenceValueOwner->GetFence(), fenceValue);
 }
 
 void CommandQueue::InsertWaitForQueue(CommandQueue* pQueue)
@@ -72,29 +64,32 @@ uint64 CommandQueue::IncrementFence()
 	return m_NextFenceValue++;
 }
 
-void CommandQueue::WaitForFenceBlock(uint64 fenceValue)
+ID3D12CommandAllocator* CommandQueue::RequestAllocator()
+{
+	uint64 completedFence = m_pFence->GetCompletedValue();
+	return m_pAllocatorPool->GetAllocator(completedFence);
+}
+
+void CommandQueue::FreeAllocator(uint64 fenceValue, ID3D12CommandAllocator* pAllocator)
+{
+	m_pAllocatorPool->FreeAllocator(pAllocator, fenceValue);
+}
+
+void CommandQueue::WaitForFence(uint64 fenceValue)
 {
 	if (IsFenceComplete(fenceValue))
 	{
 		return;
 	}
 
-	{
-		std::lock_guard<std::mutex> lockGuard(m_EventMutex);
+	std::lock_guard<std::mutex> lockGuard(m_EventMutex);
 
-		m_pFence->SetEventOnCompletion(fenceValue, m_pFenceEventHandle);
-		WaitForSingleObject(m_pFenceEventHandle, INFINITE);
-		m_LastCompletedFenceValue = fenceValue;
-	}
+	m_pFence->SetEventOnCompletion(fenceValue, m_pFenceEventHandle);
+	WaitForSingleObject(m_pFenceEventHandle, INFINITE);
+	m_LastCompletedFenceValue = fenceValue;
 }
 
 void CommandQueue::WaitForIdle()
 {
-	WaitForFenceBlock(IncrementFence());
-}
-
-uint64 CommandQueue::PollCurrentFenceValue()
-{
-	m_LastCompletedFenceValue = std::max(m_LastCompletedFenceValue, m_pFence->GetCompletedValue());
-	return m_LastCompletedFenceValue;
+	WaitForFence(IncrementFence());
 }

@@ -7,14 +7,7 @@ using WindowHandle = HWND;
 #endif
 
 class CommandQueue;
-
-class CommandContext
-{
-public:
-	ID3D12GraphicsCommandList* pCommandList;
-	ID3D12CommandAllocator* pAllocator;
-	D3D12_COMMAND_LIST_TYPE QueueType;
-};
+class CommandContext;
 
 class Graphics
 {
@@ -29,25 +22,23 @@ public:
 	ID3D12Device* GetDevice() const { return m_pDevice.Get(); }
 	void OnResize(int width, int height);
 
-	CommandQueue* GetMainCommandQueue() const;
-	CommandContext* AllocatorCommandList(D3D12_COMMAND_LIST_TYPE type);
+	void WaitForFence(uint64 fenceValue);
+	CommandQueue* GetCommandQueue(D3D12_COMMAND_LIST_TYPE type) const;
+	CommandContext* AllocateCommandList(D3D12_COMMAND_LIST_TYPE type = D3D12_COMMAND_LIST_TYPE_DIRECT);
 	void FreeCommandList(CommandContext* pCommandList);
 
-	uint64 ExecuteCommandList(CommandContext* pContext, bool waitForCompletion = false);
 	void IdleGPU();
-
 private:
 	static const uint32 FRAME_COUNT = 2;
 
-	std::map<D3D12_COMMAND_LIST_TYPE, std::unique_ptr<CommandQueue>> m_CommandQueues;
-	std::vector<CommandContext> m_CommandListPool;
+	std::array<std::unique_ptr<CommandQueue>, 1> m_CommandQueues;
+	std::vector<std::unique_ptr<CommandContext>> m_CommandListPool;
 	std::queue<CommandContext*> m_FreeCommandLists;
-
 	std::vector<ComPtr<ID3D12CommandList>> m_CommandLists;
 
 	// Pipeline objects.
-	D3D12_VIEWPORT m_Viewport;
-	D3D12_RECT m_ScissorRect;
+	Rect m_Viewport;
+	Rect m_ScissorRect;
 	ComPtr<IDXGIFactory3> m_pFactory;
 	ComPtr<IDXGISwapChain3> m_pSwapchain;
 	ComPtr<ID3D12Device> m_pDevice;
@@ -78,15 +69,13 @@ private:
 
 	//void MakeWindow();
 	void InitD3D(WindowHandle pWindow);
-	void CreateCommandObjects();
 	void CreateSwapchain(WindowHandle pWindow);
-	void CreateRtvAndDsvHeaps();
+	void CreateDescriptorHeaps();
 
 	DXGI_FORMAT m_DepthStencilFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
 	DXGI_FORMAT m_RenderTargetFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
 
 	void InitializeAssets();
-	void BuildDescriptorHeaps();
 	void BuildConstantBuffers();
 	void BuildRootSignature();
 	void BuildShadersAndInputLayout();
