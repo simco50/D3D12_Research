@@ -7,12 +7,14 @@ cbuffer Data : register(b0)
 struct VSInput
 {
 	float3 position : POSITION;
+	float2 texCoord : TEXCOORD;
 	float3 normal : NORMAL;
 };
 
 struct PSInput
 {
 	float4 position : SV_POSITION;
+	float2 texCoord : TEXCOORD;
 	float3 normal : NORMAL;
 };
 
@@ -21,6 +23,7 @@ PSInput VSMain(VSInput input)
 	PSInput result;
 	
 	result.position = mul(float4(input.position, 1.0f), WorldViewProjection);
+	result.texCoord = input.texCoord;
 	result.normal = normalize(mul(input.normal, (float3x3)World));
 	return result;
 }

@@ -28,11 +28,17 @@ public:
 	void InsertResourceBarrier(D3D12_RESOURCE_BARRIER barrier, bool executeImmediate = false);
 	void FlushResourceBarriers();
 
+	void SetDynamicConstantBufferView(int slot, void* pData, uint32 dataSize);
+	void SetDynamicVertexBuffer(int slot, int elementCount, int elementSize, void* pData);
+	void SetDynamicIndexBuffer(int elementCount, void* pData);
+
 	ID3D12GraphicsCommandList* GetCommandList() const { return m_pCommandList; }
 private:
+	static const int MAX_QUEUED_BARRIERS = 12;
+
 	void PrepareDraw();
 
-	std::array<D3D12_RESOURCE_BARRIER, 6> m_QueuedBarriers = {};
+	std::array<D3D12_RESOURCE_BARRIER, MAX_QUEUED_BARRIERS> m_QueuedBarriers = {};
 	int m_NumQueuedBarriers = 0;
 
 	D3D12_CPU_DESCRIPTOR_HANDLE* m_pRenderTarget;

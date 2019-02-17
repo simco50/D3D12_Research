@@ -2,11 +2,11 @@
 #include "CommandContext.h"
 #include "Graphics.h"
 #include "CommandQueue.h"
+#include "DynamicResourceAllocator.h"
 
 CommandContext::CommandContext(Graphics* pGraphics, ID3D12GraphicsCommandList* pCommandList, ID3D12CommandAllocator* pAllocator, D3D12_COMMAND_LIST_TYPE type)
 	: m_pGraphics(pGraphics), m_pCommandList(pCommandList), m_pAllocator(pAllocator), m_Type(type)
 {
-
 }
 
 CommandContext::~CommandContext()
@@ -31,6 +31,7 @@ uint64 CommandContext::Execute(bool wait)
 		pQueue->WaitForFence(fenceValue);
 	}
 	m_pGraphics->FreeCommandList(this);
+	m_pGraphics->GetCpuVisibleAllocator()->Free(fenceValue);
 	return fenceValue;
 }
 
@@ -123,9 +124,38 @@ void CommandContext::FlushResourceBarriers()
 	}
 }
 
+void CommandContext::SetDynamicConstantBufferView(int slot, void* pData, uint32 dataSize)
+{
+	DynamicAllocation allocation = m_pGraphics->GetCpuVisibleAllocator()->Allocate(dataSize);
+	memcpy(allocation.pMappedMemory, pData, dataSize);
+	m_pCommandList->SetGraphicsRootConstantBufferView(slot, allocation.GpuHandle);
+}
+
+void CommandContext::SetDynamicVertexBuffer(int slot, int elementCount, int elementSize, void* pData)
+{
+	DynamicAllocation allocation = m_pGraphics->GetCpuVisibleAllocator()->Allocate(elementCount * elementSize);
+	memcpy(allocation.pMappedMemory, pData, elementCount * elementSize);
+	D3D12_VERTEX_BUFFER_VIEW view = {};
+	view.BufferLocation = allocation.GpuHandle;
+	view.SizeInBytes = elementSize * elementCount;
+	view.StrideInBytes = elementSize;
+	m_pCommandList->IASetVertexBuffers(slot, 1, &view);
+}
+
+void CommandContext::SetDynamicIndexBuffer(int elementCount, void* pData)
+{
+	DynamicAllocation allocation = m_pGraphics->GetCpuVisibleAllocator()->Allocate(elementCount * sizeof(uint32));
+	memcpy(allocation.pMappedMemory, pData, elementCount * sizeof(uint32));
+	D3D12_INDEX_BUFFER_VIEW view = {};
+	view.BufferLocation = allocation.GpuHandle;
+	view.SizeInBytes = elementCount * sizeof(uint32);
+	view.Format = DXGI_FORMAT_R32_UINT;
+	m_pCommandList->IASetIndexBuffer(&view);
+}
+
 void CommandContext::InsertResourceBarrier(D3D12_RESOURCE_BARRIER barrier, bool executeImmediate /*= false*/)
 {
-	if (m_NumQueuedBarriers >= 16)
+	if (m_NumQueuedBarriers >= m_QueuedBarriers.size())
 	{
 		FlushResourceBarriers();
 	}

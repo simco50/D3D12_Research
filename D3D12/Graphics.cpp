@@ -12,7 +12,9 @@
 #include <assert.h>
 #include "DescriptorAllocator.h"
 
-#pragma comment(lib, "dxguid.lib")
+#define STB_IMAGE_IMPLEMENTATION
+#include "External/Stb/stb_image.h"
+#include "DynamicResourceAllocator.h"
 
 const uint32 Graphics::FRAME_COUNT;
 
@@ -44,8 +46,6 @@ void Graphics::Update()
 	pCommandList->SetPipelineState(m_pPipelineStateObject.Get());
 	pCommandList->SetGraphicsRootSignature(m_pRootSignature.Get());
 
-	pCommandList->SetGraphicsRootConstantBufferView(0, m_pConstantBuffer->GetGPUVirtualAddress());
-
 	pContext->SetViewport(m_Viewport);
 	pContext->SetScissorRect(m_ScissorRect);
 
@@ -57,6 +57,19 @@ void Graphics::Update()
 	Color clearColor = Color(0.1f, 0.1f, 0.1f, 1.0f);
 	pContext->ClearRenderTarget(m_RenderTargetHandles[m_CurrentBackBufferIndex], clearColor);
 	pContext->ClearDepth(m_DepthStencilHandle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0);
+
+	struct ConstantBufferData
+	{
+		Matrix World;
+		Matrix WorldViewProjection;
+	} Data;
+	Matrix proj = XMMatrixPerspectiveFovLH(XM_PIDIV4, (float)m_WindowWidth / m_WindowHeight, 0.1f, 1000);
+	Matrix view = XMMatrixLookAtLH(Vector3(0, 5, 0), Vector3(0, 0, 500), Vector3(0, 1, 0));
+	Matrix world = XMMatrixRotationRollPitchYaw(0, GameTimer::GameTime(), 0) * XMMatrixTranslation(0, -50, 500);
+	Data.World = world;
+	Data.WorldViewProjection = world * view * proj;
+	int size = (sizeof(ConstantBufferData) + 255) & ~255;
+	pContext->SetDynamicConstantBufferView(0, &Data, size);
 
 	pContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	pContext->SetVertexBuffer(m_VertexBufferView);
@@ -88,15 +101,19 @@ void Graphics::Shutdown()
 
 void Graphics::InitD3D(WindowHandle pWindow)
 {
+	UINT dxgiFactoryFlags = 0;
+
 #ifdef _DEBUG
 	//Enable debug
 	ComPtr<ID3D12Debug> pDebugController;
 	HR(D3D12GetDebugInterface(IID_PPV_ARGS(&pDebugController)));
 	pDebugController->EnableDebugLayer();
+	// Enable additional debug layers.
+	dxgiFactoryFlags |= DXGI_CREATE_FACTORY_DEBUG;
 #endif
 
 	//Create the factory
-	HR(CreateDXGIFactory1(IID_PPV_ARGS(&m_pFactory)));
+	HR(CreateDXGIFactory2(dxgiFactoryFlags, IID_PPV_ARGS(&m_pFactory)));
 
 	//Create the device
 	HR(D3D12CreateDevice(nullptr, D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&m_pDevice)));
@@ -119,6 +136,8 @@ void Graphics::InitD3D(WindowHandle pWindow)
 
 	CreateSwapchain(pWindow);
 	CreateDescriptorHeaps();
+
+	m_pDynamicCpuVisibleAllocator = std::make_unique<DynamicResourceAllocator>(m_pDevice.Get(), true, 512);
 }
 
 void Graphics::CreateSwapchain(WindowHandle pWindow)
@@ -162,7 +181,7 @@ void Graphics::OnResize(int width, int height)
 	m_WindowWidth = width;
 	m_WindowHeight = height;
 
-	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_DIRECT]->WaitForIdle();
+	IdleGPU();
 
 	for (int i = 0; i < FRAME_COUNT; ++i)
 	{
@@ -206,19 +225,16 @@ void Graphics::OnResize(int width, int height)
 	clearValue.Format = m_DepthStencilFormat;
 	clearValue.DepthStencil.Depth = 1.0f;
 	clearValue.DepthStencil.Stencil = 0;
+	D3D12_HEAP_PROPERTIES heapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
 	HR(m_pDevice->CreateCommittedResource(
-		&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
+		&heapProperties,
 		D3D12_HEAP_FLAG_NONE,
 		&desc,
-		D3D12_RESOURCE_STATE_COMMON,
+		D3D12_RESOURCE_STATE_DEPTH_WRITE,
 		&clearValue,
 		IID_PPV_ARGS(&m_pDepthStencilBuffer)));
 	m_DepthStencilHandle = m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_DSV]->AllocateDescriptor();
 	m_pDevice->CreateDepthStencilView(m_pDepthStencilBuffer.Get(), nullptr, m_DepthStencilHandle);
-
-	CommandContext* pContext = AllocateCommandList(D3D12_COMMAND_LIST_TYPE_DIRECT);
-	pContext->InsertResourceBarrier(CD3DX12_RESOURCE_BARRIER::Transition(m_pDepthStencilBuffer.Get(), D3D12_RESOURCE_STATE_COMMON,	D3D12_RESOURCE_STATE_DEPTH_WRITE));
-	pContext->Execute(true);
 
 	m_Viewport.height = m_WindowHeight;
 	m_Viewport.width = m_WindowWidth;
@@ -233,43 +249,11 @@ void Graphics::OnResize(int width, int height)
 
 void Graphics::InitializeAssets()
 {
-	BuildConstantBuffers();
 	BuildRootSignature();
 	BuildShadersAndInputLayout();
 	BuildGeometry();
+	LoadTexture();
 	BuildPSO();
-}
-
-void Graphics::BuildConstantBuffers()
-{
-	// Create the constant buffer.
-	struct ConstantBufferData
-	{
-		Matrix World;
-		Matrix WorldViewProjection;
-	} Data;
-	Matrix proj = XMMatrixPerspectiveFovLH(XM_PIDIV4, 1240.0f / 720, 0.1f, 1000);
-	Matrix view = XMMatrixLookAtLH(Vector3(0, 50, 0), Vector3(0, 0, 500), Vector3(0, 1, 0));
-	Matrix world = XMMatrixTranslation(0, -50, 500);
-	Data.World = world;
-	Data.WorldViewProjection = world * view * proj;
-	int size = (sizeof(ConstantBufferData) + 255) & ~255;
-
-	m_pDevice->CreateCommittedResource(
-		&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
-		D3D12_HEAP_FLAG_NONE,
-		&CD3DX12_RESOURCE_DESC::Buffer(size),
-		D3D12_RESOURCE_STATE_GENERIC_READ,
-		nullptr,
-		IID_PPV_ARGS(&m_pConstantBuffer));
-
-	// Map and initialize the constant buffer. We don't unmap this until the
-	// app closes. Keeping things mapped for the lifetime of the resource is okay.
-	// We do not intend to read from this resource on the CPU.
-	CD3DX12_RANGE readRange(0, 0);
-	void* pData = nullptr;
-	m_pConstantBuffer->Map(0, &readRange, reinterpret_cast<void**>(&pData));
-	memcpy(pData, &Data, sizeof(Data));
 }
 
 void Graphics::BuildRootSignature()
@@ -277,8 +261,6 @@ void Graphics::BuildRootSignature()
 	CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC desc = {};
 
 	CD3DX12_ROOT_PARAMETER1 rootParameters[1];
-	CD3DX12_DESCRIPTOR_RANGE1 range[1];
-	range[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
 	rootParameters[0].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_VERTEX);
 
 	D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
@@ -287,7 +269,8 @@ void Graphics::BuildRootSignature()
 		D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
 		D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
 
-	desc.Init_1_1(1, rootParameters, 0, nullptr, rootSignatureFlags);
+	D3D12_STATIC_SAMPLER_DESC samplerDesc = CD3DX12_STATIC_SAMPLER_DESC(0);
+	desc.Init_1_1(1, rootParameters, 1, &samplerDesc, rootSignatureFlags);
 	
 	ComPtr<ID3DBlob> pDataBlob, pErrorBlob;
 	HR(D3D12SerializeVersionedRootSignature(&desc, pDataBlob.GetAddressOf(), pErrorBlob.GetAddressOf()));
@@ -304,7 +287,7 @@ void Graphics::BuildShadersAndInputLayout()
 #endif
 	compileFlags |= D3DCOMPILE_PACK_MATRIX_ROW_MAJOR;
 
-	std::ifstream file("shaders.hlsl", std::ios::ate);
+	std::ifstream file("Resources/shaders.hlsl", std::ios::ate);
 	if (file.fail())
 	{
 		static int a = 0;
@@ -335,7 +318,8 @@ void Graphics::BuildShadersAndInputLayout()
 
 	//Input layout
 	m_InputElements.push_back(D3D12_INPUT_ELEMENT_DESC{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 });
-	m_InputElements.push_back(D3D12_INPUT_ELEMENT_DESC{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 });
+	m_InputElements.push_back(D3D12_INPUT_ELEMENT_DESC{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 });
+	m_InputElements.push_back(D3D12_INPUT_ELEMENT_DESC{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 20, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 });
 }
 
 void Graphics::BuildGeometry()
@@ -343,11 +327,12 @@ void Graphics::BuildGeometry()
 	struct Vertex
 	{
 		Vector3 Position;
+		Vector2 TexCoord;
 		Vector3 Normal;
 	};
 
 	Assimp::Importer importer;
-	const aiScene* pScene = importer.ReadFile("Man.dae",
+	const aiScene* pScene = importer.ReadFile("Resources/Man.dae",
 		aiProcess_Triangulate |
 		aiProcess_ConvertToLeftHanded |
 		aiProcess_GenSmoothNormals |
@@ -360,6 +345,7 @@ void Graphics::BuildGeometry()
 	{
 		Vertex& vertex = vertices[i];
 		vertex.Position = *reinterpret_cast<Vector3*>(&pScene->mMeshes[0]->mVertices[i]);
+		vertex.TexCoord = *reinterpret_cast<Vector2*>(&pScene->mMeshes[0]->mTextureCoords[0][i]);
 		vertex.Normal = *reinterpret_cast<Vector3*>(&pScene->mMeshes[0]->mNormals[i]);
 	}
 
@@ -392,6 +378,79 @@ void Graphics::BuildGeometry()
 	m_IndexBufferView.Format = DXGI_FORMAT_R32_UINT;
 
 	pC->Execute(true);
+}
+
+void Graphics::LoadTexture()
+{
+	std::ifstream file("Resources/Man.png", std::ios::ate | std::ios::binary);
+	std::vector<char> buffer((size_t)file.tellg());
+	file.seekg(0);
+	file.read(buffer.data(), buffer.size());
+
+	int width, height, components;
+	void* pPixels = stbi_load_from_memory((unsigned char*)buffer.data(), (int)buffer.size(), &width, &height, &components, 4);
+
+	HR(m_pDevice->CreateCommittedResource(
+		&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT), 
+		D3D12_HEAP_FLAG_NONE, 
+		&CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R8G8B8A8_UNORM, width, height), 
+		D3D12_RESOURCE_STATE_COPY_DEST, 
+		nullptr,
+		IID_PPV_ARGS(m_pTexture.GetAddressOf())));
+
+	ComPtr<ID3D12Resource> pUploadBuffer;
+
+	// In order to copy CPU memory data into our default buffer, we need to create
+	// an intermediate upload heap. 
+	HR(m_pDevice->CreateCommittedResource(
+		&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
+		D3D12_HEAP_FLAG_NONE,
+		&CD3DX12_RESOURCE_DESC::Buffer(width * height * components),
+		D3D12_RESOURCE_STATE_GENERIC_READ,
+		nullptr,
+		IID_PPV_ARGS(pUploadBuffer.GetAddressOf())));
+
+	// Describe the data we want to copy into the default buffer.
+	D3D12_SUBRESOURCE_DATA subResourceData = {};
+	subResourceData.pData = pPixels;
+	subResourceData.RowPitch = width * height * components;
+	subResourceData.SlicePitch = subResourceData.RowPitch;
+
+	CommandContext* pContext = AllocateCommandList(D3D12_COMMAND_LIST_TYPE_DIRECT);
+	ID3D12GraphicsCommandList* pCmd = pContext->GetCommandList();
+
+	// Schedule to copy the data to the default buffer resource.  At a high level, the helper function UpdateSubresources
+	// will copy the CPU memory into the intermediate upload heap.  Then, using ID3D12CommandList::CopySubresourceRegion,
+	// the intermediate upload heap data will be copied to mBuffer.
+	UpdateSubresources<1>(pCmd, m_pTexture.Get(), pUploadBuffer.Get(), 0, 0, 1, &subResourceData);
+	pCmd->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(m_pTexture.Get(),
+		D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_GENERIC_READ));
+
+	pContext->Execute(true);
+
+	stbi_image_free(pPixels);
+
+	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+	srvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	srvDesc.Texture2D.MipLevels = 1;
+	srvDesc.Texture2D.MostDetailedMip = 0;
+	srvDesc.Texture2D.PlaneSlice = 0;
+	srvDesc.Texture2D.ResourceMinLODClamp = 0;
+	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+
+	m_TextureHandle = m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV]->AllocateDescriptor();
+	m_pDevice->CreateShaderResourceView(m_pTexture.Get(), &srvDesc, m_TextureHandle);
+
+	D3D12_SAMPLER_DESC samplerDesc = {};
+	samplerDesc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+	samplerDesc.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+	samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+	samplerDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+	samplerDesc.Filter = D3D12_FILTER_MIN_MAG_POINT_MIP_LINEAR;
+
+	m_SamplerHandle = m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER]->AllocateDescriptor();
+	m_pDevice->CreateSampler(&samplerDesc, m_SamplerHandle);
 }
 
 void Graphics::BuildPSO()

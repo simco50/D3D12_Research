@@ -9,6 +9,7 @@ using WindowHandle = HWND;
 class CommandQueue;
 class CommandContext;
 class DescriptorAllocator;
+class DynamicResourceAllocator;
 
 class Graphics
 {
@@ -27,10 +28,13 @@ public:
 	CommandQueue* GetCommandQueue(D3D12_COMMAND_LIST_TYPE type) const;
 	CommandContext* AllocateCommandList(D3D12_COMMAND_LIST_TYPE type = D3D12_COMMAND_LIST_TYPE_DIRECT);
 	void FreeCommandList(CommandContext* pCommandList);
-
 	void IdleGPU();
+
+	DynamicResourceAllocator* GetCpuVisibleAllocator() const { return m_pDynamicCpuVisibleAllocator.get(); }
 private:
 	static const uint32 FRAME_COUNT = 2;
+
+	std::unique_ptr<DynamicResourceAllocator> m_pDynamicCpuVisibleAllocator;
 
 	std::array<std::unique_ptr<CommandQueue>, 1> m_CommandQueues;
 	std::vector<std::unique_ptr<CommandContext>> m_CommandListPool;
@@ -67,14 +71,18 @@ private:
 	DXGI_FORMAT m_RenderTargetFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
 
 	void InitializeAssets();
-	void BuildConstantBuffers();
 	void BuildRootSignature();
 	void BuildShadersAndInputLayout();
 	void BuildGeometry();
+	void LoadTexture();
 	void BuildPSO();
 
 	std::array<D3D12_CPU_DESCRIPTOR_HANDLE, FRAME_COUNT> m_RenderTargetHandles;
 	D3D12_CPU_DESCRIPTOR_HANDLE m_DepthStencilHandle;
+
+	ComPtr<ID3D12Resource> m_pTexture;
+	D3D12_CPU_DESCRIPTOR_HANDLE m_TextureHandle;
+	D3D12_CPU_DESCRIPTOR_HANDLE m_SamplerHandle;
 
 	ComPtr<ID3D12Resource> m_pVertexBuffer;
 	ComPtr<ID3D12Resource> m_pIndexBuffer;
@@ -85,7 +93,6 @@ private:
 	ComPtr<ID3DBlob> m_pPixelShaderCode;
 	std::vector<D3D12_INPUT_ELEMENT_DESC> m_InputElements;
 	ComPtr<ID3D12PipelineState> m_pPipelineStateObject;
-	ComPtr<ID3D12Resource> m_pConstantBuffer;
 	int m_IndexCount = 0;
 };
 
