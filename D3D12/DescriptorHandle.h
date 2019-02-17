@@ -20,19 +20,23 @@ public:
 	{
 	}
 
-	DescriptorHandle operator+ (uint32 OffsetScaledByDescriptorSize) const
+	DescriptorHandle operator+ (uint32 offsetScaledByDescriptorSize) const
 	{
 		DescriptorHandle ret = *this;
-		ret += OffsetScaledByDescriptorSize;
+		ret += offsetScaledByDescriptorSize;
 		return ret;
 	}
 
-	void operator += (uint32 OffsetScaledByDescriptorSize)
+	void operator += (uint32 offsetScaledByDescriptorSize)
 	{
 		if (m_CpuHandle.ptr != -1)
-			m_CpuHandle.ptr += OffsetScaledByDescriptorSize;
+		{
+			m_CpuHandle.ptr += offsetScaledByDescriptorSize;
+		}
 		if (m_GpuHandle.ptr != -1)
-			m_GpuHandle.ptr += OffsetScaledByDescriptorSize;
+		{
+			m_GpuHandle.ptr += offsetScaledByDescriptorSize;
+		}
 	}
 
 	D3D12_CPU_DESCRIPTOR_HANDLE GetCpuHandle() const { return m_CpuHandle; }

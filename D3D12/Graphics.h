@@ -10,6 +10,7 @@ class CommandQueue;
 class CommandContext;
 class DescriptorAllocator;
 class DynamicResourceAllocator;
+class ImGuiRenderer;
 
 class Graphics
 {
@@ -76,6 +77,8 @@ private:
 	void BuildGeometry();
 	void LoadTexture();
 	void BuildPSO();
+
+	std::unique_ptr<ImGuiRenderer> m_pImGuiRenderer;
 
 	std::array<D3D12_CPU_DESCRIPTOR_HANDLE, FRAME_COUNT> m_RenderTargetHandles;
 	D3D12_CPU_DESCRIPTOR_HANDLE m_DepthStencilHandle;

@@ -1,4 +1,6 @@
 #pragma once
+#include "DescriptorHandle.h"
+
 class DescriptorAllocator
 {
 public:
@@ -17,4 +19,3 @@ private:
 	uint32 m_DescriptorSize = 0;
 	uint32 m_RemainingDescriptors = 0;
 };
-

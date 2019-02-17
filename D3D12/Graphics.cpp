@@ -15,6 +15,8 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "External/Stb/stb_image.h"
 #include "DynamicResourceAllocator.h"
+#include "ImGuiRenderer.h"
+#include "External/Imgui/imgui.h"
 
 const uint32 Graphics::FRAME_COUNT;
 
@@ -39,6 +41,9 @@ void Graphics::Initialize(WindowHandle window)
 void Graphics::Update()
 {
 	WaitForFence(m_FenceValues[m_CurrentBackBufferIndex]);
+
+	m_pImGuiRenderer->NewFrame();
+	ImGui::ShowDemoWindow();
 
 	CommandContext* pContext = AllocateCommandList(D3D12_COMMAND_LIST_TYPE_DIRECT);
 	ID3D12GraphicsCommandList* pCommandList = pContext->GetCommandList();
@@ -68,16 +73,16 @@ void Graphics::Update()
 	Matrix world = XMMatrixRotationRollPitchYaw(0, GameTimer::GameTime(), 0) * XMMatrixTranslation(0, -50, 500);
 	Data.World = world;
 	Data.WorldViewProjection = world * view * proj;
-	int size = (sizeof(ConstantBufferData) + 255) & ~255;
-	pContext->SetDynamicConstantBufferView(0, &Data, size);
+	pContext->SetDynamicConstantBufferView(0, &Data, sizeof(ConstantBufferData));
 
 	pContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	pContext->SetVertexBuffer(m_VertexBufferView);
 	pContext->SetIndexBuffer(m_IndexBufferView);
 	pContext->DrawIndexed(m_IndexCount, 0);
-
+	
+	m_pImGuiRenderer->Render(*pContext);
+	
 	pContext->InsertResourceBarrier(CD3DX12_RESOURCE_BARRIER::Transition(m_RenderTargets[m_CurrentBackBufferIndex].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT));
-
 	m_FenceValues[m_CurrentBackBufferIndex] = pContext->Execute(false);
 
 	m_pSwapchain->Present(1, 0);
@@ -137,7 +142,7 @@ void Graphics::InitD3D(WindowHandle pWindow)
 	CreateSwapchain(pWindow);
 	CreateDescriptorHeaps();
 
-	m_pDynamicCpuVisibleAllocator = std::make_unique<DynamicResourceAllocator>(m_pDevice.Get(), true, 512);
+	m_pDynamicCpuVisibleAllocator = std::make_unique<DynamicResourceAllocator>(m_pDevice.Get(), true, 1024 * 1024);
 }
 
 void Graphics::CreateSwapchain(WindowHandle pWindow)
@@ -254,6 +259,8 @@ void Graphics::InitializeAssets()
 	BuildGeometry();
 	LoadTexture();
 	BuildPSO();
+
+	m_pImGuiRenderer = std::make_unique<ImGuiRenderer>(m_pDevice.Get());
 }
 
 void Graphics::BuildRootSignature()
