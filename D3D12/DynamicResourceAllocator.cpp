@@ -42,6 +42,9 @@ DynamicAllocation DynamicResourceAllocator::Allocate(int size)
 	DynamicAllocation allocation;
 	allocation.pBackingResource = m_pBackingResource.Get();
 	allocation.Size = size;
+
+	m_CurrentOffset = ((size_t)m_CurrentOffset + 255) & ~255;
+
 	if (size + m_CurrentOffset >= m_Size)
 	{
 		m_CurrentOffset = 0;
@@ -51,6 +54,7 @@ DynamicAllocation DynamicResourceAllocator::Allocate(int size)
 			assert(m_CurrentOffset + size <= maxOffset);
 		}
 	}
+
 	allocation.GpuHandle = m_pBackingResource->GetGPUVirtualAddress() + m_CurrentOffset;
 	allocation.Offset = m_CurrentOffset;
 	allocation.pMappedMemory = static_cast<char*>(m_pMappedMemory) + m_CurrentOffset;

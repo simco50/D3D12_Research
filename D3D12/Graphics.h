@@ -27,9 +27,12 @@ public:
 
 	void WaitForFence(uint64 fenceValue);
 	CommandQueue* GetCommandQueue(D3D12_COMMAND_LIST_TYPE type) const;
-	CommandContext* AllocateCommandList(D3D12_COMMAND_LIST_TYPE type = D3D12_COMMAND_LIST_TYPE_DIRECT);
+	CommandContext* AllocateCommandContext(D3D12_COMMAND_LIST_TYPE type = D3D12_COMMAND_LIST_TYPE_DIRECT);
 	void FreeCommandList(CommandContext* pCommandList);
 	void IdleGPU();
+
+	uint32 GetWindowWidth() const { return m_WindowWidth; }
+	uint32 GetWindowHeight() const { return m_WindowHeight; }
 
 	DynamicResourceAllocator* GetCpuVisibleAllocator() const { return m_pDynamicCpuVisibleAllocator.get(); }
 private:
@@ -85,7 +88,6 @@ private:
 
 	ComPtr<ID3D12Resource> m_pTexture;
 	D3D12_CPU_DESCRIPTOR_HANDLE m_TextureHandle;
-	D3D12_CPU_DESCRIPTOR_HANDLE m_SamplerHandle;
 
 	ComPtr<ID3D12Resource> m_pVertexBuffer;
 	ComPtr<ID3D12Resource> m_pIndexBuffer;

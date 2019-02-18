@@ -4,6 +4,10 @@
 #include "CommandQueue.h"
 #include "DynamicResourceAllocator.h"
 
+#if _DEBUG
+#include <pix3.h>
+#endif
+
 CommandContext::CommandContext(Graphics* pGraphics, ID3D12GraphicsCommandList* pCommandList, ID3D12CommandAllocator* pAllocator, D3D12_COMMAND_LIST_TYPE type)
 	: m_pGraphics(pGraphics), m_pCommandList(pCommandList), m_pAllocator(pAllocator), m_Type(type)
 {
@@ -11,7 +15,6 @@ CommandContext::CommandContext(Graphics* pGraphics, ID3D12GraphicsCommandList* p
 
 CommandContext::~CommandContext()
 {
-
 }
 
 void CommandContext::Reset()
@@ -32,6 +35,19 @@ uint64 CommandContext::Execute(bool wait)
 	}
 	m_pGraphics->FreeCommandList(this);
 	m_pGraphics->GetCpuVisibleAllocator()->Free(fenceValue);
+	return fenceValue;
+}
+
+uint64 CommandContext::ExecuteAndReset(bool wait)
+{
+	FlushResourceBarriers();
+	CommandQueue* pQueue = m_pGraphics->GetCommandQueue(m_Type);
+	uint64 fenceValue = pQueue->ExecuteCommandList(m_pCommandList);
+	if (wait)
+	{
+		pQueue->WaitForFence(fenceValue);
+	}
+	m_pCommandList->Reset(m_pAllocator, nullptr);
 	return fenceValue;
 }
 
@@ -156,6 +172,20 @@ void CommandContext::SetDynamicIndexBuffer(int elementCount, void* pData)
 	m_pCommandList->IASetIndexBuffer(&view);
 }
 
+DynamicAllocation CommandContext::AllocatorUploadMemory(size_t size)
+{
+	return m_pGraphics->GetCpuVisibleAllocator()->Allocate(size);
+}
+
+void CommandContext::InitializeBuffer(ID3D12Resource* pResource, void* pData, uint32 dataSize)
+{
+	DynamicAllocation allocation = AllocatorUploadMemory(dataSize);
+	memcpy(allocation.pMappedMemory, pData, dataSize);
+	InsertResourceBarrier(CD3DX12_RESOURCE_BARRIER::Transition(pResource, D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_COPY_DEST), true);
+	m_pCommandList->CopyBufferRegion(pResource, 0, allocation.pBackingResource, allocation.Offset, dataSize);
+	InsertResourceBarrier(CD3DX12_RESOURCE_BARRIER::Transition(pResource, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_GENERIC_READ), true);
+}
+
 void CommandContext::InsertResourceBarrier(D3D12_RESOURCE_BARRIER barrier, bool executeImmediate /*= false*/)
 {
 	if (m_NumQueuedBarriers >= m_QueuedBarriers.size())
@@ -173,4 +203,25 @@ void CommandContext::InsertResourceBarrier(D3D12_RESOURCE_BARRIER barrier, bool 
 void CommandContext::PrepareDraw()
 {
 	m_pCommandList->OMSetRenderTargets(1, m_pRenderTarget, false, m_pDepthStencilView);
+}
+
+void CommandContext::MarkBegin(const wchar_t* pName)
+{
+#ifdef _DEBUG
+	::PIXBeginEvent(m_pCommandList, 0, pName);
+#endif
+}
+
+void CommandContext::MarkEvent(const wchar_t* pName)
+{
+#ifdef _DEBUG
+	::PIXSetMarker(m_pCommandList, 0, pName);
+#endif
+}
+
+void CommandContext::MarkEnd()
+{
+#ifdef _DEBUG
+	::PIXEndEvent(m_pCommandList);
+#endif
 }

@@ -80,6 +80,20 @@ solution (engineName)
 				postbuildcommands { ("copy \"$(SolutionDir)Libraries\\Assimp\\bin\\" .. p[j] .. "\\assimp-vc140-mt.dll\" \"$(OutDir)\"") }
 		end
 		links { "assimp-vc140-mt" }
+
+		configuration {}
+		includedirs (ROOT .. "Libraries/Pix/include")
+		libdirs (ROOT .. "Libraries/Pix/lib")
+		configuration { "windows" }
+			postbuildcommands { ("copy \"$(SolutionDir)Libraries\\Pix\\bin\\WinPixEventRuntime.dll\" \"$(OutDir)\"") }
+			links { "WinPixEventRuntime" }
+
+		configuration { "uwp" }
+			libdirs (ROOT .. "Libraries/Pix/lib/WinPixEventRuntime_UAP.lib")
+			postbuildcommands { ("copy \"$(SolutionDir)Libraries\\Pix\\bin\\WinPixEventRuntime_UAP.dll\" \"$(OutDir)\"") }
+			links { "WinPixEventRuntime_UAP" }
+
+		configuration {}
 		
 		includedirs { "$(ProjectDir)" }
 		configuration {}
