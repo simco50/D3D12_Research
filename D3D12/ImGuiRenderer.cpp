@@ -43,8 +43,7 @@ void ImGuiRenderer::Render(CommandContext& context)
 	Matrix projectionMatrix = XMMatrixOrthographicOffCenterLH(0.0f, (float)m_pGraphics->GetWindowWidth(), (float)m_pGraphics->GetWindowHeight(), 0.0f, 0.0f, 1.0f);
 	context.SetDynamicConstantBufferView(0, &projectionMatrix, sizeof(Matrix));
 	context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	context.SetViewport(Rect{ 0, 0, (long)m_pGraphics->GetWindowWidth(), (long)m_pGraphics->GetWindowHeight() }, 0, 1);
-	context.SetScissorRect(Rect{ 0, 0, (long)m_pGraphics->GetWindowWidth(), (long)m_pGraphics->GetWindowHeight() });
+	context.SetViewport(FloatRect(0, 0, (float)m_pGraphics->GetWindowWidth(), (float)m_pGraphics->GetWindowHeight()), 0, 1);
 
 	int vertexOffset = 0;
 	int indexOffset = 0;
@@ -62,8 +61,7 @@ void ImGuiRenderer::Render(CommandContext& context)
 				pcmd->UserCallback(pCmdList, pcmd);
 			else
 			{
-				//Rect scissor((int)pcmd->ClipRect.x, (int)pcmd->ClipRect.y, (int)pcmd->ClipRect.z - pcmd->ClipRect.x, (int)pcmd->ClipRect.w - pcmd->ClipRect.y);
-				//context.SetScissorRect(scissor);
+				context.SetScissorRect(FloatRect(pcmd->ClipRect.x, pcmd->ClipRect.y, pcmd->ClipRect.z, pcmd->ClipRect.w));
 				context.DrawIndexed(pcmd->ElemCount, indexOffset, vertexOffset);
 			}
 			indexOffset += pcmd->ElemCount;
@@ -168,7 +166,7 @@ void ImGuiRenderer::CreatePipelineState(const ComPtr<ID3DBlob>& pVertexShaderCod
 	psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
 	psoDesc.VS = CD3DX12_SHADER_BYTECODE(pVertexShaderCode.Get());
 	psoDesc.PS = CD3DX12_SHADER_BYTECODE(pPixelShaderCode.Get());
-	psoDesc.InputLayout.NumElements = elementDesc.size();
+	psoDesc.InputLayout.NumElements = (uint32)elementDesc.size();
 	psoDesc.InputLayout.pInputElementDescs = elementDesc.data();
 	psoDesc.pRootSignature = m_pRootSignature.Get();
 	psoDesc.SampleMask = UINT_MAX;

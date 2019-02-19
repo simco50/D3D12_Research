@@ -7,6 +7,7 @@
 #if _DEBUG
 #include <pix3.h>
 #endif
+#include "GraphicsResource.h"
 
 CommandContext::CommandContext(Graphics* pGraphics, ID3D12GraphicsCommandList* pCommandList, ID3D12CommandAllocator* pAllocator, D3D12_COMMAND_LIST_TYPE type)
 	: m_pGraphics(pGraphics), m_pCommandList(pCommandList), m_pAllocator(pAllocator), m_Type(type)
@@ -109,25 +110,25 @@ void CommandContext::SetIndexBuffer(D3D12_INDEX_BUFFER_VIEW indexBufferView)
 	m_pCommandList->IASetIndexBuffer(&indexBufferView);
 }
 
-void CommandContext::SetViewport(const Rect& rect, float minDepth /*= 0.0f*/, float maxDepth /*= 1.0f*/)
+void CommandContext::SetViewport(const FloatRect& rect, float minDepth /*= 0.0f*/, float maxDepth /*= 1.0f*/)
 {
 	D3D12_VIEWPORT viewport;
-	viewport.TopLeftX = (float)rect.x;
-	viewport.TopLeftY = (float)rect.y;
-	viewport.Height = (float)rect.height;
-	viewport.Width = (float)rect.width;
+	viewport.TopLeftX = (float)rect.Left;
+	viewport.TopLeftY = (float)rect.Top;
+	viewport.Height = (float)rect.GetHeight();
+	viewport.Width = (float)rect.GetWidth();
 	viewport.MinDepth = minDepth;
 	viewport.MaxDepth = maxDepth;
 	m_pCommandList->RSSetViewports(1, &viewport);
 }
 
-void CommandContext::SetScissorRect(const Rect& rect)
+void CommandContext::SetScissorRect(const FloatRect& rect)
 {
 	D3D12_RECT r;
-	r.left = rect.x;
-	r.top = rect.x;
-	r.right = rect.x + rect.width;
-	r.bottom = rect.y + rect.height;
+	r.left = (LONG)rect.Left;
+	r.top = (LONG)rect.Top;
+	r.right = (LONG)rect.Right;
+	r.bottom = (LONG)rect.Bottom;
 	m_pCommandList->RSSetScissorRects(1, &r);
 }
 
@@ -142,16 +143,15 @@ void CommandContext::FlushResourceBarriers()
 
 void CommandContext::SetDynamicConstantBufferView(int slot, void* pData, uint32 dataSize)
 {
-	int bufferSize = (dataSize + 255) & ~255;
-	DynamicAllocation allocation = m_pGraphics->GetCpuVisibleAllocator()->Allocate(bufferSize);
+	DynamicAllocation allocation = AllocatorUploadMemory(dataSize);
 	memcpy(allocation.pMappedMemory, pData, dataSize);
 	m_pCommandList->SetGraphicsRootConstantBufferView(slot, allocation.GpuHandle);
 }
 
 void CommandContext::SetDynamicVertexBuffer(int slot, int elementCount, int elementSize, void* pData)
 {
-	int bufferSize = ((elementCount * elementSize) + 255) & ~255;
-	DynamicAllocation allocation = m_pGraphics->GetCpuVisibleAllocator()->Allocate(bufferSize);
+	int bufferSize = elementCount * elementSize;
+	DynamicAllocation allocation = AllocatorUploadMemory(bufferSize);
 	memcpy(allocation.pMappedMemory, pData, elementCount * elementSize);
 	D3D12_VERTEX_BUFFER_VIEW view = {};
 	view.BufferLocation = allocation.GpuHandle;
@@ -162,8 +162,8 @@ void CommandContext::SetDynamicVertexBuffer(int slot, int elementCount, int elem
 
 void CommandContext::SetDynamicIndexBuffer(int elementCount, void* pData)
 {
-	int bufferSize = ((elementCount * sizeof(uint32)) + 255) & ~255;
-	DynamicAllocation allocation = m_pGraphics->GetCpuVisibleAllocator()->Allocate(bufferSize);
+	int bufferSize = elementCount * sizeof(uint32);
+	DynamicAllocation allocation = AllocatorUploadMemory(bufferSize);
 	memcpy(allocation.pMappedMemory, pData, elementCount * sizeof(uint32));
 	D3D12_INDEX_BUFFER_VIEW view = {};
 	view.BufferLocation = allocation.GpuHandle;
@@ -172,31 +172,31 @@ void CommandContext::SetDynamicIndexBuffer(int elementCount, void* pData)
 	m_pCommandList->IASetIndexBuffer(&view);
 }
 
-DynamicAllocation CommandContext::AllocatorUploadMemory(size_t size)
+DynamicAllocation CommandContext::AllocatorUploadMemory(uint32 size)
 {
 	return m_pGraphics->GetCpuVisibleAllocator()->Allocate(size);
 }
 
-void CommandContext::InitializeBuffer(ID3D12Resource* pResource, void* pData, uint32 dataSize)
+void CommandContext::InitializeBuffer(GraphicsBuffer* pResource, void* pData, uint32 dataSize)
 {
 	DynamicAllocation allocation = AllocatorUploadMemory(dataSize);
 	memcpy(allocation.pMappedMemory, pData, dataSize);
-	InsertResourceBarrier(CD3DX12_RESOURCE_BARRIER::Transition(pResource, D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_COPY_DEST), true);
-	m_pCommandList->CopyBufferRegion(pResource, 0, allocation.pBackingResource, allocation.Offset, dataSize);
-	InsertResourceBarrier(CD3DX12_RESOURCE_BARRIER::Transition(pResource, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_GENERIC_READ), true);
+	InsertResourceBarrier(pResource, D3D12_RESOURCE_STATE_COPY_DEST, true);
+	m_pCommandList->CopyBufferRegion(pResource->GetResource(), 0, allocation.pBackingResource, allocation.Offset, dataSize);
+	InsertResourceBarrier(pResource, D3D12_RESOURCE_STATE_GENERIC_READ, true);
 }
 
-void CommandContext::InsertResourceBarrier(D3D12_RESOURCE_BARRIER barrier, bool executeImmediate /*= false*/)
+void CommandContext::InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESOURCE_STATES state, bool executeImmediate /*= false*/)
 {
-	if (m_NumQueuedBarriers >= m_QueuedBarriers.size())
+	if (pBuffer->m_CurrentState != state)
 	{
-		FlushResourceBarriers();
-	}
-	m_QueuedBarriers[m_NumQueuedBarriers] = barrier;
-	++m_NumQueuedBarriers;
-	if (executeImmediate)
-	{
-		FlushResourceBarriers();
+		m_QueuedBarriers[m_NumQueuedBarriers] = CD3DX12_RESOURCE_BARRIER::Transition(pBuffer->GetResource(), pBuffer->m_CurrentState, state);
+		++m_NumQueuedBarriers;
+		if (executeImmediate || m_NumQueuedBarriers >= m_QueuedBarriers.size())
+		{
+			FlushResourceBarriers();
+		}
+		pBuffer->m_CurrentState = state;
 	}
 }
 

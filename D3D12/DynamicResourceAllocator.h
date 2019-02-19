@@ -14,7 +14,7 @@ public:
 	DynamicResourceAllocator(ID3D12Device* pDevice, bool gpuVisible, int size);
 	~DynamicResourceAllocator();
 
-	DynamicAllocation Allocate(int size);
+	DynamicAllocation Allocate(int size, int alignment = 256);
 	void Free(uint64 fenceValue);
 
 private:

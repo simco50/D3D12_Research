@@ -17,6 +17,8 @@
 #include "DynamicResourceAllocator.h"
 #include "ImGuiRenderer.h"
 #include "External/Imgui/imgui.h"
+#include "GraphicsResource.h"
+#include "RootSignature.h"
 
 const uint32 Graphics::FRAME_COUNT;
 
@@ -45,45 +47,52 @@ void Graphics::Update()
 	m_pImGuiRenderer->NewFrame();
 	ImGui::ShowDemoWindow();
 
-	CommandContext* pContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
-	ID3D12GraphicsCommandList* pCommandList = pContext->GetCommandList();
-
-	pCommandList->SetPipelineState(m_pPipelineStateObject.Get());
-	pCommandList->SetGraphicsRootSignature(m_pRootSignature.Get());
-
-	pContext->SetViewport(m_Viewport);
-	pContext->SetScissorRect(m_ScissorRect);
-
-	pContext->InsertResourceBarrier(CD3DX12_RESOURCE_BARRIER::Transition(m_RenderTargets[m_CurrentBackBufferIndex].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET), true);
-
-	pContext->SetRenderTarget(&m_RenderTargetHandles[m_CurrentBackBufferIndex]);
-	pContext->SetDepthStencil(&m_DepthStencilHandle);
-
-	Color clearColor = Color(0.1f, 0.1f, 0.1f, 1.0f);
-	pContext->ClearRenderTarget(m_RenderTargetHandles[m_CurrentBackBufferIndex], clearColor);
-	pContext->ClearDepth(m_DepthStencilHandle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0);
-
-	struct ConstantBufferData
+	//3D
 	{
-		Matrix World;
-		Matrix WorldViewProjection;
-	} Data;
-	Matrix proj = XMMatrixPerspectiveFovLH(XM_PIDIV4, (float)m_WindowWidth / m_WindowHeight, 0.1f, 1000);
-	Matrix view = XMMatrixLookAtLH(Vector3(0, 5, 0), Vector3(0, 0, 500), Vector3(0, 1, 0));
-	Matrix world = XMMatrixRotationRollPitchYaw(0, GameTimer::GameTime(), 0) * XMMatrixTranslation(0, -50, 500);
-	Data.World = world;
-	Data.WorldViewProjection = world * view * proj;
-	pContext->SetDynamicConstantBufferView(0, &Data, sizeof(ConstantBufferData));
+		CommandContext* pContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+		ID3D12GraphicsCommandList* pCommandList = pContext->GetCommandList();
 
-	pContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	pContext->SetVertexBuffer(m_VertexBufferView);
-	pContext->SetIndexBuffer(m_IndexBufferView);
-	pContext->DrawIndexed(m_IndexCount, 0);
+		pCommandList->SetPipelineState(m_pPipelineStateObject.Get());
+		pCommandList->SetGraphicsRootSignature(m_pRootSignature->GetRootSignature());
 
-	m_pImGuiRenderer->Render(*pContext);
-	
-	pContext->InsertResourceBarrier(CD3DX12_RESOURCE_BARRIER::Transition(m_RenderTargets[m_CurrentBackBufferIndex].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT));
-	m_FenceValues[m_CurrentBackBufferIndex] = pContext->Execute(false);
+		pContext->SetViewport(m_Viewport);
+		pContext->SetScissorRect(m_ScissorRect);
+
+		pContext->InsertResourceBarrier(m_RenderTargets[m_CurrentBackBufferIndex].get(), D3D12_RESOURCE_STATE_RENDER_TARGET, true);
+
+		pContext->SetRenderTarget(&m_RenderTargetHandles[m_CurrentBackBufferIndex]);
+		pContext->SetDepthStencil(&m_DepthStencilHandle);
+
+		Color clearColor = Color(0.1f, 0.1f, 0.1f, 1.0f);
+		pContext->ClearRenderTarget(m_RenderTargetHandles[m_CurrentBackBufferIndex], clearColor);
+		pContext->ClearDepth(m_DepthStencilHandle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0);
+
+		struct ConstantBufferData
+		{
+			Matrix World;
+			Matrix WorldViewProjection;
+		} Data;
+		Matrix proj = XMMatrixPerspectiveFovLH(XM_PIDIV4, (float)m_WindowWidth / m_WindowHeight, 0.1f, 1000);
+		Matrix view = XMMatrixLookAtLH(Vector3(0, 5, 0), Vector3(0, 0, 500), Vector3(0, 1, 0));
+		Matrix world = XMMatrixRotationRollPitchYaw(0, GameTimer::GameTime(), 0) * XMMatrixTranslation(0, -50, 500);
+		Data.World = world;
+		Data.WorldViewProjection = world * view * proj;
+		pContext->SetDynamicConstantBufferView(0, &Data, sizeof(ConstantBufferData));
+
+		pContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		pContext->SetVertexBuffer(m_VertexBufferView);
+		pContext->SetIndexBuffer(m_IndexBufferView);
+		pContext->DrawIndexed(m_IndexCount, 0);
+		pContext->Execute(false);
+	}
+
+	//UI
+	{
+		CommandContext* pContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+		m_pImGuiRenderer->Render(*pContext);
+		pContext->InsertResourceBarrier(m_RenderTargets[m_CurrentBackBufferIndex].get(), D3D12_RESOURCE_STATE_PRESENT, true);
+		m_FenceValues[m_CurrentBackBufferIndex] = pContext->Execute(false);
+	}
 
 	m_pSwapchain->Present(1, 0);
 	m_CurrentBackBufferIndex = m_pSwapchain->GetCurrentBackBufferIndex();
@@ -191,9 +200,9 @@ void Graphics::OnResize(int width, int height)
 
 	for (int i = 0; i < FRAME_COUNT; ++i)
 	{
-		m_RenderTargets[i].Reset();
+		m_RenderTargets[i].reset();
 	}
-	m_pDepthStencilBuffer.Reset();
+	m_pDepthStencilBuffer.reset();
 
 	//Resize the buffers
 	HR(m_pSwapchain->ResizeBuffers(
@@ -208,9 +217,11 @@ void Graphics::OnResize(int width, int height)
 	//Recreate the render target views
 	for (int i = 0; i < FRAME_COUNT; ++i)
 	{
+		ID3D12Resource* pResource = nullptr;
 		m_RenderTargetHandles[i] = m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_RTV]->AllocateDescriptor();
-		HR(m_pSwapchain->GetBuffer(i, IID_PPV_ARGS(&m_RenderTargets[i])));
-		m_pDevice->CreateRenderTargetView(m_RenderTargets[i].Get(), nullptr, m_RenderTargetHandles[i]);
+		HR(m_pSwapchain->GetBuffer(i, IID_PPV_ARGS(&pResource)));
+		m_pDevice->CreateRenderTargetView(pResource, nullptr, m_RenderTargetHandles[i]);
+		m_RenderTargets[i] = std::make_unique<GraphicsResource>(pResource, D3D12_RESOURCE_STATE_PRESENT);
 	}
 
 	//Recreate the depth stencil buffer and view
@@ -227,6 +238,7 @@ void Graphics::OnResize(int width, int height)
 	desc.SampleDesc.Count = 1;
 	desc.SampleDesc.Quality = 0;
 
+	ID3D12Resource* pResource = nullptr;
 	D3D12_CLEAR_VALUE clearValue;
 	clearValue.Format = m_DepthStencilFormat;
 	clearValue.DepthStencil.Depth = 1.0f;
@@ -238,19 +250,16 @@ void Graphics::OnResize(int width, int height)
 		&desc,
 		D3D12_RESOURCE_STATE_DEPTH_WRITE,
 		&clearValue,
-		IID_PPV_ARGS(&m_pDepthStencilBuffer)));
+		IID_PPV_ARGS(&pResource)));
 	m_DepthStencilHandle = m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_DSV]->AllocateDescriptor();
-	m_pDevice->CreateDepthStencilView(m_pDepthStencilBuffer.Get(), nullptr, m_DepthStencilHandle);
+	m_pDevice->CreateDepthStencilView(pResource, nullptr, m_DepthStencilHandle);
+	m_pDepthStencilBuffer = std::make_unique<GraphicsResource>(pResource, D3D12_RESOURCE_STATE_DEPTH_WRITE);
 
-	m_Viewport.height = m_WindowHeight;
-	m_Viewport.width = m_WindowWidth;
-	m_Viewport.x = 0;
-	m_Viewport.y = 0;
-	
-	m_ScissorRect.x = 0;
-	m_ScissorRect.y = 0;
-	m_ScissorRect.width = m_WindowWidth;
-	m_ScissorRect.height = m_WindowHeight;
+	m_Viewport.Bottom = (float)m_WindowHeight;
+	m_Viewport.Right = (float)m_WindowWidth;
+	m_Viewport.Left = 0.0f;
+	m_Viewport.Top = 0.0f;
+	m_ScissorRect = m_Viewport;
 }
 
 void Graphics::InitializeAssets()
@@ -264,10 +273,8 @@ void Graphics::InitializeAssets()
 
 void Graphics::BuildRootSignature()
 {
-	CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC desc = {};
-
-	CD3DX12_ROOT_PARAMETER1 rootParameters[1];
-	rootParameters[0].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_VERTEX);
+	m_pRootSignature = std::make_unique<RootSignature>(1);
+	(*m_pRootSignature)[0].AsConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
 
 	D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
 		D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
@@ -275,12 +282,12 @@ void Graphics::BuildRootSignature()
 		D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
 		D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
 
-	D3D12_STATIC_SAMPLER_DESC samplerDesc = CD3DX12_STATIC_SAMPLER_DESC(0);
-	desc.Init_1_1(1, rootParameters, 1, &samplerDesc, rootSignatureFlags);
-	
-	ComPtr<ID3DBlob> pDataBlob, pErrorBlob;
-	HR(D3D12SerializeVersionedRootSignature(&desc, pDataBlob.GetAddressOf(), pErrorBlob.GetAddressOf()));
-	HR(m_pDevice->CreateRootSignature(0, pDataBlob->GetBufferPointer(), pDataBlob->GetBufferSize(), IID_PPV_ARGS(m_pRootSignature.GetAddressOf())));
+	D3D12_SAMPLER_DESC samplerDesc = {};
+	samplerDesc.AddressU = samplerDesc.AddressV = samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+	samplerDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+	samplerDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+	m_pRootSignature->AddStaticSampler(0, samplerDesc, D3D12_SHADER_VISIBILITY_PIXEL);
+	m_pRootSignature->Finalize(m_pDevice.Get(), rootSignatureFlags);
 }
 
 void Graphics::BuildShadersAndInputLayout()
@@ -366,39 +373,25 @@ void Graphics::BuildGeometry()
 	}
 
 	CommandContext* pContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
-	ID3D12GraphicsCommandList* pCommandList = pContext->GetCommandList();
-
-	ComPtr<ID3D12Resource> pIndexUploadBuffer;
-
 	{
-		uint32 size = vertices.size() * sizeof(Vertex);
-		D3D12_RESOURCE_DESC resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(size);
-		m_pDevice->CreateCommittedResource(&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
-			D3D12_HEAP_FLAG_NONE,
-			&resourceDesc,
-			D3D12_RESOURCE_STATE_GENERIC_READ,
-			nullptr,
-			IID_PPV_ARGS(m_pVertexBuffer.GetAddressOf()));
-		pContext->InitializeBuffer(m_pVertexBuffer.Get(), vertices.data(), size);
+		uint32 size = (uint32)vertices.size() * sizeof(Vertex);
+		m_pVertexBuffer = std::make_unique<GraphicsBuffer>();
+		m_pVertexBuffer->Create(m_pDevice.Get(), size, false);
+		m_pVertexBuffer->SetData(pContext, vertices.data(), size);
 
-		m_VertexBufferView.BufferLocation = m_pVertexBuffer->GetGPUVirtualAddress();
+		m_VertexBufferView.BufferLocation = m_pVertexBuffer->GetGpuHandle();
 		m_VertexBufferView.SizeInBytes = sizeof(Vertex) * (uint32)vertices.size();
 		m_VertexBufferView.StrideInBytes = sizeof(Vertex);
 	}
 
 	{
+		uint32 size = (uint32)indices.size() * sizeof(uint32);
 		m_IndexCount = (int)indices.size();
-		uint32 size = indices.size() * sizeof(uint32);
-		D3D12_RESOURCE_DESC resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(size);
-		m_pDevice->CreateCommittedResource(&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
-			D3D12_HEAP_FLAG_NONE,
-			&resourceDesc,
-			D3D12_RESOURCE_STATE_GENERIC_READ,
-			nullptr,
-			IID_PPV_ARGS(m_pIndexBuffer.GetAddressOf()));
-		pContext->InitializeBuffer(m_pIndexBuffer.Get(), indices.data(), size);
+		m_pIndexBuffer = std::make_unique<GraphicsBuffer>();
+		m_pIndexBuffer->Create(m_pDevice.Get(), size, false);
+		m_pIndexBuffer->SetData(pContext, indices.data(), size);
 
-		m_IndexBufferView.BufferLocation = m_pIndexBuffer->GetGPUVirtualAddress();
+		m_IndexBufferView.BufferLocation = m_pIndexBuffer->GetGpuHandle();
 		m_IndexBufferView.SizeInBytes = size;
 		m_IndexBufferView.Format = DXGI_FORMAT_R32_UINT;
 	}
@@ -481,7 +474,7 @@ void Graphics::BuildPSO()
 	desc.NodeMask = 0;
 	desc.NumRenderTargets = 1;
 	desc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-	desc.pRootSignature = m_pRootSignature.Get();
+	desc.pRootSignature = m_pRootSignature->GetRootSignature();
 	desc.PS = CD3DX12_SHADER_BYTECODE(m_pPixelShaderCode.Get());
 	desc.VS = CD3DX12_SHADER_BYTECODE(m_pVertexShaderCode.Get());
 	desc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);

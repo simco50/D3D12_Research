@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?> 
+<AutoVisualizer xmlns="http://schemas.microsoft.com/vstudio/debugger/natvis/2010">
+  <Type Name="DirectX::SimpleMath::Vector2">
+    <DisplayString>{x}, {y}</DisplayString>
+  </Type>
+  <Type Name="DirectX::SimpleMath::Vector3">
+    <DisplayString>{x}, {y}, {z}</DisplayString>
+  </Type>
+  <Type Name="DirectX::SimpleMath::Vector4">
+    <DisplayString>{x}, {y}, {z}, {w}</DisplayString>
+  </Type>
+  <Type Name="DirectX::SimpleMath::Quaternion">
+    <DisplayString>{x}, {y}, {z}, {w}</DisplayString>
+  </Type>
+  <Type Name="DirectX::SimpleMath::Color">
+    <DisplayString>{x}, {y}, {z}, {w}</DisplayString>
+  </Type>
+  <Type Name="DirectX::SimpleMath::Matrix">
+    <Expand>
+      <Item Name="0">m[0]</Item>
+      <Item Name="1">m[1]</Item>
+      <Item Name="2">m[2]</Item>
+      <Item Name="3">m[3]</Item>
+    </Expand>
+  </Type>
+
+  <Type Name="BitField&lt;*&gt;">
+    <Expand>
+      <ArrayItems>
+        <Direction>Forward</Direction>
+        <Rank>1</Rank>
+        <Size>sizeof(Data) / sizeof($T2)</Size>
+        <ValuePointer>Data,b</ValuePointer>
+      </ArrayItems>
+    </Expand>
+  </Type>
+</AutoVisualizer>
