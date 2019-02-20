@@ -16,6 +16,7 @@ class GraphicsResource;
 class RootSignature;
 class Texture2D;
 class PipelineState;
+class Mesh;
 
 class Graphics
 {
@@ -80,12 +81,9 @@ private:
 	std::array<D3D12_CPU_DESCRIPTOR_HANDLE, FRAME_COUNT> m_RenderTargetHandles;
 	D3D12_CPU_DESCRIPTOR_HANDLE m_DepthStencilHandle;
 
+	std::unique_ptr<Mesh> m_pMesh;
 	std::unique_ptr<Texture2D> m_pTexture;
 	D3D12_CPU_DESCRIPTOR_HANDLE m_TextureHandle;
-	std::unique_ptr<GraphicsBuffer> m_pVertexBuffer;
-	std::unique_ptr <GraphicsBuffer> m_pIndexBuffer;
-	D3D12_VERTEX_BUFFER_VIEW m_VertexBufferView;
-	D3D12_INDEX_BUFFER_VIEW m_IndexBufferView;
 	std::unique_ptr<RootSignature> m_pRootSignature;
 	std::unique_ptr<PipelineState> m_pPipelineStateObject;
 	int m_IndexCount = 0;

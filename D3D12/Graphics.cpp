@@ -21,6 +21,7 @@
 #include "RootSignature.h"
 #include "PipelineState.h"
 #include "Shader.h"
+#include "Mesh.h"
 
 const uint32 Graphics::FRAME_COUNT;
 
@@ -45,7 +46,7 @@ void Graphics::Update()
 	WaitForFence(m_FenceValues[m_CurrentBackBufferIndex]);
 
 	m_pImGuiRenderer->NewFrame();
-	ImGui::ShowDemoWindow();
+	ImGui::Text("Hello World");
 
 	//3D
 	{
@@ -67,26 +68,40 @@ void Graphics::Update()
 		pContext->ClearRenderTarget(m_RenderTargetHandles[m_CurrentBackBufferIndex], clearColor);
 		pContext->ClearDepth(m_DepthStencilHandle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0);
 
-		struct ConstantBufferData
-		{
-			Matrix World;
-			Matrix WorldViewProjection;
-		} Data;
-		Matrix proj = XMMatrixPerspectiveFovLH(XM_PIDIV4, (float)m_WindowWidth / m_WindowHeight, 0.1f, 1000);
-		Matrix view = XMMatrixLookAtLH(Vector3(0, 5, 0), Vector3(0, 0, 500), Vector3(0, 1, 0));
-		Matrix world = XMMatrixRotationRollPitchYaw(0, GameTimer::GameTime(), 0) * XMMatrixTranslation(0, -50, 500);
-		Data.World = world;
-		Data.WorldViewProjection = world * view * proj;
-		pContext->SetDynamicConstantBufferView(0, &Data, sizeof(ConstantBufferData));
-
 		ID3D12DescriptorHeap* pHeap = m_pTextureGpuDesciptorHeap->GetCurrentHeap();
 		pContext->GetCommandList()->SetDescriptorHeaps(1, &pHeap);
 		pContext->GetCommandList()->SetGraphicsRootDescriptorTable(1, m_pTextureGpuDesciptorHeap->GetCurrentHeap()->GetGPUDescriptorHandleForHeapStart());
-
 		pContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-		pContext->SetVertexBuffer(m_VertexBufferView);
-		pContext->SetIndexBuffer(m_IndexBufferView);
-		pContext->DrawIndexed(m_IndexCount, 0);
+
+		{
+			struct ConstantBufferData
+			{
+				Matrix World;
+				Matrix WorldViewProjection;
+			} Data;
+			Matrix proj = XMMatrixPerspectiveFovLH(XM_PIDIV4, (float)m_WindowWidth / m_WindowHeight, 0.1f, 1000);
+			Matrix view = XMMatrixLookAtLH(Vector3(0, 5, 0), Vector3(0, 0, 500), Vector3(0, 1, 0));
+			Matrix world = XMMatrixRotationRollPitchYaw(0, GameTimer::GameTime(), 0) * XMMatrixTranslation(-50, -50, 500);
+			Data.World = world;
+			Data.WorldViewProjection = world * view * proj;
+			pContext->SetDynamicConstantBufferView(0, &Data, sizeof(ConstantBufferData));
+			m_pMesh->Draw(pContext);
+		}
+		{
+			struct ConstantBufferData
+			{
+				Matrix World;
+				Matrix WorldViewProjection;
+			} Data;
+			Matrix proj = XMMatrixPerspectiveFovLH(XM_PIDIV4, (float)m_WindowWidth / m_WindowHeight, 0.1f, 1000);
+			Matrix view = XMMatrixLookAtLH(Vector3(0, 5, 0), Vector3(0, 0, 500), Vector3(0, 1, 0));
+			Matrix world = XMMatrixRotationRollPitchYaw(0, -GameTimer::GameTime(), 0) * XMMatrixTranslation(50, -50, 500);
+			Data.World = world;
+			Data.WorldViewProjection = world * view * proj;
+			pContext->SetDynamicConstantBufferView(0, &Data, sizeof(ConstantBufferData));
+			m_pMesh->Draw(pContext);
+		}
+
 		pContext->Execute(false);
 	}
 
@@ -292,65 +307,9 @@ void Graphics::CreatePipeline()
 
 void Graphics::LoadGeometry()
 {
-	struct Vertex
-	{
-		Vector3 Position;
-		Vector2 TexCoord;
-		Vector3 Normal;
-	};
-
-	Assimp::Importer importer;
-	const aiScene* pScene = importer.ReadFile("Resources/Man.dae",
-		aiProcess_Triangulate |
-		aiProcess_ConvertToLeftHanded |
-		aiProcess_GenSmoothNormals |
-		aiProcess_CalcTangentSpace |
-		aiProcess_LimitBoneWeights
-	);
-
-	std::vector<Vertex> vertices(pScene->mMeshes[0]->mNumVertices);
-	for (size_t i = 0; i < vertices.size(); ++i)
-	{
-		Vertex& vertex = vertices[i];
-		vertex.Position = *reinterpret_cast<Vector3*>(&pScene->mMeshes[0]->mVertices[i]);
-		vertex.TexCoord = *reinterpret_cast<Vector2*>(&pScene->mMeshes[0]->mTextureCoords[0][i]);
-		vertex.Normal = *reinterpret_cast<Vector3*>(&pScene->mMeshes[0]->mNormals[i]);
-	}
-
-	std::vector<uint32> indices(pScene->mMeshes[0]->mNumFaces * 3);
-	for (size_t i = 0; i < pScene->mMeshes[0]->mNumFaces; ++i)
-	{
-		for (size_t j = 0; j < 3; ++j)
-		{
-			assert(pScene->mMeshes[0]->mFaces[i].mNumIndices == 3);
-			indices[i * 3 + j] = pScene->mMeshes[0]->mFaces[i].mIndices[j];
-		}
-	}
-
 	CommandContext* pContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
-	{
-		uint32 size = (uint32)vertices.size() * sizeof(Vertex);
-		m_pVertexBuffer = std::make_unique<GraphicsBuffer>();
-		m_pVertexBuffer->Create(m_pDevice.Get(), size, false);
-		m_pVertexBuffer->SetData(pContext, vertices.data(), size);
-
-		m_VertexBufferView.BufferLocation = m_pVertexBuffer->GetGpuHandle();
-		m_VertexBufferView.SizeInBytes = sizeof(Vertex) * (uint32)vertices.size();
-		m_VertexBufferView.StrideInBytes = sizeof(Vertex);
-	}
-
-	{
-		uint32 size = (uint32)indices.size() * sizeof(uint32);
-		m_IndexCount = (int)indices.size();
-		m_pIndexBuffer = std::make_unique<GraphicsBuffer>();
-		m_pIndexBuffer->Create(m_pDevice.Get(), size, false);
-		m_pIndexBuffer->SetData(pContext, indices.data(), size);
-
-		m_IndexBufferView.BufferLocation = m_pIndexBuffer->GetGpuHandle();
-		m_IndexBufferView.SizeInBytes = size;
-		m_IndexBufferView.Format = DXGI_FORMAT_R32_UINT;
-	}
-
+	m_pMesh = std::make_unique<Mesh>();
+	m_pMesh->Load("Resources/Man.dae", m_pDevice.Get(), pContext);
 	pContext->Execute(true);
 }
 
