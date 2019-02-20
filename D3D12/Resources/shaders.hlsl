@@ -1,4 +1,4 @@
-cbuffer Data : register(b0)
+cbuffer PerObjectData : register(b0)
 {
 	float4x4 World;
 	float4x4 WorldViewProjection;

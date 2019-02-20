@@ -1,4 +1,5 @@
 #pragma once
+#include "DescriptorHandle.h"
 
 #ifdef PLATFORM_UWP
 using WindowHandle = Windows::UI::Core::CoreWindow^;
@@ -42,12 +43,12 @@ public:
 	uint32 GetWindowHeight() const { return m_WindowHeight; }
 
 	DynamicResourceAllocator* GetCpuVisibleAllocator() const { return m_pDynamicCpuVisibleAllocator.get(); }
+	DescriptorAllocator* GetGpuVisibleSRVAllocator() const { return m_pTextureGpuDesciptorHeap.get(); }
+	D3D12_CPU_DESCRIPTOR_HANDLE AllocateCpuDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE type);
+
 private:
 	void InitD3D(WindowHandle pWindow);
 	void InitializeAssets();
-	void CreatePipeline();
-	void LoadGeometry();
-	void LoadTexture();
 
 	static const uint32 FRAME_COUNT = 2;
 
@@ -83,7 +84,7 @@ private:
 
 	std::unique_ptr<Mesh> m_pMesh;
 	std::unique_ptr<Texture2D> m_pTexture;
-	D3D12_CPU_DESCRIPTOR_HANDLE m_TextureHandle;
+	DescriptorHandle m_TextureHandle;
 	std::unique_ptr<RootSignature> m_pRootSignature;
 	std::unique_ptr<PipelineState> m_pPipelineStateObject;
 	int m_IndexCount = 0;

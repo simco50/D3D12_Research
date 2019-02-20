@@ -7,6 +7,8 @@
 #include "PipelineState.h"
 #include "RootSignature.h"
 #include "Shader.h"
+#include "GraphicsResource.h"
+#include "DescriptorAllocator.h"
 
 ImGuiRenderer::ImGuiRenderer(Graphics* pGraphics)
 	: m_pGraphics(pGraphics)
@@ -27,6 +29,67 @@ void ImGuiRenderer::NewFrame()
 	ImGui::NewFrame();
 }
 
+void ImGuiRenderer::InitializeImGui()
+{
+	ImGui::CreateContext();
+	ImGuiIO& io = ImGui::GetIO();
+	io.Fonts->AddFontDefault();
+	unsigned char* pPixels;
+	int width, height;
+	io.Fonts->GetTexDataAsRGBA32(&pPixels, &width, &height);
+	m_pFontTexture = std::make_unique<Texture2D>();
+	m_pFontTexture->Create(m_pGraphics, width, height);
+	CommandContext* pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+	m_pFontTexture->SetData(pContext, pPixels, width * height * 4);
+	pContext->Execute(true);
+
+	m_TextureHandle = m_pGraphics->GetGpuVisibleSRVAllocator()->AllocateDescriptor();
+	m_pGraphics->GetDevice()->CopyDescriptorsSimple(1, m_TextureHandle.GetCpuHandle(), m_pFontTexture->GetDescriptorHandle(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+}
+
+void ImGuiRenderer::CreatePipeline()
+{
+	//Shaders
+	Shader vertexShader, pixelShader;
+	vertexShader.Load("Resources/ImGui.hlsl", Shader::Type::VertexShader, "VSMain");
+	pixelShader.Load("Resources/ImGui.hlsl", Shader::Type::PixelShader, "PSMain");
+
+	//Root signature
+	D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
+		D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
+		D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
+		D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
+		D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
+
+	m_pRootSignature = std::make_unique<RootSignature>(2);
+	(*m_pRootSignature)[0].AsConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
+	(*m_pRootSignature)[1].AsDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0, 1, D3D12_SHADER_VISIBILITY_PIXEL);
+
+	D3D12_SAMPLER_DESC samplerDesc = {};
+	samplerDesc.AddressU = samplerDesc.AddressV = samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+	samplerDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+	samplerDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+	m_pRootSignature->AddStaticSampler(0, samplerDesc, D3D12_SHADER_VISIBILITY_PIXEL);
+
+	m_pRootSignature->Finalize(m_pGraphics->GetDevice(), rootSignatureFlags);
+
+	//Input layout
+	std::vector<D3D12_INPUT_ELEMENT_DESC> elementDesc;
+	elementDesc.push_back(D3D12_INPUT_ELEMENT_DESC{ "POSITION", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 });
+	elementDesc.push_back(D3D12_INPUT_ELEMENT_DESC{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 8, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 });
+	elementDesc.push_back(D3D12_INPUT_ELEMENT_DESC{ "COLOR", 0, DXGI_FORMAT_R8G8B8A8_UNORM, 0, 16, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 });
+
+	m_pPipelineState = std::make_unique<PipelineState>();
+	m_pPipelineState->SetBlendMode(BlendMode::ALPHA, false);
+	m_pPipelineState->SetDepthWrite(false);
+	m_pPipelineState->SetDepthEnabled(true);
+	m_pPipelineState->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
+	m_pPipelineState->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
+	m_pPipelineState->SetRootSignature(m_pRootSignature->GetRootSignature());
+	m_pPipelineState->SetInputLayout(elementDesc.data(), elementDesc.size());
+	m_pPipelineState->Finalize(m_pGraphics->GetDevice());
+}
+
 void ImGuiRenderer::Render(CommandContext& context)
 {
 	//Copy the new data to the buffers
@@ -44,6 +107,10 @@ void ImGuiRenderer::Render(CommandContext& context)
 	context.SetDynamicConstantBufferView(0, &projectionMatrix, sizeof(Matrix));
 	context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	context.SetViewport(FloatRect(0, 0, (float)m_pGraphics->GetWindowWidth(), (float)m_pGraphics->GetWindowHeight()), 0, 1);
+
+	ID3D12DescriptorHeap* pHeap = m_pGraphics->GetGpuVisibleSRVAllocator()->GetCurrentHeap();
+	context.GetCommandList()->SetDescriptorHeaps(1, &pHeap);
+	context.GetCommandList()->SetGraphicsRootDescriptorTable(1, m_TextureHandle.GetGpuHandle());
 
 	int vertexOffset = 0;
 	int indexOffset = 0;
@@ -68,49 +135,4 @@ void ImGuiRenderer::Render(CommandContext& context)
 		}
 		vertexOffset += pCmdList->VtxBuffer.Size;
 	}
-}
-
-void ImGuiRenderer::CreatePipeline()
-{
-	//Shaders
-	Shader vertexShader, pixelShader;
-	vertexShader.Load("Resources/ImGui.hlsl", Shader::Type::VertexShader, "VSMain");
-	pixelShader.Load("Resources/ImGui.hlsl", Shader::Type::PixelShader, "PSMain");
-
-	//Root signature
-	D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
-		D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
-		D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
-		D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
-		D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
-
-	m_pRootSignature = std::make_unique<RootSignature>(1);
-	(*m_pRootSignature)[0].AsConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
-	m_pRootSignature->Finalize(m_pGraphics->GetDevice(), rootSignatureFlags);
-
-	//Input layout
-	std::vector<D3D12_INPUT_ELEMENT_DESC> elementDesc;
-	elementDesc.push_back(D3D12_INPUT_ELEMENT_DESC{ "POSITION", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 });
-	elementDesc.push_back(D3D12_INPUT_ELEMENT_DESC{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 8, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 });
-	elementDesc.push_back(D3D12_INPUT_ELEMENT_DESC{ "COLOR", 0, DXGI_FORMAT_R8G8B8A8_UNORM, 0, 16, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 });
-
-	m_pPipelineState = std::make_unique<PipelineState>();
-	m_pPipelineState->SetBlendMode(BlendMode::ALPHA, false);
-	m_pPipelineState->SetDepthWrite(false);
-	m_pPipelineState->SetDepthEnabled(true);
-	m_pPipelineState->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
-	m_pPipelineState->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
-	m_pPipelineState->SetRootSignature(m_pRootSignature->GetRootSignature());
-	m_pPipelineState->SetInputLayout(elementDesc.data(), elementDesc.size());
-	m_pPipelineState->Finalize(m_pGraphics->GetDevice());
-}
-
-void ImGuiRenderer::InitializeImGui()
-{
-	ImGui::CreateContext();
-	ImGuiIO& io = ImGui::GetIO();
-	io.Fonts->AddFontDefault();
-	unsigned char* pPixels;
-	int width, height;
-	io.Fonts->GetTexDataAsRGBA32(&pPixels, &width, &height);
 }

@@ -1,5 +1,6 @@
 #pragma once
 class CommandContext;
+class Graphics;
 
 class GraphicsResource
 {
@@ -31,8 +32,8 @@ protected:
 class GraphicsBuffer : public GraphicsResource
 {
 public:
-	void Create(ID3D12Device* pDevice, uint32 size, bool cpuVisible = false);
-	void SetData(CommandContext* pContext, void* pData, uint32 dataSize);
+	void Create(ID3D12Device* pDevice, int size, bool cpuVisible = false);
+	void SetData(CommandContext* pContext, void* pData, int dataSize);
 
 	uint32 GetSize() const { return m_Size; }
 
@@ -43,10 +44,14 @@ private:
 class Texture2D : public GraphicsResource
 {
 public:
-	void Create(ID3D12Device* pDevice, uint32 width, uint32 height);
-	void SetData(CommandContext* pContext, void* pData, uint32 dataSize);
+	void Create(Graphics* pGraphics, CommandContext* pContext, const char* pFilePath);
+	void Create(Graphics* pGraphics, int width, int height);
+	void SetData(CommandContext* pContext, void* pData, int dataSize);
+
+	D3D12_CPU_DESCRIPTOR_HANDLE GetDescriptorHandle() const { return m_DescriptorHandle; }
 
 private:
-	uint32 m_Width;
-	uint32 m_Height;
+	int m_Width;
+	int m_Height;
+	D3D12_CPU_DESCRIPTOR_HANDLE m_DescriptorHandle;
 };

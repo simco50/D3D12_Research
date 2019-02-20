@@ -46,7 +46,7 @@ void Graphics::Update()
 	WaitForFence(m_FenceValues[m_CurrentBackBufferIndex]);
 
 	m_pImGuiRenderer->NewFrame();
-	ImGui::Text("Hello World");
+	ImGui::ShowDemoWindow();
 
 	//3D
 	{
@@ -70,35 +70,29 @@ void Graphics::Update()
 
 		ID3D12DescriptorHeap* pHeap = m_pTextureGpuDesciptorHeap->GetCurrentHeap();
 		pContext->GetCommandList()->SetDescriptorHeaps(1, &pHeap);
-		pContext->GetCommandList()->SetGraphicsRootDescriptorTable(1, m_pTextureGpuDesciptorHeap->GetCurrentHeap()->GetGPUDescriptorHandleForHeapStart());
+		pContext->GetCommandList()->SetGraphicsRootDescriptorTable(1, m_TextureHandle.GetGpuHandle());
 		pContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
+		struct PerObjectData
 		{
-			struct ConstantBufferData
-			{
-				Matrix World;
-				Matrix WorldViewProjection;
-			} Data;
-			Matrix proj = XMMatrixPerspectiveFovLH(XM_PIDIV4, (float)m_WindowWidth / m_WindowHeight, 0.1f, 1000);
-			Matrix view = XMMatrixLookAtLH(Vector3(0, 5, 0), Vector3(0, 0, 500), Vector3(0, 1, 0));
+			Matrix World;
+			Matrix WorldViewProjection;
+		} ObjectData;
+		Matrix proj = XMMatrixPerspectiveFovLH(XM_PIDIV4, (float)m_WindowWidth / m_WindowHeight, 0.1f, 1000);
+		Matrix view = XMMatrixLookAtLH(Vector3(0, 5, 0), Vector3(0, 0, 500), Vector3(0, 1, 0));
+
+		{
 			Matrix world = XMMatrixRotationRollPitchYaw(0, GameTimer::GameTime(), 0) * XMMatrixTranslation(-50, -50, 500);
-			Data.World = world;
-			Data.WorldViewProjection = world * view * proj;
-			pContext->SetDynamicConstantBufferView(0, &Data, sizeof(ConstantBufferData));
+			ObjectData.World = world;
+			ObjectData.WorldViewProjection = world * view * proj;
+			pContext->SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
 			m_pMesh->Draw(pContext);
 		}
 		{
-			struct ConstantBufferData
-			{
-				Matrix World;
-				Matrix WorldViewProjection;
-			} Data;
-			Matrix proj = XMMatrixPerspectiveFovLH(XM_PIDIV4, (float)m_WindowWidth / m_WindowHeight, 0.1f, 1000);
-			Matrix view = XMMatrixLookAtLH(Vector3(0, 5, 0), Vector3(0, 0, 500), Vector3(0, 1, 0));
 			Matrix world = XMMatrixRotationRollPitchYaw(0, -GameTimer::GameTime(), 0) * XMMatrixTranslation(50, -50, 500);
-			Data.World = world;
-			Data.WorldViewProjection = world * view * proj;
-			pContext->SetDynamicConstantBufferView(0, &Data, sizeof(ConstantBufferData));
+			ObjectData.World = world;
+			ObjectData.WorldViewProjection = world * view * proj;
+			pContext->SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
 			m_pMesh->Draw(pContext);
 		}
 
@@ -224,7 +218,7 @@ void Graphics::OnResize(int width, int height)
 	for (int i = 0; i < FRAME_COUNT; ++i)
 	{
 		ID3D12Resource* pResource = nullptr;
-		m_RenderTargetHandles[i] = m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_RTV]->AllocateDescriptor();
+		m_RenderTargetHandles[i] = m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_RTV]->AllocateDescriptor().GetCpuHandle();
 		HR(m_pSwapchain->GetBuffer(i, IID_PPV_ARGS(&pResource)));
 		m_pDevice->CreateRenderTargetView(pResource, nullptr, m_RenderTargetHandles[i]);
 		m_RenderTargets[i] = std::make_unique<GraphicsResource>(pResource, D3D12_RESOURCE_STATE_PRESENT);
@@ -245,7 +239,7 @@ void Graphics::OnResize(int width, int height)
 		D3D12_RESOURCE_STATE_DEPTH_WRITE,
 		&clearValue,
 		IID_PPV_ARGS(&pResource)));
-	m_DepthStencilHandle = m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_DSV]->AllocateDescriptor();
+	m_DepthStencilHandle = m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_DSV]->AllocateDescriptor().GetCpuHandle();
 	m_pDevice->CreateDepthStencilView(pResource, nullptr, m_DepthStencilHandle);
 	m_pDepthStencilBuffer = std::make_unique<GraphicsResource>(pResource, D3D12_RESOURCE_STATE_DEPTH_WRITE);
 
@@ -257,13 +251,6 @@ void Graphics::OnResize(int width, int height)
 }
 
 void Graphics::InitializeAssets()
-{
-	CreatePipeline();
-	LoadGeometry();
-	LoadTexture();
-}
-
-void Graphics::CreatePipeline()
 {
 	//Shaders
 	Shader vertexShader;
@@ -303,46 +290,20 @@ void Graphics::CreatePipeline()
 	m_pPipelineStateObject->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
 	m_pPipelineStateObject->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
 	m_pPipelineStateObject->Finalize(m_pDevice.Get());
-}
 
-void Graphics::LoadGeometry()
-{
+	//Geometry
 	CommandContext* pContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 	m_pMesh = std::make_unique<Mesh>();
 	m_pMesh->Load("Resources/Man.dae", m_pDevice.Get(), pContext);
-	pContext->Execute(true);
-}
 
-void Graphics::LoadTexture()
-{
-	std::ifstream file("Resources/Man.png", std::ios::ate | std::ios::binary);
-	std::vector<char> buffer((size_t)file.tellg());
-	file.seekg(0);
-	file.read(buffer.data(), buffer.size());
-
-	int width, height, components;
-	void* pPixels = stbi_load_from_memory((unsigned char*)buffer.data(), (int)buffer.size(), &width, &height, &components, 4);
-
+	//Texture
 	m_pTexture = std::make_unique<Texture2D>();
-	m_pTexture->Create(m_pDevice.Get(), width, height);
-
-	CommandContext* pContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
-	m_pTexture->SetData(pContext, pPixels, width * height * 4);
-	pContext->Execute(true);
-
-	stbi_image_free(pPixels);
-	
-	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-	srvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-	srvDesc.Texture2D.MipLevels = 1;
-	srvDesc.Texture2D.MostDetailedMip = 0;
-	srvDesc.Texture2D.PlaneSlice = 0;
-	srvDesc.Texture2D.ResourceMinLODClamp = 0;
-	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-
+	m_pTexture->Create(this, pContext, "Resources/Man.png");
+	//HACK: Place descriptor on GPU visibile heap
 	m_TextureHandle = m_pTextureGpuDesciptorHeap->AllocateDescriptor();
-	m_pDevice->CreateShaderResourceView(m_pTexture->GetResource(), &srvDesc, m_TextureHandle);
+	m_pDevice->CopyDescriptorsSimple(1, m_TextureHandle.GetCpuHandle(), m_pTexture->GetDescriptorHandle(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	
+	pContext->Execute(true);
 }
 
 CommandQueue* Graphics::GetCommandQueue(D3D12_COMMAND_LIST_TYPE type) const
@@ -380,6 +341,11 @@ void Graphics::WaitForFence(uint64 fenceValue)
 void Graphics::FreeCommandList(CommandContext* pCommandList)
 {
 	m_FreeCommandLists.push(pCommandList);
+}
+
+D3D12_CPU_DESCRIPTOR_HANDLE Graphics::AllocateCpuDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE type)
+{
+	return m_DescriptorHeaps[type]->AllocateDescriptor().GetCpuHandle();
 }
 
 void Graphics::IdleGPU()

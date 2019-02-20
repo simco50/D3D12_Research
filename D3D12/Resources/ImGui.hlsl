@@ -17,6 +17,9 @@ struct PS_INPUT
       float4 color : COLOR0;
 };
 
+SamplerState sDiffuse : register(s0);
+Texture2D tDiffuse : register(t0);
+
 PS_INPUT VSMain(VS_INPUT input)
 {
       PS_INPUT output = (PS_INPUT)0;
@@ -30,5 +33,5 @@ PS_INPUT VSMain(VS_INPUT input)
 
 float4 PSMain(PS_INPUT input) : SV_TARGET
 {
-      return input.color;
+      return input.color* tDiffuse.Sample(sDiffuse, input.texCoord);
 }
