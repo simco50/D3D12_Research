@@ -18,6 +18,9 @@ struct PSInput
 	float3 normal : NORMAL;
 };
 
+SamplerState sDiffuse : register(s0);
+Texture2D tDiffuse : register(t0);
+
 PSInput VSMain(VSInput input)
 {
 	PSInput result;
@@ -32,5 +35,5 @@ float4 PSMain(PSInput input) : SV_TARGET
 {
 	float3 lightDirection = -normalize(float3(-1, -1, 1));
 	float diffuse = saturate(dot(lightDirection, input.normal));
-	return diffuse * float4(1, 1, 1, 1);
+	return diffuse * tDiffuse.Sample(sDiffuse, input.texCoord);
 }

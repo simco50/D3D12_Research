@@ -40,3 +40,13 @@ private:
 	uint32 m_Size;
 };
 
+class Texture2D : public GraphicsResource
+{
+public:
+	void Create(ID3D12Device* pDevice, uint32 width, uint32 height);
+	void SetData(CommandContext* pContext, void* pData, uint32 dataSize);
+
+private:
+	uint32 m_Width;
+	uint32 m_Height;
+};

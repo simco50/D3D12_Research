@@ -4,14 +4,17 @@
 class DescriptorAllocator
 {
 public:
-	DescriptorAllocator(ID3D12Device* pDevice, D3D12_DESCRIPTOR_HEAP_TYPE type);
+	DescriptorAllocator(ID3D12Device* pDevice, D3D12_DESCRIPTOR_HEAP_TYPE type, bool gpuVisible = false);
 	~DescriptorAllocator();
 
 	D3D12_CPU_DESCRIPTOR_HANDLE AllocateDescriptor();
+	ID3D12DescriptorHeap* GetCurrentHeap() { return m_DescriptorHeapPool.back().Get(); }
 
 private:
 	void AllocateNewHeap();
 	static const int DESCRIPTORS_PER_HEAP = 64;
+
+	bool m_GpuVisible;
 	std::vector<ComPtr<ID3D12DescriptorHeap>> m_DescriptorHeapPool;
 	CD3DX12_CPU_DESCRIPTOR_HANDLE m_CurrentHandle;
 	ID3D12Device* m_pDevice;

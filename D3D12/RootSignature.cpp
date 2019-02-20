@@ -66,7 +66,13 @@ void RootSignature::Finalize(ID3D12Device* pDevice, D3D12_ROOT_SIGNATURE_FLAGS f
 		}
 	}
 
-	desc.Init_1_1(m_NumParameters, reinterpret_cast<D3D12_ROOT_PARAMETER1*>(m_RootParameters.data()), (uint32)m_StaticSamplers.size(), m_StaticSamplers.data(), flags);
+	std::vector<D3D12_ROOT_PARAMETER1> parameters(m_RootParameters.size());
+	for (size_t i = 0; i < parameters.size(); ++i)
+	{
+		parameters[i] = m_RootParameters[i].Data;
+	}
+
+	desc.Init_1_1(m_NumParameters, reinterpret_cast<D3D12_ROOT_PARAMETER1*>(parameters.data()), (uint32)m_StaticSamplers.size(), m_StaticSamplers.data(), flags);
 
 	ComPtr<ID3DBlob> pDataBlob, pErrorBlob;
 	HR(D3D12SerializeVersionedRootSignature(&desc, pDataBlob.GetAddressOf(), pErrorBlob.GetAddressOf()));

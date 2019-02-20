@@ -3,6 +3,7 @@
 class Graphics;
 class GraphicsResource;
 class GraphicsBuffer;
+class Texture2D;
 
 class CommandContext
 {
@@ -38,6 +39,7 @@ public:
 
 	DynamicAllocation AllocatorUploadMemory(uint32 size);
 	void InitializeBuffer(GraphicsBuffer* pResource, void* pData, uint32 dataSize);
+	void InitializeTexture(Texture2D* pResource, void* pData, uint32 dataSize);
 
 	ID3D12GraphicsCommandList* GetCommandList() const { return m_pCommandList; }
 
