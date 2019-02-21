@@ -201,7 +201,10 @@ void CommandContext::InitializeTexture(Texture2D* pResource, void* pData, uint32
 	D3D12_RESOURCE_DESC desc = pResource->GetResource()->GetDesc();
 	m_pGraphics->GetDevice()->GetCopyableFootprints(&desc, 0, 1, 0, &layout, nullptr, nullptr, nullptr);
 	layout.Offset = allocation.Offset;
-	m_pCommandList->CopyTextureRegion(&CD3DX12_TEXTURE_COPY_LOCATION(pResource->GetResource()), 0, 0, 0, &CD3DX12_TEXTURE_COPY_LOCATION(allocation.pBackingResource, layout), nullptr);
+
+	CD3DX12_TEXTURE_COPY_LOCATION sourceLocation = CD3DX12_TEXTURE_COPY_LOCATION(pResource->GetResource());
+	CD3DX12_TEXTURE_COPY_LOCATION targetLocation = CD3DX12_TEXTURE_COPY_LOCATION(allocation.pBackingResource, layout);
+	m_pCommandList->CopyTextureRegion(&sourceLocation, 0, 0, 0, &targetLocation, nullptr);
 
 	InsertResourceBarrier(pResource, D3D12_RESOURCE_STATE_GENERIC_READ, true);
 }

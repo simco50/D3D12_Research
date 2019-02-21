@@ -17,7 +17,7 @@ public:
 
 	inline Type GetType() const { return m_Type; }
 	inline void* GetByteCode() const { return m_pByteCode->GetBufferPointer(); }
-	inline uint32 GetByteCodeSize() const { return m_pByteCode->GetBufferSize(); }
+	inline uint32 GetByteCodeSize() const { return (uint32)m_pByteCode->GetBufferSize(); }
 
 private:
 	ComPtr<ID3DBlob> m_pByteCode;

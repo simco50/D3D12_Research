@@ -86,7 +86,7 @@ void ImGuiRenderer::CreatePipeline()
 	m_pPipelineState->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
 	m_pPipelineState->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
 	m_pPipelineState->SetRootSignature(m_pRootSignature->GetRootSignature());
-	m_pPipelineState->SetInputLayout(elementDesc.data(), elementDesc.size());
+	m_pPipelineState->SetInputLayout(elementDesc.data(), (uint32)elementDesc.size());
 	m_pPipelineState->Finalize(m_pGraphics->GetDevice());
 }
 

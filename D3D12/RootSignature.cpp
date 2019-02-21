@@ -53,7 +53,7 @@ void RootSignature::Finalize(ID3D12Device* pDevice, D3D12_ROOT_SIGNATURE_FLAGS f
 		{
 			if (rootParameter.Data.DescriptorTable.pDescriptorRanges->RangeType == D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER)
 			{
-				m_DescriptorTableMask.SetBit(i);
+				m_DescriptorTableMask.SetBit((uint32)i);
 			}
 			else
 			{

@@ -84,14 +84,17 @@ solution (engineName)
 		configuration {}
 		includedirs (ROOT .. "Libraries/Pix/include")
 		libdirs (ROOT .. "Libraries/Pix/lib")
-		configuration { "windows" }
-			postbuildcommands { ("copy \"$(SolutionDir)Libraries\\Pix\\bin\\WinPixEventRuntime.dll\" \"$(OutDir)\"") }
-			links { "WinPixEventRuntime" }
-
-		configuration { "uwp" }
+		
+		if _OPTIONS["base"] == "uwp" then
 			libdirs (ROOT .. "Libraries/Pix/lib/WinPixEventRuntime_UAP.lib")
 			postbuildcommands { ("copy \"$(SolutionDir)Libraries\\Pix\\bin\\WinPixEventRuntime_UAP.dll\" \"$(OutDir)\"") }
+			postbuildcommands { ("xcopy \"$(ProjectDir)Resources\" \"$(OutDir)AppX\" /s/h/e/k/f/c/y") }
 			links { "WinPixEventRuntime_UAP" }
+		else
+			configuration { "windows" }
+				postbuildcommands { ("copy \"$(SolutionDir)Libraries\\Pix\\bin\\WinPixEventRuntime.dll\" \"$(OutDir)\"") }
+				links { "WinPixEventRuntime" }
+		end
 
 		configuration {}
 		

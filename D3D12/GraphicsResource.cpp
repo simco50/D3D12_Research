@@ -4,7 +4,7 @@
 #include "External/Stb/stb_image.h"
 #include "Graphics.h"
 
-void GraphicsBuffer::Create(ID3D12Device* pDevice, int size, bool cpuVisible /*= false*/)
+void GraphicsBuffer::Create(ID3D12Device* pDevice, uint32 size, bool cpuVisible /*= false*/)
 {
 	m_Size = size;
 	D3D12_RESOURCE_DESC desc = {};
@@ -25,7 +25,7 @@ void GraphicsBuffer::Create(ID3D12Device* pDevice, int size, bool cpuVisible /*=
 	m_CurrentState = D3D12_RESOURCE_STATE_GENERIC_READ;
 }
 
-void GraphicsBuffer::SetData(CommandContext* pContext, void* pData, int dataSize)
+void GraphicsBuffer::SetData(CommandContext* pContext, void* pData, uint32 dataSize)
 {
 	assert(m_Size == dataSize);
 	pContext->InitializeBuffer(this, pData, dataSize);
@@ -59,8 +59,10 @@ void Texture2D::Create(Graphics* pGraphics, int width, int height)
 	desc.Width = width;
 	desc.Height = height;
 
+	D3D12_HEAP_PROPERTIES heapProps = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
+
 	HR(pGraphics->GetDevice()->CreateCommittedResource(
-		&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
+		&heapProps,
 		D3D12_HEAP_FLAG_NONE,
 		&desc,
 		D3D12_RESOURCE_STATE_GENERIC_READ,
@@ -81,8 +83,8 @@ void Texture2D::Create(Graphics* pGraphics, int width, int height)
 	pGraphics->GetDevice()->CreateShaderResourceView(m_pResource, &srvDesc, m_DescriptorHandle);
 }
 
-void Texture2D::SetData(CommandContext* pContext, void* pData, int dataSize)
+void Texture2D::SetData(CommandContext* pContext, void* pData, uint32 dataSize)
 {
-	assert(m_Width * m_Height * 4 == dataSize);
+	assert((uint32)(m_Width * m_Height * 4) == dataSize);
 	pContext->InitializeTexture(this, pData, dataSize);
 }

@@ -32,8 +32,8 @@ protected:
 class GraphicsBuffer : public GraphicsResource
 {
 public:
-	void Create(ID3D12Device* pDevice, int size, bool cpuVisible = false);
-	void SetData(CommandContext* pContext, void* pData, int dataSize);
+	void Create(ID3D12Device* pDevice, uint32 size, bool cpuVisible = false);
+	void SetData(CommandContext* pContext, void* pData, uint32 dataSize);
 
 	uint32 GetSize() const { return m_Size; }
 
@@ -46,7 +46,7 @@ class Texture2D : public GraphicsResource
 public:
 	void Create(Graphics* pGraphics, CommandContext* pContext, const char* pFilePath);
 	void Create(Graphics* pGraphics, int width, int height);
-	void SetData(CommandContext* pContext, void* pData, int dataSize);
+	void SetData(CommandContext* pContext, void* pData, uint32 dataSize);
 
 	D3D12_CPU_DESCRIPTOR_HANDLE GetDescriptorHandle() const { return m_DescriptorHandle; }
 

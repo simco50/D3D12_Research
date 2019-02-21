@@ -17,7 +17,7 @@ PipelineState::PipelineState()
 	m_Desc.SampleMask = UINT_MAX;
 }
 
-void PipelineState::SetBlendMode(const BlendMode& blendMode, bool alphaToCoverage)
+void PipelineState::SetBlendMode(const BlendMode& blendMode, bool /*alphaToCoverage*/)
 {
 	D3D12_RENDER_TARGET_BLEND_DESC& desc = m_Desc.BlendState.RenderTarget[0];
 	desc.RenderTargetWriteMask = 0xf;
@@ -118,7 +118,7 @@ void PipelineState::SetDepthTest(const D3D12_COMPARISON_FUNC func)
 	m_Desc.DepthStencilState.DepthFunc = func;
 }
 
-void PipelineState::SetStencilTest(bool stencilEnabled, D3D12_COMPARISON_FUNC mode, D3D12_STENCIL_OP pass, D3D12_STENCIL_OP fail, D3D12_STENCIL_OP zFail, unsigned int stencilRef, unsigned char compareMask, unsigned char writeMask)
+void PipelineState::SetStencilTest(bool stencilEnabled, D3D12_COMPARISON_FUNC mode, D3D12_STENCIL_OP pass, D3D12_STENCIL_OP fail, D3D12_STENCIL_OP zFail, unsigned int /*stencilRef*/, unsigned char compareMask, unsigned char writeMask)
 {
 	m_Desc.DepthStencilState.StencilEnable = stencilEnabled;
 	m_Desc.DepthStencilState.FrontFace.StencilFunc = mode;
@@ -130,12 +130,12 @@ void PipelineState::SetStencilTest(bool stencilEnabled, D3D12_COMPARISON_FUNC mo
 	m_Desc.DepthStencilState.BackFace = m_Desc.DepthStencilState.FrontFace;
 }
 
-void PipelineState::SetScissorEnabled(bool enabled)
+void PipelineState::SetScissorEnabled(bool /*enabled*/)
 {
 	
 }
 
-void PipelineState::SetMultisampleEnabled(bool enabled)
+void PipelineState::SetMultisampleEnabled(bool /*enabled*/)
 {
 	
 }
