@@ -49,6 +49,10 @@ public:
 		explicit SetBitsIterator(const BitField* pBitField)
 			: m_CurrentIndex(0), m_pBitField(pBitField)
 		{
+			if (pBitField->LeastSignificantBit(&m_CurrentIndex) == false)
+			{
+				m_CurrentIndex = Bits;
+			}
 		}
 
 		void operator++()
@@ -191,9 +195,9 @@ public:
 		return true;
 	}
 
-	bool MostSignificantBit(size_t* pIndex)
+	bool MostSignificantBit(uint32* pIndex) const
 	{
-		for (size_t i = Elements() - 1; i >= 0; --i)
+		for (uint32 i = Elements() - 1; i >= 0; --i)
 		{
 			if (BitOperations::MostSignificantBit(Data[i], pIndex) == true)
 			{
@@ -204,9 +208,9 @@ public:
 		return false;
 	}
 
-	bool LeastSignificantBit(size_t* pIndex)
+	bool LeastSignificantBit(uint32* pIndex) const
 	{
-		for (size_t i = 0; i < Elements(); ++i)
+		for (uint32 i = 0; i < Elements(); ++i)
 		{
 			if (BitOperations::LeastSignificantBit(Data[i], pIndex) == true)
 			{

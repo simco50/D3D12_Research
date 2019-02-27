@@ -32,6 +32,7 @@ public:
 	ID3D12Device* GetDevice() const { return m_pDevice.Get(); }
 	void OnResize(int width, int height);
 
+	bool IsFenceComplete(uint64 fenceValue);
 	void WaitForFence(uint64 fenceValue);
 	void IdleGPU();
 
@@ -43,7 +44,6 @@ public:
 	uint32 GetWindowHeight() const { return m_WindowHeight; }
 
 	DynamicResourceAllocator* GetCpuVisibleAllocator() const { return m_pDynamicCpuVisibleAllocator.get(); }
-	DescriptorAllocator* GetGpuVisibleSRVAllocator() const { return m_pTextureGpuDesciptorHeap.get(); }
 	D3D12_CPU_DESCRIPTOR_HANDLE AllocateCpuDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE type);
 
 private:
@@ -58,7 +58,6 @@ private:
 	std::array<std::unique_ptr<GraphicsResource>, FRAME_COUNT> m_RenderTargets;
 	std::unique_ptr<GraphicsResource> m_pDepthStencilBuffer;
 	std::array<std::unique_ptr<DescriptorAllocator>, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES> m_DescriptorHeaps;
-	std::unique_ptr<DescriptorAllocator> m_pTextureGpuDesciptorHeap;
 	std::unique_ptr<DynamicResourceAllocator> m_pDynamicCpuVisibleAllocator;
 	std::array<std::unique_ptr<CommandQueue>, 1> m_CommandQueues;
 	std::vector<std::unique_ptr<CommandContext>> m_CommandListPool;
@@ -84,7 +83,7 @@ private:
 
 	std::unique_ptr<Mesh> m_pMesh;
 	std::unique_ptr<Texture2D> m_pTexture;
-	DescriptorHandle m_TextureHandle;
+	std::unique_ptr<Texture2D> m_pTexture2;
 	std::unique_ptr<RootSignature> m_pRootSignature;
 	std::unique_ptr<PipelineState> m_pPipelineStateObject;
 	int m_IndexCount = 0;

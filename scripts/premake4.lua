@@ -4,8 +4,8 @@ ROOT = "../"
 
 solution (engineName)
 	basedir (ROOT)
-	configurations { "Debug", "Development", "Shipping" }
-    platforms {"x32", "x64"}
+	configurations { "Debug", "Release" }
+    platforms {"x64"}
 	defines { "_CONSOLE", "THREADING", "PLATFORM_WINDOWS"}
 	language "C++"
 	startproject (engineName)
@@ -13,17 +13,11 @@ solution (engineName)
     configuration { "x64" }
 		defines {"x64", "_AMD64_"}
 
-	configuration { "x32" }
-		defines {"x32", "_X86_"}	
-
 	configuration "Debug"
 		defines { "_DEBUG" }
 		flags { "Symbols", "ExtraWarnings" }
-	configuration "Development"
-		defines { "DEVELOPMENT" }
-		flags {"OptimizeSpeed", "Symbols", "ExtraWarnings" }
-	configuration "Shipping"
-		defines { "SHIPPING" }
+	configuration "Release"
+		defines { "RELEASE" }
 		flags {"OptimizeSpeed", "No64BitChecks" }
 
 	configuration {}
@@ -73,12 +67,8 @@ solution (engineName)
 		}
 
 		includedirs (ROOT .. "Libraries/Assimp/include")
-		local p = platforms()
-		for j = 1, #p do
-			configuration { p[j] }
-				libdirs	(ROOT .. "Libraries/Assimp/lib/" .. p[j])
-				postbuildcommands { ("copy \"$(SolutionDir)Libraries\\Assimp\\bin\\" .. p[j] .. "\\assimp-vc140-mt.dll\" \"$(OutDir)\"") }
-		end
+		libdirs	(ROOT .. "Libraries/Assimp/lib/x64")
+		postbuildcommands { ("copy \"$(SolutionDir)Libraries\\Assimp\\bin\\x64\\assimp-vc140-mt.dll\" \"$(OutDir)\"") }
 		links { "assimp-vc140-mt" }
 
 		configuration {}

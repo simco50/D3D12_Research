@@ -42,9 +42,6 @@ void ImGuiRenderer::InitializeImGui()
 	CommandContext* pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 	m_pFontTexture->SetData(pContext, pPixels, width * height * 4);
 	pContext->Execute(true);
-
-	m_TextureHandle = m_pGraphics->GetGpuVisibleSRVAllocator()->AllocateDescriptor();
-	m_pGraphics->GetDevice()->CopyDescriptorsSimple(1, m_TextureHandle.GetCpuHandle(), m_pFontTexture->GetDescriptorHandle(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 }
 
 void ImGuiRenderer::CreatePipeline()
@@ -62,8 +59,8 @@ void ImGuiRenderer::CreatePipeline()
 		D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
 
 	m_pRootSignature = std::make_unique<RootSignature>(2);
-	(*m_pRootSignature)[0].AsConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
-	(*m_pRootSignature)[1].AsDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0, 1, D3D12_SHADER_VISIBILITY_PIXEL);
+	m_pRootSignature->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
+	m_pRootSignature->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, D3D12_SHADER_VISIBILITY_PIXEL);
 
 	D3D12_SAMPLER_DESC samplerDesc = {};
 	samplerDesc.AddressU = samplerDesc.AddressV = samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
@@ -101,16 +98,14 @@ void ImGuiRenderer::Render(CommandContext& context)
 		return;
 	}
 
-	context.GetCommandList()->SetPipelineState(m_pPipelineState->GetPipelineState());
-	context.GetCommandList()->SetGraphicsRootSignature(m_pRootSignature->GetRootSignature());
+	context.SetPipelineState(m_pPipelineState.get());
+	context.SetGraphicsRootSignature(m_pRootSignature.get());
 	Matrix projectionMatrix = XMMatrixOrthographicOffCenterLH(0.0f, (float)m_pGraphics->GetWindowWidth(), (float)m_pGraphics->GetWindowHeight(), 0.0f, 0.0f, 1.0f);
 	context.SetDynamicConstantBufferView(0, &projectionMatrix, sizeof(Matrix));
 	context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	context.SetViewport(FloatRect(0, 0, (float)m_pGraphics->GetWindowWidth(), (float)m_pGraphics->GetWindowHeight()), 0, 1);
 
-	ID3D12DescriptorHeap* pHeap = m_pGraphics->GetGpuVisibleSRVAllocator()->GetCurrentHeap();
-	context.GetCommandList()->SetDescriptorHeaps(1, &pHeap);
-	context.GetCommandList()->SetGraphicsRootDescriptorTable(1, m_TextureHandle.GetGpuHandle());
+	context.SetDynamicDescriptor(1, m_pFontTexture->GetDescriptorHandle());
 
 	int vertexOffset = 0;
 	int indexOffset = 0;

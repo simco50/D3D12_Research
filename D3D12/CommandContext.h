@@ -4,6 +4,9 @@ class Graphics;
 class GraphicsResource;
 class GraphicsBuffer;
 class Texture2D;
+class DynamicDescriptorAllocator;
+class RootSignature;
+class PipelineState;
 
 class CommandContext
 {
@@ -30,12 +33,18 @@ public:
 	void SetViewport(const FloatRect& rect, float minDepth = 0.0f, float maxDepth = 1.0f);
 	void SetScissorRect(const FloatRect& rect);
 
+	void SetGraphicsRootSignature(RootSignature* pRootSignature);
+	void SetPipelineState(PipelineState* pPipelineState);
+
 	void InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESOURCE_STATES state, bool executeImmediate = false);
 	void FlushResourceBarriers();
 
-	void SetDynamicConstantBufferView(int slot, void* pData, uint32 dataSize);
+	void SetDynamicConstantBufferView(int rootIndex, void* pData, uint32 dataSize);
 	void SetDynamicVertexBuffer(int slot, int elementCount, int elementSize, void* pData);
 	void SetDynamicIndexBuffer(int elementCount, void* pData);
+	void SetDynamicDescriptor(int rootIndex, D3D12_CPU_DESCRIPTOR_HANDLE handle);
+
+	void SetDescriptorHeap(ID3D12DescriptorHeap* pHeap, D3D12_DESCRIPTOR_HEAP_TYPE type);
 
 	DynamicAllocation AllocatorUploadMemory(uint32 size);
 	void InitializeBuffer(GraphicsBuffer* pResource, void* pData, uint32 dataSize);
@@ -50,7 +59,12 @@ public:
 private:
 	static const int MAX_QUEUED_BARRIERS = 12;
 
+	void BindDescriptorHeaps();
 	void PrepareDraw();
+
+	std::unique_ptr<DynamicDescriptorAllocator> m_pDynamicDescriptorAllocator;
+
+	std::array<ID3D12DescriptorHeap*, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES> m_CurrentDescriptorHeaps = {};
 
 	std::array<D3D12_RESOURCE_BARRIER, MAX_QUEUED_BARRIERS> m_QueuedBarriers = {};
 	int m_NumQueuedBarriers = 0;

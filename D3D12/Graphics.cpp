@@ -43,18 +43,17 @@ void Graphics::Initialize(WindowHandle window)
 
 void Graphics::Update()
 {
-	WaitForFence(m_FenceValues[m_CurrentBackBufferIndex]);
-
 	m_pImGuiRenderer->NewFrame();
-	ImGui::ShowDemoWindow();
+	ImGui::Text("Hello World");
+
+	uint64 nextFenceValue = 0;
 
 	//3D
 	{
 		CommandContext* pContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
-		ID3D12GraphicsCommandList* pCommandList = pContext->GetCommandList();
 
-		pCommandList->SetPipelineState(m_pPipelineStateObject->GetPipelineState());
-		pCommandList->SetGraphicsRootSignature(m_pRootSignature->GetRootSignature());
+		pContext->SetPipelineState(m_pPipelineStateObject.get());
+		pContext->SetGraphicsRootSignature(m_pRootSignature.get());
 
 		pContext->SetViewport(m_Viewport);
 		pContext->SetScissorRect(m_ScissorRect);
@@ -68,9 +67,6 @@ void Graphics::Update()
 		pContext->ClearRenderTarget(m_RenderTargetHandles[m_CurrentBackBufferIndex], clearColor);
 		pContext->ClearDepth(m_DepthStencilHandle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0);
 
-		ID3D12DescriptorHeap* pHeap = m_pTextureGpuDesciptorHeap->GetCurrentHeap();
-		pContext->GetCommandList()->SetDescriptorHeaps(1, &pHeap);
-		pContext->GetCommandList()->SetGraphicsRootDescriptorTable(1, m_TextureHandle.GetGpuHandle());
 		pContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
 		struct PerObjectData
@@ -86,6 +82,7 @@ void Graphics::Update()
 			ObjectData.World = world;
 			ObjectData.WorldViewProjection = world * view * proj;
 			pContext->SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
+			pContext->SetDynamicDescriptor(1, m_pTexture->GetDescriptorHandle());
 			m_pMesh->Draw(pContext);
 		}
 		{
@@ -93,20 +90,29 @@ void Graphics::Update()
 			ObjectData.World = world;
 			ObjectData.WorldViewProjection = world * view * proj;
 			pContext->SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
+			pContext->SetDynamicDescriptor(1, m_pTexture2->GetDescriptorHandle());
 			m_pMesh->Draw(pContext);
 		}
-
-		pContext->Execute(false);
+		
+		nextFenceValue = pContext->Execute(false);
 	}
 
 	//UI
 	{
 		CommandContext* pContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 		m_pImGuiRenderer->Render(*pContext);
-		pContext->InsertResourceBarrier(m_RenderTargets[m_CurrentBackBufferIndex].get(), D3D12_RESOURCE_STATE_PRESENT, true);
-		m_FenceValues[m_CurrentBackBufferIndex] = pContext->Execute(false);
+		nextFenceValue = pContext->Execute(false);
 	}
 
+	//Present
+	{
+		CommandContext* pContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+		pContext->InsertResourceBarrier(m_RenderTargets[m_CurrentBackBufferIndex].get(), D3D12_RESOURCE_STATE_PRESENT, true);
+		nextFenceValue = pContext->Execute(false);
+	}
+
+	WaitForFence(m_FenceValues[m_CurrentBackBufferIndex]);
+	m_FenceValues[m_CurrentBackBufferIndex] = nextFenceValue;
 	m_pSwapchain->Present(1, 0);
 	m_CurrentBackBufferIndex = m_pSwapchain->GetCurrentBackBufferIndex();
 }
@@ -136,12 +142,47 @@ void Graphics::InitD3D(WindowHandle pWindow)
 	//Create the device
 	HR(D3D12CreateDevice(nullptr, D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&m_pDevice)));
 
+#ifdef _DEBUG
+	ID3D12InfoQueue* pInfoQueue = nullptr;
+	if (HR(m_pDevice->QueryInterface(IID_PPV_ARGS(&pInfoQueue))))
+	{
+		// Suppress whole categories of messages
+		//D3D12_MESSAGE_CATEGORY Categories[] = {};
+
+		// Suppress messages based on their severity level
+		D3D12_MESSAGE_SEVERITY Severities[] =
+		{
+			D3D12_MESSAGE_SEVERITY_INFO
+		};
+
+		// Suppress individual messages by their ID
+		D3D12_MESSAGE_ID DenyIds[] =
+		{
+			// This occurs when there are uninitialized descriptors in a descriptor table, even when a
+			// shader does not access the missing descriptors.  I find this is common when switching
+			// shader permutations and not wanting to change much code to reorder resources.
+			D3D12_MESSAGE_ID_INVALID_DESCRIPTOR_HANDLE,
+		};
+
+		D3D12_INFO_QUEUE_FILTER NewFilter = {};
+		//NewFilter.DenyList.NumCategories = _countof(Categories);
+		//NewFilter.DenyList.pCategoryList = Categories;
+		NewFilter.DenyList.NumSeverities = _countof(Severities);
+		NewFilter.DenyList.pSeverityList = Severities;
+		NewFilter.DenyList.NumIDs = _countof(DenyIds);
+		NewFilter.DenyList.pIDList = DenyIds;
+
+		pInfoQueue->PushStorageFilter(&NewFilter);
+		pInfoQueue->Release();
+	}
+#endif
+
 	//Check 4x MSAA support
 	D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS qualityLevels;
 	qualityLevels.Flags = D3D12_MULTISAMPLE_QUALITY_LEVELS_FLAG_NONE;
 	qualityLevels.Format = m_RenderTargetFormat;
 	qualityLevels.NumQualityLevels = 0;
-	qualityLevels.SampleCount = 4;
+	qualityLevels.SampleCount = 1;
 	HR(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS, &qualityLevels, sizeof(qualityLevels)));
 
 	m_CommandQueues[0] = std::make_unique<CommandQueue>(this, D3D12_COMMAND_LIST_TYPE_DIRECT);
@@ -151,8 +192,6 @@ void Graphics::InitD3D(WindowHandle pWindow)
 	{
 		m_DescriptorHeaps[i] = std::make_unique<DescriptorAllocator>(m_pDevice.Get(), (D3D12_DESCRIPTOR_HEAP_TYPE)i);
 	}
-	m_pTextureGpuDesciptorHeap = std::make_unique<DescriptorAllocator>(m_pDevice.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, true);
-
 	m_pDynamicCpuVisibleAllocator = std::make_unique<DynamicResourceAllocator>(m_pDevice.Get(), true, 1024 * 1024 * 32);
 
 	m_pSwapchain.Reset();
@@ -184,7 +223,13 @@ void Graphics::InitD3D(WindowHandle pWindow)
 	fsDesc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
 	fsDesc.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED;
 	fsDesc.Windowed = true;
-	HR(m_pFactory->CreateSwapChainForHwnd(m_CommandQueues[D3D12_COMMAND_LIST_TYPE_DIRECT]->GetCommandQueue(), pWindow, &swapchainDesc, &fsDesc, nullptr, &swapChain));
+	HR(m_pFactory->CreateSwapChainForHwnd(
+		m_CommandQueues[D3D12_COMMAND_LIST_TYPE_DIRECT]->GetCommandQueue(), 
+		pWindow, 
+		&swapchainDesc, 
+		&fsDesc, 
+		nullptr, 
+		&swapChain));
 #endif
 	swapChain.As(&m_pSwapchain);
 	OnResize(m_WindowWidth, m_WindowHeight);
@@ -267,8 +312,8 @@ void Graphics::InitializeAssets()
 
 	//Rootsignature
 	m_pRootSignature = std::make_unique<RootSignature>(2);
-	(*m_pRootSignature)[0].AsConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
-	(*m_pRootSignature)[1].AsDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0, 1, D3D12_SHADER_VISIBILITY_PIXEL);
+	m_pRootSignature->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
+	m_pRootSignature->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, D3D12_SHADER_VISIBILITY_PIXEL);
 
 	D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
 		D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
@@ -299,9 +344,10 @@ void Graphics::InitializeAssets()
 	//Texture
 	m_pTexture = std::make_unique<Texture2D>();
 	m_pTexture->Create(this, pContext, "Resources/Man.png");
-	//HACK: Place descriptor on GPU visibile heap
-	m_TextureHandle = m_pTextureGpuDesciptorHeap->AllocateDescriptor();
-	m_pDevice->CopyDescriptorsSimple(1, m_TextureHandle.GetCpuHandle(), m_pTexture->GetDescriptorHandle(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+	//Texture2
+	m_pTexture2 = std::make_unique<Texture2D>();
+	m_pTexture2->Create(this, pContext, "Resources/ManInverted.png");
 	
 	pContext->Execute(true);
 }
@@ -329,6 +375,13 @@ CommandContext* Graphics::AllocateCommandContext(D3D12_COMMAND_LIST_TYPE type)
 		m_CommandListPool.emplace_back(std::make_unique<CommandContext>(this, static_cast<ID3D12GraphicsCommandList*>(m_CommandLists.back().Get()), pAllocator, type));
 		return m_CommandListPool.back().get();
 	}
+}
+
+bool Graphics::IsFenceComplete(uint64 fenceValue)
+{
+	D3D12_COMMAND_LIST_TYPE type = (D3D12_COMMAND_LIST_TYPE)(fenceValue >> 56);
+	CommandQueue* pQueue = GetCommandQueue(type);
+	return pQueue->IsFenceComplete(fenceValue);
 }
 
 void Graphics::WaitForFence(uint64 fenceValue)

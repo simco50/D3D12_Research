@@ -23,6 +23,5 @@ private:
 	std::unique_ptr<PipelineState> m_pPipelineState;
 	std::unique_ptr<RootSignature> m_pRootSignature;
 	std::unique_ptr<Texture2D> m_pFontTexture;
-	DescriptorHandle m_TextureHandle;
 };
 
