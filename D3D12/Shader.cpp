@@ -47,5 +47,66 @@ bool Shader::Load(const char* pFilePath, Type shaderType, const char* pEntryPoin
 		return false;
 	}
 	pErrorBlob.Reset();
+
+	ShaderReflection();
+
 	return true;
+}
+
+void Shader::ShaderReflection()
+{
+	ComPtr<ID3D12ShaderReflection> pShaderReflection;
+	D3D12_SHADER_DESC shaderDesc;
+
+	HR(D3DReflect(m_pByteCode->GetBufferPointer(), m_pByteCode->GetBufferSize(), IID_PPV_ARGS(pShaderReflection.GetAddressOf())));
+	pShaderReflection->GetDesc(&shaderDesc);
+
+	std::map<std::string, uint32> cbRegisterMap;
+
+	for (unsigned i = 0; i < shaderDesc.BoundResources; ++i)
+	{
+		D3D12_SHADER_INPUT_BIND_DESC resourceDesc;
+		pShaderReflection->GetResourceBindingDesc(i, &resourceDesc);
+
+		switch (resourceDesc.Type)
+		{
+		case D3D_SIT_CBUFFER:
+		case D3D_SIT_TBUFFER:
+			cbRegisterMap[resourceDesc.Name] = resourceDesc.BindPoint;
+			break;
+		case D3D_SIT_TEXTURE:
+		case D3D_SIT_SAMPLER:
+		case D3D_SIT_UAV_RWTYPED:
+		case D3D_SIT_STRUCTURED:
+		case D3D_SIT_UAV_RWSTRUCTURED:
+		case D3D_SIT_BYTEADDRESS:
+		case D3D_SIT_UAV_RWBYTEADDRESS:
+		case D3D_SIT_UAV_APPEND_STRUCTURED:
+		case D3D_SIT_UAV_CONSUME_STRUCTURED:
+		case D3D_SIT_UAV_RWSTRUCTURED_WITH_COUNTER:
+		default:
+			break;
+		}
+	}
+
+	for (unsigned int c = 0; c < shaderDesc.ConstantBuffers; ++c)
+	{
+		ID3D12ShaderReflectionConstantBuffer* pReflectionConstantBuffer = pShaderReflection->GetConstantBufferByIndex(c);
+		D3D12_SHADER_BUFFER_DESC bufferDesc;
+		pReflectionConstantBuffer->GetDesc(&bufferDesc);
+		uint32 cbRegister = cbRegisterMap[std::string(bufferDesc.Name)];
+
+		for (unsigned v = 0; v < bufferDesc.Variables; ++v)
+		{
+			ID3D12ShaderReflectionVariable* pVariable = pReflectionConstantBuffer->GetVariableByIndex(v);
+			D3D12_SHADER_VARIABLE_DESC variableDesc;
+			pVariable->GetDesc(&variableDesc);
+
+			ShaderParameter parameter = {};
+			parameter.Name = variableDesc.Name;
+			parameter.Offset = variableDesc.StartOffset;
+			parameter.Size = variableDesc.Size;
+			m_Parameters[variableDesc.Name] = parameter;
+		}
+	}
 }

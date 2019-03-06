@@ -1,11 +1,15 @@
 #pragma once
 
+struct ShaderParameter
+{
+	std::string Name;
+	uint32 Offset;
+	uint32 Size;
+};
+
 class Shader
 {
 public:
-	Shader() {}
-	~Shader() {}
-
 	enum class Type
 	{
 		VertexShader,
@@ -19,7 +23,13 @@ public:
 	inline void* GetByteCode() const { return m_pByteCode->GetBufferPointer(); }
 	inline uint32 GetByteCodeSize() const { return (uint32)m_pByteCode->GetBufferSize(); }
 
+	const ShaderParameter& GetShaderParameter(const std::string& name) const { return m_Parameters.at(name); }
+
 private:
+	void ShaderReflection();
+
+	std::map<std::string, ShaderParameter> m_Parameters;
+
 	ComPtr<ID3DBlob> m_pByteCode;
 	Type m_Type;
 };
