@@ -42,7 +42,8 @@ public:
 	void SetDynamicConstantBufferView(int rootIndex, void* pData, uint32 dataSize);
 	void SetDynamicVertexBuffer(int slot, int elementCount, int elementSize, void* pData);
 	void SetDynamicIndexBuffer(int elementCount, void* pData);
-	void SetDynamicDescriptor(int rootIndex, D3D12_CPU_DESCRIPTOR_HANDLE handle);
+	void SetDynamicDescriptor(int rootIndex, int offset, D3D12_CPU_DESCRIPTOR_HANDLE handle);
+	void SetDynamicDescriptor(int rootIndex, int offset, D3D12_CPU_DESCRIPTOR_HANDLE* handles, int count);
 
 	void SetDescriptorHeap(ID3D12DescriptorHeap* pHeap, D3D12_DESCRIPTOR_HEAP_TYPE type);
 

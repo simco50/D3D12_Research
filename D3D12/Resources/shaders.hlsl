@@ -35,5 +35,8 @@ float4 PSMain(PSInput input) : SV_TARGET
 {
 	float3 lightDirection = -normalize(float3(-1, -1, 1));
 	float diffuse = saturate(dot(lightDirection, input.normal));
-	return diffuse * tDiffuse.Sample(sDiffuse, input.texCoord);
+
+	float4 s = tDiffuse.Sample(sDiffuse, input.texCoord);
+
+	return diffuse * s;
 }

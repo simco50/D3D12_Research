@@ -198,9 +198,14 @@ void CommandContext::SetDynamicIndexBuffer(int elementCount, void* pData)
 	m_pCommandList->IASetIndexBuffer(&view);
 }
 
-void CommandContext::SetDynamicDescriptor(int rootIndex, D3D12_CPU_DESCRIPTOR_HANDLE handle)
+void CommandContext::SetDynamicDescriptor(int rootIndex, int offset, D3D12_CPU_DESCRIPTOR_HANDLE handle)
 {
-	m_pDynamicDescriptorAllocator->SetDescriptors(rootIndex, 0, 1, &handle);
+	m_pDynamicDescriptorAllocator->SetDescriptors(rootIndex, offset, 1, &handle);
+}
+
+void CommandContext::SetDynamicDescriptor(int rootIndex, int offset, D3D12_CPU_DESCRIPTOR_HANDLE* handles, int count)
+{
+	m_pDynamicDescriptorAllocator->SetDescriptors(rootIndex, offset, count, handles);
 }
 
 void CommandContext::SetDescriptorHeap(ID3D12DescriptorHeap* pHeap, D3D12_DESCRIPTOR_HEAP_TYPE type)
