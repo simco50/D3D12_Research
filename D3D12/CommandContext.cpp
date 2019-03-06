@@ -4,13 +4,13 @@
 #include "CommandQueue.h"
 #include "DynamicResourceAllocator.h"
 #include "GraphicsResource.h"
+#include "DynamicDescriptorAllocator.h"
+#include "PipelineState.h"
+#include "RootSignature.h"
 
 #if _DEBUG
 #include <pix3.h>
 #endif
-#include "DynamicDescriptorAllocator.h"
-#include "PipelineState.h"
-#include "RootSignature.h"
 
 CommandContext::CommandContext(Graphics* pGraphics, ID3D12GraphicsCommandList* pCommandList, ID3D12CommandAllocator* pAllocator, D3D12_COMMAND_LIST_TYPE type)
 	: m_pGraphics(pGraphics), m_pCommandList(pCommandList), m_pAllocator(pAllocator), m_Type(type)
@@ -24,8 +24,10 @@ CommandContext::~CommandContext()
 
 void CommandContext::Reset()
 {
+	assert(m_pCommandList && m_pAllocator == nullptr);
 	m_pAllocator = m_pGraphics->GetCommandQueue(m_Type)->RequestAllocator();
 	m_pCommandList->Reset(m_pAllocator, nullptr);
+	m_NumQueuedBarriers = 0;
 	BindDescriptorHeaps();
 }
 
@@ -34,14 +36,21 @@ uint64 CommandContext::Execute(bool wait)
 	FlushResourceBarriers();
 	CommandQueue* pQueue = m_pGraphics->GetCommandQueue(m_Type);
 	uint64 fenceValue = pQueue->ExecuteCommandList(m_pCommandList);
+
 	pQueue->FreeAllocator(fenceValue, m_pAllocator);
+	m_pAllocator = nullptr;
+
+	m_pGraphics->GetCpuVisibleAllocator()->Free(fenceValue);
+	m_pDynamicDescriptorAllocator->ReleaseUsedHeaps(fenceValue);
+
 	if (wait)
 	{
 		pQueue->WaitForFence(fenceValue);
 	}
+	m_pRenderTarget = nullptr;
+	m_pDepthStencilView = nullptr;
 	m_pGraphics->FreeCommandList(this);
-	m_pGraphics->GetCpuVisibleAllocator()->Free(fenceValue);
-	m_pDynamicDescriptorAllocator->ReleaseUsedHeaps(fenceValue);
+
 	return fenceValue;
 }
 

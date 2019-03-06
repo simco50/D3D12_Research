@@ -104,6 +104,8 @@ void ImGuiRenderer::Render(CommandContext& context)
 	context.SetDynamicConstantBufferView(0, &projectionMatrix, sizeof(Matrix));
 	context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	context.SetViewport(FloatRect(0, 0, (float)m_pGraphics->GetWindowWidth(), (float)m_pGraphics->GetWindowHeight()), 0, 1);
+	context.SetDepthStencil(m_pGraphics->GetDepthStencilView());
+	context.SetRenderTarget(m_pGraphics->GetCurrentRenderTargetView());
 
 	context.SetDynamicDescriptor(1, m_pFontTexture->GetDescriptorHandle());
 

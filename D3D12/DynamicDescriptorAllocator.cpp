@@ -4,7 +4,7 @@
 #include "RootSignature.h"
 #include "CommandContext.h"
 
-std::vector<Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>> DynamicDescriptorAllocator::m_DescriptorHeaps;
+std::vector<ComPtr<ID3D12DescriptorHeap>> DynamicDescriptorAllocator::m_DescriptorHeaps;
 std::queue<std::pair<uint64, ID3D12DescriptorHeap*>> DynamicDescriptorAllocator::m_FreeDescriptors;
 
 DynamicDescriptorAllocator::DynamicDescriptorAllocator(Graphics* pGraphics, CommandContext* pContext, D3D12_DESCRIPTOR_HEAP_TYPE type)
@@ -109,8 +109,10 @@ void DynamicDescriptorAllocator::ParseRootSignature(RootSignature* pRootSignatur
 		int rootIndex = it.Value();
 		RootDescriptorEntry& entry = m_RootDescriptorTable[rootIndex];
 		entry.AssignedHandlesBitMap.ClearAll();
-		entry.TableSize = pRootSignature->GetDescriptorTableSizes()[rootIndex];
-		entry.TableStart = m_HandleCache.data() + offset;
+		uint32 tableSize = pRootSignature->GetDescriptorTableSizes()[rootIndex];
+		assert(tableSize > 0);
+		entry.TableSize = tableSize;
+		entry.TableStart = &m_HandleCache[offset];
 		offset += entry.TableSize;
 	}
 }
@@ -140,16 +142,14 @@ uint32 DynamicDescriptorAllocator::GetRequiredSpace()
 
 ID3D12DescriptorHeap* DynamicDescriptorAllocator::RequestNewHeap(D3D12_DESCRIPTOR_HEAP_TYPE type)
 {
-	if (m_FreeDescriptors.empty() == false && m_pGraphics->IsFenceComplete(m_FreeDescriptors.front().first))
+	if (m_FreeDescriptors.size() > 0 && m_pGraphics->IsFenceComplete(m_FreeDescriptors.front().first))
 	{
-		std::cout << "Getting heap from pool" << std::endl;
 		ID3D12DescriptorHeap* pHeap = m_FreeDescriptors.front().second;
 		m_FreeDescriptors.pop();
 		return pHeap;
 	}
 	else
 	{
-		std::cout << "Creating new heap" << std::endl;
 		ComPtr<ID3D12DescriptorHeap> pHeap;
 		D3D12_DESCRIPTOR_HEAP_DESC desc = {};
 		desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;

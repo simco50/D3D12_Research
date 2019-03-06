@@ -5,7 +5,8 @@ class RootSignature
 public:
 	static const int MAX_NUM_DESCRIPTORS = 16;
 	static const int MAX_RANGES_PER_TABLE = 2;
-	using RootSignatureDescriptorMask = BitField<MAX_NUM_DESCRIPTORS, uint32>;
+	using RootSignatureDescriptorMask = BitField32;
+	static_assert(MAX_NUM_DESCRIPTORS <= BitField32::Capacity(), "Descriptor bitfield is not large enough");
 
 	RootSignature(uint32 numRootParameters);
 

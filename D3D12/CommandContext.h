@@ -69,8 +69,8 @@ private:
 	std::array<D3D12_RESOURCE_BARRIER, MAX_QUEUED_BARRIERS> m_QueuedBarriers = {};
 	int m_NumQueuedBarriers = 0;
 
-	D3D12_CPU_DESCRIPTOR_HANDLE* m_pRenderTarget;
-	D3D12_CPU_DESCRIPTOR_HANDLE* m_pDepthStencilView;
+	D3D12_CPU_DESCRIPTOR_HANDLE* m_pRenderTarget = nullptr;
+	D3D12_CPU_DESCRIPTOR_HANDLE* m_pDepthStencilView = nullptr;
 	Graphics* m_pGraphics;
 
 	ID3D12GraphicsCommandList* m_pCommandList;

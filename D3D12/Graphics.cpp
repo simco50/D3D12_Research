@@ -6,24 +6,21 @@
 #include "CommandQueue.h"
 #include "CommandContext.h"
 
-#include "assimp/Importer.hpp"
-#include "assimp/postprocess.h"
-#include "assimp/scene.h"
-#include <assert.h>
 #include "DescriptorAllocator.h"
-
-#define STB_IMAGE_IMPLEMENTATION
-#include "External/Stb/stb_image.h"
-#include "DynamicResourceAllocator.h"
-#include "ImGuiRenderer.h"
-#include "External/Imgui/imgui.h"
 #include "GraphicsResource.h"
 #include "RootSignature.h"
 #include "PipelineState.h"
 #include "Shader.h"
 #include "Mesh.h"
+#include "DynamicResourceAllocator.h"
+#include "ImGuiRenderer.h"
 
-const uint32 Graphics::FRAME_COUNT;
+#define STB_IMAGE_IMPLEMENTATION
+#include "External/Stb/stb_image.h"
+#include "External/Imgui/imgui.h"
+
+const DXGI_FORMAT Graphics::DEPTH_STENCIL_FORMAT = DXGI_FORMAT_D24_UNORM_S8_UINT;
+const DXGI_FORMAT Graphics::RENDER_TARGET_FORMAT = DXGI_FORMAT_R8G8B8A8_UNORM;
 
 Graphics::Graphics(uint32 width, uint32 height)
 	: m_WindowWidth(width), m_WindowHeight(height)
@@ -43,6 +40,8 @@ void Graphics::Initialize(WindowHandle window)
 
 void Graphics::Update()
 {
+	IdleGPU();
+
 	m_pImGuiRenderer->NewFrame();
 	ImGui::Text("Hello World");
 
@@ -93,11 +92,11 @@ void Graphics::Update()
 			pContext->SetDynamicDescriptor(1, m_pTexture2->GetDescriptorHandle());
 			m_pMesh->Draw(pContext);
 		}
-		
+
 		nextFenceValue = pContext->Execute(false);
 	}
 
-	//UI
+	////UI
 	{
 		CommandContext* pContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 		m_pImGuiRenderer->Render(*pContext);
@@ -180,7 +179,7 @@ void Graphics::InitD3D(WindowHandle pWindow)
 	//Check 4x MSAA support
 	D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS qualityLevels;
 	qualityLevels.Flags = D3D12_MULTISAMPLE_QUALITY_LEVELS_FLAG_NONE;
-	qualityLevels.Format = m_RenderTargetFormat;
+	qualityLevels.Format = RENDER_TARGET_FORMAT;
 	qualityLevels.NumQualityLevels = 0;
 	qualityLevels.SampleCount = 1;
 	HR(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS, &qualityLevels, sizeof(qualityLevels)));
@@ -199,7 +198,7 @@ void Graphics::InitD3D(WindowHandle pWindow)
 	DXGI_SWAP_CHAIN_DESC1 swapchainDesc = {};
 	swapchainDesc.Width = m_WindowWidth;
 	swapchainDesc.Height = m_WindowHeight;
-	swapchainDesc.Format = m_RenderTargetFormat;
+	swapchainDesc.Format = RENDER_TARGET_FORMAT;
 	swapchainDesc.SampleDesc.Count = 1;
 	swapchainDesc.SampleDesc.Quality = 0;
 	swapchainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
@@ -254,7 +253,7 @@ void Graphics::OnResize(int width, int height)
 		FRAME_COUNT, 
 		m_WindowWidth, 
 		m_WindowHeight, 
-		m_RenderTargetFormat,
+		RENDER_TARGET_FORMAT,
 		DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH));
 
 	m_CurrentBackBufferIndex = 0;
@@ -270,10 +269,10 @@ void Graphics::OnResize(int width, int height)
 	}
 
 	//Recreate the depth stencil buffer and view
-	D3D12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Tex2D(m_DepthStencilFormat, width, height, 1, 0, 1, 0, D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL);
+	D3D12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Tex2D(DEPTH_STENCIL_FORMAT, width, height, 1, 0, 1, 0, D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL);
 	ID3D12Resource* pResource = nullptr;
 	D3D12_CLEAR_VALUE clearValue;
-	clearValue.Format = m_DepthStencilFormat;
+	clearValue.Format = DEPTH_STENCIL_FORMAT;
 	clearValue.DepthStencil.Depth = 1.0f;
 	clearValue.DepthStencil.Stencil = 0;
 	D3D12_HEAP_PROPERTIES heapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
