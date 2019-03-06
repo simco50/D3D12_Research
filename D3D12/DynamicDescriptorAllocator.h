@@ -11,7 +11,7 @@ public:
 	DynamicDescriptorAllocator(Graphics* pGraphics, CommandContext* pContext, D3D12_DESCRIPTOR_HEAP_TYPE type);
 	~DynamicDescriptorAllocator();
 
-	void SetDescriptors(uint32 rootIndex, uint32 offset, uint32 numHandles, const D3D12_CPU_DESCRIPTOR_HANDLE handles[]);
+	void SetDescriptors(uint32 rootIndex, uint32 offset, uint32 numHandles, const D3D12_CPU_DESCRIPTOR_HANDLE* pHandles);
 	void UploadAndBindStagedDescriptors();
 
 	bool HasSpace(int count);
@@ -22,18 +22,18 @@ public:
 	void ReleaseUsedHeaps(uint64 fenceValue);
 
 private:
-	uint32 GetRequiredSpace();
-	ID3D12DescriptorHeap* RequestNewHeap(D3D12_DESCRIPTOR_HEAP_TYPE type);
-	void ReleaseHeap();
-	void UnbindAll();
-
-	DescriptorHandle Allocate(int descriptors);
-
-	static const int DESCRIPTORS_PER_HEAP = 1024;
+	static const int MAX_DESCRIPTORS_PER_COPY = 8;
+	static const int DESCRIPTORS_PER_HEAP = 64;
 	static const int MAX_DESCRIPTORS_PER_TABLE = 6;
 
 	static std::vector<ComPtr<ID3D12DescriptorHeap>> m_DescriptorHeaps;
 	static std::queue<std::pair<uint64, ID3D12DescriptorHeap*>> m_FreeDescriptors;
+
+	uint32 GetRequiredSpace();
+	ID3D12DescriptorHeap* RequestNewHeap(D3D12_DESCRIPTOR_HEAP_TYPE type);
+	void ReleaseHeap();
+	void UnbindAll();
+	DescriptorHandle Allocate(int descriptors);
 
 	std::vector<ID3D12DescriptorHeap*> m_UsedDescriptorHeaps;
 
@@ -49,11 +49,11 @@ private:
 	BitField32 m_RootDescriptorMask {};
 	BitField32 m_StaleRootParameters {};
 
+	DescriptorHandle m_StartHandle{};
 	Graphics* m_pGraphics;
 	CommandContext* m_pOwner;
-	D3D12_DESCRIPTOR_HEAP_TYPE m_Type;
-	DescriptorHandle m_StartHandle {};
-	int m_CurrentOffset = 0;
 	ID3D12DescriptorHeap* m_pCurrentHeap = nullptr;
+	D3D12_DESCRIPTOR_HEAP_TYPE m_Type;
+	int m_CurrentOffset = 0;
 	uint32 m_DescriptorSize = 0;
 };
