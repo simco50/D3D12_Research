@@ -47,11 +47,17 @@ public:
 	void Create(Graphics* pGraphics, CommandContext* pContext, const char* pFilePath);
 	void Create(Graphics* pGraphics, int width, int height);
 	void SetData(CommandContext* pContext, void* pData, uint32 dataSize);
+	void CreateForSwapchain(Graphics* pGraphics, ID3D12Resource* pTexture);
+	void CreateDepthStencil(Graphics* pGraphics, int width, int height, DXGI_FORMAT format);
 
-	D3D12_CPU_DESCRIPTOR_HANDLE GetDescriptorHandle() const { return m_DescriptorHandle; }
+	D3D12_CPU_DESCRIPTOR_HANDLE GetRTV() const { return m_Rtv; }
+	D3D12_CPU_DESCRIPTOR_HANDLE GetSRV() const { return m_Srv; }
 
 private:
+	static DXGI_FORMAT GetDepthFormat(DXGI_FORMAT format);
+
 	int m_Width;
 	int m_Height;
-	D3D12_CPU_DESCRIPTOR_HANDLE m_DescriptorHandle;
+	D3D12_CPU_DESCRIPTOR_HANDLE m_Rtv;
+	D3D12_CPU_DESCRIPTOR_HANDLE m_Srv;
 };

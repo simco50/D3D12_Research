@@ -7,21 +7,15 @@ DescriptorAllocator::DescriptorAllocator(ID3D12Device* pDevice, D3D12_DESCRIPTOR
 	m_DescriptorSize = pDevice->GetDescriptorHandleIncrementSize(type);
 }
 
-DescriptorAllocator::~DescriptorAllocator()
+D3D12_CPU_DESCRIPTOR_HANDLE DescriptorAllocator::AllocateDescriptor()
 {
-}
-
-DescriptorHandle DescriptorAllocator::AllocateDescriptor()
-{
-	if (m_RemainingDescriptors <= 0)
+	if (m_RemainingDescriptors <= 0 || m_DescriptorHeapPool.size() == 0)
 	{
 		AllocateNewHeap();
 	}
-	DescriptorHandle handle(m_CurrentCpuHandle, m_CurrentGpuHandle);
 	m_CurrentCpuHandle.Offset(1, m_DescriptorSize);
-	m_CurrentGpuHandle.Offset(1, m_DescriptorSize);
 	--m_RemainingDescriptors;
-	return handle;
+	return m_CurrentCpuHandle;
 }
 
 void DescriptorAllocator::AllocateNewHeap()
@@ -35,6 +29,5 @@ void DescriptorAllocator::AllocateNewHeap()
 	m_pDevice->CreateDescriptorHeap(&desc, IID_PPV_ARGS(pNewHeap.GetAddressOf()));
 	m_DescriptorHeapPool.push_back(std::move(pNewHeap));
 	m_CurrentCpuHandle = m_DescriptorHeapPool.back()->GetCPUDescriptorHandleForHeapStart();
-	m_CurrentGpuHandle = m_DescriptorHeapPool.back()->GetGPUDescriptorHandleForHeapStart();
 	m_RemainingDescriptors = DESCRIPTORS_PER_HEAP;
 }

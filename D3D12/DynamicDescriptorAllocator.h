@@ -22,9 +22,12 @@ public:
 	void ReleaseUsedHeaps(uint64 fenceValue);
 
 private:
+	//Maximum amount of descriptors per CopyDescriptors call
 	static const int MAX_DESCRIPTORS_PER_COPY = 8;
+	//The amount of descriptors in each heap
 	static const int DESCRIPTORS_PER_HEAP = 64;
-	static const int MAX_DESCRIPTORS_PER_TABLE = 6;
+	//The max amount of root parameters
+	static const int MAX_NUM_ROOT_PARAMETERS = 6;
 
 	static std::vector<ComPtr<ID3D12DescriptorHeap>> m_DescriptorHeaps;
 	static std::queue<std::pair<uint64, ID3D12DescriptorHeap*>> m_FreeDescriptors;
@@ -41,9 +44,9 @@ private:
 	{
 		BitField32 AssignedHandlesBitMap {};
 		D3D12_CPU_DESCRIPTOR_HANDLE* TableStart = nullptr;
-		uint32_t TableSize = 0;
+		uint32 TableSize = 0;
 	};
-	std::array<RootDescriptorEntry, MAX_DESCRIPTORS_PER_TABLE> m_RootDescriptorTable = {};
+	std::array<RootDescriptorEntry, MAX_NUM_ROOT_PARAMETERS> m_RootDescriptorTable = {};
 	std::array<D3D12_CPU_DESCRIPTOR_HANDLE, DESCRIPTORS_PER_HEAP> m_HandleCache = {};
 
 	BitField32 m_RootDescriptorMask {};
@@ -54,6 +57,6 @@ private:
 	CommandContext* m_pOwner;
 	ID3D12DescriptorHeap* m_pCurrentHeap = nullptr;
 	D3D12_DESCRIPTOR_HEAP_TYPE m_Type;
-	int m_CurrentOffset = 0;
+	uint32 m_CurrentOffset = 0;
 	uint32 m_DescriptorSize = 0;
 };

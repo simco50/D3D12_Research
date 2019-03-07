@@ -14,9 +14,6 @@
 #include "Mesh.h"
 #include "DynamicResourceAllocator.h"
 #include "ImGuiRenderer.h"
-
-#define STB_IMAGE_IMPLEMENTATION
-#include "External/Stb/stb_image.h"
 #include "External/Imgui/imgui.h"
 
 const DXGI_FORMAT Graphics::DEPTH_STENCIL_FORMAT = DXGI_FORMAT_D24_UNORM_S8_UINT;
@@ -40,17 +37,15 @@ void Graphics::Initialize(WindowHandle window)
 
 void Graphics::Update()
 {
-	IdleGPU();
-
 	m_pImGuiRenderer->NewFrame();
-	ImGui::Text("Hello World");
+
+	UpdateImGui();
 
 	uint64 nextFenceValue = 0;
+	CommandContext* pContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 
 	//3D
 	{
-		CommandContext* pContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
-
 		pContext->SetPipelineState(m_pPipelineStateObject.get());
 		pContext->SetGraphicsRootSignature(m_pRootSignature.get());
 
@@ -59,12 +54,12 @@ void Graphics::Update()
 
 		pContext->InsertResourceBarrier(m_RenderTargets[m_CurrentBackBufferIndex].get(), D3D12_RESOURCE_STATE_RENDER_TARGET, true);
 
-		pContext->SetRenderTarget(&m_RenderTargetHandles[m_CurrentBackBufferIndex]);
-		pContext->SetDepthStencil(&m_DepthStencilHandle);
+		pContext->SetRenderTarget(&GetCurrentRenderTarget()->GetRTV());
+		pContext->SetDepthStencil(&GetDepthStencilView()->GetRTV());
 
 		Color clearColor = Color(0.1f, 0.1f, 0.1f, 1.0f);
-		pContext->ClearRenderTarget(m_RenderTargetHandles[m_CurrentBackBufferIndex], clearColor);
-		pContext->ClearDepth(m_DepthStencilHandle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0);
+		pContext->ClearRenderTarget(GetCurrentRenderTarget()->GetRTV(), clearColor);
+		pContext->ClearDepth(GetDepthStencilView()->GetRTV(), D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0);
 
 		pContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
@@ -81,7 +76,7 @@ void Graphics::Update()
 			ObjectData.World = world;
 			ObjectData.WorldViewProjection = world * view * proj;
 			pContext->SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
-			pContext->SetDynamicDescriptor(1, 0, m_pTexture->GetDescriptorHandle());
+			pContext->SetDynamicDescriptor(1, 0, m_pTexture->GetSRV());
 			m_pMesh->Draw(pContext);
 		}
 		{
@@ -89,27 +84,22 @@ void Graphics::Update()
 			ObjectData.World = world;
 			ObjectData.WorldViewProjection = world * view * proj;
 			pContext->SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
-			pContext->SetDynamicDescriptor(1, 0, m_pTexture2->GetDescriptorHandle());
+			pContext->SetDynamicDescriptor(1, 0, m_pTexture2->GetSRV());
 			m_pMesh->Draw(pContext);
 		}
-
-		nextFenceValue = pContext->Execute(false);
 	}
 
 	////UI
 	{
-		CommandContext* pContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 		m_pImGuiRenderer->Render(*pContext);
-		nextFenceValue = pContext->Execute(false);
 	}
 
 	//Present
 	{
-		CommandContext* pContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 		pContext->InsertResourceBarrier(m_RenderTargets[m_CurrentBackBufferIndex].get(), D3D12_RESOURCE_STATE_PRESENT, true);
-		nextFenceValue = pContext->Execute(false);
 	}
 
+	nextFenceValue = pContext->Execute(false);
 	WaitForFence(m_FenceValues[m_CurrentBackBufferIndex]);
 	m_FenceValues[m_CurrentBackBufferIndex] = nextFenceValue;
 	m_pSwapchain->Present(1, 0);
@@ -191,7 +181,7 @@ void Graphics::InitD3D(WindowHandle pWindow)
 	{
 		m_DescriptorHeaps[i] = std::make_unique<DescriptorAllocator>(m_pDevice.Get(), (D3D12_DESCRIPTOR_HEAP_TYPE)i);
 	}
-	m_pDynamicCpuVisibleAllocator = std::make_unique<DynamicResourceAllocator>(m_pDevice.Get(), true, 1024 * 1024 * 32);
+	m_pDynamicCpuVisibleAllocator = std::make_unique<DynamicResourceAllocator>(m_pDevice.Get(), true, 0x20000);
 
 	m_pSwapchain.Reset();
 
@@ -203,7 +193,7 @@ void Graphics::InitD3D(WindowHandle pWindow)
 	swapchainDesc.SampleDesc.Quality = 0;
 	swapchainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
 	swapchainDesc.BufferCount = FRAME_COUNT;
-	swapchainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+	swapchainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
 	swapchainDesc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
 	swapchainDesc.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
 	swapchainDesc.Stereo = false;
@@ -262,30 +252,13 @@ void Graphics::OnResize(int width, int height)
 	for (int i = 0; i < FRAME_COUNT; ++i)
 	{
 		ID3D12Resource* pResource = nullptr;
-		m_RenderTargetHandles[i] = m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_RTV]->AllocateDescriptor().GetCpuHandle();
 		HR(m_pSwapchain->GetBuffer(i, IID_PPV_ARGS(&pResource)));
-		m_pDevice->CreateRenderTargetView(pResource, nullptr, m_RenderTargetHandles[i]);
-		m_RenderTargets[i] = std::make_unique<GraphicsResource>(pResource, D3D12_RESOURCE_STATE_PRESENT);
+		m_RenderTargets[i] = std::make_unique<Texture2D>();
+		m_RenderTargets[i]->CreateForSwapchain(this, pResource);
 	}
 
-	//Recreate the depth stencil buffer and view
-	D3D12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Tex2D(DEPTH_STENCIL_FORMAT, width, height, 1, 0, 1, 0, D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL);
-	ID3D12Resource* pResource = nullptr;
-	D3D12_CLEAR_VALUE clearValue;
-	clearValue.Format = DEPTH_STENCIL_FORMAT;
-	clearValue.DepthStencil.Depth = 1.0f;
-	clearValue.DepthStencil.Stencil = 0;
-	D3D12_HEAP_PROPERTIES heapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
-	HR(m_pDevice->CreateCommittedResource(
-		&heapProperties,
-		D3D12_HEAP_FLAG_NONE,
-		&desc,
-		D3D12_RESOURCE_STATE_DEPTH_WRITE,
-		&clearValue,
-		IID_PPV_ARGS(&pResource)));
-	m_DepthStencilHandle = m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_DSV]->AllocateDescriptor().GetCpuHandle();
-	m_pDevice->CreateDepthStencilView(pResource, nullptr, m_DepthStencilHandle);
-	m_pDepthStencilBuffer = std::make_unique<GraphicsResource>(pResource, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+	m_pDepthStencilBuffer = std::make_unique<Texture2D>();
+	m_pDepthStencilBuffer->CreateDepthStencil(this, width, height, DEPTH_STENCIL_FORMAT);
 
 	m_Viewport.Bottom = (float)m_WindowHeight;
 	m_Viewport.Right = (float)m_WindowWidth;
@@ -351,6 +324,50 @@ void Graphics::InitializeAssets()
 	pContext->Execute(true);
 }
 
+void Graphics::UpdateImGui()
+{
+	//Frame times
+	ImGui::SetNextWindowPos(ImVec2((float)GetWindowWidth(), 0), 0, ImVec2(1, 0));
+	ImGui::Begin("Debug Info", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
+	ImGui::Text("MS: %.4f", GameTimer::DeltaTime());
+	ImGui::SameLine(100);
+	ImGui::Text("FPS: %.1f", 1.0f / GameTimer::DeltaTime());
+	ImGui::End();
+
+	ImGui::Begin("GPU Stats");
+	ImGui::BeginTabBar("GpuStatsBar");
+	ImGui::BeginTabItem("Descriptor Heaps");
+	ImGui::Text("Used CPU Descriptor Heaps");
+	for (const auto& pAllocator : m_DescriptorHeaps)
+	{
+		switch (pAllocator->GetType())
+		{
+		case D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV:
+			ImGui::Text("Constant/Shader/Unordered Access Views");
+			break;
+		case D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER:
+			ImGui::Text("Samplers");
+			break;
+		case D3D12_DESCRIPTOR_HEAP_TYPE_RTV:
+			ImGui::Text("Render Target Views");
+			break;
+		case D3D12_DESCRIPTOR_HEAP_TYPE_DSV:
+			ImGui::Text("Depth Stencil Views");
+			break;
+		default:
+			break;
+		}
+		uint32 totalDescriptors = pAllocator->GetHeapCount() * DescriptorAllocator::DESCRIPTORS_PER_HEAP;
+		uint32 usedDescriptors = pAllocator->GetNumAllocatedDescriptors();
+		std::stringstream str;
+		str << usedDescriptors << "/" << totalDescriptors;
+		ImGui::ProgressBar((float)usedDescriptors / totalDescriptors, ImVec2(-1, 0), str.str().c_str());
+	}
+	ImGui::EndTabItem();
+	ImGui::EndTabBar();
+	ImGui::End();
+}
+
 CommandQueue* Graphics::GetCommandQueue(D3D12_COMMAND_LIST_TYPE type) const
 {
 	return m_CommandQueues.at(type).get();
@@ -397,7 +414,7 @@ void Graphics::FreeCommandList(CommandContext* pCommandList)
 
 D3D12_CPU_DESCRIPTOR_HANDLE Graphics::AllocateCpuDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE type)
 {
-	return m_DescriptorHeaps[type]->AllocateDescriptor().GetCpuHandle();
+	return m_DescriptorHeaps[type]->AllocateDescriptor();
 }
 
 void Graphics::IdleGPU()

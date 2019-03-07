@@ -178,10 +178,10 @@ void CommandContext::SetDynamicVertexBuffer(int rootIndex, int elementCount, int
 {
 	int bufferSize = elementCount * elementSize;
 	DynamicAllocation allocation = AllocatorUploadMemory(bufferSize);
-	memcpy(allocation.pMappedMemory, pData, elementCount * elementSize);
+	memcpy(allocation.pMappedMemory, pData, bufferSize);
 	D3D12_VERTEX_BUFFER_VIEW view = {};
 	view.BufferLocation = allocation.GpuHandle;
-	view.SizeInBytes = elementSize * elementCount;
+	view.SizeInBytes = bufferSize;
 	view.StrideInBytes = elementSize;
 	m_pCommandList->IASetVertexBuffers(rootIndex, 1, &view);
 }
@@ -190,10 +190,10 @@ void CommandContext::SetDynamicIndexBuffer(int elementCount, void* pData)
 {
 	int bufferSize = elementCount * sizeof(uint32);
 	DynamicAllocation allocation = AllocatorUploadMemory(bufferSize);
-	memcpy(allocation.pMappedMemory, pData, elementCount * sizeof(uint32));
+	memcpy(allocation.pMappedMemory, pData, bufferSize);
 	D3D12_INDEX_BUFFER_VIEW view = {};
 	view.BufferLocation = allocation.GpuHandle;
-	view.SizeInBytes = elementCount * sizeof(uint32);
+	view.SizeInBytes = allocation.Size;
 	view.Format = DXGI_FORMAT_R32_UINT;
 	m_pCommandList->IASetIndexBuffer(&view);
 }

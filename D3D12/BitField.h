@@ -75,7 +75,7 @@ public:
 			return m_CurrentIndex < Bits;
 		}
 
-		int Value() const
+		uint32 Value() const
 		{
 			return m_CurrentIndex;
 		}
