@@ -32,6 +32,9 @@ bool Shader::Load(const char* pFilePath, Type shaderType, const char* pEntryPoin
 	case Type::PixelShader:
 		shaderModel = "ps_5_0";
 		break;
+	case Type::ComputeShader:
+		shaderModel = "cs_5_0";
+		break;
 	case Type::MAX:
 	default:
 		return false;
