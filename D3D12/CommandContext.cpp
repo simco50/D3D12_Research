@@ -327,6 +327,6 @@ void ComputeCommandContext::SetPipelineState(ComputePipelineState* pPipelineStat
 void ComputeCommandContext::Dispatch(uint32 groupCountX, uint32 groupCountY, uint32 groupCountZ)
 {
 	FlushResourceBarriers();
-	m_pDynamicDescriptorAllocator->UploadAndBindStagedDescriptors();
+	m_pDynamicDescriptorAllocator->UploadAndBindStagedDescriptors(true);
 	m_pCommandList->Dispatch(groupCountX, groupCountY, groupCountZ);
 }

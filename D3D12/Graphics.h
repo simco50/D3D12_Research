@@ -16,6 +16,7 @@ class GraphicsResource;
 class RootSignature;
 class Texture2D;
 class GraphicsPipelineState;
+class ComputePipelineState;
 class Mesh;
 
 class Graphics
@@ -89,4 +90,9 @@ private:
 	std::unique_ptr<Texture2D> m_pTexture2;
 	std::unique_ptr<RootSignature> m_pRootSignature;
 	std::unique_ptr<GraphicsPipelineState> m_pPipelineStateObject;
+
+	std::unique_ptr<RootSignature> m_pComputeTestRootSignature;
+	std::unique_ptr<ComputePipelineState> m_pComputePipelineStateObject;
+	std::unique_ptr<Texture2D> m_pTestTargetTexture;
+	D3D12_CPU_DESCRIPTOR_HANDLE m_UavHandle;
 };

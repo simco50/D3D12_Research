@@ -39,6 +39,14 @@ void Graphics::Update()
 {
 	m_pImGuiRenderer->NewFrame();
 
+	ComputeCommandContext* pCompute = (ComputeCommandContext*)AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COMPUTE);
+	pCompute->SetComputeRootSignature(m_pComputeTestRootSignature.get());
+	pCompute->SetPipelineState(m_pComputePipelineStateObject.get());
+	pCompute->SetDynamicDescriptor(0, 0, m_pMesh->GetMaterial(0).pDiffuseTexture->GetSRV());
+	pCompute->SetDynamicDescriptor(1, 0, m_UavHandle);
+	pCompute->Dispatch(64, 64, 1);
+	uint64 computeFence = pCompute->Execute(false);
+
 	uint64 nextFenceValue = 0;
 	GraphicsCommandContext* pContext = (GraphicsCommandContext*)AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 
@@ -69,6 +77,7 @@ void Graphics::Update()
 		Matrix view = XMMatrixLookAtLH(Vector3(1, 1, -1) * 400, Vector3(0, 0, 0), Vector3(0, 1, 0));
 
 		{
+			pContext->InsertResourceBarrier(m_pTestTargetTexture.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, true);
 			ObjectData.World = XMMatrixIdentity();
 			ObjectData.WorldViewProjection = ObjectData.World * view * proj;
 			pContext->SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
@@ -78,10 +87,11 @@ void Graphics::Update()
 				const Material& material = m_pMesh->GetMaterial(pSubMesh->GetMaterialId());
 				if (material.pDiffuseTexture)
 				{
-					pContext->SetDynamicDescriptor(1, 0, material.pDiffuseTexture->GetSRV());
+					pContext->SetDynamicDescriptor(1, 0, m_pTestTargetTexture->GetSRV());
 				}
 				pSubMesh->Draw(pContext);
 			}
+			pContext->InsertResourceBarrier(m_pTestTargetTexture.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, true);
 		}
 	}
 
@@ -96,7 +106,7 @@ void Graphics::Update()
 	{
 		pContext->InsertResourceBarrier(m_RenderTargets[m_CurrentBackBufferIndex].get(), D3D12_RESOURCE_STATE_PRESENT, true);
 	}
-
+	WaitForFence(computeFence);
 	nextFenceValue = pContext->Execute(false);
 	WaitForFence(m_FenceValues[m_CurrentBackBufferIndex]);
 	m_FenceValues[m_CurrentBackBufferIndex] = nextFenceValue;
@@ -271,9 +281,9 @@ void Graphics::InitializeAssets()
 	{
 		//Shaders
 		Shader vertexShader;
-		vertexShader.Load("Resources/shaders.hlsl", Shader::Type::VertexShader, "VSMain");
+		vertexShader.Load("Resources/Diffuse.hlsl", Shader::Type::VertexShader, "VSMain");
 		Shader pixelShader;
-		pixelShader.Load("Resources/shaders.hlsl", Shader::Type::PixelShader, "PSMain");
+		pixelShader.Load("Resources/Diffuse.hlsl", Shader::Type::PixelShader, "PSMain");
 
 		//Input layout
 		D3D12_INPUT_ELEMENT_DESC inputElements[] = {
@@ -316,6 +326,36 @@ void Graphics::InitializeAssets()
 
 		pContext->Execute(true);
 	}
+
+	{
+		//Shaders
+		Shader computeShader;
+		computeShader.Load("Resources/ComputeTest.hlsl", Shader::Type::ComputeShader, "CSMain");
+
+		//Rootsignature
+		m_pComputeTestRootSignature = std::make_unique<RootSignature>(2);
+		m_pComputeTestRootSignature->SetDescriptorTableSimple(0, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, D3D12_SHADER_VISIBILITY_ALL);
+		m_pComputeTestRootSignature->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, D3D12_SHADER_VISIBILITY_ALL);
+
+		D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
+			D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
+			D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
+			D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
+
+		m_pComputeTestRootSignature->Finalize(m_pDevice.Get(), rootSignatureFlags);
+
+		//Pipeline state
+		m_pComputePipelineStateObject = std::make_unique<ComputePipelineState>();
+		m_pComputePipelineStateObject->SetRootSignature(m_pComputeTestRootSignature->GetRootSignature());
+		m_pComputePipelineStateObject->SetComputeShader(computeShader.GetByteCode(), computeShader.GetByteCodeSize());
+		m_pComputePipelineStateObject->Finalize(m_pDevice.Get());
+	}
+
+	GraphicsCommandContext* pContext = (GraphicsCommandContext*)AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+	m_pTestTargetTexture = std::make_unique<Texture2D>();
+	m_pTestTargetTexture->Create(this, 128, 128);
+	m_UavHandle = m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV]->AllocateDescriptor();
+	m_pDevice->CreateUnorderedAccessView(m_pTestTargetTexture->GetResource(), nullptr, nullptr, m_UavHandle);
 }
 
 void Graphics::UpdateImGui()
