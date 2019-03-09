@@ -52,6 +52,10 @@ public:
 
 	D3D12_CPU_DESCRIPTOR_HANDLE GetRTV() const { return m_Rtv; }
 	D3D12_CPU_DESCRIPTOR_HANDLE GetSRV() const { return m_Srv; }
+	D3D12_CPU_DESCRIPTOR_HANDLE GetUAV() const { return m_Uav; }
+
+	int GetWidth() const { return m_Width; }
+	int GetHeight() const { return m_Height; }
 
 private:
 	static DXGI_FORMAT GetDepthFormat(DXGI_FORMAT format);
@@ -60,4 +64,5 @@ private:
 	int m_Height;
 	D3D12_CPU_DESCRIPTOR_HANDLE m_Rtv;
 	D3D12_CPU_DESCRIPTOR_HANDLE m_Srv;
+	D3D12_CPU_DESCRIPTOR_HANDLE m_Uav;
 };

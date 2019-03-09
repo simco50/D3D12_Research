@@ -12,6 +12,8 @@
 #include <pix3.h>
 #endif
 
+constexpr int VALID_COMPUTE_QUEUE_RESOURCE_STATES = D3D12_RESOURCE_STATE_UNORDERED_ACCESS | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_COPY_DEST | D3D12_RESOURCE_STATE_COPY_SOURCE;
+
 CommandContext::CommandContext(Graphics* pGraphics, ID3D12GraphicsCommandList* pCommandList, ID3D12CommandAllocator* pAllocator, D3D12_COMMAND_LIST_TYPE type)
 	: m_pGraphics(pGraphics), m_pCommandList(pCommandList), m_pAllocator(pAllocator), m_Type(type)
 {
@@ -85,6 +87,11 @@ void CommandContext::FlushResourceBarriers()
 		m_pCommandList->ResourceBarrier(m_NumQueuedBarriers, m_QueuedBarriers.data());
 		m_NumQueuedBarriers = 0;
 	}
+}
+
+void CommandContext::SetComputeRootConstants(int rootIndex, uint32 count, const void* pConstants)
+{
+	m_pCommandList->SetComputeRoot32BitConstants(rootIndex, count, pConstants, 0);
 }
 
 void CommandContext::SetDynamicConstantBufferView(int rootIndex, void* pData, uint32 dataSize)
@@ -178,6 +185,13 @@ void CommandContext::InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESO
 {
 	if (pBuffer->m_CurrentState != state)
 	{
+		if (m_Type == D3D12_COMMAND_LIST_TYPE_COMPUTE)
+		{
+			D3D12_RESOURCE_STATES currentState = pBuffer->GetResourceState();
+			assert((currentState & VALID_COMPUTE_QUEUE_RESOURCE_STATES) == currentState);
+			assert((state & VALID_COMPUTE_QUEUE_RESOURCE_STATES) == state);
+		}
+
 		m_QueuedBarriers[m_NumQueuedBarriers] = CD3DX12_RESOURCE_BARRIER::Transition(pBuffer->GetResource(), pBuffer->m_CurrentState, state);
 		++m_NumQueuedBarriers;
 		if (executeImmediate || m_NumQueuedBarriers >= m_QueuedBarriers.size())
@@ -240,21 +254,21 @@ void GraphicsCommandContext::SetPipelineState(GraphicsPipelineState* pPipelineSt
 void GraphicsCommandContext::Draw(int vertexStart, int vertexCount)
 {
 	FlushResourceBarriers();
-	m_pDynamicDescriptorAllocator->UploadAndBindStagedDescriptors();
+	m_pDynamicDescriptorAllocator->UploadAndBindStagedDescriptors(DynamicDescriptorAllocator::DescriptorTableType::Graphics);
 	m_pCommandList->DrawInstanced(vertexCount, 1, vertexStart, 0);
 }
 
 void GraphicsCommandContext::DrawIndexed(int indexCount, int indexStart, int minVertex /*= 0*/)
 {
 	FlushResourceBarriers();
-	m_pDynamicDescriptorAllocator->UploadAndBindStagedDescriptors();
+	m_pDynamicDescriptorAllocator->UploadAndBindStagedDescriptors(DynamicDescriptorAllocator::DescriptorTableType::Graphics);
 	m_pCommandList->DrawIndexedInstanced(indexCount, 1, indexStart, minVertex, 0);
 }
 
 void GraphicsCommandContext::DrawIndexedInstanced(int indexCount, int indexStart, int instanceCount, int minVertex /*= 0*/, int instanceStart /*= 0*/)
 {
 	FlushResourceBarriers();
-	m_pDynamicDescriptorAllocator->UploadAndBindStagedDescriptors();
+	m_pDynamicDescriptorAllocator->UploadAndBindStagedDescriptors(DynamicDescriptorAllocator::DescriptorTableType::Graphics);
 	m_pCommandList->DrawIndexedInstanced(indexCount, instanceCount, indexStart, minVertex, instanceStart);
 }
 
@@ -327,6 +341,6 @@ void ComputeCommandContext::SetPipelineState(ComputePipelineState* pPipelineStat
 void ComputeCommandContext::Dispatch(uint32 groupCountX, uint32 groupCountY, uint32 groupCountZ)
 {
 	FlushResourceBarriers();
-	m_pDynamicDescriptorAllocator->UploadAndBindStagedDescriptors();
+	m_pDynamicDescriptorAllocator->UploadAndBindStagedDescriptors(DynamicDescriptorAllocator::DescriptorTableType::Compute);
 	m_pCommandList->Dispatch(groupCountX, groupCountY, groupCountZ);
 }

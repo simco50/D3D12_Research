@@ -39,7 +39,7 @@ void Graphics::Update()
 {
 	m_pImGuiRenderer->NewFrame();
 
-	uint64 nextFenceValue = 0;
+		uint64 nextFenceValue = 0;
 	GraphicsCommandContext* pContext = (GraphicsCommandContext*)AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 
 	//3D
@@ -96,7 +96,6 @@ void Graphics::Update()
 	{
 		pContext->InsertResourceBarrier(m_RenderTargets[m_CurrentBackBufferIndex].get(), D3D12_RESOURCE_STATE_PRESENT, true);
 	}
-
 	nextFenceValue = pContext->Execute(false);
 	WaitForFence(m_FenceValues[m_CurrentBackBufferIndex]);
 	m_FenceValues[m_CurrentBackBufferIndex] = nextFenceValue;
@@ -271,9 +270,9 @@ void Graphics::InitializeAssets()
 	{
 		//Shaders
 		Shader vertexShader;
-		vertexShader.Load("Resources/shaders.hlsl", Shader::Type::VertexShader, "VSMain");
+		vertexShader.Load("Resources/Diffuse.hlsl", Shader::Type::VertexShader, "VSMain");
 		Shader pixelShader;
-		pixelShader.Load("Resources/shaders.hlsl", Shader::Type::PixelShader, "PSMain");
+		pixelShader.Load("Resources/Diffuse.hlsl", Shader::Type::PixelShader, "PSMain");
 
 		//Input layout
 		D3D12_INPUT_ELEMENT_DESC inputElements[] = {

@@ -16,6 +16,7 @@ class GraphicsResource;
 class RootSignature;
 class Texture2D;
 class GraphicsPipelineState;
+class ComputePipelineState;
 class Mesh;
 
 class Graphics
