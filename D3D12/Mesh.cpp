@@ -24,7 +24,7 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, GraphicsCommandConte
 		| aiProcess_GenUVCoords
 	);
 
-	for (int i = 0; i < pScene->mNumMeshes; ++i)
+	for (uint32 i = 0; i < pScene->mNumMeshes; ++i)
 	{
 		m_Meshes.push_back(LoadMesh(pScene->mMeshes[i], pGraphics->GetDevice(), pContext));
 		pContext->ExecuteAndReset(true);
@@ -34,7 +34,7 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, GraphicsCommandConte
 	dirPath = dirPath.substr(0, dirPath.rfind('/'));
 
 	m_Materials.resize(pScene->mNumMaterials);
-	for (int i = 0; i < pScene->mNumMaterials; ++i)
+	for (uint32 i = 0; i < pScene->mNumMaterials; ++i)
 	{
 		aiString path;
 		aiReturn ret = pScene->mMaterials[i]->GetTexture(aiTextureType_DIFFUSE, 0, &path);
@@ -66,7 +66,7 @@ std::unique_ptr<SubMesh> Mesh::LoadMesh(aiMesh* pMesh, ID3D12Device* pDevice, Gr
 	std::vector<Vertex> vertices(pMesh->mNumVertices);
 	std::vector<uint32> indices(pMesh->mNumFaces * 3);
 
-	for (int j = 0; j < pMesh->mNumVertices; ++j)
+	for (uint32 j = 0; j < pMesh->mNumVertices; ++j)
 	{
 		Vertex& vertex = vertices[j];
 		vertex.Position = *reinterpret_cast<Vector3*>(&pMesh->mVertices[j]);
@@ -77,10 +77,10 @@ std::unique_ptr<SubMesh> Mesh::LoadMesh(aiMesh* pMesh, ID3D12Device* pDevice, Gr
 			vertex.Tangent = *reinterpret_cast<Vector3*>(&pMesh->mTangents[j]);
 	}
 
-	for (size_t j = 0; j < pMesh->mNumFaces; ++j)
+	for (uint32 j = 0; j < pMesh->mNumFaces; ++j)
 	{
 		const aiFace& face = pMesh->mFaces[j];
-		for (size_t k = 0; k < 3; ++k)
+		for (uint32 k = 0; k < 3; ++k)
 		{
 			assert(face.mNumIndices == 3);
 			indices[j * 3 + k] = face.mIndices[k];
