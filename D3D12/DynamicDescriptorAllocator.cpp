@@ -32,7 +32,7 @@ void DynamicDescriptorAllocator::SetDescriptors(uint32 rootIndex, uint32 offset,
 	m_StaleRootParameters.SetBit(rootIndex);
 }
 
-void DynamicDescriptorAllocator::UploadAndBindStagedDescriptors(bool compute)
+void DynamicDescriptorAllocator::UploadAndBindStagedDescriptors(DescriptorTableType descriptorTableType)
 {
 	if (m_StaleRootParameters.AnyBitSet() == false)
 	{
@@ -86,13 +86,18 @@ void DynamicDescriptorAllocator::UploadAndBindStagedDescriptors(bool compute)
 		destinationRangeSizes[destinationRangeCount] = rangeSize;
 		++destinationRangeCount;
 
-		if (compute)
+		switch (descriptorTableType)
 		{
-			m_pOwner->GetCommandList()->SetComputeRootDescriptorTable(rootIndex, gpuHandle.GetGpuHandle());
-		}
-		else
-		{
+		case DescriptorTableType::Graphics:
 			m_pOwner->GetCommandList()->SetGraphicsRootDescriptorTable(rootIndex, gpuHandle.GetGpuHandle());
+			break;
+		case DescriptorTableType::Compute:
+			m_pOwner->GetCommandList()->SetComputeRootDescriptorTable(rootIndex, gpuHandle.GetGpuHandle());
+			break;
+		default:
+			assert(false);
+			break;
+
 		}
 
 		gpuHandle += rangeSize * m_DescriptorSize;

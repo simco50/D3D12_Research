@@ -8,11 +8,17 @@ class Graphics;
 class DynamicDescriptorAllocator
 {
 public:
+	enum class DescriptorTableType
+	{
+		Graphics,
+		Compute,
+	};
+
 	DynamicDescriptorAllocator(Graphics* pGraphics, CommandContext* pContext, D3D12_DESCRIPTOR_HEAP_TYPE type);
 	~DynamicDescriptorAllocator();
 
 	void SetDescriptors(uint32 rootIndex, uint32 offset, uint32 numHandles, const D3D12_CPU_DESCRIPTOR_HANDLE* pHandles);
-	void UploadAndBindStagedDescriptors(bool compute = false);
+	void UploadAndBindStagedDescriptors(DescriptorTableType descriptorTableType);
 
 	bool HasSpace(int count);
 	ID3D12DescriptorHeap* GetHeap();

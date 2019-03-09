@@ -10,6 +10,16 @@ RootSignature::RootSignature(uint32 numRootParameters) : m_NumParameters(numRoot
 	m_DescriptorTableRanges.resize(numRootParameters);
 }
 
+void RootSignature::SetRootConstants(uint32 rootIndex, uint32 registerSlot, uint32 constantCount, D3D12_SHADER_VISIBILITY visibility)
+{
+	D3D12_ROOT_PARAMETER1& data = m_RootParameters[rootIndex];
+	data.ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+	data.Constants.Num32BitValues = constantCount;
+	data.Constants.RegisterSpace = 0;
+	data.Constants.ShaderRegister = registerSlot;
+	data.ShaderVisibility = visibility;
+}
+
 void RootSignature::SetConstantBufferView(uint32 rootIndex, uint32 registersSlot, D3D12_SHADER_VISIBILITY visibility)
 {
 	D3D12_ROOT_PARAMETER1& data = m_RootParameters[rootIndex];
