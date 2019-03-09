@@ -19,7 +19,16 @@ enum class BlendMode
 class PipelineState
 {
 public:
-	PipelineState();
+	ID3D12PipelineState* GetPipelineState() const { return m_pPipelineState.Get(); }
+
+protected:
+	ComPtr<ID3D12PipelineState> m_pPipelineState;
+};
+
+class GraphicsPipelineState : public PipelineState
+{
+public:
+	GraphicsPipelineState();
 
 	//BlendState
 	void SetBlendMode(const BlendMode& blendMode, bool alphaToCoverage);
@@ -37,18 +46,30 @@ public:
 	void SetCullMode(D3D12_CULL_MODE cullMode);
 	void SetLineAntialias(bool lineAntiAlias);
 
-	void Finalize(ID3D12Device* pDevice);
-	ID3D12PipelineState* GetPipelineState() const { return m_pPipelineState.Get(); }
-
 	void SetInputLayout(D3D12_INPUT_ELEMENT_DESC* pElements, uint32 count);
 	void SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE topology);
 
 	void SetRootSignature(ID3D12RootSignature* pRootSignature);
 
-	void SetVertexShader(const void* byteCode, uint32 byteCodeLength);
-	void SetPixelShader(const void* byteCode, uint32 byteCodeLength);
+	void SetVertexShader(const void* pByteCode, uint32 byteCodeLength);
+	void SetPixelShader(const void* pByteCode, uint32 byteCodeLength);
+
+	void Finalize(ID3D12Device* pDevice);
 
 private:
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC m_Desc = {};
-	ComPtr<ID3D12PipelineState> m_pPipelineState;
+};
+
+class ComputePipelineState : public PipelineState
+{
+public:
+	ComputePipelineState();
+
+	void Finalize(ID3D12Device* pDevice);
+
+	void SetRootSignature(ID3D12RootSignature* pRootSignature);
+	void SetComputeShader(const void* pByteCode, uint32 byteCodeLength);
+
+private:
+	D3D12_COMPUTE_PIPELINE_STATE_DESC m_Desc = {};
 };

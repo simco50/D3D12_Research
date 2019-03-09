@@ -77,7 +77,7 @@ void ImGuiRenderer::CreatePipeline()
 	elementDesc.push_back(D3D12_INPUT_ELEMENT_DESC{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 8, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 });
 	elementDesc.push_back(D3D12_INPUT_ELEMENT_DESC{ "COLOR", 0, DXGI_FORMAT_R8G8B8A8_UNORM, 0, 16, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 });
 
-	m_pPipelineState = std::make_unique<PipelineState>();
+	m_pPipelineState = std::make_unique<GraphicsPipelineState>();
 	m_pPipelineState->SetBlendMode(BlendMode::ALPHA, false);
 	m_pPipelineState->SetDepthWrite(false);
 	m_pPipelineState->SetDepthEnabled(true);
@@ -88,7 +88,7 @@ void ImGuiRenderer::CreatePipeline()
 	m_pPipelineState->Finalize(m_pGraphics->GetDevice());
 }
 
-void ImGuiRenderer::Render(CommandContext& context)
+void ImGuiRenderer::Render(GraphicsCommandContext& context)
 {
 	ImGui::Render();
 	ImDrawData* pDrawData = ImGui::GetDrawData();
@@ -104,8 +104,7 @@ void ImGuiRenderer::Render(CommandContext& context)
 	context.SetDynamicConstantBufferView(0, &projectionMatrix, sizeof(Matrix));
 	context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	context.SetViewport(FloatRect(0, 0, (float)m_pGraphics->GetWindowWidth(), (float)m_pGraphics->GetWindowHeight()), 0, 1);
-	context.SetDepthStencil(&m_pGraphics->GetDepthStencilView()->GetRTV());
-	context.SetRenderTarget(&m_pGraphics->GetCurrentRenderTarget()->GetRTV());
+	context.SetRenderTargets(&m_pGraphics->GetCurrentRenderTarget()->GetRTV(), m_pGraphics->GetDepthStencilView()->GetRTV());
 
 	for (int n = 0; n < pDrawData->CmdListsCount; n++)
 	{

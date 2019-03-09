@@ -39,10 +39,8 @@ void Graphics::Update()
 {
 	m_pImGuiRenderer->NewFrame();
 
-	UpdateImGui();
-
 	uint64 nextFenceValue = 0;
-	CommandContext* pContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+	GraphicsCommandContext* pContext = (GraphicsCommandContext*)AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 
 	//3D
 	{
@@ -54,8 +52,7 @@ void Graphics::Update()
 
 		pContext->InsertResourceBarrier(m_RenderTargets[m_CurrentBackBufferIndex].get(), D3D12_RESOURCE_STATE_RENDER_TARGET, true);
 
-		pContext->SetRenderTarget(&GetCurrentRenderTarget()->GetRTV());
-		pContext->SetDepthStencil(&GetDepthStencilView()->GetRTV());
+		pContext->SetRenderTargets(&GetCurrentRenderTarget()->GetRTV(), GetDepthStencilView()->GetRTV());
 
 		Color clearColor = Color(0.1f, 0.1f, 0.1f, 1.0f);
 		pContext->ClearRenderTarget(GetCurrentRenderTarget()->GetRTV(), clearColor);
@@ -68,26 +65,27 @@ void Graphics::Update()
 			Matrix World;
 			Matrix WorldViewProjection;
 		} ObjectData;
-		Matrix proj = XMMatrixPerspectiveFovLH(XM_PIDIV4, (float)m_WindowWidth / m_WindowHeight, 0.1f, 1000);
-		Matrix view = XMMatrixLookAtLH(Vector3(0, 5, 0), Vector3(0, 0, 500), Vector3(0, 1, 0));
+		Matrix proj = XMMatrixPerspectiveFovLH(XM_PIDIV4, (float)m_WindowWidth / m_WindowHeight, 0.1f, 10000);
+		Matrix view = XMMatrixLookAtLH(Vector3(1, 1, -1) * 400, Vector3(0, 0, 0), Vector3(0, 1, 0));
 
 		{
-			Matrix world = XMMatrixRotationRollPitchYaw(0, GameTimer::GameTime(), 0) * XMMatrixTranslation(-50, -50, 500);
-			ObjectData.World = world;
-			ObjectData.WorldViewProjection = world * view * proj;
+			ObjectData.World = XMMatrixIdentity();
+			ObjectData.WorldViewProjection = ObjectData.World * view * proj;
 			pContext->SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
-			pContext->SetDynamicDescriptor(1, 0, m_pTexture->GetSRV());
-			m_pMesh->Draw(pContext);
-		}
-		{
-			Matrix world = XMMatrixRotationRollPitchYaw(0, -GameTimer::GameTime(), 0) * XMMatrixTranslation(50, -50, 500);
-			ObjectData.World = world;
-			ObjectData.WorldViewProjection = world * view * proj;
-			pContext->SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
-			pContext->SetDynamicDescriptor(1, 0, m_pTexture2->GetSRV());
-			m_pMesh->Draw(pContext);
+			for (int i = 0; i < m_pMesh->GetMeshCount(); ++i)
+			{
+				SubMesh* pSubMesh = m_pMesh->GetMesh(i);
+				const Material& material = m_pMesh->GetMaterial(pSubMesh->GetMaterialId());
+				if (material.pDiffuseTexture)
+				{
+					pContext->SetDynamicDescriptor(1, 0, material.pDiffuseTexture->GetSRV());
+				}
+				pSubMesh->Draw(pContext);
+			}
 		}
 	}
+
+	UpdateImGui();
 
 	////UI
 	{
@@ -174,14 +172,15 @@ void Graphics::InitD3D(WindowHandle pWindow)
 	qualityLevels.SampleCount = 1;
 	HR(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS, &qualityLevels, sizeof(qualityLevels)));
 
-	m_CommandQueues[0] = std::make_unique<CommandQueue>(this, D3D12_COMMAND_LIST_TYPE_DIRECT);
+	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_DIRECT] = std::make_unique<CommandQueue>(this, D3D12_COMMAND_LIST_TYPE_DIRECT);
+	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_COMPUTE] = std::make_unique<CommandQueue>(this, D3D12_COMMAND_LIST_TYPE_COMPUTE);
 
 	assert(m_DescriptorHeaps.size() == D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES);
 	for (size_t i = 0; i < D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES; ++i)
 	{
 		m_DescriptorHeaps[i] = std::make_unique<DescriptorAllocator>(m_pDevice.Get(), (D3D12_DESCRIPTOR_HEAP_TYPE)i);
 	}
-	m_pDynamicCpuVisibleAllocator = std::make_unique<DynamicResourceAllocator>(m_pDevice.Get(), true, 0x20000);
+	m_pDynamicCpuVisibleAllocator = std::make_unique<DynamicResourceAllocator>(this, true, 0x20000);
 
 	m_pSwapchain.Reset();
 
@@ -269,59 +268,54 @@ void Graphics::OnResize(int width, int height)
 
 void Graphics::InitializeAssets()
 {
-	//Shaders
-	Shader vertexShader;
-	vertexShader.Load("Resources/shaders.hlsl", Shader::Type::VertexShader, "VSMain");
-	Shader pixelShader;
-	pixelShader.Load("Resources/shaders.hlsl", Shader::Type::PixelShader, "PSMain");
+	{
+		//Shaders
+		Shader vertexShader;
+		vertexShader.Load("Resources/shaders.hlsl", Shader::Type::VertexShader, "VSMain");
+		Shader pixelShader;
+		pixelShader.Load("Resources/shaders.hlsl", Shader::Type::PixelShader, "PSMain");
 
-	//Input layout
-	D3D12_INPUT_ELEMENT_DESC inputElements[] = {
-		D3D12_INPUT_ELEMENT_DESC{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-		D3D12_INPUT_ELEMENT_DESC{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-		D3D12_INPUT_ELEMENT_DESC{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 20, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-	};
+		//Input layout
+		D3D12_INPUT_ELEMENT_DESC inputElements[] = {
+			D3D12_INPUT_ELEMENT_DESC{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+			D3D12_INPUT_ELEMENT_DESC{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+			D3D12_INPUT_ELEMENT_DESC{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 20, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+			D3D12_INPUT_ELEMENT_DESC{ "TANGENT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 36, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+		};
 
-	//Rootsignature
-	m_pRootSignature = std::make_unique<RootSignature>(2);
-	m_pRootSignature->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
-	m_pRootSignature->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, D3D12_SHADER_VISIBILITY_PIXEL);
+		//Rootsignature
+		m_pRootSignature = std::make_unique<RootSignature>(2);
+		m_pRootSignature->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
+		m_pRootSignature->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, D3D12_SHADER_VISIBILITY_PIXEL);
 
-	D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
-		D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
-		D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
-		D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
-		D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
+		D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
+			D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
+			D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
+			D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
+			D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
 
-	D3D12_SAMPLER_DESC samplerDesc = {};
-	samplerDesc.AddressU = samplerDesc.AddressV = samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-	samplerDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_ALWAYS;
-	samplerDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
-	m_pRootSignature->AddStaticSampler(0, samplerDesc, D3D12_SHADER_VISIBILITY_PIXEL);
-	m_pRootSignature->Finalize(m_pDevice.Get(), rootSignatureFlags);
+		D3D12_SAMPLER_DESC samplerDesc = {};
+		samplerDesc.AddressU = samplerDesc.AddressV = samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+		samplerDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+		samplerDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+		m_pRootSignature->AddStaticSampler(0, samplerDesc, D3D12_SHADER_VISIBILITY_PIXEL);
+		m_pRootSignature->Finalize(m_pDevice.Get(), rootSignatureFlags);
 
-	//Pipeline state
-	m_pPipelineStateObject = std::make_unique<PipelineState>();
-	m_pPipelineStateObject->SetInputLayout(inputElements, sizeof(inputElements) / sizeof(inputElements[0]));
-	m_pPipelineStateObject->SetRootSignature(m_pRootSignature->GetRootSignature());
-	m_pPipelineStateObject->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
-	m_pPipelineStateObject->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
-	m_pPipelineStateObject->Finalize(m_pDevice.Get());
+		//Pipeline state
+		m_pPipelineStateObject = std::make_unique<GraphicsPipelineState>();
+		m_pPipelineStateObject->SetInputLayout(inputElements, sizeof(inputElements) / sizeof(inputElements[0]));
+		m_pPipelineStateObject->SetRootSignature(m_pRootSignature->GetRootSignature());
+		m_pPipelineStateObject->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
+		m_pPipelineStateObject->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
+		m_pPipelineStateObject->Finalize(m_pDevice.Get());
 
-	//Geometry
-	CommandContext* pContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
-	m_pMesh = std::make_unique<Mesh>();
-	m_pMesh->Load("Resources/Man.dae", m_pDevice.Get(), pContext);
+		//Geometry
+		GraphicsCommandContext* pContext = (GraphicsCommandContext*)AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+		m_pMesh = std::make_unique<Mesh>();
+		m_pMesh->Load("Resources/Man.dae", this, pContext);
 
-	//Texture
-	m_pTexture = std::make_unique<Texture2D>();
-	m_pTexture->Create(this, pContext, "Resources/Man.png");
-
-	//Texture2
-	m_pTexture2 = std::make_unique<Texture2D>();
-	m_pTexture2->Create(this, pContext, "Resources/ManInverted.png");
-	
-	pContext->Execute(true);
+		pContext->Execute(true);
+	}
 }
 
 void Graphics::UpdateImGui()
@@ -375,10 +369,13 @@ CommandQueue* Graphics::GetCommandQueue(D3D12_COMMAND_LIST_TYPE type) const
 
 CommandContext* Graphics::AllocateCommandContext(D3D12_COMMAND_LIST_TYPE type)
 {
-	if (m_FreeCommandLists.size() > 0)
+	int typeIndex = (int)type;
+
+	std::lock_guard<std::mutex> lockGuard(m_ContextAllocationMutex);
+	if (m_FreeCommandLists[typeIndex].size() > 0)
 	{
-		CommandContext* pCommandList = m_FreeCommandLists.front();
-		m_FreeCommandLists.pop();
+		CommandContext* pCommandList = m_FreeCommandLists[typeIndex].front();
+		m_FreeCommandLists[typeIndex].pop();
 		pCommandList->Reset();
 		return pCommandList;
 	}
@@ -388,8 +385,19 @@ CommandContext* Graphics::AllocateCommandContext(D3D12_COMMAND_LIST_TYPE type)
 		ID3D12CommandAllocator* pAllocator = m_CommandQueues[type]->RequestAllocator();
 		m_pDevice->CreateCommandList(0, type, pAllocator, nullptr, IID_PPV_ARGS(pCommandList.GetAddressOf()));
 		m_CommandLists.push_back(std::move(pCommandList));
-		m_CommandListPool.emplace_back(std::make_unique<CommandContext>(this, static_cast<ID3D12GraphicsCommandList*>(m_CommandLists.back().Get()), pAllocator, type));
-		return m_CommandListPool.back().get();
+		switch (type)
+		{
+		case D3D12_COMMAND_LIST_TYPE_DIRECT:
+			m_CommandListPool[typeIndex].emplace_back(std::make_unique<GraphicsCommandContext>(this, static_cast<ID3D12GraphicsCommandList*>(m_CommandLists.back().Get()), pAllocator));
+			break;
+		case D3D12_COMMAND_LIST_TYPE_COMPUTE:
+			m_CommandListPool[typeIndex].emplace_back(std::make_unique<ComputeCommandContext>(this, static_cast<ID3D12GraphicsCommandList*>(m_CommandLists.back().Get()), pAllocator));
+			break;
+		default:
+			assert(false);
+			break;
+		}
+		return m_CommandListPool[typeIndex].back().get();
 	}
 }
 
@@ -409,7 +417,8 @@ void Graphics::WaitForFence(uint64 fenceValue)
 
 void Graphics::FreeCommandList(CommandContext* pCommandList)
 {
-	m_FreeCommandLists.push(pCommandList);
+	std::lock_guard<std::mutex> lockGuard(m_ContextAllocationMutex);
+	m_FreeCommandLists[(int)pCommandList->GetType()].push(pCommandList);
 }
 
 D3D12_CPU_DESCRIPTOR_HANDLE Graphics::AllocateCpuDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE type)
@@ -421,6 +430,9 @@ void Graphics::IdleGPU()
 {
 	for (auto& pCommandQueue : m_CommandQueues)
 	{
-		pCommandQueue->WaitForIdle();
+		if (pCommandQueue)
+		{
+			pCommandQueue->WaitForIdle();
+		}
 	}
 }

@@ -1,10 +1,11 @@
 #include "stdafx.h"
 #include "DynamicResourceAllocator.h"
+#include "Graphics.h"
 
-DynamicResourceAllocator::DynamicResourceAllocator(ID3D12Device* pDevice, bool gpuVisible, int size)
-	: m_pDevice(pDevice), m_Size(size)
+DynamicResourceAllocator::DynamicResourceAllocator(Graphics* pGraphics, bool gpuVisible, int size)
+	: m_pGraphics(pGraphics), m_Size(size)
 {
-	m_pBackingResource = CreateResource(pDevice, gpuVisible, size, &m_pMappedMemory);
+	m_pBackingResource = CreateResource(gpuVisible, size, &m_pMappedMemory);
 }
 
 DynamicAllocation DynamicResourceAllocator::Allocate(int size, int alignment)
@@ -15,7 +16,7 @@ DynamicAllocation DynamicResourceAllocator::Allocate(int size, int alignment)
 
 	if (size > m_Size)
 	{
-		m_LargeResources.emplace_back(CreateResource(m_pDevice, true, bufferSize, &allocation.pMappedMemory));
+		m_LargeResources.emplace_back(CreateResource(true, bufferSize, &allocation.pMappedMemory));
 		allocation.pBackingResource = m_LargeResources.back().Get();
 		allocation.Offset = 0;
 		allocation.GpuHandle = allocation.pBackingResource->GetGPUVirtualAddress();
@@ -31,7 +32,12 @@ DynamicAllocation DynamicResourceAllocator::Allocate(int size, int alignment)
 			m_CurrentOffset = 0;
 			if (m_FenceOffsets.size() > 0)
 			{
-				int maxOffset = m_FenceOffsets.front().second;
+				int maxOffset = 0;
+				while (m_FenceOffsets.size() > 0 && m_pGraphics->IsFenceComplete(m_FenceOffsets.front().first))
+				{
+					maxOffset = m_FenceOffsets.front().second;
+					m_FenceOffsets.pop();
+				}
 				assert(m_CurrentOffset + bufferSize <= maxOffset);
 			}
 		}
@@ -45,22 +51,10 @@ DynamicAllocation DynamicResourceAllocator::Allocate(int size, int alignment)
 
 void DynamicResourceAllocator::Free(uint64 fenceValue)
 {
-	while (m_FenceOffsets.size() > 0)
-	{
-		const auto& offset = m_FenceOffsets.front();
-		if (fenceValue > offset.first)
-		{
-			m_FenceOffsets.pop();
-		}
-		else
-		{
-			break;
-		}
-	}
 	m_FenceOffsets.emplace(fenceValue, m_CurrentOffset);
 }
 
-ComPtr<ID3D12Resource> DynamicResourceAllocator::CreateResource(ID3D12Device* pDevice, bool gpuVisible, int size, void** pMappedData)
+ComPtr<ID3D12Resource> DynamicResourceAllocator::CreateResource(bool gpuVisible, int size, void** pMappedData)
 {
 	ComPtr<ID3D12Resource> pResource;
 	D3D12_RESOURCE_DESC desc = {};
@@ -83,7 +77,7 @@ ComPtr<ID3D12Resource> DynamicResourceAllocator::CreateResource(ID3D12Device* pD
 	props.Type = gpuVisible ? D3D12_HEAP_TYPE_UPLOAD : D3D12_HEAP_TYPE_DEFAULT;
 	props.VisibleNodeMask = 0;
 
-	HR(pDevice->CreateCommittedResource(&props, D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(pResource.GetAddressOf())));
+	HR(m_pGraphics->GetDevice()->CreateCommittedResource(&props, D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(pResource.GetAddressOf())));
 
 	D3D12_RANGE readRange;
 	readRange.Begin = 0;
