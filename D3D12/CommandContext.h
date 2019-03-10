@@ -85,6 +85,8 @@ public:
 	void SetScissorRect(const FloatRect& rect);
 
 	void SetPipelineState(GraphicsPipelineState* pPipelineState);
+
+	void SetGraphicsRootConstants(int rootIndex, uint32 count, const void* pConstants);
 };
 
 class ComputeCommandContext : public CommandContext

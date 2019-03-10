@@ -45,8 +45,18 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, GraphicsCommandConte
 			std::stringstream str;
 			str << dirPath << "/" << path.C_Str();
 			m.pDiffuseTexture = std::make_unique<Texture2D>();
-			m.pDiffuseTexture->Create(pGraphics, pContext, str.str().c_str());
+			m.pDiffuseTexture->Create(pGraphics, pContext, str.str().c_str(), TextureUsage::ShaderResource);
 		}
+
+		//ret = pScene->mMaterials[i]->GetTexture(aiTextureType_HEIGHT, 0, &path);
+		//if (ret == aiReturn_SUCCESS)
+		//{
+		//	std::stringstream str;
+		//	str << dirPath << "/" << path.C_Str();
+		//	m.pNormalTexture = std::make_unique<Texture2D>();
+		//	m.pNormalTexture->Create(pGraphics, pContext, str.str().c_str(), TextureUsage::ShaderResource);
+		//}
+
 		pContext->ExecuteAndReset(true);
 	}
 

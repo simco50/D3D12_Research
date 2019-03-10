@@ -13,9 +13,10 @@ D3D12_CPU_DESCRIPTOR_HANDLE DescriptorAllocator::AllocateDescriptor()
 	{
 		AllocateNewHeap();
 	}
+	D3D12_CPU_DESCRIPTOR_HANDLE handle = m_CurrentCpuHandle;
 	m_CurrentCpuHandle.Offset(1, m_DescriptorSize);
 	--m_RemainingDescriptors;
-	return m_CurrentCpuHandle;
+	return handle;
 }
 
 void DescriptorAllocator::AllocateNewHeap()

@@ -54,6 +54,8 @@ public:
 	static const DXGI_FORMAT RENDER_TARGET_FORMAT;
 
 private:
+	uint64 GetFenceToWaitFor();
+
 	void InitD3D(WindowHandle pWindow);
 	void InitializeAssets();
 
@@ -86,8 +88,10 @@ private:
 	std::array<uint64, FRAME_COUNT> m_FenceValues = {};
 
 	std::unique_ptr<Mesh> m_pMesh;
-	std::unique_ptr<Texture2D> m_pTexture;
-	std::unique_ptr<Texture2D> m_pTexture2;
 	std::unique_ptr<RootSignature> m_pRootSignature;
 	std::unique_ptr<GraphicsPipelineState> m_pPipelineStateObject;
+
+	std::unique_ptr<Texture2D> m_pShadowMap;
+	std::unique_ptr<RootSignature> m_pShadowsRootSignature;
+	std::unique_ptr<GraphicsPipelineState> m_pShadowsPipelineStateObject;
 };

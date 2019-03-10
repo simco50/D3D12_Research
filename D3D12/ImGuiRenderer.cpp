@@ -38,7 +38,7 @@ void ImGuiRenderer::InitializeImGui()
 	int width, height;
 	io.Fonts->GetTexDataAsRGBA32(&pPixels, &width, &height);
 	m_pFontTexture = std::make_unique<Texture2D>();
-	m_pFontTexture->Create(m_pGraphics, width, height);
+	m_pFontTexture->Create(m_pGraphics, width, height, DXGI_FORMAT_R8G8B8A8_UNORM, TextureUsage::ShaderResource);
 	CommandContext* pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 	m_pFontTexture->SetData(pContext, pPixels, width * height * 4);
 	io.Fonts->TexID = m_pFontTexture.get();
@@ -85,6 +85,7 @@ void ImGuiRenderer::CreatePipeline()
 	m_pPipelineState->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
 	m_pPipelineState->SetRootSignature(m_pRootSignature->GetRootSignature());
 	m_pPipelineState->SetInputLayout(elementDesc.data(), (uint32)elementDesc.size());
+	m_pPipelineState->SetRenderTargetFormat(DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_D24_UNORM_S8_UINT, 1, 0);
 	m_pPipelineState->Finalize(m_pGraphics->GetDevice());
 }
 

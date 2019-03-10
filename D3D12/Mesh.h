@@ -26,7 +26,7 @@ private:
 struct Material
 {
 	std::unique_ptr<Texture2D> pDiffuseTexture;
-	std::unique_ptr<Texture2D> pBumpTexture;
+	std::unique_ptr<Texture2D> pNormalTexture;
 };
 
 class Mesh

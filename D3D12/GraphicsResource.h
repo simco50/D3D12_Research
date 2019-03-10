@@ -41,14 +41,24 @@ private:
 	uint32 m_Size;
 };
 
+enum class TextureUsage
+{
+	/*Default				= 0,*/
+	/*Dynamic				= 1 << 0,*/
+	UnorderedAccess		= 1 << 1,
+	ShaderResource		= 1 << 2,
+	RenderTarget		= 1 << 3,
+	DepthStencil		= 1 << 4,
+};
+DEFINE_ENUM_FLAG_OPERATORS(TextureUsage)
+
 class Texture2D : public GraphicsResource
 {
 public:
-	void Create(Graphics* pGraphics, CommandContext* pContext, const char* pFilePath);
-	void Create(Graphics* pGraphics, int width, int height);
+	void Create(Graphics* pGraphics, CommandContext* pContext, const char* pFilePath, TextureUsage usage);
+	void Create(Graphics* pGraphics, int width, int height, DXGI_FORMAT format, TextureUsage usage);
 	void SetData(CommandContext* pContext, void* pData, uint32 dataSize);
 	void CreateForSwapchain(Graphics* pGraphics, ID3D12Resource* pTexture);
-	void CreateDepthStencil(Graphics* pGraphics, int width, int height, DXGI_FORMAT format);
 
 	D3D12_CPU_DESCRIPTOR_HANDLE GetRTV() const { return m_Rtv; }
 	D3D12_CPU_DESCRIPTOR_HANDLE GetSRV() const { return m_Srv; }

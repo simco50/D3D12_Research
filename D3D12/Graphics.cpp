@@ -37,13 +37,57 @@ void Graphics::Initialize(WindowHandle window)
 
 void Graphics::Update()
 {
+	struct PerFrameData
+	{
+		Vector4 LightPosition;
+		Matrix LightViewProjection;
+	} frameData;
+
+	frameData.LightPosition = Vector4(cos(GameTimer::GameTime()), 2, sin(GameTimer::GameTime()), 0) * 500;
+	frameData.LightViewProjection = XMMatrixLookAtLH(frameData.LightPosition, Vector3(0, 0, 0), Vector3(0, 1, 0)) * XMMatrixOrthographicLH((float)m_pShadowMap->GetWidth(), (float)m_pShadowMap->GetWidth(), 0.01f, 2000);
+
 	m_pImGuiRenderer->NewFrame();
 
-		uint64 nextFenceValue = 0;
-	GraphicsCommandContext* pContext = (GraphicsCommandContext*)AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+	uint64 nextFenceValue = 0;
+
+	//Shadow Map
+	{
+		GraphicsCommandContext* pContext = (GraphicsCommandContext*)AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+		pContext->MarkBegin(L"Shadows");
+		pContext->SetPipelineState(m_pShadowsPipelineStateObject.get());
+		pContext->SetGraphicsRootSignature(m_pShadowsRootSignature.get());
+
+		pContext->SetViewport(FloatRect(0, 0, (float)m_pShadowMap->GetWidth(), (float)m_pShadowMap->GetHeight()));
+		pContext->SetScissorRect(FloatRect(0, 0, (float)m_pShadowMap->GetWidth(), (float)m_pShadowMap->GetHeight()));
+
+		pContext->InsertResourceBarrier(m_pShadowMap.get(), D3D12_RESOURCE_STATE_DEPTH_WRITE, true);
+		pContext->SetRenderTargets(nullptr, m_pShadowMap->GetRTV());
+
+		Color clearColor = Color(0.1f, 0.1f, 0.1f, 1.0f);
+		pContext->ClearDepth(m_pShadowMap->GetRTV(), D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0);
+
+		pContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+		struct PerObjectData
+		{
+			Matrix WorldViewProjection;
+		} ObjectData;
+		ObjectData.WorldViewProjection = frameData.LightViewProjection;
+		pContext->SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
+		for (int i = 0; i < m_pMesh->GetMeshCount(); ++i)
+		{
+			m_pMesh->GetMesh(i)->Draw(pContext);
+		}
+
+		pContext->InsertResourceBarrier(m_pShadowMap.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, true);
+		pContext->MarkEnd();
+		pContext->Execute(false);
+	}
 
 	//3D
 	{
+		GraphicsCommandContext* pContext = (GraphicsCommandContext*)AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+		pContext->MarkBegin(L"3D");
 		pContext->SetPipelineState(m_pPipelineStateObject.get());
 		pContext->SetGraphicsRootSignature(m_pRootSignature.get());
 
@@ -65,40 +109,49 @@ void Graphics::Update()
 			Matrix World;
 			Matrix WorldViewProjection;
 		} ObjectData;
-		Matrix proj = XMMatrixPerspectiveFovLH(XM_PIDIV4, (float)m_WindowWidth / m_WindowHeight, 0.1f, 10000);
-		Matrix view = XMMatrixLookAtLH(Vector3(1, 1, -1) * 400, Vector3(0, 0, 0), Vector3(0, 1, 0));
+		Matrix proj = XMMatrixPerspectiveFovLH(XM_PIDIV4, (float)m_WindowWidth / m_WindowHeight, 0.1f, 2000);
+		Matrix view = XMMatrixLookAtLH(Vector3(400, 200, 200), Vector3(0, 0, 0), Vector3(0, 1, 0));
 
+		ObjectData.World = Matrix::CreateTranslation(0, 0, 0);
+		ObjectData.WorldViewProjection = ObjectData.World * view * proj;
+		pContext->SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
+		pContext->SetDynamicConstantBufferView(1, &frameData, sizeof(PerFrameData));
+		pContext->SetDynamicDescriptor(3, 0, m_pShadowMap->GetSRV());
+		for (int i = 0; i < m_pMesh->GetMeshCount(); ++i)
 		{
-			ObjectData.World = XMMatrixIdentity();
-			ObjectData.WorldViewProjection = ObjectData.World * view * proj;
-			pContext->SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
-			for (int i = 0; i < m_pMesh->GetMeshCount(); ++i)
+			SubMesh* pSubMesh = m_pMesh->GetMesh(i);
+			const Material& material = m_pMesh->GetMaterial(pSubMesh->GetMaterialId());
+			if (material.pDiffuseTexture)
 			{
-				SubMesh* pSubMesh = m_pMesh->GetMesh(i);
-				const Material& material = m_pMesh->GetMaterial(pSubMesh->GetMaterialId());
-				if (material.pDiffuseTexture)
-				{
-					pContext->SetDynamicDescriptor(1, 0, material.pDiffuseTexture->GetSRV());
-				}
-				pSubMesh->Draw(pContext);
+				pContext->SetDynamicDescriptor(2, 0, material.pDiffuseTexture->GetSRV());
 			}
+			pSubMesh->Draw(pContext);
 		}
+		pContext->MarkEnd();
+		pContext->Execute(false);
 	}
 
 	UpdateImGui();
 
+	GraphicsCommandContext* pContext = (GraphicsCommandContext*)AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+	pContext->MarkBegin(L"UI");
 	////UI
 	{
 		m_pImGuiRenderer->Render(*pContext);
 	}
+	pContext->MarkEnd();
 
+	pContext->MarkBegin(L"Present");
 	//Present
 	{
 		pContext->InsertResourceBarrier(m_RenderTargets[m_CurrentBackBufferIndex].get(), D3D12_RESOURCE_STATE_PRESENT, true);
 	}
+	pContext->MarkEnd();
 	nextFenceValue = pContext->Execute(false);
-	WaitForFence(m_FenceValues[m_CurrentBackBufferIndex]);
-	m_FenceValues[m_CurrentBackBufferIndex] = nextFenceValue;
+
+	uint64 waitFenceIdx = GetFenceToWaitFor();
+	WaitForFence(m_FenceValues[waitFenceIdx]);
+	m_FenceValues[waitFenceIdx] = nextFenceValue;
 	m_pSwapchain->Present(1, 0);
 	m_CurrentBackBufferIndex = m_pSwapchain->GetCurrentBackBufferIndex();
 }
@@ -107,6 +160,11 @@ void Graphics::Shutdown()
 {
 	// Wait for the GPU to be done with all resources.
 	IdleGPU();
+}
+
+uint64 Graphics::GetFenceToWaitFor()
+{
+	return (m_CurrentBackBufferIndex + (FRAME_COUNT - 1)) % FRAME_COUNT;
 }
 
 void Graphics::InitD3D(WindowHandle pWindow)
@@ -179,7 +237,7 @@ void Graphics::InitD3D(WindowHandle pWindow)
 	{
 		m_DescriptorHeaps[i] = std::make_unique<DescriptorAllocator>(m_pDevice.Get(), (D3D12_DESCRIPTOR_HEAP_TYPE)i);
 	}
-	m_pDynamicCpuVisibleAllocator = std::make_unique<DynamicResourceAllocator>(this, true, 0x20000);
+	m_pDynamicCpuVisibleAllocator = std::make_unique<DynamicResourceAllocator>(this, true, 0x160000);
 
 	m_pSwapchain.Reset();
 
@@ -256,7 +314,7 @@ void Graphics::OnResize(int width, int height)
 	}
 
 	m_pDepthStencilBuffer = std::make_unique<Texture2D>();
-	m_pDepthStencilBuffer->CreateDepthStencil(this, width, height, DEPTH_STENCIL_FORMAT);
+	m_pDepthStencilBuffer->Create(this, width, height, DXGI_FORMAT_D24_UNORM_S8_UINT, TextureUsage::DepthStencil);
 
 	m_Viewport.Bottom = (float)m_WindowHeight;
 	m_Viewport.Right = (float)m_WindowWidth;
@@ -267,6 +325,16 @@ void Graphics::OnResize(int width, int height)
 
 void Graphics::InitializeAssets()
 {
+	GraphicsCommandContext* pContext = (GraphicsCommandContext*)AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+
+	//Input layout
+	D3D12_INPUT_ELEMENT_DESC inputElements[] = {
+		D3D12_INPUT_ELEMENT_DESC{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+		D3D12_INPUT_ELEMENT_DESC{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+		D3D12_INPUT_ELEMENT_DESC{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 20, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+		D3D12_INPUT_ELEMENT_DESC{ "TANGENT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 36, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+	};
+
 	{
 		//Shaders
 		Shader vertexShader;
@@ -274,18 +342,12 @@ void Graphics::InitializeAssets()
 		Shader pixelShader;
 		pixelShader.Load("Resources/Diffuse.hlsl", Shader::Type::PixelShader, "PSMain");
 
-		//Input layout
-		D3D12_INPUT_ELEMENT_DESC inputElements[] = {
-			D3D12_INPUT_ELEMENT_DESC{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-			D3D12_INPUT_ELEMENT_DESC{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-			D3D12_INPUT_ELEMENT_DESC{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 20, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-			D3D12_INPUT_ELEMENT_DESC{ "TANGENT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 36, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-		};
-
 		//Rootsignature
-		m_pRootSignature = std::make_unique<RootSignature>(2);
+		m_pRootSignature = std::make_unique<RootSignature>(4);
 		m_pRootSignature->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
-		m_pRootSignature->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, D3D12_SHADER_VISIBILITY_PIXEL);
+		m_pRootSignature->SetConstantBufferView(1, 1, D3D12_SHADER_VISIBILITY_ALL);
+		m_pRootSignature->SetDescriptorTableSimple(2, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, D3D12_SHADER_VISIBILITY_PIXEL);
+		m_pRootSignature->SetDescriptorTableSimple(3, 1, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, D3D12_SHADER_VISIBILITY_PIXEL);
 
 		D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
 			D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
@@ -306,15 +368,44 @@ void Graphics::InitializeAssets()
 		m_pPipelineStateObject->SetRootSignature(m_pRootSignature->GetRootSignature());
 		m_pPipelineStateObject->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
 		m_pPipelineStateObject->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
+		m_pPipelineStateObject->SetRenderTargetFormat(DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_D24_UNORM_S8_UINT, 1, 0);
 		m_pPipelineStateObject->Finalize(m_pDevice.Get());
-
-		//Geometry
-		GraphicsCommandContext* pContext = (GraphicsCommandContext*)AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
-		m_pMesh = std::make_unique<Mesh>();
-		m_pMesh->Load("Resources/Man.dae", this, pContext);
-
-		pContext->Execute(true);
 	}
+
+	{
+		Shader vertexShader;
+		vertexShader.Load("Resources/Shadows.hlsl", Shader::Type::VertexShader, "VSMain");
+
+		//Rootsignature
+		m_pShadowsRootSignature = std::make_unique<RootSignature>(1);
+		m_pShadowsRootSignature->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
+
+		D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
+			D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
+			D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
+			D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
+			D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
+
+		m_pShadowsRootSignature->Finalize(m_pDevice.Get(), rootSignatureFlags);
+
+		//Pipeline state
+		m_pShadowsPipelineStateObject = std::make_unique<GraphicsPipelineState>();
+		m_pShadowsPipelineStateObject->SetInputLayout(inputElements, sizeof(inputElements) / sizeof(inputElements[0]));
+		m_pShadowsPipelineStateObject->SetRootSignature(m_pShadowsRootSignature->GetRootSignature());
+		m_pShadowsPipelineStateObject->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
+		m_pShadowsPipelineStateObject->SetRenderTargetFormats(nullptr, 0, DXGI_FORMAT_D24_UNORM_S8_UINT, 1, 0);
+		m_pShadowsPipelineStateObject->SetCullMode(D3D12_CULL_MODE_NONE);
+		m_pShadowsPipelineStateObject->Finalize(m_pDevice.Get());
+
+		m_pShadowMap = std::make_unique<Texture2D>();
+		m_pShadowMap->Create(this, 2048, 2048, DXGI_FORMAT_D24_UNORM_S8_UINT, TextureUsage::DepthStencil | TextureUsage::ShaderResource);
+	}
+
+	//Geometry
+	m_pMesh = std::make_unique<Mesh>();
+	m_pMesh->Load("Resources/sponza/sponza.obj", this, pContext);
+
+	pContext->Execute(true);
 }
 
 void Graphics::UpdateImGui()

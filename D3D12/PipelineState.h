@@ -30,6 +30,9 @@ class GraphicsPipelineState : public PipelineState
 public:
 	GraphicsPipelineState();
 
+	void SetRenderTargetFormat(DXGI_FORMAT rtvFormat, DXGI_FORMAT dsvFormat, uint32 msaa, uint32 msaaQuality);
+	void SetRenderTargetFormats(DXGI_FORMAT* rtvFormats, uint32 count, DXGI_FORMAT dsvFormat, uint32 msaa, uint32 msaaQuality);
+
 	//BlendState
 	void SetBlendMode(const BlendMode& blendMode, bool alphaToCoverage);
 
