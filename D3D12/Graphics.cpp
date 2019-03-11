@@ -15,6 +15,7 @@
 #include "DynamicResourceAllocator.h"
 #include "ImGuiRenderer.h"
 #include "External/Imgui/imgui.h"
+#include "Input.h"
 
 const DXGI_FORMAT Graphics::DEPTH_STENCIL_FORMAT = DXGI_FORMAT_D24_UNORM_S8_UINT;
 const DXGI_FORMAT Graphics::RENDER_TARGET_FORMAT = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -28,10 +29,15 @@ Graphics::~Graphics()
 {
 }
 
-void Graphics::Initialize(WindowHandle window)
+void Graphics::Initialize(HWND window)
 {
-	InitD3D(window);
+	m_pWindow = window;
+	InitD3D();
 	InitializeAssets();
+
+	m_CameraPosition = Vector3(0, 1200, -150);
+	m_CameraRotation = Quaternion::CreateFromYawPitchRoll(XM_PIDIV4, XM_PIDIV4, 0);
+
 	return;
 }
 
@@ -43,8 +49,33 @@ void Graphics::Update()
 		Matrix LightViewProjection;
 	} frameData;
 
-	frameData.LightPosition = Vector4(cos(GameTimer::GameTime()), 2, sin(GameTimer::GameTime()), 0) * 500;
-	frameData.LightViewProjection = XMMatrixLookAtLH(frameData.LightPosition, Vector3(0, 0, 0), Vector3(0, 1, 0)) * XMMatrixOrthographicLH((float)m_pShadowMap->GetWidth(), (float)m_pShadowMap->GetWidth(), 0.01f, 2000);
+	frameData.LightPosition = Vector4(cos((float)GameTimer::GameTime() / 5.0f), 2, sin((float)GameTimer::GameTime() / 5.0f), 0) * 800;
+	frameData.LightViewProjection = XMMatrixLookAtLH(frameData.LightPosition, Vector3(0, 0, 0), Vector3(0, 1, 0)) * XMMatrixOrthographicLH((float)m_pShadowMap->GetWidth(), (float)m_pShadowMap->GetWidth(), 1.0f, 3000);
+
+	if (Input::Instance().IsMouseDown(VK_LBUTTON))
+	{
+		Vector2 mouseDelta = Input::Instance().GetMouseDelta();
+		Quaternion yr = Quaternion::CreateFromYawPitchRoll(0, mouseDelta.y * GameTimer::DeltaTime() * 0.1f, 0);
+		Quaternion pr = Quaternion::CreateFromYawPitchRoll(mouseDelta.x * GameTimer::DeltaTime() * 0.1f, 0, 0);
+		m_CameraRotation = yr * m_CameraRotation * pr;
+	}
+
+	Vector3 movement;
+	movement.x -= (int)Input::Instance().IsKeyDown('A');
+	movement.x += (int)Input::Instance().IsKeyDown('D');
+	movement.z -= (int)Input::Instance().IsKeyDown('S');
+	movement.z += (int)Input::Instance().IsKeyDown('W');
+	movement = Vector3::Transform(movement, m_CameraRotation);
+	movement.y -= (int)Input::Instance().IsKeyDown('Q');
+	movement.y += (int)Input::Instance().IsKeyDown('E');
+	movement *= GameTimer::DeltaTime() * 200.0f;
+	m_CameraPosition += movement;
+
+	Matrix cameraMatrix = Matrix::CreateFromQuaternion(m_CameraRotation) * Matrix::CreateTranslation(m_CameraPosition);
+	Matrix cameraView;
+	cameraMatrix.Invert(cameraView);
+	Matrix cameraProjection = XMMatrixPerspectiveFovLH(XM_PIDIV4, (float)m_WindowWidth / m_WindowHeight, 1.0f, 3000);
+	Matrix cameraViewProjection = cameraView * cameraProjection;
 
 	m_pImGuiRenderer->NewFrame();
 
@@ -109,11 +140,9 @@ void Graphics::Update()
 			Matrix World;
 			Matrix WorldViewProjection;
 		} ObjectData;
-		Matrix proj = XMMatrixPerspectiveFovLH(XM_PIDIV4, (float)m_WindowWidth / m_WindowHeight, 0.1f, 2000);
-		Matrix view = XMMatrixLookAtLH(Vector3(400, 200, 200), Vector3(0, 0, 0), Vector3(0, 1, 0));
+		ObjectData.World = XMMatrixIdentity();
+		ObjectData.WorldViewProjection = ObjectData.World * cameraViewProjection;
 
-		ObjectData.World = Matrix::CreateTranslation(0, 0, 0);
-		ObjectData.WorldViewProjection = ObjectData.World * view * proj;
 		pContext->SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
 		pContext->SetDynamicConstantBufferView(1, &frameData, sizeof(PerFrameData));
 		pContext->SetDynamicDescriptor(3, 0, m_pShadowMap->GetSRV());
@@ -167,7 +196,7 @@ uint64 Graphics::GetFenceToWaitFor()
 	return (m_CurrentBackBufferIndex + (FRAME_COUNT - 1)) % FRAME_COUNT;
 }
 
-void Graphics::InitD3D(WindowHandle pWindow)
+void Graphics::InitD3D()
 {
 	UINT dxgiFactoryFlags = 0;
 
@@ -254,14 +283,7 @@ void Graphics::InitD3D(WindowHandle pWindow)
 	swapchainDesc.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
 	swapchainDesc.Stereo = false;
 	ComPtr<IDXGISwapChain1> swapChain;
-#ifdef PLATFORM_UWP
-	HR(m_pFactory->CreateSwapChainForCoreWindow(
-		m_CommandQueues[D3D12_COMMAND_LIST_TYPE_DIRECT]->GetCommandQueue(),
-		reinterpret_cast<IUnknown*>(pWindow),
-		&swapchainDesc,
-		nullptr,
-		&swapChain));
-#else
+
 	DXGI_SWAP_CHAIN_FULLSCREEN_DESC fsDesc{};
 	fsDesc.RefreshRate.Denominator = 60;
 	fsDesc.RefreshRate.Numerator = 1;
@@ -270,12 +292,12 @@ void Graphics::InitD3D(WindowHandle pWindow)
 	fsDesc.Windowed = true;
 	HR(m_pFactory->CreateSwapChainForHwnd(
 		m_CommandQueues[D3D12_COMMAND_LIST_TYPE_DIRECT]->GetCommandQueue(), 
-		pWindow, 
+		m_pWindow, 
 		&swapchainDesc, 
 		&fsDesc, 
 		nullptr, 
 		&swapChain));
-#endif
+
 	swapChain.As(&m_pSwapchain);
 	OnResize(m_WindowWidth, m_WindowHeight);
 
@@ -398,7 +420,7 @@ void Graphics::InitializeAssets()
 		m_pShadowsPipelineStateObject->Finalize(m_pDevice.Get());
 
 		m_pShadowMap = std::make_unique<Texture2D>();
-		m_pShadowMap->Create(this, 2048, 2048, DXGI_FORMAT_D24_UNORM_S8_UINT, TextureUsage::DepthStencil | TextureUsage::ShaderResource);
+		m_pShadowMap->Create(this, 4096, 4096, DXGI_FORMAT_D32_FLOAT_S8X24_UINT, TextureUsage::DepthStencil | TextureUsage::ShaderResource);
 	}
 
 	//Geometry

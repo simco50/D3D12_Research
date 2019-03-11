@@ -1,11 +1,5 @@
 #pragma once
 
-#ifdef PLATFORM_UWP
-using WindowHandle = Windows::UI::Core::CoreWindow^;
-#else
-using WindowHandle = HWND;
-#endif
-
 class CommandQueue;
 class CommandContext;
 class DescriptorAllocator;
@@ -25,7 +19,7 @@ public:
 	Graphics(uint32 width, uint32 height);
 	~Graphics();
 
-	virtual void Initialize(WindowHandle window);
+	virtual void Initialize(HWND window);
 	virtual void Update();
 	virtual void Shutdown();
 
@@ -56,10 +50,15 @@ public:
 private:
 	uint64 GetFenceToWaitFor();
 
-	void InitD3D(WindowHandle pWindow);
+	void InitD3D();
 	void InitializeAssets();
 
 	void UpdateImGui();
+
+	Vector3 m_CameraPosition;
+	Quaternion m_CameraRotation;
+
+	HWND m_pWindow = nullptr;
 
 	ComPtr<IDXGIFactory3> m_pFactory;
 	ComPtr<IDXGISwapChain3> m_pSwapchain;
