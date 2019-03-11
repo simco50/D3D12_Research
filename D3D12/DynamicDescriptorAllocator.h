@@ -36,7 +36,7 @@ private:
 	static const int MAX_NUM_ROOT_PARAMETERS = 6;
 
 	static std::vector<ComPtr<ID3D12DescriptorHeap>> m_DescriptorHeaps;
-	static std::queue<std::pair<uint64, ID3D12DescriptorHeap*>> m_FreeDescriptors;
+	static std::array<std::queue<std::pair<uint64, ID3D12DescriptorHeap*>>, 2> m_FreeDescriptors;
 
 	uint32 GetRequiredSpace();
 	ID3D12DescriptorHeap* RequestNewHeap(D3D12_DESCRIPTOR_HEAP_TYPE type);

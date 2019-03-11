@@ -31,6 +31,8 @@ public:
 	void SetDynamicIndexBuffer(int elementCount, void* pData);
 	void SetDynamicDescriptor(int rootIndex, int offset, D3D12_CPU_DESCRIPTOR_HANDLE handle);
 	void SetDynamicDescriptor(int rootIndex, int offset, D3D12_CPU_DESCRIPTOR_HANDLE* handles, int count);
+	void SetDynamicSampler(int rootIndex, int offset, D3D12_CPU_DESCRIPTOR_HANDLE handle);
+	void SetDynamicSamplers(int rootIndex, int offset, D3D12_CPU_DESCRIPTOR_HANDLE* handles, int count);
 
 	void SetDescriptorHeap(ID3D12DescriptorHeap* pHeap, D3D12_DESCRIPTOR_HEAP_TYPE type);
 
@@ -51,7 +53,8 @@ protected:
 
 	void BindDescriptorHeaps();
 
-	std::unique_ptr<DynamicDescriptorAllocator> m_pDynamicDescriptorAllocator;
+	std::unique_ptr<DynamicDescriptorAllocator> m_pShaderResourceDescriptorAllocator;
+	std::unique_ptr<DynamicDescriptorAllocator> m_pSamplerDescriptorAllocator;
 
 	std::array<ID3D12DescriptorHeap*, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES> m_CurrentDescriptorHeaps = {};
 

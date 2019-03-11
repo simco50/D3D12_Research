@@ -146,6 +146,7 @@ void Graphics::Update()
 		pContext->SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
 		pContext->SetDynamicConstantBufferView(1, &frameData, sizeof(PerFrameData));
 		pContext->SetDynamicDescriptor(3, 0, m_pShadowMap->GetSRV());
+		pContext->SetDynamicSampler(4, 0, m_ShadowMapSampler);
 		for (int i = 0; i < m_pMesh->GetMeshCount(); ++i)
 		{
 			SubMesh* pSubMesh = m_pMesh->GetMesh(i);
@@ -365,11 +366,12 @@ void Graphics::InitializeAssets()
 		pixelShader.Load("Resources/Diffuse.hlsl", Shader::Type::PixelShader, "PSMain");
 
 		//Rootsignature
-		m_pRootSignature = std::make_unique<RootSignature>(4);
+		m_pRootSignature = std::make_unique<RootSignature>(5);
 		m_pRootSignature->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
 		m_pRootSignature->SetConstantBufferView(1, 1, D3D12_SHADER_VISIBILITY_ALL);
 		m_pRootSignature->SetDescriptorTableSimple(2, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, D3D12_SHADER_VISIBILITY_PIXEL);
 		m_pRootSignature->SetDescriptorTableSimple(3, 1, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, D3D12_SHADER_VISIBILITY_PIXEL);
+		m_pRootSignature->SetDescriptorTableSimple(4, 1, D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER, 1, D3D12_SHADER_VISIBILITY_PIXEL);
 
 		D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
 			D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
@@ -383,6 +385,12 @@ void Graphics::InitializeAssets()
 		samplerDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
 		m_pRootSignature->AddStaticSampler(0, samplerDesc, D3D12_SHADER_VISIBILITY_PIXEL);
 		m_pRootSignature->Finalize(m_pDevice.Get(), rootSignatureFlags);
+
+		samplerDesc.AddressU = samplerDesc.AddressV = samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+		samplerDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
+		samplerDesc.Filter = D3D12_FILTER_COMPARISON_MIN_MAG_MIP_LINEAR;
+		m_ShadowMapSampler = m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER]->AllocateDescriptor();
+		m_pDevice->CreateSampler(&samplerDesc, m_ShadowMapSampler);
 
 		//Pipeline state
 		m_pPipelineStateObject = std::make_unique<GraphicsPipelineState>();
@@ -415,7 +423,7 @@ void Graphics::InitializeAssets()
 		m_pShadowsPipelineStateObject->SetInputLayout(inputElements, sizeof(inputElements) / sizeof(inputElements[0]));
 		m_pShadowsPipelineStateObject->SetRootSignature(m_pShadowsRootSignature->GetRootSignature());
 		m_pShadowsPipelineStateObject->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
-		m_pShadowsPipelineStateObject->SetRenderTargetFormats(nullptr, 0, DXGI_FORMAT_D24_UNORM_S8_UINT, 1, 0);
+		m_pShadowsPipelineStateObject->SetRenderTargetFormats(nullptr, 0, DXGI_FORMAT_D32_FLOAT_S8X24_UINT, 1, 0);
 		m_pShadowsPipelineStateObject->SetCullMode(D3D12_CULL_MODE_NONE);
 		m_pShadowsPipelineStateObject->Finalize(m_pDevice.Get());
 

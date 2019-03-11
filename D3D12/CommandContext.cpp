@@ -17,7 +17,8 @@ constexpr int VALID_COMPUTE_QUEUE_RESOURCE_STATES = D3D12_RESOURCE_STATE_UNORDER
 CommandContext::CommandContext(Graphics* pGraphics, ID3D12GraphicsCommandList* pCommandList, ID3D12CommandAllocator* pAllocator, D3D12_COMMAND_LIST_TYPE type)
 	: m_pGraphics(pGraphics), m_pCommandList(pCommandList), m_pAllocator(pAllocator), m_Type(type)
 {
-	m_pDynamicDescriptorAllocator = std::make_unique<DynamicDescriptorAllocator>(pGraphics, this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	m_pShaderResourceDescriptorAllocator = std::make_unique<DynamicDescriptorAllocator>(pGraphics, this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	m_pSamplerDescriptorAllocator = std::make_unique<DynamicDescriptorAllocator>(pGraphics, this, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
 }
 
 CommandContext::~CommandContext()
@@ -44,7 +45,7 @@ uint64 CommandContext::Execute(bool wait)
 	m_pAllocator = nullptr;
 
 	m_pGraphics->GetCpuVisibleAllocator()->Free(fenceValue);
-	m_pDynamicDescriptorAllocator->ReleaseUsedHeaps(fenceValue);
+	m_pShaderResourceDescriptorAllocator->ReleaseUsedHeaps(fenceValue);
 
 	if (wait)
 	{
@@ -72,13 +73,15 @@ uint64 CommandContext::ExecuteAndReset(bool wait)
 void CommandContext::SetGraphicsRootSignature(RootSignature* pRootSignature)
 {
 	m_pCommandList->SetGraphicsRootSignature(pRootSignature->GetRootSignature());
-	m_pDynamicDescriptorAllocator->ParseRootSignature(pRootSignature);
+	m_pShaderResourceDescriptorAllocator->ParseRootSignature(pRootSignature);
+	m_pSamplerDescriptorAllocator->ParseRootSignature(pRootSignature);
 }
 
 void CommandContext::SetComputeRootSignature(RootSignature* pRootSignature)
 {
 	m_pCommandList->SetComputeRootSignature(pRootSignature->GetRootSignature());
-	m_pDynamicDescriptorAllocator->ParseRootSignature(pRootSignature);
+	m_pShaderResourceDescriptorAllocator->ParseRootSignature(pRootSignature);
+	m_pSamplerDescriptorAllocator->ParseRootSignature(pRootSignature);
 }
 
 void CommandContext::FlushResourceBarriers()
@@ -128,12 +131,22 @@ void CommandContext::SetDynamicIndexBuffer(int elementCount, void* pData)
 
 void CommandContext::SetDynamicDescriptor(int rootIndex, int offset, D3D12_CPU_DESCRIPTOR_HANDLE handle)
 {
-	m_pDynamicDescriptorAllocator->SetDescriptors(rootIndex, offset, 1, &handle);
+	m_pShaderResourceDescriptorAllocator->SetDescriptors(rootIndex, offset, 1, &handle);
 }
 
 void CommandContext::SetDynamicDescriptor(int rootIndex, int offset, D3D12_CPU_DESCRIPTOR_HANDLE* handles, int count)
 {
-	m_pDynamicDescriptorAllocator->SetDescriptors(rootIndex, offset, count, handles);
+	m_pShaderResourceDescriptorAllocator->SetDescriptors(rootIndex, offset, count, handles);
+}
+
+void CommandContext::SetDynamicSampler(int rootIndex, int offset, D3D12_CPU_DESCRIPTOR_HANDLE handle)
+{
+	m_pSamplerDescriptorAllocator->SetDescriptors(rootIndex, offset, 1, &handle);
+}
+
+void CommandContext::SetDynamicSamplers(int rootIndex, int offset, D3D12_CPU_DESCRIPTOR_HANDLE* handles, int count)
+{
+	m_pSamplerDescriptorAllocator->SetDescriptors(rootIndex, offset, count, handles);
 }
 
 void CommandContext::SetDescriptorHeap(ID3D12DescriptorHeap* pHeap, D3D12_DESCRIPTOR_HEAP_TYPE type)
@@ -260,21 +273,24 @@ void GraphicsCommandContext::SetGraphicsRootConstants(int rootIndex, uint32 coun
 void GraphicsCommandContext::Draw(int vertexStart, int vertexCount)
 {
 	FlushResourceBarriers();
-	m_pDynamicDescriptorAllocator->UploadAndBindStagedDescriptors(DescriptorTableType::Graphics);
+	m_pShaderResourceDescriptorAllocator->UploadAndBindStagedDescriptors(DescriptorTableType::Graphics);
+	m_pSamplerDescriptorAllocator->UploadAndBindStagedDescriptors(DescriptorTableType::Graphics);
 	m_pCommandList->DrawInstanced(vertexCount, 1, vertexStart, 0);
 }
 
 void GraphicsCommandContext::DrawIndexed(int indexCount, int indexStart, int minVertex /*= 0*/)
 {
 	FlushResourceBarriers();
-	m_pDynamicDescriptorAllocator->UploadAndBindStagedDescriptors(DescriptorTableType::Graphics);
+	m_pShaderResourceDescriptorAllocator->UploadAndBindStagedDescriptors(DescriptorTableType::Graphics);
+	m_pSamplerDescriptorAllocator->UploadAndBindStagedDescriptors(DescriptorTableType::Graphics);
 	m_pCommandList->DrawIndexedInstanced(indexCount, 1, indexStart, minVertex, 0);
 }
 
 void GraphicsCommandContext::DrawIndexedInstanced(int indexCount, int indexStart, int instanceCount, int minVertex /*= 0*/, int instanceStart /*= 0*/)
 {
 	FlushResourceBarriers();
-	m_pDynamicDescriptorAllocator->UploadAndBindStagedDescriptors(DescriptorTableType::Graphics);
+	m_pShaderResourceDescriptorAllocator->UploadAndBindStagedDescriptors(DescriptorTableType::Graphics);
+	m_pSamplerDescriptorAllocator->UploadAndBindStagedDescriptors(DescriptorTableType::Graphics);
 	m_pCommandList->DrawIndexedInstanced(indexCount, instanceCount, indexStart, minVertex, instanceStart);
 }
 
@@ -354,6 +370,7 @@ void ComputeCommandContext::SetPipelineState(ComputePipelineState* pPipelineStat
 void ComputeCommandContext::Dispatch(uint32 groupCountX, uint32 groupCountY, uint32 groupCountZ)
 {
 	FlushResourceBarriers();
-	m_pDynamicDescriptorAllocator->UploadAndBindStagedDescriptors(DescriptorTableType::Compute);
+	m_pShaderResourceDescriptorAllocator->UploadAndBindStagedDescriptors(DescriptorTableType::Compute);
+	m_pSamplerDescriptorAllocator->UploadAndBindStagedDescriptors(DescriptorTableType::Compute);
 	m_pCommandList->Dispatch(groupCountX, groupCountY, groupCountZ);
 }

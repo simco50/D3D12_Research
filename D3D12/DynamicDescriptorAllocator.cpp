@@ -5,7 +5,7 @@
 #include "CommandContext.h"
 
 std::vector<ComPtr<ID3D12DescriptorHeap>> DynamicDescriptorAllocator::m_DescriptorHeaps;
-std::queue<std::pair<uint64, ID3D12DescriptorHeap*>> DynamicDescriptorAllocator::m_FreeDescriptors;
+std::array<std::queue<std::pair<uint64, ID3D12DescriptorHeap*>>, 2> DynamicDescriptorAllocator::m_FreeDescriptors;
 
 DynamicDescriptorAllocator::DynamicDescriptorAllocator(Graphics* pGraphics, CommandContext* pContext, D3D12_DESCRIPTOR_HEAP_TYPE type)
 	: m_pGraphics(pGraphics), m_pOwner(pContext), m_Type(type)
@@ -149,7 +149,7 @@ void DynamicDescriptorAllocator::ReleaseUsedHeaps(uint64 fenceValue)
 	ReleaseHeap();
 	for (ID3D12DescriptorHeap* pHeap : m_UsedDescriptorHeaps)
 	{
-		m_FreeDescriptors.emplace(fenceValue, pHeap);
+		m_FreeDescriptors[(int)m_Type].emplace(fenceValue, pHeap);
 	}
 	m_UsedDescriptorHeaps.clear();
 }
@@ -169,10 +169,10 @@ uint32 DynamicDescriptorAllocator::GetRequiredSpace()
 
 ID3D12DescriptorHeap* DynamicDescriptorAllocator::RequestNewHeap(D3D12_DESCRIPTOR_HEAP_TYPE type)
 {
-	if (m_FreeDescriptors.size() > 0 && m_pGraphics->IsFenceComplete(m_FreeDescriptors.front().first))
+	if (m_FreeDescriptors[(int)m_Type].size() > 0 && m_pGraphics->IsFenceComplete(m_FreeDescriptors[(int)m_Type].front().first))
 	{
-		ID3D12DescriptorHeap* pHeap = m_FreeDescriptors.front().second;
-		m_FreeDescriptors.pop();
+		ID3D12DescriptorHeap* pHeap = m_FreeDescriptors[(int)m_Type].front().second;
+		m_FreeDescriptors[(int)m_Type].pop();
 		return pHeap;
 	}
 	else
