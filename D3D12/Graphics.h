@@ -55,6 +55,8 @@ private:
 
 	void UpdateImGui();
 
+	std::vector<float> m_FrameTimes;
+
 	Vector3 m_CameraPosition;
 	Quaternion m_CameraRotation;
 

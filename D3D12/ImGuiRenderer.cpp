@@ -81,6 +81,7 @@ void ImGuiRenderer::CreatePipeline()
 	m_pPipelineState->SetBlendMode(BlendMode::ALPHA, false);
 	m_pPipelineState->SetDepthWrite(false);
 	m_pPipelineState->SetDepthEnabled(true);
+	m_pPipelineState->SetCullMode(D3D12_CULL_MODE_NONE);
 	m_pPipelineState->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
 	m_pPipelineState->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
 	m_pPipelineState->SetRootSignature(m_pRootSignature->GetRootSignature());
@@ -114,9 +115,9 @@ void ImGuiRenderer::Render(GraphicsCommandContext& context)
 		context.SetDynamicIndexBuffer(pCmdList->IdxBuffer.Size, pCmdList->IdxBuffer.Data);
 
 		int indexOffset = 0;
-		for (int cmd_i = 0; cmd_i < pCmdList->CmdBuffer.Size; cmd_i++)
+		for (int i = 0; i < pCmdList->CmdBuffer.Size; i++)
 		{
-			const ImDrawCmd* pcmd = &pCmdList->CmdBuffer[cmd_i];
+			const ImDrawCmd* pcmd = &pCmdList->CmdBuffer[i];
 			if (pcmd->UserCallback)
 				pcmd->UserCallback(pCmdList, pcmd);
 			else
