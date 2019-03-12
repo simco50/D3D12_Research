@@ -33,45 +33,30 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, GraphicsCommandConte
 	std::string dirPath = pFilePath;
 	dirPath = dirPath.substr(0, dirPath.rfind('/'));
 
+	auto loadTexture = [pGraphics, pContext](std::string basePath, aiMaterial* pMaterial, aiTextureType type) 
+	{
+		std::unique_ptr<Texture2D> pTex;
+		aiString path;
+		aiReturn ret = pMaterial->GetTexture(type, 0, &path);
+		if (ret == aiReturn_SUCCESS)
+		{
+			std::stringstream str;
+			std::string p = path.C_Str();
+			p = p.substr(0, p.find('.')).append(".png");
+			str << basePath << p;
+			pTex = std::make_unique<Texture2D>();
+			pTex->Create(pGraphics, pContext, str.str().c_str(), TextureUsage::ShaderResource);
+		}
+		return pTex;
+	};
+
 	m_Materials.resize(pScene->mNumMaterials);
 	for (uint32 i = 0; i < pScene->mNumMaterials; ++i)
 	{
-		aiString path;
-		aiReturn ret = pScene->mMaterials[i]->GetTexture(aiTextureType_DIFFUSE, 0, &path);
-		std::string newPath = path.C_Str();
-		newPath = newPath.substr(0, newPath.rfind('.')).append(".png");
-
 		Material& m = m_Materials[i];
-		if (ret == aiReturn_SUCCESS)
-		{
-			std::stringstream str;
-			str << dirPath << "/" << newPath;
-			m.pDiffuseTexture = std::make_unique<Texture2D>();
-			m.pDiffuseTexture->Create(pGraphics, pContext, str.str().c_str(), TextureUsage::ShaderResource);
-		}
-
-		ret = pScene->mMaterials[i]->GetTexture(aiTextureType_NORMALS, 0, &path);
-		newPath = path.C_Str();
-		newPath = newPath.substr(0, newPath.rfind('.')).append(".png");
-		if (ret == aiReturn_SUCCESS)
-		{
-			std::stringstream str;
-			str << dirPath << "/" << newPath;
-			m.pNormalTexture = std::make_unique<Texture2D>();
-			m.pNormalTexture->Create(pGraphics, pContext, str.str().c_str(), TextureUsage::ShaderResource);
-		}
-
-		ret = pScene->mMaterials[i]->GetTexture(aiTextureType_SPECULAR, 0, &path);
-		newPath = path.C_Str();
-		newPath = newPath.substr(0, newPath.rfind('.')).append(".png");
-		if (ret == aiReturn_SUCCESS)
-		{
-			std::stringstream str;
-			str << dirPath << "/" << newPath;
-			m.pSpecularTexture = std::make_unique<Texture2D>();
-			m.pSpecularTexture->Create(pGraphics, pContext, str.str().c_str(), TextureUsage::ShaderResource);
-		}
-
+		m.pDiffuseTexture = loadTexture(dirPath, pScene->mMaterials[i], aiTextureType_DIFFUSE);
+		m.pNormalTexture = loadTexture(dirPath, pScene->mMaterials[i], aiTextureType_NORMALS);
+		m.pSpecularTexture = loadTexture(dirPath, pScene->mMaterials[i], aiTextureType_SPECULAR);
 		pContext->ExecuteAndReset(true);
 	}
 
@@ -86,6 +71,7 @@ std::unique_ptr<SubMesh> Mesh::LoadMesh(aiMesh* pMesh, ID3D12Device* pDevice, Gr
 		Vector2 TexCoord;
 		Vector3 Normal;
 		Vector3 Tangent;
+		Vector3 Bitangent;
 	};
 
 	std::vector<Vertex> vertices(pMesh->mNumVertices);
@@ -99,7 +85,10 @@ std::unique_ptr<SubMesh> Mesh::LoadMesh(aiMesh* pMesh, ID3D12Device* pDevice, Gr
 			vertex.TexCoord = *reinterpret_cast<Vector2*>(&pMesh->mTextureCoords[0][j]);
 		vertex.Normal = *reinterpret_cast<Vector3*>(&pMesh->mNormals[j]);
 		if (pMesh->HasTangentsAndBitangents())
+		{
 			vertex.Tangent = *reinterpret_cast<Vector3*>(&pMesh->mTangents[j]);
+			vertex.Bitangent = *reinterpret_cast<Vector3*>(&pMesh->mBitangents[j]);
+		}
 	}
 
 	for (uint32 j = 0; j < pMesh->mNumFaces; ++j)

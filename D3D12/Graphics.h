@@ -88,6 +88,8 @@ private:
 	uint32 m_CurrentBackBufferIndex = 0;
 	std::array<uint64, FRAME_COUNT> m_FenceValues = {};
 
+	std::unique_ptr<Texture2D> m_pDummyTexture;
+
 	std::unique_ptr<Mesh> m_pMesh;
 	std::unique_ptr<RootSignature> m_pRootSignature;
 	std::unique_ptr<GraphicsPipelineState> m_pPipelineStateObject;

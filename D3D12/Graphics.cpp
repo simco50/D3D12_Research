@@ -37,7 +37,7 @@ void Graphics::Initialize(HWND window)
 
 	m_FrameTimes.resize(256);
 
-	m_CameraPosition = Vector3(0, 1200, -150);
+	m_CameraPosition = Vector3(0, 100, -15);
 	m_CameraRotation = Quaternion::CreateFromYawPitchRoll(XM_PIDIV4, XM_PIDIV4, 0);
 }
 
@@ -50,8 +50,8 @@ void Graphics::Update()
 		Matrix ViewInverse;
 	} frameData;
 
-	frameData.LightPosition = Vector4(cos((float)GameTimer::GameTime() / 5.0f), 2, sin((float)GameTimer::GameTime() / 5.0f), 0) * 800;
-	frameData.LightViewProjection = XMMatrixLookAtLH(frameData.LightPosition, Vector3(0, 0, 0), Vector3(0, 1, 0)) * XMMatrixOrthographicLH((float)m_pShadowMap->GetWidth(), (float)m_pShadowMap->GetWidth(), 1.0f, 3000);
+	frameData.LightPosition = Vector4(cos((float)GameTimer::GameTime() / 5.0f), 2, sin((float)GameTimer::GameTime() / 5.0f), 0) * 80;
+	frameData.LightViewProjection = XMMatrixLookAtLH(frameData.LightPosition, Vector3(0, 0, 0), Vector3(0, 1, 0)) * XMMatrixOrthographicLH(512, 512, 1.0f, 300);
 
 	if (Input::Instance().IsMouseDown(VK_LBUTTON))
 	{
@@ -69,13 +69,13 @@ void Graphics::Update()
 	movement = Vector3::Transform(movement, m_CameraRotation);
 	movement.y -= (int)Input::Instance().IsKeyDown('Q');
 	movement.y += (int)Input::Instance().IsKeyDown('E');
-	movement *= GameTimer::DeltaTime() * 200.0f;
+	movement *= GameTimer::DeltaTime() * 20.0f;
 	m_CameraPosition += movement;
 
 	frameData.ViewInverse = Matrix::CreateFromQuaternion(m_CameraRotation) * Matrix::CreateTranslation(m_CameraPosition);
 	Matrix cameraView;
 	frameData.ViewInverse.Invert(cameraView);
-	Matrix cameraProjection = XMMatrixPerspectiveFovLH(XM_PIDIV4, (float)m_WindowWidth / m_WindowHeight, 1.0f, 3000);
+	Matrix cameraProjection = XMMatrixPerspectiveFovLH(XM_PIDIV4, (float)m_WindowWidth / m_WindowHeight, 1.0f, 300);
 	Matrix cameraViewProjection = cameraView * cameraProjection;
 
 	m_pImGuiRenderer->NewFrame();
@@ -89,8 +89,8 @@ void Graphics::Update()
 		pContext->SetPipelineState(m_pShadowsPipelineStateObject.get());
 		pContext->SetGraphicsRootSignature(m_pShadowsRootSignature.get());
 
-		pContext->SetViewport(FloatRect(0, 0, (float)m_pShadowMap->GetWidth(), (float)m_pShadowMap->GetHeight()));
-		pContext->SetScissorRect(FloatRect(0, 0, (float)m_pShadowMap->GetWidth(), (float)m_pShadowMap->GetHeight()));
+		pContext->SetViewport(FloatRect(0, 0, m_pShadowMap->GetWidth(), m_pShadowMap->GetHeight()));
+		pContext->SetScissorRect(FloatRect(0, 0, m_pShadowMap->GetWidth(), m_pShadowMap->GetHeight()));
 
 		pContext->InsertResourceBarrier(m_pShadowMap.get(), D3D12_RESOURCE_STATE_DEPTH_WRITE, true);
 		pContext->SetRenderTargets(nullptr, m_pShadowMap->GetRTV());
@@ -104,7 +104,7 @@ void Graphics::Update()
 		{
 			Matrix WorldViewProjection;
 		} ObjectData;
-		ObjectData.WorldViewProjection = Matrix::CreateScale(10, 10, 10) * frameData.LightViewProjection;
+		ObjectData.WorldViewProjection = frameData.LightViewProjection;
 		pContext->SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
 		for (int i = 0; i < m_pMesh->GetMeshCount(); ++i)
 		{
@@ -141,7 +141,7 @@ void Graphics::Update()
 			Matrix World;
 			Matrix WorldViewProjection;
 		} ObjectData;
-		ObjectData.World = Matrix::CreateScale(10, 10, 10);
+		ObjectData.World = XMMatrixIdentity();
 		ObjectData.WorldViewProjection = ObjectData.World * cameraViewProjection;
 
 		pContext->SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
@@ -152,18 +152,9 @@ void Graphics::Update()
 		{
 			SubMesh* pSubMesh = m_pMesh->GetMesh(i);
 			const Material& material = m_pMesh->GetMaterial(pSubMesh->GetMaterialId());
-			if (material.pDiffuseTexture)
-			{
-				pContext->SetDynamicDescriptor(2, 0, material.pDiffuseTexture->GetSRV());
-			}
-			if (material.pNormalTexture)
-			{
-				pContext->SetDynamicDescriptor(2, 1, material.pNormalTexture->GetSRV());
-			}
-			if (material.pSpecularTexture)
-			{
-				pContext->SetDynamicDescriptor(2, 2, material.pSpecularTexture->GetSRV());
-			}
+			pContext->SetDynamicDescriptor(2, 0, material.pDiffuseTexture ? material.pDiffuseTexture->GetSRV() : m_pDummyTexture->GetSRV());
+			pContext->SetDynamicDescriptor(2, 1, material.pNormalTexture ? material.pNormalTexture->GetSRV() : m_pDummyTexture->GetSRV());
+			pContext->SetDynamicDescriptor(2, 2, material.pSpecularTexture ? material.pSpecularTexture->GetSRV() : m_pDummyTexture->GetSRV());
 			pSubMesh->Draw(pContext);
 		}
 		pContext->MarkEnd();
@@ -365,6 +356,7 @@ void Graphics::InitializeAssets()
 		D3D12_INPUT_ELEMENT_DESC{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
 		D3D12_INPUT_ELEMENT_DESC{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 20, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
 		D3D12_INPUT_ELEMENT_DESC{ "TANGENT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 32, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+		D3D12_INPUT_ELEMENT_DESC{ "TEXCOORD", 1, DXGI_FORMAT_R32G32B32_FLOAT, 0, 44, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
 	};
 
 	{
@@ -391,7 +383,7 @@ void Graphics::InitializeAssets()
 		D3D12_SAMPLER_DESC samplerDesc = {};
 		samplerDesc.AddressU = samplerDesc.AddressV = samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
 		samplerDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_ALWAYS;
-		samplerDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
+		samplerDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
 		m_pRootSignature->AddStaticSampler(0, samplerDesc, D3D12_SHADER_VISIBILITY_PIXEL);
 		m_pRootSignature->Finalize(m_pDevice.Get(), rootSignatureFlags);
 
@@ -443,6 +435,9 @@ void Graphics::InitializeAssets()
 	//Geometry
 	m_pMesh = std::make_unique<Mesh>();
 	m_pMesh->Load("Resources/sponza/sponza.dae", this, pContext);
+
+	m_pDummyTexture = std::make_unique<Texture2D>();
+	m_pDummyTexture->Create(this, 1, 1, DXGI_FORMAT_R8G8B8A8_UNORM, TextureUsage::ShaderResource);
 
 	pContext->Execute(true);
 }
