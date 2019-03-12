@@ -38,14 +38,30 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, GraphicsCommandConte
 		std::unique_ptr<Texture2D> pTex;
 		aiString path;
 		aiReturn ret = pMaterial->GetTexture(type, 0, &path);
+		pTex = std::make_unique<Texture2D>();
 		if (ret == aiReturn_SUCCESS)
 		{
-			std::stringstream str;
 			std::string p = path.C_Str();
 			p = p.substr(0, p.find('.')).append(".png");
+			std::stringstream str;
 			str << basePath << p;
-			pTex = std::make_unique<Texture2D>();
 			pTex->Create(pGraphics, pContext, str.str().c_str(), TextureUsage::ShaderResource);
+		}
+		else
+		{
+			switch (type)
+			{
+			case aiTextureType_NORMALS:
+				pTex->Create(pGraphics, pContext, "Resources/textures/dummy_ddn.png", TextureUsage::ShaderResource);
+				break;
+			case aiTextureType_SPECULAR:
+				pTex->Create(pGraphics, pContext, "Resources/textures/dummy_specular.png", TextureUsage::ShaderResource);
+				break;
+			case aiTextureType_DIFFUSE:
+			default:
+				pTex->Create(pGraphics, pContext, "Resources/textures/dummy.png", TextureUsage::ShaderResource);
+				break;
+			}
 		}
 		return pTex;
 	};

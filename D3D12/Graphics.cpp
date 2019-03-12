@@ -152,9 +152,9 @@ void Graphics::Update()
 		{
 			SubMesh* pSubMesh = m_pMesh->GetMesh(i);
 			const Material& material = m_pMesh->GetMaterial(pSubMesh->GetMaterialId());
-			pContext->SetDynamicDescriptor(2, 0, material.pDiffuseTexture ? material.pDiffuseTexture->GetSRV() : m_pDummyTexture->GetSRV());
-			pContext->SetDynamicDescriptor(2, 1, material.pNormalTexture ? material.pNormalTexture->GetSRV() : m_pDummyTexture->GetSRV());
-			pContext->SetDynamicDescriptor(2, 2, material.pSpecularTexture ? material.pSpecularTexture->GetSRV() : m_pDummyTexture->GetSRV());
+			pContext->SetDynamicDescriptor(2, 0, material.pDiffuseTexture->GetSRV());
+			pContext->SetDynamicDescriptor(2, 1, material.pNormalTexture->GetSRV());
+			pContext->SetDynamicDescriptor(2, 2, material.pSpecularTexture->GetSRV());
 			pSubMesh->Draw(pContext);
 		}
 		pContext->MarkEnd();
@@ -435,9 +435,6 @@ void Graphics::InitializeAssets()
 	//Geometry
 	m_pMesh = std::make_unique<Mesh>();
 	m_pMesh->Load("Resources/sponza/sponza.dae", this, pContext);
-
-	m_pDummyTexture = std::make_unique<Texture2D>();
-	m_pDummyTexture->Create(this, 1, 1, DXGI_FORMAT_R8G8B8A8_UNORM, TextureUsage::ShaderResource);
 
 	pContext->Execute(true);
 }
