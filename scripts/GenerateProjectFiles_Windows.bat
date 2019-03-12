@@ -1,1 +1,1 @@
-genie.exe --base=windows vs2017
+genie.exe vs2017

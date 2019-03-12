@@ -38,7 +38,7 @@ DynamicAllocation DynamicResourceAllocator::Allocate(int size, int alignment)
 					maxOffset = m_FenceOffsets.front().second;
 					m_FenceOffsets.pop();
 				}
-				assert(m_CurrentOffset + bufferSize <= maxOffset);
+				//assert(m_CurrentOffset + bufferSize <= maxOffset);
 			}
 		}
 		allocation.GpuHandle = m_pBackingResource->GetGPUVirtualAddress() + m_CurrentOffset;

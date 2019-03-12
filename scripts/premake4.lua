@@ -36,13 +36,7 @@ solution (engineName)
 		action.vstudio.windowsTargetPlatformVersion    = windowsPlatform
 		action.vstudio.windowsTargetPlatformMinVersion = windowsPlatform
 
-		if _OPTIONS["base"] == "uwp" then
-			defines { "PLATFORM_UWP" }
-			premake.vstudio.toolset = "v141"
-			premake.vstudio.storeapp = "10.0"
-		else
-			defines { "PLATFORM_WINDOWS" }
-		end
+		defines { "PLATFORM_WINDOWS" }
 
 		files
 		{ 
@@ -75,29 +69,11 @@ solution (engineName)
 		includedirs (ROOT .. "Libraries/Pix/include")
 		libdirs (ROOT .. "Libraries/Pix/lib")
 		
-		if _OPTIONS["base"] == "uwp" then
-			libdirs (ROOT .. "Libraries/Pix/lib/WinPixEventRuntime_UAP.lib")
-			postbuildcommands { ("copy \"$(SolutionDir)Libraries\\Pix\\bin\\WinPixEventRuntime_UAP.dll\" \"$(OutDir)\"") }
-			postbuildcommands { ("xcopy \"$(ProjectDir)Resources\" \"$(OutDir)AppX\" /s/h/e/k/f/c/y") }
-			links { "WinPixEventRuntime_UAP" }
-		else
-			configuration { "windows" }
-				postbuildcommands { ("copy \"$(SolutionDir)Libraries\\Pix\\bin\\WinPixEventRuntime.dll\" \"$(OutDir)\"") }
-				links { "WinPixEventRuntime" }
-		end
+		configuration { "windows" }
+			postbuildcommands { ("copy \"$(SolutionDir)Libraries\\Pix\\bin\\WinPixEventRuntime.dll\" \"$(OutDir)\"") }
+			links { "WinPixEventRuntime" }
 
 		configuration {}
 		
 		includedirs { "$(ProjectDir)" }
 		configuration {}
-
-newoption {
-	trigger     = "base",
-	value       = "API",
-	description = "Choose a particular 3D API for rendering",
-	default     = "windows",
-	allowed = {
-		{ "windows", "Windows" },
-		{ "uwp", "Universal Windows Platform" },
-	}
-}

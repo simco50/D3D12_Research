@@ -27,6 +27,8 @@ struct Material
 {
 	std::unique_ptr<Texture2D> pDiffuseTexture;
 	std::unique_ptr<Texture2D> pNormalTexture;
+	std::unique_ptr<Texture2D> pSpecularTexture;
+	std::unique_ptr<Texture2D> pAlphaTexture;
 };
 
 class Mesh

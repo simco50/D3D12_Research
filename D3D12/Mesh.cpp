@@ -38,24 +38,39 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, GraphicsCommandConte
 	{
 		aiString path;
 		aiReturn ret = pScene->mMaterials[i]->GetTexture(aiTextureType_DIFFUSE, 0, &path);
+		std::string newPath = path.C_Str();
+		newPath = newPath.substr(0, newPath.rfind('.')).append(".png");
 
 		Material& m = m_Materials[i];
 		if (ret == aiReturn_SUCCESS)
 		{
 			std::stringstream str;
-			str << dirPath << "/" << path.C_Str();
+			str << dirPath << "/" << newPath;
 			m.pDiffuseTexture = std::make_unique<Texture2D>();
 			m.pDiffuseTexture->Create(pGraphics, pContext, str.str().c_str(), TextureUsage::ShaderResource);
 		}
 
-		//ret = pScene->mMaterials[i]->GetTexture(aiTextureType_HEIGHT, 0, &path);
-		//if (ret == aiReturn_SUCCESS)
-		//{
-		//	std::stringstream str;
-		//	str << dirPath << "/" << path.C_Str();
-		//	m.pNormalTexture = std::make_unique<Texture2D>();
-		//	m.pNormalTexture->Create(pGraphics, pContext, str.str().c_str(), TextureUsage::ShaderResource);
-		//}
+		ret = pScene->mMaterials[i]->GetTexture(aiTextureType_NORMALS, 0, &path);
+		newPath = path.C_Str();
+		newPath = newPath.substr(0, newPath.rfind('.')).append(".png");
+		if (ret == aiReturn_SUCCESS)
+		{
+			std::stringstream str;
+			str << dirPath << "/" << newPath;
+			m.pNormalTexture = std::make_unique<Texture2D>();
+			m.pNormalTexture->Create(pGraphics, pContext, str.str().c_str(), TextureUsage::ShaderResource);
+		}
+
+		ret = pScene->mMaterials[i]->GetTexture(aiTextureType_SPECULAR, 0, &path);
+		newPath = path.C_Str();
+		newPath = newPath.substr(0, newPath.rfind('.')).append(".png");
+		if (ret == aiReturn_SUCCESS)
+		{
+			std::stringstream str;
+			str << dirPath << "/" << newPath;
+			m.pSpecularTexture = std::make_unique<Texture2D>();
+			m.pSpecularTexture->Create(pGraphics, pContext, str.str().c_str(), TextureUsage::ShaderResource);
+		}
 
 		pContext->ExecuteAndReset(true);
 	}
