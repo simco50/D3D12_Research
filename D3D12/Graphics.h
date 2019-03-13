@@ -1,4 +1,5 @@
 #pragma once
+#include "Light.h"
 
 class CommandQueue;
 class CommandContext;
@@ -95,4 +96,6 @@ private:
 	std::unique_ptr<Texture2D> m_pShadowMap;
 	std::unique_ptr<RootSignature> m_pShadowsRootSignature;
 	std::unique_ptr<GraphicsPipelineState> m_pShadowsPipelineStateObject;
+
+	std::vector<Light> m_Lights;
 };

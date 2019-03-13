@@ -20,47 +20,6 @@
 const DXGI_FORMAT Graphics::DEPTH_STENCIL_FORMAT = DXGI_FORMAT_D24_UNORM_S8_UINT;
 const DXGI_FORMAT Graphics::RENDER_TARGET_FORMAT = DXGI_FORMAT_R8G8B8A8_UNORM;
 
-#pragma pack(push)
-#pragma pack(16) 
-struct Light
-{
-	int Enabled;
-	Vector3 Position;
-	Vector3 Direction;
-	float Intensity;
-	Vector4 Color;
-	float Range;
-	float SpotLightAngle;
-	float Attenuation;
-	uint32 Type;
-
-	static Light Directional(const Vector3& position, const Vector3& direction, float intensity = 1.0f, const Vector4& color = Vector4(1, 1, 1, 1))
-	{
-		Light l;
-		l.Enabled = true;
-		l.Position = position;
-		l.Direction = direction;
-		l.Intensity = intensity;
-		l.Color = color;
-		l.Type = 0;
-		return l;
-	}
-
-	static Light Point(const Vector3& position, float radius, float intensity = 1.0f, float attenuation = 0.5f, const Vector4& color = Vector4(1, 1, 1, 1))
-	{
-		Light l;
-		l.Enabled = true;
-		l.Position = position;
-		l.Range = radius;
-		l.Intensity = intensity;
-		l.Color = color;
-		l.Attenuation = attenuation;
-		l.Type = 1;
-		return l;
-	}
-};
-#pragma pack(pop)
-
 Graphics::Graphics(uint32 width, uint32 height)
 	: m_WindowWidth(width), m_WindowHeight(height)
 {
@@ -68,6 +27,14 @@ Graphics::Graphics(uint32 width, uint32 height)
 
 Graphics::~Graphics()
 {
+}
+
+float RandomRange(float min, float max)
+{
+	float random = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
+	float diff = max - min;
+	float r = random * diff;
+	return min + r;
 }
 
 void Graphics::Initialize(HWND window)
@@ -80,29 +47,36 @@ void Graphics::Initialize(HWND window)
 
 	m_CameraPosition = Vector3(0, 100, -15);
 	m_CameraRotation = Quaternion::CreateFromYawPitchRoll(XM_PIDIV4, XM_PIDIV4, 0);
+
+	m_Lights.resize(20);
+	for (int i = 0; i < m_Lights.size(); ++i)
+	{
+		Vector4 color = Vector4(RandomRange(0, 1), RandomRange(0, 1), RandomRange(0, 1), 1);
+		color.Normalize(color);
+		m_Lights[i] = Light::Point(Vector3(RandomRange(-200, 200), RandomRange(0, 400), RandomRange(-200, 200)), 120.0f, 1.0f, 0.5f, color);
+	}
 }
 
 void Graphics::Update()
 {
-	Vector3 mainLightPosition = Vector3(cos((float)GameTimer::GameTime() / 5.0f), 1.5, sin((float)GameTimer::GameTime() / 5.0f)) * 80;
-	Vector3 mainLightDirection;
-	mainLightPosition.Normalize(mainLightDirection);
-	mainLightDirection *= -1;
-
-	std::vector<Light> lights;
-	lights.push_back(Light::Directional(mainLightPosition, mainLightDirection));
-	lights.push_back(Light::Point(Vector3(-100, 20, 0), 50.0f, 1.0f, 0.5f, Vector4(1, 0, 0, 1)));
-	lights.push_back(Light::Point(Vector3(0, 20, 0), 50.0f, 1.0f, 0.5f, Vector4(0, 0, 1, 1)));
-	lights.push_back(Light::Point(Vector3(100, 70, 50), 50.0f, 1.0f, 0.5f, Vector4(0, 1, 1, 1)));
-	lights.push_back(Light::Point(Vector3(100, 70, -50), 50.0f, 1.0f, 0.5f, Vector4(1, 1, 0, 1)));
-
 	struct PerFrameData
 	{
 		Matrix LightViewProjection;
 		Matrix ViewInverse;
 	} frameData;
 
-	frameData.LightViewProjection = XMMatrixLookAtLH(lights[0].Position, Vector3(0, 0, 0), Vector3(0, 1, 0)) * XMMatrixOrthographicLH(512, 512, 5.0f, 200.0f);
+	Vector3 mainLightPosition = Vector3(cos((float)GameTimer::GameTime() / 5.0f), 1.5, sin((float)GameTimer::GameTime() / 5.0f)) * 80;
+	Vector3 mainLightDirection;
+	mainLightPosition.Normalize(mainLightDirection);
+	mainLightDirection *= -1;
+	m_Lights[0] = Light::Directional(mainLightPosition, mainLightDirection);
+
+	frameData.LightViewProjection = XMMatrixLookAtLH(m_Lights[0].Position, Vector3(0, 0, 0), Vector3(0, 1, 0)) * XMMatrixOrthographicLH(512, 512, 5.0f, 200.0f);
+	//for (int i = 1; i < m_Lights.size(); ++i)
+	//{
+	//	m_Lights[i].Position.x += cos(GameTimer::GameTime());
+	//	m_Lights[i].Position.z += sin(GameTimer::GameTime());
+	//}
 
 	if (Input::Instance().IsMouseDown(VK_LBUTTON))
 	{
@@ -197,7 +171,7 @@ void Graphics::Update()
 
 		pContext->SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
 		pContext->SetDynamicConstantBufferView(1, &frameData, sizeof(PerFrameData));
-		pContext->SetDynamicConstantBufferView(2, lights.data(), sizeof(Light) * lights.size());
+		pContext->SetDynamicConstantBufferView(2, m_Lights.data(), sizeof(Light) * m_Lights.size());
 		pContext->SetDynamicDescriptor(4, 0, m_pShadowMap->GetSRV());
 		for (int i = 0; i < m_pMesh->GetMeshCount(); ++i)
 		{

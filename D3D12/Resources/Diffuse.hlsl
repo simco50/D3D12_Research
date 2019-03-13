@@ -25,7 +25,7 @@ struct Light
 
 cbuffer LightData : register(b2)
 {
-    Light cLights[6];
+    Light cLights[20];
 }
 
 struct VSInput
@@ -119,7 +119,7 @@ LightResult DoLight(float3 worldPosition, float3 normal, float3 viewDirection, f
 {
 	LightResult totalResult = (LightResult)0;
 
-	for(int i = 1; i < 5; ++i)
+	for(int i = 1; i < 20; ++i)
 	{
 		if(cLights[i].Enabled == 0)
 		{
