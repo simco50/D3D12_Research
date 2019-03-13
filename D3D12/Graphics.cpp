@@ -20,6 +20,47 @@
 const DXGI_FORMAT Graphics::DEPTH_STENCIL_FORMAT = DXGI_FORMAT_D24_UNORM_S8_UINT;
 const DXGI_FORMAT Graphics::RENDER_TARGET_FORMAT = DXGI_FORMAT_R8G8B8A8_UNORM;
 
+#pragma pack(push)
+#pragma pack(16) 
+struct Light
+{
+	int Enabled;
+	Vector3 Position;
+	Vector3 Direction;
+	float Intensity;
+	Vector4 Color;
+	float Range;
+	float SpotLightAngle;
+	float Attenuation;
+	uint32 Type;
+
+	static Light Directional(const Vector3& position, const Vector3& direction, float intensity = 1.0f, const Vector4& color = Vector4(1, 1, 1, 1))
+	{
+		Light l;
+		l.Enabled = true;
+		l.Position = position;
+		l.Direction = direction;
+		l.Intensity = intensity;
+		l.Color = color;
+		l.Type = 0;
+		return l;
+	}
+
+	static Light Point(const Vector3& position, float radius, float intensity = 1.0f, float attenuation = 0.5f, const Vector4& color = Vector4(1, 1, 1, 1))
+	{
+		Light l;
+		l.Enabled = true;
+		l.Position = position;
+		l.Range = radius;
+		l.Intensity = intensity;
+		l.Color = color;
+		l.Attenuation = attenuation;
+		l.Type = 1;
+		return l;
+	}
+};
+#pragma pack(pop)
+
 Graphics::Graphics(uint32 width, uint32 height)
 	: m_WindowWidth(width), m_WindowHeight(height)
 {
@@ -43,15 +84,25 @@ void Graphics::Initialize(HWND window)
 
 void Graphics::Update()
 {
+	Vector3 mainLightPosition = Vector3(cos((float)GameTimer::GameTime() / 5.0f), 1.5, sin((float)GameTimer::GameTime() / 5.0f)) * 80;
+	Vector3 mainLightDirection;
+	mainLightPosition.Normalize(mainLightDirection);
+	mainLightDirection *= -1;
+
+	std::vector<Light> lights;
+	lights.push_back(Light::Directional(mainLightPosition, mainLightDirection));
+	lights.push_back(Light::Point(Vector3(-100, 20, 0), 50.0f, 1.0f, 0.5f, Vector4(1, 0, 0, 1)));
+	lights.push_back(Light::Point(Vector3(0, 20, 0), 50.0f, 1.0f, 0.5f, Vector4(0, 0, 1, 1)));
+	lights.push_back(Light::Point(Vector3(100, 70, 50), 50.0f, 1.0f, 0.5f, Vector4(0, 1, 1, 1)));
+	lights.push_back(Light::Point(Vector3(100, 70, -50), 50.0f, 1.0f, 0.5f, Vector4(1, 1, 0, 1)));
+
 	struct PerFrameData
 	{
-		Vector4 LightPosition;
 		Matrix LightViewProjection;
 		Matrix ViewInverse;
 	} frameData;
 
-	frameData.LightPosition = Vector4(cos((float)GameTimer::GameTime() / 5.0f), 2, sin((float)GameTimer::GameTime() / 5.0f), 0) * 80;
-	frameData.LightViewProjection = XMMatrixLookAtLH(frameData.LightPosition, Vector3(0, 0, 0), Vector3(0, 1, 0)) * XMMatrixOrthographicLH(512, 512, 1.0f, 300);
+	frameData.LightViewProjection = XMMatrixLookAtLH(lights[0].Position, Vector3(0, 0, 0), Vector3(0, 1, 0)) * XMMatrixOrthographicLH(512, 512, 5.0f, 200.0f);
 
 	if (Input::Instance().IsMouseDown(VK_LBUTTON))
 	{
@@ -146,15 +197,15 @@ void Graphics::Update()
 
 		pContext->SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
 		pContext->SetDynamicConstantBufferView(1, &frameData, sizeof(PerFrameData));
-		pContext->SetDynamicDescriptor(3, 0, m_pShadowMap->GetSRV());
-		pContext->SetDynamicSampler(4, 0, m_ShadowMapSampler);
+		pContext->SetDynamicConstantBufferView(2, lights.data(), sizeof(Light) * lights.size());
+		pContext->SetDynamicDescriptor(4, 0, m_pShadowMap->GetSRV());
 		for (int i = 0; i < m_pMesh->GetMeshCount(); ++i)
 		{
 			SubMesh* pSubMesh = m_pMesh->GetMesh(i);
 			const Material& material = m_pMesh->GetMaterial(pSubMesh->GetMaterialId());
-			pContext->SetDynamicDescriptor(2, 0, material.pDiffuseTexture->GetSRV());
-			pContext->SetDynamicDescriptor(2, 1, material.pNormalTexture->GetSRV());
-			pContext->SetDynamicDescriptor(2, 2, material.pSpecularTexture->GetSRV());
+			pContext->SetDynamicDescriptor(3, 0, material.pDiffuseTexture->GetSRV());
+			pContext->SetDynamicDescriptor(3, 1, material.pNormalTexture->GetSRV());
+			pContext->SetDynamicDescriptor(3, 2, material.pSpecularTexture->GetSRV());
 			pSubMesh->Draw(pContext);
 		}
 		pContext->MarkEnd();
@@ -267,7 +318,7 @@ void Graphics::InitD3D()
 	{
 		m_DescriptorHeaps[i] = std::make_unique<DescriptorAllocator>(m_pDevice.Get(), (D3D12_DESCRIPTOR_HEAP_TYPE)i);
 	}
-	m_pDynamicCpuVisibleAllocator = std::make_unique<DynamicResourceAllocator>(this, true, 0x200000);
+	m_pDynamicCpuVisibleAllocator = std::make_unique<DynamicResourceAllocator>(this, true, 0x400000);
 
 	m_pSwapchain.Reset();
 
@@ -337,7 +388,7 @@ void Graphics::OnResize(int width, int height)
 	}
 
 	m_pDepthStencilBuffer = std::make_unique<Texture2D>();
-	m_pDepthStencilBuffer->Create(this, width, height, DXGI_FORMAT_D24_UNORM_S8_UINT, TextureUsage::DepthStencil);
+	m_pDepthStencilBuffer->Create(this, width, height, DEPTH_STENCIL_FORMAT, TextureUsage::DepthStencil);
 
 	m_Viewport.Bottom = (float)m_WindowHeight;
 	m_Viewport.Right = (float)m_WindowWidth;
@@ -370,9 +421,9 @@ void Graphics::InitializeAssets()
 		m_pRootSignature = std::make_unique<RootSignature>(5);
 		m_pRootSignature->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
 		m_pRootSignature->SetConstantBufferView(1, 1, D3D12_SHADER_VISIBILITY_ALL);
-		m_pRootSignature->SetDescriptorTableSimple(2, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3, D3D12_SHADER_VISIBILITY_PIXEL);
-		m_pRootSignature->SetDescriptorTableSimple(3, 3, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, D3D12_SHADER_VISIBILITY_PIXEL);
-		m_pRootSignature->SetDescriptorTableSimple(4, 1, D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER, 1, D3D12_SHADER_VISIBILITY_PIXEL);
+		m_pRootSignature->SetConstantBufferView(2, 2, D3D12_SHADER_VISIBILITY_PIXEL);
+		m_pRootSignature->SetDescriptorTableSimple(3, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3, D3D12_SHADER_VISIBILITY_PIXEL);
+		m_pRootSignature->SetDescriptorTableSimple(4, 3, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, D3D12_SHADER_VISIBILITY_PIXEL);
 
 		D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
 			D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
@@ -385,13 +436,18 @@ void Graphics::InitializeAssets()
 		samplerDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_ALWAYS;
 		samplerDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
 		m_pRootSignature->AddStaticSampler(0, samplerDesc, D3D12_SHADER_VISIBILITY_PIXEL);
-		m_pRootSignature->Finalize(m_pDevice.Get(), rootSignatureFlags);
+
+		samplerDesc.AddressU = samplerDesc.AddressV = samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+		samplerDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+		samplerDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
+		m_pRootSignature->AddStaticSampler(1, samplerDesc, D3D12_SHADER_VISIBILITY_PIXEL);
 
 		samplerDesc.AddressU = samplerDesc.AddressV = samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
 		samplerDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
 		samplerDesc.Filter = D3D12_FILTER_COMPARISON_MIN_MAG_MIP_LINEAR;
-		m_ShadowMapSampler = m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER]->AllocateDescriptor();
-		m_pDevice->CreateSampler(&samplerDesc, m_ShadowMapSampler);
+		m_pRootSignature->AddStaticSampler(2, samplerDesc, D3D12_SHADER_VISIBILITY_PIXEL);
+
+		m_pRootSignature->Finalize(m_pDevice.Get(), rootSignatureFlags);
 
 		//Pipeline state
 		m_pPipelineStateObject = std::make_unique<GraphicsPipelineState>();
@@ -399,7 +455,7 @@ void Graphics::InitializeAssets()
 		m_pPipelineStateObject->SetRootSignature(m_pRootSignature->GetRootSignature());
 		m_pPipelineStateObject->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
 		m_pPipelineStateObject->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
-		m_pPipelineStateObject->SetRenderTargetFormat(DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_D24_UNORM_S8_UINT, 1, 0);
+		m_pPipelineStateObject->SetRenderTargetFormat(RENDER_TARGET_FORMAT, DEPTH_STENCIL_FORMAT, 1, 0);
 		m_pPipelineStateObject->Finalize(m_pDevice.Get());
 	}
 

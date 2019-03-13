@@ -37,8 +37,8 @@ public:
 	void SetDescriptorHeap(ID3D12DescriptorHeap* pHeap, D3D12_DESCRIPTOR_HEAP_TYPE type);
 
 	DynamicAllocation AllocatorUploadMemory(uint32 size);
-	void InitializeBuffer(GraphicsBuffer* pResource, void* pData, uint32 dataSize);
-	void InitializeTexture(Texture2D* pResource, void* pData, uint32 dataSize);
+	void InitializeBuffer(GraphicsBuffer* pResource, const void* pData, uint32 dataSize);
+	void InitializeTexture(Texture2D* pResource, const void* pData, uint32 dataSize);
 
 	ID3D12GraphicsCommandList* GetCommandList() const { return m_pCommandList; }
 

@@ -42,7 +42,6 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, GraphicsCommandConte
 		if (ret == aiReturn_SUCCESS)
 		{
 			std::string p = path.C_Str();
-			p = p.substr(0, p.find('.')).append(".png");
 			std::stringstream str;
 			str << basePath << p;
 			pTex->Create(pGraphics, pContext, str.str().c_str(), TextureUsage::ShaderResource);

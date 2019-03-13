@@ -57,7 +57,7 @@ class Texture2D : public GraphicsResource
 public:
 	void Create(Graphics* pGraphics, CommandContext* pContext, const char* pFilePath, TextureUsage usage);
 	void Create(Graphics* pGraphics, int width, int height, DXGI_FORMAT format, TextureUsage usage);
-	void SetData(CommandContext* pContext, void* pData, uint32 dataSize);
+	void SetData(CommandContext* pContext, const void* pData, uint32 dataSize);
 	void CreateForSwapchain(Graphics* pGraphics, ID3D12Resource* pTexture);
 
 	D3D12_CPU_DESCRIPTOR_HANDLE GetRTV() const { return m_Rtv; }
@@ -69,9 +69,12 @@ public:
 
 private:
 	static DXGI_FORMAT GetDepthFormat(DXGI_FORMAT format);
+	int GetRowDataSize(unsigned int width) const;
 
 	int m_Width;
 	int m_Height;
+	DXGI_FORMAT m_Format;
+	int m_MipLevels = 1;
 	D3D12_CPU_DESCRIPTOR_HANDLE m_Rtv;
 	D3D12_CPU_DESCRIPTOR_HANDLE m_Srv;
 	D3D12_CPU_DESCRIPTOR_HANDLE m_Uav;

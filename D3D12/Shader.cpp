@@ -12,16 +12,18 @@ bool Shader::Load(const char* pFilePath, Type shaderType, const char* pEntryPoin
 #endif
 	compileFlags |= D3DCOMPILE_PACK_MATRIX_ROW_MAJOR;
 
-	std::ifstream file(pFilePath, std::ios::ate);
+	std::ifstream file(pFilePath);
 	if (file.fail())
 	{
 		return false;
 	}
-	int size = (int)file.tellg();
-	std::vector<char> data(size);
-	file.seekg(0);
-	file.read(data.data(), data.size());
-	file.close();
+	std::stringstream stream;
+	std::string line;
+	while (getline(file, line))
+	{
+		stream << line << "\n";
+	}
+	line = stream.str();
 
 	std::string shaderModel = "";
 	switch (shaderType)
@@ -42,7 +44,7 @@ bool Shader::Load(const char* pFilePath, Type shaderType, const char* pEntryPoin
 	m_Type = shaderType;
 
 	ComPtr<ID3DBlob> pErrorBlob;
-	D3DCompile2(data.data(), data.size(), nullptr, nullptr, nullptr, pEntryPoint, shaderModel.c_str(), compileFlags, 0, 0, nullptr, 0, m_pByteCode.GetAddressOf(), pErrorBlob.GetAddressOf());
+	D3DCompile2(line.data(), line.size(), nullptr, nullptr, nullptr, pEntryPoint, shaderModel.c_str(), compileFlags, 0, 0, nullptr, 0, m_pByteCode.GetAddressOf(), pErrorBlob.GetAddressOf());
 	if (pErrorBlob != nullptr)
 	{
 		std::wstring errorMsg = std::wstring((char*)pErrorBlob->GetBufferPointer(), (char*)pErrorBlob->GetBufferPointer() + pErrorBlob->GetBufferSize());

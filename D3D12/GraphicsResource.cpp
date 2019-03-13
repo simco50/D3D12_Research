@@ -1,9 +1,8 @@
 #include "stdafx.h"
 #include "GraphicsResource.h"
 #include "CommandContext.h"
-#define STB_IMAGE_IMPLEMENTATION
-#include "External/Stb/stb_image.h"
 #include "Graphics.h"
+#include "Image.h"
 
 void GraphicsBuffer::Create(ID3D12Device* pDevice, uint32 size, bool cpuVisible /*= false*/)
 {
@@ -34,16 +33,24 @@ void GraphicsBuffer::SetData(CommandContext* pContext, void* pData, uint32 dataS
 
 void Texture2D::Create(Graphics* pGraphics, CommandContext* pContext, const char* pFilePath, TextureUsage usage)
 {
-	int components = 0;
-	void* pPixels = stbi_load(pFilePath, &m_Width, &m_Height, &components, 4);
-	Create(pGraphics, m_Width, m_Height, DXGI_FORMAT_R8G8B8A8_UNORM, usage);
-	SetData(pContext, pPixels, m_Width * m_Height * 4);
-	pContext->ExecuteAndReset(true);
-	stbi_image_free(pPixels);
+	Image img;
+	if (img.Load(pFilePath))
+	{
+		m_Width = img.GetWidth();
+		m_Height = img.GetHeight();
+		m_Format = (DXGI_FORMAT)Image::TextureFormatFromCompressionFormat(img.GetFormat(), false);
+		m_MipLevels = 1;
+		MipLevelInfo info;
+		img.GetSurfaceInfo(m_Width, m_Height, 1, 0, info);
+		Create(pGraphics, m_Width, m_Height, m_Format, usage);
+		SetData(pContext, img.GetData(0), info.DataSize);
+		pContext->ExecuteAndReset(true);
+	}
 }
 
 void Texture2D::Create(Graphics* pGraphics, int width, int height, DXGI_FORMAT format, TextureUsage usage)
 {
+	m_Format = format;
 	TextureUsage depthAndRt = TextureUsage::RenderTarget | TextureUsage::DepthStencil;
 	assert((usage & depthAndRt) != depthAndRt);
 
@@ -79,7 +86,7 @@ void Texture2D::Create(Graphics* pGraphics, int width, int height, DXGI_FORMAT f
 	}
 	desc.Format = format;
 	desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-	desc.MipLevels = 1;
+	desc.MipLevels = m_MipLevels;
 	desc.SampleDesc.Count = 1;
 	desc.SampleDesc.Quality = 0;
 	desc.Width = width;
@@ -106,7 +113,7 @@ void Texture2D::Create(Graphics* pGraphics, int width, int height, DXGI_FORMAT f
 	{
 		srvDesc.Format = format;
 	}
-	srvDesc.Texture2D.MipLevels = 1;
+	srvDesc.Texture2D.MipLevels = m_MipLevels;
 	srvDesc.Texture2D.MostDetailedMip = 0;
 	srvDesc.Texture2D.PlaneSlice = 0;
 	srvDesc.Texture2D.ResourceMinLODClamp = 0;
@@ -134,9 +141,8 @@ void Texture2D::Create(Graphics* pGraphics, int width, int height, DXGI_FORMAT f
 	}
 }
 
-void Texture2D::SetData(CommandContext* pContext, void* pData, uint32 dataSize)
+void Texture2D::SetData(CommandContext* pContext, const void* pData, uint32 dataSize)
 {
-	assert((uint32)(m_Width * m_Height * 4) == dataSize);
 	pContext->InitializeTexture(this, pData, dataSize);
 }
 
@@ -147,6 +153,7 @@ void Texture2D::CreateForSwapchain(Graphics* pGraphics, ID3D12Resource* pTexture
 	D3D12_RESOURCE_DESC desc = pTexture->GetDesc();
 	m_Width = (uint32)desc.Width;
 	m_Height = (uint32)desc.Height;
+	m_Format = desc.Format;
 	m_Rtv = pGraphics->AllocateCpuDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 	pGraphics->GetDevice()->CreateRenderTargetView(pTexture, nullptr, m_Rtv);
 }
@@ -183,5 +190,66 @@ DXGI_FORMAT Texture2D::GetDepthFormat(DXGI_FORMAT format)
 
 	default:
 		return DXGI_FORMAT_UNKNOWN;
+	}
+}
+
+int Texture2D::GetRowDataSize(unsigned int width) const
+{
+	switch (m_Format)
+	{
+	case DXGI_FORMAT_R8_UNORM:
+	case DXGI_FORMAT_A8_UNORM:
+		return (unsigned)width;
+
+	case DXGI_FORMAT_R8G8_UNORM:
+	case DXGI_FORMAT_R16_UNORM:
+	case DXGI_FORMAT_R16_FLOAT:
+	case DXGI_FORMAT_R16_TYPELESS:
+		return (unsigned)(width * 2);
+
+	case DXGI_FORMAT_B8G8R8A8_UNORM:
+	case DXGI_FORMAT_R8G8B8A8_UNORM:
+	case DXGI_FORMAT_R16G16_UNORM:
+	case DXGI_FORMAT_R16G16_FLOAT:
+	case DXGI_FORMAT_R32_FLOAT:
+	case DXGI_FORMAT_R24G8_TYPELESS:
+	case DXGI_FORMAT_R32_TYPELESS:
+		return (unsigned)(width * 4);
+
+	case DXGI_FORMAT_R16G16B16A16_UNORM:
+	case DXGI_FORMAT_R16G16B16A16_FLOAT:
+		return (unsigned)(width * 8);
+
+	case DXGI_FORMAT_R32G32B32A32_FLOAT:
+		return (unsigned)(width * 16);
+
+	case DXGI_FORMAT_BC1_TYPELESS:
+	case DXGI_FORMAT_BC1_UNORM:
+	case DXGI_FORMAT_BC1_UNORM_SRGB:
+	case DXGI_FORMAT_BC4_TYPELESS:
+	case DXGI_FORMAT_BC4_UNORM:
+	case DXGI_FORMAT_BC4_SNORM:
+		return (unsigned)(((width + 3) >> 2) * 8);
+
+	case DXGI_FORMAT_BC2_TYPELESS:
+	case DXGI_FORMAT_BC2_UNORM:
+	case DXGI_FORMAT_BC2_UNORM_SRGB:
+	case DXGI_FORMAT_BC3_TYPELESS:
+	case DXGI_FORMAT_BC3_UNORM:
+	case DXGI_FORMAT_BC3_UNORM_SRGB:
+	case DXGI_FORMAT_BC5_TYPELESS:
+	case DXGI_FORMAT_BC5_UNORM:
+	case DXGI_FORMAT_BC5_SNORM:
+	case DXGI_FORMAT_BC6H_TYPELESS:
+	case DXGI_FORMAT_BC6H_UF16:
+	case DXGI_FORMAT_BC6H_SF16:
+	case DXGI_FORMAT_BC7_TYPELESS:
+	case DXGI_FORMAT_BC7_UNORM:
+	case DXGI_FORMAT_BC7_UNORM_SRGB:
+		return (unsigned)(((width + 3) >> 2) * 16);
+	case DXGI_FORMAT_R32G32B32_FLOAT:
+		return width * 3 * sizeof(float);
+	default:
+		return 0;
 	}
 }
