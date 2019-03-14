@@ -39,11 +39,20 @@ void Texture2D::Create(Graphics* pGraphics, CommandContext* pContext, const char
 		m_Width = img.GetWidth();
 		m_Height = img.GetHeight();
 		m_Format = (DXGI_FORMAT)Image::TextureFormatFromCompressionFormat(img.GetFormat(), false);
-		m_MipLevels = 1;
-		MipLevelInfo info;
-		img.GetSurfaceInfo(m_Width, m_Height, 1, 0, info);
+		m_MipLevels = img.GetMipLevels();
+
+		std::vector<D3D12_SUBRESOURCE_DATA> subResourceData(m_MipLevels);
+		for (int i = 0; i < m_MipLevels; ++i)
+		{
+			D3D12_SUBRESOURCE_DATA& data = subResourceData[i];
+			MipLevelInfo info = img.GetMipInfo(i);
+			data.pData = img.GetData(i);
+			data.RowPitch = info.RowSize;
+			data.SlicePitch = info.RowSize * info.Width;
+		}
+
 		Create(pGraphics, m_Width, m_Height, m_Format, usage);
-		SetData(pContext, img.GetData(0), info.DataSize);
+		pContext->InitializeTexture(this, subResourceData.data(), m_MipLevels);
 		pContext->ExecuteAndReset(true);
 	}
 }
@@ -143,7 +152,11 @@ void Texture2D::Create(Graphics* pGraphics, int width, int height, DXGI_FORMAT f
 
 void Texture2D::SetData(CommandContext* pContext, const void* pData, uint32 dataSize)
 {
-	pContext->InitializeTexture(this, pData, dataSize);
+	D3D12_SUBRESOURCE_DATA data;
+	data.pData = pData;
+	data.RowPitch = GetRowDataSize(m_Width);
+	data.SlicePitch = data.RowPitch * m_Width;
+	pContext->InitializeTexture(this, &data, 1);
 }
 
 void Texture2D::CreateForSwapchain(Graphics* pGraphics, ID3D12Resource* pTexture)

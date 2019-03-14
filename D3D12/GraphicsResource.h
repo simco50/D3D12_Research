@@ -66,10 +66,11 @@ public:
 
 	int GetWidth() const { return m_Width; }
 	int GetHeight() const { return m_Height; }
+	int GetMipLevels() const { return m_MipLevels; }
 
+	int GetRowDataSize(unsigned int width) const;
 private:
 	static DXGI_FORMAT GetDepthFormat(DXGI_FORMAT format);
-	int GetRowDataSize(unsigned int width) const;
 
 	int m_Width;
 	int m_Height;

@@ -54,6 +54,7 @@ public:
 
 	unsigned char* GetWritableData() { return m_Pixels.data(); }
 	const unsigned char* GetData(int mipLevel = 0) const;
+	uint32 GetTotalSize() const { return (uint32)m_Pixels.size(); }
 
 	MipLevelInfo GetMipInfo(int mipLevel) const;
 	int GetMipLevels() const { return m_MipLevels; }

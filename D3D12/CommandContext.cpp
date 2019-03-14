@@ -11,6 +11,7 @@
 #if _DEBUG
 #include <pix3.h>
 #endif
+#include "d3dx12.h"
 
 constexpr int VALID_COMPUTE_QUEUE_RESOURCE_STATES = D3D12_RESOURCE_STATE_UNORDERED_ACCESS | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_COPY_DEST | D3D12_RESOURCE_STATE_COPY_SOURCE;
 
@@ -172,23 +173,13 @@ void CommandContext::InitializeBuffer(GraphicsBuffer* pResource, const void* pDa
 	InsertResourceBarrier(pResource, D3D12_RESOURCE_STATE_GENERIC_READ, true);
 }
 
-void CommandContext::InitializeTexture(Texture2D* pResource, const void* pData, uint32 dataSize)
+void CommandContext::InitializeTexture(Texture2D* pResource, D3D12_SUBRESOURCE_DATA* pSubResourceDatas, int subResourceCount)
 {
-	DynamicAllocation allocation = m_pGraphics->GetCpuVisibleAllocator()->Allocate(dataSize, 512);
-	memcpy(allocation.pMappedMemory, pData, dataSize);
+	uint32 allocationSize = GetRequiredIntermediateSize(pResource->GetResource(), 0, subResourceCount);
+	DynamicAllocation allocation = m_pGraphics->GetCpuVisibleAllocator()->Allocate(allocationSize, 512);
 	InsertResourceBarrier(pResource, D3D12_RESOURCE_STATE_COPY_DEST, true);
-
-	int subResource = D3D12CalcSubresource(0, 0, 0, 1, 0);
-	D3D12_PLACED_SUBRESOURCE_FOOTPRINT layout;
-	D3D12_RESOURCE_DESC desc = pResource->GetResource()->GetDesc();
-	m_pGraphics->GetDevice()->GetCopyableFootprints(&desc, subResource, 1, 0, &layout, nullptr, nullptr, nullptr);
-	layout.Offset = allocation.Offset;
-
-	CD3DX12_TEXTURE_COPY_LOCATION sourceLocation = CD3DX12_TEXTURE_COPY_LOCATION(pResource->GetResource());
-	CD3DX12_TEXTURE_COPY_LOCATION targetLocation = CD3DX12_TEXTURE_COPY_LOCATION(allocation.pBackingResource, layout);
-	m_pCommandList->CopyTextureRegion(&sourceLocation, 0, 0, 0, &targetLocation, nullptr);
-
-	InsertResourceBarrier(pResource, D3D12_RESOURCE_STATE_GENERIC_READ, true);
+	UpdateSubresources(m_pCommandList, pResource->GetResource(), allocation.pBackingResource, 0, 0, subResourceCount, pSubResourceDatas);
+	InsertResourceBarrier(pResource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, true);
 }
 
 void CommandContext::InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESOURCE_STATES state, bool executeImmediate /*= false*/)
