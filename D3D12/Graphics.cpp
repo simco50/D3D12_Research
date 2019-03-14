@@ -20,9 +20,10 @@
 const DXGI_FORMAT Graphics::DEPTH_STENCIL_FORMAT = DXGI_FORMAT_D24_UNORM_S8_UINT;
 const DXGI_FORMAT Graphics::RENDER_TARGET_FORMAT = DXGI_FORMAT_R8G8B8A8_UNORM;
 
-Graphics::Graphics(uint32 width, uint32 height)
-	: m_WindowWidth(width), m_WindowHeight(height)
+Graphics::Graphics(uint32 width, uint32 height, int sampleCount /*= 1*/)
+	: m_WindowWidth(width), m_WindowHeight(height), m_SampleCount(sampleCount)
 {
+
 }
 
 Graphics::~Graphics()
@@ -151,11 +152,11 @@ void Graphics::Update()
 		pContext->SetViewport(m_Viewport);
 		pContext->SetScissorRect(m_ScissorRect);
 
-		pContext->InsertResourceBarrier(m_RenderTargets[m_CurrentBackBufferIndex].get(), D3D12_RESOURCE_STATE_RENDER_TARGET, true);
+		pContext->InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RENDER_TARGET, true);
 
 		pContext->SetRenderTargets(&GetCurrentRenderTarget()->GetRTV(), GetDepthStencilView()->GetRTV());
 
-		Color clearColor = Color(0.1f, 0.1f, 0.1f, 1.0f);
+		Color clearColor = Color(0, 0, 0, 1);
 		pContext->ClearRenderTarget(GetCurrentRenderTarget()->GetRTV(), clearColor);
 		pContext->ClearDepth(GetDepthStencilView()->GetRTV(), D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0);
 
@@ -199,7 +200,13 @@ void Graphics::Update()
 	pContext->MarkBegin(L"Present");
 	//Present
 	{
-		pContext->InsertResourceBarrier(m_RenderTargets[m_CurrentBackBufferIndex].get(), D3D12_RESOURCE_STATE_PRESENT, true);
+		if (m_SampleCount > 1)
+		{
+			pContext->InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RESOLVE_SOURCE, false);
+			pContext->InsertResourceBarrier(GetCurrentBackbuffer(), D3D12_RESOURCE_STATE_RESOLVE_DEST, true);
+			pContext->GetCommandList()->ResolveSubresource(GetCurrentBackbuffer()->GetResource(), 0, GetCurrentRenderTarget()->GetResource(), 0, RENDER_TARGET_FORMAT);
+		}
+		pContext->InsertResourceBarrier(GetCurrentBackbuffer(), D3D12_RESOURCE_STATE_PRESENT, true);
 	}
 	pContext->MarkEnd();
 	nextFenceValue = pContext->Execute(false);
@@ -281,8 +288,9 @@ void Graphics::InitD3D()
 	qualityLevels.Flags = D3D12_MULTISAMPLE_QUALITY_LEVELS_FLAG_NONE;
 	qualityLevels.Format = RENDER_TARGET_FORMAT;
 	qualityLevels.NumQualityLevels = 0;
-	qualityLevels.SampleCount = 1;
+	qualityLevels.SampleCount = m_SampleCount;
 	HR(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS, &qualityLevels, sizeof(qualityLevels)));
+	m_SampleQuality = qualityLevels.NumQualityLevels - 1;
 
 	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_DIRECT] = std::make_unique<CommandQueue>(this, D3D12_COMMAND_LIST_TYPE_DIRECT);
 	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_COMPUTE] = std::make_unique<CommandQueue>(this, D3D12_COMMAND_LIST_TYPE_COMPUTE);
@@ -359,10 +367,16 @@ void Graphics::OnResize(int width, int height)
 		HR(m_pSwapchain->GetBuffer(i, IID_PPV_ARGS(&pResource)));
 		m_RenderTargets[i] = std::make_unique<Texture2D>();
 		m_RenderTargets[i]->CreateForSwapchain(this, pResource);
+
+		if (m_SampleCount > 1)
+		{
+			m_MultiSampleRenderTargets[i] = std::make_unique<Texture2D>();
+			m_MultiSampleRenderTargets[i]->Create(this, width, height, RENDER_TARGET_FORMAT, TextureUsage::RenderTarget, m_SampleCount);
+		}
 	}
 
 	m_pDepthStencilBuffer = std::make_unique<Texture2D>();
-	m_pDepthStencilBuffer->Create(this, width, height, DEPTH_STENCIL_FORMAT, TextureUsage::DepthStencil);
+	m_pDepthStencilBuffer->Create(this, width, height, DEPTH_STENCIL_FORMAT, TextureUsage::DepthStencil, m_SampleCount);
 
 	m_Viewport.Bottom = (float)m_WindowHeight;
 	m_Viewport.Right = (float)m_WindowWidth;
@@ -430,7 +444,7 @@ void Graphics::InitializeAssets()
 		m_pPipelineStateObject->SetRootSignature(m_pRootSignature->GetRootSignature());
 		m_pPipelineStateObject->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
 		m_pPipelineStateObject->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
-		m_pPipelineStateObject->SetRenderTargetFormat(RENDER_TARGET_FORMAT, DEPTH_STENCIL_FORMAT, 1, 0);
+		m_pPipelineStateObject->SetRenderTargetFormat(RENDER_TARGET_FORMAT, DEPTH_STENCIL_FORMAT, m_SampleCount, m_SampleQuality);
 		m_pPipelineStateObject->Finalize(m_pDevice.Get());
 	}
 
@@ -460,7 +474,7 @@ void Graphics::InitializeAssets()
 		m_pShadowsPipelineStateObject->Finalize(m_pDevice.Get());
 
 		m_pShadowMap = std::make_unique<Texture2D>();
-		m_pShadowMap->Create(this, 4096, 4096, DXGI_FORMAT_D32_FLOAT_S8X24_UINT, TextureUsage::DepthStencil | TextureUsage::ShaderResource);
+		m_pShadowMap->Create(this, 4096, 4096, DXGI_FORMAT_D32_FLOAT_S8X24_UINT, TextureUsage::DepthStencil | TextureUsage::ShaderResource, 1);
 	}
 
 	//Geometry
@@ -591,4 +605,15 @@ void Graphics::IdleGPU()
 			pCommandQueue->WaitForIdle();
 		}
 	}
+}
+
+uint32 Graphics::GetMultiSampleQualityLevel(uint32 msaa)
+{
+	D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS qualityLevels;
+	qualityLevels.Flags = D3D12_MULTISAMPLE_QUALITY_LEVELS_FLAG_NONE;
+	qualityLevels.Format = RENDER_TARGET_FORMAT;
+	qualityLevels.NumQualityLevels = 0;
+	qualityLevels.SampleCount = msaa;
+	HR(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS, &qualityLevels, sizeof(qualityLevels)));
+	return qualityLevels.NumQualityLevels - 1;
 }

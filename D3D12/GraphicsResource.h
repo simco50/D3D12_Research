@@ -56,7 +56,7 @@ class Texture2D : public GraphicsResource
 {
 public:
 	void Create(Graphics* pGraphics, CommandContext* pContext, const char* pFilePath, TextureUsage usage);
-	void Create(Graphics* pGraphics, int width, int height, DXGI_FORMAT format, TextureUsage usage);
+	void Create(Graphics* pGraphics, int width, int height, DXGI_FORMAT format, TextureUsage usage, int sampleCount);
 	void SetData(CommandContext* pContext, const void* pData, uint32 dataSize);
 	void CreateForSwapchain(Graphics* pGraphics, ID3D12Resource* pTexture);
 
@@ -72,6 +72,7 @@ public:
 private:
 	static DXGI_FORMAT GetDepthFormat(DXGI_FORMAT format);
 
+	int m_SampleCount = 1;
 	int m_Width;
 	int m_Height;
 	DXGI_FORMAT m_Format;

@@ -51,15 +51,16 @@ void Texture2D::Create(Graphics* pGraphics, CommandContext* pContext, const char
 			data.SlicePitch = info.RowSize * info.Width;
 		}
 
-		Create(pGraphics, m_Width, m_Height, m_Format, usage);
+		Create(pGraphics, m_Width, m_Height, m_Format, usage, 1);
 		pContext->InitializeTexture(this, subResourceData.data(), m_MipLevels);
 		pContext->ExecuteAndReset(true);
 	}
 }
 
-void Texture2D::Create(Graphics* pGraphics, int width, int height, DXGI_FORMAT format, TextureUsage usage)
+void Texture2D::Create(Graphics* pGraphics, int width, int height, DXGI_FORMAT format, TextureUsage usage, int sampleCount)
 {
 	m_Format = format;
+	m_SampleCount = sampleCount;
 	TextureUsage depthAndRt = TextureUsage::RenderTarget | TextureUsage::DepthStencil;
 	assert((usage & depthAndRt) != depthAndRt);
 
@@ -68,8 +69,6 @@ void Texture2D::Create(Graphics* pGraphics, int width, int height, DXGI_FORMAT f
 
 	D3D12_CLEAR_VALUE* pClearValue = nullptr;
 	D3D12_CLEAR_VALUE clearValue = {};
-	clearValue.DepthStencil.Depth = 1;
-	clearValue.DepthStencil.Stencil = 0;
 	clearValue.Format = format;
 
 	D3D12_RESOURCE_STATES initState = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
@@ -85,19 +84,24 @@ void Texture2D::Create(Graphics* pGraphics, int width, int height, DXGI_FORMAT f
 	if ((usage & TextureUsage::RenderTarget) == TextureUsage::RenderTarget)
 	{
 		desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+		Color clearColor = Color(0, 0, 0, 1);
+		memcpy(&clearValue.Color, &clearColor, sizeof(Color));
+		pClearValue = &clearValue;
 		initState = D3D12_RESOURCE_STATE_RENDER_TARGET;
 	}
 	if ((usage & TextureUsage::DepthStencil) == TextureUsage::DepthStencil)
 	{
 		desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+		clearValue.DepthStencil.Depth = 1;
+		clearValue.DepthStencil.Stencil = 0;
 		pClearValue = &clearValue;
 		initState = D3D12_RESOURCE_STATE_DEPTH_WRITE;
 	}
 	desc.Format = format;
 	desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
 	desc.MipLevels = m_MipLevels;
-	desc.SampleDesc.Count = 1;
-	desc.SampleDesc.Quality = 0;
+	desc.SampleDesc.Count = sampleCount;
+	desc.SampleDesc.Quality = pGraphics->GetMultiSampleQualityLevel(sampleCount);
 	desc.Width = width;
 	desc.Height = height;
 

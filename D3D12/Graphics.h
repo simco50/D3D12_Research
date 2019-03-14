@@ -17,7 +17,7 @@ class Mesh;
 class Graphics
 {
 public:
-	Graphics(uint32 width, uint32 height);
+	Graphics(uint32 width, uint32 height, int sampleCount = 1);
 	~Graphics();
 
 	virtual void Initialize(HWND window);
@@ -42,7 +42,11 @@ public:
 	D3D12_CPU_DESCRIPTOR_HANDLE AllocateCpuDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE type);
 
 	Texture2D* GetDepthStencilView() const { return m_pDepthStencilBuffer.get(); }
-	Texture2D* GetCurrentRenderTarget() const {	return m_RenderTargets[m_CurrentBackBufferIndex].get();	}
+	Texture2D* GetCurrentRenderTarget() const {	return m_SampleCount > 1 ? m_MultiSampleRenderTargets[m_CurrentBackBufferIndex].get() : GetCurrentBackbuffer();	}
+	Texture2D* GetCurrentBackbuffer() const { return m_RenderTargets[m_CurrentBackBufferIndex].get(); }
+
+	uint32 GetMultiSampleCount() const { return m_SampleCount; }
+	uint32 GetMultiSampleQualityLevel(uint32 msaa);
 
 	static const int32 FRAME_COUNT = 3;
 	static const DXGI_FORMAT DEPTH_STENCIL_FORMAT;
@@ -67,6 +71,10 @@ private:
 	ComPtr<IDXGISwapChain3> m_pSwapchain;
 	ComPtr<ID3D12Device> m_pDevice;
 
+	int m_SampleCount = 1;
+	int m_SampleQuality = 0;
+
+	std::array<std::unique_ptr<Texture2D>, FRAME_COUNT> m_MultiSampleRenderTargets;
 	std::array<std::unique_ptr<Texture2D>, FRAME_COUNT> m_RenderTargets;
 	std::unique_ptr<Texture2D> m_pDepthStencilBuffer;
 
