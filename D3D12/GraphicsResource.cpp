@@ -59,6 +59,11 @@ void Texture2D::Create(Graphics* pGraphics, CommandContext* pContext, const char
 
 void Texture2D::Create(Graphics* pGraphics, int width, int height, DXGI_FORMAT format, TextureUsage usage, int sampleCount)
 {
+	if (m_pResource)
+	{
+		m_pResource->Release();
+	}
+
 	m_Format = format;
 	m_SampleCount = sampleCount;
 	TextureUsage depthAndRt = TextureUsage::RenderTarget | TextureUsage::DepthStencil;
@@ -134,22 +139,34 @@ void Texture2D::Create(Graphics* pGraphics, int width, int height, DXGI_FORMAT f
 
 	if ((usage & TextureUsage::ShaderResource) == TextureUsage::ShaderResource)
 	{
-		m_Srv = pGraphics->AllocateCpuDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+		if (m_Srv.ptr == 0)
+		{
+			m_Srv = pGraphics->AllocateCpuDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+		}
 		pGraphics->GetDevice()->CreateShaderResourceView(m_pResource, &srvDesc, m_Srv);
 	}
 	if ((usage & TextureUsage::UnorderedAccess) == TextureUsage::UnorderedAccess)
 	{
-		m_Uav = pGraphics->AllocateCpuDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+		if (m_Uav.ptr == 0)
+		{
+			m_Uav = pGraphics->AllocateCpuDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+		}
 		pGraphics->GetDevice()->CreateUnorderedAccessView(m_pResource, nullptr, nullptr, m_Uav);
 	}
 	if ((usage & TextureUsage::RenderTarget) == TextureUsage::RenderTarget)
 	{
-		m_Rtv = pGraphics->AllocateCpuDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+		if (m_Rtv.ptr == 0)
+		{
+			m_Rtv = pGraphics->AllocateCpuDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+		}
 		pGraphics->GetDevice()->CreateRenderTargetView(m_pResource, nullptr, m_Rtv);
 	}
 	else if ((usage & TextureUsage::DepthStencil) == TextureUsage::DepthStencil)
 	{
-		m_Rtv = pGraphics->AllocateCpuDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
+		if (m_Rtv.ptr == 0)
+		{
+			m_Rtv = pGraphics->AllocateCpuDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
+		}
 		pGraphics->GetDevice()->CreateDepthStencilView(m_pResource, nullptr, m_Rtv);
 	}
 }
@@ -171,7 +188,10 @@ void Texture2D::CreateForSwapchain(Graphics* pGraphics, ID3D12Resource* pTexture
 	m_Width = (uint32)desc.Width;
 	m_Height = (uint32)desc.Height;
 	m_Format = desc.Format;
-	m_Rtv = pGraphics->AllocateCpuDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+	if (m_Rtv.ptr == 0)
+	{
+		m_Rtv = pGraphics->AllocateCpuDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+	}
 	pGraphics->GetDevice()->CreateRenderTargetView(pTexture, nullptr, m_Rtv);
 }
 

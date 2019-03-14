@@ -9,6 +9,7 @@
 #include "Shader.h"
 #include "GraphicsResource.h"
 #include "DescriptorAllocator.h"
+#include "Input.h"
 
 ImGuiRenderer::ImGuiRenderer(Graphics* pGraphics)
 	: m_pGraphics(pGraphics)
@@ -26,6 +27,16 @@ void ImGuiRenderer::NewFrame()
 {
 	ImGuiIO& io = ImGui::GetIO();
 	io.DisplaySize = ImVec2((float)m_pGraphics->GetWindowWidth(), (float)m_pGraphics->GetWindowHeight());
+
+	io.MouseDown[0] = Input::Instance().IsMouseDown(0);
+	io.MouseDown[1] = Input::Instance().IsMouseDown(1);
+	io.MouseDown[2] = Input::Instance().IsMouseDown(2);
+
+	Vector2 mousePos = Input::Instance().GetMousePosition();
+	io.MousePos.x = mousePos.x;
+	io.MousePos.y = mousePos.y;
+	io.MouseDrawCursor = true;
+
 	ImGui::NewFrame();
 }
 

@@ -14,6 +14,9 @@ DynamicAllocation DynamicResourceAllocator::Allocate(int size, int alignment)
 	DynamicAllocation allocation;
 	allocation.Size = bufferSize;
 
+	m_TotalMemoryAllocation += bufferSize;
+	m_TotalMemoryAllocationPeak = std::max(m_TotalMemoryAllocationPeak, m_TotalMemoryAllocation);
+
 	if (size > m_Size)
 	{
 		m_LargeResources.emplace_back(CreateResource(true, bufferSize, &allocation.pMappedMemory));

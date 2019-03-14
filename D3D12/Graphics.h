@@ -55,6 +55,9 @@ public:
 private:
 	uint64 GetFenceToWaitFor();
 
+	void BeginFrame();
+	void EndFrame(uint64 fenceValue);
+
 	void InitD3D();
 	void InitializeAssets();
 

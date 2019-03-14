@@ -11,9 +11,15 @@ public:
 	GraphicsResource(ID3D12Resource* pResource, D3D12_RESOURCE_STATES state) : m_pResource(pResource), m_CurrentState(state) {}
 	virtual ~GraphicsResource()
 	{
+		Release();
+	}
+
+	void Release()
+	{
 		if (m_pResource)
 		{
 			m_pResource->Release();
+			m_pResource = nullptr;
 		}
 	}
 
