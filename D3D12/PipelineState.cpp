@@ -174,6 +174,13 @@ void GraphicsPipelineState::SetLineAntialias(bool lineAntiAlias)
 	m_Desc.RasterizerState.AntialiasedLineEnable = lineAntiAlias;
 }
 
+void GraphicsPipelineState::SetDepthBias(float depthBias, float depthBiasClamp, float slopeScaledDepthBias)
+{
+	m_Desc.RasterizerState.SlopeScaledDepthBias = slopeScaledDepthBias;
+	m_Desc.RasterizerState.DepthBias = depthBias;
+	m_Desc.RasterizerState.DepthBiasClamp = depthBiasClamp;
+}
+
 void GraphicsPipelineState::SetInputLayout(D3D12_INPUT_ELEMENT_DESC* pElements, uint32 count)
 {
 	m_Desc.InputLayout.NumElements = count;

@@ -48,6 +48,7 @@ public:
 	void SetFillMode(D3D12_FILL_MODE fillMode);
 	void SetCullMode(D3D12_CULL_MODE cullMode);
 	void SetLineAntialias(bool lineAntiAlias);
+	void SetDepthBias(float depthBias, float depthBiasClamp, float slopeScaledDepthBias);
 
 	void SetInputLayout(D3D12_INPUT_ELEMENT_DESC* pElements, uint32 count);
 	void SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE topology);

@@ -74,7 +74,7 @@ void Graphics::Update()
 
 	frameData.LightViewProjection = XMMatrixLookAtLH(m_Lights[0].Position, Vector3(0, 0, 0), Vector3(0, 1, 0)) * XMMatrixOrthographicLH(512, 512, 5.0f, 200.0f);
 
-	if (Input::Instance().IsMouseDown(VK_LBUTTON))
+	if (Input::Instance().IsMouseDown(0))
 	{
 		Vector2 mouseDelta = Input::Instance().GetMouseDelta();
 		Quaternion yr = Quaternion::CreateFromYawPitchRoll(0, mouseDelta.y * GameTimer::DeltaTime() * 0.1f, 0);
@@ -486,6 +486,7 @@ void Graphics::InitializeAssets()
 		m_pShadowsPipelineStateObject->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
 		m_pShadowsPipelineStateObject->SetRenderTargetFormats(nullptr, 0, DXGI_FORMAT_D32_FLOAT_S8X24_UINT, 1, 0);
 		m_pShadowsPipelineStateObject->SetCullMode(D3D12_CULL_MODE_NONE);
+		m_pShadowsPipelineStateObject->SetDepthBias(0.0f, 0.0f, 4.0f);
 		m_pShadowsPipelineStateObject->Finalize(m_pDevice.Get());
 
 		m_pShadowMap = std::make_unique<Texture2D>();
