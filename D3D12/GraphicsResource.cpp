@@ -33,6 +33,11 @@ void GraphicsBuffer::SetData(CommandContext* pContext, void* pData, uint32 dataS
 
 void StructuredBuffer::Create(Graphics* pGraphics, uint32 elementStride, uint32 elementCount, bool cpuVisible /*= false*/)
 {
+	if (m_pResource)
+	{
+		m_pResource->Release();
+	}
+
 	m_Size = elementCount * elementStride;
 	D3D12_RESOURCE_DESC desc = {};
 	desc.Alignment = 0;

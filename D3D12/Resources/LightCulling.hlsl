@@ -1,79 +1,15 @@
+#include "Common.hlsl"
+#include "Constants.hlsl"
+
 cbuffer ShaderParameters : register(b0)
 {
     float4x4 cView;
-    float2 cScreenDimensions;
-    float2 padding;
     uint4 cNumThreadGroups;
-    uint4 cNumThreads;
 }
-
-struct Light
-{
-	int Enabled;
-	float3 Position;
-	float3 Direction;
-	float Intensity;
-	float4 Color;
-	float Range;
-	float SpotLightAngle;
-	float Attenuation;
-	uint Type;
-};
 
 cbuffer LightData : register(b1)
 {
-    Light cLights[20];
-}
-
-struct Plane
-{
-    float3 Normal;
-    float DistanceToOrigin;
-};
-
-struct Frustum
-{
-    Plane Left;
-    Plane Right;
-    Plane Top;
-    Plane Bottom;
-};
-
-struct Sphere
-{
-    float3 Position;
-    float Radius;
-};
-
-bool SphereInPlane(Sphere sphere, Plane plane)
-{
-    return dot(plane.Normal, sphere.Radius) - plane.DistanceToOrigin < -sphere.Radius;
-}
-
-bool SphereInFrustum(Sphere sphere, Frustum frustum, float depthNear, float depthFar)
-{
-    if(sphere.Position.z - sphere.Radius > depthNear || sphere.Position.z + sphere.Radius < depthFar)
-    {
-        return false;
-    }
-
-    if(SphereInPlane(sphere, frustum.Left))
-    {
-        return false;
-    }
-    if(SphereInPlane(sphere, frustum.Right))
-    {
-        return false;
-    }
-    if(SphereInPlane(sphere, frustum.Top))
-    {
-        return false;
-    }
-    if(SphereInPlane(sphere, frustum.Bottom))
-    {
-        return false;
-    }
-    return true;
+    Light cLights[LIGHT_COUNT];
 }
 
 StructuredBuffer<Frustum> tInFrustums : register(t0);
@@ -101,23 +37,28 @@ struct CS_INPUT
     uint GroupIndex : SV_GROUPINDEX;
 };
 
-[numthreads(16, 16, 1)]
+[numthreads(BLOCK_SIZE, BLOCK_SIZE, 1)]
 void CSMain(CS_INPUT input)
 {
     int2 texCoord = input.DispatchThreadId.xy;
     if ( input.GroupIndex == 0 )
     {
         LightCount = 0;
-        GroupFrustum = tInFrustums[input.GroupId.x + ( input.GroupId.y * cNumThreadGroups.x )];
+        GroupFrustum = tInFrustums[input.GroupId.x + (input.GroupId.y * cNumThreadGroups.x)];
     }
     GroupMemoryBarrierWithGroupSync();
 
-    for(uint i = 0; i < 20; ++i)
+    for(uint i = input.GroupIndex; i < LIGHT_COUNT; i += BLOCK_SIZE * BLOCK_SIZE)
     {
-        Sphere sphere = { mul(float4(cLights[i].Position.xyz, 1), cView).xyz, cLights[i].Range };
-        if ( i == 1/*SphereInFrustum( sphere, GroupFrustum, 0, 1000000000 )*/ )
+        if(cLights[i].Enabled)
         {
-            AddLight( i );
+            Sphere sphere;
+            sphere.Radius = cLights[i].Range;
+            sphere.Position = mul(float4(cLights[i].Position, 1), cView).xyz;
+            if (SphereInFrustum(sphere, GroupFrustum, 0, 1000000000))
+            {
+                AddLight(i);
+            }
         }
     }
 
@@ -131,7 +72,7 @@ void CSMain(CS_INPUT input)
 
     GroupMemoryBarrierWithGroupSync();
 
-    for (uint j = input.GroupIndex; j < LightCount; j += 16 * 16)
+    for (uint j = input.GroupIndex; j < LightCount; j += BLOCK_SIZE * BLOCK_SIZE)
     {
         uLightIndexList[LightIndexStartOffset + j] = LightList[j];
     }
