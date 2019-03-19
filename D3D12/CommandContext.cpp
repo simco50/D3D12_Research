@@ -68,6 +68,8 @@ uint64 CommandContext::ExecuteAndReset(bool wait)
 		pQueue->WaitForFence(fenceValue);
 	}
 	m_pCommandList->Reset(m_pAllocator, nullptr);
+
+	m_CurrentDescriptorHeaps = {};
 	return fenceValue;
 }
 
@@ -99,12 +101,6 @@ void CommandContext::SetComputeRootConstants(int rootIndex, uint32 count, const 
 	m_pCommandList->SetComputeRoot32BitConstants(rootIndex, count, pConstants, 0);
 }
 
-void CommandContext::SetDynamicConstantBufferView(int rootIndex, void* pData, uint32 dataSize)
-{
-	DynamicAllocation allocation = AllocatorUploadMemory(dataSize);
-	memcpy(allocation.pMappedMemory, pData, dataSize);
-	m_pCommandList->SetGraphicsRootConstantBufferView(rootIndex, allocation.GpuHandle);
-}
 
 void CommandContext::SetDynamicVertexBuffer(int rootIndex, int elementCount, int elementSize, void* pData)
 {
@@ -247,6 +243,13 @@ GraphicsCommandContext::GraphicsCommandContext(Graphics* pGraphics, ID3D12Graphi
 
 }
 
+void GraphicsCommandContext::SetDynamicConstantBufferView(int rootIndex, void* pData, uint32 dataSize)
+{
+	DynamicAllocation allocation = AllocatorUploadMemory(dataSize);
+	memcpy(allocation.pMappedMemory, pData, dataSize);
+	m_pCommandList->SetGraphicsRootConstantBufferView(rootIndex, allocation.GpuHandle);
+}
+
 void GraphicsCommandContext::SetPipelineState(GraphicsPipelineState* pPipelineState)
 {
 	m_pCommandList->SetPipelineState(pPipelineState->GetPipelineState());
@@ -347,6 +350,13 @@ void GraphicsCommandContext::SetScissorRect(const FloatRect& rect)
 
 ComputeCommandContext::ComputeCommandContext(Graphics* pGraphics, ID3D12GraphicsCommandList* pCommandList, ID3D12CommandAllocator* pAllocator) : CommandContext(pGraphics, pCommandList, pAllocator, D3D12_COMMAND_LIST_TYPE_COMPUTE)
 {
+}
+
+void ComputeCommandContext::SetDynamicConstantBufferView(int rootIndex, void* pData, uint32 dataSize)
+{
+	DynamicAllocation allocation = AllocatorUploadMemory(dataSize);
+	memcpy(allocation.pMappedMemory, pData, dataSize);
+	m_pCommandList->SetComputeRootConstantBufferView(rootIndex, allocation.GpuHandle);
 }
 
 void ComputeCommandContext::SetPipelineState(ComputePipelineState* pPipelineState)

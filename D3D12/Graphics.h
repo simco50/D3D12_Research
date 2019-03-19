@@ -13,6 +13,7 @@ class Texture2D;
 class GraphicsPipelineState;
 class ComputePipelineState;
 class Mesh;
+class StructuredBuffer;
 
 class Graphics
 {
@@ -107,6 +108,18 @@ private:
 	std::unique_ptr<Texture2D> m_pShadowMap;
 	std::unique_ptr<RootSignature> m_pShadowsRootSignature;
 	std::unique_ptr<GraphicsPipelineState> m_pShadowsPipelineStateObject;
+
+	std::unique_ptr<RootSignature> m_pComputeGenerateFrustumsRootSignature;
+	std::unique_ptr<ComputePipelineState> m_pComputeGenerateFrustumsPipeline;
+	std::unique_ptr<StructuredBuffer> m_pFrustumsBuffer;
+	int m_FrustumCountX;
+	int m_FrustumCountY;
+
+	std::unique_ptr<RootSignature> m_pComputeLightCullRootSignature;
+	std::unique_ptr<ComputePipelineState> m_pComputeLightCullPipeline;
+	std::unique_ptr<StructuredBuffer> m_pLightIndexCounterBuffer;
+	std::unique_ptr<StructuredBuffer> m_pLightIndexListBuffer;
+	std::unique_ptr<Texture2D> m_pLightGrid;
 
 	std::vector<Light> m_Lights;
 };
