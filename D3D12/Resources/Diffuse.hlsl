@@ -144,15 +144,22 @@ LightResult DoLight(float4 position, float3 worldPosition, float3 normal, float3
 		switch(light.Type)
 		{
 		case 0:
-		{
 			result = DoDirectionalLight(light, normal, viewDirection);
-		}
-		break;
+			break;
 		case 1:
-		{
 			result = DoPointLight(light, worldPosition, normal, viewDirection);
+			break;
+		default:
+			//Unsupported light type
+			result.Diffuse = float4(1, 0, 1, 1);
+			result.Specular = float4(0, 0, 0, 1);
+			break;
 		}
-		break;
+
+		if(lightIndex == 0)
+		{
+			result.Specular = shadowFactor > 0 ? result.Specular : float4(0, 0, 0, 0);
+			result.Diffuse *= shadowFactor;
 		}
 
 		totalResult.Diffuse += result.Diffuse;
@@ -223,16 +230,7 @@ float4 PSMain(PSInput input) : SV_TARGET
 
 	shadowFactor /= kernelSize * kernelSize;
 
-	LightResult mainLight = DoDirectionalLight(cLights[0], input.normal, viewDirection);
-	mainLight.Diffuse *= shadowFactor;
-	if(shadowFactor == 0)
-	{
-		mainLight.Specular *= 0.0f;
-	}
     LightResult lightResults = DoLight(input.position, input.wpos.xyz, input.normal, viewDirection, shadowFactor);
-	lightResults.Diffuse += mainLight.Diffuse;
-	lightResults.Specular += mainLight.Specular;
-
     float4 specularSample = tSpecularTexture.Sample(sDiffuseSampler, input.texCoord);
     lightResults.Specular *= specularSample;
     lightResults.Diffuse *= diffuseSample;

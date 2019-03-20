@@ -44,16 +44,16 @@ Plane CalculatePlane(float3 a, float3 b, float3 c)
 
 bool SphereInPlane(Sphere sphere, Plane plane)
 {
-    return dot(plane.Normal, sphere.Radius) - plane.DistanceToOrigin < -sphere.Radius;
+    return dot(plane.Normal, sphere.Position) - plane.DistanceToOrigin < -sphere.Radius;
 }
 
 bool SphereInFrustum(Sphere sphere, Frustum frustum, float depthNear, float depthFar)
 {
     bool inside = true;
-    //if(sphere.Position.z - sphere.Radius > depthNear || sphere.Position.z + sphere.Radius < depthFar)
-    //{
-    //    inside = false;
-    //}
+    /*if(sphere.Position.z - sphere.Radius < depthNear || sphere.Position.z + sphere.Radius > depthFar)
+    {
+        inside = false;
+    }*/
     if(SphereInPlane(sphere, frustum.Left))
     {
         inside = false;

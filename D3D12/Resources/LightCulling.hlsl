@@ -52,13 +52,22 @@ void CSMain(CS_INPUT input)
     {
         if(cLights[i].Enabled)
         {
-            Sphere sphere;
-            sphere.Radius = cLights[i].Range;
-            sphere.Position = mul(float4(cLights[i].Position, 1), cView).xyz;
-            if (SphereInFrustum(sphere, GroupFrustum, 0, 1000000000))
+            switch(cLights[i].Type)
             {
-                AddLight(i);
+                case 1:
+                Sphere sphere;
+                    sphere.Radius = cLights[i].Range;
+                    sphere.Position = mul(float4(cLights[i].Position, 1), cView).xyz;
+                    if (SphereInFrustum(sphere, GroupFrustum, 0, 0xFFFF))
+                    {
+                        AddLight(i);
+                    }
+                break;
+                default:
+                    AddLight(i);
+                break;
             }
+        
         }
     }
 
