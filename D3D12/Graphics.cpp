@@ -49,7 +49,7 @@ void Graphics::Initialize(HWND window)
 	m_CameraPosition = Vector3(0, 100, -15);
 	m_CameraRotation = Quaternion::CreateFromYawPitchRoll(XM_PIDIV4, XM_PIDIV4, 0);
 
-	m_Lights.resize(1000);
+	m_Lights.resize(500);
 	for (int i = 0; i < m_Lights.size(); ++i)
 	{
 		Vector4 color = Vector4(RandomRange(0, 1), RandomRange(0, 1), RandomRange(0, 1), 1);
@@ -125,10 +125,10 @@ void Graphics::Update()
 		pContext->SetPipelineState(m_pShadowsPipelineStateObject.get());
 		pContext->SetGraphicsRootSignature(m_pShadowsRootSignature.get());
 		
-		pContext->SetViewport(FloatRect(0, 0, m_pDepthPrepassTexture->GetWidth(), m_pDepthPrepassTexture->GetHeight()));
-		pContext->SetScissorRect(FloatRect(0, 0, m_pDepthPrepassTexture->GetWidth(), m_pDepthPrepassTexture->GetHeight()));
+		pContext->SetViewport(FloatRect(0, 0, (float)m_pDepthPrepassTexture->GetWidth(), (float)m_pDepthPrepassTexture->GetHeight()));
+		pContext->SetScissorRect(FloatRect(0, 0, (float)m_pDepthPrepassTexture->GetWidth(), (float)m_pDepthPrepassTexture->GetHeight()));
 
-		pContext->SetRenderTargets(nullptr, m_pDepthPrepassTexture->GetRTV());
+		pContext->SetDepthOnlyTarget(m_pDepthPrepassTexture->GetRTV());
 
 		Color clearColor = Color(0.1f, 0.1f, 0.1f, 1.0f);
 		pContext->ClearDepth(m_pDepthPrepassTexture->GetRTV(), D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0);
@@ -171,10 +171,10 @@ void Graphics::Update()
 #pragma pack(pop)
 
 		cameraProjection.Invert(Data.ProjectionInverse);
-		Data.ScreenDimensions.x = m_WindowWidth;
-		Data.ScreenDimensions.y = m_WindowHeight;
-		Data.NumThreadGroups[0] = (uint32)ceil((float)m_FrustumCountX / 16);
-		Data.NumThreadGroups[1] = (uint32)ceil((float)m_FrustumCountY / 16);
+		Data.ScreenDimensions.x = (float)m_WindowWidth;
+		Data.ScreenDimensions.y = (float)m_WindowHeight;
+		Data.NumThreadGroups[0] = (uint32)ceil((float)m_FrustumCountX / FORWARD_PLUS_BLOCK_SIZE);
+		Data.NumThreadGroups[1] = (uint32)ceil((float)m_FrustumCountY / FORWARD_PLUS_BLOCK_SIZE);
 		Data.NumThreadGroups[2] = 1;
 		Data.NumThreads[0] = m_FrustumCountX;
 		Data.NumThreads[1] = m_FrustumCountY;
@@ -215,7 +215,7 @@ void Graphics::Update()
 		cameraProjection.Invert(Data.ProjectionInverse);
 
 		pContext->SetDynamicConstantBufferView(0, &Data, sizeof(ShaderParameters));
-		pContext->SetDynamicConstantBufferView(1, m_Lights.data(), sizeof(Light) * m_Lights.size());
+		pContext->SetDynamicConstantBufferView(1, m_Lights.data(), sizeof(Light) * (uint32)m_Lights.size());
 		pContext->SetDynamicDescriptor(2, 0, m_pLightIndexCounterBuffer->GetUAV());
 		pContext->SetDynamicDescriptor(2, 1, m_pLightIndexListBuffer->GetUAV());
 		pContext->SetDynamicDescriptor(2, 2, m_pLightGrid->GetUAV());
@@ -234,11 +234,11 @@ void Graphics::Update()
 		pContext->SetPipelineState(m_pShadowsPipelineStateObject.get());
 		pContext->SetGraphicsRootSignature(m_pShadowsRootSignature.get());
 
-		pContext->SetViewport(FloatRect(0, 0, m_pShadowMap->GetWidth(), m_pShadowMap->GetHeight()));
-		pContext->SetScissorRect(FloatRect(0, 0, m_pShadowMap->GetWidth(), m_pShadowMap->GetHeight()));
+		pContext->SetViewport(FloatRect(0, 0, (float)m_pShadowMap->GetWidth(), (float)m_pShadowMap->GetHeight()));
+		pContext->SetScissorRect(FloatRect(0, 0, (float)m_pShadowMap->GetWidth(), (float)m_pShadowMap->GetHeight()));
 
 		pContext->InsertResourceBarrier(m_pShadowMap.get(), D3D12_RESOURCE_STATE_DEPTH_WRITE, true);
-		pContext->SetRenderTargets(nullptr, m_pShadowMap->GetRTV());
+		pContext->SetDepthOnlyTarget(m_pShadowMap->GetRTV());
 
 		Color clearColor = Color(0.1f, 0.1f, 0.1f, 1.0f);
 		pContext->ClearDepth(m_pShadowMap->GetRTV(), D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0);
@@ -278,7 +278,7 @@ void Graphics::Update()
 		pContext->InsertResourceBarrier(m_pLightGrid.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, false);
 		pContext->InsertResourceBarrier(m_pLightIndexListBuffer.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, true);
 
-		pContext->SetRenderTargets(&GetCurrentRenderTarget()->GetRTV(), GetDepthStencilView()->GetRTV());
+		pContext->SetRenderTarget(GetCurrentRenderTarget()->GetRTV(), GetDepthStencilView()->GetRTV());
 
 		Color clearColor = Color(0, 0, 0, 1);
 		pContext->ClearRenderTarget(GetCurrentRenderTarget()->GetRTV(), clearColor);
@@ -296,7 +296,7 @@ void Graphics::Update()
 
 		pContext->SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
 		pContext->SetDynamicConstantBufferView(1, &frameData, sizeof(PerFrameData));
-		pContext->SetDynamicConstantBufferView(2, m_Lights.data(), sizeof(Light) * m_Lights.size());
+		pContext->SetDynamicConstantBufferView(2, m_Lights.data(), sizeof(Light) * (uint32)m_Lights.size());
 		pContext->SetDynamicDescriptor(4, 0, m_pShadowMap->GetSRV());
 		pContext->SetDynamicDescriptor(4, 1, m_pLightGrid->GetSRV());
 		pContext->SetDynamicDescriptor(4, 2, m_pLightIndexListBuffer->GetSRV());
@@ -319,13 +319,13 @@ void Graphics::Update()
 
 
 	GraphicsCommandContext* pContext = (GraphicsCommandContext*)AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
-	//pContext->MarkBegin(L"UI");
-	//////UI
-	//{
-	//	UpdateImGui();
-	//	m_pImGuiRenderer->Render(*pContext);
-	//}
-	//pContext->MarkEnd();
+	pContext->MarkBegin(L"UI");
+	//UI
+	{
+		UpdateImGui();
+		m_pImGuiRenderer->Render(*pContext);
+	}
+	pContext->MarkEnd();
 
 	pContext->MarkBegin(L"Present");
 	//Present
@@ -357,7 +357,7 @@ uint64 Graphics::GetFenceToWaitFor()
 
 void Graphics::BeginFrame()
 {
-	//m_pImGuiRenderer->NewFrame();
+	m_pImGuiRenderer->NewFrame();
 }
 
 void Graphics::EndFrame(uint64 fenceValue)
@@ -533,8 +533,8 @@ void Graphics::OnResize(int width, int height)
 	m_pDepthStencilBuffer->Create(this, width, height, DEPTH_STENCIL_FORMAT, TextureUsage::DepthStencil, m_SampleCount);
 	m_pDepthPrepassTexture->Create(this, width, height, DXGI_FORMAT_D32_FLOAT_S8X24_UINT, TextureUsage::DepthStencil | TextureUsage::ShaderResource, 1);
 
-	m_FrustumCountX = (int)(ceil(width / 16));
-	m_FrustumCountY = (int)(ceil(height / 16));
+	m_FrustumCountX = (int)(ceil((float)width / FORWARD_PLUS_BLOCK_SIZE));
+	m_FrustumCountY = (int)(ceil((float)height / FORWARD_PLUS_BLOCK_SIZE));
 	m_pFrustumsBuffer->Create(this, 64, m_FrustumCountX * m_FrustumCountY, false);
 
 	m_pLightGrid->Create(this, m_FrustumCountX, m_FrustumCountY, DXGI_FORMAT_R32G32_UINT, TextureUsage::ShaderResource | TextureUsage::UnorderedAccess, 1);
@@ -632,7 +632,7 @@ void Graphics::InitializeAssets()
 		m_pShadowsPipelineStateObject->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
 		m_pShadowsPipelineStateObject->SetRenderTargetFormats(nullptr, 0, DXGI_FORMAT_D32_FLOAT_S8X24_UINT, 1, 0);
 		m_pShadowsPipelineStateObject->SetCullMode(D3D12_CULL_MODE_NONE);
-		m_pShadowsPipelineStateObject->SetDepthBias(0.0f, 0.0f, 4.0f);
+		m_pShadowsPipelineStateObject->SetDepthBias(0, 0.0f, 4.0f);
 		m_pShadowsPipelineStateObject->Finalize(m_pDevice.Get());
 
 		m_pShadowMap = std::make_unique<Texture2D>();
@@ -690,12 +690,12 @@ void Graphics::UpdateImGui()
 	m_FrameTimes[m_FrameTimes.size() - 1] = GameTimer::DeltaTime();
 
 	ImGui::SetNextWindowPos(ImVec2(0, 0), 0, ImVec2(0, 0));
-	ImGui::SetNextWindowSize(ImVec2(250, m_WindowHeight));
+	ImGui::SetNextWindowSize(ImVec2(250, (float)m_WindowHeight));
 	ImGui::Begin("GPU Stats", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
 	ImGui::Text("MS: %.4f", GameTimer::DeltaTime());
 	ImGui::SameLine(100);
 	ImGui::Text("FPS: %.1f", 1.0f / GameTimer::DeltaTime());
-	ImGui::PlotLines("Frametime", m_FrameTimes.data(), m_FrameTimes.size(), 0, 0, 0.0f, 0.03f, ImVec2(200, 100));
+	ImGui::PlotLines("Frametime", m_FrameTimes.data(), (int)m_FrameTimes.size(), 0, 0, 0.0f, 0.03f, ImVec2(200, 100));
 	ImGui::BeginTabBar("GpuStatsBar");
 	if (ImGui::BeginTabItem("Descriptor Heaps"))
 	{

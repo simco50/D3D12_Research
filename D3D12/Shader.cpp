@@ -9,7 +9,7 @@ public:
 		: m_BasePath(basePath)
 	{}
 
-	STDOVERRIDEMETHODIMP Open(THIS_ D3D_INCLUDE_TYPE IncludeType, LPCSTR pFileName, LPCVOID pParentData, LPCVOID *ppData, UINT *pBytes)
+	STDOVERRIDEMETHODIMP Open(THIS_ D3D_INCLUDE_TYPE /*IncludeType*/, LPCSTR pFileName, LPCVOID /*pParentData*/, LPCVOID *ppData, UINT *pBytes)
 	{
 		std::string filePath = m_BasePath + std::string(pFileName);
 		std::ifstream stream(filePath.c_str(), std::ios::binary | std::ios::ate);
@@ -17,11 +17,12 @@ public:
 		{
 			return E_FAIL;
 		}
-		*pBytes = stream.tellg();
+		*pBytes = (UINT)stream.tellg();
 		*ppData = new char[*pBytes];
 		stream.seekg(0);
 		stream.read((char*)*ppData, *pBytes);
 		stream.close();
+		return S_OK;
 	}
 
 	STDOVERRIDEMETHODIMP Close(THIS_ LPCVOID pData)
@@ -91,65 +92,5 @@ bool Shader::Load(const char* pFilePath, Type shaderType, const char* pEntryPoin
 	}
 	pErrorBlob.Reset();
 
-	ShaderReflection();
-
 	return true;
-}
-
-void Shader::ShaderReflection()
-{
-	ComPtr<ID3D12ShaderReflection> pShaderReflection;
-	D3D12_SHADER_DESC shaderDesc;
-
-	HR(D3DReflect(m_pByteCode->GetBufferPointer(), m_pByteCode->GetBufferSize(), IID_PPV_ARGS(pShaderReflection.GetAddressOf())));
-	pShaderReflection->GetDesc(&shaderDesc);
-
-	std::map<std::string, uint32> cbRegisterMap;
-
-	for (unsigned i = 0; i < shaderDesc.BoundResources; ++i)
-	{
-		D3D12_SHADER_INPUT_BIND_DESC resourceDesc;
-		pShaderReflection->GetResourceBindingDesc(i, &resourceDesc);
-
-		switch (resourceDesc.Type)
-		{
-		case D3D_SIT_CBUFFER:
-		case D3D_SIT_TBUFFER:
-			cbRegisterMap[resourceDesc.Name] = resourceDesc.BindPoint;
-			break;
-		case D3D_SIT_TEXTURE:
-		case D3D_SIT_SAMPLER:
-		case D3D_SIT_UAV_RWTYPED:
-		case D3D_SIT_STRUCTURED:
-		case D3D_SIT_UAV_RWSTRUCTURED:
-		case D3D_SIT_BYTEADDRESS:
-		case D3D_SIT_UAV_RWBYTEADDRESS:
-		case D3D_SIT_UAV_APPEND_STRUCTURED:
-		case D3D_SIT_UAV_CONSUME_STRUCTURED:
-		case D3D_SIT_UAV_RWSTRUCTURED_WITH_COUNTER:
-		default:
-			break;
-		}
-	}
-
-	for (unsigned int c = 0; c < shaderDesc.ConstantBuffers; ++c)
-	{
-		ID3D12ShaderReflectionConstantBuffer* pReflectionConstantBuffer = pShaderReflection->GetConstantBufferByIndex(c);
-		D3D12_SHADER_BUFFER_DESC bufferDesc;
-		pReflectionConstantBuffer->GetDesc(&bufferDesc);
-		uint32 cbRegister = cbRegisterMap[std::string(bufferDesc.Name)];
-
-		for (unsigned v = 0; v < bufferDesc.Variables; ++v)
-		{
-			ID3D12ShaderReflectionVariable* pVariable = pReflectionConstantBuffer->GetVariableByIndex(v);
-			D3D12_SHADER_VARIABLE_DESC variableDesc;
-			pVariable->GetDesc(&variableDesc);
-
-			ShaderParameter parameter = {};
-			parameter.Name = variableDesc.Name;
-			parameter.Offset = variableDesc.StartOffset;
-			parameter.Size = variableDesc.Size;
-			m_Parameters[variableDesc.Name] = parameter;
-		}
-	}
 }

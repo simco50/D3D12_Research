@@ -52,6 +52,7 @@ public:
 	static const int32 FRAME_COUNT = 3;
 	static const DXGI_FORMAT DEPTH_STENCIL_FORMAT;
 	static const DXGI_FORMAT RENDER_TARGET_FORMAT;
+	static const int FORWARD_PLUS_BLOCK_SIZE = 16;
 
 private:
 	uint64 GetFenceToWaitFor();

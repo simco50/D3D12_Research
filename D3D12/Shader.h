@@ -27,8 +27,6 @@ public:
 	const ShaderParameter& GetShaderParameter(const std::string& name) const { return m_Parameters.at(name); }
 
 private:
-	void ShaderReflection();
-
 	std::map<std::string, ShaderParameter> m_Parameters;
 
 	ComPtr<ID3DBlob> m_pByteCode;

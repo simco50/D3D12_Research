@@ -80,12 +80,12 @@ private:
 		}
 		case WM_KEYUP:
 		{
-			Input::Instance().UpdateKey(wParam, false);
+			Input::Instance().UpdateKey((uint32)wParam, false);
 			return 0;
 		}
 		case WM_KEYDOWN:
 		{
-			Input::Instance().UpdateKey(wParam, true);
+			Input::Instance().UpdateKey((uint32)wParam, true);
 			return 0;
 		}
 		case WM_DESTROY:

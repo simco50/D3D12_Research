@@ -16,7 +16,7 @@ void Input::Update()
 {
 	for (size_t i = 0; i < m_KeyStates.size(); ++i)
 	{
-		m_KeyStates[i] = (m_KeyStates[i] & KeyState::Down);
+		m_KeyStates[i] = (KeyState)(m_KeyStates[i] & KeyState::Down);
 	}
 	m_LastMousePosition = m_CurrentMousePosition;
 	UpdateMousePosition();
@@ -67,5 +67,5 @@ void Input::UpdateMousePosition()
 	POINT p;
 	::GetCursorPos(&p);
 	::ScreenToClient(m_pWindow, &p);
-	m_CurrentMousePosition = Vector2(p.x, p.y);
+	m_CurrentMousePosition = Vector2((float)p.x, (float)p.y);
 }

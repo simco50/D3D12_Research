@@ -171,8 +171,8 @@ void CommandContext::InitializeBuffer(GraphicsBuffer* pResource, const void* pDa
 
 void CommandContext::InitializeTexture(Texture2D* pResource, D3D12_SUBRESOURCE_DATA* pSubResourceDatas, int subResourceCount)
 {
-	uint32 allocationSize = GetRequiredIntermediateSize(pResource->GetResource(), 0, subResourceCount);
-	DynamicAllocation allocation = m_pGraphics->GetCpuVisibleAllocator()->Allocate(allocationSize, 512);
+	uint64 allocationSize = GetRequiredIntermediateSize(pResource->GetResource(), (UINT)0, (UINT)subResourceCount);
+	DynamicAllocation allocation = m_pGraphics->GetCpuVisibleAllocator()->Allocate((uint32)allocationSize, 512);
 	InsertResourceBarrier(pResource, D3D12_RESOURCE_STATE_COPY_DEST, true);
 	UpdateSubresources(m_pCommandList, pResource->GetResource(), allocation.pBackingResource, 0, 0, subResourceCount, pSubResourceDatas);
 	InsertResourceBarrier(pResource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, true);
@@ -292,6 +292,16 @@ void GraphicsCommandContext::ClearRenderTarget(D3D12_CPU_DESCRIPTOR_HANDLE rtv, 
 void GraphicsCommandContext::ClearDepth(D3D12_CPU_DESCRIPTOR_HANDLE dsv, D3D12_CLEAR_FLAGS clearFlags /*= D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL*/, float depth /*= 1.0f*/, unsigned char stencil /*= 0*/)
 {
 	m_pCommandList->ClearDepthStencilView(dsv, clearFlags, depth, stencil, 0, nullptr);
+}
+
+void GraphicsCommandContext::SetDepthOnlyTarget(D3D12_CPU_DESCRIPTOR_HANDLE dsv)
+{
+	SetRenderTargets(nullptr, dsv);
+}
+
+void GraphicsCommandContext::SetRenderTarget(D3D12_CPU_DESCRIPTOR_HANDLE rtv, D3D12_CPU_DESCRIPTOR_HANDLE dsv)
+{
+	SetRenderTargets(&rtv, dsv);
 }
 
 void GraphicsCommandContext::SetRenderTargets(D3D12_CPU_DESCRIPTOR_HANDLE* pRtv, D3D12_CPU_DESCRIPTOR_HANDLE dsv)

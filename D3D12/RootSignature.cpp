@@ -122,7 +122,7 @@ void RootSignature::Finalize(ID3D12Device* pDevice, D3D12_ROOT_SIGNATURE_FLAGS f
 			}
 			else
 			{
-				m_DescriptorTableMask.SetBit(i);
+				m_DescriptorTableMask.SetBit((uint32)i);
 			}
 			for (uint32 j = 0; j < rootParameter.DescriptorTable.NumDescriptorRanges; ++j)
 			{

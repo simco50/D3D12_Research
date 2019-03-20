@@ -160,7 +160,7 @@ void Texture2D::Create(Graphics* pGraphics, int width, int height, DXGI_FORMAT f
 	}
 	desc.Format = format;
 	desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-	desc.MipLevels = m_MipLevels;
+	desc.MipLevels = (uint16)m_MipLevels;
 	desc.SampleDesc.Count = sampleCount;
 	desc.SampleDesc.Quality = pGraphics->GetMultiSampleQualityLevel(sampleCount);
 	desc.Width = width;
@@ -227,7 +227,7 @@ void Texture2D::Create(Graphics* pGraphics, int width, int height, DXGI_FORMAT f
 	}
 }
 
-void Texture2D::SetData(CommandContext* pContext, const void* pData, uint32 dataSize)
+void Texture2D::SetData(CommandContext* pContext, const void* pData)
 {
 	D3D12_SUBRESOURCE_DATA data;
 	data.pData = pData;

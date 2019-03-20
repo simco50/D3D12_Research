@@ -75,7 +75,7 @@ class Texture2D : public GraphicsResource
 public:
 	void Create(Graphics* pGraphics, CommandContext* pContext, const char* pFilePath, TextureUsage usage);
 	void Create(Graphics* pGraphics, int width, int height, DXGI_FORMAT format, TextureUsage usage, int sampleCount);
-	void SetData(CommandContext* pContext, const void* pData, uint32 dataSize);
+	void SetData(CommandContext* pContext, const void* pData);
 	void CreateForSwapchain(Graphics* pGraphics, ID3D12Resource* pTexture);
 
 	D3D12_CPU_DESCRIPTOR_HANDLE GetRTV() const { return m_Rtv; }
