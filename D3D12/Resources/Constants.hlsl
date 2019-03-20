@@ -1,4 +1,4 @@
 #define BLOCK_SIZE 16
-#define LIGHT_COUNT 20
+#define LIGHT_COUNT 1000
 
 #define FORWARD_PLUS 1

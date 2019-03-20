@@ -45,6 +45,9 @@ void CSMain(CS_INPUT input)
     frustum.Top = CalculatePlane(eyePos, viewSpace[0], viewSpace[1]);
     frustum.Bottom = CalculatePlane(eyePos, viewSpace[3], viewSpace[2]);
 
-    uint arrayIndex = input.DispatchThreadId.x + (input.DispatchThreadId.y * cNumThreads.x);
-    uOutFrustums[arrayIndex] = frustum;
+    if(input.DispatchThreadId.x < cNumThreads.x && input.DispatchThreadId.y < cNumThreads.y)
+    {
+        uint arrayIndex = input.DispatchThreadId.x + (input.DispatchThreadId.y * cNumThreads.x);
+        uOutFrustums[arrayIndex] = frustum;
+    }
 }

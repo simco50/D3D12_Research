@@ -120,6 +120,7 @@ private:
 	std::unique_ptr<StructuredBuffer> m_pLightIndexCounterBuffer;
 	std::unique_ptr<StructuredBuffer> m_pLightIndexListBuffer;
 	std::unique_ptr<Texture2D> m_pLightGrid;
+	std::unique_ptr<Texture2D> m_pDepthPrepassTexture;
 
 	std::vector<Light> m_Lights;
 };
