@@ -44,17 +44,17 @@ void Graphics::Initialize(HWND window)
 	InitD3D();
 	InitializeAssets();
 
-	m_FrameTimes.resize(256);
+	m_FrameTimes.resize(60*3);
 
 	m_CameraPosition = Vector3(0, 100, -15);
 	m_CameraRotation = Quaternion::CreateFromYawPitchRoll(XM_PIDIV4, XM_PIDIV4, 0);
 
-	m_Lights.resize(500);
+	m_Lights.resize(512);
 	for (int i = 0; i < m_Lights.size(); ++i)
 	{
 		Vector4 color = Vector4(RandomRange(0, 1), RandomRange(0, 1), RandomRange(0, 1), 1);
 		color.Normalize(color);
-		m_Lights[i] = Light::Point(Vector3(RandomRange(-200, 200), RandomRange(0, 10), RandomRange(-200, 200)), 20.0f, 1.0f, 0.5f, color);
+		m_Lights[i] = Light::Point(Vector3(RandomRange(-200, 200), RandomRange(5, 10), RandomRange(-200, 200)), 20.0f, 1.0f, 0.5f, color);
 	}
 }
 
@@ -152,7 +152,9 @@ void Graphics::Update()
 	}
 
 	//Frustum generation
+	if(m_FrustumsDirty)
 	{
+		m_FrustumsDirty = false;
 		ComputeCommandContext* pContext = (ComputeCommandContext*)AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COMPUTE);
 		pContext->MarkBegin(L"Frustum Generation");
 		pContext->SetPipelineState(m_pComputeGenerateFrustumsPipeline.get());
@@ -536,7 +538,7 @@ void Graphics::OnResize(int width, int height)
 	m_FrustumCountX = (int)(ceil((float)width / FORWARD_PLUS_BLOCK_SIZE));
 	m_FrustumCountY = (int)(ceil((float)height / FORWARD_PLUS_BLOCK_SIZE));
 	m_pFrustumsBuffer->Create(this, 64, m_FrustumCountX * m_FrustumCountY, false);
-
+	m_FrustumsDirty = true;
 	m_pLightGrid->Create(this, m_FrustumCountX, m_FrustumCountY, DXGI_FORMAT_R32G32_UINT, TextureUsage::ShaderResource | TextureUsage::UnorderedAccess, 1);
 
 	m_Viewport.Bottom = (float)m_WindowHeight;

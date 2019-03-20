@@ -113,6 +113,7 @@ private:
 	std::unique_ptr<RootSignature> m_pComputeGenerateFrustumsRootSignature;
 	std::unique_ptr<ComputePipelineState> m_pComputeGenerateFrustumsPipeline;
 	std::unique_ptr<StructuredBuffer> m_pFrustumsBuffer;
+	bool m_FrustumsDirty = true;
 	int m_FrustumCountX;
 	int m_FrustumCountY;
 
