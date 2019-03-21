@@ -38,5 +38,20 @@ struct Light
 		l.Type = 1;
 		return l;
 	}
+
+	static Light Cone(const Vector3& position, float range, const Vector3& direction, float angle = XM_PIDIV4, float intensity = 1.0f, float attenuation = 0.5f, const Vector4& color = Vector4(1, 1, 1, 1))
+	{
+		Light l;
+		l.Enabled = true;
+		l.Position = position;
+		l.Range = range;
+		l.Direction = direction;
+		l.SpotLightAngle = angle;
+		l.Intensity = intensity;
+		l.Color = color;
+		l.Attenuation = attenuation;
+		l.Type = 2;
+		return l;
+	}
 };
 #pragma pack(pop)

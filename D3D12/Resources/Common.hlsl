@@ -31,6 +31,14 @@ struct Sphere
     float Radius;
 };
 
+struct Cone
+{
+    float3 Tip;
+    float Height;
+    float3 Direction;
+    float Radius;
+};
+
 Plane CalculatePlane(float3 a, float3 b, float3 c)
 {
     float3 v0 = b - a;
@@ -40,21 +48,6 @@ Plane CalculatePlane(float3 a, float3 b, float3 c)
     plane.Normal = normalize(cross(v1, v0));
     plane.DistanceToOrigin = dot(plane.Normal, a);
     return plane;
-}
-
-bool SphereBehindPlane(Sphere sphere, Plane plane)
-{
-    return dot(plane.Normal, sphere.Position) - plane.DistanceToOrigin < - sphere.Radius;
-}
-
-bool SphereInFrustum(Sphere sphere, Frustum frustum, float depthNear, float depthFar)
-{
-    bool inside = sphere.Position.z + sphere.Radius > depthNear && sphere.Position.z - sphere.Radius < depthFar;
-    inside = inside ? !SphereBehindPlane(sphere, frustum.Left) : false;
-    inside = inside ? !SphereBehindPlane(sphere, frustum.Right) : false;
-    inside = inside ? !SphereBehindPlane(sphere, frustum.Top) : false;
-    inside = inside ? !SphereBehindPlane(sphere, frustum.Bottom) : false;
-    return inside;
 }
 
 // Convert clip space coordinates to view space

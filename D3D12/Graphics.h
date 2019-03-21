@@ -42,7 +42,8 @@ public:
 	DynamicResourceAllocator* GetCpuVisibleAllocator() const { return m_pDynamicCpuVisibleAllocator.get(); }
 	D3D12_CPU_DESCRIPTOR_HANDLE AllocateCpuDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE type);
 
-	Texture2D* GetDepthStencilView() const { return m_pDepthStencilBuffer.get(); }
+	Texture2D* GetDepthStencil() const { return m_pDepthStencil.get(); }
+	Texture2D* GetResolvedDepthStencil() const { return m_SampleCount > 1 ? m_pResolvedDepthStencil.get() : m_pDepthStencil.get(); }
 	Texture2D* GetCurrentRenderTarget() const {	return m_SampleCount > 1 ? m_MultiSampleRenderTargets[m_CurrentBackBufferIndex].get() : GetCurrentBackbuffer();	}
 	Texture2D* GetCurrentBackbuffer() const { return m_RenderTargets[m_CurrentBackBufferIndex].get(); }
 
@@ -81,7 +82,6 @@ private:
 
 	std::array<std::unique_ptr<Texture2D>, FRAME_COUNT> m_MultiSampleRenderTargets;
 	std::array<std::unique_ptr<Texture2D>, FRAME_COUNT> m_RenderTargets;
-	std::unique_ptr<Texture2D> m_pDepthStencilBuffer;
 
 	std::array<std::unique_ptr<DescriptorAllocator>, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES> m_DescriptorHeaps;
 	std::unique_ptr<DynamicResourceAllocator> m_pDynamicCpuVisibleAllocator;
@@ -114,15 +114,17 @@ private:
 	std::unique_ptr<ComputePipelineState> m_pComputeGenerateFrustumsPipeline;
 	std::unique_ptr<StructuredBuffer> m_pFrustumsBuffer;
 	bool m_FrustumsDirty = true;
-	int m_FrustumCountX;
-	int m_FrustumCountY;
 
 	std::unique_ptr<RootSignature> m_pComputeLightCullRootSignature;
 	std::unique_ptr<ComputePipelineState> m_pComputeLightCullPipeline;
 	std::unique_ptr<StructuredBuffer> m_pLightIndexCounterBuffer;
 	std::unique_ptr<StructuredBuffer> m_pLightIndexListBuffer;
 	std::unique_ptr<Texture2D> m_pLightGrid;
-	std::unique_ptr<Texture2D> m_pDepthPrepassTexture;
+
+	std::unique_ptr<RootSignature> m_pDepthPrepassRootSignature;
+	std::unique_ptr<GraphicsPipelineState> m_pDepthPrepassPipelineStateObject;
+	std::unique_ptr<Texture2D> m_pDepthStencil;
+	std::unique_ptr<Texture2D> m_pResolvedDepthStencil;
 
 	std::vector<Light> m_Lights;
 };

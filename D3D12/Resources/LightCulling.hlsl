@@ -30,7 +30,53 @@ void AddLight(uint lightIndex)
 {
     uint index;
     InterlockedAdd(LightCount, 1, index);
-    LightList[index] = lightIndex;
+    if(index < 1024)
+    {
+        LightList[index] = lightIndex;
+    }
+}
+
+bool SphereBehindPlane(Sphere sphere, Plane plane)
+{
+    return dot(plane.Normal, sphere.Position) - plane.DistanceToOrigin < -sphere.Radius;
+}
+
+bool PointBehindPlane(float3 p, Plane plane)
+{
+    return dot(plane.Normal, p) - plane.DistanceToOrigin < 0;
+}
+
+bool ConeBehindPlane(Cone cone, Plane plane)
+{
+    float3 m = cross(cross(plane.Normal, cone.Direction), cone.Direction);
+    float3 Q = cone.Tip + cone.Direction * cone.Height - m * cone.Radius;
+    return PointBehindPlane(cone.Tip, plane) && PointBehindPlane(Q, plane);
+}
+
+bool ConeInFrustum(Cone cone, Frustum frustum, float zNear, float zFar)
+{
+    Plane nearPlane, farPlane;
+    nearPlane.Normal = float3(0, 0, 1);
+    nearPlane.DistanceToOrigin = zNear;
+    farPlane.Normal = float3(0, 0, -1);
+    farPlane.DistanceToOrigin = -zFar;
+ 
+    bool inside = !(ConeBehindPlane(cone, nearPlane) || ConeBehindPlane(cone, farPlane));
+    inside = inside ? !ConeBehindPlane(cone, frustum.Left) : false;
+    inside = inside ? !ConeBehindPlane(cone, frustum.Right) : false;
+    inside = inside ? !ConeBehindPlane(cone, frustum.Top) : false;
+    inside = inside ? !ConeBehindPlane(cone, frustum.Bottom) : false;
+    return inside;
+}
+
+bool SphereInFrustum(Sphere sphere, Frustum frustum, float depthNear, float depthFar)
+{
+    bool inside = !(sphere.Position.z + sphere.Radius < depthNear || sphere.Position.z - sphere.Radius > depthFar);
+    inside = inside ? !SphereBehindPlane(sphere, frustum.Left) : false;
+    inside = inside ? !SphereBehindPlane(sphere, frustum.Right) : false;
+    inside = inside ? !SphereBehindPlane(sphere, frustum.Top) : false;
+    inside = inside ? !SphereBehindPlane(sphere, frustum.Bottom) : false;
+    return inside;
 }
 
 struct CS_INPUT
@@ -85,15 +131,19 @@ void CSMain(CS_INPUT input)
     //Perform the light culling
     for(uint i = input.GroupIndex; i < LIGHT_COUNT; i += BLOCK_SIZE * BLOCK_SIZE)
     {
-        if(cLights[i].Enabled)
+        Light light = cLights[i];
+        if(light.Enabled)
         {
-            switch(cLights[i].Type)
+            switch(light.Type)
             {
-                case 1:
+                case LIGHT_DIRECTIONAL:
+                    AddLight(i);
+                    break;
+                case LIGHT_POINT:
                     Sphere sphere;
-                    sphere.Radius = cLights[i].Range;
+                    sphere.Radius = light.Range;
                     //Need the light position in view space
-                    sphere.Position = mul(float4(cLights[i].Position, 1.0f), cView).xyz;
+                    sphere.Position = mul(float4(light.Position, 1.0f), cView).xyz;
                     if (SphereInFrustum(sphere, GroupFrustum, nearClipVS, maxDepthVS))
                     {
                         if(!SphereBehindPlane(sphere, minPlane))
@@ -102,8 +152,19 @@ void CSMain(CS_INPUT input)
                         }
                     }
                     break;
-                default:
-                    AddLight(i);
+                case LIGHT_SPOT:
+                    Cone cone;
+                    cone.Radius = tan(radians(light.SpotLightAngle)) * light.Range;
+                    cone.Direction = mul(light.Direction, (float3x3)cView);
+                    cone.Tip = mul(float4(light.Position, 1.0f), cView).xyz;
+                    cone.Height = light.Range;
+                    if(ConeInFrustum(cone, GroupFrustum, nearClipVS, maxDepthVS))
+                    {
+                        if(!ConeBehindPlane(cone, minPlane))
+                        {
+                            AddLight(i);
+                        }
+                    }
                     break;
             }
         
