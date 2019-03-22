@@ -49,9 +49,9 @@ bool PointBehindPlane(float3 p, Plane plane)
 
 bool ConeBehindPlane(Cone cone, Plane plane)
 {
-    float3 m = cross(cross(plane.Normal, cone.Direction), cone.Direction);
-    float3 Q = cone.Tip + cone.Direction * cone.Height - m * cone.Radius;
-    return PointBehindPlane(cone.Tip, plane) && PointBehindPlane(Q, plane);
+    float3 furthestPointDirection = cross(cross(plane.Normal, cone.Direction), cone.Direction);
+    float3 furthestPointOnCircle = cone.Tip + cone.Direction * cone.Height - furthestPointDirection * cone.Radius;
+    return PointBehindPlane(cone.Tip, plane) && PointBehindPlane(furthestPointOnCircle, plane);
 }
 
 bool ConeInFrustum(Cone cone, Frustum frustum, float zNear, float zFar)
