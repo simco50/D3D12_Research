@@ -39,6 +39,12 @@ struct Cone
     float Radius;
 };
 
+struct AABB
+{
+    float3 Center;
+    float3 Extents;
+};
+
 Plane CalculatePlane(float3 a, float3 b, float3 c)
 {
     float3 v0 = b - a;
@@ -68,4 +74,18 @@ float4 ScreenToView(float4 screen, float2 screenDimensions, float4x4 projectionI
     // Convert to clip space
     float4 clip = float4(float2(texCoord.x, 1.0f - texCoord.y) * 2.0f - 1.0f, screen.z, screen.w);
     return ClipToView(clip, projectionInverse);
+}
+
+void AABBFromMinMax(inout AABB aabb, float3 minimum, float3 maximum)
+{
+    aabb.Center = (minimum + maximum) / 2.0f;
+    aabb.Extents = abs(maximum - aabb.Center);
+}
+
+float3 HUEtoRGB(in float H)
+{
+    float R = abs(H * 6 - 3) - 1;
+    float G = 2 - abs(H * 6 - 2);
+    float B = 2 - abs(H * 6 - 4);
+    return saturate(float3(R,G,B));
 }

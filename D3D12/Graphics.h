@@ -110,11 +110,6 @@ private:
 	std::unique_ptr<RootSignature> m_pShadowsRootSignature;
 	std::unique_ptr<GraphicsPipelineState> m_pShadowsPipelineStateObject;
 
-	std::unique_ptr<RootSignature> m_pComputeGenerateFrustumsRootSignature;
-	std::unique_ptr<ComputePipelineState> m_pComputeGenerateFrustumsPipeline;
-	std::unique_ptr<StructuredBuffer> m_pFrustumsBuffer;
-	bool m_FrustumsDirty = true;
-
 	std::unique_ptr<RootSignature> m_pComputeLightCullRootSignature;
 	std::unique_ptr<ComputePipelineState> m_pComputeLightCullPipeline;
 	std::unique_ptr<StructuredBuffer> m_pLightIndexCounterBuffer;

@@ -49,19 +49,19 @@ void Graphics::Initialize(HWND window)
 	m_CameraPosition = Vector3(0, 100, -15);
 	m_CameraRotation = Quaternion::CreateFromYawPitchRoll(XM_PIDIV4, XM_PIDIV4, 0);
 
-	m_Lights.resize(512);
+	m_Lights.resize(1024);
 	for (int i = 0; i < m_Lights.size(); ++i)
 	{
 		Vector4 color = Vector4(RandomRange(0, 1), RandomRange(0, 1), RandomRange(0, 1), 1);
 		color.Normalize(color);
-		int type = rand() % 2;
+		int type = 0;
 		if (type == 0)
 		{
-			m_Lights[i] = Light::Point(Vector3(RandomRange(-200, 200), RandomRange(10, 50), RandomRange(-200, 200)), 15.0f, 1.0f, 0.5f, color);
+			m_Lights[i] = Light::Point(Vector3(RandomRange(-200, 200), RandomRange(0, 50), RandomRange(-200, 200)), RandomRange(15.0f, 35.0f), 1.0f, 0.5f, color);
 		}
 		else
 		{
-			m_Lights[i] = Light::Cone(Vector3(RandomRange(-200, 200), RandomRange(20, 60), RandomRange(-200, 200)), 40.0f, Vector3(0, -1, 0), 60.0f, 1.0f, 0.5f, color);
+			m_Lights[i] = Light::Cone(Vector3(RandomRange(-200, 200), RandomRange(10, 60), RandomRange(-200, 200)), 40.0f, Vector3(0, -1, 0), 60.0f, 1.0f, 0.5f, color);
 		}
 	}
 }
@@ -166,48 +166,6 @@ void Graphics::Update()
 		depthPrepassFence = pContext->Execute(false);
 	}
 
-	//Frustum generation
-	if(m_FrustumsDirty)
-	{
-		m_FrustumsDirty = false;
-		ComputeCommandContext* pContext = (ComputeCommandContext*)AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COMPUTE);
-		pContext->MarkBegin(L"Frustum Generation");
-		pContext->SetPipelineState(m_pComputeGenerateFrustumsPipeline.get());
-		pContext->SetComputeRootSignature(m_pComputeGenerateFrustumsRootSignature.get());
-
-#pragma pack(push)
-#pragma pack(16) 
-		struct ShaderParameters
-		{
-			Matrix ProjectionInverse;
-			Vector2 ScreenDimensions;
-			Vector2 padding;
-			uint32 NumThreadGroups[4];
-			uint32 NumThreads[4];
-		} Data;
-#pragma pack(pop)
-
-		int frustumCountX = (int)(ceil((float)m_WindowWidth / FORWARD_PLUS_BLOCK_SIZE));
-		int frustumCountY = (int)(ceil((float)m_WindowHeight / FORWARD_PLUS_BLOCK_SIZE));
-
-		cameraProjection.Invert(Data.ProjectionInverse);
-		Data.ScreenDimensions.x = (float)m_WindowWidth;
-		Data.ScreenDimensions.y = (float)m_WindowHeight;
-		Data.NumThreadGroups[0] = (uint32)ceil((float)frustumCountX / FORWARD_PLUS_BLOCK_SIZE);
-		Data.NumThreadGroups[1] = (uint32)ceil((float)frustumCountY / FORWARD_PLUS_BLOCK_SIZE);
-		Data.NumThreadGroups[2] = 1;
-		Data.NumThreads[0] = frustumCountX;
-		Data.NumThreads[1] = frustumCountY;
-		Data.NumThreads[2] = 1;
-
-		pContext->SetDynamicDescriptor(1, 0, m_pFrustumsBuffer->GetUAV());
-		pContext->SetDynamicConstantBufferView(0, &Data, sizeof(ShaderParameters));
-
-		pContext->Dispatch(Data.NumThreadGroups[0], Data.NumThreadGroups[1], Data.NumThreadGroups[2]);
-		pContext->MarkEnd();
-		pContext->Execute(false);
-	}
-
 	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_COMPUTE]->InsertWaitForFence(clearLightIndexFence);
 	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_COMPUTE]->InsertWaitForFence(depthPrepassFence);
 
@@ -225,6 +183,7 @@ void Graphics::Update()
 			Matrix CameraView;
 			uint32 NumThreadGroups[4];
 			Matrix ProjectionInverse;
+			Vector2 ScreenDimensions;
 		} Data;
 #pragma pack(pop)
 
@@ -235,6 +194,8 @@ void Graphics::Update()
 		Data.NumThreadGroups[0] = frustumCountX;
 		Data.NumThreadGroups[1] = frustumCountY;
 		Data.NumThreadGroups[2] = 1;
+		Data.ScreenDimensions.x = (float)m_WindowWidth;
+		Data.ScreenDimensions.y = (float)m_WindowHeight;
 		cameraProjection.Invert(Data.ProjectionInverse);
 
 		pContext->SetDynamicConstantBufferView(0, &Data, sizeof(ShaderParameters));
@@ -242,8 +203,7 @@ void Graphics::Update()
 		pContext->SetDynamicDescriptor(2, 0, m_pLightIndexCounterBuffer->GetUAV());
 		pContext->SetDynamicDescriptor(2, 1, m_pLightIndexListBuffer->GetUAV());
 		pContext->SetDynamicDescriptor(2, 2, m_pLightGrid->GetUAV());
-		pContext->SetDynamicDescriptor(3, 0, m_pFrustumsBuffer->GetSRV());
-		pContext->SetDynamicDescriptor(3, 1, GetResolvedDepthStencil()->GetSRV());
+		pContext->SetDynamicDescriptor(3, 0, GetResolvedDepthStencil()->GetSRV());
 
 		pContext->Dispatch(Data.NumThreadGroups[0], Data.NumThreadGroups[1], Data.NumThreadGroups[2]);
 		pContext->MarkEnd();
@@ -382,12 +342,10 @@ void Graphics::BeginFrame()
 
 void Graphics::EndFrame(uint64 fenceValue)
 {
-	uint64 waitFenceIdx = GetFenceToWaitFor();
-	WaitForFence(m_FenceValues[waitFenceIdx]);
-	m_FenceValues[waitFenceIdx] = fenceValue;
+	m_FenceValues[m_CurrentBackBufferIndex] = fenceValue;
 	m_pSwapchain->Present(1, 0);
 	m_CurrentBackBufferIndex = m_pSwapchain->GetCurrentBackBufferIndex();
-
+	WaitForFence(m_FenceValues[m_CurrentBackBufferIndex]);
 	m_pDynamicCpuVisibleAllocator->ResetAllocationCounter();
 }
 
@@ -504,7 +462,6 @@ void Graphics::InitD3D()
 			m_MultiSampleRenderTargets[i] = std::make_unique<Texture2D>();
 		}
 	}
-	m_pFrustumsBuffer = std::make_unique<StructuredBuffer>();
 	m_pLightGrid = std::make_unique<Texture2D>();
 	m_pDepthStencil = std::make_unique<Texture2D>();
 	if (m_SampleCount > 1)
@@ -564,8 +521,6 @@ void Graphics::OnResize(int width, int height)
 
 	int frustumCountX = (int)(ceil((float)width / FORWARD_PLUS_BLOCK_SIZE));
 	int frustumCountY = (int)(ceil((float)height / FORWARD_PLUS_BLOCK_SIZE));
-	m_pFrustumsBuffer->Create(this, 64, frustumCountX * frustumCountY, false);
-	m_FrustumsDirty = true;
 	m_pLightGrid->Create(this, frustumCountX, frustumCountY, DXGI_FORMAT_R32G32_UINT, TextureUsage::ShaderResource | TextureUsage::UnorderedAccess, 1);
 
 	m_Viewport.Bottom = (float)m_WindowHeight;
@@ -696,25 +651,13 @@ void Graphics::InitializeAssets()
 
 	{
 		Shader computeShader;
-		computeShader.Load("Resources/GenerateFrustums.hlsl", Shader::Type::ComputeShader, "CSMain");
-
-		m_pComputeGenerateFrustumsRootSignature = std::make_unique<RootSignature>(2);
-		m_pComputeGenerateFrustumsRootSignature->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_ALL);
-		m_pComputeGenerateFrustumsRootSignature->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, D3D12_SHADER_VISIBILITY_ALL);
-		m_pComputeGenerateFrustumsRootSignature->Finalize(m_pDevice.Get(), D3D12_ROOT_SIGNATURE_FLAG_NONE);
-
-		m_pComputeGenerateFrustumsPipeline = std::make_unique<ComputePipelineState>();
-		m_pComputeGenerateFrustumsPipeline->SetComputeShader(computeShader.GetByteCode(), computeShader.GetByteCodeSize());
-		m_pComputeGenerateFrustumsPipeline->SetRootSignature(m_pComputeGenerateFrustumsRootSignature->GetRootSignature());
-		m_pComputeGenerateFrustumsPipeline->Finalize(m_pDevice.Get());
-
 		computeShader.Load("Resources/LightCulling.hlsl", Shader::Type::ComputeShader, "CSMain");
 
 		m_pComputeLightCullRootSignature = std::make_unique<RootSignature>(4);
 		m_pComputeLightCullRootSignature->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_ALL);
 		m_pComputeLightCullRootSignature->SetConstantBufferView(1, 1, D3D12_SHADER_VISIBILITY_ALL);
 		m_pComputeLightCullRootSignature->SetDescriptorTableSimple(2, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 3, D3D12_SHADER_VISIBILITY_ALL);
-		m_pComputeLightCullRootSignature->SetDescriptorTableSimple(3, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, D3D12_SHADER_VISIBILITY_ALL);
+		m_pComputeLightCullRootSignature->SetDescriptorTableSimple(3, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, D3D12_SHADER_VISIBILITY_ALL);
 		m_pComputeLightCullRootSignature->Finalize(m_pDevice.Get(), D3D12_ROOT_SIGNATURE_FLAG_NONE);
 
 		m_pComputeLightCullPipeline = std::make_unique<ComputePipelineState>();
