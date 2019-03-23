@@ -8,7 +8,7 @@ struct Light
 	float Range;
 	float SpotLightAngle;
 	float Attenuation;
-	uint Type;
+	int Type;
 };
 
 struct Plane
@@ -19,10 +19,7 @@ struct Plane
 
 struct Frustum
 {
-    Plane Left;
-    Plane Right;
-    Plane Top;
-    Plane Bottom;
+    Plane Planes[4];
 };
 
 struct Sphere

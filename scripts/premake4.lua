@@ -21,7 +21,7 @@ solution (engineName)
 		flags {"OptimizeSpeed", "No64BitChecks" }
 
 	configuration {}
-		kind "WindowedApp"
+		kind "ConsoleApp"
 
 	project (engineName)
 		location (ROOT .. engineName)

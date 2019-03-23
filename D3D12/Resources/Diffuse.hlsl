@@ -57,7 +57,7 @@ StructuredBuffer<uint> tLightIndexList : register(t5);
 
 LightResult DoLight(float4 position, float3 worldPosition, float3 normal, float3 viewDirection, float shadowFactor)
 {
-#ifdef FORWARD_PLUS
+#if FORWARD_PLUS
 	uint2 tileIndex = uint2(floor(position.xy / BLOCK_SIZE));
 	uint startOffset = tLightGrid[tileIndex].x;
 	uint lightCount = tLightGrid[tileIndex].y;
@@ -67,16 +67,17 @@ LightResult DoLight(float4 position, float3 worldPosition, float3 normal, float3
 	LightResult totalResult = (LightResult)0;
 
 #if DEBUG_VISUALIZE
-	totalResult.Diffuse = (float)max(lightCount - 1, 0) / 10.0f;
+	totalResult.Diffuse = (float)max(lightCount, 0) / 50.0f;
 	return totalResult;
 #endif
 
 	for(uint i = 0; i < lightCount; ++i)
 	{
-#ifdef FORWARD_PLUS
+#if FORWARD_PLUS
 		uint lightIndex = tLightIndexList[startOffset + i];
 		Light light = cLights[lightIndex];
 #else
+		uint lightIndex = i;
 		Light light = cLights[i];
 		if(light.Enabled == 0)
 		{
@@ -175,7 +176,7 @@ float4 PSMain(PSInput input) : SV_TARGET
 	{
 		for(int y = -hKernel; y <= hKernel; ++y)
 		{
-    		shadowFactor += tShadowMapTexture.SampleCmpLevelZero(sShadowMapSampler, input.lpos.xy + float2(dx * x, dy * y), input.lpos.z );
+    		shadowFactor += tShadowMapTexture.SampleCmpLevelZero(sShadowMapSampler, input.lpos.xy + float2(dx * x, dy * y), input.lpos.z);
 		}
 	}
 	shadowFactor /= kernelSize * kernelSize;

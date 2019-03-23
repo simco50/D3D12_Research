@@ -251,7 +251,7 @@ void Texture2D::CreateForSwapchain(Graphics* pGraphics, ID3D12Resource* pTexture
 	pGraphics->GetDevice()->CreateRenderTargetView(pTexture, nullptr, m_Rtv);
 }
 
-DXGI_FORMAT Texture2D::GetDepthFormat(DXGI_FORMAT format)
+DXGI_FORMAT Texture::GetDepthFormat(DXGI_FORMAT format)
 {
 	switch (format)
 	{
@@ -286,7 +286,7 @@ DXGI_FORMAT Texture2D::GetDepthFormat(DXGI_FORMAT format)
 	}
 }
 
-int Texture2D::GetRowDataSize(unsigned int width) const
+int Texture::GetRowDataSize(unsigned int width) const
 {
 	switch (m_Format)
 	{
@@ -344,5 +344,123 @@ int Texture2D::GetRowDataSize(unsigned int width) const
 		return width * 3 * sizeof(float);
 	default:
 		return 0;
+	}
+}
+
+void TextureCube::Create(Graphics* pGraphics, int width, int height, DXGI_FORMAT format, TextureUsage usage, int sampleCount)
+{
+	if (m_pResource)
+	{
+		m_pResource->Release();
+	}
+
+	m_Format = format;
+	m_SampleCount = sampleCount;
+	TextureUsage depthAndRt = TextureUsage::RenderTarget | TextureUsage::DepthStencil;
+	assert((usage & depthAndRt) != depthAndRt);
+	assert((usage & TextureUsage::UnorderedAccess) != TextureUsage::UnorderedAccess);
+
+	m_Width = width;
+	m_Height = height;
+
+	D3D12_CLEAR_VALUE* pClearValue = nullptr;
+	D3D12_CLEAR_VALUE clearValue = {};
+	clearValue.Format = format;
+
+	D3D12_RESOURCE_STATES initState = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+
+	D3D12_RESOURCE_DESC desc = {};
+	desc.Alignment = 0;
+	desc.DepthOrArraySize = 6;
+	desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+	if ((usage & TextureUsage::RenderTarget) == TextureUsage::RenderTarget)
+	{
+		desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+		Color clearColor = Color(0, 0, 0, 1);
+		memcpy(&clearValue.Color, &clearColor, sizeof(Color));
+		pClearValue = &clearValue;
+		initState = D3D12_RESOURCE_STATE_RENDER_TARGET;
+	}
+	if ((usage & TextureUsage::DepthStencil) == TextureUsage::DepthStencil)
+	{
+		desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+		clearValue.DepthStencil.Depth = 1;
+		clearValue.DepthStencil.Stencil = 0;
+		pClearValue = &clearValue;
+		initState = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+	}
+	desc.Format = format;
+	desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+	desc.MipLevels = (uint16)m_MipLevels;
+	desc.SampleDesc.Count = sampleCount;
+	desc.SampleDesc.Quality = pGraphics->GetMultiSampleQualityLevel(sampleCount);
+	desc.Width = width;
+	desc.Height = height;
+
+	D3D12_HEAP_PROPERTIES heapProps = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
+
+	HR(pGraphics->GetDevice()->CreateCommittedResource(
+		&heapProps,
+		D3D12_HEAP_FLAG_NONE,
+		&desc,
+		initState,
+		pClearValue,
+		IID_PPV_ARGS(&m_pResource)));
+	m_CurrentState = initState;
+
+	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+	if ((usage & TextureUsage::DepthStencil) == TextureUsage::DepthStencil)
+	{
+		srvDesc.Format = GetDepthFormat(format);
+	}
+	else
+	{
+		srvDesc.Format = format;
+	}
+	srvDesc.TextureCube.MipLevels = m_MipLevels;
+	srvDesc.TextureCube.MostDetailedMip = 0;
+	srvDesc.TextureCube.ResourceMinLODClamp = 0;
+	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
+
+	if ((usage & TextureUsage::ShaderResource) == TextureUsage::ShaderResource)
+	{
+		if (m_Srv.ptr == 0)
+		{
+			m_Srv = pGraphics->AllocateCpuDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+		}
+		pGraphics->GetDevice()->CreateShaderResourceView(m_pResource, &srvDesc, m_Srv);
+	}
+	if ((usage & TextureUsage::RenderTarget) == TextureUsage::RenderTarget)
+	{
+		for (int i = 0; i < 6; ++i)
+		{
+			if (m_Rtv[i].ptr == 0)
+			{
+				m_Rtv[i] = pGraphics->AllocateCpuDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+			}
+			D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = { };
+			rtvDesc.Texture2D.PlaneSlice = i;
+			rtvDesc.Texture2D.MipSlice = 0;
+			rtvDesc.Format = format;
+			rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
+			pGraphics->GetDevice()->CreateRenderTargetView(m_pResource, nullptr, m_Rtv[i]);
+		}
+	}
+	else if ((usage & TextureUsage::DepthStencil) == TextureUsage::DepthStencil)
+	{
+		for (int i = 0; i < 6; ++i)
+		{
+			if (m_Rtv[i].ptr == 0)
+			{
+				m_Rtv[i] = pGraphics->AllocateCpuDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
+			}
+			D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
+			dsvDesc.Flags = D3D12_DSV_FLAG_NONE;
+			dsvDesc.Format = GetDepthFormat(format);
+			dsvDesc.Texture2D.MipSlice = 0;
+			dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
+			pGraphics->GetDevice()->CreateDepthStencilView(m_pResource, nullptr, m_Rtv[i]);
+		}
 	}
 }

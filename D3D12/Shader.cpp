@@ -38,15 +38,17 @@ private:
 	std::string m_BasePath;
 };
 
-bool Shader::Load(const char* pFilePath, Type shaderType, const char* pEntryPoint)
+bool Shader::Load(const char* pFilePath, Type shaderType, const char* pEntryPoint, const std::vector<std::string> defines)
 {
+	uint32 compileFlags = D3DCOMPILE_PACK_MATRIX_ROW_MAJOR;
 #if defined(_DEBUG)
 	// Enable better shader debugging with the graphics debugging tools.
-	uint32 compileFlags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
+	compileFlags |= D3DCOMPILE_DEBUG;
+	compileFlags |= D3DCOMPILE_SKIP_OPTIMIZATION;
+	compileFlags |= D3DCOMPILE_PREFER_FLOW_CONTROL;
 #else
-	uint32 compileFlags = 0;
+	compileFlags |= D3DCOMPILE_OPTIMIZATION_LEVEL3;
 #endif
-	compileFlags |= D3DCOMPILE_PACK_MATRIX_ROW_MAJOR;
 
 	std::ifstream file(pFilePath);
 	if (file.fail())
@@ -60,6 +62,20 @@ bool Shader::Load(const char* pFilePath, Type shaderType, const char* pEntryPoin
 		stream << line << "\n";
 	}
 	line = stream.str();
+
+	std::vector<D3D_SHADER_MACRO> shaderDefines;
+	for (const std::string& define : defines)
+	{
+		D3D_SHADER_MACRO m;
+		m.Name = define.c_str();
+		m.Definition = "1";
+		shaderDefines.push_back(m);
+	}
+
+	D3D_SHADER_MACRO endMacro;
+	endMacro.Name = nullptr;
+	endMacro.Definition = nullptr;
+	shaderDefines.push_back(endMacro);
 
 	std::string shaderModel = "";
 	switch (shaderType)
@@ -83,7 +99,7 @@ bool Shader::Load(const char* pFilePath, Type shaderType, const char* pEntryPoin
 	D3DInclude include(filePath.substr(0, filePath.rfind('/') + 1));
 
 	ComPtr<ID3DBlob> pErrorBlob;
-	D3DCompile2(line.data(), line.size(), nullptr, nullptr, &include, pEntryPoint, shaderModel.c_str(), compileFlags, 0, 0, nullptr, 0, m_pByteCode.GetAddressOf(), pErrorBlob.GetAddressOf());
+	D3DCompile2(line.data(), line.size(), nullptr, shaderDefines.data(), &include, pEntryPoint, shaderModel.c_str(), compileFlags, 0, 0, nullptr, 0, m_pByteCode.GetAddressOf(), pErrorBlob.GetAddressOf());
 	if (pErrorBlob != nullptr)
 	{
 		std::wstring errorMsg = std::wstring((char*)pErrorBlob->GetBufferPointer(), (char*)pErrorBlob->GetBufferPointer() + pErrorBlob->GetBufferSize());

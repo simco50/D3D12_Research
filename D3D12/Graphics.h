@@ -56,8 +56,6 @@ public:
 	static const int FORWARD_PLUS_BLOCK_SIZE = 16;
 
 private:
-	uint64 GetFenceToWaitFor();
-
 	void BeginFrame();
 	void EndFrame(uint64 fenceValue);
 
@@ -105,6 +103,8 @@ private:
 	std::unique_ptr<Mesh> m_pMesh;
 	std::unique_ptr<RootSignature> m_pRootSignature;
 	std::unique_ptr<GraphicsPipelineState> m_pPipelineStateObject;
+	std::unique_ptr<GraphicsPipelineState> m_pPipelineStateObjectDebug;
+	bool m_UseDebugView = false;
 
 	std::unique_ptr<Texture2D> m_pShadowMap;
 	std::unique_ptr<RootSignature> m_pShadowsRootSignature;

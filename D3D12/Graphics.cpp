@@ -41,30 +41,44 @@ void Graphics::Initialize(HWND window)
 	m_CameraPosition = Vector3(0, 100, -15);
 	m_CameraRotation = Quaternion::CreateFromYawPitchRoll(XM_PIDIV4, XM_PIDIV4, 0);
 
-	m_Lights.resize(1024);
+	m_Lights.resize(512);
 	for (int i = 0; i < m_Lights.size(); ++i)
 	{
-		Vector4 color = Vector4(Math::RandomRange(0, 1), Math::RandomRange(0, 1), Math::RandomRange(0, 1), 1);
-		color.Normalize(color);
-		int type = 0;
+		Vector3 c = Vector3(Math::RandomRange(0, 1), Math::RandomRange(0, 1), Math::RandomRange(0, 1));
+		Vector4 color(c.x, c.y, c.z, 1);
+		int type = rand() % 2;
 		if (type == 0)
 		{
-			m_Lights[i] = Light::Point(Vector3(Math::RandomRange(-200, 200), Math::RandomRange(10, 50), Math::RandomRange(-200, 200)), 15.0f, 1.0f, 0.5f, color);
+			m_Lights[i] = Light::Point(Vector3(Math::RandomRange(-140, 140), Math::RandomRange(0, 150), Math::RandomRange(-60, 60)), 25.0f, 1.0f, 0.5f, color);
 		}
 		else
 		{
-			m_Lights[i] = Light::Cone(Vector3(Math::RandomRange(-200, 200), Math::RandomRange(20, 60), Math::RandomRange(-200, 200)), 40.0f, Math::RandVector(), 60.0f, 1.0f, 0.5f, color);
+			m_Lights[i] = Light::Cone(Vector3(Math::RandomRange(-140, 140), Math::RandomRange(20, 150), Math::RandomRange(-60, 60)), 35.0f, Math::RandVector(), 45.0f, 1.0f, 0.5f, color);
 		}
 	}
 }
 
 void Graphics::Update()
 {
+	if (Input::Instance().IsKeyPressed('P'))
+	{
+		m_UseDebugView = !m_UseDebugView;
+	}
+
 	struct PerFrameData
 	{
 		Matrix LightViewProjection;
 		Matrix ViewInverse;
 	} frameData;
+
+	for (Light& l : m_Lights)
+	{
+		l.Position += Vector3::Down * GameTimer::DeltaTime() * 5;
+		if (l.Position.y < 0)
+		{
+			l.Position.y = 150;
+		}
+	}
 
 	Vector3 mainLightPosition = Vector3(cos((float)GameTimer::GameTime() / 5.0f), 1.5, sin((float)GameTimer::GameTime() / 5.0f)) * 80;
 	Vector3 mainLightDirection;
@@ -179,12 +193,9 @@ void Graphics::Update()
 		} Data;
 #pragma pack(pop)
 
-		int frustumCountX = (int)(ceil((float)m_WindowWidth / FORWARD_PLUS_BLOCK_SIZE));
-		int frustumCountY = (int)(ceil((float)m_WindowHeight / FORWARD_PLUS_BLOCK_SIZE));
-
 		Data.CameraView = cameraView;
-		Data.NumThreadGroups[0] = frustumCountX;
-		Data.NumThreadGroups[1] = frustumCountY;
+		Data.NumThreadGroups[0] = (int)(ceil((float)m_WindowWidth / FORWARD_PLUS_BLOCK_SIZE));
+		Data.NumThreadGroups[1] = (int)(ceil((float)m_WindowHeight / FORWARD_PLUS_BLOCK_SIZE));
 		Data.NumThreadGroups[2] = 1;
 		Data.ScreenDimensions.x = (float)m_WindowWidth;
 		Data.ScreenDimensions.y = (float)m_WindowHeight;
@@ -241,23 +252,23 @@ void Graphics::Update()
 	{
 		GraphicsCommandContext* pContext = (GraphicsCommandContext*)AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 		pContext->MarkBegin(L"3D");
-		pContext->SetPipelineState(m_pPipelineStateObject.get());
+		pContext->SetPipelineState(m_UseDebugView ? m_pPipelineStateObjectDebug.get() : m_pPipelineStateObject.get());
 		pContext->SetGraphicsRootSignature(m_pRootSignature.get());
-
+	
 		pContext->SetViewport(m_Viewport);
 		pContext->SetScissorRect(m_ScissorRect);
-
+	
 		pContext->InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RENDER_TARGET, false);
 		pContext->InsertResourceBarrier(m_pLightGrid.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, false);
 		pContext->InsertResourceBarrier(m_pLightIndexListBuffer.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, true);
-
+	
 		pContext->SetRenderTarget(GetCurrentRenderTarget()->GetRTV(), GetDepthStencil()->GetRTV());
-
+	
 		Color clearColor = Color(0, 0, 0, 1);
 		pContext->ClearRenderTarget(GetCurrentRenderTarget()->GetRTV(), clearColor);
-
+	
 		pContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
+	
 		struct PerObjectData
 		{
 			Matrix World;
@@ -265,7 +276,7 @@ void Graphics::Update()
 		} ObjectData;
 		ObjectData.World = XMMatrixIdentity();
 		ObjectData.WorldViewProjection = ObjectData.World * cameraViewProjection;
-
+	
 		pContext->SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
 		pContext->SetDynamicConstantBufferView(1, &frameData, sizeof(PerFrameData));
 		pContext->SetDynamicConstantBufferView(2, m_Lights.data(), sizeof(Light) * (uint32)m_Lights.size());
@@ -282,10 +293,10 @@ void Graphics::Update()
 			pSubMesh->Draw(pContext);
 		}
 		pContext->MarkEnd();
-
+	
 		pContext->InsertResourceBarrier(m_pLightGrid.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, false);
 		pContext->InsertResourceBarrier(m_pLightIndexListBuffer.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, true);
-
+	
 		pContext->Execute(false);
 	}
 
@@ -320,11 +331,6 @@ void Graphics::Shutdown()
 {
 	// Wait for the GPU to be done with all resources.
 	IdleGPU();
-}
-
-uint64 Graphics::GetFenceToWaitFor()
-{
-	return (m_CurrentBackBufferIndex + (FRAME_COUNT - 1)) % FRAME_COUNT;
 }
 
 void Graphics::BeginFrame()
@@ -584,6 +590,18 @@ void Graphics::InitializeAssets()
 		m_pPipelineStateObject->SetRenderTargetFormat(RENDER_TARGET_FORMAT, DEPTH_STENCIL_FORMAT, m_SampleCount, m_SampleQuality);
 		m_pPipelineStateObject->SetDepthTest(D3D12_COMPARISON_FUNC_LESS_EQUAL);
 		m_pPipelineStateObject->Finalize(m_pDevice.Get());
+
+		//Debug version
+		pixelShader.Load("Resources/Diffuse.hlsl", Shader::Type::PixelShader, "PSMain", { "DEBUG_VISUALIZE" });
+
+		m_pPipelineStateObjectDebug = std::make_unique<GraphicsPipelineState>();
+		m_pPipelineStateObjectDebug->SetInputLayout(inputElements, sizeof(inputElements) / sizeof(inputElements[0]));
+		m_pPipelineStateObjectDebug->SetRootSignature(m_pRootSignature->GetRootSignature());
+		m_pPipelineStateObjectDebug->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
+		m_pPipelineStateObjectDebug->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
+		m_pPipelineStateObjectDebug->SetRenderTargetFormat(RENDER_TARGET_FORMAT, DEPTH_STENCIL_FORMAT, m_SampleCount, m_SampleQuality);
+		m_pPipelineStateObjectDebug->SetDepthTest(D3D12_COMPARISON_FUNC_LESS_EQUAL);
+		m_pPipelineStateObjectDebug->Finalize(m_pDevice.Get());
 	}
 
 	{
@@ -607,13 +625,13 @@ void Graphics::InitializeAssets()
 		m_pShadowsPipelineStateObject->SetInputLayout(inputElements, sizeof(inputElements) / sizeof(inputElements[0]));
 		m_pShadowsPipelineStateObject->SetRootSignature(m_pShadowsRootSignature->GetRootSignature());
 		m_pShadowsPipelineStateObject->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
-		m_pShadowsPipelineStateObject->SetRenderTargetFormats(nullptr, 0, DXGI_FORMAT_D32_FLOAT_S8X24_UINT, 1, 0);
+		m_pShadowsPipelineStateObject->SetRenderTargetFormats(nullptr, 0, DXGI_FORMAT_D16_UNORM, 1, 0);
 		m_pShadowsPipelineStateObject->SetCullMode(D3D12_CULL_MODE_NONE);
 		m_pShadowsPipelineStateObject->SetDepthBias(0, 0.0f, 4.0f);
 		m_pShadowsPipelineStateObject->Finalize(m_pDevice.Get());
 
 		m_pShadowMap = std::make_unique<Texture2D>();
-		m_pShadowMap->Create(this, 4096, 4096, DXGI_FORMAT_D32_FLOAT_S8X24_UINT, TextureUsage::DepthStencil | TextureUsage::ShaderResource, 1);
+		m_pShadowMap->Create(this, 2048, 2048, DXGI_FORMAT_D16_UNORM, TextureUsage::DepthStencil | TextureUsage::ShaderResource, 1);
 	}
 
 	{
@@ -682,7 +700,7 @@ void Graphics::UpdateImGui()
 	ImGui::SetNextWindowPos(ImVec2(0, 0), 0, ImVec2(0, 0));
 	ImGui::SetNextWindowSize(ImVec2(250, (float)m_WindowHeight));
 	ImGui::Begin("GPU Stats", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
-	ImGui::Text("MS: %.4f", GameTimer::DeltaTime());
+	ImGui::Text("MS: %.4f", GameTimer::DeltaTime() * 1000.0f);
 	ImGui::SameLine(100);
 	ImGui::Text("FPS: %.1f", 1.0f / GameTimer::DeltaTime());
 	ImGui::PlotLines("Frametime", m_FrameTimes.data(), (int)m_FrameTimes.size(), 0, 0, 0.0f, 0.03f, ImVec2(200, 100));

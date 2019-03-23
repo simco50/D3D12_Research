@@ -18,7 +18,7 @@ public:
 		MAX
 	};
 
-	bool Load(const char* pFilePath, Type shaderType, const char* pEntryPoint);
+	bool Load(const char* pFilePath, Type shaderType, const char* pEntryPoint, const std::vector<std::string> defines = {});
 
 	inline Type GetType() const { return m_Type; }
 	inline void* GetByteCode() const { return m_pByteCode->GetBufferPointer(); }

@@ -26,15 +26,15 @@ groupshared AABB GroupAABB;
 groupshared uint LightCount;
 groupshared uint LightIndexStartOffset;
 groupshared uint LightList[1024];
+#if SPLITZ_CULLING
+groupshared uint DepthMask;
+#endif
 
 void AddLight(uint lightIndex)
 {
     uint index;
     InterlockedAdd(LightCount, 1, index);
-    if(index < 1024)
-    {
-        LightList[index] = lightIndex;
-    }
+    LightList[index] = lightIndex;
 }
 
 bool SphereBehindPlane(Sphere sphere, Plane plane)
@@ -63,20 +63,20 @@ bool ConeInFrustum(Cone cone, Frustum frustum, float zNear, float zFar)
     farPlane.DistanceToOrigin = -zFar;
  
     bool inside = !(ConeBehindPlane(cone, nearPlane) || ConeBehindPlane(cone, farPlane));
-    inside = inside ? !ConeBehindPlane(cone, frustum.Left) : false;
-    inside = inside ? !ConeBehindPlane(cone, frustum.Right) : false;
-    inside = inside ? !ConeBehindPlane(cone, frustum.Top) : false;
-    inside = inside ? !ConeBehindPlane(cone, frustum.Bottom) : false;
+    for(int i = 0; i < 4 && inside; ++i)
+    {
+        inside = !ConeBehindPlane(cone, frustum.Planes[i]);
+    }
     return inside;
 }
 
 bool SphereInFrustum(Sphere sphere, Frustum frustum, float depthNear, float depthFar)
 {
     bool inside = !(sphere.Position.z + sphere.Radius < depthNear || sphere.Position.z - sphere.Radius > depthFar);
-    inside = inside ? !SphereBehindPlane(sphere, frustum.Left) : false;
-    inside = inside ? !SphereBehindPlane(sphere, frustum.Right) : false;
-    inside = inside ? !SphereBehindPlane(sphere, frustum.Top) : false;
-    inside = inside ? !SphereBehindPlane(sphere, frustum.Bottom) : false;
+    for(int i = 0; i < 4 && inside; ++i)
+    {
+        inside = !SphereBehindPlane(sphere, frustum.Planes[i]);
+    }
     return inside;
 }
 
@@ -95,21 +95,37 @@ struct CS_INPUT
     uint GroupIndex : SV_GROUPINDEX;
 };
 
+uint CreateLightMask(float depthRangeMin, float depthRange, Sphere sphere)
+{
+    float fMin = sphere.Position.z - sphere.Radius;
+    float fMax = sphere.Position.z + sphere.Radius;
+    uint maskIndexStart = max(0, min(31, floor((fMin - depthRangeMin) * depthRange)));
+    uint maskIndexEnd = max(0, min(31, floor((fMax - depthRangeMin) * depthRange)));
+
+    uint mask = 0xFFFFFFFF;
+    mask >>= 31 - (maskIndexEnd - maskIndexStart);
+    mask <<= maskIndexStart;
+    return mask;
+}
+
 [numthreads(BLOCK_SIZE, BLOCK_SIZE, 1)]
 void CSMain(CS_INPUT input)
 {
     int2 texCoord = input.DispatchThreadId.xy;
-    float fDepth = tDepthTexture.Load(int3(texCoord, 0)).r;
+    float fDepth = tDepthTexture[texCoord].r;
 
     //Convert to uint because you can't used interlocked functions on floats
     uint depth = asuint(fDepth);
 
     //Initialize the groupshared data only on the first thread of the group
-    if ( input.GroupIndex == 0 )
+    if (input.GroupIndex == 0)
     {
         MinDepth = 0xffffffff;
         MaxDepth = 0;
         LightCount = 0;
+#if SPLITZ_CULLING
+        DepthMask = 0;
+#endif
     }
 
     //Wait for thread 0 to finish with initializing the groupshared data
@@ -137,13 +153,13 @@ void CSMain(CS_INPUT input)
 		viewSpace[6] = ScreenToView(float4(float2(input.GroupId.x, input.GroupId.y + 1) * BLOCK_SIZE, fMaxDepth, 1.0f), cScreenDimensions, cProjectionInverse).xyz;
 		viewSpace[7] = ScreenToView(float4(float2(input.GroupId.x + 1, input.GroupId.y + 1) * BLOCK_SIZE, fMaxDepth, 1.0f), cScreenDimensions, cProjectionInverse).xyz;
 
-        GroupFrustum.Left = CalculatePlane(float3(0, 0, 0), viewSpace[6], viewSpace[4]);
-        GroupFrustum.Right = CalculatePlane(float3(0, 0, 0), viewSpace[5], viewSpace[7]);
-        GroupFrustum.Top = CalculatePlane(float3(0, 0, 0), viewSpace[4], viewSpace[5]);
-        GroupFrustum.Bottom = CalculatePlane(float3(0, 0, 0), viewSpace[7], viewSpace[6]);
+        GroupFrustum.Planes[0] = CalculatePlane(float3(0, 0, 0), viewSpace[6], viewSpace[4]);
+        GroupFrustum.Planes[1] = CalculatePlane(float3(0, 0, 0), viewSpace[5], viewSpace[7]);
+        GroupFrustum.Planes[2] = CalculatePlane(float3(0, 0, 0), viewSpace[4], viewSpace[5]);
+        GroupFrustum.Planes[3] = CalculatePlane(float3(0, 0, 0), viewSpace[7], viewSpace[6]);
 
-        float3 minAABB = 10000000;
-        float3 maxAABB = -10000000;
+        float3 minAABB = 1000000;
+        float3 maxAABB = -1000000;
         [unroll]
         for(uint i = 0; i < 8; ++i)
         {
@@ -153,64 +169,77 @@ void CSMain(CS_INPUT input)
         AABBFromMinMax(GroupAABB, minAABB, maxAABB);        
     }
     
-    GroupMemoryBarrierWithGroupSync();
-    
     // Convert depth values to view space.
-    float minDepthVS = ClipToView(float4(0, 0, fMinDepth, 1), cProjectionInverse).z;
-    float maxDepthVS = ClipToView(float4(0, 0, fMaxDepth, 1), cProjectionInverse).z;
-    float nearClipVS = ClipToView(float4(0, 0, 0, 1), cProjectionInverse).z;
-    
+    float minDepthVS = ScreenToView(float4(0, 0, fMinDepth, 1), cScreenDimensions, cProjectionInverse).z;
+    float maxDepthVS = ScreenToView(float4(0, 0, fMaxDepth, 1), cScreenDimensions, cProjectionInverse).z;
+    float nearClipVS = ScreenToView(float4(0, 0, 0, 1), cScreenDimensions, cProjectionInverse).z;
+
+#if SPLITZ_CULLING
+    float depthVS = ScreenToView(float4(0, 0, fDepth, 1), cScreenDimensions, cProjectionInverse).z;
+    float depthRange = 31.0f / (maxDepthVS - minDepthVS);
+    uint cellIndex = max(0, min(31, floor((depthVS - minDepthVS) * depthRange)));
+    InterlockedOr(DepthMask, 1 << cellIndex);
+#endif
+
     // Clipping plane for minimum depth value 
     Plane minPlane;
     minPlane.Normal = float3(0.0f, 0.0f, 1.0f);
     minPlane.DistanceToOrigin = minDepthVS;
 
+    GroupMemoryBarrierWithGroupSync();
+
     //Perform the light culling
+    [loop]
     for(uint i = input.GroupIndex; i < LIGHT_COUNT; i += BLOCK_SIZE * BLOCK_SIZE)
     {
         Light light = cLights[i];
-        if(light.Enabled)
-        {
-            switch(light.Type)
-            {
-                case LIGHT_DIRECTIONAL:
-                {
-                    AddLight(i);
-                    break;
-                }
-                case LIGHT_POINT:
-                {
-                    Sphere sphere;
-                    sphere.Radius = light.Range;
-                    sphere.Position = mul(float4(light.Position, 1.0f), cView).xyz;
-                    if (SphereInFrustum(sphere, GroupFrustum, nearClipVS, maxDepthVS))
-                    {
-                        if(SphereInAABB(sphere, GroupAABB))
-                        {
-                            AddLight(i);
-                        }
-                    }
-                    break;
-                }
-                case LIGHT_SPOT:
-                {
-                    Cone cone;
-                    cone.Radius = tan(radians(light.SpotLightAngle)) * light.Range;
-                    cone.Direction = mul(light.Direction, (float3x3)cView);
-                    cone.Tip = mul(float4(light.Position, 1.0f), cView).xyz;
-                    cone.Height = light.Range;
 
-                    if(ConeInFrustum(cone, GroupFrustum, nearClipVS, maxDepthVS))
+        switch(light.Type)
+        {
+            case LIGHT_DIRECTIONAL:
+            {
+                AddLight(i);
+                break;
+            }
+            case LIGHT_POINT:
+            {
+                Sphere sphere = (Sphere)0;
+                sphere.Radius = light.Range;
+                sphere.Position = mul(float4(light.Position, 1.0f), cView).xyz;
+                if (SphereInFrustum(sphere, GroupFrustum, nearClipVS, maxDepthVS))
+                {
+                    if(SphereInAABB(sphere, GroupAABB))
                     {
-                        if(!ConeBehindPlane(cone, minPlane))
+#if SPLITZ_CULLING
+                        if(DepthMask & CreateLightMask(minDepthVS, depthRange, sphere))
+#endif
                         {
                             AddLight(i);
                         }
                     }
-                    break;
                 }
+                break;
             }
-        
+            case LIGHT_SPOT:
+            {
+                Sphere sphere;
+                sphere.Radius = light.Range * 0.5f / pow(cos(radians(light.SpotLightAngle / 2)), 2);
+                sphere.Position = mul(float4(light.Position, 1), cView).xyz + mul(light.Direction, (float3x3)cView) * sphere.Radius;
+                if (SphereInFrustum(sphere, GroupFrustum, nearClipVS, maxDepthVS))
+                {
+                    if(SphereInAABB(sphere, GroupAABB))
+                    {
+#if SPLITZ_CULLING
+                        if(DepthMask & CreateLightMask(minDepthVS, depthRange, sphere))
+#endif
+                        {
+                            AddLight(i);
+                        }
+                    }
+                }
+
+                break;
+            }
         }
     }
 
@@ -226,6 +255,7 @@ void CSMain(CS_INPUT input)
     GroupMemoryBarrierWithGroupSync();
 
     //Distribute populating the light index light amonst threads in the thread group
+    [loop]
     for (uint j = input.GroupIndex; j < LightCount; j += BLOCK_SIZE * BLOCK_SIZE)
     {
         uLightIndexList[LightIndexStartOffset + j] = LightList[j];

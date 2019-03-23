@@ -70,7 +70,29 @@ enum class TextureUsage
 };
 DEFINE_ENUM_FLAG_OPERATORS(TextureUsage)
 
-class Texture2D : public GraphicsResource
+class Texture : public GraphicsResource
+{
+public:
+	D3D12_CPU_DESCRIPTOR_HANDLE GetSRV() const { return m_Srv; }
+	int GetRowDataSize(unsigned int width) const;
+
+	int GetWidth() const { return m_Width; }
+	int GetHeight() const { return m_Height; }
+	int GetMipLevels() const { return m_MipLevels; }
+
+protected:
+	static DXGI_FORMAT GetDepthFormat(DXGI_FORMAT format);
+
+	int m_SampleCount = 1;
+	int m_Width;
+	int m_Height;
+	DXGI_FORMAT m_Format;
+	int m_MipLevels = 1;
+	D3D12_CPU_DESCRIPTOR_HANDLE m_Srv;
+
+};
+
+class Texture2D : public Texture
 {
 public:
 	void Create(Graphics* pGraphics, CommandContext* pContext, const char* pFilePath, TextureUsage usage);
@@ -79,23 +101,30 @@ public:
 	void CreateForSwapchain(Graphics* pGraphics, ID3D12Resource* pTexture);
 
 	D3D12_CPU_DESCRIPTOR_HANDLE GetRTV() const { return m_Rtv; }
-	D3D12_CPU_DESCRIPTOR_HANDLE GetSRV() const { return m_Srv; }
 	D3D12_CPU_DESCRIPTOR_HANDLE GetUAV() const { return m_Uav; }
 
-	int GetWidth() const { return m_Width; }
-	int GetHeight() const { return m_Height; }
-	int GetMipLevels() const { return m_MipLevels; }
-
-	int GetRowDataSize(unsigned int width) const;
 private:
-	static DXGI_FORMAT GetDepthFormat(DXGI_FORMAT format);
-
-	int m_SampleCount = 1;
-	int m_Width;
-	int m_Height;
-	DXGI_FORMAT m_Format;
-	int m_MipLevels = 1;
 	D3D12_CPU_DESCRIPTOR_HANDLE m_Rtv;
-	D3D12_CPU_DESCRIPTOR_HANDLE m_Srv;
 	D3D12_CPU_DESCRIPTOR_HANDLE m_Uav;
+};
+
+enum class CubeMapFace
+{
+	POSITIVE_X = 0,
+	NEGATIVE_X,
+	POSITIVE_Y,
+	NEGATIVE_Y,
+	POSITIVE_Z,
+	NEGATIVE_Z,
+	MAX
+};
+
+class TextureCube : public Texture
+{
+public:
+	void Create(Graphics* pGraphics, int width, int height, DXGI_FORMAT format, TextureUsage usage, int sampleCount);
+	D3D12_CPU_DESCRIPTOR_HANDLE GetRTV(CubeMapFace face) const { return m_Rtv[(int)face]; }
+
+private:
+	D3D12_CPU_DESCRIPTOR_HANDLE m_Rtv[8];
 };
