@@ -24,7 +24,7 @@ void RootSignature::SetConstantBufferView(uint32 rootIndex, uint32 registersSlot
 {
 	D3D12_ROOT_PARAMETER1& data = m_RootParameters[rootIndex];
 	data.ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
-	data.Descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_NONE;
+	data.Descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC;
 	data.Descriptor.RegisterSpace = 0;
 	data.Descriptor.ShaderRegister = registersSlot;
 	data.ShaderVisibility = visibility;
@@ -34,7 +34,17 @@ void RootSignature::SetShaderResourceView(uint32 rootIndex, uint32 registersSlot
 {
 	D3D12_ROOT_PARAMETER1& data = m_RootParameters[rootIndex];
 	data.ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
-	data.Descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_NONE;
+	data.Descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC;
+	data.Descriptor.RegisterSpace = 0;
+	data.Descriptor.ShaderRegister = registersSlot;
+	data.ShaderVisibility = visibility;
+}
+
+void RootSignature::SetUnorderedAccessView(uint32 rootIndex, uint32 registersSlot, D3D12_SHADER_VISIBILITY visibility)
+{
+	D3D12_ROOT_PARAMETER1& data = m_RootParameters[rootIndex];
+	data.ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV;
+	data.Descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC;
 	data.Descriptor.RegisterSpace = 0;
 	data.Descriptor.ShaderRegister = registersSlot;
 	data.ShaderVisibility = visibility;
@@ -57,7 +67,7 @@ void RootSignature::SetDescriptorTableRange(uint32 rootIndex, uint32 rangeIndex,
 	range.BaseShaderRegister = startRegisterSlot;
 	range.RegisterSpace = 0;
 	range.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
-	range.Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE;
+	range.Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE | D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE;
 }
 
 void RootSignature::SetDescriptorTableSimple(uint32 rootIndex, uint32 startRegisterSlot, D3D12_DESCRIPTOR_RANGE_TYPE type, uint32 count, D3D12_SHADER_VISIBILITY visibility)

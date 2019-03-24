@@ -164,9 +164,10 @@ void CommandContext::InitializeBuffer(GraphicsBuffer* pResource, const void* pDa
 {
 	DynamicAllocation allocation = AllocatorUploadMemory(dataSize);
 	memcpy(allocation.pMappedMemory, pData, dataSize);
+	D3D12_RESOURCE_STATES previousState = pResource->GetResourceState();
 	InsertResourceBarrier(pResource, D3D12_RESOURCE_STATE_COPY_DEST, true);
 	m_pCommandList->CopyBufferRegion(pResource->GetResource(), 0, allocation.pBackingResource, allocation.Offset, dataSize);
-	InsertResourceBarrier(pResource, D3D12_RESOURCE_STATE_GENERIC_READ, true);
+	InsertResourceBarrier(pResource, previousState, true);
 }
 
 void CommandContext::InitializeTexture(Texture2D* pResource, D3D12_SUBRESOURCE_DATA* pSubResourceDatas, int subResourceCount)

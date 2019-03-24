@@ -31,12 +31,27 @@ void GraphicsBuffer::SetData(CommandContext* pContext, void* pData, uint32 dataS
 	pContext->InitializeBuffer(this, pData, dataSize);
 }
 
+void GraphicsResource::SetName(const std::string& name)
+{
+#ifdef _DEBUG
+	if (m_pResource)
+	{
+		std::wstring n(name.begin(), name.end());
+		m_pResource->SetName(n.c_str());
+	}
+#endif
+}
+
 void StructuredBuffer::Create(Graphics* pGraphics, uint32 elementStride, uint32 elementCount, bool cpuVisible /*= false*/)
 {
 	if (m_pResource)
 	{
 		m_pResource->Release();
 	}
+
+	m_Size = elementCount * elementStride;
+	const int alignment = 16;
+	int bufferSize = (m_Size + (alignment - 1)) & ~(alignment - 1);
 
 	m_Size = elementCount * elementStride;
 	D3D12_RESOURCE_DESC desc = {};
@@ -50,11 +65,11 @@ void StructuredBuffer::Create(Graphics* pGraphics, uint32 elementStride, uint32 
 	desc.MipLevels = 1;
 	desc.SampleDesc.Count = 1;
 	desc.SampleDesc.Quality = 0;
-	desc.Width = m_Size;
+	desc.Width = bufferSize;
 
 	D3D12_HEAP_PROPERTIES properties = CD3DX12_HEAP_PROPERTIES(cpuVisible ? D3D12_HEAP_TYPE_UPLOAD : D3D12_HEAP_TYPE_DEFAULT);
-	HR(pGraphics->GetDevice()->CreateCommittedResource(&properties, D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&m_pResource)));
-	m_CurrentState = D3D12_RESOURCE_STATE_GENERIC_READ;
+	HR(pGraphics->GetDevice()->CreateCommittedResource(&properties, D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, nullptr, IID_PPV_ARGS(&m_pResource)));
+	m_CurrentState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
 
 	D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc{};
 	uavDesc.Buffer.CounterOffsetInBytes = 0;
