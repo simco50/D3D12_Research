@@ -4,15 +4,15 @@
 #pragma pack(16) 
 struct Light
 {
-	int Enabled;
 	Vector3 Position;
+	int Enabled;
 	Vector3 Direction;
-	float Intensity;
-	Vector4 Color;
+	uint32 Type;
 	float Range;
 	float SpotLightAngle;
 	float Attenuation;
-	uint32 Type;
+	float Intensity;
+	Vector4 Color;
 
 	static Light Directional(const Vector3& position, const Vector3& direction, float intensity = 1.0f, const Vector4& color = Vector4(1, 1, 1, 1))
 	{

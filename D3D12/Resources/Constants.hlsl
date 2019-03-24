@@ -1,5 +1,5 @@
 #define BLOCK_SIZE 16
-#define LIGHT_COUNT 512
+#define LIGHT_COUNT 2048
 
 #define LIGHT_DIRECTIONAL 0
 #define LIGHT_POINT 1

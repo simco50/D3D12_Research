@@ -122,4 +122,5 @@ private:
 	std::unique_ptr<Texture2D> m_pResolvedDepthStencil;
 
 	std::vector<Light> m_Lights;
+	std::unique_ptr<StructuredBuffer> m_pLightBuffer;
 };
