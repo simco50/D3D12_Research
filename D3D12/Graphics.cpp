@@ -17,7 +17,8 @@
 #include "External/Imgui/imgui.h"
 #include "Input.h"
 
-const DXGI_FORMAT Graphics::DEPTH_STENCIL_FORMAT = DXGI_FORMAT_D24_UNORM_S8_UINT;
+const DXGI_FORMAT Graphics::DEPTH_STENCIL_FORMAT = DXGI_FORMAT_D32_FLOAT;
+const DXGI_FORMAT Graphics::DEPTH_STENCIL_SHADOW_FORMAT = DXGI_FORMAT_D16_UNORM;
 const DXGI_FORMAT Graphics::RENDER_TARGET_FORMAT = DXGI_FORMAT_R8G8B8A8_UNORM;
 
 Graphics::Graphics(uint32 width, uint32 height, int sampleCount /*= 1*/)
@@ -80,13 +81,13 @@ void Graphics::Update()
 		}
 	}
 
-	Vector3 mainLightPosition = Vector3(cos((float)GameTimer::GameTime() / 5.0f), 1.5, sin((float)GameTimer::GameTime() / 5.0f)) * 80;
+	Vector3 mainLightPosition = Vector3(cos((float)GameTimer::GameTime() / 5.0f), 1.5, sin((float)GameTimer::GameTime() / 5.0f)) * 120;
 	Vector3 mainLightDirection;
 	mainLightPosition.Normalize(mainLightDirection);
 	mainLightDirection *= -1;
 	m_Lights[0] = Light::Directional(mainLightPosition, mainLightDirection);
 
-	frameData.LightViewProjection = XMMatrixLookAtLH(m_Lights[0].Position, Vector3(0, 0, 0), Vector3(0, 1, 0)) * XMMatrixOrthographicLH(512, 512, 5.0f, 200.0f);
+	frameData.LightViewProjection = XMMatrixLookAtLH(m_Lights[0].Position, Vector3(0, 0, 0), Vector3(0, 1, 0)) * XMMatrixOrthographicLH(512, 512, 100000.0f, 0.1f);
 
 	if (Input::Instance().IsMouseDown(0))
 	{
@@ -110,7 +111,7 @@ void Graphics::Update()
 	frameData.ViewInverse = Matrix::CreateFromQuaternion(m_CameraRotation) * Matrix::CreateTranslation(m_CameraPosition);
 	Matrix cameraView;
 	frameData.ViewInverse.Invert(cameraView);
-	Matrix cameraProjection = XMMatrixPerspectiveFovLH(XM_PIDIV4, (float)m_WindowWidth / m_WindowHeight, 1.0f, 300);
+	Matrix cameraProjection = XMMatrixPerspectiveFovLH(XM_PIDIV4, (float)m_WindowWidth / m_WindowHeight, 100000.0f, 0.1f);
 	Matrix cameraViewProjection = cameraView * cameraProjection;
 
 	BeginFrame();
@@ -134,7 +135,7 @@ void Graphics::Update()
 		pContext->SetDepthOnlyTarget(GetDepthStencil()->GetRTV());
 
 		Color clearColor = Color(0.1f, 0.1f, 0.1f, 1.0f);
-		pContext->ClearDepth(GetDepthStencil()->GetRTV(), D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0);
+		pContext->ClearDepth(GetDepthStencil()->GetRTV(), D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 0.0f, 0);
 
 		pContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
@@ -224,7 +225,7 @@ void Graphics::Update()
 		pContext->InsertResourceBarrier(m_pShadowMap.get(), D3D12_RESOURCE_STATE_DEPTH_WRITE, true);
 		pContext->SetDepthOnlyTarget(m_pShadowMap->GetRTV());
 
-		pContext->ClearDepth(m_pShadowMap->GetRTV(), D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0);
+		pContext->ClearDepth(m_pShadowMap->GetRTV(), D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 0.0f, 0);
 
 		pContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
@@ -572,7 +573,7 @@ void Graphics::InitializeAssets()
 		m_pRootSignature->AddStaticSampler(1, samplerDesc, D3D12_SHADER_VISIBILITY_PIXEL);
 
 		samplerDesc.AddressU = samplerDesc.AddressV = samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-		samplerDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
+		samplerDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_GREATER_EQUAL;
 		samplerDesc.Filter = D3D12_FILTER_COMPARISON_MIN_MAG_MIP_POINT;
 		m_pRootSignature->AddStaticSampler(2, samplerDesc, D3D12_SHADER_VISIBILITY_PIXEL);
 
@@ -585,7 +586,7 @@ void Graphics::InitializeAssets()
 		m_pPipelineStateObject->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
 		m_pPipelineStateObject->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
 		m_pPipelineStateObject->SetRenderTargetFormat(RENDER_TARGET_FORMAT, DEPTH_STENCIL_FORMAT, m_SampleCount, m_SampleQuality);
-		m_pPipelineStateObject->SetDepthTest(D3D12_COMPARISON_FUNC_LESS_EQUAL);
+		m_pPipelineStateObject->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
 		m_pPipelineStateObject->Finalize(m_pDevice.Get());
 
 		//Debug version
@@ -597,7 +598,7 @@ void Graphics::InitializeAssets()
 		m_pPipelineStateObjectDebug->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
 		m_pPipelineStateObjectDebug->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
 		m_pPipelineStateObjectDebug->SetRenderTargetFormat(RENDER_TARGET_FORMAT, DEPTH_STENCIL_FORMAT, m_SampleCount, m_SampleQuality);
-		m_pPipelineStateObjectDebug->SetDepthTest(D3D12_COMPARISON_FUNC_LESS_EQUAL);
+		m_pPipelineStateObjectDebug->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
 		m_pPipelineStateObjectDebug->Finalize(m_pDevice.Get());
 	}
 
@@ -622,13 +623,14 @@ void Graphics::InitializeAssets()
 		m_pShadowsPipelineStateObject->SetInputLayout(inputElements, sizeof(inputElements) / sizeof(inputElements[0]));
 		m_pShadowsPipelineStateObject->SetRootSignature(m_pShadowsRootSignature->GetRootSignature());
 		m_pShadowsPipelineStateObject->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
-		m_pShadowsPipelineStateObject->SetRenderTargetFormats(nullptr, 0, DXGI_FORMAT_D16_UNORM, 1, 0);
+		m_pShadowsPipelineStateObject->SetRenderTargetFormats(nullptr, 0, DEPTH_STENCIL_SHADOW_FORMAT, 1, 0);
 		m_pShadowsPipelineStateObject->SetCullMode(D3D12_CULL_MODE_NONE);
-		m_pShadowsPipelineStateObject->SetDepthBias(0, 0.0f, 4.0f);
+		m_pShadowsPipelineStateObject->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
+		m_pShadowsPipelineStateObject->SetDepthBias(-4, 0.0f, -4.0f);
 		m_pShadowsPipelineStateObject->Finalize(m_pDevice.Get());
 
 		m_pShadowMap = std::make_unique<Texture2D>();
-		m_pShadowMap->Create(this, 2048, 2048, DXGI_FORMAT_D16_UNORM, TextureUsage::DepthStencil | TextureUsage::ShaderResource, 1);
+		m_pShadowMap->Create(this, 2048, 2048, DEPTH_STENCIL_SHADOW_FORMAT, TextureUsage::DepthStencil | TextureUsage::ShaderResource, 1);
 	}
 
 	{
@@ -653,6 +655,7 @@ void Graphics::InitializeAssets()
 		m_pDepthPrepassPipelineStateObject->SetRootSignature(m_pDepthPrepassRootSignature->GetRootSignature());
 		m_pDepthPrepassPipelineStateObject->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
 		m_pDepthPrepassPipelineStateObject->SetRenderTargetFormats(nullptr, 0, DEPTH_STENCIL_FORMAT, m_SampleCount, m_SampleQuality);
+		m_pDepthPrepassPipelineStateObject->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
 		m_pDepthPrepassPipelineStateObject->Finalize(m_pDevice.Get());
 	}
 

@@ -91,7 +91,7 @@ void ImGuiRenderer::CreatePipeline()
 	m_pPipelineState = std::make_unique<GraphicsPipelineState>();
 	m_pPipelineState->SetBlendMode(BlendMode::ALPHA, false);
 	m_pPipelineState->SetDepthWrite(false);
-	m_pPipelineState->SetDepthEnabled(true);
+	m_pPipelineState->SetDepthEnabled(false);
 	m_pPipelineState->SetCullMode(D3D12_CULL_MODE_NONE);
 	m_pPipelineState->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
 	m_pPipelineState->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());

@@ -160,7 +160,6 @@ float4 PSMain(PSInput input) : SV_TARGET
 	input.lpos.xyz /= input.lpos.w;
 	input.lpos.x = input.lpos.x / 2.0f + 0.5f;
 	input.lpos.y = input.lpos.y / -2.0f + 0.5f;
-	input.lpos.z -= 0.001f;
 
 	int width, height;
 	tShadowMapTexture.GetDimensions(width, height);

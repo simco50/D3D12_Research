@@ -137,8 +137,8 @@ void CSMain(CS_INPUT input)
     //Wait for all the threads to finish
     GroupMemoryBarrierWithGroupSync();
 
-    float fMinDepth = asfloat(MinDepth);
-    float fMaxDepth = asfloat(MaxDepth);
+    float fMinDepth = asfloat(MaxDepth);
+    float fMaxDepth = asfloat(MinDepth);
 
     if(input.GroupIndex == 0)
     {
@@ -171,7 +171,7 @@ void CSMain(CS_INPUT input)
     // Convert depth values to view space.
     float minDepthVS = ScreenToView(float4(0, 0, fMinDepth, 1), cScreenDimensions, cProjectionInverse).z;
     float maxDepthVS = ScreenToView(float4(0, 0, fMaxDepth, 1), cScreenDimensions, cProjectionInverse).z;
-    float nearClipVS = ScreenToView(float4(0, 0, 0, 1), cScreenDimensions, cProjectionInverse).z;
+    float nearClipVS = ScreenToView(float4(0, 0, 1, 1), cScreenDimensions, cProjectionInverse).z;
 
 #if SPLITZ_CULLING
     float depthVS = ScreenToView(float4(0, 0, fDepth, 1), cScreenDimensions, cProjectionInverse).z;
