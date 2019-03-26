@@ -65,7 +65,7 @@ LightResult DoLight(float4 position, float3 worldPosition, float3 normal, float3
 	LightResult totalResult = (LightResult)0;
 
 #if DEBUG_VISUALIZE
-	totalResult.Diffuse = (float)max(lightCount, 0) / 50.0f;
+	totalResult.Diffuse = (float)max(lightCount, 0) / 100.0f;
 	return totalResult;
 #endif
 

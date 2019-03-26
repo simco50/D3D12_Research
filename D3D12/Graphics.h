@@ -50,6 +50,8 @@ public:
 	uint32 GetMultiSampleCount() const { return m_SampleCount; }
 	uint32 GetMultiSampleQualityLevel(uint32 msaa);
 
+	static const int32 DIRECTIONAL_SHADOW_MAP_SIZE = 2048;
+	static const int32 LIGHT_COUNT = 16384;
 	static const int32 FRAME_COUNT = 3;
 	static const DXGI_FORMAT DEPTH_STENCIL_FORMAT;
 	static const DXGI_FORMAT DEPTH_STENCIL_SHADOW_FORMAT;
@@ -119,6 +121,8 @@ private:
 
 	std::unique_ptr<RootSignature> m_pDepthPrepassRootSignature;
 	std::unique_ptr<GraphicsPipelineState> m_pDepthPrepassPipelineStateObject;
+	std::unique_ptr<RootSignature> m_pResolveDepthRootSignature;
+	std::unique_ptr<ComputePipelineState> m_pResolveDepthPipelineStateObject;
 	std::unique_ptr<Texture2D> m_pDepthStencil;
 	std::unique_ptr<Texture2D> m_pResolvedDepthStencil;
 

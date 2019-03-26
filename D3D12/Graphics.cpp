@@ -42,7 +42,7 @@ void Graphics::Initialize(HWND window)
 	m_CameraPosition = Vector3(0, 100, -15);
 	m_CameraRotation = Quaternion::CreateFromYawPitchRoll(XM_PIDIV4, XM_PIDIV4, 0);
 
-	m_Lights.resize(2048);
+	m_Lights.resize(LIGHT_COUNT);
 	for (int i = 0; i < m_Lights.size(); ++i)
 	{
 		Vector3 c = Vector3(Math::RandomRange(0, 1), Math::RandomRange(0, 1), Math::RandomRange(0, 1));
@@ -50,11 +50,11 @@ void Graphics::Initialize(HWND window)
 		int type = rand() % 2;
 		if (type == 0)
 		{
-			m_Lights[i] = Light::Point(Vector3(Math::RandomRange(-140, 140), Math::RandomRange(0, 150), Math::RandomRange(-60, 60)), 15.0f, 1.0f, 0.5f, color);
+			m_Lights[i] = Light::Point(Vector3(Math::RandomRange(-140, 140), Math::RandomRange(0, 150), Math::RandomRange(-60, 60)), 10.0f, 1.0f, 0.5f, color);
 		}
 		else
 		{
-			m_Lights[i] = Light::Cone(Vector3(Math::RandomRange(-140, 140), Math::RandomRange(20, 150), Math::RandomRange(-60, 60)), 25.0f, Math::RandVector(), 45.0f, 1.0f, 0.5f, color);
+			m_Lights[i] = Light::Cone(Vector3(Math::RandomRange(-140, 140), Math::RandomRange(20, 150), Math::RandomRange(-60, 60)), 15.0f, Math::RandVector(), 45.0f, 1.0f, 0.5f, color);
 		}
 	}
 }
@@ -150,19 +150,42 @@ void Graphics::Update()
 			m_pMesh->GetMesh(i)->Draw(pContext);
 		}
 
+		pContext->InsertResourceBarrier(GetDepthStencil(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, false);
+
 		if (m_SampleCount > 1)
 		{
-			pContext->InsertResourceBarrier(GetResolvedDepthStencil(), D3D12_RESOURCE_STATE_RESOLVE_DEST, false);
-			pContext->InsertResourceBarrier(GetDepthStencil(), D3D12_RESOURCE_STATE_RESOLVE_SOURCE, true);
-			pContext->GetCommandList()->ResolveSubresource(GetResolvedDepthStencil()->GetResource(), 0, GetDepthStencil()->GetResource(), 0, DXGI_FORMAT_R24_UNORM_X8_TYPELESS);
+			pContext->InsertResourceBarrier(GetResolvedDepthStencil(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, true);
 		}
-		pContext->InsertResourceBarrier(GetDepthStencil(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, false);
 
 		pContext->MarkEnd();
 		depthPrepassFence = pContext->Execute(false);
 	}
 
 	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_COMPUTE]->InsertWaitForFence(depthPrepassFence);
+
+	//Depth resolve
+	if(m_SampleCount > 1)
+	{
+		ComputeCommandContext* pContext = (ComputeCommandContext*)AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COMPUTE);
+		pContext->MarkBegin(L"Depth Resolve");
+
+		pContext->SetComputeRootSignature(m_pResolveDepthRootSignature.get());
+		pContext->SetPipelineState(m_pResolveDepthPipelineStateObject.get());
+
+		pContext->SetDynamicDescriptor(0, 0, GetResolvedDepthStencil()->GetUAV());
+		pContext->SetDynamicDescriptor(1, 0, GetDepthStencil()->GetSRV());
+
+		int dispatchGroupsX = (int)ceil((float)m_WindowWidth / 16);
+		int dispatchGroupsY = (int)ceil((float)m_WindowHeight / 16);
+		pContext->Dispatch(dispatchGroupsX, dispatchGroupsY, 1);
+
+		pContext->InsertResourceBarrier(GetResolvedDepthStencil(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, true);
+		pContext->MarkEnd();
+
+		uint32 resolveDepthFence = pContext->Execute(false);
+		m_CommandQueues[D3D12_COMMAND_LIST_TYPE_DIRECT]->InsertWaitForFence(resolveDepthFence);
+		m_CommandQueues[D3D12_COMMAND_LIST_TYPE_COMPUTE]->InsertWaitForFence(resolveDepthFence);
+	}
 
 	//Light culling
 	{
@@ -225,7 +248,7 @@ void Graphics::Update()
 		pContext->InsertResourceBarrier(m_pShadowMap.get(), D3D12_RESOURCE_STATE_DEPTH_WRITE, true);
 		pContext->SetDepthOnlyTarget(m_pShadowMap->GetRTV());
 
-		pContext->ClearDepth(m_pShadowMap->GetRTV(), D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 0.0f, 0);
+		pContext->ClearDepth(m_pShadowMap->GetRTV(), D3D12_CLEAR_FLAG_DEPTH, 0.0f, 0);
 
 		pContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
@@ -508,8 +531,8 @@ void Graphics::OnResize(int width, int height)
 	}
 	if (m_SampleCount > 1)
 	{
-		m_pDepthStencil->Create(this, width, height, DEPTH_STENCIL_FORMAT, TextureUsage::DepthStencil, m_SampleCount);
-		m_pResolvedDepthStencil->Create(this, width, height, DEPTH_STENCIL_FORMAT, TextureUsage::DepthStencil | TextureUsage::ShaderResource, 1);
+		m_pDepthStencil->Create(this, width, height, DEPTH_STENCIL_FORMAT, TextureUsage::DepthStencil | TextureUsage::ShaderResource, m_SampleCount);
+		m_pResolvedDepthStencil->Create(this, width, height, DXGI_FORMAT_R32_FLOAT, TextureUsage::ShaderResource | TextureUsage::UnorderedAccess, 1);
 	}
 	else
 	{
@@ -626,11 +649,11 @@ void Graphics::InitializeAssets()
 		m_pShadowsPipelineStateObject->SetRenderTargetFormats(nullptr, 0, DEPTH_STENCIL_SHADOW_FORMAT, 1, 0);
 		m_pShadowsPipelineStateObject->SetCullMode(D3D12_CULL_MODE_NONE);
 		m_pShadowsPipelineStateObject->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
-		m_pShadowsPipelineStateObject->SetDepthBias(-4, 0.0f, -4.0f);
+		m_pShadowsPipelineStateObject->SetDepthBias(0, 0.0f, -4.0f);
 		m_pShadowsPipelineStateObject->Finalize(m_pDevice.Get());
 
 		m_pShadowMap = std::make_unique<Texture2D>();
-		m_pShadowMap->Create(this, 2048, 2048, DEPTH_STENCIL_SHADOW_FORMAT, TextureUsage::DepthStencil | TextureUsage::ShaderResource, 1);
+		m_pShadowMap->Create(this, DIRECTIONAL_SHADOW_MAP_SIZE, DIRECTIONAL_SHADOW_MAP_SIZE, DEPTH_STENCIL_SHADOW_FORMAT, TextureUsage::DepthStencil | TextureUsage::ShaderResource, 1);
 	}
 
 	{
@@ -657,6 +680,23 @@ void Graphics::InitializeAssets()
 		m_pDepthPrepassPipelineStateObject->SetRenderTargetFormats(nullptr, 0, DEPTH_STENCIL_FORMAT, m_SampleCount, m_SampleQuality);
 		m_pDepthPrepassPipelineStateObject->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
 		m_pDepthPrepassPipelineStateObject->Finalize(m_pDevice.Get());
+
+	}
+
+	//Depth resolve
+	{
+		Shader computeShader;
+		computeShader.Load("Resources/ResolveDepth.hlsl", Shader::Type::ComputeShader, "CSMain", { "DEPTH_RESOLVE_MIN" });
+
+		m_pResolveDepthRootSignature = std::make_unique<RootSignature>(2);
+		m_pResolveDepthRootSignature->SetDescriptorTableSimple(0, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, D3D12_SHADER_VISIBILITY_ALL);
+		m_pResolveDepthRootSignature->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, D3D12_SHADER_VISIBILITY_ALL);
+		m_pResolveDepthRootSignature->Finalize(m_pDevice.Get(), D3D12_ROOT_SIGNATURE_FLAG_NONE);
+
+		m_pResolveDepthPipelineStateObject = std::make_unique<ComputePipelineState>();
+		m_pResolveDepthPipelineStateObject->SetComputeShader(computeShader.GetByteCode(), computeShader.GetByteCodeSize());
+		m_pResolveDepthPipelineStateObject->SetRootSignature(m_pResolveDepthRootSignature->GetRootSignature());
+		m_pResolveDepthPipelineStateObject->Finalize(m_pDevice.Get());
 	}
 
 	{
@@ -680,7 +720,7 @@ void Graphics::InitializeAssets()
 		m_pLightIndexListBuffer->Create(this, sizeof(uint32), 720000, false);
 
 		m_pLightBuffer = std::make_unique<StructuredBuffer>();
-		m_pLightBuffer->Create(this, sizeof(Light), 2048, false);
+		m_pLightBuffer->Create(this, sizeof(Light), LIGHT_COUNT, false);
 	}
 
 	//Geometry

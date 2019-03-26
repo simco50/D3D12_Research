@@ -206,7 +206,14 @@ void Texture2D::Create(Graphics* pGraphics, int width, int height, DXGI_FORMAT f
 	srvDesc.Texture2D.MostDetailedMip = 0;
 	srvDesc.Texture2D.PlaneSlice = 0;
 	srvDesc.Texture2D.ResourceMinLODClamp = 0;
-	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+	if (m_SampleCount > 1)
+	{
+		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DMS;
+	}
+	else
+	{
+		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+	}
 
 	if ((usage & TextureUsage::ShaderResource) == TextureUsage::ShaderResource)
 	{
