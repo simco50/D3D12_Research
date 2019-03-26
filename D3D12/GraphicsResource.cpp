@@ -25,9 +25,9 @@ void GraphicsBuffer::Create(ID3D12Device* pDevice, uint32 size, bool cpuVisible,
 	m_CurrentState = D3D12_RESOURCE_STATE_GENERIC_READ;
 }
 
-void GraphicsBuffer::SetData(CommandContext* pContext, void* pData, uint32 dataSize)
+void GraphicsBuffer::SetData(CommandContext* pContext, void* pData, uint32 dataSize, uint32 offset)
 {
-	assert(m_Size == dataSize);
+	assert(dataSize + offset <= m_Size);
 	pContext->InitializeBuffer(this, pData, dataSize);
 }
 

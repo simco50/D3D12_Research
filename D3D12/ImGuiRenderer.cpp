@@ -49,6 +49,7 @@ void ImGuiRenderer::InitializeImGui()
 	io.Fonts->GetTexDataAsRGBA32(&pPixels, &width, &height);
 	m_pFontTexture = std::make_unique<Texture2D>();
 	m_pFontTexture->Create(m_pGraphics, width, height, DXGI_FORMAT_R8G8B8A8_UNORM, TextureUsage::ShaderResource, 1);
+
 	CommandContext* pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 	m_pFontTexture->SetData(pContext, pPixels);
 	io.Fonts->TexID = m_pFontTexture.get();
@@ -58,9 +59,8 @@ void ImGuiRenderer::InitializeImGui()
 void ImGuiRenderer::CreatePipeline()
 {
 	//Shaders
-	Shader vertexShader, pixelShader;
-	vertexShader.Load("Resources/ImGui.hlsl", Shader::Type::VertexShader, "VSMain");
-	pixelShader.Load("Resources/ImGui.hlsl", Shader::Type::PixelShader, "PSMain");
+	Shader vertexShader("Resources/ImGui.hlsl", Shader::Type::VertexShader, "VSMain");
+	Shader pixelShader("Resources/ImGui.hlsl", Shader::Type::PixelShader, "PSMain");
 
 	//Root signature
 	D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =

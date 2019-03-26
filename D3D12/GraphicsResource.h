@@ -41,7 +41,7 @@ class GraphicsBuffer : public GraphicsResource
 {
 public:
 	void Create(ID3D12Device* pDevice, uint32 size, bool cpuVisible = false, bool unorderedAccess = false);
-	void SetData(CommandContext* pContext, void* pData, uint32 dataSize);
+	void SetData(CommandContext* pContext, void* pData, uint32 dataSize, uint32 offset = 0);
 
 	uint32 GetSize() const { return m_Size; }
 

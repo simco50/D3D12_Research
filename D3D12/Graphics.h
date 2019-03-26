@@ -25,7 +25,7 @@ public:
 	virtual void Update();
 	virtual void Shutdown();
 
-	ID3D12Device* GetDevice() const { return m_pDevice.Get(); }
+	inline ID3D12Device* GetDevice() const { return m_pDevice.Get(); }
 	void OnResize(int width, int height);
 
 	bool IsFenceComplete(uint64 fenceValue);
@@ -50,9 +50,11 @@ public:
 	uint32 GetMultiSampleCount() const { return m_SampleCount; }
 	uint32 GetMultiSampleQualityLevel(uint32 msaa);
 
+	//CONSTANTS
 	static const int32 DIRECTIONAL_SHADOW_MAP_SIZE = 2048;
-	static const int32 LIGHT_COUNT = 16384;
+	static const int32 MAX_LIGHT_COUNT = 2048;
 	static const int32 FRAME_COUNT = 3;
+	static const int32 MAX_LIGHT_DENSITY = 720000;
 	static const DXGI_FORMAT DEPTH_STENCIL_FORMAT;
 	static const DXGI_FORMAT DEPTH_STENCIL_SHADOW_FORMAT;
 	static const DXGI_FORMAT RENDER_TARGET_FORMAT;
@@ -66,6 +68,8 @@ private:
 	void InitializeAssets();
 
 	void UpdateImGui();
+
+	void RandomizeLights();
 
 	std::vector<float> m_FrameTimes;
 
@@ -94,8 +98,6 @@ private:
 
 	std::unique_ptr<ImGuiRenderer> m_pImGuiRenderer;
 
-	FloatRect m_Viewport;
-	FloatRect m_ScissorRect;
 	unsigned int m_WindowWidth;
 	unsigned int m_WindowHeight;
 
@@ -104,28 +106,36 @@ private:
 	std::array<uint64, FRAME_COUNT> m_FenceValues = {};
 
 	std::unique_ptr<Mesh> m_pMesh;
-	std::unique_ptr<RootSignature> m_pRootSignature;
-	std::unique_ptr<GraphicsPipelineState> m_pPipelineStateObject;
-	std::unique_ptr<GraphicsPipelineState> m_pPipelineStateObjectDebug;
+
+	//Diffuse scene passes
+	std::unique_ptr<RootSignature> m_pDiffuseRootSignature;
+	std::unique_ptr<GraphicsPipelineState> m_pDiffusePipelineStateObject;
+	std::unique_ptr<GraphicsPipelineState> m_pDiffusePipelineStateObjectDebug;
 	bool m_UseDebugView = false;
 
+	//Directional light shadow mapping
 	std::unique_ptr<Texture2D> m_pShadowMap;
 	std::unique_ptr<RootSignature> m_pShadowsRootSignature;
 	std::unique_ptr<GraphicsPipelineState> m_pShadowsPipelineStateObject;
-
+	
+	//Light Culling
 	std::unique_ptr<RootSignature> m_pComputeLightCullRootSignature;
 	std::unique_ptr<ComputePipelineState> m_pComputeLightCullPipeline;
 	std::unique_ptr<StructuredBuffer> m_pLightIndexCounterBuffer;
 	std::unique_ptr<StructuredBuffer> m_pLightIndexListBuffer;
 	std::unique_ptr<Texture2D> m_pLightGrid;
 
+	//Depth Prepass
 	std::unique_ptr<RootSignature> m_pDepthPrepassRootSignature;
 	std::unique_ptr<GraphicsPipelineState> m_pDepthPrepassPipelineStateObject;
+
+	//MSAA Depth resolve
 	std::unique_ptr<RootSignature> m_pResolveDepthRootSignature;
 	std::unique_ptr<ComputePipelineState> m_pResolveDepthPipelineStateObject;
 	std::unique_ptr<Texture2D> m_pDepthStencil;
 	std::unique_ptr<Texture2D> m_pResolvedDepthStencil;
 
+	//Light data
 	std::vector<Light> m_Lights;
 	std::unique_ptr<StructuredBuffer> m_pLightBuffer;
 };

@@ -4,10 +4,18 @@
 #pragma pack(16) 
 struct Light
 {
+	enum class Type : uint32
+	{
+		Directional,
+		Point,
+		Spot,
+		MAX
+	};
+
 	Vector3 Position;
 	int Enabled;
 	Vector3 Direction;
-	uint32 Type;
+	Type LightType;
 	float Range;
 	float SpotLightAngle;
 	float Attenuation;
@@ -22,7 +30,7 @@ struct Light
 		l.Direction = direction;
 		l.Intensity = intensity;
 		l.Color = color;
-		l.Type = 0;
+		l.LightType = Type::Directional;
 		return l;
 	}
 
@@ -35,11 +43,11 @@ struct Light
 		l.Intensity = intensity;
 		l.Color = color;
 		l.Attenuation = attenuation;
-		l.Type = 1;
+		l.LightType = Type::Point;
 		return l;
 	}
 
-	static Light Cone(const Vector3& position, float range, const Vector3& direction, float angle = XM_PIDIV4, float intensity = 1.0f, float attenuation = 0.5f, const Vector4& color = Vector4(1, 1, 1, 1))
+	static Light Spot(const Vector3& position, float range, const Vector3& direction, float angle = XM_PIDIV4, float intensity = 1.0f, float attenuation = 0.5f, const Vector4& color = Vector4(1, 1, 1, 1))
 	{
 		Light l;
 		l.Enabled = true;
@@ -50,7 +58,7 @@ struct Light
 		l.Intensity = intensity;
 		l.Color = color;
 		l.Attenuation = attenuation;
-		l.Type = 2;
+		l.LightType = Type::Spot;
 		return l;
 	}
 };

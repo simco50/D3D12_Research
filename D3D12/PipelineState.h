@@ -29,6 +29,7 @@ class GraphicsPipelineState : public PipelineState
 {
 public:
 	GraphicsPipelineState();
+	GraphicsPipelineState(const GraphicsPipelineState& other);
 
 	void SetRenderTargetFormat(DXGI_FORMAT rtvFormat, DXGI_FORMAT dsvFormat, uint32 msaa, uint32 msaaQuality);
 	void SetRenderTargetFormats(DXGI_FORMAT* rtvFormats, uint32 count, DXGI_FORMAT dsvFormat, uint32 msaa, uint32 msaaQuality);
@@ -68,6 +69,7 @@ class ComputePipelineState : public PipelineState
 {
 public:
 	ComputePipelineState();
+	ComputePipelineState(const ComputePipelineState& other);
 
 	void Finalize(ID3D12Device* pDevice);
 

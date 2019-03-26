@@ -14,6 +14,11 @@ GraphicsPipelineState::GraphicsPipelineState()
 	m_Desc.SampleMask = UINT_MAX;
 }
 
+GraphicsPipelineState::GraphicsPipelineState(const GraphicsPipelineState& other)
+	: m_Desc(other.m_Desc)
+{
+}
+
 void GraphicsPipelineState::SetRenderTargetFormat(DXGI_FORMAT rtvFormat, DXGI_FORMAT dsvFormat, uint32 msaa, uint32 msaaQuality)
 {
 	SetRenderTargetFormats(&rtvFormat, 1, dsvFormat, msaa, msaaQuality);
@@ -212,6 +217,12 @@ void GraphicsPipelineState::SetPixelShader(const void* pByteCode, uint32 byteCod
 ComputePipelineState::ComputePipelineState()
 {
 	m_Desc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
+}
+
+ComputePipelineState::ComputePipelineState(const ComputePipelineState& other)
+	: m_Desc(other.m_Desc)
+{
+
 }
 
 void ComputePipelineState::Finalize(ID3D12Device* pDevice)

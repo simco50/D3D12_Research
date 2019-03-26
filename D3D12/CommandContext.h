@@ -36,7 +36,7 @@ public:
 	void SetDescriptorHeap(ID3D12DescriptorHeap* pHeap, D3D12_DESCRIPTOR_HEAP_TYPE type);
 
 	DynamicAllocation AllocatorUploadMemory(uint32 size);
-	void InitializeBuffer(GraphicsBuffer* pResource, const void* pData, uint32 dataSize);
+	void InitializeBuffer(GraphicsBuffer* pResource, const void* pData, uint32 dataSize, uint32 offset = 0);
 	void InitializeTexture(Texture2D* pResource, D3D12_SUBRESOURCE_DATA* pSubResourceDatas, int subResourceCount);
 
 	ID3D12GraphicsCommandList* GetCommandList() const { return m_pCommandList; }
@@ -77,7 +77,7 @@ public:
 	void Draw(int vertexStart, int vertexCount);
 	void DrawIndexed(int indexCount, int indexStart, int minVertex = 0);
 	void DrawIndexedInstanced(int indexCount, int indexStart, int instanceCount, int minVertex = 0, int instanceStart = 0);
-	void ClearRenderTarget(D3D12_CPU_DESCRIPTOR_HANDLE rtv, const Color& color = Color(0.15f, 0.15f, 0.15f, 1.0f));
+	void ClearRenderTarget(D3D12_CPU_DESCRIPTOR_HANDLE rtv, const Color& color = Color(0.0f, 0.0f, 0.0f, 1.0f));
 	void ClearDepth(D3D12_CPU_DESCRIPTOR_HANDLE dsv, D3D12_CLEAR_FLAGS clearFlags = D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, float depth = 1.0f, unsigned char stencil = 0);
 
 	void SetDepthOnlyTarget(D3D12_CPU_DESCRIPTOR_HANDLE dsv);

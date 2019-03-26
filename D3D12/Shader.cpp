@@ -38,7 +38,7 @@ private:
 	std::string m_BasePath;
 };
 
-bool Shader::Load(const char* pFilePath, Type shaderType, const char* pEntryPoint, const std::vector<std::string> defines)
+Shader::Shader(const char* pFilePath, Type shaderType, const char* pEntryPoint, const std::vector<std::string> defines)
 {
 	uint32 compileFlags = D3DCOMPILE_PACK_MATRIX_ROW_MAJOR;
 #if defined(_DEBUG)
@@ -53,7 +53,7 @@ bool Shader::Load(const char* pFilePath, Type shaderType, const char* pEntryPoin
 	std::ifstream file(pFilePath);
 	if (file.fail())
 	{
-		return false;
+		return;
 	}
 	std::stringstream stream;
 	std::string line;
@@ -91,7 +91,7 @@ bool Shader::Load(const char* pFilePath, Type shaderType, const char* pEntryPoin
 		break;
 	case Type::MAX:
 	default:
-		return false;
+		return;
 	}
 	m_Type = shaderType;
 
@@ -104,9 +104,9 @@ bool Shader::Load(const char* pFilePath, Type shaderType, const char* pEntryPoin
 	{
 		std::wstring errorMsg = std::wstring((char*)pErrorBlob->GetBufferPointer(), (char*)pErrorBlob->GetBufferPointer() + pErrorBlob->GetBufferSize());
 		std::wcout << errorMsg << std::endl;
-		return false;
+		return;
 	}
 	pErrorBlob.Reset();
 
-	return true;
+	return;
 }
