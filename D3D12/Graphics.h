@@ -14,6 +14,15 @@ class GraphicsPipelineState;
 class ComputePipelineState;
 class Mesh;
 class StructuredBuffer;
+class SubMesh;
+struct Material;
+
+struct Batch
+{
+	const SubMesh* pMesh;
+	const Material* pMaterial;
+	Matrix WorldMatrix;
+};
 
 class Graphics
 {
@@ -71,6 +80,8 @@ private:
 
 	void RandomizeLights();
 
+	void SortBatchesBackToFront(const Vector3& cameraPosition, std::vector<Batch>& batches);
+
 	std::vector<float> m_FrameTimes;
 
 	Vector3 m_CameraPosition;
@@ -106,10 +117,13 @@ private:
 	std::array<uint64, FRAME_COUNT> m_FenceValues = {};
 
 	std::unique_ptr<Mesh> m_pMesh;
+	std::vector<Batch> m_OpaqueBatches;
+	std::vector<Batch> m_TransparantBatches;
 
 	//Diffuse scene passes
 	std::unique_ptr<RootSignature> m_pDiffuseRootSignature;
 	std::unique_ptr<GraphicsPipelineState> m_pDiffusePipelineStateObject;
+	std::unique_ptr<GraphicsPipelineState> m_pDiffuseAlphaPipelineStateObject;
 	std::unique_ptr<GraphicsPipelineState> m_pDiffusePipelineStateObjectDebug;
 	bool m_UseDebugView = false;
 
@@ -117,13 +131,17 @@ private:
 	std::unique_ptr<Texture2D> m_pShadowMap;
 	std::unique_ptr<RootSignature> m_pShadowsRootSignature;
 	std::unique_ptr<GraphicsPipelineState> m_pShadowsPipelineStateObject;
+	std::unique_ptr<RootSignature> m_pShadowsAlphaRootSignature;
+	std::unique_ptr<GraphicsPipelineState> m_pShadowsAlphaPipelineStateObject;
 	
 	//Light Culling
 	std::unique_ptr<RootSignature> m_pComputeLightCullRootSignature;
 	std::unique_ptr<ComputePipelineState> m_pComputeLightCullPipeline;
-	std::unique_ptr<StructuredBuffer> m_pLightIndexCounterBuffer;
-	std::unique_ptr<StructuredBuffer> m_pLightIndexListBuffer;
-	std::unique_ptr<Texture2D> m_pLightGrid;
+	std::unique_ptr<StructuredBuffer> m_pLightIndexCounter;
+	std::unique_ptr<StructuredBuffer> m_pLightIndexListBufferOpaque;
+	std::unique_ptr<Texture2D> m_pLightGridOpaque;
+	std::unique_ptr<StructuredBuffer> m_pLightIndexListBufferTransparant;
+	std::unique_ptr<Texture2D> m_pLightGridTransparant;
 
 	//Depth Prepass
 	std::unique_ptr<RootSignature> m_pDepthPrepassRootSignature;

@@ -10,7 +10,7 @@ class SubMesh
 	friend class Mesh;
 
 public:
-	void Draw(GraphicsCommandContext* pContext);
+	void Draw(GraphicsCommandContext* pContext) const;
 	int GetMaterialId() const { return m_MaterialId; }
 
 private:

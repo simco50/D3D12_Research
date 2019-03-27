@@ -11,28 +11,48 @@ cbuffer ShaderParameters : register(b0)
 
 StructuredBuffer<Light> Lights : register(t1);
 Texture2D tDepthTexture : register(t0);
+
 globallycoherent RWStructuredBuffer<uint> uLightIndexCounter : register(u0);
-RWStructuredBuffer<uint> uLightIndexList : register(u1);
-RWTexture2D<uint2> uOutLightGrid : register(u2);
+RWStructuredBuffer<uint> uOpaqueLightIndexList : register(u1);
+RWTexture2D<uint2> uOpaqueOutLightGrid : register(u2);
+
+RWStructuredBuffer<uint> uTransparantLightIndexList : register(u3);
+RWTexture2D<uint2> uTransparantOutLightGrid : register(u4);
 
 groupshared uint MinDepth;
 groupshared uint MaxDepth;
 groupshared Frustum GroupFrustum;
 groupshared AABB GroupAABB;
-groupshared uint LightCount;
-groupshared uint LightIndexStartOffset;
-groupshared uint LightList[1024];
+
+groupshared uint OpaqueLightCount;
+groupshared uint OpaqueLightIndexStartOffset;
+groupshared uint OpaqueLightList[1024];
+
+groupshared uint TransparantLightCount;
+groupshared uint TransparantLightIndexStartOffset;
+groupshared uint TransparantLightList[1024];
+
 #if SPLITZ_CULLING
 groupshared uint DepthMask;
 #endif
 
-void AddLight(uint lightIndex)
+void AddLightForOpaque(uint lightIndex)
 {
     uint index;
-    InterlockedAdd(LightCount, 1, index);
+    InterlockedAdd(OpaqueLightCount, 1, index);
     if (index < 1024)
     {
-        LightList[index] = lightIndex;
+        OpaqueLightList[index] = lightIndex;
+    }
+}
+
+void AddLightForTransparant(uint lightIndex)
+{
+    uint index;
+    InterlockedAdd(TransparantLightCount, 1, index);
+    if (index < 1024)
+    {
+        TransparantLightList[index] = lightIndex;
     }
 }
 
@@ -121,7 +141,8 @@ void CSMain(CS_INPUT input)
     {
         MinDepth = 0xffffffff;
         MaxDepth = 0;
-        LightCount = 0;
+        OpaqueLightCount = 0;
+        TransparantLightCount = 0;
 #if SPLITZ_CULLING
         DepthMask = 0;
 #endif
@@ -201,13 +222,15 @@ void CSMain(CS_INPUT input)
             sphere.Position = mul(float4(light.Position, 1.0f), cView).xyz;
             if (SphereInFrustum(sphere, GroupFrustum, nearClipVS, maxDepthVS))
             {
+                AddLightForTransparant(i);
+
                 if(SphereInAABB(sphere, GroupAABB))
                 {
 #if SPLITZ_CULLING
                     if(DepthMask & CreateLightMask(minDepthVS, depthRange, sphere))
 #endif
                     {
-                        AddLight(i);
+                        AddLightForOpaque(i);
                     }
                 }
             }
@@ -220,13 +243,15 @@ void CSMain(CS_INPUT input)
             sphere.Position = mul(float4(light.Position, 1), cView).xyz + mul(light.Direction, (float3x3)cView) * sphere.Radius;
             if (SphereInFrustum(sphere, GroupFrustum, nearClipVS, maxDepthVS))
             {
+                AddLightForTransparant(i);
+
                 if(SphereInAABB(sphere, GroupAABB))
                 {
 #if SPLITZ_CULLING
                     if(DepthMask & CreateLightMask(minDepthVS, depthRange, sphere))
 #endif
                     {
-                        AddLight(i);
+                        AddLightForOpaque(i);
                     }
                 }
             }
@@ -234,7 +259,8 @@ void CSMain(CS_INPUT input)
         break;
         case LIGHT_DIRECTIONAL:
         {
-            AddLight(i);
+            AddLightForTransparant(i);
+            AddLightForOpaque(i);
         }
         break;
         }
@@ -245,15 +271,22 @@ void CSMain(CS_INPUT input)
     //Populate the light grid only on the first thread in the group
     if (input.GroupIndex == 0)
     {
-        InterlockedAdd(uLightIndexCounter[0], LightCount, LightIndexStartOffset);
-        uOutLightGrid[input.GroupId.xy] = uint2(LightIndexStartOffset, LightCount);
+        InterlockedAdd(uLightIndexCounter[0], OpaqueLightCount, OpaqueLightIndexStartOffset);
+        uOpaqueOutLightGrid[input.GroupId.xy] = uint2(OpaqueLightIndexStartOffset, OpaqueLightCount);
+
+        InterlockedAdd(uLightIndexCounter[1], TransparantLightCount, TransparantLightIndexStartOffset);
+        uTransparantOutLightGrid[input.GroupId.xy] = uint2(TransparantLightIndexStartOffset, TransparantLightCount);
     }
 
     GroupMemoryBarrierWithGroupSync();
 
     //Distribute populating the light index light amonst threads in the thread group
-    for (i = input.GroupIndex; i < LightCount; i += BLOCK_SIZE * BLOCK_SIZE)
+    for (i = input.GroupIndex; i < OpaqueLightCount; i += BLOCK_SIZE * BLOCK_SIZE)
     {
-        uLightIndexList[LightIndexStartOffset + i] = LightList[i];
+        uOpaqueLightIndexList[OpaqueLightIndexStartOffset + i] = OpaqueLightList[i];
+    }
+    for (i = input.GroupIndex; i < TransparantLightCount; i += BLOCK_SIZE * BLOCK_SIZE)
+    {
+        uTransparantLightIndexList[TransparantLightIndexStartOffset + i] = TransparantLightList[i];
     }
 }
