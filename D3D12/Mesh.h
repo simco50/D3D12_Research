@@ -3,6 +3,7 @@ class GraphicsBuffer;
 class GraphicsCommandContext;
 class Texture2D;
 class Graphics;
+class CommandContext;
 struct aiMesh;
 
 class SubMesh
@@ -35,13 +36,13 @@ struct Material
 class Mesh
 {
 public:
-	bool Load(const char* pFilePath, Graphics* pGraphics, GraphicsCommandContext* pContext);
+	bool Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pContext);
 	int GetMeshCount() const { return (int)m_Meshes.size(); }
 	SubMesh* GetMesh(const int index) const { return m_Meshes[index].get(); }
 	const Material& GetMaterial(int materialId) const { return m_Materials[materialId]; }
 
 private:
-	std::unique_ptr<SubMesh> LoadMesh(aiMesh* pMesh, ID3D12Device* pDevice, GraphicsCommandContext* pContext);
+	std::unique_ptr<SubMesh> LoadMesh(aiMesh* pMesh, ID3D12Device* pDevice, CommandContext* pContext);
 
 	std::vector<std::unique_ptr<SubMesh>> m_Meshes;
 	std::vector<Material> m_Materials;

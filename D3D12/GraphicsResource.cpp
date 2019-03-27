@@ -21,8 +21,8 @@ void GraphicsBuffer::Create(ID3D12Device* pDevice, uint32 size, bool cpuVisible,
 	desc.Width = size;
 
 	D3D12_HEAP_PROPERTIES properties = CD3DX12_HEAP_PROPERTIES(cpuVisible ? D3D12_HEAP_TYPE_UPLOAD : D3D12_HEAP_TYPE_DEFAULT);
-	HR(pDevice->CreateCommittedResource(&properties, D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&m_pResource)));
-	m_CurrentState = D3D12_RESOURCE_STATE_GENERIC_READ;
+	HR(pDevice->CreateCommittedResource(&properties, D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(&m_pResource)));
+	m_CurrentState = D3D12_RESOURCE_STATE_COMMON;
 }
 
 void GraphicsBuffer::SetData(CommandContext* pContext, void* pData, uint32 dataSize, uint32 offset)
@@ -147,7 +147,7 @@ void Texture2D::Create(Graphics* pGraphics, int width, int height, DXGI_FORMAT f
 	D3D12_CLEAR_VALUE clearValue = {};
 	clearValue.Format = format;
 
-	D3D12_RESOURCE_STATES initState = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+	D3D12_RESOURCE_STATES initState = D3D12_RESOURCE_STATE_COMMON;
 
 	D3D12_RESOURCE_DESC desc = {};
 	desc.Alignment = 0;
@@ -163,7 +163,6 @@ void Texture2D::Create(Graphics* pGraphics, int width, int height, DXGI_FORMAT f
 		Color clearColor = Color(0, 0, 0, 1);
 		memcpy(&clearValue.Color, &clearColor, sizeof(Color));
 		pClearValue = &clearValue;
-		initState = D3D12_RESOURCE_STATE_RENDER_TARGET;
 	}
 	if ((usage & TextureUsage::DepthStencil) == TextureUsage::DepthStencil)
 	{
@@ -171,7 +170,6 @@ void Texture2D::Create(Graphics* pGraphics, int width, int height, DXGI_FORMAT f
 		clearValue.DepthStencil.Depth = 0;
 		clearValue.DepthStencil.Stencil = 0;
 		pClearValue = &clearValue;
-		initState = D3D12_RESOURCE_STATE_DEPTH_WRITE;
 	}
 	desc.Format = format;
 	desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;

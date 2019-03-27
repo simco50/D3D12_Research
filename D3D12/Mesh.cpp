@@ -7,7 +7,7 @@
 #include "CommandContext.h"
 #include "Graphics.h"
 
-bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, GraphicsCommandContext* pContext)
+bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pContext)
 {
 	struct Vertex
 	{
@@ -80,7 +80,7 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, GraphicsCommandConte
 	return true;
 }
 
-std::unique_ptr<SubMesh> Mesh::LoadMesh(aiMesh* pMesh, ID3D12Device* pDevice, GraphicsCommandContext* pContext)
+std::unique_ptr<SubMesh> Mesh::LoadMesh(aiMesh* pMesh, ID3D12Device* pDevice, CommandContext* pContext)
 {
 	struct Vertex
 	{

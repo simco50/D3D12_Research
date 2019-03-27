@@ -13,7 +13,8 @@
 #endif
 #include "d3dx12.h"
 
-constexpr int VALID_COMPUTE_QUEUE_RESOURCE_STATES = D3D12_RESOURCE_STATE_UNORDERED_ACCESS | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_COPY_DEST | D3D12_RESOURCE_STATE_COPY_SOURCE;
+constexpr int VALID_COMPUTE_QUEUE_RESOURCE_STATES = D3D12_RESOURCE_STATE_COMMON | D3D12_RESOURCE_STATE_UNORDERED_ACCESS | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_COPY_DEST | D3D12_RESOURCE_STATE_COPY_SOURCE;
+constexpr int VALID_COPY_QUEUE_RESOURCE_STATES = D3D12_RESOURCE_STATE_COMMON | D3D12_RESOURCE_STATE_COPY_DEST | D3D12_RESOURCE_STATE_COPY_SOURCE;
 
 CommandContext::CommandContext(Graphics* pGraphics, ID3D12GraphicsCommandList* pCommandList, ID3D12CommandAllocator* pAllocator, D3D12_COMMAND_LIST_TYPE type)
 	: m_pGraphics(pGraphics), m_pCommandList(pCommandList), m_pAllocator(pAllocator), m_Type(type)
@@ -73,20 +74,6 @@ uint64 CommandContext::ExecuteAndReset(bool wait)
 	return fenceValue;
 }
 
-void CommandContext::SetGraphicsRootSignature(RootSignature* pRootSignature)
-{
-	m_pCommandList->SetGraphicsRootSignature(pRootSignature->GetRootSignature());
-	m_pShaderResourceDescriptorAllocator->ParseRootSignature(pRootSignature);
-	m_pSamplerDescriptorAllocator->ParseRootSignature(pRootSignature);
-}
-
-void CommandContext::SetComputeRootSignature(RootSignature* pRootSignature)
-{
-	m_pCommandList->SetComputeRootSignature(pRootSignature->GetRootSignature());
-	m_pShaderResourceDescriptorAllocator->ParseRootSignature(pRootSignature);
-	m_pSamplerDescriptorAllocator->ParseRootSignature(pRootSignature);
-}
-
 void CommandContext::FlushResourceBarriers()
 {
 	if (m_NumQueuedBarriers > 0)
@@ -95,12 +82,6 @@ void CommandContext::FlushResourceBarriers()
 		m_NumQueuedBarriers = 0;
 	}
 }
-
-void CommandContext::SetComputeRootConstants(int rootIndex, uint32 count, const void* pConstants)
-{
-	m_pCommandList->SetComputeRoot32BitConstants(rootIndex, count, pConstants, 0);
-}
-
 
 void CommandContext::SetDynamicVertexBuffer(int rootIndex, int elementCount, int elementSize, void* pData)
 {
@@ -174,9 +155,28 @@ void CommandContext::InitializeTexture(Texture2D* pResource, D3D12_SUBRESOURCE_D
 {
 	uint64 allocationSize = GetRequiredIntermediateSize(pResource->GetResource(), (UINT)0, (UINT)subResourceCount);
 	DynamicAllocation allocation = m_pGraphics->GetCpuVisibleAllocator()->Allocate((uint32)allocationSize, 512);
+	D3D12_RESOURCE_STATES previousState = pResource->GetResourceState();
 	InsertResourceBarrier(pResource, D3D12_RESOURCE_STATE_COPY_DEST, true);
 	UpdateSubresources(m_pCommandList, pResource->GetResource(), allocation.pBackingResource, 0, 0, subResourceCount, pSubResourceDatas);
-	InsertResourceBarrier(pResource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, true);
+	InsertResourceBarrier(pResource, previousState, true);
+}
+
+GraphicsCommandContext* CommandContext::AsGraphicsContext()
+{
+	assert(m_Type == D3D12_COMMAND_LIST_TYPE_DIRECT);
+	return static_cast<GraphicsCommandContext*>(this);
+}
+
+ComputeCommandContext* CommandContext::AsComputeContext()
+{
+	assert(m_Type == D3D12_COMMAND_LIST_TYPE_DIRECT || m_Type == D3D12_COMMAND_LIST_TYPE_COMPUTE);
+	return static_cast<ComputeCommandContext*>(this);
+}
+
+CopyCommandContext* CommandContext::AsCopyContext()
+{
+	assert(m_Type == D3D12_COMMAND_LIST_TYPE_DIRECT || m_Type == D3D12_COMMAND_LIST_TYPE_COMPUTE || m_Type == D3D12_COMMAND_LIST_TYPE_COPY);
+	return static_cast<CopyCommandContext*>(this);
 }
 
 void CommandContext::InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESOURCE_STATES state, bool executeImmediate /*= false*/)
@@ -188,6 +188,12 @@ void CommandContext::InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESO
 			D3D12_RESOURCE_STATES currentState = pBuffer->GetResourceState();
 			assert((currentState & VALID_COMPUTE_QUEUE_RESOURCE_STATES) == currentState);
 			assert((state & VALID_COMPUTE_QUEUE_RESOURCE_STATES) == state);
+		}
+		else if (m_Type == D3D12_COMMAND_LIST_TYPE_COPY)
+		{
+			D3D12_RESOURCE_STATES currentState = pBuffer->GetResourceState();
+			assert((currentState & VALID_COPY_QUEUE_RESOURCE_STATES) == currentState);
+			assert((state & VALID_COPY_QUEUE_RESOURCE_STATES) == state);
 		}
 
 		m_QueuedBarriers[m_NumQueuedBarriers] = CD3DX12_RESOURCE_BARRIER::Transition(pBuffer->GetResource(), pBuffer->m_CurrentState, state);
@@ -256,7 +262,7 @@ void GraphicsCommandContext::SetPipelineState(GraphicsPipelineState* pPipelineSt
 	m_pCommandList->SetPipelineState(pPipelineState->GetPipelineState());
 }
 
-void GraphicsCommandContext::SetGraphicsRootConstants(int rootIndex, uint32 count, const void* pConstants)
+void GraphicsCommandContext::SetRootConstants(int rootIndex, uint32 count, const void* pConstants)
 {
 	m_pCommandList->SetGraphicsRoot32BitConstants(rootIndex, count, pConstants, 0);
 }
@@ -359,7 +365,27 @@ void GraphicsCommandContext::SetScissorRect(const FloatRect& rect)
 	m_pCommandList->RSSetScissorRects(1, &r);
 }
 
-ComputeCommandContext::ComputeCommandContext(Graphics* pGraphics, ID3D12GraphicsCommandList* pCommandList, ID3D12CommandAllocator* pAllocator) : CommandContext(pGraphics, pCommandList, pAllocator, D3D12_COMMAND_LIST_TYPE_COMPUTE)
+void GraphicsCommandContext::SetRootSignature(RootSignature* pRootSignature)
+{
+	m_pCommandList->SetGraphicsRootSignature(pRootSignature->GetRootSignature());
+	m_pShaderResourceDescriptorAllocator->ParseRootSignature(pRootSignature);
+	m_pSamplerDescriptorAllocator->ParseRootSignature(pRootSignature);
+}
+
+void ComputeCommandContext::SetRootSignature(RootSignature* pRootSignature)
+{
+	m_pCommandList->SetComputeRootSignature(pRootSignature->GetRootSignature());
+	m_pShaderResourceDescriptorAllocator->ParseRootSignature(pRootSignature);
+	m_pSamplerDescriptorAllocator->ParseRootSignature(pRootSignature);
+}
+
+void ComputeCommandContext::SetRootConstants(int rootIndex, uint32 count, const void* pConstants)
+{
+	m_pCommandList->SetComputeRoot32BitConstants(rootIndex, count, pConstants, 0);
+}
+
+ComputeCommandContext::ComputeCommandContext(Graphics* pGraphics, ID3D12GraphicsCommandList* pCommandList, ID3D12CommandAllocator* pAllocator)
+	: CommandContext(pGraphics, pCommandList, pAllocator, D3D12_COMMAND_LIST_TYPE_COMPUTE)
 {
 }
 
@@ -381,4 +407,10 @@ void ComputeCommandContext::Dispatch(uint32 groupCountX, uint32 groupCountY, uin
 	m_pShaderResourceDescriptorAllocator->UploadAndBindStagedDescriptors(DescriptorTableType::Compute);
 	m_pSamplerDescriptorAllocator->UploadAndBindStagedDescriptors(DescriptorTableType::Compute);
 	m_pCommandList->Dispatch(groupCountX, groupCountY, groupCountZ);
+}
+
+CopyCommandContext::CopyCommandContext(Graphics* pGraphics, ID3D12GraphicsCommandList* pCommandList, ID3D12CommandAllocator* pAllocator)
+	: CommandContext(pGraphics, pCommandList, pAllocator, D3D12_COMMAND_LIST_TYPE_COPY)
+{
+
 }

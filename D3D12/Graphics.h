@@ -60,7 +60,7 @@ public:
 	uint32 GetMultiSampleQualityLevel(uint32 msaa);
 
 	//CONSTANTS
-	static const int32 DIRECTIONAL_SHADOW_MAP_SIZE = 2048;
+	static const int32 DIRECTIONAL_SHADOW_MAP_SIZE = 4096;
 	static const int32 MAX_LIGHT_COUNT = 2048;
 	static const int32 FRAME_COUNT = 3;
 	static const int32 MAX_LIGHT_DENSITY = 720000;

@@ -112,7 +112,7 @@ void ImGuiRenderer::Render(GraphicsCommandContext& context)
 	}
 
 	context.SetPipelineState(m_pPipelineState.get());
-	context.SetGraphicsRootSignature(m_pRootSignature.get());
+	context.SetRootSignature(m_pRootSignature.get());
 	Matrix projectionMatrix = XMMatrixOrthographicOffCenterLH(0.0f, (float)m_pGraphics->GetWindowWidth(), (float)m_pGraphics->GetWindowHeight(), 0.0f, 0.0f, 1.0f);
 	context.SetDynamicConstantBufferView(0, &projectionMatrix, sizeof(Matrix));
 	context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
