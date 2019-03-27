@@ -63,7 +63,7 @@ void Graphics::RandomizeLights()
 		const float range = Math::RandomRange(15.0f, 25.0f);
 		const float angle = Math::RandomRange(30.0f, 60.0f);
 
-		Light::Type type = (Light::Type)(rand() % 2 + 1);
+		Light::Type type = rand() % 2 == 0 ? Light::Type::Point : Light::Type::Spot;
 		switch (type)
 		{
 		case Light::Type::Point:
@@ -79,6 +79,8 @@ void Graphics::RandomizeLights()
 			break;
 		}
 	}
+
+	std::sort(m_Lights.begin(), m_Lights.end(), [](const Light& a, const Light& b) { return (int)a.LightType < (int)b.LightType; });
 }
 
 void Graphics::SortBatchesBackToFront(const Vector3& cameraPosition, std::vector<Batch>& batches)
@@ -140,13 +142,29 @@ void Graphics::Update()
 		Matrix ViewInverse;
 	} frameData;
 	
-	//Setup the directional light
+	//Setup the main light (only shadow casting light)
+	Light& mainLight = m_Lights[0];
 	Vector3 mainLightPosition = Vector3(cos((float)GameTimer::GameTime() / 5.0f), 1.5, sin((float)GameTimer::GameTime() / 5.0f)) * 120;
 	Vector3 mainLightDirection;
 	mainLightPosition.Normalize(mainLightDirection);
 	mainLightDirection *= -1;
-	m_Lights[0] = Light::Directional(mainLightPosition, mainLightDirection);
-	frameData.LightViewProjection = XMMatrixLookAtLH(m_Lights[0].Position, Vector3(0, 0, 0), Vector3(0, 1, 0)) * XMMatrixOrthographicLH(512, 512, 100000.0f, 0.1f);
+	mainLight = Light::Directional(mainLightPosition, mainLightDirection);
+
+	switch (mainLight.LightType)
+	{
+	case Light::Type::Directional:
+		frameData.LightViewProjection = XMMatrixLookAtLH(mainLight.Position, Vector3(0, 0, 0), Vector3(0, 1, 0)) * XMMatrixOrthographicLH(512, 512, 100000.0f, 0.1f);
+		break;
+	case Light::Type::Spot:
+		frameData.LightViewProjection = XMMatrixLookAtLH(mainLight.Position, Vector3(0, 0, 0), Vector3(0, 1, 0)) * XMMatrixPerspectiveFovLH(mainLight.SpotLightAngle, 1.0f, 100000.0f, 0.1f);
+		break;
+	case Light::Type::Point:
+	case Light::Type::MAX:
+	default:
+		//Point light shadows not supported
+		assert(false);
+		break;
+	}
 
 	//Camera constants
 	frameData.ViewInverse = Matrix::CreateFromQuaternion(m_CameraRotation) * Matrix::CreateTranslation(m_CameraPosition);

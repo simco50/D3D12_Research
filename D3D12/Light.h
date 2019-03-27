@@ -1,7 +1,5 @@
 #pragma once
 
-#pragma pack(push)
-#pragma pack(16) 
 struct Light
 {
 	enum class Type : uint32
@@ -16,11 +14,11 @@ struct Light
 	int Enabled;
 	Vector3 Direction;
 	Type LightType;
+	Vector4 Color;
 	float Range;
 	float SpotLightAngle;
 	float Attenuation;
-	float Intensity;
-	Vector4 Color;
+	float padding;
 
 	static Light Directional(const Vector3& position, const Vector3& direction, float intensity = 1.0f, const Vector4& color = Vector4(1, 1, 1, 1))
 	{
@@ -28,8 +26,7 @@ struct Light
 		l.Enabled = true;
 		l.Position = position;
 		l.Direction = direction;
-		l.Intensity = intensity;
-		l.Color = color;
+		l.Color = Vector4(color.x, color.y, color.z, intensity);
 		l.LightType = Type::Directional;
 		return l;
 	}
@@ -40,8 +37,7 @@ struct Light
 		l.Enabled = true;
 		l.Position = position;
 		l.Range = radius;
-		l.Intensity = intensity;
-		l.Color = color;
+		l.Color = Vector4(color.x, color.y, color.z, intensity);
 		l.Attenuation = attenuation;
 		l.LightType = Type::Point;
 		return l;
@@ -55,11 +51,9 @@ struct Light
 		l.Range = range;
 		l.Direction = direction;
 		l.SpotLightAngle = angle;
-		l.Intensity = intensity;
-		l.Color = color;
+		l.Color = Vector4(color.x, color.y, color.z, intensity);
 		l.Attenuation = attenuation;
 		l.LightType = Type::Spot;
 		return l;
 	}
 };
-#pragma pack(pop)

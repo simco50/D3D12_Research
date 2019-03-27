@@ -4,11 +4,11 @@ struct Light
 	int Enabled;
 	float3 Direction;
 	int Type;
+	float4 Color;
 	float Range;
 	float SpotLightAngle;
 	float Attenuation;
-	float Intensity;
-	float4 Color;
+    float padding;
 };
 
 struct Plane
