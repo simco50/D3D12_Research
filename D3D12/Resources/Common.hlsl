@@ -86,3 +86,30 @@ float3 HUEtoRGB(in float H)
     float B = 2 - abs(H * 6 - 4);
     return saturate(float3(R,G,B));
 }
+
+//Emulates sampling a TextureCube
+float2 sampleCube(const float3 v, out float faceIndex)
+{
+	float3 vAbs = abs(v);
+	float ma;
+	float2 uv;
+	if(vAbs.z >= vAbs.x && vAbs.z >= vAbs.y)
+	{
+		faceIndex = v.z < 0.0 ? 5.0 : 4.0;
+		ma = 0.5 / vAbs.z;
+		uv = float2(v.z < 0.0 ? -v.x : v.x, -v.y);
+	}
+	else if(vAbs.y >= vAbs.x)
+	{
+		faceIndex = v.y < 0.0 ? 3.0 : 2.0;
+		ma = 0.5 / vAbs.y;
+		uv = float2(v.x, v.y < 0.0 ? -v.z : v.z);
+	}
+	else
+	{
+		faceIndex = v.x < 0.0 ? 1.0 : 0.0;
+		ma = 0.5 / vAbs.x;
+		uv = float2(v.x < 0.0 ? v.z : -v.z, -v.y);
+	}
+	return uv * ma + 0.5;
+}
