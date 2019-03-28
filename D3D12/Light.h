@@ -18,7 +18,7 @@ struct Light
 	float Range;
 	float SpotLightAngle;
 	float Attenuation;
-	float padding;
+	int32 ShadowIndex = -1;
 
 	static Light Directional(const Vector3& position, const Vector3& direction, float intensity = 1.0f, const Vector4& color = Vector4(1, 1, 1, 1))
 	{
@@ -28,6 +28,7 @@ struct Light
 		l.Direction = direction;
 		l.Color = Vector4(color.x, color.y, color.z, intensity);
 		l.LightType = Type::Directional;
+		l.ShadowIndex = -1;
 		return l;
 	}
 
@@ -40,6 +41,7 @@ struct Light
 		l.Color = Vector4(color.x, color.y, color.z, intensity);
 		l.Attenuation = attenuation;
 		l.LightType = Type::Point;
+		l.ShadowIndex = -1;
 		return l;
 	}
 
@@ -54,6 +56,7 @@ struct Light
 		l.Color = Vector4(color.x, color.y, color.z, intensity);
 		l.Attenuation = attenuation;
 		l.LightType = Type::Spot;
+		l.ShadowIndex = -1;
 		return l;
 	}
 };

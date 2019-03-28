@@ -26,7 +26,11 @@ public:
 
 	const ShaderParameter& GetShaderParameter(const std::string& name) const { return m_Parameters.at(name); }
 
+	static void AddGlobalShaderDefine(const std::string& name, const std::string& value = "1");
+
 private:
+	static std::vector<std::pair<std::string, std::string>> m_GlobalShaderDefines;
+
 	std::map<std::string, ShaderParameter> m_Parameters;
 
 	ComPtr<ID3DBlob> m_pByteCode;

@@ -32,6 +32,11 @@ void Graphics::Initialize(HWND window)
 {
 	m_pWindow = window;
 
+	Shader::AddGlobalShaderDefine("LIGHT_COUNT", std::to_string(MAX_LIGHT_COUNT));
+	Shader::AddGlobalShaderDefine("BLOCK_SIZE", std::to_string(FORWARD_PLUS_BLOCK_SIZE));
+	Shader::AddGlobalShaderDefine("SHADOWMAP_DX", std::to_string(1.0f / SHADOW_MAP_SIZE));
+	Shader::AddGlobalShaderDefine("PCF_KERNEL_SIZE", std::to_string(3));
+
 	InitD3D();
 	InitializeAssets();
 
@@ -50,7 +55,27 @@ void Graphics::RandomizeLights()
 	sceneBounds.Extents = Vector3(140, 70, 60);
 
 	m_Lights.resize(MAX_LIGHT_COUNT);
-	for (int i = 0; i < m_Lights.size(); ++i)
+
+	int lightIndex = 0;
+	Vector3 mainLightPosition = Vector3(cos((float)GameTimer::GameTime() / 5.0f), 1.5, sin((float)GameTimer::GameTime() / 5.0f)) * 120;
+	Vector3 mainLightDirection;
+	mainLightPosition.Normalize(mainLightDirection);
+	mainLightDirection *= -1;
+	m_Lights[lightIndex] = Light::Directional(mainLightPosition, mainLightDirection, 0.5f, Vector4(1, 1, 1, 1));
+	m_Lights[lightIndex].ShadowIndex = lightIndex;
+	++lightIndex;
+	m_Lights[lightIndex] = Light::Spot(Vector3(0, 20, 0), 200, Vector3::Right, 40.0f, 1.0f, 0.5f, Vector4(1, 1, 1, 1));
+	m_Lights[lightIndex].ShadowIndex = lightIndex;
+	++lightIndex;
+	m_Lights[lightIndex] = Light::Spot(Vector3(0, 20, 0), 200, Vector3::Forward, 40.0f, 1.0f, 0.5f, Vector4(1, 1, 1, 1));
+	m_Lights[lightIndex].ShadowIndex = lightIndex;
+	++lightIndex;
+	m_Lights[lightIndex] = Light::Spot(Vector3(0, 20, 0), 200, Vector3::Backward, 40.0f, 1.0f, 0.5f, Vector4(1, 1, 1, 1));
+	m_Lights[lightIndex].ShadowIndex = lightIndex;
+
+	int randomLightsStartIndex = lightIndex + 1;
+
+	for (int i = randomLightsStartIndex; i < m_Lights.size(); ++i)
 	{
 		Vector3 c = Vector3(Math::RandomRange(0.0f, 1.0f), Math::RandomRange(0.0f, 1.0f), Math::RandomRange(0.0f, 1.0f));
 		Vector4 color(c.x, c.y, c.z, 1);
@@ -80,7 +105,8 @@ void Graphics::RandomizeLights()
 		}
 	}
 
-	std::sort(m_Lights.begin(), m_Lights.end(), [](const Light& a, const Light& b) { return (int)a.LightType < (int)b.LightType; });
+	//It's a bit weird but I don't sort the lights that I manually created because I access them by their original index during the update function
+	std::sort(m_Lights.begin() + randomLightsStartIndex, m_Lights.end(), [](const Light& a, const Light& b) { return (int)a.LightType < (int)b.LightType; });
 }
 
 void Graphics::SortBatchesBackToFront(const Vector3& cameraPosition, std::vector<Batch>& batches)
@@ -123,48 +149,19 @@ void Graphics::Update()
 	movement *= GameTimer::DeltaTime() * 20.0f;
 	m_CameraPosition += movement;
 
+	//Set main light position
+	m_Lights[0].Position = Vector3(cos((float)GameTimer::GameTime() / 5.0f), 1.5, sin((float)GameTimer::GameTime() / 5.0f)) * 120;
+	m_Lights[0].Position.Normalize(m_Lights[0].Direction);
+	m_Lights[0].Direction *= -1;
+
 	SortBatchesBackToFront(m_CameraPosition, m_TransparantBatches);
 
-	//Light movement
-	for (Light& l : m_Lights)
-	{
-		l.Position += Vector3::Down * GameTimer::DeltaTime() * 5;
-		if (l.Position.y < 0)
-		{
-			l.Position.y = 150;
-		}
-	}
-
-	//Setup per-frame constant data
+	//PER FRAME CONSTANTS
+	/////////////////////////////////////////
 	struct PerFrameData
 	{
-		Matrix LightViewProjection;
 		Matrix ViewInverse;
 	} frameData;
-	
-	//Setup the main light (only shadow casting light)
-	Light& mainLight = m_Lights[0];
-	Vector3 mainLightPosition = Vector3(cos((float)GameTimer::GameTime() / 5.0f), 1.5, sin((float)GameTimer::GameTime() / 5.0f)) * 120;
-	Vector3 mainLightDirection;
-	mainLightPosition.Normalize(mainLightDirection);
-	mainLightDirection *= -1;
-	mainLight = Light::Directional(mainLightPosition, mainLightDirection);
-
-	switch (mainLight.LightType)
-	{
-	case Light::Type::Directional:
-		frameData.LightViewProjection = XMMatrixLookAtLH(mainLight.Position, Vector3(0, 0, 0), Vector3(0, 1, 0)) * XMMatrixOrthographicLH(512, 512, 100000.0f, 0.1f);
-		break;
-	case Light::Type::Spot:
-		frameData.LightViewProjection = XMMatrixLookAtLH(mainLight.Position, Vector3(0, 0, 0), Vector3(0, 1, 0)) * XMMatrixPerspectiveFovLH(mainLight.SpotLightAngle, 1.0f, 100000.0f, 0.1f);
-		break;
-	case Light::Type::Point:
-	case Light::Type::MAX:
-	default:
-		//Point light shadows not supported
-		assert(false);
-		break;
-	}
 
 	//Camera constants
 	frameData.ViewInverse = Matrix::CreateFromQuaternion(m_CameraRotation) * Matrix::CreateTranslation(m_CameraPosition);
@@ -172,6 +169,43 @@ void Graphics::Update()
 	frameData.ViewInverse.Invert(cameraView);
 	Matrix cameraProjection = XMMatrixPerspectiveFovLH(XM_PIDIV4, (float)m_WindowWidth / m_WindowHeight, 100000.0f, 0.1f);
 	Matrix cameraViewProjection = cameraView * cameraProjection;
+
+	// SHADOW MAP PARTITIONING
+	/////////////////////////////////////////
+
+	struct LightData
+	{
+		Matrix LightViewProjections[8];
+		Vector4 ShadowMapOffsets[8];
+	} lightData;
+	
+	//Main directional
+	int lightIndex = 0;
+	lightData.LightViewProjections[lightIndex] = XMMatrixLookAtLH(m_Lights[lightIndex].Position, m_Lights[lightIndex].Position + m_Lights[lightIndex].Direction, Vector3(0, 1, 0)) * XMMatrixOrthographicLH(512, 512, 1000.0f, 0.1f);
+	lightData.ShadowMapOffsets[lightIndex].x = 0.0f;
+	lightData.ShadowMapOffsets[lightIndex].y = 0.0f;
+	lightData.ShadowMapOffsets[lightIndex].z = 0.75f;
+
+	//Spot A
+	++lightIndex;
+	lightData.LightViewProjections[lightIndex] = XMMatrixLookAtLH(m_Lights[lightIndex].Position, m_Lights[lightIndex].Position + m_Lights[lightIndex].Direction, Vector3(0, 1, 0)) * XMMatrixPerspectiveFovLH(Math::PIDIV2, 1.0f, 300.0f, 0.1f);
+	lightData.ShadowMapOffsets[lightIndex].x = 0.75f;
+	lightData.ShadowMapOffsets[lightIndex].y = 0.0f;
+	lightData.ShadowMapOffsets[lightIndex].z = 0.25f;
+
+	//Spot B
+	++lightIndex;
+	lightData.LightViewProjections[lightIndex] = XMMatrixLookAtLH(m_Lights[lightIndex].Position, m_Lights[lightIndex].Position + m_Lights[lightIndex].Direction, Vector3(0, 1, 0)) * XMMatrixPerspectiveFovLH(Math::PIDIV2, 1.0f, 300.0f, 0.1f);
+	lightData.ShadowMapOffsets[lightIndex].x = 0.75f;
+	lightData.ShadowMapOffsets[lightIndex].y = 0.25f;
+	lightData.ShadowMapOffsets[lightIndex].z = 0.25f;
+
+	//Spot C
+	++lightIndex;
+	lightData.LightViewProjections[lightIndex] = XMMatrixLookAtLH(m_Lights[lightIndex].Position, m_Lights[lightIndex].Position + m_Lights[lightIndex].Direction, Vector3(0, 1, 0)) * XMMatrixPerspectiveFovLH(Math::PIDIV2, 1.0f, 300.0f, 0.1f);
+	lightData.ShadowMapOffsets[lightIndex].x = 0.75f;
+	lightData.ShadowMapOffsets[lightIndex].y = 0.5f;
+	lightData.ShadowMapOffsets[lightIndex].z = 0.25f;
 
 	////////////////////////////////
 	// LET THE RENDERING BEGIN!
@@ -299,55 +333,65 @@ void Graphics::Update()
 		lightCullingFence = pContext->Execute(false);
 	}
 
-	//4. DIRECTIONAL SHADOW MAPPING
-	// - Currently just rendering a directional light depth texture using the first light in the light buffer
+	//4. SINGLE TARGET SHADOW MAPPING
+	// - Render shadow maps for directional and spot lights
 	// - Renders the scene depth onto a separate depth buffer from the light's view
 	{
 		GraphicsCommandContext* pContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT)->AsGraphicsContext();
-		pContext->MarkBegin(L"Shadows");
-		pContext->SetViewport(FloatRect(0, 0, (float)m_pShadowMap->GetWidth(), (float)m_pShadowMap->GetHeight()));
-		pContext->SetScissorRect(FloatRect(0, 0, (float)m_pShadowMap->GetWidth(), (float)m_pShadowMap->GetHeight()));
 
+		pContext->MarkBegin(L"Shadows");
 		pContext->InsertResourceBarrier(m_pShadowMap.get(), D3D12_RESOURCE_STATE_DEPTH_WRITE, true);
 		pContext->SetDepthOnlyTarget(m_pShadowMap->GetRTV());
-
 		pContext->ClearDepth(m_pShadowMap->GetRTV(), D3D12_CLEAR_FLAG_DEPTH, 0.0f, 0);
-
 		pContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-		struct PerObjectData
+		for (const Light& l : m_Lights)
 		{
-			Matrix WorldViewProjection;
-		} ObjectData;
-		ObjectData.WorldViewProjection = frameData.LightViewProjection;
-
-		//Opaque
-		{
-			pContext->MarkBegin(L"Opaque");
-			pContext->SetPipelineState(m_pShadowsPipelineStateObject.get());
-			pContext->SetRootSignature(m_pShadowsRootSignature.get());
-
-			pContext->SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
-			for (const Batch& b : m_OpaqueBatches)
+			if (l.ShadowIndex != -1 && (l.LightType == Light::Type::Directional || l.LightType == Light::Type::Spot))
 			{
-				b.pMesh->Draw(pContext);
-			}
-			pContext->MarkEnd();
-		}
-		//Transparant
-		{
-			pContext->MarkBegin(L"Transparant");
-			pContext->SetPipelineState(m_pShadowsAlphaPipelineStateObject.get());
-			pContext->SetRootSignature(m_pShadowsAlphaRootSignature.get());
+				const Vector4& shadowOffset = lightData.ShadowMapOffsets[l.ShadowIndex];
+				FloatRect viewport;
+				viewport.Left = shadowOffset.x * (float)m_pShadowMap->GetWidth();
+				viewport.Top = shadowOffset.y * (float)m_pShadowMap->GetHeight();
+				viewport.Right = viewport.Left + shadowOffset.z * (float)m_pShadowMap->GetWidth();
+				viewport.Bottom = viewport.Top + shadowOffset.z * (float)m_pShadowMap->GetHeight();
+				pContext->SetViewport(viewport);
+				pContext->SetScissorRect(viewport);
 
-			pContext->SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
-			for (const Batch& b : m_TransparantBatches)
-			{
-				b.pMesh->Draw(pContext);
-			}
-			pContext->MarkEnd();
-		}
+				struct PerObjectData
+				{
+					Matrix WorldViewProjection;
+				} ObjectData;
+				ObjectData.WorldViewProjection = lightData.LightViewProjections[l.ShadowIndex];
 
+				//Opaque
+				{
+					pContext->MarkBegin(L"Opaque");
+					pContext->SetPipelineState(m_pShadowsPipelineStateObject.get());
+					pContext->SetRootSignature(m_pShadowsRootSignature.get());
+
+					pContext->SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
+					for (const Batch& b : m_OpaqueBatches)
+					{
+						b.pMesh->Draw(pContext);
+					}
+					pContext->MarkEnd();
+				}
+				//Transparant
+				{
+					pContext->MarkBegin(L"Transparant");
+					pContext->SetPipelineState(m_pShadowsAlphaPipelineStateObject.get());
+					pContext->SetRootSignature(m_pShadowsAlphaRootSignature.get());
+
+					pContext->SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
+					for (const Batch& b : m_TransparantBatches)
+					{
+						pContext->SetDynamicDescriptor(1, 0, b.pMaterial->pDiffuseTexture->GetSRV());
+						b.pMesh->Draw(pContext);
+					}
+					pContext->MarkEnd();
+				}
+			}
+		}
 		pContext->MarkEnd();
 		pContext->Execute(false);
 	}
@@ -393,16 +437,17 @@ void Graphics::Update()
 
 			pContext->SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
 			pContext->SetDynamicConstantBufferView(1, &frameData, sizeof(PerFrameData));
-			pContext->SetDynamicDescriptor(3, 0, m_pShadowMap->GetSRV());
-			pContext->SetDynamicDescriptor(3, 1, m_pLightGridOpaque->GetSRV());
-			pContext->SetDynamicDescriptor(3, 2, m_pLightIndexListBufferOpaque->GetSRV());
-			pContext->SetDynamicDescriptor(3, 3, m_pLightBuffer->GetSRV());
+			pContext->SetDynamicConstantBufferView(2, &lightData, sizeof(LightData));
+			pContext->SetDynamicDescriptor(4, 0, m_pShadowMap->GetSRV());
+			pContext->SetDynamicDescriptor(4, 1, m_pLightGridOpaque->GetSRV());
+			pContext->SetDynamicDescriptor(4, 2, m_pLightIndexListBufferOpaque->GetSRV());
+			pContext->SetDynamicDescriptor(4, 3, m_pLightBuffer->GetSRV());
 
 			for (const Batch& b : m_OpaqueBatches)
 			{
-				pContext->SetDynamicDescriptor(2, 0, b.pMaterial->pDiffuseTexture->GetSRV());
-				pContext->SetDynamicDescriptor(2, 1, b.pMaterial->pNormalTexture->GetSRV());
-				pContext->SetDynamicDescriptor(2, 2, b.pMaterial->pSpecularTexture->GetSRV());
+				pContext->SetDynamicDescriptor(3, 0, b.pMaterial->pDiffuseTexture->GetSRV());
+				pContext->SetDynamicDescriptor(3, 1, b.pMaterial->pNormalTexture->GetSRV());
+				pContext->SetDynamicDescriptor(3, 2, b.pMaterial->pSpecularTexture->GetSRV());
 				b.pMesh->Draw(pContext);
 			}
 			pContext->MarkEnd();
@@ -416,16 +461,17 @@ void Graphics::Update()
 
 			pContext->SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
 			pContext->SetDynamicConstantBufferView(1, &frameData, sizeof(PerFrameData));
-			pContext->SetDynamicDescriptor(3, 0, m_pShadowMap->GetSRV());
-			pContext->SetDynamicDescriptor(3, 1, m_pLightGridTransparant->GetSRV());
-			pContext->SetDynamicDescriptor(3, 2, m_pLightIndexListBufferTransparant->GetSRV());
-			pContext->SetDynamicDescriptor(3, 3, m_pLightBuffer->GetSRV());
+			pContext->SetDynamicConstantBufferView(2, &lightData, sizeof(LightData));
+			pContext->SetDynamicDescriptor(4, 0, m_pShadowMap->GetSRV());
+			pContext->SetDynamicDescriptor(4, 1, m_pLightGridTransparant->GetSRV());
+			pContext->SetDynamicDescriptor(4, 2, m_pLightIndexListBufferTransparant->GetSRV());
+			pContext->SetDynamicDescriptor(4, 3, m_pLightBuffer->GetSRV());
 
 			for (const Batch& b : m_TransparantBatches)
 			{
-				pContext->SetDynamicDescriptor(2, 0, b.pMaterial->pDiffuseTexture->GetSRV());
-				pContext->SetDynamicDescriptor(2, 1, b.pMaterial->pNormalTexture->GetSRV());
-				pContext->SetDynamicDescriptor(2, 2, b.pMaterial->pSpecularTexture->GetSRV());
+				pContext->SetDynamicDescriptor(3, 0, b.pMaterial->pDiffuseTexture->GetSRV());
+				pContext->SetDynamicDescriptor(3, 1, b.pMaterial->pNormalTexture->GetSRV());
+				pContext->SetDynamicDescriptor(3, 2, b.pMaterial->pSpecularTexture->GetSRV());
 				b.pMesh->Draw(pContext);
 			}
 			pContext->MarkEnd();
@@ -712,11 +758,12 @@ void Graphics::InitializeAssets()
 		Shader pixelShader("Resources/Diffuse.hlsl", Shader::Type::PixelShader, "PSMain");
 
 		//Rootsignature
-		m_pDiffuseRootSignature = std::make_unique<RootSignature>(4);
+		m_pDiffuseRootSignature = std::make_unique<RootSignature>(5);
 		m_pDiffuseRootSignature->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
 		m_pDiffuseRootSignature->SetConstantBufferView(1, 1, D3D12_SHADER_VISIBILITY_ALL);
-		m_pDiffuseRootSignature->SetDescriptorTableSimple(2, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3, D3D12_SHADER_VISIBILITY_PIXEL);
-		m_pDiffuseRootSignature->SetDescriptorTableSimple(3, 3, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 4, D3D12_SHADER_VISIBILITY_PIXEL);
+		m_pDiffuseRootSignature->SetConstantBufferView(2, 2, D3D12_SHADER_VISIBILITY_PIXEL);
+		m_pDiffuseRootSignature->SetDescriptorTableSimple(3, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3, D3D12_SHADER_VISIBILITY_PIXEL);
+		m_pDiffuseRootSignature->SetDescriptorTableSimple(4, 3, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 4, D3D12_SHADER_VISIBILITY_PIXEL);
 
 		D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
 			D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
@@ -852,12 +899,12 @@ void Graphics::InitializeAssets()
 			m_pShadowsAlphaPipelineStateObject->SetRenderTargetFormats(nullptr, 0, DEPTH_STENCIL_SHADOW_FORMAT, 1, 0);
 			m_pShadowsAlphaPipelineStateObject->SetCullMode(D3D12_CULL_MODE_NONE);
 			m_pShadowsAlphaPipelineStateObject->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
-			m_pShadowsAlphaPipelineStateObject->SetDepthBias(0, 0.0f, -4.0f);
+			m_pShadowsAlphaPipelineStateObject->SetDepthBias(0, 0.0f, 0.0f);
 			m_pShadowsAlphaPipelineStateObject->Finalize(m_pDevice.Get());
 		}
 
 		m_pShadowMap = std::make_unique<Texture2D>();
-		m_pShadowMap->Create(this, DIRECTIONAL_SHADOW_MAP_SIZE, DIRECTIONAL_SHADOW_MAP_SIZE, DEPTH_STENCIL_SHADOW_FORMAT, TextureUsage::DepthStencil | TextureUsage::ShaderResource, 1);
+		m_pShadowMap->Create(this, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE, DEPTH_STENCIL_SHADOW_FORMAT, TextureUsage::DepthStencil | TextureUsage::ShaderResource, 1);
 	}
 
 	//Depth prepass

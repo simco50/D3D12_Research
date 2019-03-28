@@ -8,7 +8,7 @@ struct Light
 	float Range;
 	float SpotLightAngle;
 	float Attenuation;
-    float padding;
+    int ShadowIndex;
 };
 
 struct Plane
