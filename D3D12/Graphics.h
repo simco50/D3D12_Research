@@ -68,6 +68,7 @@ public:
 	static const DXGI_FORMAT DEPTH_STENCIL_SHADOW_FORMAT;
 	static const DXGI_FORMAT RENDER_TARGET_FORMAT;
 	static const int FORWARD_PLUS_BLOCK_SIZE = 16;
+	static const int MAX_SHADOW_CASTERS = 8;
 
 private:
 	void BeginFrame();
@@ -154,6 +155,7 @@ private:
 	std::unique_ptr<Texture2D> m_pResolvedDepthStencil;
 
 	//Light data
+	int m_ShadowCasters = 0;
 	std::vector<Light> m_Lights;
 	std::unique_ptr<StructuredBuffer> m_pLightBuffer;
 };

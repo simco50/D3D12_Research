@@ -1,7 +1,7 @@
 cbuffer LightData : register(b2)
 {
-	float4x4 cLightViewProjections[8];
-	float4 cShadowMapOffsets[8];
+	float4x4 cLightViewProjections[MAX_SHADOW_CASTERS];
+	float4 cShadowMapOffsets[MAX_SHADOW_CASTERS];
 }
 
 Texture2D tShadowMapTexture : register(t3);

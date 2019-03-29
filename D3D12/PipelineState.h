@@ -58,6 +58,7 @@ public:
 
 	void SetVertexShader(const void* pByteCode, uint32 byteCodeLength);
 	void SetPixelShader(const void* pByteCode, uint32 byteCodeLength);
+	void SetGeometryShader(const void* pByteCode, uint32 byteCodeLength);
 
 	void Finalize(ID3D12Device* pDevice);
 

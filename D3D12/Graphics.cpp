@@ -36,7 +36,8 @@ void Graphics::Initialize(HWND window)
 	Shader::AddGlobalShaderDefine("BLOCK_SIZE", std::to_string(FORWARD_PLUS_BLOCK_SIZE));
 	Shader::AddGlobalShaderDefine("SHADOWMAP_DX", std::to_string(1.0f / SHADOW_MAP_SIZE));
 	Shader::AddGlobalShaderDefine("PCF_KERNEL_SIZE", std::to_string(3));
-
+	Shader::AddGlobalShaderDefine("MAX_SHADOW_CASTERS", std::to_string(MAX_SHADOW_CASTERS));
+	
 	InitD3D();
 	InitializeAssets();
 
@@ -175,37 +176,37 @@ void Graphics::Update()
 
 	struct LightData
 	{
-		Matrix LightViewProjections[8];
-		Vector4 ShadowMapOffsets[8];
+		Matrix LightViewProjections[MAX_SHADOW_CASTERS];
+		Vector4 ShadowMapOffsets[MAX_SHADOW_CASTERS];
 	} lightData;
 	
 	//Main directional
-	int lightIndex = 0;
-	lightData.LightViewProjections[lightIndex] = XMMatrixLookAtLH(m_Lights[lightIndex].Position, m_Lights[lightIndex].Position + m_Lights[lightIndex].Direction, Vector3(0, 1, 0)) * XMMatrixOrthographicLH(512, 512, 1000.0f, 0.1f);
-	lightData.ShadowMapOffsets[lightIndex].x = 0.0f;
-	lightData.ShadowMapOffsets[lightIndex].y = 0.0f;
-	lightData.ShadowMapOffsets[lightIndex].z = 0.75f;
+	m_ShadowCasters = 0;
+	lightData.LightViewProjections[m_ShadowCasters] = XMMatrixLookAtLH(m_Lights[m_ShadowCasters].Position, m_Lights[m_ShadowCasters].Position + m_Lights[m_ShadowCasters].Direction, Vector3(0, 1, 0)) * XMMatrixOrthographicLH(512, 512, 1000.0f, 0.1f);
+	lightData.ShadowMapOffsets[m_ShadowCasters].x = 0.0f;
+	lightData.ShadowMapOffsets[m_ShadowCasters].y = 0.0f;
+	lightData.ShadowMapOffsets[m_ShadowCasters].z = 0.75f;
 
 	//Spot A
-	++lightIndex;
-	lightData.LightViewProjections[lightIndex] = XMMatrixLookAtLH(m_Lights[lightIndex].Position, m_Lights[lightIndex].Position + m_Lights[lightIndex].Direction, Vector3(0, 1, 0)) * XMMatrixPerspectiveFovLH(Math::PIDIV2, 1.0f, 300.0f, 0.1f);
-	lightData.ShadowMapOffsets[lightIndex].x = 0.75f;
-	lightData.ShadowMapOffsets[lightIndex].y = 0.0f;
-	lightData.ShadowMapOffsets[lightIndex].z = 0.25f;
+	++m_ShadowCasters;
+	lightData.LightViewProjections[m_ShadowCasters] = XMMatrixLookAtLH(m_Lights[m_ShadowCasters].Position, m_Lights[m_ShadowCasters].Position + m_Lights[m_ShadowCasters].Direction, Vector3(0, 1, 0)) * XMMatrixPerspectiveFovLH(Math::PIDIV2, 1.0f, 300.0f, 0.1f);
+	lightData.ShadowMapOffsets[m_ShadowCasters].x = 0.75f;
+	lightData.ShadowMapOffsets[m_ShadowCasters].y = 0.0f;
+	lightData.ShadowMapOffsets[m_ShadowCasters].z = 0.25f;
 
 	//Spot B
-	++lightIndex;
-	lightData.LightViewProjections[lightIndex] = XMMatrixLookAtLH(m_Lights[lightIndex].Position, m_Lights[lightIndex].Position + m_Lights[lightIndex].Direction, Vector3(0, 1, 0)) * XMMatrixPerspectiveFovLH(Math::PIDIV2, 1.0f, 300.0f, 0.1f);
-	lightData.ShadowMapOffsets[lightIndex].x = 0.75f;
-	lightData.ShadowMapOffsets[lightIndex].y = 0.25f;
-	lightData.ShadowMapOffsets[lightIndex].z = 0.25f;
+	++m_ShadowCasters;
+	lightData.LightViewProjections[m_ShadowCasters] = XMMatrixLookAtLH(m_Lights[m_ShadowCasters].Position, m_Lights[m_ShadowCasters].Position + m_Lights[m_ShadowCasters].Direction, Vector3(0, 1, 0)) * XMMatrixPerspectiveFovLH(Math::PIDIV2, 1.0f, 300.0f, 0.1f);
+	lightData.ShadowMapOffsets[m_ShadowCasters].x = 0.75f;
+	lightData.ShadowMapOffsets[m_ShadowCasters].y = 0.25f;
+	lightData.ShadowMapOffsets[m_ShadowCasters].z = 0.25f;
 
 	//Spot C
-	++lightIndex;
-	lightData.LightViewProjections[lightIndex] = XMMatrixLookAtLH(m_Lights[lightIndex].Position, m_Lights[lightIndex].Position + m_Lights[lightIndex].Direction, Vector3(0, 1, 0)) * XMMatrixPerspectiveFovLH(Math::PIDIV2, 1.0f, 300.0f, 0.1f);
-	lightData.ShadowMapOffsets[lightIndex].x = 0.75f;
-	lightData.ShadowMapOffsets[lightIndex].y = 0.5f;
-	lightData.ShadowMapOffsets[lightIndex].z = 0.25f;
+	++m_ShadowCasters;
+	lightData.LightViewProjections[m_ShadowCasters] = XMMatrixLookAtLH(m_Lights[m_ShadowCasters].Position, m_Lights[m_ShadowCasters].Position + m_Lights[m_ShadowCasters].Direction, Vector3(0, 1, 0)) * XMMatrixPerspectiveFovLH(Math::PIDIV2, 1.0f, 300.0f, 0.1f);
+	lightData.ShadowMapOffsets[m_ShadowCasters].x = 0.75f;
+	lightData.ShadowMapOffsets[m_ShadowCasters].y = 0.5f;
+	lightData.ShadowMapOffsets[m_ShadowCasters].z = 0.25f;
 
 	////////////////////////////////
 	// LET THE RENDERING BEGIN!
@@ -333,9 +334,9 @@ void Graphics::Update()
 		lightCullingFence = pContext->Execute(false);
 	}
 
-	//4. SINGLE TARGET SHADOW MAPPING
-	// - Render shadow maps for directional and spot lights
+	//4. SHADOW MAPPING
 	// - Renders the scene depth onto a separate depth buffer from the light's view
+	if(m_ShadowCasters > 0)
 	{
 		GraphicsCommandContext* pContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT)->AsGraphicsContext();
 
@@ -344,52 +345,50 @@ void Graphics::Update()
 		pContext->SetDepthOnlyTarget(m_pShadowMap->GetRTV());
 		pContext->ClearDepth(m_pShadowMap->GetRTV(), D3D12_CLEAR_FLAG_DEPTH, 0.0f, 0);
 		pContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-		for (const Light& l : m_Lights)
+		
+		for(int i = 0; i < m_ShadowCasters; ++i)
 		{
-			if (l.ShadowIndex != -1 && (l.LightType == Light::Type::Directional || l.LightType == Light::Type::Spot))
+			const Vector4& shadowOffset = lightData.ShadowMapOffsets[i];
+			FloatRect viewport;
+			viewport.Left = shadowOffset.x * (float)m_pShadowMap->GetWidth();
+			viewport.Top = shadowOffset.y * (float)m_pShadowMap->GetHeight();
+			viewport.Right = viewport.Left + shadowOffset.z * (float)m_pShadowMap->GetWidth();
+			viewport.Bottom = viewport.Top + shadowOffset.z * (float)m_pShadowMap->GetHeight();
+			pContext->SetViewport(viewport);
+			pContext->SetScissorRect(viewport);
+
+			struct PerObjectData
 			{
-				const Vector4& shadowOffset = lightData.ShadowMapOffsets[l.ShadowIndex];
-				FloatRect viewport;
-				viewport.Left = shadowOffset.x * (float)m_pShadowMap->GetWidth();
-				viewport.Top = shadowOffset.y * (float)m_pShadowMap->GetHeight();
-				viewport.Right = viewport.Left + shadowOffset.z * (float)m_pShadowMap->GetWidth();
-				viewport.Bottom = viewport.Top + shadowOffset.z * (float)m_pShadowMap->GetHeight();
-				pContext->SetViewport(viewport);
-				pContext->SetScissorRect(viewport);
+				Matrix WorldViewProjection;
+			} ObjectData;
+			ObjectData.WorldViewProjection = lightData.LightViewProjections[i];
 
-				struct PerObjectData
+			//Opaque
+			{
+				pContext->MarkBegin(L"Opaque");
+				pContext->SetPipelineState(m_pShadowsPipelineStateObject.get());
+				pContext->SetRootSignature(m_pShadowsRootSignature.get());
+
+				pContext->SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
+				for (const Batch& b : m_OpaqueBatches)
 				{
-					Matrix WorldViewProjection;
-				} ObjectData;
-				ObjectData.WorldViewProjection = lightData.LightViewProjections[l.ShadowIndex];
-
-				//Opaque
-				{
-					pContext->MarkBegin(L"Opaque");
-					pContext->SetPipelineState(m_pShadowsPipelineStateObject.get());
-					pContext->SetRootSignature(m_pShadowsRootSignature.get());
-
-					pContext->SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
-					for (const Batch& b : m_OpaqueBatches)
-					{
-						b.pMesh->Draw(pContext);
-					}
-					pContext->MarkEnd();
+					b.pMesh->Draw(pContext);
 				}
-				//Transparant
-				{
-					pContext->MarkBegin(L"Transparant");
-					pContext->SetPipelineState(m_pShadowsAlphaPipelineStateObject.get());
-					pContext->SetRootSignature(m_pShadowsAlphaRootSignature.get());
+				pContext->MarkEnd();
+			}
+			//Transparant
+			{
+				pContext->MarkBegin(L"Transparant");
+				pContext->SetPipelineState(m_pShadowsAlphaPipelineStateObject.get());
+				pContext->SetRootSignature(m_pShadowsAlphaRootSignature.get());
 
-					pContext->SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
-					for (const Batch& b : m_TransparantBatches)
-					{
-						pContext->SetDynamicDescriptor(1, 0, b.pMaterial->pDiffuseTexture->GetSRV());
-						b.pMesh->Draw(pContext);
-					}
-					pContext->MarkEnd();
+				pContext->SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
+				for (const Batch& b : m_TransparantBatches)
+				{
+					pContext->SetDynamicDescriptor(1, 0, b.pMaterial->pDiffuseTexture->GetSRV());
+					b.pMesh->Draw(pContext);
 				}
+				pContext->MarkEnd();
 			}
 		}
 		pContext->MarkEnd();

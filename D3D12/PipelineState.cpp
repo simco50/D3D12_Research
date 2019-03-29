@@ -214,6 +214,12 @@ void GraphicsPipelineState::SetPixelShader(const void* pByteCode, uint32 byteCod
 	m_Desc.PS.BytecodeLength = byteCodeLength;
 }
 
+void GraphicsPipelineState::SetGeometryShader(const void* pByteCode, uint32 byteCodeLength)
+{
+	m_Desc.GS.pShaderBytecode = pByteCode;
+	m_Desc.GS.BytecodeLength = byteCodeLength;
+}
+
 ComputePipelineState::ComputePipelineState()
 {
 	m_Desc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;

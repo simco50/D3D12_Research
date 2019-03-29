@@ -96,6 +96,9 @@ Shader::Shader(const char* pFilePath, Type shaderType, const char* pEntryPoint, 
 	case Type::PixelShader:
 		shaderModel = "ps_5_0";
 		break;
+	case Type::GeometryShader:
+		shaderModel = "gs_5_0";
+		break;
 	case Type::ComputeShader:
 		shaderModel = "cs_5_0";
 		break;

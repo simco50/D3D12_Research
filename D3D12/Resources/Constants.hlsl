@@ -29,3 +29,7 @@
 #ifndef SHADOWMAP_DX
 #define SHADOWMAP_DX 0.000244140625f
 #endif
+
+#ifndef MAX_SHADOW_CASTERS
+#define MAX_SHADOW_CASTERS 8
+#endif
