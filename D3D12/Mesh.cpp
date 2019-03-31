@@ -118,7 +118,10 @@ std::unique_ptr<SubMesh> Mesh::LoadMesh(aiMesh* pMesh, ID3D12Device* pDevice, Co
 		}
 	}
 
+
 	std::unique_ptr<SubMesh> pSubMesh = std::make_unique<SubMesh>();
+	BoundingBox::CreateFromPoints(pSubMesh->m_Bounds, vertices.size(), (XMFLOAT3*)&vertices[0], sizeof(Vertex));
+
 	{
 		uint32 size = (uint32)vertices.size() * sizeof(Vertex);
 		pSubMesh->m_pVertexBuffer = std::make_unique<GraphicsBuffer>();

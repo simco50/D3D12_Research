@@ -2,7 +2,6 @@
 #include "ImGuiRenderer.h"
 #include <fstream>
 #include "CommandContext.h"
-#include "External/Imgui/imgui.h"
 #include "Graphics.h"
 #include "PipelineState.h"
 #include "RootSignature.h"
