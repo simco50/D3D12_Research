@@ -46,11 +46,11 @@ void GraphicsPipelineState::SetBlendMode(const BlendMode& blendMode, bool /*alph
 {
 	D3D12_RENDER_TARGET_BLEND_DESC& desc = m_Desc.BlendState.RenderTarget[0];
 	desc.RenderTargetWriteMask = 0xf;
-	desc.BlendEnable = blendMode == BlendMode::REPLACE ? false : true;
+	desc.BlendEnable = blendMode == BlendMode::Replace ? false : true;
 
 	switch (blendMode)
 	{
-	case BlendMode::REPLACE:
+	case BlendMode::Replace:
 		desc.SrcBlend = D3D12_BLEND_ONE;
 		desc.DestBlend = D3D12_BLEND_ZERO;
 		desc.BlendOp = D3D12_BLEND_OP_ADD;
@@ -58,7 +58,7 @@ void GraphicsPipelineState::SetBlendMode(const BlendMode& blendMode, bool /*alph
 		desc.DestBlendAlpha = D3D12_BLEND_ZERO;
 		desc.BlendOpAlpha = D3D12_BLEND_OP_ADD;
 		break;
-	case BlendMode::ALPHA:
+	case BlendMode::Alpha:
 		desc.SrcBlend = D3D12_BLEND_SRC_ALPHA;
 		desc.DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
 		desc.BlendOp = D3D12_BLEND_OP_ADD;
@@ -66,7 +66,7 @@ void GraphicsPipelineState::SetBlendMode(const BlendMode& blendMode, bool /*alph
 		desc.DestBlendAlpha = D3D12_BLEND_INV_SRC_ALPHA;
 		desc.BlendOpAlpha = D3D12_BLEND_OP_ADD;
 		break;
-	case BlendMode::ADD:
+	case BlendMode::And:
 		desc.SrcBlend = D3D12_BLEND_SRC_ALPHA;
 		desc.DestBlend = D3D12_BLEND_ONE;
 		desc.BlendOp = D3D12_BLEND_OP_ADD;
@@ -74,7 +74,7 @@ void GraphicsPipelineState::SetBlendMode(const BlendMode& blendMode, bool /*alph
 		desc.DestBlendAlpha = D3D12_BLEND_ONE;
 		desc.BlendOpAlpha = D3D12_BLEND_OP_ADD;
 		break;
-	case BlendMode::MULTIPLY:
+	case BlendMode::Multiply:
 		desc.SrcBlend = D3D12_BLEND_DEST_COLOR;
 		desc.DestBlend = D3D12_BLEND_ZERO;
 		desc.BlendOp = D3D12_BLEND_OP_ADD;
@@ -82,7 +82,7 @@ void GraphicsPipelineState::SetBlendMode(const BlendMode& blendMode, bool /*alph
 		desc.DestBlendAlpha = D3D12_BLEND_ZERO;
 		desc.BlendOpAlpha = D3D12_BLEND_OP_ADD;
 		break;
-	case BlendMode::ADDALPHA:
+	case BlendMode::AddAlpha:
 		desc.SrcBlend = D3D12_BLEND_SRC_ALPHA;
 		desc.DestBlend = D3D12_BLEND_ONE;
 		desc.BlendOp = D3D12_BLEND_OP_ADD;
@@ -90,7 +90,7 @@ void GraphicsPipelineState::SetBlendMode(const BlendMode& blendMode, bool /*alph
 		desc.DestBlendAlpha = D3D12_BLEND_ONE;
 		desc.BlendOpAlpha = D3D12_BLEND_OP_ADD;
 		break;
-	case BlendMode::PREMULALPHA:
+	case BlendMode::PreMultiplyAlpha:
 		desc.SrcBlend = D3D12_BLEND_ONE;
 		desc.DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
 		desc.BlendOp = D3D12_BLEND_OP_ADD;
@@ -98,7 +98,7 @@ void GraphicsPipelineState::SetBlendMode(const BlendMode& blendMode, bool /*alph
 		desc.DestBlendAlpha = D3D12_BLEND_INV_SRC_ALPHA;
 		desc.BlendOpAlpha = D3D12_BLEND_OP_ADD;
 		break;
-	case BlendMode::INVDESTALPHA:
+	case BlendMode::InverseDestinationAlpha:
 		desc.SrcBlend = D3D12_BLEND_INV_DEST_ALPHA;
 		desc.DestBlend = D3D12_BLEND_DEST_ALPHA;
 		desc.BlendOp = D3D12_BLEND_OP_ADD;
@@ -106,7 +106,7 @@ void GraphicsPipelineState::SetBlendMode(const BlendMode& blendMode, bool /*alph
 		desc.DestBlendAlpha = D3D12_BLEND_DEST_ALPHA;
 		desc.BlendOpAlpha = D3D12_BLEND_OP_ADD;
 		break;
-	case BlendMode::SUBTRACT:
+	case BlendMode::Subtract:
 		desc.SrcBlend = D3D12_BLEND_ONE;
 		desc.DestBlend = D3D12_BLEND_ONE;
 		desc.BlendOp = D3D12_BLEND_OP_REV_SUBTRACT;
@@ -114,7 +114,7 @@ void GraphicsPipelineState::SetBlendMode(const BlendMode& blendMode, bool /*alph
 		desc.DestBlendAlpha = D3D12_BLEND_ONE;
 		desc.BlendOpAlpha = D3D12_BLEND_OP_REV_SUBTRACT;
 		break;
-	case BlendMode::SUBTRACTALPHA:
+	case BlendMode::SubtractAlpha:
 		desc.SrcBlend = D3D12_BLEND_SRC_ALPHA;
 		desc.DestBlend = D3D12_BLEND_ONE;
 		desc.BlendOp = D3D12_BLEND_OP_REV_SUBTRACT;
@@ -122,7 +122,7 @@ void GraphicsPipelineState::SetBlendMode(const BlendMode& blendMode, bool /*alph
 		desc.DestBlendAlpha = D3D12_BLEND_ONE;
 		desc.BlendOpAlpha = D3D12_BLEND_OP_REV_SUBTRACT;
 		break;
-	case BlendMode::UNDEFINED:
+	case BlendMode::Undefined:
 	default:
 		break;
 	}

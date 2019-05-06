@@ -18,10 +18,14 @@ GraphicsResource::~GraphicsResource()
 
 void GraphicsResource::Release()
 {
-	m_pResource.Reset();
+	if (m_pResource)
+	{
+		m_pResource->Release();
+		m_pResource = nullptr;
+	}
 }
 
 void GraphicsResource::SetName(const char* pName)
 {
-	SetD3DObjectName(m_pResource.Get(), pName);
+	SetD3DObjectName(m_pResource, pName);
 }

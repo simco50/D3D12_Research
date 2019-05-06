@@ -14,6 +14,7 @@ static bool LogHRESULT(HRESULT hr)
 		nullptr, hr, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
 		(LPWSTR)&errorMsg, 0, nullptr) != 0)
 	{
+		OutputDebugStringW(errorMsg);
 		std::wcout << L"Error: " << errorMsg << std::endl;
 	}
 	__debugbreak();

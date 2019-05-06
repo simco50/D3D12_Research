@@ -6,12 +6,11 @@ class CommandContext;
 
 enum class TextureUsage
 {
-	/*Default				= 0,*/
-	/*Dynamic				= 1 << 0,*/
+	/*Dynamic		= 1 << 0, UNSUPPORTED */
 	UnorderedAccess = 1 << 1,
-	ShaderResource = 1 << 2,
-	RenderTarget = 1 << 3,
-	DepthStencil = 1 << 4,
+	ShaderResource	= 1 << 2,
+	RenderTarget	= 1 << 3,
+	DepthStencil	= 1 << 4,
 };
 DEFINE_ENUM_FLAG_OPERATORS(TextureUsage)
 

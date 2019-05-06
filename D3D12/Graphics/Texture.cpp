@@ -5,7 +5,7 @@
 #include "Graphics.h"
 
 Texture::Texture(ID3D12Device* pDevice)
-	: m_Width(0), m_Height(0), m_DepthOrArraySize(0), m_Format(DXGI_FORMAT_UNKNOWN), m_MipLevels(1)
+	: m_Width(0), m_Height(0), m_DepthOrArraySize(0), m_Format(DXGI_FORMAT_UNKNOWN), m_MipLevels(1), m_Dimension(TextureDimension::Texture2D), m_IsArray(false)
 {
 	m_SrvUavDescriptorSize = pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 	m_RtvDescriptorSize = pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
@@ -189,7 +189,7 @@ void Texture::Create_Internal(Graphics* pGraphics, TextureDimension dimension, i
 		default:
 			break;
 		}
-		pGraphics->GetDevice()->CreateShaderResourceView(m_pResource.Get(), &srvDesc, m_Srv);
+		pGraphics->GetDevice()->CreateShaderResourceView(m_pResource, &srvDesc, m_Srv);
 	}
 	if ((usage & TextureUsage::UnorderedAccess) == TextureUsage::UnorderedAccess)
 	{
@@ -235,7 +235,7 @@ void Texture::Create_Internal(Graphics* pGraphics, TextureDimension dimension, i
 			uavDesc.Texture2D.MipSlice = i;
 			uavDesc.Texture2DArray.MipSlice = i;
 			uavDesc.Texture3D.MipSlice = i;
-			pGraphics->GetDevice()->CreateUnorderedAccessView(m_pResource.Get(), nullptr, &uavDesc, m_Uav.Offset(i, m_SrvUavDescriptorSize));
+			pGraphics->GetDevice()->CreateUnorderedAccessView(m_pResource, nullptr, &uavDesc, m_Uav.Offset(i, m_SrvUavDescriptorSize));
 		}
 	}
 	if ((usage & TextureUsage::RenderTarget) == TextureUsage::RenderTarget)
@@ -296,7 +296,7 @@ void Texture::Create_Internal(Graphics* pGraphics, TextureDimension dimension, i
 		default:
 			break;
 		}
-		pGraphics->GetDevice()->CreateRenderTargetView(m_pResource.Get(), &rtvDesc, m_Rtv);
+		pGraphics->GetDevice()->CreateRenderTargetView(m_pResource, &rtvDesc, m_Rtv);
 	}
 	else if ((usage & TextureUsage::DepthStencil) == TextureUsage::DepthStencil)
 	{
@@ -350,7 +350,7 @@ void Texture::Create_Internal(Graphics* pGraphics, TextureDimension dimension, i
 			break;
 			
 		}
-		pGraphics->GetDevice()->CreateDepthStencilView(m_pResource.Get(), &dsvDesc, m_Rtv);
+		pGraphics->GetDevice()->CreateDepthStencilView(m_pResource, &dsvDesc, m_Rtv);
 	}
 }
 
@@ -505,6 +505,7 @@ void Texture2D::SetData(CommandContext* pContext, const void* pData)
 
 void Texture2D::CreateForSwapchain(Graphics* pGraphics, ID3D12Resource* pTexture)
 {
+	Release();
 	m_pResource = pTexture;
 	m_CurrentState = D3D12_RESOURCE_STATE_PRESENT;
 	D3D12_RESOURCE_DESC desc = pTexture->GetDesc();

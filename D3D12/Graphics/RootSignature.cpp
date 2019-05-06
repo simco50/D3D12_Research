@@ -1,57 +1,70 @@
 #include "stdafx.h"
 #include "RootSignature.h"
 
-RootSignature::RootSignature(uint32 numRootParameters) : m_NumParameters(numRootParameters)
+RootSignature::RootSignature() 
+	: m_NumParameters(0)
 {
-	assert(numRootParameters <= MAX_NUM_DESCRIPTORS);
-	m_NumParameters = numRootParameters;
-	m_RootParameters.resize(numRootParameters);
-	m_DescriptorTableSizes.resize(numRootParameters);
-	m_DescriptorTableRanges.resize(numRootParameters);
 }
 
-void RootSignature::SetRootConstants(uint32 rootIndex, uint32 registerSlot, uint32 constantCount, D3D12_SHADER_VISIBILITY visibility)
+void RootSignature::SetSize(uint32 size, bool shrink /*= true*/)
 {
-	D3D12_ROOT_PARAMETER1& data = m_RootParameters[rootIndex];
+	if (size != m_NumParameters && (shrink || size > m_NumParameters))
+	{
+		assert(size <= MAX_NUM_DESCRIPTORS);
+		m_RootParameters.resize(size);
+		m_DescriptorTableSizes.resize(size);
+		m_DescriptorTableRanges.resize(size);
+		m_NumParameters = size;
+	}
+}
+
+void RootSignature::SetRootConstants(uint32 rootIndex, uint32 shaderRegister, uint32 constantCount, D3D12_SHADER_VISIBILITY visibility)
+{
+	SetSize(rootIndex + 1);
+	D3D12_ROOT_PARAMETER1 & data = m_RootParameters[rootIndex];
 	data.ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
 	data.Constants.Num32BitValues = constantCount;
 	data.Constants.RegisterSpace = 0;
-	data.Constants.ShaderRegister = registerSlot;
+	data.Constants.ShaderRegister = shaderRegister;
 	data.ShaderVisibility = visibility;
 }
 
-void RootSignature::SetConstantBufferView(uint32 rootIndex, uint32 registersSlot, D3D12_SHADER_VISIBILITY visibility)
+void RootSignature::SetConstantBufferView(uint32 rootIndex, uint32 shaderRegister, D3D12_SHADER_VISIBILITY visibility)
 {
-	D3D12_ROOT_PARAMETER1& data = m_RootParameters[rootIndex];
+	SetSize(rootIndex + 1);
+	D3D12_ROOT_PARAMETER1 & data = m_RootParameters[rootIndex];
 	data.ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
 	data.Descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC;
 	data.Descriptor.RegisterSpace = 0;
-	data.Descriptor.ShaderRegister = registersSlot;
+	data.Descriptor.ShaderRegister = shaderRegister;
 	data.ShaderVisibility = visibility;
 }
 
-void RootSignature::SetShaderResourceView(uint32 rootIndex, uint32 registersSlot, D3D12_SHADER_VISIBILITY visibility)
+void RootSignature::SetShaderResourceView(uint32 rootIndex, uint32 shaderRegister, D3D12_SHADER_VISIBILITY visibility)
 {
-	D3D12_ROOT_PARAMETER1& data = m_RootParameters[rootIndex];
+	SetSize(rootIndex + 1);
+	D3D12_ROOT_PARAMETER1 & data = m_RootParameters[rootIndex];
 	data.ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
 	data.Descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC;
 	data.Descriptor.RegisterSpace = 0;
-	data.Descriptor.ShaderRegister = registersSlot;
+	data.Descriptor.ShaderRegister = shaderRegister;
 	data.ShaderVisibility = visibility;
 }
 
-void RootSignature::SetUnorderedAccessView(uint32 rootIndex, uint32 registersSlot, D3D12_SHADER_VISIBILITY visibility)
+void RootSignature::SetUnorderedAccessView(uint32 rootIndex, uint32 shaderRegister, D3D12_SHADER_VISIBILITY visibility)
 {
-	D3D12_ROOT_PARAMETER1& data = m_RootParameters[rootIndex];
+	SetSize(rootIndex + 1);
+	D3D12_ROOT_PARAMETER1 & data = m_RootParameters[rootIndex];
 	data.ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV;
 	data.Descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC;
 	data.Descriptor.RegisterSpace = 0;
-	data.Descriptor.ShaderRegister = registersSlot;
+	data.Descriptor.ShaderRegister = shaderRegister;
 	data.ShaderVisibility = visibility;
 }
 
 void RootSignature::SetDescriptorTable(uint32 rootIndex, uint32 rangeCount, D3D12_SHADER_VISIBILITY visibility)
 {
+	SetSize(rootIndex + 1);
 	D3D12_ROOT_PARAMETER1& data = m_RootParameters[rootIndex];
 	data.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
 	data.ShaderVisibility = visibility;
@@ -61,6 +74,7 @@ void RootSignature::SetDescriptorTable(uint32 rootIndex, uint32 rangeCount, D3D1
 
 void RootSignature::SetDescriptorTableRange(uint32 rootIndex, uint32 rangeIndex, uint32 startRegisterSlot, D3D12_DESCRIPTOR_RANGE_TYPE type, uint32 count)
 {
+	assert(rangeIndex < MAX_RANGES_PER_TABLE);
 	D3D12_DESCRIPTOR_RANGE1& range = m_DescriptorTableRanges[rootIndex][rangeIndex];
 	range.RangeType = type;
 	range.NumDescriptors = count;
@@ -76,7 +90,7 @@ void RootSignature::SetDescriptorTableSimple(uint32 rootIndex, uint32 startRegis
 	SetDescriptorTableRange(rootIndex, 0, startRegisterSlot, type, count);
 }
 
-void RootSignature::AddStaticSampler(uint32 slot, D3D12_SAMPLER_DESC samplerDesc, D3D12_SHADER_VISIBILITY visibility)
+void RootSignature::AddStaticSampler(uint32 shaderRegister, D3D12_SAMPLER_DESC samplerDesc, D3D12_SHADER_VISIBILITY visibility)
 {
 	D3D12_STATIC_SAMPLER_DESC desc = {};
 	desc.Filter = samplerDesc.Filter;
@@ -89,7 +103,7 @@ void RootSignature::AddStaticSampler(uint32 slot, D3D12_SAMPLER_DESC samplerDesc
 	desc.BorderColor = D3D12_STATIC_BORDER_COLOR_OPAQUE_WHITE;
 	desc.MinLOD = samplerDesc.MinLOD;
 	desc.MaxLOD = samplerDesc.MaxLOD;
-	desc.ShaderRegister = slot;
+	desc.ShaderRegister = shaderRegister;
 	desc.RegisterSpace = 0;
 	desc.ShaderVisibility = visibility;
 
@@ -97,43 +111,37 @@ void RootSignature::AddStaticSampler(uint32 slot, D3D12_SAMPLER_DESC samplerDesc
 		desc.AddressV == D3D12_TEXTURE_ADDRESS_MODE_BORDER ||
 		desc.AddressW == D3D12_TEXTURE_ADDRESS_MODE_BORDER)
 	{
-
-		if (samplerDesc.BorderColor[3] == 1.0f)
-		{
-			if (samplerDesc.BorderColor[0] == 1.0f)
-			{
-				desc.BorderColor = D3D12_STATIC_BORDER_COLOR_OPAQUE_WHITE;
-			}
-			else
-			{
-				desc.BorderColor = D3D12_STATIC_BORDER_COLOR_OPAQUE_BLACK;
-			}
-		}
-		else
-		{
-			desc.BorderColor = D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK;
-		}
+		desc.BorderColor = samplerDesc.BorderColor[3] * samplerDesc.BorderColor[0] == 1.0f == 0 ? D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK : D3D12_STATIC_BORDER_COLOR_OPAQUE_WHITE;
 	}
 	m_StaticSamplers.push_back(desc);
 }
 
-void RootSignature::Finalize(ID3D12Device* pDevice, D3D12_ROOT_SIGNATURE_FLAGS flags)
+void RootSignature::Finalize(const char* pName, ID3D12Device* pDevice, D3D12_ROOT_SIGNATURE_FLAGS flags)
 {
 	CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC desc = {};
 
 	for (size_t i = 0; i < m_RootParameters.size(); ++i)
 	{
-		const D3D12_ROOT_PARAMETER1& rootParameter = m_RootParameters[i];
+		D3D12_ROOT_PARAMETER1& rootParameter = m_RootParameters[i];
 		if (rootParameter.ParameterType == D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE)
 		{
-			if (rootParameter.DescriptorTable.pDescriptorRanges->RangeType == D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER)
+			//Fixup the table ranges because the rootsignature can be dynamically resized
+			rootParameter.DescriptorTable.pDescriptorRanges = m_DescriptorTableRanges[i].data();
+			switch (rootParameter.DescriptorTable.pDescriptorRanges->RangeType)
 			{
-				m_SamplerMask.SetBit((uint32)i);
-			}
-			else
-			{
+			case D3D12_DESCRIPTOR_RANGE_TYPE_SRV:
+			case D3D12_DESCRIPTOR_RANGE_TYPE_UAV:
+			case D3D12_DESCRIPTOR_RANGE_TYPE_CBV:
 				m_DescriptorTableMask.SetBit((uint32)i);
+				break;
+			case D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER:
+				m_SamplerMask.SetBit((uint32)i);
+				break;
+			default:
+				assert(false);
+				break;
 			}
+
 			for (uint32 j = 0; j < rootParameter.DescriptorTable.NumDescriptorRanges; ++j)
 			{
 				m_DescriptorTableSizes[i] = rootParameter.DescriptorTable.pDescriptorRanges[j].NumDescriptors;
@@ -146,4 +154,5 @@ void RootSignature::Finalize(ID3D12Device* pDevice, D3D12_ROOT_SIGNATURE_FLAGS f
 	ComPtr<ID3DBlob> pDataBlob, pErrorBlob;
 	HR(D3D12SerializeVersionedRootSignature(&desc, pDataBlob.GetAddressOf(), pErrorBlob.GetAddressOf()));
 	HR(pDevice->CreateRootSignature(0, pDataBlob->GetBufferPointer(), pDataBlob->GetBufferSize(), IID_PPV_ARGS(m_pRootSignature.GetAddressOf())));
+	SetD3DObjectName(m_pRootSignature.Get(), pName);
 }

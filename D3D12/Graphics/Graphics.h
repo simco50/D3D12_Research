@@ -122,22 +122,22 @@ private:
 	std::vector<Batch> m_TransparantBatches;
 
 	//Diffuse scene passes
-	std::unique_ptr<RootSignature> m_pDiffuseRootSignature;
-	std::unique_ptr<GraphicsPipelineState> m_pDiffusePipelineStateObject;
-	std::unique_ptr<GraphicsPipelineState> m_pDiffuseAlphaPipelineStateObject;
-	std::unique_ptr<GraphicsPipelineState> m_pDiffusePipelineStateObjectDebug;
+	std::unique_ptr<RootSignature> m_pDiffuseRS;
+	std::unique_ptr<GraphicsPipelineState> m_pDiffuseOpaquePSO;
+	std::unique_ptr<GraphicsPipelineState> m_pDiffuseAlphaPSO;
+	std::unique_ptr<GraphicsPipelineState> m_pDiffuseDebugPSO;
 	bool m_UseDebugView = false;
 
 	//Directional light shadow mapping
 	std::unique_ptr<Texture2D> m_pShadowMap;
-	std::unique_ptr<RootSignature> m_pShadowsRootSignature;
-	std::unique_ptr<GraphicsPipelineState> m_pShadowsPipelineStateObject;
-	std::unique_ptr<RootSignature> m_pShadowsAlphaRootSignature;
-	std::unique_ptr<GraphicsPipelineState> m_pShadowsAlphaPipelineStateObject;
+	std::unique_ptr<RootSignature> m_pShadowsOpaqueRS;
+	std::unique_ptr<GraphicsPipelineState> m_pShadowsOpaquePSO;
+	std::unique_ptr<RootSignature> m_pShadowsAlphaRS;
+	std::unique_ptr<GraphicsPipelineState> m_pShadowsAlphaPSO;
 	
 	//Light Culling
-	std::unique_ptr<RootSignature> m_pComputeLightCullRootSignature;
-	std::unique_ptr<ComputePipelineState> m_pComputeLightCullPipeline;
+	std::unique_ptr<RootSignature> m_pComputeLightCullRS;
+	std::unique_ptr<ComputePipelineState> m_pComputeLightCullPSO;
 	std::unique_ptr<StructuredBuffer> m_pLightIndexCounter;
 	std::unique_ptr<StructuredBuffer> m_pLightIndexListBufferOpaque;
 	std::unique_ptr<Texture2D> m_pLightGridOpaque;
@@ -145,12 +145,12 @@ private:
 	std::unique_ptr<Texture2D> m_pLightGridTransparant;
 
 	//Depth Prepass
-	std::unique_ptr<RootSignature> m_pDepthPrepassRootSignature;
-	std::unique_ptr<GraphicsPipelineState> m_pDepthPrepassPipelineStateObject;
+	std::unique_ptr<RootSignature> m_pDepthPrepassRS;
+	std::unique_ptr<GraphicsPipelineState> m_pDepthPrepassPSO;
 
 	//MSAA Depth resolve
-	std::unique_ptr<RootSignature> m_pResolveDepthRootSignature;
-	std::unique_ptr<ComputePipelineState> m_pResolveDepthPipelineStateObject;
+	std::unique_ptr<RootSignature> m_pResolveDepthRS;
+	std::unique_ptr<ComputePipelineState> m_pResolveDepthPSO;
 	std::unique_ptr<Texture2D> m_pDepthStencil;
 	std::unique_ptr<Texture2D> m_pResolvedDepthStencil;
 

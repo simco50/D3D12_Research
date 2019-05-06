@@ -4,16 +4,16 @@ class Shader;
 
 enum class BlendMode
 {
-	REPLACE = 0,
-	ADD,
-	MULTIPLY,
-	ALPHA,
-	ADDALPHA,
-	PREMULALPHA,
-	INVDESTALPHA,
-	SUBTRACT,
-	SUBTRACTALPHA,
-	UNDEFINED,
+	Replace = 0,
+	And,
+	Multiply,
+	Alpha,
+	AddAlpha,
+	PreMultiplyAlpha,
+	InverseDestinationAlpha,
+	Subtract,
+	SubtractAlpha,
+	Undefined,
 };
 
 class PipelineState
@@ -56,6 +56,7 @@ public:
 
 	void SetRootSignature(ID3D12RootSignature* pRootSignature);
 
+	//Shaders
 	void SetVertexShader(const void* pByteCode, uint32 byteCodeLength);
 	void SetPixelShader(const void* pByteCode, uint32 byteCodeLength);
 	void SetGeometryShader(const void* pByteCode, uint32 byteCodeLength);
