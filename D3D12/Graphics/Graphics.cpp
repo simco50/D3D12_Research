@@ -11,7 +11,7 @@
 #include "Mesh.h"
 #include "DynamicResourceAllocator.h"
 #include "ImGuiRenderer.h"
-#include "Input.h"
+#include "Core/Input.h"
 
 const DXGI_FORMAT Graphics::DEPTH_STENCIL_FORMAT = DXGI_FORMAT_D32_FLOAT;
 const DXGI_FORMAT Graphics::DEPTH_STENCIL_SHADOW_FORMAT = DXGI_FORMAT_D16_UNORM;

@@ -2,7 +2,7 @@
 #include "GraphicsResource.h"
 #include "CommandContext.h"
 #include "Graphics.h"
-#include "Image.h"
+#include "Content/Image.h"
 
 void GraphicsBuffer::Create(ID3D12Device* pDevice, uint32 size, bool cpuVisible, bool unorderedAccess)
 {

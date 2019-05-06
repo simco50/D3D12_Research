@@ -1,6 +1,6 @@
 ﻿#include "stdafx.h"
-#include "Graphics.h"
-#include "Input.h"
+#include "Graphics/Graphics.h"
+#include "Core/Input.h"
 
 const int gWindowWidth = 1240;
 const int gWindowHeight = 720;
@@ -116,7 +116,7 @@ private:
 
 		return DefWindowProc(hWnd, message, wParam, lParam);
 	}
-
+	
 	void MakeWindow(const char* pTitle)
 	{
 		WNDCLASS wc;
@@ -128,7 +128,7 @@ private:
 		wc.hbrBackground = (HBRUSH)GetStockObject(WHITE_BRUSH);
 		wc.lpfnWndProc = WndProcStatic;
 		wc.style = CS_HREDRAW | CS_VREDRAW;
-		wc.lpszClassName = "wndClass";
+		wc.lpszClassName = TEXT("wndClass");
 		wc.lpszMenuName = nullptr;
 		wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
 
@@ -149,7 +149,7 @@ private:
 		int y = (displayHeight - gWindowHeight) / 2;
 
 		m_Window = CreateWindow(
-			"wndClass",
+			TEXT("wndClass"),
 			pTitle,
 			windowStyle,
 			x,
