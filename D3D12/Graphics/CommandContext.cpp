@@ -3,10 +3,11 @@
 #include "Graphics.h"
 #include "CommandQueue.h"
 #include "DynamicResourceAllocator.h"
-#include "GraphicsResource.h"
 #include "DynamicDescriptorAllocator.h"
 #include "PipelineState.h"
 #include "RootSignature.h"
+#include "GraphicsBuffer.h"
+#include "Texture.h"
 
 #if _DEBUG
 #include <pix3.h>

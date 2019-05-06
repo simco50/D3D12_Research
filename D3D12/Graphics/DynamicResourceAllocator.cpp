@@ -28,7 +28,7 @@ DynamicAllocation DynamicResourceAllocator::Allocate(int size, int alignment)
 	{
 		allocation.pBackingResource = m_pBackingResource.Get();
 
-		m_CurrentOffset = ((size_t)m_CurrentOffset + (alignment - 1)) & ~(alignment - 1);
+		m_CurrentOffset = (m_CurrentOffset + (alignment - 1)) & ~(alignment - 1);
 
 		if (bufferSize + m_CurrentOffset >= m_Size)
 		{

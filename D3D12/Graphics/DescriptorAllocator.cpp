@@ -7,15 +7,15 @@ DescriptorAllocator::DescriptorAllocator(ID3D12Device* pDevice, D3D12_DESCRIPTOR
 	m_DescriptorSize = pDevice->GetDescriptorHandleIncrementSize(type);
 }
 
-D3D12_CPU_DESCRIPTOR_HANDLE DescriptorAllocator::AllocateDescriptor()
+D3D12_CPU_DESCRIPTOR_HANDLE DescriptorAllocator::AllocateDescriptors(int count)
 {
-	if (m_RemainingDescriptors <= 0 || m_DescriptorHeapPool.size() == 0)
+	if (m_RemainingDescriptors <= count || m_DescriptorHeapPool.size() == 0)
 	{
 		AllocateNewHeap();
 	}
 	D3D12_CPU_DESCRIPTOR_HANDLE handle = m_CurrentCpuHandle;
-	m_CurrentCpuHandle.Offset(1, m_DescriptorSize);
-	--m_RemainingDescriptors;
+	m_CurrentCpuHandle.Offset(count, m_DescriptorSize);
+	m_RemainingDescriptors -= count;
 	return handle;
 }
 

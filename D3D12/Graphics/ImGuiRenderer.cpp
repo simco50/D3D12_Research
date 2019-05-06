@@ -9,6 +9,7 @@
 #include "GraphicsResource.h"
 #include "DescriptorAllocator.h"
 #include "Core/Input.h"
+#include "Texture.h"
 
 ImGuiRenderer::ImGuiRenderer(Graphics* pGraphics)
 	: m_pGraphics(pGraphics)
@@ -46,7 +47,7 @@ void ImGuiRenderer::InitializeImGui()
 	unsigned char* pPixels;
 	int width, height;
 	io.Fonts->GetTexDataAsRGBA32(&pPixels, &width, &height);
-	m_pFontTexture = std::make_unique<Texture2D>();
+	m_pFontTexture = std::make_unique<Texture2D>(m_pGraphics->GetDevice());
 	m_pFontTexture->Create(m_pGraphics, width, height, DXGI_FORMAT_R8G8B8A8_UNORM, TextureUsage::ShaderResource, 1);
 
 	CommandContext* pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
@@ -116,7 +117,7 @@ void ImGuiRenderer::Render(GraphicsCommandContext& context)
 	context.SetDynamicConstantBufferView(0, &projectionMatrix, sizeof(Matrix));
 	context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	context.SetViewport(FloatRect(0, 0, (float)m_pGraphics->GetWindowWidth(), (float)m_pGraphics->GetWindowHeight()), 0, 1);
-	context.SetRenderTarget(m_pGraphics->GetCurrentRenderTarget()->GetRTV(), m_pGraphics->GetDepthStencil()->GetRTV());
+	context.SetRenderTarget(m_pGraphics->GetCurrentRenderTarget()->GetRTV(), m_pGraphics->GetDepthStencil()->GetDSV());
 
 	for (int n = 0; n < pDrawData->CmdListsCount; n++)
 	{

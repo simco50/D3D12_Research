@@ -12,6 +12,8 @@
 #include "DynamicResourceAllocator.h"
 #include "ImGuiRenderer.h"
 #include "Core/Input.h"
+#include "Texture.h"
+#include "GraphicsBuffer.h"
 
 const DXGI_FORMAT Graphics::DEPTH_STENCIL_FORMAT = DXGI_FORMAT_D32_FLOAT;
 const DXGI_FORMAT Graphics::DEPTH_STENCIL_SHADOW_FORMAT = DXGI_FORMAT_D16_UNORM;
@@ -221,8 +223,8 @@ void Graphics::Update()
 		pContext->MarkBegin(L"Depth Prepass");
 
 		pContext->InsertResourceBarrier(GetDepthStencil(), D3D12_RESOURCE_STATE_DEPTH_WRITE, true);
-		pContext->SetDepthOnlyTarget(GetDepthStencil()->GetRTV());
-		pContext->ClearDepth(GetDepthStencil()->GetRTV(), D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 0.0f, 0);
+		pContext->SetDepthOnlyTarget(GetDepthStencil()->GetDSV());
+		pContext->ClearDepth(GetDepthStencil()->GetDSV(), D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 0.0f, 0);
 		pContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 		pContext->SetViewport(FloatRect(0, 0, (float)m_WindowWidth, (float)m_WindowHeight));
 		pContext->SetScissorRect(FloatRect(0, 0, (float)m_WindowWidth, (float)m_WindowHeight));
@@ -337,8 +339,8 @@ void Graphics::Update()
 
 		pContext->MarkBegin(L"Shadows");
 		pContext->InsertResourceBarrier(m_pShadowMap.get(), D3D12_RESOURCE_STATE_DEPTH_WRITE, true);
-		pContext->SetDepthOnlyTarget(m_pShadowMap->GetRTV());
-		pContext->ClearDepth(m_pShadowMap->GetRTV(), D3D12_CLEAR_FLAG_DEPTH, 0.0f, 0);
+		pContext->SetDepthOnlyTarget(m_pShadowMap->GetDSV());
+		pContext->ClearDepth(m_pShadowMap->GetDSV(), D3D12_CLEAR_FLAG_DEPTH, 0.0f, 0);
 		pContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 		
 		for(int i = 0; i < m_ShadowCasters; ++i)
@@ -412,7 +414,7 @@ void Graphics::Update()
 		pContext->InsertResourceBarrier(GetDepthStencil(), D3D12_RESOURCE_STATE_DEPTH_READ, false);
 		pContext->InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RENDER_TARGET, true);
 
-		pContext->SetRenderTarget(GetCurrentRenderTarget()->GetRTV(), GetDepthStencil()->GetRTV());
+		pContext->SetRenderTarget(GetCurrentRenderTarget()->GetRTV(), GetDepthStencil()->GetDSV());
 		pContext->ClearRenderTarget(GetCurrentRenderTarget()->GetRTV());
 	
 		pContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -654,21 +656,21 @@ void Graphics::InitD3D()
 	//Create the textures but don't create the resources themselves yet.
 	for (int i = 0; i < FRAME_COUNT; ++i)
 	{
-		m_RenderTargets[i] = std::make_unique<Texture2D>();
+		m_RenderTargets[i] = std::make_unique<Texture2D>(m_pDevice.Get());
 	}
-	m_pDepthStencil = std::make_unique<Texture2D>();
+	m_pDepthStencil = std::make_unique<Texture2D>(m_pDevice.Get());
 
 	if (m_SampleCount > 1)
 	{
-		m_pResolvedDepthStencil = std::make_unique<Texture2D>();
+		m_pResolvedDepthStencil = std::make_unique<Texture2D>(m_pDevice.Get());
 		for (int i = 0; i < FRAME_COUNT; ++i)
 		{
-			m_MultiSampleRenderTargets[i] = std::make_unique<Texture2D>();
+			m_MultiSampleRenderTargets[i] = std::make_unique<Texture2D>(m_pDevice.Get());
 		}
 	}
 
-	m_pLightGridOpaque = std::make_unique<Texture2D>();
-	m_pLightGridTransparant = std::make_unique<Texture2D>();
+	m_pLightGridOpaque = std::make_unique<Texture2D>(m_pDevice.Get());
+	m_pLightGridTransparant = std::make_unique<Texture2D>(m_pDevice.Get());
 
 	OnResize(m_WindowWidth, m_WindowHeight);
 
@@ -900,7 +902,7 @@ void Graphics::InitializeAssets()
 			m_pShadowsAlphaPipelineStateObject->Finalize(m_pDevice.Get());
 		}
 
-		m_pShadowMap = std::make_unique<Texture2D>();
+		m_pShadowMap = std::make_unique<Texture2D>(m_pDevice.Get());
 		m_pShadowMap->Create(this, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE, DEPTH_STENCIL_SHADOW_FORMAT, TextureUsage::DepthStencil | TextureUsage::ShaderResource, 1);
 	}
 
@@ -1118,9 +1120,10 @@ void Graphics::FreeCommandList(CommandContext* pCommandList)
 	m_FreeCommandLists[(int)pCommandList->GetType()].push(pCommandList);
 }
 
-D3D12_CPU_DESCRIPTOR_HANDLE Graphics::AllocateCpuDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE type)
+D3D12_CPU_DESCRIPTOR_HANDLE Graphics::AllocateCpuDescriptors(int count, D3D12_DESCRIPTOR_HEAP_TYPE type)
 {
-	return m_DescriptorHeaps[type]->AllocateDescriptor();
+	assert((int)type < m_DescriptorHeaps.size());
+	return m_DescriptorHeaps[type]->AllocateDescriptors(count);
 }
 
 void Graphics::IdleGPU()
