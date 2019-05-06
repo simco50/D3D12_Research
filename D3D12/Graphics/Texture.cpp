@@ -227,7 +227,6 @@ void Texture::Create_Internal(Graphics* pGraphics, TextureDimension dimension, i
 			break;
 		default:
 			break;
-		
 		}
 		for (int i = 0; i < m_MipLevels; ++i)
 		{

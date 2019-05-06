@@ -51,6 +51,8 @@ public:
 protected:
 	void Create_Internal(Graphics* pGraphics, TextureDimension dimension, int width, int height, int depthOrArraySize, DXGI_FORMAT format, TextureUsage usage, int sampleCount);
 	
+	//#SimonC: This can hold multiple handles as long as they're sequential in memory. 
+	//Need to adapt allocator to work with this nicely so it doesn't waste memory
 	CD3DX12_CPU_DESCRIPTOR_HANDLE m_Rtv = {};
 	CD3DX12_CPU_DESCRIPTOR_HANDLE m_Uav = {};
 	CD3DX12_CPU_DESCRIPTOR_HANDLE m_Srv = {};

@@ -23,11 +23,5 @@ void GraphicsResource::Release()
 
 void GraphicsResource::SetName(const char* pName)
 {
-	if (m_pResource)
-	{
-		wchar_t name[256];
-		size_t written = 0;
-		mbstowcs_s(&written, name, pName, 256);
-		m_pResource->SetName(name);
-	}
+	SetD3DObjectName(m_pResource.Get(), pName);
 }

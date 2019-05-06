@@ -3,6 +3,8 @@
 class Graphics;
 class GraphicsResource;
 class GraphicsBuffer;
+class VertexBuffer;
+class IndexBuffer;
 class Texture2D;
 class DynamicDescriptorAllocator;
 class RootSignature;
@@ -50,6 +52,8 @@ public:
 	void MarkEvent(const wchar_t* pName);
 	void MarkEnd();
 
+	void SetName(const char* pName);
+
 protected:
 	static const int MAX_QUEUED_BARRIERS = 12;
 
@@ -92,9 +96,9 @@ public:
 	void SetRenderTarget(D3D12_CPU_DESCRIPTOR_HANDLE rtv, D3D12_CPU_DESCRIPTOR_HANDLE dsv);
 	void SetRenderTargets(D3D12_CPU_DESCRIPTOR_HANDLE* pRtv, D3D12_CPU_DESCRIPTOR_HANDLE dsv);
 	void SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY type);
-	void SetVertexBuffer(D3D12_VERTEX_BUFFER_VIEW vertexBufferView);
-	void SetVertexBuffers(D3D12_VERTEX_BUFFER_VIEW* pBuffers, int bufferCount);
-	void SetIndexBuffer(D3D12_INDEX_BUFFER_VIEW indexBufferView);
+	void SetVertexBuffer(VertexBuffer* pVertexBuffer);
+	void SetVertexBuffers(VertexBuffer* pVertexBuffers, int bufferCount);
+	void SetIndexBuffer(IndexBuffer* pIndexBuffer);
 	void SetViewport(const FloatRect& rect, float minDepth = 0.0f, float maxDepth = 1.0f);
 	void SetScissorRect(const FloatRect& rect);
 };

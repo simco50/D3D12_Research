@@ -7,8 +7,9 @@ DescriptorAllocator::DescriptorAllocator(ID3D12Device* pDevice, D3D12_DESCRIPTOR
 	m_DescriptorSize = pDevice->GetDescriptorHandleIncrementSize(type);
 }
 
-D3D12_CPU_DESCRIPTOR_HANDLE DescriptorAllocator::AllocateDescriptors(int count)
+D3D12_CPU_DESCRIPTOR_HANDLE DescriptorAllocator::AllocateDescriptors(uint32 count)
 {
+	assert(count > 0);
 	if (m_RemainingDescriptors <= count || m_DescriptorHeapPool.size() == 0)
 	{
 		AllocateNewHeap();

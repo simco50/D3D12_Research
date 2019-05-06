@@ -36,9 +36,10 @@ void GraphicsPipelineState::SetRenderTargetFormats(DXGI_FORMAT* rtvFormats, uint
 	m_Desc.DSVFormat = dsvFormat;
 }
 
-void GraphicsPipelineState::Finalize(ID3D12Device* pDevice)
+void GraphicsPipelineState::Finalize(const char* pName, ID3D12Device* pDevice)
 {
 	pDevice->CreateGraphicsPipelineState(&m_Desc, IID_PPV_ARGS(m_pPipelineState.GetAddressOf()));
+	SetD3DObjectName(m_pPipelineState.Get(), pName);
 }
 
 void GraphicsPipelineState::SetBlendMode(const BlendMode& blendMode, bool /*alphaToCoverage*/)
@@ -231,9 +232,10 @@ ComputePipelineState::ComputePipelineState(const ComputePipelineState& other)
 
 }
 
-void ComputePipelineState::Finalize(ID3D12Device* pDevice)
+void ComputePipelineState::Finalize(const char* pName, ID3D12Device* pDevice)
 {
 	pDevice->CreateComputePipelineState(&m_Desc, IID_PPV_ARGS(m_pPipelineState.GetAddressOf()));
+	SetD3DObjectName(m_pPipelineState.Get(), pName);
 }
 
 void ComputePipelineState::SetRootSignature(ID3D12RootSignature* pRootSignature)

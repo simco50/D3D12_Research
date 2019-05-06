@@ -7,7 +7,7 @@ public:
 	DescriptorAllocator(ID3D12Device* pDevice, D3D12_DESCRIPTOR_HEAP_TYPE type, bool gpuVisible = false);
 	~DescriptorAllocator() = default;
 
-	D3D12_CPU_DESCRIPTOR_HANDLE AllocateDescriptors(int count);
+	D3D12_CPU_DESCRIPTOR_HANDLE AllocateDescriptors(uint32 count = 1);
 	ID3D12DescriptorHeap* GetCurrentHeap() { return m_DescriptorHeapPool.back().Get(); }
 
 	uint32 GetHeapCount() const { return (uint32)m_DescriptorHeapPool.size(); }

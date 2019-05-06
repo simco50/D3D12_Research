@@ -98,7 +98,7 @@ void ImGuiRenderer::CreatePipeline()
 	m_pPipelineState->SetRootSignature(m_pRootSignature->GetRootSignature());
 	m_pPipelineState->SetInputLayout(elementDesc.data(), (uint32)elementDesc.size());
 	m_pPipelineState->SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, m_pGraphics->GetMultiSampleCount(), m_pGraphics->GetMultiSampleQualityLevel(m_pGraphics->GetMultiSampleCount()));
-	m_pPipelineState->Finalize(m_pGraphics->GetDevice());
+	m_pPipelineState->Finalize("ImGui Pipeline", m_pGraphics->GetDevice());
 }
 
 void ImGuiRenderer::Render(GraphicsCommandContext& context)

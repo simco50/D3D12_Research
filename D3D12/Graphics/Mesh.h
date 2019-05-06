@@ -1,5 +1,6 @@
 #pragma once
-class GraphicsBuffer;
+class VertexBuffer;
+class IndexBuffer;
 class GraphicsCommandContext;
 class Texture2D;
 class Graphics;
@@ -20,10 +21,8 @@ private:
 	int m_IndexCount = 0;
 	int m_VertexCount = 0;
 	BoundingBox m_Bounds;
-	std::unique_ptr<GraphicsBuffer> m_pVertexBuffer;
-	std::unique_ptr<GraphicsBuffer> m_pIndexBuffer;
-	D3D12_VERTEX_BUFFER_VIEW m_VertexBufferView;
-	D3D12_INDEX_BUFFER_VIEW m_IndexBufferView;
+	std::unique_ptr<VertexBuffer> m_pVertexBuffer;
+	std::unique_ptr<IndexBuffer> m_pIndexBuffer;
 };
 
 struct Material
@@ -44,7 +43,7 @@ public:
 	const Material& GetMaterial(int materialId) const { return m_Materials[materialId]; }
 
 private:
-	std::unique_ptr<SubMesh> LoadMesh(aiMesh* pMesh, ID3D12Device* pDevice, CommandContext* pContext);
+	std::unique_ptr<SubMesh> LoadMesh(aiMesh* pMesh, Graphics* pGraphics, CommandContext* pContext);
 
 	std::vector<std::unique_ptr<SubMesh>> m_Meshes;
 	std::vector<Material> m_Materials;
