@@ -1,52 +1,42 @@
 #include "stdafx.h"
 #include "DynamicResourceAllocator.h"
 #include "Graphics.h"
+#include "GraphicsBuffer.h"
 
-DynamicResourceAllocator::DynamicResourceAllocator(Graphics* pGraphics, bool gpuVisible, int size)
-	: m_pGraphics(pGraphics), m_Size(size)
+DynamicResourceAllocator::DynamicResourceAllocator(DynamicAllocationManager* pPageManager)
+	: m_pPageManager(pPageManager)
 {
-	m_pBackingResource = CreateResource(gpuVisible, size, &m_pMappedMemory);
+
 }
 
-DynamicAllocation DynamicResourceAllocator::Allocate(int size, int alignment)
+DynamicAllocation DynamicResourceAllocator::Allocate(uint64 size, int alignment)
 {
 	int bufferSize = (size + (alignment - 1)) & ~(alignment - 1);
 	DynamicAllocation allocation;
 	allocation.Size = bufferSize;
 
-	m_TotalMemoryAllocation += bufferSize;
-	m_TotalMemoryAllocationPeak = std::max(m_TotalMemoryAllocationPeak, m_TotalMemoryAllocation);
-
-	if (size > m_Size)
+	if (bufferSize > PAGE_SIZE)
 	{
-		m_LargeResources.emplace_back(CreateResource(true, bufferSize, &allocation.pMappedMemory));
-		allocation.pBackingResource = m_LargeResources.back().Get();
+		AllocationPage* pPage = m_pPageManager->CreateNewPage(bufferSize);
+		m_UsedLargePages.push_back(pPage);
 		allocation.Offset = 0;
-		allocation.GpuHandle = allocation.pBackingResource->GetGPUVirtualAddress();
+		allocation.GpuHandle = pPage->GetGpuHandle();
+		allocation.pBackingResource = pPage;
+		allocation.pMappedMemory = pPage->GetMappedData();
 	}
 	else
 	{
-		allocation.pBackingResource = m_pBackingResource.Get();
-
-		m_CurrentOffset = (m_CurrentOffset + (alignment - 1)) & ~(alignment - 1);
-
-		if (bufferSize + m_CurrentOffset >= m_Size)
+		if (m_pCurrentPage == nullptr || m_CurrentOffset + bufferSize > PAGE_SIZE)
 		{
+			m_pCurrentPage = m_pPageManager->AllocatePage(PAGE_SIZE);
 			m_CurrentOffset = 0;
-			if (m_FenceOffsets.size() > 0)
-			{
-				int maxOffset = 0;
-				while (m_FenceOffsets.size() > 0 && m_pGraphics->IsFenceComplete(m_FenceOffsets.front().first))
-				{
-					maxOffset = m_FenceOffsets.front().second;
-					m_FenceOffsets.pop();
-				}
-				//assert(m_CurrentOffset + bufferSize <= maxOffset);
-			}
+			m_UsedPages.push_back(m_pCurrentPage);
 		}
-		allocation.GpuHandle = m_pBackingResource->GetGPUVirtualAddress() + m_CurrentOffset;
 		allocation.Offset = m_CurrentOffset;
-		allocation.pMappedMemory = static_cast<char*>(m_pMappedMemory) + m_CurrentOffset;
+		allocation.GpuHandle = m_pCurrentPage->GetGpuHandle() + m_CurrentOffset;
+		allocation.pBackingResource = m_pCurrentPage;
+		allocation.pMappedMemory = (char*)m_pCurrentPage->GetMappedData() + m_CurrentOffset;
+
 		m_CurrentOffset += bufferSize;
 	}
 	return allocation;
@@ -54,37 +44,73 @@ DynamicAllocation DynamicResourceAllocator::Allocate(int size, int alignment)
 
 void DynamicResourceAllocator::Free(uint64 fenceValue)
 {
-	m_FenceOffsets.emplace(fenceValue, m_CurrentOffset);
+	m_pPageManager->FreePages(fenceValue, m_UsedPages);
+	m_UsedPages.clear();
+
+	m_pPageManager->FreeLargePages(fenceValue, m_UsedLargePages);
+	m_UsedLargePages.clear();
+
+	m_pCurrentPage = nullptr;
+	m_CurrentOffset = 0;
 }
 
-ComPtr<ID3D12Resource> DynamicResourceAllocator::CreateResource(bool gpuVisible, int size, void** pMappedData)
+DynamicAllocationManager::DynamicAllocationManager(Graphics* pGraphics)
+	: m_pGraphics(pGraphics)
 {
-	ComPtr<ID3D12Resource> pResource;
-	D3D12_RESOURCE_DESC desc = {};
-	desc.Alignment = 0;
-	desc.DepthOrArraySize = 1;
-	desc.Dimension = D3D12_RESOURCE_DIMENSION_UNKNOWN;
-	desc.Flags = D3D12_RESOURCE_FLAG_NONE;
-	desc.Format = DXGI_FORMAT_UNKNOWN;
-	desc.Height = 1;
-	desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-	desc.MipLevels = 1;
-	desc.Width = size;
-	desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-	desc.SampleDesc.Count = 1;
 
-	D3D12_HEAP_PROPERTIES props = {};
-	props.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
-	props.CreationNodeMask = 0;
-	props.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
-	props.Type = gpuVisible ? D3D12_HEAP_TYPE_UPLOAD : D3D12_HEAP_TYPE_DEFAULT;
-	props.VisibleNodeMask = 0;
+}
 
-	HR(m_pGraphics->GetDevice()->CreateCommittedResource(&props, D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(pResource.GetAddressOf())));
+DynamicAllocationManager::~DynamicAllocationManager()
+{
 
-	D3D12_RANGE readRange;
-	readRange.Begin = 0;
-	readRange.End = 0;
-	HR(pResource->Map(0, &readRange, pMappedData));
-	return pResource;
+}
+
+AllocationPage* DynamicAllocationManager::AllocatePage(uint64 size)
+{
+	std::lock_guard<std::mutex> lockGuard(m_PageMutex);
+
+	AllocationPage* pPage = nullptr;
+	if (m_FreedPages.size() > 0 && m_pGraphics->IsFenceComplete(m_FreedPages.front().first))
+	{
+		pPage = m_FreedPages.front().second;
+		m_FreedPages.pop();
+	}
+	else
+	{
+		pPage = CreateNewPage(size);
+		m_Pages.emplace_back(pPage);
+	}
+	return pPage;
+}
+
+AllocationPage* DynamicAllocationManager::CreateNewPage(uint64 size)
+{
+	AllocationPage* pNewPage = new AllocationPage();
+	pNewPage->Create(m_pGraphics, size, true);
+	pNewPage->Map();
+	return pNewPage;
+}
+
+void DynamicAllocationManager::FreePages(uint64 fenceValue, const std::vector<AllocationPage*> pPages)
+{
+	std::lock_guard<std::mutex> lockGuard(m_PageMutex);
+	for (AllocationPage* pPage : pPages)
+	{
+		m_FreedPages.emplace(fenceValue, pPage);
+	}
+}
+
+void DynamicAllocationManager::FreeLargePages(uint64 fenceValue, const std::vector<AllocationPage*> pLargePages)
+{
+	std::lock_guard<std::mutex> lockGuard(m_PageMutex);
+
+	while (m_DeleteQueue.size() > 0 && m_pGraphics->IsFenceComplete(m_DeleteQueue.front().first))
+	{
+		m_DeleteQueue.pop();
+	}
+
+	for (AllocationPage* pPage : pLargePages)
+	{
+		m_DeleteQueue.emplace(fenceValue, pPage);
+	}
 }

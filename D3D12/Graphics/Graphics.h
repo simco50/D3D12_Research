@@ -4,9 +4,8 @@
 class CommandQueue;
 class CommandContext;
 class DescriptorAllocator;
-class DynamicResourceAllocator;
 class ImGuiRenderer;
-class GraphicsBuffer;
+class DynamicAllocationManager;
 class GraphicsResource;
 class RootSignature;
 class Texture2D;
@@ -48,7 +47,8 @@ public:
 	uint32 GetWindowWidth() const { return m_WindowWidth; }
 	uint32 GetWindowHeight() const { return m_WindowHeight; }
 
-	DynamicResourceAllocator* GetCpuVisibleAllocator() const { return m_pDynamicCpuVisibleAllocator.get(); }
+	DynamicAllocationManager* GetAllocationManager() const { return m_pDynamicAllocationManager.get(); }
+
 	D3D12_CPU_DESCRIPTOR_HANDLE AllocateCpuDescriptors(int count, D3D12_DESCRIPTOR_HEAP_TYPE type);
 
 	Texture2D* GetDepthStencil() const { return m_pDepthStencil.get(); }
@@ -97,11 +97,12 @@ private:
 	int m_SampleCount = 1;
 	int m_SampleQuality = 0;
 
+	std::unique_ptr<DynamicAllocationManager> m_pDynamicAllocationManager;
+
 	std::array<std::unique_ptr<Texture2D>, FRAME_COUNT> m_MultiSampleRenderTargets;
 	std::array<std::unique_ptr<Texture2D>, FRAME_COUNT> m_RenderTargets;
 
 	std::array<std::unique_ptr<DescriptorAllocator>, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES> m_DescriptorHeaps;
-	std::unique_ptr<DynamicResourceAllocator> m_pDynamicCpuVisibleAllocator;
 	std::array<std::unique_ptr<CommandQueue>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_CommandQueues;
 	std::array<std::vector<std::unique_ptr<CommandContext>>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_CommandListPool;
 	std::array < std::queue<CommandContext*>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_FreeCommandLists;

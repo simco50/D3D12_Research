@@ -10,6 +10,7 @@ class DynamicDescriptorAllocator;
 class RootSignature;
 class GraphicsPipelineState;
 class ComputePipelineState;
+class DynamicResourceAllocator;
 
 class GraphicsCommandContext;
 class ComputeCommandContext;
@@ -34,8 +35,7 @@ public:
 	void InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESOURCE_STATES state, bool executeImmediate = false);
 	void FlushResourceBarriers();
 
-	DynamicAllocation AllocateUploadMemory(uint32 size);
-	void InitializeBuffer(GraphicsBuffer* pResource, const void* pData, uint32 dataSize, uint32 offset = 0);
+	void InitializeBuffer(GraphicsBuffer* pResource, const void* pData, uint64 dataSize, uint64 offset = 0);
 	void InitializeTexture(Texture2D* pResource, D3D12_SUBRESOURCE_DATA* pSubResourceDatas, int firstSubResource, int subResourceCount);
 
 	ID3D12GraphicsCommandList* GetCommandList() const { return m_pCommandList; }
@@ -56,6 +56,7 @@ protected:
 
 	Graphics* m_pGraphics;
 
+	std::unique_ptr<DynamicResourceAllocator> m_DynamicAllocator;
 	ID3D12GraphicsCommandList* m_pCommandList;
 	ID3D12CommandAllocator* m_pAllocator;
 	D3D12_COMMAND_LIST_TYPE m_Type;

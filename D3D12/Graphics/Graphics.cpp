@@ -541,7 +541,6 @@ void Graphics::EndFrame(uint64 fenceValue)
 	m_pSwapchain->Present(1, 0);
 	m_CurrentBackBufferIndex = m_pSwapchain->GetCurrentBackBufferIndex();
 	WaitForFence(m_FenceValues[m_CurrentBackBufferIndex]);
-	m_pDynamicCpuVisibleAllocator->ResetAllocationCounter();
 }
 
 void Graphics::InitD3D()
@@ -619,7 +618,7 @@ void Graphics::InitD3D()
 		m_DescriptorHeaps[i] = std::make_unique<DescriptorAllocator>(m_pDevice.Get(), (D3D12_DESCRIPTOR_HEAP_TYPE)i);
 	}
 
-	m_pDynamicCpuVisibleAllocator = std::make_unique<DynamicResourceAllocator>(this, true, 0x400000);
+	m_pDynamicAllocationManager = std::make_unique<DynamicAllocationManager>(this);
 
 	m_pSwapchain.Reset();
 
@@ -1034,12 +1033,6 @@ void Graphics::UpdateImGui()
 			str << usedDescriptors << "/" << totalDescriptors;
 			ImGui::ProgressBar((float)usedDescriptors / totalDescriptors, ImVec2(-1, 0), str.str().c_str());
 		}
-		ImGui::EndTabItem();
-	}
-	if (ImGui::BeginTabItem("Memory"))
-	{
-		ImGui::Text("Used Dynamic Memory: %d KB", m_pDynamicCpuVisibleAllocator->GetTotalMemoryAllocated() / 1024);
-		ImGui::Text("Dynamic Memory Peak: %d KB", m_pDynamicCpuVisibleAllocator->GetTotalMemoryAllocatedPeak() / 1024);
 		ImGui::EndTabItem();
 	}
 	ImGui::EndTabBar();
