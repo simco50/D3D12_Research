@@ -74,7 +74,7 @@ uint64 CommandContext::ExecuteAndReset(bool wait)
 
 void CommandContext::InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESOURCE_STATES state, bool executeImmediate /*= false*/)
 {
-	if ((state & pBuffer->m_CurrentState) != state)
+	if (state != pBuffer->m_CurrentState)
 	{
 		if (m_Type == D3D12_COMMAND_LIST_TYPE_COMPUTE)
 		{
