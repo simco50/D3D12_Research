@@ -1,8 +1,8 @@
 #include "stdafx.h"
 #include "DescriptorAllocator.h"
 
-DescriptorAllocator::DescriptorAllocator(ID3D12Device* pDevice, D3D12_DESCRIPTOR_HEAP_TYPE type, bool gpuVisible)
-	: m_GpuVisible(gpuVisible), m_pDevice(pDevice), m_Type(type)
+DescriptorAllocator::DescriptorAllocator(ID3D12Device* pDevice, D3D12_DESCRIPTOR_HEAP_TYPE type)
+	: m_pDevice(pDevice), m_Type(type)
 {
 	m_DescriptorSize = pDevice->GetDescriptorHandleIncrementSize(type);
 }
@@ -23,7 +23,7 @@ D3D12_CPU_DESCRIPTOR_HANDLE DescriptorAllocator::AllocateDescriptors(uint32 coun
 void DescriptorAllocator::AllocateNewHeap()
 {
 	D3D12_DESCRIPTOR_HEAP_DESC desc = {};
-	desc.Flags = m_GpuVisible ? D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE : D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+	desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
 	desc.NodeMask = 0;
 	desc.NumDescriptors = DESCRIPTORS_PER_HEAP;
 	desc.Type = m_Type;

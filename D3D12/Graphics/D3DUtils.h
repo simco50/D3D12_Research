@@ -3,10 +3,12 @@
 #define HR(hr) \
 LogHRESULT(hr)
 
-static bool LogHRESULT(HRESULT hr)
+inline bool LogHRESULT(HRESULT hr)
 {
 	if (hr == S_OK)
+	{
 		return true;
+	}
 
 	WCHAR* errorMsg;
 	if (FormatMessageW(
