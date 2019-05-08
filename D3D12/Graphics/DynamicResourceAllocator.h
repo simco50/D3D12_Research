@@ -6,8 +6,8 @@ struct DynamicAllocation
 {
 	GraphicsBuffer* pBackingResource = nullptr;
 	D3D12_GPU_VIRTUAL_ADDRESS GpuHandle{ 0 };
-	int Offset = 0;
-	int Size = 0;
+	size_t Offset = 0;
+	size_t Size = 0;
 	void* pMappedMemory = nullptr;
 };
 
@@ -19,8 +19,8 @@ public:
 	DynamicAllocationManager(Graphics* pGraphics);
 	~DynamicAllocationManager();
 
-	AllocationPage* AllocatePage(uint64 size);
-	AllocationPage* CreateNewPage(uint64 size);
+	AllocationPage* AllocatePage(size_t size);
+	AllocationPage* CreateNewPage(size_t size);
 
 	void FreePages(uint64 fenceValue, const std::vector<AllocationPage*> pPages);
 	void FreeLargePages(uint64 fenceValue, const std::vector<AllocationPage*> pLargePages);
@@ -37,16 +37,16 @@ class DynamicResourceAllocator
 {
 public:
 	DynamicResourceAllocator(DynamicAllocationManager* pPageManager);
-	DynamicAllocation Allocate(uint64 size, int alignment = 256);
+	DynamicAllocation Allocate(size_t size, int alignment = 256);
 	void Free(uint64 fenceValue);
 
 private:
-	constexpr static uint64 PAGE_SIZE = 0xFFFF;
+	constexpr static size_t PAGE_SIZE = 0xFFFF;
 
 	DynamicAllocationManager* m_pPageManager;
 
 	AllocationPage* m_pCurrentPage = nullptr;
-	int m_CurrentOffset = 0;
+	size_t m_CurrentOffset = 0;
 	std::vector<AllocationPage*> m_UsedPages;
 	std::vector<AllocationPage*> m_UsedLargePages;
 };

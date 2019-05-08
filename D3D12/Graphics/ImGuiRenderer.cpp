@@ -123,7 +123,7 @@ void ImGuiRenderer::Render(GraphicsCommandContext& context)
 	{
 		const ImDrawList* pCmdList = pDrawData->CmdLists[n];
 		context.SetDynamicVertexBuffer(0, pCmdList->VtxBuffer.Size, sizeof(ImDrawVert), pCmdList->VtxBuffer.Data);
-		context.SetDynamicIndexBuffer(pCmdList->IdxBuffer.Size, pCmdList->IdxBuffer.Data);
+		context.SetDynamicIndexBuffer(pCmdList->IdxBuffer.Size, pCmdList->IdxBuffer.Data, true);
 
 		int indexOffset = 0;
 		for (int i = 0; i < pCmdList->CmdBuffer.Size; i++)

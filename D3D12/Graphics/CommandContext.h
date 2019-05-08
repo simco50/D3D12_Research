@@ -127,7 +127,7 @@ public:
 	void SetGraphicsRootConstants(int rootIndex, uint32 count, const void* pConstants);
 	void SetDynamicConstantBufferView(int rootIndex, void* pData, uint32 dataSize);
 	void SetDynamicVertexBuffer(int slot, int elementCount, int elementSize, void* pData);
-	void SetDynamicIndexBuffer(int elementCount, void* pData);
+	void SetDynamicIndexBuffer(int elementCount, void* pData, bool smallIndices = false);
 	void SetDepthOnlyTarget(D3D12_CPU_DESCRIPTOR_HANDLE dsv);
 	void SetRenderTarget(D3D12_CPU_DESCRIPTOR_HANDLE rtv, D3D12_CPU_DESCRIPTOR_HANDLE dsv);
 	void SetRenderTargets(D3D12_CPU_DESCRIPTOR_HANDLE* pRtv, D3D12_CPU_DESCRIPTOR_HANDLE dsv);

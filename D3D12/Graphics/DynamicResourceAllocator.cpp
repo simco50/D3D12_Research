@@ -9,9 +9,9 @@ DynamicResourceAllocator::DynamicResourceAllocator(DynamicAllocationManager* pPa
 
 }
 
-DynamicAllocation DynamicResourceAllocator::Allocate(uint64 size, int alignment)
+DynamicAllocation DynamicResourceAllocator::Allocate(size_t size, int alignment)
 {
-	int bufferSize = (size + (alignment - 1)) & ~(alignment - 1);
+	size_t bufferSize = (size + ((int64)alignment - 1)) & ~(alignment - 1);
 	DynamicAllocation allocation;
 	allocation.Size = bufferSize;
 
@@ -65,7 +65,7 @@ DynamicAllocationManager::~DynamicAllocationManager()
 
 }
 
-AllocationPage* DynamicAllocationManager::AllocatePage(uint64 size)
+AllocationPage* DynamicAllocationManager::AllocatePage(size_t size)
 {
 	std::lock_guard<std::mutex> lockGuard(m_PageMutex);
 
@@ -83,7 +83,7 @@ AllocationPage* DynamicAllocationManager::AllocatePage(uint64 size)
 	return pPage;
 }
 
-AllocationPage* DynamicAllocationManager::CreateNewPage(uint64 size)
+AllocationPage* DynamicAllocationManager::CreateNewPage(size_t size)
 {
 	AllocationPage* pNewPage = new AllocationPage();
 	pNewPage->Create(m_pGraphics, size, true);

@@ -397,16 +397,17 @@ void GraphicsCommandContext::SetDynamicVertexBuffer(int rootIndex, int elementCo
 	m_pCommandList->IASetVertexBuffers(rootIndex, 1, &view);
 }
 
-void GraphicsCommandContext::SetDynamicIndexBuffer(int elementCount, void* pData)
+void GraphicsCommandContext::SetDynamicIndexBuffer(int elementCount, void* pData, bool smallIndices /*= false*/)
 {
 	assert(m_CurrentContext == CommandListContext::Graphics);
-	int bufferSize = elementCount * sizeof(uint32);
+	int stride = smallIndices ? sizeof(uint16) : sizeof(uint32);
+	int bufferSize = elementCount * stride;
 	DynamicAllocation allocation = m_DynamicAllocator->Allocate(bufferSize);
 	memcpy(allocation.pMappedMemory, pData, bufferSize);
 	D3D12_INDEX_BUFFER_VIEW view = {};
 	view.BufferLocation = allocation.GpuHandle;
-	view.SizeInBytes = allocation.Size;
-	view.Format = DXGI_FORMAT_R32_UINT;
+	view.SizeInBytes = bufferSize;
+	view.Format = smallIndices ? DXGI_FORMAT_R16_UINT : DXGI_FORMAT_R32_UINT;
 	m_pCommandList->IASetIndexBuffer(&view);
 }
 
