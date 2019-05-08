@@ -1,5 +1,5 @@
 #pragma once
-class Graphics;
+#include "Graphics.h"
 class ReadbackBuffer;
 class CommandContext;
 
@@ -11,16 +11,21 @@ public:
 
 	void Begin(CommandContext& context);
 	void End(CommandContext& context);
-	void Readback(int frameIndex);
+
+	void BeginReadback(int frameIndex);
+	void EndReadBack(int frameIndex);
+
+	double GetTime(int index) const;
 
 private:
-	int GetOffsetForFrame(int frameIndex);
-
 	constexpr static int HEAP_SIZE = 512;
+
+	std::array<uint64, Graphics::FRAME_COUNT> m_FenceValues = {};
+	uint64* m_pCurrentReadBackData = nullptr;
 
 	Graphics* m_pGraphics;
 	double m_SecondsPerTick = 0.0;
-	int m_CurrentIndex = 0;
+	int m_CurrentTimer = 0;
 	ComPtr<ID3D12QueryHeap> m_pQueryHeap;
 	std::unique_ptr<ReadbackBuffer> m_pReadBackBuffer;
 };

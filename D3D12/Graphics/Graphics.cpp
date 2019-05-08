@@ -540,11 +540,12 @@ void Graphics::EndFrame(uint64 fenceValue)
 	//The 'm_CurrentBackBufferIndex' is the frame that just got queued so we set the fence value on that frame
 	//We present and request the new backbuffer index and wait for that one to finish on the GPU before starting to queue work for that frame.
 
+	m_pGraphicsProfiler->BeginReadback(m_CurrentBackBufferIndex);
 	m_FenceValues[m_CurrentBackBufferIndex] = fenceValue;
 	m_pSwapchain->Present(1, 0);
 	m_CurrentBackBufferIndex = m_pSwapchain->GetCurrentBackBufferIndex();
 	WaitForFence(m_FenceValues[m_CurrentBackBufferIndex]);
-	m_pGraphicsProfiler->Readback(m_CurrentBackBufferIndex);
+	m_pGraphicsProfiler->EndReadBack(m_CurrentBackBufferIndex);
 }
 
 void Graphics::InitD3D()
