@@ -9,6 +9,7 @@ enum class BufferUsage
 	Dynamic			= 1 << 0,
 	UnorderedAccess = 1 << 1,
 	ShaderResource	= 1 << 2,
+	ReadBack		= 1 << 3,
 };
 DEFINE_ENUM_FLAG_OPERATORS(BufferUsage)
 
@@ -86,5 +87,14 @@ public:
 
 private:
 	bool m_SmallIndices = false;
+	D3D12_INDEX_BUFFER_VIEW m_View;
+};
+
+class ReadbackBuffer : public GraphicsBuffer
+{
+public:
+	void Create(Graphics* pGraphics, uint64 size);
+
+private:
 	D3D12_INDEX_BUFFER_VIEW m_View;
 };

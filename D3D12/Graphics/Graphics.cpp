@@ -14,6 +14,7 @@
 #include "Core/Input.h"
 #include "Texture.h"
 #include "GraphicsBuffer.h"
+#include "GraphicsProfiler.h"
 
 const DXGI_FORMAT Graphics::DEPTH_STENCIL_FORMAT = DXGI_FORMAT_D32_FLOAT;
 const DXGI_FORMAT Graphics::DEPTH_STENCIL_SHADOW_FORMAT = DXGI_FORMAT_D16_UNORM;
@@ -401,6 +402,7 @@ void Graphics::Update()
 	// - Render the scene using the shadow mapping result and the light culling buffers
 	{
 		GraphicsCommandContext* pContext = static_cast<GraphicsCommandContext*>(AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT));
+		m_pGraphicsProfiler->Begin(*pContext);
 		pContext->MarkBegin(L"3D");
 	
 		pContext->SetViewport(FloatRect(0, 0, (float)m_WindowWidth, (float)m_WindowHeight));
@@ -482,6 +484,7 @@ void Graphics::Update()
 		pContext->InsertResourceBarrier(m_pLightGridTransparant.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, false);
 		pContext->InsertResourceBarrier(m_pLightIndexListBufferTransparant.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, true);
 
+		m_pGraphicsProfiler->End(*pContext);
 		pContext->Execute(false);
 	}
 
@@ -537,10 +540,12 @@ void Graphics::EndFrame(uint64 fenceValue)
 	//The 'm_CurrentBackBufferIndex' is the frame that just got queued so we set the fence value on that frame
 	//We present and request the new backbuffer index and wait for that one to finish on the GPU before starting to queue work for that frame.
 
+	m_pGraphicsProfiler->BeginReadback(m_CurrentBackBufferIndex);
 	m_FenceValues[m_CurrentBackBufferIndex] = fenceValue;
 	m_pSwapchain->Present(1, 0);
 	m_CurrentBackBufferIndex = m_pSwapchain->GetCurrentBackBufferIndex();
 	WaitForFence(m_FenceValues[m_CurrentBackBufferIndex]);
+	m_pGraphicsProfiler->EndReadBack(m_CurrentBackBufferIndex);
 }
 
 void Graphics::InitD3D()
@@ -612,6 +617,7 @@ void Graphics::InitD3D()
 	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_COPY] = std::make_unique<CommandQueue>(this, D3D12_COMMAND_LIST_TYPE_COPY);
 	//m_CommandQueues[D3D12_COMMAND_LIST_TYPE_BUNDLE] = std::make_unique<CommandQueue>(this, D3D12_COMMAND_LIST_TYPE_BUNDLE);
 
+
 	assert(m_DescriptorHeaps.size() == D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES);
 	for (size_t i = 0; i < D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES; ++i)
 	{
@@ -619,6 +625,7 @@ void Graphics::InitD3D()
 	}
 
 	m_pDynamicAllocationManager = std::make_unique<DynamicAllocationManager>(this);
+	m_pGraphicsProfiler = std::make_unique<GraphicsProfiler>(this);
 
 	m_pSwapchain.Reset();
 

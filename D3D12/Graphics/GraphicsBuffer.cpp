@@ -17,7 +17,7 @@ void GraphicsBuffer::SetData(CommandContext* pContext, void* pData, uint64 dataS
 void* GraphicsBuffer::Map(uint32 subResource /*= 0*/, uint64 readFrom /*= 0*/, uint64 readTo /*= 0*/)
 {
 	assert(m_pResource);
-	assert((m_Usage & BufferUsage::Dynamic) == BufferUsage::Dynamic);
+	assert((m_Usage & BufferUsage::Dynamic) == BufferUsage::Dynamic || (m_Usage & BufferUsage::ReadBack) == BufferUsage::ReadBack);
 	CD3DX12_RANGE range(readFrom, readTo);
 	m_pResource->Map(subResource, &range, &m_pMappedData);
 	return m_pMappedData;
@@ -28,7 +28,7 @@ void GraphicsBuffer::Unmap(uint32 subResource /*= 0*/, uint64 writtenFrom /*= 0*
 	if (m_pMappedData)
 	{
 		assert(m_pResource);
-		assert((m_Usage & BufferUsage::Dynamic) == BufferUsage::Dynamic);
+		assert((m_Usage & BufferUsage::Dynamic) == BufferUsage::Dynamic || (m_Usage & BufferUsage::ReadBack) == BufferUsage::ReadBack);
 		CD3DX12_RANGE range(writtenFrom, writtenFrom);
 		m_pResource->Unmap(subResource, &range);
 		m_pMappedData = nullptr;
@@ -58,8 +58,10 @@ void GraphicsBuffer::CreateInternal(ID3D12Device* pDevice, uint32 elementStride,
 	D3D12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Buffer(bufferSize, flags);
 
 	bool cpuVisible = (usage & BufferUsage::Dynamic) == BufferUsage::Dynamic;
-	m_CurrentState = cpuVisible ? D3D12_RESOURCE_STATE_GENERIC_READ : D3D12_RESOURCE_STATE_COMMON;
-	D3D12_HEAP_PROPERTIES properties = CD3DX12_HEAP_PROPERTIES(cpuVisible ? D3D12_HEAP_TYPE_UPLOAD : D3D12_HEAP_TYPE_DEFAULT);
+	bool readBack = (usage & BufferUsage::ReadBack) == BufferUsage::ReadBack;
+	assert(!(cpuVisible && readBack));
+	m_CurrentState = readBack ? D3D12_RESOURCE_STATE_COPY_DEST : (cpuVisible ? D3D12_RESOURCE_STATE_GENERIC_READ : D3D12_RESOURCE_STATE_COMMON);
+	D3D12_HEAP_PROPERTIES properties = CD3DX12_HEAP_PROPERTIES(readBack ? D3D12_HEAP_TYPE_READBACK : (cpuVisible ? D3D12_HEAP_TYPE_UPLOAD : D3D12_HEAP_TYPE_DEFAULT));
 	HR(pDevice->CreateCommittedResource(&properties, D3D12_HEAP_FLAG_NONE, &desc, m_CurrentState, nullptr, IID_PPV_ARGS(&m_pResource)));
 
 	CreateViews(pDevice);
@@ -187,4 +189,9 @@ void IndexBuffer::CreateViews(ID3D12Device* pDevice)
 	m_View.BufferLocation = GetGpuHandle();
 	m_View.Format = m_SmallIndices ? DXGI_FORMAT_R16_UINT : DXGI_FORMAT_R32_UINT;
 	m_View.SizeInBytes = (uint32)GetSize();
+}
+
+void ReadbackBuffer::Create(Graphics* pGraphics, uint64 size)
+{
+	CreateInternal(pGraphics->GetDevice(), 1, size, BufferUsage::ReadBack);
 }
