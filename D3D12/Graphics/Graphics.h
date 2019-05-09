@@ -14,7 +14,6 @@ class ComputePipelineState;
 class Mesh;
 class StructuredBuffer;
 class SubMesh;
-class GraphicsProfiler;
 struct Material;
 
 struct Batch
@@ -99,7 +98,6 @@ private:
 	int m_SampleQuality = 0;
 
 	std::unique_ptr<DynamicAllocationManager> m_pDynamicAllocationManager;
-	std::unique_ptr<GraphicsProfiler> m_pGraphicsProfiler;
 
 	std::array<std::unique_ptr<Texture2D>, FRAME_COUNT> m_MultiSampleRenderTargets;
 	std::array<std::unique_ptr<Texture2D>, FRAME_COUNT> m_RenderTargets;

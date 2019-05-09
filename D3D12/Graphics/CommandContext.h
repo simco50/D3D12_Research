@@ -42,8 +42,8 @@ public:
 
 	D3D12_COMMAND_LIST_TYPE GetType() const { return m_Type; }
 
-	void MarkBegin(const wchar_t* pName);
-	void MarkEvent(const wchar_t* pName);
+	void MarkBegin(const char* pName);
+	void MarkEvent(const char* pName);
 	void MarkEnd();
 
 	void SetName(const char* pName);

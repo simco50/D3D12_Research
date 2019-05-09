@@ -10,14 +10,14 @@ inline bool LogHRESULT(HRESULT hr)
 		return true;
 	}
 
-	WCHAR* errorMsg;
-	if (FormatMessageW(
+	char* errorMsg;
+	if (FormatMessage(
 		FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM,
 		nullptr, hr, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-		(LPWSTR)&errorMsg, 0, nullptr) != 0)
+		(LPSTR)&errorMsg, 0, nullptr) != 0)
 	{
-		OutputDebugStringW(errorMsg);
-		std::wcout << L"Error: " << errorMsg << std::endl;
+		OutputDebugString(errorMsg);
+		std::cout << "Error: " << errorMsg << std::endl;
 	}
 	__debugbreak();
 	return false;
