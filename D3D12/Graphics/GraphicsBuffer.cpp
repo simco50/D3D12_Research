@@ -3,9 +3,24 @@
 #include "CommandContext.h"
 #include "Graphics.h"
 
-void GraphicsBuffer::Create(Graphics* pGraphics, uint64 size, bool cpuVisible)
+void GraphicsBuffer::Create(Graphics* pGraphics, uint64 elementCount, uint32 elementStride, bool cpuVisible)
 {
-	CreateInternal(pGraphics->GetDevice(), 1, size, cpuVisible ? BufferUsage::Dynamic : BufferUsage::Default);
+	Release();
+
+	m_ElementCount = elementCount;
+	m_ElementStride = elementStride;
+
+	const int alignment = 16;
+	int bufferSize = (GetSize() + (alignment - 1)) & ~(alignment - 1);
+
+	D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
+	D3D12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Buffer(bufferSize, flags);
+
+	m_CurrentState = cpuVisible ? D3D12_RESOURCE_STATE_GENERIC_READ : D3D12_RESOURCE_STATE_COMMON;
+	D3D12_HEAP_PROPERTIES properties = CD3DX12_HEAP_PROPERTIES(cpuVisible ? D3D12_HEAP_TYPE_UPLOAD : D3D12_HEAP_TYPE_DEFAULT);
+	HR(pGraphics->GetDevice()->CreateCommittedResource(&properties, D3D12_HEAP_FLAG_NONE, &desc, m_CurrentState, nullptr, IID_PPV_ARGS(&m_pResource)));
+
+	CreateViews(pGraphics->GetDevice());
 }
 
 void GraphicsBuffer::SetData(CommandContext* pContext, void* pData, uint64 dataSize, uint32 offset)
@@ -17,7 +32,6 @@ void GraphicsBuffer::SetData(CommandContext* pContext, void* pData, uint64 dataS
 void* GraphicsBuffer::Map(uint32 subResource /*= 0*/, uint64 readFrom /*= 0*/, uint64 readTo /*= 0*/)
 {
 	assert(m_pResource);
-	assert((m_Usage & BufferUsage::Dynamic) == BufferUsage::Dynamic || (m_Usage & BufferUsage::ReadBack) == BufferUsage::ReadBack);
 	CD3DX12_RANGE range(readFrom, readTo);
 	m_pResource->Map(subResource, &range, &m_pMappedData);
 	return m_pMappedData;
@@ -28,43 +42,10 @@ void GraphicsBuffer::Unmap(uint32 subResource /*= 0*/, uint64 writtenFrom /*= 0*
 	if (m_pMappedData)
 	{
 		assert(m_pResource);
-		assert((m_Usage & BufferUsage::Dynamic) == BufferUsage::Dynamic || (m_Usage & BufferUsage::ReadBack) == BufferUsage::ReadBack);
 		CD3DX12_RANGE range(writtenFrom, writtenFrom);
 		m_pResource->Unmap(subResource, &range);
 		m_pMappedData = nullptr;
 	}
-}
-
-void GraphicsBuffer::CreateInternal(ID3D12Device* pDevice, uint32 elementStride, uint64 elementCount, BufferUsage usage)
-{
-	Release();
-
-	m_Usage = usage;
-	m_ElementCount = elementCount;
-	m_ElementStride = elementStride;
-
-	const int alignment = 16;
-	int bufferSize = (GetSize() + (alignment - 1)) & ~(alignment - 1);
-
-	D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_NONE;
-	if ((usage & BufferUsage::UnorderedAccess) == BufferUsage::UnorderedAccess)
-	{
-		flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-	}
-	if ((usage & BufferUsage::ShaderResource) != BufferUsage::ShaderResource)
-	{
-		flags |= D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
-	}
-	D3D12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Buffer(bufferSize, flags);
-
-	bool cpuVisible = (usage & BufferUsage::Dynamic) == BufferUsage::Dynamic;
-	bool readBack = (usage & BufferUsage::ReadBack) == BufferUsage::ReadBack;
-	assert(!(cpuVisible && readBack));
-	m_CurrentState = readBack ? D3D12_RESOURCE_STATE_COPY_DEST : (cpuVisible ? D3D12_RESOURCE_STATE_GENERIC_READ : D3D12_RESOURCE_STATE_COMMON);
-	D3D12_HEAP_PROPERTIES properties = CD3DX12_HEAP_PROPERTIES(readBack ? D3D12_HEAP_TYPE_READBACK : (cpuVisible ? D3D12_HEAP_TYPE_UPLOAD : D3D12_HEAP_TYPE_DEFAULT));
-	HR(pDevice->CreateCommittedResource(&properties, D3D12_HEAP_FLAG_NONE, &desc, m_CurrentState, nullptr, IID_PPV_ARGS(&m_pResource)));
-
-	CreateViews(pDevice);
 }
 
 StructuredBuffer::StructuredBuffer(Graphics* pGraphics)
@@ -75,12 +56,23 @@ StructuredBuffer::StructuredBuffer(Graphics* pGraphics)
 
 void StructuredBuffer::Create(Graphics* pGraphics, uint32 elementStride, uint64 elementCount, bool cpuVisible /*= false*/)
 {
-	BufferUsage usage = BufferUsage::UnorderedAccess | BufferUsage::ShaderResource;
-	if (cpuVisible)
-	{
-		usage |= BufferUsage::Dynamic;
-	}
-	CreateInternal(pGraphics->GetDevice(), elementStride, elementCount, usage);
+	Release();
+
+	m_ElementCount = elementCount;
+	m_ElementStride = elementStride;
+
+	const int alignment = 16;
+	int bufferSize = (GetSize() + (alignment - 1)) & ~(alignment - 1);
+
+	D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_NONE;
+	flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+	D3D12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Buffer(bufferSize, flags);
+
+	m_CurrentState = cpuVisible ? D3D12_RESOURCE_STATE_GENERIC_READ : D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+	D3D12_HEAP_PROPERTIES properties = CD3DX12_HEAP_PROPERTIES(cpuVisible ? D3D12_HEAP_TYPE_UPLOAD : D3D12_HEAP_TYPE_DEFAULT);
+	HR(pGraphics->GetDevice()->CreateCommittedResource(&properties, D3D12_HEAP_FLAG_NONE, &desc, m_CurrentState, nullptr, IID_PPV_ARGS(&m_pResource)));
+
+	CreateViews(pGraphics->GetDevice());
 }
 
 void StructuredBuffer::CreateViews(ID3D12Device* pDevice)
@@ -123,12 +115,21 @@ ByteAddressBuffer::ByteAddressBuffer(Graphics* pGraphics)
 void ByteAddressBuffer::Create(Graphics* pGraphics, uint32 elementStride, uint64 elementCount, bool cpuVisible /*= false*/)
 {
 	assert(elementStride == 1);
-	BufferUsage usage = BufferUsage::UnorderedAccess | BufferUsage::ShaderResource;
-	if (cpuVisible)
-	{
-		usage |= BufferUsage::Dynamic;
-	}
-	CreateInternal(pGraphics->GetDevice(), elementStride, elementCount, usage);
+
+	m_ElementCount = elementCount;
+	m_ElementStride = elementStride;
+
+	const int alignment = 16;
+	int bufferSize = (GetSize() + (alignment - 1)) & ~(alignment - 1);
+
+	D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+	D3D12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Buffer(bufferSize, flags);
+
+	m_CurrentState = cpuVisible ? D3D12_RESOURCE_STATE_GENERIC_READ : D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+	D3D12_HEAP_PROPERTIES properties = CD3DX12_HEAP_PROPERTIES(cpuVisible ? D3D12_HEAP_TYPE_UPLOAD : D3D12_HEAP_TYPE_DEFAULT);
+	HR(pGraphics->GetDevice()->CreateCommittedResource(&properties, D3D12_HEAP_FLAG_NONE, &desc, m_CurrentState, nullptr, IID_PPV_ARGS(&m_pResource)));
+
+	CreateViews(pGraphics->GetDevice());
 }
 
 void ByteAddressBuffer::CreateViews(ID3D12Device* pDevice)
@@ -156,16 +157,6 @@ void ByteAddressBuffer::CreateViews(ID3D12Device* pDevice)
 	pDevice->CreateShaderResourceView(m_pResource, &srvDesc, m_Srv);
 }
 
-void VertexBuffer::Create(Graphics* pGraphics, uint32 elementStride, uint64 elementCount, bool cpuVisible /*= false*/)
-{
-	BufferUsage usage = BufferUsage::Default;
-	if (cpuVisible)
-	{
-		usage |= BufferUsage::Dynamic;
-	}
-	CreateInternal(pGraphics->GetDevice(), elementStride, elementCount, usage);
-}
-
 void VertexBuffer::CreateViews(ID3D12Device* pDevice)
 {
 	m_View.BufferLocation = GetGpuHandle();
@@ -173,15 +164,10 @@ void VertexBuffer::CreateViews(ID3D12Device* pDevice)
 	m_View.StrideInBytes = GetStride();
 }
 
-void IndexBuffer::Create(Graphics * pGraphics, bool smallIndices, uint64 elementCount, bool cpuVisible /*= false*/)
+void IndexBuffer::Create(Graphics * pGraphics, bool smallIndices, uint32 elementCount, bool cpuVisible /*= false*/)
 {
 	m_SmallIndices = smallIndices;
-	BufferUsage usage = BufferUsage::Default;
-	if (cpuVisible)
-	{
-		usage |= BufferUsage::Dynamic;
-	}
-	CreateInternal(pGraphics->GetDevice(), smallIndices ? 2 : 4, elementCount, usage);
+	GraphicsBuffer::Create(pGraphics, smallIndices ? 2 : 4, elementCount, cpuVisible);
 }
 
 void IndexBuffer::CreateViews(ID3D12Device* pDevice)
@@ -193,5 +179,16 @@ void IndexBuffer::CreateViews(ID3D12Device* pDevice)
 
 void ReadbackBuffer::Create(Graphics* pGraphics, uint64 size)
 {
-	CreateInternal(pGraphics->GetDevice(), 1, size, BufferUsage::ReadBack);
+	m_ElementCount = size;
+	m_ElementStride = 1;
+
+	const int alignment = 16;
+	int bufferSize = (GetSize() + (alignment - 1)) & ~(alignment - 1);
+
+	D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
+	D3D12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Buffer(bufferSize, flags);
+
+	m_CurrentState = D3D12_RESOURCE_STATE_COPY_DEST;
+	D3D12_HEAP_PROPERTIES properties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_READBACK);
+	HR(pGraphics->GetDevice()->CreateCommittedResource(&properties, D3D12_HEAP_FLAG_NONE, &desc, m_CurrentState, nullptr, IID_PPV_ARGS(&m_pResource)));
 }

@@ -86,7 +86,7 @@ AllocationPage* DynamicAllocationManager::AllocatePage(size_t size)
 AllocationPage* DynamicAllocationManager::CreateNewPage(size_t size)
 {
 	AllocationPage* pNewPage = new AllocationPage();
-	pNewPage->Create(m_pGraphics, size, true);
+	pNewPage->Create(m_pGraphics, size, 1, true);
 	pNewPage->Map();
 	return pNewPage;
 }

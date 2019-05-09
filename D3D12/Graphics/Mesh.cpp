@@ -126,7 +126,7 @@ std::unique_ptr<SubMesh> Mesh::LoadMesh(aiMesh* pMesh, Graphics* pGraphics, Comm
 	{
 		uint32 size = (uint32)vertices.size() * sizeof(Vertex);
 		pSubMesh->m_pVertexBuffer = std::make_unique<VertexBuffer>();
-		pSubMesh->m_pVertexBuffer->Create(pGraphics, sizeof(Vertex), (uint32)vertices.size(), false);
+		pSubMesh->m_pVertexBuffer->Create(pGraphics, (uint32)vertices.size(), sizeof(Vertex), false);
 		pSubMesh->m_pVertexBuffer->SetData(pContext, vertices.data(), size);
 	}
 
