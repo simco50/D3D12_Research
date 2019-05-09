@@ -28,7 +28,7 @@ enum class TextureDimension
 class Texture : public GraphicsResource
 {
 public:
-	Texture(ID3D12Device* pDevice);
+	Texture();
 
 	int GetWidth() const { return m_Width; }
 	int GetHeight() const { return m_Height; }
@@ -72,8 +72,6 @@ protected:
 class Texture2D : public Texture
 {
 public:
-	Texture2D(ID3D12Device* pDevice);
-
 	void Create(Graphics* pGraphics, CommandContext* pContext, const char* pFilePath, TextureUsage usage);
 	void Create(Graphics* pGraphics, int width, int height, DXGI_FORMAT format, TextureUsage usage, int sampleCount, int arraySize = -1);
 	void SetData(CommandContext* pContext, const void* pData);
@@ -83,13 +81,11 @@ public:
 class Texture3D : public Texture
 {
 public:
-	Texture3D(ID3D12Device* pDevice);
 	void Create(Graphics* pGraphics, int width, int height, int depth, DXGI_FORMAT format, TextureUsage usage);
 };
 
 class TextureCube : public Texture 
 {
 public:
-	TextureCube(ID3D12Device* pDevice);
 	void Create(Graphics* pGraphics, int width, int height, DXGI_FORMAT format, TextureUsage usage, int sampleCount, int arraySize = -1);
 };

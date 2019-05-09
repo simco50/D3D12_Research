@@ -4,11 +4,9 @@
 #include "CommandContext.h"
 #include "Graphics.h"
 
-Texture::Texture(ID3D12Device* pDevice)
+Texture::Texture()
 	: m_Width(0), m_Height(0), m_DepthOrArraySize(0), m_Format(DXGI_FORMAT_UNKNOWN), m_MipLevels(1), m_Dimension(TextureDimension::Texture2D), m_IsArray(false)
 {
-	m_SrvUavDescriptorSize = pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-	m_RtvDescriptorSize = pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 }
 
 D3D12_CPU_DESCRIPTOR_HANDLE Texture::GetSRV(int subResource /*= 0*/) const
@@ -37,6 +35,9 @@ void Texture::Create_Internal(Graphics* pGraphics, TextureDimension dimension, i
 	assert((usage & depthAndRt) != depthAndRt);
 
 	Release();
+
+	m_RtvDescriptorSize = pGraphics->GetDevice()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+	m_SrvUavDescriptorSize = pGraphics->GetDevice()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
 	m_Width = width;
 	m_Height = height;
@@ -450,12 +451,6 @@ DXGI_FORMAT Texture::GetSrvFormatFromDepth(DXGI_FORMAT format)
 	}
 }
 
-Texture2D::Texture2D(ID3D12Device* pDevice)
-	: Texture(pDevice)
-{
-
-}
-
 void Texture2D::Create(Graphics* pGraphics, CommandContext* pContext, const char* pFilePath, TextureUsage usage)
 {
 	Image img;
@@ -519,20 +514,9 @@ void Texture2D::CreateForSwapchain(Graphics* pGraphics, ID3D12Resource* pTexture
 	pGraphics->GetDevice()->CreateRenderTargetView(pTexture, nullptr, m_Rtv);
 }
 
-Texture3D::Texture3D(ID3D12Device* pDevice)
-	: Texture(pDevice)
-{
-}
-
 void Texture3D::Create(Graphics* pGraphics, int width, int height, int depth, DXGI_FORMAT format, TextureUsage usage)
 {
 	Create_Internal(pGraphics, TextureDimension::Texture3D, width, height, depth, format, usage, 1);
-}
-
-TextureCube::TextureCube(ID3D12Device* pDevice)
-	: Texture(pDevice)
-{
-
 }
 
 void TextureCube::Create(Graphics* pGraphics, int width, int height, DXGI_FORMAT format, TextureUsage usage, int sampleCount, int arraySize /*= -1*/)

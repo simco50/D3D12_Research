@@ -662,21 +662,21 @@ void Graphics::InitD3D()
 	//Create the textures but don't create the resources themselves yet.
 	for (int i = 0; i < FRAME_COUNT; ++i)
 	{
-		m_RenderTargets[i] = std::make_unique<Texture2D>(m_pDevice.Get());
+		m_RenderTargets[i] = std::make_unique<Texture2D>();
 	}
-	m_pDepthStencil = std::make_unique<Texture2D>(m_pDevice.Get());
+	m_pDepthStencil = std::make_unique<Texture2D>();
 
 	if (m_SampleCount > 1)
 	{
-		m_pResolvedDepthStencil = std::make_unique<Texture2D>(m_pDevice.Get());
+		m_pResolvedDepthStencil = std::make_unique<Texture2D>();
 		for (int i = 0; i < FRAME_COUNT; ++i)
 		{
-			m_MultiSampleRenderTargets[i] = std::make_unique<Texture2D>(m_pDevice.Get());
+			m_MultiSampleRenderTargets[i] = std::make_unique<Texture2D>();
 		}
 	}
 
-	m_pLightGridOpaque = std::make_unique<Texture2D>(m_pDevice.Get());
-	m_pLightGridTransparant = std::make_unique<Texture2D>(m_pDevice.Get());
+	m_pLightGridOpaque = std::make_unique<Texture2D>();
+	m_pLightGridTransparant = std::make_unique<Texture2D>();
 
 	OnResize(m_WindowWidth, m_WindowHeight);
 
@@ -896,7 +896,7 @@ void Graphics::InitializeAssets()
 			m_pShadowsAlphaPSO->Finalize("Shadow Mapping (Alpha) Pipeline", m_pDevice.Get());
 		}
 
-		m_pShadowMap = std::make_unique<Texture2D>(m_pDevice.Get());
+		m_pShadowMap = std::make_unique<Texture2D>();
 		m_pShadowMap->Create(this, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE, DEPTH_STENCIL_SHADOW_FORMAT, TextureUsage::DepthStencil | TextureUsage::ShaderResource, 1);
 	}
 

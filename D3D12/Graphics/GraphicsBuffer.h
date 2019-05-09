@@ -6,13 +6,11 @@ class Graphics;
 class GraphicsBuffer : public GraphicsResource
 {
 public:
-	void Create(Graphics* pGraphics, uint64 elementCount, uint32 elementStride, bool cpuVisible);
 	void SetData(CommandContext* pContext, void* pData, uint64 dataSize, uint32 offset = 0);
 
 	void* Map(uint32 subResource = 0, uint64 readFrom = 0, uint64 readTo = 0);
 	void Unmap(uint32 subResource = 0, uint64 writtenFrom = 0, uint64 writtenTo = 0);
 
-	inline void* GetMappedData() const { return m_pMappedData; }
 	inline uint64 GetSize() const { return m_ElementCount * m_ElementStride; }
 	inline uint32 GetStride() const { return m_ElementStride; }
 	inline uint64 GetElementCount() const { return m_ElementCount; }
@@ -21,6 +19,7 @@ public:
 	D3D12_CPU_DESCRIPTOR_HANDLE GetUAV() const { return m_Uav; }
 
 protected:
+	void Create(Graphics* pGraphics, uint64 elementCount, uint32 elementStride, bool cpuVisible);
 	virtual void CreateViews(ID3D12Device* pDevice) {}
 
 	uint32 m_ElementStride = 0;
@@ -28,8 +27,6 @@ protected:
 
 	CD3DX12_CPU_DESCRIPTOR_HANDLE m_Uav = {};
 	CD3DX12_CPU_DESCRIPTOR_HANDLE m_Srv = {};
-
-	void* m_pMappedData = nullptr;
 };
 
 class StructuredBuffer : public GraphicsBuffer
@@ -56,6 +53,7 @@ public:
 class VertexBuffer : public GraphicsBuffer
 {
 public:
+	void Create(Graphics* pGraphics, uint64 elementCount, uint32 elementStride, bool cpuVisible = false);
 	virtual void CreateViews(ID3D12Device* pDevice) override;
 
 	inline const D3D12_VERTEX_BUFFER_VIEW GetView() const { return m_View; }

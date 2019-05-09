@@ -39,7 +39,7 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 		std::unique_ptr<Texture2D> pTex;
 		aiString path;
 		aiReturn ret = pMaterial->GetTexture(type, 0, &path);
-		pTex = std::make_unique<Texture2D>(pGraphics->GetDevice());
+		pTex = std::make_unique<Texture2D>();
 		if (ret == aiReturn_SUCCESS)
 		{
 			std::string p = path.C_Str();
