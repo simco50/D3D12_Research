@@ -59,6 +59,8 @@ public:
 	uint32 GetMultiSampleCount() const { return m_SampleCount; }
 	uint32 GetMultiSampleQualityLevel(uint32 msaa);
 
+	ID3D12Resource* CreateResource(const D3D12_RESOURCE_DESC& desc, D3D12_RESOURCE_STATES initialState, D3D12_HEAP_TYPE heapType);
+
 	//CONSTANTS
 	static const int32 SHADOW_MAP_SIZE = 4096;
 	static const int32 MAX_LIGHT_COUNT = 2048;

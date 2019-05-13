@@ -20,7 +20,7 @@ public:
 
 protected:
 	void Create(Graphics* pGraphics, uint64 elementCount, uint32 elementStride, bool cpuVisible);
-	virtual void CreateViews(ID3D12Device* pDevice) {}
+	virtual void CreateViews(Graphics* pGraphics) {}
 
 	uint32 m_ElementStride = 0;
 	uint64 m_ElementCount = 0;
@@ -34,7 +34,7 @@ class StructuredBuffer : public GraphicsBuffer
 public:
 	StructuredBuffer(Graphics* pGraphics);
 	void Create(Graphics* pGraphics, uint32 elementStride, uint64 elementCount, bool cpuVisible = false);
-	virtual void CreateViews(ID3D12Device* pDevice) override;
+	virtual void CreateViews(Graphics* pGraphics) override;
 
 	GraphicsResource* GetCounter() const { return m_pCounter.get(); }
 
@@ -47,14 +47,14 @@ class ByteAddressBuffer : public GraphicsBuffer
 public:
 	ByteAddressBuffer(Graphics* pGraphics);
 	void Create(Graphics* pGraphics, uint32 elementStride, uint64 elementCount, bool cpuVisible = false);
-	virtual void CreateViews(ID3D12Device* pDevice) override;
+	virtual void CreateViews(Graphics* pGraphics) override;
 };
 
 class VertexBuffer : public GraphicsBuffer
 {
 public:
 	void Create(Graphics* pGraphics, uint64 elementCount, uint32 elementStride, bool cpuVisible = false);
-	virtual void CreateViews(ID3D12Device* pDevice) override;
+	virtual void CreateViews(Graphics* pGraphics) override;
 
 	inline const D3D12_VERTEX_BUFFER_VIEW GetView() const { return m_View; }
 private:
@@ -66,7 +66,7 @@ class IndexBuffer : public GraphicsBuffer
 public:
 	void Create(Graphics* pGraphics, bool smallIndices, uint32 elementCount, bool cpuVisible = false);
 	inline const D3D12_INDEX_BUFFER_VIEW GetView() const { return m_View; }
-	virtual void CreateViews(ID3D12Device* pDevice) override;
+	virtual void CreateViews(Graphics* pGraphics) override;
 
 private:
 	bool m_SmallIndices = false;

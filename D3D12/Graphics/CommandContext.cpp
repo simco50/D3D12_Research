@@ -9,11 +9,8 @@
 #include "GraphicsBuffer.h"
 #include "Texture.h"
 
-#ifdef _DEBUG
-#include <pix3.h>
-#endif
 #include "d3dx12.h"
-#include "GraphicsProfiler.h"
+#include "Profiler.h"
 
 constexpr int VALID_COMPUTE_QUEUE_RESOURCE_STATES = D3D12_RESOURCE_STATE_COMMON | D3D12_RESOURCE_STATE_UNORDERED_ACCESS | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_COPY_DEST | D3D12_RESOURCE_STATE_COPY_SOURCE;
 constexpr int VALID_COPY_QUEUE_RESOURCE_STATES = D3D12_RESOURCE_STATE_COMMON | D3D12_RESOURCE_STATE_COPY_DEST | D3D12_RESOURCE_STATE_COPY_SOURCE;
@@ -129,36 +126,6 @@ void CommandContext::InitializeTexture(Texture2D* pResource, D3D12_SUBRESOURCE_D
 	InsertResourceBarrier(pResource, D3D12_RESOURCE_STATE_COPY_DEST, true);
 	UpdateSubresources(m_pCommandList, pResource->GetResource(), allocation.pBackingResource->GetResource(), allocation.Offset, firstSubResource, subResourceCount, pSubResourceDatas);
 	InsertResourceBarrier(pResource, previousState, true);
-}
-
-void CommandContext::MarkBegin(const char* pName)
-{
-#ifdef _DEBUG
-	wchar_t name[256];
-	size_t written = 0;
-	mbstowcs_s(&written, name, pName, 256);
-	::PIXBeginEvent(m_pCommandList, 0, name);
-
-	GraphicsProfiler::Instance()->Begin(pName, *this);
-#endif
-}
-
-void CommandContext::MarkEvent(const char* pName)
-{
-#ifdef _DEBUG
-	wchar_t name[256];
-	size_t written = 0;
-	mbstowcs_s(&written, name, pName, 256);
-	::PIXSetMarker(m_pCommandList, 0, name);
-#endif
-}
-
-void CommandContext::MarkEnd()
-{
-#ifdef _DEBUG
-	::PIXEndEvent(m_pCommandList);
-	GraphicsProfiler::Instance()->End(*this);
-#endif
 }
 
 void CommandContext::SetName(const char* pName)
