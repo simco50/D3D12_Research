@@ -1,6 +1,7 @@
 ﻿#include "stdafx.h"
 #include "Graphics/Graphics.h"
 #include "Core/Input.h"
+#include "Core/Console.h"
 
 const int gWindowWidth = 1240;
 const int gWindowHeight = 720;
@@ -178,8 +179,11 @@ private:
 	std::unique_ptr<Graphics> m_pGraphics;
 };
 
-int main()
+
+int WINAPI WinMain(HINSTANCE hInstance,	HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd)
 {
+	Console::Startup();
+	E_LOG(Info, "Startup");
 	ViewWrapper vp;
 	vp.Run("D3D12 - Hello World");
 }

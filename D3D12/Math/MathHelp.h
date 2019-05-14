@@ -110,6 +110,12 @@ namespace Math
 		return value;
 	}
 
+	template<typename T>
+	T AlignUp(T value, T alignment)
+	{
+		return (value + ((T)alignment - 1)) & ~(alignment - 1);
+	}
+
 	float Lerp(float a, float b, float t);
 
 	float InverseLerp(float a, float b, float value);

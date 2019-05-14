@@ -12,7 +12,7 @@ workspace (ENGINE_NAME)
 	language ("C++")
 	startproject (ENGINE_NAME)
 	symbols ("On")
-	kind ("ConsoleApp")
+	kind ("WindowedApp")
 	characterset ("MBCS")
 
     filter "platforms:x64"

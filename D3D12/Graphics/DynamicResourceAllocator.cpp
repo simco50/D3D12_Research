@@ -11,7 +11,7 @@ DynamicResourceAllocator::DynamicResourceAllocator(DynamicAllocationManager* pPa
 
 DynamicAllocation DynamicResourceAllocator::Allocate(size_t size, int alignment)
 {
-	size_t bufferSize = (size + ((int64)alignment - 1)) & ~(alignment - 1);
+	size_t bufferSize = Math::AlignUp<size_t>(size, alignment);
 	DynamicAllocation allocation;
 	allocation.Size = bufferSize;
 
