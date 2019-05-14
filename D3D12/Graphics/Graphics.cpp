@@ -15,6 +15,7 @@
 #include "Texture.h"
 #include "GraphicsBuffer.h"
 #include "Profiler.h"
+#include "PersistentResourceAllocator.h"
 
 const DXGI_FORMAT Graphics::DEPTH_STENCIL_FORMAT = DXGI_FORMAT_D32_FLOAT;
 const DXGI_FORMAT Graphics::DEPTH_STENCIL_SHADOW_FORMAT = DXGI_FORMAT_D16_UNORM;
@@ -621,6 +622,7 @@ void Graphics::InitD3D()
 	}
 
 	m_pDynamicAllocationManager = std::make_unique<DynamicAllocationManager>(this);
+	m_pPersistentAllocationManager = std::make_unique<PersistentResourceAllocator>(GetDevice());
 	Profiler::Instance()->Initialize(this);
 
 	m_pSwapchain.Reset();
@@ -1008,8 +1010,7 @@ void Graphics::UpdateImGui()
 	ImGui::SameLine(100);
 	ImGui::Text("FPS: %.1f", 1.0f / GameTimer::DeltaTime());
 	ImGui::PlotLines("Frametime", m_FrameTimes.data(), (int)m_FrameTimes.size(), 0, 0, 0.0f, 0.03f, ImVec2(200, 100));
-	ImGui::BeginTabBar("GpuStatsBar");
-	if (ImGui::BeginTabItem("Descriptor Heaps"))
+	if (ImGui::TreeNode("Descriptor Heaps"))
 	{
 		ImGui::Text("Used CPU Descriptor Heaps");
 		for (const auto& pAllocator : m_DescriptorHeaps)
@@ -1037,9 +1038,37 @@ void Graphics::UpdateImGui()
 			str << usedDescriptors << "/" << totalDescriptors;
 			ImGui::ProgressBar((float)usedDescriptors / totalDescriptors, ImVec2(-1, 0), str.str().c_str());
 		}
-		ImGui::EndTabItem();
+		ImGui::TreePop();
 	}
-	ImGui::EndTabBar();
+	if (ImGui::TreeNode("Persistent Resources"))
+	{
+		for (int i = 0; i < (int)ResourceType::MAX; ++i)
+		{
+			ResourceType type = (ResourceType)i;
+			switch (type)
+			{
+			case ResourceType::Buffer:
+				ImGui::TextWrapped("Buffers");
+				break;
+			case ResourceType::Texture:
+				ImGui::TextWrapped("Textures");
+				break;
+			case ResourceType::RenderTarget:
+				ImGui::TextWrapped("Render Target/Depth Stencil");
+				break;
+			case ResourceType::MAX:
+			default:
+				break;
+			}
+			ImGui::Text("Heaps: %d", m_pPersistentAllocationManager->GetHeapCount(type));
+			float totalSize = (float)m_pPersistentAllocationManager->GetTotalSize(type) / 0b100000000000000000000;
+			float used = totalSize - (float)m_pPersistentAllocationManager->GetRemainingSize(type) / 0b100000000000000000000;
+			std::stringstream str;
+			str << used << "/" << totalSize << "MB";
+			ImGui::ProgressBar((float)used / totalSize, ImVec2(-1, 0), str.str().c_str());
+		}
+		ImGui::TreePop();
+	}
 	ImGui::End();
 
 	static bool showOutputLog = false;
@@ -1168,10 +1197,17 @@ uint32 Graphics::GetMultiSampleQualityLevel(uint32 msaa)
 	return qualityLevels.NumQualityLevels - 1;
 }
 
-ID3D12Resource* Graphics::CreateResource(const D3D12_RESOURCE_DESC& desc, D3D12_RESOURCE_STATES initialState, D3D12_HEAP_TYPE heapType)
+ID3D12Resource* Graphics::CreateResource(const D3D12_RESOURCE_DESC& desc, D3D12_RESOURCE_STATES initialState, D3D12_HEAP_TYPE heapType, D3D12_CLEAR_VALUE* pClearValue /*= nullptr*/)
 {
-	D3D12_HEAP_PROPERTIES properties = CD3DX12_HEAP_PROPERTIES(heapType);
 	ID3D12Resource* pResource;
-	HR(m_pDevice->CreateCommittedResource(&properties, D3D12_HEAP_FLAG_NONE, &desc, initialState, nullptr, IID_PPV_ARGS(&pResource)));
+	if (heapType == D3D12_HEAP_TYPE_DEFAULT)
+	{
+		pResource = m_pPersistentAllocationManager->CreateResource(desc, initialState, pClearValue);
+	}
+	else
+	{
+		D3D12_HEAP_PROPERTIES properties = CD3DX12_HEAP_PROPERTIES(heapType);
+		HR(m_pDevice->CreateCommittedResource(&properties, D3D12_HEAP_FLAG_NONE, &desc, initialState, nullptr, IID_PPV_ARGS(&pResource)));
+	}
 	return pResource;
 }

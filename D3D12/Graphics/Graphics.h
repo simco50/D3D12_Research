@@ -14,6 +14,7 @@ class ComputePipelineState;
 class Mesh;
 class StructuredBuffer;
 class SubMesh;
+class PersistentResourceAllocator;
 struct Material;
 
 struct Batch
@@ -59,7 +60,7 @@ public:
 	uint32 GetMultiSampleCount() const { return m_SampleCount; }
 	uint32 GetMultiSampleQualityLevel(uint32 msaa);
 
-	ID3D12Resource* CreateResource(const D3D12_RESOURCE_DESC& desc, D3D12_RESOURCE_STATES initialState, D3D12_HEAP_TYPE heapType);
+	ID3D12Resource* CreateResource(const D3D12_RESOURCE_DESC& desc, D3D12_RESOURCE_STATES initialState, D3D12_HEAP_TYPE heapType, D3D12_CLEAR_VALUE* pClearValue = nullptr);
 
 	//CONSTANTS
 	static const int32 SHADOW_MAP_SIZE = 4096;
@@ -99,6 +100,7 @@ private:
 	int m_SampleCount = 1;
 	int m_SampleQuality = 0;
 
+	std::unique_ptr<PersistentResourceAllocator> m_pPersistentAllocationManager;;
 	std::unique_ptr<DynamicAllocationManager> m_pDynamicAllocationManager;
 
 	std::array<std::unique_ptr<Texture2D>, FRAME_COUNT> m_MultiSampleRenderTargets;

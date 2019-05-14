@@ -100,14 +100,7 @@ void Texture::Create_Internal(Graphics* pGraphics, TextureDimension dimension, i
 	desc.Height = height;
 	desc.DepthOrArraySize = m_DepthOrArraySize;
 
-	D3D12_HEAP_PROPERTIES heapProps = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
-	HR(pGraphics->GetDevice()->CreateCommittedResource(
-		&heapProps,
-		D3D12_HEAP_FLAG_NONE,
-		&desc,
-		m_CurrentState,
-		pClearValue,
-		IID_PPV_ARGS(&m_pResource)));
+	m_pResource = pGraphics->CreateResource(desc, m_CurrentState, D3D12_HEAP_TYPE_DEFAULT, pClearValue);
 
 	if ((usage & TextureUsage::ShaderResource) == TextureUsage::ShaderResource)
 	{
