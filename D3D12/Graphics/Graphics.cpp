@@ -1010,7 +1010,7 @@ void Graphics::UpdateImGui()
 	ImGui::SameLine(100);
 	ImGui::Text("FPS: %.1f", 1.0f / GameTimer::DeltaTime());
 	ImGui::PlotLines("Frametime", m_FrameTimes.data(), (int)m_FrameTimes.size(), 0, 0, 0.0f, 0.03f, ImVec2(200, 100));
-	if (ImGui::TreeNode("Descriptor Heaps"))
+	if (ImGui::TreeNodeEx("Descriptor Heaps", ImGuiTreeNodeFlags_DefaultOpen))
 	{
 		ImGui::Text("Used CPU Descriptor Heaps");
 		for (const auto& pAllocator : m_DescriptorHeaps)
@@ -1040,7 +1040,7 @@ void Graphics::UpdateImGui()
 		}
 		ImGui::TreePop();
 	}
-	if (ImGui::TreeNode("Persistent Resources"))
+	if (ImGui::TreeNodeEx("Persistent Resources", ImGuiTreeNodeFlags_DefaultOpen))
 	{
 		for (int i = 0; i < (int)ResourceType::MAX; ++i)
 		{
