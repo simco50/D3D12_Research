@@ -9,7 +9,7 @@ public:
 	GraphicsBuffer() = default;
 	GraphicsBuffer(ID3D12Resource* pResource, D3D12_RESOURCE_STATES state);
 
-	void SetData(CommandContext* pContext, void* pData, uint64 dataSize, uint32 offset = 0);
+	void SetData(CommandContext* pContext, const void* pData, uint64 dataSize, uint32 offset = 0);
 
 	void* Map(uint32 subResource = 0, uint64 readFrom = 0, uint64 readTo = 0);
 	void Unmap(uint32 subResource = 0, uint64 writtenFrom = 0, uint64 writtenTo = 0);

@@ -1,6 +1,3 @@
-#define BLOCK_SIZE 16
-#define LIGHT_COUNT 512
-
 #define LIGHT_DIRECTIONAL 0
 #define LIGHT_POINT 1
 #define LIGHT_SPOT 2
@@ -35,16 +32,15 @@ struct Light
 cbuffer ShaderParameters : register(b0)
 {
 	float4x4 cView;
-	uint4 cNumThreadGroups;
 }
 
-StructuredBuffer<Light> Lights : register(t1);
-StructuredBuffer<AABB> tClusterAABBs : register(t2);
-StructuredBuffer<uint> tActiveClusterIndices : register(t3);
+StructuredBuffer<Light> Lights : register(t0);
+StructuredBuffer<AABB> tClusterAABBs : register(t1);
+StructuredBuffer<uint> tActiveClusterIndices : register(t2);
 
 globallycoherent RWStructuredBuffer<uint> uLightIndexCounter : register(u0);
 RWStructuredBuffer<uint> uLightIndexList : register(u1);
-RWTexture1D<uint2> uOutLightGrid : register(u2);
+RWStructuredBuffer<uint2> uOutLightGrid : register(u2);
 
 groupshared AABB GroupAABB;
 
@@ -96,7 +92,7 @@ struct CS_INPUT
 };
 
 [numthreads(BLOCK_SIZE, 1, 1)]
-void CSMain(CS_INPUT input)
+void LightCulling(CS_INPUT input)
 {
 	uint clusterIndex = tActiveClusterIndices[input.DispatchThreadId.x];
 

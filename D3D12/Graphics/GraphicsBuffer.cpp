@@ -23,7 +23,7 @@ GraphicsBuffer::GraphicsBuffer(ID3D12Resource* pResource, D3D12_RESOURCE_STATES 
 
 }
 
-void GraphicsBuffer::SetData(CommandContext* pContext, void* pData, uint64 dataSize, uint32 offset)
+void GraphicsBuffer::SetData(CommandContext* pContext, const void* pData, uint64 dataSize, uint32 offset)
 {
 	assert(dataSize + offset <= GetSize());
 	pContext->InitializeBuffer(this, pData, dataSize);

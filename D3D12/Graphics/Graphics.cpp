@@ -498,6 +498,7 @@ void Graphics::Update()
 	resources.pOpaqueBatches = &m_OpaqueBatches;
 	resources.pTransparantBatches = &m_TransparantBatches;
 	resources.pRenderTarget = GetCurrentRenderTarget();
+	resources.pLights = &m_Lights;
 	m_pClusteredForward->Execute(resources);
 
 	{

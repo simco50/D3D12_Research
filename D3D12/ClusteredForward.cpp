@@ -9,6 +9,7 @@
 #include "Graphics/CommandQueue.h"
 #include "Graphics/Texture.h"
 #include "Graphics/Mesh.h"
+#include "Graphics/Light.h"
 
 static constexpr int cClusterDimensionsX = 16;
 static constexpr int cClusterDimensionsY = 9;
@@ -30,7 +31,6 @@ void ClusteredForward::OnSwapchainCreated(int windowWidth, int windowHeight)
 	m_pUniqueClusters->SetName("UniqueClusters");
 	m_pActiveClusters->Create(m_pGraphics, sizeof(uint32), cClusterDimensionsX* cClusterDimensionsY* cClusterDimensionsZ, false);
 	m_pActiveClusters->SetName("ActiveClusters");
-	m_pDebugTexture->Create(m_pGraphics, windowWidth, windowHeight, Graphics::RENDER_TARGET_FORMAT, TextureUsage::RenderTarget, m_pGraphics->GetMultiSampleCount());
 }
 
 void ClusteredForward::Execute(const ClusteredForwardInputResources& resources)
@@ -81,17 +81,15 @@ void ClusteredForward::Execute(const ClusteredForwardInputResources& resources)
 		
 		pContext->InsertResourceBarrier(m_pUniqueClusters.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, false);
 		pContext->InsertResourceBarrier(resources.pDepthPrepassBuffer, D3D12_RESOURCE_STATE_DEPTH_READ, false);
-		pContext->InsertResourceBarrier(m_pDebugTexture.get(), D3D12_RESOURCE_STATE_RENDER_TARGET, true);
 
 		std::vector<uint32> zero(cClusterDimensionsX * cClusterDimensionsY * cClusterDimensionsZ);
-		m_pUniqueClusters->SetData(pContext, zero.data(), zero.size());
+		m_pUniqueClusters->SetData(pContext, zero.data(), sizeof(uint32) * zero.size());
 
 		pContext->SetGraphicsPipelineState(m_pMarkUniqueClustersPSO.get());
 		pContext->SetGraphicsRootSignature(m_pMarkUniqueClustersRS.get());
 		pContext->SetViewport(FloatRect(0, 0, screenDimensions.x, screenDimensions.y));
 		pContext->SetScissorRect(FloatRect(0, 0, screenDimensions.x, screenDimensions.y));
-		//pContext->SetRenderTargets(nullptr, resources.pDepthPrepassBuffer->GetDSV());
-		pContext->SetRenderTarget(resources.pRenderTarget->GetRTV(), resources.pDepthPrepassBuffer->GetDSV());
+		pContext->SetRenderTargets(nullptr, resources.pDepthPrepassBuffer->GetDSV());
 		pContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
 		struct ConstantBuffer
@@ -134,13 +132,122 @@ void ClusteredForward::Execute(const ClusteredForwardInputResources& resources)
 		pContext->SetComputePipelineState(m_pCompactClustersPSO.get());
 		pContext->SetComputeRootSignature(m_pCompactClustersRS.get());
 
-		std::vector<uint32> zero(1);
-		m_pActiveClusters->GetCounter()->SetData(pContext, zero.data(), zero.size());
+		uint32 zero = 0;
+		m_pActiveClusters->GetCounter()->SetData(pContext, &zero, sizeof(uint32));
 
 		pContext->SetDynamicDescriptor(0, 0, m_pUniqueClusters->GetSRV());
 		pContext->SetDynamicDescriptor(1, 0, m_pActiveClusters->GetUAV());
 
-		pContext->Dispatch(cClusterDimensionsX * cClusterDimensionsY * cClusterDimensionsZ / 64, 0, 0);
+		pContext->Dispatch(cClusterDimensionsX * cClusterDimensionsY * cClusterDimensionsZ / 64, 1, 1);
+
+		pContext->Execute(false);
+	}
+
+	// Update Indirect Arguments
+	{
+		ComputeCommandContext* pContext = (ComputeCommandContext*)m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COMPUTE);
+		
+		pContext->InsertResourceBarrier(m_pIndirectArguments.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, true);
+		
+		pContext->SetComputePipelineState(m_pUpdateIndirectArgumentsPSO.get());
+		pContext->SetComputeRootSignature(m_pUpdateIndirectArgumentsRS.get());
+
+		pContext->SetDynamicDescriptor(0, 0, m_pActiveClusters->GetCounter()->GetSRV());
+		pContext->SetDynamicDescriptor(1, 0, m_pIndirectArguments->GetUAV());
+
+		pContext->Dispatch(1, 1, 1);
+		pContext->Execute(false);
+	}
+
+	// Light Culling
+	{
+		ComputeCommandContext* pContext = (ComputeCommandContext*)m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COMPUTE);
+		pContext->SetComputePipelineState(m_pLightCullingPSO.get());
+		pContext->SetComputeRootSignature(m_pLightCullingRS.get());
+
+		pContext->InsertResourceBarrier(m_pIndirectArguments.get(), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT, true);
+
+		uint32 zero = 0;
+		m_pLightIndexCounter->SetData(pContext, &zero, sizeof(uint32));
+		uint32 zero2[64 * cClusterDimensionsX * cClusterDimensionsY * cClusterDimensionsZ];
+		memset(zero2, 0, 64 * cClusterDimensionsX * cClusterDimensionsY * cClusterDimensionsZ);
+		m_pLightGrid->SetData(pContext, &zero, cClusterDimensionsX* cClusterDimensionsY* cClusterDimensionsZ * sizeof(uint32));
+
+		m_pLights->SetData(pContext, resources.pLights->data(), sizeof(Light) * resources.pLights->size(), 0);
+
+		struct ConstantBuffer
+		{
+			Matrix View;
+		} constantBuffer;
+
+		constantBuffer.View = m_pGraphics->GetViewMatrix();
+
+		pContext->SetComputeDynamicConstantBufferView(0, &constantBuffer, sizeof(ConstantBuffer));
+
+		pContext->SetDynamicDescriptor(1, 0, m_pLights->GetSRV());
+		pContext->SetDynamicDescriptor(1, 1, m_pAABBs->GetSRV());
+		pContext->SetDynamicDescriptor(1, 2, m_pActiveClusters->GetSRV());
+
+		pContext->SetDynamicDescriptor(2, 0, m_pLightIndexCounter->GetUAV());
+		pContext->SetDynamicDescriptor(2, 1, m_pLightIndexGrid->GetUAV());
+		pContext->SetDynamicDescriptor(2, 2, m_pLightGrid->GetUAV());
+
+		pContext->ExecuteIndirect(m_pLightCullingCommandSignature.Get(), m_pIndirectArguments.get());
+
+		pContext->Execute(false);
+	}
+
+	//Base Pass
+	{
+		GraphicsCommandContext* pContext = (GraphicsCommandContext*)(m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT));
+
+		pContext->SetViewport(FloatRect(0, 0, (float)screenDimensions.x, (float)screenDimensions.y));
+		pContext->SetScissorRect(FloatRect(0, 0, (float)screenDimensions.x, (float)screenDimensions.y));
+
+		pContext->InsertResourceBarrier(m_pLightGrid.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, false);
+		pContext->InsertResourceBarrier(m_pLightIndexGrid.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, false);
+
+		pContext->SetRenderTarget(resources.pRenderTarget->GetRTV(), resources.pDepthPrepassBuffer->GetDSV());
+		pContext->ClearRenderTarget(resources.pRenderTarget->GetRTV());
+
+		pContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+		struct PerObjectData
+		{
+			Matrix World;
+			Matrix WorldViewProjection;
+		} objectData;
+
+		struct PerFrameData
+		{
+			Matrix ViewInverse;
+		} frameData;
+
+		Matrix view = m_pGraphics->GetViewMatrix();
+		view.Invert(frameData.ViewInverse);
+
+		objectData.World = XMMatrixIdentity();
+		objectData.WorldViewProjection = objectData.World * m_pGraphics->GetViewMatrix() * projection;
+
+		pContext->SetGraphicsPipelineState(m_pDiffusePSO.get());
+		pContext->SetGraphicsRootSignature(m_pDiffuseRS.get());
+
+		pContext->SetDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
+		pContext->SetDynamicConstantBufferView(1, &frameData, sizeof(PerFrameData));
+		pContext->SetDynamicDescriptor(2, 0, m_pLightGrid->GetSRV());
+		pContext->SetDynamicDescriptor(2, 1, m_pLightIndexGrid->GetSRV());
+
+		for (const Batch& b : *resources.pOpaqueBatches)
+		{
+			pContext->SetDynamicDescriptor(3, 0, b.pMaterial->pDiffuseTexture->GetSRV());
+			pContext->SetDynamicDescriptor(3, 1, b.pMaterial->pNormalTexture->GetSRV());
+			pContext->SetDynamicDescriptor(3, 2, b.pMaterial->pSpecularTexture->GetSRV());
+			b.pMesh->Draw(pContext);
+		}
+
+
+		pContext->InsertResourceBarrier(m_pLightGrid.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, false);
+		pContext->InsertResourceBarrier(m_pLightIndexGrid.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, true);
 
 		pContext->Execute(false);
 	}
@@ -151,7 +258,16 @@ void ClusteredForward::SetupResources(Graphics* pGraphics)
 	m_pAABBs = std::make_unique<StructuredBuffer>(pGraphics);
 	m_pUniqueClusters = std::make_unique<StructuredBuffer>(pGraphics);
 	m_pActiveClusters = std::make_unique<StructuredBuffer>(pGraphics);
-	m_pDebugTexture = std::make_unique<Texture2D>();
+	m_pIndirectArguments = std::make_unique<ByteAddressBuffer>(pGraphics);
+	m_pIndirectArguments->Create(m_pGraphics, sizeof(uint32), 3, false);
+	m_pLights = std::make_unique<StructuredBuffer>(pGraphics);
+	m_pLights->Create(m_pGraphics, sizeof(Light), Graphics::MAX_LIGHT_COUNT);
+	m_pLightIndexCounter = std::make_unique<StructuredBuffer>(pGraphics);
+	m_pLightIndexCounter->Create(pGraphics, sizeof(uint32), 1);
+	m_pLightIndexGrid = std::make_unique<StructuredBuffer>(pGraphics);
+	m_pLightIndexGrid->Create(pGraphics, sizeof(uint32), 64 * cClusterDimensionsX * cClusterDimensionsY * cClusterDimensionsZ);
+	m_pLightGrid = std::make_unique<StructuredBuffer>(pGraphics);
+	m_pLightGrid->Create(pGraphics, 2 * sizeof(uint32), 64 * cClusterDimensionsX * cClusterDimensionsY * cClusterDimensionsZ);
 }
 
 void ClusteredForward::SetupPipelines(Graphics* pGraphics)
@@ -191,7 +307,7 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
 		m_pMarkUniqueClustersPSO->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
 		m_pMarkUniqueClustersPSO->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
 		m_pMarkUniqueClustersPSO->SetInputLayout(opaqueInputElements, 1);
-		m_pMarkUniqueClustersPSO->SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, m_pGraphics->GetMultiSampleCount(), m_pGraphics->GetMultiSampleQualityLevel(m_pGraphics->GetMultiSampleCount()));
+		m_pMarkUniqueClustersPSO->SetRenderTargetFormats(nullptr, 0, Graphics::DEPTH_STENCIL_FORMAT, m_pGraphics->GetMultiSampleCount(), m_pGraphics->GetMultiSampleQualityLevel(m_pGraphics->GetMultiSampleCount()));
 		m_pMarkUniqueClustersPSO->SetDepthWrite(false);
 		m_pMarkUniqueClustersPSO->SetDepthEnabled(false);
 		m_pMarkUniqueClustersPSO->Finalize("Mark Unique Clusters", m_pGraphics->GetDevice());
@@ -210,5 +326,89 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
 		m_pCompactClustersPSO->SetComputeShader(computeShader.GetByteCode(), computeShader.GetByteCodeSize());
 		m_pCompactClustersPSO->SetRootSignature(m_pCompactClustersRS->GetRootSignature());
 		m_pCompactClustersPSO->Finalize("Compact Clusters", pGraphics->GetDevice());
+	}
+
+	//Prepare Indirect Dispatch Buffer
+	{
+		Shader computeShader = Shader("Resources/Shaders/CL_UpdateIndirectArguments.hlsl", Shader::Type::ComputeShader, "UpdateIndirectArguments");
+
+		m_pUpdateIndirectArgumentsRS = std::make_unique<RootSignature>();
+		m_pUpdateIndirectArgumentsRS->SetDescriptorTableSimple(0, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, D3D12_SHADER_VISIBILITY_ALL);
+		m_pUpdateIndirectArgumentsRS->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, D3D12_SHADER_VISIBILITY_ALL);
+		m_pUpdateIndirectArgumentsRS->Finalize("Update Indirect Dispatch Buffer", pGraphics->GetDevice(), D3D12_ROOT_SIGNATURE_FLAG_NONE);
+
+		m_pUpdateIndirectArgumentsPSO = std::make_unique<ComputePipelineState>();
+		m_pUpdateIndirectArgumentsPSO->SetComputeShader(computeShader.GetByteCode(), computeShader.GetByteCodeSize());
+		m_pUpdateIndirectArgumentsPSO->SetRootSignature(m_pUpdateIndirectArgumentsRS->GetRootSignature());
+		m_pUpdateIndirectArgumentsPSO->Finalize("Update Indirect Dispatch Buffer", pGraphics->GetDevice());
+	}
+
+	//Light Culling
+	{
+		Shader computeShader = Shader("Resources/Shaders/CL_LightCulling.hlsl", Shader::Type::ComputeShader, "LightCulling");
+
+		m_pLightCullingRS = std::make_unique<RootSignature>();
+		m_pLightCullingRS->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_ALL);
+		m_pLightCullingRS->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3, D3D12_SHADER_VISIBILITY_ALL);
+		m_pLightCullingRS->SetDescriptorTableSimple(2, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 3, D3D12_SHADER_VISIBILITY_ALL);
+		m_pLightCullingRS->Finalize("Light Culling", pGraphics->GetDevice(), D3D12_ROOT_SIGNATURE_FLAG_NONE);
+
+		m_pLightCullingPSO = std::make_unique<ComputePipelineState>();
+		m_pLightCullingPSO->SetComputeShader(computeShader.GetByteCode(), computeShader.GetByteCodeSize());
+		m_pLightCullingPSO->SetRootSignature(m_pLightCullingRS->GetRootSignature());
+		m_pLightCullingPSO->Finalize("Light Culling", pGraphics->GetDevice());
+
+
+		D3D12_INDIRECT_ARGUMENT_DESC desc;
+		desc.Type = D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH;
+		D3D12_COMMAND_SIGNATURE_DESC sigDesc = {};
+		sigDesc.ByteStride = 3 * sizeof(uint32);
+		sigDesc.NodeMask = 0;
+		sigDesc.pArgumentDescs = &desc;
+		sigDesc.NumArgumentDescs = 1;
+		HR(m_pGraphics->GetDevice()->CreateCommandSignature(&sigDesc, nullptr, IID_PPV_ARGS(m_pLightCullingCommandSignature.GetAddressOf())));
+	}
+
+	//Diffuse
+	{
+		D3D12_INPUT_ELEMENT_DESC inputElements[] = {
+			D3D12_INPUT_ELEMENT_DESC{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+			D3D12_INPUT_ELEMENT_DESC{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+			D3D12_INPUT_ELEMENT_DESC{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 20, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+			D3D12_INPUT_ELEMENT_DESC{ "TANGENT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 32, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+			D3D12_INPUT_ELEMENT_DESC{ "TEXCOORD", 1, DXGI_FORMAT_R32G32B32_FLOAT, 0, 44, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+		};
+
+		Shader vertexShader("Resources/Shaders/CL_Diffuse.hlsl", Shader::Type::VertexShader, "VSMain");
+		Shader pixelShader("Resources/Shaders/CL_Diffuse.hlsl", Shader::Type::PixelShader, "PSMain");
+
+		m_pDiffuseRS = std::make_unique<RootSignature>();
+		m_pDiffuseRS->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_ALL);
+		m_pDiffuseRS->SetConstantBufferView(1, 0, D3D12_SHADER_VISIBILITY_ALL);
+		m_pDiffuseRS->SetDescriptorTableSimple(2, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3, D3D12_SHADER_VISIBILITY_ALL);
+		m_pDiffuseRS->SetDescriptorTableSimple(3, 3, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 3, D3D12_SHADER_VISIBILITY_ALL);
+
+		D3D12_SAMPLER_DESC samplerDesc = {};
+		samplerDesc.AddressU = samplerDesc.AddressV = samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+		samplerDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+		samplerDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+		samplerDesc.MaxLOD = D3D12_FLOAT32_MAX;
+		m_pDiffuseRS->AddStaticSampler(0, samplerDesc, D3D12_SHADER_VISIBILITY_PIXEL);
+
+		samplerDesc.AddressU = samplerDesc.AddressV = samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+		samplerDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+		samplerDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
+		m_pDiffuseRS->AddStaticSampler(1, samplerDesc, D3D12_SHADER_VISIBILITY_PIXEL);
+
+		m_pDiffuseRS->Finalize("Diffuse", pGraphics->GetDevice(), D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+
+		m_pDiffusePSO = std::make_unique<GraphicsPipelineState>();
+		m_pDiffusePSO->SetRootSignature(m_pDiffuseRS->GetRootSignature());
+		m_pDiffusePSO->SetBlendMode(BlendMode::Replace, false);
+		m_pDiffusePSO->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
+		m_pDiffusePSO->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
+		m_pDiffusePSO->SetInputLayout(inputElements, 5);
+		m_pDiffusePSO->SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, m_pGraphics->GetMultiSampleCount(), m_pGraphics->GetMultiSampleQualityLevel(m_pGraphics->GetMultiSampleCount()));
+		m_pDiffusePSO->Finalize("Diffuse", m_pGraphics->GetDevice());
 	}
 }

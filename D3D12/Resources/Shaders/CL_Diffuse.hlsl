@@ -44,10 +44,17 @@ SamplerState sNormalSampler : register(s1);
 
 Texture2D tSpecularTexture : register(t2);
 
-Texture1D<uint2> tLightGrid : register(t4);
-StructuredBuffer<uint> tLightIndexList : register(t5);
+Texture1D<uint2> tLightGrid : register(t3);
+StructuredBuffer<uint> tLightIndexList : register(t4);
 
-StructuredBuffer<Light> Lights : register(t6);
+StructuredBuffer<Light> Lights : register(t5);
+
+uint GetSliceFromDepth(float depth)
+{
+    float aConstant = cClusterDimensions.z / log(cFarZ / cNearZ);
+    float bConstant = (cClusterDimensions.z * log(cNearZ)) / log(cFarZ / cNearZ);
+    return floor(log(depth) * aConstant - bConstant);
+}
 
 LightResult DoLight(float4 position, float3 worldPosition, float3 normal, float3 viewDirection)
 {
