@@ -94,7 +94,7 @@ struct CS_INPUT
 [numthreads(BLOCK_SIZE, 1, 1)]
 void LightCulling(CS_INPUT input)
 {
-	uint clusterIndex = tActiveClusterIndices[input.DispatchThreadId.x];
+	uint clusterIndex = tActiveClusterIndices[input.GroupId.x];
 
 	//Initialize the groupshared data only on the first thread of the group
 	if (input.GroupIndex == 0)
@@ -107,7 +107,7 @@ void LightCulling(CS_INPUT input)
 	GroupMemoryBarrierWithGroupSync();
 
 	//Perform the light culling
-	for (uint i = input.GroupIndex; i < LIGHT_COUNT; i += BLOCK_SIZE * BLOCK_SIZE)
+	for (uint i = input.GroupIndex; i < LIGHT_COUNT; i += BLOCK_SIZE)
 	{
 		Light light = Lights[i];
 
@@ -149,13 +149,13 @@ void LightCulling(CS_INPUT input)
 	if (input.GroupIndex == 0)
 	{
 		InterlockedAdd(uLightIndexCounter[0], LightCount, LightIndexStartOffset);
-		uOutLightGrid[input.GroupId.x] = uint2(LightIndexStartOffset, LightCount);
+		uOutLightGrid[clusterIndex] = uint2(LightIndexStartOffset, LightCount);
 	}
 
 	GroupMemoryBarrierWithGroupSync();
 
 	//Distribute populating the light index light amonst threads in the thread group
-	for (i = input.GroupIndex; i < LightCount; i += BLOCK_SIZE * BLOCK_SIZE)
+	for (i = input.GroupIndex; i < LightCount; i += BLOCK_SIZE)
 	{
 		uLightIndexList[LightIndexStartOffset + i] = LightList[i];
 	}

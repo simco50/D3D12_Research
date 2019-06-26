@@ -12,9 +12,11 @@ cbuffer PerObjectData : register(b0)
 cbuffer PerFrameData : register(b1)
 {
 	float4x4 cViewInverse;
-    uint3 cClusterDimensions;
-	uint padding;
+    uint4 cClusterDimensions;
 	float2 cScreenDimensions;
+	float cNearZ;
+	float cFarZ;
+    float2 cClusterSize;
 }
 
 struct VSInput
@@ -29,6 +31,7 @@ struct VSInput
 struct PSInput
 {
 	float4 position : SV_POSITION;
+	float4 vsPosition : POSITION_VS;
 	float2 texCoord : TEXCOORD;
 	float3 normal : NORMAL;
 	float3 tangent : TANGENT;
@@ -44,7 +47,7 @@ SamplerState sNormalSampler : register(s1);
 
 Texture2D tSpecularTexture : register(t2);
 
-Texture1D<uint2> tLightGrid : register(t3);
+StructuredBuffer<uint2> tLightGrid : register(t3);
 StructuredBuffer<uint> tLightIndexList : register(t4);
 
 StructuredBuffer<Light> Lights : register(t5);
@@ -56,11 +59,11 @@ uint GetSliceFromDepth(float depth)
     return floor(log(depth) * aConstant - bConstant);
 }
 
-LightResult DoLight(float4 position, float3 worldPosition, float3 normal, float3 viewDirection)
+LightResult DoLight(float4 position, float4 viewSpacePosition, float3 worldPosition, float3 normal, float3 viewDirection)
 {
-	uint zSlice = GetSliceFromDepth(mul(position, cWorldView).z);
-    uint2 clusterIndexXY = floor((position.xy * cScreenDimensions) / cClusterDimensions.xy);
-    uint clusterIndex1D = clusterIndexXY.x + (clusterIndexXY.y * cClusterDimensions.x) + (zSlice * (cClusterDimensions.x + cClusterDimensions.y));
+	uint zSlice = GetSliceFromDepth(viewSpacePosition.z);
+    uint2 clusterIndexXY = floor(position.xy / cClusterSize);
+    uint clusterIndex1D = clusterIndexXY.x + (clusterIndexXY.y * cClusterDimensions.x) + (zSlice * (cClusterDimensions.x * cClusterDimensions.y));
 
 	uint startOffset = tLightGrid[clusterIndex1D].x;
 	uint lightCount = tLightGrid[clusterIndex1D].y;
@@ -121,6 +124,7 @@ PSInput VSMain(VSInput input)
 	result.tangent = normalize(mul(input.tangent, (float3x3)cWorld));
 	result.bitangent = normalize(mul(input.bitangent, (float3x3)cWorld));
 	result.worldPosition = mul(float4(input.position, 1.0f), cWorld);
+	result.vsPosition = mul(float4(input.position, 1.0f), cWorldView);
 	return result;
 }
 
@@ -131,7 +135,7 @@ float4 PSMain(PSInput input) : SV_TARGET
 	float3 viewDirection = normalize(input.worldPosition.xyz - cViewInverse[3].xyz);
 	float3 normal = CalculateNormal(normalize(input.normal), normalize(input.tangent), normalize(input.bitangent), input.texCoord, true);
 
-    LightResult lightResults = DoLight(input.position, input.worldPosition.xyz, input.normal, viewDirection);
+    LightResult lightResults = DoLight(input.position, input.vsPosition, input.worldPosition.xyz, input.normal, viewDirection);
     float4 specularSample = tSpecularTexture.Sample(sDiffuseSampler, input.texCoord);
     lightResults.Specular *= specularSample;
    	lightResults.Diffuse *= diffuseSample;
