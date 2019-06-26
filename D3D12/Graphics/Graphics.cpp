@@ -219,12 +219,13 @@ void Graphics::Update()
 	////////////////////////////////
 	// LET THE RENDERING BEGIN!
 	////////////////////////////////
-
+	
 	BeginFrame();
 
 	uint64 nextFenceValue = 0;
 	uint64 lightCullingFence = 0;
 
+	/*
 	//1. DEPTH PREPASS
 	// - Depth only pass that renders the entire scene
 	// - Optimization that prevents wasteful lighting calculations during the base pass
@@ -491,7 +492,7 @@ void Graphics::Update()
 		pContext->InsertResourceBarrier(m_pLightIndexListBufferTransparant.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, true);
 
 		pContext->Execute(false);
-	}
+	}*/
 
 	ClusteredForwardInputResources resources;
 	resources.pDepthPrepassBuffer = GetDepthStencil();

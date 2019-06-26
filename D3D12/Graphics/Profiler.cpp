@@ -133,11 +133,6 @@ void Profiler::BeginReadback(int frameIndex)
 			stream << "\t";
 		}
 		stream << "[" << m_pCurrentBlock->Name << "] > " << m_pCurrentBlock->GpuTimer.GetTime(m_SecondsPerGpuTick) << " ms" << std::endl;
-		for (int i = 0; i < depth; ++i)
-		{
-			stream << "\t";
-		}
-		stream << "[" << m_pCurrentBlock->Name << "] > " << m_pCurrentBlock->CpuTimer.GetTime(m_SecondsPerCpuTick) << " ms" << std::endl;
 
 		while (m_pCurrentBlock->Children.size() == 0)
 		{
@@ -157,6 +152,7 @@ void Profiler::BeginReadback(int frameIndex)
 		m_pCurrentBlock = m_pCurrentBlock->Children.front().get();
 		depth++;
 	}
+	E_LOG(Info, "%s", stream.str().c_str());
 	m_pCurrentBlock = m_pRootBlock.get();
 }
 

@@ -17,6 +17,8 @@ cbuffer PerFrameData : register(b1)
 	float cNearZ;
 	float cFarZ;
     float2 cClusterSize;
+	float cSliceMagicA;
+	float cSliceMagicB;
 }
 
 struct VSInput
@@ -52,11 +54,19 @@ StructuredBuffer<uint> tLightIndexList : register(t4);
 
 StructuredBuffer<Light> Lights : register(t5);
 
+Texture2D tHeatMapTexture : register(t6);
+
 uint GetSliceFromDepth(float depth)
 {
-    float aConstant = cClusterDimensions.z / log(cFarZ / cNearZ);
-    float bConstant = (cClusterDimensions.z * log(cNearZ)) / log(cFarZ / cNearZ);
-    return floor(log(depth) * aConstant - bConstant);
+    return floor(log(depth) * cSliceMagicA - cSliceMagicB);
+}
+
+int GetLightCount(float4 positionVS, float4 position)
+{
+	uint zSlice = GetSliceFromDepth(positionVS.z);
+    uint2 clusterIndexXY = floor(position.xy / cClusterSize);
+    uint clusterIndex1D = clusterIndexXY.x + (clusterIndexXY.y * cClusterDimensions.x) + (zSlice * (cClusterDimensions.x * cClusterDimensions.y));
+	return tLightGrid[clusterIndex1D].y;
 }
 
 LightResult DoLight(float4 position, float4 viewSpacePosition, float3 worldPosition, float3 normal, float3 viewDirection)
@@ -130,6 +140,10 @@ PSInput VSMain(VSInput input)
 
 float4 PSMain(PSInput input) : SV_TARGET
 {
+	//float2 uv = float2((float)GetLightCount(input.vsPosition, input.position) / 100, 0);
+	//return tHeatMapTexture.Sample(sDiffuseSampler, uv);
+
+
 	float4 diffuseSample = tDiffuseTexture.Sample(sDiffuseSampler, input.texCoord);
 
 	float3 viewDirection = normalize(input.worldPosition.xyz - cViewInverse[3].xyz);

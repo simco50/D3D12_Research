@@ -33,6 +33,8 @@ private:
 
 	Graphics* m_pGraphics;
 
+	std::unique_ptr<Texture2D> m_pHeatMapTexture;
+
 	//Step 1: AABB
 	std::unique_ptr<RootSignature> m_pCreateAabbRS;
 	std::unique_ptr<ComputePipelineState> m_pCreateAabbPSO;
