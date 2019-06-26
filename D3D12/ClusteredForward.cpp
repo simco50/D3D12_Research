@@ -132,8 +132,8 @@ void ClusteredForward::Execute(const ClusteredForwardInputResources& resources)
 		pContext->SetComputePipelineState(m_pCompactClustersPSO.get());
 		pContext->SetComputeRootSignature(m_pCompactClustersRS.get());
 
-		uint32 zero = 0;
-		m_pActiveClusters->GetCounter()->SetData(pContext, &zero, sizeof(uint32));
+		uint32 values[] = { 0,0,0,0 };
+		pContext->ClearUavUInt(m_pActiveClusters->GetCounter(), values);
 
 		pContext->SetDynamicDescriptor(0, 0, m_pUniqueClusters->GetSRV());
 		pContext->SetDynamicDescriptor(1, 0, m_pActiveClusters->GetUAV());
@@ -170,10 +170,10 @@ void ClusteredForward::Execute(const ClusteredForwardInputResources& resources)
 		uint32 zero = 0;
 		m_pLightIndexCounter->SetData(pContext, &zero, sizeof(uint32));
 		uint32 zero2[64 * cClusterDimensionsX * cClusterDimensionsY * cClusterDimensionsZ];
-		memset(zero2, 0, sizeof(uint32) * cClusterDimensionsX * cClusterDimensionsY * cClusterDimensionsZ);
-		m_pLightGrid->SetData(pContext, &zero, cClusterDimensionsX* cClusterDimensionsY* cClusterDimensionsZ * sizeof(uint32));
-
+		memset(zero2, 0, 64 * sizeof(uint32) * cClusterDimensionsX * cClusterDimensionsY * cClusterDimensionsZ);
+		m_pLightIndexGrid->SetData(pContext, &zero, 64 * cClusterDimensionsX* cClusterDimensionsY* cClusterDimensionsZ * sizeof(uint32));
 		m_pLights->SetData(pContext, resources.pLights->data(), sizeof(Light) * resources.pLights->size(), 0);
+
 
 		struct ConstantBuffer
 		{
