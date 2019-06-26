@@ -225,7 +225,7 @@ void Graphics::Update()
 	uint64 nextFenceValue = 0;
 	uint64 lightCullingFence = 0;
 
-	/*
+#if 0
 	//1. DEPTH PREPASS
 	// - Depth only pass that renders the entire scene
 	// - Optimization that prevents wasteful lighting calculations during the base pass
@@ -492,7 +492,9 @@ void Graphics::Update()
 		pContext->InsertResourceBarrier(m_pLightIndexListBufferTransparant.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, true);
 
 		pContext->Execute(false);
-	}*/
+	}
+
+#else
 
 	ClusteredForwardInputResources resources;
 	resources.pDepthPrepassBuffer = GetDepthStencil();
@@ -501,6 +503,8 @@ void Graphics::Update()
 	resources.pRenderTarget = GetCurrentRenderTarget();
 	resources.pLights = &m_Lights;
 	m_pClusteredForward->Execute(resources);
+
+#endif
 
 	{
 		GraphicsCommandContext* pContext = static_cast<GraphicsCommandContext*>(AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT));

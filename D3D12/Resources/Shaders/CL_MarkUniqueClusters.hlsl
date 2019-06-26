@@ -2,22 +2,17 @@ cbuffer Parameters : register(b0)
 {
     float4x4 cWorldView;
     float4x4 cProjection;
-    float2 cScreenDimensions;
-    float cNearZ;
-    float cFarZ;
     uint4 cClusterDimensions;
     float2 cClusterSize;
-    //float cFormulaConstantA;
-    //float cFormulaConstantB;
+	float cSliceMagicA;
+	float cSliceMagicB;
 }
 
 RWStructuredBuffer<uint> uUniqueClusters : register(u1);
 
 uint GetSliceFromDepth(float depth)
 {
-    float aConstant = cClusterDimensions.z / log(cFarZ / cNearZ);
-    float bConstant = (cClusterDimensions.z * log(cNearZ)) / log(cFarZ / cNearZ);
-    return floor(log(depth) * aConstant - bConstant);
+    return floor(log(depth) * cSliceMagicA - cSliceMagicB);
 }
 
 struct VS_Input
