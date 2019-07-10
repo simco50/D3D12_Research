@@ -51,7 +51,10 @@ workspace (ENGINE_NAME)
 			(SOURCE_DIR .. "**.inl"),
 			(SOURCE_DIR .. "**.c"),
 			(SOURCE_DIR .. "**.natvis"),
+			(SOURCE_DIR .. "Resources/**")
 		}
+		filter { "files:" .. SOURCE_DIR .. "Resources/**" }
+			flags { "ExcludeFromBuild" }
 
 		filter ("files:" .. SOURCE_DIR .. "External/**")
 			flags { "NoPCH" }

@@ -25,6 +25,12 @@ struct Batch
 	Matrix WorldMatrix;
 };
 
+enum class RenderPath
+{
+	Tiled,
+	Clustered,
+};
+
 class Graphics
 {
 public:
@@ -124,6 +130,8 @@ private:
 	// Synchronization objects.
 	uint32 m_CurrentBackBufferIndex = 0;
 	std::array<uint64, FRAME_COUNT> m_FenceValues = {};
+
+	RenderPath m_RenderPath = RenderPath::Tiled;
 
 	std::unique_ptr<Mesh> m_pMesh;
 	std::vector<Batch> m_OpaqueBatches;
