@@ -6,8 +6,8 @@
 cbuffer ShaderParameters : register(b0)
 {
     float4x4 cView;
-    uint4 cNumThreadGroups;
     float4x4 cProjectionInverse;
+    uint4 cNumThreadGroups;
     float2 cScreenDimensions;
 }
 

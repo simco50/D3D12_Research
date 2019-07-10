@@ -71,6 +71,7 @@ public:
 
 	//Commands
 	void Dispatch(uint32 groupCountX, uint32 groupCountY, uint32 groupCountZ);
+	void ExecuteIndirect(ID3D12CommandSignature* pCommandSignature, GraphicsBuffer* pIndirectArguments);
 
 	virtual void Reset() override;
 	virtual uint64 Execute(bool wait) override;

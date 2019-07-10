@@ -5,9 +5,7 @@ cbuffer ShaderParameters : register(b0)
 {
     float4x4 cProjectionInverse;
     float2 cScreenDimensions;
-    float2 padding;
-    uint4 cNumThreadGroups;
-    uint4 cNumThreads;
+    uint2 cNumThreads;
 }
 
 RWStructuredBuffer<Frustum> uOutFrustums : register(u0);
@@ -40,10 +38,10 @@ void CSMain(CS_INPUT input)
     }
 
     Frustum frustum;
-    frustum.Left = CalculatePlane(eyePos, viewSpace[2], viewSpace[0]);
-    frustum.Right = CalculatePlane(eyePos, viewSpace[1], viewSpace[3]);
-    frustum.Top = CalculatePlane(eyePos, viewSpace[0], viewSpace[1]);
-    frustum.Bottom = CalculatePlane(eyePos, viewSpace[3], viewSpace[2]);
+    frustum.Planes[0] = CalculatePlane(eyePos, viewSpace[2], viewSpace[0]);
+    frustum.Planes[1] = CalculatePlane(eyePos, viewSpace[1], viewSpace[3]);
+    frustum.Planes[2] = CalculatePlane(eyePos, viewSpace[0], viewSpace[1]);
+    frustum.Planes[3] = CalculatePlane(eyePos, viewSpace[3], viewSpace[2]);
 
     if(input.DispatchThreadId.x < cNumThreads.x && input.DispatchThreadId.y < cNumThreads.y)
     {

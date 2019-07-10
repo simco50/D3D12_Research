@@ -59,8 +59,8 @@ void ImGuiRenderer::InitializeImGui()
 void ImGuiRenderer::CreatePipeline()
 {
 	//Shaders
-	Shader vertexShader("Resources/ImGui.hlsl", Shader::Type::VertexShader, "VSMain");
-	Shader pixelShader("Resources/ImGui.hlsl", Shader::Type::PixelShader, "PSMain");
+	Shader vertexShader("Resources/Shaders/ImGui.hlsl", Shader::Type::VertexShader, "VSMain");
+	Shader pixelShader("Resources/Shaders/ImGui.hlsl", Shader::Type::PixelShader, "PSMain");
 
 	//Root signature
 	D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =

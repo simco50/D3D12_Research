@@ -16,12 +16,19 @@ class StructuredBuffer;
 class SubMesh;
 class PersistentResourceAllocator;
 struct Material;
+class ClusteredForward;
 
 struct Batch
 {
 	const SubMesh* pMesh;
 	const Material* pMaterial;
 	Matrix WorldMatrix;
+};
+
+enum class RenderPath
+{
+	Tiled,
+	Clustered,
 };
 
 class Graphics
@@ -54,7 +61,7 @@ public:
 
 	Texture2D* GetDepthStencil() const { return m_pDepthStencil.get(); }
 	Texture2D* GetResolvedDepthStencil() const { return m_SampleCount > 1 ? m_pResolvedDepthStencil.get() : m_pDepthStencil.get(); }
-	Texture2D* GetCurrentRenderTarget() const {	return m_SampleCount > 1 ? m_MultiSampleRenderTargets[m_CurrentBackBufferIndex].get() : GetCurrentBackbuffer();	}
+	Texture2D* GetCurrentRenderTarget() const { return m_SampleCount > 1 ? m_MultiSampleRenderTargets[m_CurrentBackBufferIndex].get() : GetCurrentBackbuffer(); }
 	Texture2D* GetCurrentBackbuffer() const { return m_RenderTargets[m_CurrentBackBufferIndex].get(); }
 
 	uint32 GetMultiSampleCount() const { return m_SampleCount; }
@@ -72,6 +79,8 @@ public:
 	static const DXGI_FORMAT RENDER_TARGET_FORMAT;
 	static const int FORWARD_PLUS_BLOCK_SIZE = 16;
 	static const int MAX_SHADOW_CASTERS = 8;
+
+	Matrix GetViewMatrix();
 
 private:
 	void BeginFrame();
@@ -122,6 +131,8 @@ private:
 	uint32 m_CurrentBackBufferIndex = 0;
 	std::array<uint64, FRAME_COUNT> m_FenceValues = {};
 
+	RenderPath m_RenderPath = RenderPath::Tiled;
+
 	std::unique_ptr<Mesh> m_pMesh;
 	std::vector<Batch> m_OpaqueBatches;
 	std::vector<Batch> m_TransparantBatches;
@@ -132,6 +143,8 @@ private:
 	std::unique_ptr<GraphicsPipelineState> m_pDiffuseAlphaPSO;
 	std::unique_ptr<GraphicsPipelineState> m_pDiffuseDebugPSO;
 	bool m_UseDebugView = false;
+
+	std::unique_ptr<ClusteredForward> m_pClusteredForward;
 
 	//Directional light shadow mapping
 	std::unique_ptr<Texture2D> m_pShadowMap;
