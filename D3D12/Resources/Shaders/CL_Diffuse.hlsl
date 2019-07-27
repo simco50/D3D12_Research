@@ -1,5 +1,4 @@
 #include "Common.hlsl"
-#include "Constants.hlsl"
 #include "Lighting.hlsl"
 
 cbuffer PerObjectData : register(b0)

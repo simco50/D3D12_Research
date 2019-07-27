@@ -1,3 +1,6 @@
+#ifndef H_CONSTANTS
+#define H_CONSTANTS
+
 #ifndef BLOCK_SIZE
 #define BLOCK_SIZE 16
 #endif
@@ -32,4 +35,6 @@
 
 #ifndef MAX_SHADOW_CASTERS
 #define MAX_SHADOW_CASTERS 8
+#endif
+
 #endif

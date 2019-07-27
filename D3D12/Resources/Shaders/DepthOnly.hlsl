@@ -1,3 +1,5 @@
+#include "Common.hlsl"
+
 cbuffer PerObjectData : register(b0)
 {
 	float4x4 WorldViewProjection;

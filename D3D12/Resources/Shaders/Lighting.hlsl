@@ -1,3 +1,8 @@
+#ifndef H_LIGHTING
+#define H_LIGHTING
+
+#include "Common.hlsl"
+
 cbuffer LightData : register(b2)
 {
 	float4x4 cLightViewProjections[MAX_SHADOW_CASTERS];
@@ -142,3 +147,5 @@ LightResult DoSpotLight(Light light, float3 worldPosition, float3 normal, float3
 
 	return result;
 }
+
+#endif

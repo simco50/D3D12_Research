@@ -1,3 +1,8 @@
+#ifndef H_COMMON
+#define H_COMMON
+
+#include "Constants.hlsl"
+
 struct Light
 {
 	float3 Position;
@@ -38,9 +43,59 @@ struct Cone
 
 struct AABB
 {
-    float3 Center;
-    float3 Extents;
+    float4 Center;
+    float4 Extents;
 };
+
+bool SphereInAABB(Sphere sphere, AABB aabb)
+{
+    float3 d = max(0, abs(aabb.Center.xyz - sphere.Position) - aabb.Extents.xyz);
+    float distanceSq = dot(d, d);
+    return distanceSq <= sphere.Radius * sphere.Radius;
+}
+
+bool SphereBehindPlane(Sphere sphere, Plane plane)
+{
+    return dot(plane.Normal, sphere.Position) - plane.DistanceToOrigin < -sphere.Radius;
+}
+
+bool PointBehindPlane(float3 p, Plane plane)
+{
+    return dot(plane.Normal, p) - plane.DistanceToOrigin < 0;
+}
+
+bool ConeBehindPlane(Cone cone, Plane plane)
+{
+    float3 furthestPointDirection = cross(cross(plane.Normal, cone.Direction), cone.Direction);
+    float3 furthestPointOnCircle = cone.Tip + cone.Direction * cone.Height - furthestPointDirection * cone.Radius;
+    return PointBehindPlane(cone.Tip, plane) && PointBehindPlane(furthestPointOnCircle, plane);
+}
+
+bool ConeInFrustum(Cone cone, Frustum frustum, float zNear, float zFar)
+{
+    Plane nearPlane, farPlane;
+    nearPlane.Normal = float3(0, 0, 1);
+    nearPlane.DistanceToOrigin = zNear;
+    farPlane.Normal = float3(0, 0, -1);
+    farPlane.DistanceToOrigin = -zFar;
+ 
+    bool inside = !(ConeBehindPlane(cone, nearPlane) || ConeBehindPlane(cone, farPlane));
+    for(int i = 0; i < 4 && inside; ++i)
+    {
+        inside = !ConeBehindPlane(cone, frustum.Planes[i]);
+    }
+    return inside;
+}
+
+bool SphereInFrustum(Sphere sphere, Frustum frustum, float depthNear, float depthFar)
+{
+    bool inside = !(sphere.Position.z + sphere.Radius < depthNear || sphere.Position.z - sphere.Radius > depthFar);
+    for(int i = 0; i < 4 && inside; ++i)
+    {
+        inside = !SphereBehindPlane(sphere, frustum.Planes[i]);
+    }
+    return inside;
+}
 
 Plane CalculatePlane(float3 a, float3 b, float3 c)
 {
@@ -75,8 +130,8 @@ float4 ScreenToView(float4 screen, float2 screenDimensions, float4x4 projectionI
 
 void AABBFromMinMax(inout AABB aabb, float3 minimum, float3 maximum)
 {
-    aabb.Center = (minimum + maximum) / 2.0f;
-    aabb.Extents = abs(maximum - aabb.Center);
+    aabb.Center = float4((minimum + maximum) / 2.0f, 0);
+    aabb.Extents = float4(maximum, 0) - aabb.Center;
 }
 
 float3 HUEtoRGB(in float H)
@@ -132,3 +187,5 @@ float GetCubeFaceIndex(const float3 v)
 	}
     return faceIndex;
 }
+
+#endif

@@ -1,5 +1,4 @@
 #include "Common.hlsl"
-#include "Constants.hlsl"
 
 #ifndef DEPTH_RESOLVE_MIN
 #define DEPTH_RESOLVE_MIN 1

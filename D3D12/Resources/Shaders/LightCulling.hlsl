@@ -58,56 +58,6 @@ void AddLightForTransparant(uint lightIndex)
     }
 }
 
-bool SphereBehindPlane(Sphere sphere, Plane plane)
-{
-    return dot(plane.Normal, sphere.Position) - plane.DistanceToOrigin < -sphere.Radius;
-}
-
-bool PointBehindPlane(float3 p, Plane plane)
-{
-    return dot(plane.Normal, p) - plane.DistanceToOrigin < 0;
-}
-
-bool ConeBehindPlane(Cone cone, Plane plane)
-{
-    float3 furthestPointDirection = cross(cross(plane.Normal, cone.Direction), cone.Direction);
-    float3 furthestPointOnCircle = cone.Tip + cone.Direction * cone.Height - furthestPointDirection * cone.Radius;
-    return PointBehindPlane(cone.Tip, plane) && PointBehindPlane(furthestPointOnCircle, plane);
-}
-
-bool ConeInFrustum(Cone cone, Frustum frustum, float zNear, float zFar)
-{
-    Plane nearPlane, farPlane;
-    nearPlane.Normal = float3(0, 0, 1);
-    nearPlane.DistanceToOrigin = zNear;
-    farPlane.Normal = float3(0, 0, -1);
-    farPlane.DistanceToOrigin = -zFar;
- 
-    bool inside = !(ConeBehindPlane(cone, nearPlane) || ConeBehindPlane(cone, farPlane));
-    for(int i = 0; i < 4 && inside; ++i)
-    {
-        inside = !ConeBehindPlane(cone, frustum.Planes[i]);
-    }
-    return inside;
-}
-
-bool SphereInFrustum(Sphere sphere, Frustum frustum, float depthNear, float depthFar)
-{
-    bool inside = !(sphere.Position.z + sphere.Radius < depthNear || sphere.Position.z - sphere.Radius > depthFar);
-    for(int i = 0; i < 4 && inside; ++i)
-    {
-        inside = !SphereBehindPlane(sphere, frustum.Planes[i]);
-    }
-    return inside;
-}
-
-bool SphereInAABB(Sphere sphere, AABB aabb)
-{
-    float3 d = max(0, abs(aabb.Center - sphere.Position) - aabb.Extents);
-    float distanceSq = dot(d, d);
-    return distanceSq <= sphere.Radius * sphere.Radius;
-}
-
 struct CS_INPUT
 {
     uint3 GroupId : SV_GROUPID;

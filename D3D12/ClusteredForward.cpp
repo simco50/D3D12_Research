@@ -23,8 +23,8 @@ ClusteredForward::ClusteredForward(Graphics* pGraphics)
 
 void ClusteredForward::OnSwapchainCreated(int windowWidth, int windowHeight)
 {
-	m_ClusterCountX = (uint32)ceil(windowWidth / cClusterSize);
-	m_ClusterCountY = (uint32)ceil(windowHeight / cClusterSize);
+	m_ClusterCountX = (uint32)ceil((float)windowWidth / cClusterSize);
+	m_ClusterCountY = (uint32)ceil((float)windowHeight / cClusterSize);
 	m_ClusterCountZ = 32;
 
 	struct AABB { Vector4 Min; Vector4 Max; };

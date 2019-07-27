@@ -1,3 +1,5 @@
+#include "Common.hlsl"
+
 cbuffer Parameters : register(b0)
 {
     float4x4 cWorldView;

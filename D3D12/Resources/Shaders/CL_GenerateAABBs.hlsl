@@ -1,8 +1,4 @@
-struct AABB
-{
-    float4 Center;
-    float4 Extents;
-};
+#include "Common.hlsl"
 
 cbuffer Parameters : register(b0)
 {
@@ -17,14 +13,6 @@ cbuffer Parameters : register(b0)
 float GetDepthFromSlice(uint slice)
 {
     return cNearZ * pow(cFarZ / cNearZ, (float)slice / cClusterDimensions.z);
-}
-
-float4 ScreenToView(float2 viewSpace)
-{
-    viewSpace = viewSpace / cScreenDimensions;
-    float4 clipSpace = float4(viewSpace.x * 2.0f - 1.0f, (1.0f - viewSpace.y) * 2.0f - 1.0f, 0.0f, 1.0f);
-    clipSpace = mul(clipSpace, cProjectionInverse);
-    return clipSpace / clipSpace.w;
 }
 
 float3 LineFromOriginZIntersection(float3 lineFromOrigin, float depth)
@@ -50,8 +38,8 @@ void GenerateAABBs(CS_Input input)
     float2 minPoint_SS = float2(clusterIndex3D.x * cClusterSize.x, clusterIndex3D.y * cClusterSize.y);
     float2 maxPoint_SS = float2((clusterIndex3D.x + 1) * cClusterSize.x, (clusterIndex3D.y + 1) * cClusterSize.y);
 
-    float3 minPoint_VS = ScreenToView(minPoint_SS).xyz;
-    float3 maxPoint_VS = ScreenToView(maxPoint_SS).xyz;
+    float3 minPoint_VS = ScreenToView(float4(minPoint_SS, 0, 1), cScreenDimensions, cProjectionInverse).xyz;
+    float3 maxPoint_VS = ScreenToView(float4(maxPoint_SS, 0, 1), cScreenDimensions, cProjectionInverse).xyz;
 
     float farZ = GetDepthFromSlice(clusterIndex3D.z);
     float nearZ = GetDepthFromSlice(clusterIndex3D.z + 1);
@@ -64,6 +52,5 @@ void GenerateAABBs(CS_Input input)
     float3 bbMin = min(min(minPointNear, minPointFar), min(maxPointNear, maxPointFar));
     float3 bbMax = max(max(minPointNear, minPointFar), max(maxPointNear, maxPointFar));
 
-    uOutAABBs[clusterIndex1D].Center = float4((bbMin + bbMax) / 2.0f, 1.0f);
-    uOutAABBs[clusterIndex1D].Extents = float4(bbMax - uOutAABBs[clusterIndex1D].Center, 1.0f);
+    AABBFromMinMax(uOutAABBs[clusterIndex1D], bbMin, bbMax);
 }

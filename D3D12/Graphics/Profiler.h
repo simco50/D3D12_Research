@@ -39,8 +39,8 @@ private:
 		{
 			strcpy_s(Name, pName);
 		}
-		CpuTimer CpuTimer;
-		GpuTimer GpuTimer;
+		CpuTimer CpuTimer{};
+		GpuTimer GpuTimer{};
 		char Name[128];
 		Block* pParent = nullptr;
 		std::deque<std::unique_ptr<Block>> Children;

@@ -1,33 +1,7 @@
-#define LIGHT_DIRECTIONAL 0
-#define LIGHT_POINT 1
-#define LIGHT_SPOT 2
-
-struct AABB
-{
-    float4 Center;
-    float4 Extents;
-};
-
-struct Sphere
-{
-	float3 Position;
-	float Radius;
-};
-
-struct Light
-{
-	float3 Position;
-	int Enabled;
-	float3 Direction;
-	int Type;
-	float4 Color;
-	float Range;
-	float SpotLightAngle;
-	float Attenuation;
-	int ShadowIndex;
-};
+#include "Common.hlsl"
 
 #define MAX_LIGHTS_PER_TILE 256
+#define THREAD_COUNT 1024
 
 cbuffer ShaderParameters : register(b0)
 {
@@ -59,13 +33,6 @@ void AddLight(uint lightIndex)
 	}
 }
 
-bool SphereInAABB(Sphere sphere, AABB aabb)
-{
-    float3 d = max(0, abs(aabb.Center - sphere.Position) - aabb.Extents);
-    float distanceSq = dot(d, d);
-    return distanceSq <= sphere.Radius * sphere.Radius;
-}
-
 struct CS_INPUT
 {
 	uint3 GroupId : SV_GROUPID;
@@ -73,8 +40,6 @@ struct CS_INPUT
 	uint3 DispatchThreadId : SV_DISPATCHTHREADID;
 	uint GroupIndex : SV_GROUPINDEX;
 };
-
-#define THREAD_COUNT 1024
 
 [numthreads(THREAD_COUNT, 1, 1)]
 void LightCulling(CS_INPUT input)
