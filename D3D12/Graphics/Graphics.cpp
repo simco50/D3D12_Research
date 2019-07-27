@@ -77,10 +77,10 @@ void Graphics::RandomizeLights()
 		position.y = Math::RandomRange(-sceneBounds.Extents.y, sceneBounds.Extents.y) + sceneBounds.Center.y;
 		position.z = Math::RandomRange(-sceneBounds.Extents.z, sceneBounds.Extents.z) + sceneBounds.Center.z;
 
-		const float range = Math::RandomRange(15.0f, 25.0f);
+		const float range = Math::RandomRange(7.0f, 9.0f);
 		const float angle = Math::RandomRange(30.0f, 60.0f);
 
-		Light::Type type = rand() % 2 == 0 ? Light::Type::Point : Light::Type::Spot;
+		Light::Type type = Light::Type::Point;// rand() % 2 == 0 ? Light::Type::Point : Light::Type::Spot;
 		switch (type)
 		{
 		case Light::Type::Point:
@@ -180,7 +180,7 @@ void Graphics::Update()
 	Matrix projection = XMMatrixPerspectiveFovLH(Math::PIDIV2, 1.0f, m_Lights[0].Range, 0.1f);
 	
 	m_ShadowCasters = 0;
-	lightData.LightViewProjections[m_ShadowCasters] = Matrix::CreateLookAt(m_Lights[0].Position, m_Lights[0].Position + Vector3(-1.0f, 0.0f, 0.0f), Vector3(0.0f, 1.0f, 0.0f)) * projection;
+	/*lightData.LightViewProjections[m_ShadowCasters] = Matrix::CreateLookAt(m_Lights[0].Position, m_Lights[0].Position + Vector3(-1.0f, 0.0f, 0.0f), Vector3(0.0f, 1.0f, 0.0f)) * projection;
 	lightData.ShadowMapOffsets[m_ShadowCasters].x = 0.0f;
 	lightData.ShadowMapOffsets[m_ShadowCasters].y = 0.0f;
 	lightData.ShadowMapOffsets[m_ShadowCasters].z = 0.25f;
@@ -214,7 +214,7 @@ void Graphics::Update()
 	lightData.ShadowMapOffsets[m_ShadowCasters].x = 0.25f;
 	lightData.ShadowMapOffsets[m_ShadowCasters].y = 0.25f;
 	lightData.ShadowMapOffsets[m_ShadowCasters].z = 0.25f;
-	++m_ShadowCasters;
+	++m_ShadowCasters;*/
 
 	////////////////////////////////
 	// LET THE RENDERING BEGIN!
@@ -518,7 +518,7 @@ void Graphics::Update()
 		}
 		Profiler::Instance()->End(pContext);
 
-		Profiler::Instance()->Begin("Present", pContext);
+		Profiler::Instance()->Begin("Resolve", pContext);
 		//7. MSAA Render Target Resolve
 		// - We have to resolve a MSAA render target ourselves. Unlike D3D11, this is not done automatically by the API.
 		//	Luckily, there's a method that does it for us!
@@ -789,8 +789,8 @@ void Graphics::InitializeAssets()
 	//Diffuse passes
 	{
 		//Shaders
-		Shader vertexShader("Resources/Shaders/Diffuse.hlsl", Shader::Type::VertexShader, "VSMain", { "SHADOW" });
-		Shader pixelShader("Resources/Shaders/Diffuse.hlsl", Shader::Type::PixelShader, "PSMain", { "SHADOW" });
+		Shader vertexShader("Resources/Shaders/Diffuse.hlsl", Shader::Type::VertexShader, "VSMain", { /*"SHADOW"*/ });
+		Shader pixelShader("Resources/Shaders/Diffuse.hlsl", Shader::Type::PixelShader, "PSMain", { /*"SHADOW"*/ });
 
 		//Rootsignature
 		m_pDiffuseRS = std::make_unique<RootSignature>();
@@ -1117,8 +1117,8 @@ void Graphics::UpdateImGui()
 	ImGui::End();
 
 	static bool showOutputLog = false;
-	ImGui::SetNextWindowPos(ImVec2(250, showOutputLog ? (float)m_WindowHeight - 200 : (float)m_WindowHeight - 20));
-	ImGui::SetNextWindowSize(ImVec2((float)m_WindowWidth - 250, 200));
+	ImGui::SetNextWindowPos(ImVec2(250, showOutputLog ? (float)m_WindowHeight - 250 : (float)m_WindowHeight - 20));
+	ImGui::SetNextWindowSize(ImVec2((float)m_WindowWidth - 250, 250));
 	ImGui::SetNextWindowCollapsed(!showOutputLog);
 
 	showOutputLog = ImGui::Begin("Output Log", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);

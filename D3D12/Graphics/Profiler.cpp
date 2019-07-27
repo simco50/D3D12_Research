@@ -5,6 +5,7 @@
 #include "GraphicsBuffer.h"
 #include "CommandQueue.h"
 
+#define USE_PIX
 #include <pix3.h>
 
 void CpuTimer::Begin()
@@ -132,7 +133,7 @@ void Profiler::BeginReadback(int frameIndex)
 		{
 			stream << "\t";
 		}
-		stream << "[" << m_pCurrentBlock->Name << "] > " << m_pCurrentBlock->GpuTimer.GetTime(m_SecondsPerGpuTick) << " ms" << std::endl;
+		stream << "[" << m_pCurrentBlock->Name << "] > GPU: " << m_pCurrentBlock->GpuTimer.GetTime(m_SecondsPerGpuTick) << " ms. CPU: " << m_pCurrentBlock->CpuTimer.GetTime(m_SecondsPerCpuTick) << " ms." << std::endl;
 
 		while (m_pCurrentBlock->Children.size() == 0)
 		{

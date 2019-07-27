@@ -12,9 +12,7 @@
 #include "Graphics/Light.h"
 #include "Graphics/Profiler.h"
 
-static constexpr int cClusterDimensionsX = 16;
-static constexpr int cClusterDimensionsY = 9;
-static constexpr int cClusterDimensionsZ = 24;
+static constexpr int cClusterSize = 64;
 
 ClusteredForward::ClusteredForward(Graphics* pGraphics)
 	: m_pGraphics(pGraphics)
@@ -25,24 +23,23 @@ ClusteredForward::ClusteredForward(Graphics* pGraphics)
 
 void ClusteredForward::OnSwapchainCreated(int windowWidth, int windowHeight)
 {
-	struct AABB { Vector4 Min; Vector4 Max; };
-	m_pAABBs->Create(m_pGraphics, sizeof(AABB), cClusterDimensionsX * cClusterDimensionsY * cClusterDimensionsZ, false);
-	m_pAABBs->SetName("AABBs");
-	m_pUniqueClusters->Create(m_pGraphics, sizeof(uint32), cClusterDimensionsX * cClusterDimensionsY * cClusterDimensionsZ, false);
-	m_pUniqueClusters->SetName("UniqueClusters");
-	m_pActiveClusters->Create(m_pGraphics, sizeof(uint32), cClusterDimensionsX* cClusterDimensionsY* cClusterDimensionsZ, false);
-	m_pActiveClusters->SetName("ActiveClusters");
-}
+	m_ClusterCountX = (uint32)ceil(windowWidth / cClusterSize);
+	m_ClusterCountY = (uint32)ceil(windowHeight / cClusterSize);
+	m_ClusterCountZ = 32;
 
-void ClusteredForward::Execute(const ClusteredForwardInputResources& resources)
-{
-	Vector2 screenDimensions((float)m_pGraphics->GetWindowWidth(), (float)m_pGraphics->GetWindowHeight());
-	float nearZ = 0.1f;
-	float farZ = 1000.0f;
-	Matrix projection = XMMatrixPerspectiveFovLH(XM_PIDIV4, screenDimensions.x / screenDimensions.y, nearZ, farZ);
-	
-	float sliceMagicA = (float)cClusterDimensionsZ / log(farZ / nearZ);
-	float sliceMagicB = ((float)cClusterDimensionsZ * log(nearZ)) / log(farZ / nearZ);
+	struct AABB { Vector4 Min; Vector4 Max; };
+	m_pAABBs->Create(m_pGraphics, sizeof(AABB), m_ClusterCountX * m_ClusterCountY * m_ClusterCountZ, false);
+	m_pAABBs->SetName("AABBs");
+	m_pUniqueClusters->Create(m_pGraphics, sizeof(uint32), m_ClusterCountX * m_ClusterCountY * m_ClusterCountZ, false);
+	m_pUniqueClusters->SetName("UniqueClusters");
+	m_pActiveClusters->Create(m_pGraphics, sizeof(uint32), m_ClusterCountX * m_ClusterCountY * m_ClusterCountZ, false);
+	m_pActiveClusters->SetName("ActiveClusters");
+	m_pLightIndexGrid->Create(m_pGraphics, sizeof(uint32), 64 * m_ClusterCountX * m_ClusterCountY * m_ClusterCountZ);
+	m_pLightGrid->Create(m_pGraphics, 2 * sizeof(uint32), m_ClusterCountX * m_ClusterCountY* m_ClusterCountZ);
+
+	float nearZ = 2.0f;
+	float farZ = 500.0f;
+	Matrix projection = XMMatrixPerspectiveFovLH(XM_PIDIV4, (float)windowWidth / windowHeight, nearZ, farZ);
 
 	// Create AABBs
 	{
@@ -62,25 +59,35 @@ void ClusteredForward::Execute(const ClusteredForwardInputResources& resources)
 			float FarZ;
 		} constantBuffer;
 
-		constantBuffer.ScreenDimensions = screenDimensions;
+		constantBuffer.ScreenDimensions = Vector2((float)m_pGraphics->GetWindowWidth(), (float)m_pGraphics->GetWindowHeight());
 		constantBuffer.NearZ = nearZ;
 		constantBuffer.FarZ = farZ;
 		projection.Invert(constantBuffer.ProjectionInverse);
-		constantBuffer.ClusterSize.x = screenDimensions.x / cClusterDimensionsX;
-		constantBuffer.ClusterSize.y = screenDimensions.y / cClusterDimensionsY;
-		constantBuffer.ClusterDimensions[0] = cClusterDimensionsX;
-		constantBuffer.ClusterDimensions[1] = cClusterDimensionsY;
-		constantBuffer.ClusterDimensions[2] = cClusterDimensionsZ;
+		constantBuffer.ClusterSize.x = cClusterSize;
+		constantBuffer.ClusterSize.y = cClusterSize;
+		constantBuffer.ClusterDimensions[0] = m_ClusterCountX;
+		constantBuffer.ClusterDimensions[1] = m_ClusterCountY;
+		constantBuffer.ClusterDimensions[2] = m_ClusterCountZ;
 
 		pContext->SetComputeDynamicConstantBufferView(0, &constantBuffer, sizeof(ConstantBuffer));
 		pContext->SetDynamicDescriptor(1, 0, m_pAABBs->GetUAV());
 
-		pContext->Dispatch(cClusterDimensionsX, cClusterDimensionsY, cClusterDimensionsZ);
+		pContext->Dispatch(m_ClusterCountX, m_ClusterCountY, m_ClusterCountZ);
 
 		Profiler::Instance()->End(pContext);
-		uint64 fence = pContext->Execute(false);
-		m_pGraphics->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT)->InsertWaitForFence(fence);
+		uint64 fence = pContext->Execute(true);
 	}
+}
+
+void ClusteredForward::Execute(const ClusteredForwardInputResources& resources)
+{
+	Vector2 screenDimensions((float)m_pGraphics->GetWindowWidth(), (float)m_pGraphics->GetWindowHeight());
+	float nearZ = 2.0f;
+	float farZ = 500.0f;
+	Matrix projection = XMMatrixPerspectiveFovLH(XM_PIDIV4, screenDimensions.x / screenDimensions.y, nearZ, farZ);
+	
+	float sliceMagicA = (float)m_ClusterCountZ / log(farZ / nearZ);
+	float sliceMagicB = ((float)m_ClusterCountZ * log(nearZ)) / log(farZ / nearZ);
 
 	//Mark Unique Clusters
 	{
@@ -92,7 +99,7 @@ void ClusteredForward::Execute(const ClusteredForwardInputResources& resources)
 		pContext->ClearDepth(resources.pDepthPrepassBuffer->GetDSV(), D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0);
 
 		Profiler::Instance()->Begin("Update Data", pContext);
-		std::vector<uint32> zero(cClusterDimensionsX * cClusterDimensionsY * cClusterDimensionsZ);
+		std::vector<uint32> zero(m_ClusterCountX * m_ClusterCountY * m_ClusterCountZ);
 		m_pUniqueClusters->SetData(pContext, zero.data(), sizeof(uint32) * zero.size());
 		Profiler::Instance()->End(pContext);
 
@@ -117,12 +124,12 @@ void ClusteredForward::Execute(const ClusteredForwardInputResources& resources)
 		constantBuffer.Projection = projection;
 		constantBuffer.SliceMagicA = sliceMagicA;
 		constantBuffer.SliceMagicB = sliceMagicB;
-		constantBuffer.ClusterDimensions[0] = cClusterDimensionsX;
-		constantBuffer.ClusterDimensions[1] = cClusterDimensionsY;
-		constantBuffer.ClusterDimensions[2] = cClusterDimensionsZ;
+		constantBuffer.ClusterDimensions[0] = m_ClusterCountX;
+		constantBuffer.ClusterDimensions[1] = m_ClusterCountY;
+		constantBuffer.ClusterDimensions[2] = m_ClusterCountZ;
 		constantBuffer.ClusterDimensions[3] = 0;
-		constantBuffer.ClusterSize[0] = screenDimensions.x / cClusterDimensionsX;
-		constantBuffer.ClusterSize[1] = screenDimensions.y / cClusterDimensionsY;
+		constantBuffer.ClusterSize[0] = cClusterSize;
+		constantBuffer.ClusterSize[1] = cClusterSize;
 
 		{
 			Profiler::Instance()->Begin("Opaque", pContext);
@@ -164,7 +171,7 @@ void ClusteredForward::Execute(const ClusteredForwardInputResources& resources)
 		pContext->SetDynamicDescriptor(0, 0, m_pUniqueClusters->GetSRV());
 		pContext->SetDynamicDescriptor(1, 0, m_pActiveClusters->GetUAV());
 
-		pContext->Dispatch(cClusterDimensionsX * cClusterDimensionsY * cClusterDimensionsZ / 64, 1, 1);
+		pContext->Dispatch((int)ceil(m_ClusterCountX * m_ClusterCountY * m_ClusterCountZ / 64.0f), 1, 1);
 
 		Profiler::Instance()->End(pContext);
 		pContext->Execute(false);
@@ -197,14 +204,14 @@ void ClusteredForward::Execute(const ClusteredForwardInputResources& resources)
 
 		pContext->InsertResourceBarrier(m_pIndirectArguments.get(), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT, true);
 
-		Profiler::Instance()->Begin("Update Data", pContext);
+		//Profiler::Instance()->Begin("Update Data", pContext);
 		uint32 zero = 0;
 		m_pLightIndexCounter->SetData(pContext, &zero, sizeof(uint32));
-		std::vector<uint32> zero2(64 * cClusterDimensionsX * cClusterDimensionsY * cClusterDimensionsZ);
-		memset(zero2.data(), 0, zero2.size() * sizeof(uint32));
-		m_pLightIndexGrid->SetData(pContext, zero2.data(), zero2.size() * sizeof(uint32));
+		//std::vector<uint32> zero2(64 * m_ClusterCountX * m_ClusterCountY * m_ClusterCountZ);
+		//memset(zero2.data(), 0, zero2.size() * sizeof(uint32));
+		//m_pLightIndexGrid->SetData(pContext, zero2.data(), zero2.size() * sizeof(uint32));
 		m_pLights->SetData(pContext, resources.pLights->data(), sizeof(Light) * resources.pLights->size(), 0);
-		Profiler::Instance()->End(pContext);
+		//Profiler::Instance()->End(pContext);
 
 		struct ConstantBuffer
 		{
@@ -259,12 +266,12 @@ void ClusteredForward::Execute(const ClusteredForwardInputResources& resources)
 		frameData.ScreenDimensions = screenDimensions;
 		frameData.NearZ = nearZ;
 		frameData.FarZ = farZ;
-		frameData.ClusterDimensions[0] = cClusterDimensionsX;
-		frameData.ClusterDimensions[1] = cClusterDimensionsY;
-		frameData.ClusterDimensions[2] = cClusterDimensionsZ;
+		frameData.ClusterDimensions[0] = m_ClusterCountX;
+		frameData.ClusterDimensions[1] = m_ClusterCountY;
+		frameData.ClusterDimensions[2] = m_ClusterCountZ;
 		frameData.ClusterDimensions[3] = 0;
-		frameData.ClusterSize[0] = screenDimensions.x / cClusterDimensionsX;
-		frameData.ClusterSize[1] = screenDimensions.y / cClusterDimensionsY;
+		frameData.ClusterSize[0] = cClusterSize;
+		frameData.ClusterSize[1] = cClusterSize;
 		frameData.SliceMagicA = sliceMagicA;
 		frameData.SliceMagicB = sliceMagicB;
 
@@ -341,9 +348,7 @@ void ClusteredForward::SetupResources(Graphics* pGraphics)
 	m_pLightIndexCounter = std::make_unique<StructuredBuffer>(pGraphics);
 	m_pLightIndexCounter->Create(pGraphics, sizeof(uint32), 1);
 	m_pLightIndexGrid = std::make_unique<StructuredBuffer>(pGraphics);
-	m_pLightIndexGrid->Create(pGraphics, sizeof(uint32), 64 * cClusterDimensionsX * cClusterDimensionsY * cClusterDimensionsZ);
 	m_pLightGrid = std::make_unique<StructuredBuffer>(pGraphics);
-	m_pLightGrid->Create(pGraphics, 2 * sizeof(uint32), cClusterDimensionsX * cClusterDimensionsY * cClusterDimensionsZ);
 
 	CopyCommandContext* pContext = (CopyCommandContext*)pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COPY);
 	m_pHeatMapTexture = std::make_unique<Texture2D>();

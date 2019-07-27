@@ -136,7 +136,7 @@ PSInput VSMain(VSInput input)
 
 float4 PSMain(PSInput input) : SV_TARGET
 {
-	//float2 uv = float2((float)GetLightCount(input.vsPosition, input.position) / 100, 0);
+	//float2 uv = float2((float)GetLightCount(input.positionVS, input.position) / 100, 0);
 	//return tHeatMapTexture.Sample(sDiffuseSampler, uv);
 
 	float4 diffuseSample = tDiffuseTexture.Sample(sDiffuseSampler, input.texCoord);

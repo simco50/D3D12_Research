@@ -71,7 +71,7 @@ public:
 
 	//CONSTANTS
 	static const int32 SHADOW_MAP_SIZE = 4096;
-	static const int32 MAX_LIGHT_COUNT = 2048;
+	static const int32 MAX_LIGHT_COUNT = 8192;
 	static const int32 FRAME_COUNT = 3;
 	static const int32 MAX_LIGHT_DENSITY = 720000;
 	static const DXGI_FORMAT DEPTH_STENCIL_FORMAT;
