@@ -5,10 +5,6 @@
 #define BLOCK_SIZE 16
 #endif
 
-#ifndef LIGHT_COUNT
-#define LIGHT_COUNT 4
-#endif
-
 #define LIGHT_DIRECTIONAL 0
 #define LIGHT_POINT 1
 #define LIGHT_SPOT 2

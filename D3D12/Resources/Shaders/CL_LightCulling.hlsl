@@ -6,6 +6,7 @@
 cbuffer ShaderParameters : register(b0)
 {
 	float4x4 cView;
+	int cLightCount;
 }
 
 StructuredBuffer<Light> Lights : register(t0);
@@ -19,17 +20,17 @@ RWStructuredBuffer<uint2> uOutLightGrid : register(u2);
 groupshared AABB GroupAABB;
 groupshared uint ClusterIndex;
 
-groupshared uint IndexStartOffset;
-groupshared uint LightCount;
-groupshared uint LightList[MAX_LIGHTS_PER_TILE];
+groupshared uint gIndexStartOffset;
+groupshared uint gLightCount;
+groupshared uint gLightList[MAX_LIGHTS_PER_TILE];
 
 void AddLight(uint lightIndex)
 {
 	uint index;
-	InterlockedAdd(LightCount, 1, index);
+	InterlockedAdd(gLightCount, 1, index);
 	if (index < MAX_LIGHTS_PER_TILE)
 	{
-		LightList[index] = lightIndex;
+		gLightList[index] = lightIndex;
 	}
 }
 
@@ -47,7 +48,7 @@ void LightCulling(CS_INPUT input)
 	//Initialize the groupshared data only on the first thread of the group
 	if (input.GroupIndex == 0)
 	{
-		LightCount = 0;
+		gLightCount = 0;
 		ClusterIndex = tActiveClusterIndices[input.GroupId.x];
 		GroupAABB = tClusterAABBs[ClusterIndex];
 	}
@@ -56,7 +57,8 @@ void LightCulling(CS_INPUT input)
 	GroupMemoryBarrierWithGroupSync();
 
 	//Perform the light culling
-	for (uint i = input.GroupIndex; i < LIGHT_COUNT; i += THREAD_COUNT)
+	[loop]
+	for (uint i = input.GroupIndex; i < cLightCount; i += THREAD_COUNT)
 	{
 		Light light = Lights[i];
 
@@ -97,15 +99,15 @@ void LightCulling(CS_INPUT input)
 	//Populate the light grid only on the first thread in the group
 	if (input.GroupIndex == 0)
 	{
-		InterlockedAdd(uLightIndexCounter[0], LightCount, IndexStartOffset);
-		uOutLightGrid[ClusterIndex] = uint2(IndexStartOffset, LightCount);
+		InterlockedAdd(uLightIndexCounter[0], gLightCount, gIndexStartOffset);
+		uOutLightGrid[ClusterIndex] = uint2(gIndexStartOffset, gLightCount);
 	}
 
 	GroupMemoryBarrierWithGroupSync();
 
 	//Distribute populating the light index light amonst threads in the thread group
-	for (i = input.GroupIndex; i < LightCount; i += THREAD_COUNT)
+	for (i = input.GroupIndex; i < gLightCount; i += THREAD_COUNT)
 	{
-		uLightIndexList[IndexStartOffset + i] = LightList[i];
+		uLightIndexList[gIndexStartOffset + i] = gLightList[i];
 	}
 }

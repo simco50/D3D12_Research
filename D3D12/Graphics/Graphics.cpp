@@ -22,6 +22,9 @@ const DXGI_FORMAT Graphics::DEPTH_STENCIL_FORMAT = DXGI_FORMAT_D32_FLOAT;
 const DXGI_FORMAT Graphics::DEPTH_STENCIL_SHADOW_FORMAT = DXGI_FORMAT_D16_UNORM;
 const DXGI_FORMAT Graphics::RENDER_TARGET_FORMAT = DXGI_FORMAT_R8G8B8A8_UNORM;
 
+bool gSortOpaqueMeshes = true;
+bool gSortTransparentMeshes = true;
+
 Graphics::Graphics(uint32 width, uint32 height, int sampleCount /*= 1*/)
 	: m_WindowWidth(width), m_WindowHeight(height), m_SampleCount(sampleCount)
 {
@@ -36,28 +39,27 @@ void Graphics::Initialize(HWND window)
 {
 	m_pWindow = window;
 
-	Shader::AddGlobalShaderDefine("LIGHT_COUNT", std::to_string(MAX_LIGHT_COUNT));
 	Shader::AddGlobalShaderDefine("BLOCK_SIZE", std::to_string(FORWARD_PLUS_BLOCK_SIZE));
 	Shader::AddGlobalShaderDefine("SHADOWMAP_DX", std::to_string(1.0f / SHADOW_MAP_SIZE));
 	Shader::AddGlobalShaderDefine("PCF_KERNEL_SIZE", std::to_string(5));
 	Shader::AddGlobalShaderDefine("MAX_SHADOW_CASTERS", std::to_string(MAX_SHADOW_CASTERS));
-	
+
 	InitD3D();
 	InitializeAssets();
 
+	RandomizeLights(m_DesiredLightCount);
+
 	m_CameraPosition = Vector3(0, 100, -15);
 	m_CameraRotation = Quaternion::CreateFromYawPitchRoll(XM_PIDIV4, XM_PIDIV4, 0);
-
-	RandomizeLights();
 }
 
-void Graphics::RandomizeLights()
+void Graphics::RandomizeLights(int count)
 {
+	m_Lights.resize(count);
+
 	BoundingBox sceneBounds;
 	sceneBounds.Center = Vector3(0, 70, 0);
 	sceneBounds.Extents = Vector3(140, 70, 60);
-
-	m_Lights.resize(MAX_LIGHT_COUNT);
 
 	int lightIndex = 0;
 	m_Lights[lightIndex] = Light::Point(Vector3(0, 20, 0), 200);
@@ -75,10 +77,10 @@ void Graphics::RandomizeLights()
 		position.y = Math::RandomRange(-sceneBounds.Extents.y, sceneBounds.Extents.y) + sceneBounds.Center.y;
 		position.z = Math::RandomRange(-sceneBounds.Extents.z, sceneBounds.Extents.z) + sceneBounds.Center.z;
 
-		const float range = Math::RandomRange(5.0f, 7.0f);
+		const float range = Math::RandomRange(7.0f, 12.0f);
 		const float angle = Math::RandomRange(30.0f, 60.0f);
 
-		Light::Type type = Light::Type::Point;// rand() % 2 == 0 ? Light::Type::Point : Light::Type::Spot;
+		Light::Type type = rand() % 2 == 0 ? Light::Type::Point : Light::Type::Spot;
 		switch (type)
 		{
 		case Light::Type::Point:
@@ -97,15 +99,20 @@ void Graphics::RandomizeLights()
 
 	//It's a bit weird but I don't sort the lights that I manually created because I access them by their original index during the update function
 	std::sort(m_Lights.begin() + randomLightsStartIndex, m_Lights.end(), [](const Light& a, const Light& b) { return (int)a.LightType < (int)b.LightType; });
+
+	IdleGPU();
+	if (m_pLightBuffer->GetElementCount() != count)
+	{
+		m_pLightBuffer->Create(this, sizeof(Light), count);
+	}
+	GraphicsCommandContext* pContext = static_cast<GraphicsCommandContext*>(AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT));
+	m_pLightBuffer->SetData(pContext, m_Lights.data(), sizeof(Light) * m_Lights.size());
+	pContext->Execute(true);
 }
 
 void Graphics::SortBatchesBackToFront(const Vector3& cameraPosition, std::vector<Batch>& batches)
 {
-	std::sort(batches.begin(), batches.end(), [cameraPosition](const Batch& a, const Batch& b) {
-		float aDist = Vector3::DistanceSquared(a.pMesh->GetBounds().Center, cameraPosition);
-		float bDist = Vector3::DistanceSquared(b.pMesh->GetBounds().Center, cameraPosition);
-		return aDist > bDist;
-	});
+	
 }
 
 Matrix Graphics::GetViewMatrix()
@@ -126,7 +133,12 @@ void Graphics::Update()
 	}
 	if (Input::Instance().IsKeyPressed('O'))
 	{
-		RandomizeLights();
+		RandomizeLights(m_DesiredLightCount);
+	}
+
+	for (Light& light : m_Lights)
+	{
+		float length = light.Position.Length();
 	}
 
 	//Camera movement
@@ -151,7 +163,17 @@ void Graphics::Update()
 	//Set main light position
 	m_Lights[0].Position = Vector3(cos((float)GameTimer::GameTime() / 20.0f) * 70, 50, 0);
 
-	SortBatchesBackToFront(m_CameraPosition, m_TransparantBatches);
+	std::sort(m_TransparantBatches.begin(), m_TransparantBatches.end(), [this](const Batch& a, const Batch& b) {
+		float aDist = Vector3::DistanceSquared(a.pMesh->GetBounds().Center, m_CameraPosition);
+		float bDist = Vector3::DistanceSquared(b.pMesh->GetBounds().Center, m_CameraPosition);
+		return aDist > bDist;
+		});
+
+	std::sort(m_OpaqueBatches.begin(), m_OpaqueBatches.end(), [this](const Batch& a, const Batch& b) {
+		float aDist = Vector3::DistanceSquared(a.pMesh->GetBounds().Center, m_CameraPosition);
+		float bDist = Vector3::DistanceSquared(b.pMesh->GetBounds().Center, m_CameraPosition);
+		return aDist < bDist;
+		});
 
 	//PER FRAME CONSTANTS
 	/////////////////////////////////////////
@@ -228,6 +250,7 @@ void Graphics::Update()
 
 	if (m_RenderPath == RenderPath::Tiled)
 	{
+		Profiler::Instance()->Begin("Forward+");
 		//1. DEPTH PREPASS
 		// - Depth only pass that renders the entire scene
 		// - Optimization that prevents wasteful lighting calculations during the base pass
@@ -317,6 +340,7 @@ void Graphics::Update()
 				Matrix ProjectionInverse;
 				uint32 NumThreadGroups[4];
 				Vector2 ScreenDimensions;
+				uint32 LightCount;
 			} Data;
 
 			Data.CameraView = cameraView;
@@ -325,6 +349,7 @@ void Graphics::Update()
 			Data.NumThreadGroups[2] = 1;
 			Data.ScreenDimensions.x = (float)m_WindowWidth;
 			Data.ScreenDimensions.y = (float)m_WindowHeight;
+			Data.LightCount = m_Lights.size();
 			cameraProjection.Invert(Data.ProjectionInverse);
 
 			pContext->SetComputeDynamicConstantBufferView(0, &Data, sizeof(ShaderParameters));
@@ -495,17 +520,20 @@ void Graphics::Update()
 
 			pContext->Execute(false);
 		}
+		Profiler::Instance()->End();
+
 	}
 	else if (m_RenderPath == RenderPath::Clustered)
 	{
-
+		Profiler::Instance()->Begin("Clustered Forward");
 		ClusteredForwardInputResources resources;
 		resources.pDepthPrepassBuffer = GetDepthStencil();
 		resources.pOpaqueBatches = &m_OpaqueBatches;
 		resources.pTransparantBatches = &m_TransparantBatches;
 		resources.pRenderTarget = GetCurrentRenderTarget();
-		resources.pLights = &m_Lights;
+		resources.pLightBuffer = m_pLightBuffer.get();
 		m_pClusteredForward->Execute(resources);
+		Profiler::Instance()->End();
 	}
 
 	{
@@ -996,7 +1024,6 @@ void Graphics::InitializeAssets()
 		m_pLightIndexListBufferTransparant = std::make_unique<StructuredBuffer>(this);
 		m_pLightIndexListBufferTransparant->Create(this, sizeof(uint32), MAX_LIGHT_DENSITY);
 		m_pLightBuffer = std::make_unique<StructuredBuffer>(this);
-		m_pLightBuffer->Create(this, sizeof(Light), MAX_LIGHT_COUNT);
 	}
 
 	//Geometry
@@ -1056,6 +1083,13 @@ void Graphics::UpdateImGui()
 			}, nullptr, 2);
 		extern bool gUseAlternativeLightCulling;
 		ImGui::Checkbox("Alternative Light Culling", &gUseAlternativeLightCulling);
+
+		ImGui::Separator();
+		ImGui::SliderInt("Lights", &m_DesiredLightCount, 10, 16384);
+		if (ImGui::Button("Generate Lights"))
+		{
+			RandomizeLights(m_DesiredLightCount);
+		}
 		ImGui::TreePop();
 	}
 	if (ImGui::TreeNodeEx("Descriptor Heaps", ImGuiTreeNodeFlags_DefaultOpen))

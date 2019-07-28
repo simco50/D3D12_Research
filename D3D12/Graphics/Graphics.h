@@ -71,7 +71,6 @@ public:
 
 	//CONSTANTS
 	static const int32 SHADOW_MAP_SIZE = 4096;
-	static const int32 MAX_LIGHT_COUNT = 8192;
 	static const int32 FRAME_COUNT = 3;
 	static const int32 MAX_LIGHT_DENSITY = 720000;
 	static const DXGI_FORMAT DEPTH_STENCIL_FORMAT;
@@ -91,12 +90,14 @@ private:
 
 	void UpdateImGui();
 
-	void RandomizeLights();
+	void RandomizeLights(int count);
 
 	void SortBatchesBackToFront(const Vector3& cameraPosition, std::vector<Batch>& batches);
 
 	int m_Frame = 0;
 	std::array<float, 180> m_FrameTimes;
+
+	int m_DesiredLightCount = 4096;
 
 	Vector3 m_CameraPosition;
 	Quaternion m_CameraRotation;

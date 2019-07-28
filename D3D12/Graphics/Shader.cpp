@@ -112,7 +112,7 @@ Shader::Shader(const char* pFilePath, Type shaderType, const char* pEntryPoint, 
 	D3DInclude include(filePath.substr(0, filePath.rfind('/') + 1));
 
 	ComPtr<ID3DBlob> pErrorBlob;
-	D3DCompile2(line.data(), line.size(), nullptr, shaderDefines.data(), &include, pEntryPoint, shaderModel.c_str(), compileFlags, 0, 0, nullptr, 0, m_pByteCode.GetAddressOf(), pErrorBlob.GetAddressOf());
+	D3DCompile2(line.data(), line.size(), filePath.c_str(), shaderDefines.data(), &include, pEntryPoint, shaderModel.c_str(), compileFlags, 0, 0, nullptr, 0, m_pByteCode.GetAddressOf(), pErrorBlob.GetAddressOf());
 	if (pErrorBlob != nullptr)
 	{
 		std::wstring errorMsg = std::wstring((char*)pErrorBlob->GetBufferPointer(), (char*)pErrorBlob->GetBufferPointer() + pErrorBlob->GetBufferSize());

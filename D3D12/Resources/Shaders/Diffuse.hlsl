@@ -11,6 +11,7 @@ cbuffer PerObjectData : register(b0)
 cbuffer PerFrameData : register(b1)
 {
 	float4x4 cViewInverse;
+	uint cLightCount;
 }
 
 struct VSInput
@@ -54,7 +55,7 @@ LightResult DoLight(float4 position, float3 worldPosition, float3 normal, float3
 	uint startOffset = tLightGrid[tileIndex].x;
 	uint lightCount = tLightGrid[tileIndex].y;
 #else
-	uint lightCount = LIGHT_COUNT;
+	uint lightCount = cLightCount;
 #endif
 	LightResult totalResult = (LightResult)0;
 

@@ -37,7 +37,7 @@ void ClusteredForward::OnSwapchainCreated(int windowWidth, int windowHeight)
 	m_pUniqueClusters->SetName("UniqueClusters");
 	m_pActiveClusters->Create(m_pGraphics, sizeof(uint32), totalClusterCount, false);
 	m_pActiveClusters->SetName("ActiveClusters");
-	m_pLightIndexGrid->Create(m_pGraphics, sizeof(uint32), 256 * totalClusterCount);
+	m_pLightIndexGrid->Create(m_pGraphics, sizeof(uint32), 32 * totalClusterCount);
 	m_pLightGrid->Create(m_pGraphics, 2 * sizeof(uint32), totalClusterCount);
 
 	float nearZ = 2.0f;
@@ -212,7 +212,6 @@ void ClusteredForward::Execute(const ClusteredForwardInputResources& resources)
 				Profiler::Instance()->Begin("Set Data", pContext);
 				uint32 zero = 0;
 				m_pLightIndexCounter->SetData(pContext, &zero, sizeof(uint32));
-				m_pLights->SetData(pContext, resources.pLights->data(), sizeof(Light) * resources.pLights->size(), 0);
 				std::vector<char> zeros(2 * sizeof(uint32) * m_ClusterCountX * m_ClusterCountY * cClusterCountZ);
 				m_pLightGrid->SetData(pContext, zeros.data(), sizeof(char) * zeros.size());
 				Profiler::Instance()->End(pContext);
@@ -221,16 +220,18 @@ void ClusteredForward::Execute(const ClusteredForwardInputResources& resources)
 				{
 					Matrix View;
 					uint32 ClusterDimensions[3];
+					int LightCount;
 				} constantBuffer;
 
 				constantBuffer.View = m_pGraphics->GetViewMatrix();
 				constantBuffer.ClusterDimensions[0] = m_ClusterCountX;
 				constantBuffer.ClusterDimensions[1] = m_ClusterCountY;
 				constantBuffer.ClusterDimensions[2] = cClusterCountZ;
+				constantBuffer.LightCount = resources.pLightBuffer->GetElementCount();
 
 				pContext->SetComputeDynamicConstantBufferView(0, &constantBuffer, sizeof(ConstantBuffer));
 
-				pContext->SetDynamicDescriptor(1, 0, m_pLights->GetSRV());
+				pContext->SetDynamicDescriptor(1, 0, resources.pLightBuffer->GetSRV());
 				pContext->SetDynamicDescriptor(1, 1, m_pAABBs->GetSRV());
 				pContext->SetDynamicDescriptor(1, 2, m_pActiveClusters->GetSRV());
 
@@ -258,18 +259,19 @@ void ClusteredForward::Execute(const ClusteredForwardInputResources& resources)
 
 				uint32 zero = 0;
 				m_pLightIndexCounter->SetData(pContext, &zero, sizeof(uint32));
-				m_pLights->SetData(pContext, resources.pLights->data(), sizeof(Light) * resources.pLights->size(), 0);
 
 				struct ConstantBuffer
 				{
 					Matrix View;
+					int LightCount;
 				} constantBuffer;
 
 				constantBuffer.View = m_pGraphics->GetViewMatrix();
+				constantBuffer.LightCount = resources.pLightBuffer->GetElementCount();
 
 				pContext->SetComputeDynamicConstantBufferView(0, &constantBuffer, sizeof(ConstantBuffer));
 
-				pContext->SetDynamicDescriptor(1, 0, m_pLights->GetSRV());
+				pContext->SetDynamicDescriptor(1, 0, resources.pLightBuffer->GetSRV());
 				pContext->SetDynamicDescriptor(1, 1, m_pAABBs->GetSRV());
 				pContext->SetDynamicDescriptor(1, 2, m_pActiveClusters->GetSRV());
 
@@ -347,7 +349,7 @@ void ClusteredForward::Execute(const ClusteredForwardInputResources& resources)
 			pContext->SetDynamicConstantBufferView(1, &frameData, sizeof(PerFrameData));
 			pContext->SetDynamicDescriptor(3, 0, m_pLightGrid->GetSRV());
 			pContext->SetDynamicDescriptor(3, 1, m_pLightIndexGrid->GetSRV());
-			pContext->SetDynamicDescriptor(3, 2, m_pLights->GetSRV());
+			pContext->SetDynamicDescriptor(3, 2, resources.pLightBuffer->GetSRV());
 			pContext->SetDynamicDescriptor(4, 0, m_pHeatMapTexture->GetSRV());
 
 			for (const Batch& b : *resources.pOpaqueBatches)
@@ -393,8 +395,6 @@ void ClusteredForward::SetupResources(Graphics* pGraphics)
 	m_pActiveClusters = std::make_unique<StructuredBuffer>(pGraphics);
 	m_pIndirectArguments = std::make_unique<ByteAddressBuffer>(pGraphics);
 	m_pIndirectArguments->Create(m_pGraphics, sizeof(uint32), 3, false);
-	m_pLights = std::make_unique<StructuredBuffer>(pGraphics);
-	m_pLights->Create(m_pGraphics, sizeof(Light), Graphics::MAX_LIGHT_COUNT);
 	m_pLightIndexCounter = std::make_unique<StructuredBuffer>(pGraphics);
 	m_pLightIndexCounter->Create(pGraphics, sizeof(uint32), 1);
 	m_pLightIndexGrid = std::make_unique<StructuredBuffer>(pGraphics);
