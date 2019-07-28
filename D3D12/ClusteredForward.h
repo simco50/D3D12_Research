@@ -35,7 +35,6 @@ private:
 
 	uint32 m_ClusterCountX = 0;
 	uint32 m_ClusterCountY = 0;
-	uint32 m_ClusterCountZ = 0;
 
 	std::unique_ptr<Texture2D> m_pHeatMapTexture;
 

@@ -72,7 +72,7 @@ public:
 	//CONSTANTS
 	static const int32 SHADOW_MAP_SIZE = 4096;
 	static const int32 MAX_LIGHT_COUNT = 8192;
-	static const int32 FRAME_COUNT = 2;
+	static const int32 FRAME_COUNT = 3;
 	static const int32 MAX_LIGHT_DENSITY = 720000;
 	static const DXGI_FORMAT DEPTH_STENCIL_FORMAT;
 	static const DXGI_FORMAT DEPTH_STENCIL_SHADOW_FORMAT;
@@ -95,7 +95,8 @@ private:
 
 	void SortBatchesBackToFront(const Vector3& cameraPosition, std::vector<Batch>& batches);
 
-	std::vector<float> m_FrameTimes;
+	int m_Frame = 0;
+	std::array<float, 180> m_FrameTimes;
 
 	Vector3 m_CameraPosition;
 	Quaternion m_CameraRotation;
@@ -131,7 +132,7 @@ private:
 	uint32 m_CurrentBackBufferIndex = 0;
 	std::array<uint64, FRAME_COUNT> m_FenceValues = {};
 
-	RenderPath m_RenderPath = RenderPath::Tiled;
+	RenderPath m_RenderPath = RenderPath::Clustered;
 
 	std::unique_ptr<Mesh> m_pMesh;
 	std::vector<Batch> m_OpaqueBatches;

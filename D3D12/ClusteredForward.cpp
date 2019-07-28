@@ -13,6 +13,7 @@
 #include "Graphics/Profiler.h"
 
 static constexpr int cClusterSize = 64;
+static constexpr int cClusterCountZ = 32;
 
 ClusteredForward::ClusteredForward(Graphics* pGraphics)
 	: m_pGraphics(pGraphics)
@@ -23,19 +24,20 @@ ClusteredForward::ClusteredForward(Graphics* pGraphics)
 
 void ClusteredForward::OnSwapchainCreated(int windowWidth, int windowHeight)
 {
+
 	m_ClusterCountX = (uint32)ceil((float)windowWidth / cClusterSize);
 	m_ClusterCountY = (uint32)ceil((float)windowHeight / cClusterSize);
-	m_ClusterCountZ = 32;
 
 	struct AABB { Vector4 Min; Vector4 Max; };
-	m_pAABBs->Create(m_pGraphics, sizeof(AABB), m_ClusterCountX * m_ClusterCountY * m_ClusterCountZ, false);
+	uint64 totalClusterCount = (uint64)m_ClusterCountX * m_ClusterCountY * cClusterCountZ;
+	m_pAABBs->Create(m_pGraphics, sizeof(AABB), totalClusterCount, false);
 	m_pAABBs->SetName("AABBs");
-	m_pUniqueClusters->Create(m_pGraphics, sizeof(uint32), m_ClusterCountX * m_ClusterCountY * m_ClusterCountZ, false);
+	m_pUniqueClusters->Create(m_pGraphics, sizeof(uint32), totalClusterCount, false);
 	m_pUniqueClusters->SetName("UniqueClusters");
-	m_pActiveClusters->Create(m_pGraphics, sizeof(uint32), m_ClusterCountX * m_ClusterCountY * m_ClusterCountZ, false);
+	m_pActiveClusters->Create(m_pGraphics, sizeof(uint32), totalClusterCount, false);
 	m_pActiveClusters->SetName("ActiveClusters");
-	m_pLightIndexGrid->Create(m_pGraphics, sizeof(uint32), 64 * m_ClusterCountX * m_ClusterCountY * m_ClusterCountZ);
-	m_pLightGrid->Create(m_pGraphics, 2 * sizeof(uint32), m_ClusterCountX * m_ClusterCountY* m_ClusterCountZ);
+	m_pLightIndexGrid->Create(m_pGraphics, sizeof(uint32), 64 * totalClusterCount);
+	m_pLightGrid->Create(m_pGraphics, 2 * sizeof(uint32), totalClusterCount);
 
 	float nearZ = 2.0f;
 	float farZ = 500.0f;
@@ -67,12 +69,12 @@ void ClusteredForward::OnSwapchainCreated(int windowWidth, int windowHeight)
 		constantBuffer.ClusterSize.y = cClusterSize;
 		constantBuffer.ClusterDimensions[0] = m_ClusterCountX;
 		constantBuffer.ClusterDimensions[1] = m_ClusterCountY;
-		constantBuffer.ClusterDimensions[2] = m_ClusterCountZ;
+		constantBuffer.ClusterDimensions[2] = cClusterCountZ;
 
 		pContext->SetComputeDynamicConstantBufferView(0, &constantBuffer, sizeof(ConstantBuffer));
 		pContext->SetDynamicDescriptor(1, 0, m_pAABBs->GetUAV());
 
-		pContext->Dispatch(m_ClusterCountX, m_ClusterCountY, m_ClusterCountZ);
+		pContext->Dispatch(m_ClusterCountX, m_ClusterCountY, cClusterCountZ);
 
 		Profiler::Instance()->End(pContext);
 		uint64 fence = pContext->Execute(true);
@@ -85,9 +87,9 @@ void ClusteredForward::Execute(const ClusteredForwardInputResources& resources)
 	float nearZ = 2.0f;
 	float farZ = 500.0f;
 	Matrix projection = XMMatrixPerspectiveFovLH(XM_PIDIV4, screenDimensions.x / screenDimensions.y, nearZ, farZ);
-	
-	float sliceMagicA = (float)m_ClusterCountZ / log(farZ / nearZ);
-	float sliceMagicB = ((float)m_ClusterCountZ * log(nearZ)) / log(farZ / nearZ);
+
+	float sliceMagicA = (float)cClusterCountZ / log(farZ / nearZ);
+	float sliceMagicB = ((float)cClusterCountZ * log(nearZ)) / log(farZ / nearZ);
 
 	//Mark Unique Clusters
 	{
@@ -99,7 +101,7 @@ void ClusteredForward::Execute(const ClusteredForwardInputResources& resources)
 		pContext->ClearDepth(resources.pDepthPrepassBuffer->GetDSV(), D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0);
 
 		Profiler::Instance()->Begin("Update Data", pContext);
-		std::vector<uint32> zero(m_ClusterCountX * m_ClusterCountY * m_ClusterCountZ);
+		std::vector<uint32> zero(m_ClusterCountX * m_ClusterCountY * cClusterCountZ);
 		m_pUniqueClusters->SetData(pContext, zero.data(), sizeof(uint32) * zero.size());
 		Profiler::Instance()->End(pContext);
 
@@ -126,7 +128,7 @@ void ClusteredForward::Execute(const ClusteredForwardInputResources& resources)
 		constantBuffer.SliceMagicB = sliceMagicB;
 		constantBuffer.ClusterDimensions[0] = m_ClusterCountX;
 		constantBuffer.ClusterDimensions[1] = m_ClusterCountY;
-		constantBuffer.ClusterDimensions[2] = m_ClusterCountZ;
+		constantBuffer.ClusterDimensions[2] = cClusterCountZ;
 		constantBuffer.ClusterDimensions[3] = 0;
 		constantBuffer.ClusterSize[0] = cClusterSize;
 		constantBuffer.ClusterSize[1] = cClusterSize;
@@ -155,86 +157,83 @@ void ClusteredForward::Execute(const ClusteredForwardInputResources& resources)
 
 		Profiler::Instance()->End(pContext);
 		uint64 fence = pContext->Execute(false);
+
 		m_pGraphics->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COMPUTE)->InsertWaitForFence(fence);
 	}
 
-	// Compact Clusters
 	{
 		ComputeCommandContext* pContext = (ComputeCommandContext*)m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COMPUTE);
-		Profiler::Instance()->Begin("Compact Clusters", pContext);
-		pContext->SetComputePipelineState(m_pCompactClustersPSO.get());
-		pContext->SetComputeRootSignature(m_pCompactClustersRS.get());
-
-		uint32 values[] = { 0,0,0,0 };
-		pContext->ClearUavUInt(m_pActiveClusters->GetCounter(), values);
-
-		pContext->SetDynamicDescriptor(0, 0, m_pUniqueClusters->GetSRV());
-		pContext->SetDynamicDescriptor(1, 0, m_pActiveClusters->GetUAV());
-
-		pContext->Dispatch((int)ceil(m_ClusterCountX * m_ClusterCountY * m_ClusterCountZ / 64.0f), 1, 1);
-
-		Profiler::Instance()->End(pContext);
-		pContext->Execute(false);
-	}
-
-	// Update Indirect Arguments
-	{
-		ComputeCommandContext* pContext = (ComputeCommandContext*)m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COMPUTE);
-		Profiler::Instance()->Begin("Update Indirect Arguments", pContext);
-
-		pContext->InsertResourceBarrier(m_pIndirectArguments.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, true);
-		
-		pContext->SetComputePipelineState(m_pUpdateIndirectArgumentsPSO.get());
-		pContext->SetComputeRootSignature(m_pUpdateIndirectArgumentsRS.get());
-
-		pContext->SetDynamicDescriptor(0, 0, m_pActiveClusters->GetCounter()->GetSRV());
-		pContext->SetDynamicDescriptor(1, 0, m_pIndirectArguments->GetUAV());
-
-		pContext->Dispatch(1, 1, 1);
-		Profiler::Instance()->End(pContext);
-		pContext->Execute(false);
-	}
-
-	// Light Culling
-	{
-		ComputeCommandContext* pContext = (ComputeCommandContext*)m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COMPUTE);
-		Profiler::Instance()->Begin("Light Culling", pContext);
-		pContext->SetComputePipelineState(m_pLightCullingPSO.get());
-		pContext->SetComputeRootSignature(m_pLightCullingRS.get());
-
-		pContext->InsertResourceBarrier(m_pIndirectArguments.get(), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT, true);
-
-		//Profiler::Instance()->Begin("Update Data", pContext);
-		uint32 zero = 0;
-		m_pLightIndexCounter->SetData(pContext, &zero, sizeof(uint32));
-		//std::vector<uint32> zero2(64 * m_ClusterCountX * m_ClusterCountY * m_ClusterCountZ);
-		//memset(zero2.data(), 0, zero2.size() * sizeof(uint32));
-		//m_pLightIndexGrid->SetData(pContext, zero2.data(), zero2.size() * sizeof(uint32));
-		m_pLights->SetData(pContext, resources.pLights->data(), sizeof(Light) * resources.pLights->size(), 0);
-		//Profiler::Instance()->End(pContext);
-
-		struct ConstantBuffer
+		// Compact Clusters
 		{
-			Matrix View;
-		} constantBuffer;
+			Profiler::Instance()->Begin("Compact Clusters", pContext);
+			pContext->SetComputePipelineState(m_pCompactClustersPSO.get());
+			pContext->SetComputeRootSignature(m_pCompactClustersRS.get());
 
-		constantBuffer.View = m_pGraphics->GetViewMatrix();
+			uint32 values[] = { 0,0,0,0 };
+			pContext->ClearUavUInt(m_pActiveClusters->GetCounter(), values);
 
-		pContext->SetComputeDynamicConstantBufferView(0, &constantBuffer, sizeof(ConstantBuffer));
+			pContext->SetDynamicDescriptor(0, 0, m_pUniqueClusters->GetSRV());
+			pContext->SetDynamicDescriptor(1, 0, m_pActiveClusters->GetUAV());
 
-		pContext->SetDynamicDescriptor(1, 0, m_pLights->GetSRV());
-		pContext->SetDynamicDescriptor(1, 1, m_pAABBs->GetSRV());
-		pContext->SetDynamicDescriptor(1, 2, m_pActiveClusters->GetSRV());
+			pContext->Dispatch((int)ceil(m_ClusterCountX * m_ClusterCountY * cClusterCountZ / 64.0f), 1, 1);
 
-		pContext->SetDynamicDescriptor(2, 0, m_pLightIndexCounter->GetUAV());
-		pContext->SetDynamicDescriptor(2, 1, m_pLightIndexGrid->GetUAV());
-		pContext->SetDynamicDescriptor(2, 2, m_pLightGrid->GetUAV());
+			Profiler::Instance()->End(pContext);
+			pContext->ExecuteAndReset(false);
+		}
 
-		pContext->ExecuteIndirect(m_pLightCullingCommandSignature.Get(), m_pIndirectArguments.get());
+		// Update Indirect Arguments
+		{
+			Profiler::Instance()->Begin("Update Indirect Arguments", pContext);
 
-		Profiler::Instance()->End(pContext);
-		uint64 fence = pContext->Execute(false);
-		m_pGraphics->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT)->InsertWaitForFence(fence);
+			pContext->InsertResourceBarrier(m_pIndirectArguments.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, true);
+
+			pContext->SetComputePipelineState(m_pUpdateIndirectArgumentsPSO.get());
+			pContext->SetComputeRootSignature(m_pUpdateIndirectArgumentsRS.get());
+
+			pContext->SetDynamicDescriptor(0, 0, m_pActiveClusters->GetCounter()->GetSRV());
+			pContext->SetDynamicDescriptor(1, 0, m_pIndirectArguments->GetUAV());
+
+			pContext->Dispatch(1, 1, 1);
+			Profiler::Instance()->End(pContext);
+			pContext->ExecuteAndReset(false);
+		}
+
+		// Light Culling
+		{
+			Profiler::Instance()->Begin("Light Culling", pContext);
+			pContext->SetComputePipelineState(m_pLightCullingPSO.get());
+			pContext->SetComputeRootSignature(m_pLightCullingRS.get());
+
+			pContext->InsertResourceBarrier(m_pIndirectArguments.get(), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT, true);
+
+			uint32 zero = 0;
+			m_pLightIndexCounter->SetData(pContext, &zero, sizeof(uint32));
+			m_pLights->SetData(pContext, resources.pLights->data(), sizeof(Light) * resources.pLights->size(), 0);
+
+			struct ConstantBuffer
+			{
+				Matrix View;
+			} constantBuffer;
+
+			constantBuffer.View = m_pGraphics->GetViewMatrix();
+
+			pContext->SetComputeDynamicConstantBufferView(0, &constantBuffer, sizeof(ConstantBuffer));
+
+			pContext->SetDynamicDescriptor(1, 0, m_pLights->GetSRV());
+			pContext->SetDynamicDescriptor(1, 1, m_pAABBs->GetSRV());
+			pContext->SetDynamicDescriptor(1, 2, m_pActiveClusters->GetSRV());
+
+			pContext->SetDynamicDescriptor(2, 0, m_pLightIndexCounter->GetUAV());
+			pContext->SetDynamicDescriptor(2, 1, m_pLightIndexGrid->GetUAV());
+			pContext->SetDynamicDescriptor(2, 2, m_pLightGrid->GetUAV());
+
+			pContext->ExecuteIndirect(m_pLightCullingCommandSignature.Get(), m_pIndirectArguments.get());
+
+			Profiler::Instance()->End(pContext);
+			uint64 fence = pContext->Execute(false);
+
+			m_pGraphics->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT)->InsertWaitForFence(fence);
+		}
 	}
 
 	//Base Pass
@@ -268,7 +267,7 @@ void ClusteredForward::Execute(const ClusteredForwardInputResources& resources)
 		frameData.FarZ = farZ;
 		frameData.ClusterDimensions[0] = m_ClusterCountX;
 		frameData.ClusterDimensions[1] = m_ClusterCountY;
-		frameData.ClusterDimensions[2] = m_ClusterCountZ;
+		frameData.ClusterDimensions[2] = cClusterCountZ;
 		frameData.ClusterDimensions[3] = 0;
 		frameData.ClusterSize[0] = cClusterSize;
 		frameData.ClusterSize[1] = cClusterSize;
