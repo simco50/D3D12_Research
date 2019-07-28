@@ -15,6 +15,8 @@
 static constexpr int cClusterSize = 64;
 static constexpr int cClusterCountZ = 32;
 
+bool gUseAlternativeLightCulling = false;
+
 ClusteredForward::ClusteredForward(Graphics* pGraphics)
 	: m_pGraphics(pGraphics)
 {
@@ -24,7 +26,6 @@ ClusteredForward::ClusteredForward(Graphics* pGraphics)
 
 void ClusteredForward::OnSwapchainCreated(int windowWidth, int windowHeight)
 {
-
 	m_ClusterCountX = (uint32)ceil((float)windowWidth / cClusterSize);
 	m_ClusterCountY = (uint32)ceil((float)windowHeight / cClusterSize);
 
@@ -36,7 +37,7 @@ void ClusteredForward::OnSwapchainCreated(int windowWidth, int windowHeight)
 	m_pUniqueClusters->SetName("UniqueClusters");
 	m_pActiveClusters->Create(m_pGraphics, sizeof(uint32), totalClusterCount, false);
 	m_pActiveClusters->SetName("ActiveClusters");
-	m_pLightIndexGrid->Create(m_pGraphics, sizeof(uint32), 64 * totalClusterCount);
+	m_pLightIndexGrid->Create(m_pGraphics, sizeof(uint32), 256 * totalClusterCount);
 	m_pLightGrid->Create(m_pGraphics, 2 * sizeof(uint32), totalClusterCount);
 
 	float nearZ = 2.0f;
@@ -158,11 +159,11 @@ void ClusteredForward::Execute(const ClusteredForwardInputResources& resources)
 		Profiler::Instance()->End(pContext);
 		uint64 fence = pContext->Execute(false);
 
-		m_pGraphics->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COMPUTE)->InsertWaitForFence(fence);
+		//m_pGraphics->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COMPUTE)->InsertWaitForFence(fence);
 	}
 
 	{
-		ComputeCommandContext* pContext = (ComputeCommandContext*)m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COMPUTE);
+		ComputeCommandContext* pContext = (ComputeCommandContext*)m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 		// Compact Clusters
 		{
 			Profiler::Instance()->Begin("Compact Clusters", pContext);
@@ -198,41 +199,91 @@ void ClusteredForward::Execute(const ClusteredForwardInputResources& resources)
 			pContext->ExecuteAndReset(false);
 		}
 
-		// Light Culling
+		if (gUseAlternativeLightCulling)
 		{
-			Profiler::Instance()->Begin("Light Culling", pContext);
-			pContext->SetComputePipelineState(m_pLightCullingPSO.get());
-			pContext->SetComputeRootSignature(m_pLightCullingRS.get());
-
-			pContext->InsertResourceBarrier(m_pIndirectArguments.get(), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT, true);
-
-			uint32 zero = 0;
-			m_pLightIndexCounter->SetData(pContext, &zero, sizeof(uint32));
-			m_pLights->SetData(pContext, resources.pLights->data(), sizeof(Light) * resources.pLights->size(), 0);
-
-			struct ConstantBuffer
+			// Light Culling
 			{
-				Matrix View;
-			} constantBuffer;
+				Profiler::Instance()->Begin("Alternative Light Culling", pContext);
+				pContext->SetComputePipelineState(m_pAlternativeLightCullingPSO.get());
+				pContext->SetComputeRootSignature(m_pLightCullingRS.get());
 
-			constantBuffer.View = m_pGraphics->GetViewMatrix();
+				pContext->InsertResourceBarrier(m_pIndirectArguments.get(), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT, true);
 
-			pContext->SetComputeDynamicConstantBufferView(0, &constantBuffer, sizeof(ConstantBuffer));
+				Profiler::Instance()->Begin("Set Data", pContext);
+				uint32 zero = 0;
+				m_pLightIndexCounter->SetData(pContext, &zero, sizeof(uint32));
+				m_pLights->SetData(pContext, resources.pLights->data(), sizeof(Light) * resources.pLights->size(), 0);
+				std::vector<char> zeros(2 * sizeof(uint32) * m_ClusterCountX * m_ClusterCountY * cClusterCountZ);
+				m_pLightGrid->SetData(pContext, zeros.data(), sizeof(char) * zeros.size());
+				Profiler::Instance()->End(pContext);
 
-			pContext->SetDynamicDescriptor(1, 0, m_pLights->GetSRV());
-			pContext->SetDynamicDescriptor(1, 1, m_pAABBs->GetSRV());
-			pContext->SetDynamicDescriptor(1, 2, m_pActiveClusters->GetSRV());
+				struct ConstantBuffer
+				{
+					Matrix View;
+					uint32 ClusterDimensions[3];
+				} constantBuffer;
 
-			pContext->SetDynamicDescriptor(2, 0, m_pLightIndexCounter->GetUAV());
-			pContext->SetDynamicDescriptor(2, 1, m_pLightIndexGrid->GetUAV());
-			pContext->SetDynamicDescriptor(2, 2, m_pLightGrid->GetUAV());
+				constantBuffer.View = m_pGraphics->GetViewMatrix();
+				constantBuffer.ClusterDimensions[0] = m_ClusterCountX;
+				constantBuffer.ClusterDimensions[1] = m_ClusterCountY;
+				constantBuffer.ClusterDimensions[2] = cClusterCountZ;
 
-			pContext->ExecuteIndirect(m_pLightCullingCommandSignature.Get(), m_pIndirectArguments.get());
+				pContext->SetComputeDynamicConstantBufferView(0, &constantBuffer, sizeof(ConstantBuffer));
 
-			Profiler::Instance()->End(pContext);
-			uint64 fence = pContext->Execute(false);
+				pContext->SetDynamicDescriptor(1, 0, m_pLights->GetSRV());
+				pContext->SetDynamicDescriptor(1, 1, m_pAABBs->GetSRV());
+				pContext->SetDynamicDescriptor(1, 2, m_pActiveClusters->GetSRV());
 
-			m_pGraphics->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT)->InsertWaitForFence(fence);
+				pContext->SetDynamicDescriptor(2, 0, m_pLightIndexCounter->GetUAV());
+				pContext->SetDynamicDescriptor(2, 1, m_pLightIndexGrid->GetUAV());
+				pContext->SetDynamicDescriptor(2, 2, m_pLightGrid->GetUAV());
+
+				pContext->Dispatch((int)ceil((float)m_ClusterCountX / 4), (int)ceil((float)m_ClusterCountY / 4), (int)ceil((float)cClusterCountZ / 4));
+
+				Profiler::Instance()->End(pContext);
+				uint64 fence = pContext->Execute(false);
+
+				//m_pGraphics->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT)->InsertWaitForFence(fence);
+			}
+		}
+		else
+		{
+			// Light Culling
+			{
+				Profiler::Instance()->Begin("Light Culling", pContext);
+				pContext->SetComputePipelineState(m_pLightCullingPSO.get());
+				pContext->SetComputeRootSignature(m_pLightCullingRS.get());
+
+				pContext->InsertResourceBarrier(m_pIndirectArguments.get(), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT, true);
+
+				uint32 zero = 0;
+				m_pLightIndexCounter->SetData(pContext, &zero, sizeof(uint32));
+				m_pLights->SetData(pContext, resources.pLights->data(), sizeof(Light) * resources.pLights->size(), 0);
+
+				struct ConstantBuffer
+				{
+					Matrix View;
+				} constantBuffer;
+
+				constantBuffer.View = m_pGraphics->GetViewMatrix();
+
+				pContext->SetComputeDynamicConstantBufferView(0, &constantBuffer, sizeof(ConstantBuffer));
+
+				pContext->SetDynamicDescriptor(1, 0, m_pLights->GetSRV());
+				pContext->SetDynamicDescriptor(1, 1, m_pAABBs->GetSRV());
+				pContext->SetDynamicDescriptor(1, 2, m_pActiveClusters->GetSRV());
+
+				pContext->SetDynamicDescriptor(2, 0, m_pLightIndexCounter->GetUAV());
+				pContext->SetDynamicDescriptor(2, 1, m_pLightIndexGrid->GetUAV());
+				pContext->SetDynamicDescriptor(2, 2, m_pLightGrid->GetUAV());
+
+				pContext->ExecuteIndirect(m_pLightCullingCommandSignature.Get(), m_pIndirectArguments.get());
+
+				Profiler::Instance()->End(pContext);
+				uint64 fence = pContext->Execute(false);
+
+				//m_pGraphics->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT)->InsertWaitForFence(fence);
+			}
 		}
 	}
 
@@ -399,6 +450,7 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
 		m_pMarkUniqueClustersRS->Finalize("Mark Unique Clusters", pGraphics->GetDevice(), D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
 		m_pMarkUniqueClustersOpaquePSO = std::make_unique<GraphicsPipelineState>();
+		m_pMarkUniqueClustersOpaquePSO->SetDepthTest(D3D12_COMPARISON_FUNC_LESS_EQUAL);
 		m_pMarkUniqueClustersOpaquePSO->SetRootSignature(m_pMarkUniqueClustersRS->GetRootSignature());
 		m_pMarkUniqueClustersOpaquePSO->SetBlendMode(BlendMode::Replace, false);
 		m_pMarkUniqueClustersOpaquePSO->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
@@ -467,6 +519,16 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
 		sigDesc.pArgumentDescs = &desc;
 		sigDesc.NumArgumentDescs = 1;
 		HR(m_pGraphics->GetDevice()->CreateCommandSignature(&sigDesc, nullptr, IID_PPV_ARGS(m_pLightCullingCommandSignature.GetAddressOf())));
+	}
+
+	//Alternative Light Culling
+	{
+		Shader computeShader = Shader("Resources/Shaders/CL_LightCullingUnreal.hlsl", Shader::Type::ComputeShader, "LightCulling");
+
+		m_pAlternativeLightCullingPSO = std::make_unique<ComputePipelineState>();
+		m_pAlternativeLightCullingPSO->SetComputeShader(computeShader.GetByteCode(), computeShader.GetByteCodeSize());
+		m_pAlternativeLightCullingPSO->SetRootSignature(m_pLightCullingRS->GetRootSignature());
+		m_pAlternativeLightCullingPSO->Finalize("Light Culling", pGraphics->GetDevice());
 	}
 
 	//Diffuse

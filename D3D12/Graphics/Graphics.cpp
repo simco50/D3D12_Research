@@ -75,7 +75,7 @@ void Graphics::RandomizeLights()
 		position.y = Math::RandomRange(-sceneBounds.Extents.y, sceneBounds.Extents.y) + sceneBounds.Center.y;
 		position.z = Math::RandomRange(-sceneBounds.Extents.z, sceneBounds.Extents.z) + sceneBounds.Center.z;
 
-		const float range = Math::RandomRange(7.0f, 9.0f);
+		const float range = Math::RandomRange(5.0f, 7.0f);
 		const float angle = Math::RandomRange(30.0f, 60.0f);
 
 		Light::Type type = Light::Type::Point;// rand() % 2 == 0 ? Light::Type::Point : Light::Type::Spot;
@@ -1054,6 +1054,8 @@ void Graphics::UpdateImGui()
 				}
 				return true;
 			}, nullptr, 2);
+		extern bool gUseAlternativeLightCulling;
+		ImGui::Checkbox("Alternative Light Culling", &gUseAlternativeLightCulling);
 		ImGui::TreePop();
 	}
 	if (ImGui::TreeNodeEx("Descriptor Heaps", ImGuiTreeNodeFlags_DefaultOpen))

@@ -1,7 +1,7 @@
 #include "Common.hlsl"
 
 #define MAX_LIGHTS_PER_TILE 256
-#define THREAD_COUNT 1024
+#define THREAD_COUNT 512
 
 cbuffer ShaderParameters : register(b0)
 {

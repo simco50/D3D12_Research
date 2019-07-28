@@ -30,9 +30,12 @@ CommandContext::~CommandContext()
 
 void CommandContext::Reset()
 {
-	assert(m_pCommandList && m_pAllocator == nullptr);
-	m_pAllocator = m_pGraphics->GetCommandQueue(m_Type)->RequestAllocator();
-	m_pCommandList->Reset(m_pAllocator, nullptr);
+	assert(m_pCommandList);
+	if (m_pAllocator == nullptr)
+	{
+		m_pAllocator = m_pGraphics->GetCommandQueue(m_Type)->RequestAllocator();
+		m_pCommandList->Reset(m_pAllocator, nullptr);
+	}
 	m_NumQueuedBarriers = 0;
 }
 
