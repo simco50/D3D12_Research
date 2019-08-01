@@ -110,11 +110,6 @@ void Graphics::RandomizeLights(int count)
 	pContext->Execute(true);
 }
 
-void Graphics::SortBatchesBackToFront(const Vector3& cameraPosition, std::vector<Batch>& batches)
-{
-	
-}
-
 Matrix Graphics::GetViewMatrix()
 {
 	Matrix viewInverse = Matrix::CreateFromQuaternion(m_CameraRotation) * Matrix::CreateTranslation(m_CameraPosition);
@@ -186,7 +181,7 @@ void Graphics::Update()
 	frameData.ViewInverse = Matrix::CreateFromQuaternion(m_CameraRotation) * Matrix::CreateTranslation(m_CameraPosition);
 	Matrix cameraView;
 	frameData.ViewInverse.Invert(cameraView);
-	Matrix cameraProjection = XMMatrixPerspectiveFovLH(XM_PIDIV4, (float)m_WindowWidth / m_WindowHeight, 100000.0f, 0.1f);
+	Matrix cameraProjection = XMMatrixPerspectiveFovLH(Math::ToRadians * 60, (float)m_WindowWidth / m_WindowHeight, 100000.0f, 0.1f);
 	Matrix cameraViewProjection = cameraView * cameraProjection;
 
 	// SHADOW MAP PARTITIONING
@@ -1083,6 +1078,8 @@ void Graphics::UpdateImGui()
 			}, nullptr, 2);
 		extern bool gUseAlternativeLightCulling;
 		ImGui::Checkbox("Alternative Light Culling", &gUseAlternativeLightCulling);
+		extern bool gVisualizeClusters;
+		ImGui::Checkbox("Visualize Clusters", &gVisualizeClusters);
 
 		ImGui::Separator();
 		ImGui::SliderInt("Lights", &m_DesiredLightCount, 10, 16384);

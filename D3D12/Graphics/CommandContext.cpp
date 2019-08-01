@@ -102,6 +102,20 @@ void CommandContext::InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESO
 	}
 }
 
+void CommandContext::InsertUavBarrier(GraphicsResource* pBuffer /*= nullptr*/, bool executeImmediate /*= false*/)
+{
+	m_QueuedBarriers[m_NumQueuedBarriers] = CD3DX12_RESOURCE_BARRIER::UAV(pBuffer ? pBuffer->GetResource() : nullptr);
+	++m_NumQueuedBarriers;
+	if (executeImmediate || m_NumQueuedBarriers >= m_QueuedBarriers.size())
+	{
+		FlushResourceBarriers();
+	}
+	if (pBuffer)
+	{
+		pBuffer->m_CurrentState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+	}
+}
+
 void CommandContext::FlushResourceBarriers()
 {
 	if (m_NumQueuedBarriers > 0)
@@ -109,6 +123,19 @@ void CommandContext::FlushResourceBarriers()
 		m_pCommandList->ResourceBarrier(m_NumQueuedBarriers, m_QueuedBarriers.data());
 		m_NumQueuedBarriers = 0;
 	}
+}
+
+void CommandContext::CopyResource(GraphicsBuffer* pSource, GraphicsBuffer* pTarget)
+{
+	assert(pSource);
+	assert(pTarget);
+	D3D12_RESOURCE_STATES sourceState = pSource->GetResourceState();
+	D3D12_RESOURCE_STATES targetState = pTarget->GetResourceState();
+	InsertResourceBarrier(pSource, D3D12_RESOURCE_STATE_COPY_SOURCE);
+	InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_COPY_DEST, true);
+	m_pCommandList->CopyResource(pTarget->GetResource(), pSource->GetResource());
+	InsertResourceBarrier(pSource, sourceState);
+	InsertResourceBarrier(pTarget, targetState);
 }
 
 void CommandContext::InitializeBuffer(GraphicsBuffer* pResource, const void* pData, uint64 dataSize, uint64 offset)

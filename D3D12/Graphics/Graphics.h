@@ -92,8 +92,6 @@ private:
 
 	void RandomizeLights(int count);
 
-	void SortBatchesBackToFront(const Vector3& cameraPosition, std::vector<Batch>& batches);
-
 	int m_Frame = 0;
 	std::array<float, 180> m_FrameTimes;
 
