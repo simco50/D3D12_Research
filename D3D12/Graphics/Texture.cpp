@@ -53,21 +53,33 @@ void Texture::Create_Internal(Graphics* pGraphics, TextureDimension dimension, i
 
 	D3D12_RESOURCE_DESC desc = {};
 	desc.Alignment = 0;
-	desc.DepthOrArraySize = 1;
+	desc.Format = format;
+	desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+	desc.MipLevels = (uint16)m_MipLevels;
+	desc.SampleDesc.Count = sampleCount;
+	desc.SampleDesc.Quality = pGraphics->GetMultiSampleQualityLevel(sampleCount);
+	desc.Width = width;
+	desc.Height = height;
 	switch (dimension)
 	{
 	case TextureDimension::Texture1D:
 	case TextureDimension::Texture1DArray:
 		desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE1D;
+		desc.DepthOrArraySize = depthOrArraySize;
 		break;
 	case TextureDimension::TextureCube:
 	case TextureDimension::TextureCubeArray:
+		desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+		desc.DepthOrArraySize = 6 * depthOrArraySize;
+		break;
 	case TextureDimension::Texture2D:
 	case TextureDimension::Texture2DArray:
 		desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+		desc.DepthOrArraySize = depthOrArraySize;
 		break;
 	case TextureDimension::Texture3D:
 		desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE3D;
+		desc.DepthOrArraySize = depthOrArraySize;
 		break;
 	default:
 		assert(false);
@@ -91,14 +103,6 @@ void Texture::Create_Internal(Graphics* pGraphics, TextureDimension dimension, i
 		clearValue.DepthStencil.Stencil = 0;
 		pClearValue = &clearValue;
 	}
-	desc.Format = format;
-	desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-	desc.MipLevels = (uint16)m_MipLevels;
-	desc.SampleDesc.Count = sampleCount;
-	desc.SampleDesc.Quality = pGraphics->GetMultiSampleQualityLevel(sampleCount);
-	desc.Width = width;
-	desc.Height = height;
-	desc.DepthOrArraySize = m_DepthOrArraySize;
 
 	m_pResource = pGraphics->CreateResource(desc, m_CurrentState, D3D12_HEAP_TYPE_DEFAULT, pClearValue);
 
@@ -216,8 +220,10 @@ void Texture::Create_Internal(Graphics* pGraphics, TextureDimension dimension, i
 			break;
 		case TextureDimension::TextureCube:
 		case TextureDimension::TextureCubeArray:
-			//unsupported
-			assert(false);
+			uavDesc.Texture2DArray.ArraySize = depthOrArraySize * 6;
+			uavDesc.Texture2DArray.FirstArraySlice = 0;
+			uavDesc.Texture2DArray.PlaneSlice = 0;
+			uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2DARRAY;
 			break;
 		default:
 			break;
@@ -521,5 +527,34 @@ void TextureCube::Create(Graphics* pGraphics, int width, int height, DXGI_FORMAT
 	else
 	{
 		Create_Internal(pGraphics, TextureDimension::TextureCube, width, height, 1, format, usage, sampleCount);
+	}
+}
+
+void TextureCube::Create(Graphics* pGraphics, CommandContext* pContext, const char* pFilePath, TextureUsage usage)
+{
+	Image img;
+	if (img.Load(pFilePath))
+	{
+		m_MipLevels = img.GetMipLevels();
+		std::vector<D3D12_SUBRESOURCE_DATA> subResourceData(m_MipLevels * 6);
+		const Image* pCurrentImage = &img;
+		for (int i = 0; i < 6; ++i)
+		{
+			assert(pCurrentImage);
+			for (int j = 0; j < m_MipLevels; ++j)
+			{
+				D3D12_SUBRESOURCE_DATA& data = subResourceData[i * m_MipLevels + j];
+				MipLevelInfo info = pCurrentImage->GetMipInfo(j);
+				data.pData = pCurrentImage->GetData(j);
+				data.RowPitch = info.RowSize;
+				data.SlicePitch = (uint64)info.RowSize * info.Width;
+			}
+			pCurrentImage = pCurrentImage->GetNextImage();
+		}
+
+		DXGI_FORMAT format = (DXGI_FORMAT)Image::TextureFormatFromCompressionFormat(img.GetFormat(), false);
+		Create_Internal(pGraphics, TextureDimension::TextureCube, img.GetWidth(), img.GetHeight(), 1, format, usage, 1);
+		pContext->InitializeTexture(this, subResourceData.data(), 0, m_MipLevels * 6);
+		pContext->ExecuteAndReset(true);
 	}
 }

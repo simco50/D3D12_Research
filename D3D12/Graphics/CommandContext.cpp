@@ -148,10 +148,10 @@ void CommandContext::InitializeBuffer(GraphicsBuffer* pResource, const void* pDa
 	InsertResourceBarrier(pResource, previousState, true);
 }
 
-void CommandContext::InitializeTexture(Texture2D* pResource, D3D12_SUBRESOURCE_DATA* pSubResourceDatas, int firstSubResource, int subResourceCount)
+void CommandContext::InitializeTexture(Texture* pResource, D3D12_SUBRESOURCE_DATA* pSubResourceDatas, int firstSubResource, int subResourceCount)
 {
 	uint64 allocationSize = GetRequiredIntermediateSize(pResource->GetResource(), (UINT)firstSubResource, (UINT)subResourceCount);
-	DynamicAllocation allocation = m_DynamicAllocator->Allocate((uint32)allocationSize, 512);
+	DynamicAllocation allocation = m_DynamicAllocator->Allocate((uint32)allocationSize, D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT);
 	D3D12_RESOURCE_STATES previousState = pResource->GetResourceState();
 	InsertResourceBarrier(pResource, D3D12_RESOURCE_STATE_COPY_DEST, true);
 	UpdateSubresources(m_pCommandList, pResource->GetResource(), allocation.pBackingResource->GetResource(), allocation.Offset, firstSubResource, subResourceCount, pSubResourceDatas);

@@ -5,7 +5,7 @@ class GraphicsResource;
 class GraphicsBuffer;
 class VertexBuffer;
 class IndexBuffer;
-class Texture2D;
+class Texture;
 class DynamicDescriptorAllocator;
 class RootSignature;
 class GraphicsPipelineState;
@@ -38,7 +38,7 @@ public:
 
 	void CopyResource(GraphicsBuffer* pSource, GraphicsBuffer* pTarget);
 	void InitializeBuffer(GraphicsBuffer* pResource, const void* pData, uint64 dataSize, uint64 offset = 0);
-	void InitializeTexture(Texture2D* pResource, D3D12_SUBRESOURCE_DATA* pSubResourceDatas, int firstSubResource, int subResourceCount);
+	void InitializeTexture(Texture* pResource, D3D12_SUBRESOURCE_DATA* pSubResourceDatas, int firstSubResource, int subResourceCount);
 
 	ID3D12GraphicsCommandList* GetCommandList() const { return m_pCommandList; }
 
