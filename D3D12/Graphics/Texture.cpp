@@ -235,7 +235,7 @@ void Texture::Create_Internal(Graphics* pGraphics, TextureDimension dimension, i
 			uavDesc.Texture2D.MipSlice = i;
 			uavDesc.Texture2DArray.MipSlice = i;
 			uavDesc.Texture3D.MipSlice = i;
-			pGraphics->GetDevice()->CreateUnorderedAccessView(m_pResource, nullptr, &uavDesc, m_Uav.Offset(i, m_SrvUavDescriptorSize));
+			pGraphics->GetDevice()->CreateUnorderedAccessView(m_pResource, nullptr, &uavDesc, CD3DX12_CPU_DESCRIPTOR_HANDLE(m_Uav, i, m_SrvUavDescriptorSize));
 		}
 	}
 	if ((usage & TextureUsage::RenderTarget) == TextureUsage::RenderTarget)
