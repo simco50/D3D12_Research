@@ -67,9 +67,8 @@ int GetLightCount(float4 positionVS, float4 position)
 
 LightResult DoLight(float4 position, float4 viewSpacePosition, float3 worldPosition, float3 normal, float3 viewDirection)
 {
-	uint zSlice = GetSliceFromDepth(viewSpacePosition.z);
-    uint2 clusterIndexXY = floor(position.xy / cClusterSize);
-    uint clusterIndex1D = clusterIndexXY.x + (clusterIndexXY.y * cClusterDimensions.x) + (zSlice * (cClusterDimensions.x * cClusterDimensions.y));
+    uint3 clusterIndex3D = uint3(floor(position.xy / cClusterSize), GetSliceFromDepth(viewSpacePosition.z));
+    uint clusterIndex1D = clusterIndex3D.x + (cClusterDimensions.x * (clusterIndex3D.y + cClusterDimensions.y * clusterIndex3D.z));
 
 	uint startOffset = tLightGrid[clusterIndex1D].x;
 	uint lightCount = tLightGrid[clusterIndex1D].y;

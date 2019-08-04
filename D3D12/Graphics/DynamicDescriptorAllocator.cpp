@@ -64,6 +64,9 @@ void DynamicDescriptorAllocator::UploadAndBindStagedDescriptors(DescriptorTableT
 	std::array<uint32, MAX_DESCRIPTORS_PER_COPY> sourceRangeSizes = {};
 	std::array<uint32, MAX_DESCRIPTORS_PER_COPY> destinationRangeSizes = {};
 
+	int tableCount = 0;
+	std::array<D3D12_GPU_DESCRIPTOR_HANDLE, MAX_NUM_ROOT_PARAMETERS> newDescriptorTables = {};
+
 	for (auto it = m_StaleRootParameters.GetSetBitsIterator(); it.Valid(); ++it)
 	{
 		//If the rangecount exceeds the max amount of descriptors per copy, flush
@@ -93,26 +96,32 @@ void DynamicDescriptorAllocator::UploadAndBindStagedDescriptors(DescriptorTableT
 		destinationRangeSizes[destinationRangeCount] = rangeSize;
 		++destinationRangeCount;
 
-		switch (descriptorTableType)
-		{
-		case DescriptorTableType::Graphics:
-			m_pOwner->GetCommandList()->SetGraphicsRootDescriptorTable(rootIndex, gpuHandle.GetGpuHandle());
-			break;
-		case DescriptorTableType::Compute:
-			m_pOwner->GetCommandList()->SetComputeRootDescriptorTable(rootIndex, gpuHandle.GetGpuHandle());
-			break;
-		default:
-			assert(false);
-			break;
-
-		}
+		newDescriptorTables[tableCount++] = gpuHandle.GetGpuHandle();
 
 		gpuHandle += rangeSize * m_DescriptorSize;
 	}
 
-	m_StaleRootParameters.ClearAll();
-
 	m_pGraphics->GetDevice()->CopyDescriptors(destinationRangeCount, destinationRanges.data(), destinationRangeSizes.data(), sourceRangeCount, sourceRanges.data(), sourceRangeSizes.data(), m_Type);
+
+	int i = 0;
+	for (auto it = m_StaleRootParameters.GetSetBitsIterator(); it.Valid(); ++it)
+	{
+		uint32 rootIndex = it.Value();
+		switch (descriptorTableType)
+		{
+		case DescriptorTableType::Graphics:
+			m_pOwner->GetCommandList()->SetGraphicsRootDescriptorTable(rootIndex, newDescriptorTables[i++]);
+			break;
+		case DescriptorTableType::Compute:
+			m_pOwner->GetCommandList()->SetComputeRootDescriptorTable(rootIndex, newDescriptorTables[i++]);
+			break;
+		default:
+			assert(false);
+			break;
+		}
+	}
+
+	m_StaleRootParameters.ClearAll();
 }
 
 bool DynamicDescriptorAllocator::HasSpace(int count)

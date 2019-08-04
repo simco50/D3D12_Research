@@ -44,9 +44,8 @@ PS_Input MarkClusters_VS(VS_Input input)
 
 void MarkClusters_PS(PS_Input input)
 {
-    uint zSlice = GetSliceFromDepth(input.positionVS.z);
-    uint2 clusterIndexXY = floor(input.position.xy / cClusterSize);
-    uint clusterIndex1D = clusterIndexXY.x + (clusterIndexXY.y * cClusterDimensions.x) + (zSlice * (cClusterDimensions.x * cClusterDimensions.y));
+    uint3 clusterIndex3D = uint3(floor(input.position.xy / cClusterSize), GetSliceFromDepth(input.positionVS.z));
+    uint clusterIndex1D = clusterIndex3D.x + (cClusterDimensions.x * (clusterIndex3D.y + cClusterDimensions.y * clusterIndex3D.z));
 
 #ifdef ALPHA_BLEND
     float s = tDiffuseTexture.Sample(sDiffuseSampler, input.texCoord).a;

@@ -81,7 +81,7 @@ void RootSignature::SetDescriptorTableRange(uint32 rootIndex, uint32 rangeIndex,
 	range.BaseShaderRegister = startRegisterSlot;
 	range.RegisterSpace = 0;
 	range.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
-	range.Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE | D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE;
+	range.Flags = D3D12_DESCRIPTOR_RANGE_FLAG_NONE;
 }
 
 void RootSignature::SetDescriptorTableSimple(uint32 rootIndex, uint32 startRegisterSlot, D3D12_DESCRIPTOR_RANGE_TYPE type, uint32 count, D3D12_SHADER_VISIBILITY visibility)

@@ -104,6 +104,7 @@ void Graphics::RandomizeLights(int count)
 	if (m_pLightBuffer->GetElementCount() != count)
 	{
 		m_pLightBuffer->Create(this, sizeof(Light), count);
+		m_pLightBuffer->SetName("Light Buffer");
 	}
 	GraphicsCommandContext* pContext = static_cast<GraphicsCommandContext*>(AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT));
 	m_pLightBuffer->SetData(pContext, m_Lights.data(), sizeof(Light) * m_Lights.size());
@@ -602,9 +603,15 @@ void Graphics::InitD3D()
 	ComPtr<ID3D12Debug> pDebugController;
 	HR(D3D12GetDebugInterface(IID_PPV_ARGS(&pDebugController)));
 	pDebugController->EnableDebugLayer();
+
+	/*ComPtr<ID3D12Debug1> pDebugController1;
+	HR(pDebugController->QueryInterface(IID_PPV_ARGS(&pDebugController1)));
+	pDebugController1->SetEnableGPUBasedValidation(true);*/
+
 	// Enable additional debug layers.
 	dxgiFactoryFlags |= DXGI_CREATE_FACTORY_DEBUG;
 #endif
+
 
 	//Create the factory
 	HR(CreateDXGIFactory2(dxgiFactoryFlags, IID_PPV_ARGS(&m_pFactory)));

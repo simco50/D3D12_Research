@@ -41,8 +41,11 @@ void ClusteredForward::OnSwapchainCreated(int windowWidth, int windowHeight)
 	m_pCompactedClusters->Create(m_pGraphics, sizeof(uint32), totalClusterCount, false);
 	m_pCompactedClusters->SetName("Compacted Clusters");
 	m_pLightIndexGrid->Create(m_pGraphics, sizeof(uint32), 32 * totalClusterCount);
+	m_pLightIndexGrid->SetName("Light Index Grid");
 	m_pLightGrid->Create(m_pGraphics, 2 * sizeof(uint32), totalClusterCount);
+	m_pLightGrid->SetName("Light Grid");
 	m_pDebugLightGrid->Create(m_pGraphics, 2 * sizeof(uint32), totalClusterCount);
+	m_pDebugLightGrid->SetName("Debug Light Grid");
 
 	float nearZ = 2.0f;
 	float farZ = 500.0f;
@@ -211,7 +214,9 @@ void ClusteredForward::Execute(const ClusteredForwardInputResources& resources)
 				pContext->SetComputePipelineState(m_pAlternativeLightCullingPSO.get());
 				pContext->SetComputeRootSignature(m_pLightCullingRS.get());
 
-				pContext->InsertResourceBarrier(m_pIndirectArguments.get(), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT, true);
+				pContext->InsertResourceBarrier(m_pIndirectArguments.get(), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT, false);
+				pContext->InsertResourceBarrier(m_pCompactedClusters.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, false);
+				pContext->InsertResourceBarrier(m_pAABBs.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, true);
 
 				Profiler::Instance()->Begin("Set Data", pContext);
 				uint32 zero = 0;
@@ -259,7 +264,11 @@ void ClusteredForward::Execute(const ClusteredForwardInputResources& resources)
 				pContext->SetComputePipelineState(m_pLightCullingPSO.get());
 				pContext->SetComputeRootSignature(m_pLightCullingRS.get());
 
-				pContext->InsertResourceBarrier(m_pIndirectArguments.get(), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT, true);
+				pContext->InsertResourceBarrier(m_pIndirectArguments.get(), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT, false);
+				pContext->InsertResourceBarrier(m_pCompactedClusters.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, false);
+				pContext->InsertResourceBarrier(m_pAABBs.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, false);
+				pContext->InsertResourceBarrier(m_pLightGrid.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, false);
+				pContext->InsertResourceBarrier(m_pLightIndexGrid.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, true);
 
 				uint32 zero = 0;
 				m_pLightIndexCounter->SetData(pContext, &zero, sizeof(uint32));
@@ -384,9 +393,6 @@ void ClusteredForward::Execute(const ClusteredForwardInputResources& resources)
 			Profiler::Instance()->End(pContext);
 		}
 
-		pContext->InsertResourceBarrier(m_pLightGrid.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, false);
-		pContext->InsertResourceBarrier(m_pLightIndexGrid.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, true);
-
 		Profiler::Instance()->End(pContext);
 		pContext->Execute(false);
 	}
@@ -448,6 +454,7 @@ void ClusteredForward::SetupResources(Graphics* pGraphics)
 	CopyCommandContext* pContext = (CopyCommandContext*)pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COPY);
 	m_pHeatMapTexture = std::make_unique<Texture2D>();
 	m_pHeatMapTexture->Create(pGraphics, pContext, "Resources/Textures/Heatmap.png", TextureUsage::ShaderResource);
+	m_pHeatMapTexture->SetName("Heatmap texture");
 	pContext->Execute(true);
 
 }
@@ -593,7 +600,7 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
 		m_pDiffuseRS->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_ALL);
 		m_pDiffuseRS->SetConstantBufferView(1, 1, D3D12_SHADER_VISIBILITY_ALL);
 		m_pDiffuseRS->SetDescriptorTableSimple(2, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3, D3D12_SHADER_VISIBILITY_ALL);
-		m_pDiffuseRS->SetDescriptorTableSimple(3, 3, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3, D3D12_SHADER_VISIBILITY_ALL);
+		m_pDiffuseRS->SetDescriptorTableSimple(3, 3, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3, D3D12_SHADER_VISIBILITY_PIXEL);
 		m_pDiffuseRS->SetDescriptorTableSimple(4, 6, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, D3D12_SHADER_VISIBILITY_ALL);
 
 		D3D12_SAMPLER_DESC samplerDesc = {};
