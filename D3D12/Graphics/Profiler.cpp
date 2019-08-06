@@ -314,6 +314,10 @@ void Profiler::EndReadBack(int frameIndex)
 
 float Profiler::GetGpuTime(int timerIndex) const
 {
+	if (timerIndex < 0)
+	{
+		return 0;
+	}
 	assert(m_pCurrentReadBackData);
 	uint64 start = m_pCurrentReadBackData[timerIndex * 2];
 	uint64 end = m_pCurrentReadBackData[timerIndex * 2 + 1];
