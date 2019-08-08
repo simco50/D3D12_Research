@@ -347,7 +347,7 @@ void Graphics::Update()
 			Data.NumThreadGroups[2] = 1;
 			Data.ScreenDimensions.x = (float)m_WindowWidth;
 			Data.ScreenDimensions.y = (float)m_WindowHeight;
-			Data.LightCount = m_Lights.size();
+			Data.LightCount = (uint32)m_Lights.size();
 			cameraProjection.Invert(Data.ProjectionInverse);
 
 			pContext->SetComputeDynamicConstantBufferView(0, &Data, sizeof(ShaderParameters));
@@ -533,7 +533,6 @@ void Graphics::Update()
 	{
 		Profiler::Instance()->Begin("Clustered Forward");
 		ClusteredForwardInputResources resources;
-		resources.pDepthPrepassBuffer = GetDepthStencil();
 		resources.pOpaqueBatches = &m_OpaqueBatches;
 		resources.pTransparantBatches = &m_TransparantBatches;
 		resources.pRenderTarget = GetCurrentRenderTarget();
@@ -1206,8 +1205,6 @@ CommandContext* Graphics::AllocateCommandContext(D3D12_COMMAND_LIST_TYPE type)
 		ComPtr<ID3D12CommandList> pCommandList;
 		ID3D12CommandAllocator* pAllocator = m_CommandQueues[type]->RequestAllocator();
 		m_pDevice->CreateCommandList(0, type, pAllocator, nullptr, IID_PPV_ARGS(pCommandList.GetAddressOf()));
-		ComPtr<ID3D12GraphicsCommandList4> pCmd;
-		pCommandList.As<ID3D12GraphicsCommandList4>(&pCmd);
 		m_CommandLists.push_back(std::move(pCommandList));
 		switch (type)
 		{

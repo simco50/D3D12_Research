@@ -33,7 +33,7 @@ private:
 	//Maximum amount of descriptors per CopyDescriptors call
 	static const int MAX_DESCRIPTORS_PER_COPY = 8;
 	//The amount of descriptors in each heap
-	static const int DESCRIPTORS_PER_HEAP = 64;
+	static const int DESCRIPTORS_PER_HEAP = 256;
 	//The max amount of root parameters
 	static const int MAX_NUM_ROOT_PARAMETERS = 6;
 

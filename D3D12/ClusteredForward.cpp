@@ -27,6 +27,8 @@ ClusteredForward::ClusteredForward(Graphics* pGraphics)
 
 void ClusteredForward::OnSwapchainCreated(int windowWidth, int windowHeight)
 {
+	m_pDepthTexture->Create(m_pGraphics, windowWidth, windowHeight, Graphics::DEPTH_STENCIL_FORMAT, TextureUsage::DepthStencil, m_pGraphics->GetMultiSampleCount(), -1, ClearBinding(1.0f, 0));
+
 	m_ClusterCountX = (uint32)ceil((float)windowWidth / cClusterSize);
 	m_ClusterCountY = (uint32)ceil((float)windowHeight / cClusterSize);
 
@@ -34,8 +36,7 @@ void ClusteredForward::OnSwapchainCreated(int windowWidth, int windowHeight)
 	uint64 totalClusterCount = (uint64)m_ClusterCountX * m_ClusterCountY * cClusterCountZ;
 	m_pAABBs->Create(m_pGraphics, sizeof(AABB), totalClusterCount, false);
 	m_pAABBs->SetName("AABBs");
-	DXGI_FORMAT bufferFormat = m_pGraphics->CheckTypedUAVSupport(DXGI_FORMAT_R8_UINT) ? DXGI_FORMAT_R8_UINT : DXGI_FORMAT_R32_UINT;
-	m_pUniqueClusters->Create(m_pGraphics, bufferFormat, totalClusterCount, false);
+	m_pUniqueClusters->Create(m_pGraphics, sizeof(uint32), totalClusterCount, false);
 	m_pUniqueClusters->SetName("Unique Clusters");
 	m_pDebugCompactedClusters->Create(m_pGraphics, sizeof(uint32), totalClusterCount, false);
 	m_pDebugCompactedClusters->SetName("Debug Compacted Clusters");
@@ -106,7 +107,7 @@ void ClusteredForward::Execute(const ClusteredForwardInputResources& resources)
 		Profiler::Instance()->Begin("Mark Clusters", pContext);
 
 		pContext->InsertResourceBarrier(m_pUniqueClusters.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, false);
-		pContext->InsertResourceBarrier(resources.pDepthPrepassBuffer, D3D12_RESOURCE_STATE_DEPTH_WRITE, true);
+		pContext->InsertResourceBarrier(m_pDepthTexture.get(), D3D12_RESOURCE_STATE_DEPTH_WRITE, true);
 
 		Profiler::Instance()->Begin("Update Data", pContext);
 		std::vector<uint32> zero(m_ClusterCountX * m_ClusterCountY * cClusterCountZ);
@@ -115,7 +116,7 @@ void ClusteredForward::Execute(const ClusteredForwardInputResources& resources)
 
 		ClearValues values;
 		values.ClearDepth = true;
-		pContext->BeginRenderPass(nullptr, resources.pDepthPrepassBuffer, values, RenderPassAccess::DontCare_DontCare, RenderPassAccess::Clear_Store);
+		pContext->BeginRenderPass(nullptr, m_pDepthTexture.get(), values, RenderPassAccess::DontCare_DontCare, RenderPassAccess::Clear_Store);
 
 		pContext->SetGraphicsPipelineState(m_pMarkUniqueClustersOpaquePSO.get());
 		pContext->SetGraphicsRootSignature(m_pMarkUniqueClustersRS.get());
@@ -241,7 +242,7 @@ void ClusteredForward::Execute(const ClusteredForwardInputResources& resources)
 				constantBuffer.ClusterDimensions[0] = m_ClusterCountX;
 				constantBuffer.ClusterDimensions[1] = m_ClusterCountY;
 				constantBuffer.ClusterDimensions[2] = cClusterCountZ;
-				constantBuffer.LightCount = resources.pLightBuffer->GetElementCount();
+				constantBuffer.LightCount = (uint32)resources.pLightBuffer->GetElementCount();
 
 				pContext->SetComputeDynamicConstantBufferView(0, &constantBuffer, sizeof(ConstantBuffer));
 
@@ -285,7 +286,7 @@ void ClusteredForward::Execute(const ClusteredForwardInputResources& resources)
 				} constantBuffer;
 
 				constantBuffer.View = m_pGraphics->GetViewMatrix();
-				constantBuffer.LightCount = resources.pLightBuffer->GetElementCount();
+				constantBuffer.LightCount = (uint32)resources.pLightBuffer->GetElementCount();
 
 				pContext->SetComputeDynamicConstantBufferView(0, &constantBuffer, sizeof(ConstantBuffer));
 
@@ -353,7 +354,7 @@ void ClusteredForward::Execute(const ClusteredForwardInputResources& resources)
 
 		ClearValues values;
 		values.ClearColor = true;
-		pContext->BeginRenderPass(resources.pRenderTarget, resources.pDepthPrepassBuffer, values, RenderPassAccess::Clear_Store, RenderPassAccess::Load_DontCare);
+		pContext->BeginRenderPass(resources.pRenderTarget, m_pDepthTexture.get(), values, RenderPassAccess::Clear_Store, RenderPassAccess::Load_DontCare);
 		pContext->SetViewport(FloatRect(0, 0, (float)screenDimensions.x, (float)screenDimensions.y));
 		pContext->SetScissorRect(FloatRect(0, 0, (float)screenDimensions.x, (float)screenDimensions.y));
 
@@ -419,7 +420,7 @@ void ClusteredForward::Execute(const ClusteredForwardInputResources& resources)
 		}
 
 		ClearValues values;
-		pContext->BeginRenderPass(resources.pRenderTarget, resources.pDepthPrepassBuffer, values, RenderPassAccess::Load_Store, RenderPassAccess::Load_DontCare);
+		pContext->BeginRenderPass(resources.pRenderTarget, m_pDepthTexture.get(), values, RenderPassAccess::Load_Store, RenderPassAccess::Load_DontCare);
 
 		pContext->SetGraphicsPipelineState(m_pDebugClustersPSO.get());
 		pContext->SetGraphicsRootSignature(m_pDebugClustersRS.get());
@@ -450,8 +451,10 @@ void ClusteredForward::Execute(const ClusteredForwardInputResources& resources)
 
 void ClusteredForward::SetupResources(Graphics* pGraphics)
 {
+	m_pDepthTexture = std::make_unique<Texture2D>();
+
 	m_pAABBs = std::make_unique<StructuredBuffer>(pGraphics);
-	m_pUniqueClusters = std::make_unique<TypedBuffer>(pGraphics);
+	m_pUniqueClusters = std::make_unique<StructuredBuffer>(pGraphics);
 	m_pCompactedClusters = std::make_unique<StructuredBuffer>(pGraphics);
 	m_pDebugCompactedClusters = std::make_unique<StructuredBuffer>(pGraphics);
 	m_pIndirectArguments = std::make_unique<ByteAddressBuffer>(pGraphics);

@@ -3,7 +3,7 @@ struct CS_Input
     uint3 ThreadID : SV_DISPATCHTHREADID;
 };
 
-Buffer<uint> tInActiveClusters : register(t0);
+StructuredBuffer<uint> tInActiveClusters : register(t0);
 RWStructuredBuffer<uint> uOutCompactedClusters : register(u0);
 
 [numthreads(64, 1, 1)]

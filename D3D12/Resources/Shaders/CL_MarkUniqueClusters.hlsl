@@ -10,7 +10,7 @@ cbuffer Parameters : register(b0)
 	float cSliceMagicB;
 }
 
-RWBuffer<uint> uActiveClusters : register(u1);
+RWStructuredBuffer<uint> uActiveClusters : register(u1);
 
 SamplerState sDiffuseSampler : register(s0);
 Texture2D tDiffuseTexture : register(t0);
