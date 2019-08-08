@@ -144,7 +144,14 @@ struct RenderPassInfo
 	{
 		RenderPassAccess Access = RenderPassAccess::DontCare_DontCare;
 		Texture* Texture = nullptr;
-		int SubResource = 0;
+		int MipLevel = 0;
+		int ArrayIndex = 0;
+	};
+
+	struct DepthTargetInfo
+	{
+		RenderPassAccess Access = RenderPassAccess::DontCare_DontCare;
+		Texture* Texture = nullptr;
 	};
 
 	RenderPassInfo(Texture* pDepthBuffer, RenderPassAccess access)
@@ -165,7 +172,7 @@ struct RenderPassInfo
 
 	uint32 RenderTargetCount;
 	std::array<RenderTargetInfo, 4> RenderTargets;
-	RenderTargetInfo DepthStencilTarget;
+	DepthTargetInfo DepthStencilTarget;
 };
 
 class GraphicsCommandContext : public ComputeCommandContext

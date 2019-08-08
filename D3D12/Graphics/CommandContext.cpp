@@ -377,7 +377,7 @@ void GraphicsCommandContext::BeginRenderPass(const RenderPassInfo& renderPassInf
 		D3D12_RENDER_PASS_DEPTH_STENCIL_DESC renderPassDepthStencilDesc{ renderPassInfo.DepthStencilTarget.Texture->GetDSV(), depthAccessBegin, depthAccessBegin, depthAccessEnd, depthAccessEnd };
 
 		std::array<D3D12_RENDER_PASS_RENDER_TARGET_DESC, 4> renderTargetDescs;
-		for (int i = 0; i < renderPassInfo.RenderTargetCount; ++i)
+		for (uint32 i = 0; i < renderPassInfo.RenderTargetCount; ++i)
 		{
 			const RenderPassInfo::RenderTargetInfo& data = renderPassInfo.RenderTargets[i];
 			D3D12_RENDER_PASS_BEGINNING_ACCESS renderTargetAccessBegin{ getRenderPassAccessBegin(data.Access) };
@@ -388,14 +388,15 @@ void GraphicsCommandContext::BeginRenderPass(const RenderPassInfo& renderPassInf
 				renderTargetAccessBegin.Clear.ClearValue.Format = data.Texture->GetFormat();
 			}
 			D3D12_RENDER_PASS_ENDING_ACCESS renderTargetAccessEnd{ getRenderPassAccessEnd(data.Access) };
-			renderTargetDescs[i] = D3D12_RENDER_PASS_RENDER_TARGET_DESC{ data.Texture->GetRTV(data.SubResource), renderTargetAccessBegin, renderTargetAccessEnd };
+			uint32 subResource = D3D12CalcSubresource(data.MipLevel, data.ArrayIndex, 0, data.Texture->GetMipLevels(), data.Texture->GetArraySize());
+			renderTargetDescs[i] = D3D12_RENDER_PASS_RENDER_TARGET_DESC{ data.Texture->GetRTV(subResource), renderTargetAccessBegin, renderTargetAccessEnd };
 		}
 		
 		pCmd->BeginRenderPass(renderPassInfo.RenderTargetCount, renderTargetDescs.data(), &renderPassDepthStencilDesc, D3D12_RENDER_PASS_FLAG_NONE);	
 	}
 	else
 	{
-		D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = renderPassInfo.DepthStencilTarget.Texture->GetDSV(renderPassInfo.DepthStencilTarget.SubResource);
+		D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = renderPassInfo.DepthStencilTarget.Texture->GetDSV();
 		if ((RenderTargetLoadAction)((uint8)renderPassInfo.DepthStencilTarget.Access >> 2) == RenderTargetLoadAction::Clear)
 		{
 			D3D12_CLEAR_FLAGS clearFlags = D3D12_CLEAR_FLAGS::D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAGS::D3D12_CLEAR_FLAG_STENCIL;
@@ -405,15 +406,17 @@ void GraphicsCommandContext::BeginRenderPass(const RenderPassInfo& renderPassInf
 		}
 
 		std::array<D3D12_CPU_DESCRIPTOR_HANDLE, 4> rtvs;
-		for (int i = 0; i < renderPassInfo.RenderTargetCount; ++i)
+		for (uint32 i = 0; i < renderPassInfo.RenderTargetCount; ++i)
 		{
 			const RenderPassInfo::RenderTargetInfo& data = renderPassInfo.RenderTargets[i];
+			uint32 subResource = D3D12CalcSubresource(data.MipLevel, data.ArrayIndex, 0, data.Texture->GetMipLevels(), data.Texture->GetArraySize());
+			rtvs[i] = data.Texture->GetRTV(subResource);
+			
 			if ((RenderTargetLoadAction)((uint8)data.Access >> 2) == RenderTargetLoadAction::Clear)
 			{
 				assert(data.Texture->GetClearBinding().BindingValue == ClearBinding::ClearBindingValue::Color);
-				m_pCommandList->ClearRenderTargetView(data.Texture->GetRTV(), &data.Texture->GetClearBinding().Color.x, 0, nullptr);
+				m_pCommandList->ClearRenderTargetView(data.Texture->GetRTV(subResource), &data.Texture->GetClearBinding().Color.x, 0, nullptr);
 			}
-			rtvs[i] = data.Texture->GetRTV();
 		}
 		m_pCommandList->OMSetRenderTargets(renderPassInfo.RenderTargetCount, rtvs.data(), false, &dsvHandle);
 	}
