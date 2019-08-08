@@ -10,6 +10,7 @@
 #include "DescriptorAllocator.h"
 #include "Core/Input.h"
 #include "Texture.h"
+#include "Profiler.h"
 
 ImGuiRenderer::ImGuiRenderer(Graphics* pGraphics)
 	: m_pGraphics(pGraphics)
@@ -117,7 +118,9 @@ void ImGuiRenderer::Render(GraphicsCommandContext& context)
 	context.SetDynamicConstantBufferView(0, &projectionMatrix, sizeof(Matrix));
 	context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	context.SetViewport(FloatRect(0, 0, (float)m_pGraphics->GetWindowWidth(), (float)m_pGraphics->GetWindowHeight()), 0, 1);
-	context.SetRenderTarget(m_pGraphics->GetCurrentRenderTarget()->GetRTV(), m_pGraphics->GetDepthStencil()->GetDSV());
+
+	Profiler::Instance()->Begin("Render UI", &context);
+	context.BeginRenderPass(RenderPassInfo(m_pGraphics->GetCurrentRenderTarget(), RenderPassAccess::Load_Store, m_pGraphics->GetDepthStencil(), RenderPassAccess::DontCare_DontCare));
 
 	for (int n = 0; n < pDrawData->CmdListsCount; n++)
 	{
@@ -143,4 +146,6 @@ void ImGuiRenderer::Render(GraphicsCommandContext& context)
 			indexOffset += pcmd->ElemCount;
 		}
 	}
+	context.EndRenderPass();
+	Profiler::Instance()->End(&context);
 }

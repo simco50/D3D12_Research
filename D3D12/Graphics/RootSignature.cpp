@@ -149,10 +149,41 @@ void RootSignature::Finalize(const char* pName, ID3D12Device* pDevice, D3D12_ROO
 		}
 	}
 
+	constexpr uint32 recommendedDwords = 12;
+	uint32 dwords = GetDWordSize();
+	if (dwords > recommendedDwords)
+	{
+		E_LOG(Warning, "[RootSignature::Finalize] RootSignature '%s' uses %d DWORDs while under %d is recommended", pName, dwords, recommendedDwords);
+	}
+
 	desc.Init_1_1(m_NumParameters, m_RootParameters.data(), (uint32)m_StaticSamplers.size(), m_StaticSamplers.data(), flags);
 
 	ComPtr<ID3DBlob> pDataBlob, pErrorBlob;
 	HR(D3D12SerializeVersionedRootSignature(&desc, pDataBlob.GetAddressOf(), pErrorBlob.GetAddressOf()));
 	HR(pDevice->CreateRootSignature(0, pDataBlob->GetBufferPointer(), pDataBlob->GetBufferSize(), IID_PPV_ARGS(m_pRootSignature.GetAddressOf())));
 	SetD3DObjectName(m_pRootSignature.Get(), pName);
+}
+
+uint32 RootSignature::GetDWordSize() const
+{
+	uint32 count = 0;
+	for (size_t i = 0; i < m_RootParameters.size(); ++i)
+	{
+		const D3D12_ROOT_PARAMETER1& rootParameter = m_RootParameters[i];
+		switch (rootParameter.ParameterType)
+		{
+		case D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS:
+			count += rootParameter.Constants.Num32BitValues;
+			break;
+		case D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE:
+			count += 1;
+			break;
+		case D3D12_ROOT_PARAMETER_TYPE_CBV:
+		case D3D12_ROOT_PARAMETER_TYPE_SRV:
+		case D3D12_ROOT_PARAMETER_TYPE_UAV:
+			count += 2;
+			break;
+		}
+	}
+	return count;
 }

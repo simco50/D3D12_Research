@@ -107,10 +107,86 @@ private:
 	void BindDescriptorHeaps();
 };
 
+enum class RenderTargetLoadAction : uint8
+{
+	DontCare,
+	Load,
+	Clear,
+	NoTouch,
+};
+DEFINE_ENUM_FLAG_OPERATORS(RenderTargetLoadAction)
+
+
+enum class RenderTargetStoreAction : uint8
+{
+	DontCare,
+	Store,
+	Resolve,
+	NoTouch,
+};
+DEFINE_ENUM_FLAG_OPERATORS(RenderTargetStoreAction)
+
+enum class RenderPassAccess : uint8
+{
+#define COMBINE_ACTIONS(load, store) (uint8)RenderTargetLoadAction::load << 2 | (uint8)RenderTargetStoreAction::store
+	DontCare_DontCare	= COMBINE_ACTIONS(DontCare, DontCare),
+	DontCare_Store		= COMBINE_ACTIONS(DontCare, Store),
+	Clear_Store			= COMBINE_ACTIONS(Clear, Store),
+	Load_Store			= COMBINE_ACTIONS(Load, Store),
+	Clear_DontCare		= COMBINE_ACTIONS(Clear, DontCare),
+	Load_DontCare		= COMBINE_ACTIONS(Load, DontCare),
+	Clear_Resolve		= COMBINE_ACTIONS(Clear, Resolve),
+	Load_Resolve		= COMBINE_ACTIONS(Load, Resolve),
+	NoAccess			= COMBINE_ACTIONS(NoTouch, NoTouch)
+#undef COMBINE_ACTIONS
+};
+
+struct RenderPassInfo
+{
+	struct RenderTargetInfo
+	{
+		RenderPassAccess Access = RenderPassAccess::DontCare_DontCare;
+		Texture* Texture = nullptr;
+		int MipLevel = 0;
+		int ArrayIndex = 0;
+	};
+
+	struct DepthTargetInfo
+	{
+		RenderPassAccess Access = RenderPassAccess::DontCare_DontCare;
+		RenderPassAccess StencilAccess = RenderPassAccess::DontCare_DontCare;
+		Texture* Texture = nullptr;
+	};
+
+	RenderPassInfo(Texture* pDepthBuffer, RenderPassAccess access)
+		: RenderTargetCount(0)
+	{
+		DepthStencilTarget.Access = access;
+		DepthStencilTarget.Texture = pDepthBuffer;
+	}
+
+	RenderPassInfo(Texture* pRenderTarget, RenderPassAccess renderTargetAccess, Texture* pDepthBuffer, RenderPassAccess depthAccess, RenderPassAccess stencilAccess = RenderPassAccess::NoAccess)
+		: RenderTargetCount(1)
+	{
+		RenderTargets[0].Access = renderTargetAccess;
+		RenderTargets[0].Texture = pRenderTarget;
+		DepthStencilTarget.Access = depthAccess;
+		DepthStencilTarget.Texture = pDepthBuffer;
+		DepthStencilTarget.StencilAccess = stencilAccess;
+	}
+
+	uint32 RenderTargetCount;
+	std::array<RenderTargetInfo, 4> RenderTargets;
+	DepthTargetInfo DepthStencilTarget;
+};
+
 class GraphicsCommandContext : public ComputeCommandContext
 {
 public:
 	GraphicsCommandContext(Graphics* pGraphics, ID3D12GraphicsCommandList* pCommandList, ID3D12CommandAllocator* pAllocator);
+
+	void BeginRenderPass(const RenderPassInfo& renderPassInfo);
+	void EndRenderPass();
 
 	//Commands
 	void Draw(int vertexStart, int vertexCount);
@@ -127,9 +203,6 @@ public:
 	void SetDynamicConstantBufferView(int rootIndex, void* pData, uint32 dataSize);
 	void SetDynamicVertexBuffer(int slot, int elementCount, int elementSize, void* pData);
 	void SetDynamicIndexBuffer(int elementCount, void* pData, bool smallIndices = false);
-	void SetDepthOnlyTarget(D3D12_CPU_DESCRIPTOR_HANDLE dsv);
-	void SetRenderTarget(D3D12_CPU_DESCRIPTOR_HANDLE rtv, D3D12_CPU_DESCRIPTOR_HANDLE dsv);
-	void SetRenderTargets(D3D12_CPU_DESCRIPTOR_HANDLE* pRtv, D3D12_CPU_DESCRIPTOR_HANDLE dsv);
 	void SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY type);
 	void SetVertexBuffer(VertexBuffer* pVertexBuffer);
 	void SetVertexBuffers(VertexBuffer* pVertexBuffers, int bufferCount);

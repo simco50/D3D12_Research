@@ -11,7 +11,6 @@ class ByteAddressBuffer;
 
 struct ClusteredForwardInputResources
 {
-	Texture2D* pDepthPrepassBuffer = nullptr;
 	Texture2D* pRenderTarget = nullptr;
 	const std::vector<Batch>* pOpaqueBatches;
 	const std::vector<Batch>* pTransparantBatches;
@@ -37,6 +36,7 @@ private:
 	uint32 m_ClusterCountY = 0;
 
 	std::unique_ptr<Texture2D> m_pHeatMapTexture;
+	std::unique_ptr<Texture2D> m_pDepthTexture;
 
 	//Step 1: AABB
 	std::unique_ptr<RootSignature> m_pCreateAabbRS;

@@ -253,8 +253,9 @@ void Graphics::Update()
 			Profiler::Instance()->Begin("Depth Prepass", pContext);
 
 			pContext->InsertResourceBarrier(GetDepthStencil(), D3D12_RESOURCE_STATE_DEPTH_WRITE, true);
-			pContext->SetDepthOnlyTarget(GetDepthStencil()->GetDSV());
-			pContext->ClearDepth(GetDepthStencil()->GetDSV(), D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 0.0f, 0);
+
+			pContext->BeginRenderPass(RenderPassInfo(GetDepthStencil(), RenderPassAccess::Clear_Store));
+
 			pContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 			pContext->SetViewport(FloatRect(0, 0, (float)m_WindowWidth, (float)m_WindowHeight));
 			pContext->SetScissorRect(FloatRect(0, 0, (float)m_WindowWidth, (float)m_WindowHeight));
@@ -272,6 +273,8 @@ void Graphics::Update()
 			{
 				b.pMesh->Draw(pContext);
 			}
+
+			pContext->EndRenderPass();
 
 			pContext->InsertResourceBarrier(GetDepthStencil(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, false);
 			if (m_SampleCount > 1)
@@ -342,7 +345,7 @@ void Graphics::Update()
 			Data.NumThreadGroups[2] = 1;
 			Data.ScreenDimensions.x = (float)m_WindowWidth;
 			Data.ScreenDimensions.y = (float)m_WindowHeight;
-			Data.LightCount = m_Lights.size();
+			Data.LightCount = (uint32)m_Lights.size();
 			cameraProjection.Invert(Data.ProjectionInverse);
 
 			pContext->SetComputeDynamicConstantBufferView(0, &Data, sizeof(ShaderParameters));
@@ -368,8 +371,9 @@ void Graphics::Update()
 
 			Profiler::Instance()->Begin("Shadows", pContext);
 			pContext->InsertResourceBarrier(m_pShadowMap.get(), D3D12_RESOURCE_STATE_DEPTH_WRITE, true);
-			pContext->SetDepthOnlyTarget(m_pShadowMap->GetDSV());
-			pContext->ClearDepth(m_pShadowMap->GetDSV(), D3D12_CLEAR_FLAG_DEPTH, 0.0f, 0);
+
+			pContext->BeginRenderPass(RenderPassInfo(m_pShadowMap.get(), RenderPassAccess::Clear_Store));
+
 			pContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
 			for (int i = 0; i < m_ShadowCasters; ++i)
@@ -419,6 +423,9 @@ void Graphics::Update()
 				}
 				Profiler::Instance()->End(pContext);
 			}
+
+			pContext->EndRenderPass();
+
 			Profiler::Instance()->End(pContext);
 			pContext->Execute(false);
 		}
@@ -443,8 +450,7 @@ void Graphics::Update()
 			pContext->InsertResourceBarrier(GetDepthStencil(), D3D12_RESOURCE_STATE_DEPTH_READ, false);
 			pContext->InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RENDER_TARGET, true);
 
-			pContext->SetRenderTarget(GetCurrentRenderTarget()->GetRTV(), GetDepthStencil()->GetDSV());
-			pContext->ClearRenderTarget(GetCurrentRenderTarget()->GetRTV());
+			pContext->BeginRenderPass(RenderPassInfo(GetCurrentRenderTarget(), RenderPassAccess::DontCare_Store, GetDepthStencil(), RenderPassAccess::Load_DontCare));
 
 			pContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
@@ -511,6 +517,7 @@ void Graphics::Update()
 			pContext->InsertResourceBarrier(m_pLightGridTransparant.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, false);
 			pContext->InsertResourceBarrier(m_pLightIndexListBufferTransparant.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, true);
 
+			pContext->EndRenderPass();
 			pContext->Execute(false);
 		}
 		Profiler::Instance()->End();
@@ -520,7 +527,6 @@ void Graphics::Update()
 	{
 		Profiler::Instance()->Begin("Clustered Forward");
 		ClusteredForwardInputResources resources;
-		resources.pDepthPrepassBuffer = GetDepthStencil();
 		resources.pOpaqueBatches = &m_OpaqueBatches;
 		resources.pTransparantBatches = &m_TransparantBatches;
 		resources.pRenderTarget = GetCurrentRenderTarget();
@@ -609,7 +615,6 @@ void Graphics::InitD3D()
 	dxgiFactoryFlags |= DXGI_CREATE_FACTORY_DEBUG;
 #endif
 
-
 	//Create the factory
 	HR(CreateDXGIFactory2(dxgiFactoryFlags, IID_PPV_ARGS(&m_pFactory)));
 
@@ -666,7 +671,6 @@ void Graphics::InitD3D()
 	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_COPY] = std::make_unique<CommandQueue>(this, D3D12_COMMAND_LIST_TYPE_COPY);
 	//m_CommandQueues[D3D12_COMMAND_LIST_TYPE_BUNDLE] = std::make_unique<CommandQueue>(this, D3D12_COMMAND_LIST_TYPE_BUNDLE);
 
-
 	assert(m_DescriptorHeaps.size() == D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES);
 	for (size_t i = 0; i < D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES; ++i)
 	{
@@ -719,10 +723,7 @@ void Graphics::InitD3D()
 	if (m_SampleCount > 1)
 	{
 		m_pResolvedDepthStencil = std::make_unique<Texture2D>();
-		for (int i = 0; i < FRAME_COUNT; ++i)
-		{
-			m_MultiSampleRenderTargets[i] = std::make_unique<Texture2D>();
-		}
+		m_pMultiSampleRenderTarget = std::make_unique<Texture2D>();
 	}
 
 	m_pLightGridOpaque = std::make_unique<Texture2D>();
@@ -766,23 +767,20 @@ void Graphics::OnResize(int width, int height)
 		HR(m_pSwapchain->GetBuffer(i, IID_PPV_ARGS(&pResource)));
 		m_RenderTargets[i]->CreateForSwapchain(this, pResource);
 		m_RenderTargets[i]->SetName("Rendertarget");
-
-		if (m_SampleCount > 1)
-		{
-			m_MultiSampleRenderTargets[i]->Create(this, width, height, RENDER_TARGET_FORMAT, TextureUsage::RenderTarget, m_SampleCount);
-			m_MultiSampleRenderTargets[i]->SetName("Multisample Rendertarget");
-		}
 	}
 	if (m_SampleCount > 1)
 	{
-		m_pDepthStencil->Create(this, width, height, DEPTH_STENCIL_FORMAT, TextureUsage::DepthStencil | TextureUsage::ShaderResource, m_SampleCount);
+		m_pDepthStencil->Create(this, width, height, DEPTH_STENCIL_FORMAT, TextureUsage::DepthStencil | TextureUsage::ShaderResource, m_SampleCount, -1, ClearBinding(0.0f, 0));
 		m_pDepthStencil->SetName("Depth Stencil");
-		m_pResolvedDepthStencil->Create(this, width, height, DXGI_FORMAT_R32_FLOAT, TextureUsage::ShaderResource | TextureUsage::UnorderedAccess, 1);
+		m_pResolvedDepthStencil->Create(this, width, height, DXGI_FORMAT_R32_FLOAT, TextureUsage::ShaderResource | TextureUsage::UnorderedAccess, 1, -1, ClearBinding(0.0f, 0));
 		m_pResolvedDepthStencil->SetName("Resolve Depth Stencil");
+
+		m_pMultiSampleRenderTarget->Create(this, width, height, RENDER_TARGET_FORMAT, TextureUsage::RenderTarget, m_SampleCount, -1, ClearBinding(Color(0, 0, 0, 0)));
+		m_pMultiSampleRenderTarget->SetName("Multisample Rendertarget");
 	}
 	else
 	{
-		m_pDepthStencil->Create(this, width, height, DEPTH_STENCIL_FORMAT, TextureUsage::DepthStencil | TextureUsage::ShaderResource, m_SampleCount);
+		m_pDepthStencil->Create(this, width, height, DEPTH_STENCIL_FORMAT, TextureUsage::DepthStencil | TextureUsage::ShaderResource, m_SampleCount, -1, ClearBinding(0.0f, 0));
 		m_pDepthStencil->SetName("Depth Stencil");
 	}
 
@@ -952,7 +950,7 @@ void Graphics::InitializeAssets()
 		}
 
 		m_pShadowMap = std::make_unique<Texture2D>();
-		m_pShadowMap->Create(this, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE, DEPTH_STENCIL_SHADOW_FORMAT, TextureUsage::DepthStencil | TextureUsage::ShaderResource, 1);
+		m_pShadowMap->Create(this, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE, DEPTH_STENCIL_SHADOW_FORMAT, TextureUsage::DepthStencil | TextureUsage::ShaderResource, 1, -1, ClearBinding(1.0f, 0));
 	}
 
 	//Depth prepass
@@ -1123,35 +1121,6 @@ void Graphics::UpdateImGui()
 		}
 		ImGui::TreePop();
 	}
-	if (ImGui::TreeNodeEx("Persistent Resources", ImGuiTreeNodeFlags_DefaultOpen))
-	{
-		for (int i = 0; i < (int)ResourceType::MAX; ++i)
-		{
-			ResourceType type = (ResourceType)i;
-			switch (type)
-			{
-			case ResourceType::Buffer:
-				ImGui::TextWrapped("Buffers");
-				break;
-			case ResourceType::Texture:
-				ImGui::TextWrapped("Textures");
-				break;
-			case ResourceType::RenderTarget:
-				ImGui::TextWrapped("Render Target/Depth Stencil");
-				break;
-			case ResourceType::MAX:
-			default:
-				break;
-			}
-			ImGui::Text("Heaps: %d", m_pPersistentAllocationManager->GetHeapCount(type));
-			float totalSize = (float)m_pPersistentAllocationManager->GetTotalSize(type) / 0b100000000000000000000;
-			float used = totalSize - (float)m_pPersistentAllocationManager->GetRemainingSize(type) / 0b100000000000000000000;
-			std::stringstream str;
-			str << used << "/" << totalSize << "MB";
-			ImGui::ProgressBar((float)used / totalSize, ImVec2(-1, 0), str.str().c_str());
-		}
-		ImGui::TreePop();
-	}
 	ImGui::End();
 
 	static bool showOutputLog = false;
@@ -1171,18 +1140,18 @@ void Graphics::UpdateImGui()
 			case LogType::VeryVerbose:
 			case LogType::Verbose:
 			case LogType::Info:
-				ImGui::TextColored(ImVec4(1, 1, 1, 1), "[Info] %s", entry.Message.c_str());
+				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 1, 1, 1));
 				break;
 			case LogType::Warning:
-				ImGui::TextColored(ImVec4(1, 1, 0, 1), "[Warning] %s", entry.Message.c_str());
+				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 1, 0, 1));
 				break;
 			case LogType::Error:
 			case LogType::FatalError:
-				ImGui::TextColored(ImVec4(1, 0, 0, 1), "[Error] %s", entry.Message.c_str());
-				break;
-			default:
+				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 0, 0, 1));
 				break;
 			}
+			ImGui::TextWrapped("[Error] %s", entry.Message.c_str());
+			ImGui::PopStyleColor();
 		}
 	}
 	ImGui::End();
@@ -1263,6 +1232,77 @@ void Graphics::FreeCommandList(CommandContext* pCommandList)
 {
 	std::lock_guard<std::mutex> lockGuard(m_ContextAllocationMutex);
 	m_FreeCommandLists[(int)pCommandList->GetType()].push(pCommandList);
+}
+
+bool Graphics::CheckTypedUAVSupport(DXGI_FORMAT format) const
+{
+	D3D12_FEATURE_DATA_D3D12_OPTIONS featureData{};
+	HR(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &featureData, sizeof(featureData)));
+
+	switch (format)
+	{
+	case DXGI_FORMAT_R32_FLOAT:
+	case DXGI_FORMAT_R32_UINT:
+	case DXGI_FORMAT_R32_SINT:
+		// Unconditionally supported.
+		return true;
+
+	case DXGI_FORMAT_R32G32B32A32_FLOAT:
+	case DXGI_FORMAT_R32G32B32A32_UINT:
+	case DXGI_FORMAT_R32G32B32A32_SINT:
+	case DXGI_FORMAT_R16G16B16A16_FLOAT:
+	case DXGI_FORMAT_R16G16B16A16_UINT:
+	case DXGI_FORMAT_R16G16B16A16_SINT:
+	case DXGI_FORMAT_R8G8B8A8_UNORM:
+	case DXGI_FORMAT_R8G8B8A8_UINT:
+	case DXGI_FORMAT_R8G8B8A8_SINT:
+	case DXGI_FORMAT_R16_FLOAT:
+	case DXGI_FORMAT_R16_UINT:
+	case DXGI_FORMAT_R16_SINT:
+	case DXGI_FORMAT_R8_UNORM:
+	case DXGI_FORMAT_R8_UINT:
+	case DXGI_FORMAT_R8_SINT:
+		// All these are supported if this optional feature is set.
+		return featureData.TypedUAVLoadAdditionalFormats;
+
+	case DXGI_FORMAT_R16G16B16A16_UNORM:
+	case DXGI_FORMAT_R16G16B16A16_SNORM:
+	case DXGI_FORMAT_R32G32_FLOAT:
+	case DXGI_FORMAT_R32G32_UINT:
+	case DXGI_FORMAT_R32G32_SINT:
+	case DXGI_FORMAT_R10G10B10A2_UNORM:
+	case DXGI_FORMAT_R10G10B10A2_UINT:
+	case DXGI_FORMAT_R11G11B10_FLOAT:
+	case DXGI_FORMAT_R8G8B8A8_SNORM:
+	case DXGI_FORMAT_R16G16_FLOAT:
+	case DXGI_FORMAT_R16G16_UNORM:
+	case DXGI_FORMAT_R16G16_UINT:
+	case DXGI_FORMAT_R16G16_SNORM:
+	case DXGI_FORMAT_R16G16_SINT:
+	case DXGI_FORMAT_R8G8_UNORM:
+	case DXGI_FORMAT_R8G8_UINT:
+	case DXGI_FORMAT_R8G8_SNORM:
+	case DXGI_FORMAT_R8G8_SINT:
+	case DXGI_FORMAT_R16_UNORM:
+	case DXGI_FORMAT_R16_SNORM:
+	case DXGI_FORMAT_R8_SNORM:
+	case DXGI_FORMAT_A8_UNORM:
+	case DXGI_FORMAT_B5G6R5_UNORM:
+	case DXGI_FORMAT_B5G5R5A1_UNORM:
+	case DXGI_FORMAT_B4G4R4A4_UNORM:
+		// Conditionally supported by specific pDevices.
+		if (featureData.TypedUAVLoadAdditionalFormats)
+		{
+			D3D12_FEATURE_DATA_FORMAT_SUPPORT formatSupport = { format, D3D12_FORMAT_SUPPORT1_NONE, D3D12_FORMAT_SUPPORT2_NONE };
+			HR(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_FORMAT_SUPPORT, &formatSupport, sizeof(formatSupport)));
+			const DWORD mask = D3D12_FORMAT_SUPPORT2_UAV_TYPED_LOAD | D3D12_FORMAT_SUPPORT2_UAV_TYPED_STORE;
+			return ((formatSupport.Support2 & mask) == mask);
+		}
+		return false;
+
+	default:
+		return false;
+	}
 }
 
 D3D12_CPU_DESCRIPTOR_HANDLE Graphics::AllocateCpuDescriptors(int count, D3D12_DESCRIPTOR_HEAP_TYPE type)
