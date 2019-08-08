@@ -107,10 +107,51 @@ private:
 	void BindDescriptorHeaps();
 };
 
+enum class RenderTargetLoadAction : uint8
+{
+	DontCare,
+	Load,
+	Clear,
+};
+DEFINE_ENUM_FLAG_OPERATORS(RenderTargetLoadAction)
+
+
+enum class RenderTargetStoreAction : uint8
+{
+	DontCare,
+	Store,
+	Resolve,
+};
+DEFINE_ENUM_FLAG_OPERATORS(RenderTargetStoreAction)
+
+enum class RenderPassAccess : uint8
+{
+#define COMBINE_ACTIONS(load, store) (uint8)RenderTargetLoadAction::load << 2 | (uint8)RenderTargetStoreAction::store
+	DontCare_DontCare	= COMBINE_ACTIONS(DontCare, DontCare),
+	DontCare_Store		= COMBINE_ACTIONS(DontCare, Store),
+	Clear_Store			= COMBINE_ACTIONS(Clear, Store),
+	Load_Store			= COMBINE_ACTIONS(Load, Store),
+	Clear_DontCare		= COMBINE_ACTIONS(Clear, DontCare),
+	Load_DontCare		= COMBINE_ACTIONS(Load, DontCare),
+	Clear_Resolve		= COMBINE_ACTIONS(Clear, Resolve),
+	Load_Resolve		= COMBINE_ACTIONS(Load, Resolve),
+#undef COMBINE_ACTIONS
+};
+
+struct ClearValues
+{
+	bool ClearColor = false;
+	bool ClearStencil = false;
+	bool ClearDepth = false;
+};
+
 class GraphicsCommandContext : public ComputeCommandContext
 {
 public:
 	GraphicsCommandContext(Graphics* pGraphics, ID3D12GraphicsCommandList* pCommandList, ID3D12CommandAllocator* pAllocator);
+
+	void BeginRenderPass(Texture* pRenderTarget, Texture* pDepthStencil, const ClearValues& clearValues, RenderPassAccess rtAccess = RenderPassAccess::Load_Store, RenderPassAccess dsAccess = RenderPassAccess::Load_Store);
+	void EndRenderPass();
 
 	//Commands
 	void Draw(int vertexStart, int vertexCount);

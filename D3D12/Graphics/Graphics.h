@@ -55,6 +55,8 @@ public:
 	uint32 GetWindowWidth() const { return m_WindowWidth; }
 	uint32 GetWindowHeight() const { return m_WindowHeight; }
 
+	bool CheckTypedUAVSupport(DXGI_FORMAT format) const;
+
 	DynamicAllocationManager* GetAllocationManager() const { return m_pDynamicAllocationManager.get(); }
 
 	D3D12_CPU_DESCRIPTOR_HANDLE AllocateCpuDescriptors(int count, D3D12_DESCRIPTOR_HEAP_TYPE type);

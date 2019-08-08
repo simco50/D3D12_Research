@@ -146,9 +146,7 @@ void TypedBuffer::Create(Graphics* pGraphics, DXGI_FORMAT format, uint64 element
 {
 	Release();
 
-	D3D12_FEATURE_DATA_D3D12_OPTIONS featureData{};
-	HR(pGraphics->GetDevice()->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &featureData, sizeof(featureData)));
-	assert(FormatIsUAVCompatible(pGraphics->GetDevice(), featureData.TypedUAVLoadAdditionalFormats, format));
+	assert(pGraphics->CheckTypedUAVSupport(format));
 
 	m_ElementCount = elementCount;
 	m_ElementStride = Texture::GetRowDataSize(format, 1);
@@ -159,76 +157,6 @@ void TypedBuffer::Create(Graphics* pGraphics, DXGI_FORMAT format, uint64 element
 	m_pResource = pGraphics->CreateResource(desc, m_CurrentState, cpuVisible ? D3D12_HEAP_TYPE_UPLOAD : D3D12_HEAP_TYPE_DEFAULT);
 
 	CreateViews(pGraphics);
-}
-
-bool TypedBuffer::FormatIsUAVCompatible(ID3D12Device* pDevice, bool typedUAVLoadAdditionalFormats, DXGI_FORMAT format)
-{
-	switch (format)
-	{
-	case DXGI_FORMAT_R32_FLOAT:
-	case DXGI_FORMAT_R32_UINT:
-	case DXGI_FORMAT_R32_SINT:
-		// Unconditionally supported.
-		return true;
-
-	case DXGI_FORMAT_R32G32B32A32_FLOAT:
-	case DXGI_FORMAT_R32G32B32A32_UINT:
-	case DXGI_FORMAT_R32G32B32A32_SINT:
-	case DXGI_FORMAT_R16G16B16A16_FLOAT:
-	case DXGI_FORMAT_R16G16B16A16_UINT:
-	case DXGI_FORMAT_R16G16B16A16_SINT:
-	case DXGI_FORMAT_R8G8B8A8_UNORM:
-	case DXGI_FORMAT_R8G8B8A8_UINT:
-	case DXGI_FORMAT_R8G8B8A8_SINT:
-	case DXGI_FORMAT_R16_FLOAT:
-	case DXGI_FORMAT_R16_UINT:
-	case DXGI_FORMAT_R16_SINT:
-	case DXGI_FORMAT_R8_UNORM:
-	case DXGI_FORMAT_R8_UINT:
-	case DXGI_FORMAT_R8_SINT:
-		// All these are supported if this optional feature is set.
-		return typedUAVLoadAdditionalFormats;
-
-	case DXGI_FORMAT_R16G16B16A16_UNORM:
-	case DXGI_FORMAT_R16G16B16A16_SNORM:
-	case DXGI_FORMAT_R32G32_FLOAT:
-	case DXGI_FORMAT_R32G32_UINT:
-	case DXGI_FORMAT_R32G32_SINT:
-	case DXGI_FORMAT_R10G10B10A2_UNORM:
-	case DXGI_FORMAT_R10G10B10A2_UINT:
-	case DXGI_FORMAT_R11G11B10_FLOAT:
-	case DXGI_FORMAT_R8G8B8A8_SNORM:
-	case DXGI_FORMAT_R16G16_FLOAT:
-	case DXGI_FORMAT_R16G16_UNORM:
-	case DXGI_FORMAT_R16G16_UINT:
-	case DXGI_FORMAT_R16G16_SNORM:
-	case DXGI_FORMAT_R16G16_SINT:
-	case DXGI_FORMAT_R8G8_UNORM:
-	case DXGI_FORMAT_R8G8_UINT:
-	case DXGI_FORMAT_R8G8_SNORM:
-	case DXGI_FORMAT_R8G8_SINT:
-	case DXGI_FORMAT_R16_UNORM:
-	case DXGI_FORMAT_R16_SNORM:
-	case DXGI_FORMAT_R8_SNORM:
-	case DXGI_FORMAT_A8_UNORM:
-	case DXGI_FORMAT_B5G6R5_UNORM:
-	case DXGI_FORMAT_B5G5R5A1_UNORM:
-	case DXGI_FORMAT_B4G4R4A4_UNORM:
-		// Conditionally supported by specific pDevices.
-		if (typedUAVLoadAdditionalFormats)
-		{
-			D3D12_FEATURE_DATA_FORMAT_SUPPORT formatSupport = { format, D3D12_FORMAT_SUPPORT1_NONE, D3D12_FORMAT_SUPPORT2_NONE };
-			if (SUCCEEDED(pDevice->CheckFeatureSupport(D3D12_FEATURE_FORMAT_SUPPORT, &formatSupport, sizeof(formatSupport))))
-			{
-				const DWORD mask = D3D12_FORMAT_SUPPORT2_UAV_TYPED_LOAD | D3D12_FORMAT_SUPPORT2_UAV_TYPED_STORE;
-				return ((formatSupport.Support2 & mask) == mask);
-			}
-		}
-		return false;
-
-	default:
-		return false;
-	}
 }
 
 void TypedBuffer::CreateViews(Graphics* pGraphics)

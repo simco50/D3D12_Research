@@ -150,8 +150,10 @@ void CommandContext::InitializeBuffer(GraphicsBuffer* pResource, const void* pDa
 
 void CommandContext::InitializeTexture(Texture* pResource, D3D12_SUBRESOURCE_DATA* pSubResourceDatas, int firstSubResource, int subResourceCount)
 {
-	uint64 allocationSize = GetRequiredIntermediateSize(pResource->GetResource(), (UINT)firstSubResource, (UINT)subResourceCount);
-	DynamicAllocation allocation = m_DynamicAllocator->Allocate((uint32)allocationSize, D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT);
+	D3D12_RESOURCE_DESC desc = pResource->GetResource()->GetDesc();
+	size_t requiredSize = 0;
+	m_pGraphics->GetDevice()->GetCopyableFootprints(&desc, firstSubResource, subResourceCount, 0, nullptr, nullptr, nullptr, &requiredSize);
+	DynamicAllocation allocation = m_DynamicAllocator->Allocate(requiredSize, D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT);
 	D3D12_RESOURCE_STATES previousState = pResource->GetResourceState();
 	InsertResourceBarrier(pResource, D3D12_RESOURCE_STATE_COPY_DEST, true);
 	UpdateSubresources(m_pCommandList, pResource->GetResource(), allocation.pBackingResource->GetResource(), allocation.Offset, firstSubResource, subResourceCount, pSubResourceDatas);
@@ -333,6 +335,106 @@ GraphicsCommandContext::GraphicsCommandContext(Graphics* pGraphics, ID3D12Graphi
 {
 	m_CurrentContext = CommandListContext::Graphics;
 	m_Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
+}
+
+void GraphicsCommandContext::BeginRenderPass(Texture* pRenderTarget, Texture* pDepthStencil, const ClearValues& clearValues, RenderPassAccess rtAccess /*= RenderPassAccess::Clear*/, RenderPassAccess dsAccess /*= RenderPassAccess::Clear*/)
+{
+	ComPtr<ID3D12GraphicsCommandList4> pCmd;
+
+	if (m_pCommandList->QueryInterface(IID_PPV_ARGS(pCmd.GetAddressOf())) == S_OK)
+	{
+		auto getRenderPassAccessBegin = [](RenderTargetLoadAction access) {
+			switch (access)
+			{
+			case RenderTargetLoadAction::DontCare: return D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_DISCARD;
+			case RenderTargetLoadAction::Load: return D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_PRESERVE;
+			case RenderTargetLoadAction::Clear: return D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_CLEAR;
+			}
+			return D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_NO_ACCESS;
+		};
+
+		auto getRenderPassAccessEnd = [](RenderTargetStoreAction access) {
+			switch (access)
+			{
+			case RenderTargetStoreAction::DontCare: return D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_DISCARD;
+			case RenderTargetStoreAction::Store: return D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_PRESERVE;
+			case RenderTargetStoreAction::Resolve: return D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_RESOLVE;
+			}
+			return D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_NO_ACCESS;
+		};
+
+		D3D12_RENDER_PASS_BEGINNING_ACCESS depthAccessBegin{ getRenderPassAccessBegin((RenderTargetLoadAction)((uint8)dsAccess >> 2)) };
+		if (clearValues.ClearDepth || clearValues.ClearStencil)
+		{
+			assert(pDepthStencil->GetClearBinding().BindingValue == ClearBinding::ClearBindingValue::DepthStencil);
+			depthAccessBegin.Clear.ClearValue.DepthStencil.Depth = pDepthStencil->GetClearBinding().DepthStencil.Depth;
+			depthAccessBegin.Clear.ClearValue.DepthStencil.Stencil = pDepthStencil->GetClearBinding().DepthStencil.Stencil;
+			depthAccessBegin.Clear.ClearValue.Format = pDepthStencil->GetFormat();
+		}
+		D3D12_RENDER_PASS_ENDING_ACCESS depthAccessEnd{ getRenderPassAccessEnd((RenderTargetStoreAction)((uint8)dsAccess & 0b0011)), {} };
+		D3D12_RENDER_PASS_DEPTH_STENCIL_DESC renderPassDepthStencilDesc{ pDepthStencil->GetDSV(), depthAccessBegin, depthAccessBegin, depthAccessEnd, depthAccessEnd };
+
+		if (pRenderTarget == nullptr)
+		{
+			pCmd->BeginRenderPass(0, nullptr, &renderPassDepthStencilDesc, D3D12_RENDER_PASS_FLAG_NONE);
+		}
+		else
+		{
+			D3D12_RENDER_PASS_BEGINNING_ACCESS renderTargetAccessBegin{ getRenderPassAccessBegin((RenderTargetLoadAction)((uint8)rtAccess >> 2)) };
+			if (clearValues.ClearColor)
+			{
+				assert(pRenderTarget->GetClearBinding().BindingValue == ClearBinding::ClearBindingValue::Color);
+				memcpy(renderTargetAccessBegin.Clear.ClearValue.Color, &pRenderTarget->GetClearBinding().Color.x, sizeof(Color));
+				renderTargetAccessBegin.Clear.ClearValue.Format = pRenderTarget->GetFormat();
+			}
+			D3D12_RENDER_PASS_ENDING_ACCESS renderTargetAccessEnd{ getRenderPassAccessEnd((RenderTargetStoreAction)((uint8)rtAccess & 0b0011)), {} };
+			D3D12_RENDER_PASS_RENDER_TARGET_DESC renderPassRenderTargetDesc{ pRenderTarget->GetRTV(), renderTargetAccessBegin, renderTargetAccessEnd };
+
+			pCmd->BeginRenderPass(1, &renderPassRenderTargetDesc, &renderPassDepthStencilDesc, D3D12_RENDER_PASS_FLAG_NONE);
+		}
+	}
+	else
+	{
+		D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = pDepthStencil->GetDSV();
+		D3D12_CLEAR_FLAGS clearFlags = (D3D12_CLEAR_FLAGS)0;
+		if (clearValues.ClearDepth)
+		{
+			clearFlags |= D3D12_CLEAR_FLAGS::D3D12_CLEAR_FLAG_DEPTH;
+		}
+		if (clearValues.ClearStencil)
+		{
+			clearFlags |= D3D12_CLEAR_FLAGS::D3D12_CLEAR_FLAG_STENCIL;
+		}
+		if (clearFlags != (D3D12_CLEAR_FLAGS)0)
+		{
+			assert(pDepthStencil->GetClearBinding().BindingValue == ClearBinding::ClearBindingValue::DepthStencil);
+			m_pCommandList->ClearDepthStencilView(dsvHandle, clearFlags, pDepthStencil->GetClearBinding().DepthStencil.Depth, pDepthStencil->GetClearBinding().DepthStencil.Stencil, 0, nullptr);
+		}
+		if (pRenderTarget)
+		{
+			D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = pRenderTarget->GetRTV();
+			if (clearValues.ClearColor)
+			{
+				assert(pRenderTarget->GetClearBinding().BindingValue == ClearBinding::ClearBindingValue::Color);
+				m_pCommandList->ClearRenderTargetView(rtvHandle, &pRenderTarget->GetClearBinding().Color.x, 0, nullptr);
+			}
+			m_pCommandList->OMSetRenderTargets(1, &rtvHandle, false, &dsvHandle);
+		}
+		else
+		{
+			m_pCommandList->OMSetRenderTargets(0, nullptr, false, &dsvHandle);
+		}
+	}
+}
+
+void GraphicsCommandContext::EndRenderPass()
+{
+	ComPtr<ID3D12GraphicsCommandList4> pCmd;
+
+	if (m_pCommandList->QueryInterface(IID_PPV_ARGS(pCmd.GetAddressOf())) == S_OK)
+	{
+		pCmd->EndRenderPass();
+	}
 }
 
 void GraphicsCommandContext::Draw(int vertexStart, int vertexCount)

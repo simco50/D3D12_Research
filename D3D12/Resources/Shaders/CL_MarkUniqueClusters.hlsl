@@ -10,7 +10,7 @@ cbuffer Parameters : register(b0)
 	float cSliceMagicB;
 }
 
-RWStructuredBuffer<uint> uUniqueClusters : register(u1);
+RWBuffer<uint> uActiveClusters : register(u1);
 
 SamplerState sDiffuseSampler : register(s0);
 Texture2D tDiffuseTexture : register(t0);
@@ -53,8 +53,8 @@ void MarkClusters_PS(PS_Input input)
     {
         discard;
     }
-    uUniqueClusters[clusterIndex1D] = ceil(s);
+    uActiveClusters[clusterIndex1D] = ceil(s);
 #else
-    uUniqueClusters[clusterIndex1D] = 1;
+    uActiveClusters[clusterIndex1D] = 1;
 #endif
 }
