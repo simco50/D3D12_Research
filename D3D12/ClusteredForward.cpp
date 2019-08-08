@@ -112,11 +112,10 @@ void ClusteredForward::Execute(const ClusteredForwardInputResources& resources)
 		Profiler::Instance()->Begin("Update Data", pContext);
 		std::vector<uint32> zero(m_ClusterCountX * m_ClusterCountY * cClusterCountZ);
 		m_pUniqueClusters->SetData(pContext, zero.data(), sizeof(uint32) * zero.size());
+		m_pCompactedClusters->SetData(pContext, zero.data(), sizeof(uint32) * zero.size());
 		Profiler::Instance()->End(pContext);
 
-		ClearValues values;
-		values.ClearDepth = true;
-		pContext->BeginRenderPass(nullptr, m_pDepthTexture.get(), values, RenderPassAccess::DontCare_DontCare, RenderPassAccess::Clear_Store);
+		pContext->BeginRenderPass(RenderPassInfo(m_pDepthTexture.get(), RenderPassAccess::Clear_Store));
 
 		pContext->SetGraphicsPipelineState(m_pMarkUniqueClustersOpaquePSO.get());
 		pContext->SetGraphicsRootSignature(m_pMarkUniqueClustersRS.get());
@@ -352,9 +351,7 @@ void ClusteredForward::Execute(const ClusteredForwardInputResources& resources)
 		pContext->InsertResourceBarrier(m_pLightIndexGrid.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, false);
 		pContext->InsertResourceBarrier(resources.pRenderTarget, D3D12_RESOURCE_STATE_RENDER_TARGET, true);
 
-		ClearValues values;
-		values.ClearColor = true;
-		pContext->BeginRenderPass(resources.pRenderTarget, m_pDepthTexture.get(), values, RenderPassAccess::Clear_Store, RenderPassAccess::Load_DontCare);
+		pContext->BeginRenderPass(RenderPassInfo(resources.pRenderTarget, RenderPassAccess::Clear_Store, m_pDepthTexture.get(), RenderPassAccess::Load_DontCare));
 		pContext->SetViewport(FloatRect(0, 0, (float)screenDimensions.x, (float)screenDimensions.y));
 		pContext->SetScissorRect(FloatRect(0, 0, (float)screenDimensions.x, (float)screenDimensions.y));
 
@@ -419,8 +416,7 @@ void ClusteredForward::Execute(const ClusteredForwardInputResources& resources)
 			m_DidCopyDebugClusterData = true;
 		}
 
-		ClearValues values;
-		pContext->BeginRenderPass(resources.pRenderTarget, m_pDepthTexture.get(), values, RenderPassAccess::Load_Store, RenderPassAccess::Load_DontCare);
+		pContext->BeginRenderPass(RenderPassInfo(resources.pRenderTarget, RenderPassAccess::Load_Store, m_pDepthTexture.get(), RenderPassAccess::Load_DontCare));
 
 		pContext->SetGraphicsPipelineState(m_pDebugClustersPSO.get());
 		pContext->SetGraphicsRootSignature(m_pDebugClustersRS.get());

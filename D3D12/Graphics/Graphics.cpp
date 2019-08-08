@@ -254,9 +254,7 @@ void Graphics::Update()
 
 			pContext->InsertResourceBarrier(GetDepthStencil(), D3D12_RESOURCE_STATE_DEPTH_WRITE, true);
 
-			ClearValues values;
-			values.ClearDepth = true;
-			pContext->BeginRenderPass(nullptr, GetDepthStencil(), values, RenderPassAccess::DontCare_DontCare, RenderPassAccess::Clear_Store);
+			pContext->BeginRenderPass(RenderPassInfo(GetDepthStencil(), RenderPassAccess::Clear_Store));
 
 			pContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 			pContext->SetViewport(FloatRect(0, 0, (float)m_WindowWidth, (float)m_WindowHeight));
@@ -374,9 +372,7 @@ void Graphics::Update()
 			Profiler::Instance()->Begin("Shadows", pContext);
 			pContext->InsertResourceBarrier(m_pShadowMap.get(), D3D12_RESOURCE_STATE_DEPTH_WRITE, true);
 
-			ClearValues values;
-			values.ClearDepth = true;
-			pContext->BeginRenderPass(nullptr, m_pShadowMap.get(), values, RenderPassAccess::DontCare_DontCare, RenderPassAccess::Clear_Store);
+			pContext->BeginRenderPass(RenderPassInfo(m_pShadowMap.get(), RenderPassAccess::Clear_Store));
 
 			pContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
@@ -454,9 +450,7 @@ void Graphics::Update()
 			pContext->InsertResourceBarrier(GetDepthStencil(), D3D12_RESOURCE_STATE_DEPTH_READ, false);
 			pContext->InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RENDER_TARGET, true);
 
-			ClearValues values;
-			values.ClearColor = true;
-			pContext->BeginRenderPass(GetCurrentRenderTarget(), GetDepthStencil(), values, RenderPassAccess::DontCare_Store, RenderPassAccess::Load_DontCare);
+			pContext->BeginRenderPass(RenderPassInfo(GetCurrentRenderTarget(), RenderPassAccess::DontCare_Store, GetDepthStencil(), RenderPassAccess::Load_DontCare));
 
 			pContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
@@ -787,14 +781,14 @@ void Graphics::OnResize(int width, int height)
 	}
 	if (m_SampleCount > 1)
 	{
-		m_pDepthStencil->Create(this, width, height, DEPTH_STENCIL_FORMAT, TextureUsage::DepthStencil | TextureUsage::ShaderResource, m_SampleCount, -1, ClearBinding(1.0f, 0));
+		m_pDepthStencil->Create(this, width, height, DEPTH_STENCIL_FORMAT, TextureUsage::DepthStencil | TextureUsage::ShaderResource, m_SampleCount, -1, ClearBinding(0.0f, 0));
 		m_pDepthStencil->SetName("Depth Stencil");
-		m_pResolvedDepthStencil->Create(this, width, height, DXGI_FORMAT_R32_FLOAT, TextureUsage::ShaderResource | TextureUsage::UnorderedAccess, 1, -1, ClearBinding(1.0f, 0));
+		m_pResolvedDepthStencil->Create(this, width, height, DXGI_FORMAT_R32_FLOAT, TextureUsage::ShaderResource | TextureUsage::UnorderedAccess, 1, -1, ClearBinding(0.0f, 0));
 		m_pResolvedDepthStencil->SetName("Resolve Depth Stencil");
 	}
 	else
 	{
-		m_pDepthStencil->Create(this, width, height, DEPTH_STENCIL_FORMAT, TextureUsage::DepthStencil | TextureUsage::ShaderResource, m_SampleCount, -1, ClearBinding(1.0f, 0));
+		m_pDepthStencil->Create(this, width, height, DEPTH_STENCIL_FORMAT, TextureUsage::DepthStencil | TextureUsage::ShaderResource, m_SampleCount, -1, ClearBinding(0.0f, 0));
 		m_pDepthStencil->SetName("Depth Stencil");
 	}
 
@@ -964,7 +958,7 @@ void Graphics::InitializeAssets()
 		}
 
 		m_pShadowMap = std::make_unique<Texture2D>();
-		m_pShadowMap->Create(this, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE, DEPTH_STENCIL_SHADOW_FORMAT, TextureUsage::DepthStencil | TextureUsage::ShaderResource, 1, -1, ClearBinding(1.0f, 0.0f));
+		m_pShadowMap->Create(this, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE, DEPTH_STENCIL_SHADOW_FORMAT, TextureUsage::DepthStencil | TextureUsage::ShaderResource, 1, -1, ClearBinding(1.0f, 0));
 	}
 
 	//Depth prepass

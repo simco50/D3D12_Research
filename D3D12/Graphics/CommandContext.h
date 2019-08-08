@@ -138,11 +138,34 @@ enum class RenderPassAccess : uint8
 #undef COMBINE_ACTIONS
 };
 
-struct ClearValues
+struct RenderPassInfo
 {
-	bool ClearColor = false;
-	bool ClearStencil = false;
-	bool ClearDepth = false;
+	struct RenderTargetInfo
+	{
+		RenderPassAccess Access = RenderPassAccess::DontCare_DontCare;
+		Texture* Texture = nullptr;
+		int SubResource = 0;
+	};
+
+	RenderPassInfo(Texture* pDepthBuffer, RenderPassAccess access)
+		: RenderTargetCount(0)
+	{
+		DepthStencilTarget.Access = access;
+		DepthStencilTarget.Texture = pDepthBuffer;
+	}
+
+	RenderPassInfo(Texture* pRenderTarget, RenderPassAccess renderTargetAccess, Texture* pDepthBuffer, RenderPassAccess depthAccess)
+		: RenderTargetCount(1)
+	{
+		RenderTargets[0].Access = renderTargetAccess;
+		RenderTargets[0].Texture = pRenderTarget;
+		DepthStencilTarget.Access = depthAccess;
+		DepthStencilTarget.Texture = pDepthBuffer;
+	}
+
+	uint32 RenderTargetCount;
+	std::array<RenderTargetInfo, 4> RenderTargets;
+	RenderTargetInfo DepthStencilTarget;
 };
 
 class GraphicsCommandContext : public ComputeCommandContext
@@ -150,7 +173,7 @@ class GraphicsCommandContext : public ComputeCommandContext
 public:
 	GraphicsCommandContext(Graphics* pGraphics, ID3D12GraphicsCommandList* pCommandList, ID3D12CommandAllocator* pAllocator);
 
-	void BeginRenderPass(Texture* pRenderTarget, Texture* pDepthStencil, const ClearValues& clearValues, RenderPassAccess rtAccess = RenderPassAccess::Load_Store, RenderPassAccess dsAccess = RenderPassAccess::Load_Store);
+	void BeginRenderPass(const RenderPassInfo& renderPassInfo);
 	void EndRenderPass();
 
 	//Commands
@@ -168,9 +191,6 @@ public:
 	void SetDynamicConstantBufferView(int rootIndex, void* pData, uint32 dataSize);
 	void SetDynamicVertexBuffer(int slot, int elementCount, int elementSize, void* pData);
 	void SetDynamicIndexBuffer(int elementCount, void* pData, bool smallIndices = false);
-	void SetDepthOnlyTarget(D3D12_CPU_DESCRIPTOR_HANDLE dsv);
-	void SetRenderTarget(D3D12_CPU_DESCRIPTOR_HANDLE rtv, D3D12_CPU_DESCRIPTOR_HANDLE dsv);
-	void SetRenderTargets(D3D12_CPU_DESCRIPTOR_HANDLE* pRtv, D3D12_CPU_DESCRIPTOR_HANDLE dsv);
 	void SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY type);
 	void SetVertexBuffer(VertexBuffer* pVertexBuffer);
 	void SetVertexBuffers(VertexBuffer* pVertexBuffers, int bufferCount);

@@ -337,14 +337,15 @@ GraphicsCommandContext::GraphicsCommandContext(Graphics* pGraphics, ID3D12Graphi
 	m_Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
 }
 
-void GraphicsCommandContext::BeginRenderPass(Texture* pRenderTarget, Texture* pDepthStencil, const ClearValues& clearValues, RenderPassAccess rtAccess /*= RenderPassAccess::Clear*/, RenderPassAccess dsAccess /*= RenderPassAccess::Clear*/)
+void GraphicsCommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 {
 	ComPtr<ID3D12GraphicsCommandList4> pCmd;
 
 	if (m_pCommandList->QueryInterface(IID_PPV_ARGS(pCmd.GetAddressOf())) == S_OK)
 	{
-		auto getRenderPassAccessBegin = [](RenderTargetLoadAction access) {
-			switch (access)
+		auto getRenderPassAccessBegin = [](RenderPassAccess access) {
+			RenderTargetLoadAction loadAction = (RenderTargetLoadAction)((uint8)access >> 2);
+			switch (loadAction)
 			{
 			case RenderTargetLoadAction::DontCare: return D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_DISCARD;
 			case RenderTargetLoadAction::Load: return D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_PRESERVE;
@@ -353,8 +354,9 @@ void GraphicsCommandContext::BeginRenderPass(Texture* pRenderTarget, Texture* pD
 			return D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_NO_ACCESS;
 		};
 
-		auto getRenderPassAccessEnd = [](RenderTargetStoreAction access) {
-			switch (access)
+		auto getRenderPassAccessEnd = [](RenderPassAccess access) {
+			RenderTargetStoreAction storeAction = (RenderTargetStoreAction)((uint8)access & 0b11);
+			switch (storeAction)
 			{
 			case RenderTargetStoreAction::DontCare: return D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_DISCARD;
 			case RenderTargetStoreAction::Store: return D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_PRESERVE;
@@ -363,67 +365,57 @@ void GraphicsCommandContext::BeginRenderPass(Texture* pRenderTarget, Texture* pD
 			return D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_NO_ACCESS;
 		};
 
-		D3D12_RENDER_PASS_BEGINNING_ACCESS depthAccessBegin{ getRenderPassAccessBegin((RenderTargetLoadAction)((uint8)dsAccess >> 2)) };
-		if (clearValues.ClearDepth || clearValues.ClearStencil)
+		D3D12_RENDER_PASS_BEGINNING_ACCESS depthAccessBegin{ getRenderPassAccessBegin(renderPassInfo.DepthStencilTarget.Access) };
+		if (depthAccessBegin.Type == D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_CLEAR)
 		{
-			assert(pDepthStencil->GetClearBinding().BindingValue == ClearBinding::ClearBindingValue::DepthStencil);
-			depthAccessBegin.Clear.ClearValue.DepthStencil.Depth = pDepthStencil->GetClearBinding().DepthStencil.Depth;
-			depthAccessBegin.Clear.ClearValue.DepthStencil.Stencil = pDepthStencil->GetClearBinding().DepthStencil.Stencil;
-			depthAccessBegin.Clear.ClearValue.Format = pDepthStencil->GetFormat();
+			assert(renderPassInfo.DepthStencilTarget.Texture->GetClearBinding().BindingValue == ClearBinding::ClearBindingValue::DepthStencil);
+			depthAccessBegin.Clear.ClearValue.DepthStencil.Depth = renderPassInfo.DepthStencilTarget.Texture->GetClearBinding().DepthStencil.Depth;
+			depthAccessBegin.Clear.ClearValue.DepthStencil.Stencil = renderPassInfo.DepthStencilTarget.Texture->GetClearBinding().DepthStencil.Stencil;
+			depthAccessBegin.Clear.ClearValue.Format = renderPassInfo.DepthStencilTarget.Texture->GetFormat();
 		}
-		D3D12_RENDER_PASS_ENDING_ACCESS depthAccessEnd{ getRenderPassAccessEnd((RenderTargetStoreAction)((uint8)dsAccess & 0b0011)), {} };
-		D3D12_RENDER_PASS_DEPTH_STENCIL_DESC renderPassDepthStencilDesc{ pDepthStencil->GetDSV(), depthAccessBegin, depthAccessBegin, depthAccessEnd, depthAccessEnd };
+		D3D12_RENDER_PASS_ENDING_ACCESS depthAccessEnd{ getRenderPassAccessEnd(renderPassInfo.DepthStencilTarget.Access) };
+		D3D12_RENDER_PASS_DEPTH_STENCIL_DESC renderPassDepthStencilDesc{ renderPassInfo.DepthStencilTarget.Texture->GetDSV(), depthAccessBegin, depthAccessBegin, depthAccessEnd, depthAccessEnd };
 
-		if (pRenderTarget == nullptr)
+		std::array<D3D12_RENDER_PASS_RENDER_TARGET_DESC, 4> renderTargetDescs;
+		for (int i = 0; i < renderPassInfo.RenderTargetCount; ++i)
 		{
-			pCmd->BeginRenderPass(0, nullptr, &renderPassDepthStencilDesc, D3D12_RENDER_PASS_FLAG_NONE);
-		}
-		else
-		{
-			D3D12_RENDER_PASS_BEGINNING_ACCESS renderTargetAccessBegin{ getRenderPassAccessBegin((RenderTargetLoadAction)((uint8)rtAccess >> 2)) };
-			if (clearValues.ClearColor)
+			const RenderPassInfo::RenderTargetInfo& data = renderPassInfo.RenderTargets[i];
+			D3D12_RENDER_PASS_BEGINNING_ACCESS renderTargetAccessBegin{ getRenderPassAccessBegin(data.Access) };
+			if (renderTargetAccessBegin.Type == D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_CLEAR)
 			{
-				assert(pRenderTarget->GetClearBinding().BindingValue == ClearBinding::ClearBindingValue::Color);
-				memcpy(renderTargetAccessBegin.Clear.ClearValue.Color, &pRenderTarget->GetClearBinding().Color.x, sizeof(Color));
-				renderTargetAccessBegin.Clear.ClearValue.Format = pRenderTarget->GetFormat();
+				assert(data.Texture->GetClearBinding().BindingValue == ClearBinding::ClearBindingValue::Color);
+				memcpy(renderTargetAccessBegin.Clear.ClearValue.Color, &data.Texture->GetClearBinding().Color.x, sizeof(Color));
+				renderTargetAccessBegin.Clear.ClearValue.Format = data.Texture->GetFormat();
 			}
-			D3D12_RENDER_PASS_ENDING_ACCESS renderTargetAccessEnd{ getRenderPassAccessEnd((RenderTargetStoreAction)((uint8)rtAccess & 0b0011)), {} };
-			D3D12_RENDER_PASS_RENDER_TARGET_DESC renderPassRenderTargetDesc{ pRenderTarget->GetRTV(), renderTargetAccessBegin, renderTargetAccessEnd };
-
-			pCmd->BeginRenderPass(1, &renderPassRenderTargetDesc, &renderPassDepthStencilDesc, D3D12_RENDER_PASS_FLAG_NONE);
+			D3D12_RENDER_PASS_ENDING_ACCESS renderTargetAccessEnd{ getRenderPassAccessEnd(data.Access) };
+			renderTargetDescs[i] = D3D12_RENDER_PASS_RENDER_TARGET_DESC{ data.Texture->GetRTV(data.SubResource), renderTargetAccessBegin, renderTargetAccessEnd };
 		}
+		
+		pCmd->BeginRenderPass(renderPassInfo.RenderTargetCount, renderTargetDescs.data(), &renderPassDepthStencilDesc, D3D12_RENDER_PASS_FLAG_NONE);	
 	}
 	else
 	{
-		D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = pDepthStencil->GetDSV();
-		D3D12_CLEAR_FLAGS clearFlags = (D3D12_CLEAR_FLAGS)0;
-		if (clearValues.ClearDepth)
+		D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = renderPassInfo.DepthStencilTarget.Texture->GetDSV(renderPassInfo.DepthStencilTarget.SubResource);
+		if ((RenderTargetLoadAction)((uint8)renderPassInfo.DepthStencilTarget.Access >> 2) == RenderTargetLoadAction::Clear)
 		{
-			clearFlags |= D3D12_CLEAR_FLAGS::D3D12_CLEAR_FLAG_DEPTH;
+			D3D12_CLEAR_FLAGS clearFlags = D3D12_CLEAR_FLAGS::D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAGS::D3D12_CLEAR_FLAG_STENCIL;
+			const ClearBinding& clearBinding = renderPassInfo.DepthStencilTarget.Texture->GetClearBinding();
+			assert(clearBinding.BindingValue == ClearBinding::ClearBindingValue::DepthStencil);
+			m_pCommandList->ClearDepthStencilView(dsvHandle, clearFlags, clearBinding.DepthStencil.Depth, clearBinding.DepthStencil.Stencil, 0, nullptr);
 		}
-		if (clearValues.ClearStencil)
+
+		std::array<D3D12_CPU_DESCRIPTOR_HANDLE, 4> rtvs;
+		for (int i = 0; i < renderPassInfo.RenderTargetCount; ++i)
 		{
-			clearFlags |= D3D12_CLEAR_FLAGS::D3D12_CLEAR_FLAG_STENCIL;
-		}
-		if (clearFlags != (D3D12_CLEAR_FLAGS)0)
-		{
-			assert(pDepthStencil->GetClearBinding().BindingValue == ClearBinding::ClearBindingValue::DepthStencil);
-			m_pCommandList->ClearDepthStencilView(dsvHandle, clearFlags, pDepthStencil->GetClearBinding().DepthStencil.Depth, pDepthStencil->GetClearBinding().DepthStencil.Stencil, 0, nullptr);
-		}
-		if (pRenderTarget)
-		{
-			D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = pRenderTarget->GetRTV();
-			if (clearValues.ClearColor)
+			const RenderPassInfo::RenderTargetInfo& data = renderPassInfo.RenderTargets[i];
+			if ((RenderTargetLoadAction)((uint8)data.Access >> 2) == RenderTargetLoadAction::Clear)
 			{
-				assert(pRenderTarget->GetClearBinding().BindingValue == ClearBinding::ClearBindingValue::Color);
-				m_pCommandList->ClearRenderTargetView(rtvHandle, &pRenderTarget->GetClearBinding().Color.x, 0, nullptr);
+				assert(data.Texture->GetClearBinding().BindingValue == ClearBinding::ClearBindingValue::Color);
+				m_pCommandList->ClearRenderTargetView(data.Texture->GetRTV(), &data.Texture->GetClearBinding().Color.x, 0, nullptr);
 			}
-			m_pCommandList->OMSetRenderTargets(1, &rtvHandle, false, &dsvHandle);
+			rtvs[i] = data.Texture->GetRTV();
 		}
-		else
-		{
-			m_pCommandList->OMSetRenderTargets(0, nullptr, false, &dsvHandle);
-		}
+		m_pCommandList->OMSetRenderTargets(renderPassInfo.RenderTargetCount, rtvs.data(), false, &dsvHandle);
 	}
 }
 
@@ -527,29 +519,6 @@ void GraphicsCommandContext::SetDynamicIndexBuffer(int elementCount, void* pData
 	view.SizeInBytes = bufferSize;
 	view.Format = smallIndices ? DXGI_FORMAT_R16_UINT : DXGI_FORMAT_R32_UINT;
 	m_pCommandList->IASetIndexBuffer(&view);
-}
-
-void GraphicsCommandContext::SetDepthOnlyTarget(D3D12_CPU_DESCRIPTOR_HANDLE dsv)
-{
-	SetRenderTargets(nullptr, dsv);
-}
-
-void GraphicsCommandContext::SetRenderTarget(D3D12_CPU_DESCRIPTOR_HANDLE rtv, D3D12_CPU_DESCRIPTOR_HANDLE dsv)
-{
-	SetRenderTargets(&rtv, dsv);
-}
-
-void GraphicsCommandContext::SetRenderTargets(D3D12_CPU_DESCRIPTOR_HANDLE* pRtv, D3D12_CPU_DESCRIPTOR_HANDLE dsv)
-{
-	assert(m_CurrentContext == CommandListContext::Graphics);
-	if (pRtv)
-	{
-		m_pCommandList->OMSetRenderTargets(1, pRtv, false, &dsv);
-	}
-	else
-	{
-		m_pCommandList->OMSetRenderTargets(0, nullptr, false, &dsv);
-	}
 }
 
 void GraphicsCommandContext::SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY type)
