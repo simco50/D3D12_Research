@@ -63,7 +63,7 @@ public:
 
 	Texture2D* GetDepthStencil() const { return m_pDepthStencil.get(); }
 	Texture2D* GetResolvedDepthStencil() const { return m_SampleCount > 1 ? m_pResolvedDepthStencil.get() : m_pDepthStencil.get(); }
-	Texture2D* GetCurrentRenderTarget() const { return m_SampleCount > 1 ? m_MultiSampleRenderTargets[m_CurrentBackBufferIndex].get() : GetCurrentBackbuffer(); }
+	Texture2D* GetCurrentRenderTarget() const { return m_SampleCount > 1 ? m_pMultiSampleRenderTarget.get() : GetCurrentBackbuffer(); }
 	Texture2D* GetCurrentBackbuffer() const { return m_RenderTargets[m_CurrentBackBufferIndex].get(); }
 
 	uint32 GetMultiSampleCount() const { return m_SampleCount; }
@@ -114,7 +114,7 @@ private:
 	std::unique_ptr<PersistentResourceAllocator> m_pPersistentAllocationManager;;
 	std::unique_ptr<DynamicAllocationManager> m_pDynamicAllocationManager;
 
-	std::array<std::unique_ptr<Texture2D>, FRAME_COUNT> m_MultiSampleRenderTargets;
+	std::unique_ptr<Texture2D> m_pMultiSampleRenderTarget;
 	std::array<std::unique_ptr<Texture2D>, FRAME_COUNT> m_RenderTargets;
 
 	std::array<std::unique_ptr<DescriptorAllocator>, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES> m_DescriptorHeaps;

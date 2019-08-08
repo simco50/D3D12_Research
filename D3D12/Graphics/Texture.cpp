@@ -14,9 +14,9 @@ D3D12_CPU_DESCRIPTOR_HANDLE Texture::GetSRV(int subResource /*= 0*/) const
 	return CD3DX12_CPU_DESCRIPTOR_HANDLE(m_Srv, subResource, m_SrvUavDescriptorSize);
 }
 
-D3D12_CPU_DESCRIPTOR_HANDLE Texture::GetDSV(int subResource /*= 0*/) const
+D3D12_CPU_DESCRIPTOR_HANDLE Texture::GetDSV(bool writeable /*= true*/) const
 {
-	return CD3DX12_CPU_DESCRIPTOR_HANDLE(m_Rtv, subResource, m_RtvDescriptorSize);
+	return CD3DX12_CPU_DESCRIPTOR_HANDLE(m_Rtv, writeable ? 0 : 1, m_DsvDescriptorSize);
 }
 
 D3D12_CPU_DESCRIPTOR_HANDLE Texture::GetRTV(int subResource /*= 0*/) const
@@ -38,6 +38,7 @@ void Texture::Create_Internal(Graphics* pGraphics, TextureDimension dimension, i
 
 	m_RtvDescriptorSize = pGraphics->GetDevice()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 	m_SrvUavDescriptorSize = pGraphics->GetDevice()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	m_DsvDescriptorSize = pGraphics->GetDevice()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
 
 	m_ClearBinding = clearBinding;
 	m_Width = width;
@@ -121,6 +122,7 @@ void Texture::Create_Internal(Graphics* pGraphics, TextureDimension dimension, i
 
 		desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
 		pClearValue = &clearValue;
+		m_CurrentState = D3D12_RESOURCE_STATE_DEPTH_WRITE;
 	}
 
 	m_pResource = pGraphics->CreateResource(desc, m_CurrentState, D3D12_HEAP_TYPE_DEFAULT, pClearValue);
@@ -321,7 +323,7 @@ void Texture::Create_Internal(Graphics* pGraphics, TextureDimension dimension, i
 	{
 		if (m_Rtv.ptr == 0)
 		{
-			m_Rtv = pGraphics->AllocateCpuDescriptors(1, D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
+			m_Rtv = pGraphics->AllocateCpuDescriptors(2, D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
 		}
 
 		D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
@@ -370,6 +372,8 @@ void Texture::Create_Internal(Graphics* pGraphics, TextureDimension dimension, i
 			
 		}
 		pGraphics->GetDevice()->CreateDepthStencilView(m_pResource, &dsvDesc, m_Rtv);
+		dsvDesc.Flags = D3D12_DSV_FLAG_READ_ONLY_DEPTH;
+		pGraphics->GetDevice()->CreateDepthStencilView(m_pResource, &dsvDesc, CD3DX12_CPU_DESCRIPTOR_HANDLE(m_Rtv, 1, m_DsvDescriptorSize));
 	}
 }
 

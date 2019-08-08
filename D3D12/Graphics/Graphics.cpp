@@ -615,7 +615,6 @@ void Graphics::InitD3D()
 	dxgiFactoryFlags |= DXGI_CREATE_FACTORY_DEBUG;
 #endif
 
-
 	//Create the factory
 	HR(CreateDXGIFactory2(dxgiFactoryFlags, IID_PPV_ARGS(&m_pFactory)));
 
@@ -672,7 +671,6 @@ void Graphics::InitD3D()
 	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_COPY] = std::make_unique<CommandQueue>(this, D3D12_COMMAND_LIST_TYPE_COPY);
 	//m_CommandQueues[D3D12_COMMAND_LIST_TYPE_BUNDLE] = std::make_unique<CommandQueue>(this, D3D12_COMMAND_LIST_TYPE_BUNDLE);
 
-
 	assert(m_DescriptorHeaps.size() == D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES);
 	for (size_t i = 0; i < D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES; ++i)
 	{
@@ -725,10 +723,7 @@ void Graphics::InitD3D()
 	if (m_SampleCount > 1)
 	{
 		m_pResolvedDepthStencil = std::make_unique<Texture2D>();
-		for (int i = 0; i < FRAME_COUNT; ++i)
-		{
-			m_MultiSampleRenderTargets[i] = std::make_unique<Texture2D>();
-		}
+		m_pMultiSampleRenderTarget = std::make_unique<Texture2D>();
 	}
 
 	m_pLightGridOpaque = std::make_unique<Texture2D>();
@@ -772,12 +767,6 @@ void Graphics::OnResize(int width, int height)
 		HR(m_pSwapchain->GetBuffer(i, IID_PPV_ARGS(&pResource)));
 		m_RenderTargets[i]->CreateForSwapchain(this, pResource);
 		m_RenderTargets[i]->SetName("Rendertarget");
-
-		if (m_SampleCount > 1)
-		{
-			m_MultiSampleRenderTargets[i]->Create(this, width, height, RENDER_TARGET_FORMAT, TextureUsage::RenderTarget, m_SampleCount, -1, ClearBinding(Color(0, 0, 0, 0)));
-			m_MultiSampleRenderTargets[i]->SetName("Multisample Rendertarget");
-		}
 	}
 	if (m_SampleCount > 1)
 	{
@@ -785,6 +774,9 @@ void Graphics::OnResize(int width, int height)
 		m_pDepthStencil->SetName("Depth Stencil");
 		m_pResolvedDepthStencil->Create(this, width, height, DXGI_FORMAT_R32_FLOAT, TextureUsage::ShaderResource | TextureUsage::UnorderedAccess, 1, -1, ClearBinding(0.0f, 0));
 		m_pResolvedDepthStencil->SetName("Resolve Depth Stencil");
+
+		m_pMultiSampleRenderTarget->Create(this, width, height, RENDER_TARGET_FORMAT, TextureUsage::RenderTarget, m_SampleCount, -1, ClearBinding(Color(0, 0, 0, 0)));
+		m_pMultiSampleRenderTarget->SetName("Multisample Rendertarget");
 	}
 	else
 	{
@@ -1148,18 +1140,18 @@ void Graphics::UpdateImGui()
 			case LogType::VeryVerbose:
 			case LogType::Verbose:
 			case LogType::Info:
-				ImGui::TextColored(ImVec4(1, 1, 1, 1), "[Info] %s", entry.Message.c_str());
+				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 1, 1, 1));
 				break;
 			case LogType::Warning:
-				ImGui::TextColored(ImVec4(1, 1, 0, 1), "[Warning] %s", entry.Message.c_str());
+				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 1, 0, 1));
 				break;
 			case LogType::Error:
 			case LogType::FatalError:
-				ImGui::TextColored(ImVec4(1, 0, 0, 1), "[Error] %s", entry.Message.c_str());
-				break;
-			default:
+				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 0, 0, 1));
 				break;
 			}
+			ImGui::TextWrapped("[Error] %s", entry.Message.c_str());
+			ImGui::PopStyleColor();
 		}
 	}
 	ImGui::End();

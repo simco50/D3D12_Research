@@ -36,6 +36,8 @@ public:
 	const BitField32& GetDescriptorTableMask() const { return m_DescriptorTableMask; }
 	const std::vector<uint32>& GetDescriptorTableSizes() const { return m_DescriptorTableSizes; }
 
+	uint32 GetDWordSize() const;
+
 private:
 	std::vector<D3D12_ROOT_PARAMETER1> m_RootParameters;
 	std::vector<uint32> m_DescriptorTableSizes;

@@ -77,7 +77,7 @@ public:
 	D3D12_CPU_DESCRIPTOR_HANDLE GetRTV(int subResource = 0) const;
 	D3D12_CPU_DESCRIPTOR_HANDLE GetUAV(int subResource = 0) const;
 	D3D12_CPU_DESCRIPTOR_HANDLE GetSRV(int subResource = 0) const;
-	D3D12_CPU_DESCRIPTOR_HANDLE GetDSV(int subResource = 0) const;
+	D3D12_CPU_DESCRIPTOR_HANDLE GetDSV(bool writeable = true) const;
 
 	bool IsArray() const { return m_IsArray; }
 	TextureDimension GetDimension() const { return m_Dimension; }
@@ -108,6 +108,7 @@ protected:
 
 	int m_SrvUavDescriptorSize = 0;
 	int m_RtvDescriptorSize = 0;
+	int m_DsvDescriptorSize = 0;
 };
 
 class Texture2D : public Texture

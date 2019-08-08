@@ -112,6 +112,7 @@ enum class RenderTargetLoadAction : uint8
 	DontCare,
 	Load,
 	Clear,
+	NoTouch,
 };
 DEFINE_ENUM_FLAG_OPERATORS(RenderTargetLoadAction)
 
@@ -121,6 +122,7 @@ enum class RenderTargetStoreAction : uint8
 	DontCare,
 	Store,
 	Resolve,
+	NoTouch,
 };
 DEFINE_ENUM_FLAG_OPERATORS(RenderTargetStoreAction)
 
@@ -135,6 +137,7 @@ enum class RenderPassAccess : uint8
 	Load_DontCare		= COMBINE_ACTIONS(Load, DontCare),
 	Clear_Resolve		= COMBINE_ACTIONS(Clear, Resolve),
 	Load_Resolve		= COMBINE_ACTIONS(Load, Resolve),
+	NoAccess			= COMBINE_ACTIONS(NoTouch, NoTouch)
 #undef COMBINE_ACTIONS
 };
 
@@ -151,6 +154,7 @@ struct RenderPassInfo
 	struct DepthTargetInfo
 	{
 		RenderPassAccess Access = RenderPassAccess::DontCare_DontCare;
+		RenderPassAccess StencilAccess = RenderPassAccess::DontCare_DontCare;
 		Texture* Texture = nullptr;
 	};
 
@@ -161,13 +165,14 @@ struct RenderPassInfo
 		DepthStencilTarget.Texture = pDepthBuffer;
 	}
 
-	RenderPassInfo(Texture* pRenderTarget, RenderPassAccess renderTargetAccess, Texture* pDepthBuffer, RenderPassAccess depthAccess)
+	RenderPassInfo(Texture* pRenderTarget, RenderPassAccess renderTargetAccess, Texture* pDepthBuffer, RenderPassAccess depthAccess, RenderPassAccess stencilAccess = RenderPassAccess::NoAccess)
 		: RenderTargetCount(1)
 	{
 		RenderTargets[0].Access = renderTargetAccess;
 		RenderTargets[0].Texture = pRenderTarget;
 		DepthStencilTarget.Access = depthAccess;
 		DepthStencilTarget.Texture = pDepthBuffer;
+		DepthStencilTarget.StencilAccess = stencilAccess;
 	}
 
 	uint32 RenderTargetCount;

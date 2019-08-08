@@ -15,6 +15,12 @@
 constexpr int VALID_COMPUTE_QUEUE_RESOURCE_STATES = D3D12_RESOURCE_STATE_COMMON | D3D12_RESOURCE_STATE_UNORDERED_ACCESS | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_COPY_DEST | D3D12_RESOURCE_STATE_COPY_SOURCE | D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT;
 constexpr int VALID_COPY_QUEUE_RESOURCE_STATES = D3D12_RESOURCE_STATE_COMMON | D3D12_RESOURCE_STATE_COPY_DEST | D3D12_RESOURCE_STATE_COPY_SOURCE;
 
+#define USE_RENDERPASSES 0
+
+#ifndef USE_RENDERPASSES
+#define USE_RENDERPASSES 0
+#endif
+
 #pragma region BASE
 
 CommandContext::CommandContext(Graphics* pGraphics, ID3D12GraphicsCommandList* pCommandList, ID3D12CommandAllocator* pAllocator)
@@ -339,8 +345,8 @@ GraphicsCommandContext::GraphicsCommandContext(Graphics* pGraphics, ID3D12Graphi
 
 void GraphicsCommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 {
+#if USE_RENDERPASSES
 	ComPtr<ID3D12GraphicsCommandList4> pCmd;
-
 	if (m_pCommandList->QueryInterface(IID_PPV_ARGS(pCmd.GetAddressOf())) == S_OK)
 	{
 		auto getRenderPassAccessBegin = [](RenderPassAccess access) {
@@ -370,11 +376,26 @@ void GraphicsCommandContext::BeginRenderPass(const RenderPassInfo& renderPassInf
 		{
 			assert(renderPassInfo.DepthStencilTarget.Texture->GetClearBinding().BindingValue == ClearBinding::ClearBindingValue::DepthStencil);
 			depthAccessBegin.Clear.ClearValue.DepthStencil.Depth = renderPassInfo.DepthStencilTarget.Texture->GetClearBinding().DepthStencil.Depth;
-			depthAccessBegin.Clear.ClearValue.DepthStencil.Stencil = renderPassInfo.DepthStencilTarget.Texture->GetClearBinding().DepthStencil.Stencil;
 			depthAccessBegin.Clear.ClearValue.Format = renderPassInfo.DepthStencilTarget.Texture->GetFormat();
 		}
 		D3D12_RENDER_PASS_ENDING_ACCESS depthAccessEnd{ getRenderPassAccessEnd(renderPassInfo.DepthStencilTarget.Access) };
-		D3D12_RENDER_PASS_DEPTH_STENCIL_DESC renderPassDepthStencilDesc{ renderPassInfo.DepthStencilTarget.Texture->GetDSV(), depthAccessBegin, depthAccessBegin, depthAccessEnd, depthAccessEnd };
+
+		bool writeable = true;
+		if (depthAccessEnd.Type == D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_DISCARD)
+		{
+			writeable = false;
+		}
+
+		D3D12_RENDER_PASS_BEGINNING_ACCESS stencilAccessBegin{ getRenderPassAccessBegin(renderPassInfo.DepthStencilTarget.StencilAccess) };
+		if (stencilAccessBegin.Type == D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_CLEAR)
+		{
+			assert(renderPassInfo.DepthStencilTarget.Texture->GetClearBinding().BindingValue == ClearBinding::ClearBindingValue::DepthStencil);
+			stencilAccessBegin.Clear.ClearValue.DepthStencil.Stencil = renderPassInfo.DepthStencilTarget.Texture->GetClearBinding().DepthStencil.Stencil;
+			stencilAccessBegin.Clear.ClearValue.Format = renderPassInfo.DepthStencilTarget.Texture->GetFormat();
+		}
+		D3D12_RENDER_PASS_ENDING_ACCESS stencilAccessEnd{ getRenderPassAccessEnd(renderPassInfo.DepthStencilTarget.StencilAccess) };
+
+		D3D12_RENDER_PASS_DEPTH_STENCIL_DESC renderPassDepthStencilDesc{ renderPassInfo.DepthStencilTarget.Texture->GetDSV(writeable), depthAccessBegin, stencilAccessBegin, depthAccessEnd, stencilAccessEnd };
 
 		std::array<D3D12_RENDER_PASS_RENDER_TARGET_DESC, 4> renderTargetDescs;
 		for (uint32 i = 0; i < renderPassInfo.RenderTargetCount; ++i)
@@ -395,11 +416,26 @@ void GraphicsCommandContext::BeginRenderPass(const RenderPassInfo& renderPassInf
 		pCmd->BeginRenderPass(renderPassInfo.RenderTargetCount, renderTargetDescs.data(), &renderPassDepthStencilDesc, D3D12_RENDER_PASS_FLAG_NONE);	
 	}
 	else
+#endif
 	{
-		D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = renderPassInfo.DepthStencilTarget.Texture->GetDSV();
+		bool writeable = true;
+		if ((RenderTargetLoadAction)((uint8)renderPassInfo.DepthStencilTarget.Access >> 2) == RenderTargetLoadAction::DontCare)
+		{
+			writeable = false;
+		}
+
+		D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = renderPassInfo.DepthStencilTarget.Texture->GetDSV(writeable);
+		D3D12_CLEAR_FLAGS clearFlags = (D3D12_CLEAR_FLAGS)0;
 		if ((RenderTargetLoadAction)((uint8)renderPassInfo.DepthStencilTarget.Access >> 2) == RenderTargetLoadAction::Clear)
 		{
-			D3D12_CLEAR_FLAGS clearFlags = D3D12_CLEAR_FLAGS::D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAGS::D3D12_CLEAR_FLAG_STENCIL;
+			clearFlags |= D3D12_CLEAR_FLAGS::D3D12_CLEAR_FLAG_DEPTH;
+		}
+		if ((RenderTargetLoadAction)((uint8)renderPassInfo.DepthStencilTarget.Access >> 2) == RenderTargetLoadAction::Clear)
+		{
+			clearFlags |= D3D12_CLEAR_FLAGS::D3D12_CLEAR_FLAG_STENCIL;
+		}
+		if (clearFlags != (D3D12_CLEAR_FLAGS)0)
+		{
 			const ClearBinding& clearBinding = renderPassInfo.DepthStencilTarget.Texture->GetClearBinding();
 			assert(clearBinding.BindingValue == ClearBinding::ClearBindingValue::DepthStencil);
 			m_pCommandList->ClearDepthStencilView(dsvHandle, clearFlags, clearBinding.DepthStencil.Depth, clearBinding.DepthStencil.Stencil, 0, nullptr);
@@ -424,12 +460,14 @@ void GraphicsCommandContext::BeginRenderPass(const RenderPassInfo& renderPassInf
 
 void GraphicsCommandContext::EndRenderPass()
 {
+#if USE_RENDERPASSES
 	ComPtr<ID3D12GraphicsCommandList4> pCmd;
 
 	if (m_pCommandList->QueryInterface(IID_PPV_ARGS(pCmd.GetAddressOf())) == S_OK)
 	{
 		pCmd->EndRenderPass();
 	}
+#endif
 }
 
 void GraphicsCommandContext::Draw(int vertexStart, int vertexCount)
