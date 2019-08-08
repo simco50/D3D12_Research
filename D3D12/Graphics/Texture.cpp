@@ -411,6 +411,7 @@ int Texture::GetRowDataSize(DXGI_FORMAT format, unsigned int width)
 	case DXGI_FORMAT_R32G32B32_FLOAT:
 		return width * 3 * sizeof(float);
 	default:
+		assert(false);
 		return 0;
 	}
 }

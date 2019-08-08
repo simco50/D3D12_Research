@@ -49,7 +49,11 @@ void GpuTimer::End(CommandContext* pContext)
 
 float GpuTimer::GetTime() const
 {
-	return Profiler::Instance()->GetGpuTime(m_TimerIndex);
+	if (m_TimerIndex >= 0)
+	{
+		return Profiler::Instance()->GetGpuTime(m_TimerIndex);
+	}
+	return 0.0f;
 }
 
 void ProfileNode::StartTimer(CommandContext* pContext)
@@ -314,10 +318,7 @@ void Profiler::EndReadBack(int frameIndex)
 
 float Profiler::GetGpuTime(int timerIndex) const
 {
-	if (timerIndex < 0)
-	{
-		return 0;
-	}
+	assert(timerIndex >= 0);
 	assert(m_pCurrentReadBackData);
 	uint64 start = m_pCurrentReadBackData[timerIndex * 2];
 	uint64 end = m_pCurrentReadBackData[timerIndex * 2 + 1];

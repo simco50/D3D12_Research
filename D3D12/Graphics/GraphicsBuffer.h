@@ -53,6 +53,20 @@ private:
 	std::unique_ptr<ByteAddressBuffer> m_pCounter;
 };
 
+class TypedBuffer : public GraphicsBuffer
+{
+public:
+	TypedBuffer(Graphics* pGraphics);
+	void Create(Graphics* pGraphics, DXGI_FORMAT format, uint64 elementCount, bool cpuVisible = false);
+	static bool FormatIsUAVCompatible(ID3D12Device* pDevice, bool typedUAVLoadAdditionalFormats, DXGI_FORMAT format);
+	virtual void CreateViews(Graphics* pGraphics) override;
+
+	DXGI_FORMAT GetFormat() const { return m_Format; }
+
+private:
+	DXGI_FORMAT m_Format;
+};
+
 class VertexBuffer : public GraphicsBuffer
 {
 public:
