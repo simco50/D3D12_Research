@@ -345,6 +345,8 @@ GraphicsCommandContext::GraphicsCommandContext(Graphics* pGraphics, ID3D12Graphi
 
 void GraphicsCommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 {
+	FlushResourceBarriers();
+
 #if USE_RENDERPASSES
 	ComPtr<ID3D12GraphicsCommandList4> pCmd;
 	if (m_pCommandList->QueryInterface(IID_PPV_ARGS(pCmd.GetAddressOf())) == S_OK)

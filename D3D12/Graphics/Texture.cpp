@@ -533,6 +533,7 @@ void Texture2D::CreateForSwapchain(Graphics* pGraphics, ID3D12Resource* pTexture
 	m_Width = (uint32)desc.Width;
 	m_Height = (uint32)desc.Height;
 	m_Format = desc.Format;
+	m_ClearBinding = ClearBinding(Color(0, 0, 0, 1));
 	if (m_Rtv.ptr == 0)
 	{
 		m_Rtv = pGraphics->AllocateCpuDescriptors(1, D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
