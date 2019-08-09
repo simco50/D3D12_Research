@@ -546,20 +546,20 @@ void Graphics::Update()
 		}
 		Profiler::Instance()->End(pContext);
 
-		Profiler::Instance()->Begin("Resolve", pContext);
 		//7. MSAA Render Target Resolve
 		// - We have to resolve a MSAA render target ourselves. Unlike D3D11, this is not done automatically by the API.
 		//	Luckily, there's a method that does it for us!
 		{
 			if (m_SampleCount > 1)
 			{
+				Profiler::Instance()->Begin("Resolve", pContext);
 				pContext->InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RESOLVE_SOURCE, false);
 				pContext->InsertResourceBarrier(GetCurrentBackbuffer(), D3D12_RESOURCE_STATE_RESOLVE_DEST, true);
 				pContext->GetCommandList()->ResolveSubresource(GetCurrentBackbuffer()->GetResource(), 0, GetCurrentRenderTarget()->GetResource(), 0, RENDER_TARGET_FORMAT);
+				Profiler::Instance()->End(pContext);
 			}
 			pContext->InsertResourceBarrier(GetCurrentBackbuffer(), D3D12_RESOURCE_STATE_PRESENT, true);
 		}
-		Profiler::Instance()->End(pContext);
 		nextFenceValue = pContext->Execute(false);
 	}
 
@@ -655,6 +655,12 @@ void Graphics::InitD3D()
 		pInfoQueue->Release();
 	}
 #endif
+
+	D3D12_FEATURE_DATA_D3D12_OPTIONS5 featureSupport{};
+	if (m_pDevice->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &featureSupport, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS5)) == S_OK)
+	{
+		m_RenderPassTier = featureSupport.RenderPassesTier;
+	}
 
 	//Check MSAA support
 	D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS qualityLevels;
@@ -1303,6 +1309,11 @@ bool Graphics::CheckTypedUAVSupport(DXGI_FORMAT format) const
 	default:
 		return false;
 	}
+}
+
+bool Graphics::UseRenderPasses() const
+{
+	return m_RenderPassTier > D3D12_RENDER_PASS_TIER::D3D12_RENDER_PASS_TIER_0;
 }
 
 D3D12_CPU_DESCRIPTOR_HANDLE Graphics::AllocateCpuDescriptors(int count, D3D12_DESCRIPTOR_HEAP_TYPE type)

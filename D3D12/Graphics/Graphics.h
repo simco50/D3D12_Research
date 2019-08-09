@@ -56,6 +56,7 @@ public:
 	uint32 GetWindowHeight() const { return m_WindowHeight; }
 
 	bool CheckTypedUAVSupport(DXGI_FORMAT format) const;
+	bool UseRenderPasses() const;
 
 	DynamicAllocationManager* GetAllocationManager() const { return m_pDynamicAllocationManager.get(); }
 
@@ -107,6 +108,8 @@ private:
 	ComPtr<IDXGIFactory3> m_pFactory;
 	ComPtr<IDXGISwapChain3> m_pSwapchain;
 	ComPtr<ID3D12Device> m_pDevice;
+
+	D3D12_RENDER_PASS_TIER m_RenderPassTier = D3D12_RENDER_PASS_TIER_0;
 
 	int m_SampleCount = 1;
 	int m_SampleQuality = 0;

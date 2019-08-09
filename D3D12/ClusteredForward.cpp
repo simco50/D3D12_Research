@@ -115,7 +115,7 @@ void ClusteredForward::Execute(const ClusteredForwardInputResources& resources)
 		pContext->InsertResourceBarrier(m_pDepthTexture.get(), D3D12_RESOURCE_STATE_DEPTH_WRITE);
 		pContext->InsertResourceBarrier(m_pUniqueClusters.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-		pContext->BeginRenderPass(RenderPassInfo(m_pDepthTexture.get(), RenderPassAccess::Clear_Store));
+		pContext->BeginRenderPass(RenderPassInfo(m_pDepthTexture.get(), RenderPassAccess::Clear_Store, true));
 
 		pContext->SetGraphicsPipelineState(m_pMarkUniqueClustersOpaquePSO.get());
 		pContext->SetGraphicsRootSignature(m_pMarkUniqueClustersRS.get());
