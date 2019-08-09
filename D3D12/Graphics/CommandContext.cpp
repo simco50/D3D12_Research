@@ -346,7 +346,6 @@ GraphicsCommandContext::GraphicsCommandContext(Graphics* pGraphics, ID3D12Graphi
 void GraphicsCommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 {
 	assert(!m_InRenderPass);
-	FlushResourceBarriers();
 
 #if USE_RENDERPASSES
 	ComPtr<ID3D12GraphicsCommandList4> pCmd;
@@ -389,24 +388,27 @@ void GraphicsCommandContext::BeginRenderPass(const RenderPassInfo& renderPassInf
 				memcpy(renderTargetDescs[i].BeginningAccess.Clear.ClearValue.Color, &data.Target->GetClearBinding().Color.x, sizeof(Color));
 				renderTargetDescs[i].BeginningAccess.Clear.ClearValue.Format = data.Target->GetFormat();
 			}
+			renderTargetDescs[i].EndingAccess.Type = RenderPassInfo::ExtractEndingAccess(data.Access);
+
 			uint32 subResource = D3D12CalcSubresource(data.MipLevel, data.ArrayIndex, 0, data.Target->GetMipLevels(), data.Target->GetArraySize());
+
+			std::array<D3D12_RENDER_PASS_ENDING_ACCESS_RESOLVE_SUBRESOURCE_PARAMETERS, 4> subResourceParameters{};
 
 			if (renderTargetDescs[i].EndingAccess.Type == D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_RESOLVE)
 			{
 				assert(data.ResolveTarget);
+				InsertResourceBarrier(data.ResolveTarget, D3D12_RESOURCE_STATE_RESOLVE_DEST, false);
 				renderTargetDescs[i].EndingAccess.Resolve.Format = data.Target->GetFormat();
 				renderTargetDescs[i].EndingAccess.Resolve.pDstResource = data.ResolveTarget->GetResource();
 				renderTargetDescs[i].EndingAccess.Resolve.pSrcResource = data.Target->GetResource();
 				renderTargetDescs[i].EndingAccess.Resolve.PreserveResolveSource = false;
 				renderTargetDescs[i].EndingAccess.Resolve.ResolveMode = D3D12_RESOLVE_MODE_AVERAGE;
 				renderTargetDescs[i].EndingAccess.Resolve.SubresourceCount = 1;
-				D3D12_RENDER_PASS_ENDING_ACCESS_RESOLVE_SUBRESOURCE_PARAMETERS subResourceParameters{};
-				subResourceParameters.DstSubresource = 0;
-				subResourceParameters.SrcSubresource = subResource;
-				subResourceParameters.DstX = 0;
-				subResourceParameters.DstY = 0;
-				subResourceParameters.SrcRect = CD3DX12_RECT(0, 0, data.Target->GetWidth(), data.Target->GetHeight());
-				renderTargetDescs[i].EndingAccess.Resolve.pSubresourceParameters = &subResourceParameters;
+				subResourceParameters[i].DstSubresource = 0;
+				subResourceParameters[i].SrcSubresource = subResource;
+				subResourceParameters[i].DstX = 0;
+				subResourceParameters[i].DstY = 0;
+				renderTargetDescs[i].EndingAccess.Resolve.pSubresourceParameters = subResourceParameters.data();
 			}
 
 			renderTargetDescs[i].cpuDescriptor = data.Target->GetRTV(subResource);
@@ -418,6 +420,7 @@ void GraphicsCommandContext::BeginRenderPass(const RenderPassInfo& renderPassInf
 			renderPassFlags |= D3D12_RENDER_PASS_FLAG_ALLOW_UAV_WRITES;
 		}
 
+		FlushResourceBarriers();
 		pCmd->BeginRenderPass(renderPassInfo.RenderTargetCount, renderTargetDescs.data(), &renderPassDepthStencilDesc, renderPassFlags);
 	}
 	else

@@ -31,7 +31,7 @@ CommandQueue::~CommandQueue()
 uint64 CommandQueue::ExecuteCommandList(ID3D12CommandList* pCommandList)
 {
 	std::lock_guard<std::mutex> lock(m_FenceMutex);
-	static_cast<ID3D12GraphicsCommandList*>(pCommandList)->Close();
+	HR(static_cast<ID3D12GraphicsCommandList*>(pCommandList)->Close());
 	m_pCommandQueue->ExecuteCommandLists(1, &pCommandList);
 	m_pCommandQueue->Signal(m_pFence.Get(), m_NextFenceValue);
 	return m_NextFenceValue++;

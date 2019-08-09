@@ -553,9 +553,10 @@ void Graphics::Update()
 			if (m_SampleCount > 1)
 			{
 				Profiler::Instance()->Begin("Resolve", pContext);
-				pContext->InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RESOLVE_SOURCE, false);
-				pContext->InsertResourceBarrier(GetCurrentBackbuffer(), D3D12_RESOURCE_STATE_RESOLVE_DEST, true);
-				pContext->GetCommandList()->ResolveSubresource(GetCurrentBackbuffer()->GetResource(), 0, GetCurrentRenderTarget()->GetResource(), 0, RENDER_TARGET_FORMAT);
+				RenderPassInfo info(GetCurrentRenderTarget(), RenderPassAccess::Load_Resolve, GetDepthStencil(), RenderPassAccess::DontCare_DontCare);
+				info.RenderTargets[0].ResolveTarget = GetCurrentBackbuffer();
+				pContext->BeginRenderPass(info);
+				pContext->EndRenderPass();
 				Profiler::Instance()->End(pContext);
 			}
 			pContext->InsertResourceBarrier(GetCurrentBackbuffer(), D3D12_RESOURCE_STATE_PRESENT, true);
@@ -659,7 +660,7 @@ void Graphics::InitD3D()
 	D3D12_FEATURE_DATA_D3D12_OPTIONS5 featureSupport{};
 	if (m_pDevice->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &featureSupport, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS5)) == S_OK)
 	{
-		m_RenderPassTier = featureSupport.RenderPassesTier;
+		m_RenderPassTier = D3D12_RENDER_PASS_TIER_1;//featureSupport.RenderPassesTier;
 	}
 
 	//Check MSAA support
