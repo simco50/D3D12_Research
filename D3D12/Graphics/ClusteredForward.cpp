@@ -28,6 +28,7 @@ ClusteredForward::ClusteredForward(Graphics* pGraphics)
 void ClusteredForward::OnSwapchainCreated(int windowWidth, int windowHeight)
 {
 	m_pDepthTexture->Create(m_pGraphics, windowWidth, windowHeight, Graphics::DEPTH_STENCIL_FORMAT, TextureUsage::DepthStencil, m_pGraphics->GetMultiSampleCount(), -1, ClearBinding(0.0f, 0));
+	m_pDepthTexture->SetName("Clustered Forward Depth Texture");
 
 	m_ClusterCountX = (uint32)ceil((float)windowWidth / cClusterSize);
 	m_ClusterCountY = (uint32)ceil((float)windowHeight / cClusterSize);
@@ -113,6 +114,7 @@ void ClusteredForward::Execute(const ClusteredForwardInputResources& resources)
 		Profiler::Instance()->End(pContext);
 
 		pContext->InsertResourceBarrier(m_pDepthTexture.get(), D3D12_RESOURCE_STATE_DEPTH_WRITE);
+		pContext->InsertResourceBarrier(resources.pRenderTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
 		pContext->InsertResourceBarrier(m_pUniqueClusters.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
 		pContext->BeginRenderPass(RenderPassInfo(m_pDepthTexture.get(), RenderPassAccess::Clear_Store, true));

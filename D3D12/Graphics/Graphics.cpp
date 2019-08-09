@@ -619,8 +619,14 @@ void Graphics::InitD3D()
 	//Create the factory
 	HR(CreateDXGIFactory2(dxgiFactoryFlags, IID_PPV_ARGS(&m_pFactory)));
 
+	IDXGIAdapter* pAdapter = nullptr;
+	uint32 adapterIndex = 0;
+	/*while (m_pFactory->EnumAdapters(adapterIndex++, &pAdapter) == S_OK)
+	{
+	}*/
+
 	//Create the device
-	HR(D3D12CreateDevice(nullptr, D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&m_pDevice)));
+	HR(D3D12CreateDevice(pAdapter, D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&m_pDevice)));
 
 #ifdef _DEBUG
 	ID3D12InfoQueue* pInfoQueue = nullptr;
@@ -660,7 +666,7 @@ void Graphics::InitD3D()
 	D3D12_FEATURE_DATA_D3D12_OPTIONS5 featureSupport{};
 	if (m_pDevice->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &featureSupport, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS5)) == S_OK)
 	{
-		m_RenderPassTier = D3D12_RENDER_PASS_TIER_1;//featureSupport.RenderPassesTier;
+		m_RenderPassTier = featureSupport.RenderPassesTier;
 	}
 
 	//Check MSAA support

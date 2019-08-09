@@ -397,7 +397,7 @@ void GraphicsCommandContext::BeginRenderPass(const RenderPassInfo& renderPassInf
 			if (renderTargetDescs[i].EndingAccess.Type == D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_RESOLVE)
 			{
 				assert(data.ResolveTarget);
-				InsertResourceBarrier(data.ResolveTarget, D3D12_RESOURCE_STATE_RESOLVE_DEST, false);
+				InsertResourceBarrier(data.ResolveTarget, D3D12_RESOURCE_STATE_RESOLVE_DEST);
 				renderTargetDescs[i].EndingAccess.Resolve.Format = data.Target->GetFormat();
 				renderTargetDescs[i].EndingAccess.Resolve.pDstResource = data.ResolveTarget->GetResource();
 				renderTargetDescs[i].EndingAccess.Resolve.pSrcResource = data.Target->GetResource();
@@ -426,6 +426,7 @@ void GraphicsCommandContext::BeginRenderPass(const RenderPassInfo& renderPassInf
 	else
 #endif
 	{
+		FlushResourceBarriers();
 		bool writeable = true;
 		if (RenderPassInfo::ExtractEndingAccess(renderPassInfo.DepthStencilTarget.Access) == D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_DISCARD)
 		{
