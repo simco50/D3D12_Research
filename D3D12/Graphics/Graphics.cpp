@@ -17,6 +17,7 @@
 #include "Profiler.h"
 #include "PersistentResourceAllocator.h"
 #include "ClusteredForward.h"
+#include "Scene/Camera.h"
 
 const DXGI_FORMAT Graphics::DEPTH_STENCIL_FORMAT = DXGI_FORMAT_D32_FLOAT;
 const DXGI_FORMAT Graphics::DEPTH_STENCIL_SHADOW_FORMAT = DXGI_FORMAT_D16_UNORM;
@@ -39,6 +40,13 @@ void Graphics::Initialize(HWND window)
 {
 	m_pWindow = window;
 
+	m_pCamera = std::make_unique<FreeCamera>(this);
+	m_pCamera->SetPosition(Vector3(0, 100, -15));
+	m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(XM_PIDIV4, XM_PIDIV4, 0));
+	m_pCamera->SetNearPlane(500.0f);
+	m_pCamera->SetFarPlane(2.0f);
+	m_pCamera->SetViewport(0, 0, 1, 1);
+
 	Shader::AddGlobalShaderDefine("BLOCK_SIZE", std::to_string(FORWARD_PLUS_BLOCK_SIZE));
 	Shader::AddGlobalShaderDefine("SHADOWMAP_DX", std::to_string(1.0f / SHADOW_MAP_SIZE));
 	Shader::AddGlobalShaderDefine("PCF_KERNEL_SIZE", std::to_string(5));
@@ -48,9 +56,6 @@ void Graphics::Initialize(HWND window)
 	InitializeAssets();
 
 	RandomizeLights(m_DesiredLightCount);
-
-	m_CameraPosition = Vector3(0, 100, -15);
-	m_CameraRotation = Quaternion::CreateFromYawPitchRoll(XM_PIDIV4, XM_PIDIV4, 0);
 }
 
 void Graphics::RandomizeLights(int count)
@@ -111,18 +116,12 @@ void Graphics::RandomizeLights(int count)
 	pContext->Execute(true);
 }
 
-Matrix Graphics::GetViewMatrix()
-{
-	Matrix viewInverse = Matrix::CreateFromQuaternion(m_CameraRotation) * Matrix::CreateTranslation(m_CameraPosition);
-	Matrix cameraView;
-	viewInverse.Invert(cameraView);
-	return cameraView;
-}
-
 void Graphics::Update()
 {
 	Profiler::Instance()->Begin("Update Game State");
 	//Render forward+ tiles
+
+	m_pCamera->Update();
 	if (Input::Instance().IsKeyPressed('P'))
 	{
 		m_UseDebugView = !m_UseDebugView;
@@ -137,34 +136,15 @@ void Graphics::Update()
 		float length = light.Position.Length();
 	}
 
-	//Camera movement
-	if (Input::Instance().IsMouseDown(0))
-	{
-		Vector2 mouseDelta = Input::Instance().GetMouseDelta();
-		Quaternion yr = Quaternion::CreateFromYawPitchRoll(0, mouseDelta.y * GameTimer::DeltaTime() * 0.1f, 0);
-		Quaternion pr = Quaternion::CreateFromYawPitchRoll(mouseDelta.x * GameTimer::DeltaTime() * 0.1f, 0, 0);
-		m_CameraRotation = yr * m_CameraRotation * pr;
-	}
-	Vector3 movement;
-	movement.x -= (int)Input::Instance().IsKeyDown('A');
-	movement.x += (int)Input::Instance().IsKeyDown('D');
-	movement.z -= (int)Input::Instance().IsKeyDown('S');
-	movement.z += (int)Input::Instance().IsKeyDown('W');
-	movement.y -= (int)Input::Instance().IsKeyDown('Q');
-	movement.y += (int)Input::Instance().IsKeyDown('E');
-	movement = Vector3::Transform(movement, m_CameraRotation);
-	movement *= GameTimer::DeltaTime() * 20.0f;
-	m_CameraPosition += movement;
-
 	std::sort(m_TransparantBatches.begin(), m_TransparantBatches.end(), [this](const Batch& a, const Batch& b) {
-		float aDist = Vector3::DistanceSquared(a.pMesh->GetBounds().Center, m_CameraPosition);
-		float bDist = Vector3::DistanceSquared(b.pMesh->GetBounds().Center, m_CameraPosition);
+		float aDist = Vector3::DistanceSquared(a.pMesh->GetBounds().Center, m_pCamera->GetPosition());
+		float bDist = Vector3::DistanceSquared(b.pMesh->GetBounds().Center, m_pCamera->GetPosition());
 		return aDist > bDist;
 		});
 
 	std::sort(m_OpaqueBatches.begin(), m_OpaqueBatches.end(), [this](const Batch& a, const Batch& b) {
-		float aDist = Vector3::DistanceSquared(a.pMesh->GetBounds().Center, m_CameraPosition);
-		float bDist = Vector3::DistanceSquared(b.pMesh->GetBounds().Center, m_CameraPosition);
+		float aDist = Vector3::DistanceSquared(a.pMesh->GetBounds().Center, m_pCamera->GetPosition());
+		float bDist = Vector3::DistanceSquared(b.pMesh->GetBounds().Center, m_pCamera->GetPosition());
 		return aDist < bDist;
 		});
 
@@ -176,11 +156,7 @@ void Graphics::Update()
 	} frameData;
 
 	//Camera constants
-	frameData.ViewInverse = Matrix::CreateFromQuaternion(m_CameraRotation) * Matrix::CreateTranslation(m_CameraPosition);
-	Matrix cameraView;
-	frameData.ViewInverse.Invert(cameraView);
-	Matrix cameraProjection = XMMatrixPerspectiveFovLH(Math::ToRadians * 60, (float)m_WindowWidth / m_WindowHeight, 100000.0f, 0.1f);
-	Matrix cameraViewProjection = cameraView * cameraProjection;
+	frameData.ViewInverse = m_pCamera->GetViewInverse();
 
 	// SHADOW MAP PARTITIONING
 	/////////////////////////////////////////
@@ -197,37 +173,7 @@ void Graphics::Update()
 	/*lightData.LightViewProjections[m_ShadowCasters] = Matrix::CreateLookAt(m_Lights[0].Position, m_Lights[0].Position + Vector3(-1.0f, 0.0f, 0.0f), Vector3(0.0f, 1.0f, 0.0f)) * projection;
 	lightData.ShadowMapOffsets[m_ShadowCasters].x = 0.0f;
 	lightData.ShadowMapOffsets[m_ShadowCasters].y = 0.0f;
-	lightData.ShadowMapOffsets[m_ShadowCasters].z = 0.25f;
-	++m_ShadowCasters;
-
-	lightData.LightViewProjections[m_ShadowCasters] = Matrix::CreateLookAt(m_Lights[0].Position, m_Lights[0].Position + Vector3(1.0f, 0.0f, 0.0f), Vector3(0.0f, 1.0f, 0.0f)) * projection;
-	lightData.ShadowMapOffsets[m_ShadowCasters].x = 0.25f;
-	lightData.ShadowMapOffsets[m_ShadowCasters].y = 0.0f;
-	lightData.ShadowMapOffsets[m_ShadowCasters].z = 0.25f;
-	++m_ShadowCasters;
-
-	lightData.LightViewProjections[m_ShadowCasters] = Matrix::CreateLookAt(m_Lights[0].Position, m_Lights[0].Position + Vector3(0.0f, -1.0f, 0.0f), Vector3(0.0f, 0.0f, -1.0f)) * projection;
-	lightData.ShadowMapOffsets[m_ShadowCasters].x = 0.5f;
-	lightData.ShadowMapOffsets[m_ShadowCasters].y = 0.0f;
-	lightData.ShadowMapOffsets[m_ShadowCasters].z = 0.25f;
-	++m_ShadowCasters;
-
-	lightData.LightViewProjections[m_ShadowCasters] = Matrix::CreateLookAt(m_Lights[0].Position, m_Lights[0].Position + Vector3(0.0f, 1.0f, 0.0f), Vector3(0.0f, 0.0f, 1.0f)) * projection;
-	lightData.ShadowMapOffsets[m_ShadowCasters].x = 0.75f;
-	lightData.ShadowMapOffsets[m_ShadowCasters].y = 0.0f;
-	lightData.ShadowMapOffsets[m_ShadowCasters].z = 0.25f;
-	++m_ShadowCasters;
-
-	lightData.LightViewProjections[m_ShadowCasters] = Matrix::CreateLookAt(m_Lights[0].Position, m_Lights[0].Position + Vector3(0.0f, 0.0f, -1.0f), Vector3(0.0f, 1.0f, 0.0f)) * projection;
-	lightData.ShadowMapOffsets[m_ShadowCasters].x = 0.0f;
-	lightData.ShadowMapOffsets[m_ShadowCasters].y = 0.25f;
-	lightData.ShadowMapOffsets[m_ShadowCasters].z = 0.25f;
-	++m_ShadowCasters;
-
-	lightData.LightViewProjections[m_ShadowCasters] = Matrix::CreateLookAt(m_Lights[0].Position, m_Lights[0].Position + Vector3(0.0f, 0.0f, 1.0f), Vector3(0.0f, 1.0f, 0.0f)) * projection;
-	lightData.ShadowMapOffsets[m_ShadowCasters].x = 0.25f;
-	lightData.ShadowMapOffsets[m_ShadowCasters].y = 0.25f;
-	lightData.ShadowMapOffsets[m_ShadowCasters].z = 0.25f;
+	lightData.ShadowMapOffsets[m_ShadowCasters].z = 1.0f;
 	++m_ShadowCasters;*/
 
 	////////////////////////////////
@@ -264,13 +210,13 @@ void Graphics::Update()
 			{
 				Matrix WorldViewProjection;
 			} ObjectData;
-			ObjectData.WorldViewProjection = cameraViewProjection;
 
 			pContext->SetGraphicsPipelineState(m_pDepthPrepassPSO.get());
 			pContext->SetGraphicsRootSignature(m_pDepthPrepassRS.get());
-			pContext->SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
 			for (const Batch& b : m_OpaqueBatches)
 			{
+				ObjectData.WorldViewProjection = m_pCamera->GetViewProjection();
+				pContext->SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
 				b.pMesh->Draw(pContext);
 			}
 
@@ -339,14 +285,14 @@ void Graphics::Update()
 				uint32 LightCount;
 			} Data;
 
-			Data.CameraView = cameraView;
+			Data.CameraView = m_pCamera->GetView();
 			Data.NumThreadGroups[0] = Math::RoundUp((float)m_WindowWidth / FORWARD_PLUS_BLOCK_SIZE);
 			Data.NumThreadGroups[1] = Math::RoundUp((float)m_WindowHeight / FORWARD_PLUS_BLOCK_SIZE);
 			Data.NumThreadGroups[2] = 1;
 			Data.ScreenDimensions.x = (float)m_WindowWidth;
 			Data.ScreenDimensions.y = (float)m_WindowHeight;
 			Data.LightCount = (uint32)m_Lights.size();
-			cameraProjection.Invert(Data.ProjectionInverse);
+			Data.ProjectionInverse = m_pCamera->GetProjectionInverse();
 
 			pContext->SetComputeDynamicConstantBufferView(0, &Data, sizeof(ShaderParameters));
 			pContext->SetDynamicDescriptor(1, 0, m_pLightIndexCounter->GetUAV());
@@ -450,7 +396,7 @@ void Graphics::Update()
 			pContext->InsertResourceBarrier(GetDepthStencil(), D3D12_RESOURCE_STATE_DEPTH_READ);
 			pContext->InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RENDER_TARGET);
 
-			pContext->BeginRenderPass(RenderPassInfo(GetCurrentRenderTarget(), RenderPassAccess::DontCare_Store, GetDepthStencil(), RenderPassAccess::Load_DontCare));
+			pContext->BeginRenderPass(RenderPassInfo(GetCurrentRenderTarget(), RenderPassAccess::Clear_Store, GetDepthStencil(), RenderPassAccess::Load_DontCare));
 
 			pContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
@@ -459,8 +405,6 @@ void Graphics::Update()
 				Matrix World;
 				Matrix WorldViewProjection;
 			} ObjectData;
-			ObjectData.World = XMMatrixIdentity();
-			ObjectData.WorldViewProjection = ObjectData.World * cameraViewProjection;
 
 			//Opaque
 			{
@@ -468,7 +412,6 @@ void Graphics::Update()
 				pContext->SetGraphicsPipelineState(m_UseDebugView ? m_pDiffuseDebugPSO.get() : m_pDiffuseOpaquePSO.get());
 				pContext->SetGraphicsRootSignature(m_pDiffuseRS.get());
 
-				pContext->SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
 				pContext->SetDynamicConstantBufferView(1, &frameData, sizeof(PerFrameData));
 				pContext->SetDynamicConstantBufferView(2, &lightData, sizeof(LightData));
 				pContext->SetDynamicDescriptor(4, 0, m_pShadowMap->GetSRV());
@@ -478,6 +421,9 @@ void Graphics::Update()
 
 				for (const Batch& b : m_OpaqueBatches)
 				{
+					ObjectData.World = XMMatrixIdentity();
+					ObjectData.WorldViewProjection = ObjectData.World * m_pCamera->GetViewProjection();
+					pContext->SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
 					pContext->SetDynamicDescriptor(3, 0, b.pMaterial->pDiffuseTexture->GetSRV());
 					pContext->SetDynamicDescriptor(3, 1, b.pMaterial->pNormalTexture->GetSRV());
 					pContext->SetDynamicDescriptor(3, 2, b.pMaterial->pSpecularTexture->GetSRV());
@@ -502,6 +448,9 @@ void Graphics::Update()
 
 				for (const Batch& b : m_TransparantBatches)
 				{
+					ObjectData.World = XMMatrixIdentity();
+					ObjectData.WorldViewProjection = ObjectData.World * m_pCamera->GetViewProjection();
+					pContext->SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
 					pContext->SetDynamicDescriptor(3, 0, b.pMaterial->pDiffuseTexture->GetSRV());
 					pContext->SetDynamicDescriptor(3, 1, b.pMaterial->pNormalTexture->GetSRV());
 					pContext->SetDynamicDescriptor(3, 2, b.pMaterial->pSpecularTexture->GetSRV());
@@ -512,10 +461,10 @@ void Graphics::Update()
 
 			Profiler::Instance()->End(pContext);
 
-			pContext->InsertResourceBarrier(m_pLightGridOpaque.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, false);
-			pContext->InsertResourceBarrier(m_pLightIndexListBufferOpaque.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, true);
-			pContext->InsertResourceBarrier(m_pLightGridTransparant.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, false);
-			pContext->InsertResourceBarrier(m_pLightIndexListBufferTransparant.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, true);
+			pContext->InsertResourceBarrier(m_pLightGridOpaque.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+			pContext->InsertResourceBarrier(m_pLightIndexListBufferOpaque.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+			pContext->InsertResourceBarrier(m_pLightGridTransparant.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+			pContext->InsertResourceBarrier(m_pLightIndexListBufferTransparant.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
 			pContext->EndRenderPass();
 			pContext->Execute(false);
@@ -531,6 +480,7 @@ void Graphics::Update()
 		resources.pTransparantBatches = &m_TransparantBatches;
 		resources.pRenderTarget = GetCurrentRenderTarget();
 		resources.pLightBuffer = m_pLightBuffer.get();
+		resources.pCamera = m_pCamera.get();
 		m_pClusteredForward->Execute(resources);
 		Profiler::Instance()->End();
 	}

@@ -17,6 +17,7 @@ class SubMesh;
 class PersistentResourceAllocator;
 struct Material;
 class ClusteredForward;
+class Camera;
 
 struct Batch
 {
@@ -67,6 +68,8 @@ public:
 	Texture2D* GetCurrentRenderTarget() const { return m_SampleCount > 1 ? m_pMultiSampleRenderTarget.get() : GetCurrentBackbuffer(); }
 	Texture2D* GetCurrentBackbuffer() const { return m_RenderTargets[m_CurrentBackBufferIndex].get(); }
 
+	Camera* GetCamera() const { return m_pCamera.get(); }
+
 	uint32 GetMultiSampleCount() const { return m_SampleCount; }
 	uint32 GetMultiSampleQualityLevel(uint32 msaa);
 
@@ -81,8 +84,6 @@ public:
 	static const DXGI_FORMAT RENDER_TARGET_FORMAT;
 	static const int FORWARD_PLUS_BLOCK_SIZE = 16;
 	static const int MAX_SHADOW_CASTERS = 8;
-
-	Matrix GetViewMatrix();
 
 private:
 	void BeginFrame();
@@ -100,8 +101,7 @@ private:
 
 	int m_DesiredLightCount = 4096;
 
-	Vector3 m_CameraPosition;
-	Quaternion m_CameraRotation;
+	std::unique_ptr<Camera> m_pCamera;
 
 	HWND m_pWindow = nullptr;
 
