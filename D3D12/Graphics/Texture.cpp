@@ -123,6 +123,11 @@ void Texture::Create_Internal(Graphics* pGraphics, TextureDimension dimension, i
 		desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
 		pClearValue = &clearValue;
 		m_CurrentState = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+
+		if ((usage & TextureUsage::ShaderResource) != TextureUsage::ShaderResource)
+		{
+			desc.Flags |= D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
+		}
 	}
 
 	m_pResource = pGraphics->CreateResource(desc, m_CurrentState, D3D12_HEAP_TYPE_DEFAULT, pClearValue);

@@ -8,6 +8,7 @@ class GraphicsPipelineState;
 class StructuredBuffer;
 class Texture2D;
 class ByteAddressBuffer;
+class Camera;
 
 struct ClusteredForwardInputResources
 {
@@ -15,6 +16,7 @@ struct ClusteredForwardInputResources
 	const std::vector<Batch>* pOpaqueBatches;
 	const std::vector<Batch>* pTransparantBatches;
 	StructuredBuffer* pLightBuffer;
+	Camera* pCamera;
 };
 
 class ClusteredForward

@@ -2,6 +2,8 @@
 #include "CommandQueue.h"
 #include "CommandAllocatorPool.h"
 #include "Graphics.h"
+#define USE_PIX
+#include "pix3.h"
 
 CommandQueue::CommandQueue(Graphics* pGraphics, D3D12_COMMAND_LIST_TYPE type)
 	: m_pGraphics(pGraphics),
@@ -86,7 +88,15 @@ void CommandQueue::WaitForFence(uint64 fenceValue)
 	std::lock_guard<std::mutex> lockGuard(m_EventMutex);
 
 	m_pFence->SetEventOnCompletion(fenceValue, m_pFenceEventHandle);
-	WaitForSingleObject(m_pFenceEventHandle, INFINITE);
+	DWORD result = WaitForSingleObject(m_pFenceEventHandle, INFINITE);
+
+	switch (result)
+	{
+	case WAIT_OBJECT_0:
+		PIXNotifyWakeFromFenceSignal(m_pFenceEventHandle); // The event was successfully signaled, so notify PIX
+		break;
+	}
+
 	m_LastCompletedFenceValue = fenceValue;
 }
 
