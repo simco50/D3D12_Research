@@ -186,4 +186,5 @@ int WINAPI WinMain(HINSTANCE hInstance,	HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	E_LOG(Info, "Startup");
 	ViewWrapper vp;
 	vp.Run("D3D12 - Hello World");
+	return 0;
 }

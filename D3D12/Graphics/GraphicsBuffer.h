@@ -44,13 +44,18 @@ class StructuredBuffer : public GraphicsBuffer
 {
 public:
 	StructuredBuffer(Graphics* pGraphics);
+	~StructuredBuffer();
 	void Create(Graphics* pGraphics, uint32 elementStride, uint64 elementCount, bool cpuVisible = false);
+	void Create(Graphics* pGraphics, uint32 elementStride, uint64 elementCount, ByteAddressBuffer* pCounterBuffer, uint32 counterBufferOffset, bool cpuVisible = false);
 	virtual void CreateViews(Graphics* pGraphics) override;
 
-	ByteAddressBuffer* GetCounter() const { return m_pCounter.get(); }
+	ByteAddressBuffer* GetCounter() const { return m_pCounter; }
+	uint32 GetCounterBufferOffset() const { return m_CounterBufferOffset; }
 
 private:
-	std::unique_ptr<ByteAddressBuffer> m_pCounter;
+	ByteAddressBuffer* m_pCounter = nullptr;
+	uint32 m_CounterBufferOffset = 0;
+	bool m_CounterOwner = true;
 };
 
 class TypedBuffer : public GraphicsBuffer

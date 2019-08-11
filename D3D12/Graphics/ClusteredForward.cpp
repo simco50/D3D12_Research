@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "ClusteredForward.h"
+#include "Graphics/CommandSignature.h"
 #include "Graphics/Shader.h"
 #include "Graphics/PipelineState.h"
 #include "Graphics/RootSignature.h"
@@ -12,6 +13,7 @@
 #include "Graphics/Light.h"
 #include "Graphics/Profiler.h"
 #include "Scene/Camera.h"
+#include "GpuParticles.h"
 
 static constexpr int cClusterSize = 64;
 static constexpr int cClusterCountZ = 32;
@@ -24,6 +26,15 @@ ClusteredForward::ClusteredForward(Graphics* pGraphics)
 {
 	SetupResources(pGraphics);
 	SetupPipelines(pGraphics);
+
+	GpuParticles particles(pGraphics);
+	particles.Initialize();
+	particles.Simulate();
+}
+
+ClusteredForward::~ClusteredForward()
+{
+
 }
 
 void ClusteredForward::OnSwapchainCreated(int windowWidth, int windowHeight)
@@ -218,9 +229,11 @@ void ClusteredForward::Execute(const ClusteredForwardInputResources& resources)
 				pContext->SetComputePipelineState(m_pAlternativeLightCullingPSO.get());
 				pContext->SetComputeRootSignature(m_pLightCullingRS.get());
 
-				pContext->InsertResourceBarrier(m_pIndirectArguments.get(), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT, false);
-				pContext->InsertResourceBarrier(m_pCompactedClusters.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, false);
-				pContext->InsertResourceBarrier(m_pAABBs.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, true);
+				pContext->InsertResourceBarrier(m_pLightGrid.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+				pContext->InsertResourceBarrier(m_pIndirectArguments.get(), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
+				pContext->InsertResourceBarrier(m_pCompactedClusters.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+				pContext->InsertResourceBarrier(m_pAABBs.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+				pContext->FlushResourceBarriers();
 
 				Profiler::Instance()->Begin("Set Data", pContext);
 				uint32 zero = 0;
@@ -296,7 +309,7 @@ void ClusteredForward::Execute(const ClusteredForwardInputResources& resources)
 				pContext->SetDynamicDescriptor(2, 1, m_pLightIndexGrid->GetUAV());
 				pContext->SetDynamicDescriptor(2, 2, m_pLightGrid->GetUAV());
 
-				pContext->ExecuteIndirect(m_pLightCullingCommandSignature.Get(), m_pIndirectArguments.get());
+				pContext->ExecuteIndirect(m_pLightCullingCommandSignature->GetCommandSignature(), m_pIndirectArguments.get());
 
 				Profiler::Instance()->End(pContext);
 				uint64 fence = pContext->Execute(false);
@@ -573,14 +586,9 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
 		m_pLightCullingPSO->SetRootSignature(m_pLightCullingRS->GetRootSignature());
 		m_pLightCullingPSO->Finalize("Light Culling", pGraphics->GetDevice());
 
-		D3D12_INDIRECT_ARGUMENT_DESC desc;
-		desc.Type = D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH;
-		D3D12_COMMAND_SIGNATURE_DESC sigDesc = {};
-		sigDesc.ByteStride = 3 * sizeof(uint32);
-		sigDesc.NodeMask = 0;
-		sigDesc.pArgumentDescs = &desc;
-		sigDesc.NumArgumentDescs = 1;
-		HR(m_pGraphics->GetDevice()->CreateCommandSignature(&sigDesc, nullptr, IID_PPV_ARGS(m_pLightCullingCommandSignature.GetAddressOf())));
+		m_pLightCullingCommandSignature = std::make_unique<CommandSignature>();
+		m_pLightCullingCommandSignature->AddDispatch();
+		m_pLightCullingCommandSignature->Finalize("Light Culling Command Signature", m_pGraphics->GetDevice());
 	}
 
 	//Alternative Light Culling
