@@ -27,9 +27,8 @@ ClusteredForward::ClusteredForward(Graphics* pGraphics)
 	SetupResources(pGraphics);
 	SetupPipelines(pGraphics);
 
-	GpuParticles particles(pGraphics);
-	particles.Initialize();
-	particles.Simulate();
+	m_pGpuParticles = std::make_unique<GpuParticles>(pGraphics);
+	m_pGpuParticles->Initialize();
 }
 
 ClusteredForward::~ClusteredForward()
@@ -108,6 +107,8 @@ void ClusteredForward::Execute(const ClusteredForwardInputResources& resources)
 
 	float sliceMagicA = (float)cClusterCountZ / log(nearZ / farZ);
 	float sliceMagicB = ((float)cClusterCountZ * log(farZ)) / log(nearZ / farZ);
+
+	m_pGpuParticles->Simulate();
 
 	//Mark Unique Clusters
 	{

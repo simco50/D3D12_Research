@@ -13,10 +13,10 @@ struct CS_INPUT
 	uint GroupIndex : SV_GROUPINDEX;
 };
 
-#define ALIVE_LIST_1_COUNTER 0
-#define ALIVE_LIST_2_COUNTER 1
-#define DEAD_LIST_COUNTER 2
-#define EMIT_COUNTER 3
+#define DEAD_LIST_COUNTER 0
+#define ALIVE_LIST_1_COUNTER 4
+#define ALIVE_LIST_2_COUNTER 8
+#define EMIT_COUNT 12
 
 #ifdef COMPILE_UPDATE_PARAMETERS
 
@@ -33,41 +33,49 @@ RWByteAddressBuffer uSimulateArguments : register(u2);
 void UpdateSimulationParameters(CS_INPUT input)
 {
     uint deadCount = uCounters.Load(DEAD_LIST_COUNTER);
-    uint aliveParticleCount = uCounters.Load(ALIVE_LIST_1_COUNTER);
+    uint aliveParticleCount = uCounters.Load(ALIVE_LIST_2_COUNTER);
 
     uint emitCount = min(deadCount, cEmitCount);
 
-    uEmitArguments.Store3(0, uint3(emitCount / 128, 1, 1));
+    uEmitArguments.Store3(0, uint3(ceil((float)emitCount / 128), 1, 1));
 
-    uSimulateArguments.Store3(0, uint3((aliveParticleCount + emitCount) / 128, 1, 1));
+    uint simulateCount = ceil((float)(aliveParticleCount + emitCount) / 128);
+    uSimulateArguments.Store3(0, uint3(simulateCount, 1, 1));
 
     uCounters.Store(ALIVE_LIST_1_COUNTER, aliveParticleCount);
     uCounters.Store(ALIVE_LIST_2_COUNTER, 0);
-    uCounters.Store(EMIT_COUNTER, emitCount);
+    uCounters.Store(EMIT_COUNT, emitCount);
 }
 
 #endif
 
 #if COMPILE_EMITTER
 
-RWStructuredBuffer<uint> uDeadList : register(u0);
-RWStructuredBuffer<uint> uAliveList1 : register(u1);
-RWStructuredBuffer<ParticleData> uParticleData  : register(u2);
+RWByteAddressBuffer uCounters : register(u0);
+RWStructuredBuffer<uint> uDeadList : register(u1);
+RWStructuredBuffer<uint> uAliveList1 : register(u2);
+RWStructuredBuffer<ParticleData> uParticleData  : register(u3);
 
 [numthreads(128, 1, 1)]
 void Emit(CS_INPUT input)
 {
-    uint deadSlot = uDeadList.DecrementCounter();
-    uint particleIndex = uDeadList[deadSlot - 1];
+    uint emitCount = uCounters.Load(EMIT_COUNT);
+    if(input.DispatchThreadId.x < emitCount)
+    {
+        ParticleData p;
+        p.LifeTime = 0;
+        p.Position = float3(input.DispatchThreadId.x, 0, 0);
+        p.Velocity = float3(1, 0, 0);
 
-    ParticleData p = uParticleData[particleIndex];
-    p.LifeTime = 0;
-    p.Position = float3(input.DispatchThreadId.x, 0, 0);
-    p.Velocity = float3(1, 0, 0);
-    uParticleData[particleIndex] = p;
+        uint deadSlot;
+        uCounters.InterlockedAdd(DEAD_LIST_COUNTER, -1, deadSlot);
+        uint particleIndex = uDeadList[deadSlot - 1];
+        uParticleData[particleIndex] = p;
 
-    uint aliveSlot = uAliveList1.IncrementCounter();
-    uAliveList1[aliveSlot] = particleIndex;
+        uint aliveSlot;
+        uCounters.InterlockedAdd(ALIVE_LIST_1_COUNTER, 1, aliveSlot);
+        uAliveList1[aliveSlot] = particleIndex;
+    }
 }
 
 #endif
@@ -80,30 +88,37 @@ cbuffer Parameters : register(b0)
     float cParticleLifeTime;
 }
 
-RWStructuredBuffer<uint> uDeadList : register(u0);
-RWStructuredBuffer<uint> uAliveList1 : register(u1);
-RWStructuredBuffer<ParticleData> uParticleData  : register(u2);
-StructuredBuffer<uint> uAliveList2  : register(t0);
+RWByteAddressBuffer uCounters : register(u0);
+RWStructuredBuffer<uint> uDeadList : register(u1);
+RWStructuredBuffer<uint> uAliveList1 : register(u2);
+RWStructuredBuffer<uint> uAliveList2 : register(u3);
+RWStructuredBuffer<ParticleData> uParticleData : register(u4);
 
 [numthreads(128, 1, 1)]
 void Simulate(CS_INPUT input)
 {
-    uint particleIndex = uAliveList2[input.DispatchThreadId.x];
-
-    if(uParticleData[particleIndex].LifeTime < cParticleLifeTime)
+    uint aliveCount = uCounters.Load(ALIVE_LIST_1_COUNTER);
+    if(input.DispatchThreadId.x < aliveCount)
     {
+        uint particleIndex = uAliveList1[input.DispatchThreadId.x];
         ParticleData p = uParticleData[particleIndex];
-        p.Position += p.Velocity * cDeltaTime;
-        p.LifeTime += cDeltaTime;
-        uParticleData[particleIndex] = p;
 
-        uint aliveSlot = uAliveList1.IncrementCounter();
-        uAliveList1[aliveSlot] = input.DispatchThreadId.x;
-    }
-    else
-    {
-        uint deadSlot = uDeadList.IncrementCounter();
-        uDeadList[deadSlot] = input.DispatchThreadId.x;
+        if(p.LifeTime < cParticleLifeTime)
+        {
+            p.Position += p.Velocity * cDeltaTime;
+            p.LifeTime += cDeltaTime;
+            uParticleData[particleIndex] = p;
+
+            uint aliveSlot;
+            uCounters.InterlockedAdd(ALIVE_LIST_2_COUNTER, 1, aliveSlot);
+            uAliveList2[aliveSlot] = particleIndex;
+        }
+        else
+        {
+            uint deadSlot;
+            uCounters.InterlockedAdd(DEAD_LIST_COUNTER, 1, deadSlot);
+            uDeadList[deadSlot] = particleIndex;
+        }
     }
 }
 

@@ -10,6 +10,7 @@ class Texture2D;
 class ByteAddressBuffer;
 class Camera;
 class CommandSignature;
+class GpuParticles;
 
 struct ClusteredForwardInputResources
 {
@@ -86,5 +87,7 @@ private:
 	std::unique_ptr<StructuredBuffer> m_pDebugLightGrid;
 	Matrix m_DebugClustersViewMatrix;
 	bool m_DidCopyDebugClusterData = false;
+
+	std::unique_ptr<GpuParticles> m_pGpuParticles;
 };
 
