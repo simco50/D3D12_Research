@@ -205,10 +205,9 @@ void ComputeCommandContext::Dispatch(uint32 groupCountX, uint32 groupCountY, uin
 
 void ComputeCommandContext::ExecuteIndirect(ID3D12CommandSignature* pCommandSignature, GraphicsBuffer* pIndirectArguments)
 {
-	assert(m_CurrentContext == CommandListContext::Compute);
 	FlushResourceBarriers();
-	m_pShaderResourceDescriptorAllocator->UploadAndBindStagedDescriptors(DescriptorTableType::Compute);
-	m_pSamplerDescriptorAllocator->UploadAndBindStagedDescriptors(DescriptorTableType::Compute);
+	m_pShaderResourceDescriptorAllocator->UploadAndBindStagedDescriptors(m_CurrentContext == CommandListContext::Compute ? DescriptorTableType::Compute : DescriptorTableType::Graphics);
+	m_pSamplerDescriptorAllocator->UploadAndBindStagedDescriptors(m_CurrentContext == CommandListContext::Compute ? DescriptorTableType::Compute : DescriptorTableType::Graphics);
 	m_pCommandList->ExecuteIndirect(pCommandSignature, 1, pIndirectArguments->GetResource(), 0, nullptr, 0);
 }
 

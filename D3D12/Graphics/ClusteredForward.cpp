@@ -108,8 +108,6 @@ void ClusteredForward::Execute(const ClusteredForwardInputResources& resources)
 	float sliceMagicA = (float)cClusterCountZ / log(nearZ / farZ);
 	float sliceMagicB = ((float)cClusterCountZ * log(farZ)) / log(nearZ / farZ);
 
-	m_pGpuParticles->Simulate();
-
 	//Mark Unique Clusters
 	{
 		GraphicsCommandContext* pContext = (GraphicsCommandContext*)m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
@@ -457,6 +455,8 @@ void ClusteredForward::Execute(const ClusteredForwardInputResources& resources)
 	{
 		m_DidCopyDebugClusterData = false;
 	}
+
+	m_pGpuParticles->Simulate();
 }
 
 void ClusteredForward::SetupResources(Graphics* pGraphics)

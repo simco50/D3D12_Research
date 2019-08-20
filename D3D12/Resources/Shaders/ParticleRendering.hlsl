@@ -12,15 +12,11 @@ cbuffer FrameData : register(b0)
 }
 
 StructuredBuffer<ParticleData> tParticleData : register(t0);
+StructuredBuffer<uint> tAliveList : register(t1);
 
 struct VS_Input
 {
 	uint vertexId : SV_VERTEXID;
-};
-
-struct GS_Input
-{
-    uint index : INDEX;
 };
 
 struct PS_Input
@@ -29,34 +25,31 @@ struct PS_Input
     float4 color : COLOR;
 };
 
-GS_Input VSMain(VS_Input input)
+static const float3 BILLBOARD[] = {
+	float3(-1, -1, 0),	// 0
+	float3(1, -1, 0),	// 1
+	float3(-1, 1, 0),	// 2
+	float3(-1, 1, 0),	// 3
+	float3(1, -1, 0),	// 4
+	float3(1, 1, 0),	// 5
+};
+
+PS_Input VSMain(VS_Input input)
 {
-    GS_Input output;
-    output.index = input.vertexId;
+    PS_Input output;
+
+    uint vertexID = input.vertexId % 6;
+	uint instanceID = input.vertexId / 6;
+
+    uint particleIndex = tAliveList[instanceID];
+    ParticleData particle = tParticleData[particleIndex];
+    float3 q = 10*BILLBOARD[vertexID];
+    
+    output.position = float4(mul(q + particle.Position, (float3x3)cViewInverse), 1);
+    output.position = mul(output.position, cViewProjection);
+    output.color = float4(1, 1, 0, 1);
+
     return output;
-}
-
-[maxvertexcount(4)]
-void GSMain(point GS_Input input[1], inout TriangleStream<PS_Input> outputStream)
-{
-    static float size = 4;
-    static float3 vertices[4] = {
-        float3(-size, size, 0),
-        float3(size, size, 0),
-        float3(-size, -size, 0),
-        float3(size, -size, 0)
-    };
-
-    ParticleData p = tParticleData[input[0].index];
-    float3 transformedVertices[4];
-    [unroll]
-    for(uint i = 0; i < 4; ++i)
-    {
-        PS_Input vertex;
-        vertex.position = mul(float4(mul(vertices[i], (float3x3)cViewInverse) + p.Position, 1), cViewProjection);
-        vertex.color = float4(1, 1, 0, 1);
-        outputStream.Append(vertex);
-    }
 }
 
 float4 PSMain(PS_Input input) : SV_TARGET

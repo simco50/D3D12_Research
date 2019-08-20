@@ -25,6 +25,14 @@ void CommandSignature::AddDispatch()
 	D3D12_INDIRECT_ARGUMENT_DESC desc;
 	desc.Type = D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH;
 	m_ArgumentDesc.push_back(desc);
-	m_Stride+= 3 * sizeof(uint32);
+	m_Stride += 3 * sizeof(uint32);
+}
+
+void CommandSignature::AddDraw()
+{
+	D3D12_INDIRECT_ARGUMENT_DESC desc;
+	desc.Type = D3D12_INDIRECT_ARGUMENT_TYPE_DRAW;
+	m_ArgumentDesc.push_back(desc);
+	m_Stride += 4 * sizeof(uint32);
 }
 

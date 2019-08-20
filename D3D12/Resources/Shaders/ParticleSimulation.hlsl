@@ -64,8 +64,8 @@ void Emit(CS_INPUT input)
     {
         ParticleData p;
         p.LifeTime = 0;
-        p.Position = float3(input.DispatchThreadId.x, 0, 0);
-        p.Velocity = float3(1, 0, 0);
+        p.Position = float3(0, 0, 0);
+        p.Velocity = float3(0, 20, 0);
 
         uint deadSlot;
         uCounters.InterlockedAdd(DEAD_LIST_COUNTER, -1, deadSlot);
@@ -105,6 +105,7 @@ void Simulate(CS_INPUT input)
 
         if(p.LifeTime < cParticleLifeTime)
         {
+            p.Velocity += float3(0, -9.81f * cDeltaTime, 0);
             p.Position += p.Velocity * cDeltaTime;
             p.LifeTime += cDeltaTime;
             uParticleData[particleIndex] = p;
@@ -120,6 +121,20 @@ void Simulate(CS_INPUT input)
             uDeadList[deadSlot] = particleIndex;
         }
     }
+}
+
+#endif
+
+#ifdef COMPILE_SIMULATE_END
+
+ByteAddressBuffer tCounters : register(t0);
+RWByteAddressBuffer uArgumentsBuffer : register(u0);
+
+[numthreads(1, 1, 1)]
+void SimulateEnd(CS_INPUT input)
+{
+    uint particleCount = tCounters.Load(ALIVE_LIST_2_COUNTER);
+    uArgumentsBuffer.Store4(0, uint4(6 * particleCount, 1, 0, 0));
 }
 
 #endif

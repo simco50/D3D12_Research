@@ -10,6 +10,7 @@ public:
 
 	void SetRootSignature(ID3D12RootSignature* pRootSignature) { m_pRootSignature = pRootSignature; }
 	void AddDispatch();
+	void AddDraw();
 
 	ID3D12CommandSignature* GetCommandSignature() const { return m_pCommandSignature.Get(); }
 

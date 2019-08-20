@@ -9,8 +9,10 @@
 #include "CommandContext.h"
 #include "Profiler.h"
 #include "GraphicsResource.h"
+#include "Scene/Camera.h"
+#include "Texture.h"
 
-static constexpr uint32 cMaxParticleCount = 2048;
+static constexpr uint32 cMaxParticleCount = 4096;
 
 struct ParticleData
 {
@@ -54,12 +56,18 @@ void GpuParticles::Initialize()
 	m_pEmitArguments->Create(m_pGraphics, sizeof(uint32), 3);
 	m_pSimulateArguments = std::make_unique<ByteAddressBuffer>(m_pGraphics);
 	m_pSimulateArguments->Create(m_pGraphics, sizeof(uint32), 3);
+	m_pDrawArguments = std::make_unique<ByteAddressBuffer>(m_pGraphics);
+	m_pDrawArguments->Create(m_pGraphics, sizeof(uint32), 4);
 
 	pContext->Execute(true);
 
 	m_pSimpleDispatchCommandSignature = std::make_unique<CommandSignature>();
 	m_pSimpleDispatchCommandSignature->AddDispatch();
 	m_pSimpleDispatchCommandSignature->Finalize("Simple Dispatch", m_pGraphics->GetDevice());
+
+	m_pSimpleDrawCommandSignature = std::make_unique<CommandSignature>();
+	m_pSimpleDrawCommandSignature->AddDraw();
+	m_pSimpleDrawCommandSignature->Finalize("Simple Draw", m_pGraphics->GetDevice());
 
 	{
 		Shader computeShader("Resources/Shaders/ParticleSimulation.hlsl", Shader::Type::ComputeShader, "UpdateSimulationParameters", { "COMPILE_UPDATE_PARAMETERS" });
@@ -87,29 +95,39 @@ void GpuParticles::Initialize()
 		m_pSimulateRS = std::make_unique<RootSignature>();
 		m_pSimulateRS->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_ALL);
 		m_pSimulateRS->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 5, D3D12_SHADER_VISIBILITY_ALL);
-		m_pSimulateRS->Finalize("Particle SimulationRS", m_pGraphics->GetDevice(), D3D12_ROOT_SIGNATURE_FLAG_NONE);
+		m_pSimulateRS->Finalize("Particle Simulation RS", m_pGraphics->GetDevice(), D3D12_ROOT_SIGNATURE_FLAG_NONE);
 		m_pSimulatePS = std::make_unique<ComputePipelineState>();
 		m_pSimulatePS->SetComputeShader(computeShader.GetByteCode(), computeShader.GetByteCodeSize());
 		m_pSimulatePS->SetRootSignature(m_pSimulateRS->GetRootSignature());
 		m_pSimulatePS->Finalize("Particle Simulation PS", m_pGraphics->GetDevice());
 	}
 	{
+		Shader computeShader("Resources/Shaders/ParticleSimulation.hlsl", Shader::Type::ComputeShader, "SimulateEnd", { "COMPILE_SIMULATE_END" });
+		m_pSimulateEndRS = std::make_unique<RootSignature>();
+		m_pSimulateEndRS->SetDescriptorTableSimple(0, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, D3D12_SHADER_VISIBILITY_ALL);
+		m_pSimulateEndRS->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, D3D12_SHADER_VISIBILITY_ALL);
+		m_pSimulateEndRS->Finalize("Particle Simulation End RS", m_pGraphics->GetDevice(), D3D12_ROOT_SIGNATURE_FLAG_NONE);
+		m_pSimulateEndPS = std::make_unique<ComputePipelineState>();
+		m_pSimulateEndPS->SetComputeShader(computeShader.GetByteCode(), computeShader.GetByteCodeSize());
+		m_pSimulateEndPS->SetRootSignature(m_pSimulateEndRS->GetRootSignature());
+		m_pSimulateEndPS->Finalize("Particle Simulation End PS", m_pGraphics->GetDevice());
+	}
+	{
 		Shader vertexShader("Resources/Shaders/ParticleRendering.hlsl", Shader::Type::VertexShader, "VSMain");
-		Shader geometryShader("Resources/Shaders/ParticleRendering.hlsl", Shader::Type::GeometryShader, "GSMain");
 		Shader pixelShader("Resources/Shaders/ParticleRendering.hlsl", Shader::Type::PixelShader, "PSMain");
 
 		m_pRenderParticlesRS = std::make_unique<RootSignature>();
-		m_pRenderParticlesRS->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_GEOMETRY);
-		m_pRenderParticlesRS->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, D3D12_SHADER_VISIBILITY_GEOMETRY);
+		m_pRenderParticlesRS->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
+		m_pRenderParticlesRS->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, D3D12_SHADER_VISIBILITY_VERTEX);
 		m_pRenderParticlesRS->Finalize("Particle Rendering", m_pGraphics->GetDevice(), D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
 		m_pRenderParticlesPS = std::make_unique<GraphicsPipelineState>();
 		m_pRenderParticlesPS->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
-		m_pRenderParticlesPS->SetGeometryShader(geometryShader.GetByteCode(), geometryShader.GetByteCodeSize());
 		m_pRenderParticlesPS->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
 		m_pRenderParticlesPS->SetRootSignature(m_pRenderParticlesRS->GetRootSignature());
-		m_pRenderParticlesPS->SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT);
+		m_pRenderParticlesPS->SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
 		m_pRenderParticlesPS->SetInputLayout(nullptr, 0);
+		m_pRenderParticlesPS->SetDepthTest(D3D12_COMPARISON_FUNC_ALWAYS);
 		m_pRenderParticlesPS->SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, m_pGraphics->GetMultiSampleCount(), m_pGraphics->GetMultiSampleQualityLevel(m_pGraphics->GetMultiSampleCount()));
 		m_pRenderParticlesPS->Finalize("Particle Rendering PS", m_pGraphics->GetDevice());
 	}
@@ -118,6 +136,7 @@ void GpuParticles::Initialize()
 void GpuParticles::Simulate()
 {
 	GraphicsCommandContext* pContext = static_cast<GraphicsCommandContext*>(m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT));
+
 	{
 		Profiler::Instance()->Begin("Prepare Arguments", pContext);
 		pContext->SetComputePipelineState(m_pPrepareArgumentsPS.get());
@@ -125,6 +144,9 @@ void GpuParticles::Simulate()
 
 		pContext->InsertResourceBarrier(m_pEmitArguments.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 		pContext->InsertResourceBarrier(m_pSimulateArguments.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+		pContext->InsertResourceBarrier(m_pCountersBuffer.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+		pContext->InsertResourceBarrier(m_pAliveList2.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+		pContext->InsertResourceBarrier(m_pParticleBuffer.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 		pContext->FlushResourceBarriers();
 
 		struct Parameters
@@ -198,7 +220,57 @@ void GpuParticles::Simulate()
 		Profiler::Instance()->End(pContext);
 	}
 	{
-	
+		Profiler::Instance()->Begin("Simulate End", pContext);
+
+		pContext->InsertResourceBarrier(m_pDrawArguments.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+		pContext->InsertResourceBarrier(m_pCountersBuffer.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+
+		pContext->SetComputePipelineState(m_pSimulateEndPS.get());
+		pContext->SetComputeRootSignature(m_pSimulateEndRS.get());
+
+		pContext->SetDynamicDescriptor(0, 0, m_pCountersBuffer->GetSRV());
+		pContext->SetDynamicDescriptor(1, 0, m_pDrawArguments->GetUAV());
+
+		pContext->Dispatch(1, 1, 1);
+
+		pContext->InsertUavBarrier();
+		Profiler::Instance()->End(pContext);
+	}
+	{
+		Profiler::Instance()->Begin("Draw Particles", pContext);
+
+		pContext->InsertResourceBarrier(m_pDrawArguments.get(), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
+		pContext->InsertResourceBarrier(m_pAliveList2.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+		pContext->InsertResourceBarrier(m_pParticleBuffer.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+		pContext->InsertResourceBarrier(m_pGraphics->GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RENDER_TARGET);
+
+		pContext->BeginRenderPass(RenderPassInfo(m_pGraphics->GetCurrentRenderTarget(), RenderPassAccess::Load_Store, m_pGraphics->GetDepthStencil(), RenderPassAccess::Load_Store));
+
+		pContext->SetGraphicsPipelineState(m_pRenderParticlesPS.get());
+		pContext->SetGraphicsRootSignature(m_pRenderParticlesRS.get());
+
+		struct FrameData
+		{
+			Matrix ViewInverse;
+			Matrix ViewProjection;
+		} frameData;
+		frameData.ViewInverse = m_pGraphics->GetCamera()->GetViewInverse();
+		frameData.ViewProjection = m_pGraphics->GetCamera()->GetViewProjection();
+
+		pContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		pContext->SetDynamicConstantBufferView(0, &frameData, sizeof(FrameData));
+
+		D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
+			m_pParticleBuffer->GetSRV(),
+			m_pAliveList2->GetSRV()
+		};
+		pContext->SetDynamicDescriptors(1, 0, srvs, 2);
+
+		pContext->ExecuteIndirect(m_pSimpleDrawCommandSignature->GetCommandSignature(), m_pDrawArguments.get());
+
+		pContext->EndRenderPass();
+
+		Profiler::Instance()->End(pContext);
 	}
 
 	std::swap(m_pAliveList1, m_pAliveList2);
