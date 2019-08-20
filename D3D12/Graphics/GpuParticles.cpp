@@ -12,7 +12,7 @@
 #include "Scene/Camera.h"
 #include "Texture.h"
 
-static constexpr uint32 cMaxParticleCount = 4096;
+static constexpr uint32 cMaxParticleCount = 2000000;
 
 struct ParticleData
 {
@@ -43,7 +43,7 @@ void GpuParticles::Initialize()
 	m_pAliveList2->Create(m_pGraphics, sizeof(uint32), cMaxParticleCount);
 	m_pDeadList = std::make_unique<StructuredBuffer>(m_pGraphics);
 	m_pDeadList->Create(m_pGraphics, sizeof(uint32), cMaxParticleCount);
-	std::array<uint32, cMaxParticleCount> deadList;
+	std::vector<uint32> deadList(cMaxParticleCount);
 	std::generate(deadList.begin(), deadList.end(), [n = 0]() mutable { return n++; });
 	m_pDeadList->SetData(pContext, deadList.data(), sizeof(uint32) * deadList.size());
 	uint32 aliveCount = cMaxParticleCount;
@@ -83,7 +83,8 @@ void GpuParticles::Initialize()
 	{
 		Shader computeShader("Resources/Shaders/ParticleSimulation.hlsl", Shader::Type::ComputeShader, "Emit", { "COMPILE_EMITTER" });
 		m_pEmitRS = std::make_unique<RootSignature>();
-		m_pEmitRS->SetDescriptorTableSimple(0, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 4, D3D12_SHADER_VISIBILITY_ALL);
+		m_pEmitRS->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_ALL);
+		m_pEmitRS->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 4, D3D12_SHADER_VISIBILITY_ALL);
 		m_pEmitRS->Finalize("Particle Emitter RS", m_pGraphics->GetDevice(), D3D12_ROOT_SIGNATURE_FLAG_NONE);
 		m_pEmitPS = std::make_unique<ComputePipelineState>();
 		m_pEmitPS->SetComputeShader(computeShader.GetByteCode(), computeShader.GetByteCodeSize());
@@ -127,6 +128,8 @@ void GpuParticles::Initialize()
 		m_pRenderParticlesPS->SetRootSignature(m_pRenderParticlesRS->GetRootSignature());
 		m_pRenderParticlesPS->SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
 		m_pRenderParticlesPS->SetInputLayout(nullptr, 0);
+		m_pRenderParticlesPS->SetCullMode(D3D12_CULL_MODE_NONE);
+		m_pRenderParticlesPS->SetDepthEnabled(false);
 		m_pRenderParticlesPS->SetDepthTest(D3D12_COMPARISON_FUNC_ALWAYS);
 		m_pRenderParticlesPS->SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, m_pGraphics->GetMultiSampleCount(), m_pGraphics->GetMultiSampleQualityLevel(m_pGraphics->GetMultiSampleCount()));
 		m_pRenderParticlesPS->Finalize("Particle Rendering PS", m_pGraphics->GetDevice());
@@ -153,7 +156,7 @@ void GpuParticles::Simulate()
 		{
 			uint32 EmitCount;
 		} parameters;
-		parameters.EmitCount = 5;
+		parameters.EmitCount = 10000;
 
 		D3D12_CPU_DESCRIPTOR_HANDLE uavs[] = {
 			m_pCountersBuffer->GetUAV(),
@@ -182,7 +185,12 @@ void GpuParticles::Simulate()
 			m_pAliveList1->GetUAV(),
 			m_pParticleBuffer->GetUAV(),
 		};
-		pContext->SetDynamicDescriptors(0, 0, uavs, 4);
+		pContext->SetDynamicDescriptors(1, 0, uavs, 4);
+
+		std::array<Vector4, 64> randomDirections;
+		std::generate(randomDirections.begin(), randomDirections.end(), []() { Vector3 v = Math::RandVector(); v.Normalize(); return Vector4(v.x, v.y, v.z, 0); });
+
+		pContext->SetComputeDynamicConstantBufferView(0, randomDirections.data(), sizeof(Vector4) * randomDirections.size());
 
 		pContext->ExecuteIndirect(m_pSimpleDispatchCommandSignature->GetCommandSignature(), m_pEmitArguments.get());
 
@@ -201,7 +209,7 @@ void GpuParticles::Simulate()
 			float ParticleLifeTime;
 		} parameters;
 		parameters.DeltaTime = GameTimer::DeltaTime();
-		parameters.ParticleLifeTime = 2.0f;
+		parameters.ParticleLifeTime = 4.0f;
 
 		pContext->SetComputeDynamicConstantBufferView(0, &parameters, sizeof(Parameters));
 
@@ -249,13 +257,19 @@ void GpuParticles::Simulate()
 		pContext->SetGraphicsPipelineState(m_pRenderParticlesPS.get());
 		pContext->SetGraphicsRootSignature(m_pRenderParticlesRS.get());
 
+		Vector2 screenDimensions((float)m_pGraphics->GetWindowWidth(), (float)m_pGraphics->GetWindowHeight());
+		pContext->SetViewport(FloatRect(0, 0, (float)screenDimensions.x, (float)screenDimensions.y));
+		pContext->SetScissorRect(FloatRect(0, 0, (float)screenDimensions.x, (float)screenDimensions.y));
+
 		struct FrameData
 		{
 			Matrix ViewInverse;
-			Matrix ViewProjection;
+			Matrix View;
+			Matrix Projection;
 		} frameData;
 		frameData.ViewInverse = m_pGraphics->GetCamera()->GetViewInverse();
-		frameData.ViewProjection = m_pGraphics->GetCamera()->GetViewProjection();
+		frameData.View = m_pGraphics->GetCamera()->GetView();
+		frameData.Projection = m_pGraphics->GetCamera()->GetProjection();
 
 		pContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 		pContext->SetDynamicConstantBufferView(0, &frameData, sizeof(FrameData));

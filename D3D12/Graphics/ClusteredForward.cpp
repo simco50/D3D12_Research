@@ -356,6 +356,8 @@ void ClusteredForward::Execute(const ClusteredForwardInputResources& resources)
 		frameData.SliceMagicA = sliceMagicA;
 		frameData.SliceMagicB = sliceMagicB;
 
+		Matrix v = view * resources.pCamera->GetProjection();
+
 		Profiler::Instance()->Begin("Lighting Pass", pContext);
 
 		pContext->InsertResourceBarrier(m_pLightGrid.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);

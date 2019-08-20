@@ -51,6 +51,11 @@ void UpdateSimulationParameters(CS_INPUT input)
 
 #if COMPILE_EMITTER
 
+cbuffer EmitterData : register(b0)
+{
+    float4 cRandomDirections[64];
+}
+
 RWByteAddressBuffer uCounters : register(u0);
 RWStructuredBuffer<uint> uDeadList : register(u1);
 RWStructuredBuffer<uint> uAliveList1 : register(u2);
@@ -62,14 +67,15 @@ void Emit(CS_INPUT input)
     uint emitCount = uCounters.Load(EMIT_COUNT);
     if(input.DispatchThreadId.x < emitCount)
     {
-        ParticleData p;
-        p.LifeTime = 0;
-        p.Position = float3(0, 0, 0);
-        p.Velocity = float3(0, 20, 0);
-
         uint deadSlot;
         uCounters.InterlockedAdd(DEAD_LIST_COUNTER, -1, deadSlot);
         uint particleIndex = uDeadList[deadSlot - 1];
+
+        ParticleData p;
+        p.LifeTime = 0;
+        p.Position = float3(0, 0, 0);
+        p.Velocity = 20*cRandomDirections[particleIndex % 64].xyz;
+        
         uParticleData[particleIndex] = p;
 
         uint aliveSlot;

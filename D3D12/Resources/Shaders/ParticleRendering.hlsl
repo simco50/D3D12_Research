@@ -8,7 +8,8 @@ struct ParticleData
 cbuffer FrameData : register(b0)
 {
     float4x4 cViewInverse;
-    float4x4 cViewProjection;
+    float4x4 cView;
+    float4x4 cProjection;
 }
 
 StructuredBuffer<ParticleData> tParticleData : register(t0);
@@ -43,10 +44,12 @@ PS_Input VSMain(VS_Input input)
 
     uint particleIndex = tAliveList[instanceID];
     ParticleData particle = tParticleData[particleIndex];
-    float3 q = 10*BILLBOARD[vertexID];
+    float3 q = 0.1*BILLBOARD[vertexID];
     
-    output.position = float4(mul(q + particle.Position, (float3x3)cViewInverse), 1);
-    output.position = mul(output.position, cViewProjection);
+    output.position = float4(mul(q, (float3x3)cViewInverse), 1);
+    output.position.xyz += particle.Position;
+    output.position = mul(output.position, cView);
+    output.position = mul(output.position, cProjection);
     output.color = float4(1, 1, 0, 1);
 
     return output;
