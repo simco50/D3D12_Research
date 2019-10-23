@@ -13,6 +13,8 @@ public:
 
 	void* Map(uint32 subResource = 0, uint64 readFrom = 0, uint64 readTo = 0);
 	void Unmap(uint32 subResource = 0, uint64 writtenFrom = 0, uint64 writtenTo = 0);
+	
+	virtual bool IsBuffer() const override  { return true; }
 
 	inline uint64 GetSize() const { return m_ElementCount * m_ElementStride; }
 	inline uint32 GetStride() const { return m_ElementStride; }
