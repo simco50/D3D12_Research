@@ -36,7 +36,7 @@ public:
 	void InsertUavBarrier(GraphicsResource* pBuffer = nullptr, bool executeImmediate = false);
 	void FlushResourceBarriers();
 
-	void CopyResource(GraphicsBuffer* pSource, GraphicsBuffer* pTarget);
+	void CopyResource(GraphicsResource* pSource, GraphicsResource* pTarget);
 	void InitializeBuffer(GraphicsBuffer* pResource, const void* pData, uint64 dataSize, uint64 offset = 0);
 	void InitializeTexture(Texture* pResource, D3D12_SUBRESOURCE_DATA* pSubResourceDatas, int firstSubResource, int subResourceCount);
 
@@ -58,8 +58,6 @@ protected:
 	ID3D12GraphicsCommandList* m_pCommandList;
 	ID3D12CommandAllocator* m_pAllocator;
 	D3D12_COMMAND_LIST_TYPE m_Type;
-
-	std::vector<GraphicsResource*> m_TransitionedResources;
 };
 
 class CopyCommandContext : public CommandContext

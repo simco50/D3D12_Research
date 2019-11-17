@@ -18,6 +18,8 @@
 #include "PersistentResourceAllocator.h"
 #include "ClusteredForward.h"
 #include "Scene/Camera.h"
+#include "Clouds.h"
+#include <DXProgrammableCapture.h>
 
 const DXGI_FORMAT Graphics::DEPTH_STENCIL_FORMAT = DXGI_FORMAT_D32_FLOAT;
 const DXGI_FORMAT Graphics::DEPTH_STENCIL_SHADOW_FORMAT = DXGI_FORMAT_D16_UNORM;
@@ -43,7 +45,7 @@ void Graphics::Initialize(HWND window)
 	m_pCamera = std::make_unique<FreeCamera>(this);
 	m_pCamera->SetPosition(Vector3(0, 100, -15));
 	m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(XM_PIDIV4, XM_PIDIV4, 0));
-	m_pCamera->SetNearPlane(500.0f);
+	m_pCamera->SetNearPlane(400.0f);
 	m_pCamera->SetFarPlane(2.0f);
 	m_pCamera->SetViewport(0, 0, 1, 1);
 
@@ -53,7 +55,11 @@ void Graphics::Initialize(HWND window)
 	Shader::AddGlobalShaderDefine("MAX_SHADOW_CASTERS", std::to_string(MAX_SHADOW_CASTERS));
 
 	InitD3D();
+
 	InitializeAssets();
+
+	m_pClouds = std::make_unique<class Clouds>();
+	m_pClouds->Initialize(this);
 
 	RandomizeLights(m_DesiredLightCount);
 }
@@ -272,6 +278,11 @@ void Graphics::Update()
 			m_pLightIndexCounter->SetData(pContext, &zero, sizeof(uint32) * 2);
 			m_pLightBuffer->SetData(pContext, m_Lights.data(), (uint32)m_Lights.size() * sizeof(Light));
 			Profiler::Instance()->End(pContext);
+
+			pContext->InsertResourceBarrier(m_pLightGridOpaque.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+			pContext->InsertResourceBarrier(m_pLightIndexListBufferOpaque.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+			pContext->InsertResourceBarrier(m_pLightGridTransparant.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+			pContext->InsertResourceBarrier(m_pLightIndexListBufferTransparant.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
 			pContext->SetComputePipelineState(m_pComputeLightCullPSO.get());
 			pContext->SetComputeRootSignature(m_pComputeLightCullRS.get());
@@ -492,6 +503,7 @@ void Graphics::Update()
 		// - ImGui render, pretty straight forward
 		{
 			UpdateImGui();
+			m_pClouds->RenderUI();
 			m_pImGuiRenderer->Render(*pContext);
 		}
 		Profiler::Instance()->End(pContext);
@@ -504,14 +516,28 @@ void Graphics::Update()
 			{
 				Profiler::Instance()->Begin("Resolve", pContext);
 				pContext->InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RESOLVE_SOURCE);
-				pContext->InsertResourceBarrier(GetCurrentBackbuffer(), D3D12_RESOURCE_STATE_RESOLVE_DEST);
+				pContext->InsertResourceBarrier(m_pResolvedRenderTarget.get(), D3D12_RESOURCE_STATE_RESOLVE_DEST);
 				pContext->FlushResourceBarriers();
-				pContext->GetCommandList()->ResolveSubresource(GetCurrentBackbuffer()->GetResource(), 0, GetCurrentRenderTarget()->GetResource(), 0, RENDER_TARGET_FORMAT);
+				pContext->GetCommandList()->ResolveSubresource(m_pResolvedRenderTarget->GetResource(), 0, GetCurrentRenderTarget()->GetResource(), 0, RENDER_TARGET_FORMAT);
 				Profiler::Instance()->End(pContext);
 			}
 			pContext->InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RENDER_TARGET);
 			pContext->InsertResourceBarrier(GetCurrentBackbuffer(), D3D12_RESOURCE_STATE_PRESENT);
 		}
+		pContext->Execute(false);
+	}
+
+	m_pClouds->Render(this, m_pResolvedRenderTarget.get(), m_pResolvedDepthStencil.get());
+
+	{
+		GraphicsCommandContext* pContext = static_cast<GraphicsCommandContext*>(AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT));
+		Profiler::Instance()->Begin("Blit to Backbuffer", pContext);
+		pContext->InsertResourceBarrier(m_pResolvedRenderTarget.get(), D3D12_RESOURCE_STATE_COPY_SOURCE);
+		pContext->InsertResourceBarrier(GetCurrentBackbuffer(), D3D12_RESOURCE_STATE_COPY_DEST);
+		pContext->FlushResourceBarriers();
+		pContext->CopyResource(m_pResolvedRenderTarget.get(), GetCurrentBackbuffer());
+		pContext->InsertResourceBarrier(GetCurrentBackbuffer(), D3D12_RESOURCE_STATE_PRESENT);
+		Profiler::Instance()->End(pContext);
 		nextFenceValue = pContext->Execute(false);
 	}
 
@@ -530,6 +556,12 @@ void Graphics::Shutdown()
 
 void Graphics::BeginFrame()
 {
+	if (m_StartPixCapture)
+	{
+		BeginPixCapture();
+		m_StartPixCapture = false;
+		m_StopPixCapture = true;
+	}
 	m_pImGuiRenderer->NewFrame();
 }
 
@@ -546,6 +578,12 @@ void Graphics::EndFrame(uint64 fenceValue)
 	m_CurrentBackBufferIndex = m_pSwapchain->GetCurrentBackBufferIndex();
 	WaitForFence(m_FenceValues[m_CurrentBackBufferIndex]);
 	Profiler::Instance()->EndReadBack(m_Frame);
+
+	if (m_StopPixCapture)
+	{
+		EndPixCapture();
+		m_StopPixCapture = false;
+	}
 }
 
 void Graphics::InitD3D()
@@ -687,6 +725,7 @@ void Graphics::InitD3D()
 	if (m_SampleCount > 1)
 	{
 		m_pResolvedDepthStencil = std::make_unique<Texture2D>();
+		m_pResolvedRenderTarget = std::make_unique<Texture2D>();
 		m_pMultiSampleRenderTarget = std::make_unique<Texture2D>();
 	}
 
@@ -741,6 +780,9 @@ void Graphics::OnResize(int width, int height)
 
 		m_pMultiSampleRenderTarget->Create(this, width, height, RENDER_TARGET_FORMAT, TextureUsage::RenderTarget, m_SampleCount, -1, ClearBinding(Color(0, 0, 0, 0)));
 		m_pMultiSampleRenderTarget->SetName("Multisample Rendertarget");
+
+		m_pResolvedRenderTarget->Create(this, width, height, RENDER_TARGET_FORMAT, TextureUsage::RenderTarget | TextureUsage::ShaderResource, 1, -1, ClearBinding(Color(0, 0, 0, 0)));
+		m_pResolvedRenderTarget->SetName("Resolved Rendertarget");
 	}
 	else
 	{
@@ -1024,6 +1066,11 @@ void Graphics::UpdateImGui()
 	ImGui::Text("FPS: %.1f", 1.0f / GameTimer::DeltaTime());
 	ImGui::PlotLines("Frametime", m_FrameTimes.data(), (int)m_FrameTimes.size(), m_Frame % m_FrameTimes.size(), 0, 0.0f, 0.03f, ImVec2(200, 100));
 
+	if (ImGui::Button("PIX Capture"))
+	{
+		m_StartPixCapture = true;
+	}
+
 	if (ImGui::TreeNodeEx("Lighting", ImGuiTreeNodeFlags_DefaultOpen))
 	{
 		ImGui::Combo("Render Path", (int*)& m_RenderPath, [](void* data, int index, const char** outText)
@@ -1289,6 +1336,28 @@ void Graphics::IdleGPU()
 			pCommandQueue->WaitForIdle();
 		}
 	}
+}
+
+bool Graphics::BeginPixCapture() const
+{
+	ComPtr<IDXGraphicsAnalysis> ga;
+	if (SUCCEEDED(DXGIGetDebugInterface1(0, IID_PPV_ARGS(ga.GetAddressOf()))))
+	{
+		ga->BeginCapture();
+		return true;
+	}
+	return false;
+}
+
+bool Graphics::EndPixCapture() const
+{
+	ComPtr<IDXGraphicsAnalysis> ga;
+	if (SUCCEEDED(DXGIGetDebugInterface1(0, IID_PPV_ARGS(ga.GetAddressOf()))))
+	{
+		ga->EndCapture();
+		return true;
+	}
+	return false;
 }
 
 uint32 Graphics::GetMultiSampleQualityLevel(uint32 msaa)

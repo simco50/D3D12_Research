@@ -545,11 +545,6 @@ void Texture2D::CreateForSwapchain(Graphics* pGraphics, ID3D12Resource* pTexture
 		m_Rtv = pGraphics->AllocateCpuDescriptors(1, D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 	}
 	pGraphics->GetDevice()->CreateRenderTargetView(pTexture, nullptr, m_Rtv);
-	if (m_Srv.ptr == 0)
-	{
-		m_Srv = pGraphics->AllocateCpuDescriptors(1, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-	}
-	pGraphics->GetDevice()->CreateShaderResourceView(pTexture, nullptr, m_Srv);
 }
 
 void Texture3D::Create(Graphics* pGraphics, int width, int height, int depth, DXGI_FORMAT format, TextureUsage usage)

@@ -49,6 +49,9 @@ public:
 	void WaitForFence(uint64 fenceValue);
 	void IdleGPU();
 
+	bool BeginPixCapture() const;
+	bool EndPixCapture() const;
+
 	CommandQueue* GetCommandQueue(D3D12_COMMAND_LIST_TYPE type) const;
 	CommandContext* AllocateCommandContext(D3D12_COMMAND_LIST_TYPE type = D3D12_COMMAND_LIST_TYPE_DIRECT);
 	void FreeCommandList(CommandContext* pCommandList);
@@ -65,7 +68,7 @@ public:
 
 	Texture2D* GetDepthStencil() const { return m_pDepthStencil.get(); }
 	Texture2D* GetResolvedDepthStencil() const { return m_SampleCount > 1 ? m_pResolvedDepthStencil.get() : m_pDepthStencil.get(); }
-	Texture2D* GetCurrentRenderTarget() const { return m_SampleCount > 1 ? m_pMultiSampleRenderTarget.get() : GetCurrentBackbuffer(); }
+	Texture2D* GetCurrentRenderTarget() const { return m_SampleCount > 1 ? m_pMultiSampleRenderTarget.get() : m_pResolvedRenderTarget.get(); }
 	Texture2D* GetCurrentBackbuffer() const { return m_RenderTargets[m_CurrentBackBufferIndex].get(); }
 
 	Camera* GetCamera() const { return m_pCamera.get(); }
@@ -118,6 +121,7 @@ private:
 	std::unique_ptr<DynamicAllocationManager> m_pDynamicAllocationManager;
 
 	std::unique_ptr<Texture2D> m_pMultiSampleRenderTarget;
+	std::unique_ptr<Texture2D> m_pResolvedRenderTarget;
 	std::array<std::unique_ptr<Texture2D>, FRAME_COUNT> m_RenderTargets;
 
 	std::array<std::unique_ptr<DescriptorAllocator>, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES> m_DescriptorHeaps;
@@ -131,12 +135,14 @@ private:
 
 	unsigned int m_WindowWidth;
 	unsigned int m_WindowHeight;
+	bool m_StartPixCapture = false;
+	bool m_StopPixCapture = false;
 
 	// Synchronization objects.
 	uint32 m_CurrentBackBufferIndex = 0;
 	std::array<uint64, FRAME_COUNT> m_FenceValues = {};
 
-	RenderPath m_RenderPath = RenderPath::Clustered;
+	RenderPath m_RenderPath = RenderPath::Tiled;
 
 	std::unique_ptr<Mesh> m_pMesh;
 	std::vector<Batch> m_OpaqueBatches;
@@ -181,4 +187,6 @@ private:
 	int m_ShadowCasters = 0;
 	std::vector<Light> m_Lights;
 	std::unique_ptr<StructuredBuffer> m_pLightBuffer;
+
+	std::unique_ptr<class Clouds> m_pClouds;
 };
