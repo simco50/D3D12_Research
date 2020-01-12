@@ -1,47 +1,86 @@
 #include "stdafx.h"
 #include "Shader.h"
 #include <fstream>
+#include "Core/Paths.h"
 
 std::vector<std::pair<std::string, std::string>> Shader::m_GlobalShaderDefines;
 
-class D3DInclude : public ID3DInclude
+#define USE_SHADER_LINE_DIRECTIVE 1;
+
+bool Shader::ProcessSource(const std::string& filePath, std::stringstream& output, std::vector<StringHash>& processedIncludes, std::vector<std::string>& dependencies)
 {
-public:
-	D3DInclude(const std::string& basePath)
-		: m_BasePath(basePath)
-	{}
-
-	STDOVERRIDEMETHODIMP Open(THIS_ D3D_INCLUDE_TYPE /*IncludeType*/, LPCSTR pFileName, LPCVOID /*pParentData*/, LPCVOID *ppData, UINT *pBytes)
+	if (m_Path != filePath)
 	{
-		std::string filePath = m_BasePath + std::string(pFileName);
-		std::ifstream stream(filePath.c_str(), std::ios::binary | std::ios::ate);
-		if (stream.fail())
-		{
-			return E_FAIL;
-		}
-		*pBytes = (UINT)stream.tellg();
-		*ppData = new char[*pBytes];
-		stream.seekg(0);
-		stream.read((char*)*ppData, *pBytes);
-		stream.close();
-		return S_OK;
+		dependencies.push_back(filePath);
 	}
 
-	STDOVERRIDEMETHODIMP Close(THIS_ LPCVOID pData)
+	std::string line;
+
+	int linesProcessed = 0;
+	bool placedLineDirective = false;
+
+	std::ifstream fileStream(filePath, std::ios::binary);
+
+	if (fileStream.fail())
 	{
-		if (pData)
-		{
-			char* pBuffer = (char*)pData;
-			delete[] pBuffer;
-		}
-		return S_OK;
+		E_LOG(Error, "Failed to open file '%s'", filePath.c_str());
+		return false;
 	}
-private:
-	std::string m_BasePath;
-};
+
+	while (getline(fileStream, line))
+	{
+		size_t start = line.find("#include");
+		if (start != std::string::npos)
+		{
+			size_t start = line.find('"') + 1;
+			size_t end = line.rfind('"');
+			if (end == std::string::npos || start == std::string::npos || start == end)
+			{
+				E_LOG(Error, "Include syntax errror: %s", line.c_str());
+				return false;
+			}
+			std::string includeFilePath = line.substr(start, end - start);
+			StringHash includeHash(includeFilePath);
+			if (std::find(processedIncludes.begin(), processedIncludes.end(), includeHash) == processedIncludes.end())
+			{
+				processedIncludes.push_back(includeHash);
+				std::string basePath = Paths::GetDirectoryPath(filePath);
+				std::string filePath = basePath + includeFilePath;
+
+				if (!ProcessSource(filePath, output, processedIncludes, dependencies))
+				{
+					return false;
+				}
+			}
+			placedLineDirective = false;
+		}
+		else
+		{
+			if (placedLineDirective == false)
+			{
+				placedLineDirective = true;
+#if USE_SHADER_LINE_DIRECTIVE
+				output << "#line " << linesProcessed + 1 << " \"" << filePath << "\"\n";
+#endif
+			}
+			output << line << '\n';
+		}
+		++linesProcessed;
+	}
+	return true;
+}
 
 Shader::Shader(const char* pFilePath, Type shaderType, const char* pEntryPoint, const std::vector<std::string> defines)
 {
+	std::stringstream shaderSource;
+	std::vector<StringHash> includes;
+	std::vector<std::string> dependencies;
+	if (!ProcessSource(pFilePath, shaderSource, includes, dependencies))
+	{
+		return;
+	}
+	std::string source = shaderSource.str();
+
 	uint32 compileFlags = D3DCOMPILE_PACK_MATRIX_ROW_MAJOR;
 #if defined(_DEBUG)
 	// Enable better shader debugging with the graphics debugging tools.
@@ -51,19 +90,6 @@ Shader::Shader(const char* pFilePath, Type shaderType, const char* pEntryPoint, 
 #else
 	compileFlags |= D3DCOMPILE_OPTIMIZATION_LEVEL3;
 #endif
-
-	std::ifstream file(pFilePath);
-	if (file.fail())
-	{
-		return;
-	}
-	std::stringstream stream;
-	std::string line;
-	while (getline(file, line))
-	{
-		stream << line << "\n";
-	}
-	line = stream.str();
 
 	std::vector<D3D_SHADER_MACRO> shaderDefines;
 	for (const std::string& define : defines)
@@ -109,10 +135,9 @@ Shader::Shader(const char* pFilePath, Type shaderType, const char* pEntryPoint, 
 	m_Type = shaderType;
 
 	std::string filePath = pFilePath;
-	D3DInclude include(filePath.substr(0, filePath.rfind('/') + 1));
 
 	ComPtr<ID3DBlob> pErrorBlob;
-	D3DCompile2(line.data(), line.size(), filePath.c_str(), shaderDefines.data(), &include, pEntryPoint, shaderModel.c_str(), compileFlags, 0, 0, nullptr, 0, m_pByteCode.GetAddressOf(), pErrorBlob.GetAddressOf());
+	D3DCompile(source.data(), source.size(), filePath.c_str(), shaderDefines.data(), nullptr, pEntryPoint, shaderModel.c_str(), compileFlags, 0, m_pByteCode.GetAddressOf(), pErrorBlob.GetAddressOf());
 	if (pErrorBlob != nullptr)
 	{
 		std::wstring errorMsg = std::wstring((char*)pErrorBlob->GetBufferPointer(), (char*)pErrorBlob->GetBufferPointer() + pErrorBlob->GetBufferSize());

@@ -21,8 +21,11 @@ public:
 	static void AddGlobalShaderDefine(const std::string& name, const std::string& value = "1");
 
 private:
+	bool ProcessSource(const std::string& filePath, std::stringstream& output, std::vector<StringHash>& processedIncludes, std::vector<std::string>& dependencies);
+
 	static std::vector<std::pair<std::string, std::string>> m_GlobalShaderDefines;
 
+	std::string m_Path;
 	ComPtr<ID3DBlob> m_pByteCode;
 	Type m_Type;
 };
