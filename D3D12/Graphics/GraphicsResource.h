@@ -13,7 +13,6 @@ public:
 	void SetName(const char* pName);
 
 public:
-	virtual bool IsBuffer() const { return false; }
 	inline ID3D12Resource* GetResource() const { return m_pResource; }
 	inline ID3D12Resource** GetResourceAddressOf() { return &m_pResource; }
 	inline D3D12_GPU_VIRTUAL_ADDRESS GetGpuHandle() const { return m_pResource->GetGPUVirtualAddress(); }

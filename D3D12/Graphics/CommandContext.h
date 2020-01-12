@@ -58,8 +58,6 @@ protected:
 	ID3D12GraphicsCommandList* m_pCommandList;
 	ID3D12CommandAllocator* m_pAllocator;
 	D3D12_COMMAND_LIST_TYPE m_Type;
-
-	std::vector<GraphicsResource*> m_TransitionedResources;
 };
 
 class CopyCommandContext : public CommandContext

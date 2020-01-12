@@ -12,42 +12,8 @@
 #include "d3dx12.h"
 #include "Profiler.h"
 
-constexpr static int VALID_COMPUTE_QUEUE_RESOURCE_STATES = 
-D3D12_RESOURCE_STATE_COMMON 
-| D3D12_RESOURCE_STATE_UNORDERED_ACCESS 
-| D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE 
-| D3D12_RESOURCE_STATE_COPY_DEST 
-| D3D12_RESOURCE_STATE_COPY_SOURCE 
-| D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT;
-
-constexpr static int VALID_COPY_QUEUE_RESOURCE_STATES = 
-D3D12_RESOURCE_STATE_COMMON 
-| D3D12_RESOURCE_STATE_COPY_DEST 
-| D3D12_RESOURCE_STATE_COPY_SOURCE;
-
-constexpr static int IMPLICIT_PROMOTION_TEXTURE_STATES =
-D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE
-| D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
-| D3D12_RESOURCE_STATE_COPY_DEST
-| D3D12_RESOURCE_STATE_COPY_SOURCE;
-
-constexpr static int IMPLICIT_PROMOTION_BUFFER_STATES =
-D3D12_RESOURCE_STATE_COMMON
-| D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
-| D3D12_RESOURCE_STATE_INDEX_BUFFER
-| D3D12_RESOURCE_STATE_RENDER_TARGET
-| D3D12_RESOURCE_STATE_UNORDERED_ACCESS
-| D3D12_RESOURCE_STATE_DEPTH_WRITE
-| D3D12_RESOURCE_STATE_DEPTH_READ
-| D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE
-| D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
-| D3D12_RESOURCE_STATE_STREAM_OUT
-| D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT
-| D3D12_RESOURCE_STATE_COPY_DEST
-| D3D12_RESOURCE_STATE_COPY_SOURCE
-| D3D12_RESOURCE_STATE_RESOLVE_DEST
-| D3D12_RESOURCE_STATE_RESOLVE_SOURCE
-| D3D12_RESOURCE_STATE_PREDICATION;
+constexpr int VALID_COMPUTE_QUEUE_RESOURCE_STATES = D3D12_RESOURCE_STATE_COMMON | D3D12_RESOURCE_STATE_UNORDERED_ACCESS | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_COPY_DEST | D3D12_RESOURCE_STATE_COPY_SOURCE | D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT;
+constexpr int VALID_COPY_QUEUE_RESOURCE_STATES = D3D12_RESOURCE_STATE_COMMON | D3D12_RESOURCE_STATE_COPY_DEST | D3D12_RESOURCE_STATE_COPY_SOURCE;
 
 #define USE_RENDERPASSES 1
 
@@ -85,15 +51,6 @@ uint64 CommandContext::Execute(bool wait)
 	CommandQueue* pQueue = m_pGraphics->GetCommandQueue(m_Type);
 	uint64 fenceValue = pQueue->ExecuteCommandList(m_pCommandList);
 
-	for (GraphicsResource* pResource : m_TransitionedResources)
-	{
-		if (pResource->IsBuffer())
-		{
-			pResource->m_CurrentState = D3D12_RESOURCE_STATE_COMMON;
-		}
-	}
-	m_TransitionedResources.clear();
-
 	if (wait)
 	{
 		pQueue->WaitForFence(fenceValue);
@@ -113,15 +70,6 @@ uint64 CommandContext::ExecuteAndReset(bool wait)
 	CommandQueue* pQueue = m_pGraphics->GetCommandQueue(m_Type);
 	uint64 fenceValue = pQueue->ExecuteCommandList(m_pCommandList);
 
-	for (GraphicsResource* pResource : m_TransitionedResources)
-	{
-		if (pResource->IsBuffer())
-		{
-			pResource->m_CurrentState = D3D12_RESOURCE_STATE_COMMON;
-		}
-	}
-	m_TransitionedResources.clear();
-
 	if (wait)
 	{
 		pQueue->WaitForFence(fenceValue);
@@ -137,9 +85,9 @@ void CommandContext::InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESO
 {
 	if (state != pBuffer->m_CurrentState)
 	{
-		const D3D12_RESOURCE_STATES currentState = pBuffer->GetResourceState();
 		if (m_Type == D3D12_COMMAND_LIST_TYPE_COMPUTE)
 		{
+			D3D12_RESOURCE_STATES currentState = pBuffer->GetResourceState();
 			assert((currentState & VALID_COMPUTE_QUEUE_RESOURCE_STATES) == currentState);
 			assert((state & VALID_COMPUTE_QUEUE_RESOURCE_STATES) == state);
 		}
@@ -150,43 +98,13 @@ void CommandContext::InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESO
 			assert((state & VALID_COPY_QUEUE_RESOURCE_STATES) == state);
 		}
 
-		bool implicitTransition = false;
-		if (currentState == D3D12_RESOURCE_STATE_COMMON)
+		m_QueuedBarriers[m_NumQueuedBarriers] = CD3DX12_RESOURCE_BARRIER::Transition(pBuffer->GetResource(), pBuffer->m_CurrentState, state);
+		++m_NumQueuedBarriers;
+		if (executeImmediate || m_NumQueuedBarriers >= m_QueuedBarriers.size())
 		{
-			if (pBuffer->IsBuffer())
-			{
-				implicitTransition = (state & IMPLICIT_PROMOTION_BUFFER_STATES) == state;
-			}
-			else
-			{
-				implicitTransition = (state & IMPLICIT_PROMOTION_TEXTURE_STATES) == state;
-			}
+			FlushResourceBarriers();
 		}
-
-		if (!implicitTransition)
-		{
-			m_QueuedBarriers[m_NumQueuedBarriers] = CD3DX12_RESOURCE_BARRIER::Transition(pBuffer->GetResource(), pBuffer->m_CurrentState, state);
-			++m_NumQueuedBarriers;
-			if (executeImmediate || m_NumQueuedBarriers >= m_QueuedBarriers.size())
-			{
-				FlushResourceBarriers();
-			}
-
-		}
-#ifdef _DEBUG
-		else
-		{
-			ComPtr<ID3D12DebugCommandList1> pDebug = nullptr;
-			if (SUCCEEDED(m_pCommandList->QueryInterface(IID_PPV_ARGS(pDebug.GetAddressOf()))))
-			{
-				pDebug->AssertResourceState(pBuffer->GetResource(), 0, state);
-			}
-		}
-#endif
-
 		pBuffer->m_CurrentState = state;
-
-		m_TransitionedResources.push_back(pBuffer);
 	}
 }
 
@@ -202,8 +120,6 @@ void CommandContext::InsertUavBarrier(GraphicsResource* pBuffer /*= nullptr*/, b
 	{
 		pBuffer->m_CurrentState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
 	}
-
-	m_TransitionedResources.push_back(pBuffer);
 }
 
 void CommandContext::FlushResourceBarriers()
