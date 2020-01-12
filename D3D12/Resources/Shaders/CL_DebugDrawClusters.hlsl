@@ -1,5 +1,8 @@
 #include "Common.hlsl"
 
+#define RootSig "CBV(b0, visibility=SHADER_VISIBILITY_GEOMETRY), " \
+				"DescriptorTable(SRV(t0, numDescriptors = 4), visibility=SHADER_VISIBILITY_VERTEX)"
+
 cbuffer PerFrameData : register(b0)
 {
 	float4x4 cProjection;
@@ -23,6 +26,7 @@ struct PSInput
 	float4 color : COLOR;
 };
 
+[RootSignature(RootSig)]
 GSInput VSMain(uint vertexId : SV_VertexID)
 {
 	GSInput result;

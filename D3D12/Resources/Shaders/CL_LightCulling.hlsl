@@ -1,5 +1,9 @@
 #include "Common.hlsl"
 
+#define RootSig "CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \
+				"DescriptorTable(SRV(t0, numDescriptors = 3)), " \
+				"DescriptorTable(UAV(u0, numDescriptors = 3))"
+
 #define MAX_LIGHTS_PER_TILE 256
 #define THREAD_COUNT 512
 
@@ -54,6 +58,7 @@ bool ConeInSphere(float3 conePosition, float3 coneDirection, float coneRange, fl
 	return !(angleCull || frontCull || backCull);
 }
 
+[RootSignature(RootSig)]
 [numthreads(THREAD_COUNT, 1, 1)]
 void LightCulling(CS_INPUT input)
 {

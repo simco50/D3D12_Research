@@ -14,7 +14,6 @@ class ComputePipelineState;
 class Mesh;
 class StructuredBuffer;
 class SubMesh;
-class PersistentResourceAllocator;
 struct Material;
 class ClusteredForward;
 class Camera;
@@ -114,7 +113,6 @@ private:
 	int m_SampleCount = 1;
 	int m_SampleQuality = 0;
 
-	std::unique_ptr<PersistentResourceAllocator> m_pPersistentAllocationManager;;
 	std::unique_ptr<DynamicAllocationManager> m_pDynamicAllocationManager;
 
 	std::unique_ptr<Texture2D> m_pMultiSampleRenderTarget;

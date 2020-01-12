@@ -1,5 +1,8 @@
 #include "Common.hlsl"
 
+#define RootSig "CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \
+				"DescriptorTable(UAV(u0, numDescriptors = 1), visibility = SHADER_VISIBILITY_ALL), "
+
 cbuffer Parameters : register(b0)
 {
     float4x4 cProjectionInverse;
@@ -29,6 +32,7 @@ struct CS_Input
     uint3 GroupID : SV_GROUPID;
 };
 
+[RootSignature(RootSig)]
 [numthreads(1, 1, 1)]
 void GenerateAABBs(CS_Input input)
 {

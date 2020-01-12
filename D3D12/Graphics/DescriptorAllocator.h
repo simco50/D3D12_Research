@@ -11,9 +11,9 @@ public:
 	ID3D12DescriptorHeap* GetCurrentHeap() { return m_DescriptorHeapPool.back().Get(); }
 
 	uint32 GetHeapCount() const { return (uint32)m_DescriptorHeapPool.size(); }
-	uint32 GetNumAllocatedDescriptors() const { return std::max((int)m_DescriptorHeapPool.size() - 1, 0) * DESCRIPTORS_PER_HEAP + DESCRIPTORS_PER_HEAP - m_RemainingDescriptors; }
+	uint32 GetNumAllocatedDescriptors() const;
 	D3D12_DESCRIPTOR_HEAP_TYPE GetType() const { return m_Type; }
-	static const int DESCRIPTORS_PER_HEAP = 256;
+	static const int DESCRIPTORS_PER_HEAP;
 
 private:
 	void AllocateNewHeap();

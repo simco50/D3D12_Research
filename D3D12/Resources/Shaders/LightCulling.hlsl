@@ -1,6 +1,10 @@
 #include "Common.hlsl"
 #include "Constants.hlsl"
 
+#define RootSig "CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \
+				"DescriptorTable(UAV(u0, numDescriptors = 5), visibility=SHADER_VISIBILITY_ALL), " \
+				"DescriptorTable(SRV(t0, numDescriptors = 2), visibility=SHADER_VISIBILITY_ALL), "
+
 #define MAX_LIGHTS_PER_TILE 256
 
 cbuffer ShaderParameters : register(b0)
@@ -80,6 +84,7 @@ uint CreateLightMask(float depthRangeMin, float depthRange, Sphere sphere)
     return mask;
 }
 
+[RootSignature(RootSig)]
 [numthreads(BLOCK_SIZE, BLOCK_SIZE, 1)]
 void CSMain(CS_INPUT input)
 {

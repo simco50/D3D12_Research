@@ -1,5 +1,8 @@
 #include "Common.hlsl"
 
+#define RootSig "DescriptorTable(UAV(u0, numDescriptors = 1), visibility=SHADER_VISIBILITY_ALL), " \
+				"DescriptorTable(SRV(t0, numDescriptors = 1), visibility=SHADER_VISIBILITY_ALL), "
+
 #ifndef DEPTH_RESOLVE_MIN
 #define DEPTH_RESOLVE_MIN 1
 #endif
@@ -15,6 +18,7 @@
 Texture2DMS<float> tInputTexture : register(t0);
 RWTexture2D<float> uOutputTexture : register(u0);
 
+[RootSignature(RootSig)]
 [numthreads(16, 16, 1)]
 void CSMain(uint3 threadId : SV_DISPATCHTHREADID)
 {

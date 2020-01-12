@@ -1,6 +1,8 @@
 #include "stdafx.h"
 #include "DescriptorAllocator.h"
 
+const int DescriptorAllocator::DESCRIPTORS_PER_HEAP = 256;
+
 DescriptorAllocator::DescriptorAllocator(ID3D12Device* pDevice, D3D12_DESCRIPTOR_HEAP_TYPE type)
 	: m_pDevice(pDevice), m_Type(type)
 {
@@ -32,4 +34,9 @@ void DescriptorAllocator::AllocateNewHeap()
 	m_DescriptorHeapPool.push_back(std::move(pNewHeap));
 	m_CurrentCpuHandle = m_DescriptorHeapPool.back()->GetCPUDescriptorHandleForHeapStart();
 	m_RemainingDescriptors = DESCRIPTORS_PER_HEAP;
+}
+
+uint32 DescriptorAllocator::GetNumAllocatedDescriptors() const
+{
+	return std::max((int)m_DescriptorHeapPool.size() - 1, 0) * DESCRIPTORS_PER_HEAP + DESCRIPTORS_PER_HEAP - m_RemainingDescriptors;
 }

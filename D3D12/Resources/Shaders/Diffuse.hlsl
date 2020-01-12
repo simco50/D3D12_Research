@@ -2,6 +2,16 @@
 #include "Constants.hlsl"
 #include "Lighting.hlsl"
 
+#define RootSig "RootFlags(ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT), " \
+				"CBV(b0, visibility=SHADER_VISIBILITY_VERTEX), " \
+				"CBV(b1, visibility=SHADER_VISIBILITY_ALL), " \
+				"CBV(b2, visibility=SHADER_VISIBILITY_PIXEL), " \
+				"DescriptorTable(SRV(t0, numDescriptors = 3), visibility=SHADER_VISIBILITY_PIXEL), " \
+				"DescriptorTable(SRV(t3, numDescriptors = 4), visibility=SHADER_VISIBILITY_PIXEL), " \
+				"StaticSampler(s0, filter=FILTER_MIN_MAG_MIP_LINEAR, visibility = SHADER_VISIBILITY_PIXEL), " \
+				"StaticSampler(s1, filter=FILTER_MIN_MAG_MIP_POINT, visibility = SHADER_VISIBILITY_PIXEL), " \
+				"StaticSampler(s2, filter=FILTER_MIN_MAG_MIP_POINT, visibility = SHADER_VISIBILITY_PIXEL, comparisonFunc = COMPARISON_GREATER_EQUAL)"
+
 cbuffer PerObjectData : register(b0)
 {
 	float4x4 cWorld;
@@ -121,6 +131,7 @@ float3 CalculateNormal(float3 normal, float3 tangent, float3 bitangent, float2 t
 	return mul(sampledNormal, normalMatrix);
 }
 
+[RootSignature(RootSig)]
 PSInput VSMain(VSInput input)
 {
 	PSInput result;

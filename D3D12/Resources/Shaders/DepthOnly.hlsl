@@ -1,5 +1,15 @@
 #include "Common.hlsl"
 
+#ifdef ALPHA_BLEND
+#define RootSig "RootFlags(ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT), " \
+				"CBV(b0, visibility=SHADER_VISIBILITY_VERTEX), " \
+				"DescriptorTable(SRV(t0, numDescriptors = 1), visibility=SHADER_VISIBILITY_PIXEL), " \
+				"StaticSampler(s0, filter=FILTER_MIN_MAG_MIP_LINEAR, visibility = SHADER_VISIBILITY_PIXEL), "
+#else
+#define RootSig "RootFlags(ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT), " \
+				"CBV(b0, visibility=SHADER_VISIBILITY_VERTEX), "
+#endif
+
 cbuffer PerObjectData : register(b0)
 {
 	float4x4 WorldViewProjection;
@@ -26,6 +36,7 @@ struct PSInput
 #endif
 };
 
+[RootSignature(RootSig)]
 PSInput VSMain(VSInput input)
 {
 	PSInput result = (PSInput)0;

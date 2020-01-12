@@ -1,5 +1,11 @@
 #include "Common.hlsl"
 
+#define RootSig "RootFlags(ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT), " \
+				"CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \
+				"DescriptorTable(UAV(u1, numDescriptors = 1), visibility = SHADER_VISIBILITY_PIXEL), " \
+				"DescriptorTable(SRV(t0, numDescriptors = 1), visibility = SHADER_VISIBILITY_PIXEL), " \
+				"StaticSampler(s0, filter=FILTER_MIN_MAG_MIP_LINEAR, visibility = SHADER_VISIBILITY_PIXEL)"
+
 cbuffer Parameters : register(b0)
 {
     float4x4 cWorldView;
@@ -33,6 +39,7 @@ struct PS_Input
     float2 texCoord : TEXCOORD;
 };
 
+[RootSignature(RootSig)]
 PS_Input MarkClusters_VS(VS_Input input)
 {
     PS_Input output = (PS_Input)0;
