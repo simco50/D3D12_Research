@@ -37,3 +37,8 @@ newaction {
 		os.remove(SOURCE_DIR .. "*.vcxproj.*")
 	end
 }
+
+function AddDxc()
+	postbuildcommands { ("copy \"$(SolutionDir)Libraries\\Dxc\\dxcompiler.dll\" \"$(OutDir)\"") }
+	postbuildcommands { ("copy \"$(SolutionDir)Libraries\\Dxc\\dxil.dll\" \"$(OutDir)\"") }
+end

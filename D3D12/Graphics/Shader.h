@@ -1,5 +1,7 @@
 #pragma once
 
+struct IDxcBlob;
+
 class Shader
 {
 public:
@@ -13,10 +15,11 @@ public:
 	};
 
 	Shader(const char* pFilePath, Type shaderType, const char* pEntryPoint, const std::vector<std::string> defines = {});
+	~Shader();
 
 	inline Type GetType() const { return m_Type; }
-	inline void* GetByteCode() const { return m_pByteCode->GetBufferPointer(); }
-	inline uint32 GetByteCodeSize() const { return (uint32)m_pByteCode->GetBufferSize(); }
+	void* GetByteCode() const;
+	uint32 GetByteCodeSize() const;
 
 	static void AddGlobalShaderDefine(const std::string& name, const std::string& value = "1");
 
@@ -27,6 +30,6 @@ private:
 
 	std::string m_Path;
 	ComPtr<ID3DBlob> m_pByteCode;
+	ComPtr<IDxcBlob> m_pByteCodeDxc;
 	Type m_Type;
 };
-
