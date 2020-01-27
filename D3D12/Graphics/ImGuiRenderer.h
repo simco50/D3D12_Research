@@ -1,6 +1,6 @@
 #pragma once
 #include "DescriptorHandle.h"
-class GraphicsCommandContext;
+class CommandContext;
 class Graphics;
 class RootSignature;
 class GraphicsPipelineState;
@@ -13,7 +13,7 @@ public:
 	~ImGuiRenderer();
 
 	void NewFrame();
-	void Render(GraphicsCommandContext& context);
+	void Render(CommandContext& context);
 
 private:
 	void CreatePipeline();

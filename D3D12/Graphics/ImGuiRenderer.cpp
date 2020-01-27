@@ -87,7 +87,7 @@ void ImGuiRenderer::CreatePipeline()
 	m_pPipelineState->Finalize("ImGui Pipeline", m_pGraphics->GetDevice());
 }
 
-void ImGuiRenderer::Render(GraphicsCommandContext& context)
+void ImGuiRenderer::Render(CommandContext& context)
 {
 	ImGui::Render();
 	ImDrawData* pDrawData = ImGui::GetDrawData();

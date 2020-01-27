@@ -110,7 +110,7 @@ void Graphics::RandomizeLights(int count)
 		m_pLightBuffer->Create(this, sizeof(Light), count);
 		m_pLightBuffer->SetName("Light Buffer");
 	}
-	GraphicsCommandContext* pContext = static_cast<GraphicsCommandContext*>(AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT));
+	CommandContext* pContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 	m_pLightBuffer->SetData(pContext, m_Lights.data(), sizeof(Light) * m_Lights.size());
 	pContext->Execute(true);
 }
@@ -194,7 +194,7 @@ void Graphics::Update()
 		// - Optimization that prevents wasteful lighting calculations during the base pass
 		// - Required for light culling
 		{
-			GraphicsCommandContext* pContext = static_cast<GraphicsCommandContext*>(AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT));
+			CommandContext* pContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 			Profiler::Instance()->Begin("Depth Prepass", pContext);
 
 			pContext->InsertResourceBarrier(GetDepthStencil(), D3D12_RESOURCE_STATE_DEPTH_WRITE);
@@ -237,7 +237,7 @@ void Graphics::Update()
 		// - If MSAA is enabled, run a compute shader to resolve the depth buffer
 		if (m_SampleCount > 1)
 		{
-			ComputeCommandContext* pContext = static_cast<ComputeCommandContext*>(AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COMPUTE));
+			CommandContext* pContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COMPUTE);
 			Profiler::Instance()->Begin("Depth Resolve", pContext);
 
 			pContext->SetComputeRootSignature(m_pResolveDepthRS.get());
@@ -264,7 +264,7 @@ void Graphics::Update()
 		// - Outputs a: - Texture2D containing a count and an offset of lights per tile.
 		//				- uint[] index buffer to indicate what lights are visible in each tile.
 		{
-			ComputeCommandContext* pContext = static_cast<ComputeCommandContext*>(AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COMPUTE));
+			CommandContext* pContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COMPUTE);
 			Profiler::Instance()->Begin("Light Culling", pContext);
 			Profiler::Instance()->Begin("Setup Light Data", pContext);
 			uint32 zero[] = { 0, 0 };
@@ -312,7 +312,7 @@ void Graphics::Update()
 		// - Renders the scene depth onto a separate depth buffer from the light's view
 		if (m_ShadowCasters > 0)
 		{
-			GraphicsCommandContext* pContext = static_cast<GraphicsCommandContext*>(AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT));
+			CommandContext* pContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 
 			Profiler::Instance()->Begin("Shadows", pContext);
 			pContext->InsertResourceBarrier(m_pShadowMap.get(), D3D12_RESOURCE_STATE_DEPTH_WRITE);
@@ -381,7 +381,7 @@ void Graphics::Update()
 		//5. BASE PASS
 		// - Render the scene using the shadow mapping result and the light culling buffers
 		{
-			GraphicsCommandContext* pContext = static_cast<GraphicsCommandContext*>(AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT));
+			CommandContext* pContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 			Profiler::Instance()->Begin("3D", pContext);
 
 			pContext->SetViewport(FloatRect(0, 0, (float)m_WindowWidth, (float)m_WindowHeight));
@@ -485,7 +485,7 @@ void Graphics::Update()
 	}
 
 	{
-		GraphicsCommandContext* pContext = static_cast<GraphicsCommandContext*>(AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT));
+		CommandContext* pContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 		Profiler::Instance()->Begin("UI", pContext);
 		//6. UI
 		// - ImGui render, pretty straight forward
@@ -920,7 +920,7 @@ void Graphics::InitializeAssets()
 
 	//Geometry
 	{
-		CopyCommandContext* pContext = static_cast<CopyCommandContext*>(AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COPY));
+		CommandContext* pContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COPY);
 		m_pMesh = std::make_unique<Mesh>();
 		m_pMesh->Load("Resources/sponza/sponza.dae", this, pContext);
 		pContext->Execute(true);
@@ -1089,24 +1089,7 @@ CommandContext* Graphics::AllocateCommandContext(D3D12_COMMAND_LIST_TYPE type)
 		ID3D12CommandAllocator* pAllocator = m_CommandQueues[type]->RequestAllocator();
 		m_pDevice->CreateCommandList(0, type, pAllocator, nullptr, IID_PPV_ARGS(pCommandList.GetAddressOf()));
 		m_CommandLists.push_back(std::move(pCommandList));
-		switch (type)
-		{
-		case D3D12_COMMAND_LIST_TYPE_DIRECT:
-			m_CommandListPool[typeIndex].emplace_back(std::make_unique<GraphicsCommandContext>(this, static_cast<ID3D12GraphicsCommandList*>(m_CommandLists.back().Get()), pAllocator));
-			m_CommandListPool[typeIndex].back()->SetName("Pooled Graphics Command Context");
-			break;
-		case D3D12_COMMAND_LIST_TYPE_COMPUTE:
-			m_CommandListPool[typeIndex].emplace_back(std::make_unique<ComputeCommandContext>(this, static_cast<ID3D12GraphicsCommandList*>(m_CommandLists.back().Get()), pAllocator));
-			m_CommandListPool[typeIndex].back()->SetName("Pooled Compute Command Context");
-			break;
-		case D3D12_COMMAND_LIST_TYPE_COPY:
-			m_CommandListPool[typeIndex].emplace_back(std::make_unique<CopyCommandContext>(this, static_cast<ID3D12GraphicsCommandList*>(m_CommandLists.back().Get()), pAllocator));
-			m_CommandListPool[typeIndex].back()->SetName("Pooled Copy Command Context");
-			break;
-		default:
-			assert(false);
-			break;
-		}
+		m_CommandListPool[typeIndex].emplace_back(std::make_unique<CommandContext>(this, static_cast<ID3D12GraphicsCommandList*>(m_CommandLists.back().Get()), pAllocator, type));
 		return m_CommandListPool[typeIndex].back().get();
 	}
 }

@@ -1,7 +1,7 @@
 #pragma once
 #include "DescriptorHandle.h"
 
-class ComputeCommandContext;
+class CommandContext;
 class RootSignature;
 class Graphics;
 
@@ -14,7 +14,7 @@ enum class DescriptorTableType
 class DynamicDescriptorAllocator
 {
 public:
-	DynamicDescriptorAllocator(Graphics* pGraphics, ComputeCommandContext* pContext, D3D12_DESCRIPTOR_HEAP_TYPE type);
+	DynamicDescriptorAllocator(Graphics* pGraphics, CommandContext* pContext, D3D12_DESCRIPTOR_HEAP_TYPE type);
 	~DynamicDescriptorAllocator();
 
 	DescriptorHandle AllocateTransientDescriptor(int count);
@@ -62,7 +62,7 @@ private:
 
 	DescriptorHandle m_StartHandle{};
 	Graphics* m_pGraphics;
-	ComputeCommandContext* m_pOwner;
+	CommandContext* m_pOwner;
 	ID3D12DescriptorHeap* m_pCurrentHeap = nullptr;
 	D3D12_DESCRIPTOR_HEAP_TYPE m_Type;
 	uint32 m_CurrentOffset = 0;

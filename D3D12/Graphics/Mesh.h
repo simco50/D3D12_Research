@@ -1,7 +1,7 @@
 #pragma once
 class VertexBuffer;
 class IndexBuffer;
-class GraphicsCommandContext;
+class CommandContext;
 class Texture2D;
 class Graphics;
 class CommandContext;
@@ -12,7 +12,7 @@ class SubMesh
 	friend class Mesh;
 
 public:
-	void Draw(GraphicsCommandContext* pContext) const;
+	void Draw(CommandContext* pContext) const;
 	int GetMaterialId() const { return m_MaterialId; }
 	const BoundingBox& GetBounds() const { return m_Bounds; }
 

@@ -7,7 +7,7 @@
 std::vector<ComPtr<ID3D12DescriptorHeap>> DynamicDescriptorAllocator::m_DescriptorHeaps;
 std::array<std::queue<std::pair<uint64, ID3D12DescriptorHeap*>>, 2> DynamicDescriptorAllocator::m_FreeDescriptors;
 
-DynamicDescriptorAllocator::DynamicDescriptorAllocator(Graphics* pGraphics, ComputeCommandContext* pContext, D3D12_DESCRIPTOR_HEAP_TYPE type)
+DynamicDescriptorAllocator::DynamicDescriptorAllocator(Graphics* pGraphics, CommandContext* pContext, D3D12_DESCRIPTOR_HEAP_TYPE type)
 	: m_pGraphics(pGraphics), m_pOwner(pContext), m_Type(type)
 {
 	m_DescriptorSize = m_pGraphics->GetDevice()->GetDescriptorHandleIncrementSize(type);

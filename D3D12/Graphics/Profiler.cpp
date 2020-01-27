@@ -309,7 +309,7 @@ void Profiler::EndReadBack(int frameIndex)
 	m_pCurrentBlock->StartTimer(nullptr);
 	m_pCurrentBlock->EndTimer(nullptr);
 
-	GraphicsCommandContext* pContext = (GraphicsCommandContext*)m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+	CommandContext* pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 	pContext->GetCommandList()->ResolveQueryData(m_pQueryHeap.Get(), D3D12_QUERY_TYPE_TIMESTAMP, offset, HEAP_SIZE * 2, m_pReadBackBuffer->GetResource(), offset * sizeof(uint64));
 	m_FenceValues[backBufferIndex] = pContext->Execute(false);
 
