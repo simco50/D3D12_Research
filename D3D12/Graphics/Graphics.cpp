@@ -17,6 +17,7 @@
 #include "Profiler.h"
 #include "ClusteredForward.h"
 #include "Scene/Camera.h"
+#include "RenderGraph/RenderGraph.h"
 
 const DXGI_FORMAT Graphics::DEPTH_STENCIL_FORMAT = DXGI_FORMAT_D32_FLOAT;
 const DXGI_FORMAT Graphics::DEPTH_STENCIL_SHADOW_FORMAT = DXGI_FORMAT_D16_UNORM;
@@ -237,25 +238,38 @@ void Graphics::Update()
 		// - If MSAA is enabled, run a compute shader to resolve the depth buffer
 		if (m_SampleCount > 1)
 		{
-			CommandContext* pContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COMPUTE);
-			Profiler::Instance()->Begin("Depth Resolve", pContext);
+			RG::RenderGraph graph;
 
-			pContext->SetComputeRootSignature(m_pResolveDepthRS.get());
-			pContext->SetComputePipelineState(m_pResolveDepthPSO.get());
+			RG::ResourceHandle stencilSource = graph.ImportResource<RG::Texture>("Depth Stencil", nullptr);
+			RG::ResourceHandleMutable stencilTarget = graph.ImportResource<RG::Texture>("Depth Stencil Target", nullptr);
 
-			pContext->SetDynamicDescriptor(0, 0, GetResolvedDepthStencil()->GetUAV());
-			pContext->SetDynamicDescriptor(1, 0, GetDepthStencil()->GetSRV());
+			struct DepthResolveData
+			{
+				RG::ResourceHandle StencilSource;
+				RG::ResourceHandleMutable StencilTarget;
+			};
 
-			int dispatchGroupsX = Math::RoundUp((float)m_WindowWidth / 16);
-			int dispatchGroupsY = Math::RoundUp((float)m_WindowHeight / 16);
-			pContext->Dispatch(dispatchGroupsX, dispatchGroupsY, 1);
+			graph.AddCallbackPass<DepthResolveData>("Depth Resolve", [&](RG::RenderPassBuilder& builder, DepthResolveData& data)
+				{
+					data.StencilSource = builder.Read(stencilSource);
+					data.StencilTarget = builder.Write(stencilTarget);
+				},
+				[=](CommandContext& renderContext, const RG::RenderPassResources& resources, const DepthResolveData& data)
+				{
+					renderContext.SetComputeRootSignature(m_pResolveDepthRS.get());
+					renderContext.SetComputePipelineState(m_pResolveDepthPSO.get());
 
-			pContext->InsertResourceBarrier(GetResolvedDepthStencil(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, true);
-			Profiler::Instance()->End(pContext);
+					renderContext.SetDynamicDescriptor(0, 0, GetResolvedDepthStencil()->GetUAV());
+					renderContext.SetDynamicDescriptor(1, 0, GetDepthStencil()->GetSRV());
 
-			uint64 resolveDepthFence = pContext->Execute(false);
-			m_CommandQueues[D3D12_COMMAND_LIST_TYPE_DIRECT]->InsertWaitForFence(resolveDepthFence);
-			m_CommandQueues[D3D12_COMMAND_LIST_TYPE_COMPUTE]->InsertWaitForFence(resolveDepthFence);
+					int dispatchGroupsX = Math::RoundUp((float)m_WindowWidth / 16);
+					int dispatchGroupsY = Math::RoundUp((float)m_WindowHeight / 16);
+					renderContext.Dispatch(dispatchGroupsX, dispatchGroupsY, 1);
+
+					renderContext.InsertResourceBarrier(GetResolvedDepthStencil(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, true);
+				});
+			graph.Compile();
+			graph.Execute(this);
 		}
 
 		//3. LIGHT CULLING
