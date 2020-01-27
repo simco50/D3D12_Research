@@ -55,6 +55,14 @@ namespace RG
 			return *static_cast<T*>(pData);
 		}
 
+		template<typename T>
+		const T& Get() const
+		{
+			void* pData = GetData(T::Type());
+			RG_ASSERT(pData, "Data for given type does not exist in blackboard");
+			return *static_cast<T*>(pData);
+		}
+
 		Blackboard& Branch()
 		{
 			m_Children.emplace_back(std::make_unique<Blackboard>());
@@ -329,7 +337,7 @@ namespace RG
 		RenderGraph& operator=(const RenderGraph& other) = delete;
 
 		void Compile();
-		void Execute(Graphics* pGraphics);
+		int64 Execute(Graphics* pGraphics);
 		void Present(ResourceHandle resource);
 		void DumpGraphViz(const char* pPath) const;
 
@@ -360,6 +368,13 @@ namespace RG
 			ResourceBase* pResource = new Resource<T>(name, (int)m_Resources.size(), pTexture);
 			m_Resources.push_back(pResource);
 			return CreateResourceNode(pResource);
+		}
+
+		template<typename T>
+		T* ExtractResource(ResourceHandle handle)
+		{
+			const ResourceNode& node = GetResourceNode(handle);
+			return node.m_pResource;
 		}
 
 		ResourceHandleMutable CreateResourceNode(ResourceBase* pResource)

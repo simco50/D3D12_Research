@@ -214,7 +214,7 @@ namespace RG
 		}
 	}
 
-	void RenderGraph::Execute(Graphics* pGraphics)
+	int64 RenderGraph::Execute(Graphics* pGraphics)
 	{
 		CommandContext* pContext = pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 
@@ -239,7 +239,7 @@ namespace RG
 			}
 		}
 		
-		pContext->Execute(true);
+		return pContext->Execute(false);
 	}
 
 	void RenderGraph::Present(ResourceHandle resource)
