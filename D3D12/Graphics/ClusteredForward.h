@@ -6,13 +6,13 @@ class ComputePipelineState;
 class RootSignature;
 class GraphicsPipelineState;
 class StructuredBuffer;
-class Texture2D;
+class Texture;
 class ByteAddressBuffer;
 class Camera;
 
 struct ClusteredForwardInputResources
 {
-	Texture2D* pRenderTarget = nullptr;
+	Texture* pRenderTarget = nullptr;
 	const std::vector<Batch>* pOpaqueBatches;
 	const std::vector<Batch>* pTransparantBatches;
 	StructuredBuffer* pLightBuffer;
@@ -37,8 +37,8 @@ private:
 	uint32 m_ClusterCountX = 0;
 	uint32 m_ClusterCountY = 0;
 
-	std::unique_ptr<Texture2D> m_pHeatMapTexture;
-	std::unique_ptr<Texture2D> m_pDepthTexture;
+	std::unique_ptr<Texture> m_pHeatMapTexture;
+	std::unique_ptr<Texture> m_pDepthTexture;
 
 	//Step 1: AABB
 	std::unique_ptr<RootSignature> m_pCreateAabbRS;

@@ -48,8 +48,8 @@ void ImGuiRenderer::InitializeImGui()
 	unsigned char* pPixels;
 	int width, height;
 	io.Fonts->GetTexDataAsRGBA32(&pPixels, &width, &height);
-	m_pFontTexture = std::make_unique<Texture2D>();
-	m_pFontTexture->Create(m_pGraphics, width, height, DXGI_FORMAT_R8G8B8A8_UNORM, TextureUsage::ShaderResource, 1);
+	m_pFontTexture = std::make_unique<Texture>();
+	m_pFontTexture->Create(m_pGraphics, TextureDesc(width, height, DXGI_FORMAT_R8G8B8A8_UNORM, TextureUsage::ShaderResource, 1));
 
 	CommandContext* pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 	m_pFontTexture->SetData(pContext, pPixels);
@@ -124,7 +124,7 @@ void ImGuiRenderer::Render(CommandContext& context)
 				context.SetScissorRect(FloatRect(pcmd->ClipRect.x, pcmd->ClipRect.y, pcmd->ClipRect.z, pcmd->ClipRect.w));
 				if (pcmd->TextureId != nullptr)
 				{
-					context.SetDynamicDescriptor(1, 0, static_cast<Texture2D*>(pcmd->TextureId)->GetSRV());
+					context.SetDynamicDescriptor(1, 0, static_cast<Texture*>(pcmd->TextureId)->GetSRV());
 				}
 				context.DrawIndexed(pcmd->ElemCount, indexOffset, 0);
 			}

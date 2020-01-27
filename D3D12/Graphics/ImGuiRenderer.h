@@ -4,7 +4,7 @@ class CommandContext;
 class Graphics;
 class RootSignature;
 class GraphicsPipelineState;
-class Texture2D;
+class Texture;
 
 class ImGuiRenderer
 {
@@ -22,6 +22,6 @@ private:
 	Graphics* m_pGraphics;
 	std::unique_ptr<GraphicsPipelineState> m_pPipelineState;
 	std::unique_ptr<RootSignature> m_pRootSignature;
-	std::unique_ptr<Texture2D> m_pFontTexture;
+	std::unique_ptr<Texture> m_pFontTexture;
 };
 

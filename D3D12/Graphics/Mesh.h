@@ -2,7 +2,7 @@
 class VertexBuffer;
 class IndexBuffer;
 class CommandContext;
-class Texture2D;
+class Texture;
 class Graphics;
 class CommandContext;
 struct aiMesh;
@@ -27,10 +27,10 @@ private:
 
 struct Material
 {
-	std::unique_ptr<Texture2D> pDiffuseTexture;
-	std::unique_ptr<Texture2D> pNormalTexture;
-	std::unique_ptr<Texture2D> pSpecularTexture;
-	std::unique_ptr<Texture2D> pAlphaTexture;
+	std::unique_ptr<Texture> pDiffuseTexture;
+	std::unique_ptr<Texture> pNormalTexture;
+	std::unique_ptr<Texture> pSpecularTexture;
+	std::unique_ptr<Texture> pAlphaTexture;
 	bool IsTransparent;
 };
 

@@ -28,7 +28,7 @@ ClusteredForward::ClusteredForward(Graphics* pGraphics)
 
 void ClusteredForward::OnSwapchainCreated(int windowWidth, int windowHeight)
 {
-	m_pDepthTexture->Create(m_pGraphics, windowWidth, windowHeight, Graphics::DEPTH_STENCIL_FORMAT, TextureUsage::DepthStencil, m_pGraphics->GetMultiSampleCount(), -1, ClearBinding(0.0f, 0));
+	m_pDepthTexture->Create(m_pGraphics, TextureDesc(windowWidth, windowHeight, Graphics::DEPTH_STENCIL_FORMAT, TextureUsage::DepthStencil, m_pGraphics->GetMultiSampleCount(), ClearBinding(0.0f, 0)));
 	m_pDepthTexture->SetName("Clustered Forward Depth Texture");
 
 	m_ClusterCountX = (uint32)ceil((float)windowWidth / cClusterSize);
@@ -447,7 +447,7 @@ void ClusteredForward::Execute(const ClusteredForwardInputResources& resources)
 
 void ClusteredForward::SetupResources(Graphics* pGraphics)
 {
-	m_pDepthTexture = std::make_unique<Texture2D>();
+	m_pDepthTexture = std::make_unique<Texture>();
 
 	m_pAABBs = std::make_unique<StructuredBuffer>(pGraphics);
 	m_pUniqueClusters = std::make_unique<StructuredBuffer>(pGraphics);
@@ -462,8 +462,8 @@ void ClusteredForward::SetupResources(Graphics* pGraphics)
 	m_pDebugLightGrid = std::make_unique<StructuredBuffer>(pGraphics);
 
 	CommandContext* pContext = pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COPY);
-	m_pHeatMapTexture = std::make_unique<Texture2D>();
-	m_pHeatMapTexture->Create(pGraphics, pContext, "Resources/Textures/Heatmap.png", TextureUsage::ShaderResource);
+	m_pHeatMapTexture = std::make_unique<Texture>();
+	m_pHeatMapTexture->Create(pGraphics, pContext, "Resources/Textures/Heatmap.png");
 	m_pHeatMapTexture->SetName("Heatmap texture");
 	pContext->Execute(true);
 

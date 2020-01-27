@@ -36,30 +36,30 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 
 	auto loadTexture = [pGraphics, pContext](std::string basePath, aiMaterial* pMaterial, aiTextureType type) 
 	{
-		std::unique_ptr<Texture2D> pTex;
+		std::unique_ptr<Texture> pTex;
 		aiString path;
 		aiReturn ret = pMaterial->GetTexture(type, 0, &path);
-		pTex = std::make_unique<Texture2D>();
+		pTex = std::make_unique<Texture>();
 		if (ret == aiReturn_SUCCESS)
 		{
 			std::string p = path.C_Str();
 			std::stringstream str;
 			str << basePath << p;
-			pTex->Create(pGraphics, pContext, str.str().c_str(), TextureUsage::ShaderResource);
+			pTex->Create(pGraphics, pContext, str.str().c_str());
 		}
 		else
 		{
 			switch (type)
 			{
 			case aiTextureType_NORMALS:
-				pTex->Create(pGraphics, pContext, "Resources/textures/dummy_ddn.png", TextureUsage::ShaderResource);
+				pTex->Create(pGraphics, pContext, "Resources/textures/dummy_ddn.png");
 				break;
 			case aiTextureType_SPECULAR:
-				pTex->Create(pGraphics, pContext, "Resources/textures/dummy_specular.png", TextureUsage::ShaderResource);
+				pTex->Create(pGraphics, pContext, "Resources/textures/dummy_specular.png");
 				break;
 			case aiTextureType_DIFFUSE:
 			default:
-				pTex->Create(pGraphics, pContext, "Resources/textures/dummy.png", TextureUsage::ShaderResource);
+				pTex->Create(pGraphics, pContext, "Resources/textures/dummy.png");
 				break;
 			}
 		}

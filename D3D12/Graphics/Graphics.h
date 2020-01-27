@@ -8,7 +8,7 @@ class ImGuiRenderer;
 class DynamicAllocationManager;
 class GraphicsResource;
 class RootSignature;
-class Texture2D;
+class Texture;
 class GraphicsPipelineState;
 class ComputePipelineState;
 class Mesh;
@@ -62,10 +62,10 @@ public:
 
 	D3D12_CPU_DESCRIPTOR_HANDLE AllocateCpuDescriptors(int count, D3D12_DESCRIPTOR_HEAP_TYPE type);
 
-	Texture2D* GetDepthStencil() const { return m_pDepthStencil.get(); }
-	Texture2D* GetResolvedDepthStencil() const { return m_SampleCount > 1 ? m_pResolvedDepthStencil.get() : m_pDepthStencil.get(); }
-	Texture2D* GetCurrentRenderTarget() const { return m_SampleCount > 1 ? m_pMultiSampleRenderTarget.get() : GetCurrentBackbuffer(); }
-	Texture2D* GetCurrentBackbuffer() const { return m_RenderTargets[m_CurrentBackBufferIndex].get(); }
+	Texture* GetDepthStencil() const { return m_pDepthStencil.get(); }
+	Texture* GetResolvedDepthStencil() const { return m_SampleCount > 1 ? m_pResolvedDepthStencil.get() : m_pDepthStencil.get(); }
+	Texture* GetCurrentRenderTarget() const { return m_SampleCount > 1 ? m_pMultiSampleRenderTarget.get() : GetCurrentBackbuffer(); }
+	Texture* GetCurrentBackbuffer() const { return m_RenderTargets[m_CurrentBackBufferIndex].get(); }
 
 	Camera* GetCamera() const { return m_pCamera.get(); }
 
@@ -115,8 +115,8 @@ private:
 
 	std::unique_ptr<DynamicAllocationManager> m_pDynamicAllocationManager;
 
-	std::unique_ptr<Texture2D> m_pMultiSampleRenderTarget;
-	std::array<std::unique_ptr<Texture2D>, FRAME_COUNT> m_RenderTargets;
+	std::unique_ptr<Texture> m_pMultiSampleRenderTarget;
+	std::array<std::unique_ptr<Texture>, FRAME_COUNT> m_RenderTargets;
 
 	std::array<std::unique_ptr<DescriptorAllocator>, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES> m_DescriptorHeaps;
 	std::array<std::unique_ptr<CommandQueue>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_CommandQueues;
@@ -150,7 +150,7 @@ private:
 	std::unique_ptr<ClusteredForward> m_pClusteredForward;
 
 	//Directional light shadow mapping
-	std::unique_ptr<Texture2D> m_pShadowMap;
+	std::unique_ptr<Texture> m_pShadowMap;
 	std::unique_ptr<RootSignature> m_pShadowsOpaqueRS;
 	std::unique_ptr<GraphicsPipelineState> m_pShadowsOpaquePSO;
 	std::unique_ptr<RootSignature> m_pShadowsAlphaRS;
@@ -161,9 +161,9 @@ private:
 	std::unique_ptr<ComputePipelineState> m_pComputeLightCullPSO;
 	std::unique_ptr<StructuredBuffer> m_pLightIndexCounter;
 	std::unique_ptr<StructuredBuffer> m_pLightIndexListBufferOpaque;
-	std::unique_ptr<Texture2D> m_pLightGridOpaque;
+	std::unique_ptr<Texture> m_pLightGridOpaque;
 	std::unique_ptr<StructuredBuffer> m_pLightIndexListBufferTransparant;
-	std::unique_ptr<Texture2D> m_pLightGridTransparant;
+	std::unique_ptr<Texture> m_pLightGridTransparant;
 
 	//Depth Prepass
 	std::unique_ptr<RootSignature> m_pDepthPrepassRS;
@@ -172,8 +172,8 @@ private:
 	//MSAA Depth resolve
 	std::unique_ptr<RootSignature> m_pResolveDepthRS;
 	std::unique_ptr<ComputePipelineState> m_pResolveDepthPSO;
-	std::unique_ptr<Texture2D> m_pDepthStencil;
-	std::unique_ptr<Texture2D> m_pResolvedDepthStencil;
+	std::unique_ptr<Texture> m_pDepthStencil;
+	std::unique_ptr<Texture> m_pResolvedDepthStencil;
 
 	//Light data
 	int m_ShadowCasters = 0;

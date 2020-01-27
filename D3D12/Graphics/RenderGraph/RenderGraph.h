@@ -1,4 +1,5 @@
 #pragma once
+#include "../Texture.h"
 
 #define RG_DEBUG 1
 
@@ -19,15 +20,6 @@ class CommandContext;
 
 namespace RG
 {
-	struct Texture
-	{
-		struct Descriptor
-		{
-			int Width;
-			int Height;
-		};
-	};
-
 	struct Buffer
 	{
 		struct Descriptor
