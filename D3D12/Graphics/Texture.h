@@ -70,10 +70,6 @@ struct TextureDesc
 		: Width(1), Height(1), DepthOrArraySize(1), Mips(1), SampleCount(1), Format(DXGI_FORMAT_UNKNOWN), Usage(TextureUsage::None), ClearBindingValue(ClearBinding()), Dimensions(TextureDimension::Texture2D)
 	{}
 
-	TextureDesc(int width, int height, DXGI_FORMAT format, TextureUsage usage = TextureUsage::ShaderResource, int sampleCount = 1, const ClearBinding & clearBinding = ClearBinding())
-		: Width(width), Height(height), DepthOrArraySize(1), Mips(1), SampleCount(sampleCount), Format(format), Usage(usage), ClearBindingValue(clearBinding), Dimensions(TextureDimension::Texture2D)
-	{}
-
 	int Width;
 	int Height;
 	int DepthOrArraySize;
@@ -83,6 +79,59 @@ struct TextureDesc
 	TextureUsage Usage;
 	ClearBinding ClearBindingValue;
 	TextureDimension Dimensions;
+
+	static TextureDesc Create2D(int width, int height, DXGI_FORMAT format, TextureUsage usage = TextureUsage::ShaderResource, int sampleCount = 1, int mips = 1)
+	{
+		assert(width);
+		assert(height);
+		TextureDesc desc;
+		desc.Width = width;
+		desc.Height = height;
+		desc.DepthOrArraySize = 1;
+		desc.Mips = mips;
+		desc.SampleCount = sampleCount;
+		desc.Format = format;
+		desc.Usage = usage;
+		desc.ClearBindingValue = ClearBinding();
+		desc.Dimensions = TextureDimension::Texture2D;
+		return desc;
+	}
+
+	static TextureDesc CreateDepth(int width, int height, DXGI_FORMAT format, TextureUsage usage = TextureUsage::DepthStencil, int sampleCount = 1, const ClearBinding & clearBinding = ClearBinding(1, 0))
+	{
+		assert(width);
+		assert(height);
+		assert((usage & TextureUsage::DepthStencil) == TextureUsage::DepthStencil);
+		TextureDesc desc;
+		desc.Width = width;
+		desc.Height = height;
+		desc.DepthOrArraySize = 1;
+		desc.Mips = 1;
+		desc.SampleCount = sampleCount;
+		desc.Format = format;
+		desc.Usage = usage;
+		desc.ClearBindingValue = clearBinding;
+		desc.Dimensions = TextureDimension::Texture2D;
+		return desc;
+	}
+
+	static TextureDesc CreateRenderTarget(int width, int height, DXGI_FORMAT format, TextureUsage usage = TextureUsage::RenderTarget, int sampleCount = 1, const ClearBinding & clearBinding = ClearBinding(Color(0, 0, 0)))
+	{
+		assert(width);
+		assert(height);
+		assert((usage & TextureUsage::RenderTarget) == TextureUsage::RenderTarget);
+		TextureDesc desc;
+		desc.Width = width;
+		desc.Height = height;
+		desc.DepthOrArraySize = 1;
+		desc.Mips = 1;
+		desc.SampleCount = sampleCount;
+		desc.Format = format;
+		desc.Usage = usage;
+		desc.ClearBindingValue = clearBinding;
+		desc.Dimensions = TextureDimension::Texture2D;
+		return desc;
+	}
 };
 
 class Texture : public GraphicsResource

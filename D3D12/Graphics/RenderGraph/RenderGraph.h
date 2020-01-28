@@ -402,7 +402,7 @@ namespace RG
 		}
 
 	private:
-		constexpr static const int MAX_EXECUTE_CAPTURE_SIZE = 1 << 15;
+		constexpr static const int MAX_EXECUTE_CAPTURE_SIZE = 1 << 10;
 
 		struct ResourceAlias
 		{

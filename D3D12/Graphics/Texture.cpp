@@ -47,7 +47,7 @@ void Texture::Create(Graphics* pGraphics, const TextureDesc& textureDesc)
 	clearValue.Format = textureDesc.Format;
 
 	D3D12_RESOURCE_DESC desc = {};
-	desc.Alignment = 0;
+	desc.Alignment = 0; //0 will pick the most appropriate alignment
 	desc.Format = textureDesc.Format;
 	desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
 	desc.MipLevels = (uint16)textureDesc.Mips;
@@ -122,6 +122,9 @@ void Texture::Create(Graphics* pGraphics, const TextureDesc& textureDesc)
 			desc.Flags |= D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
 		}
 	}
+
+	D3D12_RESOURCE_ALLOCATION_INFO info = pGraphics->GetDevice()->GetResourceAllocationInfo(0, 1, &desc);
+	info.Alignment;
 
 	m_pResource = pGraphics->CreateResource(desc, m_CurrentState, D3D12_HEAP_TYPE_DEFAULT, pClearValue);
 
