@@ -35,14 +35,26 @@ namespace RG
 		return newResource;
 	}
 
-	ResourceHandleMutable RenderPassBuilder::CreateTexture(const std::string& name, const Texture::Descriptor& desc)
+	ResourceHandleMutable RenderPassBuilder::CreateTexture(const std::string& name, const TextureDesc& desc)
 	{
-		return m_RenderGraph.CreateResource<Texture>(name, desc);
+		return m_RenderGraph.CreateTexture(name, desc);
 	}
 
-	ResourceHandleMutable RenderPassBuilder::CreateBuffer(const std::string& name, const Buffer::Descriptor& desc)
+	ResourceHandleMutable RenderPassBuilder::CreateBuffer(const std::string& name, const BufferDesc& desc)
 	{
-		return m_RenderGraph.CreateResource<Buffer>(name, desc);
+		return m_RenderGraph.CreateBuffer(name, desc);
+	}
+
+	const TextureDesc& RenderPassBuilder::GetTextureDesc(const ResourceHandle& handle) const
+	{
+		VirtualResourceBase* pResource = m_RenderGraph.GetResource(handle);
+		return static_cast<TextureResource*>(pResource)->GetDesc();
+	}
+
+	const BufferDesc& RenderPassBuilder::GetBufferDesc(const ResourceHandle& handle) const
+	{
+		VirtualResourceBase* pResource = m_RenderGraph.GetResource(handle);
+		return static_cast<BufferResource*>(pResource)->GetDesc();
 	}
 
 	void RenderPassBuilder::NeverCull()
@@ -61,7 +73,7 @@ namespace RG
 		{
 			delete pPass;
 		}
-		for (ResourceBase* pResource : m_Resources)
+		for (VirtualResourceBase* pResource : m_Resources)
 		{
 			delete pResource;
 		}
@@ -181,7 +193,7 @@ namespace RG
 
 			for (ResourceHandle read : pPass->m_Reads)
 			{
-				ResourceBase* pResource = GetResource(read);
+				VirtualResourceBase* pResource = GetResource(read);
 				if (pResource->pFirstPassUsage == nullptr)
 				{
 					pResource->pFirstPassUsage = pPass;
@@ -191,7 +203,7 @@ namespace RG
 
 			for (ResourceHandle write : pPass->m_Writes)
 			{
-				ResourceBase* pResource = GetResource(write);
+				VirtualResourceBase* pResource = GetResource(write);
 				if (pResource->pFirstPassUsage == nullptr)
 				{
 					pResource->pFirstPassUsage = pPass;
@@ -200,7 +212,7 @@ namespace RG
 			}
 		}
 
-		for (ResourceBase* pResource : m_Resources)
+		for (VirtualResourceBase* pResource : m_Resources)
 		{
 			if (pResource->m_References > 0)
 			{
@@ -222,7 +234,7 @@ namespace RG
 		{
 			if (pPass->m_References > 0)
 			{
-				for (ResourceBase* pResource : pPass->m_ResourcesToCreate)
+				for (VirtualResourceBase* pResource : pPass->m_ResourcesToCreate)
 				{
 					pResource->Create();
 				}
@@ -232,7 +244,7 @@ namespace RG
 				pPass->Execute(resources, *pContext);
 				Profiler::Instance()->End(pContext);
 
-				for (ResourceBase* pResource : pPass->m_ResourcesToDestroy)
+				for (VirtualResourceBase* pResource : pPass->m_ResourcesToDestroy)
 				{
 					pResource->Destroy();
 				}
@@ -362,11 +374,5 @@ namespace RG
 		m_Aliases.push_back(ResourceAlias{ From, To });
 		++node.m_pResource->m_Version;
 		return CreateResourceNode(node.m_pResource);
-	}
-
-	ResourceBase* RenderPassResources::GetResourceInternal(ResourceHandle handle) const
-	{
-		const ResourceNode& node = m_Graph.GetResourceNode(handle);
-		return node.m_pResource;
 	}
 }

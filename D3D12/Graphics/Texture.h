@@ -137,8 +137,6 @@ struct TextureDesc
 class Texture : public GraphicsResource
 {
 public:
-	using Descriptor = TextureDesc;
-
 	Texture();
 
 	void Create(Graphics* pGraphics, const TextureDesc& desc);

@@ -198,8 +198,8 @@ void Graphics::Update()
 			RG::ResourceHandleMutable DepthStencilResolved;
 		};
 		MainData& Data = MainBlackboard.Add<MainData>();
-		Data.DepthStencil = graph.ImportResource<Texture>("Depth Stencil", GetDepthStencil());
-		Data.DepthStencilResolved = graph.ImportResource<Texture>("Depth Stencil Target", GetResolvedDepthStencil());
+		Data.DepthStencil = graph.ImportTexture("Depth Stencil", GetDepthStencil());
+		Data.DepthStencilResolved = graph.ImportTexture("Depth Stencil Target", GetResolvedDepthStencil());
 
 		Profiler::Instance()->Begin("Forward+");
 		//1. DEPTH PREPASS
