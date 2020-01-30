@@ -2,13 +2,13 @@
 #include "Profiler.h"
 #include "Graphics.h"
 #include "CommandContext.h"
-#include "GraphicsBuffer.h"
 #include "CommandQueue.h"
 
 #define USE_PIX
 #ifdef USE_PIX
 #include <pix3.h>
 #endif
+#include "Buffer.h"
 
 void CpuTimer::Begin()
 {
@@ -237,8 +237,8 @@ void Profiler::Initialize(Graphics* pGraphics)
 	HR(pGraphics->GetDevice()->CreateQueryHeap(&desc, IID_PPV_ARGS(m_pQueryHeap.GetAddressOf())));
 
 	int bufferSize = HEAP_SIZE * sizeof(uint64) * 2 * Graphics::FRAME_COUNT;
-	m_pReadBackBuffer = std::make_unique<ReadbackBuffer>();
-	m_pReadBackBuffer->Create(pGraphics, bufferSize);
+	m_pReadBackBuffer = std::make_unique<Buffer>();
+	m_pReadBackBuffer->Create(pGraphics, BufferDesc::Readback(bufferSize));
 
 	uint64 timeStampFrequency;
 	pGraphics->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT)->GetCommandQueue()->GetTimestampFrequency(&timeStampFrequency);

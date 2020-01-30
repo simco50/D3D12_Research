@@ -1,6 +1,7 @@
 #pragma once
 #include "Graphics/Graphics.h"
 #include "Graphics/Light.h"
+#include "Buffer.h"
 class Graphics;
 class ComputePipelineState;
 class RootSignature;
@@ -9,6 +10,7 @@ class StructuredBuffer;
 class Texture;
 class ByteAddressBuffer;
 class Camera;
+class Buffer;
 
 struct ClusteredForwardInputResources
 {
@@ -43,23 +45,33 @@ private:
 	//Step 1: AABB
 	std::unique_ptr<RootSignature> m_pCreateAabbRS;
 	std::unique_ptr<ComputePipelineState> m_pCreateAabbPSO;
-	std::unique_ptr<StructuredBuffer> m_pAABBs;
+	std::unique_ptr<Buffer> m_pAabb;
+	BufferUAV m_AabbUAV;
+	BufferSRV m_AabbSRV;
 
 	//Step 2: Mark Unique Clusters
 	std::unique_ptr<RootSignature> m_pMarkUniqueClustersRS;
 	std::unique_ptr<GraphicsPipelineState> m_pMarkUniqueClustersOpaquePSO;
 	std::unique_ptr<GraphicsPipelineState> m_pMarkUniqueClustersTransparantPSO;
-	std::unique_ptr<StructuredBuffer> m_pUniqueClusters;
+	std::unique_ptr<Buffer> m_pUniqueClusters;
+	BufferUAV m_UniqueClustersUAV;
+	BufferSRV m_UniqueClustersSRV;
 
 	//Step 3: Compact Cluster List
 	std::unique_ptr<RootSignature> m_pCompactClustersRS;
 	std::unique_ptr<ComputePipelineState> m_pCompactClustersPSO;
-	std::unique_ptr<StructuredBuffer> m_pCompactedClusters;
+	std::unique_ptr<Buffer> m_pCompactedClusters;
+	std::unique_ptr<Buffer> m_pCompactedClustersCounter;
+	BufferUAV m_CompactedClustersCounterUAV;
+	BufferSRV m_CompactedClustersCounterSRV;
+	BufferUAV m_CompactedClustersUAV;
+	BufferSRV m_CompactedClustersSRV;
 
 	//Step 4: Update Indirect Dispatch Buffer
 	std::unique_ptr<RootSignature> m_pUpdateIndirectArgumentsRS;
 	std::unique_ptr<ComputePipelineState> m_pUpdateIndirectArgumentsPSO;
-	std::unique_ptr<ByteAddressBuffer> m_pIndirectArguments;
+	std::unique_ptr<Buffer> m_pIndirectArguments;
+	BufferUAV m_IndirectArgumentsUAV;
 
 	//Step 5: Light Culling
 	std::unique_ptr<RootSignature> m_pLightCullingRS;

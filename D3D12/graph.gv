@@ -1,0 +1,30 @@
+digraph RenderGraph {
+rankdir = LR
+Pass0 [shape=rectangle, style="filled, rounded", margin=0.2, fillcolor = orange, label = "Depth Prepass
+Refs: 2
+Index: 0"]
+Pass1 [shape=rectangle, style="filled, rounded", margin=0.2, fillcolor = orange, label = "Depth Resolve
+Refs: 1
+Index: 1"]
+Resource0_0 [shape=rectangle, style=filled, fillcolor = lightskyblue3, label = "Depth Stencil
+Id:0
+Refs: 1"]
+Resource1_0 [shape=rectangle, style=filled, fillcolor = azure2, label = "Depth Stencil Target
+Id:1
+Refs: 0"]
+Resource0_1 [shape=rectangle, style=filled, fillcolor = lightskyblue3, label = "Depth Stencil
+Id:0
+Refs: 1"]
+Resource1_1 [shape=rectangle, style=filled, fillcolor = azure2, label = "Depth Stencil Target
+Id:1
+Refs: 0"]
+Pass0 -> Resource0_1 [color=chocolate1]
+Pass1 -> Resource1_1 [color=chocolate1]
+
+Resource0_0 -> {
+} [color=darkseagreen]Resource1_0 -> {
+} [color=darkseagreen]Resource0_1 -> {
+Pass1
+} [color=darkseagreen]Resource1_1 -> {
+} [color=darkseagreen]
+}

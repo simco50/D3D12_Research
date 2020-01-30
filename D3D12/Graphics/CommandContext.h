@@ -3,14 +3,14 @@
 class Graphics;
 class GraphicsResource;
 class GraphicsBuffer;
-class VertexBuffer;
-class IndexBuffer;
 class Texture;
 class DynamicDescriptorAllocator;
 class RootSignature;
 class GraphicsPipelineState;
 class ComputePipelineState;
 class DynamicResourceAllocator;
+class Buffer;
+class BufferUAV;
 
 enum class CommandListContext
 {
@@ -117,6 +117,7 @@ public:
 
 	void CopyResource(GraphicsBuffer* pSource, GraphicsBuffer* pTarget);
 	void InitializeBuffer(GraphicsBuffer* pResource, const void* pData, uint64 dataSize, uint64 offset = 0);
+	void InitializeBuffer(Buffer* pResource, const void* pData, uint64 dataSize, uint64 offset = 0);
 	void InitializeTexture(Texture* pResource, D3D12_SUBRESOURCE_DATA* pSubResourceDatas, int firstSubResource, int subResourceCount);
 
 	ID3D12GraphicsCommandList* GetCommandList() const { return m_pCommandList; }
@@ -128,6 +129,7 @@ public:
 	//Commands
 	void Dispatch(uint32 groupCountX, uint32 groupCountY, uint32 groupCountZ);
 	void ExecuteIndirect(ID3D12CommandSignature* pCommandSignature, GraphicsBuffer* pIndirectArguments);
+	void ExecuteIndirect(ID3D12CommandSignature* pCommandSignature, Buffer* pIndirectArguments);
 	void Draw(int vertexStart, int vertexCount);
 	void DrawIndexed(int indexCount, int indexStart, int minVertex = 0);
 	void DrawIndexedInstanced(int indexCount, int indexStart, int instanceCount, int minVertex = 0, int instanceStart = 0);
@@ -137,6 +139,7 @@ public:
 	void BeginRenderPass(const RenderPassInfo& renderPassInfo);
 	void EndRenderPass();
 
+	void ClearUavUInt(const BufferUAV& uav, uint32 values[4]);
 	void ClearUavUInt(GraphicsBuffer* pBuffer, uint32 values[4]);
 	void ClearUavFloat(GraphicsBuffer* pBuffer, float values[4]);
 
@@ -159,9 +162,9 @@ public:
 	void SetDynamicVertexBuffer(int slot, int elementCount, int elementSize, void* pData);
 	void SetDynamicIndexBuffer(int elementCount, void* pData, bool smallIndices = false);
 	void SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY type);
-	void SetVertexBuffer(VertexBuffer* pVertexBuffer);
-	void SetVertexBuffers(VertexBuffer* pVertexBuffers, int bufferCount);
-	void SetIndexBuffer(IndexBuffer* pIndexBuffer);
+	void SetVertexBuffer(Buffer* pVertexBuffer);
+	void SetVertexBuffers(Buffer** pVertexBuffers, int bufferCount);
+	void SetIndexBuffer(Buffer* pIndexBuffer);
 	void SetViewport(const FloatRect& rect, float minDepth = 0.0f, float maxDepth = 1.0f);
 	void SetScissorRect(const FloatRect& rect);
 
