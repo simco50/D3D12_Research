@@ -18,9 +18,39 @@
 #include <emmintrin.h>
 #endif
 
-struct PIXEventsBlockInfo
-{
-};
+//
+// The PIXBeginEvent and PIXSetMarker functions have an optimized path for
+// copying strings that work by copying 128-bit or 64-bits at a time. In some
+// circumstances this may result in PIX logging the remaining memory after the
+// null terminator.
+//
+// By default this optimization is enabled unless Address Sanitizer is enabled,
+// since this optimization can trigger a global-buffer-overflow when copying
+// string literals.
+//
+// The PIX_ENABLE_BLOCK_ARGUMENT_COPY controls whether or not this optimization
+// is enabled. Applications may also explicitly set this macro to 0 to disable
+// the optimization if necessary.
+//
+
+#if defined(PIX_ENABLE_BLOCK_ARGUMENT_COPY)
+// Previously set values override everything
+# define PIX_ENABLE_BLOCK_ARGUMENT_COPY_SET 0
+#elif defined(__has_feature)
+# if __has_feature(address_sanitizer)
+// Disable block argument copy when address sanitizer is enabled
+#  define PIX_ENABLE_BLOCK_ARGUMENT_COPY 0
+#  define PIX_ENABLE_BLOCK_ARGUMENT_COPY_SET 1
+# endif
+#endif
+
+#if !defined(PIX_ENABLE_BLOCK_ARGUMENT_COPY)
+// Default to enabled.
+# define PIX_ENABLE_BLOCK_ARGUMENT_COPY 1
+# define PIX_ENABLE_BLOCK_ARGUMENT_COPY_SET 1
+#endif
+
+struct PIXEventsBlockInfo;
 
 struct PIXEventsThreadInfo
 {
@@ -29,7 +59,7 @@ struct PIXEventsThreadInfo
     UINT64* destination;
 };
 
-extern "C" UINT64 WINAPI PIXEventsReplaceBlock(bool getEarliestTime);
+extern "C" UINT64 WINAPI PIXEventsReplaceBlock(PIXEventsThreadInfo* threadInfo, bool getEarliestTime) noexcept;
 
 enum PIXEventType
 {
@@ -44,23 +74,6 @@ enum PIXEventType
     PIXEvent_BeginEvent_OnContext_NoArgs    = 0x012,
     PIXEvent_SetMarker_OnContext_VarArgs    = 0x017,
     PIXEvent_SetMarker_OnContext_NoArgs     = 0x018,
-
-    // Xbox and Windows store different types of events for context events.
-    // On Xbox these include a context argument, while on Windows they do not.
-    // It is important not to change the event types used on the Windows version
-    // as there are OS components (eg debug layer & DRED) that decode event
-    // structs.
-#if defined(XBOX) || defined(_XBOX_ONE) || defined(_DURANGO) || defined(_GAMING_XBOX)
-    PIXEvent_GPU_BeginEvent_OnContext_VarArgs = PIXEvent_BeginEvent_OnContext_VarArgs,
-    PIXEvent_GPU_BeginEvent_OnContext_NoArgs  = PIXEvent_BeginEvent_OnContext_NoArgs,
-    PIXEvent_GPU_SetMarker_OnContext_VarArgs  = PIXEvent_SetMarker_OnContext_VarArgs,
-    PIXEvent_GPU_SetMarker_OnContext_NoArgs   = PIXEvent_SetMarker_OnContext_NoArgs,
-#else
-    PIXEvent_GPU_BeginEvent_OnContext_VarArgs = PIXEvent_BeginEvent_VarArgs,
-    PIXEvent_GPU_BeginEvent_OnContext_NoArgs  = PIXEvent_BeginEvent_NoArgs,
-    PIXEvent_GPU_SetMarker_OnContext_VarArgs  = PIXEvent_SetMarker_VarArgs,
-    PIXEvent_GPU_SetMarker_OnContext_NoArgs   = PIXEvent_SetMarker_NoArgs,
-#endif
 };
 
 static const UINT64 PIXEventsReservedRecordSpaceQwords = 64;
@@ -300,6 +313,7 @@ inline void PIXCopyEventArgumentSlowest(_Out_writes_to_ptr_(limit) UINT64*& dest
 
 inline void PIXCopyEventArgumentSlow(_Out_writes_to_ptr_(limit) UINT64*& destination, _In_ const UINT64* limit, _In_ PCSTR argument)
 {
+#if PIX_ENABLE_BLOCK_ARGUMENT_COPY
     if (PIXIsPointerAligned<8>(argument))
     {
         *destination++ = PIXEncodeStringInfo(0, 8, TRUE, FALSE);
@@ -323,6 +337,7 @@ inline void PIXCopyEventArgumentSlow(_Out_writes_to_ptr_(limit) UINT64*& destina
         }
     }
     else
+#endif // PIX_ENABLE_BLOCK_ARGUMENT_COPY
     {
         PIXCopyEventArgumentSlowest(destination, limit, argument);
     }
@@ -335,7 +350,7 @@ inline void PIXCopyEventArgument<PCSTR>(_Out_writes_to_ptr_(limit) UINT64*& dest
     {
         if (argument != nullptr)
         {
-#if defined(_M_X64) || defined(_M_IX86)
+#if (defined(_M_X64) || defined(_M_IX86)) && PIX_ENABLE_BLOCK_ARGUMENT_COPY
             if (PIXIsPointerAligned<16>(argument))
             {
                 *destination++ = PIXEncodeStringInfo(0, 16, TRUE, FALSE);
@@ -370,7 +385,7 @@ inline void PIXCopyEventArgument<PCSTR>(_Out_writes_to_ptr_(limit) UINT64*& dest
                 }
             }
             else
-#endif // defined(_M_X64) || defined(_M_IX86)
+#endif // (defined(_M_X64) || defined(_M_IX86)) && PIX_ENABLE_BLOCK_ARGUMENT_COPY
             {
                 PIXCopyEventArgumentSlow(destination, limit, argument);
             }
@@ -428,6 +443,7 @@ inline void PIXCopyEventArgumentSlowest(_Out_writes_to_ptr_(limit) UINT64*& dest
 
 inline void PIXCopyEventArgumentSlow(_Out_writes_to_ptr_(limit) UINT64*& destination, _In_ const UINT64* limit, _In_ PCWSTR argument)
 {
+#if PIX_ENABLE_BLOCK_ARGUMENT_COPY
     if (PIXIsPointerAligned<8>(argument))
     {
         *destination++ = PIXEncodeStringInfo(0, 8, FALSE, FALSE);
@@ -448,6 +464,7 @@ inline void PIXCopyEventArgumentSlow(_Out_writes_to_ptr_(limit) UINT64*& destina
         }
     }
     else
+#endif // PIX_ENABLE_BLOCK_ARGUMENT_COPY
     {
         PIXCopyEventArgumentSlowest(destination, limit, argument);
     }
@@ -460,7 +477,7 @@ inline void PIXCopyEventArgument<PCWSTR>(_Out_writes_to_ptr_(limit) UINT64*& des
     {
         if (argument != nullptr)
         {
-#if defined(_M_X64) || defined(_M_IX86)
+#if (defined(_M_X64) || defined(_M_IX86)) && PIX_ENABLE_BLOCK_ARGUMENT_COPY
             if (PIXIsPointerAligned<16>(argument))
             {
                 *destination++ = PIXEncodeStringInfo(0, 16, FALSE, FALSE);
@@ -495,7 +512,7 @@ inline void PIXCopyEventArgument<PCWSTR>(_Out_writes_to_ptr_(limit) UINT64*& des
                 }
             }
             else
-#endif // defined(_M_X64) || defined(_M_IX86)
+#endif // (defined(_M_X64) || defined(_M_IX86)) && PIX_ENABLE_BLOCK_ARGUMENT_COPY
             {
                 PIXCopyEventArgumentSlow(destination, limit, argument);
             }
@@ -559,4 +576,12 @@ template<> struct PIXInferScopedEventType<UINT> { typedef void Type; };
 template<> struct PIXInferScopedEventType<const UINT> { typedef void Type; };
 template<> struct PIXInferScopedEventType<INT> { typedef void Type; };
 template<> struct PIXInferScopedEventType<const INT> { typedef void Type; };
+
+
+#if PIX_ENABLE_BLOCK_ARGUMENT_COPY_SET
+#undef PIX_ENABLE_BLOCK_ARGUMENT_COPY
+#endif
+
+#undef PIX_ENABLE_BLOCK_ARGUMENT_COPY_SET
+
 #endif //_PIXEventsCommon_H_
