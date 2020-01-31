@@ -3,6 +3,9 @@
 class ReadbackBuffer;
 class CommandContext;
 
+#define GPU_PROFILE_BEGIN(name, cmdlist) Profiler::Instance()->Begin(name, &cmdlist);
+#define GPU_PROFILE_END(cmdlist) Profiler::Instance()->End(&cmdlist);
+
 class CpuTimer
 {
 public:

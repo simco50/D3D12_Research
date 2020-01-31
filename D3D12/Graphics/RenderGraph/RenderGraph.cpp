@@ -1,9 +1,8 @@
 #include "stdafx.h"
 #include "RenderGraph.h"
-#include <fstream>
-#include "../Graphics.h"
-#include "../CommandContext.h"
-#include "../Profiler.h"
+#include "Graphics/Graphics.h"
+#include "Graphics/CommandContext.h"
+#include "Graphics/Profiler.h"
 
 namespace RG
 {
@@ -35,26 +34,14 @@ namespace RG
 		return newResource;
 	}
 
-	ResourceHandleMutable RenderPassBuilder::CreateTexture(const std::string& name, const TextureDesc& desc)
+	ResourceHandleMutable RenderPassBuilder::CreateTexture(const char* pName, const TextureDesc& desc)
 	{
-		return m_RenderGraph.CreateTexture(name, desc);
+		return m_RenderGraph.CreateTexture(pName, desc);
 	}
 
-	ResourceHandleMutable RenderPassBuilder::CreateBuffer(const std::string& name, const BufferDesc& desc)
+	ResourceHandleMutable RenderPassBuilder::CreateBuffer(const char* pName, const BufferDesc& desc)
 	{
-		return m_RenderGraph.CreateBuffer(name, desc);
-	}
-
-	const TextureDesc& RenderPassBuilder::GetTextureDesc(const ResourceHandle& handle) const
-	{
-		VirtualResourceBase* pResource = m_RenderGraph.GetResource(handle);
-		return static_cast<TextureResource*>(pResource)->GetDesc();
-	}
-
-	const BufferDesc& RenderPassBuilder::GetBufferDesc(const ResourceHandle& handle) const
-	{
-		VirtualResourceBase* pResource = m_RenderGraph.GetResource(handle);
-		return static_cast<BufferResource*>(pResource)->GetDesc();
+		return m_RenderGraph.CreateBuffer(pName, desc);
 	}
 
 	void RenderPassBuilder::NeverCull()
@@ -229,28 +216,26 @@ namespace RG
 	int64 RenderGraph::Execute(Graphics* pGraphics)
 	{
 		CommandContext* pContext = pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
-
 		for (RenderPassBase* pPass : m_RenderPasses)
 		{
 			if (pPass->m_References > 0)
 			{
 				for (VirtualResourceBase* pResource : pPass->m_ResourcesToCreate)
 				{
-					pResource->Create();
+					pResource->Create(*this);
 				}
 
 				RenderPassResources resources(*this, *pPass);
-				Profiler::Instance()->Begin(pPass->m_Name.c_str(), pContext);
+				GPU_PROFILE_BEGIN(pPass->m_Name, *pContext);
 				pPass->Execute(resources, *pContext);
-				Profiler::Instance()->End(pContext);
+				GPU_PROFILE_END(*pContext);
 
 				for (VirtualResourceBase* pResource : pPass->m_ResourcesToDestroy)
 				{
-					pResource->Destroy();
+					pResource->Destroy(*this);
 				}
 			}
 		}
-		
 		return pContext->Execute(false);
 	}
 
@@ -265,106 +250,6 @@ namespace RG
 			},
 			[=](CommandContext&, const RenderPassResources&, const Empty&) {
 			});
-	}
-
-	void RenderGraph::DumpGraphViz(const char* pPath) const
-	{
-		std::ofstream stream(pPath);
-
-		stream << "digraph RenderGraph {\n";
-		stream << "rankdir = LR\n";
-
-		//Pass declaration
-		int passIndex = 0;
-		for (RenderPassBase* pPass : m_RenderPasses)
-		{
-			stream << "Pass" << pPass->m_Id << " [";
-			stream << "shape=rectangle, style=\"filled, rounded\", margin=0.2, ";
-			if (pPass->m_References == 0)
-			{
-				stream << "fillcolor = mistyrose";
-			}
-			else
-			{
-				stream << "fillcolor = orange";
-			}
-			stream << ", label = \"";
-			stream << pPass->m_Name << "\n";
-			stream << "Refs: " << pPass->m_References << "\n";
-			stream << "Index: " << passIndex;
-			stream << "\"";
-			stream << "]\n";
-			if (pPass->m_References)
-			{
-				++passIndex;
-			}
-		}
-
-		//Resource declaration
-		for (const ResourceNode& node : m_ResourceNodes)
-		{
-			stream << "Resource" << node.m_pResource->m_Id << "_" << node.m_Version << " [";
-			stream << "shape=rectangle, style=filled, ";
-			if (node.m_pResource->m_References == 0)
-			{
-				stream << "fillcolor = azure2";
-			}
-			else if (node.m_pResource->m_IsImported)
-			{
-				stream << "fillcolor = lightskyblue3";
-			}
-			else
-			{
-				stream << "fillcolor = lightskyblue1";
-			}
-			stream << ", label = \"";
-			stream << node.m_pResource->m_Name << "\n";
-			stream << "Id:" << node.m_pResource->m_Id << "\n";
-			stream << "Refs: " << node.m_pResource->m_References;
-			stream << "\"";
-			stream << "]\n";
-		}
-
-		//Writes
-		for (RenderPassBase* pPass : m_RenderPasses)
-		{
-			for (ResourceHandle handle : pPass->m_Writes)
-			{
-				const ResourceNode& node = GetResourceNode(handle);
-				stream << "Pass" << pPass->m_Id << " -> " << "Resource" << node.m_pResource->m_Id << "_" << node.m_Version;
-				stream << " [color=chocolate1]\n";
-			}
-		}
-		stream << "\n";
-
-		//Reads
-		for (const ResourceNode& node : m_ResourceNodes)
-		{
-			stream << "Resource" << node.m_pResource->m_Id << "_" << node.m_Version << " -> {\n";
-			for (RenderPassBase* pPass : m_RenderPasses)
-			{
-				for (ResourceHandle read : pPass->m_Reads)
-				{
-					const ResourceNode& readNode = GetResourceNode(read);
-					if (node.m_Version == readNode.m_Version && node.m_pResource->m_Id == readNode.m_pResource->m_Id)
-					{
-						stream << "Pass" << pPass->m_Id << "\n";
-					}
-				}
-			}
-			stream << "} " << "[color=darkseagreen]";
-		}
-		stream << "\n";
-
-		//Aliases
-		for (const ResourceAlias& alias : m_Aliases) 
-		{
-			stream << "Resource" << GetResourceNode(alias.From).m_pResource->m_Id << "_" << GetResourceNode(alias.From).m_Version << " -> ";
-			stream << "Resource" << GetResourceNode(alias.To).m_pResource->m_Id << "_" << GetResourceNode(alias.To).m_Version;
-			stream << " [color=magenta]\n";
-		}
-
-		stream << "}";
 	}
 
 	ResourceHandle RenderGraph::MoveResource(ResourceHandle From, ResourceHandle To)

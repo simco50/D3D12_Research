@@ -30,6 +30,9 @@ struct ClearBinding
 {
 	struct DepthStencilData
 	{
+		DepthStencilData(float depth = 0.0f, uint8 stencil = 1)
+			: Depth(depth), Stencil(stencil)
+		{}
 		float Depth;
 		uint8 Stencil;
 	};
@@ -42,7 +45,7 @@ struct ClearBinding
 	};
 
 	ClearBinding()
-		: BindingValue(ClearBindingValue::None)
+		: BindingValue(ClearBindingValue::None), DepthStencil(DepthStencilData())
 	{}
 
 	ClearBinding(const Color& color)
@@ -67,7 +70,15 @@ struct ClearBinding
 struct TextureDesc
 {
 	TextureDesc()
-		: Width(1), Height(1), DepthOrArraySize(1), Mips(1), SampleCount(1), Format(DXGI_FORMAT_UNKNOWN), Usage(TextureUsage::None), ClearBindingValue(ClearBinding()), Dimensions(TextureDimension::Texture2D)
+		: Width(1), 
+		Height(1), 
+		DepthOrArraySize(1),
+		Mips(1), 
+		SampleCount(1), 
+		Format(DXGI_FORMAT_UNKNOWN), 
+		Usage(TextureUsage::None), 
+		ClearBindingValue(ClearBinding()), 
+		Dimensions(TextureDimension::Texture2D)
 	{}
 
 	int Width;
