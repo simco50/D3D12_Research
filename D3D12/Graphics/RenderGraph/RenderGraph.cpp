@@ -3,6 +3,7 @@
 #include "Graphics/Graphics.h"
 #include "Graphics/CommandContext.h"
 #include "Graphics/Profiler.h"
+#include "ResourceAllocator.h"
 
 namespace RG
 {
@@ -49,7 +50,8 @@ namespace RG
 		m_Pass.m_NeverCull = true;
 	}
 
-	RenderGraph::RenderGraph()
+	RenderGraph::RenderGraph(ResourceAllocator* pAllocator)
+		: m_pAllocator(pAllocator)
 	{
 
 	}
@@ -220,20 +222,14 @@ namespace RG
 		{
 			if (pPass->m_References > 0)
 			{
-				for (VirtualResourceBase* pResource : pPass->m_ResourcesToCreate)
-				{
-					pResource->Create(*this);
-				}
+				pPass->PrepareResources(m_pAllocator);
 
 				RenderPassResources resources(*this, *pPass);
 				GPU_PROFILE_BEGIN(pPass->m_Name, *pContext);
 				pPass->Execute(resources, *pContext);
 				GPU_PROFILE_END(*pContext);
 
-				for (VirtualResourceBase* pResource : pPass->m_ResourcesToDestroy)
-				{
-					pResource->Destroy(*this);
-				}
+				pPass->ReleaseResources(m_pAllocator);
 			}
 		}
 		return pContext->Execute(false);
@@ -259,5 +255,51 @@ namespace RG
 		m_Aliases.push_back(ResourceAlias{ From, To });
 		++node.m_pResource->m_Version;
 		return CreateResourceNode(node.m_pResource);
+	}
+
+	void RenderPassBase::PrepareResources(ResourceAllocator* pAllocator)
+	{
+		for (VirtualResourceBase* pResource : m_ResourcesToCreate)
+		{
+			if (pResource->m_IsImported)
+			{
+				continue;
+			}
+			switch (pResource->m_Type)
+			{
+			case ResourceType::Texture:
+				pResource->m_pPhysicalResource = pAllocator->CreateTexture(static_cast<TextureResource*>(pResource)->GetDesc());
+				break;
+			case ResourceType::Buffer:
+				break;
+			case ResourceType::None:
+			default:
+				assert(0);
+				break;
+			}
+		}
+	}
+
+	void RenderPassBase::ReleaseResources(ResourceAllocator* pAllocator)
+	{
+		for (VirtualResourceBase* pResource : m_ResourcesToCreate)
+		{
+			if (pResource->m_IsImported)
+			{
+				continue;
+			}
+			switch (pResource->m_Type)
+			{
+			case ResourceType::Texture:
+				pAllocator->ReleaseTexture(static_cast<Texture*>(pResource->m_pPhysicalResource));
+				break;
+			case ResourceType::Buffer:
+				break;
+			case ResourceType::None:
+			default:
+				assert(0);
+				break;
+			}
+		}
 	}
 }

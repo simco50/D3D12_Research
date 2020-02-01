@@ -19,6 +19,7 @@
 #include "Scene/Camera.h"
 #include "RenderGraph/RenderGraph.h"
 #include "RenderGraph/Blackboard.h"
+#include "RenderGraph/ResourceAllocator.h"
 
 const DXGI_FORMAT Graphics::DEPTH_STENCIL_FORMAT = DXGI_FORMAT_D32_FLOAT;
 const DXGI_FORMAT Graphics::DEPTH_STENCIL_SHADOW_FORMAT = DXGI_FORMAT_D16_UNORM;
@@ -190,7 +191,7 @@ void Graphics::Update()
 
 	if (m_RenderPath == RenderPath::Tiled)
 	{
-		RG::RenderGraph graph;
+		RG::RenderGraph graph(m_pGraphAllocator.get());
 		RG::Blackboard MainBlackboard;
 		struct MainData
 		{
@@ -735,6 +736,7 @@ void Graphics::InitD3D()
 	OnResize(m_WindowWidth, m_WindowHeight);
 
 	m_pImGuiRenderer = std::make_unique<ImGuiRenderer>(this);
+	m_pGraphAllocator = std::make_unique<RG::ResourceAllocator>(this);
 }
 
 void Graphics::OnResize(int width, int height)

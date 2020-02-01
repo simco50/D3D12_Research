@@ -18,6 +18,11 @@ struct Material;
 class ClusteredForward;
 class Camera;
 
+namespace RG
+{
+	class ResourceAllocator;
+}
+
 struct Batch
 {
 	const SubMesh* pMesh;
@@ -126,6 +131,7 @@ private:
 	std::mutex m_ContextAllocationMutex;
 
 	std::unique_ptr<ImGuiRenderer> m_pImGuiRenderer;
+	std::unique_ptr<RG::ResourceAllocator> m_pGraphAllocator;
 
 	unsigned int m_WindowWidth;
 	unsigned int m_WindowHeight;
