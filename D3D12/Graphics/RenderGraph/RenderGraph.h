@@ -248,6 +248,7 @@ namespace RG
 		int64 Execute(Graphics* pGraphics);
 		void Present(ResourceHandle resource);
 		void DumpGraphViz(const char* pPath) const;
+		void DumpGraphMermaid(const char* pPath) const;
 		ResourceHandle MoveResource(ResourceHandle From, ResourceHandle To);
 
 		template<typename PassData, typename SetupCallback, typename ExecuteCallback>
