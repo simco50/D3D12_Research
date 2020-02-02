@@ -2,8 +2,8 @@
 #include "Profiler.h"
 #include "Graphics.h"
 #include "CommandContext.h"
-#include "GraphicsBuffer.h"
 #include "CommandQueue.h"
+#include "Buffer.h"
 
 #define USE_PIX
 #ifdef USE_PIX
@@ -236,9 +236,8 @@ void Profiler::Initialize(Graphics* pGraphics)
 	desc.Type = D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
 	HR(pGraphics->GetDevice()->CreateQueryHeap(&desc, IID_PPV_ARGS(m_pQueryHeap.GetAddressOf())));
 
-	int bufferSize = HEAP_SIZE * sizeof(uint64) * 2 * Graphics::FRAME_COUNT;
-	m_pReadBackBuffer = std::make_unique<ReadbackBuffer>();
-	m_pReadBackBuffer->Create(pGraphics, bufferSize);
+	m_pReadBackBuffer = std::make_unique<Buffer>();
+	m_pReadBackBuffer->Create(pGraphics, BufferDesc::CreateReadback(HEAP_SIZE * 2 * Graphics::FRAME_COUNT));
 
 	uint64 timeStampFrequency;
 	pGraphics->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT)->GetCommandQueue()->GetTimestampFrequency(&timeStampFrequency);

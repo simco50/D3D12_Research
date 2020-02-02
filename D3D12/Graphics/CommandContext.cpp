@@ -539,25 +539,30 @@ void CommandContext::SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY type)
 	m_pCommandList->IASetPrimitiveTopology(type);
 }
 
-void CommandContext::SetVertexBuffer(VertexBuffer* pVertexBuffer)
+void CommandContext::SetVertexBuffer(Buffer* pVertexBuffer)
 {
-	SetVertexBuffers(pVertexBuffer, 1);
+	SetVertexBuffers(&pVertexBuffer, 1);
 }
 
-void CommandContext::SetVertexBuffers(VertexBuffer* pVertexBuffers, int bufferCount)
+void CommandContext::SetVertexBuffers(Buffer** pVertexBuffers, int bufferCount)
 {
 	assert(bufferCount <= 4);
 	std::array<D3D12_VERTEX_BUFFER_VIEW, 4> views = {};
 	for (int i = 0; i < bufferCount; ++i)
 	{
-		views[i] = pVertexBuffers->GetView();
+		views[i].BufferLocation = pVertexBuffers[i]->GetGpuHandle();
+		views[i].SizeInBytes = (uint32)pVertexBuffers[i]->GetSize();
+		views[i].StrideInBytes = pVertexBuffers[i]->GetDesc().ElementSize;
 	}
 	m_pCommandList->IASetVertexBuffers(0, bufferCount, views.data());
 }
 
-void CommandContext::SetIndexBuffer(IndexBuffer* pIndexBuffer)
+void CommandContext::SetIndexBuffer(Buffer* pIndexBuffer)
 {
-	const D3D12_INDEX_BUFFER_VIEW& view = pIndexBuffer->GetView();
+	D3D12_INDEX_BUFFER_VIEW view;
+	view.BufferLocation = pIndexBuffer->GetGpuHandle();
+	view.Format = pIndexBuffer->GetDesc().ElementSize == 4 ? DXGI_FORMAT_R32_UINT : DXGI_FORMAT_R16_UINT;
+	view.SizeInBytes = (uint32)pIndexBuffer->GetSize();
 	m_pCommandList->IASetIndexBuffer(&view);
 }
 

@@ -182,39 +182,3 @@ void TypedBuffer::CreateViews(Graphics* pGraphics)
 
 	pGraphics->GetDevice()->CreateShaderResourceView(m_pResource, &srvDesc, m_Srv);
 }
-
-
-void VertexBuffer::Create(Graphics* pGraphics, uint64 elementCount, uint32 elementStride, bool cpuVisible)
-{
-	GraphicsBuffer::Create(pGraphics, elementCount, elementStride, cpuVisible);
-}
-
-void VertexBuffer::CreateViews(Graphics* pGraphics)
-{
-	m_View.BufferLocation = GetGpuHandle();
-	m_View.SizeInBytes = (uint32)GetSize();
-	m_View.StrideInBytes = GetStride();
-}
-
-void IndexBuffer::Create(Graphics * pGraphics, bool smallIndices, uint32 elementCount, bool cpuVisible /*= false*/)
-{
-	m_SmallIndices = smallIndices;
-	GraphicsBuffer::Create(pGraphics, smallIndices ? 2 : 4, elementCount, cpuVisible);
-}
-
-void IndexBuffer::CreateViews(Graphics* pGraphics)
-{
-	m_View.BufferLocation = GetGpuHandle();
-	m_View.Format = m_SmallIndices ? DXGI_FORMAT_R16_UINT : DXGI_FORMAT_R32_UINT;
-	m_View.SizeInBytes = (uint32)GetSize();
-}
-
-void ReadbackBuffer::Create(Graphics* pGraphics, uint64 size)
-{
-	m_ElementCount = size;
-	m_ElementStride = 1;
-	m_CurrentState = D3D12_RESOURCE_STATE_COPY_DEST;
-
-	D3D12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Buffer(GetSize(), D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE);
-	m_pResource = pGraphics->CreateResource(desc, m_CurrentState,  D3D12_HEAP_TYPE_READBACK);
-}

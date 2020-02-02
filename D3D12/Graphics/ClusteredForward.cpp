@@ -28,7 +28,7 @@ ClusteredForward::ClusteredForward(Graphics* pGraphics)
 
 void ClusteredForward::OnSwapchainCreated(int windowWidth, int windowHeight)
 {
-	m_pDepthTexture->Create(m_pGraphics, TextureDesc::CreateDepth(windowWidth, windowHeight, Graphics::DEPTH_STENCIL_FORMAT, TextureUsage::DepthStencil, m_pGraphics->GetMultiSampleCount(), ClearBinding(0.0f, 0)));
+	m_pDepthTexture->Create(m_pGraphics, TextureDesc::CreateDepth(windowWidth, windowHeight, Graphics::DEPTH_STENCIL_FORMAT, TextureFlag::DepthStencil, m_pGraphics->GetMultiSampleCount(), ClearBinding(0.0f, 0)));
 	m_pDepthTexture->SetName("Clustered Forward Depth Texture");
 
 	m_ClusterCountX = (uint32)ceil((float)windowWidth / cClusterSize);

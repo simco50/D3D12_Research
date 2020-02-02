@@ -3,8 +3,6 @@
 class Graphics;
 class GraphicsResource;
 class GraphicsBuffer;
-class VertexBuffer;
-class IndexBuffer;
 class Texture;
 class DynamicDescriptorAllocator;
 class RootSignature;
@@ -161,9 +159,9 @@ public:
 	void SetDynamicVertexBuffer(int slot, int elementCount, int elementSize, void* pData);
 	void SetDynamicIndexBuffer(int elementCount, void* pData, bool smallIndices = false);
 	void SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY type);
-	void SetVertexBuffer(VertexBuffer* pVertexBuffer);
-	void SetVertexBuffers(VertexBuffer* pVertexBuffers, int bufferCount);
-	void SetIndexBuffer(IndexBuffer* pIndexBuffer);
+	void SetVertexBuffer(Buffer* pVertexBuffer);
+	void SetVertexBuffers(Buffer** pVertexBuffers, int bufferCount);
+	void SetIndexBuffer(Buffer* pIndexBuffer);
 	void SetViewport(const FloatRect& rect, float minDepth = 0.0f, float maxDepth = 1.0f);
 	void SetScissorRect(const FloatRect& rect);
 

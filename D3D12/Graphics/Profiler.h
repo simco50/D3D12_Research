@@ -1,6 +1,6 @@
 #pragma once
 #include "Graphics.h"
-class ReadbackBuffer;
+class Buffer;
 class CommandContext;
 
 #define GPU_PROFILE_BEGIN(name, cmdlist) Profiler::Instance()->Begin(name, &cmdlist);
@@ -174,7 +174,7 @@ private:
 	float m_SecondsPerCpuTick = 0.0f;
 	int m_CurrentTimer = 0;
 	ComPtr<ID3D12QueryHeap> m_pQueryHeap;
-	std::unique_ptr<ReadbackBuffer> m_pReadBackBuffer;
+	std::unique_ptr<Buffer> m_pReadBackBuffer;
 
 	std::unique_ptr<ProfileNode> m_pRootBlock;
 	ProfileNode* m_pPreviousBlock = nullptr;

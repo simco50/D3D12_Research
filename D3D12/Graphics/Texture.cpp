@@ -31,8 +31,8 @@ D3D12_CPU_DESCRIPTOR_HANDLE Texture::GetUAV(int subResource /*= 0*/) const
 void Texture::Create(Graphics* pGraphics, const TextureDesc& textureDesc)
 {
 	m_Desc = textureDesc;
-	TextureUsage depthAndRt = TextureUsage::RenderTarget | TextureUsage::DepthStencil;
-	assert((textureDesc.Usage & depthAndRt) != depthAndRt);
+	TextureFlag depthAndRt = TextureFlag::RenderTarget | TextureFlag::DepthStencil;
+	assert(Any(textureDesc.Usage, depthAndRt) == false);
 
 	Release();
 
@@ -80,11 +80,11 @@ void Texture::Create(Graphics* pGraphics, const TextureDesc& textureDesc)
 		assert(false);
 		break;
 	}
-	if ((textureDesc.Usage & TextureUsage::UnorderedAccess) == TextureUsage::UnorderedAccess)
+	if (Any(textureDesc.Usage, TextureFlag::UnorderedAccess))
 	{
 		desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 	}
-	if ((textureDesc.Usage & TextureUsage::RenderTarget) == TextureUsage::RenderTarget)
+	if (Any(textureDesc.Usage, TextureFlag::RenderTarget))
 	{
 		if (textureDesc.ClearBindingValue.BindingValue == ClearBinding::ClearBindingValue::Color)
 		{
@@ -100,7 +100,7 @@ void Texture::Create(Graphics* pGraphics, const TextureDesc& textureDesc)
 		desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
 
 	}
-	if ((textureDesc.Usage & TextureUsage::DepthStencil) == TextureUsage::DepthStencil)
+	if (Any(textureDesc.Usage, TextureFlag::DepthStencil))
 	{
 		if (textureDesc.ClearBindingValue.BindingValue == ClearBinding::ClearBindingValue::DepthStencil)
 		{
@@ -117,7 +117,7 @@ void Texture::Create(Graphics* pGraphics, const TextureDesc& textureDesc)
 		pClearValue = &clearValue;
 		m_CurrentState = D3D12_RESOURCE_STATE_DEPTH_WRITE;
 
-		if ((textureDesc.Usage & TextureUsage::ShaderResource) != TextureUsage::ShaderResource)
+		if (Any(textureDesc.Usage, TextureFlag::ShaderResource) == false)
 		{
 			desc.Flags |= D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
 		}
@@ -128,7 +128,7 @@ void Texture::Create(Graphics* pGraphics, const TextureDesc& textureDesc)
 
 	m_pResource = pGraphics->CreateResource(desc, m_CurrentState, D3D12_HEAP_TYPE_DEFAULT, pClearValue);
 
-	if ((textureDesc.Usage & TextureUsage::ShaderResource) == TextureUsage::ShaderResource)
+	if (Any(textureDesc.Usage, TextureFlag::ShaderResource) )
 	{
 		if (m_Srv.ptr == 0)
 		{
@@ -136,8 +136,8 @@ void Texture::Create(Graphics* pGraphics, const TextureDesc& textureDesc)
 		}
 		D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
 		srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-		srvDesc.Format = (textureDesc.Usage & TextureUsage::DepthStencil) == TextureUsage::DepthStencil ? GetSrvFormatFromDepth(textureDesc.Format) : textureDesc.Format;
-		
+		srvDesc.Format = Any(textureDesc.Usage, TextureFlag::DepthStencil) ? GetSrvFormatFromDepth(textureDesc.Format) : textureDesc.Format;
+
 		switch (textureDesc.Dimensions)
 		{
 		case TextureDimension::Texture1D:
@@ -211,7 +211,7 @@ void Texture::Create(Graphics* pGraphics, const TextureDesc& textureDesc)
 		}
 		pGraphics->GetDevice()->CreateShaderResourceView(m_pResource, &srvDesc, m_Srv);
 	}
-	if ((textureDesc.Usage & TextureUsage::UnorderedAccess) == TextureUsage::UnorderedAccess)
+	if (Any(textureDesc.Usage, TextureFlag::UnorderedAccess))
 	{
 		if (m_Uav.ptr == 0)
 		{
@@ -261,7 +261,7 @@ void Texture::Create(Graphics* pGraphics, const TextureDesc& textureDesc)
 			pGraphics->GetDevice()->CreateUnorderedAccessView(m_pResource, nullptr, &uavDesc, CD3DX12_CPU_DESCRIPTOR_HANDLE(m_Uav, i, m_SrvUavDescriptorSize));
 		}
 	}
-	if ((textureDesc.Usage & TextureUsage::RenderTarget) == TextureUsage::RenderTarget)
+	if (Any(textureDesc.Usage, TextureFlag::RenderTarget))
 	{
 		if (m_Rtv.ptr == 0)
 		{
@@ -321,7 +321,7 @@ void Texture::Create(Graphics* pGraphics, const TextureDesc& textureDesc)
 		}
 		pGraphics->GetDevice()->CreateRenderTargetView(m_pResource, &rtvDesc, m_Rtv);
 	}
-	else if ((textureDesc.Usage & TextureUsage::DepthStencil) == TextureUsage::DepthStencil)
+	else if (Any(textureDesc.Usage, TextureFlag::DepthStencil))
 	{
 		if (m_Rtv.ptr == 0)
 		{
@@ -371,7 +371,7 @@ void Texture::Create(Graphics* pGraphics, const TextureDesc& textureDesc)
 			break;
 		default:
 			break;
-			
+
 		}
 		pGraphics->GetDevice()->CreateDepthStencilView(m_pResource, &dsvDesc, m_Rtv);
 		dsvDesc.Flags = D3D12_DSV_FLAG_READ_ONLY_DEPTH;
@@ -489,7 +489,7 @@ void Texture::Create(Graphics* pGraphics, CommandContext* pContext, const char* 
 		desc.Height = img.GetHeight();
 		desc.Format = (DXGI_FORMAT)Image::TextureFormatFromCompressionFormat(img.GetFormat(), false);
 		desc.Mips = img.GetMipLevels();
-		desc.Usage = TextureUsage::ShaderResource;
+		desc.Usage = TextureFlag::ShaderResource;
 
 		std::vector<D3D12_SUBRESOURCE_DATA> subResourceData(desc.Mips);
 		for (int i = 0; i < desc.Mips; ++i)
@@ -522,14 +522,14 @@ void Texture::CreateForSwapchain(Graphics* pGraphics, ID3D12Resource* pTexture)
 	m_pResource = pTexture;
 	m_CurrentState = D3D12_RESOURCE_STATE_PRESENT;
 	D3D12_RESOURCE_DESC desc = pTexture->GetDesc();
-	
+
 	m_Desc.Width = (uint32)desc.Width;
 	m_Desc.Height = (uint32)desc.Height;
 	m_Desc.Format = desc.Format;
 	m_Desc.ClearBindingValue = ClearBinding(Color(0, 0, 0, 1));
 	m_Desc.Mips = desc.MipLevels;
 	m_Desc.SampleCount = desc.SampleDesc.Count;
-	m_Desc.Usage = TextureUsage::RenderTarget;
+	m_Desc.Usage = TextureFlag::RenderTarget;
 
 	if (m_Rtv.ptr == 0)
 	{

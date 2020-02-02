@@ -2,6 +2,7 @@
 #include "DynamicResourceAllocator.h"
 #include "Graphics.h"
 #include "GraphicsBuffer.h"
+#include "Buffer.h"
 
 DynamicResourceAllocator::DynamicResourceAllocator(DynamicAllocationManager* pPageManager)
 	: m_pPageManager(pPageManager)
@@ -117,6 +118,6 @@ void DynamicAllocationManager::FreeLargePages(uint64 fenceValue, const std::vect
 
 void AllocationPage::Create(Graphics* pGraphics, uint64 size)
 {
-	GraphicsBuffer::Create(pGraphics, size, 1, true);
+	Buffer::Create(pGraphics, BufferDesc((uint32)size, 1, BufferFlag::Upload));
 	m_pMappedData = Map();
 }

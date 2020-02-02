@@ -65,35 +65,3 @@ public:
 private:
 	DXGI_FORMAT m_Format;
 };
-
-class VertexBuffer : public GraphicsBuffer
-{
-public:
-	void Create(Graphics* pGraphics, uint64 elementCount, uint32 elementStride, bool cpuVisible = false);
-	virtual void CreateViews(Graphics* pGraphics) override;
-
-	inline const D3D12_VERTEX_BUFFER_VIEW GetView() const { return m_View; }
-private:
-	D3D12_VERTEX_BUFFER_VIEW m_View;
-};
-
-class IndexBuffer : public GraphicsBuffer
-{
-public:
-	void Create(Graphics* pGraphics, bool smallIndices, uint32 elementCount, bool cpuVisible = false);
-	inline const D3D12_INDEX_BUFFER_VIEW GetView() const { return m_View; }
-	virtual void CreateViews(Graphics* pGraphics) override;
-
-private:
-	bool m_SmallIndices = false;
-	D3D12_INDEX_BUFFER_VIEW m_View;
-};
-
-class ReadbackBuffer : public GraphicsBuffer
-{
-public:
-	void Create(Graphics* pGraphics, uint64 size);
-
-private:
-	D3D12_INDEX_BUFFER_VIEW m_View;
-};
