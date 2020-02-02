@@ -11,6 +11,7 @@
 
 #include "d3dx12.h"
 #include "Profiler.h"
+#include "Buffer.h"
 
 constexpr int VALID_COMPUTE_QUEUE_RESOURCE_STATES = D3D12_RESOURCE_STATE_COMMON | D3D12_RESOURCE_STATE_UNORDERED_ACCESS | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_COPY_DEST | D3D12_RESOURCE_STATE_COPY_SOURCE | D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT;
 constexpr int VALID_COPY_QUEUE_RESOURCE_STATES = D3D12_RESOURCE_STATE_COMMON | D3D12_RESOURCE_STATE_COPY_DEST | D3D12_RESOURCE_STATE_COPY_SOURCE;
@@ -159,6 +160,16 @@ void CommandContext::CopyResource(GraphicsBuffer* pSource, GraphicsBuffer* pTarg
 }
 
 void CommandContext::InitializeBuffer(GraphicsBuffer* pResource, const void* pData, uint64 dataSize, uint64 offset)
+{
+	DynamicAllocation allocation = m_DynamicAllocator->Allocate(dataSize);
+	memcpy(allocation.pMappedMemory, pData, dataSize);
+	D3D12_RESOURCE_STATES previousState = pResource->GetResourceState();
+	InsertResourceBarrier(pResource, D3D12_RESOURCE_STATE_COPY_DEST, true);
+	m_pCommandList->CopyBufferRegion(pResource->GetResource(), offset, allocation.pBackingResource->GetResource(), allocation.Offset, dataSize);
+	InsertResourceBarrier(pResource, previousState, true);
+}
+
+void CommandContext::InitializeBuffer(Buffer* pResource, const void* pData, uint64 dataSize, uint64 offset /*= 0*/)
 {
 	DynamicAllocation allocation = m_DynamicAllocator->Allocate(dataSize);
 	memcpy(allocation.pMappedMemory, pData, dataSize);

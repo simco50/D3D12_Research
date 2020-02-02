@@ -11,6 +11,7 @@ class RootSignature;
 class GraphicsPipelineState;
 class ComputePipelineState;
 class DynamicResourceAllocator;
+class Buffer;
 
 enum class CommandListContext
 {
@@ -117,6 +118,7 @@ public:
 
 	void CopyResource(GraphicsBuffer* pSource, GraphicsBuffer* pTarget);
 	void InitializeBuffer(GraphicsBuffer* pResource, const void* pData, uint64 dataSize, uint64 offset = 0);
+	void InitializeBuffer(Buffer* pResource, const void* pData, uint64 dataSize, uint64 offset = 0);
 	void InitializeTexture(Texture* pResource, D3D12_SUBRESOURCE_DATA* pSubResourceDatas, int firstSubResource, int subResourceCount);
 
 	ID3D12GraphicsCommandList* GetCommandList() const { return m_pCommandList; }
