@@ -3,12 +3,12 @@
 #include "Graphics.h"
 #include "CommandContext.h"
 #include "CommandQueue.h"
-#include "Buffer.h"
 
 #define USE_PIX
 #ifdef USE_PIX
 #include <pix3.h>
 #endif
+#include "GraphicsBuffer.h"
 
 void CpuTimer::Begin()
 {

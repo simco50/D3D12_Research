@@ -2,7 +2,6 @@
 #include "DynamicResourceAllocator.h"
 #include "Graphics.h"
 #include "GraphicsBuffer.h"
-#include "Buffer.h"
 
 DynamicResourceAllocator::DynamicResourceAllocator(DynamicAllocationManager* pPageManager)
 	: m_pPageManager(pPageManager)

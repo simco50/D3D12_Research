@@ -25,11 +25,6 @@ namespace RG
 	class RenderGraph;
 	class RenderPassBase;
 
-	struct BufferDesc
-	{
-		int Size;
-	};
-
 	enum class ResourceType
 	{
 		None,
@@ -71,7 +66,7 @@ namespace RG
 	class BufferResource : public VirtualResourceBase
 	{
 	public:
-		BufferResource(const char* pName, int id, const BufferDesc& desc, GraphicsBuffer* pBuffer)
+		BufferResource(const char* pName, int id, const BufferDesc& desc, Buffer* pBuffer)
 			: VirtualResourceBase(pName, id, pBuffer != nullptr, ResourceType::Buffer, pBuffer), m_Desc(desc)
 		{}
 		const BufferDesc& GetDesc() const { return m_Desc; }
@@ -284,7 +279,7 @@ namespace RG
 			return CreateResourceNode(pResource);
 		}
 
-		ResourceHandleMutable ImportBuffer(const char* pName, GraphicsBuffer* pBuffer)
+		ResourceHandleMutable ImportBuffer(const char* pName, Buffer* pBuffer)
 		{
 			assert(pBuffer);
 			BufferDesc desc{};

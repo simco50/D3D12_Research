@@ -7,7 +7,6 @@
 #include "Graphics.h"
 #include "Texture.h"
 #include "GraphicsBuffer.h"
-#include "Buffer.h"
 
 bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pContext)
 {

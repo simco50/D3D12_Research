@@ -35,7 +35,7 @@ void ClusteredForward::OnSwapchainCreated(int windowWidth, int windowHeight)
 	m_ClusterCountY = (uint32)ceil((float)windowHeight / cClusterSize);
 
 	struct AABB { Vector4 Min; Vector4 Max; };
-	uint64 totalClusterCount = (uint64)m_ClusterCountX * m_ClusterCountY * cClusterCountZ;
+	uint32 totalClusterCount = m_ClusterCountX * m_ClusterCountY * cClusterCountZ;
 	m_pAABBs->Create(m_pGraphics, sizeof(AABB), totalClusterCount, false);
 	m_pAABBs->SetName("AABBs");
 	m_pUniqueClusters->Create(m_pGraphics, sizeof(uint32), totalClusterCount, false);
@@ -182,7 +182,7 @@ void ClusteredForward::Execute(const ClusteredForwardInputResources& resources)
 
 			pContext->InsertResourceBarrier(m_pUniqueClusters.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, false);
 			uint32 values[] = { 0,0,0,0 };
-			pContext->ClearUavUInt(m_pCompactedClusters->GetCounter(), values);
+			pContext->ClearUavUInt(m_pCompactedClusters->GetCounter(), m_pCompactedClusters->GetCounter()->GetUAV(), values);
 
 			pContext->SetDynamicDescriptor(0, 0, m_pUniqueClusters->GetSRV());
 			pContext->SetDynamicDescriptor(1, 0, m_pCompactedClusters->GetUAV());
@@ -240,7 +240,7 @@ void ClusteredForward::Execute(const ClusteredForwardInputResources& resources)
 				constantBuffer.ClusterDimensions[0] = m_ClusterCountX;
 				constantBuffer.ClusterDimensions[1] = m_ClusterCountY;
 				constantBuffer.ClusterDimensions[2] = cClusterCountZ;
-				constantBuffer.LightCount = (uint32)resources.pLightBuffer->GetElementCount();
+				constantBuffer.LightCount = (uint32)resources.pLightBuffer->GetDesc().ElementCount;
 
 				pContext->SetComputeDynamicConstantBufferView(0, &constantBuffer, sizeof(ConstantBuffer));
 
@@ -284,7 +284,7 @@ void ClusteredForward::Execute(const ClusteredForwardInputResources& resources)
 				} constantBuffer;
 
 				constantBuffer.View = resources.pCamera->GetView();
-				constantBuffer.LightCount = (uint32)resources.pLightBuffer->GetElementCount();
+				constantBuffer.LightCount = (uint32)resources.pLightBuffer->GetDesc().ElementCount;
 
 				pContext->SetComputeDynamicConstantBufferView(0, &constantBuffer, sizeof(ConstantBuffer));
 

@@ -2,7 +2,6 @@
 #include "DynamicResourceAllocator.h"
 class Graphics;
 class GraphicsResource;
-class GraphicsBuffer;
 class Texture;
 class DynamicDescriptorAllocator;
 class RootSignature;
@@ -114,8 +113,7 @@ public:
 	void InsertUavBarrier(GraphicsResource* pBuffer = nullptr, bool executeImmediate = false);
 	void FlushResourceBarriers();
 
-	void CopyResource(GraphicsBuffer* pSource, GraphicsBuffer* pTarget);
-	void InitializeBuffer(GraphicsBuffer* pResource, const void* pData, uint64 dataSize, uint64 offset = 0);
+	void CopyResource(GraphicsResource* pSource, GraphicsResource* pTarget);
 	void InitializeBuffer(Buffer* pResource, const void* pData, uint64 dataSize, uint64 offset = 0);
 	void InitializeTexture(Texture* pResource, D3D12_SUBRESOURCE_DATA* pSubResourceDatas, int firstSubResource, int subResourceCount);
 
@@ -127,7 +125,7 @@ public:
 
 	//Commands
 	void Dispatch(uint32 groupCountX, uint32 groupCountY, uint32 groupCountZ);
-	void ExecuteIndirect(ID3D12CommandSignature* pCommandSignature, GraphicsBuffer* pIndirectArguments);
+	void ExecuteIndirect(ID3D12CommandSignature* pCommandSignature, Buffer* pIndirectArguments);
 	void Draw(int vertexStart, int vertexCount);
 	void DrawIndexed(int indexCount, int indexStart, int minVertex = 0);
 	void DrawIndexedInstanced(int indexCount, int indexStart, int instanceCount, int minVertex = 0, int instanceStart = 0);
@@ -137,8 +135,8 @@ public:
 	void BeginRenderPass(const RenderPassInfo& renderPassInfo);
 	void EndRenderPass();
 
-	void ClearUavUInt(GraphicsBuffer* pBuffer, uint32 values[4]);
-	void ClearUavFloat(GraphicsBuffer* pBuffer, float values[4]);
+	void ClearUavUInt(GraphicsResource* pBuffer, D3D12_CPU_DESCRIPTOR_HANDLE uav, uint32 values[4]);
+	void ClearUavFloat(GraphicsResource* pBuffer, D3D12_CPU_DESCRIPTOR_HANDLE uav, float values[4]);
 
 	//Bindings
 	void SetComputePipelineState(ComputePipelineState* pPipelineState);

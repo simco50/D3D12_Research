@@ -108,7 +108,7 @@ void Graphics::RandomizeLights(int count)
 	std::sort(m_Lights.begin() + randomLightsStartIndex, m_Lights.end(), [](const Light& a, const Light& b) { return (int)a.LightType < (int)b.LightType; });
 
 	IdleGPU();
-	if (m_pLightBuffer->GetElementCount() != count)
+	if (m_pLightBuffer->GetDesc().ElementCount != count)
 	{
 		m_pLightBuffer->Create(this, sizeof(Light), count);
 		m_pLightBuffer->SetName("Light Buffer");
