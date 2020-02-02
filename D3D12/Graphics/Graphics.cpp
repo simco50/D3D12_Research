@@ -191,13 +191,13 @@ void Graphics::Update()
 
 	if (m_RenderPath == RenderPath::Tiled)
 	{
-		RG::RenderGraph graph(m_pGraphAllocator.get());
-		RG::Blackboard MainBlackboard;
+		RGGraph graph(m_pGraphAllocator.get());
+		RGBlackboard MainBlackboard;
 		struct MainData
 		{
 			RG_BLACKBOARD_DATA(MainData)
-			RG::ResourceHandleMutable DepthStencil;
-			RG::ResourceHandleMutable DepthStencilResolved;
+			RGResourceHandleMutable DepthStencil;
+			RGResourceHandleMutable DepthStencilResolved;
 		};
 		MainData& Data = MainBlackboard.Add<MainData>();
 		Data.DepthStencil = graph.ImportTexture("Depth Stencil", GetDepthStencil());
@@ -211,16 +211,16 @@ void Graphics::Update()
 		{
 			struct DepthPrepassData
 			{
-				RG::ResourceHandleMutable StencilTarget;
+				RGResourceHandleMutable StencilTarget;
 			};
 
-			RG::RenderPass<DepthPrepassData>& prepass = graph.AddCallbackPass<DepthPrepassData>("Depth Prepass", [&](RG::RenderPassBuilder& builder, DepthPrepassData& data)
+			RGPass<DepthPrepassData>& prepass = graph.AddCallbackPass<DepthPrepassData>("Depth Prepass", [&](RGPassBuilder& builder, DepthPrepassData& data)
 				{
 					MainData& Main = MainBlackboard.Get<MainData>();
 					data.StencilTarget = builder.Write(Main.DepthStencil);
 					Main.DepthStencil = data.StencilTarget;
 				},
-				[=](CommandContext& renderContext, const RG::RenderPassResources& resources, const DepthPrepassData& data)
+				[=](CommandContext& renderContext, const RGPassResources& resources, const DepthPrepassData& data)
 				{
 					Texture* pDepthStencil = resources.GetResource<Texture>(data.StencilTarget);
 					const TextureDesc& desc = pDepthStencil->GetDesc();
@@ -256,18 +256,18 @@ void Graphics::Update()
 		{
 			struct DepthResolveData
 			{
-				RG::ResourceHandle StencilSource;
-				RG::ResourceHandleMutable StencilTarget;
+				RGResourceHandle StencilSource;
+				RGResourceHandleMutable StencilTarget;
 			};
 
-			graph.AddCallbackPass<DepthResolveData>("Depth Resolve", [&](RG::RenderPassBuilder& builder, DepthResolveData& data)
+			graph.AddCallbackPass<DepthResolveData>("Depth Resolve", [&](RGPassBuilder& builder, DepthResolveData& data)
 				{
 					MainData& Main = MainBlackboard.Get<MainData>();
 					data.StencilSource = builder.Read(Main.DepthStencil);
 					data.StencilTarget = builder.Write(Main.DepthStencilResolved);
 					Main.DepthStencilResolved = data.StencilTarget;
 				},
-				[=](CommandContext& renderContext, const RG::RenderPassResources& resources, const DepthResolveData& data)
+				[=](CommandContext& renderContext, const RGPassResources& resources, const DepthResolveData& data)
 				{
 					renderContext.InsertResourceBarrier(resources.GetResource<Texture>(data.StencilSource), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, false);
 					renderContext.InsertResourceBarrier(resources.GetResource<Texture>(data.StencilTarget), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, false);
@@ -288,15 +288,13 @@ void Graphics::Update()
 
 		graph.Present(Data.DepthStencilResolved);
 		graph.Compile();
-
-		int64 fence = graph.Execute(this);
-
 		static bool written = false;
 		if (written == false)
 		{
 			graph.DumpGraphMermaid("graph.html");
 			written = true;
 		}
+		int64 fence = graph.Execute(this);
 
 		WaitForFence(fence);
 
@@ -738,7 +736,7 @@ void Graphics::InitD3D()
 	OnResize(m_WindowWidth, m_WindowHeight);
 
 	m_pImGuiRenderer = std::make_unique<ImGuiRenderer>(this);
-	m_pGraphAllocator = std::make_unique<RG::ResourceAllocator>(this);
+	m_pGraphAllocator = std::make_unique<RGResourceAllocator>(this);
 }
 
 void Graphics::OnResize(int width, int height)
