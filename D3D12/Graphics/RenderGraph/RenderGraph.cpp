@@ -58,14 +58,7 @@ namespace RG
 
 	RenderGraph::~RenderGraph()
 	{
-		for (RenderPassBase* pPass : m_RenderPasses)
-		{
-			delete pPass;
-		}
-		for (VirtualResourceBase* pResource : m_Resources)
-		{
-			delete pResource;
-		}
+		DestroyData();
 	}
 
 	void RenderGraph::Compile()
@@ -222,16 +215,24 @@ namespace RG
 		{
 			if (pPass->m_References > 0)
 			{
-				pPass->PrepareResources(m_pAllocator);
+				PrepareResources(pPass, m_pAllocator);
 
 				RenderPassResources resources(*this, *pPass);
+
+				//#todo: Automatically insert resource barriers
+				//#todo: Check if we're in a Graphics pass and automatically call BeginRenderPass
+
 				GPU_PROFILE_BEGIN(pPass->m_Name, *pContext);
 				pPass->Execute(resources, *pContext);
 				GPU_PROFILE_END(*pContext);
 
-				pPass->ReleaseResources(m_pAllocator);
+				//#todo: Check if we're in a Graphics pass and automatically call EndRenderPass
+
+				ReleaseResources(pPass, m_pAllocator);
 			}
 		}
+		//#todo: This shouldn't be called if we want to dump a graph
+		//DestroyData();
 		return pContext->Execute(false);
 	}
 
@@ -257,9 +258,9 @@ namespace RG
 		return CreateResourceNode(node.m_pResource);
 	}
 
-	void RenderPassBase::PrepareResources(ResourceAllocator* pAllocator)
+	void RenderGraph::PrepareResources(RenderPassBase* pPass, ResourceAllocator* pAllocator)
 	{
-		for (VirtualResourceBase* pResource : m_ResourcesToCreate)
+		for (VirtualResourceBase* pResource : pPass->m_ResourcesToCreate)
 		{
 			if (pResource->m_IsImported)
 			{
@@ -280,9 +281,9 @@ namespace RG
 		}
 	}
 
-	void RenderPassBase::ReleaseResources(ResourceAllocator* pAllocator)
+	void RenderGraph::ReleaseResources(RenderPassBase* pPass, ResourceAllocator* pAllocator)
 	{
-		for (VirtualResourceBase* pResource : m_ResourcesToCreate)
+		for (VirtualResourceBase* pResource : pPass->m_ResourcesToDestroy)
 		{
 			if (pResource->m_IsImported)
 			{
@@ -301,5 +302,21 @@ namespace RG
 				break;
 			}
 		}
+	}
+
+	void RenderGraph::DestroyData()
+	{
+		for (RenderPassBase* pPass : m_RenderPasses)
+		{
+			delete pPass;
+		}
+		m_RenderPasses.clear();
+		for (VirtualResourceBase* pResource : m_Resources)
+		{
+			delete pResource;
+		}
+		m_Resources.clear();
+		m_ResourceNodes.clear();
+		m_Aliases.clear();
 	}
 }

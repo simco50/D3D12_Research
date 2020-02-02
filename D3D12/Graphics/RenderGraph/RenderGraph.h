@@ -183,9 +183,6 @@ namespace RG
 			return std::find(m_Writes.begin(), m_Writes.end(), handle) != m_Writes.end();
 		}
 
-		void PrepareResources(ResourceAllocator* pAllocator);
-		void ReleaseResources(ResourceAllocator* pAllocator);
-
 	protected:
 		const char* m_Name;
 		std::vector<ResourceHandle> m_Reads;
@@ -313,6 +310,10 @@ namespace RG
 		}
 
 	private:
+		void PrepareResources(RenderPassBase* pPass, ResourceAllocator* pAllocator);
+		void ReleaseResources(RenderPassBase* pPass, ResourceAllocator* pAllocator);
+		void DestroyData();
+
 		struct ResourceAlias
 		{
 			ResourceHandle From;

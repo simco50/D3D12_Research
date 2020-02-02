@@ -87,74 +87,6 @@ struct BufferDesc
 	BufferFlag Usage = BufferFlag::None;
 };
 
-struct BufferUAVDesc
-{
-	static BufferUAVDesc CreateStructured(Buffer* pCounter = nullptr)
-	{
-		BufferUAVDesc desc;
-		desc.Format = DXGI_FORMAT_UNKNOWN;
-		desc.FirstElement = 0;
-		desc.CounterOffset = 0;
-		desc.pCounter = pCounter;
-		return desc;
-	}
-
-	static BufferUAVDesc CreateTyped(DXGI_FORMAT format, Buffer* pCounter = nullptr)
-	{
-		BufferUAVDesc desc;
-		desc.Format = format;
-		desc.FirstElement = 0;
-		desc.CounterOffset = 0;
-		desc.pCounter = pCounter;
-		return desc;
-	}
-
-	static BufferUAVDesc CreateByteAddress()
-	{
-		BufferUAVDesc desc;
-		desc.Format = DXGI_FORMAT_R32_TYPELESS;
-		desc.FirstElement = 0;
-		desc.CounterOffset = 0;
-		desc.pCounter = nullptr;
-		return desc;
-	}
-
-	DXGI_FORMAT Format;
-	int FirstElement;
-	int CounterOffset;
-	Buffer* pCounter;
-};
-
-struct BufferSRVDesc
-{
-	static BufferSRVDesc CreateStructured(Buffer* pCounter = nullptr)
-	{
-		BufferSRVDesc desc;
-		desc.Format = DXGI_FORMAT_UNKNOWN;
-		desc.FirstElement = 0;
-		return desc;
-	}
-
-	static BufferSRVDesc CreateTyped(DXGI_FORMAT format, Buffer* pCounter = nullptr)
-	{
-		BufferSRVDesc desc;
-		desc.Format = format;
-		desc.FirstElement = 0;
-		return desc;
-	}
-
-	static BufferSRVDesc CreateByteAddress()
-	{
-		BufferSRVDesc desc;
-		desc.Format = DXGI_FORMAT_R32_TYPELESS;
-		desc.FirstElement = 0;
-		return desc;
-	}
-
-	DXGI_FORMAT Format;
-	int FirstElement;
-};
-
 class Buffer : public GraphicsResource
 {
 public:
@@ -170,30 +102,6 @@ public:
 	const BufferDesc& GetDesc() const { return m_Desc; }
 protected:
 	BufferDesc m_Desc;
-};
-
-class DescriptorBase
-{
-public:
-	Buffer* GetParent() const { return m_pParent; }
-	D3D12_CPU_DESCRIPTOR_HANDLE GetDescriptor() const { return m_Descriptor; }
-protected:
-	Buffer* m_pParent = nullptr;
-	CD3DX12_CPU_DESCRIPTOR_HANDLE m_Descriptor = {};
-};
-
-class BufferSRV : public DescriptorBase
-{
-public:
-	BufferSRV() = default;
-	void Create(Graphics* pGraphics, Buffer* pBuffer, const BufferSRVDesc& desc);
-};
-
-class BufferUAV : public DescriptorBase
-{
-public:
-	BufferUAV() = default;
-	void Create(Graphics* pGraphics, Buffer* pBuffer, const BufferUAVDesc& desc);
 };
 
 class BufferWithDescriptors : public Buffer
