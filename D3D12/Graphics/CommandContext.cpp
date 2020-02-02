@@ -11,6 +11,7 @@
 
 #include "d3dx12.h"
 #include "Profiler.h"
+#include "Buffer.h"
 
 constexpr int VALID_COMPUTE_QUEUE_RESOURCE_STATES = D3D12_RESOURCE_STATE_COMMON | D3D12_RESOURCE_STATE_UNORDERED_ACCESS | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_COPY_DEST | D3D12_RESOURCE_STATE_COPY_SOURCE | D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT;
 constexpr int VALID_COPY_QUEUE_RESOURCE_STATES = D3D12_RESOURCE_STATE_COMMON | D3D12_RESOURCE_STATE_COPY_DEST | D3D12_RESOURCE_STATE_COPY_SOURCE;
@@ -159,6 +160,16 @@ void CommandContext::CopyResource(GraphicsBuffer* pSource, GraphicsBuffer* pTarg
 }
 
 void CommandContext::InitializeBuffer(GraphicsBuffer* pResource, const void* pData, uint64 dataSize, uint64 offset)
+{
+	DynamicAllocation allocation = m_DynamicAllocator->Allocate(dataSize);
+	memcpy(allocation.pMappedMemory, pData, dataSize);
+	D3D12_RESOURCE_STATES previousState = pResource->GetResourceState();
+	InsertResourceBarrier(pResource, D3D12_RESOURCE_STATE_COPY_DEST, true);
+	m_pCommandList->CopyBufferRegion(pResource->GetResource(), offset, allocation.pBackingResource->GetResource(), allocation.Offset, dataSize);
+	InsertResourceBarrier(pResource, previousState, true);
+}
+
+void CommandContext::InitializeBuffer(Buffer* pResource, const void* pData, uint64 dataSize, uint64 offset /*= 0*/)
 {
 	DynamicAllocation allocation = m_DynamicAllocator->Allocate(dataSize);
 	memcpy(allocation.pMappedMemory, pData, dataSize);
@@ -528,25 +539,30 @@ void CommandContext::SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY type)
 	m_pCommandList->IASetPrimitiveTopology(type);
 }
 
-void CommandContext::SetVertexBuffer(VertexBuffer* pVertexBuffer)
+void CommandContext::SetVertexBuffer(Buffer* pVertexBuffer)
 {
-	SetVertexBuffers(pVertexBuffer, 1);
+	SetVertexBuffers(&pVertexBuffer, 1);
 }
 
-void CommandContext::SetVertexBuffers(VertexBuffer* pVertexBuffers, int bufferCount)
+void CommandContext::SetVertexBuffers(Buffer** pVertexBuffers, int bufferCount)
 {
 	assert(bufferCount <= 4);
 	std::array<D3D12_VERTEX_BUFFER_VIEW, 4> views = {};
 	for (int i = 0; i < bufferCount; ++i)
 	{
-		views[i] = pVertexBuffers->GetView();
+		views[i].BufferLocation = pVertexBuffers[i]->GetGpuHandle();
+		views[i].SizeInBytes = (uint32)pVertexBuffers[i]->GetSize();
+		views[i].StrideInBytes = pVertexBuffers[i]->GetDesc().ElementSize;
 	}
 	m_pCommandList->IASetVertexBuffers(0, bufferCount, views.data());
 }
 
-void CommandContext::SetIndexBuffer(IndexBuffer* pIndexBuffer)
+void CommandContext::SetIndexBuffer(Buffer* pIndexBuffer)
 {
-	const D3D12_INDEX_BUFFER_VIEW& view = pIndexBuffer->GetView();
+	D3D12_INDEX_BUFFER_VIEW view;
+	view.BufferLocation = pIndexBuffer->GetGpuHandle();
+	view.Format = pIndexBuffer->GetDesc().ElementSize == 4 ? DXGI_FORMAT_R32_UINT : DXGI_FORMAT_R16_UINT;
+	view.SizeInBytes = (uint32)pIndexBuffer->GetSize();
 	m_pCommandList->IASetIndexBuffer(&view);
 }
 

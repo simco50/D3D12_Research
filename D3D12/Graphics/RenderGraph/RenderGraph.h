@@ -21,6 +21,7 @@ class CommandContext;
 
 namespace RG
 {
+	class ResourceAllocator;
 	class RenderGraph;
 	class RenderPassBase;
 
@@ -29,15 +30,19 @@ namespace RG
 		int Size;
 	};
 
+	enum class ResourceType
+	{
+		None,
+		Texture,
+		Buffer,
+	};
+
 	class VirtualResourceBase
 	{
 	public:
-		VirtualResourceBase(const char* pName, int id, bool isImported)
-			: m_Name(pName), m_Id(id), m_IsImported(isImported)
+		VirtualResourceBase(const char* pName, int id, bool isImported, ResourceType type, void* pResource)
+			: m_Name(pName), m_Id(id), m_IsImported(isImported), m_pPhysicalResource(pResource), m_Type(type)
 		{}
-		virtual void Create(RenderGraph& graph) = 0;
-		virtual void Destroy(RenderGraph& graph) = 0;
-
 		const char* m_Name;
 		int m_Id;
 		bool m_IsImported;
@@ -47,41 +52,28 @@ namespace RG
 		int m_References = 0;
 		RenderPassBase* pFirstPassUsage = nullptr;
 		RenderPassBase* pLastPassUsage = nullptr;
-	};
-	
-	template<typename T>
-	class VirtualResource : public VirtualResourceBase
-	{
-	public:
-		VirtualResource(const char* pName, int id, T* pResource)
-			: VirtualResourceBase(pName, id, pResource != nullptr), m_pResource(pResource)
-		{}
-		T* GetResource() const { return m_pResource; }
-	protected:
-		T* m_pResource;
+
+		ResourceType m_Type;
+		void* m_pPhysicalResource;
 	};
 
-	class TextureResource : public VirtualResource<Texture>
+	class TextureResource : public VirtualResourceBase
 	{
 	public:
 		TextureResource(const char* pName, int id, const TextureDesc& desc, Texture* pTexture)
-			: VirtualResource(pName, id, pTexture), m_Desc(desc)
+			: VirtualResourceBase(pName, id, pTexture != nullptr, ResourceType::Texture, pTexture), m_Desc(desc)
 		{}
-		virtual void Create(RenderGraph& graph) override {}
-		virtual void Destroy(RenderGraph& graph) override {}
 		const TextureDesc& GetDesc() const { return m_Desc; }
 	private:
 		TextureDesc m_Desc;
 	};
 
-	class BufferResource : public VirtualResource<GraphicsBuffer>
+	class BufferResource : public VirtualResourceBase
 	{
 	public:
 		BufferResource(const char* pName, int id, const BufferDesc& desc, GraphicsBuffer* pBuffer)
-			: VirtualResource(pName, id, pBuffer), m_Desc(desc)
+			: VirtualResourceBase(pName, id, pBuffer != nullptr, ResourceType::Buffer, pBuffer), m_Desc(desc)
 		{}
-		virtual void Create(RenderGraph& graph) override {}
-		virtual void Destroy(RenderGraph& graph) override {}
 		const BufferDesc& GetDesc() const { return m_Desc; }
 	private:
 		BufferDesc m_Desc;
@@ -163,7 +155,7 @@ namespace RG
 		{
 			const ResourceNode& node = m_Graph.GetResourceNode(handle);
 			assert(node.m_pResource);
-			return static_cast<VirtualResource<T>*>(node.m_pResource)->GetResource();
+			return static_cast<T*>(node.m_pResource->m_pPhysicalResource);
 		}
 
 	private:
@@ -195,6 +187,9 @@ namespace RG
 		{
 			return std::find(m_Writes.begin(), m_Writes.end(), handle) != m_Writes.end();
 		}
+
+		void PrepareResources(ResourceAllocator* pAllocator);
+		void ReleaseResources(ResourceAllocator* pAllocator);
 
 	protected:
 		const char* m_Name;
@@ -243,7 +238,7 @@ namespace RG
 	class RenderGraph
 	{
 	public:
-		RenderGraph();
+		RenderGraph(ResourceAllocator* pAllocator);
 		~RenderGraph();
 
 		RenderGraph(const RenderGraph& other) = delete;
@@ -253,6 +248,7 @@ namespace RG
 		int64 Execute(Graphics* pGraphics);
 		void Present(ResourceHandle resource);
 		void DumpGraphViz(const char* pPath) const;
+		void DumpGraphMermaid(const char* pPath) const;
 		ResourceHandle MoveResource(ResourceHandle From, ResourceHandle To);
 
 		template<typename PassData, typename SetupCallback, typename ExecuteCallback>
@@ -327,6 +323,7 @@ namespace RG
 			ResourceHandle From;
 			ResourceHandle To;
 		};
+		ResourceAllocator* m_pAllocator;
 
 		std::vector<ResourceAlias> m_Aliases;
 		std::vector<RenderPassBase*> m_RenderPasses;

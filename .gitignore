@@ -6,3 +6,5 @@ Build
 *.user
 *.sln
 imgui.ini
+*.html
+*.gv
