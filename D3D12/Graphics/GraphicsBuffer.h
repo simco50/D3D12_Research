@@ -1,5 +1,6 @@
 #pragma once
 #include "GraphicsResource.h"
+#include "ResourceViews.h"
 class CommandContext;
 class Graphics;
 class Buffer;
@@ -91,43 +92,43 @@ class Buffer : public GraphicsResource
 {
 public:
 	Buffer() = default;
-	Buffer(ID3D12Resource* pResource, D3D12_RESOURCE_STATES state);
+	Buffer(const char* pName);
+	Buffer(ID3D12Resource * pResource, D3D12_RESOURCE_STATES state);
+	~Buffer();
 	void Create(Graphics* pGraphics, const BufferDesc& desc);
 	void SetData(CommandContext* pContext, const void* pData, uint64 dataSize, uint32 offset = 0);
 
 	void* Map(uint32 subResource = 0, uint64 readFrom = 0, uint64 readTo = 0);
 	void Unmap(uint32 subResource = 0, uint64 writtenFrom = 0, uint64 writtenTo = 0);
 
-	inline uint64 GetSize() const { return m_Desc.ElementCount * m_Desc.ElementSize; }
+	inline uint64 GetSize() const { return (uint64)m_Desc.ElementCount * m_Desc.ElementSize; }
 	const BufferDesc& GetDesc() const { return m_Desc; }
 protected:
+	std::vector<std::unique_ptr<DescriptorBase>> m_Descriptors;
 	BufferDesc m_Desc;
+	const char* m_pName = nullptr;
 };
 
 class BufferWithDescriptors : public Buffer
 {
 public:
-	D3D12_CPU_DESCRIPTOR_HANDLE GetSRV() const { return m_Srv; }
-	D3D12_CPU_DESCRIPTOR_HANDLE GetUAV() const { return m_Uav; }
+	D3D12_CPU_DESCRIPTOR_HANDLE GetSRV() const;
+	D3D12_CPU_DESCRIPTOR_HANDLE GetUAV() const;
 protected:
-	CD3DX12_CPU_DESCRIPTOR_HANDLE m_Uav = {};
-	CD3DX12_CPU_DESCRIPTOR_HANDLE m_Srv = {};
+	UnorderedAccessView m_Uav;
+	ShaderResourceView m_Srv;
 };
 
 class ByteAddressBuffer : public BufferWithDescriptors
 {
 public:
-	ByteAddressBuffer(Graphics* pGraphics);
 	void Create(Graphics* pGraphics, uint32 elementStride, uint32 elementCount, bool cpuVisible = false);
-	void CreateViews(Graphics* pGraphics);
 };
 
 class StructuredBuffer : public BufferWithDescriptors
 {
 public:
-	StructuredBuffer(Graphics* pGraphics);
 	void Create(Graphics* pGraphics, uint32 elementStride, uint32 elementCount, bool cpuVisible = false);
-	void CreateViews(Graphics* pGraphics);
 	
 	ByteAddressBuffer* GetCounter() const { return m_pCounter.get(); }
 

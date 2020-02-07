@@ -950,13 +950,13 @@ void Graphics::InitializeAssets()
 		m_pComputeLightCullPSO->SetRootSignature(m_pComputeLightCullRS->GetRootSignature());
 		m_pComputeLightCullPSO->Finalize("Compute Light Culling Pipeline", m_pDevice.Get());
 
-		m_pLightIndexCounter = std::make_unique<StructuredBuffer>(this);
+		m_pLightIndexCounter = std::make_unique<StructuredBuffer>();
 		m_pLightIndexCounter->Create(this, sizeof(uint32), 2);
-		m_pLightIndexListBufferOpaque = std::make_unique<StructuredBuffer>(this);
+		m_pLightIndexListBufferOpaque = std::make_unique<StructuredBuffer>();
 		m_pLightIndexListBufferOpaque->Create(this, sizeof(uint32), MAX_LIGHT_DENSITY);
-		m_pLightIndexListBufferTransparant = std::make_unique<StructuredBuffer>(this);
+		m_pLightIndexListBufferTransparant = std::make_unique<StructuredBuffer>();
 		m_pLightIndexListBufferTransparant->Create(this, sizeof(uint32), MAX_LIGHT_DENSITY);
-		m_pLightBuffer = std::make_unique<StructuredBuffer>(this);
+		m_pLightBuffer = std::make_unique<StructuredBuffer>();
 	}
 
 	//Geometry
