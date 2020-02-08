@@ -12,6 +12,7 @@
 #include "Graphics/Light.h"
 #include "Graphics/Profiler.h"
 #include "Scene/Camera.h"
+#include "ResourceViews.h"
 
 static constexpr int cClusterSize = 64;
 static constexpr int cClusterCountZ = 32;
@@ -174,7 +175,8 @@ void ClusteredForward::Execute(const ClusteredForwardInputResources& resources)
 
 			pContext->InsertResourceBarrier(m_pUniqueClusters.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, false);
 			uint32 values[] = { 0,0,0,0 };
-			pContext->ClearUavUInt(m_pCompactedClusters->GetCounter(), m_pCompactedClusters->GetCounter()->GetUAV(), values);
+			UnorderedAccessView* pCompatectedClustersUAV = m_pCompactedClusters->GetUAV();
+			pContext->ClearUavUInt(pCompatectedClustersUAV->GetCounter(), pCompatectedClustersUAV->GetCounterUAV(), values);
 
 			pContext->SetDynamicDescriptor(0, 0, m_pUniqueClusters->GetSRV());
 			pContext->SetDynamicDescriptor(1, 0, m_pCompactedClusters->GetUAV());
@@ -194,7 +196,7 @@ void ClusteredForward::Execute(const ClusteredForwardInputResources& resources)
 			pContext->SetComputePipelineState(m_pUpdateIndirectArgumentsPSO.get());
 			pContext->SetComputeRootSignature(m_pUpdateIndirectArgumentsRS.get());
 
-			pContext->SetDynamicDescriptor(0, 0, m_pCompactedClusters->GetCounter()->GetSRV());
+			pContext->SetDynamicDescriptor(0, 0, m_pCompactedClusters->GetUAV()->GetCounter()->GetSRV());
 			pContext->SetDynamicDescriptor(1, 0, m_pIndirectArguments->GetUAV());
 
 			pContext->Dispatch(1, 1, 1);

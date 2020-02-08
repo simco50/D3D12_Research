@@ -14,7 +14,7 @@ end
 
 function AddD3D12()
 	filter {}
-	links {	"d3d12.lib", "dxgi", "d3dcompiler" }
+	links {	"d3d12.lib", "dxgi", "d3dcompiler", "dxguid" }
 end
 
 function AddAssimp()

@@ -8,7 +8,7 @@ std::vector<ComPtr<ID3D12DescriptorHeap>> OnlineDescriptorAllocator::m_Descripto
 std::array<std::queue<std::pair<uint64, ID3D12DescriptorHeap*>>, 2> OnlineDescriptorAllocator::m_FreeDescriptors;
 
 OnlineDescriptorAllocator::OnlineDescriptorAllocator(Graphics* pGraphics, CommandContext* pContext, D3D12_DESCRIPTOR_HEAP_TYPE type)
-	: m_pGraphics(pGraphics), m_pOwner(pContext), m_Type(type)
+	: GraphicsObject(pGraphics), m_pOwner(pContext), m_Type(type)
 {
 	m_DescriptorSize = m_pGraphics->GetDevice()->GetDescriptorHandleIncrementSize(type);
 }

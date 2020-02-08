@@ -5,7 +5,7 @@ class Graphics;
 class CommandContext;
 class UnorderedAccessView;
 class ShaderResourceView;
-class DescriptorBase;
+class ResourceView;
 struct TextureUAVDesc;
 struct TextureSRVDesc;
 
@@ -198,7 +198,7 @@ public:
 
 private:
 	TextureDesc m_Desc;
-	std::vector<std::unique_ptr<DescriptorBase>> m_Descriptors;
+	std::vector<std::unique_ptr<ResourceView>> m_Descriptors;
 
 	//#SimonC: This can hold multiple handles as long as they're sequential in memory. 
 	//Need to adapt allocator to work with this nicely so it doesn't waste memory

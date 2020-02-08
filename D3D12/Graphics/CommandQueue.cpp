@@ -6,12 +6,12 @@
 #include "pix3.h"
 
 CommandQueue::CommandQueue(Graphics* pGraphics, D3D12_COMMAND_LIST_TYPE type)
-	: m_pGraphics(pGraphics),
+	: GraphicsObject(pGraphics),
 	m_NextFenceValue((uint64)type << 56 | 1),
 	m_LastCompletedFenceValue((uint64)type << 56),
 	m_Type(type)
 {
-	m_pAllocatorPool = std::make_unique<CommandAllocatorPool>(pGraphics->GetDevice(), type);
+	m_pAllocatorPool = std::make_unique<CommandAllocatorPool>(pGraphics, type);
 
 	D3D12_COMMAND_QUEUE_DESC desc = {};
 	desc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;

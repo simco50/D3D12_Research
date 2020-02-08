@@ -3,6 +3,12 @@
 #define HR(hr) \
 LogHRESULT(hr)
 
+#ifdef _DEBUG
+#define D3D_SETNAME(obj, name) SetD3DObjectName(obj, name)
+#else
+#define D3D_SETNAME(obj, name)
+#endif
+
 inline bool LogHRESULT(HRESULT hr)
 {
 	if (hr == S_OK)
@@ -24,7 +30,6 @@ inline bool LogHRESULT(HRESULT hr)
 
 inline void SetD3DObjectName(ID3D12Object* pObject, const char* pName)
 {
-#ifdef _DEBUG
 	if (pObject)
 	{
 		wchar_t name[256];
@@ -32,5 +37,4 @@ inline void SetD3DObjectName(ID3D12Object* pObject, const char* pName)
 		mbstowcs_s(&written, name, pName, 256);
 		pObject->SetName(name);
 	}
-#endif
 }

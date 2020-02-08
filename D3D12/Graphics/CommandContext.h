@@ -1,5 +1,6 @@
 #pragma once
 #include "DynamicResourceAllocator.h"
+#include "GraphicsResource.h"
 class Graphics;
 class GraphicsResource;
 class Texture;
@@ -99,7 +100,7 @@ struct RenderPassInfo
 	DepthTargetInfo DepthStencilTarget{};
 };
 
-class CommandContext
+class CommandContext : public GraphicsObject
 {
 public:
 	CommandContext(Graphics* pGraphics, ID3D12GraphicsCommandList* pCommandList, ID3D12CommandAllocator* pAllocator, D3D12_COMMAND_LIST_TYPE type);
@@ -121,8 +122,6 @@ public:
 
 	D3D12_COMMAND_LIST_TYPE GetType() const { return m_Type; }
 
-	void SetName(const char* pName);
-
 	//Commands
 	void Dispatch(uint32 groupCountX, uint32 groupCountY, uint32 groupCountZ);
 	void ExecuteIndirect(ID3D12CommandSignature* pCommandSignature, Buffer* pIndirectArguments);
@@ -136,7 +135,9 @@ public:
 	void EndRenderPass();
 
 	void ClearUavUInt(GraphicsResource* pBuffer, D3D12_CPU_DESCRIPTOR_HANDLE uav, uint32 values[4]);
+	void ClearUavUInt(GraphicsResource* pBuffer, UnorderedAccessView* pUav, uint32 values[4]);
 	void ClearUavFloat(GraphicsResource* pBuffer, D3D12_CPU_DESCRIPTOR_HANDLE uav, float values[4]);
+	void ClearUavFloat(GraphicsResource* pBuffer, UnorderedAccessView* pUav, float values[4]);
 
 	//Bindings
 	void SetComputePipelineState(ComputePipelineState* pPipelineState);
@@ -145,6 +146,8 @@ public:
 	void SetComputeDynamicConstantBufferView(int rootIndex, void* pData, uint32 dataSize);
 
 	void SetDynamicDescriptor(int rootIndex, int offset, D3D12_CPU_DESCRIPTOR_HANDLE handle);
+	void SetDynamicDescriptor(int rootIndex, int offset, UnorderedAccessView* pView);
+	void SetDynamicDescriptor(int rootIndex, int offset, ShaderResourceView* pView);
 	void SetDynamicDescriptors(int rootIndex, int offset, D3D12_CPU_DESCRIPTOR_HANDLE* handles, int count = 1);
 	void SetDynamicSampler(int rootIndex, int offset, D3D12_CPU_DESCRIPTOR_HANDLE handle);
 	void SetDynamicSamplers(int rootIndex, int offset, D3D12_CPU_DESCRIPTOR_HANDLE* handles, int count = 1);
@@ -175,8 +178,6 @@ private:
 
 	std::array<D3D12_RESOURCE_BARRIER, MAX_QUEUED_BARRIERS> m_QueuedBarriers = {};
 	int m_NumQueuedBarriers = 0;
-
-	Graphics* m_pGraphics;
 
 	std::unique_ptr<DynamicResourceAllocator> m_DynamicAllocator;
 	ID3D12GraphicsCommandList* m_pCommandList;

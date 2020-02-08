@@ -1,17 +1,18 @@
 #include "stdafx.h"
 #include "OfflineDescriptorAllocator.h"
+#include "Graphics.h"
 
-OfflineDescriptorAllocator::OfflineDescriptorAllocator(ID3D12Device* pDevice, D3D12_DESCRIPTOR_HEAP_TYPE type)
-	: m_pDevice(pDevice), m_Type(type)
+OfflineDescriptorAllocator::OfflineDescriptorAllocator(Graphics* pGraphics, D3D12_DESCRIPTOR_HEAP_TYPE type, uint32 descriptorsPerHeap)
+	: GraphicsObject(pGraphics), m_Type(type), m_DescriptorsPerHeap(descriptorsPerHeap)
 {
-	m_DescriptorSize = pDevice->GetDescriptorHandleIncrementSize(type);
+	m_DescriptorSize = pGraphics->GetDevice()->GetDescriptorHandleIncrementSize(type);
 }
 
 OfflineDescriptorAllocator::~OfflineDescriptorAllocator()
 {
 }
 
-D3D12_CPU_DESCRIPTOR_HANDLE OfflineDescriptorAllocator::AllocateDescriptor()
+CD3DX12_CPU_DESCRIPTOR_HANDLE OfflineDescriptorAllocator::AllocateDescriptor()
 {
 	if (m_FreeHeaps.size() == 0)
 	{
@@ -19,7 +20,7 @@ D3D12_CPU_DESCRIPTOR_HANDLE OfflineDescriptorAllocator::AllocateDescriptor()
 	}
 	std::list<Heap::Range>& freeRange = m_Heaps[m_FreeHeaps.front()]->FreeRanges;
 	Heap::Range& range = freeRange.front();
-	D3D12_CPU_DESCRIPTOR_HANDLE outHandle = range.Begin;
+	CD3DX12_CPU_DESCRIPTOR_HANDLE outHandle = range.Begin;
 	range.Begin.Offset(m_DescriptorSize);
 	if (range.Begin == range.End)
 	{
@@ -39,7 +40,7 @@ void OfflineDescriptorAllocator::FreeDescriptor(D3D12_CPU_DESCRIPTOR_HANDLE hand
 	for (size_t i = 0; i < m_Heaps.size(); ++i)
 	{
 		D3D12_CPU_DESCRIPTOR_HANDLE start = m_Heaps[i]->pHeap->GetCPUDescriptorHandleForHeapStart();
-		if (handle.ptr >= start.ptr && handle.ptr < start.ptr + m_DescriptorSize * DESCRIPTORS_PER_HEAP)
+		if (handle.ptr >= start.ptr && handle.ptr < start.ptr + m_DescriptorSize * m_DescriptorsPerHeap)
 		{
 			heapIndex = (int)i;
 			break;
@@ -92,15 +93,15 @@ void OfflineDescriptorAllocator::AllocateNewHeap()
 	D3D12_DESCRIPTOR_HEAP_DESC desc = {};
 	desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
 	desc.NodeMask = 0;
-	desc.NumDescriptors = DESCRIPTORS_PER_HEAP;
+	desc.NumDescriptors = m_DescriptorsPerHeap;
 	desc.Type = m_Type;
 
 	std::unique_ptr<Heap> pHeap = std::make_unique<Heap>();
-	m_pDevice->CreateDescriptorHeap(&desc, IID_PPV_ARGS(pHeap->pHeap.GetAddressOf()));
+	m_pGraphics->GetDevice()->CreateDescriptorHeap(&desc, IID_PPV_ARGS(pHeap->pHeap.GetAddressOf()));
 	CD3DX12_CPU_DESCRIPTOR_HANDLE Begin = CD3DX12_CPU_DESCRIPTOR_HANDLE(pHeap->pHeap->GetCPUDescriptorHandleForHeapStart());
-	pHeap->FreeRanges.push_back(Heap::Range{ Begin, CD3DX12_CPU_DESCRIPTOR_HANDLE(Begin, DESCRIPTORS_PER_HEAP, m_DescriptorSize) });
+	pHeap->FreeRanges.push_back(Heap::Range{ Begin, CD3DX12_CPU_DESCRIPTOR_HANDLE(Begin, m_DescriptorsPerHeap, m_DescriptorSize) });
 	m_Heaps.push_back(std::move(pHeap));
 	m_FreeHeaps.push_back((int)m_Heaps.size() - 1);
 
-	m_NumDescriptors += DESCRIPTORS_PER_HEAP;
+	m_NumDescriptors += m_DescriptorsPerHeap;
 }

@@ -158,17 +158,11 @@ void Texture::Create(const TextureDesc& textureDesc)
 
 	if (Any(textureDesc.Usage, TextureFlag::ShaderResource) )
 	{
-		TextureSRVDesc srvDesc;
-		srvDesc.FirstArraySlice = 0;
-		srvDesc.Format = m_Desc.Format;
-		srvDesc.NumMipLevels = m_Desc.Mips;
-		srvDesc.NumArraySlices = m_Desc.DepthOrArraySize;
-		CreateSRV(&m_pSrv, srvDesc);
+		CreateSRV(&m_pSrv, TextureSRVDesc(0));
 	}
 	if (Any(textureDesc.Usage, TextureFlag::UnorderedAccess))
 	{
-		TextureUAVDesc uavDesc;
-		uavDesc.MipLevel = 0;
+		TextureUAVDesc uavDesc(0);
 		CreateUAV(&m_pUav, uavDesc);
 	}
 	if (Any(textureDesc.Usage, TextureFlag::RenderTarget))
@@ -450,11 +444,5 @@ void Texture::CreateForSwapchain(ID3D12Resource* pTexture)
 		m_Rtv = m_pGraphics->GetDescriptorManager(D3D12_DESCRIPTOR_HEAP_TYPE_RTV)->AllocateDescriptor();
 	}
 	m_pGraphics->GetDevice()->CreateRenderTargetView(pTexture, nullptr, m_Rtv);
-
-	TextureSRVDesc srvDesc;
-	srvDesc.FirstArraySlice = 0;
-	srvDesc.Format = m_Desc.Format;
-	srvDesc.NumMipLevels = m_Desc.Mips;
-	srvDesc.NumArraySlices = m_Desc.DepthOrArraySize;
-	CreateSRV(&m_pSrv, srvDesc);
+	CreateSRV(&m_pSrv, TextureSRVDesc(0));
 }

@@ -1,8 +1,9 @@
 #include "stdafx.h"
 #include "CommandAllocatorPool.h"
+#include "Graphics.h"
 
-CommandAllocatorPool::CommandAllocatorPool(ID3D12Device* pDevice, D3D12_COMMAND_LIST_TYPE type)
-	: m_pDevice(pDevice), m_Type(type)
+CommandAllocatorPool::CommandAllocatorPool(Graphics* pGraphics, D3D12_COMMAND_LIST_TYPE type)
+	: GraphicsObject(pGraphics), m_Type(type)
 {
 }
 
@@ -24,7 +25,7 @@ ID3D12CommandAllocator* CommandAllocatorPool::GetAllocator(uint64 fenceValue)
 	}
 
 	ComPtr<ID3D12CommandAllocator> pAllocator;
-	m_pDevice->CreateCommandAllocator(m_Type, IID_PPV_ARGS(pAllocator.GetAddressOf()));
+	m_pGraphics->GetDevice()->CreateCommandAllocator(m_Type, IID_PPV_ARGS(pAllocator.GetAddressOf()));
 	m_CommandAllocators.push_back(std::move(pAllocator));
 	return m_CommandAllocators.back().Get();
 }
