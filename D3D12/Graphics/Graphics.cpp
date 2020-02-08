@@ -3,7 +3,7 @@
 #include "CommandAllocatorPool.h"
 #include "CommandQueue.h"
 #include "CommandContext.h"
-#include "DescriptorAllocator.h"
+#include "OfflineDescriptorAllocator.h"
 #include "GraphicsResource.h"
 #include "RootSignature.h"
 #include "PipelineState.h"
@@ -110,8 +110,7 @@ void Graphics::RandomizeLights(int count)
 	IdleGPU();
 	if (m_pLightBuffer->GetDesc().ElementCount != count)
 	{
-		m_pLightBuffer->Create(this, sizeof(Light), count);
-		m_pLightBuffer->SetName("Light Buffer");
+		m_pLightBuffer->Create(BufferDesc::CreateStructured(count, sizeof(Light)));
 	}
 	CommandContext* pContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 	m_pLightBuffer->SetData(pContext, m_Lights.data(), sizeof(Light) * m_Lights.size());
@@ -677,7 +676,7 @@ void Graphics::InitD3D()
 	assert(m_DescriptorHeaps.size() == D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES);
 	for (size_t i = 0; i < D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES; ++i)
 	{
-		m_DescriptorHeaps[i] = std::make_unique<DescriptorAllocator>(m_pDevice.Get(), (D3D12_DESCRIPTOR_HEAP_TYPE)i);
+		m_DescriptorHeaps[i] = std::make_unique<OfflineDescriptorAllocator>(m_pDevice.Get(), (D3D12_DESCRIPTOR_HEAP_TYPE)i);
 	}
 
 	m_pDynamicAllocationManager = std::make_unique<DynamicAllocationManager>(this);
@@ -718,18 +717,18 @@ void Graphics::InitD3D()
 	//Create the textures but don't create the resources themselves yet.
 	for (int i = 0; i < FRAME_COUNT; ++i)
 	{
-		m_RenderTargets[i] = std::make_unique<Texture>();
+		m_RenderTargets[i] = std::make_unique<Texture>(this, "Render Target");
 	}
-	m_pDepthStencil = std::make_unique<Texture>();
+	m_pDepthStencil = std::make_unique<Texture>(this, "Depth Stencil");
 
 	if (m_SampleCount > 1)
 	{
-		m_pResolvedDepthStencil = std::make_unique<Texture>();
-		m_pMultiSampleRenderTarget = std::make_unique<Texture>();
+		m_pResolvedDepthStencil = std::make_unique<Texture>(this, "Resolved Depth Stencil");
+		m_pMultiSampleRenderTarget = std::make_unique<Texture>(this, "MSAA Target");
 	}
 
-	m_pLightGridOpaque = std::make_unique<Texture>();
-	m_pLightGridTransparant = std::make_unique<Texture>();
+	m_pLightGridOpaque = std::make_unique<Texture>(this, "Opaque Light Grid");
+	m_pLightGridTransparant = std::make_unique<Texture>(this, "Transparant Light Grid");
 
 	m_pClusteredForward = std::make_unique<ClusteredForward>(this);
 
@@ -768,29 +767,24 @@ void Graphics::OnResize(int width, int height)
 	{
 		ID3D12Resource* pResource = nullptr;
 		HR(m_pSwapchain->GetBuffer(i, IID_PPV_ARGS(&pResource)));
-		m_RenderTargets[i]->CreateForSwapchain(this, pResource);
-		m_RenderTargets[i]->SetName("Rendertarget");
+		m_RenderTargets[i]->CreateForSwapchain(pResource);
 	}
 	if (m_SampleCount > 1)
 	{
-		m_pDepthStencil->Create(this, TextureDesc::CreateDepth(width, height, DEPTH_STENCIL_FORMAT, TextureFlag::DepthStencil | TextureFlag::ShaderResource, m_SampleCount, ClearBinding(0.0f, 0)));
-		m_pDepthStencil->SetName("Depth Stencil");
-		m_pResolvedDepthStencil->Create(this, TextureDesc::Create2D(width, height, DXGI_FORMAT_R32_FLOAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
-		m_pResolvedDepthStencil->SetName("Resolve Depth Stencil");
+		m_pDepthStencil->Create(TextureDesc::CreateDepth(width, height, DEPTH_STENCIL_FORMAT, TextureFlag::DepthStencil | TextureFlag::ShaderResource, m_SampleCount, ClearBinding(0.0f, 0)));
+		m_pResolvedDepthStencil->Create(TextureDesc::Create2D(width, height, DXGI_FORMAT_R32_FLOAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
 
-		m_pMultiSampleRenderTarget->Create(this, TextureDesc::CreateRenderTarget(width, height, RENDER_TARGET_FORMAT, TextureFlag::RenderTarget, m_SampleCount, ClearBinding(Color(0, 0, 0, 0))));
-		m_pMultiSampleRenderTarget->SetName("Multisample Rendertarget");
+		m_pMultiSampleRenderTarget->Create(TextureDesc::CreateRenderTarget(width, height, RENDER_TARGET_FORMAT, TextureFlag::RenderTarget, m_SampleCount, ClearBinding(Color(0, 0, 0, 0))));
 	}
 	else
 	{
-		m_pDepthStencil->Create(this, TextureDesc::CreateDepth(width, height, DEPTH_STENCIL_FORMAT, TextureFlag::DepthStencil | TextureFlag::ShaderResource, m_SampleCount, ClearBinding(0.0f, 0)));
-		m_pDepthStencil->SetName("Depth Stencil");
+		m_pDepthStencil->Create(TextureDesc::CreateDepth(width, height, DEPTH_STENCIL_FORMAT, TextureFlag::DepthStencil | TextureFlag::ShaderResource, m_SampleCount, ClearBinding(0.0f, 0)));
 	}
 
 	int frustumCountX = (int)(ceil((float)width / FORWARD_PLUS_BLOCK_SIZE));
 	int frustumCountY = (int)(ceil((float)height / FORWARD_PLUS_BLOCK_SIZE));
-	m_pLightGridOpaque->Create(this, TextureDesc::Create2D(frustumCountX, frustumCountY, DXGI_FORMAT_R32G32_UINT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
-	m_pLightGridTransparant->Create(this, TextureDesc::Create2D(frustumCountX, frustumCountY, DXGI_FORMAT_R32G32_UINT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
+	m_pLightGridOpaque->Create(TextureDesc::Create2D(frustumCountX, frustumCountY, DXGI_FORMAT_R32G32_UINT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
+	m_pLightGridTransparant->Create(TextureDesc::Create2D(frustumCountX, frustumCountY, DXGI_FORMAT_R32G32_UINT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
 
 	m_pClusteredForward->OnSwapchainCreated(width, height);
 }
@@ -898,8 +892,8 @@ void Graphics::InitializeAssets()
 			m_pShadowsAlphaPSO->Finalize("Shadow Mapping (Alpha) Pipeline", m_pDevice.Get());
 		}
 
-		m_pShadowMap = std::make_unique<Texture>();
-		m_pShadowMap->Create(this, TextureDesc::CreateDepth(SHADOW_MAP_SIZE, SHADOW_MAP_SIZE, DEPTH_STENCIL_SHADOW_FORMAT, TextureFlag::DepthStencil | TextureFlag::ShaderResource, 1, ClearBinding(1.0f, 0)));
+		m_pShadowMap = std::make_unique<Texture>(this, "Shadow Map");
+		m_pShadowMap->Create(TextureDesc::CreateDepth(SHADOW_MAP_SIZE, SHADOW_MAP_SIZE, DEPTH_STENCIL_SHADOW_FORMAT, TextureFlag::DepthStencil | TextureFlag::ShaderResource, 1, ClearBinding(1.0f, 0)));
 	}
 
 	//Depth prepass
@@ -950,13 +944,13 @@ void Graphics::InitializeAssets()
 		m_pComputeLightCullPSO->SetRootSignature(m_pComputeLightCullRS->GetRootSignature());
 		m_pComputeLightCullPSO->Finalize("Compute Light Culling Pipeline", m_pDevice.Get());
 
-		m_pLightIndexCounter = std::make_unique<StructuredBuffer>();
-		m_pLightIndexCounter->Create(this, sizeof(uint32), 2);
-		m_pLightIndexListBufferOpaque = std::make_unique<StructuredBuffer>();
-		m_pLightIndexListBufferOpaque->Create(this, sizeof(uint32), MAX_LIGHT_DENSITY);
-		m_pLightIndexListBufferTransparant = std::make_unique<StructuredBuffer>();
-		m_pLightIndexListBufferTransparant->Create(this, sizeof(uint32), MAX_LIGHT_DENSITY);
-		m_pLightBuffer = std::make_unique<StructuredBuffer>();
+		m_pLightIndexCounter = std::make_unique<Buffer>(this, "Light Index Counter");
+		m_pLightIndexCounter->Create(BufferDesc::CreateStructured(2, sizeof(uint32)));
+		m_pLightIndexListBufferOpaque = std::make_unique<Buffer>(this, "Light List Opaque");
+		m_pLightIndexListBufferOpaque->Create(BufferDesc::CreateStructured(MAX_LIGHT_DENSITY, sizeof(uint32)));
+		m_pLightIndexListBufferTransparant = std::make_unique<Buffer>(this, "Light List Transparant");
+		m_pLightIndexListBufferTransparant->Create(BufferDesc::CreateStructured(MAX_LIGHT_DENSITY, sizeof(uint32)));
+		m_pLightBuffer = std::make_unique<Buffer>(this, "Light Buffer");
 	}
 
 	//Geometry
@@ -1049,7 +1043,7 @@ void Graphics::UpdateImGui()
 			default:
 				break;
 			}
-			uint32 totalDescriptors = pAllocator->GetHeapCount() * DescriptorAllocator::DESCRIPTORS_PER_HEAP;
+			uint32 totalDescriptors = pAllocator->GetNumDescriptors();
 			uint32 usedDescriptors = pAllocator->GetNumAllocatedDescriptors();
 			std::stringstream str;
 			str << usedDescriptors << "/" << totalDescriptors;
@@ -1229,12 +1223,6 @@ bool Graphics::CheckTypedUAVSupport(DXGI_FORMAT format) const
 bool Graphics::UseRenderPasses() const
 {
 	return m_RenderPassTier > D3D12_RENDER_PASS_TIER::D3D12_RENDER_PASS_TIER_0;
-}
-
-D3D12_CPU_DESCRIPTOR_HANDLE Graphics::AllocateCpuDescriptors(int count, D3D12_DESCRIPTOR_HEAP_TYPE type)
-{
-	assert((int)type < m_DescriptorHeaps.size());
-	return m_DescriptorHeaps[type]->AllocateDescriptors(count);
 }
 
 void Graphics::IdleGPU()

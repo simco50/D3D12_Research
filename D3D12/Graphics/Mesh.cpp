@@ -39,27 +39,27 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 		std::unique_ptr<Texture> pTex;
 		aiString path;
 		aiReturn ret = pMaterial->GetTexture(type, 0, &path);
-		pTex = std::make_unique<Texture>();
+		pTex = std::make_unique<Texture>(pGraphics);
 		if (ret == aiReturn_SUCCESS)
 		{
 			std::string p = path.C_Str();
 			std::stringstream str;
 			str << basePath << p;
-			pTex->Create(pGraphics, pContext, str.str().c_str());
+			pTex->Create(pContext, str.str().c_str());
 		}
 		else
 		{
 			switch (type)
 			{
 			case aiTextureType_NORMALS:
-				pTex->Create(pGraphics, pContext, "Resources/textures/dummy_ddn.png");
+				pTex->Create(pContext, "Resources/textures/dummy_ddn.png");
 				break;
 			case aiTextureType_SPECULAR:
-				pTex->Create(pGraphics, pContext, "Resources/textures/dummy_specular.png");
+				pTex->Create(pContext, "Resources/textures/dummy_specular.png");
 				break;
 			case aiTextureType_DIFFUSE:
 			default:
-				pTex->Create(pGraphics, pContext, "Resources/textures/dummy.png");
+				pTex->Create(pContext, "Resources/textures/dummy.png");
 				break;
 			}
 		}
@@ -125,16 +125,16 @@ std::unique_ptr<SubMesh> Mesh::LoadMesh(aiMesh* pMesh, Graphics* pGraphics, Comm
 
 	{
 		uint32 size = (uint32)vertices.size() * sizeof(Vertex);
-		pSubMesh->m_pVertexBuffer = std::make_unique<Buffer>();
-		pSubMesh->m_pVertexBuffer->Create(pGraphics, BufferDesc::CreateVertexBuffer((uint32)vertices.size(), sizeof(Vertex)));
+		pSubMesh->m_pVertexBuffer = std::make_unique<Buffer>(pGraphics);
+		pSubMesh->m_pVertexBuffer->Create(BufferDesc::CreateVertexBuffer((uint32)vertices.size(), sizeof(Vertex)));
 		pSubMesh->m_pVertexBuffer->SetData(pContext, vertices.data(), size);
 	}
 
 	{
 		uint32 size = (uint32)indices.size() * sizeof(uint32);
 		pSubMesh->m_IndexCount = (int)indices.size();
-		pSubMesh->m_pIndexBuffer = std::make_unique<Buffer>();
-		pSubMesh->m_pIndexBuffer->Create(pGraphics, BufferDesc::CreateIndexBuffer((uint32)size, false));
+		pSubMesh->m_pIndexBuffer = std::make_unique<Buffer>(pGraphics);
+		pSubMesh->m_pIndexBuffer->Create(BufferDesc::CreateIndexBuffer((uint32)size, false));
 		pSubMesh->m_pIndexBuffer->SetData(pContext, indices.data(), size);
 	}
 	pSubMesh->m_MaterialId = pMesh->mMaterialIndex;

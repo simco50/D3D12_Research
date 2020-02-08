@@ -236,8 +236,8 @@ void Profiler::Initialize(Graphics* pGraphics)
 	desc.Type = D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
 	HR(pGraphics->GetDevice()->CreateQueryHeap(&desc, IID_PPV_ARGS(m_pQueryHeap.GetAddressOf())));
 
-	m_pReadBackBuffer = std::make_unique<Buffer>();
-	m_pReadBackBuffer->Create(pGraphics, BufferDesc::CreateReadback(HEAP_SIZE * 2 * Graphics::FRAME_COUNT));
+	m_pReadBackBuffer = std::make_unique<Buffer>(pGraphics, "Profiling Readback Buffer");
+	m_pReadBackBuffer->Create(BufferDesc::CreateReadback(HEAP_SIZE * 2 * Graphics::FRAME_COUNT));
 
 	uint64 timeStampFrequency;
 	pGraphics->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT)->GetCommandQueue()->GetTimestampFrequency(&timeStampFrequency);

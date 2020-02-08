@@ -1,12 +1,27 @@
 #pragma once
 
-class GraphicsResource
+class Graphics;
+
+class GraphicsObject
+{
+public:
+	GraphicsObject(Graphics* pParent = nullptr)
+		: m_pGraphics(pParent)
+	{}
+
+	Graphics* GetGraphics() const { return m_pGraphics; }
+
+protected:
+	Graphics* m_pGraphics;
+};
+
+class GraphicsResource : public GraphicsObject
 {
 	friend class CommandContext;
 
 public:
-	GraphicsResource();
-	GraphicsResource(ID3D12Resource* pResource, D3D12_RESOURCE_STATES state);
+	GraphicsResource(Graphics* pParent);
+	GraphicsResource(Graphics* pParent, ID3D12Resource* pResource, D3D12_RESOURCE_STATES state);
 	virtual ~GraphicsResource();
 
 	void Release();

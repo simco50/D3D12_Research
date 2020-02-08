@@ -14,7 +14,8 @@ struct DynamicAllocation
 class AllocationPage : public Buffer
 {
 public:
-	void Create(Graphics* pGraphics, uint64 size);
+	AllocationPage(Graphics* pGraphics);
+	void Create(uint64 size);
 	inline void* GetMappedData() const { return m_pMappedData; }
 private:
 	void* m_pMappedData = nullptr;

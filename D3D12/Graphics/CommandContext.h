@@ -3,7 +3,7 @@
 class Graphics;
 class GraphicsResource;
 class Texture;
-class DynamicDescriptorAllocator;
+class OnlineDescriptorAllocator;
 class RootSignature;
 class GraphicsPipelineState;
 class ComputePipelineState;
@@ -166,8 +166,8 @@ public:
 	void SetDescriptorHeap(ID3D12DescriptorHeap* pHeap, D3D12_DESCRIPTOR_HEAP_TYPE type);
 
 private:
-	std::unique_ptr<DynamicDescriptorAllocator> m_pShaderResourceDescriptorAllocator;
-	std::unique_ptr<DynamicDescriptorAllocator> m_pSamplerDescriptorAllocator;
+	std::unique_ptr<OnlineDescriptorAllocator> m_pShaderResourceDescriptorAllocator;
+	std::unique_ptr<OnlineDescriptorAllocator> m_pSamplerDescriptorAllocator;
 
 	std::array<ID3D12DescriptorHeap*, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES> m_CurrentDescriptorHeaps = {};
 

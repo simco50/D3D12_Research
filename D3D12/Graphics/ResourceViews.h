@@ -1,4 +1,5 @@
 #pragma once
+#include "GraphicsResource.h"
 
 class Buffer;
 class Graphics;
@@ -95,15 +96,16 @@ struct TextureUAVDesc
 {
 	uint8 MipLevel;
 
-	bool operator==(const TextureSRVDesc& other) const
+	bool operator==(const TextureUAVDesc& other) const
 	{
 		return MipLevel == other.MipLevel;
 	}
 };
 
-class DescriptorBase
+class DescriptorBase : public GraphicsObject
 {
 public:
+	DescriptorBase(Graphics* pGraphics);
 	GraphicsResource* GetParent() const { return m_pParent; }
 	D3D12_CPU_DESCRIPTOR_HANDLE GetDescriptor() const { return m_Descriptor; }
 protected:
@@ -114,15 +116,19 @@ protected:
 class ShaderResourceView : public DescriptorBase
 {
 public:
-	ShaderResourceView() = default;
-	void Create(Graphics* pGraphics, Buffer* pBuffer, const BufferSRVDesc& desc);
-	void Create(Graphics* pGraphics, Texture* pTexture, const TextureSRVDesc& desc);
+	ShaderResourceView(Graphics* pGraphics);
+	~ShaderResourceView();
+	void Create(Buffer* pBuffer, const BufferSRVDesc& desc);
+	void Create(Texture* pTexture, const TextureSRVDesc& desc);
+	void Release();
 };
 
 class UnorderedAccessView : public DescriptorBase
 {
 public:
-	UnorderedAccessView() = default;
-	void Create(Graphics* pGraphics, Buffer* pBuffer, const BufferUAVDesc& desc);
-	void Create(Graphics* pGraphics, Texture* pTexture, const TextureUAVDesc& desc);
+	UnorderedAccessView(Graphics* pGraphics);
+	~UnorderedAccessView();
+	void Create(Buffer* pBuffer, const BufferUAVDesc& desc);
+	void Create(Texture* pTexture, const TextureUAVDesc& desc);
+	void Release();
 };

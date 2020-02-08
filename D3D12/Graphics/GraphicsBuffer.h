@@ -1,9 +1,13 @@
 #pragma once
 #include "GraphicsResource.h"
-#include "ResourceViews.h"
 class CommandContext;
 class Graphics;
 class Buffer;
+class ShaderResourceView;
+class UnorderedAccessView;
+class DescriptorBase;
+struct BufferSRVDesc;
+struct BufferUAVDesc;
 
 enum class BufferFlag
 {
@@ -40,13 +44,13 @@ struct BufferDesc
 		return BufferDesc(size, sizeof(uint64), BufferFlag::Readback);
 	}
 
-	static BufferDesc CreateByteAddress(int bytes, BufferFlag usage = BufferFlag::ShaderResource | BufferFlag::UnorderedAccess)
+	static BufferDesc CreateByteAddress(int bytes, BufferFlag usage = BufferFlag::ShaderResource)
 	{
 		assert(bytes % 4 == 0);
 		BufferDesc desc;
 		desc.ElementCount = bytes / 4;
 		desc.ElementSize = 4;
-		desc.Usage = usage | BufferFlag::ByteAddress;
+		desc.Usage = usage | BufferFlag::ByteAddress | BufferFlag::UnorderedAccess;
 		return desc;
 	}
 
@@ -60,12 +64,12 @@ struct BufferDesc
 	}
 
 	template<typename IndirectParameters>
-	static BufferDesc CreateIndirectArguments(int elements = 1, BufferFlag usage = BufferFlag::IndirectArguments | BufferFlag::UnorderedAccess)
+	static BufferDesc CreateIndirectArguments(int elements = 1, BufferFlag usage = BufferFlag::None)
 	{
 		BufferDesc desc;
 		desc.ElementCount = elements;
-		desc.ElementSize = size(IndirectParameters);
-		desc.Usage = usage | BufferFlag::IndirectArguments;
+		desc.ElementSize = sizeof(IndirectParameters);
+		desc.Usage = usage | BufferFlag::IndirectArguments | BufferFlag::UnorderedAccess;
 		return desc;
 	}
 
@@ -91,11 +95,10 @@ struct BufferDesc
 class Buffer : public GraphicsResource
 {
 public:
-	Buffer() = default;
-	Buffer(const char* pName);
-	Buffer(ID3D12Resource * pResource, D3D12_RESOURCE_STATES state);
+	Buffer(Graphics* pGraphics, const char* pName = "");
+	Buffer(Graphics* pGraphics, ID3D12Resource * pResource, D3D12_RESOURCE_STATES state);
 	~Buffer();
-	void Create(Graphics* pGraphics, const BufferDesc& desc);
+	void Create(const BufferDesc& desc);
 	void SetData(CommandContext* pContext, const void* pData, uint64 dataSize, uint32 offset = 0);
 
 	void* Map(uint32 subResource = 0, uint64 readFrom = 0, uint64 readTo = 0);
@@ -103,35 +106,20 @@ public:
 
 	inline uint64 GetSize() const { return (uint64)m_Desc.ElementCount * m_Desc.ElementSize; }
 	const BufferDesc& GetDesc() const { return m_Desc; }
+
+	void CreateUAV(UnorderedAccessView** pView, const BufferUAVDesc& desc);
+	void CreateSRV(ShaderResourceView** pView, const BufferSRVDesc& desc);
+
+	D3D12_CPU_DESCRIPTOR_HANDLE GetSRV() const;
+	D3D12_CPU_DESCRIPTOR_HANDLE GetUAV() const;
+	Buffer* GetCounter() const { return m_pCounter.get(); }
+
 protected:
+	UnorderedAccessView* m_pUav = nullptr;
+	ShaderResourceView* m_pSrv = nullptr;
+	std::unique_ptr<Buffer> m_pCounter;
+
 	std::vector<std::unique_ptr<DescriptorBase>> m_Descriptors;
 	BufferDesc m_Desc;
 	const char* m_pName = nullptr;
-};
-
-class BufferWithDescriptors : public Buffer
-{
-public:
-	D3D12_CPU_DESCRIPTOR_HANDLE GetSRV() const;
-	D3D12_CPU_DESCRIPTOR_HANDLE GetUAV() const;
-protected:
-	UnorderedAccessView m_Uav;
-	ShaderResourceView m_Srv;
-};
-
-class ByteAddressBuffer : public BufferWithDescriptors
-{
-public:
-	void Create(Graphics* pGraphics, uint32 elementStride, uint32 elementCount, bool cpuVisible = false);
-};
-
-class StructuredBuffer : public BufferWithDescriptors
-{
-public:
-	void Create(Graphics* pGraphics, uint32 elementStride, uint32 elementCount, bool cpuVisible = false);
-	
-	ByteAddressBuffer* GetCounter() const { return m_pCounter.get(); }
-
-private:
-	std::unique_ptr<ByteAddressBuffer> m_pCounter;
 };

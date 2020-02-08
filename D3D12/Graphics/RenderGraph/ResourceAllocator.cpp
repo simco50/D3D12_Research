@@ -23,8 +23,8 @@ Texture* RGResourceAllocator::CreateTexture(const TextureDesc& desc)
 			return pTex;
 		}
 	}
-	std::unique_ptr<Texture> pTex = std::make_unique<Texture>();
-	pTex->Create(m_pGraphics, desc);
+	std::unique_ptr<Texture> pTex = std::make_unique<Texture>(m_pGraphics);
+	pTex->Create(desc);
 	m_Textures.push_back(std::move(pTex));
 	return m_Textures.back().get();
 }

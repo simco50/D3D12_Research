@@ -3,17 +3,25 @@
 #include "Graphics.h"
 #include "GraphicsBuffer.h"
 #include "Texture.h"
+#include "OfflineDescriptorAllocator.h"
 
-void ShaderResourceView::Create(Graphics* pGraphics, Buffer* pBuffer, const BufferSRVDesc& desc)
+ShaderResourceView::ShaderResourceView(Graphics* pGraphics)
+	: DescriptorBase(pGraphics)
+{
+	m_Descriptor = m_pGraphics->GetDescriptorManager(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV)->AllocateDescriptor();
+}
+
+ShaderResourceView::~ShaderResourceView()
+{
+	Release();
+}
+
+void ShaderResourceView::Create(Buffer* pBuffer, const BufferSRVDesc& desc)
 {
 	assert(pBuffer);
 	m_pParent = pBuffer;
 	const BufferDesc& bufferDesc = pBuffer->GetDesc();
 
-	if (m_Descriptor.ptr == 0)
-	{
-		m_Descriptor = pGraphics->AllocateCpuDescriptors(1, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-	}
 	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
 	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 	srvDesc.Format = desc.Format;
@@ -25,14 +33,14 @@ void ShaderResourceView::Create(Graphics* pGraphics, Buffer* pBuffer, const Buff
 	{
 		srvDesc.Buffer.Flags |= D3D12_BUFFER_SRV_FLAG_RAW;
 	}
-	else if (Any(bufferDesc.Usage, BufferFlag::Structured))
+	else if (Any(bufferDesc.Usage, BufferFlag::Structured) || Any(bufferDesc.Usage, BufferFlag::IndirectArguments))
 	{
 		srvDesc.Buffer.StructureByteStride = bufferDesc.ElementSize;
 	}
-	pGraphics->GetDevice()->CreateShaderResourceView(pBuffer->GetResource(), &srvDesc, m_Descriptor);
+	m_pParent->GetGraphics()->GetDevice()->CreateShaderResourceView(pBuffer->GetResource(), &srvDesc, m_Descriptor);
 }
 
-void ShaderResourceView::Create(Graphics* pGraphics, Texture* pTexture, const TextureSRVDesc& desc)
+void ShaderResourceView::Create(Texture* pTexture, const TextureSRVDesc& desc)
 {
 	assert(pTexture);
 	m_pParent = pTexture;
@@ -40,7 +48,7 @@ void ShaderResourceView::Create(Graphics* pGraphics, Texture* pTexture, const Te
 
 	if (m_Descriptor.ptr == 0)
 	{
-		m_Descriptor = pGraphics->AllocateCpuDescriptors(1, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+		m_Descriptor = m_pParent->GetGraphics()->GetDescriptorManager(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV)->AllocateDescriptor();
 	}
 	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
 	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
@@ -117,19 +125,36 @@ void ShaderResourceView::Create(Graphics* pGraphics, Texture* pTexture, const Te
 	default:
 		break;
 	}
-	pGraphics->GetDevice()->CreateShaderResourceView(pTexture->GetResource(), &srvDesc, m_Descriptor);
+	m_pParent->GetGraphics()->GetDevice()->CreateShaderResourceView(pTexture->GetResource(), &srvDesc, m_Descriptor);
 }
 
-void UnorderedAccessView::Create(Graphics* pGraphics, Buffer* pBuffer, const BufferUAVDesc& desc)
+void ShaderResourceView::Release()
+{
+	if (m_Descriptor.ptr != 0)
+	{
+		assert(m_pParent);
+		m_pParent->GetGraphics()->GetDescriptorManager(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV)->FreeDescriptor(m_Descriptor);
+		m_Descriptor.ptr = 0;
+	}
+}
+
+UnorderedAccessView::UnorderedAccessView(Graphics* pGraphics)
+	: DescriptorBase(pGraphics)
+{
+	m_Descriptor = m_pGraphics->GetDescriptorManager(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV)->AllocateDescriptor();
+}
+
+UnorderedAccessView::~UnorderedAccessView()
+{
+	Release();
+}
+
+void UnorderedAccessView::Create(Buffer* pBuffer, const BufferUAVDesc& desc)
 {
 	assert(pBuffer);
 	m_pParent = pBuffer;
 	const BufferDesc& bufferDesc = pBuffer->GetDesc();
 
-	if (m_Descriptor.ptr == 0)
-	{
-		m_Descriptor = pGraphics->AllocateCpuDescriptors(1, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-	}
 	D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
 	uavDesc.Format = desc.Format;
 	uavDesc.Buffer.CounterOffsetInBytes = desc.CounterOffset;
@@ -143,14 +168,14 @@ void UnorderedAccessView::Create(Graphics* pGraphics, Buffer* pBuffer, const Buf
 	{
 		uavDesc.Buffer.Flags |= D3D12_BUFFER_UAV_FLAG_RAW;
 	}
-	else if (Any(bufferDesc.Usage, BufferFlag::Structured))
+	else if (Any(bufferDesc.Usage, BufferFlag::Structured) || Any(bufferDesc.Usage, BufferFlag::IndirectArguments))
 	{
 		uavDesc.Buffer.StructureByteStride = bufferDesc.ElementSize;
 	}
-	pGraphics->GetDevice()->CreateUnorderedAccessView(pBuffer->GetResource(), desc.pCounter ? desc.pCounter->GetResource() : nullptr, &uavDesc, m_Descriptor);
+	m_pParent->GetGraphics()->GetDevice()->CreateUnorderedAccessView(pBuffer->GetResource(), desc.pCounter ? desc.pCounter->GetResource() : nullptr, &uavDesc, m_Descriptor);
 }
 
-void UnorderedAccessView::Create(Graphics* pGraphics, Texture* pTexture, const TextureUAVDesc& desc)
+void UnorderedAccessView::Create(Texture* pTexture, const TextureUAVDesc& desc)
 {
 	assert(pTexture);
 	m_pParent = pTexture;
@@ -158,7 +183,7 @@ void UnorderedAccessView::Create(Graphics* pGraphics, Texture* pTexture, const T
 
 	if (m_Descriptor.ptr == 0)
 	{
-		m_Descriptor = pGraphics->AllocateCpuDescriptors(1, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+		m_Descriptor = m_pParent->GetGraphics()->GetDescriptorManager(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV)->AllocateDescriptor();
 	}
 	D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
 	switch (textureDesc.Dimensions)
@@ -199,5 +224,20 @@ void UnorderedAccessView::Create(Graphics* pGraphics, Texture* pTexture, const T
 	uavDesc.Texture2D.MipSlice = desc.MipLevel;
 	uavDesc.Texture2DArray.MipSlice = desc.MipLevel;
 	uavDesc.Texture3D.MipSlice = desc.MipLevel;
-	pGraphics->GetDevice()->CreateUnorderedAccessView(pTexture->GetResource(), nullptr, &uavDesc, m_Descriptor);
+	m_pParent->GetGraphics()->GetDevice()->CreateUnorderedAccessView(pTexture->GetResource(), nullptr, &uavDesc, m_Descriptor);
+}
+
+void UnorderedAccessView::Release()
+{
+	if (m_Descriptor.ptr != 0)
+	{
+		assert(m_pParent);
+		m_pParent->GetGraphics()->GetDescriptorManager(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV)->FreeDescriptor(m_Descriptor);
+		m_Descriptor.ptr = 0;
+	}
+}
+
+DescriptorBase::DescriptorBase(Graphics* pGraphics)
+	: GraphicsObject(pGraphics)
+{
 }

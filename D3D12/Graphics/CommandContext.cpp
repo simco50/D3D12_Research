@@ -3,7 +3,7 @@
 #include "Graphics.h"
 #include "CommandQueue.h"
 #include "DynamicResourceAllocator.h"
-#include "DynamicDescriptorAllocator.h"
+#include "OnlineDescriptorAllocator.h"
 #include "PipelineState.h"
 #include "RootSignature.h"
 #include "GraphicsBuffer.h"
@@ -27,8 +27,8 @@ CommandContext::CommandContext(Graphics* pGraphics, ID3D12GraphicsCommandList* p
 	m_DynamicAllocator = std::make_unique<DynamicResourceAllocator>(pGraphics->GetAllocationManager());
 	if (m_Type != D3D12_COMMAND_LIST_TYPE_COPY)
 	{
-		m_pShaderResourceDescriptorAllocator = std::make_unique<DynamicDescriptorAllocator>(pGraphics, this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-		m_pSamplerDescriptorAllocator = std::make_unique<DynamicDescriptorAllocator>(pGraphics, this, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
+		m_pShaderResourceDescriptorAllocator = std::make_unique<OnlineDescriptorAllocator>(pGraphics, this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+		m_pSamplerDescriptorAllocator = std::make_unique<OnlineDescriptorAllocator>(pGraphics, this, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
 	}
 }
 
@@ -354,7 +354,7 @@ void CommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 				renderTargetDescs[i].EndingAccess.Resolve.pSubresourceParameters = subResourceParameters.data();
 			}
 
-			renderTargetDescs[i].cpuDescriptor = data.Target->GetRTV(subResource);
+			renderTargetDescs[i].cpuDescriptor = data.Target->GetRTV();
 		}
 
 		D3D12_RENDER_PASS_FLAGS renderPassFlags = D3D12_RENDER_PASS_FLAG_NONE;
@@ -398,12 +398,12 @@ void CommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 		{
 			const RenderPassInfo::RenderTargetInfo& data = renderPassInfo.RenderTargets[i];
 			uint32 subResource = D3D12CalcSubresource(data.MipLevel, data.ArrayIndex, 0, data.Target->GetMipLevels(), data.Target->GetArraySize());
-			rtvs[i] = data.Target->GetRTV(subResource);
+			rtvs[i] = data.Target->GetRTV();
 			
 			if (RenderPassInfo::ExtractBeginAccess(data.Access) == D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_CLEAR)
 			{
 				assert(data.Target->GetClearBinding().BindingValue == ClearBinding::ClearBindingValue::Color);
-				m_pCommandList->ClearRenderTargetView(data.Target->GetRTV(subResource), &data.Target->GetClearBinding().Color.x, 0, nullptr);
+				m_pCommandList->ClearRenderTargetView(data.Target->GetRTV(), &data.Target->GetClearBinding().Color.x, 0, nullptr);
 			}
 		}
 		m_pCommandList->OMSetRenderTargets(renderPassInfo.RenderTargetCount, rtvs.data(), false, &dsvHandle);

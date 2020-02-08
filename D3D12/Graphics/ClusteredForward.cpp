@@ -28,28 +28,20 @@ ClusteredForward::ClusteredForward(Graphics* pGraphics)
 
 void ClusteredForward::OnSwapchainCreated(int windowWidth, int windowHeight)
 {
-	m_pDepthTexture->Create(m_pGraphics, TextureDesc::CreateDepth(windowWidth, windowHeight, Graphics::DEPTH_STENCIL_FORMAT, TextureFlag::DepthStencil, m_pGraphics->GetMultiSampleCount(), ClearBinding(0.0f, 0)));
-	m_pDepthTexture->SetName("Clustered Forward Depth Texture");
+	m_pDepthTexture->Create(TextureDesc::CreateDepth(windowWidth, windowHeight, Graphics::DEPTH_STENCIL_FORMAT, TextureFlag::DepthStencil, m_pGraphics->GetMultiSampleCount(), ClearBinding(0.0f, 0)));
 
 	m_ClusterCountX = (uint32)ceil((float)windowWidth / cClusterSize);
 	m_ClusterCountY = (uint32)ceil((float)windowHeight / cClusterSize);
 
 	struct AABB { Vector4 Min; Vector4 Max; };
 	uint32 totalClusterCount = m_ClusterCountX * m_ClusterCountY * cClusterCountZ;
-	m_pAABBs->Create(m_pGraphics, sizeof(AABB), totalClusterCount, false);
-	m_pAABBs->SetName("AABBs");
-	m_pUniqueClusters->Create(m_pGraphics, sizeof(uint32), totalClusterCount, false);
-	m_pUniqueClusters->SetName("Unique Clusters");
-	m_pDebugCompactedClusters->Create(m_pGraphics, sizeof(uint32), totalClusterCount, false);
-	m_pDebugCompactedClusters->SetName("Debug Compacted Clusters");
-	m_pCompactedClusters->Create(m_pGraphics, sizeof(uint32), totalClusterCount, false);
-	m_pCompactedClusters->SetName("Compacted Clusters");
-	m_pLightIndexGrid->Create(m_pGraphics, sizeof(uint32), 32 * totalClusterCount);
-	m_pLightIndexGrid->SetName("Light Index Grid");
-	m_pLightGrid->Create(m_pGraphics, 2 * sizeof(uint32), totalClusterCount);
-	m_pLightGrid->SetName("Light Grid");
-	m_pDebugLightGrid->Create(m_pGraphics, 2 * sizeof(uint32), totalClusterCount);
-	m_pDebugLightGrid->SetName("Debug Light Grid");
+	m_pAABBs->Create(BufferDesc::CreateStructured(totalClusterCount, sizeof(AABB)));
+	m_pUniqueClusters->Create(BufferDesc::CreateStructured(totalClusterCount, sizeof(uint32)));
+	m_pDebugCompactedClusters->Create(BufferDesc::CreateStructured(totalClusterCount, sizeof(uint32)));
+	m_pCompactedClusters->Create(BufferDesc::CreateStructured(totalClusterCount, sizeof(uint32)));
+	m_pLightIndexGrid->Create(BufferDesc::CreateStructured(32 * totalClusterCount, sizeof(uint32)));
+	m_pLightGrid->Create(BufferDesc::CreateStructured(totalClusterCount, 2 * sizeof(uint32)));
+	m_pDebugLightGrid->Create(BufferDesc::CreateStructured(totalClusterCount, 2 * sizeof(uint32)));
 
 	// Create AABBs
 	{
@@ -447,26 +439,24 @@ void ClusteredForward::Execute(const ClusteredForwardInputResources& resources)
 
 void ClusteredForward::SetupResources(Graphics* pGraphics)
 {
-	m_pDepthTexture = std::make_unique<Texture>();
+	m_pDepthTexture = std::make_unique<Texture>(pGraphics, "Depth Texture");
 
-	m_pAABBs = std::make_unique<StructuredBuffer>();
-	m_pUniqueClusters = std::make_unique<StructuredBuffer>();
-	m_pCompactedClusters = std::make_unique<StructuredBuffer>();
-	m_pDebugCompactedClusters = std::make_unique<StructuredBuffer>();
-	m_pIndirectArguments = std::make_unique<ByteAddressBuffer>();
-	m_pIndirectArguments->Create(m_pGraphics, sizeof(uint32), 3, false);
-	m_pLightIndexCounter = std::make_unique<StructuredBuffer>();
-	m_pLightIndexCounter->Create(pGraphics, sizeof(uint32), 1);
-	m_pLightIndexGrid = std::make_unique<StructuredBuffer>();
-	m_pLightGrid = std::make_unique<StructuredBuffer>();
-	m_pDebugLightGrid = std::make_unique<StructuredBuffer>();
+	m_pAABBs = std::make_unique<Buffer>(pGraphics, "AABBs");
+	m_pUniqueClusters = std::make_unique<Buffer>(pGraphics, "Unique Clusters");
+	m_pCompactedClusters = std::make_unique<Buffer>(pGraphics, "Compacted Clusters");
+	m_pDebugCompactedClusters = std::make_unique<Buffer>(pGraphics, "Debug Compacted Clusters");
+	m_pIndirectArguments = std::make_unique<Buffer>(pGraphics, "Light Culling Indirect Arguments");
+	m_pIndirectArguments->Create(BufferDesc::CreateIndirectArguments<uint32>(3));
+	m_pLightIndexCounter = std::make_unique<Buffer>(pGraphics, "Light Index Counter");
+	m_pLightIndexCounter->Create(BufferDesc::CreateByteAddress(sizeof(uint32)));
+	m_pLightIndexGrid = std::make_unique<Buffer>(pGraphics, "Light Index Grid");
+	m_pLightGrid = std::make_unique<Buffer>(pGraphics, "Light Grid");
+	m_pDebugLightGrid = std::make_unique<Buffer>(pGraphics, "Debug Light Grid");
 
 	CommandContext* pContext = pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COPY);
-	m_pHeatMapTexture = std::make_unique<Texture>();
-	m_pHeatMapTexture->Create(pGraphics, pContext, "Resources/Textures/Heatmap.png");
-	m_pHeatMapTexture->SetName("Heatmap texture");
+	m_pHeatMapTexture = std::make_unique<Texture>(pGraphics, "Heatmap Texture");
+	m_pHeatMapTexture->Create(pContext, "Resources/Textures/Heatmap.png");
 	pContext->Execute(true);
-
 }
 
 void ClusteredForward::SetupPipelines(Graphics* pGraphics)

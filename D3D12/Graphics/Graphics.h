@@ -3,7 +3,7 @@
 
 class CommandQueue;
 class CommandContext;
-class DescriptorAllocator;
+class OfflineDescriptorAllocator;
 class ImGuiRenderer;
 class DynamicAllocationManager;
 class GraphicsResource;
@@ -12,7 +12,7 @@ class Texture;
 class GraphicsPipelineState;
 class ComputePipelineState;
 class Mesh;
-class StructuredBuffer;
+class Buffer;
 class SubMesh;
 struct Material;
 class ClusteredForward;
@@ -61,7 +61,7 @@ public:
 
 	DynamicAllocationManager* GetAllocationManager() const { return m_pDynamicAllocationManager.get(); }
 
-	D3D12_CPU_DESCRIPTOR_HANDLE AllocateCpuDescriptors(int count, D3D12_DESCRIPTOR_HEAP_TYPE type);
+	OfflineDescriptorAllocator* GetDescriptorManager(D3D12_DESCRIPTOR_HEAP_TYPE type) const { return m_DescriptorHeaps[type].get(); }
 
 	Texture* GetDepthStencil() const { return m_pDepthStencil.get(); }
 	Texture* GetResolvedDepthStencil() const { return m_SampleCount > 1 ? m_pResolvedDepthStencil.get() : m_pDepthStencil.get(); }
@@ -114,17 +114,17 @@ private:
 	int m_SampleCount = 1;
 	int m_SampleQuality = 0;
 
+	std::array<std::unique_ptr<OfflineDescriptorAllocator>, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES> m_DescriptorHeaps;
 	std::unique_ptr<DynamicAllocationManager> m_pDynamicAllocationManager;
 
-	std::unique_ptr<Texture> m_pMultiSampleRenderTarget;
-	std::array<std::unique_ptr<Texture>, FRAME_COUNT> m_RenderTargets;
-
-	std::array<std::unique_ptr<DescriptorAllocator>, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES> m_DescriptorHeaps;
 	std::array<std::unique_ptr<CommandQueue>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_CommandQueues;
 	std::array<std::vector<std::unique_ptr<CommandContext>>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_CommandListPool;
 	std::array < std::queue<CommandContext*>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_FreeCommandLists;
 	std::vector<ComPtr<ID3D12CommandList>> m_CommandLists;
 	std::mutex m_ContextAllocationMutex;
+
+	std::unique_ptr<Texture> m_pMultiSampleRenderTarget;
+	std::array<std::unique_ptr<Texture>, FRAME_COUNT> m_RenderTargets;
 
 	std::unique_ptr<ImGuiRenderer> m_pImGuiRenderer;
 	std::unique_ptr<RGResourceAllocator> m_pGraphAllocator;
@@ -161,10 +161,10 @@ private:
 	//Light Culling
 	std::unique_ptr<RootSignature> m_pComputeLightCullRS;
 	std::unique_ptr<ComputePipelineState> m_pComputeLightCullPSO;
-	std::unique_ptr<StructuredBuffer> m_pLightIndexCounter;
-	std::unique_ptr<StructuredBuffer> m_pLightIndexListBufferOpaque;
+	std::unique_ptr<Buffer> m_pLightIndexCounter;
+	std::unique_ptr<Buffer> m_pLightIndexListBufferOpaque;
 	std::unique_ptr<Texture> m_pLightGridOpaque;
-	std::unique_ptr<StructuredBuffer> m_pLightIndexListBufferTransparant;
+	std::unique_ptr<Buffer> m_pLightIndexListBufferTransparant;
 	std::unique_ptr<Texture> m_pLightGridTransparant;
 
 	//Depth Prepass
@@ -180,5 +180,5 @@ private:
 	//Light data
 	int m_ShadowCasters = 0;
 	std::vector<Light> m_Lights;
-	std::unique_ptr<StructuredBuffer> m_pLightBuffer;
+	std::unique_ptr<Buffer> m_pLightBuffer;
 };
