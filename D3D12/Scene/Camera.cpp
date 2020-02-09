@@ -102,7 +102,7 @@ const Matrix& Camera::GetViewProjection() const
 const Matrix& Camera::GetViewInverse() const
 {
 	UpdateMatrices();
-	return m_ViewProjection;
+	return m_ViewInverse;
 }
 
 const Matrix& Camera::GetProjectionInverse() const

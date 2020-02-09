@@ -33,4 +33,6 @@
 #define MAX_SHADOW_CASTERS 8
 #endif
 
+#define PI 3.14159265359
+
 #endif

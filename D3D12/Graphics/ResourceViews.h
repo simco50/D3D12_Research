@@ -43,7 +43,7 @@ struct TextureSRVDesc
 
 struct TextureUAVDesc
 {
-	explicit TextureUAVDesc(int mipLevel)
+	explicit TextureUAVDesc(uint8 mipLevel)
 		: MipLevel(mipLevel)
 	{}
 
