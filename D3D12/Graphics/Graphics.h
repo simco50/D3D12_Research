@@ -124,6 +124,7 @@ private:
 	std::mutex m_ContextAllocationMutex;
 
 	std::unique_ptr<Texture> m_pMultiSampleRenderTarget;
+	std::unique_ptr<Texture> m_pHDRRenderTarget;
 	std::array<std::unique_ptr<Texture>, FRAME_COUNT> m_RenderTargets;
 
 	std::unique_ptr<ImGuiRenderer> m_pImGuiRenderer;
@@ -141,13 +142,6 @@ private:
 	std::unique_ptr<Mesh> m_pMesh;
 	std::vector<Batch> m_OpaqueBatches;
 	std::vector<Batch> m_TransparantBatches;
-
-	//Diffuse scene passes
-	std::unique_ptr<RootSignature> m_pDiffuseRS;
-	std::unique_ptr<GraphicsPipelineState> m_pDiffuseOpaquePSO;
-	std::unique_ptr<GraphicsPipelineState> m_pDiffuseAlphaPSO;
-	std::unique_ptr<GraphicsPipelineState> m_pDiffuseDebugPSO;
-	bool m_UseDebugView = false;
 
 	std::unique_ptr<ClusteredForward> m_pClusteredForward;
 
@@ -176,6 +170,16 @@ private:
 	std::unique_ptr<ComputePipelineState> m_pResolveDepthPSO;
 	std::unique_ptr<Texture> m_pDepthStencil;
 	std::unique_ptr<Texture> m_pResolvedDepthStencil;
+
+	//PBR
+	std::unique_ptr<RootSignature> m_pPBRDiffuseRS;
+	std::unique_ptr<GraphicsPipelineState> m_pPBRDiffusePSO;
+	std::unique_ptr<GraphicsPipelineState> m_pPBRDiffuseAlphaPSO;
+
+	//Tonemapping
+	std::unique_ptr<RootSignature> m_pToneMapRS;
+	std::unique_ptr<GraphicsPipelineState> m_pToneMapPSO;
+	std::unique_ptr<Texture> m_pToneMapDepth;
 
 	//Light data
 	int m_ShadowCasters = 0;

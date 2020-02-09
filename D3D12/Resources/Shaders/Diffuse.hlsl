@@ -10,7 +10,6 @@
 				"DescriptorTable(SRV(t3, numDescriptors = 4), visibility=SHADER_VISIBILITY_PIXEL), " \
 				"StaticSampler(s0, filter=FILTER_MIN_MAG_MIP_LINEAR, visibility = SHADER_VISIBILITY_PIXEL), " \
 				"StaticSampler(s1, filter=FILTER_MIN_MAG_MIP_POINT, visibility = SHADER_VISIBILITY_PIXEL), " \
-				"StaticSampler(s2, filter=FILTER_MIN_MAG_MIP_POINT, visibility = SHADER_VISIBILITY_PIXEL, comparisonFunc = COMPARISON_GREATER_EQUAL)"
 
 cbuffer PerObjectData : register(b0)
 {

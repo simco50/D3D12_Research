@@ -55,6 +55,13 @@ void ImGuiRenderer::InitializeImGui()
 	m_pFontTexture->SetData(pContext, pPixels);
 	io.Fonts->TexID = m_pFontTexture.get();
 	pContext->Execute(true);
+
+	m_pDepthBuffer = std::make_unique<Texture>(m_pGraphics);
+}
+
+void ImGuiRenderer::OnSwapchainCreated(int windowWidth, int windowHeight)
+{
+	m_pDepthBuffer->Create(TextureDesc::CreateDepth(windowWidth, windowHeight, DXGI_FORMAT_D32_FLOAT));
 }
 
 void ImGuiRenderer::CreatePipeline()
@@ -83,11 +90,11 @@ void ImGuiRenderer::CreatePipeline()
 	m_pPipelineState->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
 	m_pPipelineState->SetRootSignature(m_pRootSignature->GetRootSignature());
 	m_pPipelineState->SetInputLayout(elementDesc.data(), (uint32)elementDesc.size());
-	m_pPipelineState->SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, m_pGraphics->GetMultiSampleCount(), m_pGraphics->GetMultiSampleQualityLevel(m_pGraphics->GetMultiSampleCount()));
+	m_pPipelineState->SetRenderTargetFormat(DXGI_FORMAT_R8G8B8A8_UNORM, Graphics::DEPTH_STENCIL_FORMAT, 1, 0);
 	m_pPipelineState->Finalize("ImGui Pipeline", m_pGraphics->GetDevice());
 }
 
-void ImGuiRenderer::Render(CommandContext& context)
+void ImGuiRenderer::Render(CommandContext& context, Texture* pRenderTarget)
 {
 	ImGui::Render();
 	ImDrawData* pDrawData = ImGui::GetDrawData();
@@ -105,7 +112,7 @@ void ImGuiRenderer::Render(CommandContext& context)
 	context.SetViewport(FloatRect(0, 0, (float)m_pGraphics->GetWindowWidth(), (float)m_pGraphics->GetWindowHeight()), 0, 1);
 
 	Profiler::Instance()->Begin("Render UI", &context);
-	context.BeginRenderPass(RenderPassInfo(m_pGraphics->GetCurrentRenderTarget(), RenderPassAccess::Load_Store, m_pGraphics->GetDepthStencil(), RenderPassAccess::DontCare_DontCare));
+	context.BeginRenderPass(RenderPassInfo(pRenderTarget, RenderPassAccess::Load_Store, m_pDepthBuffer.get(), RenderPassAccess::DontCare_DontCare));
 
 	for (int n = 0; n < pDrawData->CmdListsCount; n++)
 	{

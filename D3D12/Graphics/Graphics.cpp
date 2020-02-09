@@ -23,7 +23,7 @@
 
 const DXGI_FORMAT Graphics::DEPTH_STENCIL_FORMAT = DXGI_FORMAT_D32_FLOAT;
 const DXGI_FORMAT Graphics::DEPTH_STENCIL_SHADOW_FORMAT = DXGI_FORMAT_D16_UNORM;
-const DXGI_FORMAT Graphics::RENDER_TARGET_FORMAT = DXGI_FORMAT_R8G8B8A8_UNORM;
+const DXGI_FORMAT Graphics::RENDER_TARGET_FORMAT = DXGI_FORMAT_R16G16B16A16_FLOAT;
 
 bool gSortOpaqueMeshes = true;
 bool gSortTransparentMeshes = true;
@@ -123,10 +123,6 @@ void Graphics::Update()
 	//Render forward+ tiles
 
 	m_pCamera->Update();
-	if (Input::Instance().IsKeyPressed('P'))
-	{
-		m_UseDebugView = !m_UseDebugView;
-	}
 	if (Input::Instance().IsKeyPressed('O'))
 	{
 		RandomizeLights(m_DesiredLightCount);
@@ -447,8 +443,8 @@ void Graphics::Update()
 			//Opaque
 			{
 				Profiler::Instance()->Begin("Opaque", pContext);
-				pContext->SetGraphicsPipelineState(m_UseDebugView ? m_pDiffuseDebugPSO.get() : m_pDiffuseOpaquePSO.get());
-				pContext->SetGraphicsRootSignature(m_pDiffuseRS.get());
+				pContext->SetGraphicsPipelineState(m_pPBRDiffusePSO.get());
+				pContext->SetGraphicsRootSignature(m_pPBRDiffuseRS.get());
 
 				pContext->SetDynamicConstantBufferView(1, &frameData, sizeof(PerFrameData));
 				pContext->SetDynamicConstantBufferView(2, &lightData, sizeof(LightData));
@@ -473,8 +469,8 @@ void Graphics::Update()
 			//Transparant
 			{
 				Profiler::Instance()->Begin("Transparant", pContext);
-				pContext->SetGraphicsPipelineState(m_UseDebugView ? m_pDiffuseDebugPSO.get() : m_pDiffuseAlphaPSO.get());
-				pContext->SetGraphicsRootSignature(m_pDiffuseRS.get());
+				pContext->SetGraphicsPipelineState(m_pPBRDiffuseAlphaPSO.get());
+				pContext->SetGraphicsRootSignature(m_pPBRDiffuseRS.get());
 
 				pContext->SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
 				pContext->SetDynamicConstantBufferView(1, &frameData, sizeof(PerFrameData));
@@ -523,33 +519,54 @@ void Graphics::Update()
 		Profiler::Instance()->End();
 	}
 
+
+
 	{
 		CommandContext* pContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+
+		//7. MSAA Render Target Resolve
+		// - We have to resolve a MSAA render target ourselves. Unlike D3D11, this is not done automatically by the API.
+		//	Luckily, there's a method that does it for us!
+		if (m_SampleCount > 1)
+		{
+			Profiler::Instance()->Begin("Resolve", pContext);
+			pContext->InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RESOLVE_SOURCE);
+			pContext->InsertResourceBarrier(m_pHDRRenderTarget.get(), D3D12_RESOURCE_STATE_RESOLVE_DEST);
+			pContext->FlushResourceBarriers();
+			pContext->GetCommandList()->ResolveSubresource(m_pHDRRenderTarget->GetResource(), 0, GetCurrentRenderTarget()->GetResource(), 0, RENDER_TARGET_FORMAT);
+			Profiler::Instance()->End(pContext);
+		}
+
+		//Tonemap
+		{
+			Profiler::Instance()->Begin("Tonemap", pContext);
+			pContext->InsertResourceBarrier(GetCurrentBackbuffer(), D3D12_RESOURCE_STATE_RENDER_TARGET);
+			pContext->InsertResourceBarrier(m_pHDRRenderTarget.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+
+			pContext->SetGraphicsPipelineState(m_pToneMapPSO.get());
+			pContext->SetGraphicsRootSignature(m_pToneMapRS.get());
+			pContext->SetViewport(FloatRect(0, 0, (float)m_WindowWidth, (float)m_WindowHeight));
+			pContext->SetScissorRect(FloatRect(0, 0, (float)m_WindowWidth, (float)m_WindowHeight));
+			pContext->BeginRenderPass(RenderPassInfo(GetCurrentBackbuffer(), RenderPassAccess::Clear_Store, m_pToneMapDepth.get(), RenderPassAccess::Clear_DontCare));
+			pContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+			pContext->SetDynamicDescriptor(0, 0, m_pHDRRenderTarget->GetSRV());
+			pContext->Draw(0, 3);
+			pContext->EndRenderPass();
+			Profiler::Instance()->End(pContext);
+		}
+
 		Profiler::Instance()->Begin("UI", pContext);
 		//6. UI
 		// - ImGui render, pretty straight forward
 		{
 			UpdateImGui();
-			m_pImGuiRenderer->Render(*pContext);
+			m_pImGuiRenderer->Render(*pContext, GetCurrentBackbuffer());
 		}
 		Profiler::Instance()->End(pContext);
 
-		//7. MSAA Render Target Resolve
-		// - We have to resolve a MSAA render target ourselves. Unlike D3D11, this is not done automatically by the API.
-		//	Luckily, there's a method that does it for us!
-		{
-			if (m_SampleCount > 1)
-			{
-				Profiler::Instance()->Begin("Resolve", pContext);
-				pContext->InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RESOLVE_SOURCE);
-				pContext->InsertResourceBarrier(GetCurrentBackbuffer(), D3D12_RESOURCE_STATE_RESOLVE_DEST);
-				pContext->FlushResourceBarriers();
-				pContext->GetCommandList()->ResolveSubresource(GetCurrentBackbuffer()->GetResource(), 0, GetCurrentRenderTarget()->GetResource(), 0, RENDER_TARGET_FORMAT);
-				Profiler::Instance()->End(pContext);
-			}
-			pContext->InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RENDER_TARGET);
-			pContext->InsertResourceBarrier(GetCurrentBackbuffer(), D3D12_RESOURCE_STATE_PRESENT);
-		}
+		pContext->InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RENDER_TARGET);
+		pContext->InsertResourceBarrier(GetCurrentBackbuffer(), D3D12_RESOURCE_STATE_PRESENT);
+		
 		nextFenceValue = pContext->Execute(false);
 	}
 
@@ -687,7 +704,7 @@ void Graphics::InitD3D()
 	DXGI_SWAP_CHAIN_DESC1 swapchainDesc = {};
 	swapchainDesc.Width = m_WindowWidth;
 	swapchainDesc.Height = m_WindowHeight;
-	swapchainDesc.Format = RENDER_TARGET_FORMAT;
+	swapchainDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
 	swapchainDesc.SampleDesc.Count = 1;
 	swapchainDesc.SampleDesc.Quality = 0;
 	swapchainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
@@ -725,16 +742,18 @@ void Graphics::InitD3D()
 	{
 		m_pResolvedDepthStencil = std::make_unique<Texture>(this, "Resolved Depth Stencil");
 		m_pMultiSampleRenderTarget = std::make_unique<Texture>(this, "MSAA Target");
+		m_pHDRRenderTarget = std::make_unique<Texture>(this, "HDR Target");
 	}
+	m_pToneMapDepth = std::make_unique<Texture>(this, "Tonemap Depth");
 
 	m_pLightGridOpaque = std::make_unique<Texture>(this, "Opaque Light Grid");
 	m_pLightGridTransparant = std::make_unique<Texture>(this, "Transparant Light Grid");
 
 	m_pClusteredForward = std::make_unique<ClusteredForward>(this);
+	m_pImGuiRenderer = std::make_unique<ImGuiRenderer>(this);
 
 	OnResize(m_WindowWidth, m_WindowHeight);
 
-	m_pImGuiRenderer = std::make_unique<ImGuiRenderer>(this);
 	m_pGraphAllocator = std::make_unique<RGResourceAllocator>(this);
 }
 
@@ -757,7 +776,7 @@ void Graphics::OnResize(int width, int height)
 		FRAME_COUNT, 
 		m_WindowWidth, 
 		m_WindowHeight, 
-		RENDER_TARGET_FORMAT,
+		DXGI_FORMAT_R8G8B8A8_UNORM,
 		DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH));
 
 	m_CurrentBackBufferIndex = 0;
@@ -775,11 +794,14 @@ void Graphics::OnResize(int width, int height)
 		m_pResolvedDepthStencil->Create(TextureDesc::Create2D(width, height, DXGI_FORMAT_R32_FLOAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
 
 		m_pMultiSampleRenderTarget->Create(TextureDesc::CreateRenderTarget(width, height, RENDER_TARGET_FORMAT, TextureFlag::RenderTarget, m_SampleCount, ClearBinding(Color(0, 0, 0, 0))));
+		m_pHDRRenderTarget->Create(TextureDesc::CreateRenderTarget(width, height, RENDER_TARGET_FORMAT, TextureFlag::RenderTarget | TextureFlag::ShaderResource));
 	}
 	else
 	{
 		m_pDepthStencil->Create(TextureDesc::CreateDepth(width, height, DEPTH_STENCIL_FORMAT, TextureFlag::DepthStencil | TextureFlag::ShaderResource, m_SampleCount, ClearBinding(0.0f, 0)));
 	}
+
+	m_pToneMapDepth->Create(TextureDesc::CreateDepth(width, height, DEPTH_STENCIL_FORMAT, TextureFlag::DepthStencil));
 
 	int frustumCountX = (int)(ceil((float)width / FORWARD_PLUS_BLOCK_SIZE));
 	int frustumCountY = (int)(ceil((float)height / FORWARD_PLUS_BLOCK_SIZE));
@@ -787,6 +809,7 @@ void Graphics::OnResize(int width, int height)
 	m_pLightGridTransparant->Create(TextureDesc::Create2D(frustumCountX, frustumCountY, DXGI_FORMAT_R32G32_UINT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
 
 	m_pClusteredForward->OnSwapchainCreated(width, height);
+	m_pImGuiRenderer->OnSwapchainCreated(width, height);
 }
 
 void Graphics::InitializeAssets()
@@ -810,40 +833,33 @@ void Graphics::InitializeAssets()
 		D3D12_INPUT_ELEMENT_DESC{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
 	};
 
-	//Diffuse passes
+	//PBR Diffuse passes
 	{
 		//Shaders
-		Shader vertexShader("Resources/Shaders/Diffuse.hlsl", Shader::Type::VertexShader, "VSMain", { /*"SHADOW"*/ });
-		Shader pixelShader("Resources/Shaders/Diffuse.hlsl", Shader::Type::PixelShader, "PSMain", { /*"SHADOW"*/ });
+		Shader vertexShader("Resources/Shaders/Diffuse_PBR.hlsl", Shader::Type::VertexShader, "VSMain", { /*"SHADOW"*/ });
+		Shader pixelShader("Resources/Shaders/Diffuse_PBR.hlsl", Shader::Type::PixelShader, "PSMain", { /*"SHADOW"*/ });
 
 		//Rootsignature
-		m_pDiffuseRS = std::make_unique<RootSignature>();
-		m_pDiffuseRS->FinalizeFromShader("Diffuse", vertexShader, m_pDevice.Get());
+		m_pPBRDiffuseRS = std::make_unique<RootSignature>();
+		m_pPBRDiffuseRS->FinalizeFromShader("Diffuse", vertexShader, m_pDevice.Get());
 
 		{
 			//Opaque
-			m_pDiffuseOpaquePSO = std::make_unique<GraphicsPipelineState>();
-			m_pDiffuseOpaquePSO->SetInputLayout(inputElements, sizeof(inputElements) / sizeof(inputElements[0]));
-			m_pDiffuseOpaquePSO->SetRootSignature(m_pDiffuseRS->GetRootSignature());
-			m_pDiffuseOpaquePSO->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
-			m_pDiffuseOpaquePSO->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
-			m_pDiffuseOpaquePSO->SetRenderTargetFormat(RENDER_TARGET_FORMAT, DEPTH_STENCIL_FORMAT, m_SampleCount, m_SampleQuality);
-			m_pDiffuseOpaquePSO->SetDepthTest(D3D12_COMPARISON_FUNC_EQUAL);
-			m_pDiffuseOpaquePSO->SetDepthWrite(false);
-			m_pDiffuseOpaquePSO->Finalize("Diffuse (Opaque) Pipeline", m_pDevice.Get());
+			m_pPBRDiffusePSO = std::make_unique<GraphicsPipelineState>();
+			m_pPBRDiffusePSO->SetInputLayout(inputElements, sizeof(inputElements) / sizeof(inputElements[0]));
+			m_pPBRDiffusePSO->SetRootSignature(m_pPBRDiffuseRS->GetRootSignature());
+			m_pPBRDiffusePSO->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
+			m_pPBRDiffusePSO->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
+			m_pPBRDiffusePSO->SetRenderTargetFormat(RENDER_TARGET_FORMAT, DEPTH_STENCIL_FORMAT, m_SampleCount, m_SampleQuality);
+			m_pPBRDiffusePSO->SetDepthTest(D3D12_COMPARISON_FUNC_EQUAL);
+			m_pPBRDiffusePSO->SetDepthWrite(false);
+			m_pPBRDiffusePSO->Finalize("Diffuse PBR Pipeline", m_pDevice.Get());
 
 			//Transparant
-			m_pDiffuseAlphaPSO = std::make_unique<GraphicsPipelineState>(*m_pDiffuseOpaquePSO.get());
-			m_pDiffuseAlphaPSO->SetBlendMode(BlendMode::Alpha, false);
-			m_pDiffuseAlphaPSO->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
-			m_pDiffuseAlphaPSO->Finalize("Diffuse (Alpha) Pipeline", m_pDevice.Get());
-
-			//Debug version
-			m_pDiffuseDebugPSO = std::make_unique<GraphicsPipelineState>(*m_pDiffuseOpaquePSO.get());
-			m_pDiffuseDebugPSO->SetDepthTest(D3D12_COMPARISON_FUNC_EQUAL);
-			Shader debugPixelShader = Shader("Resources/Shaders/Diffuse.hlsl", Shader::Type::PixelShader, "PSMain", { "DEBUG_VISUALIZE" });
-			m_pDiffuseDebugPSO->SetPixelShader(debugPixelShader.GetByteCode(), debugPixelShader.GetByteCodeSize());
-			m_pDiffuseDebugPSO->Finalize("Diffuse (Debug) Pipeline", m_pDevice.Get());
+			m_pPBRDiffuseAlphaPSO = std::make_unique<GraphicsPipelineState>(*m_pPBRDiffusePSO.get());
+			m_pPBRDiffuseAlphaPSO->SetBlendMode(BlendMode::Alpha, false);
+			m_pPBRDiffuseAlphaPSO->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
+			m_pPBRDiffuseAlphaPSO->Finalize("Diffuse PBR (Alpha) Pipeline", m_pDevice.Get());
 		}
 	}
 
@@ -913,6 +929,25 @@ void Graphics::InitializeAssets()
 		m_pDepthPrepassPSO->SetRenderTargetFormats(nullptr, 0, DEPTH_STENCIL_FORMAT, m_SampleCount, m_SampleQuality);
 		m_pDepthPrepassPSO->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
 		m_pDepthPrepassPSO->Finalize("Depth Prepass Pipeline", m_pDevice.Get());
+	}
+
+	//Tonemapping
+	{
+		Shader vertexShader("Resources/Shaders/Tonemapping.hlsl", Shader::Type::VertexShader, "VSMain");
+		Shader pixelShader("Resources/Shaders/Tonemapping.hlsl", Shader::Type::PixelShader, "PSMain");
+
+		//Rootsignature
+		m_pToneMapRS = std::make_unique<RootSignature>();
+		m_pToneMapRS->FinalizeFromShader("Tonemapping", vertexShader, m_pDevice.Get());
+
+		//Pipeline state
+		m_pToneMapPSO = std::make_unique<GraphicsPipelineState>();
+		m_pToneMapPSO->SetRootSignature(m_pToneMapRS->GetRootSignature());
+		m_pToneMapPSO->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
+		m_pToneMapPSO->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
+		m_pToneMapPSO->SetRenderTargetFormat(DXGI_FORMAT_R8G8B8A8_UNORM, DEPTH_STENCIL_FORMAT, 1, 0);
+		m_pToneMapPSO->SetDepthTest(D3D12_COMPARISON_FUNC_ALWAYS);
+		m_pToneMapPSO->Finalize("Tone mapping Pipeline", m_pDevice.Get());
 	}
 
 	//Depth resolve
