@@ -170,7 +170,7 @@ void Console::InitializeConsoleWindow()
 		std::cin.clear();
 
 		//Set ConsoleHandle
-		//m_ConsoleHandle = GetStdHandle(STD_OUTPUT_HANDLE);
+		m_ConsoleHandle = GetStdHandle(STD_OUTPUT_HANDLE);
 
 		//Disable Close-Button
 		HWND hwnd = GetConsoleWindow();
