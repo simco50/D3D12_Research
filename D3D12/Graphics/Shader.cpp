@@ -127,11 +127,13 @@ bool Shader::CompileDxc(const std::string& source, const char* pTarget, const ch
 		L"/Zpr",
 #ifdef _DEBUG
 		L"-Zi",
+		L"-Qembed_debug",
 #else
-		L"-0d"
+		L"-0d",
 #endif
+		L"/WX",
 	};
-
+	
 	std::vector<std::wstring> dDefineNames;
 	std::vector<std::wstring> dDefineValues;
 	for (const std::string& define : defines)
@@ -178,6 +180,7 @@ bool Shader::CompileDxc(const std::string& source, const char* pTarget, const ch
 	pCompileResult->GetResult(m_pByteCodeDxc.GetAddressOf());
 	// Save to a file, disassemble and print, store somewhere ...
 	pCompileResult->Release();
+
 	return true;
 #else
 	return false;

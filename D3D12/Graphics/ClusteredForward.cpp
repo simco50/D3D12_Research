@@ -91,9 +91,10 @@ void ClusteredForward::Execute(const ClusteredForwardInputResources& resources)
 	float sliceMagicA = (float)cClusterCountZ / log(nearZ / farZ);
 	float sliceMagicB = ((float)cClusterCountZ * log(farZ)) / log(nearZ / farZ);
 
+	CommandContext* pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+
 	//Mark Unique Clusters
 	{
-		CommandContext* pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 		Profiler::Instance()->Begin("Mark Clusters", pContext);
 
 		Profiler::Instance()->Begin("Update Data", pContext);
@@ -160,13 +161,10 @@ void ClusteredForward::Execute(const ClusteredForwardInputResources& resources)
 		Profiler::Instance()->End(pContext);
 		pContext->EndRenderPass();
 
-		uint64 fence = pContext->Execute(false);
-
 		//m_pGraphics->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COMPUTE)->InsertWaitForFence(fence);
 	}
 
 	{
-		CommandContext* pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 		// Compact Clusters
 		{
 			Profiler::Instance()->Begin("Compact Clusters", pContext);
@@ -174,9 +172,11 @@ void ClusteredForward::Execute(const ClusteredForwardInputResources& resources)
 			pContext->SetComputeRootSignature(m_pCompactClustersRS.get());
 
 			pContext->InsertResourceBarrier(m_pUniqueClusters.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, false);
+
+			UnorderedAccessView* pCompactedClustersUAV = m_pCompactedClusters->GetUAV();
+			pContext->InsertResourceBarrier(pCompactedClustersUAV->GetCounter(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, true);
 			uint32 values[] = { 0,0,0,0 };
-			UnorderedAccessView* pCompatectedClustersUAV = m_pCompactedClusters->GetUAV();
-			pContext->ClearUavUInt(pCompatectedClustersUAV->GetCounter(), pCompatectedClustersUAV->GetCounterUAV(), values);
+			pContext->ClearUavUInt(pCompactedClustersUAV->GetCounter(), pCompactedClustersUAV->GetCounterUAV(), values);
 
 			pContext->SetDynamicDescriptor(0, 0, m_pUniqueClusters->GetSRV());
 			pContext->SetDynamicDescriptor(1, 0, m_pCompactedClusters->GetUAV());
@@ -184,14 +184,16 @@ void ClusteredForward::Execute(const ClusteredForwardInputResources& resources)
 			pContext->Dispatch((int)ceil(m_ClusterCountX * m_ClusterCountY * cClusterCountZ / 64.0f), 1, 1);
 
 			Profiler::Instance()->End(pContext);
-			pContext->ExecuteAndReset(false);
 		}
 
 		// Update Indirect Arguments
 		{
 			Profiler::Instance()->Begin("Update Indirect Arguments", pContext);
 
-			pContext->InsertResourceBarrier(m_pIndirectArguments.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, true);
+			UnorderedAccessView* pCompactedClustersUAV = m_pCompactedClusters->GetUAV();
+			pContext->InsertResourceBarrier(pCompactedClustersUAV->GetCounter(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+			pContext->InsertResourceBarrier(m_pIndirectArguments.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+			pContext->FlushResourceBarriers();
 
 			pContext->SetComputePipelineState(m_pUpdateIndirectArgumentsPSO.get());
 			pContext->SetComputeRootSignature(m_pUpdateIndirectArgumentsRS.get());
@@ -201,7 +203,6 @@ void ClusteredForward::Execute(const ClusteredForwardInputResources& resources)
 
 			pContext->Dispatch(1, 1, 1);
 			Profiler::Instance()->End(pContext);
-			pContext->ExecuteAndReset(false);
 		}
 
 		if (gUseAlternativeLightCulling)
@@ -212,9 +213,11 @@ void ClusteredForward::Execute(const ClusteredForwardInputResources& resources)
 				pContext->SetComputePipelineState(m_pAlternativeLightCullingPSO.get());
 				pContext->SetComputeRootSignature(m_pLightCullingRS.get());
 
-				pContext->InsertResourceBarrier(m_pIndirectArguments.get(), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT, false);
-				pContext->InsertResourceBarrier(m_pCompactedClusters.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, false);
-				pContext->InsertResourceBarrier(m_pAABBs.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, true);
+				pContext->InsertResourceBarrier(m_pIndirectArguments.get(), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
+				pContext->InsertResourceBarrier(m_pCompactedClusters.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+				pContext->InsertResourceBarrier(m_pAABBs.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+				pContext->InsertResourceBarrier(m_pLightIndexCounter.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+				pContext->FlushResourceBarriers();
 
 				Profiler::Instance()->Begin("Set Data", pContext);
 				uint32 zero = 0;
@@ -249,9 +252,6 @@ void ClusteredForward::Execute(const ClusteredForwardInputResources& resources)
 				pContext->Dispatch((int)ceil((float)m_ClusterCountX / 4), (int)ceil((float)m_ClusterCountY / 4), (int)ceil((float)cClusterCountZ / 4));
 
 				Profiler::Instance()->End(pContext);
-				uint64 fence = pContext->Execute(false);
-
-				//m_pGraphics->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT)->InsertWaitForFence(fence);
 			}
 		}
 		else
@@ -293,16 +293,12 @@ void ClusteredForward::Execute(const ClusteredForwardInputResources& resources)
 				pContext->ExecuteIndirect(m_pLightCullingCommandSignature.Get(), m_pIndirectArguments.get());
 
 				Profiler::Instance()->End(pContext);
-				uint64 fence = pContext->Execute(false);
-
-				//m_pGraphics->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT)->InsertWaitForFence(fence);
 			}
 		}
 	}
 
 	//Base Pass
 	{
-		CommandContext* pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 		struct PerObjectData
 		{
 			Matrix World;
@@ -392,12 +388,10 @@ void ClusteredForward::Execute(const ClusteredForwardInputResources& resources)
 
 		pContext->EndRenderPass();
 		Profiler::Instance()->End(pContext);
-		pContext->Execute(false);
 	}
 
 	if (gVisualizeClusters)
 	{
-		CommandContext* pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 		Profiler::Instance()->Begin("Cluster Visualization", pContext);
 
 		if (m_DidCopyDebugClusterData == false)
@@ -431,12 +425,12 @@ void ClusteredForward::Execute(const ClusteredForwardInputResources& resources)
 		pContext->EndRenderPass();
 		Profiler::Instance()->End(pContext);
 
-		pContext->Execute(false);
 	}
 	else
 	{
 		m_DidCopyDebugClusterData = false;
 	}
+	pContext->Execute(false);
 }
 
 void ClusteredForward::SetupResources(Graphics* pGraphics)

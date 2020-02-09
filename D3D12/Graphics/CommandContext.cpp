@@ -66,6 +66,15 @@ uint64 CommandContext::Execute(bool wait)
 	m_pAllocator = nullptr;
 	m_pGraphics->FreeCommandList(this);
 
+	if (m_pShaderResourceDescriptorAllocator)
+	{
+		m_pShaderResourceDescriptorAllocator->ReleaseUsedHeaps(fenceValue);
+	}
+	if (m_pSamplerDescriptorAllocator)
+	{
+		m_pSamplerDescriptorAllocator->ReleaseUsedHeaps(fenceValue);
+	}
+
 	return fenceValue;
 }
 

@@ -9,7 +9,6 @@
 				"DescriptorTable(SRV(t0, numDescriptors = 3), visibility=SHADER_VISIBILITY_PIXEL), " \
 				"DescriptorTable(SRV(t3, numDescriptors = 4), visibility=SHADER_VISIBILITY_PIXEL), " \
 				"StaticSampler(s0, filter=FILTER_MIN_MAG_MIP_LINEAR, visibility = SHADER_VISIBILITY_PIXEL), " \
-				"StaticSampler(s1, filter=FILTER_MIN_MAG_MIP_POINT, visibility = SHADER_VISIBILITY_PIXEL), " \
 
 cbuffer PerObjectData : register(b0)
 {
@@ -46,7 +45,6 @@ Texture2D tDiffuseTexture : register(t0);
 SamplerState sDiffuseSampler : register(s0);
 
 Texture2D tNormalTexture : register(t1);
-SamplerState sNormalSampler : register(s1);
 
 Texture2D tSpecularTexture : register(t2);
 
@@ -101,7 +99,7 @@ LightResult DoLight(float4 pos, float3 wPos, float3 N, float3 V)
 float3 CalculateNormal(float3 N, float3 T, float3 BT, float2 tex, bool invertY)
 {
 	float3x3 normalMatrix = float3x3(T, BT, N);
-	float3 sampledNormal = tNormalTexture.Sample(sNormalSampler, tex).rgb;
+	float3 sampledNormal = tNormalTexture.Sample(sDiffuseSampler, tex).rgb;
 	sampledNormal.xy = sampledNormal.xy * 2.0f - 1.0f;
 	if(invertY)
 	{
