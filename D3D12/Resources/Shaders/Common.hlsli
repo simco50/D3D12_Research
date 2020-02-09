@@ -1,7 +1,4 @@
-#ifndef H_COMMON
-#define H_COMMON
-
-#include "Constants.hlsl"
+#include "Constants.hlsli"
 
 struct Light
 {
@@ -134,14 +131,6 @@ void AABBFromMinMax(inout AABB aabb, float3 minimum, float3 maximum)
     aabb.Extents = float4(maximum, 0) - aabb.Center;
 }
 
-float3 HUEtoRGB(in float H)
-{
-    float R = abs(H * 6 - 3) - 1;
-    float G = 2 - abs(H * 6 - 2);
-    float B = 2 - abs(H * 6 - 4);
-    return saturate(float3(R,G,B));
-}
-
 //Emulates sampling a TextureCube
 float2 SampleCube(const float3 v, out float faceIndex)
 {
@@ -187,5 +176,3 @@ float GetCubeFaceIndex(const float3 v)
 	}
     return faceIndex;
 }
-
-#endif

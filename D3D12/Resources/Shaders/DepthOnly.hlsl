@@ -1,4 +1,4 @@
-#include "Common.hlsl"
+#include "Common.hlsli"
 
 #ifdef ALPHA_BLEND
 #define RootSig "RootFlags(ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT), " \

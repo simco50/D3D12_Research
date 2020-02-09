@@ -1,5 +1,5 @@
-#include "Common.hlsl"
-#include "Constants.hlsl"
+#include "Common.hlsli"
+#include "Constants.hlsli"
 
 #define RootSig "CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \
 				"DescriptorTable(UAV(u0, numDescriptors = 5), visibility=SHADER_VISIBILITY_ALL), " \

@@ -1,4 +1,4 @@
-#include "Common.hlsl"
+#include "Common.hlsli"
 
 #define MAX_LIGHTS_PER_TILE 32
 #define THREAD_GROUP_SIZE 4

@@ -160,8 +160,6 @@ void ClusteredForward::Execute(const ClusteredForwardInputResources& resources)
 
 		Profiler::Instance()->End(pContext);
 		pContext->EndRenderPass();
-
-		//m_pGraphics->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COMPUTE)->InsertWaitForFence(fence);
 	}
 
 	{
@@ -356,7 +354,6 @@ void ClusteredForward::Execute(const ClusteredForwardInputResources& resources)
 			pContext->SetDynamicDescriptor(3, 0, m_pLightGrid->GetSRV());
 			pContext->SetDynamicDescriptor(3, 1, m_pLightIndexGrid->GetSRV());
 			pContext->SetDynamicDescriptor(3, 2, resources.pLightBuffer->GetSRV());
-			pContext->SetDynamicDescriptor(4, 0, m_pHeatMapTexture->GetSRV());
 
 			for (const Batch& b : *resources.pOpaqueBatches)
 			{

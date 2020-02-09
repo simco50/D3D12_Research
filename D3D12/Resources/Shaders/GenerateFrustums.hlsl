@@ -1,5 +1,5 @@
-#include "Common.hlsl"
-#include "Constants.hlsl"
+#include "Common.hlsli"
+#include "Constants.hlsli"
 
 cbuffer ShaderParameters : register(b0)
 {

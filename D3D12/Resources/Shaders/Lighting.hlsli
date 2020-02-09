@@ -1,8 +1,5 @@
-#ifndef H_LIGHTING_PBR
-#define H_LIGHTING_PBR
-
-#include "Common.hlsl"
-#include "ShadingModels.hlsl"
+#include "Common.hlsli"
+#include "ShadingModels.hlsli"
 
 cbuffer LightData : register(b2)
 {
@@ -77,5 +74,3 @@ LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, floa
 	float3 L = normalize(light.Position - wPos);
 	return DefaultLitBxDF(specularColor, roughness, diffuseColor, N, V, L, attenuation);
 }
-
-#endif

@@ -129,11 +129,6 @@ void Graphics::Update()
 		RandomizeLights(m_DesiredLightCount);
 	}
 
-	for (Light& light : m_Lights)
-	{
-		float length = light.Position.Length();
-	}
-
 	std::sort(m_TransparantBatches.begin(), m_TransparantBatches.end(), [this](const Batch& a, const Batch& b) {
 		float aDist = Vector3::DistanceSquared(a.pMesh->GetBounds().Center, m_pCamera->GetPosition());
 		float bDist = Vector3::DistanceSquared(b.pMesh->GetBounds().Center, m_pCamera->GetPosition());
@@ -829,8 +824,8 @@ void Graphics::InitializeAssets()
 	//PBR Diffuse passes
 	{
 		//Shaders
-		Shader vertexShader("Resources/Shaders/Diffuse_PBR.hlsl", Shader::Type::VertexShader, "VSMain", { /*"SHADOW"*/ });
-		Shader pixelShader("Resources/Shaders/Diffuse_PBR.hlsl", Shader::Type::PixelShader, "PSMain", { /*"SHADOW"*/ });
+		Shader vertexShader("Resources/Shaders/Diffuse.hlsl", Shader::Type::VertexShader, "VSMain", { /*"SHADOW"*/ });
+		Shader pixelShader("Resources/Shaders/Diffuse.hlsl", Shader::Type::PixelShader, "PSMain", { /*"SHADOW"*/ });
 
 		//Rootsignature
 		m_pPBRDiffuseRS = std::make_unique<RootSignature>();

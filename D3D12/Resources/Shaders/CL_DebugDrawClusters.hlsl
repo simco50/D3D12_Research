@@ -1,4 +1,4 @@
-#include "Common.hlsl"
+#include "Common.hlsli"
 
 #define RootSig "CBV(b0, visibility=SHADER_VISIBILITY_GEOMETRY), " \
 				"DescriptorTable(SRV(t0, numDescriptors = 4), visibility=SHADER_VISIBILITY_VERTEX)"
@@ -37,7 +37,7 @@ GSInput VSMain(uint vertexId : SV_VertexID)
 	result.extents = aabb.Extents;
 
     uint lightCount = tLightGrid[clusterIndex].y;
-	result.color = tHeatmapTexture.Load(uint3(lightCount * 5, 0, 0));
+	result.color = tHeatmapTexture.Load(uint3(lightCount * 15, 0, 0));
 	return result;
 }
 
