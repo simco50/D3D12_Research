@@ -38,14 +38,6 @@ void AddLight(uint lightIndex)
 	}
 }
 
-struct CS_INPUT
-{
-	uint3 GroupId : SV_GROUPID;
-	uint3 GroupThreadId : SV_GROUPTHREADID;
-	uint3 DispatchThreadId : SV_DISPATCHTHREADID;
-	uint GroupIndex : SV_GROUPINDEX;
-};
-
 bool ConeInSphere(float3 conePosition, float3 coneDirection, float coneRange, float2 coneAngleSinCos, Sphere sphere)
 {
 	float3 v = sphere.Position - conePosition;
@@ -57,6 +49,14 @@ bool ConeInSphere(float3 conePosition, float3 coneDirection, float coneRange, fl
 	bool backCull = v1Len < -sphere.Radius;
 	return !(angleCull || frontCull || backCull);
 }
+
+struct CS_INPUT
+{
+	uint3 GroupId : SV_GROUPID;
+	uint3 GroupThreadId : SV_GROUPTHREADID;
+	uint3 DispatchThreadId : SV_DISPATCHTHREADID;
+	uint GroupIndex : SV_GROUPINDEX;
+};
 
 [RootSignature(RootSig)]
 [numthreads(THREAD_COUNT, 1, 1)]
