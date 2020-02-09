@@ -387,7 +387,7 @@ DXGI_FORMAT Texture::GetSrvFormatFromDepth(DXGI_FORMAT format)
 	}
 }
 
-void Texture::Create(CommandContext* pContext, const char* pFilePath)
+void Texture::Create(CommandContext* pContext, const char* pFilePath, bool srgb)
 {
 	Image img;
 	if (img.Load(pFilePath))
@@ -395,7 +395,7 @@ void Texture::Create(CommandContext* pContext, const char* pFilePath)
 		TextureDesc desc;
 		desc.Width = img.GetWidth();
 		desc.Height = img.GetHeight();
-		desc.Format = (DXGI_FORMAT)Image::TextureFormatFromCompressionFormat(img.GetFormat(), false);
+		desc.Format = (DXGI_FORMAT)Image::TextureFormatFromCompressionFormat(img.GetFormat(), srgb);
 		desc.Mips = img.GetMipLevels();
 		desc.Usage = TextureFlag::ShaderResource;
 

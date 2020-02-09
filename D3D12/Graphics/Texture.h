@@ -172,7 +172,7 @@ public:
 
 	void Create(const TextureDesc& desc);
 	void CreateForSwapchain(ID3D12Resource* pTexture);
-	void Create(CommandContext* pContext, const char* pFilePath);
+	void Create(CommandContext* pContext, const char* pFilePath, bool srgb = false);
 	void SetData(CommandContext* pContext, const void* pData);
 
 	int GetWidth() const { return m_Desc.Width; }

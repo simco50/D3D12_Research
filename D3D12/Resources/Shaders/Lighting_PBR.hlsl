@@ -74,7 +74,7 @@ float GetAttenuation(Light light, float3 wPos)
 LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, float roughness, float3 wPos, float3 N, float3 V)
 {
 	float attenuation = GetAttenuation(light, wPos);
-	float3 L = light.Position - wPos;
+	float3 L = normalize(light.Position - wPos);
 	return DefaultLitBxDF(specularColor, roughness, diffuseColor, N, V, L, attenuation);
 }
 

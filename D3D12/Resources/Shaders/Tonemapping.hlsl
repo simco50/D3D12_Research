@@ -25,23 +25,60 @@ PSInput VSMain(uint index : SV_VERTEXID)
 	return output;
 }
 
-float3 LinearTosRGB(in float3 color)
+#define TONEMAP_GAMMA 1.0
+
+// Reinhard Tonemapper
+float4 tonemap_reinhard(in float3 color)
 {
-	return color;
-    float3 x = color * 12.92f;
-    float3 y = 1.055f * pow(saturate(color), 1.0f / 2.4f) - 0.055f;
+   color *= 16;
+   color = color/(1+color);
+   float3 ret = pow(color, TONEMAP_GAMMA); // gamma
+   return float4(ret,1);
+}
 
-    float3 clr = color;
-    clr.r = color.r < 0.0031308f ? x.r : y.r;
-    clr.g = color.g < 0.0031308f ? x.g : y.g;
-    clr.b = color.b < 0.0031308f ? x.b : y.b;
+// Uncharted 2 Tonemapper
+float3 tonemap_uncharted2(in float3 x)
+{
+    float A = 0.15;
+    float B = 0.50;
+    float C = 0.10;
+    float D = 0.20;
+    float E = 0.02;
+    float F = 0.30;
 
-    return clr;
+    return ((x*(A*x+C*B)+D*E)/(x*(A*x+B)+D*F))-E/F;
+}
+
+float3 tonemap_uc2(in float3 color)
+{
+    float W = 11.2;
+
+    color *= 16;  // Hardcoded Exposure Adjustment
+
+    float exposure_bias = 2.0f;
+    float3 curr = tonemap_uncharted2(exposure_bias*color);
+
+    float3 white_scale = 1.0f/tonemap_uncharted2(W);
+    float3 ccolor = curr*white_scale;
+
+    float3 ret = pow(abs(ccolor), TONEMAP_GAMMA); // gamma
+
+    return ret;
+}
+
+// Filmic tonemapper
+float3 tonemap_filmic(in float3 color)
+{
+    color = max(0, color - 0.004f);
+    color = (color * (6.2f * color + 0.5f)) / (color * (6.2f * color + 1.7f)+ 0.06f);
+
+    // result has 1/2.2 baked in
+    return pow(color, TONEMAP_GAMMA);
 }
 
 float4 PSMain(PSInput input) : SV_TARGET
 {
-	float3 color = LinearTosRGB(tColor.Sample(sColorSampler, input.texCoord).rgb);
+	float3 color = tonemap_uc2(tColor.Sample(sColorSampler, input.texCoord).rgb);
 		
 	return float4(color, 1);
 }

@@ -1,5 +1,15 @@
 #include "Common.hlsl"
 
+float DielectricSpecularToF0(float specular)
+{
+	return 0.08f * specular;
+}
+
+float3 ComputeF0(float specular, float3 baseColor, float metallic)
+{
+	return lerp(DielectricSpecularToF0(specular).xxx, baseColor, metallic.xxx);
+}
+
 float Pow4( float x )
 {
 	float xx = x*x;

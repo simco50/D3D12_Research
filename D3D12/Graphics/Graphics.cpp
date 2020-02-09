@@ -69,10 +69,11 @@ void Graphics::RandomizeLights(int count)
 	sceneBounds.Extents = Vector3(140, 70, 60);
 
 	int lightIndex = 0;
-	m_Lights[lightIndex] = Light::Point(Vector3(0, 20, 0), 200);
-	m_Lights[lightIndex].ShadowIndex = lightIndex;
-
-	int randomLightsStartIndex = lightIndex + 1;
+	Vector3 Dir(1, -1, 1);
+	Dir.Normalize();
+	m_Lights[lightIndex] = Light::Directional(Vector3(200, 200, 200), Dir, 0.4f);
+	
+	int randomLightsStartIndex = lightIndex+1;
 
 	for (int i = randomLightsStartIndex; i < m_Lights.size(); ++i)
 	{
@@ -84,7 +85,7 @@ void Graphics::RandomizeLights(int count)
 		position.y = Math::RandomRange(-sceneBounds.Extents.y, sceneBounds.Extents.y) + sceneBounds.Center.y;
 		position.z = Math::RandomRange(-sceneBounds.Extents.z, sceneBounds.Extents.z) + sceneBounds.Center.z;
 
-		const float range = Math::RandomRange(7.0f, 12.0f);
+		const float range = Math::RandomRange(10.0f, 18.0f);
 		const float angle = Math::RandomRange(30.0f, 60.0f);
 
 		Light::Type type = rand() % 2 == 0 ? Light::Type::Point : Light::Type::Spot;
@@ -164,7 +165,7 @@ void Graphics::Update()
 		Vector4 ShadowMapOffsets[MAX_SHADOW_CASTERS];
 	} lightData;
 
-	Matrix projection = XMMatrixPerspectiveFovLH(Math::PIDIV2, 1.0f, m_Lights[0].Range, 0.1f);
+	//Matrix projection = XMMatrixPerspectiveFovLH(Math::PIDIV2, 1.0f, m_Lights[0].Range, 0.1f);
 	
 	m_ShadowCasters = 0;
 	/*lightData.LightViewProjections[m_ShadowCasters] = Matrix::CreateLookAt(m_Lights[0].Position, m_Lights[0].Position + Vector3(-1.0f, 0.0f, 0.0f), Vector3(0.0f, 1.0f, 0.0f)) * projection;
@@ -293,13 +294,14 @@ void Graphics::Update()
 
 		WaitForFence(fence);
 
+		CommandContext* pContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+
 		//3. LIGHT CULLING
 		// - Compute shader to buckets lights in tiles depending on their screen position.
 		// - Requires a depth buffer 
 		// - Outputs a: - Texture containing a count and an offset of lights per tile.
 		//				- uint[] index buffer to indicate what lights are visible in each tile.
 		{
-			CommandContext* pContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COMPUTE);
 			Profiler::Instance()->Begin("Light Culling", pContext);
 			Profiler::Instance()->Begin("Setup Light Data", pContext);
 			uint32 zero[] = { 0, 0 };
@@ -339,16 +341,12 @@ void Graphics::Update()
 
 			pContext->Dispatch(Data.NumThreadGroups[0], Data.NumThreadGroups[1], Data.NumThreadGroups[2]);
 			Profiler::Instance()->End(pContext);
-
-			lightCullingFence = pContext->Execute(false);
 		}
 
 		//4. SHADOW MAPPING
 		// - Renders the scene depth onto a separate depth buffer from the light's view
 		if (m_ShadowCasters > 0)
 		{
-			CommandContext* pContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
-
 			Profiler::Instance()->Begin("Shadows", pContext);
 			pContext->InsertResourceBarrier(m_pShadowMap.get(), D3D12_RESOURCE_STATE_DEPTH_WRITE);
 
@@ -407,16 +405,11 @@ void Graphics::Update()
 			pContext->EndRenderPass();
 
 			Profiler::Instance()->End(pContext);
-			pContext->Execute(false);
 		}
-
-		//Can't do the lighting until the light culling is complete
-		m_CommandQueues[D3D12_COMMAND_LIST_TYPE_DIRECT]->InsertWaitForFence(lightCullingFence);
 
 		//5. BASE PASS
 		// - Render the scene using the shadow mapping result and the light culling buffers
 		{
-			CommandContext* pContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 			Profiler::Instance()->Begin("3D", pContext);
 
 			pContext->SetViewport(FloatRect(0, 0, (float)m_WindowWidth, (float)m_WindowHeight));
@@ -501,10 +494,10 @@ void Graphics::Update()
 			pContext->InsertResourceBarrier(m_pLightIndexListBufferTransparant.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
 			pContext->EndRenderPass();
-			pContext->Execute(false);
 		}
 		Profiler::Instance()->End();
 
+		pContext->Execute(false);
 	}
 	else if (m_RenderPath == RenderPath::Clustered)
 	{
@@ -518,8 +511,6 @@ void Graphics::Update()
 		m_pClusteredForward->Execute(resources);
 		Profiler::Instance()->End();
 	}
-
-
 
 	{
 		CommandContext* pContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
@@ -614,9 +605,11 @@ void Graphics::InitD3D()
 	HR(D3D12GetDebugInterface(IID_PPV_ARGS(&pDebugController)));
 	pDebugController->EnableDebugLayer();
 
-	/*ComPtr<ID3D12Debug1> pDebugController1;
+#ifdef GPU_VALIDATION
+	ComPtr<ID3D12Debug1> pDebugController1;
 	HR(pDebugController->QueryInterface(IID_PPV_ARGS(&pDebugController1)));
-	pDebugController1->SetEnableGPUBasedValidation(true);*/
+	pDebugController1->SetEnableGPUBasedValidation(true);
+#endif
 
 	// Enable additional debug layers.
 	dxgiFactoryFlags |= DXGI_CREATE_FACTORY_DEBUG;

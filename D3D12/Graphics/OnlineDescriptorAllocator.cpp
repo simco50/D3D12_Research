@@ -180,7 +180,9 @@ uint32 OnlineDescriptorAllocator::GetRequiredSpace()
 		m_RootDescriptorTable[rootIndex].AssignedHandlesBitMap.MostSignificantBit(&maxHandle);
 		requiredSpace += (uint32)maxHandle + 1;
 	}
-	return requiredSpace;
+
+	//#todo: SUPER CRAZY HACK: Some descriptors are created on the fly outside of this system
+	return requiredSpace + 10;
 }
 
 ID3D12DescriptorHeap* OnlineDescriptorAllocator::RequestNewHeap(D3D12_DESCRIPTOR_HEAP_TYPE type)
