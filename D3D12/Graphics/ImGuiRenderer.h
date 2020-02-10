@@ -14,7 +14,6 @@ public:
 
 	void NewFrame();
 	void Render(CommandContext& context, Texture* pRenderTarget);
-	void OnSwapchainCreated(int windowWidth, int windowHeight);
 
 private:
 	void CreatePipeline();
@@ -24,6 +23,5 @@ private:
 	std::unique_ptr<GraphicsPipelineState> m_pPipelineState;
 	std::unique_ptr<RootSignature> m_pRootSignature;
 	std::unique_ptr<Texture> m_pFontTexture;
-	std::unique_ptr<Texture> m_pDepthBuffer;
 };
 

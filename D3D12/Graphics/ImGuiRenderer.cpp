@@ -55,13 +55,6 @@ void ImGuiRenderer::InitializeImGui()
 	m_pFontTexture->SetData(pContext, pPixels);
 	io.Fonts->TexID = m_pFontTexture.get();
 	pContext->Execute(true);
-
-	m_pDepthBuffer = std::make_unique<Texture>(m_pGraphics);
-}
-
-void ImGuiRenderer::OnSwapchainCreated(int windowWidth, int windowHeight)
-{
-	m_pDepthBuffer->Create(TextureDesc::CreateDepth(windowWidth, windowHeight, DXGI_FORMAT_D32_FLOAT));
 }
 
 void ImGuiRenderer::CreatePipeline()
@@ -73,7 +66,6 @@ void ImGuiRenderer::CreatePipeline()
 	//Root signature
 	m_pRootSignature = std::make_unique<RootSignature>();
 	m_pRootSignature->FinalizeFromShader("ImGui", vertexShader, m_pGraphics->GetDevice());
-
 	//Input layout
 	std::vector<D3D12_INPUT_ELEMENT_DESC> elementDesc = {
 		{ "POSITION", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
@@ -103,16 +95,15 @@ void ImGuiRenderer::Render(CommandContext& context, Texture* pRenderTarget)
 	{
 		return;
 	}
-
 	context.SetGraphicsPipelineState(m_pPipelineState.get());
 	context.SetGraphicsRootSignature(m_pRootSignature.get());
-	Matrix projectionMatrix = XMMatrixOrthographicOffCenterLH(0.0f, (float)m_pGraphics->GetWindowWidth(), (float)m_pGraphics->GetWindowHeight(), 0.0f, 0.0f, 1.0f);
+	Matrix projectionMatrix = XMMatrixOrthographicOffCenterLH(0.0f, pDrawData->DisplayPos.x + pDrawData->DisplaySize.x, pDrawData->DisplayPos.y + pDrawData->DisplaySize.y, 0.0f, 0.0f, 1.0f);
 	context.SetDynamicConstantBufferView(0, &projectionMatrix, sizeof(Matrix));
 	context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	context.SetViewport(FloatRect(0, 0, (float)m_pGraphics->GetWindowWidth(), (float)m_pGraphics->GetWindowHeight()), 0, 1);
-
+	context.SetViewport(FloatRect(pDrawData->DisplayPos.x, pDrawData->DisplayPos.y, pDrawData->DisplayPos.x + pDrawData->DisplaySize.x, pDrawData->DisplayPos.y + pDrawData->DisplaySize.y), 0, 1);
+	
 	Profiler::Instance()->Begin("Render UI", &context);
-	context.BeginRenderPass(RenderPassInfo(pRenderTarget, RenderPassAccess::Load_Store, m_pDepthBuffer.get(), RenderPassAccess::DontCare_DontCare));
+	context.BeginRenderPass(RenderPassInfo(pRenderTarget, RenderPassAccess::Load_Store, nullptr, RenderPassAccess::DontCare_DontCare));
 
 	for (int n = 0; n < pDrawData->CmdListsCount; n++)
 	{

@@ -65,8 +65,8 @@ public:
 
 	Texture* GetDepthStencil() const { return m_pDepthStencil.get(); }
 	Texture* GetResolvedDepthStencil() const { return m_SampleCount > 1 ? m_pResolvedDepthStencil.get() : m_pDepthStencil.get(); }
-	Texture* GetCurrentRenderTarget() const { return m_SampleCount > 1 ? m_pMultiSampleRenderTarget.get() : GetCurrentBackbuffer(); }
-	Texture* GetCurrentBackbuffer() const { return m_RenderTargets[m_CurrentBackBufferIndex].get(); }
+	Texture* GetCurrentRenderTarget() const { return m_SampleCount > 1 ? m_pMultiSampleRenderTarget.get() : m_pHDRRenderTarget.get(); }
+	Texture* GetCurrentBackbuffer() const { return m_Backbuffers[m_CurrentBackBufferIndex].get(); }
 
 	Camera* GetCamera() const { return m_pCamera.get(); }
 
@@ -82,6 +82,7 @@ public:
 	static const DXGI_FORMAT DEPTH_STENCIL_FORMAT;
 	static const DXGI_FORMAT DEPTH_STENCIL_SHADOW_FORMAT;
 	static const DXGI_FORMAT RENDER_TARGET_FORMAT;
+	static const DXGI_FORMAT SWAPCHAIN_FORMAT;
 	static const int FORWARD_PLUS_BLOCK_SIZE = 16;
 	static const int MAX_SHADOW_CASTERS = 8;
 
@@ -123,12 +124,15 @@ private:
 	std::vector<ComPtr<ID3D12CommandList>> m_CommandLists;
 	std::mutex m_ContextAllocationMutex;
 
+	std::array<std::unique_ptr<Texture>, FRAME_COUNT> m_Backbuffers;
 	std::unique_ptr<Texture> m_pMultiSampleRenderTarget;
 	std::unique_ptr<Texture> m_pHDRRenderTarget;
-	std::array<std::unique_ptr<Texture>, FRAME_COUNT> m_RenderTargets;
+	std::unique_ptr<Texture> m_pDepthStencil;
+	std::unique_ptr<Texture> m_pResolvedDepthStencil;
 
 	std::unique_ptr<ImGuiRenderer> m_pImGuiRenderer;
 	std::unique_ptr<RGResourceAllocator> m_pGraphAllocator;
+	std::unique_ptr<ClusteredForward> m_pClusteredForward;
 
 	unsigned int m_WindowWidth;
 	unsigned int m_WindowHeight;
@@ -143,9 +147,7 @@ private:
 	std::vector<Batch> m_OpaqueBatches;
 	std::vector<Batch> m_TransparantBatches;
 
-	std::unique_ptr<ClusteredForward> m_pClusteredForward;
-
-	//Directional light shadow mapping
+	//Shadow mapping
 	std::unique_ptr<Texture> m_pShadowMap;
 	std::unique_ptr<RootSignature> m_pShadowsOpaqueRS;
 	std::unique_ptr<GraphicsPipelineState> m_pShadowsOpaquePSO;
@@ -168,8 +170,6 @@ private:
 	//MSAA Depth resolve
 	std::unique_ptr<RootSignature> m_pResolveDepthRS;
 	std::unique_ptr<ComputePipelineState> m_pResolveDepthPSO;
-	std::unique_ptr<Texture> m_pDepthStencil;
-	std::unique_ptr<Texture> m_pResolvedDepthStencil;
 
 	//PBR
 	std::unique_ptr<RootSignature> m_pPBRDiffuseRS;
@@ -179,7 +179,6 @@ private:
 	//Tonemapping
 	std::unique_ptr<RootSignature> m_pToneMapRS;
 	std::unique_ptr<GraphicsPipelineState> m_pToneMapPSO;
-	std::unique_ptr<Texture> m_pToneMapDepth;
 
 	//Light data
 	int m_ShadowCasters = 0;

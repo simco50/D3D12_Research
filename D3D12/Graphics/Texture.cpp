@@ -7,7 +7,7 @@
 #include "ResourceViews.h"
 
 Texture::Texture(Graphics* pGraphics, const char* pName)
-	: GraphicsResource(pGraphics)
+	: GraphicsResource(pGraphics), m_pName(pName)
 {
 }
 
@@ -284,6 +284,11 @@ void Texture::Create(const TextureDesc& textureDesc)
 		m_pGraphics->GetDevice()->CreateDepthStencilView(m_pResource, &dsvDesc, m_Rtv);
 		dsvDesc.Flags = D3D12_DSV_FLAG_READ_ONLY_DEPTH;
 		m_pGraphics->GetDevice()->CreateDepthStencilView(m_pResource, &dsvDesc, m_ReadOnlyDsv);
+	}
+
+	if (m_pName)
+	{
+		SetName(m_pName);
 	}
 }
 

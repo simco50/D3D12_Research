@@ -21,9 +21,22 @@
 #include "RenderGraph/Blackboard.h"
 #include "RenderGraph/ResourceAllocator.h"
 
+#ifdef _DEBUG
+#define D3D_VALIDATION 1
+#endif
+
+#ifndef D3D_VALIDATION
+#define D3D_VALIDATION 0
+#endif
+
+#ifndef GPU_VALIDATION
+#define GPU_VALIDATION 0
+#endif
+
 const DXGI_FORMAT Graphics::DEPTH_STENCIL_FORMAT = DXGI_FORMAT_D32_FLOAT;
 const DXGI_FORMAT Graphics::DEPTH_STENCIL_SHADOW_FORMAT = DXGI_FORMAT_D16_UNORM;
-const DXGI_FORMAT Graphics::RENDER_TARGET_FORMAT = DXGI_FORMAT_R16G16B16A16_FLOAT;
+const DXGI_FORMAT Graphics::RENDER_TARGET_FORMAT = DXGI_FORMAT_R11G11B10_FLOAT;
+const DXGI_FORMAT Graphics::SWAPCHAIN_FORMAT = DXGI_FORMAT_R8G8B8A8_UNORM;
 
 bool gSortOpaqueMeshes = true;
 bool gSortTransparentMeshes = true;
@@ -85,7 +98,7 @@ void Graphics::RandomizeLights(int count)
 		position.y = Math::RandomRange(-sceneBounds.Extents.y, sceneBounds.Extents.y) + sceneBounds.Center.y;
 		position.z = Math::RandomRange(-sceneBounds.Extents.z, sceneBounds.Extents.z) + sceneBounds.Center.z;
 
-		const float range = Math::RandomRange(10.0f, 18.0f);
+		const float range = Math::RandomRange(5.0f, 9.0f);
 		const float angle = Math::RandomRange(30.0f, 60.0f);
 
 		Light::Type type = rand() % 2 == 0 ? Light::Type::Point : Light::Type::Spot;
@@ -287,7 +300,7 @@ void Graphics::Update()
 		}
 		int64 fence = graph.Execute(this);
 
-		WaitForFence(fence);
+		//WaitForFence(fence);
 
 		CommandContext* pContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 
@@ -303,6 +316,8 @@ void Graphics::Update()
 			m_pLightIndexCounter->SetData(pContext, &zero, sizeof(uint32) * 2);
 			m_pLightBuffer->SetData(pContext, m_Lights.data(), (uint32)m_Lights.size() * sizeof(Light));
 			Profiler::Instance()->End(pContext);
+
+			pContext->InsertResourceBarrier(GetResolvedDepthStencil(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, false);
 
 			pContext->SetComputePipelineState(m_pComputeLightCullPSO.get());
 			pContext->SetComputeRootSignature(m_pComputeLightCullRS.get());
@@ -533,7 +548,7 @@ void Graphics::Update()
 			pContext->SetGraphicsRootSignature(m_pToneMapRS.get());
 			pContext->SetViewport(FloatRect(0, 0, (float)m_WindowWidth, (float)m_WindowHeight));
 			pContext->SetScissorRect(FloatRect(0, 0, (float)m_WindowWidth, (float)m_WindowHeight));
-			pContext->BeginRenderPass(RenderPassInfo(GetCurrentBackbuffer(), RenderPassAccess::Clear_Store, m_pToneMapDepth.get(), RenderPassAccess::Clear_DontCare));
+			pContext->BeginRenderPass(RenderPassInfo(GetCurrentBackbuffer(), RenderPassAccess::Clear_Store, nullptr, RenderPassAccess::DontCare_DontCare));
 			pContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 			pContext->SetDynamicDescriptor(0, 0, m_pHDRRenderTarget->GetSRV());
 			pContext->Draw(0, 3);
@@ -594,13 +609,13 @@ void Graphics::InitD3D()
 	E_LOG(Info, "Graphics::InitD3D()");
 	UINT dxgiFactoryFlags = 0;
 
-#ifdef _DEBUG
+#if D3D_VALIDATION
 	//Enable debug
 	ComPtr<ID3D12Debug> pDebugController;
 	HR(D3D12GetDebugInterface(IID_PPV_ARGS(&pDebugController)));
 	pDebugController->EnableDebugLayer();
 
-#ifdef GPU_VALIDATION
+#if GPU_VALIDATION
 	ComPtr<ID3D12Debug1> pDebugController1;
 	HR(pDebugController->QueryInterface(IID_PPV_ARGS(&pDebugController1)));
 	pDebugController1->SetEnableGPUBasedValidation(true);
@@ -622,7 +637,7 @@ void Graphics::InitD3D()
 	//Create the device
 	HR(D3D12CreateDevice(pAdapter, D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&m_pDevice)));
 
-#ifdef _DEBUG
+#if D3D_VALIDATION
 	ID3D12InfoQueue* pInfoQueue = nullptr;
 	if (HR(m_pDevice->QueryInterface(IID_PPV_ARGS(&pInfoQueue))))
 	{
@@ -692,7 +707,7 @@ void Graphics::InitD3D()
 	DXGI_SWAP_CHAIN_DESC1 swapchainDesc = {};
 	swapchainDesc.Width = m_WindowWidth;
 	swapchainDesc.Height = m_WindowHeight;
-	swapchainDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	swapchainDesc.Format = SWAPCHAIN_FORMAT;
 	swapchainDesc.SampleDesc.Count = 1;
 	swapchainDesc.SampleDesc.Quality = 0;
 	swapchainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
@@ -722,7 +737,7 @@ void Graphics::InitD3D()
 	//Create the textures but don't create the resources themselves yet.
 	for (int i = 0; i < FRAME_COUNT; ++i)
 	{
-		m_RenderTargets[i] = std::make_unique<Texture>(this, "Render Target");
+		m_Backbuffers[i] = std::make_unique<Texture>(this, "Render Target");
 	}
 	m_pDepthStencil = std::make_unique<Texture>(this, "Depth Stencil");
 
@@ -730,9 +745,8 @@ void Graphics::InitD3D()
 	{
 		m_pResolvedDepthStencil = std::make_unique<Texture>(this, "Resolved Depth Stencil");
 		m_pMultiSampleRenderTarget = std::make_unique<Texture>(this, "MSAA Target");
-		m_pHDRRenderTarget = std::make_unique<Texture>(this, "HDR Target");
 	}
-	m_pToneMapDepth = std::make_unique<Texture>(this, "Tonemap Depth");
+	m_pHDRRenderTarget = std::make_unique<Texture>(this, "HDR Target");
 
 	m_pLightGridOpaque = std::make_unique<Texture>(this, "Opaque Light Grid");
 	m_pLightGridTransparant = std::make_unique<Texture>(this, "Transparant Light Grid");
@@ -755,7 +769,7 @@ void Graphics::OnResize(int width, int height)
 
 	for (int i = 0; i < FRAME_COUNT; ++i)
 	{
-		m_RenderTargets[i]->Release();
+		m_Backbuffers[i]->Release();
 	}
 	m_pDepthStencil->Release();
 
@@ -764,7 +778,7 @@ void Graphics::OnResize(int width, int height)
 		FRAME_COUNT, 
 		m_WindowWidth, 
 		m_WindowHeight, 
-		DXGI_FORMAT_R8G8B8A8_UNORM,
+		SWAPCHAIN_FORMAT,
 		DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH));
 
 	m_CurrentBackBufferIndex = 0;
@@ -774,22 +788,19 @@ void Graphics::OnResize(int width, int height)
 	{
 		ID3D12Resource* pResource = nullptr;
 		HR(m_pSwapchain->GetBuffer(i, IID_PPV_ARGS(&pResource)));
-		m_RenderTargets[i]->CreateForSwapchain(pResource);
+		m_Backbuffers[i]->CreateForSwapchain(pResource);
 	}
 	if (m_SampleCount > 1)
 	{
 		m_pDepthStencil->Create(TextureDesc::CreateDepth(width, height, DEPTH_STENCIL_FORMAT, TextureFlag::DepthStencil | TextureFlag::ShaderResource, m_SampleCount, ClearBinding(0.0f, 0)));
 		m_pResolvedDepthStencil->Create(TextureDesc::Create2D(width, height, DXGI_FORMAT_R32_FLOAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
-
 		m_pMultiSampleRenderTarget->Create(TextureDesc::CreateRenderTarget(width, height, RENDER_TARGET_FORMAT, TextureFlag::RenderTarget, m_SampleCount, ClearBinding(Color(0, 0, 0, 0))));
-		m_pHDRRenderTarget->Create(TextureDesc::CreateRenderTarget(width, height, RENDER_TARGET_FORMAT, TextureFlag::RenderTarget | TextureFlag::ShaderResource));
 	}
 	else
 	{
 		m_pDepthStencil->Create(TextureDesc::CreateDepth(width, height, DEPTH_STENCIL_FORMAT, TextureFlag::DepthStencil | TextureFlag::ShaderResource, m_SampleCount, ClearBinding(0.0f, 0)));
 	}
-
-	m_pToneMapDepth->Create(TextureDesc::CreateDepth(width, height, DEPTH_STENCIL_FORMAT, TextureFlag::DepthStencil));
+	m_pHDRRenderTarget->Create(TextureDesc::CreateRenderTarget(width, height, RENDER_TARGET_FORMAT, TextureFlag::RenderTarget | TextureFlag::ShaderResource));
 
 	int frustumCountX = (int)(ceil((float)width / FORWARD_PLUS_BLOCK_SIZE));
 	int frustumCountY = (int)(ceil((float)height / FORWARD_PLUS_BLOCK_SIZE));
@@ -797,7 +808,6 @@ void Graphics::OnResize(int width, int height)
 	m_pLightGridTransparant->Create(TextureDesc::Create2D(frustumCountX, frustumCountY, DXGI_FORMAT_R32G32_UINT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
 
 	m_pClusteredForward->OnSwapchainCreated(width, height);
-	m_pImGuiRenderer->OnSwapchainCreated(width, height);
 }
 
 void Graphics::InitializeAssets()
@@ -930,11 +940,12 @@ void Graphics::InitializeAssets()
 
 		//Pipeline state
 		m_pToneMapPSO = std::make_unique<GraphicsPipelineState>();
+		m_pToneMapPSO->SetDepthEnabled(false);
+		m_pToneMapPSO->SetDepthWrite(false);
 		m_pToneMapPSO->SetRootSignature(m_pToneMapRS->GetRootSignature());
 		m_pToneMapPSO->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
 		m_pToneMapPSO->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
-		m_pToneMapPSO->SetRenderTargetFormat(DXGI_FORMAT_R8G8B8A8_UNORM, DEPTH_STENCIL_FORMAT, 1, 0);
-		m_pToneMapPSO->SetDepthTest(D3D12_COMPARISON_FUNC_ALWAYS);
+		m_pToneMapPSO->SetRenderTargetFormat(SWAPCHAIN_FORMAT, DEPTH_STENCIL_FORMAT, 1, 0);
 		m_pToneMapPSO->Finalize("Tone mapping Pipeline", m_pDevice.Get());
 	}
 

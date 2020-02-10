@@ -88,6 +88,7 @@ void OnlineDescriptorAllocator::UploadAndBindStagedDescriptors(DescriptorTableTy
 		for (uint32 i = 0; i < rangeSize; ++i)
 		{
 			sourceRangeSizes[sourceRangeCount] = 1;
+			assert(entry.TableStart[i].ptr);
 			sourceRanges[sourceRangeCount] = entry.TableStart[i];
 			++sourceRangeCount;
 		}
@@ -145,6 +146,7 @@ void OnlineDescriptorAllocator::ParseRootSignature(RootSignature* pRootSignature
 		pRootSignature->GetSamplerTableMask() : pRootSignature->GetDescriptorTableMask();
 
 	m_StaleRootParameters.ClearAll();
+	memset(m_HandleCache.data(), 0, m_HandleCache.size() * sizeof(D3D12_CPU_DESCRIPTOR_HANDLE));
 
 	uint32 offset = 0;
 	for (auto it = m_RootDescriptorMask.GetSetBitsIterator(); it.Valid(); ++it)

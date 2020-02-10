@@ -342,13 +342,11 @@ void ClusteredForward::Execute(const ClusteredForwardInputResources& resources)
 		pContext->BeginRenderPass(RenderPassInfo(resources.pRenderTarget, RenderPassAccess::Clear_Store, m_pDepthTexture.get(), RenderPassAccess::Load_DontCare));
 		pContext->SetViewport(FloatRect(0, 0, (float)screenDimensions.x, (float)screenDimensions.y));
 		pContext->SetScissorRect(FloatRect(0, 0, (float)screenDimensions.x, (float)screenDimensions.y));
-
+		pContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		pContext->SetGraphicsRootSignature(m_pDiffuseRS.get());
 		{
 			Profiler::Instance()->Begin("Opaque", pContext);
 			pContext->SetGraphicsPipelineState(m_pDiffusePSO.get());
-			pContext->SetGraphicsRootSignature(m_pDiffuseRS.get());
-
-			pContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
 			pContext->SetDynamicConstantBufferView(1, &frameData, sizeof(PerFrameData));
 			pContext->SetDynamicDescriptor(3, 0, m_pLightGrid->GetSRV());
