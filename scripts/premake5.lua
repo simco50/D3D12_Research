@@ -14,7 +14,7 @@ workspace (ENGINE_NAME)
 	symbols ("On")
 	kind ("WindowedApp")
 	characterset ("MBCS")
-	flags {"MultiProcessorCompile"}
+	--flags {"MultiProcessorCompile"}
 	rtti "Off"
 	
 	filter {"system:windows"}

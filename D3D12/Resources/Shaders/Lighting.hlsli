@@ -14,7 +14,7 @@ float DoAttenuation(Light light, float d)
 
 #ifdef SHADOW
 Texture2D tShadowMapTexture : register(t3);
-SamplerComparisonState sShadowMapSampler : register(s2);
+SamplerComparisonState sShadowMapSampler : register(s1);
 
 float DoShadow(float3 wPos, int shadowMapIndex)
 {
@@ -72,5 +72,15 @@ LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, floa
 {
 	float attenuation = GetAttenuation(light, wPos);
 	float3 L = normalize(light.Position - wPos);
-	return DefaultLitBxDF(specularColor, roughness, diffuseColor, N, V, L, attenuation);
+	LightResult result = DefaultLitBxDF(specularColor, roughness, diffuseColor, N, V, L, attenuation);
+
+#ifdef SHADOW
+	if(light.ShadowIndex >= 0)
+	{
+		float s = DoShadow(wPos, light.ShadowIndex);
+		result.Diffuse *= s;
+		result.Specular *= s;
+	}
+#endif
+	return result;
 }

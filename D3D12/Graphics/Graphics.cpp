@@ -82,9 +82,10 @@ void Graphics::RandomizeLights(int count)
 	sceneBounds.Extents = Vector3(140, 70, 60);
 
 	int lightIndex = 0;
-	Vector3 Dir(1, -1, 1);
+	Vector3 Dir(-300, -300, -300);
 	Dir.Normalize();
-	m_Lights[lightIndex] = Light::Directional(Vector3(200, 200, 200), Dir, 0.4f);
+	m_Lights[lightIndex] = Light::Directional(Vector3(300, 300, 300), Dir, 0.4f);
+	m_Lights[lightIndex].ShadowIndex = 0;
 	
 	int randomLightsStartIndex = lightIndex+1;
 
@@ -173,14 +174,14 @@ void Graphics::Update()
 		Vector4 ShadowMapOffsets[MAX_SHADOW_CASTERS];
 	} lightData;
 
-	//Matrix projection = XMMatrixPerspectiveFovLH(Math::PIDIV2, 1.0f, m_Lights[0].Range, 0.1f);
+	Matrix projection = XMMatrixOrthographicLH(512, 512, 10000, 0.1f);
 	
 	m_ShadowCasters = 0;
-	/*lightData.LightViewProjections[m_ShadowCasters] = Matrix::CreateLookAt(m_Lights[0].Position, m_Lights[0].Position + Vector3(-1.0f, 0.0f, 0.0f), Vector3(0.0f, 1.0f, 0.0f)) * projection;
+	lightData.LightViewProjections[m_ShadowCasters] = Matrix(XMMatrixLookAtLH(m_Lights[0].Position, m_Lights[0].Position + m_Lights[0].Direction, Vector3(0.0f, 1.0f, 0.0f))) * projection;
 	lightData.ShadowMapOffsets[m_ShadowCasters].x = 0.0f;
 	lightData.ShadowMapOffsets[m_ShadowCasters].y = 0.0f;
 	lightData.ShadowMapOffsets[m_ShadowCasters].z = 1.0f;
-	++m_ShadowCasters;*/
+	++m_ShadowCasters;
 
 	////////////////////////////////
 	// LET THE RENDERING BEGIN!
@@ -475,7 +476,6 @@ void Graphics::Update()
 				pContext->SetGraphicsPipelineState(m_pPBRDiffuseAlphaPSO.get());
 				pContext->SetGraphicsRootSignature(m_pPBRDiffuseRS.get());
 
-				pContext->SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
 				pContext->SetDynamicConstantBufferView(1, &frameData, sizeof(PerFrameData));
 				pContext->SetDynamicConstantBufferView(2, &lightData, sizeof(LightData));
 				pContext->SetDynamicDescriptor(4, 0, m_pShadowMap->GetSRV());
@@ -834,8 +834,8 @@ void Graphics::InitializeAssets()
 	//PBR Diffuse passes
 	{
 		//Shaders
-		Shader vertexShader("Resources/Shaders/Diffuse.hlsl", Shader::Type::VertexShader, "VSMain", { /*"SHADOW"*/ });
-		Shader pixelShader("Resources/Shaders/Diffuse.hlsl", Shader::Type::PixelShader, "PSMain", { /*"SHADOW"*/ });
+		Shader vertexShader("Resources/Shaders/Diffuse.hlsl", Shader::Type::VertexShader, "VSMain", { "SHADOW" });
+		Shader pixelShader("Resources/Shaders/Diffuse.hlsl", Shader::Type::PixelShader, "PSMain", { "SHADOW" });
 
 		//Rootsignature
 		m_pPBRDiffuseRS = std::make_unique<RootSignature>();
@@ -907,7 +907,7 @@ void Graphics::InitializeAssets()
 		}
 
 		m_pShadowMap = std::make_unique<Texture>(this, "Shadow Map");
-		m_pShadowMap->Create(TextureDesc::CreateDepth(SHADOW_MAP_SIZE, SHADOW_MAP_SIZE, DEPTH_STENCIL_SHADOW_FORMAT, TextureFlag::DepthStencil | TextureFlag::ShaderResource, 1, ClearBinding(1.0f, 0)));
+		m_pShadowMap->Create(TextureDesc::CreateDepth(SHADOW_MAP_SIZE, SHADOW_MAP_SIZE, DEPTH_STENCIL_SHADOW_FORMAT, TextureFlag::DepthStencil | TextureFlag::ShaderResource, 1, ClearBinding(0.0f, 0)));
 	}
 
 	//Depth prepass
