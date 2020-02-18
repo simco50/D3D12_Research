@@ -129,7 +129,7 @@ bool Shader::CompileDxc(const std::string& source, const char* pTarget, const ch
 		L"-Zi",
 		L"-Qembed_debug",
 #else
-		L"-0d",
+		L"0d",
 #endif
 		L"/WX",
 	};

@@ -41,6 +41,11 @@ const DXGI_FORMAT Graphics::SWAPCHAIN_FORMAT = DXGI_FORMAT_R8G8B8A8_UNORM;
 bool gSortOpaqueMeshes = true;
 bool gSortTransparentMeshes = true;
 
+float g_WhitePoint = 4;
+float g_MinLogLuminance = -10;
+float g_MaxLogLuminance = 2;
+float g_Tau = 10;
+
 Graphics::Graphics(uint32 width, uint32 height, int sampleCount /*= 1*/)
 	: m_WindowWidth(width), m_WindowHeight(height), m_SampleCount(sampleCount)
 {
@@ -84,7 +89,7 @@ void Graphics::RandomizeLights(int count)
 	int lightIndex = 0;
 	Vector3 Dir(-300, -300, -300);
 	Dir.Normalize();
-	m_Lights[lightIndex] = Light::Directional(Vector3(300, 300, 300), Dir, 0.4f);
+	m_Lights[lightIndex] = Light::Directional(Vector3(300, 300, 300), Dir, 0.1f);
 	m_Lights[lightIndex].ShadowIndex = 0;
 	
 	int randomLightsStartIndex = lightIndex+1;
@@ -106,10 +111,10 @@ void Graphics::RandomizeLights(int count)
 		switch (type)
 		{
 		case Light::Type::Point:
-			m_Lights[i] = Light::Point(position, range, 1.0f, 0.5f, color);
+			m_Lights[i] = Light::Point(position, range, 4.0f, 0.5f, color);
 			break;
 		case Light::Type::Spot:
-			m_Lights[i] = Light::Spot(position, range, Math::RandVector(), angle, 1.0f, 0.5f, color);
+			m_Lights[i] = Light::Spot(position, range, Math::RandVector(), angle, 4.0f, 0.5f, color);
 			break;
 		case Light::Type::Directional:
 		case Light::Type::MAX:
@@ -523,38 +528,109 @@ void Graphics::Update()
 	}
 
 	{
-		CommandContext* pContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 
 		//7. MSAA Render Target Resolve
 		// - We have to resolve a MSAA render target ourselves. Unlike D3D11, this is not done automatically by the API.
 		//	Luckily, there's a method that does it for us!
 		if (m_SampleCount > 1)
 		{
+			CommandContext* pContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 			Profiler::Instance()->Begin("Resolve", pContext);
 			pContext->InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RESOLVE_SOURCE);
 			pContext->InsertResourceBarrier(m_pHDRRenderTarget.get(), D3D12_RESOURCE_STATE_RESOLVE_DEST);
 			pContext->FlushResourceBarriers();
 			pContext->GetCommandList()->ResolveSubresource(m_pHDRRenderTarget->GetResource(), 0, GetCurrentRenderTarget()->GetResource(), 0, RENDER_TARGET_FORMAT);
 			Profiler::Instance()->End(pContext);
+			nextFenceValue = pContext->Execute(false);
 		}
 
 		//Tonemap
 		{
-			Profiler::Instance()->Begin("Tonemap", pContext);
-			pContext->InsertResourceBarrier(GetCurrentBackbuffer(), D3D12_RESOURCE_STATE_RENDER_TARGET);
-			pContext->InsertResourceBarrier(m_pHDRRenderTarget.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+			CommandContext* pContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+			Profiler::Instance()->Begin("Luminance Histogram", pContext);
 
-			pContext->SetGraphicsPipelineState(m_pToneMapPSO.get());
-			pContext->SetGraphicsRootSignature(m_pToneMapRS.get());
-			pContext->SetViewport(FloatRect(0, 0, (float)m_WindowWidth, (float)m_WindowHeight));
-			pContext->SetScissorRect(FloatRect(0, 0, (float)m_WindowWidth, (float)m_WindowHeight));
-			pContext->BeginRenderPass(RenderPassInfo(GetCurrentBackbuffer(), RenderPassAccess::Clear_Store, nullptr, RenderPassAccess::DontCare_DontCare));
-			pContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-			pContext->SetDynamicDescriptor(0, 0, m_pHDRRenderTarget->GetSRV());
-			pContext->Draw(0, 3);
-			pContext->EndRenderPass();
+			uint32 values[4] = {};
+
+			pContext->InsertResourceBarrier(m_pLuminanceHistogram.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, true);
+			pContext->InsertResourceBarrier(m_pHDRRenderTarget.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, true);
+			pContext->ClearUavUInt(m_pLuminanceHistogram.get(), m_pLuminanceHistogram->GetUAV(), values);
+
+			pContext->SetComputePipelineState(m_pLuminanceHistogramPSO.get());
+			pContext->SetComputeRootSignature(m_pLuminanceHistogramRS.get());
+
+			struct HistogramParameters
+			{
+				uint32 Width;
+				uint32 Height;
+				float MinLogLuminance;
+				float OneOverLogLuminanceRange;
+			} Parameters;
+			Parameters.Width = m_WindowWidth;
+			Parameters.Height = m_WindowHeight;
+			Parameters.MinLogLuminance = g_MinLogLuminance;
+			Parameters.OneOverLogLuminanceRange = 1.0f / (g_MaxLogLuminance - g_MinLogLuminance);
+
+			pContext->SetComputeDynamicConstantBufferView(0, &Parameters, sizeof(HistogramParameters));
+			pContext->SetDynamicDescriptor(1, 0, m_pLuminanceHistogram->GetUAV());
+			pContext->SetDynamicDescriptor(2, 0, m_pHDRRenderTarget->GetSRV());
+
+			pContext->Dispatch(ceil(m_WindowWidth / 16), ceil(m_WindowHeight / 16), 1);
 			Profiler::Instance()->End(pContext);
+
+
+
+			Profiler::Instance()->Begin("Average Luminance", pContext);
+
+			pContext->InsertResourceBarrier(m_pLuminanceHistogram.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+			pContext->InsertResourceBarrier(m_pAverageLuminance.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+			pContext->SetComputePipelineState(m_pAverageLuminancePSO.get());
+			pContext->SetComputeRootSignature(m_pAverageLuminanceRS.get());
+
+			struct AverageParameters
+			{
+				int32 PixelCount;
+				float MinLogLuminance;
+				float LogLuminanceRange;
+				float TimeDelta;
+				float Tau;
+			} AverageParameters;
+
+			AverageParameters.PixelCount = m_WindowWidth * m_WindowHeight;
+			AverageParameters.MinLogLuminance = g_MinLogLuminance;
+			AverageParameters.LogLuminanceRange = g_MaxLogLuminance - g_MinLogLuminance;
+			AverageParameters.TimeDelta = GameTimer::DeltaTime();
+			AverageParameters.Tau = g_Tau;
+
+			pContext->SetComputeDynamicConstantBufferView(0, &AverageParameters, sizeof(AverageParameters));
+			pContext->SetDynamicDescriptor(1, 0, m_pAverageLuminance->GetUAV());
+			pContext->SetDynamicDescriptor(2, 0, m_pLuminanceHistogram->GetSRV());
+
+			pContext->Dispatch(1, 1, 1);
+			Profiler::Instance()->End(pContext);
+
+			nextFenceValue = pContext->Execute(false);
 		}
+
+		CommandContext* pContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+
+		Profiler::Instance()->Begin("Tonemap", pContext);
+		pContext->InsertResourceBarrier(GetCurrentBackbuffer(), D3D12_RESOURCE_STATE_RENDER_TARGET);
+		pContext->InsertResourceBarrier(m_pAverageLuminance.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+
+		pContext->SetGraphicsPipelineState(m_pToneMapPSO.get());
+		pContext->SetGraphicsRootSignature(m_pToneMapRS.get());
+		pContext->SetViewport(FloatRect(0, 0, (float)m_WindowWidth, (float)m_WindowHeight));
+		pContext->SetScissorRect(FloatRect(0, 0, (float)m_WindowWidth, (float)m_WindowHeight));
+		pContext->BeginRenderPass(RenderPassInfo(GetCurrentBackbuffer(), RenderPassAccess::Clear_Store, nullptr, RenderPassAccess::DontCare_DontCare));
+
+		pContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		pContext->SetDynamicConstantBufferView(0, &g_WhitePoint, sizeof(float));
+		pContext->SetDynamicDescriptor(1, 0, m_pHDRRenderTarget->GetSRV());
+		pContext->SetDynamicDescriptor(1, 1, m_pAverageLuminance->GetSRV());
+		pContext->Draw(0, 3);
+		pContext->EndRenderPass();
+		Profiler::Instance()->End(pContext);
 
 		Profiler::Instance()->Begin("UI", pContext);
 		//6. UI
@@ -929,6 +1005,41 @@ void Graphics::InitializeAssets()
 		m_pDepthPrepassPSO->Finalize("Depth Prepass Pipeline", m_pDevice.Get());
 	}
 
+	//Luminance Historgram
+	{
+		Shader computeShader("Resources/Shaders/LuminanceHistogram.hlsl", Shader::Type::ComputeShader, "CSMain");
+
+		//Rootsignature
+		m_pLuminanceHistogramRS = std::make_unique<RootSignature>();
+		m_pLuminanceHistogramRS->FinalizeFromShader("Luminance Historgram", computeShader, m_pDevice.Get());
+
+		//Pipeline state
+		m_pLuminanceHistogramPSO = std::make_unique<ComputePipelineState>();
+		m_pLuminanceHistogramPSO->SetRootSignature(m_pLuminanceHistogramRS->GetRootSignature());
+		m_pLuminanceHistogramPSO->SetComputeShader(computeShader.GetByteCode(), computeShader.GetByteCodeSize());
+		m_pLuminanceHistogramPSO->Finalize("Luminance Historgram", m_pDevice.Get());
+
+		m_pLuminanceHistogram = std::make_unique<Buffer>(this);
+		m_pLuminanceHistogram->Create(BufferDesc::CreateByteAddress(sizeof(uint32) * 256));
+		m_pAverageLuminance = std::make_unique<Texture>(this);
+		m_pAverageLuminance->Create(TextureDesc::Create2D(1, 1, DXGI_FORMAT_R32_FLOAT, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource));
+	}
+
+	//Average Luminance
+	{
+		Shader computeShader("Resources/Shaders/AverageLuminance.hlsl", Shader::Type::ComputeShader, "CSMain");
+
+		//Rootsignature
+		m_pAverageLuminanceRS = std::make_unique<RootSignature>();
+		m_pAverageLuminanceRS->FinalizeFromShader("Average Luminance", computeShader, m_pDevice.Get());
+
+		//Pipeline state
+		m_pAverageLuminancePSO = std::make_unique<ComputePipelineState>();
+		m_pAverageLuminancePSO->SetRootSignature(m_pAverageLuminanceRS->GetRootSignature());
+		m_pAverageLuminancePSO->SetComputeShader(computeShader.GetByteCode(), computeShader.GetByteCodeSize());
+		m_pAverageLuminancePSO->Finalize("Average Luminance", m_pDevice.Get());
+	}
+
 	//Tonemapping
 	{
 		Shader vertexShader("Resources/Shaders/Tonemapping.hlsl", Shader::Type::VertexShader, "VSMain");
@@ -1017,7 +1128,7 @@ void Graphics::UpdateImGui()
 	m_FrameTimes[m_Frame % m_FrameTimes.size()] = GameTimer::DeltaTime();
 
 	ImGui::SetNextWindowPos(ImVec2(0, 0), 0, ImVec2(0, 0));
-	ImGui::SetNextWindowSize(ImVec2(250, (float)m_WindowHeight));
+	ImGui::SetNextWindowSize(ImVec2(400, (float)m_WindowHeight));
 	ImGui::Begin("GPU Stats", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
 	ImGui::Text("MS: %.4f", GameTimer::DeltaTime() * 1000.0f);
 	ImGui::SameLine(100);
@@ -1053,6 +1164,12 @@ void Graphics::UpdateImGui()
 		{
 			RandomizeLights(m_DesiredLightCount);
 		}
+
+		ImGui::SliderFloat("Min Log Luminance", &g_MinLogLuminance, -100, 20);
+		ImGui::SliderFloat("Max Log Luminance", &g_MaxLogLuminance, -50, 50);
+		ImGui::SliderFloat("White Point", &g_WhitePoint, 0, 20);
+		ImGui::SliderFloat("Tau", &g_Tau, 0, 100);
+
 		ImGui::TreePop();
 	}
 	if (ImGui::TreeNodeEx("Descriptor Heaps", ImGuiTreeNodeFlags_DefaultOpen))
