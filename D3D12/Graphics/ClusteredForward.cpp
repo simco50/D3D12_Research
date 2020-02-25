@@ -31,23 +31,25 @@ void ClusteredForward::OnSwapchainCreated(int windowWidth, int windowHeight)
 {
 	m_pDepthTexture->Create(TextureDesc::CreateDepth(windowWidth, windowHeight, Graphics::DEPTH_STENCIL_FORMAT, TextureFlag::DepthStencil, m_pGraphics->GetMultiSampleCount(), ClearBinding(0.0f, 0)));
 
-	m_ClusterCountX = (uint32)ceil((float)windowWidth / cClusterSize);
-	m_ClusterCountY = (uint32)ceil((float)windowHeight / cClusterSize);
+	m_ClusterCountX = Math::RoundUp((float)windowWidth / cClusterSize);
+	m_ClusterCountY = Math::RoundUp((float)windowHeight / cClusterSize);
 
-	struct AABB { Vector4 Min; Vector4 Max; };
 	uint32 totalClusterCount = m_ClusterCountX * m_ClusterCountY * cClusterCountZ;
-	m_pAABBs->Create(BufferDesc::CreateStructured(totalClusterCount, sizeof(AABB)));
+	m_pAABBs->Create(BufferDesc::CreateStructured(totalClusterCount, sizeof(Vector4) * 2));
 	m_pUniqueClusters->Create(BufferDesc::CreateStructured(totalClusterCount, sizeof(uint32)));
+	m_pUniqueClusters->CreateUAV(&m_pUniqueClustersRawUAV, BufferUAVDesc::CreateRaw());
 	m_pDebugCompactedClusters->Create(BufferDesc::CreateStructured(totalClusterCount, sizeof(uint32)));
 	m_pCompactedClusters->Create(BufferDesc::CreateStructured(totalClusterCount, sizeof(uint32)));
+	m_pCompactedClusters->CreateUAV(&m_pCompactedClustersRawUAV, BufferUAVDesc::CreateRaw());
 	m_pLightIndexGrid->Create(BufferDesc::CreateStructured(32 * totalClusterCount, sizeof(uint32)));
 	m_pLightGrid->Create(BufferDesc::CreateStructured(totalClusterCount, 2 * sizeof(uint32)));
+	m_pLightGrid->CreateUAV(&m_pLightGridRawUAV, BufferUAVDesc::CreateRaw());
 	m_pDebugLightGrid->Create(BufferDesc::CreateStructured(totalClusterCount, 2 * sizeof(uint32)));
 
-	CommandContext* pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COMPUTE);
+	CommandContext* pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 	// Create AABBs
 	{
-		GPU_PROFILE_SCOPE(CreateAABBs, pContext);
+		GPU_PROFILE_SCOPE("CreateAABBs", pContext);
 
 		pContext->SetComputePipelineState(m_pCreateAabbPSO.get());
 		pContext->SetComputeRootSignature(m_pCreateAabbRS.get());
@@ -82,7 +84,7 @@ void ClusteredForward::OnSwapchainCreated(int windowWidth, int windowHeight)
 
 void ClusteredForward::Execute(CommandContext* pContext, const ClusteredForwardInputResources& resources)
 {
-	GPU_PROFILE_SCOPE(ClusteredForward, pContext);
+	GPU_PROFILE_SCOPE("Clustered Forward", pContext);
 
 	Vector2 screenDimensions((float)m_pGraphics->GetWindowWidth(), (float)m_pGraphics->GetWindowHeight());
 	float nearZ = resources.pCamera->GetNear();
@@ -93,18 +95,17 @@ void ClusteredForward::Execute(CommandContext* pContext, const ClusteredForwardI
 
 	//Mark Unique Clusters
 	{
-		GPU_PROFILE_SCOPE(MarkClusters, pContext);
-
-		{
-			GPU_PROFILE_SCOPE(UpdateData, pContext);
-			std::vector<uint32> zero(m_ClusterCountX * m_ClusterCountY * cClusterCountZ);
-			m_pUniqueClusters->SetData(pContext, zero.data(), sizeof(uint32) * zero.size());
-			m_pCompactedClusters->SetData(pContext, zero.data(), sizeof(uint32) * zero.size());
-		}
+		GPU_PROFILE_SCOPE("Mark Clusters", pContext);
 
 		pContext->InsertResourceBarrier(m_pDepthTexture.get(), D3D12_RESOURCE_STATE_DEPTH_WRITE);
 		pContext->InsertResourceBarrier(resources.pRenderTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
 		pContext->InsertResourceBarrier(m_pUniqueClusters.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+		pContext->InsertResourceBarrier(m_pCompactedClusters.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+		pContext->InsertResourceBarrier(m_pLightGrid.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+		pContext->ClearUavUInt(m_pCompactedClusters.get(), m_pCompactedClustersRawUAV);
+		pContext->ClearUavUInt(m_pUniqueClusters.get(), m_pUniqueClustersRawUAV);
+		pContext->ClearUavUInt(m_pLightGrid.get(), m_pLightGridRawUAV);
 
 		pContext->BeginRenderPass(RenderPassInfo(m_pDepthTexture.get(), RenderPassAccess::Clear_Store, true));
 
@@ -135,7 +136,7 @@ void ClusteredForward::Execute(CommandContext* pContext, const ClusteredForwardI
 		constantBuffer.ClusterSize[1] = cClusterSize;
 
 		{
-			GPU_PROFILE_SCOPE(Opaque, pContext);
+			GPU_PROFILE_SCOPE("Opaque", pContext);
 			pContext->SetDynamicConstantBufferView(0, &constantBuffer, sizeof(ConstantBuffer));
 			pContext->SetDynamicDescriptor(1, 0, m_pUniqueClusters->GetUAV());
 			for (const Batch& b : *resources.pOpaqueBatches)
@@ -145,7 +146,7 @@ void ClusteredForward::Execute(CommandContext* pContext, const ClusteredForwardI
 		}
 
 		{
-			GPU_PROFILE_SCOPE(Transparant, pContext);
+			GPU_PROFILE_SCOPE("Transparant", pContext);
 			pContext->SetGraphicsPipelineState(m_pMarkUniqueClustersTransparantPSO.get());
 			for (const Batch& b : *resources.pTransparantBatches)
 			{
@@ -159,31 +160,29 @@ void ClusteredForward::Execute(CommandContext* pContext, const ClusteredForwardI
 	{
 		// Compact Clusters
 		{
-			GPU_PROFILE_SCOPE(CompactClusters, pContext);
+			GPU_PROFILE_SCOPE("Compact Clusters", pContext);
 			pContext->SetComputePipelineState(m_pCompactClustersPSO.get());
 			pContext->SetComputeRootSignature(m_pCompactClustersRS.get());
 
-			pContext->InsertResourceBarrier(m_pUniqueClusters.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, false);
-
+			pContext->InsertResourceBarrier(m_pUniqueClusters.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 			UnorderedAccessView* pCompactedClustersUAV = m_pCompactedClusters->GetUAV();
-			pContext->InsertResourceBarrier(pCompactedClustersUAV->GetCounter(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, true);
-			uint32 values[] = { 0,0,0,0 };
-			pContext->ClearUavUInt(pCompactedClustersUAV->GetCounter(), pCompactedClustersUAV->GetCounterUAV(), values);
+			pContext->InsertResourceBarrier(pCompactedClustersUAV->GetCounter(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+			pContext->ClearUavUInt(pCompactedClustersUAV->GetCounter(), pCompactedClustersUAV->GetCounterUAV());
 
 			pContext->SetDynamicDescriptor(0, 0, m_pUniqueClusters->GetSRV());
 			pContext->SetDynamicDescriptor(1, 0, m_pCompactedClusters->GetUAV());
 
-			pContext->Dispatch((int)ceil(m_ClusterCountX * m_ClusterCountY * cClusterCountZ / 64.0f), 1, 1);
+			pContext->Dispatch(Math::RoundUp(m_ClusterCountX * m_ClusterCountY * cClusterCountZ / 64.0f), 1, 1);
 		}
 
 		// Update Indirect Arguments
 		{
-			GPU_PROFILE_SCOPE(UpdateIndirectArguments, pContext);
+			GPU_PROFILE_SCOPE("Update Indirect Arguments", pContext);
 
 			UnorderedAccessView* pCompactedClustersUAV = m_pCompactedClusters->GetUAV();
 			pContext->InsertResourceBarrier(pCompactedClustersUAV->GetCounter(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 			pContext->InsertResourceBarrier(m_pIndirectArguments.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-			pContext->FlushResourceBarriers();
 
 			pContext->SetComputePipelineState(m_pUpdateIndirectArgumentsPSO.get());
 			pContext->SetComputeRootSignature(m_pUpdateIndirectArgumentsRS.get());
@@ -198,23 +197,17 @@ void ClusteredForward::Execute(CommandContext* pContext, const ClusteredForwardI
 		{
 			// Light Culling
 			{
-				GPU_PROFILE_SCOPE(AlternativeLightCulling, pContext);
+				GPU_PROFILE_SCOPE("Alternative Light Culling", pContext);
 				pContext->SetComputePipelineState(m_pAlternativeLightCullingPSO.get());
 				pContext->SetComputeRootSignature(m_pLightCullingRS.get());
+
+				pContext->ClearUavUInt(m_pLightIndexCounter.get(), m_pLightIndexCounter->GetUAV());
+				pContext->ClearUavUInt(m_pLightGrid.get(), m_pLightGridRawUAV);
 
 				pContext->InsertResourceBarrier(m_pIndirectArguments.get(), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
 				pContext->InsertResourceBarrier(m_pCompactedClusters.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 				pContext->InsertResourceBarrier(m_pAABBs.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 				pContext->InsertResourceBarrier(m_pLightIndexCounter.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-				pContext->FlushResourceBarriers();
-
-				{
-					GPU_PROFILE_SCOPE(SetData, pContext);
-					uint32 zero = 0;
-					m_pLightIndexCounter->SetData(pContext, &zero, sizeof(uint32));
-					std::vector<char> zeros(2 * sizeof(uint32) * m_ClusterCountX * m_ClusterCountY * cClusterCountZ);
-					m_pLightGrid->SetData(pContext, zeros.data(), sizeof(char) * zeros.size());
-				}
 
 				struct ConstantBuffer
 				{
@@ -239,25 +232,24 @@ void ClusteredForward::Execute(CommandContext* pContext, const ClusteredForwardI
 				pContext->SetDynamicDescriptor(2, 1, m_pLightIndexGrid->GetUAV());
 				pContext->SetDynamicDescriptor(2, 2, m_pLightGrid->GetUAV());
 
-				pContext->Dispatch((int)ceil((float)m_ClusterCountX / 4), (int)ceil((float)m_ClusterCountY / 4), (int)ceil((float)cClusterCountZ / 4));
+				pContext->Dispatch(Math::RoundUp((float)m_ClusterCountX / 4), Math::RoundUp((float)m_ClusterCountY / 4), Math::RoundUp((float)cClusterCountZ / 4));
 			}
 		}
 		else
 		{
 			// Light Culling
 			{
-				GPU_PROFILE_SCOPE(LightCulling, pContext);
+				GPU_PROFILE_SCOPE("Light Culling", pContext);
 				pContext->SetComputePipelineState(m_pLightCullingPSO.get());
 				pContext->SetComputeRootSignature(m_pLightCullingRS.get());
 
-				pContext->InsertResourceBarrier(m_pIndirectArguments.get(), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT, false);
-				pContext->InsertResourceBarrier(m_pCompactedClusters.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, false);
-				pContext->InsertResourceBarrier(m_pAABBs.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, false);
-				pContext->InsertResourceBarrier(m_pLightGrid.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, false);
-				pContext->InsertResourceBarrier(m_pLightIndexGrid.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, true);
+				pContext->ClearUavUInt(m_pLightIndexCounter.get(), m_pLightIndexCounter->GetUAV());
 
-				uint32 zero = 0;
-				m_pLightIndexCounter->SetData(pContext, &zero, sizeof(uint32));
+				pContext->InsertResourceBarrier(m_pIndirectArguments.get(), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
+				pContext->InsertResourceBarrier(m_pCompactedClusters.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+				pContext->InsertResourceBarrier(m_pAABBs.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+				pContext->InsertResourceBarrier(m_pLightGrid.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+				pContext->InsertResourceBarrier(m_pLightIndexGrid.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
 				struct ConstantBuffer
 				{
@@ -320,7 +312,7 @@ void ClusteredForward::Execute(CommandContext* pContext, const ClusteredForwardI
 		frameData.SliceMagicA = sliceMagicA;
 		frameData.SliceMagicB = sliceMagicB;
 
-		GPU_PROFILE_SCOPE(LightingPass, pContext);
+		GPU_PROFILE_SCOPE("Lighting", pContext);
 
 		pContext->InsertResourceBarrier(m_pLightGrid.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 		pContext->InsertResourceBarrier(m_pLightIndexGrid.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
@@ -332,7 +324,7 @@ void ClusteredForward::Execute(CommandContext* pContext, const ClusteredForwardI
 		pContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 		pContext->SetGraphicsRootSignature(m_pDiffuseRS.get());
 		{
-			GPU_PROFILE_SCOPE(Opaque, pContext);
+			GPU_PROFILE_SCOPE("Opaque", pContext);
 			pContext->SetGraphicsPipelineState(m_pDiffusePSO.get());
 
 			pContext->SetDynamicConstantBufferView(1, &frameData, sizeof(PerFrameData));
@@ -352,7 +344,7 @@ void ClusteredForward::Execute(CommandContext* pContext, const ClusteredForwardI
 		}
 
 		{
-			GPU_PROFILE_SCOPE(Transparant, pContext);
+			GPU_PROFILE_SCOPE("Transparant", pContext);
 			pContext->SetGraphicsPipelineState(m_pDiffuseTransparancyPSO.get());
 
 			for (const Batch& b : *resources.pTransparantBatches)
@@ -371,7 +363,7 @@ void ClusteredForward::Execute(CommandContext* pContext, const ClusteredForwardI
 
 	if (gVisualizeClusters)
 	{
-		GPU_PROFILE_SCOPE(ClusterVisualization, pContext);
+		GPU_PROFILE_SCOPE("Cluster Visualization", pContext);
 
 		if (m_DidCopyDebugClusterData == false)
 		{
@@ -447,7 +439,7 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
 
 	//Mark Clusters
 	{
-		std::vector<D3D12_INPUT_ELEMENT_DESC> inputElements = {
+		D3D12_INPUT_ELEMENT_DESC inputElements[] = {
 			D3D12_INPUT_ELEMENT_DESC{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
 			D3D12_INPUT_ELEMENT_DESC{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
 		};
@@ -465,7 +457,7 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
 		m_pMarkUniqueClustersOpaquePSO->SetBlendMode(BlendMode::Replace, false);
 		m_pMarkUniqueClustersOpaquePSO->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
 		m_pMarkUniqueClustersOpaquePSO->SetPixelShader(pixelShaderOpaque.GetByteCode(), pixelShaderOpaque.GetByteCodeSize());
-		m_pMarkUniqueClustersOpaquePSO->SetInputLayout(inputElements.data(), (uint32)inputElements.size());
+		m_pMarkUniqueClustersOpaquePSO->SetInputLayout(inputElements, ARRAYSIZE(inputElements));
 		m_pMarkUniqueClustersOpaquePSO->SetRenderTargetFormats(nullptr, 0, Graphics::DEPTH_STENCIL_FORMAT, m_pGraphics->GetMultiSampleCount(), m_pGraphics->GetMultiSampleQualityLevel(m_pGraphics->GetMultiSampleCount()));
 		m_pMarkUniqueClustersOpaquePSO->Finalize("Mark Unique Clusters", m_pGraphics->GetDevice());
 
@@ -556,7 +548,7 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
 		m_pDiffusePSO->SetBlendMode(BlendMode::Replace, false);
 		m_pDiffusePSO->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
 		m_pDiffusePSO->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
-		m_pDiffusePSO->SetInputLayout(inputElements, 5);
+		m_pDiffusePSO->SetInputLayout(inputElements, ARRAYSIZE(inputElements));
 		m_pDiffusePSO->SetDepthTest(D3D12_COMPARISON_FUNC_EQUAL);
 		m_pDiffusePSO->SetDepthWrite(false);
 		m_pDiffusePSO->SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, m_pGraphics->GetMultiSampleCount(), m_pGraphics->GetMultiSampleQualityLevel(m_pGraphics->GetMultiSampleCount()));

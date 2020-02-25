@@ -131,10 +131,10 @@ public:
 	void BeginRenderPass(const RenderPassInfo& renderPassInfo);
 	void EndRenderPass();
 
-	void ClearUavUInt(GraphicsResource* pBuffer, D3D12_CPU_DESCRIPTOR_HANDLE uav, uint32 values[4]);
-	void ClearUavUInt(GraphicsResource* pBuffer, UnorderedAccessView* pUav, uint32 values[4]);
-	void ClearUavFloat(GraphicsResource* pBuffer, D3D12_CPU_DESCRIPTOR_HANDLE uav, float values[4]);
-	void ClearUavFloat(GraphicsResource* pBuffer, UnorderedAccessView* pUav, float values[4]);
+	void ClearUavUInt(GraphicsResource* pBuffer, D3D12_CPU_DESCRIPTOR_HANDLE uav, uint32* values = nullptr);
+	void ClearUavUInt(GraphicsResource* pBuffer, UnorderedAccessView* pUav, uint32* values = nullptr);
+	void ClearUavFloat(GraphicsResource* pBuffer, D3D12_CPU_DESCRIPTOR_HANDLE uav, float* values = nullptr);
+	void ClearUavFloat(GraphicsResource* pBuffer, UnorderedAccessView* pUav, float* values = nullptr);
 
 	//Bindings
 	void SetComputePipelineState(ComputePipelineState* pPipelineState);

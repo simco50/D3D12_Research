@@ -215,7 +215,7 @@ void Graphics::Update()
 		Data.DepthStencil = graph.ImportTexture("Depth Stencil", GetDepthStencil());
 		Data.DepthStencilResolved = graph.ImportTexture("Depth Stencil Target", GetResolvedDepthStencil());
 
-		GPU_PROFILE_SCOPE(ForwardPlus, pContext);
+		GPU_PROFILE_SCOPE("Forward Plus", pContext);
 		//1. DEPTH PREPASS
 		// - Depth only pass that renders the entire scene
 		// - Optimization that prevents wasteful lighting calculations during the base pass
@@ -239,21 +239,15 @@ void Graphics::Update()
 					renderContext.InsertResourceBarrier(pDepthStencil, D3D12_RESOURCE_STATE_DEPTH_WRITE);
 
 					renderContext.BeginRenderPass(RenderPassInfo(pDepthStencil, RenderPassAccess::Clear_Store));
-
 					renderContext.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 					renderContext.SetViewport(FloatRect(0, 0, (float)desc.Width, (float)desc.Height));
-
-					struct PerObjectData
-					{
-						Matrix WorldViewProjection;
-					} ObjectData;
 
 					renderContext.SetGraphicsPipelineState(m_pDepthPrepassPSO.get());
 					renderContext.SetGraphicsRootSignature(m_pDepthPrepassRS.get());
 					for (const Batch& b : m_OpaqueBatches)
 					{
-						ObjectData.WorldViewProjection = m_pCamera->GetViewProjection();
-						renderContext.SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
+						Matrix worldViewProjection = m_pCamera->GetViewProjection();
+						renderContext.SetDynamicConstantBufferView(0, &worldViewProjection, sizeof(Matrix));
 						b.pMesh->Draw(&renderContext);
 					}
 					renderContext.EndRenderPass();
@@ -314,9 +308,9 @@ void Graphics::Update()
 		// - Outputs a: - Texture containing a count and an offset of lights per tile.
 		//				- uint[] index buffer to indicate what lights are visible in each tile.
 		{
-			GPU_PROFILE_SCOPE(LightCulling, pContext);
+			GPU_PROFILE_SCOPE("Light Culling", pContext);
 			{
-				GPU_PROFILE_SCOPE(SetupLightData, pContext);
+				GPU_PROFILE_SCOPE("Setup Light Data", pContext);
 				uint32 zero[] = { 0, 0 };
 				m_pLightIndexCounter->SetData(pContext, &zero, sizeof(uint32) * 2);
 				m_pLightBuffer->SetData(pContext, m_Lights.data(), (uint32)m_Lights.size() * sizeof(Light));
@@ -361,7 +355,7 @@ void Graphics::Update()
 		// - Renders the scene depth onto a separate depth buffer from the light's view
 		if (m_ShadowCasters > 0)
 		{
-			GPU_PROFILE_SCOPE(Shadows, pContext);
+			GPU_PROFILE_SCOPE("Shadows", pContext);
 			pContext->InsertResourceBarrier(m_pShadowMap.get(), D3D12_RESOURCE_STATE_DEPTH_WRITE);
 
 			pContext->BeginRenderPass(RenderPassInfo(m_pShadowMap.get(), RenderPassAccess::Clear_Store));
@@ -369,7 +363,7 @@ void Graphics::Update()
 
 			for (int i = 0; i < m_ShadowCasters; ++i)
 			{
-				GPU_PROFILE_SCOPE(LightView, pContext);
+				GPU_PROFILE_SCOPE("Light View", pContext);
 				const Vector4& shadowOffset = lightData.ShadowMapOffsets[i];
 				FloatRect viewport;
 				viewport.Left = shadowOffset.x * (float)m_pShadowMap->GetWidth();
@@ -386,7 +380,7 @@ void Graphics::Update()
 
 				//Opaque
 				{
-					GPU_PROFILE_SCOPE(Opaque, pContext);
+					GPU_PROFILE_SCOPE("Opaque", pContext);
 					pContext->SetGraphicsPipelineState(m_pShadowsOpaquePSO.get());
 					pContext->SetGraphicsRootSignature(m_pShadowsOpaqueRS.get());
 
@@ -398,7 +392,7 @@ void Graphics::Update()
 				}
 				//Transparant
 				{
-					GPU_PROFILE_SCOPE(Transparant, pContext);
+					GPU_PROFILE_SCOPE("Transparant", pContext);
 					pContext->SetGraphicsPipelineState(m_pShadowsAlphaPSO.get());
 					pContext->SetGraphicsRootSignature(m_pShadowsAlphaRS.get());
 
@@ -416,7 +410,7 @@ void Graphics::Update()
 		//5. BASE PASS
 		// - Render the scene using the shadow mapping result and the light culling buffers
 		{
-			GPU_PROFILE_SCOPE(Lighting, pContext);
+			GPU_PROFILE_SCOPE("Lighting", pContext);
 
 			pContext->SetViewport(FloatRect(0, 0, (float)m_WindowWidth, (float)m_WindowHeight));
 
@@ -440,7 +434,7 @@ void Graphics::Update()
 
 			//Opaque
 			{
-				GPU_PROFILE_SCOPE(Opaque, pContext);
+				GPU_PROFILE_SCOPE("Opaque", pContext);
 				pContext->SetGraphicsPipelineState(m_pPBRDiffusePSO.get());
 				pContext->SetGraphicsRootSignature(m_pPBRDiffuseRS.get());
 
@@ -465,7 +459,7 @@ void Graphics::Update()
 
 			//Transparant
 			{
-				GPU_PROFILE_SCOPE(Transparant, pContext);
+				GPU_PROFILE_SCOPE("Transparant", pContext);
 				pContext->SetGraphicsPipelineState(m_pPBRDiffuseAlphaPSO.get());
 				pContext->SetGraphicsRootSignature(m_pPBRDiffuseRS.get());
 
@@ -527,15 +521,13 @@ void Graphics::Update()
 
 		//Tonemap
 		{
-			GPU_PROFILE_SCOPE(Tonemap, pContext);
+			GPU_PROFILE_SCOPE("Tonemap", pContext);
 			{
-				GPU_PROFILE_SCOPE(LuminanceHistogram, pContext);
-
-				uint32 values[4] = {};
+				GPU_PROFILE_SCOPE("Luminance Histogram", pContext);
 
 				pContext->InsertResourceBarrier(m_pLuminanceHistogram.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, true);
 				pContext->InsertResourceBarrier(m_pHDRRenderTarget.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, true);
-				pContext->ClearUavUInt(m_pLuminanceHistogram.get(), m_pLuminanceHistogram->GetUAV(), values);
+				pContext->ClearUavUInt(m_pLuminanceHistogram.get(), m_pLuminanceHistogram->GetUAV());
 
 				pContext->SetComputePipelineState(m_pLuminanceHistogramPSO.get());
 				pContext->SetComputeRootSignature(m_pLuminanceHistogramRS.get());
@@ -556,11 +548,11 @@ void Graphics::Update()
 				pContext->SetDynamicDescriptor(1, 0, m_pLuminanceHistogram->GetUAV());
 				pContext->SetDynamicDescriptor(2, 0, m_pHDRRenderTarget->GetSRV());
 
-				pContext->Dispatch(ceil(m_WindowWidth / 16), ceil(m_WindowHeight / 16), 1);
+				pContext->Dispatch(Math::RoundUp((float)m_WindowWidth / 16), Math::RoundUp((float)m_WindowHeight / 16), 1);
 			}
 
 			{
-				GPU_PROFILE_SCOPE(AverageLuminance, pContext);
+				GPU_PROFILE_SCOPE("Average Luminance", pContext);
 
 				pContext->InsertResourceBarrier(m_pLuminanceHistogram.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 				pContext->InsertResourceBarrier(m_pAverageLuminance.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
@@ -591,7 +583,7 @@ void Graphics::Update()
 			}
 
 			{
-				GPU_PROFILE_SCOPE(Tonemapping, pContext);
+				GPU_PROFILE_SCOPE("Tonemapping", pContext);
 				pContext->InsertResourceBarrier(GetCurrentBackbuffer(), D3D12_RESOURCE_STATE_RENDER_TARGET);
 				pContext->InsertResourceBarrier(m_pAverageLuminance.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
@@ -613,7 +605,7 @@ void Graphics::Update()
 		//6. UI
 		// - ImGui render, pretty straight forward
 		{
-			GPU_PROFILE_SCOPE(UI, pContext);
+			GPU_PROFILE_SCOPE("UI", pContext);
 			UpdateImGui();
 			m_pImGuiRenderer->Render(*pContext, GetCurrentBackbuffer());
 		}
@@ -855,8 +847,8 @@ void Graphics::OnResize(int width, int height)
 	}
 	m_pHDRRenderTarget->Create(TextureDesc::CreateRenderTarget(width, height, RENDER_TARGET_FORMAT, TextureFlag::RenderTarget | TextureFlag::ShaderResource));
 
-	int frustumCountX = (int)(ceil((float)width / FORWARD_PLUS_BLOCK_SIZE));
-	int frustumCountY = (int)(ceil((float)height / FORWARD_PLUS_BLOCK_SIZE));
+	int frustumCountX = Math::RoundUp((float)width / FORWARD_PLUS_BLOCK_SIZE);
+	int frustumCountY = Math::RoundUp((float)height / FORWARD_PLUS_BLOCK_SIZE);
 	m_pLightGridOpaque->Create(TextureDesc::Create2D(frustumCountX, frustumCountY, DXGI_FORMAT_R32G32_UINT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
 	m_pLightGridTransparant->Create(TextureDesc::Create2D(frustumCountX, frustumCountY, DXGI_FORMAT_R32G32_UINT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
 

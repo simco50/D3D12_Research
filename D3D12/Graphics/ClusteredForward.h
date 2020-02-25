@@ -8,6 +8,7 @@ class Camera;
 struct Batch;
 class CommandContext;
 class Buffer;
+class UnorderedAccessView;
 
 struct ClusteredForwardInputResources
 {
@@ -49,11 +50,13 @@ private:
 	std::unique_ptr<GraphicsPipelineState> m_pMarkUniqueClustersOpaquePSO;
 	std::unique_ptr<GraphicsPipelineState> m_pMarkUniqueClustersTransparantPSO;
 	std::unique_ptr<Buffer> m_pUniqueClusters;
+	UnorderedAccessView* m_pUniqueClustersRawUAV = nullptr;
 
 	//Step 3: Compact Cluster List
 	std::unique_ptr<RootSignature> m_pCompactClustersRS;
 	std::unique_ptr<ComputePipelineState> m_pCompactClustersPSO;
 	std::unique_ptr<Buffer> m_pCompactedClusters;
+	UnorderedAccessView* m_pCompactedClustersRawUAV = nullptr;
 
 	//Step 4: Update Indirect Dispatch Buffer
 	std::unique_ptr<RootSignature> m_pUpdateIndirectArgumentsRS;
@@ -67,6 +70,7 @@ private:
 	std::unique_ptr<Buffer> m_pLightIndexCounter;
 	std::unique_ptr<Buffer> m_pLightIndexGrid;
 	std::unique_ptr<Buffer> m_pLightGrid;
+	UnorderedAccessView* m_pLightGridRawUAV = nullptr;
 
 	//Alternative light culling
 	std::unique_ptr<ComputePipelineState> m_pAlternativeLightCullingPSO;

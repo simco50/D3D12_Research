@@ -206,26 +206,30 @@ void CommandContext::ExecuteIndirect(ID3D12CommandSignature* pCommandSignature, 
 	m_pCommandList->ExecuteIndirect(pCommandSignature, 1, pIndirectArguments->GetResource(), 0, nullptr, 0);
 }
 
-void CommandContext::ClearUavUInt(GraphicsResource* pBuffer, D3D12_CPU_DESCRIPTOR_HANDLE uav, uint32 values[4])
+void CommandContext::ClearUavUInt(GraphicsResource* pBuffer, D3D12_CPU_DESCRIPTOR_HANDLE uav, uint32* values /*= nullptr*/)
 {
+	FlushResourceBarriers();
 	DescriptorHandle gpuHandle = m_pShaderResourceDescriptorAllocator->AllocateTransientDescriptor(1);
 	m_pGraphics->GetDevice()->CopyDescriptorsSimple(1, gpuHandle.GetCpuHandle(), uav, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-	m_pCommandList->ClearUnorderedAccessViewUint(gpuHandle.GetGpuHandle(), uav, pBuffer->GetResource(), values, 0, nullptr);
+	uint32 zeros[4] = { 0,0,0,0 };
+	m_pCommandList->ClearUnorderedAccessViewUint(gpuHandle.GetGpuHandle(), uav, pBuffer->GetResource(), values ? values : zeros, 0, nullptr);
 }
 
-void CommandContext::ClearUavUInt(GraphicsResource* pBuffer, UnorderedAccessView* pUav, uint32 values[4])
+void CommandContext::ClearUavUInt(GraphicsResource* pBuffer, UnorderedAccessView* pUav, uint32* values /*= nullptr*/)
 {
 	ClearUavUInt(pBuffer, pUav->GetDescriptor(), values);
 }
 
-void CommandContext::ClearUavFloat(GraphicsResource* pBuffer, D3D12_CPU_DESCRIPTOR_HANDLE uav, float values[4])
+void CommandContext::ClearUavFloat(GraphicsResource* pBuffer, D3D12_CPU_DESCRIPTOR_HANDLE uav, float* values /*= nullptr*/)
 {
+	FlushResourceBarriers();
 	DescriptorHandle gpuHandle = m_pShaderResourceDescriptorAllocator->AllocateTransientDescriptor(1);
 	m_pGraphics->GetDevice()->CopyDescriptorsSimple(1, gpuHandle.GetCpuHandle(), uav, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-	m_pCommandList->ClearUnorderedAccessViewFloat(gpuHandle.GetGpuHandle(), uav, pBuffer->GetResource(), values, 0, nullptr);
+	float zeros[4] = { 0,0,0,0 };
+	m_pCommandList->ClearUnorderedAccessViewFloat(gpuHandle.GetGpuHandle(), uav, pBuffer->GetResource(), values ? values : zeros, 0, nullptr);
 }
 
-void CommandContext::ClearUavFloat(GraphicsResource* pBuffer, UnorderedAccessView* pUav, float values[4])
+void CommandContext::ClearUavFloat(GraphicsResource* pBuffer, UnorderedAccessView* pUav, float* values /*= nullptr*/)
 {
 	ClearUavFloat(pBuffer, pUav->GetDescriptor(), values);
 }

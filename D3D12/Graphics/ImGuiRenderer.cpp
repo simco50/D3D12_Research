@@ -95,7 +95,7 @@ void ImGuiRenderer::Render(CommandContext& context, Texture* pRenderTarget)
 	{
 		return;
 	}
-	GPU_PROFILE_SCOPE(RenderUI, &context);
+	GPU_PROFILE_SCOPE("RenderUI", &context);
 	context.SetGraphicsPipelineState(m_pPipelineState.get());
 	context.SetGraphicsRootSignature(m_pRootSignature.get());
 	Matrix projectionMatrix = XMMatrixOrthographicOffCenterLH(0.0f, pDrawData->DisplayPos.x + pDrawData->DisplaySize.x, pDrawData->DisplayPos.y + pDrawData->DisplaySize.y, 0.0f, 0.0f, 1.0f);
