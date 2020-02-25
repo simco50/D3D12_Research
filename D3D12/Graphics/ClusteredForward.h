@@ -6,6 +6,7 @@ class GraphicsPipelineState;
 class Texture;
 class Camera;
 struct Batch;
+class CommandContext;
 class Buffer;
 
 struct ClusteredForwardInputResources
@@ -24,7 +25,7 @@ public:
 
 	void OnSwapchainCreated(int windowWidth, int windowHeight);
 
-	void Execute(const ClusteredForwardInputResources& resources);
+	void Execute(CommandContext* pContext, const ClusteredForwardInputResources& resources);
 
 private:
 	void SetupResources(Graphics* pGraphics);

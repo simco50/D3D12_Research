@@ -3,11 +3,14 @@
 class Buffer;
 class CommandContext;
 
-#define GPU_PROFILE_BEGIN(name, cmdlist) Profiler::Instance()->Begin(name, &cmdlist);
-#define GPU_PROFILE_END(cmdlist) Profiler::Instance()->End(&cmdlist);
+#define GPU_PROFILE_BEGIN(name, cmdlist) Profiler::Instance()->Begin(name, cmdlist);
+#define GPU_PROFILE_END(cmdlist) Profiler::Instance()->End(cmdlist);
 
 #define PROFILE_BEGIN(name) Profiler::Instance()->Begin(name, nullptr);
 #define PROFILE_END() Profiler::Instance()->End();
+
+#define GPU_PROFILE_SCOPE(name, cmdlist) ScopeProfiler profiler ## __COUNTER__(#name, cmdlist)
+#define PROFILE_SCOPE(name, cmdlist) ScopeProfiler profiler ## __COUNTER__(#name, nullptr)
 
 class CpuTimer
 {
@@ -182,4 +185,19 @@ private:
 	std::unique_ptr<ProfileNode> m_pRootBlock;
 	ProfileNode* m_pPreviousBlock = nullptr;
 	ProfileNode* m_pCurrentBlock = nullptr;
+};
+
+struct ScopeProfiler
+{
+	ScopeProfiler(const char* pName, CommandContext* pContext = nullptr)
+		: pContext(pContext)
+	{
+		Profiler::Instance()->Begin(pName, pContext);
+	}
+
+	~ScopeProfiler()
+	{
+		Profiler::Instance()->End(pContext);
+	}
+	CommandContext* pContext;
 };

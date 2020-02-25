@@ -208,9 +208,9 @@ void RGGraph::ExecutePass(RGPassBase* pPass, CommandContext& context, RGResource
 	//#todo: Automatically insert resource barriers
 	//#todo: Check if we're in a Graphics pass and automatically call BeginRenderPass
 
-	GPU_PROFILE_BEGIN(pPass->m_Name, context);
+	GPU_PROFILE_BEGIN(pPass->m_Name, &context);
 	pPass->Execute(resources, context);
-	GPU_PROFILE_END(context);
+	GPU_PROFILE_END(&context);
 
 	//#todo: Check if we're in a Graphics pass and automatically call EndRenderPass
 

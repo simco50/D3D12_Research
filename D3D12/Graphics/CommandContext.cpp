@@ -593,6 +593,7 @@ void CommandContext::SetViewport(const FloatRect& rect, float minDepth /*= 0.0f*
 	viewport.MinDepth = minDepth;
 	viewport.MaxDepth = maxDepth;
 	m_pCommandList->RSSetViewports(1, &viewport);
+	SetScissorRect(rect);
 }
 
 void CommandContext::SetScissorRect(const FloatRect& rect)

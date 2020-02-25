@@ -95,6 +95,7 @@ void ImGuiRenderer::Render(CommandContext& context, Texture* pRenderTarget)
 	{
 		return;
 	}
+	GPU_PROFILE_SCOPE(RenderUI, &context);
 	context.SetGraphicsPipelineState(m_pPipelineState.get());
 	context.SetGraphicsRootSignature(m_pRootSignature.get());
 	Matrix projectionMatrix = XMMatrixOrthographicOffCenterLH(0.0f, pDrawData->DisplayPos.x + pDrawData->DisplaySize.x, pDrawData->DisplayPos.y + pDrawData->DisplaySize.y, 0.0f, 0.0f, 1.0f);
@@ -102,7 +103,6 @@ void ImGuiRenderer::Render(CommandContext& context, Texture* pRenderTarget)
 	context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	context.SetViewport(FloatRect(pDrawData->DisplayPos.x, pDrawData->DisplayPos.y, pDrawData->DisplayPos.x + pDrawData->DisplaySize.x, pDrawData->DisplayPos.y + pDrawData->DisplaySize.y), 0, 1);
 	
-	Profiler::Instance()->Begin("Render UI", &context);
 	context.BeginRenderPass(RenderPassInfo(pRenderTarget, RenderPassAccess::Load_Store, nullptr, RenderPassAccess::DontCare_DontCare));
 
 	for (int n = 0; n < pDrawData->CmdListsCount; n++)
@@ -110,7 +110,6 @@ void ImGuiRenderer::Render(CommandContext& context, Texture* pRenderTarget)
 		const ImDrawList* pCmdList = pDrawData->CmdLists[n];
 		context.SetDynamicVertexBuffer(0, pCmdList->VtxBuffer.Size, sizeof(ImDrawVert), pCmdList->VtxBuffer.Data);
 		context.SetDynamicIndexBuffer(pCmdList->IdxBuffer.Size, pCmdList->IdxBuffer.Data, true);
-
 		int indexOffset = 0;
 		for (int i = 0; i < pCmdList->CmdBuffer.Size; i++)
 		{
@@ -122,7 +121,9 @@ void ImGuiRenderer::Render(CommandContext& context, Texture* pRenderTarget)
 				context.SetScissorRect(FloatRect(pcmd->ClipRect.x, pcmd->ClipRect.y, pcmd->ClipRect.z, pcmd->ClipRect.w));
 				if (pcmd->TextureId != nullptr)
 				{
-					context.SetDynamicDescriptor(1, 0, static_cast<Texture*>(pcmd->TextureId)->GetSRV());
+					Texture* pTex = static_cast<Texture*>(pcmd->TextureId);
+					context.InsertResourceBarrier(pTex, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+					context.SetDynamicDescriptor(1, 0, pTex->GetSRV());
 				}
 				context.DrawIndexed(pcmd->ElemCount, indexOffset, 0);
 			}
@@ -130,5 +131,4 @@ void ImGuiRenderer::Render(CommandContext& context, Texture* pRenderTarget)
 		}
 	}
 	context.EndRenderPass();
-	Profiler::Instance()->End(&context);
 }
