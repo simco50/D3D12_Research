@@ -120,13 +120,14 @@ public:
 	D3D12_COMMAND_LIST_TYPE GetType() const { return m_Type; }
 
 	//Commands
-	void Dispatch(uint32 groupCountX, uint32 groupCountY, uint32 groupCountZ);
+	void Dispatch(uint32 groupCountX = 1, uint32 groupCountY = 1, uint32 groupCountZ = 1);
 	void ExecuteIndirect(ID3D12CommandSignature* pCommandSignature, Buffer* pIndirectArguments);
 	void Draw(int vertexStart, int vertexCount);
 	void DrawIndexed(int indexCount, int indexStart, int minVertex = 0);
 	void DrawIndexedInstanced(int indexCount, int indexStart, int instanceCount, int minVertex = 0, int instanceStart = 0);
 	void ClearRenderTarget(D3D12_CPU_DESCRIPTOR_HANDLE rtv, const Color& color = Color(0.0f, 0.0f, 0.0f, 1.0f));
 	void ClearDepth(D3D12_CPU_DESCRIPTOR_HANDLE dsv, D3D12_CLEAR_FLAGS clearFlags = D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, float depth = 1.0f, unsigned char stencil = 0);
+	void ResolveResource(Texture* pSource, uint32 sourceSubResource, Texture* pTarget, uint32 targetSubResource, DXGI_FORMAT format);
 
 	void BeginRenderPass(const RenderPassInfo& renderPassInfo);
 	void EndRenderPass();

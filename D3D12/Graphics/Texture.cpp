@@ -422,7 +422,7 @@ void Texture::Create(CommandContext* pContext, const char* pFilePath, bool srgb)
 			pImg = pImg->GetNextImage();
 		}
 		Create(desc);
-		pContext->InitializeTexture(this, subResourceData.data(), 0, subResourceData.size());
+		pContext->InitializeTexture(this, subResourceData.data(), 0, (int)subResourceData.size());
 		pContext->ExecuteAndReset(true);
 	}
 }

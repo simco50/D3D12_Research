@@ -462,10 +462,10 @@ void CommandContext::EndRenderPass()
 			const RenderPassInfo::RenderTargetInfo& data = m_CurrentRenderPassInfo.RenderTargets[i];
 			if (RenderPassInfo::ExtractEndingAccess(data.Access) == D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_RESOLVE)
 			{
-				InsertResourceBarrier(data.Target, D3D12_RESOURCE_STATE_RESOLVE_SOURCE, false);
-				InsertResourceBarrier(data.ResolveTarget, D3D12_RESOURCE_STATE_RESOLVE_DEST, true);
+				InsertResourceBarrier(data.Target, D3D12_RESOURCE_STATE_RESOLVE_SOURCE);
+				InsertResourceBarrier(data.ResolveTarget, D3D12_RESOURCE_STATE_RESOLVE_DEST);
 				uint32 subResource = D3D12CalcSubresource(data.MipLevel, data.ArrayIndex, 0, data.Target->GetMipLevels(), data.Target->GetArraySize());
-				m_pCommandList->ResolveSubresource(data.ResolveTarget->GetResource(), 0, data.Target->GetResource(), subResource, data.Target->GetFormat());
+				ResolveResource(data.Target, subResource, data.ResolveTarget, 0, data.Target->GetFormat());
 			}
 		}
 	}
@@ -504,6 +504,12 @@ void CommandContext::ClearRenderTarget(D3D12_CPU_DESCRIPTOR_HANDLE rtv, const Co
 void CommandContext::ClearDepth(D3D12_CPU_DESCRIPTOR_HANDLE dsv, D3D12_CLEAR_FLAGS clearFlags /*= D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL*/, float depth /*= 1.0f*/, unsigned char stencil /*= 0*/)
 {
 	m_pCommandList->ClearDepthStencilView(dsv, clearFlags, depth, stencil, 0, nullptr);
+}
+
+void CommandContext::ResolveResource(Texture* pSource, uint32 sourceSubResource, Texture* pTarget, uint32 targetSubResource, DXGI_FORMAT format)
+{
+	FlushResourceBarriers();
+	m_pCommandList->ResolveSubresource(pTarget->GetResource(), targetSubResource, pSource->GetResource(), sourceSubResource, format);
 }
 
 void CommandContext::SetGraphicsPipelineState(GraphicsPipelineState* pPipelineState)

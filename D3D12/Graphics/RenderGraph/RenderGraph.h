@@ -8,7 +8,7 @@ class CommandContext;
 
 class RGResourceAllocator;
 class RGGraph;
-class RGPassBase;
+class RGPass;
 
 enum class RGResourceType
 {
@@ -66,7 +66,7 @@ struct RGNode
 	RGResource* pResource;
 	int Version;
 	//RenderGraph compile-time values
-	RGPassBase* pWriter = nullptr;
+	RGPass* pWriter = nullptr;
 	int Reads = 0;
 };
 
@@ -87,17 +87,10 @@ struct RGResourceHandle
 	int Index;
 };
 
-struct RGResourceHandleMutable : public RGResourceHandle
-{
-	explicit RGResourceHandleMutable(int id = InvalidIndex)
-		: RGResourceHandle(id)
-	{}
-};
-
 class RGPassBuilder
 {
 public:
-	RGPassBuilder(RGGraph& renderGraph, RGPassBase& pass)
+	RGPassBuilder(RGGraph& renderGraph, RGPass& pass)
 		: m_RenderGraph(renderGraph),
 		m_Pass(pass)
 	{}
@@ -106,20 +99,20 @@ public:
 	RGPassBuilder& operator=(const RGPassBuilder& other) = delete;
 
 	RGResourceHandle Read(const RGResourceHandle& resource);
-	RGResourceHandleMutable Write(RGResourceHandleMutable& resource);
-	RGResourceHandleMutable CreateTexture(const char* pName, const TextureDesc& desc);
-	RGResourceHandleMutable CreateBuffer(const char* pName, const BufferDesc& desc);
+	RGResourceHandle Write(RGResourceHandle& resource);
+	RGResourceHandle CreateTexture(const char* pName, const TextureDesc& desc);
+	RGResourceHandle CreateBuffer(const char* pName, const BufferDesc& desc);
 	void NeverCull();
 
 private:
-	RGPassBase& m_Pass;
+	RGPass& m_Pass;
 	RGGraph& m_RenderGraph;
 };
 
 class RGPassResources
 {
 public:
-	RGPassResources(RGGraph& graph, RGPassBase& pass)
+	RGPassResources(RGGraph& graph, RGPass& pass)
 		: m_Graph(graph), m_Pass(pass)
 	{}
 
@@ -136,22 +129,52 @@ public:
 
 private:
 	RGGraph& m_Graph;
-	RGPassBase& m_Pass;
+	RGPass& m_Pass;
 };
 
-class RGPassBase
+class IPassExecutor
+{
+public:
+	virtual void Execute(const RGPassResources& resources, CommandContext& renderContext) = 0;
+};
+
+template<typename ExecuteCallback>
+class PassExecutor : public IPassExecutor
+{
+public:
+	PassExecutor(ExecuteCallback& callback)
+		: m_Callback(std::move(callback))
+	{}
+	virtual void Execute(const RGPassResources& resources, CommandContext& renderContext) override
+	{
+		m_Callback(renderContext, resources);
+	}
+private:
+	ExecuteCallback m_Callback;
+};
+
+class RGPass
 {
 public:
 	friend class RGPassBuilder;
 	friend class RGGraph;
 
-	RGPassBase(RGGraph& graph, const char* pName, int id)
+	RGPass(RGGraph& graph, const char* pName, int id)
 		: m_Name(pName), m_RenderGraph(graph), m_Id(id)
 	{}
 
-	virtual ~RGPassBase() = default;
+	void Execute(const RGPassResources& resources, CommandContext& renderContext)
+	{
+		assert(m_pPassExecutor);
+		m_pPassExecutor->Execute(resources, renderContext);
+	}
 
-	virtual void Execute(const RGPassResources& resources, CommandContext& renderContext) = 0;
+	template<typename ExecuteCallback>
+	void SetCallback(ExecuteCallback&& callback)
+	{
+		m_pPassExecutor = std::make_unique<PassExecutor<ExecuteCallback>>(std::move(callback));
+	}
+
 	const char* GetName() const { return m_Name; }
 
 	bool ReadsFrom(RGResourceHandle handle) const
@@ -165,6 +188,7 @@ public:
 	}
 
 private:
+	std::unique_ptr<IPassExecutor> m_pPassExecutor;
 	const char* m_Name;
 	std::vector<RGResourceHandle> m_Reads;
 	std::vector<RGResourceHandle> m_Writes;
@@ -174,36 +198,6 @@ private:
 
 	//RenderGraph compile-time values
 	int m_References = 0;
-};
-
-template<typename PassData>
-class RGPass : public RGPassBase
-{
-	friend class RGGraph;
-public:
-	RGPass(RGGraph& graph, const char* pName, int id)
-		: RGPassBase(graph, pName, id),
-		m_PassData{}
-	{}
-	inline const PassData& GetData() const { return m_PassData; }
-protected:
-	PassData m_PassData;
-};
-
-template<typename PassData, typename ExecuteCallback>
-class RGLambdaPass : public RGPass<PassData>
-{
-public:
-	RGLambdaPass(RGGraph& graph, const char* pName, int id, ExecuteCallback&& executeCallback)
-		: RGPass(graph, pName, id),
-		m_ExecuteCallback(std::forward<ExecuteCallback>(executeCallback))
-	{}
-	virtual void Execute(const RGPassResources& resources, CommandContext& renderContext) override
-	{
-		m_ExecuteCallback(renderContext, resources, m_PassData);
-	}
-private:
-	ExecuteCallback m_ExecuteCallback;
 };
 
 class RGGraph
@@ -222,32 +216,33 @@ public:
 	void DumpGraphMermaid(const char* pPath) const;
 	RGResourceHandle MoveResource(RGResourceHandle From, RGResourceHandle To);
 
-	template<typename PassData, typename SetupCallback, typename ExecuteCallback>
-	RGPass<PassData>& AddCallbackPass(const char* pName, const SetupCallback& setupCallback, ExecuteCallback&& executeCallback)
+	template<typename Callback>
+	RGPass& AddPass(const char* pName, const Callback& passCallback)
 	{
+		using ExecuteCallback = typename std::result_of<Callback(RGPassBuilder&)>::type;
 		RG_STATIC_ASSERT(sizeof(ExecuteCallback) < 1024, "The Execute callback exceeds the maximum size");
-		RGPass<PassData>* pPass = new RGLambdaPass<PassData, ExecuteCallback>(*this, pName, (int)m_RenderPasses.size(), std::forward<ExecuteCallback>(executeCallback));
+		RGPass* pPass = new RGPass(*this, pName, (int)m_RenderPasses.size());
 		RGPassBuilder builder(*this, *pPass);
-		setupCallback(builder, pPass->m_PassData);
+		pPass->SetCallback<ExecuteCallback>(std::move(passCallback(builder)));
 		m_RenderPasses.push_back(pPass);
 		return *pPass;
 	}
 
-	RGResourceHandleMutable CreateTexture(const char* pName, const TextureDesc& desc)
+	RGResourceHandle CreateTexture(const char* pName, const TextureDesc& desc)
 	{
 		RGResource* pResource = new RGTexture(pName, (int)m_Resources.size(), desc, nullptr);
 		m_Resources.push_back(pResource);
 		return CreateResourceNode(pResource);
 	}
 
-	RGResourceHandleMutable CreateBuffer(const char* pName, const BufferDesc& desc)
+	RGResourceHandle CreateBuffer(const char* pName, const BufferDesc& desc)
 	{
 		RGResource* pResource = new RGBuffer(pName, (int)m_Resources.size(), desc, nullptr);
 		m_Resources.push_back(pResource);
 		return CreateResourceNode(pResource);
 	}
 
-	RGResourceHandleMutable ImportTexture(const char* pName, Texture* pTexture)
+	RGResourceHandle ImportTexture(const char* pName, Texture* pTexture)
 	{
 		assert(pTexture);
 		RGResource* pResource = new RGTexture(pName, (int)m_Resources.size(), pTexture->GetDesc(), pTexture);
@@ -255,7 +250,7 @@ public:
 		return CreateResourceNode(pResource);
 	}
 
-	RGResourceHandleMutable ImportBuffer(const char* pName, Buffer* pBuffer)
+	RGResourceHandle ImportBuffer(const char* pName, Buffer* pBuffer)
 	{
 		assert(pBuffer);
 		BufferDesc desc{};
@@ -269,11 +264,11 @@ public:
 		return handle.IsValid() && handle.Index < (int)m_ResourceNodes.size();
 	}
 
-	RGResourceHandleMutable CreateResourceNode(RGResource* pResource)
+	RGResourceHandle CreateResourceNode(RGResource* pResource)
 	{
 		RGNode node(pResource);
 		m_ResourceNodes.push_back(node);
-		return RGResourceHandleMutable((int)m_ResourceNodes.size() - 1);
+		return RGResourceHandle((int)m_ResourceNodes.size() - 1);
 	}
 
 	const RGNode& GetResourceNode(RGResourceHandle handle) const
@@ -289,9 +284,9 @@ public:
 	}
 
 private:
-	void ExecutePass(RGPassBase* pPass, CommandContext& context, RGResourceAllocator* pAllocator);
-	void PrepareResources(RGPassBase* pPass, RGResourceAllocator* pAllocator);
-	void ReleaseResources(RGPassBase* pPass, RGResourceAllocator* pAllocator);
+	void ExecutePass(RGPass* pPass, CommandContext& context, RGResourceAllocator* pAllocator);
+	void PrepareResources(RGPass* pPass, RGResourceAllocator* pAllocator);
+	void ReleaseResources(RGPass* pPass, RGResourceAllocator* pAllocator);
 	void DestroyData();
 
 	void ConditionallyCreateResource(RGResource* pResource, RGResourceAllocator* pAllocator);
@@ -305,7 +300,7 @@ private:
 	RGResourceAllocator* m_pAllocator;
 
 	std::vector<RGResourceAlias> m_Aliases;
-	std::vector<RGPassBase*> m_RenderPasses;
+	std::vector<RGPass*> m_RenderPasses;
 	std::vector<RGResource*> m_Resources;
 	std::vector<RGNode> m_ResourceNodes;
 };
