@@ -11,6 +11,7 @@
 #include "Core/Input.h"
 #include "Texture.h"
 #include "Profiler.h"
+#include "RenderGraph/RenderGraph.h"
 
 ImGuiRenderer::ImGuiRenderer(Graphics* pGraphics)
 	: m_pGraphics(pGraphics)
@@ -86,7 +87,7 @@ void ImGuiRenderer::CreatePipeline()
 	m_pPipelineState->Finalize("ImGui Pipeline", m_pGraphics->GetDevice());
 }
 
-void ImGuiRenderer::Render(CommandContext& context, Texture* pRenderTarget)
+void ImGuiRenderer::Render(RGGraph& graph, Texture* pRenderTarget)
 {
 	ImGui::Render();
 	ImDrawData* pDrawData = ImGui::GetDrawData();
@@ -95,40 +96,61 @@ void ImGuiRenderer::Render(CommandContext& context, Texture* pRenderTarget)
 	{
 		return;
 	}
-	GPU_PROFILE_SCOPE("RenderUI", &context);
-	context.SetGraphicsPipelineState(m_pPipelineState.get());
-	context.SetGraphicsRootSignature(m_pRootSignature.get());
-	Matrix projectionMatrix = Math::CreateOrthographicOffCenterMatrix(0.0f, pDrawData->DisplayPos.x + pDrawData->DisplaySize.x, pDrawData->DisplayPos.y + pDrawData->DisplaySize.y, 0.0f, 0.0f, 1.0f);
-	context.SetDynamicConstantBufferView(0, &projectionMatrix, sizeof(Matrix));
-	context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	context.SetViewport(FloatRect(pDrawData->DisplayPos.x, pDrawData->DisplayPos.y, pDrawData->DisplayPos.x + pDrawData->DisplaySize.x, pDrawData->DisplayPos.y + pDrawData->DisplaySize.y), 0, 1);
-	
-	context.BeginRenderPass(RenderPassInfo(pRenderTarget, RenderPassAccess::Load_Store, nullptr, RenderPassAccess::DontCare_DontCare));
-
-	for (int n = 0; n < pDrawData->CmdListsCount; n++)
-	{
-		const ImDrawList* pCmdList = pDrawData->CmdLists[n];
-		context.SetDynamicVertexBuffer(0, pCmdList->VtxBuffer.Size, sizeof(ImDrawVert), pCmdList->VtxBuffer.Data);
-		context.SetDynamicIndexBuffer(pCmdList->IdxBuffer.Size, pCmdList->IdxBuffer.Data, true);
-		int indexOffset = 0;
-		for (int i = 0; i < pCmdList->CmdBuffer.Size; i++)
+	graph.AddPass("Render UI", [&](RGPassBuilder& builder)
 		{
-			const ImDrawCmd* pcmd = &pCmdList->CmdBuffer[i];
-			if (pcmd->UserCallback)
-				pcmd->UserCallback(pCmdList, pcmd);
-			else
+			builder.NeverCull();
+			return [=](CommandContext& context, const RGPassResources& resources)
 			{
-				context.SetScissorRect(FloatRect(pcmd->ClipRect.x, pcmd->ClipRect.y, pcmd->ClipRect.z, pcmd->ClipRect.w));
-				if (pcmd->TextureId != nullptr)
+				context.SetGraphicsPipelineState(m_pPipelineState.get());
+				context.SetGraphicsRootSignature(m_pRootSignature.get());
+				Matrix projectionMatrix = Math::CreateOrthographicOffCenterMatrix(0.0f, pDrawData->DisplayPos.x + pDrawData->DisplaySize.x, pDrawData->DisplayPos.y + pDrawData->DisplaySize.y, 0.0f, 0.0f, 1.0f);
+				context.SetDynamicConstantBufferView(0, &projectionMatrix, sizeof(Matrix));
+				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+				context.SetViewport(FloatRect(pDrawData->DisplayPos.x, pDrawData->DisplayPos.y, pDrawData->DisplayPos.x + pDrawData->DisplaySize.x, pDrawData->DisplayPos.y + pDrawData->DisplaySize.y), 0, 1);
+
+				context.BeginRenderPass(RenderPassInfo(pRenderTarget, RenderPassAccess::Load_Store, nullptr, RenderPassAccess::DontCare_DontCare));
+
+				for (int n = 0; n < pDrawData->CmdListsCount; n++)
 				{
-					Texture* pTex = static_cast<Texture*>(pcmd->TextureId);
-					context.InsertResourceBarrier(pTex, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-					context.SetDynamicDescriptor(1, 0, pTex->GetSRV());
+					const ImDrawList* pCmdList = pDrawData->CmdLists[n];
+					context.SetDynamicVertexBuffer(0, pCmdList->VtxBuffer.Size, sizeof(ImDrawVert), pCmdList->VtxBuffer.Data);
+					context.SetDynamicIndexBuffer(pCmdList->IdxBuffer.Size, pCmdList->IdxBuffer.Data, true);
+					int indexOffset = 0;
+					for (int i = 0; i < pCmdList->CmdBuffer.Size; i++)
+					{
+						const ImDrawCmd* pcmd = &pCmdList->CmdBuffer[i];
+						if (pcmd->UserCallback)
+							pcmd->UserCallback(pCmdList, pcmd);
+						else
+						{
+							context.SetScissorRect(FloatRect(pcmd->ClipRect.x, pcmd->ClipRect.y, pcmd->ClipRect.z, pcmd->ClipRect.w));
+							if (pcmd->TextureId != nullptr)
+							{
+								Texture* pTex = static_cast<Texture*>(pcmd->TextureId);
+								context.InsertResourceBarrier(pTex, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+								context.SetDynamicDescriptor(1, 0, pTex->GetSRV());
+							}
+							context.DrawIndexed(pcmd->ElemCount, indexOffset, 0);
+						}
+						indexOffset += pcmd->ElemCount;
+					}
 				}
-				context.DrawIndexed(pcmd->ElemCount, indexOffset, 0);
-			}
-			indexOffset += pcmd->ElemCount;
-		}
-	}
-	context.EndRenderPass();
+				context.EndRenderPass();
+			};
+		});
+}
+
+void ImGuiRenderer::Update()
+{
+	m_UpdateCallback.Broadcast();
+}
+
+DelegateHandle ImGuiRenderer::AddUpdateCallback(ImGuiCallbackDelegate&& callback)
+{
+	return m_UpdateCallback.Add(std::move(callback));
+}
+
+void ImGuiRenderer::RemoveUpdateCallback(DelegateHandle handle)
+{
+	m_UpdateCallback.Remove(handle);
 }

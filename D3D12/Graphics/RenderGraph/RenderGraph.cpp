@@ -187,12 +187,22 @@ RGResourceHandle RGGraph::MoveResource(RGResourceHandle From, RGResourceHandle T
 
 int64 RGGraph::Execute(Graphics* pGraphics)
 {
+	int eclFrequency = 4;
+	int i = 0;
 	CommandContext* pContext = pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 	for (RGPass* pPass : m_RenderPasses)
 	{
 		if (pPass->m_References > 0)
 		{
 			ExecutePass(pPass, *pContext, m_pAllocator);
+		}
+
+		++i;
+		if (i == eclFrequency)
+		{
+			i = 0;
+			pContext->Execute(false);
+			pContext = pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 		}
 	}
 	DestroyData();
@@ -295,4 +305,12 @@ void RGGraph::ConditionallyReleaseResource(RGResource* pResource, RGResourceAllo
 			break;
 		}
 	}
+}
+
+Texture* RGPassResources::GetTexture(RGResourceHandle handle) const
+{
+	const RGNode& node = m_Graph.GetResourceNode(handle);
+	assert(node.pResource);
+	assert(node.pResource->m_Type == RGResourceType::Texture);
+	return static_cast<Texture*>(node.pResource->m_pPhysicalResource);
 }

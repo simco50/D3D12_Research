@@ -112,7 +112,6 @@ public:
 
 	void Reset();
 	uint64 Execute(bool wait);
-	uint64 ExecuteAndReset(bool wait);
 
 	void InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESOURCE_STATES state, bool executeImmediate = false);
 	void InsertUavBarrier(GraphicsResource* pBuffer = nullptr, bool executeImmediate = false);
@@ -127,7 +126,7 @@ public:
 	D3D12_COMMAND_LIST_TYPE GetType() const { return m_Type; }
 
 	//Commands
-	void Dispatch(uint32 groupCountX = 1, uint32 groupCountY = 1, uint32 groupCountZ = 1);
+	void Dispatch(uint32 groupCountX, uint32 groupCountY = 1, uint32 groupCountZ = 1);
 	void ExecuteIndirect(ID3D12CommandSignature* pCommandSignature, Buffer* pIndirectArguments);
 	void Draw(int vertexStart, int vertexCount);
 	void DrawIndexed(int indexCount, int indexStart, int minVertex = 0);
@@ -159,9 +158,9 @@ public:
 	void SetGraphicsRootSignature(RootSignature* pRootSignature);
 
 	void SetGraphicsRootConstants(int rootIndex, uint32 count, const void* pConstants);
-	void SetDynamicConstantBufferView(int rootIndex, void* pData, uint32 dataSize);
-	void SetDynamicVertexBuffer(int slot, int elementCount, int elementSize, void* pData);
-	void SetDynamicIndexBuffer(int elementCount, void* pData, bool smallIndices = false);
+	void SetDynamicConstantBufferView(int rootIndex, const void* pData, uint32 dataSize);
+	void SetDynamicVertexBuffer(int slot, int elementCount, int elementSize, const void* pData);
+	void SetDynamicIndexBuffer(int elementCount, const void* pData, bool smallIndices = false);
 	void SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY type);
 	void SetVertexBuffer(Buffer* pVertexBuffer);
 	void SetVertexBuffers(Buffer** pVertexBuffers, int bufferCount);

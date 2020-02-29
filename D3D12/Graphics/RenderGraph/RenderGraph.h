@@ -119,13 +119,7 @@ public:
 	RGPassResources(const RGPassResources& other) = delete;
 	RGPassResources& operator=(const RGPassResources& other) = delete;
 
-	template<typename T>
-	T* GetResource(RGResourceHandle handle) const
-	{
-		const RGNode& node = m_Graph.GetResourceNode(handle);
-		assert(node.pResource);
-		return static_cast<T*>(node.pResource->m_pPhysicalResource);
-	}
+	Texture* GetTexture(RGResourceHandle handle) const;
 
 private:
 	RGGraph& m_Graph;

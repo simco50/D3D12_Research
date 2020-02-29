@@ -392,7 +392,7 @@ DXGI_FORMAT Texture::GetSrvFormatFromDepth(DXGI_FORMAT format)
 	}
 }
 
-void Texture::Create(CommandContext* pContext, const char* pFilePath, bool srgb)
+bool Texture::Create(CommandContext* pContext, const char* pFilePath, bool srgb)
 {
 	Image img;
 	if (img.Load(pFilePath))
@@ -423,8 +423,9 @@ void Texture::Create(CommandContext* pContext, const char* pFilePath, bool srgb)
 		}
 		Create(desc);
 		pContext->InitializeTexture(this, subResourceData.data(), 0, (int)subResourceData.size());
-		pContext->ExecuteAndReset(true);
+		return true;
 	}
+	return false;
 }
 
 void Texture::SetData(CommandContext* pContext, const void* pData)

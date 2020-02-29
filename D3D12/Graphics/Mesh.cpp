@@ -28,7 +28,6 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 	for (uint32 i = 0; i < pScene->mNumMeshes; ++i)
 	{
 		m_Meshes.push_back(LoadMesh(pScene->mMeshes[i], pGraphics, pContext));
-		pContext->ExecuteAndReset(true);
 	}
 
 	std::string dirPath = pFilePath;
@@ -40,14 +39,15 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 		aiString path;
 		aiReturn ret = pMaterial->GetTexture(type, 0, &path);
 		pTex = std::make_unique<Texture>(pGraphics);
-		if (ret == aiReturn_SUCCESS)
+		bool success = ret == aiReturn_SUCCESS;
+		if (success)
 		{
 			std::string p = path.C_Str();
 			std::stringstream str;
-			str << basePath << p;
-			pTex->Create(pContext, str.str().c_str(), srgb);
+			str << basePath << "/" << p;
+			success = pTex->Create(pContext, str.str().c_str(), srgb);
 		}
-		else
+		if(!success)
 		{
 			switch (type)
 			{
@@ -75,7 +75,6 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 		m.pSpecularTexture = loadTexture(dirPath, pScene->mMaterials[i], aiTextureType_SPECULAR, false);
 		aiString p;
 		m.IsTransparent = pScene->mMaterials[i]->GetTexture(aiTextureType_OPACITY, 0, &p) == aiReturn_SUCCESS;
-		pContext->ExecuteAndReset(true);
 	}
 
 	return true;

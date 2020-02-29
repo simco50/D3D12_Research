@@ -77,33 +77,6 @@ uint64 CommandContext::Execute(bool wait)
 	return fenceValue;
 }
 
-uint64 CommandContext::ExecuteAndReset(bool wait)
-{
-	FlushResourceBarriers();
-	CommandQueue* pQueue = m_pGraphics->GetCommandQueue(m_Type);
-	uint64 fenceValue = pQueue->ExecuteCommandList(m_pCommandList);
-
-	if (wait)
-	{
-		pQueue->WaitForFence(fenceValue);
-	}
-
-	m_DynamicAllocator->Free(fenceValue);
-	m_pCommandList->Reset(m_pAllocator, nullptr);
-
-	if (m_pShaderResourceDescriptorAllocator)
-	{
-		m_pShaderResourceDescriptorAllocator->ReleaseUsedHeaps(fenceValue);
-	}
-	if (m_pSamplerDescriptorAllocator)
-	{
-		m_pSamplerDescriptorAllocator->ReleaseUsedHeaps(fenceValue);
-	}
-	m_CurrentDescriptorHeaps = {};
-
-	return fenceValue;
-}
-
 void CommandContext::InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESOURCE_STATES state, bool executeImmediate /*= false*/)
 {
 	if (state != pBuffer->m_CurrentState)
@@ -552,14 +525,14 @@ void CommandContext::SetGraphicsRootConstants(int rootIndex, uint32 count, const
 	m_pCommandList->SetGraphicsRoot32BitConstants(rootIndex, count, pConstants, 0);
 }
 
-void CommandContext::SetDynamicConstantBufferView(int rootIndex, void* pData, uint32 dataSize)
+void CommandContext::SetDynamicConstantBufferView(int rootIndex, const void* pData, uint32 dataSize)
 {
 	DynamicAllocation allocation = m_DynamicAllocator->Allocate(dataSize);
 	memcpy(allocation.pMappedMemory, pData, dataSize);
 	m_pCommandList->SetGraphicsRootConstantBufferView(rootIndex, allocation.GpuHandle);
 }
 
-void CommandContext::SetDynamicVertexBuffer(int rootIndex, int elementCount, int elementSize, void* pData)
+void CommandContext::SetDynamicVertexBuffer(int rootIndex, int elementCount, int elementSize, const void* pData)
 {
 	int bufferSize = elementCount * elementSize;
 	DynamicAllocation allocation = m_DynamicAllocator->Allocate(bufferSize);
@@ -571,7 +544,7 @@ void CommandContext::SetDynamicVertexBuffer(int rootIndex, int elementCount, int
 	m_pCommandList->IASetVertexBuffers(rootIndex, 1, &view);
 }
 
-void CommandContext::SetDynamicIndexBuffer(int elementCount, void* pData, bool smallIndices /*= false*/)
+void CommandContext::SetDynamicIndexBuffer(int elementCount, const void* pData, bool smallIndices /*= false*/)
 {
 	int stride = smallIndices ? sizeof(uint16) : sizeof(uint32);
 	int bufferSize = elementCount * stride;
