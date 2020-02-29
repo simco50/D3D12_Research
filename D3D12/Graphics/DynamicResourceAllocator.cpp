@@ -26,7 +26,9 @@ DynamicAllocation DynamicResourceAllocator::Allocate(size_t size, int alignment)
 	}
 	else
 	{
-		if (m_pCurrentPage == nullptr || m_CurrentOffset + bufferSize > PAGE_SIZE)
+		m_CurrentOffset = Math::AlignUp<size_t>(m_CurrentOffset, alignment);
+
+		if (m_pCurrentPage == nullptr || m_CurrentOffset + bufferSize >= PAGE_SIZE)
 		{
 			m_pCurrentPage = m_pPageManager->AllocatePage(PAGE_SIZE);
 			m_CurrentOffset = 0;

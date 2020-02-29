@@ -34,7 +34,7 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 	std::string dirPath = pFilePath;
 	dirPath = dirPath.substr(0, dirPath.rfind('/'));
 
-	auto loadTexture = [pGraphics, pContext](std::string basePath, aiMaterial* pMaterial, aiTextureType type, bool srgb) 
+	auto loadTexture = [pGraphics, pContext](std::string basePath, aiMaterial* pMaterial, aiTextureType type, bool srgb)
 	{
 		std::unique_ptr<Texture> pTex;
 		aiString path;
@@ -99,7 +99,7 @@ std::unique_ptr<SubMesh> Mesh::LoadMesh(aiMesh* pMesh, Graphics* pGraphics, Comm
 	{
 		Vertex& vertex = vertices[j];
 		vertex.Position = *reinterpret_cast<Vector3*>(&pMesh->mVertices[j]);
-		if(pMesh->HasTextureCoords(0))
+		if (pMesh->HasTextureCoords(0))
 			vertex.TexCoord = *reinterpret_cast<Vector2*>(&pMesh->mTextureCoords[0][j]);
 		vertex.Normal = *reinterpret_cast<Vector3*>(&pMesh->mNormals[j]);
 		if (pMesh->HasTangentsAndBitangents())
@@ -121,7 +121,7 @@ std::unique_ptr<SubMesh> Mesh::LoadMesh(aiMesh* pMesh, Graphics* pGraphics, Comm
 
 
 	std::unique_ptr<SubMesh> pSubMesh = std::make_unique<SubMesh>();
-	BoundingBox::CreateFromPoints(pSubMesh->m_Bounds, vertices.size(), (XMFLOAT3*)&vertices[0], sizeof(Vertex));
+	BoundingBox::CreateFromPoints(pSubMesh->m_Bounds, vertices.size(), (Vector3*)&vertices[0], sizeof(Vertex));
 
 	{
 		uint32 size = (uint32)vertices.size() * sizeof(Vertex);

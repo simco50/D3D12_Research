@@ -88,8 +88,15 @@ struct RenderPassInfo
 		WriteUAVs = uavWrites;
 	}
 
-	static D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE ExtractBeginAccess(RenderPassAccess access);
-	static D3D12_RENDER_PASS_ENDING_ACCESS_TYPE ExtractEndingAccess(RenderPassAccess access);
+	static RenderTargetLoadAction GetBeginAccess(RenderPassAccess access)
+	{
+		return (RenderTargetLoadAction)((uint8)access >> 2);
+	}
+
+	static RenderTargetStoreAction GetEndAccess(RenderPassAccess access)
+	{
+		return (RenderTargetStoreAction)((uint8)access & 0b11);
+	}
 
 	bool WriteUAVs = false;
 	uint32 RenderTargetCount = 0;
@@ -132,9 +139,7 @@ public:
 	void BeginRenderPass(const RenderPassInfo& renderPassInfo);
 	void EndRenderPass();
 
-	void ClearUavUInt(GraphicsResource* pBuffer, D3D12_CPU_DESCRIPTOR_HANDLE uav, uint32* values = nullptr);
 	void ClearUavUInt(GraphicsResource* pBuffer, UnorderedAccessView* pUav, uint32* values = nullptr);
-	void ClearUavFloat(GraphicsResource* pBuffer, D3D12_CPU_DESCRIPTOR_HANDLE uav, float* values = nullptr);
 	void ClearUavFloat(GraphicsResource* pBuffer, UnorderedAccessView* pUav, float* values = nullptr);
 
 	//Bindings

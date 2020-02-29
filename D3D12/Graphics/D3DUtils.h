@@ -33,8 +33,7 @@ inline void SetD3DObjectName(ID3D12Object* pObject, const char* pName)
 	if (pObject)
 	{
 		wchar_t name[256];
-		size_t written = 0;
-		mbstowcs_s(&written, name, pName, 256);
+		MultiByteToWideChar(CP_UTF8, 0, pName, strlen(pName) + 1, name, 256);
 		pObject->SetName(name);
 	}
 }

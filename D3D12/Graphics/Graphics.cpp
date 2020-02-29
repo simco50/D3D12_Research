@@ -62,7 +62,7 @@ void Graphics::Initialize(HWND window)
 
 	m_pCamera = std::make_unique<FreeCamera>(this);
 	m_pCamera->SetPosition(Vector3(0, 100, -15));
-	m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(XM_PIDIV4, XM_PIDIV4, 0));
+	m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(Math::PIDIV4, Math::PIDIV4, 0));
 	m_pCamera->SetNearPlane(500.0f);
 	m_pCamera->SetFarPlane(2.0f);
 	m_pCamera->SetViewport(0, 0, 1, 1);
@@ -179,7 +179,7 @@ void Graphics::Update()
 		Vector4 ShadowMapOffsets[MAX_SHADOW_CASTERS];
 	} lightData;
 
-	Matrix projection = XMMatrixOrthographicLH(512, 512, 10000, 0.1f);
+	Matrix projection = Math::CreateOrthographicMatrix(512, 512, 10000, 0.1f);
 	
 	m_ShadowCasters = 0;
 	lightData.LightViewProjections[m_ShadowCasters] = Matrix(XMMatrixLookAtLH(m_Lights[0].Position, Vector3(), Vector3(0.0f, 1.0f, 0.0f))) * projection;
@@ -432,7 +432,7 @@ void Graphics::Update()
 
 				for (const Batch& b : m_OpaqueBatches)
 				{
-					ObjectData.World = XMMatrixIdentity();
+					ObjectData.World = Matrix::Identity;
 					ObjectData.WorldViewProjection = ObjectData.World * m_pCamera->GetViewProjection();
 					pContext->SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
 					pContext->SetDynamicDescriptor(3, 0, b.pMaterial->pDiffuseTexture->GetSRV());
@@ -457,7 +457,7 @@ void Graphics::Update()
 
 				for (const Batch& b : m_TransparantBatches)
 				{
-					ObjectData.World = XMMatrixIdentity();
+					ObjectData.World = Matrix::Identity;
 					ObjectData.WorldViewProjection = ObjectData.World * m_pCamera->GetViewProjection();
 					pContext->SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
 					pContext->SetDynamicDescriptor(3, 0, b.pMaterial->pDiffuseTexture->GetSRV());
