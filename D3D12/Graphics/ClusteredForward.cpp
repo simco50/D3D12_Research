@@ -29,8 +29,6 @@ ClusteredForward::ClusteredForward(Graphics* pGraphics)
 
 void ClusteredForward::OnSwapchainCreated(int windowWidth, int windowHeight)
 {
-	m_pDepthTexture->Create(TextureDesc::CreateDepth(windowWidth, windowHeight, Graphics::DEPTH_STENCIL_FORMAT, TextureFlag::DepthStencil, m_pGraphics->GetMultiSampleCount(), ClearBinding(0.0f, 0)));
-
 	m_ClusterCountX = Math::RoundUp((float)windowWidth / cClusterSize);
 	m_ClusterCountY = Math::RoundUp((float)windowHeight / cClusterSize);
 
@@ -93,49 +91,56 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
 
 	graph.AddPass("Mark Clusters", [&](RGPassBuilder& builder)
 		{
+			builder.Read(resources.DepthBuffer);
 			builder.NeverCull();
 			return [=](CommandContext& context, const RGPassResources& passResources)
 			{
-				context.InsertResourceBarrier(m_pDepthTexture.get(), D3D12_RESOURCE_STATE_DEPTH_WRITE);
 				context.InsertResourceBarrier(resources.pRenderTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
 				context.InsertResourceBarrier(m_pUniqueClusters.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
 				context.ClearUavUInt(m_pUniqueClusters.get(), m_pUniqueClustersRawUAV);
 
-				context.BeginRenderPass(RenderPassInfo(m_pDepthTexture.get(), RenderPassAccess::Clear_Store, true));
+				context.BeginRenderPass(RenderPassInfo(passResources.GetTexture(resources.DepthBuffer), RenderPassAccess::Load_DontCare, true));
 
 				context.SetGraphicsPipelineState(m_pMarkUniqueClustersOpaquePSO.get());
 				context.SetGraphicsRootSignature(m_pMarkUniqueClustersRS.get());
 				context.SetViewport(FloatRect(0, 0, screenDimensions.x, screenDimensions.y));
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-				struct ConstantBuffer
+				struct PerFrameParameters
 				{
-					Matrix WorldView;
-					Matrix Projection;
 					uint32 ClusterDimensions[4];
 					float ClusterSize[2];
 					float SliceMagicA;
 					float SliceMagicB;
-				} constantBuffer;
+				} perFrameParameters;
 
-				constantBuffer.WorldView = resources.pCamera->GetView();
-				constantBuffer.Projection = resources.pCamera->GetProjection();
-				constantBuffer.SliceMagicA = sliceMagicA;
-				constantBuffer.SliceMagicB = sliceMagicB;
-				constantBuffer.ClusterDimensions[0] = m_ClusterCountX;
-				constantBuffer.ClusterDimensions[1] = m_ClusterCountY;
-				constantBuffer.ClusterDimensions[2] = cClusterCountZ;
-				constantBuffer.ClusterDimensions[3] = 0;
-				constantBuffer.ClusterSize[0] = cClusterSize;
-				constantBuffer.ClusterSize[1] = cClusterSize;
+				struct PerObjectParameters
+				{
+					Matrix WorldView;
+					Matrix WorldViewProjection;
+				} perObjectParameters;
+
+				perFrameParameters.SliceMagicA = sliceMagicA;
+				perFrameParameters.SliceMagicB = sliceMagicB;
+				perFrameParameters.ClusterDimensions[0] = m_ClusterCountX;
+				perFrameParameters.ClusterDimensions[1] = m_ClusterCountY;
+				perFrameParameters.ClusterDimensions[2] = cClusterCountZ;
+				perFrameParameters.ClusterDimensions[3] = 0;
+				perFrameParameters.ClusterSize[0] = cClusterSize;
+				perFrameParameters.ClusterSize[1] = cClusterSize;
+
+				context.SetDynamicConstantBufferView(1, &perFrameParameters, sizeof(PerFrameParameters));
+				context.SetDynamicDescriptor(2, 0, m_pUniqueClusters->GetUAV());
 
 				{
 					GPU_PROFILE_SCOPE("Opaque", &context);
-					context.SetDynamicConstantBufferView(0, &constantBuffer, sizeof(ConstantBuffer));
-					context.SetDynamicDescriptor(1, 0, m_pUniqueClusters->GetUAV());
 					for (const Batch& b : *resources.pOpaqueBatches)
 					{
+						perObjectParameters.WorldView = b.WorldMatrix * resources.pCamera->GetView();
+						perObjectParameters.WorldViewProjection = resources.pCamera->GetViewProjection();
+
+						context.SetDynamicConstantBufferView(0, &perObjectParameters, sizeof(PerObjectParameters));
 						b.pMesh->Draw(&context);
 					}
 				}
@@ -145,7 +150,11 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
 					context.SetGraphicsPipelineState(m_pMarkUniqueClustersTransparantPSO.get());
 					for (const Batch& b : *resources.pTransparantBatches)
 					{
-						context.SetDynamicDescriptor(2, 0, b.pMaterial->pDiffuseTexture->GetSRV());
+						perObjectParameters.WorldView = b.WorldMatrix * resources.pCamera->GetView();
+						perObjectParameters.WorldViewProjection = resources.pCamera->GetViewProjection();
+						context.SetDynamicConstantBufferView(0, &perObjectParameters, sizeof(PerObjectParameters));
+
+						context.SetDynamicDescriptor(3, 0, b.pMaterial->pDiffuseTexture->GetSRV());
 						b.pMesh->Draw(&context);
 					}
 				}
@@ -237,12 +246,14 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
 
 	graph.AddPass("Base Pass", [&](RGPassBuilder& builder)
 		{
+			builder.Read(resources.DepthBuffer);
 			builder.NeverCull();
 			return [=](CommandContext& context, const RGPassResources& passResources)
 			{
 				struct PerObjectData
 				{
 					Matrix World;
+					Matrix WorldViewProjection;
 				} objectData;
 
 				struct PerFrameData
@@ -278,9 +289,8 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
 				context.InsertResourceBarrier(m_pLightGrid.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 				context.InsertResourceBarrier(m_pLightIndexGrid.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 				context.InsertResourceBarrier(resources.pRenderTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
-				context.InsertResourceBarrier(m_pDepthTexture.get(), D3D12_RESOURCE_STATE_DEPTH_READ);
 
-				context.BeginRenderPass(RenderPassInfo(resources.pRenderTarget, RenderPassAccess::Clear_Store, m_pDepthTexture.get(), RenderPassAccess::Load_DontCare));
+				context.BeginRenderPass(RenderPassInfo(resources.pRenderTarget, RenderPassAccess::Clear_Store, passResources.GetTexture(resources.DepthBuffer), RenderPassAccess::Load_DontCare));
 				context.SetViewport(FloatRect(0, 0, (float)screenDimensions.x, (float)screenDimensions.y));
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 				context.SetGraphicsRootSignature(m_pDiffuseRS.get());
@@ -293,9 +303,12 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
 					context.SetDynamicDescriptor(3, 1, m_pLightIndexGrid->GetSRV());
 					context.SetDynamicDescriptor(3, 2, resources.pLightBuffer->GetSRV());
 
+
 					for (const Batch& b : *resources.pOpaqueBatches)
 					{
-						objectData.World = Matrix::Identity;
+						objectData.World = b.WorldMatrix;
+						objectData.WorldViewProjection = objectData.World * resources.pCamera->GetViewProjection();
+
 						context.SetDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
 						context.SetDynamicDescriptor(2, 0, b.pMaterial->pDiffuseTexture->GetSRV());
 						context.SetDynamicDescriptor(2, 1, b.pMaterial->pNormalTexture->GetSRV());
@@ -310,7 +323,9 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
 
 					for (const Batch& b : *resources.pTransparantBatches)
 					{
-						objectData.World = Matrix::Identity;
+						objectData.World = b.WorldMatrix;
+						objectData.WorldViewProjection = objectData.World * resources.pCamera->GetViewProjection();
+
 						context.SetDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
 						context.SetDynamicDescriptor(2, 0, b.pMaterial->pDiffuseTexture->GetSRV());
 						context.SetDynamicDescriptor(2, 1, b.pMaterial->pNormalTexture->GetSRV());
@@ -327,6 +342,7 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
 	{
 		graph.AddPass("Base Pass", [&](RGPassBuilder& builder)
 			{
+				builder.Read(resources.DepthBuffer);
 				builder.NeverCull();
 				return [=](CommandContext& context, const RGPassResources& passResources)
 				{
@@ -339,7 +355,7 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
 						m_DidCopyDebugClusterData = true;
 					}
 
-					context.BeginRenderPass(RenderPassInfo(resources.pRenderTarget, RenderPassAccess::Load_Store, m_pDepthTexture.get(), RenderPassAccess::Load_DontCare));
+					context.BeginRenderPass(RenderPassInfo(resources.pRenderTarget, RenderPassAccess::Clear_Store, passResources.GetTexture(resources.DepthBuffer), RenderPassAccess::Load_DontCare));
 
 					context.SetGraphicsPipelineState(m_pDebugClustersPSO.get());
 					context.SetGraphicsRootSignature(m_pDebugClustersRS.get());
@@ -368,8 +384,6 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
 
 void ClusteredForward::SetupResources(Graphics* pGraphics)
 {
-	m_pDepthTexture = std::make_unique<Texture>(pGraphics, "Depth Texture");
-
 	m_pAABBs = std::make_unique<Buffer>(pGraphics, "AABBs");
 	m_pUniqueClusters = std::make_unique<Buffer>(pGraphics, "Unique Clusters");
 	m_pCompactedClusters = std::make_unique<Buffer>(pGraphics, "Compacted Clusters");
@@ -425,6 +439,7 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
 		m_pMarkUniqueClustersOpaquePSO->SetInputLayout(inputElements, ARRAYSIZE(inputElements));
 		m_pMarkUniqueClustersOpaquePSO->SetRenderTargetFormats(nullptr, 0, Graphics::DEPTH_STENCIL_FORMAT, m_pGraphics->GetMultiSampleCount(), m_pGraphics->GetMultiSampleQualityLevel(m_pGraphics->GetMultiSampleCount()));
 		m_pMarkUniqueClustersOpaquePSO->Finalize("Mark Unique Clusters", m_pGraphics->GetDevice());
+		m_pMarkUniqueClustersOpaquePSO->SetDepthWrite(false);
 
 		m_pMarkUniqueClustersTransparantPSO = std::make_unique<GraphicsPipelineState>(*m_pMarkUniqueClustersOpaquePSO);
 		m_pMarkUniqueClustersTransparantPSO->SetDepthWrite(false);

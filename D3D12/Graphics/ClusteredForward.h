@@ -1,4 +1,5 @@
 #pragma once
+#include "RenderGraph/RenderGraph.h"
 class Graphics;
 class ComputePipelineState;
 class RootSignature;
@@ -13,6 +14,7 @@ class RGGraph;
 
 struct ClusteredForwardInputResources
 {
+	RGResourceHandle DepthBuffer;
 	Texture* pRenderTarget = nullptr;
 	const std::vector<Batch>* pOpaqueBatches;
 	const std::vector<Batch>* pTransparantBatches;
@@ -39,7 +41,6 @@ private:
 	uint32 m_ClusterCountY = 0;
 
 	std::unique_ptr<Texture> m_pHeatMapTexture;
-	std::unique_ptr<Texture> m_pDepthTexture;
 
 	//Step 1: AABB
 	std::unique_ptr<RootSignature> m_pCreateAabbRS;

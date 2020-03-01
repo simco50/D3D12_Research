@@ -214,70 +214,69 @@ void Graphics::Update()
 	uint64 nextFenceValue = 0;
 	uint64 lightCullingFence = 0;
 
-	if (m_RenderPath == RenderPath::Tiled)
-	{
-		//1. DEPTH PREPASS
-		// - Depth only pass that renders the entire scene
-		// - Optimization that prevents wasteful lighting calculations during the base pass
-		// - Required for light culling
-		graph.AddPass("Depth Prepass", [&](RGPassBuilder& builder)
+	//1. DEPTH PREPASS
+	// - Depth only pass that renders the entire scene
+	// - Optimization that prevents wasteful lighting calculations during the base pass
+	// - Required for light culling
+	graph.AddPass("Depth Prepass", [&](RGPassBuilder& builder)
+		{
+			builder.NeverCull();
+			Data.DepthStencil = builder.Write(Data.DepthStencil);
+
+			return [=](CommandContext& renderContext, const RGPassResources& resources)
 			{
-				builder.NeverCull();
-				Data.DepthStencil = builder.Write(Data.DepthStencil);
+				Texture* pDepthStencil = resources.GetTexture(Data.DepthStencil);
+				const TextureDesc& desc = pDepthStencil->GetDesc();
+				renderContext.InsertResourceBarrier(pDepthStencil, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+
+				renderContext.BeginRenderPass(RenderPassInfo(pDepthStencil, RenderPassAccess::Clear_Store));
+				renderContext.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+				renderContext.SetViewport(FloatRect(0, 0, (float)desc.Width, (float)desc.Height));
+
+				renderContext.SetGraphicsPipelineState(m_pDepthPrepassPSO.get());
+				renderContext.SetGraphicsRootSignature(m_pDepthPrepassRS.get());
+				for (const Batch& b : m_OpaqueBatches)
+				{
+					Matrix worldViewProjection = m_pCamera->GetViewProjection();
+					renderContext.SetDynamicConstantBufferView(0, &worldViewProjection, sizeof(Matrix));
+					b.pMesh->Draw(&renderContext);
+				}
+				renderContext.EndRenderPass();
+			};
+		});
+
+	//2. [OPTIONAL] DEPTH RESOLVE
+	// - If MSAA is enabled, run a compute shader to resolve the depth buffer
+	if (m_SampleCount > 1)
+	{
+		graph.AddPass("Depth Resolve", [&](RGPassBuilder& builder)
+			{
+				Data.DepthStencil = builder.Read(Data.DepthStencil);
+				Data.DepthStencilResolved = builder.Write(Data.DepthStencilResolved);
 
 				return [=](CommandContext& renderContext, const RGPassResources& resources)
 				{
-					Texture* pDepthStencil = resources.GetTexture(Data.DepthStencil);
-					const TextureDesc& desc = pDepthStencil->GetDesc();
-					renderContext.InsertResourceBarrier(pDepthStencil, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+					renderContext.InsertResourceBarrier(resources.GetTexture(Data.DepthStencil), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+					renderContext.InsertResourceBarrier(resources.GetTexture(Data.DepthStencilResolved), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-					renderContext.BeginRenderPass(RenderPassInfo(pDepthStencil, RenderPassAccess::Clear_Store));
-					renderContext.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-					renderContext.SetViewport(FloatRect(0, 0, (float)desc.Width, (float)desc.Height));
+					renderContext.SetComputeRootSignature(m_pResolveDepthRS.get());
+					renderContext.SetComputePipelineState(m_pResolveDepthPSO.get());
 
-					renderContext.SetGraphicsPipelineState(m_pDepthPrepassPSO.get());
-					renderContext.SetGraphicsRootSignature(m_pDepthPrepassRS.get());
-					for (const Batch& b : m_OpaqueBatches)
-					{
-						Matrix worldViewProjection = m_pCamera->GetViewProjection();
-						renderContext.SetDynamicConstantBufferView(0, &worldViewProjection, sizeof(Matrix));
-						b.pMesh->Draw(&renderContext);
-					}
-					renderContext.EndRenderPass();
+					renderContext.SetDynamicDescriptor(0, 0, resources.GetTexture(Data.DepthStencilResolved)->GetUAV());
+					renderContext.SetDynamicDescriptor(1, 0, resources.GetTexture(Data.DepthStencil)->GetSRV());
+
+					int dispatchGroupsX = Math::DivideAndRoundUp(m_WindowWidth, 16);
+					int dispatchGroupsY = Math::DivideAndRoundUp(m_WindowHeight, 16);
+					renderContext.Dispatch(dispatchGroupsX, dispatchGroupsY);
+
+					renderContext.InsertResourceBarrier(resources.GetTexture(Data.DepthStencilResolved), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+					renderContext.InsertResourceBarrier(resources.GetTexture(Data.DepthStencil), D3D12_RESOURCE_STATE_DEPTH_READ);
 				};
 			});
+	}
 
-
-		//2. [OPTIONAL] DEPTH RESOLVE
-		// - If MSAA is enabled, run a compute shader to resolve the depth buffer
-		if (m_SampleCount > 1)
-		{
-			graph.AddPass("Depth Resolve", [&](RGPassBuilder& builder)
-				{
-					builder.NeverCull();
-					Data.DepthStencil = builder.Read(Data.DepthStencil);
-					Data.DepthStencilResolved = builder.Write(Data.DepthStencilResolved);
-
-					return [=](CommandContext& renderContext, const RGPassResources& resources)
-					{
-						renderContext.InsertResourceBarrier(resources.GetTexture(Data.DepthStencil), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-						renderContext.InsertResourceBarrier(resources.GetTexture(Data.DepthStencilResolved), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-
-						renderContext.SetComputeRootSignature(m_pResolveDepthRS.get());
-						renderContext.SetComputePipelineState(m_pResolveDepthPSO.get());
-
-						renderContext.SetDynamicDescriptor(0, 0, resources.GetTexture(Data.DepthStencilResolved)->GetUAV());
-						renderContext.SetDynamicDescriptor(1, 0, resources.GetTexture(Data.DepthStencil)->GetSRV());
-
-						int dispatchGroupsX = Math::DivideAndRoundUp(m_WindowWidth, 16);
-						int dispatchGroupsY = Math::DivideAndRoundUp(m_WindowHeight, 16);
-						renderContext.Dispatch(dispatchGroupsX, dispatchGroupsY);
-
-						renderContext.InsertResourceBarrier(resources.GetTexture(Data.DepthStencilResolved), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-					};
-				});
-		}
-
+	if (m_RenderPath == RenderPath::Tiled)
+	{
 		//3. LIGHT CULLING
 		// - Compute shader to buckets lights in tiles depending on their screen position.
 		// - Requires a depth buffer 
@@ -361,7 +360,6 @@ void Graphics::Update()
 							{
 								Matrix WorldViewProjection;
 							} ObjectData;
-							ObjectData.WorldViewProjection = lightData.LightViewProjections[i];
 							context.SetGraphicsRootSignature(m_pShadowsRS.get());
 
 							//Opaque
@@ -369,9 +367,10 @@ void Graphics::Update()
 								GPU_PROFILE_SCOPE("Opaque", &context);
 								context.SetGraphicsPipelineState(m_pShadowsOpaquePSO.get());
 
-								context.SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
 								for (const Batch& b : m_OpaqueBatches)
 								{
+									ObjectData.WorldViewProjection = b.WorldMatrix * lightData.LightViewProjections[i];
+									context.SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
 									b.pMesh->Draw(&context);
 								}
 							}
@@ -383,6 +382,8 @@ void Graphics::Update()
 								context.SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
 								for (const Batch& b : m_TransparantBatches)
 								{
+									ObjectData.WorldViewProjection = b.WorldMatrix * lightData.LightViewProjections[i];
+									context.SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
 									context.SetDynamicDescriptor(1, 0, b.pMaterial->pDiffuseTexture->GetSRV());
 									b.pMesh->Draw(&context);
 								}
@@ -434,7 +435,7 @@ void Graphics::Update()
 
 						for (const Batch& b : m_OpaqueBatches)
 						{
-							ObjectData.World = Matrix::Identity;
+							ObjectData.World = b.WorldMatrix;
 							ObjectData.WorldViewProjection = ObjectData.World * m_pCamera->GetViewProjection();
 							context.SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
 							context.SetDynamicDescriptor(3, 0, b.pMaterial->pDiffuseTexture->GetSRV());
@@ -459,7 +460,7 @@ void Graphics::Update()
 
 						for (const Batch& b : m_TransparantBatches)
 						{
-							ObjectData.World = Matrix::Identity;
+							ObjectData.World = b.WorldMatrix;
 							ObjectData.WorldViewProjection = ObjectData.World * m_pCamera->GetViewProjection();
 							context.SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
 							context.SetDynamicDescriptor(3, 0, b.pMaterial->pDiffuseTexture->GetSRV());
@@ -481,6 +482,7 @@ void Graphics::Update()
 	else if (m_RenderPath == RenderPath::Clustered)
 	{
 		ClusteredForwardInputResources resources;
+		resources.DepthBuffer = Data.DepthStencil;
 		resources.pOpaqueBatches = &m_OpaqueBatches;
 		resources.pTransparantBatches = &m_TransparantBatches;
 		resources.pRenderTarget = GetCurrentRenderTarget();
