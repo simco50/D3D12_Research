@@ -138,7 +138,7 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
 					for (const Batch& b : *resources.pOpaqueBatches)
 					{
 						perObjectParameters.WorldView = b.WorldMatrix * resources.pCamera->GetView();
-						perObjectParameters.WorldViewProjection = resources.pCamera->GetViewProjection();
+						perObjectParameters.WorldViewProjection = b.WorldMatrix * resources.pCamera->GetViewProjection();
 
 						context.SetDynamicConstantBufferView(0, &perObjectParameters, sizeof(PerObjectParameters));
 						b.pMesh->Draw(&context);
@@ -151,7 +151,8 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
 					for (const Batch& b : *resources.pTransparantBatches)
 					{
 						perObjectParameters.WorldView = b.WorldMatrix * resources.pCamera->GetView();
-						perObjectParameters.WorldViewProjection = resources.pCamera->GetViewProjection();
+						perObjectParameters.WorldViewProjection = b.WorldMatrix * resources.pCamera->GetViewProjection();
+						
 						context.SetDynamicConstantBufferView(0, &perObjectParameters, sizeof(PerObjectParameters));
 
 						context.SetDynamicDescriptor(3, 0, b.pMaterial->pDiffuseTexture->GetSRV());
@@ -213,13 +214,14 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
 				context.SetComputePipelineState(m_pLightCullingPSO.get());
 				context.SetComputeRootSignature(m_pLightCullingRS.get());
 
-				context.ClearUavUInt(m_pLightIndexCounter.get(), m_pLightIndexCounter->GetUAV());
-
 				context.InsertResourceBarrier(m_pIndirectArguments.get(), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
 				context.InsertResourceBarrier(m_pCompactedClusters.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 				context.InsertResourceBarrier(m_pAABBs.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 				context.InsertResourceBarrier(m_pLightGrid.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 				context.InsertResourceBarrier(m_pLightIndexGrid.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+				context.ClearUavUInt(m_pLightGrid.get(), m_pLightGridRawUAV);
+				context.ClearUavUInt(m_pLightIndexCounter.get(), m_pLightIndexCounter->GetUAV());
 
 				struct ConstantBuffer
 				{
@@ -340,7 +342,7 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
 
 	if (gVisualizeClusters)
 	{
-		graph.AddPass("Base Pass", [&](RGPassBuilder& builder)
+		graph.AddPass("Visualize Clusters", [&](RGPassBuilder& builder)
 			{
 				builder.Read(resources.DepthBuffer);
 				builder.NeverCull();
@@ -355,7 +357,7 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
 						m_DidCopyDebugClusterData = true;
 					}
 
-					context.BeginRenderPass(RenderPassInfo(resources.pRenderTarget, RenderPassAccess::Clear_Store, passResources.GetTexture(resources.DepthBuffer), RenderPassAccess::Load_DontCare));
+					context.BeginRenderPass(RenderPassInfo(resources.pRenderTarget, RenderPassAccess::Load_Store, passResources.GetTexture(resources.DepthBuffer), RenderPassAccess::Load_DontCare));
 
 					context.SetGraphicsPipelineState(m_pDebugClustersPSO.get());
 					context.SetGraphicsRootSignature(m_pDebugClustersRS.get());

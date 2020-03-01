@@ -18,12 +18,14 @@ struct Material;
 class ClusteredForward;
 class Camera;
 class RGResourceAllocator;
+class DebugRenderer;
 
 struct Batch
 {
 	const SubMesh* pMesh;
 	const Material* pMaterial;
 	Matrix WorldMatrix;
+	BoundingBox Bounds;
 };
 
 enum class RenderPath
@@ -160,6 +162,7 @@ private:
 	std::unique_ptr<ImGuiRenderer> m_pImGuiRenderer;
 	std::unique_ptr<RGResourceAllocator> m_pGraphAllocator;
 	std::unique_ptr<ClusteredForward> m_pClusteredForward;
+	std::unique_ptr<DebugRenderer> m_pDebugRenderer;
 
 	unsigned int m_WindowWidth;
 	unsigned int m_WindowHeight;

@@ -20,6 +20,7 @@
 #include "RenderGraph/RenderGraph.h"
 #include "RenderGraph/Blackboard.h"
 #include "RenderGraph/ResourceAllocator.h"
+#include "DebugRenderer.h"
 
 #ifdef _DEBUG
 #define D3D_VALIDATION 1
@@ -105,8 +106,8 @@ void Graphics::RandomizeLights(int count)
 		position.y = Math::RandomRange(-sceneBounds.Extents.y, sceneBounds.Extents.y) + sceneBounds.Center.y;
 		position.z = Math::RandomRange(-sceneBounds.Extents.z, sceneBounds.Extents.z) + sceneBounds.Center.z;
 
-		const float range = Math::RandomRange(5.0f, 9.0f);
-		const float angle = Math::RandomRange(30.0f, 60.0f);
+		const float range = Math::RandomRange(8.0f, 12.0f);
+		const float angle = Math::RandomRange(40.0f, 80.0f);
 
 		Light::Type type = rand() % 2 == 0 ? Light::Type::Point : Light::Type::Spot;
 		switch (type)
@@ -237,7 +238,7 @@ void Graphics::Update()
 				renderContext.SetGraphicsRootSignature(m_pDepthPrepassRS.get());
 				for (const Batch& b : m_OpaqueBatches)
 				{
-					Matrix worldViewProjection = m_pCamera->GetViewProjection();
+					Matrix worldViewProjection = b.WorldMatrix * m_pCamera->GetViewProjection();
 					renderContext.SetDynamicConstantBufferView(0, &worldViewProjection, sizeof(Matrix));
 					b.pMesh->Draw(&renderContext);
 				}
@@ -491,6 +492,8 @@ void Graphics::Update()
 		m_pClusteredForward->Execute(graph, resources);
 	}
 
+	m_pDebugRenderer->Render(graph);
+
 	//7. MSAA Render Target Resolve
 	// - We have to resolve a MSAA render target ourselves. Unlike D3D11, this is not done automatically by the API.
 	//	Luckily, there's a method that does it for us!
@@ -654,6 +657,7 @@ void Graphics::EndFrame(uint64 fenceValue)
 	m_CurrentBackBufferIndex = m_pSwapchain->GetCurrentBackBufferIndex();
 	WaitForFence(m_FenceValues[m_CurrentBackBufferIndex]);
 	Profiler::Instance()->EndReadBack(m_Frame);
+	m_pDebugRenderer->EndFrame();
 }
 
 void Graphics::InitD3D()
@@ -690,6 +694,7 @@ void Graphics::InitD3D()
 		char name[256];
 		ToMultibyte(desc.Description, name, 256);
 		E_LOG(Info, "\t%s", name);
+		pAdapter.Reset();
 	}
 
 	m_pFactory->EnumAdapters1(0, pAdapter.GetAddressOf());
@@ -701,6 +706,7 @@ void Graphics::InitD3D()
 
 	//Create the device
 	HR(D3D12CreateDevice(pAdapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&m_pDevice)));
+	pAdapter.Reset();
 
 #if D3D_VALIDATION
 	ID3D12InfoQueue* pInfoQueue = nullptr;
@@ -826,6 +832,8 @@ void Graphics::InitD3D()
 	OnResize(m_WindowWidth, m_WindowHeight);
 
 	m_pGraphAllocator = std::make_unique<RGResourceAllocator>(this);
+	m_pDebugRenderer = std::make_unique<DebugRenderer>(this);
+	m_pDebugRenderer->SetCamera(m_pCamera.get());
 }
 
 void Graphics::OnResize(int width, int height)
@@ -899,8 +907,8 @@ void Graphics::InitializeAssets()
 	//PBR Diffuse passes
 	{
 		//Shaders
-		Shader vertexShader("Resources/Shaders/Diffuse.hlsl", Shader::Type::VertexShader, "VSMain", { "SHADOW" });
-		Shader pixelShader("Resources/Shaders/Diffuse.hlsl", Shader::Type::PixelShader, "PSMain", { "SHADOW" });
+		Shader vertexShader("Resources/Shaders/Diffuse.hlsl", Shader::Type::VertexShader, "VSMain", { /*"SHADOW"*/ });
+		Shader pixelShader("Resources/Shaders/Diffuse.hlsl", Shader::Type::PixelShader, "PSMain", { /*"SHADOW"*/ });
 
 		//Rootsignature
 		m_pPBRDiffuseRS = std::make_unique<RootSignature>();
@@ -1082,6 +1090,7 @@ void Graphics::InitializeAssets()
 		for (int i = 0; i < m_pMesh->GetMeshCount(); ++i)
 		{
 			Batch b;
+			b.Bounds = m_pMesh->GetMesh(i)->GetBounds();
 			b.pMesh = m_pMesh->GetMesh(i);
 			b.pMaterial = &m_pMesh->GetMaterial(b.pMesh->GetMaterialId());
 			b.WorldMatrix = Matrix::Identity;
@@ -1131,7 +1140,7 @@ void Graphics::UpdateImGui()
 		ImGui::Checkbox("Visualize Clusters", &gVisualizeClusters);
 
 		ImGui::Separator();
-		ImGui::SliderInt("Lights", &m_DesiredLightCount, 10, 16384);
+		ImGui::SliderInt("Lights", &m_DesiredLightCount, 10, 16384*4);
 		if (ImGui::Button("Generate Lights"))
 		{
 			RandomizeLights(m_DesiredLightCount);
