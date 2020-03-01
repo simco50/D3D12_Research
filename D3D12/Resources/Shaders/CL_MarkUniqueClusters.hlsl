@@ -53,15 +53,5 @@ void MarkClusters_PS(PS_Input input)
 {
     uint3 clusterIndex3D = uint3(floor(input.position.xy / cClusterSize), GetSliceFromDepth(input.positionVS.z));
     uint clusterIndex1D = clusterIndex3D.x + (cClusterDimensions.x * (clusterIndex3D.y + cClusterDimensions.y * clusterIndex3D.z));
-
-#ifdef ALPHA_BLEND
-    float s = tDiffuseTexture.Sample(sDiffuseSampler, input.texCoord).a;
-    if(s < 0.01f)
-    {
-        discard;
-    }
-    uActiveClusters[clusterIndex1D] = ceil(s);
-#else
     uActiveClusters[clusterIndex1D] = 1;
-#endif
 }

@@ -73,9 +73,6 @@ private:
 	std::unique_ptr<Buffer> m_pLightGrid;
 	UnorderedAccessView* m_pLightGridRawUAV = nullptr;
 
-	//Alternative light culling
-	std::unique_ptr<ComputePipelineState> m_pAlternativeLightCullingPSO;
-
 	//Step 6: Lighting
 	std::unique_ptr<RootSignature> m_pDiffuseRS;
 	std::unique_ptr<GraphicsPipelineState> m_pDiffusePSO;

@@ -35,7 +35,7 @@ void Buffer::Create(const BufferDesc& bufferDesc)
 	desc.Height = 1;
 	desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
 	desc.MipLevels = 1;
-	desc.Width = (int64)bufferDesc.ElementSize * bufferDesc.ElementCount;
+	desc.Width = Math::AlignUp<int64>((int64)bufferDesc.ElementSize * bufferDesc.ElementCount, 16);
 	desc.SampleDesc.Count = 1;
 	desc.SampleDesc.Quality = 0;
 

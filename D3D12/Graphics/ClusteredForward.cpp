@@ -18,7 +18,6 @@
 static constexpr int cClusterSize = 64;
 static constexpr int cClusterCountZ = 32;
 
-bool gUseAlternativeLightCulling = false;
 bool gVisualizeClusters = false;
 
 ClusteredForward::ClusteredForward(Graphics* pGraphics)
@@ -196,96 +195,46 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
 			};
 		});
 
-	if (gUseAlternativeLightCulling)
-	{
-		graph.AddPass("Alternative Light Culling", [&](RGPassBuilder& builder)
-			{
-				builder.NeverCull();
-				return [=](CommandContext& context, const RGPassResources& passResources)
-				{
-					context.SetComputePipelineState(m_pAlternativeLightCullingPSO.get());
-					context.SetComputeRootSignature(m_pLightCullingRS.get());
-
-					context.ClearUavUInt(m_pLightIndexCounter.get(), m_pLightIndexCounter->GetUAV());
-					context.ClearUavUInt(m_pLightGrid.get(), m_pLightGridRawUAV);
-
-					context.InsertResourceBarrier(m_pIndirectArguments.get(), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
-					context.InsertResourceBarrier(m_pCompactedClusters.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-					context.InsertResourceBarrier(m_pAABBs.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-					context.InsertResourceBarrier(m_pLightIndexCounter.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-
-					struct ConstantBuffer
-					{
-						Matrix View;
-						uint32 ClusterDimensions[3];
-						int LightCount;
-					} constantBuffer;
-
-					constantBuffer.View = resources.pCamera->GetView();
-					constantBuffer.ClusterDimensions[0] = m_ClusterCountX;
-					constantBuffer.ClusterDimensions[1] = m_ClusterCountY;
-					constantBuffer.ClusterDimensions[2] = cClusterCountZ;
-					constantBuffer.LightCount = (uint32)resources.pLightBuffer->GetDesc().ElementCount;
-
-					context.SetComputeDynamicConstantBufferView(0, &constantBuffer, sizeof(ConstantBuffer));
-
-					context.SetDynamicDescriptor(1, 0, resources.pLightBuffer->GetSRV());
-					context.SetDynamicDescriptor(1, 1, m_pAABBs->GetSRV());
-					context.SetDynamicDescriptor(1, 2, m_pCompactedClusters->GetSRV());
-
-					context.SetDynamicDescriptor(2, 0, m_pLightIndexCounter->GetUAV());
-					context.SetDynamicDescriptor(2, 1, m_pLightIndexGrid->GetUAV());
-					context.SetDynamicDescriptor(2, 2, m_pLightGrid->GetUAV());
-
-					context.Dispatch(Math::RoundUp((float)m_ClusterCountX / 4), Math::RoundUp((float)m_ClusterCountY / 4), Math::RoundUp((float)cClusterCountZ / 4));
-				};
-			});
-	}
-	else
-	{
-		// Light Culling
-		graph.AddPass("Light Culling", [&](RGPassBuilder& builder)
-			{
-				builder.NeverCull();
-				return [=](CommandContext& context, const RGPassResources& passResources)
-				{
-					context.SetComputePipelineState(m_pLightCullingPSO.get());
-					context.SetComputeRootSignature(m_pLightCullingRS.get());
-
-					context.ClearUavUInt(m_pLightIndexCounter.get(), m_pLightIndexCounter->GetUAV());
-
-					context.InsertResourceBarrier(m_pIndirectArguments.get(), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
-					context.InsertResourceBarrier(m_pCompactedClusters.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-					context.InsertResourceBarrier(m_pAABBs.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-					context.InsertResourceBarrier(m_pLightGrid.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-					context.InsertResourceBarrier(m_pLightIndexGrid.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-
-					struct ConstantBuffer
-					{
-						Matrix View;
-						int LightCount;
-					} constantBuffer;
-
-					constantBuffer.View = resources.pCamera->GetView();
-					constantBuffer.LightCount = (uint32)resources.pLightBuffer->GetDesc().ElementCount;
-
-					context.SetComputeDynamicConstantBufferView(0, &constantBuffer, sizeof(ConstantBuffer));
-
-					context.SetDynamicDescriptor(1, 0, resources.pLightBuffer->GetSRV());
-					context.SetDynamicDescriptor(1, 1, m_pAABBs->GetSRV());
-					context.SetDynamicDescriptor(1, 2, m_pCompactedClusters->GetSRV());
-
-					context.SetDynamicDescriptor(2, 0, m_pLightIndexCounter->GetUAV());
-					context.SetDynamicDescriptor(2, 1, m_pLightIndexGrid->GetUAV());
-					context.SetDynamicDescriptor(2, 2, m_pLightGrid->GetUAV());
-
-					context.ExecuteIndirect(m_pLightCullingCommandSignature.Get(), m_pIndirectArguments.get());
-				};
-			});
-	}
 	
+	graph.AddPass("Light Culling", [&](RGPassBuilder& builder)
+		{
+			builder.NeverCull();
+			return [=](CommandContext& context, const RGPassResources& passResources)
+			{
+				context.SetComputePipelineState(m_pLightCullingPSO.get());
+				context.SetComputeRootSignature(m_pLightCullingRS.get());
 
-	//Base Pass
+				context.ClearUavUInt(m_pLightIndexCounter.get(), m_pLightIndexCounter->GetUAV());
+
+				context.InsertResourceBarrier(m_pIndirectArguments.get(), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
+				context.InsertResourceBarrier(m_pCompactedClusters.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+				context.InsertResourceBarrier(m_pAABBs.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+				context.InsertResourceBarrier(m_pLightGrid.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+				context.InsertResourceBarrier(m_pLightIndexGrid.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+				struct ConstantBuffer
+				{
+					Matrix View;
+					int LightCount;
+				} constantBuffer;
+
+				constantBuffer.View = resources.pCamera->GetView();
+				constantBuffer.LightCount = (uint32)resources.pLightBuffer->GetDesc().ElementCount;
+
+				context.SetComputeDynamicConstantBufferView(0, &constantBuffer, sizeof(ConstantBuffer));
+
+				context.SetDynamicDescriptor(1, 0, resources.pLightBuffer->GetSRV());
+				context.SetDynamicDescriptor(1, 1, m_pAABBs->GetSRV());
+				context.SetDynamicDescriptor(1, 2, m_pCompactedClusters->GetSRV());
+
+				context.SetDynamicDescriptor(2, 0, m_pLightIndexCounter->GetUAV());
+				context.SetDynamicDescriptor(2, 1, m_pLightIndexGrid->GetUAV());
+				context.SetDynamicDescriptor(2, 2, m_pLightGrid->GetUAV());
+
+				context.ExecuteIndirect(m_pLightCullingCommandSignature.Get(), m_pIndirectArguments.get());
+			};
+		});
+
 	graph.AddPass("Base Pass", [&](RGPassBuilder& builder)
 		{
 			builder.NeverCull();
@@ -463,7 +412,6 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
 
 		Shader vertexShader("Resources/Shaders/CL_MarkUniqueClusters.hlsl", Shader::Type::VertexShader, "MarkClusters_VS");
 		Shader pixelShaderOpaque("Resources/Shaders/CL_MarkUniqueClusters.hlsl", Shader::Type::PixelShader, "MarkClusters_PS");
-		Shader pixelShaderTransparant("Resources/Shaders/CL_MarkUniqueClusters.hlsl", Shader::Type::PixelShader, "MarkClusters_PS", {"ALPHA_BLEND"});
 
 		m_pMarkUniqueClustersRS = std::make_unique<RootSignature>();
 		m_pMarkUniqueClustersRS->FinalizeFromShader("Mark Unique Clusters", vertexShader, pGraphics->GetDevice());
@@ -479,8 +427,6 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
 		m_pMarkUniqueClustersOpaquePSO->Finalize("Mark Unique Clusters", m_pGraphics->GetDevice());
 
 		m_pMarkUniqueClustersTransparantPSO = std::make_unique<GraphicsPipelineState>(*m_pMarkUniqueClustersOpaquePSO);
-		m_pMarkUniqueClustersTransparantPSO->SetBlendMode(BlendMode::Alpha, false);
-		m_pMarkUniqueClustersTransparantPSO->SetPixelShader(pixelShaderTransparant.GetByteCode(), pixelShaderTransparant.GetByteCodeSize());
 		m_pMarkUniqueClustersTransparantPSO->SetDepthWrite(false);
 		m_pMarkUniqueClustersTransparantPSO->Finalize("Mark Unique Clusters", m_pGraphics->GetDevice());
 	}
@@ -531,16 +477,6 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
 		sigDesc.pArgumentDescs = &desc;
 		sigDesc.NumArgumentDescs = 1;
 		HR(m_pGraphics->GetDevice()->CreateCommandSignature(&sigDesc, nullptr, IID_PPV_ARGS(m_pLightCullingCommandSignature.GetAddressOf())));
-	}
-
-	//Alternative Light Culling
-	{
-		Shader computeShader = Shader("Resources/Shaders/CL_LightCullingUnreal.hlsl", Shader::Type::ComputeShader, "LightCulling");
-
-		m_pAlternativeLightCullingPSO = std::make_unique<ComputePipelineState>();
-		m_pAlternativeLightCullingPSO->SetComputeShader(computeShader.GetByteCode(), computeShader.GetByteCodeSize());
-		m_pAlternativeLightCullingPSO->SetRootSignature(m_pLightCullingRS->GetRootSignature());
-		m_pAlternativeLightCullingPSO->Finalize("Light Culling", pGraphics->GetDevice());
 	}
 
 	//Diffuse

@@ -32,6 +32,33 @@ enum class RenderPath
 	Clustered,
 };
 
+#define PIX_CAPTURE_SCOPE() PixScopeCapture<__COUNTER__> pix_scope_##__COUNTER__;
+
+template<size_t IDX>
+class PixScopeCapture
+{
+public:
+	PixScopeCapture()
+	{
+		static bool hit = false;
+		if (hit == false)
+		{
+			hit = true;
+			DXGIGetDebugInterface1(0, IID_PPV_ARGS(&pGa));
+			if (pGa)
+				pGa->BeginCapture();
+		}
+	}
+
+	~PixScopeCapture()
+	{
+		if (pGa)
+			pGa->EndCapture();
+	}
+private:
+	ComPtr<IDXGraphicsAnalysis> pGa;
+};
+
 class Graphics
 {
 public:
@@ -141,7 +168,7 @@ private:
 	uint32 m_CurrentBackBufferIndex = 0;
 	std::array<uint64, FRAME_COUNT> m_FenceValues = {};
 
-	RenderPath m_RenderPath = RenderPath::Tiled;
+	RenderPath m_RenderPath = RenderPath::Clustered;
 
 	std::unique_ptr<Mesh> m_pMesh;
 	std::vector<Batch> m_OpaqueBatches;

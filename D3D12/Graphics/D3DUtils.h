@@ -28,12 +28,22 @@ inline bool LogHRESULT(HRESULT hr)
 	return false;
 }
 
+inline int ToMultibyte(const wchar_t* pStr, char* pOut, int len)
+{
+	return WideCharToMultiByte(CP_UTF8, 0, pStr, -1, pOut, len, nullptr, nullptr);
+}
+
+inline int ToWidechar(const char* pStr, wchar_t* pOut, int len)
+{
+	return MultiByteToWideChar(CP_UTF8, 0, pStr, -1, pOut, len);
+}
+
 inline void SetD3DObjectName(ID3D12Object* pObject, const char* pName)
 {
 	if (pObject)
 	{
 		wchar_t name[256];
-		MultiByteToWideChar(CP_UTF8, 0, pName, strlen(pName) + 1, name, 256);
+		ToWidechar(pName, name, 256);
 		pObject->SetName(name);
 	}
 }

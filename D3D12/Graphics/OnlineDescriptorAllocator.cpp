@@ -31,12 +31,20 @@ void OnlineDescriptorAllocator::SetDescriptors(uint32 rootIndex, uint32 offset, 
 	assert(numHandles + offset <= m_RootDescriptorTable[rootIndex].TableSize);
 
 	RootDescriptorEntry& entry = m_RootDescriptorTable[rootIndex];
+	bool dirty = false;
 	for (uint32 i = 0; i < numHandles; ++i)
 	{
-		entry.TableStart[i + offset] = pHandles[i];
-		entry.AssignedHandlesBitMap.SetBit(i + offset);
+		if (entry.TableStart[i + offset].ptr != pHandles[i].ptr)
+		{
+			entry.TableStart[i + offset] = pHandles[i];
+			entry.AssignedHandlesBitMap.SetBit(i + offset);
+			dirty = true;
+		}
 	}
-	m_StaleRootParameters.SetBit(rootIndex);
+	if (dirty)
+	{
+		m_StaleRootParameters.SetBit(rootIndex);
+	}
 }
 
 void OnlineDescriptorAllocator::UploadAndBindStagedDescriptors(DescriptorTableType descriptorTableType)
