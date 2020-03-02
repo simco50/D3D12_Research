@@ -637,6 +637,7 @@ void Graphics::Shutdown()
 {
 	// Wait for the GPU to be done with all resources.
 	IdleGPU();
+	m_pSwapchain->SetFullscreenState(false, nullptr);
 }
 
 void Graphics::BeginFrame()
@@ -838,7 +839,7 @@ void Graphics::InitD3D()
 
 void Graphics::OnResize(int width, int height)
 {
-	E_LOG(Info, "Graphics::OnResize()");
+	E_LOG(Info, "Viewport resized: %dx%d", width, height);
 	m_WindowWidth = width;
 	m_WindowHeight = height;
 
@@ -883,6 +884,8 @@ void Graphics::OnResize(int width, int height)
 	int frustumCountY = Math::RoundUp((float)height / FORWARD_PLUS_BLOCK_SIZE);
 	m_pLightGridOpaque->Create(TextureDesc::Create2D(frustumCountX, frustumCountY, DXGI_FORMAT_R32G32_UINT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
 	m_pLightGridTransparant->Create(TextureDesc::Create2D(frustumCountX, frustumCountY, DXGI_FORMAT_R32G32_UINT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
+	
+	m_pCamera->SetDirty();
 
 	m_pClusteredForward->OnSwapchainCreated(width, height);
 }

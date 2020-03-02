@@ -16,6 +16,7 @@ public:
 	const Vector3& GetPosition() const { return m_Position; }
 	const Quaternion& GetRotation() const { return m_Rotation; }
 
+	void SetDirty() { m_Dirty = true; }
 	void SetFoV(float fov);
 	void SetViewport(float x, float y, float width, float height);
 	FloatRect GetViewport() const { return GetAbsoluteViewport(); }

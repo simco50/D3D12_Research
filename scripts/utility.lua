@@ -39,6 +39,7 @@ newaction {
 }
 
 function AddDxc()
+	links { "dxcompiler" }
 	postbuildcommands { ("copy \"$(SolutionDir)Libraries\\Dxc\\dxcompiler.dll\" \"$(OutDir)\"") }
 	postbuildcommands { ("copy \"$(SolutionDir)Libraries\\Dxc\\dxil.dll\" \"$(OutDir)\"") }
 end

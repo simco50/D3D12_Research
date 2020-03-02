@@ -45,7 +45,6 @@ void ClusteredForward::OnSwapchainCreated(int windowWidth, int windowHeight)
 	m_pDebugLightGrid->Create(BufferDesc::CreateStructured(totalClusterCount, 2 * sizeof(uint32)));
 
 	CommandContext* pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
-	// Create AABBs
 	{
 		GPU_PROFILE_SCOPE("CreateAABBs", pContext);
 
@@ -62,7 +61,7 @@ void ClusteredForward::OnSwapchainCreated(int windowWidth, int windowHeight)
 			float FarZ;
 		} constantBuffer;
 
-		constantBuffer.ScreenDimensions = Vector2((float)m_pGraphics->GetWindowWidth(), (float)m_pGraphics->GetWindowHeight());
+		constantBuffer.ScreenDimensions = Vector2((float)windowWidth, (float)windowHeight);
 		constantBuffer.NearZ = m_pGraphics->GetCamera()->GetFar();
 		constantBuffer.FarZ = m_pGraphics->GetCamera()->GetNear();
 		constantBuffer.ProjectionInverse = m_pGraphics->GetCamera()->GetProjectionInverse();
@@ -433,18 +432,18 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
 		m_pMarkUniqueClustersRS->FinalizeFromShader("Mark Unique Clusters", vertexShader, pGraphics->GetDevice());
 
 		m_pMarkUniqueClustersOpaquePSO = std::make_unique<GraphicsPipelineState>();
-		m_pMarkUniqueClustersOpaquePSO->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
+		m_pMarkUniqueClustersOpaquePSO->SetDepthTest(D3D12_COMPARISON_FUNC_EQUAL);
 		m_pMarkUniqueClustersOpaquePSO->SetRootSignature(m_pMarkUniqueClustersRS->GetRootSignature());
-		m_pMarkUniqueClustersOpaquePSO->SetBlendMode(BlendMode::Replace, false);
 		m_pMarkUniqueClustersOpaquePSO->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
 		m_pMarkUniqueClustersOpaquePSO->SetPixelShader(pixelShaderOpaque.GetByteCode(), pixelShaderOpaque.GetByteCodeSize());
 		m_pMarkUniqueClustersOpaquePSO->SetInputLayout(inputElements, ARRAYSIZE(inputElements));
 		m_pMarkUniqueClustersOpaquePSO->SetRenderTargetFormats(nullptr, 0, Graphics::DEPTH_STENCIL_FORMAT, m_pGraphics->GetMultiSampleCount(), m_pGraphics->GetMultiSampleQualityLevel(m_pGraphics->GetMultiSampleCount()));
-		m_pMarkUniqueClustersOpaquePSO->Finalize("Mark Unique Clusters", m_pGraphics->GetDevice());
+		m_pMarkUniqueClustersOpaquePSO->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
 		m_pMarkUniqueClustersOpaquePSO->SetDepthWrite(false);
+		m_pMarkUniqueClustersOpaquePSO->Finalize("Mark Unique Clusters", m_pGraphics->GetDevice());
 
 		m_pMarkUniqueClustersTransparantPSO = std::make_unique<GraphicsPipelineState>(*m_pMarkUniqueClustersOpaquePSO);
-		m_pMarkUniqueClustersTransparantPSO->SetDepthWrite(false);
+		m_pMarkUniqueClustersOpaquePSO->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
 		m_pMarkUniqueClustersTransparantPSO->Finalize("Mark Unique Clusters", m_pGraphics->GetDevice());
 	}
 

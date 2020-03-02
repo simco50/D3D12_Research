@@ -1,7 +1,5 @@
 #pragma once
 
-struct IDxcBlob;
-
 class Shader
 {
 public:
@@ -36,6 +34,5 @@ private:
 
 	std::string m_Path;
 	ComPtr<ID3DBlob> m_pByteCode;
-	ComPtr<IDxcBlob> m_pByteCodeDxc;
 	Type m_Type;
 };
