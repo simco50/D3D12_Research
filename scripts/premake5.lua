@@ -3,27 +3,22 @@ require "utility"
 ENGINE_NAME = "D3D12"
 ROOT = "../"
 SOURCE_DIR = ROOT .. ENGINE_NAME .. "/"
+WIN_SDK = "10.0.17763.0"
 
 workspace (ENGINE_NAME)
 	basedir (ROOT)
 	configurations { "Debug", "Release" }
     platforms { "x64" }
-	defines { "_CONSOLE" }
+	defines {  "x64" }
 	language ("C++")
 	startproject (ENGINE_NAME)
 	symbols ("On")
+	architecture ("x64")
 	kind ("WindowedApp")
 	characterset ("MBCS")
 	flags {"MultiProcessorCompile"}
 	rtti "Off"
 	
-	filter {"system:windows"}
-		defines { "PLATFORM_WINDOWS" }
-
-    filter "platforms:x64"
-		defines {"x64"}
-		architecture ("x64")
-
 	filter "configurations:Debug"
 		defines { "_DEBUG" }
 		optimize ("Off")
@@ -44,7 +39,7 @@ workspace (ENGINE_NAME)
 		SetPlatformDefines()
 
 		filter {"system:windows", "action:vs*"}
-			systemversion ("10.0.17763.0")
+			systemversion (WIN_SDK)
 		filter {}
 
 		---- File setup ----
@@ -57,8 +52,6 @@ workspace (ENGINE_NAME)
 			(SOURCE_DIR .. "**.c"),
 			(SOURCE_DIR .. "**.natvis"),
 		}
-		filter { "files:" .. SOURCE_DIR .. "Resources/**" }
-			flags { "ExcludeFromBuild" }
 
 		filter ("files:" .. SOURCE_DIR .. "External/**")
 			flags { "NoPCH" }

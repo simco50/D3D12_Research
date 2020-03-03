@@ -25,6 +25,12 @@ function AddAssimp()
 	links { "assimp-vc140-mt" }
 end
 
+function AddDxc()
+	links { "dxcompiler" }
+	postbuildcommands { ("copy \"$(SolutionDir)Libraries\\Dxc\\dxcompiler.dll\" \"$(OutDir)\"") }
+	postbuildcommands { ("copy \"$(SolutionDir)Libraries\\Dxc\\dxil.dll\" \"$(OutDir)\"") }
+end
+
 newaction {
 	trigger     = "clean",
 	description = "Remove all binaries and generated files",
@@ -37,9 +43,3 @@ newaction {
 		os.remove(SOURCE_DIR .. "*.vcxproj.*")
 	end
 }
-
-function AddDxc()
-	links { "dxcompiler" }
-	postbuildcommands { ("copy \"$(SolutionDir)Libraries\\Dxc\\dxcompiler.dll\" \"$(OutDir)\"") }
-	postbuildcommands { ("copy \"$(SolutionDir)Libraries\\Dxc\\dxil.dll\" \"$(OutDir)\"") }
-end

@@ -6,7 +6,6 @@
 
 #define USE_SHADER_LINE_DIRECTIVE 1
 
-
 std::vector<std::pair<std::string, std::string>> Shader::m_GlobalShaderDefines;
 
 Shader::Shader(const char* pFilePath, Type shaderType, const char* pEntryPoint, const std::vector<std::string> defines)
@@ -105,17 +104,16 @@ bool Shader::Compile(const char* pFilePath, Type shaderType, const char* pEntryP
 
 bool Shader::CompileDxc(const std::string& source, const char* pTarget, const char* pEntryPoint, const std::vector<std::string> defines /*= {}*/)
 {
-	IDxcLibrary* pLibrary;
-	DxcCreateInstance(CLSID_DxcLibrary, IID_PPV_ARGS(&pLibrary));
-	IDxcCompiler* pCompiler;
-	DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(&pCompiler));
+	ComPtr<IDxcLibrary> pLibrary;
+	HR(DxcCreateInstance(CLSID_DxcLibrary, IID_PPV_ARGS(pLibrary.GetAddressOf())));
+	ComPtr<IDxcCompiler> pCompiler;
+	HR(DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(pCompiler.GetAddressOf())));
 
-	IDxcBlobEncoding* pSource;
-	HR(pLibrary->CreateBlobWithEncodingFromPinned(source.c_str(), (uint32)source.size(), CP_UTF8, &pSource));
+	ComPtr<IDxcBlobEncoding> pSource;
+	HR(pLibrary->CreateBlobWithEncodingFromPinned(source.c_str(), (uint32)source.size(), CP_UTF8, pSource.GetAddressOf()));
 
-	size_t written = 0;
 	wchar_t target[256];
-	mbstowcs_s(&written, target, pTarget, 256);
+	ToWidechar(pTarget, target, 256);
 
 	LPCWSTR pArgs[] =
 	{
@@ -153,43 +151,42 @@ bool Shader::CompileDxc(const std::string& source, const char* pTarget, const ch
 	}
 
 	wchar_t fileName[256], entryPoint[256];
-	mbstowcs_s(&written, fileName, m_Path.c_str(), 256);
-	mbstowcs_s(&written, entryPoint, pEntryPoint, 256);
-	IDxcOperationResult* pCompileResult;
+	ToWidechar(m_Path.c_str(), fileName, 256);
+	ToWidechar(pEntryPoint, entryPoint, 256);
 
-	HR(pCompiler->Compile(pSource, fileName, entryPoint, target, &pArgs[0], sizeof(pArgs) / sizeof(pArgs[0]), dxcDefines.data(), (uint32)dxcDefines.size(), nullptr, &pCompileResult));
+	ComPtr<IDxcOperationResult> pCompileResult;
 
-	HRESULT hrCompilation;
-	pCompileResult->GetStatus(&hrCompilation);
+	HR(pCompiler->Compile(pSource.Get(), fileName, entryPoint, target, &pArgs[0], sizeof(pArgs) / sizeof(pArgs[0]), dxcDefines.data(), (uint32)dxcDefines.size(), nullptr, pCompileResult.GetAddressOf()));
 
-	if (hrCompilation < 0)
+	auto checkResult = [&](IDxcOperationResult* pResult) {
+		HRESULT hrCompilation;
+		HR(pResult->GetStatus(&hrCompilation));
+
+		if (hrCompilation < 0)
+		{
+			ComPtr<IDxcBlobEncoding> pPrintBlob, pPrintBlob8;
+			HR(pResult->GetErrorBuffer(pPrintBlob.GetAddressOf()));
+			pLibrary->GetBlobAsUtf8(pPrintBlob.Get(), pPrintBlob8.GetAddressOf());
+			E_LOG(Error, "%s", (char*)pPrintBlob8->GetBufferPointer());
+			return false;
+		}
+		return true;
+	};
+
+	if (!checkResult(pCompileResult.Get()))
 	{
-		IDxcBlobEncoding* pPrintBlob, * pPrintBlob8;
-		HR(pCompileResult->GetErrorBuffer(&pPrintBlob));
-		pLibrary->GetBlobAsUtf8(pPrintBlob, &pPrintBlob8);
-		E_LOG(Error, "%s", (char*)pPrintBlob8->GetBufferPointer());
-		pPrintBlob->Release();
-		pPrintBlob8->Release();
 		return false;
 	}
 
 	IDxcBlob** pBlob = reinterpret_cast<IDxcBlob**>(m_pByteCode.GetAddressOf());
 	pCompileResult->GetResult(pBlob);
-	// Save to a file, disassemble and print, store somewhere ...
-	pCompileResult->Release();
 
 	ComPtr<IDxcValidator> pValidator;
 	DxcCreateInstance(CLSID_DxcValidator, IID_PPV_ARGS(pValidator.GetAddressOf()));
 	pValidator->Validate(*pBlob, DxcValidatorFlags_InPlaceEdit, &pCompileResult);
-	pCompileResult->GetStatus(&hrCompilation);
-	if (hrCompilation < 0)
+
+	if (!checkResult(pCompileResult.Get()))
 	{
-		IDxcBlobEncoding* pPrintBlob, * pPrintBlob8;
-		HR(pCompileResult->GetErrorBuffer(&pPrintBlob));
-		pLibrary->GetBlobAsUtf8(pPrintBlob, &pPrintBlob8);
-		E_LOG(Error, "%s", (char*)pPrintBlob8->GetBufferPointer());
-		pPrintBlob->Release();
-		pPrintBlob8->Release();
 		return false;
 	}
 

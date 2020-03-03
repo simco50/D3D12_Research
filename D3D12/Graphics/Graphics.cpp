@@ -141,8 +141,6 @@ void Graphics::RandomizeLights(int count)
 
 void Graphics::Update()
 {
-	PIX_CAPTURE_SCOPE();
-
 	PROFILE_BEGIN("Update Game State");
 	//Render forward+ tiles
 
@@ -414,6 +412,14 @@ void Graphics::Update()
 					context.BeginRenderPass(RenderPassInfo(GetCurrentRenderTarget(), RenderPassAccess::Clear_Store, GetDepthStencil(), RenderPassAccess::Load_DontCare));
 
 					context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+					context.SetGraphicsRootSignature(m_pPBRDiffuseRS.get());
+
+					context.SetDynamicConstantBufferView(1, &frameData, sizeof(PerFrameData));
+					context.SetDynamicConstantBufferView(2, &lightData, sizeof(LightData));
+					context.SetDynamicDescriptor(4, 0, m_pShadowMap->GetSRV());
+					context.SetDynamicDescriptor(4, 1, m_pLightGridOpaque->GetSRV());
+					context.SetDynamicDescriptor(4, 2, m_pLightIndexListBufferOpaque->GetSRV());
+					context.SetDynamicDescriptor(4, 3, m_pLightBuffer->GetSRV());
 
 					struct PerObjectData
 					{
@@ -425,15 +431,7 @@ void Graphics::Update()
 					{
 						GPU_PROFILE_SCOPE("Opaque", &context);
 						context.SetGraphicsPipelineState(m_pPBRDiffusePSO.get());
-						context.SetGraphicsRootSignature(m_pPBRDiffuseRS.get());
-
-						context.SetDynamicConstantBufferView(1, &frameData, sizeof(PerFrameData));
-						context.SetDynamicConstantBufferView(2, &lightData, sizeof(LightData));
-						context.SetDynamicDescriptor(4, 0, m_pShadowMap->GetSRV());
-						context.SetDynamicDescriptor(4, 1, m_pLightGridOpaque->GetSRV());
-						context.SetDynamicDescriptor(4, 2, m_pLightIndexListBufferOpaque->GetSRV());
-						context.SetDynamicDescriptor(4, 3, m_pLightBuffer->GetSRV());
-
+						
 						for (const Batch& b : m_OpaqueBatches)
 						{
 							ObjectData.World = b.WorldMatrix;
@@ -450,14 +448,6 @@ void Graphics::Update()
 					{
 						GPU_PROFILE_SCOPE("Transparant", &context);
 						context.SetGraphicsPipelineState(m_pPBRDiffuseAlphaPSO.get());
-						context.SetGraphicsRootSignature(m_pPBRDiffuseRS.get());
-
-						context.SetDynamicConstantBufferView(1, &frameData, sizeof(PerFrameData));
-						context.SetDynamicConstantBufferView(2, &lightData, sizeof(LightData));
-						context.SetDynamicDescriptor(4, 0, m_pShadowMap->GetSRV());
-						context.SetDynamicDescriptor(4, 1, m_pLightGridTransparant->GetSRV());
-						context.SetDynamicDescriptor(4, 2, m_pLightIndexListBufferTransparant->GetSRV());
-						context.SetDynamicDescriptor(4, 3, m_pLightBuffer->GetSRV());
 
 						for (const Batch& b : m_TransparantBatches)
 						{
