@@ -24,7 +24,7 @@ void Console::Startup()
 	console.m_ConvertBuffer = new char[console.m_ConvertBufferSize];
 }
 
-bool Console::LogHRESULT(const std::string &source, HRESULT hr)
+bool Console::LogHRESULT(const char* source, HRESULT hr)
 {
 	if (FAILED(hr))
 	{
@@ -33,38 +33,21 @@ bool Console::LogHRESULT(const std::string &source, HRESULT hr)
 			hr = HRESULT_CODE(hr);
 		}
 
-		std::stringstream ss;
-		if (source.size() != 0)
-		{
-			ss << "Source: ";
-			ss << source;
-			ss << "\n";
-		}
-		ss << "Message: ";
-
 		char* errorMsg;
 		if (FormatMessage(
 			FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM,
 			nullptr, hr, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
 			(LPSTR)&errorMsg, 0, nullptr) != 0)
 		{
-			OutputDebugString(errorMsg);
-			ss << errorMsg;
 		}
-
-		Log(ss.str(), LogType::Error);
+		LogFormat(LogType::Error, "Source: %s\n Message: %s", source, errorMsg);
 		return true;
 	}
 
 	return false;
 }
 
-bool Console::LogHRESULT(char* source, HRESULT hr)
-{
-	return LogHRESULT(std::string(source), hr);
-}
-
-void Console::Log(const std::string &message, LogType type)
+void Console::Log(const char* message, LogType type)
 {
 	if ((int)type < (int)consoleInstance->m_Verbosity)
 	{
@@ -92,11 +75,13 @@ void Console::Log(const std::string &message, LogType type)
 		break;
 	}
 
+	stream << message;
+	const std::string output = stream.str();
+	std::cout << output << std::endl;
+	OutputDebugString(output.c_str());
+	OutputDebugString("\n");
 	if (consoleInstance->m_ConsoleHandle)
 	{
-		stream << message;
-		const std::string output = stream.str();
-		std::cout << output << std::endl;
 		SetConsoleTextAttribute(consoleInstance->m_ConsoleHandle, FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY);
 	}
 
@@ -122,17 +107,6 @@ void Console::LogFormat(LogType type, const char* format, ...)
 
 	va_start(ap, format);
 	_vsnprintf_s(&consoleInstance->m_ConvertBuffer[0], consoleInstance->m_ConvertBufferSize, consoleInstance->m_ConvertBufferSize, format, ap);
-	va_end(ap);
-	Log(&consoleInstance->m_ConvertBuffer[0], type);
-}
-
-void Console::LogFormat(LogType type, const std::string& format, ...)
-{
-	va_list ap;
-
-	const char* f = format.c_str();
-	va_start(ap, f);
-	_vsnprintf_s(&consoleInstance->m_ConvertBuffer[0], consoleInstance->m_ConvertBufferSize, consoleInstance->m_ConvertBufferSize, f, ap);
 	va_end(ap);
 	Log(&consoleInstance->m_ConvertBuffer[0], type);
 }

@@ -16,7 +16,7 @@ public:
 	{
 		RG_ASSERT(m_DataMap.find(T::Type()) == m_DataMap.end(), "Data type already exists in blackboard");
 		T* pData = new T();
-		m_DataMap[T::Type()] = pData;
+		m_DataMap[StringHash(T::Type())] = pData;
 		return *pData;
 	}
 
@@ -39,9 +39,9 @@ public:
 	RGBlackboard& Branch();
 
 private:
-	void* GetData(const std::string& name);
+	void* GetData(const char* hash);
 
-	std::map<std::string, void*> m_DataMap;
+	std::map<StringHash, void*> m_DataMap;
 	std::vector<std::unique_ptr<RGBlackboard>> m_Children;
 	RGBlackboard* m_pParent = nullptr;
 };

@@ -106,32 +106,6 @@ void ProfileNode::PopulateTimes(int frameIndex)
 	}
 }
 
-void ProfileNode::LogTimes(int frameIndex, void(*pLogFunction)(const char* pText), int depth /*= 0*/, bool isRoot /*= false*/)
-{
-	if (frameIndex - m_LastProcessedFrame < 60)
-	{
-		if (isRoot)
-		{
-			E_LOG(Info, "Timings for frame: %d", frameIndex);
-		}
-		else
-		{
-			std::stringstream str;
-			for (int i = 0; i < depth; ++i)
-			{
-				str << '\t';
-			}
-			str << m_Name << ": GPU: " << m_GpuTimeHistory.GetAverage() << " ms. CPU: " << m_CpuTimeHistory.GetAverage() << " ms.";
-			std::string msg = str.str();
-			pLogFunction(msg.c_str());
-		}
-		for (auto& child : m_Children)
-		{
-			child->LogTimes(frameIndex, pLogFunction, depth + 1, false);
-		}
-	}
-}
-
 void ProfileNode::RenderImGui(int frameIndex)
 {
 	ImGui::Spacing();

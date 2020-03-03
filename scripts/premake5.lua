@@ -14,7 +14,7 @@ workspace (ENGINE_NAME)
 	symbols ("On")
 	kind ("WindowedApp")
 	characterset ("MBCS")
-	--flags {"MultiProcessorCompile"}
+	flags {"MultiProcessorCompile"}
 	rtti "Off"
 	
 	filter {"system:windows"}
@@ -56,7 +56,6 @@ workspace (ENGINE_NAME)
 			(SOURCE_DIR .. "**.inl"),
 			(SOURCE_DIR .. "**.c"),
 			(SOURCE_DIR .. "**.natvis"),
-			(SOURCE_DIR .. "**.hlsl*")
 		}
 		filter { "files:" .. SOURCE_DIR .. "Resources/**" }
 			flags { "ExcludeFromBuild" }
