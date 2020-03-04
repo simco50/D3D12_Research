@@ -46,7 +46,7 @@ using uint64 = uint64_t;
 #include <d3d12.h>
 #define D3DX12_NO_STATE_OBJECT_HELPERS
 #include "Graphics/d3dx12.h"
-#include <dxgi1_4.h>
+#include <dxgi1_6.h>
 #include <D3Dcompiler.h>
 #include <DXProgrammableCapture.h>
 

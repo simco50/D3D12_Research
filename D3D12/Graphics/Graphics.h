@@ -135,7 +135,6 @@ private:
 
 	HWND m_pWindow = nullptr;
 
-	ComPtr<IDXGIFactory3> m_pFactory;
 	ComPtr<IDXGISwapChain3> m_pSwapchain;
 	ComPtr<ID3D12Device> m_pDevice;
 

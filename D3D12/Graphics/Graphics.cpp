@@ -673,24 +673,26 @@ void Graphics::InitD3D()
 #endif
 
 	//Create the factory
-	HR(CreateDXGIFactory2(dxgiFactoryFlags, IID_PPV_ARGS(&m_pFactory)));
+	ComPtr<IDXGIFactory7> pFactory;
+	HR(CreateDXGIFactory2(dxgiFactoryFlags, IID_PPV_ARGS(&pFactory)));
 
-	ComPtr<IDXGIAdapter1> pAdapter;
+	ComPtr<IDXGIAdapter4> pAdapter;
 	uint32 adapterIndex = 0;
 	E_LOG(Info, "Adapters:");
-	while (m_pFactory->EnumAdapters1(adapterIndex++, pAdapter.GetAddressOf()) == S_OK)
+	DXGI_GPU_PREFERENCE gpuPreference = DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE;
+	while (pFactory->EnumAdapterByGpuPreference(adapterIndex++, gpuPreference, IID_PPV_ARGS(pAdapter.GetAddressOf())) == S_OK)
 	{
-		DXGI_ADAPTER_DESC1 desc;
-		pAdapter->GetDesc1(&desc);
+		DXGI_ADAPTER_DESC3 desc;
+		pAdapter->GetDesc3(&desc);
 		char name[256];
 		ToMultibyte(desc.Description, name, 256);
 		E_LOG(Info, "\t%s", name);
 		pAdapter.Reset();
 	}
 
-	m_pFactory->EnumAdapters1(0, pAdapter.GetAddressOf());
-	DXGI_ADAPTER_DESC1 desc;
-	pAdapter->GetDesc1(&desc);
+	pFactory->EnumAdapterByGpuPreference(0, gpuPreference, IID_PPV_ARGS(pAdapter.GetAddressOf()));
+	DXGI_ADAPTER_DESC3 desc;
+	pAdapter->GetDesc3(&desc);
 	char name[256];
 	ToMultibyte(desc.Description, name, 256);
 	E_LOG(Info, "Using %s", name);
@@ -789,13 +791,13 @@ void Graphics::InitD3D()
 	fsDesc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
 	fsDesc.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED;
 	fsDesc.Windowed = true;
-	HR(m_pFactory->CreateSwapChainForHwnd(
+	HR(pFactory->CreateSwapChainForHwnd(
 		m_CommandQueues[D3D12_COMMAND_LIST_TYPE_DIRECT]->GetCommandQueue(), 
 		m_pWindow, 
 		&swapchainDesc, 
 		&fsDesc, 
 		nullptr, 
-		&swapChain));
+		swapChain.GetAddressOf()));
 
 	swapChain.As(&m_pSwapchain);
 
