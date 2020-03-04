@@ -1073,6 +1073,19 @@ void Graphics::InitializeAssets()
 		m_pLightBuffer = std::make_unique<Buffer>(this, "Light Buffer");
 	}
 
+	//Mip generation
+	{
+		Shader computeShader("Resources/Shaders/GenerateMips.hlsl", Shader::Type::ComputeShader, "CSMain");
+
+		m_pGenerateMipsRS = std::make_unique<RootSignature>();
+		m_pGenerateMipsRS->FinalizeFromShader("Generate Mips", computeShader, m_pDevice.Get());
+
+		m_pGenerateMipsPSO = std::make_unique<ComputePipelineState>();
+		m_pGenerateMipsPSO->SetComputeShader(computeShader.GetByteCode(), computeShader.GetByteCodeSize());
+		m_pGenerateMipsPSO->SetRootSignature(m_pGenerateMipsRS->GetRootSignature());
+		m_pGenerateMipsPSO->Finalize("Generate Mips PSO", m_pDevice.Get());
+	}
+
 	//Geometry
 	{
 		CommandContext* pContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COPY);

@@ -1,4 +1,4 @@
-﻿#include "stdafx.h"
+#include "stdafx.h"
 #include "Graphics/Graphics.h"
 #include "Core/Input.h"
 #include "Core/Console.h"
