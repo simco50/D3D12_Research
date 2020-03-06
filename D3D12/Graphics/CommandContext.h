@@ -22,6 +22,7 @@ enum class RenderTargetLoadAction : uint8
 	DontCare,
 	Load,
 	Clear,
+	NoAccess
 };
 DEFINE_ENUM_FLAG_OPERATORS(RenderTargetLoadAction)
 
@@ -30,12 +31,13 @@ enum class RenderTargetStoreAction : uint8
 	DontCare,
 	Store,
 	Resolve,
+	NoAccess,
 };
 DEFINE_ENUM_FLAG_OPERATORS(RenderTargetStoreAction)
 
 enum class RenderPassAccess : uint8
 {
-#define COMBINE_ACTIONS(load, store) (uint8)RenderTargetLoadAction::load << 2 | (uint8)RenderTargetStoreAction::store
+#define COMBINE_ACTIONS(load, store) (uint8)RenderTargetLoadAction::load << 4 | (uint8)RenderTargetStoreAction::store
 	DontCare_DontCare = COMBINE_ACTIONS(DontCare, DontCare),
 	DontCare_Store = COMBINE_ACTIONS(DontCare, Store),
 	Clear_Store = COMBINE_ACTIONS(Clear, Store),
@@ -44,6 +46,7 @@ enum class RenderPassAccess : uint8
 	Load_DontCare = COMBINE_ACTIONS(Load, DontCare),
 	Clear_Resolve = COMBINE_ACTIONS(Clear, Resolve),
 	Load_Resolve = COMBINE_ACTIONS(Load, Resolve),
+	NoAccess = COMBINE_ACTIONS(NoAccess, NoAccess),
 #undef COMBINE_ACTIONS
 };
 
@@ -74,10 +77,11 @@ struct RenderPassInfo
 	{
 		DepthStencilTarget.Access = access;
 		DepthStencilTarget.Target = pDepthBuffer;
+		DepthStencilTarget.StencilAccess = RenderPassAccess::NoAccess;
 		WriteUAVs = uavWrites;
 	}
 
-	RenderPassInfo(Texture* pRenderTarget, RenderPassAccess renderTargetAccess, Texture* pDepthBuffer, RenderPassAccess depthAccess, bool uavWrites = false, RenderPassAccess stencilAccess = RenderPassAccess::DontCare_DontCare)
+	RenderPassInfo(Texture* pRenderTarget, RenderPassAccess renderTargetAccess, Texture* pDepthBuffer, RenderPassAccess depthAccess, bool uavWrites = false, RenderPassAccess stencilAccess = RenderPassAccess::NoAccess)
 		: RenderTargetCount(1)
 	{
 		RenderTargets[0].Access = renderTargetAccess;
@@ -90,12 +94,12 @@ struct RenderPassInfo
 
 	static RenderTargetLoadAction GetBeginAccess(RenderPassAccess access)
 	{
-		return (RenderTargetLoadAction)((uint8)access >> 2);
+		return (RenderTargetLoadAction)((uint8)access >> 4);
 	}
 
 	static RenderTargetStoreAction GetEndAccess(RenderPassAccess access)
 	{
-		return (RenderTargetStoreAction)((uint8)access & 0b11);
+		return (RenderTargetStoreAction)((uint8)access & 0b1111);
 	}
 
 	bool WriteUAVs = false;

@@ -21,6 +21,7 @@
 #include "RenderGraph/Blackboard.h"
 #include "RenderGraph/ResourceAllocator.h"
 #include "DebugRenderer.h"
+#include "ResourceViews.h"
 
 #ifdef _DEBUG
 #define D3D_VALIDATION 1
@@ -39,8 +40,6 @@ const DXGI_FORMAT Graphics::DEPTH_STENCIL_SHADOW_FORMAT = DXGI_FORMAT_D16_UNORM;
 const DXGI_FORMAT Graphics::RENDER_TARGET_FORMAT = DXGI_FORMAT_R11G11B10_FLOAT;
 const DXGI_FORMAT Graphics::SWAPCHAIN_FORMAT = DXGI_FORMAT_R8G8B8A8_UNORM;
 
-bool gSortOpaqueMeshes = true;
-bool gSortTransparentMeshes = true;
 bool gDumpRenderGraph = false;
 
 float g_WhitePoint = 4;
@@ -142,7 +141,6 @@ void Graphics::RandomizeLights(int count)
 void Graphics::Update()
 {
 	PROFILE_BEGIN("Update Game State");
-	//Render forward+ tiles
 
 	m_pCamera->Update();
 
@@ -287,14 +285,10 @@ void Graphics::Update()
 				Data.DepthStencilResolved = builder.Read(Data.DepthStencilResolved);
 				return [=](CommandContext& context, const RGPassResources& resources)
 				{
-					{
-						GPU_PROFILE_SCOPE("Setup Light Data", &context);
-						uint32 zero[] = { 0, 0 };
-						m_pLightIndexCounter->SetData(&context, &zero, sizeof(uint32) * 2);
-						m_pLightBuffer->SetData(&context, m_Lights.data(), (uint32)m_Lights.size() * sizeof(Light));
-					}
-
 					context.InsertResourceBarrier(GetResolvedDepthStencil(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+					context.InsertResourceBarrier(m_pLightIndexCounter.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+					context.ClearUavUInt(m_pLightIndexCounter.get(), m_pLightIndexCounterRawUAV);
 
 					context.SetComputePipelineState(m_pComputeLightCullPSO.get());
 					context.SetComputeRootSignature(m_pComputeLightCullRS.get());
@@ -427,7 +421,6 @@ void Graphics::Update()
 						Matrix WorldViewProjection;
 					} ObjectData;
 
-					//Opaque
 					{
 						GPU_PROFILE_SCOPE("Opaque", &context);
 						context.SetGraphicsPipelineState(m_pPBRDiffusePSO.get());
@@ -444,7 +437,6 @@ void Graphics::Update()
 						}
 					}
 
-					//Transparant
 					{
 						GPU_PROFILE_SCOPE("Transparant", &context);
 						context.SetGraphicsPipelineState(m_pPBRDiffuseAlphaPSO.get());
@@ -580,7 +572,7 @@ void Graphics::Update()
 					context.SetGraphicsPipelineState(m_pToneMapPSO.get());
 					context.SetGraphicsRootSignature(m_pToneMapRS.get());
 					context.SetViewport(FloatRect(0, 0, (float)m_WindowWidth, (float)m_WindowHeight));
-					context.BeginRenderPass(RenderPassInfo(GetCurrentBackbuffer(), RenderPassAccess::Clear_Store, nullptr, RenderPassAccess::DontCare_DontCare));
+					context.BeginRenderPass(RenderPassInfo(GetCurrentBackbuffer(), RenderPassAccess::Clear_Store, nullptr, RenderPassAccess::NoAccess));
 
 					context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 					context.SetDynamicConstantBufferView(0, &g_WhitePoint, sizeof(float));
@@ -1068,6 +1060,7 @@ void Graphics::InitializeAssets()
 
 		m_pLightIndexCounter = std::make_unique<Buffer>(this, "Light Index Counter");
 		m_pLightIndexCounter->Create(BufferDesc::CreateStructured(2, sizeof(uint32)));
+		m_pLightIndexCounter->CreateUAV(&m_pLightIndexCounterRawUAV, BufferUAVDesc::CreateRaw());
 		m_pLightIndexListBufferOpaque = std::make_unique<Buffer>(this, "Light List Opaque");
 		m_pLightIndexListBufferOpaque->Create(BufferDesc::CreateStructured(MAX_LIGHT_DENSITY, sizeof(uint32)));
 		m_pLightIndexListBufferTransparant = std::make_unique<Buffer>(this, "Light List Transparant");

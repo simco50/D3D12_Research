@@ -75,15 +75,20 @@ float3 SpecularGGX(float Roughness, float3 SpecularColor, float NoL, float NoH, 
 
 LightResult DefaultLitBxDF(float3 SpecularColor, float Roughness, float3 DiffuseColor, half3 N, half3 V, half3 L, float Falloff)
 {
+	LightResult lighting = (LightResult)0;
+	if(Falloff <= 0)
+		return lighting;
+	float NoL = saturate(dot(N, L));
+	if(NoL == 0)
+		return lighting;
+
 	float3 H = normalize(V + L);
 	float NoH = saturate(dot(N, H));
-	float NoL = saturate(dot(N, L));
 	float NoV = dot(N, V);
 	float VoH = saturate(dot(V, H));
 	NoV = saturate(abs(NoV) + 1e-5);
 
-	LightResult Lighting;
-	Lighting.Diffuse  = (Falloff * NoL) * Diffuse_Lambert(DiffuseColor);
-	Lighting.Specular = (Falloff * NoL) * SpecularGGX(Roughness, SpecularColor, NoL, NoH, NoV, VoH);
-	return Lighting;
+	lighting.Diffuse  = (Falloff * NoL) * Diffuse_Lambert(DiffuseColor);
+	lighting.Specular = (Falloff * NoL) * SpecularGGX(Roughness, SpecularColor, NoL, NoH, NoV, VoH);
+	return lighting;
 }

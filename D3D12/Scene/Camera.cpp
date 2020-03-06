@@ -173,7 +173,7 @@ void FreeCamera::Update()
 	movement.y += (int)Input::Instance().IsKeyDown('E');
 	movement = Vector3::Transform(movement, m_Rotation);
 
-	m_Velocity = Vector3::Lerp(m_Velocity, movement, 0.1f);
+	m_Velocity = Vector3::SmoothStep(m_Velocity, movement, 0.1f);
 	m_Position += m_Velocity * GameTimer::DeltaTime() * 20.0f;
 
 	OnDirty();

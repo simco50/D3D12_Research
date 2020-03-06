@@ -155,16 +155,6 @@ void GraphicsPipelineState::SetStencilTest(bool stencilEnabled, D3D12_COMPARISON
 	m_Desc.DepthStencilState.BackFace = m_Desc.DepthStencilState.FrontFace;
 }
 
-void GraphicsPipelineState::SetScissorEnabled(bool /*enabled*/)
-{
-
-}
-
-void GraphicsPipelineState::SetMultisampleEnabled(bool /*enabled*/)
-{
-
-}
-
 void GraphicsPipelineState::SetFillMode(D3D12_FILL_MODE fillMode)
 {
 	m_Desc.RasterizerState.FillMode = fillMode;
