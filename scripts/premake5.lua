@@ -3,7 +3,7 @@ require "utility"
 ENGINE_NAME = "D3D12"
 ROOT = "../"
 SOURCE_DIR = ROOT .. ENGINE_NAME .. "/"
-WIN_SDK = "10.0.17763.0"
+WIN_SDK = "10.0.18362.0"
 
 workspace (ENGINE_NAME)
 	basedir (ROOT)
@@ -11,12 +11,13 @@ workspace (ENGINE_NAME)
     platforms { "x64" }
 	defines {  "x64" }
 	language ("C++")
+	cppdialect "c++17"
 	startproject (ENGINE_NAME)
 	symbols ("On")
 	architecture ("x64")
 	kind ("WindowedApp")
 	characterset ("MBCS")
-	flags {"MultiProcessorCompile"}
+	flags {"MultiProcessorCompile", "ShadowedVariables"}
 	rtti "Off"
 	
 	filter "configurations:Debug"
@@ -26,6 +27,9 @@ workspace (ENGINE_NAME)
 	filter "configurations:Release"
 		defines { "RELEASE" }
 		optimize ("Full")
+		flags { "NoIncrementalLink", "LinkTimeOptimization" }
+
+	filter {}
 
 	project (ENGINE_NAME)
 		location (ROOT .. ENGINE_NAME)
@@ -56,6 +60,8 @@ workspace (ENGINE_NAME)
 		filter ("files:" .. SOURCE_DIR .. "External/**")
 			flags { "NoPCH" }
 		filter {}
+
+		postbuildcommands { "{COPY} \"$(ProjectDir)Resources\" \"$(OutDir)Resources\"" }
 
 		---- External libraries ----
 		AddAssimp()
