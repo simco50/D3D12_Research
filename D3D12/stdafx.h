@@ -15,6 +15,7 @@
 #include <functional>
 #include <unordered_map>
 #include <list>
+#include <fstream>
 
 #if defined(_MSC_FULL_VER)
 using int8 = __int8;

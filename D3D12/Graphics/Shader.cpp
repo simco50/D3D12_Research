@@ -1,10 +1,11 @@
 #include "stdafx.h"
 #include "Shader.h"
-#include <fstream>
 #include "Core/Paths.h"
 #include <dxcapi.h>
 
+#ifndef USE_SHADER_LINE_DIRECTIVE
 #define USE_SHADER_LINE_DIRECTIVE 1
+#endif
 
 std::vector<std::pair<std::string, std::string>> Shader::m_GlobalShaderDefines;
 
