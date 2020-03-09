@@ -525,7 +525,10 @@ void Graphics::Update()
 						context.SetDynamicDescriptor(1, 0, pToneMapInput->GetUAV());
 						context.SetDynamicDescriptor(2, 0, m_pHDRRenderTarget->GetSRV());
 
-						context.Dispatch(Math::RoundUp((float)Parameters.TargetDimensions[0] / 16), Math::RoundUp((float)Parameters.TargetDimensions[1] / 16), 1);
+						context.Dispatch(
+							Math::DivideAndRoundUp(Parameters.TargetDimensions[0], 16), 
+							Math::DivideAndRoundUp(Parameters.TargetDimensions[1], 16)
+						);
 					};
 				});
 		}
@@ -561,7 +564,10 @@ void Graphics::Update()
 					context.SetDynamicDescriptor(1, 0, m_pLuminanceHistogram->GetUAV());
 					context.SetDynamicDescriptor(2, 0, pToneMapInput->GetSRV());
 
-					context.Dispatch(Math::RoundUp((float)pToneMapInput->GetWidth() / 16), Math::RoundUp((float)pToneMapInput->GetHeight() / 16), 1);
+					context.Dispatch(
+						Math::DivideAndRoundUp(pToneMapInput->GetWidth(), 16),
+						Math::DivideAndRoundUp(pToneMapInput->GetHeight(), 16)
+					);
 				};
 			});
 
@@ -595,7 +601,7 @@ void Graphics::Update()
 					context.SetDynamicDescriptor(1, 0, m_pAverageLuminance->GetUAV());
 					context.SetDynamicDescriptor(2, 0, m_pLuminanceHistogram->GetSRV());
 
-					context.Dispatch(1, 1, 1);
+					context.Dispatch(1);
 				};
 			});
 
