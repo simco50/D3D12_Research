@@ -909,7 +909,7 @@ void Graphics::OnResize(int width, int height)
 		m_pDepthStencil->Create(TextureDesc::CreateDepth(width, height, DEPTH_STENCIL_FORMAT, TextureFlag::DepthStencil | TextureFlag::ShaderResource, m_SampleCount, ClearBinding(0.0f, 0)));
 	}
 	m_pHDRRenderTarget->Create(TextureDesc::Create2D(width, height, RENDER_TARGET_FORMAT, TextureFlag::ShaderResource));
-	m_pDownscaledColor->Create(TextureDesc::Create2D(width / 2, height / 2, RENDER_TARGET_FORMAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
+	m_pDownscaledColor->Create(TextureDesc::Create2D(Math::DivideAndRoundUp(width, 4), Math::DivideAndRoundUp(height, 4), RENDER_TARGET_FORMAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
 
 	int frustumCountX = Math::RoundUp((float)width / FORWARD_PLUS_BLOCK_SIZE);
 	int frustumCountY = Math::RoundUp((float)height / FORWARD_PLUS_BLOCK_SIZE);
