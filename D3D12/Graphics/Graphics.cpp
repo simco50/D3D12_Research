@@ -307,8 +307,11 @@ void Graphics::Update()
 					Vector4 RandomVectors[64];
 					Matrix ViewInverse;
 					Matrix ProjectionInverse;
-					Matrix ViewProjection;
+					Matrix Projection;
+					Matrix View;
 					uint32 Dimensions[2];
+					float Near;
+					float Far;
 				} shaderParameters;
 
 				for (int i = 0; i < 64; ++i)
@@ -316,6 +319,8 @@ void Graphics::Update()
 					if (!written)
 					{
 						randoms[i] = Vector4(Math::RandVector());
+						randoms[i].z = abs(randoms[i].z);
+						randoms[i].Normalize();
 					}
 					shaderParameters.RandomVectors[i] = randoms[i];
 				}
@@ -323,9 +328,12 @@ void Graphics::Update()
 
 				shaderParameters.ViewInverse = m_pCamera->GetViewInverse();
 				shaderParameters.ProjectionInverse = m_pCamera->GetProjectionInverse();
-				shaderParameters.ViewProjection = m_pCamera->GetProjection();
+				shaderParameters.Projection = m_pCamera->GetProjection();
+				shaderParameters.View = m_pCamera->GetView();
 				shaderParameters.Dimensions[0] = m_WindowWidth;
 				shaderParameters.Dimensions[1] = m_WindowHeight;
+				shaderParameters.Near = m_pCamera->GetFar();
+				shaderParameters.Far = m_pCamera->GetNear();
 
 				renderContext.SetComputeDynamicConstantBufferView(0, &shaderParameters, sizeof(ShaderParameters));
 				renderContext.SetDynamicDescriptor(1, 0, m_pSSAOTarget->GetUAV());
@@ -1249,7 +1257,9 @@ void Graphics::UpdateImGui()
 {
 	m_FrameTimes[m_Frame % m_FrameTimes.size()] = GameTimer::DeltaTime();
 
+	ImGui::Begin("SSAO");
 	ImGui::Image(m_pSSAOTarget.get(), ImVec2(Math::DivideAndRoundUp(m_WindowWidth, 2), Math::DivideAndRoundUp(m_WindowHeight, 2)));
+	ImGui::End();
 
 	ImGui::SetNextWindowPos(ImVec2(0, 0), 0, ImVec2(0, 0));
 	ImGui::SetNextWindowSize(ImVec2(300, (float)m_WindowHeight));
