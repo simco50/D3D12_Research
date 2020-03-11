@@ -220,6 +220,7 @@ private:
 	std::unique_ptr<Texture> m_pAverageLuminance;
 
 	//SSAO
+	std::unique_ptr<Texture> m_pNoiseTexture;
 	std::unique_ptr<Texture> m_pSSAOTarget;
 	std::unique_ptr<RootSignature> m_pSSAORS;
 	std::unique_ptr<ComputePipelineState> m_pSSAOPSO;

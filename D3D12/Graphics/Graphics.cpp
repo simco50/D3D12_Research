@@ -138,9 +138,6 @@ void Graphics::RandomizeLights(int count)
 	pContext->Execute(true);
 }
 
-static bool written = false;
-static Vector4 randoms[64];
-
 void Graphics::Update()
 {
 	PROFILE_BEGIN("Update Game State");
@@ -299,46 +296,50 @@ void Graphics::Update()
 				renderContext.InsertResourceBarrier(resources.GetTexture(Data.DepthStencilResolved), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 				renderContext.InsertResourceBarrier(m_pNormals.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 				renderContext.InsertResourceBarrier(m_pSSAOTarget.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+				renderContext.InsertResourceBarrier(m_pNoiseTexture.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
 				renderContext.SetComputeRootSignature(m_pSSAORS.get());
 				renderContext.SetComputePipelineState(m_pSSAOPSO.get());
 
 				struct ShaderParameters
 				{
-					Vector4 RandomVectors[64];
-					Matrix ViewInverse;
+					Vector4 RandomVectors[32];
 					Matrix ProjectionInverse;
 					Matrix Projection;
 					Matrix View;
 					uint32 Dimensions[2];
 				} shaderParameters;
 
-				for (int i = 0; i < 64; ++i)
+				//lovely hacky
+				static bool written = false;
+				static Vector4 randoms[32];
+				if (!written)
 				{
-					if (!written)
+					for (int i = 0; i < 32; ++i)
 					{
 						randoms[i] = Vector4(Math::RandVector());
 						randoms[i].z = abs(randoms[i].z);
+						randoms[i] *= Math::Min(0.1f, (float)pow(Math::RandomRange(0, 1), 2));
 						randoms[i].Normalize();
 					}
-					shaderParameters.RandomVectors[i] = randoms[i];
+					written = true;
 				}
-				written = true;
+				memcpy(shaderParameters.RandomVectors, randoms, sizeof(Vector4) * 32);
 
-				shaderParameters.ViewInverse = m_pCamera->GetViewInverse();
 				shaderParameters.ProjectionInverse = m_pCamera->GetProjectionInverse();
 				shaderParameters.Projection = m_pCamera->GetProjection();
 				shaderParameters.View = m_pCamera->GetView();
-				shaderParameters.Dimensions[0] = m_WindowWidth;
-				shaderParameters.Dimensions[1] = m_WindowHeight;
+				shaderParameters.Dimensions[0] = m_pSSAOTarget->GetWidth();
+				shaderParameters.Dimensions[1] = m_pSSAOTarget->GetHeight();
 
 				renderContext.SetComputeDynamicConstantBufferView(0, &shaderParameters, sizeof(ShaderParameters));
 				renderContext.SetDynamicDescriptor(1, 0, m_pSSAOTarget->GetUAV());
 				renderContext.SetDynamicDescriptor(2, 0, resources.GetTexture(Data.DepthStencilResolved)->GetSRV());
 				renderContext.SetDynamicDescriptor(2, 1, m_pNormals.get()->GetSRV());
+				renderContext.SetDynamicDescriptor(2, 2, m_pNoiseTexture.get()->GetSRV());
 
-				int dispatchGroupsX = Math::DivideAndRoundUp(m_WindowWidth, 16);
-				int dispatchGroupsY = Math::DivideAndRoundUp(m_WindowHeight, 16);
+				int dispatchGroupsX = Math::DivideAndRoundUp(m_pSSAOTarget->GetWidth(), 16);
+				int dispatchGroupsY = Math::DivideAndRoundUp(m_pSSAOTarget->GetHeight(), 16);
 				renderContext.Dispatch(dispatchGroupsX, dispatchGroupsY);
 
 				renderContext.InsertResourceBarrier(resources.GetTexture(Data.DepthStencilResolved), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
@@ -988,7 +989,7 @@ void Graphics::OnResize(int width, int height)
 
 	m_pMSAANormals->Create(TextureDesc::CreateRenderTarget(width, height, DXGI_FORMAT_R32G32B32A32_FLOAT, TextureFlag::RenderTarget, m_SampleCount));
 	m_pNormals->Create(TextureDesc::Create2D(width, height, DXGI_FORMAT_R32G32B32A32_FLOAT, TextureFlag::ShaderResource));
-	m_pSSAOTarget->Create(TextureDesc::Create2D(width, height, DXGI_FORMAT_R32G32B32A32_FLOAT, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource));
+	m_pSSAOTarget->Create(TextureDesc::Create2D(Math::DivideAndRoundUp(width, 4), Math::DivideAndRoundUp(height, 4), DXGI_FORMAT_R32_FLOAT, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource));
 
 	int frustumCountX = Math::RoundUp((float)width / FORWARD_PLUS_BLOCK_SIZE);
 	int frustumCountY = Math::RoundUp((float)height / FORWARD_PLUS_BLOCK_SIZE);
@@ -1222,12 +1223,12 @@ void Graphics::InitializeAssets()
 		m_pSSAOPSO->Finalize("SSAO PSO", m_pDevice.Get());
 	}
 
+	CommandContext* pContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COPY);
+
 	//Geometry
 	{
-		CommandContext* pContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COPY);
 		m_pMesh = std::make_unique<Mesh>();
 		m_pMesh->Load("Resources/sponza/sponza.dae", this, pContext);
-		pContext->Execute(true);
 
 		for (int i = 0; i < m_pMesh->GetMeshCount(); ++i)
 		{
@@ -1246,6 +1247,11 @@ void Graphics::InitializeAssets()
 			}
 		}
 	}
+
+	m_pNoiseTexture = std::make_unique<Texture>(this, "Noise");
+	m_pNoiseTexture->Create(pContext, "Resources/Textures/Noise.png", false);
+
+	pContext->Execute(true);
 }
 
 void Graphics::UpdateImGui()
