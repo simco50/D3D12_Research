@@ -252,6 +252,7 @@ void Graphics::Update()
 					constBuffer.WorldViewProj = constBuffer.World * m_pCamera->GetViewProjection();
 
 					renderContext.SetDynamicConstantBufferView(0, &constBuffer, sizeof(Parameters));
+					renderContext.SetDynamicDescriptor(1, 0, b.pMaterial->pNormalTexture->GetSRV());
 					b.pMesh->Draw(&renderContext);
 				}
 				renderContext.EndRenderPass();
@@ -310,8 +311,6 @@ void Graphics::Update()
 					Matrix Projection;
 					Matrix View;
 					uint32 Dimensions[2];
-					float Near;
-					float Far;
 				} shaderParameters;
 
 				for (int i = 0; i < 64; ++i)
@@ -332,8 +331,6 @@ void Graphics::Update()
 				shaderParameters.View = m_pCamera->GetView();
 				shaderParameters.Dimensions[0] = m_WindowWidth;
 				shaderParameters.Dimensions[1] = m_WindowHeight;
-				shaderParameters.Near = m_pCamera->GetFar();
-				shaderParameters.Far = m_pCamera->GetNear();
 
 				renderContext.SetComputeDynamicConstantBufferView(0, &shaderParameters, sizeof(ShaderParameters));
 				renderContext.SetDynamicDescriptor(1, 0, m_pSSAOTarget->GetUAV());
@@ -787,23 +784,21 @@ void Graphics::InitD3D()
 #endif
 
 	//Create the factory
-	ComPtr<IDXGIFactory7> pFactory;
+	ComPtr<IDXGIFactory6> pFactory;
 	HR(CreateDXGIFactory2(dxgiFactoryFlags, IID_PPV_ARGS(&pFactory)));
 
 	ComPtr<IDXGIAdapter4> pAdapter;
 	uint32 adapterIndex = 0;
 	E_LOG(Info, "Adapters:");
 	DXGI_GPU_PREFERENCE gpuPreference = DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE;
-	while (pFactory->EnumAdapterByGpuPreference(adapterIndex++, gpuPreference, IID_PPV_ARGS(pAdapter.GetAddressOf())) == S_OK)
+	while (pFactory->EnumAdapterByGpuPreference(adapterIndex++, gpuPreference, IID_PPV_ARGS(pAdapter.ReleaseAndGetAddressOf())) == S_OK)
 	{
 		DXGI_ADAPTER_DESC3 desc;
 		pAdapter->GetDesc3(&desc);
 		char name[256];
 		ToMultibyte(desc.Description, name, 256);
 		E_LOG(Info, "\t%s", name);
-		pAdapter.Reset();
 	}
-
 	pFactory->EnumAdapterByGpuPreference(0, gpuPreference, IID_PPV_ARGS(pAdapter.GetAddressOf()));
 	DXGI_ADAPTER_DESC3 desc;
 	pAdapter->GetDesc3(&desc);
@@ -1258,7 +1253,7 @@ void Graphics::UpdateImGui()
 	m_FrameTimes[m_Frame % m_FrameTimes.size()] = GameTimer::DeltaTime();
 
 	ImGui::Begin("SSAO");
-	ImGui::Image(m_pSSAOTarget.get(), ImVec2(Math::DivideAndRoundUp(m_WindowWidth, 2), Math::DivideAndRoundUp(m_WindowHeight, 2)));
+	ImGui::Image(m_pSSAOTarget.get(), ImVec2((float)Math::DivideAndRoundUp(m_WindowWidth, 2), (float)Math::DivideAndRoundUp(m_WindowHeight, 2)));
 	ImGui::End();
 
 	ImGui::SetNextWindowPos(ImVec2(0, 0), 0, ImVec2(0, 0));

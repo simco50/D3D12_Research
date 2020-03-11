@@ -12,8 +12,6 @@ cbuffer ShaderParameters : register(b0)
     float4x4 cProjection;
     float4x4 cView;
     uint2 cDimensions;
-    float cNear;
-    float cFar;
 }
 
 Texture2D tDepthTexture : register(t0);

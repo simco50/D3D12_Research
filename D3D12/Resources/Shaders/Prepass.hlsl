@@ -11,8 +11,8 @@ cbuffer PerObjectData : register(b0)
 	float4x4 WorldViewProjection;
 }
 
-Texture2D tAlphaTexture : register(t0);
-SamplerState sAlphaSampler : register(s0);
+Texture2D tNormalTexture : register(t0);
+SamplerState sSampler : register(s0);
 
 struct VSInput
 {
@@ -32,6 +32,19 @@ struct PSInput
 	float3 bitangent : TEXCOORD1;
 };
 
+float3 CalculateNormal(float3 N, float3 T, float3 BT, float2 tex, bool invertY)
+{
+	float3x3 normalMatrix = float3x3(T, BT, N);
+	float3 sampledNormal = tNormalTexture.Sample(sSampler, tex).rgb;
+	sampledNormal.xy = sampledNormal.xy * 2.0f - 1.0f;
+	if(invertY)
+	{
+		sampledNormal.y = -sampledNormal.y;
+	}
+	sampledNormal = normalize(sampledNormal);
+	return mul(sampledNormal, normalMatrix);
+}
+
 [RootSignature(RootSig)]
 PSInput VSMain(VSInput input)
 {
@@ -46,10 +59,5 @@ PSInput VSMain(VSInput input)
 
 float4 PSMain(PSInput input) : SV_Target0
 {
-	/*if(tAlphaTexture.Sample(sAlphaSampler, input.texCoord).a == 0.0f)
-	{
-		discard;
-	}*/
-
-	return float4(normalize(input.normal), 1);
+	return float4(CalculateNormal(normalize(input.normal), normalize(input.tangent), normalize(input.bitangent), input.texCoord, false), 0);
 }
