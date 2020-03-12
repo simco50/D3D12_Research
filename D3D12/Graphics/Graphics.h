@@ -158,6 +158,8 @@ private:
 	std::unique_ptr<Texture> m_pHDRRenderTarget;
 	std::unique_ptr<Texture> m_pDepthStencil;
 	std::unique_ptr<Texture> m_pResolvedDepthStencil;
+	std::unique_ptr<Texture> m_pMSAANormals;
+	std::unique_ptr<Texture> m_pNormals;
 
 	std::unique_ptr<ImGuiRenderer> m_pImGuiRenderer;
 	std::unique_ptr<RGResourceAllocator> m_pGraphAllocator;
@@ -216,6 +218,12 @@ private:
 	std::unique_ptr<GraphicsPipelineState> m_pToneMapPSO;
 	std::unique_ptr<Buffer> m_pLuminanceHistogram;
 	std::unique_ptr<Texture> m_pAverageLuminance;
+
+	//SSAO
+	std::unique_ptr<Texture> m_pNoiseTexture;
+	std::unique_ptr<Texture> m_pSSAOTarget;
+	std::unique_ptr<RootSignature> m_pSSAORS;
+	std::unique_ptr<ComputePipelineState> m_pSSAOPSO;
 
 	//Mip generation
 	std::unique_ptr<ComputePipelineState> m_pGenerateMipsPSO;
