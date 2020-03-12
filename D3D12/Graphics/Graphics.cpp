@@ -227,7 +227,7 @@ void Graphics::Update()
 				renderContext.InsertResourceBarrier(pDepthStencil, D3D12_RESOURCE_STATE_DEPTH_WRITE);
 				renderContext.InsertResourceBarrier(m_pMSAANormals.get(), D3D12_RESOURCE_STATE_RENDER_TARGET);
 
-				RenderPassInfo info = RenderPassInfo(m_pMSAANormals.get(), RenderPassAccess::DontCare_Resolve, pDepthStencil, RenderPassAccess::Clear_Store);
+				RenderPassInfo info = RenderPassInfo(m_pMSAANormals.get(), RenderPassAccess::Clear_Resolve, pDepthStencil, RenderPassAccess::Clear_Store);
 				info.RenderTargets[0].ResolveTarget = m_pNormals.get();
 
 				renderContext.BeginRenderPass(info);
@@ -318,9 +318,9 @@ void Graphics::Update()
 					for (int i = 0; i < 32; ++i)
 					{
 						randoms[i] = Vector4(Math::RandVector());
-						randoms[i].z = Math::Lerp(0.1, 1, abs(randoms[i].z));
+						randoms[i].z = Math::Lerp(0.1f, 1.0f, (float)abs(randoms[i].z));
 						randoms[i].Normalize();
-						randoms[i] *= Math::Lerp(0.1f, 1, (float)pow(Math::RandomRange(0, 1), 2));
+						randoms[i] *= Math::Lerp(0.1f, 1.0f, (float)pow(Math::RandomRange(0, 1), 2));
 					}
 					written = true;
 				}
@@ -841,7 +841,7 @@ void Graphics::InitD3D()
 		NewFilter.DenyList.NumIDs = _countof(DenyIds);
 		NewFilter.DenyList.pIDList = DenyIds;
 
-#if 0
+#if 1
 		HR(pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, true));
 #endif
 		pInfoQueue->PushStorageFilter(&NewFilter);
@@ -984,7 +984,7 @@ void Graphics::OnResize(int width, int height)
 	{
 		m_pDepthStencil->Create(TextureDesc::CreateDepth(width, height, DEPTH_STENCIL_FORMAT, TextureFlag::DepthStencil | TextureFlag::ShaderResource, m_SampleCount, ClearBinding(0.0f, 0)));
 	}
-	m_pHDRRenderTarget->Create(TextureDesc::Create2D(width, height, RENDER_TARGET_FORMAT, TextureFlag::ShaderResource));
+	m_pHDRRenderTarget->Create(TextureDesc::CreateRenderTarget(width, height, RENDER_TARGET_FORMAT, TextureFlag::ShaderResource | TextureFlag::RenderTarget));
 	m_pDownscaledColor->Create(TextureDesc::Create2D(Math::DivideAndRoundUp(width, 4), Math::DivideAndRoundUp(height, 4), RENDER_TARGET_FORMAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
 
 	m_pMSAANormals->Create(TextureDesc::CreateRenderTarget(width, height, DXGI_FORMAT_R32G32B32A32_FLOAT, TextureFlag::RenderTarget, m_SampleCount));

@@ -462,10 +462,19 @@ void CommandContext::EndRenderPass()
 			const RenderPassInfo::RenderTargetInfo& data = m_CurrentRenderPassInfo.RenderTargets[i];
 			if (ExtractEndingAccess(data.Access) == D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_RESOLVE)
 			{
-				InsertResourceBarrier(data.Target, D3D12_RESOURCE_STATE_RESOLVE_SOURCE);
-				InsertResourceBarrier(data.ResolveTarget, D3D12_RESOURCE_STATE_RESOLVE_DEST);
-				uint32 subResource = D3D12CalcSubresource(data.MipLevel, data.ArrayIndex, 0, data.Target->GetMipLevels(), data.Target->GetArraySize());
-				ResolveResource(data.Target, subResource, data.ResolveTarget, 0, data.Target->GetFormat());
+				if (data.Target->GetDesc().SampleCount > 1)
+				{
+					InsertResourceBarrier(data.Target, D3D12_RESOURCE_STATE_RESOLVE_SOURCE);
+					InsertResourceBarrier(data.ResolveTarget, D3D12_RESOURCE_STATE_RESOLVE_DEST);
+					uint32 subResource = D3D12CalcSubresource(data.MipLevel, data.ArrayIndex, 0, data.Target->GetMipLevels(), data.Target->GetArraySize());
+					ResolveResource(data.Target, subResource, data.ResolveTarget, 0, data.Target->GetFormat());
+				}
+				else
+				{
+					FlushResourceBarriers();
+					CopyResource(data.Target, data.ResolveTarget);
+					FlushResourceBarriers();
+				}
 			}
 		}
 	}

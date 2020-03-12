@@ -61,8 +61,6 @@ workspace (ENGINE_NAME)
 			flags { "NoPCH" }
 		filter {}
 
-		postbuildcommands { "{COPY} \"$(ProjectDir)Resources\" \"$(OutDir)Resources\"" }
-
 		---- External libraries ----
 		AddAssimp()
 		filter "system:Windows"

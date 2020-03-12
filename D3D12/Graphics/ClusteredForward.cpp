@@ -95,6 +95,7 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
 			return [=](CommandContext& context, const RGPassResources& passResources)
 			{
 				context.InsertResourceBarrier(resources.pRenderTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
+				context.InsertResourceBarrier(passResources.GetTexture(resources.DepthBuffer), D3D12_RESOURCE_STATE_DEPTH_READ);
 				context.InsertResourceBarrier(m_pUniqueClusters.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
 				context.ClearUavUInt(m_pUniqueClusters.get(), m_pUniqueClustersRawUAV);
