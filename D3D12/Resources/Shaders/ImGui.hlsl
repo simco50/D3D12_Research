@@ -1,4 +1,9 @@
-#include "Common.hlsl"
+#include "Common.hlsli"
+
+#define RootSig "RootFlags(ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT), " \
+				"CBV(b0, visibility=SHADER_VISIBILITY_VERTEX), " \
+				"DescriptorTable(SRV(t0, numDescriptors = 1), visibility = SHADER_VISIBILITY_PIXEL), " \
+				"StaticSampler(s0, filter=FILTER_MIN_MAG_MIP_POINT, visibility = SHADER_VISIBILITY_PIXEL)"
 
 cbuffer Data : register(b0)
 {
@@ -22,6 +27,7 @@ struct PS_INPUT
 SamplerState sDiffuse : register(s0);
 Texture2D tDiffuse : register(t0);
 
+[RootSignature(RootSig)]
 PS_INPUT VSMain(VS_INPUT input)
 {
 	PS_INPUT output = (PS_INPUT)0;

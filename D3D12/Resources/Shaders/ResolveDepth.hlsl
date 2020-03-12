@@ -1,4 +1,7 @@
-#include "Common.hlsl"
+#include "Common.hlsli"
+
+#define RootSig "DescriptorTable(UAV(u0, numDescriptors = 1), visibility=SHADER_VISIBILITY_ALL), " \
+				"DescriptorTable(SRV(t0, numDescriptors = 1), visibility=SHADER_VISIBILITY_ALL), "
 
 #ifndef DEPTH_RESOLVE_MIN
 #define DEPTH_RESOLVE_MIN 1
@@ -15,22 +18,26 @@
 Texture2DMS<float> tInputTexture : register(t0);
 RWTexture2D<float> uOutputTexture : register(u0);
 
+[RootSignature(RootSig)]
 [numthreads(16, 16, 1)]
 void CSMain(uint3 threadId : SV_DISPATCHTHREADID)
 {
 	uint2 dimensions;
 	uint sampleCount;
 	tInputTexture.GetDimensions(dimensions.x, dimensions.y, sampleCount);
-	float result = 1;
-	for(uint i = 0; i < sampleCount; ++i)
-	{
-#if DEPTH_RESOLVE_MIN
-		result = min(result, tInputTexture.Load(threadId.xy, i).r);
-#elif DEPTH_RESOLVE_MAX
-		result = max(result, tInputTexture.Load(threadId.xy, i).r);
-#elif DEPTH_RESOLVE_AVERAGE
-		result += tInputTexture.Load(threadId.xy, i).r / sampleCount;
-#endif
+	if(threadId.x < dimensions.x && threadId.y < dimensions.y)
+    {
+		float result = 1;
+		for(uint i = 0; i < sampleCount; ++i)
+		{
+	#if DEPTH_RESOLVE_MIN
+			result = min(result, tInputTexture.Load(threadId.xy, i).r);
+	#elif DEPTH_RESOLVE_MAX
+			result = max(result, tInputTexture.Load(threadId.xy, i).r);
+	#elif DEPTH_RESOLVE_AVERAGE
+			result += tInputTexture.Load(threadId.xy, i).r / sampleCount;
+	#endif
+		}
+		uOutputTexture[threadId.xy] = result;
 	}
-	uOutputTexture[threadId.xy] = result;
 }

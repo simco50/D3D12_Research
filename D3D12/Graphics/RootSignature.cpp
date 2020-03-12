@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "RootSignature.h"
+#include "Shader.h"
 
 RootSignature::RootSignature() 
 	: m_NumParameters(0)
@@ -118,11 +119,34 @@ void RootSignature::AddStaticSampler(uint32 shaderRegister, D3D12_SAMPLER_DESC s
 
 void RootSignature::Finalize(const char* pName, ID3D12Device* pDevice, D3D12_ROOT_SIGNATURE_FLAGS flags)
 {
-	CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC desc = {};
+	std::array<bool, (int32)Shader::Type::MAX> shaderVisibility{};
 
 	for (size_t i = 0; i < m_RootParameters.size(); ++i)
 	{
 		D3D12_ROOT_PARAMETER1& rootParameter = m_RootParameters[i];
+		switch (rootParameter.ShaderVisibility)
+		{
+		case D3D12_SHADER_VISIBILITY_VERTEX:
+			shaderVisibility[(int)Shader::Type::VertexShader] = true;
+			break;
+		case D3D12_SHADER_VISIBILITY_GEOMETRY:
+			shaderVisibility[(int)Shader::Type::GeometryShader] = true;
+			break;
+		case D3D12_SHADER_VISIBILITY_PIXEL:
+			shaderVisibility[(int)Shader::Type::PixelShader] = true;
+			break;
+		case D3D12_SHADER_VISIBILITY_ALL:
+			for (bool& v : shaderVisibility)
+			{
+				v = true;
+			}
+			break;
+		default:
+		case D3D12_SHADER_VISIBILITY_DOMAIN:
+		case D3D12_SHADER_VISIBILITY_HULL:
+			assert(false);
+			break;
+		}
 		if (rootParameter.ParameterType == D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE)
 		{
 			//Fixup the table ranges because the rootsignature can be dynamically resized
@@ -149,6 +173,23 @@ void RootSignature::Finalize(const char* pName, ID3D12Device* pDevice, D3D12_ROO
 		}
 	}
 
+	if (shaderVisibility[(int)Shader::Type::VertexShader] == false)
+	{
+		flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_VERTEX_SHADER_ROOT_ACCESS;
+	}
+	if (shaderVisibility[(int)Shader::Type::PixelShader] == false)
+	{
+		flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS;
+	}
+	if (shaderVisibility[(int)Shader::Type::GeometryShader] == false)
+	{
+		flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
+	}
+
+	//#todo: Tessellation not supported yet
+	flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS;
+	flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS;
+
 	constexpr uint32 recommendedDwords = 12;
 	uint32 dwords = GetDWordSize();
 	if (dwords > recommendedDwords)
@@ -156,12 +197,40 @@ void RootSignature::Finalize(const char* pName, ID3D12Device* pDevice, D3D12_ROO
 		E_LOG(Warning, "[RootSignature::Finalize] RootSignature '%s' uses %d DWORDs while under %d is recommended", pName, dwords, recommendedDwords);
 	}
 
+	CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC desc = {};
 	desc.Init_1_1(m_NumParameters, m_RootParameters.data(), (uint32)m_StaticSamplers.size(), m_StaticSamplers.data(), flags);
 
 	ComPtr<ID3DBlob> pDataBlob, pErrorBlob;
 	HR(D3D12SerializeVersionedRootSignature(&desc, pDataBlob.GetAddressOf(), pErrorBlob.GetAddressOf()));
 	HR(pDevice->CreateRootSignature(0, pDataBlob->GetBufferPointer(), pDataBlob->GetBufferSize(), IID_PPV_ARGS(m_pRootSignature.GetAddressOf())));
 	SetD3DObjectName(m_pRootSignature.Get(), pName);
+}
+
+void RootSignature::FinalizeFromShader(const char* pName, const Shader& shader, ID3D12Device* pDevice)
+{
+	ComPtr<ID3D12VersionedRootSignatureDeserializer> pDeserializer;
+	HR(D3D12CreateVersionedRootSignatureDeserializer(shader.GetByteCode(), shader.GetByteCodeSize(), IID_PPV_ARGS(pDeserializer.GetAddressOf())));
+	const D3D12_VERSIONED_ROOT_SIGNATURE_DESC* pDesc = pDeserializer->GetUnconvertedRootSignatureDesc();
+
+	m_NumParameters = pDesc->Desc_1_1.NumParameters;
+	m_DescriptorTableRanges.resize(m_NumParameters);
+	m_DescriptorTableSizes.resize(m_NumParameters);
+	m_RootParameters.resize(m_NumParameters);
+	m_StaticSamplers.resize(pDesc->Desc_1_1.NumStaticSamplers);
+
+	memcpy(m_StaticSamplers.data(), pDesc->Desc_1_1.pStaticSamplers, m_StaticSamplers.size() * sizeof(D3D12_STATIC_SAMPLER_DESC));
+	memcpy(m_RootParameters.data(), pDesc->Desc_1_1.pParameters, m_RootParameters.size() * sizeof(D3D12_ROOT_PARAMETER1));
+
+	for (uint32 i = 0; i < pDesc->Desc_1_1.NumParameters; ++i)
+	{
+		const D3D12_ROOT_PARAMETER1& rootParameter = pDesc->Desc_1_1.pParameters[i];
+		if (rootParameter.ParameterType == D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE)
+		{
+			memcpy(m_DescriptorTableRanges[i].data(), rootParameter.DescriptorTable.pDescriptorRanges, rootParameter.DescriptorTable.NumDescriptorRanges * sizeof(D3D12_DESCRIPTOR_RANGE1));
+		}
+	}
+
+	Finalize(pName, pDevice, pDesc->Desc_1_1.Flags);
 }
 
 uint32 RootSignature::GetDWordSize() const

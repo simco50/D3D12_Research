@@ -1,21 +1,24 @@
 #pragma once
-#include "Graphics/Graphics.h"
-#include "Graphics/Light.h"
+#include "RenderGraph/RenderGraph.h"
 class Graphics;
 class ComputePipelineState;
 class RootSignature;
 class GraphicsPipelineState;
-class StructuredBuffer;
-class Texture2D;
-class ByteAddressBuffer;
+class Texture;
 class Camera;
+struct Batch;
+class CommandContext;
+class Buffer;
+class UnorderedAccessView;
+class RGGraph;
 
 struct ClusteredForwardInputResources
 {
-	Texture2D* pRenderTarget = nullptr;
+	RGResourceHandle DepthBuffer;
+	Texture* pRenderTarget = nullptr;
 	const std::vector<Batch>* pOpaqueBatches;
 	const std::vector<Batch>* pTransparantBatches;
-	StructuredBuffer* pLightBuffer;
+	Buffer* pLightBuffer;
 	Camera* pCamera;
 };
 
@@ -26,7 +29,7 @@ public:
 
 	void OnSwapchainCreated(int windowWidth, int windowHeight);
 
-	void Execute(const ClusteredForwardInputResources& resources);
+	void Execute(RGGraph& graph, const ClusteredForwardInputResources& resources);
 
 private:
 	void SetupResources(Graphics* pGraphics);
@@ -37,40 +40,39 @@ private:
 	uint32 m_ClusterCountX = 0;
 	uint32 m_ClusterCountY = 0;
 
-	std::unique_ptr<Texture2D> m_pHeatMapTexture;
-	std::unique_ptr<Texture2D> m_pDepthTexture;
+	std::unique_ptr<Texture> m_pHeatMapTexture;
 
 	//Step 1: AABB
 	std::unique_ptr<RootSignature> m_pCreateAabbRS;
 	std::unique_ptr<ComputePipelineState> m_pCreateAabbPSO;
-	std::unique_ptr<StructuredBuffer> m_pAABBs;
+	std::unique_ptr<Buffer> m_pAABBs;
 
 	//Step 2: Mark Unique Clusters
 	std::unique_ptr<RootSignature> m_pMarkUniqueClustersRS;
 	std::unique_ptr<GraphicsPipelineState> m_pMarkUniqueClustersOpaquePSO;
 	std::unique_ptr<GraphicsPipelineState> m_pMarkUniqueClustersTransparantPSO;
-	std::unique_ptr<StructuredBuffer> m_pUniqueClusters;
+	std::unique_ptr<Buffer> m_pUniqueClusters;
+	UnorderedAccessView* m_pUniqueClustersRawUAV = nullptr;
 
 	//Step 3: Compact Cluster List
 	std::unique_ptr<RootSignature> m_pCompactClustersRS;
 	std::unique_ptr<ComputePipelineState> m_pCompactClustersPSO;
-	std::unique_ptr<StructuredBuffer> m_pCompactedClusters;
+	std::unique_ptr<Buffer> m_pCompactedClusters;
+	UnorderedAccessView* m_pCompactedClustersRawUAV = nullptr;
 
 	//Step 4: Update Indirect Dispatch Buffer
 	std::unique_ptr<RootSignature> m_pUpdateIndirectArgumentsRS;
 	std::unique_ptr<ComputePipelineState> m_pUpdateIndirectArgumentsPSO;
-	std::unique_ptr<ByteAddressBuffer> m_pIndirectArguments;
+	std::unique_ptr<Buffer> m_pIndirectArguments;
 
 	//Step 5: Light Culling
 	std::unique_ptr<RootSignature> m_pLightCullingRS;
 	std::unique_ptr<ComputePipelineState> m_pLightCullingPSO;
 	ComPtr<ID3D12CommandSignature> m_pLightCullingCommandSignature;
-	std::unique_ptr<StructuredBuffer> m_pLightIndexCounter;
-	std::unique_ptr<StructuredBuffer> m_pLightIndexGrid;
-	std::unique_ptr<StructuredBuffer> m_pLightGrid;
-
-	//Alternative light culling
-	std::unique_ptr<ComputePipelineState> m_pAlternativeLightCullingPSO;
+	std::unique_ptr<Buffer> m_pLightIndexCounter;
+	std::unique_ptr<Buffer> m_pLightIndexGrid;
+	std::unique_ptr<Buffer> m_pLightGrid;
+	UnorderedAccessView* m_pLightGridRawUAV = nullptr;
 
 	//Step 6: Lighting
 	std::unique_ptr<RootSignature> m_pDiffuseRS;
@@ -80,8 +82,8 @@ private:
 	//Cluster debug rendering
 	std::unique_ptr<RootSignature> m_pDebugClustersRS;
 	std::unique_ptr<GraphicsPipelineState> m_pDebugClustersPSO;
-	std::unique_ptr<StructuredBuffer> m_pDebugCompactedClusters;
-	std::unique_ptr<StructuredBuffer> m_pDebugLightGrid;
+	std::unique_ptr<Buffer> m_pDebugCompactedClusters;
+	std::unique_ptr<Buffer> m_pDebugLightGrid;
 	Matrix m_DebugClustersViewMatrix;
 	bool m_DidCopyDebugClusterData = false;
 };

@@ -45,7 +45,7 @@ public:
 	bool IsNull() const { return m_CpuHandle.ptr == InvalidHandle; }
 	bool IsShaderVisible() const { return m_GpuHandle.ptr != InvalidHandle; }
 
-	constexpr static size_t InvalidHandle = ~(size_t)0;
+	constexpr static size_t InvalidHandle = (size_t)-1;
 
 private:
 	D3D12_CPU_DESCRIPTOR_HANDLE m_CpuHandle;

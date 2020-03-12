@@ -11,6 +11,7 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "External/Stb/stb_image_write.h"
 #include <fstream>
+#include "Core/Paths.h"
 
 Image::Image()
 {
@@ -22,9 +23,9 @@ Image::~Image()
 
 }
 
-bool Image::Load(const std::string& inputStream)
+bool Image::Load(const char* inputStream)
 {
-	const std::string extension = inputStream.substr(inputStream.find('.') + 1);
+	const std::string extension = Paths::GetFileExtenstion(inputStream);
 	bool success = false;
 	if (extension == "dds")
 	{
@@ -225,16 +226,16 @@ unsigned int Image::TextureFormatFromCompressionFormat(const ImageFormat& format
 	}
 }
 
-bool Image::LoadStbi(const std::string& inputStream)
+bool Image::LoadStbi(const char* inputStream)
 {
 	m_Components = 4;
 	m_Depth = 1;
 	int components = 0;
 
-	m_IsHdr = stbi_is_hdr(inputStream.c_str());
+	m_IsHdr = stbi_is_hdr(inputStream);
 	if (m_IsHdr)
 	{
-		float* pPixels = stbi_loadf(inputStream.c_str(), &m_Width, &m_Height, &components, m_Components);
+		float* pPixels = stbi_loadf(inputStream, &m_Width, &m_Height, &components, m_Components);
 		if (pPixels == nullptr)
 		{
 			return false;
@@ -248,7 +249,7 @@ bool Image::LoadStbi(const std::string& inputStream)
 	}
 	else
 	{
-		unsigned char* pPixels = stbi_load(inputStream.c_str(), &m_Width, &m_Height, &components, m_Components);
+		unsigned char* pPixels = stbi_load(inputStream, &m_Width, &m_Height, &components, m_Components);
 		if (pPixels == nullptr)
 		{
 			return false;
@@ -262,7 +263,7 @@ bool Image::LoadStbi(const std::string& inputStream)
 	}
 }
 
-bool Image::LoadDds(const std::string& inputStream)
+bool Image::LoadDds(const char* inputStream)
 {
 	std::ifstream fStream(inputStream, std::ios::binary);
 
@@ -475,6 +476,7 @@ bool Image::LoadDds(const std::string& inputStream)
 		if (isCubemap)
 		{
 			imageChainCount = 6;
+			m_IsCubemap = true;
 		}
 		else if (hasDxgi && pDx10Header->arraySize > 1)
 		{

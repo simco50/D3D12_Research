@@ -2,13 +2,13 @@
 #include "Profiler.h"
 #include "Graphics.h"
 #include "CommandContext.h"
-#include "GraphicsBuffer.h"
 #include "CommandQueue.h"
 
 #define USE_PIX
 #ifdef USE_PIX
 #include <pix3.h>
 #endif
+#include "GraphicsBuffer.h"
 
 void CpuTimer::Begin()
 {
@@ -102,32 +102,6 @@ void ProfileNode::PopulateTimes(int frameIndex)
 		for (auto& child : m_Children)
 		{
 			child->PopulateTimes(frameIndex);
-		}
-	}
-}
-
-void ProfileNode::LogTimes(int frameIndex, void(*pLogFunction)(const char* pText), int depth /*= 0*/, bool isRoot /*= false*/)
-{
-	if (frameIndex - m_LastProcessedFrame < 60)
-	{
-		if (isRoot)
-		{
-			E_LOG(Info, "Timings for frame: %d", frameIndex);
-		}
-		else
-		{
-			std::stringstream str;
-			for (int i = 0; i < depth; ++i)
-			{
-				str << '\t';
-			}
-			str << m_Name << ": GPU: " << m_GpuTimeHistory.GetAverage() << " ms. CPU: " << m_CpuTimeHistory.GetAverage() << " ms.";
-			std::string msg = str.str();
-			pLogFunction(msg.c_str());
-		}
-		for (auto& child : m_Children)
-		{
-			child->LogTimes(frameIndex, pLogFunction, depth + 1, false);
 		}
 	}
 }
@@ -236,9 +210,8 @@ void Profiler::Initialize(Graphics* pGraphics)
 	desc.Type = D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
 	HR(pGraphics->GetDevice()->CreateQueryHeap(&desc, IID_PPV_ARGS(m_pQueryHeap.GetAddressOf())));
 
-	int bufferSize = HEAP_SIZE * sizeof(uint64) * 2 * Graphics::FRAME_COUNT;
-	m_pReadBackBuffer = std::make_unique<ReadbackBuffer>();
-	m_pReadBackBuffer->Create(pGraphics, bufferSize);
+	m_pReadBackBuffer = std::make_unique<Buffer>(pGraphics, "Profiling Readback Buffer");
+	m_pReadBackBuffer->Create(BufferDesc::CreateReadback(HEAP_SIZE * 2 * Graphics::FRAME_COUNT));
 
 	uint64 timeStampFrequency;
 	pGraphics->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT)->GetCommandQueue()->GetTimestampFrequency(&timeStampFrequency);
@@ -309,7 +282,7 @@ void Profiler::EndReadBack(int frameIndex)
 	m_pCurrentBlock->StartTimer(nullptr);
 	m_pCurrentBlock->EndTimer(nullptr);
 
-	GraphicsCommandContext* pContext = (GraphicsCommandContext*)m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+	CommandContext* pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 	pContext->GetCommandList()->ResolveQueryData(m_pQueryHeap.Get(), D3D12_QUERY_TYPE_TIMESTAMP, offset, HEAP_SIZE * 2, m_pReadBackBuffer->GetResource(), offset * sizeof(uint64));
 	m_FenceValues[backBufferIndex] = pContext->Execute(false);
 

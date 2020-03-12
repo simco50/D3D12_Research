@@ -3,22 +3,23 @@ require "utility"
 ENGINE_NAME = "D3D12"
 ROOT = "../"
 SOURCE_DIR = ROOT .. ENGINE_NAME .. "/"
+WIN_SDK = "10.0.18362.0"
 
 workspace (ENGINE_NAME)
 	basedir (ROOT)
 	configurations { "Debug", "Release" }
     platforms { "x64" }
-	defines { "_CONSOLE" }
+	defines {  "x64" }
 	language ("C++")
+	cppdialect "c++17"
 	startproject (ENGINE_NAME)
 	symbols ("On")
+	architecture ("x64")
 	kind ("WindowedApp")
 	characterset ("MBCS")
-
-    filter "platforms:x64"
-		defines {"x64"}
-		architecture ("x64")
-
+	flags {"MultiProcessorCompile", "ShadowedVariables"}
+	rtti "Off"
+	
 	filter "configurations:Debug"
 		defines { "_DEBUG" }
 		optimize ("Off")
@@ -26,6 +27,9 @@ workspace (ENGINE_NAME)
 	filter "configurations:Release"
 		defines { "RELEASE" }
 		optimize ("Full")
+		flags { "NoIncrementalLink", "LinkTimeOptimization" }
+
+	filter {}
 
 	project (ENGINE_NAME)
 		location (ROOT .. ENGINE_NAME)
@@ -39,7 +43,7 @@ workspace (ENGINE_NAME)
 		SetPlatformDefines()
 
 		filter {"system:windows", "action:vs*"}
-			systemversion ("10.0.17763.0")
+			systemversion (WIN_SDK)
 		filter {}
 
 		---- File setup ----
@@ -51,19 +55,19 @@ workspace (ENGINE_NAME)
 			(SOURCE_DIR .. "**.inl"),
 			(SOURCE_DIR .. "**.c"),
 			(SOURCE_DIR .. "**.natvis"),
-			(SOURCE_DIR .. "Resources/**")
 		}
-		filter { "files:" .. SOURCE_DIR .. "Resources/**" }
-			flags { "ExcludeFromBuild" }
 
 		filter ("files:" .. SOURCE_DIR .. "External/**")
 			flags { "NoPCH" }
 		filter {}
+
+		postbuildcommands { "{COPY} \"$(ProjectDir)Resources\" \"$(OutDir)Resources\"" }
 
 		---- External libraries ----
 		AddAssimp()
 		filter "system:Windows"
 			AddD3D12()
 			AddPix()
+			AddDxc()
 			
 --------------------------------------------------------

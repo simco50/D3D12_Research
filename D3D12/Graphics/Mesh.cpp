@@ -7,6 +7,7 @@
 #include "Graphics.h"
 #include "Texture.h"
 #include "GraphicsBuffer.h"
+#include "Core/Paths.h"
 
 bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pContext)
 {
@@ -28,38 +29,37 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 	for (uint32 i = 0; i < pScene->mNumMeshes; ++i)
 	{
 		m_Meshes.push_back(LoadMesh(pScene->mMeshes[i], pGraphics, pContext));
-		pContext->ExecuteAndReset(true);
 	}
 
-	std::string dirPath = pFilePath;
-	dirPath = dirPath.substr(0, dirPath.rfind('/'));
+	std::string dirPath = Paths::GetDirectoryPath(pFilePath);
 
-	auto loadTexture = [pGraphics, pContext](std::string basePath, aiMaterial* pMaterial, aiTextureType type) 
+	auto loadTexture = [pGraphics, pContext](const char* basePath, aiMaterial* pMaterial, aiTextureType type, bool srgb)
 	{
-		std::unique_ptr<Texture2D> pTex;
+		std::unique_ptr<Texture> pTex;
 		aiString path;
 		aiReturn ret = pMaterial->GetTexture(type, 0, &path);
-		pTex = std::make_unique<Texture2D>();
-		if (ret == aiReturn_SUCCESS)
+		pTex = std::make_unique<Texture>(pGraphics);
+		bool success = ret == aiReturn_SUCCESS;
+		if (success)
 		{
 			std::string p = path.C_Str();
 			std::stringstream str;
-			str << basePath << p;
-			pTex->Create(pGraphics, pContext, str.str().c_str(), TextureUsage::ShaderResource);
+			str << basePath << "/" << p;
+			success = pTex->Create(pContext, str.str().c_str(), srgb);
 		}
-		else
+		if(!success)
 		{
 			switch (type)
 			{
 			case aiTextureType_NORMALS:
-				pTex->Create(pGraphics, pContext, "Resources/textures/dummy_ddn.png", TextureUsage::ShaderResource);
+				pTex->Create(pContext, "Resources/textures/dummy_ddn.png", srgb);
 				break;
 			case aiTextureType_SPECULAR:
-				pTex->Create(pGraphics, pContext, "Resources/textures/dummy_specular.png", TextureUsage::ShaderResource);
+				pTex->Create(pContext, "Resources/textures/dummy_specular.png", srgb);
 				break;
 			case aiTextureType_DIFFUSE:
 			default:
-				pTex->Create(pGraphics, pContext, "Resources/textures/dummy.png", TextureUsage::ShaderResource);
+				pTex->Create(pContext, "Resources/textures/dummy.png", srgb);
 				break;
 			}
 		}
@@ -70,12 +70,11 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 	for (uint32 i = 0; i < pScene->mNumMaterials; ++i)
 	{
 		Material& m = m_Materials[i];
-		m.pDiffuseTexture = loadTexture(dirPath, pScene->mMaterials[i], aiTextureType_DIFFUSE);
-		m.pNormalTexture = loadTexture(dirPath, pScene->mMaterials[i], aiTextureType_NORMALS);
-		m.pSpecularTexture = loadTexture(dirPath, pScene->mMaterials[i], aiTextureType_SPECULAR);
+		m.pDiffuseTexture = loadTexture(dirPath.c_str(), pScene->mMaterials[i], aiTextureType_DIFFUSE, true);
+		m.pNormalTexture = loadTexture(dirPath.c_str(), pScene->mMaterials[i], aiTextureType_NORMALS, false);
+		m.pSpecularTexture = loadTexture(dirPath.c_str(), pScene->mMaterials[i], aiTextureType_SPECULAR, false);
 		aiString p;
 		m.IsTransparent = pScene->mMaterials[i]->GetTexture(aiTextureType_OPACITY, 0, &p) == aiReturn_SUCCESS;
-		pContext->ExecuteAndReset(true);
 	}
 
 	return true;
@@ -99,7 +98,7 @@ std::unique_ptr<SubMesh> Mesh::LoadMesh(aiMesh* pMesh, Graphics* pGraphics, Comm
 	{
 		Vertex& vertex = vertices[j];
 		vertex.Position = *reinterpret_cast<Vector3*>(&pMesh->mVertices[j]);
-		if(pMesh->HasTextureCoords(0))
+		if (pMesh->HasTextureCoords(0))
 			vertex.TexCoord = *reinterpret_cast<Vector2*>(&pMesh->mTextureCoords[0][j]);
 		vertex.Normal = *reinterpret_cast<Vector3*>(&pMesh->mNormals[j]);
 		if (pMesh->HasTangentsAndBitangents())
@@ -121,20 +120,20 @@ std::unique_ptr<SubMesh> Mesh::LoadMesh(aiMesh* pMesh, Graphics* pGraphics, Comm
 
 
 	std::unique_ptr<SubMesh> pSubMesh = std::make_unique<SubMesh>();
-	BoundingBox::CreateFromPoints(pSubMesh->m_Bounds, vertices.size(), (XMFLOAT3*)&vertices[0], sizeof(Vertex));
+	BoundingBox::CreateFromPoints(pSubMesh->m_Bounds, vertices.size(), (Vector3*)&vertices[0], sizeof(Vertex));
 
 	{
 		uint32 size = (uint32)vertices.size() * sizeof(Vertex);
-		pSubMesh->m_pVertexBuffer = std::make_unique<VertexBuffer>();
-		pSubMesh->m_pVertexBuffer->Create(pGraphics, (uint32)vertices.size(), sizeof(Vertex), false);
+		pSubMesh->m_pVertexBuffer = std::make_unique<Buffer>(pGraphics);
+		pSubMesh->m_pVertexBuffer->Create(BufferDesc::CreateVertexBuffer((uint32)vertices.size(), sizeof(Vertex)));
 		pSubMesh->m_pVertexBuffer->SetData(pContext, vertices.data(), size);
 	}
 
 	{
 		uint32 size = (uint32)indices.size() * sizeof(uint32);
 		pSubMesh->m_IndexCount = (int)indices.size();
-		pSubMesh->m_pIndexBuffer = std::make_unique<IndexBuffer>();
-		pSubMesh->m_pIndexBuffer->Create(pGraphics, false, size, false);
+		pSubMesh->m_pIndexBuffer = std::make_unique<Buffer>(pGraphics);
+		pSubMesh->m_pIndexBuffer->Create(BufferDesc::CreateIndexBuffer((uint32)size, false));
 		pSubMesh->m_pIndexBuffer->SetData(pContext, indices.data(), size);
 	}
 	pSubMesh->m_MaterialId = pMesh->mMaterialIndex;
@@ -142,7 +141,12 @@ std::unique_ptr<SubMesh> Mesh::LoadMesh(aiMesh* pMesh, Graphics* pGraphics, Comm
 	return pSubMesh;
 }
 
-void SubMesh::Draw(GraphicsCommandContext* pContext) const
+SubMesh::~SubMesh()
+{
+
+}
+
+void SubMesh::Draw(CommandContext* pContext) const
 {
 	pContext->SetIndexBuffer(m_pIndexBuffer.get());
 	pContext->SetVertexBuffer(m_pVertexBuffer.get());

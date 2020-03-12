@@ -1,10 +1,13 @@
 #pragma once
 #include "DescriptorHandle.h"
-class GraphicsCommandContext;
+class CommandContext;
 class Graphics;
 class RootSignature;
 class GraphicsPipelineState;
-class Texture2D;
+class Texture;
+class RGGraph;
+
+DECLARE_MULTICAST_DELEGATE(ImGuiCallback);
 
 class ImGuiRenderer
 {
@@ -13,15 +16,20 @@ public:
 	~ImGuiRenderer();
 
 	void NewFrame();
-	void Render(GraphicsCommandContext& context);
+	void Render(RGGraph& graph, Texture* pRenderTarget);
+	void Update();
+	DelegateHandle AddUpdateCallback(ImGuiCallbackDelegate&& callback);
+	void RemoveUpdateCallback(DelegateHandle handle);
 
 private:
 	void CreatePipeline();
 	void InitializeImGui();
 
+	ImGuiCallback m_UpdateCallback;
+
 	Graphics* m_pGraphics;
 	std::unique_ptr<GraphicsPipelineState> m_pPipelineState;
 	std::unique_ptr<RootSignature> m_pRootSignature;
-	std::unique_ptr<Texture2D> m_pFontTexture;
+	std::unique_ptr<Texture> m_pFontTexture;
 };
 

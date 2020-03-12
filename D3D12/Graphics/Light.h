@@ -16,7 +16,7 @@ struct Light
 	Type LightType;
 	Vector4 Color;
 	float Range;
-	float SpotLightAngle;
+	float CosHalfAngle;
 	float Attenuation;
 	int32 ShadowIndex = -1;
 
@@ -45,14 +45,14 @@ struct Light
 		return l;
 	}
 
-	static Light Spot(const Vector3& position, float range, const Vector3& direction, float angle = XM_PIDIV4, float intensity = 1.0f, float attenuation = 0.5f, const Vector4& color = Vector4(1, 1, 1, 1))
+	static Light Spot(const Vector3& position, float range, const Vector3& direction, float angleInDegrees = 60, float intensity = 1.0f, float attenuation = 0.5f, const Vector4& color = Vector4(1, 1, 1, 1))
 	{
 		Light l;
 		l.Enabled = true;
 		l.Position = position;
 		l.Range = range;
 		l.Direction = direction;
-		l.SpotLightAngle = angle;
+		l.CosHalfAngle = cos(angleInDegrees / 2.0f * Math::PI / 180.0f);
 		l.Color = Vector4(color.x, color.y, color.z, intensity);
 		l.Attenuation = attenuation;
 		l.LightType = Type::Spot;

@@ -1,8 +1,7 @@
 #pragma once
-class VertexBuffer;
-class IndexBuffer;
-class GraphicsCommandContext;
-class Texture2D;
+class Buffer;
+class CommandContext;
+class Texture;
 class Graphics;
 class CommandContext;
 struct aiMesh;
@@ -12,7 +11,9 @@ class SubMesh
 	friend class Mesh;
 
 public:
-	void Draw(GraphicsCommandContext* pContext) const;
+	~SubMesh();
+
+	void Draw(CommandContext* pContext) const;
 	int GetMaterialId() const { return m_MaterialId; }
 	const BoundingBox& GetBounds() const { return m_Bounds; }
 
@@ -21,16 +22,16 @@ private:
 	int m_IndexCount = 0;
 	int m_VertexCount = 0;
 	BoundingBox m_Bounds;
-	std::unique_ptr<VertexBuffer> m_pVertexBuffer;
-	std::unique_ptr<IndexBuffer> m_pIndexBuffer;
+	std::unique_ptr<Buffer> m_pVertexBuffer;
+	std::unique_ptr<Buffer> m_pIndexBuffer;
 };
 
 struct Material
 {
-	std::unique_ptr<Texture2D> pDiffuseTexture;
-	std::unique_ptr<Texture2D> pNormalTexture;
-	std::unique_ptr<Texture2D> pSpecularTexture;
-	std::unique_ptr<Texture2D> pAlphaTexture;
+	std::unique_ptr<Texture> pDiffuseTexture;
+	std::unique_ptr<Texture> pNormalTexture;
+	std::unique_ptr<Texture> pSpecularTexture;
+	std::unique_ptr<Texture> pAlphaTexture;
 	bool IsTransparent;
 };
 

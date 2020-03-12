@@ -1,7 +1,16 @@
 #pragma once
 #include "Graphics.h"
-class ReadbackBuffer;
+class Buffer;
 class CommandContext;
+
+#define GPU_PROFILE_BEGIN(name, cmdlist) Profiler::Instance()->Begin(name, cmdlist);
+#define GPU_PROFILE_END(cmdlist) Profiler::Instance()->End(cmdlist);
+
+#define PROFILE_BEGIN(name) Profiler::Instance()->Begin(name, nullptr);
+#define PROFILE_END() Profiler::Instance()->End();
+
+#define GPU_PROFILE_SCOPE(name, cmdlist) ScopeProfiler profiler ## __COUNTER__(name, cmdlist)
+#define PROFILE_SCOPE(name, cmdlist) ScopeProfiler profiler ## __COUNTER__(name, nullptr)
 
 class CpuTimer
 {
@@ -92,7 +101,6 @@ public:
 	void EndTimer(CommandContext* pContext);
 
 	void PopulateTimes(int frameIndex);
-	void LogTimes(int frameIndex, void(*pLogFunction)(const char* pText), int depth = 0, bool isRoot = false);
 	void RenderImGui(int frameIndex);
 
 	bool HasChild(const char* pName);
@@ -171,9 +179,24 @@ private:
 	float m_SecondsPerCpuTick = 0.0f;
 	int m_CurrentTimer = 0;
 	ComPtr<ID3D12QueryHeap> m_pQueryHeap;
-	std::unique_ptr<ReadbackBuffer> m_pReadBackBuffer;
+	std::unique_ptr<Buffer> m_pReadBackBuffer;
 
 	std::unique_ptr<ProfileNode> m_pRootBlock;
 	ProfileNode* m_pPreviousBlock = nullptr;
 	ProfileNode* m_pCurrentBlock = nullptr;
+};
+
+struct ScopeProfiler
+{
+	ScopeProfiler(const char* pName, CommandContext* pContext = nullptr)
+		: pContext(pContext)
+	{
+		Profiler::Instance()->Begin(pName, pContext);
+	}
+
+	~ScopeProfiler()
+	{
+		Profiler::Instance()->End(pContext);
+	}
+	CommandContext* pContext;
 };

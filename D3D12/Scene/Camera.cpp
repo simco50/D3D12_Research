@@ -102,13 +102,19 @@ const Matrix& Camera::GetViewProjection() const
 const Matrix& Camera::GetViewInverse() const
 {
 	UpdateMatrices();
-	return m_ViewProjection;
+	return m_ViewInverse;
 }
 
 const Matrix& Camera::GetProjectionInverse() const
 {
 	UpdateMatrices();
 	return m_ProjectionInverse;
+}
+
+const BoundingFrustum& Camera::GetFrustum() const
+{
+	UpdateMatrices();
+	return m_Frustum;
 }
 
 void Camera::OnDirty()
@@ -134,6 +140,10 @@ void Camera::UpdateMatrices() const
 		m_Projection.Invert(m_ProjectionInverse);
 		m_ViewProjection = m_View * m_Projection;
 		m_Dirty = false;
+
+		Matrix p = Math::CreatePerspectiveMatrix(m_FoV, rect.GetWidth() / rect.GetHeight(), m_FarPlane, m_NearPlane);
+		BoundingFrustum::CreateFromMatrix(m_Frustum, p);
+		m_Frustum.Transform(m_Frustum, m_ViewInverse);
 	}
 }
 
@@ -163,7 +173,7 @@ void FreeCamera::Update()
 	movement.y += (int)Input::Instance().IsKeyDown('E');
 	movement = Vector3::Transform(movement, m_Rotation);
 
-	m_Velocity = Vector3::Lerp(m_Velocity, movement, 0.1f);
+	m_Velocity = Vector3::SmoothStep(m_Velocity, movement, 0.1f);
 	m_Position += m_Velocity * GameTimer::DeltaTime() * 20.0f;
 
 	OnDirty();

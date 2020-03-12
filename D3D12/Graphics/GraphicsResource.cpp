@@ -1,13 +1,13 @@
 #include "stdafx.h"
 #include "GraphicsResource.h"
 
-GraphicsResource::GraphicsResource() 
-	: m_pResource(nullptr), m_CurrentState(D3D12_RESOURCE_STATE_COMMON)
+GraphicsResource::GraphicsResource(Graphics* pParent) 
+	: GraphicsObject(pParent), m_pResource(nullptr), m_CurrentState(D3D12_RESOURCE_STATE_COMMON)
 {
 }
 
-GraphicsResource::GraphicsResource(ID3D12Resource* pResource, D3D12_RESOURCE_STATES state) 
-	: m_pResource(pResource), m_CurrentState(state)
+GraphicsResource::GraphicsResource(Graphics* pParent, ID3D12Resource* pResource, D3D12_RESOURCE_STATES state)
+	: GraphicsObject(pParent), m_pResource(pResource), m_CurrentState(state)
 {
 }
 

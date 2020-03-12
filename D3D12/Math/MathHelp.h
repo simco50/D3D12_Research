@@ -171,6 +171,11 @@ namespace Math
 		return (int32)ceil(value);
 	}
 
+	inline uint32 DivideAndRoundUp(uint32 nominator, uint32 denominator)
+	{
+		return (uint32)ceil((float)nominator / denominator);
+	}
+
 	static const Vector4& GetHaltonSequence(int idx)
 	{
 		static const Vector4 HALTON[] = {

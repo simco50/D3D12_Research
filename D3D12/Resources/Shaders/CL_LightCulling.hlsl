@@ -1,4 +1,8 @@
-#include "Common.hlsl"
+#include "Common.hlsli"
+
+#define RootSig "CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \
+				"DescriptorTable(SRV(t0, numDescriptors = 3)), " \
+				"DescriptorTable(UAV(u0, numDescriptors = 3))"
 
 #define MAX_LIGHTS_PER_TILE 256
 #define THREAD_COUNT 512
@@ -34,14 +38,6 @@ void AddLight(uint lightIndex)
 	}
 }
 
-struct CS_INPUT
-{
-	uint3 GroupId : SV_GROUPID;
-	uint3 GroupThreadId : SV_GROUPTHREADID;
-	uint3 DispatchThreadId : SV_DISPATCHTHREADID;
-	uint GroupIndex : SV_GROUPINDEX;
-};
-
 bool ConeInSphere(float3 conePosition, float3 coneDirection, float coneRange, float2 coneAngleSinCos, Sphere sphere)
 {
 	float3 v = sphere.Position - conePosition;
@@ -54,6 +50,15 @@ bool ConeInSphere(float3 conePosition, float3 coneDirection, float coneRange, fl
 	return !(angleCull || frontCull || backCull);
 }
 
+struct CS_INPUT
+{
+	uint3 GroupId : SV_GROUPID;
+	uint3 GroupThreadId : SV_GROUPTHREADID;
+	uint3 DispatchThreadId : SV_DISPATCHTHREADID;
+	uint GroupIndex : SV_GROUPINDEX;
+};
+
+[RootSignature(RootSig)]
 [numthreads(THREAD_COUNT, 1, 1)]
 void LightCulling(CS_INPUT input)
 {
@@ -89,24 +94,13 @@ void LightCulling(CS_INPUT input)
 		break;
 		case LIGHT_SPOT:
 		{
-#ifdef OPTIMIZED_SPOT_LIGHT_CULLING
 			Sphere sphere;
-			sphere.Position = GroupAABB.Center;
-			sphere.Radius = sqrt(dot(GroupAABB.Extents, GroupAABB.Extents));
-
-			if(ConeInSphere(mul(float4(light.Position, 1), cView).xyz, mul(light.Direction, (float3x3)cView), light.Range, float2(sin(radians(light.SpotLightAngle / 2)), cos(radians(light.SpotLightAngle / 2))), sphere))
-			{
-				AddLight(i);
-			}
-#else
-			Sphere sphere;
-			sphere.Radius = light.Range * 0.5f / pow(cos(radians(light.SpotLightAngle / 2)), 2);
+			sphere.Radius = light.Range * 0.5f / pow(light.CosSpotLightAngle, 2);
 			sphere.Position = mul(float4(light.Position, 1), cView).xyz + mul(light.Direction, (float3x3)cView) * sphere.Radius;
 			if (SphereInAABB(sphere, GroupAABB))
 			{
 				AddLight(i);
 			}
-#endif
 		}
 		break;
 		case LIGHT_DIRECTIONAL:

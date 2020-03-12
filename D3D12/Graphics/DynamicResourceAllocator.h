@@ -4,23 +4,24 @@ class Graphics;
 
 struct DynamicAllocation
 {
-	GraphicsBuffer* pBackingResource = nullptr;
+	Buffer* pBackingResource = nullptr;
 	D3D12_GPU_VIRTUAL_ADDRESS GpuHandle{ 0 };
 	size_t Offset = 0;
 	size_t Size = 0;
 	void* pMappedMemory = nullptr;
 };
 
-class AllocationPage : public GraphicsBuffer
+class AllocationPage : public Buffer
 {
 public:
-	void Create(Graphics* pGraphics, uint64 size);
+	AllocationPage(Graphics* pGraphics);
+	void Create(uint64 size);
 	inline void* GetMappedData() const { return m_pMappedData; }
 private:
 	void* m_pMappedData = nullptr;
 };
 
-class DynamicAllocationManager
+class DynamicAllocationManager : public GraphicsObject
 {
 public:
 	DynamicAllocationManager(Graphics* pGraphics);
@@ -33,7 +34,6 @@ public:
 	void FreeLargePages(uint64 fenceValue, const std::vector<AllocationPage*> pLargePages);
 
 private:
-	Graphics* m_pGraphics;
 	std::mutex m_PageMutex;
 	std::vector<std::unique_ptr<AllocationPage>> m_Pages;
 	std::queue<std::pair<uint64, AllocationPage*>> m_FreedPages;

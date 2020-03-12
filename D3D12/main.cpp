@@ -1,7 +1,11 @@
-﻿#include "stdafx.h"
+#include "stdafx.h"
 #include "Graphics/Graphics.h"
 #include "Core/Input.h"
 #include "Core/Console.h"
+
+#define _CRTDBG_MAP_ALLOC
+#include <stdlib.h>
+#include <crtdbg.h>
 
 const int gWindowWidth = 1240;
 const int gWindowHeight = 720;
@@ -12,9 +16,12 @@ class ViewWrapper
 public:
 	void Run(const char* pTitle)
 	{
+		m_DisplayWidth = gWindowWidth;
+		m_DisplayHeight = gWindowHeight;
+
 		MakeWindow(pTitle);
 
-		m_pGraphics = std::make_unique<Graphics>(gWindowWidth, gWindowHeight, gMsaaSampleCount);
+		m_pGraphics = std::make_unique<Graphics>(m_DisplayWidth, m_DisplayHeight, gMsaaSampleCount);
 		m_pGraphics->Initialize(m_Window);
 
 		GameTimer::Reset();
@@ -38,6 +45,15 @@ public:
 	}
 
 private:
+	void OnPause(const bool paused)
+	{
+		m_Pause = paused;
+		if (paused)
+			GameTimer::Stop();
+		else
+			GameTimer::Start();
+	}
+
 	static LRESULT CALLBACK WndProcStatic(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	{
 		ViewWrapper* pThis = nullptr;
@@ -68,15 +84,51 @@ private:
 	{
 		switch (message)
 		{
-			// WM_SIZE is sent when the user resizes the window.  
+		case WM_ACTIVATE:
+			OnPause(LOWORD(wParam) == WA_INACTIVE);
+			return 0;
+		// WM_SIZE is sent when the user resizes the window.  
 		case WM_SIZE:
 		{
 			// Save the new client area dimensions.
-			int windowWidth = LOWORD(lParam);
-			int windowHeight = HIWORD(lParam);
-			if (m_pGraphics && windowWidth > 0 && windowHeight > 0)
+			m_DisplayWidth = LOWORD(lParam);
+			m_DisplayHeight = HIWORD(lParam);
+			if (m_pGraphics)
 			{
-				m_pGraphics->OnResize(windowWidth, windowHeight);
+				if (wParam == SIZE_MINIMIZED)
+				{
+					OnPause(true);
+					m_Minimized = true;
+					m_Maximized = false;
+				}
+				else if (wParam == SIZE_MAXIMIZED)
+				{
+					OnPause(false);
+					m_Minimized = false;
+					m_Maximized = true;
+					m_pGraphics->OnResize(m_DisplayWidth, m_DisplayHeight);
+				}
+				else if (wParam == SIZE_RESTORED)
+				{
+					// Restoring from minimized state?
+					if (m_Minimized)
+					{
+						OnPause(false);
+						m_Minimized = false;
+						m_pGraphics->OnResize(m_DisplayWidth, m_DisplayHeight);
+					}
+					// Restoring from maximized state?
+					else if (m_Maximized)
+					{
+						OnPause(false);
+						m_Maximized = false;
+						m_pGraphics->OnResize(m_DisplayWidth, m_DisplayHeight);
+					}
+					else if (!m_IsResizing) // API call such as SetWindowPos or mSwapChain->SetFullscreenState.
+					{
+						m_pGraphics->OnResize(m_DisplayWidth, m_DisplayHeight);
+					}
+				}
 			}
 			return 0;
 		}
@@ -113,11 +165,20 @@ private:
 		case WM_RBUTTONUP:
 			Input::Instance().UpdateMouseKey(1, false);
 			break;
+		case WM_ENTERSIZEMOVE:
+			OnPause(true);
+			m_IsResizing = true;
+			break;
+		case WM_EXITSIZEMOVE:
+			OnPause(false);
+			m_IsResizing = false;
+			m_pGraphics->OnResize(m_DisplayWidth, m_DisplayHeight);
+			break;
 		}
 
 		return DefWindowProc(hWnd, message, wParam, lParam);
 	}
-	
+
 	void MakeWindow(const char* pTitle)
 	{
 		WNDCLASS wc;
@@ -143,11 +204,11 @@ private:
 
 		DWORD windowStyle = WS_OVERLAPPEDWINDOW;
 
-		RECT windowRect = { 0, 0, (LONG)gWindowWidth, (LONG)gWindowHeight };
+		RECT windowRect = { 0, 0, (LONG)m_DisplayWidth, (LONG)m_DisplayHeight };
 		AdjustWindowRect(&windowRect, windowStyle, false);
 
-		int x = (displayWidth - gWindowWidth) / 2;
-		int y = (displayHeight - gWindowHeight) / 2;
+		int x = (displayWidth - m_DisplayWidth) / 2;
+		int y = (displayHeight - m_DisplayHeight) / 2;
 
 		m_Window = CreateWindow(
 			TEXT("wndClass"),
@@ -175,6 +236,12 @@ private:
 	}
 
 private:
+	bool m_Pause = false;
+	bool m_Minimized = false;
+	bool m_Maximized = false;
+	int m_DisplayWidth = 1240;
+	int m_DisplayHeight = 720;
+	bool m_IsResizing = false;
 	HWND m_Window;
 	std::unique_ptr<Graphics> m_pGraphics;
 };
@@ -182,8 +249,10 @@ private:
 
 int WINAPI WinMain(HINSTANCE hInstance,	HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd)
 {
+	_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
 	Console::Startup();
 	E_LOG(Info, "Startup");
 	ViewWrapper vp;
 	vp.Run("D3D12 - Hello World");
+	return 0;
 }

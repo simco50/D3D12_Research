@@ -1,9 +1,10 @@
 #pragma once
+#include "GraphicsResource.h"
 
 class CommandAllocatorPool;
 class Graphics;
 
-class CommandQueue
+class CommandQueue : public GraphicsObject
 {
 public:
 	CommandQueue(Graphics* pGraphics, D3D12_COMMAND_LIST_TYPE type);
@@ -31,7 +32,6 @@ public:
 	void FreeAllocator(uint64 fenceValue, ID3D12CommandAllocator* pAllocator);
 
 private:
-	Graphics* m_pGraphics;
 	std::unique_ptr<CommandAllocatorPool> m_pAllocatorPool;
 
     ComPtr<ID3D12CommandQueue> m_pCommandQueue;
