@@ -318,9 +318,9 @@ void Graphics::Update()
 					for (int i = 0; i < 32; ++i)
 					{
 						randoms[i] = Vector4(Math::RandVector());
-						randoms[i].z = abs(randoms[i].z);
-						randoms[i] *= Math::Min(0.1f, (float)pow(Math::RandomRange(0, 1), 2));
+						randoms[i].z = Math::Lerp(0.1, 1, abs(randoms[i].z));
 						randoms[i].Normalize();
+						randoms[i] *= Math::Lerp(0.1f, 1, (float)pow(Math::RandomRange(0, 1), 2));
 					}
 					written = true;
 				}
