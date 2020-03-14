@@ -16,6 +16,7 @@ class Buffer;
 class SubMesh;
 struct Material;
 class ClusteredForward;
+class TiledForward;
 class Camera;
 class RGResourceAllocator;
 class DebugRenderer;
@@ -164,6 +165,7 @@ private:
 	std::unique_ptr<ImGuiRenderer> m_pImGuiRenderer;
 	std::unique_ptr<RGResourceAllocator> m_pGraphAllocator;
 	std::unique_ptr<ClusteredForward> m_pClusteredForward;
+	std::unique_ptr<TiledForward> m_pTiledForward;
 	std::unique_ptr<DebugRenderer> m_pDebugRenderer;
 
 	unsigned int m_WindowWidth;
@@ -185,16 +187,6 @@ private:
 	std::unique_ptr<GraphicsPipelineState> m_pShadowsOpaquePSO;
 	std::unique_ptr<GraphicsPipelineState> m_pShadowsAlphaPSO;
 	
-	//Light Culling
-	std::unique_ptr<RootSignature> m_pComputeLightCullRS;
-	std::unique_ptr<ComputePipelineState> m_pComputeLightCullPSO;
-	std::unique_ptr<Buffer> m_pLightIndexCounter;
-	UnorderedAccessView* m_pLightIndexCounterRawUAV = nullptr;
-	std::unique_ptr<Buffer> m_pLightIndexListBufferOpaque;
-	std::unique_ptr<Texture> m_pLightGridOpaque;
-	std::unique_ptr<Buffer> m_pLightIndexListBufferTransparant;
-	std::unique_ptr<Texture> m_pLightGridTransparant;
-
 	//Depth Prepass
 	std::unique_ptr<RootSignature> m_pDepthPrepassRS;
 	std::unique_ptr<GraphicsPipelineState> m_pDepthPrepassPSO;
@@ -202,11 +194,6 @@ private:
 	//MSAA Depth resolve
 	std::unique_ptr<RootSignature> m_pResolveDepthRS;
 	std::unique_ptr<ComputePipelineState> m_pResolveDepthPSO;
-
-	//PBR
-	std::unique_ptr<RootSignature> m_pPBRDiffuseRS;
-	std::unique_ptr<GraphicsPipelineState> m_pPBRDiffusePSO;
-	std::unique_ptr<GraphicsPipelineState> m_pPBRDiffuseAlphaPSO;
 
 	//Tonemapping
 	std::unique_ptr<Texture> m_pDownscaledColor;
