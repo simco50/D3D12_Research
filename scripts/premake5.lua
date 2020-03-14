@@ -27,7 +27,7 @@ workspace (ENGINE_NAME)
 	filter "configurations:Release"
 		defines { "RELEASE" }
 		optimize ("Full")
-		flags { "NoIncrementalLink", "LinkTimeOptimization" }
+		flags { "NoIncrementalLink" }
 
 	filter {}
 
