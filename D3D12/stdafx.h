@@ -15,6 +15,7 @@
 #include <functional>
 #include <unordered_map>
 #include <list>
+#include <algorithm>
 #include <fstream>
 
 #if defined(_MSC_FULL_VER)

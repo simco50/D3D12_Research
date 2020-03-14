@@ -1259,7 +1259,16 @@ void Graphics::UpdateImGui()
 	m_FrameTimes[m_Frame % m_FrameTimes.size()] = GameTimer::DeltaTime();
 
 	ImGui::Begin("SSAO");
-	ImGui::Image(m_pSSAOTarget.get(), ImVec2((float)Math::DivideAndRoundUp(m_WindowWidth, 2), (float)Math::DivideAndRoundUp(m_WindowHeight, 2)));
+	Vector2 image((float)m_pSSAOTarget->GetWidth(), (float)m_pSSAOTarget->GetHeight());
+	Vector2 windowSize(ImGui::GetContentRegionAvail().x, ImGui::GetContentRegionAvail().y);
+	float width = windowSize.x;
+	float height = windowSize.x * image.y / image.x;
+	if (image.x / windowSize.x < image.y / windowSize.y)
+	{
+		width = image.x / image.y * windowSize.y;
+		height = windowSize.y;
+	}
+	ImGui::Image(m_pSSAOTarget.get(), ImVec2(width, height));
 	ImGui::End();
 
 	ImGui::SetNextWindowPos(ImVec2(0, 0), 0, ImVec2(0, 0));
