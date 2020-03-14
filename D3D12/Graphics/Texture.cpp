@@ -309,7 +309,9 @@ int Texture::GetRowDataSize(DXGI_FORMAT format, unsigned int width)
 		return (unsigned)(width * 2);
 
 	case DXGI_FORMAT_B8G8R8A8_UNORM:
+	case DXGI_FORMAT_B8G8R8A8_UNORM_SRGB:
 	case DXGI_FORMAT_R8G8B8A8_UNORM:
+	case DXGI_FORMAT_R8G8B8A8_UNORM_SRGB:
 	case DXGI_FORMAT_R16G16_UNORM:
 	case DXGI_FORMAT_R16G16_FLOAT:
 	case DXGI_FORMAT_R32_FLOAT:
@@ -397,35 +399,40 @@ bool Texture::Create(CommandContext* pContext, const char* pFilePath, bool srgb)
 	Image img;
 	if (img.Load(pFilePath))
 	{
-		TextureDesc desc;
-		desc.Width = img.GetWidth();
-		desc.Height = img.GetHeight();
-		desc.Format = (DXGI_FORMAT)Image::TextureFormatFromCompressionFormat(img.GetFormat(), srgb);
-		desc.Mips = img.GetMipLevels();
-		desc.Usage = TextureFlag::ShaderResource;
-		desc.Dimensions = img.IsCubemap() ? TextureDimension::TextureCube : TextureDimension::Texture2D;
-
-		const Image* pImg = &img;
-		std::vector<D3D12_SUBRESOURCE_DATA> subResourceData;
-		int resourceOffset = 0;
-		while (pImg)
-		{
-			subResourceData.resize(subResourceData.size() + desc.Mips);
-			for (int i = 0; i < desc.Mips; ++i)
-			{
-				D3D12_SUBRESOURCE_DATA& data = subResourceData[resourceOffset++];
-				MipLevelInfo info = pImg->GetMipInfo(i);
-				data.pData = pImg->GetData(i);
-				data.RowPitch = info.RowSize;
-				data.SlicePitch = (uint64)info.RowSize * info.Width;
-			}
-			pImg = pImg->GetNextImage();
-		}
-		Create(desc);
-		pContext->InitializeTexture(this, subResourceData.data(), 0, (int)subResourceData.size());
-		return true;
+		return Create(pContext, img, srgb);
 	}
 	return false;
+}
+
+bool Texture::Create(CommandContext* pContext, const Image& img, bool srgb /*= false*/)
+{
+	TextureDesc desc;
+	desc.Width = img.GetWidth();
+	desc.Height = img.GetHeight();
+	desc.Format = (DXGI_FORMAT)Image::TextureFormatFromCompressionFormat(img.GetFormat(), srgb);
+	desc.Mips = img.GetMipLevels();
+	desc.Usage = TextureFlag::ShaderResource;
+	desc.Dimensions = img.IsCubemap() ? TextureDimension::TextureCube : TextureDimension::Texture2D;
+
+	const Image* pImg = &img;
+	std::vector<D3D12_SUBRESOURCE_DATA> subResourceData;
+	int resourceOffset = 0;
+	while (pImg)
+	{
+		subResourceData.resize(subResourceData.size() + desc.Mips);
+		for (int i = 0; i < desc.Mips; ++i)
+		{
+			D3D12_SUBRESOURCE_DATA& data = subResourceData[resourceOffset++];
+			MipLevelInfo info = pImg->GetMipInfo(i);
+			data.pData = pImg->GetData(i);
+			data.RowPitch = info.RowSize;
+			data.SlicePitch = (uint64)info.RowSize * info.Width;
+		}
+		pImg = pImg->GetNextImage();
+	}
+	Create(desc);
+	pContext->InitializeTexture(this, subResourceData.data(), 0, (int)subResourceData.size());
+	return true;
 }
 
 void Texture::SetData(CommandContext* pContext, const void* pData)

@@ -718,7 +718,7 @@ void Graphics::InitD3D()
 		NewFilter.DenyList.NumIDs = _countof(DenyIds);
 		NewFilter.DenyList.pIDList = DenyIds;
 
-#if 0
+#if 1
 		HR(pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, true));
 #endif
 		pInfoQueue->PushStorageFilter(&NewFilter);

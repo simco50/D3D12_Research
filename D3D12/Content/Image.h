@@ -36,6 +36,7 @@ public:
 	virtual ~Image();
 
 	bool Load(const char* filePath);
+	bool Load(const void* pPixels, size_t dataSize, const char* pFormatHint);
 
 	bool SetSize(const int x, const int y, const int components);
 	bool SetData(const unsigned int* pPixels);
