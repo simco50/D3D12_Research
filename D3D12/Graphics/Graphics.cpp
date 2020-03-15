@@ -51,6 +51,7 @@ float g_Tau = 10;
 float g_AoPower = 3;
 float g_AoThreshold = 0.0025f;
 float g_AoRadius = 0.25f;
+int g_AoSamples = 16;
 
 Graphics::Graphics(uint32 width, uint32 height, int sampleCount /*= 1*/)
 	: m_WindowWidth(width), m_WindowHeight(height), m_SampleCount(sampleCount)
@@ -309,6 +310,7 @@ void Graphics::Update()
 					float Power;
 					float Radius;
 					float Threshold;
+					int Samples;
 				} shaderParameters;
 
 				//lovely hacky
@@ -337,6 +339,7 @@ void Graphics::Update()
 				shaderParameters.Power = g_AoPower;
 				shaderParameters.Radius = g_AoRadius;
 				shaderParameters.Threshold = g_AoThreshold;
+				shaderParameters.Samples = g_AoSamples;
 
 				renderContext.SetComputeDynamicConstantBufferView(0, &shaderParameters, sizeof(ShaderParameters));
 				renderContext.SetDynamicDescriptor(1, 0, m_pSSAOTarget->GetUAV());
@@ -1213,6 +1216,7 @@ void Graphics::UpdateImGui()
 		ImGui::SliderFloat("AO Power", &g_AoPower, 1, 10);
 		ImGui::SliderFloat("AO Threshold", &g_AoThreshold, 0, 0.025f);
 		ImGui::SliderFloat("AO Radius", &g_AoRadius, 0.1f, 5.0f);
+		ImGui::SliderInt("AO Samples", &g_AoSamples, 0, 64);
 
 		if (ImGui::Button("Dump RenderGraph"))
 		{

@@ -52,6 +52,7 @@ using uint64 = uint64_t;
 #include <D3Dcompiler.h>
 #include <DXProgrammableCapture.h>
 
+#include "Core/CommandLine.h"
 #include "Math/MathTypes.h"
 #include "Core/GameTimer.h"
 #include "Core/BitField.h"
