@@ -6,6 +6,7 @@ class CommandContext;
 class UnorderedAccessView;
 class ShaderResourceView;
 class ResourceView;
+class Image;
 struct TextureUAVDesc;
 struct TextureSRVDesc;
 
@@ -173,6 +174,7 @@ public:
 	void Create(const TextureDesc& desc);
 	void CreateForSwapchain(ID3D12Resource* pTexture);
 	bool Create(CommandContext* pContext, const char* pFilePath, bool srgb = false);
+	bool Create(CommandContext* pContext, const Image& img, bool srgb = false);
 	void SetData(CommandContext* pContext, const void* pData);
 
 	int GetWidth() const { return m_Desc.Width; }

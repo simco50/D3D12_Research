@@ -1,6 +1,6 @@
 #include "Common.hlsli"
 
-#define SSAO_SAMPLES 32
+#define SSAO_SAMPLES 64
 
 #define RootSig "CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \
 				"DescriptorTable(UAV(u0, numDescriptors = 1), visibility=SHADER_VISIBILITY_ALL), " \
@@ -15,6 +15,12 @@ cbuffer ShaderParameters : register(b0)
     float4x4 cProjection;
     float4x4 cView;
     uint2 cDimensions;
+    float cNear;
+    float cFar;
+    float cAoPower;
+    float cAoRadius;
+    float cAoDepthThreshold;
+    int cAoSamples;
 }
 
 Texture2D tDepthTexture : register(t0);
@@ -43,27 +49,28 @@ void CSMain(CS_INPUT input)
     float4 viewPos = ScreenToView(float4(texCoord.xy, depth, 1), float2(1, 1), cProjectionInverse);
     float3 normal = normalize(mul(tNormalsTexture.SampleLevel(sSampler, texCoord, 0).xyz, (float3x3)cView));
 
-    float3 randomVec = normalize(float3(tNoiseTexture.SampleLevel(sPointSampler, texCoord * (float2)cDimensions / 100, 0).xy, 0));
+    float3 randomVec = normalize(float3(tNoiseTexture.SampleLevel(sPointSampler, texCoord * (float2)cDimensions / 1000, 0).xy, 0));
 	float3 tangent = normalize(randomVec - normal * dot(randomVec, normal));
 	float3 bitangent = cross(tangent, normal);
 	float3x3 TBN = float3x3(tangent, bitangent, normal);
 
     float occlusion = 0;
-    int kernelSize = SSAO_SAMPLES;
-    float radius = 0.75;
     
-    for(int i = 0; i < kernelSize; ++i)
+    for(int i = 0; i < cAoSamples; ++i)
     {
-        float3 vpos = viewPos.xyz + mul(cRandomVectors[i].xyz, TBN) * radius;
+        float3 vpos = viewPos.xyz + mul(cRandomVectors[i].xyz, TBN) * cAoRadius;
         float4 newTexCoord = mul(float4(vpos, 1), cProjection);
         newTexCoord.xyz /= newTexCoord.w;
         newTexCoord.xyz = newTexCoord.xyz * 0.5f + 0.5f;
-        newTexCoord.y = 1 - newTexCoord.y;
-        float projectedDepth = tDepthTexture.SampleLevel(sSampler, newTexCoord.xy, 0).r;
-        float4 depthVpos = ScreenToView(float4(newTexCoord.xy, projectedDepth, 1), float2(1, 1), cProjectionInverse);
-        float rangeCheck = smoothstep(0.0, 1.0, radius / abs(viewPos.z - depthVpos.z));
-        occlusion += rangeCheck * (vpos.z >= depthVpos.z + 0.025f ? 1 : 0);
+        if(newTexCoord.x >= 0 && newTexCoord.x <= 1 && newTexCoord.y >= 0 && newTexCoord.y <= 1)
+        {
+            newTexCoord.y = 1 - newTexCoord.y;
+            float projectedDepth = tDepthTexture.SampleLevel(sSampler, newTexCoord.xy, 0).r;
+            float4 depthVpos = ScreenToView(float4(newTexCoord.xy, projectedDepth, 1), float2(1, 1), cProjectionInverse);
+            const float depthDiscontinuity = 1 - saturate(abs(newTexCoord.w - depthVpos.z) * 0.2f);
+            occlusion += depthDiscontinuity * (vpos.z >= depthVpos.z + cAoDepthThreshold ? 1 : 0);
+        }
     }
-    occlusion = 1.0 - (occlusion / kernelSize);
-    uAmbientOcclusion[input.DispatchThreadId.xy] = occlusion;
+    occlusion = occlusion / cAoSamples;
+    uAmbientOcclusion[input.DispatchThreadId.xy] = pow(saturate(1 - occlusion), cAoPower);
 }

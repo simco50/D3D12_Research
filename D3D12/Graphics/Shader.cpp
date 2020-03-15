@@ -115,18 +115,25 @@ bool Shader::CompileDxc(const std::string& source, const char* pTarget, const ch
 	wchar_t target[256];
 	ToWidechar(pTarget, target, 256);
 
-	LPCWSTR pArgs[] =
+	const LPCWSTR* pCompileArguments;
+	int numCompileArguments = 0;
+	const constexpr LPCWSTR pArgs[] =
 	{
 		L"/Zpr",
 		L"/WX",
-#ifdef _DEBUG
+		L"/O3",
+	};
+	const constexpr LPCWSTR pDebugArgs[] =
+	{
+		L"/Zpr",
+		L"/WX",
 		L"/Zi",
 		L"/Qembed_debug",
 		L"/Od",
-#else
-		L"/O3",
-#endif
 	};
+	bool debugShaders = CommandLine::GetBool("DebugShaders");
+	pCompileArguments = debugShaders ? &pDebugArgs[0] : &pArgs[0];
+	numCompileArguments = debugShaders ? ARRAYSIZE(pDebugArgs) : ARRAYSIZE(pArgs);
 	
 	std::vector<std::wstring> dDefineNames;
 	std::vector<std::wstring> dDefineValues;
@@ -156,7 +163,7 @@ bool Shader::CompileDxc(const std::string& source, const char* pTarget, const ch
 
 	ComPtr<IDxcOperationResult> pCompileResult;
 
-	HR(pCompiler->Compile(pSource.Get(), fileName, entryPoint, target, &pArgs[0], sizeof(pArgs) / sizeof(pArgs[0]), dxcDefines.data(), (uint32)dxcDefines.size(), nullptr, pCompileResult.GetAddressOf()));
+	HR(pCompiler->Compile(pSource.Get(), fileName, entryPoint, target, const_cast<LPCWSTR*>(pCompileArguments), numCompileArguments, dxcDefines.data(), (uint32)dxcDefines.size(), nullptr, pCompileResult.GetAddressOf()));
 
 	auto checkResult = [&](IDxcOperationResult* pResult) {
 		HRESULT hrCompilation;

@@ -5,7 +5,7 @@
 				"CBV(b0, visibility=SHADER_VISIBILITY_VERTEX), " \
 				"CBV(b1, visibility=SHADER_VISIBILITY_ALL), " \
 				"DescriptorTable(SRV(t0, numDescriptors = 3)), " \
-				"DescriptorTable(SRV(t3, numDescriptors = 3), visibility=SHADER_VISIBILITY_PIXEL), " \
+				"DescriptorTable(SRV(t3, numDescriptors = 4), visibility=SHADER_VISIBILITY_PIXEL), " \
 				"StaticSampler(s0, filter=FILTER_MIN_MAG_MIP_LINEAR, visibility = SHADER_VISIBILITY_PIXEL), "
 
 cbuffer PerObjectData : register(b0)
@@ -57,6 +57,7 @@ SamplerState sDiffuseSampler : register(s0);
 StructuredBuffer<uint2> tLightGrid : register(t3);
 StructuredBuffer<uint> tLightIndexList : register(t4);
 StructuredBuffer<Light> Lights : register(t5);
+Texture2D tAO : register(t6);
 
 uint GetSliceFromDepth(float depth)
 {
@@ -135,7 +136,7 @@ float4 PSMain(PSInput input) : SV_TARGET
 
 	LightResult lighting = DoLight(input.position, input.positionVS.xyz, input.positionWS.xyz, N, V, diffuseColor, specularColor, r);
 	
-	float3 color = lighting.Diffuse + lighting.Specular; 
+	float3 color = (lighting.Diffuse + lighting.Specular) * tAO.SampleLevel(sDiffuseSampler, (float2)input.position.xy / cScreenDimensions, 0).r;
 
 	return float4(color, baseColor.a);
 }

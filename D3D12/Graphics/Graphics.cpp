@@ -22,6 +22,7 @@
 #include "RenderGraph/ResourceAllocator.h"
 #include "DebugRenderer.h"
 #include "ResourceViews.h"
+#include "TiledForward.h"
 
 #ifdef _DEBUG
 #define D3D_VALIDATION 1
@@ -46,6 +47,11 @@ float g_WhitePoint = 4;
 float g_MinLogLuminance = -10;
 float g_MaxLogLuminance = 2;
 float g_Tau = 10;
+
+float g_AoPower = 3;
+float g_AoThreshold = 0.0025f;
+float g_AoRadius = 0.25f;
+int g_AoSamples = 16;
 
 Graphics::Graphics(uint32 width, uint32 height, int sampleCount /*= 1*/)
 	: m_WindowWidth(width), m_WindowHeight(height), m_SampleCount(sampleCount)
@@ -161,16 +167,6 @@ void Graphics::Update()
 		return aDist < bDist;
 		});
 
-	//PER FRAME CONSTANTS
-	/////////////////////////////////////////
-	struct PerFrameData
-	{
-		Matrix ViewInverse;
-	} frameData;
-
-	//Camera constants
-	frameData.ViewInverse = m_pCamera->GetViewInverse();
-
 	// SHADOW MAP PARTITIONING
 	/////////////////////////////////////////
 
@@ -206,7 +202,7 @@ void Graphics::Update()
 	};
 	MainData Data;
 	Data.DepthStencil = graph.ImportTexture("Depth Stencil", GetDepthStencil());
-	Data.DepthStencilResolved = graph.ImportTexture("Depth Stencil Target", GetResolvedDepthStencil());
+	Data.DepthStencilResolved = graph.ImportTexture("Resolved Depth Stencil", GetResolvedDepthStencil());
 
 	uint64 nextFenceValue = 0;
 	uint64 lightCullingFence = 0;
@@ -301,36 +297,49 @@ void Graphics::Update()
 				renderContext.SetComputeRootSignature(m_pSSAORS.get());
 				renderContext.SetComputePipelineState(m_pSSAOPSO.get());
 
+				constexpr int ssaoRandomVectors = 64;
 				struct ShaderParameters
 				{
-					Vector4 RandomVectors[32];
+					Vector4 RandomVectors[ssaoRandomVectors];
 					Matrix ProjectionInverse;
 					Matrix Projection;
 					Matrix View;
 					uint32 Dimensions[2];
+					float Near;
+					float Far;
+					float Power;
+					float Radius;
+					float Threshold;
+					int Samples;
 				} shaderParameters;
 
 				//lovely hacky
 				static bool written = false;
-				static Vector4 randoms[32];
+				static Vector4 randoms[ssaoRandomVectors];
 				if (!written)
 				{
-					for (int i = 0; i < 32; ++i)
+					for (int i = 0; i < ssaoRandomVectors; ++i)
 					{
 						randoms[i] = Vector4(Math::RandVector());
-						randoms[i].z = Math::Lerp(0.1f, 1.0f, (float)abs(randoms[i].z));
+						randoms[i].z = Math::Lerp(0.1f, 0.8f, (float)abs(randoms[i].z));
 						randoms[i].Normalize();
-						randoms[i] *= Math::Lerp(0.1f, 1.0f, (float)pow(Math::RandomRange(0, 1), 2));
+						randoms[i] *= Math::Lerp(0.2f, 1.0f, (float)pow(Math::RandomRange(0, 1), 2));
 					}
 					written = true;
 				}
-				memcpy(shaderParameters.RandomVectors, randoms, sizeof(Vector4) * 32);
+				memcpy(shaderParameters.RandomVectors, randoms, sizeof(Vector4) * ssaoRandomVectors);
 
 				shaderParameters.ProjectionInverse = m_pCamera->GetProjectionInverse();
 				shaderParameters.Projection = m_pCamera->GetProjection();
 				shaderParameters.View = m_pCamera->GetView();
 				shaderParameters.Dimensions[0] = m_pSSAOTarget->GetWidth();
 				shaderParameters.Dimensions[1] = m_pSSAOTarget->GetHeight();
+				shaderParameters.Near = m_pCamera->GetNear();
+				shaderParameters.Far = m_pCamera->GetFar();
+				shaderParameters.Power = g_AoPower;
+				shaderParameters.Radius = g_AoRadius;
+				shaderParameters.Threshold = g_AoThreshold;
+				shaderParameters.Samples = g_AoSamples;
 
 				renderContext.SetComputeDynamicConstantBufferView(0, &shaderParameters, sizeof(ShaderParameters));
 				renderContext.SetDynamicDescriptor(1, 0, m_pSSAOTarget->GetUAV());
@@ -343,199 +352,131 @@ void Graphics::Update()
 				renderContext.Dispatch(dispatchGroupsX, dispatchGroupsY);
 
 				renderContext.InsertResourceBarrier(resources.GetTexture(Data.DepthStencilResolved), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-				renderContext.InsertResourceBarrier(m_pSSAOTarget.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 			};
 		});
 
-	if (m_RenderPath == RenderPath::Tiled)
-	{
-		//3. LIGHT CULLING
-		// - Compute shader to buckets lights in tiles depending on their screen position.
-		// - Requires a depth buffer 
-		// - Outputs a: - Texture containing a count and an offset of lights per tile.
-		//				- uint[] index buffer to indicate what lights are visible in each tile.
-		graph.AddPass("Light Culling", [&](RGPassBuilder& builder)
-			{
-				builder.NeverCull();
-				Data.DepthStencilResolved = builder.Read(Data.DepthStencilResolved);
-				return [=](CommandContext& context, const RGPassResources& resources)
-				{
-					context.InsertResourceBarrier(GetResolvedDepthStencil(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-					context.InsertResourceBarrier(m_pLightIndexCounter.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-
-					context.ClearUavUInt(m_pLightIndexCounter.get(), m_pLightIndexCounterRawUAV);
-
-					context.SetComputePipelineState(m_pComputeLightCullPSO.get());
-					context.SetComputeRootSignature(m_pComputeLightCullRS.get());
-
-					struct ShaderParameters
-					{
-						Matrix CameraView;
-						Matrix ProjectionInverse;
-						uint32 NumThreadGroups[4];
-						Vector2 ScreenDimensions;
-						uint32 LightCount;
-					} Data{};
-
-					Data.CameraView = m_pCamera->GetView();
-					Data.NumThreadGroups[0] = Math::DivideAndRoundUp(m_WindowWidth, FORWARD_PLUS_BLOCK_SIZE);
-					Data.NumThreadGroups[1] = Math::DivideAndRoundUp(m_WindowHeight, FORWARD_PLUS_BLOCK_SIZE);
-					Data.NumThreadGroups[2] = 1;
-					Data.ScreenDimensions.x = (float)m_WindowWidth;
-					Data.ScreenDimensions.y = (float)m_WindowHeight;
-					Data.LightCount = (uint32)m_Lights.size();
-					Data.ProjectionInverse = m_pCamera->GetProjectionInverse();
-
-					context.SetComputeDynamicConstantBufferView(0, &Data, sizeof(ShaderParameters));
-					context.SetDynamicDescriptor(1, 0, m_pLightIndexCounter->GetUAV());
-					context.SetDynamicDescriptor(1, 1, m_pLightIndexListBufferOpaque->GetUAV());
-					context.SetDynamicDescriptor(1, 2, m_pLightGridOpaque->GetUAV());
-					context.SetDynamicDescriptor(1, 3, m_pLightIndexListBufferTransparant->GetUAV());
-					context.SetDynamicDescriptor(1, 4, m_pLightGridTransparant->GetUAV());
-					context.SetDynamicDescriptor(2, 0, GetResolvedDepthStencil()->GetSRV());
-					context.SetDynamicDescriptor(2, 1, m_pLightBuffer->GetSRV());
-
-					context.Dispatch(Data.NumThreadGroups[0], Data.NumThreadGroups[1], Data.NumThreadGroups[2]);
-				};
-			});
-
-		//4. SHADOW MAPPING
-		// - Renders the scene depth onto a separate depth buffer from the light's view
-		if (m_ShadowCasters > 0)
+	graph.AddPass("Blur SSAO", [&](RGPassBuilder& builder)
 		{
-			graph.AddPass("Shadow Mapping", [&](RGPassBuilder& builder)
+			builder.NeverCull();
+			return [=](CommandContext& renderContext, const RGPassResources& resources)
+			{
+				renderContext.InsertResourceBarrier(m_pSSAOBlurred.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+				renderContext.InsertResourceBarrier(m_pSSAOTarget.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+
+				renderContext.SetComputeRootSignature(m_pSSAOBlurRS.get());
+				renderContext.SetComputePipelineState(m_pSSAOBlurPSO.get());
+
+				struct ShaderParameters
 				{
-					builder.NeverCull();
-					return [=](CommandContext& context, const RGPassResources& resources)
-					{
-						context.InsertResourceBarrier(m_pShadowMap.get(), D3D12_RESOURCE_STATE_DEPTH_WRITE);
+					float Dimensions[2];
+					uint32 Horizontal;
+					float Far;
+					float Near;
+				} shaderParameters;
 
-						context.BeginRenderPass(RenderPassInfo(m_pShadowMap.get(), RenderPassAccess::Clear_Store));
-						context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+				shaderParameters.Horizontal = 1;
+				shaderParameters.Dimensions[0] = 1.0f / m_pSSAOTarget->GetWidth();
+				shaderParameters.Dimensions[1] = 1.0f / m_pSSAOTarget->GetHeight();
+				shaderParameters.Far = m_pCamera->GetFar();
+				shaderParameters.Near = m_pCamera->GetNear();
 
-						for (int i = 0; i < m_ShadowCasters; ++i)
-						{
-							GPU_PROFILE_SCOPE("Light View", &context);
-							const Vector4& shadowOffset = lightData.ShadowMapOffsets[i];
-							FloatRect viewport;
-							viewport.Left = shadowOffset.x * (float)m_pShadowMap->GetWidth();
-							viewport.Top = shadowOffset.y * (float)m_pShadowMap->GetHeight();
-							viewport.Right = viewport.Left + shadowOffset.z * (float)m_pShadowMap->GetWidth();
-							viewport.Bottom = viewport.Top + shadowOffset.z * (float)m_pShadowMap->GetHeight();
-							context.SetViewport(viewport);
+				Texture* pDepth = m_SampleCount == 1 ? m_pDepthStencil.get() : m_pResolvedDepthStencil.get();
 
-							struct PerObjectData
-							{
-								Matrix WorldViewProjection;
-							} ObjectData{};
-							context.SetGraphicsRootSignature(m_pShadowsRS.get());
+				renderContext.SetComputeDynamicConstantBufferView(0, &shaderParameters, sizeof(ShaderParameters));
+				renderContext.SetDynamicDescriptor(1, 0, m_pSSAOBlurred->GetUAV());
+				renderContext.SetDynamicDescriptor(2, 0, pDepth->GetSRV());
+				renderContext.SetDynamicDescriptor(2, 1, m_pSSAOTarget->GetSRV());
 
-							//Opaque
-							{
-								GPU_PROFILE_SCOPE("Opaque", &context);
-								context.SetGraphicsPipelineState(m_pShadowsOpaquePSO.get());
+				renderContext.Dispatch(Math::DivideAndRoundUp(m_pSSAOBlurred->GetWidth(), 256), m_pSSAOBlurred->GetHeight());
 
-								for (const Batch& b : m_OpaqueBatches)
-								{
-									ObjectData.WorldViewProjection = b.WorldMatrix * lightData.LightViewProjections[i];
-									context.SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
-									b.pMesh->Draw(&context);
-								}
-							}
-							//Transparant
-							{
-								GPU_PROFILE_SCOPE("Transparant", &context);
-								context.SetGraphicsPipelineState(m_pShadowsAlphaPSO.get());
+				renderContext.InsertResourceBarrier(m_pSSAOBlurred.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+				renderContext.InsertResourceBarrier(m_pSSAOTarget.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-								context.SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
-								for (const Batch& b : m_TransparantBatches)
-								{
-									ObjectData.WorldViewProjection = b.WorldMatrix * lightData.LightViewProjections[i];
-									context.SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
-									context.SetDynamicDescriptor(1, 0, b.pMaterial->pDiffuseTexture->GetSRV());
-									b.pMesh->Draw(&context);
-								}
-							}
-						}
-						context.EndRenderPass();
-					};
-				});
-		}
+				renderContext.SetDynamicDescriptor(1, 0, m_pSSAOTarget->GetUAV());
+				renderContext.SetDynamicDescriptor(2, 0, pDepth->GetSRV());
+				renderContext.SetDynamicDescriptor(2, 1, m_pSSAOBlurred->GetSRV());
 
-		//5. BASE PASS
-		// - Render the scene using the shadow mapping result and the light culling buffers
-		graph.AddPass("Base Pass", [&](RGPassBuilder& builder)
+				shaderParameters.Horizontal = 0;
+				renderContext.SetComputeDynamicConstantBufferView(0, &shaderParameters, sizeof(ShaderParameters));
+				renderContext.Dispatch(m_pSSAOBlurred->GetWidth(), Math::DivideAndRoundUp(m_pSSAOBlurred->GetHeight(), 256));
+			};
+		});
+
+	//4. SHADOW MAPPING
+	// - Renders the scene depth onto a separate depth buffer from the light's view
+	if (m_ShadowCasters > 0)
+	{
+		graph.AddPass("Shadow Mapping", [&](RGPassBuilder& builder)
 			{
 				builder.NeverCull();
 				return [=](CommandContext& context, const RGPassResources& resources)
 				{
-					context.SetViewport(FloatRect(0, 0, (float)m_WindowWidth, (float)m_WindowHeight));
+					context.InsertResourceBarrier(m_pShadowMap.get(), D3D12_RESOURCE_STATE_DEPTH_WRITE);
 
-					context.InsertResourceBarrier(m_pShadowMap.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-					context.InsertResourceBarrier(m_pLightGridOpaque.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-					context.InsertResourceBarrier(m_pLightIndexListBufferOpaque.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-					context.InsertResourceBarrier(m_pLightGridTransparant.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-					context.InsertResourceBarrier(m_pLightIndexListBufferTransparant.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-					context.InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RENDER_TARGET);
-
-					context.BeginRenderPass(RenderPassInfo(GetCurrentRenderTarget(), RenderPassAccess::Clear_Store, GetDepthStencil(), RenderPassAccess::Load_DontCare));
-
+					context.BeginRenderPass(RenderPassInfo(m_pShadowMap.get(), RenderPassAccess::Clear_Store));
 					context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-					context.SetGraphicsRootSignature(m_pPBRDiffuseRS.get());
 
-					context.SetDynamicConstantBufferView(1, &frameData, sizeof(PerFrameData));
-					context.SetDynamicConstantBufferView(2, &lightData, sizeof(LightData));
-					context.SetDynamicDescriptor(4, 0, m_pShadowMap->GetSRV());
-					context.SetDynamicDescriptor(4, 1, m_pLightGridOpaque->GetSRV());
-					context.SetDynamicDescriptor(4, 2, m_pLightIndexListBufferOpaque->GetSRV());
-					context.SetDynamicDescriptor(4, 3, m_pLightBuffer->GetSRV());
-
-					struct PerObjectData
+					for (int i = 0; i < m_ShadowCasters; ++i)
 					{
-						Matrix World;
-						Matrix WorldViewProjection;
-					} ObjectData{};
+						GPU_PROFILE_SCOPE("Light View", &context);
+						const Vector4& shadowOffset = lightData.ShadowMapOffsets[i];
+						FloatRect viewport;
+						viewport.Left = shadowOffset.x * (float)m_pShadowMap->GetWidth();
+						viewport.Top = shadowOffset.y * (float)m_pShadowMap->GetHeight();
+						viewport.Right = viewport.Left + shadowOffset.z * (float)m_pShadowMap->GetWidth();
+						viewport.Bottom = viewport.Top + shadowOffset.z * (float)m_pShadowMap->GetHeight();
+						context.SetViewport(viewport);
 
-					{
-						GPU_PROFILE_SCOPE("Opaque", &context);
-						context.SetGraphicsPipelineState(m_pPBRDiffusePSO.get());
-						
-						for (const Batch& b : m_OpaqueBatches)
+						struct PerObjectData
 						{
-							ObjectData.World = b.WorldMatrix;
-							ObjectData.WorldViewProjection = ObjectData.World * m_pCamera->GetViewProjection();
+							Matrix WorldViewProjection;
+						} ObjectData{};
+						context.SetGraphicsRootSignature(m_pShadowsRS.get());
+
+						//Opaque
+						{
+							GPU_PROFILE_SCOPE("Opaque", &context);
+							context.SetGraphicsPipelineState(m_pShadowsOpaquePSO.get());
+
+							for (const Batch& b : m_OpaqueBatches)
+							{
+								ObjectData.WorldViewProjection = b.WorldMatrix * lightData.LightViewProjections[i];
+								context.SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
+								b.pMesh->Draw(&context);
+							}
+						}
+						//Transparant
+						{
+							GPU_PROFILE_SCOPE("Transparant", &context);
+							context.SetGraphicsPipelineState(m_pShadowsAlphaPSO.get());
+
 							context.SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
-							context.SetDynamicDescriptor(3, 0, b.pMaterial->pDiffuseTexture->GetSRV());
-							context.SetDynamicDescriptor(3, 1, b.pMaterial->pNormalTexture->GetSRV());
-							context.SetDynamicDescriptor(3, 2, b.pMaterial->pSpecularTexture->GetSRV());
-							b.pMesh->Draw(&context);
+							for (const Batch& b : m_TransparantBatches)
+							{
+								ObjectData.WorldViewProjection = b.WorldMatrix * lightData.LightViewProjections[i];
+								context.SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
+								context.SetDynamicDescriptor(1, 0, b.pMaterial->pDiffuseTexture->GetSRV());
+								b.pMesh->Draw(&context);
+							}
 						}
 					}
-
-					{
-						GPU_PROFILE_SCOPE("Transparant", &context);
-						context.SetGraphicsPipelineState(m_pPBRDiffuseAlphaPSO.get());
-
-						for (const Batch& b : m_TransparantBatches)
-						{
-							ObjectData.World = b.WorldMatrix;
-							ObjectData.WorldViewProjection = ObjectData.World * m_pCamera->GetViewProjection();
-							context.SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
-							context.SetDynamicDescriptor(3, 0, b.pMaterial->pDiffuseTexture->GetSRV());
-							context.SetDynamicDescriptor(3, 1, b.pMaterial->pNormalTexture->GetSRV());
-							context.SetDynamicDescriptor(3, 2, b.pMaterial->pSpecularTexture->GetSRV());
-							b.pMesh->Draw(&context);
-						}
-					}
-
-					context.InsertResourceBarrier(m_pLightGridOpaque.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-					context.InsertResourceBarrier(m_pLightIndexListBufferOpaque.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-					context.InsertResourceBarrier(m_pLightGridTransparant.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-					context.InsertResourceBarrier(m_pLightIndexListBufferTransparant.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-
 					context.EndRenderPass();
 				};
 			});
+	}
+
+	if (m_RenderPath == RenderPath::Tiled)
+	{
+		TiledForwardInputResources resources;
+		resources.ResolvedDepthBuffer = Data.DepthStencilResolved;
+		resources.DepthBuffer = Data.DepthStencil;
+		resources.pOpaqueBatches = &m_OpaqueBatches;
+		resources.pTransparantBatches = &m_TransparantBatches;
+		resources.pRenderTarget = GetCurrentRenderTarget();
+		resources.pLightBuffer = m_pLightBuffer.get();
+		resources.pCamera = m_pCamera.get();
+		resources.pShadowMap = m_pShadowMap.get();
+		m_pTiledForward->Execute(graph, resources);
 	}
 	else if (m_RenderPath == RenderPath::Clustered)
 	{
@@ -546,6 +487,7 @@ void Graphics::Update()
 		resources.pRenderTarget = GetCurrentRenderTarget();
 		resources.pLightBuffer = m_pLightBuffer.get();
 		resources.pCamera = m_pCamera.get();
+		resources.pAO = m_pSSAOTarget.get();
 		m_pClusteredForward->Execute(graph, resources);
 	}
 
@@ -929,11 +871,10 @@ void Graphics::InitD3D()
 	m_pMSAANormals = std::make_unique<Texture>(this, "MSAA Normals");
 	m_pNormals = std::make_unique<Texture>(this, "Normals");
 	m_pSSAOTarget = std::make_unique<Texture>(this, "SSAO");
-
-	m_pLightGridOpaque = std::make_unique<Texture>(this, "Opaque Light Grid");
-	m_pLightGridTransparant = std::make_unique<Texture>(this, "Transparant Light Grid");
+	m_pSSAOBlurred = std::make_unique<Texture>(this, "SSAO Blurred");
 
 	m_pClusteredForward = std::make_unique<ClusteredForward>(this);
+	m_pTiledForward = std::make_unique<TiledForward>(this);
 	m_pImGuiRenderer = std::make_unique<ImGuiRenderer>(this);
 	m_pImGuiRenderer->AddUpdateCallback(ImGuiCallbackDelegate::CreateRaw(this, &Graphics::UpdateImGui));
 
@@ -990,20 +931,19 @@ void Graphics::OnResize(int width, int height)
 
 	m_pMSAANormals->Create(TextureDesc::CreateRenderTarget(width, height, DXGI_FORMAT_R32G32B32A32_FLOAT, TextureFlag::RenderTarget, m_SampleCount));
 	m_pNormals->Create(TextureDesc::Create2D(width, height, DXGI_FORMAT_R32G32B32A32_FLOAT, TextureFlag::ShaderResource));
-	m_pSSAOTarget->Create(TextureDesc::Create2D(Math::DivideAndRoundUp(width, 4), Math::DivideAndRoundUp(height, 4), DXGI_FORMAT_R32_FLOAT, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource));
+	m_pSSAOTarget->Create(TextureDesc::Create2D(Math::DivideAndRoundUp(width, 2), Math::DivideAndRoundUp(height, 2), DXGI_FORMAT_R8_UNORM, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource));
+	m_pSSAOBlurred->Create(TextureDesc::Create2D(Math::DivideAndRoundUp(width, 2), Math::DivideAndRoundUp(height, 2), DXGI_FORMAT_R8_UNORM, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource));
 
-	int frustumCountX = Math::RoundUp((float)width / FORWARD_PLUS_BLOCK_SIZE);
-	int frustumCountY = Math::RoundUp((float)height / FORWARD_PLUS_BLOCK_SIZE);
-	m_pLightGridOpaque->Create(TextureDesc::Create2D(frustumCountX, frustumCountY, DXGI_FORMAT_R32G32_UINT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
-	m_pLightGridTransparant->Create(TextureDesc::Create2D(frustumCountX, frustumCountY, DXGI_FORMAT_R32G32_UINT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
-	
 	m_pCamera->SetDirty();
 
 	m_pClusteredForward->OnSwapchainCreated(width, height);
+	m_pTiledForward->OnSwapchainCreated(width, height);
 }
 
 void Graphics::InitializeAssets()
 {
+	m_pLightBuffer = std::make_unique<Buffer>(this, "Lights");
+
 	//Input layout
 	//UNIVERSAL
 	D3D12_INPUT_ELEMENT_DESC inputElements[] = {
@@ -1018,36 +958,6 @@ void Graphics::InitializeAssets()
 		D3D12_INPUT_ELEMENT_DESC{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
 		D3D12_INPUT_ELEMENT_DESC{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
 	};
-
-	//PBR Diffuse passes
-	{
-		//Shaders
-		Shader vertexShader("Resources/Shaders/Diffuse.hlsl", Shader::Type::VertexShader, "VSMain", { /*"SHADOW"*/ });
-		Shader pixelShader("Resources/Shaders/Diffuse.hlsl", Shader::Type::PixelShader, "PSMain", { /*"SHADOW"*/ });
-
-		//Rootsignature
-		m_pPBRDiffuseRS = std::make_unique<RootSignature>();
-		m_pPBRDiffuseRS->FinalizeFromShader("Diffuse", vertexShader, m_pDevice.Get());
-
-		{
-			//Opaque
-			m_pPBRDiffusePSO = std::make_unique<GraphicsPipelineState>();
-			m_pPBRDiffusePSO->SetInputLayout(inputElements, sizeof(inputElements) / sizeof(inputElements[0]));
-			m_pPBRDiffusePSO->SetRootSignature(m_pPBRDiffuseRS->GetRootSignature());
-			m_pPBRDiffusePSO->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
-			m_pPBRDiffusePSO->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
-			m_pPBRDiffusePSO->SetRenderTargetFormat(RENDER_TARGET_FORMAT, DEPTH_STENCIL_FORMAT, m_SampleCount, m_SampleQuality);
-			m_pPBRDiffusePSO->SetDepthTest(D3D12_COMPARISON_FUNC_EQUAL);
-			m_pPBRDiffusePSO->SetDepthWrite(false);
-			m_pPBRDiffusePSO->Finalize("Diffuse PBR Pipeline", m_pDevice.Get());
-
-			//Transparant
-			m_pPBRDiffuseAlphaPSO = std::make_unique<GraphicsPipelineState>(*m_pPBRDiffusePSO.get());
-			m_pPBRDiffuseAlphaPSO->SetBlendMode(BlendMode::Alpha, false);
-			m_pPBRDiffuseAlphaPSO->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
-			m_pPBRDiffuseAlphaPSO->Finalize("Diffuse PBR (Alpha) Pipeline", m_pDevice.Get());
-		}
-	}
 
 	//Shadow mapping
 	//Vertex shader-only pass that writes to the depth buffer using the light matrix
@@ -1175,29 +1085,6 @@ void Graphics::InitializeAssets()
 		m_pResolveDepthPSO->Finalize("Resolve Depth Pipeline", m_pDevice.Get());
 	}
 
-	//Light culling
-	//Compute shader that requires depth buffer and light data to place lights into tiles
-	{
-		Shader computeShader("Resources/Shaders/LightCulling.hlsl", Shader::Type::ComputeShader, "CSMain");
-
-		m_pComputeLightCullRS = std::make_unique<RootSignature>();
-		m_pComputeLightCullRS->FinalizeFromShader("Light Culling", computeShader, m_pDevice.Get());
-
-		m_pComputeLightCullPSO = std::make_unique<ComputePipelineState>();
-		m_pComputeLightCullPSO->SetComputeShader(computeShader.GetByteCode(), computeShader.GetByteCodeSize());
-		m_pComputeLightCullPSO->SetRootSignature(m_pComputeLightCullRS->GetRootSignature());
-		m_pComputeLightCullPSO->Finalize("Compute Light Culling Pipeline", m_pDevice.Get());
-
-		m_pLightIndexCounter = std::make_unique<Buffer>(this, "Light Index Counter");
-		m_pLightIndexCounter->Create(BufferDesc::CreateStructured(2, sizeof(uint32)));
-		m_pLightIndexCounter->CreateUAV(&m_pLightIndexCounterRawUAV, BufferUAVDesc::CreateRaw());
-		m_pLightIndexListBufferOpaque = std::make_unique<Buffer>(this, "Light List Opaque");
-		m_pLightIndexListBufferOpaque->Create(BufferDesc::CreateStructured(MAX_LIGHT_DENSITY, sizeof(uint32)));
-		m_pLightIndexListBufferTransparant = std::make_unique<Buffer>(this, "Light List Transparant");
-		m_pLightIndexListBufferTransparant->Create(BufferDesc::CreateStructured(MAX_LIGHT_DENSITY, sizeof(uint32)));
-		m_pLightBuffer = std::make_unique<Buffer>(this, "Light Buffer");
-	}
-
 	//Mip generation
 	{
 		Shader computeShader("Resources/Shaders/GenerateMips.hlsl", Shader::Type::ComputeShader, "CSMain");
@@ -1223,6 +1110,20 @@ void Graphics::InitializeAssets()
 		m_pSSAOPSO->SetRootSignature(m_pSSAORS->GetRootSignature());
 		m_pSSAOPSO->Finalize("SSAO PSO", m_pDevice.Get());
 	}
+
+	//SSAO
+	{
+		Shader computeShader("Resources/Shaders/SSAOBlur.hlsl", Shader::Type::ComputeShader, "CSMain");
+
+		m_pSSAOBlurRS = std::make_unique<RootSignature>();
+		m_pSSAOBlurRS->FinalizeFromShader("SSAO Blur", computeShader, m_pDevice.Get());
+
+		m_pSSAOBlurPSO = std::make_unique<ComputePipelineState>();
+		m_pSSAOBlurPSO->SetComputeShader(computeShader.GetByteCode(), computeShader.GetByteCodeSize());
+		m_pSSAOBlurPSO->SetRootSignature(m_pSSAOBlurRS->GetRootSignature());
+		m_pSSAOBlurPSO->Finalize("SSAO Blur PSO", m_pDevice.Get());
+	}
+
 
 	CommandContext* pContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COPY);
 
@@ -1352,7 +1253,16 @@ void Graphics::UpdateImGui()
 	m_FrameTimes[m_Frame % m_FrameTimes.size()] = GameTimer::DeltaTime();
 
 	ImGui::Begin("SSAO");
-	ImGui::Image(m_pSSAOTarget.get(), ImVec2((float)Math::DivideAndRoundUp(m_WindowWidth, 2), (float)Math::DivideAndRoundUp(m_WindowHeight, 2)));
+	Vector2 image((float)m_pSSAOBlurred->GetWidth(), (float)m_pSSAOBlurred->GetHeight());
+	Vector2 windowSize(ImGui::GetContentRegionAvail().x, ImGui::GetContentRegionAvail().y);
+	float width = windowSize.x;
+	float height = windowSize.x * image.y / image.x;
+	if (image.x / windowSize.x < image.y / windowSize.y)
+	{
+		width = image.x / image.y * windowSize.y;
+		height = windowSize.y;
+	}
+	ImGui::Image(m_pSSAOTarget.get(), ImVec2(width, height));
 	ImGui::End();
 
 	ImGui::SetNextWindowPos(ImVec2(0, 0), 0, ImVec2(0, 0));
@@ -1395,6 +1305,11 @@ void Graphics::UpdateImGui()
 		ImGui::SliderFloat("Max Log Luminance", &g_MaxLogLuminance, -50, 50);
 		ImGui::SliderFloat("White Point", &g_WhitePoint, 0, 20);
 		ImGui::SliderFloat("Tau", &g_Tau, 0, 100);
+
+		ImGui::SliderFloat("AO Power", &g_AoPower, 1, 10);
+		ImGui::SliderFloat("AO Threshold", &g_AoThreshold, 0, 0.025f);
+		ImGui::SliderFloat("AO Radius", &g_AoRadius, 0.1f, 5.0f);
+		ImGui::SliderInt("AO Samples", &g_AoSamples, 0, 64);
 
 		if (ImGui::Button("Dump RenderGraph"))
 		{

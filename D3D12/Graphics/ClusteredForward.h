@@ -16,10 +16,11 @@ struct ClusteredForwardInputResources
 {
 	RGResourceHandle DepthBuffer;
 	Texture* pRenderTarget = nullptr;
-	const std::vector<Batch>* pOpaqueBatches;
-	const std::vector<Batch>* pTransparantBatches;
-	Buffer* pLightBuffer;
-	Camera* pCamera;
+	Texture* pAO = nullptr;
+	const std::vector<Batch>* pOpaqueBatches = nullptr;
+	const std::vector<Batch>* pTransparantBatches = nullptr;
+	Buffer* pLightBuffer = nullptr;
+	Camera* pCamera = nullptr;
 };
 
 class ClusteredForward

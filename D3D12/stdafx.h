@@ -15,6 +15,7 @@
 #include <functional>
 #include <unordered_map>
 #include <list>
+#include <algorithm>
 #include <fstream>
 
 #if defined(_MSC_FULL_VER)
@@ -51,6 +52,7 @@ using uint64 = uint64_t;
 #include <D3Dcompiler.h>
 #include <DXProgrammableCapture.h>
 
+#include "Core/CommandLine.h"
 #include "Math/MathTypes.h"
 #include "Core/GameTimer.h"
 #include "Core/BitField.h"

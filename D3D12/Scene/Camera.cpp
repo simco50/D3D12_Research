@@ -156,7 +156,7 @@ FreeCamera::FreeCamera(Graphics* pGraphics)
 void FreeCamera::Update()
 {
 	//Camera movement
-	if (Input::Instance().IsMouseDown(0))
+	if (Input::Instance().IsMouseDown(0) && ImGui::IsAnyItemActive() == false)
 	{
 		Vector2 mouseDelta = Input::Instance().GetMouseDelta();
 		Quaternion yr = Quaternion::CreateFromYawPitchRoll(0, mouseDelta.y * GameTimer::DeltaTime() * 0.1f, 0);

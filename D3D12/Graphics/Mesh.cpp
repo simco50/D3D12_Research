@@ -118,7 +118,6 @@ std::unique_ptr<SubMesh> Mesh::LoadMesh(aiMesh* pMesh, Graphics* pGraphics, Comm
 		}
 	}
 
-
 	std::unique_ptr<SubMesh> pSubMesh = std::make_unique<SubMesh>();
 	BoundingBox::CreateFromPoints(pSubMesh->m_Bounds, vertices.size(), (Vector3*)&vertices[0], sizeof(Vertex));
 

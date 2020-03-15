@@ -28,7 +28,6 @@ struct Light
 		l.Direction = direction;
 		l.Color = Vector4(color.x, color.y, color.z, intensity);
 		l.LightType = Type::Directional;
-		l.ShadowIndex = -1;
 		return l;
 	}
 
@@ -41,7 +40,6 @@ struct Light
 		l.Color = Vector4(color.x, color.y, color.z, intensity);
 		l.Attenuation = attenuation;
 		l.LightType = Type::Point;
-		l.ShadowIndex = -1;
 		return l;
 	}
 
@@ -56,7 +54,6 @@ struct Light
 		l.Color = Vector4(color.x, color.y, color.z, intensity);
 		l.Attenuation = attenuation;
 		l.LightType = Type::Spot;
-		l.ShadowIndex = -1;
 		return l;
 	}
 };
