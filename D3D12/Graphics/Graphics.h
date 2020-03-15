@@ -140,6 +140,7 @@ private:
 	ComPtr<ID3D12Device> m_pDevice;
 
 	D3D12_RENDER_PASS_TIER m_RenderPassTier = D3D12_RENDER_PASS_TIER_0;
+	D3D12_RAYTRACING_TIER m_RayTracingTier = D3D12_RAYTRACING_TIER_NOT_SUPPORTED;
 
 	int m_SampleCount = 1;
 	int m_SampleQuality = 0;

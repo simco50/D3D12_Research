@@ -19,6 +19,7 @@ enum class BufferFlag
 	Structured = 1 << 4,
 	ByteAddress = 1 << 5,
 	IndirectArguments = 1 << 6,
+	AccelerationStructure = 1 << 7,
 };
 DECLARE_BITMASK_TYPE(BufferFlag)
 
@@ -51,6 +52,16 @@ struct BufferDesc
 		desc.ElementCount = bytes / 4;
 		desc.ElementSize = 4;
 		desc.Usage = usage | BufferFlag::ByteAddress | BufferFlag::UnorderedAccess;
+		return desc;
+	}
+
+	static BufferDesc CreateAccelerationStructure(int bytes, BufferFlag usage = BufferFlag::None)
+	{
+		assert(bytes % 4 == 0);
+		BufferDesc desc;
+		desc.ElementCount = bytes / 4;
+		desc.ElementSize = 4;
+		desc.Usage = usage | BufferFlag::AccelerationStructure | BufferFlag::UnorderedAccess;
 		return desc;
 	}
 
