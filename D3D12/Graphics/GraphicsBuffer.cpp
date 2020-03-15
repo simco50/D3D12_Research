@@ -83,7 +83,7 @@ void Buffer::Create(const BufferDesc& bufferDesc)
 			CreateUAV(&m_pUav, BufferUAVDesc(DXGI_FORMAT_UNKNOWN, true, false));
 		}
 	}
-	if (Any(bufferDesc.Usage, BufferFlag::ShaderResource))
+	if (Any(bufferDesc.Usage, BufferFlag::ShaderResource | BufferFlag::AccelerationStructure))
 	{
 		CreateSRV(&m_pSrv, BufferSRVDesc(DXGI_FORMAT_UNKNOWN));
 	}

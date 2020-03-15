@@ -73,7 +73,7 @@ void RootSignature::SetDescriptorTable(uint32 rootIndex, uint32 rangeCount, D3D1
 	data.DescriptorTable.pDescriptorRanges = m_DescriptorTableRanges[rootIndex].data();
 }
 
-void RootSignature::SetDescriptorTableRange(uint32 rootIndex, uint32 rangeIndex, uint32 startRegisterSlot, D3D12_DESCRIPTOR_RANGE_TYPE type, uint32 count)
+void RootSignature::SetDescriptorTableRange(uint32 rootIndex, uint32 rangeIndex, uint32 startRegisterSlot, D3D12_DESCRIPTOR_RANGE_TYPE type, uint32 count, uint32 heapSlotOffset)
 {
 	assert(rangeIndex < MAX_RANGES_PER_TABLE);
 	D3D12_DESCRIPTOR_RANGE1& range = m_DescriptorTableRanges[rootIndex][rangeIndex];
@@ -81,14 +81,14 @@ void RootSignature::SetDescriptorTableRange(uint32 rootIndex, uint32 rangeIndex,
 	range.NumDescriptors = count;
 	range.BaseShaderRegister = startRegisterSlot;
 	range.RegisterSpace = 0;
-	range.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+	range.OffsetInDescriptorsFromTableStart = heapSlotOffset;
 	range.Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE;
 }
 
 void RootSignature::SetDescriptorTableSimple(uint32 rootIndex, uint32 startRegisterSlot, D3D12_DESCRIPTOR_RANGE_TYPE type, uint32 count, D3D12_SHADER_VISIBILITY visibility)
 {
 	SetDescriptorTable(rootIndex, 1, visibility);
-	SetDescriptorTableRange(rootIndex, 0, startRegisterSlot, type, count);
+	SetDescriptorTableRange(rootIndex, 0, startRegisterSlot, type, count, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND);
 }
 
 void RootSignature::AddStaticSampler(uint32 shaderRegister, D3D12_SAMPLER_DESC samplerDesc, D3D12_SHADER_VISIBILITY visibility)
@@ -173,22 +173,26 @@ void RootSignature::Finalize(const char* pName, ID3D12Device* pDevice, D3D12_ROO
 		}
 	}
 
-	if (shaderVisibility[(int)Shader::Type::VertexShader] == false)
+	//It's illegal to have RS flags if it's a local root signature
+	if ((flags & D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE) == 0)
 	{
-		flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_VERTEX_SHADER_ROOT_ACCESS;
-	}
-	if (shaderVisibility[(int)Shader::Type::PixelShader] == false)
-	{
-		flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS;
-	}
-	if (shaderVisibility[(int)Shader::Type::GeometryShader] == false)
-	{
-		flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
-	}
+		if (shaderVisibility[(int)Shader::Type::VertexShader] == false)
+		{
+			flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_VERTEX_SHADER_ROOT_ACCESS;
+		}
+		if (shaderVisibility[(int)Shader::Type::PixelShader] == false)
+		{
+			flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS;
+		}
+		if (shaderVisibility[(int)Shader::Type::GeometryShader] == false)
+		{
+			flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
+		}
 
-	//#todo: Tessellation not supported yet
-	flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS;
-	flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS;
+		//#todo: Tessellation not supported yet
+		flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS;
+		flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS;
+	}
 
 	constexpr uint32 recommendedDwords = 12;
 	uint32 dwords = GetDWordSize();
@@ -201,7 +205,13 @@ void RootSignature::Finalize(const char* pName, ID3D12Device* pDevice, D3D12_ROO
 	desc.Init_1_1(m_NumParameters, m_RootParameters.data(), (uint32)m_StaticSamplers.size(), m_StaticSamplers.data(), flags);
 
 	ComPtr<ID3DBlob> pDataBlob, pErrorBlob;
-	HR(D3D12SerializeVersionedRootSignature(&desc, pDataBlob.GetAddressOf(), pErrorBlob.GetAddressOf()));
+	D3D12SerializeVersionedRootSignature(&desc, pDataBlob.GetAddressOf(), pErrorBlob.GetAddressOf());
+	if (pErrorBlob)
+	{
+		std::wstring errorMsg = std::wstring((char*)pErrorBlob->GetBufferPointer(), (char*)pErrorBlob->GetBufferPointer() + pErrorBlob->GetBufferSize());
+		std::wcout << errorMsg << std::endl;
+		assert(false);
+	}
 	HR(pDevice->CreateRootSignature(0, pDataBlob->GetBufferPointer(), pDataBlob->GetBufferSize(), IID_PPV_ARGS(m_pRootSignature.GetAddressOf())));
 	SetD3DObjectName(m_pRootSignature.Get(), pName);
 }

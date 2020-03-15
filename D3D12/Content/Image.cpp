@@ -45,7 +45,7 @@ bool Image::Load(const void* pInPixels, size_t dataSize, const char* pFormatHint
 	m_Depth = 1;
 	int components = 0;
 
-	unsigned char* pPixels = stbi_load_from_memory((stbi_uc*)pInPixels, dataSize, &m_Width, &m_Height, &components, m_Components);
+	unsigned char* pPixels = stbi_load_from_memory((stbi_uc*)pInPixels, (int)dataSize, &m_Width, &m_Height, &components, m_Components);
 	if (pPixels == nullptr)
 	{
 		return false;
