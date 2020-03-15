@@ -202,6 +202,7 @@ Profiler* Profiler::Instance()
 
 void Profiler::Initialize(Graphics* pGraphics)
 {
+	assert(m_pGraphics == nullptr);
 	m_pGraphics = pGraphics;
 
 	D3D12_QUERY_HEAP_DESC desc = {};

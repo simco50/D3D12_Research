@@ -125,6 +125,12 @@ float4 ScreenToView(float4 screen, float2 screenDimensions, float4x4 projectionI
     return ClipToView(clip, projectionInverse);
 }
 
+float LinearizeDepth(float z, float near, float far)
+{
+    float z_n = 2.0 * z - 1.0;
+	return 2.0 * far * near / (near + far - z_n * (near - far));
+}
+
 void AABBFromMinMax(inout AABB aabb, float3 minimum, float3 maximum)
 {
     aabb.Center = float4((minimum + maximum) / 2.0f, 0);

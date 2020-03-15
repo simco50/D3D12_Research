@@ -18,10 +18,10 @@ struct TiledForwardInputResources
 	RGResourceHandle DepthBuffer;
 	Texture* pShadowMap = nullptr;
 	Texture* pRenderTarget = nullptr;
-	const std::vector<Batch>* pOpaqueBatches;
-	const std::vector<Batch>* pTransparantBatches;
-	Buffer* pLightBuffer;
-	Camera* pCamera;
+	const std::vector<Batch>* pOpaqueBatches = nullptr;
+	const std::vector<Batch>* pTransparantBatches = nullptr;
+	Buffer* pLightBuffer = nullptr;
+	Camera* pCamera = nullptr;
 };
 
 class TiledForward

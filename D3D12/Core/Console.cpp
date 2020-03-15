@@ -4,6 +4,7 @@
 static Console* consoleInstance = nullptr;
 
 Console::Console()
+	: m_ConvertBufferSize(4096), m_ConvertBuffer(new char[m_ConvertBufferSize])
 {
 }
 
@@ -14,14 +15,13 @@ Console::~Console()
 
 void Console::Startup()
 {
+	assert(consoleInstance == nullptr);
 	static Console console;
 	consoleInstance = &console;
 
 #ifdef _DEBUG
 	console.InitializeConsoleWindow();
 #endif
-
-	console.m_ConvertBuffer = new char[console.m_ConvertBufferSize];
 }
 
 bool Console::LogHRESULT(const char* source, HRESULT hr)

@@ -152,7 +152,6 @@ void Texture::Create(const TextureDesc& textureDesc)
 	}
 
 	D3D12_RESOURCE_ALLOCATION_INFO info = m_pGraphics->GetDevice()->GetResourceAllocationInfo(0, 1, &desc);
-	info.Alignment;
 
 	m_pResource = m_pGraphics->CreateResource(desc, m_CurrentState, D3D12_HEAP_TYPE_DEFAULT, pClearValue);
 

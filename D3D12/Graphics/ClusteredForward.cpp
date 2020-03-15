@@ -291,6 +291,7 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
 				context.InsertResourceBarrier(m_pLightGrid.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 				context.InsertResourceBarrier(m_pLightIndexGrid.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 				context.InsertResourceBarrier(resources.pRenderTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
+				context.InsertResourceBarrier(resources.pAO, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
 				context.BeginRenderPass(RenderPassInfo(resources.pRenderTarget, RenderPassAccess::Clear_Store, passResources.GetTexture(resources.DepthBuffer), RenderPassAccess::Load_DontCare));
 				context.SetViewport(FloatRect(0, 0, (float)screenDimensions.x, (float)screenDimensions.y));
@@ -304,6 +305,7 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
 					context.SetDynamicDescriptor(3, 0, m_pLightGrid->GetSRV());
 					context.SetDynamicDescriptor(3, 1, m_pLightIndexGrid->GetSRV());
 					context.SetDynamicDescriptor(3, 2, resources.pLightBuffer->GetSRV());
+					context.SetDynamicDescriptor(3, 3, resources.pAO->GetSRV());
 
 
 					for (const Batch& b : *resources.pOpaqueBatches)

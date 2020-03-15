@@ -174,7 +174,7 @@ private:
 	std::array<uint64, Graphics::FRAME_COUNT> m_FenceValues = {};
 	uint64* m_pCurrentReadBackData = nullptr;
 
-	Graphics* m_pGraphics;
+	Graphics* m_pGraphics = nullptr;
 	float m_SecondsPerGpuTick = 0.0f;
 	float m_SecondsPerCpuTick = 0.0f;
 	int m_CurrentTimer = 0;

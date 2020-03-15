@@ -79,15 +79,11 @@ void RGGraph::Compile()
 		for (RGPass* pPass : m_RenderPasses)
 		{
 			//Make all renderpasses that read from "From" also read from "To"
-			for (RGResourceHandle read : pPass->m_Reads)
+			if (pPass->ReadsFrom(alias.From))
 			{
-				if (pPass->ReadsFrom(alias.From))
+				if (pPass->ReadsFrom(alias.To) == false)
 				{
-					if (pPass->ReadsFrom(alias.To) == false)
-					{
-						pPass->m_Reads.push_back(alias.To);
-					}
-					break;
+					pPass->m_Reads.push_back(alias.To);
 				}
 			}
 
