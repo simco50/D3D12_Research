@@ -1138,7 +1138,7 @@ void Graphics::InitializeAssets()
 	}
 
 
-	CommandContext* pContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COPY);
+	CommandContext* pContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 
 	//Geometry
 	{
