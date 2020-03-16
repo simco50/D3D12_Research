@@ -45,21 +45,21 @@ struct BufferDesc
 		return BufferDesc(size, sizeof(uint64), BufferFlag::Readback);
 	}
 
-	static BufferDesc CreateByteAddress(int bytes, BufferFlag usage = BufferFlag::ShaderResource)
+	static BufferDesc CreateByteAddress(uint64 bytes, BufferFlag usage = BufferFlag::ShaderResource)
 	{
 		assert(bytes % 4 == 0);
 		BufferDesc desc;
-		desc.ElementCount = bytes / 4;
+		desc.ElementCount = (uint32)(bytes / 4);
 		desc.ElementSize = 4;
 		desc.Usage = usage | BufferFlag::ByteAddress | BufferFlag::UnorderedAccess;
 		return desc;
 	}
 
-	static BufferDesc CreateAccelerationStructure(int bytes, BufferFlag usage = BufferFlag::None)
+	static BufferDesc CreateAccelerationStructure(uint64 bytes, BufferFlag usage = BufferFlag::None)
 	{
 		assert(bytes % 4 == 0);
 		BufferDesc desc;
-		desc.ElementCount = bytes / 4;
+		desc.ElementCount = (uint32)(bytes / 4);
 		desc.ElementSize = 4;
 		desc.Usage = usage | BufferFlag::AccelerationStructure | BufferFlag::UnorderedAccess;
 		return desc;

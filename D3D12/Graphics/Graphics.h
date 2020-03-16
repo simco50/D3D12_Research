@@ -172,6 +172,8 @@ private:
 	unsigned int m_WindowWidth;
 	unsigned int m_WindowHeight;
 
+	std::unique_ptr<Texture> m_pRayTracingOutput;
+
 	// Synchronization objects.
 	uint32 m_CurrentBackBufferIndex = 0;
 	std::array<uint64, FRAME_COUNT> m_FenceValues = {};
