@@ -255,6 +255,16 @@ void CommandContext::SetDescriptorHeap(ID3D12DescriptorHeap* pHeap, D3D12_DESCRI
 	}
 }
 
+DynamicAllocation CommandContext::AllocateTransientMemory(uint64 size)
+{
+	return m_DynamicAllocator->Allocate(size);
+}
+
+DescriptorHandle CommandContext::AllocateTransientDescriptors(int descriptorCount, D3D12_DESCRIPTOR_HEAP_TYPE type)
+{
+	return m_pShaderResourceDescriptorAllocator->AllocateTransientDescriptor(descriptorCount);
+}
+
 void CommandContext::BindDescriptorHeaps()
 {
 	std::array<ID3D12DescriptorHeap*, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES> heapsToBind = {};

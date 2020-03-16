@@ -21,6 +21,7 @@ class Camera;
 class RGResourceAllocator;
 class DebugRenderer;
 class UnorderedAccessView;
+class Raytracing;
 
 struct Batch
 {
@@ -89,6 +90,7 @@ public:
 
 	bool CheckTypedUAVSupport(DXGI_FORMAT format) const;
 	bool UseRenderPasses() const;
+	bool SupportsRayTracing() const { return m_RayTracingTier != D3D12_RAYTRACING_TIER_NOT_SUPPORTED; }
 
 	DynamicAllocationManager* GetAllocationManager() const { return m_pDynamicAllocationManager.get(); }
 
@@ -167,12 +169,11 @@ private:
 	std::unique_ptr<RGResourceAllocator> m_pGraphAllocator;
 	std::unique_ptr<ClusteredForward> m_pClusteredForward;
 	std::unique_ptr<TiledForward> m_pTiledForward;
+	std::unique_ptr<Raytracing> m_pRaytracing;
 	std::unique_ptr<DebugRenderer> m_pDebugRenderer;
 
 	unsigned int m_WindowWidth;
 	unsigned int m_WindowHeight;
-
-	std::unique_ptr<Texture> m_pRayTracingOutput;
 
 	// Synchronization objects.
 	uint32 m_CurrentBackBufferIndex = 0;

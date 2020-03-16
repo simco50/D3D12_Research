@@ -23,9 +23,7 @@
 #include "DebugRenderer.h"
 #include "ResourceViews.h"
 #include "TiledForward.h"
-#include "External/nv_helpers_dx12/RaytracingPipelineGenerator.h"
-#include "External/nv_helpers_dx12/BottomLevelASGenerator.h"
-#include "External/nv_helpers_dx12/ShaderBindingTableGenerator.h"
+#include "Raytracing.h"
 
 #ifdef _DEBUG
 #define D3D_VALIDATION 1
@@ -647,15 +645,16 @@ void Graphics::Update()
 					context.SetDynamicDescriptor(1, 1, m_pAverageLuminance->GetSRV());
 					context.Draw(0, 3);
 					context.EndRenderPass();
-
-#if 1 //RAYTRACING VISUALIZATION
-					if (g_ShowRaytraced)
-					{
-						context.CopyResource(m_pRayTracingOutput.get(), GetCurrentBackbuffer());
-					}
-#endif
 				};
 			});
+	}
+
+	if (g_ShowRaytraced)
+	{
+		RaytracingInputResources rtResources{};
+		rtResources.pCamera = m_pCamera.get();
+		rtResources.pRenderTarget = GetCurrentBackbuffer();
+		m_pRaytracing->Execute(graph, rtResources);
 	}
 
 	//9. UI
@@ -887,6 +886,7 @@ void Graphics::InitD3D()
 
 	m_pClusteredForward = std::make_unique<ClusteredForward>(this);
 	m_pTiledForward = std::make_unique<TiledForward>(this);
+	m_pRaytracing = std::make_unique<Raytracing>(this);
 	m_pImGuiRenderer = std::make_unique<ImGuiRenderer>(this);
 	m_pImGuiRenderer->AddUpdateCallback(ImGuiCallbackDelegate::CreateRaw(this, &Graphics::UpdateImGui));
 
@@ -938,7 +938,7 @@ void Graphics::OnResize(int width, int height)
 	{
 		m_pDepthStencil->Create(TextureDesc::CreateDepth(width, height, DEPTH_STENCIL_FORMAT, TextureFlag::DepthStencil | TextureFlag::ShaderResource, m_SampleCount, ClearBinding(0.0f, 0)));
 	}
-	m_pHDRRenderTarget->Create(TextureDesc::CreateRenderTarget(width, height, RENDER_TARGET_FORMAT, TextureFlag::ShaderResource | TextureFlag::RenderTarget));
+	m_pHDRRenderTarget->Create(TextureDesc::CreateRenderTarget(width, height, RENDER_TARGET_FORMAT, TextureFlag::ShaderResource | TextureFlag::RenderTarget | TextureFlag::UnorderedAccess));
 	m_pDownscaledColor->Create(TextureDesc::Create2D(Math::DivideAndRoundUp(width, 4), Math::DivideAndRoundUp(height, 4), RENDER_TARGET_FORMAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
 
 	m_pMSAANormals->Create(TextureDesc::CreateRenderTarget(width, height, DXGI_FORMAT_R32G32B32A32_FLOAT, TextureFlag::RenderTarget, m_SampleCount));
@@ -950,6 +950,7 @@ void Graphics::OnResize(int width, int height)
 
 	m_pClusteredForward->OnSwapchainCreated(width, height);
 	m_pTiledForward->OnSwapchainCreated(width, height);
+	m_pRaytracing->OnSwapchainCreated(width, height);
 }
 
 void Graphics::InitializeAssets()
@@ -1165,299 +1166,8 @@ void Graphics::InitializeAssets()
 	m_pNoiseTexture = std::make_unique<Texture>(this, "Noise");
 	m_pNoiseTexture->Create(pContext, "Resources/Textures/Noise.png", false);
 
+	m_pRaytracing->GenerateAccelerationStructure(this, m_pMesh.get(), *pContext);
 	pContext->Execute(true);
-
-	ComPtr<ID3D12Device5> pDevice;
-	if (m_RayTracingTier != D3D12_RAYTRACING_TIER_NOT_SUPPORTED && m_pDevice.As(&pDevice) == S_OK)
-	{
-		PIX_CAPTURE_SCOPE();
-
-		CommandContext* pContext2 = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
-		ID3D12GraphicsCommandList* pC = pContext2->GetCommandList();
-		ComPtr<ID3D12GraphicsCommandList4> pCmd;
-		pC->QueryInterface(IID_PPV_ARGS(pCmd.GetAddressOf()));
-
-		std::unique_ptr<Buffer> pBLAS, pTLAS;
-		std::unique_ptr<Buffer> pBLASScratch;
-		std::unique_ptr<Buffer> pTLASScratch, pDescriptorsBuffer;
-
-		ComPtr<ID3D12StateObject> pPipeline;
-		ComPtr<ID3D12StateObjectProperties> pPipelineProperties;
-
-		std::unique_ptr<RootSignature> pRayGenSignature = std::make_unique<RootSignature>();
-		std::unique_ptr<RootSignature> pHitSignature = std::make_unique<RootSignature>();
-		std::unique_ptr<RootSignature> pMissSignature = std::make_unique<RootSignature>();
-		std::unique_ptr<RootSignature> pDummySignature = std::make_unique<RootSignature>();
-
-		m_pRayTracingOutput = std::make_unique<Texture>(this, "Ray Tracing Output");
-		UnorderedAccessView* pOutputRawUAV = nullptr;
-
-		std::unique_ptr<Buffer> pShaderBindingTable = std::make_unique<Buffer>(this, "Shader Binding Table");
-
-		std::unique_ptr<OnlineDescriptorAllocator> pDescriptorAllocator = std::make_unique<OnlineDescriptorAllocator>(this, pContext2, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-		std::unique_ptr<DynamicResourceAllocator> pDynamicAllocator = std::make_unique<DynamicResourceAllocator>(GetAllocationManager());
-
-		DescriptorHandle uavHandle = pDescriptorAllocator->AllocateTransientDescriptor(2);
-		DescriptorHandle srvHandle = uavHandle + pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-
-		/*std::unique_ptr<Buffer> pVertexBuffer = std::make_unique<Buffer>(this, "Vertex Buffer");
-		struct Vertex
-		{
-			Vector3 Position;
-			Vector4 Color;
-		};
-		Vertex vertices[] = {
-			{ { 0.0f, 0.25f, 0.0f }, { 1, 0, 0, 1} },
-			{ { 0.25f, -0.25f, 0.0f }, { 0, 1, 0, 1 } },
-			{ { -0.25f, -0.25f, 0.0f }, { 0, 0, 1, 1 } },
-		};
-		pVertexBuffer->Create(BufferDesc::CreateVertexBuffer(ARRAYSIZE(vertices), sizeof(Vertex), BufferFlag::ShaderResource));
-		pVertexBuffer->SetData(pContext2, vertices, sizeof(Vertex) * ARRAYSIZE(vertices));*/
-
-		//Bottom Level Acceleration Structure
-		{
-			std::vector<D3D12_RAYTRACING_GEOMETRY_DESC> geometries;
-
-			for (size_t i = 0; i < m_pMesh->GetMeshCount(); ++i)
-			{
-				SubMesh* pMesh = m_pMesh->GetMesh(i);
-				D3D12_RAYTRACING_GEOMETRY_DESC geometryDesc{};
-				geometryDesc.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
-				geometryDesc.Flags = D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
-				geometryDesc.Triangles.IndexBuffer = pMesh->GetIndexBuffer()->GetGpuHandle();
-				geometryDesc.Triangles.IndexCount = pMesh->GetIndexBuffer()->GetDesc().ElementCount;
-				geometryDesc.Triangles.IndexFormat = DXGI_FORMAT_R32_UINT;
-				geometryDesc.Triangles.Transform3x4 = 0;
-				geometryDesc.Triangles.VertexBuffer.StartAddress = pMesh->GetVertexBuffer()->GetGpuHandle();
-				geometryDesc.Triangles.VertexBuffer.StrideInBytes = pMesh->GetVertexBuffer()->GetDesc().ElementSize;
-				geometryDesc.Triangles.VertexCount = pMesh->GetVertexBuffer()->GetDesc().ElementCount;
-				geometryDesc.Triangles.VertexFormat = DXGI_FORMAT_R32G32B32_FLOAT;
-				geometries.push_back(geometryDesc);
-			}
-
-			D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS prebuildInfo{};
-			prebuildInfo.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
-			prebuildInfo.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_NONE;
-			prebuildInfo.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
-			prebuildInfo.NumDescs = (uint32)geometries.size();
-			prebuildInfo.pGeometryDescs = geometries.data();
-
-			D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO info{};
-			pDevice->GetRaytracingAccelerationStructurePrebuildInfo(&prebuildInfo, &info);
-
-			pBLASScratch = std::make_unique<Buffer>(this, "BLAS Scratch Buffer");
-			pBLASScratch->Create(BufferDesc::CreateByteAddress(Math::AlignUp<uint64>(info.ScratchDataSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT), BufferFlag::UnorderedAccess));
-			pBLAS = std::make_unique<Buffer>(this, "BLAS");
-			pBLAS->Create(BufferDesc::CreateAccelerationStructure(Math::AlignUp<uint64>(info.ResultDataMaxSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT), BufferFlag::UnorderedAccess));
-
-			D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC asDesc{};
-			asDesc.Inputs = prebuildInfo;
-			asDesc.DestAccelerationStructureData = pBLAS->GetGpuHandle();
-			asDesc.ScratchAccelerationStructureData = pBLASScratch->GetGpuHandle();
-			asDesc.SourceAccelerationStructureData = 0;
-
-			pCmd->BuildRaytracingAccelerationStructure(&asDesc, 0, nullptr);
-			pContext2->InsertUavBarrier(pBLAS.get(), true);
-		}
-		//Top Level Acceleration Structure
-		{
-			D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS prebuildInfo{};
-			prebuildInfo.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
-			prebuildInfo.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
-			prebuildInfo.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_NONE;
-			prebuildInfo.NumDescs = 1;
-
-			D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO info{};
-			pDevice->GetRaytracingAccelerationStructurePrebuildInfo(&prebuildInfo, &info);
-
-			pTLASScratch = std::make_unique<Buffer>(this, "TLAS Scratch");
-			pTLASScratch->Create(BufferDesc::CreateByteAddress(Math::AlignUp<uint64>(info.ScratchDataSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT), BufferFlag::None));
-			pTLAS = std::make_unique<Buffer>(this, "TLAS");
-			pTLAS->Create(BufferDesc::CreateAccelerationStructure(Math::AlignUp<uint64>(info.ResultDataMaxSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT)));
-			pDescriptorsBuffer = std::make_unique<Buffer>(this, "Descriptors Buffer");
-			pDescriptorsBuffer->Create(BufferDesc::CreateVertexBuffer((uint32)Math::AlignUp<uint64>(sizeof(D3D12_RAYTRACING_INSTANCE_DESC), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT), 4, BufferFlag::Upload));
-
-			D3D12_RAYTRACING_INSTANCE_DESC* pInstanceDesc = static_cast<D3D12_RAYTRACING_INSTANCE_DESC*>(pDescriptorsBuffer->Map());
-			pInstanceDesc->AccelerationStructure = pBLAS->GetGpuHandle();
-			pInstanceDesc->Flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE;
-			pInstanceDesc->InstanceContributionToHitGroupIndex = 0;
-			pInstanceDesc->InstanceID = 0;
-			pInstanceDesc->InstanceMask = 0xFF;
-			memcpy(pInstanceDesc->Transform, &Matrix::Identity, 12 * sizeof(float));
-			pDescriptorsBuffer->Unmap();
-
-			D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC asDesc{};
-			asDesc.DestAccelerationStructureData = pTLAS->GetGpuHandle();
-			asDesc.ScratchAccelerationStructureData = pTLASScratch->GetGpuHandle();
-			asDesc.Inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
-			asDesc.Inputs.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_NONE;
-			asDesc.Inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
-			asDesc.Inputs.InstanceDescs = pDescriptorsBuffer->GetGpuHandle();
-			asDesc.Inputs.NumDescs = 1;
-			asDesc.SourceAccelerationStructureData = 0;
-
-			pCmd->BuildRaytracingAccelerationStructure(&asDesc, 0, nullptr);
-			pContext2->InsertUavBarrier(pTLAS.get(), true);
-		}
-		//Raytracing Pipeline
-		{
-			pRayGenSignature->SetDescriptorTableSimple(0, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, D3D12_SHADER_VISIBILITY_ALL);
-			pRayGenSignature->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, D3D12_SHADER_VISIBILITY_ALL);
-			pRayGenSignature->SetConstantBufferView(2, 0, D3D12_SHADER_VISIBILITY_ALL);
-			pRayGenSignature->Finalize("Ray Gen RS", pDevice.Get(), D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE);
-			//pHitSignature->SetShaderResourceView(0, 0, D3D12_SHADER_VISIBILITY_ALL);
-			pHitSignature->Finalize("Hit RS", pDevice.Get(), D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE);
-			pMissSignature->Finalize("Hit RS", pDevice.Get(), D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE);
-			pDummySignature->Finalize("Dummy Global RS", pDevice.Get(), D3D12_ROOT_SIGNATURE_FLAG_NONE);
-
-			ShaderLibrary rayGenShader("Resources/RayTracingShaders/RayGen.hlsl");
-			ShaderLibrary hitShader("Resources/RayTracingShaders/Hit.hlsl");
-			ShaderLibrary missShader("Resources/RayTracingShaders/Miss.hlsl");
-
-			CD3DX12_STATE_OBJECT_DESC desc(D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE);
-			{
-				CD3DX12_DXIL_LIBRARY_SUBOBJECT* pRayGenDesc = desc.CreateSubobject<CD3DX12_DXIL_LIBRARY_SUBOBJECT>();
-				pRayGenDesc->SetDXILLibrary(&CD3DX12_SHADER_BYTECODE(rayGenShader.GetByteCode(), rayGenShader.GetByteCodeSize()));
-				pRayGenDesc->DefineExport(L"RayGen");
-				CD3DX12_DXIL_LIBRARY_SUBOBJECT* pHitDesc = desc.CreateSubobject<CD3DX12_DXIL_LIBRARY_SUBOBJECT>();
-				pHitDesc->SetDXILLibrary(&CD3DX12_SHADER_BYTECODE(hitShader.GetByteCode(), hitShader.GetByteCodeSize()));
-				pHitDesc->DefineExport(L"ClosestHit");
-				CD3DX12_DXIL_LIBRARY_SUBOBJECT* pMissDesc = desc.CreateSubobject<CD3DX12_DXIL_LIBRARY_SUBOBJECT>();
-				pMissDesc->SetDXILLibrary(&CD3DX12_SHADER_BYTECODE(missShader.GetByteCode(), missShader.GetByteCodeSize()));
-				pMissDesc->DefineExport(L"Miss");
-			}
-			{
-				CD3DX12_HIT_GROUP_SUBOBJECT* pHitGroupDesc = desc.CreateSubobject<CD3DX12_HIT_GROUP_SUBOBJECT>();
-				pHitGroupDesc->SetHitGroupExport(L"HitGroup");
-				pHitGroupDesc->SetClosestHitShaderImport(L"ClosestHit");
-			}
-			{
-				CD3DX12_LOCAL_ROOT_SIGNATURE_SUBOBJECT* pRayGenRs = desc.CreateSubobject<CD3DX12_LOCAL_ROOT_SIGNATURE_SUBOBJECT>();
-				pRayGenRs->SetRootSignature(pRayGenSignature->GetRootSignature());
-				CD3DX12_SUBOBJECT_TO_EXPORTS_ASSOCIATION_SUBOBJECT* pRayGenAssociation = desc.CreateSubobject<CD3DX12_SUBOBJECT_TO_EXPORTS_ASSOCIATION_SUBOBJECT>();
-				pRayGenAssociation->AddExport(L"RayGen");
-				pRayGenAssociation->SetSubobjectToAssociate(*pRayGenRs);
-
-				CD3DX12_LOCAL_ROOT_SIGNATURE_SUBOBJECT* pMissRs = desc.CreateSubobject<CD3DX12_LOCAL_ROOT_SIGNATURE_SUBOBJECT>();
-				pMissRs->SetRootSignature(pMissSignature->GetRootSignature());
-				CD3DX12_SUBOBJECT_TO_EXPORTS_ASSOCIATION_SUBOBJECT* pMissAssociation = desc.CreateSubobject<CD3DX12_SUBOBJECT_TO_EXPORTS_ASSOCIATION_SUBOBJECT>();
-				pMissAssociation->AddExport(L"Miss");
-				pMissAssociation->SetSubobjectToAssociate(*pMissRs);
-
-				CD3DX12_LOCAL_ROOT_SIGNATURE_SUBOBJECT* pHitRs = desc.CreateSubobject<CD3DX12_LOCAL_ROOT_SIGNATURE_SUBOBJECT>();
-				pHitRs->SetRootSignature(pHitSignature->GetRootSignature());
-				CD3DX12_SUBOBJECT_TO_EXPORTS_ASSOCIATION_SUBOBJECT* pHitAssociation = desc.CreateSubobject<CD3DX12_SUBOBJECT_TO_EXPORTS_ASSOCIATION_SUBOBJECT>();
-				pHitAssociation->AddExport(L"HitGroup");
-				pHitAssociation->SetSubobjectToAssociate(*pHitRs);
-			}
-			{
-				CD3DX12_RAYTRACING_SHADER_CONFIG_SUBOBJECT* pRtConfig = desc.CreateSubobject<CD3DX12_RAYTRACING_SHADER_CONFIG_SUBOBJECT>();
-				pRtConfig->Config(4 * sizeof(float), 2 * sizeof(float));
-
-				CD3DX12_RAYTRACING_PIPELINE_CONFIG_SUBOBJECT* pRtPipelineConfig = desc.CreateSubobject<CD3DX12_RAYTRACING_PIPELINE_CONFIG_SUBOBJECT>();
-				pRtPipelineConfig->Config(1);
-
-				CD3DX12_GLOBAL_ROOT_SIGNATURE_SUBOBJECT* pGlobalRs = desc.CreateSubobject<CD3DX12_GLOBAL_ROOT_SIGNATURE_SUBOBJECT>();
-				pGlobalRs->SetRootSignature(pDummySignature->GetRootSignature());
-			}
-			D3D12_STATE_OBJECT_DESC stateObject = *desc;
-			HR(pDevice->CreateStateObject(&stateObject, IID_PPV_ARGS(pPipeline.GetAddressOf())));
-			HR(pPipeline->QueryInterface(IID_PPV_ARGS(pPipelineProperties.GetAddressOf())));
-		}
-		//Output texture
-		{
-			m_pRayTracingOutput->Create(TextureDesc::Create2D(m_WindowWidth, m_WindowHeight, DXGI_FORMAT_R8G8B8A8_UNORM, TextureFlag::UnorderedAccess));
-			m_pRayTracingOutput->CreateUAV(&pOutputRawUAV, TextureUAVDesc(0));
-		}
-		//Copy descriptors
-		{
-			pDevice->CopyDescriptorsSimple(1, uavHandle.GetCpuHandle(), m_pRayTracingOutput->GetUAV(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-			pDevice->CopyDescriptorsSimple(1, srvHandle.GetCpuHandle(), pTLAS->GetSRV()->GetDescriptor(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-		}
-
-		nv_helpers_dx12::ShaderBindingTableGenerator sbtGenerator;
-		//Shader Bindings
-		{
-			/*uint64 progIdSize = D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT;
-			uint64 totalSize = 0;
-		
-			struct SBTEntry
-			{
-				SBTEntry(const std::wstring& entryPoint, const std::vector<void*>& inputData)
-					: EntryPoint(entryPoint), InputData(inputData)
-				{}
-				std::wstring EntryPoint;
-				std::vector<void*> InputData;
-				uint64 Size;
-			};
-			std::vector<SBTEntry> entries;
-			entries.emplace_back(SBTEntry(L"RayGen", { reinterpret_cast<uint64*>(uavHandle.GetGpuHandle().ptr), reinterpret_cast<uint64*>(srvHandle.GetGpuHandle().ptr) }));
-			entries.emplace_back(SBTEntry(L"Miss", { }));
-			entries.emplace_back(SBTEntry(L"HitGroup", { }));
-
-			for (SBTEntry& entry : entries)
-			{
-				entry.Size = Math::AlignUp<uint64>(D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT + 8 * entry.InputData.size(), D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT);
-				totalSize += entry.Size;
-				if (entry.EntryPoint == L"RayGen")
-				{
-					rayGenSize = entry.Size;
-				}
-			}
-
-			pShaderBindingTable->Create(BufferDesc::CreateVertexBuffer(Math::AlignUp<uint64>(totalSize, 256), 1, BufferFlag::Upload));
-			char* pData = (char*)pShaderBindingTable->Map();
-			for (SBTEntry& entry : entries)
-			{
-				void* id = pPipelineProperties->GetShaderIdentifier(entry.EntryPoint.c_str());
-				memcpy(pData, id, progIdSize);
-				memcpy(pData + progIdSize, entry.InputData.data(), entry.InputData.size() * 8);
-				pData += entry.Size;
-			}
-			pShaderBindingTable->Unmap();*/
-
-			struct CameraParameters
-			{
-				Matrix ViewInverse;
-				Matrix ProjectionInverse;
-			} cameraData;
-			cameraData.ViewInverse = m_pCamera->GetViewInverse();
-			cameraData.ProjectionInverse = m_pCamera->GetProjectionInverse();
-
-			DynamicAllocation allocation = pDynamicAllocator->Allocate(sizeof(CameraParameters));
-			memcpy(allocation.pMappedMemory, &cameraData, sizeof(CameraParameters));
-
-			sbtGenerator.AddMissProgram(L"Miss", {});
-			sbtGenerator.AddRayGenerationProgram(L"RayGen", { reinterpret_cast<uint64*>(uavHandle.GetGpuHandle().ptr), reinterpret_cast<uint64*>(srvHandle.GetGpuHandle().ptr), reinterpret_cast<uint64*>(allocation.GpuHandle + allocation.Offset) });
-			sbtGenerator.AddHitGroup(L"HitGroup", { /*(void*)pVertexBuffer->GetGpuHandle()*/ });
-			uint64 size = sbtGenerator.ComputeSBTSize();
-			pShaderBindingTable->Create(BufferDesc::CreateVertexBuffer((uint32)Math::AlignUp<uint64>(size, 256), 1, BufferFlag::Upload));
-			sbtGenerator.Generate(pShaderBindingTable->GetResource(), pPipelineProperties.Get());
-		}
-		//Dispatch Rays
-		{
-			D3D12_DISPATCH_RAYS_DESC rayDesc{};
-			rayDesc.Width = m_pRayTracingOutput->GetWidth();
-			rayDesc.Height = m_pRayTracingOutput->GetHeight();
-			rayDesc.Depth = 1;
-			rayDesc.RayGenerationShaderRecord.StartAddress = pShaderBindingTable->GetGpuHandle();
-			rayDesc.RayGenerationShaderRecord.SizeInBytes = sbtGenerator.GetRayGenSectionSize();
-			rayDesc.MissShaderTable.StartAddress = pShaderBindingTable->GetGpuHandle() + sbtGenerator.GetRayGenSectionSize();
-			rayDesc.MissShaderTable.SizeInBytes = sbtGenerator.GetMissSectionSize();
-			rayDesc.MissShaderTable.StrideInBytes = sbtGenerator.GetMissEntrySize();
-			rayDesc.HitGroupTable.StartAddress = pShaderBindingTable->GetGpuHandle() + sbtGenerator.GetRayGenSectionSize() + sbtGenerator.GetMissSectionSize();
-			rayDesc.HitGroupTable.SizeInBytes = sbtGenerator.GetHitGroupSectionSize();
-			rayDesc.HitGroupTable.StrideInBytes = sbtGenerator.GetHitGroupEntrySize();
-			pContext2->InsertResourceBarrier(m_pRayTracingOutput.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-			pContext2->ClearUavUInt(m_pRayTracingOutput.get(), pOutputRawUAV);
-			pContext2->FlushResourceBarriers();
-	
-			pCmd->SetPipelineState1(pPipeline.Get());
-			pCmd->DispatchRays(&rayDesc);
-		}
-		pContext2->Execute(true);
-	}
-
 }
 
 void Graphics::UpdateImGui()
@@ -1513,7 +1223,13 @@ void Graphics::UpdateImGui()
 			RandomizeLights(m_DesiredLightCount);
 		}
 
-		ImGui::Checkbox("Raytracing", &g_ShowRaytraced);
+		if (ImGui::Checkbox("Raytracing", &g_ShowRaytraced))
+		{
+			if (m_RayTracingTier == D3D12_RAYTRACING_TIER_NOT_SUPPORTED)
+			{
+				g_ShowRaytraced = false;
+			}
+		}
 
 		ImGui::SliderFloat("Min Log Luminance", &g_MinLogLuminance, -100, 20);
 		ImGui::SliderFloat("Max Log Luminance", &g_MaxLogLuminance, -50, 50);
