@@ -19,18 +19,29 @@
 Raytracing::Raytracing(Graphics* pGraphics)
 	: m_pGraphics(pGraphics)
 {
-	SetupResources(pGraphics);
-	SetupPipelines(pGraphics);
+	if (pGraphics->SupportsRayTracing())
+	{
+		SetupResources(pGraphics);
+		SetupPipelines(pGraphics);
+	}
 }
 
 void Raytracing::OnSwapchainCreated(int windowWidth, int windowHeight)
 {
-	m_pOutputTexture->Create(TextureDesc::Create2D(windowWidth, windowHeight, DXGI_FORMAT_R8G8B8A8_UNORM, TextureFlag::UnorderedAccess));
-	m_pOutputTexture->CreateUAV(&pOutputRawUAV, TextureUAVDesc(0));
+	if (m_pOutputTexture)
+	{
+		m_pOutputTexture->Create(TextureDesc::Create2D(windowWidth, windowHeight, DXGI_FORMAT_R8G8B8A8_UNORM, TextureFlag::UnorderedAccess));
+		m_pOutputTexture->CreateUAV(&pOutputRawUAV, TextureUAVDesc(0));
+	}
 }
 
 void Raytracing::Execute(RGGraph& graph, const RaytracingInputResources& resources)
 {
+	if (m_pOutputTexture == nullptr)
+	{
+		return;
+	}
+
 	graph.AddPass("Raytracing", [&](RGPassBuilder& builder)
 		{
 			builder.NeverCull();
