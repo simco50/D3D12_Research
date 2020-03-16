@@ -1188,7 +1188,7 @@ void Graphics::InitializeAssets()
 			{ 0.25f, -0.25f, 0.0f },
 			{ -0.25f, -0.25f, 0.0f },
 		};
-		pVertexBuffer->Create(BufferDesc::CreateVertexBuffer(3, sizeof(Vector3)));
+		pVertexBuffer->Create(BufferDesc::CreateVertexBuffer(3, sizeof(Vector3), BufferFlag::ShaderResource));
 		pVertexBuffer->SetData(pContext, positions, ARRAYSIZE(positions));
 
 		//Bottom Level Acceleration Structure
@@ -1215,6 +1215,8 @@ void Graphics::InitializeAssets()
 			D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO info{};
 			pDevice->GetRaytracingAccelerationStructurePrebuildInfo(&prebuildInfo, &info);
 
+			pContext->InsertResourceBarrier(pVertexBuffer.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, true);
+
 			pBLASScratch = std::make_unique<Buffer>(this, "BLAS Scratch Buffer");
 			pBLASScratch->Create(BufferDesc::CreateByteAddress(Math::AlignUp<int>(info.ScratchDataSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT), BufferFlag::UnorderedAccess));
 			pBLAS = std::make_unique<Buffer>(this, "BLAS");
@@ -1227,24 +1229,25 @@ void Graphics::InitializeAssets()
 			asDesc.SourceAccelerationStructureData = 0;
 
 			pCmd->BuildRaytracingAccelerationStructure(&asDesc, 0, nullptr);
+			pContext->InsertUavBarrier(pBLAS.get(), true);
 		}
 		//Top Level Acceleration Structure
 		{
 			D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS prebuildInfo{};
 			prebuildInfo.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
-			prebuildInfo.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_NONE;
 			prebuildInfo.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
+			prebuildInfo.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_NONE;
 			prebuildInfo.NumDescs = 1;
 
 			D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO info{};
 			pDevice->GetRaytracingAccelerationStructurePrebuildInfo(&prebuildInfo, &info);
 
 			pTLASScratch = std::make_unique<Buffer>(this, "TLAS Scratch");
-			pTLASScratch->Create(BufferDesc::CreateByteAddress(Math::AlignUp<int>(info.ScratchDataSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT), BufferFlag::None));
+			pTLASScratch->Create(BufferDesc::CreateByteAddress(Math::AlignUp<uint64>(info.ScratchDataSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT), BufferFlag::None));
 			pTLAS = std::make_unique<Buffer>(this, "TLAS");
-			pTLAS->Create(BufferDesc::CreateAccelerationStructure(Math::AlignUp<int>(info.ResultDataMaxSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT)));
+			pTLAS->Create(BufferDesc::CreateAccelerationStructure(Math::AlignUp<uint64>(info.ResultDataMaxSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT)));
 			pDescriptorsBuffer = std::make_unique<Buffer>(this, "Descriptors Buffer");
-			pDescriptorsBuffer->Create(BufferDesc::CreateVertexBuffer(1, sizeof(D3D12_RAYTRACING_INSTANCE_DESC), BufferFlag::Upload));
+			pDescriptorsBuffer->Create(BufferDesc::CreateVertexBuffer(Math::AlignUp<int>(sizeof(D3D12_RAYTRACING_INSTANCE_DESC), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT), 4, BufferFlag::Upload));
 
 			D3D12_RAYTRACING_INSTANCE_DESC* pInstanceDesc = static_cast<D3D12_RAYTRACING_INSTANCE_DESC*>(pDescriptorsBuffer->Map());
 			pInstanceDesc->AccelerationStructure = pBLAS->GetGpuHandle();
@@ -1252,7 +1255,7 @@ void Graphics::InitializeAssets()
 			pInstanceDesc->InstanceContributionToHitGroupIndex = 0;
 			pInstanceDesc->InstanceID = 0;
 			pInstanceDesc->InstanceMask = 0xFF;
-			memcpy(pInstanceDesc->Transform, &Matrix::Identity, sizeof(Matrix));
+			memcpy(pInstanceDesc->Transform, &Matrix::Identity, 12 * sizeof(float));
 			pDescriptorsBuffer->Unmap();
 
 			D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC asDesc{};
@@ -1260,11 +1263,13 @@ void Graphics::InitializeAssets()
 			asDesc.ScratchAccelerationStructureData = pTLASScratch->GetGpuHandle();
 			asDesc.Inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
 			asDesc.Inputs.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_NONE;
+			asDesc.Inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
 			asDesc.Inputs.InstanceDescs = pDescriptorsBuffer->GetGpuHandle();
 			asDesc.Inputs.NumDescs = 1;
 			asDesc.SourceAccelerationStructureData = 0;
 
 			pCmd->BuildRaytracingAccelerationStructure(&asDesc, 0, nullptr);
+			pContext->InsertUavBarrier(pTLAS.get(), true);
 		}
 		//Raytracing Pipeline
 		{
@@ -1340,11 +1345,11 @@ void Graphics::InitializeAssets()
 			pDevice->CopyDescriptorsSimple(1, srvHandle.GetCpuHandle(), pTLAS->GetSRV()->GetDescriptor(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 		}
 
-		int rayGenSize = 0;
+		uint64 rayGenSize = 0;
 		//Shader Bindings
 		{
-			int64 progIdSize = D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT;
-			int64 totalSize = 0;
+			uint64 progIdSize = D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT;
+			uint64 totalSize = 0;
 		
 			struct SBTEntry
 			{
@@ -1353,7 +1358,7 @@ void Graphics::InitializeAssets()
 				{}
 				std::wstring EntryPoint;
 				std::vector<void*> InputData;
-				int Size;
+				uint64 Size;
 			};
 			std::vector<SBTEntry> entries;
 			entries.emplace_back(SBTEntry(L"RayGen", { reinterpret_cast<uint64*>(uavHandle.GetGpuHandle().ptr), reinterpret_cast<uint64*>(srvHandle.GetGpuHandle().ptr) }));
@@ -1362,12 +1367,12 @@ void Graphics::InitializeAssets()
 
 			for (SBTEntry& entry : entries)
 			{
-				entry.Size = Math::AlignUp<int64>(D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT + 8 * entry.InputData.size(), D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT);
+				entry.Size = Math::AlignUp<uint64>(D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT + 8 * entry.InputData.size(), D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT);
 				totalSize += entry.Size;
 			}
 			rayGenSize = entries[0].Size;
 
-			pShaderBindingTable->Create(BufferDesc::CreateVertexBuffer(Math::AlignUp<int64>(totalSize, 256), 1, BufferFlag::Upload));
+			pShaderBindingTable->Create(BufferDesc::CreateVertexBuffer(Math::AlignUp<uint64>(totalSize, 256), 1, BufferFlag::Upload));
 			char* pData = (char*)pShaderBindingTable->Map();
 			for (SBTEntry& entry : entries)
 			{

@@ -27,8 +27,8 @@ void RayGen()
 
 	payload.colorAndDistance.xy = (float2)launchIndex.xy / dims.xy;
 
-	/*// Trace the ray
-	TraceRay(
+	// Trace the ray
+	/*TraceRay(
 		// Parameter name: AccelerationStructure
 		// Acceleration structure
 		SceneBVH,
