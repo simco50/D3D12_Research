@@ -112,20 +112,32 @@ void ShaderBindingTableGenerator::Generate(ID3D12Resource* sbtBuffer,
   {
     throw std::logic_error("Could not map the shader binding table");
   }
-  // Copy the shader identifiers followed by their resource pointers or root constants: first the
-  // ray generation, then the miss shaders, and finally the set of hit groups
-  uint32_t offset = 0;
 
-  offset = CopyShaderData(raytracingPipeline, pData, m_rayGen, m_rayGenEntrySize);
-  pData += offset;
-
-  offset = CopyShaderData(raytracingPipeline, pData, m_miss, m_missEntrySize);
-  pData += offset;
-
-  offset = CopyShaderData(raytracingPipeline, pData, m_hitGroup, m_hitGroupEntrySize);
+  Generate(pData, raytracingPipeline);
 
   // Unmap the SBT
   sbtBuffer->Unmap(0, nullptr);
+}
+
+void ShaderBindingTableGenerator::Generate(void* pMappedData, ID3D12StateObjectProperties* raytracingPipeline)
+{
+    if (pMappedData == nullptr)
+    {
+		throw std::logic_error("Data is null");
+    }
+	// Map the SBT
+	uint8_t* pData = (uint8_t*)pMappedData;
+	// Copy the shader identifiers followed by their resource pointers or root constants: first the
+	// ray generation, then the miss shaders, and finally the set of hit groups
+	uint32_t offset = 0;
+
+	offset = CopyShaderData(raytracingPipeline, pData, m_rayGen, m_rayGenEntrySize);
+	pData += offset;
+
+	offset = CopyShaderData(raytracingPipeline, pData, m_miss, m_missEntrySize);
+	pData += offset;
+
+	offset = CopyShaderData(raytracingPipeline, pData, m_hitGroup, m_hitGroupEntrySize);
 }
 
 //--------------------------------------------------------------------------------------------------

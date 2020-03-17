@@ -51,8 +51,6 @@ private:
 	std::unique_ptr<Texture> m_pOutputTexture;
 	UnorderedAccessView* pOutputRawUAV = nullptr;
 
-	std::unique_ptr<Buffer> m_pShaderBindingTable;
-
 	/*std::unique_ptr<OnlineDescriptorAllocator> pDescriptorAllocator = std::make_unique<OnlineDescriptorAllocator>(this, pContext2, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 	std::unique_ptr<DynamicResourceAllocator> pDynamicAllocator = std::make_unique<DynamicResourceAllocator>(GetAllocationManager());
 

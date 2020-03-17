@@ -140,6 +140,12 @@ public:
   void Generate(ID3D12Resource* sbtBuffer,
                 ID3D12StateObjectProperties* raytracingPipeline);
 
+  /// Build the SBT and store it into sbtBuffer, which has to be pre-allocated on the upload heap.
+  /// Access to the raytracing pipeline object is required to fetch program identifiers using their
+  /// names
+  void Generate(void* pMappedData,
+	  ID3D12StateObjectProperties* raytracingPipeline);
+
   /// Reset the sets of programs and hit groups
   void Reset();
 
