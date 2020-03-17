@@ -654,6 +654,8 @@ void Graphics::Update()
 		RaytracingInputResources rtResources{};
 		rtResources.pCamera = m_pCamera.get();
 		rtResources.pRenderTarget = GetCurrentBackbuffer();
+		rtResources.pNormalsTexture = m_pNormals.get();
+		rtResources.pDepthTexture = m_pResolvedDepthStencil.get();
 		m_pRaytracing->Execute(graph, rtResources);
 	}
 
@@ -808,6 +810,12 @@ void Graphics::InitD3D()
 		m_RenderPassTier = featureSupport.RenderPassesTier;
 		m_RayTracingTier = featureSupport.RaytracingTier;
 	}
+
+	D3D12_FEATURE_DATA_SHADER_MODEL shaderModelSupport{};
+	shaderModelSupport.HighestShaderModel = D3D_SHADER_MODEL_6_5;
+	m_pDevice->CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &shaderModelSupport, sizeof(D3D12_FEATURE_DATA_SHADER_MODEL));
+	m_ShaderModelMajor = shaderModelSupport.HighestShaderModel >> 0x4;
+	m_ShaderModelMinor = shaderModelSupport.HighestShaderModel & 0xF;
 
 	//Check MSAA support
 	D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS qualityLevels;
@@ -1450,6 +1458,14 @@ bool Graphics::CheckTypedUAVSupport(DXGI_FORMAT format) const
 bool Graphics::UseRenderPasses() const
 {
 	return m_RenderPassTier > D3D12_RENDER_PASS_TIER::D3D12_RENDER_PASS_TIER_0;
+}
+
+bool Graphics::GetShaderModel(int& major, int& minor) const
+{
+	bool supported = m_ShaderModelMajor > major || (m_ShaderModelMajor == major && m_ShaderModelMinor >= minor);
+	major = m_ShaderModelMajor;
+	minor = m_ShaderModelMinor;
+	return supported;
 }
 
 void Graphics::IdleGPU()

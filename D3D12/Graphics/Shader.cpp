@@ -328,9 +328,16 @@ ShaderLibrary::ShaderLibrary(const char* pFilePath, const std::vector<std::strin
 	wchar_t fileName[256];
 	ToWidechar(m_Path.c_str(), fileName, 256);
 
+	static const constexpr LPCWSTR pArgs[] =
+	{
+		L"/Zpr",
+		L"/WX",
+		L"/O3",
+	};
+
 	ComPtr<IDxcOperationResult> pCompileResult;
 
-	HR(pCompiler->Compile(pSource.Get(), fileName, L"", L"lib_6_3", nullptr, 0, dxcDefines.data(), (uint32)dxcDefines.size(), nullptr, pCompileResult.GetAddressOf()));
+	HR(pCompiler->Compile(pSource.Get(), fileName, L"", L"lib_6_3", const_cast<LPCWSTR*>(pArgs), ARRAYSIZE(pArgs), dxcDefines.data(), (uint32)dxcDefines.size(), nullptr, pCompileResult.GetAddressOf()));
 
 	auto checkResult = [&](IDxcOperationResult* pResult) {
 		HRESULT hrCompilation;

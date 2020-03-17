@@ -13,6 +13,8 @@ class RGGraph;
 struct RaytracingInputResources
 {
 	Texture* pRenderTarget = nullptr;
+	Texture* pNormalsTexture = nullptr;
+	Texture* pDepthTexture = nullptr;
 	Camera* pCamera = nullptr;
 };
 
