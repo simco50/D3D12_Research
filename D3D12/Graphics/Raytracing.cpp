@@ -62,23 +62,32 @@ void Raytracing::Execute(RGGraph& graph, const RaytracingInputResources& resourc
 					context.InsertResourceBarrier(resources.pDepthTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 					context.InsertResourceBarrier(resources.pNormalsTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 					context.InsertResourceBarrier(m_pOutputTexture.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-					context.FlushResourceBarriers();
 
-					DescriptorHandle descriptors = context.AllocateTransientDescriptors(5, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+					const int descriptorsToAllocate = 5;
+					int totalAllocatedDescriptors = 0;
+					DescriptorHandle descriptors = context.AllocateTransientDescriptors(descriptorsToAllocate, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 					ID3D12Device* pDevice = m_pGraphics->GetDevice();
 
-					DescriptorHandle renderTargetUAV = descriptors;
-					pDevice->CopyDescriptorsSimple(1, renderTargetUAV.GetCpuHandle(), m_pOutputTexture->GetUAV(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-					descriptors += pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-					DescriptorHandle tlasSRV = descriptors;
-					pDevice->CopyDescriptorsSimple(1, tlasSRV.GetCpuHandle(), m_pTLAS->GetSRV()->GetDescriptor(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-					descriptors += pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-					DescriptorHandle textureSRVs = descriptors;
-					pDevice->CopyDescriptorsSimple(1, descriptors.GetCpuHandle(), resources.pNormalsTexture->GetSRV(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-					descriptors += pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-					pDevice->CopyDescriptorsSimple(1, descriptors.GetCpuHandle(), resources.pDepthTexture->GetSRV(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-					descriptors += pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-					pDevice->CopyDescriptorsSimple(1, descriptors.GetCpuHandle(), resources.pNoiseTexture->GetSRV(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+					auto pfCopyDescriptors = [&](const std::vector<D3D12_CPU_DESCRIPTOR_HANDLE>& sourceDescriptors)
+					{
+						DescriptorHandle originalHandle = descriptors;
+						for (size_t i = 0; i < sourceDescriptors.size(); ++i)
+						{
+							if (totalAllocatedDescriptors >= descriptorsToAllocate)
+							{
+								assert(false);
+							}
+
+							pDevice->CopyDescriptorsSimple(1, descriptors.GetCpuHandle(), sourceDescriptors[i], D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+							descriptors += pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+							++totalAllocatedDescriptors;
+						}
+						return originalHandle;
+					};
+
+					DescriptorHandle renderTargetUAV = pfCopyDescriptors({ m_pOutputTexture->GetUAV() });
+					DescriptorHandle tlasSRV = pfCopyDescriptors({ m_pTLAS->GetSRV()->GetDescriptor() });
+					DescriptorHandle textureSRVs = pfCopyDescriptors({ resources.pNormalsTexture->GetSRV(), resources.pDepthTexture->GetSRV(), resources.pNoiseTexture->GetSRV() });
 
 					constexpr const int numRandomVectors = 64;
 					struct CameraParameters
@@ -128,11 +137,10 @@ void Raytracing::Execute(RGGraph& graph, const RaytracingInputResources& resourc
 					rayDesc.HitGroupTable.StartAddress = sbtAllocation.GpuHandle + sbtGenerator.GetRayGenSectionSize() + sbtGenerator.GetMissSectionSize();
 					rayDesc.HitGroupTable.SizeInBytes = sbtGenerator.GetHitGroupSectionSize();
 					rayDesc.HitGroupTable.StrideInBytes = sbtGenerator.GetHitGroupEntrySize();
-					context.InsertResourceBarrier(m_pOutputTexture.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-					context.ClearUavUInt(m_pOutputTexture.get(), pOutputRawUAV);
-					context.FlushResourceBarriers();
 
 					pCmd->SetPipelineState1(m_pStateObject.Get());
+
+					context.FlushResourceBarriers();
 					pCmd->DispatchRays(&rayDesc);
 
 					GPU_PROFILE_SCOPE("CopyTarget", &context);
