@@ -15,6 +15,7 @@ struct RaytracingInputResources
 	Texture* pRenderTarget = nullptr;
 	Texture* pNormalsTexture = nullptr;
 	Texture* pDepthTexture = nullptr;
+	Texture* pNoiseTexture = nullptr;
 	Camera* pCamera = nullptr;
 };
 

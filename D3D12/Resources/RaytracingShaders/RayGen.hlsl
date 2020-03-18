@@ -1,7 +1,7 @@
 #include "Common.hlsl"
 
 #define RPP 64
-#define RPP_ACTUAL 12
+#define RPP_ACTUAL 1
 
 // Raytracing output texture, accessed as a UAV
 RWTexture2D<float4> gOutput : register(u0);
@@ -11,6 +11,7 @@ RaytracingAccelerationStructure SceneBVH : register(t0);
 
 Texture2D tNormals : register(t1);
 Texture2D tDepth : register(t2);
+Texture2D tNoise : register(t3);
 
 cbuffer ShaderParameters : register(b0)
 {
@@ -38,7 +39,7 @@ void RayGen()
 
 	float3 normal = normalize(tNormals[launchIndex].rgb);
 
-	float3 randomVec = normalize(float3(0.1f, -0.8f, 0.4f));
+	float3 randomVec = normalize(float3(tNoise[texCoord * 2048 % 256].xy * 2 - 1, 0));
 	float3 tangent = normalize(randomVec - normal * dot(randomVec, normal));
 	float3 bitangent = cross(tangent, normal);
 	float3x3 TBN = float3x3(tangent, bitangent, normal);
@@ -48,10 +49,10 @@ void RayGen()
 	{
 		float3 n = mul(cRandomVectors[i].xyz, TBN);
 		RayDesc ray;
-		ray.Origin = world.xyz + n * 0.000001f;
-		ray.Direction = n;
-		ray.TMin = 0;
-		ray.TMax = 0.25f;
+		ray.Origin = world.xyz;
+		ray.Direction = normalize(n);
+		ray.TMin = 0.001f;
+		ray.TMax = length(n);
 
 		// Trace the ray
 		TraceRay(
@@ -61,7 +62,9 @@ void RayGen()
 
 			// Parameter name: RayFlags
 			// Flags can be used to specify the behavior upon hitting a surface
-			RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH,
+			RAY_FLAG_CULL_BACK_FACING_TRIANGLES
+			 | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH
+        	 | RAY_FLAG_FORCE_OPAQUE,
 
 			// Parameter name: InstanceInclusionMask
 			// Instance inclusion mask, which can be used to mask out some geometry to

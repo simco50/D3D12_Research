@@ -64,7 +64,7 @@ void Raytracing::Execute(RGGraph& graph, const RaytracingInputResources& resourc
 					context.InsertResourceBarrier(m_pOutputTexture.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 					context.FlushResourceBarriers();
 
-					DescriptorHandle descriptors = context.AllocateTransientDescriptors(4, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+					DescriptorHandle descriptors = context.AllocateTransientDescriptors(5, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 					ID3D12Device* pDevice = m_pGraphics->GetDevice();
 
 					DescriptorHandle renderTargetUAV = descriptors;
@@ -77,6 +77,8 @@ void Raytracing::Execute(RGGraph& graph, const RaytracingInputResources& resourc
 					pDevice->CopyDescriptorsSimple(1, descriptors.GetCpuHandle(), resources.pNormalsTexture->GetSRV(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 					descriptors += pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 					pDevice->CopyDescriptorsSimple(1, descriptors.GetCpuHandle(), resources.pDepthTexture->GetSRV(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+					descriptors += pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+					pDevice->CopyDescriptorsSimple(1, descriptors.GetCpuHandle(), resources.pNoiseTexture->GetSRV(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
 					constexpr const int numRandomVectors = 64;
 					struct CameraParameters
@@ -95,7 +97,7 @@ void Raytracing::Execute(RGGraph& graph, const RaytracingInputResources& resourc
 							randoms[i] = Vector4(Math::RandVector());
 							randoms[i].z = Math::Lerp(0.1f, 0.8f, (float)abs(randoms[i].z));
 							randoms[i].Normalize();
-							randoms[i] *= Math::Lerp(0.2f, 1.0f, (float)pow(Math::RandomRange(0, 1), 2));
+							randoms[i] *= Math::Lerp(0.1f, 1.0f, (float)pow(Math::RandomRange(0, 1), 2));
 						}
 						written = true;
 					}
@@ -256,7 +258,7 @@ void Raytracing::SetupPipelines(Graphics* pGraphics)
 		m_pRayGenSignature->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_ALL);
 		m_pRayGenSignature->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, D3D12_SHADER_VISIBILITY_ALL);
 		m_pRayGenSignature->SetDescriptorTableSimple(2, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, D3D12_SHADER_VISIBILITY_ALL);
-		m_pRayGenSignature->SetDescriptorTableSimple(3, 1, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, D3D12_SHADER_VISIBILITY_ALL);
+		m_pRayGenSignature->SetDescriptorTableSimple(3, 1, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3, D3D12_SHADER_VISIBILITY_ALL);
 		m_pRayGenSignature->Finalize("Ray Gen RS", pGraphics->GetDevice(), D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE);
 		m_pHitSignature = std::make_unique<RootSignature>();
 		m_pHitSignature->Finalize("Hit RS", pGraphics->GetDevice(), D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE);

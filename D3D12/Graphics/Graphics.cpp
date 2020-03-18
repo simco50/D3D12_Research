@@ -656,6 +656,7 @@ void Graphics::Update()
 		rtResources.pRenderTarget = GetCurrentBackbuffer();
 		rtResources.pNormalsTexture = m_pNormals.get();
 		rtResources.pDepthTexture = m_pResolvedDepthStencil.get();
+		rtResources.pNoiseTexture = m_pNoiseTexture.get();
 		m_pRaytracing->Execute(graph, rtResources);
 	}
 
