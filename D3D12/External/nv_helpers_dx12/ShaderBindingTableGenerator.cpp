@@ -35,8 +35,6 @@ dispatch rays description.
 */
 
 #include "ShaderBindingTableGenerator.h"
-#include <string>
-#include <stdexcept>
 // Helper to compute aligned buffer sizes
 #ifndef ROUND_UP
 #define ROUND_UP(v, powerOf2Alignment) (((v) + (powerOf2Alignment)-1) & ~((powerOf2Alignment)-1))
@@ -80,64 +78,40 @@ void ShaderBindingTableGenerator::AddHitGroup(const std::wstring& entryPoint,
 // Compute the size of the SBT based on the set of programs and hit groups it contains
 uint32_t ShaderBindingTableGenerator::ComputeSBTSize()
 {
-  // Size of a program identifier
-  m_progIdSize = D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT;
-  // Compute the entry size of each program type depending on the maximum number of parameters in
-  // each category
-  m_rayGenEntrySize = GetEntrySize(m_rayGen);
-  m_missEntrySize = GetEntrySize(m_miss);
-  m_hitGroupEntrySize = GetEntrySize(m_hitGroup);
+    // Compute the entry size of each program type depending on the maximum number of parameters in
+    // each category
+    m_rayGenEntrySize = GetEntrySize(m_rayGen);
+    m_missEntrySize = GetEntrySize(m_miss);
+    m_hitGroupEntrySize = GetEntrySize(m_hitGroup);
 
-  // The total SBT size is the sum of the entries for ray generation, miss and hit groups, aligned
-  // on 256 bytes
-  uint32_t sbtSize = ROUND_UP(m_rayGenEntrySize * static_cast<UINT>(m_rayGen.size()) +
-                                  m_missEntrySize * static_cast<UINT>(m_miss.size()) +
-                                  m_hitGroupEntrySize * static_cast<UINT>(m_hitGroup.size()),
-                              256);
-  return sbtSize;
-}
-
-//--------------------------------------------------------------------------------------------------
-//
-// Build the SBT and store it into sbtBuffer, which has to be pre-allocated on the upload heap.
-// Access to the raytracing pipeline object is required to fetch program identifiers using their
-// names
-void ShaderBindingTableGenerator::Generate(ID3D12Resource* sbtBuffer,
-                                           ID3D12StateObjectProperties* raytracingPipeline)
-{
-  // Map the SBT
-  uint8_t* pData;
-  HRESULT hr = sbtBuffer->Map(0, nullptr, reinterpret_cast<void**>(&pData));
-  if (FAILED(hr))
-  {
-    throw std::logic_error("Could not map the shader binding table");
-  }
-
-  Generate(pData, raytracingPipeline);
-
-  // Unmap the SBT
-  sbtBuffer->Unmap(0, nullptr);
+    // The total SBT size is the sum of the entries for ray generation, miss and hit groups, aligned
+    // on 256 bytes
+    uint32_t sbtSize = ROUND_UP(m_rayGenEntrySize * static_cast<UINT>(m_rayGen.size()) +
+        m_missEntrySize * static_cast<UINT>(m_miss.size()) +
+        m_hitGroupEntrySize * static_cast<UINT>(m_hitGroup.size()),
+        256);
+    return sbtSize;
 }
 
 void ShaderBindingTableGenerator::Generate(void* pMappedData, ID3D12StateObjectProperties* raytracingPipeline)
 {
     if (pMappedData == nullptr)
     {
-		throw std::logic_error("Data is null");
+        throw std::logic_error("Data is null");
     }
-	// Map the SBT
-	uint8_t* pData = (uint8_t*)pMappedData;
-	// Copy the shader identifiers followed by their resource pointers or root constants: first the
-	// ray generation, then the miss shaders, and finally the set of hit groups
-	uint32_t offset = 0;
+    // Map the SBT
+    uint8_t* pData = (uint8_t*)pMappedData;
+    // Copy the shader identifiers followed by their resource pointers or root constants: first the
+    // ray generation, then the miss shaders, and finally the set of hit groups
+    uint32_t offset = 0;
 
-	offset = CopyShaderData(raytracingPipeline, pData, m_rayGen, m_rayGenEntrySize);
-	pData += offset;
+    offset = CopyShaderData(raytracingPipeline, pData, m_rayGen, m_rayGenEntrySize);
+    pData += offset;
 
-	offset = CopyShaderData(raytracingPipeline, pData, m_miss, m_missEntrySize);
-	pData += offset;
+    offset = CopyShaderData(raytracingPipeline, pData, m_miss, m_missEntrySize);
+    pData += offset;
 
-	offset = CopyShaderData(raytracingPipeline, pData, m_hitGroup, m_hitGroupEntrySize);
+    offset = CopyShaderData(raytracingPipeline, pData, m_hitGroup, m_hitGroupEntrySize);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -145,14 +119,13 @@ void ShaderBindingTableGenerator::Generate(void* pMappedData, ID3D12StateObjectP
 // Reset the sets of programs and hit groups
 void ShaderBindingTableGenerator::Reset()
 {
-  m_rayGen.clear();
-  m_miss.clear();
-  m_hitGroup.clear();
+    m_rayGen.clear();
+    m_miss.clear();
+    m_hitGroup.clear();
 
-  m_rayGenEntrySize = 0;
-  m_missEntrySize = 0;
-  m_hitGroupEntrySize = 0;
-  m_progIdSize = 0;
+    m_rayGenEntrySize = 0;
+    m_missEntrySize = 0;
+    m_hitGroupEntrySize = 0;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -164,7 +137,7 @@ void ShaderBindingTableGenerator::Reset()
 // Get the size in bytes of the SBT section dedicated to ray generation programs
 UINT ShaderBindingTableGenerator::GetRayGenSectionSize() const
 {
-  return m_rayGenEntrySize * static_cast<UINT>(m_rayGen.size());
+    return m_rayGenEntrySize * static_cast<UINT>(m_rayGen.size());
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -172,7 +145,7 @@ UINT ShaderBindingTableGenerator::GetRayGenSectionSize() const
 // Get the size in bytes of one ray generation program entry in the SBT
 UINT ShaderBindingTableGenerator::GetRayGenEntrySize() const
 {
-  return m_rayGenEntrySize;
+    return m_rayGenEntrySize;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -180,7 +153,7 @@ UINT ShaderBindingTableGenerator::GetRayGenEntrySize() const
 // Get the size in bytes of the SBT section dedicated to miss programs
 UINT ShaderBindingTableGenerator::GetMissSectionSize() const
 {
-  return m_missEntrySize * static_cast<UINT>(m_miss.size());
+    return m_missEntrySize * static_cast<UINT>(m_miss.size());
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -188,7 +161,7 @@ UINT ShaderBindingTableGenerator::GetMissSectionSize() const
 // Get the size in bytes of one miss program entry in the SBT
 UINT ShaderBindingTableGenerator::GetMissEntrySize()
 {
-  return m_missEntrySize;
+    return m_missEntrySize;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -196,7 +169,7 @@ UINT ShaderBindingTableGenerator::GetMissEntrySize()
 // Get the size in bytes of the SBT section dedicated to hit groups
 UINT ShaderBindingTableGenerator::GetHitGroupSectionSize() const
 {
-  return m_hitGroupEntrySize * static_cast<UINT>(m_hitGroup.size());
+    return m_hitGroupEntrySize * static_cast<UINT>(m_hitGroup.size());
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -204,7 +177,7 @@ UINT ShaderBindingTableGenerator::GetHitGroupSectionSize() const
 // Get the size in bytes of one hit group entry in the SBT
 UINT ShaderBindingTableGenerator::GetHitGroupEntrySize() const
 {
-  return m_hitGroupEntrySize;
+    return m_hitGroupEntrySize;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -216,24 +189,24 @@ uint32_t ShaderBindingTableGenerator::CopyShaderData(
     ID3D12StateObjectProperties* raytracingPipeline, uint8_t* outputData,
     const std::vector<SBTEntry>& shaders, uint32_t entrySize)
 {
-  uint8_t* pData = outputData;
-  for (const auto& shader : shaders)
-  {
-    // Get the shader identifier, and check whether that identifier is known
-    void* id = raytracingPipeline->GetShaderIdentifier(shader.m_entryPoint.c_str());
-    if (!id)
+    uint8_t* pData = outputData;
+    for (const auto& shader : shaders)
     {
-      throw std::logic_error("Unknown shader identifier used in the SBT");
-    }
-    // Copy the shader identifier
-    memcpy(pData, id, m_progIdSize);
-    // Copy all its resources pointers or values in bulk
-    memcpy(pData + m_progIdSize, shader.m_inputData.data(), shader.m_inputData.size() * 8);
+        // Get the shader identifier, and check whether that identifier is known
+        void* id = raytracingPipeline->GetShaderIdentifier(shader.m_entryPoint.c_str());
+        if (!id)
+        {
+            throw std::logic_error("Unknown shader identifier used in the SBT");
+        }
+        // Copy the shader identifier
+        memcpy(pData, id, D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
+        // Copy all its resources pointers or values in bulk
+        memcpy(pData + D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES, shader.m_inputData.data(), shader.m_inputData.size() * 8);
 
-    pData += entrySize;
-  }
-  // Return the number of bytes actually written to the output buffer
-  return static_cast<uint32_t>(shaders.size()) * entrySize;
+        pData += entrySize;
+    }
+    // Return the number of bytes actually written to the output buffer
+    return static_cast<uint32_t>(shaders.size()) * entrySize;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -242,19 +215,19 @@ uint32_t ShaderBindingTableGenerator::CopyShaderData(
 // number of parameters of their root signature
 uint32_t ShaderBindingTableGenerator::GetEntrySize(const std::vector<SBTEntry>& entries)
 {
-  // Find the maximum number of parameters used by a single entry
-  size_t maxArgs = 0;
-  for (const auto& shader : entries)
-  {
-    maxArgs = max(maxArgs, shader.m_inputData.size());
-  }
-  // A SBT entry is made of a program ID and a set of parameters, taking 8 bytes each. Those
-  // parameters can either be 8-bytes pointers, or 4-bytes constants
-  uint32_t entrySize = m_progIdSize + 8 * static_cast<uint32_t>(maxArgs);
+    // Find the maximum number of parameters used by a single entry
+    size_t maxArgs = 0;
+    for (const auto& shader : entries)
+    {
+        maxArgs = max(maxArgs, shader.m_inputData.size());
+    }
+    // A SBT entry is made of a program ID and a set of parameters, taking 8 bytes each. Those
+    // parameters can either be 8-bytes pointers, or 4-bytes constants
+    uint32_t entrySize = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES + 8 * static_cast<uint32_t>(maxArgs);
 
-  // The entries of the shader binding table must be 16-bytes-aligned
-  entrySize = ROUND_UP(entrySize, 2*D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT);
-
+  // The entries of the shader binding table must be 64-bytes-aligned
+  entrySize = ROUND_UP(entrySize, D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT);
+  
   return entrySize;
 }
 

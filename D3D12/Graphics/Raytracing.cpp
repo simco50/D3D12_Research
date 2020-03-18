@@ -31,7 +31,6 @@ void Raytracing::OnSwapchainCreated(int windowWidth, int windowHeight)
 	if (m_pOutputTexture)
 	{
 		m_pOutputTexture->Create(TextureDesc::Create2D(windowWidth, windowHeight, DXGI_FORMAT_R8G8B8A8_UNORM, TextureFlag::UnorderedAccess));
-		m_pOutputTexture->CreateUAV(&pOutputRawUAV, TextureUAVDesc(0));
 	}
 }
 
@@ -142,13 +141,19 @@ void Raytracing::Execute(RGGraph& graph, const RaytracingInputResources& resourc
 
 					context.FlushResourceBarriers();
 					pCmd->DispatchRays(&rayDesc);
-
-					GPU_PROFILE_SCOPE("CopyTarget", &context);
-					context.CopyResource(m_pOutputTexture.get(), resources.pRenderTarget);
 				}
 			};
 		});
 
+		//TEMP
+		graph.AddPass("Copy Target", [&](RGPassBuilder& builder)
+			{
+				builder.NeverCull();
+				return [=](CommandContext& context, const RGPassResources& passResources)
+				{
+					context.CopyResource(m_pOutputTexture.get(), resources.pRenderTarget);
+				};
+			});
 }
 
 void Raytracing::GenerateAccelerationStructure(Graphics* pGraphics, Mesh* pMesh, CommandContext& context)
@@ -315,6 +320,7 @@ void Raytracing::SetupPipelines(Graphics* pGraphics)
 			pHitAssociation->AddExport(L"HitGroup");
 			pHitAssociation->SetSubobjectToAssociate(*pHitRs);
 		}
+		
 		{
 			CD3DX12_RAYTRACING_SHADER_CONFIG_SUBOBJECT* pRtConfig = desc.CreateSubobject<CD3DX12_RAYTRACING_SHADER_CONFIG_SUBOBJECT>();
 			pRtConfig->Config(4 * sizeof(float), 2 * sizeof(float));
