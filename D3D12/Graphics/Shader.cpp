@@ -104,10 +104,13 @@ bool Shader::Compile(const char* pFilePath, Type shaderType, const char* pEntryP
 
 bool Shader::CompileDxc(const std::string& source, const char* pTarget, const char* pEntryPoint, const std::vector<std::string> defines /*= {}*/)
 {
-	ComPtr<IDxcLibrary> pLibrary;
-	HR(DxcCreateInstance(CLSID_DxcLibrary, IID_PPV_ARGS(pLibrary.GetAddressOf())));
-	ComPtr<IDxcCompiler> pCompiler;
-	HR(DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(pCompiler.GetAddressOf())));
+	static ComPtr<IDxcLibrary> pLibrary;
+	static ComPtr<IDxcCompiler> pCompiler;
+	if (!pCompiler)
+	{
+		HR(DxcCreateInstance(CLSID_DxcLibrary, IID_PPV_ARGS(pLibrary.GetAddressOf())));
+		HR(DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(pCompiler.GetAddressOf())));
+	}
 
 	ComPtr<IDxcBlobEncoding> pSource;
 	HR(pLibrary->CreateBlobWithEncodingFromPinned(source.c_str(), (uint32)source.size(), CP_UTF8, pSource.GetAddressOf()));
@@ -131,6 +134,7 @@ bool Shader::CompileDxc(const std::string& source, const char* pTarget, const ch
 		L"/Qembed_debug",
 		L"/Od",
 	};
+
 	bool debugShaders = CommandLine::GetBool("DebugShaders");
 	pCompileArguments = debugShaders ? &pDebugArgs[0] : &pArgs[0];
 	numCompileArguments = debugShaders ? ARRAYSIZE(pDebugArgs) : ARRAYSIZE(pArgs);
@@ -165,37 +169,20 @@ bool Shader::CompileDxc(const std::string& source, const char* pTarget, const ch
 
 	HR(pCompiler->Compile(pSource.Get(), fileName, entryPoint, target, const_cast<LPCWSTR*>(pCompileArguments), numCompileArguments, dxcDefines.data(), (uint32)dxcDefines.size(), nullptr, pCompileResult.GetAddressOf()));
 
-	auto checkResult = [&](IDxcOperationResult* pResult) {
-		HRESULT hrCompilation;
-		HR(pResult->GetStatus(&hrCompilation));
+	HRESULT hrCompilation;
+	HR(pCompileResult->GetStatus(&hrCompilation));
 
-		if (hrCompilation < 0)
-		{
-			ComPtr<IDxcBlobEncoding> pPrintBlob, pPrintBlob8;
-			HR(pResult->GetErrorBuffer(pPrintBlob.GetAddressOf()));
-			pLibrary->GetBlobAsUtf8(pPrintBlob.Get(), pPrintBlob8.GetAddressOf());
-			E_LOG(Error, "%s", (char*)pPrintBlob8->GetBufferPointer());
-			return false;
-		}
-		return true;
-	};
-
-	if (!checkResult(pCompileResult.Get()))
+	if (hrCompilation < 0)
 	{
+		ComPtr<IDxcBlobEncoding> pPrintBlob, pPrintBlob8;
+		HR(pCompileResult->GetErrorBuffer(pPrintBlob.GetAddressOf()));
+		pLibrary->GetBlobAsUtf8(pPrintBlob.Get(), pPrintBlob8.GetAddressOf());
+		E_LOG(Error, "%s", (char*)pPrintBlob8->GetBufferPointer());
 		return false;
 	}
 
 	IDxcBlob** pBlob = reinterpret_cast<IDxcBlob**>(m_pByteCode.GetAddressOf());
 	pCompileResult->GetResult(pBlob);
-
-	ComPtr<IDxcValidator> pValidator;
-	DxcCreateInstance(CLSID_DxcValidator, IID_PPV_ARGS(pValidator.GetAddressOf()));
-	pValidator->Validate(*pBlob, DxcValidatorFlags_InPlaceEdit, &pCompileResult);
-
-	if (!checkResult(pCompileResult.Get()))
-	{
-		return false;
-	}
 
 	return true;
 }

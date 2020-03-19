@@ -3,10 +3,8 @@
 #define RPP 64
 #define RPP_ACTUAL 1
 
-// Raytracing output texture, accessed as a UAV
 RWTexture2D<float4> gOutput : register(u0);
 
-// Raytracing acceleration structure, accessed as a SRV
 RaytracingAccelerationStructure SceneBVH : register(t0);
 
 Texture2D tNormals : register(t1);
@@ -23,9 +21,8 @@ cbuffer ShaderParameters : register(b0)
 [shader("raygeneration")] 
 void RayGen() 
 {
-	// Initialize the ray payload
 	HitInfo payload;
-	payload.hit = 1;
+	payload.hit = 0;
 
 	uint2 launchIndex = DispatchRaysIndex().xy;
 

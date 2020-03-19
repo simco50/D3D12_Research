@@ -280,9 +280,9 @@ void Raytracing::SetupPipelines(Graphics* pGraphics)
 		m_pDummySignature = std::make_unique<RootSignature>();
 		m_pDummySignature->Finalize("Dummy Global RS", pGraphics->GetDevice(), D3D12_ROOT_SIGNATURE_FLAG_NONE);
 
-		ShaderLibrary rayGenShader("Resources/RayTracingShaders/RayGen.hlsl");
-		ShaderLibrary hitShader("Resources/RayTracingShaders/Hit.hlsl");
-		ShaderLibrary missShader("Resources/RayTracingShaders/Miss.hlsl");
+		ShaderLibrary rayGenShader("Resources/Shaders/Raytracing/RayGen.hlsl");
+		ShaderLibrary hitShader("Resources/Shaders/Raytracing/Hit.hlsl");
+		ShaderLibrary missShader("Resources/Shaders/Raytracing/Miss.hlsl");
 
 		CD3DX12_STATE_OBJECT_DESC desc(D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE);
 		{
