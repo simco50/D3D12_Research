@@ -294,7 +294,7 @@ void Graphics::Update()
 			{
 				renderContext.InsertResourceBarrier(resources.GetTexture(Data.DepthStencilResolved), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 				renderContext.InsertResourceBarrier(m_pNormals.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-				renderContext.InsertResourceBarrier(m_pSSAOTarget.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+				renderContext.InsertResourceBarrier(m_pAmbientOcclusion.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 				renderContext.InsertResourceBarrier(m_pNoiseTexture.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
 				renderContext.SetComputeRootSignature(m_pSSAORS.get());
@@ -335,8 +335,8 @@ void Graphics::Update()
 				shaderParameters.ProjectionInverse = m_pCamera->GetProjectionInverse();
 				shaderParameters.Projection = m_pCamera->GetProjection();
 				shaderParameters.View = m_pCamera->GetView();
-				shaderParameters.Dimensions[0] = m_pSSAOTarget->GetWidth();
-				shaderParameters.Dimensions[1] = m_pSSAOTarget->GetHeight();
+				shaderParameters.Dimensions[0] = m_pAmbientOcclusion->GetWidth();
+				shaderParameters.Dimensions[1] = m_pAmbientOcclusion->GetHeight();
 				shaderParameters.Near = m_pCamera->GetNear();
 				shaderParameters.Far = m_pCamera->GetFar();
 				shaderParameters.Power = g_AoPower;
@@ -345,13 +345,13 @@ void Graphics::Update()
 				shaderParameters.Samples = g_AoSamples;
 
 				renderContext.SetComputeDynamicConstantBufferView(0, &shaderParameters, sizeof(ShaderParameters));
-				renderContext.SetDynamicDescriptor(1, 0, m_pSSAOTarget->GetUAV());
+				renderContext.SetDynamicDescriptor(1, 0, m_pAmbientOcclusion->GetUAV());
 				renderContext.SetDynamicDescriptor(2, 0, resources.GetTexture(Data.DepthStencilResolved)->GetSRV());
 				renderContext.SetDynamicDescriptor(2, 1, m_pNormals.get()->GetSRV());
 				renderContext.SetDynamicDescriptor(2, 2, m_pNoiseTexture.get()->GetSRV());
 
-				int dispatchGroupsX = Math::DivideAndRoundUp(m_pSSAOTarget->GetWidth(), 16);
-				int dispatchGroupsY = Math::DivideAndRoundUp(m_pSSAOTarget->GetHeight(), 16);
+				int dispatchGroupsX = Math::DivideAndRoundUp(m_pAmbientOcclusion->GetWidth(), 16);
+				int dispatchGroupsY = Math::DivideAndRoundUp(m_pAmbientOcclusion->GetHeight(), 16);
 				renderContext.Dispatch(dispatchGroupsX, dispatchGroupsY);
 
 				renderContext.InsertResourceBarrier(resources.GetTexture(Data.DepthStencilResolved), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
@@ -363,8 +363,8 @@ void Graphics::Update()
 			builder.NeverCull();
 			return [=](CommandContext& renderContext, const RGPassResources& resources)
 			{
-				renderContext.InsertResourceBarrier(m_pSSAOBlurred.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-				renderContext.InsertResourceBarrier(m_pSSAOTarget.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+				renderContext.InsertResourceBarrier(m_pAmbientOcclusionIntermediate.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+				renderContext.InsertResourceBarrier(m_pAmbientOcclusion.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
 				renderContext.SetComputeRootSignature(m_pSSAOBlurRS.get());
 				renderContext.SetComputePipelineState(m_pSSAOBlurPSO.get());
@@ -378,30 +378,30 @@ void Graphics::Update()
 				} shaderParameters;
 
 				shaderParameters.Horizontal = 1;
-				shaderParameters.Dimensions[0] = 1.0f / m_pSSAOTarget->GetWidth();
-				shaderParameters.Dimensions[1] = 1.0f / m_pSSAOTarget->GetHeight();
+				shaderParameters.Dimensions[0] = 1.0f / m_pAmbientOcclusion->GetWidth();
+				shaderParameters.Dimensions[1] = 1.0f / m_pAmbientOcclusion->GetHeight();
 				shaderParameters.Far = m_pCamera->GetFar();
 				shaderParameters.Near = m_pCamera->GetNear();
 
 				Texture* pDepth = m_SampleCount == 1 ? m_pDepthStencil.get() : m_pResolvedDepthStencil.get();
 
 				renderContext.SetComputeDynamicConstantBufferView(0, &shaderParameters, sizeof(ShaderParameters));
-				renderContext.SetDynamicDescriptor(1, 0, m_pSSAOBlurred->GetUAV());
+				renderContext.SetDynamicDescriptor(1, 0, m_pAmbientOcclusionIntermediate->GetUAV());
 				renderContext.SetDynamicDescriptor(2, 0, pDepth->GetSRV());
-				renderContext.SetDynamicDescriptor(2, 1, m_pSSAOTarget->GetSRV());
+				renderContext.SetDynamicDescriptor(2, 1, m_pAmbientOcclusion->GetSRV());
 
-				renderContext.Dispatch(Math::DivideAndRoundUp(m_pSSAOBlurred->GetWidth(), 256), m_pSSAOBlurred->GetHeight());
+				renderContext.Dispatch(Math::DivideAndRoundUp(m_pAmbientOcclusionIntermediate->GetWidth(), 256), m_pAmbientOcclusionIntermediate->GetHeight());
 
-				renderContext.InsertResourceBarrier(m_pSSAOBlurred.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-				renderContext.InsertResourceBarrier(m_pSSAOTarget.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+				renderContext.InsertResourceBarrier(m_pAmbientOcclusionIntermediate.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+				renderContext.InsertResourceBarrier(m_pAmbientOcclusion.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-				renderContext.SetDynamicDescriptor(1, 0, m_pSSAOTarget->GetUAV());
+				renderContext.SetDynamicDescriptor(1, 0, m_pAmbientOcclusion->GetUAV());
 				renderContext.SetDynamicDescriptor(2, 0, pDepth->GetSRV());
-				renderContext.SetDynamicDescriptor(2, 1, m_pSSAOBlurred->GetSRV());
+				renderContext.SetDynamicDescriptor(2, 1, m_pAmbientOcclusionIntermediate->GetSRV());
 
 				shaderParameters.Horizontal = 0;
 				renderContext.SetComputeDynamicConstantBufferView(0, &shaderParameters, sizeof(ShaderParameters));
-				renderContext.Dispatch(m_pSSAOBlurred->GetWidth(), Math::DivideAndRoundUp(m_pSSAOBlurred->GetHeight(), 256));
+				renderContext.Dispatch(m_pAmbientOcclusionIntermediate->GetWidth(), Math::DivideAndRoundUp(m_pAmbientOcclusionIntermediate->GetHeight(), 256));
 			};
 		});
 
@@ -490,7 +490,7 @@ void Graphics::Update()
 		resources.pRenderTarget = GetCurrentRenderTarget();
 		resources.pLightBuffer = m_pLightBuffer.get();
 		resources.pCamera = m_pCamera.get();
-		resources.pAO = m_pSSAOTarget.get();
+		resources.pAO = m_pAmbientOcclusion.get();
 		m_pClusteredForward->Execute(graph, resources);
 	}
 
@@ -892,8 +892,8 @@ void Graphics::InitD3D()
 	m_pDownscaledColor = std::make_unique<Texture>(this, "Downscaled HDR Target");
 	m_pMSAANormals = std::make_unique<Texture>(this, "MSAA Normals");
 	m_pNormals = std::make_unique<Texture>(this, "Normals");
-	m_pSSAOTarget = std::make_unique<Texture>(this, "SSAO");
-	m_pSSAOBlurred = std::make_unique<Texture>(this, "SSAO Blurred");
+	m_pAmbientOcclusion = std::make_unique<Texture>(this, "SSAO");
+	m_pAmbientOcclusionIntermediate = std::make_unique<Texture>(this, "SSAO Blurred");
 
 	m_pClusteredForward = std::make_unique<ClusteredForward>(this);
 	m_pTiledForward = std::make_unique<TiledForward>(this);
@@ -954,8 +954,8 @@ void Graphics::OnResize(int width, int height)
 
 	m_pMSAANormals->Create(TextureDesc::CreateRenderTarget(width, height, DXGI_FORMAT_R32G32B32A32_FLOAT, TextureFlag::RenderTarget, m_SampleCount));
 	m_pNormals->Create(TextureDesc::Create2D(width, height, DXGI_FORMAT_R32G32B32A32_FLOAT, TextureFlag::ShaderResource));
-	m_pSSAOTarget->Create(TextureDesc::Create2D(Math::DivideAndRoundUp(width, 2), Math::DivideAndRoundUp(height, 2), DXGI_FORMAT_R8_UNORM, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource));
-	m_pSSAOBlurred->Create(TextureDesc::Create2D(Math::DivideAndRoundUp(width, 2), Math::DivideAndRoundUp(height, 2), DXGI_FORMAT_R8_UNORM, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource));
+	m_pAmbientOcclusion->Create(TextureDesc::Create2D(Math::DivideAndRoundUp(width, 2), Math::DivideAndRoundUp(height, 2), DXGI_FORMAT_R8_UNORM, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource));
+	m_pAmbientOcclusionIntermediate->Create(TextureDesc::Create2D(Math::DivideAndRoundUp(width, 2), Math::DivideAndRoundUp(height, 2), DXGI_FORMAT_R8_UNORM, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource));
 
 	m_pCamera->SetDirty();
 
@@ -1186,7 +1186,7 @@ void Graphics::UpdateImGui()
 	m_FrameTimes[m_Frame % m_FrameTimes.size()] = GameTimer::DeltaTime();
 
 	ImGui::Begin("SSAO");
-	Vector2 image((float)m_pSSAOBlurred->GetWidth(), (float)m_pSSAOBlurred->GetHeight());
+	Vector2 image((float)m_pAmbientOcclusionIntermediate->GetWidth(), (float)m_pAmbientOcclusionIntermediate->GetHeight());
 	Vector2 windowSize(ImGui::GetContentRegionAvail().x, ImGui::GetContentRegionAvail().y);
 	float width = windowSize.x;
 	float height = windowSize.x * image.y / image.x;
@@ -1195,7 +1195,7 @@ void Graphics::UpdateImGui()
 		width = image.x / image.y * windowSize.y;
 		height = windowSize.y;
 	}
-	ImGui::Image(m_pSSAOTarget.get(), ImVec2(width, height));
+	ImGui::Image(m_pAmbientOcclusion.get(), ImVec2(width, height));
 	ImGui::End();
 
 	ImGui::SetNextWindowPos(ImVec2(0, 0), 0, ImVec2(0, 0));

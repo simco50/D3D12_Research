@@ -3,7 +3,7 @@
 #define RPP 64
 #define RPP_ACTUAL 1
 
-RWTexture2D<float4> gOutput : register(u0);
+RWTexture2D<float> gOutput : register(u0);
 
 RaytracingAccelerationStructure SceneBVH : register(t0);
 
@@ -108,5 +108,5 @@ void RayGen()
 		totalHits += payload.hit;
 	}
 
-	gOutput[launchIndex] = float4((1-(float)totalHits / RPP_ACTUAL).xxx, 1.f);
+	gOutput[launchIndex] = 1-(float)totalHits / RPP_ACTUAL;
 }

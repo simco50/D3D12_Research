@@ -30,7 +30,7 @@ void Raytracing::OnSwapchainCreated(int windowWidth, int windowHeight)
 {
 	if (m_pOutputTexture)
 	{
-		m_pOutputTexture->Create(TextureDesc::Create2D(windowWidth, windowHeight, DXGI_FORMAT_R8G8B8A8_UNORM, TextureFlag::UnorderedAccess));
+		m_pOutputTexture->Create(TextureDesc::Create2D(windowWidth, windowHeight, DXGI_FORMAT_R8_UNORM, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource));
 	}
 }
 
@@ -138,7 +138,7 @@ void Raytracing::Execute(RGGraph& graph, const RaytracingInputResources& resourc
 			};
 		});
 
-		//TEMP
+		/*//TEMP
 		graph.AddPass("Copy Target", [&](RGPassBuilder& builder)
 			{
 				builder.NeverCull();
@@ -146,7 +146,21 @@ void Raytracing::Execute(RGGraph& graph, const RaytracingInputResources& resourc
 				{
 					context.CopyResource(m_pOutputTexture.get(), resources.pRenderTarget);
 				};
-			});
+			});*/
+
+		ImGui::Begin("RTAO");
+		Vector2 image((float)m_pOutputTexture->GetWidth(), (float)m_pOutputTexture->GetHeight());
+		Vector2 windowSize(ImGui::GetContentRegionAvail().x, ImGui::GetContentRegionAvail().y);
+		float width = windowSize.x;
+		float height = windowSize.x * image.y / image.x;
+		if (image.x / windowSize.x < image.y / windowSize.y)
+		{
+			width = image.x / image.y * windowSize.y;
+			height = windowSize.y;
+		}
+
+		ImGui::Image(m_pOutputTexture.get(), ImVec2(width, height));
+		ImGui::End();
 }
 
 void Raytracing::GenerateAccelerationStructure(Graphics* pGraphics, Mesh* pMesh, CommandContext& context)

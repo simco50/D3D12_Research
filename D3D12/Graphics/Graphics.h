@@ -217,8 +217,8 @@ private:
 
 	//SSAO
 	std::unique_ptr<Texture> m_pNoiseTexture;
-	std::unique_ptr<Texture> m_pSSAOTarget;
-	std::unique_ptr<Texture> m_pSSAOBlurred;
+	std::unique_ptr<Texture> m_pAmbientOcclusion;
+	std::unique_ptr<Texture> m_pAmbientOcclusionIntermediate;
 	std::unique_ptr<RootSignature> m_pSSAORS;
 	std::unique_ptr<ComputePipelineState> m_pSSAOPSO;
 	std::unique_ptr<RootSignature> m_pSSAOBlurRS;
