@@ -75,6 +75,7 @@ public:
 	virtual void Shutdown();
 
 	inline ID3D12Device* GetDevice() const { return m_pDevice.Get(); }
+	inline ID3D12Device5* GetRaytracingDevice() const { return m_pRaytracingDevice.Get(); }
 	void OnResize(int width, int height);
 
 	bool IsFenceComplete(uint64 fenceValue);
@@ -142,6 +143,7 @@ private:
 
 	ComPtr<IDXGISwapChain3> m_pSwapchain;
 	ComPtr<ID3D12Device> m_pDevice;
+	ComPtr<ID3D12Device5> m_pRaytracingDevice;
 
 	D3D12_RENDER_PASS_TIER m_RenderPassTier = D3D12_RENDER_PASS_TIER_0;
 	D3D12_RAYTRACING_TIER m_RayTracingTier = D3D12_RAYTRACING_TIER_NOT_SUPPORTED;
