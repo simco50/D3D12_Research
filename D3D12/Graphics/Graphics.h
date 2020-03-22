@@ -21,7 +21,7 @@ class Camera;
 class RGResourceAllocator;
 class DebugRenderer;
 class UnorderedAccessView;
-class Raytracing;
+class RTAO;
 
 struct Batch
 {
@@ -174,7 +174,7 @@ private:
 	std::unique_ptr<RGResourceAllocator> m_pGraphAllocator;
 	std::unique_ptr<ClusteredForward> m_pClusteredForward;
 	std::unique_ptr<TiledForward> m_pTiledForward;
-	std::unique_ptr<Raytracing> m_pRaytracing;
+	std::unique_ptr<RTAO> m_pRaytracing;
 	std::unique_ptr<DebugRenderer> m_pDebugRenderer;
 
 	unsigned int m_WindowWidth;

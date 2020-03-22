@@ -256,9 +256,14 @@ void CommandContext::SetDescriptorHeap(ID3D12DescriptorHeap* pHeap, D3D12_DESCRI
 	}
 }
 
-DynamicAllocation CommandContext::AllocateTransientMemory(uint64 size)
+DynamicAllocation CommandContext::AllocateTransientMemory(uint64 size, const void* pData /*= nullptr*/)
 {
-	return m_DynamicAllocator->Allocate(size);
+	DynamicAllocation allocation = m_DynamicAllocator->Allocate(size);
+	if (pData)
+	{
+		memcpy(allocation.pMappedMemory, pData, size);
+	}
+	return allocation;
 }
 
 DescriptorHandle CommandContext::AllocateTransientDescriptors(int descriptorCount, D3D12_DESCRIPTOR_HEAP_TYPE type)

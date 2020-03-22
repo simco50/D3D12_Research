@@ -23,7 +23,7 @@
 #include "DebugRenderer.h"
 #include "ResourceViews.h"
 #include "TiledForward.h"
-#include "Raytracing.h"
+#include "RTAO.h"
 
 #ifdef _DEBUG
 #define D3D_VALIDATION 1
@@ -902,7 +902,7 @@ void Graphics::InitD3D()
 
 	m_pClusteredForward = std::make_unique<ClusteredForward>(this);
 	m_pTiledForward = std::make_unique<TiledForward>(this);
-	m_pRaytracing = std::make_unique<Raytracing>(this);
+	m_pRaytracing = std::make_unique<RTAO>(this);
 	m_pImGuiRenderer = std::make_unique<ImGuiRenderer>(this);
 	m_pImGuiRenderer->AddUpdateCallback(ImGuiCallbackDelegate::CreateRaw(this, &Graphics::UpdateImGui));
 
@@ -1190,8 +1190,9 @@ void Graphics::UpdateImGui()
 {
 	m_FrameTimes[m_Frame % m_FrameTimes.size()] = GameTimer::DeltaTime();
 
+	ImGui::SetNextWindowPos(ImVec2(300, 0), 0, ImVec2(0, 0));
 	ImGui::Begin("Ambient Occlusion");
-	Vector2 image((float)m_pAmbientOcclusionIntermediate->GetWidth(), (float)m_pAmbientOcclusionIntermediate->GetHeight());
+	Vector2 image((float)m_pAmbientOcclusion->GetWidth(), (float)m_pAmbientOcclusion->GetHeight());
 	Vector2 windowSize(ImGui::GetContentRegionAvail().x, ImGui::GetContentRegionAvail().y);
 	float width = windowSize.x;
 	float height = windowSize.x * image.y / image.x;

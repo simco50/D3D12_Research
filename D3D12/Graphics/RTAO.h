@@ -18,10 +18,10 @@ struct RaytracingInputResources
 	Camera* pCamera = nullptr;
 };
 
-class Raytracing
+class RTAO
 {
 public:
-	Raytracing(Graphics* pGraphics);
+	RTAO(Graphics* pGraphics);
 
 	void OnSwapchainCreated(int windowWidth, int windowHeight);
 
