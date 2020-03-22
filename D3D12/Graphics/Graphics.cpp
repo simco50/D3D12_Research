@@ -84,6 +84,7 @@ void Graphics::Initialize(HWND window)
 
 	InitD3D();
 	InitializeAssets();
+	g_ShowRaytraced = SupportsRayTracing() ? g_ShowRaytraced : false;
 
 	RandomizeLights(m_DesiredLightCount);
 }
