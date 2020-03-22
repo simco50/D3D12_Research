@@ -26,6 +26,7 @@ public:
 
 	void Release();
 	void SetName(const char* pName);
+	std::string GetName() const;
 
 public:
 	inline ID3D12Resource* GetResource() const { return m_pResource; }

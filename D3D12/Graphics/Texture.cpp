@@ -60,7 +60,7 @@ void Texture::Create(const TextureDesc& textureDesc)
 {
 	m_Desc = textureDesc;
 	TextureFlag depthAndRt = TextureFlag::RenderTarget | TextureFlag::DepthStencil;
-	assert(Any(textureDesc.Usage, depthAndRt) == false);
+	assert(All(textureDesc.Usage, depthAndRt) == false);
 
 	Release();
 

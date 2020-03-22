@@ -5,9 +5,8 @@
 #include "ResourceViews.h"
 
 Buffer::Buffer(Graphics* pGraphics, const char* pName /*= ""*/)
-	: GraphicsResource(pGraphics), m_pName(pName)
+	: GraphicsResource(pGraphics), m_Name(pName)
 {
-
 }
 
 Buffer::Buffer(Graphics* pGraphics, ID3D12Resource* pResource, D3D12_RESOURCE_STATES state)
@@ -40,7 +39,7 @@ void Buffer::Create(const BufferDesc& bufferDesc)
 	desc.SampleDesc.Quality = 0;
 
 	D3D12_HEAP_TYPE heapType = D3D12_HEAP_TYPE_DEFAULT;
-	if (Any(bufferDesc.Usage, BufferFlag::ShaderResource) == false)
+	if (Any(bufferDesc.Usage, BufferFlag::ShaderResource | BufferFlag::AccelerationStructure) == false)
 	{
 		desc.Flags |= D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
 	}
@@ -59,12 +58,14 @@ void Buffer::Create(const BufferDesc& bufferDesc)
 		heapType = D3D12_HEAP_TYPE_UPLOAD;
 		m_CurrentState = D3D12_RESOURCE_STATE_GENERIC_READ;
 	}
+	if (Any(bufferDesc.Usage, BufferFlag::AccelerationStructure))
+	{
+		m_CurrentState = D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE;
+	}
+
 	m_pResource = m_pGraphics->CreateResource(desc, m_CurrentState, heapType);
 
-	if (m_pName)
-	{
-		SetName(m_pName);
-	}
+	SetName(m_Name.c_str());
 
 	//#todo: Temp code. Pull out views from buffer
 	if (Any(bufferDesc.Usage, BufferFlag::UnorderedAccess))
@@ -78,7 +79,7 @@ void Buffer::Create(const BufferDesc& bufferDesc)
 			CreateUAV(&m_pUav, BufferUAVDesc(DXGI_FORMAT_UNKNOWN, true, false));
 		}
 	}
-	if (Any(bufferDesc.Usage, BufferFlag::ShaderResource))
+	if (Any(bufferDesc.Usage, BufferFlag::ShaderResource | BufferFlag::AccelerationStructure))
 	{
 		CreateSRV(&m_pSrv, BufferSRVDesc(DXGI_FORMAT_UNKNOWN));
 	}

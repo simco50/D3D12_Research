@@ -23,22 +23,33 @@ void ShaderResourceView::Create(Buffer* pBuffer, const BufferSRVDesc& desc)
 	const BufferDesc& bufferDesc = pBuffer->GetDesc();
 
 	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-	srvDesc.Format = desc.Format;
-	srvDesc.Buffer.FirstElement = 0;
-	srvDesc.Buffer.NumElements = bufferDesc.ElementCount;
-	srvDesc.Buffer.StructureByteStride = 0;
-	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
-	if(desc.Raw)
-	{
-		srvDesc.Buffer.Flags |= D3D12_BUFFER_SRV_FLAG_RAW;
-		srvDesc.Format = DXGI_FORMAT_R32_TYPELESS;
+	if(Any(bufferDesc.Usage, BufferFlag::AccelerationStructure))
+	{ 
+		srvDesc.Format = DXGI_FORMAT_UNKNOWN;
+		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_RAYTRACING_ACCELERATION_STRUCTURE;
+		srvDesc.RaytracingAccelerationStructure.Location = pBuffer->GetGpuHandle();
+		srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+		m_pParent->GetGraphics()->GetDevice()->CreateShaderResourceView(nullptr, &srvDesc, m_Descriptor);
 	}
 	else
 	{
-		srvDesc.Buffer.StructureByteStride = bufferDesc.ElementSize;
+		srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+		srvDesc.Format = desc.Format;
+		srvDesc.Buffer.FirstElement = 0;
+		srvDesc.Buffer.NumElements = bufferDesc.ElementCount;
+		srvDesc.Buffer.StructureByteStride = 0;
+		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+		if (desc.Raw)
+		{
+			srvDesc.Buffer.Flags |= D3D12_BUFFER_SRV_FLAG_RAW;
+			srvDesc.Format = DXGI_FORMAT_R32_TYPELESS;
+		}
+		else
+		{
+			srvDesc.Buffer.StructureByteStride = bufferDesc.ElementSize;
+		}
+		m_pParent->GetGraphics()->GetDevice()->CreateShaderResourceView(pBuffer->GetResource(), &srvDesc, m_Descriptor);
 	}
-	m_pParent->GetGraphics()->GetDevice()->CreateShaderResourceView(pBuffer->GetResource(), &srvDesc, m_Descriptor);
 }
 
 void ShaderResourceView::Create(Texture* pTexture, const TextureSRVDesc& desc)
@@ -179,7 +190,9 @@ void UnorderedAccessView::Create(Buffer* pBuffer, const BufferUAVDesc& desc)
 	{
 		if (!m_pCounter)
 		{
-			m_pCounter = std::make_unique<Buffer>(m_pGraphics, "Counter");
+			std::stringstream str;
+			str << pBuffer->GetName() << " - Counter";
+			m_pCounter = std::make_unique<Buffer>(m_pGraphics, str.str().c_str());
 		}
 		m_pCounter->Create(BufferDesc::CreateByteAddress(4));
 	}

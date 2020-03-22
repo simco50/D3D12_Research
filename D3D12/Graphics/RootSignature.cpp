@@ -22,7 +22,7 @@ void RootSignature::SetSize(uint32 size, bool shrink /*= true*/)
 void RootSignature::SetRootConstants(uint32 rootIndex, uint32 shaderRegister, uint32 constantCount, D3D12_SHADER_VISIBILITY visibility)
 {
 	SetSize(rootIndex + 1);
-	D3D12_ROOT_PARAMETER1 & data = m_RootParameters[rootIndex];
+	D3D12_ROOT_PARAMETER & data = m_RootParameters[rootIndex];
 	data.ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
 	data.Constants.Num32BitValues = constantCount;
 	data.Constants.RegisterSpace = 0;
@@ -33,9 +33,8 @@ void RootSignature::SetRootConstants(uint32 rootIndex, uint32 shaderRegister, ui
 void RootSignature::SetConstantBufferView(uint32 rootIndex, uint32 shaderRegister, D3D12_SHADER_VISIBILITY visibility)
 {
 	SetSize(rootIndex + 1);
-	D3D12_ROOT_PARAMETER1 & data = m_RootParameters[rootIndex];
+	D3D12_ROOT_PARAMETER & data = m_RootParameters[rootIndex];
 	data.ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
-	data.Descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC;
 	data.Descriptor.RegisterSpace = 0;
 	data.Descriptor.ShaderRegister = shaderRegister;
 	data.ShaderVisibility = visibility;
@@ -44,9 +43,8 @@ void RootSignature::SetConstantBufferView(uint32 rootIndex, uint32 shaderRegiste
 void RootSignature::SetShaderResourceView(uint32 rootIndex, uint32 shaderRegister, D3D12_SHADER_VISIBILITY visibility)
 {
 	SetSize(rootIndex + 1);
-	D3D12_ROOT_PARAMETER1 & data = m_RootParameters[rootIndex];
+	D3D12_ROOT_PARAMETER & data = m_RootParameters[rootIndex];
 	data.ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
-	data.Descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC;
 	data.Descriptor.RegisterSpace = 0;
 	data.Descriptor.ShaderRegister = shaderRegister;
 	data.ShaderVisibility = visibility;
@@ -55,9 +53,8 @@ void RootSignature::SetShaderResourceView(uint32 rootIndex, uint32 shaderRegiste
 void RootSignature::SetUnorderedAccessView(uint32 rootIndex, uint32 shaderRegister, D3D12_SHADER_VISIBILITY visibility)
 {
 	SetSize(rootIndex + 1);
-	D3D12_ROOT_PARAMETER1 & data = m_RootParameters[rootIndex];
+	D3D12_ROOT_PARAMETER & data = m_RootParameters[rootIndex];
 	data.ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV;
-	data.Descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC;
 	data.Descriptor.RegisterSpace = 0;
 	data.Descriptor.ShaderRegister = shaderRegister;
 	data.ShaderVisibility = visibility;
@@ -66,29 +63,28 @@ void RootSignature::SetUnorderedAccessView(uint32 rootIndex, uint32 shaderRegist
 void RootSignature::SetDescriptorTable(uint32 rootIndex, uint32 rangeCount, D3D12_SHADER_VISIBILITY visibility)
 {
 	SetSize(rootIndex + 1);
-	D3D12_ROOT_PARAMETER1& data = m_RootParameters[rootIndex];
+	D3D12_ROOT_PARAMETER& data = m_RootParameters[rootIndex];
 	data.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
 	data.ShaderVisibility = visibility;
 	data.DescriptorTable.NumDescriptorRanges = rangeCount;
 	data.DescriptorTable.pDescriptorRanges = m_DescriptorTableRanges[rootIndex].data();
 }
 
-void RootSignature::SetDescriptorTableRange(uint32 rootIndex, uint32 rangeIndex, uint32 startRegisterSlot, D3D12_DESCRIPTOR_RANGE_TYPE type, uint32 count)
+void RootSignature::SetDescriptorTableRange(uint32 rootIndex, uint32 rangeIndex, uint32 startRegisterSlot, D3D12_DESCRIPTOR_RANGE_TYPE type, uint32 count, uint32 heapSlotOffset)
 {
 	assert(rangeIndex < MAX_RANGES_PER_TABLE);
-	D3D12_DESCRIPTOR_RANGE1& range = m_DescriptorTableRanges[rootIndex][rangeIndex];
+	D3D12_DESCRIPTOR_RANGE& range = m_DescriptorTableRanges[rootIndex][rangeIndex];
 	range.RangeType = type;
 	range.NumDescriptors = count;
 	range.BaseShaderRegister = startRegisterSlot;
 	range.RegisterSpace = 0;
-	range.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
-	range.Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE;
+	range.OffsetInDescriptorsFromTableStart = heapSlotOffset;
 }
 
 void RootSignature::SetDescriptorTableSimple(uint32 rootIndex, uint32 startRegisterSlot, D3D12_DESCRIPTOR_RANGE_TYPE type, uint32 count, D3D12_SHADER_VISIBILITY visibility)
 {
 	SetDescriptorTable(rootIndex, 1, visibility);
-	SetDescriptorTableRange(rootIndex, 0, startRegisterSlot, type, count);
+	SetDescriptorTableRange(rootIndex, 0, startRegisterSlot, type, count, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND);
 }
 
 void RootSignature::AddStaticSampler(uint32 shaderRegister, D3D12_SAMPLER_DESC samplerDesc, D3D12_SHADER_VISIBILITY visibility)
@@ -123,7 +119,7 @@ void RootSignature::Finalize(const char* pName, ID3D12Device* pDevice, D3D12_ROO
 
 	for (size_t i = 0; i < m_RootParameters.size(); ++i)
 	{
-		D3D12_ROOT_PARAMETER1& rootParameter = m_RootParameters[i];
+		D3D12_ROOT_PARAMETER& rootParameter = m_RootParameters[i];
 		switch (rootParameter.ShaderVisibility)
 		{
 		case D3D12_SHADER_VISIBILITY_VERTEX:
@@ -173,22 +169,26 @@ void RootSignature::Finalize(const char* pName, ID3D12Device* pDevice, D3D12_ROO
 		}
 	}
 
-	if (shaderVisibility[(int)Shader::Type::VertexShader] == false)
+	//It's illegal to have RS flags if it's a local root signature
+	if ((flags & D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE) == 0)
 	{
-		flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_VERTEX_SHADER_ROOT_ACCESS;
-	}
-	if (shaderVisibility[(int)Shader::Type::PixelShader] == false)
-	{
-		flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS;
-	}
-	if (shaderVisibility[(int)Shader::Type::GeometryShader] == false)
-	{
-		flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
-	}
+		if (shaderVisibility[(int)Shader::Type::VertexShader] == false)
+		{
+			flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_VERTEX_SHADER_ROOT_ACCESS;
+		}
+		if (shaderVisibility[(int)Shader::Type::PixelShader] == false)
+		{
+			flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS;
+		}
+		if (shaderVisibility[(int)Shader::Type::GeometryShader] == false)
+		{
+			flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
+		}
 
-	//#todo: Tessellation not supported yet
-	flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS;
-	flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS;
+		//#todo: Tessellation not supported yet
+		flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS;
+		flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS;
+	}
 
 	constexpr uint32 recommendedDwords = 12;
 	uint32 dwords = GetDWordSize();
@@ -198,10 +198,15 @@ void RootSignature::Finalize(const char* pName, ID3D12Device* pDevice, D3D12_ROO
 	}
 
 	CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC desc = {};
-	desc.Init_1_1(m_NumParameters, m_RootParameters.data(), (uint32)m_StaticSamplers.size(), m_StaticSamplers.data(), flags);
-
+	desc.Init_1_0(m_NumParameters, m_RootParameters.data(), (uint32)m_StaticSamplers.size(), m_StaticSamplers.data(), flags);
 	ComPtr<ID3DBlob> pDataBlob, pErrorBlob;
-	HR(D3D12SerializeVersionedRootSignature(&desc, pDataBlob.GetAddressOf(), pErrorBlob.GetAddressOf()));
+	D3D12SerializeVersionedRootSignature(&desc, pDataBlob.GetAddressOf(), pErrorBlob.GetAddressOf());
+	if (pErrorBlob)
+	{
+		const char* pError = (char*)pErrorBlob->GetBufferPointer();
+		E_LOG(Error, "RootSignature serialization error: %s", pError);
+		return;
+	}
 	HR(pDevice->CreateRootSignature(0, pDataBlob->GetBufferPointer(), pDataBlob->GetBufferSize(), IID_PPV_ARGS(m_pRootSignature.GetAddressOf())));
 	SetD3DObjectName(m_pRootSignature.Get(), pName);
 }
@@ -212,25 +217,25 @@ void RootSignature::FinalizeFromShader(const char* pName, const Shader& shader, 
 	HR(D3D12CreateVersionedRootSignatureDeserializer(shader.GetByteCode(), shader.GetByteCodeSize(), IID_PPV_ARGS(pDeserializer.GetAddressOf())));
 	const D3D12_VERSIONED_ROOT_SIGNATURE_DESC* pDesc = pDeserializer->GetUnconvertedRootSignatureDesc();
 
-	m_NumParameters = pDesc->Desc_1_1.NumParameters;
+	m_NumParameters = pDesc->Desc_1_0.NumParameters;
 	m_DescriptorTableRanges.resize(m_NumParameters);
 	m_DescriptorTableSizes.resize(m_NumParameters);
 	m_RootParameters.resize(m_NumParameters);
-	m_StaticSamplers.resize(pDesc->Desc_1_1.NumStaticSamplers);
+	m_StaticSamplers.resize(pDesc->Desc_1_0.NumStaticSamplers);
 
-	memcpy(m_StaticSamplers.data(), pDesc->Desc_1_1.pStaticSamplers, m_StaticSamplers.size() * sizeof(D3D12_STATIC_SAMPLER_DESC));
-	memcpy(m_RootParameters.data(), pDesc->Desc_1_1.pParameters, m_RootParameters.size() * sizeof(D3D12_ROOT_PARAMETER1));
+	memcpy(m_StaticSamplers.data(), pDesc->Desc_1_0.pStaticSamplers, m_StaticSamplers.size() * sizeof(D3D12_STATIC_SAMPLER_DESC));
+	memcpy(m_RootParameters.data(), pDesc->Desc_1_0.pParameters, m_RootParameters.size() * sizeof(D3D12_ROOT_PARAMETER));
 
-	for (uint32 i = 0; i < pDesc->Desc_1_1.NumParameters; ++i)
+	for (uint32 i = 0; i < pDesc->Desc_1_0.NumParameters; ++i)
 	{
-		const D3D12_ROOT_PARAMETER1& rootParameter = pDesc->Desc_1_1.pParameters[i];
+		const D3D12_ROOT_PARAMETER& rootParameter = pDesc->Desc_1_0.pParameters[i];
 		if (rootParameter.ParameterType == D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE)
 		{
-			memcpy(m_DescriptorTableRanges[i].data(), rootParameter.DescriptorTable.pDescriptorRanges, rootParameter.DescriptorTable.NumDescriptorRanges * sizeof(D3D12_DESCRIPTOR_RANGE1));
+			memcpy(m_DescriptorTableRanges[i].data(), rootParameter.DescriptorTable.pDescriptorRanges, rootParameter.DescriptorTable.NumDescriptorRanges * sizeof(D3D12_DESCRIPTOR_RANGE));
 		}
 	}
 
-	Finalize(pName, pDevice, pDesc->Desc_1_1.Flags);
+	Finalize(pName, pDevice, pDesc->Desc_1_0.Flags);
 }
 
 uint32 RootSignature::GetDWordSize() const
@@ -238,7 +243,7 @@ uint32 RootSignature::GetDWordSize() const
 	uint32 count = 0;
 	for (size_t i = 0; i < m_RootParameters.size(); ++i)
 	{
-		const D3D12_ROOT_PARAMETER1& rootParameter = m_RootParameters[i];
+		const D3D12_ROOT_PARAMETER& rootParameter = m_RootParameters[i];
 		switch (rootParameter.ParameterType)
 		{
 		case D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS:

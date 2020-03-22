@@ -213,7 +213,7 @@ public:
 	template<typename Callback>
 	RGPass& AddPass(const char* pName, const Callback& passCallback)
 	{
-		using ExecuteCallback = typename std::result_of<Callback(RGPassBuilder&)>::type;
+		using ExecuteCallback = typename std::invoke_result<Callback, RGPassBuilder&>::type;
 		RG_STATIC_ASSERT(sizeof(ExecuteCallback) < 1024, "The Execute callback exceeds the maximum size");
 		RGPass* pPass = new RGPass(*this, pName, (int)m_RenderPasses.size());
 		RGPassBuilder builder(*this, *pPass);

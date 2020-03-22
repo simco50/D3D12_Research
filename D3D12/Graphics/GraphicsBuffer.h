@@ -19,6 +19,7 @@ enum class BufferFlag
 	Structured = 1 << 4,
 	ByteAddress = 1 << 5,
 	IndirectArguments = 1 << 6,
+	AccelerationStructure = 1 << 7,
 };
 DECLARE_BITMASK_TYPE(BufferFlag)
 
@@ -44,13 +45,23 @@ struct BufferDesc
 		return BufferDesc(size, sizeof(uint64), BufferFlag::Readback);
 	}
 
-	static BufferDesc CreateByteAddress(int bytes, BufferFlag usage = BufferFlag::ShaderResource)
+	static BufferDesc CreateByteAddress(uint64 bytes, BufferFlag usage = BufferFlag::ShaderResource)
 	{
 		assert(bytes % 4 == 0);
 		BufferDesc desc;
-		desc.ElementCount = bytes / 4;
+		desc.ElementCount = (uint32)(bytes / 4);
 		desc.ElementSize = 4;
 		desc.Usage = usage | BufferFlag::ByteAddress | BufferFlag::UnorderedAccess;
+		return desc;
+	}
+
+	static BufferDesc CreateAccelerationStructure(uint64 bytes, BufferFlag usage = BufferFlag::None)
+	{
+		assert(bytes % 4 == 0);
+		BufferDesc desc;
+		desc.ElementCount = (uint32)(bytes / 4);
+		desc.ElementSize = 4;
+		desc.Usage = usage | BufferFlag::AccelerationStructure | BufferFlag::UnorderedAccess;
 		return desc;
 	}
 
@@ -121,5 +132,5 @@ protected:
 
 	std::vector<std::unique_ptr<ResourceView>> m_Descriptors;
 	BufferDesc m_Desc;
-	const char* m_pName = nullptr;
+	std::string m_Name;
 };

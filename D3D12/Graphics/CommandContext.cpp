@@ -30,6 +30,7 @@ CommandContext::CommandContext(Graphics* pGraphics, ID3D12GraphicsCommandList* p
 		m_pShaderResourceDescriptorAllocator = std::make_unique<OnlineDescriptorAllocator>(pGraphics, this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 		m_pSamplerDescriptorAllocator = std::make_unique<OnlineDescriptorAllocator>(pGraphics, this, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
 	}
+	pCommandList->QueryInterface(IID_PPV_ARGS(m_pRaytracingCommandList.GetAddressOf()));
 }
 
 CommandContext::~CommandContext()
@@ -164,17 +165,13 @@ void CommandContext::InitializeTexture(Texture* pResource, D3D12_SUBRESOURCE_DAT
 
 void CommandContext::Dispatch(uint32 groupCountX, uint32 groupCountY, uint32 groupCountZ)
 {
-	FlushResourceBarriers();
-	m_pShaderResourceDescriptorAllocator->UploadAndBindStagedDescriptors(DescriptorTableType::Compute);
-	m_pSamplerDescriptorAllocator->UploadAndBindStagedDescriptors(DescriptorTableType::Compute);
+	PrepareDraw(DescriptorTableType::Compute);
 	m_pCommandList->Dispatch(groupCountX, groupCountY, groupCountZ);
 }
 
 void CommandContext::ExecuteIndirect(ID3D12CommandSignature* pCommandSignature, Buffer* pIndirectArguments)
 {
-	FlushResourceBarriers();
-	m_pShaderResourceDescriptorAllocator->UploadAndBindStagedDescriptors(DescriptorTableType::Compute);
-	m_pSamplerDescriptorAllocator->UploadAndBindStagedDescriptors(DescriptorTableType::Compute);
+	PrepareDraw(DescriptorTableType::Compute);
 	m_pCommandList->ExecuteIndirect(pCommandSignature, 1, pIndirectArguments->GetResource(), 0, nullptr, 0);
 }
 
@@ -257,6 +254,21 @@ void CommandContext::SetDescriptorHeap(ID3D12DescriptorHeap* pHeap, D3D12_DESCRI
 		m_CurrentDescriptorHeaps[(int)type] = pHeap;
 		BindDescriptorHeaps();
 	}
+}
+
+DynamicAllocation CommandContext::AllocateTransientMemory(uint64 size, const void* pData /*= nullptr*/)
+{
+	DynamicAllocation allocation = m_DynamicAllocator->Allocate(size);
+	if (pData)
+	{
+		memcpy(allocation.pMappedMemory, pData, size);
+	}
+	return allocation;
+}
+
+DescriptorHandle CommandContext::AllocateTransientDescriptors(int descriptorCount, D3D12_DESCRIPTOR_HEAP_TYPE type)
+{
+	return m_pShaderResourceDescriptorAllocator->AllocateTransientDescriptor(descriptorCount);
 }
 
 void CommandContext::BindDescriptorHeaps()
@@ -487,25 +499,19 @@ void CommandContext::EndRenderPass()
 
 void CommandContext::Draw(int vertexStart, int vertexCount)
 {
-	FlushResourceBarriers();
-	m_pShaderResourceDescriptorAllocator->UploadAndBindStagedDescriptors(DescriptorTableType::Graphics);
-	m_pSamplerDescriptorAllocator->UploadAndBindStagedDescriptors(DescriptorTableType::Graphics);
+	PrepareDraw(DescriptorTableType::Graphics);
 	m_pCommandList->DrawInstanced(vertexCount, 1, vertexStart, 0);
 }
 
 void CommandContext::DrawIndexed(int indexCount, int indexStart, int minVertex /*= 0*/)
 {
-	FlushResourceBarriers();
-	m_pShaderResourceDescriptorAllocator->UploadAndBindStagedDescriptors(DescriptorTableType::Graphics);
-	m_pSamplerDescriptorAllocator->UploadAndBindStagedDescriptors(DescriptorTableType::Graphics);
+	PrepareDraw(DescriptorTableType::Graphics);
 	m_pCommandList->DrawIndexedInstanced(indexCount, 1, indexStart, minVertex, 0);
 }
 
 void CommandContext::DrawIndexedInstanced(int indexCount, int indexStart, int instanceCount, int minVertex /*= 0*/, int instanceStart /*= 0*/)
 {
-	FlushResourceBarriers();
-	m_pShaderResourceDescriptorAllocator->UploadAndBindStagedDescriptors(DescriptorTableType::Graphics);
-	m_pSamplerDescriptorAllocator->UploadAndBindStagedDescriptors(DescriptorTableType::Graphics);
+	PrepareDraw(DescriptorTableType::Graphics);
 	m_pCommandList->DrawIndexedInstanced(indexCount, instanceCount, indexStart, minVertex, instanceStart);
 }
 
@@ -523,6 +529,14 @@ void CommandContext::ResolveResource(Texture* pSource, uint32 sourceSubResource,
 {
 	FlushResourceBarriers();
 	m_pCommandList->ResolveSubresource(pTarget->GetResource(), targetSubResource, pSource->GetResource(), sourceSubResource, format);
+}
+
+void CommandContext::PrepareDraw(DescriptorTableType type)
+{
+	FlushResourceBarriers();
+	m_pShaderResourceDescriptorAllocator->UploadAndBindStagedDescriptors(type);
+	m_pSamplerDescriptorAllocator->UploadAndBindStagedDescriptors(type);
+
 }
 
 void CommandContext::SetGraphicsPipelineState(GraphicsPipelineState* pPipelineState)

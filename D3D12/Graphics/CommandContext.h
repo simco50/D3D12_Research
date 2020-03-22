@@ -1,6 +1,7 @@
 #pragma once
 #include "DynamicResourceAllocator.h"
 #include "GraphicsResource.h"
+#include "OnlineDescriptorAllocator.h"
 class Graphics;
 class GraphicsResource;
 class Texture;
@@ -127,6 +128,7 @@ public:
 	void InitializeTexture(Texture* pResource, D3D12_SUBRESOURCE_DATA* pSubResourceDatas, int firstSubResource, int subResourceCount);
 
 	ID3D12GraphicsCommandList* GetCommandList() const { return m_pCommandList; }
+	ID3D12GraphicsCommandList4* GetRaytracingCommandList() const { return  m_pRaytracingCommandList.Get(); }
 
 	D3D12_COMMAND_LIST_TYPE GetType() const { return m_Type; }
 
@@ -139,6 +141,8 @@ public:
 	void ClearRenderTarget(D3D12_CPU_DESCRIPTOR_HANDLE rtv, const Color& color = Color(0.0f, 0.0f, 0.0f, 1.0f));
 	void ClearDepth(D3D12_CPU_DESCRIPTOR_HANDLE dsv, D3D12_CLEAR_FLAGS clearFlags = D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, float depth = 1.0f, unsigned char stencil = 0);
 	void ResolveResource(Texture* pSource, uint32 sourceSubResource, Texture* pTarget, uint32 targetSubResource, DXGI_FORMAT format);
+
+	void PrepareDraw(DescriptorTableType type);
 
 	void BeginRenderPass(const RenderPassInfo& renderPassInfo);
 	void EndRenderPass();
@@ -175,6 +179,9 @@ public:
 
 	void SetDescriptorHeap(ID3D12DescriptorHeap* pHeap, D3D12_DESCRIPTOR_HEAP_TYPE type);
 
+	DynamicAllocation AllocateTransientMemory(uint64 size, const void* pData = nullptr);
+	DescriptorHandle AllocateTransientDescriptors(int descriptorCount, D3D12_DESCRIPTOR_HEAP_TYPE type);
+
 private:
 	std::unique_ptr<OnlineDescriptorAllocator> m_pShaderResourceDescriptorAllocator;
 	std::unique_ptr<OnlineDescriptorAllocator> m_pSamplerDescriptorAllocator;
@@ -188,6 +195,7 @@ private:
 
 	std::unique_ptr<DynamicResourceAllocator> m_DynamicAllocator;
 	ID3D12GraphicsCommandList* m_pCommandList;
+	ComPtr<ID3D12GraphicsCommandList4> m_pRaytracingCommandList;
 	ID3D12CommandAllocator* m_pAllocator;
 	D3D12_COMMAND_LIST_TYPE m_Type;
 

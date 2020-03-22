@@ -48,6 +48,8 @@ void ClusteredForward::OnSwapchainCreated(int windowWidth, int windowHeight)
 	{
 		GPU_PROFILE_SCOPE("CreateAABBs", pContext);
 
+		pContext->InsertResourceBarrier(m_pAABBs.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
 		pContext->SetComputePipelineState(m_pCreateAabbPSO.get());
 		pContext->SetComputeRootSignature(m_pCreateAabbRS.get());
 
@@ -206,7 +208,7 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
 		});
 
 	
-	graph.AddPass("Light Culling", [&](RGPassBuilder& builder)
+	graph.AddPass("Clustered Light Culling", [&](RGPassBuilder& builder)
 		{
 			builder.NeverCull();
 			return [=](CommandContext& context, const RGPassResources& passResources)

@@ -46,7 +46,6 @@ using uint64 = uint64_t;
 #include <wrl/client.h>
 
 #include <d3d12.h>
-#define D3DX12_NO_STATE_OBJECT_HELPERS
 #include "Graphics/d3dx12.h"
 #include <dxgi1_6.h>
 #include <D3Dcompiler.h>
@@ -104,4 +103,5 @@ inline ENUMTYPE& operator &= (ENUMTYPE& a, ENUMTYPE b) throw() { return (ENUMTYP
 inline constexpr ENUMTYPE operator ~ (ENUMTYPE a) throw() { return ENUMTYPE(~((EnumFlagSize<ENUMTYPE>::type)a)); } \
 inline constexpr ENUMTYPE operator ^ (ENUMTYPE a, ENUMTYPE b) throw() { return ENUMTYPE(((EnumFlagSize<ENUMTYPE>::type)a) ^ ((EnumFlagSize<ENUMTYPE>::type)b)); } \
 inline ENUMTYPE& operator ^= (ENUMTYPE& a, ENUMTYPE b) throw() { return (ENUMTYPE&)(((EnumFlagSize<ENUMTYPE>::type&)a) ^= ((EnumFlagSize<ENUMTYPE>::type)b)); } \
-inline constexpr bool Any(ENUMTYPE a, ENUMTYPE b) throw() { return (ENUMTYPE)(((EnumFlagSize<ENUMTYPE>::type&)a) & ((EnumFlagSize<ENUMTYPE>::type)b)) == b; }
+inline constexpr bool Any(ENUMTYPE a, ENUMTYPE b) throw() { return (ENUMTYPE)(((EnumFlagSize<ENUMTYPE>::type&)a) & ((EnumFlagSize<ENUMTYPE>::type)b)) != (ENUMTYPE)0; } \
+inline constexpr bool All(ENUMTYPE a, ENUMTYPE b) throw() { return (ENUMTYPE)(((EnumFlagSize<ENUMTYPE>::type&)a) & ((EnumFlagSize<ENUMTYPE>::type)b)) == b; }

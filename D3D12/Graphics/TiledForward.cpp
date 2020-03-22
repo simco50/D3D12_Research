@@ -45,10 +45,10 @@ void TiledForward::Execute(RGGraph& graph, const TiledForwardInputResources& res
 				context.InsertResourceBarrier(pDepthTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 				context.InsertResourceBarrier(m_pLightIndexCounter.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-				context.InsertResourceBarrier(m_pLightGridOpaque.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-				context.InsertResourceBarrier(m_pLightGridTransparant.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-				context.InsertResourceBarrier(m_pLightIndexListBufferOpaque.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-				context.InsertResourceBarrier(m_pLightIndexListBufferTransparant.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+				context.InsertResourceBarrier(m_pLightGridOpaque.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+				context.InsertResourceBarrier(m_pLightGridTransparant.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+				context.InsertResourceBarrier(m_pLightIndexListBufferOpaque.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+				context.InsertResourceBarrier(m_pLightIndexListBufferTransparant.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
 				context.ClearUavUInt(m_pLightIndexCounter.get(), m_pLightIndexCounterRawUAV);
 
@@ -197,12 +197,12 @@ void TiledForward::SetupPipelines(Graphics* pGraphics)
 	Shader computeShader("Resources/Shaders/LightCulling.hlsl", Shader::Type::ComputeShader, "CSMain");
 
 	m_pComputeLightCullRS = std::make_unique<RootSignature>();
-	m_pComputeLightCullRS->FinalizeFromShader("Light Culling", computeShader, pGraphics->GetDevice());
+	m_pComputeLightCullRS->FinalizeFromShader("Tiled Light Culling RS", computeShader, pGraphics->GetDevice());
 
 	m_pComputeLightCullPSO = std::make_unique<ComputePipelineState>();
 	m_pComputeLightCullPSO->SetComputeShader(computeShader.GetByteCode(), computeShader.GetByteCodeSize());
 	m_pComputeLightCullPSO->SetRootSignature(m_pComputeLightCullRS->GetRootSignature());
-	m_pComputeLightCullPSO->Finalize("Compute Light Culling Pipeline", pGraphics->GetDevice());
+	m_pComputeLightCullPSO->Finalize("Tiled Light Culling PSO", pGraphics->GetDevice());
 
 	m_pLightIndexCounter = std::make_unique<Buffer>(pGraphics, "Light Index Counter");
 	m_pLightIndexCounter->Create(BufferDesc::CreateStructured(2, sizeof(uint32)));

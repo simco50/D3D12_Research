@@ -25,7 +25,7 @@ public:
 	void SetShaderResourceView(uint32 rootIndex, uint32 shaderRegister, D3D12_SHADER_VISIBILITY visibility);
 	void SetUnorderedAccessView(uint32 rootIndex, uint32 shaderRegister, D3D12_SHADER_VISIBILITY visibility);
 	void SetDescriptorTable(uint32 rootIndex, uint32 rangeCount, D3D12_SHADER_VISIBILITY visibility);
-	void SetDescriptorTableRange(uint32 rootIndex, uint32 rangeIndex, uint32 startRegisterSlot, D3D12_DESCRIPTOR_RANGE_TYPE type, uint32 count);
+	void SetDescriptorTableRange(uint32 rootIndex, uint32 rangeIndex, uint32 startRegisterSlot, D3D12_DESCRIPTOR_RANGE_TYPE type, uint32 count, uint32 heapSlotOffset);
 	void SetDescriptorTableSimple(uint32 rootIndex, uint32 startRegisterSlot, D3D12_DESCRIPTOR_RANGE_TYPE type, uint32 count, D3D12_SHADER_VISIBILITY visibility);
 
 	void AddStaticSampler(uint32 shaderRegister, D3D12_SAMPLER_DESC samplerDesc, D3D12_SHADER_VISIBILITY visibility);
@@ -42,10 +42,10 @@ public:
 	uint32 GetDWordSize() const;
 
 private:
-	std::vector<D3D12_ROOT_PARAMETER1> m_RootParameters;
+	std::vector<D3D12_ROOT_PARAMETER> m_RootParameters;
 	std::vector<uint32> m_DescriptorTableSizes;
 	std::vector<D3D12_STATIC_SAMPLER_DESC> m_StaticSamplers;
-	std::vector<std::array<D3D12_DESCRIPTOR_RANGE1, MAX_RANGES_PER_TABLE>> m_DescriptorTableRanges;
+	std::vector<std::array<D3D12_DESCRIPTOR_RANGE, MAX_RANGES_PER_TABLE>> m_DescriptorTableRanges;
 	ComPtr<ID3D12RootSignature> m_pRootSignature;
 
 	BitField32 m_DescriptorTableMask;

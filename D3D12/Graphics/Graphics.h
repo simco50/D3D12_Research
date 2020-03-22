@@ -21,6 +21,7 @@ class Camera;
 class RGResourceAllocator;
 class DebugRenderer;
 class UnorderedAccessView;
+class RTAO;
 
 struct Batch
 {
@@ -74,6 +75,7 @@ public:
 	virtual void Shutdown();
 
 	inline ID3D12Device* GetDevice() const { return m_pDevice.Get(); }
+	inline ID3D12Device5* GetRaytracingDevice() const { return m_pRaytracingDevice.Get(); }
 	void OnResize(int width, int height);
 
 	bool IsFenceComplete(uint64 fenceValue);
@@ -89,6 +91,8 @@ public:
 
 	bool CheckTypedUAVSupport(DXGI_FORMAT format) const;
 	bool UseRenderPasses() const;
+	bool SupportsRayTracing() const { return m_RayTracingTier != D3D12_RAYTRACING_TIER_NOT_SUPPORTED; }
+	bool GetShaderModel(int& major, int& minor) const;
 
 	DynamicAllocationManager* GetAllocationManager() const { return m_pDynamicAllocationManager.get(); }
 
@@ -139,8 +143,12 @@ private:
 
 	ComPtr<IDXGISwapChain3> m_pSwapchain;
 	ComPtr<ID3D12Device> m_pDevice;
+	ComPtr<ID3D12Device5> m_pRaytracingDevice;
 
 	D3D12_RENDER_PASS_TIER m_RenderPassTier = D3D12_RENDER_PASS_TIER_0;
+	D3D12_RAYTRACING_TIER m_RayTracingTier = D3D12_RAYTRACING_TIER_NOT_SUPPORTED;
+	int m_ShaderModelMajor = -1;
+	int m_ShaderModelMinor = -1;
 
 	int m_SampleCount = 1;
 	int m_SampleQuality = 0;
@@ -166,6 +174,7 @@ private:
 	std::unique_ptr<RGResourceAllocator> m_pGraphAllocator;
 	std::unique_ptr<ClusteredForward> m_pClusteredForward;
 	std::unique_ptr<TiledForward> m_pTiledForward;
+	std::unique_ptr<RTAO> m_pRaytracing;
 	std::unique_ptr<DebugRenderer> m_pDebugRenderer;
 
 	unsigned int m_WindowWidth;
@@ -208,8 +217,8 @@ private:
 
 	//SSAO
 	std::unique_ptr<Texture> m_pNoiseTexture;
-	std::unique_ptr<Texture> m_pSSAOTarget;
-	std::unique_ptr<Texture> m_pSSAOBlurred;
+	std::unique_ptr<Texture> m_pAmbientOcclusion;
+	std::unique_ptr<Texture> m_pAmbientOcclusionIntermediate;
 	std::unique_ptr<RootSignature> m_pSSAORS;
 	std::unique_ptr<ComputePipelineState> m_pSSAOPSO;
 	std::unique_ptr<RootSignature> m_pSSAOBlurRS;
