@@ -47,7 +47,5 @@ private:
 	std::unique_ptr<RootSignature> m_pHitSignature;
 	std::unique_ptr<RootSignature> m_pMissSignature;
 	std::unique_ptr<RootSignature> m_pDummySignature;
-
-	std::unique_ptr<Texture> m_pOutputTexture;
 };
 
