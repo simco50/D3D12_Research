@@ -11,6 +11,9 @@ Texture2D tNormals : register(t1);
 Texture2D tDepth : register(t2);
 Texture2D tNoise : register(t3);
 
+SamplerState sSceneSampler : register(s0);
+SamplerState sTexSampler : register(s1);
+
 cbuffer ShaderParameters : register(b0)
 {
 	float4x4 cViewInverse;
@@ -25,19 +28,18 @@ void RayGen()
 	payload.hit = 0;
 
 	uint2 launchIndex = DispatchRaysIndex().xy;
-
-	float depth = tDepth[launchIndex].r;
-
 	float2 texCoord = (float2)launchIndex / DispatchRaysDimensions().xy;
+
+	float depth = tDepth.SampleLevel(sSceneSampler, texCoord, 0).r;
+	float3 normal = tNormals.SampleLevel(sSceneSampler, texCoord, 0).rgb;
+	float3 noise = float3(tNoise.SampleLevel(sTexSampler, texCoord * 10, 0).rg * 2 - 1, 0);
+
 	float4 clip = float4(float2(texCoord.x, 1.0f - texCoord.y) * 2.0f - 1.0f, depth, 1);
 	float4 view = mul(clip, cProjectionInverse);
 	view /= view.w;
 	float4 world = mul(view, cViewInverse);
 
-	float3 normal = normalize(tNormals[launchIndex].rgb);
-
-	float3 randomVec = normalize(float3(tNoise[texCoord * 2048 % 256].xy * 2 - 1, 0));
-	float3 tangent = normalize(randomVec - normal * dot(randomVec, normal));
+	float3 tangent = normalize(noise - normal * dot(noise, normal));
 	float3 bitangent = cross(tangent, normal);
 	float3x3 TBN = float3x3(tangent, bitangent, normal);
 

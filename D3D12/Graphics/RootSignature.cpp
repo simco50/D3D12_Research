@@ -208,9 +208,9 @@ void RootSignature::Finalize(const char* pName, ID3D12Device* pDevice, D3D12_ROO
 	D3D12SerializeVersionedRootSignature(&desc, pDataBlob.GetAddressOf(), pErrorBlob.GetAddressOf());
 	if (pErrorBlob)
 	{
-		std::wstring errorMsg = std::wstring((char*)pErrorBlob->GetBufferPointer(), (char*)pErrorBlob->GetBufferPointer() + pErrorBlob->GetBufferSize());
-		std::wcout << errorMsg << std::endl;
-		assert(false);
+		const char* pError = (char*)pErrorBlob->GetBufferPointer();
+		E_LOG(Error, "RootSignature serialization error: %s", pError);
+		return;
 	}
 	HR(pDevice->CreateRootSignature(0, pDataBlob->GetBufferPointer(), pDataBlob->GetBufferSize(), IID_PPV_ARGS(m_pRootSignature.GetAddressOf())));
 	SetD3DObjectName(m_pRootSignature.Get(), pName);
