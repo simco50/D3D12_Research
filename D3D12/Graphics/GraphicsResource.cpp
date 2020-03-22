@@ -29,3 +29,16 @@ void GraphicsResource::SetName(const char* pName)
 {
 	SetD3DObjectName(m_pResource, pName);
 }
+
+std::string GraphicsResource::GetName() const
+{
+	if (m_pResource)
+	{
+		uint32 size = 0;
+		m_pResource->GetPrivateData(WKPDID_D3DDebugObjectName, &size, nullptr);
+		std::string str(size, '\0');
+		m_pResource->GetPrivateData(WKPDID_D3DDebugObjectName, &size, str.data());
+		return str;
+	}
+	return "";
+}

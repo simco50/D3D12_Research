@@ -132,5 +132,5 @@ protected:
 
 	std::vector<std::unique_ptr<ResourceView>> m_Descriptors;
 	BufferDesc m_Desc;
-	const char* m_pName = nullptr;
+	std::string m_Name;
 };

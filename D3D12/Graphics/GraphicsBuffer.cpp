@@ -5,9 +5,8 @@
 #include "ResourceViews.h"
 
 Buffer::Buffer(Graphics* pGraphics, const char* pName /*= ""*/)
-	: GraphicsResource(pGraphics), m_pName(pName)
+	: GraphicsResource(pGraphics), m_Name(pName)
 {
-
 }
 
 Buffer::Buffer(Graphics* pGraphics, ID3D12Resource* pResource, D3D12_RESOURCE_STATES state)
@@ -66,10 +65,7 @@ void Buffer::Create(const BufferDesc& bufferDesc)
 
 	m_pResource = m_pGraphics->CreateResource(desc, m_CurrentState, heapType);
 
-	if (m_pName)
-	{
-		SetName(m_pName);
-	}
+	SetName(m_Name.c_str());
 
 	//#todo: Temp code. Pull out views from buffer
 	if (Any(bufferDesc.Usage, BufferFlag::UnorderedAccess))

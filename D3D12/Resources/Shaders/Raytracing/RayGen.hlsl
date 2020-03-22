@@ -1,7 +1,7 @@
 #include "Common.hlsl"
 
 #define RPP 64
-#define RPP_ACTUAL 1
+#define RPP_ACTUAL 4 
 
 RWTexture2D<float> gOutput : register(u0);
 
@@ -49,9 +49,9 @@ void RayGen()
 		float3 n = mul(cRandomVectors[i].xyz, TBN);
 		RayDesc ray;
 		ray.Origin = world.xyz;
-		ray.Direction = normalize(n);
+		ray.Direction = n;
 		ray.TMin = 0.001f;
-		ray.TMax = length(n);
+		ray.TMax = 1;
 
 		// Trace the ray
 		TraceRay(
@@ -110,5 +110,5 @@ void RayGen()
 		totalHits += payload.hit;
 	}
 
-	gOutput[launchIndex] = 1-(float)totalHits / RPP_ACTUAL;
+	gOutput[launchIndex] = 1 - (float)totalHits / RPP_ACTUAL;
 }

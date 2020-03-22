@@ -1190,7 +1190,7 @@ void Graphics::UpdateImGui()
 {
 	m_FrameTimes[m_Frame % m_FrameTimes.size()] = GameTimer::DeltaTime();
 
-	ImGui::Begin("SSAO");
+	ImGui::Begin("Ambient Occlusion");
 	Vector2 image((float)m_pAmbientOcclusionIntermediate->GetWidth(), (float)m_pAmbientOcclusionIntermediate->GetHeight());
 	Vector2 windowSize(ImGui::GetContentRegionAvail().x, ImGui::GetContentRegionAvail().y);
 	float width = windowSize.x;
