@@ -53,10 +53,13 @@ public:
 	void Commit(CommandContext& context, D3D12_DISPATCH_RAYS_DESC& desc)
 	{
 		uint32 totalSize = 0;
-		uint32 rayGenSection = Math::AlignUp<uint32>(m_RayGenEntrySize * (uint32)m_RayGenTable.size(), D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT);
-		uint32 missSection = Math::AlignUp<uint32>(m_MissEntrySize * (uint32)m_MissTable.size(), D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT);
-		uint32 hitSection = Math::AlignUp<uint32>(m_HitEntrySize * (uint32)m_HitTable.size(), D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT);
-		totalSize = Math::AlignUp<uint32>(rayGenSection + missSection + hitSection, 256);
+		uint32 rayGenSection = m_RayGenEntrySize * (uint32)m_RayGenTable.size();
+		uint32 rayGenSectionAligned = Math::AlignUp<uint32>(rayGenSection, D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT);
+		uint32 missSection = m_MissEntrySize * (uint32)m_MissTable.size();
+		uint32 missSectionAligned = Math::AlignUp<uint32>(missSection, D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT);
+		uint32 hitSection = m_HitEntrySize * (uint32)m_HitTable.size();
+		uint32 hitSectionAligned = Math::AlignUp<uint32>(hitSection, D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT);
+		totalSize = Math::AlignUp<uint32>(rayGenSectionAligned + missSectionAligned + hitSectionAligned, 256);
 		DynamicAllocation allocation = context.AllocateTransientMemory(totalSize);
 		char* pStart = (char*)allocation.pMappedMemory;
 		char* pData = pStart;
@@ -66,14 +69,14 @@ public:
 			memcpy(pData + D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES, e.data.data(), e.data.size() * sizeof(uint64));
 			pData += m_RayGenEntrySize;
 		}
-		pData = pStart + rayGenSection;
+		pData = pStart + rayGenSectionAligned;
 		for (const TableEntry& e : m_MissTable)
 		{
 			memcpy(pData, e.pIdentifier, D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
 			memcpy(pData + D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES, e.data.data(), e.data.size() * sizeof(uint64));
 			pData += m_RayGenEntrySize;
 		}
-		pData = pStart + rayGenSection + missSection;
+		pData = pStart + rayGenSectionAligned + missSectionAligned;
 		for (const TableEntry& e : m_HitTable)
 		{
 			memcpy(pData, e.pIdentifier, D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
@@ -82,10 +85,10 @@ public:
 		}
 		desc.RayGenerationShaderRecord.StartAddress = allocation.GpuHandle;
 		desc.RayGenerationShaderRecord.SizeInBytes = rayGenSection;
-		desc.MissShaderTable.StartAddress = allocation.GpuHandle + rayGenSection;
+		desc.MissShaderTable.StartAddress = allocation.GpuHandle + rayGenSectionAligned;
 		desc.MissShaderTable.SizeInBytes = missSection;
 		desc.MissShaderTable.StrideInBytes = m_MissEntrySize;
-		desc.HitGroupTable.StartAddress = allocation.GpuHandle + rayGenSection + missSection;
+		desc.HitGroupTable.StartAddress = allocation.GpuHandle + rayGenSectionAligned + missSectionAligned;
 		desc.HitGroupTable.SizeInBytes = hitSection;
 		desc.HitGroupTable.StrideInBytes = m_HitEntrySize;
 

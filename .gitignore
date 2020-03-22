@@ -9,3 +9,4 @@ imgui.ini
 *.html
 *.gv
 .vscode/
+*.nsight*
