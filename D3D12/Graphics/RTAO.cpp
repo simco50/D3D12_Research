@@ -14,7 +14,115 @@
 #include "Scene/Camera.h"
 #include "ResourceViews.h"
 #include "RenderGraph/RenderGraph.h"
-#include "External/nv_helpers_dx12/ShaderBindingTableGenerator.h"
+
+class ShaderBindingTable
+{
+private:
+	struct TableEntry
+	{
+		std::vector<void*> data;
+		void* pIdentifier = nullptr;
+	};
+public:
+	ShaderBindingTable(ID3D12StateObject* pStateObject)
+	{
+		HR(pStateObject->QueryInterface(IID_PPV_ARGS(m_pObjectProperties.GetAddressOf())));
+	}
+
+	void AddRayGenEntry(const char* pName, const std::vector<void*>& data)
+	{
+		m_RayGenTable.push_back(CreateEntry(pName, data));
+		uint32 entrySize = Math::AlignUp<uint32>(D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES + (uint32)data.size() * 8, D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT);
+		m_RayGenEntrySize = Math::Max<int>(m_RayGenEntrySize, entrySize);
+	}
+
+	void AddMissEntry(const char* pName, const std::vector<void*>& data)
+	{
+		m_MissTable.push_back(CreateEntry(pName, data));
+		uint32 entrySize = Math::AlignUp<uint32>(D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES + (uint32)data.size() * 8, D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT);
+		m_MissEntrySize = Math::Max<int>(m_MissEntrySize, entrySize);
+	}
+
+	void AddHitGroupEntry(const char* pName, const std::vector<void*>& data)
+	{
+		m_HitTable.push_back(CreateEntry(pName, data));
+		uint32 entrySize = Math::AlignUp<uint32>(D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES + (uint32)data.size() * 8, D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT);
+		m_HitEntrySize = Math::Max<int>(m_HitEntrySize, entrySize);
+	}
+
+	void Commit(CommandContext& context, D3D12_DISPATCH_RAYS_DESC& desc)
+	{
+		uint32 totalSize = 0;
+		uint32 rayGenSection = Math::AlignUp<uint32>(m_RayGenEntrySize * (uint32)m_RayGenTable.size(), D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT);
+		uint32 missSection = Math::AlignUp<uint32>(m_MissEntrySize * (uint32)m_MissTable.size(), D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT);
+		uint32 hitSection = Math::AlignUp<uint32>(m_HitEntrySize * (uint32)m_HitTable.size(), D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT);
+		totalSize = Math::AlignUp<uint32>(rayGenSection + missSection + hitSection, 256);
+		DynamicAllocation allocation = context.AllocateTransientMemory(totalSize);
+		char* pStart = (char*)allocation.pMappedMemory;
+		char* pData = pStart;
+		for (const TableEntry& e : m_RayGenTable)
+		{
+			memcpy(pData, e.pIdentifier, D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
+			memcpy(pData + D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES, e.data.data(), e.data.size() * sizeof(uint64));
+			pData += m_RayGenEntrySize;
+		}
+		pData = pStart + rayGenSection;
+		for (const TableEntry& e : m_MissTable)
+		{
+			memcpy(pData, e.pIdentifier, D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
+			memcpy(pData + D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES, e.data.data(), e.data.size() * sizeof(uint64));
+			pData += m_RayGenEntrySize;
+		}
+		pData = pStart + rayGenSection + missSection;
+		for (const TableEntry& e : m_HitTable)
+		{
+			memcpy(pData, e.pIdentifier, D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
+			memcpy(pData + D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES, e.data.data(), e.data.size() * sizeof(uint64));
+			pData += m_RayGenEntrySize;
+		}
+		desc.RayGenerationShaderRecord.StartAddress = allocation.GpuHandle;
+		desc.RayGenerationShaderRecord.SizeInBytes = rayGenSection;
+		desc.MissShaderTable.StartAddress = allocation.GpuHandle + rayGenSection;
+		desc.MissShaderTable.SizeInBytes = missSection;
+		desc.MissShaderTable.StrideInBytes = m_MissEntrySize;
+		desc.HitGroupTable.StartAddress = allocation.GpuHandle + rayGenSection + missSection;
+		desc.HitGroupTable.SizeInBytes = hitSection;
+		desc.HitGroupTable.StrideInBytes = m_HitEntrySize;
+
+		m_RayGenTable.clear();
+		m_RayGenEntrySize = 0;
+		m_MissTable.clear();
+		m_MissEntrySize = 0;
+		m_HitTable.clear();
+		m_HitEntrySize = 0;
+	}
+
+private:
+	TableEntry CreateEntry(const char* pName, const std::vector<void*>& data)
+	{
+		TableEntry entry;
+		auto it = m_IdentifierMap.find(pName);
+		if (it == m_IdentifierMap.end())
+		{
+			wchar_t wName[256];
+			ToWidechar(pName, wName, 256);
+			m_IdentifierMap[pName] = m_pObjectProperties->GetShaderIdentifier(wName);
+		}
+		entry.pIdentifier = m_IdentifierMap[pName];
+		assert(entry.pIdentifier);
+		entry.data = data;
+		return entry;
+	}
+
+	ComPtr<ID3D12StateObjectProperties> m_pObjectProperties;
+	std::vector<TableEntry> m_RayGenTable;
+	uint32 m_RayGenEntrySize = 0;
+	std::vector<TableEntry> m_MissTable;
+	uint32 m_MissEntrySize = 0;
+	std::vector<TableEntry> m_HitTable;
+	uint32 m_HitEntrySize = 0;
+	std::unordered_map<std::string, void*> m_IdentifierMap;
+};
 
 RTAO::RTAO(Graphics* pGraphics)
 	: m_pGraphics(pGraphics)
@@ -37,8 +145,6 @@ void RTAO::Execute(RGGraph& graph, const RaytracingInputResources& resources)
 			builder.NeverCull();
 			return [=](CommandContext& context, const RGPassResources& passResources)
 			{
-				nv_helpers_dx12::ShaderBindingTableGenerator sbtGenerator;
-				DynamicAllocation sbtAllocation;
 				{
 					context.InsertResourceBarrier(resources.pDepthTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 					context.InsertResourceBarrier(resources.pNormalsTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
@@ -100,27 +206,18 @@ void RTAO::Execute(RGGraph& graph, const RaytracingInputResources& resources)
 
 					DynamicAllocation allocation = context.AllocateTransientMemory(sizeof(CameraParameters), &cameraData);
 
-					sbtGenerator.AddMissProgram(L"Miss", {});
-					sbtGenerator.AddRayGenerationProgram(L"RayGen", { reinterpret_cast<uint64*>(allocation.GpuHandle), reinterpret_cast<uint64*>(renderTargetUAV.GetGpuHandle().ptr), reinterpret_cast<uint64*>(tlasSRV.GetGpuHandle().ptr), reinterpret_cast<uint64*>(textureSRVs.GetGpuHandle().ptr) });
-					sbtGenerator.AddHitGroup(L"HitGroup", {});
-					sbtAllocation = context.AllocateTransientMemory(sbtGenerator.ComputeSBTSize());
-					sbtGenerator.Generate(sbtAllocation.pMappedMemory, m_pStateObjectProperties.Get());
-				}
-				{
+					D3D12_DISPATCH_RAYS_DESC rayDesc{};
+					ShaderBindingTable bindingTable(m_pStateObject.Get());
+					bindingTable.AddRayGenEntry("RayGen", { reinterpret_cast<uint64*>(allocation.GpuHandle), reinterpret_cast<uint64*>(renderTargetUAV.GetGpuHandle().ptr), reinterpret_cast<uint64*>(tlasSRV.GetGpuHandle().ptr), reinterpret_cast<uint64*>(textureSRVs.GetGpuHandle().ptr) });
+					bindingTable.AddMissEntry("Miss", {});
+					bindingTable.AddHitGroupEntry("HitGroup", {});
+					bindingTable.Commit(context, rayDesc);
+
 					ID3D12GraphicsCommandList4* pCmd = context.GetRaytracingCommandList();
 
-					D3D12_DISPATCH_RAYS_DESC rayDesc{};
 					rayDesc.Width = resources.pRenderTarget->GetWidth();
 					rayDesc.Height = resources.pRenderTarget->GetHeight();
 					rayDesc.Depth = 1;
-					rayDesc.RayGenerationShaderRecord.StartAddress = sbtAllocation.GpuHandle;
-					rayDesc.RayGenerationShaderRecord.SizeInBytes = sbtGenerator.GetRayGenSectionSize();
-					rayDesc.MissShaderTable.StartAddress = sbtAllocation.GpuHandle + sbtGenerator.GetRayGenSectionSize();
-					rayDesc.MissShaderTable.SizeInBytes = sbtGenerator.GetMissSectionSize();
-					rayDesc.MissShaderTable.StrideInBytes = sbtGenerator.GetMissEntrySize();
-					rayDesc.HitGroupTable.StartAddress = sbtAllocation.GpuHandle + sbtGenerator.GetRayGenSectionSize() + sbtGenerator.GetMissSectionSize();
-					rayDesc.HitGroupTable.SizeInBytes = sbtGenerator.GetHitGroupSectionSize();
-					rayDesc.HitGroupTable.StrideInBytes = sbtGenerator.GetHitGroupEntrySize();
 
 					pCmd->SetPipelineState1(m_pStateObject.Get());
 					context.PrepareDraw(DescriptorTableType::Compute);
