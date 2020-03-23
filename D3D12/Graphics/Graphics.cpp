@@ -77,10 +77,10 @@ void Graphics::Initialize(HWND window)
 	m_pCamera->SetFarPlane(10.0f);
 	m_pCamera->SetViewport(0, 0, 1, 1);
 
-	Shader::AddGlobalShaderDefine("BLOCK_SIZE", std::to_string(FORWARD_PLUS_BLOCK_SIZE));
-	Shader::AddGlobalShaderDefine("SHADOWMAP_DX", std::to_string(1.0f / SHADOW_MAP_SIZE));
-	Shader::AddGlobalShaderDefine("PCF_KERNEL_SIZE", std::to_string(5));
-	Shader::AddGlobalShaderDefine("MAX_SHADOW_CASTERS", std::to_string(MAX_SHADOW_CASTERS));
+	ShaderCompiler::AddGlobalShaderDefine("BLOCK_SIZE", std::to_string(FORWARD_PLUS_BLOCK_SIZE));
+	ShaderCompiler::AddGlobalShaderDefine("SHADOWMAP_DX", std::to_string(1.0f / SHADOW_MAP_SIZE));
+	ShaderCompiler::AddGlobalShaderDefine("PCF_KERNEL_SIZE", std::to_string(5));
+	ShaderCompiler::AddGlobalShaderDefine("MAX_SHADOW_CASTERS", std::to_string(MAX_SHADOW_CASTERS));
 
 	InitD3D();
 	InitializeAssets();
