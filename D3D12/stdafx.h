@@ -50,6 +50,7 @@ using uint64 = uint64_t;
 #include <dxgi1_6.h>
 #include <D3Dcompiler.h>
 #include <DXProgrammableCapture.h>
+#include <dxc/dxcapi.h>
 
 #include "Core/CommandLine.h"
 #include "Math/MathTypes.h"

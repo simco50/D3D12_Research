@@ -1,7 +1,6 @@
 #include "stdafx.h"
 #include "Shader.h"
 #include "Core/Paths.h"
-#include <dxc/dxcapi.h>
 
 #ifndef USE_SHADER_LINE_DIRECTIVE
 #define USE_SHADER_LINE_DIRECTIVE 1
@@ -136,7 +135,8 @@ bool ShaderCompiler::CompileDxc(const char* pIdentifier, const char* pShaderSour
 		std::ofstream fileStream(p.str(), std::ios::binary);
 		fileStream.write((char*)pDebugData->GetBufferPointer(), pDebugData->GetBufferSize());
 	}
-
+#endif
+#if 0
 	//Reflection
 	{
 		ComPtr<IDxcBlob> pReflectionData;
@@ -215,19 +215,7 @@ void ShaderCompiler::AddGlobalShaderDefine(const std::string& name, const std::s
 	m_GlobalShaderDefines.emplace_back(name, value);
 }
 
-Shader::Shader(const char* pFilePath, Type shaderType, const char* pEntryPoint, const std::vector<std::string> defines)
-{
-	m_Path = pFilePath;
-	m_Type = shaderType;
-	Compile(pFilePath, shaderType, pEntryPoint, 6, 0, defines);
-}
-
-Shader::~Shader()
-{
-
-}
-
-bool Shader::ProcessSource(const std::string& sourcePath, const std::string& filePath, std::stringstream& output, std::vector<StringHash>& processedIncludes, std::vector<std::string>& dependencies)
+bool ShaderBase::ProcessSource(const std::string& sourcePath, const std::string& filePath, std::stringstream& output, std::vector<StringHash>& processedIncludes, std::vector<std::string>& dependencies)
 {
 	if (sourcePath != filePath)
 	{
@@ -290,6 +278,23 @@ bool Shader::ProcessSource(const std::string& sourcePath, const std::string& fil
 	return true;
 }
 
+void* ShaderBase::GetByteCode() const
+{
+	return m_pByteCode->GetBufferPointer();
+}
+
+uint32 ShaderBase::GetByteCodeSize() const
+{
+	return (uint32)m_pByteCode->GetBufferSize();
+}
+
+Shader::Shader(const char* pFilePath, Type shaderType, const char* pEntryPoint, const std::vector<std::string> defines)
+{
+	m_Path = pFilePath;
+	m_Type = shaderType;
+	Compile(pFilePath, shaderType, pEntryPoint, 6, 3, defines);
+}
+
 bool Shader::Compile(const char* pFilePath, Type shaderType, const char* pEntryPoint, char shaderModelMajor, char shaderModelMinor, const std::vector<std::string> defines /*= {}*/)
 {
 	std::stringstream shaderSource;
@@ -303,15 +308,15 @@ bool Shader::Compile(const char* pFilePath, Type shaderType, const char* pEntryP
 
 	if (shaderModelMajor < 6)
 	{
-		return ShaderCompiler::CompileFxc(pFilePath, source.c_str(), (uint32)source.size(), m_pByteCode.GetAddressOf(), pEntryPoint, target.c_str(), defines);
+		ID3DBlob** pBlob = reinterpret_cast<ID3DBlob**>(m_pByteCode.GetAddressOf());
+		return ShaderCompiler::CompileFxc(pFilePath, source.c_str(), (uint32)source.size(), pBlob, pEntryPoint, target.c_str(), defines);
 	}
-	IDxcBlob** pBlob = reinterpret_cast<IDxcBlob**>(m_pByteCode.GetAddressOf());
-	return ShaderCompiler::CompileDxc(pFilePath, source.c_str(), (uint32)source.size(), pBlob, pEntryPoint, target.c_str(), defines);
+	return ShaderCompiler::CompileDxc(pFilePath, source.c_str(), (uint32)source.size(), m_pByteCode.GetAddressOf(), pEntryPoint, target.c_str(), defines);
 }
 
 std::string Shader::GetShaderTarget(Type shaderType, char shaderModelMajor, char shaderModelMinor)
 {
-	char out[7];
+	char out[16];
 	switch (shaderType)
 	{
 	case Type::VertexShader:
@@ -333,27 +338,28 @@ std::string Shader::GetShaderTarget(Type shaderType, char shaderModelMajor, char
 	return out;
 }
 
-void* Shader::GetByteCode() const
-{
-	return m_pByteCode->GetBufferPointer();
-}
-
-uint32 Shader::GetByteCodeSize() const
-{
-	return (uint32)m_pByteCode->GetBufferSize();
-}
-
 ShaderLibrary::ShaderLibrary(const char* pFilePath, const std::vector<std::string> defines)
+{
+	m_Path = pFilePath;
+	Compile(pFilePath, 6, 3, defines);
+}
+
+std::string ShaderLibrary::GetShaderTarget(char shaderModelMajor, char shaderModelMinor)
+{
+	char out[16];
+	sprintf_s(out, "lib_%d_%d", shaderModelMajor, shaderModelMinor);
+	return out;
+}
+
+bool ShaderLibrary::Compile(const char* pFilePath, char shaderModelMajor, char shaderModelMinor, const std::vector<std::string> defines /*= {}*/)
 {
 	std::stringstream shaderSource;
 	std::vector<StringHash> includes;
-	if (!Shader::ProcessSource(pFilePath, pFilePath, shaderSource, includes, m_Dependencies))
+	if (!ProcessSource(pFilePath, pFilePath, shaderSource, includes, m_Dependencies))
 	{
-		return;
+		return false;
 	}
 	std::string source = shaderSource.str();
-
-	m_Path = pFilePath;
-	IDxcBlob** pBlob = reinterpret_cast<IDxcBlob**>(m_pByteCode.GetAddressOf());
-	ShaderCompiler::CompileDxc(pFilePath, source.c_str(), (uint32)source.size(), pBlob, "", "lib_6_3", defines);
+	std::string target = GetShaderTarget(shaderModelMajor, shaderModelMinor);
+	return ShaderCompiler::CompileDxc(pFilePath, source.c_str(), (uint32)source.size(), m_pByteCode.GetAddressOf(), "", target.c_str(), defines);
 }

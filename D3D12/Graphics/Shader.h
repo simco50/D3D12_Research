@@ -3,14 +3,28 @@
 class ShaderCompiler
 {
 public:
-	static bool CompileDxc(const char* pIdentifier, const char* pShaderSource, uint32 shaderSourceSize, struct IDxcBlob** pOutput, const char* pEntryPoint = "", const char* pTarget = "", const std::vector<std::string>& defines = {});
+	static bool CompileDxc(const char* pIdentifier, const char* pShaderSource, uint32 shaderSourceSize, IDxcBlob** pOutput, const char* pEntryPoint = "", const char* pTarget = "", const std::vector<std::string>& defines = {});
 	static bool CompileFxc(const char* pIdentifier, const char* pShaderSource, uint32 shaderSourceSize, ID3DBlob** pOutput, const char* pEntryPoint = "", const char* pTarget = "", const std::vector<std::string>& defines = {});
 	static void AddGlobalShaderDefine(const std::string& name, const std::string& value = "1");
 private:
 	static std::vector<std::pair<std::string, std::string>> m_GlobalShaderDefines;
 };
 
-class Shader
+class ShaderBase
+{
+public:
+	void* GetByteCode() const;
+	uint32 GetByteCodeSize() const;
+	const std::vector<std::string>& GetDependencies() const { return m_Dependencies; }
+
+protected:
+	static bool ProcessSource(const std::string& sourcePath, const std::string& filePath, std::stringstream& output, std::vector<StringHash>& processedIncludes, std::vector<std::string>& dependencies);
+	std::vector<std::string> m_Dependencies;
+	std::string m_Path;
+	ComPtr<IDxcBlob> m_pByteCode;
+};
+
+class Shader : public ShaderBase
 {
 public:
 	enum class Type
@@ -23,37 +37,23 @@ public:
 	};
 
 	Shader(const char* pFilePath, Type shaderType, const char* pEntryPoint, const std::vector<std::string> defines = {});
-	~Shader();
 
 	inline Type GetType() const { return m_Type; }
-	void* GetByteCode() const;
-	uint32 GetByteCodeSize() const;
-	const std::vector<std::string>& GetDependencies() const { return m_Dependencies; }
-
-	static bool ProcessSource(const std::string& sourcePath, const std::string& filePath, std::stringstream& output, std::vector<StringHash>& processedIncludes, std::vector<std::string>& dependencies);
 
 private:
-	bool Compile(const char* pFilePath, Type shaderType, const char* pEntryPoint, char shaderModelMajor, char shaderModelMinor, const std::vector<std::string> defines = {});
-
 	static std::string GetShaderTarget(Type shaderType, char shaderModelMajor, char shaderModelMinor);
-
-	std::vector<std::string> m_Dependencies;
-	std::string m_Path;
-	ComPtr<ID3DBlob> m_pByteCode;
+	
+	bool Compile(const char* pFilePath, Type shaderType, const char* pEntryPoint, char shaderModelMajor, char shaderModelMinor, const std::vector<std::string> defines = {});
+	
 	Type m_Type;
 };
 
-class ShaderLibrary
+class ShaderLibrary : public ShaderBase
 {
 public:
 	ShaderLibrary(const char* pFilePath, const std::vector<std::string> defines = {});
-
-	void* GetByteCode() const { return m_pByteCode->GetBufferPointer(); }
-	uint32 GetByteCodeSize() const { return (uint32)m_pByteCode->GetBufferSize(); }
-	ID3DBlob* GetBlob() const { return m_pByteCode.Get(); }
-
 private:
-	std::vector<std::string> m_Dependencies;
-	std::string m_Path;
-	ComPtr<ID3DBlob> m_pByteCode;
+	static std::string GetShaderTarget(char shaderModelMajor, char shaderModelMinor);
+	
+	bool Compile(const char* pFilePath, char shaderModelMajor, char shaderModelMinor, const std::vector<std::string> defines = {});
 };
