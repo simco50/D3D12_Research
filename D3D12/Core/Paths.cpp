@@ -215,3 +215,22 @@ std::string Paths::WorkingDirectory()
 	GetModuleFileName(nullptr, path, 256);
 	return path;
 }
+
+bool Paths::CreateDirectoryTree(const std::string& path)
+{
+	size_t slash = path.find('/', 0);
+	while (slash != std::string::npos)
+	{
+		if (slash > 1)
+		{
+			std::string dirToCreate = path.substr(0, slash);
+			const BOOL success = CreateDirectory(dirToCreate.c_str(), nullptr);
+			if (!success)
+			{
+				return false;
+			}
+		}
+		slash = path.find('/', slash + 1);
+	}
+	return true;
+}

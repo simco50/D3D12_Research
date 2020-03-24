@@ -27,7 +27,9 @@ bool ShaderCompiler::CompileDxc(const char* pIdentifier, const char* pShaderSour
 	ToWidechar(pIdentifier, fileName, 256);
 	ToWidechar(pEntryPoint, entryPoint, 256);
 	ToWidechar(pTarget, target, 256);
-	bool debugShaders = CommandLine::GetBool("DebugShaders");
+
+	const constexpr char* pShaderSymbolsPath = "_Temp/ShaderSymbols/";
+	bool debugShaders = CommandLine::GetBool("debugshaders");
 
 	std::vector<std::wstring> wDefines;
 	for (const std::string& define : defines)
@@ -61,6 +63,7 @@ bool ShaderCompiler::CompileDxc(const char* pIdentifier, const char* pShaderSour
 	if (debugShaders)
 	{
 		arguments.push_back(DXC_ARG_SKIP_OPTIMIZATIONS);
+		arguments.push_back(L"-Qembed_debug");
 	}
 	else
 	{
@@ -72,11 +75,13 @@ bool ShaderCompiler::CompileDxc(const char* pIdentifier, const char* pShaderSour
 	arguments.push_back(DXC_ARG_PACK_MATRIX_ROW_MAJOR);
 
 	//Strip everything
-	arguments.push_back(L"-Qstrip_debug");
+	//arguments.push_back(L"-Qstrip_debug");
 	arguments.push_back(L"-Qstrip_reflect");
 
+	wchar_t symbolsPath[256];
+	ToWidechar(pShaderSymbolsPath, symbolsPath, 256);
 	arguments.push_back(L"/Fd");
-	arguments.push_back(L"ShaderDebug/");
+	arguments.push_back(symbolsPath);
 
 	for (size_t i = 0; i < wDefines.size(); ++i)
 	{
@@ -96,7 +101,7 @@ bool ShaderCompiler::CompileDxc(const char* pIdentifier, const char* pShaderSour
 	pCompileResult->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(pErrors.GetAddressOf()), nullptr);
 	if (pErrors && pErrors->GetStringLength() > 0)
 	{
-		E_LOG(Error, "%s", (char*)pErrors->GetBufferPointer());
+		E_LOG(Warning, "%s", (char*)pErrors->GetBufferPointer());
 		return false;
 	}
 
@@ -117,8 +122,7 @@ bool ShaderCompiler::CompileDxc(const char* pIdentifier, const char* pShaderSour
 			ComPtr<IDxcBlobUtf8> pPrintBlobUtf8;
 			pResult->GetErrorBuffer(pPrintBlob.GetAddressOf());
 			pUtils->GetBlobAsUtf8(pPrintBlob.Get(), pPrintBlobUtf8.GetAddressOf());
-			E_LOG(Error, "%s", pPrintBlobUtf8->GetBufferPointer());
-			return false;
+			E_LOG(Warning, "%s", pPrintBlobUtf8->GetBufferPointer());
 		}
 	}
 
@@ -128,11 +132,12 @@ bool ShaderCompiler::CompileDxc(const char* pIdentifier, const char* pShaderSour
 		ComPtr<IDxcBlob> pDebugData;
 		ComPtr<IDxcBlobUtf16> pDebugDataPath;
 		pCompileResult->GetOutput(DXC_OUT_PDB, IID_PPV_ARGS(pDebugData.GetAddressOf()), pDebugDataPath.GetAddressOf());
+		Paths::CreateDirectoryTree(pShaderSymbolsPath);
+		std::stringstream pathStream;
 		char path[256];
 		ToMultibyte((wchar_t*)pDebugDataPath->GetBufferPointer(), path, 256);
-		std::stringstream p;
-		p << "ShaderDebug/" << path;
-		std::ofstream fileStream(p.str(), std::ios::binary);
+		pathStream << pShaderSymbolsPath << path;
+		std::ofstream fileStream(pathStream.str(), std::ios::binary);
 		fileStream.write((char*)pDebugData->GetBufferPointer(), pDebugData->GetBufferSize());
 	}
 #endif
