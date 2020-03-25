@@ -1,6 +1,7 @@
 #include "Common.hlsli"
 
 #define SSAO_SAMPLES 64
+#define BLOCK_SIZE 16
 
 #define RootSig "CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \
 				"DescriptorTable(UAV(u0, numDescriptors = 1), visibility=SHADER_VISIBILITY_ALL), " \

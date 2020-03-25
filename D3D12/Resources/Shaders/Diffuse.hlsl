@@ -1,6 +1,10 @@
 #include "Common.hlsli"
 #include "Lighting.hlsli"
 
+#define SPLITZ_CULLING 1
+#define FORWARD_PLUS 1
+#define BLOCK_SIZE 16
+
 #define RootSig "RootFlags(ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT), " \
 				"CBV(b0, visibility=SHADER_VISIBILITY_VERTEX), " \
 				"CBV(b1, visibility=SHADER_VISIBILITY_ALL), " \
@@ -90,11 +94,6 @@ LightResult DoLight(float4 pos, float3 worldPos, float3 N, float3 V, float3 diff
 	uint lightCount = cLightCount;
 #endif
 	LightResult totalResult = (LightResult)0;
-
-#if DEBUG_VISUALIZE
-	totalResult.Diffuse = (float)max(lightCount, 0) / 100.0f;
-	return totalResult;
-#endif
 
 	for(uint i = 0; i < lightCount; ++i)
 	{

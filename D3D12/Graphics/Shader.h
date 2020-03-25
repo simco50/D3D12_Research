@@ -5,9 +5,6 @@ class ShaderCompiler
 public:
 	static bool CompileDxc(const char* pIdentifier, const char* pShaderSource, uint32 shaderSourceSize, IDxcBlob** pOutput, const char* pEntryPoint = "", const char* pTarget = "", const std::vector<std::string>& defines = {});
 	static bool CompileFxc(const char* pIdentifier, const char* pShaderSource, uint32 shaderSourceSize, ID3DBlob** pOutput, const char* pEntryPoint = "", const char* pTarget = "", const std::vector<std::string>& defines = {});
-	static void AddGlobalShaderDefine(const std::string& name, const std::string& value = "1");
-private:
-	static std::vector<std::pair<std::string, std::string>> m_GlobalShaderDefines;
 };
 
 class ShaderBase

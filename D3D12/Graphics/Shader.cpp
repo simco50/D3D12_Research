@@ -6,8 +6,6 @@
 #define USE_SHADER_LINE_DIRECTIVE 1
 #endif
 
-std::vector<std::pair<std::string, std::string>> ShaderCompiler::m_GlobalShaderDefines;
-
 bool ShaderCompiler::CompileDxc(const char* pIdentifier, const char* pShaderSource, uint32 shaderSourceSize, IDxcBlob** pOutput, const char* pEntryPoint /*= ""*/, const char* pTarget /*= ""*/, const std::vector<std::string>& defines /*= {}*/)
 {
 	static ComPtr<IDxcUtils> pUtils;
@@ -40,16 +38,7 @@ bool ShaderCompiler::CompileDxc(const char* pIdentifier, const char* pShaderSour
 		str << intermediate << "=1";
 		wDefines.push_back(str.str());
 	}
-	for (const auto& define : m_GlobalShaderDefines)
-	{
-		std::wstringstream str;
-		wchar_t intermediate[256];
-		ToWidechar(define.first.c_str(), intermediate, 256);
-		str << intermediate;
-		ToWidechar(define.second.c_str(), intermediate, 256);
-		str << "=" << intermediate;
-		wDefines.push_back(str.str());
-	}
+	wDefines.push_back(L"_DXC=1");
 
 	std::vector<LPCWSTR> arguments;
 	arguments.reserve(20);
@@ -180,6 +169,8 @@ bool ShaderCompiler::CompileFxc(const char* pIdentifier, const char* pShaderSour
 #else
 	compileFlags |= D3DCOMPILE_OPTIMIZATION_LEVEL3;
 #endif
+	std::vector<std::string> globalDefines;
+	globalDefines.push_back("_FXC=1");
 
 	std::vector<D3D_SHADER_MACRO> shaderDefines;
 	for (const std::string& define : defines)
@@ -189,12 +180,11 @@ bool ShaderCompiler::CompileFxc(const char* pIdentifier, const char* pShaderSour
 		m.Definition = "1";
 		shaderDefines.push_back(m);
 	}
-
-	for (const auto& define : m_GlobalShaderDefines)
+	for (const std::string& define : globalDefines)
 	{
 		D3D_SHADER_MACRO m;
-		m.Name = define.first.c_str();
-		m.Definition = define.second.c_str();
+		m.Name = define.c_str();
+		m.Definition = "1";
 		shaderDefines.push_back(m);
 	}
 
@@ -213,11 +203,6 @@ bool ShaderCompiler::CompileFxc(const char* pIdentifier, const char* pShaderSour
 	}
 	pErrorBlob.Reset();
 	return true;
-}
-
-void ShaderCompiler::AddGlobalShaderDefine(const std::string& name, const std::string& value /*= "1"*/)
-{
-	m_GlobalShaderDefines.emplace_back(name, value);
 }
 
 bool ShaderBase::ProcessSource(const std::string& sourcePath, const std::string& filePath, std::stringstream& output, std::vector<StringHash>& processedIncludes, std::vector<std::string>& dependencies)

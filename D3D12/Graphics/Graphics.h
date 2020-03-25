@@ -118,8 +118,6 @@ public:
 	static const DXGI_FORMAT DEPTH_STENCIL_SHADOW_FORMAT;
 	static const DXGI_FORMAT RENDER_TARGET_FORMAT;
 	static const DXGI_FORMAT SWAPCHAIN_FORMAT;
-	static const int FORWARD_PLUS_BLOCK_SIZE = 16;
-	static const int MAX_SHADOW_CASTERS = 8;
 
 private:
 	void BeginFrame();

@@ -107,10 +107,11 @@ void TiledForward::Execute(RGGraph& graph, const TiledForwardInputResources& res
 					Matrix WorldViewProjection;
 				} ObjectData{};
 
+				constexpr const int MAX_SHADOW_CASTERS = 8;
 				struct LightData
 				{
-					Matrix LightViewProjections[Graphics::MAX_SHADOW_CASTERS];
-					Vector4 ShadowMapOffsets[Graphics::MAX_SHADOW_CASTERS];
+					Matrix LightViewProjections[MAX_SHADOW_CASTERS];
+					Vector4 ShadowMapOffsets[MAX_SHADOW_CASTERS];
 				} lightData;
 
 				//Camera constants

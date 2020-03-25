@@ -6,6 +6,7 @@
 				"DescriptorTable(SRV(t0, numDescriptors = 2), visibility=SHADER_VISIBILITY_ALL), "
 
 #define MAX_LIGHTS_PER_TILE 256
+#define BLOCK_SIZE 16
 
 cbuffer ShaderParameters : register(b0)
 {
