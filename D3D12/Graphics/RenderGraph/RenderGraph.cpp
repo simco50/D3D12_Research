@@ -48,10 +48,10 @@ void RGPassBuilder::NeverCull()
 	m_Pass.m_NeverCull = true;
 }
 
-RGGraph::RGGraph(RGResourceAllocator* pAllocator)
-	: m_pAllocator(pAllocator)
+RGGraph::RGGraph(Graphics* pGraphics)
+	: m_pGraphics(pGraphics)
 {
-
+	m_ImmediateMode = CommandLine::GetBool("rgimmediate");
 }
 
 RGGraph::~RGGraph()
@@ -181,16 +181,34 @@ RGResourceHandle RGGraph::MoveResource(RGResourceHandle From, RGResourceHandle T
 	return CreateResourceNode(node.pResource);
 }
 
-int64 RGGraph::Execute(Graphics* pGraphics)
+RGPass& RGGraph::AddPass(RGPass* pPass)
 {
+	m_RenderPasses.push_back(pPass);
+
+	if (m_ImmediateMode)
+	{
+		CommandContext* pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+		ExecutePass(pPass, *pContext);
+		m_LastFenceValue = pContext->Execute(false);
+	}
+
+	return *pPass;
+}
+
+int64 RGGraph::Execute()
+{
+	if (m_ImmediateMode)
+	{
+		return m_LastFenceValue;
+	}
 	int eclFrequency = 4;
 	int i = 0;
-	CommandContext* pContext = pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+	CommandContext* pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 	for (RGPass* pPass : m_RenderPasses)
 	{
 		if (pPass->m_References > 0)
 		{
-			ExecutePass(pPass, *pContext, m_pAllocator);
+			ExecutePass(pPass, *pContext);
 		}
 
 		++i;
@@ -198,16 +216,16 @@ int64 RGGraph::Execute(Graphics* pGraphics)
 		{
 			i = 0;
 			pContext->Execute(false);
-			pContext = pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+			pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 		}
 	}
 	DestroyData();
 	return pContext->Execute(false);
 }
 
-void RGGraph::ExecutePass(RGPass* pPass, CommandContext& context, RGResourceAllocator* pAllocator)
+void RGGraph::ExecutePass(RGPass* pPass, CommandContext& context)
 {
-	PrepareResources(pPass, m_pAllocator);
+	PrepareResources(pPass);
 
 	RGPassResources resources(*this, *pPass);
 
@@ -221,30 +239,30 @@ void RGGraph::ExecutePass(RGPass* pPass, CommandContext& context, RGResourceAllo
 
 	//#todo: Check if we're in a Graphics pass and automatically call EndRenderPass
 
-	ReleaseResources(pPass, m_pAllocator);
+	ReleaseResources(pPass);
 }
 
-void RGGraph::PrepareResources(RGPass* pPass, RGResourceAllocator* pAllocator)
+void RGGraph::PrepareResources(RGPass* pPass)
 {
 	for (RGResourceHandle handle : pPass->m_Writes)
 	{
-		ConditionallyCreateResource(GetResource(handle), pAllocator);
+		ConditionallyCreateResource(GetResource(handle));
 	}
 	for (RGResourceHandle handle : pPass->m_Writes)
 	{
-		ConditionallyCreateResource(GetResource(handle), pAllocator);
+		ConditionallyCreateResource(GetResource(handle));
 	}
 }
 
-void RGGraph::ReleaseResources(RGPass* pPass, RGResourceAllocator* pAllocator)
+void RGGraph::ReleaseResources(RGPass* pPass)
 {
 	for (RGResourceHandle handle : pPass->m_Writes)
 	{
-		ConditionallyReleaseResource(GetResource(handle), pAllocator);
+		ConditionallyReleaseResource(GetResource(handle));
 	}
 	for (RGResourceHandle handle : pPass->m_Writes)
 	{
-		ConditionallyReleaseResource(GetResource(handle), pAllocator);
+		ConditionallyReleaseResource(GetResource(handle));
 	}
 }
 
@@ -264,14 +282,14 @@ void RGGraph::DestroyData()
 	m_Aliases.clear();
 }
 
-void RGGraph::ConditionallyCreateResource(RGResource* pResource, RGResourceAllocator* pAllocator)
+void RGGraph::ConditionallyCreateResource(RGResource* pResource)
 {
 	if (pResource->m_pPhysicalResource == nullptr)
 	{
 		switch (pResource->m_Type)
 		{
 		case RGResourceType::Texture:
-			pResource->m_pPhysicalResource = pAllocator->CreateTexture(static_cast<RGTexture*>(pResource)->GetDesc());
+			pResource->m_pPhysicalResource = m_pAllocator->CreateTexture(static_cast<RGTexture*>(pResource)->GetDesc());
 			break;
 		case RGResourceType::Buffer:
 			break;
@@ -283,7 +301,7 @@ void RGGraph::ConditionallyCreateResource(RGResource* pResource, RGResourceAlloc
 	}
 }
 
-void RGGraph::ConditionallyReleaseResource(RGResource* pResource, RGResourceAllocator* pAllocator)
+void RGGraph::ConditionallyReleaseResource(RGResource* pResource)
 {
 	pResource->m_References--;
 	if (pResource->m_References == 0 && pResource->m_IsImported == false)
@@ -291,7 +309,7 @@ void RGGraph::ConditionallyReleaseResource(RGResource* pResource, RGResourceAllo
 		switch (pResource->m_Type)
 		{
 		case RGResourceType::Texture:
-			pAllocator->ReleaseTexture(static_cast<Texture*>(pResource->m_pPhysicalResource));
+			m_pAllocator->ReleaseTexture(static_cast<Texture*>(pResource->m_pPhysicalResource));
 			break;
 		case RGResourceType::Buffer:
 			break;

@@ -195,7 +195,7 @@ void Graphics::Update()
 	BeginFrame();
 	m_pImGuiRenderer->Update();
 
-	RGGraph graph(m_pGraphAllocator.get());
+	RGGraph graph(this);
 	struct MainData
 	{
 		RGResourceHandle DepthStencil;
@@ -684,7 +684,7 @@ void Graphics::Update()
 		graph.DumpGraphMermaid("graph.html");
 		gDumpRenderGraph = false;
 	}
-	nextFenceValue = graph.Execute(this);
+	nextFenceValue = graph.Execute();
 
 	//10. PRESENT
 	//	- Set fence for the currently queued frame

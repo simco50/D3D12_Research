@@ -197,14 +197,14 @@ private:
 class RGGraph
 {
 public:
-	explicit RGGraph(RGResourceAllocator* pAllocator);
+	explicit RGGraph(Graphics* pGraphics);
 	~RGGraph();
 
 	RGGraph(const RGGraph& other) = delete;
 	RGGraph& operator=(const RGGraph& other) = delete;
 
 	void Compile();
-	int64 Execute(Graphics* pGraphics);
+	int64 Execute();
 	void Present(RGResourceHandle resource);
 	void DumpGraphViz(const char* pPath) const;
 	void DumpGraphMermaid(const char* pPath) const;
@@ -218,9 +218,10 @@ public:
 		RGPass* pPass = new RGPass(*this, pName, (int)m_RenderPasses.size());
 		RGPassBuilder builder(*this, *pPass);
 		pPass->SetCallback<ExecuteCallback>(std::move(passCallback(builder)));
-		m_RenderPasses.push_back(pPass);
-		return *pPass;
+		return AddPass(pPass);
 	}
+
+	RGPass& AddPass(RGPass* pPass);
 
 	RGResourceHandle CreateTexture(const char* pName, const TextureDesc& desc)
 	{
@@ -278,20 +279,24 @@ public:
 	}
 
 private:
-	void ExecutePass(RGPass* pPass, CommandContext& context, RGResourceAllocator* pAllocator);
-	void PrepareResources(RGPass* pPass, RGResourceAllocator* pAllocator);
-	void ReleaseResources(RGPass* pPass, RGResourceAllocator* pAllocator);
+	void ExecutePass(RGPass* pPass, CommandContext& context);
+	void PrepareResources(RGPass* pPass);
+	void ReleaseResources(RGPass* pPass);
 	void DestroyData();
 
-	void ConditionallyCreateResource(RGResource* pResource, RGResourceAllocator* pAllocator);
-	void ConditionallyReleaseResource(RGResource* pResource, RGResourceAllocator* pAllocator);
+	void ConditionallyCreateResource(RGResource* pResource);
+	void ConditionallyReleaseResource(RGResource* pResource);
 
 	struct RGResourceAlias
 	{
 		RGResourceHandle From;
 		RGResourceHandle To;
 	};
+
+	Graphics* m_pGraphics;
 	RGResourceAllocator* m_pAllocator;
+	uint64 m_LastFenceValue = 0;
+	bool m_ImmediateMode = false;
 
 	std::vector<RGResourceAlias> m_Aliases;
 	std::vector<RGPass*> m_RenderPasses;

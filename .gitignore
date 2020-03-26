@@ -10,3 +10,4 @@ imgui.ini
 *.gv
 .vscode/
 *.nsight*
+*.args.json

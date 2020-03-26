@@ -33,8 +33,6 @@ public:
 
 	void Execute(RGGraph& graph, const TiledForwardInputResources& resources);
 
-	void GetData(Buffer** pLightListOpaque, Texture** pLightGridOpaque, Buffer** pLightListTransparant, Texture** pLightGridTransparant);
-
 private:
 	void SetupResources(Graphics* pGraphics);
 	void SetupPipelines(Graphics* pGraphics);
@@ -51,9 +49,8 @@ private:
 	std::unique_ptr<Buffer> m_pLightIndexListBufferTransparant;
 	std::unique_ptr<Texture> m_pLightGridTransparant;
 
-	//PBR
-	std::unique_ptr<RootSignature> m_pPBRDiffuseRS;
-	std::unique_ptr<GraphicsPipelineState> m_pPBRDiffusePSO;
-	std::unique_ptr<GraphicsPipelineState> m_pPBRDiffuseAlphaPSO;
+	//Diffuse
+	std::unique_ptr<RootSignature> m_pDiffuseRS;
+	std::unique_ptr<GraphicsPipelineState> m_pDiffusePSO;
+	std::unique_ptr<GraphicsPipelineState> m_pDiffuseAlphaPSO;
 };
-

@@ -15,7 +15,7 @@
 #include "ResourceViews.h"
 #include "RenderGraph/RenderGraph.h"
 
-static constexpr int MAX_LIGHT_DENSITY = 720000;
+static constexpr int MAX_LIGHT_DENSITY = 72000;
 static constexpr int FORWARD_PLUS_BLOCK_SIZE = 16;
 
 TiledForward::TiledForward(Graphics* pGraphics)
@@ -129,7 +129,7 @@ void TiledForward::Execute(RGGraph& graph, const TiledForwardInputResources& res
 				context.BeginRenderPass(RenderPassInfo(resources.pRenderTarget, RenderPassAccess::Clear_Store, pDepth, RenderPassAccess::Load_DontCare));
 
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-				context.SetGraphicsRootSignature(m_pPBRDiffuseRS.get());
+				context.SetGraphicsRootSignature(m_pDiffuseRS.get());
 
 				context.SetDynamicConstantBufferView(1, &frameData, sizeof(PerFrameData));
 				context.SetDynamicConstantBufferView(2, &lightData, sizeof(LightData));
@@ -138,7 +138,7 @@ void TiledForward::Execute(RGGraph& graph, const TiledForwardInputResources& res
 				context.SetDynamicDescriptor(4, 3, resources.pLightBuffer->GetSRV());
 				{
 					GPU_PROFILE_SCOPE("Opaque", &context);
-					context.SetGraphicsPipelineState(m_pPBRDiffusePSO.get());
+					context.SetGraphicsPipelineState(m_pDiffusePSO.get());
 
 					context.SetDynamicDescriptor(4, 1, m_pLightGridOpaque->GetSRV());
 					context.SetDynamicDescriptor(4, 2, m_pLightIndexListBufferOpaque->GetSRV()->GetDescriptor());
@@ -157,7 +157,7 @@ void TiledForward::Execute(RGGraph& graph, const TiledForwardInputResources& res
 
 				{
 					GPU_PROFILE_SCOPE("Transparant", &context);
-					context.SetGraphicsPipelineState(m_pPBRDiffuseAlphaPSO.get());
+					context.SetGraphicsPipelineState(m_pDiffuseAlphaPSO.get());
 
 					context.SetDynamicDescriptor(4, 1, m_pLightGridTransparant->GetSRV());
 					context.SetDynamicDescriptor(4, 2, m_pLightIndexListBufferTransparant->GetSRV()->GetDescriptor());
@@ -177,14 +177,6 @@ void TiledForward::Execute(RGGraph& graph, const TiledForwardInputResources& res
 				context.EndRenderPass();
 			};
 		});
-}
-
-void TiledForward::GetData(Buffer** pLightListOpaque, Texture** pLightGridOpaque, Buffer** pLightListTransparant, Texture** pLightGridTransparant)
-{
-	*pLightListOpaque = m_pLightIndexListBufferOpaque.get();
-	*pLightListTransparant = m_pLightIndexListBufferTransparant.get();
-	*pLightGridOpaque = m_pLightGridOpaque.get();
-	*pLightGridTransparant = m_pLightGridTransparant.get();
 }
 
 void TiledForward::SetupResources(Graphics* pGraphics)
@@ -228,26 +220,26 @@ void TiledForward::SetupPipelines(Graphics* pGraphics)
 		Shader pixelShader("Resources/Shaders/Diffuse.hlsl", Shader::Type::PixelShader, "PSMain", { /*"SHADOW"*/ });
 
 		//Rootsignature
-		m_pPBRDiffuseRS = std::make_unique<RootSignature>();
-		m_pPBRDiffuseRS->FinalizeFromShader("Diffuse", vertexShader, pGraphics->GetDevice());
+		m_pDiffuseRS = std::make_unique<RootSignature>();
+		m_pDiffuseRS->FinalizeFromShader("Diffuse", vertexShader, pGraphics->GetDevice());
 
 		{
 			//Opaque
-			m_pPBRDiffusePSO = std::make_unique<GraphicsPipelineState>();
-			m_pPBRDiffusePSO->SetInputLayout(inputElements, sizeof(inputElements) / sizeof(inputElements[0]));
-			m_pPBRDiffusePSO->SetRootSignature(m_pPBRDiffuseRS->GetRootSignature());
-			m_pPBRDiffusePSO->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
-			m_pPBRDiffusePSO->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
-			m_pPBRDiffusePSO->SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, pGraphics->GetMultiSampleCount(), pGraphics->GetMultiSampleQualityLevel(pGraphics->GetMultiSampleCount()));
-			m_pPBRDiffusePSO->SetDepthTest(D3D12_COMPARISON_FUNC_EQUAL);
-			m_pPBRDiffusePSO->SetDepthWrite(false);
-			m_pPBRDiffusePSO->Finalize("Diffuse PBR Pipeline", pGraphics->GetDevice());
+			m_pDiffusePSO = std::make_unique<GraphicsPipelineState>();
+			m_pDiffusePSO->SetInputLayout(inputElements, sizeof(inputElements) / sizeof(inputElements[0]));
+			m_pDiffusePSO->SetRootSignature(m_pDiffuseRS->GetRootSignature());
+			m_pDiffusePSO->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
+			m_pDiffusePSO->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
+			m_pDiffusePSO->SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, pGraphics->GetMultiSampleCount(), pGraphics->GetMultiSampleQualityLevel(pGraphics->GetMultiSampleCount()));
+			m_pDiffusePSO->SetDepthTest(D3D12_COMPARISON_FUNC_EQUAL);
+			m_pDiffusePSO->SetDepthWrite(false);
+			m_pDiffusePSO->Finalize("Diffuse PBR Pipeline", pGraphics->GetDevice());
 
 			//Transparant
-			m_pPBRDiffuseAlphaPSO = std::make_unique<GraphicsPipelineState>(*m_pPBRDiffusePSO.get());
-			m_pPBRDiffuseAlphaPSO->SetBlendMode(BlendMode::Alpha, false);
-			m_pPBRDiffuseAlphaPSO->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
-			m_pPBRDiffuseAlphaPSO->Finalize("Diffuse PBR (Alpha) Pipeline", pGraphics->GetDevice());
+			m_pDiffuseAlphaPSO = std::make_unique<GraphicsPipelineState>(*m_pDiffusePSO.get());
+			m_pDiffuseAlphaPSO->SetBlendMode(BlendMode::Alpha, false);
+			m_pDiffuseAlphaPSO->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
+			m_pDiffuseAlphaPSO->Finalize("Diffuse PBR (Alpha) Pipeline", pGraphics->GetDevice());
 		}
 	}
 }
