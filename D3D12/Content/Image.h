@@ -1,7 +1,5 @@
 #pragma once
 
-struct SDL_Surface;
-
 enum class ImageFormat
 {
 	RGBA = 0,
@@ -84,6 +82,6 @@ private:
 	bool m_IsCubemap = false;
 	std::unique_ptr<Image> m_pNextImage;
 	ImageFormat m_Format = ImageFormat::MAX;
+	std::array<uint32, D3D12_REQ_MIP_LEVELS> m_MipLevelDataOffsets;
 	std::vector<unsigned char> m_Pixels;
-	std::vector<uint32> m_MipLevelDataOffsets;
 };

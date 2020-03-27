@@ -503,13 +503,12 @@ bool Image::LoadDds(const char* inputStream)
 			m_IsArray = true;
 		}
 		uint32 totalDataSize = 0;
-		m_MipLevelDataOffsets.clear();
 		m_MipLevels = std::max(1, (int)header.dwMipMapCount);
 		for (int mipLevel = 0; mipLevel < m_MipLevels; ++mipLevel)
 		{
 			MipLevelInfo mipInfo;
 			GetSurfaceInfo(header.dwWidth, header.dwHeight, header.dwDepth, mipLevel, mipInfo);
-			m_MipLevelDataOffsets.push_back(totalDataSize);
+			m_MipLevelDataOffsets[mipLevel] = totalDataSize;
 			totalDataSize += mipInfo.DataSize;
 		}
 

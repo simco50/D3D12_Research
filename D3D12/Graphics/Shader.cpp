@@ -57,20 +57,18 @@ bool ShaderCompiler::CompileDxc(const char* pIdentifier, const char* pShaderSour
 	else
 	{
 		arguments.push_back(DXC_ARG_OPTIMIZATION_LEVEL3);
+		arguments.push_back(L"-Qstrip_debug");
+		wchar_t symbolsPath[256];
+		ToWidechar(pShaderSymbolsPath, symbolsPath, 256);
+		arguments.push_back(L"/Fd");
+		arguments.push_back(symbolsPath);
 	}
 
 	arguments.push_back(DXC_ARG_WARNINGS_ARE_ERRORS);
 	arguments.push_back(DXC_ARG_DEBUG);
 	arguments.push_back(DXC_ARG_PACK_MATRIX_ROW_MAJOR);
 
-	//Strip everything
-	//arguments.push_back(L"-Qstrip_debug");
 	arguments.push_back(L"-Qstrip_reflect");
-
-	wchar_t symbolsPath[256];
-	ToWidechar(pShaderSymbolsPath, symbolsPath, 256);
-	arguments.push_back(L"/Fd");
-	arguments.push_back(symbolsPath);
 
 	for (size_t i = 0; i < wDefines.size(); ++i)
 	{
