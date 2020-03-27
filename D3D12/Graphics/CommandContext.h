@@ -7,8 +7,7 @@ class GraphicsResource;
 class Texture;
 class OnlineDescriptorAllocator;
 class RootSignature;
-class GraphicsPipelineState;
-class ComputePipelineState;
+class PipelineState;
 class DynamicResourceAllocator;
 class Buffer;
 
@@ -151,7 +150,7 @@ public:
 	void ClearUavFloat(GraphicsResource* pBuffer, UnorderedAccessView* pUav, float* values = nullptr);
 
 	//Bindings
-	void SetComputePipelineState(ComputePipelineState* pPipelineState);
+	void SetPipelineState(PipelineState* pPipelineState);
 	void SetComputeRootSignature(RootSignature* pRootSignature);
 	void SetComputeRootConstants(int rootIndex, uint32 count, const void* pConstants);
 	void SetComputeDynamicConstantBufferView(int rootIndex, void* pData, uint32 dataSize);
@@ -163,7 +162,6 @@ public:
 	void SetDynamicSampler(int rootIndex, int offset, D3D12_CPU_DESCRIPTOR_HANDLE handle);
 	void SetDynamicSamplers(int rootIndex, int offset, D3D12_CPU_DESCRIPTOR_HANDLE* handles, int count = 1);
 
-	void SetGraphicsPipelineState(GraphicsPipelineState* pPipelineState);
 	void SetGraphicsRootSignature(RootSignature* pRootSignature);
 
 	void SetGraphicsRootConstants(int rootIndex, uint32 count, const void* pConstants);

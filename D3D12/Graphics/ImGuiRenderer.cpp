@@ -114,8 +114,8 @@ void ImGuiRenderer::InitializeImGui()
 void ImGuiRenderer::CreatePipeline()
 {
 	//Shaders
-	Shader vertexShader("Resources/Shaders/ImGui.hlsl", Shader::Type::VertexShader, "VSMain");
-	Shader pixelShader("Resources/Shaders/ImGui.hlsl", Shader::Type::PixelShader, "PSMain");
+	Shader vertexShader("Resources/Shaders/ImGui.hlsl", Shader::Type::Vertex, "VSMain");
+	Shader pixelShader("Resources/Shaders/ImGui.hlsl", Shader::Type::Pixel, "PSMain");
 
 	//Root signature
 	m_pRootSignature = std::make_unique<RootSignature>();
@@ -127,7 +127,7 @@ void ImGuiRenderer::CreatePipeline()
 		{ "COLOR", 0, DXGI_FORMAT_R8G8B8A8_UNORM, 0, 16, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
 	};
 
-	m_pPipelineState = std::make_unique<GraphicsPipelineState>();
+	m_pPipelineState = std::make_unique<PipelineState>();
 	m_pPipelineState->SetBlendMode(BlendMode::Alpha, false);
 	m_pPipelineState->SetDepthWrite(false);
 	m_pPipelineState->SetDepthEnabled(false);
@@ -154,7 +154,7 @@ void ImGuiRenderer::Render(RGGraph& graph, Texture* pRenderTarget)
 			builder.NeverCull();
 			return [=](CommandContext& context, const RGPassResources& resources)
 			{
-				context.SetGraphicsPipelineState(m_pPipelineState.get());
+				context.SetPipelineState(m_pPipelineState.get());
 				context.SetGraphicsRootSignature(m_pRootSignature.get());
 				Matrix projectionMatrix = Math::CreateOrthographicOffCenterMatrix(0.0f, pDrawData->DisplayPos.x + pDrawData->DisplaySize.x, pDrawData->DisplayPos.y + pDrawData->DisplaySize.y, 0.0f, 0.0f, 1.0f);
 				context.SetDynamicConstantBufferView(0, &projectionMatrix, sizeof(Matrix));

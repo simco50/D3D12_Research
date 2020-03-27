@@ -307,16 +307,16 @@ std::string Shader::GetShaderTarget(Type shaderType, char shaderModelMajor, char
 	char out[16];
 	switch (shaderType)
 	{
-	case Type::VertexShader:
+	case Type::Vertex:
 		sprintf_s(out, "vs_%d_%d", shaderModelMajor, shaderModelMinor);
 		break;
-	case Type::PixelShader:
+	case Type::Pixel:
 		sprintf_s(out, "ps_%d_%d", shaderModelMajor, shaderModelMinor);
 		break;
-	case Type::GeometryShader:
+	case Type::Geometry:
 		sprintf_s(out, "gs_%d_%d", shaderModelMajor, shaderModelMinor);
 		break;
-	case Type::ComputeShader:
+	case Type::Compute:
 		sprintf_s(out, "cs_%d_%d", shaderModelMajor, shaderModelMinor);
 		break;
 	case Type::MAX:

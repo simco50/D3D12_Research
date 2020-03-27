@@ -1,7 +1,5 @@
 #pragma once
 
-class Shader;
-
 enum class BlendMode
 {
 	Replace = 0,
@@ -19,17 +17,10 @@ enum class BlendMode
 class PipelineState
 {
 public:
+	PipelineState();
+	PipelineState(const PipelineState& other);
 	ID3D12PipelineState* GetPipelineState() const { return m_pPipelineState.Get(); }
-
-protected:
-	ComPtr<ID3D12PipelineState> m_pPipelineState;
-};
-
-class GraphicsPipelineState : public PipelineState
-{
-public:
-	GraphicsPipelineState();
-	GraphicsPipelineState(const GraphicsPipelineState& other);
+	void Finalize(const char* pName, ID3D12Device* pDevice);
 
 	void SetRenderTargetFormat(DXGI_FORMAT rtvFormat, DXGI_FORMAT dsvFormat, uint32 msaa, uint32 msaaQuality);
 	void SetRenderTargetFormats(DXGI_FORMAT* rtvFormats, uint32 count, DXGI_FORMAT dsvFormat, uint32 msaa, uint32 msaaQuality);
@@ -58,24 +49,9 @@ public:
 	void SetVertexShader(const void* pByteCode, uint32 byteCodeLength);
 	void SetPixelShader(const void* pByteCode, uint32 byteCodeLength);
 	void SetGeometryShader(const void* pByteCode, uint32 byteCodeLength);
-
-	void Finalize(const char* pName, ID3D12Device* pDevice);
-
-private:
-	D3D12_GRAPHICS_PIPELINE_STATE_DESC m_Desc = {};
-};
-
-class ComputePipelineState : public PipelineState
-{
-public:
-	ComputePipelineState();
-	ComputePipelineState(const ComputePipelineState& other);
-
-	void Finalize(const char* pName, ID3D12Device* pDevice);
-
-	void SetRootSignature(ID3D12RootSignature* pRootSignature);
 	void SetComputeShader(const void* pByteCode, uint32 byteCodeLength);
 
-private:
-	D3D12_COMPUTE_PIPELINE_STATE_DESC m_Desc = {};
+protected:
+	ComPtr<ID3D12PipelineState> m_pPipelineState;
+	CD3DX12_PIPELINE_STATE_STREAM1 m_Desc = {};
 };

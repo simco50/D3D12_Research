@@ -26,10 +26,10 @@ class Shader : public ShaderBase
 public:
 	enum class Type
 	{
-		VertexShader,
-		PixelShader,
-		GeometryShader,
-		ComputeShader,
+		Vertex,
+		Pixel,
+		Geometry,
+		Compute,
 		MAX
 	};
 

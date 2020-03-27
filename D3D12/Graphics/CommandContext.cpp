@@ -193,11 +193,6 @@ void CommandContext::ClearUavFloat(GraphicsResource* pBuffer, UnorderedAccessVie
 	m_pCommandList->ClearUnorderedAccessViewFloat(gpuHandle.GetGpuHandle(), pUav->GetDescriptor(), pBuffer->GetResource(), values ? values : zeros, 0, nullptr);
 }
 
-void CommandContext::SetComputePipelineState(ComputePipelineState* pPipelineState)
-{
-	m_pCommandList->SetPipelineState(pPipelineState->GetPipelineState());
-}
-
 void CommandContext::SetComputeRootSignature(RootSignature* pRootSignature)
 {
 	m_pCommandList->SetComputeRootSignature(pRootSignature->GetRootSignature());
@@ -539,7 +534,7 @@ void CommandContext::PrepareDraw(DescriptorTableType type)
 
 }
 
-void CommandContext::SetGraphicsPipelineState(GraphicsPipelineState* pPipelineState)
+void CommandContext::SetPipelineState(PipelineState* pPipelineState)
 {
 	m_pCommandList->SetPipelineState(pPipelineState->GetPipelineState());
 }

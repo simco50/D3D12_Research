@@ -4,7 +4,7 @@ class Graphics;
 class Buffer;
 class Camera;
 class RootSignature;
-class GraphicsPipelineState;
+class PipelineState;
 class RGGraph;
 struct Light;
 
@@ -104,7 +104,7 @@ public:
 	int m_TrianglePrimitives = 0;
 	std::vector<DebugTriangle> m_Triangles;
 
-	std::unique_ptr<GraphicsPipelineState> m_pTrianglesPSO;
-	std::unique_ptr<GraphicsPipelineState> m_pLinesPSO;
+	std::unique_ptr<PipelineState> m_pTrianglesPSO;
+	std::unique_ptr<PipelineState> m_pLinesPSO;
 	std::unique_ptr<RootSignature> m_pRS;
 };

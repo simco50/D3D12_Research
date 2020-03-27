@@ -20,15 +20,15 @@ DebugRenderer::DebugRenderer(Graphics* pGraphics) :
 	};
 
 	//Shaders
-	Shader vertexShader("Resources/Shaders/DebugRenderer.hlsl", Shader::Type::VertexShader, "VSMain", { });
-	Shader pixelShader("Resources/Shaders/DebugRenderer.hlsl", Shader::Type::PixelShader, "PSMain", { });
+	Shader vertexShader("Resources/Shaders/DebugRenderer.hlsl", Shader::Type::Vertex, "VSMain", { });
+	Shader pixelShader("Resources/Shaders/DebugRenderer.hlsl", Shader::Type::Pixel, "PSMain", { });
 
 	//Rootsignature
 	m_pRS = std::make_unique<RootSignature>();
 	m_pRS->FinalizeFromShader("Diffuse", vertexShader, pGraphics->GetDevice());
 
 	//Opaque
-	m_pTrianglesPSO = std::make_unique<GraphicsPipelineState>();
+	m_pTrianglesPSO = std::make_unique<PipelineState>();
 	m_pTrianglesPSO->SetInputLayout(inputElements, sizeof(inputElements) / sizeof(inputElements[0]));
 	m_pTrianglesPSO->SetRootSignature(m_pRS->GetRootSignature());
 	m_pTrianglesPSO->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
@@ -39,7 +39,7 @@ DebugRenderer::DebugRenderer(Graphics* pGraphics) :
 	m_pTrianglesPSO->SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
 	m_pTrianglesPSO->Finalize("Triangle DebugRenderer PSO", pGraphics->GetDevice());
 
-	m_pLinesPSO = std::make_unique<GraphicsPipelineState>(*m_pTrianglesPSO);
+	m_pLinesPSO = std::make_unique<PipelineState>(*m_pTrianglesPSO);
 	m_pLinesPSO->SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE);
 	m_pLinesPSO->Finalize("Lines DebugRenderer PSO", pGraphics->GetDevice());
 }
@@ -76,14 +76,14 @@ void DebugRenderer::Render(RGGraph& graph)
 				if (m_LinePrimitives != 0)
 				{
 					context.SetDynamicVertexBuffer(0, m_LinePrimitives, sizeof(Vector3) + sizeof(Color), m_Lines.data());
-					context.SetGraphicsPipelineState(m_pLinesPSO.get());
+					context.SetPipelineState(m_pLinesPSO.get());
 					context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINELIST);
 					context.Draw(0, m_LinePrimitives);
 				}
 				if (m_TrianglePrimitives != 0)
 				{
 					context.SetDynamicVertexBuffer(0, m_TrianglePrimitives, sizeof(Vector3) + sizeof(Color), m_Triangles.data());
-					context.SetGraphicsPipelineState(m_pTrianglesPSO.get());
+					context.SetPipelineState(m_pTrianglesPSO.get());
 					context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 					context.Draw(0, m_TrianglePrimitives);
 				}
