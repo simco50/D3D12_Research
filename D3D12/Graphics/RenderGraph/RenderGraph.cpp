@@ -197,30 +197,33 @@ RGPass& RGGraph::AddPass(RGPass* pPass)
 
 int64 RGGraph::Execute()
 {
-	if (m_ImmediateMode)
+	if (m_ImmediateMode == false)
 	{
-		return m_LastFenceValue;
-	}
-	int eclFrequency = 4;
-	int i = 0;
-	CommandContext* pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
-	for (RGPass* pPass : m_RenderPasses)
-	{
-		if (pPass->m_References > 0)
+		int eclFrequency = 4;
+		int i = 0;
+		CommandContext* pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+		for (RGPass* pPass : m_RenderPasses)
 		{
-			ExecutePass(pPass, *pContext);
-		}
+			if (pPass->m_References > 0)
+			{
+				ExecutePass(pPass, *pContext);
+			}
 
-		++i;
-		if (i == eclFrequency)
+			++i;
+			if (i == eclFrequency)
+			{
+				i = 0;
+				m_LastFenceValue = pContext->Execute(false);
+				pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+			}
+		}
+		if (i > 0)
 		{
-			i = 0;
-			pContext->Execute(false);
-			pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+			m_LastFenceValue = pContext->Execute(false);
 		}
 	}
 	DestroyData();
-	return pContext->Execute(false);
+	return m_LastFenceValue;
 }
 
 void RGGraph::ExecutePass(RGPass* pPass, CommandContext& context)
