@@ -49,9 +49,13 @@ private:
 	{
 		m_Pause = paused;
 		if (paused)
+		{
 			GameTimer::Stop();
+		}
 		else
+		{
 			GameTimer::Start();
+		}
 	}
 
 	static LRESULT CALLBACK WndProcStatic(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)

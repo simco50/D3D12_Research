@@ -72,9 +72,9 @@ struct DebugSphere
 class DebugRenderer
 {
 public:
-	explicit DebugRenderer(Graphics* pGraphics);
-	virtual ~DebugRenderer();
-
+	static DebugRenderer& Instance();
+	
+	void Initialize(Graphics* pGraphics);
 	void Render(RGGraph& graph);
 	void EndFrame();
 
@@ -107,4 +107,6 @@ public:
 	std::unique_ptr<PipelineState> m_pTrianglesPSO;
 	std::unique_ptr<PipelineState> m_pLinesPSO;
 	std::unique_ptr<RootSignature> m_pRS;
+private:
+	DebugRenderer() = default;
 };

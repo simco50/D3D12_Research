@@ -208,7 +208,7 @@ void Graphics::Update()
 	uint64 nextFenceValue = 0;
 	uint64 lightCullingFence = 0;
 
-	//1. DEPTH PREPASS
+	//DEPTH PREPASS
 	// - Depth only pass that renders the entire scene
 	// - Optimization that prevents wasteful lighting calculations during the base pass
 	// - Required for light culling
@@ -222,10 +222,8 @@ void Graphics::Update()
 				Texture* pDepthStencil = resources.GetTexture(Data.DepthStencil);
 				const TextureDesc& desc = pDepthStencil->GetDesc();
 				renderContext.InsertResourceBarrier(pDepthStencil, D3D12_RESOURCE_STATE_DEPTH_WRITE);
-				renderContext.InsertResourceBarrier(m_pMSAANormals.get(), D3D12_RESOURCE_STATE_RENDER_TARGET);
 
-				RenderPassInfo info = RenderPassInfo(m_pMSAANormals.get(), RenderPassAccess::Clear_Resolve, pDepthStencil, RenderPassAccess::Clear_Store);
-				info.RenderTargets[0].ResolveTarget = m_pNormals.get();
+				RenderPassInfo info = RenderPassInfo(pDepthStencil, RenderPassAccess::Clear_Store);
 
 				renderContext.BeginRenderPass(info);
 				renderContext.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -233,6 +231,42 @@ void Graphics::Update()
 
 				renderContext.SetPipelineState(m_pDepthPrepassPSO.get());
 				renderContext.SetGraphicsRootSignature(m_pDepthPrepassRS.get());
+
+				struct Parameters
+				{
+					Matrix WorldViewProj;
+				} constBuffer;
+
+				for (const Batch& b : m_OpaqueBatches)
+				{
+					constBuffer.WorldViewProj = b.WorldMatrix * m_pCamera->GetViewProjection();
+					renderContext.SetDynamicConstantBufferView(0, &constBuffer, sizeof(Parameters));
+					b.pMesh->Draw(&renderContext);
+				}
+				renderContext.EndRenderPass();
+			};
+		});
+
+	//NORMALS
+	graph.AddPass("Normals", [&](RGPassBuilder& builder)
+		{
+			builder.NeverCull();
+			Data.DepthStencil = builder.Write(Data.DepthStencil);
+
+			return [=](CommandContext& renderContext, const RGPassResources& resources)
+			{
+				Texture* pDepthStencil = resources.GetTexture(Data.DepthStencil);
+				const TextureDesc& desc = pDepthStencil->GetDesc();
+				renderContext.InsertResourceBarrier(m_pMSAANormals.get(), D3D12_RESOURCE_STATE_RENDER_TARGET);
+
+				RenderPassInfo info = RenderPassInfo(m_pMSAANormals.get(), RenderPassAccess::Clear_Store, pDepthStencil, RenderPassAccess::Load_DontCare);
+
+				renderContext.BeginRenderPass(info);
+				renderContext.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+				renderContext.SetViewport(FloatRect(0, 0, (float)desc.Width, (float)desc.Height));
+
+				renderContext.SetPipelineState(m_pNormalsPSO.get());
+				renderContext.SetGraphicsRootSignature(m_pNormalsRS.get());
 
 				struct Parameters
 				{
@@ -244,16 +278,22 @@ void Graphics::Update()
 				{
 					constBuffer.World = b.WorldMatrix;
 					constBuffer.WorldViewProj = constBuffer.World * m_pCamera->GetViewProjection();
-
 					renderContext.SetDynamicConstantBufferView(0, &constBuffer, sizeof(Parameters));
 					renderContext.SetDynamicDescriptor(1, 0, b.pMaterial->pNormalTexture->GetSRV());
 					b.pMesh->Draw(&renderContext);
 				}
 				renderContext.EndRenderPass();
+
+				if (m_SampleCount > 1)
+				{
+					renderContext.InsertResourceBarrier(m_pNormals.get(), D3D12_RESOURCE_STATE_RESOLVE_DEST);
+					renderContext.InsertResourceBarrier(m_pMSAANormals.get(), D3D12_RESOURCE_STATE_RESOLVE_SOURCE);
+					renderContext.ResolveResource(m_pMSAANormals.get(), 0, m_pNormals.get(), 0, m_pNormals->GetFormat());
+				}
 			};
 		});
 
-	//2. [OPTIONAL] DEPTH RESOLVE
+	//[WITH MSAA] DEPTH RESOLVE
 	// - If MSAA is enabled, run a compute shader to resolve the depth buffer
 	if (m_SampleCount > 1)
 	{
@@ -418,7 +458,7 @@ void Graphics::Update()
 			});
 	}
 
-	//4. SHADOW MAPPING
+	//SHADOW MAPPING
 	// - Renders the scene depth onto a separate depth buffer from the light's view
 	if (m_ShadowCasters > 0)
 	{
@@ -507,9 +547,9 @@ void Graphics::Update()
 		m_pClusteredForward->Execute(graph, resources);
 	}
 
-	m_pDebugRenderer->Render(graph);
+	DebugRenderer::Instance().Render(graph);
 
-	//7. MSAA Render Target Resolve
+	//MSAA Render Target Resolve
 	// - We have to resolve a MSAA render target ourselves. Unlike D3D11, this is not done automatically by the API.
 	//	Luckily, there's a method that does it for us!
 	if (m_SampleCount > 1)
@@ -526,7 +566,7 @@ void Graphics::Update()
 			});
 	}
 
-	//8. Tonemapping
+	//Tonemapping
 	{
 		bool downscaleTonemapInput = true;
 		Texture* pToneMapInput = downscaleTonemapInput ? m_pDownscaledColor.get() : m_pHDRRenderTarget.get();
@@ -662,7 +702,7 @@ void Graphics::Update()
 			});
 	}
 
-	//9. UI
+	//UI
 	// - ImGui render, pretty straight forward
 	{
 		m_pImGuiRenderer->Render(graph, GetCurrentBackbuffer());
@@ -686,7 +726,7 @@ void Graphics::Update()
 	}
 	nextFenceValue = graph.Execute();
 
-	//10. PRESENT
+	//PRESENT
 	//	- Set fence for the currently queued frame
 	//	- Present the frame buffer
 	//	- Wait for the next frame to be finished to start queueing work for it
@@ -718,7 +758,7 @@ void Graphics::EndFrame(uint64 fenceValue)
 	m_CurrentBackBufferIndex = m_pSwapchain->GetCurrentBackBufferIndex();
 	WaitForFence(m_FenceValues[m_CurrentBackBufferIndex]);
 	Profiler::Instance()->EndReadBack(m_Frame);
-	m_pDebugRenderer->EndFrame();
+	DebugRenderer::Instance().EndFrame();
 }
 
 void Graphics::InitD3D()
@@ -906,8 +946,9 @@ void Graphics::InitD3D()
 	OnResize(m_WindowWidth, m_WindowHeight);
 
 	m_pGraphAllocator = std::make_unique<RGResourceAllocator>(this);
-	m_pDebugRenderer = std::make_unique<DebugRenderer>(this);
-	m_pDebugRenderer->SetCamera(m_pCamera.get());
+
+	DebugRenderer::Instance().Initialize(this);
+	DebugRenderer::Instance().SetCamera(m_pCamera.get());
 }
 
 void Graphics::OnResize(int width, int height)
@@ -1022,8 +1063,7 @@ void Graphics::InitializeAssets()
 	//Depth prepass
 	//Simple vertex shader to fill the depth buffer to optimize later passes
 	{
-		Shader vertexShader("Resources/Shaders/Prepass.hlsl", Shader::Type::Vertex, "VSMain");
-		Shader pixelShader("Resources/Shaders/Prepass.hlsl", Shader::Type::Pixel, "PSMain");
+		Shader vertexShader("Resources/Shaders/DepthOnly.hlsl", Shader::Type::Vertex, "VSMain");
 
 		//Rootsignature
 		m_pDepthPrepassRS = std::make_unique<RootSignature>();
@@ -1031,13 +1071,33 @@ void Graphics::InitializeAssets()
 
 		//Pipeline state
 		m_pDepthPrepassPSO = std::make_unique<PipelineState>();
-		m_pDepthPrepassPSO->SetInputLayout(inputElements, sizeof(inputElements) / sizeof(inputElements[0]));
+		m_pDepthPrepassPSO->SetInputLayout(depthOnlyInputElements, sizeof(depthOnlyInputElements) / sizeof(depthOnlyInputElements[0]));
 		m_pDepthPrepassPSO->SetRootSignature(m_pDepthPrepassRS->GetRootSignature());
 		m_pDepthPrepassPSO->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
-		m_pDepthPrepassPSO->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
-		m_pDepthPrepassPSO->SetRenderTargetFormat(DXGI_FORMAT_R32G32B32A32_FLOAT, DEPTH_STENCIL_FORMAT, m_SampleCount, m_SampleQuality);
 		m_pDepthPrepassPSO->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
+		m_pDepthPrepassPSO->SetRenderTargetFormats(nullptr, 0, DEPTH_STENCIL_FORMAT, m_SampleCount, m_SampleQuality);
 		m_pDepthPrepassPSO->Finalize("Depth Prepass Pipeline", m_pDevice.Get());
+	}
+
+	//Normals
+	{
+		Shader vertexShader("Resources/Shaders/OutputNormals.hlsl", Shader::Type::Vertex, "VSMain");
+		Shader pixelShader("Resources/Shaders/OutputNormals.hlsl", Shader::Type::Pixel, "PSMain");
+
+		//Rootsignature
+		m_pNormalsRS = std::make_unique<RootSignature>();
+		m_pNormalsRS->FinalizeFromShader("Normals", vertexShader, m_pDevice.Get());
+
+		//Pipeline state
+		m_pNormalsPSO = std::make_unique<PipelineState>();
+		m_pNormalsPSO->SetInputLayout(inputElements, sizeof(inputElements) / sizeof(inputElements[0]));
+		m_pNormalsPSO->SetRootSignature(m_pNormalsRS->GetRootSignature());
+		m_pNormalsPSO->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
+		m_pNormalsPSO->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
+		m_pNormalsPSO->SetRenderTargetFormat(DXGI_FORMAT_R32G32B32A32_FLOAT, DEPTH_STENCIL_FORMAT, m_SampleCount, m_SampleQuality);
+		m_pNormalsPSO->SetDepthTest(D3D12_COMPARISON_FUNC_EQUAL);
+		m_pNormalsPSO->SetDepthWrite(false);
+		m_pNormalsPSO->Finalize("Normals Pipeline", m_pDevice.Get());
 	}
 
 	//Luminance Historgram
