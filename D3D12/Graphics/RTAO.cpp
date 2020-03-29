@@ -141,7 +141,7 @@ void RTAO::OnSwapchainCreated(int windowWidth, int windowHeight)
 {
 }
 
-void RTAO::Execute(RGGraph& graph, const RaytracingInputResources& resources)
+void RTAO::Execute(RGGraph& graph, const RtaoInputResources& resources)
 {
 	graph.AddPass("Raytracing", [&](RGPassBuilder& builder)
 		{

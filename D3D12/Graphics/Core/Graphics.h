@@ -20,6 +20,7 @@ class Camera;
 class RGResourceAllocator;
 class UnorderedAccessView;
 class RTAO;
+class SSAO;
 
 struct Batch
 {
@@ -170,7 +171,8 @@ private:
 	std::unique_ptr<RGResourceAllocator> m_pGraphAllocator;
 	std::unique_ptr<ClusteredForward> m_pClusteredForward;
 	std::unique_ptr<TiledForward> m_pTiledForward;
-	std::unique_ptr<RTAO> m_pRaytracing;
+	std::unique_ptr<RTAO> m_pRTAO;
+	std::unique_ptr<SSAO> m_pSSAO;
 
 	unsigned int m_WindowWidth;
 	unsigned int m_WindowHeight;
@@ -217,11 +219,6 @@ private:
 	//SSAO
 	std::unique_ptr<Texture> m_pNoiseTexture;
 	std::unique_ptr<Texture> m_pAmbientOcclusion;
-	std::unique_ptr<Texture> m_pAmbientOcclusionIntermediate;
-	std::unique_ptr<RootSignature> m_pSSAORS;
-	std::unique_ptr<PipelineState> m_pSSAOPSO;
-	std::unique_ptr<RootSignature> m_pSSAOBlurRS;
-	std::unique_ptr<PipelineState> m_pSSAOBlurPSO;
 
 	//Mip generation
 	std::unique_ptr<PipelineState> m_pGenerateMipsPSO;
