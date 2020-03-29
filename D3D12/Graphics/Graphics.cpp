@@ -102,7 +102,7 @@ void Graphics::RandomizeLights(int count)
 
 	for (int i = randomLightsStartIndex; i < m_Lights.size(); ++i)
 	{
-		Vector3 c = Vector3(Math::RandomRange(0.0f, 1.0f), Math::RandomRange(0.0f, 1.0f), Math::RandomRange(0.0f, 1.0f));
+		Vector3 c = Vector3(Math::RandomRange(0.6f, 1.0f), Math::RandomRange(0.6f, 1.0f), Math::RandomRange(0.6f, 1.0f));
 		Vector4 color(c.x, c.y, c.z, 1);
 
 		Vector3 position;
@@ -110,8 +110,8 @@ void Graphics::RandomizeLights(int count)
 		position.y = Math::RandomRange(-sceneBounds.Extents.y, sceneBounds.Extents.y) + sceneBounds.Center.y;
 		position.z = Math::RandomRange(-sceneBounds.Extents.z, sceneBounds.Extents.z) + sceneBounds.Center.z;
 
-		const float range = Math::RandomRange(4.0f, 6.0f);
-		const float angle = Math::RandomRange(40.0f, 80.0f);
+		const float range = Math::RandomRange(40.0f, 60.0f);
+		const float angle = Math::RandomRange(60.0f, 120.0f);
 
 		Light::Type type = rand() % 2 == 0 ? Light::Type::Point : Light::Type::Spot;
 		switch (type)

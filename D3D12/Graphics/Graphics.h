@@ -131,7 +131,7 @@ private:
 	int m_Frame = 0;
 	std::array<float, 180> m_FrameTimes{};
 
-	int m_DesiredLightCount = 4096;
+	int m_DesiredLightCount = 128;
 
 	std::unique_ptr<Camera> m_pCamera;
 

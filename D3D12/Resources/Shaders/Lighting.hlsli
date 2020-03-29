@@ -72,6 +72,11 @@ float GetAttenuation(Light light, float3 wPos)
 	return attentuation;
 }
 
+float3 ApplyAmbientLight(float3 diffuse, float ao, float3 lightColor)
+{
+    return ao * diffuse * lightColor;
+}
+
 LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, float roughness, float3 wPos, float3 N, float3 V)
 {
 	float attenuation = GetAttenuation(light, wPos);
