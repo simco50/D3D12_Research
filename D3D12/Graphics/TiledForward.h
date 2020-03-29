@@ -10,6 +10,7 @@ class CommandContext;
 class Buffer;
 class UnorderedAccessView;
 class RGGraph;
+struct ShadowData;
 
 struct TiledForwardInputResources
 {
@@ -21,6 +22,7 @@ struct TiledForwardInputResources
 	const std::vector<Batch>* pTransparantBatches = nullptr;
 	Buffer* pLightBuffer = nullptr;
 	Camera* pCamera = nullptr;
+	ShadowData* pShadowData = nullptr;
 };
 
 class TiledForward

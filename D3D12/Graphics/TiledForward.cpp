@@ -107,13 +107,6 @@ void TiledForward::Execute(RGGraph& graph, const TiledForwardInputResources& res
 					Matrix WorldViewProjection;
 				} ObjectData{};
 
-				constexpr const int MAX_SHADOW_CASTERS = 8;
-				struct LightData
-				{
-					Matrix LightViewProjections[MAX_SHADOW_CASTERS];
-					Vector4 ShadowMapOffsets[MAX_SHADOW_CASTERS];
-				} lightData;
-
 				//Camera constants
 				frameData.ViewInverse = resources.pCamera->GetViewInverse();
 
@@ -132,7 +125,7 @@ void TiledForward::Execute(RGGraph& graph, const TiledForwardInputResources& res
 				context.SetGraphicsRootSignature(m_pDiffuseRS.get());
 
 				context.SetDynamicConstantBufferView(1, &frameData, sizeof(PerFrameData));
-				context.SetDynamicConstantBufferView(2, &lightData, sizeof(LightData));
+				context.SetDynamicConstantBufferView(2, resources.pShadowData, sizeof(ShadowData));
 
 				context.SetDynamicDescriptor(4, 0, resources.pShadowMap->GetSRV());
 				context.SetDynamicDescriptor(4, 3, resources.pLightBuffer->GetSRV());
@@ -216,8 +209,8 @@ void TiledForward::SetupPipelines(Graphics* pGraphics)
 	//PBR Diffuse passes
 	{
 		//Shaders
-		Shader vertexShader("Resources/Shaders/Diffuse.hlsl", Shader::Type::Vertex, "VSMain", { /*"SHADOW"*/ });
-		Shader pixelShader("Resources/Shaders/Diffuse.hlsl", Shader::Type::Pixel, "PSMain", { /*"SHADOW"*/ });
+		Shader vertexShader("Resources/Shaders/Diffuse.hlsl", Shader::Type::Vertex, "VSMain", { "SHADOW" });
+		Shader pixelShader("Resources/Shaders/Diffuse.hlsl", Shader::Type::Pixel, "PSMain", { "SHADOW" });
 
 		//Rootsignature
 		m_pDiffuseRS = std::make_unique<RootSignature>();

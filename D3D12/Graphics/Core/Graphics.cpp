@@ -50,7 +50,6 @@ float g_MinLogLuminance = -10;
 float g_MaxLogLuminance = 2;
 float g_Tau = 10;
 
-
 bool g_ShowRaytraced = true;
 
 Graphics::Graphics(uint32 width, uint32 height, int sampleCount /*= 1*/)
@@ -167,16 +166,11 @@ void Graphics::Update()
 	// SHADOW MAP PARTITIONING
 	/////////////////////////////////////////
 
-	constexpr const int MAX_SHADOW_CASTERS = 8;
-	struct LightData
-	{
-		Matrix LightViewProjections[MAX_SHADOW_CASTERS];
-		Vector4 ShadowMapOffsets[MAX_SHADOW_CASTERS];
-	} lightData;
 
 	Matrix projection = Math::CreateOrthographicMatrix(512, 512, 10000, 0.1f);
 
 	m_ShadowCasters = 0;
+	ShadowData lightData;
 	lightData.LightViewProjections[m_ShadowCasters] = Matrix(XMMatrixLookAtLH(m_Lights[0].Position, Vector3(), Vector3(0.0f, 1.0f, 0.0f))) * projection;
 	lightData.ShadowMapOffsets[m_ShadowCasters].x = 0.0f;
 	lightData.ShadowMapOffsets[m_ShadowCasters].y = 0.0f;
@@ -416,6 +410,7 @@ void Graphics::Update()
 		resources.pLightBuffer = m_pLightBuffer.get();
 		resources.pCamera = m_pCamera.get();
 		resources.pShadowMap = m_pShadowMap.get();
+		resources.pShadowData = &lightData;
 		m_pTiledForward->Execute(graph, resources);
 	}
 	else if (m_RenderPath == RenderPath::Clustered)
@@ -428,6 +423,8 @@ void Graphics::Update()
 		resources.pLightBuffer = m_pLightBuffer.get();
 		resources.pCamera = m_pCamera.get();
 		resources.pAO = m_pAmbientOcclusion.get();
+		resources.pShadowMap = m_pShadowMap.get();
+		resources.pShadowData = &lightData;
 		m_pClusteredForward->Execute(graph, resources);
 	}
 

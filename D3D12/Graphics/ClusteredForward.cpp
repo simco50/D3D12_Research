@@ -304,10 +304,12 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
 					context.SetPipelineState(m_pDiffusePSO.get());
 
 					context.SetDynamicConstantBufferView(1, &frameData, sizeof(PerFrameData));
-					context.SetDynamicDescriptor(3, 0, m_pLightGrid->GetSRV());
-					context.SetDynamicDescriptor(3, 1, m_pLightIndexGrid->GetSRV());
-					context.SetDynamicDescriptor(3, 2, resources.pLightBuffer->GetSRV());
-					context.SetDynamicDescriptor(3, 3, resources.pAO->GetSRV());
+					context.SetDynamicConstantBufferView(2, resources.pShadowData, sizeof(ShadowData));
+					context.SetDynamicDescriptor(4, 0, resources.pShadowMap->GetSRV());
+					context.SetDynamicDescriptor(4, 1, m_pLightGrid->GetSRV());
+					context.SetDynamicDescriptor(4, 2, m_pLightIndexGrid->GetSRV());
+					context.SetDynamicDescriptor(4, 3, resources.pLightBuffer->GetSRV());
+					context.SetDynamicDescriptor(4, 4, resources.pAO->GetSRV());
 
 
 					for (const Batch& b : *resources.pOpaqueBatches)
@@ -316,9 +318,9 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
 						objectData.WorldViewProjection = objectData.World * resources.pCamera->GetViewProjection();
 
 						context.SetDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
-						context.SetDynamicDescriptor(2, 0, b.pMaterial->pDiffuseTexture->GetSRV());
-						context.SetDynamicDescriptor(2, 1, b.pMaterial->pNormalTexture->GetSRV());
-						context.SetDynamicDescriptor(2, 2, b.pMaterial->pSpecularTexture->GetSRV());
+						context.SetDynamicDescriptor(3, 0, b.pMaterial->pDiffuseTexture->GetSRV());
+						context.SetDynamicDescriptor(3, 1, b.pMaterial->pNormalTexture->GetSRV());
+						context.SetDynamicDescriptor(3, 2, b.pMaterial->pSpecularTexture->GetSRV());
 						b.pMesh->Draw(&context);
 					}
 				}
@@ -333,9 +335,9 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
 						objectData.WorldViewProjection = objectData.World * resources.pCamera->GetViewProjection();
 
 						context.SetDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
-						context.SetDynamicDescriptor(2, 0, b.pMaterial->pDiffuseTexture->GetSRV());
-						context.SetDynamicDescriptor(2, 1, b.pMaterial->pNormalTexture->GetSRV());
-						context.SetDynamicDescriptor(2, 2, b.pMaterial->pSpecularTexture->GetSRV());
+						context.SetDynamicDescriptor(3, 0, b.pMaterial->pDiffuseTexture->GetSRV());
+						context.SetDynamicDescriptor(3, 1, b.pMaterial->pNormalTexture->GetSRV());
+						context.SetDynamicDescriptor(3, 2, b.pMaterial->pSpecularTexture->GetSRV());
 						b.pMesh->Draw(&context);
 					}
 				}
@@ -510,8 +512,8 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
 			D3D12_INPUT_ELEMENT_DESC{ "TEXCOORD", 1, DXGI_FORMAT_R32G32B32_FLOAT, 0, 44, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
 		};
 
-		Shader vertexShader("Resources/Shaders/CL_Diffuse.hlsl", Shader::Type::Vertex, "VSMain");
-		Shader pixelShader("Resources/Shaders/CL_Diffuse.hlsl", Shader::Type::Pixel, "PSMain");
+		Shader vertexShader("Resources/Shaders/CL_Diffuse.hlsl", Shader::Type::Vertex, "VSMain", { "SHADOW" });
+		Shader pixelShader("Resources/Shaders/CL_Diffuse.hlsl", Shader::Type::Pixel, "PSMain", { "SHADOW" });
 
 		m_pDiffuseRS = std::make_unique<RootSignature>();
 		m_pDiffuseRS->FinalizeFromShader("Diffuse", vertexShader, pGraphics->GetDevice());

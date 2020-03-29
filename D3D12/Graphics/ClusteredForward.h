@@ -10,16 +10,19 @@ class CommandContext;
 class Buffer;
 class UnorderedAccessView;
 class RGGraph;
+struct ShadowData;
 
 struct ClusteredForwardInputResources
 {
 	RGResourceHandle DepthBuffer;
 	Texture* pRenderTarget = nullptr;
 	Texture* pAO = nullptr;
+	Texture* pShadowMap = nullptr;
 	const std::vector<Batch>* pOpaqueBatches = nullptr;
 	const std::vector<Batch>* pTransparantBatches = nullptr;
 	Buffer* pLightBuffer = nullptr;
 	Camera* pCamera = nullptr;
+	ShadowData* pShadowData = nullptr;
 };
 
 class ClusteredForward

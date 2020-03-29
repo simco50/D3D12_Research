@@ -137,6 +137,7 @@ float4 PSMain(PSInput input) : SV_TARGET
 	LightResult lighting = DoLight(input.position, input.worldPosition, N, V, diffuseColor, specularColor, r);
 	
 	float3 color = lighting.Diffuse + lighting.Specular; 
+	color += ApplyAmbientLight(diffuseColor, 1, 0.01f);
 
 	return float4(color, baseColor.a);
 }
