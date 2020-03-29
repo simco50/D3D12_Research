@@ -1,13 +1,14 @@
 #include "stdafx.h"
 #include "Mesh.h"
+#include "Graphics/Core/CommandContext.h"
+#include "Graphics/Core/Graphics.h"
+#include "Graphics/Core/Texture.h"
+#include "Graphics/Core/GraphicsBuffer.h"
+#include "Core/Paths.h"
+
 #include "assimp/Importer.hpp"
 #include "assimp/scene.h"
 #include "assimp/postprocess.h"
-#include "CommandContext.h"
-#include "Graphics.h"
-#include "Texture.h"
-#include "GraphicsBuffer.h"
-#include "Core/Paths.h"
 
 bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pContext)
 {

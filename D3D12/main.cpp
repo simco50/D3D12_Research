@@ -1,5 +1,5 @@
 #include "stdafx.h"
-#include "Graphics/Graphics.h"
+#include "Graphics/Core/Graphics.h"
 #include "Core/Input.h"
 #include "Core/Console.h"
 

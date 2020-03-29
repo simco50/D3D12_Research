@@ -8,22 +8,22 @@
 #include "RootSignature.h"
 #include "PipelineState.h"
 #include "Shader.h"
-#include "Mesh.h"
 #include "DynamicResourceAllocator.h"
-#include "ImGuiRenderer.h"
+#include "Graphics/Mesh.h"
 #include "Core/Input.h"
 #include "Texture.h"
-#include "GraphicsBuffer.h"
-#include "Profiler.h"
-#include "ClusteredForward.h"
 #include "Scene/Camera.h"
-#include "RenderGraph/RenderGraph.h"
-#include "RenderGraph/Blackboard.h"
-#include "RenderGraph/ResourceAllocator.h"
-#include "DebugRenderer.h"
 #include "ResourceViews.h"
-#include "TiledForward.h"
-#include "RTAO.h"
+#include "GraphicsBuffer.h"
+#include "Graphics/Profiler.h"
+#include "Graphics/ClusteredForward.h"
+#include "Graphics/RenderGraph/RenderGraph.h"
+#include "Graphics/RenderGraph/Blackboard.h"
+#include "Graphics/RenderGraph/ResourceAllocator.h"
+#include "Graphics/DebugRenderer.h"
+#include "Graphics/TiledForward.h"
+#include "Graphics/RTAO.h"
+#include "Graphics/ImGuiRenderer.h"
 
 #ifdef _DEBUG
 #define D3D_VALIDATION 1
@@ -336,7 +336,6 @@ void Graphics::Update()
 	}
 	else
 	{
-
 		graph.AddPass("SSAO", [&](RGPassBuilder& builder)
 			{
 				builder.NeverCull();

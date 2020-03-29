@@ -1,6 +1,6 @@
 #include "stdafx.h"
 #include "Camera.h"
-#include "Graphics/Graphics.h"
+#include "Graphics/Core/Graphics.h"
 #include "Core/Input.h"
 
 Camera::Camera(Graphics* pGraphics)

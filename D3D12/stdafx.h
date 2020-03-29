@@ -46,11 +46,13 @@ using uint64 = uint64_t;
 #include <wrl/client.h>
 
 #include <d3d12.h>
-#include "Graphics/d3dx12.h"
 #include <dxgi1_6.h>
 #include <D3Dcompiler.h>
 #include <DXProgrammableCapture.h>
 #include <dxc/dxcapi.h>
+
+#include "External/d3dx12/d3dx12.h"
+#include "External/Imgui/imgui.h"
 
 #include "Core/CommandLine.h"
 #include "Math/MathTypes.h"
@@ -59,9 +61,8 @@ using uint64 = uint64_t;
 #include "Math/MathHelp.h"
 #include "Core/Console.h"
 #include "Core/StringHash.h"
-#include "Graphics/D3DUtils.h"
-#include "External/Imgui/imgui.h"
 #include "Core/Delegates.h"
+#include "Graphics/Core/D3DUtils.h"
 
 template<typename T>
 using ComPtr = Microsoft::WRL::ComPtr<T>;

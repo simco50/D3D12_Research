@@ -1,7 +1,7 @@
 #pragma once
 #include "RenderGraphDefinitions.h"
-#include "../Texture.h"
-#include "../GraphicsBuffer.h"
+#include "Graphics/Core/Texture.h"
+#include "Graphics/Core/GraphicsBuffer.h"
 
 class Graphics;
 class CommandContext;

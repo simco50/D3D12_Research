@@ -1,7 +1,7 @@
 #include "stdafx.h"
 #include "RenderGraph.h"
-#include "Graphics/Graphics.h"
-#include "Graphics/CommandContext.h"
+#include "Graphics/Core/Graphics.h"
+#include "Graphics/Core/CommandContext.h"
 #include "Graphics/Profiler.h"
 #include "ResourceAllocator.h"
 

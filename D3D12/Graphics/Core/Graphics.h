@@ -1,5 +1,5 @@
 #pragma once
-#include "Light.h"
+#include "../Light.h"
 
 class CommandQueue;
 class CommandContext;

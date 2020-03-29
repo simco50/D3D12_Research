@@ -1,14 +1,14 @@
 #include "stdafx.h"
 #include "Profiler.h"
-#include "Graphics.h"
-#include "CommandContext.h"
-#include "CommandQueue.h"
+#include "Graphics/Core/Graphics.h"
+#include "Graphics/Core/CommandContext.h"
+#include "Graphics/Core/CommandQueue.h"
+#include "Graphics/Core/GraphicsBuffer.h"
 
 #define USE_PIX
 #ifdef USE_PIX
 #include <pix3.h>
 #endif
-#include "GraphicsBuffer.h"
 
 void CpuTimer::Begin()
 {

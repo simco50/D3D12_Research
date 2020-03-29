@@ -1,15 +1,15 @@
 #include "stdafx.h"
 #include "DebugRenderer.h"
-#include "GraphicsBuffer.h"
-#include "Graphics.h"
-#include "Shader.h"
+#include "Graphics/Core/GraphicsBuffer.h"
+#include "Graphics/Core/Graphics.h"
+#include "Graphics/Core/Shader.h"
+#include "Graphics/Core/PipelineState.h"
+#include "Graphics/Core/RootSignature.h"
+#include "Graphics/Core/CommandContext.h"
 #include "Scene/Camera.h"
 #include "Mesh.h"
 #include "Light.h"
-#include "RootSignature.h"
-#include "PipelineState.h"
 #include "RenderGraph/RenderGraph.h"
-#include "CommandContext.h"
 
 DebugRenderer& DebugRenderer::Instance()
 {
