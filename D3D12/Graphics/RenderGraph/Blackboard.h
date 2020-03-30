@@ -37,6 +37,7 @@ public:
 	}
 
 	RGBlackboard& Branch();
+	void Merge(const RGBlackboard& other, bool overrideExisting);
 
 private:
 	void* GetData(const char* hash);
