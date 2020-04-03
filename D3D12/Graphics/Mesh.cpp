@@ -114,14 +114,14 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 			switch (type)
 			{
 			case aiTextureType_NORMALS:
-				pTex->Create(pContext, "Resources/textures/dummy_ddn.png", srgb);
+				pTex->Create(pContext, "Resources/textures/dummy_ddn.dds", srgb);
 				break;
 			case aiTextureType_SPECULAR:
-				pTex->Create(pContext, "Resources/textures/dummy_specular.png", srgb);
+				pTex->Create(pContext, "Resources/textures/dummy_specular.dds", srgb);
 				break;
 			case aiTextureType_DIFFUSE:
 			default:
-				pTex->Create(pContext, "Resources/textures/dummy.png", srgb);
+				pTex->Create(pContext, "Resources/textures/dummy.dds", srgb);
 				break;
 			}
 		}

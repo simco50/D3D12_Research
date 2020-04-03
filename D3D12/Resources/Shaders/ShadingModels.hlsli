@@ -5,21 +5,15 @@ float DielectricSpecularToF0(float specular)
 	return 0.08f * specular;
 }
 
-float3 ComputeF0(float specular, float3 baseColor, float metallic)
+//Note from Filament: vec3 f0 = 0.16 * reflectance * reflectance * (1.0 - metallic) + baseColor * metallic;
+float3 ComputeF0(float specular, float3 baseColor, float metalness)
 {
-	return lerp(DielectricSpecularToF0(specular).xxx, baseColor, metallic.xxx);
+	return lerp(DielectricSpecularToF0(specular).xxx, baseColor, metalness.xxx);
 }
 
-float Pow4(float x)
+float3 ComputeDiffuseColor(float3 baseColor, float metalness)
 {
-	float xx = x * x;
-	return xx * xx;
-}
-
-float Pow5(float x)
-{
-	float xx = x * x;
-	return xx * xx * x;
+	return baseColor * (1 - metalness);
 }
 
 float3 Diffuse_Lambert(float3 DiffuseColor)
@@ -61,6 +55,22 @@ struct LightResult
 	float3 Specular;
 };
 
+//Microfacet Specular Model:
+/*
+		D * G * F
+	----------------- == D * Vis * F
+	  4 * NoL * NoV
+
+				  G
+	Vis = ------------------
+		    4 * NoL * NoV
+
+- F(l, h) - Fresnel Reflectance - What fraction of light is reflected as opposed to refracted (How reflective is the surfce)
+- D(h) - Normal Distribution Function - How many microfacets are pointing in the right direction
+- G(l, v, h) - Geometry/ShadowMasking function - How many light rays are actually reaching the view
+*/
+
+
 float3 SpecularGGX(float Roughness, float3 SpecularColor, float NoL, float NoH, float NoV, float VoH)
 {
 	float a2 = Pow4(Roughness);
@@ -83,8 +93,8 @@ LightResult DefaultLitBxDF(float3 SpecularColor, float Roughness, float3 Diffuse
 		return lighting;
 
 	float3 H = normalize(V + L);
+	float NoV = saturate(abs(dot(N, V)) + 1e-5);
 	float NoH = saturate(dot(N, H));
-	float NoV = dot(N, V);
 	float VoH = saturate(dot(V, H));
 	NoV = saturate(abs(NoV) + 1e-5);
 

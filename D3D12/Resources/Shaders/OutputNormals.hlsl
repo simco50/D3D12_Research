@@ -8,7 +8,7 @@
 cbuffer PerObjectData : register(b0)
 {
 	float4x4 cWorld;
-	float4x4 WorldViewProjection;
+	float4x4 cWorldViewProjection;
 }
 
 Texture2D tNormalTexture : register(t0);
@@ -49,7 +49,7 @@ float3 CalculateNormal(float3 N, float3 T, float3 BT, float2 tex, bool invertY)
 PSInput VSMain(VSInput input)
 {
 	PSInput result = (PSInput)0;
-	result.position = mul(float4(input.position, 1.0f), WorldViewProjection);
+	result.position = mul(float4(input.position, 1.0f), cWorldViewProjection);
 	result.texCoord = input.texCoord;
 	result.normal = mul(input.normal, (float3x3)cWorld).xyz;
 	result.tangent = mul(input.tangent, (float3x3)cWorld).xyz;

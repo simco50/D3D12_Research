@@ -16,6 +16,18 @@ float DoAttenuation(Light light, float d)
     return 1.0f - smoothstep(light.Range * light.Attenuation, light.Range, d);
 }
 
+float3 TangentSpaceNormalMapping(Texture2D normalTexture, SamplerState normalSampler, float3x3 TBN, float2 tex, bool invertY)
+{
+	float3 sampledNormal = normalTexture.Sample(normalSampler, tex).rgb;
+	sampledNormal.xy = sampledNormal.xy * 2.0f - 1.0f;
+	if(invertY)
+	{
+		sampledNormal.y = -sampledNormal.y;
+	}
+	sampledNormal = normalize(sampledNormal);
+	return mul(sampledNormal, TBN);
+}
+
 #ifdef SHADOW
 Texture2D tShadowMapTexture : register(t3);
 SamplerComparisonState sShadowMapSampler : register(s1);
@@ -63,9 +75,9 @@ float GetAttenuation(Light light, float3 wPos)
 			float minCos = light.CosSpotLightAngle;
 			float maxCos = lerp(minCos, 1.0f, 1 - light.Attenuation);
 			float cosAngle = dot(-L, light.Direction);
-			float spotIntensity = smoothstep(minCos, maxCos, cosAngle);
+			float spotFalloff = smoothstep(minCos, maxCos, cosAngle);
 
-			attentuation *= spotIntensity;
+			attentuation *= spotFalloff;
 		}
 	}
 
@@ -91,5 +103,9 @@ LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, floa
 		result.Specular *= s;
 	}
 #endif
+
+	result.Diffuse *= light.Color.rgb * light.Color.w;
+	result.Specular *= light.Color.rgb * light.Color.w;
+
 	return result;
 }

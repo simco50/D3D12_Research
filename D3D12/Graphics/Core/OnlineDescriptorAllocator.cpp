@@ -20,8 +20,11 @@ OnlineDescriptorAllocator::~OnlineDescriptorAllocator()
 
 DescriptorHandle OnlineDescriptorAllocator::AllocateTransientDescriptor(int count)
 {
-	GetHeap();
-	assert(HasSpace(count));
+	if (HasSpace(count) == false)
+	{
+		ReleaseHeap();
+		UnbindAll();
+	}
 	m_pOwner->SetDescriptorHeap(GetHeap(), m_Type);
 	return Allocate(count);
 }

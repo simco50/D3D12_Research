@@ -11,3 +11,4 @@ imgui.ini
 .vscode/
 *.nsight*
 *.args.json
+_Temp/
