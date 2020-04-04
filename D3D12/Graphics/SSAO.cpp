@@ -16,7 +16,7 @@
 
 float g_AoPower = 3;
 float g_AoThreshold = 0.0025f;
-float g_AoRadius = 0.25f;
+float g_AoRadius = 0.5f;
 int g_AoSamples = 16;
 
 SSAO::SSAO(Graphics* pGraphics)
@@ -36,6 +36,13 @@ void SSAO::OnSwapchainCreated(int windowWidth, int windowHeight)
 
 void SSAO::Execute(RGGraph& graph, const SsaoInputResources& resources)
 {
+	ImGui::Begin("Parameters");
+	ImGui::SliderFloat("AO Power", &g_AoPower, 0, 10);
+	ImGui::SliderFloat("AO Threshold", &g_AoThreshold, 0.0001f, 0.01f);
+	ImGui::SliderFloat("AO Radius", &g_AoRadius, 0, 2);
+	ImGui::SliderInt("AO Samples", &g_AoSamples, 1, 64);
+	ImGui::End();
+
 	graph.AddPass("SSAO", [&](RGPassBuilder& builder)
 		{
 			builder.NeverCull();
@@ -52,7 +59,6 @@ void SSAO::Execute(RGGraph& graph, const SsaoInputResources& resources)
 				constexpr int ssaoRandomVectors = 64;
 				struct ShaderParameters
 				{
-					Vector4 RandomVectors[ssaoRandomVectors];
 					Matrix ProjectionInverse;
 					Matrix Projection;
 					Matrix View;
@@ -63,24 +69,7 @@ void SSAO::Execute(RGGraph& graph, const SsaoInputResources& resources)
 					float Radius;
 					float Threshold;
 					int Samples;
-				} shaderParameters;
-
-				//lovely hacky
-				static Vector4 randoms[ssaoRandomVectors];
-				static bool written = false;
-				if (!written)
-				{
-					srand(0);
-					for (int i = 0; i < ssaoRandomVectors; ++i)
-					{
-						randoms[i] = Vector4(Math::RandVector());
-						randoms[i].z = Math::Lerp(0.1f, 0.8f, (float)abs(randoms[i].z));
-						randoms[i].Normalize();
-						randoms[i] *= Math::Lerp(0.2f, 1.0f, (float)pow(Math::RandomRange(0, 1), 2));
-					}
-					written = true;
-				}
-				memcpy(shaderParameters.RandomVectors, randoms, sizeof(Vector4) * ssaoRandomVectors);
+				} shaderParameters{};
 
 				shaderParameters.ProjectionInverse = resources.pCamera->GetProjectionInverse();
 				shaderParameters.Projection = resources.pCamera->GetProjection();

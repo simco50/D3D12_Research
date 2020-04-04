@@ -1,4 +1,5 @@
 #include "Common.hlsli"
+#include "RNG.hlsli"
 
 #define SSAO_SAMPLES 64
 #define BLOCK_SIZE 16
@@ -11,7 +12,6 @@
 
 cbuffer ShaderParameters : register(b0)
 {
-    float4 cRandomVectors[SSAO_SAMPLES];
     float4x4 cProjectionInverse;
     float4x4 cProjection;
     float4x4 cView;
@@ -50,7 +50,8 @@ void CSMain(CS_INPUT input)
     float4 viewPos = ScreenToView(float4(texCoord.xy, depth, 1), float2(1, 1), cProjectionInverse);
     float3 normal = normalize(mul(tNormalsTexture.SampleLevel(sSampler, texCoord, 0).xyz, (float3x3)cView));
 
-    float3 randomVec = normalize(float3(tNoiseTexture.SampleLevel(sPointSampler, texCoord * (float2)cDimensions / 1000, 0).xy, 0));
+    int state = SeedThread(input.DispatchThreadId.x);
+	float3 randomVec = float3(Random01(state), Random01(state), Random01(state)) * 2.0f - 1.0f;
 	float3 tangent = normalize(randomVec - normal * dot(randomVec, normal));
 	float3 bitangent = cross(tangent, normal);
 	float3x3 TBN = float3x3(tangent, bitangent, normal);
@@ -59,7 +60,9 @@ void CSMain(CS_INPUT input)
     
     for(int i = 0; i < cAoSamples; ++i)
     {
-        float3 vpos = viewPos.xyz + mul(cRandomVectors[i].xyz, TBN) * cAoRadius;
+        float2 point2d = HammersleyPoints(i, cAoSamples);
+		float3 hemispherePoint = HemisphereSampleUniform(point2d.x, point2d.y);
+        float3 vpos = viewPos.xyz + mul(hemispherePoint, TBN) * cAoRadius;
         float4 newTexCoord = mul(float4(vpos, 1), cProjection);
         newTexCoord.xyz /= newTexCoord.w;
         newTexCoord.xyz = newTexCoord.xyz * 0.5f + 0.5f;
