@@ -17,7 +17,7 @@
 cbuffer PerObjectData : register(b0)
 {
 	float4x4 cWorld;
-	float4x4 cWorldViewProjection;
+	float4x4 cWorldViewProj;
 }
 
 cbuffer PerFrameData : register(b1)
@@ -88,7 +88,7 @@ LightResult DoLight(float4 pos, float3 worldPos, float3 N, float3 V, float3 diff
 PSInput VSMain(VSInput input)
 {
 	PSInput result;
-	result.position = mul(float4(input.position, 1.0f), cWorldViewProjection);
+	result.position = mul(float4(input.position, 1.0f), cWorldViewProj);
 	result.positionWS = mul(float4(input.position, 1.0f), cWorld).xyz;
 	result.texCoord = input.texCoord;
 	result.normal = normalize(mul(input.normal, (float3x3)cWorld));

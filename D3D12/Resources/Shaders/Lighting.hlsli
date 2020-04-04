@@ -35,27 +35,33 @@ SamplerComparisonState sShadowMapSampler : register(s1);
 float DoShadow(float3 wPos, int shadowMapIndex)
 {
 	float4x4 lightViewProjection = cLightViewProjections[shadowMapIndex];
-
 	float4 lightPos = mul(float4(wPos, 1), lightViewProjection);
 	lightPos.xyz /= lightPos.w;
 	lightPos.x = lightPos.x / 2.0f + 0.5f;
 	lightPos.y = lightPos.y / -2.0f + 0.5f;
 
-	float shadowFactor = 0;
-	int hKernel = (PCF_KERNEL_SIZE - 1) / 2;
-
 	float2 shadowMapStart = cShadowMapOffsets[shadowMapIndex].xy;
 	float normalizedShadowMapSize = cShadowMapOffsets[shadowMapIndex].z;
 
-	for(int x = -hKernel; x <= hKernel; ++x)
-	{
-		for(int y = -hKernel; y <= hKernel; ++y)
-		{
-			float2 texCoord = shadowMapStart + lightPos.xy * normalizedShadowMapSize + float2(SHADOWMAP_DX * x, SHADOWMAP_DX * y); 
-			shadowFactor += tShadowMapTexture.SampleCmpLevelZero(sShadowMapSampler, texCoord, lightPos.z);
-		}
-	}
-	return shadowFactor / (PCF_KERNEL_SIZE * PCF_KERNEL_SIZE);
+	float2 texCoord = shadowMapStart + lightPos.xy * normalizedShadowMapSize; 
+	
+	const float Dilation = 2.0f;
+    float d1 = Dilation * SHADOWMAP_DX * 0.125f;
+    float d2 = Dilation * SHADOWMAP_DX * 0.875f;
+    float d3 = Dilation * SHADOWMAP_DX * 0.625f;
+    float d4 = Dilation * SHADOWMAP_DX * 0.375f;
+    float result = (
+        2.0f * tShadowMapTexture.SampleCmpLevelZero(sShadowMapSampler, texCoord, lightPos.z) +
+        tShadowMapTexture.SampleCmpLevelZero(sShadowMapSampler, texCoord + float2(-d2,  d1), lightPos.z) +
+        tShadowMapTexture.SampleCmpLevelZero(sShadowMapSampler, texCoord + float2(-d1, -d2), lightPos.z) +
+        tShadowMapTexture.SampleCmpLevelZero(sShadowMapSampler, texCoord + float2( d2, -d1), lightPos.z) +
+        tShadowMapTexture.SampleCmpLevelZero(sShadowMapSampler, texCoord + float2( d1,  d2), lightPos.z) +
+        tShadowMapTexture.SampleCmpLevelZero(sShadowMapSampler, texCoord + float2(-d4,  d3), lightPos.z) +
+        tShadowMapTexture.SampleCmpLevelZero(sShadowMapSampler, texCoord + float2(-d3, -d4), lightPos.z) +
+        tShadowMapTexture.SampleCmpLevelZero(sShadowMapSampler, texCoord + float2( d4, -d3), lightPos.z) +
+        tShadowMapTexture.SampleCmpLevelZero(sShadowMapSampler, texCoord + float2( d3,  d4), lightPos.z)
+        ) / 10.0f;
+    return result * result;
 }
 #endif
 

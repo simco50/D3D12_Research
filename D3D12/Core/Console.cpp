@@ -19,9 +19,10 @@ void Console::Startup()
 	static Console console;
 	consoleInstance = &console;
 
-#ifdef _DEBUG
-	console.InitializeConsoleWindow();
-#endif
+	if (CommandLine::GetBool("noconsole") == false)
+	{
+		console.InitializeConsoleWindow();
+	}
 }
 
 bool Console::LogHRESULT(const char* source, HRESULT hr)
