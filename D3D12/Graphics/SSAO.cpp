@@ -14,11 +14,6 @@
 #include "Graphics/Profiler.h"
 #include "Scene/Camera.h"
 
-float g_AoPower = 3;
-float g_AoThreshold = 0.0025f;
-float g_AoRadius = 0.5f;
-int g_AoSamples = 16;
-
 SSAO::SSAO(Graphics* pGraphics)
 	: m_pGraphics(pGraphics)
 {
@@ -36,6 +31,11 @@ void SSAO::OnSwapchainCreated(int windowWidth, int windowHeight)
 
 void SSAO::Execute(RGGraph& graph, const SsaoInputResources& resources)
 {
+	static float g_AoPower = 3;
+	static float g_AoThreshold = 0.0025f;
+	static float g_AoRadius = 0.5f;
+	static int g_AoSamples = 16;
+
 	ImGui::Begin("Parameters");
 	ImGui::SliderFloat("AO Power", &g_AoPower, 0, 10);
 	ImGui::SliderFloat("AO Threshold", &g_AoThreshold, 0.0001f, 0.01f);
