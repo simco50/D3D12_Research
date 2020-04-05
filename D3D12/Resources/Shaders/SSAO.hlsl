@@ -50,7 +50,7 @@ void CSMain(CS_INPUT input)
     float4 viewPos = ScreenToView(float4(texCoord.xy, depth, 1), float2(1, 1), cProjectionInverse);
     float3 normal = normalize(mul(tNormalsTexture.SampleLevel(sSampler, texCoord, 0).xyz, (float3x3)cView));
 
-    int state = SeedThread(input.DispatchThreadId.x);
+    uint state = SeedThread(input.DispatchThreadId.x + input.DispatchThreadId.y * cDimensions.x);
 	float3 randomVec = float3(Random01(state), Random01(state), Random01(state)) * 2.0f - 1.0f;
 	float3 tangent = normalize(randomVec - normal * dot(randomVec, normal));
 	float3 bitangent = cross(tangent, normal);

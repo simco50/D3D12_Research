@@ -368,7 +368,7 @@ void DebugRenderer::AddLight(const Light& light)
 		AddSphere(light.Position, light.Range, 8, 8, Color(1.0f, 1.0f, 0.0f, 1.0f), false);
 		break;
 	case Light::Type::Spot:
-		AddWireCone(light.Position, light.Direction, light.Range, Math::ToDegrees * acos(light.CosHalfAngle), 10, Color(1.0f, 1.0f, 0.0f, 1.0f));
+		AddWireCone(light.Position, light.Direction, light.Range, Math::ToDegrees * acos(light.SpotlightAngles.y), 10, Color(1.0f, 1.0f, 0.0f, 1.0f));
 		break;
 	default:
 		break;

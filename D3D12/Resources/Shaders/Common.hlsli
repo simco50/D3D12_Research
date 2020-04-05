@@ -6,11 +6,21 @@ struct Light
 	int Enabled;
 	float3 Direction;
 	int Type;
-	float4 Color;
+	float2 SpotlightAngles;
+	uint Color;
+    float Intensity;
 	float Range;
-	float CosSpotLightAngle;
-	float Attenuation;
     int ShadowIndex;
+
+    float4 GetColor()
+    {
+        return float4(
+            (float)((Color & 0xFF000000) >> 24) / 255.0f,
+            (float)((Color & 0x00FF0000) >> 16) / 255.0f,
+            (float)((Color & 0x0000FF00) >> 8) / 255.0f,
+            (float)((Color & 0x000000FF) >> 0) / 255.0f
+        );
+    }
 };
 
 struct Plane
@@ -193,4 +203,9 @@ float Pow5(float x)
 {
 	float xx = x * x;
 	return xx * xx * x;
+}
+
+float Square(float x)
+{
+    return x * x;
 }

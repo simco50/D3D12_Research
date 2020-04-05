@@ -11,9 +11,24 @@ cbuffer LightData : register(b2)
 	float4 cShadowMapOffsets[MAX_SHADOW_CASTERS];
 }
 
-float DoAttenuation(Light light, float d)
+// Angle >= Umbra -> 0
+// Angle < Penumbra -> 1
+//Gradient between Umbra and Penumbra
+float DirectionalAttenuation(float3 L, float3 direction, float cosUmbra, float cosPenumbra)
 {
-    return 1.0f - smoothstep(light.Range * light.Attenuation, light.Range, d);
+	float cosAngle = dot(-normalize(L), direction);
+	float falloff = saturate((cosAngle - cosUmbra) / (cosPenumbra - cosUmbra));
+	return falloff * falloff;
+}
+
+//Distance between rays is proportional to distance squared
+//Extra windowing function to make light radius finite
+float RadialAttenuation(float3 L, float range)
+{
+	float distSq = dot(L, L);
+	float rangeSq = Square(range);
+	float windowing = Square(saturate(1 - Square(distSq * Square(rcp(range)))));
+	return (rangeSq / (distSq + 1)) * windowing;
 }
 
 float3 TangentSpaceNormalMapping(Texture2D normalTexture, SamplerState normalSampler, float3x3 TBN, float2 tex, bool invertY)
@@ -72,18 +87,10 @@ float GetAttenuation(Light light, float3 wPos)
 	if(light.Type >= LIGHT_POINT)
 	{
 		float3 L = light.Position - wPos;
-		float d = length(L);
-		L = L / d;
-		attentuation *= DoAttenuation(light, d);
-
+		attentuation *= RadialAttenuation(L, light.Range);
 		if(light.Type >= LIGHT_SPOT)
 		{
-			float minCos = light.CosSpotLightAngle;
-			float maxCos = lerp(minCos, 1.0f, 1 - light.Attenuation);
-			float cosAngle = dot(-L, light.Direction);
-			float spotFalloff = smoothstep(minCos, maxCos, cosAngle);
-
-			attentuation *= spotFalloff;
+			attentuation *= DirectionalAttenuation(L, light.Direction, light.SpotlightAngles.y, light.SpotlightAngles.x);
 		}
 	}
 
@@ -110,8 +117,9 @@ LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, floa
 	}
 #endif
 
-	result.Diffuse *= light.Color.rgb * light.Color.w;
-	result.Specular *= light.Color.rgb * light.Color.w;
+	float4 color = light.GetColor();
+	result.Diffuse *= color.rgb * light.Intensity;
+	result.Specular *= color.rgb * light.Intensity;
 
 	return result;
 }
