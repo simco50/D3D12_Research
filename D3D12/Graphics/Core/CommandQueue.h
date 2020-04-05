@@ -35,7 +35,6 @@ private:
 	std::unique_ptr<CommandAllocatorPool> m_pAllocatorPool;
 
     ComPtr<ID3D12CommandQueue> m_pCommandQueue;
-    D3D12_COMMAND_LIST_TYPE m_Type;
     std::mutex m_FenceMutex;
     std::mutex m_EventMutex;
 

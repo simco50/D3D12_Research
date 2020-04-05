@@ -24,8 +24,8 @@ class SSAO;
 
 struct Batch
 {
-	const SubMesh* pMesh;
-	const Material* pMaterial;
+	const SubMesh* pMesh = nullptr;
+	const Material* pMaterial = nullptr;
 	Matrix WorldMatrix;
 	BoundingBox Bounds;
 };
@@ -76,9 +76,9 @@ public:
 	Graphics(uint32 width, uint32 height, int sampleCount = 1);
 	~Graphics();
 
-	virtual void Initialize(HWND window);
-	virtual void Update();
-	virtual void Shutdown();
+	void Initialize(HWND window);
+	void Update();
+	void Shutdown();
 
 	inline ID3D12Device* GetDevice() const { return m_pDevice.Get(); }
 	inline ID3D12Device5* GetRaytracingDevice() const { return m_pRaytracingDevice.Get(); }
@@ -224,7 +224,6 @@ private:
 	std::unique_ptr<Texture> m_pAverageLuminance;
 
 	//SSAO
-	std::unique_ptr<Texture> m_pNoiseTexture;
 	std::unique_ptr<Texture> m_pAmbientOcclusion;
 
 	//Mip generation

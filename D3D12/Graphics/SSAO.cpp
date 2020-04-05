@@ -15,7 +15,6 @@
 #include "Scene/Camera.h"
 
 SSAO::SSAO(Graphics* pGraphics)
-	: m_pGraphics(pGraphics)
 {
 	if (pGraphics->SupportsRayTracing())
 	{
@@ -51,12 +50,10 @@ void SSAO::Execute(RGGraph& graph, const SsaoInputResources& resources)
 				renderContext.InsertResourceBarrier(resources.pDepthTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 				renderContext.InsertResourceBarrier(resources.pNormalsTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 				renderContext.InsertResourceBarrier(resources.pRenderTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-				renderContext.InsertResourceBarrier(resources.pNoiseTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
 				renderContext.SetComputeRootSignature(m_pSSAORS.get());
 				renderContext.SetPipelineState(m_pSSAOPSO.get());
 
-				constexpr int ssaoRandomVectors = 64;
 				struct ShaderParameters
 				{
 					Matrix ProjectionInverse;
@@ -87,7 +84,6 @@ void SSAO::Execute(RGGraph& graph, const SsaoInputResources& resources)
 				renderContext.SetDynamicDescriptor(1, 0, resources.pRenderTarget->GetUAV());
 				renderContext.SetDynamicDescriptor(2, 0, resources.pDepthTexture->GetSRV());
 				renderContext.SetDynamicDescriptor(2, 1, resources.pNormalsTexture->GetSRV());
-				renderContext.SetDynamicDescriptor(2, 2, resources.pNoiseTexture->GetSRV());
 
 				int dispatchGroupsX = Math::DivideAndRoundUp(resources.pRenderTarget->GetWidth(), 16);
 				int dispatchGroupsY = Math::DivideAndRoundUp(resources.pRenderTarget->GetHeight(), 16);

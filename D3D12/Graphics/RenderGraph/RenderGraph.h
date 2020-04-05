@@ -21,18 +21,18 @@ class RGResource
 {
 public:
 	RGResource(const char* pName, int id, bool isImported, RGResourceType type, void* pResource)
-		: m_Name(pName), m_Id(id), m_IsImported(isImported), m_pPhysicalResource(pResource), m_Type(type)
+		: m_Name(pName), m_Id(id), m_IsImported(isImported), m_Version(0), m_Type(type), m_pPhysicalResource(pResource), m_References(0)
 	{}
 
 	const char* m_Name;
 	int m_Id;
 	bool m_IsImported;
-	int m_Version = 0;
+	int m_Version;
 	RGResourceType m_Type;
 	void* m_pPhysicalResource;
 
 	//RenderGraph compile-time values
-	int m_References = 0;
+	int m_References;
 };
 
 class RGTexture : public RGResource
@@ -91,8 +91,7 @@ class RGPassBuilder
 {
 public:
 	RGPassBuilder(RGGraph& renderGraph, RGPass& pass)
-		: m_RenderGraph(renderGraph),
-		m_Pass(pass)
+		: m_Pass(pass), m_RenderGraph(renderGraph)
 	{}
 
 	RGPassBuilder(const RGPassBuilder& other) = delete;
@@ -129,6 +128,7 @@ private:
 class IPassExecutor
 {
 public:
+	virtual ~IPassExecutor() = default;
 	virtual void Execute(const RGPassResources& resources, CommandContext& renderContext) = 0;
 };
 
@@ -136,7 +136,7 @@ template<typename ExecuteCallback>
 class PassExecutor : public IPassExecutor
 {
 public:
-	PassExecutor(ExecuteCallback& callback)
+	PassExecutor(ExecuteCallback&& callback)
 		: m_Callback(std::move(callback))
 	{}
 	virtual void Execute(const RGPassResources& resources, CommandContext& renderContext) override

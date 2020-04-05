@@ -197,7 +197,6 @@ void Graphics::Update()
 	Data.DepthStencilResolved = graph.ImportTexture("Resolved Depth Stencil", GetResolvedDepthStencil());
 
 	uint64 nextFenceValue = 0;
-	uint64 lightCullingFence = 0;
 
 	//DEPTH PREPASS
 	// - Depth only pass that renders the entire scene
@@ -322,7 +321,6 @@ void Graphics::Update()
 		rtResources.pRenderTarget = m_pAmbientOcclusion.get();
 		rtResources.pNormalsTexture = m_pNormals.get();
 		rtResources.pDepthTexture = m_pResolvedDepthStencil.get();
-		rtResources.pNoiseTexture = m_pNoiseTexture.get();
 		m_pRTAO->Execute(graph, rtResources);
 	}
 	else
@@ -332,7 +330,6 @@ void Graphics::Update()
 		ssaoResources.pRenderTarget = m_pAmbientOcclusion.get();
 		ssaoResources.pNormalsTexture = m_pNormals.get();
 		ssaoResources.pDepthTexture = m_pResolvedDepthStencil.get();
-		ssaoResources.pNoiseTexture = m_pNoiseTexture.get();
 		m_pSSAO->Execute(graph, ssaoResources);
 	}
 
@@ -1090,9 +1087,6 @@ void Graphics::InitializeAssets()
 		}
 	}
 
-	m_pNoiseTexture = std::make_unique<Texture>(this, "Noise");
-	m_pNoiseTexture->Create(pContext, "Resources/Textures/Noise.png", false);
-
 	m_pRTAO->GenerateAccelerationStructure(this, m_pMesh.get(), *pContext);
 	pContext->Execute(true);
 }
@@ -1119,7 +1113,7 @@ void Graphics::UpdateImGui()
 	ImGui::SetNextWindowSize(ImVec2(300, (float)m_WindowHeight));
 	ImGui::Begin("GPU Stats", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
 	ImGui::Text("MS: %.4f", GameTimer::DeltaTime() * 1000.0f);
-	ImGui::SameLine(100);
+	ImGui::SameLine(100.0f);
 	ImGui::Text("FPS: %.1f", 1.0f / GameTimer::DeltaTime());
 	ImGui::PlotLines("Frametime", m_FrameTimes.data(), (int)m_FrameTimes.size(), m_Frame % m_FrameTimes.size(), 0, 0.0f, 0.03f, ImVec2(200, 100));
 

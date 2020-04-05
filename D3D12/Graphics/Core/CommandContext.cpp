@@ -424,7 +424,6 @@ void CommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 		for (uint32 i = 0; i < renderPassInfo.RenderTargetCount; ++i)
 		{
 			const RenderPassInfo::RenderTargetInfo& data = renderPassInfo.RenderTargets[i];
-			uint32 subResource = D3D12CalcSubresource(data.MipLevel, data.ArrayIndex, 0, data.Target->GetMipLevels(), data.Target->GetArraySize());
 			rtvs[i] = data.Target->GetRTV();
 			
 			if (ExtractBeginAccess(data.Access) == D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_CLEAR)

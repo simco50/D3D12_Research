@@ -38,8 +38,6 @@ private:
 	void SetupResources(Graphics* pGraphics);
 	void SetupPipelines(Graphics* pGraphics);
 
-	Graphics* m_pGraphics;
-
 	//Light Culling
 	std::unique_ptr<RootSignature> m_pComputeLightCullRS;
 	std::unique_ptr<PipelineState> m_pComputeLightCullPSO;

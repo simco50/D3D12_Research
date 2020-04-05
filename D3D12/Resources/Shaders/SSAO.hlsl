@@ -6,9 +6,8 @@
 
 #define RootSig "CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \
 				"DescriptorTable(UAV(u0, numDescriptors = 1), visibility=SHADER_VISIBILITY_ALL), " \
-				"DescriptorTable(SRV(t0, numDescriptors = 3), visibility=SHADER_VISIBILITY_ALL), " \
+				"DescriptorTable(SRV(t0, numDescriptors = 2), visibility=SHADER_VISIBILITY_ALL), " \
 				"StaticSampler(s0, filter=FILTER_MIN_MAG_LINEAR_MIP_POINT, visibility = SHADER_VISIBILITY_ALL), " \
-				"StaticSampler(s1, filter=FILTER_MIN_MAG_MIP_POINT, visibility = SHADER_VISIBILITY_ALL), " \
 
 cbuffer ShaderParameters : register(b0)
 {
@@ -26,9 +25,7 @@ cbuffer ShaderParameters : register(b0)
 
 Texture2D tDepthTexture : register(t0);
 Texture2D tNormalsTexture : register(t1);
-Texture2D tNoiseTexture : register(t2);
 SamplerState sSampler : register(s0);
-SamplerState sPointSampler : register(s1);
 
 RWTexture2D<float> uAmbientOcclusion : register(u0);
 

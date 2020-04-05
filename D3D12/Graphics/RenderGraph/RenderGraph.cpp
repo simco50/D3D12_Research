@@ -326,6 +326,7 @@ void RGGraph::ConditionallyReleaseResource(RGResource* pResource)
 
 Texture* RGPassResources::GetTexture(RGResourceHandle handle) const
 {
+	RG_ASSERT(m_Pass.ReadsFrom(handle) || m_Pass.WritesTo(handle), "Pass doesn't read or write to this resource");
 	const RGNode& node = m_Graph.GetResourceNode(handle);
 	assert(node.pResource);
 	assert(node.pResource->m_Type == RGResourceType::Texture);

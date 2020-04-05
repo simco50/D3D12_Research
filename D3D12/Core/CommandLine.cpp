@@ -9,7 +9,6 @@ bool CommandLine::Parse(const char* pCommandLine)
 	m_CommandLine = pCommandLine;
 	m_Parameters.clear();
 	bool quoted = false;
-	bool skipArgument = false;
 
 	int commandStart = 0;
 	bool hasValue = false;

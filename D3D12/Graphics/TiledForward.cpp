@@ -19,7 +19,6 @@ static constexpr int MAX_LIGHT_DENSITY = 72000;
 static constexpr int FORWARD_PLUS_BLOCK_SIZE = 16;
 
 TiledForward::TiledForward(Graphics* pGraphics)
-	: m_pGraphics(pGraphics)
 {
 	SetupResources(pGraphics);
 	SetupPipelines(pGraphics);

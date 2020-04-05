@@ -10,14 +10,14 @@ struct Light
 		MAX
 	};
 
-	Vector3 Position;
-	int Enabled;
-	Vector3 Direction;
-	Type LightType;
-	Vector2 SpotlightAngles;
-	uint32 Colour;
-	float Intensity;
-	float Range;
+	Vector3 Position = Vector3::Zero;
+	int Enabled = 1;
+	Vector3 Direction = Vector3::Forward;
+	Type LightType = Type::MAX;
+	Vector2 SpotlightAngles = Vector2::Zero;
+	uint32 Colour = 0xFFFFFFFF;
+	float Intensity = 1.0f;
+	float Range = 1.0f;
 	int32 ShadowIndex = -1;
 
 	void SetColor(const Color& c)
@@ -30,7 +30,7 @@ struct Light
 
 	static Light Directional(const Vector3& position, const Vector3& direction, float intensity = 1.0f, const Color& color = Color(1, 1, 1, 1))
 	{
-		Light l;
+		Light l{};
 		l.Enabled = true;
 		l.Position = position;
 		l.Direction = direction;
@@ -42,7 +42,7 @@ struct Light
 
 	static Light Point(const Vector3& position, float radius, float intensity = 1.0f, const Color& color = Color(1, 1, 1, 1))
 	{
-		Light l;
+		Light l{};
 		l.Enabled = true;
 		l.Position = position;
 		l.Range = radius;
@@ -54,7 +54,7 @@ struct Light
 
 	static Light Spot(const Vector3& position, float range, const Vector3& direction, float umbraAngleInDegrees = 60, float penumbraAngleInDegrees = 40, float intensity = 1.0f, const Color& color = Color(1, 1, 1, 1))
 	{
-		Light l;
+		Light l{};
 		l.Enabled = true;
 		l.Position = position;
 		l.Range = range;

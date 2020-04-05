@@ -3,7 +3,7 @@
 #include "Graphics.h"
 
 OfflineDescriptorAllocator::OfflineDescriptorAllocator(Graphics* pGraphics, D3D12_DESCRIPTOR_HEAP_TYPE type, uint32 descriptorsPerHeap)
-	: GraphicsObject(pGraphics), m_Type(type), m_DescriptorsPerHeap(descriptorsPerHeap)
+	: GraphicsObject(pGraphics), m_DescriptorsPerHeap(descriptorsPerHeap), m_Type(type)
 {
 	m_DescriptorSize = pGraphics->GetDevice()->GetDescriptorHandleIncrementSize(type);
 }

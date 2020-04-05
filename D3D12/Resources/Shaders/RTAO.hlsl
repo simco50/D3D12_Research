@@ -8,10 +8,8 @@ RaytracingAccelerationStructure SceneBVH : register(t0);
 
 Texture2D tNormals : register(t1);
 Texture2D tDepth : register(t2);
-Texture2D tNoise : register(t3);
 
 SamplerState sSceneSampler : register(s0);
-SamplerState sTexSampler : register(s1);
 
 cbuffer ShaderParameters : register(b0)
 {

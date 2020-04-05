@@ -11,7 +11,7 @@ struct Light;
 struct DebugLine
 {
 	DebugLine(const Vector3& start, const Vector3& end, const Color& colorStart, const Color& colorEnd)
-		: Start(start), End(end), ColorStart(colorStart), ColorEnd(colorEnd)
+		: Start(start), ColorStart(colorStart), End(end), ColorEnd(colorEnd)
 	{}
 
 	Vector3 Start;
@@ -34,7 +34,7 @@ struct DebugRay
 struct DebugTriangle
 {
 	DebugTriangle(const Vector3& a, const Vector3& b, const Vector3& c, const Color& colorA, const Color& colorB, const Color& colorC)
-		: A(a), B(b), C(c), ColorA(colorA), ColorB(colorB), ColorC(colorC)
+		: A(a), ColorA(colorA), B(b), ColorB(colorB), C(c), ColorC(colorC)
 	{}
 
 	Vector3 A;

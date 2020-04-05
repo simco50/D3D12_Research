@@ -161,10 +161,9 @@ void RTAO::Execute(RGGraph& graph, const RtaoInputResources& resources)
 				{
 					context.InsertResourceBarrier(resources.pDepthTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 					context.InsertResourceBarrier(resources.pNormalsTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-					context.InsertResourceBarrier(resources.pNoiseTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 					context.InsertResourceBarrier(resources.pRenderTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-					const int descriptorsToAllocate = 5;
+					const int descriptorsToAllocate = 4;
 					int totalAllocatedDescriptors = 0;
 					DescriptorHandle descriptors = context.AllocateTransientDescriptors(descriptorsToAllocate, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 					ID3D12Device* pDevice = m_pGraphics->GetDevice();
@@ -188,7 +187,7 @@ void RTAO::Execute(RGGraph& graph, const RtaoInputResources& resources)
 
 					DescriptorHandle renderTargetUAV = pfCopyDescriptors({ resources.pRenderTarget->GetUAV() });
 					DescriptorHandle tlasSRV = pfCopyDescriptors({ m_pTLAS->GetSRV()->GetDescriptor() });
-					DescriptorHandle textureSRVs = pfCopyDescriptors({ resources.pNormalsTexture->GetSRV(), resources.pDepthTexture->GetSRV(), resources.pNoiseTexture->GetSRV() });
+					DescriptorHandle textureSRVs = pfCopyDescriptors({ resources.pNormalsTexture->GetSRV(), resources.pDepthTexture->GetSRV() });
 
 					constexpr const int numRandomVectors = 64;
 					struct Parameters
@@ -199,7 +198,7 @@ void RTAO::Execute(RGGraph& graph, const RtaoInputResources& resources)
 						float Power;
 						float Radius;
 						int32 Samples;
-					} parameters;
+					} parameters{};
 
 					static bool written = false;
 					static Vector4 randoms[numRandomVectors];
@@ -360,7 +359,7 @@ void RTAO::SetupPipelines(Graphics* pGraphics)
 		m_pRayGenSignature->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_ALL);
 		m_pRayGenSignature->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, D3D12_SHADER_VISIBILITY_ALL);
 		m_pRayGenSignature->SetDescriptorTableSimple(2, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, D3D12_SHADER_VISIBILITY_ALL);
-		m_pRayGenSignature->SetDescriptorTableSimple(3, 1, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3, D3D12_SHADER_VISIBILITY_ALL);
+		m_pRayGenSignature->SetDescriptorTableSimple(3, 1, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, D3D12_SHADER_VISIBILITY_ALL);
 		D3D12_SAMPLER_DESC samplerDesc{};
 		samplerDesc.AddressU = samplerDesc.AddressV = samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
 		samplerDesc.Filter = D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT;
@@ -382,7 +381,8 @@ void RTAO::SetupPipelines(Graphics* pGraphics)
 		//Shaders
 		{
 			CD3DX12_DXIL_LIBRARY_SUBOBJECT* pRayGenDesc = desc.CreateSubobject<CD3DX12_DXIL_LIBRARY_SUBOBJECT>();
-			pRayGenDesc->SetDXILLibrary(&CD3DX12_SHADER_BYTECODE(shaderLibrary.GetByteCode(), shaderLibrary.GetByteCodeSize()));
+			CD3DX12_SHADER_BYTECODE byteCode = CD3DX12_SHADER_BYTECODE(shaderLibrary.GetByteCode(), shaderLibrary.GetByteCodeSize());
+			pRayGenDesc->SetDXILLibrary(&byteCode);
 			pRayGenDesc->DefineExport(L"RayGen");
 			pRayGenDesc->DefineExport(L"ClosestHit");
 			pRayGenDesc->DefineExport(L"Miss");
