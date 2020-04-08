@@ -21,7 +21,7 @@ public:
 
 private:
 	int64 m_StartTime;
-	int64 m_EndTime;
+	float m_TotalTime = 0;
 };
 
 class GpuTimer
