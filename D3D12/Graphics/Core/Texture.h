@@ -163,6 +163,19 @@ struct TextureDesc
 		desc.Dimensions = TextureDimension::Texture2D;
 		return desc;
 	}
+
+	bool operator==(const TextureDesc& other) const
+	{
+		return other.Width == Width &&
+			other.Height == Height &&
+			other.DepthOrArraySize == DepthOrArraySize &&
+			other.Mips == Mips &&
+			other.SampleCount == SampleCount &&
+			other.Format == Format &&
+			other.Usage == Usage &&
+			other.ClearBindingValue == ClearBindingValue &&
+			other.Dimensions == Dimensions;
+	}
 };
 
 class Texture : public GraphicsResource
@@ -171,7 +184,7 @@ public:
 	Texture(Graphics* pGraphics, const char* pName = "");
 	~Texture();
 
-	void Create(const TextureDesc& desc);
+	void Create(const TextureDesc& desc, ID3D12Heap* pHeap = nullptr, uint64 offset = 0);
 	void CreateForSwapchain(ID3D12Resource* pTexture);
 	bool Create(CommandContext* pContext, const char* pFilePath, bool srgb = false);
 	bool Create(CommandContext* pContext, const Image& img, bool srgb = false);
@@ -209,9 +222,5 @@ private:
 
 	ShaderResourceView* m_pSrv = nullptr;
 	UnorderedAccessView* m_pUav = nullptr;
-
-	int m_SrvUavDescriptorSize = 0;
-	int m_RtvDescriptorSize = 0;
-	int m_DsvDescriptorSize = 0;
 	const char* m_pName = nullptr;
 };

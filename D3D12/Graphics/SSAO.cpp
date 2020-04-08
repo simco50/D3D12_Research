@@ -31,7 +31,7 @@ SSAO::SSAO(Graphics* pGraphics)
 
 void SSAO::OnSwapchainCreated(int windowWidth, int windowHeight)
 {
-	m_pAmbientOcclusionIntermediate->Create(TextureDesc::Create2D(Math::DivideAndRoundUp(windowWidth, 2), Math::DivideAndRoundUp(windowHeight, 2), DXGI_FORMAT_R8_UNORM, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource));
+	m_pAmbientOcclusionIntermediate->Create(TextureDesc::Create2D(Math::DivideAndRoundUp(windowWidth, 4), Math::DivideAndRoundUp(windowHeight, 4), DXGI_FORMAT_R8_UNORM, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource));
 }
 
 void SSAO::Execute(RGGraph& graph, const SsaoInputResources& resources)

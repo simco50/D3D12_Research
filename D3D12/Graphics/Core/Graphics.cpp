@@ -186,6 +186,11 @@ void Graphics::Update()
 	BeginFrame();
 	m_pImGuiRenderer->Update();
 
+	/*for (Light& light : m_Lights)
+	{
+		DebugRenderer::Instance().AddLight(light);
+	}*/
+
 	RGGraph graph(this);
 	struct MainData
 	{
@@ -642,8 +647,11 @@ void Graphics::EndFrame(uint64 fenceValue)
 	DebugRenderer::Instance().EndFrame();
 }
 
+Graphics* gGraphics = nullptr;
+
 void Graphics::InitD3D()
 {
+	gGraphics = this;
 	E_LOG(Info, "Graphics::InitD3D()");
 	UINT dxgiFactoryFlags = 0;
 
@@ -790,11 +798,11 @@ void Graphics::InitD3D()
 	fsDesc.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED;
 	fsDesc.Windowed = true;
 	HR(pFactory->CreateSwapChainForHwnd(
-		m_CommandQueues[D3D12_COMMAND_LIST_TYPE_DIRECT]->GetCommandQueue(), 
-		m_pWindow, 
-		&swapchainDesc, 
-		&fsDesc, 
-		nullptr, 
+		m_CommandQueues[D3D12_COMMAND_LIST_TYPE_DIRECT]->GetCommandQueue(),
+		m_pWindow,
+		&swapchainDesc,
+		&fsDesc,
+		nullptr,
 		swapChain.GetAddressOf()));
 
 	swapChain.As(&m_pSwapchain);
@@ -830,6 +838,165 @@ void Graphics::InitD3D()
 
 	DebugRenderer::Instance().Initialize(this);
 	DebugRenderer::Instance().SetCamera(m_pCamera.get());
+
+	/*class Heap;
+
+	struct HeapResource
+	{
+		Texture* pResource;
+		Heap* pHeap;
+	};
+
+	class Heap
+	{
+	public:
+		Heap(ID3D12Device* pInDevice, uint64 size)
+			: pDevice(pInDevice), Size(size)
+		{
+			D3D12_HEAP_DESC heapDesc{};
+			heapDesc.Alignment = 0;
+			heapDesc.Flags = D3D12_HEAP_FLAG_ALLOW_ONLY_RT_DS_TEXTURES;
+			heapDesc.Properties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
+			heapDesc.SizeInBytes = Math::AlignUp<uint64>(Size, (uint64)pow(2, 22));
+			HR(pInDevice->CreateHeap(&heapDesc, IID_PPV_ARGS(pHeap.GetAddressOf())));
+		}
+
+		~Heap()
+		{
+			for (HeapResource& resource : Resources)
+			{
+				delete resource.pResource;
+			}
+		}
+
+		HeapResource* Allocate(const TextureDesc& textureDesc)
+		{
+			for (HeapResource& resource : Resources)
+			{
+				if (resource.pResource->GetDesc() == textureDesc)
+				{
+					return &resource;
+				}
+			}
+			HeapResource resource;
+			resource.pHeap = this;
+			resource.pResource = new Texture(gGraphics);
+			resource.pResource->Create(textureDesc, pHeap.Get(), 0);
+			Resources.push_back(resource);
+			return &Resources.back();
+		}
+
+		ID3D12Device* pDevice;
+		ComPtr<ID3D12Heap> pHeap;
+		std::vector<HeapResource> Resources;
+		uint64 Size;
+	};
+
+	struct ResourceAllocation
+	{
+		Heap* pHeap;
+		ID3D12Resource* pResource;
+		bool NeedsClear;
+	};
+
+	class ResourceAllocator
+	{
+	public:
+		ResourceAllocator(ID3D12Device* pDevice)
+			: pDevice(pDevice)
+		{
+		}
+
+		HeapResource* Allocate(const TextureDesc& textureDesc)
+		{
+			size_t size = textureDesc.DepthOrArraySize * textureDesc.Height * Texture::GetRowDataSize(textureDesc.Format, textureDesc.Width);
+			int bestMatch = -1;
+			uint64 bestSize = std::numeric_limits<uint64>::max();
+			Heap* pHeap = nullptr;
+			for (size_t i = 0; i < FreeHeaps.size(); ++i)
+			{
+				if (FreeHeaps[i]->Size < bestSize && FreeHeaps[i]->Size >= size)
+				{
+					bestSize = FreeHeaps[i]->Size;
+					bestMatch = (int)i;
+				}
+			}
+			if (bestMatch >= 0)
+			{
+				std::swap(FreeHeaps[bestMatch], FreeHeaps.back());
+				pHeap = FreeHeaps.back();
+				FreeHeaps.pop_back();
+			}
+
+			if (pHeap == nullptr)
+			{
+				std::unique_ptr<Heap> pNewHeap = std::make_unique<Heap>(pDevice, size);
+				Heaps.push_back(std::move(pNewHeap));
+				pHeap = Heaps.back().get();
+			}
+			return pHeap->Allocate(textureDesc);
+		}
+
+		void Free(const HeapResource* allocation)
+		{
+			FreeHeaps.push_back(allocation->pHeap);
+		}
+
+		ID3D12Device* pDevice;
+		std::vector<std::unique_ptr<Heap>> Heaps;
+		std::vector<Heap*> FreeHeaps;
+	};
+
+
+	Vector2 sizes[] = { {1920,1080},{1920 / 2,1080 / 2},{512,512}, {64, 64}, {128, 128}, {64, 64}, {128, 128} };
+	auto randSize = [&sizes]() { return sizes[2 % ARRAYSIZE(sizes)]; };
+
+	uint64 firstSize = 0;
+	uint64 lastSize = 0;
+
+	ResourceAllocator allocator(m_pDevice.Get());
+	std::array<HeapResource*, 1000> allocations;
+
+	for (int i = 0; i < 50; ++i)
+	{
+		CpuTimer descriptorTimer;
+
+		CpuTimer heapCreateTimer;
+		heapCreateTimer.Begin();
+
+		for (size_t j = 0; j < allocations.size(); ++j)
+		{
+			Vector2 size = randSize();
+			allocations[j] = allocator.Allocate(TextureDesc::Create2D(size.x, size.y, DXGI_FORMAT_R32_FLOAT, TextureFlag::RenderTarget));
+		}
+
+		for (size_t j = 0; j < allocations.size(); ++j)
+		{
+			allocator.Free(allocations[j]);
+		}
+
+		heapCreateTimer.End();
+
+		int resources = 0;
+		uint64 totalSize = 0;
+		for (auto& heap : allocator.Heaps)
+		{
+			resources += heap->Resources.size();
+			totalSize += heap->Size;
+		}
+
+		if (i == 0)
+		{
+			firstSize = totalSize;
+		}
+		else if (i == allocations.size() - 1)
+		{
+			lastSize = totalSize;
+		}
+
+		std::cout << i << "," << heapCreateTimer.GetTime() << "," << (int)allocator.Heaps.size() << "," << resources << "," << totalSize / 1024 / 1024 << std::endl;
+	}
+	E_LOG(Info, "Total Waste: %d MiB", (lastSize - firstSize) / 1024 / 1024);*/
 }
 
 void Graphics::OnResize(int width, int height)
@@ -878,7 +1045,7 @@ void Graphics::OnResize(int width, int height)
 
 	m_pMSAANormals->Create(TextureDesc::CreateRenderTarget(width, height, DXGI_FORMAT_R32G32B32A32_FLOAT, TextureFlag::RenderTarget, m_SampleCount));
 	m_pNormals->Create(TextureDesc::Create2D(width, height, DXGI_FORMAT_R32G32B32A32_FLOAT, TextureFlag::ShaderResource));
-	m_pAmbientOcclusion->Create(TextureDesc::CreateRenderTarget(Math::DivideAndRoundUp(width, 2), Math::DivideAndRoundUp(height, 2), DXGI_FORMAT_R8_UNORM, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource | TextureFlag::RenderTarget));
+	m_pAmbientOcclusion->Create(TextureDesc::CreateRenderTarget(Math::DivideAndRoundUp(width, 4), Math::DivideAndRoundUp(height, 4), DXGI_FORMAT_R8_UNORM, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource | TextureFlag::RenderTarget));
 
 	m_pCamera->SetDirty();
 

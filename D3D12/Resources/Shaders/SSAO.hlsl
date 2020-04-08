@@ -62,14 +62,13 @@ void CSMain(CS_INPUT input)
         float3 vpos = viewPos.xyz + mul(cRandomVectors[i].xyz, TBN) * cAoRadius;
         float4 newTexCoord = mul(float4(vpos, 1), cProjection);
         newTexCoord.xyz /= newTexCoord.w;
-        newTexCoord.xyz = newTexCoord.xyz * 0.5f + 0.5f;
+        newTexCoord.xy = newTexCoord.xy * float2(0.5f, -0.5f) + float2(0.5f, 0.5f);
         if(newTexCoord.x >= 0 && newTexCoord.x <= 1 && newTexCoord.y >= 0 && newTexCoord.y <= 1)
         {
-            newTexCoord.y = 1 - newTexCoord.y;
-            float projectedDepth = tDepthTexture.SampleLevel(sSampler, newTexCoord.xy, 0).r;
-            float4 depthVpos = ScreenToView(float4(newTexCoord.xy, projectedDepth, 1), float2(1, 1), cProjectionInverse);
-            const float depthDiscontinuity = 1 - saturate(abs(newTexCoord.w - depthVpos.z) * 0.2f);
-            occlusion += depthDiscontinuity * (vpos.z >= depthVpos.z + cAoDepthThreshold ? 1 : 0);
+            float sampleDepth = tDepthTexture.SampleLevel(sSampler, newTexCoord.xy, 0).r;
+            float4 depthVpos = ScreenToView(float4(newTexCoord.xy, sampleDepth, 1), float2(1, 1), cProjectionInverse);
+            float rangeCheck = smoothstep(0.0f, 1.0f, cAoRadius / (viewPos.z - depthVpos.z));
+            occlusion += (vpos.z >= depthVpos.z + cAoDepthThreshold) * rangeCheck;
         }
     }
     occlusion = occlusion / cAoSamples;

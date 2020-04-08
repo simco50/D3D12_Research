@@ -95,7 +95,7 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 
 	std::string dirPath = Paths::GetDirectoryPath(pFilePath);
 
-	auto loadTexture = [pGraphics, pContext](const char* basePath, aiMaterial* pMaterial, aiTextureType type, bool srgb)
+	auto loadTexture = [pGraphics, pContext](const char* basePath, const aiMaterial* pMaterial, aiTextureType type, bool srgb)
 	{
 		std::unique_ptr<Texture> pTex;
 		aiString path;
@@ -106,7 +106,7 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 		{
 			std::string p = path.C_Str();
 			std::stringstream str;
-			str << basePath << "/" << p;
+			str << basePath << p;
 			success = pTex->Create(pContext, str.str().c_str(), srgb);
 		}
 		if(!success)
@@ -132,11 +132,12 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 	for (uint32 i = 0; i < pScene->mNumMaterials; ++i)
 	{
 		Material& m = m_Materials[i];
-		m.pDiffuseTexture = loadTexture(dirPath.c_str(), pScene->mMaterials[i], aiTextureType_DIFFUSE, true);
-		m.pNormalTexture = loadTexture(dirPath.c_str(), pScene->mMaterials[i], aiTextureType_NORMALS, false);
-		m.pSpecularTexture = loadTexture(dirPath.c_str(), pScene->mMaterials[i], aiTextureType_SPECULAR, false);
+		const aiMaterial* pMat = pScene->mMaterials[i];
+		m.pDiffuseTexture = loadTexture(dirPath.c_str(), pMat, aiTextureType_DIFFUSE, true);
+		m.pNormalTexture = loadTexture(dirPath.c_str(), pMat, aiTextureType_NORMALS, false);
+		m.pSpecularTexture = loadTexture(dirPath.c_str(), pMat, aiTextureType_SPECULAR, false);
 		aiString p;
-		m.IsTransparent = pScene->mMaterials[i]->GetTexture(aiTextureType_OPACITY, 0, &p) == aiReturn_SUCCESS;
+		m.IsTransparent = pMat->GetTexture(aiTextureType_OPACITY, 0, &p) == aiReturn_SUCCESS;
 	}
 
 	return true;

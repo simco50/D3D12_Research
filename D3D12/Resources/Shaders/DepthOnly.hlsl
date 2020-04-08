@@ -30,18 +30,14 @@ PSInput VSMain(VSInput input)
 {
 	PSInput result = (PSInput)0;
 	result.position = mul(float4(input.position, 1.0f), WorldViewProjection);
-#ifdef ALPHA_BLEND
 	result.texCoord = input.texCoord;
-#endif
 	return result;
 }
 
-#ifdef ALPHA_BLEND
 void PSMain(PSInput input)
 {
-	if(tAlphaTexture.Sample(sAlphaSampler, input.texCoord).a == 0.0f)
+	if(tAlphaTexture.Sample(sAlphaSampler, input.texCoord).a < 0.5f)
 	{
 		discard;
 	}
 }
-#endif

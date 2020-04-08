@@ -21,12 +21,12 @@ void CpuTimer::End()
 {
 	LARGE_INTEGER end;
 	QueryPerformanceCounter(&end);
-	m_EndTime = end.QuadPart;
+	m_TotalTime += (float)(end.QuadPart - m_StartTime)* Profiler::Instance()->GetSecondsPerCpuTick() * 1000.0f;
 }
 
 float CpuTimer::GetTime() const
 {
-	return (float)(m_EndTime - m_StartTime) * Profiler::Instance()->GetSecondsPerCpuTick() * 1000.0f;
+	return m_TotalTime;
 }
 
 GpuTimer::GpuTimer() 
