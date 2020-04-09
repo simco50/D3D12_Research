@@ -209,3 +209,33 @@ float Square(float x)
 {
     return x * x;
 }
+
+//This is still not totally exact as pow() has imprecisions
+float SrgbToLinear(float y)
+{
+    if(y <= 0.04045f)
+    {
+        return y / 12.92f;
+    }
+    return pow((y + 0.055f) / 1.055f, 2.4f);
+}
+
+float SrgbToLinearFast(float y)
+{
+    return pow(y, 2.2f);
+}
+
+//This is still not totally exact as pow() has imprecisions
+float LinearToSrgb(float x)
+{
+    if(x <= 0.00313008)
+    {
+        return 12.92f * x;
+    }
+    return 1.055f * pow(x, 1.0f/ 2.4f) - 0.055f;
+}
+
+float LinearToSrgbFast(float x)
+{
+    return pow(x, 1.0f / 2.2f);
+}

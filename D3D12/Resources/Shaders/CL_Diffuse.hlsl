@@ -113,7 +113,7 @@ float4 PSMain(PSInput input) : SV_TARGET
 	float3 specularColor = ComputeF0(specular.r, baseColor.rgb, metalness);
 
 	float3x3 TBN = float3x3(normalize(input.tangent), normalize(input.bitangent), normalize(input.normal));
-	float3 N = TangentSpaceNormalMapping(tNormalTexture, sDiffuseSampler, TBN, input.texCoord, false);
+	float3 N = TangentSpaceNormalMapping(tNormalTexture, sDiffuseSampler, TBN, input.texCoord, true);
 	float3 V = normalize(cViewInverse[3].xyz - input.positionWS.xyz);
 
 	LightResult lighting = DoLight(input.position, input.positionVS.xyz, input.positionWS.xyz, N, V, diffuseColor, specularColor, r);
@@ -122,7 +122,7 @@ float4 PSMain(PSInput input) : SV_TARGET
 
 	//Constant ambient
 	float ao = tAO.SampleLevel(sDiffuseSampler, (float2)input.position.xy / cScreenDimensions, 0).r;
-	color += ApplyAmbientLight(diffuseColor, ao, 10.0f);
+	color += ApplyAmbientLight(diffuseColor, ao, 0.1f);
 
 	return float4(color, baseColor.a);
 }

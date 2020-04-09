@@ -108,7 +108,7 @@ float4 PSMain(PSInput input) : SV_TARGET
 	float3 specularColor = ComputeF0(specular.r, baseColor.rgb, metalness);
 
 	float3x3 TBN = float3x3(normalize(input.tangent), normalize(input.bitangent), normalize(input.normal));
-	float3 N = TangentSpaceNormalMapping(tNormalTexture, sDiffuseSampler, TBN, input.texCoord, false);
+	float3 N = TangentSpaceNormalMapping(tNormalTexture, sDiffuseSampler, TBN, input.texCoord, true);
 	float3 V = normalize(cViewInverse[3].xyz - input.positionWS);
 
 	LightResult lighting = DoLight(input.position, input.positionWS, N, V, diffuseColor, specularColor, r);

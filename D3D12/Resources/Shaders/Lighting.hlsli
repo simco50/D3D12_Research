@@ -26,9 +26,9 @@ float DirectionalAttenuation(float3 L, float3 direction, float cosUmbra, float c
 float RadialAttenuation(float3 L, float range)
 {
 	float distSq = dot(L, L);
-	float rangeSq = Square(range);
+	float distanceAttenuation = 1 / (distSq + 1);
 	float windowing = Square(saturate(1 - Square(distSq * Square(rcp(range)))));
-	return (rangeSq / (distSq + 1)) * windowing;
+	return distanceAttenuation * windowing;
 }
 
 float3 TangentSpaceNormalMapping(Texture2D normalTexture, SamplerState normalSampler, float3x3 TBN, float2 tex, bool invertY)
