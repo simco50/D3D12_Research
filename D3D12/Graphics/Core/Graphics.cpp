@@ -89,9 +89,10 @@ void Graphics::RandomizeLights(int count)
 	sceneBounds.Extents = Vector3(140, 70, 60);
 
 	int lightIndex = 0;
-	Vector3 Dir(-300, -300, -300);
-	Dir.Normalize();
-	m_Lights[lightIndex] = Light::Directional(Vector3(300, 300, 300), Dir, 10.0f);
+	Vector3 Position(-150, 160, -10);
+	Vector3 Direction;
+	Position.Normalize(Direction);
+	m_Lights[lightIndex] = Light::Directional(Position, -Direction, 10.0f);
 	m_Lights[lightIndex].ShadowIndex = 0;
 
 	int randomLightsStartIndex = lightIndex + 1;
@@ -130,9 +131,9 @@ void Graphics::RandomizeLights(int count)
 	std::sort(m_Lights.begin() + randomLightsStartIndex, m_Lights.end(), [](const Light& a, const Light& b) { return (int)a.LightType < (int)b.LightType; });
 
 	IdleGPU();
-	if (m_pLightBuffer->GetDesc().ElementCount != count)
+	if (m_pLightBuffer->GetDesc().ElementCount != m_Lights.size())
 	{
-		m_pLightBuffer->Create(BufferDesc::CreateStructured(count, sizeof(Light)));
+		m_pLightBuffer->Create(BufferDesc::CreateStructured(m_Lights.size(), sizeof(Light)));
 	}
 	CommandContext* pContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 	m_pLightBuffer->SetData(pContext, m_Lights.data(), sizeof(Light) * m_Lights.size());
