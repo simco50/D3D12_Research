@@ -31,7 +31,7 @@ public:
 	float GetNear() const { return m_NearPlane; }
 	float GetFar() const { return m_FarPlane; }
 
-	float SetFoV() const { return m_FoV; }
+	float GetFoV() const { return m_FoV; }
 
 	const Matrix& GetView() const;
 	const Matrix& GetProjection() const;

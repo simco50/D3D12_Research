@@ -65,6 +65,7 @@ void DebugRenderer::Render(RGGraph& graph)
 			return [=](CommandContext& context, const RGPassResources& resources)
 			{
 				context.InsertResourceBarrier(m_pGraphics->GetDepthStencil(), D3D12_RESOURCE_STATE_DEPTH_WRITE);
+				context.InsertResourceBarrier(m_pGraphics->GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RENDER_TARGET);
 
 				context.BeginRenderPass(RenderPassInfo(m_pGraphics->GetCurrentRenderTarget(), RenderPassAccess::Load_Store, m_pGraphics->GetDepthStencil(), RenderPassAccess::Load_Store));
 

@@ -62,14 +62,13 @@ bool ShaderCompiler::CompileDxc(const char* pIdentifier, const char* pShaderSour
 		ToWidechar(pShaderSymbolsPath, symbolsPath, 256);
 		arguments.push_back(L"/Fd");
 		arguments.push_back(symbolsPath);
+		arguments.push_back(L"-Qstrip_reflect");
 	}
 
 	arguments.push_back(DXC_ARG_WARNINGS_ARE_ERRORS);
 	arguments.push_back(DXC_ARG_DEBUG);
 	arguments.push_back(DXC_ARG_PACK_MATRIX_ROW_MAJOR);
-
-	arguments.push_back(L"-Qstrip_reflect");
-
+	
 	for (size_t i = 0; i < wDefines.size(); ++i)
 	{
 		arguments.push_back(L"-D");
@@ -256,7 +255,10 @@ bool ShaderBase::ProcessSource(const std::string& sourcePath, const std::string&
 			{
 				placedLineDirective = true;
 #if USE_SHADER_LINE_DIRECTIVE
-				output << "#line " << linesProcessed + 1 << " \"" << filePath << "\"\n";
+				if (CommandLine::GetBool("debugshaders") == false)
+				{
+					output << "#line " << linesProcessed + 1 << " \"" << filePath << "\"\n";
+				}
 #endif
 			}
 			output << line << '\n';
