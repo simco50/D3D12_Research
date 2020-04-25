@@ -231,33 +231,32 @@ void Graphics::Update()
 			max.z = Math::Max(point.z, max.z);
 		}
 
-		{
-			//DEBUG STUFF
-			std::vector<Vector3> stuff;
-			stuff.push_back(Vector3::Transform(Vector3(max.x, max.y, max.z), lightInverseMatrix));
-			stuff.push_back(Vector3::Transform(Vector3(min.x, max.y, max.z), lightInverseMatrix));
-			stuff.push_back(Vector3::Transform(Vector3(min.x, min.y, max.z), lightInverseMatrix));
-			stuff.push_back(Vector3::Transform(Vector3(max.x, min.y, max.z), lightInverseMatrix));
-			stuff.push_back(Vector3::Transform(Vector3(max.x, max.y, min.z), lightInverseMatrix));
-			stuff.push_back(Vector3::Transform(Vector3(min.x, max.y, min.z), lightInverseMatrix));
-			stuff.push_back(Vector3::Transform(Vector3(min.x, min.y, min.z), lightInverseMatrix));
-			stuff.push_back(Vector3::Transform(Vector3(max.x, min.y, min.z), lightInverseMatrix));
+		/*
+		Bounding sphere
+		Vector3 center = (min + max) / 2;
+		Vector3 extents = (max - min) / 2;
+		float radius = sqrtf(extents.Dot(extents));
 
-			DebugRenderer::Instance().AddLine(stuff[0], stuff[1], Color(0, 0, 1, 1));
-			DebugRenderer::Instance().AddLine(stuff[0], stuff[3], Color(0, 0, 1, 1));
-			DebugRenderer::Instance().AddLine(stuff[1], stuff[2], Color(0, 0, 1, 1));
-			DebugRenderer::Instance().AddLine(stuff[2], stuff[3], Color(0, 0, 1, 1));
+		min.x = center.x - radius;
+		min.y = center.y - radius;
+		max.x = center.x + radius;
+		max.y = center.y + radius;*/
 
-			DebugRenderer::Instance().AddLine(stuff[4], stuff[5], Color(0, 0, 1, 1));
-			DebugRenderer::Instance().AddLine(stuff[4], stuff[7], Color(0, 0, 1, 1));
-			DebugRenderer::Instance().AddLine(stuff[5], stuff[6], Color(0, 0, 1, 1));
-			DebugRenderer::Instance().AddLine(stuff[6], stuff[7], Color(0, 0, 1, 1));
+		Vector3 viewSize = max - min;
+		Vector3 unitsPerPixel = viewSize / (m_pShadowMap->GetWidth() / 2);
+		min.x /= unitsPerPixel.x;
+		min.x = floor(min.x);
+		min.x *= unitsPerPixel.x;
+		min.y /= unitsPerPixel.y;
+		min.y = floor(min.y);
+		min.y *= unitsPerPixel.y;
 
-			DebugRenderer::Instance().AddLine(stuff[0], stuff[4], Color(0, 0, 1, 1));
-			DebugRenderer::Instance().AddLine(stuff[1], stuff[5], Color(0, 0, 1, 1));
-			DebugRenderer::Instance().AddLine(stuff[2], stuff[6], Color(0, 0, 1, 1));
-			DebugRenderer::Instance().AddLine(stuff[3], stuff[7], Color(0, 0, 1, 1));
-		}
+		max.x /= unitsPerPixel.x;
+		max.x = floor(max.x);
+		max.x *= unitsPerPixel.x;
+		max.y /= unitsPerPixel.y;
+		max.y = floor(max.y);
+		max.y *= unitsPerPixel.y;
 
 		Matrix projectionMatrix = Math::CreateOrthographicOffCenterMatrix(min.x, max.x, min.y, max.y, max.z, 0);
 
@@ -272,10 +271,6 @@ void Graphics::Update()
 	lightData.ShadowMapOffsets[3] = Vector4(0.5f, 0.5f, 0.5f, 0);
 
 	DebugRenderer::Instance().AddLight(m_Lights[0]);
-
-	BoundingFrustum f = gCam.GetFrustum();
-
-	DebugRenderer::Instance().AddFrustrum(f, Color(1, 0, 0, 0));
 
 	////////////////////////////////
 	// LET THE RENDERING BEGIN!
