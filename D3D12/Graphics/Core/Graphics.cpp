@@ -38,8 +38,10 @@
 #define GPU_VALIDATION 0
 #endif
 
+Camera gCam(nullptr);
+
 const DXGI_FORMAT Graphics::DEPTH_STENCIL_FORMAT = DXGI_FORMAT_D32_FLOAT;
-const DXGI_FORMAT Graphics::DEPTH_STENCIL_SHADOW_FORMAT = DXGI_FORMAT_D16_UNORM;
+const DXGI_FORMAT Graphics::DEPTH_STENCIL_SHADOW_FORMAT = DXGI_FORMAT_D32_FLOAT;
 const DXGI_FORMAT Graphics::RENDER_TARGET_FORMAT = DXGI_FORMAT_R11G11B10_FLOAT;
 const DXGI_FORMAT Graphics::SWAPCHAIN_FORMAT = DXGI_FORMAT_R8G8B8A8_UNORM;
 
@@ -72,6 +74,7 @@ void Graphics::Initialize(HWND window)
 	m_pCamera->SetNearPlane(500.0f);
 	m_pCamera->SetFarPlane(10.0f);
 	m_pCamera->SetViewport(0, 0, 1, 1);
+	gCam = *m_pCamera;
 
 	InitD3D();
 	InitializeAssets();
@@ -82,7 +85,7 @@ void Graphics::Initialize(HWND window)
 
 void Graphics::RandomizeLights(int count)
 {
-	m_Lights.resize(count);
+	m_Lights.resize(1);
 
 	BoundingBox sceneBounds;
 	sceneBounds.Center = Vector3(0, 70, 0);
@@ -92,7 +95,7 @@ void Graphics::RandomizeLights(int count)
 	Vector3 Position(-150, 160, -10);
 	Vector3 Direction;
 	Position.Normalize(Direction);
-	m_Lights[lightIndex] = Light::Directional(Position, -Direction, 10.0f);
+	m_Lights[lightIndex] = Light::Directional(Position, -Direction, 1.0f);
 	m_Lights[lightIndex].ShadowIndex = 0;
 
 	int randomLightsStartIndex = lightIndex + 1;
@@ -114,10 +117,10 @@ void Graphics::RandomizeLights(int count)
 		switch (type)
 		{
 		case Light::Type::Point:
-			m_Lights[i] = Light::Point(position, range, 3000.0f, color);
+			m_Lights[i] = Light::Point(position, range, 30.0f, color);
 			break;
 		case Light::Type::Spot:
-			m_Lights[i] = Light::Spot(position, range, Math::RandVector(), angle, angle - Math::RandomRange(0.0f, angle / 2), 3000.0f, color);
+			m_Lights[i] = Light::Spot(position, range, Math::RandVector(), angle, angle - Math::RandomRange(0.0f, angle / 2), 30.0f, color);
 			break;
 		case Light::Type::Directional:
 		case Light::Type::MAX:
@@ -142,6 +145,9 @@ void Graphics::RandomizeLights(int count)
 
 void Graphics::Update()
 {
+	BeginFrame();
+	m_pImGuiRenderer->Update();
+
 	PIX_CAPTURE_SCOPE();
 	PROFILE_BEGIN("Update Game State");
 
@@ -166,8 +172,6 @@ void Graphics::Update()
 
 	// SHADOW MAP PARTITIONING
 	/////////////////////////////////////////
-
-
 	Matrix projection = Math::CreateOrthographicMatrix(512, 512, 10000, 0.1f);
 
 	m_ShadowCasters = 0;
@@ -178,14 +182,106 @@ void Graphics::Update()
 	lightData.ShadowMapOffsets[m_ShadowCasters].z = 1.0f;
 	++m_ShadowCasters;
 
+	gCam = *m_pCamera;
+
+	uint32 numCascades = 4;
+	float cascadeRatio = pow(gCam.GetNear() / gCam.GetFar(), 1.0f / numCascades);
+	std::vector<float> splits;
+	splits.push_back(gCam.GetFar());
+	for (uint32 i = 1; i <= numCascades; ++i)
+	{
+		splits.push_back(splits[i - 1] * cascadeRatio);
+	}
+
+	Matrix lightMatrix = XMMatrixLookToLH(m_Lights[0].Position, m_Lights[0].Direction, Vector3::Up);
+	Matrix lightInverseMatrix = XMMatrixInverse(nullptr, lightMatrix);
+
+	for (uint32 i = 0; i < numCascades; ++i)
+	{
+		float minZ = splits[i];
+		float maxZ = splits[i + 1];
+		float minY = minZ * tan(gCam.GetFoV() / 2);
+		float maxY = maxZ * tan(gCam.GetFoV() / 2);
+		float minX = minZ * tan((gCam.GetFoV() * gCam.GetViewport().GetAspect()) / 2);
+		float maxX = maxZ * tan((gCam.GetFoV() * gCam.GetViewport().GetAspect()) / 2);
+		Vector3 points[] = {
+			Vector3(-minX, -minY, minZ),
+			Vector3(-minX, minY, minZ),
+			Vector3(minX, minY, minZ),
+			Vector3(minX, -minY, minZ),
+			Vector3(-maxX, -maxY, maxZ),
+			Vector3(-maxX, maxY, maxZ),
+			Vector3(maxX, maxY, maxZ),
+			Vector3(maxX, -maxY, maxZ),
+		};
+
+		Vector3 min(1000000);
+		Vector3 max(-1000000);
+
+		for (Vector3& point : points)
+		{
+			point = Vector3::Transform(point, gCam.GetViewInverse());
+			point = Vector3::Transform(point, lightMatrix);
+
+			min.x = Math::Min(point.x, min.x);
+			max.x = Math::Max(point.x, max.x);
+			min.y = Math::Min(point.y, min.y);
+			max.y = Math::Max(point.y, max.y);
+			min.z = Math::Min(point.z, min.z);
+			max.z = Math::Max(point.z, max.z);
+		}
+
+		{
+			//DEBUG STUFF
+			std::vector<Vector3> stuff;
+			stuff.push_back(Vector3::Transform(Vector3(max.x, max.y, max.z), lightInverseMatrix));
+			stuff.push_back(Vector3::Transform(Vector3(min.x, max.y, max.z), lightInverseMatrix));
+			stuff.push_back(Vector3::Transform(Vector3(min.x, min.y, max.z), lightInverseMatrix));
+			stuff.push_back(Vector3::Transform(Vector3(max.x, min.y, max.z), lightInverseMatrix));
+			stuff.push_back(Vector3::Transform(Vector3(max.x, max.y, min.z), lightInverseMatrix));
+			stuff.push_back(Vector3::Transform(Vector3(min.x, max.y, min.z), lightInverseMatrix));
+			stuff.push_back(Vector3::Transform(Vector3(min.x, min.y, min.z), lightInverseMatrix));
+			stuff.push_back(Vector3::Transform(Vector3(max.x, min.y, min.z), lightInverseMatrix));
+
+			DebugRenderer::Instance().AddLine(stuff[0], stuff[1], Color(0, 0, 1, 1));
+			DebugRenderer::Instance().AddLine(stuff[0], stuff[3], Color(0, 0, 1, 1));
+			DebugRenderer::Instance().AddLine(stuff[1], stuff[2], Color(0, 0, 1, 1));
+			DebugRenderer::Instance().AddLine(stuff[2], stuff[3], Color(0, 0, 1, 1));
+
+			DebugRenderer::Instance().AddLine(stuff[4], stuff[5], Color(0, 0, 1, 1));
+			DebugRenderer::Instance().AddLine(stuff[4], stuff[7], Color(0, 0, 1, 1));
+			DebugRenderer::Instance().AddLine(stuff[5], stuff[6], Color(0, 0, 1, 1));
+			DebugRenderer::Instance().AddLine(stuff[6], stuff[7], Color(0, 0, 1, 1));
+
+			DebugRenderer::Instance().AddLine(stuff[0], stuff[4], Color(0, 0, 1, 1));
+			DebugRenderer::Instance().AddLine(stuff[1], stuff[5], Color(0, 0, 1, 1));
+			DebugRenderer::Instance().AddLine(stuff[2], stuff[6], Color(0, 0, 1, 1));
+			DebugRenderer::Instance().AddLine(stuff[3], stuff[7], Color(0, 0, 1, 1));
+		}
+
+		Matrix projectionMatrix = Math::CreateOrthographicOffCenterMatrix(min.x, max.x, min.y, max.y, max.z, 0);
+
+		lightData.LightViewProjections[i] = lightMatrix * projectionMatrix;
+		lightData.CascadeDepths[i] = splits[i + 1];
+	}
+	m_ShadowCasters = 4;
+
+	lightData.ShadowMapOffsets[0] = Vector4(0.0f, 0, 0.5f, 0);
+	lightData.ShadowMapOffsets[1] = Vector4(0.5f, 0, 0.5f, 0);
+	lightData.ShadowMapOffsets[2] = Vector4(0.0f, 0.5f, 0.5f, 0);
+	lightData.ShadowMapOffsets[3] = Vector4(0.5f, 0.5f, 0.5f, 0);
+
+	DebugRenderer::Instance().AddLight(m_Lights[0]);
+
+	BoundingFrustum f = gCam.GetFrustum();
+
+	DebugRenderer::Instance().AddFrustrum(f, Color(1, 0, 0, 0));
+
 	////////////////////////////////
 	// LET THE RENDERING BEGIN!
 	////////////////////////////////
 
 	PROFILE_END();
-
-	BeginFrame();
-	m_pImGuiRenderer->Update();
 
 	RGGraph graph(this);
 	struct MainData
@@ -1096,19 +1192,35 @@ void Graphics::UpdateImGui()
 {
 	m_FrameTimes[m_Frame % m_FrameTimes.size()] = GameTimer::DeltaTime();
 
-	ImGui::SetNextWindowPos(ImVec2(300, 0), 0, ImVec2(0, 0));
-	ImGui::Begin("Ambient Occlusion");
-	Vector2 image((float)m_pAmbientOcclusion->GetWidth(), (float)m_pAmbientOcclusion->GetHeight());
-	Vector2 windowSize(ImGui::GetContentRegionAvail().x, ImGui::GetContentRegionAvail().y);
-	float width = windowSize.x;
-	float height = windowSize.x * image.y / image.x;
-	if (image.x / windowSize.x < image.y / windowSize.y)
 	{
-		width = image.x / image.y * windowSize.y;
-		height = windowSize.y;
+		ImGui::SetNextWindowPos(ImVec2(300, 0), 0, ImVec2(0, 0));
+		ImGui::Begin("Ambient Occlusion");
+		Vector2 image((float)m_pAmbientOcclusion->GetWidth(), (float)m_pAmbientOcclusion->GetHeight());
+		Vector2 windowSize(ImGui::GetContentRegionAvail().x, ImGui::GetContentRegionAvail().y);
+		float width = windowSize.x;
+		float height = windowSize.x * image.y / image.x;
+		if (image.x / windowSize.x < image.y / windowSize.y)
+		{
+			width = image.x / image.y * windowSize.y;
+			height = windowSize.y;
+		}
+		ImGui::Image(m_pAmbientOcclusion.get(), ImVec2(width, height));
+		ImGui::End();
 	}
-	ImGui::Image(m_pAmbientOcclusion.get(), ImVec2(width, height));
-	ImGui::End();
+	{
+		ImGui::Begin("Shadow Map");
+		Vector2 image((float)m_pShadowMap->GetWidth(), (float)m_pShadowMap->GetHeight());
+		Vector2 windowSize(ImGui::GetContentRegionAvail().x, ImGui::GetContentRegionAvail().y);
+		float width = windowSize.x;
+		float height = windowSize.x * image.y / image.x;
+		if (image.x / windowSize.x < image.y / windowSize.y)
+		{
+			width = image.x / image.y * windowSize.y;
+			height = windowSize.y;
+		}
+		ImGui::Image(m_pShadowMap.get(), ImVec2(width, height));
+		ImGui::End();
+	}
 
 	ImGui::SetNextWindowPos(ImVec2(0, 0), 0, ImVec2(0, 0));
 	ImGui::SetNextWindowSize(ImVec2(300, (float)m_WindowHeight));
@@ -1117,6 +1229,11 @@ void Graphics::UpdateImGui()
 	ImGui::SameLine(100.0f);
 	ImGui::Text("FPS: %.1f", 1.0f / GameTimer::DeltaTime());
 	ImGui::PlotLines("Frametime", m_FrameTimes.data(), (int)m_FrameTimes.size(), m_Frame % m_FrameTimes.size(), 0, 0.0f, 0.03f, ImVec2(200, 100));
+
+	if (ImGui::Button("Update Camera"))
+	{
+		gCam = *m_pCamera;
+	}
 
 	if (ImGui::TreeNodeEx("Lighting", ImGuiTreeNodeFlags_DefaultOpen))
 	{

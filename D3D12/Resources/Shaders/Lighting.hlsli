@@ -9,6 +9,7 @@ cbuffer LightData : register(b2)
 {
 	float4x4 cLightViewProjections[MAX_SHADOW_CASTERS];
 	float4 cShadowMapOffsets[MAX_SHADOW_CASTERS];
+	float4 cCascadeDepths;
 }
 
 // Angle >= Umbra -> 0
@@ -102,19 +103,48 @@ float3 ApplyAmbientLight(float3 diffuse, float ao, float3 lightColor)
     return ao * diffuse * lightColor;
 }
 
-LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, float roughness, float3 wPos, float3 N, float3 V)
+static float4 colors[4] = {
+	float4(1,0,0,1),
+	float4(0,1,0,1),
+	float4(0,0,1,1),
+	float4(1,0,1,1),
+};
+
+LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, float roughness, float3 wPos, float3 N, float3 V, float clipZ)
 {
 	float attenuation = GetAttenuation(light, wPos);
 	float3 L = normalize(light.Position - wPos);
 	LightResult result = DefaultLitBxDF(specularColor, roughness, diffuseColor, N, V, L, attenuation);
 
 #ifdef SHADOW
-	if(light.ShadowIndex >= 0)
+
+
+	if(light.Type == LIGHT_DIRECTIONAL)
+	{
+		int cascadeIndex = 0;
+		for(int i = 0; i < 4; ++i)
+		{
+			if(clipZ <= cCascadeDepths[i])
+			{
+				cascadeIndex = i;
+				break;
+			}
+		}
+		float s = DoShadow(wPos, cascadeIndex);
+		result.Diffuse *= s;
+		result.Specular *= s;
+
+#if 0
+		result.Diffuse += 0.3f * colors[cascadeIndex].xyz;
+#endif
+	}
+
+	/*if(light.ShadowIndex >= 0)
 	{
 		float s = DoShadow(wPos, light.ShadowIndex);
 		result.Diffuse *= s;
 		result.Specular *= s;
-	}
+	}*/
 #endif
 
 	float4 color = light.GetColor();

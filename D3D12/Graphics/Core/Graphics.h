@@ -35,6 +35,7 @@ struct ShadowData
 {
 	Matrix LightViewProjections[MAX_SHADOW_CASTERS];
 	Vector4 ShadowMapOffsets[MAX_SHADOW_CASTERS];
+	float CascadeDepths[4];
 };
 
 enum class RenderPath
