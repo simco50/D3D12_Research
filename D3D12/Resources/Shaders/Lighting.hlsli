@@ -118,33 +118,23 @@ LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, floa
 
 #ifdef SHADOW
 
-
 	if(light.Type == LIGHT_DIRECTIONAL)
 	{
-		int cascadeIndex = 0;
-		for(int i = 0; i < 4; ++i)
-		{
-			if(clipZ <= cCascadeDepths[i])
-			{
-				cascadeIndex = i;
-				break;
-			}
-		}
+		float4 splits = clipZ > cCascadeDepths;
+		int cascadeIndex = dot(splits, float4(1, 1, 1, 1));
 		float s = DoShadow(wPos, cascadeIndex);
 		result.Diffuse *= s;
 		result.Specular *= s;
-
 #if 0
 		result.Diffuse += 0.3f * colors[cascadeIndex].xyz;
 #endif
 	}
-
-	/*if(light.ShadowIndex >= 0)
+	else if(light.ShadowIndex >= 0)
 	{
 		float s = DoShadow(wPos, light.ShadowIndex);
 		result.Diffuse *= s;
 		result.Specular *= s;
-	}*/
+	}
 #endif
 
 	float4 color = light.GetColor();
