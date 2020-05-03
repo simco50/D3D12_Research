@@ -110,7 +110,7 @@ static float4 colors[4] = {
 	float4(1,0,1,1),
 };
 
-LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, float roughness, float3 wPos, float3 N, float3 V, float clipZ)
+LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, float roughness, float4 pos, float3 wPos, float3 N, float3 V, float clipPosZ)
 {
 	float attenuation = GetAttenuation(light, wPos);
 	float3 L = normalize(light.Position - wPos);
@@ -120,14 +120,17 @@ LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, floa
 
 	if(light.Type == LIGHT_DIRECTIONAL)
 	{
-		float4 splits = clipZ > cCascadeDepths;
+		float4 splits = clipPosZ < cCascadeDepths;
 		int cascadeIndex = dot(splits, float4(1, 1, 1, 1));
-		float s = DoShadow(wPos, cascadeIndex);
+		float s = DoShadow(wPos, light.ShadowIndex + cascadeIndex);
 		result.Diffuse *= s;
 		result.Specular *= s;
-#if 0
-		result.Diffuse += 0.3f * colors[cascadeIndex].xyz;
+
+#define VISUALIZE_CASCADES 0
+#if VISUALIZE_CASCADES
+		result.Diffuse += 0.2f * colors[cascadeIndex].xyz;
 #endif
+
 	}
 	else if(light.ShadowIndex >= 0)
 	{

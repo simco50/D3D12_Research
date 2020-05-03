@@ -38,8 +38,6 @@
 #define GPU_VALIDATION 0
 #endif
 
-Camera gCam(nullptr);
-
 const DXGI_FORMAT Graphics::DEPTH_STENCIL_FORMAT = DXGI_FORMAT_D32_FLOAT;
 const DXGI_FORMAT Graphics::DEPTH_STENCIL_SHADOW_FORMAT = DXGI_FORMAT_D32_FLOAT;
 const DXGI_FORMAT Graphics::RENDER_TARGET_FORMAT = DXGI_FORMAT_R11G11B10_FLOAT;
@@ -52,7 +50,7 @@ float g_MinLogLuminance = -10;
 float g_MaxLogLuminance = 2;
 float g_Tau = 10;
 
-bool g_ShowRaytraced = true;
+bool g_ShowRaytraced = false;
 
 Graphics::Graphics(uint32 width, uint32 height, int sampleCount /*= 1*/)
 	: m_WindowWidth(width), m_WindowHeight(height), m_SampleCount(sampleCount)
@@ -74,7 +72,6 @@ void Graphics::Initialize(HWND window)
 	m_pCamera->SetNearPlane(500.0f);
 	m_pCamera->SetFarPlane(10.0f);
 	m_pCamera->SetViewport(0, 0, 1, 1);
-	gCam = *m_pCamera;
 
 	InitD3D();
 	InitializeAssets();
@@ -136,7 +133,7 @@ void Graphics::RandomizeLights(int count)
 	IdleGPU();
 	if (m_pLightBuffer->GetDesc().ElementCount != m_Lights.size())
 	{
-		m_pLightBuffer->Create(BufferDesc::CreateStructured(m_Lights.size(), sizeof(Light)));
+		m_pLightBuffer->Create(BufferDesc::CreateStructured((int)m_Lights.size(), sizeof(Light)));
 	}
 	CommandContext* pContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 	m_pLightBuffer->SetData(pContext, m_Lights.data(), sizeof(Light) * m_Lights.size());
@@ -172,25 +169,18 @@ void Graphics::Update()
 
 	// SHADOW MAP PARTITIONING
 	/////////////////////////////////////////
-	Matrix projection = Math::CreateOrthographicMatrix(512, 512, 10000, 0.1f);
 
 	m_ShadowCasters = 0;
 	ShadowData lightData;
-	lightData.LightViewProjections[m_ShadowCasters] = Matrix(XMMatrixLookAtLH(m_Lights[0].Position, Vector3(), Vector3(0.0f, 1.0f, 0.0f))) * projection;
-	lightData.ShadowMapOffsets[m_ShadowCasters].x = 0.0f;
-	lightData.ShadowMapOffsets[m_ShadowCasters].y = 0.0f;
-	lightData.ShadowMapOffsets[m_ShadowCasters].z = 1.0f;
-	++m_ShadowCasters;
-
-	gCam = *m_pCamera;
 
 	uint32 numCascades = 4;
-	float cascadeRatio = pow(gCam.GetNear() / gCam.GetFar(), 1.0f / numCascades);
-	std::vector<float> splits;
-	splits.push_back(gCam.GetFar());
+	constexpr uint32 MAX_CASCADES = 4;
+	float zPartitioningRatio = pow(m_pCamera->GetNear() / m_pCamera->GetFar(), 1.0f / numCascades);
+	std::array<float, MAX_CASCADES + 1> cascadeDepths;
+	cascadeDepths[0] = m_pCamera->GetFar();
 	for (uint32 i = 1; i <= numCascades; ++i)
 	{
-		splits.push_back(splits[i - 1] * cascadeRatio);
+		cascadeDepths[i] = cascadeDepths[i - 1] * zPartitioningRatio;
 	}
 
 	Matrix lightMatrix = XMMatrixLookToLH(m_Lights[0].Position, m_Lights[0].Direction, Vector3::Up);
@@ -198,12 +188,12 @@ void Graphics::Update()
 
 	for (uint32 i = 0; i < numCascades; ++i)
 	{
-		float minZ = splits[i];
-		float maxZ = splits[i + 1];
-		float minY = minZ * tan(gCam.GetFoV() / 2);
-		float maxY = maxZ * tan(gCam.GetFoV() / 2);
-		float minX = minZ * tan((gCam.GetFoV() * gCam.GetViewport().GetAspect()) / 2);
-		float maxX = maxZ * tan((gCam.GetFoV() * gCam.GetViewport().GetAspect()) / 2);
+		float minZ = cascadeDepths[i];
+		float maxZ = cascadeDepths[i + 1];
+		float minY = minZ * tan(m_pCamera->GetFoV() / 2);
+		float maxY = maxZ * tan(m_pCamera->GetFoV() / 2);
+		float minX = minZ * tan((m_pCamera->GetFoV() * m_pCamera->GetViewport().GetAspect()) / 2);
+		float maxX = maxZ * tan((m_pCamera->GetFoV() * m_pCamera->GetViewport().GetAspect()) / 2);
 		Vector3 points[] = {
 			Vector3(-minX, -minY, minZ),
 			Vector3(-minX, minY, minZ),
@@ -220,7 +210,7 @@ void Graphics::Update()
 
 		for (Vector3& point : points)
 		{
-			point = Vector3::Transform(point, gCam.GetViewInverse());
+			point = Vector3::Transform(point, m_pCamera->GetViewInverse());
 			point = Vector3::Transform(point, lightMatrix);
 
 			min.x = Math::Min(point.x, min.x);
@@ -231,8 +221,8 @@ void Graphics::Update()
 			max.z = Math::Max(point.z, max.z);
 		}
 
-		/*
-		Bounding sphere
+#if 0
+		//Bounding sphere to keep the projection size constant
 		Vector3 center = (min + max) / 2;
 		Vector3 extents = (max - min) / 2;
 		float radius = sqrtf(extents.Dot(extents));
@@ -240,10 +230,12 @@ void Graphics::Update()
 		min.x = center.x - radius;
 		min.y = center.y - radius;
 		max.x = center.x + radius;
-		max.y = center.y + radius;*/
+		max.y = center.y + radius;
+#endif
 
+		//Snap projection to shadowmap texels to avoid flickering edges
 		Vector3 viewSize = max - min;
-		Vector3 unitsPerPixel = viewSize / (m_pShadowMap->GetWidth() / 2);
+		Vector3 unitsPerPixel = viewSize / ((float)m_pShadowMap->GetWidth() / 2);
 		min.x /= unitsPerPixel.x;
 		min.x = floor(min.x);
 		min.x *= unitsPerPixel.x;
@@ -261,16 +253,14 @@ void Graphics::Update()
 		Matrix projectionMatrix = Math::CreateOrthographicOffCenterMatrix(min.x, max.x, min.y, max.y, max.z, 0);
 
 		lightData.LightViewProjections[i] = lightMatrix * projectionMatrix;
-		lightData.CascadeDepths[i] = splits[i + 1];
+		lightData.CascadeDepths[i] = Vector4::Transform(Vector4(0, 0, cascadeDepths[i + 1], 1), m_pCamera->GetProjection()).z;
+		m_ShadowCasters++;
 	}
-	m_ShadowCasters = 4;
 
 	lightData.ShadowMapOffsets[0] = Vector4(0.0f, 0, 0.5f, 0);
 	lightData.ShadowMapOffsets[1] = Vector4(0.5f, 0, 0.5f, 0);
 	lightData.ShadowMapOffsets[2] = Vector4(0.0f, 0.5f, 0.5f, 0);
 	lightData.ShadowMapOffsets[3] = Vector4(0.5f, 0.5f, 0.5f, 0);
-
-	DebugRenderer::Instance().AddLight(m_Lights[0]);
 
 	////////////////////////////////
 	// LET THE RENDERING BEGIN!
@@ -1224,11 +1214,6 @@ void Graphics::UpdateImGui()
 	ImGui::SameLine(100.0f);
 	ImGui::Text("FPS: %.1f", 1.0f / GameTimer::DeltaTime());
 	ImGui::PlotLines("Frametime", m_FrameTimes.data(), (int)m_FrameTimes.size(), m_Frame % m_FrameTimes.size(), 0, 0.0f, 0.03f, ImVec2(200, 100));
-
-	if (ImGui::Button("Update Camera"))
-	{
-		gCam = *m_pCamera;
-	}
 
 	if (ImGui::TreeNodeEx("Lighting", ImGuiTreeNodeFlags_DefaultOpen))
 	{
