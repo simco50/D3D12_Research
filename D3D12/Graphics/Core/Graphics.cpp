@@ -194,7 +194,7 @@ void Graphics::Update()
 		float maxY = maxZ * tan(m_pCamera->GetFoV() / 2);
 		float minX = minZ * tan((m_pCamera->GetFoV() * m_pCamera->GetViewport().GetAspect()) / 2);
 		float maxX = maxZ * tan((m_pCamera->GetFoV() * m_pCamera->GetViewport().GetAspect()) / 2);
-		Vector3 points[] = {
+		Vector3 frustumCorners[] = {
 			Vector3(-minX, -minY, minZ),
 			Vector3(-minX, minY, minZ),
 			Vector3(minX, minY, minZ),
@@ -204,21 +204,17 @@ void Graphics::Update()
 			Vector3(maxX, maxY, maxZ),
 			Vector3(maxX, -maxY, maxZ),
 		};
+		
+		Vector3 min(FLT_MAX);
+		Vector3 max(FLT_MIN);
 
-		Vector3 min(1000000);
-		Vector3 max(-1000000);
-
-		for (Vector3& point : points)
+		for (Vector3& point : frustumCorners)
 		{
 			point = Vector3::Transform(point, m_pCamera->GetViewInverse());
 			point = Vector3::Transform(point, lightMatrix);
 
-			min.x = Math::Min(point.x, min.x);
-			max.x = Math::Max(point.x, max.x);
-			min.y = Math::Min(point.y, min.y);
-			max.y = Math::Max(point.y, max.y);
-			min.z = Math::Min(point.z, min.z);
-			max.z = Math::Max(point.z, max.z);
+			min = Vector3::Min(min, point);
+			max = Vector3::Max(max, point);
 		}
 
 #if 0
@@ -236,19 +232,16 @@ void Graphics::Update()
 		//Snap projection to shadowmap texels to avoid flickering edges
 		Vector3 viewSize = max - min;
 		Vector3 unitsPerPixel = viewSize / ((float)m_pShadowMap->GetWidth() / 2);
-		min.x /= unitsPerPixel.x;
-		min.x = floor(min.x);
-		min.x *= unitsPerPixel.x;
-		min.y /= unitsPerPixel.y;
-		min.y = floor(min.y);
-		min.y *= unitsPerPixel.y;
 
-		max.x /= unitsPerPixel.x;
-		max.x = floor(max.x);
-		max.x *= unitsPerPixel.x;
-		max.y /= unitsPerPixel.y;
-		max.y = floor(max.y);
-		max.y *= unitsPerPixel.y;
+		float farPlane = max.z;
+		DirectX::XMVECTOR _min = min;
+		_min = DirectX::XMVectorDivide(_min, unitsPerPixel);
+		_min = DirectX::XMVectorFloor(_min);
+		min = DirectX::XMVectorMultiply(_min, unitsPerPixel);
+		DirectX::XMVECTOR _max = max;
+		_max = DirectX::XMVectorDivide(_max, unitsPerPixel);
+		_max = DirectX::XMVectorFloor(_max);
+		max = DirectX::XMVectorMultiply(_max, unitsPerPixel);
 
 		Matrix projectionMatrix = Math::CreateOrthographicOffCenterMatrix(min.x, max.x, min.y, max.y, max.z, 0);
 
