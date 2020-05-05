@@ -231,6 +231,13 @@ private:
 	std::unique_ptr<PipelineState> m_pGenerateMipsPSO;
 	std::unique_ptr<RootSignature> m_pGenerateMipsRS;
 
+	//Depth Reduction
+	std::unique_ptr<PipelineState> m_pPrepareReduceDepthPSO;
+	std::unique_ptr<PipelineState> m_pReduceDepthPSO;
+	std::unique_ptr<RootSignature> m_pReduceDepthRS;
+	std::vector<std::unique_ptr<Texture>> m_ReductionTargets;
+	std::vector<std::unique_ptr<Buffer>> m_ReductionReadbackTargets;
+
 	//Light data
 	int m_ShadowCasters = 0;
 	std::vector<Light> m_Lights;

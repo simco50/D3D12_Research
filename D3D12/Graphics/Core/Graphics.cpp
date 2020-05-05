@@ -50,6 +50,9 @@ float g_MinLogLuminance = -10;
 float g_MaxLogLuminance = 2;
 float g_Tau = 10;
 
+float g_NearPoint = 0;
+float g_FarPoint = 0;
+
 bool g_ShowRaytraced = false;
 
 Graphics::Graphics(uint32 width, uint32 height, int sampleCount /*= 1*/)
@@ -175,9 +178,9 @@ void Graphics::Update()
 
 	uint32 numCascades = 4;
 	constexpr uint32 MAX_CASCADES = 4;
-	float zPartitioningRatio = pow(m_pCamera->GetNear() / m_pCamera->GetFar(), 1.0f / numCascades);
+	float zPartitioningRatio = pow((g_FarPoint * 1.1f) / g_NearPoint, 1.0f / numCascades);
 	std::array<float, MAX_CASCADES + 1> cascadeDepths;
-	cascadeDepths[0] = m_pCamera->GetFar();
+	cascadeDepths[0] = g_NearPoint;
 	for (uint32 i = 1; i <= numCascades; ++i)
 	{
 		cascadeDepths[i] = cascadeDepths[i - 1] * zPartitioningRatio;
@@ -407,6 +410,72 @@ void Graphics::Update()
 		ssaoResources.pDepthTexture = m_pResolvedDepthStencil.get();
 		m_pSSAO->Execute(graph, ssaoResources);
 	}
+
+	graph.AddPass("Depth Reduce", [&](RGPassBuilder& builder)
+		{
+			builder.NeverCull();
+			Data.DepthStencil = builder.Write(Data.DepthStencil);
+
+			return [=](CommandContext& renderContext, const RGPassResources& resources)
+			{
+				Texture* pDepthStencil = resources.GetTexture(Data.DepthStencil);
+				renderContext.InsertResourceBarrier(pDepthStencil, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+				renderContext.InsertResourceBarrier(m_ReductionTargets[0].get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+				renderContext.SetComputeRootSignature(m_pReduceDepthRS.get());
+				renderContext.SetPipelineState(m_pPrepareReduceDepthPSO.get());
+
+				struct ShaderParameters
+				{
+					float Near;
+					float Far;
+				} parameters;
+				parameters.Near = m_pCamera->GetNear();
+				parameters.Far = m_pCamera->GetFar();
+
+				renderContext.SetComputeDynamicConstantBufferView(0, &parameters, sizeof(ShaderParameters));
+				renderContext.SetDynamicDescriptor(1, 0, m_ReductionTargets[0]->GetUAV());
+				renderContext.SetDynamicDescriptor(2, 0, pDepthStencil->GetSRV());
+
+				renderContext.Dispatch(m_ReductionTargets[0]->GetWidth(), m_ReductionTargets[0]->GetHeight(), 1);
+
+				renderContext.SetPipelineState(m_pReduceDepthPSO.get());
+				for (size_t i = 1; i < m_ReductionTargets.size(); ++i)
+				{
+					renderContext.InsertResourceBarrier(m_ReductionTargets[i - 1].get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+					renderContext.InsertResourceBarrier(m_ReductionTargets[i].get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+					renderContext.SetDynamicDescriptor(1, 0, m_ReductionTargets[i]->GetUAV());
+					renderContext.SetDynamicDescriptor(2, 0, m_ReductionTargets[i - 1]->GetSRV());
+
+					renderContext.Dispatch(m_ReductionTargets[i]->GetWidth(), m_ReductionTargets[i]->GetHeight(), 1);
+				}
+
+				renderContext.InsertResourceBarrier(m_ReductionTargets.back().get(), D3D12_RESOURCE_STATE_COPY_SOURCE);
+				renderContext.FlushResourceBarriers();
+
+				D3D12_PLACED_SUBRESOURCE_FOOTPRINT bufferFootprint = {};
+				bufferFootprint.Footprint.Width = 1;
+				bufferFootprint.Footprint.Height = 1;
+				bufferFootprint.Footprint.Depth = 1;
+				bufferFootprint.Footprint.RowPitch = Math::AlignUp<int>(sizeof(Vector2), D3D12_TEXTURE_DATA_PITCH_ALIGNMENT);
+				bufferFootprint.Footprint.Format = DXGI_FORMAT_R32G32_FLOAT;
+				bufferFootprint.Offset = 0;
+
+				CD3DX12_TEXTURE_COPY_LOCATION srcLocation(m_ReductionTargets.back()->GetResource(), 0);
+				CD3DX12_TEXTURE_COPY_LOCATION dstLocation(m_ReductionReadbackTargets[m_Frame % FRAME_COUNT]->GetResource(), bufferFootprint);
+				renderContext.GetCommandList()->CopyTextureRegion(&dstLocation, 0, 0, 0, &srcLocation, nullptr);
+
+				Buffer* pSourceBuffer = m_ReductionReadbackTargets[(m_Frame + FRAME_COUNT - 1) % FRAME_COUNT].get();
+				Vector2* pData = (Vector2*)pSourceBuffer->Map();
+				float min = pData->x;
+				float max = pData->y;
+				pSourceBuffer->Unmap();
+
+				g_NearPoint = min;
+				g_FarPoint = max;
+			};
+		});
 
 	//SHADOW MAPPING
 	// - Renders the scene depth onto a separate depth buffer from the light's view
@@ -958,6 +1027,25 @@ void Graphics::OnResize(int width, int height)
 	m_pTiledForward->OnSwapchainCreated(width, height);
 	m_pRTAO->OnSwapchainCreated(width, height);
 	m_pSSAO->OnSwapchainCreated(width, height);
+
+	m_ReductionTargets.clear();
+	int w = GetWindowWidth();
+	int h = GetWindowHeight();
+	while (w > 1 || h > 1)
+	{
+		w = Math::DivideAndRoundUp(w, 16);
+		h = Math::DivideAndRoundUp(h, 16);
+		std::unique_ptr<Texture> pTexture = std::make_unique<Texture>(this);
+		pTexture->Create(TextureDesc::Create2D(w, h, DXGI_FORMAT_R32G32_FLOAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
+		m_ReductionTargets.push_back(std::move(pTexture));
+	}
+
+	for (int i = 0; i < FRAME_COUNT; ++i)
+	{
+		std::unique_ptr<Buffer> pBuffer = std::make_unique<Buffer>(this);
+		pBuffer->Create(BufferDesc::CreateStructured(2, sizeof(float), BufferFlag::Readback));
+		m_ReductionReadbackTargets.push_back(std::move(pBuffer));
+	}
 }
 
 void Graphics::InitializeAssets()
@@ -1111,7 +1199,6 @@ void Graphics::InitializeAssets()
 	//Depth resolve
 	//Resolves a multisampled depth buffer to a normal depth buffer
 	//Only required when the sample count > 1
-	if(m_SampleCount > 1)
 	{
 		Shader computeShader("Resources/Shaders/ResolveDepth.hlsl", Shader::Type::Compute, "CSMain", { "DEPTH_RESOLVE_MIN" });
 
@@ -1122,6 +1209,24 @@ void Graphics::InitializeAssets()
 		m_pResolveDepthPSO->SetComputeShader(computeShader.GetByteCode(), computeShader.GetByteCodeSize());
 		m_pResolveDepthPSO->SetRootSignature(m_pResolveDepthRS->GetRootSignature());
 		m_pResolveDepthPSO->Finalize("Resolve Depth Pipeline", m_pDevice.Get());
+	}
+
+	//Depth reduce
+	{
+		Shader prepareReduceShader("Resources/Shaders/ReduceDepth.hlsl", Shader::Type::Compute, "PrepareReduceDepth", { "WITH_MSAA" });
+		Shader reduceShader("Resources/Shaders/ReduceDepth.hlsl", Shader::Type::Compute, "ReduceDepth", { });
+
+		m_pReduceDepthRS = std::make_unique<RootSignature>();
+		m_pReduceDepthRS->FinalizeFromShader("Depth Reduce", prepareReduceShader, m_pDevice.Get());
+
+		m_pPrepareReduceDepthPSO = std::make_unique<PipelineState>();
+		m_pPrepareReduceDepthPSO->SetComputeShader(prepareReduceShader.GetByteCode(), prepareReduceShader.GetByteCodeSize());
+		m_pPrepareReduceDepthPSO->SetRootSignature(m_pReduceDepthRS->GetRootSignature());
+		m_pPrepareReduceDepthPSO->Finalize("Prepare Reduce Depth Pipeline", m_pDevice.Get());
+
+		m_pReduceDepthPSO = std::make_unique<PipelineState>(*m_pPrepareReduceDepthPSO);
+		m_pReduceDepthPSO->SetComputeShader(reduceShader.GetByteCode(), reduceShader.GetByteCodeSize());
+		m_pReduceDepthPSO->Finalize("Reduce Depth Pipeline", m_pDevice.Get());
 	}
 
 	//Mip generation

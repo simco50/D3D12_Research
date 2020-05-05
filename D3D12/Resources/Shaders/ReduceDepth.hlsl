@@ -3,6 +3,7 @@
 				"DescriptorTable(SRV(t0, numDescriptors = 1), visibility = SHADER_VISIBILITY_ALL), " \
 
 #define BLOCK_SIZE 16
+#define THREAD_COUNT (BLOCK_SIZE * BLOCK_SIZE)
 
 #if WITH_MSAA
 Texture2DMS<float> tDepthMap : register(t0);
@@ -17,7 +18,6 @@ cbuffer ShaderParameters : register(b0)
 {
     float cNear;
     float cFar;
-    float4x4 cProjectionInverse;
 }
 
 struct CS_INPUT
@@ -46,33 +46,43 @@ void PrepareReduceDepth(CS_INPUT input)
     tDepthMap.GetDimensions(dimensions.x, dimensions.y, sampleCount);
     samplePos = min(samplePos, dimensions - 1);
 
-    float depthMin = 1.0f;
+    float depthMin = 10000000000000000.0f;
     float depthMax = 0.0f;
 
     for(uint sampleIdx = 0; sampleIdx < sampleCount; ++sampleIdx)
     {
         float depth = tDepthMap.Load(samplePos, sampleIdx);
-        depth = LinearizeDepth(depth);
-        depthMin = min(depthMin, depth);
-        depthMax = min(depthMax, depth);
+        if(depth > 0.0f)
+        {
+            depth = LinearizeDepth(depth);
+            depthMin = min(depthMin, depth);
+            depthMax = max(depthMax, depth);
+        }
     }
     gsDepthSamples[input.GroupIndex] = float2(depthMin, depthMax);
 #else
-
     uint2 dimensions;
     tDepthMap.GetDimensions(dimensions.x, dimensions.y);
     samplePos = min(samplePos, dimensions - 1);
     float depth = tDepthMap[samplePos];
-    depth = LinearizeDepth(depth);
+    if(depth > 0.0f)
+    {
+        depth = LinearizeDepth(depth);
+    }
     gsDepthSamples[input.GroupIndex] = float2(depth, depth);
 
 #endif
 
     GroupMemoryBarrierWithGroupSync();
 
-    for(uint s = 0; s < 1; ++s)
+    for(uint s = THREAD_COUNT / 2; s > 0; s >>= 1)
     {
-
+        if(input.GroupIndex < s)
+        {
+            gsDepthSamples[input.GroupIndex].x = min(gsDepthSamples[input.GroupIndex].x, gsDepthSamples[input.GroupIndex + s].x);
+            gsDepthSamples[input.GroupIndex].y = max(gsDepthSamples[input.GroupIndex].y, gsDepthSamples[input.GroupIndex + s].y);
+        }
+        GroupMemoryBarrierWithGroupSync();
     }
 
     if(input.GroupIndex == 0)
@@ -97,11 +107,15 @@ void ReduceDepth(CS_INPUT input)
 
     GroupMemoryBarrierWithGroupSync();
 
-    for(uint s = 0; s < 1; ++s)
+    for(uint s = THREAD_COUNT / 2; s > 0; s >>= 1)
     {
-
+        if(input.GroupIndex < s)
+        {
+            gsDepthSamples[input.GroupIndex].x = min(gsDepthSamples[input.GroupIndex].x, gsDepthSamples[input.GroupIndex + s].x);
+            gsDepthSamples[input.GroupIndex].y = max(gsDepthSamples[input.GroupIndex].y, gsDepthSamples[input.GroupIndex + s].y);
+        }
+        GroupMemoryBarrierWithGroupSync();
     }
-
     if(input.GroupIndex == 0)
     {
         uOutputMap[input.GroupId.xy] = gsDepthSamples[0];
