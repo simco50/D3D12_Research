@@ -30,7 +30,9 @@ struct CS_INPUT
 
 float LinearizeDepth(float depth)
 {
-    return cNear * cFar / (cFar + depth * (cNear - cFar));
+    //linearize between 0 and 1
+    float lin = cNear * cFar / (cFar + depth * (cNear - cFar));
+    return (lin - cFar) / (cNear - cFar);
 }
 
 groupshared float2 gsDepthSamples[BLOCK_SIZE * BLOCK_SIZE];
