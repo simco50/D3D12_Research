@@ -50,11 +50,7 @@ float g_MinLogLuminance = -10;
 float g_MaxLogLuminance = 2;
 float g_Tau = 10;
 
-float g_NearPoint = 0;
-float g_FarPoint = 0;
-
-bool g_EnableSDSM = true;
-
+bool g_SDSM = true;
 bool g_ShowRaytraced = false;
 
 Graphics::Graphics(uint32 width, uint32 height, int sampleCount /*= 1*/)
@@ -87,7 +83,7 @@ void Graphics::Initialize(HWND window)
 
 void Graphics::RandomizeLights(int count)
 {
-	m_Lights.resize(1);
+	m_Lights.resize(count);
 
 	BoundingBox sceneBounds;
 	sceneBounds.Center = Vector3(0, 70, 0);
@@ -179,8 +175,18 @@ void Graphics::Update()
 	ShadowData lightData;
 
 	uint32 numCascades = 4;
-	float minPoint = g_EnableSDSM ? g_NearPoint : 0;
-	float maxPoint = g_EnableSDSM ? g_FarPoint : 1;
+	float minPoint = 0;
+	float maxPoint = 1;
+
+	if (g_SDSM)
+	{
+		Buffer* pSourceBuffer = m_ReductionReadbackTargets[(m_Frame + 1) % FRAME_COUNT].get();
+		float* pData = (float*)pSourceBuffer->Map();
+		minPoint = pData[0];
+		maxPoint = pData[1];
+		pSourceBuffer->Unmap();
+	}
+
 	float clipPlaneRange = abs(m_pCamera->GetNear() - m_pCamera->GetFar());
 
 	float minZ = m_pCamera->GetFar() + minPoint * clipPlaneRange;
@@ -424,68 +430,65 @@ void Graphics::Update()
 	// - Renders the scene depth onto a separate depth buffer from the light's view
 	if (m_ShadowCasters > 0)
 	{
-		graph.AddPass("Depth Reduce", [&](RGPassBuilder& builder)
-			{
-				builder.NeverCull();
-				Data.DepthStencil = builder.Write(Data.DepthStencil);
-
-				return [=](CommandContext& renderContext, const RGPassResources& resources)
+		if (g_SDSM)
+		{
+			graph.AddPass("Depth Reduce", [&](RGPassBuilder& builder)
 				{
-					Texture* pDepthStencil = resources.GetTexture(Data.DepthStencil);
-					renderContext.InsertResourceBarrier(pDepthStencil, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-					renderContext.InsertResourceBarrier(m_ReductionTargets[0].get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+					builder.NeverCull();
+					Data.DepthStencil = builder.Write(Data.DepthStencil);
 
-					renderContext.SetComputeRootSignature(m_pReduceDepthRS.get());
-					renderContext.SetPipelineState(m_pPrepareReduceDepthPSO.get());
-
-					struct ShaderParameters
+					return [=](CommandContext& renderContext, const RGPassResources& resources)
 					{
-						float Near;
-						float Far;
-					} parameters;
-					parameters.Near = m_pCamera->GetNear();
-					parameters.Far = m_pCamera->GetFar();
+						Texture* pDepthStencil = resources.GetTexture(Data.DepthStencil);
+						renderContext.InsertResourceBarrier(pDepthStencil, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+						renderContext.InsertResourceBarrier(m_ReductionTargets[0].get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-					renderContext.SetComputeDynamicConstantBufferView(0, &parameters, sizeof(ShaderParameters));
-					renderContext.SetDynamicDescriptor(1, 0, m_ReductionTargets[0]->GetUAV());
-					renderContext.SetDynamicDescriptor(2, 0, pDepthStencil->GetSRV());
+						renderContext.SetComputeRootSignature(m_pReduceDepthRS.get());
+						renderContext.SetPipelineState(m_pPrepareReduceDepthPSO.get());
 
-					renderContext.Dispatch(m_ReductionTargets[0]->GetWidth(), m_ReductionTargets[0]->GetHeight(), 1);
+						struct ShaderParameters
+						{
+							float Near;
+							float Far;
+						} parameters;
+						parameters.Near = m_pCamera->GetNear();
+						parameters.Far = m_pCamera->GetFar();
 
-					renderContext.SetPipelineState(m_pReduceDepthPSO.get());
-					for (size_t i = 1; i < m_ReductionTargets.size(); ++i)
-					{
-						renderContext.InsertResourceBarrier(m_ReductionTargets[i - 1].get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-						renderContext.InsertResourceBarrier(m_ReductionTargets[i].get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+						renderContext.SetComputeDynamicConstantBufferView(0, &parameters, sizeof(ShaderParameters));
+						renderContext.SetDynamicDescriptor(1, 0, m_ReductionTargets[0]->GetUAV());
+						renderContext.SetDynamicDescriptor(2, 0, pDepthStencil->GetSRV());
 
-						renderContext.SetDynamicDescriptor(1, 0, m_ReductionTargets[i]->GetUAV());
-						renderContext.SetDynamicDescriptor(2, 0, m_ReductionTargets[i - 1]->GetSRV());
+						renderContext.Dispatch(m_ReductionTargets[0]->GetWidth(), m_ReductionTargets[0]->GetHeight(), 1);
 
-						renderContext.Dispatch(m_ReductionTargets[i]->GetWidth(), m_ReductionTargets[i]->GetHeight(), 1);
-					}
+						renderContext.SetPipelineState(m_pReduceDepthPSO.get());
+						for (size_t i = 1; i < m_ReductionTargets.size(); ++i)
+						{
+							renderContext.InsertResourceBarrier(m_ReductionTargets[i - 1].get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+							renderContext.InsertResourceBarrier(m_ReductionTargets[i].get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-					renderContext.InsertResourceBarrier(m_ReductionTargets.back().get(), D3D12_RESOURCE_STATE_COPY_SOURCE);
-					renderContext.FlushResourceBarriers();
+							renderContext.SetDynamicDescriptor(1, 0, m_ReductionTargets[i]->GetUAV());
+							renderContext.SetDynamicDescriptor(2, 0, m_ReductionTargets[i - 1]->GetSRV());
 
-					D3D12_PLACED_SUBRESOURCE_FOOTPRINT bufferFootprint = {};
-					bufferFootprint.Footprint.Width = 1;
-					bufferFootprint.Footprint.Height = 1;
-					bufferFootprint.Footprint.Depth = 1;
-					bufferFootprint.Footprint.RowPitch = Math::AlignUp<int>(sizeof(Vector2), D3D12_TEXTURE_DATA_PITCH_ALIGNMENT);
-					bufferFootprint.Footprint.Format = DXGI_FORMAT_R32G32_FLOAT;
-					bufferFootprint.Offset = 0;
+							renderContext.Dispatch(m_ReductionTargets[i]->GetWidth(), m_ReductionTargets[i]->GetHeight(), 1);
+						}
 
-					CD3DX12_TEXTURE_COPY_LOCATION srcLocation(m_ReductionTargets.back()->GetResource(), 0);
-					CD3DX12_TEXTURE_COPY_LOCATION dstLocation(m_ReductionReadbackTargets[m_Frame % FRAME_COUNT]->GetResource(), bufferFootprint);
-					renderContext.GetCommandList()->CopyTextureRegion(&dstLocation, 0, 0, 0, &srcLocation, nullptr);
+						renderContext.InsertResourceBarrier(m_ReductionTargets.back().get(), D3D12_RESOURCE_STATE_COPY_SOURCE);
+						renderContext.FlushResourceBarriers();
 
-					Buffer* pSourceBuffer = m_ReductionReadbackTargets[(m_Frame + FRAME_COUNT - 1) % FRAME_COUNT].get();
-					Vector2* pData = (Vector2*)pSourceBuffer->Map();
-					g_NearPoint = pData->x;
-					g_FarPoint = pData->y;
-					pSourceBuffer->Unmap();
-				};
-			});
+						D3D12_PLACED_SUBRESOURCE_FOOTPRINT bufferFootprint = {};
+						bufferFootprint.Footprint.Width = 1;
+						bufferFootprint.Footprint.Height = 1;
+						bufferFootprint.Footprint.Depth = 1;
+						bufferFootprint.Footprint.RowPitch = Math::AlignUp<int>(sizeof(Vector2), D3D12_TEXTURE_DATA_PITCH_ALIGNMENT);
+						bufferFootprint.Footprint.Format = DXGI_FORMAT_R32G32_FLOAT;
+						bufferFootprint.Offset = 0;
+
+						CD3DX12_TEXTURE_COPY_LOCATION srcLocation(m_ReductionTargets.back()->GetResource(), 0);
+						CD3DX12_TEXTURE_COPY_LOCATION dstLocation(m_ReductionReadbackTargets[m_Frame % FRAME_COUNT]->GetResource(), bufferFootprint);
+						renderContext.GetCommandList()->CopyTextureRegion(&dstLocation, 0, 0, 0, &srcLocation, nullptr);
+					};
+				});
+		}
 
 		graph.AddPass("Shadow Mapping", [&](RGPassBuilder& builder)
 			{
@@ -1347,7 +1350,7 @@ void Graphics::UpdateImGui()
 			RandomizeLights(m_DesiredLightCount);
 		}
 
-		ImGui::Checkbox("SDSM", &g_EnableSDSM);
+		ImGui::Checkbox("SDSM", &g_SDSM);
 		if (ImGui::Checkbox("Raytracing", &g_ShowRaytraced))
 		{
 			if (m_RayTracingTier == D3D12_RAYTRACING_TIER_NOT_SUPPORTED)
