@@ -1,7 +1,8 @@
 #include "Common.hlsli"
 
 #define RootSig "CBV(b0, visibility=SHADER_VISIBILITY_GEOMETRY), " \
-				"DescriptorTable(SRV(t0, numDescriptors = 4), visibility=SHADER_VISIBILITY_VERTEX)"
+				"DescriptorTable(SRV(t0, numDescriptors = 4), visibility=SHADER_VISIBILITY_VERTEX), " \
+				"StaticSampler(s0, filter=FILTER_MIN_MAG_MIP_LINEAR, visibility = SHADER_VISIBILITY_VERTEX, addressU = TEXTURE_ADDRESS_CLAMP, addressV = TEXTURE_ADDRESS_CLAMP), " \
 
 cbuffer PerFrameData : register(b0)
 {
@@ -12,6 +13,7 @@ StructuredBuffer<AABB> tAABBs : register(t0);
 StructuredBuffer<uint> tCompactedClusters : register(t1);
 StructuredBuffer<uint2> tLightGrid : register(t2);
 Texture2D tHeatmapTexture : register(t3);
+SamplerState sHeatmapSampler : register(s0);
 
 struct GSInput
 {
@@ -38,7 +40,7 @@ GSInput VSMain(uint vertexId : SV_VertexID)
 	result.extents = aabb.Extents;
 
     result.lightCount = tLightGrid[clusterIndex].y;
-	result.color = tHeatmapTexture.Load(uint3(result.lightCount * 15, 0, 0));
+	result.color = tHeatmapTexture.SampleLevel(sHeatmapSampler, float2((float)result.lightCount / 30.0f, 0), 0);
 	return result;
 }
 

@@ -119,7 +119,15 @@ float4 PSMain(PSInput input) : SV_TARGET
 
 	//Constant ambient
 	float ao = 1.0f;
-	color += ApplyAmbientLight(diffuseColor, ao, 0.01f);
+	color += ApplyAmbientLight(diffuseColor, ao, 0.1f);
 
 	return float4(color, baseColor.a);
+}
+
+float4 DebugLightDensityPS(PSInput input) : SV_TARGET
+{
+	uint2 tileIndex = uint2(floor(input.position.xy / BLOCK_SIZE));
+	uint startOffset = tLightGrid[tileIndex].x;
+	uint lightCount = tLightGrid[tileIndex].y;
+	return float4(((float)lightCount / 100).xxx, 1);
 }
