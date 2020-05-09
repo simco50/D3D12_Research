@@ -42,6 +42,7 @@ struct PSInput
 	float3 normal : NORMAL;
 	float3 tangent : TANGENT;
 	float3 bitangent : TEXCOORD1;
+	float clipPosZ : CLIPPOS;
 };
 
 Texture2D tDiffuseTexture : register(t0);
@@ -57,7 +58,7 @@ StructuredBuffer<uint> tLightIndexList : register(t5);
 
 StructuredBuffer<Light> Lights : register(t6);
 
-LightResult DoLight(float4 pos, float3 worldPos, float3 N, float3 V, float3 diffuseColor, float3 specularColor, float roughness)
+LightResult DoLight(float4 pos, float3 worldPos, float3 N, float3 V, float3 diffuseColor, float3 specularColor, float roughness, float clipPosZ)
 {
 #if FORWARD_PLUS
 	uint2 tileIndex = uint2(floor(pos.xy / BLOCK_SIZE));
@@ -77,7 +78,7 @@ LightResult DoLight(float4 pos, float3 worldPos, float3 N, float3 V, float3 diff
 		uint lightIndex = i;
 		Light light = Lights[i];
 #endif
-		LightResult result = DoLight(light, specularColor, diffuseColor, roughness, worldPos, N, V);
+		LightResult result = DoLight(light, specularColor, diffuseColor, roughness, pos, worldPos, N, V, clipPosZ);
 		totalResult.Diffuse += result.Diffuse;
 		totalResult.Specular += result.Specular;
 	}
@@ -94,6 +95,7 @@ PSInput VSMain(VSInput input)
 	result.normal = normalize(mul(input.normal, (float3x3)cWorld));
 	result.tangent = normalize(mul(input.tangent, (float3x3)cWorld));
 	result.bitangent = normalize(mul(input.bitangent, (float3x3)cWorld));
+	result.clipPosZ = result.position.z;
 	return result;
 }
 
@@ -111,13 +113,21 @@ float4 PSMain(PSInput input) : SV_TARGET
 	float3 N = TangentSpaceNormalMapping(tNormalTexture, sDiffuseSampler, TBN, input.texCoord, true);
 	float3 V = normalize(cViewInverse[3].xyz - input.positionWS);
 
-	LightResult lighting = DoLight(input.position, input.positionWS, N, V, diffuseColor, specularColor, r);
+	LightResult lighting = DoLight(input.position, input.positionWS, N, V, diffuseColor, specularColor, r, input.clipPosZ);
 	
 	float3 color = lighting.Diffuse + lighting.Specular; 
 
 	//Constant ambient
 	float ao = 1.0f;
-	color += ApplyAmbientLight(diffuseColor, ao, 0.01f);
+	color += ApplyAmbientLight(diffuseColor, ao, 0.1f);
 
 	return float4(color, baseColor.a);
+}
+
+float4 DebugLightDensityPS(PSInput input) : SV_TARGET
+{
+	uint2 tileIndex = uint2(floor(input.position.xy / BLOCK_SIZE));
+	uint startOffset = tLightGrid[tileIndex].x;
+	uint lightCount = tLightGrid[tileIndex].y;
+	return float4(((float)lightCount / 100).xxx, 1);
 }

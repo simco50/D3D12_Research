@@ -81,8 +81,8 @@ void Texture::Create(const TextureDesc& textureDesc)
 	desc.MipLevels = (uint16)textureDesc.Mips;
 	desc.SampleDesc.Count = textureDesc.SampleCount;
 	desc.SampleDesc.Quality = m_pGraphics->GetMultiSampleQualityLevel(textureDesc.SampleCount);
-	desc.Width = Math::Max(4, textureDesc.Width);
-	desc.Height = Math::Max(4, textureDesc.Height);
+	desc.Width = textureDesc.Width;
+	desc.Height = textureDesc.Height;
 	switch (textureDesc.Dimensions)
 	{
 	case TextureDimension::Texture1D:

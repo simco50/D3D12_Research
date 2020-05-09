@@ -35,6 +35,7 @@ struct ShadowData
 {
 	Matrix LightViewProjections[MAX_SHADOW_CASTERS];
 	Vector4 ShadowMapOffsets[MAX_SHADOW_CASTERS];
+	float CascadeDepths[4];
 };
 
 enum class RenderPath
@@ -106,6 +107,7 @@ public:
 
 	Texture* GetDepthStencil() const { return m_pDepthStencil.get(); }
 	Texture* GetResolvedDepthStencil() const { return m_SampleCount > 1 ? m_pResolvedDepthStencil.get() : m_pDepthStencil.get(); }
+	Texture* GetResolvedNormals() const { return m_SampleCount > 1 ? m_pResolvedNormals.get() : m_pNormals.get(); }
 	Texture* GetCurrentRenderTarget() const { return m_SampleCount > 1 ? m_pMultiSampleRenderTarget.get() : m_pHDRRenderTarget.get(); }
 	Texture* GetCurrentBackbuffer() const { return m_Backbuffers[m_CurrentBackBufferIndex].get(); }
 
@@ -117,9 +119,8 @@ public:
 	ID3D12Resource* CreateResource(const D3D12_RESOURCE_DESC& desc, D3D12_RESOURCE_STATES initialState, D3D12_HEAP_TYPE heapType, D3D12_CLEAR_VALUE* pClearValue = nullptr);
 
 	//CONSTANTS
-	static const int32 SHADOW_MAP_SIZE = 4096;
+	static const int32 SHADOW_MAP_SIZE = 2048;
 	static const int32 FRAME_COUNT = 3;
-	static const int32 MAX_LIGHT_DENSITY = 720000;
 	static const DXGI_FORMAT DEPTH_STENCIL_FORMAT;
 	static const DXGI_FORMAT DEPTH_STENCIL_SHADOW_FORMAT;
 	static const DXGI_FORMAT RENDER_TARGET_FORMAT;
@@ -171,8 +172,8 @@ private:
 	std::unique_ptr<Texture> m_pHDRRenderTarget;
 	std::unique_ptr<Texture> m_pDepthStencil;
 	std::unique_ptr<Texture> m_pResolvedDepthStencil;
-	std::unique_ptr<Texture> m_pMSAANormals;
 	std::unique_ptr<Texture> m_pNormals;
+	std::unique_ptr<Texture> m_pResolvedNormals;
 
 	std::unique_ptr<ImGuiRenderer> m_pImGuiRenderer;
 	std::unique_ptr<RGResourceAllocator> m_pGraphAllocator;
@@ -229,6 +230,14 @@ private:
 	//Mip generation
 	std::unique_ptr<PipelineState> m_pGenerateMipsPSO;
 	std::unique_ptr<RootSignature> m_pGenerateMipsRS;
+
+	//Depth Reduction
+	std::unique_ptr<PipelineState> m_pPrepareReduceDepthPSO;
+	std::unique_ptr<PipelineState> m_pPrepareReduceDepthMsaaPSO;
+	std::unique_ptr<PipelineState> m_pReduceDepthPSO;
+	std::unique_ptr<RootSignature> m_pReduceDepthRS;
+	std::vector<std::unique_ptr<Texture>> m_ReductionTargets;
+	std::vector<std::unique_ptr<Buffer>> m_ReductionReadbackTargets;
 
 	//Light data
 	int m_ShadowCasters = 0;

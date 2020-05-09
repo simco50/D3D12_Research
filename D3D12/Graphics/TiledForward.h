@@ -52,4 +52,5 @@ private:
 	std::unique_ptr<RootSignature> m_pDiffuseRS;
 	std::unique_ptr<PipelineState> m_pDiffusePSO;
 	std::unique_ptr<PipelineState> m_pDiffuseAlphaPSO;
+	std::unique_ptr<PipelineState> m_pVisualizeDensityPSO;
 };

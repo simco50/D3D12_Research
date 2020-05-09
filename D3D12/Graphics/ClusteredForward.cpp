@@ -18,7 +18,7 @@
 static constexpr int cClusterSize = 64;
 static constexpr int cClusterCountZ = 32;
 
-bool gVisualizeClusters = false;
+bool g_VisualizeClusters = false;
 
 ClusteredForward::ClusteredForward(Graphics* pGraphics)
 	: m_pGraphics(pGraphics)
@@ -346,7 +346,7 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
 			};
 		});
 
-	if (gVisualizeClusters)
+	if (g_VisualizeClusters)
 	{
 		graph.AddPass("Visualize Clusters", [&](RGPassBuilder& builder)
 			{
@@ -512,8 +512,8 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
 			D3D12_INPUT_ELEMENT_DESC{ "TEXCOORD", 1, DXGI_FORMAT_R32G32B32_FLOAT, 0, 44, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
 		};
 
-		Shader vertexShader("Resources/Shaders/CL_Diffuse.hlsl", Shader::Type::Vertex, "VSMain", { "SHADOW" });
-		Shader pixelShader("Resources/Shaders/CL_Diffuse.hlsl", Shader::Type::Pixel, "PSMain", { "SHADOW" });
+		Shader vertexShader("Resources/Shaders/CL_Diffuse.hlsl", Shader::Type::Vertex, "VSMain", { });
+		Shader pixelShader("Resources/Shaders/CL_Diffuse.hlsl", Shader::Type::Pixel, "PSMain", { });
 
 		m_pDiffuseRS = std::make_unique<RootSignature>();
 		m_pDiffuseRS->FinalizeFromShader("Diffuse", vertexShader, pGraphics->GetDevice());

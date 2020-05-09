@@ -363,7 +363,8 @@ void DebugRenderer::AddLight(const Light& light)
 	switch (light.LightType)
 	{
 	case Light::Type::Directional:
-		AddWireCylinder(light.Position, light.Direction, 200.0f, 50.0f, 10, Color(1.0f, 1.0f, 0.0f, 1.0f));
+		AddWireCylinder(light.Position, light.Direction, 30.0f, 5.0f, 10, Color(1.0f, 1.0f, 0.0f, 1.0f));
+		AddAxisSystem(Matrix::CreateWorld(light.Position, -light.Direction, Vector3::Up), 1.0f);
 		break;
 	case Light::Type::Point:
 		AddSphere(light.Position, light.Range, 8, 8, Color(1.0f, 1.0f, 0.0f, 1.0f), false);

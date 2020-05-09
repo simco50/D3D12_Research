@@ -125,6 +125,9 @@ namespace Math
 	Matrix CreateOrthographicMatrix(float width, float height, float nearPlane, float farPlane);
 	Matrix CreateOrthographicOffCenterMatrix(float left, float right, float bottom, float top, float nearPlane, float farPlane);
 
+	void GetProjectionClipPlanes(const Matrix& projection, float& nearPlane, float& farPlane);
+	void ReverseZProjection(Matrix& projection);
+
 	Vector3 ScaleFromMatrix(const Matrix& m);
 
 	Quaternion LookRotation(const Vector3& direction);

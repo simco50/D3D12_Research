@@ -62,6 +62,21 @@ namespace Math
 #endif
 	}
 
+	void GetProjectionClipPlanes(const Matrix& projection, float& nearPlane, float& farPlane)
+	{
+		nearPlane = -projection._43 / projection._33;
+		farPlane = nearPlane * projection._33 / (projection._33 - 1);
+	}
+
+	void ReverseZProjection(Matrix& projection)
+	{
+		float n, f;
+		GetProjectionClipPlanes(projection, n, f);
+		std::swap(n, f);
+		projection._33 = f / (f - n);
+		projection._43 = -projection._33 * n;
+	}
+
 	DirectX::SimpleMath::Vector3 ScaleFromMatrix(const Matrix& m)
 	{
 		return Vector3(
