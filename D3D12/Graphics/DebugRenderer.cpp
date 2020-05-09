@@ -22,7 +22,7 @@ void DebugRenderer::Initialize(Graphics* pGraphics)
 	m_pGraphics = pGraphics;
 	D3D12_INPUT_ELEMENT_DESC inputElements[] = {
 		D3D12_INPUT_ELEMENT_DESC{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-		D3D12_INPUT_ELEMENT_DESC{ "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+		D3D12_INPUT_ELEMENT_DESC{ "COLOR", 0, DXGI_FORMAT_R32_UINT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
 	};
 
 	//Shaders
@@ -59,6 +59,8 @@ void DebugRenderer::Render(RGGraph& graph)
 		return;
 	}
 
+	constexpr uint32 VertexStride = sizeof(DebugLine) / 2;
+
 	graph.AddPass("Debug Rendering", [&](RGPassBuilder& builder)
 		{
 			builder.NeverCull();
@@ -77,14 +79,14 @@ void DebugRenderer::Render(RGGraph& graph)
 
 				if (m_LinePrimitives != 0)
 				{
-					context.SetDynamicVertexBuffer(0, m_LinePrimitives, sizeof(Vector3) + sizeof(Color), m_Lines.data());
+					context.SetDynamicVertexBuffer(0, m_LinePrimitives, VertexStride, m_Lines.data());
 					context.SetPipelineState(m_pLinesPSO.get());
 					context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINELIST);
 					context.Draw(0, m_LinePrimitives);
 				}
 				if (m_TrianglePrimitives != 0)
 				{
-					context.SetDynamicVertexBuffer(0, m_TrianglePrimitives, sizeof(Vector3) + sizeof(Color), m_Triangles.data());
+					context.SetDynamicVertexBuffer(0, m_TrianglePrimitives, VertexStride, m_Triangles.data());
 					context.SetPipelineState(m_pTrianglesPSO.get());
 					context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 					context.Draw(0, m_TrianglePrimitives);
@@ -110,7 +112,7 @@ void DebugRenderer::AddLine(const Vector3& start, const Vector3& end, const Colo
 
 void DebugRenderer::AddLine(const Vector3& start, const Vector3& end, const Color& colorStart, const Color& colorEnd)
 {
-	m_Lines.push_back(DebugLine(start, end, colorStart, colorEnd));
+	m_Lines.push_back(DebugLine(start, end, Math::EncodeColor(colorStart), Math::EncodeColor(colorEnd)));
 	m_LinePrimitives += 2;
 }
 
@@ -128,7 +130,7 @@ void DebugRenderer::AddTriangle(const Vector3& a, const Vector3& b, const Vector
 {
 	if (solid)
 	{
-		m_Triangles.push_back(DebugTriangle(a, b, c, colorA, colorB, colorC));
+		m_Triangles.push_back(DebugTriangle(a, b, c, Math::EncodeColor(colorA), Math::EncodeColor(colorB), Math::EncodeColor(colorC)));
 		m_TrianglePrimitives += 3;
 	}
 	else
@@ -145,10 +147,10 @@ void DebugRenderer::AddPolygon(const Vector3& a, const Vector3& b, const Vector3
 	AddTriangle(c, d, a, color);
 }
 
-void DebugRenderer::AddBoundingBox(const BoundingBox& boundingBox, const Color& color, const bool solid /*= false*/)
+void DebugRenderer::AddBox(const Vector3& position, const Vector3& extents, const Color& color, const bool solid /*= false*/)
 {
-	Vector3 min(boundingBox.Center.x - boundingBox.Extents.x, boundingBox.Center.y - boundingBox.Extents.y, boundingBox.Center.z - boundingBox.Extents.z);
-	Vector3 max(boundingBox.Center.x + boundingBox.Extents.x, boundingBox.Center.y + boundingBox.Extents.y, boundingBox.Center.z + boundingBox.Extents.z);
+	Vector3 min(position.x - extents.x, position.y - extents.y, position.z - extents.z);
+	Vector3 max(position.x + extents.x, position.y + extents.y, position.z + extents.z);
 
 	Vector3 v1(max.x, min.y, min.z);
 	Vector3 v2(max.x, max.y, min.z);
@@ -181,6 +183,11 @@ void DebugRenderer::AddBoundingBox(const BoundingBox& boundingBox, const Color& 
 		AddPolygon(v3, v2, max, v6, color);
 		AddPolygon(min, v1, v5, v4, color);
 	}
+}
+
+void DebugRenderer::AddBoundingBox(const BoundingBox& boundingBox, const Color& color, const bool solid /*= false*/)
+{
+	AddBox(boundingBox.Center, boundingBox.Extents, color, solid);
 }
 
 void DebugRenderer::AddBoundingBox(const BoundingBox& boundingBox, const Matrix& transform, const Color& color, const bool solid /*= false*/)
@@ -259,7 +266,7 @@ void DebugRenderer::AddSphere(const Vector3& position, const float radius, const
 				Vector3 p3 = sphere.GetPoint(i, j + jStep);
 				Vector3 p4 = sphere.GetPoint(i + iStep, j + jStep);
 
-				AddPolygon(p2, p1, p3, p4, Color(0, 0, 1, 1));
+				AddPolygon(p2, p1, p3, p4, color);
 			}
 		}
 	}

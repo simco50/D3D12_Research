@@ -1,5 +1,15 @@
 #include "Constants.hlsli"
 
+float4 UIntToColor(uint c)
+{
+    return float4(
+            (float)((c & 0x00FF0000) >> 16) / 255.0f,
+            (float)((c & 0x0000FF00) >> 8) / 255.0f,
+            (float)((c & 0x000000FF) >> 0) / 255.0f,
+            (float)((c & 0xFF000000) >> 24) / 255.0f
+        );
+}
+
 struct Light
 {
 	float3 Position;
@@ -14,12 +24,7 @@ struct Light
 
     float4 GetColor()
     {
-        return float4(
-            (float)((Color & 0xFF000000) >> 24) / 255.0f,
-            (float)((Color & 0x00FF0000) >> 16) / 255.0f,
-            (float)((Color & 0x0000FF00) >> 8) / 255.0f,
-            (float)((Color & 0x000000FF) >> 0) / 255.0f
-        );
+        return UIntToColor(Color);
     }
 };
 

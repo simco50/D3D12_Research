@@ -39,7 +39,7 @@
 #endif
 
 const DXGI_FORMAT Graphics::DEPTH_STENCIL_FORMAT = DXGI_FORMAT_D32_FLOAT;
-const DXGI_FORMAT Graphics::DEPTH_STENCIL_SHADOW_FORMAT = DXGI_FORMAT_D32_FLOAT;
+const DXGI_FORMAT Graphics::DEPTH_STENCIL_SHADOW_FORMAT = DXGI_FORMAT_D16_UNORM;
 const DXGI_FORMAT Graphics::RENDER_TARGET_FORMAT = DXGI_FORMAT_R11G11B10_FLOAT;
 const DXGI_FORMAT Graphics::SWAPCHAIN_FORMAT = DXGI_FORMAT_R8G8B8A8_UNORM;
 
@@ -51,9 +51,10 @@ float g_MaxLogLuminance = 2;
 float g_Tau = 10;
 
 bool g_SDSM = false;
-bool g_StabilizeCascades = false;
+bool g_StabilizeCascades = true;
 float g_PSSMFactor = 1.0f;
 bool g_ShowRaytraced = false;
+bool g_VisualizeLights = false;
 
 Graphics::Graphics(uint32 width, uint32 height, int sampleCount /*= 1*/)
 	: m_WindowWidth(width), m_WindowHeight(height), m_SampleCount(sampleCount)
@@ -95,7 +96,7 @@ void Graphics::RandomizeLights(int count)
 	Vector3 Position(-150, 160, -10);
 	Vector3 Direction;
 	Position.Normalize(Direction);
-	m_Lights[lightIndex] = Light::Directional(Position, -Direction, 1.0f);
+	m_Lights[lightIndex] = Light::Directional(Position, -Direction, 5.0f);
 	m_Lights[lightIndex].ShadowIndex = 0;
 
 	int randomLightsStartIndex = lightIndex + 1;
@@ -112,15 +113,16 @@ void Graphics::RandomizeLights(int count)
 
 		const float range = Math::RandomRange(40.0f, 60.0f);
 		const float angle = Math::RandomRange(60.0f, 120.0f);
+		const float intensity = Math::RandomRange(250, 270);
 
 		Light::Type type = rand() % 2 == 0 ? Light::Type::Point : Light::Type::Spot;
 		switch (type)
 		{
 		case Light::Type::Point:
-			m_Lights[i] = Light::Point(position, range, 30.0f, color);
+			m_Lights[i] = Light::Point(position, range, intensity, color);
 			break;
 		case Light::Type::Spot:
-			m_Lights[i] = Light::Spot(position, range, Math::RandVector(), angle, angle - Math::RandomRange(0.0f, angle / 2), 30.0f, color);
+			m_Lights[i] = Light::Spot(position, range, Math::RandVector(), angle, angle - Math::RandomRange(0.0f, angle / 2), intensity, color);
 			break;
 		case Light::Type::Directional:
 		case Light::Type::MAX:
@@ -169,6 +171,14 @@ void Graphics::Update()
 		float bDist = Vector3::DistanceSquared(b.pMesh->GetBounds().Center, m_pCamera->GetPosition());
 		return aDist < bDist;
 		});
+
+	if (g_VisualizeLights)
+	{
+		for (const Light& light : m_Lights)
+		{
+			DebugRenderer::Instance().AddLight(light);
+		}
+	}
 
 	// SHADOW MAP PARTITIONING
 	/////////////////////////////////////////
@@ -531,6 +541,8 @@ void Graphics::Update()
 					context.BeginRenderPass(RenderPassInfo(m_pShadowMap.get(), RenderPassAccess::Clear_Store));
 					context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
+					context.SetGraphicsRootSignature(m_pShadowsRS.get());
+
 					for (int i = 0; i < m_ShadowCasters; ++i)
 					{
 						GPU_PROFILE_SCOPE("Light View", &context);
@@ -546,7 +558,6 @@ void Graphics::Update()
 						{
 							Matrix WorldViewProjection;
 						} ObjectData{};
-						context.SetGraphicsRootSignature(m_pShadowsRS.get());
 
 						//Opaque
 						{
@@ -1113,8 +1124,7 @@ void Graphics::InitializeAssets()
 		//Opaque
 		{
 			Shader vertexShader("Resources/Shaders/DepthOnly.hlsl", Shader::Type::Vertex, "VSMain");
-			Shader alphaVertexShader("Resources/Shaders/DepthOnly.hlsl", Shader::Type::Vertex, "VSMain", { "ALPHA_BLEND" });
-			Shader alphaPixelShader("Resources/Shaders/DepthOnly.hlsl", Shader::Type::Pixel, "PSMain", { "ALPHA_BLEND" });
+			Shader alphaPixelShader("Resources/Shaders/DepthOnly.hlsl", Shader::Type::Pixel, "PSMain");
 
 			//Rootsignature
 			m_pShadowsRS = std::make_unique<RootSignature>();
@@ -1132,7 +1142,6 @@ void Graphics::InitializeAssets()
 			m_pShadowsOpaquePSO->Finalize("Shadow Mapping (Opaque) Pipeline", m_pDevice.Get());
 
 			m_pShadowsAlphaPSO = std::make_unique<PipelineState>(*m_pShadowsOpaquePSO);
-			m_pShadowsAlphaPSO->SetVertexShader(alphaVertexShader.GetByteCode(), alphaVertexShader.GetByteCodeSize());
 			m_pShadowsAlphaPSO->SetPixelShader(alphaPixelShader.GetByteCode(), alphaPixelShader.GetByteCodeSize());
 			m_pShadowsAlphaPSO->Finalize("Shadow Mapping (Alpha) Pipeline", m_pDevice.Get());
 		}
@@ -1399,6 +1408,7 @@ void Graphics::UpdateImGui()
 		ImGui::Checkbox("SDSM", &g_SDSM);
 		ImGui::Checkbox("Stabilize Cascades", &g_StabilizeCascades);
 		ImGui::SliderFloat("PSSM Factor", &g_PSSMFactor, 0, 1);
+		ImGui::Checkbox("Debug Render Lights", &g_VisualizeLights);
 		
 		if (ImGui::Checkbox("Raytracing", &g_ShowRaytraced))
 		{
