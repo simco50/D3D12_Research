@@ -338,7 +338,6 @@ void Graphics::Update()
 	// - Required for light culling
 	graph.AddPass("Depth Prepass", [&](RGPassBuilder& builder)
 		{
-			builder.NeverCull();
 			Data.DepthStencil = builder.Write(Data.DepthStencil);
 
 			return [=](CommandContext& renderContext, const RGPassResources& resources)
@@ -374,7 +373,6 @@ void Graphics::Update()
 	//NORMALS
 	graph.AddPass("Normals", [&](RGPassBuilder& builder)
 		{
-			builder.NeverCull();
 			Data.DepthStencil = builder.Write(Data.DepthStencil);
 
 			return [=](CommandContext& renderContext, const RGPassResources& resources)
@@ -475,7 +473,6 @@ void Graphics::Update()
 		{
 			graph.AddPass("Depth Reduce", [&](RGPassBuilder& builder)
 				{
-					builder.NeverCull();
 					Data.DepthStencil = builder.Write(Data.DepthStencil);
 
 					return [=](CommandContext& renderContext, const RGPassResources& resources)
@@ -533,7 +530,6 @@ void Graphics::Update()
 
 		graph.AddPass("Shadow Mapping", [&](RGPassBuilder& builder)
 			{
-				builder.NeverCull();
 				return [=](CommandContext& context, const RGPassResources& resources)
 				{
 					context.InsertResourceBarrier(m_pShadowMap.get(), D3D12_RESOURCE_STATE_DEPTH_WRITE);
@@ -629,7 +625,6 @@ void Graphics::Update()
 	{
 		graph.AddPass("Resolve", [&](RGPassBuilder& builder)
 			{
-				builder.NeverCull();
 				return [=](CommandContext& context, const RGPassResources& resources)
 				{
 					context.InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RESOLVE_SOURCE);
@@ -649,7 +644,6 @@ void Graphics::Update()
 		{
 			graph.AddPass("Downsample Color", [&](RGPassBuilder& builder)
 				{
-					builder.NeverCull();
 					toneMappingInput = builder.Write(toneMappingInput);
 					return [=](CommandContext& context, const RGPassResources& resources)
 					{
@@ -681,7 +675,6 @@ void Graphics::Update()
 
 		graph.AddPass("Luminance Histogram", [&](RGPassBuilder& builder)
 			{
-				builder.NeverCull();
 				toneMappingInput = builder.Read(toneMappingInput);
 				return [=](CommandContext& context, const RGPassResources& resources)
 				{
@@ -719,7 +712,6 @@ void Graphics::Update()
 
 		graph.AddPass("Average Luminance", [&](RGPassBuilder& builder)
 			{
-				builder.NeverCull();
 				return [=](CommandContext& context, const RGPassResources& resources)
 				{
 					context.InsertResourceBarrier(m_pLuminanceHistogram.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
@@ -753,7 +745,6 @@ void Graphics::Update()
 
 		graph.AddPass("Tonemap", [&](RGPassBuilder& builder)
 			{
-				builder.NeverCull();
 				return [=](CommandContext& context, const RGPassResources& resources)
 				{
 					context.InsertResourceBarrier(GetCurrentBackbuffer(), D3D12_RESOURCE_STATE_RENDER_TARGET);
@@ -783,7 +774,6 @@ void Graphics::Update()
 
 	graph.AddPass("Temp Barriers", [&](RGPassBuilder& builder)
 		{
-			builder.NeverCull();
 			return [=](CommandContext& context, const RGPassResources& resources)
 			{
 				context.InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RENDER_TARGET);
@@ -1328,24 +1318,10 @@ void Graphics::UpdateImGui()
 {
 	m_FrameTimes[m_Frame % m_FrameTimes.size()] = GameTimer::DeltaTime();
 
-	{
-		ImGui::SetNextWindowPos(ImVec2(300, 0), 0, ImVec2(0, 0));
-		ImGui::Begin("Ambient Occlusion");
-		Vector2 image((float)m_pAmbientOcclusion->GetWidth(), (float)m_pAmbientOcclusion->GetHeight());
-		Vector2 windowSize(ImGui::GetContentRegionAvail().x, ImGui::GetContentRegionAvail().y);
-		float width = windowSize.x;
-		float height = windowSize.x * image.y / image.x;
-		if (image.x / windowSize.x < image.y / windowSize.y)
-		{
-			width = image.x / image.y * windowSize.y;
-			height = windowSize.y;
-		}
-		ImGui::Image(m_pAmbientOcclusion.get(), ImVec2(width, height));
-		ImGui::End();
-	}
+	if(m_pVisualizeTexture)
 	{
 		ImGui::Begin("Shadow Map");
-		Vector2 image((float)m_pShadowMap->GetWidth(), (float)m_pShadowMap->GetHeight());
+		Vector2 image((float)m_pVisualizeTexture->GetWidth(), (float)m_pVisualizeTexture->GetHeight());
 		Vector2 windowSize(ImGui::GetContentRegionAvail().x, ImGui::GetContentRegionAvail().y);
 		float width = windowSize.x;
 		float height = windowSize.x * image.y / image.x;
@@ -1354,7 +1330,7 @@ void Graphics::UpdateImGui()
 			width = image.x / image.y * windowSize.y;
 			height = windowSize.y;
 		}
-		ImGui::Image(m_pShadowMap.get(), ImVec2(width, height));
+		ImGui::Image(m_pVisualizeTexture, ImVec2(width, height));
 		ImGui::End();
 	}
 
@@ -1404,24 +1380,6 @@ void Graphics::UpdateImGui()
 		{
 			RandomizeLights(m_DesiredLightCount);
 		}
-
-		ImGui::Checkbox("SDSM", &g_SDSM);
-		ImGui::Checkbox("Stabilize Cascades", &g_StabilizeCascades);
-		ImGui::SliderFloat("PSSM Factor", &g_PSSMFactor, 0, 1);
-		ImGui::Checkbox("Debug Render Lights", &g_VisualizeLights);
-		
-		if (ImGui::Checkbox("Raytracing", &g_ShowRaytraced))
-		{
-			if (m_RayTracingTier == D3D12_RAYTRACING_TIER_NOT_SUPPORTED)
-			{
-				g_ShowRaytraced = false;
-			}
-		}
-
-		ImGui::SliderFloat("Min Log Luminance", &g_MinLogLuminance, -100, 20);
-		ImGui::SliderFloat("Max Log Luminance", &g_MaxLogLuminance, -50, 50);
-		ImGui::SliderFloat("White Point", &g_WhitePoint, 0, 20);
-		ImGui::SliderFloat("Tau", &g_Tau, 0, 100);
 
 		if (ImGui::Button("Dump RenderGraph"))
 		{
@@ -1508,6 +1466,32 @@ void Graphics::UpdateImGui()
 		ImGui::End();
 	}
 	ImGui::PopStyleVar();
+
+	ImGui::Begin("Parameters");
+
+	ImGui::Text("Shadows");
+	ImGui::Checkbox("SDSM", &g_SDSM);
+	ImGui::Checkbox("Stabilize Cascades", &g_StabilizeCascades);
+	ImGui::SliderFloat("PSSM Factor", &g_PSSMFactor, 0, 1);
+
+	ImGui::Text("Expose/Tonemapping");
+	ImGui::SliderFloat("Min Log Luminance", &g_MinLogLuminance, -100, 20);
+	ImGui::SliderFloat("Max Log Luminance", &g_MaxLogLuminance, -50, 50);
+	ImGui::SliderFloat("White Point", &g_WhitePoint, 0, 20);
+	ImGui::SliderFloat("Tau", &g_Tau, 0, 100);
+
+	ImGui::Text("Misc");
+	ImGui::Checkbox("Debug Render Lights", &g_VisualizeLights);
+
+	if (ImGui::Checkbox("Raytracing", &g_ShowRaytraced))
+	{
+		if (m_RayTracingTier == D3D12_RAYTRACING_TIER_NOT_SUPPORTED)
+		{
+			g_ShowRaytraced = false;
+		}
+	}
+
+	ImGui::End();
 }
 
 CommandQueue* Graphics::GetCommandQueue(D3D12_COMMAND_LIST_TYPE type) const

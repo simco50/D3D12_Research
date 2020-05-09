@@ -38,7 +38,6 @@ void TiledForward::Execute(RGGraph& graph, const TiledForwardInputResources& res
 {
 	graph.AddPass("Light Culling", [&](RGPassBuilder& builder)
 		{
-			builder.NeverCull();
 			builder.Read(resources.ResolvedDepthBuffer);
 			return [=](CommandContext& context, const RGPassResources& passResources)
 			{
@@ -91,7 +90,6 @@ void TiledForward::Execute(RGGraph& graph, const TiledForwardInputResources& res
 	// - Render the scene using the shadow mapping result and the light culling buffers
 	graph.AddPass("Base Pass", [&](RGPassBuilder& builder)
 		{
-			builder.NeverCull();
 			builder.Read(resources.DepthBuffer);
 			return [=](CommandContext& context, const RGPassResources& passResources)
 			{

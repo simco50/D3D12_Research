@@ -93,7 +93,6 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
 	graph.AddPass("Mark Clusters", [&](RGPassBuilder& builder)
 		{
 			builder.Read(resources.DepthBuffer);
-			builder.NeverCull();
 			return [=](CommandContext& context, const RGPassResources& passResources)
 			{
 				context.InsertResourceBarrier(resources.pRenderTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
@@ -167,7 +166,6 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
 
 	graph.AddPass("Compact Clusters", [&](RGPassBuilder& builder)
 		{
-			builder.NeverCull();
 			return [=](CommandContext& context, const RGPassResources& resources)
 			{
 				context.SetPipelineState(m_pCompactClustersPSO.get());
@@ -190,7 +188,6 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
 
 	graph.AddPass("Update Indirect Arguments", [&](RGPassBuilder& builder)
 		{
-			builder.NeverCull();
 			return [=](CommandContext& context, const RGPassResources& resources)
 			{
 				UnorderedAccessView* pCompactedClustersUAV = m_pCompactedClusters->GetUAV();
@@ -210,7 +207,6 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
 	
 	graph.AddPass("Clustered Light Culling", [&](RGPassBuilder& builder)
 		{
-			builder.NeverCull();
 			return [=](CommandContext& context, const RGPassResources& passResources)
 			{
 				context.SetPipelineState(m_pLightCullingPSO.get());
@@ -251,7 +247,6 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
 	graph.AddPass("Base Pass", [&](RGPassBuilder& builder)
 		{
 			builder.Read(resources.DepthBuffer);
-			builder.NeverCull();
 			return [=](CommandContext& context, const RGPassResources& passResources)
 			{
 				struct PerObjectData
@@ -351,7 +346,6 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
 		graph.AddPass("Visualize Clusters", [&](RGPassBuilder& builder)
 			{
 				builder.Read(resources.DepthBuffer);
-				builder.NeverCull();
 				return [=](CommandContext& context, const RGPassResources& passResources)
 				{
 					if (m_DidCopyDebugClusterData == false)

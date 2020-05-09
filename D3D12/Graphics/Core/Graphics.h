@@ -243,4 +243,6 @@ private:
 	int m_ShadowCasters = 0;
 	std::vector<Light> m_Lights;
 	std::unique_ptr<Buffer> m_pLightBuffer;
+
+	Texture* m_pVisualizeTexture = nullptr;
 };

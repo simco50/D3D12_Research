@@ -63,7 +63,6 @@ void DebugRenderer::Render(RGGraph& graph)
 
 	graph.AddPass("Debug Rendering", [&](RGPassBuilder& builder)
 		{
-			builder.NeverCull();
 			return [=](CommandContext& context, const RGPassResources& resources)
 			{
 				context.InsertResourceBarrier(m_pGraphics->GetDepthStencil(), D3D12_RESOURCE_STATE_DEPTH_WRITE);

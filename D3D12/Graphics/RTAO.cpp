@@ -37,14 +37,14 @@ void RTAO::Execute(RGGraph& graph, const RtaoInputResources& resources)
 	static int32 g_AoSamples = 1;
 
 	ImGui::Begin("Parameters");
-	ImGui::SliderFloat("AO Power", &g_AoPower, 0, 10);
-	ImGui::SliderFloat("AO Radius", &g_AoRadius, 0.1f, 2.0f);
-	ImGui::SliderInt("AO Samples", &g_AoSamples, 1, 64);
+	ImGui::Text("Ambient Occlusion");
+	ImGui::SliderFloat("Power", &g_AoPower, 0, 10);
+	ImGui::SliderFloat("Radius", &g_AoRadius, 0.1f, 2.0f);
+	ImGui::SliderInt("Samples", &g_AoSamples, 1, 64);
 	ImGui::End();
 
 	graph.AddPass("Raytracing", [&](RGPassBuilder& builder)
 		{
-			builder.NeverCull();
 			return [=](CommandContext& context, const RGPassResources& passResources)
 			{
 				{
