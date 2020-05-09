@@ -211,8 +211,8 @@ void TiledForward::SetupPipelines(Graphics* pGraphics)
 	//PBR Diffuse passes
 	{
 		//Shaders
-		Shader vertexShader("Resources/Shaders/Diffuse.hlsl", Shader::Type::Vertex, "VSMain", { "SHADOW" });
-		Shader pixelShader("Resources/Shaders/Diffuse.hlsl", Shader::Type::Pixel, "PSMain", { "SHADOW" });
+		Shader vertexShader("Resources/Shaders/Diffuse.hlsl", Shader::Type::Vertex, "VSMain", { });
+		Shader pixelShader("Resources/Shaders/Diffuse.hlsl", Shader::Type::Pixel, "PSMain", { });
 		Shader debugPixelShader("Resources/Shaders/Diffuse.hlsl", Shader::Type::Pixel, "DebugLightDensityPS", { });
 
 		//Rootsignature

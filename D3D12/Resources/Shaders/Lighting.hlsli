@@ -44,7 +44,6 @@ float3 TangentSpaceNormalMapping(Texture2D normalTexture, SamplerState normalSam
 	return mul(sampledNormal, TBN);
 }
 
-#ifdef SHADOW
 Texture2D tShadowMapTexture : register(t3);
 SamplerComparisonState sShadowMapSampler : register(s1);
 
@@ -79,7 +78,6 @@ float DoShadow(float3 wPos, int shadowMapIndex)
         ) / 10.0f;
     return result * result;
 }
-#endif
 
 float GetAttenuation(Light light, float3 wPos)
 {
@@ -103,7 +101,7 @@ float3 ApplyAmbientLight(float3 diffuse, float ao, float3 lightColor)
     return ao * diffuse * lightColor;
 }
 
-static float4 colors[4] = {
+static float4 COLORS[4] = {
 	float4(1,0,0,1),
 	float4(0,1,0,1),
 	float4(0,0,1,1),
@@ -116,8 +114,6 @@ LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, floa
 	float3 L = normalize(light.Position - wPos);
 	LightResult result = DefaultLitBxDF(specularColor, roughness, diffuseColor, N, V, L, attenuation);
 
-#ifdef SHADOW
-
 	if(light.Type == LIGHT_DIRECTIONAL)
 	{
 		float4 splits = clipPosZ < cCascadeDepths;
@@ -125,12 +121,10 @@ LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, floa
 		float s = DoShadow(wPos, light.ShadowIndex + cascadeIndex);
 		result.Diffuse *= s;
 		result.Specular *= s;
-
 #define VISUALIZE_CASCADES 0
 #if VISUALIZE_CASCADES
-		result.Diffuse += 0.2f * colors[cascadeIndex].xyz;
+		result.Diffuse += 0.2f * COLORS[cascadeIndex].xyz;
 #endif
-
 	}
 	else if(light.ShadowIndex >= 0)
 	{
@@ -138,7 +132,6 @@ LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, floa
 		result.Diffuse *= s;
 		result.Specular *= s;
 	}
-#endif
 
 	float4 color = light.GetColor();
 	result.Diffuse *= color.rgb * light.Intensity;
