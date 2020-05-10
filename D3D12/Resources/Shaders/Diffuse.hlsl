@@ -23,6 +23,7 @@ cbuffer PerObjectData : register(b0)
 cbuffer PerFrameData : register(b1)
 {
 	float4x4 cViewInverse;
+	float4x4 cView;
 }
 
 struct VSInput
@@ -38,11 +39,11 @@ struct PSInput
 {
 	float4 position : SV_POSITION;
 	float3 positionWS : POSITION_WS;
+	float3 positionVS : POSITION_VS;
 	float2 texCoord : TEXCOORD;
 	float3 normal : NORMAL;
 	float3 tangent : TANGENT;
 	float3 bitangent : TEXCOORD1;
-	float clipPosZ : CLIPPOS;
 };
 
 Texture2D tDiffuseTexture : register(t0);
@@ -58,7 +59,7 @@ StructuredBuffer<uint> tLightIndexList : register(t5);
 
 StructuredBuffer<Light> Lights : register(t6);
 
-LightResult DoLight(float4 pos, float3 worldPos, float3 N, float3 V, float3 diffuseColor, float3 specularColor, float roughness, float clipPosZ)
+LightResult DoLight(float4 pos, float3 worldPos, float3 vPos, float3 N, float3 V, float3 diffuseColor, float3 specularColor, float roughness)
 {
 #if FORWARD_PLUS
 	uint2 tileIndex = uint2(floor(pos.xy / BLOCK_SIZE));
@@ -78,7 +79,7 @@ LightResult DoLight(float4 pos, float3 worldPos, float3 N, float3 V, float3 diff
 		uint lightIndex = i;
 		Light light = Lights[i];
 #endif
-		LightResult result = DoLight(light, specularColor, diffuseColor, roughness, pos, worldPos, N, V, clipPosZ);
+		LightResult result = DoLight(light, specularColor, diffuseColor, roughness, pos, worldPos, vPos, N, V);
 		totalResult.Diffuse += result.Diffuse;
 		totalResult.Specular += result.Specular;
 	}
@@ -91,11 +92,11 @@ PSInput VSMain(VSInput input)
 	PSInput result;
 	result.position = mul(float4(input.position, 1.0f), cWorldViewProj);
 	result.positionWS = mul(float4(input.position, 1.0f), cWorld).xyz;
+	result.positionVS = mul(float4(result.positionWS, 1.0f), cView).xyz;
 	result.texCoord = input.texCoord;
 	result.normal = normalize(mul(input.normal, (float3x3)cWorld));
 	result.tangent = normalize(mul(input.tangent, (float3x3)cWorld));
 	result.bitangent = normalize(mul(input.bitangent, (float3x3)cWorld));
-	result.clipPosZ = result.position.z;
 	return result;
 }
 
@@ -113,7 +114,7 @@ float4 PSMain(PSInput input) : SV_TARGET
 	float3 N = TangentSpaceNormalMapping(tNormalTexture, sDiffuseSampler, TBN, input.texCoord, true);
 	float3 V = normalize(cViewInverse[3].xyz - input.positionWS);
 
-	LightResult lighting = DoLight(input.position, input.positionWS, N, V, diffuseColor, specularColor, r, input.clipPosZ);
+	LightResult lighting = DoLight(input.position, input.positionWS, input.positionVS, N, V, diffuseColor, specularColor, r);
 	
 	float3 color = lighting.Diffuse + lighting.Specular; 
 

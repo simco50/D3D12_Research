@@ -98,6 +98,7 @@ void TiledForward::Execute(RGGraph& graph, const TiledForwardInputResources& res
 				struct PerFrameData
 				{
 					Matrix ViewInverse;
+					Matrix View;
 				} frameData;
 
 				struct PerObjectData
@@ -108,6 +109,7 @@ void TiledForward::Execute(RGGraph& graph, const TiledForwardInputResources& res
 
 				//Camera constants
 				frameData.ViewInverse = resources.pCamera->GetViewInverse();
+				frameData.View = resources.pCamera->GetView();
 
 				context.SetViewport(FloatRect(0, 0, (float)pDepthTexture->GetWidth(), (float)pDepthTexture->GetHeight()));
 
