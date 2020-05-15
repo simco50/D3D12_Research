@@ -90,6 +90,7 @@ public:
 	void WaitForFence(uint64 fenceValue);
 	void IdleGPU();
 
+	ImGuiRenderer* GetImGui() const { return m_pImGuiRenderer.get(); }
 	CommandQueue* GetCommandQueue(D3D12_COMMAND_LIST_TYPE type) const;
 	CommandContext* AllocateCommandContext(D3D12_COMMAND_LIST_TYPE type = D3D12_COMMAND_LIST_TYPE_DIRECT);
 	void FreeCommandList(CommandContext* pCommandList);
@@ -115,7 +116,7 @@ public:
 	Camera* GetCamera() const { return m_pCamera.get(); }
 
 	uint32 GetMultiSampleCount() const { return m_SampleCount; }
-	uint32 GetMultiSampleQualityLevel(uint32 msaa);
+	uint32 GetMultiSampleQualityLevel(uint32 msaa, DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN);
 
 	ID3D12Resource* CreateResource(const D3D12_RESOURCE_DESC& desc, D3D12_RESOURCE_STATES initialState, D3D12_HEAP_TYPE heapType, D3D12_CLEAR_VALUE* pClearValue = nullptr);
 

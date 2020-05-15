@@ -1,3 +1,4 @@
+#include "RNG.hlsli"
 
 #define RootSig "CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \
 				"DescriptorTable(UAV(u0, numDescriptors = 8), visibility = SHADER_VISIBILITY_ALL), " \
@@ -8,6 +9,7 @@ struct ParticleData
     float3 Position;
     float LifeTime;
     float3 Velocity;
+    float Size;
 };
 
 struct CS_INPUT
@@ -25,7 +27,7 @@ struct CS_INPUT
 
 cbuffer SimulationParameters : register(b0)
 {
-    uint cEmitCount;
+    int cEmitCount;
 }
 
 cbuffer EmitParameters : register(b0)
@@ -83,7 +85,7 @@ void Emit(CS_INPUT input)
         p.LifeTime = 0;
         p.Position = float3(0, 0, 0);
         p.Velocity = 20*cRandomDirections[particleIndex % 64].xyz;
-        
+        p.Size = (float)Random(deadSlot, 10, 30) / 100.0f;
         uParticleData[particleIndex] = p;
 
         uint aliveSlot;

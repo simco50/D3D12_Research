@@ -12,6 +12,10 @@
 #include "Scene/Camera.h"
 #include "Graphics/Core/Texture.h"
 #include "Core/ResourceViews.h"
+#include "ImGuiRenderer.h"
+
+static int32 g_EmitCount = 30;
+static bool g_Simulate = true;
 
 static constexpr uint32 cMaxParticleCount = 2000000;
 
@@ -20,6 +24,7 @@ struct ParticleData
 	Vector3 Position;
 	float LifeTime;
 	Vector3 Velocity;
+	float Size;
 };
 
 GpuParticles::GpuParticles(Graphics* pGraphics)
@@ -121,15 +126,29 @@ void GpuParticles::Initialize()
 		m_pRenderParticlesPS->SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
 		m_pRenderParticlesPS->SetInputLayout(nullptr, 0);
 		m_pRenderParticlesPS->SetDepthWrite(false);
+		m_pRenderParticlesPS->SetBlendMode(BlendMode::Alpha, false);
 		m_pRenderParticlesPS->SetCullMode(D3D12_CULL_MODE_NONE);
 		m_pRenderParticlesPS->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
 		m_pRenderParticlesPS->SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, m_pGraphics->GetMultiSampleCount(), m_pGraphics->GetMultiSampleQualityLevel(m_pGraphics->GetMultiSampleCount()));
 		m_pRenderParticlesPS->Finalize("Particle Rendering PS", m_pGraphics->GetDevice());
 	}
+
+	m_pGraphics->GetImGui()->AddUpdateCallback(ImGuiCallbackDelegate::CreateLambda([]() {
+		ImGui::Begin("Parameters");
+		ImGui::Text("Particles");
+		ImGui::Checkbox("Simulate", &g_Simulate);
+		ImGui::SliderInt("Emit Count", &g_EmitCount, 0, 50);
+		ImGui::End();
+		}));
 }
 
 void GpuParticles::Simulate(CommandContext& context)
 {
+	if (!g_Simulate)
+	{
+		return;
+	}
+
 	context.InsertResourceBarrier(m_pDrawArguments.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 	context.InsertResourceBarrier(m_pEmitArguments.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 	context.InsertResourceBarrier(m_pSimulateArguments.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
@@ -160,9 +179,9 @@ void GpuParticles::Simulate(CommandContext& context)
 
 		struct Parameters
 		{
-			uint32 EmitCount;
+			int32 EmitCount;
 		} parameters;
-		parameters.EmitCount = 1000;
+		parameters.EmitCount = g_EmitCount;
 
 		context.SetComputeDynamicConstantBufferView(0, &parameters, sizeof(Parameters));
 
@@ -221,7 +240,7 @@ void GpuParticles::Render(CommandContext& context)
 		context.InsertResourceBarrier(m_pParticleBuffer.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 		context.InsertResourceBarrier(m_pGraphics->GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RENDER_TARGET);
 
-		context.BeginRenderPass(RenderPassInfo(m_pGraphics->GetCurrentRenderTarget(), RenderPassAccess::Load_Store, m_pGraphics->GetDepthStencil(), RenderPassAccess::Load_Store));
+		context.BeginRenderPass(RenderPassInfo(m_pGraphics->GetCurrentRenderTarget(), RenderPassAccess::Load_Store, m_pGraphics->GetDepthStencil(), RenderPassAccess::Load_DontCare));
 
 		context.SetPipelineState(m_pRenderParticlesPS.get());
 		context.SetGraphicsRootSignature(m_pRenderParticlesRS.get());

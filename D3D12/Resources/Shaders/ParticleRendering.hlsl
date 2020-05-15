@@ -3,6 +3,7 @@ struct ParticleData
     float3 Position;
     float LifeTime;
     float3 Velocity;
+    float Size;
 };
 
 cbuffer FrameData : register(b0)
@@ -23,6 +24,7 @@ struct VS_Input
 struct PS_Input
 {
     float4 position : SV_POSITION;
+    float2 texCoord : TEXCOORD;
     float4 color : COLOR;
 };
 
@@ -44,18 +46,20 @@ PS_Input VSMain(VS_Input input)
 
     uint particleIndex = tAliveList[instanceID];
     ParticleData particle = tParticleData[particleIndex];
-    float3 q = 0.1 * BILLBOARD[vertexID];
+    float3 q = particle.Size * BILLBOARD[vertexID];
     
     output.position = float4(mul(q, (float3x3)cViewInverse), 1);
     output.position.xyz += particle.Position;
     output.position = mul(output.position, cView);
     output.position = mul(output.position, cProjection);
     output.color = float4(10000, 0, 1, 1);
+    output.texCoord = (BILLBOARD[vertexID].xy + 1) / 2.0f;
 
     return output;
 }
 
 float4 PSMain(PS_Input input) : SV_TARGET
 {
-    return input.color;
+    float alpha = 1 - saturate(2 * length(input.texCoord.xy - 0.5f));
+    return float4(1, 1, 1, alpha);
 }

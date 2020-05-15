@@ -49,7 +49,7 @@ bool gDumpRenderGraph = false;
 float g_WhitePoint = 4;
 float g_MinLogLuminance = -10;
 float g_MaxLogLuminance = 2;
-float g_Tau = 10;
+float g_Tau = 2;
 
 bool g_SDSM = false;
 bool g_StabilizeCascades = true;
@@ -1734,11 +1734,11 @@ void Graphics::IdleGPU()
 	}
 }
 
-uint32 Graphics::GetMultiSampleQualityLevel(uint32 msaa)
+uint32 Graphics::GetMultiSampleQualityLevel(uint32 msaa, DXGI_FORMAT format)
 {
 	D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS qualityLevels;
 	qualityLevels.Flags = D3D12_MULTISAMPLE_QUALITY_LEVELS_FLAG_NONE;
-	qualityLevels.Format = RENDER_TARGET_FORMAT;
+	qualityLevels.Format = format == DXGI_FORMAT_UNKNOWN ? RENDER_TARGET_FORMAT : format;
 	qualityLevels.NumQualityLevels = 0;
 	qualityLevels.SampleCount = msaa;
 	HR(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS, &qualityLevels, sizeof(qualityLevels)));

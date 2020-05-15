@@ -24,6 +24,7 @@ float DirectionalAttenuation(float3 L, float3 direction, float cosUmbra, float c
 
 //Distance between rays is proportional to distance squared
 //Extra windowing function to make light radius finite
+//https://blog.selfshadow.com/publications/s2013-shading-course/karis/s2013_pbs_epic_notes_v2.pdf
 float RadialAttenuation(float3 L, float range)
 {
 	float distSq = dot(L, L);
