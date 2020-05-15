@@ -21,6 +21,7 @@ class RGResourceAllocator;
 class UnorderedAccessView;
 class RTAO;
 class SSAO;
+class GpuParticles;
 
 struct Batch
 {
@@ -242,6 +243,9 @@ private:
 	//Sky
 	std::unique_ptr<RootSignature> m_pSkyboxRS;
 	std::unique_ptr<PipelineState> m_pSkyboxPSO;
+
+	//Particles
+	std::unique_ptr<GpuParticles> m_pParticles;
 
 	//Light data
 	int m_ShadowCasters = 0;

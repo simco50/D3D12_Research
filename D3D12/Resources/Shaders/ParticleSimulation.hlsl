@@ -1,3 +1,8 @@
+
+#define RootSig "CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \
+				"DescriptorTable(UAV(u0, numDescriptors = 8), visibility = SHADER_VISIBILITY_ALL), " \
+				"DescriptorTable(SRV(t0, numDescriptors = 1), visibility = SHADER_VISIBILITY_ALL), "
+
 struct ParticleData
 {
     float3 Position;
@@ -18,17 +23,34 @@ struct CS_INPUT
 #define ALIVE_LIST_2_COUNTER 8
 #define EMIT_COUNT 12
 
-#ifdef COMPILE_UPDATE_PARAMETERS
-
-cbuffer Parameters : register(b0)
+cbuffer SimulationParameters : register(b0)
 {
     uint cEmitCount;
+}
+
+cbuffer EmitParameters : register(b0)
+{
+    float4 cRandomDirections[64];
+}
+
+cbuffer SimulateParameters : register(b0)
+{
+    float cDeltaTime;
+    float cParticleLifeTime;
 }
 
 RWByteAddressBuffer uCounters : register(u0);
 RWByteAddressBuffer uEmitArguments : register(u1);
 RWByteAddressBuffer uSimulateArguments : register(u2);
+RWByteAddressBuffer uDrawArgumentsBuffer : register(u3);
+RWStructuredBuffer<uint> uDeadList : register(u4);
+RWStructuredBuffer<uint> uAliveList1 : register(u5);
+RWStructuredBuffer<uint> uAliveList2 : register(u6);
+RWStructuredBuffer<ParticleData> uParticleData  : register(u7);
 
+ByteAddressBuffer tCounters : register(t0);
+
+[RootSignature(RootSig)]
 [numthreads(1, 1, 1)]
 void UpdateSimulationParameters(CS_INPUT input)
 {
@@ -46,20 +68,6 @@ void UpdateSimulationParameters(CS_INPUT input)
     uCounters.Store(ALIVE_LIST_2_COUNTER, 0);
     uCounters.Store(EMIT_COUNT, emitCount);
 }
-
-#endif
-
-#if COMPILE_EMITTER
-
-cbuffer EmitterData : register(b0)
-{
-    float4 cRandomDirections[64];
-}
-
-RWByteAddressBuffer uCounters : register(u0);
-RWStructuredBuffer<uint> uDeadList : register(u1);
-RWStructuredBuffer<uint> uAliveList1 : register(u2);
-RWStructuredBuffer<ParticleData> uParticleData  : register(u3);
 
 [numthreads(128, 1, 1)]
 void Emit(CS_INPUT input)
@@ -83,22 +91,6 @@ void Emit(CS_INPUT input)
         uAliveList1[aliveSlot] = particleIndex;
     }
 }
-
-#endif
-
-#ifdef COMPILE_SIMULATE
-
-cbuffer Parameters : register(b0)
-{
-    float cDeltaTime;
-    float cParticleLifeTime;
-}
-
-RWByteAddressBuffer uCounters : register(u0);
-RWStructuredBuffer<uint> uDeadList : register(u1);
-RWStructuredBuffer<uint> uAliveList1 : register(u2);
-RWStructuredBuffer<uint> uAliveList2 : register(u3);
-RWStructuredBuffer<ParticleData> uParticleData : register(u4);
 
 [numthreads(128, 1, 1)]
 void Simulate(CS_INPUT input)
@@ -129,18 +121,9 @@ void Simulate(CS_INPUT input)
     }
 }
 
-#endif
-
-#ifdef COMPILE_SIMULATE_END
-
-ByteAddressBuffer tCounters : register(t0);
-RWByteAddressBuffer uArgumentsBuffer : register(u0);
-
 [numthreads(1, 1, 1)]
 void SimulateEnd(CS_INPUT input)
 {
     uint particleCount = tCounters.Load(ALIVE_LIST_2_COUNTER);
-    uArgumentsBuffer.Store4(0, uint4(6 * particleCount, 1, 0, 0));
+    uDrawArgumentsBuffer.Store4(0, uint4(6 * particleCount, 1, 0, 0));
 }
-
-#endif

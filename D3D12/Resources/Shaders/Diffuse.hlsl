@@ -120,7 +120,7 @@ float4 PSMain(PSInput input) : SV_TARGET
 
 	//Constant ambient
 	float ao = 1.0f;
-	color += ApplyAmbientLight(diffuseColor, ao, 0.1f);
+	color += ApplyAmbientLight(diffuseColor, ao, float3(0.2f, 0.5f, 1.0f) * 0.1f);
 
 	return float4(color, baseColor.a);
 }

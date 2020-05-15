@@ -25,10 +25,8 @@ private:
 	std::unique_ptr<Buffer> m_pParticleBuffer;
 	std::unique_ptr<Buffer> m_pCountersBuffer;
 
-	std::unique_ptr<RootSignature> m_pPrepareArgumentsRS;
 	std::unique_ptr<PipelineState> m_pPrepareArgumentsPS;
 
-	std::unique_ptr<RootSignature> m_pEmitRS;
 	std::unique_ptr<PipelineState> m_pEmitPS;
 	std::unique_ptr<Buffer> m_pEmitArguments;
 
@@ -36,7 +34,6 @@ private:
 	std::unique_ptr<PipelineState> m_pSimulatePS;
 	std::unique_ptr<Buffer> m_pSimulateArguments;
 
-	std::unique_ptr<RootSignature> m_pSimulateEndRS;
 	std::unique_ptr<PipelineState> m_pSimulateEndPS;
 	std::unique_ptr<Buffer> m_pDrawArguments;
 

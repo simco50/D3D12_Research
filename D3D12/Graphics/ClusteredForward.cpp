@@ -27,6 +27,11 @@ ClusteredForward::ClusteredForward(Graphics* pGraphics)
 	SetupPipelines(pGraphics);
 }
 
+ClusteredForward::~ClusteredForward()
+{
+
+}
+
 void ClusteredForward::OnSwapchainCreated(int windowWidth, int windowHeight)
 {
 	m_ClusterCountX = Math::RoundUp((float)windowWidth / cClusterSize);

@@ -38,12 +38,13 @@ void GpuParticles::Initialize()
 	m_pCountersBuffer = std::make_unique<Buffer>(m_pGraphics);
 	m_pCountersBuffer->Create(BufferDesc::CreateByteAddress(sizeof(uint32) * 4));
 
+	BufferDesc particleBufferDesc = BufferDesc::CreateStructured(cMaxParticleCount, sizeof(uint32));
 	m_pAliveList1 = std::make_unique<Buffer>(m_pGraphics);
-	m_pAliveList1->Create(BufferDesc::CreateStructured(cMaxParticleCount, sizeof(uint32)));
+	m_pAliveList1->Create(particleBufferDesc);
 	m_pAliveList2 = std::make_unique<Buffer>(m_pGraphics);
-	m_pAliveList2->Create(BufferDesc::CreateStructured(cMaxParticleCount, sizeof(uint32)));
+	m_pAliveList2->Create(particleBufferDesc);
 	m_pDeadList = std::make_unique<Buffer>(m_pGraphics);
-	m_pDeadList->Create(BufferDesc::CreateStructured(cMaxParticleCount, sizeof(uint32)));
+	m_pDeadList->Create(particleBufferDesc);
 	std::vector<uint32> deadList(cMaxParticleCount);
 	std::generate(deadList.begin(), deadList.end(), [n = 0]() mutable { return n++; });
 	m_pDeadList->SetData(pContext, deadList.data(), sizeof(uint32) * deadList.size());
@@ -71,47 +72,37 @@ void GpuParticles::Initialize()
 	m_pSimpleDrawCommandSignature->Finalize("Simple Draw", m_pGraphics->GetDevice());
 
 	{
-		Shader computeShader("Resources/Shaders/ParticleSimulation.hlsl", Shader::Type::Compute, "UpdateSimulationParameters", { "COMPILE_UPDATE_PARAMETERS" });
-		m_pPrepareArgumentsRS = std::make_unique<RootSignature>();
-		m_pPrepareArgumentsRS->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_ALL);
-		m_pPrepareArgumentsRS->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 3, D3D12_SHADER_VISIBILITY_ALL);
-		m_pPrepareArgumentsRS->Finalize("Prepare Particle Arguments RS", m_pGraphics->GetDevice(), D3D12_ROOT_SIGNATURE_FLAG_NONE);
+		Shader computeShader("Resources/Shaders/ParticleSimulation.hlsl", Shader::Type::Compute, "UpdateSimulationParameters");
+		m_pSimulateRS = std::make_unique<RootSignature>();
+		m_pSimulateRS->FinalizeFromShader("Particle Simulation RS", computeShader, m_pGraphics->GetDevice());
+	}
+
+	{
+		Shader computeShader("Resources/Shaders/ParticleSimulation.hlsl", Shader::Type::Compute, "UpdateSimulationParameters");
 		m_pPrepareArgumentsPS = std::make_unique<PipelineState>();
 		m_pPrepareArgumentsPS->SetComputeShader(computeShader.GetByteCode(), computeShader.GetByteCodeSize());
-		m_pPrepareArgumentsPS->SetRootSignature(m_pPrepareArgumentsRS->GetRootSignature());
+		m_pPrepareArgumentsPS->SetRootSignature(m_pSimulateRS->GetRootSignature());
 		m_pPrepareArgumentsPS->Finalize("Prepare Particle Arguments PS", m_pGraphics->GetDevice());
 	}
 	{
-		Shader computeShader("Resources/Shaders/ParticleSimulation.hlsl", Shader::Type::Compute, "Emit", { "COMPILE_EMITTER" });
-		m_pEmitRS = std::make_unique<RootSignature>();
-		m_pEmitRS->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_ALL);
-		m_pEmitRS->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 4, D3D12_SHADER_VISIBILITY_ALL);
-		m_pEmitRS->Finalize("Particle Emitter RS", m_pGraphics->GetDevice(), D3D12_ROOT_SIGNATURE_FLAG_NONE);
+		Shader computeShader("Resources/Shaders/ParticleSimulation.hlsl", Shader::Type::Compute, "Emit");
 		m_pEmitPS = std::make_unique<PipelineState>();
 		m_pEmitPS->SetComputeShader(computeShader.GetByteCode(), computeShader.GetByteCodeSize());
-		m_pEmitPS->SetRootSignature(m_pEmitRS->GetRootSignature());
+		m_pEmitPS->SetRootSignature(m_pSimulateRS->GetRootSignature());
 		m_pEmitPS->Finalize("Particle Emitter PS", m_pGraphics->GetDevice());
 	}
 	{
-		Shader computeShader("Resources/Shaders/ParticleSimulation.hlsl", Shader::Type::Compute, "Simulate", { "COMPILE_SIMULATE" });
-		m_pSimulateRS = std::make_unique<RootSignature>();
-		m_pSimulateRS->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_ALL);
-		m_pSimulateRS->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 5, D3D12_SHADER_VISIBILITY_ALL);
-		m_pSimulateRS->Finalize("Particle Simulation RS", m_pGraphics->GetDevice(), D3D12_ROOT_SIGNATURE_FLAG_NONE);
+		Shader computeShader("Resources/Shaders/ParticleSimulation.hlsl", Shader::Type::Compute, "Simulate");
 		m_pSimulatePS = std::make_unique<PipelineState>();
 		m_pSimulatePS->SetComputeShader(computeShader.GetByteCode(), computeShader.GetByteCodeSize());
 		m_pSimulatePS->SetRootSignature(m_pSimulateRS->GetRootSignature());
 		m_pSimulatePS->Finalize("Particle Simulation PS", m_pGraphics->GetDevice());
 	}
 	{
-		Shader computeShader("Resources/Shaders/ParticleSimulation.hlsl", Shader::Type::Compute, "SimulateEnd", { "COMPILE_SIMULATE_END" });
-		m_pSimulateEndRS = std::make_unique<RootSignature>();
-		m_pSimulateEndRS->SetDescriptorTableSimple(0, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, D3D12_SHADER_VISIBILITY_ALL);
-		m_pSimulateEndRS->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, D3D12_SHADER_VISIBILITY_ALL);
-		m_pSimulateEndRS->Finalize("Particle Simulation End RS", m_pGraphics->GetDevice(), D3D12_ROOT_SIGNATURE_FLAG_NONE);
+		Shader computeShader("Resources/Shaders/ParticleSimulation.hlsl", Shader::Type::Compute, "SimulateEnd");
 		m_pSimulateEndPS = std::make_unique<PipelineState>();
 		m_pSimulateEndPS->SetComputeShader(computeShader.GetByteCode(), computeShader.GetByteCodeSize());
-		m_pSimulateEndPS->SetRootSignature(m_pSimulateEndRS->GetRootSignature());
+		m_pSimulateEndPS->SetRootSignature(m_pSimulateRS->GetRootSignature());
 		m_pSimulateEndPS->Finalize("Particle Simulation End PS", m_pGraphics->GetDevice());
 	}
 	{
@@ -139,18 +130,33 @@ void GpuParticles::Initialize()
 
 void GpuParticles::Simulate(CommandContext& context)
 {
+	context.InsertResourceBarrier(m_pDrawArguments.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+	context.InsertResourceBarrier(m_pEmitArguments.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+	context.InsertResourceBarrier(m_pSimulateArguments.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+	context.InsertResourceBarrier(m_pCountersBuffer.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+	context.InsertResourceBarrier(m_pAliveList1.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+	context.InsertResourceBarrier(m_pAliveList2.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+	context.InsertResourceBarrier(m_pParticleBuffer.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+	context.SetComputeRootSignature(m_pSimulateRS.get());
+
+	D3D12_CPU_DESCRIPTOR_HANDLE uavs[] = {
+		m_pCountersBuffer->GetUAV()->GetDescriptor(),
+		m_pEmitArguments->GetUAV()->GetDescriptor(),
+		m_pSimulateArguments->GetUAV()->GetDescriptor(),
+		m_pDrawArguments->GetUAV()->GetDescriptor(),
+		m_pDeadList->GetUAV()->GetDescriptor(),
+		m_pAliveList1->GetUAV()->GetDescriptor(),
+		m_pAliveList2->GetUAV()->GetDescriptor(),
+		m_pParticleBuffer->GetUAV()->GetDescriptor(),
+	};
+	context.SetDynamicDescriptors(1, 0, uavs, ARRAYSIZE(uavs));
+	context.SetDynamicDescriptor(2, 0, m_pCountersBuffer->GetSRV()->GetDescriptor());
+
 	{
 		GPU_PROFILE_SCOPE("Prepare Arguments", &context);
 
 		context.SetPipelineState(m_pPrepareArgumentsPS.get());
-		context.SetComputeRootSignature(m_pPrepareArgumentsRS.get());
-
-		context.InsertResourceBarrier(m_pEmitArguments.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-		context.InsertResourceBarrier(m_pSimulateArguments.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-		context.InsertResourceBarrier(m_pCountersBuffer.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-		context.InsertResourceBarrier(m_pAliveList2.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-		context.InsertResourceBarrier(m_pParticleBuffer.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-		context.FlushResourceBarriers();
 
 		struct Parameters
 		{
@@ -158,13 +164,7 @@ void GpuParticles::Simulate(CommandContext& context)
 		} parameters;
 		parameters.EmitCount = 1000;
 
-		D3D12_CPU_DESCRIPTOR_HANDLE uavs[] = {
-			m_pCountersBuffer->GetUAV()->GetDescriptor(),
-			m_pEmitArguments->GetUAV()->GetDescriptor(),
-			m_pSimulateArguments->GetUAV()->GetDescriptor(),
-		};
 		context.SetComputeDynamicConstantBufferView(0, &parameters, sizeof(Parameters));
-		context.SetDynamicDescriptors(1, 0, uavs, 3);
 
 		context.Dispatch(1, 1, 1);
 		context.InsertUavBarrier();
@@ -176,23 +176,12 @@ void GpuParticles::Simulate(CommandContext& context)
 		GPU_PROFILE_SCOPE("Emit", &context);
 
 		context.SetPipelineState(m_pEmitPS.get());
-		context.SetComputeRootSignature(m_pEmitRS.get());
-
-		D3D12_CPU_DESCRIPTOR_HANDLE uavs[] = {
-			m_pCountersBuffer->GetUAV()->GetDescriptor(),
-			m_pDeadList->GetUAV()->GetDescriptor(),
-			m_pAliveList1->GetUAV()->GetDescriptor(),
-			m_pParticleBuffer->GetUAV()->GetDescriptor(),
-		};
-		context.SetDynamicDescriptors(1, 0, uavs, 4);
 
 		std::array<Vector4, 64> randomDirections;
 		std::generate(randomDirections.begin(), randomDirections.end(), []() { Vector3 v = Math::RandVector(); v.Normalize(); return Vector4(v.x, v.y, v.z, 0); });
 
 		context.SetComputeDynamicConstantBufferView(0, randomDirections.data(), sizeof(Vector4) * (uint32)randomDirections.size());
-
 		context.ExecuteIndirect(m_pSimpleDispatchCommandSignature->GetCommandSignature(), m_pEmitArguments.get());
-
 		context.InsertUavBarrier();
 	}
 	{
@@ -210,41 +199,25 @@ void GpuParticles::Simulate(CommandContext& context)
 		parameters.ParticleLifeTime = 4.0f;
 
 		context.SetComputeDynamicConstantBufferView(0, &parameters, sizeof(Parameters));
-
-		D3D12_CPU_DESCRIPTOR_HANDLE uavs[] = {
-			m_pCountersBuffer->GetUAV()->GetDescriptor(),
-			m_pDeadList->GetUAV()->GetDescriptor(),
-			m_pAliveList1->GetUAV()->GetDescriptor(),
-			m_pAliveList2->GetUAV()->GetDescriptor(),
-			m_pParticleBuffer->GetUAV()->GetDescriptor(),
-		};
-		context.SetDynamicDescriptors(1, 0, uavs, 5);
-
 		context.ExecuteIndirect(m_pSimpleDispatchCommandSignature->GetCommandSignature(), m_pSimulateArguments.get());
-
 		context.InsertUavBarrier();
 	}
 	{
 		GPU_PROFILE_SCOPE("Simulate End", &context);
 
-		context.InsertResourceBarrier(m_pDrawArguments.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-		context.InsertResourceBarrier(m_pCountersBuffer.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-
 		context.SetPipelineState(m_pSimulateEndPS.get());
-		context.SetComputeRootSignature(m_pSimulateEndRS.get());
-
-		context.SetDynamicDescriptor(0, 0, m_pCountersBuffer->GetSRV());
-		context.SetDynamicDescriptor(1, 0, m_pDrawArguments->GetUAV());
-
 		context.Dispatch(1, 1, 1);
-
 		context.InsertUavBarrier();
 	}
+	std::swap(m_pAliveList1, m_pAliveList2);
+}
+
+void GpuParticles::Render(CommandContext& context)
+{
 	{
 		GPU_PROFILE_SCOPE("Draw Particles", &context);
 
 		context.InsertResourceBarrier(m_pDrawArguments.get(), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
-		context.InsertResourceBarrier(m_pAliveList2.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 		context.InsertResourceBarrier(m_pParticleBuffer.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 		context.InsertResourceBarrier(m_pGraphics->GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RENDER_TARGET);
 
@@ -272,19 +245,10 @@ void GpuParticles::Simulate(CommandContext& context)
 
 		D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
 			m_pParticleBuffer->GetSRV()->GetDescriptor(),
-			m_pAliveList2->GetSRV()->GetDescriptor()
+			m_pAliveList1->GetSRV()->GetDescriptor()
 		};
 		context.SetDynamicDescriptors(1, 0, srvs, 2);
-
 		context.ExecuteIndirect(m_pSimpleDrawCommandSignature->GetCommandSignature(), m_pDrawArguments.get(), false);
-
 		context.EndRenderPass();
 	}
-
-	std::swap(m_pAliveList1, m_pAliveList2);
-}
-
-void GpuParticles::Render(CommandContext& context)
-{
-
 }

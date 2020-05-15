@@ -25,6 +25,7 @@
 #include "Graphics/RTAO.h"
 #include "Graphics/SSAO.h"
 #include "Graphics/ImGuiRenderer.h"
+#include "../GpuParticles.h"
 
 #ifdef _DEBUG
 #define D3D_VALIDATION 1
@@ -335,6 +336,14 @@ void Graphics::Update()
 
 	uint64 nextFenceValue = 0;
 
+	graph.AddPass("Simulate Particles", [&](RGPassBuilder& builder)
+		{
+			return [=](CommandContext& context, const RGPassResources& passResources)
+			{
+				m_pParticles->Simulate(context);
+			};
+		});
+
 	//DEPTH PREPASS
 	// - Depth only pass that renders the entire scene
 	// - Optimization that prevents wasteful lighting calculations during the base pass
@@ -618,6 +627,14 @@ void Graphics::Update()
 		resources.pShadowData = &lightData;
 		m_pClusteredForward->Execute(graph, resources);
 	}
+
+	graph.AddPass("Draw Particles", [&](RGPassBuilder& builder)
+		{
+			return [=](CommandContext& context, const RGPassResources& passResources)
+			{
+				m_pParticles->Render(context);
+			};
+		});
 
 	graph.AddPass("Sky", [&](RGPassBuilder& builder)
 		{
@@ -955,7 +972,7 @@ void Graphics::InitD3D()
 		NewFilter.DenyList.NumIDs = _countof(DenyIds);
 		NewFilter.DenyList.pIDList = DenyIds;
 
-#if 1
+#if 0
 		HR(pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, true));
 #endif
 		pInfoQueue->PushStorageFilter(&NewFilter);
@@ -1056,6 +1073,8 @@ void Graphics::InitD3D()
 	m_pSSAO = std::make_unique<SSAO>(this);
 	m_pImGuiRenderer = std::make_unique<ImGuiRenderer>(this);
 	m_pImGuiRenderer->AddUpdateCallback(ImGuiCallbackDelegate::CreateRaw(this, &Graphics::UpdateImGui));
+	m_pParticles = std::make_unique<GpuParticles>(this);
+	m_pParticles->Initialize();
 
 	OnResize(m_WindowWidth, m_WindowHeight);
 
