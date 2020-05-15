@@ -167,9 +167,9 @@ void CommandContext::Dispatch(uint32 groupCountX, uint32 groupCountY, uint32 gro
 	m_pCommandList->Dispatch(groupCountX, groupCountY, groupCountZ);
 }
 
-void CommandContext::ExecuteIndirect(ID3D12CommandSignature* pCommandSignature, Buffer* pIndirectArguments)
+void CommandContext::ExecuteIndirect(ID3D12CommandSignature* pCommandSignature, Buffer* pIndirectArguments, bool isCompute)
 {
-	PrepareDraw(DescriptorTableType::Compute);
+	PrepareDraw(isCompute ? DescriptorTableType::Compute : DescriptorTableType::Graphics);
 	m_pCommandList->ExecuteIndirect(pCommandSignature, 1, pIndirectArguments->GetResource(), 0, nullptr, 0);
 }
 
