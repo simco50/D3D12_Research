@@ -189,7 +189,7 @@ void GpuParticles::Simulate(CommandContext& context)
 		std::array<Vector4, 64> randomDirections;
 		std::generate(randomDirections.begin(), randomDirections.end(), []() { Vector3 v = Math::RandVector(); v.Normalize(); return Vector4(v.x, v.y, v.z, 0); });
 
-		context.SetComputeDynamicConstantBufferView(0, randomDirections.data(), sizeof(Vector4) * randomDirections.size());
+		context.SetComputeDynamicConstantBufferView(0, randomDirections.data(), sizeof(Vector4) * (uint32)randomDirections.size());
 
 		context.ExecuteIndirect(m_pSimpleDispatchCommandSignature->GetCommandSignature(), m_pEmitArguments.get());
 

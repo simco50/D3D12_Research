@@ -116,7 +116,7 @@ void Graphics::RandomizeLights(int count)
 
 		const float range = Math::RandomRange(40.0f, 60.0f);
 		const float angle = Math::RandomRange(60.0f, 120.0f);
-		const float intensity = Math::RandomRange(250, 270);
+		const float intensity = Math::RandomRange(250.0f, 270.0f);
 
 		Light::Type type = rand() % 2 == 0 ? Light::Type::Point : Light::Type::Spot;
 		switch (type)
