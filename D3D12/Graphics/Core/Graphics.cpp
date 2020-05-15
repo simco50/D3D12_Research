@@ -56,6 +56,9 @@ float g_PSSMFactor = 1.0f;
 bool g_ShowRaytraced = false;
 bool g_VisualizeLights = false;
 
+float g_SunOrientation = 0;
+float g_SunInclination = 0.2f;
+
 Graphics::Graphics(uint32 width, uint32 height, int sampleCount /*= 1*/)
 	: m_WindowWidth(width), m_WindowHeight(height), m_SampleCount(sampleCount)
 {
@@ -616,6 +619,54 @@ void Graphics::Update()
 		m_pClusteredForward->Execute(graph, resources);
 	}
 
+	graph.AddPass("Sky", [&](RGPassBuilder& builder)
+		{
+			Data.DepthStencil = builder.Read(Data.DepthStencil);
+
+			return [=](CommandContext& renderContext, const RGPassResources& resources)
+			{
+				Texture* pDepthStencil = resources.GetTexture(Data.DepthStencil);
+				const TextureDesc& desc = pDepthStencil->GetDesc();
+				renderContext.InsertResourceBarrier(pDepthStencil, D3D12_RESOURCE_STATE_DEPTH_READ);
+
+				RenderPassInfo info = RenderPassInfo(GetCurrentRenderTarget(), RenderPassAccess::Load_Store, pDepthStencil, RenderPassAccess::Load_DontCare);
+
+				renderContext.BeginRenderPass(info);
+				renderContext.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+				renderContext.SetViewport(FloatRect(0, 0, (float)desc.Width, (float)desc.Height));
+
+				renderContext.SetPipelineState(m_pSkyboxPSO.get());
+				renderContext.SetGraphicsRootSignature(m_pSkyboxRS.get());
+
+				float costheta = cosf(g_SunOrientation);
+				float sintheta = sinf(g_SunOrientation);
+				float cosphi = cosf(g_SunInclination * Math::PIDIV2);
+				float sinphi = sinf(g_SunInclination * Math::PIDIV2);
+
+				struct Parameters
+				{
+					Matrix View;
+					Matrix Projection;
+					Vector3 Bias;
+					float padding1;
+					Vector3 SunDirection;
+					float padding2;
+				} constBuffer;
+
+				constBuffer.View = m_pCamera->GetView();
+				constBuffer.Projection = m_pCamera->GetProjection();
+				constBuffer.Bias = Vector3::One;
+				constBuffer.SunDirection = Vector3(costheta * cosphi, sinphi, sintheta * cosphi);
+				constBuffer.SunDirection.Normalize();
+
+				renderContext.SetDynamicConstantBufferView(0, &constBuffer, sizeof(Parameters));
+
+				renderContext.Draw(0, 36);
+
+				renderContext.EndRenderPass();
+			};
+		});
+
 	DebugRenderer::Instance().Render(graph);
 
 	//MSAA Render Target Resolve
@@ -1091,6 +1142,7 @@ void Graphics::OnResize(int width, int height)
 
 void Graphics::InitializeAssets()
 {
+	CommandContext* pContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 	m_pLightBuffer = std::make_unique<Buffer>(this, "Lights");
 
 	//Input layout
@@ -1285,7 +1337,29 @@ void Graphics::InitializeAssets()
 		m_pGenerateMipsPSO->Finalize("Generate Mips PSO", m_pDevice.Get());
 	}
 
-	CommandContext* pContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+	//Sky
+	{
+		D3D12_INPUT_ELEMENT_DESC cubeInputElements[] = {
+			D3D12_INPUT_ELEMENT_DESC{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+		};
+
+		Shader vertexShader("Resources/Shaders/ProceduralSky.hlsl", Shader::Type::Vertex, "VSMain");
+		Shader pixelShader("Resources/Shaders/ProceduralSky.hlsl", Shader::Type::Pixel, "PSMain");
+
+		//Rootsignature
+		m_pSkyboxRS = std::make_unique<RootSignature>();
+		m_pSkyboxRS->FinalizeFromShader("Skybox", vertexShader, m_pDevice.Get());
+
+		//Pipeline state
+		m_pSkyboxPSO = std::make_unique<PipelineState>();
+		m_pSkyboxPSO->SetInputLayout(nullptr, 0);
+		m_pSkyboxPSO->SetRootSignature(m_pSkyboxRS->GetRootSignature());
+		m_pSkyboxPSO->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
+		m_pSkyboxPSO->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
+		m_pSkyboxPSO->SetRenderTargetFormat(RENDER_TARGET_FORMAT, DEPTH_STENCIL_FORMAT, m_SampleCount, m_SampleQuality);
+		m_pSkyboxPSO->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
+		m_pSkyboxPSO->Finalize("Skybox", m_pDevice.Get());
+	}
 
 	//Geometry
 	{
@@ -1468,6 +1542,10 @@ void Graphics::UpdateImGui()
 	ImGui::PopStyleVar();
 
 	ImGui::Begin("Parameters");
+
+	ImGui::Text("Sky");
+	ImGui::SliderFloat("Sun Orientation", &g_SunOrientation, -Math::PI, Math::PI);
+	ImGui::SliderFloat("Sun Inclination", &g_SunInclination, 0, 1);
 
 	ImGui::Text("Shadows");
 	ImGui::Checkbox("SDSM", &g_SDSM);
