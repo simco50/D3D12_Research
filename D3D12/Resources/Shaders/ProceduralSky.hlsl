@@ -65,20 +65,10 @@ struct VSOutput
 VSOutput VSMain(in VSInput input)
 {
 	VSOutput output;
-
-    // Rotate into view-space, centered on the camera
     float3 positionVS = mul(CUBE[input.vertexId].xyz, (float3x3)cView);
-
-    // Transform to clip-space
     output.PositionCS = mul(float4(positionVS, 1.0f), cProjection);
 	output.PositionCS.z = 0.0001f;
-
-	// Make a texture coordinate
 	output.TexCoord = CUBE[input.vertexId].xyz;
-
-	// Pass along the bias
-	output.cBias = cBias;
-
 	return output;
 }
 
@@ -119,42 +109,6 @@ float3 CIESky(float3 dir, float3 sunDir)
 	color = lerp(SunColor, SkyColor, saturate(abs(sunGamma) / SunWidth));
 
 	return max(color * luminance, 0);
-}
-
-float3 GetSky(float3 dir, float3 sunDir)
-{
-	//SKY
-	float3 skyDir = float3(dir.x, abs(dir.y), dir.z);
-
-	float atmosphere = sqrt(1.0f - skyDir.y);
-	float3 skyColor = float3(0.2f, 0.4f, 0.8f);
-	float scatter = pow(abs(sunDir.y), 1.0f / 15.0f);
-	scatter = 1 - min(max(scatter, 0.8f), 1.0f);
-	float3 scatterColor = lerp(float3(1.0f, 1.0f, 1.0f), float3(1.0f, 0.3f, 0.0f) * 1.5f, scatter);
-	return lerp(skyColor, scatterColor, atmosphere / 1.3f);
-}
-
-float3 GetSun(float3 dir, float3 sunDir)
-{
-	const float3 SunColor = float3(1.0f, 0.8f, 0.3f) * 500;
-	const float SunWidth = 0.04f;
-	float sunGamma = AngleBetween(dir, sunDir);
-	float sun = 1 - saturate(abs(sunGamma) / SunWidth);
-
-	float glow = saturate(sun);
-	sun = pow(sun, 100);
-	sun *= 100;
-	sun = saturate(sun);
-
-	glow = pow(glow, 6.0f);
-	glow = pow(glow, abs(dir.y));
-	glow = saturate(glow);
-
-	sun *= pow(abs(dir.y), 2);
-    glow *= pow(abs(dir.y), 2);
-    sun += glow;
-    
-    return SunColor * sun;
 }
 
 float4 PSMain(in VSOutput input) : SV_Target
