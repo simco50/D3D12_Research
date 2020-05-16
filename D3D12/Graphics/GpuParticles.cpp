@@ -15,6 +15,7 @@
 #include "ImGuiRenderer.h"
 
 static int32 g_EmitCount = 30;
+static float g_LifeTime = 4.0f;
 static bool g_Simulate = true;
 
 static constexpr uint32 cMaxParticleCount = 2000000;
@@ -138,11 +139,12 @@ void GpuParticles::Initialize()
 		ImGui::Text("Particles");
 		ImGui::Checkbox("Simulate", &g_Simulate);
 		ImGui::SliderInt("Emit Count", &g_EmitCount, 0, 50);
+		ImGui::SliderFloat("Life Time", &g_LifeTime, 0, 10);
 		ImGui::End();
 		}));
 }
 
-void GpuParticles::Simulate(CommandContext& context)
+void GpuParticles::Simulate(CommandContext& context, Texture* pResolvedDepth, Texture* pNormals)
 {
 	if (!g_Simulate)
 	{
@@ -169,8 +171,15 @@ void GpuParticles::Simulate(CommandContext& context)
 		m_pAliveList2->GetUAV()->GetDescriptor(),
 		m_pParticleBuffer->GetUAV()->GetDescriptor(),
 	};
+
+	D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
+		m_pCountersBuffer->GetSRV()->GetDescriptor(),
+		pResolvedDepth->GetSRV(),
+		pNormals->GetSRV(),
+	};
+
 	context.SetDynamicDescriptors(1, 0, uavs, ARRAYSIZE(uavs));
-	context.SetDynamicDescriptor(2, 0, m_pCountersBuffer->GetSRV()->GetDescriptor());
+	context.SetDynamicDescriptors(2, 0, srvs, ARRAYSIZE(srvs));
 
 	{
 		GPU_PROFILE_SCOPE("Prepare Arguments", &context);
@@ -197,7 +206,13 @@ void GpuParticles::Simulate(CommandContext& context)
 		context.SetPipelineState(m_pEmitPS.get());
 
 		std::array<Vector4, 64> randomDirections;
-		std::generate(randomDirections.begin(), randomDirections.end(), []() { Vector3 v = Math::RandVector(); v.Normalize(); return Vector4(v.x, v.y, v.z, 0); });
+		std::generate(randomDirections.begin(), randomDirections.end(), []()
+			{
+				Vector4 r = Vector4(Math::RandVector());
+				r.y = Math::Lerp(0.1f, 0.8f, (float)abs(r.y));
+				r.Normalize();
+				return r;
+			});
 
 		context.SetComputeDynamicConstantBufferView(0, randomDirections.data(), sizeof(Vector4) * (uint32)randomDirections.size());
 		context.ExecuteIndirect(m_pSimpleDispatchCommandSignature->GetCommandSignature(), m_pEmitArguments.get());
@@ -211,11 +226,17 @@ void GpuParticles::Simulate(CommandContext& context)
 
 		struct Parameters
 		{
+			Matrix ViewProjection;
 			float DeltaTime;
 			float ParticleLifeTime;
+			float Near;
+			float Far;
 		} parameters;
 		parameters.DeltaTime = GameTimer::DeltaTime();
-		parameters.ParticleLifeTime = 4.0f;
+		parameters.ParticleLifeTime = g_LifeTime;
+		parameters.ViewProjection = m_pGraphics->GetCamera()->GetViewProjection();
+		parameters.Near = m_pGraphics->GetCamera()->GetNear();
+		parameters.Far = m_pGraphics->GetCamera()->GetFar();
 
 		context.SetComputeDynamicConstantBufferView(0, &parameters, sizeof(Parameters));
 		context.ExecuteIndirect(m_pSimpleDispatchCommandSignature->GetCommandSignature(), m_pSimulateArguments.get());

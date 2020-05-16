@@ -336,14 +336,6 @@ void Graphics::Update()
 
 	uint64 nextFenceValue = 0;
 
-	graph.AddPass("Simulate Particles", [&](RGPassBuilder& builder)
-		{
-			return [=](CommandContext& context, const RGPassResources& passResources)
-			{
-				m_pParticles->Simulate(context);
-			};
-		});
-
 	//DEPTH PREPASS
 	// - Depth only pass that renders the entire scene
 	// - Optimization that prevents wasteful lighting calculations during the base pass
@@ -457,6 +449,14 @@ void Graphics::Update()
 				};
 			});
 	}
+
+	graph.AddPass("Simulate Particles", [&](RGPassBuilder& builder)
+		{
+			return [=](CommandContext& context, const RGPassResources& passResources)
+			{
+				m_pParticles->Simulate(context, GetResolvedDepthStencil(), GetResolvedNormals());
+			};
+		});
 
 	if (g_ShowRaytraced)
 	{

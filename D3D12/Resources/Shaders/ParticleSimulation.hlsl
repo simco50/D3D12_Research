@@ -1,8 +1,10 @@
 #include "RNG.hlsli"
+#include "Common.hlsli"
 
 #define RootSig "CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \
 				"DescriptorTable(UAV(u0, numDescriptors = 8), visibility = SHADER_VISIBILITY_ALL), " \
-				"DescriptorTable(SRV(t0, numDescriptors = 1), visibility = SHADER_VISIBILITY_ALL), "
+				"DescriptorTable(SRV(t0, numDescriptors = 3), visibility = SHADER_VISIBILITY_ALL), " \
+				"StaticSampler(s0, filter=FILTER_MIN_MAG_LINEAR_MIP_POINT, visibility = SHADER_VISIBILITY_ALL), " \
 
 struct ParticleData
 {
@@ -37,8 +39,11 @@ cbuffer EmitParameters : register(b0)
 
 cbuffer SimulateParameters : register(b0)
 {
+    float4x4 cViewProjection;
     float cDeltaTime;
     float cParticleLifeTime;
+    float cNear;
+    float cFar;
 }
 
 RWByteAddressBuffer uCounters : register(u0);
@@ -51,6 +56,10 @@ RWStructuredBuffer<uint> uAliveList2 : register(u6);
 RWStructuredBuffer<ParticleData> uParticleData  : register(u7);
 
 ByteAddressBuffer tCounters : register(t0);
+Texture2D tDepth : register(t1);
+Texture2D tNormals : register(t2);
+
+SamplerState sSampler : register(s0);
 
 [RootSignature(RootSig)]
 [numthreads(1, 1, 1)]
@@ -83,9 +92,9 @@ void Emit(CS_INPUT input)
 
         ParticleData p;
         p.LifeTime = 0;
-        p.Position = float3(0, 0, 0);
-        p.Velocity = 20*cRandomDirections[particleIndex % 64].xyz;
-        p.Size = (float)Random(deadSlot, 10, 30) / 100.0f;
+        p.Position = float3(0, 3, 0);
+        p.Velocity = normalize(float3(0, 1, 1)) * 20;//20*cRandomDirections[particleIndex % 64].xyz;
+        p.Size = 0.1f;//(float)Random(deadSlot, 10, 30) / 100.0f;
         uParticleData[particleIndex] = p;
 
         uint aliveSlot;
@@ -105,9 +114,28 @@ void Simulate(CS_INPUT input)
 
         if(p.LifeTime < cParticleLifeTime)
         {
+            float4 screenPos = mul(float4(p.Position, 1), cViewProjection);
+            screenPos.xyz /= screenPos.w;
+            if(screenPos.x > -1 && screenPos.y < 1 && screenPos.y > -1 && screenPos.y < 1)
+            {
+                float2 uv = screenPos.xy * float2(0.5f, -0.5f) + 0.5f;
+                float depth = LinearizeDepth(tDepth.SampleLevel(sSampler, uv, 0).r, cFar, cNear);
+                const float thickness = 0.2f;
+
+                if(screenPos.w + p.Size > depth && screenPos.w - p.Size < depth + thickness)
+                {
+                    float3 normal = tNormals.SampleLevel(sSampler, uv, 0).xyz;
+                    if(dot(normal, p.Velocity) < 0)
+                    {
+                        p.Velocity = reflect(p.Velocity, normal);
+                    }
+                }
+            }
+
             p.Velocity += float3(0, -9.81f * cDeltaTime, 0);
             p.Position += p.Velocity * cDeltaTime;
             p.LifeTime += cDeltaTime;
+
             uParticleData[particleIndex] = p;
 
             uint aliveSlot;

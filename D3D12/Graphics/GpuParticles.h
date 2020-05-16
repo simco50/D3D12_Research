@@ -6,6 +6,7 @@ class CommandSignature;
 class PipelineState;
 class RootSignature;
 class CommandContext;
+class Texture;
 
 class GpuParticles
 {
@@ -14,7 +15,7 @@ public:
 	~GpuParticles();
 
 	void Initialize();
-	void Simulate(CommandContext& context);
+	void Simulate(CommandContext& context, Texture* pSourceDepth, Texture* pNormals);
 	void Render(CommandContext& context);
 private:
 	Graphics* m_pGraphics;
