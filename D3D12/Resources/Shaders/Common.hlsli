@@ -140,6 +140,13 @@ float4 ScreenToView(float4 screen, float2 screenDimensions, float4x4 projectionI
     return ClipToView(clip, projectionInverse);
 }
 
+float3 WorldFromDepth(float2 uv, float depth, float4x4 viewProjectionInverse)
+{
+    float4 clip = float4(float2(uv.x, 1.0f - uv.y) * 2.0f - 1.0f, depth, 1.0f);
+    float4 world = mul(clip, viewProjectionInverse);
+    return world.xyz / world.w;
+}
+
 float LinearizeDepth(float z, float near, float far)
 {
     float z_n = 2.0 * z - 1.0;

@@ -1,4 +1,5 @@
 #include "RNG.hlsli"
+#include "Common.hlsli"
 
 #define RPP 64
 
@@ -25,13 +26,6 @@ struct RayPayload
 {
 	float hitDistance;
 };
-
-float4 ClipToWorld(float4 clip)
-{
-	float4 view = mul(clip, cProjectionInverse);
-	view /= view.w;
-	return mul(view, cViewInverse);
-}
 
 [shader("closesthit")] 
 void ClosestHit(inout RayPayload payload, BuiltInTriangleIntersectionAttributes attrib) 
@@ -60,7 +54,7 @@ void RayGen()
 	uint state = SeedThread(launchIndex1d);
 	float3 randomVec = float3(Random01(state), Random01(state), Random01(state)) * 2.0f - 1.0f;
 
-	float4 world = ClipToWorld(float4(float2(texCoord.x, 1.0f - texCoord.y) * 2.0f - 1.0f, depth, 1));
+	float3 world = WorldFromDepth(texCoord, depth, mul(cProjectionInverse, cViewInverse));
 	float3 tangent = normalize(randomVec - normal * dot(randomVec, normal));
 	float3 bitangent = cross(tangent, normal);
 	float3x3 TBN = float3x3(tangent, bitangent, normal);
@@ -70,7 +64,7 @@ void RayGen()
 	{
 		float3 n = mul(cRandomVectors[Random(state, 0, RPP - 1)].xyz, TBN);
 		RayDesc ray;
-		ray.Origin = world.xyz + 0.001f * n;
+		ray.Origin = world + 0.001f * n;
 		ray.Direction = n;
 		ray.TMin = 0.0f;
 		ray.TMax = cRadius;
