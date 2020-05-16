@@ -180,7 +180,7 @@ void Graphics::Update()
 	{
 		for (const Light& light : m_Lights)
 		{
-			DebugRenderer::Instance().AddLight(light);
+			DebugRenderer::Get()->AddLight(light);
 		}
 	}
 
@@ -684,7 +684,7 @@ void Graphics::Update()
 			};
 		});
 
-	DebugRenderer::Instance().Render(graph);
+	DebugRenderer::Get()->Render(graph, *m_pCamera, GetCurrentRenderTarget(), GetDepthStencil());
 
 	//MSAA Render Target Resolve
 	// - We have to resolve a MSAA render target ourselves. Unlike D3D11, this is not done automatically by the API.
@@ -883,13 +883,13 @@ void Graphics::EndFrame(uint64 fenceValue)
 	//We present and request the new backbuffer index and wait for that one to finish on the GPU before starting to queue work for that frame.
 
 	++m_Frame;
-	Profiler::Instance()->BeginReadback(m_Frame);
+	Profiler::Get()->BeginReadback(m_Frame);
 	m_FenceValues[m_CurrentBackBufferIndex] = fenceValue;
 	m_pSwapchain->Present(1, 0);
 	m_CurrentBackBufferIndex = m_pSwapchain->GetCurrentBackBufferIndex();
 	WaitForFence(m_FenceValues[m_CurrentBackBufferIndex]);
-	Profiler::Instance()->EndReadBack(m_Frame);
-	DebugRenderer::Instance().EndFrame();
+	Profiler::Get()->EndReadBack(m_Frame);
+	DebugRenderer::Get()->EndFrame();
 }
 
 void Graphics::InitD3D()
@@ -1015,7 +1015,7 @@ void Graphics::InitD3D()
 	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_DSV] = std::make_unique<OfflineDescriptorAllocator>(this, D3D12_DESCRIPTOR_HEAP_TYPE_DSV, 64);
 
 	m_pDynamicAllocationManager = std::make_unique<DynamicAllocationManager>(this);
-	Profiler::Instance()->Initialize(this);
+	Profiler::Get()->Initialize(this);
 
 	m_pSwapchain.Reset();
 
@@ -1080,8 +1080,7 @@ void Graphics::InitD3D()
 
 	m_pGraphAllocator = std::make_unique<RGResourceAllocator>(this);
 
-	DebugRenderer::Instance().Initialize(this);
-	DebugRenderer::Instance().SetCamera(m_pCamera.get());
+	DebugRenderer::Get()->Initialize(this);
 }
 
 void Graphics::OnResize(int width, int height)
@@ -1554,7 +1553,7 @@ void Graphics::UpdateImGui()
 		ImGui::SetNextWindowSize(ImVec2((float)(m_WindowWidth - 250) * 0.5f, 250));
 		ImGui::SetNextWindowCollapsed(!showOutputLog);
 		ImGui::Begin("Profiler", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
-		ProfileNode* pRootNode = Profiler::Instance()->GetRootNode();
+		ProfileNode* pRootNode = Profiler::Get()->GetRootNode();
 		pRootNode->RenderImGui(m_Frame);
 		ImGui::End();
 	}

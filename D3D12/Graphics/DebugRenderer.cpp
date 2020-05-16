@@ -11,15 +11,14 @@
 #include "Light.h"
 #include "RenderGraph/RenderGraph.h"
 
-DebugRenderer& DebugRenderer::Instance()
+DebugRenderer* DebugRenderer::Get()
 {
 	static DebugRenderer instance;
-	return instance;
+	return &instance;
 }
 
 void DebugRenderer::Initialize(Graphics* pGraphics)
 {
-	m_pGraphics = pGraphics;
 	D3D12_INPUT_ELEMENT_DESC inputElements[] = {
 		D3D12_INPUT_ELEMENT_DESC{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
 		D3D12_INPUT_ELEMENT_DESC{ "COLOR", 0, DXGI_FORMAT_R32_UINT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
@@ -39,7 +38,7 @@ void DebugRenderer::Initialize(Graphics* pGraphics)
 	m_pTrianglesPSO->SetRootSignature(m_pRS->GetRootSignature());
 	m_pTrianglesPSO->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
 	m_pTrianglesPSO->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
-	m_pTrianglesPSO->SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, m_pGraphics->GetMultiSampleCount(), m_pGraphics->GetMultiSampleQualityLevel(m_pGraphics->GetMultiSampleCount()));
+	m_pTrianglesPSO->SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, pGraphics->GetMultiSampleCount(), pGraphics->GetMultiSampleQualityLevel(pGraphics->GetMultiSampleCount()));
 	m_pTrianglesPSO->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
 	m_pTrianglesPSO->SetDepthWrite(true);
 	m_pTrianglesPSO->SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
@@ -50,11 +49,10 @@ void DebugRenderer::Initialize(Graphics* pGraphics)
 	m_pLinesPSO->Finalize("Lines DebugRenderer PSO", pGraphics->GetDevice());
 }
 
-void DebugRenderer::Render(RGGraph& graph)
+void DebugRenderer::Render(RGGraph& graph, Camera& camera, Texture* pTarget, Texture* pDepth)
 {
 	int totalPrimitives = m_LinePrimitives + m_TrianglePrimitives;
-
-	if (totalPrimitives == 0 || m_pCamera == nullptr)
+	if (totalPrimitives == 0)
 	{
 		return;
 	}
@@ -65,15 +63,15 @@ void DebugRenderer::Render(RGGraph& graph)
 		{
 			return [=](CommandContext& context, const RGPassResources& resources)
 			{
-				context.InsertResourceBarrier(m_pGraphics->GetDepthStencil(), D3D12_RESOURCE_STATE_DEPTH_WRITE);
-				context.InsertResourceBarrier(m_pGraphics->GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RENDER_TARGET);
+				context.InsertResourceBarrier(pDepth, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+				context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
-				context.BeginRenderPass(RenderPassInfo(m_pGraphics->GetCurrentRenderTarget(), RenderPassAccess::Load_Store, m_pGraphics->GetDepthStencil(), RenderPassAccess::Load_Store));
+				context.BeginRenderPass(RenderPassInfo(pTarget, RenderPassAccess::Load_Store, pDepth, RenderPassAccess::Load_Store));
 
-				context.SetViewport(FloatRect(0, 0, (float)m_pGraphics->GetWindowWidth(), (float)m_pGraphics->GetWindowHeight()));
+				context.SetViewport(FloatRect(0, 0, (float)pTarget->GetWidth(), (float)pTarget->GetHeight()));
 				context.SetGraphicsRootSignature(m_pRS.get());
 
-				const Matrix& projectionMatrix = m_pCamera->GetViewProjection();
+				const Matrix& projectionMatrix = camera.GetViewProjection();
 				context.SetDynamicConstantBufferView(0, &projectionMatrix, sizeof(Matrix));
 
 				if (m_LinePrimitives != 0)
@@ -294,7 +292,7 @@ void DebugRenderer::AddAxisSystem(const Matrix& transform, const float lineLengt
 {
 	Matrix newMatrix = Matrix::CreateScale(Math::ScaleFromMatrix(transform));
 	newMatrix.Invert(newMatrix);
-	newMatrix *= Matrix::CreateScale(Vector3::Distance(m_pCamera->GetViewInverse().Translation(), transform.Translation()) / 5.0f);
+	//newMatrix *= Matrix::CreateScale(Vector3::Distance(m_pCamera->GetViewInverse().Translation(), transform.Translation()) / 5.0f);
 	newMatrix *= transform;
 	Vector3 origin(Vector3::Transform(Vector3(), transform));
 	Vector3 x(Vector3::Transform(Vector3(lineLength, 0, 0), newMatrix));

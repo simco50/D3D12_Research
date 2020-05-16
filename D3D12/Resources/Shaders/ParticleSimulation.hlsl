@@ -80,6 +80,15 @@ void UpdateSimulationParameters(CS_INPUT input)
     uCounters.Store(EMIT_COUNT, emitCount);
 }
 
+float3 RandomDirection(uint seed)
+{
+    return normalize(float3(
+        lerp(-0.8f, 0.8f, Random01(seed)),
+        lerp(0.2f, 0.8f, Random01(seed)),
+        lerp(0.2f, 0.8f, Random01(seed))
+    ));
+}
+
 [numthreads(128, 1, 1)]
 void Emit(CS_INPUT input)
 {
@@ -90,11 +99,13 @@ void Emit(CS_INPUT input)
         uCounters.InterlockedAdd(DEAD_LIST_COUNTER, -1, deadSlot);
         uint particleIndex = uDeadList[deadSlot - 1];
 
+        uint seed = deadSlot * particleIndex;
+
         ParticleData p;
         p.LifeTime = 0;
         p.Position = float3(0, 3, 0);
-        p.Velocity = normalize(float3(0, 1, 1)) * 20;//20*cRandomDirections[particleIndex % 64].xyz;
-        p.Size = 0.1f;//(float)Random(deadSlot, 10, 30) / 100.0f;
+        p.Velocity = (Random01(seed) + 1) * 30 * RandomDirection(seed);
+        p.Size = 0.15f;//(float)Random(deadSlot, 10, 30) / 100.0f;
         uParticleData[particleIndex] = p;
 
         uint aliveSlot;
@@ -120,19 +131,19 @@ void Simulate(CS_INPUT input)
             {
                 float2 uv = screenPos.xy * float2(0.5f, -0.5f) + 0.5f;
                 float depth = LinearizeDepth(tDepth.SampleLevel(sSampler, uv, 0).r, cFar, cNear);
-                const float thickness = 0.2f;
+                const float thickness = 0.6f;
 
                 if(screenPos.w + p.Size > depth && screenPos.w - p.Size < depth + thickness)
                 {
                     float3 normal = tNormals.SampleLevel(sSampler, uv, 0).xyz;
                     if(dot(normal, p.Velocity) < 0)
                     {
-                        p.Velocity = reflect(p.Velocity, normal);
+                        p.Velocity = reflect(p.Velocity, normal) * 0.85f;
                     }
                 }
             }
 
-            p.Velocity += float3(0, -9.81f * cDeltaTime, 0);
+            p.Velocity += float3(0, -9.81f * cDeltaTime*5, 0);
             p.Position += p.Velocity * cDeltaTime;
             p.LifeTime += cDeltaTime;
 

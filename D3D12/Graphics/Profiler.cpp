@@ -21,7 +21,7 @@ void CpuTimer::End()
 {
 	LARGE_INTEGER end;
 	QueryPerformanceCounter(&end);
-	m_TotalTime = (float)(end.QuadPart - m_StartTime)* Profiler::Instance()->GetSecondsPerCpuTick() * 1000.0f;
+	m_TotalTime = (float)(end.QuadPart - m_StartTime)* Profiler::Get()->GetSecondsPerCpuTick() * 1000.0f;
 }
 
 float CpuTimer::GetTime() const
@@ -37,21 +37,21 @@ void GpuTimer::Begin(CommandContext* pContext)
 {
 	if (m_TimerIndex == -1)
 	{
-		m_TimerIndex = Profiler::Instance()->GetNextTimerIndex();
+		m_TimerIndex = Profiler::Get()->GetNextTimerIndex();
 	}
-	Profiler::Instance()->StartGpuTimer(pContext, m_TimerIndex);
+	Profiler::Get()->StartGpuTimer(pContext, m_TimerIndex);
 }
 
 void GpuTimer::End(CommandContext* pContext)
 {
-	Profiler::Instance()->StopGpuTimer(pContext, m_TimerIndex);
+	Profiler::Get()->StopGpuTimer(pContext, m_TimerIndex);
 }
 
 float GpuTimer::GetTime() const
 {
 	if (m_TimerIndex >= 0)
 	{
-		return Profiler::Instance()->GetGpuTime(m_TimerIndex);
+		return Profiler::Get()->GetGpuTime(m_TimerIndex);
 	}
 	return 0.0f;
 }
@@ -194,7 +194,7 @@ bool ProfileNode::HasChild(const char* pName)
 	return m_Map.find(hash) != m_Map.end();
 }
 
-Profiler* Profiler::Instance()
+Profiler* Profiler::Get()
 {
 	static Profiler profiler;
 	return &profiler;
@@ -302,12 +302,12 @@ float Profiler::GetGpuTime(int timerIndex) const
 
 void Profiler::StartGpuTimer(CommandContext* pContext, int timerIndex)
 {
-	pContext->GetCommandList()->EndQuery(Profiler::Instance()->GetQueryHeap(), D3D12_QUERY_TYPE_TIMESTAMP, timerIndex * 2);
+	pContext->GetCommandList()->EndQuery(Profiler::Get()->GetQueryHeap(), D3D12_QUERY_TYPE_TIMESTAMP, timerIndex * 2);
 }
 
 void Profiler::StopGpuTimer(CommandContext* pContext, int timerIndex)
 {
-	pContext->GetCommandList()->EndQuery(Profiler::Instance()->GetQueryHeap(), D3D12_QUERY_TYPE_TIMESTAMP, timerIndex * 2 + 1);
+	pContext->GetCommandList()->EndQuery(Profiler::Get()->GetQueryHeap(), D3D12_QUERY_TYPE_TIMESTAMP, timerIndex * 2 + 1);
 }
 
 int32 Profiler::GetNextTimerIndex()
