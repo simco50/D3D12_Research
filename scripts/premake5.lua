@@ -23,6 +23,7 @@ workspace (ENGINE_NAME)
 	filter "configurations:Debug"
 		defines { "_DEBUG" }
 		optimize ("Off")
+		inlining "Explicit"
 
 	filter "configurations:Release"
 		defines { "RELEASE" }
