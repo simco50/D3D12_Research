@@ -101,7 +101,13 @@ PSInput VSMain(VSInput input)
 	return result;
 }
 
-
+#define G_SCATTERING 0.0001f
+float ComputeScattering(float LoV)
+{
+	float result = 1.0f - G_SCATTERING * G_SCATTERING;
+	result /= (4.0f * PI * pow(1.0f + G_SCATTERING * G_SCATTERING - (2.0f * G_SCATTERING) * LoV, 1.5f));
+	return result;
+}
 
 [earlydepthstencil]
 float4 PSMain(PSInput input) : SV_TARGET
@@ -124,6 +130,30 @@ float4 PSMain(PSInput input) : SV_TARGET
 
 	float ao = tAO.SampleLevel(sDiffuseSampler, (float2)input.position.xy / cScreenDimensions, 0).r;
 	color += ApplyAmbientLight(diffuseColor, ao, float3(0.2f, 0.5f, 1.0f) * 0.1f);
+
+#define VOLUMETRIC_LIGHT 1
+#if VOLUMETRIC_LIGHT
+	const float fogValue = 0.2f;
+	const uint samples = 50;
+	float3 cameraPos = cViewInverse[3].xyz;
+	float3 worldPos = input.positionWS.xyz;
+	float3 rayVector = cameraPos - worldPos;
+	float3 rayStep = rayVector / samples;
+	float3 accumFog = 0.0f.xxx;
+
+	float3 currentPosition = worldPos;
+	for(int i = 0; i < samples; ++i)
+	{
+		float4 vPos = mul(float4(currentPosition, 1), cView);
+		float4 splits = vPos.z > cCascadeDepths;
+		int cascadeIndex = dot(splits, float4(1, 1, 1, 1));
+		float visibility = DoShadow(currentPosition, Lights[0].ShadowIndex + cascadeIndex);
+		accumFog += visibility * fogValue * ComputeScattering(dot(rayVector, Lights[0].Direction)).xxx * Lights[0].GetColor().rgb * Lights[0].Intensity;
+		currentPosition += rayStep;
+	}
+	accumFog /= samples;
+	color += accumFog;
+#endif
 
 	return float4(color, baseColor.a);
 }
