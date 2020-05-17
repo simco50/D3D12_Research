@@ -199,7 +199,7 @@ void GpuParticles::Simulate(CommandContext& context, Texture* pResolvedDepth, Te
 		{
 			int32 EmitCount;
 		} parameters;
-		parameters.EmitCount = floor(m_ParticlesToSpawn);
+		parameters.EmitCount = (uint32)floor(m_ParticlesToSpawn);
 		m_ParticlesToSpawn -= parameters.EmitCount;
 
 		context.SetComputeDynamicConstantBufferView(0, &parameters, sizeof(Parameters));
