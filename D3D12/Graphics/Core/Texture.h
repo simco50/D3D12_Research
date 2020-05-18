@@ -132,7 +132,7 @@ struct TextureDesc
 	{
 		assert(width);
 		assert(height);
-		assert(Any(flags, TextureFlag::DepthStencil));
+		assert(EnumHasAnyFlags(flags, TextureFlag::DepthStencil));
 		TextureDesc desc;
 		desc.Width = width;
 		desc.Height = height;
@@ -150,7 +150,7 @@ struct TextureDesc
 	{
 		assert(width);
 		assert(height);
-		assert(Any(flags, TextureFlag::RenderTarget));
+		assert(EnumHasAnyFlags(flags, TextureFlag::RenderTarget));
 		TextureDesc desc;
 		desc.Width = width;
 		desc.Height = height;

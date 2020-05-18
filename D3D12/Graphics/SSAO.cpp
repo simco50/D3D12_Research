@@ -16,11 +16,8 @@
 
 SSAO::SSAO(Graphics* pGraphics)
 {
-	if (pGraphics->SupportsRayTracing())
-	{
-		SetupResources(pGraphics);
-		SetupPipelines(pGraphics);
-	}
+	SetupResources(pGraphics);
+	SetupPipelines(pGraphics);
 }
 
 void SSAO::OnSwapchainCreated(int windowWidth, int windowHeight)

@@ -23,7 +23,7 @@ void ShaderResourceView::Create(Buffer* pBuffer, const BufferSRVDesc& desc)
 	const BufferDesc& bufferDesc = pBuffer->GetDesc();
 
 	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-	if(Any(bufferDesc.Usage, BufferFlag::AccelerationStructure))
+	if(EnumHasAnyFlags(bufferDesc.Usage, BufferFlag::AccelerationStructure))
 	{ 
 		srvDesc.Format = DXGI_FORMAT_UNKNOWN;
 		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_RAYTRACING_ACCELERATION_STRUCTURE;
@@ -64,7 +64,7 @@ void ShaderResourceView::Create(Texture* pTexture, const TextureSRVDesc& desc)
 	}
 	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
 	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-	srvDesc.Format = Any(textureDesc.Usage, TextureFlag::DepthStencil) ? Texture::GetSrvFormatFromDepth(textureDesc.Format) : textureDesc.Format;
+	srvDesc.Format = EnumHasAnyFlags(textureDesc.Usage, TextureFlag::DepthStencil) ? Texture::GetSrvFormatFromDepth(textureDesc.Format) : textureDesc.Format;
 
 	switch (textureDesc.Dimensions)
 	{

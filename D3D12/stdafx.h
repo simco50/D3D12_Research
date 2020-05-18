@@ -44,6 +44,8 @@ using uint64 = uint64_t;
 #define NOMINMAX
 #include <Windows.h>
 #include <wrl/client.h>
+template<typename T>
+using ComPtr = Microsoft::WRL::ComPtr<T>;
 
 #include <d3d12.h>
 #include <dxgi1_6.h>
@@ -64,46 +66,24 @@ using uint64 = uint64_t;
 #include "Core/Delegates.h"
 #include "Graphics/Core/D3DUtils.h"
 
-template<typename T>
-using ComPtr = Microsoft::WRL::ComPtr<T>;
+#define DECLARE_BITMASK_TYPE(Enum) \
+	inline Enum& operator|=(Enum& Lhs, Enum Rhs) { return Lhs = (Enum)((__underlying_type(Enum))Lhs | (__underlying_type(Enum))Rhs); } \
+	inline Enum& operator&=(Enum& Lhs, Enum Rhs) { return Lhs = (Enum)((__underlying_type(Enum))Lhs & (__underlying_type(Enum))Rhs); } \
+	inline Enum& operator^=(Enum& Lhs, Enum Rhs) { return Lhs = (Enum)((__underlying_type(Enum))Lhs ^ (__underlying_type(Enum))Rhs); } \
+	inline constexpr Enum  operator| (Enum  Lhs, Enum Rhs) { return (Enum)((__underlying_type(Enum))Lhs | (__underlying_type(Enum))Rhs); } \
+	inline constexpr Enum  operator& (Enum  Lhs, Enum Rhs) { return (Enum)((__underlying_type(Enum))Lhs & (__underlying_type(Enum))Rhs); } \
+	inline constexpr Enum  operator^ (Enum  Lhs, Enum Rhs) { return (Enum)((__underlying_type(Enum))Lhs ^ (__underlying_type(Enum))Rhs); } \
+	inline constexpr bool  operator! (Enum  E) { return !(__underlying_type(Enum))E; } \
+	inline constexpr Enum  operator~ (Enum  E) { return (Enum)~(__underlying_type(Enum))E; }
 
-template <size_t S>
-struct EnumSize;
-template <>
-struct EnumSize<1>
+template<typename Enum>
+inline bool EnumHasAllFlags(Enum Flags, Enum Contains)
 {
-	typedef int8 type;
-};
-template <>
-struct EnumSize<2>
-{
-	typedef int16 type;
-};
-template <>
-struct EnumSize<4>
-{
-	typedef int32 type;
-};
-template <>
-struct EnumSize<8>
-{
-	typedef int64 type;
-};
+	return (((__underlying_type(Enum))Flags) & (__underlying_type(Enum))Contains) == ((__underlying_type(Enum))Contains);
+}
 
-// used as an approximation of std::underlying_type<T>
-template <class T>
-struct EnumFlagSize
+template<typename Enum>
+inline bool EnumHasAnyFlags(Enum Flags, Enum Contains)
 {
-	typedef typename EnumSize<sizeof(T)>::type type;
-};
-
-#define DECLARE_BITMASK_TYPE(ENUMTYPE) \
-inline constexpr ENUMTYPE operator | (ENUMTYPE a, ENUMTYPE b) throw() { return ENUMTYPE(((EnumFlagSize<ENUMTYPE>::type)a) | ((EnumFlagSize<ENUMTYPE>::type)b)); } \
-inline ENUMTYPE& operator |= (ENUMTYPE& a, ENUMTYPE b) throw() { return (ENUMTYPE&)(((EnumFlagSize<ENUMTYPE>::type&)a) |= ((EnumFlagSize<ENUMTYPE>::type)b)); } \
-inline constexpr ENUMTYPE operator & (ENUMTYPE a, ENUMTYPE b) throw() { return ENUMTYPE(((EnumFlagSize<ENUMTYPE>::type)a) & ((EnumFlagSize<ENUMTYPE>::type)b)); } \
-inline ENUMTYPE& operator &= (ENUMTYPE& a, ENUMTYPE b) throw() { return (ENUMTYPE&)(((EnumFlagSize<ENUMTYPE>::type&)a) &= ((EnumFlagSize<ENUMTYPE>::type)b)); } \
-inline constexpr ENUMTYPE operator ~ (ENUMTYPE a) throw() { return ENUMTYPE(~((EnumFlagSize<ENUMTYPE>::type)a)); } \
-inline constexpr ENUMTYPE operator ^ (ENUMTYPE a, ENUMTYPE b) throw() { return ENUMTYPE(((EnumFlagSize<ENUMTYPE>::type)a) ^ ((EnumFlagSize<ENUMTYPE>::type)b)); } \
-inline ENUMTYPE& operator ^= (ENUMTYPE& a, ENUMTYPE b) throw() { return (ENUMTYPE&)(((EnumFlagSize<ENUMTYPE>::type&)a) ^= ((EnumFlagSize<ENUMTYPE>::type)b)); } \
-inline constexpr bool Any(ENUMTYPE a, ENUMTYPE b) throw() { return (ENUMTYPE)(((EnumFlagSize<ENUMTYPE>::type&)a) & ((EnumFlagSize<ENUMTYPE>::type)b)) != (ENUMTYPE)0; } \
-inline constexpr bool All(ENUMTYPE a, ENUMTYPE b) throw() { return (ENUMTYPE)(((EnumFlagSize<ENUMTYPE>::type&)a) & ((EnumFlagSize<ENUMTYPE>::type)b)) == b; }
+	return (((__underlying_type(Enum))Flags) & (__underlying_type(Enum))Contains) != 0;
+}

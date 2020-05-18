@@ -60,7 +60,7 @@ void Texture::Create(const TextureDesc& textureDesc)
 {
 	m_Desc = textureDesc;
 	TextureFlag depthAndRt = TextureFlag::RenderTarget | TextureFlag::DepthStencil;
-	assert(All(textureDesc.Usage, depthAndRt) == false);
+	assert(EnumHasAllFlags(textureDesc.Usage, depthAndRt) == false);
 
 	Release();
 
@@ -108,11 +108,11 @@ void Texture::Create(const TextureDesc& textureDesc)
 		assert(false);
 		break;
 	}
-	if (Any(textureDesc.Usage, TextureFlag::UnorderedAccess))
+	if (EnumHasAnyFlags(textureDesc.Usage, TextureFlag::UnorderedAccess))
 	{
 		desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 	}
-	if (Any(textureDesc.Usage, TextureFlag::RenderTarget))
+	if (EnumHasAnyFlags(textureDesc.Usage, TextureFlag::RenderTarget))
 	{
 		if (textureDesc.ClearBindingValue.BindingValue == ClearBinding::ClearBindingValue::Color)
 		{
@@ -128,7 +128,7 @@ void Texture::Create(const TextureDesc& textureDesc)
 		desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
 
 	}
-	if (Any(textureDesc.Usage, TextureFlag::DepthStencil))
+	if (EnumHasAnyFlags(textureDesc.Usage, TextureFlag::DepthStencil))
 	{
 		if (textureDesc.ClearBindingValue.BindingValue == ClearBinding::ClearBindingValue::DepthStencil)
 		{
@@ -145,7 +145,7 @@ void Texture::Create(const TextureDesc& textureDesc)
 		pClearValue = &clearValue;
 		m_CurrentState = D3D12_RESOURCE_STATE_DEPTH_WRITE;
 
-		if (Any(textureDesc.Usage, TextureFlag::ShaderResource) == false)
+		if (EnumHasAnyFlags(textureDesc.Usage, TextureFlag::ShaderResource) == false)
 		{
 			desc.Flags |= D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
 		}
@@ -153,16 +153,16 @@ void Texture::Create(const TextureDesc& textureDesc)
 
 	m_pResource = m_pGraphics->CreateResource(desc, m_CurrentState, D3D12_HEAP_TYPE_DEFAULT, pClearValue);
 
-	if (Any(textureDesc.Usage, TextureFlag::ShaderResource) )
+	if (EnumHasAnyFlags(textureDesc.Usage, TextureFlag::ShaderResource))
 	{
 		CreateSRV(&m_pSrv, TextureSRVDesc(0));
 	}
-	if (Any(textureDesc.Usage, TextureFlag::UnorderedAccess))
+	if (EnumHasAnyFlags(textureDesc.Usage, TextureFlag::UnorderedAccess))
 	{
 		TextureUAVDesc uavDesc(0);
 		CreateUAV(&m_pUav, uavDesc);
 	}
-	if (Any(textureDesc.Usage, TextureFlag::RenderTarget))
+	if (EnumHasAnyFlags(textureDesc.Usage, TextureFlag::RenderTarget))
 	{
 		if (m_Rtv.ptr == 0)
 		{
@@ -222,7 +222,7 @@ void Texture::Create(const TextureDesc& textureDesc)
 		}
 		m_pGraphics->GetDevice()->CreateRenderTargetView(m_pResource, &rtvDesc, m_Rtv);
 	}
-	else if (Any(textureDesc.Usage, TextureFlag::DepthStencil))
+	else if (EnumHasAnyFlags(textureDesc.Usage, TextureFlag::DepthStencil))
 	{
 		if (m_Rtv.ptr == 0)
 		{
