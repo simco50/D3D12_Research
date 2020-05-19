@@ -133,8 +133,8 @@ float4 PSMain(PSInput input) : SV_TARGET
 
 #define VOLUMETRIC_LIGHT 1
 #if VOLUMETRIC_LIGHT
-	const float fogValue = 0.2f;
-	const uint samples = 50;
+	const float fogValue = 0.1f;
+	const uint samples = 16;
 	float3 cameraPos = cViewInverse[3].xyz;
 	float3 worldPos = input.positionWS.xyz;
 	float3 rayVector = cameraPos - worldPos;
@@ -142,13 +142,38 @@ float4 PSMain(PSInput input) : SV_TARGET
 	float3 accumFog = 0.0f.xxx;
 
 	float3 currentPosition = worldPos;
+
+	static float DitherPattern[4][4] = 
+		{{ 0.0f, 0.5f, 0.125f, 0.625f},
+		{ 0.75f, 0.22f, 0.875f, 0.375f},
+		{ 0.1875f, 0.6875f, 0.0625f, 0.5625},
+		{ 0.9375f, 0.4375f, 0.8125f, 0.3125}};
+		
+	float ditherValue = DitherPattern[floor(input.position.x) % 4][floor(input.position.y) % 4];
+	currentPosition += rayStep + ditherValue;
+
 	for(int i = 0; i < samples; ++i)
 	{
 		float4 vPos = mul(float4(currentPosition, 1), cView);
 		float4 splits = vPos.z > cCascadeDepths;
 		int cascadeIndex = dot(splits, float4(1, 1, 1, 1));
-		float visibility = DoShadow(currentPosition, Lights[0].ShadowIndex + cascadeIndex);
-		accumFog += visibility * fogValue * ComputeScattering(dot(rayVector, Lights[0].Direction)).xxx * Lights[0].GetColor().rgb * Lights[0].Intensity;
+		int shadowMapIndex = Lights[0].ShadowIndex + cascadeIndex;
+
+		float4x4 lightViewProjection = cLightViewProjections[shadowMapIndex];
+		float4 lightPos = mul(float4(currentPosition, 1), lightViewProjection);
+		lightPos.xyz /= lightPos.w;
+		lightPos.x = lightPos.x / 2.0f + 0.5f;
+		lightPos.y = lightPos.y / -2.0f + 0.5f;
+
+		float2 shadowMapStart = cShadowMapOffsets[shadowMapIndex].xy;
+		float2 normalizedShadowMapSize = cShadowMapOffsets[shadowMapIndex].zw;
+
+		float2 texCoord = shadowMapStart + float2(lightPos.x * normalizedShadowMapSize.x, lightPos.y * normalizedShadowMapSize.y); 
+		float shadowDepth = tShadowMapTexture.SampleLevel(sDiffuseSampler, texCoord, 0).r;
+		if(shadowDepth < lightPos.z)
+		{
+			accumFog += fogValue * ComputeScattering(dot(rayVector, Lights[0].Direction)).xxx * Lights[0].GetColor().rgb * Lights[0].Intensity;
+		}
 		currentPosition += rayStep;
 	}
 	accumFog /= samples;
