@@ -30,6 +30,9 @@ cbuffer Constants : register(b0)
 	float cCloudTheshold;
 	float3 cCloudOffset;
 	float cCloudDensity;
+
+	float3 cMinExtents;
+	float3 cMaxExtents;
 }
 
 PSInput VSMain(VSInput input)
@@ -41,8 +44,9 @@ PSInput VSMain(VSInput input)
 	return output;
 }
 
-float2 rayBoxDistance(float3 boundsMin, float3 boundsMax, float3 rayOrigin, float3 rayDirection)
+float2 RayBoxDistance(float3 boundsMin, float3 boundsMax, float3 rayOrigin, float3 rayDirection)
 {
+	//http://jcgt.org/published/0007/03/04/
 	float3 t0 = (boundsMin - rayOrigin) / rayDirection;
 	float3 t1 = (boundsMax - rayOrigin) / rayDirection;
 	float3 tMin = min(t0, t1);
@@ -70,15 +74,14 @@ float SampleDensity(float3 position)
 
 float4 PSMain(PSInput input) : SV_TARGET
 {
-	float3 rd = normalize(input.ray.xyz);
 	float3 ro = cViewInverse[3].xyz;
-
+	float3 rd = normalize(input.ray.xyz);
 	float4 color = tSceneTexture.Sample(sSceneSampler, input.texCoord);
+
+	float2 boxResult = RayBoxDistance(cMinExtents, cMaxExtents, ro, rd);
 	float depth = GetLinearDepth(tDepthTexture.Sample(sSceneSampler, input.texCoord).r);
 	float maxDepth = depth * length(input.ray.xyz);
-
-	float2 boxResult = rayBoxDistance(float3(-50, -5, -50), float3(50, 50, 50), ro, rd);
-
+	
 	float distanceTravelled = 0;
 	float stepSize = boxResult.y / 100;
 	float dstLimit = min(maxDepth - boxResult.x, boxResult.y);
@@ -90,6 +93,6 @@ float4 PSMain(PSInput input) : SV_TARGET
 		totalDensity += SampleDensity(rayPos) * stepSize;
 		distanceTravelled += stepSize;
 	}
-	float transmittance = exp(-totalDensity);
-	return float4(color.xyz * transmittance, 1);
+	float transmittance = saturate(1 - exp(-totalDensity));
+	return float4(color.xyz + 5*transmittance, 1);
 }

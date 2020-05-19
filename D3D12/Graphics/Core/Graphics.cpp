@@ -637,14 +637,6 @@ void Graphics::Update()
 			};
 		});
 
-	graph.AddPass("Draw Clouds", [&](RGPassBuilder& builder)
-		{
-			return [=](CommandContext& context, const RGPassResources& passResources)
-			{
-				m_pClouds->Render(context, GetCurrentRenderTarget(), GetDepthStencil(), GetCamera());
-			};
-		});
-
 	graph.AddPass("Sky", [&](RGPassBuilder& builder)
 		{
 			Data.DepthStencil = builder.Read(Data.DepthStencil);
@@ -690,6 +682,14 @@ void Graphics::Update()
 				renderContext.Draw(0, 36);
 
 				renderContext.EndRenderPass();
+			};
+		});
+
+	graph.AddPass("Draw Clouds", [&](RGPassBuilder& builder)
+		{
+			return [=](CommandContext& context, const RGPassResources& passResources)
+			{
+				m_pClouds->Render(context, GetCurrentRenderTarget(), GetDepthStencil(), GetCamera());
 			};
 		});
 
