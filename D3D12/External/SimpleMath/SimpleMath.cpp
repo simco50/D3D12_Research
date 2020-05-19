@@ -9,7 +9,6 @@
 //-------------------------------------------------------------------------------------
 
 #include "SimpleMath.h"
-#include <algorithm>
 
 /****************************************************************************
  *
@@ -71,7 +70,7 @@ static_assert(offsetof(DirectX::SimpleMath::Viewport, minDepth) == offsetof(D3D1
 static_assert(offsetof(DirectX::SimpleMath::Viewport, maxDepth) == offsetof(D3D11_VIEWPORT, MaxDepth), "Layout mismatch");
 #endif
 
-#if defined(__d3d12_h__) || defined(__d3d12_x_h__)
+#if defined(__d3d12_h__) || defined(__d3d12_x_h__) || defined(__XBOX_D3D12_X__)
 static_assert(sizeof(DirectX::SimpleMath::Viewport) == sizeof(D3D12_VIEWPORT), "Size mismatch");
 static_assert(offsetof(DirectX::SimpleMath::Viewport, x) == offsetof(D3D12_VIEWPORT, TopLeftX), "Layout mismatch");
 static_assert(offsetof(DirectX::SimpleMath::Viewport, y) == offsetof(D3D12_VIEWPORT, TopLeftY), "Layout mismatch");
@@ -81,7 +80,7 @@ static_assert(offsetof(DirectX::SimpleMath::Viewport, minDepth) == offsetof(D3D1
 static_assert(offsetof(DirectX::SimpleMath::Viewport, maxDepth) == offsetof(D3D12_VIEWPORT, MaxDepth), "Layout mismatch");
 #endif
 
-RECT DirectX::SimpleMath::Viewport::ComputeDisplayArea(DXGI_SCALING scaling, UINT backBufferWidth, UINT backBufferHeight, int outputWidth, int outputHeight)
+RECT DirectX::SimpleMath::Viewport::ComputeDisplayArea(DXGI_SCALING scaling, UINT backBufferWidth, UINT backBufferHeight, int outputWidth, int outputHeight) noexcept
 {
     RECT rct;
 
@@ -133,15 +132,15 @@ RECT DirectX::SimpleMath::Viewport::ComputeDisplayArea(DXGI_SCALING scaling, UIN
             // Output is displayed in the upper left corner of the window area
             rct.top = 0;
             rct.left = 0;
-            rct.right = std::min<UINT>(backBufferWidth, UINT(outputWidth));
-            rct.bottom = std::min<UINT>(backBufferHeight, UINT(outputHeight));
+            rct.right = std::min<LONG>(static_cast<LONG>(backBufferWidth), outputWidth);
+            rct.bottom = std::min<LONG>(static_cast<LONG>(backBufferHeight), outputHeight);
             break;
     }
 
     return rct;
 }
 
-RECT DirectX::SimpleMath::Viewport::ComputeTitleSafeArea(UINT backBufferWidth, UINT backBufferHeight)
+RECT DirectX::SimpleMath::Viewport::ComputeTitleSafeArea(UINT backBufferWidth, UINT backBufferHeight) noexcept
 {
     float safew = (float(backBufferWidth) + 19.f) / 20.f;
     float safeh = (float(backBufferHeight) + 19.f) / 20.f;

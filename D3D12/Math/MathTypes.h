@@ -1,5 +1,6 @@
 #pragma once
 
+#define __d3d12_h__
 #include "External/SimpleMath/SimpleMath.h"
 using BoundingBox = DirectX::BoundingBox;
 using BoundingFrustum = DirectX::BoundingFrustum;
@@ -36,6 +37,10 @@ struct RectT
 
 	T GetWidth() const { return Right - Left; }
 	T GetHeight() const { return Bottom - Top; }
+	T GetAspect() const
+	{
+		return GetWidth() / GetHeight();
+	}
 
 	RectT Scale(const float scale) const
 	{

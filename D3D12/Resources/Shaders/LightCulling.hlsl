@@ -1,7 +1,12 @@
-#include "Common.hlsl"
-#include "Constants.hlsl"
+#include "Common.hlsli"
+#include "Constants.hlsli"
+
+#define RootSig "CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \
+				"DescriptorTable(UAV(u0, numDescriptors = 5), visibility=SHADER_VISIBILITY_ALL), " \
+				"DescriptorTable(SRV(t0, numDescriptors = 2), visibility=SHADER_VISIBILITY_ALL), "
 
 #define MAX_LIGHTS_PER_TILE 256
+#define BLOCK_SIZE 16
 
 cbuffer ShaderParameters : register(b0)
 {
@@ -80,6 +85,7 @@ uint CreateLightMask(float depthRangeMin, float depthRange, Sphere sphere)
     return mask;
 }
 
+[RootSignature(RootSig)]
 [numthreads(BLOCK_SIZE, BLOCK_SIZE, 1)]
 void CSMain(CS_INPUT input)
 {
@@ -193,7 +199,7 @@ void CSMain(CS_INPUT input)
         case LIGHT_SPOT:
         {
             Sphere sphere;
-            sphere.Radius = light.Range * 0.5f / pow(cos(radians(light.SpotLightAngle / 2)), 2);
+            sphere.Radius = light.Range * 0.5f / pow(light.SpotlightAngles.y, 2);
             sphere.Position = mul(float4(light.Position, 1), cView).xyz + mul(light.Direction, (float3x3)cView) * sphere.Radius;
             if (SphereInFrustum(sphere, GroupFrustum, nearClipVS, maxDepthVS))
             {

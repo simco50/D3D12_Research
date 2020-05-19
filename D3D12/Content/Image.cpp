@@ -11,6 +11,7 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "External/Stb/stb_image_write.h"
 #include <fstream>
+#include "Core/Paths.h"
 
 Image::Image()
 {
@@ -22,9 +23,9 @@ Image::~Image()
 
 }
 
-bool Image::Load(const std::string& inputStream)
+bool Image::Load(const char* inputStream)
 {
-	const std::string extension = inputStream.substr(inputStream.find('.') + 1);
+	const std::string extension = Paths::GetFileExtenstion(inputStream);
 	bool success = false;
 	if (extension == "dds")
 	{
@@ -36,6 +37,25 @@ bool Image::Load(const std::string& inputStream)
 		success = LoadStbi(inputStream);
 	}
 	return success;
+}
+
+bool Image::Load(const void* pInPixels, size_t dataSize, const char* pFormatHint)
+{
+	m_Components = 4;
+	m_Depth = 1;
+	int components = 0;
+
+	unsigned char* pPixels = stbi_load_from_memory((stbi_uc*)pInPixels, (int)dataSize, &m_Width, &m_Height, &components, m_Components);
+	if (pPixels == nullptr)
+	{
+		return false;
+	}
+	m_BBP = sizeof(char) * 8 * m_Components;
+	m_Format = ImageFormat::RGBA;
+	m_Pixels.resize(m_Width * m_Height * m_Components);
+	memcpy(m_Pixels.data(), pPixels, m_Pixels.size());
+	stbi_image_free(pPixels);
+	return true;
 }
 
 bool Image::SetSize(const int x, const int y, const int components)
@@ -225,16 +245,16 @@ unsigned int Image::TextureFormatFromCompressionFormat(const ImageFormat& format
 	}
 }
 
-bool Image::LoadStbi(const std::string& inputStream)
+bool Image::LoadStbi(const char* inputStream)
 {
 	m_Components = 4;
 	m_Depth = 1;
 	int components = 0;
 
-	m_IsHdr = stbi_is_hdr(inputStream.c_str());
+	m_IsHdr = stbi_is_hdr(inputStream);
 	if (m_IsHdr)
 	{
-		float* pPixels = stbi_loadf(inputStream.c_str(), &m_Width, &m_Height, &components, m_Components);
+		float* pPixels = stbi_loadf(inputStream, &m_Width, &m_Height, &components, m_Components);
 		if (pPixels == nullptr)
 		{
 			return false;
@@ -248,7 +268,7 @@ bool Image::LoadStbi(const std::string& inputStream)
 	}
 	else
 	{
-		unsigned char* pPixels = stbi_load(inputStream.c_str(), &m_Width, &m_Height, &components, m_Components);
+		unsigned char* pPixels = stbi_load(inputStream, &m_Width, &m_Height, &components, m_Components);
 		if (pPixels == nullptr)
 		{
 			return false;
@@ -262,7 +282,7 @@ bool Image::LoadStbi(const std::string& inputStream)
 	}
 }
 
-bool Image::LoadDds(const std::string& inputStream)
+bool Image::LoadDds(const char* inputStream)
 {
 	std::ifstream fStream(inputStream, std::ios::binary);
 
@@ -475,6 +495,7 @@ bool Image::LoadDds(const std::string& inputStream)
 		if (isCubemap)
 		{
 			imageChainCount = 6;
+			m_IsCubemap = true;
 		}
 		else if (hasDxgi && pDx10Header->arraySize > 1)
 		{
@@ -482,13 +503,12 @@ bool Image::LoadDds(const std::string& inputStream)
 			m_IsArray = true;
 		}
 		uint32 totalDataSize = 0;
-		m_MipLevelDataOffsets.clear();
 		m_MipLevels = std::max(1, (int)header.dwMipMapCount);
 		for (int mipLevel = 0; mipLevel < m_MipLevels; ++mipLevel)
 		{
 			MipLevelInfo mipInfo;
 			GetSurfaceInfo(header.dwWidth, header.dwHeight, header.dwDepth, mipLevel, mipInfo);
-			m_MipLevelDataOffsets.push_back(totalDataSize);
+			m_MipLevelDataOffsets[mipLevel] = totalDataSize;
 			totalDataSize += mipInfo.DataSize;
 		}
 

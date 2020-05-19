@@ -1,0 +1,8 @@
+
+#define PI 3.14159265359
+#define PI_DIV_2 1.57079632679
+#define PI_DIV_4 0.78539816339
+
+#define LIGHT_DIRECTIONAL 0
+#define LIGHT_POINT 1
+#define LIGHT_SPOT 2

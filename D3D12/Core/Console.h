@@ -27,11 +27,9 @@ public:
 		LogType Type;
 	};
 	static void Startup();
-	static bool LogHRESULT(const std::string &source, HRESULT hr);
-	static bool LogHRESULT(char* source, HRESULT hr);
-	static void Log(const std::string &message, LogType type = LogType::Info);
+	static bool LogHRESULT(const char* source, HRESULT hr);
+	static void Log(const char* message, LogType type = LogType::Info);
 	static void LogFormat(LogType type, const char* format, ...);
-	static void LogFormat(LogType type, const std::string& format, ...);
 	static void SetVerbosity(LogType type);
 
 	static const std::deque<LogEntry>& GetHistory();
@@ -39,8 +37,8 @@ public:
 private:
 	void InitializeConsoleWindow();
 
+	const size_t m_ConvertBufferSize;
 	char* m_ConvertBuffer;
-	const size_t m_ConvertBufferSize = 4096;
 	std::queue<LogEntry> m_MessageQueue;
 	std::mutex m_QueueMutex;
 

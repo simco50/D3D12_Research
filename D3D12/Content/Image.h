@@ -1,7 +1,5 @@
 #pragma once
 
-struct SDL_Surface;
-
 enum class ImageFormat
 {
 	RGBA = 0,
@@ -35,7 +33,8 @@ public:
 	explicit Image();
 	virtual ~Image();
 
-	bool Load(const std::string& filePath);
+	bool Load(const char* filePath);
+	bool Load(const void* pPixels, size_t dataSize, const char* pFormatHint);
 
 	bool SetSize(const int x, const int y, const int components);
 	bool SetData(const unsigned int* pPixels);
@@ -51,6 +50,7 @@ public:
 	int GetComponents() const { return m_Components; }
 	bool IsSRGB() const { return m_sRgb; }
 	bool IsHDR() const { return m_IsHdr; }
+	bool IsCubemap() const { return m_IsCubemap; }
 
 	unsigned char* GetWritableData() { return m_Pixels.data(); }
 	const unsigned char* GetData(int mipLevel = 0) const;
@@ -67,8 +67,8 @@ public:
 	static unsigned int TextureFormatFromCompressionFormat(const ImageFormat& format, bool sRgb);
 
 private:
-	bool LoadDds(const std::string& inputStream);
-	bool LoadStbi(const std::string& inputStream);
+	bool LoadDds(const char* inputStream);
+	bool LoadStbi(const char* inputStream);
 
 	int m_Width = 0;
 	int m_Height = 0;
@@ -79,8 +79,9 @@ private:
 	bool m_sRgb = false;
 	bool m_IsArray = false;
 	bool m_IsHdr = false;
+	bool m_IsCubemap = false;
 	std::unique_ptr<Image> m_pNextImage;
 	ImageFormat m_Format = ImageFormat::MAX;
+	std::array<uint32, D3D12_REQ_MIP_LEVELS> m_MipLevelDataOffsets;
 	std::vector<unsigned char> m_Pixels;
-	std::vector<uint32> m_MipLevelDataOffsets;
 };

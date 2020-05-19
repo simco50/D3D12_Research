@@ -1,9 +1,19 @@
-#include "Common.hlsl"
-#include "Lighting.hlsl"
+#include "Common.hlsli"
+#include "Lighting.hlsli"
+
+#define RootSig "RootFlags(ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT), " \
+				"CBV(b0, visibility=SHADER_VISIBILITY_VERTEX), " \
+				"CBV(b1, visibility=SHADER_VISIBILITY_ALL), " \
+				"CBV(b2, visibility=SHADER_VISIBILITY_PIXEL), " \
+				"DescriptorTable(SRV(t0, numDescriptors = 3)), " \
+				"DescriptorTable(SRV(t3, numDescriptors = 5), visibility=SHADER_VISIBILITY_PIXEL), " \
+				"StaticSampler(s0, filter=FILTER_MIN_MAG_MIP_LINEAR, visibility = SHADER_VISIBILITY_PIXEL), " \
+				"StaticSampler(s1, filter=FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT, visibility = SHADER_VISIBILITY_PIXEL, comparisonFunc=COMPARISON_GREATER), "
 
 cbuffer PerObjectData : register(b0)
 {
 	float4x4 cWorld;
+	float4x4 cWorldViewProj;
 }
 
 cbuffer PerFrameData : register(b1)
@@ -45,29 +55,20 @@ Texture2D tNormalTexture : register(t1);
 Texture2D tSpecularTexture : register(t2);
 
 SamplerState sDiffuseSampler : register(s0);
-SamplerState sNormalSampler : register(s1);
 
-StructuredBuffer<uint2> tLightGrid : register(t3);
-StructuredBuffer<uint> tLightIndexList : register(t4);
-StructuredBuffer<Light> Lights : register(t5);
-Texture2D tHeatMapTexture : register(t6);
+StructuredBuffer<uint2> tLightGrid : register(t4);
+StructuredBuffer<uint> tLightIndexList : register(t5);
+StructuredBuffer<Light> Lights : register(t6);
+Texture2D tAO : register(t7);
 
 uint GetSliceFromDepth(float depth)
 {
     return floor(log(depth) * cSliceMagicA - cSliceMagicB);
 }
 
-int GetLightCount(float4 positionVS, float4 position)
+LightResult DoLight(float4 pos, float3 vPos, float3 worldPos, float3 N, float3 V, float3 diffuseColor, float3 specularColor, float roughness)
 {
-	uint zSlice = GetSliceFromDepth(positionVS.z);
-    uint2 clusterIndexXY = floor(position.xy / cClusterSize);
-    uint clusterIndex1D = clusterIndexXY.x + (clusterIndexXY.y * cClusterDimensions.x) + (zSlice * (cClusterDimensions.x * cClusterDimensions.y));
-	return tLightGrid[clusterIndex1D].y;
-}
-
-LightResult DoLight(float4 position, float4 viewSpacePosition, float3 worldPosition, float3 normal, float3 viewDirection)
-{
-    uint3 clusterIndex3D = uint3(floor(position.xy / cClusterSize), GetSliceFromDepth(viewSpacePosition.z));
+    uint3 clusterIndex3D = uint3(floor(pos.xy / cClusterSize), GetSliceFromDepth(vPos.z));
     uint clusterIndex1D = clusterIndex3D.x + (cClusterDimensions.x * (clusterIndex3D.y + cClusterDimensions.y * clusterIndex3D.z));
 
 	uint startOffset = tLightGrid[clusterIndex1D].x;
@@ -78,27 +79,7 @@ LightResult DoLight(float4 position, float4 viewSpacePosition, float3 worldPosit
 	{
 		uint lightIndex = tLightIndexList[startOffset + i];
 		Light light = Lights[lightIndex];
-
-		LightResult result = (LightResult)0;
-
-		switch(light.Type)
-		{
-		case LIGHT_DIRECTIONAL:
-			result = DoDirectionalLight(light, worldPosition, normal, viewDirection);
-			break;
-		case LIGHT_POINT:
-			result = DoPointLight(light, worldPosition, normal, viewDirection);
-			break;
-		case LIGHT_SPOT:
-			result = DoSpotLight(light, worldPosition, normal, viewDirection);
-			break;
-		default:
-			//Unsupported light type
-			result.Diffuse = float4(1, 0, 1, 1);
-			result.Specular = float4(0, 0, 0, 1);
-			break;
-		}
-
+		LightResult result = DoLight(light, specularColor, diffuseColor, roughness, pos, worldPos, vPos, N, V);
 		totalResult.Diffuse += result.Diffuse;
 		totalResult.Specular += result.Specular;
 	}
@@ -106,25 +87,13 @@ LightResult DoLight(float4 position, float4 viewSpacePosition, float3 worldPosit
 	return totalResult;
 }
 
-float3 CalculateNormal(float3 normal, float3 tangent, float3 bitangent, float2 texCoord, bool invertY)
-{
-	float3x3 normalMatrix = float3x3(tangent, bitangent, normal);
-	float3 sampledNormal = tNormalTexture.Sample(sNormalSampler, texCoord).rgb;
-	sampledNormal.xy = sampledNormal.xy * 2.0f - 1.0f;
-	if(invertY)
-	{
-		sampledNormal.y = -sampledNormal.y;
-	}
-	sampledNormal = normalize(sampledNormal);
-	return mul(sampledNormal, normalMatrix);
-}
-
+[RootSignature(RootSig)]
 PSInput VSMain(VSInput input)
 {
 	PSInput result;
 	result.positionWS = mul(float4(input.position, 1.0f), cWorld);
 	result.positionVS = mul(result.positionWS, cView);
-	result.position = mul(result.positionVS, cProjection);
+	result.position = mul(float4(input.position, 1.0f), cWorldViewProj);
 	result.texCoord = input.texCoord;
 	result.normal = normalize(mul(input.normal, (float3x3)cWorld));
 	result.tangent = normalize(mul(input.tangent, (float3x3)cWorld));
@@ -132,23 +101,59 @@ PSInput VSMain(VSInput input)
 	return result;
 }
 
+#define G_SCATTERING 0.0001f
+float ComputeScattering(float LoV)
+{
+	float result = 1.0f - G_SCATTERING * G_SCATTERING;
+	result /= (4.0f * PI * pow(1.0f + G_SCATTERING * G_SCATTERING - (2.0f * G_SCATTERING) * LoV, 1.5f));
+	return result;
+}
+
+[earlydepthstencil]
 float4 PSMain(PSInput input) : SV_TARGET
 {
-	//float2 uv = float2((float)GetLightCount(input.positionVS, input.position) / 100, 0);
-	//return tHeatMapTexture.Sample(sDiffuseSampler, uv);
+	float4 baseColor = tDiffuseTexture.Sample(sDiffuseSampler, input.texCoord);
+	float3 specular = 0.5f;
+	float metalness = 0;
+	float r = 0.5f;
 
-	float4 diffuseSample = tDiffuseTexture.Sample(sDiffuseSampler, input.texCoord);
+	float3 diffuseColor = ComputeDiffuseColor(baseColor.rgb, metalness);
+	float3 specularColor = ComputeF0(specular.r, baseColor.rgb, metalness);
 
-	float3 viewDirection = normalize(input.positionWS.xyz - cViewInverse[3].xyz);
-	float3 normal = CalculateNormal(normalize(input.normal), normalize(input.tangent), normalize(input.bitangent), input.texCoord, true);
+	float3x3 TBN = float3x3(normalize(input.tangent), normalize(input.bitangent), normalize(input.normal));
+	float3 N = TangentSpaceNormalMapping(tNormalTexture, sDiffuseSampler, TBN, input.texCoord, true);
+	float3 V = normalize(cViewInverse[3].xyz - input.positionWS.xyz);
 
-    LightResult lightResults = DoLight(input.position, input.positionVS, input.positionWS.xyz, input.normal, viewDirection);
-    float4 specularSample = tSpecularTexture.Sample(sDiffuseSampler, input.texCoord);
-    lightResults.Specular *= specularSample;
-   	lightResults.Diffuse *= diffuseSample;
+	LightResult lighting = DoLight(input.position, input.positionVS.xyz, input.positionWS.xyz, N, V, diffuseColor, specularColor, r);
+	
+	float3 color = lighting.Diffuse + lighting.Specular;
 
-	float4 color = saturate(lightResults.Diffuse + lightResults.Specular);
-	color.a = diffuseSample.a;
+	float ao = tAO.SampleLevel(sDiffuseSampler, (float2)input.position.xy / cScreenDimensions, 0).r;
+	color += ApplyAmbientLight(diffuseColor, ao, float3(0.2f, 0.5f, 1.0f) * 0.1f);
 
-	return color;
+#define VOLUMETRIC_LIGHT 1
+#if VOLUMETRIC_LIGHT
+	const float fogValue = 0.2f;
+	const uint samples = 50;
+	float3 cameraPos = cViewInverse[3].xyz;
+	float3 worldPos = input.positionWS.xyz;
+	float3 rayVector = cameraPos - worldPos;
+	float3 rayStep = rayVector / samples;
+	float3 accumFog = 0.0f.xxx;
+
+	float3 currentPosition = worldPos;
+	for(int i = 0; i < samples; ++i)
+	{
+		float4 vPos = mul(float4(currentPosition, 1), cView);
+		float4 splits = vPos.z > cCascadeDepths;
+		int cascadeIndex = dot(splits, float4(1, 1, 1, 1));
+		float visibility = DoShadow(currentPosition, Lights[0].ShadowIndex + cascadeIndex);
+		accumFog += visibility * fogValue * ComputeScattering(dot(rayVector, Lights[0].Direction)).xxx * Lights[0].GetColor().rgb * Lights[0].Intensity;
+		currentPosition += rayStep;
+	}
+	accumFog /= samples;
+	color += accumFog;
+#endif
+
+	return float4(color, baseColor.a);
 }

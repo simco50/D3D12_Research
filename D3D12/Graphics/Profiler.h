@@ -1,7 +1,16 @@
 #pragma once
-#include "Graphics.h"
-class ReadbackBuffer;
+#include "Graphics/Core/Graphics.h"
+class Buffer;
 class CommandContext;
+
+#define GPU_PROFILE_BEGIN(name, cmdlist) Profiler::Instance()->Begin(name, cmdlist);
+#define GPU_PROFILE_END(cmdlist) Profiler::Instance()->End(cmdlist);
+
+#define PROFILE_BEGIN(name) Profiler::Get()->Begin(name, nullptr);
+#define PROFILE_END() Profiler::Get()->End();
+
+#define GPU_PROFILE_SCOPE(name, cmdlist) ScopeProfiler profiler ## __COUNTER__(name, cmdlist)
+#define PROFILE_SCOPE(name, cmdlist) ScopeProfiler profiler ## __COUNTER__(name, nullptr)
 
 class CpuTimer
 {
@@ -12,7 +21,7 @@ public:
 
 private:
 	int64 m_StartTime;
-	int64 m_EndTime;
+	float m_TotalTime = 0;
 };
 
 class GpuTimer
@@ -92,7 +101,6 @@ public:
 	void EndTimer(CommandContext* pContext);
 
 	void PopulateTimes(int frameIndex);
-	void LogTimes(int frameIndex, void(*pLogFunction)(const char* pText), int depth = 0, bool isRoot = false);
 	void RenderImGui(int frameIndex);
 
 	bool HasChild(const char* pName);
@@ -133,7 +141,7 @@ private:
 class Profiler
 {
 public:
-	static Profiler* Instance();
+	static Profiler* Get();
 
 	void Initialize(Graphics* pGraphics);
 
@@ -166,14 +174,29 @@ private:
 	std::array<uint64, Graphics::FRAME_COUNT> m_FenceValues = {};
 	uint64* m_pCurrentReadBackData = nullptr;
 
-	Graphics* m_pGraphics;
+	Graphics* m_pGraphics = nullptr;
 	float m_SecondsPerGpuTick = 0.0f;
 	float m_SecondsPerCpuTick = 0.0f;
 	int m_CurrentTimer = 0;
 	ComPtr<ID3D12QueryHeap> m_pQueryHeap;
-	std::unique_ptr<ReadbackBuffer> m_pReadBackBuffer;
+	std::unique_ptr<Buffer> m_pReadBackBuffer;
 
 	std::unique_ptr<ProfileNode> m_pRootBlock;
 	ProfileNode* m_pPreviousBlock = nullptr;
 	ProfileNode* m_pCurrentBlock = nullptr;
+};
+
+struct ScopeProfiler
+{
+	ScopeProfiler(const char* pName, CommandContext* pContext = nullptr)
+		: pContext(pContext)
+	{
+		Profiler::Get()->Begin(pName, pContext);
+	}
+
+	~ScopeProfiler()
+	{
+		Profiler::Get()->End(pContext);
+	}
+	CommandContext* pContext;
 };

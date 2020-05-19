@@ -50,8 +50,15 @@
 #define PIX_CAPTURE_VIDEO                   (1 << 7)
 #define PIX_CAPTURE_AUDIO                   (1 << 8)
 
-typedef union PIXCaptureParameters
+union PIXCaptureParameters
 {
+    enum PIXCaptureStorage
+    {
+        Hybrid = 0,
+        Disk,
+        Memory,
+    };
+
     struct GpuCaptureParameters
     {
         PVOID reserved;
@@ -59,12 +66,19 @@ typedef union PIXCaptureParameters
 
     struct TimingCaptureParameters
     {
-        BOOL CaptureCallstacks;
         PWSTR FileName;
+        UINT32 MaximumToolingMemorySizeMb;
+        PIXCaptureStorage CaptureStorage;
+
+        BOOL CaptureGpuTiming;
+
+        BOOL CaptureCallstacks;
+        BOOL CaptureCpuSamples;
+        UINT32 CpuSamplesPerSecond;
     } TimingCaptureParameters;
+};
 
-} PIXCaptureParameters, *PPIXCaptureParameters;
-
+typedef PIXCaptureParameters* PPIXCaptureParameters;
 
 
 #if defined(USE_PIX) && defined(USE_PIX_SUPPORTED_ARCHITECTURE)
@@ -72,11 +86,12 @@ typedef union PIXCaptureParameters
 #define PIX_EVENTS_ARE_TURNED_ON
 
 #include "PIXEventsCommon.h"
-#include "PIXEventsGenerated.h"
+#include "PIXEvents.h"
 
 // Starts a programmatically controlled capture.
 // captureFlags uses the PIX_CAPTURE_* family of flags to specify the type of capture to take
-extern "C" HRESULT WINAPI PIXBeginCapture(DWORD captureFlags, _In_opt_ const PPIXCaptureParameters captureParameters);
+extern "C" HRESULT WINAPI PIXBeginCapture1(DWORD captureFlags, _In_opt_ const PPIXCaptureParameters captureParameters);
+inline HRESULT PIXBeginCapture(DWORD captureFlags, _In_opt_ const PPIXCaptureParameters captureParameters) { return PIXBeginCapture1(captureFlags, captureParameters); }
 
 // Stops a programmatically controlled capture
 //  If discard == TRUE, the captured data is discarded
@@ -90,6 +105,7 @@ extern "C" void WINAPI PIXReportCounter(_In_ PCWSTR name, float value);
 #else
 
 // Eliminate these APIs when not using PIX
+inline HRESULT PIXBeginCapture1(DWORD, _In_opt_ const PIXCaptureParameters*) { return S_OK; }
 inline HRESULT PIXBeginCapture(DWORD, _In_opt_ const PIXCaptureParameters*) { return S_OK; }
 inline HRESULT PIXEndCapture(BOOL) { return S_OK; }
 inline DWORD PIXGetCaptureState() { return 0; }

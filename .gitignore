@@ -6,3 +6,9 @@ Build
 *.user
 *.sln
 imgui.ini
+*.html
+*.gv
+.vscode/
+*.nsight*
+*.args.json
+_Temp/

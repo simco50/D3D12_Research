@@ -53,6 +53,11 @@ public:
 		return m_Hash != other.m_Hash;
 	}
 
+	constexpr void Combine(uint32 other)
+	{
+		m_Hash ^= other + 0x9e3779b9 + (m_Hash << 6) + (m_Hash >> 2);
+	}
+
 	inline constexpr operator uint32() const { return m_Hash; }
 
 	inline bool operator==(const StringHash& rhs) const { return m_Hash == rhs.m_Hash; }

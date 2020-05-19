@@ -1,6 +1,6 @@
 #include "stdafx.h"
 #include "Camera.h"
-#include "Graphics/Graphics.h"
+#include "Graphics/Core/Graphics.h"
 #include "Core/Input.h"
 
 Camera::Camera(Graphics* pGraphics)
@@ -111,6 +111,12 @@ const Matrix& Camera::GetProjectionInverse() const
 	return m_ProjectionInverse;
 }
 
+const BoundingFrustum& Camera::GetFrustum() const
+{
+	UpdateMatrices();
+	return m_Frustum;
+}
+
 void Camera::OnDirty()
 {
 	m_Dirty = true;
@@ -134,6 +140,14 @@ void Camera::UpdateMatrices() const
 		m_Projection.Invert(m_ProjectionInverse);
 		m_ViewProjection = m_View * m_Projection;
 		m_Dirty = false;
+
+		Matrix p = m_Projection;
+		if (m_FarPlane < m_NearPlane)
+		{
+			Math::ReverseZProjection(p);
+		}
+		BoundingFrustum::CreateFromMatrix(m_Frustum, p);
+		m_Frustum.Transform(m_Frustum, m_ViewInverse);
 	}
 }
 
@@ -146,7 +160,7 @@ FreeCamera::FreeCamera(Graphics* pGraphics)
 void FreeCamera::Update()
 {
 	//Camera movement
-	if (Input::Instance().IsMouseDown(0))
+	if (Input::Instance().IsMouseDown(0) && ImGui::IsAnyItemActive() == false)
 	{
 		Vector2 mouseDelta = Input::Instance().GetMouseDelta();
 		Quaternion yr = Quaternion::CreateFromYawPitchRoll(0, mouseDelta.y * GameTimer::DeltaTime() * 0.1f, 0);
@@ -163,8 +177,8 @@ void FreeCamera::Update()
 	movement.y += (int)Input::Instance().IsKeyDown('E');
 	movement = Vector3::Transform(movement, m_Rotation);
 
-	m_Velocity = Vector3::Lerp(m_Velocity, movement, 0.1f);
-	m_Position += m_Velocity * GameTimer::DeltaTime() * 20.0f;
+	m_Velocity = Vector3::SmoothStep(m_Velocity, movement, 0.1f);
+	m_Position += m_Velocity * GameTimer::DeltaTime() * 40.0f;
 
 	OnDirty();
 }

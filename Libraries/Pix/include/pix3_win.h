@@ -20,7 +20,7 @@
  // PIXEventsThreadInfo is defined in PIXEventsCommon.h
 struct PIXEventsThreadInfo;
 
-extern "C" PIXEventsThreadInfo* PIXGetThreadInfo();
+extern "C" PIXEventsThreadInfo* PIXGetThreadInfo() noexcept;
 
 #if defined(USE_PIX) && defined(USE_PIX_SUPPORTED_ARCHITECTURE)
 // Notifies PIX that an event handle was set as a result of a D3D12 fence being signaled.
@@ -44,14 +44,5 @@ __forceinline UINT64 PIXGetTimestampCounter()
     QueryPerformanceCounter(&time);
     return time.QuadPart;
 }
-
-template<class T>
-void PIXCopyEventArgument(UINT64*&, const UINT64*, T);
-
-template<class T>
-void PIXStoreContextArgument(UINT64*& destination, const UINT64* limit, T context)
-{
-    PIXCopyEventArgument(destination, limit, context);
-};
 
 #endif //_PIX3_WIN_H_

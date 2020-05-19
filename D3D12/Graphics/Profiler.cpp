@@ -1,9 +1,9 @@
 #include "stdafx.h"
 #include "Profiler.h"
-#include "Graphics.h"
-#include "CommandContext.h"
-#include "GraphicsBuffer.h"
-#include "CommandQueue.h"
+#include "Graphics/Core/Graphics.h"
+#include "Graphics/Core/CommandContext.h"
+#include "Graphics/Core/CommandQueue.h"
+#include "Graphics/Core/GraphicsBuffer.h"
 
 #define USE_PIX
 #ifdef USE_PIX
@@ -21,12 +21,12 @@ void CpuTimer::End()
 {
 	LARGE_INTEGER end;
 	QueryPerformanceCounter(&end);
-	m_EndTime = end.QuadPart;
+	m_TotalTime = (float)(end.QuadPart - m_StartTime)* Profiler::Get()->GetSecondsPerCpuTick() * 1000.0f;
 }
 
 float CpuTimer::GetTime() const
 {
-	return (float)(m_EndTime - m_StartTime) * Profiler::Instance()->GetSecondsPerCpuTick() * 1000.0f;
+	return m_TotalTime;
 }
 
 GpuTimer::GpuTimer() 
@@ -37,21 +37,21 @@ void GpuTimer::Begin(CommandContext* pContext)
 {
 	if (m_TimerIndex == -1)
 	{
-		m_TimerIndex = Profiler::Instance()->GetNextTimerIndex();
+		m_TimerIndex = Profiler::Get()->GetNextTimerIndex();
 	}
-	Profiler::Instance()->StartGpuTimer(pContext, m_TimerIndex);
+	Profiler::Get()->StartGpuTimer(pContext, m_TimerIndex);
 }
 
 void GpuTimer::End(CommandContext* pContext)
 {
-	Profiler::Instance()->StopGpuTimer(pContext, m_TimerIndex);
+	Profiler::Get()->StopGpuTimer(pContext, m_TimerIndex);
 }
 
 float GpuTimer::GetTime() const
 {
 	if (m_TimerIndex >= 0)
 	{
-		return Profiler::Instance()->GetGpuTime(m_TimerIndex);
+		return Profiler::Get()->GetGpuTime(m_TimerIndex);
 	}
 	return 0.0f;
 }
@@ -102,32 +102,6 @@ void ProfileNode::PopulateTimes(int frameIndex)
 		for (auto& child : m_Children)
 		{
 			child->PopulateTimes(frameIndex);
-		}
-	}
-}
-
-void ProfileNode::LogTimes(int frameIndex, void(*pLogFunction)(const char* pText), int depth /*= 0*/, bool isRoot /*= false*/)
-{
-	if (frameIndex - m_LastProcessedFrame < 60)
-	{
-		if (isRoot)
-		{
-			E_LOG(Info, "Timings for frame: %d", frameIndex);
-		}
-		else
-		{
-			std::stringstream str;
-			for (int i = 0; i < depth; ++i)
-			{
-				str << '\t';
-			}
-			str << m_Name << ": GPU: " << m_GpuTimeHistory.GetAverage() << " ms. CPU: " << m_CpuTimeHistory.GetAverage() << " ms.";
-			std::string msg = str.str();
-			pLogFunction(msg.c_str());
-		}
-		for (auto& child : m_Children)
-		{
-			child->LogTimes(frameIndex, pLogFunction, depth + 1, false);
 		}
 	}
 }
@@ -220,7 +194,7 @@ bool ProfileNode::HasChild(const char* pName)
 	return m_Map.find(hash) != m_Map.end();
 }
 
-Profiler* Profiler::Instance()
+Profiler* Profiler::Get()
 {
 	static Profiler profiler;
 	return &profiler;
@@ -228,6 +202,7 @@ Profiler* Profiler::Instance()
 
 void Profiler::Initialize(Graphics* pGraphics)
 {
+	assert(m_pGraphics == nullptr);
 	m_pGraphics = pGraphics;
 
 	D3D12_QUERY_HEAP_DESC desc = {};
@@ -236,9 +211,8 @@ void Profiler::Initialize(Graphics* pGraphics)
 	desc.Type = D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
 	HR(pGraphics->GetDevice()->CreateQueryHeap(&desc, IID_PPV_ARGS(m_pQueryHeap.GetAddressOf())));
 
-	int bufferSize = HEAP_SIZE * sizeof(uint64) * 2 * Graphics::FRAME_COUNT;
-	m_pReadBackBuffer = std::make_unique<ReadbackBuffer>();
-	m_pReadBackBuffer->Create(pGraphics, bufferSize);
+	m_pReadBackBuffer = std::make_unique<Buffer>(pGraphics, "Profiling Readback Buffer");
+	m_pReadBackBuffer->Create(BufferDesc::CreateReadback(HEAP_SIZE * 2 * Graphics::FRAME_COUNT));
 
 	uint64 timeStampFrequency;
 	pGraphics->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT)->GetCommandQueue()->GetTimestampFrequency(&timeStampFrequency);
@@ -309,7 +283,7 @@ void Profiler::EndReadBack(int frameIndex)
 	m_pCurrentBlock->StartTimer(nullptr);
 	m_pCurrentBlock->EndTimer(nullptr);
 
-	GraphicsCommandContext* pContext = (GraphicsCommandContext*)m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+	CommandContext* pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 	pContext->GetCommandList()->ResolveQueryData(m_pQueryHeap.Get(), D3D12_QUERY_TYPE_TIMESTAMP, offset, HEAP_SIZE * 2, m_pReadBackBuffer->GetResource(), offset * sizeof(uint64));
 	m_FenceValues[backBufferIndex] = pContext->Execute(false);
 
@@ -328,12 +302,12 @@ float Profiler::GetGpuTime(int timerIndex) const
 
 void Profiler::StartGpuTimer(CommandContext* pContext, int timerIndex)
 {
-	pContext->GetCommandList()->EndQuery(Profiler::Instance()->GetQueryHeap(), D3D12_QUERY_TYPE_TIMESTAMP, timerIndex * 2);
+	pContext->GetCommandList()->EndQuery(Profiler::Get()->GetQueryHeap(), D3D12_QUERY_TYPE_TIMESTAMP, timerIndex * 2);
 }
 
 void Profiler::StopGpuTimer(CommandContext* pContext, int timerIndex)
 {
-	pContext->GetCommandList()->EndQuery(Profiler::Instance()->GetQueryHeap(), D3D12_QUERY_TYPE_TIMESTAMP, timerIndex * 2 + 1);
+	pContext->GetCommandList()->EndQuery(Profiler::Get()->GetQueryHeap(), D3D12_QUERY_TYPE_TIMESTAMP, timerIndex * 2 + 1);
 }
 
 int32 Profiler::GetNextTimerIndex()

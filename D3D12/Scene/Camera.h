@@ -16,6 +16,7 @@ public:
 	const Vector3& GetPosition() const { return m_Position; }
 	const Quaternion& GetRotation() const { return m_Rotation; }
 
+	void SetDirty() { m_Dirty = true; }
 	void SetFoV(float fov);
 	void SetViewport(float x, float y, float width, float height);
 	FloatRect GetViewport() const { return GetAbsoluteViewport(); }
@@ -37,6 +38,7 @@ public:
 	const Matrix& GetViewProjection() const;
 	const Matrix& GetViewInverse() const;
 	const Matrix& GetProjectionInverse() const;
+	const BoundingFrustum& GetFrustum() const;
 
 protected:
 	void OnDirty();
@@ -61,6 +63,7 @@ private:
 	mutable Matrix m_ViewProjection;
 	mutable Matrix m_ViewInverse;
 	mutable Matrix m_ProjectionInverse;
+	mutable BoundingFrustum m_Frustum;
 
 	bool m_Perspective = true;
 	mutable bool m_Dirty = true;
