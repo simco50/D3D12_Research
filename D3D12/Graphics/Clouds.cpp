@@ -8,12 +8,39 @@
 #include "Graphics/Core/CommandContext.h"
 #include "Profiler.h"
 #include "Scene/Camera.h"
+#include "ImGuiRenderer.h"
 
 static const int Resolution = 256;
 static const int MaxPoints = 256;
 
+
+struct CloudParameters
+{
+	Vector4 FrustumCorners[4];
+	Matrix ViewInverse;
+	float NearPlane;
+	float FarPlane;
+
+	float CloudScale = 0.02f;
+	float CloudThreshold = 0.4f;
+	Vector3 CloudOffset;
+	float CloudDensity = 0.7f;
+};
+
+static CloudParameters sCloudParameters;
+
 void Clouds::Initialize(Graphics* pGraphics)
 {
+	pGraphics->GetImGui()->AddUpdateCallback(ImGuiCallbackDelegate::CreateLambda([]() {
+		ImGui::Begin("Parameters");
+		ImGui::Text("Clouds");
+		ImGui::SliderFloat("Scale", &sCloudParameters.CloudScale, 0, 0.02f);
+		ImGui::SliderFloat("Threshold", &sCloudParameters.CloudThreshold, 0, 0.5f);
+		ImGui::SliderFloat("Density", &sCloudParameters.CloudDensity, 0, 1);
+		ImGui::SliderFloat3("Offset", &sCloudParameters.CloudOffset.x, -1, 1);
+		ImGui::End();
+		}));
+
 	CommandContext* pContext = pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 	{
 		Shader shader("Resources/Shaders/WorleyNoise.hlsl", Shader::Type::Compute, "WorleyNoiseCS");
@@ -61,9 +88,9 @@ void Clouds::Initialize(Graphics* pGraphics)
 		m_pCloudsPS->SetInputLayout(quadIL, 2);
 		m_pCloudsPS->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
 		m_pCloudsPS->SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
-		m_pCloudsPS->SetDepthTest(D3D12_COMPARISON_FUNC_ALWAYS);
+		m_pCloudsPS->SetDepthEnabled(false);
 		m_pCloudsPS->SetDepthWrite(false);
-		m_pCloudsPS->SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, 1, 0);
+		m_pCloudsPS->SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, pGraphics->GetMultiSampleCount(), pGraphics->GetMultiSampleQualityLevel(pGraphics->GetMultiSampleCount()));
 		m_pCloudsPS->SetRootSignature(m_pCloudsRS->GetRootSignature());
 		m_pCloudsPS->Finalize("Clouds PS", pGraphics->GetDevice());
 	}
@@ -87,13 +114,11 @@ void Clouds::Initialize(Graphics* pGraphics)
 		m_pQuadVertexBuffer->SetData(pContext, vertices, sizeof(Vertex) * 6);
 
 		m_pIntermediateColor = std::make_unique<Texture>(pGraphics);
-		m_pIntermediateColor->Create(TextureDesc::Create2D(pGraphics->GetWindowWidth(), pGraphics->GetWindowHeight(), Graphics::RENDER_TARGET_FORMAT, TextureFlag::RenderTarget | TextureFlag::ShaderResource));
-		m_pIntermediateDepth = std::make_unique<Texture>(pGraphics);
-		m_pIntermediateDepth->Create(TextureDesc::Create2D(pGraphics->GetWindowWidth(), pGraphics->GetWindowHeight(), Graphics::DEPTH_STENCIL_FORMAT, TextureFlag::DepthStencil | TextureFlag::ShaderResource));
+		m_pIntermediateColor->Create(TextureDesc::CreateRenderTarget(pGraphics->GetWindowWidth(), pGraphics->GetWindowHeight(), Graphics::RENDER_TARGET_FORMAT, TextureFlag::RenderTarget | TextureFlag::ShaderResource, pGraphics->GetMultiSampleCount()));
 	}
 
 	{
-		PROFILE_SCOPE("Render Clouds", pContext);
+		GPU_PROFILE_SCOPE("Compute Clouds", pContext);
 
 		pContext->SetPipelineState(m_pWorleyNoisePS.get());
 		pContext->SetComputeRootSignature(m_pWorleyNoiseRS.get());
@@ -128,35 +153,10 @@ void Clouds::Initialize(Graphics* pGraphics)
 	pContext->Execute(true);
 }
 
-struct CloudParameters
-{
-	Vector4 FrustumCorners[4];
-	Matrix ViewInverse;
-	float NearPlane;
-	float FarPlane;
-
-	float CloudScale = 0.02f;
-	float CloudThreshold = 0.4f;
-	Vector3 CloudOffset;
-	float CloudDensity = 0.7f;
-};
-
-static CloudParameters sCloudParameters;
-
-void Clouds::RenderUI()
-{
-	ImGui::Begin("Clouds");
-	ImGui::SliderFloat("Scale", &sCloudParameters.CloudScale, 0, 0.02f);
-	ImGui::SliderFloat("Threshold", &sCloudParameters.CloudThreshold, 0, 0.5f);
-	ImGui::SliderFloat("Density", &sCloudParameters.CloudDensity, 0, 1);
-	ImGui::SliderFloat3("Offset", &sCloudParameters.CloudOffset.x, -1, 1);
-	ImGui::End();
-}
-
 void Clouds::Render(CommandContext& context, Texture* pSceneTexture, Texture* pDepthTexture, Camera* pCamera)
 {
 	{
-		PROFILE_SCOPE("Clouds", &context);
+		GPU_PROFILE_SCOPE("Clouds", &context);
 		context.InsertResourceBarrier(m_pWorleyNoiseTexture.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 		context.InsertResourceBarrier(pSceneTexture, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 		context.InsertResourceBarrier(pDepthTexture, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
@@ -166,7 +166,7 @@ void Clouds::Render(CommandContext& context, Texture* pSceneTexture, Texture* pD
 		context.SetViewport(FloatRect(0, 0, (float)pSceneTexture->GetWidth(), (float)pSceneTexture->GetHeight()));
 		context.SetScissorRect(FloatRect(0, 0, (float)pSceneTexture->GetWidth(), (float)pSceneTexture->GetHeight()));
 
-		context.BeginRenderPass(RenderPassInfo(m_pIntermediateColor.get(), RenderPassAccess::DontCare_Store, m_pIntermediateDepth.get(), RenderPassAccess::Clear_Store));
+		context.BeginRenderPass(RenderPassInfo(m_pIntermediateColor.get(), RenderPassAccess::DontCare_Store, nullptr, RenderPassAccess::NoAccess));
 
 		context.SetPipelineState(m_pCloudsPS.get());
 		context.SetGraphicsRootSignature(m_pCloudsRS.get());
@@ -202,7 +202,7 @@ void Clouds::Render(CommandContext& context, Texture* pSceneTexture, Texture* pD
 	}
 
 	{
-		PROFILE_SCOPE("Blit to Main Render Target", pContext);
+		GPU_PROFILE_SCOPE("Blit to Main Render Target", &context);
 		context.InsertResourceBarrier(pSceneTexture, D3D12_RESOURCE_STATE_COPY_DEST);
 		context.InsertResourceBarrier(m_pIntermediateColor.get(), D3D12_RESOURCE_STATE_COPY_SOURCE);
 		context.FlushResourceBarriers();

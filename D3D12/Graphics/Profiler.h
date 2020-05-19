@@ -10,7 +10,7 @@ class CommandContext;
 #define PROFILE_END() Profiler::Get()->End();
 
 #define GPU_PROFILE_SCOPE(name, cmdlist) ScopeProfiler profiler ## __COUNTER__(name, cmdlist)
-#define PROFILE_SCOPE(name, cmdlist) ScopeProfiler profiler ## __COUNTER__(name, nullptr)
+#define PROFILE_SCOPE(name) ScopeProfiler profiler ## __COUNTER__(name, nullptr)
 
 class CpuTimer
 {

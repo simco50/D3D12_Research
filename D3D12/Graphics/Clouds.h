@@ -12,7 +12,6 @@ class Clouds
 {
 public:
 	void Initialize(Graphics* pGraphics);
-	void RenderUI();
 	void Render(CommandContext& context, Texture* pSceneTexture, Texture* pDepthTexture, Camera* pCamera);
 
 private:

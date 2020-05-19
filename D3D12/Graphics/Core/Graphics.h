@@ -22,6 +22,7 @@ class UnorderedAccessView;
 class RTAO;
 class SSAO;
 class GpuParticles;
+class Clouds;
 
 struct Batch
 {
@@ -183,6 +184,7 @@ private:
 	std::unique_ptr<TiledForward> m_pTiledForward;
 	std::unique_ptr<RTAO> m_pRTAO;
 	std::unique_ptr<SSAO> m_pSSAO;
+	std::unique_ptr<Clouds> m_pClouds;
 
 	unsigned int m_WindowWidth;
 	unsigned int m_WindowHeight;

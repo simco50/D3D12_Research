@@ -26,6 +26,7 @@
 #include "Graphics/SSAO.h"
 #include "Graphics/ImGuiRenderer.h"
 #include "../GpuParticles.h"
+#include "../Clouds.h"
 
 #ifdef _DEBUG
 #define D3D_VALIDATION 1
@@ -636,6 +637,14 @@ void Graphics::Update()
 			};
 		});
 
+	graph.AddPass("Draw Clouds", [&](RGPassBuilder& builder)
+		{
+			return [=](CommandContext& context, const RGPassResources& passResources)
+			{
+				m_pClouds->Render(context, GetCurrentRenderTarget(), GetDepthStencil(), GetCamera());
+			};
+		});
+
 	graph.AddPass("Sky", [&](RGPassBuilder& builder)
 		{
 			Data.DepthStencil = builder.Read(Data.DepthStencil);
@@ -1075,6 +1084,8 @@ void Graphics::InitD3D()
 	m_pImGuiRenderer->AddUpdateCallback(ImGuiCallbackDelegate::CreateRaw(this, &Graphics::UpdateImGui));
 	m_pParticles = std::make_unique<GpuParticles>(this);
 	m_pParticles->Initialize();
+	m_pClouds = std::make_unique<Clouds>();
+	m_pClouds->Initialize(this);
 
 	OnResize(m_WindowWidth, m_WindowHeight);
 
