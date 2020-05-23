@@ -6,7 +6,7 @@
 cbuffer Parameters : register(b0)
 {
     float4x4 cProjectionInverse;
-    float2 cScreenDimensions;
+    float2 cScreenDimensionsInv;
     float2 cClusterSize;
     uint3 cClusterDimensions;
     float cNearZ;
@@ -42,8 +42,8 @@ void GenerateAABBs(CS_Input input)
     float2 minPoint_SS = float2(clusterIndex3D.x * cClusterSize.x, clusterIndex3D.y * cClusterSize.y);
     float2 maxPoint_SS = float2((clusterIndex3D.x + 1) * cClusterSize.x, (clusterIndex3D.y + 1) * cClusterSize.y);
 
-    float3 minPoint_VS = ScreenToView(float4(minPoint_SS, 0, 1), cScreenDimensions, cProjectionInverse).xyz;
-    float3 maxPoint_VS = ScreenToView(float4(maxPoint_SS, 0, 1), cScreenDimensions, cProjectionInverse).xyz;
+    float3 minPoint_VS = ScreenToView(float4(minPoint_SS, 0, 1), cScreenDimensionsInv, cProjectionInverse).xyz;
+    float3 maxPoint_VS = ScreenToView(float4(maxPoint_SS, 0, 1), cScreenDimensionsInv, cProjectionInverse).xyz;
 
     float farZ = GetDepthFromSlice(clusterIndex3D.z);
     float nearZ = GetDepthFromSlice(clusterIndex3D.z + 1);

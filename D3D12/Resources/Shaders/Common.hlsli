@@ -131,10 +131,10 @@ float4 ClipToView(float4 clip, float4x4 projectionInverse)
 }
  
 // Convert screen space coordinates to view space.
-float4 ScreenToView(float4 screen, float2 screenDimensions, float4x4 projectionInverse)
+float4 ScreenToView(float4 screen, float2 screenDimensionsInv, float4x4 projectionInverse)
 {
     // Convert to normalized texture coordinates
-    float2 texCoord = screen.xy / screenDimensions;
+    float2 texCoord = screen.xy * screenDimensionsInv;
     // Convert to clip space
     float4 clip = float4(float2(texCoord.x, 1.0f - texCoord.y) * 2.0f - 1.0f, screen.z, screen.w);
     return ClipToView(clip, projectionInverse);

@@ -61,14 +61,14 @@ void ClusteredForward::OnSwapchainCreated(int windowWidth, int windowHeight)
 		struct ConstantBuffer
 		{
 			Matrix ProjectionInverse;
-			Vector2 ScreenDimensions;
+			Vector2 ScreenDimensionsInv;
 			Vector2 ClusterSize;
 			int ClusterDimensions[3];
 			float NearZ;
 			float FarZ;
 		} constantBuffer;
 
-		constantBuffer.ScreenDimensions = Vector2((float)windowWidth, (float)windowHeight);
+		constantBuffer.ScreenDimensionsInv = Vector2(1.0f / windowWidth, 1.0f / windowHeight);
 		constantBuffer.NearZ = m_pGraphics->GetCamera()->GetFar();
 		constantBuffer.FarZ = m_pGraphics->GetCamera()->GetNear();
 		constantBuffer.ProjectionInverse = m_pGraphics->GetCamera()->GetProjectionInverse();
