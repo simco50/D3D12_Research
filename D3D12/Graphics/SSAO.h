@@ -13,7 +13,6 @@ class PipelineState;
 struct SsaoInputResources
 {
 	Texture* pRenderTarget = nullptr;
-	Texture* pNormalsTexture = nullptr;
 	Texture* pDepthTexture = nullptr;
 	Camera* pCamera = nullptr;
 };

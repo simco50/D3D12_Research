@@ -3,7 +3,7 @@
 
 #define RootSig "CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \
 				"DescriptorTable(UAV(u0, numDescriptors = 8), visibility = SHADER_VISIBILITY_ALL), " \
-				"DescriptorTable(SRV(t0, numDescriptors = 3), visibility = SHADER_VISIBILITY_ALL), " \
+				"DescriptorTable(SRV(t0, numDescriptors = 2), visibility = SHADER_VISIBILITY_ALL), " \
 				"StaticSampler(s0, filter=FILTER_MIN_MAG_MIP_POINT, visibility = SHADER_VISIBILITY_ALL), " \
 
 struct ParticleData
@@ -40,6 +40,8 @@ cbuffer EmitParameters : register(b0)
 cbuffer SimulateParameters : register(b0)
 {
     float4x4 cViewProjection;
+    float4x4 cViewProjectionInv;
+    float2 cViewDimensionsInv;
     float cDeltaTime;
     float cParticleLifeTime;
     float cNear;
@@ -57,7 +59,6 @@ RWStructuredBuffer<ParticleData> uParticleData  : register(u7);
 
 ByteAddressBuffer tCounters : register(t0);
 Texture2D tDepth : register(t1);
-Texture2D tNormals : register(t2);
 
 SamplerState sSampler : register(s0);
 
@@ -130,12 +131,19 @@ void Simulate(CS_INPUT input)
             if(screenPos.x > -1 && screenPos.y < 1 && screenPos.y > -1 && screenPos.y < 1)
             {
                 float2 uv = screenPos.xy * float2(0.5f, -0.5f) + 0.5f;
-                float depth = LinearizeDepth(tDepth.SampleLevel(sSampler, uv, 0).r, cFar, cNear);
-                const float thickness = 0.6f;
+                float depth = tDepth.SampleLevel(sSampler, uv, 0).r;
+                float linearDepth = LinearizeDepth(depth, cFar, cNear);
+                const float thickness = 10.0f;
 
-                if(screenPos.w + p.Size > depth && screenPos.w - p.Size < depth + thickness)
+                if(screenPos.w + p.Size > linearDepth && screenPos.w - p.Size < linearDepth + thickness)
                 {
-                    float3 normal = tNormals.SampleLevel(sSampler, uv, 0).xyz;
+                    float2 texCoord1 = uv + float2(cViewDimensionsInv.x, 0);
+                    float2 texCoord2 = uv + float2(0, -cViewDimensionsInv.y);
+                    float3 p0 = WorldFromDepth(uv, depth, cViewProjectionInv);
+                    float3 p1 = WorldFromDepth(texCoord1, tDepth.SampleLevel(sSampler, texCoord1, 0).r, cViewProjectionInv);
+                    float3 p2 = WorldFromDepth(texCoord2, tDepth.SampleLevel(sSampler, texCoord2, 0).r, cViewProjectionInv);
+                    float3 normal = normalize(cross(p2 - p0, p1 - p0));
+
                     if(dot(normal, p.Velocity) < 0)
                     {
                         p.Velocity = reflect(p.Velocity, normal) * 0.85f;

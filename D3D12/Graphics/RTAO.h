@@ -12,7 +12,6 @@ class RGGraph;
 struct RtaoInputResources
 {
 	Texture* pRenderTarget = nullptr;
-	Texture* pNormalsTexture = nullptr;
 	Texture* pDepthTexture = nullptr;
 	Camera* pCamera = nullptr;
 };

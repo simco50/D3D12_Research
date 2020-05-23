@@ -109,7 +109,6 @@ public:
 
 	Texture* GetDepthStencil() const { return m_pDepthStencil.get(); }
 	Texture* GetResolvedDepthStencil() const { return m_SampleCount > 1 ? m_pResolvedDepthStencil.get() : m_pDepthStencil.get(); }
-	Texture* GetResolvedNormals() const { return m_SampleCount > 1 ? m_pResolvedNormals.get() : m_pNormals.get(); }
 	Texture* GetCurrentRenderTarget() const { return m_SampleCount > 1 ? m_pMultiSampleRenderTarget.get() : m_pHDRRenderTarget.get(); }
 	Texture* GetCurrentBackbuffer() const { return m_Backbuffers[m_CurrentBackBufferIndex].get(); }
 
@@ -174,8 +173,6 @@ private:
 	std::unique_ptr<Texture> m_pHDRRenderTarget;
 	std::unique_ptr<Texture> m_pDepthStencil;
 	std::unique_ptr<Texture> m_pResolvedDepthStencil;
-	std::unique_ptr<Texture> m_pNormals;
-	std::unique_ptr<Texture> m_pResolvedNormals;
 
 	std::unique_ptr<ImGuiRenderer> m_pImGuiRenderer;
 	std::unique_ptr<RGResourceAllocator> m_pGraphAllocator;

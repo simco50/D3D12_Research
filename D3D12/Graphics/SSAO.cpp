@@ -45,7 +45,6 @@ void SSAO::Execute(RGGraph& graph, const SsaoInputResources& resources)
 			return [=](CommandContext& renderContext, const RGPassResources& passResources)
 			{
 				renderContext.InsertResourceBarrier(resources.pDepthTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-				renderContext.InsertResourceBarrier(resources.pNormalsTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 				renderContext.InsertResourceBarrier(resources.pRenderTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
 				renderContext.SetComputeRootSignature(m_pSSAORS.get());
@@ -54,6 +53,7 @@ void SSAO::Execute(RGGraph& graph, const SsaoInputResources& resources)
 				struct ShaderParameters
 				{
 					Matrix ProjectionInverse;
+					Matrix ViewInverse;
 					Matrix Projection;
 					Matrix View;
 					uint32 Dimensions[2];
@@ -66,6 +66,7 @@ void SSAO::Execute(RGGraph& graph, const SsaoInputResources& resources)
 				} shaderParameters{};
 
 				shaderParameters.ProjectionInverse = resources.pCamera->GetProjectionInverse();
+				shaderParameters.ViewInverse = resources.pCamera->GetViewInverse();
 				shaderParameters.Projection = resources.pCamera->GetProjection();
 				shaderParameters.View = resources.pCamera->GetView();
 				shaderParameters.Dimensions[0] = resources.pRenderTarget->GetWidth();
@@ -80,7 +81,6 @@ void SSAO::Execute(RGGraph& graph, const SsaoInputResources& resources)
 				renderContext.SetComputeDynamicConstantBufferView(0, &shaderParameters, sizeof(ShaderParameters));
 				renderContext.SetDynamicDescriptor(1, 0, resources.pRenderTarget->GetUAV());
 				renderContext.SetDynamicDescriptor(2, 0, resources.pDepthTexture->GetSRV());
-				renderContext.SetDynamicDescriptor(2, 1, resources.pNormalsTexture->GetSRV());
 
 				int dispatchGroupsX = Math::DivideAndRoundUp(resources.pRenderTarget->GetWidth(), 16);
 				int dispatchGroupsY = Math::DivideAndRoundUp(resources.pRenderTarget->GetHeight(), 16);
