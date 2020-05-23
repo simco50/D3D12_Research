@@ -204,10 +204,6 @@ private:
 	std::unique_ptr<RootSignature> m_pDepthPrepassRS;
 	std::unique_ptr<PipelineState> m_pDepthPrepassPSO;
 
-	//Normals Rendering
-	std::unique_ptr<RootSignature> m_pNormalsRS;
-	std::unique_ptr<PipelineState> m_pNormalsPSO;
-
 	//MSAA Depth resolve
 	std::unique_ptr<RootSignature> m_pResolveDepthRS;
 	std::unique_ptr<PipelineState> m_pResolveDepthPSO;

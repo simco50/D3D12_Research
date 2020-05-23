@@ -1180,27 +1180,6 @@ void Graphics::InitializeAssets()
 		m_pDepthPrepassPSO->Finalize("Depth Prepass Pipeline", m_pDevice.Get());
 	}
 
-	//Normals
-	{
-		Shader vertexShader("Resources/Shaders/OutputNormals.hlsl", Shader::Type::Vertex, "VSMain");
-		Shader pixelShader("Resources/Shaders/OutputNormals.hlsl", Shader::Type::Pixel, "PSMain");
-
-		//Rootsignature
-		m_pNormalsRS = std::make_unique<RootSignature>();
-		m_pNormalsRS->FinalizeFromShader("Normals", vertexShader, m_pDevice.Get());
-
-		//Pipeline state
-		m_pNormalsPSO = std::make_unique<PipelineState>();
-		m_pNormalsPSO->SetInputLayout(inputElements, sizeof(inputElements) / sizeof(inputElements[0]));
-		m_pNormalsPSO->SetRootSignature(m_pNormalsRS->GetRootSignature());
-		m_pNormalsPSO->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
-		m_pNormalsPSO->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
-		m_pNormalsPSO->SetRenderTargetFormat(DXGI_FORMAT_R32G32B32A32_FLOAT, DEPTH_STENCIL_FORMAT, m_SampleCount, m_SampleQuality);
-		m_pNormalsPSO->SetDepthTest(D3D12_COMPARISON_FUNC_EQUAL);
-		m_pNormalsPSO->SetDepthWrite(false);
-		m_pNormalsPSO->Finalize("Normals Pipeline", m_pDevice.Get());
-	}
-
 	//Luminance Historgram
 	{
 		Shader computeShader("Resources/Shaders/LuminanceHistogram.hlsl", Shader::Type::Compute, "CSMain");
