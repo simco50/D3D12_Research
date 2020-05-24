@@ -7,7 +7,7 @@
 				"CBV(b2, visibility=SHADER_VISIBILITY_PIXEL), " \
 				"DescriptorTable(SRV(t0, numDescriptors = 3)), " \
 				"DescriptorTable(SRV(t3, numDescriptors = 5), visibility=SHADER_VISIBILITY_PIXEL), " \
-				"StaticSampler(s0, filter=FILTER_MIN_MAG_MIP_LINEAR, visibility = SHADER_VISIBILITY_PIXEL), " \
+				"StaticSampler(s0, filter=FILTER_ANISOTROPIC, maxAnisotropy = 4, visibility = SHADER_VISIBILITY_PIXEL), " \
 				"StaticSampler(s1, filter=FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT, visibility = SHADER_VISIBILITY_PIXEL, comparisonFunc=COMPARISON_GREATER), "
 
 cbuffer PerObjectData : register(b0)
@@ -133,8 +133,8 @@ float4 PSMain(PSInput input) : SV_TARGET
 
 #define VOLUMETRIC_LIGHT 1
 #if VOLUMETRIC_LIGHT
-	const float fogValue = 0.1f;
-	const uint samples = 16;
+	const float fogValue = 0.4f;
+	const uint samples = 10;
 	float3 cameraPos = cViewInverse[3].xyz;
 	float3 worldPos = input.positionWS.xyz;
 	float3 rayVector = cameraPos - worldPos;
@@ -150,7 +150,7 @@ float4 PSMain(PSInput input) : SV_TARGET
 		{ 0.9375f, 0.4375f, 0.8125f, 0.3125}};
 		
 	float ditherValue = DitherPattern[floor(input.position.x) % 4][floor(input.position.y) % 4];
-	currentPosition += rayStep + ditherValue;
+	currentPosition += rayStep * ditherValue;
 
 	for(int i = 0; i < samples; ++i)
 	{

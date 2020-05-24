@@ -11,6 +11,30 @@
 #include "Light.h"
 #include "RenderGraph/RenderGraph.h"
 
+struct DebugSphere
+{
+	DebugSphere(const Vector3& center, const float radius) :
+		Center(center), Radius(radius)
+	{}
+
+	Vector3 Center;
+	float Radius;
+
+	Vector3 GetPoint(const float theta, const float phi) const
+	{
+		return Center + GetLocalPoint(theta, phi);
+	}
+
+	Vector3 GetLocalPoint(const float theta, const float phi) const
+	{
+		return Vector3(
+			Radius * sin(theta) * sin(phi),
+			Radius * cos(phi),
+			Radius * cos(theta) * sin(phi)
+		);
+	}
+};
+
 DebugRenderer* DebugRenderer::Get()
 {
 	static DebugRenderer instance;
@@ -49,9 +73,11 @@ void DebugRenderer::Initialize(Graphics* pGraphics)
 	m_pLinesPSO->Finalize("Lines DebugRenderer PSO", pGraphics->GetDevice());
 }
 
-void DebugRenderer::Render(RGGraph& graph, Camera& camera, Texture* pTarget, Texture* pDepth)
+void DebugRenderer::Render(RGGraph& graph, const Matrix& viewProjection, Texture* pTarget, Texture* pDepth)
 {
-	int totalPrimitives = m_LinePrimitives + m_TrianglePrimitives;
+	int linePrimitives = (int)m_Lines.size() * 2;
+	int trianglePrimitives = (int)m_Triangles.size() * 3;
+	int totalPrimitives = linePrimitives + trianglePrimitives;
 	if (totalPrimitives == 0)
 	{
 		return;
@@ -67,28 +93,25 @@ void DebugRenderer::Render(RGGraph& graph, Camera& camera, Texture* pTarget, Tex
 				context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
 				context.BeginRenderPass(RenderPassInfo(pTarget, RenderPassAccess::Load_Store, pDepth, RenderPassAccess::Load_Store));
-
 				context.SetViewport(FloatRect(0, 0, (float)pTarget->GetWidth(), (float)pTarget->GetHeight()));
 				context.SetGraphicsRootSignature(m_pRS.get());
 
-				const Matrix& projectionMatrix = camera.GetViewProjection();
-				context.SetDynamicConstantBufferView(0, &projectionMatrix, sizeof(Matrix));
+				context.SetDynamicConstantBufferView(0, &viewProjection, sizeof(Matrix));
 
-				if (m_LinePrimitives != 0)
+				if (linePrimitives != 0)
 				{
-					context.SetDynamicVertexBuffer(0, m_LinePrimitives, VertexStride, m_Lines.data());
+					context.SetDynamicVertexBuffer(0, linePrimitives, VertexStride, m_Lines.data());
 					context.SetPipelineState(m_pLinesPSO.get());
 					context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINELIST);
-					context.Draw(0, m_LinePrimitives);
+					context.Draw(0, linePrimitives);
 				}
-				if (m_TrianglePrimitives != 0)
+				if (trianglePrimitives != 0)
 				{
-					context.SetDynamicVertexBuffer(0, m_TrianglePrimitives, VertexStride, m_Triangles.data());
+					context.SetDynamicVertexBuffer(0, trianglePrimitives, VertexStride, m_Triangles.data());
 					context.SetPipelineState(m_pTrianglesPSO.get());
 					context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-					context.Draw(0, m_TrianglePrimitives);
+					context.Draw(0, trianglePrimitives);
 				}
-
 				context.EndRenderPass();
 			};
 		});
@@ -96,9 +119,7 @@ void DebugRenderer::Render(RGGraph& graph, Camera& camera, Texture* pTarget, Tex
 
 void DebugRenderer::EndFrame()
 {
-	m_LinePrimitives = 0;
 	m_Lines.clear();
-	m_TrianglePrimitives = 0;
 	m_Triangles.clear();
 }
 
@@ -110,7 +131,6 @@ void DebugRenderer::AddLine(const Vector3& start, const Vector3& end, const Colo
 void DebugRenderer::AddLine(const Vector3& start, const Vector3& end, const Color& colorStart, const Color& colorEnd)
 {
 	m_Lines.push_back(DebugLine(start, end, Math::EncodeColor(colorStart), Math::EncodeColor(colorEnd)));
-	m_LinePrimitives += 2;
 }
 
 void DebugRenderer::AddRay(const Vector3& start, const Vector3& direction, const Color& color)
@@ -128,7 +148,6 @@ void DebugRenderer::AddTriangle(const Vector3& a, const Vector3& b, const Vector
 	if (solid)
 	{
 		m_Triangles.push_back(DebugTriangle(a, b, c, Math::EncodeColor(colorA), Math::EncodeColor(colorB), Math::EncodeColor(colorC)));
-		m_TrianglePrimitives += 3;
 	}
 	else
 	{
@@ -231,8 +250,8 @@ void DebugRenderer::AddSphere(const Vector3& position, const float radius, const
 {
 	DebugSphere sphere(position, radius);
 
-	float jStep = Math::PI / slices;
-	float iStep = Math::PI / stacks;
+	const float jStep = Math::PI / slices;
+	const float iStep = Math::PI / stacks;
 
 	if (!solid)
 	{
@@ -292,7 +311,6 @@ void DebugRenderer::AddAxisSystem(const Matrix& transform, const float lineLengt
 {
 	Matrix newMatrix = Matrix::CreateScale(Math::ScaleFromMatrix(transform));
 	newMatrix.Invert(newMatrix);
-	//newMatrix *= Matrix::CreateScale(Vector3::Distance(m_pCamera->GetViewInverse().Translation(), transform.Translation()) / 5.0f);
 	newMatrix *= transform;
 	Vector3 origin(Vector3::Transform(Vector3(), transform));
 	Vector3 x(Vector3::Transform(Vector3(lineLength, 0, 0), newMatrix));

@@ -18,6 +18,7 @@ SamplerState sSampler : register(s0);
 cbuffer ShaderParameters : register(b0)
 {
     uint2 cTargetDimensions;
+    float2 cTargetDimensionsInv;
 }
 
 struct CS_INPUT
@@ -31,6 +32,6 @@ void CSMain(CS_INPUT input)
 {
     if(input.DispatchThreadId.x < cTargetDimensions.x && input.DispatchThreadId.y < cTargetDimensions.y)
     {
-        uOutput[input.DispatchThreadId.xy] = tInput.SampleLevel(sSampler, (input.DispatchThreadId.xy + 0.5f) * rcp((float2)cTargetDimensions), 0);
+        uOutput[input.DispatchThreadId.xy] = tInput.SampleLevel(sSampler, ((float2)input.DispatchThreadId.xy + 0.5f) * cTargetDimensionsInv, 0);
     }
 }

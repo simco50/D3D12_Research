@@ -637,7 +637,7 @@ void Graphics::Update()
 			};
 		});
 
-	DebugRenderer::Get()->Render(graph, *m_pCamera, GetCurrentRenderTarget(), GetDepthStencil());
+	DebugRenderer::Get()->Render(graph, m_pCamera->GetViewProjection(), GetCurrentRenderTarget(), GetDepthStencil());
 
 	//MSAA Render Target Resolve
 	// - We have to resolve a MSAA render target ourselves. Unlike D3D11, this is not done automatically by the API.
@@ -678,9 +678,11 @@ void Graphics::Update()
 						struct DownscaleParameters
 						{
 							uint32 TargetDimensions[2];
+							Vector2 TargetDimensionsInv;
 						} Parameters{};
 						Parameters.TargetDimensions[0] = pToneMapInput->GetWidth();
 						Parameters.TargetDimensions[1] = pToneMapInput->GetHeight();
+						Parameters.TargetDimensionsInv = Vector2(1.0f / pToneMapInput->GetWidth(), 1.0f / pToneMapInput->GetHeight());
 
 						context.SetComputeDynamicConstantBufferView(0, &Parameters, sizeof(DownscaleParameters));
 						context.SetDynamicDescriptor(1, 0, pToneMapInput->GetUAV());
@@ -882,7 +884,24 @@ void Graphics::InitD3D()
 		pAdapter->GetDesc3(&desc);
 		char name[256];
 		ToMultibyte(desc.Description, name, 256);
-		E_LOG(Info, "\t%s", name);
+		E_LOG(Info, "\t%s - %f GB", name, (float)desc.DedicatedVideoMemory * Math::ToGigaBytes);
+
+		uint32 outputIndex = 0;
+		ComPtr<IDXGIOutput> pOutput;
+		while (pAdapter->EnumOutputs(outputIndex++, pOutput.ReleaseAndGetAddressOf()) == S_OK)
+		{
+			ComPtr<IDXGIOutput6> pOutput1;
+			pOutput.As(&pOutput1);
+			DXGI_OUTPUT_DESC1 outputDesc;
+			pOutput1->GetDesc1(&outputDesc);
+			
+			E_LOG(Info, "\t\tMonitor %d - %dx%d - HDR: %s - %d BPP", 
+				outputIndex, 
+				outputDesc.DesktopCoordinates.right - outputDesc.DesktopCoordinates.left,
+				outputDesc.DesktopCoordinates.bottom - outputDesc.DesktopCoordinates.top,
+				outputDesc.ColorSpace == DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020 ? "Yes" : "No",
+				outputDesc.BitsPerColor);
+		}
 	}
 	pFactory->EnumAdapterByGpuPreference(0, gpuPreference, IID_PPV_ARGS(pAdapter.GetAddressOf()));
 	DXGI_ADAPTER_DESC3 desc;

@@ -1,8 +1,6 @@
 #pragma once
 
 class Graphics;
-class Buffer;
-class Camera;
 class RootSignature;
 class PipelineState;
 class RGGraph;
@@ -21,17 +19,6 @@ struct DebugLine
 	uint32 ColorEnd;
 };
 
-struct DebugRay
-{
-	DebugRay(const Vector3& start, const Vector3& direction, const uint32& color)
-		: Start(start), Direction(direction), Color(color)
-	{}
-
-	Vector3 Start;
-	Vector3 Direction;
-	uint32 Color;
-};
-
 struct DebugTriangle
 {
 	DebugTriangle(const Vector3& a, const Vector3& b, const Vector3& c, const uint32& colorA, const uint32& colorB, const uint32& colorC)
@@ -46,37 +33,13 @@ struct DebugTriangle
 	uint32 ColorC;
 };
 
-struct DebugSphere
-{
-	DebugSphere(const Vector3& center, const float radius) :
-		Center(center), Radius(radius)
-	{}
-
-	Vector3 Center;
-	float Radius;
-
-	Vector3 GetPoint(const float theta, const float phi) const
-	{
-		return Center + GetLocalPoint(theta, phi);
-	}
-
-	Vector3 GetLocalPoint(const float theta, const float phi) const
-	{
-		return Vector3(
-			Radius * sin(theta) * sin(phi),
-			Radius * cos(phi),
-			Radius * cos(theta) * sin(phi)
-		);
-	}
-};
-
 class DebugRenderer
 {
 public:
 	static DebugRenderer* Get();
 	
 	void Initialize(Graphics* pGraphics);
-	void Render(RGGraph& graph, Camera& camera, Texture* pTarget, Texture* pDepth);
+	void Render(RGGraph& graph, const Matrix& viewProjection, Texture* pTarget, Texture* pDepth);
 	void EndFrame();
 
 	void AddLine(const Vector3& start, const Vector3& end, const Color& color);
@@ -96,9 +59,7 @@ public:
 	void AddBone(const Matrix& matrix, const float length, const Color& color);
 	void AddLight(const Light& light);
 
-	int m_LinePrimitives = 0;
 	std::vector<DebugLine> m_Lines;
-	int m_TrianglePrimitives = 0;
 	std::vector<DebugTriangle> m_Triangles;
 
 	std::unique_ptr<PipelineState> m_pTrianglesPSO;
