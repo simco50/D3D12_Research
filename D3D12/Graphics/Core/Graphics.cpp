@@ -50,6 +50,7 @@ float g_WhitePoint = 4;
 float g_MinLogLuminance = -10;
 float g_MaxLogLuminance = 2;
 float g_Tau = 2;
+int32 g_ToneMapper = 0;
 
 bool g_SDSM = false;
 bool g_StabilizeCascades = true;
@@ -770,6 +771,14 @@ void Graphics::Update()
 			{
 				return [=](CommandContext& context, const RGPassResources& resources)
 				{
+					struct Parameters
+					{
+						float WhitePoint;
+						uint32 Tonemapper;
+					} constBuffer;
+					constBuffer.WhitePoint = g_WhitePoint;
+					constBuffer.Tonemapper = g_ToneMapper;
+
 					context.InsertResourceBarrier(GetCurrentBackbuffer(), D3D12_RESOURCE_STATE_RENDER_TARGET);
 					context.InsertResourceBarrier(m_pAverageLuminance.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 					context.InsertResourceBarrier(m_pHDRRenderTarget.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
@@ -780,7 +789,7 @@ void Graphics::Update()
 					context.BeginRenderPass(RenderPassInfo(GetCurrentBackbuffer(), RenderPassAccess::Clear_Store, nullptr, RenderPassAccess::NoAccess));
 
 					context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-					context.SetDynamicConstantBufferView(0, &g_WhitePoint, sizeof(float));
+					context.SetDynamicConstantBufferView(0, &constBuffer, sizeof(Parameters));
 					context.SetDynamicDescriptor(1, 0, m_pHDRRenderTarget->GetSRV());
 					context.SetDynamicDescriptor(1, 1, m_pAverageLuminance->GetSRV());
 					context.Draw(0, 3);
@@ -1523,6 +1532,23 @@ void Graphics::UpdateImGui()
 	ImGui::SliderFloat("Min Log Luminance", &g_MinLogLuminance, -100, 20);
 	ImGui::SliderFloat("Max Log Luminance", &g_MaxLogLuminance, -50, 50);
 	ImGui::SliderFloat("White Point", &g_WhitePoint, 0, 20);
+	ImGui::Combo("Tonemapper", (int*)&g_ToneMapper, [](void* data, int index, const char** outText)
+		{
+			if (index == 0)
+				*outText = "Reinhard";
+			else if (index == 1)
+				*outText = "Reinhard Extended";
+			else if (index == 2)
+				*outText = "ACES Fast";
+			else if (index == 3)
+				*outText = "Unreal 3";
+			else if (index == 4)
+				*outText = "Uncharted 2";
+			else
+				return false;
+			return true;
+		}, nullptr, 5);
+
 	ImGui::SliderFloat("Tau", &g_Tau, 0, 100);
 
 	ImGui::Text("Misc");

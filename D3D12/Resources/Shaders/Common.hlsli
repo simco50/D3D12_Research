@@ -251,3 +251,8 @@ float LinearToSrgbFast(float x)
 {
     return pow(x, 1.0f / 2.2f);
 }
+
+float3 LinearToSrgbFast(float3 rgb)
+{
+    return pow(rgb, 1.0f / 2.2f);
+}
