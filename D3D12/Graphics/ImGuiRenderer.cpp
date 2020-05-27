@@ -153,6 +153,8 @@ void ImGuiRenderer::Render(RGGraph& graph, Texture* pRenderTarget)
 		{
 			return [=](CommandContext& context, const RGPassResources& resources)
 			{
+				context.InsertResourceBarrier(pRenderTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
+
 				context.SetPipelineState(m_pPipelineState.get());
 				context.SetGraphicsRootSignature(m_pRootSignature.get());
 				Matrix projectionMatrix = Math::CreateOrthographicOffCenterMatrix(0.0f, pDrawData->DisplayPos.x + pDrawData->DisplaySize.x, pDrawData->DisplayPos.y + pDrawData->DisplaySize.y, 0.0f, 0.0f, 1.0f);
