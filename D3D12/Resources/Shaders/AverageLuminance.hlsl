@@ -6,7 +6,7 @@
 #define HISTOGRAM_AVERAGE_THREADS_PER_DIMENSION 16
 
 ByteAddressBuffer tLuminanceHistogram : register(t0);
-RWTexture2D<float> uLuminanceOutput : register(u0);
+RWStructuredBuffer<float> uLuminanceOutput : register(u0);
 
 cbuffer LuminanceHistogramAverageBuffer : register(b0)
 {
@@ -48,8 +48,8 @@ void CSMain(CSInput input)
     {
         float weightedLogAverage = (gHistogramShared[0].x / max((float)cPixelCount - countForThisBin, 1.0)) - 1.0;
         float weightedAverageLuminance = exp2(((weightedLogAverage / 254.0) * cLogLuminanceRange) + cMinLogLuminance);
-        float luminanceLastFrame = uLuminanceOutput[uint2(0, 0)];
+        float luminanceLastFrame = uLuminanceOutput[0];
         float adaptedLuminance = luminanceLastFrame + (weightedAverageLuminance - luminanceLastFrame) * (1 - exp(-cTimeDelta * cTau));
-        uLuminanceOutput[uint2(0, 0)] = adaptedLuminance;
+        uLuminanceOutput[0] = adaptedLuminance;
     }
 }

@@ -825,7 +825,7 @@ void Graphics::Update()
 						context.SetDynamicDescriptor(2, 0, m_pLuminanceHistogram->GetSRV());
 						context.SetDynamicDescriptor(2, 1, m_pAverageLuminance->GetSRV());
 
-						context.Dispatch(256, 1);
+						context.Dispatch(1, m_pLuminanceHistogram->GetDesc().ElementCount);
 					};
 				});
 		}
@@ -1260,8 +1260,8 @@ void Graphics::InitializeAssets()
 
 		m_pLuminanceHistogram = std::make_unique<Buffer>(this);
 		m_pLuminanceHistogram->Create(BufferDesc::CreateByteAddress(sizeof(uint32) * 256));
-		m_pAverageLuminance = std::make_unique<Texture>(this);
-		m_pAverageLuminance->Create(TextureDesc::Create2D(1, 1, DXGI_FORMAT_R32_FLOAT, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource));
+		m_pAverageLuminance = std::make_unique<Buffer>(this);
+		m_pAverageLuminance->Create(BufferDesc::CreateStructured(1, sizeof(float), BufferFlag::UnorderedAccess | BufferFlag::ShaderResource));
 	}
 
 	//Debug Draw Histogram

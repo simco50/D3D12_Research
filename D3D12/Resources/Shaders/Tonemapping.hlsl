@@ -119,7 +119,7 @@ float Uncharted2(float x)
 
 Texture2D tColor : register(t0);
 SamplerState sColorSampler : register(s0);
-Texture2D tAverageLuminance : register(t1);
+StructuredBuffer<float> tAverageLuminance : register(t1);
 
 [RootSignature(RootSig)]
 PSInput VSMain(uint index : SV_VERTEXID)
@@ -139,7 +139,7 @@ PSInput VSMain(uint index : SV_VERTEXID)
 float4 PSMain(PSInput input) : SV_TARGET
 {
 	float3 rgb = tColor.Sample(sColorSampler, input.texCoord).rgb;
-    float avgLum = tAverageLuminance.Load(uint3(0, 0, 0)).r;
+    float avgLum = tAverageLuminance[0];
 
     float3 Yxy = ConvertRGB2Yxy(rgb);
 
