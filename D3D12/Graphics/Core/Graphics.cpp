@@ -49,7 +49,7 @@ bool gDumpRenderGraph = false;
 float g_WhitePoint = 4;
 float g_MinLogLuminance = -10;
 float g_MaxLogLuminance = 2;
-float g_Tau = 2;
+float g_Tau = 1;
 bool g_DrawHistogram = true;
 int32 g_ToneMapper = 0;
 
@@ -1261,7 +1261,7 @@ void Graphics::InitializeAssets()
 		m_pLuminanceHistogram = std::make_unique<Buffer>(this);
 		m_pLuminanceHistogram->Create(BufferDesc::CreateByteAddress(sizeof(uint32) * 256));
 		m_pAverageLuminance = std::make_unique<Buffer>(this);
-		m_pAverageLuminance->Create(BufferDesc::CreateStructured(1, sizeof(float), BufferFlag::UnorderedAccess | BufferFlag::ShaderResource));
+		m_pAverageLuminance->Create(BufferDesc::CreateStructured(2, sizeof(float), BufferFlag::UnorderedAccess | BufferFlag::ShaderResource));
 	}
 
 	//Debug Draw Histogram
@@ -1598,7 +1598,7 @@ void Graphics::UpdateImGui()
 			return true;
 		}, nullptr, 5);
 
-	ImGui::SliderFloat("Tau", &g_Tau, 0, 100);
+	ImGui::SliderFloat("Tau", &g_Tau, 0, 5);
 
 	ImGui::Text("Misc");
 	ImGui::Checkbox("Debug Render Lights", &g_VisualizeLights);

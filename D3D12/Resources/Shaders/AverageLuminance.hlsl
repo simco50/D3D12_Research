@@ -51,5 +51,6 @@ void CSMain(CSInput input)
         float luminanceLastFrame = uLuminanceOutput[0];
         float adaptedLuminance = luminanceLastFrame + (weightedAverageLuminance - luminanceLastFrame) * (1 - exp(-cTimeDelta * cTau));
         uLuminanceOutput[0] = adaptedLuminance;
+        uLuminanceOutput[1] = weightedAverageLuminance;
     }
 }

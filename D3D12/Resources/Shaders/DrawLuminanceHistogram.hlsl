@@ -7,6 +7,7 @@
 #define BACKGROUND_COLOR float4(0, 0, 0, 0.6f)
 #define FOREGROUND_COLOR float4(1, 0, 0, 0.8f)
 #define CURSOR_COLOR float4(1, 0, 1, 1.0f)
+#define TARGET_COLOR float4(1, 1, 1, 1.0f)
 
 RWTexture2D<float4> uOutTexture : register(u0);
 ByteAddressBuffer tLuminanceHistogram : register(t0);
@@ -43,13 +44,19 @@ void DrawLuminanceHistogram(uint groupIndex : SV_GroupIndex, uint3 threadId : SV
     uOutTexture.GetDimensions(dimensions.x, dimensions.y);
     uint2 s = uint2(dimensions.x, 0) + uint2(-BIN_COUNT * 4 + groupIndex * 4, threadId.y);
 
-    float avg = tAverageLuminance[0];
-    float t = (log2(avg) - cMinLogLuminance) * cInverseLogLuminanceRange;
+    float currentAverage = tAverageLuminance[0];
+    float targetAverage = tAverageLuminance[1];
+    float tCurrent = (log2(currentAverage) - cMinLogLuminance) * cInverseLogLuminanceRange;
+    float tTarget = (log2(targetAverage) - cMinLogLuminance) * cInverseLogLuminanceRange;
 
     float4 outColor = BACKGROUND_COLOR;
-    if(floor(t * BIN_COUNT) == groupIndex)
+    if(floor(tCurrent * BIN_COUNT) == groupIndex)
     {
         outColor = CURSOR_COLOR;
+    }
+    else if(floor(tTarget * BIN_COUNT) == groupIndex)
+    {
+        outColor = TARGET_COLOR;
     }
     else if(BIN_COUNT - threadId.y < (currentBinValue * BIN_COUNT) / maxBinValue)
     {
