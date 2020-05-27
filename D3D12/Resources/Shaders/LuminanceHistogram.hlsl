@@ -32,7 +32,7 @@ uint HDRToHistogramBin(float3 hdrColor)
     }
     
     float logLuminance = saturate((log2(luminance) - cMinLogLuminance) * cOneOverLogLuminanceRange);
-    return (uint)(logLuminance * 254.0 + 1.0);
+    return (uint)(logLuminance * (NUM_HISTOGRAM_BINS - 1) + 1.0);
 }
     
 groupshared uint HistogramShared[NUM_HISTOGRAM_BINS];

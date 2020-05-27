@@ -1,6 +1,5 @@
 #include "Common.hlsli"
-
-#define TONEMAP_OPERATOR 2
+#include "TonemappingOperators.hlsli"
 
 #define TONEMAP_REINHARD 0
 #define TONEMAP_REINHARD_EXTENDED 1
@@ -76,47 +75,6 @@ float3 ConvertYxy2RGB(float3 Yxy)
 	return ConvertXYZ2RGB(ConvertYxy2XYZ(Yxy));
 }
 
-float Reinhard(float x)
-{
-	return x / (1.0 + x);
-}
-
-float ReinhardExtended(float x, float MaxWhite)
-{
-	return (x * (1.0 + x / Square(MaxWhite)) ) / (1.0 + x);
-}
-
-float ACES_Fast(float x) 
-{
-    // Narkowicz 2015, "ACES Filmic Tone Mapping Curve"
-    const float a = 2.51;
-    const float b = 0.03;
-    const float c = 2.43;
-    const float d = 0.59;
-    const float e = 0.14;
-    return (x * (a * x + b)) / (x * (c * x + d) + e);
-}
-
-float Unreal3(float x) 
-{
-    // Unreal 3, Documentation: "Color Grading"
-    // Adapted to be close to Tonemap_ACES, with similar range
-    // Gamma 2.2 correction is baked in, don't use with sRGB conversion!
-    return x / (x + 0.155) * 1.019;
-}
-
-float Uncharted2(float x)
-{
-	const float A = 0.15;
-	const float B = 0.50;
-	const float C = 0.10;
-	const float D = 0.20;
-	const float E = 0.02;
-	const float F = 0.30;
-	const float W = 11.2;
-	return ((x*(A*x+C*B)+D*E)/(x*(A*x+B)+D*F))-E/F;
-}
-
 Texture2D tColor : register(t0);
 SamplerState sColorSampler : register(s0);
 StructuredBuffer<float> tAverageLuminance : register(t1);
@@ -141,8 +99,6 @@ float4 PSMain(PSInput input) : SV_TARGET
 	float3 rgb = tColor.Sample(sColorSampler, input.texCoord).rgb;
     float avgLum = tAverageLuminance[0];
 
-    float3 Yxy = ConvertRGB2Yxy(rgb);
-
 	/* Long version - https://google.github.io/filament/Filament.md.html#imagingpipeline/physicallybasedcamera/exposurevalue
 	const float ISO = 100.0f;
 	const float K = 12.5f;
@@ -153,32 +109,42 @@ float4 PSMain(PSInput input) : SV_TARGET
 	float newLuminance = Yxy.x / lMax;
 	*/
 
-    float newLuminance = Yxy.x / (9.6 * avgLum + 0.0001f);
+#if TONEMAP_LUMINANCE
+    float3 Yxy = ConvertRGB2Yxy(rgb);
+    float value = Yxy.x / (9.6 * avgLum + 0.0001f);
+#else
+	float3 value = rgb / (9.6 * avgLum + 0.0001f);
+#endif
 
-	//Tonemap on luminance only.
-	//John Hable prefers applying to all channels - http://filmicworlds.com/blog/filmic-tonemapping-with-piecewise-power-curves/
 	switch(cTonemapper)
 	{
 	case TONEMAP_REINHARD:
-    	Yxy.x = Reinhard(newLuminance);
-		return float4(LinearToSrgbFast(ConvertYxy2RGB(Yxy)), 1);
+    	value = Reinhard(value);
 		break;
-		case TONEMAP_REINHARD_EXTENDED:
-    	Yxy.x = ReinhardExtended(newLuminance, cWhitePoint);
-		return float4(LinearToSrgbFast(ConvertYxy2RGB(Yxy)), 1);
+	case TONEMAP_REINHARD_EXTENDED:
+    	value = ReinhardExtended(value, cWhitePoint);
 		break;
 	case TONEMAP_ACES_FAST:
-		Yxy.x = ACES_Fast(newLuminance);
-		return float4(LinearToSrgbFast(ConvertYxy2RGB(Yxy)), 1);
+		value = ACES_Fast(value);
 		break;
 	case TONEMAP_UNREAL3:
-		Yxy.x = Unreal3(newLuminance);
-		return float4(ConvertYxy2RGB(Yxy), 1);
+		value = Unreal3(value);
 		break;
 	case TONEMAP_UNCHARTED2:
-		Yxy.x = Uncharted2(newLuminance);
-		return float4(LinearToSrgbFast(ConvertYxy2RGB(Yxy)), 1);
+		value = Uncharted2(value);
 		break;
 	}
-	return float4(0, 0, 0, 0);
+
+#if TONEMAP_LUMINANCE
+	Yxy.x = value;
+	rgb = ConvertYxy2RGB(Yxy);
+#else
+	rgb = value;
+#endif
+
+	if(cTonemapper != TONEMAP_UNREAL3)
+	{
+		rgb = LinearToSrgbFast(rgb);
+	}
+	return float4(rgb, 1);
 }

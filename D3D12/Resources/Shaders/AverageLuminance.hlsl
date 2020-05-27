@@ -17,12 +17,18 @@ cbuffer LuminanceHistogramAverageBuffer : register(b0)
     float cTau;
 };
                         
-groupshared float gHistogramShared[NUM_HISTOGRAM_BINS];
+groupshared uint gHistogramShared[NUM_HISTOGRAM_BINS];
 
 struct CSInput
 {
     uint groupIndex : SV_GroupIndex;
 };
+
+float Adaption(float current, float target, float dt, float speed)
+{
+    float factor = 1.0f - exp2(-dt * speed);
+    return current + (target - current) * factor;
+}
 
 [RootSignature(RootSig)]
 [numthreads(HISTOGRAM_AVERAGE_THREADS_PER_DIMENSION, HISTOGRAM_AVERAGE_THREADS_PER_DIMENSION, 1)]
@@ -30,7 +36,6 @@ void CSMain(CSInput input)
 {
     float countForThisBin = (float)tLuminanceHistogram.Load(input.groupIndex * 4);
     gHistogramShared[input.groupIndex] = countForThisBin * (float)input.groupIndex;
-    
     GroupMemoryBarrierWithGroupSync();
     
     [unroll]
@@ -40,16 +45,16 @@ void CSMain(CSInput input)
         {
             gHistogramShared[input.groupIndex] += gHistogramShared[input.groupIndex + histogramSampleIndex];
         }
-
         GroupMemoryBarrierWithGroupSync();
     }
     
     if(input.groupIndex == 0)
     {
-        float weightedLogAverage = (gHistogramShared[0].x / max((float)cPixelCount - countForThisBin, 1.0)) - 1.0;
-        float weightedAverageLuminance = exp2(((weightedLogAverage / 254.0) * cLogLuminanceRange) + cMinLogLuminance);
+        float weightedLogAverage = ((float)gHistogramShared[0].x / max((float)cPixelCount - countForThisBin, 1.0)) - 1.0;
+        float weightedAverageLuminance = exp2(((weightedLogAverage / (NUM_HISTOGRAM_BINS - 1)) * cLogLuminanceRange) + cMinLogLuminance);
         float luminanceLastFrame = uLuminanceOutput[0];
-        float adaptedLuminance = luminanceLastFrame + (weightedAverageLuminance - luminanceLastFrame) * (1 - exp(-cTimeDelta * cTau));
+        float adaptedLuminance = Adaption(luminanceLastFrame, weightedAverageLuminance, cTimeDelta, cTau);
+
         uLuminanceOutput[0] = adaptedLuminance;
         uLuminanceOutput[1] = weightedAverageLuminance;
     }

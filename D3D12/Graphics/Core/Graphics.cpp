@@ -46,12 +46,12 @@ const DXGI_FORMAT Graphics::SWAPCHAIN_FORMAT = DXGI_FORMAT_R8G8B8A8_UNORM;
 
 bool gDumpRenderGraph = false;
 
-float g_WhitePoint = 4;
+float g_WhitePoint = 1;
 float g_MinLogLuminance = -10;
-float g_MaxLogLuminance = 2;
-float g_Tau = 1;
+float g_MaxLogLuminance = 20;
+float g_Tau = 2;
 bool g_DrawHistogram = true;
-int32 g_ToneMapper = 0;
+int32 g_ToneMapper = 1;
 
 bool g_SDSM = false;
 bool g_StabilizeCascades = true;
