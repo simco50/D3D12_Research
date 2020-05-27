@@ -7,15 +7,11 @@
 #define TONEMAP_UNREAL3 3
 #define TONEMAP_UNCHARTED2 4
 
-#define RootSig "CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \
-				"DescriptorTable(SRV(t0, numDescriptors = 2), visibility=SHADER_VISIBILITY_PIXEL), " \
-				"StaticSampler(s0, filter=FILTER_MIN_MAG_MIP_LINEAR, visibility = SHADER_VISIBILITY_PIXEL), " \
+#define BLOCK_SIZE 16
 
-struct PSInput
-{
-	float4 position : SV_POSITION;
-	float2 texCoord : TEXCOORD;
-};
+#define RootSig "CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \
+				"DescriptorTable(UAV(u0, numDescriptors = 1), visibility=SHADER_VISIBILITY_ALL), " \
+				"DescriptorTable(SRV(t0, numDescriptors = 2), visibility=SHADER_VISIBILITY_ALL), " \
 
 cbuffer Parameters : register(b0)
 {
@@ -75,28 +71,22 @@ float3 ConvertYxy2RGB(float3 Yxy)
 	return ConvertXYZ2RGB(ConvertYxy2XYZ(Yxy));
 }
 
+RWTexture2D<float4> uOutColor : register(u0);
 Texture2D tColor : register(t0);
-SamplerState sColorSampler : register(s0);
 StructuredBuffer<float> tAverageLuminance : register(t1);
 
 [RootSignature(RootSig)]
-PSInput VSMain(uint index : SV_VERTEXID)
+[numthreads(BLOCK_SIZE, BLOCK_SIZE, 1)]
+void CSMain(uint3 dispatchThreadId : SV_DISPATCHTHREADID)
 {
-	PSInput output;
-	output.position.x = (float)(index / 2) * 4.0f - 1.0f;
-	output.position.y = (float)(index % 2) * 4.0f - 1.0f;
-	output.position.z = 0.0f;
-	output.position.w = 1.0f;
+	uint2 dimensions;
+	tColor.GetDimensions(dimensions.x, dimensions.y);
+	if(dispatchThreadId.x >= dimensions.x || dispatchThreadId.y >= dimensions.y)
+	{
+		return;
+	}
 
-	output.texCoord.x = (float)(index / 2) * 2.0f;
-	output.texCoord.y = 1.0f - (float)(index % 2) * 2.0f;
-
-	return output;
-}
-
-float4 PSMain(PSInput input) : SV_TARGET
-{
-	float3 rgb = tColor.Sample(sColorSampler, input.texCoord).rgb;
+	float3 rgb = tColor.Load(uint3(dispatchThreadId.xy, 0)).rgb;
     float avgLum = tAverageLuminance[0];
 
 	/* Long version - https://google.github.io/filament/Filament.md.html#imagingpipeline/physicallybasedcamera/exposurevalue
@@ -146,5 +136,5 @@ float4 PSMain(PSInput input) : SV_TARGET
 	{
 		rgb = LinearToSrgbFast(rgb);
 	}
-	return float4(rgb, 1);
+	uOutColor[dispatchThreadId.xy] = float4(rgb, 1);
 }

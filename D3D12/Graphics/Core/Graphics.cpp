@@ -780,21 +780,23 @@ void Graphics::Update()
 					constBuffer.WhitePoint = g_WhitePoint;
 					constBuffer.Tonemapper = g_ToneMapper;
 
-					context.InsertResourceBarrier(m_pTonemapTarget.get(), D3D12_RESOURCE_STATE_RENDER_TARGET);
-					context.InsertResourceBarrier(m_pAverageLuminance.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-					context.InsertResourceBarrier(m_pHDRRenderTarget.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+					context.InsertResourceBarrier(m_pTonemapTarget.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+					context.InsertResourceBarrier(m_pAverageLuminance.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+					context.InsertResourceBarrier(m_pHDRRenderTarget.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
 					context.SetPipelineState(m_pToneMapPSO.get());
-					context.SetGraphicsRootSignature(m_pToneMapRS.get());
-					context.SetViewport(FloatRect(0, 0, (float)m_WindowWidth, (float)m_WindowHeight));
-					context.BeginRenderPass(RenderPassInfo(m_pTonemapTarget.get(), RenderPassAccess::Clear_Store, nullptr, RenderPassAccess::NoAccess));
-
-					context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-					context.SetDynamicConstantBufferView(0, &constBuffer, sizeof(Parameters));
-					context.SetDynamicDescriptor(1, 0, m_pHDRRenderTarget->GetSRV());
-					context.SetDynamicDescriptor(1, 1, m_pAverageLuminance->GetSRV());
-					context.Draw(0, 3);
-					context.EndRenderPass();
+					context.SetComputeRootSignature(m_pToneMapRS.get());
+					
+					context.SetComputeDynamicConstantBufferView(0, &constBuffer, sizeof(Parameters));
+					
+					context.SetDynamicDescriptor(1, 0, m_pTonemapTarget->GetUAV());
+					context.SetDynamicDescriptor(2, 0, m_pHDRRenderTarget->GetSRV());
+					context.SetDynamicDescriptor(2, 1, m_pAverageLuminance->GetSRV());
+					
+					context.Dispatch(
+						Math::DivideAndRoundUp(m_pHDRRenderTarget->GetWidth(), 16),
+						Math::DivideAndRoundUp(m_pHDRRenderTarget->GetHeight(), 16)
+					);
 				};
 			});
 
@@ -1293,21 +1295,16 @@ void Graphics::InitializeAssets()
 
 	//Tonemapping
 	{
-		Shader vertexShader("Resources/Shaders/Tonemapping.hlsl", Shader::Type::Vertex, "VSMain");
-		Shader pixelShader("Resources/Shaders/Tonemapping.hlsl", Shader::Type::Pixel, "PSMain");
+		Shader computeShader("Resources/Shaders/Tonemapping.hlsl", Shader::Type::Compute, "CSMain");
 
 		//Rootsignature
 		m_pToneMapRS = std::make_unique<RootSignature>();
-		m_pToneMapRS->FinalizeFromShader("Tonemapping", vertexShader, m_pDevice.Get());
+		m_pToneMapRS->FinalizeFromShader("Tonemapping", computeShader, m_pDevice.Get());
 
 		//Pipeline state
 		m_pToneMapPSO = std::make_unique<PipelineState>();
-		m_pToneMapPSO->SetDepthEnabled(false);
-		m_pToneMapPSO->SetDepthWrite(false);
 		m_pToneMapPSO->SetRootSignature(m_pToneMapRS->GetRootSignature());
-		m_pToneMapPSO->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
-		m_pToneMapPSO->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
-		m_pToneMapPSO->SetRenderTargetFormat(SWAPCHAIN_FORMAT, DEPTH_STENCIL_FORMAT, 1, 0);
+		m_pToneMapPSO->SetComputeShader(computeShader.GetByteCode(), computeShader.GetByteCodeSize());
 		m_pToneMapPSO->Finalize("Tone mapping Pipeline", m_pDevice.Get());
 	}
 
