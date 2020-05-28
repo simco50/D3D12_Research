@@ -1,3 +1,5 @@
+#include "TonemappingUtility.hlsli"
+
 #define RootSig "CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \
 				"DescriptorTable(UAV(u0, numDescriptors = 1))," \
 				"DescriptorTable(SRV(t0, numDescriptors = 1))"
@@ -16,8 +18,8 @@ cbuffer LuminanceHistogramAverageBuffer : register(b0)
     float cTimeDelta;
     float cTau;
 };
-                        
-groupshared uint gHistogramShared[NUM_HISTOGRAM_BINS];
+
+groupshared float gHistogramShared[NUM_HISTOGRAM_BINS];
 
 struct CSInput
 {
@@ -50,12 +52,13 @@ void CSMain(CSInput input)
     
     if(input.groupIndex == 0)
     {
-        float weightedLogAverage = ((float)gHistogramShared[0].x / max((float)cPixelCount - countForThisBin, 1.0)) - 1.0;
+        float weightedLogAverage = (gHistogramShared[0].x / max((float)cPixelCount - countForThisBin, 1.0)) - 1.0;
         float weightedAverageLuminance = exp2(((weightedLogAverage / (NUM_HISTOGRAM_BINS - 1)) * cLogLuminanceRange) + cMinLogLuminance);
         float luminanceLastFrame = uLuminanceOutput[0];
         float adaptedLuminance = Adaption(luminanceLastFrame, weightedAverageLuminance, cTimeDelta, cTau);
 
         uLuminanceOutput[0] = adaptedLuminance;
         uLuminanceOutput[1] = weightedAverageLuminance;
+        uLuminanceOutput[2] = Exposure(EV100FromLuminance(weightedAverageLuminance));
     }
 }

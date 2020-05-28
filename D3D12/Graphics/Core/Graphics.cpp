@@ -1263,7 +1263,7 @@ void Graphics::InitializeAssets()
 		m_pLuminanceHistogram = std::make_unique<Buffer>(this);
 		m_pLuminanceHistogram->Create(BufferDesc::CreateByteAddress(sizeof(uint32) * 256));
 		m_pAverageLuminance = std::make_unique<Buffer>(this);
-		m_pAverageLuminance->Create(BufferDesc::CreateStructured(2, sizeof(float), BufferFlag::UnorderedAccess | BufferFlag::ShaderResource));
+		m_pAverageLuminance->Create(BufferDesc::CreateStructured(3, sizeof(float), BufferFlag::UnorderedAccess | BufferFlag::ShaderResource));
 	}
 
 	//Debug Draw Histogram
