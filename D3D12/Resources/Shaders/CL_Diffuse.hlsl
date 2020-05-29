@@ -133,7 +133,7 @@ float4 PSMain(PSInput input) : SV_TARGET
 
 #define VOLUMETRIC_LIGHT 1
 #if VOLUMETRIC_LIGHT
-	const float fogValue = 0.4f;
+	const float fogValue = 0.1f;
 	const uint samples = 10;
 	float3 cameraPos = cViewInverse[3].xyz;
 	float3 worldPos = input.positionWS.xyz;

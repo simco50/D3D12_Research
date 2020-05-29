@@ -25,7 +25,7 @@
 #include "Graphics/RTAO.h"
 #include "Graphics/SSAO.h"
 #include "Graphics/ImGuiRenderer.h"
-#include "../GpuParticles.h"
+#include "Graphics/GpuParticles.h"
 
 #ifdef _DEBUG
 #define D3D_VALIDATION 1
@@ -59,8 +59,8 @@ float g_PSSMFactor = 1.0f;
 bool g_ShowRaytraced = false;
 bool g_VisualizeLights = false;
 
-float g_SunOrientation = 0;
-float g_SunInclination = 0.2f;
+float g_SunInclination = 0.579f;
+float g_SunOrientation = -3.055f;
 
 Graphics::Graphics(uint32 width, uint32 height, int sampleCount /*= 1*/)
 	: m_WindowWidth(width), m_WindowHeight(height), m_SampleCount(sampleCount)
@@ -141,14 +141,11 @@ void Graphics::RandomizeLights(int count)
 	//It's a bit weird but I don't sort the lights that I manually created because I access them by their original index during the update function
 	std::sort(m_Lights.begin() + randomLightsStartIndex, m_Lights.end(), [](const Light& a, const Light& b) { return (int)a.LightType < (int)b.LightType; });
 
-	IdleGPU();
-	if (m_pLightBuffer->GetDesc().ElementCount != m_Lights.size())
+	if (m_pLightBuffer->GetDesc().ElementCount != count)
 	{
-		m_pLightBuffer->Create(BufferDesc::CreateStructured((int)m_Lights.size(), sizeof(Light)));
+		IdleGPU();
+		m_pLightBuffer->Create(BufferDesc::CreateStructured(count, sizeof(Light), BufferFlag::ShaderResource));
 	}
-	CommandContext* pContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
-	m_pLightBuffer->SetData(pContext, m_Lights.data(), sizeof(Light) * m_Lights.size());
-	pContext->Execute(true);
 }
 
 void Graphics::Update()
@@ -337,6 +334,24 @@ void Graphics::Update()
 	Data.DepthStencilResolved = graph.ImportTexture("Resolved Depth Stencil", GetResolvedDepthStencil());
 
 	uint64 nextFenceValue = 0;
+
+	graph.AddPass("Setup Lights", [&](RGPassBuilder& builder)
+		{
+			Data.DepthStencil = builder.Write(Data.DepthStencil);
+
+			return [=](CommandContext& renderContext, const RGPassResources& resources)
+			{
+				float costheta = cosf(g_SunOrientation);
+				float sintheta = sinf(g_SunOrientation);
+				float cosphi = cosf(g_SunInclination * Math::PIDIV2);
+				float sinphi = sinf(g_SunInclination * Math::PIDIV2);
+
+				m_Lights[0].Direction = -Vector3(costheta * cosphi, sinphi, sintheta * cosphi);
+
+				DynamicAllocation allocation = renderContext.AllocateTransientMemory(m_Lights.size() * sizeof(Light), m_Lights.data());
+				renderContext.GetCommandList()->CopyBufferRegion(m_pLightBuffer->GetResource(), 0, allocation.pBackingResource->GetResource(), allocation.Offset, m_pLightBuffer->GetSize());
+			};
+		});
 
 	//DEPTH PREPASS
 	// - Depth only pass that renders the entire scene
@@ -610,11 +625,6 @@ void Graphics::Update()
 				renderContext.SetPipelineState(m_pSkyboxPSO.get());
 				renderContext.SetGraphicsRootSignature(m_pSkyboxRS.get());
 
-				float costheta = cosf(g_SunOrientation);
-				float sintheta = sinf(g_SunOrientation);
-				float cosphi = cosf(g_SunInclination * Math::PIDIV2);
-				float sinphi = sinf(g_SunInclination * Math::PIDIV2);
-
 				struct Parameters
 				{
 					Matrix View;
@@ -628,7 +638,7 @@ void Graphics::Update()
 				constBuffer.View = m_pCamera->GetView();
 				constBuffer.Projection = m_pCamera->GetProjection();
 				constBuffer.Bias = Vector3::One;
-				constBuffer.SunDirection = Vector3(costheta * cosphi, sinphi, sintheta * cosphi);
+				constBuffer.SunDirection = -m_Lights[0].Direction;
 				constBuffer.SunDirection.Normalize();
 
 				renderContext.SetDynamicConstantBufferView(0, &constBuffer, sizeof(Parameters));

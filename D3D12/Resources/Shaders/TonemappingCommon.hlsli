@@ -1,6 +1,6 @@
 #include "Common.hlsli"
 
-#define NUM_HISTOGRAM_BINS 64
+#define NUM_HISTOGRAM_BINS 256
 
 #define TONEMAP_LUMINANCE 0
 
