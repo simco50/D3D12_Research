@@ -158,4 +158,30 @@ namespace Math
 		return output;
 	}
 
+	Color MakeFromColorTemperature(float Temp)
+	{
+		Temp = Clamp(Temp, 15000.0f, 1000.0f);
+
+		//[Krystek85] Algorithm works in the CIE 1960 (UCS) space,
+		float u = (0.860117757f + 1.54118254e-4f * Temp + 1.28641212e-7f * Temp * Temp) / (1.0f + 8.42420235e-4f * Temp + 7.08145163e-7f * Temp * Temp);
+		float v = (0.317398726f + 4.22806245e-5f * Temp + 4.20481691e-8f * Temp * Temp) / (1.0f - 2.89741816e-5f * Temp + 1.61456053e-7f * Temp * Temp);
+
+		//UCS to xyY
+		float x = 3.0f * u / (2.0f * u - 8.0f * v + 4.0f);
+		float y = 2.0f * v / (2.0f * u - 8.0f * v + 4.0f);
+		float z = 1.0f - x - y;
+
+		//xyY to XYZ
+		float Y = 1.0f;
+		float X = Y / y * x;
+		float Z = Y / y * z;
+
+		// XYZ to RGB - BT.709
+		float R = 3.2404542f * X + -1.5371385f * Y + -0.4985314f * Z;
+		float G = -0.9692660f * X + 1.8760108f * Y + 0.0415560f * Z;
+		float B = 0.0556434f * X + -0.2040259f * Y + 1.0572252f * Z;
+
+		return Color(R, G, B);
+	}
+
 }

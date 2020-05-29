@@ -1,10 +1,9 @@
-#include "TonemappingUtility.hlsli"
+#include "TonemappingCommon.hlsli"
 
 #define RootSig "CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \
 				"DescriptorTable(UAV(u0, numDescriptors = 1))," \
 				"DescriptorTable(SRV(t0, numDescriptors = 1))"
 
-#define NUM_HISTOGRAM_BINS 256
 #define HISTOGRAM_AVERAGE_THREADS_PER_DIMENSION 16
 
 ByteAddressBuffer tLuminanceHistogram : register(t0);

@@ -1,5 +1,5 @@
 #include "Common.hlsli"
-#include "TonemappingUtility.hlsli"
+#include "TonemappingCommon.hlsli"
 
 #define TONEMAP_REINHARD 0
 #define TONEMAP_REINHARD_EXTENDED 1

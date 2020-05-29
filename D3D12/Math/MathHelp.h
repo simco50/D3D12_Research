@@ -132,4 +132,6 @@ namespace Math
 	{
 		return (uint32)ceil((float)nominator / denominator);
 	}
+
+	Color MakeFromColorTemperature(float Temp);
 };

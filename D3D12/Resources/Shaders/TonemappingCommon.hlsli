@@ -1,5 +1,7 @@
 #include "Common.hlsli"
 
+#define NUM_HISTOGRAM_BINS 64
+
 #define TONEMAP_LUMINANCE 0
 
 #if TONEMAP_LUMINANCE
@@ -112,4 +114,9 @@ float EV100FromLuminance(float luminance)
 float Exposure(float ev100)
 {
 	return 1.0f / (pow(2.0f, ev100) * 1.2f);
+}
+
+float GetLuminance(float3 color)
+{
+    return dot(color, float3(0.2127f, 0.7152f, 0.0722f));
 }

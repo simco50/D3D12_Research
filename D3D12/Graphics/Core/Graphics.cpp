@@ -857,8 +857,6 @@ void Graphics::Update()
 	}
 	nextFenceValue = graph.Execute();
 
-	m_pVisualizeTexture = m_pAmbientOcclusion.get();
-
 	//PRESENT
 	//	- Set fence for the currently queued frame
 	//	- Present the frame buffer
