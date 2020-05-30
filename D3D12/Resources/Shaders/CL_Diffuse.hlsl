@@ -129,7 +129,7 @@ float4 PSMain(PSInput input) : SV_TARGET
 	float3 color = lighting.Diffuse + lighting.Specular;
 
 	float ao = tAO.SampleLevel(sDiffuseSampler, (float2)input.position.xy / cScreenDimensions, 0).r;
-	color += ApplyAmbientLight(diffuseColor, ao, float3(0.2f, 0.5f, 1.0f) * 0.1f);
+	color += ApplyAmbientLight(diffuseColor, ao, Lights[0].GetColor().rgb * 0.1f);
 
 #define VOLUMETRIC_LIGHT 1
 #if VOLUMETRIC_LIGHT

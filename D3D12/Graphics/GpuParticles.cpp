@@ -29,27 +29,27 @@ struct ParticleData
 };
 
 GpuParticles::GpuParticles(Graphics* pGraphics)
-	: m_pGraphics(pGraphics)
 {
+	Initialize(pGraphics);
 }
 
 GpuParticles::~GpuParticles()
 {
 }
 
-void GpuParticles::Initialize()
+void GpuParticles::Initialize(Graphics* pGraphics)
 {
-	CommandContext* pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+	CommandContext* pContext = pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 
-	m_pCountersBuffer = std::make_unique<Buffer>(m_pGraphics);
+	m_pCountersBuffer = std::make_unique<Buffer>(pGraphics);
 	m_pCountersBuffer->Create(BufferDesc::CreateByteAddress(sizeof(uint32) * 4));
 
 	BufferDesc particleBufferDesc = BufferDesc::CreateStructured(cMaxParticleCount, sizeof(uint32));
-	m_pAliveList1 = std::make_unique<Buffer>(m_pGraphics);
+	m_pAliveList1 = std::make_unique<Buffer>(pGraphics);
 	m_pAliveList1->Create(particleBufferDesc);
-	m_pAliveList2 = std::make_unique<Buffer>(m_pGraphics);
+	m_pAliveList2 = std::make_unique<Buffer>(pGraphics);
 	m_pAliveList2->Create(particleBufferDesc);
-	m_pDeadList = std::make_unique<Buffer>(m_pGraphics);
+	m_pDeadList = std::make_unique<Buffer>(pGraphics);
 	m_pDeadList->Create(particleBufferDesc);
 	std::vector<uint32> deadList(cMaxParticleCount);
 	std::generate(deadList.begin(), deadList.end(), [n = 0]() mutable { return n++; });
@@ -57,30 +57,30 @@ void GpuParticles::Initialize()
 	uint32 aliveCount = cMaxParticleCount;
 	m_pCountersBuffer->SetData(pContext, &aliveCount, sizeof(uint32), 0);
 
-	m_pParticleBuffer = std::make_unique<Buffer>(m_pGraphics);
+	m_pParticleBuffer = std::make_unique<Buffer>(pGraphics);
 	m_pParticleBuffer->Create(BufferDesc::CreateStructured(cMaxParticleCount, sizeof(ParticleData)));
 
-	m_pEmitArguments = std::make_unique<Buffer>(m_pGraphics);
+	m_pEmitArguments = std::make_unique<Buffer>(pGraphics);
 	m_pEmitArguments->Create(BufferDesc::CreateIndirectArguments<uint32>(3));
-	m_pSimulateArguments = std::make_unique<Buffer>(m_pGraphics);
+	m_pSimulateArguments = std::make_unique<Buffer>(pGraphics);
 	m_pSimulateArguments->Create(BufferDesc::CreateIndirectArguments<uint32>(3));
-	m_pDrawArguments = std::make_unique<Buffer>(m_pGraphics);
+	m_pDrawArguments = std::make_unique<Buffer>(pGraphics);
 	m_pDrawArguments->Create(BufferDesc::CreateIndirectArguments<uint32>(4));
 
 	pContext->Execute(true);
 
 	m_pSimpleDispatchCommandSignature = std::make_unique<CommandSignature>();
 	m_pSimpleDispatchCommandSignature->AddDispatch();
-	m_pSimpleDispatchCommandSignature->Finalize("Simple Dispatch", m_pGraphics->GetDevice());
+	m_pSimpleDispatchCommandSignature->Finalize("Simple Dispatch", pGraphics->GetDevice());
 
 	m_pSimpleDrawCommandSignature = std::make_unique<CommandSignature>();
 	m_pSimpleDrawCommandSignature->AddDraw();
-	m_pSimpleDrawCommandSignature->Finalize("Simple Draw", m_pGraphics->GetDevice());
+	m_pSimpleDrawCommandSignature->Finalize("Simple Draw", pGraphics->GetDevice());
 
 	{
 		Shader computeShader("Resources/Shaders/ParticleSimulation.hlsl", Shader::Type::Compute, "UpdateSimulationParameters");
 		m_pSimulateRS = std::make_unique<RootSignature>();
-		m_pSimulateRS->FinalizeFromShader("Particle Simulation RS", computeShader, m_pGraphics->GetDevice());
+		m_pSimulateRS->FinalizeFromShader("Particle Simulation RS", computeShader, pGraphics->GetDevice());
 	}
 
 	{
@@ -88,28 +88,28 @@ void GpuParticles::Initialize()
 		m_pPrepareArgumentsPS = std::make_unique<PipelineState>();
 		m_pPrepareArgumentsPS->SetComputeShader(computeShader.GetByteCode(), computeShader.GetByteCodeSize());
 		m_pPrepareArgumentsPS->SetRootSignature(m_pSimulateRS->GetRootSignature());
-		m_pPrepareArgumentsPS->Finalize("Prepare Particle Arguments PS", m_pGraphics->GetDevice());
+		m_pPrepareArgumentsPS->Finalize("Prepare Particle Arguments PS", pGraphics->GetDevice());
 	}
 	{
 		Shader computeShader("Resources/Shaders/ParticleSimulation.hlsl", Shader::Type::Compute, "Emit");
 		m_pEmitPS = std::make_unique<PipelineState>();
 		m_pEmitPS->SetComputeShader(computeShader.GetByteCode(), computeShader.GetByteCodeSize());
 		m_pEmitPS->SetRootSignature(m_pSimulateRS->GetRootSignature());
-		m_pEmitPS->Finalize("Particle Emitter PS", m_pGraphics->GetDevice());
+		m_pEmitPS->Finalize("Particle Emitter PS", pGraphics->GetDevice());
 	}
 	{
 		Shader computeShader("Resources/Shaders/ParticleSimulation.hlsl", Shader::Type::Compute, "Simulate");
 		m_pSimulatePS = std::make_unique<PipelineState>();
 		m_pSimulatePS->SetComputeShader(computeShader.GetByteCode(), computeShader.GetByteCodeSize());
 		m_pSimulatePS->SetRootSignature(m_pSimulateRS->GetRootSignature());
-		m_pSimulatePS->Finalize("Particle Simulation PS", m_pGraphics->GetDevice());
+		m_pSimulatePS->Finalize("Particle Simulation PS", pGraphics->GetDevice());
 	}
 	{
 		Shader computeShader("Resources/Shaders/ParticleSimulation.hlsl", Shader::Type::Compute, "SimulateEnd");
 		m_pSimulateEndPS = std::make_unique<PipelineState>();
 		m_pSimulateEndPS->SetComputeShader(computeShader.GetByteCode(), computeShader.GetByteCodeSize());
 		m_pSimulateEndPS->SetRootSignature(m_pSimulateRS->GetRootSignature());
-		m_pSimulateEndPS->Finalize("Particle Simulation End PS", m_pGraphics->GetDevice());
+		m_pSimulateEndPS->Finalize("Particle Simulation End PS", pGraphics->GetDevice());
 	}
 	{
 		Shader vertexShader("Resources/Shaders/ParticleRendering.hlsl", Shader::Type::Vertex, "VSMain");
@@ -118,7 +118,7 @@ void GpuParticles::Initialize()
 		m_pRenderParticlesRS = std::make_unique<RootSignature>();
 		m_pRenderParticlesRS->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
 		m_pRenderParticlesRS->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, D3D12_SHADER_VISIBILITY_VERTEX);
-		m_pRenderParticlesRS->Finalize("Particle Rendering", m_pGraphics->GetDevice(), D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+		m_pRenderParticlesRS->Finalize("Particle Rendering", pGraphics->GetDevice(), D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
 		m_pRenderParticlesPS = std::make_unique<PipelineState>();
 		m_pRenderParticlesPS->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
@@ -130,11 +130,11 @@ void GpuParticles::Initialize()
 		m_pRenderParticlesPS->SetBlendMode(BlendMode::Alpha, false);
 		m_pRenderParticlesPS->SetCullMode(D3D12_CULL_MODE_NONE);
 		m_pRenderParticlesPS->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
-		m_pRenderParticlesPS->SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, m_pGraphics->GetMultiSampleCount(), m_pGraphics->GetMultiSampleQualityLevel(m_pGraphics->GetMultiSampleCount()));
-		m_pRenderParticlesPS->Finalize("Particle Rendering PS", m_pGraphics->GetDevice());
+		m_pRenderParticlesPS->SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, pGraphics->GetMultiSampleCount(), pGraphics->GetMultiSampleQualityLevel(pGraphics->GetMultiSampleCount()));
+		m_pRenderParticlesPS->Finalize("Particle Rendering PS", pGraphics->GetDevice());
 	}
 
-	m_pGraphics->GetImGui()->AddUpdateCallback(ImGuiCallbackDelegate::CreateLambda([]() {
+	pGraphics->GetImGui()->AddUpdateCallback(ImGuiCallbackDelegate::CreateLambda([]() {
 		ImGui::Begin("Parameters");
 		ImGui::Text("Particles");
 		ImGui::Checkbox("Simulate", &g_Simulate);
@@ -144,7 +144,7 @@ void GpuParticles::Initialize()
 		}));
 }
 
-void GpuParticles::Simulate(CommandContext& context, Texture* pResolvedDepth)
+void GpuParticles::Simulate(CommandContext& context, Texture* pResolvedDepth, const Camera& camera)
 {
 	if (!g_Simulate)
 	{
@@ -246,12 +246,12 @@ void GpuParticles::Simulate(CommandContext& context, Texture* pResolvedDepth)
 		} parameters;
 		parameters.DimensionsInv.x = 1.0f / pResolvedDepth->GetWidth();
 		parameters.DimensionsInv.y = 1.0f / pResolvedDepth->GetHeight();
-		parameters.ViewProjectionInv = m_pGraphics->GetCamera()->GetProjectionInverse() * m_pGraphics->GetCamera()->GetViewInverse();
+		parameters.ViewProjectionInv = camera.GetProjectionInverse() * camera.GetViewInverse();
 		parameters.DeltaTime = GameTimer::DeltaTime();
 		parameters.ParticleLifeTime = g_LifeTime;
-		parameters.ViewProjection = m_pGraphics->GetCamera()->GetViewProjection();
-		parameters.Near = m_pGraphics->GetCamera()->GetNear();
-		parameters.Far = m_pGraphics->GetCamera()->GetFar();
+		parameters.ViewProjection = camera.GetViewProjection();
+		parameters.Near = camera.GetNear();
+		parameters.Far = camera.GetFar();
 
 		context.SetComputeDynamicConstantBufferView(0, &parameters, sizeof(Parameters));
 		context.ExecuteIndirect(m_pSimpleDispatchCommandSignature->GetCommandSignature(), m_pSimulateArguments.get());
@@ -267,41 +267,39 @@ void GpuParticles::Simulate(CommandContext& context, Texture* pResolvedDepth)
 	std::swap(m_pAliveList1, m_pAliveList2);
 }
 
-void GpuParticles::Render(CommandContext& context)
+void GpuParticles::Render(CommandContext& context, Texture* pTarget, Texture* pDepth, const Camera& camera)
 {
+	context.InsertResourceBarrier(m_pDrawArguments.get(), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
+	context.InsertResourceBarrier(m_pParticleBuffer.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+	context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
+
+	context.BeginRenderPass(RenderPassInfo(pTarget, RenderPassAccess::Load_Store, pDepth, RenderPassAccess::Load_DontCare));
+
+	context.SetPipelineState(m_pRenderParticlesPS.get());
+	context.SetGraphicsRootSignature(m_pRenderParticlesRS.get());
+
+	Vector2 screenDimensions((float)pTarget->GetWidth(), (float)pTarget->GetHeight());
+	context.SetViewport(FloatRect(0, 0, (float)screenDimensions.x, (float)screenDimensions.y));
+	context.SetScissorRect(FloatRect(0, 0, (float)screenDimensions.x, (float)screenDimensions.y));
+
+	struct FrameData
 	{
-		context.InsertResourceBarrier(m_pDrawArguments.get(), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
-		context.InsertResourceBarrier(m_pParticleBuffer.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-		context.InsertResourceBarrier(m_pGraphics->GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RENDER_TARGET);
+		Matrix ViewInverse;
+		Matrix View;
+		Matrix Projection;
+	} frameData;
+	frameData.ViewInverse = camera.GetViewInverse();
+	frameData.View = camera.GetView();
+	frameData.Projection = camera.GetProjection();
 
-		context.BeginRenderPass(RenderPassInfo(m_pGraphics->GetCurrentRenderTarget(), RenderPassAccess::Load_Store, m_pGraphics->GetDepthStencil(), RenderPassAccess::Load_DontCare));
+	context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	context.SetDynamicConstantBufferView(0, &frameData, sizeof(FrameData));
 
-		context.SetPipelineState(m_pRenderParticlesPS.get());
-		context.SetGraphicsRootSignature(m_pRenderParticlesRS.get());
-
-		Vector2 screenDimensions((float)m_pGraphics->GetWindowWidth(), (float)m_pGraphics->GetWindowHeight());
-		context.SetViewport(FloatRect(0, 0, (float)screenDimensions.x, (float)screenDimensions.y));
-		context.SetScissorRect(FloatRect(0, 0, (float)screenDimensions.x, (float)screenDimensions.y));
-
-		struct FrameData
-		{
-			Matrix ViewInverse;
-			Matrix View;
-			Matrix Projection;
-		} frameData;
-		frameData.ViewInverse = m_pGraphics->GetCamera()->GetViewInverse();
-		frameData.View = m_pGraphics->GetCamera()->GetView();
-		frameData.Projection = m_pGraphics->GetCamera()->GetProjection();
-
-		context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-		context.SetDynamicConstantBufferView(0, &frameData, sizeof(FrameData));
-
-		D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
-			m_pParticleBuffer->GetSRV()->GetDescriptor(),
-			m_pAliveList1->GetSRV()->GetDescriptor()
-		};
-		context.SetDynamicDescriptors(1, 0, srvs, 2);
-		context.ExecuteIndirect(m_pSimpleDrawCommandSignature->GetCommandSignature(), m_pDrawArguments.get(), false);
-		context.EndRenderPass();
-	}
+	D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
+		m_pParticleBuffer->GetSRV()->GetDescriptor(),
+		m_pAliveList1->GetSRV()->GetDescriptor()
+	};
+	context.SetDynamicDescriptors(1, 0, srvs, 2);
+	context.ExecuteIndirect(m_pSimpleDrawCommandSignature->GetCommandSignature(), m_pDrawArguments.get(), false);
+	context.EndRenderPass();
 }

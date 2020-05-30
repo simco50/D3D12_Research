@@ -61,6 +61,7 @@ bool g_VisualizeLights = false;
 
 float g_SunInclination = 0.579f;
 float g_SunOrientation = -3.055f;
+float g_SunTemperature = 5000.0f;
 
 Graphics::Graphics(uint32 width, uint32 height, int sampleCount /*= 1*/)
 	: m_WindowWidth(width), m_WindowHeight(height), m_SampleCount(sampleCount)
@@ -347,6 +348,7 @@ void Graphics::Update()
 				float sinphi = sinf(g_SunInclination * Math::PIDIV2);
 
 				m_Lights[0].Direction = -Vector3(costheta * cosphi, sinphi, sintheta * cosphi);
+				m_Lights[0].Colour = Math::EncodeColor(Math::MakeFromColorTemperature(g_SunTemperature));
 
 				DynamicAllocation allocation = renderContext.AllocateTransientMemory(m_Lights.size() * sizeof(Light), m_Lights.data());
 				renderContext.GetCommandList()->CopyBufferRegion(m_pLightBuffer->GetResource(), 0, allocation.pBackingResource->GetResource(), allocation.Offset, m_pLightBuffer->GetSize());
@@ -426,7 +428,7 @@ void Graphics::Update()
 		{
 			return [=](CommandContext& context, const RGPassResources& passResources)
 			{
-				m_pParticles->Simulate(context, GetResolvedDepthStencil());
+				m_pParticles->Simulate(context, GetResolvedDepthStencil(), *m_pCamera);
 			};
 		});
 
@@ -602,7 +604,7 @@ void Graphics::Update()
 		{
 			return [=](CommandContext& context, const RGPassResources& passResources)
 			{
-				m_pParticles->Render(context);
+				m_pParticles->Render(context, GetCurrentRenderTarget(), GetDepthStencil(), *m_pCamera);
 			};
 		});
 
@@ -1100,7 +1102,6 @@ void Graphics::InitD3D()
 	m_pImGuiRenderer = std::make_unique<ImGuiRenderer>(this);
 	m_pImGuiRenderer->AddUpdateCallback(ImGuiCallbackDelegate::CreateRaw(this, &Graphics::UpdateImGui));
 	m_pParticles = std::make_unique<GpuParticles>(this);
-	m_pParticles->Initialize();
 
 	OnResize(m_WindowWidth, m_WindowHeight);
 
@@ -1575,6 +1576,7 @@ void Graphics::UpdateImGui()
 	ImGui::Text("Sky");
 	ImGui::SliderFloat("Sun Orientation", &g_SunOrientation, -Math::PI, Math::PI);
 	ImGui::SliderFloat("Sun Inclination", &g_SunInclination, 0, 1);
+	ImGui::SliderFloat("Sun Temperature", &g_SunTemperature, 1000, 15000);
 
 	ImGui::Text("Shadows");
 	ImGui::Checkbox("SDSM", &g_SDSM);

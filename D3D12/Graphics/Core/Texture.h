@@ -163,6 +163,24 @@ struct TextureDesc
 		desc.Dimensions = TextureDimension::Texture2D;
 		return desc;
 	}
+
+	bool operator==(const TextureDesc& other) const
+	{
+		return Width == other.Width
+			&& Height == other.Height
+			&& DepthOrArraySize == other.DepthOrArraySize
+			&& Mips == other.Mips
+			&& SampleCount == other.SampleCount
+			&& Format == other.Format
+			&& Usage == other.Usage
+			&& ClearBindingValue == other.ClearBindingValue
+			&& Dimensions == other.Dimensions;
+	}
+
+	bool operator !=(const TextureDesc& other) const
+	{
+		return !operator==(other);
+	}
 };
 
 class Texture : public GraphicsResource

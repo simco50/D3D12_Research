@@ -49,16 +49,6 @@ namespace Math
 		return (a + b) / (T)2;
 	}
 
-
-	template<typename T>
-	constexpr void Clamp01(T& value)
-	{
-		if (value > 1)
-			value = 1;
-		else if (value < 0)
-			value = 0;
-	}
-
 	template<typename T>
 	T Clamp01(const T value)
 	{
@@ -105,10 +95,10 @@ namespace Math
 	{
 		uint32 output = 0;
 		//unsigned int layout: AAAA RRRR GGGG BBBB
-		output |= (unsigned char)(color.x * 255.0f) << 16;
-		output |= (unsigned char)(color.y * 255.0f) << 8;
-		output |= (unsigned char)(color.z * 255.0f);
-		output |= (unsigned char)(color.w * 255.0f) << 24;
+		output |= (unsigned char)(Clamp01(color.x) * 255.0f) << 16;
+		output |= (unsigned char)(Clamp01(color.y) * 255.0f) << 8;
+		output |= (unsigned char)(Clamp01(color.z) * 255.0f);
+		output |= (unsigned char)(Clamp01(color.w) * 255.0f) << 24;
 		return output;
 	}
 
