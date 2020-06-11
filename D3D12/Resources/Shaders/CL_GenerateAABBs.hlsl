@@ -7,7 +7,7 @@ cbuffer Parameters : register(b0)
 {
     float4x4 cProjectionInverse;
     float2 cScreenDimensionsInv;
-    float2 cClusterSize;
+    uint2 cClusterSize;
     uint3 cClusterDimensions;
     float cNearZ;
     float cFarZ;

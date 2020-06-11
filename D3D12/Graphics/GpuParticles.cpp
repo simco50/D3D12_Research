@@ -1,7 +1,7 @@
 #include "stdafx.h"
 #include "GpuParticles.h"
 #include "Graphics/Core/GraphicsBuffer.h"
-#include "CommandSignature.h"
+#include "Graphics/Core/CommandSignature.h"
 #include "Graphics/Core/Graphics.h"
 #include "Graphics/Core/Shader.h"
 #include "Graphics/Core/PipelineState.h"
@@ -203,7 +203,7 @@ void GpuParticles::Simulate(CommandContext& context, Texture* pResolvedDepth, co
 
 		context.SetComputeDynamicConstantBufferView(0, &parameters, sizeof(Parameters));
 
-		context.Dispatch(1, 1, 1);
+		context.Dispatch(1);
 		context.InsertUavBarrier();
 		context.InsertResourceBarrier(m_pEmitArguments.get(), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
 		context.InsertResourceBarrier(m_pSimulateArguments.get(), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
@@ -225,7 +225,7 @@ void GpuParticles::Simulate(CommandContext& context, Texture* pResolvedDepth, co
 			});
 
 		context.SetComputeDynamicConstantBufferView(0, randomDirections.data(), sizeof(Vector4) * (uint32)randomDirections.size());
-		context.ExecuteIndirect(m_pSimpleDispatchCommandSignature->GetCommandSignature(), m_pEmitArguments.get());
+		context.ExecuteIndirect(m_pSimpleDispatchCommandSignature.get(), m_pEmitArguments.get());
 		context.InsertUavBarrier();
 	}
 	{
@@ -254,14 +254,14 @@ void GpuParticles::Simulate(CommandContext& context, Texture* pResolvedDepth, co
 		parameters.Far = camera.GetFar();
 
 		context.SetComputeDynamicConstantBufferView(0, &parameters, sizeof(Parameters));
-		context.ExecuteIndirect(m_pSimpleDispatchCommandSignature->GetCommandSignature(), m_pSimulateArguments.get());
+		context.ExecuteIndirect(m_pSimpleDispatchCommandSignature.get(), m_pSimulateArguments.get());
 		context.InsertUavBarrier();
 	}
 	{
 		GPU_PROFILE_SCOPE("Simulate End", &context);
 
 		context.SetPipelineState(m_pSimulateEndPS.get());
-		context.Dispatch(1, 1, 1);
+		context.Dispatch(1);
 		context.InsertUavBarrier();
 	}
 	std::swap(m_pAliveList1, m_pAliveList2);
@@ -300,6 +300,6 @@ void GpuParticles::Render(CommandContext& context, Texture* pTarget, Texture* pD
 		m_pAliveList1->GetSRV()->GetDescriptor()
 	};
 	context.SetDynamicDescriptors(1, 0, srvs, 2);
-	context.ExecuteIndirect(m_pSimpleDrawCommandSignature->GetCommandSignature(), m_pDrawArguments.get(), false);
+	context.ExecuteIndirect(m_pSimpleDrawCommandSignature.get(), m_pDrawArguments.get(), false);
 	context.EndRenderPass();
 }

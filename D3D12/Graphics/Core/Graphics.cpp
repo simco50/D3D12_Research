@@ -480,7 +480,7 @@ void Graphics::Update()
 						renderContext.SetDynamicDescriptor(1, 0, m_ReductionTargets[0]->GetUAV());
 						renderContext.SetDynamicDescriptor(2, 0, pDepthStencil->GetSRV());
 
-						renderContext.Dispatch(m_ReductionTargets[0]->GetWidth(), m_ReductionTargets[0]->GetHeight(), 1);
+						renderContext.Dispatch(m_ReductionTargets[0]->GetWidth(), m_ReductionTargets[0]->GetHeight());
 
 						renderContext.SetPipelineState(m_pReduceDepthPSO.get());
 						for (size_t i = 1; i < m_ReductionTargets.size(); ++i)
@@ -491,7 +491,7 @@ void Graphics::Update()
 							renderContext.SetDynamicDescriptor(1, 0, m_ReductionTargets[i]->GetUAV());
 							renderContext.SetDynamicDescriptor(2, 0, m_ReductionTargets[i - 1]->GetSRV());
 
-							renderContext.Dispatch(m_ReductionTargets[i]->GetWidth(), m_ReductionTargets[i]->GetHeight(), 1);
+							renderContext.Dispatch(m_ReductionTargets[i]->GetWidth(), m_ReductionTargets[i]->GetHeight());
 						}
 
 						renderContext.InsertResourceBarrier(m_ReductionTargets.back().get(), D3D12_RESOURCE_STATE_COPY_SOURCE);
@@ -691,11 +691,11 @@ void Graphics::Update()
 
 						struct DownscaleParameters
 						{
-							uint32 TargetDimensions[2];
+							IntVector2 TargetDimensions;
 							Vector2 TargetDimensionsInv;
 						} Parameters{};
-						Parameters.TargetDimensions[0] = pToneMapInput->GetWidth();
-						Parameters.TargetDimensions[1] = pToneMapInput->GetHeight();
+						Parameters.TargetDimensions.x = pToneMapInput->GetWidth();
+						Parameters.TargetDimensions.y = pToneMapInput->GetHeight();
 						Parameters.TargetDimensionsInv = Vector2(1.0f / pToneMapInput->GetWidth(), 1.0f / pToneMapInput->GetHeight());
 
 						context.SetComputeDynamicConstantBufferView(0, &Parameters, sizeof(DownscaleParameters));
@@ -703,8 +703,8 @@ void Graphics::Update()
 						context.SetDynamicDescriptor(2, 0, m_pHDRRenderTarget->GetSRV());
 
 						context.Dispatch(
-							Math::DivideAndRoundUp(Parameters.TargetDimensions[0], 16), 
-							Math::DivideAndRoundUp(Parameters.TargetDimensions[1], 16)
+							Math::DivideAndRoundUp(Parameters.TargetDimensions.x, 16), 
+							Math::DivideAndRoundUp(Parameters.TargetDimensions.y, 16)
 						);
 					};
 				});
@@ -966,7 +966,22 @@ void Graphics::InitD3D()
 	E_LOG(Info, "Using %s", name);
 
 	//Create the device
+	constexpr D3D_FEATURE_LEVEL featureLevels[] =
+	{
+		D3D_FEATURE_LEVEL_12_1,
+		D3D_FEATURE_LEVEL_12_0,
+		D3D_FEATURE_LEVEL_11_1,
+		D3D_FEATURE_LEVEL_11_0
+	};
+
 	HR(D3D12CreateDevice(pAdapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&m_pDevice)));
+	D3D12_FEATURE_DATA_FEATURE_LEVELS caps{};
+	caps.pFeatureLevelsRequested = featureLevels;
+	caps.NumFeatureLevels = ARRAYSIZE(featureLevels);
+	HR(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_FEATURE_LEVELS, &caps, sizeof(D3D12_FEATURE_DATA_FEATURE_LEVELS)));
+	HR(D3D12CreateDevice(pAdapter.Get(), caps.MaxSupportedFeatureLevel, IID_PPV_ARGS(m_pDevice.ReleaseAndGetAddressOf())));
+
+
 	pAdapter.Reset();
 
 	m_pDevice.As(&m_pRaytracingDevice);

@@ -14,6 +14,7 @@
 #include "Graphics/Profiler.h"
 #include "Scene/Camera.h"
 #include "RenderGraph/RenderGraph.h"
+#include "Core/CommandSignature.h"
 
 static constexpr int cClusterSize = 64;
 static constexpr int cClusterCountZ = 32;
@@ -62,8 +63,8 @@ void ClusteredForward::OnSwapchainCreated(int windowWidth, int windowHeight)
 		{
 			Matrix ProjectionInverse;
 			Vector2 ScreenDimensionsInv;
-			Vector2 ClusterSize;
-			int ClusterDimensions[3];
+			IntVector2 ClusterSize;
+			IntVector3 ClusterDimensions;
 			float NearZ;
 			float FarZ;
 		} constantBuffer;
@@ -72,11 +73,8 @@ void ClusteredForward::OnSwapchainCreated(int windowWidth, int windowHeight)
 		constantBuffer.NearZ = m_pGraphics->GetCamera()->GetFar();
 		constantBuffer.FarZ = m_pGraphics->GetCamera()->GetNear();
 		constantBuffer.ProjectionInverse = m_pGraphics->GetCamera()->GetProjectionInverse();
-		constantBuffer.ClusterSize.x = cClusterSize;
-		constantBuffer.ClusterSize.y = cClusterSize;
-		constantBuffer.ClusterDimensions[0] = m_ClusterCountX;
-		constantBuffer.ClusterDimensions[1] = m_ClusterCountY;
-		constantBuffer.ClusterDimensions[2] = cClusterCountZ;
+		constantBuffer.ClusterSize = IntVector2(cClusterSize, cClusterSize);
+		constantBuffer.ClusterDimensions = IntVector3(m_ClusterCountX, m_ClusterCountY, cClusterCountZ);
 
 		pContext->SetComputeDynamicConstantBufferView(0, &constantBuffer, sizeof(ConstantBuffer));
 		pContext->SetDynamicDescriptor(1, 0, m_pAABBs->GetUAV());
@@ -115,26 +113,23 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
 
 				struct PerFrameParameters
 				{
-					uint32 ClusterDimensions[4];
-					float ClusterSize[2];
+					IntVector3 ClusterDimensions;
+					int padding0;
+					IntVector2 ClusterSize;
 					float SliceMagicA;
 					float SliceMagicB;
-				} perFrameParameters;
+				} perFrameParameters{};
 
 				struct PerObjectParameters
 				{
 					Matrix WorldView;
 					Matrix WorldViewProjection;
-				} perObjectParameters;
+				} perObjectParameters{};
 
 				perFrameParameters.SliceMagicA = sliceMagicA;
 				perFrameParameters.SliceMagicB = sliceMagicB;
-				perFrameParameters.ClusterDimensions[0] = m_ClusterCountX;
-				perFrameParameters.ClusterDimensions[1] = m_ClusterCountY;
-				perFrameParameters.ClusterDimensions[2] = cClusterCountZ;
-				perFrameParameters.ClusterDimensions[3] = 0;
-				perFrameParameters.ClusterSize[0] = cClusterSize;
-				perFrameParameters.ClusterSize[1] = cClusterSize;
+				perFrameParameters.ClusterDimensions = IntVector3(m_ClusterCountX, m_ClusterCountY, cClusterCountZ);
+				perFrameParameters.ClusterSize = IntVector2(cClusterSize, cClusterSize);
 
 				context.SetDynamicConstantBufferView(1, &perFrameParameters, sizeof(PerFrameParameters));
 				context.SetDynamicDescriptor(2, 0, m_pUniqueClusters->GetUAV());
@@ -187,7 +182,7 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
 				context.SetDynamicDescriptor(0, 0, m_pUniqueClusters->GetSRV());
 				context.SetDynamicDescriptor(1, 0, m_pCompactedClusters->GetUAV());
 
-				context.Dispatch(Math::RoundUp(m_ClusterCountX * m_ClusterCountY * cClusterCountZ / 64.0f), 1, 1);
+				context.Dispatch(Math::RoundUp(m_ClusterCountX * m_ClusterCountY * cClusterCountZ / 64.0f));
 			};
 		});
 
@@ -205,7 +200,7 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
 				context.SetDynamicDescriptor(0, 0, m_pCompactedClusters->GetUAV()->GetCounter()->GetSRV());
 				context.SetDynamicDescriptor(1, 0, m_pIndirectArguments->GetUAV());
 
-				context.Dispatch(1, 1, 1);
+				context.Dispatch(1);
 			};
 		});
 
@@ -230,7 +225,7 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
 				{
 					Matrix View;
 					int LightCount;
-				} constantBuffer;
+				} constantBuffer{};
 
 				constantBuffer.View = resources.pCamera->GetView();
 				constantBuffer.LightCount = (uint32)resources.pLightBuffer->GetDesc().ElementCount;
@@ -245,7 +240,7 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
 				context.SetDynamicDescriptor(2, 1, m_pLightIndexGrid->GetUAV());
 				context.SetDynamicDescriptor(2, 2, m_pLightGrid->GetUAV());
 
-				context.ExecuteIndirect(m_pLightCullingCommandSignature.Get(), m_pIndirectArguments.get());
+				context.ExecuteIndirect(m_pLightCullingCommandSignature.get(), m_pIndirectArguments.get());
 			};
 		});
 
@@ -265,14 +260,15 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
 					Matrix View;
 					Matrix Projection;
 					Matrix ViewInverse;
-					uint32 ClusterDimensions[4];
+					IntVector3 ClusterDimensions;
+					int padding0;
 					Vector2 ScreenDimensions;
 					float NearZ;
 					float FarZ;
-					float ClusterSize[2];
+					IntVector2 ClusterSize;
 					float SliceMagicA;
 					float SliceMagicB;
-				} frameData;
+				} frameData{};
 
 				Matrix view = resources.pCamera->GetView();
 				frameData.View = view;
@@ -281,12 +277,7 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
 				frameData.ScreenDimensions = screenDimensions;
 				frameData.NearZ = farZ;
 				frameData.FarZ = nearZ;
-				frameData.ClusterDimensions[0] = m_ClusterCountX;
-				frameData.ClusterDimensions[1] = m_ClusterCountY;
-				frameData.ClusterDimensions[2] = cClusterCountZ;
-				frameData.ClusterDimensions[3] = 0;
-				frameData.ClusterSize[0] = cClusterSize;
-				frameData.ClusterSize[1] = cClusterSize;
+				frameData.ClusterDimensions = IntVector3(m_ClusterCountX, m_ClusterCountY, cClusterCountZ);
 				frameData.SliceMagicA = sliceMagicA;
 				frameData.SliceMagicB = sliceMagicB;
 
@@ -491,14 +482,10 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
 		m_pLightCullingPSO->SetRootSignature(m_pLightCullingRS->GetRootSignature());
 		m_pLightCullingPSO->Finalize("Light Culling", pGraphics->GetDevice());
 
-		D3D12_INDIRECT_ARGUMENT_DESC desc;
-		desc.Type = D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH;
-		D3D12_COMMAND_SIGNATURE_DESC sigDesc = {};
-		sigDesc.ByteStride = 3 * sizeof(uint32);
-		sigDesc.NodeMask = 0;
-		sigDesc.pArgumentDescs = &desc;
-		sigDesc.NumArgumentDescs = 1;
-		HR(m_pGraphics->GetDevice()->CreateCommandSignature(&sigDesc, nullptr, IID_PPV_ARGS(m_pLightCullingCommandSignature.GetAddressOf())));
+
+		m_pLightCullingCommandSignature = std::make_unique<CommandSignature>();
+		m_pLightCullingCommandSignature->AddDispatch();
+		m_pLightCullingCommandSignature->Finalize("Light Culling Command Signature", pGraphics->GetDevice());
 	}
 
 	//Diffuse

@@ -208,7 +208,7 @@ void RootSignature::Finalize(const char* pName, ID3D12Device* pDevice, D3D12_ROO
 		return;
 	}
 	HR(pDevice->CreateRootSignature(0, pDataBlob->GetBufferPointer(), pDataBlob->GetBufferSize(), IID_PPV_ARGS(m_pRootSignature.GetAddressOf())));
-	SetD3DObjectName(m_pRootSignature.Get(), pName);
+	D3D::SetObjectName(m_pRootSignature.Get(), pName);
 }
 
 void RootSignature::FinalizeFromShader(const char* pName, const Shader& shader, ID3D12Device* pDevice)

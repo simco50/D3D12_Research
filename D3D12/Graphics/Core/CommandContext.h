@@ -10,6 +10,7 @@ class RootSignature;
 class PipelineState;
 class DynamicResourceAllocator;
 class Buffer;
+class CommandSignature;
 
 enum class CommandListContext
 {
@@ -109,6 +110,18 @@ struct RenderPassInfo
 	DepthTargetInfo DepthStencilTarget{};
 };
 
+class ResourceBarrierBatcher
+{
+public:
+	void AddTransition(ID3D12Resource* pResource, D3D12_RESOURCE_STATES beforeState, D3D12_RESOURCE_STATES afterState, int subResource);
+	void AddUAV(ID3D12Resource* pResource);
+	void Flush(ID3D12GraphicsCommandList* pCmdList);
+	void Reset();
+
+private:
+	std::vector<D3D12_RESOURCE_BARRIER> m_QueuedBarriers;
+};
+
 class CommandContext : public GraphicsObject
 {
 public:
@@ -118,7 +131,7 @@ public:
 	void Reset();
 	uint64 Execute(bool wait);
 
-	void InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESOURCE_STATES state, bool executeImmediate = false);
+	void InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESOURCE_STATES state, bool executeImmediate = false, uint32 subResource = 0xffffffff);
 	void InsertUavBarrier(GraphicsResource* pBuffer = nullptr, bool executeImmediate = false);
 	void FlushResourceBarriers();
 
@@ -133,11 +146,12 @@ public:
 
 	//Commands
 	void Dispatch(uint32 groupCountX, uint32 groupCountY = 1, uint32 groupCountZ = 1);
-	void ExecuteIndirect(ID3D12CommandSignature* pCommandSignature, Buffer* pIndirectArguments, bool isCompute = true);
+	void Dispatch(const IntVector3& groupCounts);
+	void ExecuteIndirect(CommandSignature* pCommandSignature, Buffer* pIndirectArguments, bool isCompute = true);
 	void Draw(int vertexStart, int vertexCount);
 	void DrawIndexed(int indexCount, int indexStart, int minVertex = 0);
 	void DrawIndexedInstanced(int indexCount, int indexStart, int instanceCount, int minVertex = 0, int instanceStart = 0);
-	void ClearRenderTarget(D3D12_CPU_DESCRIPTOR_HANDLE rtv, const Color& color = Color(0.0f, 0.0f, 0.0f, 1.0f));
+	void ClearColor(D3D12_CPU_DESCRIPTOR_HANDLE rtv, const Color& color = Color(0.0f, 0.0f, 0.0f, 1.0f));
 	void ClearDepth(D3D12_CPU_DESCRIPTOR_HANDLE dsv, D3D12_CLEAR_FLAGS clearFlags = D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, float depth = 1.0f, unsigned char stencil = 0);
 	void ResolveResource(Texture* pSource, uint32 sourceSubResource, Texture* pTarget, uint32 targetSubResource, DXGI_FORMAT format);
 
@@ -186,10 +200,7 @@ private:
 
 	std::array<ID3D12DescriptorHeap*, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES> m_CurrentDescriptorHeaps = {};
 
-	static const int MAX_QUEUED_BARRIERS = 12;
-
-	std::array<D3D12_RESOURCE_BARRIER, MAX_QUEUED_BARRIERS> m_QueuedBarriers = {};
-	int m_NumQueuedBarriers = 0;
+	ResourceBarrierBatcher m_BarrierBatcher;
 
 	std::unique_ptr<DynamicResourceAllocator> m_DynamicAllocator;
 	ID3D12GraphicsCommandList* m_pCommandList;

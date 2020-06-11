@@ -59,15 +59,16 @@ void TiledForward::Execute(RGGraph& graph, const TiledForwardInputResources& res
 				{
 					Matrix CameraView;
 					Matrix ProjectionInverse;
-					uint32 NumThreadGroups[4];
+					IntVector3 NumThreadGroups;
+					int padding0;
 					Vector2 ScreenDimensionsInv;
 					uint32 LightCount;
 				} Data{};
 
 				Data.CameraView = resources.pCamera->GetView();
-				Data.NumThreadGroups[0] = Math::DivideAndRoundUp(pDepthTexture->GetWidth(), FORWARD_PLUS_BLOCK_SIZE);
-				Data.NumThreadGroups[1] = Math::DivideAndRoundUp(pDepthTexture->GetHeight(), FORWARD_PLUS_BLOCK_SIZE);
-				Data.NumThreadGroups[2] = 1;
+				Data.NumThreadGroups.x = Math::DivideAndRoundUp(pDepthTexture->GetWidth(), FORWARD_PLUS_BLOCK_SIZE);
+				Data.NumThreadGroups.y = Math::DivideAndRoundUp(pDepthTexture->GetHeight(), FORWARD_PLUS_BLOCK_SIZE);
+				Data.NumThreadGroups.z = 1;
 				Data.ScreenDimensionsInv = Vector2(1.0f / pDepthTexture->GetWidth(), 1.0f / pDepthTexture->GetHeight());
 				Data.LightCount = (uint32)resources.pLightBuffer->GetDesc().ElementCount;
 				Data.ProjectionInverse = resources.pCamera->GetProjectionInverse();
@@ -81,7 +82,7 @@ void TiledForward::Execute(RGGraph& graph, const TiledForwardInputResources& res
 				context.SetDynamicDescriptor(2, 0, pDepthTexture->GetSRV());
 				context.SetDynamicDescriptor(2, 1, resources.pLightBuffer->GetSRV());
 
-				context.Dispatch(Data.NumThreadGroups[0], Data.NumThreadGroups[1], Data.NumThreadGroups[2]);
+				context.Dispatch(Data.NumThreadGroups);
 			};
 		});
 

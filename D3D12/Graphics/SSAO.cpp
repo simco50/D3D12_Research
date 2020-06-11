@@ -56,7 +56,7 @@ void SSAO::Execute(RGGraph& graph, const SsaoInputResources& resources)
 					Matrix ViewInverse;
 					Matrix Projection;
 					Matrix View;
-					uint32 Dimensions[2];
+					IntVector2 Dimensions;
 					float Near;
 					float Far;
 					float Power;
@@ -69,8 +69,8 @@ void SSAO::Execute(RGGraph& graph, const SsaoInputResources& resources)
 				shaderParameters.ViewInverse = resources.pCamera->GetViewInverse();
 				shaderParameters.Projection = resources.pCamera->GetProjection();
 				shaderParameters.View = resources.pCamera->GetView();
-				shaderParameters.Dimensions[0] = resources.pRenderTarget->GetWidth();
-				shaderParameters.Dimensions[1] = resources.pRenderTarget->GetHeight();
+				shaderParameters.Dimensions.x = resources.pRenderTarget->GetWidth();
+				shaderParameters.Dimensions.y = resources.pRenderTarget->GetHeight();
 				shaderParameters.Near = resources.pCamera->GetNear();
 				shaderParameters.Far = resources.pCamera->GetFar();
 				shaderParameters.Power = g_AoPower;
@@ -100,15 +100,15 @@ void SSAO::Execute(RGGraph& graph, const SsaoInputResources& resources)
 
 				struct ShaderParameters
 				{
-					float Dimensions[2];
+					Vector2 DimensionsInv;
 					uint32 Horizontal;
 					float Far;
 					float Near;
 				} shaderParameters;
 
 				shaderParameters.Horizontal = 1;
-				shaderParameters.Dimensions[0] = 1.0f / resources.pRenderTarget->GetWidth();
-				shaderParameters.Dimensions[1] = 1.0f / resources.pRenderTarget->GetHeight();
+				shaderParameters.DimensionsInv.x = 1.0f / resources.pRenderTarget->GetWidth();
+				shaderParameters.DimensionsInv.y = 1.0f / resources.pRenderTarget->GetHeight();
 				shaderParameters.Far = resources.pCamera->GetFar();
 				shaderParameters.Near = resources.pCamera->GetNear();
 

@@ -5,6 +5,7 @@ class PipelineState;
 class RootSignature;
 class Texture;
 class Camera;
+class CommandSignature;
 struct Batch;
 class CommandContext;
 class Buffer;
@@ -72,7 +73,7 @@ private:
 	//Step 5: Light Culling
 	std::unique_ptr<RootSignature> m_pLightCullingRS;
 	std::unique_ptr<PipelineState> m_pLightCullingPSO;
-	ComPtr<ID3D12CommandSignature> m_pLightCullingCommandSignature;
+	std::unique_ptr<CommandSignature> m_pLightCullingCommandSignature;
 	std::unique_ptr<Buffer> m_pLightIndexCounter;
 	std::unique_ptr<Buffer> m_pLightIndexGrid;
 	std::unique_ptr<Buffer> m_pLightGrid;

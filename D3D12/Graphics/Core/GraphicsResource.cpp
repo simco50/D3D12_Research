@@ -27,7 +27,7 @@ void GraphicsResource::Release()
 
 void GraphicsResource::SetName(const char* pName)
 {
-	SetD3DObjectName(m_pResource, pName);
+	D3D::SetObjectName(m_pResource, pName);
 }
 
 std::string GraphicsResource::GetName() const
