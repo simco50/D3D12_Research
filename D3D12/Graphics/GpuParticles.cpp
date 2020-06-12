@@ -78,42 +78,42 @@ void GpuParticles::Initialize(Graphics* pGraphics)
 	m_pSimpleDrawCommandSignature->Finalize("Simple Draw", pGraphics->GetDevice());
 
 	{
-		Shader computeShader("Resources/Shaders/ParticleSimulation.hlsl", Shader::Type::Compute, "UpdateSimulationParameters");
+		Shader computeShader("ParticleSimulation.hlsl", Shader::Type::Compute, "UpdateSimulationParameters");
 		m_pSimulateRS = std::make_unique<RootSignature>();
 		m_pSimulateRS->FinalizeFromShader("Particle Simulation RS", computeShader, pGraphics->GetDevice());
 	}
 
 	{
-		Shader computeShader("Resources/Shaders/ParticleSimulation.hlsl", Shader::Type::Compute, "UpdateSimulationParameters");
+		Shader computeShader("ParticleSimulation.hlsl", Shader::Type::Compute, "UpdateSimulationParameters");
 		m_pPrepareArgumentsPS = std::make_unique<PipelineState>();
 		m_pPrepareArgumentsPS->SetComputeShader(computeShader.GetByteCode(), computeShader.GetByteCodeSize());
 		m_pPrepareArgumentsPS->SetRootSignature(m_pSimulateRS->GetRootSignature());
 		m_pPrepareArgumentsPS->Finalize("Prepare Particle Arguments PS", pGraphics->GetDevice());
 	}
 	{
-		Shader computeShader("Resources/Shaders/ParticleSimulation.hlsl", Shader::Type::Compute, "Emit");
+		Shader computeShader("ParticleSimulation.hlsl", Shader::Type::Compute, "Emit");
 		m_pEmitPS = std::make_unique<PipelineState>();
 		m_pEmitPS->SetComputeShader(computeShader.GetByteCode(), computeShader.GetByteCodeSize());
 		m_pEmitPS->SetRootSignature(m_pSimulateRS->GetRootSignature());
 		m_pEmitPS->Finalize("Particle Emitter PS", pGraphics->GetDevice());
 	}
 	{
-		Shader computeShader("Resources/Shaders/ParticleSimulation.hlsl", Shader::Type::Compute, "Simulate");
+		Shader computeShader("ParticleSimulation.hlsl", Shader::Type::Compute, "Simulate");
 		m_pSimulatePS = std::make_unique<PipelineState>();
 		m_pSimulatePS->SetComputeShader(computeShader.GetByteCode(), computeShader.GetByteCodeSize());
 		m_pSimulatePS->SetRootSignature(m_pSimulateRS->GetRootSignature());
 		m_pSimulatePS->Finalize("Particle Simulation PS", pGraphics->GetDevice());
 	}
 	{
-		Shader computeShader("Resources/Shaders/ParticleSimulation.hlsl", Shader::Type::Compute, "SimulateEnd");
+		Shader computeShader("ParticleSimulation.hlsl", Shader::Type::Compute, "SimulateEnd");
 		m_pSimulateEndPS = std::make_unique<PipelineState>();
 		m_pSimulateEndPS->SetComputeShader(computeShader.GetByteCode(), computeShader.GetByteCodeSize());
 		m_pSimulateEndPS->SetRootSignature(m_pSimulateRS->GetRootSignature());
 		m_pSimulateEndPS->Finalize("Particle Simulation End PS", pGraphics->GetDevice());
 	}
 	{
-		Shader vertexShader("Resources/Shaders/ParticleRendering.hlsl", Shader::Type::Vertex, "VSMain");
-		Shader pixelShader("Resources/Shaders/ParticleRendering.hlsl", Shader::Type::Pixel, "PSMain");
+		Shader vertexShader("ParticleRendering.hlsl", Shader::Type::Vertex, "VSMain");
+		Shader pixelShader("ParticleRendering.hlsl", Shader::Type::Pixel, "PSMain");
 
 		m_pRenderParticlesRS = std::make_unique<RootSignature>();
 		m_pRenderParticlesRS->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
@@ -130,7 +130,7 @@ void GpuParticles::Initialize(Graphics* pGraphics)
 		m_pRenderParticlesPS->SetBlendMode(BlendMode::Alpha, false);
 		m_pRenderParticlesPS->SetCullMode(D3D12_CULL_MODE_NONE);
 		m_pRenderParticlesPS->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
-		m_pRenderParticlesPS->SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, pGraphics->GetMultiSampleCount(), pGraphics->GetMultiSampleQualityLevel(pGraphics->GetMultiSampleCount()));
+		m_pRenderParticlesPS->SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, pGraphics->GetMultiSampleCount());
 		m_pRenderParticlesPS->Finalize("Particle Rendering PS", pGraphics->GetDevice());
 	}
 

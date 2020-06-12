@@ -7,7 +7,7 @@
 #endif
 
 #ifndef RG_ASSERT
-#define RG_ASSERT(expression, msg) assert((expression) && #msg)
+#define RG_ASSERT(expression, msg) check((expression) && #msg)
 #endif
 
 #ifndef RG_STATIC_ASSERT

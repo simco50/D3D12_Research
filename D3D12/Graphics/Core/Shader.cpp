@@ -1,6 +1,7 @@
 #include "stdafx.h"
 #include "Shader.h"
 #include "Core/Paths.h"
+#include "Core/CommandLine.h"
 
 #ifndef USE_SHADER_LINE_DIRECTIVE
 #define USE_SHADER_LINE_DIRECTIVE 1
@@ -13,13 +14,13 @@ bool ShaderCompiler::CompileDxc(const char* pIdentifier, const char* pShaderSour
 	static ComPtr<IDxcValidator> pValidator;
 	if (!pUtils)
 	{
-		HR(DxcCreateInstance(CLSID_DxcUtils, IID_PPV_ARGS(pUtils.GetAddressOf())));
-		HR(DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(pCompiler.GetAddressOf())));
-		HR(DxcCreateInstance(CLSID_DxcValidator, IID_PPV_ARGS(pValidator.GetAddressOf())));
+		VERIFY_HR(DxcCreateInstance(CLSID_DxcUtils, IID_PPV_ARGS(pUtils.GetAddressOf())));
+		VERIFY_HR(DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(pCompiler.GetAddressOf())));
+		VERIFY_HR(DxcCreateInstance(CLSID_DxcValidator, IID_PPV_ARGS(pValidator.GetAddressOf())));
 	}
 
 	ComPtr<IDxcBlobEncoding> pSource;
-	HR(pUtils->CreateBlob(pShaderSource, shaderSourceSize, CP_UTF8, pSource.GetAddressOf()));
+	VERIFY_HR(pUtils->CreateBlob(pShaderSource, shaderSourceSize, CP_UTF8, pSource.GetAddressOf()));
 
 	wchar_t target[256], fileName[256], entryPoint[256];
 	ToWidechar(pIdentifier, fileName, 256);
@@ -81,7 +82,7 @@ bool ShaderCompiler::CompileDxc(const char* pIdentifier, const char* pShaderSour
 	sourceBuffer.Encoding = 0;
 
 	ComPtr<IDxcResult> pCompileResult;
-	HR(pCompiler->Compile(&sourceBuffer, arguments.data(), (uint32)arguments.size(), nullptr, IID_PPV_ARGS(pCompileResult.GetAddressOf())));
+	VERIFY_HR(pCompiler->Compile(&sourceBuffer, arguments.data(), (uint32)arguments.size(), nullptr, IID_PPV_ARGS(pCompileResult.GetAddressOf())));
 
 	ComPtr<IDxcBlobUtf8> pErrors;
 	pCompileResult->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(pErrors.GetAddressOf()), nullptr);
@@ -93,13 +94,13 @@ bool ShaderCompiler::CompileDxc(const char* pIdentifier, const char* pShaderSour
 
 	//Shader object
 	{
-		HR(pCompileResult->GetOutput(DXC_OUT_OBJECT, IID_PPV_ARGS(pOutput), nullptr));
+		VERIFY_HR(pCompileResult->GetOutput(DXC_OUT_OBJECT, IID_PPV_ARGS(pOutput), nullptr));
 	}
 
 	//Validation
 	{
 		ComPtr<IDxcOperationResult> pResult;
-		HR(pValidator->Validate(*pOutput, DxcValidatorFlags_InPlaceEdit, pResult.GetAddressOf()));
+		VERIFY_HR(pValidator->Validate(*pOutput, DxcValidatorFlags_InPlaceEdit, pResult.GetAddressOf()));
 		HRESULT validationResult;
 		pResult->GetStatus(&validationResult);
 		if (validationResult != S_OK)
@@ -139,14 +140,14 @@ bool ShaderCompiler::CompileDxc(const char* pIdentifier, const char* pShaderSour
 		if (strcmp(pEntryPoint, "") == 0)
 		{
 			ComPtr<ID3D12LibraryReflection> pLibraryReflection;
-			HR(pUtils->CreateReflection(&reflectionBuffer, IID_PPV_ARGS(pLibraryReflection.GetAddressOf())));
+			VERIFY_HR(pUtils->CreateReflection(&reflectionBuffer, IID_PPV_ARGS(pLibraryReflection.GetAddressOf())));
 			D3D12_LIBRARY_DESC libraryDesc;
 			pLibraryReflection->GetDesc(&libraryDesc);
 		}
 		else
 		{
 			ComPtr<ID3D12ShaderReflection> pShaderReflection;
-			HR(pUtils->CreateReflection(&reflectionBuffer, IID_PPV_ARGS(pShaderReflection.GetAddressOf())));
+			VERIFY_HR(pUtils->CreateReflection(&reflectionBuffer, IID_PPV_ARGS(pShaderReflection.GetAddressOf())));
 			D3D12_SHADER_DESC shaderDesc;
 			pShaderReflection->GetDesc(&shaderDesc);
 		}
@@ -280,9 +281,9 @@ uint32 ShaderBase::GetByteCodeSize() const
 
 Shader::Shader(const char* pFilePath, Type shaderType, const char* pEntryPoint, const std::vector<std::string> defines)
 {
-	m_Path = pFilePath;
+	m_Path = Paths::ShadersDir() + pFilePath;
 	m_Type = shaderType;
-	Compile(pFilePath, shaderType, pEntryPoint, 6, 3, defines);
+	Compile(m_Path.c_str(), shaderType, pEntryPoint, 6, 3, defines);
 }
 
 bool Shader::Compile(const char* pFilePath, Type shaderType, const char* pEntryPoint, char shaderModelMajor, char shaderModelMinor, const std::vector<std::string> defines /*= {}*/)
@@ -330,8 +331,8 @@ std::string Shader::GetShaderTarget(Type shaderType, char shaderModelMajor, char
 
 ShaderLibrary::ShaderLibrary(const char* pFilePath, const std::vector<std::string> defines)
 {
-	m_Path = pFilePath;
-	Compile(pFilePath, 6, 3, defines);
+	m_Path = Paths::ShadersDir() + pFilePath;
+	Compile(m_Path.c_str(), 6, 3, defines);
 }
 
 std::string ShaderLibrary::GetShaderTarget(char shaderModelMajor, char shaderModelMinor)

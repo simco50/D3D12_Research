@@ -3,9 +3,6 @@
 class CommandSignature
 {
 public:
-	CommandSignature() = default;
-	~CommandSignature() = default;
-
 	void Finalize(const char* pName, ID3D12Device* pDevice);
 
 	void SetRootSignature(ID3D12RootSignature* pRootSignature) { m_pRootSignature = pRootSignature; }

@@ -18,8 +18,8 @@ CommandQueue::CommandQueue(Graphics* pGraphics, D3D12_COMMAND_LIST_TYPE type)
 	desc.Priority = 0;
 	desc.Type = type;
 
-	HR(pGraphics->GetDevice()->CreateCommandQueue(&desc, IID_PPV_ARGS(m_pCommandQueue.GetAddressOf())));
-	HR(pGraphics->GetDevice()->CreateFence(m_LastCompletedFenceValue, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(m_pFence.GetAddressOf())));
+	VERIFY_HR_EX(pGraphics->GetDevice()->CreateCommandQueue(&desc, IID_PPV_ARGS(m_pCommandQueue.GetAddressOf())), m_pGraphics->GetDevice());
+	VERIFY_HR_EX(pGraphics->GetDevice()->CreateFence(m_LastCompletedFenceValue, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(m_pFence.GetAddressOf())), m_pGraphics->GetDevice());
 
 	m_pFenceEventHandle = CreateEventEx(nullptr, nullptr, 0, EVENT_ALL_ACCESS);
 }
@@ -32,7 +32,7 @@ CommandQueue::~CommandQueue()
 uint64 CommandQueue::ExecuteCommandList(ID3D12CommandList* pCommandList)
 {
 	std::lock_guard<std::mutex> lock(m_FenceMutex);
-	HR(static_cast<ID3D12GraphicsCommandList*>(pCommandList)->Close());
+	VERIFY_HR_EX(static_cast<ID3D12GraphicsCommandList*>(pCommandList)->Close(), m_pGraphics->GetDevice());
 	m_pCommandQueue->ExecuteCommandLists(1, &pCommandList);
 	m_pCommandQueue->Signal(m_pFence.Get(), m_NextFenceValue);
 	return m_NextFenceValue++;

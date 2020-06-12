@@ -22,20 +22,20 @@ PipelineState::PipelineState(const PipelineState& other)
 void PipelineState::Finalize(const char* pName, ID3D12Device* pDevice)
 {
 	ComPtr<ID3D12Device2> pDevice2;
-	HR(pDevice->QueryInterface(IID_PPV_ARGS(pDevice2.GetAddressOf())));
+	VERIFY_HR_EX(pDevice->QueryInterface(IID_PPV_ARGS(pDevice2.GetAddressOf())), pDevice);
 	D3D12_PIPELINE_STATE_STREAM_DESC streamDesc{};
 	streamDesc.pPipelineStateSubobjectStream = &m_Desc;
 	streamDesc.SizeInBytes = sizeof(m_Desc);
-	HR(pDevice2->CreatePipelineState(&streamDesc, IID_PPV_ARGS(m_pPipelineState.GetAddressOf())));
+	VERIFY_HR_EX(pDevice2->CreatePipelineState(&streamDesc, IID_PPV_ARGS(m_pPipelineState.GetAddressOf())), pDevice);
 	D3D::SetObjectName(m_pPipelineState.Get(), pName);
 }
 
-void PipelineState::SetRenderTargetFormat(DXGI_FORMAT rtvFormat, DXGI_FORMAT dsvFormat, uint32 msaa, uint32 msaaQuality)
+void PipelineState::SetRenderTargetFormat(DXGI_FORMAT rtvFormat, DXGI_FORMAT dsvFormat, uint32 msaa)
 {
-	SetRenderTargetFormats(&rtvFormat, 1, dsvFormat, msaa, msaaQuality);
+	SetRenderTargetFormats(&rtvFormat, 1, dsvFormat, msaa);
 }
 
-void PipelineState::SetRenderTargetFormats(DXGI_FORMAT* rtvFormats, uint32 count, DXGI_FORMAT dsvFormat, uint32 msaa, uint32 msaaQuality)
+void PipelineState::SetRenderTargetFormats(DXGI_FORMAT* rtvFormats, uint32 count, DXGI_FORMAT dsvFormat, uint32 msaa)
 {
 	D3D12_RT_FORMAT_ARRAY* pFormatArray = &m_Desc.RTVFormats;
 	pFormatArray->NumRenderTargets = count;
@@ -45,7 +45,7 @@ void PipelineState::SetRenderTargetFormats(DXGI_FORMAT* rtvFormats, uint32 count
 	}
 	DXGI_SAMPLE_DESC* pSampleDesc = &m_Desc.SampleDesc;
 	pSampleDesc->Count = msaa;
-	pSampleDesc->Quality = msaaQuality;
+	pSampleDesc->Quality = 0;
 	m_Desc.DSVFormat = dsvFormat;
 }
 

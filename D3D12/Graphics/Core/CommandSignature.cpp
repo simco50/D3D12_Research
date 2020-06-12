@@ -8,7 +8,7 @@ void CommandSignature::Finalize(const char* pName, ID3D12Device* pDevice)
 	desc.NodeMask = 0;
 	desc.NumArgumentDescs = (uint32)m_ArgumentDesc.size();
 	desc.pArgumentDescs = m_ArgumentDesc.data();
-	HR(pDevice->CreateCommandSignature(&desc, m_pRootSignature, IID_PPV_ARGS(m_pCommandSignature.GetAddressOf())));
+	VERIFY_HR_EX(pDevice->CreateCommandSignature(&desc, m_pRootSignature, IID_PPV_ARGS(m_pCommandSignature.GetAddressOf())), pDevice);
 	D3D::SetObjectName(m_pCommandSignature.Get(), pName);
 }
 

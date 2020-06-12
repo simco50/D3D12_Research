@@ -15,8 +15,8 @@ cbuffer PerObjectParameters : register(b0)
 
 cbuffer Parameters : register(b1)
 {
-    uint4 cClusterDimensions;
-    float2 cClusterSize;
+    int4 cClusterDimensions;
+    int2 cClusterSize;
 	float cSliceMagicA;
 	float cSliceMagicB;
 }

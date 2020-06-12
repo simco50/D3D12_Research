@@ -182,7 +182,7 @@ void TiledForward::SetupResources(Graphics* pGraphics)
 
 void TiledForward::SetupPipelines(Graphics* pGraphics)
 {
-	Shader computeShader("Resources/Shaders/LightCulling.hlsl", Shader::Type::Compute, "CSMain");
+	Shader computeShader("LightCulling.hlsl", Shader::Type::Compute, "CSMain");
 
 	m_pComputeLightCullRS = std::make_unique<RootSignature>();
 	m_pComputeLightCullRS->FinalizeFromShader("Tiled Light Culling RS", computeShader, pGraphics->GetDevice());
@@ -211,9 +211,9 @@ void TiledForward::SetupPipelines(Graphics* pGraphics)
 	//PBR Diffuse passes
 	{
 		//Shaders
-		Shader vertexShader("Resources/Shaders/Diffuse.hlsl", Shader::Type::Vertex, "VSMain", { });
-		Shader pixelShader("Resources/Shaders/Diffuse.hlsl", Shader::Type::Pixel, "PSMain", { });
-		Shader debugPixelShader("Resources/Shaders/Diffuse.hlsl", Shader::Type::Pixel, "DebugLightDensityPS", { });
+		Shader vertexShader("Diffuse.hlsl", Shader::Type::Vertex, "VSMain", { });
+		Shader pixelShader("Diffuse.hlsl", Shader::Type::Pixel, "PSMain", { });
+		Shader debugPixelShader("Diffuse.hlsl", Shader::Type::Pixel, "DebugLightDensityPS", { });
 
 		//Rootsignature
 		m_pDiffuseRS = std::make_unique<RootSignature>();
@@ -226,7 +226,7 @@ void TiledForward::SetupPipelines(Graphics* pGraphics)
 			m_pDiffusePSO->SetRootSignature(m_pDiffuseRS->GetRootSignature());
 			m_pDiffusePSO->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
 			m_pDiffusePSO->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
-			m_pDiffusePSO->SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, pGraphics->GetMultiSampleCount(), pGraphics->GetMultiSampleQualityLevel(pGraphics->GetMultiSampleCount()));
+			m_pDiffusePSO->SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, pGraphics->GetMultiSampleCount());
 			m_pDiffusePSO->SetDepthTest(D3D12_COMPARISON_FUNC_EQUAL);
 			m_pDiffusePSO->SetDepthWrite(false);
 			m_pDiffusePSO->Finalize("Diffuse PBR Pipeline", pGraphics->GetDevice());

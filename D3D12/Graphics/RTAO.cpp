@@ -158,7 +158,7 @@ void RTAO::GenerateAccelerationStructure(Graphics* pGraphics, Mesh* pMesh, Comma
 		m_pBLASScratch = std::make_unique<Buffer>(pGraphics, "BLAS Scratch Buffer");
 		m_pBLASScratch->Create(BufferDesc::CreateByteAddress(Math::AlignUp<uint64>(info.ScratchDataSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT), BufferFlag::UnorderedAccess));
 		m_pBLAS = std::make_unique<Buffer>(pGraphics, "BLAS");
-		m_pBLAS->Create(BufferDesc::CreateAccelerationStructure(Math::AlignUp<uint64>(info.ResultDataMaxSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT), BufferFlag::UnorderedAccess));
+		m_pBLAS->Create(BufferDesc::CreateAccelerationStructure(Math::AlignUp<uint64>(info.ResultDataMaxSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT)));
 
 		D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC asDesc{};
 		asDesc.Inputs = prebuildInfo;
@@ -239,7 +239,7 @@ void RTAO::SetupPipelines(Graphics* pGraphics)
 		samplerDesc.AddressU = samplerDesc.AddressV = samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
 		m_pGlobalRS->Finalize("Dummy Global RS", pGraphics->GetDevice(), D3D12_ROOT_SIGNATURE_FLAG_NONE);
 
-		ShaderLibrary shaderLibrary("Resources/Shaders/RTAO.hlsl");
+		ShaderLibrary shaderLibrary("RTAO.hlsl");
 
 		CD3DX12_STATE_OBJECT_DESC desc(D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE);
 
@@ -295,7 +295,7 @@ void RTAO::SetupPipelines(Graphics* pGraphics)
 		}
 		D3D12_STATE_OBJECT_DESC stateObject = *desc;
 
-		HR(pGraphics->GetRaytracingDevice()->CreateStateObject(&stateObject, IID_PPV_ARGS(m_pStateObject.GetAddressOf())));
-		HR(m_pStateObject->QueryInterface(IID_PPV_ARGS(m_pStateObjectProperties.GetAddressOf())));
+		VERIFY_HR_EX(pGraphics->GetRaytracingDevice()->CreateStateObject(&stateObject, IID_PPV_ARGS(m_pStateObject.GetAddressOf())), pGraphics->GetDevice());
+		VERIFY_HR_EX(m_pStateObject->QueryInterface(IID_PPV_ARGS(m_pStateObjectProperties.GetAddressOf())), pGraphics->GetDevice());
 	}
 }

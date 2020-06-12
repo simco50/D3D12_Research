@@ -33,6 +33,7 @@ struct Paths
 	static std::string ResourcesDir();
 	static std::string ConfigDir();
 	static std::string ShaderCacheDir();
+	static std::string ShadersDir();
 
 	static std::string GameIniFile();
 	static std::string EngineIniFile();

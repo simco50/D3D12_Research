@@ -1,6 +1,7 @@
 #pragma once
 #include "DescriptorHandle.h"
 #include "GraphicsResource.h"
+#include "Core/BitField.h"
 
 class CommandContext;
 class RootSignature;

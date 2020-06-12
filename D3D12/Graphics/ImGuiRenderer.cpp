@@ -114,8 +114,8 @@ void ImGuiRenderer::InitializeImGui()
 void ImGuiRenderer::CreatePipeline()
 {
 	//Shaders
-	Shader vertexShader("Resources/Shaders/ImGui.hlsl", Shader::Type::Vertex, "VSMain");
-	Shader pixelShader("Resources/Shaders/ImGui.hlsl", Shader::Type::Pixel, "PSMain");
+	Shader vertexShader("ImGui.hlsl", Shader::Type::Vertex, "VSMain");
+	Shader pixelShader("ImGui.hlsl", Shader::Type::Pixel, "PSMain");
 
 	//Root signature
 	m_pRootSignature = std::make_unique<RootSignature>();
@@ -136,7 +136,7 @@ void ImGuiRenderer::CreatePipeline()
 	m_pPipelineState->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
 	m_pPipelineState->SetRootSignature(m_pRootSignature->GetRootSignature());
 	m_pPipelineState->SetInputLayout(elementDesc.data(), (uint32)elementDesc.size());
-	m_pPipelineState->SetRenderTargetFormat(DXGI_FORMAT_R8G8B8A8_UNORM, Graphics::DEPTH_STENCIL_FORMAT, 1, 0);
+	m_pPipelineState->SetRenderTargetFormat(DXGI_FORMAT_R8G8B8A8_UNORM, Graphics::DEPTH_STENCIL_FORMAT, 1);
 	m_pPipelineState->Finalize("ImGui Pipeline", m_pGraphics->GetDevice());
 }
 

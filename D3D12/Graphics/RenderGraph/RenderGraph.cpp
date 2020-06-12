@@ -4,6 +4,7 @@
 #include "Graphics/Core/CommandContext.h"
 #include "Graphics/Profiler.h"
 #include "ResourceAllocator.h"
+#include "Core/CommandLine.h"
 
 RGResourceHandle RGPassBuilder::Read(const RGResourceHandle& resource)
 {
@@ -301,7 +302,7 @@ void RGGraph::ConditionallyCreateResource(RGResource* pResource)
 			break;
 		case RGResourceType::None:
 		default:
-			assert(0);
+			noEntry();
 			break;
 		}
 	}
@@ -321,7 +322,7 @@ void RGGraph::ConditionallyReleaseResource(RGResource* pResource)
 			break;
 		case RGResourceType::None:
 		default:
-			assert(0);
+			noEntry();
 			break;
 		}
 	}
@@ -331,7 +332,7 @@ Texture* RGPassResources::GetTexture(RGResourceHandle handle) const
 {
 	RG_ASSERT(m_Pass.ReadsFrom(handle) || m_Pass.WritesTo(handle), "Pass doesn't read or write to this resource");
 	const RGNode& node = m_Graph.GetResourceNode(handle);
-	assert(node.pResource);
-	assert(node.pResource->m_Type == RGResourceType::Texture);
+	check(node.pResource);
+	check(node.pResource->m_Type == RGResourceType::Texture);
 	return static_cast<Texture*>(node.pResource->m_pPhysicalResource);
 }

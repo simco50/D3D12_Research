@@ -22,8 +22,8 @@ public:
 	ID3D12PipelineState* GetPipelineState() const { return m_pPipelineState.Get(); }
 	void Finalize(const char* pName, ID3D12Device* pDevice);
 
-	void SetRenderTargetFormat(DXGI_FORMAT rtvFormat, DXGI_FORMAT dsvFormat, uint32 msaa, uint32 msaaQuality);
-	void SetRenderTargetFormats(DXGI_FORMAT* rtvFormats, uint32 count, DXGI_FORMAT dsvFormat, uint32 msaa, uint32 msaaQuality);
+	void SetRenderTargetFormat(DXGI_FORMAT rtvFormat, DXGI_FORMAT dsvFormat, uint32 msaa);
+	void SetRenderTargetFormats(DXGI_FORMAT* rtvFormats, uint32 count, DXGI_FORMAT dsvFormat, uint32 msaa);
 
 	//BlendState
 	void SetBlendMode(const BlendMode& blendMode, bool alphaToCoverage);

@@ -6,6 +6,7 @@
 #define _CRTDBG_MAP_ALLOC
 #include <stdlib.h>
 #include <crtdbg.h>
+#include "Core/CommandLine.h"
 
 const int gWindowWidth = 1240;
 const int gWindowHeight = 720;
@@ -256,6 +257,7 @@ int WINAPI WinMain(HINSTANCE hInstance,	HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	CommandLine::Parse(lpCmdLine);
 	_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
 	Console::Startup();
+
 	E_LOG(Info, "Startup");
 	ViewWrapper vp;
 	vp.Run("D3D12 - Hello World");

@@ -1,4 +1,5 @@
 #pragma once
+#include "Core/BitField.h"
 
 /*
 	The RootSignature describes how the GPU resources map to the shader.

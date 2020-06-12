@@ -7,9 +7,9 @@ enum class ImageFormat
 	RGB32,
 	RGBA16,
 	RGBA32,
-	DXT1,
-	DXT3,
-	DXT5,
+	BC1,
+	BC2,
+	BC3,
 	BC4,
 	BC5,
 	BC6H,
@@ -27,12 +27,9 @@ struct MipLevelInfo
 	uint32 DataSize = 0;
 };
 
-class Image
+class Image final
 {
 public:
-	explicit Image();
-	virtual ~Image();
-
 	bool Load(const char* filePath);
 	bool Load(const void* pPixels, size_t dataSize, const char* pFormatHint);
 

@@ -31,8 +31,8 @@ DescriptorHandle OnlineDescriptorAllocator::AllocateTransientDescriptor(int coun
 
 void OnlineDescriptorAllocator::SetDescriptors(uint32 rootIndex, uint32 offset, uint32 numHandles, const D3D12_CPU_DESCRIPTOR_HANDLE* pHandles)
 {
-	assert(m_RootDescriptorMask.GetBit(rootIndex));
-	assert(numHandles + offset <= m_RootDescriptorTable[rootIndex].TableSize);
+	check(m_RootDescriptorMask.GetBit(rootIndex));
+	check(numHandles + offset <= m_RootDescriptorTable[rootIndex].TableSize);
 
 	RootDescriptorEntry& entry = m_RootDescriptorTable[rootIndex];
 	bool dirty = false;
@@ -100,7 +100,7 @@ void OnlineDescriptorAllocator::UploadAndBindStagedDescriptors(DescriptorTableTy
 		for (uint32 i = 0; i < rangeSize; ++i)
 		{
 			sourceRangeSizes[sourceRangeCount] = 1;
-			assert(entry.TableStart[i].ptr);
+			check(entry.TableStart[i].ptr);
 			sourceRanges[sourceRangeCount] = entry.TableStart[i];
 			++sourceRangeCount;
 		}
@@ -129,7 +129,7 @@ void OnlineDescriptorAllocator::UploadAndBindStagedDescriptors(DescriptorTableTy
 			m_pOwner->GetCommandList()->SetComputeRootDescriptorTable(rootIndex, newDescriptorTables[i++]);
 			break;
 		default:
-			assert(false);
+			noEntry();
 			break;
 		}
 	}
@@ -154,7 +154,7 @@ ID3D12DescriptorHeap* OnlineDescriptorAllocator::GetHeap()
 
 void OnlineDescriptorAllocator::ParseRootSignature(RootSignature* pRootSignature)
 {
-	m_RootDescriptorMask = m_Type == D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER ? 
+	m_RootDescriptorMask = m_Type == D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER ?
 		pRootSignature->GetSamplerTableMask() : pRootSignature->GetDescriptorTableMask();
 
 	m_StaleRootParameters.ClearAll();
@@ -167,7 +167,7 @@ void OnlineDescriptorAllocator::ParseRootSignature(RootSignature* pRootSignature
 		RootDescriptorEntry& entry = m_RootDescriptorTable[rootIndex];
 		entry.AssignedHandlesBitMap.ClearAll();
 		uint32 tableSize = pRootSignature->GetDescriptorTableSizes()[rootIndex];
-		assert(tableSize > 0);
+		check(tableSize > 0);
 		entry.TableSize = tableSize;
 		entry.TableStart = &m_HandleCache[offset];
 		offset += entry.TableSize;
@@ -214,7 +214,7 @@ ID3D12DescriptorHeap* OnlineDescriptorAllocator::RequestNewHeap(D3D12_DESCRIPTOR
 		desc.NumDescriptors = DESCRIPTORS_PER_HEAP;
 		desc.NodeMask = 0;
 		desc.Type = type;
-		HR(m_pGraphics->GetDevice()->CreateDescriptorHeap(&desc, IID_PPV_ARGS(pHeap.GetAddressOf())));
+		VERIFY_HR_EX(m_pGraphics->GetDevice()->CreateDescriptorHeap(&desc, IID_PPV_ARGS(pHeap.GetAddressOf())), m_pGraphics->GetDevice());
 		m_DescriptorHeaps.push_back(std::move(pHeap));
 		return m_DescriptorHeaps.back().Get();
 	}
@@ -224,10 +224,10 @@ void OnlineDescriptorAllocator::ReleaseHeap()
 {
 	if (m_CurrentOffset == 0)
 	{
-		assert(m_pCurrentHeap == nullptr);
+		check(m_pCurrentHeap == nullptr);
 		return;
 	}
-	assert(m_pCurrentHeap);
+	check(m_pCurrentHeap);
 	m_UsedDescriptorHeaps.push_back(m_pCurrentHeap);
 	m_pCurrentHeap = nullptr;
 	m_CurrentOffset = 0;

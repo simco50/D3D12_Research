@@ -21,11 +21,11 @@ cbuffer PerFrameData : register(b1)
 	float4x4 cView;
 	float4x4 cProjection;
 	float4x4 cViewInverse;
-    uint4 cClusterDimensions;
+    int4 cClusterDimensions;
 	float2 cScreenDimensions;
 	float cNearZ;
 	float cFarZ;
-    float2 cClusterSize;
+    int2 cClusterSize;
 	float cSliceMagicA;
 	float cSliceMagicB;
 }

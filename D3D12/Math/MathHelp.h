@@ -15,6 +15,10 @@ namespace Math
 	constexpr float ToMegaBytes = 1.0f / (1 << 20);
 	constexpr float ToGigaBytes = 1.0f / (1 << 30);
 
+	constexpr uint32 FromKilobytes = 1 << 10;
+	constexpr uint32 FromMegaBytes = 1 << 20;
+	constexpr uint32 FromGigaBytes = 1 << 30;
+
 	template<typename T>
 	constexpr T Max(const T& a, const T& b)
 	{
@@ -27,22 +31,20 @@ namespace Math
 		return a < b ? a : b;
 	}
 
-
 	float RandomRange(float min, float max);
 
 	int RandomRange(int min, int max);
 
 	template<typename T>
-	constexpr T Clamp(const T value, const T hi, const T lo)
+	constexpr T Clamp(const T value, const T low, const T high)
 	{
-		if (value > hi)
-			return hi;
-		else if (value < lo)
-			return lo;
+		if (value > high)
+			return high;
+		else if (value < low)
+			return low;
 		return value;
 	}
 
-	
 	template<typename T>
 	constexpr T Average(const T& a, const T& b)
 	{
@@ -81,11 +83,15 @@ namespace Math
 
 	Quaternion LookRotation(const Vector3& direction);
 
-	std::string ToBase(unsigned int number, unsigned int base);
-
-	std::string ToBinary(unsigned int number);
-
-	std::string ToHex(unsigned int number);
+	std::string ToBase(unsigned int number, unsigned int base, bool addPrefix = true);
+	inline std::string ToBinary(uint32 number, bool addPrefix = true)
+	{
+		return ToBase(number, 2, addPrefix);
+	}
+	inline std::string ToHex(uint32 number, bool addPrefix = true)
+	{
+		return ToBase(number, 16, addPrefix);
+	}
 
 	Vector3 RandVector();
 

@@ -142,7 +142,7 @@ void SSAO::SetupPipelines(Graphics* pGraphics)
 {
 	//SSAO
 	{
-		Shader computeShader("Resources/Shaders/SSAO.hlsl", Shader::Type::Compute, "CSMain");
+		Shader computeShader("SSAO.hlsl", Shader::Type::Compute, "CSMain");
 
 		m_pSSAORS = std::make_unique<RootSignature>();
 		m_pSSAORS->FinalizeFromShader("SSAO", computeShader, pGraphics->GetDevice());
@@ -155,7 +155,7 @@ void SSAO::SetupPipelines(Graphics* pGraphics)
 
 	//SSAO Blur
 	{
-		Shader computeShader("Resources/Shaders/SSAOBlur.hlsl", Shader::Type::Compute, "CSMain");
+		Shader computeShader("SSAOBlur.hlsl", Shader::Type::Compute, "CSMain");
 
 		m_pSSAOBlurRS = std::make_unique<RootSignature>();
 		m_pSSAOBlurRS->FinalizeFromShader("SSAO Blur", computeShader, pGraphics->GetDevice());

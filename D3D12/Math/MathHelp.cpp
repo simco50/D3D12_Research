@@ -94,53 +94,52 @@ namespace Math
 		return Quaternion::CreateFromYawPitchRoll(yaw, pitch, 0);
 	}
 
-	std::string ToBase(unsigned int number, unsigned int base)
+	std::string ToBase(unsigned int number, unsigned int base, bool addPrefix /*= true*/)
 	{
-		std::stringstream nr;
-		unsigned int count = 0;
+		char buffer[16];
+		memset(buffer, 0, 16);
+		char* pCurrent = buffer;
+		uint32 count = 0;
 		while (number != 0)
 		{
 			unsigned int mod = number % base;
 			if (mod > 9)
 			{
-				nr << (char)('A' + mod - 10);
+				*pCurrent++ = (char)('A' + mod - 10);
 			}
 			else
 			{
-				nr << mod;
+				*pCurrent++ = '0' + mod;
 			}
 			number /= base;
 			++count;
 		}
-		for (; count <= 8; ++count)
+		constexpr uint32 minPadding = 8;
+		for (; count <= minPadding; ++count)
 		{
-			nr << '0';
+			*pCurrent++ = '0';
 		}
-		if (base == 2)
+		if (addPrefix)
 		{
-			nr << "b0";
+			if (base == 2)
+			{
+				*pCurrent++ = 'b';
+				*pCurrent++ = '0';
+			}
+			else if (base == 8)
+			{
+				*pCurrent++ = 'c';
+				*pCurrent++ = '0';
+			}
+			else if (base == 16)
+			{
+				*pCurrent++ = 'x';
+				*pCurrent++ = '0';
+			}
 		}
-		else if (base == 8)
-		{
-			nr << "c0";
-		}
-		else if (base == 16)
-		{
-			nr << "x0";
-		}
-		std::string out = nr.str();
+		std::string out = buffer;
 		std::reverse(out.begin(), out.end());
 		return out;
-	}
-
-	std::string ToBinary(unsigned int number)
-	{
-		return Math::ToBase(number, 2);
-	}
-
-	std::string ToHex(unsigned int number)
-	{
-		return Math::ToBase(number, 16);
 	}
 
 	DirectX::SimpleMath::Vector3 RandVector()
@@ -160,7 +159,9 @@ namespace Math
 
 	Color MakeFromColorTemperature(float Temp)
 	{
-		Temp = Clamp(Temp, 15000.0f, 1000.0f);
+		constexpr float MAX_TEMPERATURE = 15000.0f;
+		constexpr float MIN_TEMPERATURE = 1000.0f;
+		Temp = Clamp(Temp, MIN_TEMPERATURE, MAX_TEMPERATURE);
 
 		//[Krystek85] Algorithm works in the CIE 1960 (UCS) space,
 		float u = (0.860117757f + 1.54118254e-4f * Temp + 1.28641212e-7f * Temp * Temp) / (1.0f + 8.42420235e-4f * Temp + 7.08145163e-7f * Temp * Temp);
@@ -183,5 +184,4 @@ namespace Math
 
 		return Color(R, G, B);
 	}
-
 }

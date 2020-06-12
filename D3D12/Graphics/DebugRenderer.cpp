@@ -49,8 +49,8 @@ void DebugRenderer::Initialize(Graphics* pGraphics)
 	};
 
 	//Shaders
-	Shader vertexShader("Resources/Shaders/DebugRenderer.hlsl", Shader::Type::Vertex, "VSMain", { });
-	Shader pixelShader("Resources/Shaders/DebugRenderer.hlsl", Shader::Type::Pixel, "PSMain", { });
+	Shader vertexShader("DebugRenderer.hlsl", Shader::Type::Vertex, "VSMain", { });
+	Shader pixelShader("DebugRenderer.hlsl", Shader::Type::Pixel, "PSMain", { });
 
 	//Rootsignature
 	m_pRS = std::make_unique<RootSignature>();
@@ -62,7 +62,7 @@ void DebugRenderer::Initialize(Graphics* pGraphics)
 	m_pTrianglesPSO->SetRootSignature(m_pRS->GetRootSignature());
 	m_pTrianglesPSO->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
 	m_pTrianglesPSO->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
-	m_pTrianglesPSO->SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, pGraphics->GetMultiSampleCount(), pGraphics->GetMultiSampleQualityLevel(pGraphics->GetMultiSampleCount()));
+	m_pTrianglesPSO->SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, pGraphics->GetMultiSampleCount());
 	m_pTrianglesPSO->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
 	m_pTrianglesPSO->SetDepthWrite(true);
 	m_pTrianglesPSO->SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
