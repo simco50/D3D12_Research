@@ -42,7 +42,7 @@ struct BufferDesc
 
 	static BufferDesc CreateReadback(int size)
 	{
-		return BufferDesc(size, sizeof(uint64), BufferFlag::Readback);
+		return BufferDesc(size, sizeof(uint8), BufferFlag::Readback);
 	}
 
 	static BufferDesc CreateByteAddress(uint64 bytes, BufferFlag usage = BufferFlag::ShaderResource)

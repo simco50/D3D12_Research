@@ -79,12 +79,11 @@ void Graphics::Initialize(HWND window)
 {
 	m_pWindow = window;
 
-	m_pCamera = std::make_unique<FreeCamera>(this);
+	m_pCamera = std::make_unique<FreeCamera>();
 	m_pCamera->SetPosition(Vector3(0, 100, -15));
 	m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(Math::PIDIV4, Math::PIDIV4, 0));
 	m_pCamera->SetNearPlane(500.0f);
 	m_pCamera->SetFarPlane(10.0f);
-	m_pCamera->SetViewport(0, 0, 1, 1);
 
 	InitD3D();
 	InitializeAssets();
@@ -155,6 +154,7 @@ void Graphics::RandomizeLights(int count)
 
 void Graphics::Update()
 {
+	PROFILE_BEGIN("Update");
 	BeginFrame();
 	m_pImGuiRenderer->Update();
 
@@ -881,6 +881,8 @@ void Graphics::Update()
 		gDumpRenderGraph = false;
 	}
 	nextFenceValue = graph.Execute();
+	PROFILE_END();
+
 
 	//PRESENT
 	//	- Set fence for the currently queued frame
@@ -903,18 +905,18 @@ void Graphics::BeginFrame()
 
 void Graphics::EndFrame(uint64 fenceValue)
 {
+	Profiler::Get()->Resolve(this, m_Frame);
+	DebugRenderer::Get()->EndFrame();
+
 	//This always gets me confused!
 	//The 'm_CurrentBackBufferIndex' is the frame that just got queued so we set the fence value on that frame
 	//We present and request the new backbuffer index and wait for that one to finish on the GPU before starting to queue work for that frame.
 
-	++m_Frame;
-	Profiler::Get()->BeginReadback(m_Frame);
 	m_FenceValues[m_CurrentBackBufferIndex] = fenceValue;
 	m_pSwapchain->Present(1, 0);
 	m_CurrentBackBufferIndex = m_pSwapchain->GetCurrentBackBufferIndex();
 	WaitForFence(m_FenceValues[m_CurrentBackBufferIndex]);
-	Profiler::Get()->EndReadBack(m_Frame);
-	DebugRenderer::Get()->EndFrame();
+	++m_Frame;
 }
 
 void Graphics::InitD3D()
@@ -1185,6 +1187,7 @@ void Graphics::OnResize(int width, int height)
 
 	m_pAmbientOcclusion->Create(TextureDesc::CreateRenderTarget(Math::DivideAndRoundUp(width, 2), Math::DivideAndRoundUp(height, 2), DXGI_FORMAT_R8_UNORM, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource | TextureFlag::RenderTarget));
 
+	m_pCamera->SetViewport(0, 0, (float)width, (float)height);
 	m_pCamera->SetDirty();
 
 	m_pClusteredForward->OnSwapchainCreated(width, height);
@@ -1469,7 +1472,7 @@ void Graphics::UpdateImGui()
 	ImGui::SetNextWindowPos(ImVec2(0, 0), 0, ImVec2(0, 0));
 	ImGui::SetNextWindowSize(ImVec2(300, (float)m_WindowHeight));
 	ImGui::Begin("GPU Stats", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
-	ImGui::Text("MS: %.4f", GameTimer::DeltaTime() * 1000.0f);
+	ImGui::Text("MS: %4.2f", GameTimer::DeltaTime() * 1000.0f);
 	ImGui::SameLine(100.0f);
 	ImGui::Text("%d x %d", m_WindowWidth, m_WindowHeight);
 	ImGui::SameLine(180.0f);
@@ -1530,9 +1533,9 @@ void Graphics::UpdateImGui()
 			case D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV:
 				ImGui::TextWrapped("Constant/Shader/Unordered Access Views");
 				break;
-			/*case D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER:
+			case D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER:
 				ImGui::TextWrapped("Samplers");
-				break;*/
+				break;
 			case D3D12_DESCRIPTOR_HEAP_TYPE_RTV:
 				ImGui::TextWrapped("Render Target Views");
 				break;
@@ -1553,7 +1556,7 @@ void Graphics::UpdateImGui()
 	if (ImGui::TreeNodeEx("Memory", ImGuiTreeNodeFlags_DefaultOpen))
 	{
 		ImGui::Text("Dynamic Upload Memory");
-		ImGui::Text("%f MB", Math::ToMegaBytes* m_pDynamicAllocationManager->GetMemoryUsage());
+		ImGui::Text("%.2f MB", Math::ToMegaBytes* m_pDynamicAllocationManager->GetMemoryUsage());
 		ImGui::TreePop();
 	}
 	ImGui::End();
@@ -1561,7 +1564,7 @@ void Graphics::UpdateImGui()
 	static bool showOutputLog = false;
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0);
 	ImGui::SetNextWindowPos(ImVec2(300, showOutputLog ? (float)m_WindowHeight - 250 : (float)m_WindowHeight - 20));
-	ImGui::SetNextWindowSize(ImVec2(showOutputLog ? (float)(m_WindowWidth - 250) * 0.5f : m_WindowWidth - 250, 250));
+	ImGui::SetNextWindowSize(ImVec2(showOutputLog ? (float)(m_WindowWidth - 300) * 0.5f : m_WindowWidth - 250, 250));
 	ImGui::SetNextWindowCollapsed(!showOutputLog);
 
 	showOutputLog = ImGui::Begin("Output Log", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
@@ -1595,8 +1598,8 @@ void Graphics::UpdateImGui()
 
 	if (showOutputLog)
 	{
-		ImGui::SetNextWindowPos(ImVec2(250 + (m_WindowWidth - 250) / 2.0f, showOutputLog ? (float)m_WindowHeight - 250 : (float)m_WindowHeight - 20));
-		ImGui::SetNextWindowSize(ImVec2((float)(m_WindowWidth - 250) * 0.5f, 250));
+		ImGui::SetNextWindowPos(ImVec2(300 + (m_WindowWidth - 300) / 2.0f, showOutputLog ? (float)m_WindowHeight - 250 : (float)m_WindowHeight - 20));
+		ImGui::SetNextWindowSize(ImVec2((float)(m_WindowWidth - 300) * 0.5f, 250));
 		ImGui::SetNextWindowCollapsed(!showOutputLog);
 		ImGui::Begin("Profiler", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
 		ProfileNode* pRootNode = Profiler::Get()->GetRootNode();

@@ -10,7 +10,7 @@ class CommandContext;
 #define PROFILE_END() Profiler::Get()->End();
 
 #define GPU_PROFILE_SCOPE(name, cmdlist) ScopeProfiler profiler ## __COUNTER__(name, cmdlist)
-#define PROFILE_SCOPE(name, cmdlist) ScopeProfiler profiler ## __COUNTER__(name, nullptr)
+#define PROFILE_SCOPE(name) ScopeProfiler profiler ## __COUNTER__(name, nullptr)
 
 class CpuTimer
 {
@@ -30,7 +30,7 @@ public:
 	GpuTimer();
 	void Begin(CommandContext* pContext);
 	void End(CommandContext* pContext);
-	float GetTime() const;
+	float GetTime(const uint64* pReadbackData) const;
 
 private:
 	int m_TimerIndex = -1;
@@ -100,7 +100,7 @@ public:
 	void StartTimer(CommandContext* pContext);
 	void EndTimer(CommandContext* pContext);
 
-	void PopulateTimes(int frameIndex);
+	void PopulateTimes(const uint64* pReadbackData, int frameIndex);
 	void RenderImGui(int frameIndex);
 
 	bool HasChild(const char* pName);
@@ -148,16 +148,13 @@ public:
 	void Begin(const char* pName, CommandContext* pContext = nullptr);
 	void End(CommandContext* pContext = nullptr);
 
-	void BeginReadback(int frameIndex);
-	void EndReadBack(int frameIndex);
+	void Resolve(Graphics* pGraphics, int frameIndex);
 
-	float GetGpuTime(int timerIndex) const;
+	float GetGpuTime(const uint64* pReadbackData, int timerIndex) const;
 	void StartGpuTimer(CommandContext* pContext, int timerIndex);
 	void StopGpuTimer(CommandContext* pContext, int timerIndex);
 
 	int32 GetNextTimerIndex();
-
-	inline const uint64* GetData() const { return m_pCurrentReadBackData; }
 
 	float GetSecondsPerCpuTick() const { return m_SecondsPerCpuTick; }
 	float GetSecondsPerGpuTick() const { return m_SecondsPerGpuTick; }
@@ -169,15 +166,16 @@ public:
 private:
 	Profiler() = default;
 
-	constexpr static int HEAP_SIZE = 512;
+	constexpr static int MAX_GPU_TIME_QUERIES = 512;
+	constexpr static int QUERY_PAIR_NUM = 2;
+	constexpr static int HEAP_SIZE = MAX_GPU_TIME_QUERIES * QUERY_PAIR_NUM;
 
 	std::array<uint64, Graphics::FRAME_COUNT> m_FenceValues = {};
-	uint64* m_pCurrentReadBackData = nullptr;
 
-	Graphics* m_pGraphics = nullptr;
 	float m_SecondsPerGpuTick = 0.0f;
 	float m_SecondsPerCpuTick = 0.0f;
 	int m_CurrentTimer = 0;
+	int m_CurrentReadbackFrame = 0;
 	ComPtr<ID3D12QueryHeap> m_pQueryHeap;
 	std::unique_ptr<Buffer> m_pReadBackBuffer;
 
