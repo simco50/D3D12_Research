@@ -10,10 +10,9 @@
 #include "Core/Input.h"
 
 ImGuiRenderer::ImGuiRenderer(Graphics* pGraphics)
-	: m_pGraphics(pGraphics)
 {
-	CreatePipeline();
-	InitializeImGui();
+	CreatePipeline(pGraphics);
+	InitializeImGui(pGraphics);
 }
 
 ImGuiRenderer::~ImGuiRenderer()
@@ -21,14 +20,15 @@ ImGuiRenderer::~ImGuiRenderer()
 	ImGui::DestroyContext();
 }
 
-void ImGuiRenderer::NewFrame()
+void ImGuiRenderer::NewFrame(uint32 width, uint32 height)
 {
 	ImGuiIO& io = ImGui::GetIO();
-	io.DisplaySize = ImVec2((float)m_pGraphics->GetWindowWidth(), (float)m_pGraphics->GetWindowHeight());
+	io.DisplaySize = ImVec2((float)width, (float)height);
 
 	io.MouseDown[0] = Input::Instance().IsMouseDown(0);
 	io.MouseDown[1] = Input::Instance().IsMouseDown(1);
 	io.MouseDown[2] = Input::Instance().IsMouseDown(2);
+	io.MouseWheel = Input::Instance().GetMouseWheelDelta();
 
 	Vector2 mousePos = Input::Instance().GetMousePosition();
 	io.MousePos.x = mousePos.x;
@@ -37,10 +37,11 @@ void ImGuiRenderer::NewFrame()
 	ImGui::NewFrame();
 }
 
-void ImGuiRenderer::InitializeImGui()
+void ImGuiRenderer::InitializeImGui(Graphics* pGraphics)
 {
 	ImGui::CreateContext();
 	ImGuiIO& io = ImGui::GetIO();
+
 	ImFontConfig fontConfig;
 	fontConfig.OversampleH = 2;
 	fontConfig.OversampleV = 2;
@@ -49,10 +50,10 @@ void ImGuiRenderer::InitializeImGui()
 	unsigned char* pPixels;
 	int width, height;
 	io.Fonts->GetTexDataAsRGBA32(&pPixels, &width, &height);
-	m_pFontTexture = std::make_unique<Texture>(m_pGraphics, "ImGui Font");
+	m_pFontTexture = std::make_unique<Texture>(pGraphics, "ImGui Font");
 	m_pFontTexture->Create(TextureDesc::Create2D(width, height, DXGI_FORMAT_R8G8B8A8_UNORM, TextureFlag::ShaderResource, 1));
 
-	CommandContext* pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+	CommandContext* pContext = pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 	m_pFontTexture->SetData(pContext, pPixels);
 	io.Fonts->TexID = m_pFontTexture.get();
 	pContext->Execute(true);
@@ -111,7 +112,7 @@ void ImGuiRenderer::InitializeImGui()
 	colors[ImGuiCol_ModalWindowDimBg] = ImVec4(0.80f, 0.80f, 0.80f, 0.35f);
 }
 
-void ImGuiRenderer::CreatePipeline()
+void ImGuiRenderer::CreatePipeline(Graphics* pGraphics)
 {
 	//Shaders
 	Shader vertexShader("ImGui.hlsl", Shader::Type::Vertex, "VSMain");
@@ -119,7 +120,7 @@ void ImGuiRenderer::CreatePipeline()
 
 	//Root signature
 	m_pRootSignature = std::make_unique<RootSignature>();
-	m_pRootSignature->FinalizeFromShader("ImGui", vertexShader, m_pGraphics->GetDevice());
+	m_pRootSignature->FinalizeFromShader("ImGui", vertexShader, pGraphics->GetDevice());
 	//Input layout
 	std::vector<D3D12_INPUT_ELEMENT_DESC> elementDesc = {
 		{ "POSITION", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
@@ -137,7 +138,7 @@ void ImGuiRenderer::CreatePipeline()
 	m_pPipelineState->SetRootSignature(m_pRootSignature->GetRootSignature());
 	m_pPipelineState->SetInputLayout(elementDesc.data(), (uint32)elementDesc.size());
 	m_pPipelineState->SetRenderTargetFormat(DXGI_FORMAT_R8G8B8A8_UNORM, Graphics::DEPTH_STENCIL_FORMAT, 1);
-	m_pPipelineState->Finalize("ImGui Pipeline", m_pGraphics->GetDevice());
+	m_pPipelineState->Finalize("ImGui Pipeline", pGraphics->GetDevice());
 }
 
 void ImGuiRenderer::Render(RGGraph& graph, Texture* pRenderTarget)

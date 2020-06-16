@@ -136,6 +136,12 @@ private:
 			}
 			return 0;
 		}
+		case WM_MOUSEWHEEL:
+		{
+			float mouseWheel = (float)GET_WHEEL_DELTA_WPARAM(wParam) / WHEEL_DELTA;
+			Input::Instance().UpdateMouseWheel(mouseWheel);
+			return 0;
+		}
 		case WM_KEYUP:
 		{
 			Input::Instance().UpdateKey((uint32)wParam, false);

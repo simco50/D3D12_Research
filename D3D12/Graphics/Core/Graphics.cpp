@@ -900,7 +900,7 @@ void Graphics::Shutdown()
 
 void Graphics::BeginFrame()
 {
-	m_pImGuiRenderer->NewFrame();
+	m_pImGuiRenderer->NewFrame(m_WindowWidth, m_WindowHeight);
 }
 
 void Graphics::EndFrame(uint64 fenceValue)
