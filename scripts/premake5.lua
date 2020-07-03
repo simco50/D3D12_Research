@@ -3,7 +3,7 @@ require "utility"
 ENGINE_NAME = "D3D12"
 ROOT = "../"
 SOURCE_DIR = ROOT .. ENGINE_NAME .. "/"
-WIN_SDK = "10.0.18362.0"
+WIN_SDK = "10.0.19041.0"
 
 workspace (ENGINE_NAME)
 	basedir (ROOT)
