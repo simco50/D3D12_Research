@@ -49,8 +49,8 @@ void RGPassBuilder::NeverCull()
 	m_Pass.m_NeverCull = true;
 }
 
-RGGraph::RGGraph(Graphics* pGraphics)
-	: m_pGraphics(pGraphics)
+RGGraph::RGGraph(Graphics* pGraphics, uint64 allocatorSize /*= 0xFFFF*/)
+	: m_pGraphics(pGraphics), m_Allocator(allocatorSize)
 {
 	m_ImmediateMode = CommandLine::GetBool("rgimmediate");
 }
@@ -273,12 +273,12 @@ void RGGraph::DestroyData()
 {
 	for (RGPass* pPass : m_RenderPasses)
 	{
-		delete pPass;
+		m_Allocator.Release(pPass);
 	}
 	m_RenderPasses.clear();
 	for (RGResource* pResource : m_Resources)
 	{
-		delete pResource;
+		m_Allocator.Release(pResource);
 	}
 	m_Resources.clear();
 	m_ResourceNodes.clear();
