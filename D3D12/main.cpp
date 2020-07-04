@@ -24,7 +24,7 @@ public:
 		m_pGraphics = std::make_unique<Graphics>(m_DisplayWidth, m_DisplayHeight, gMsaaSampleCount);
 		m_pGraphics->Initialize(m_Window);
 
-		GameTimer::Reset();
+		Time::Reset();
 		//Game loop
 		MSG msg = {};
 		while (msg.message != WM_QUIT)
@@ -36,7 +36,7 @@ public:
 			}
 			else
 			{
-				GameTimer::Tick();
+				Time::Tick();
 				m_pGraphics->Update();
 				Input::Instance().Update();
 			}
@@ -50,11 +50,11 @@ private:
 		m_Pause = paused;
 		if (paused)
 		{
-			GameTimer::Stop();
+			Time::Stop();
 		}
 		else
 		{
-			GameTimer::Start();
+			Time::Start();
 		}
 	}
 

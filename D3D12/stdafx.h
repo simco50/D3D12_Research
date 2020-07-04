@@ -93,7 +93,7 @@ inline int ToWidechar(const char* pStr, wchar_t* pOut, int len)
 
 
 #include "Math/MathTypes.h"
-#include "Core/GameTimer.h"
+#include "Core/Time.h"
 #include "Math/Math.h"
 #include "Core/Console.h"
 #include "Core/StringHash.h"

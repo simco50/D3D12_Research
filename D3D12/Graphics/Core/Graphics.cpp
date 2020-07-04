@@ -739,7 +739,7 @@ void Graphics::Update()
 				Parameters.PixelCount = pToneMapInput->GetWidth() * pToneMapInput->GetHeight();
 				Parameters.MinLogLuminance = g_MinLogLuminance;
 				Parameters.LogLuminanceRange = g_MaxLogLuminance - g_MinLogLuminance;
-				Parameters.TimeDelta = GameTimer::DeltaTime();
+				Parameters.TimeDelta = Time::DeltaTime();
 				Parameters.Tau = g_Tau;
 
 				context.SetComputeDynamicConstantBufferView(0, &Parameters, sizeof(AverageParameters));
@@ -1406,7 +1406,7 @@ void Graphics::InitializeAssets()
 
 void Graphics::UpdateImGui()
 {
-	m_FrameTimes[m_Frame % m_FrameTimes.size()] = GameTimer::DeltaTime();
+	m_FrameTimes[m_Frame % m_FrameTimes.size()] = Time::DeltaTime();
 
 	if(m_pVisualizeTexture)
 	{
@@ -1427,7 +1427,7 @@ void Graphics::UpdateImGui()
 	ImGui::SetNextWindowPos(ImVec2(0, 0), 0, ImVec2(0, 0));
 	ImGui::SetNextWindowSize(ImVec2(300, (float)m_WindowHeight));
 	ImGui::Begin("GPU Stats", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
-	ImGui::Text("MS: %4.2f", GameTimer::DeltaTime() * 1000.0f);
+	ImGui::Text("MS: %4.2f", Time::DeltaTime() * 1000.0f);
 	ImGui::SameLine(100.0f);
 	ImGui::Text("%d x %d", m_WindowWidth, m_WindowHeight);
 	ImGui::SameLine(180.0f);

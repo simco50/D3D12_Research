@@ -150,7 +150,7 @@ void GpuParticles::Simulate(CommandContext& context, Texture* pResolvedDepth, co
 	}
 
 	static float time = 0;
-	time += GameTimer::DeltaTime();
+	time += Time::DeltaTime();
 	if (time > g_LifeTime)
 	{
 		time = 0;
@@ -245,7 +245,7 @@ void GpuParticles::Simulate(CommandContext& context, Texture* pResolvedDepth, co
 		parameters.DimensionsInv.x = 1.0f / pResolvedDepth->GetWidth();
 		parameters.DimensionsInv.y = 1.0f / pResolvedDepth->GetHeight();
 		parameters.ViewProjectionInv = camera.GetProjectionInverse() * camera.GetViewInverse();
-		parameters.DeltaTime = GameTimer::DeltaTime();
+		parameters.DeltaTime = Time::DeltaTime();
 		parameters.ParticleLifeTime = g_LifeTime;
 		parameters.ViewProjection = camera.GetViewProjection();
 		parameters.Near = camera.GetNear();
