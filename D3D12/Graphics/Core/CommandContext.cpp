@@ -140,7 +140,7 @@ void CommandContext::FlushResourceBarriers()
 	m_BarrierBatcher.Flush(m_pCommandList);
 }
 
-void CommandContext::CopyResource(GraphicsResource* pSource, GraphicsResource* pTarget)
+void CommandContext::CopyTexture(GraphicsResource* pSource, GraphicsResource* pTarget)
 {
 	check(pSource);
 	check(pTarget);
@@ -151,6 +151,33 @@ void CommandContext::CopyResource(GraphicsResource* pSource, GraphicsResource* p
 	m_pCommandList->CopyResource(pTarget->GetResource(), pSource->GetResource());
 	InsertResourceBarrier(pSource, sourceState);
 	InsertResourceBarrier(pTarget, targetState);
+}
+
+void CommandContext::CopyTexture(Texture* pSource, Buffer* pDestination, const D3D12_BOX& sourceRegion, int sourceSubregion /*= 0*/, int destinationOffset /*= 0*/)
+{
+	D3D12_PLACED_SUBRESOURCE_FOOTPRINT bufferFootprint = {};
+	bufferFootprint.Footprint.Width = (uint32)pDestination->GetSize();
+	bufferFootprint.Footprint.Height = 1;
+	bufferFootprint.Footprint.Depth = 1;
+	bufferFootprint.Footprint.RowPitch = Math::AlignUp<uint32>((uint32)pDestination->GetSize(), D3D12_TEXTURE_DATA_PITCH_ALIGNMENT);
+	bufferFootprint.Footprint.Format = pDestination->GetDesc().Format;
+	bufferFootprint.Offset = 0;
+
+	CD3DX12_TEXTURE_COPY_LOCATION srcLocation(pSource->GetResource(), sourceSubregion);
+	CD3DX12_TEXTURE_COPY_LOCATION dstLocation(pDestination->GetResource(), bufferFootprint);
+	m_pCommandList->CopyTextureRegion(&dstLocation, destinationOffset, 0, 0, &srcLocation, &sourceRegion);
+}
+
+void CommandContext::CopyTexture(Texture* pSource, Texture* pDestination, const D3D12_BOX& sourceRegion, const D3D12_BOX& destinationRegion, int sourceSubregion /*= 0*/, int destinationSubregion /*= 0*/)
+{
+	CD3DX12_TEXTURE_COPY_LOCATION srcLocation(pSource->GetResource(), sourceSubregion);
+	CD3DX12_TEXTURE_COPY_LOCATION dstLocation(pDestination->GetResource(), destinationSubregion);
+	m_pCommandList->CopyTextureRegion(&dstLocation, destinationRegion.left, destinationRegion.top, destinationRegion.front, &srcLocation, &sourceRegion);
+}
+
+void CommandContext::CopyBuffer(Buffer* pSource, Buffer* pDestination, uint32 size, uint32 sourceOffset, uint32 destinationOffset)
+{
+	m_pCommandList->CopyBufferRegion(pDestination->GetResource(), destinationOffset, pSource->GetResource(), sourceOffset, size);
 }
 
 void CommandContext::InitializeBuffer(Buffer* pResource, const void* pData, uint64 dataSize, uint64 offset)
@@ -494,7 +521,7 @@ void CommandContext::EndRenderPass()
 				else
 				{
 					FlushResourceBarriers();
-					CopyResource(data.Target, data.ResolveTarget);
+					CopyTexture(data.Target, data.ResolveTarget);
 					FlushResourceBarriers();
 				}
 			}

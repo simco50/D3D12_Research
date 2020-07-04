@@ -358,7 +358,7 @@ void Graphics::Update()
 
 			DynamicAllocation allocation = renderContext.AllocateTransientMemory(m_Lights.size() * sizeof(Light));
 			memcpy(allocation.pMappedMemory, m_Lights.data(), m_Lights.size() * sizeof(Light));
-			renderContext.GetCommandList()->CopyBufferRegion(m_pLightBuffer->GetResource(), 0, allocation.pBackingResource->GetResource(), allocation.Offset, m_pLightBuffer->GetSize());
+			renderContext.CopyBuffer(allocation.pBackingResource, m_pLightBuffer.get(), (uint32)m_pLightBuffer->GetSize(), (uint32)allocation.Offset, 0);
 		});
 
 	//DEPTH PREPASS
@@ -493,17 +493,7 @@ void Graphics::Update()
 					renderContext.InsertResourceBarrier(m_ReductionTargets.back().get(), D3D12_RESOURCE_STATE_COPY_SOURCE);
 					renderContext.FlushResourceBarriers();
 
-					D3D12_PLACED_SUBRESOURCE_FOOTPRINT bufferFootprint = {};
-					bufferFootprint.Footprint.Width = 1;
-					bufferFootprint.Footprint.Height = 1;
-					bufferFootprint.Footprint.Depth = 1;
-					bufferFootprint.Footprint.RowPitch = Math::AlignUp<int>(sizeof(Vector2), D3D12_TEXTURE_DATA_PITCH_ALIGNMENT);
-					bufferFootprint.Footprint.Format = DXGI_FORMAT_R32G32_FLOAT;
-					bufferFootprint.Offset = 0;
-
-					CD3DX12_TEXTURE_COPY_LOCATION srcLocation(m_ReductionTargets.back()->GetResource(), 0);
-					CD3DX12_TEXTURE_COPY_LOCATION dstLocation(m_ReductionReadbackTargets[m_Frame % FRAME_COUNT]->GetResource(), bufferFootprint);
-					renderContext.GetCommandList()->CopyTextureRegion(&dstLocation, 0, 0, 0, &srcLocation, nullptr);
+					renderContext.CopyTexture(m_ReductionTargets.back().get(), m_ReductionReadbackTargets[m_Frame % FRAME_COUNT].get(), CD3DX12_BOX(0, 1));
 				});
 		}
 
@@ -835,7 +825,7 @@ void Graphics::Update()
 	RGPassBuilder temp = graph.AddPass("Temp Barriers");
 	temp.Bind([=](CommandContext& context, const RGPassResources& resources)
 		{
-			context.CopyResource(m_pTonemapTarget.get(), GetCurrentBackbuffer());
+			context.CopyTexture(m_pTonemapTarget.get(), GetCurrentBackbuffer());
 			context.InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RENDER_TARGET);
 			context.InsertResourceBarrier(GetCurrentBackbuffer(), D3D12_RESOURCE_STATE_PRESENT);
 		});
@@ -1176,7 +1166,7 @@ void Graphics::OnResize(int width, int height)
 	for (int i = 0; i < FRAME_COUNT; ++i)
 	{
 		std::unique_ptr<Buffer> pBuffer = std::make_unique<Buffer>(this);
-		pBuffer->Create(BufferDesc::CreateStructured(2, sizeof(float), BufferFlag::Readback));
+		pBuffer->Create(BufferDesc::CreateTyped(1, DXGI_FORMAT_R32G32_FLOAT, BufferFlag::Readback));
 		m_ReductionReadbackTargets.push_back(std::move(pBuffer));
 	}
 }

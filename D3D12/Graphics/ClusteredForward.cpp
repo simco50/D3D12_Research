@@ -340,8 +340,8 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
 			{
 				if (m_DidCopyDebugClusterData == false)
 				{
-					context.CopyResource(m_pCompactedClusters.get(), m_pDebugCompactedClusters.get());
-					context.CopyResource(m_pLightGrid.get(), m_pDebugLightGrid.get());
+					context.CopyTexture(m_pCompactedClusters.get(), m_pDebugCompactedClusters.get());
+					context.CopyTexture(m_pLightGrid.get(), m_pDebugLightGrid.get());
 					m_DebugClustersViewMatrix = resources.pCamera->GetView();
 					m_DebugClustersViewMatrix.Invert(m_DebugClustersViewMatrix);
 					m_DidCopyDebugClusterData = true;

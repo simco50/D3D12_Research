@@ -203,6 +203,8 @@ namespace D3D
 			return (unsigned)(((width + 3) >> 2) * 16);
 		case DXGI_FORMAT_R32G32B32_FLOAT:
 			return width * 3 * sizeof(float);
+		case DXGI_FORMAT_R32G32_FLOAT:
+			return width * 2 * sizeof(float);
 		default:
 			noEntry();
 			return 0;
