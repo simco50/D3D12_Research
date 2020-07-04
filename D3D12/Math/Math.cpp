@@ -1,5 +1,5 @@
 #include "stdafx.h"
-#include "MathHelp.h"
+#include "Math.h"
 
 namespace Math
 {

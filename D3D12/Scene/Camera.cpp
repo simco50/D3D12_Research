@@ -6,11 +6,13 @@
 void Camera::SetPosition(const Vector3& position)
 {
 	m_Position = position;
+	OnDirty();
 }
 
 void Camera::SetRotation(const Quaternion& rotation)
 {
 	m_Rotation = rotation;
+	OnDirty();
 }
 
 void Camera::SetFoV(float fov)

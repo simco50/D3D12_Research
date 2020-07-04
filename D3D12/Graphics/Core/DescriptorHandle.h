@@ -10,9 +10,8 @@ public:
 	}
 
 	DescriptorHandle(D3D12_CPU_DESCRIPTOR_HANDLE CpuHandle)
-		: m_CpuHandle(CpuHandle)
+		: m_CpuHandle(CpuHandle), m_GpuHandle({InvalidHandle})
 	{
-		m_GpuHandle.ptr = InvalidHandle;
 	}
 
 	DescriptorHandle(D3D12_CPU_DESCRIPTOR_HANDLE CpuHandle, D3D12_GPU_DESCRIPTOR_HANDLE GpuHandle)

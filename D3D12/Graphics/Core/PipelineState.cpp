@@ -2,6 +2,162 @@
 #include "PipelineState.h"
 #include "Shader.h"
 
+StateObjectDesc::StateObjectDesc(D3D12_STATE_OBJECT_TYPE type /*= D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE*/)
+	: m_ScratchAllocator(0xFFFF), m_StateObjectAllocator(0xFF), m_Type(type)
+{
+
+}
+
+uint32 StateObjectDesc::AddLibrary(const void* pByteCode, uint32 byteCodeLength, const std::vector<std::string>& exports /*= {}*/)
+{
+	D3D12_DXIL_LIBRARY_DESC* pDesc = m_ScratchAllocator.Allocate<D3D12_DXIL_LIBRARY_DESC>();
+	pDesc->DXILLibrary.BytecodeLength = byteCodeLength;
+	pDesc->DXILLibrary.pShaderBytecode = pByteCode;
+	if (exports.size())
+	{
+		D3D12_EXPORT_DESC* pExports = m_ScratchAllocator.Allocate<D3D12_EXPORT_DESC>((uint32)exports.size());
+		D3D12_EXPORT_DESC* pCurrentExport = pExports;
+		for (const std::string& exportName : exports)
+		{
+			uint32 len = (uint32)exportName.length();
+			wchar_t* pNameData = m_ScratchAllocator.Allocate<wchar_t>(len + 1);
+			MultiByteToWideChar(0, 0, exportName.c_str(), len, pNameData, len);
+			pCurrentExport->ExportToRename = pNameData;
+			pCurrentExport->Name = pNameData;
+			pCurrentExport->Flags = D3D12_EXPORT_FLAG_NONE;
+			pCurrentExport++;
+		}
+		pDesc->NumExports = (uint32)exports.size();
+		pDesc->pExports = pExports;
+	}
+	return AddStateObject(pDesc, D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY);
+}
+
+uint32 StateObjectDesc::AddHitGroup(const char* pHitGroupExport, const char* pClosestHitShaderImport /*= nullptr*/, const char* pAnyHitShaderImport /*= nullptr*/, const char* pIntersectionShaderImport /*= nullptr*/)
+{
+	check(pHitGroupExport);
+	D3D12_HIT_GROUP_DESC* pDesc = m_ScratchAllocator.Allocate<D3D12_HIT_GROUP_DESC>();
+	{
+		int len = (int)strlen(pHitGroupExport);
+		wchar_t* pNameData = m_ScratchAllocator.Allocate<wchar_t>(len + 1);
+		MultiByteToWideChar(0, 0, pHitGroupExport, len, pNameData, len);
+		pDesc->HitGroupExport = pNameData;
+	}
+	if (pClosestHitShaderImport)
+	{
+		uint32 len = (uint32)strlen(pClosestHitShaderImport);
+		wchar_t* pNameData = m_ScratchAllocator.Allocate<wchar_t>(len + 1);
+		MultiByteToWideChar(0, 0, pClosestHitShaderImport, len, pNameData, len);
+		pDesc->ClosestHitShaderImport = pNameData;
+	}
+	if (pAnyHitShaderImport)
+	{
+		uint32 len = (uint32)strlen(pAnyHitShaderImport);
+		wchar_t* pNameData = m_ScratchAllocator.Allocate<wchar_t>(len + 1);
+		MultiByteToWideChar(0, 0, pAnyHitShaderImport, len, pNameData, len);
+		pDesc->AnyHitShaderImport = pNameData;
+	}
+	if (pIntersectionShaderImport)
+	{
+		uint32 len = (uint32)strlen(pIntersectionShaderImport);
+		wchar_t* pNameData = m_ScratchAllocator.Allocate<wchar_t>(len + 1);
+		MultiByteToWideChar(0, 0, pIntersectionShaderImport, len, pNameData, len);
+		pDesc->HitGroupExport = pNameData;
+	}
+	pDesc->Type = pIntersectionShaderImport ? D3D12_HIT_GROUP_TYPE_PROCEDURAL_PRIMITIVE : D3D12_HIT_GROUP_TYPE_TRIANGLES;
+	return AddStateObject(pDesc, D3D12_STATE_SUBOBJECT_TYPE_HIT_GROUP);
+}
+
+uint32 StateObjectDesc::AddStateAssociation(uint32 index, const std::vector<std::string>& exports)
+{
+	check(exports.size());
+	D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION* pAssociation = m_ScratchAllocator.Allocate<D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION>();
+	pAssociation->NumExports = (uint32)exports.size();
+	pAssociation->pSubobjectToAssociate = GetSubobject(index);
+	const wchar_t** pExportList = m_ScratchAllocator.Allocate<const wchar_t*>(pAssociation->NumExports);
+	pAssociation->pExports = pExportList;
+	for (size_t i = 0; i < exports.size(); ++i)
+	{
+		uint32 len = (uint32)exports[i].length();
+		wchar_t* pNameData = m_ScratchAllocator.Allocate<wchar_t>(len + 1);
+		MultiByteToWideChar(0, 0, exports[i].c_str(), len, pNameData, len);
+		pExportList[i] = pNameData;
+	}
+	return AddStateObject(pAssociation, D3D12_STATE_SUBOBJECT_TYPE_SUBOBJECT_TO_EXPORTS_ASSOCIATION);
+}
+
+uint32 StateObjectDesc::AddCollection(ID3D12StateObject* pStateObject, const std::vector<std::string>& exports /*= {}*/)
+{
+	D3D12_EXISTING_COLLECTION_DESC* pDesc = m_ScratchAllocator.Allocate<D3D12_EXISTING_COLLECTION_DESC>();
+	pDesc->pExistingCollection = pStateObject;
+	if (exports.size())
+	{
+		D3D12_EXPORT_DESC* pExports = m_ScratchAllocator.Allocate<D3D12_EXPORT_DESC>((uint32)exports.size());
+		pDesc->pExports = pExports;
+		for (size_t i = 0; i < exports.size(); ++i)
+		{
+			D3D12_EXPORT_DESC& currentExport = pExports[i];
+			uint32 len = (uint32)exports[i].length();
+			wchar_t* pNameData = m_ScratchAllocator.Allocate<wchar_t>(len + 1);
+			MultiByteToWideChar(0, 0, exports[i].c_str(), len, pNameData, len);
+			currentExport.ExportToRename = pNameData;
+			currentExport.Name = pNameData;
+			currentExport.Flags = D3D12_EXPORT_FLAG_NONE;
+		}
+	}
+	return AddStateObject(pDesc, D3D12_STATE_SUBOBJECT_TYPE_EXISTING_COLLECTION);
+}
+
+uint32 StateObjectDesc::BindLocalRootSignature(const char* pExportName, ID3D12RootSignature* pRootSignature)
+{
+	D3D12_LOCAL_ROOT_SIGNATURE* pRs = m_ScratchAllocator.Allocate<D3D12_LOCAL_ROOT_SIGNATURE>();
+	pRs->pLocalRootSignature = pRootSignature;
+	uint32 rsState = AddStateObject(pRs, D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE);
+	return AddStateAssociation(rsState, { pExportName });
+}
+
+uint32 StateObjectDesc::SetRaytracingShaderConfig(uint32 maxPayloadSize, uint32 maxAttributeSize)
+{
+	D3D12_RAYTRACING_SHADER_CONFIG* pDesc = m_ScratchAllocator.Allocate<D3D12_RAYTRACING_SHADER_CONFIG>();
+	pDesc->MaxPayloadSizeInBytes = maxPayloadSize;
+	pDesc->MaxAttributeSizeInBytes = maxAttributeSize;
+	return AddStateObject(pDesc, D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_SHADER_CONFIG);
+}
+
+uint32 StateObjectDesc::SetRaytracingPipelineConfig(uint32 maxRecursionDepth, D3D12_RAYTRACING_PIPELINE_FLAGS flags)
+{
+	D3D12_RAYTRACING_PIPELINE_CONFIG1* pDesc = m_ScratchAllocator.Allocate<D3D12_RAYTRACING_PIPELINE_CONFIG1>();
+	pDesc->MaxTraceRecursionDepth = maxRecursionDepth;
+	pDesc->Flags = flags;
+	return AddStateObject(pDesc, D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG1);
+}
+
+uint32 StateObjectDesc::SetGlobalRootSignature(ID3D12RootSignature* pRootSignature)
+{
+	D3D12_GLOBAL_ROOT_SIGNATURE* pRs = m_ScratchAllocator.Allocate<D3D12_GLOBAL_ROOT_SIGNATURE>();
+	pRs->pGlobalRootSignature = pRootSignature;
+	return AddStateObject(pRs, D3D12_STATE_SUBOBJECT_TYPE_GLOBAL_ROOT_SIGNATURE);
+}
+
+ComPtr<ID3D12StateObject> StateObjectDesc::Finalize(const char* pName, ID3D12Device5* pDevice) const
+{
+	D3D12_STATE_OBJECT_DESC desc;
+	desc.NumSubobjects = m_SubObjects;
+	desc.Type = m_Type;
+	desc.pSubobjects = (D3D12_STATE_SUBOBJECT*)m_StateObjectAllocator.Data();
+	ComPtr<ID3D12StateObject> pStateObject;
+	VERIFY_HR(pDevice->CreateStateObject(&desc, IID_PPV_ARGS(pStateObject.GetAddressOf())));
+	return pStateObject;
+}
+
+uint32 StateObjectDesc::AddStateObject(void* pDesc, D3D12_STATE_SUBOBJECT_TYPE type)
+{
+	D3D12_STATE_SUBOBJECT* pState = m_StateObjectAllocator.Allocate<D3D12_STATE_SUBOBJECT>();
+	pState->pDesc = pDesc;
+	pState->Type = type;
+	return m_SubObjects++;
+}
+
 PipelineState::PipelineState()
 {
 	m_Desc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
@@ -74,7 +230,7 @@ void PipelineState::SetBlendMode(const BlendMode& blendMode, bool /*alphaToCover
 		desc.DestBlendAlpha = D3D12_BLEND_INV_SRC_ALPHA;
 		desc.BlendOpAlpha = D3D12_BLEND_OP_ADD;
 		break;
-	case BlendMode::And:
+	case BlendMode::Additive:
 		desc.SrcBlend = D3D12_BLEND_SRC_ALPHA;
 		desc.DestBlend = D3D12_BLEND_ONE;
 		desc.BlendOp = D3D12_BLEND_OP_ADD;

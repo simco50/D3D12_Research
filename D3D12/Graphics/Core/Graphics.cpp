@@ -1,6 +1,5 @@
 #include "stdafx.h"
 #include "Graphics.h"
-#include "CommandAllocatorPool.h"
 #include "CommandQueue.h"
 #include "CommandContext.h"
 #include "OfflineDescriptorAllocator.h"
@@ -16,16 +15,16 @@
 #include "ResourceViews.h"
 #include "GraphicsBuffer.h"
 #include "Graphics/Profiler.h"
-#include "Graphics/ClusteredForward.h"
 #include "Graphics/RenderGraph/RenderGraph.h"
 #include "Graphics/RenderGraph/Blackboard.h"
 #include "Graphics/RenderGraph/ResourceAllocator.h"
 #include "Graphics/DebugRenderer.h"
-#include "Graphics/TiledForward.h"
-#include "Graphics/RTAO.h"
-#include "Graphics/SSAO.h"
 #include "Graphics/ImGuiRenderer.h"
-#include "Graphics/GpuParticles.h"
+#include "Graphics/Techniques/ClusteredForward.h"
+#include "Graphics/Techniques/TiledForward.h"
+#include "Graphics/Techniques/RTAO.h"
+#include "Graphics/Techniques/SSAO.h"
+#include "Graphics/Techniques/GpuParticles.h"
 
 #ifdef _DEBUG
 #define D3D_VALIDATION 1

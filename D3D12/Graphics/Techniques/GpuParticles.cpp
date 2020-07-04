@@ -7,12 +7,12 @@
 #include "Graphics/Core/PipelineState.h"
 #include "Graphics/Core/RootSignature.h"
 #include "Graphics/Core/CommandContext.h"
-#include "Profiler.h"
 #include "Graphics/Core/GraphicsResource.h"
-#include "Scene/Camera.h"
 #include "Graphics/Core/Texture.h"
-#include "Core/ResourceViews.h"
-#include "ImGuiRenderer.h"
+#include "Graphics/Core/ResourceViews.h"
+#include "Graphics/Profiler.h"
+#include "Graphics/ImGuiRenderer.h"
+#include "Scene/Camera.h"
 
 static int32 g_EmitCount = 30;
 static float g_LifeTime = 4.0f;
@@ -116,9 +116,7 @@ void GpuParticles::Initialize(Graphics* pGraphics)
 		Shader pixelShader("ParticleRendering.hlsl", ShaderType::Pixel, "PSMain");
 
 		m_pRenderParticlesRS = std::make_unique<RootSignature>();
-		m_pRenderParticlesRS->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
-		m_pRenderParticlesRS->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, D3D12_SHADER_VISIBILITY_VERTEX);
-		m_pRenderParticlesRS->Finalize("Particle Rendering", pGraphics->GetDevice(), D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+		m_pRenderParticlesRS->FinalizeFromShader("Particle Rendering", vertexShader, pGraphics->GetDevice());
 
 		m_pRenderParticlesPS = std::make_unique<PipelineState>();
 		m_pRenderParticlesPS->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());

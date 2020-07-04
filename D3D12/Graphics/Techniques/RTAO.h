@@ -1,5 +1,4 @@
 #pragma once
-#include "RenderGraph/RenderGraph.h"
 class Mesh;
 class Graphics;
 class RootSignature;
@@ -38,8 +37,7 @@ private:
 	std::unique_ptr<Buffer> m_pTLASScratch;
 	std::unique_ptr<Buffer> m_pDescriptorsBuffer;
 
-	ComPtr<ID3D12StateObject> m_pStateObject;
-	ComPtr<ID3D12StateObjectProperties> m_pStateObjectProperties;
+	ComPtr<ID3D12StateObject> m_RtSO;
 
 	std::unique_ptr<RootSignature> m_pRayGenSignature;
 	std::unique_ptr<RootSignature> m_pHitSignature;

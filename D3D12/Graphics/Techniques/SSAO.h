@@ -1,5 +1,4 @@
 #pragma once
-#include "RenderGraph/RenderGraph.h"
 class Mesh;
 class Graphics;
 class RootSignature;

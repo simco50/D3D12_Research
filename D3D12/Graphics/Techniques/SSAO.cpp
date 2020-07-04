@@ -9,6 +9,7 @@
 #include "Graphics/Core/CommandQueue.h"
 #include "Graphics/Core/Texture.h"
 #include "Graphics/Core/ResourceViews.h"
+#include "Graphics/RenderGraph/RenderGraph.h"
 #include "Graphics/Mesh.h"
 #include "Graphics/Light.h"
 #include "Graphics/Profiler.h"

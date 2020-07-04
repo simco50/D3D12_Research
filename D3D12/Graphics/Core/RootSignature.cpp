@@ -87,30 +87,9 @@ void RootSignature::SetDescriptorTableSimple(uint32 rootIndex, uint32 startRegis
 	SetDescriptorTableRange(rootIndex, 0, startRegisterSlot, type, count, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND);
 }
 
-void RootSignature::AddStaticSampler(uint32 shaderRegister, D3D12_SAMPLER_DESC samplerDesc, D3D12_SHADER_VISIBILITY visibility)
+void RootSignature::AddStaticSampler(uint32 shaderRegister, const D3D12_STATIC_SAMPLER_DESC& samplerDesc, D3D12_SHADER_VISIBILITY visibility)
 {
-	D3D12_STATIC_SAMPLER_DESC desc = {};
-	desc.Filter = samplerDesc.Filter;
-	desc.AddressU = samplerDesc.AddressU;
-	desc.AddressV = samplerDesc.AddressV;
-	desc.AddressW = samplerDesc.AddressW;
-	desc.MipLODBias = samplerDesc.MipLODBias;
-	desc.MaxAnisotropy = samplerDesc.MaxAnisotropy;
-	desc.ComparisonFunc = samplerDesc.ComparisonFunc;
-	desc.BorderColor = D3D12_STATIC_BORDER_COLOR_OPAQUE_WHITE;
-	desc.MinLOD = samplerDesc.MinLOD;
-	desc.MaxLOD = samplerDesc.MaxLOD;
-	desc.ShaderRegister = shaderRegister;
-	desc.RegisterSpace = 0;
-	desc.ShaderVisibility = visibility;
-
-	if (desc.AddressU == D3D12_TEXTURE_ADDRESS_MODE_BORDER ||
-		desc.AddressV == D3D12_TEXTURE_ADDRESS_MODE_BORDER ||
-		desc.AddressW == D3D12_TEXTURE_ADDRESS_MODE_BORDER)
-	{
-		desc.BorderColor = samplerDesc.BorderColor[3] * samplerDesc.BorderColor[0] == 1.0f == 0 ? D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK : D3D12_STATIC_BORDER_COLOR_OPAQUE_WHITE;
-	}
-	m_StaticSamplers.push_back(desc);
+	m_StaticSamplers.push_back(samplerDesc);
 }
 
 void RootSignature::Finalize(const char* pName, ID3D12Device* pDevice, D3D12_ROOT_SIGNATURE_FLAGS flags)
@@ -185,9 +164,10 @@ void RootSignature::Finalize(const char* pName, ID3D12Device* pDevice, D3D12_ROO
 			flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
 		}
 
-		//#todo: Tessellation not supported yet
 		flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS;
 		flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS;
+		flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_MESH_SHADER_ROOT_ACCESS;
+		flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_AMPLIFICATION_SHADER_ROOT_ACCESS;
 	}
 
 	constexpr uint32 recommendedDwords = 12;

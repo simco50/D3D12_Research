@@ -75,7 +75,7 @@ inline int ToMultibyte(const wchar_t* pStr, char* pOut, int len)
 inline int ToWidechar(const char* pStr, wchar_t* pOut, int len)
 {
 	size_t converted = 0;
-	mbstowcs_s(&converted, pOut, len, pStr, len);
+	mbstowcs_s(&converted, pOut, len, pStr, len - 1);
 	return (int)converted;
 }
 
@@ -94,7 +94,7 @@ inline int ToWidechar(const char* pStr, wchar_t* pOut, int len)
 
 #include "Math/MathTypes.h"
 #include "Core/GameTimer.h"
-#include "Math/MathHelp.h"
+#include "Math/Math.h"
 #include "Core/Console.h"
 #include "Core/StringHash.h"
 #include "Core/Delegates.h"

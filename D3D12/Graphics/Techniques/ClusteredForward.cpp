@@ -9,12 +9,12 @@
 #include "Graphics/Core/CommandQueue.h"
 #include "Graphics/Core/Texture.h"
 #include "Graphics/Core/ResourceViews.h"
+#include "Graphics/Core/CommandSignature.h"
+#include "Graphics/RenderGraph/RenderGraph.h"
 #include "Graphics/Mesh.h"
 #include "Graphics/Light.h"
 #include "Graphics/Profiler.h"
 #include "Scene/Camera.h"
-#include "RenderGraph/RenderGraph.h"
-#include "Core/CommandSignature.h"
 
 static constexpr int cClusterSize = 64;
 static constexpr int cClusterCountZ = 32;
@@ -535,7 +535,7 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
 		m_pDebugClustersPSO->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
 		m_pDebugClustersPSO->SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, m_pGraphics->GetMultiSampleCount());
 		m_pDebugClustersPSO->SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT);
-		m_pDebugClustersPSO->SetBlendMode(BlendMode::And, false);
+		m_pDebugClustersPSO->SetBlendMode(BlendMode::Additive, false);
 		m_pDebugClustersPSO->Finalize("Debug Clusters PSO", m_pGraphics->GetDevice());
 	}
 }
