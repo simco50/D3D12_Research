@@ -19,15 +19,6 @@ void Camera::SetFoV(float fov)
 	OnDirty();
 }
 
-void Camera::SetViewport(float x, float y, float width, float height)
-{
-	m_Viewport.Left = x;
-	m_Viewport.Top = y;
-	m_Viewport.Right = width + x;
-	m_Viewport.Bottom = height + y;
-	OnDirty();
-}
-
 void Camera::SetClippingPlanes(float nearPlane, float farPlane)
 {
 	m_NearPlane = nearPlane;
@@ -35,15 +26,19 @@ void Camera::SetClippingPlanes(float nearPlane, float farPlane)
 	OnDirty();
 }
 
-void Camera::SetOrthographic(bool orthographic)
+void Camera::SetAspectRatio(float aspectRatio)
 {
-	m_Perspective = !orthographic;
+	m_AspectRatio = aspectRatio;
 	OnDirty();
 }
 
-void Camera::SetOrthographicSize(float size)
+void Camera::SetOrthographic(bool orthographic, float size)
 {
-	m_Size = size;
+	m_Perspective = !orthographic;
+	if (orthographic)
+	{
+		m_OrthographicSize = size;
+	}
 	OnDirty();
 }
 
@@ -108,11 +103,11 @@ void Camera::UpdateMatrices() const
 		m_ViewInverse.Invert(m_View);
 		if (m_Perspective)
 		{
-			m_Projection = Math::CreatePerspectiveMatrix(m_FoV, m_Viewport.GetWidth() / m_Viewport.GetHeight(), m_NearPlane, m_FarPlane);
+			m_Projection = Math::CreatePerspectiveMatrix(m_FoV, m_AspectRatio, m_NearPlane, m_FarPlane);
 		}
 		else
 		{
-			m_Projection = Math::CreateOrthographicMatrix(m_Viewport.GetWidth(), m_Viewport.GetHeight(), m_NearPlane, m_FarPlane);
+			m_Projection = Math::CreateOrthographicMatrix(m_OrthographicSize * m_AspectRatio, m_OrthographicSize, m_NearPlane, m_FarPlane);
 		}
 		m_Projection.Invert(m_ProjectionInverse);
 		m_ViewProjection = m_View * m_Projection;

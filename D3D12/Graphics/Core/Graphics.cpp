@@ -344,100 +344,90 @@ void Graphics::Update()
 
 	uint64 nextFenceValue = 0;
 
-	graph.AddPass("Setup Lights", [&](RGPassBuilder& builder)
+	RGPassBuilder setupLights = graph.AddPass("Setup Lights");
+	Data.DepthStencil = setupLights.Write(Data.DepthStencil);
+	setupLights.Bind([=](CommandContext& renderContext, const RGPassResources& resources)
 		{
-			Data.DepthStencil = builder.Write(Data.DepthStencil);
+			float costheta = cosf(g_SunOrientation);
+			float sintheta = sinf(g_SunOrientation);
+			float cosphi = cosf(g_SunInclination * Math::PIDIV2);
+			float sinphi = sinf(g_SunInclination * Math::PIDIV2);
 
-			return [=](CommandContext& renderContext, const RGPassResources& resources)
-			{
-				float costheta = cosf(g_SunOrientation);
-				float sintheta = sinf(g_SunOrientation);
-				float cosphi = cosf(g_SunInclination * Math::PIDIV2);
-				float sinphi = sinf(g_SunInclination * Math::PIDIV2);
+			m_Lights[0].Direction = -Vector3(costheta * cosphi, sinphi, sintheta * cosphi);
+			m_Lights[0].Colour = Math::EncodeColor(Math::MakeFromColorTemperature(g_SunTemperature));
 
-				m_Lights[0].Direction = -Vector3(costheta * cosphi, sinphi, sintheta * cosphi);
-				m_Lights[0].Colour = Math::EncodeColor(Math::MakeFromColorTemperature(g_SunTemperature));
-
-				DynamicAllocation allocation = renderContext.AllocateTransientMemory(m_Lights.size() * sizeof(Light), m_Lights.data());
-				renderContext.GetCommandList()->CopyBufferRegion(m_pLightBuffer->GetResource(), 0, allocation.pBackingResource->GetResource(), allocation.Offset, m_pLightBuffer->GetSize());
-			};
+			DynamicAllocation allocation = renderContext.AllocateTransientMemory(m_Lights.size() * sizeof(Light));
+			memcpy(allocation.pMappedMemory, m_Lights.data(), m_Lights.size() * sizeof(Light));
+			renderContext.GetCommandList()->CopyBufferRegion(m_pLightBuffer->GetResource(), 0, allocation.pBackingResource->GetResource(), allocation.Offset, m_pLightBuffer->GetSize());
 		});
 
 	//DEPTH PREPASS
 	// - Depth only pass that renders the entire scene
 	// - Optimization that prevents wasteful lighting calculations during the base pass
 	// - Required for light culling
-	graph.AddPass("Depth Prepass", [&](RGPassBuilder& builder)
+	RGPassBuilder prepass = graph.AddPass("Depth Prepass");
+	Data.DepthStencil = prepass.Write(Data.DepthStencil);
+	prepass.Bind([=](CommandContext& renderContext, const RGPassResources& resources)
 		{
-			Data.DepthStencil = builder.Write(Data.DepthStencil);
+			Texture* pDepthStencil = resources.GetTexture(Data.DepthStencil);
+			const TextureDesc& desc = pDepthStencil->GetDesc();
+			renderContext.InsertResourceBarrier(pDepthStencil, D3D12_RESOURCE_STATE_DEPTH_WRITE);
 
-			return [=](CommandContext& renderContext, const RGPassResources& resources)
+			RenderPassInfo info = RenderPassInfo(pDepthStencil, RenderPassAccess::Clear_Store);
+
+			renderContext.BeginRenderPass(info);
+			renderContext.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+			renderContext.SetViewport(FloatRect(0, 0, (float)desc.Width, (float)desc.Height));
+
+			renderContext.SetPipelineState(m_pDepthPrepassPSO.get());
+			renderContext.SetGraphicsRootSignature(m_pDepthPrepassRS.get());
+
+			struct Parameters
 			{
-				Texture* pDepthStencil = resources.GetTexture(Data.DepthStencil);
-				const TextureDesc& desc = pDepthStencil->GetDesc();
-				renderContext.InsertResourceBarrier(pDepthStencil, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+				Matrix WorldViewProj;
+			} constBuffer;
 
-				RenderPassInfo info = RenderPassInfo(pDepthStencil, RenderPassAccess::Clear_Store);
-
-				renderContext.BeginRenderPass(info);
-				renderContext.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-				renderContext.SetViewport(FloatRect(0, 0, (float)desc.Width, (float)desc.Height));
-
-				renderContext.SetPipelineState(m_pDepthPrepassPSO.get());
-				renderContext.SetGraphicsRootSignature(m_pDepthPrepassRS.get());
-
-				struct Parameters
-				{
-					Matrix WorldViewProj;
-				} constBuffer;
-
-				for (const Batch& b : m_OpaqueBatches)
-				{
-					constBuffer.WorldViewProj = b.WorldMatrix * m_pCamera->GetViewProjection();
-					renderContext.SetDynamicConstantBufferView(0, &constBuffer, sizeof(Parameters));
-					b.pMesh->Draw(&renderContext);
-				}
-				renderContext.EndRenderPass();
-			};
+			for (const Batch& b : m_OpaqueBatches)
+			{
+				constBuffer.WorldViewProj = b.WorldMatrix * m_pCamera->GetViewProjection();
+				renderContext.SetDynamicConstantBufferView(0, &constBuffer, sizeof(Parameters));
+				b.pMesh->Draw(&renderContext);
+			}
+			renderContext.EndRenderPass();
 		});
 
 	//[WITH MSAA] DEPTH RESOLVE
 	// - If MSAA is enabled, run a compute shader to resolve the depth buffer
 	if (m_SampleCount > 1)
 	{
-		graph.AddPass("Depth Resolve", [&](RGPassBuilder& builder)
+		RGPassBuilder depthResolve = graph.AddPass("Depth Resolve");
+		Data.DepthStencil = depthResolve.Read(Data.DepthStencil);
+		Data.DepthStencilResolved = depthResolve.Write(Data.DepthStencilResolved);
+		depthResolve.Bind([=](CommandContext& renderContext, const RGPassResources& resources)
 			{
-				Data.DepthStencil = builder.Read(Data.DepthStencil);
-				Data.DepthStencilResolved = builder.Write(Data.DepthStencilResolved);
+				renderContext.InsertResourceBarrier(resources.GetTexture(Data.DepthStencil), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+				renderContext.InsertResourceBarrier(resources.GetTexture(Data.DepthStencilResolved), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-				return [=](CommandContext& renderContext, const RGPassResources& resources)
-				{
-					renderContext.InsertResourceBarrier(resources.GetTexture(Data.DepthStencil), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-					renderContext.InsertResourceBarrier(resources.GetTexture(Data.DepthStencilResolved), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+				renderContext.SetComputeRootSignature(m_pResolveDepthRS.get());
+				renderContext.SetPipelineState(m_pResolveDepthPSO.get());
 
-					renderContext.SetComputeRootSignature(m_pResolveDepthRS.get());
-					renderContext.SetPipelineState(m_pResolveDepthPSO.get());
+				renderContext.SetDynamicDescriptor(0, 0, resources.GetTexture(Data.DepthStencilResolved)->GetUAV());
+				renderContext.SetDynamicDescriptor(1, 0, resources.GetTexture(Data.DepthStencil)->GetSRV());
 
-					renderContext.SetDynamicDescriptor(0, 0, resources.GetTexture(Data.DepthStencilResolved)->GetUAV());
-					renderContext.SetDynamicDescriptor(1, 0, resources.GetTexture(Data.DepthStencil)->GetSRV());
+				int dispatchGroupsX = Math::DivideAndRoundUp(m_WindowWidth, 16);
+				int dispatchGroupsY = Math::DivideAndRoundUp(m_WindowHeight, 16);
+				renderContext.Dispatch(dispatchGroupsX, dispatchGroupsY);
 
-					int dispatchGroupsX = Math::DivideAndRoundUp(m_WindowWidth, 16);
-					int dispatchGroupsY = Math::DivideAndRoundUp(m_WindowHeight, 16);
-					renderContext.Dispatch(dispatchGroupsX, dispatchGroupsY);
-
-					renderContext.InsertResourceBarrier(resources.GetTexture(Data.DepthStencilResolved), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-					renderContext.InsertResourceBarrier(resources.GetTexture(Data.DepthStencil), D3D12_RESOURCE_STATE_DEPTH_READ);
-					renderContext.FlushResourceBarriers();
-				};
+				renderContext.InsertResourceBarrier(resources.GetTexture(Data.DepthStencilResolved), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+				renderContext.InsertResourceBarrier(resources.GetTexture(Data.DepthStencil), D3D12_RESOURCE_STATE_DEPTH_READ);
+				renderContext.FlushResourceBarriers();
 			});
 	}
 
-	graph.AddPass("Simulate Particles", [&](RGPassBuilder& builder)
+	RGPassBuilder simulateParticles = graph.AddPass("Simulate Particles");
+	simulateParticles.Bind([=](CommandContext& context, const RGPassResources& passResources)
 		{
-			return [=](CommandContext& context, const RGPassResources& passResources)
-			{
-				m_pParticles->Simulate(context, GetResolvedDepthStencil(), *m_pCamera);
-			};
+			m_pParticles->Simulate(context, GetResolvedDepthStencil(), *m_pCamera);
 		});
 
 	if (g_ShowRaytraced)
@@ -463,119 +453,114 @@ void Graphics::Update()
 	{
 		if (g_SDSM)
 		{
-			graph.AddPass("Depth Reduce", [&](RGPassBuilder& builder)
+			RGPassBuilder depthReduce = graph.AddPass("Depth Reduce");
+			Data.DepthStencil = depthReduce.Write(Data.DepthStencil);
+			depthReduce.Bind([=](CommandContext& renderContext, const RGPassResources& resources)
 				{
-					Data.DepthStencil = builder.Write(Data.DepthStencil);
+					Texture* pDepthStencil = resources.GetTexture(Data.DepthStencil);
+					renderContext.InsertResourceBarrier(pDepthStencil, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+					renderContext.InsertResourceBarrier(m_ReductionTargets[0].get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-					return [=](CommandContext& renderContext, const RGPassResources& resources)
+					renderContext.SetComputeRootSignature(m_pReduceDepthRS.get());
+					renderContext.SetPipelineState(pDepthStencil->GetDesc().SampleCount > 1 ? m_pPrepareReduceDepthMsaaPSO.get() : m_pPrepareReduceDepthPSO.get());
+
+					struct ShaderParameters
 					{
-						Texture* pDepthStencil = resources.GetTexture(Data.DepthStencil);
-						renderContext.InsertResourceBarrier(pDepthStencil, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-						renderContext.InsertResourceBarrier(m_ReductionTargets[0].get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+						float Near;
+						float Far;
+					} parameters;
+					parameters.Near = m_pCamera->GetNear();
+					parameters.Far = m_pCamera->GetFar();
 
-						renderContext.SetComputeRootSignature(m_pReduceDepthRS.get());
-						renderContext.SetPipelineState(pDepthStencil->GetDesc().SampleCount > 1 ? m_pPrepareReduceDepthMsaaPSO.get() : m_pPrepareReduceDepthPSO.get());
+					renderContext.SetComputeDynamicConstantBufferView(0, &parameters, sizeof(ShaderParameters));
+					renderContext.SetDynamicDescriptor(1, 0, m_ReductionTargets[0]->GetUAV());
+					renderContext.SetDynamicDescriptor(2, 0, pDepthStencil->GetSRV());
 
-						struct ShaderParameters
-						{
-							float Near;
-							float Far;
-						} parameters;
-						parameters.Near = m_pCamera->GetNear();
-						parameters.Far = m_pCamera->GetFar();
+					renderContext.Dispatch(m_ReductionTargets[0]->GetWidth(), m_ReductionTargets[0]->GetHeight());
 
-						renderContext.SetComputeDynamicConstantBufferView(0, &parameters, sizeof(ShaderParameters));
-						renderContext.SetDynamicDescriptor(1, 0, m_ReductionTargets[0]->GetUAV());
-						renderContext.SetDynamicDescriptor(2, 0, pDepthStencil->GetSRV());
+					renderContext.SetPipelineState(m_pReduceDepthPSO.get());
+					for (size_t i = 1; i < m_ReductionTargets.size(); ++i)
+					{
+						renderContext.InsertResourceBarrier(m_ReductionTargets[i - 1].get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+						renderContext.InsertResourceBarrier(m_ReductionTargets[i].get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-						renderContext.Dispatch(m_ReductionTargets[0]->GetWidth(), m_ReductionTargets[0]->GetHeight());
+						renderContext.SetDynamicDescriptor(1, 0, m_ReductionTargets[i]->GetUAV());
+						renderContext.SetDynamicDescriptor(2, 0, m_ReductionTargets[i - 1]->GetSRV());
 
-						renderContext.SetPipelineState(m_pReduceDepthPSO.get());
-						for (size_t i = 1; i < m_ReductionTargets.size(); ++i)
-						{
-							renderContext.InsertResourceBarrier(m_ReductionTargets[i - 1].get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-							renderContext.InsertResourceBarrier(m_ReductionTargets[i].get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+						renderContext.Dispatch(m_ReductionTargets[i]->GetWidth(), m_ReductionTargets[i]->GetHeight());
+					}
 
-							renderContext.SetDynamicDescriptor(1, 0, m_ReductionTargets[i]->GetUAV());
-							renderContext.SetDynamicDescriptor(2, 0, m_ReductionTargets[i - 1]->GetSRV());
+					renderContext.InsertResourceBarrier(m_ReductionTargets.back().get(), D3D12_RESOURCE_STATE_COPY_SOURCE);
+					renderContext.FlushResourceBarriers();
 
-							renderContext.Dispatch(m_ReductionTargets[i]->GetWidth(), m_ReductionTargets[i]->GetHeight());
-						}
+					D3D12_PLACED_SUBRESOURCE_FOOTPRINT bufferFootprint = {};
+					bufferFootprint.Footprint.Width = 1;
+					bufferFootprint.Footprint.Height = 1;
+					bufferFootprint.Footprint.Depth = 1;
+					bufferFootprint.Footprint.RowPitch = Math::AlignUp<int>(sizeof(Vector2), D3D12_TEXTURE_DATA_PITCH_ALIGNMENT);
+					bufferFootprint.Footprint.Format = DXGI_FORMAT_R32G32_FLOAT;
+					bufferFootprint.Offset = 0;
 
-						renderContext.InsertResourceBarrier(m_ReductionTargets.back().get(), D3D12_RESOURCE_STATE_COPY_SOURCE);
-						renderContext.FlushResourceBarriers();
-
-						D3D12_PLACED_SUBRESOURCE_FOOTPRINT bufferFootprint = {};
-						bufferFootprint.Footprint.Width = 1;
-						bufferFootprint.Footprint.Height = 1;
-						bufferFootprint.Footprint.Depth = 1;
-						bufferFootprint.Footprint.RowPitch = Math::AlignUp<int>(sizeof(Vector2), D3D12_TEXTURE_DATA_PITCH_ALIGNMENT);
-						bufferFootprint.Footprint.Format = DXGI_FORMAT_R32G32_FLOAT;
-						bufferFootprint.Offset = 0;
-
-						CD3DX12_TEXTURE_COPY_LOCATION srcLocation(m_ReductionTargets.back()->GetResource(), 0);
-						CD3DX12_TEXTURE_COPY_LOCATION dstLocation(m_ReductionReadbackTargets[m_Frame % FRAME_COUNT]->GetResource(), bufferFootprint);
-						renderContext.GetCommandList()->CopyTextureRegion(&dstLocation, 0, 0, 0, &srcLocation, nullptr);
-					};
+					CD3DX12_TEXTURE_COPY_LOCATION srcLocation(m_ReductionTargets.back()->GetResource(), 0);
+					CD3DX12_TEXTURE_COPY_LOCATION dstLocation(m_ReductionReadbackTargets[m_Frame % FRAME_COUNT]->GetResource(), bufferFootprint);
+					renderContext.GetCommandList()->CopyTextureRegion(&dstLocation, 0, 0, 0, &srcLocation, nullptr);
 				});
 		}
 
-		graph.AddPass("Shadow Mapping", [&](RGPassBuilder& builder)
+		RGPassBuilder shadows = graph.AddPass("Shadow Mapping");
+		shadows.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
-				return [=](CommandContext& context, const RGPassResources& resources)
+				context.InsertResourceBarrier(m_pShadowMap.get(), D3D12_RESOURCE_STATE_DEPTH_WRITE);
+
+				context.BeginRenderPass(RenderPassInfo(m_pShadowMap.get(), RenderPassAccess::Clear_Store));
+				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+				context.SetGraphicsRootSignature(m_pShadowsRS.get());
+
+				for (int i = 0; i < m_ShadowCasters; ++i)
 				{
-					context.InsertResourceBarrier(m_pShadowMap.get(), D3D12_RESOURCE_STATE_DEPTH_WRITE);
+					GPU_PROFILE_SCOPE("Light View", &context);
+					const Vector4& shadowOffset = lightData.ShadowMapOffsets[i];
+					FloatRect viewport;
+					viewport.Left = shadowOffset.x * (float)m_pShadowMap->GetWidth();
+					viewport.Top = shadowOffset.y * (float)m_pShadowMap->GetHeight();
+					viewport.Right = viewport.Left + shadowOffset.z * (float)m_pShadowMap->GetWidth();
+					viewport.Bottom = viewport.Top + shadowOffset.w * (float)m_pShadowMap->GetHeight();
+					context.SetViewport(viewport);
 
-					context.BeginRenderPass(RenderPassInfo(m_pShadowMap.get(), RenderPassAccess::Clear_Store));
-					context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-					context.SetGraphicsRootSignature(m_pShadowsRS.get());
-
-					for (int i = 0; i < m_ShadowCasters; ++i)
+					struct PerObjectData
 					{
-						GPU_PROFILE_SCOPE("Light View", &context);
-						const Vector4& shadowOffset = lightData.ShadowMapOffsets[i];
-						FloatRect viewport;
-						viewport.Left = shadowOffset.x * (float)m_pShadowMap->GetWidth();
-						viewport.Top = shadowOffset.y * (float)m_pShadowMap->GetHeight();
-						viewport.Right = viewport.Left + shadowOffset.z * (float)m_pShadowMap->GetWidth();
-						viewport.Bottom = viewport.Top + shadowOffset.w * (float)m_pShadowMap->GetHeight();
-						context.SetViewport(viewport);
+						Matrix WorldViewProjection;
+					} ObjectData{};
 
-						struct PerObjectData
+					//Opaque
+					{
+						GPU_PROFILE_SCOPE("Opaque", &context);
+						context.SetPipelineState(m_pShadowsOpaquePSO.get());
+
+						for (const Batch& b : m_OpaqueBatches)
 						{
-							Matrix WorldViewProjection;
-						} ObjectData{};
-
-						//Opaque
-						{
-							GPU_PROFILE_SCOPE("Opaque", &context);
-							context.SetPipelineState(m_pShadowsOpaquePSO.get());
-
-							for (const Batch& b : m_OpaqueBatches)
-							{
-								ObjectData.WorldViewProjection = b.WorldMatrix * lightData.LightViewProjections[i];
-								context.SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
-								b.pMesh->Draw(&context);
-							}
-						}
-						//Transparant
-						{
-							GPU_PROFILE_SCOPE("Transparant", &context);
-							context.SetPipelineState(m_pShadowsAlphaPSO.get());
-
+							ObjectData.WorldViewProjection = b.WorldMatrix * lightData.LightViewProjections[i];
 							context.SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
-							for (const Batch& b : m_TransparantBatches)
-							{
-								ObjectData.WorldViewProjection = b.WorldMatrix * lightData.LightViewProjections[i];
-								context.SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
-								context.SetDynamicDescriptor(1, 0, b.pMaterial->pDiffuseTexture->GetSRV());
-								b.pMesh->Draw(&context);
-							}
+							b.pMesh->Draw(&context);
 						}
 					}
-					context.EndRenderPass();
-				};
+					//Transparant
+					{
+						GPU_PROFILE_SCOPE("Transparant", &context);
+						context.SetPipelineState(m_pShadowsAlphaPSO.get());
+
+						context.SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
+						for (const Batch& b : m_TransparantBatches)
+						{
+							ObjectData.WorldViewProjection = b.WorldMatrix * lightData.LightViewProjections[i];
+							context.SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
+							context.SetDynamicDescriptor(1, 0, b.pMaterial->pDiffuseTexture->GetSRV());
+							b.pMesh->Draw(&context);
+						}
+					}
+				}
+				context.EndRenderPass();
 			});
 	}
 
@@ -608,55 +593,50 @@ void Graphics::Update()
 		m_pClusteredForward->Execute(graph, resources);
 	}
 
-	graph.AddPass("Draw Particles", [&](RGPassBuilder& builder)
+	RGPassBuilder drawParticles = graph.AddPass("Draw Particles");
+	drawParticles.Bind([=](CommandContext& context, const RGPassResources& passResources)
 		{
-			return [=](CommandContext& context, const RGPassResources& passResources)
-			{
-				m_pParticles->Render(context, GetCurrentRenderTarget(), GetDepthStencil(), *m_pCamera);
-			};
+			m_pParticles->Render(context, GetCurrentRenderTarget(), GetDepthStencil(), *m_pCamera);
 		});
 
-	graph.AddPass("Sky", [&](RGPassBuilder& builder)
+	RGPassBuilder sky = graph.AddPass("Sky");
+	Data.DepthStencil = sky.Read(Data.DepthStencil);
+	sky.Bind([=](CommandContext& renderContext, const RGPassResources& resources)
 		{
-			Data.DepthStencil = builder.Read(Data.DepthStencil);
+			Texture* pDepthStencil = resources.GetTexture(Data.DepthStencil);
+			const TextureDesc& desc = pDepthStencil->GetDesc();
+			renderContext.InsertResourceBarrier(pDepthStencil, D3D12_RESOURCE_STATE_DEPTH_READ);
 
-			return [=](CommandContext& renderContext, const RGPassResources& resources)
+			RenderPassInfo info = RenderPassInfo(GetCurrentRenderTarget(), RenderPassAccess::Load_Store, pDepthStencil, RenderPassAccess::Load_DontCare);
+
+			renderContext.BeginRenderPass(info);
+			renderContext.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+			renderContext.SetViewport(FloatRect(0, 0, (float)desc.Width, (float)desc.Height));
+
+			renderContext.SetPipelineState(m_pSkyboxPSO.get());
+			renderContext.SetGraphicsRootSignature(m_pSkyboxRS.get());
+
+			struct Parameters
 			{
-				Texture* pDepthStencil = resources.GetTexture(Data.DepthStencil);
-				const TextureDesc& desc = pDepthStencil->GetDesc();
-				renderContext.InsertResourceBarrier(pDepthStencil, D3D12_RESOURCE_STATE_DEPTH_READ);
+				Matrix View;
+				Matrix Projection;
+				Vector3 Bias;
+				float padding1;
+				Vector3 SunDirection;
+				float padding2;
+			} constBuffer;
 
-				RenderPassInfo info = RenderPassInfo(GetCurrentRenderTarget(), RenderPassAccess::Load_Store, pDepthStencil, RenderPassAccess::Load_DontCare);
+			constBuffer.View = m_pCamera->GetView();
+			constBuffer.Projection = m_pCamera->GetProjection();
+			constBuffer.Bias = Vector3::One;
+			constBuffer.SunDirection = -m_Lights[0].Direction;
+			constBuffer.SunDirection.Normalize();
 
-				renderContext.BeginRenderPass(info);
-				renderContext.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-				renderContext.SetViewport(FloatRect(0, 0, (float)desc.Width, (float)desc.Height));
+			renderContext.SetDynamicConstantBufferView(0, &constBuffer, sizeof(Parameters));
 
-				renderContext.SetPipelineState(m_pSkyboxPSO.get());
-				renderContext.SetGraphicsRootSignature(m_pSkyboxRS.get());
+			renderContext.Draw(0, 36);
 
-				struct Parameters
-				{
-					Matrix View;
-					Matrix Projection;
-					Vector3 Bias;
-					float padding1;
-					Vector3 SunDirection;
-					float padding2;
-				} constBuffer;
-
-				constBuffer.View = m_pCamera->GetView();
-				constBuffer.Projection = m_pCamera->GetProjection();
-				constBuffer.Bias = Vector3::One;
-				constBuffer.SunDirection = -m_Lights[0].Direction;
-				constBuffer.SunDirection.Normalize();
-
-				renderContext.SetDynamicConstantBufferView(0, &constBuffer, sizeof(Parameters));
-
-				renderContext.Draw(0, 36);
-
-				renderContext.EndRenderPass();
-			};
+			renderContext.EndRenderPass();
 		});
 
 	DebugRenderer::Get()->Render(graph, m_pCamera->GetViewProjection(), GetCurrentRenderTarget(), GetDepthStencil());
@@ -666,14 +646,12 @@ void Graphics::Update()
 	//	Luckily, there's a method that does it for us!
 	if (m_SampleCount > 1)
 	{
-		graph.AddPass("Resolve", [&](RGPassBuilder& builder)
+		RGPassBuilder resolve = graph.AddPass("Resolve");
+		resolve.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
-				return [=](CommandContext& context, const RGPassResources& resources)
-				{
-					context.InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RESOLVE_SOURCE);
-					context.InsertResourceBarrier(m_pHDRRenderTarget.get(), D3D12_RESOURCE_STATE_RESOLVE_DEST);
-					context.ResolveResource(GetCurrentRenderTarget(), 0, m_pHDRRenderTarget.get(), 0, RENDER_TARGET_FORMAT);
-				};
+				context.InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RESOLVE_SOURCE);
+				context.InsertResourceBarrier(m_pHDRRenderTarget.get(), D3D12_RESOURCE_STATE_RESOLVE_DEST);
+				context.ResolveResource(GetCurrentRenderTarget(), 0, m_pHDRRenderTarget.get(), 0, RENDER_TARGET_FORMAT);
 			});
 	}
 
@@ -685,170 +663,160 @@ void Graphics::Update()
 
 		if (downscaleTonemapInput)
 		{
-			graph.AddPass("Downsample Color", [&](RGPassBuilder& builder)
+			RGPassBuilder colorDownsample = graph.AddPass("Downsample Color");
+			toneMappingInput = colorDownsample.Write(toneMappingInput);
+			colorDownsample.Bind([=](CommandContext& context, const RGPassResources& resources)
 				{
-					toneMappingInput = builder.Write(toneMappingInput);
-					return [=](CommandContext& context, const RGPassResources& resources)
+					Texture* pToneMapInput = resources.GetTexture(toneMappingInput);
+					context.InsertResourceBarrier(pToneMapInput, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+					context.InsertResourceBarrier(m_pHDRRenderTarget.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+
+					context.SetPipelineState(m_pGenerateMipsPSO.get());
+					context.SetComputeRootSignature(m_pGenerateMipsRS.get());
+
+					struct DownscaleParameters
 					{
-						Texture* pToneMapInput = resources.GetTexture(toneMappingInput);
-						context.InsertResourceBarrier(pToneMapInput, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-						context.InsertResourceBarrier(m_pHDRRenderTarget.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+						IntVector2 TargetDimensions;
+						Vector2 TargetDimensionsInv;
+					} Parameters{};
+					Parameters.TargetDimensions.x = pToneMapInput->GetWidth();
+					Parameters.TargetDimensions.y = pToneMapInput->GetHeight();
+					Parameters.TargetDimensionsInv = Vector2(1.0f / pToneMapInput->GetWidth(), 1.0f / pToneMapInput->GetHeight());
 
-						context.SetPipelineState(m_pGenerateMipsPSO.get());
-						context.SetComputeRootSignature(m_pGenerateMipsRS.get());
+					context.SetComputeDynamicConstantBufferView(0, &Parameters, sizeof(DownscaleParameters));
+					context.SetDynamicDescriptor(1, 0, pToneMapInput->GetUAV());
+					context.SetDynamicDescriptor(2, 0, m_pHDRRenderTarget->GetSRV());
 
-						struct DownscaleParameters
-						{
-							IntVector2 TargetDimensions;
-							Vector2 TargetDimensionsInv;
-						} Parameters{};
-						Parameters.TargetDimensions.x = pToneMapInput->GetWidth();
-						Parameters.TargetDimensions.y = pToneMapInput->GetHeight();
-						Parameters.TargetDimensionsInv = Vector2(1.0f / pToneMapInput->GetWidth(), 1.0f / pToneMapInput->GetHeight());
-
-						context.SetComputeDynamicConstantBufferView(0, &Parameters, sizeof(DownscaleParameters));
-						context.SetDynamicDescriptor(1, 0, pToneMapInput->GetUAV());
-						context.SetDynamicDescriptor(2, 0, m_pHDRRenderTarget->GetSRV());
-
-						context.Dispatch(
-							Math::DivideAndRoundUp(Parameters.TargetDimensions.x, 16),
-							Math::DivideAndRoundUp(Parameters.TargetDimensions.y, 16)
-						);
-					};
+					context.Dispatch(
+						Math::DivideAndRoundUp(Parameters.TargetDimensions.x, 16),
+						Math::DivideAndRoundUp(Parameters.TargetDimensions.y, 16)
+					);
 				});
 		}
 
-		graph.AddPass("Luminance Histogram", [&](RGPassBuilder& builder)
+		RGPassBuilder histogram = graph.AddPass("Luminance Histogram");
+		toneMappingInput = histogram.Read(toneMappingInput);
+		histogram.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
-				toneMappingInput = builder.Read(toneMappingInput);
-				return [=](CommandContext& context, const RGPassResources& resources)
+				Texture* pToneMapInput = resources.GetTexture(toneMappingInput);
+
+				context.InsertResourceBarrier(m_pLuminanceHistogram.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+				context.InsertResourceBarrier(pToneMapInput, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+				context.ClearUavUInt(m_pLuminanceHistogram.get(), m_pLuminanceHistogram->GetUAV());
+
+				context.SetPipelineState(m_pLuminanceHistogramPSO.get());
+				context.SetComputeRootSignature(m_pLuminanceHistogramRS.get());
+
+				struct HistogramParameters
 				{
-					Texture* pToneMapInput = resources.GetTexture(toneMappingInput);
+					uint32 Width;
+					uint32 Height;
+					float MinLogLuminance;
+					float OneOverLogLuminanceRange;
+				} Parameters;
+				Parameters.Width = pToneMapInput->GetWidth();
+				Parameters.Height = pToneMapInput->GetHeight();
+				Parameters.MinLogLuminance = g_MinLogLuminance;
+				Parameters.OneOverLogLuminanceRange = 1.0f / (g_MaxLogLuminance - g_MinLogLuminance);
 
-					context.InsertResourceBarrier(m_pLuminanceHistogram.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-					context.InsertResourceBarrier(pToneMapInput, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-					context.ClearUavUInt(m_pLuminanceHistogram.get(), m_pLuminanceHistogram->GetUAV());
+				context.SetComputeDynamicConstantBufferView(0, &Parameters, sizeof(HistogramParameters));
+				context.SetDynamicDescriptor(1, 0, m_pLuminanceHistogram->GetUAV());
+				context.SetDynamicDescriptor(2, 0, pToneMapInput->GetSRV());
 
-					context.SetPipelineState(m_pLuminanceHistogramPSO.get());
-					context.SetComputeRootSignature(m_pLuminanceHistogramRS.get());
-
-					struct HistogramParameters
-					{
-						uint32 Width;
-						uint32 Height;
-						float MinLogLuminance;
-						float OneOverLogLuminanceRange;
-					} Parameters;
-					Parameters.Width = pToneMapInput->GetWidth();
-					Parameters.Height = pToneMapInput->GetHeight();
-					Parameters.MinLogLuminance = g_MinLogLuminance;
-					Parameters.OneOverLogLuminanceRange = 1.0f / (g_MaxLogLuminance - g_MinLogLuminance);
-
-					context.SetComputeDynamicConstantBufferView(0, &Parameters, sizeof(HistogramParameters));
-					context.SetDynamicDescriptor(1, 0, m_pLuminanceHistogram->GetUAV());
-					context.SetDynamicDescriptor(2, 0, pToneMapInput->GetSRV());
-
-					context.Dispatch(
-						Math::DivideAndRoundUp(pToneMapInput->GetWidth(), 16),
-						Math::DivideAndRoundUp(pToneMapInput->GetHeight(), 16)
-					);
-				};
+				context.Dispatch(
+					Math::DivideAndRoundUp(pToneMapInput->GetWidth(), 16),
+					Math::DivideAndRoundUp(pToneMapInput->GetHeight(), 16)
+				);
 			});
 
-		graph.AddPass("Average Luminance", [&](RGPassBuilder& builder)
+		RGPassBuilder avgLuminance = graph.AddPass("Average Luminance");
+		avgLuminance.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
-				return [=](CommandContext& context, const RGPassResources& resources)
+				context.InsertResourceBarrier(m_pLuminanceHistogram.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+				context.InsertResourceBarrier(m_pAverageLuminance.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+				context.SetPipelineState(m_pAverageLuminancePSO.get());
+				context.SetComputeRootSignature(m_pAverageLuminanceRS.get());
+
+				struct AverageParameters
 				{
-					context.InsertResourceBarrier(m_pLuminanceHistogram.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-					context.InsertResourceBarrier(m_pAverageLuminance.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+					int32 PixelCount;
+					float MinLogLuminance;
+					float LogLuminanceRange;
+					float TimeDelta;
+					float Tau;
+				} Parameters;
 
-					context.SetPipelineState(m_pAverageLuminancePSO.get());
-					context.SetComputeRootSignature(m_pAverageLuminanceRS.get());
+				Parameters.PixelCount = pToneMapInput->GetWidth() * pToneMapInput->GetHeight();
+				Parameters.MinLogLuminance = g_MinLogLuminance;
+				Parameters.LogLuminanceRange = g_MaxLogLuminance - g_MinLogLuminance;
+				Parameters.TimeDelta = GameTimer::DeltaTime();
+				Parameters.Tau = g_Tau;
 
-					struct AverageParameters
-					{
-						int32 PixelCount;
-						float MinLogLuminance;
-						float LogLuminanceRange;
-						float TimeDelta;
-						float Tau;
-					} Parameters;
+				context.SetComputeDynamicConstantBufferView(0, &Parameters, sizeof(AverageParameters));
+				context.SetDynamicDescriptor(1, 0, m_pAverageLuminance->GetUAV());
+				context.SetDynamicDescriptor(2, 0, m_pLuminanceHistogram->GetSRV());
 
-					Parameters.PixelCount = pToneMapInput->GetWidth() * pToneMapInput->GetHeight();
-					Parameters.MinLogLuminance = g_MinLogLuminance;
-					Parameters.LogLuminanceRange = g_MaxLogLuminance - g_MinLogLuminance;
-					Parameters.TimeDelta = GameTimer::DeltaTime();
-					Parameters.Tau = g_Tau;
-
-					context.SetComputeDynamicConstantBufferView(0, &Parameters, sizeof(AverageParameters));
-					context.SetDynamicDescriptor(1, 0, m_pAverageLuminance->GetUAV());
-					context.SetDynamicDescriptor(2, 0, m_pLuminanceHistogram->GetSRV());
-
-					context.Dispatch(1);
-				};
+				context.Dispatch(1);
 			});
 
-		graph.AddPass("Tonemap", [&](RGPassBuilder& builder)
+		RGPassBuilder tonemap = graph.AddPass("Tonemap");
+		tonemap.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
-				return [=](CommandContext& context, const RGPassResources& resources)
+				struct Parameters
 				{
-					struct Parameters
-					{
-						float WhitePoint;
-						uint32 Tonemapper;
-					} constBuffer;
-					constBuffer.WhitePoint = g_WhitePoint;
-					constBuffer.Tonemapper = g_ToneMapper;
+					float WhitePoint;
+					uint32 Tonemapper;
+				} constBuffer;
+				constBuffer.WhitePoint = g_WhitePoint;
+				constBuffer.Tonemapper = g_ToneMapper;
 
-					context.InsertResourceBarrier(m_pTonemapTarget.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-					context.InsertResourceBarrier(m_pAverageLuminance.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-					context.InsertResourceBarrier(m_pHDRRenderTarget.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+				context.InsertResourceBarrier(m_pTonemapTarget.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+				context.InsertResourceBarrier(m_pAverageLuminance.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+				context.InsertResourceBarrier(m_pHDRRenderTarget.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
-					context.SetPipelineState(m_pToneMapPSO.get());
-					context.SetComputeRootSignature(m_pToneMapRS.get());
+				context.SetPipelineState(m_pToneMapPSO.get());
+				context.SetComputeRootSignature(m_pToneMapRS.get());
 
-					context.SetComputeDynamicConstantBufferView(0, &constBuffer, sizeof(Parameters));
+				context.SetComputeDynamicConstantBufferView(0, &constBuffer, sizeof(Parameters));
 
-					context.SetDynamicDescriptor(1, 0, m_pTonemapTarget->GetUAV());
-					context.SetDynamicDescriptor(2, 0, m_pHDRRenderTarget->GetSRV());
-					context.SetDynamicDescriptor(2, 1, m_pAverageLuminance->GetSRV());
+				context.SetDynamicDescriptor(1, 0, m_pTonemapTarget->GetUAV());
+				context.SetDynamicDescriptor(2, 0, m_pHDRRenderTarget->GetSRV());
+				context.SetDynamicDescriptor(2, 1, m_pAverageLuminance->GetSRV());
 
-					context.Dispatch(
-						Math::DivideAndRoundUp(m_pHDRRenderTarget->GetWidth(), 16),
-						Math::DivideAndRoundUp(m_pHDRRenderTarget->GetHeight(), 16)
-					);
-				};
+				context.Dispatch(
+					Math::DivideAndRoundUp(m_pHDRRenderTarget->GetWidth(), 16),
+					Math::DivideAndRoundUp(m_pHDRRenderTarget->GetHeight(), 16)
+				);
 			});
 
 		if (g_EnableUI && g_DrawHistogram)
 		{
-			graph.AddPass("Draw Histogram", [&](RGPassBuilder& builder)
+			RGPassBuilder drawHistogram = graph.AddPass("Draw Histogram");
+			drawHistogram.Bind([=](CommandContext& context, const RGPassResources& resources)
 				{
-					return [=](CommandContext& context, const RGPassResources& resources)
+					context.InsertResourceBarrier(m_pLuminanceHistogram.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+					context.InsertResourceBarrier(m_pAverageLuminance.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+					context.InsertResourceBarrier(m_pTonemapTarget.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+					context.SetPipelineState(m_pDrawHistogramPSO.get());
+					context.SetComputeRootSignature(m_pDrawHistogramRS.get());
+
+					struct AverageParameters
 					{
-						context.InsertResourceBarrier(m_pLuminanceHistogram.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-						context.InsertResourceBarrier(m_pAverageLuminance.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-						context.InsertResourceBarrier(m_pTonemapTarget.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+						float MinLogLuminance;
+						float InverseLogLuminanceRange;
+					} Parameters;
 
-						context.SetPipelineState(m_pDrawHistogramPSO.get());
-						context.SetComputeRootSignature(m_pDrawHistogramRS.get());
+					Parameters.MinLogLuminance = g_MinLogLuminance;
+					Parameters.InverseLogLuminanceRange = 1.0f / (g_MaxLogLuminance - g_MinLogLuminance);
 
-						struct AverageParameters
-						{
-							float MinLogLuminance;
-							float InverseLogLuminanceRange;
-						} Parameters;
+					context.SetComputeDynamicConstantBufferView(0, &Parameters, sizeof(AverageParameters));
+					context.SetDynamicDescriptor(1, 0, m_pTonemapTarget->GetUAV());
+					context.SetDynamicDescriptor(2, 0, m_pLuminanceHistogram->GetSRV());
+					context.SetDynamicDescriptor(2, 1, m_pAverageLuminance->GetSRV());
 
-						Parameters.MinLogLuminance = g_MinLogLuminance;
-						Parameters.InverseLogLuminanceRange = 1.0f / (g_MaxLogLuminance - g_MinLogLuminance);
-
-						context.SetComputeDynamicConstantBufferView(0, &Parameters, sizeof(AverageParameters));
-						context.SetDynamicDescriptor(1, 0, m_pTonemapTarget->GetUAV());
-						context.SetDynamicDescriptor(2, 0, m_pLuminanceHistogram->GetSRV());
-						context.SetDynamicDescriptor(2, 1, m_pAverageLuminance->GetSRV());
-
-						context.Dispatch(1, m_pLuminanceHistogram->GetDesc().ElementCount);
-					};
+					context.Dispatch(1, m_pLuminanceHistogram->GetDesc().ElementCount);
 				});
 		}
 	}
@@ -864,14 +832,12 @@ void Graphics::Update()
 		ImGui::Render();
 	}
 
-	graph.AddPass("Temp Barriers", [&](RGPassBuilder& builder)
+	RGPassBuilder temp = graph.AddPass("Temp Barriers");
+	temp.Bind([=](CommandContext& context, const RGPassResources& resources)
 		{
-			return [=](CommandContext& context, const RGPassResources& resources)
-			{
-				context.CopyResource(m_pTonemapTarget.get(), GetCurrentBackbuffer());
-				context.InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RENDER_TARGET);
-				context.InsertResourceBarrier(GetCurrentBackbuffer(), D3D12_RESOURCE_STATE_PRESENT);
-			};
+			context.CopyResource(m_pTonemapTarget.get(), GetCurrentBackbuffer());
+			context.InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RENDER_TARGET);
+			context.InsertResourceBarrier(GetCurrentBackbuffer(), D3D12_RESOURCE_STATE_PRESENT);
 		});
 
 	graph.Compile();
@@ -1187,7 +1153,7 @@ void Graphics::OnResize(int width, int height)
 
 	m_pAmbientOcclusion->Create(TextureDesc::CreateRenderTarget(Math::DivideAndRoundUp(width, 2), Math::DivideAndRoundUp(height, 2), DXGI_FORMAT_R8_UNORM, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource | TextureFlag::RenderTarget));
 
-	m_pCamera->SetViewport(0, 0, (float)width, (float)height);
+	m_pCamera->SetAspectRatio((float)width / height);
 	m_pCamera->SetDirty();
 
 	m_pClusteredForward->OnSwapchainCreated(width, height);
@@ -1240,8 +1206,8 @@ void Graphics::InitializeAssets()
 	{
 		//Opaque
 		{
-			Shader vertexShader("DepthOnly.hlsl", Shader::Type::Vertex, "VSMain");
-			Shader alphaPixelShader("DepthOnly.hlsl", Shader::Type::Pixel, "PSMain");
+			Shader vertexShader("DepthOnly.hlsl", ShaderType::Vertex, "VSMain");
+			Shader alphaPixelShader("DepthOnly.hlsl", ShaderType::Pixel, "PSMain");
 
 			//Rootsignature
 			m_pShadowsRS = std::make_unique<RootSignature>();
@@ -1270,7 +1236,7 @@ void Graphics::InitializeAssets()
 	//Depth prepass
 	//Simple vertex shader to fill the depth buffer to optimize later passes
 	{
-		Shader vertexShader("DepthOnly.hlsl", Shader::Type::Vertex, "VSMain");
+		Shader vertexShader("DepthOnly.hlsl", ShaderType::Vertex, "VSMain");
 
 		//Rootsignature
 		m_pDepthPrepassRS = std::make_unique<RootSignature>();
@@ -1288,7 +1254,7 @@ void Graphics::InitializeAssets()
 
 	//Luminance Historgram
 	{
-		Shader computeShader("LuminanceHistogram.hlsl", Shader::Type::Compute, "CSMain");
+		Shader computeShader("LuminanceHistogram.hlsl", ShaderType::Compute, "CSMain");
 
 		//Rootsignature
 		m_pLuminanceHistogramRS = std::make_unique<RootSignature>();
@@ -1308,7 +1274,7 @@ void Graphics::InitializeAssets()
 
 	//Debug Draw Histogram
 	{
-		Shader computeDrawShader("DrawLuminanceHistogram.hlsl", Shader::Type::Compute, "DrawLuminanceHistogram");
+		Shader computeDrawShader("DrawLuminanceHistogram.hlsl", ShaderType::Compute, "DrawLuminanceHistogram");
 		m_pDrawHistogramRS = std::make_unique<RootSignature>();
 		m_pDrawHistogramRS->FinalizeFromShader("Draw Luminance Historgram", computeDrawShader, m_pDevice.Get());
 
@@ -1320,7 +1286,7 @@ void Graphics::InitializeAssets()
 
 	//Average Luminance
 	{
-		Shader computeShader("AverageLuminance.hlsl", Shader::Type::Compute, "CSMain");
+		Shader computeShader("AverageLuminance.hlsl", ShaderType::Compute, "CSMain");
 
 		//Rootsignature
 		m_pAverageLuminanceRS = std::make_unique<RootSignature>();
@@ -1335,7 +1301,7 @@ void Graphics::InitializeAssets()
 
 	//Tonemapping
 	{
-		Shader computeShader("Tonemapping.hlsl", Shader::Type::Compute, "CSMain");
+		Shader computeShader("Tonemapping.hlsl", ShaderType::Compute, "CSMain");
 
 		//Rootsignature
 		m_pToneMapRS = std::make_unique<RootSignature>();
@@ -1352,7 +1318,7 @@ void Graphics::InitializeAssets()
 	//Resolves a multisampled depth buffer to a normal depth buffer
 	//Only required when the sample count > 1
 	{
-		Shader computeShader("ResolveDepth.hlsl", Shader::Type::Compute, "CSMain", { "DEPTH_RESOLVE_MIN" });
+		Shader computeShader("ResolveDepth.hlsl", ShaderType::Compute, "CSMain", { "DEPTH_RESOLVE_MIN" });
 
 		m_pResolveDepthRS = std::make_unique<RootSignature>();
 		m_pResolveDepthRS->FinalizeFromShader("Depth Resolve", computeShader, m_pDevice.Get());
@@ -1365,9 +1331,9 @@ void Graphics::InitializeAssets()
 
 	//Depth reduce
 	{
-		Shader prepareReduceShader("ReduceDepth.hlsl", Shader::Type::Compute, "PrepareReduceDepth", { });
-		Shader prepareReduceShaderMSAA("ReduceDepth.hlsl", Shader::Type::Compute, "PrepareReduceDepth", { "WITH_MSAA" });
-		Shader reduceShader("ReduceDepth.hlsl", Shader::Type::Compute, "ReduceDepth", { });
+		Shader prepareReduceShader("ReduceDepth.hlsl", ShaderType::Compute, "PrepareReduceDepth", { });
+		Shader prepareReduceShaderMSAA("ReduceDepth.hlsl", ShaderType::Compute, "PrepareReduceDepth", { "WITH_MSAA" });
+		Shader reduceShader("ReduceDepth.hlsl", ShaderType::Compute, "ReduceDepth", { });
 
 		m_pReduceDepthRS = std::make_unique<RootSignature>();
 		m_pReduceDepthRS->FinalizeFromShader("Depth Reduce", prepareReduceShader, m_pDevice.Get());
@@ -1387,7 +1353,7 @@ void Graphics::InitializeAssets()
 
 	//Mip generation
 	{
-		Shader computeShader("GenerateMips.hlsl", Shader::Type::Compute, "CSMain");
+		Shader computeShader("GenerateMips.hlsl", ShaderType::Compute, "CSMain");
 
 		m_pGenerateMipsRS = std::make_unique<RootSignature>();
 		m_pGenerateMipsRS->FinalizeFromShader("Generate Mips", computeShader, m_pDevice.Get());
@@ -1404,8 +1370,8 @@ void Graphics::InitializeAssets()
 			D3D12_INPUT_ELEMENT_DESC{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
 		};
 
-		Shader vertexShader("ProceduralSky.hlsl", Shader::Type::Vertex, "VSMain");
-		Shader pixelShader("ProceduralSky.hlsl", Shader::Type::Pixel, "PSMain");
+		Shader vertexShader("ProceduralSky.hlsl", ShaderType::Vertex, "VSMain");
+		Shader pixelShader("ProceduralSky.hlsl", ShaderType::Pixel, "PSMain");
 
 		//Rootsignature
 		m_pSkyboxRS = std::make_unique<RootSignature>();

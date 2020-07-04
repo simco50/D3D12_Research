@@ -81,23 +81,42 @@ uint64 CommandContext::Execute(bool wait)
 	return fenceValue;
 }
 
+bool NeedsTransition(D3D12_RESOURCE_STATES& before, D3D12_RESOURCE_STATES& after)
+{
+	//Can read from 'write' DSV
+	if (before == D3D12_RESOURCE_STATE_DEPTH_WRITE && after == D3D12_RESOURCE_STATE_DEPTH_READ)
+	{
+		return false;
+	}
+	if (after == D3D12_RESOURCE_STATE_COMMON)
+	{
+		return before != D3D12_RESOURCE_STATE_COMMON;
+	}
+	//Combine already transitioned bits
+	D3D12_RESOURCE_STATES combined = before | after;
+	if ((combined & (D3D12_RESOURCE_STATE_GENERIC_READ | D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT)) == combined)
+	{
+		after = combined;
+	}
+	return before != after;
+}
+
 void CommandContext::InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESOURCE_STATES state, bool executeImmediate /*= false*/, uint32 subResource /*= 0xffffffff*/)
 {
-	if (state != pBuffer->GetResourceState(subResource))
+	D3D12_RESOURCE_STATES beforeState = pBuffer->GetResourceState();
+	if (m_Type == D3D12_COMMAND_LIST_TYPE_COMPUTE)
 	{
-		if (m_Type == D3D12_COMMAND_LIST_TYPE_COMPUTE)
-		{
-			D3D12_RESOURCE_STATES currentState = pBuffer->GetResourceState();
-			check((currentState & VALID_COMPUTE_QUEUE_RESOURCE_STATES) == currentState);
-			check((state & VALID_COMPUTE_QUEUE_RESOURCE_STATES) == state);
-		}
-		else if (m_Type == D3D12_COMMAND_LIST_TYPE_COPY)
-		{
-			D3D12_RESOURCE_STATES currentState = pBuffer->GetResourceState();
-			check((currentState & VALID_COPY_QUEUE_RESOURCE_STATES) == currentState);
-			check((state & VALID_COPY_QUEUE_RESOURCE_STATES) == state);
-		}
+		check((beforeState & VALID_COMPUTE_QUEUE_RESOURCE_STATES) == beforeState);
+		check((state & VALID_COMPUTE_QUEUE_RESOURCE_STATES) == state);
+	}
+	else if (m_Type == D3D12_COMMAND_LIST_TYPE_COPY)
+	{
+		check((beforeState & VALID_COPY_QUEUE_RESOURCE_STATES) == beforeState);
+		check((state & VALID_COPY_QUEUE_RESOURCE_STATES) == state);
+	}
 
+	if (NeedsTransition(beforeState, state))
+	{
 		m_BarrierBatcher.AddTransition(pBuffer->GetResource(), pBuffer->GetResourceState(subResource), state, subResource);
 		if (executeImmediate)
 		{
@@ -249,14 +268,9 @@ void CommandContext::SetDescriptorHeap(ID3D12DescriptorHeap* pHeap, D3D12_DESCRI
 	}
 }
 
-DynamicAllocation CommandContext::AllocateTransientMemory(uint64 size, const void* pData /*= nullptr*/)
+DynamicAllocation CommandContext::AllocateTransientMemory(uint64 size)
 {
-	DynamicAllocation allocation = m_DynamicAllocator->Allocate(size);
-	if (pData)
-	{
-		memcpy(allocation.pMappedMemory, pData, size);
-	}
-	return allocation;
+	return m_DynamicAllocator->Allocate(size);
 }
 
 DescriptorHandle CommandContext::AllocateTransientDescriptors(int descriptorCount, D3D12_DESCRIPTOR_HEAP_TYPE type)

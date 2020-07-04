@@ -15,19 +15,16 @@ public:
 
 	void SetDirty() { m_Dirty = true; }
 	void SetFoV(float fov);
-	void SetViewport(float x, float y, float width, float height);
-	FloatRect GetViewport() const { return m_Viewport; }
 	void SetClippingPlanes(float nearPlane, float farPlane);
+	void SetAspectRatio(float aspectRatio);
 
-	void SetOrthographic(bool orthographic);
-	void SetOrthographicSize(float size);
+	void SetOrthographic(bool orthographic, float size = -1.0);
 
 	void SetNearPlane(float nearPlane);
 	void SetFarPlane(float farPlane);
 
 	float GetNear() const { return m_NearPlane; }
 	float GetFar() const { return m_FarPlane; }
-
 	float GetFoV() const { return m_FoV; }
 
 	const Matrix& GetView() const;
@@ -49,8 +46,9 @@ private:
 	float m_FoV = 60.0f * Math::PI / 180;
 	float m_NearPlane = 1.0f;
 	float m_FarPlane = 500.0f;
+	float m_OrthographicSize = 1;
+	float m_AspectRatio;
 
-	FloatRect m_Viewport;
 	mutable Matrix m_Projection;
 	mutable Matrix m_View;
 	mutable Matrix m_ViewProjection;

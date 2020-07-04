@@ -53,5 +53,5 @@ public:
 
 protected:
 	ComPtr<ID3D12PipelineState> m_pPipelineState;
-	CD3DX12_PIPELINE_STATE_STREAM1 m_Desc = {};
+	CD3DX12_PIPELINE_STATE_STREAM2 m_Desc = {};
 };

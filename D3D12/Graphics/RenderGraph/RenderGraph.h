@@ -97,8 +97,14 @@ public:
 	RGPassBuilder(const RGPassBuilder& other) = delete;
 	RGPassBuilder& operator=(const RGPassBuilder& other) = delete;
 
+	template<typename ExecuteCallback>
+	void Bind(ExecuteCallback&& callback)
+	{
+		m_Pass.SetCallback(std::move(callback));
+	}
+
 	RGResourceHandle Read(const RGResourceHandle& resource);
-	RGResourceHandle Write(RGResourceHandle& resource);
+	[[nodiscard]] RGResourceHandle Write(RGResourceHandle& resource);
 	RGResourceHandle CreateTexture(const char* pName, const TextureDesc& desc);
 	RGResourceHandle CreateBuffer(const char* pName, const BufferDesc& desc);
 	void NeverCull();
@@ -166,6 +172,7 @@ public:
 	template<typename ExecuteCallback>
 	void SetCallback(ExecuteCallback&& callback)
 	{
+		RG_STATIC_ASSERT(sizeof(ExecuteCallback) < 1024, "The Execute callback exceeds the maximum size");
 		m_pPassExecutor = std::make_unique<PassExecutor<ExecuteCallback>>(std::move(callback));
 	}
 
@@ -210,18 +217,12 @@ public:
 	void DumpGraphMermaid(const char* pPath) const;
 	RGResourceHandle MoveResource(RGResourceHandle From, RGResourceHandle To);
 
-	template<typename Callback>
-	RGPass& AddPass(const char* pName, const Callback& passCallback)
+	RGPassBuilder AddPass(const char* pName)
 	{
-		using ExecuteCallback = typename std::invoke_result<Callback, RGPassBuilder&>::type;
-		RG_STATIC_ASSERT(sizeof(ExecuteCallback) < 1024, "The Execute callback exceeds the maximum size");
 		RGPass* pPass = new RGPass(*this, pName, (int)m_RenderPasses.size());
-		RGPassBuilder builder(*this, *pPass);
-		pPass->SetCallback<ExecuteCallback>(std::move(passCallback(builder)));
-		return AddPass(pPass);
+		AddPass(pPass);
+		return RGPassBuilder(*this, *pPass);
 	}
-
-	RGPass& AddPass(RGPass* pPass);
 
 	RGResourceHandle CreateTexture(const char* pName, const TextureDesc& desc)
 	{
@@ -279,6 +280,7 @@ public:
 	}
 
 private:
+	RGPass& AddPass(RGPass* pPass);
 	void ExecutePass(RGPass* pPass, CommandContext& context);
 	void PrepareResources(RGPass* pPass);
 	void ReleaseResources(RGPass* pPass);

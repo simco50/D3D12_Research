@@ -12,7 +12,6 @@
 #include <sstream>
 #include <algorithm>
 #include <assert.h>
-#include <functional>
 #include <unordered_map>
 #include <list>
 #include <algorithm>

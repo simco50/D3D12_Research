@@ -115,7 +115,7 @@ void RootSignature::AddStaticSampler(uint32 shaderRegister, D3D12_SAMPLER_DESC s
 
 void RootSignature::Finalize(const char* pName, ID3D12Device* pDevice, D3D12_ROOT_SIGNATURE_FLAGS flags)
 {
-	std::array<bool, (int32)Shader::Type::MAX> shaderVisibility{};
+	std::array<bool, (int32)ShaderType::MAX> shaderVisibility{};
 
 	for (size_t i = 0; i < m_RootParameters.size(); ++i)
 	{
@@ -123,13 +123,13 @@ void RootSignature::Finalize(const char* pName, ID3D12Device* pDevice, D3D12_ROO
 		switch (rootParameter.ShaderVisibility)
 		{
 		case D3D12_SHADER_VISIBILITY_VERTEX:
-			shaderVisibility[(int)Shader::Type::Vertex] = true;
+			shaderVisibility[(int)ShaderType::Vertex] = true;
 			break;
 		case D3D12_SHADER_VISIBILITY_GEOMETRY:
-			shaderVisibility[(int)Shader::Type::Geometry] = true;
+			shaderVisibility[(int)ShaderType::Geometry] = true;
 			break;
 		case D3D12_SHADER_VISIBILITY_PIXEL:
-			shaderVisibility[(int)Shader::Type::Pixel] = true;
+			shaderVisibility[(int)ShaderType::Pixel] = true;
 			break;
 		case D3D12_SHADER_VISIBILITY_ALL:
 			for (bool& v : shaderVisibility)
@@ -172,15 +172,15 @@ void RootSignature::Finalize(const char* pName, ID3D12Device* pDevice, D3D12_ROO
 	//It's illegal to have RS flags if it's a local root signature
 	if ((flags & D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE) == 0)
 	{
-		if (shaderVisibility[(int)Shader::Type::Vertex] == false)
+		if (shaderVisibility[(int)ShaderType::Vertex] == false)
 		{
 			flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_VERTEX_SHADER_ROOT_ACCESS;
 		}
-		if (shaderVisibility[(int)Shader::Type::Pixel] == false)
+		if (shaderVisibility[(int)ShaderType::Pixel] == false)
 		{
 			flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS;
 		}
-		if (shaderVisibility[(int)Shader::Type::Geometry] == false)
+		if (shaderVisibility[(int)ShaderType::Geometry] == false)
 		{
 			flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
 		}

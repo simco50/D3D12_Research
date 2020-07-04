@@ -49,8 +49,8 @@ void DebugRenderer::Initialize(Graphics* pGraphics)
 	};
 
 	//Shaders
-	Shader vertexShader("DebugRenderer.hlsl", Shader::Type::Vertex, "VSMain", { });
-	Shader pixelShader("DebugRenderer.hlsl", Shader::Type::Pixel, "PSMain", { });
+	Shader vertexShader("DebugRenderer.hlsl", ShaderType::Vertex, "VSMain", { });
+	Shader pixelShader("DebugRenderer.hlsl", ShaderType::Pixel, "PSMain", { });
 
 	//Rootsignature
 	m_pRS = std::make_unique<RootSignature>();
@@ -85,35 +85,33 @@ void DebugRenderer::Render(RGGraph& graph, const Matrix& viewProjection, Texture
 
 	constexpr uint32 VertexStride = sizeof(DebugLine) / 2;
 
-	graph.AddPass("Debug Rendering", [&](RGPassBuilder& builder)
+	RGPassBuilder pass = graph.AddPass("Debug Rendering");
+	pass.Bind([=](CommandContext& context, const RGPassResources& resources)
 		{
-			return [=](CommandContext& context, const RGPassResources& resources)
+			context.InsertResourceBarrier(pDepth, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+			context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
+
+			context.BeginRenderPass(RenderPassInfo(pTarget, RenderPassAccess::Load_Store, pDepth, RenderPassAccess::Load_Store));
+			context.SetViewport(FloatRect(0, 0, (float)pTarget->GetWidth(), (float)pTarget->GetHeight()));
+			context.SetGraphicsRootSignature(m_pRS.get());
+
+			context.SetDynamicConstantBufferView(0, &viewProjection, sizeof(Matrix));
+
+			if (linePrimitives != 0)
 			{
-				context.InsertResourceBarrier(pDepth, D3D12_RESOURCE_STATE_DEPTH_WRITE);
-				context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
-
-				context.BeginRenderPass(RenderPassInfo(pTarget, RenderPassAccess::Load_Store, pDepth, RenderPassAccess::Load_Store));
-				context.SetViewport(FloatRect(0, 0, (float)pTarget->GetWidth(), (float)pTarget->GetHeight()));
-				context.SetGraphicsRootSignature(m_pRS.get());
-
-				context.SetDynamicConstantBufferView(0, &viewProjection, sizeof(Matrix));
-
-				if (linePrimitives != 0)
-				{
-					context.SetDynamicVertexBuffer(0, linePrimitives, VertexStride, m_Lines.data());
-					context.SetPipelineState(m_pLinesPSO.get());
-					context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINELIST);
-					context.Draw(0, linePrimitives);
-				}
-				if (trianglePrimitives != 0)
-				{
-					context.SetDynamicVertexBuffer(0, trianglePrimitives, VertexStride, m_Triangles.data());
-					context.SetPipelineState(m_pTrianglesPSO.get());
-					context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-					context.Draw(0, trianglePrimitives);
-				}
-				context.EndRenderPass();
-			};
+				context.SetDynamicVertexBuffer(0, linePrimitives, VertexStride, m_Lines.data());
+				context.SetPipelineState(m_pLinesPSO.get());
+				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINELIST);
+				context.Draw(0, linePrimitives);
+			}
+			if (trianglePrimitives != 0)
+			{
+				context.SetDynamicVertexBuffer(0, trianglePrimitives, VertexStride, m_Triangles.data());
+				context.SetPipelineState(m_pTrianglesPSO.get());
+				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+				context.Draw(0, trianglePrimitives);
+			}
+			context.EndRenderPass();
 		});
 }
 

@@ -115,8 +115,8 @@ void ImGuiRenderer::InitializeImGui(Graphics* pGraphics)
 void ImGuiRenderer::CreatePipeline(Graphics* pGraphics)
 {
 	//Shaders
-	Shader vertexShader("ImGui.hlsl", Shader::Type::Vertex, "VSMain");
-	Shader pixelShader("ImGui.hlsl", Shader::Type::Pixel, "PSMain");
+	Shader vertexShader("ImGui.hlsl", ShaderType::Vertex, "VSMain");
+	Shader pixelShader("ImGui.hlsl", ShaderType::Pixel, "PSMain");
 
 	//Root signature
 	m_pRootSignature = std::make_unique<RootSignature>();
@@ -150,48 +150,46 @@ void ImGuiRenderer::Render(RGGraph& graph, Texture* pRenderTarget)
 	{
 		return;
 	}
-	graph.AddPass("Render UI", [&](RGPassBuilder& builder)
+	RGPassBuilder pass = graph.AddPass("Render UI");
+	pass.Bind([=](CommandContext& context, const RGPassResources& resources)
 		{
-			return [=](CommandContext& context, const RGPassResources& resources)
+			context.InsertResourceBarrier(pRenderTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
+
+			context.SetPipelineState(m_pPipelineState.get());
+			context.SetGraphicsRootSignature(m_pRootSignature.get());
+			Matrix projectionMatrix = Math::CreateOrthographicOffCenterMatrix(0.0f, pDrawData->DisplayPos.x + pDrawData->DisplaySize.x, pDrawData->DisplayPos.y + pDrawData->DisplaySize.y, 0.0f, 0.0f, 1.0f);
+			context.SetDynamicConstantBufferView(0, &projectionMatrix, sizeof(Matrix));
+			context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+			context.SetViewport(FloatRect(pDrawData->DisplayPos.x, pDrawData->DisplayPos.y, pDrawData->DisplayPos.x + pDrawData->DisplaySize.x, pDrawData->DisplayPos.y + pDrawData->DisplaySize.y), 0, 1);
+
+			context.BeginRenderPass(RenderPassInfo(pRenderTarget, RenderPassAccess::Load_Store, nullptr, RenderPassAccess::NoAccess));
+
+			for (int n = 0; n < pDrawData->CmdListsCount; n++)
 			{
-				context.InsertResourceBarrier(pRenderTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
-
-				context.SetPipelineState(m_pPipelineState.get());
-				context.SetGraphicsRootSignature(m_pRootSignature.get());
-				Matrix projectionMatrix = Math::CreateOrthographicOffCenterMatrix(0.0f, pDrawData->DisplayPos.x + pDrawData->DisplaySize.x, pDrawData->DisplayPos.y + pDrawData->DisplaySize.y, 0.0f, 0.0f, 1.0f);
-				context.SetDynamicConstantBufferView(0, &projectionMatrix, sizeof(Matrix));
-				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-				context.SetViewport(FloatRect(pDrawData->DisplayPos.x, pDrawData->DisplayPos.y, pDrawData->DisplayPos.x + pDrawData->DisplaySize.x, pDrawData->DisplayPos.y + pDrawData->DisplaySize.y), 0, 1);
-
-				context.BeginRenderPass(RenderPassInfo(pRenderTarget, RenderPassAccess::Load_Store, nullptr, RenderPassAccess::NoAccess));
-
-				for (int n = 0; n < pDrawData->CmdListsCount; n++)
+				const ImDrawList* pCmdList = pDrawData->CmdLists[n];
+				context.SetDynamicVertexBuffer(0, pCmdList->VtxBuffer.Size, sizeof(ImDrawVert), pCmdList->VtxBuffer.Data);
+				context.SetDynamicIndexBuffer(pCmdList->IdxBuffer.Size, pCmdList->IdxBuffer.Data, true);
+				int indexOffset = 0;
+				for (int i = 0; i < pCmdList->CmdBuffer.Size; i++)
 				{
-					const ImDrawList* pCmdList = pDrawData->CmdLists[n];
-					context.SetDynamicVertexBuffer(0, pCmdList->VtxBuffer.Size, sizeof(ImDrawVert), pCmdList->VtxBuffer.Data);
-					context.SetDynamicIndexBuffer(pCmdList->IdxBuffer.Size, pCmdList->IdxBuffer.Data, true);
-					int indexOffset = 0;
-					for (int i = 0; i < pCmdList->CmdBuffer.Size; i++)
+					const ImDrawCmd* pcmd = &pCmdList->CmdBuffer[i];
+					if (pcmd->UserCallback)
+						pcmd->UserCallback(pCmdList, pcmd);
+					else
 					{
-						const ImDrawCmd* pcmd = &pCmdList->CmdBuffer[i];
-						if (pcmd->UserCallback)
-							pcmd->UserCallback(pCmdList, pcmd);
-						else
+						context.SetScissorRect(FloatRect(pcmd->ClipRect.x, pcmd->ClipRect.y, pcmd->ClipRect.z, pcmd->ClipRect.w));
+						if (pcmd->TextureId != nullptr)
 						{
-							context.SetScissorRect(FloatRect(pcmd->ClipRect.x, pcmd->ClipRect.y, pcmd->ClipRect.z, pcmd->ClipRect.w));
-							if (pcmd->TextureId != nullptr)
-							{
-								Texture* pTex = static_cast<Texture*>(pcmd->TextureId);
-								context.InsertResourceBarrier(pTex, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-								context.SetDynamicDescriptor(1, 0, pTex->GetSRV());
-							}
-							context.DrawIndexed(pcmd->ElemCount, indexOffset, 0);
+							Texture* pTex = static_cast<Texture*>(pcmd->TextureId);
+							context.InsertResourceBarrier(pTex, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+							context.SetDynamicDescriptor(1, 0, pTex->GetSRV());
 						}
-						indexOffset += pcmd->ElemCount;
+						context.DrawIndexed(pcmd->ElemCount, indexOffset, 0);
 					}
+					indexOffset += pcmd->ElemCount;
 				}
-				context.EndRenderPass();
-			};
+			}
+			context.EndRenderPass();
 		});
 }
 

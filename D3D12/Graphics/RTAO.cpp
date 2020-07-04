@@ -43,71 +43,67 @@ void RTAO::Execute(RGGraph& graph, const RtaoInputResources& resources)
 	ImGui::SliderInt("Samples", &g_AoSamples, 1, 64);
 	ImGui::End();
 
-	graph.AddPass("Raytracing", [&](RGPassBuilder& builder)
+	RGPassBuilder rt = graph.AddPass("Raytracing");
+	rt.Bind([=](CommandContext& context, const RGPassResources& passResources)
 		{
-			return [=](CommandContext& context, const RGPassResources& passResources)
+			context.InsertResourceBarrier(resources.pDepthTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+			context.InsertResourceBarrier(resources.pRenderTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+			context.SetComputeRootSignature(m_pGlobalRS.get());
+			ID3D12GraphicsCommandList4* pCmd = context.GetRaytracingCommandList();
+			pCmd->SetPipelineState1(m_pStateObject.Get());
+
+			constexpr const int numRandomVectors = 64;
+			struct Parameters
 			{
+				Matrix ViewInverse;
+				Matrix ProjectionInverse;
+				Vector4 RandomVectors[numRandomVectors];
+				float Power;
+				float Radius;
+				int32 Samples;
+			} parameters{};
+
+			static bool written = false;
+			static Vector4 randoms[numRandomVectors];
+			if (!written)
+			{
+				srand(2);
+				written = true;
+				for (int i = 0; i < numRandomVectors; ++i)
 				{
-					context.InsertResourceBarrier(resources.pDepthTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-					context.InsertResourceBarrier(resources.pRenderTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-
-					context.SetComputeRootSignature(m_pGlobalRS.get());
-					ID3D12GraphicsCommandList4* pCmd = context.GetRaytracingCommandList();
-					pCmd->SetPipelineState1(m_pStateObject.Get());
-
-					constexpr const int numRandomVectors = 64;
-					struct Parameters
-					{
-						Matrix ViewInverse;
-						Matrix ProjectionInverse;
-						Vector4 RandomVectors[numRandomVectors];
-						float Power;
-						float Radius;
-						int32 Samples;
-					} parameters{};
-
-					static bool written = false;
-					static Vector4 randoms[numRandomVectors];
-					if (!written)
-					{
-						srand(2);
-						written = true;
-						for (int i = 0; i < numRandomVectors; ++i)
-						{
-							randoms[i] = Vector4(Math::RandVector());
-							randoms[i].z = Math::Lerp(0.1f, 0.8f, (float)abs(randoms[i].z));
-							randoms[i].Normalize();
-							randoms[i] *= Math::Lerp(0.1f, 1.0f, (float)pow(Math::RandomRange(0, 1), 2));
-						}
-					}
-					memcpy(parameters.RandomVectors, randoms, sizeof(Vector4) * numRandomVectors);
-
-					parameters.ViewInverse = resources.pCamera->GetViewInverse();
-					parameters.ProjectionInverse = resources.pCamera->GetProjectionInverse();
-					parameters.Power = g_AoPower;
-					parameters.Radius = g_AoRadius;
-					parameters.Samples = g_AoSamples;
-
-					D3D12_DISPATCH_RAYS_DESC rayDesc{};
-					ShaderBindingTable bindingTable(m_pStateObject.Get());
-					bindingTable.AddRayGenEntry("RayGen", {});
-					bindingTable.AddMissEntry("Miss", {});
-					bindingTable.AddHitGroupEntry("HitGroup", {});
-					bindingTable.Commit(context, rayDesc);
-
-					rayDesc.Width = resources.pRenderTarget->GetWidth();
-					rayDesc.Height = resources.pRenderTarget->GetHeight();
-					rayDesc.Depth = 1;
-
-					context.SetComputeDynamicConstantBufferView(0, &parameters, sizeof(Parameters));
-					context.SetDynamicDescriptor(1, 0, resources.pRenderTarget->GetUAV());
-					context.SetDynamicDescriptor(2, 0, m_pTLAS->GetSRV());
-					context.SetDynamicDescriptor(2, 1, resources.pDepthTexture->GetSRV());
-
-					context.PrepareDraw(DescriptorTableType::Compute);
-					pCmd->DispatchRays(&rayDesc);
+					randoms[i] = Vector4(Math::RandVector());
+					randoms[i].z = Math::Lerp(0.1f, 0.8f, (float)abs(randoms[i].z));
+					randoms[i].Normalize();
+					randoms[i] *= Math::Lerp(0.1f, 1.0f, (float)pow(Math::RandomRange(0, 1), 2));
 				}
-			};
+			}
+			memcpy(parameters.RandomVectors, randoms, sizeof(Vector4) * numRandomVectors);
+
+			parameters.ViewInverse = resources.pCamera->GetViewInverse();
+			parameters.ProjectionInverse = resources.pCamera->GetProjectionInverse();
+			parameters.Power = g_AoPower;
+			parameters.Radius = g_AoRadius;
+			parameters.Samples = g_AoSamples;
+
+			D3D12_DISPATCH_RAYS_DESC rayDesc{};
+			ShaderBindingTable bindingTable(m_pStateObject.Get());
+			bindingTable.AddRayGenEntry("RayGen", {});
+			bindingTable.AddMissEntry("Miss", {});
+			bindingTable.AddHitGroupEntry("HitGroup", {});
+			bindingTable.Commit(context, rayDesc);
+
+			rayDesc.Width = resources.pRenderTarget->GetWidth();
+			rayDesc.Height = resources.pRenderTarget->GetHeight();
+			rayDesc.Depth = 1;
+
+			context.SetComputeDynamicConstantBufferView(0, &parameters, sizeof(Parameters));
+			context.SetDynamicDescriptor(1, 0, resources.pRenderTarget->GetUAV());
+			context.SetDynamicDescriptor(2, 0, m_pTLAS->GetSRV());
+			context.SetDynamicDescriptor(2, 1, resources.pDepthTexture->GetSRV());
+
+			context.PrepareDraw(DescriptorTableType::Compute);
+			pCmd->DispatchRays(&rayDesc);
 		});
 }
 
@@ -287,8 +283,8 @@ void RTAO::SetupPipelines(Graphics* pGraphics)
 			CD3DX12_RAYTRACING_SHADER_CONFIG_SUBOBJECT* pRtConfig = desc.CreateSubobject<CD3DX12_RAYTRACING_SHADER_CONFIG_SUBOBJECT>();
 			pRtConfig->Config(sizeof(float), 2 * sizeof(float));
 
-			CD3DX12_RAYTRACING_PIPELINE_CONFIG_SUBOBJECT* pRtPipelineConfig = desc.CreateSubobject<CD3DX12_RAYTRACING_PIPELINE_CONFIG_SUBOBJECT>();
-			pRtPipelineConfig->Config(1);
+			CD3DX12_RAYTRACING_PIPELINE_CONFIG1_SUBOBJECT* pRtPipelineConfig = desc.CreateSubobject<CD3DX12_RAYTRACING_PIPELINE_CONFIG1_SUBOBJECT>();
+			pRtPipelineConfig->Config(1, D3D12_RAYTRACING_PIPELINE_FLAG_SKIP_PROCEDURAL_PRIMITIVES);
 
 			CD3DX12_GLOBAL_ROOT_SIGNATURE_SUBOBJECT* pGlobalRs = desc.CreateSubobject<CD3DX12_GLOBAL_ROOT_SIGNATURE_SUBOBJECT>();
 			pGlobalRs->SetRootSignature(m_pGlobalRS->GetRootSignature());
