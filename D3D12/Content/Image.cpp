@@ -48,7 +48,7 @@ bool Image::Load(const void* pInPixels, size_t dataSize, const char* pFormatHint
 	return true;
 }
 
-bool Image::SetSize(const int x, const int y, const int components)
+bool Image::SetSize(int x, int y, int components)
 {
 	m_Width = x;
 	m_Height = y;
@@ -66,7 +66,7 @@ bool Image::SetData(const unsigned int* pPixels)
 	return true;
 }
 
-bool Image::SetPixel(const int x, const int y, const Color& color)
+bool Image::SetPixel(int x, int y, const Color& color)
 {
 	if (x + y * m_Width >= (int)m_Pixels.size())
 	{
@@ -80,7 +80,7 @@ bool Image::SetPixel(const int x, const int y, const Color& color)
 	return true;
 }
 
-bool Image::SetPixelInt(const int x, const int y, const unsigned int color)
+bool Image::SetPixelInt(int x, int y, unsigned int color)
 {
 	if (x + y * m_Width >= (int)m_Pixels.size())
 	{
@@ -94,7 +94,7 @@ bool Image::SetPixelInt(const int x, const int y, const unsigned int color)
 	return true;
 }
 
-Color Image::GetPixel(const int x, const int y) const
+Color Image::GetPixel(int x, int y) const
 {
 	Color c = {};
 	if (x + y * m_Width >= (int)m_Pixels.size())
@@ -109,7 +109,7 @@ Color Image::GetPixel(const int x, const int y) const
 	return c;
 }
 
-unsigned int Image::GetPixelInt(const int x, const int y) const
+unsigned int Image::GetPixelInt(int x, int y) const
 {
 	unsigned int c = 0;
 	if (x + y * m_Width >= (int)m_Pixels.size())

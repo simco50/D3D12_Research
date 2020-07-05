@@ -11,6 +11,7 @@ class PipelineState;
 class DynamicResourceAllocator;
 class Buffer;
 class CommandSignature;
+class ShaderBindingTable;
 
 enum class CommandListContext
 {
@@ -131,8 +132,8 @@ public:
 	void Reset();
 	uint64 Execute(bool wait);
 
-	void InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESOURCE_STATES state, bool executeImmediate = false, uint32 subResource = 0xffffffff);
-	void InsertUavBarrier(GraphicsResource* pBuffer = nullptr, bool executeImmediate = false);
+	void InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESOURCE_STATES state, uint32 subResource = 0xffffffff);
+	void InsertUavBarrier(GraphicsResource* pBuffer = nullptr);
 	void FlushResourceBarriers();
 
 	void CopyTexture(GraphicsResource* pSource, GraphicsResource* pTarget);
@@ -154,6 +155,9 @@ public:
 	void Draw(int vertexStart, int vertexCount);
 	void DrawIndexed(int indexCount, int indexStart, int minVertex = 0);
 	void DrawIndexedInstanced(int indexCount, int indexStart, int instanceCount, int minVertex = 0, int instanceStart = 0);
+	
+	void DispatchRays(ShaderBindingTable& table, uint32 width = 1, uint32 height = 1, uint32 depth = 1);
+
 	void ClearColor(D3D12_CPU_DESCRIPTOR_HANDLE rtv, const Color& color = Color(0.0f, 0.0f, 0.0f, 1.0f));
 	void ClearDepth(D3D12_CPU_DESCRIPTOR_HANDLE dsv, D3D12_CLEAR_FLAGS clearFlags = D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, float depth = 1.0f, unsigned char stencil = 0);
 	void ResolveResource(Texture* pSource, uint32 sourceSubResource, Texture* pTarget, uint32 targetSubResource, DXGI_FORMAT format);
@@ -168,6 +172,7 @@ public:
 
 	//Bindings
 	void SetPipelineState(PipelineState* pPipelineState);
+	void SetPipelineState(ID3D12StateObject* pStateObject);
 	void SetComputeRootSignature(RootSignature* pRootSignature);
 	void SetComputeRootConstants(int rootIndex, uint32 count, const void* pConstants);
 	void SetComputeDynamicConstantBufferView(int rootIndex, void* pData, uint32 dataSize);

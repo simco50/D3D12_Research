@@ -6,14 +6,10 @@
 #include "Graphics/Core/GraphicsBuffer.h"
 #include "Graphics/Core/Graphics.h"
 #include "Graphics/Core/CommandContext.h"
-#include "Graphics/Core/CommandQueue.h"
 #include "Graphics/Core/Texture.h"
-#include "Graphics/Core/ResourceViews.h"
 #include "Graphics/Core/RaytracingCommon.h"
 #include "Graphics/RenderGraph/RenderGraph.h"
 #include "Graphics/Mesh.h"
-#include "Graphics/Light.h"
-#include "Graphics/Profiler.h"
 #include "Scene/Camera.h"
 
 RTAO::RTAO(Graphics* pGraphics)
@@ -30,7 +26,7 @@ void RTAO::OnSwapchainCreated(int windowWidth, int windowHeight)
 {
 }
 
-void RTAO::Execute(RGGraph& graph, const RtaoInputResources& resources)
+void RTAO::Execute(RGGraph& graph, Texture* pColor, Texture* pDepth, Camera& camera)
 {
 	static float g_AoPower = 3;
 	static float g_AoRadius = 0.5f;
@@ -46,12 +42,11 @@ void RTAO::Execute(RGGraph& graph, const RtaoInputResources& resources)
 	RGPassBuilder rt = graph.AddPass("Raytracing");
 	rt.Bind([=](CommandContext& context, const RGPassResources& passResources)
 		{
-			context.InsertResourceBarrier(resources.pDepthTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-			context.InsertResourceBarrier(resources.pRenderTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+			context.InsertResourceBarrier(pDepth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+			context.InsertResourceBarrier(pColor, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
 			context.SetComputeRootSignature(m_pGlobalRS.get());
-			ID3D12GraphicsCommandList4* pCmd = context.GetRaytracingCommandList();
-			pCmd->SetPipelineState1(m_RtSO.Get());
+			context.SetPipelineState(m_pRtSO.Get());
 
 			constexpr const int numRandomVectors = 64;
 			struct Parameters
@@ -80,30 +75,23 @@ void RTAO::Execute(RGGraph& graph, const RtaoInputResources& resources)
 			}
 			memcpy(parameters.RandomVectors, randoms, sizeof(Vector4) * numRandomVectors);
 
-			parameters.ViewInverse = resources.pCamera->GetViewInverse();
-			parameters.ProjectionInverse = resources.pCamera->GetProjectionInverse();
+			parameters.ViewInverse = camera.GetViewInverse();
+			parameters.ProjectionInverse = camera.GetProjectionInverse();
 			parameters.Power = g_AoPower;
 			parameters.Radius = g_AoRadius;
 			parameters.Samples = g_AoSamples;
 
-			D3D12_DISPATCH_RAYS_DESC rayDesc{};
-			ShaderBindingTable bindingTable(m_RtSO.Get());
+			ShaderBindingTable bindingTable(m_pRtSO.Get());
 			bindingTable.AddRayGenEntry("RayGen", {});
 			bindingTable.AddMissEntry("Miss", {});
 			bindingTable.AddHitGroupEntry("HitGroup", {});
-			bindingTable.Commit(context, rayDesc);
-
-			rayDesc.Width = resources.pRenderTarget->GetWidth();
-			rayDesc.Height = resources.pRenderTarget->GetHeight();
-			rayDesc.Depth = 1;
 
 			context.SetComputeDynamicConstantBufferView(0, &parameters, sizeof(Parameters));
-			context.SetDynamicDescriptor(1, 0, resources.pRenderTarget->GetUAV());
+			context.SetDynamicDescriptor(1, 0, pColor->GetUAV());
 			context.SetDynamicDescriptor(2, 0, m_pTLAS->GetSRV());
-			context.SetDynamicDescriptor(2, 1, resources.pDepthTexture->GetSRV());
+			context.SetDynamicDescriptor(2, 1, pDepth->GetSRV());
 
-			context.PrepareDraw(DescriptorTableType::Compute);
-			pCmd->DispatchRays(&rayDesc);
+			context.DispatchRays(bindingTable, pColor->GetWidth(), pColor->GetHeight());
 		});
 }
 
@@ -153,6 +141,7 @@ void RTAO::GenerateAccelerationStructure(Graphics* pGraphics, Mesh* pMesh, Comma
 
 		m_pBLASScratch = std::make_unique<Buffer>(pGraphics, "BLAS Scratch Buffer");
 		m_pBLASScratch->Create(BufferDesc::CreateByteAddress(Math::AlignUp<uint64>(info.ScratchDataSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT), BufferFlag::UnorderedAccess));
+
 		m_pBLAS = std::make_unique<Buffer>(pGraphics, "BLAS");
 		m_pBLAS->Create(BufferDesc::CreateAccelerationStructure(Math::AlignUp<uint64>(info.ResultDataMaxSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT)));
 
@@ -163,7 +152,8 @@ void RTAO::GenerateAccelerationStructure(Graphics* pGraphics, Mesh* pMesh, Comma
 		asDesc.SourceAccelerationStructureData = 0;
 
 		pCmd->BuildRaytracingAccelerationStructure(&asDesc, 0, nullptr);
-		context.InsertUavBarrier(m_pBLAS.get(), true);
+		context.InsertUavBarrier(m_pBLAS.get());
+		context.FlushResourceBarriers();
 	}
 	//Top Level Acceleration Structure
 	{
@@ -205,7 +195,7 @@ void RTAO::GenerateAccelerationStructure(Graphics* pGraphics, Mesh* pMesh, Comma
 		asDesc.SourceAccelerationStructureData = 0;
 
 		pCmd->BuildRaytracingAccelerationStructure(&asDesc, 0, nullptr);
-		context.InsertUavBarrier(m_pTLAS.get(), true);
+		context.InsertUavBarrier(m_pTLAS.get());
 	}
 }
 
@@ -244,6 +234,6 @@ void RTAO::SetupPipelines(Graphics* pGraphics)
 		stateDesc.SetRaytracingShaderConfig(sizeof(float), 2 * sizeof(float));
 		stateDesc.SetRaytracingPipelineConfig(1, D3D12_RAYTRACING_PIPELINE_FLAG_SKIP_PROCEDURAL_PRIMITIVES);
 		stateDesc.SetGlobalRootSignature(m_pGlobalRS->GetRootSignature());
-		m_RtSO = stateDesc.Finalize("RTAO SO", pGraphics->GetRaytracingDevice());
+		m_pRtSO = stateDesc.Finalize("RTAO SO", pGraphics->GetRaytracingDevice());
 	}
 }

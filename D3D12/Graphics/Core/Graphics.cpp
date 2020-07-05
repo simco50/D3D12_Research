@@ -431,19 +431,11 @@ void Graphics::Update()
 
 	if (g_ShowRaytraced)
 	{
-		RtaoInputResources rtResources{};
-		rtResources.pCamera = m_pCamera.get();
-		rtResources.pRenderTarget = m_pAmbientOcclusion.get();
-		rtResources.pDepthTexture = GetResolvedDepthStencil();
-		m_pRTAO->Execute(graph, rtResources);
+		m_pRTAO->Execute(graph, m_pAmbientOcclusion.get(), GetResolvedDepthStencil(), *m_pCamera);
 	}
 	else
 	{
-		SsaoInputResources ssaoResources{};
-		ssaoResources.pCamera = m_pCamera.get();
-		ssaoResources.pRenderTarget = m_pAmbientOcclusion.get();
-		ssaoResources.pDepthTexture = GetResolvedDepthStencil();
-		m_pSSAO->Execute(graph, ssaoResources);
+		m_pSSAO->Execute(graph, m_pAmbientOcclusion.get(), GetResolvedDepthStencil(), *m_pCamera);
 	}
 
 	//SHADOW MAPPING
@@ -1008,7 +1000,7 @@ void Graphics::InitD3D()
 			m_RayTracingTier = featureSupport.RaytracingTier;
 		}
 		D3D12_FEATURE_DATA_SHADER_MODEL shaderModelSupport{};
-		shaderModelSupport.HighestShaderModel = D3D_SHADER_MODEL_6_5;
+		shaderModelSupport.HighestShaderModel = D3D_SHADER_MODEL_6_6;
 		if (SUCCEEDED(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &shaderModelSupport, sizeof(D3D12_FEATURE_DATA_SHADER_MODEL))))
 		{
 			m_ShaderModelMajor = shaderModelSupport.HighestShaderModel >> 0x4;

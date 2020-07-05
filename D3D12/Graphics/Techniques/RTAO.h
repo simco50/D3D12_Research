@@ -8,13 +8,6 @@ class CommandContext;
 class Buffer;
 class RGGraph;
 
-struct RtaoInputResources
-{
-	Texture* pRenderTarget = nullptr;
-	Texture* pDepthTexture = nullptr;
-	Camera* pCamera = nullptr;
-};
-
 class RTAO
 {
 public:
@@ -22,7 +15,7 @@ public:
 
 	void OnSwapchainCreated(int windowWidth, int windowHeight);
 
-	void Execute(RGGraph& graph, const RtaoInputResources& resources);
+	void Execute(RGGraph& graph, Texture* pColor, Texture* pDepth, Camera& camera);
 	void GenerateAccelerationStructure(Graphics* pGraphics, Mesh* pMesh, CommandContext& context);
 
 private:
@@ -37,7 +30,7 @@ private:
 	std::unique_ptr<Buffer> m_pTLASScratch;
 	std::unique_ptr<Buffer> m_pDescriptorsBuffer;
 
-	ComPtr<ID3D12StateObject> m_RtSO;
+	ComPtr<ID3D12StateObject> m_pRtSO;
 
 	std::unique_ptr<RootSignature> m_pRayGenSignature;
 	std::unique_ptr<RootSignature> m_pHitSignature;

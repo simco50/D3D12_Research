@@ -1,13 +1,10 @@
 #include "stdafx.h"
 #include "DebugRenderer.h"
-#include "Graphics/Core/GraphicsBuffer.h"
 #include "Graphics/Core/Graphics.h"
 #include "Graphics/Core/Shader.h"
 #include "Graphics/Core/PipelineState.h"
 #include "Graphics/Core/RootSignature.h"
 #include "Graphics/Core/CommandContext.h"
-#include "Scene/Camera.h"
-#include "Mesh.h"
 #include "Light.h"
 #include "RenderGraph/RenderGraph.h"
 
@@ -161,7 +158,7 @@ void DebugRenderer::AddPolygon(const Vector3& a, const Vector3& b, const Vector3
 	AddTriangle(c, d, a, color);
 }
 
-void DebugRenderer::AddBox(const Vector3& position, const Vector3& extents, const Color& color, const bool solid /*= false*/)
+void DebugRenderer::AddBox(const Vector3& position, const Vector3& extents, const Color& color, bool solid /*= false*/)
 {
 	Vector3 min(position.x - extents.x, position.y - extents.y, position.z - extents.z);
 	Vector3 max(position.x + extents.x, position.y + extents.y, position.z + extents.z);
@@ -199,12 +196,12 @@ void DebugRenderer::AddBox(const Vector3& position, const Vector3& extents, cons
 	}
 }
 
-void DebugRenderer::AddBoundingBox(const BoundingBox& boundingBox, const Color& color, const bool solid /*= false*/)
+void DebugRenderer::AddBoundingBox(const BoundingBox& boundingBox, const Color& color, bool solid /*= false*/)
 {
 	AddBox(boundingBox.Center, boundingBox.Extents, color, solid);
 }
 
-void DebugRenderer::AddBoundingBox(const BoundingBox& boundingBox, const Matrix& transform, const Color& color, const bool solid /*= false*/)
+void DebugRenderer::AddBoundingBox(const BoundingBox& boundingBox, const Matrix& transform, const Color& color, bool solid /*= false*/)
 {
 	const Vector3 min(boundingBox.Center.x - boundingBox.Extents.x, boundingBox.Center.y - boundingBox.Extents.y, boundingBox.Center.z - boundingBox.Extents.z);
 	const Vector3 max(boundingBox.Center.x + boundingBox.Extents.x, boundingBox.Center.y + boundingBox.Extents.y, boundingBox.Center.z + boundingBox.Extents.z);
@@ -244,7 +241,7 @@ void DebugRenderer::AddBoundingBox(const BoundingBox& boundingBox, const Matrix&
     }
 }
 
-void DebugRenderer::AddSphere(const Vector3& position, const float radius, const int slices, const int stacks, const Color& color, const bool solid)
+void DebugRenderer::AddSphere(const Vector3& position, float radius,  int slices, int stacks, const Color& color, bool solid)
 {
 	DebugSphere sphere(position, radius);
 
@@ -305,7 +302,7 @@ void DebugRenderer::AddFrustrum(const BoundingFrustum& frustrum, const Color& co
 	AddLine(corners[3], corners[7], color);
 }
 
-void DebugRenderer::AddAxisSystem(const Matrix& transform, const float lineLength)
+void DebugRenderer::AddAxisSystem(const Matrix& transform, float lineLength)
 {
 	Matrix newMatrix = Matrix::CreateScale(Math::ScaleFromMatrix(transform));
 	newMatrix.Invert(newMatrix);
@@ -320,7 +317,7 @@ void DebugRenderer::AddAxisSystem(const Matrix& transform, const float lineLengt
 	AddLine(origin, z, Color(0, 0, 1, 1));
 }
 
-void DebugRenderer::AddWireCylinder(const Vector3& position, const Vector3& direction, const float height, const float radius, const int segments, const Color& color)
+void DebugRenderer::AddWireCylinder(const Vector3& position, const Vector3& direction, float height, float radius, int segments, const Color& color)
 {
 	Vector3 d;
 	direction.Normalize(d);
@@ -339,7 +336,7 @@ void DebugRenderer::AddWireCylinder(const Vector3& position, const Vector3& dire
 	}
 }
 
-void DebugRenderer::AddWireCone(const Vector3& position, const Vector3& direction, const float height, const float angle, const int segments, const Color& color)
+void DebugRenderer::AddWireCone(const Vector3& position, const Vector3& direction, float height, float angle, int segments, const Color& color)
 {
 	Vector3 d;
 	direction.Normalize(d);
@@ -358,7 +355,7 @@ void DebugRenderer::AddWireCone(const Vector3& position, const Vector3& directio
 	}
 }
 
-void DebugRenderer::AddBone(const Matrix& matrix, const float length, const Color& color)
+void DebugRenderer::AddBone(const Matrix& matrix, float length, const Color& color)
 {
 	float boneSize = 2;
 	Vector3 start = Vector3::Transform(Vector3(0, 0, 0), matrix);

@@ -1,6 +1,5 @@
 #include "stdafx.h"
 #include "Camera.h"
-#include "Graphics/Core/Graphics.h"
 #include "Core/Input.h"
 
 void Camera::SetPosition(const Vector3& position)

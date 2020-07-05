@@ -47,7 +47,7 @@ private:
 	float m_NearPlane = 1.0f;
 	float m_FarPlane = 500.0f;
 	float m_OrthographicSize = 1;
-	float m_AspectRatio;
+	float m_AspectRatio = 1.0f;
 
 	mutable Matrix m_Projection;
 	mutable Matrix m_View;

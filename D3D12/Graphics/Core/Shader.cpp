@@ -19,7 +19,6 @@ namespace ShaderCompiler
 		case ShaderType::Pixel:		return "ps";
 		case ShaderType::Geometry:	return "gs";
 		case ShaderType::Compute:	return "cs";
-		case ShaderType::MAX:		return "lib"; //Assume MAX is shader lib
 		default: noEntry();			return "";
 		}
 	}
@@ -55,7 +54,6 @@ namespace ShaderCompiler
 			str << intermediate << "=1";
 			wDefines.push_back(str.str());
 		}
-		wDefines.push_back(L"_DXC=1");
 
 		std::vector<LPCWSTR> arguments;
 		arguments.reserve(20);
@@ -190,18 +188,8 @@ namespace ShaderCompiler
 			compileFlags |= D3DCOMPILE_OPTIMIZATION_LEVEL3;
 		}
 
-		std::vector<std::string> globalDefines;
-		globalDefines.push_back("_FXC=1");
-
 		std::vector<D3D_SHADER_MACRO> shaderDefines;
 		for (const std::string& define : defines)
-		{
-			D3D_SHADER_MACRO m;
-			m.Name = define.c_str();
-			m.Definition = "1";
-			shaderDefines.push_back(m);
-		}
-		for (const std::string& define : globalDefines)
 		{
 			D3D_SHADER_MACRO m;
 			m.Name = define.c_str();
@@ -226,24 +214,33 @@ namespace ShaderCompiler
 		return true;
 	}
 
-	bool Compile(const char* pIdentifier, const char* pShaderSource, uint32 shaderSourceSize, ShaderType type, IDxcBlob** pOutput, const char* pEntryPoint, uint32 majVersion, uint32 minVersion, const std::vector<std::string>& defines /*= {}*/)
+	bool Compile(const char* pIdentifier, const char* pShaderSource, uint32 shaderSourceSize, const char* pTarget, IDxcBlob** pOutput, const char* pEntryPoint, uint32 majVersion, uint32 minVersion, const std::vector<std::string>& defines /*= {}*/)
 	{
 		char target[16];
-		const char* pTargetType = GetShaderTarget(type);
-		size_t i = strlen(pTargetType);
-		memcpy(target, pTargetType, i);
+		size_t i = strlen(pTarget);
+		memcpy(target, pTarget, i);
 		target[i++] = '_';
 		target[i++] = '0' + majVersion;
 		target[i++] = '_';
 		target[i++] = '0' + minVersion;
 		target[i++] = 0;
 
+		std::vector<std::string> definesActual = defines;
+		std::stringstream str;
+		str << "_SM_MAJ=" << majVersion;
+		definesActual.push_back(str.str());
+		str = std::stringstream();
+		str << "_SM_MIN=" << minVersion;
+		definesActual.push_back(str.str());
+
 		if (majVersion < 6)
 		{
+			definesActual.emplace_back("_FXC=1");
 			ID3DBlob** pBlob = reinterpret_cast<ID3DBlob**>(pOutput);
-			return CompileFxc(pIdentifier, pShaderSource, shaderSourceSize, pBlob, pEntryPoint, target, defines);
+			return CompileFxc(pIdentifier, pShaderSource, shaderSourceSize, pBlob, pEntryPoint, target, definesActual);
 		}
-		return CompileDxc(pIdentifier, pShaderSource, shaderSourceSize, pOutput, pEntryPoint, target, defines);
+		definesActual.emplace_back("_DXC=1");
+		return CompileDxc(pIdentifier, pShaderSource, shaderSourceSize, pOutput, pEntryPoint, target, definesActual);
 	}
 }
 
@@ -340,7 +337,7 @@ bool Shader::Compile(const char* pFilePath, ShaderType shaderType, const char* p
 	}
 
 	std::string source = shaderSource.str();
-	return ShaderCompiler::Compile(pFilePath, source.c_str(), (uint32)source.size(), shaderType, m_pByteCode.GetAddressOf(), pEntryPoint, shaderModelMajor, shaderModelMinor, defines);
+	return ShaderCompiler::Compile(pFilePath, source.c_str(), (uint32)source.size(), ShaderCompiler::GetShaderTarget(shaderType), m_pByteCode.GetAddressOf(), pEntryPoint, shaderModelMajor, shaderModelMinor, defines);
 }
 
 ShaderLibrary::ShaderLibrary(const char* pFilePath, const std::vector<std::string> defines)
@@ -359,5 +356,5 @@ bool ShaderLibrary::Compile(const char* pFilePath, uint32 shaderModelMajor, uint
 	}
 
 	std::string source = shaderSource.str();
-	return ShaderCompiler::Compile(pFilePath, source.c_str(), (uint32)source.size(), ShaderType::MAX, m_pByteCode.GetAddressOf(), "", shaderModelMajor, shaderModelMinor, defines);
+	return ShaderCompiler::Compile(pFilePath, source.c_str(), (uint32)source.size(), "lib", m_pByteCode.GetAddressOf(), "", shaderModelMajor, shaderModelMinor, defines);
 }

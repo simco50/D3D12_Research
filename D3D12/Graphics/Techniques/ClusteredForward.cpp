@@ -6,13 +6,11 @@
 #include "Graphics/Core/GraphicsBuffer.h"
 #include "Graphics/Core/Graphics.h"
 #include "Graphics/Core/CommandContext.h"
-#include "Graphics/Core/CommandQueue.h"
 #include "Graphics/Core/Texture.h"
 #include "Graphics/Core/ResourceViews.h"
 #include "Graphics/Core/CommandSignature.h"
 #include "Graphics/RenderGraph/RenderGraph.h"
 #include "Graphics/Mesh.h"
-#include "Graphics/Light.h"
 #include "Graphics/Profiler.h"
 #include "Scene/Camera.h"
 
@@ -163,7 +161,7 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
 		});
 
 	RGPassBuilder& compactClusters = graph.AddPass("Compact Clusters");
-	compactClusters.Bind([=](CommandContext& context, const RGPassResources& resources)
+	compactClusters.Bind([=](CommandContext& context, const RGPassResources& passResources)
 		{
 			context.SetPipelineState(m_pCompactClustersPSO.get());
 			context.SetComputeRootSignature(m_pCompactClustersRS.get());
@@ -183,7 +181,7 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
 		});
 
 	RGPassBuilder updateArguments = graph.AddPass("Update Indirect Arguments");
-	updateArguments.Bind([=](CommandContext& context, const RGPassResources& resources)
+	updateArguments.Bind([=](CommandContext& context, const RGPassResources& passResources)
 		{
 			UnorderedAccessView* pCompactedClustersUAV = m_pCompactedClusters->GetUAV();
 			context.InsertResourceBarrier(pCompactedClustersUAV->GetCounter(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);

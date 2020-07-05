@@ -252,7 +252,7 @@ private:
 	int m_DisplayWidth = 1240;
 	int m_DisplayHeight = 720;
 	bool m_IsResizing = false;
-	HWND m_Window;
+	HWND m_Window = 0;
 	std::unique_ptr<Graphics> m_pGraphics;
 };
 

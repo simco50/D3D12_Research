@@ -9,13 +9,6 @@ class Buffer;
 class RGGraph;
 class PipelineState;
 
-struct SsaoInputResources
-{
-	Texture* pRenderTarget = nullptr;
-	Texture* pDepthTexture = nullptr;
-	Camera* pCamera = nullptr;
-};
-
 class SSAO
 {
 public:
@@ -23,7 +16,7 @@ public:
 
 	void OnSwapchainCreated(int windowWidth, int windowHeight);
 
-	void Execute(RGGraph& graph, const SsaoInputResources& resources);
+	void Execute(RGGraph& graph, Texture* pColor, Texture* pDepth, Camera& camera);
 
 private:
 	void SetupResources(Graphics* pGraphics);
