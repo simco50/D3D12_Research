@@ -7,6 +7,9 @@
 #define USE_SHADER_LINE_DIRECTIVE 1
 #endif
 
+#define SM_MAJ 6
+#define SM_MIN 5
+
 namespace ShaderCompiler
 {
 	constexpr const char* pShaderSymbolsPath = "_Temp/ShaderSymbols/";
@@ -15,11 +18,15 @@ namespace ShaderCompiler
 	{
 		switch (t)
 		{
-		case ShaderType::Vertex:	return "vs";
-		case ShaderType::Pixel:		return "ps";
-		case ShaderType::Geometry:	return "gs";
-		case ShaderType::Compute:	return "cs";
-		default: noEntry();			return "";
+		case ShaderType::Vertex:		return "vs";
+		case ShaderType::Pixel:			return "ps";
+		case ShaderType::Geometry:		return "gs";
+		case ShaderType::Compute:		return "cs";
+		case ShaderType::Hull:			return "hs";
+		case ShaderType::Domain:		return "ds";
+		case ShaderType::Mesh:			return "ms";
+		case ShaderType::Amplification: return "as";
+		default: noEntry();				return "";
 		}
 	}
 
@@ -324,7 +331,7 @@ Shader::Shader(const char* pFilePath, ShaderType shaderType, const char* pEntryP
 {
 	m_Path = Paths::ShadersDir() + pFilePath;
 	m_Type = shaderType;
-	Compile(m_Path.c_str(), shaderType, pEntryPoint, 6, 3, defines);
+	Compile(m_Path.c_str(), shaderType, pEntryPoint, SM_MAJ, SM_MIN, defines);
 }
 
 bool Shader::Compile(const char* pFilePath, ShaderType shaderType, const char* pEntryPoint, uint32 shaderModelMajor, uint32 shaderModelMinor, const std::vector<std::string> defines /*= {}*/)
@@ -343,7 +350,7 @@ bool Shader::Compile(const char* pFilePath, ShaderType shaderType, const char* p
 ShaderLibrary::ShaderLibrary(const char* pFilePath, const std::vector<std::string> defines)
 {
 	m_Path = Paths::ShadersDir() + pFilePath;
-	Compile(m_Path.c_str(), 6, 3, defines);
+	Compile(m_Path.c_str(), SM_MAJ, SM_MIN, defines);
 }
 
 bool ShaderLibrary::Compile(const char* pFilePath, uint32 shaderModelMajor, uint32 shaderModelMinor, const std::vector<std::string> defines /*= {}*/)

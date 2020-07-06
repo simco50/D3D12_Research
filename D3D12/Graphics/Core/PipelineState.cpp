@@ -365,23 +365,3 @@ void PipelineState::SetRootSignature(ID3D12RootSignature* pRootSignature)
 {
 	m_Desc.pRootSignature = pRootSignature;
 }
-
-void PipelineState::SetVertexShader(const void* pByteCode, uint32 byteCodeLength)
-{
-	m_Desc.VS = { pByteCode, byteCodeLength };
-}
-
-void PipelineState::SetPixelShader(const void* pByteCode, uint32 byteCodeLength)
-{
-	m_Desc.PS = { pByteCode, byteCodeLength };
-}
-
-void PipelineState::SetGeometryShader(const void* pByteCode, uint32 byteCodeLength)
-{
-	m_Desc.GS = { pByteCode, byteCodeLength };
-}
-
-void PipelineState::SetComputeShader(const void* pByteCode, uint32 byteCodeLength)
-{
-	m_Desc.CS = { pByteCode, byteCodeLength };
-}
