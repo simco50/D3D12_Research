@@ -41,6 +41,7 @@ using ComPtr = Microsoft::WRL::ComPtr<T>;
 #include <dxc/dxcapi.h>
 
 #include "External/d3dx12/d3dx12.h"
+#include "External/d3dx12/d3dx12_extra.h"
 #include "External/Imgui/imgui.h"
 
 #define DECLARE_BITMASK_TYPE(Enum) \

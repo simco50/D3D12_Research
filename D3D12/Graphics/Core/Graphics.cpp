@@ -25,6 +25,7 @@
 #include "Graphics/Techniques/RTAO.h"
 #include "Graphics/Techniques/SSAO.h"
 #include "Graphics/Techniques/GpuParticles.h"
+#include "Core/CommandLine.h"
 
 #ifdef _DEBUG
 #define D3D_VALIDATION 1
@@ -157,7 +158,7 @@ void Graphics::Update()
 	BeginFrame();
 	m_pImGuiRenderer->Update();
 
-	PIX_CAPTURE_SCOPE();
+	D3D::PixCaptureScope pixScope;
 	PROFILE_BEGIN("Update Game State");
 
 	m_pCamera->Update();
@@ -871,28 +872,41 @@ void Graphics::InitD3D()
 	E_LOG(Info, "Graphics::InitD3D()");
 	UINT dxgiFactoryFlags = 0;
 
-#if D3D_VALIDATION
-	//Enable debug
-	ComPtr<ID3D12Debug> pDebugController;
-	if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&pDebugController))))
+	bool debugD3D = CommandLine::GetBool("d3dvalidation") || D3D_VALIDATION;
+	bool gpuValidation = CommandLine::GetBool("gpuvalidation") || GPU_VALIDATION;
+
+	if (debugD3D)
 	{
-		pDebugController->EnableDebugLayer();
-		E_LOG(Info, "D3D12 Debug Layer Enabled");
+		ComPtr<ID3D12Debug> pDebugController;
+		if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&pDebugController))))
+		{
+			pDebugController->EnableDebugLayer();
+			E_LOG(Info, "D3D12 Debug Layer Enabled");
+		}
+
+		if (gpuValidation)
+		{
+			ComPtr<ID3D12Debug1> pDebugController1;
+			if (SUCCEEDED(pDebugController->QueryInterface(IID_PPV_ARGS(&pDebugController1))))
+			{
+				pDebugController1->SetEnableGPUBasedValidation(true);
+				E_LOG(Warning, "D3D12 GPU Based Validation Enabled");
+			}
+		}
+
+		// Enable additional debug layers.
+		dxgiFactoryFlags |= DXGI_CREATE_FACTORY_DEBUG;
 	}
 
-#if GPU_VALIDATION
-	ComPtr<ID3D12Debug1> pDebugController1;
-	if (SUCCEEDED(pDebugController->QueryInterface(IID_PPV_ARGS(&pDebugController1))))
+	ComPtr<ID3D12DeviceRemovedExtendedDataSettings> pDredSettings;
+	if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&pDredSettings))))
 	{
-		pDebugController1->SetEnableGPUBasedValidation(true);
-		E_LOG(Warning, "D3D12 GPU Based Validation Enabled");
-}
-#endif
-
-	// Enable additional debug layers.
-	dxgiFactoryFlags |= DXGI_CREATE_FACTORY_DEBUG;
-#endif
-
+		E_LOG(Info, "DRED Enabled");
+		// Turn on auto-breadcrumbs and page fault reporting.
+		pDredSettings->SetAutoBreadcrumbsEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
+		pDredSettings->SetPageFaultEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
+	}
+	
 	//Create the factory
 	ComPtr<IDXGIFactory6> pFactory;
 	VERIFY_HR(CreateDXGIFactory2(dxgiFactoryFlags, IID_PPV_ARGS(&pFactory)));
@@ -953,43 +967,45 @@ void Graphics::InitD3D()
 
 	m_pDevice.As(&m_pRaytracingDevice);
 
-#if D3D_VALIDATION
-	ID3D12InfoQueue* pInfoQueue = nullptr;
-	if (SUCCEEDED(m_pDevice->QueryInterface(IID_PPV_ARGS(&pInfoQueue))))
+	if(debugD3D)
 	{
-		// Suppress whole categories of messages
-		//D3D12_MESSAGE_CATEGORY Categories[] = {};
-
-		// Suppress messages based on their severity level
-		D3D12_MESSAGE_SEVERITY Severities[] =
+		ID3D12InfoQueue* pInfoQueue = nullptr;
+		if (SUCCEEDED(m_pDevice->QueryInterface(IID_PPV_ARGS(&pInfoQueue))))
 		{
-			D3D12_MESSAGE_SEVERITY_INFO
-		};
+			// Suppress whole categories of messages
+			//D3D12_MESSAGE_CATEGORY Categories[] = {};
 
-		// Suppress individual messages by their ID
-		D3D12_MESSAGE_ID DenyIds[] =
-		{
-			// This occurs when there are uninitialized descriptors in a descriptor table, even when a
-			// shader does not access the missing descriptors.  I find this is common when switching
-			// shader permutations and not wanting to change much code to reorder resources.
-			D3D12_MESSAGE_ID_INVALID_DESCRIPTOR_HANDLE,
-		};
+			// Suppress messages based on their severity level
+			D3D12_MESSAGE_SEVERITY Severities[] =
+			{
+				D3D12_MESSAGE_SEVERITY_INFO
+			};
 
-		D3D12_INFO_QUEUE_FILTER NewFilter = {};
-		//NewFilter.DenyList.NumCategories = _countof(Categories);
-		//NewFilter.DenyList.pCategoryList = Categories;
-		NewFilter.DenyList.NumSeverities = _countof(Severities);
-		NewFilter.DenyList.pSeverityList = Severities;
-		NewFilter.DenyList.NumIDs = _countof(DenyIds);
-		NewFilter.DenyList.pIDList = DenyIds;
+			// Suppress individual messages by their ID
+			D3D12_MESSAGE_ID DenyIds[] =
+			{
+				// This occurs when there are uninitialized descriptors in a descriptor table, even when a
+				// shader does not access the missing descriptors.  I find this is common when switching
+				// shader permutations and not wanting to change much code to reorder resources.
+				D3D12_MESSAGE_ID_INVALID_DESCRIPTOR_HANDLE,
+			};
 
-#if 0
-		HR(pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, true), GetDevice());
-#endif
-		pInfoQueue->PushStorageFilter(&NewFilter);
-		pInfoQueue->Release();
+			D3D12_INFO_QUEUE_FILTER NewFilter = {};
+			//NewFilter.DenyList.NumCategories = _countof(Categories);
+			//NewFilter.DenyList.pCategoryList = Categories;
+			NewFilter.DenyList.NumSeverities = _countof(Severities);
+			NewFilter.DenyList.pSeverityList = Severities;
+			NewFilter.DenyList.NumIDs = _countof(DenyIds);
+			NewFilter.DenyList.pIDList = DenyIds;
+
+			if (CommandLine::GetBool("d3dbreakvalidation"))
+			{
+				VERIFY_HR_EX(pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, true), GetDevice());
+			}
+			pInfoQueue->PushStorageFilter(&NewFilter);
+			pInfoQueue->Release();
+		}
 	}
-#endif
 
 	//Feature checks
 	{	
@@ -1020,11 +1036,6 @@ void Graphics::InitD3D()
 	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_RTV] = std::make_unique<OfflineDescriptorAllocator>(this, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, 128);
 	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_DSV] = std::make_unique<OfflineDescriptorAllocator>(this, D3D12_DESCRIPTOR_HEAP_TYPE_DSV, 64);
 
-	m_pDynamicAllocationManager = std::make_unique<DynamicAllocationManager>(this);
-	Profiler::Get()->Initialize(this);
-
-	m_pSwapchain.Reset();
-
 	DXGI_SWAP_CHAIN_DESC1 swapchainDesc = {};
 	swapchainDesc.Width = m_WindowWidth;
 	swapchainDesc.Height = m_WindowHeight;
@@ -1045,15 +1056,21 @@ void Graphics::InitD3D()
 	fsDesc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
 	fsDesc.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED;
 	fsDesc.Windowed = true;
-	VERIFY_HR_EX(pFactory->CreateSwapChainForHwnd(
+	VERIFY_HR(pFactory->CreateSwapChainForHwnd(
 		m_CommandQueues[D3D12_COMMAND_LIST_TYPE_DIRECT]->GetCommandQueue(), 
 		m_pWindow, 
 		&swapchainDesc, 
 		&fsDesc, 
 		nullptr, 
-		swapChain.GetAddressOf()), GetDevice());
+		swapChain.GetAddressOf()));
 
+	m_pSwapchain.Reset();
 	swapChain.As(&m_pSwapchain);
+
+	m_pDynamicAllocationManager = std::make_unique<DynamicAllocationManager>(this);
+	m_pGraphAllocator = std::make_unique<RGResourceAllocator>(this);
+
+	Profiler::Get()->Initialize(this);
 
 	//Create the textures but don't create the resources themselves yet.
 	for (int i = 0; i < FRAME_COUNT; ++i)
@@ -1080,11 +1097,11 @@ void Graphics::InitD3D()
 	m_pImGuiRenderer->AddUpdateCallback(ImGuiCallbackDelegate::CreateRaw(this, &Graphics::UpdateImGui));
 	m_pParticles = std::make_unique<GpuParticles>(this);
 
-	OnResize(m_WindowWidth, m_WindowHeight);
 
-	m_pGraphAllocator = std::make_unique<RGResourceAllocator>(this);
 
 	DebugRenderer::Get()->Initialize(this);
+
+	OnResize(m_WindowWidth, m_WindowHeight);
 }
 
 void Graphics::OnResize(int width, int height)
@@ -1169,17 +1186,17 @@ void Graphics::InitializeAssets()
 
 	//Input layout
 	//UNIVERSAL
-	D3D12_INPUT_ELEMENT_DESC inputElements[] = {
-		D3D12_INPUT_ELEMENT_DESC{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-		D3D12_INPUT_ELEMENT_DESC{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-		D3D12_INPUT_ELEMENT_DESC{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 20, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-		D3D12_INPUT_ELEMENT_DESC{ "TANGENT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 32, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-		D3D12_INPUT_ELEMENT_DESC{ "TEXCOORD", 1, DXGI_FORMAT_R32G32B32_FLOAT, 0, 44, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+	CD3DX12_INPUT_ELEMENT_DESC inputElements[] = {
+		CD3DX12_INPUT_ELEMENT_DESC("POSITION", DXGI_FORMAT_R32G32B32_FLOAT),
+		CD3DX12_INPUT_ELEMENT_DESC("TEXCOORD", DXGI_FORMAT_R32G32_FLOAT),
+		CD3DX12_INPUT_ELEMENT_DESC("NORMAL", DXGI_FORMAT_R32G32B32_FLOAT),
+		CD3DX12_INPUT_ELEMENT_DESC("TANGENT", DXGI_FORMAT_R32G32B32_FLOAT),
+		CD3DX12_INPUT_ELEMENT_DESC("TEXCOORD", DXGI_FORMAT_R32G32B32_FLOAT, 1),
 	};
 
-	D3D12_INPUT_ELEMENT_DESC depthOnlyInputElements[] = {
-		D3D12_INPUT_ELEMENT_DESC{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-		D3D12_INPUT_ELEMENT_DESC{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+	CD3DX12_INPUT_ELEMENT_DESC depthOnlyInputElements[] = {
+		CD3DX12_INPUT_ELEMENT_DESC("POSITION", DXGI_FORMAT_R32G32B32_FLOAT),
+		CD3DX12_INPUT_ELEMENT_DESC("TEXCOORD", DXGI_FORMAT_R32G32_FLOAT),
 	};
 
 	//Shadow mapping
@@ -1347,8 +1364,8 @@ void Graphics::InitializeAssets()
 
 	//Sky
 	{
-		D3D12_INPUT_ELEMENT_DESC cubeInputElements[] = {
-			D3D12_INPUT_ELEMENT_DESC{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+		CD3DX12_INPUT_ELEMENT_DESC cubeInputElements[] = {
+			CD3DX12_INPUT_ELEMENT_DESC("POSITION", DXGI_FORMAT_R32G32B32_FLOAT),
 		};
 
 		Shader vertexShader("ProceduralSky.hlsl", ShaderType::Vertex, "VSMain");
