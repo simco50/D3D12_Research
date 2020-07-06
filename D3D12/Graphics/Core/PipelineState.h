@@ -85,6 +85,14 @@ private:
 	D3D12_STATE_OBJECT_TYPE m_Type;
 };
 
+enum class PipelineStateType
+{
+	Graphics,
+	Compute,
+	Mesh,
+	MAX
+};
+
 class PipelineState
 {
 public:
@@ -117,16 +125,19 @@ public:
 	void SetRootSignature(ID3D12RootSignature* pRootSignature);
 
 	//Shaders
-	void SetVertexShader(const void* pByteCode, uint32 byteCodeLength)				{ m_Desc.VS = { pByteCode, byteCodeLength }; }
-	void SetPixelShader(const void* pByteCode, uint32 byteCodeLength)				{ m_Desc.PS = { pByteCode, byteCodeLength }; }
-	void SetHullShader(const void* pByteCode, uint32 byteCodeLength)				{ m_Desc.HS = { pByteCode, byteCodeLength }; }
-	void SetDomainShader(const void* pByteCode, uint32 byteCodeLength)				{ m_Desc.DS = { pByteCode, byteCodeLength }; }
-	void SetGeometryShader(const void* pByteCode, uint32 byteCodeLength)			{ m_Desc.GS = { pByteCode, byteCodeLength }; }
-	void SetComputeShader(const void* pByteCode, uint32 byteCodeLength)				{ m_Desc.CS = { pByteCode, byteCodeLength }; }
-	void SetMeshShader(const void* pByteCode, uint32 byteCodeLength)				{ m_Desc.MS = { pByteCode, byteCodeLength }; }
-	void SetAmplificationShader(const void* pByteCode, uint32 byteCodeLength)		{ m_Desc.AS = { pByteCode, byteCodeLength }; }
+	void SetVertexShader(const void* pByteCode, uint32 byteCodeLength);
+	void SetPixelShader(const void* pByteCode, uint32 byteCodeLength);
+	void SetHullShader(const void* pByteCode, uint32 byteCodeLength);
+	void SetDomainShader(const void* pByteCode, uint32 byteCodeLength);
+	void SetGeometryShader(const void* pByteCode, uint32 byteCodeLength);
+	void SetComputeShader(const void* pByteCode, uint32 byteCodeLength);
+	void SetMeshShader(const void* pByteCode, uint32 byteCodeLength);
+	void SetAmplificationShader(const void* pByteCode, uint32 byteCodeLength);
+
+	PipelineStateType GetType() const { return m_Type; }
 
 protected:
 	ComPtr<ID3D12PipelineState> m_pPipelineState;
 	CD3DX12_PIPELINE_STATE_STREAM2 m_Desc = {};
+	PipelineStateType m_Type = PipelineStateType::MAX;
 };

@@ -158,7 +158,6 @@ void Graphics::Update()
 	BeginFrame();
 	m_pImGuiRenderer->Update();
 
-	D3D::PixCaptureScope pixScope;
 	PROFILE_BEGIN("Update Game State");
 
 	m_pCamera->Update();
@@ -1021,6 +1020,11 @@ void Graphics::InitD3D()
 		{
 			m_ShaderModelMajor = shaderModelSupport.HighestShaderModel >> 0x4;
 			m_ShaderModelMinor = shaderModelSupport.HighestShaderModel & 0xF;
+		}
+		D3D12_FEATURE_DATA_D3D12_OPTIONS7 caps7{};
+		if (SUCCEEDED(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS7, &caps7, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS7))))
+		{
+			m_MeshShaderSupport = caps7.MeshShaderTier;
 		}
 	}
 

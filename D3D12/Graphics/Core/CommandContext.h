@@ -145,12 +145,14 @@ public:
 
 	ID3D12GraphicsCommandList* GetCommandList() const { return m_pCommandList; }
 	ID3D12GraphicsCommandList4* GetRaytracingCommandList() const { return  m_pRaytracingCommandList.Get(); }
+	ID3D12GraphicsCommandList6* GetMeshShadingCommandList() const { return  m_pMeshShadingCommandList.Get(); }
 
 	D3D12_COMMAND_LIST_TYPE GetType() const { return m_Type; }
 
 	//Commands
 	void Dispatch(uint32 groupCountX, uint32 groupCountY = 1, uint32 groupCountZ = 1);
 	void Dispatch(const IntVector3& groupCounts);
+	void DispatchMesh(uint32 groupCountX, uint32 groupCountY = 1, uint32 groupCountZ = 1);
 	void ExecuteIndirect(CommandSignature* pCommandSignature, Buffer* pIndirectArguments, bool isCompute = true);
 	void Draw(int vertexStart, int vertexCount);
 	void DrawIndexed(int indexCount, int indexStart, int minVertex = 0);
@@ -213,6 +215,7 @@ private:
 	std::unique_ptr<DynamicResourceAllocator> m_DynamicAllocator;
 	ID3D12GraphicsCommandList* m_pCommandList;
 	ComPtr<ID3D12GraphicsCommandList4> m_pRaytracingCommandList;
+	ComPtr<ID3D12GraphicsCommandList6> m_pMeshShadingCommandList;
 	ID3D12CommandAllocator* m_pAllocator;
 	D3D12_COMMAND_LIST_TYPE m_Type;
 
