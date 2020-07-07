@@ -237,7 +237,7 @@ void RGGraph::ExecutePass(RGPass* pPass, CommandContext& context)
 
 	{
 		GPU_PROFILE_SCOPE(pPass->m_Name, &context);
-		pPass->Execute(resources, context);
+		pPass->Execute(context, resources);
 	}
 
 	//#todo: Check if we're in a Graphics pass and automatically call EndRenderPass

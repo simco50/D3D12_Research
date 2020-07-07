@@ -14,18 +14,19 @@ const int gMsaaSampleCount = 4;
 class ViewWrapper
 {
 public:
-	void Run(const char* pTitle)
+	void Run(HINSTANCE hInstance, const char* pTitle)
 	{
 		m_DisplayWidth = gWindowWidth;
 		m_DisplayHeight = gWindowHeight;
 
-		MakeWindow(pTitle);
+		HWND window = MakeWindow(hInstance, pTitle);
+		Input::Instance().SetWindow(window);
 
-		m_pGraphics = std::make_unique<Graphics>(m_DisplayWidth, m_DisplayHeight, gMsaaSampleCount);
-		m_pGraphics->Initialize(m_Window);
+		m_pGraphics = new Graphics(m_DisplayWidth, m_DisplayHeight, gMsaaSampleCount);
+		m_pGraphics->Initialize(window);
 
 		Time::Reset();
-		//Game loop
+
 		MSG msg = {};
 		while (msg.message != WM_QUIT)
 		{
@@ -34,52 +35,28 @@ public:
 				TranslateMessage(&msg);
 				DispatchMessage(&msg);
 			}
-			else
-			{
-				Time::Tick();
-				m_pGraphics->Update();
-				Input::Instance().Update();
-			}
+			Time::Tick();
+			m_pGraphics->Update();
+			Input::Instance().Update();
 		}
 		m_pGraphics->Shutdown();
+		delete m_pGraphics;
 	}
 
 private:
-	void OnPause(const bool paused)
-	{
-		m_Pause = paused;
-		if (paused)
-		{
-			Time::Stop();
-		}
-		else
-		{
-			Time::Start();
-		}
-	}
-
 	static LRESULT CALLBACK WndProcStatic(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	{
 		ViewWrapper* pThis = nullptr;
-
 		if (message == WM_NCCREATE)
 		{
 			pThis = static_cast<ViewWrapper*>(reinterpret_cast<CREATESTRUCT*>(lParam)->lpCreateParams);
-			SetLastError(0);
-			if (!SetWindowLongPtr(hWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(pThis)))
-			{
-				if (GetLastError() != 0)
-					return 0;
-			}
+			SetWindowLongPtrA(hWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(pThis));
+
 		}
 		else
 		{
-			pThis = reinterpret_cast<ViewWrapper*>(GetWindowLongPtr(hWnd, GWLP_USERDATA));
-		}
-		if (pThis)
-		{
-			LRESULT callback = pThis->WndProc(hWnd, message, wParam, lParam);
-			return callback;
+			pThis = reinterpret_cast<ViewWrapper*>(GetWindowLongPtrA(hWnd, GWLP_USERDATA));
+			return pThis->WndProc(hWnd, message, wParam, lParam);
 		}
 		return DefWindowProc(hWnd, message, wParam, lParam);
 	}
@@ -89,7 +66,7 @@ private:
 		switch (message)
 		{
 		case WM_ACTIVATE:
-			OnPause(LOWORD(wParam) == WA_INACTIVE);
+			LOWORD(wParam) == WA_INACTIVE ? Time::Stop() : Time::Start();
 			return 0;
 		// WM_SIZE is sent when the user resizes the window.  
 		case WM_SIZE:
@@ -101,13 +78,13 @@ private:
 			{
 				if (wParam == SIZE_MINIMIZED)
 				{
-					OnPause(true);
+					Time::Stop();
 					m_Minimized = true;
 					m_Maximized = false;
 				}
 				else if (wParam == SIZE_MAXIMIZED)
 				{
-					OnPause(false);
+					Time::Start();
 					m_Minimized = false;
 					m_Maximized = true;
 					m_pGraphics->OnResize(m_DisplayWidth, m_DisplayHeight);
@@ -117,14 +94,14 @@ private:
 					// Restoring from minimized state?
 					if (m_Minimized)
 					{
-						OnPause(false);
+						Time::Start();
 						m_Minimized = false;
 						m_pGraphics->OnResize(m_DisplayWidth, m_DisplayHeight);
 					}
 					// Restoring from maximized state?
 					else if (m_Maximized)
 					{
-						OnPause(false);
+						Time::Start();
 						m_Maximized = false;
 						m_pGraphics->OnResize(m_DisplayWidth, m_DisplayHeight);
 					}
@@ -176,11 +153,11 @@ private:
 			Input::Instance().UpdateMouseKey(1, false);
 			break;
 		case WM_ENTERSIZEMOVE:
-			OnPause(true);
+			Time::Stop();
 			m_IsResizing = true;
 			break;
 		case WM_EXITSIZEMOVE:
-			OnPause(false);
+			Time::Start();
 			m_IsResizing = false;
 			m_pGraphics->OnResize(m_DisplayWidth, m_DisplayHeight);
 			break;
@@ -189,38 +166,34 @@ private:
 		return DefWindowProc(hWnd, message, wParam, lParam);
 	}
 
-	void MakeWindow(const char* pTitle)
+	HWND MakeWindow(HINSTANCE hInstance, const char* pTitle)
 	{
-		WNDCLASS wc;
+		WNDCLASSEX wc{};
 
-		wc.hInstance = GetModuleHandle(0);
-		wc.cbClsExtra = 0;
-		wc.cbWndExtra = 0;
-		wc.hIcon = 0;
+		wc.cbSize = sizeof(WNDCLASSEX);
+		wc.hInstance = hInstance;
 		wc.hbrBackground = (HBRUSH)GetStockObject(WHITE_BRUSH);
 		wc.lpfnWndProc = WndProcStatic;
 		wc.style = CS_HREDRAW | CS_VREDRAW;
 		wc.lpszClassName = TEXT("wndClass");
-		wc.lpszMenuName = nullptr;
 		wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
 
-		if (!RegisterClass(&wc))
+		if (!RegisterClassEx(&wc))
 		{
-			return;
+			return nullptr;
 		}
 
 		int displayWidth = GetSystemMetrics(SM_CXSCREEN);
 		int displayHeight = GetSystemMetrics(SM_CYSCREEN);
 
 		DWORD windowStyle = WS_OVERLAPPEDWINDOW;
-
 		RECT windowRect = { 0, 0, (LONG)m_DisplayWidth, (LONG)m_DisplayHeight };
 		AdjustWindowRect(&windowRect, windowStyle, false);
 
 		int x = (displayWidth - m_DisplayWidth) / 2;
 		int y = (displayHeight - m_DisplayHeight) / 2;
 
-		m_Window = CreateWindow(
+		HWND window = CreateWindowA(
 			TEXT("wndClass"),
 			pTitle,
 			windowStyle,
@@ -230,41 +203,38 @@ private:
 			windowRect.bottom - windowRect.top,
 			nullptr,
 			nullptr,
-			GetModuleHandle(0),
+			hInstance,
 			this
 		);
 
-		if (m_Window == nullptr)
-			return;
-
-		ShowWindow(m_Window, SW_SHOWDEFAULT);
-		if (!UpdateWindow(m_Window))
+		if (window == nullptr)
 		{
-			return;
+			return window;
 		}
-		Input::Instance().SetWindow(m_Window);
+
+		ShowWindow(window, SW_SHOWDEFAULT);
+
+		return window;
 	}
 
 private:
-	bool m_Pause = false;
 	bool m_Minimized = false;
 	bool m_Maximized = false;
 	int m_DisplayWidth = 1240;
 	int m_DisplayHeight = 720;
 	bool m_IsResizing = false;
-	HWND m_Window = 0;
-	std::unique_ptr<Graphics> m_pGraphics;
+	Graphics* m_pGraphics = nullptr;
 };
-
 
 int WINAPI WinMain(HINSTANCE hInstance,	HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd)
 {
 	CommandLine::Parse(lpCmdLine);
+
 	_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
 	Console::Startup();
 
 	E_LOG(Info, "Startup");
 	ViewWrapper vp;
-	vp.Run("D3D12 - Hello World");
+	vp.Run(hInstance, "D3D12");
 	return 0;
 }

@@ -70,23 +70,6 @@ struct RGNode
 	int Reads = 0;
 };
 
-struct RGResourceHandle
-{
-	explicit RGResourceHandle(int id = InvalidIndex)
-		: Index(id)
-	{}
-
-	bool operator==(const RGResourceHandle& other) const { return Index == other.Index; }
-	bool operator!=(const RGResourceHandle& other) const { return Index != other.Index; }
-
-	constexpr static const int InvalidIndex = -1;
-
-	inline void Invalidate() { Index = InvalidIndex; }
-	inline bool IsValid() const { return Index != InvalidIndex; }
-
-	int Index;
-};
-
 class RGPassBuilder
 {
 public:
@@ -131,28 +114,6 @@ private:
 	RGPass& m_Pass;
 };
 
-class IPassExecutor
-{
-public:
-	virtual ~IPassExecutor() = default;
-	virtual void Execute(const RGPassResources& resources, CommandContext& renderContext) = 0;
-};
-
-template<typename ExecuteCallback>
-class PassExecutor : public IPassExecutor
-{
-public:
-	PassExecutor(ExecuteCallback&& callback)
-		: m_Callback(std::move(callback))
-	{}
-	virtual void Execute(const RGPassResources& resources, CommandContext& renderContext) override
-	{
-		m_Callback(renderContext, resources);
-	}
-private:
-	ExecuteCallback m_Callback;
-};
-
 class RGPass
 {
 public:
@@ -163,20 +124,18 @@ public:
 		: m_Name(pName), m_RenderGraph(graph), m_Id(id)
 	{}
 
-	void Execute(const RGPassResources& resources, CommandContext& renderContext)
+	void Execute(CommandContext& renderContext, const RGPassResources& resources)
 	{
-		check(m_pPassExecutor);
-		m_pPassExecutor->Execute(resources, renderContext);
+		check(m_ExecuteCallback.IsBound());
+		m_ExecuteCallback.Execute(renderContext, resources);
 	}
 
 	template<typename ExecuteCallback>
 	void SetCallback(ExecuteCallback&& callback)
 	{
 		RG_STATIC_ASSERT(sizeof(ExecuteCallback) < 1024, "The Execute callback exceeds the maximum size");
-		m_pPassExecutor = std::make_unique<PassExecutor<ExecuteCallback>>(std::move(callback));
+		m_ExecuteCallback.BindLambda(std::move(callback));
 	}
-
-	const char* GetName() const { return m_Name; }
 
 	bool ReadsFrom(RGResourceHandle handle) const
 	{
@@ -188,8 +147,11 @@ public:
 		return std::find(m_Writes.begin(), m_Writes.end(), handle) != m_Writes.end();
 	}
 
+	const char* GetName() const { return m_Name; }
+
 private:
-	std::unique_ptr<IPassExecutor> m_pPassExecutor;
+	DECLARE_DELEGATE(ExecutePassDelegate, CommandContext& /*renderContext*/, const RGPassResources& /*resources*/);
+	ExecutePassDelegate m_ExecuteCallback;
 	const char* m_Name;
 	std::vector<RGResourceHandle> m_Reads;
 	std::vector<RGResourceHandle> m_Writes;

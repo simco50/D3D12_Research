@@ -108,7 +108,7 @@ void RTAO::GenerateAccelerationStructure(Graphics* pGraphics, Mesh* pMesh, Comma
 		std::vector<D3D12_RAYTRACING_GEOMETRY_DESC> geometries;
 		for (size_t i = 0; i < pMesh->GetMeshCount(); ++i)
 		{
-			SubMesh* pSubMesh = pMesh->GetMesh((int)i);
+			const SubMesh* pSubMesh = pMesh->GetMesh((int)i);
 			if (pMesh->GetMaterial(pSubMesh->GetMaterialId()).IsTransparent)
 			{
 				continue;

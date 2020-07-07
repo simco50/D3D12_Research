@@ -134,10 +134,7 @@ Profiler* Profiler::Get()
 
 void Profiler::Initialize(Graphics* pGraphics)
 {
-	D3D12_QUERY_HEAP_DESC desc = {};
-	desc.Count = HEAP_SIZE;
-	desc.NodeMask = 0;
-	desc.Type = D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
+	CD3DX12_QUERY_HEAP_DESC desc(HEAP_SIZE, D3D12_QUERY_HEAP_TYPE_TIMESTAMP);
 	VERIFY_HR_EX(pGraphics->GetDevice()->CreateQueryHeap(&desc, IID_PPV_ARGS(m_pQueryHeap.GetAddressOf())), pGraphics->GetDevice());
 
 	m_pReadBackBuffer = std::make_unique<Buffer>(pGraphics, "Profiling Readback Buffer");

@@ -123,7 +123,8 @@ private:
 	void EndFrame(uint64 fenceValue);
 
 	void InitD3D();
-	void InitializeAssets();
+	void InitializePipelines();
+	void InitializeAssets(CommandContext& context);
 
 	void UpdateImGui();
 

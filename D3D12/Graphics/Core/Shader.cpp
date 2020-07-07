@@ -55,11 +55,9 @@ namespace ShaderCompiler
 		std::vector<std::wstring> wDefines;
 		for (const std::string& define : defines)
 		{
-			std::wstringstream str;
 			wchar_t intermediate[256];
 			ToWidechar(define.c_str(), intermediate, 256);
-			str << intermediate << "=1";
-			wDefines.push_back(str.str());
+			wDefines.push_back(intermediate);
 		}
 
 		std::vector<LPCWSTR> arguments;
@@ -109,7 +107,7 @@ namespace ShaderCompiler
 		pCompileResult->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(pErrors.GetAddressOf()), nullptr);
 		if (pErrors && pErrors->GetStringLength() > 0)
 		{
-			E_LOG(Warning, "%s", (char*)pErrors->GetBufferPointer());
+			E_LOG(Warning, (char*)pErrors->GetBufferPointer());
 			return false;
 		}
 
@@ -232,7 +230,15 @@ namespace ShaderCompiler
 		target[i++] = '0' + minVersion;
 		target[i++] = 0;
 
-		std::vector<std::string> definesActual = defines;
+		std::vector<std::string> definesActual(defines);
+		for (std::string& define : definesActual)
+		{
+			if (define.find('=') == std::string::npos)
+			{
+				define += std::string("=1");
+			}
+		}
+
 		std::stringstream str;
 		str << "_SM_MAJ=" << majVersion;
 		definesActual.push_back(str.str());

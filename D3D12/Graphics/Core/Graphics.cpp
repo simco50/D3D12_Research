@@ -86,7 +86,12 @@ void Graphics::Initialize(HWND window)
 	m_pCamera->SetFarPlane(10.0f);
 
 	InitD3D();
-	InitializeAssets();
+	InitializePipelines();
+
+	CommandContext* pContext = AllocateCommandContext();
+	InitializeAssets(*pContext);
+	pContext->Execute(true);
+
 	g_ShowRaytraced = SupportsRayTracing() ? g_ShowRaytraced : false;
 
 	RandomizeLights(m_DesiredLightCount);
@@ -1108,6 +1113,33 @@ void Graphics::InitD3D()
 	OnResize(m_WindowWidth, m_WindowHeight);
 }
 
+
+void Graphics::InitializeAssets(CommandContext& context)
+{
+	m_pMesh = std::make_unique<Mesh>();
+	m_pMesh->Load("Resources/sponza/sponza.dae", this, &context);
+
+	for (int i = 0; i < m_pMesh->GetMeshCount(); ++i)
+	{
+		Batch b;
+		b.Bounds = m_pMesh->GetMesh(i)->GetBounds();
+		b.pMesh = m_pMesh->GetMesh(i);
+		b.pMaterial = &m_pMesh->GetMaterial(b.pMesh->GetMaterialId());
+		b.WorldMatrix = Matrix::Identity;
+		if (b.pMaterial->IsTransparent)
+		{
+			m_TransparantBatches.push_back(b);
+		}
+		else
+		{
+			m_OpaqueBatches.push_back(b);
+		}
+	}
+
+	m_pRTAO->GenerateAccelerationStructure(this, m_pMesh.get(), context);
+
+}
+
 void Graphics::OnResize(int width, int height)
 {
 	E_LOG(Info, "Viewport resized: %dx%d", width, height);
@@ -1183,9 +1215,8 @@ void Graphics::OnResize(int width, int height)
 	}
 }
 
-void Graphics::InitializeAssets()
+void Graphics::InitializePipelines()
 {
-	CommandContext* pContext = AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 	m_pLightBuffer = std::make_unique<Buffer>(this, "Lights");
 
 	//Input layout
@@ -1389,32 +1420,6 @@ void Graphics::InitializeAssets()
 		m_pSkyboxPSO->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
 		m_pSkyboxPSO->Finalize("Skybox", m_pDevice.Get());
 	}
-
-	//Geometry
-	{
-		m_pMesh = std::make_unique<Mesh>();
-		m_pMesh->Load("Resources/sponza/sponza.dae", this, pContext);
-
-		for (int i = 0; i < m_pMesh->GetMeshCount(); ++i)
-		{
-			Batch b;
-			b.Bounds = m_pMesh->GetMesh(i)->GetBounds();
-			b.pMesh = m_pMesh->GetMesh(i);
-			b.pMaterial = &m_pMesh->GetMaterial(b.pMesh->GetMaterialId());
-			b.WorldMatrix = Matrix::Identity;
-			if (b.pMaterial->IsTransparent)
-			{
-				m_TransparantBatches.push_back(b);
-			}
-			else
-			{
-				m_OpaqueBatches.push_back(b);
-			}
-		}
-	}
-
-	m_pRTAO->GenerateAccelerationStructure(this, m_pMesh.get(), *pContext);
-	pContext->Execute(true);
 }
 
 void Graphics::UpdateImGui()

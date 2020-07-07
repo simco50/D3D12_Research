@@ -1,5 +1,5 @@
 #pragma once
-#include "Graphics/RenderGraph/RenderGraph.h"
+#include "Graphics/RenderGraph/RenderGraphDefinitions.h"
 class Graphics;
 class RootSignature;
 class PipelineState;
