@@ -12,6 +12,7 @@ class DynamicResourceAllocator;
 class Buffer;
 class CommandSignature;
 class ShaderBindingTable;
+struct BufferView;
 
 enum class CommandListContext
 {
@@ -196,9 +197,9 @@ public:
 	void SetDynamicVertexBuffer(int slot, int elementCount, int elementSize, const void* pData);
 	void SetDynamicIndexBuffer(int elementCount, const void* pData, bool smallIndices = false);
 	void SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY type);
-	void SetVertexBuffer(Buffer* pVertexBuffer);
-	void SetVertexBuffers(Buffer** pVertexBuffers, int bufferCount);
-	void SetIndexBuffer(Buffer* pIndexBuffer);
+	void SetVertexBuffer(BufferView buffer);
+	void SetVertexBuffers(BufferView* pBuffers, int bufferCount);
+	void SetIndexBuffer(BufferView indexBuffer);
 	void SetViewport(const FloatRect& rect, float minDepth = 0.0f, float maxDepth = 1.0f);
 	void SetScissorRect(const FloatRect& rect);
 
