@@ -3,7 +3,7 @@
 #include "Shader.h"
 
 StateObjectDesc::StateObjectDesc(D3D12_STATE_OBJECT_TYPE type /*= D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE*/)
-	: m_ScratchAllocator(0xFFFF), m_StateObjectAllocator(0xFF), m_Type(type)
+	: m_StateObjectAllocator(0xFF), m_ScratchAllocator(0xFFFF), m_Type(type)
 {
 
 }

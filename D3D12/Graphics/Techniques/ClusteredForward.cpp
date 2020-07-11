@@ -160,7 +160,7 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
 			context.EndRenderPass();
 		});
 
-	RGPassBuilder& compactClusters = graph.AddPass("Compact Clusters");
+	RGPassBuilder compactClusters = graph.AddPass("Compact Clusters");
 	compactClusters.Bind([=](CommandContext& context, const RGPassResources& passResources)
 		{
 			context.SetPipelineState(m_pCompactClustersPSO.get());

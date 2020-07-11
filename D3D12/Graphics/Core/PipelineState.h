@@ -27,7 +27,7 @@ class StateObjectDesc
 
 		~PODLinearAllocator()
 		{
-			delete m_pData;
+			delete[] m_pData;
 			m_pData = nullptr;
 		}
 

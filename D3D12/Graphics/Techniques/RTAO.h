@@ -22,8 +22,6 @@ private:
 	void SetupResources(Graphics* pGraphics);
 	void SetupPipelines(Graphics* pGraphics);
 
-	Graphics* m_pGraphics;
-
 	std::unique_ptr<Buffer> m_pBLAS;
 	std::unique_ptr<Buffer> m_pTLAS;
 	std::unique_ptr<Buffer> m_pBLASScratch;

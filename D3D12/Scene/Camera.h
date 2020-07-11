@@ -42,7 +42,6 @@ protected:
 private:
 	void UpdateMatrices() const;
 
-	float m_Size = 50.0f;
 	float m_FoV = 60.0f * Math::PI / 180;
 	float m_NearPlane = 1.0f;
 	float m_FarPlane = 500.0f;

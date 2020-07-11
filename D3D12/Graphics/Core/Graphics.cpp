@@ -66,7 +66,7 @@ float g_SunTemperature = 5000.0f;
 bool g_EnableUI = true;
 
 Graphics::Graphics(uint32 width, uint32 height, int sampleCount /*= 1*/)
-	: m_WindowWidth(width), m_WindowHeight(height), m_SampleCount(sampleCount)
+	: m_SampleCount(sampleCount), m_WindowWidth(width), m_WindowHeight(height)
 {
 
 }
@@ -1221,14 +1221,6 @@ void Graphics::InitializePipelines()
 
 	//Input layout
 	//UNIVERSAL
-	CD3DX12_INPUT_ELEMENT_DESC inputElements[] = {
-		CD3DX12_INPUT_ELEMENT_DESC("POSITION", DXGI_FORMAT_R32G32B32_FLOAT),
-		CD3DX12_INPUT_ELEMENT_DESC("TEXCOORD", DXGI_FORMAT_R32G32_FLOAT),
-		CD3DX12_INPUT_ELEMENT_DESC("NORMAL", DXGI_FORMAT_R32G32B32_FLOAT),
-		CD3DX12_INPUT_ELEMENT_DESC("TANGENT", DXGI_FORMAT_R32G32B32_FLOAT),
-		CD3DX12_INPUT_ELEMENT_DESC("TEXCOORD", DXGI_FORMAT_R32G32B32_FLOAT, 1),
-	};
-
 	CD3DX12_INPUT_ELEMENT_DESC depthOnlyInputElements[] = {
 		CD3DX12_INPUT_ELEMENT_DESC("POSITION", DXGI_FORMAT_R32G32B32_FLOAT),
 		CD3DX12_INPUT_ELEMENT_DESC("TEXCOORD", DXGI_FORMAT_R32G32_FLOAT),
@@ -1399,10 +1391,6 @@ void Graphics::InitializePipelines()
 
 	//Sky
 	{
-		CD3DX12_INPUT_ELEMENT_DESC cubeInputElements[] = {
-			CD3DX12_INPUT_ELEMENT_DESC("POSITION", DXGI_FORMAT_R32G32B32_FLOAT),
-		};
-
 		Shader vertexShader("ProceduralSky.hlsl", ShaderType::Vertex, "VSMain");
 		Shader pixelShader("ProceduralSky.hlsl", ShaderType::Pixel, "PSMain");
 

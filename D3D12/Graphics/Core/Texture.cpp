@@ -269,8 +269,9 @@ DXGI_FORMAT Texture::GetSrvFormat(DXGI_FORMAT format)
 	case DXGI_FORMAT_D16_UNORM:
 	case DXGI_FORMAT_R16_UNORM:
 		return DXGI_FORMAT_R16_UNORM;
+	default:
+		return format;
 	}
-	return format;
 }
 
 bool Texture::Create(CommandContext* pContext, const char* pFilePath, bool srgb)

@@ -13,7 +13,6 @@
 #include "Scene/Camera.h"
 
 RTAO::RTAO(Graphics* pGraphics)
-	: m_pGraphics(pGraphics)
 {
 	if (pGraphics->SupportsRayTracing())
 	{

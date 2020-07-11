@@ -49,9 +49,9 @@ public:
 		return m_AllSameState ? m_CommonState : m_ResourceStates[subResource];
 	}
 private:
-	bool m_AllSameState;
-	D3D12_RESOURCE_STATES m_CommonState;
 	std::array<D3D12_RESOURCE_STATES, 12> m_ResourceStates{};
+	D3D12_RESOURCE_STATES m_CommonState;
+	bool m_AllSameState;
 };
 
 class GraphicsResource : public GraphicsObject
