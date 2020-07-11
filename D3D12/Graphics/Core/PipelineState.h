@@ -1,5 +1,8 @@
 #pragma once
 
+class Shader;
+class ShaderLibrary;
+
 enum class BlendMode
 {
 	Replace = 0,
@@ -60,7 +63,7 @@ class StateObjectDesc
 public:
 	StateObjectDesc(D3D12_STATE_OBJECT_TYPE type = D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE);
 
-	uint32 AddLibrary(const void* pByteCode, uint32 byteCodeLength, const std::vector<std::string>& exports = {});
+	uint32 AddLibrary(const ShaderLibrary& shader, const std::vector<std::string>& exports = {});
 	uint32 AddHitGroup(const char* pHitGroupExport, const char* pClosestHitShaderImport = nullptr, const char* pAnyHitShaderImport = nullptr, const char* pIntersectionShaderImport = nullptr);
 	uint32 AddStateAssociation(uint32 index, const std::vector<std::string>& exports);
 	uint32 AddCollection(ID3D12StateObject* pStateObject, const std::vector<std::string>& exports = {});
@@ -125,14 +128,14 @@ public:
 	void SetRootSignature(ID3D12RootSignature* pRootSignature);
 
 	//Shaders
-	void SetVertexShader(const void* pByteCode, uint32 byteCodeLength);
-	void SetPixelShader(const void* pByteCode, uint32 byteCodeLength);
-	void SetHullShader(const void* pByteCode, uint32 byteCodeLength);
-	void SetDomainShader(const void* pByteCode, uint32 byteCodeLength);
-	void SetGeometryShader(const void* pByteCode, uint32 byteCodeLength);
-	void SetComputeShader(const void* pByteCode, uint32 byteCodeLength);
-	void SetMeshShader(const void* pByteCode, uint32 byteCodeLength);
-	void SetAmplificationShader(const void* pByteCode, uint32 byteCodeLength);
+	void SetVertexShader(const Shader& shader);
+	void SetPixelShader(const Shader& shader);
+	void SetHullShader(const Shader& shader);
+	void SetDomainShader(const Shader& shader);
+	void SetGeometryShader(const Shader& shader);
+	void SetComputeShader(const Shader& shader);
+	void SetMeshShader(const Shader& shader);
+	void SetAmplificationShader(const Shader& shader);
 
 	PipelineStateType GetType() const { return m_Type; }
 

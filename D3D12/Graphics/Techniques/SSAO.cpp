@@ -138,7 +138,7 @@ void SSAO::SetupPipelines(Graphics* pGraphics)
 		m_pSSAORS->FinalizeFromShader("SSAO", computeShader, pGraphics->GetDevice());
 
 		m_pSSAOPSO = std::make_unique<PipelineState>();
-		m_pSSAOPSO->SetComputeShader(computeShader.GetByteCode(), computeShader.GetByteCodeSize());
+		m_pSSAOPSO->SetComputeShader(computeShader);
 		m_pSSAOPSO->SetRootSignature(m_pSSAORS->GetRootSignature());
 		m_pSSAOPSO->Finalize("SSAO PSO", pGraphics->GetDevice());
 	}
@@ -151,7 +151,7 @@ void SSAO::SetupPipelines(Graphics* pGraphics)
 		m_pSSAOBlurRS->FinalizeFromShader("SSAO Blur", computeShader, pGraphics->GetDevice());
 
 		m_pSSAOBlurPSO = std::make_unique<PipelineState>();
-		m_pSSAOBlurPSO->SetComputeShader(computeShader.GetByteCode(), computeShader.GetByteCodeSize());
+		m_pSSAOBlurPSO->SetComputeShader(computeShader);
 		m_pSSAOBlurPSO->SetRootSignature(m_pSSAOBlurRS->GetRootSignature());
 		m_pSSAOBlurPSO->Finalize("SSAO Blur PSO", pGraphics->GetDevice());
 	}

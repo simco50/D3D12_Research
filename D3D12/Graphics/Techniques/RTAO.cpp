@@ -225,7 +225,7 @@ void RTAO::SetupPipelines(Graphics* pGraphics)
 		ShaderLibrary shaderLibrary("RTAO.hlsl");
 
 		StateObjectDesc stateDesc;
-		stateDesc.AddLibrary(shaderLibrary.GetByteCode(), shaderLibrary.GetByteCodeSize(), { "RayGen", "ClosestHit", "Miss" });
+		stateDesc.AddLibrary(shaderLibrary, { "RayGen", "ClosestHit", "Miss" });
 		stateDesc.AddHitGroup("HitGroup", "ClosestHit");
 		stateDesc.BindLocalRootSignature("RayGen", m_pRayGenSignature->GetRootSignature());
 		stateDesc.BindLocalRootSignature("Miss", m_pMissSignature->GetRootSignature());

@@ -57,8 +57,8 @@ void DebugRenderer::Initialize(Graphics* pGraphics)
 	m_pTrianglesPSO = std::make_unique<PipelineState>();
 	m_pTrianglesPSO->SetInputLayout(inputElements, sizeof(inputElements) / sizeof(inputElements[0]));
 	m_pTrianglesPSO->SetRootSignature(m_pRS->GetRootSignature());
-	m_pTrianglesPSO->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
-	m_pTrianglesPSO->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
+	m_pTrianglesPSO->SetVertexShader(vertexShader);
+	m_pTrianglesPSO->SetPixelShader(pixelShader);
 	m_pTrianglesPSO->SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, pGraphics->GetMultiSampleCount());
 	m_pTrianglesPSO->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
 	m_pTrianglesPSO->SetDepthWrite(true);

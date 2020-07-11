@@ -38,7 +38,7 @@ std::string GraphicsResource::GetName() const
 		uint32 size = 0;
 		m_pResource->GetPrivateData(WKPDID_D3DDebugObjectName, &size, nullptr);
 		std::string str(size, '\0');
-		m_pResource->GetPrivateData(WKPDID_D3DDebugObjectName, &size, str.data());
+		m_pResource->GetPrivateData(WKPDID_D3DDebugObjectName, &size, &str[0]);
 		return str;
 	}
 	return "";

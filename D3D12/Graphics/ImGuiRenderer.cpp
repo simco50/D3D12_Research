@@ -133,8 +133,8 @@ void ImGuiRenderer::CreatePipeline(Graphics* pGraphics)
 	m_pPipelineState->SetDepthWrite(false);
 	m_pPipelineState->SetDepthEnabled(false);
 	m_pPipelineState->SetCullMode(D3D12_CULL_MODE_NONE);
-	m_pPipelineState->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
-	m_pPipelineState->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
+	m_pPipelineState->SetVertexShader(vertexShader);
+	m_pPipelineState->SetPixelShader(pixelShader);
 	m_pPipelineState->SetRootSignature(m_pRootSignature->GetRootSignature());
 	m_pPipelineState->SetInputLayout(elementDesc, ARRAYSIZE(elementDesc));
 	m_pPipelineState->SetRenderTargetFormat(DXGI_FORMAT_R8G8B8A8_UNORM, Graphics::DEPTH_STENCIL_FORMAT, 1);

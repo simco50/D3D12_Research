@@ -77,9 +77,6 @@ public:
 		: m_Pass(pass), m_RenderGraph(renderGraph)
 	{}
 
-	RGPassBuilder(const RGPassBuilder& other) = delete;
-	RGPassBuilder& operator=(const RGPassBuilder& other) = delete;
-
 	template<typename ExecuteCallback>
 	void Bind(ExecuteCallback&& callback)
 	{

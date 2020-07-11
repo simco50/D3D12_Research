@@ -181,7 +181,7 @@ void TiledForward::SetupPipelines(Graphics* pGraphics)
 	m_pComputeLightCullRS->FinalizeFromShader("Tiled Light Culling RS", computeShader, pGraphics->GetDevice());
 
 	m_pComputeLightCullPSO = std::make_unique<PipelineState>();
-	m_pComputeLightCullPSO->SetComputeShader(computeShader.GetByteCode(), computeShader.GetByteCodeSize());
+	m_pComputeLightCullPSO->SetComputeShader(computeShader);
 	m_pComputeLightCullPSO->SetRootSignature(m_pComputeLightCullRS->GetRootSignature());
 	m_pComputeLightCullPSO->Finalize("Tiled Light Culling PSO", pGraphics->GetDevice());
 
@@ -217,8 +217,8 @@ void TiledForward::SetupPipelines(Graphics* pGraphics)
 			m_pDiffusePSO = std::make_unique<PipelineState>();
 			m_pDiffusePSO->SetInputLayout(inputElements, sizeof(inputElements) / sizeof(inputElements[0]));
 			m_pDiffusePSO->SetRootSignature(m_pDiffuseRS->GetRootSignature());
-			m_pDiffusePSO->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
-			m_pDiffusePSO->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
+			m_pDiffusePSO->SetVertexShader(vertexShader);
+			m_pDiffusePSO->SetPixelShader(pixelShader);
 			m_pDiffusePSO->SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, pGraphics->GetMultiSampleCount());
 			m_pDiffusePSO->SetDepthTest(D3D12_COMPARISON_FUNC_EQUAL);
 			m_pDiffusePSO->SetDepthWrite(false);
@@ -232,7 +232,7 @@ void TiledForward::SetupPipelines(Graphics* pGraphics)
 
 			//Debug Density
 			m_pVisualizeDensityPSO = std::make_unique<PipelineState>(*m_pDiffusePSO.get());
-			m_pVisualizeDensityPSO->SetPixelShader(debugPixelShader.GetByteCode(), debugPixelShader.GetByteCodeSize());
+			m_pVisualizeDensityPSO->SetPixelShader(debugPixelShader);
 			m_pVisualizeDensityPSO->Finalize("Debug Light Density Pipeline", pGraphics->GetDevice());
 		}
 	}

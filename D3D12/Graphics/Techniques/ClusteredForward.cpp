@@ -409,7 +409,7 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
 		m_pCreateAabbRS->FinalizeFromShader("Create AABB", computeShader, pGraphics->GetDevice());
 
 		m_pCreateAabbPSO = std::make_unique<PipelineState>();
-		m_pCreateAabbPSO->SetComputeShader(computeShader.GetByteCode(), computeShader.GetByteCodeSize());
+		m_pCreateAabbPSO->SetComputeShader(computeShader);
 		m_pCreateAabbPSO->SetRootSignature(m_pCreateAabbRS->GetRootSignature());
 		m_pCreateAabbPSO->Finalize("Create AABB", pGraphics->GetDevice());
 	}
@@ -430,8 +430,8 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
 		m_pMarkUniqueClustersOpaquePSO = std::make_unique<PipelineState>();
 		m_pMarkUniqueClustersOpaquePSO->SetDepthTest(D3D12_COMPARISON_FUNC_EQUAL);
 		m_pMarkUniqueClustersOpaquePSO->SetRootSignature(m_pMarkUniqueClustersRS->GetRootSignature());
-		m_pMarkUniqueClustersOpaquePSO->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
-		m_pMarkUniqueClustersOpaquePSO->SetPixelShader(pixelShaderOpaque.GetByteCode(), pixelShaderOpaque.GetByteCodeSize());
+		m_pMarkUniqueClustersOpaquePSO->SetVertexShader(vertexShader);
+		m_pMarkUniqueClustersOpaquePSO->SetPixelShader(pixelShaderOpaque);
 		m_pMarkUniqueClustersOpaquePSO->SetInputLayout(inputElements, ARRAYSIZE(inputElements));
 		m_pMarkUniqueClustersOpaquePSO->SetRenderTargetFormats(nullptr, 0, Graphics::DEPTH_STENCIL_FORMAT, m_pGraphics->GetMultiSampleCount());
 		m_pMarkUniqueClustersOpaquePSO->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
@@ -451,7 +451,7 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
 		m_pCompactClustersRS->FinalizeFromShader("Compact Clusters", computeShader, pGraphics->GetDevice());
 
 		m_pCompactClustersPSO = std::make_unique<PipelineState>();
-		m_pCompactClustersPSO->SetComputeShader(computeShader.GetByteCode(), computeShader.GetByteCodeSize());
+		m_pCompactClustersPSO->SetComputeShader(computeShader);
 		m_pCompactClustersPSO->SetRootSignature(m_pCompactClustersRS->GetRootSignature());
 		m_pCompactClustersPSO->Finalize("Compact Clusters", pGraphics->GetDevice());
 	}
@@ -464,7 +464,7 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
 		m_pUpdateIndirectArgumentsRS->FinalizeFromShader("Update Indirect Dispatch Buffer", computeShader, pGraphics->GetDevice());
 
 		m_pUpdateIndirectArgumentsPSO = std::make_unique<PipelineState>();
-		m_pUpdateIndirectArgumentsPSO->SetComputeShader(computeShader.GetByteCode(), computeShader.GetByteCodeSize());
+		m_pUpdateIndirectArgumentsPSO->SetComputeShader(computeShader);
 		m_pUpdateIndirectArgumentsPSO->SetRootSignature(m_pUpdateIndirectArgumentsRS->GetRootSignature());
 		m_pUpdateIndirectArgumentsPSO->Finalize("Update Indirect Dispatch Buffer", pGraphics->GetDevice());
 	}
@@ -477,7 +477,7 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
 		m_pLightCullingRS->FinalizeFromShader("Light Culling", computeShader, pGraphics->GetDevice());
 
 		m_pLightCullingPSO = std::make_unique<PipelineState>();
-		m_pLightCullingPSO->SetComputeShader(computeShader.GetByteCode(), computeShader.GetByteCodeSize());
+		m_pLightCullingPSO->SetComputeShader(computeShader);
 		m_pLightCullingPSO->SetRootSignature(m_pLightCullingRS->GetRootSignature());
 		m_pLightCullingPSO->Finalize("Light Culling", pGraphics->GetDevice());
 
@@ -507,8 +507,8 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
 		m_pDiffusePSO = std::make_unique<PipelineState>();
 		m_pDiffusePSO->SetRootSignature(m_pDiffuseRS->GetRootSignature());
 		m_pDiffusePSO->SetBlendMode(BlendMode::Replace, false);
-		m_pDiffusePSO->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
-		m_pDiffusePSO->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
+		m_pDiffusePSO->SetVertexShader(vertexShader);
+		m_pDiffusePSO->SetPixelShader(pixelShader);
 		m_pDiffusePSO->SetInputLayout(inputElements, ARRAYSIZE(inputElements));
 		m_pDiffusePSO->SetDepthTest(D3D12_COMPARISON_FUNC_EQUAL);
 		m_pDiffusePSO->SetDepthWrite(false);
@@ -529,18 +529,19 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
 		m_pDebugClustersRS = std::make_unique<RootSignature>();
 		m_pDebugClustersPSO = std::make_unique<PipelineState>();
 
+		m_pDebugClustersPSO->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
+		m_pDebugClustersPSO->SetDepthWrite(false);
+		m_pDebugClustersPSO->SetPixelShader(pixelShader);
+		m_pDebugClustersPSO->SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, m_pGraphics->GetMultiSampleCount());
+		m_pDebugClustersPSO->SetBlendMode(BlendMode::Additive, false);
+
 		if (m_pGraphics->SupportsMeshShaders())
 		{
 			Shader meshShader("CL_DebugDrawClusters.hlsl", ShaderType::Mesh, "MSMain");
 			m_pDebugClustersRS->FinalizeFromShader("Debug Clusters", meshShader, m_pGraphics->GetDevice());
-
-			m_pDebugClustersPSO->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
-			m_pDebugClustersPSO->SetDepthWrite(false);
+			
 			m_pDebugClustersPSO->SetRootSignature(m_pDebugClustersRS->GetRootSignature());
-			m_pDebugClustersPSO->SetMeshShader(meshShader.GetByteCode(), meshShader.GetByteCodeSize());
-			m_pDebugClustersPSO->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
-			m_pDebugClustersPSO->SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, m_pGraphics->GetMultiSampleCount());
-			m_pDebugClustersPSO->SetBlendMode(BlendMode::Additive, false);
+			m_pDebugClustersPSO->SetMeshShader(meshShader);
 			m_pDebugClustersPSO->Finalize("Debug Clusters PSO", m_pGraphics->GetDevice());
 		}
 		else
@@ -549,16 +550,9 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
 			Shader geometryShader("CL_DebugDrawClusters.hlsl", ShaderType::Geometry, "GSMain");
 			m_pDebugClustersRS->FinalizeFromShader("Debug Clusters", vertexShader, m_pGraphics->GetDevice());
 
-			m_pDebugClustersPSO->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
-			m_pDebugClustersPSO->SetDepthWrite(false);
-			m_pDebugClustersPSO->SetInputLayout(nullptr, 0);
 			m_pDebugClustersPSO->SetRootSignature(m_pDebugClustersRS->GetRootSignature());
-			m_pDebugClustersPSO->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
-			m_pDebugClustersPSO->SetGeometryShader(geometryShader.GetByteCode(), geometryShader.GetByteCodeSize());
-			m_pDebugClustersPSO->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
-			m_pDebugClustersPSO->SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, m_pGraphics->GetMultiSampleCount());
-			m_pDebugClustersPSO->SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT);
-			m_pDebugClustersPSO->SetBlendMode(BlendMode::Additive, false);
+			m_pDebugClustersPSO->SetVertexShader(vertexShader);
+			m_pDebugClustersPSO->SetGeometryShader(geometryShader);
 			m_pDebugClustersPSO->Finalize("Debug Clusters PSO", m_pGraphics->GetDevice());
 		}
 	}
