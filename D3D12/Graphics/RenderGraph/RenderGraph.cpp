@@ -195,19 +195,46 @@ RGPass& RGGraph::AddPass(RGPass* pPass)
 	return *pPass;
 }
 
+void RGGraph::PushEvent(const char* pName)
+{
+	ProfileEvent e;
+	e.Begin = true;
+	e.PassIndex = (uint32)m_RenderPasses.size();
+	e.pName = pName;
+	m_Events.push_back(e);
+	m_EventStackSize++;
+}
+
+void RGGraph::PopEvent()
+{
+	RG_ASSERT(m_RenderPasses.size() > 0, "Can't pop event before a RenderPass has been added");
+	RG_ASSERT(m_EventStackSize > 0, "No Event to Pop");
+	ProfileEvent e;
+	e.Begin = false;
+	e.PassIndex = (uint32)m_RenderPasses.size() - 1;
+	e.pName = nullptr;
+	m_Events.push_back(e);
+	m_EventStackSize--;
+}
+
 int64 RGGraph::Execute()
 {
+	RG_ASSERT(m_EventStackSize == 0, "Missing PopEvent");
 	if (m_ImmediateMode == false)
 	{
 		int eclFrequency = 4;
 		int i = 0;
 		CommandContext* pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
-		for (RGPass* pPass : m_RenderPasses)
+		for(uint32 passIndex = 0; passIndex < (uint32)m_RenderPasses.size(); ++passIndex)
 		{
+			RGPass* pPass = m_RenderPasses[passIndex];
+
+			ProcessEvents(*pContext, passIndex, true);
 			if (pPass->m_References > 0)
 			{
 				ExecutePass(pPass, *pContext);
 			}
+			ProcessEvents(*pContext, passIndex, false);
 
 			++i;
 			if (i == eclFrequency)
@@ -320,6 +347,24 @@ void RGGraph::ConditionallyReleaseResource(RGResource* pResource)
 		default:
 			noEntry();
 			break;
+		}
+	}
+}
+
+void RGGraph::ProcessEvents(CommandContext& context, uint32 passIndex, bool begin)
+{
+	for (uint32 eventIdx = m_CurrentEvent; eventIdx < m_Events.size() && m_Events[eventIdx].PassIndex == passIndex; ++eventIdx)
+	{
+		ProfileEvent& e = m_Events[eventIdx];
+		if (e.Begin && begin)
+		{
+			m_CurrentEvent++;
+			GPU_PROFILE_BEGIN(e.pName, &context);
+		}
+		else if (!e.Begin && !begin)
+		{
+			m_CurrentEvent++;
+			GPU_PROFILE_END(&context);
 		}
 	}
 }

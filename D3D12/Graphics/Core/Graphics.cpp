@@ -434,13 +434,16 @@ void Graphics::Update()
 			m_pParticles->Simulate(context, GetResolvedDepthStencil(), *m_pCamera);
 		});
 
-	if (g_ShowRaytraced)
 	{
-		m_pRTAO->Execute(graph, m_pAmbientOcclusion.get(), GetResolvedDepthStencil(), *m_pCamera);
-	}
-	else
-	{
-		m_pSSAO->Execute(graph, m_pAmbientOcclusion.get(), GetResolvedDepthStencil(), *m_pCamera);
+		RG_GRAPH_SCOPE("Ambient Occlusion", graph);
+		if (g_ShowRaytraced)
+		{
+			m_pRTAO->Execute(graph, m_pAmbientOcclusion.get(), GetResolvedDepthStencil(), *m_pCamera);
+		}
+		else
+		{
+			m_pSSAO->Execute(graph, m_pAmbientOcclusion.get(), GetResolvedDepthStencil(), *m_pCamera);
+		}
 	}
 
 	//SHADOW MAPPING
@@ -552,6 +555,7 @@ void Graphics::Update()
 
 	if (m_RenderPath == RenderPath::Tiled)
 	{
+		RG_GRAPH_SCOPE("Tiled Lighting", graph);
 		TiledForwardInputResources resources;
 		resources.ResolvedDepthBuffer = Data.DepthStencilResolved;
 		resources.DepthBuffer = Data.DepthStencil;
@@ -566,6 +570,7 @@ void Graphics::Update()
 	}
 	else if (m_RenderPath == RenderPath::Clustered)
 	{
+		RG_GRAPH_SCOPE("Clustered Lighting", graph);
 		ClusteredForwardInputResources resources;
 		resources.DepthBuffer = Data.DepthStencil;
 		resources.pOpaqueBatches = &m_OpaqueBatches;
@@ -576,7 +581,9 @@ void Graphics::Update()
 		resources.pAO = m_pAmbientOcclusion.get();
 		resources.pShadowMap = m_pShadowMap.get();
 		resources.pShadowData = &lightData;
+		graph.PushEvent("Clustered Lighting");
 		m_pClusteredForward->Execute(graph, resources);
+		graph.PopEvent();
 	}
 
 	RGPassBuilder drawParticles = graph.AddPass("Draw Particles");
@@ -643,6 +650,7 @@ void Graphics::Update()
 
 	//Tonemapping
 	{
+		RG_GRAPH_SCOPE("Tonemapping", graph);
 		bool downscaleTonemapInput = true;
 		Texture* pToneMapInput = downscaleTonemapInput ? m_pDownscaledColor.get() : m_pHDRRenderTarget.get();
 		RGResourceHandle toneMappingInput = graph.ImportTexture("Tonemap Input", pToneMapInput);

@@ -3,6 +3,8 @@
 #include "Graphics/Core/Texture.h"
 #include "Graphics/Core/GraphicsBuffer.h"
 
+#define RG_GRAPH_SCOPE(name, graph) RGGraphScope rgScope_ ## __COUNTER__(name, graph)
+
 class Graphics;
 class CommandContext;
 
@@ -269,6 +271,10 @@ public:
 		return node.pResource;
 	}
 
+	void PushEvent(const char* pName);
+
+	void PopEvent();
+
 private:
 	RGPass& AddPass(RGPass* pPass);
 	void ExecutePass(RGPass* pPass, CommandContext& context);
@@ -278,6 +284,8 @@ private:
 
 	void ConditionallyCreateResource(RGResource* pResource);
 	void ConditionallyReleaseResource(RGResource* pResource);
+
+	void ProcessEvents(CommandContext& context, uint32 passIndex, bool begin);
 
 	struct RGResourceAlias
 	{
@@ -291,8 +299,35 @@ private:
 	uint64 m_LastFenceValue = 0;
 	bool m_ImmediateMode = false;
 
+	struct ProfileEvent
+	{
+		const char* pName;
+		bool Begin;
+		uint32 PassIndex;
+	};
+
+	uint32 m_CurrentEvent = 0;
+	std::vector<ProfileEvent> m_Events;
+	int m_EventStackSize = 0;
+
 	std::vector<RGResourceAlias> m_Aliases;
 	std::vector<RGPass*> m_RenderPasses;
 	std::vector<RGResource*> m_Resources;
 	std::vector<RGNode> m_ResourceNodes;
+};
+
+class RGGraphScope
+{
+public:
+	RGGraphScope(const char* pName, RGGraph& graph)
+		: m_Graph(graph)
+	{
+		graph.PushEvent(pName);
+	}
+	~RGGraphScope()
+	{
+		m_Graph.PopEvent();
+	}
+private:
+	RGGraph& m_Graph;
 };
