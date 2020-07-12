@@ -202,6 +202,13 @@ void Graphics::Update()
 	m_ShadowCasters = 0;
 	ShadowData lightData;
 
+	float costheta = cosf(g_SunOrientation);
+	float sintheta = sinf(g_SunOrientation);
+	float cosphi = cosf(g_SunInclination * Math::PIDIV2);
+	float sinphi = sinf(g_SunInclination * Math::PIDIV2);
+	m_Lights[0].Direction = -Vector3(costheta * cosphi, sinphi, sintheta * cosphi);
+	m_Lights[0].Colour = Math::EncodeColor(Math::MakeFromColorTemperature(g_SunTemperature));
+
 	uint32 numCascades = 4;
 	float minPoint = 0;
 	float maxPoint = 1;
@@ -352,14 +359,6 @@ void Graphics::Update()
 	Data.DepthStencil = setupLights.Write(Data.DepthStencil);
 	setupLights.Bind([=](CommandContext& renderContext, const RGPassResources& resources)
 		{
-			float costheta = cosf(g_SunOrientation);
-			float sintheta = sinf(g_SunOrientation);
-			float cosphi = cosf(g_SunInclination * Math::PIDIV2);
-			float sinphi = sinf(g_SunInclination * Math::PIDIV2);
-
-			m_Lights[0].Direction = -Vector3(costheta * cosphi, sinphi, sintheta * cosphi);
-			m_Lights[0].Colour = Math::EncodeColor(Math::MakeFromColorTemperature(g_SunTemperature));
-
 			DynamicAllocation allocation = renderContext.AllocateTransientMemory(m_Lights.size() * sizeof(Light));
 			memcpy(allocation.pMappedMemory, m_Lights.data(), m_Lights.size() * sizeof(Light));
 			renderContext.CopyBuffer(allocation.pBackingResource, m_pLightBuffer.get(), (uint32)m_pLightBuffer->GetSize(), (uint32)allocation.Offset, 0);
@@ -1099,8 +1098,6 @@ void Graphics::InitD3D()
 	m_pImGuiRenderer = std::make_unique<ImGuiRenderer>(this);
 	m_pImGuiRenderer->AddUpdateCallback(ImGuiCallbackDelegate::CreateRaw(this, &Graphics::UpdateImGui));
 	m_pParticles = std::make_unique<GpuParticles>(this);
-
-
 
 	DebugRenderer::Get()->Initialize(this);
 

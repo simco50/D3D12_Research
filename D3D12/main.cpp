@@ -6,6 +6,7 @@
 #define _CRTDBG_MAP_ALLOC
 #include <crtdbg.h>
 #include "Core/CommandLine.h"
+#include "Core/TaskQueue.h"
 
 const int gWindowWidth = 1240;
 const int gWindowHeight = 720;
@@ -18,6 +19,7 @@ public:
 	{
 		m_DisplayWidth = gWindowWidth;
 		m_DisplayHeight = gWindowHeight;
+		TaskQueue::Initialize(std::thread::hardware_concurrency());
 
 		HWND window = MakeWindow(hInstance, pTitle);
 		Input::Instance().SetWindow(window);
@@ -41,6 +43,8 @@ public:
 		}
 		m_pGraphics->Shutdown();
 		delete m_pGraphics;
+
+		TaskQueue::Shutdown();
 	}
 
 private:
@@ -231,6 +235,7 @@ int WINAPI WinMain(HINSTANCE hInstance,	HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	CommandLine::Parse(lpCmdLine);
 
 	_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
+	//_CrtSetBreakAlloc(6528);
 	Console::Startup();
 
 	E_LOG(Info, "Startup");
