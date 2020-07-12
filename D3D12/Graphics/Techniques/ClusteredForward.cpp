@@ -84,6 +84,8 @@ void ClusteredForward::OnSwapchainCreated(int windowWidth, int windowHeight)
 
 void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResources& resources)
 {
+	RG_GRAPH_SCOPE("Clustered Lighting", graph);
+
 	Vector2 screenDimensions((float)m_pGraphics->GetWindowWidth(), (float)m_pGraphics->GetWindowHeight());
 	float nearZ = resources.pCamera->GetNear();
 	float farZ = resources.pCamera->GetFar();

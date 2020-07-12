@@ -8,6 +8,7 @@ class RootSignature;
 class CommandContext;
 class Texture;
 class Camera;
+class RGGraph;
 
 class GpuParticles
 {
@@ -15,8 +16,8 @@ public:
 	GpuParticles(Graphics* pGraphics);
 	~GpuParticles();
 
-	void Simulate(CommandContext& context, Texture* pSourceDepth, const Camera& camera);
-	void Render(CommandContext& context, Texture* pTarget, Texture* pDepth, const Camera& camera);
+	void Simulate(RGGraph& graph, Texture* pSourceDepth, const Camera& camera);
+	void Render(RGGraph& graph, Texture* pTarget, Texture* pDepth, const Camera& camera);
 private:
 	void Initialize(Graphics* pGraphics);
 

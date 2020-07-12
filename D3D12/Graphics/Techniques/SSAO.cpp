@@ -35,6 +35,8 @@ void SSAO::Execute(RGGraph& graph, Texture* pColor, Texture* pDepth, Camera& cam
 	ImGui::SliderInt("Samples", &g_AoSamples, 1, 64);
 	ImGui::End();
 
+	RG_GRAPH_SCOPE("Ambient Occlusion", graph);
+
 	RGPassBuilder ssao = graph.AddPass("SSAO");
 	ssao.Bind([=](CommandContext& renderContext, const RGPassResources& passResources)
 		{

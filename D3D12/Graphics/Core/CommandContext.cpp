@@ -276,7 +276,7 @@ void CommandContext::SetDynamicDescriptor(int rootIndex, int offset, ShaderResou
 	SetDynamicDescriptor(rootIndex, offset, pView->GetDescriptor());
 }
 
-void CommandContext::SetDynamicDescriptors(int rootIndex, int offset, D3D12_CPU_DESCRIPTOR_HANDLE* handles, int count)
+void CommandContext::SetDynamicDescriptors(int rootIndex, int offset, const D3D12_CPU_DESCRIPTOR_HANDLE* handles, int count)
 {
 	m_pShaderResourceDescriptorAllocator->SetDescriptors(rootIndex, offset, count, handles);
 }
@@ -286,7 +286,7 @@ void CommandContext::SetDynamicSampler(int rootIndex, int offset, D3D12_CPU_DESC
 	m_pSamplerDescriptorAllocator->SetDescriptors(rootIndex, offset, 1, &handle);
 }
 
-void CommandContext::SetDynamicSamplers(int rootIndex, int offset, D3D12_CPU_DESCRIPTOR_HANDLE* handles, int count)
+void CommandContext::SetDynamicSamplers(int rootIndex, int offset, const D3D12_CPU_DESCRIPTOR_HANDLE* handles, int count)
 {
 	m_pSamplerDescriptorAllocator->SetDescriptors(rootIndex, offset, count, handles);
 }

@@ -34,6 +34,8 @@ void TiledForward::OnSwapchainCreated(int windowWidth, int windowHeight)
 
 void TiledForward::Execute(RGGraph& graph, const TiledForwardInputResources& resources)
 {
+	RG_GRAPH_SCOPE("Tiled Lighting", graph);
+
 	RGPassBuilder culling = graph.AddPass("Light Culling");
 	culling.Read(resources.ResolvedDepthBuffer);
 	culling.Bind([=](CommandContext& context, const RGPassResources& passResources)

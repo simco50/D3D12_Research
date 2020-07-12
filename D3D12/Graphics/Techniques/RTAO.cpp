@@ -38,7 +38,7 @@ void RTAO::Execute(RGGraph& graph, Texture* pColor, Texture* pDepth, Camera& cam
 	ImGui::SliderInt("Samples", &g_AoSamples, 1, 64);
 	ImGui::End();
 
-	RGPassBuilder rt = graph.AddPass("Raytracing");
+	RGPassBuilder rt = graph.AddPass("RTAO");
 	rt.Bind([=](CommandContext& context, const RGPassResources& passResources)
 		{
 			context.InsertResourceBarrier(pDepth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);

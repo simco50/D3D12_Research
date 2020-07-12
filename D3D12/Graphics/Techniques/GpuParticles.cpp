@@ -13,6 +13,7 @@
 #include "Graphics/Profiler.h"
 #include "Graphics/ImGuiRenderer.h"
 #include "Scene/Camera.h"
+#include "../RenderGraph/RenderGraph.h"
 
 static int32 g_EmitCount = 30;
 static float g_LifeTime = 4.0f;
@@ -142,7 +143,7 @@ void GpuParticles::Initialize(Graphics* pGraphics)
 		}));
 }
 
-void GpuParticles::Simulate(CommandContext& context, Texture* pResolvedDepth, const Camera& camera)
+void GpuParticles::Simulate(RGGraph& graph, Texture* pResolvedDepth, const Camera& camera)
 {
 	if (!g_Simulate)
 	{
@@ -156,18 +157,6 @@ void GpuParticles::Simulate(CommandContext& context, Texture* pResolvedDepth, co
 		time = 0;
 		m_ParticlesToSpawn = 1000000;
 	}
-
-	//m_ParticlesToSpawn += (float)g_EmitCount * GameTimer::DeltaTime();
-
-	context.InsertResourceBarrier(m_pDrawArguments.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-	context.InsertResourceBarrier(m_pEmitArguments.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-	context.InsertResourceBarrier(m_pSimulateArguments.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-	context.InsertResourceBarrier(m_pCountersBuffer.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-	context.InsertResourceBarrier(m_pAliveList1.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-	context.InsertResourceBarrier(m_pAliveList2.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-	context.InsertResourceBarrier(m_pParticleBuffer.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-
-	context.SetComputeRootSignature(m_pSimulateRS.get());
 
 	D3D12_CPU_DESCRIPTOR_HANDLE uavs[] = {
 		m_pCountersBuffer->GetUAV()->GetDescriptor(),
@@ -185,119 +174,150 @@ void GpuParticles::Simulate(CommandContext& context, Texture* pResolvedDepth, co
 		pResolvedDepth->GetSRV(),
 	};
 
-	context.SetDynamicDescriptors(1, 0, uavs, ARRAYSIZE(uavs));
-	context.SetDynamicDescriptors(2, 0, srvs, ARRAYSIZE(srvs));
+	RG_GRAPH_SCOPE("Particle Simulation", graph);
 
-	{
-		GPU_PROFILE_SCOPE("Prepare Arguments", &context);
-
-		context.SetPipelineState(m_pPrepareArgumentsPS.get());
-		struct Parameters
+	RGPassBuilder prepareArguments = graph.AddPass("Prepare Arguments");
+	prepareArguments.Bind([=](CommandContext& context, const RGPassResources& passResources)
 		{
-			int32 EmitCount;
-		} parameters;
-		parameters.EmitCount = (uint32)floor(m_ParticlesToSpawn);
-		m_ParticlesToSpawn -= parameters.EmitCount;
+			//m_ParticlesToSpawn += (float)g_EmitCount * GameTimer::DeltaTime();
 
-		context.SetComputeDynamicConstantBufferView(0, &parameters, sizeof(Parameters));
+			context.InsertResourceBarrier(m_pDrawArguments.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+			context.InsertResourceBarrier(m_pEmitArguments.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+			context.InsertResourceBarrier(m_pSimulateArguments.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+			context.InsertResourceBarrier(m_pCountersBuffer.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+			context.InsertResourceBarrier(m_pAliveList1.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+			context.InsertResourceBarrier(m_pAliveList2.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+			context.InsertResourceBarrier(m_pParticleBuffer.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-		context.Dispatch(1);
-		context.InsertUavBarrier();
-		context.InsertResourceBarrier(m_pEmitArguments.get(), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
-		context.InsertResourceBarrier(m_pSimulateArguments.get(), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
-		context.FlushResourceBarriers();
-	}
-	{
-		GPU_PROFILE_SCOPE("Emit", &context);
+			context.SetComputeRootSignature(m_pSimulateRS.get());
+			context.SetDynamicDescriptors(1, 0, uavs, ARRAYSIZE(uavs));
+			context.SetDynamicDescriptors(2, 0, srvs, ARRAYSIZE(srvs));
 
-		context.SetPipelineState(m_pEmitPS.get());
-
-		std::array<Vector4, 64> randomDirections;
-		std::generate(randomDirections.begin(), randomDirections.end(), []()
+			context.SetPipelineState(m_pPrepareArgumentsPS.get());
+			struct Parameters
 			{
-				Vector4 r = Vector4(Math::RandVector());
-				r.y = Math::Lerp(0.6f, 0.8f, (float)abs(r.y));
-				r.z = Math::Lerp(0.6f, 0.8f, (float)abs(r.z));
-				r.Normalize();
-				return r;
-			});
+				int32 EmitCount;
+			} parameters;
+			parameters.EmitCount = (uint32)floor(m_ParticlesToSpawn);
+			m_ParticlesToSpawn -= parameters.EmitCount;
 
-		context.SetComputeDynamicConstantBufferView(0, randomDirections.data(), sizeof(Vector4) * (uint32)randomDirections.size());
-		context.ExecuteIndirect(m_pSimpleDispatchCommandSignature.get(), m_pEmitArguments.get());
-		context.InsertUavBarrier();
-	}
-	{
-		GPU_PROFILE_SCOPE("Simulate", &context);
+			context.SetComputeDynamicConstantBufferView(0, &parameters, sizeof(Parameters));
 
-		context.SetPipelineState(m_pSimulatePS.get());
-		context.SetComputeRootSignature(m_pSimulateRS.get());
+			context.Dispatch(1);
+			context.InsertUavBarrier();
+			context.InsertResourceBarrier(m_pEmitArguments.get(), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
+			context.InsertResourceBarrier(m_pSimulateArguments.get(), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
+		});
 
-		struct Parameters
+	RGPassBuilder emit = graph.AddPass("Emit");
+	emit.Bind([=](CommandContext& context, const RGPassResources& passResources)
 		{
-			Matrix ViewProjection;
-			Matrix ViewProjectionInv;
-			Vector2 DimensionsInv;
-			float DeltaTime;
-			float ParticleLifeTime;
-			float Near;
-			float Far;
-		} parameters;
-		parameters.DimensionsInv.x = 1.0f / pResolvedDepth->GetWidth();
-		parameters.DimensionsInv.y = 1.0f / pResolvedDepth->GetHeight();
-		parameters.ViewProjectionInv = camera.GetProjectionInverse() * camera.GetViewInverse();
-		parameters.DeltaTime = Time::DeltaTime();
-		parameters.ParticleLifeTime = g_LifeTime;
-		parameters.ViewProjection = camera.GetViewProjection();
-		parameters.Near = camera.GetNear();
-		parameters.Far = camera.GetFar();
+			context.SetComputeRootSignature(m_pSimulateRS.get());
+			context.SetDynamicDescriptors(1, 0, uavs, ARRAYSIZE(uavs));
+			context.SetDynamicDescriptors(2, 0, srvs, ARRAYSIZE(srvs));
 
-		context.SetComputeDynamicConstantBufferView(0, &parameters, sizeof(Parameters));
-		context.ExecuteIndirect(m_pSimpleDispatchCommandSignature.get(), m_pSimulateArguments.get());
-		context.InsertUavBarrier();
-	}
-	{
-		GPU_PROFILE_SCOPE("Simulate End", &context);
+			context.SetPipelineState(m_pEmitPS.get());
 
-		context.SetPipelineState(m_pSimulateEndPS.get());
-		context.Dispatch(1);
-		context.InsertUavBarrier();
-	}
+			std::array<Vector4, 64> randomDirections;
+			std::generate(randomDirections.begin(), randomDirections.end(), []()
+				{
+					Vector4 r = Vector4(Math::RandVector());
+					r.y = Math::Lerp(0.6f, 0.8f, (float)abs(r.y));
+					r.z = Math::Lerp(0.6f, 0.8f, (float)abs(r.z));
+					r.Normalize();
+					return r;
+				});
+
+			context.SetComputeDynamicConstantBufferView(0, randomDirections.data(), sizeof(Vector4) * (uint32)randomDirections.size());
+			context.ExecuteIndirect(m_pSimpleDispatchCommandSignature.get(), m_pEmitArguments.get());
+			context.InsertUavBarrier();
+		});
+
+	RGPassBuilder simulate = graph.AddPass("Simulate");
+	simulate.Bind([=](CommandContext& context, const RGPassResources& passResources)
+		{
+			context.SetComputeRootSignature(m_pSimulateRS.get());
+			context.SetDynamicDescriptors(1, 0, uavs, ARRAYSIZE(uavs));
+			context.SetDynamicDescriptors(2, 0, srvs, ARRAYSIZE(srvs));
+
+			context.SetPipelineState(m_pSimulatePS.get());
+
+			struct Parameters
+			{
+				Matrix ViewProjection;
+				Matrix ViewProjectionInv;
+				Vector2 DimensionsInv;
+				float DeltaTime;
+				float ParticleLifeTime;
+				float Near;
+				float Far;
+			} parameters;
+			parameters.DimensionsInv.x = 1.0f / pResolvedDepth->GetWidth();
+			parameters.DimensionsInv.y = 1.0f / pResolvedDepth->GetHeight();
+			parameters.ViewProjectionInv = camera.GetProjectionInverse() * camera.GetViewInverse();
+			parameters.DeltaTime = Time::DeltaTime();
+			parameters.ParticleLifeTime = g_LifeTime;
+			parameters.ViewProjection = camera.GetViewProjection();
+			parameters.Near = camera.GetNear();
+			parameters.Far = camera.GetFar();
+
+			context.SetComputeDynamicConstantBufferView(0, &parameters, sizeof(Parameters));
+			context.ExecuteIndirect(m_pSimpleDispatchCommandSignature.get(), m_pSimulateArguments.get());
+			context.InsertUavBarrier();
+		});
+
+	RGPassBuilder simulateEnd = graph.AddPass("Simulate End");
+	simulateEnd.Bind([=](CommandContext& context, const RGPassResources& passResources)
+		{
+			context.SetComputeRootSignature(m_pSimulateRS.get());
+			context.SetDynamicDescriptors(1, 0, uavs, ARRAYSIZE(uavs));
+			context.SetDynamicDescriptors(2, 0, srvs, ARRAYSIZE(srvs));
+
+			context.SetPipelineState(m_pSimulateEndPS.get());
+			context.Dispatch(1);
+			context.InsertUavBarrier();
+		});
+
 	std::swap(m_pAliveList1, m_pAliveList2);
 }
 
-void GpuParticles::Render(CommandContext& context, Texture* pTarget, Texture* pDepth, const Camera& camera)
+void GpuParticles::Render(RGGraph& graph, Texture* pTarget, Texture* pDepth, const Camera& camera)
 {
-	context.InsertResourceBarrier(m_pDrawArguments.get(), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
-	context.InsertResourceBarrier(m_pParticleBuffer.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-	context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
+	RGPassBuilder renderParticles = graph.AddPass("Render Particles");
+	renderParticles.Bind([=](CommandContext& context, const RGPassResources& resources)
+		{
+			context.InsertResourceBarrier(m_pDrawArguments.get(), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
+			context.InsertResourceBarrier(m_pParticleBuffer.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+			context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
-	context.BeginRenderPass(RenderPassInfo(pTarget, RenderPassAccess::Load_Store, pDepth, RenderPassAccess::Load_DontCare));
+			context.BeginRenderPass(RenderPassInfo(pTarget, RenderPassAccess::Load_Store, pDepth, RenderPassAccess::Load_DontCare));
 
-	context.SetPipelineState(m_pRenderParticlesPS.get());
-	context.SetGraphicsRootSignature(m_pRenderParticlesRS.get());
+			context.SetPipelineState(m_pRenderParticlesPS.get());
+			context.SetGraphicsRootSignature(m_pRenderParticlesRS.get());
 
-	Vector2 screenDimensions((float)pTarget->GetWidth(), (float)pTarget->GetHeight());
-	context.SetViewport(FloatRect(0, 0, (float)screenDimensions.x, (float)screenDimensions.y));
-	context.SetScissorRect(FloatRect(0, 0, (float)screenDimensions.x, (float)screenDimensions.y));
+			Vector2 screenDimensions((float)pTarget->GetWidth(), (float)pTarget->GetHeight());
+			context.SetViewport(FloatRect(0, 0, (float)screenDimensions.x, (float)screenDimensions.y));
+			context.SetScissorRect(FloatRect(0, 0, (float)screenDimensions.x, (float)screenDimensions.y));
 
-	struct FrameData
-	{
-		Matrix ViewInverse;
-		Matrix View;
-		Matrix Projection;
-	} frameData;
-	frameData.ViewInverse = camera.GetViewInverse();
-	frameData.View = camera.GetView();
-	frameData.Projection = camera.GetProjection();
+			struct FrameData
+			{
+				Matrix ViewInverse;
+				Matrix View;
+				Matrix Projection;
+			} frameData;
+			frameData.ViewInverse = camera.GetViewInverse();
+			frameData.View = camera.GetView();
+			frameData.Projection = camera.GetProjection();
 
-	context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	context.SetDynamicConstantBufferView(0, &frameData, sizeof(FrameData));
+			context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+			context.SetDynamicConstantBufferView(0, &frameData, sizeof(FrameData));
 
-	D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
-		m_pParticleBuffer->GetSRV()->GetDescriptor(),
-		m_pAliveList1->GetSRV()->GetDescriptor()
-	};
-	context.SetDynamicDescriptors(1, 0, srvs, 2);
-	context.ExecuteIndirect(m_pSimpleDrawCommandSignature.get(), m_pDrawArguments.get(), false);
-	context.EndRenderPass();
+			D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
+				m_pParticleBuffer->GetSRV()->GetDescriptor(),
+				m_pAliveList1->GetSRV()->GetDescriptor()
+			};
+			context.SetDynamicDescriptors(1, 0, srvs, 2);
+			context.ExecuteIndirect(m_pSimpleDrawCommandSignature.get(), m_pDrawArguments.get(), false);
+			context.EndRenderPass();
+		});
 }
