@@ -37,9 +37,6 @@ public:
 				TranslateMessage(&msg);
 				DispatchMessage(&msg);
 			}
-			Time::Tick();
-			m_pGraphics->Update();
-			Input::Instance().Update();
 		}
 		m_pGraphics->Shutdown();
 		delete m_pGraphics;
@@ -69,6 +66,11 @@ private:
 	{
 		switch (message)
 		{
+		case WM_PAINT:
+			Time::Tick();
+			m_pGraphics->Update();
+			Input::Instance().Update();
+			return 0;
 		case WM_ACTIVATE:
 			LOWORD(wParam) == WA_INACTIVE ? Time::Stop() : Time::Start();
 			return 0;

@@ -12,3 +12,4 @@ imgui.ini
 *.nsight*
 *.args.json
 _Temp/
+*.opt
