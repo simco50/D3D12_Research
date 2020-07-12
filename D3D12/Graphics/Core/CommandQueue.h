@@ -14,6 +14,7 @@ public:
 private:
 	std::vector<ComPtr<ID3D12CommandAllocator>> m_CommandAllocators;
 	std::queue<std::pair<ID3D12CommandAllocator*, uint64>> m_FreeAllocators;
+	std::mutex m_AllocationMutex;
 
 	D3D12_COMMAND_LIST_TYPE m_Type;
 };

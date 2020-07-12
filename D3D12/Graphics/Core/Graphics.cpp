@@ -1622,22 +1622,24 @@ CommandContext* Graphics::AllocateCommandContext(D3D12_COMMAND_LIST_TYPE type)
 	int typeIndex = (int)type;
 
 	std::lock_guard<std::mutex> lockGuard(m_ContextAllocationMutex);
+	CommandContext* pContext = nullptr;
 	if (m_FreeCommandLists[typeIndex].size() > 0)
 	{
-		CommandContext* pCommandList = m_FreeCommandLists[typeIndex].front();
+		pContext = m_FreeCommandLists[typeIndex].front();
 		m_FreeCommandLists[typeIndex].pop();
-		pCommandList->Reset();
-		return pCommandList;
+		pContext->Reset();
 	}
 	else
 	{
 		ComPtr<ID3D12CommandList> pCommandList;
 		ID3D12CommandAllocator* pAllocator = m_CommandQueues[type]->RequestAllocator();
 		m_pDevice->CreateCommandList(0, type, pAllocator, nullptr, IID_PPV_ARGS(pCommandList.GetAddressOf()));
+		pCommandList->SetName(L"Pooled Commandlist");
 		m_CommandLists.push_back(std::move(pCommandList));
 		m_CommandListPool[typeIndex].emplace_back(std::make_unique<CommandContext>(this, static_cast<ID3D12GraphicsCommandList*>(m_CommandLists.back().Get()), pAllocator, type));
-		return m_CommandListPool[typeIndex].back().get();
+		pContext = m_CommandListPool[typeIndex].back().get();
 	}
+	return pContext;
 }
 
 bool Graphics::IsFenceComplete(uint64 fenceValue)

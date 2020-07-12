@@ -6,6 +6,7 @@
 
 std::vector<ComPtr<ID3D12DescriptorHeap>> OnlineDescriptorAllocator::m_DescriptorHeaps;
 std::array<std::queue<std::pair<uint64, ID3D12DescriptorHeap*>>, 2> OnlineDescriptorAllocator::m_FreeDescriptors;
+std::mutex OnlineDescriptorAllocator::m_HeapAllocationMutex;
 
 OnlineDescriptorAllocator::OnlineDescriptorAllocator(Graphics* pGraphics, CommandContext* pContext, D3D12_DESCRIPTOR_HEAP_TYPE type)
 	: GraphicsObject(pGraphics), m_pOwner(pContext), m_Type(type)
@@ -177,9 +178,12 @@ void OnlineDescriptorAllocator::ParseRootSignature(RootSignature* pRootSignature
 void OnlineDescriptorAllocator::ReleaseUsedHeaps(uint64 fenceValue)
 {
 	ReleaseHeap();
-	for (ID3D12DescriptorHeap* pHeap : m_UsedDescriptorHeaps)
 	{
-		m_FreeDescriptors[(int)m_Type].emplace(fenceValue, pHeap);
+		std::scoped_lock<std::mutex> lock(m_HeapAllocationMutex);
+		for (ID3D12DescriptorHeap* pHeap : m_UsedDescriptorHeaps)
+		{
+			m_FreeDescriptors[(int)m_Type].emplace(fenceValue, pHeap);
+		}
 	}
 	m_UsedDescriptorHeaps.clear();
 }
@@ -200,6 +204,7 @@ uint32 OnlineDescriptorAllocator::GetRequiredSpace()
 
 ID3D12DescriptorHeap* OnlineDescriptorAllocator::RequestNewHeap(D3D12_DESCRIPTOR_HEAP_TYPE type)
 {
+	std::scoped_lock<std::mutex> lock(m_HeapAllocationMutex);
 	if (m_FreeDescriptors[(int)m_Type].size() > 0 && m_pGraphics->IsFenceComplete(m_FreeDescriptors[(int)m_Type].front().first))
 	{
 		ID3D12DescriptorHeap* pHeap = m_FreeDescriptors[(int)m_Type].front().second;

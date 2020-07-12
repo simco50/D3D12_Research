@@ -11,6 +11,7 @@ CommandAllocatorPool::CommandAllocatorPool(Graphics* pGraphics, D3D12_COMMAND_LI
 
 ID3D12CommandAllocator* CommandAllocatorPool::GetAllocator(uint64 fenceValue)
 {
+	std::scoped_lock<std::mutex> lock(m_AllocationMutex);
 	if (m_FreeAllocators.empty() == false)
 	{
 		std::pair<ID3D12CommandAllocator*, uint64>& pFirst = m_FreeAllocators.front();
@@ -24,6 +25,7 @@ ID3D12CommandAllocator* CommandAllocatorPool::GetAllocator(uint64 fenceValue)
 
 	ComPtr<ID3D12CommandAllocator> pAllocator;
 	m_pGraphics->GetDevice()->CreateCommandAllocator(m_Type, IID_PPV_ARGS(pAllocator.GetAddressOf()));
+	pAllocator->SetName(L"Pooled Allocator");
 	m_CommandAllocators.push_back(std::move(pAllocator));
 	return m_CommandAllocators.back().Get();
 }
