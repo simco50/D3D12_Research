@@ -118,6 +118,7 @@ public:
 	void AddUAV(ID3D12Resource* pResource);
 	void Flush(ID3D12GraphicsCommandList* pCmdList);
 	void Reset();
+	bool HasWork() const { return m_QueuedBarriers.size() > 0; }
 
 private:
 	std::vector<D3D12_RESOURCE_BARRIER> m_QueuedBarriers;
@@ -131,6 +132,8 @@ public:
 
 	void Reset();
 	uint64 Execute(bool wait);
+	static uint64 Execute(CommandContext** pContexts, uint32 numContexts, bool wait);
+	void Free(uint64 fenceValue);
 
 	void InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESOURCE_STATES state, uint32 subResource = 0xffffffff);
 	void InsertUavBarrier(GraphicsResource* pBuffer = nullptr);
@@ -204,6 +207,13 @@ public:
 	DynamicAllocation AllocateTransientMemory(uint64 size);
 	DescriptorHandle AllocateTransientDescriptors(int descriptorCount, D3D12_DESCRIPTOR_HEAP_TYPE type);
 
+	struct PendingBarrier
+	{
+		GraphicsResource* pResource;
+		ResourceState State;
+	};
+	const std::vector<PendingBarrier>& GetPendingBarriers() const { return m_PendingBarriers; }
+
 private:
 	std::unique_ptr<OnlineDescriptorAllocator> m_pShaderResourceDescriptorAllocator;
 	std::unique_ptr<OnlineDescriptorAllocator> m_pSamplerDescriptorAllocator;
@@ -223,4 +233,7 @@ private:
 
 	RenderPassInfo m_CurrentRenderPassInfo;
 	bool m_InRenderPass = false;
+
+	std::unordered_map<GraphicsResource*, ResourceState> m_ResourceStates;
+	std::vector<PendingBarrier> m_PendingBarriers;
 };

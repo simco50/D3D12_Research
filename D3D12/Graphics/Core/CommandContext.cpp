@@ -57,17 +57,36 @@ void CommandContext::Reset()
 
 uint64 CommandContext::Execute(bool wait)
 {
-	FlushResourceBarriers();
-	CommandQueue* pQueue = m_pGraphics->GetCommandQueue(m_Type);
-	uint64 fenceValue = pQueue->ExecuteCommandList(m_pCommandList);
+	CommandContext* pContexts[] = { this };
+	return Execute(pContexts, 1, wait);
+}
 
+uint64 CommandContext::Execute(CommandContext** pContexts, uint32 numContexts, bool wait)
+{
+	check(numContexts > 0);
+	CommandQueue* pQueue = pContexts[0]->m_pGraphics->GetCommandQueue(pContexts[0]->GetType());
+	for (uint32 i = 0; i < numContexts; ++i)
+	{
+		check(pContexts[i]->GetType() == pQueue->GetType());
+		pContexts[i]->FlushResourceBarriers();
+	}
+	uint64 fenceValue = pQueue->ExecuteCommandLists(pContexts, numContexts);
 	if (wait)
 	{
 		pQueue->WaitForFence(fenceValue);
 	}
 
+	for (uint32 i = 0; i < numContexts; ++i)
+	{
+		pContexts[i]->Free(fenceValue);
+	}
+	return fenceValue;
+}
+
+void CommandContext::Free(uint64 fenceValue)
+{
 	m_DynamicAllocator->Free(fenceValue);
-	pQueue->FreeAllocator(fenceValue, m_pAllocator);
+	m_pGraphics->GetCommandQueue(m_Type)->FreeAllocator(fenceValue, m_pAllocator);
 	m_pAllocator = nullptr;
 	m_pGraphics->FreeCommandList(this);
 
@@ -79,8 +98,6 @@ uint64 CommandContext::Execute(bool wait)
 	{
 		m_pSamplerDescriptorAllocator->ReleaseUsedHeaps(fenceValue);
 	}
-
-	return fenceValue;
 }
 
 bool NeedsTransition(D3D12_RESOURCE_STATES& before, D3D12_RESOURCE_STATES& after)
@@ -105,22 +122,34 @@ bool NeedsTransition(D3D12_RESOURCE_STATES& before, D3D12_RESOURCE_STATES& after
 
 void CommandContext::InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESOURCE_STATES state, uint32 subResource /*= 0xffffffff*/)
 {
-	D3D12_RESOURCE_STATES beforeState = pBuffer->GetResourceState();
-	if (m_Type == D3D12_COMMAND_LIST_TYPE_COMPUTE)
+	ResourceState& resourceState = m_ResourceStates[pBuffer];
+	D3D12_RESOURCE_STATES beforeState = resourceState.Get(subResource);
+	if (beforeState == D3D12_RESOURCE_STATE_UNKNOWN)
 	{
-		check((beforeState & VALID_COMPUTE_QUEUE_RESOURCE_STATES) == beforeState);
-		check((state & VALID_COMPUTE_QUEUE_RESOURCE_STATES) == state);
+		PendingBarrier barrier;
+		barrier.pResource = pBuffer;
+		barrier.State = state;
+		m_PendingBarriers.push_back(barrier);
+		resourceState.Set(state, subResource);
 	}
-	else if (m_Type == D3D12_COMMAND_LIST_TYPE_COPY)
+	else
 	{
-		check((beforeState & VALID_COPY_QUEUE_RESOURCE_STATES) == beforeState);
-		check((state & VALID_COPY_QUEUE_RESOURCE_STATES) == state);
-	}
+		if (m_Type == D3D12_COMMAND_LIST_TYPE_COMPUTE)
+		{
+			check((beforeState & VALID_COMPUTE_QUEUE_RESOURCE_STATES) == beforeState);
+			check((state & VALID_COMPUTE_QUEUE_RESOURCE_STATES) == state);
+		}
+		else if (m_Type == D3D12_COMMAND_LIST_TYPE_COPY)
+		{
+			check((beforeState & VALID_COPY_QUEUE_RESOURCE_STATES) == beforeState);
+			check((state & VALID_COPY_QUEUE_RESOURCE_STATES) == state);
+		}
 
-	if (NeedsTransition(beforeState, state))
-	{
-		m_BarrierBatcher.AddTransition(pBuffer->GetResource(), pBuffer->GetResourceState(subResource), state, subResource);
-		pBuffer->SetResourceState(state, subResource);
+		if (NeedsTransition(beforeState, state))
+		{
+			m_BarrierBatcher.AddTransition(pBuffer->GetResource(), beforeState, state, subResource);
+			resourceState.Set(state, subResource);
+		}
 	}
 }
 
@@ -701,6 +730,10 @@ void CommandContext::SetScissorRect(const FloatRect& rect)
 
 void ResourceBarrierBatcher::AddTransition(ID3D12Resource* pResource, D3D12_RESOURCE_STATES beforeState, D3D12_RESOURCE_STATES afterState, int subResource)
 {
+	if (beforeState == afterState)
+	{
+		return;
+	}
 	if (m_QueuedBarriers.size())
 	{
 		const D3D12_RESOURCE_BARRIER& last = m_QueuedBarriers.back();

@@ -2,6 +2,7 @@
 #include "GraphicsResource.h"
 
 class Graphics;
+class CommandContext;
 
 class CommandAllocatorPool : public GraphicsObject
 {
@@ -25,7 +26,7 @@ public:
 	CommandQueue(Graphics* pGraphics, D3D12_COMMAND_LIST_TYPE type);
 	~CommandQueue();
 
-	uint64 ExecuteCommandList(ID3D12CommandList* pCommandContext);
+	uint64 ExecuteCommandLists(CommandContext** pCommandContexts, uint32 numContexts);
 	ID3D12CommandQueue* GetCommandQueue() const { return m_pCommandQueue.Get(); }
 
 	//Inserts a stall/wait in the queue so it blocks the GPU
@@ -42,6 +43,7 @@ public:
 	uint64 GetLastCompletedFence() const { return m_LastCompletedFenceValue; }
 	uint64 GetNextFenceValue() const { return m_NextFenceValue; }
 	ID3D12Fence* GetFence() const { return m_pFence.Get(); }
+	D3D12_COMMAND_LIST_TYPE GetType() const { return m_Type; }
 
 	ID3D12CommandAllocator* RequestAllocator();
 	void FreeAllocator(uint64 fenceValue, ID3D12CommandAllocator* pAllocator);
@@ -58,4 +60,6 @@ private:
 
     ComPtr<ID3D12Fence> m_pFence;
 	HANDLE m_pFenceEventHandle = nullptr;
+
+	D3D12_COMMAND_LIST_TYPE m_Type;
 };

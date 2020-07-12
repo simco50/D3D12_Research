@@ -3,6 +3,7 @@
 #include "Graphics.h"
 #define USE_PIX
 #include "pix3.h"
+#include "CommandContext.h"
 
 CommandAllocatorPool::CommandAllocatorPool(Graphics* pGraphics, D3D12_COMMAND_LIST_TYPE type)
 	: GraphicsObject(pGraphics), m_Type(type)
@@ -38,7 +39,8 @@ void CommandAllocatorPool::FreeAllocator(ID3D12CommandAllocator* pAllocator, uin
 CommandQueue::CommandQueue(Graphics* pGraphics, D3D12_COMMAND_LIST_TYPE type)
 	: GraphicsObject(pGraphics),
 	m_NextFenceValue((uint64)type << 56 | 1),
-	m_LastCompletedFenceValue((uint64)type << 56)
+	m_LastCompletedFenceValue((uint64)type << 56),
+	m_Type(type)
 {
 	m_pAllocatorPool = std::make_unique<CommandAllocatorPool>(pGraphics, type);
 
@@ -59,12 +61,39 @@ CommandQueue::~CommandQueue()
 	CloseHandle(m_pFenceEventHandle);
 }
 
-uint64 CommandQueue::ExecuteCommandList(ID3D12CommandList* pCommandList)
+uint64 CommandQueue::ExecuteCommandLists(CommandContext** pCommandContexts, uint32 numContexts)
 {
+	std::vector<ID3D12CommandList*> commandLists{};
+	for (uint32 i = 0; i < numContexts; ++i)
+	{
+		CommandContext* pContext = pCommandContexts[i];
+
+		if (pContext->GetPendingBarriers().size())
+		{
+			ResourceBarrierBatcher barriers;
+			for (const CommandContext::PendingBarrier& pending : pContext->GetPendingBarriers())
+			{
+				barriers.AddTransition(pending.pResource->GetResource(), pending.pResource->GetResourceState(0xffffffff), pending.State.Get(0xffffffff), 0xffffffff);
+				pending.pResource->SetResourceState(pending.State.Get(0xffffffff));
+			}
+			if (barriers.HasWork())
+			{
+				CommandContext* pC = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+				barriers.Flush(pC->GetCommandList());
+				pC->GetCommandList()->Close();
+				pC->Free(m_NextFenceValue);
+				commandLists.push_back(pC->GetCommandList());
+			}
+		}
+
+		commandLists.push_back((ID3D12CommandList*)pContext->GetCommandList());
+		VERIFY_HR_EX(pContext->GetCommandList()->Close(), m_pGraphics->GetDevice());
+	}
+	m_pCommandQueue->ExecuteCommandLists(commandLists.size(), commandLists.data());
+	
 	std::lock_guard<std::mutex> lock(m_FenceMutex);
-	VERIFY_HR_EX(static_cast<ID3D12GraphicsCommandList*>(pCommandList)->Close(), m_pGraphics->GetDevice());
-	m_pCommandQueue->ExecuteCommandLists(1, &pCommandList);
 	m_pCommandQueue->Signal(m_pFence.Get(), m_NextFenceValue);
+
 	return m_NextFenceValue++;
 }
 
