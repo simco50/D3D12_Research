@@ -68,28 +68,27 @@ uint64 CommandQueue::ExecuteCommandLists(CommandContext** pCommandContexts, uint
 	{
 		CommandContext* pContext = pCommandContexts[i];
 
-		if (pContext->GetPendingBarriers().size())
+		ResourceBarrierBatcher barriers;
+		for (const CommandContext::PendingBarrier& pending : pContext->GetPendingBarriers())
 		{
-			ResourceBarrierBatcher barriers;
-			for (const CommandContext::PendingBarrier& pending : pContext->GetPendingBarriers())
-			{
-				barriers.AddTransition(pending.pResource->GetResource(), pending.pResource->GetResourceState(0xffffffff), pending.State.Get(0xffffffff), 0xffffffff);
-				pending.pResource->SetResourceState(pending.State.Get(0xffffffff));
-			}
-			if (barriers.HasWork())
-			{
-				CommandContext* pC = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
-				barriers.Flush(pC->GetCommandList());
-				pC->GetCommandList()->Close();
-				pC->Free(m_NextFenceValue);
-				commandLists.push_back(pC->GetCommandList());
-			}
+			uint32 subResource = pending.Subresource;
+			GraphicsResource* pResource = pending.pResource;
+			barriers.AddTransition(pResource->GetResource(), pResource->GetResourceState(subResource), pending.State.Get(subResource), subResource);
+			pResource->SetResourceState(pContext->GetResourceState(pending.pResource).Get(subResource));
+		}
+		if (barriers.HasWork())
+		{
+			CommandContext* pC = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+			barriers.Flush(pC->GetCommandList());
+			pC->GetCommandList()->Close();
+			pC->Free(m_NextFenceValue);
+			commandLists.push_back(pC->GetCommandList());
 		}
 
 		commandLists.push_back((ID3D12CommandList*)pContext->GetCommandList());
 		VERIFY_HR_EX(pContext->GetCommandList()->Close(), m_pGraphics->GetDevice());
 	}
-	m_pCommandQueue->ExecuteCommandLists(commandLists.size(), commandLists.data());
+	m_pCommandQueue->ExecuteCommandLists((uint32)commandLists.size(), commandLists.data());
 	
 	std::lock_guard<std::mutex> lock(m_FenceMutex);
 	m_pCommandQueue->Signal(m_pFence.Get(), m_NextFenceValue);

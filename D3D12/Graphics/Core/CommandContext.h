@@ -135,7 +135,7 @@ public:
 	static uint64 Execute(CommandContext** pContexts, uint32 numContexts, bool wait);
 	void Free(uint64 fenceValue);
 
-	void InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESOURCE_STATES state, uint32 subResource = 0xffffffff);
+	void InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESOURCE_STATES state, uint32 subResource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES);
 	void InsertUavBarrier(GraphicsResource* pBuffer = nullptr);
 	void FlushResourceBarriers();
 
@@ -211,8 +211,15 @@ public:
 	{
 		GraphicsResource* pResource;
 		ResourceState State;
+		uint32 Subresource;
 	};
 	const std::vector<PendingBarrier>& GetPendingBarriers() const { return m_PendingBarriers; }
+	ResourceState GetResourceState(GraphicsResource* pResource) const 
+	{
+		auto it = m_ResourceStates.find(pResource);
+		check(it != m_ResourceStates.end());
+		return it->second;
+	}
 
 private:
 	std::unique_ptr<OnlineDescriptorAllocator> m_pShaderResourceDescriptorAllocator;

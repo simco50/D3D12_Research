@@ -584,6 +584,7 @@ void Graphics::Update()
 			Texture* pDepthStencil = resources.GetTexture(Data.DepthStencil);
 			const TextureDesc& desc = pDepthStencil->GetDesc();
 			renderContext.InsertResourceBarrier(pDepthStencil, D3D12_RESOURCE_STATE_DEPTH_READ);
+			renderContext.InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RENDER_TARGET);
 
 			RenderPassInfo info = RenderPassInfo(GetCurrentRenderTarget(), RenderPassAccess::Load_Store, pDepthStencil, RenderPassAccess::Load_DontCare);
 
