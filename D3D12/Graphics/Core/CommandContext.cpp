@@ -53,21 +53,43 @@ void CommandContext::Reset()
 	}
 	m_BarrierBatcher.Reset();
 	BindDescriptorHeaps();
+
+	m_PendingBarriers.clear();
+	m_ResourceStates.clear();
 }
 
 uint64 CommandContext::Execute(bool wait)
 {
-	FlushResourceBarriers();
-	CommandQueue* pQueue = m_pGraphics->GetCommandQueue(m_Type);
-	uint64 fenceValue = pQueue->ExecuteCommandList(m_pCommandList);
+	CommandContext* pContexts[] = { this };
+	return Execute(pContexts, ARRAYSIZE(pContexts), wait);
+}
 
+uint64 CommandContext::Execute(CommandContext** pContexts, uint32 numContexts, bool wait)
+{
+	check(numContexts > 0);
+	CommandQueue* pQueue = pContexts[0]->m_pGraphics->GetCommandQueue(pContexts[0]->GetType());
+	for (uint32 i = 0; i < numContexts; ++i)
+	{
+		check(pContexts[i]->GetType() == pQueue->GetType());
+		pContexts[i]->FlushResourceBarriers();
+	}
+	uint64 fenceValue = pQueue->ExecuteCommandLists(pContexts, numContexts);
 	if (wait)
 	{
 		pQueue->WaitForFence(fenceValue);
 	}
 
+	for (uint32 i = 0; i < numContexts; ++i)
+	{
+		pContexts[i]->Free(fenceValue);
+	}
+	return fenceValue;
+}
+
+void CommandContext::Free(uint64 fenceValue)
+{
 	m_DynamicAllocator->Free(fenceValue);
-	pQueue->FreeAllocator(fenceValue, m_pAllocator);
+	m_pGraphics->GetCommandQueue(m_Type)->FreeAllocator(fenceValue, m_pAllocator);
 	m_pAllocator = nullptr;
 	m_pGraphics->FreeCommandList(this);
 
@@ -79,8 +101,6 @@ uint64 CommandContext::Execute(bool wait)
 	{
 		m_pSamplerDescriptorAllocator->ReleaseUsedHeaps(fenceValue);
 	}
-
-	return fenceValue;
 }
 
 bool NeedsTransition(D3D12_RESOURCE_STATES& before, D3D12_RESOURCE_STATES& after)
@@ -103,24 +123,37 @@ bool NeedsTransition(D3D12_RESOURCE_STATES& before, D3D12_RESOURCE_STATES& after
 	return before != after;
 }
 
-void CommandContext::InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESOURCE_STATES state, uint32 subResource /*= 0xffffffff*/)
+void CommandContext::InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESOURCE_STATES state, uint32 subResource /*= D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES*/)
 {
-	D3D12_RESOURCE_STATES beforeState = pBuffer->GetResourceState();
-	if (m_Type == D3D12_COMMAND_LIST_TYPE_COMPUTE)
+	ResourceState& resourceState = m_ResourceStates[pBuffer];
+	D3D12_RESOURCE_STATES beforeState = resourceState.Get(subResource);
+	if (beforeState == D3D12_RESOURCE_STATE_UNKNOWN)
 	{
-		check((beforeState & VALID_COMPUTE_QUEUE_RESOURCE_STATES) == beforeState);
-		check((state & VALID_COMPUTE_QUEUE_RESOURCE_STATES) == state);
+		PendingBarrier barrier;
+		barrier.pResource = pBuffer;
+		barrier.State = state;
+		barrier.Subresource = subResource;
+		m_PendingBarriers.push_back(barrier);
+		resourceState.Set(state, subResource);
 	}
-	else if (m_Type == D3D12_COMMAND_LIST_TYPE_COPY)
+	else
 	{
-		check((beforeState & VALID_COPY_QUEUE_RESOURCE_STATES) == beforeState);
-		check((state & VALID_COPY_QUEUE_RESOURCE_STATES) == state);
-	}
+		if (m_Type == D3D12_COMMAND_LIST_TYPE_COMPUTE)
+		{
+			check((beforeState & VALID_COMPUTE_QUEUE_RESOURCE_STATES) == beforeState);
+			check((state & VALID_COMPUTE_QUEUE_RESOURCE_STATES) == state);
+		}
+		else if (m_Type == D3D12_COMMAND_LIST_TYPE_COPY)
+		{
+			check((beforeState & VALID_COPY_QUEUE_RESOURCE_STATES) == beforeState);
+			check((state & VALID_COPY_QUEUE_RESOURCE_STATES) == state);
+		}
 
-	if (NeedsTransition(beforeState, state))
-	{
-		m_BarrierBatcher.AddTransition(pBuffer->GetResource(), pBuffer->GetResourceState(subResource), state, subResource);
-		pBuffer->SetResourceState(state, subResource);
+		if (NeedsTransition(beforeState, state))
+		{
+			m_BarrierBatcher.AddTransition(pBuffer->GetResource(), beforeState, state, subResource);
+			resourceState.Set(state, subResource);
+		}
 	}
 }
 
@@ -137,14 +170,10 @@ void CommandContext::FlushResourceBarriers()
 void CommandContext::CopyTexture(GraphicsResource* pSource, GraphicsResource* pTarget)
 {
 	check(pSource && pTarget);
-	D3D12_RESOURCE_STATES sourceState = pSource->GetResourceState();
-	D3D12_RESOURCE_STATES targetState = pTarget->GetResourceState();
 	InsertResourceBarrier(pSource, D3D12_RESOURCE_STATE_COPY_SOURCE);
 	InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_COPY_DEST);
 	FlushResourceBarriers();
 	m_pCommandList->CopyResource(pTarget->GetResource(), pSource->GetResource());
-	InsertResourceBarrier(pSource, sourceState);
-	InsertResourceBarrier(pTarget, targetState);
 }
 
 void CommandContext::CopyTexture(Texture* pSource, Buffer* pDestination, const D3D12_BOX& sourceRegion, int sourceSubregion /*= 0*/, int destinationOffset /*= 0*/)
@@ -178,12 +207,10 @@ void CommandContext::InitializeBuffer(Buffer* pResource, const void* pData, uint
 {
 	DynamicAllocation allocation = m_DynamicAllocator->Allocate(dataSize);
 	memcpy(allocation.pMappedMemory, pData, dataSize);
-	D3D12_RESOURCE_STATES previousState = pResource->GetResourceState();
 	InsertResourceBarrier(pResource, D3D12_RESOURCE_STATE_COPY_DEST);
 	FlushResourceBarriers();
 	m_pCommandList->CopyBufferRegion(pResource->GetResource(), offset, allocation.pBackingResource->GetResource(), allocation.Offset, dataSize);
-	InsertResourceBarrier(pResource, previousState);
-	FlushResourceBarriers();
+	InsertResourceBarrier(pResource, D3D12_RESOURCE_STATE_COMMON);
 }
 
 void CommandContext::InitializeTexture(Texture* pResource, D3D12_SUBRESOURCE_DATA* pSubResourceDatas, int firstSubResource, int subResourceCount)
@@ -192,12 +219,10 @@ void CommandContext::InitializeTexture(Texture* pResource, D3D12_SUBRESOURCE_DAT
 	uint64 requiredSize = 0;
 	m_pGraphics->GetDevice()->GetCopyableFootprints(&desc, firstSubResource, subResourceCount, 0, nullptr, nullptr, nullptr, &requiredSize);
 	DynamicAllocation allocation = m_DynamicAllocator->Allocate(requiredSize, D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT);
-	D3D12_RESOURCE_STATES previousState = pResource->GetResourceState();
 	InsertResourceBarrier(pResource, D3D12_RESOURCE_STATE_COPY_DEST);
 	FlushResourceBarriers();
 	UpdateSubresources(m_pCommandList, pResource->GetResource(), allocation.pBackingResource->GetResource(), allocation.Offset, firstSubResource, subResourceCount, pSubResourceDatas);
-	InsertResourceBarrier(pResource, previousState);
-	FlushResourceBarriers();
+	InsertResourceBarrier(pResource, D3D12_RESOURCE_STATE_COMMON);
 }
 
 void CommandContext::Dispatch(uint32 groupCountX, uint32 groupCountY, uint32 groupCountZ)
@@ -649,30 +674,30 @@ void CommandContext::SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY type)
 	m_pCommandList->IASetPrimitiveTopology(type);
 }
 
-void CommandContext::SetVertexBuffer(Buffer* pVertexBuffer)
+void CommandContext::SetVertexBuffer(BufferView vertexBuffer)
 {
-	SetVertexBuffers(&pVertexBuffer, 1);
+	SetVertexBuffers(&vertexBuffer, 1);
 }
 
-void CommandContext::SetVertexBuffers(Buffer** pVertexBuffers, int bufferCount)
+void CommandContext::SetVertexBuffers(BufferView* pVertexBuffers, int bufferCount)
 {
 	check(bufferCount <= 4);
 	std::array<D3D12_VERTEX_BUFFER_VIEW, 4> views = {};
 	for (int i = 0; i < bufferCount; ++i)
 	{
-		views[i].BufferLocation = pVertexBuffers[i]->GetGpuHandle();
-		views[i].SizeInBytes = (uint32)pVertexBuffers[i]->GetSize();
-		views[i].StrideInBytes = pVertexBuffers[i]->GetDesc().ElementSize;
+		views[i].BufferLocation = pVertexBuffers[i].pBuffer->GetGpuHandle() + pVertexBuffers[i].Offset;
+		views[i].SizeInBytes = (uint32)pVertexBuffers[i].pBuffer->GetSize();
+		views[i].StrideInBytes = pVertexBuffers[i].pBuffer->GetDesc().ElementSize;
 	}
 	m_pCommandList->IASetVertexBuffers(0, bufferCount, views.data());
 }
 
-void CommandContext::SetIndexBuffer(Buffer* pIndexBuffer)
+void CommandContext::SetIndexBuffer(BufferView indexBuffer)
 {
 	D3D12_INDEX_BUFFER_VIEW view;
-	view.BufferLocation = pIndexBuffer->GetGpuHandle();
-	view.Format = pIndexBuffer->GetDesc().ElementSize == 4 ? DXGI_FORMAT_R32_UINT : DXGI_FORMAT_R16_UINT;
-	view.SizeInBytes = (uint32)pIndexBuffer->GetSize();
+	view.BufferLocation = indexBuffer.pBuffer->GetGpuHandle() + indexBuffer.Offset;
+	view.Format = indexBuffer.pBuffer->GetDesc().ElementSize == 4 ? DXGI_FORMAT_R32_UINT : DXGI_FORMAT_R16_UINT;
+	view.SizeInBytes = (uint32)indexBuffer.pBuffer->GetSize();
 	m_pCommandList->IASetIndexBuffer(&view);
 }
 
@@ -701,6 +726,10 @@ void CommandContext::SetScissorRect(const FloatRect& rect)
 
 void ResourceBarrierBatcher::AddTransition(ID3D12Resource* pResource, D3D12_RESOURCE_STATES beforeState, D3D12_RESOURCE_STATES afterState, int subResource)
 {
+	if (beforeState == afterState)
+	{
+		return;
+	}
 	if (m_QueuedBarriers.size())
 	{
 		const D3D12_RESOURCE_BARRIER& last = m_QueuedBarriers.back();

@@ -12,6 +12,7 @@ class DynamicResourceAllocator;
 class Buffer;
 class CommandSignature;
 class ShaderBindingTable;
+struct BufferView;
 
 enum class CommandListContext
 {
@@ -118,6 +119,7 @@ public:
 	void AddUAV(ID3D12Resource* pResource);
 	void Flush(ID3D12GraphicsCommandList* pCmdList);
 	void Reset();
+	bool HasWork() const { return m_QueuedBarriers.size() > 0; }
 
 private:
 	std::vector<D3D12_RESOURCE_BARRIER> m_QueuedBarriers;
@@ -131,8 +133,10 @@ public:
 
 	void Reset();
 	uint64 Execute(bool wait);
+	static uint64 Execute(CommandContext** pContexts, uint32 numContexts, bool wait);
+	void Free(uint64 fenceValue);
 
-	void InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESOURCE_STATES state, uint32 subResource = 0xffffffff);
+	void InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESOURCE_STATES state, uint32 subResource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES);
 	void InsertUavBarrier(GraphicsResource* pBuffer = nullptr);
 	void FlushResourceBarriers();
 
@@ -193,9 +197,9 @@ public:
 	void SetDynamicVertexBuffer(int slot, int elementCount, int elementSize, const void* pData);
 	void SetDynamicIndexBuffer(int elementCount, const void* pData, bool smallIndices = false);
 	void SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY type);
-	void SetVertexBuffer(Buffer* pVertexBuffer);
-	void SetVertexBuffers(Buffer** pVertexBuffers, int bufferCount);
-	void SetIndexBuffer(Buffer* pIndexBuffer);
+	void SetVertexBuffer(BufferView buffer);
+	void SetVertexBuffers(BufferView* pBuffers, int bufferCount);
+	void SetIndexBuffer(BufferView indexBuffer);
 	void SetViewport(const FloatRect& rect, float minDepth = 0.0f, float maxDepth = 1.0f);
 	void SetScissorRect(const FloatRect& rect);
 
@@ -203,6 +207,20 @@ public:
 
 	DynamicAllocation AllocateTransientMemory(uint64 size);
 	DescriptorHandle AllocateTransientDescriptors(int descriptorCount, D3D12_DESCRIPTOR_HEAP_TYPE type);
+
+	struct PendingBarrier
+	{
+		GraphicsResource* pResource;
+		ResourceState State;
+		uint32 Subresource;
+	};
+	const std::vector<PendingBarrier>& GetPendingBarriers() const { return m_PendingBarriers; }
+	ResourceState GetResourceState(GraphicsResource* pResource) const 
+	{
+		auto it = m_ResourceStates.find(pResource);
+		check(it != m_ResourceStates.end());
+		return it->second;
+	}
 
 private:
 	std::unique_ptr<OnlineDescriptorAllocator> m_pShaderResourceDescriptorAllocator;
@@ -223,4 +241,7 @@ private:
 
 	RenderPassInfo m_CurrentRenderPassInfo;
 	bool m_InRenderPass = false;
+
+	std::unordered_map<GraphicsResource*, ResourceState> m_ResourceStates;
+	std::vector<PendingBarrier> m_PendingBarriers;
 };

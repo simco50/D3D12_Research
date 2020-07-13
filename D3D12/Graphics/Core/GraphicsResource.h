@@ -16,10 +16,12 @@ protected:
 	Graphics* m_pGraphics;
 };
 
+constexpr D3D12_RESOURCE_STATES D3D12_RESOURCE_STATE_UNKNOWN = (D3D12_RESOURCE_STATES)-1;
+
 class ResourceState
 {
 public:
-	ResourceState(D3D12_RESOURCE_STATES initialState)
+	ResourceState(D3D12_RESOURCE_STATES initialState = D3D12_RESOURCE_STATE_UNKNOWN)
 		: m_CommonState(initialState), m_AllSameState(true)
 	{}
 	void Set(D3D12_RESOURCE_STATES state, int subResource)

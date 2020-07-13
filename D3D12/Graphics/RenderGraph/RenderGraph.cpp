@@ -184,14 +184,6 @@ RGResourceHandle RGGraph::MoveResource(RGResourceHandle From, RGResourceHandle T
 RGPass& RGGraph::AddPass(RGPass* pPass)
 {
 	m_RenderPasses.push_back(pPass);
-
-	if (m_ImmediateMode)
-	{
-		CommandContext* pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
-		ExecutePass(pPass, *pContext);
-		m_LastFenceValue = pContext->Execute(false);
-	}
-
 	return *pPass;
 }
 
@@ -222,7 +214,7 @@ int64 RGGraph::Execute()
 	RG_ASSERT(m_EventStackSize == 0, "Missing PopEvent");
 	if (m_ImmediateMode == false)
 	{
-		int eclFrequency = 4;
+		int eclFrequency = 5;
 		int i = 0;
 		CommandContext* pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 		for(uint32 passIndex = 0; passIndex < (uint32)m_RenderPasses.size(); ++passIndex)
