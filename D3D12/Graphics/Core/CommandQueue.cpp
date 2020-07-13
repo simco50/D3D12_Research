@@ -63,31 +63,50 @@ CommandQueue::~CommandQueue()
 
 uint64 CommandQueue::ExecuteCommandLists(CommandContext** pCommandContexts, uint32 numContexts)
 {
-	std::vector<ID3D12CommandList*> commandLists{};
+	check(pCommandContexts);
+	check(numContexts > 0);
+
+	// Commandlists can be recorded in parallel.
+	// The before state of a resource transition can't be known so commandlists keep local resource states
+	// and insert "pending resource barriers" which are barriers with an unknown before state.
+	// During commandlist execution, these pending resource barriers are resolved by inserting
+	// new barriers in the previous commandlist before closing it.
+	// The first commandlist will resolve the barriers of the next so the first one will just contain resource barriers.
+
+	std::vector<ID3D12CommandList*> commandLists;
+	commandLists.reserve(numContexts + 1);
+	CommandContext* pCurrentContext = nullptr;
 	for (uint32 i = 0; i < numContexts; ++i)
 	{
-		CommandContext* pContext = pCommandContexts[i];
+		CommandContext* pNextContext = pCommandContexts[i];
 
 		ResourceBarrierBatcher barriers;
-		for (const CommandContext::PendingBarrier& pending : pContext->GetPendingBarriers())
+		for (const CommandContext::PendingBarrier& pending : pNextContext->GetPendingBarriers())
 		{
 			uint32 subResource = pending.Subresource;
 			GraphicsResource* pResource = pending.pResource;
 			barriers.AddTransition(pResource->GetResource(), pResource->GetResourceState(subResource), pending.State.Get(subResource), subResource);
-			pResource->SetResourceState(pContext->GetResourceState(pending.pResource).Get(subResource));
+			pResource->SetResourceState(pNextContext->GetResourceState(pending.pResource).Get(subResource));
 		}
 		if (barriers.HasWork())
 		{
-			CommandContext* pC = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
-			barriers.Flush(pC->GetCommandList());
-			pC->GetCommandList()->Close();
-			pC->Free(m_NextFenceValue);
-			commandLists.push_back(pC->GetCommandList());
+			if (!pCurrentContext)
+			{
+				pCurrentContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+				pCurrentContext->Free(m_NextFenceValue);
+			}
+			barriers.Flush(pCurrentContext->GetCommandList());
 		}
-
-		commandLists.push_back((ID3D12CommandList*)pContext->GetCommandList());
-		VERIFY_HR_EX(pContext->GetCommandList()->Close(), m_pGraphics->GetDevice());
+		if (pCurrentContext)
+		{
+			VERIFY_HR_EX(pCurrentContext->GetCommandList()->Close(), m_pGraphics->GetDevice());
+			commandLists.push_back(pCurrentContext->GetCommandList());
+		}
+		pCurrentContext = pNextContext;
 	}
+	VERIFY_HR_EX(pCurrentContext->GetCommandList()->Close(), m_pGraphics->GetDevice());
+	commandLists.push_back(pCurrentContext->GetCommandList());
+
 	m_pCommandQueue->ExecuteCommandLists((uint32)commandLists.size(), commandLists.data());
 	
 	std::lock_guard<std::mutex> lock(m_FenceMutex);

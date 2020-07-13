@@ -61,7 +61,7 @@ void CommandContext::Reset()
 uint64 CommandContext::Execute(bool wait)
 {
 	CommandContext* pContexts[] = { this };
-	return Execute(pContexts, 1, wait);
+	return Execute(pContexts, ARRAYSIZE(pContexts), wait);
 }
 
 uint64 CommandContext::Execute(CommandContext** pContexts, uint32 numContexts, bool wait)
