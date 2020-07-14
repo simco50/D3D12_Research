@@ -215,14 +215,29 @@ public:
 		uint32 Subresource;
 	};
 	const std::vector<PendingBarrier>& GetPendingBarriers() const { return m_PendingBarriers; }
-	ResourceState GetResourceState(GraphicsResource* pResource) const 
+
+	D3D12_RESOURCE_STATES GetResourceState(GraphicsResource* pResource, uint32 subResource) const 
 	{
 		auto it = m_ResourceStates.find(pResource);
 		check(it != m_ResourceStates.end());
-		return it->second;
+		return it->second.Get(subResource);
 	}
 
+	D3D12_RESOURCE_STATES GetResourceStateWithFallback(GraphicsResource* pResource, uint32 subResource) const
+	{
+		auto it = m_ResourceStates.find(pResource);
+		if (it == m_ResourceStates.end())
+		{
+			return pResource->GetResourceState(subResource);
+		}
+		return it->second.Get(subResource);
+	}
+
+	static bool IsTransitionAllowed(D3D12_COMMAND_LIST_TYPE commandlistType, D3D12_RESOURCE_STATES state);
+
 private:
+	void BindDescriptorHeaps();
+
 	std::unique_ptr<OnlineDescriptorAllocator> m_pShaderResourceDescriptorAllocator;
 	std::unique_ptr<OnlineDescriptorAllocator> m_pSamplerDescriptorAllocator;
 
@@ -236,12 +251,29 @@ private:
 	ComPtr<ID3D12GraphicsCommandList6> m_pMeshShadingCommandList;
 	ID3D12CommandAllocator* m_pAllocator;
 	D3D12_COMMAND_LIST_TYPE m_Type;
-
-	void BindDescriptorHeaps();
+	std::unordered_map<GraphicsResource*, ResourceState> m_ResourceStates;
+	std::vector<PendingBarrier> m_PendingBarriers;
 
 	RenderPassInfo m_CurrentRenderPassInfo;
 	bool m_InRenderPass = false;
+};
 
-	std::unordered_map<GraphicsResource*, ResourceState> m_ResourceStates;
-	std::vector<PendingBarrier> m_PendingBarriers;
+class ScopedBarrier
+{
+public:
+	ScopedBarrier(CommandContext& context, GraphicsResource* pResource, D3D12_RESOURCE_STATES state, uint32 subResources = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES) : m_Context(context), m_pResource(pResource), m_Subresources(subResources)
+	{
+		m_BeforeState = context.GetResourceStateWithFallback(pResource, subResources);
+		context.InsertResourceBarrier(pResource, state, subResources);
+	}
+
+	~ScopedBarrier()
+	{
+		m_Context.InsertResourceBarrier(m_pResource, m_BeforeState, m_Subresources);
+	}
+private:
+	CommandContext& m_Context;
+	GraphicsResource* m_pResource;
+	uint32 m_Subresources;
+	D3D12_RESOURCE_STATES m_BeforeState = D3D12_RESOURCE_STATE_UNKNOWN;
 };

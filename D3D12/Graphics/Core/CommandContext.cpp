@@ -125,6 +125,8 @@ bool NeedsTransition(D3D12_RESOURCE_STATES& before, D3D12_RESOURCE_STATES& after
 
 void CommandContext::InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESOURCE_STATES state, uint32 subResource /*= D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES*/)
 {
+	check(IsTransitionAllowed(m_Type, state));
+
 	ResourceState& resourceState = m_ResourceStates[pBuffer];
 	D3D12_RESOURCE_STATES beforeState = resourceState.Get(subResource);
 	if (beforeState == D3D12_RESOURCE_STATE_UNKNOWN)
@@ -138,19 +140,9 @@ void CommandContext::InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESO
 	}
 	else
 	{
-		if (m_Type == D3D12_COMMAND_LIST_TYPE_COMPUTE)
-		{
-			check((beforeState & VALID_COMPUTE_QUEUE_RESOURCE_STATES) == beforeState);
-			check((state & VALID_COMPUTE_QUEUE_RESOURCE_STATES) == state);
-		}
-		else if (m_Type == D3D12_COMMAND_LIST_TYPE_COPY)
-		{
-			check((beforeState & VALID_COPY_QUEUE_RESOURCE_STATES) == beforeState);
-			check((state & VALID_COPY_QUEUE_RESOURCE_STATES) == state);
-		}
-
 		if (NeedsTransition(beforeState, state))
 		{
+			check(IsTransitionAllowed(m_Type, beforeState));
 			m_BarrierBatcher.AddTransition(pBuffer->GetResource(), beforeState, state, subResource);
 			resourceState.Set(state, subResource);
 		}
@@ -207,10 +199,10 @@ void CommandContext::InitializeBuffer(Buffer* pResource, const void* pData, uint
 {
 	DynamicAllocation allocation = m_DynamicAllocator->Allocate(dataSize);
 	memcpy(allocation.pMappedMemory, pData, dataSize);
-	InsertResourceBarrier(pResource, D3D12_RESOURCE_STATE_COPY_DEST);
+
+	ScopedBarrier barrier(*this, pResource, D3D12_RESOURCE_STATE_COPY_DEST);
 	FlushResourceBarriers();
 	m_pCommandList->CopyBufferRegion(pResource->GetResource(), offset, allocation.pBackingResource->GetResource(), allocation.Offset, dataSize);
-	InsertResourceBarrier(pResource, D3D12_RESOURCE_STATE_COMMON);
 }
 
 void CommandContext::InitializeTexture(Texture* pResource, D3D12_SUBRESOURCE_DATA* pSubResourceDatas, int firstSubResource, int subResourceCount)
@@ -219,10 +211,10 @@ void CommandContext::InitializeTexture(Texture* pResource, D3D12_SUBRESOURCE_DAT
 	uint64 requiredSize = 0;
 	m_pGraphics->GetDevice()->GetCopyableFootprints(&desc, firstSubResource, subResourceCount, 0, nullptr, nullptr, nullptr, &requiredSize);
 	DynamicAllocation allocation = m_DynamicAllocator->Allocate(requiredSize, D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT);
-	InsertResourceBarrier(pResource, D3D12_RESOURCE_STATE_COPY_DEST);
+	
+	ScopedBarrier barrier(*this, pResource, D3D12_RESOURCE_STATE_COPY_DEST);
 	FlushResourceBarriers();
 	UpdateSubresources(m_pCommandList, pResource->GetResource(), allocation.pBackingResource->GetResource(), allocation.Offset, firstSubResource, subResourceCount, pSubResourceDatas);
-	InsertResourceBarrier(pResource, D3D12_RESOURCE_STATE_COMMON);
 }
 
 void CommandContext::Dispatch(uint32 groupCountX, uint32 groupCountY, uint32 groupCountZ)
@@ -333,6 +325,19 @@ DynamicAllocation CommandContext::AllocateTransientMemory(uint64 size)
 DescriptorHandle CommandContext::AllocateTransientDescriptors(int descriptorCount, D3D12_DESCRIPTOR_HEAP_TYPE type)
 {
 	return m_pShaderResourceDescriptorAllocator->AllocateTransientDescriptor(descriptorCount);
+}
+
+bool CommandContext::IsTransitionAllowed(D3D12_COMMAND_LIST_TYPE commandlistType, D3D12_RESOURCE_STATES state)
+{
+	if (commandlistType == D3D12_COMMAND_LIST_TYPE_COMPUTE)
+	{
+		return (state & VALID_COMPUTE_QUEUE_RESOURCE_STATES) == state;
+	}
+	else if (commandlistType == D3D12_COMMAND_LIST_TYPE_COPY)
+	{
+		return (state & VALID_COPY_QUEUE_RESOURCE_STATES) == state;
+	}
+	return true;
 }
 
 void CommandContext::BindDescriptorHeaps()

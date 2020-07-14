@@ -85,14 +85,16 @@ uint64 CommandQueue::ExecuteCommandLists(CommandContext** pCommandContexts, uint
 		{
 			uint32 subResource = pending.Subresource;
 			GraphicsResource* pResource = pending.pResource;
-			barriers.AddTransition(pResource->GetResource(), pResource->GetResourceState(subResource), pending.State.Get(subResource), subResource);
-			pResource->SetResourceState(pNextContext->GetResourceState(pending.pResource).Get(subResource));
+			D3D12_RESOURCE_STATES beforeState = pResource->GetResourceState(subResource);
+			checkf(CommandContext::IsTransitionAllowed(m_Type, beforeState), "The resource can not be transitioned from this state on this queue. Insert a barrier on another queue before executing this one.");
+			barriers.AddTransition(pResource->GetResource(), beforeState, pending.State.Get(subResource), subResource);
+			pResource->SetResourceState(pNextContext->GetResourceState(pending.pResource, subResource));
 		}
 		if (barriers.HasWork())
 		{
 			if (!pCurrentContext)
 			{
-				pCurrentContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+				pCurrentContext = m_pGraphics->AllocateCommandContext(m_Type);
 				pCurrentContext->Free(m_NextFenceValue);
 			}
 			barriers.Flush(pCurrentContext->GetCommandList());

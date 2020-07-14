@@ -214,8 +214,6 @@ int64 RGGraph::Execute()
 	RG_ASSERT(m_EventStackSize == 0, "Missing PopEvent");
 	if (m_ImmediateMode == false)
 	{
-		int eclFrequency = 5;
-		int i = 0;
 		CommandContext* pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 		for(uint32 passIndex = 0; passIndex < (uint32)m_RenderPasses.size(); ++passIndex)
 		{
@@ -227,19 +225,8 @@ int64 RGGraph::Execute()
 				ExecutePass(pPass, *pContext);
 			}
 			ProcessEvents(*pContext, passIndex, false);
-
-			++i;
-			if (i == eclFrequency)
-			{
-				i = 0;
-				m_LastFenceValue = pContext->Execute(false);
-				pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
-			}
 		}
-		if (i > 0)
-		{
-			m_LastFenceValue = pContext->Execute(false);
-		}
+		m_LastFenceValue = pContext->Execute(false);
 	}
 	DestroyData();
 	return m_LastFenceValue;
