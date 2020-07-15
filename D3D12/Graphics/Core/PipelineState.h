@@ -139,17 +139,37 @@ public:
 
 	PipelineStateType GetType() const { return m_Type; }
 
-protected:
+	void* GetData() { return m_SubobjectData.data(); }
 
+private:
 	ComPtr<ID3D12PipelineState> m_pPipelineState;
 
-	struct PipelineDesc
+	template<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE ObjectType>
+	typename CD3DX12_PIPELINE_STATE_SUBOJECT_TYPE_TRAITS<ObjectType>::Type* GetSubobjectData()
 	{
-		CD3DX12_PIPELINE_STATE_STREAM1 PS{};
-		CD3DX12_PIPELINE_STATE_STREAM_AS AS{};
-		CD3DX12_PIPELINE_STATE_STREAM_MS MS{};
-	};
-	PipelineDesc m_Desc;
+		using InnerType = typename CD3DX12_PIPELINE_STATE_SUBOJECT_TYPE_TRAITS<ObjectType>::Type;
+		struct SubobjectType
+		{
+			D3D12_PIPELINE_STATE_SUBOBJECT_TYPE ObjectType;
+			InnerType ObjectData;
+		};
+		if (m_SubobjectLocations[ObjectType] < 0)
+		{
+			SubobjectType* pType = (SubobjectType*)(m_SubobjectData.data() + m_Size);
+			pType->ObjectType = ObjectType;
+			m_SubobjectLocations[ObjectType] = m_Size;
+			m_Size += Math::AlignUp<uint32>(sizeof(SubobjectType), sizeof(void*));
+			m_Subobjects++;
+		}
+		int offset = m_SubobjectLocations[ObjectType];
+		SubobjectType* pObj = (SubobjectType*)&m_SubobjectData[offset];
+		return &pObj->ObjectData;
+	}
+
+	std::array<int, D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_MAX_VALID> m_SubobjectLocations{};
+	std::array<char, sizeof(CD3DX12_PIPELINE_STATE_STREAM2)> m_SubobjectData{};
+	uint32 m_Subobjects = 0;
+	uint32 m_Size = 0;
 
 	PipelineStateType m_Type = PipelineStateType::MAX;
 };
