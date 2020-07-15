@@ -1618,25 +1618,34 @@ CommandQueue* Graphics::GetCommandQueue(D3D12_COMMAND_LIST_TYPE type) const
 CommandContext* Graphics::AllocateCommandContext(D3D12_COMMAND_LIST_TYPE type)
 {
 	int typeIndex = (int)type;
-
-	std::lock_guard<std::mutex> lockGuard(m_ContextAllocationMutex);
+	bool isNew = false;
 	CommandContext* pContext = nullptr;
-	if (m_FreeCommandLists[typeIndex].size() > 0)
+
 	{
-		pContext = m_FreeCommandLists[typeIndex].front();
-		m_FreeCommandLists[typeIndex].pop();
+		std::scoped_lock<std::mutex> lock(m_ContextAllocationMutex);
+		if (m_FreeCommandLists[typeIndex].size() > 0)
+		{
+			pContext = m_FreeCommandLists[typeIndex].front();
+			m_FreeCommandLists[typeIndex].pop();
+		}
+		else
+		{
+			ComPtr<ID3D12CommandList> pCommandList;
+			ID3D12CommandAllocator* pAllocator = m_CommandQueues[type]->RequestAllocator();
+			m_pDevice->CreateCommandList(0, type, pAllocator, nullptr, IID_PPV_ARGS(pCommandList.GetAddressOf()));
+			pCommandList->SetName(L"Pooled Commandlist");
+			m_CommandLists.push_back(std::move(pCommandList));
+			m_CommandListPool[typeIndex].emplace_back(std::make_unique<CommandContext>(this, static_cast<ID3D12GraphicsCommandList*>(m_CommandLists.back().Get()), pAllocator, type));
+			pContext = m_CommandListPool[typeIndex].back().get();
+			isNew = true;
+		}
+	}
+
+	if (!isNew)
+	{
 		pContext->Reset();
 	}
-	else
-	{
-		ComPtr<ID3D12CommandList> pCommandList;
-		ID3D12CommandAllocator* pAllocator = m_CommandQueues[type]->RequestAllocator();
-		m_pDevice->CreateCommandList(0, type, pAllocator, nullptr, IID_PPV_ARGS(pCommandList.GetAddressOf()));
-		pCommandList->SetName(L"Pooled Commandlist");
-		m_CommandLists.push_back(std::move(pCommandList));
-		m_CommandListPool[typeIndex].emplace_back(std::make_unique<CommandContext>(this, static_cast<ID3D12GraphicsCommandList*>(m_CommandLists.back().Get()), pAllocator, type));
-		pContext = m_CommandListPool[typeIndex].back().get();
-	}
+
 	return pContext;
 }
 
