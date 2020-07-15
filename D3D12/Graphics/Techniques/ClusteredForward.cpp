@@ -552,6 +552,7 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
 			Shader geometryShader("CL_DebugDrawClusters.hlsl", ShaderType::Geometry, "GSMain");
 			m_pDebugClustersRS->FinalizeFromShader("Debug Clusters", vertexShader, m_pGraphics->GetDevice());
 
+			m_pDebugClustersPSO->SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT);
 			m_pDebugClustersPSO->SetRootSignature(m_pDebugClustersRS->GetRootSignature());
 			m_pDebugClustersPSO->SetVertexShader(vertexShader);
 			m_pDebugClustersPSO->SetGeometryShader(geometryShader);

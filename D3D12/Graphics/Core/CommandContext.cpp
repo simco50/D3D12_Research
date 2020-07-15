@@ -170,16 +170,11 @@ void CommandContext::CopyTexture(GraphicsResource* pSource, GraphicsResource* pT
 
 void CommandContext::CopyTexture(Texture* pSource, Buffer* pDestination, const D3D12_BOX& sourceRegion, int sourceSubregion /*= 0*/, int destinationOffset /*= 0*/)
 {
-	D3D12_PLACED_SUBRESOURCE_FOOTPRINT bufferFootprint = {};
-	bufferFootprint.Footprint.Width = (uint32)pDestination->GetSize();
-	bufferFootprint.Footprint.Height = 1;
-	bufferFootprint.Footprint.Depth = 1;
-	bufferFootprint.Footprint.RowPitch = Math::AlignUp<uint32>((uint32)pDestination->GetSize(), D3D12_TEXTURE_DATA_PITCH_ALIGNMENT);
-	bufferFootprint.Footprint.Format = pDestination->GetDesc().Format;
-	bufferFootprint.Offset = 0;
+	D3D12_PLACED_SUBRESOURCE_FOOTPRINT textureFootprint = {};
+	m_pGraphics->GetDevice()->GetCopyableFootprints(&pSource->GetResource()->GetDesc(), 0, 1, 0, &textureFootprint, nullptr, nullptr, nullptr);
 
 	CD3DX12_TEXTURE_COPY_LOCATION srcLocation(pSource->GetResource(), sourceSubregion);
-	CD3DX12_TEXTURE_COPY_LOCATION dstLocation(pDestination->GetResource(), bufferFootprint);
+	CD3DX12_TEXTURE_COPY_LOCATION dstLocation(pDestination->GetResource(), textureFootprint);
 	m_pCommandList->CopyTextureRegion(&dstLocation, destinationOffset, 0, 0, &srcLocation, &sourceRegion);
 }
 

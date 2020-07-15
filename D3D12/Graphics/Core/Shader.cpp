@@ -8,7 +8,7 @@
 #endif
 
 #define SM_MAJ 6
-#define SM_MIN 5
+#define SM_MIN 0
 
 namespace ShaderCompiler
 {
@@ -350,6 +350,12 @@ bool Shader::Compile(const char* pFilePath, ShaderType shaderType, const char* p
 	}
 
 	std::string source = shaderSource.str();
+
+	if (shaderType == ShaderType::Mesh || shaderType == ShaderType::Amplification)
+	{
+		shaderModelMinor = Math::Max<uint32>(shaderModelMinor, 5);
+	}
+
 	return ShaderCompiler::Compile(pFilePath, source.c_str(), (uint32)source.size(), ShaderCompiler::GetShaderTarget(shaderType), m_pByteCode.GetAddressOf(), pEntryPoint, shaderModelMajor, shaderModelMinor, defines);
 }
 
@@ -369,5 +375,6 @@ bool ShaderLibrary::Compile(const char* pFilePath, uint32 shaderModelMajor, uint
 	}
 
 	std::string source = shaderSource.str();
+	shaderModelMinor = Math::Max<uint32>(shaderModelMinor, 3);
 	return ShaderCompiler::Compile(pFilePath, source.c_str(), (uint32)source.size(), "lib", m_pByteCode.GetAddressOf(), "", shaderModelMajor, shaderModelMinor, defines);
 }

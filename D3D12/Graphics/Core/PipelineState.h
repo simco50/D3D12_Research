@@ -69,7 +69,7 @@ public:
 	uint32 AddCollection(ID3D12StateObject* pStateObject, const std::vector<std::string>& exports = {});
 	uint32 BindLocalRootSignature(const char* pExportName, ID3D12RootSignature* pRootSignature);
 	uint32 SetRaytracingShaderConfig(uint32 maxPayloadSize, uint32 maxAttributeSize);
-	uint32 SetRaytracingPipelineConfig(uint32 maxRecursionDepth, D3D12_RAYTRACING_PIPELINE_FLAGS flags);
+	uint32 SetRaytracingPipelineConfig(uint32 maxRecursionDepth);
 	uint32 SetGlobalRootSignature(ID3D12RootSignature* pRootSignature);
 	ComPtr<ID3D12StateObject> Finalize(const char* pName, ID3D12Device5* pDevice) const;
 
@@ -140,7 +140,16 @@ public:
 	PipelineStateType GetType() const { return m_Type; }
 
 protected:
+
 	ComPtr<ID3D12PipelineState> m_pPipelineState;
-	CD3DX12_PIPELINE_STATE_STREAM2 m_Desc = {};
+
+	struct PipelineDesc
+	{
+		CD3DX12_PIPELINE_STATE_STREAM1 PS{};
+		CD3DX12_PIPELINE_STATE_STREAM_AS AS{};
+		CD3DX12_PIPELINE_STATE_STREAM_MS MS{};
+	};
+	PipelineDesc m_Desc;
+
 	PipelineStateType m_Type = PipelineStateType::MAX;
 };

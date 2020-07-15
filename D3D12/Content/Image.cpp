@@ -60,9 +60,15 @@ bool Image::SetSize(int x, int y, int components)
 	return true;
 }
 
-bool Image::SetData(const unsigned int* pPixels)
+bool Image::SetData(const void* pPixels)
 {
-	memcpy(m_Pixels.data(), pPixels, m_Pixels.size() * m_Depth * m_Components);
+	return SetData(pPixels, 0, (uint32)m_Pixels.size());
+}
+
+bool Image::SetData(const void* pData, uint32 offsetInBytes, uint32 sizeInBytes)
+{
+	check(offsetInBytes + sizeInBytes <= m_Pixels.size());
+	memcpy(m_Pixels.data() + offsetInBytes, pData, sizeInBytes);
 	return true;
 }
 
@@ -492,4 +498,10 @@ bool Image::LoadDds(const char* inputStream)
 		return false;
 	}
 	return true;
+}
+
+void Image::Save(const char* pFilePath)
+{
+	int result = stbi_write_jpg(pFilePath, m_Width, m_Height, m_Components, m_Pixels.data(), 100);
+	check(result);
 }

@@ -32,9 +32,11 @@ class Image final
 public:
 	bool Load(const char* filePath);
 	bool Load(const void* pPixels, size_t dataSize, const char* pFormatHint);
+	void Save(const char* pFilePath);
 
 	bool SetSize(int x, int y, int components);
-	bool SetData(const unsigned int* pPixels);
+	bool SetData(const void* pPixels);
+	bool SetData(const void* pData, uint32 offsetInBytes, uint32 sizeInBytes);
 	bool SetPixel(int x, int y, const Color& color);
 	bool SetPixelInt(int x, int y, unsigned int color);
 
