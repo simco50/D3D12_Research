@@ -3,6 +3,8 @@
 #include "Graphics.h"
 #include "GraphicsBuffer.h"
 
+constexpr static uint64 PAGE_SIZE = Math::FromMegaBytes * 2;
+
 DynamicResourceAllocator::DynamicResourceAllocator(DynamicAllocationManager* pPageManager)
 	: m_pPageManager(pPageManager)
 {
@@ -15,7 +17,7 @@ DynamicAllocation DynamicResourceAllocator::Allocate(size_t size, int alignment)
 	DynamicAllocation allocation;
 	allocation.Size = bufferSize;
 
-	if (bufferSize > DynamicAllocationManager::PAGE_SIZE)
+	if (bufferSize > PAGE_SIZE)
 	{
 		AllocationPage* pPage = m_pPageManager->CreateNewPage(bufferSize);
 		m_UsedLargePages.push_back(pPage);
@@ -28,9 +30,9 @@ DynamicAllocation DynamicResourceAllocator::Allocate(size_t size, int alignment)
 	{
 		m_CurrentOffset = Math::AlignUp<size_t>(m_CurrentOffset, alignment);
 
-		if (m_pCurrentPage == nullptr || m_CurrentOffset + bufferSize >= DynamicAllocationManager::PAGE_SIZE)
+		if (m_pCurrentPage == nullptr || m_CurrentOffset + bufferSize >= PAGE_SIZE)
 		{
-			m_pCurrentPage = m_pPageManager->AllocatePage(DynamicAllocationManager::PAGE_SIZE);
+			m_pCurrentPage = m_pPageManager->AllocatePage(PAGE_SIZE);
 			m_CurrentOffset = 0;
 			m_UsedPages.push_back(m_pCurrentPage);
 		}
