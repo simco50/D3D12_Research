@@ -13,19 +13,9 @@
 #include <algorithm>
 #include <assert.h>
 #include <unordered_map>
-#include <list>
 #include <algorithm>
 #include <fstream>
-
-using int8 = int8_t;
-using int16 = int16_t;
-using int32 = int32_t;
-using int64 = int64_t;
-
-using uint8 = uint8_t;
-using uint16 = uint16_t;
-using uint32 = uint32_t;
-using uint64 = uint64_t;
+#include "Core/CoreTypes.h"
 
 #define WIN32_LEAN_AND_MEAN 
 #define NOMINMAX
@@ -36,35 +26,10 @@ using ComPtr = Microsoft::WRL::ComPtr<T>;
 
 #include <d3d12.h>
 #include <dxgi1_6.h>
-#include <D3Dcompiler.h>
-#include <DXProgrammableCapture.h>
-#include <dxc/dxcapi.h>
 
 #include "External/d3dx12/d3dx12.h"
 #include "External/d3dx12/d3dx12_extra.h"
 #include "External/Imgui/imgui.h"
-
-#define DECLARE_BITMASK_TYPE(Enum) \
-	inline Enum& operator|=(Enum& Lhs, Enum Rhs) { return Lhs = (Enum)((__underlying_type(Enum))Lhs | (__underlying_type(Enum))Rhs); } \
-	inline Enum& operator&=(Enum& Lhs, Enum Rhs) { return Lhs = (Enum)((__underlying_type(Enum))Lhs & (__underlying_type(Enum))Rhs); } \
-	inline Enum& operator^=(Enum& Lhs, Enum Rhs) { return Lhs = (Enum)((__underlying_type(Enum))Lhs ^ (__underlying_type(Enum))Rhs); } \
-	inline constexpr Enum  operator| (Enum  Lhs, Enum Rhs) { return (Enum)((__underlying_type(Enum))Lhs | (__underlying_type(Enum))Rhs); } \
-	inline constexpr Enum  operator& (Enum  Lhs, Enum Rhs) { return (Enum)((__underlying_type(Enum))Lhs & (__underlying_type(Enum))Rhs); } \
-	inline constexpr Enum  operator^ (Enum  Lhs, Enum Rhs) { return (Enum)((__underlying_type(Enum))Lhs ^ (__underlying_type(Enum))Rhs); } \
-	inline constexpr bool  operator! (Enum  E) { return !(__underlying_type(Enum))E; } \
-	inline constexpr Enum  operator~ (Enum  E) { return (Enum)~(__underlying_type(Enum))E; }
-
-template<typename Enum>
-inline bool EnumHasAllFlags(Enum Flags, Enum Contains)
-{
-	return (((__underlying_type(Enum))Flags) & (__underlying_type(Enum))Contains) == ((__underlying_type(Enum))Contains);
-}
-
-template<typename Enum>
-inline bool EnumHasAnyFlags(Enum Flags, Enum Contains)
-{
-	return (((__underlying_type(Enum))Flags) & (__underlying_type(Enum))Contains) != 0;
-}
 
 inline int ToMultibyte(const wchar_t* pStr, char* pOut, int len)
 {
@@ -89,9 +54,8 @@ inline int ToWidechar(const char* pStr, wchar_t* pOut, int len)
 #endif
 
 #define check(expression) assert(expression)
-#define checkf(expression, msg) assert(expression)
-#define noEntry() assert(false && "Should not have reached this point!")
-
+#define checkf(expression, msg) assert(expression && msg)
+#define noEntry() checkf(false, "Should not have reached this point!")
 
 #include "Math/MathTypes.h"
 #include "Core/Time.h"

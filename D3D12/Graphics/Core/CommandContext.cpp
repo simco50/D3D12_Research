@@ -12,19 +12,6 @@
 #include "CommandSignature.h"
 #include "RaytracingCommon.h"
 
-constexpr int VALID_COMPUTE_QUEUE_RESOURCE_STATES = 
-	D3D12_RESOURCE_STATE_COMMON 
-	| D3D12_RESOURCE_STATE_UNORDERED_ACCESS 
-	| D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE
-	| D3D12_RESOURCE_STATE_COPY_DEST 
-	| D3D12_RESOURCE_STATE_COPY_SOURCE 
-	| D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT;
-
-constexpr int VALID_COPY_QUEUE_RESOURCE_STATES = 
-	D3D12_RESOURCE_STATE_COMMON 
-	| D3D12_RESOURCE_STATE_COPY_DEST 
-	| D3D12_RESOURCE_STATE_COPY_SOURCE;
-
 CommandContext::CommandContext(Graphics* pGraphics, ID3D12GraphicsCommandList* pCommandList, ID3D12CommandAllocator* pAllocator, D3D12_COMMAND_LIST_TYPE type)
 	: GraphicsObject(pGraphics), m_pCommandList(pCommandList), m_pAllocator(pAllocator), m_Type(type)
 {
@@ -70,7 +57,7 @@ uint64 CommandContext::Execute(CommandContext** pContexts, uint32 numContexts, b
 	CommandQueue* pQueue = pContexts[0]->m_pGraphics->GetCommandQueue(pContexts[0]->GetType());
 	for (uint32 i = 0; i < numContexts; ++i)
 	{
-		check(pContexts[i]->GetType() == pQueue->GetType());
+		checkf(pContexts[i]->GetType() == pQueue->GetType(), "All commandlist types must match");
 		pContexts[i]->FlushResourceBarriers();
 	}
 	uint64 fenceValue = pQueue->ExecuteCommandLists(pContexts, numContexts);
@@ -125,7 +112,7 @@ bool NeedsTransition(D3D12_RESOURCE_STATES& before, D3D12_RESOURCE_STATES& after
 
 void CommandContext::InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESOURCE_STATES state, uint32 subResource /*= D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES*/)
 {
-	check(IsTransitionAllowed(m_Type, state));
+	checkf(IsTransitionAllowed(m_Type, state), "AfterState is not valid on this commandlist type");
 
 	ResourceState& resourceState = m_ResourceStates[pBuffer];
 	D3D12_RESOURCE_STATES beforeState = resourceState.Get(subResource);
@@ -142,7 +129,7 @@ void CommandContext::InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESO
 	{
 		if (NeedsTransition(beforeState, state))
 		{
-			check(IsTransitionAllowed(m_Type, beforeState));
+			checkf(IsTransitionAllowed(m_Type, beforeState), "Current resource state is not valid to transition from in this commandlist type");
 			m_BarrierBatcher.AddTransition(pBuffer->GetResource(), beforeState, state, subResource);
 			resourceState.Set(state, subResource);
 		}
@@ -324,6 +311,19 @@ DescriptorHandle CommandContext::AllocateTransientDescriptors(int descriptorCoun
 
 bool CommandContext::IsTransitionAllowed(D3D12_COMMAND_LIST_TYPE commandlistType, D3D12_RESOURCE_STATES state)
 {
+	constexpr int VALID_COMPUTE_QUEUE_RESOURCE_STATES =
+		D3D12_RESOURCE_STATE_COMMON
+		| D3D12_RESOURCE_STATE_UNORDERED_ACCESS
+		| D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE
+		| D3D12_RESOURCE_STATE_COPY_DEST
+		| D3D12_RESOURCE_STATE_COPY_SOURCE
+		| D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT;
+
+	constexpr int VALID_COPY_QUEUE_RESOURCE_STATES =
+		D3D12_RESOURCE_STATE_COMMON
+		| D3D12_RESOURCE_STATE_COPY_DEST
+		| D3D12_RESOURCE_STATE_COPY_SOURCE;
+
 	if (commandlistType == D3D12_COMMAND_LIST_TYPE_COMPUTE)
 	{
 		return (state & VALID_COMPUTE_QUEUE_RESOURCE_STATES) == state;
@@ -385,8 +385,7 @@ void CommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 	};
 
 #if D3D12_USE_RENDERPASSES
-	ComPtr<ID3D12GraphicsCommandList4> pCmd;
-	if (m_pGraphics->UseRenderPasses() && m_pCommandList->QueryInterface(IID_PPV_ARGS(pCmd.GetAddressOf())) == S_OK)
+	if (m_pGraphics->UseRenderPasses() && m_pRaytracingCommandList)
 	{
 		D3D12_RENDER_PASS_DEPTH_STENCIL_DESC renderPassDepthStencilDesc{};
 		renderPassDepthStencilDesc.DepthBeginningAccess.Type = ExtractBeginAccess(renderPassInfo.DepthStencilTarget.Access);
@@ -412,12 +411,13 @@ void CommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 			renderPassDepthStencilDesc.StencilBeginningAccess.Clear.ClearValue.Format = renderPassInfo.DepthStencilTarget.Target->GetFormat();
 		}
 		renderPassDepthStencilDesc.StencilEndingAccess.Type = ExtractEndingAccess(renderPassInfo.DepthStencilTarget.StencilAccess);
-		if (renderPassInfo.DepthStencilTarget.Target != nullptr)
+		if (renderPassInfo.DepthStencilTarget.Target)
 		{
 			renderPassDepthStencilDesc.cpuDescriptor = renderPassInfo.DepthStencilTarget.Target->GetDSV(writeable);
 		}
 
 		std::array<D3D12_RENDER_PASS_RENDER_TARGET_DESC, 4> renderTargetDescs{};
+		m_ResolveSubResourceParameters = {};
 		for (uint32 i = 0; i < renderPassInfo.RenderTargetCount; ++i)
 		{
 			const RenderPassInfo::RenderTargetInfo& data = renderPassInfo.RenderTargets[i];
@@ -434,8 +434,6 @@ void CommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 
 			uint32 subResource = D3D12CalcSubresource(data.MipLevel, data.ArrayIndex, 0, data.Target->GetMipLevels(), data.Target->GetArraySize());
 
-			std::array<D3D12_RENDER_PASS_ENDING_ACCESS_RESOLVE_SUBRESOURCE_PARAMETERS, 4> subResourceParameters{};
-
 			if (renderTargetDescs[i].EndingAccess.Type == D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_RESOLVE)
 			{
 				check(data.ResolveTarget);
@@ -446,11 +444,11 @@ void CommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 				renderTargetDescs[i].EndingAccess.Resolve.PreserveResolveSource = false;
 				renderTargetDescs[i].EndingAccess.Resolve.ResolveMode = D3D12_RESOLVE_MODE_AVERAGE;
 				renderTargetDescs[i].EndingAccess.Resolve.SubresourceCount = 1;
-				subResourceParameters[i].DstSubresource = 0;
-				subResourceParameters[i].SrcSubresource = subResource;
-				subResourceParameters[i].DstX = 0;
-				subResourceParameters[i].DstY = 0;
-				renderTargetDescs[i].EndingAccess.Resolve.pSubresourceParameters = subResourceParameters.data();
+				m_ResolveSubResourceParameters[i].DstSubresource = 0;
+				m_ResolveSubResourceParameters[i].SrcSubresource = subResource;
+				m_ResolveSubResourceParameters[i].DstX = 0;
+				m_ResolveSubResourceParameters[i].DstY = 0;
+				renderTargetDescs[i].EndingAccess.Resolve.pSubresourceParameters = m_ResolveSubResourceParameters.data();
 			}
 
 			renderTargetDescs[i].cpuDescriptor = data.Target->GetRTV();
@@ -463,7 +461,7 @@ void CommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 		}
 
 		FlushResourceBarriers();
-		pCmd->BeginRenderPass(renderPassInfo.RenderTargetCount, renderTargetDescs.data(), renderPassInfo.DepthStencilTarget.Target ? &renderPassDepthStencilDesc : nullptr, renderPassFlags);
+		m_pRaytracingCommandList->BeginRenderPass(renderPassInfo.RenderTargetCount, renderTargetDescs.data(), renderPassInfo.DepthStencilTarget.Target ? &renderPassDepthStencilDesc : nullptr, renderPassFlags);
 	}
 	else
 #endif
@@ -527,11 +525,9 @@ void CommandContext::EndRenderPass()
 	};
 
 #if D3D12_USE_RENDERPASSES
-	ComPtr<ID3D12GraphicsCommandList4> pCmd;
-
-	if (m_pGraphics->UseRenderPasses() && m_pCommandList->QueryInterface(IID_PPV_ARGS(pCmd.GetAddressOf())) == S_OK)
+	if (m_pGraphics->UseRenderPasses() && m_pRaytracingCommandList)
 	{
-		pCmd->EndRenderPass();
+		m_pRaytracingCommandList->EndRenderPass();
 	}
 	else
 #endif

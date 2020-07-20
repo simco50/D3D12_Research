@@ -30,14 +30,26 @@ public:
 		Time::Reset();
 
 		MSG msg = {};
-		while (msg.message != WM_QUIT)
+		bool quit = false;
+		while(!quit)
 		{
-			if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE))
+			while (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE))
 			{
 				TranslateMessage(&msg);
 				DispatchMessage(&msg);
+
+				if (msg.message == WM_QUIT)
+				{
+					quit = true;
+					break;
+				}
 			}
+
+			Time::Tick();
+			m_pGraphics->Update();
+			Input::Instance().Update();
 		}
+
 		m_pGraphics->Shutdown();
 		delete m_pGraphics;
 
@@ -62,15 +74,15 @@ private:
 		return DefWindowProc(hWnd, message, wParam, lParam);
 	}
 
+	void OnResize()
+	{
+		m_pGraphics->OnResize(m_DisplayWidth, m_DisplayHeight);
+	}
+
 	LRESULT WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	{
 		switch (message)
 		{
-		case WM_PAINT:
-			Time::Tick();
-			m_pGraphics->Update();
-			Input::Instance().Update();
-			return 0;
 		case WM_ACTIVATE:
 			LOWORD(wParam) == WA_INACTIVE ? Time::Stop() : Time::Start();
 			return 0;
@@ -93,7 +105,7 @@ private:
 					Time::Start();
 					m_Minimized = false;
 					m_Maximized = true;
-					m_pGraphics->OnResize(m_DisplayWidth, m_DisplayHeight);
+					OnResize();
 				}
 				else if (wParam == SIZE_RESTORED)
 				{
@@ -102,18 +114,18 @@ private:
 					{
 						Time::Start();
 						m_Minimized = false;
-						m_pGraphics->OnResize(m_DisplayWidth, m_DisplayHeight);
+						OnResize();
 					}
 					// Restoring from maximized state?
 					else if (m_Maximized)
 					{
 						Time::Start();
 						m_Maximized = false;
-						m_pGraphics->OnResize(m_DisplayWidth, m_DisplayHeight);
+						OnResize();
 					}
 					else if (!m_IsResizing) // API call such as SetWindowPos or mSwapChain->SetFullscreenState.
 					{
-						m_pGraphics->OnResize(m_DisplayWidth, m_DisplayHeight);
+						OnResize();
 					}
 				}
 			}
@@ -165,7 +177,7 @@ private:
 		case WM_EXITSIZEMOVE:
 			Time::Start();
 			m_IsResizing = false;
-			m_pGraphics->OnResize(m_DisplayWidth, m_DisplayHeight);
+			OnResize();
 			break;
 		}
 

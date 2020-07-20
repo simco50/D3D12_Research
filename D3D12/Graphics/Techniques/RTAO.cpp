@@ -180,7 +180,25 @@ void RTAO::GenerateAccelerationStructure(Graphics* pGraphics, Mesh* pMesh, Comma
 		pInstanceDesc->InstanceContributionToHitGroupIndex = 0;
 		pInstanceDesc->InstanceID = 0;
 		pInstanceDesc->InstanceMask = 0xFF;
-		memcpy(pInstanceDesc->Transform, &Matrix::Identity, 12 * sizeof(float));
+
+		//The layout of Transform is a transpose of how affine matrices are typically stored in memory. Instead of four 3-vectors, Transform is laid out as three 4-vectors.
+		auto ApplyTransform = [](const Matrix& m, D3D12_RAYTRACING_INSTANCE_DESC& desc)
+		{
+			desc.Transform[0][0] = m.m[0][0];
+			desc.Transform[0][1] = m.m[1][0];
+			desc.Transform[0][2] = m.m[2][0];
+			desc.Transform[0][3] = m.m[3][0];
+			desc.Transform[1][0] = m.m[0][1];
+			desc.Transform[1][1] = m.m[1][1];
+			desc.Transform[1][2] = m.m[2][1];
+			desc.Transform[1][3] = m.m[3][1];
+			desc.Transform[2][0] = m.m[0][2];
+			desc.Transform[2][1] = m.m[1][2];
+			desc.Transform[2][2] = m.m[2][2];
+			desc.Transform[2][3] = m.m[3][2];
+		};
+		ApplyTransform(Matrix::Identity, *pInstanceDesc);
+
 		m_pDescriptorsBuffer->Unmap();
 
 		D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC asDesc{};

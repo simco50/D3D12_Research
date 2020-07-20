@@ -1,5 +1,7 @@
 #pragma once
 
+#include <DXProgrammableCapture.h>
+
 #define VERIFY_HR(hr) D3D::LogHRESULT(hr, nullptr, #hr, __FILE__, __LINE__)
 #define VERIFY_HR_EX(hr, device) D3D::LogHRESULT(hr, device, #hr, __FILE__, __LINE__)
 

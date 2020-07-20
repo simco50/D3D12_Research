@@ -51,7 +51,8 @@ public:
 		return m_AllSameState ? m_CommonState : m_ResourceStates[subResource];
 	}
 private:
-	std::array<D3D12_RESOURCE_STATES, 12> m_ResourceStates{};
+	constexpr static uint32 MAX_SUBRESOURCES = 12;
+	std::array<D3D12_RESOURCE_STATES, MAX_SUBRESOURCES> m_ResourceStates{};
 	D3D12_RESOURCE_STATES m_CommonState;
 	bool m_AllSameState;
 };

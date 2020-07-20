@@ -3,6 +3,9 @@
 #include "Core/Paths.h"
 #include "Core/CommandLine.h"
 
+#include <dxc/dxcapi.h>
+#include <D3Dcompiler.h>
+
 #ifndef USE_SHADER_LINE_DIRECTIVE
 #define USE_SHADER_LINE_DIRECTIVE 1
 #endif
@@ -255,6 +258,11 @@ namespace ShaderCompiler
 		definesActual.emplace_back("_DXC=1");
 		return CompileDxc(pIdentifier, pShaderSource, shaderSourceSize, pOutput, pEntryPoint, target, definesActual);
 	}
+}
+
+ShaderBase::~ShaderBase()
+{
+
 }
 
 bool ShaderBase::ProcessSource(const std::string& sourcePath, const std::string& filePath, std::stringstream& output, std::vector<StringHash>& processedIncludes, std::vector<std::string>& dependencies)

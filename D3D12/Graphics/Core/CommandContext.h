@@ -108,7 +108,7 @@ struct RenderPassInfo
 
 	bool WriteUAVs = false;
 	uint32 RenderTargetCount = 0;
-	std::array<RenderTargetInfo, 4> RenderTargets{};
+	std::array<RenderTargetInfo, D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT> RenderTargets{};
 	DepthTargetInfo DepthStencilTarget{};
 };
 
@@ -254,6 +254,7 @@ private:
 	std::unordered_map<GraphicsResource*, ResourceState> m_ResourceStates;
 	std::vector<PendingBarrier> m_PendingBarriers;
 
+	std::array<D3D12_RENDER_PASS_ENDING_ACCESS_RESOLVE_SUBRESOURCE_PARAMETERS, D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT> m_ResolveSubResourceParameters{};
 	RenderPassInfo m_CurrentRenderPassInfo;
 	bool m_InRenderPass = false;
 };

@@ -17,6 +17,7 @@ class ShaderBase
 {
 public:
 	void* GetByteCode() const;
+	virtual ~ShaderBase();
 	uint32 GetByteCodeSize() const;
 	const std::vector<std::string>& GetDependencies() const { return m_Dependencies; }
 
@@ -24,7 +25,7 @@ protected:
 	static bool ProcessSource(const std::string& sourcePath, const std::string& filePath, std::stringstream& output, std::vector<StringHash>& processedIncludes, std::vector<std::string>& dependencies);
 	std::vector<std::string> m_Dependencies;
 	std::string m_Path;
-	ComPtr<IDxcBlob> m_pByteCode;
+	ComPtr<struct IDxcBlob> m_pByteCode = nullptr;
 };
 
 class Shader : public ShaderBase
