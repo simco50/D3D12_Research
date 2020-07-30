@@ -1,3 +1,14 @@
+//*********************************************************
+//
+// Copyright (c) Simon Coenen. All rights reserved.
+// This code is licensed under the MIT License (MIT).
+// THIS CODE IS PROVIDED *AS IS* WITHOUT WARRANTY OF
+// ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING ANY
+// IMPLIED WARRANTIES OF FITNESS FOR A PARTICULAR
+// PURPOSE, MERCHANTABILITY, OR NON-INFRINGEMENT.
+//
+//*********************************************************
+
 #ifndef __D3DX12_EXTRA_H__
 #define __D3DX12_EXTRA_H__
 
@@ -19,7 +30,7 @@ struct CD3DX12_INPUT_ELEMENT_DESC : public D3D12_INPUT_ELEMENT_DESC
 		uint32 byteOffset = D3D12_APPEND_ALIGNED_ELEMENT, 
 		uint32 inputSlot = 0, 
 		D3D12_INPUT_CLASSIFICATION inputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 
-		uint32 instanceDataStepRate = 0)
+		uint32 instanceDataStepRate = 0) noexcept
 	{
 		SemanticName = semanticName;
 		SemanticIndex = semanticIndex;
@@ -47,7 +58,7 @@ struct CD3DX12_QUERY_HEAP_DESC : public D3D12_QUERY_HEAP_DESC
 class CD3DX12_PIPELINE_STATE_STREAM_HELPER
 {
 private:
-	template<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE T> struct CD3DX12_PIPELINE_STATE_SUBOJECT_TYPE_TRAITS { };
+	template<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE T> struct CD3DX12_PIPELINE_STATE_SUBOJECT_TYPE_TRAITS { static_assert(sizeof(T) == -1, "Type traits for this subobject does not exist. Add one in this file."); };
 	template<> struct CD3DX12_PIPELINE_STATE_SUBOJECT_TYPE_TRAITS<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_FLAGS> { using Type = D3D12_PIPELINE_STATE_FLAGS; };
 	template<> struct CD3DX12_PIPELINE_STATE_SUBOJECT_TYPE_TRAITS<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_NODE_MASK> { using Type = UINT; };
 	template<> struct CD3DX12_PIPELINE_STATE_SUBOJECT_TYPE_TRAITS<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_ROOT_SIGNATURE> { using Type = ID3D12RootSignature*; };
@@ -78,13 +89,42 @@ private:
 public:
 	CD3DX12_PIPELINE_STATE_STREAM_HELPER()
 	{
-		m_SubobjectLocations.fill(-1);
+		m_pSubobjectData = new char[sizeof(CD3DX12_PIPELINE_STATE_STREAM2)];
+		m_pSubobjectLocations = new int[D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_MAX_VALID];
+		memset(m_pSubobjectData, 0, sizeof(CD3DX12_PIPELINE_STATE_STREAM2));
+		memset(m_pSubobjectLocations, -1, sizeof(int) * D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_MAX_VALID);
+	}
+
+	CD3DX12_PIPELINE_STATE_STREAM_HELPER(const CD3DX12_PIPELINE_STATE_STREAM_HELPER& rhs)
+		: m_Size(rhs.m_Size), m_Subobjects(rhs.m_Subobjects)
+	{
+		m_pSubobjectData = new char[sizeof(CD3DX12_PIPELINE_STATE_STREAM2)];
+		m_pSubobjectLocations = new int[D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_MAX_VALID];
+		memcpy(m_pSubobjectData, rhs.m_pSubobjectData, sizeof(CD3DX12_PIPELINE_STATE_STREAM2));
+		memcpy(m_pSubobjectLocations, rhs.m_pSubobjectLocations, sizeof(int) * D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_MAX_VALID);
+	}
+
+	CD3DX12_PIPELINE_STATE_STREAM_HELPER& operator=(const CD3DX12_PIPELINE_STATE_STREAM_HELPER& rhs)
+	{
+		m_Size = rhs.m_Size;
+		m_Subobjects = rhs.m_Subobjects;
+		m_pSubobjectData = new char[sizeof(CD3DX12_PIPELINE_STATE_STREAM2)];
+		m_pSubobjectLocations = new int[D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_MAX_VALID];
+		memcpy(m_pSubobjectData, rhs.m_pSubobjectData, sizeof(CD3DX12_PIPELINE_STATE_STREAM2));
+		memcpy(m_pSubobjectLocations, rhs.m_pSubobjectLocations, sizeof(int) * D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_MAX_VALID);
+		return *this;
+	}
+
+	~CD3DX12_PIPELINE_STATE_STREAM_HELPER()
+	{
+		delete[] m_pSubobjectData;
+		delete[] m_pSubobjectLocations;
 	}
 
 	D3D12_PIPELINE_STATE_STREAM_DESC Desc()
 	{
 		D3D12_PIPELINE_STATE_STREAM_DESC desc{};
-		desc.pPipelineStateSubobjectStream = m_SubobjectData.data();
+		desc.pPipelineStateSubobjectStream = m_pSubobjectData;
 		desc.SizeInBytes = m_Size;
 		return desc;
 	}
@@ -98,25 +138,25 @@ public:
 		using InnerType = typename CD3DX12_PIPELINE_STATE_SUBOJECT_TYPE_TRAITS<ObjectType>::Type;
 		struct SubobjectType
 		{
-			D3D12_PIPELINE_STATE_SUBOBJECT_TYPE ObjectType;
+			D3D12_PIPELINE_STATE_SUBOBJECT_TYPE ObjType;
 			InnerType ObjectData;
 		};
-		if (m_SubobjectLocations[ObjectType] < 0)
+		if (m_pSubobjectLocations[ObjectType] < 0)
 		{
-			SubobjectType* pType = (SubobjectType*)(m_SubobjectData.data() + m_Size);
-			pType->ObjectType = ObjectType;
-			m_SubobjectLocations[ObjectType] = m_Size;
+			SubobjectType* pType = (SubobjectType*)(m_pSubobjectData + m_Size);
+			pType->ObjType = ObjectType;
+			m_pSubobjectLocations[ObjectType] = m_Size;
 			m_Size += Math::AlignUp<uint32>(sizeof(SubobjectType), sizeof(void*));
 			m_Subobjects++;
 		}
-		int offset = m_SubobjectLocations[ObjectType];
-		SubobjectType* pObj = (SubobjectType*)&m_SubobjectData[offset];
+		int offset = m_pSubobjectLocations[ObjectType];
+		SubobjectType* pObj = (SubobjectType*)&m_pSubobjectData[offset];
 		return &pObj->ObjectData;
 	}
 
 private:
-	std::array<int, D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_MAX_VALID> m_SubobjectLocations;
-	std::array<char, sizeof(CD3DX12_PIPELINE_STATE_STREAM2)> m_SubobjectData{};
+	int* m_pSubobjectLocations = nullptr;
+	char* m_pSubobjectData = nullptr;
 	uint32 m_Subobjects = 0;
 	uint32 m_Size = 0;
 };
