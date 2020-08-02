@@ -26,6 +26,8 @@
 #include "Graphics/Techniques/SSAO.h"
 #include "Graphics/Techniques/GpuParticles.h"
 #include "Core/CommandLine.h"
+#include "Content/Image.h"
+#include "Core/TaskQueue.h"
 
 #ifdef _DEBUG
 #define D3D_VALIDATION 1
@@ -44,7 +46,9 @@ const DXGI_FORMAT Graphics::DEPTH_STENCIL_SHADOW_FORMAT = DXGI_FORMAT_D16_UNORM;
 const DXGI_FORMAT Graphics::RENDER_TARGET_FORMAT = DXGI_FORMAT_R11G11B10_FLOAT;
 const DXGI_FORMAT Graphics::SWAPCHAIN_FORMAT = DXGI_FORMAT_R8G8B8A8_UNORM;
 
+
 bool gDumpRenderGraph = false;
+bool g_Screenshot = false;
 
 float g_WhitePoint = 1;
 float g_MinLogLuminance = -10;
@@ -354,6 +358,60 @@ void Graphics::Update()
 	Data.DepthStencilResolved = graph.ImportTexture("Resolved Depth Stencil", GetResolvedDepthStencil());
 
 	uint64 nextFenceValue = 0;
+
+	if (g_Screenshot && m_ScreenshotDelay < 0)
+	{
+		RGPassBuilder screenshot = graph.AddPass("Take Screenshot");
+		screenshot.Bind([=](CommandContext& renderContext, const RGPassResources& resources)
+			{
+				D3D12_PLACED_SUBRESOURCE_FOOTPRINT textureFootprint = {};
+				m_pDevice->GetCopyableFootprints(&m_pTonemapTarget->GetResource()->GetDesc(), 0, 1, 0, &textureFootprint, nullptr, nullptr, nullptr);
+				m_pScreenshotBuffer = std::make_unique<Buffer>(this, "Screenshot Texture");
+				m_pScreenshotBuffer->Create(BufferDesc::CreateReadback(textureFootprint.Footprint.RowPitch * textureFootprint.Footprint.Height));
+				renderContext.InsertResourceBarrier(m_pTonemapTarget.get(), D3D12_RESOURCE_STATE_COPY_SOURCE);
+				renderContext.InsertResourceBarrier(m_pScreenshotBuffer.get(), D3D12_RESOURCE_STATE_COPY_DEST);
+				renderContext.CopyTexture(m_pTonemapTarget.get(), m_pScreenshotBuffer.get(), CD3DX12_BOX(0, 0, m_pTonemapTarget->GetWidth(), m_pTonemapTarget->GetHeight()));
+				m_ScreenshotRowPitch = textureFootprint.Footprint.RowPitch;
+			});
+		m_ScreenshotDelay = 4;
+		g_Screenshot = false;
+	}
+
+	if (m_pScreenshotBuffer)
+	{
+		if (m_ScreenshotDelay == 0)
+		{
+			TaskContext taskContext;
+			TaskQueue::Execute([&](uint32) {
+				char* pData = (char*)m_pScreenshotBuffer->Map(0, m_pScreenshotBuffer->GetSize());
+				Image img;
+				img.SetSize(m_pTonemapTarget->GetWidth(), m_pTonemapTarget->GetHeight(), 4);
+				uint32 imageRowPitch = m_pTonemapTarget->GetWidth() * 4;
+				uint32 targetOffset = 0;
+				for (int i = 0; i < m_pTonemapTarget->GetHeight(); ++i)
+				{
+					img.SetData((uint32*)pData, targetOffset, imageRowPitch);
+					pData += m_ScreenshotRowPitch;
+					targetOffset += imageRowPitch;
+				}
+				m_pScreenshotBuffer->Unmap();
+
+				SYSTEMTIME time;
+				GetSystemTime(&time);
+				char stringTarget[128];
+				GetTimeFormat(LOCALE_INVARIANT, TIME_FORCE24HOURFORMAT, &time, "hh_mm_ss", stringTarget, 128);
+				std::stringstream filePath;
+				filePath << "Screenshot_" << stringTarget << ".jpg";
+				img.Save(filePath.str().c_str());
+				m_pScreenshotBuffer.reset();
+				}, taskContext);
+			m_ScreenshotDelay = -1;
+		}
+		else
+		{
+			m_ScreenshotDelay--;
+		}
+	}
 
 	RGPassBuilder setupLights = graph.AddPass("Setup Lights");
 	Data.DepthStencil = setupLights.Write(Data.DepthStencil);
@@ -1128,7 +1186,6 @@ void Graphics::InitializeAssets(CommandContext& context)
 	}
 
 	m_pRTAO->GenerateAccelerationStructure(this, m_pMesh.get(), context);
-
 }
 
 void Graphics::OnResize(int width, int height)
@@ -1472,6 +1529,10 @@ void Graphics::UpdateImGui()
 		{
 			gDumpRenderGraph = true;
 		}
+		if (ImGui::Button("Screenshot"))
+		{
+			g_Screenshot = true;
+		}
 
 		ImGui::TreePop();
 	}
@@ -1742,7 +1803,7 @@ bool Graphics::CheckTypedUAVSupport(DXGI_FORMAT format) const
 
 bool Graphics::UseRenderPasses() const
 {
-	return m_RenderPassTier > D3D12_RENDER_PASS_TIER::D3D12_RENDER_PASS_TIER_0;
+	return m_RenderPassTier > D3D12_RENDER_PASS_TIER_0;
 }
 
 bool Graphics::GetShaderModel(int& major, int& minor) const

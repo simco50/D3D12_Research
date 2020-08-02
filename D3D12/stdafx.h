@@ -54,9 +54,10 @@ inline int ToWidechar(const char* pStr, wchar_t* pOut, int len)
 #endif
 
 #define check(expression) assert(expression)
-#define checkf(expression, msg) assert(expression && msg)
+#define checkf(expression, msg, ...) assert(expression && msg)
 #define noEntry() checkf(false, "Should not have reached this point!")
 
+#include "Core/Thread.h"
 #include "Math/MathTypes.h"
 #include "Core/Time.h"
 #include "Math/Math.h"
