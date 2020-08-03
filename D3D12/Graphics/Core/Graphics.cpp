@@ -347,6 +347,11 @@ void Graphics::Update()
 
 	PROFILE_END();
 
+	if (m_CapturePix)
+	{
+		D3D::BeginPixCapture();
+	}
+
 	RGGraph graph(this);
 	struct MainData
 	{
@@ -886,12 +891,17 @@ void Graphics::Update()
 	nextFenceValue = graph.Execute();
 	PROFILE_END();
 
-
 	//PRESENT
 	//	- Set fence for the currently queued frame
 	//	- Present the frame buffer
 	//	- Wait for the next frame to be finished to start queueing work for it
 	EndFrame(nextFenceValue);
+
+	if (m_CapturePix)
+	{
+		D3D::EndPixCapture();
+		m_CapturePix = false;
+	}
 }
 
 void Graphics::Shutdown()
@@ -1021,6 +1031,7 @@ void Graphics::InitD3D()
 	pAdapter.Reset();
 
 	m_pDevice.As(&m_pRaytracingDevice);
+	m_pDevice->SetName(L"Main Device");
 
 	if(debugD3D)
 	{
@@ -1240,24 +1251,23 @@ void Graphics::OnResize(int width, int height)
 
 	m_pClusteredForward->OnSwapchainCreated(width, height);
 	m_pTiledForward->OnSwapchainCreated(width, height);
-	m_pRTAO->OnSwapchainCreated(width, height);
 	m_pSSAO->OnSwapchainCreated(width, height);
 
 	m_ReductionTargets.clear();
-	int w = GetWindowWidth();
-	int h = GetWindowHeight();
+	int w = width;
+	int h = height;
 	while (w > 1 || h > 1)
 	{
 		w = Math::DivideAndRoundUp(w, 16);
 		h = Math::DivideAndRoundUp(h, 16);
-		std::unique_ptr<Texture> pTexture = std::make_unique<Texture>(this);
+		std::unique_ptr<Texture> pTexture = std::make_unique<Texture>(this, "SDSM Reduction Target");
 		pTexture->Create(TextureDesc::Create2D(w, h, DXGI_FORMAT_R32G32_FLOAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
 		m_ReductionTargets.push_back(std::move(pTexture));
 	}
 
 	for (int i = 0; i < FRAME_COUNT; ++i)
 	{
-		std::unique_ptr<Buffer> pBuffer = std::make_unique<Buffer>(this);
+		std::unique_ptr<Buffer> pBuffer = std::make_unique<Buffer>(this, "SDSM Reduction Readback Target");
 		pBuffer->Create(BufferDesc::CreateTyped(1, DXGI_FORMAT_R32G32_FLOAT, BufferFlag::Readback));
 		m_ReductionReadbackTargets.push_back(std::move(pBuffer));
 	}
@@ -1339,9 +1349,9 @@ void Graphics::InitializePipelines()
 		m_pLuminanceHistogramPSO->SetComputeShader(computeShader);
 		m_pLuminanceHistogramPSO->Finalize("Luminance Historgram", m_pDevice.Get());
 
-		m_pLuminanceHistogram = std::make_unique<Buffer>(this);
+		m_pLuminanceHistogram = std::make_unique<Buffer>(this, "Luminance Histogram");
 		m_pLuminanceHistogram->Create(BufferDesc::CreateByteAddress(sizeof(uint32) * 256));
-		m_pAverageLuminance = std::make_unique<Buffer>(this);
+		m_pAverageLuminance = std::make_unique<Buffer>(this, "Average Luminance");
 		m_pAverageLuminance->Create(BufferDesc::CreateStructured(3, sizeof(float), BufferFlag::UnorderedAccess | BufferFlag::ShaderResource));
 	}
 
@@ -1532,6 +1542,10 @@ void Graphics::UpdateImGui()
 		if (ImGui::Button("Screenshot"))
 		{
 			g_Screenshot = true;
+		}
+		if (ImGui::Button("Pix Capture"))
+		{
+			m_CapturePix = true;
 		}
 
 		ImGui::TreePop();

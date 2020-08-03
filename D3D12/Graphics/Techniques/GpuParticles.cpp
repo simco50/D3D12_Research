@@ -1,7 +1,6 @@
 #include "stdafx.h"
 #include "GpuParticles.h"
 #include "Graphics/Core/GraphicsBuffer.h"
-#include "Graphics/Core/CommandSignature.h"
 #include "Graphics/Core/Graphics.h"
 #include "Graphics/Core/Shader.h"
 #include "Graphics/Core/PipelineState.h"
@@ -42,15 +41,15 @@ void GpuParticles::Initialize(Graphics* pGraphics)
 {
 	CommandContext* pContext = pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 
-	m_pCountersBuffer = std::make_unique<Buffer>(pGraphics);
+	m_pCountersBuffer = std::make_unique<Buffer>(pGraphics, "Particles Counter");
 	m_pCountersBuffer->Create(BufferDesc::CreateByteAddress(sizeof(uint32) * 4));
 
 	BufferDesc particleBufferDesc = BufferDesc::CreateStructured(cMaxParticleCount, sizeof(uint32));
-	m_pAliveList1 = std::make_unique<Buffer>(pGraphics);
+	m_pAliveList1 = std::make_unique<Buffer>(pGraphics, "Particles Alive List 1");
 	m_pAliveList1->Create(particleBufferDesc);
-	m_pAliveList2 = std::make_unique<Buffer>(pGraphics);
+	m_pAliveList2 = std::make_unique<Buffer>(pGraphics, "Particles Alive List 2");
 	m_pAliveList2->Create(particleBufferDesc);
-	m_pDeadList = std::make_unique<Buffer>(pGraphics);
+	m_pDeadList = std::make_unique<Buffer>(pGraphics, "Particles Dead List");
 	m_pDeadList->Create(particleBufferDesc);
 	std::vector<uint32> deadList(cMaxParticleCount);
 	std::generate(deadList.begin(), deadList.end(), [n = 0]() mutable { return n++; });
@@ -58,14 +57,14 @@ void GpuParticles::Initialize(Graphics* pGraphics)
 	uint32 aliveCount = cMaxParticleCount;
 	m_pCountersBuffer->SetData(pContext, &aliveCount, sizeof(uint32), 0);
 
-	m_pParticleBuffer = std::make_unique<Buffer>(pGraphics);
+	m_pParticleBuffer = std::make_unique<Buffer>(pGraphics, "Particle Buffer");
 	m_pParticleBuffer->Create(BufferDesc::CreateStructured(cMaxParticleCount, sizeof(ParticleData)));
 
-	m_pEmitArguments = std::make_unique<Buffer>(pGraphics);
+	m_pEmitArguments = std::make_unique<Buffer>(pGraphics, "Emit Indirect Arguments");
 	m_pEmitArguments->Create(BufferDesc::CreateIndirectArguments<uint32>(3));
-	m_pSimulateArguments = std::make_unique<Buffer>(pGraphics);
+	m_pSimulateArguments = std::make_unique<Buffer>(pGraphics, "Simulate Indirect Arguments");
 	m_pSimulateArguments->Create(BufferDesc::CreateIndirectArguments<uint32>(3));
-	m_pDrawArguments = std::make_unique<Buffer>(pGraphics);
+	m_pDrawArguments = std::make_unique<Buffer>(pGraphics, "Draw Indirect Arguments");
 	m_pDrawArguments->Create(BufferDesc::CreateIndirectArguments<uint32>(4));
 
 	pContext->Execute(true);

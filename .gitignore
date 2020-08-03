@@ -13,3 +13,4 @@ imgui.ini
 *.args.json
 _Temp/
 *.opt
+vs-chromium-project.txt

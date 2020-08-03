@@ -93,5 +93,7 @@ private:
 	std::unique_ptr<Buffer> m_pDebugLightGrid;
 	Matrix m_DebugClustersViewMatrix;
 	bool m_DidCopyDebugClusterData = false;
+
+	bool m_ViewportDirty = true;
 };
 

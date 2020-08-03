@@ -24,6 +24,8 @@
 template<typename T>
 using ComPtr = Microsoft::WRL::ComPtr<T>;
 
+#define USE_PIX 1
+
 #include <d3d12.h>
 #include <dxgi1_6.h>
 

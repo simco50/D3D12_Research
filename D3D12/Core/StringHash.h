@@ -33,7 +33,7 @@ public:
 	{
 	}
 
-	explicit constexpr StringHash(const char* const pText) noexcept
+	constexpr StringHash(const char* const pText) noexcept
 		: m_Hash(Hash_Internal(pText, val_const))
 	{
 	}

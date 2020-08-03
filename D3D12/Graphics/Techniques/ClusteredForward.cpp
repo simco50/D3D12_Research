@@ -8,7 +8,6 @@
 #include "Graphics/Core/CommandContext.h"
 #include "Graphics/Core/Texture.h"
 #include "Graphics/Core/ResourceViews.h"
-#include "Graphics/Core/CommandSignature.h"
 #include "Graphics/RenderGraph/RenderGraph.h"
 #include "Graphics/Mesh.h"
 #include "Graphics/Profiler.h"
@@ -48,50 +47,54 @@ void ClusteredForward::OnSwapchainCreated(int windowWidth, int windowHeight)
 	m_pLightGrid->CreateUAV(&m_pLightGridRawUAV, BufferUAVDesc::CreateRaw());
 	m_pDebugLightGrid->Create(BufferDesc::CreateStructured(totalClusterCount, 2 * sizeof(uint32)));
 
-	CommandContext* pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
-	{
-		GPU_PROFILE_SCOPE("CreateAABBs", pContext);
-
-		pContext->InsertResourceBarrier(m_pAABBs.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-
-		pContext->SetPipelineState(m_pCreateAabbPSO.get());
-		pContext->SetComputeRootSignature(m_pCreateAabbRS.get());
-
-		struct ConstantBuffer
-		{
-			Matrix ProjectionInverse;
-			Vector2 ScreenDimensionsInv;
-			IntVector2 ClusterSize;
-			IntVector3 ClusterDimensions;
-			float NearZ;
-			float FarZ;
-		} constantBuffer;
-
-		constantBuffer.ScreenDimensionsInv = Vector2(1.0f / windowWidth, 1.0f / windowHeight);
-		constantBuffer.NearZ = m_pGraphics->GetCamera()->GetFar();
-		constantBuffer.FarZ = m_pGraphics->GetCamera()->GetNear();
-		constantBuffer.ProjectionInverse = m_pGraphics->GetCamera()->GetProjectionInverse();
-		constantBuffer.ClusterSize = IntVector2(cClusterSize, cClusterSize);
-		constantBuffer.ClusterDimensions = IntVector3(m_ClusterCountX, m_ClusterCountY, cClusterCountZ);
-
-		pContext->SetComputeDynamicConstantBufferView(0, &constantBuffer, sizeof(ConstantBuffer));
-		pContext->SetDynamicDescriptor(1, 0, m_pAABBs->GetUAV());
-
-		pContext->Dispatch(m_ClusterCountX, m_ClusterCountY, cClusterCountZ);
-	}
-	pContext->Execute(true);
+	m_ViewportDirty = true;
 }
 
 void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResources& resources)
 {
 	RG_GRAPH_SCOPE("Clustered Lighting", graph);
 
-	Vector2 screenDimensions((float)m_pGraphics->GetWindowWidth(), (float)m_pGraphics->GetWindowHeight());
+	Vector2 screenDimensions((float)resources.pRenderTarget->GetWidth(), (float)resources.pRenderTarget->GetHeight());
 	float nearZ = resources.pCamera->GetNear();
 	float farZ = resources.pCamera->GetFar();
 
 	float sliceMagicA = (float)cClusterCountZ / log(nearZ / farZ);
 	float sliceMagicB = ((float)cClusterCountZ * log(farZ)) / log(nearZ / farZ);
+
+	if (m_ViewportDirty)
+	{
+		RGPassBuilder calculateAabbs = graph.AddPass("Create AABBs");
+		calculateAabbs.Bind([=](CommandContext& context, const RGPassResources& passResources)
+			{
+				context.InsertResourceBarrier(m_pAABBs.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+				context.SetPipelineState(m_pCreateAabbPSO.get());
+				context.SetComputeRootSignature(m_pCreateAabbRS.get());
+
+				struct ConstantBuffer
+				{
+					Matrix ProjectionInverse;
+					Vector2 ScreenDimensionsInv;
+					IntVector2 ClusterSize;
+					IntVector3 ClusterDimensions;
+					float NearZ;
+					float FarZ;
+				} constantBuffer;
+
+				constantBuffer.ScreenDimensionsInv = Vector2(1.0f / screenDimensions.x, 1.0f / screenDimensions.y);
+				constantBuffer.NearZ = m_pGraphics->GetCamera()->GetFar();
+				constantBuffer.FarZ = m_pGraphics->GetCamera()->GetNear();
+				constantBuffer.ProjectionInverse = m_pGraphics->GetCamera()->GetProjectionInverse();
+				constantBuffer.ClusterSize = IntVector2(cClusterSize, cClusterSize);
+				constantBuffer.ClusterDimensions = IntVector3(m_ClusterCountX, m_ClusterCountY, cClusterCountZ);
+
+				context.SetComputeDynamicConstantBufferView(0, &constantBuffer, sizeof(ConstantBuffer));
+				context.SetDynamicDescriptor(1, 0, m_pAABBs->GetUAV());
+
+				context.Dispatch(m_ClusterCountX, m_ClusterCountY, cClusterCountZ);
+			});
+		m_ViewportDirty = false;
+	}
 
 	RGPassBuilder markClusters = graph.AddPass("Mark Clusters");
 	markClusters.Read(resources.DepthBuffer);

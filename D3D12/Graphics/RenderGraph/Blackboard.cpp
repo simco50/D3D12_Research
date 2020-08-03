@@ -1,16 +1,6 @@
 #include "stdafx.h"
 #include "Blackboard.h"
 
-RGBlackboard::RGBlackboard()
-{
-
-}
-
-RGBlackboard::~RGBlackboard()
-{
-
-}
-
 RGBlackboard& RGBlackboard::Branch()
 {
 	m_Children.emplace_back(std::make_unique<RGBlackboard>());

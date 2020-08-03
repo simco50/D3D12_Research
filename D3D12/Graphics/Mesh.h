@@ -4,7 +4,6 @@ class CommandContext;
 class Texture;
 class Graphics;
 class CommandContext;
-struct aiMesh;
 
 class SubMesh
 {

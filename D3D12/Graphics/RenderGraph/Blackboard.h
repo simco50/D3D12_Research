@@ -5,8 +5,8 @@ class RGBlackboard final
 {
 #define RG_BLACKBOARD_DATA(clazz) constexpr static const char* Type() { return #clazz; }
 public:
-	RGBlackboard();
-	~RGBlackboard();
+	RGBlackboard() = default;
+	~RGBlackboard() = default;
 
 	RGBlackboard(const RGBlackboard& other) = delete;
 	RGBlackboard& operator=(const RGBlackboard& other) = delete;

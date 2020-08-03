@@ -177,15 +177,20 @@ namespace Delegates
 	}
 }
 
-//Base type for delegates
-template<typename RetVal, typename... Args>
-class IDelegate
+class IDelegateBase
 {
 public:
-	IDelegate() = default;
-	virtual ~IDelegate() noexcept = default;
-	virtual RetVal Execute(Args&&... args) = 0;
+	IDelegateBase() = default;
+	virtual ~IDelegateBase() noexcept = default;
 	virtual const void* GetOwner() const { return nullptr; }
+};
+
+//Base type for delegates
+template<typename RetVal, typename... Args>
+class IDelegate : public IDelegateBase
+{
+public:
+	virtual RetVal Execute(Args&&... args) = 0;
 };
 
 template<typename RetVal, typename... Args2>
@@ -531,9 +536,121 @@ private:
 	size_t m_Size;
 };
 
+class DelegateBase
+{
+public:
+	//Default constructor
+	constexpr DelegateBase() noexcept
+		: m_Allocator()
+	{
+	}
+
+	//Default destructor
+	virtual ~DelegateBase() noexcept
+	{
+		Release();
+	}
+
+	//Copy contructor
+	DelegateBase(const DelegateBase& other)
+		: m_Allocator(other.m_Allocator)
+	{
+	}
+
+	//Copy assignment operator
+	DelegateBase& operator=(const DelegateBase& other)
+	{
+		Release();
+		m_Allocator = other.m_Allocator;
+		return *this;
+	}
+
+	//Move constructor
+	DelegateBase(DelegateBase&& other) noexcept
+		: m_Allocator(std::move(other.m_Allocator))
+	{
+	}
+
+	//Move assignment operator
+	DelegateBase& operator=(DelegateBase&& other) noexcept
+	{
+		Release();
+		m_Allocator = std::move(other.m_Allocator);
+		return *this;
+	}
+
+	//Gets the owner of the deletage
+	//Only valid for SPDelegate and RawDelegate.
+	//Otherwise returns nullptr by default
+	const void* GetOwner() const
+	{
+		if (m_Allocator.HasAllocation())
+		{
+			return GetDelegate()->GetOwner();
+		}
+		return nullptr;
+	}
+
+	size_t GetSize() const
+	{
+		return m_Allocator.GetSize();
+	}
+
+	//Clear the bound delegate if it is bound to the given object.
+	//Ignored when pObject is a nullptr
+	void ClearIfBoundTo(void* pObject)
+	{
+		if (pObject != nullptr && IsBoundTo(pObject))
+		{
+			Release();
+		}
+	}
+
+	//Clear the bound delegate if it exists
+	void Clear()
+	{
+		Release();
+	}
+
+	//If the allocator has a size, it means it's bound to something
+	bool IsBound() const
+	{
+		return m_Allocator.HasAllocation();
+	}
+
+	bool IsBoundTo(void* pObject) const
+	{
+		if (pObject == nullptr || m_Allocator.HasAllocation() == false)
+		{
+			return false;
+		}
+		return GetDelegate()->GetOwner() == pObject;
+	}
+
+protected:
+	void Release()
+	{
+		if (m_Allocator.HasAllocation())
+		{
+			GetDelegate()->~IDelegateBase();
+			m_Allocator.Free();
+		}
+	}
+
+	IDelegateBase* GetDelegate() const
+	{
+		return static_cast<IDelegateBase*>(m_Allocator.GetAllocation());
+	}
+
+	//Allocator for the delegate itself.
+	//Delegate gets allocated when its is smaller or equal than 64 bytes in size.
+	//Can be changed by preference
+	InlineAllocator<DELEGATE_INLINE_ALLOCATION_SIZE> m_Allocator;
+};
+
 //Delegate that can be bound to by just ONE object
 template<typename RetVal, typename... Args>
-class Delegate
+class Delegate : public DelegateBase
 {
 private:
 	template<typename T, typename... Args2>
@@ -543,47 +660,6 @@ private:
 
 public:
 	using IDelegateT = IDelegate<RetVal, Args...>;
-
-	//Default constructor
-	constexpr Delegate() noexcept
-		: m_Allocator()
-	{
-	}
-
-	//Default destructor
-	~Delegate() noexcept
-	{
-		Release();
-	}
-
-
-	//Copy contructor
-	Delegate(const Delegate& other)
-		: m_Allocator(other.m_Allocator)
-	{
-	}
-
-	//Copy assignment operator
-	Delegate& operator=(const Delegate& other)
-	{
-		Release();
-		m_Allocator = other.m_Allocator;
-		return *this;
-	}
-
-	//Move constructor
-	Delegate(Delegate&& other) noexcept
-		: m_Allocator(std::move(other.m_Allocator))
-	{
-	}
-
-	//Move assignment operator
-	Delegate& operator=(Delegate&& other) noexcept
-	{
-		Release();
-		m_Allocator = std::move(other.m_Allocator);
-		return *this;
-	}
 
 	//Create delegate using member function
 	template<typename T, typename... Args2>
@@ -679,68 +755,20 @@ public:
 		*this = CreateSP<T, Args2... >(pObject, pFunction, std::forward<Args2>(args)...);
 	}
 
-	//If the allocator has a size, it means it's bound to something
-	bool IsBound() const
-	{
-		return m_Allocator.HasAllocation();
-	}
-
 	//Execute the delegate with the given parameters
 	RetVal Execute(Args... args) const
 	{
 		DELEGATE_ASSERT(m_Allocator.HasAllocation(), "Delegate is not bound");
-		return GetDelegate()->Execute(std::forward<Args>(args)...);
+		return ((IDelegateT*)GetDelegate())->Execute(std::forward<Args>(args)...);
 	}
 
 	RetVal ExecuteIfBound(Args... args) const
 	{
 		if (IsBound())
 		{
-			return GetDelegate()->Execute(std::forward<Args>(args)...);
+			return ((IDelegateT*)GetDelegate())->Execute(std::forward<Args>(args)...);
 		}
 		return RetVal();
-	}
-
-	//Gets the owner of the deletage
-	//Only valid for SPDelegate and RawDelegate.
-	//Otherwise returns nullptr by default
-	const void* GetOwner() const
-	{
-		if (m_Allocator.HasAllocation())
-		{
-			return GetDelegate()->GetOwner();
-		}
-		return nullptr;
-	}
-
-	size_t GetSize() const
-	{
-		return m_Allocator.GetSize();
-	}
-
-	//Clear the bound delegate if it is bound to the given object.
-	//Ignored when pObject is a nullptr
-	void ClearIfBoundTo(void* pObject)
-	{
-		if (pObject != nullptr && IsBoundTo(pObject))
-		{
-			Release();
-		}
-	}
-
-	//Clear the bound delegate if it exists
-	void Clear()
-	{
-		Release();
-	}
-
-	bool IsBoundTo(void* pObject) const
-	{
-		if(pObject == nullptr || m_Allocator.HasAllocation() == false)
-		{
-			return false;
-		}
-		return GetDelegate()->GetOwner() == pObject;
 	}
 
 private:
@@ -751,30 +779,18 @@ private:
 		void* pAlloc = m_Allocator.Allocate(sizeof(T));
 		new (pAlloc) T(std::forward<Args3>(args)...);
 	}
+};
 
-	void Release()
-	{
-		if (m_Allocator.HasAllocation())
-		{
-			GetDelegate()->~IDelegate();
-			m_Allocator.Free();
-		}
-	}
 
-	IDelegateT* GetDelegate() const
-	{
-		return static_cast<IDelegateT*>(m_Allocator.GetAllocation());
-	}
-
-	//Allocator for the delegate itself.
-	//Delegate gets allocated when its is smaller or equal than 64 bytes in size.
-	//Can be changed by preference
-	InlineAllocator<DELEGATE_INLINE_ALLOCATION_SIZE> m_Allocator;
+class MulticastDelegateBase
+{
+public:
+	virtual ~MulticastDelegateBase() = default;
 };
 
 //Delegate that can be bound to by MULTIPLE objects
 template<typename... Args>
-class MulticastDelegate
+class MulticastDelegate : public MulticastDelegateBase
 {
 public:
 	using DelegateT = Delegate<void, Args...>;

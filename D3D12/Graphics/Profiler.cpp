@@ -4,11 +4,7 @@
 #include "Graphics/Core/CommandContext.h"
 #include "Graphics/Core/CommandQueue.h"
 #include "Graphics/Core/GraphicsBuffer.h"
-
-#define USE_PIX
-#ifdef USE_PIX
 #include <pix3.h>
-#endif
 
 void CpuTimer::Begin()
 {
@@ -136,6 +132,7 @@ void Profiler::Initialize(Graphics* pGraphics)
 {
 	CD3DX12_QUERY_HEAP_DESC desc(HEAP_SIZE, D3D12_QUERY_HEAP_TYPE_TIMESTAMP);
 	VERIFY_HR_EX(pGraphics->GetDevice()->CreateQueryHeap(&desc, IID_PPV_ARGS(m_pQueryHeap.GetAddressOf())), pGraphics->GetDevice());
+	m_pQueryHeap->SetName(L"Profiler Timestamp Query Heap");
 
 	m_pReadBackBuffer = std::make_unique<Buffer>(pGraphics, "Profiling Readback Buffer");
 	m_pReadBackBuffer->Create(BufferDesc::CreateReadback(sizeof(uint64) * Graphics::FRAME_COUNT * HEAP_SIZE));

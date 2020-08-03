@@ -245,4 +245,6 @@ private:
 	std::unique_ptr<Buffer> m_pLightBuffer;
 
 	Texture* m_pVisualizeTexture = nullptr;
+
+	bool m_CapturePix = false;
 };

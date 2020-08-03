@@ -1,7 +1,6 @@
 #include "stdafx.h"
 #include "CommandQueue.h"
 #include "Graphics.h"
-#define USE_PIX
 #include "pix3.h"
 #include "CommandContext.h"
 
@@ -52,7 +51,9 @@ CommandQueue::CommandQueue(Graphics* pGraphics, D3D12_COMMAND_LIST_TYPE type)
 	desc.Type = type;
 
 	VERIFY_HR_EX(pGraphics->GetDevice()->CreateCommandQueue(&desc, IID_PPV_ARGS(m_pCommandQueue.GetAddressOf())), m_pGraphics->GetDevice());
+	m_pCommandQueue->SetName(L"Main CommandQueue");
 	VERIFY_HR_EX(pGraphics->GetDevice()->CreateFence(m_LastCompletedFenceValue, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(m_pFence.GetAddressOf())), m_pGraphics->GetDevice());
+	m_pFence->SetName(L"CommandQueue Fence");
 
 	m_pFenceEventHandle = CreateEventExA(nullptr, "CommandQueue Fence", 0, EVENT_ALL_ACCESS);
 }

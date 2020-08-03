@@ -37,9 +37,9 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 		indexCount += pScene->mMeshes[i]->mNumFaces * 3;
 	}
 
-	m_pVertexBuffer = std::make_unique<Buffer>(pGraphics);
+	m_pVertexBuffer = std::make_unique<Buffer>(pGraphics, "Mesh VertexBuffer");
 	m_pVertexBuffer->Create(BufferDesc::CreateVertexBuffer(vertexCount, sizeof(Vertex)));
-	m_pIndexBuffer = std::make_unique<Buffer>(pGraphics);
+	m_pIndexBuffer = std::make_unique<Buffer>(pGraphics, "Mesh IndexBuffer");
 	m_pIndexBuffer->Create(BufferDesc::CreateIndexBuffer(indexCount, false));
 
 	uint32 vertexOffset = 0;
@@ -100,7 +100,7 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 		std::unique_ptr<Texture> pTex;
 		aiString path;
 		aiReturn ret = pMaterial->GetTexture(type, 0, &path);
-		pTex = std::make_unique<Texture>(pGraphics);
+		pTex = std::make_unique<Texture>(pGraphics, "Material Texture");
 		bool success = ret == aiReturn_SUCCESS;
 		if (success)
 		{
