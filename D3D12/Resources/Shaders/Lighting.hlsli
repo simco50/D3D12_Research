@@ -47,6 +47,14 @@ float3 TangentSpaceNormalMapping(Texture2D normalTexture, SamplerState normalSam
 
 Texture2D tShadowMapTexture : register(t3);
 SamplerComparisonState sShadowMapSampler : register(s1);
+SamplerState sDiffuseSampler : register(s0);
+
+float2 TransformShadowTexCoord(float2 texCoord, int shadowMapIndex)
+{
+	float2 shadowMapStart = cShadowMapOffsets[shadowMapIndex].xy;
+	float2 normalizedShadowMapSize = cShadowMapOffsets[shadowMapIndex].zw;
+	return shadowMapStart + float2(texCoord.x * normalizedShadowMapSize.x, texCoord.y * normalizedShadowMapSize.y); 
+}
 
 float DoShadow(float3 wPos, int shadowMapIndex)
 {
@@ -56,10 +64,7 @@ float DoShadow(float3 wPos, int shadowMapIndex)
 	lightPos.x = lightPos.x / 2.0f + 0.5f;
 	lightPos.y = lightPos.y / -2.0f + 0.5f;
 
-	float2 shadowMapStart = cShadowMapOffsets[shadowMapIndex].xy;
-	float2 normalizedShadowMapSize = cShadowMapOffsets[shadowMapIndex].zw;
-
-	float2 texCoord = shadowMapStart + float2(lightPos.x * normalizedShadowMapSize.x, lightPos.y * normalizedShadowMapSize.y); 
+	float2 texCoord = TransformShadowTexCoord(lightPos.xy, shadowMapIndex);
 	
 	const float Dilation = 2.0f;
     float d1 = Dilation * SHADOWMAP_DX * 0.125f;
@@ -155,4 +160,54 @@ LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, floa
 	result.Specular *= color.rgb * light.Intensity;
 
 	return result;
+}
+
+#define G_SCATTERING 0.0001f
+float ComputeScattering(float LoV)
+{
+	float result = 1.0f - G_SCATTERING * G_SCATTERING;
+	result /= (4.0f * PI * pow(1.0f + G_SCATTERING * G_SCATTERING - (2.0f * G_SCATTERING) * LoV, 1.5f));
+	return result;
+}
+
+float3 ApplyVolumetricLighting(float3 cameraPos, float3 worldPos, float3 pos, float4x4 view, Light light, int samples)
+{
+	const float fogValue = 0.1f;
+	float3 rayVector = cameraPos - worldPos;
+	float3 rayStep = rayVector / samples;
+	float3 accumFog = 0.0f.xxx;
+	float3 currentPosition = worldPos;
+
+	static float DitherPattern[4][4] = 
+		{{ 0.0f, 0.5f, 0.125f, 0.625f},
+		{ 0.75f, 0.22f, 0.875f, 0.375f},
+		{ 0.1875f, 0.6875f, 0.0625f, 0.5625},
+		{ 0.9375f, 0.4375f, 0.8125f, 0.3125}};
+		
+	float ditherValue = DitherPattern[floor(pos.x) % 4][floor(pos.y) % 4];
+	currentPosition += rayStep * ditherValue;
+
+	for(int i = 0; i < samples; ++i)
+	{
+		float4 vPos = mul(float4(currentPosition, 1), view);
+		float4 splits = vPos.z > cCascadeDepths;
+		int cascadeIndex = dot(splits, float4(1, 1, 1, 1));
+		int shadowMapIndex = light.ShadowIndex + cascadeIndex;
+
+		float4x4 lightViewProjection = cLightViewProjections[shadowMapIndex];
+		float4 lightPos = mul(float4(currentPosition, 1), lightViewProjection);
+		lightPos.xyz /= lightPos.w;
+		lightPos.x = lightPos.x / 2.0f + 0.5f;
+		lightPos.y = lightPos.y / -2.0f + 0.5f;
+
+		float2 texCoord = TransformShadowTexCoord(lightPos.xy, shadowMapIndex);
+		float shadowDepth = tShadowMapTexture.SampleLevel(sDiffuseSampler, texCoord, 0).r;
+		if(shadowDepth < lightPos.z)
+		{
+			accumFog += fogValue * ComputeScattering(dot(rayVector, light.Direction)).xxx * light.GetColor().rgb * light.Intensity;
+		}
+		currentPosition += rayStep;
+	}
+	accumFog /= samples;
+	return accumFog;
 }

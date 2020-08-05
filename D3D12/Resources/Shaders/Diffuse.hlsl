@@ -50,8 +50,6 @@ Texture2D tDiffuseTexture : register(t0);
 Texture2D tNormalTexture : register(t1);
 Texture2D tSpecularTexture : register(t2);
 
-SamplerState sDiffuseSampler : register(s0);
-
 #ifdef FORWARD_PLUS
 Texture2D<uint2> tLightGrid : register(t4);
 StructuredBuffer<uint> tLightIndexList : register(t5);
@@ -120,7 +118,12 @@ float4 PSMain(PSInput input) : SV_TARGET
 
 	//Constant ambient
 	float ao = 1.0f;
-	color += ApplyAmbientLight(diffuseColor, ao, float3(0.2f, 0.5f, 1.0f) * 0.1f);
+	color += ApplyAmbientLight(diffuseColor, ao, Lights[0].GetColor().rgb * 0.1f);
+
+#define VOLUMETRIC_LIGHT 1
+#if VOLUMETRIC_LIGHT
+	color += ApplyVolumetricLighting(cViewInverse[3].xyz, input.positionWS.xyz, input.position.xyz, cView, Lights[0], 10);
+#endif
 
 	return float4(color, baseColor.a);
 }

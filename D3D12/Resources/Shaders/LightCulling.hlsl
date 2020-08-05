@@ -17,7 +17,7 @@ cbuffer ShaderParameters : register(b0)
     uint cLightCount;
 }
 
-StructuredBuffer<Light> Lights : register(t1);
+StructuredBuffer<Light> tLights : register(t1);
 Texture2D tDepthTexture : register(t0);
 
 globallycoherent RWStructuredBuffer<uint> uLightIndexCounter : register(u0);
@@ -171,7 +171,7 @@ void CSMain(CS_INPUT input)
     [loop]
     for(uint i = input.GroupIndex; i < cLightCount; i += BLOCK_SIZE * BLOCK_SIZE)
     {
-        Light light = Lights[i];
+        Light light = tLights[i];
 
         switch(light.Type)
         {
