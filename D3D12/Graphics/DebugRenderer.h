@@ -40,7 +40,6 @@ public:
 	
 	void Initialize(Graphics* pGraphics);
 	void Render(RGGraph& graph, const Matrix& viewProjection, Texture* pTarget, Texture* pDepth);
-	void EndFrame();
 
 	void AddLine(const Vector3& start, const Vector3& end, const Color& color);
 	void AddLine(const Vector3& start, const Vector3& end, const Color& colorStart, const Color& colorEnd);

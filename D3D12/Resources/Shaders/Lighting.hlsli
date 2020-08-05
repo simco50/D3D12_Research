@@ -1,5 +1,6 @@
 #include "Common.hlsli"
 #include "ShadingModels.hlsli"
+#include "CommonBindings.hlsli"
 
 #define PCF_KERNEL_SIZE 3
 #define SHADOWMAP_DX 0.000244140625f
@@ -44,10 +45,6 @@ float3 TangentSpaceNormalMapping(Texture2D normalTexture, SamplerState normalSam
 	sampledNormal = normalize(sampledNormal);
 	return mul(sampledNormal, TBN);
 }
-
-Texture2D tShadowMapTexture : register(t3);
-SamplerComparisonState sShadowMapSampler : register(s1);
-SamplerState sDiffuseSampler : register(s0);
 
 float2 TransformShadowTexCoord(float2 texCoord, int shadowMapIndex)
 {

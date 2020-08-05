@@ -110,10 +110,6 @@ void DebugRenderer::Render(RGGraph& graph, const Matrix& viewProjection, Texture
 			}
 			context.EndRenderPass();
 		});
-}
-
-void DebugRenderer::EndFrame()
-{
 	m_Lines.clear();
 	m_Triangles.clear();
 }

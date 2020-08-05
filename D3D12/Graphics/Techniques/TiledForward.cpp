@@ -94,8 +94,12 @@ void TiledForward::Execute(RGGraph& graph, const TiledForwardInputResources& res
 
 			struct PerFrameData
 			{
-				Matrix ViewInverse;
 				Matrix View;
+				Matrix ViewInverse;
+				Matrix Projection;
+				Vector2 ScreenDimensions;
+				float NearZ;
+				float FarZ;
 			} frameData;
 
 			struct PerObjectData
@@ -107,6 +111,10 @@ void TiledForward::Execute(RGGraph& graph, const TiledForwardInputResources& res
 			//Camera constants
 			frameData.ViewInverse = resources.pCamera->GetViewInverse();
 			frameData.View = resources.pCamera->GetView();
+			frameData.Projection = resources.pCamera->GetProjection();
+			frameData.ScreenDimensions = Vector2((float)resources.pRenderTarget->GetWidth(), (float)resources.pRenderTarget->GetHeight());
+			frameData.NearZ = resources.pCamera->GetNear();
+			frameData.FarZ = resources.pCamera->GetFar();
 
 			context.SetViewport(FloatRect(0, 0, (float)pDepthTexture->GetWidth(), (float)pDepthTexture->GetHeight()));
 
@@ -117,6 +125,7 @@ void TiledForward::Execute(RGGraph& graph, const TiledForwardInputResources& res
 			context.InsertResourceBarrier(resources.pShadowMap, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(resources.pRenderTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
 			context.InsertResourceBarrier(pDepthTexture, D3D12_RESOURCE_STATE_DEPTH_READ);
+			context.InsertResourceBarrier(resources.pAO, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
 			context.BeginRenderPass(RenderPassInfo(resources.pRenderTarget, RenderPassAccess::Clear_Store, pDepthTexture, RenderPassAccess::Load_DontCare));
 
@@ -128,6 +137,18 @@ void TiledForward::Execute(RGGraph& graph, const TiledForwardInputResources& res
 
 			context.SetDynamicDescriptor(4, 0, resources.pShadowMap->GetSRV());
 			context.SetDynamicDescriptor(4, 3, resources.pLightBuffer->GetSRV());
+			context.SetDynamicDescriptor(4, 4, resources.pAO->GetSRV());
+
+			auto setMaterialDescriptors = [](CommandContext& context, const Batch& b)
+			{
+				D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
+						 b.pMaterial->pDiffuseTexture->GetSRV(),
+						 b.pMaterial->pNormalTexture->GetSRV(),
+						 b.pMaterial->pSpecularTexture->GetSRV(),
+				};
+				context.SetDynamicDescriptors(3, 0, srvs, ARRAYSIZE(srvs));
+			};
+
 			{
 				GPU_PROFILE_SCOPE("Opaque", &context);
 				context.SetPipelineState(g_VisualizeLightDensity ? m_pVisualizeDensityPSO.get() : m_pDiffusePSO.get());
@@ -140,9 +161,7 @@ void TiledForward::Execute(RGGraph& graph, const TiledForwardInputResources& res
 					ObjectData.World = b.WorldMatrix;
 					ObjectData.WorldViewProjection = ObjectData.World * resources.pCamera->GetViewProjection();
 					context.SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
-					context.SetDynamicDescriptor(3, 0, b.pMaterial->pDiffuseTexture->GetSRV());
-					context.SetDynamicDescriptor(3, 1, b.pMaterial->pNormalTexture->GetSRV());
-					context.SetDynamicDescriptor(3, 2, b.pMaterial->pSpecularTexture->GetSRV());
+					setMaterialDescriptors(context, b);
 					b.pMesh->Draw(&context);
 				}
 			}
@@ -158,10 +177,8 @@ void TiledForward::Execute(RGGraph& graph, const TiledForwardInputResources& res
 				{
 					ObjectData.World = b.WorldMatrix;
 					ObjectData.WorldViewProjection = ObjectData.World * resources.pCamera->GetViewProjection();
+					setMaterialDescriptors(context, b);
 					context.SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
-					context.SetDynamicDescriptor(3, 0, b.pMaterial->pDiffuseTexture->GetSRV());
-					context.SetDynamicDescriptor(3, 1, b.pMaterial->pNormalTexture->GetSRV());
-					context.SetDynamicDescriptor(3, 2, b.pMaterial->pSpecularTexture->GetSRV());
 					b.pMesh->Draw(&context);
 				}
 			}
@@ -206,9 +223,9 @@ void TiledForward::SetupPipelines(Graphics* pGraphics)
 	//PBR Diffuse passes
 	{
 		//Shaders
-		Shader vertexShader("Diffuse.hlsl", ShaderType::Vertex, "VSMain", { });
-		Shader pixelShader("Diffuse.hlsl", ShaderType::Pixel, "PSMain", { });
-		Shader debugPixelShader("Diffuse.hlsl", ShaderType::Pixel, "DebugLightDensityPS", { });
+		Shader vertexShader("Diffuse.hlsl", ShaderType::Vertex, "VSMain", { "TILED_FORWARD" });
+		Shader pixelShader("Diffuse.hlsl", ShaderType::Pixel, "PSMain", {"TILED_FORWARD" });
+		Shader debugPixelShader("Diffuse.hlsl", ShaderType::Pixel, "DebugLightDensityPS", {"TILED_FORWARD" });
 
 		//Rootsignature
 		m_pDiffuseRS = std::make_unique<RootSignature>();

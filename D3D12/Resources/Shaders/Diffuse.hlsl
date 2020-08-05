@@ -1,8 +1,6 @@
 #include "Common.hlsli"
 #include "Lighting.hlsli"
 
-#define SPLITZ_CULLING 1
-#define FORWARD_PLUS 1
 #define BLOCK_SIZE 16
 
 #define RootSig "RootFlags(ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT), " \
@@ -10,7 +8,7 @@
 				"CBV(b1, visibility=SHADER_VISIBILITY_ALL), " \
 				"CBV(b2, visibility=SHADER_VISIBILITY_PIXEL), " \
 				"DescriptorTable(SRV(t0, numDescriptors = 3), visibility=SHADER_VISIBILITY_PIXEL), " \
-				"DescriptorTable(SRV(t3, numDescriptors = 4), visibility=SHADER_VISIBILITY_PIXEL), " \
+				"DescriptorTable(SRV(t3, numDescriptors = 5), visibility=SHADER_VISIBILITY_PIXEL), " \
 				"StaticSampler(s0, filter=FILTER_ANISOTROPIC, maxAnisotropy = 4, visibility = SHADER_VISIBILITY_PIXEL), " \
 				"StaticSampler(s1, filter=FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT, visibility = SHADER_VISIBILITY_PIXEL, comparisonFunc=COMPARISON_GREATER), " \
 
@@ -22,8 +20,18 @@ cbuffer PerObjectData : register(b0)
 
 cbuffer PerFrameData : register(b1)
 {
-	float4x4 cViewInverse;
 	float4x4 cView;
+	float4x4 cViewInverse;
+	float4x4 cProjection;
+	float2 cScreenDimensions;
+	float cNearZ;
+	float cFarZ;
+#if CLUSTERED_FORWARD
+    int4 cClusterDimensions;
+    int2 cClusterSize;
+	float cSliceMagicA;
+	float cSliceMagicB;
+#endif
 }
 
 struct VSInput
@@ -46,37 +54,38 @@ struct PSInput
 	float3 bitangent : TEXCOORD1;
 };
 
-Texture2D tDiffuseTexture : register(t0);
-Texture2D tNormalTexture : register(t1);
-Texture2D tSpecularTexture : register(t2);
-
-#ifdef FORWARD_PLUS
+#if TILED_FORWARD
 Texture2D<uint2> tLightGrid : register(t4);
-StructuredBuffer<uint> tLightIndexList : register(t5);
+#elif CLUSTERED_FORWARD
+StructuredBuffer<uint2> tLightGrid : register(t4);
 #endif
+StructuredBuffer<uint> tLightIndexList : register(t5);
 
-StructuredBuffer<Light> Lights : register(t6);
+#if CLUSTERED_FORWARD
+uint GetSliceFromDepth(float depth)
+{
+    return floor(log(depth) * cSliceMagicA - cSliceMagicB);
+}
+#endif
 
 LightResult DoLight(float4 pos, float3 worldPos, float3 vPos, float3 N, float3 V, float3 diffuseColor, float3 specularColor, float roughness)
 {
-#if FORWARD_PLUS
+#if TILED_FORWARD
 	uint2 tileIndex = uint2(floor(pos.xy / BLOCK_SIZE));
 	uint startOffset = tLightGrid[tileIndex].x;
 	uint lightCount = tLightGrid[tileIndex].y;
-#else
-	uint lightCount = cLightCount;
+#elif CLUSTERED_FORWARD
+	uint3 clusterIndex3D = uint3(floor(pos.xy / cClusterSize), GetSliceFromDepth(vPos.z));
+    uint clusterIndex1D = clusterIndex3D.x + (cClusterDimensions.x * (clusterIndex3D.y + cClusterDimensions.y * clusterIndex3D.z));
+	uint startOffset = tLightGrid[clusterIndex1D].x;
+	uint lightCount = tLightGrid[clusterIndex1D].y;
 #endif
 	LightResult totalResult = (LightResult)0;
 
 	for(uint i = 0; i < lightCount; ++i)
 	{
-#if FORWARD_PLUS
 		uint lightIndex = tLightIndexList[startOffset + i];
-		Light light = Lights[lightIndex];
-#else
-		uint lightIndex = i;
-		Light light = Lights[i];
-#endif
+		Light light = tLights[lightIndex];
 		LightResult result = DoLight(light, specularColor, diffuseColor, roughness, pos, worldPos, vPos, N, V);
 		totalResult.Diffuse += result.Diffuse;
 		totalResult.Specular += result.Specular;
@@ -117,17 +126,15 @@ float4 PSMain(PSInput input) : SV_TARGET
 	float3 color = lighting.Diffuse + lighting.Specular; 
 
 	//Constant ambient
-	float ao = 1.0f;
-	color += ApplyAmbientLight(diffuseColor, ao, Lights[0].GetColor().rgb * 0.1f);
+	float ao = tAO.SampleLevel(sDiffuseSampler, (float2)input.position.xy / cScreenDimensions, 0).r;
+	color += ApplyAmbientLight(diffuseColor, ao, tLights[0].GetColor().rgb * 0.1f);
 
-#define VOLUMETRIC_LIGHT 1
-#if VOLUMETRIC_LIGHT
-	color += ApplyVolumetricLighting(cViewInverse[3].xyz, input.positionWS.xyz, input.position.xyz, cView, Lights[0], 10);
-#endif
+	color += ApplyVolumetricLighting(cViewInverse[3].xyz, input.positionWS.xyz, input.position.xyz, cView, tLights[0], 10);
 
 	return float4(color, baseColor.a);
 }
 
+#if TILED_FORWARD
 float4 DebugLightDensityPS(PSInput input) : SV_TARGET
 {
 	uint2 tileIndex = uint2(floor(input.position.xy / BLOCK_SIZE));
@@ -135,3 +142,4 @@ float4 DebugLightDensityPS(PSInput input) : SV_TARGET
 	uint lightCount = tLightGrid[tileIndex].y;
 	return float4(((float)lightCount / 100).xxx, 1);
 }
+#endif

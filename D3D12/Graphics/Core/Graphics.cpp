@@ -72,7 +72,6 @@ bool g_EnableUI = true;
 Graphics::Graphics(uint32 width, uint32 height, int sampleCount /*= 1*/)
 	: m_SampleCount(sampleCount), m_WindowWidth(width), m_WindowHeight(height)
 {
-
 }
 
 Graphics::~Graphics()
@@ -192,6 +191,13 @@ void Graphics::Update()
 		return aDist < bDist;
 		});
 
+	float costheta = cosf(g_SunOrientation);
+	float sintheta = sinf(g_SunOrientation);
+	float cosphi = cosf(g_SunInclination * Math::PIDIV2);
+	float sinphi = sinf(g_SunInclination * Math::PIDIV2);
+	m_Lights[0].Direction = -Vector3(costheta * cosphi, sinphi, sintheta * cosphi);
+	m_Lights[0].Colour = Math::EncodeColor(Math::MakeFromColorTemperature(g_SunTemperature));
+
 	if (g_VisualizeLights)
 	{
 		for (const Light& light : m_Lights)
@@ -200,18 +206,12 @@ void Graphics::Update()
 		}
 	}
 
+
 	// SHADOW MAP PARTITIONING
 	/////////////////////////////////////////
 
 	m_ShadowCasters = 0;
 	ShadowData lightData;
-
-	float costheta = cosf(g_SunOrientation);
-	float sintheta = sinf(g_SunOrientation);
-	float cosphi = cosf(g_SunInclination * Math::PIDIV2);
-	float sinphi = sinf(g_SunInclination * Math::PIDIV2);
-	m_Lights[0].Direction = -Vector3(costheta * cosphi, sinphi, sintheta * cosphi);
-	m_Lights[0].Colour = Math::EncodeColor(Math::MakeFromColorTemperature(g_SunTemperature));
 
 	uint32 numCascades = 4;
 	float minPoint = 0;
@@ -620,6 +620,7 @@ void Graphics::Update()
 		resources.pCamera = m_pCamera.get();
 		resources.pShadowMap = m_pShadowMap.get();
 		resources.pShadowData = &lightData;
+		resources.pAO = m_pAmbientOcclusion.get();
 		m_pTiledForward->Execute(graph, resources);
 	}
 	else if (m_RenderPath == RenderPath::Clustered)
@@ -919,7 +920,6 @@ void Graphics::BeginFrame()
 void Graphics::EndFrame(uint64 fenceValue)
 {
 	Profiler::Get()->Resolve(this, m_Frame);
-	DebugRenderer::Get()->EndFrame();
 
 	//This always gets me confused!
 	//The 'm_CurrentBackBufferIndex' is the frame that just got queued so we set the fence value on that frame
@@ -963,7 +963,7 @@ void Graphics::InitD3D()
 		dxgiFactoryFlags |= DXGI_CREATE_FACTORY_DEBUG;
 	}
 
-	ComPtr<ID3D12DeviceRemovedExtendedDataSettings> pDredSettings;
+	ComPtr<ID3D12DeviceRemovedExtendedDataSettings1> pDredSettings;
 	if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&pDredSettings))))
 	{
 		E_LOG(Info, "DRED Enabled");

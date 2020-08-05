@@ -159,52 +159,6 @@ void AABBFromMinMax(inout AABB aabb, float3 minimum, float3 maximum)
     aabb.Extents = float4(maximum, 0) - aabb.Center;
 }
 
-//Emulates sampling a TextureCube
-float2 SampleCube(const float3 v, out float faceIndex)
-{
-	float3 vAbs = abs(v);
-	float ma;
-	float2 uv;
-	if(vAbs.z >= vAbs.x && vAbs.z >= vAbs.y)
-	{
-		faceIndex = v.z < 0.0 ? 5.0 : 4.0;
-		ma = 0.5 / vAbs.z;
-		uv = float2(v.z < 0.0 ? -v.x : v.x, -v.y);
-	}
-	else if(vAbs.y >= vAbs.x)
-	{
-		faceIndex = v.y < 0.0 ? 3.0 : 2.0;
-		ma = 0.5 / vAbs.y;
-		uv = float2(v.x, v.y < 0.0 ? -v.z : v.z);
-	}
-	else
-	{
-		faceIndex = v.x < 0.0 ? 1.0 : 0.0;
-		ma = 0.5 / vAbs.x;
-		uv = float2(v.x < 0.0 ? v.z : -v.z, -v.y);
-	}
-	return uv * ma + 0.5;
-}
-
-float GetCubeFaceIndex(const float3 v)
-{
-	float3 vAbs = abs(v);
-	float faceIndex = 0;
-	if(vAbs.z >= vAbs.x && vAbs.z >= vAbs.y)
-	{
-		faceIndex = v.z < 0.0 ? 5.0 : 4.0;
-	}
-	else if(vAbs.y >= vAbs.x)
-	{
-		faceIndex = v.y < 0.0 ? 3.0 : 2.0;
-	}
-	else
-	{
-		faceIndex = v.x < 0.0 ? 1.0 : 0.0;
-	}
-    return faceIndex;
-}
-
 float Pow4(float x)
 {
 	float xx = x * x;

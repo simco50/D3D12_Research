@@ -23,9 +23,6 @@ cbuffer Parameters : register(b1)
 
 RWStructuredBuffer<uint> uActiveClusters : register(u1);
 
-SamplerState sDiffuseSampler : register(s0);
-Texture2D tDiffuseTexture : register(t0);
-
 uint GetSliceFromDepth(float depth)
 {
     return floor(log(depth) * cSliceMagicA - cSliceMagicB);

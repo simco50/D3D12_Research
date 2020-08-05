@@ -252,13 +252,13 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
 			struct PerFrameData
 			{
 				Matrix View;
-				Matrix Projection;
 				Matrix ViewInverse;
-				IntVector3 ClusterDimensions;
-				int padding0;
+				Matrix Projection;
 				Vector2 ScreenDimensions;
 				float NearZ;
 				float FarZ;
+				IntVector3 ClusterDimensions;
+				int padding0;
 				IntVector2 ClusterSize;
 				float SliceMagicA;
 				float SliceMagicB;
@@ -502,8 +502,8 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
 			CD3DX12_INPUT_ELEMENT_DESC("TEXCOORD", DXGI_FORMAT_R32G32B32_FLOAT, 1),
 		};
 
-		Shader vertexShader("CL_Diffuse.hlsl", ShaderType::Vertex, "VSMain", { });
-		Shader pixelShader("CL_Diffuse.hlsl", ShaderType::Pixel, "PSMain", { });
+		Shader vertexShader("Diffuse.hlsl", ShaderType::Vertex, "VSMain", { "CLUSTERED_FORWARD" });
+		Shader pixelShader("Diffuse.hlsl", ShaderType::Pixel, "PSMain", { "CLUSTERED_FORWARD" });
 
 		m_pDiffuseRS = std::make_unique<RootSignature>();
 		m_pDiffuseRS->FinalizeFromShader("Diffuse", vertexShader, pGraphics->GetDevice());
