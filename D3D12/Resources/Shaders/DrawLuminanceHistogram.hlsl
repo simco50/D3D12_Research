@@ -50,11 +50,11 @@ void DrawLuminanceHistogram(uint groupIndex : SV_GroupIndex, uint3 threadId : SV
     float tTarget = (log2(targetAverage) - cMinLogLuminance) * cInverseLogLuminanceRange;
 
     float4 outColor = BACKGROUND_COLOR;
-    if(floor(tCurrent * NUM_HISTOGRAM_BINS) == groupIndex)
+    if((uint)floor(tCurrent * NUM_HISTOGRAM_BINS) == groupIndex)
     {
         outColor = CURSOR_COLOR;
     }
-    else if(floor(tTarget * NUM_HISTOGRAM_BINS) == groupIndex)
+    else if((uint)floor(tTarget * NUM_HISTOGRAM_BINS) == groupIndex)
     {
         outColor = TARGET_COLOR;
     }
