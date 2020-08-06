@@ -29,6 +29,9 @@
 #include "Content/Image.h"
 #include "Core/TaskQueue.h"
 
+#define STB_RECT_PACK_IMPLEMENTATION
+#include "External/Imgui/imstb_rectpack.h"
+
 #ifdef _DEBUG
 #define D3D_VALIDATION 1
 #endif
@@ -97,6 +100,7 @@ void Graphics::Initialize(HWND window)
 
 	g_ShowRaytraced = SupportsRayTracing() ? g_ShowRaytraced : false;
 
+	m_DesiredLightCount = 3;
 	RandomizeLights(m_DesiredLightCount);
 
 	m_pDynamicAllocationManager->FlushAll();
@@ -110,48 +114,27 @@ void Graphics::RandomizeLights(int count)
 	sceneBounds.Center = Vector3(0, 70, 0);
 	sceneBounds.Extents = Vector3(140, 70, 60);
 
-	int lightIndex = 0;
 	Vector3 Position(-150, 160, -10);
 	Vector3 Direction;
 	Position.Normalize(Direction);
-	m_Lights[lightIndex] = Light::Directional(Position, -Direction, 5.0f);
-	m_Lights[lightIndex].ShadowIndex = 0;
+	m_Lights[0] = Light::Directional(Position, -Direction, 10);
+	m_Lights[0].ShadowIndex = 0;
 
-	int randomLightsStartIndex = lightIndex + 1;
+	/*
+	m_Lights[1] = Light::Spot(Vector3(-80, 10, -10), 200, Vector3(0, 0, 1), 90, 70, 5000, Color(0, 0, 1, 1.0f));
+	m_Lights[1].ShadowIndex = 0;
 
-	for (int i = randomLightsStartIndex; i < m_Lights.size(); ++i)
-	{
-		Vector3 c = Vector3(Math::RandomRange(0.6f, 1.0f), Math::RandomRange(0.6f, 1.0f), Math::RandomRange(0.6f, 1.0f));
-		Vector4 color(c.x, c.y, c.z, 1);
+	m_Lights[2] = Light::Spot(Vector3(0, 10, -10), 200, Vector3(0, 0, 1), 90, 70, 5000, Color(1, 0, 0, 1.0f));
+	m_Lights[2].ShadowIndex = 0;
 
-		Vector3 position;
-		position.x = Math::RandomRange(-sceneBounds.Extents.x, sceneBounds.Extents.x) + sceneBounds.Center.x;
-		position.y = Math::RandomRange(-sceneBounds.Extents.y, sceneBounds.Extents.y) + sceneBounds.Center.y;
-		position.z = Math::RandomRange(-sceneBounds.Extents.z, sceneBounds.Extents.z) + sceneBounds.Center.z;
+	m_Lights[3] = Light::Spot(Vector3(80, 10, -10), 200, Vector3(0, 0, 1), 90, 70, 5000, Color(0, 1, 0, 1.0f));
+	m_Lights[3].ShadowIndex = 0;
+	*/
+	m_Lights[1] = Light::Point(Vector3(0, 10, 0), 200, 5000, Color(1, 0.2, 0.2, 1));
+	m_Lights[1].ShadowIndex = 0;
 
-		const float range = Math::RandomRange(40.0f, 60.0f);
-		const float angle = Math::RandomRange(60.0f, 120.0f);
-		const float intensity = Math::RandomRange(250.0f, 270.0f);
-
-		Light::Type type = rand() % 2 == 0 ? Light::Type::Point : Light::Type::Spot;
-		switch (type)
-		{
-		case Light::Type::Point:
-			m_Lights[i] = Light::Point(position, range, intensity, color);
-			break;
-		case Light::Type::Spot:
-			m_Lights[i] = Light::Spot(position, range, Math::RandVector(), angle, angle - Math::RandomRange(0.0f, angle / 2), intensity, color);
-			break;
-		case Light::Type::Directional:
-		case Light::Type::MAX:
-		default:
-			noEntry();
-			break;
-		}
-	}
-
-	//It's a bit weird but I don't sort the lights that I manually created because I access them by their original index during the update function
-	std::sort(m_Lights.begin() + randomLightsStartIndex, m_Lights.end(), [](const Light& a, const Light& b) { return (int)a.LightType < (int)b.LightType; });
+	m_Lights[2] = Light::Spot(Vector3(0, 10, -10), 200, Vector3(0, 0, 1), 90, 70, 5000, Color(1, 0, 0, 1.0f));
+	m_Lights[2].ShadowIndex = 0;
 
 	if (m_pLightBuffer->GetDesc().ElementCount != count)
 	{
@@ -206,12 +189,13 @@ void Graphics::Update()
 		}
 	}
 
+	m_Lights[1].Position.x = 50 * sin(Time::GameTime());
+
 
 	// SHADOW MAP PARTITIONING
 	/////////////////////////////////////////
 
-	m_ShadowCasters = 0;
-	ShadowData lightData;
+	ShadowData shadowData;
 
 	uint32 numCascades = 4;
 	float minPoint = 0;
@@ -245,101 +229,179 @@ void Graphics::Update()
 		cascadeSplits[i] = (d - nearPlane) / clipPlaneRange;
 	}
 
-	for (uint32 i = 0; i < numCascades; ++i)
+	stbrp_context context;
+	stbrp_node nodes[64];
+	stbrp_init_target(&context, m_pShadowMap->GetWidth(), m_pShadowMap->GetHeight(), nodes, 64);
+	std::vector<stbrp_rect> rects;
+
+	int shadowIndex = 0;
+	for (size_t i = 0; i < m_Lights.size(); ++i)
 	{
-		float previousCascadeSplit = i == 0 ? minPoint : cascadeSplits[i - 1];
-		float currentCascadeSplit = cascadeSplits[i];
-
-		Vector3 frustumCorners[] = {
-			//near
-			Vector3(-1, -1, 1),
-			Vector3(-1, 1, 1),
-			Vector3(1, 1, 1),
-			Vector3(1, -1, 1),
-
-			//far
-			Vector3(-1, -1, 0),
-			Vector3(-1, 1, 0),
-			Vector3(1, 1, 0),
-			Vector3(1, -1, 0),
-		};
-
-		//Retrieve frustum corners in world space
-		for (Vector3& corner : frustumCorners)
+		Light& light = m_Lights[i];
+		if (light.ShadowIndex == -1)
 		{
-			corner = Vector3::Transform(corner, m_pCamera->GetProjectionInverse());
-			corner = Vector3::Transform(corner, m_pCamera->GetViewInverse());
+			continue;
 		}
-
-		//Adjust frustum corners based on cascade splits
-		for (int j = 0; j < 4; ++j)
+		light.ShadowIndex = shadowIndex;
+		if (light.LightType == Light::Type::Directional)
 		{
-			Vector3 cornerRay = frustumCorners[j + 4] - frustumCorners[j];
-			Vector3 nearPoint = previousCascadeSplit * cornerRay;
-			Vector3 farPoint = currentCascadeSplit * cornerRay;
-			frustumCorners[j + 4] = frustumCorners[j] + farPoint;
-			frustumCorners[j] = frustumCorners[j] + nearPoint;
-		}
-
-		Vector3 center = Vector3::Zero;
-		for (const Vector3& corner : frustumCorners)
-		{
-			center += corner;
-		}
-		center /= 8;
-
-		Vector3 minExtents(FLT_MAX);
-		Vector3 maxExtents(-FLT_MAX);
-
-		//Create a bounding sphere to maintain aspect in projection to avoid flickering when rotating
-		if (g_StabilizeCascades)
-		{
-			float radius = 0;
-			for (const Vector3& corner : frustumCorners)
+			for (uint32 i = 0; i < numCascades; ++i)
 			{
-				float dist = Vector3::Distance(center, corner);
-				radius = Math::Max(dist, radius);
+				float previousCascadeSplit = i == 0 ? minPoint : cascadeSplits[i - 1];
+				float currentCascadeSplit = cascadeSplits[i];
+
+				Vector3 frustumCorners[] = {
+					//near
+					Vector3(-1, -1, 1),
+					Vector3(-1, 1, 1),
+					Vector3(1, 1, 1),
+					Vector3(1, -1, 1),
+
+					//far
+					Vector3(-1, -1, 0),
+					Vector3(-1, 1, 0),
+					Vector3(1, 1, 0),
+					Vector3(1, -1, 0),
+				};
+
+				//Retrieve frustum corners in world space
+				for (Vector3& corner : frustumCorners)
+				{
+					corner = Vector3::Transform(corner, m_pCamera->GetProjectionInverse());
+					corner = Vector3::Transform(corner, m_pCamera->GetViewInverse());
+				}
+
+				//Adjust frustum corners based on cascade splits
+				for (int j = 0; j < 4; ++j)
+				{
+					Vector3 cornerRay = frustumCorners[j + 4] - frustumCorners[j];
+					Vector3 nearPoint = previousCascadeSplit * cornerRay;
+					Vector3 farPoint = currentCascadeSplit * cornerRay;
+					frustumCorners[j + 4] = frustumCorners[j] + farPoint;
+					frustumCorners[j] = frustumCorners[j] + nearPoint;
+				}
+
+				Vector3 center = Vector3::Zero;
+				for (const Vector3& corner : frustumCorners)
+				{
+					center += corner;
+				}
+				center /= 8;
+
+				Vector3 minExtents(FLT_MAX);
+				Vector3 maxExtents(-FLT_MAX);
+
+				//Create a bounding sphere to maintain aspect in projection to avoid flickering when rotating
+				if (g_StabilizeCascades)
+				{
+					float radius = 0;
+					for (const Vector3& corner : frustumCorners)
+					{
+						float dist = Vector3::Distance(center, corner);
+						radius = Math::Max(dist, radius);
+					}
+					maxExtents = Vector3(radius, radius, radius);
+					minExtents = -maxExtents;
+				}
+				else
+				{
+					Matrix lightView = XMMatrixLookToLH(center, light.Direction, Vector3::Up);
+					for (const Vector3& corner : frustumCorners)
+					{
+						Vector3 p = Vector3::Transform(corner, lightView);
+						minExtents = Vector3::Min(minExtents, p);
+						maxExtents = Vector3::Max(maxExtents, p);
+					}
+				}
+
+				Matrix shadowView = XMMatrixLookToLH(center + light.Direction * -400, light.Direction, Vector3::Up);
+
+				Matrix projectionMatrix = Math::CreateOrthographicOffCenterMatrix(minExtents.x, maxExtents.x, minExtents.y, maxExtents.y, maxExtents.z + 400, 0);
+				Matrix lightViewProjection = shadowView * projectionMatrix;
+
+				//Snap projection to shadowmap texels to avoid flickering edges
+				if (g_StabilizeCascades)
+				{
+					float shadowMapSize = m_pShadowMap->GetHeight() / 2.0f;
+					Vector4 shadowOrigin = Vector4::Transform(Vector4(0, 0, 0, 1), lightViewProjection);
+					shadowOrigin *= shadowMapSize / 2.0f;
+					Vector4 rounded = XMVectorRound(shadowOrigin);
+					Vector4 roundedOffset = rounded - shadowOrigin;
+					roundedOffset *= 2.0f / shadowMapSize;
+					roundedOffset.z = 0;
+					roundedOffset.w = 0;
+
+					projectionMatrix *= Matrix::CreateTranslation(Vector3(roundedOffset));
+					lightViewProjection = shadowView * projectionMatrix;
+				}
+
+				stbrp_rect rect;
+				rect.w = 1024;
+				rect.h = 1024;
+				rect.id = shadowIndex;
+				rects.push_back(rect);
+
+				shadowData.CascadeDepths[shadowIndex] = currentCascadeSplit * (farPlane - nearPlane) + nearPlane;
+				shadowData.LightViewProjections[shadowIndex++] = lightViewProjection;
 			}
-			maxExtents = Vector3(radius, radius, radius);
-			minExtents = -maxExtents;
 		}
-		else
+		else if (light.LightType == Light::Type::Spot)
 		{
-			Matrix lightView = XMMatrixLookToLH(center, m_Lights[0].Direction, Vector3::Up);
-			for (const Vector3& corner : frustumCorners)
+			stbrp_rect rect;
+			rect.w = 1024;
+			rect.h = 1024;
+			rect.id = shadowIndex;
+			rects.push_back(rect);
+
+			Matrix projection = DirectX::XMMatrixPerspectiveFovLH(2 * acos(light.SpotlightAngles.y), 1.0f, light.Range, 5.0f);
+			shadowData.LightViewProjections[shadowIndex++] = Matrix(XMMatrixLookToLH(light.Position, light.Direction, Vector3::Up)) * projection;
+		}
+		else if (light.LightType == Light::Type::Point)
+		{
+			Matrix projection = Math::CreatePerspectiveMatrix(Math::PIDIV2, 1, light.Range, 5.0f);
+
+			constexpr Vector3 cubemapDirections[] = {
+				Vector3(-1.0f, 0.0f, 0.0f),
+				Vector3(1.0f, 0.0f, 0.0f),
+				Vector3(0.0f, -1.0f, 0.0f),
+				Vector3(0.0f, 1.0f, 0.0f),
+				Vector3(0.0f, 0.0f, -1.0f),
+				Vector3(0.0f, 0.0f, 1.0f),
+			};
+			constexpr Vector3 cubemapUpDirections[] = {
+				Vector3(0.0f, 1.0f, 0.0f),
+				Vector3(0.0f, 1.0f, 0.0f),
+				Vector3(0.0f, 0.0f, -1.0f),
+				Vector3(0.0f, 0.0f, 1.0f),
+				Vector3(0.0f, 1.0f, 0.0f),
+				Vector3(0.0f, 1.0f, 0.0f),
+			};
+
+			for (int i = 0; i < 6; ++i)
 			{
-				Vector3 p = Vector3::Transform(corner, lightView);
-				minExtents = Vector3::Min(minExtents, p);
-				maxExtents = Vector3::Max(maxExtents, p);
+				stbrp_rect rect;
+				rect.w = 1024;
+				rect.h = 1024;
+				rect.id = i + shadowIndex;
+				rects.push_back(rect);
+				shadowData.LightViewProjections[shadowIndex + i] = Matrix::CreateLookAt(light.Position, light.Position + cubemapDirections[i], cubemapUpDirections[i]) * projection;
 			}
+			shadowIndex += 6;
 		}
-
-		Matrix shadowView = XMMatrixLookToLH(center + m_Lights[0].Direction * -400, m_Lights[0].Direction, Vector3::Up);
-
-		Matrix projectionMatrix = Math::CreateOrthographicOffCenterMatrix(minExtents.x, maxExtents.x, minExtents.y, maxExtents.y, maxExtents.z + 400, 0);
-		Matrix lightViewProjection = shadowView * projectionMatrix;
-
-		//Snap projection to shadowmap texels to avoid flickering edges
-		if (g_StabilizeCascades)
-		{
-			float shadowMapSize = m_pShadowMap->GetHeight() / 2.0f;
-			Vector4 shadowOrigin = Vector4::Transform(Vector4(0, 0, 0, 1), lightViewProjection);
-			shadowOrigin *= shadowMapSize / 2.0f;
-			Vector4 rounded = XMVectorRound(shadowOrigin);
-			Vector4 roundedOffset = rounded - shadowOrigin;
-			roundedOffset *= 2.0f / shadowMapSize;
-			roundedOffset.z = 0;
-			roundedOffset.w = 0;
-
-			projectionMatrix *= Matrix::CreateTranslation(Vector3(roundedOffset));
-			lightViewProjection = shadowView * projectionMatrix;
-		}
-
-		lightData.LightViewProjections[i] = lightViewProjection;
-		lightData.CascadeDepths[i] = currentCascadeSplit * (farPlane - nearPlane) + nearPlane;
-		lightData.ShadowMapOffsets[i] = Vector4((float)(m_ShadowCasters % 2) / 2, (float)(m_ShadowCasters / 2) / 2, 0.5f, 0.5f);
-		m_ShadowCasters++;
 	}
+
+	stbrp_pack_rects(&context, rects.data(), rects.size());
+
+	for (const stbrp_rect& r : rects)
+	{
+		shadowData.ShadowMapOffsets[r.id].x = (float)r.x / m_pShadowMap->GetWidth();
+		shadowData.ShadowMapOffsets[r.id].y = (float)r.y / m_pShadowMap->GetHeight();
+		shadowData.ShadowMapOffsets[r.id].z = (float)r.w / m_pShadowMap->GetWidth();
+		shadowData.ShadowMapOffsets[r.id].w = (float)r.h / m_pShadowMap->GetHeight();
+	}
+
+
+	m_pVisualizeTexture = m_pShadowMap.get();
 
 	////////////////////////////////
 	// LET THE RENDERING BEGIN!
@@ -490,7 +552,7 @@ void Graphics::Update()
 			});
 	}
 
-	m_pParticles->Simulate(graph, GetResolvedDepthStencil(), *m_pCamera);
+	//m_pParticles->Simulate(graph, GetResolvedDepthStencil(), *m_pCamera);
 
 	if (g_ShowRaytraced)
 	{
@@ -503,7 +565,7 @@ void Graphics::Update()
 
 	//SHADOW MAPPING
 	// - Renders the scene depth onto a separate depth buffer from the light's view
-	if (m_ShadowCasters > 0)
+	if (shadowIndex > 0)
 	{
 		if (g_SDSM)
 		{
@@ -561,10 +623,10 @@ void Graphics::Update()
 
 				context.SetGraphicsRootSignature(m_pShadowsRS.get());
 
-				for (int i = 0; i < m_ShadowCasters; ++i)
+				for (int i = 0; i < shadowIndex; ++i)
 				{
 					GPU_PROFILE_SCOPE("Light View", &context);
-					const Vector4& shadowOffset = lightData.ShadowMapOffsets[i];
+					const Vector4& shadowOffset = shadowData.ShadowMapOffsets[i];
 					FloatRect viewport;
 					viewport.Left = shadowOffset.x * (float)m_pShadowMap->GetWidth();
 					viewport.Top = shadowOffset.y * (float)m_pShadowMap->GetHeight();
@@ -584,7 +646,7 @@ void Graphics::Update()
 
 						for (const Batch& b : m_OpaqueBatches)
 						{
-							ObjectData.WorldViewProjection = b.WorldMatrix * lightData.LightViewProjections[i];
+							ObjectData.WorldViewProjection = b.WorldMatrix * shadowData.LightViewProjections[i];
 							context.SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
 							b.pMesh->Draw(&context);
 						}
@@ -597,7 +659,7 @@ void Graphics::Update()
 						context.SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
 						for (const Batch& b : m_TransparantBatches)
 						{
-							ObjectData.WorldViewProjection = b.WorldMatrix * lightData.LightViewProjections[i];
+							ObjectData.WorldViewProjection = b.WorldMatrix * shadowData.LightViewProjections[i];
 							context.SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
 							context.SetDynamicDescriptor(1, 0, b.pMaterial->pDiffuseTexture->GetSRV());
 							b.pMesh->Draw(&context);
@@ -619,7 +681,7 @@ void Graphics::Update()
 		resources.pLightBuffer = m_pLightBuffer.get();
 		resources.pCamera = m_pCamera.get();
 		resources.pShadowMap = m_pShadowMap.get();
-		resources.pShadowData = &lightData;
+		resources.pShadowData = &shadowData;
 		resources.pAO = m_pAmbientOcclusion.get();
 		m_pTiledForward->Execute(graph, resources);
 	}
@@ -634,7 +696,7 @@ void Graphics::Update()
 		resources.pCamera = m_pCamera.get();
 		resources.pAO = m_pAmbientOcclusion.get();
 		resources.pShadowMap = m_pShadowMap.get();
-		resources.pShadowData = &lightData;
+		resources.pShadowData = &shadowData;
 		m_pClusteredForward->Execute(graph, resources);
 	}
 

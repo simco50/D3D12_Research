@@ -4,7 +4,7 @@
 
 #define PCF_KERNEL_SIZE 3
 #define SHADOWMAP_DX 0.000244140625f
-#define MAX_SHADOW_CASTERS 8
+#define MAX_SHADOW_CASTERS 32
 
 cbuffer LightData : register(b2)
 {
@@ -117,39 +117,49 @@ LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, floa
 	float3 L = normalize(light.Position - wPos);
 	LightResult result = DefaultLitBxDF(specularColor, roughness, diffuseColor, N, V, L, attenuation);
 
-	if(light.Type == LIGHT_DIRECTIONAL)
+	if(light.ShadowIndex >= 0)
 	{
-		float4 splits = vPos.z > cCascadeDepths;
-		int cascadeIndex = dot(splits, float4(1, 1, 1, 1));
-		float visibility = DoShadow(wPos, light.ShadowIndex + cascadeIndex);
-		float lerpAmount = 1;
-
-#define FADE_SHADOW_CASCADES 1
-#define FADE_THRESHOLD 0.1f
-#if FADE_SHADOW_CASCADES
-		float nextSplit = cCascadeDepths[cascadeIndex];
-		float splitRange = cascadeIndex == 0 ? nextSplit : nextSplit - cCascadeDepths[cascadeIndex - 1];
-		float fadeFactor = (nextSplit - vPos.z) / splitRange;
-		if(fadeFactor <= FADE_THRESHOLD && cascadeIndex != 4 - 1)
+		if(light.Type == LIGHT_DIRECTIONAL)
 		{
-			float nextVisibility = DoShadow(wPos, light.ShadowIndex + cascadeIndex + 1);
-			lerpAmount = smoothstep(0.0f, FADE_THRESHOLD, fadeFactor);
-			visibility = lerp(nextVisibility, visibility, lerpAmount);
-		}
-#endif
-		result.Diffuse *= visibility;
-		result.Specular *= visibility;
+			float4 splits = vPos.z > cCascadeDepths;
+			int cascadeIndex = dot(splits, float4(1, 1, 1, 1));
+			float visibility = DoShadow(wPos, light.ShadowIndex + cascadeIndex);
+			float lerpAmount = 1;
 
-#define VISUALIZE_CASCADES 0
-#if VISUALIZE_CASCADES
-		result.Diffuse += 0.2f * lerp(COLORS[min(cascadeIndex + 1, 3)].xyz, COLORS[cascadeIndex].xyz, lerpAmount);
-#endif
-	}
-	else if(light.ShadowIndex >= 0)
-	{
-		float s = DoShadow(wPos, light.ShadowIndex);
-		result.Diffuse *= s;
-		result.Specular *= s;
+	#define FADE_SHADOW_CASCADES 1
+	#define FADE_THRESHOLD 0.1f
+	#if FADE_SHADOW_CASCADES
+			float nextSplit = cCascadeDepths[cascadeIndex];
+			float splitRange = cascadeIndex == 0 ? nextSplit : nextSplit - cCascadeDepths[cascadeIndex - 1];
+			float fadeFactor = (nextSplit - vPos.z) / splitRange;
+			if(fadeFactor <= FADE_THRESHOLD && cascadeIndex != 4 - 1)
+			{
+				float nextVisibility = DoShadow(wPos, light.ShadowIndex + cascadeIndex + 1);
+				lerpAmount = smoothstep(0.0f, FADE_THRESHOLD, fadeFactor);
+				visibility = lerp(nextVisibility, visibility, lerpAmount);
+			}
+	#endif
+			result.Diffuse *= visibility;
+			result.Specular *= visibility;
+
+	#define VISUALIZE_CASCADES 0
+	#if VISUALIZE_CASCADES
+			result.Diffuse += 0.2f * lerp(COLORS[min(cascadeIndex + 1, 3)].xyz, COLORS[cascadeIndex].xyz, lerpAmount);
+	#endif
+		}
+		else if(light.Type == LIGHT_SPOT)
+		{
+			float visibility = DoShadow(wPos, light.ShadowIndex);
+			result.Diffuse *= visibility;
+			result.Specular *= visibility;
+		}
+		else if(light.Type == LIGHT_POINT)
+		{
+			int faceIndex = GetCubeFaceIndex(wPos - light.Position);
+			float visibility = DoShadow(wPos, light.ShadowIndex + faceIndex);
+			result.Diffuse *= visibility;
+			result.Specular *= visibility;
+		}
 	}
 
 	float4 color = light.GetColor();
