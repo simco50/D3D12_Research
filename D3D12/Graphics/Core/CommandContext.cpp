@@ -504,6 +504,9 @@ void CommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 	}
 	m_InRenderPass = true;
 	m_CurrentRenderPassInfo = renderPassInfo;
+
+	Texture* pTargetTexture = renderPassInfo.DepthStencilTarget.Target ? renderPassInfo.DepthStencilTarget.Target : renderPassInfo.RenderTargets[0].Target;
+	SetViewport(FloatRect(0, 0, (float)pTargetTexture->GetWidth(), (float)pTargetTexture->GetHeight()), 0, 1);
 }
 
 void CommandContext::EndRenderPass()

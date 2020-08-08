@@ -19,6 +19,7 @@ struct Light
 	float Intensity = 1.0f;
 	float Range = 1.0f;
 	int32 ShadowIndex = -1;
+	float InvShadowSize = 0;
 
 	static Light Directional(const Vector3& position, const Vector3& direction, float intensity = 1.0f, const Color& color = Color(1, 1, 1, 1))
 	{

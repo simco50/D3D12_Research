@@ -21,6 +21,7 @@ struct Light
     float Intensity;
 	float Range;
     int ShadowIndex;
+    float InvShadowSize;
 
     float4 GetColor()
     {

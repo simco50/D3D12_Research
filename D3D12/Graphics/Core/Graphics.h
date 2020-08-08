@@ -166,6 +166,7 @@ private:
 	std::unique_ptr<Texture> m_pTonemapTarget;
 	std::unique_ptr<Texture> m_pDepthStencil;
 	std::unique_ptr<Texture> m_pResolvedDepthStencil;
+	std::vector<std::unique_ptr<Texture>> m_ShadowMaps;
 
 	std::unique_ptr<ImGuiRenderer> m_pImGuiRenderer;
 	std::unique_ptr<RGResourceAllocator> m_pGraphAllocator;
@@ -191,7 +192,6 @@ private:
 	std::vector<Batch> m_TransparantBatches;
 
 	//Shadow mapping
-	std::unique_ptr<Texture> m_pShadowMap;
 	std::unique_ptr<RootSignature> m_pShadowsRS;
 	std::unique_ptr<PipelineState> m_pShadowsOpaquePSO;
 	std::unique_ptr<PipelineState> m_pShadowsAlphaPSO;

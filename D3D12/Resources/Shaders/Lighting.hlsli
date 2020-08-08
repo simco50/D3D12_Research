@@ -53,7 +53,7 @@ float2 TransformShadowTexCoord(float2 texCoord, int shadowMapIndex)
 	return shadowMapStart + float2(texCoord.x * normalizedShadowMapSize.x, texCoord.y * normalizedShadowMapSize.y); 
 }
 
-float DoShadow(float3 wPos, int shadowMapIndex)
+float DoShadow(float3 wPos, int shadowMapIndex, float invShadowSize)
 {
 	float4x4 lightViewProjection = cLightViewProjections[shadowMapIndex];
 	float4 lightPos = mul(float4(wPos, 1), lightViewProjection);
@@ -61,23 +61,25 @@ float DoShadow(float3 wPos, int shadowMapIndex)
 	lightPos.x = lightPos.x / 2.0f + 0.5f;
 	lightPos.y = lightPos.y / -2.0f + 0.5f;
 
-	float2 texCoord = TransformShadowTexCoord(lightPos.xy, shadowMapIndex);
+	float2 texCoord = lightPos.xy;
+
+	Texture2D shadowTexture = tShadowMapTextures[shadowMapIndex];
 	
 	const float Dilation = 2.0f;
-    float d1 = Dilation * SHADOWMAP_DX * 0.125f;
-    float d2 = Dilation * SHADOWMAP_DX * 0.875f;
-    float d3 = Dilation * SHADOWMAP_DX * 0.625f;
-    float d4 = Dilation * SHADOWMAP_DX * 0.375f;
+    float d1 = Dilation * invShadowSize * 0.125f;
+    float d2 = Dilation * invShadowSize * 0.875f;
+    float d3 = Dilation * invShadowSize * 0.625f;
+    float d4 = Dilation * invShadowSize * 0.375f;
     float result = (
-        2.0f * tShadowMapTexture.SampleCmpLevelZero(sShadowMapSampler, texCoord, lightPos.z) +
-        tShadowMapTexture.SampleCmpLevelZero(sShadowMapSampler, texCoord + float2(-d2,  d1), lightPos.z) +
-        tShadowMapTexture.SampleCmpLevelZero(sShadowMapSampler, texCoord + float2(-d1, -d2), lightPos.z) +
-        tShadowMapTexture.SampleCmpLevelZero(sShadowMapSampler, texCoord + float2( d2, -d1), lightPos.z) +
-        tShadowMapTexture.SampleCmpLevelZero(sShadowMapSampler, texCoord + float2( d1,  d2), lightPos.z) +
-        tShadowMapTexture.SampleCmpLevelZero(sShadowMapSampler, texCoord + float2(-d4,  d3), lightPos.z) +
-        tShadowMapTexture.SampleCmpLevelZero(sShadowMapSampler, texCoord + float2(-d3, -d4), lightPos.z) +
-        tShadowMapTexture.SampleCmpLevelZero(sShadowMapSampler, texCoord + float2( d4, -d3), lightPos.z) +
-        tShadowMapTexture.SampleCmpLevelZero(sShadowMapSampler, texCoord + float2( d3,  d4), lightPos.z)
+        2.0f * shadowTexture.SampleCmpLevelZero(sShadowMapSampler, texCoord, lightPos.z) +
+        shadowTexture.SampleCmpLevelZero(sShadowMapSampler, texCoord + float2(-d2,  d1), lightPos.z) +
+        shadowTexture.SampleCmpLevelZero(sShadowMapSampler, texCoord + float2(-d1, -d2), lightPos.z) +
+        shadowTexture.SampleCmpLevelZero(sShadowMapSampler, texCoord + float2( d2, -d1), lightPos.z) +
+        shadowTexture.SampleCmpLevelZero(sShadowMapSampler, texCoord + float2( d1,  d2), lightPos.z) +
+        shadowTexture.SampleCmpLevelZero(sShadowMapSampler, texCoord + float2(-d4,  d3), lightPos.z) +
+        shadowTexture.SampleCmpLevelZero(sShadowMapSampler, texCoord + float2(-d3, -d4), lightPos.z) +
+        shadowTexture.SampleCmpLevelZero(sShadowMapSampler, texCoord + float2( d4, -d3), lightPos.z) +
+        shadowTexture.SampleCmpLevelZero(sShadowMapSampler, texCoord + float2( d3,  d4), lightPos.z)
         ) / 10.0f;
     return result * result;
 }
@@ -104,13 +106,6 @@ float3 ApplyAmbientLight(float3 diffuse, float ao, float3 lightColor)
     return ao * diffuse * lightColor;
 }
 
-static float4 COLORS[4] = {
-	float4(1,0,0,1),
-	float4(0,1,0,1),
-	float4(0,0,1,1),
-	float4(1,0,1,1),
-};
-
 LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, float roughness, float4 pos, float3 wPos, float3 vPos, float3 N, float3 V)
 {
 	float attenuation = GetAttenuation(light, wPos);
@@ -123,7 +118,7 @@ LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, floa
 		{
 			float4 splits = vPos.z > cCascadeDepths;
 			int cascadeIndex = dot(splits, float4(1, 1, 1, 1));
-			float visibility = DoShadow(wPos, light.ShadowIndex + cascadeIndex);
+			float visibility = DoShadow(wPos, light.ShadowIndex + cascadeIndex, light.InvShadowSize);
 			float lerpAmount = 1;
 
 	#define FADE_SHADOW_CASCADES 1
@@ -134,7 +129,7 @@ LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, floa
 			float fadeFactor = (nextSplit - vPos.z) / splitRange;
 			if(fadeFactor <= FADE_THRESHOLD && cascadeIndex != 4 - 1)
 			{
-				float nextVisibility = DoShadow(wPos, light.ShadowIndex + cascadeIndex + 1);
+				float nextVisibility = DoShadow(wPos, light.ShadowIndex + cascadeIndex + 1, light.InvShadowSize);
 				lerpAmount = smoothstep(0.0f, FADE_THRESHOLD, fadeFactor);
 				visibility = lerp(nextVisibility, visibility, lerpAmount);
 			}
@@ -144,19 +139,25 @@ LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, floa
 
 	#define VISUALIZE_CASCADES 0
 	#if VISUALIZE_CASCADES
+			static float4 COLORS[4] = {
+				float4(1,0,0,1),
+				float4(0,1,0,1),
+				float4(0,0,1,1),
+				float4(1,0,1,1),
+			};
 			result.Diffuse += 0.2f * lerp(COLORS[min(cascadeIndex + 1, 3)].xyz, COLORS[cascadeIndex].xyz, lerpAmount);
 	#endif
 		}
 		else if(light.Type == LIGHT_SPOT)
 		{
-			float visibility = DoShadow(wPos, light.ShadowIndex);
+			float visibility = DoShadow(wPos, light.ShadowIndex, light.InvShadowSize);
 			result.Diffuse *= visibility;
 			result.Specular *= visibility;
 		}
 		else if(light.Type == LIGHT_POINT)
 		{
 			int faceIndex = GetCubeFaceIndex(wPos - light.Position);
-			float visibility = DoShadow(wPos, light.ShadowIndex + faceIndex);
+			float visibility = DoShadow(wPos, light.ShadowIndex + faceIndex, light.InvShadowSize);
 			result.Diffuse *= visibility;
 			result.Specular *= visibility;
 		}
@@ -207,8 +208,7 @@ float3 ApplyVolumetricLighting(float3 cameraPos, float3 worldPos, float3 pos, fl
 		lightPos.x = lightPos.x / 2.0f + 0.5f;
 		lightPos.y = lightPos.y / -2.0f + 0.5f;
 
-		float2 texCoord = TransformShadowTexCoord(lightPos.xy, shadowMapIndex);
-		float shadowDepth = tShadowMapTexture.SampleLevel(sDiffuseSampler, texCoord, 0).r;
+		float shadowDepth = tShadowMapTextures[shadowMapIndex].SampleLevel(sDiffuseSampler, lightPos.xy, 0).r;
 		if(shadowDepth < lightPos.z)
 		{
 			accumFog += fogValue * ComputeScattering(dot(rayVector, light.Direction)).xxx * light.GetColor().rgb * light.Intensity;

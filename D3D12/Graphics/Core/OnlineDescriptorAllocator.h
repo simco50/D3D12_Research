@@ -33,7 +33,7 @@ public:
 
 private:
 	//Maximum amount of descriptors per CopyDescriptors call
-	static const int MAX_DESCRIPTORS_PER_COPY = 8;
+	static const int MAX_DESCRIPTORS_PER_COPY = 64;
 	//The amount of descriptors in each heap
 	static const int DESCRIPTORS_PER_HEAP = 256;
 	//The max amount of root parameters
@@ -53,7 +53,7 @@ private:
 
 	struct RootDescriptorEntry
 	{
-		BitField32 AssignedHandlesBitMap {};
+		BitField64 AssignedHandlesBitMap {};
 		D3D12_CPU_DESCRIPTOR_HANDLE* TableStart = nullptr;
 		uint32 TableSize = 0;
 	};
