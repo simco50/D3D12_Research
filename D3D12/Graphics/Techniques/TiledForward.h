@@ -16,7 +16,7 @@ struct TiledForwardInputResources
 {
 	RGResourceHandle ResolvedDepthBuffer;
 	RGResourceHandle DepthBuffer;
-	Texture* pShadowMap = nullptr;
+	std::vector<std::unique_ptr<Texture>>* pShadowMaps = nullptr;
 	Texture* pRenderTarget = nullptr;
 	Texture* pAO = nullptr;
 	const std::vector<Batch>* pOpaqueBatches = nullptr;

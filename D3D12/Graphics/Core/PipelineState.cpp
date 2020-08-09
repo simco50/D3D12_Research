@@ -45,6 +45,7 @@ void PipelineState::SetRenderTargetFormats(DXGI_FORMAT* rtvFormats, uint32 count
 	DXGI_SAMPLE_DESC& sampleDesc = m_Desc.GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_SAMPLE_DESC>();
 	sampleDesc.Count = msaa;
 	sampleDesc.Quality = 0;
+	m_Desc.GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_RASTERIZER>().MultisampleEnable = msaa > 1;
 
 	m_Desc.GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL_FORMAT>() = dsvFormat;
 }

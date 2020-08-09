@@ -4,6 +4,7 @@
 #include "External/SimpleMath/SimpleMath.h"
 using BoundingBox = DirectX::BoundingBox;
 using BoundingFrustum = DirectX::BoundingFrustum;
+using BoundingSphere = DirectX::BoundingSphere;
 using Vector2 = DirectX::SimpleMath::Vector2;
 using Vector3 = DirectX::SimpleMath::Vector3;
 using Vector4 = DirectX::SimpleMath::Vector4;

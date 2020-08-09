@@ -15,11 +15,22 @@ const int gMsaaSampleCount = 4;
 class ViewWrapper
 {
 public:
-	void Run(HINSTANCE hInstance, const char* pTitle)
+	int Run(HINSTANCE hInstance, const char* pTitle, const char* lpCmdLine)
 	{
+		Thread::SetMainThread();
+
+		CommandLine::Parse(lpCmdLine);
+
+		_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
+		//_CrtSetBreakAlloc(6528);
+		Console::Initialize();
+
+		E_LOG(Info, "Startup");
+
+		TaskQueue::Initialize(std::thread::hardware_concurrency());
+
 		m_DisplayWidth = gWindowWidth;
 		m_DisplayHeight = gWindowHeight;
-		TaskQueue::Initialize(std::thread::hardware_concurrency());
 
 		HWND window = MakeWindow(hInstance, pTitle);
 		Input::Instance().SetWindow(window);
@@ -54,6 +65,7 @@ public:
 		delete m_pGraphics;
 
 		TaskQueue::Shutdown();
+		return 0;
 	}
 
 private:
@@ -246,15 +258,6 @@ private:
 
 int WINAPI WinMain(HINSTANCE hInstance,	HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd)
 {
-	Thread::SetMainThread();
-	CommandLine::Parse(lpCmdLine);
-
-	_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
-	//_CrtSetBreakAlloc(6528);
-	Console::Initialize();
-
-	E_LOG(Info, "Startup");
 	ViewWrapper vp;
-	vp.Run(hInstance, "D3D12");
-	return 0;
+	return vp.Run(hInstance, "D3D12", lpCmdLine);
 }

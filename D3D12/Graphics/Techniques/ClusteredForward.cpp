@@ -110,7 +110,6 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
 
 			context.SetPipelineState(m_pMarkUniqueClustersOpaquePSO.get());
 			context.SetGraphicsRootSignature(m_pMarkUniqueClustersRS.get());
-			context.SetViewport(FloatRect(0, 0, screenDimensions.x, screenDimensions.y));
 			context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
 			struct PerFrameParameters
@@ -282,7 +281,6 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
 			context.InsertResourceBarrier(resources.pAO, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
 			context.BeginRenderPass(RenderPassInfo(resources.pRenderTarget, RenderPassAccess::Clear_Store, passResources.GetTexture(resources.DepthBuffer), RenderPassAccess::Load_DontCare));
-			context.SetViewport(FloatRect(0, 0, (float)screenDimensions.x, (float)screenDimensions.y));
 			context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 			context.SetGraphicsRootSignature(m_pDiffuseRS.get());
 
@@ -302,11 +300,17 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
 
 				context.SetDynamicConstantBufferView(1, &frameData, sizeof(PerFrameData));
 				context.SetDynamicConstantBufferView(2, resources.pShadowData, sizeof(ShadowData));
-				context.SetDynamicDescriptor(4, 0, resources.pShadowMap->GetSRV());
-				context.SetDynamicDescriptor(4, 1, m_pLightGrid->GetSRV());
-				context.SetDynamicDescriptor(4, 2, m_pLightIndexGrid->GetSRV());
-				context.SetDynamicDescriptor(4, 3, resources.pLightBuffer->GetSRV());
-				context.SetDynamicDescriptor(4, 4, resources.pAO->GetSRV());
+
+				context.SetDynamicDescriptor(4, 0, m_pLightGrid->GetSRV());
+				context.SetDynamicDescriptor(4, 1, m_pLightIndexGrid->GetSRV());
+				context.SetDynamicDescriptor(4, 2, resources.pLightBuffer->GetSRV());
+				context.SetDynamicDescriptor(4, 3, resources.pAO->GetSRV());
+
+				int idx = 0;
+				for (auto& pShadowMap : *resources.pShadowMaps)
+				{
+					context.SetDynamicDescriptor(5, idx++, pShadowMap->GetSRV());
+				}
 
 				for (const Batch& b : *resources.pOpaqueBatches)
 				{
@@ -354,8 +358,6 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
 
 				context.SetPipelineState(m_pDebugClustersPSO.get());
 				context.SetGraphicsRootSignature(m_pDebugClustersRS.get());
-
-				context.SetViewport(FloatRect(0, 0, (float)screenDimensions.x, (float)screenDimensions.y));
 
 				Matrix p = m_DebugClustersViewMatrix * resources.pCamera->GetViewProjection();
 

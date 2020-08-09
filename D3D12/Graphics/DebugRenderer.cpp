@@ -89,7 +89,6 @@ void DebugRenderer::Render(RGGraph& graph, const Matrix& viewProjection, Texture
 			context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
 			context.BeginRenderPass(RenderPassInfo(pTarget, RenderPassAccess::Load_Store, pDepth, RenderPassAccess::Load_Store));
-			context.SetViewport(FloatRect(0, 0, (float)pTarget->GetWidth(), (float)pTarget->GetHeight()));
 			context.SetGraphicsRootSignature(m_pRS.get());
 
 			context.SetDynamicConstantBufferView(0, &viewProjection, sizeof(Matrix));

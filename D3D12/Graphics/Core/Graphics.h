@@ -31,12 +31,13 @@ struct Batch
 	BoundingBox Bounds;
 };
 
-constexpr const int MAX_SHADOW_CASTERS = 8;
+constexpr const int MAX_SHADOW_CASTERS = 32;
 struct ShadowData
 {
 	Matrix LightViewProjections[MAX_SHADOW_CASTERS];
 	Vector4 ShadowMapOffsets[MAX_SHADOW_CASTERS];
 	float CascadeDepths[4];
+	uint32 NumCascades;
 };
 
 enum class RenderPath
@@ -166,6 +167,7 @@ private:
 	std::unique_ptr<Texture> m_pTonemapTarget;
 	std::unique_ptr<Texture> m_pDepthStencil;
 	std::unique_ptr<Texture> m_pResolvedDepthStencil;
+	std::vector<std::unique_ptr<Texture>> m_ShadowMaps;
 
 	std::unique_ptr<ImGuiRenderer> m_pImGuiRenderer;
 	std::unique_ptr<RGResourceAllocator> m_pGraphAllocator;
@@ -191,7 +193,6 @@ private:
 	std::vector<Batch> m_TransparantBatches;
 
 	//Shadow mapping
-	std::unique_ptr<Texture> m_pShadowMap;
 	std::unique_ptr<RootSignature> m_pShadowsRS;
 	std::unique_ptr<PipelineState> m_pShadowsOpaquePSO;
 	std::unique_ptr<PipelineState> m_pShadowsAlphaPSO;
@@ -240,7 +241,6 @@ private:
 	std::unique_ptr<GpuParticles> m_pParticles;
 
 	//Light data
-	int m_ShadowCasters = 0;
 	std::vector<Light> m_Lights;
 	std::unique_ptr<Buffer> m_pLightBuffer;
 

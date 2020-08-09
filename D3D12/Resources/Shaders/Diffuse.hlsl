@@ -8,7 +8,8 @@
 				"CBV(b1, visibility=SHADER_VISIBILITY_ALL), " \
 				"CBV(b2, visibility=SHADER_VISIBILITY_PIXEL), " \
 				"DescriptorTable(SRV(t0, numDescriptors = 3), visibility=SHADER_VISIBILITY_PIXEL), " \
-				"DescriptorTable(SRV(t3, numDescriptors = 5), visibility=SHADER_VISIBILITY_PIXEL), " \
+				"DescriptorTable(SRV(t3, numDescriptors = 4), visibility=SHADER_VISIBILITY_PIXEL), " \
+				"DescriptorTable(SRV(t10, numDescriptors = 32), visibility=SHADER_VISIBILITY_PIXEL), " \
 				"StaticSampler(s0, filter=FILTER_ANISOTROPIC, maxAnisotropy = 4, visibility = SHADER_VISIBILITY_PIXEL), " \
 				"StaticSampler(s1, filter=FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT, visibility = SHADER_VISIBILITY_PIXEL, comparisonFunc=COMPARISON_GREATER), " \
 
@@ -55,11 +56,11 @@ struct PSInput
 };
 
 #if TILED_FORWARD
-Texture2D<uint2> tLightGrid : register(t4);
+Texture2D<uint2> tLightGrid : register(t3);
 #elif CLUSTERED_FORWARD
-StructuredBuffer<uint2> tLightGrid : register(t4);
+StructuredBuffer<uint2> tLightGrid : register(t3);
 #endif
-StructuredBuffer<uint> tLightIndexList : register(t5);
+StructuredBuffer<uint> tLightIndexList : register(t4);
 
 #if CLUSTERED_FORWARD
 uint GetSliceFromDepth(float depth)
@@ -134,12 +135,32 @@ float4 PSMain(PSInput input) : SV_TARGET
 	return float4(color, baseColor.a);
 }
 
+static float4 DEBUG_COLORS[] = {
+	float4(0,4,141, 255) / 255,
+	float4(5,10,255, 255) / 255,
+	float4(0,164,255, 255) / 255,
+	float4(0,255,189, 255) / 255,
+	float4(0,255,41, 255) / 255,
+	float4(117,254,1, 255) / 255,
+	float4(255,239,0, 255) / 255,
+	float4(255,86,0, 255) / 255,
+	float4(204,3,0, 255) / 255,
+	float4(65,0,1, 255) / 255,
+};
+
 #if TILED_FORWARD
 float4 DebugLightDensityPS(PSInput input) : SV_TARGET
 {
 	uint2 tileIndex = uint2(floor(input.position.xy / BLOCK_SIZE));
-	uint startOffset = tLightGrid[tileIndex].x;
 	uint lightCount = tLightGrid[tileIndex].y;
-	return float4(((float)lightCount / 100).xxx, 1);
+	return DEBUG_COLORS[min(9, lightCount)];
+}
+#elif CLUSTERED_FORWARD
+float4 DebugLightDensityPS(PSInput input) : SV_TARGET
+{
+	uint3 clusterIndex3D = uint3(floor(input.position.xy / cClusterSize), GetSliceFromDepth(input.positionVS.z));
+    uint clusterIndex1D = clusterIndex3D.x + (cClusterDimensions.x * (clusterIndex3D.y + cClusterDimensions.y * clusterIndex3D.z));
+	uint lightCount = tLightGrid[clusterIndex1D].y;
+	return DEBUG_COLORS[min(9, lightCount)];
 }
 #endif
