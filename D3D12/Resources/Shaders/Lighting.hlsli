@@ -2,15 +2,13 @@
 #include "ShadingModels.hlsli"
 #include "CommonBindings.hlsli"
 
-#define PCF_KERNEL_SIZE 3
-#define SHADOWMAP_DX 0.000244140625f
 #define MAX_SHADOW_CASTERS 32
-
 cbuffer LightData : register(b2)
 {
 	float4x4 cLightViewProjections[MAX_SHADOW_CASTERS];
 	float4 cShadowMapOffsets[MAX_SHADOW_CASTERS];
 	float4 cCascadeDepths;
+	uint cNumCascades;
 }
 
 // Angle >= Umbra -> 0
@@ -117,7 +115,8 @@ LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, floa
 		if(light.Type == LIGHT_DIRECTIONAL)
 		{
 			float4 splits = vPos.z > cCascadeDepths;
-			int cascadeIndex = dot(splits, float4(1, 1, 1, 1));
+			float4 cascades = cCascadeDepths > 0;
+			int cascadeIndex = dot(splits, cascades);
 			float visibility = DoShadow(wPos, light.ShadowIndex + cascadeIndex, light.InvShadowSize);
 			float lerpAmount = 1;
 
@@ -127,7 +126,7 @@ LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, floa
 			float nextSplit = cCascadeDepths[cascadeIndex];
 			float splitRange = cascadeIndex == 0 ? nextSplit : nextSplit - cCascadeDepths[cascadeIndex - 1];
 			float fadeFactor = (nextSplit - vPos.z) / splitRange;
-			if(fadeFactor <= FADE_THRESHOLD && cascadeIndex != 4 - 1)
+			if(fadeFactor <= FADE_THRESHOLD && cascadeIndex != cNumCascades - 1)
 			{
 				float nextVisibility = DoShadow(wPos, light.ShadowIndex + cascadeIndex + 1, light.InvShadowSize);
 				lerpAmount = smoothstep(0.0f, FADE_THRESHOLD, fadeFactor);
@@ -145,7 +144,7 @@ LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, floa
 				float4(0,0,1,1),
 				float4(1,0,1,1),
 			};
-			result.Diffuse += 0.2f * lerp(COLORS[min(cascadeIndex + 1, 3)].xyz, COLORS[cascadeIndex].xyz, lerpAmount);
+			result.Diffuse += 0.2f * lerp(COLORS[min(cascadeIndex + 1, cNumCascades - 1)].xyz, COLORS[cascadeIndex].xyz, lerpAmount);
 	#endif
 		}
 		else if(light.Type == LIGHT_SPOT)

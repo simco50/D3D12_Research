@@ -59,6 +59,7 @@ int32 g_ToneMapper = 1;
 
 bool g_SDSM = false;
 bool g_StabilizeCascades = true;
+int g_ShadowCascades = 4;
 float g_PSSMFactor = 1.0f;
 bool g_ShowRaytraced = false;
 bool g_VisualizeLights = false;
@@ -196,16 +197,17 @@ void Graphics::Update()
 
 	ShadowData shadowData;
 
-	uint32 numCascades = 4;
 	float minPoint = 0;
 	float maxPoint = 1;
+
+	shadowData.NumCascades = g_ShadowCascades;
 
 	if (g_SDSM)
 	{
 		Buffer* pSourceBuffer = m_ReductionReadbackTargets[(m_Frame + 1) % FRAME_COUNT].get();
-		float* pData = (float*)pSourceBuffer->Map();
-		minPoint = pData[0];
-		maxPoint = pData[1];
+		Vector2* pData = (Vector2*)pSourceBuffer->Map();
+		minPoint = pData->x;
+		maxPoint = pData->y;
 		pSourceBuffer->Unmap();
 	}
 
@@ -217,11 +219,11 @@ void Graphics::Update()
 	float maxZ = nearPlane + maxPoint * clipPlaneRange;
 
 	constexpr uint32 MAX_CASCADES = 4;
-	std::array<float, MAX_CASCADES> cascadeSplits;
+	std::array<float, MAX_CASCADES> cascadeSplits{};
 
-	for (uint32 i = 0; i < numCascades; ++i)
+	for (int i = 0; i < g_ShadowCascades; ++i)
 	{
-		float p = (i + 1) / (float)numCascades;
+		float p = (i + 1) / (float)g_ShadowCascades;
 		float log = minZ * std::pow(maxZ / minZ, p);
 		float uniform = minZ + (maxZ - minZ) * p;
 		float d = g_PSSMFactor * (log - uniform) + uniform;
@@ -239,7 +241,7 @@ void Graphics::Update()
 		light.ShadowIndex = shadowIndex;
 		if (light.LightType == Light::Type::Directional)
 		{
-			for (uint32 i = 0; i < numCascades; ++i)
+			for (int i = 0; i < g_ShadowCascades; ++i)
 			{
 				float previousCascadeSplit = i == 0 ? minPoint : cascadeSplits[i - 1];
 				float currentCascadeSplit = cascadeSplits[i];
@@ -1699,6 +1701,7 @@ void Graphics::UpdateImGui()
 	ImGui::SliderFloat("Sun Temperature", &g_SunTemperature, 1000, 15000);
 
 	ImGui::Text("Shadows");
+	ImGui::SliderInt("Shadow Cascades", &g_ShadowCascades, 1, 4);
 	ImGui::Checkbox("SDSM", &g_SDSM);
 	ImGui::Checkbox("Stabilize Cascades", &g_StabilizeCascades);
 	ImGui::SliderFloat("PSSM Factor", &g_PSSMFactor, 0, 1);
