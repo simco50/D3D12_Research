@@ -372,17 +372,17 @@ void DebugRenderer::AddBone(const Matrix& matrix, float length, const Color& col
 
 void DebugRenderer::AddLight(const Light& light)
 {
-	switch (light.LightType)
+	switch (light.Type)
 	{
-	case Light::Type::Directional:
+	case LightType::Directional:
 		AddWireCylinder(light.Position, light.Direction, 30.0f, 5.0f, 10, Color(1.0f, 1.0f, 0.0f, 1.0f));
 		AddAxisSystem(Matrix::CreateWorld(light.Position, -light.Direction, Vector3::Up), 1.0f);
 		break;
-	case Light::Type::Point:
+	case LightType::Point:
 		AddSphere(light.Position, light.Range, 8, 8, Color(1.0f, 1.0f, 0.0f, 1.0f), false);
 		break;
-	case Light::Type::Spot:
-		AddWireCone(light.Position, light.Direction, light.Range, Math::ToDegrees * acos(light.SpotlightAngles.y), 10, Color(1.0f, 1.0f, 0.0f, 1.0f));
+	case LightType::Spot:
+		AddWireCone(light.Position, light.Direction, light.Range, Math::ToDegrees * acos(light.UmbraAngle * Math::ToRadians), 10, Color(1.0f, 1.0f, 0.0f, 1.0f));
 		break;
 	default:
 		break;
