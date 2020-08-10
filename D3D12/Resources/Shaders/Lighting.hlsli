@@ -106,10 +106,15 @@ float3 ApplyAmbientLight(float3 diffuse, float ao, float3 lightColor)
 
 LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, float roughness, float4 pos, float3 wPos, float3 vPos, float3 N, float3 V)
 {
-	float attenuation = GetAttenuation(light, wPos);
-	float3 L = normalize(light.Position - wPos);
-	LightResult result = DefaultLitBxDF(specularColor, roughness, diffuseColor, N, V, L, attenuation);
+	LightResult result = (LightResult)0;
 
+	float attenuation = GetAttenuation(light, wPos);
+	if(attenuation <= 0)
+	{
+		return result;
+	}
+
+	float visibility = 1.0f;
 	if(light.ShadowIndex >= 0)
 	{
 		if(light.Type == LIGHT_DIRECTIONAL)
@@ -117,7 +122,7 @@ LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, floa
 			float4 splits = vPos.z > cCascadeDepths;
 			float4 cascades = cCascadeDepths > 0;
 			int cascadeIndex = dot(splits, cascades);
-			float visibility = DoShadow(wPos, light.ShadowIndex + cascadeIndex, light.InvShadowSize);
+			visibility = DoShadow(wPos, light.ShadowIndex + cascadeIndex, light.InvShadowSize);
 			float lerpAmount = 1;
 
 	#define FADE_SHADOW_CASCADES 1
@@ -133,9 +138,6 @@ LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, floa
 				visibility = lerp(nextVisibility, visibility, lerpAmount);
 			}
 	#endif
-			result.Diffuse *= visibility;
-			result.Specular *= visibility;
-
 	#define VISUALIZE_CASCADES 0
 	#if VISUALIZE_CASCADES
 			static float4 COLORS[4] = {
@@ -149,22 +151,26 @@ LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, floa
 		}
 		else if(light.Type == LIGHT_SPOT)
 		{
-			float visibility = DoShadow(wPos, light.ShadowIndex, light.InvShadowSize);
-			result.Diffuse *= visibility;
-			result.Specular *= visibility;
+			visibility = DoShadow(wPos, light.ShadowIndex, light.InvShadowSize);
 		}
 		else if(light.Type == LIGHT_POINT)
 		{
 			int faceIndex = GetCubeFaceIndex(wPos - light.Position);
-			float visibility = DoShadow(wPos, light.ShadowIndex + faceIndex, light.InvShadowSize);
-			result.Diffuse *= visibility;
-			result.Specular *= visibility;
+			visibility = DoShadow(wPos, light.ShadowIndex + faceIndex, light.InvShadowSize);
 		}
 	}
 
+	if(visibility <= 0)
+	{
+		return result;
+	}
+
+	float3 L = normalize(light.Position - wPos);
+	result = DefaultLitBxDF(specularColor, roughness, diffuseColor, N, V, L, attenuation);
+
 	float4 color = light.GetColor();
-	result.Diffuse *= color.rgb * light.Intensity;
-	result.Specular *= color.rgb * light.Intensity;
+	result.Diffuse *= color.rgb * light.Intensity * visibility;
+	result.Specular *= color.rgb * light.Intensity * visibility;
 
 	return result;
 }

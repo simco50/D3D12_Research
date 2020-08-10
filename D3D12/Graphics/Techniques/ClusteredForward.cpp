@@ -50,6 +50,12 @@ void ClusteredForward::OnSwapchainCreated(int windowWidth, int windowHeight)
 	m_ViewportDirty = true;
 }
 
+void ComputeClusterMagic(float nearZ, float farZ, float& magicA, float& magicB)
+{
+	magicA = (float)cClusterCountZ / log(nearZ / farZ);
+	magicB = ((float)cClusterCountZ * log(farZ)) / log(nearZ / farZ);
+}
+
 void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResources& resources)
 {
 	RG_GRAPH_SCOPE("Clustered Lighting", graph);
@@ -57,9 +63,8 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
 	Vector2 screenDimensions((float)resources.pRenderTarget->GetWidth(), (float)resources.pRenderTarget->GetHeight());
 	float nearZ = resources.pCamera->GetNear();
 	float farZ = resources.pCamera->GetFar();
-
-	float sliceMagicA = (float)cClusterCountZ / log(nearZ / farZ);
-	float sliceMagicB = ((float)cClusterCountZ * log(farZ)) / log(nearZ / farZ);
+	float sliceMagicA, sliceMagicB;
+	ComputeClusterMagic(nearZ, farZ, sliceMagicA, sliceMagicB);
 
 	if (m_ViewportDirty)
 	{
@@ -386,6 +391,69 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
 	}
 }
 
+void ClusteredForward::VisualizeLightDensity(RGGraph& graph, Camera& camera, Texture* pTarget, Texture* pDepth)
+{
+	if (!m_pVisualizationIntermediateTexture)
+	{
+		m_pVisualizationIntermediateTexture = std::make_unique<Texture>(m_pGraphics, "LightDensity Debug Texture");
+	}
+	if (m_pVisualizationIntermediateTexture->GetDesc() != pTarget->GetDesc())
+	{
+		m_pVisualizationIntermediateTexture->Create(pTarget->GetDesc());
+	}
+
+	Vector2 screenDimensions((float)pTarget->GetWidth(), (float)pTarget->GetHeight());
+	float nearZ = camera.GetNear();
+	float farZ = camera.GetFar();
+	float sliceMagicA, sliceMagicB;
+	ComputeClusterMagic(nearZ, farZ, sliceMagicA, sliceMagicB);
+
+	RGPassBuilder basePass = graph.AddPass("Visualize Light Density");
+	basePass.Bind([=](CommandContext& context, const RGPassResources& passResources)
+		{
+			struct Data
+			{
+				Matrix ProjectionInverse;
+				IntVector3 ClusterDimensions;
+				float padding;
+				IntVector2 ClusterSize;
+				float SliceMagicA;
+				float SliceMagicB;
+				float Near;
+				float Far;
+			} constantData{};
+
+			constantData.ProjectionInverse = camera.GetProjectionInverse();
+			constantData.ClusterDimensions = IntVector3(m_ClusterCountX, m_ClusterCountY, cClusterCountZ);
+			constantData.ClusterSize = IntVector2(cClusterSize, cClusterSize);
+			constantData.SliceMagicA = sliceMagicA;
+			constantData.SliceMagicB = sliceMagicB;
+			constantData.Near = nearZ;
+			constantData.Far = farZ;
+
+			context.SetPipelineState(m_pVisualizeLightsPSO.get());
+			context.SetComputeRootSignature(m_pVisualizeLightsRS.get());
+
+			context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+			context.InsertResourceBarrier(pDepth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+			context.InsertResourceBarrier(m_pLightGrid.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+			context.InsertResourceBarrier(m_pVisualizationIntermediateTexture.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+			context.SetComputeDynamicConstantBufferView(0, &constantData, sizeof(Data));
+
+			context.SetDynamicDescriptor(1, 0, pTarget->GetSRV());
+			context.SetDynamicDescriptor(1, 1, pDepth->GetSRV());
+			context.SetDynamicDescriptor(1, 2, m_pLightGrid->GetSRV());
+
+			context.SetDynamicDescriptor(2, 0, m_pVisualizationIntermediateTexture->GetUAV());
+
+			context.Dispatch(Math::DivideAndRoundUp(pTarget->GetWidth(), 16), Math::DivideAndRoundUp(pTarget->GetHeight(), 16));
+			context.InsertUavBarrier();
+
+			context.CopyTexture(m_pVisualizationIntermediateTexture.get(), pTarget);
+		});
+}
+
 void ClusteredForward::SetupResources(Graphics* pGraphics)
 {
 	m_pAABBs = std::make_unique<Buffer>(pGraphics, "AABBs");
@@ -563,5 +631,17 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
 			m_pDebugClustersPSO->SetGeometryShader(geometryShader);
 			m_pDebugClustersPSO->Finalize("Debug Clusters PSO", m_pGraphics->GetDevice());
 		}
+	}
+
+	{
+		Shader computeShader = Shader("VisualizeLightCount.hlsl", ShaderType::Compute, "DebugLightDensityCS", { "CLUSTERED_FORWARD" });
+
+		m_pVisualizeLightsRS = std::make_unique<RootSignature>();
+		m_pVisualizeLightsRS->FinalizeFromShader("Light Density Visualization", computeShader, pGraphics->GetDevice());
+
+		m_pVisualizeLightsPSO = std::make_unique<PipelineState>();
+		m_pVisualizeLightsPSO->SetComputeShader(computeShader);
+		m_pVisualizeLightsPSO->SetRootSignature(m_pVisualizeLightsRS->GetRootSignature());
+		m_pVisualizeLightsPSO->Finalize("Light Density Visualization", pGraphics->GetDevice());
 	}
 }

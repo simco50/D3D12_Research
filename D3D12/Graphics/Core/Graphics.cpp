@@ -63,6 +63,7 @@ int g_ShadowCascades = 4;
 float g_PSSMFactor = 1.0f;
 bool g_ShowRaytraced = false;
 bool g_VisualizeLights = false;
+bool g_VisualizeLightDensity = false;
 
 float g_SunInclination = 0.579f;
 float g_SunOrientation = -3.055f;
@@ -120,13 +121,12 @@ void Graphics::RandomizeLights(int count)
 	m_Lights[0] = Light::Directional(Position, -Direction, 10);
 	m_Lights[0].ShadowIndex = 0;
 
-	m_Lights[1] = Light::Point(Vector3(0, 10, 0), 200, 5000, Color(1, 0.2f, 0.2f, 1));
+	m_Lights[1] = Light::Point(Vector3(0, 10, 0), 100, 5000, Color(1, 0.2f, 0.2f, 1));
 	m_Lights[1].ShadowIndex = 0;
 
 	m_Lights[2] = Light::Spot(Vector3(0, 10, -10), 200, Vector3(0, 0, 1), 90, 70, 5000, Color(1, 0, 0, 1.0f));
 	m_Lights[2].ShadowIndex = 0;
 
-	
 	m_Lights[3] = Light::Spot(Vector3(-80, 10, -10), 200, Vector3(0, 0, 1), 90, 70, 5000, Color(0, 0, 1, 1.0f));
 	m_Lights[3].ShadowIndex = 0;
 
@@ -911,6 +911,48 @@ void Graphics::Update()
 		}
 	}
 
+	if (g_VisualizeLightDensity)
+	{
+		if (m_RenderPath == RenderPath::Clustered)
+		{
+			m_pClusteredForward->VisualizeLightDensity(graph, *m_pCamera, m_pTonemapTarget.get(), GetResolvedDepthStencil());
+		}
+		else
+		{
+			m_pTiledForward->VisualizeLightDensity(graph, *m_pCamera, m_pTonemapTarget.get(), GetResolvedDepthStencil());
+		}
+
+		//Render Color Legend
+		ImGui::SetNextWindowSize(ImVec2(60, 255));
+		ImGui::SetNextWindowPos(ImVec2(m_WindowWidth - 65, m_WindowHeight - 280));
+		ImGui::Begin("Visualize Light Density", 0, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar);
+		ImGui::SetWindowFontScale(1.2f);
+		ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(0, 0, 0, 255));
+		static uint32 DEBUG_COLORS[] = {
+			IM_COL32(0,4,141, 255),
+			IM_COL32(5,10,255, 255),
+			IM_COL32(0,164,255, 255),
+			IM_COL32(0,255,189, 255),
+			IM_COL32(0,255,41, 255),
+			IM_COL32(117,254,1, 255),
+			IM_COL32(255,239,0, 255),
+			IM_COL32(255,86,0, 255),
+			IM_COL32(204,3,0, 255),
+			IM_COL32(65,0,1, 255),
+		};
+
+		for (int i = 0; i < ARRAYSIZE(DEBUG_COLORS); ++i)
+		{
+			char number[16];
+			sprintf_s(number, "%d", i);
+			ImGui::PushStyleColor(ImGuiCol_Button, DEBUG_COLORS[i]);
+			ImGui::Button(number, ImVec2(40,  20));
+			ImGui::PopStyleColor();
+		}
+		ImGui::PopStyleColor();
+		ImGui::End();
+	}
+
 	//UI
 	// - ImGui render, pretty straight forward
 	if(g_EnableUI)
@@ -1575,17 +1617,6 @@ void Graphics::UpdateImGui()
 				return true;
 			}, nullptr, 2);
 
-		if (m_RenderPath == RenderPath::Clustered)
-		{
-			extern bool g_VisualizeClusters;
-			ImGui::Checkbox("Visualize Clusters", &g_VisualizeClusters);
-		}
-		else if (m_RenderPath == RenderPath::Tiled)
-		{
-			extern bool g_VisualizeLightDensity;
-			ImGui::Checkbox("Visualize Light Density", &g_VisualizeLightDensity);
-		}
-
 		ImGui::Separator();
 		ImGui::SliderInt("Lights", &m_DesiredLightCount, 10, 10000);
 		if (ImGui::Button("Generate Lights"))
@@ -1732,6 +1763,9 @@ void Graphics::UpdateImGui()
 
 	ImGui::Text("Misc");
 	ImGui::Checkbox("Debug Render Lights", &g_VisualizeLights);
+	ImGui::Checkbox("Visualize Light Density", &g_VisualizeLightDensity);
+	extern bool g_VisualizeClusters;
+	ImGui::Checkbox("Visualize Clusters", &g_VisualizeClusters);
 
 	if (ImGui::Checkbox("Raytracing", &g_ShowRaytraced))
 	{
