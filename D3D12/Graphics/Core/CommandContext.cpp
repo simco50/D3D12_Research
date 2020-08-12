@@ -11,8 +11,8 @@
 #include "ResourceViews.h"
 #include "RaytracingCommon.h"
 
-CommandContext::CommandContext(Graphics* pGraphics, ID3D12GraphicsCommandList* pCommandList, ID3D12CommandAllocator* pAllocator, D3D12_COMMAND_LIST_TYPE type)
-	: GraphicsObject(pGraphics), m_pCommandList(pCommandList), m_pAllocator(pAllocator), m_Type(type)
+CommandContext::CommandContext(Graphics* pGraphics, ID3D12GraphicsCommandList* pCommandList, D3D12_COMMAND_LIST_TYPE type)
+	: GraphicsObject(pGraphics), m_pCommandList(pCommandList), m_pAllocator(nullptr), m_Type(type)
 {
 	m_DynamicAllocator = std::make_unique<DynamicResourceAllocator>(pGraphics->GetAllocationManager());
 	if (m_Type != D3D12_COMMAND_LIST_TYPE_COPY)

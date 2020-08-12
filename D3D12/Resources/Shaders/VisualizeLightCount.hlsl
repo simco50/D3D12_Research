@@ -59,7 +59,7 @@ float EdgeDetection(uint2 index, uint width, uint height)
         sampledValue += LinearizeDepth(tDepth.Load(uint3(index + offsets[j], 0)), cNear, cFar);
     }
     sampledValue /= 8;
-    return lerp(1, 0, step(0.007f, length(reference - sampledValue)));
+    return lerp(1, 0, step(0.003f, length(reference - sampledValue)));
 }
 
 [RootSignature(RootSig)]

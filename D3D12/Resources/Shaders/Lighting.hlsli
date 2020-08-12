@@ -117,13 +117,12 @@ LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, floa
 	float visibility = 1.0f;
 	if(light.ShadowIndex >= 0)
 	{
+		int shadowIndex = light.ShadowIndex;
 		if(light.Type == LIGHT_DIRECTIONAL)
 		{
 			float4 splits = vPos.z > cCascadeDepths;
 			float4 cascades = cCascadeDepths > 0;
 			int cascadeIndex = dot(splits, cascades);
-			visibility = DoShadow(wPos, light.ShadowIndex + cascadeIndex, light.InvShadowSize);
-			float lerpAmount = 1;
 
 	#define FADE_SHADOW_CASCADES 1
 	#define FADE_THRESHOLD 0.1f
@@ -133,11 +132,16 @@ LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, floa
 			float fadeFactor = (nextSplit - vPos.z) / splitRange;
 			if(fadeFactor <= FADE_THRESHOLD && cascadeIndex != cNumCascades - 1)
 			{
-				float nextVisibility = DoShadow(wPos, light.ShadowIndex + cascadeIndex + 1, light.InvShadowSize);
-				lerpAmount = smoothstep(0.0f, FADE_THRESHOLD, fadeFactor);
-				visibility = lerp(nextVisibility, visibility, lerpAmount);
+				float lerpAmount = smoothstep(0.0f, FADE_THRESHOLD, fadeFactor);
+				float dither = InterleavedGradientNoise(pos.xy);
+				if(lerpAmount < dither)
+				{
+					cascadeIndex++;
+				}
 			}
 	#endif
+			shadowIndex += cascadeIndex;
+
 	#define VISUALIZE_CASCADES 0
 	#if VISUALIZE_CASCADES
 			static float4 COLORS[4] = {
@@ -146,18 +150,15 @@ LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, floa
 				float4(0,0,1,1),
 				float4(1,0,1,1),
 			};
-			result.Diffuse += 0.2f * lerp(COLORS[min(cascadeIndex + 1, cNumCascades - 1)].xyz, COLORS[cascadeIndex].xyz, lerpAmount);
+			result.Diffuse += 0.2f * COLORS[cascadeIndex].xyz;
 	#endif
-		}
-		else if(light.Type == LIGHT_SPOT)
-		{
-			visibility = DoShadow(wPos, light.ShadowIndex, light.InvShadowSize);
+
 		}
 		else if(light.Type == LIGHT_POINT)
 		{
-			int faceIndex = GetCubeFaceIndex(wPos - light.Position);
-			visibility = DoShadow(wPos, light.ShadowIndex + faceIndex, light.InvShadowSize);
+			shadowIndex += GetCubeFaceIndex(wPos - light.Position);
 		}
+		visibility = DoShadow(wPos, shadowIndex, light.InvShadowSize);
 	}
 
 	if(visibility <= 0)
@@ -190,14 +191,8 @@ float3 ApplyVolumetricLighting(float3 cameraPos, float3 worldPos, float3 pos, fl
 	float3 rayStep = rayVector / samples;
 	float3 accumFog = 0.0f.xxx;
 	float3 currentPosition = worldPos;
-
-	static float DitherPattern[4][4] = 
-		{{ 0.0f, 0.5f, 0.125f, 0.625f},
-		{ 0.75f, 0.22f, 0.875f, 0.375f},
-		{ 0.1875f, 0.6875f, 0.0625f, 0.5625},
-		{ 0.9375f, 0.4375f, 0.8125f, 0.3125}};
 		
-	float ditherValue = DitherPattern[floor(pos.x) % 4][floor(pos.y) % 4];
+	float ditherValue = InterleavedGradientNoise(pos.xy);
 	currentPosition += rayStep * ditherValue;
 
 	for(int i = 0; i < samples; ++i)
