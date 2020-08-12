@@ -7,9 +7,9 @@
 #define STBI_NO_PNM
 
 #define STB_IMAGE_IMPLEMENTATION
-#include "External/Stb/stb_image.h"
+#include "Stb/stb_image.h"
 #define STB_IMAGE_WRITE_IMPLEMENTATION
-#include "External/Stb/stb_image_write.h"
+#include "Stb/stb_image_write.h"
 #include <fstream>
 #include "Core/Paths.h"
 

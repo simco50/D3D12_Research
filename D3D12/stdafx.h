@@ -29,9 +29,9 @@ using ComPtr = Microsoft::WRL::ComPtr<T>;
 #include <d3d12.h>
 #include <dxgi1_6.h>
 
-#include "External/d3dx12/d3dx12.h"
-#include "External/d3dx12/d3dx12_extra.h"
-#include "External/Imgui/imgui.h"
+#include "d3dx12/d3dx12.h"
+#include "d3dx12/d3dx12_extra.h"
+#include "Imgui/imgui.h"
 
 inline int ToMultibyte(const wchar_t* pStr, char* pOut, int len)
 {

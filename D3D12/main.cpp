@@ -152,11 +152,21 @@ private:
 		case WM_KEYUP:
 		{
 			Input::Instance().UpdateKey((uint32)wParam, false);
+			if(wParam < 256)
+				ImGui::GetIO().KeysDown[wParam] = 0;
 			return 0;
 		}
 		case WM_KEYDOWN:
 		{
 			Input::Instance().UpdateKey((uint32)wParam, true);
+			if (wParam < 256)
+				ImGui::GetIO().KeysDown[wParam] = 1;
+			return 0;
+		}
+		case WM_CHAR:
+		{
+			if (wParam < 256)
+				ImGui::GetIO().AddInputCharacter(wParam);
 			return 0;
 		}
 		case WM_DESTROY:

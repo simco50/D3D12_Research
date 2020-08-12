@@ -1,7 +1,7 @@
  #pragma once
 
 #define __d3d12_h__
-#include "External/SimpleMath/SimpleMath.h"
+#include "SimpleMath/SimpleMath.h"
 using BoundingBox = DirectX::BoundingBox;
 using BoundingFrustum = DirectX::BoundingFrustum;
 using BoundingSphere = DirectX::BoundingSphere;

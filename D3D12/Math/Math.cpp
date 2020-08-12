@@ -62,6 +62,15 @@ namespace Math
 #endif
 	}
 
+	Matrix CreateLookToMatrix(const Vector3& position, const Vector3& direction, const Vector3& up)
+	{
+#ifdef WORLD_RIGHT_HANDED
+		return DirectX::XMMatrixLookToRH(position, direction, up);
+#else
+		return DirectX::XMMatrixLookToLH(position, direction, up);
+#endif
+	}
+
 	void GetProjectionClipPlanes(const Matrix& projection, float& nearPlane, float& farPlane)
 	{
 		nearPlane = -projection._43 / projection._33;

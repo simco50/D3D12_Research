@@ -39,7 +39,7 @@ workspace (ENGINE_NAME)
 
 		pchheader ("stdafx.h")
 		pchsource (ROOT .. ENGINE_NAME .. "/stdafx.cpp")
-		includedirs { "$(ProjectDir)" }
+		includedirs { "$(ProjectDir)", "$(ProjectDir)External/" }
 
 		SetPlatformDefines()
 

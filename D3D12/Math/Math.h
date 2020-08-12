@@ -75,6 +75,7 @@ namespace Math
 	Matrix CreatePerspectiveOffCenterMatrix(float left, float right, float bottom, float top, float nearPlane, float farPlane);
 	Matrix CreateOrthographicMatrix(float width, float height, float nearPlane, float farPlane);
 	Matrix CreateOrthographicOffCenterMatrix(float left, float right, float bottom, float top, float nearPlane, float farPlane);
+	Matrix CreateLookToMatrix(const Vector3& position, const Vector3& direction, const Vector3& up);
 
 	void GetProjectionClipPlanes(const Matrix& projection, float& nearPlane, float& farPlane);
 	void ReverseZProjection(Matrix& projection);

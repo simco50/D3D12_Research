@@ -1,6 +1,7 @@
 #include "stdafx.h"
 #include "Camera.h"
 #include "Core/Input.h"
+#include "ImGuizmo/ImGuizmo.h"
 
 void Camera::SetPosition(const Vector3& position)
 {
@@ -127,7 +128,7 @@ void Camera::UpdateMatrices() const
 void FreeCamera::Update()
 {
 	//Camera movement
-	if (Input::Instance().IsMouseDown(0) && ImGui::IsAnyItemActive() == false)
+	if (Input::Instance().IsMouseDown(0) && ImGui::IsAnyItemActive() == false && !ImGuizmo::IsUsing())
 	{
 		Vector2 mouseDelta = Input::Instance().GetMouseDelta();
 		Quaternion yr = Quaternion::CreateFromYawPitchRoll(0, mouseDelta.y * Time::DeltaTime() * 0.1f, 0);
@@ -148,4 +149,26 @@ void FreeCamera::Update()
 	m_Position += m_Velocity * Time::DeltaTime() * 40.0f;
 
 	OnDirty();
+}
+
+Ray Camera::GetMouseRay(uint32 windowWidth, uint32 windowHeight) const
+{
+	Ray ray;
+	Vector2 mousePos = Input::Instance().GetMousePosition();
+	Vector2 ndc;
+	float hw = (float)windowWidth / 2.0f;
+	float hh = (float)windowHeight / 2.0f;
+	ndc.x = (mousePos.x - hw) / hw;
+	ndc.y = (hh - mousePos.y) / hh;
+
+	Vector3 nearPoint, farPoint;
+	Matrix viewProjInverse;
+	m_ViewProjection.Invert(viewProjInverse);
+	nearPoint = Vector3::Transform(Vector3(ndc.x, ndc.y, 0), viewProjInverse);
+	farPoint = Vector3::Transform(Vector3(ndc.x, ndc.y, 1), viewProjInverse);
+	ray.position = Vector3(nearPoint.x, nearPoint.y, nearPoint.z);
+
+	ray.direction = farPoint - nearPoint;
+	ray.direction.Normalize();
+	return ray;
 }
