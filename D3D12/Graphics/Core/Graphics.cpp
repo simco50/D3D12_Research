@@ -1591,7 +1591,7 @@ void Graphics::UpdateImGui()
 	{
 		if (m_ShadowMaps.size() >= 4)
 		{
-			int imageSize = 230;
+			float imageSize = 230;
 			ImGui::SetNextWindowSize(ImVec2(imageSize, 1024));
 			ImGui::SetNextWindowPos(ImVec2(m_WindowWidth - imageSize, 0));
 			ImGui::Begin("Shadow Cascades", 0, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoScrollbar);

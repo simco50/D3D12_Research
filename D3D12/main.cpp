@@ -166,7 +166,7 @@ private:
 		case WM_CHAR:
 		{
 			if (wParam < 256)
-				ImGui::GetIO().AddInputCharacter(wParam);
+				ImGui::GetIO().AddInputCharacter((uint32)wParam);
 			return 0;
 		}
 		case WM_DESTROY:
