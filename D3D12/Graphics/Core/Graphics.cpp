@@ -54,11 +54,12 @@ float g_WhitePoint = 1;
 float g_MinLogLuminance = -10;
 float g_MaxLogLuminance = 20;
 float g_Tau = 2;
-bool g_DrawHistogram = true;
+bool g_DrawHistogram = false;
 int32 g_ToneMapper = 1;
 
 bool g_SDSM = false;
 bool g_StabilizeCascades = true;
+bool g_VisualizeShadowCascades = false;
 int g_ShadowCascades = 4;
 float g_PSSMFactor = 1.0f;
 bool g_ShowRaytraced = false;
@@ -300,7 +301,7 @@ void Graphics::Update()
 				}
 				else
 				{
-					Matrix lightView = XMMatrixLookToLH(center, light.Direction, Vector3::Up);
+					Matrix lightView = Math::CreateLookToMatrix(center, light.Direction, Vector3::Up);
 					for (const Vector3& corner : frustumCorners)
 					{
 						Vector3 p = Vector3::Transform(corner, lightView);
@@ -309,7 +310,7 @@ void Graphics::Update()
 					}
 				}
 
-				Matrix shadowView = XMMatrixLookToLH(center + light.Direction * -400, light.Direction, Vector3::Up);
+				Matrix shadowView = Math::CreateLookToMatrix(center + light.Direction * -400, light.Direction, Vector3::Up);
 
 				Matrix projectionMatrix = Math::CreateOrthographicOffCenterMatrix(minExtents.x, maxExtents.x, minExtents.y, maxExtents.y, maxExtents.z + 400, 0);
 				Matrix lightViewProjection = shadowView * projectionMatrix;
@@ -336,8 +337,8 @@ void Graphics::Update()
 		}
 		else if (light.Type == LightType::Spot)
 		{
-			Matrix projection = DirectX::XMMatrixPerspectiveFovLH(2 * acos(light.UmbraAngle * Math::ToRadians), 1.0f, light.Range, 1.0f);
-			shadowData.LightViewProjections[shadowIndex++] = Matrix(XMMatrixLookToLH(light.Position, light.Direction, Vector3::Up)) * projection;
+			Matrix projection = Math::CreatePerspectiveMatrix(2 * acos(light.UmbraAngle * Math::ToRadians), 1.0f, light.Range, 1.0f);
+			shadowData.LightViewProjections[shadowIndex++] = Math::CreateLookToMatrix(light.Position, light.Direction, Vector3::Up) * projection;
 		}
 		else if (light.Type == LightType::Point)
 		{
@@ -389,11 +390,6 @@ void Graphics::Update()
 		{
 			light.ShadowMapSize = m_ShadowMaps[light.ShadowIndex]->GetWidth();
 		}
-	}
-
-	if (m_ShadowMaps.size() > 0)
-	{
-		m_pVisualizeTexture = m_ShadowMaps[g_ShadowMapIndex].get();
 	}
 
 	////////////////////////////////
@@ -1348,7 +1344,7 @@ void Graphics::OnResize(int width, int height)
 	m_pTonemapTarget->Create(TextureDesc::CreateRenderTarget(width, height, SWAPCHAIN_FORMAT, TextureFlag::ShaderResource | TextureFlag::RenderTarget | TextureFlag::UnorderedAccess));
 	m_pDownscaledColor->Create(TextureDesc::Create2D(Math::DivideAndRoundUp(width, 4), Math::DivideAndRoundUp(height, 4), RENDER_TARGET_FORMAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
 
-	m_pAmbientOcclusion->Create(TextureDesc::CreateRenderTarget(Math::DivideAndRoundUp(width, 2), Math::DivideAndRoundUp(height, 2), DXGI_FORMAT_R8_UNORM, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource | TextureFlag::RenderTarget));
+	m_pAmbientOcclusion->Create(TextureDesc::Create2D(Math::DivideAndRoundUp(width, 2), Math::DivideAndRoundUp(height, 2), DXGI_FORMAT_R8_UNORM, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource));
 
 	m_pCamera->SetAspectRatio((float)width / height);
 	m_pCamera->SetDirty();
@@ -1576,8 +1572,7 @@ void Graphics::UpdateImGui()
 
 	if(m_pVisualizeTexture)
 	{
-		ImGui::Begin("Shadow Map");
-		ImGui::SliderInt("Shadow Map", &g_ShadowMapIndex, 0, (int)m_ShadowMaps.size() - 1);
+		ImGui::Begin("Visualize Texture");
 		ImGui::Text("Resolution: %dx%d", m_pVisualizeTexture->GetWidth(), m_pVisualizeTexture->GetHeight());
 		Vector2 image((float)m_pVisualizeTexture->GetWidth(), (float)m_pVisualizeTexture->GetHeight());
 		Vector2 windowSize(ImGui::GetContentRegionAvail().x, ImGui::GetContentRegionAvail().y);
@@ -1590,6 +1585,23 @@ void Graphics::UpdateImGui()
 		}
 		ImGui::Image(m_pVisualizeTexture, ImVec2(width, height));
 		ImGui::End();
+	}
+
+	if (g_VisualizeShadowCascades)
+	{
+		if (m_ShadowMaps.size() >= 4)
+		{
+			int imageSize = 230;
+			ImGui::SetNextWindowSize(ImVec2(imageSize, 1024));
+			ImGui::SetNextWindowPos(ImVec2(m_WindowWidth - imageSize, 0));
+			ImGui::Begin("Shadow Cascades", 0, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoScrollbar);
+			const Light& sunLight = m_Lights[0];
+			for (int i = 0; i < 4; ++i)
+			{
+				ImGui::Image(m_ShadowMaps[sunLight.ShadowIndex + i].get(), ImVec2(imageSize, imageSize));
+			}
+			ImGui::End();
+		}
 	}
 
 	ImGui::SetNextWindowPos(ImVec2(0, 0), 0, ImVec2(0, 0));
@@ -1740,6 +1752,7 @@ void Graphics::UpdateImGui()
 	ImGui::Checkbox("SDSM", &g_SDSM);
 	ImGui::Checkbox("Stabilize Cascades", &g_StabilizeCascades);
 	ImGui::SliderFloat("PSSM Factor", &g_PSSMFactor, 0, 1);
+	ImGui::Checkbox("Visualize Cascades", &g_VisualizeShadowCascades);
 
 	ImGui::Text("Expose/Tonemapping");
 	ImGui::SliderFloat("Min Log Luminance", &g_MinLogLuminance, -100, 20);

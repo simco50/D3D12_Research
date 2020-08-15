@@ -173,6 +173,7 @@ void OnlineDescriptorAllocator::ParseRootSignature(RootSignature* pRootSignature
 		entry.TableSize = tableSize;
 		entry.TableStart = &m_HandleCache[offset];
 		offset += entry.TableSize;
+		check(offset < DESCRIPTORS_PER_HEAP);
 	}
 }
 
