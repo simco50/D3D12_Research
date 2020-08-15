@@ -37,7 +37,7 @@ private:
 	//The amount of descriptors in each heap
 	static const int DESCRIPTORS_PER_HEAP = 256;
 	//The max amount of root parameters
-	static const int MAX_NUM_ROOT_PARAMETERS = 6;
+	static const int MAX_NUM_ROOT_PARAMETERS = 10;
 
 	static std::vector<ComPtr<ID3D12DescriptorHeap>> m_DescriptorHeaps;
 	static std::array<std::queue<std::pair<uint64, ID3D12DescriptorHeap*>>, 2> m_FreeDescriptors;

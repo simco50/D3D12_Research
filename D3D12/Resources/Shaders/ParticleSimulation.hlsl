@@ -35,6 +35,7 @@ cbuffer SimulationParameters : register(b0)
 cbuffer EmitParameters : register(b0)
 {
     float4 cRandomDirections[64];
+    float4 cOrigin;
 }
 
 cbuffer SimulateParameters : register(b0)
@@ -104,7 +105,7 @@ void Emit(CS_INPUT input)
 
         ParticleData p;
         p.LifeTime = 0;
-        p.Position = float3(0, 3, 0);
+        p.Position = cOrigin.xyz;
         p.Velocity = (Random01(seed) + 1) * 30 * RandomDirection(seed);
         p.Size = 0.15f;//(float)Random(deadSlot, 10, 30) / 100.0f;
         uParticleData[particleIndex] = p;

@@ -38,7 +38,7 @@ float3 TangentSpaceNormalMapping(Texture2D normalTexture, SamplerState normalSam
 	sampledNormal.xy = sampledNormal.xy * 2.0f - 1.0f;
 	if(invertY)
 	{
-		sampledNormal.y = -sampledNormal.y;
+		sampledNormal.x = -sampledNormal.x;
 	}
 	sampledNormal = normalize(sampledNormal);
 	return mul(sampledNormal, TBN);
@@ -61,7 +61,7 @@ float DoShadow(float3 wPos, int shadowMapIndex, float invShadowSize)
 
 	float2 texCoord = lightPos.xy;
 
-	Texture2D shadowTexture = tShadowMapTextures[shadowMapIndex];
+	Texture2D shadowTexture = tShadowMapTextures[NonUniformResourceIndex(shadowMapIndex)];
 	
 	const float Dilation = 2.0f;
     float d1 = Dilation * invShadowSize * 0.125f;

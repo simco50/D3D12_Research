@@ -217,17 +217,24 @@ void GpuParticles::Simulate(RGGraph& graph, Texture* pResolvedDepth, const Camer
 
 			context.SetPipelineState(m_pEmitPS.get());
 
-			std::array<Vector4, 64> randomDirections;
-			std::generate(randomDirections.begin(), randomDirections.end(), []()
+			struct Parameters
+			{
+				std::array<Vector4, 64> RandomDirections;
+				Vector3 Origin;
+			};
+			Parameters parameters{};
+
+			std::generate(parameters.RandomDirections.begin(), parameters.RandomDirections.end(), []()
 				{
 					Vector4 r = Vector4(Math::RandVector());
 					r.y = Math::Lerp(0.6f, 0.8f, (float)abs(r.y));
 					r.z = Math::Lerp(0.6f, 0.8f, (float)abs(r.z));
 					r.Normalize();
 					return r;
-				});
+				}); 
+			parameters.Origin = Vector3(150, 3, 0);
 
-			context.SetComputeDynamicConstantBufferView(0, randomDirections.data(), sizeof(Vector4) * (uint32)randomDirections.size());
+			context.SetComputeDynamicConstantBufferView(0, &parameters, sizeof(Parameters));
 			context.ExecuteIndirect(m_pSimpleDispatchCommandSignature.get(), m_pEmitArguments.get());
 			context.InsertUavBarrier();
 		});

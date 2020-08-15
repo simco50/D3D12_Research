@@ -128,26 +128,27 @@ void Camera::UpdateMatrices() const
 void FreeCamera::Update()
 {
 	//Camera movement
-	if (Input::Instance().IsMouseDown(0) && ImGui::IsAnyItemActive() == false && !ImGuizmo::IsUsing())
-	{
-		Vector2 mouseDelta = Input::Instance().GetMouseDelta();
-		Quaternion yr = Quaternion::CreateFromYawPitchRoll(0, mouseDelta.y * Time::DeltaTime() * 0.1f, 0);
-		Quaternion pr = Quaternion::CreateFromYawPitchRoll(mouseDelta.x * Time::DeltaTime() * 0.1f, 0, 0);
-		m_Rotation = yr * m_Rotation * pr;
-	}
-
 	Vector3 movement;
-	movement.x -= (int)Input::Instance().IsKeyDown('A');
-	movement.x += (int)Input::Instance().IsKeyDown('D');
-	movement.z -= (int)Input::Instance().IsKeyDown('S');
-	movement.z += (int)Input::Instance().IsKeyDown('W');
-	movement.y -= (int)Input::Instance().IsKeyDown('Q');
-	movement.y += (int)Input::Instance().IsKeyDown('E');
-	movement = Vector3::Transform(movement, m_Rotation);
+	if (Input::Instance().IsMouseDown(1))
+	{
+		if (!ImGui::IsAnyItemActive() && !ImGuizmo::IsUsing())
+		{
+			Vector2 mouseDelta = Input::Instance().GetMouseDelta();
+			Quaternion yr = Quaternion::CreateFromYawPitchRoll(0, mouseDelta.y * Time::DeltaTime() * 0.1f, 0);
+			Quaternion pr = Quaternion::CreateFromYawPitchRoll(mouseDelta.x * Time::DeltaTime() * 0.1f, 0, 0);
+			m_Rotation = yr * m_Rotation * pr;
+		}
 
+		movement.x -= (int)Input::Instance().IsKeyDown('A');
+		movement.x += (int)Input::Instance().IsKeyDown('D');
+		movement.z -= (int)Input::Instance().IsKeyDown('S');
+		movement.z += (int)Input::Instance().IsKeyDown('W');
+		movement.y -= (int)Input::Instance().IsKeyDown('Q');
+		movement.y += (int)Input::Instance().IsKeyDown('E');
+		movement = Vector3::Transform(movement, m_Rotation);
+	}
 	m_Velocity = Vector3::SmoothStep(m_Velocity, movement, 0.1f);
 	m_Position += m_Velocity * Time::DeltaTime() * 40.0f;
-
 	OnDirty();
 }
 
