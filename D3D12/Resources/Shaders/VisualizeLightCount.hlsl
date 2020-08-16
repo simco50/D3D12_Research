@@ -19,6 +19,7 @@ cbuffer Data : register(b0)
 	float cSliceMagicB;
     float cNear;
     float cFar;
+    float cFoV;
 }
 
 #if TILED_FORWARD
@@ -62,6 +63,11 @@ float EdgeDetection(uint2 index, uint width, uint height)
     return lerp(1, 0, step(0.003f, length(reference - sampledValue)));
 }
 
+float InverseLerp(float value, float minValue, float maxValue)
+{
+	return (value - minValue) / (maxValue - minValue);
+}
+
 [RootSignature(RootSig)]
 [numthreads(16, 16, 1)]
 void DebugLightDensityCS(uint3 threadId : SV_DispatchThreadId)
@@ -70,17 +76,51 @@ void DebugLightDensityCS(uint3 threadId : SV_DispatchThreadId)
     tInput.GetDimensions(width, height);
     if(threadId.x < width && threadId.y < height)
     {
+
 #if TILED_FORWARD
         uint2 tileIndex = uint2(floor(threadId.xy / BLOCK_SIZE));
         uint lightCount = tLightGrid[tileIndex].y;
-#elif CLUSTERED_FORWARD
-        float depth = tDepth.Load(uint3(threadId.xy, 0));
-        float3 viewPos = ScreenToView(float4(0, 0, depth, 1), float2(1, 1), cProjectionInverse).xyz;
-        uint slice = floor(log(viewPos.z) * cSliceMagicA - cSliceMagicB);
-        uint3 clusterIndex3D = uint3(floor(threadId.xy / cClusterSize), slice);
-        uint clusterIndex1D = clusterIndex3D.x + (cClusterDimensions.x * (clusterIndex3D.y + cClusterDimensions.y * clusterIndex3D.z));
-        uint lightCount = tLightGrid[clusterIndex1D].y;
-#endif
         uOutput[threadId.xy] = EdgeDetection(threadId.xy, width, height) * DEBUG_COLORS[min(9, lightCount)];
+#elif CLUSTERED_FORWARD
+
+#if 0
+        float fov = cFoV / 2.0;
+        float height = 300.0;
+    
+        int2 pos = threadId.xy;
+        pos.y = (720 - pos.y);
+        pos -= uint2(1240, 720) / 2.0;
+        pos.y += 150.0;
+    
+        float angle = atan2(pos.x, pos.y);
+        if(angle > -fov && angle < fov && pos.y < height)
+        {
+            float angleNormalized = InverseLerp(angle, -fov, fov);
+            int widthSlice = floor(angleNormalized * cClusterDimensions.x);
+
+            float viewDepth = (float)pos.y / height * (cNear - cFar) + cFar;
+            uint slice = floor(log(viewDepth) * cSliceMagicA - cSliceMagicB);
+            uint lightCount = 0;
+            for(uint i = 0; i < cClusterDimensions.y; ++i)
+            {
+                uint3 clusterIndex3D = uint3(widthSlice, i, slice);
+                uint clusterIndex1D = clusterIndex3D.x + (cClusterDimensions.x * (clusterIndex3D.y + cClusterDimensions.y * clusterIndex3D.z));
+                lightCount = max(lightCount, tLightGrid[clusterIndex1D].y);
+            }
+            uOutput[threadId.xy] = float4(DEBUG_COLORS[min(9, lightCount)]);
+        }
+        else
+#endif
+        {
+
+            float depth = tDepth.Load(uint3(threadId.xy, 0));
+            float3 viewPos = ScreenToView(float4(0, 0, depth, 1), float2(1, 1), cProjectionInverse).xyz;
+            uint slice = floor(log(viewPos.z) * cSliceMagicA - cSliceMagicB);
+            uint3 clusterIndex3D = uint3(floor(threadId.xy / cClusterSize), slice);
+            uint clusterIndex1D = clusterIndex3D.x + (cClusterDimensions.x * (clusterIndex3D.y + cClusterDimensions.y * clusterIndex3D.z));
+            uint lightCount = tLightGrid[clusterIndex1D].y;
+            uOutput[threadId.xy] = EdgeDetection(threadId.xy, width, height) * DEBUG_COLORS[min(9, lightCount)];
+        }
+#endif
     }
 }

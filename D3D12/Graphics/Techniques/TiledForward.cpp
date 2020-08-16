@@ -216,6 +216,7 @@ void TiledForward::VisualizeLightDensity(RGGraph& graph, Camera& camera, Texture
 				float SliceMagicB;
 				float Near;
 				float Far;
+				float FoV;
 			} constantData{};
 
 			constantData.ProjectionInverse = camera.GetProjectionInverse();
@@ -223,6 +224,7 @@ void TiledForward::VisualizeLightDensity(RGGraph& graph, Camera& camera, Texture
 			constantData.SliceMagicB = sliceMagicB;
 			constantData.Near = nearZ;
 			constantData.Far = farZ;
+			constantData.FoV = camera.GetFoV();
 
 			context.SetPipelineState(m_pVisualizeLightsPSO.get());
 			context.SetComputeRootSignature(m_pVisualizeLightsRS.get());

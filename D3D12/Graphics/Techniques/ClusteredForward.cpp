@@ -421,6 +421,7 @@ void ClusteredForward::VisualizeLightDensity(RGGraph& graph, Camera& camera, Tex
 				float SliceMagicB;
 				float Near;
 				float Far;
+				float FoV;
 			} constantData{};
 
 			constantData.ProjectionInverse = camera.GetProjectionInverse();
@@ -430,6 +431,7 @@ void ClusteredForward::VisualizeLightDensity(RGGraph& graph, Camera& camera, Tex
 			constantData.SliceMagicB = sliceMagicB;
 			constantData.Near = nearZ;
 			constantData.Far = farZ;
+			constantData.FoV = camera.GetFoV();
 
 			context.SetPipelineState(m_pVisualizeLightsPSO.get());
 			context.SetComputeRootSignature(m_pVisualizeLightsRS.get());
