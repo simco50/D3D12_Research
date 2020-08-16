@@ -132,7 +132,7 @@ void Profiler::Initialize(Graphics* pGraphics)
 {
 	CD3DX12_QUERY_HEAP_DESC desc(HEAP_SIZE, D3D12_QUERY_HEAP_TYPE_TIMESTAMP);
 	VERIFY_HR_EX(pGraphics->GetDevice()->CreateQueryHeap(&desc, IID_PPV_ARGS(m_pQueryHeap.GetAddressOf())), pGraphics->GetDevice());
-	m_pQueryHeap->SetName(L"Profiler Timestamp Query Heap");
+	D3D::SetObjectName(m_pQueryHeap.Get(), "Profiler Timestamp Query Heap");
 
 	m_pReadBackBuffer = std::make_unique<Buffer>(pGraphics, "Profiling Readback Buffer");
 	m_pReadBackBuffer->Create(BufferDesc::CreateReadback(sizeof(uint64) * Graphics::FRAME_COUNT * HEAP_SIZE));
@@ -190,7 +190,7 @@ void Profiler::End(CommandContext* pContext)
 
 void Profiler::Resolve(Graphics* pGraphics, int frameIndex)
 {
-	checkf(m_pCurrentBlock == m_pRootBlock.get(), "If the current block isn't the root block then something must've gone wrong!");
+	checkf(m_pCurrentBlock == m_pRootBlock.get(), "The current block isn't the root block then something must've gone wrong!");
 
 	//Start the resolve on the current frame
 	int offset = MAX_GPU_TIME_QUERIES * QUERY_PAIR_NUM * m_CurrentReadbackFrame;

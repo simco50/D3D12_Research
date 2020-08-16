@@ -56,7 +56,8 @@ uint64 CommandContext::Execute(CommandContext** pContexts, uint32 numContexts, b
 	CommandQueue* pQueue = pContexts[0]->m_pGraphics->GetCommandQueue(pContexts[0]->GetType());
 	for (uint32 i = 0; i < numContexts; ++i)
 	{
-		checkf(pContexts[i]->GetType() == pQueue->GetType(), "All commandlist types must match");
+		checkf(pContexts[i]->GetType() == pQueue->GetType(), "All commandlist types must match. Expected %s, got %s",
+			D3D::CommandlistTypeToString(pQueue->GetType()), D3D::CommandlistTypeToString(pContexts[i]->GetType()));
 		pContexts[i]->FlushResourceBarriers();
 	}
 	uint64 fenceValue = pQueue->ExecuteCommandLists(pContexts, numContexts);
@@ -111,7 +112,7 @@ bool NeedsTransition(D3D12_RESOURCE_STATES& before, D3D12_RESOURCE_STATES& after
 
 void CommandContext::InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESOURCE_STATES state, uint32 subResource /*= D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES*/)
 {
-	checkf(IsTransitionAllowed(m_Type, state), "AfterState is not valid on this commandlist type");
+	checkf(IsTransitionAllowed(m_Type, state), "After state (%s) is not valid on this commandlist type (%s)", D3D::ResourceStateToString(state).c_str(), D3D::CommandlistTypeToString(m_Type));
 
 	ResourceState& resourceState = m_ResourceStates[pBuffer];
 	D3D12_RESOURCE_STATES beforeState = resourceState.Get(subResource);
@@ -128,7 +129,7 @@ void CommandContext::InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESO
 	{
 		if (NeedsTransition(beforeState, state))
 		{
-			checkf(IsTransitionAllowed(m_Type, beforeState), "Current resource state is not valid to transition from in this commandlist type");
+			checkf(IsTransitionAllowed(m_Type, beforeState), "Current resource state (%s) is not valid to transition from in this commandlist type (%s)", D3D::ResourceStateToString(state).c_str(), D3D::CommandlistTypeToString(m_Type));
 			m_BarrierBatcher.AddTransition(pBuffer->GetResource(), beforeState, state, subResource);
 			resourceState.Set(state, subResource);
 		}

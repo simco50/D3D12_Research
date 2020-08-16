@@ -7,7 +7,7 @@
 #endif
 
 #ifndef RG_ASSERT
-#define RG_ASSERT(expression, msg) check((expression) && #msg)
+#define RG_ASSERT(expression, msg, ...) checkf(expression, msg, ##__VA_ARGS__)
 #endif
 
 #ifndef RG_STATIC_ASSERT

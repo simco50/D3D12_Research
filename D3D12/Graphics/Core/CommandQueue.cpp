@@ -25,7 +25,7 @@ ID3D12CommandAllocator* CommandAllocatorPool::GetAllocator(uint64 fenceValue)
 
 	ComPtr<ID3D12CommandAllocator> pAllocator;
 	m_pGraphics->GetDevice()->CreateCommandAllocator(m_Type, IID_PPV_ARGS(pAllocator.GetAddressOf()));
-	pAllocator->SetName(L"Pooled Allocator");
+	D3D::SetObjectName(pAllocator.Get(), "Pooled Allocator");
 	m_CommandAllocators.push_back(std::move(pAllocator));
 	return m_CommandAllocators.back().Get();
 }
@@ -51,9 +51,9 @@ CommandQueue::CommandQueue(Graphics* pGraphics, D3D12_COMMAND_LIST_TYPE type)
 	desc.Type = type;
 
 	VERIFY_HR_EX(pGraphics->GetDevice()->CreateCommandQueue(&desc, IID_PPV_ARGS(m_pCommandQueue.GetAddressOf())), m_pGraphics->GetDevice());
-	m_pCommandQueue->SetName(L"Main CommandQueue");
+	D3D::SetObjectName(m_pCommandQueue.Get(), "Main CommandQueue");
 	VERIFY_HR_EX(pGraphics->GetDevice()->CreateFence(m_LastCompletedFenceValue, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(m_pFence.GetAddressOf())), m_pGraphics->GetDevice());
-	m_pFence->SetName(L"CommandQueue Fence");
+	D3D::SetObjectName(m_pCommandQueue.Get(), "CommandQueue Fence");
 
 	m_pFenceEventHandle = CreateEventExA(nullptr, "CommandQueue Fence", 0, EVENT_ALL_ACCESS);
 }
@@ -88,7 +88,9 @@ uint64 CommandQueue::ExecuteCommandLists(CommandContext** pCommandContexts, uint
 			uint32 subResource = pending.Subresource;
 			GraphicsResource* pResource = pending.pResource;
 			D3D12_RESOURCE_STATES beforeState = pResource->GetResourceState(subResource);
-			checkf(CommandContext::IsTransitionAllowed(m_Type, beforeState), "The resource can not be transitioned from this state on this queue. Insert a barrier on another queue before executing this one.");
+			checkf(CommandContext::IsTransitionAllowed(m_Type, beforeState), 
+				"Resource (%s) can not be transitioned from this state (%s) on this queue (%s). Insert a barrier on another queue before executing this one.", 
+				pResource->GetName().c_str(), D3D::ResourceStateToString(beforeState).c_str(), D3D::CommandlistTypeToString(m_Type));
 			barriers.AddTransition(pResource->GetResource(), beforeState, pending.State.Get(subResource), subResource);
 			pResource->SetResourceState(pNextContext->GetResourceState(pending.pResource, subResource));
 		}

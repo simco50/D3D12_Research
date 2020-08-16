@@ -55,8 +55,8 @@ inline int ToWidechar(const char* pStr, wchar_t* pOut, int len)
 #define WITH_CONSOLE 1
 #endif
 
-#define check(expression) assert(expression)
-#define checkf(expression, msg, ...) assert(expression && msg)
+#define check(expression) if((expression)){} else Console::LogFormat(LogType::FatalError, #expression)
+#define checkf(expression, msg, ...) if((expression)){} else Console::LogFormat(LogType::FatalError, msg, ##__VA_ARGS__)
 #define noEntry() checkf(false, "Should not have reached this point!")
 
 #include "Core/Thread.h"

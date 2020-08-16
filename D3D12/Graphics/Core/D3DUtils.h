@@ -13,6 +13,76 @@
 
 namespace D3D
 {
+	inline std::string ResourceStateToString(D3D12_RESOURCE_STATES state)
+	{
+		if (state == 0)
+		{
+			return "COMMON";
+		}
+
+		char out[1024];
+		out[0] = '\0';
+		char* pCurrent = out;
+		int i = 0;
+		auto addText = [&](const char* pText) {
+			if (i++ > 0)
+				*pCurrent++ = '/';
+			size_t len = strlen(pText);
+			memcpy(pCurrent, pText, len);
+			pCurrent += len;
+			*pCurrent = '\0';
+		};
+
+#define STATE_CASE(name) if((state & D3D12_RESOURCE_STATE_##name) == D3D12_RESOURCE_STATE_##name) addText(#name)
+		STATE_CASE(VERTEX_AND_CONSTANT_BUFFER);
+		STATE_CASE(INDEX_BUFFER);
+		STATE_CASE(RENDER_TARGET);
+		STATE_CASE(UNORDERED_ACCESS);
+		STATE_CASE(DEPTH_WRITE);
+		STATE_CASE(DEPTH_READ);
+		STATE_CASE(NON_PIXEL_SHADER_RESOURCE);
+		STATE_CASE(PIXEL_SHADER_RESOURCE);
+		STATE_CASE(STREAM_OUT);
+		STATE_CASE(INDIRECT_ARGUMENT);
+		STATE_CASE(COPY_DEST);
+		STATE_CASE(COPY_SOURCE);
+		STATE_CASE(RESOLVE_DEST);
+		STATE_CASE(RESOLVE_SOURCE);
+		STATE_CASE(RAYTRACING_ACCELERATION_STRUCTURE);
+		STATE_CASE(SHADING_RATE_SOURCE);
+		STATE_CASE(GENERIC_READ);
+		STATE_CASE(VIDEO_DECODE_READ);
+		STATE_CASE(VIDEO_DECODE_WRITE);
+		STATE_CASE(VIDEO_PROCESS_READ);
+		STATE_CASE(VIDEO_PROCESS_WRITE);
+		STATE_CASE(VIDEO_ENCODE_READ);
+		STATE_CASE(VIDEO_ENCODE_WRITE);
+		
+		//STATE_CASE(COMMON);
+		//STATE_CASE_PRESENT;
+		//STATE_CASE_PREDICATION);
+
+#undef STATE_CASE
+		return out;
+	}
+
+	inline const char* CommandlistTypeToString(D3D12_COMMAND_LIST_TYPE type)
+	{
+#define STATE_CASE(name) case D3D12_COMMAND_LIST_TYPE_##name: return #name
+		switch (type)
+		{
+			STATE_CASE(DIRECT);
+			STATE_CASE(COMPUTE);
+			STATE_CASE(COPY);
+			STATE_CASE(BUNDLE);
+			STATE_CASE(VIDEO_DECODE);
+			STATE_CASE(VIDEO_ENCODE);
+			STATE_CASE(VIDEO_PROCESS);
+			default: return "";
+		}
+#undef STATE_CASE
+	}
+
 	inline void BeginPixCapture()
 	{
 		ComPtr<IDXGraphicsAnalysis> pGa;
