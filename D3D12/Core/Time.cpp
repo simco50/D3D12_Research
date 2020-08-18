@@ -14,15 +14,6 @@ bool Time::m_IsStopped = false;
 
 int Time::m_Ticks = 0;;
 
-Time::Time()
-{
-
-}
-
-Time::~Time()
-{
-}
-
 void Time::Tick()
 {
 	if(m_IsStopped)

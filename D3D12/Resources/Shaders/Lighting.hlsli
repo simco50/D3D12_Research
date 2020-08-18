@@ -186,7 +186,7 @@ float ComputeScattering(float LoV)
 
 float3 ApplyVolumetricLighting(float3 cameraPos, float3 worldPos, float3 pos, float4x4 view, Light light, int samples)
 {
-	const float fogValue = 0.1f;
+	const float fogValue = 0.3f;
 	float3 rayVector = cameraPos - worldPos;
 	float3 rayStep = rayVector / samples;
 	float3 accumFog = 0.0f.xxx;
@@ -208,10 +208,9 @@ float3 ApplyVolumetricLighting(float3 cameraPos, float3 worldPos, float3 pos, fl
 		lightPos.x = lightPos.x / 2.0f + 0.5f;
 		lightPos.y = lightPos.y / -2.0f + 0.5f;
 
-		float shadowDepth = tShadowMapTextures[shadowMapIndex].SampleLevel(sDiffuseSampler, lightPos.xy, 0).r;
-		if(shadowDepth < lightPos.z)
+		float comparison = tShadowMapTextures[shadowMapIndex].SampleCmpLevelZero(sShadowMapSampler, lightPos.xy, lightPos.z);
 		{
-			accumFog += fogValue * ComputeScattering(dot(rayVector, light.Direction)).xxx * light.GetColor().rgb * light.Intensity;
+			accumFog += comparison * fogValue * ComputeScattering(dot(rayVector, light.Direction)).xxx * light.GetColor().rgb * light.Intensity;
 		}
 		currentPosition += rayStep;
 	}

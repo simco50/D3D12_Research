@@ -24,9 +24,6 @@ public:
 	void SetDescriptors(uint32 rootIndex, uint32 offset, uint32 numHandles, const D3D12_CPU_DESCRIPTOR_HANDLE* pHandles);
 	void UploadAndBindStagedDescriptors(DescriptorTableType descriptorTableType);
 
-	bool HasSpace(int count);
-	ID3D12DescriptorHeap* GetHeap();
-
 	void ParseRootSignature(RootSignature* pRootSignature);
 
 	void ReleaseUsedHeaps(uint64 fenceValue);
@@ -35,7 +32,7 @@ private:
 	//Maximum amount of descriptors per CopyDescriptors call
 	static const int MAX_DESCRIPTORS_PER_COPY = 64;
 	//The amount of descriptors in each heap
-	static const int DESCRIPTORS_PER_HEAP = 256;
+	static const int DESCRIPTORS_PER_HEAP = 1024;
 	//The max amount of root parameters
 	static const int MAX_NUM_ROOT_PARAMETERS = 10;
 
@@ -48,6 +45,8 @@ private:
 	void ReleaseHeap();
 	void UnbindAll();
 	DescriptorHandle Allocate(int descriptors);
+	bool HasSpace(int count);
+	ID3D12DescriptorHeap* GetHeap();
 
 	std::vector<ID3D12DescriptorHeap*> m_UsedDescriptorHeaps;
 

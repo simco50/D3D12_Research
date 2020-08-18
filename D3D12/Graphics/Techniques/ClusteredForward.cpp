@@ -50,10 +50,14 @@ void ClusteredForward::OnSwapchainCreated(int windowWidth, int windowHeight)
 	m_ViewportDirty = true;
 }
 
-void ComputeClusterMagic(float nearZ, float farZ, float& magicA, float& magicB)
+Vector2 ComputeLightGridParams(float nearZ, float farZ)
 {
-	magicA = (float)cClusterCountZ / log(nearZ / farZ);
-	magicB = ((float)cClusterCountZ * log(farZ)) / log(nearZ / farZ);
+	Vector2 lightGridParams;
+	float n = Math::Min(nearZ, farZ);
+	float f = Math::Max(nearZ, farZ);
+	lightGridParams.x = (float)cClusterCountZ / log(f / n);
+	lightGridParams.y = ((float)cClusterCountZ * log(n)) / log(f / n);
+	return lightGridParams;
 }
 
 void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResources& resources)
@@ -63,8 +67,7 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
 	Vector2 screenDimensions((float)resources.pRenderTarget->GetWidth(), (float)resources.pRenderTarget->GetHeight());
 	float nearZ = resources.pCamera->GetNear();
 	float farZ = resources.pCamera->GetFar();
-	float sliceMagicA, sliceMagicB;
-	ComputeClusterMagic(nearZ, farZ, sliceMagicA, sliceMagicB);
+	Vector2 lightGridParams = ComputeLightGridParams(nearZ, farZ);
 
 	if (m_ViewportDirty)
 	{
@@ -122,8 +125,7 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
 				IntVector3 ClusterDimensions;
 				int padding0;
 				IntVector2 ClusterSize;
-				float SliceMagicA;
-				float SliceMagicB;
+				Vector2 LightGridParams;
 			} perFrameParameters{};
 
 			struct PerObjectParameters
@@ -132,8 +134,7 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
 				Matrix WorldViewProjection;
 			} perObjectParameters{};
 
-			perFrameParameters.SliceMagicA = sliceMagicA;
-			perFrameParameters.SliceMagicB = sliceMagicB;
+			perFrameParameters.LightGridParams = lightGridParams;
 			perFrameParameters.ClusterDimensions = IntVector3(m_ClusterCountX, m_ClusterCountY, cClusterCountZ);
 			perFrameParameters.ClusterSize = IntVector2(cClusterSize, cClusterSize);
 
@@ -264,8 +265,7 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
 				IntVector3 ClusterDimensions;
 				int padding0;
 				IntVector2 ClusterSize;
-				float SliceMagicA;
-				float SliceMagicB;
+				Vector2 LightGridParams;
 			} frameData{};
 
 			Matrix view = resources.pCamera->GetView();
@@ -277,8 +277,7 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
 			frameData.FarZ = nearZ;
 			frameData.ClusterDimensions = IntVector3(m_ClusterCountX, m_ClusterCountY, cClusterCountZ);
 			frameData.ClusterSize = IntVector2(cClusterSize, cClusterSize);
-			frameData.SliceMagicA = sliceMagicA;
-			frameData.SliceMagicB = sliceMagicB;
+			frameData.LightGridParams = lightGridParams;
 
 			context.InsertResourceBarrier(m_pLightGrid.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(m_pLightIndexGrid.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
@@ -405,8 +404,7 @@ void ClusteredForward::VisualizeLightDensity(RGGraph& graph, Camera& camera, Tex
 	Vector2 screenDimensions((float)pTarget->GetWidth(), (float)pTarget->GetHeight());
 	float nearZ = camera.GetNear();
 	float farZ = camera.GetFar();
-	float sliceMagicA, sliceMagicB;
-	ComputeClusterMagic(nearZ, farZ, sliceMagicA, sliceMagicB);
+	Vector2 lightGridParams = ComputeLightGridParams(nearZ, farZ);
 
 	RGPassBuilder basePass = graph.AddPass("Visualize Light Density");
 	basePass.Bind([=](CommandContext& context, const RGPassResources& passResources)
@@ -417,21 +415,20 @@ void ClusteredForward::VisualizeLightDensity(RGGraph& graph, Camera& camera, Tex
 				IntVector3 ClusterDimensions;
 				float padding;
 				IntVector2 ClusterSize;
-				float SliceMagicA;
-				float SliceMagicB;
+				Vector2 LightGridParams;
 				float Near;
 				float Far;
 				float FoV;
+
 			} constantData{};
 
 			constantData.ProjectionInverse = camera.GetProjectionInverse();
 			constantData.ClusterDimensions = IntVector3(m_ClusterCountX, m_ClusterCountY, cClusterCountZ);
 			constantData.ClusterSize = IntVector2(cClusterSize, cClusterSize);
-			constantData.SliceMagicA = sliceMagicA;
-			constantData.SliceMagicB = sliceMagicB;
 			constantData.Near = nearZ;
 			constantData.Far = farZ;
 			constantData.FoV = camera.GetFoV();
+			constantData.LightGridParams = lightGridParams;
 
 			context.SetPipelineState(m_pVisualizeLightsPSO.get());
 			context.SetComputeRootSignature(m_pVisualizeLightsRS.get());

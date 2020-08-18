@@ -22,6 +22,8 @@ struct Light
 		float Range = 1.0f;
 		int32 ShadowIndex = -1;
 		float InvShadowSize = 0;
+
+		float padding;
 	};
 	
 	Vector3 Position = Vector3::Zero;

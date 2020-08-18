@@ -321,10 +321,7 @@ bool ShaderBase::ProcessSource(const std::string& sourcePath, const std::string&
 			{
 				placedLineDirective = true;
 #if USE_SHADER_LINE_DIRECTIVE
-				if (CommandLine::GetBool("debugshaders") == false)
-				{
-					output << "#line " << linesProcessed + 1 << " \"" << filePath << "\"\n";
-				}
+				output << "#line " << linesProcessed + 1 << " \"" << filePath << "\"\n";
 #endif
 			}
 			output << line << '\n';

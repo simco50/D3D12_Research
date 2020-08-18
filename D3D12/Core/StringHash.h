@@ -3,7 +3,6 @@
 class StringHash
 {
 private:
-
 	static constexpr uint32 val_const{ 0x811c9dc5 };
 	static constexpr uint32 prime_const{ 0x1000193 };
 
@@ -73,9 +72,9 @@ namespace std
 	template <>
 	struct hash<StringHash>
 	{
-		uint32 operator()(const StringHash& hash) const
+		size_t operator()(const StringHash& hash) const
 		{
-			return hash.m_Hash;
+			return (size_t)hash.m_Hash;
 		}
 	};
 }

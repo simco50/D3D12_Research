@@ -1,3 +1,5 @@
+#include "Common.hlsli"
+
 #define RootSig "CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \
 				"DescriptorTable(UAV(u0, numDescriptors = 1), visibility = SHADER_VISIBILITY_ALL), " \
 				"DescriptorTable(SRV(t0, numDescriptors = 1), visibility = SHADER_VISIBILITY_ALL), " \
@@ -28,13 +30,6 @@ struct CS_INPUT
     uint3 GroupThreadId : SV_GROUPTHREADID;
 };
 
-float LinearizeDepth(float depth)
-{
-    //linearize between 0 and 1
-    float lin = cNear * cFar / (cFar + depth * (cNear - cFar));
-    return (lin - cFar) / (cNear - cFar);
-}
-
 groupshared float2 gsDepthSamples[BLOCK_SIZE * BLOCK_SIZE];
 
 [RootSignature(RootSig)]
@@ -56,7 +51,7 @@ void PrepareReduceDepth(CS_INPUT input)
         float depth = tDepthMap.Load(samplePos, sampleIdx);
         if(depth > 0.0f)
         {
-            depth = LinearizeDepth(depth);
+            depth = LinearizeDepth(depth, cNear, cFar);
             depthMin = min(depthMin, depth);
             depthMax = max(depthMax, depth);
         }
@@ -69,7 +64,7 @@ void PrepareReduceDepth(CS_INPUT input)
     float depth = tDepthMap[samplePos];
     if(depth > 0.0f)
     {
-        depth = LinearizeDepth(depth);
+        depth = LinearizeDepth(depth, cNear, cFar);
     }
     gsDepthSamples[input.GroupIndex] = float2(depth, depth);
 

@@ -15,8 +15,7 @@ cbuffer Data : register(b0)
     float4x4 cProjectionInverse;
     int4 cClusterDimensions;
     int2 cClusterSize;
-    float cSliceMagicA;
-	float cSliceMagicB;
+    float2 cLightGridParams;
     float cNear;
     float cFar;
     float cFoV;
@@ -99,7 +98,7 @@ void DebugLightDensityCS(uint3 threadId : SV_DispatchThreadId)
             int widthSlice = floor(angleNormalized * cClusterDimensions.x);
 
             float viewDepth = (float)pos.y / height * (cNear - cFar) + cFar;
-            uint slice = floor(log(viewDepth) * cSliceMagicA - cSliceMagicB);
+            uint slice = floor(log(viewDepth) * cLightGridParams.x - cLightGridParams.y);
             uint lightCount = 0;
             for(uint i = 0; i < cClusterDimensions.y; ++i)
             {
@@ -115,7 +114,7 @@ void DebugLightDensityCS(uint3 threadId : SV_DispatchThreadId)
 
             float depth = tDepth.Load(uint3(threadId.xy, 0));
             float3 viewPos = ScreenToView(float4(0, 0, depth, 1), float2(1, 1), cProjectionInverse).xyz;
-            uint slice = floor(log(viewPos.z) * cSliceMagicA - cSliceMagicB);
+            uint slice = floor(log(viewPos.z) * cLightGridParams.x - cLightGridParams.y);
             uint3 clusterIndex3D = uint3(floor(threadId.xy / cClusterSize), slice);
             uint clusterIndex1D = clusterIndex3D.x + (cClusterDimensions.x * (clusterIndex3D.y + cClusterDimensions.y * clusterIndex3D.z));
             uint lightCount = tLightGrid[clusterIndex1D].y;

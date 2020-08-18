@@ -202,8 +202,10 @@ void Graphics::Update()
 		pSourceBuffer->Unmap();
 	}
 
-	float nearPlane = m_pCamera->GetFar();
-	float farPlane = m_pCamera->GetNear();
+	float n = m_pCamera->GetNear();
+	float f = m_pCamera->GetFar();
+	float nearPlane = Math::Min(n, f);
+	float farPlane = Math::Max(n, f);
 	float clipPlaneRange = farPlane - nearPlane;
 
 	float minZ = nearPlane + minPoint * clipPlaneRange;
@@ -360,9 +362,9 @@ void Graphics::Update()
 		}
 	}
 
-	if (shadowIndex > m_ShadowMaps.size())
+	if (shadowIndex >= m_ShadowMaps.size())
 	{
-		m_ShadowMaps.resize(shadowIndex);
+		m_ShadowMaps.resize(shadowIndex + 1);
 		int i = 0;
 		for (auto& pShadowMap : m_ShadowMaps)
 		{

@@ -17,15 +17,14 @@ cbuffer Parameters : register(b1)
 {
     int4 cClusterDimensions;
     int2 cClusterSize;
-	float cSliceMagicA;
-	float cSliceMagicB;
+	float2 cLightGridParams;
 }
 
 RWStructuredBuffer<uint> uActiveClusters : register(u1);
 
 uint GetSliceFromDepth(float depth)
 {
-    return floor(log(depth) * cSliceMagicA - cSliceMagicB);
+    return floor(log(depth) * cLightGridParams.x - cLightGridParams.y);
 }
 
 struct VS_Input

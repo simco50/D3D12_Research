@@ -23,6 +23,8 @@ struct Light
     int ShadowIndex;
     float InvShadowSize;
 
+    float padding;
+
     float4 GetColor()
     {
         return UIntToColor(Color);
@@ -150,8 +152,8 @@ float3 WorldFromDepth(float2 uv, float depth, float4x4 viewProjectionInverse)
 
 float LinearizeDepth(float z, float near, float far)
 {
-    float z_n = 2.0 * z - 1.0;
-	return 2.0 * far * near / (near + far - z_n * (near - far));
+    float lin = near * far / (far + z * (near - far));
+    return (lin - far) / (near - far);
 }
 
 void AABBFromMinMax(inout AABB aabb, float3 minimum, float3 maximum)

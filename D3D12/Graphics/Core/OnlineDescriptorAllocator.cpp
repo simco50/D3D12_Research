@@ -97,10 +97,8 @@ void OnlineDescriptorAllocator::UploadAndBindStagedDescriptors(DescriptorTableTy
 		entry.AssignedHandlesBitMap.MostSignificantBit(&rangeSize);
 		rangeSize += 1;
 
-		//Copy the descriptors one by one because they aren't necessarily memory contiguous
-		for (auto it = entry.AssignedHandlesBitMap.GetSetBitsIterator(); it.Valid(); ++it)
+		for (uint32 i = 0; i < rangeSize; ++i)
 		{
-			uint32 i = it.Value();
 			sourceRangeSizes[sourceRangeCount] = 1;
 			check(entry.TableStart[i].ptr);
 			sourceRanges[sourceRangeCount] = entry.TableStart[i];
