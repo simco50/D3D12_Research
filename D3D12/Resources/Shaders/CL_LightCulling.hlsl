@@ -5,7 +5,7 @@
 				"DescriptorTable(UAV(u0, numDescriptors = 3))"
 
 #define MAX_LIGHTS_PER_TILE 256
-#define THREAD_COUNT 512
+#define THREAD_COUNT 64
 
 cbuffer ShaderParameters : register(b0)
 {

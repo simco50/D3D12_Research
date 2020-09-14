@@ -771,8 +771,8 @@ void Graphics::Update()
 					context.SetDynamicDescriptor(2, 0, m_pHDRRenderTarget->GetSRV());
 
 					context.Dispatch(
-						Math::DivideAndRoundUp(Parameters.TargetDimensions.x, 16),
-						Math::DivideAndRoundUp(Parameters.TargetDimensions.y, 16)
+						Math::DivideAndRoundUp(Parameters.TargetDimensions.x, 8),
+						Math::DivideAndRoundUp(Parameters.TargetDimensions.y, 8)
 					);
 				});
 		}

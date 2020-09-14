@@ -104,25 +104,14 @@ float3 ApplyAmbientLight(float3 diffuse, float ao, float3 lightColor)
     return ao * diffuse * lightColor;
 }
 
-LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, float roughness, float4 pos, float3 wPos, float3 vPos, float3 N, float3 V)
+uint GetShadowIndex(Light light, float3 pos, float3 wPos, float3 vPos)
 {
-	LightResult result = (LightResult)0;
-
-	float attenuation = GetAttenuation(light, wPos);
-	if(attenuation <= 0)
+	int shadowIndex = light.ShadowIndex;
+	if(light.Type == LIGHT_DIRECTIONAL)
 	{
-		return result;
-	}
-
-	float visibility = 1.0f;
-	if(light.ShadowIndex >= 0)
-	{
-		int shadowIndex = light.ShadowIndex;
-		if(light.Type == LIGHT_DIRECTIONAL)
-		{
-			float4 splits = vPos.z > cCascadeDepths;
-			float4 cascades = cCascadeDepths > 0;
-			int cascadeIndex = dot(splits, cascades);
+		float4 splits = vPos.z > cCascadeDepths;
+		float4 cascades = cCascadeDepths > 0;
+		int cascadeIndex = dot(splits, cascades);
 
 	#define FADE_SHADOW_CASCADES 1
 	#define FADE_THRESHOLD 0.1f
@@ -140,30 +129,52 @@ LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, floa
 				}
 			}
 	#endif
-			shadowIndex += cascadeIndex;
 
-	#define VISUALIZE_CASCADES 0
-	#if VISUALIZE_CASCADES
+		shadowIndex += cascadeIndex;
+	}
+	else if(light.Type == LIGHT_POINT)
+	{
+		shadowIndex += GetCubeFaceIndex(wPos - light.Position);
+	}
+	return shadowIndex;
+}
+
+LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, float roughness, float4 pos, float3 wPos, float3 vPos, float3 N, float3 V)
+{
+	LightResult result = (LightResult)0;
+
+	float attenuation = GetAttenuation(light, wPos);
+	if(attenuation <= 0)
+	{
+		return result;
+	}
+
+	float visibility = 1.0f;
+	if(light.ShadowIndex >= 0)
+	{
+		int shadowIndex = GetShadowIndex(light, pos.xyz, wPos, vPos);
+
+#define VISUALIZE_CASCADES 0
+#if VISUALIZE_CASCADES
+		if(light.Type == LIGHT_DIRECTIONAL)
+		{
 			static float4 COLORS[4] = {
 				float4(1,0,0,1),
 				float4(0,1,0,1),
 				float4(0,0,1,1),
 				float4(1,0,1,1),
 			};
-			result.Diffuse += 0.2f * COLORS[cascadeIndex].xyz;
-	#endif
+			result.Diffuse += 0.4f * COLORS[shadowIndex - light.ShadowIndex].xyz;
+			result.Specular = 0;
+			return result;
+		}
+#endif
 
-		}
-		else if(light.Type == LIGHT_POINT)
-		{
-			shadowIndex += GetCubeFaceIndex(wPos - light.Position);
-		}
 		visibility = DoShadow(wPos, shadowIndex, light.InvShadowSize);
-	}
-
-	if(visibility <= 0)
-	{
-		return result;
+		if(visibility <= 0)
+		{
+			return result;
+		}
 	}
 
 	float3 L = normalize(light.Position - wPos);
@@ -198,20 +209,18 @@ float3 ApplyVolumetricLighting(float3 cameraPos, float3 worldPos, float3 pos, fl
 	for(int i = 0; i < samples; ++i)
 	{
 		float4 vPos = mul(float4(currentPosition, 1), view);
-		float4 splits = vPos.z > cCascadeDepths;
-		int cascadeIndex = dot(splits, float4(1, 1, 1, 1));
-		int shadowMapIndex = light.ShadowIndex + cascadeIndex;
-
-		float4x4 lightViewProjection = cLightViewProjections[shadowMapIndex];
-		float4 lightPos = mul(float4(currentPosition, 1), lightViewProjection);
-		lightPos.xyz /= lightPos.w;
-		lightPos.x = lightPos.x / 2.0f + 0.5f;
-		lightPos.y = lightPos.y / -2.0f + 0.5f;
-
-		float comparison = tShadowMapTextures[shadowMapIndex].SampleCmpLevelZero(sShadowMapSampler, lightPos.xy, lightPos.z);
+		float visibility = 1.0f;
+		if(light.ShadowIndex >= 0)
 		{
-			accumFog += comparison * fogValue * ComputeScattering(dot(rayVector, light.Direction)).xxx * light.GetColor().rgb * light.Intensity;
+			int shadowMapIndex = GetShadowIndex(light, pos, currentPosition, vPos.xyz);
+			float4x4 lightViewProjection = cLightViewProjections[shadowMapIndex];
+			float4 lightPos = mul(float4(currentPosition, 1), lightViewProjection);
+			lightPos.xyz /= lightPos.w;
+			lightPos.x = lightPos.x / 2.0f + 0.5f;
+			lightPos.y = lightPos.y / -2.0f + 0.5f;
+			visibility = tShadowMapTextures[shadowMapIndex].SampleCmpLevelZero(sShadowMapSampler, lightPos.xy, lightPos.z);
 		}
+		accumFog += visibility * fogValue * ComputeScattering(dot(rayVector, light.Direction)).xxx * light.GetColor().rgb * light.Intensity;
 		currentPosition += rayStep;
 	}
 	accumFog /= samples;

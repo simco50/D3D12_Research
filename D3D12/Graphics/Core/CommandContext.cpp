@@ -299,6 +299,12 @@ void CommandContext::SetDescriptorHeap(ID3D12DescriptorHeap* pHeap, D3D12_DESCRI
 	}
 }
 
+void CommandContext::SetShadingRate(D3D12_SHADING_RATE shadingRate /*= D3D12_SHADING_RATE_1X1*/)
+{
+	check(m_pMeshShadingCommandList);
+	m_pMeshShadingCommandList->RSSetShadingRate(shadingRate, nullptr);
+}
+
 DynamicAllocation CommandContext::AllocateTransientMemory(uint64 size)
 {
 	return m_DynamicAllocator->Allocate(size);
@@ -429,8 +435,13 @@ void CommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 			if (renderTargetDescs[i].BeginningAccess.Type == D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_CLEAR)
 			{
 				check(data.Target->GetClearBinding().BindingValue == ClearBinding::ClearBindingValue::Color);
-				memcpy(renderTargetDescs[i].BeginningAccess.Clear.ClearValue.Color, &data.Target->GetClearBinding().Color, sizeof(Color));
-				renderTargetDescs[i].BeginningAccess.Clear.ClearValue.Format = data.Target->GetFormat();
+				const Color& clearColor = data.Target->GetClearBinding().Color;
+				D3D12_CLEAR_VALUE& clearValue = renderTargetDescs[i].BeginningAccess.Clear.ClearValue;
+				clearValue.Color[0] = clearColor.x;
+				clearValue.Color[1] = clearColor.y;
+				clearValue.Color[2] = clearColor.z;
+				clearValue.Color[3] = clearColor.w;
+				clearValue.Format = data.Target->GetFormat();
 			}
 			renderTargetDescs[i].EndingAccess.Type = ExtractEndingAccess(data.Access);
 

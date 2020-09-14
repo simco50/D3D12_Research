@@ -99,7 +99,8 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
 				context.SetComputeDynamicConstantBufferView(0, &constantBuffer, sizeof(ConstantBuffer));
 				context.SetDynamicDescriptor(1, 0, m_pAABBs->GetUAV());
 
-				context.Dispatch(m_ClusterCountX, m_ClusterCountY, cClusterCountZ);
+				//Cluster count in z is 32 so fits nicely in a wavefront on Nvidia so make groupsize in shader 32
+				context.Dispatch(m_ClusterCountX, m_ClusterCountY, Math::DivideAndRoundUp(cClusterCountZ, 32));
 			});
 		m_ViewportDirty = false;
 	}

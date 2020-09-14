@@ -152,8 +152,7 @@ float3 WorldFromDepth(float2 uv, float depth, float4x4 viewProjectionInverse)
 
 float LinearizeDepth(float z, float near, float far)
 {
-    float lin = near * far / (far + z * (near - far));
-    return (lin - far) / (near - far);
+    return 1.0 / (((near - far) / far) * z + 1.0);
 }
 
 void AABBFromMinMax(inout AABB aabb, float3 minimum, float3 maximum)

@@ -275,6 +275,8 @@ void GpuParticles::Simulate(RGGraph& graph, Texture* pResolvedDepth, const Camer
 	RGPassBuilder simulateEnd = graph.AddPass("Simulate End");
 	simulateEnd.Bind([=](CommandContext& context, const RGPassResources& passResources)
 		{
+			context.InsertResourceBarrier(m_pCountersBuffer.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+
 			context.SetComputeRootSignature(m_pSimulateRS.get());
 			context.SetDynamicDescriptors(1, 0, uavs, ARRAYSIZE(uavs));
 			context.SetDynamicDescriptors(2, 0, srvs, ARRAYSIZE(srvs));
@@ -293,7 +295,8 @@ void GpuParticles::Render(RGGraph& graph, Texture* pTarget, Texture* pDepth, con
 	renderParticles.Bind([=](CommandContext& context, const RGPassResources& resources)
 		{
 			context.InsertResourceBarrier(m_pDrawArguments.get(), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
-			context.InsertResourceBarrier(m_pParticleBuffer.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+			context.InsertResourceBarrier(m_pParticleBuffer.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+			context.InsertResourceBarrier(m_pAliveList1.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
 			context.BeginRenderPass(RenderPassInfo(pTarget, RenderPassAccess::Load_Store, pDepth, RenderPassAccess::Load_DontCare));

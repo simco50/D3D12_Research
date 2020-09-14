@@ -5,7 +5,7 @@
 				"DescriptorTable(SRV(t0, numDescriptors = 1), visibility = SHADER_VISIBILITY_ALL), " \
 				"StaticSampler(s0, filter=FILTER_MIN_MAG_LINEAR_MIP_POINT, visibility = SHADER_VISIBILITY_ALL), "
 
-#define BLOCK_SIZE 16
+#define BLOCK_SIZE 8
 
 #define TEXTURE_STORAGE float4
 #define TEXTURE_INPUT_TYPE Texture2D<TEXTURE_STORAGE>
