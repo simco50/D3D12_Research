@@ -189,6 +189,11 @@ private:
 	RenderPath m_RenderPath = RenderPath::Clustered;
 
 	std::unique_ptr<Mesh> m_pMesh;
+	std::unique_ptr<Buffer> m_pBLAS;
+	std::unique_ptr<Buffer> m_pTLAS;
+	std::unique_ptr<Buffer> m_pBLASScratch;
+	std::unique_ptr<Buffer> m_pTLASScratch;
+
 	std::vector<Batch> m_OpaqueBatches;
 	std::vector<Batch> m_TransparantBatches;
 

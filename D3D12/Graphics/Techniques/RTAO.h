@@ -5,25 +5,19 @@ class RootSignature;
 class Texture;
 class Camera;
 class CommandContext;
-class Buffer;
 class RGGraph;
+class Buffer;
 
 class RTAO
 {
 public:
 	RTAO(Graphics* pGraphics);
 
-	void Execute(RGGraph& graph, Texture* pColor, Texture* pDepth, Camera& camera);
-	void GenerateAccelerationStructure(Graphics* pGraphics, Mesh* pMesh, CommandContext& context);
+	void Execute(RGGraph& graph, Texture* pColor, Texture* pDepth, Buffer* pTLAS, Camera& camera);
 
 private:
 	void SetupResources(Graphics* pGraphics);
 	void SetupPipelines(Graphics* pGraphics);
-
-	std::unique_ptr<Buffer> m_pBLAS;
-	std::unique_ptr<Buffer> m_pTLAS;
-	std::unique_ptr<Buffer> m_pBLASScratch;
-	std::unique_ptr<Buffer> m_pTLASScratch;
 
 	ComPtr<ID3D12StateObject> m_pRtSO;
 
