@@ -167,10 +167,9 @@ void RTAO::GenerateAccelerationStructure(Graphics* pGraphics, Mesh* pMesh, Comma
 		m_pTLASScratch->Create(BufferDesc::CreateByteAddress(Math::AlignUp<uint64>(info.ScratchDataSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT), BufferFlag::None));
 		m_pTLAS = std::make_unique<Buffer>(pGraphics, "TLAS");
 		m_pTLAS->Create(BufferDesc::CreateAccelerationStructure(Math::AlignUp<uint64>(info.ResultDataMaxSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT)));
-		m_pDescriptorsBuffer = std::make_unique<Buffer>(pGraphics, "Descriptors Buffer");
-		m_pDescriptorsBuffer->Create(BufferDesc::CreateVertexBuffer((uint32)Math::AlignUp<uint64>(sizeof(D3D12_RAYTRACING_INSTANCE_DESC), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT), 4, BufferFlag::Upload));
 
-		D3D12_RAYTRACING_INSTANCE_DESC* pInstanceDesc = static_cast<D3D12_RAYTRACING_INSTANCE_DESC*>(m_pDescriptorsBuffer->Map());
+		DynamicAllocation allocation = context.AllocateTransientMemory(sizeof(D3D12_RAYTRACING_INSTANCE_DESC));
+		D3D12_RAYTRACING_INSTANCE_DESC* pInstanceDesc = static_cast<D3D12_RAYTRACING_INSTANCE_DESC*>(allocation.pMappedMemory);
 		pInstanceDesc->AccelerationStructure = m_pBLAS->GetGpuHandle();
 		pInstanceDesc->Flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE;
 		pInstanceDesc->InstanceContributionToHitGroupIndex = 0;
@@ -195,15 +194,13 @@ void RTAO::GenerateAccelerationStructure(Graphics* pGraphics, Mesh* pMesh, Comma
 		};
 		ApplyTransform(Matrix::Identity, *pInstanceDesc);
 
-		m_pDescriptorsBuffer->Unmap();
-
 		D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC asDesc{};
 		asDesc.DestAccelerationStructureData = m_pTLAS->GetGpuHandle();
 		asDesc.ScratchAccelerationStructureData = m_pTLASScratch->GetGpuHandle();
 		asDesc.Inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
 		asDesc.Inputs.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_NONE;
 		asDesc.Inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
-		asDesc.Inputs.InstanceDescs = m_pDescriptorsBuffer->GetGpuHandle();
+		asDesc.Inputs.InstanceDescs = allocation.GpuHandle;
 		asDesc.Inputs.NumDescs = 1;
 		asDesc.SourceAccelerationStructureData = 0;
 

@@ -24,7 +24,6 @@ private:
 	std::unique_ptr<Buffer> m_pTLAS;
 	std::unique_ptr<Buffer> m_pBLASScratch;
 	std::unique_ptr<Buffer> m_pTLASScratch;
-	std::unique_ptr<Buffer> m_pDescriptorsBuffer;
 
 	ComPtr<ID3D12StateObject> m_pRtSO;
 
