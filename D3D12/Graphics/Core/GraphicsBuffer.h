@@ -9,18 +9,6 @@ class ResourceView;
 struct BufferSRVDesc;
 struct BufferUAVDesc;
 
-struct BufferView
-{
-	BufferView(Buffer* pBuffer)
-		: pBuffer(pBuffer), Offset(0)
-	{}
-	BufferView(Buffer* pBuffer, uint32 offset)
-		: pBuffer(pBuffer), Offset(offset)
-	{}
-	Buffer* pBuffer;
-	uint32 Offset;
-};
-
 enum class BufferFlag
 {
 	None = 0,
@@ -41,6 +29,11 @@ struct BufferDesc
 	BufferDesc(int elements, int elementSize, BufferFlag usage = BufferFlag::None)
 		: ElementCount(elements), ElementSize(elementSize), Usage(usage)
 	{}
+
+	static BufferDesc CreateBuffer(uint32 sizeInBytes, BufferFlag usage = BufferFlag::None)
+	{
+		return BufferDesc(sizeInBytes, 1, usage);
+	}
 
 	static BufferDesc CreateIndexBuffer(int elements, bool smallIndices, BufferFlag usage = BufferFlag::None)
 	{
@@ -156,4 +149,36 @@ protected:
 
 	BufferDesc m_Desc;
 	std::string m_Name;
+};
+
+struct VertexBufferView
+{
+	VertexBufferView(D3D12_GPU_VIRTUAL_ADDRESS location, uint32 elements, uint32 stride)
+		: Location(location), Elements(elements), Stride(stride)
+	{}
+	VertexBufferView(Buffer* pBuffer)
+	{
+		Location = pBuffer->GetGpuHandle();
+		Elements = (uint32)pBuffer->GetDesc().ElementCount;
+		Stride = pBuffer->GetDesc().ElementSize;
+	}
+	D3D12_GPU_VIRTUAL_ADDRESS Location;
+	uint32 Elements;
+	uint32 Stride;
+};
+
+struct IndexBufferView
+{
+	IndexBufferView(D3D12_GPU_VIRTUAL_ADDRESS location, uint32 elements, bool smallIndices = false)
+		: Location(location), Elements(elements), SmallIndices(smallIndices)
+	{}
+	IndexBufferView(Buffer* pBuffer)
+	{
+		Location = pBuffer->GetGpuHandle();
+		Elements = (uint32)pBuffer->GetDesc().ElementCount;
+		SmallIndices = pBuffer->GetDesc().Format == DXGI_FORMAT_R16_UINT;
+	}
+	D3D12_GPU_VIRTUAL_ADDRESS Location;
+	uint32 Elements;
+	bool SmallIndices;
 };

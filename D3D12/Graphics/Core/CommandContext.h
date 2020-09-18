@@ -197,9 +197,9 @@ public:
 	void SetDynamicVertexBuffer(int slot, int elementCount, int elementSize, const void* pData);
 	void SetDynamicIndexBuffer(int elementCount, const void* pData, bool smallIndices = false);
 	void SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY type);
-	void SetVertexBuffer(BufferView buffer);
-	void SetVertexBuffers(BufferView* pBuffers, int bufferCount);
-	void SetIndexBuffer(BufferView indexBuffer);
+	void SetVertexBuffer(const VertexBufferView& buffer);
+	void SetVertexBuffers(const VertexBufferView* pBuffers, int bufferCount);
+	void SetIndexBuffer(const IndexBufferView& indexBuffer);
 	void SetViewport(const FloatRect& rect, float minDepth = 0.0f, float maxDepth = 1.0f);
 	void SetScissorRect(const FloatRect& rect);
 

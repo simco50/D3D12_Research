@@ -1306,12 +1306,12 @@ void Graphics::InitializeAssets(CommandContext& context)
 				D3D12_RAYTRACING_GEOMETRY_DESC geometryDesc{};
 				geometryDesc.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
 				geometryDesc.Flags = D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
-				geometryDesc.Triangles.IndexBuffer = m_pMesh->GetIndexBuffer()->GetGpuHandle() + pSubMesh->GetIndexByteOffset();
+				geometryDesc.Triangles.IndexBuffer = pSubMesh->GetIndicesLocation();
 				geometryDesc.Triangles.IndexCount = pSubMesh->GetIndexCount();
 				geometryDesc.Triangles.IndexFormat = DXGI_FORMAT_R32_UINT;
 				geometryDesc.Triangles.Transform3x4 = 0;
-				geometryDesc.Triangles.VertexBuffer.StartAddress = m_pMesh->GetVertexBuffer()->GetGpuHandle() + pSubMesh->GetVertexByteOffset();
-				geometryDesc.Triangles.VertexBuffer.StrideInBytes = m_pMesh->GetVertexBuffer()->GetDesc().ElementSize;
+				geometryDesc.Triangles.VertexBuffer.StartAddress = pSubMesh->GetVerticesLocation();
+				geometryDesc.Triangles.VertexBuffer.StrideInBytes = pSubMesh->GetStride();
 				geometryDesc.Triangles.VertexCount = pSubMesh->GetVertexCount();
 				geometryDesc.Triangles.VertexFormat = DXGI_FORMAT_R32G32B32_FLOAT;
 				geometries.push_back(geometryDesc);
