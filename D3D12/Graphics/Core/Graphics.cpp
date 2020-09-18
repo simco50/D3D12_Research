@@ -29,10 +29,6 @@
 #include "Content/Image.h"
 #include "Core/TaskQueue.h"
 
-#ifdef _DEBUG
-#define D3D_VALIDATION 1
-#endif
-
 #ifndef D3D_VALIDATION
 #define D3D_VALIDATION 0
 #endif
@@ -1019,7 +1015,7 @@ void Graphics::InitD3D()
 	E_LOG(Info, "Graphics::InitD3D()");
 	UINT dxgiFactoryFlags = 0;
 
-	bool debugD3D = CommandLine::GetBool("d3dvalidation") || D3D_VALIDATION;
+	bool debugD3D = CommandLine::GetBool("d3ddebug") || D3D_VALIDATION;
 	bool gpuValidation = CommandLine::GetBool("gpuvalidation") || GPU_VALIDATION;
 
 	if (debugD3D)
@@ -1045,13 +1041,16 @@ void Graphics::InitD3D()
 		dxgiFactoryFlags |= DXGI_CREATE_FACTORY_DEBUG;
 	}
 
-	ComPtr<ID3D12DeviceRemovedExtendedDataSettings1> pDredSettings;
-	if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&pDredSettings))))
+	if (CommandLine::GetBool("dred"))
 	{
-		// Turn on auto-breadcrumbs and page fault reporting.
-		pDredSettings->SetAutoBreadcrumbsEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
-		pDredSettings->SetPageFaultEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
-		E_LOG(Info, "DRED Enabled");
+		ComPtr<ID3D12DeviceRemovedExtendedDataSettings1> pDredSettings;
+		if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&pDredSettings))))
+		{
+			// Turn on auto-breadcrumbs and page fault reporting.
+			pDredSettings->SetAutoBreadcrumbsEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
+			pDredSettings->SetPageFaultEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
+			E_LOG(Info, "DRED Enabled");
+		}
 	}
 	
 	//Create the factory
@@ -1185,6 +1184,7 @@ void Graphics::InitD3D()
 		if (SUCCEEDED(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS7, &caps7, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS7))))
 		{
 			m_MeshShaderSupport = caps7.MeshShaderTier;
+			m_SamplerFeedbackSupport = caps7.SamplerFeedbackTier;
 		}
 	}
 

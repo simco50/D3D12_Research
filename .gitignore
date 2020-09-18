@@ -10,7 +10,6 @@ imgui.ini
 *.gv
 .vscode/
 *.nsight*
-*.args.json
 _Temp/
 *.opt
 vs-chromium-project.txt

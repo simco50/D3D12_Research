@@ -149,6 +149,7 @@ private:
 	int m_ShaderModelMajor = -1;
 	int m_ShaderModelMinor = -1;
 	D3D12_MESH_SHADER_TIER m_MeshShaderSupport = D3D12_MESH_SHADER_TIER_NOT_SUPPORTED;
+	D3D12_SAMPLER_FEEDBACK_TIER m_SamplerFeedbackSupport = D3D12_SAMPLER_FEEDBACK_TIER_NOT_SUPPORTED;
 
 	int m_SampleCount = 1;
 

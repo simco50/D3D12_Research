@@ -110,7 +110,7 @@ namespace ShaderCompiler
 		pCompileResult->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(pErrors.GetAddressOf()), nullptr);
 		if (pErrors && pErrors->GetStringLength() > 0)
 		{
-			E_LOG(Warning, (char*)pErrors->GetBufferPointer());
+			E_LOG(Warning, "%s", (char*)pErrors->GetBufferPointer());
 			return false;
 		}
 

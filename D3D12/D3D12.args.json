@@ -1,0 +1,32 @@
+{
+  "FileVersion": 2,
+  "Id": "83a1ea0c-efb5-12be-b837-b61d240b0fef",
+  "Items": [
+    {
+      "Id": "63a8be03-b372-44a8-8d6a-9fa939588c63",
+      "Command": "Graphics",
+      "Items": [
+        {
+          "Id": "9f558793-12fa-4b34-b71b-5d7a1915b079",
+          "Command": "-dred"
+        },
+        {
+          "Id": "4de03791-1cf7-46f4-a5a7-f2e2a0bce9d2",
+          "Command": "-d3ddebug"
+        },
+        {
+          "Id": "eab03713-b9ab-4cfe-92d6-e90b2941e916",
+          "Command": "-gpuvalidation"
+        },
+        {
+          "Id": "105b6371-3768-4e96-a67d-ff8d99170742",
+          "Command": "-debugshaders"
+        }
+      ]
+    },
+    {
+      "Id": "3e3a5cf0-56ee-4188-a439-5c6205a883ce",
+      "Command": "-rgimmediate"
+    }
+  ]
+}
