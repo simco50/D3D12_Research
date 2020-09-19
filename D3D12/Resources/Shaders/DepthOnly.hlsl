@@ -1,4 +1,5 @@
 #include "Common.hlsli"
+#include "CommonBindings.hlsli"
 
 #define RootSig "RootFlags(ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT), " \
 				"CBV(b0, visibility=SHADER_VISIBILITY_VERTEX), " \
@@ -9,9 +10,6 @@ cbuffer PerObjectData : register(b0)
 {
 	float4x4 WorldViewProjection;
 }
-
-Texture2D tAlphaTexture : register(t0);
-SamplerState sAlphaSampler : register(s0);
 
 struct VSInput
 {
@@ -36,7 +34,7 @@ PSInput VSMain(VSInput input)
 
 void PSMain(PSInput input)
 {
-	if(tAlphaTexture.Sample(sAlphaSampler, input.texCoord).a < 0.5f)
+	if(tDiffuseTexture.Sample(sDiffuseSampler, input.texCoord).a < 0.5f)
 	{
 		discard;
 	}

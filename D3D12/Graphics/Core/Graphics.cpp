@@ -647,34 +647,25 @@ void Graphics::Update()
 			});
 	}
 
+	SceneData sceneData;
+	sceneData.pDepthBuffer = GetDepthStencil();
+	sceneData.pResolvedDepth = GetResolvedDepthStencil();
+	sceneData.pOpaqueBatches = &m_OpaqueBatches;
+	sceneData.pTransparantBatches = &m_TransparantBatches;
+	sceneData.pRenderTarget = GetCurrentRenderTarget();
+	sceneData.pLightBuffer = m_pLightBuffer.get();
+	sceneData.pCamera = m_pCamera.get();
+	sceneData.pShadowMaps = &m_ShadowMaps;
+	sceneData.pShadowData = &shadowData;
+	sceneData.pAO = m_pAmbientOcclusion.get();
+
 	if (m_RenderPath == RenderPath::Tiled)
 	{
-		TiledForwardInputResources resources;
-		resources.ResolvedDepthBuffer = Data.DepthStencilResolved;
-		resources.DepthBuffer = Data.DepthStencil;
-		resources.pOpaqueBatches = &m_OpaqueBatches;
-		resources.pTransparantBatches = &m_TransparantBatches;
-		resources.pRenderTarget = GetCurrentRenderTarget();
-		resources.pLightBuffer = m_pLightBuffer.get();
-		resources.pCamera = m_pCamera.get();
-		resources.pShadowMaps = &m_ShadowMaps;
-		resources.pShadowData = &shadowData;
-		resources.pAO = m_pAmbientOcclusion.get();
-		m_pTiledForward->Execute(graph, resources);
+		m_pTiledForward->Execute(graph, sceneData);
 	}
 	else if (m_RenderPath == RenderPath::Clustered)
 	{
-		ClusteredForwardInputResources resources;
-		resources.DepthBuffer = Data.DepthStencil;
-		resources.pOpaqueBatches = &m_OpaqueBatches;
-		resources.pTransparantBatches = &m_TransparantBatches;
-		resources.pRenderTarget = GetCurrentRenderTarget();
-		resources.pLightBuffer = m_pLightBuffer.get();
-		resources.pCamera = m_pCamera.get();
-		resources.pAO = m_pAmbientOcclusion.get();
-		resources.pShadowMaps = &m_ShadowMaps;
-		resources.pShadowData = &shadowData;
-		m_pClusteredForward->Execute(graph, resources);
+		m_pClusteredForward->Execute(graph, sceneData);
 	}
 
 	m_pParticles->Render(graph, GetCurrentRenderTarget(), GetDepthStencil(), *m_pCamera);

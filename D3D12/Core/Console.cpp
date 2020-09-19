@@ -57,29 +57,6 @@ void Console::Initialize()
 #endif
 }
 
-bool Console::LogHRESULT(const char* source, HRESULT hr)
-{
-	if (FAILED(hr))
-	{
-		if (FACILITY_WINDOWS == HRESULT_FACILITY(hr))
-		{
-			hr = HRESULT_CODE(hr);
-		}
-
-		char* errorMsg;
-		if (FormatMessage(
-			FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM,
-			nullptr, hr, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-			(LPSTR)&errorMsg, 0, nullptr) != 0)
-		{
-		}
-		LogFormat(LogType::Error, "Source: %s\n Message: %s", source, errorMsg);
-		return true;
-	}
-
-	return false;
-}
-
 void Console::Log(const char* message, LogType type)
 {
 	if ((int)type < (int)sVerbosity)
@@ -91,6 +68,8 @@ void Console::Log(const char* message, LogType type)
 	switch (type)
 	{
 	case LogType::Info:
+		if (sConsoleHandle)
+			SetConsoleTextAttribute(sConsoleHandle, FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY);
 		stream << "[INFO] ";
 		break;
 	case LogType::Warning:
@@ -108,11 +87,10 @@ void Console::Log(const char* message, LogType type)
 		break;
 	}
 
-	stream << message;
+	stream << message << "\n";
 	const std::string output = stream.str();
-	std::cout << output << std::endl;
+	printf(output.c_str());
 	OutputDebugString(output.c_str());
-	OutputDebugString("\n");
 	if (sConsoleHandle)
 	{
 		SetConsoleTextAttribute(sConsoleHandle, FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY);
@@ -154,10 +132,10 @@ void Console::Log(const char* message, LogType type)
 
 void Console::LogFormat(LogType type, const char* format, ...)
 {
-	static char sConvertBuffer[4096];
+	static char sConvertBuffer[8196];
 	va_list ap;
 	va_start(ap, format);
-	_vsnprintf_s(sConvertBuffer, 4096, 4096, format, ap);
+	vsnprintf_s(sConvertBuffer, 8196, format, ap);
 	va_end(ap);
 	Log(sConvertBuffer, type);
 }

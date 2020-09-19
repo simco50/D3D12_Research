@@ -31,16 +31,14 @@ void TiledForward::OnSwapchainCreated(int windowWidth, int windowHeight)
 	m_pLightGridTransparant->Create(TextureDesc::Create2D(frustumCountX, frustumCountY, DXGI_FORMAT_R32G32_UINT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
 }
 
-void TiledForward::Execute(RGGraph& graph, const TiledForwardInputResources& resources)
+void TiledForward::Execute(RGGraph& graph, const SceneData& resources)
 {
 	RG_GRAPH_SCOPE("Tiled Lighting", graph);
 
 	RGPassBuilder culling = graph.AddPass("Light Culling");
-	culling.Read(resources.ResolvedDepthBuffer);
 	culling.Bind([=](CommandContext& context, const RGPassResources& passResources)
 		{
-			Texture* pDepthTexture = passResources.GetTexture(resources.ResolvedDepthBuffer);
-			context.InsertResourceBarrier(pDepthTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+			context.InsertResourceBarrier(resources.pDepthBuffer, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(m_pLightIndexCounter.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
 			context.InsertResourceBarrier(m_pLightGridOpaque.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
@@ -64,10 +62,10 @@ void TiledForward::Execute(RGGraph& graph, const TiledForwardInputResources& res
 			} Data{};
 
 			Data.CameraView = resources.pCamera->GetView();
-			Data.NumThreadGroups.x = Math::DivideAndRoundUp(pDepthTexture->GetWidth(), FORWARD_PLUS_BLOCK_SIZE);
-			Data.NumThreadGroups.y = Math::DivideAndRoundUp(pDepthTexture->GetHeight(), FORWARD_PLUS_BLOCK_SIZE);
+			Data.NumThreadGroups.x = Math::DivideAndRoundUp(resources.pDepthBuffer->GetWidth(), FORWARD_PLUS_BLOCK_SIZE);
+			Data.NumThreadGroups.y = Math::DivideAndRoundUp(resources.pDepthBuffer->GetHeight(), FORWARD_PLUS_BLOCK_SIZE);
 			Data.NumThreadGroups.z = 1;
-			Data.ScreenDimensionsInv = Vector2(1.0f / pDepthTexture->GetWidth(), 1.0f / pDepthTexture->GetHeight());
+			Data.ScreenDimensionsInv = Vector2(1.0f / resources.pDepthBuffer->GetWidth(), 1.0f / resources.pDepthBuffer->GetHeight());
 			Data.LightCount = (uint32)resources.pLightBuffer->GetDesc().ElementCount;
 			Data.ProjectionInverse = resources.pCamera->GetProjectionInverse();
 
@@ -77,7 +75,7 @@ void TiledForward::Execute(RGGraph& graph, const TiledForwardInputResources& res
 			context.SetDynamicDescriptor(1, 2, m_pLightGridOpaque->GetUAV());
 			context.SetDynamicDescriptor(1, 3, m_pLightIndexListBufferTransparant->GetUAV());
 			context.SetDynamicDescriptor(1, 4, m_pLightGridTransparant->GetUAV());
-			context.SetDynamicDescriptor(2, 0, pDepthTexture->GetSRV());
+			context.SetDynamicDescriptor(2, 0, resources.pDepthBuffer->GetSRV());
 			context.SetDynamicDescriptor(2, 1, resources.pLightBuffer->GetSRV());
 
 			context.Dispatch(Data.NumThreadGroups);
@@ -86,11 +84,8 @@ void TiledForward::Execute(RGGraph& graph, const TiledForwardInputResources& res
 	//5. BASE PASS
 	// - Render the scene using the shadow mapping result and the light culling buffers
 	RGPassBuilder basePass = graph.AddPass("Base Pass");
-	basePass.Read(resources.DepthBuffer);
 	basePass.Bind([=](CommandContext& context, const RGPassResources& passResources)
 		{
-			Texture* pDepthTexture = passResources.GetTexture(resources.DepthBuffer);
-
 			struct PerFrameData
 			{
 				Matrix View;
@@ -120,10 +115,10 @@ void TiledForward::Execute(RGGraph& graph, const TiledForwardInputResources& res
 			context.InsertResourceBarrier(m_pLightIndexListBufferOpaque.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(m_pLightIndexListBufferTransparant.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(resources.pRenderTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
-			context.InsertResourceBarrier(pDepthTexture, D3D12_RESOURCE_STATE_DEPTH_READ);
+			context.InsertResourceBarrier(resources.pDepthBuffer, D3D12_RESOURCE_STATE_DEPTH_READ);
 			context.InsertResourceBarrier(resources.pAO, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
-			context.BeginRenderPass(RenderPassInfo(resources.pRenderTarget, RenderPassAccess::Clear_Store, pDepthTexture, RenderPassAccess::Load_DontCare));
+			context.BeginRenderPass(RenderPassInfo(resources.pRenderTarget, RenderPassAccess::Clear_Store, resources.pDepthBuffer, RenderPassAccess::Load_DontCare));
 
 			context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 			context.SetGraphicsRootSignature(m_pDiffuseRS.get());

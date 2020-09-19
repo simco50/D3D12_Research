@@ -60,7 +60,7 @@ Vector2 ComputeLightGridParams(float nearZ, float farZ)
 	return lightGridParams;
 }
 
-void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResources& resources)
+void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 {
 	RG_GRAPH_SCOPE("Clustered Lighting", graph);
 
@@ -106,16 +106,15 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
 	}
 
 	RGPassBuilder markClusters = graph.AddPass("Mark Clusters");
-	markClusters.Read(resources.DepthBuffer);
 	markClusters.Bind([=](CommandContext& context, const RGPassResources& passResources)
 		{
 			context.InsertResourceBarrier(resources.pRenderTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
-			context.InsertResourceBarrier(passResources.GetTexture(resources.DepthBuffer), D3D12_RESOURCE_STATE_DEPTH_READ);
+			context.InsertResourceBarrier(resources.pDepthBuffer, D3D12_RESOURCE_STATE_DEPTH_READ);
 			context.InsertResourceBarrier(m_pUniqueClusters.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
 			context.ClearUavUInt(m_pUniqueClusters.get(), m_pUniqueClustersRawUAV);
 
-			context.BeginRenderPass(RenderPassInfo(passResources.GetTexture(resources.DepthBuffer), RenderPassAccess::Load_DontCare, true));
+			context.BeginRenderPass(RenderPassInfo(resources.pDepthBuffer, RenderPassAccess::Load_DontCare, true));
 
 			context.SetPipelineState(m_pMarkUniqueClustersOpaquePSO.get());
 			context.SetGraphicsRootSignature(m_pMarkUniqueClustersRS.get());
@@ -246,7 +245,6 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
 		});
 
 	RGPassBuilder basePass = graph.AddPass("Base Pass");
-	basePass.Read(resources.DepthBuffer);
 	basePass.Bind([=](CommandContext& context, const RGPassResources& passResources)
 		{
 			struct PerObjectData
@@ -285,7 +283,7 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
 			context.InsertResourceBarrier(resources.pRenderTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
 			context.InsertResourceBarrier(resources.pAO, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
-			context.BeginRenderPass(RenderPassInfo(resources.pRenderTarget, RenderPassAccess::Clear_Store, passResources.GetTexture(resources.DepthBuffer), RenderPassAccess::Load_DontCare));
+			context.BeginRenderPass(RenderPassInfo(resources.pRenderTarget, RenderPassAccess::Clear_Store, resources.pDepthBuffer, RenderPassAccess::Load_DontCare));
 			context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 			context.SetGraphicsRootSignature(m_pDiffuseRS.get());
 
@@ -347,7 +345,6 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
 	if (g_VisualizeClusters)
 	{
 		RGPassBuilder visualize = graph.AddPass("Visualize Clusters");
-		visualize.Read(resources.DepthBuffer);
 		visualize.Bind([=](CommandContext& context, const RGPassResources& passResources)
 			{
 				if (m_DidCopyDebugClusterData == false)
@@ -359,7 +356,7 @@ void ClusteredForward::Execute(RGGraph& graph, const ClusteredForwardInputResour
 					m_DidCopyDebugClusterData = true;
 				}
 
-				context.BeginRenderPass(RenderPassInfo(resources.pRenderTarget, RenderPassAccess::Load_Store, passResources.GetTexture(resources.DepthBuffer), RenderPassAccess::Load_DontCare));
+				context.BeginRenderPass(RenderPassInfo(resources.pRenderTarget, RenderPassAccess::Load_Store, resources.pDepthBuffer, RenderPassAccess::Load_DontCare));
 
 				context.SetPipelineState(m_pDebugClustersPSO.get());
 				context.SetGraphicsRootSignature(m_pDebugClustersRS.get());

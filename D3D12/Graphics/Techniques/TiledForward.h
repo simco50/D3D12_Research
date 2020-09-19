@@ -11,20 +11,7 @@ class Buffer;
 class UnorderedAccessView;
 class RGGraph;
 struct ShadowData;
-
-struct TiledForwardInputResources
-{
-	RGResourceHandle ResolvedDepthBuffer;
-	RGResourceHandle DepthBuffer;
-	std::vector<std::unique_ptr<Texture>>* pShadowMaps = nullptr;
-	Texture* pRenderTarget = nullptr;
-	Texture* pAO = nullptr;
-	const std::vector<Batch>* pOpaqueBatches = nullptr;
-	const std::vector<Batch>* pTransparantBatches = nullptr;
-	Buffer* pLightBuffer = nullptr;
-	Camera* pCamera = nullptr;
-	ShadowData* pShadowData = nullptr;
-};
+struct SceneData;
 
 class TiledForward
 {
@@ -33,7 +20,7 @@ public:
 
 	void OnSwapchainCreated(int windowWidth, int windowHeight);
 
-	void Execute(RGGraph& graph, const TiledForwardInputResources& resources);
+	void Execute(RGGraph& graph, const SceneData& resources);
 	void VisualizeLightDensity(RGGraph& graph, Camera& camera, Texture* pTarget, Texture* pDepth);
 
 private:

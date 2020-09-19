@@ -13,26 +13,29 @@
 				"StaticSampler(s0, filter=FILTER_ANISOTROPIC, maxAnisotropy = 4, visibility = SHADER_VISIBILITY_PIXEL), " \
 				"StaticSampler(s1, filter=FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT, visibility = SHADER_VISIBILITY_PIXEL, comparisonFunc=COMPARISON_GREATER), " \
 
-cbuffer PerObjectData : register(b0)
+struct PerObjectData
 {
-	float4x4 cWorld;
-	float4x4 cWorldViewProj;
-}
+	float4x4 World;
+	float4x4 WorldViewProj;
+};
 
-cbuffer PerFrameData : register(b1)
+struct PerViewData
 {
-	float4x4 cView;
-	float4x4 cViewInverse;
-	float4x4 cProjection;
-	float2 cScreenDimensions;
-	float cNearZ;
-	float cFarZ;
+	float4x4 View;
+	float4x4 ViewInverse;
+	float4x4 Projection;
+	float2 ScreenDimensions;
+	float NearZ;
+	float FarZ;
 #if CLUSTERED_FORWARD
-    int4 cClusterDimensions;
-    int2 cClusterSize;
-	float2 cLightGridParams;
+    int4 ClusterDimensions;
+    int2 ClusterSize;
+	float2 LightGridParams;
 #endif
-}
+};
+
+ConstantBuffer<PerObjectData> cObjectData : register(b0);
+ConstantBuffer<PerViewData> cViewData : register(b1);
 
 struct VSInput
 {
@@ -64,7 +67,7 @@ StructuredBuffer<uint> tLightIndexList : register(t4);
 #if CLUSTERED_FORWARD
 uint GetSliceFromDepth(float depth)
 {
-    return floor(log(depth) * cLightGridParams.x - cLightGridParams.y);
+    return floor(log(depth) * cViewData.LightGridParams.x - cViewData.LightGridParams.y);
 }
 #endif
 
@@ -75,8 +78,8 @@ LightResult DoLight(float4 pos, float3 worldPos, float3 vPos, float3 N, float3 V
 	uint startOffset = tLightGrid[tileIndex].x;
 	uint lightCount = tLightGrid[tileIndex].y;
 #elif CLUSTERED_FORWARD
-	uint3 clusterIndex3D = uint3(floor(pos.xy / cClusterSize), GetSliceFromDepth(vPos.z));
-    uint clusterIndex1D = clusterIndex3D.x + (cClusterDimensions.x * (clusterIndex3D.y + cClusterDimensions.y * clusterIndex3D.z));
+	uint3 clusterIndex3D = uint3(floor(pos.xy / cViewData.ClusterSize), GetSliceFromDepth(vPos.z));
+    uint clusterIndex1D = clusterIndex3D.x + (cViewData.ClusterDimensions.x * (clusterIndex3D.y + cViewData.ClusterDimensions.y * clusterIndex3D.z));
 	uint startOffset = tLightGrid[clusterIndex1D].x;
 	uint lightCount = tLightGrid[clusterIndex1D].y;
 #endif
@@ -97,13 +100,13 @@ LightResult DoLight(float4 pos, float3 worldPos, float3 vPos, float3 N, float3 V
 PSInput VSMain(VSInput input)
 {
 	PSInput result;
-	result.position = mul(float4(input.position, 1.0f), cWorldViewProj);
-	result.positionWS = mul(float4(input.position, 1.0f), cWorld).xyz;
-	result.positionVS = mul(float4(result.positionWS, 1.0f), cView).xyz;
+	result.position = mul(float4(input.position, 1.0f), cObjectData.WorldViewProj);
+	result.positionWS = mul(float4(input.position, 1.0f), cObjectData.World).xyz;
+	result.positionVS = mul(float4(result.positionWS, 1.0f), cViewData.View).xyz;
 	result.texCoord = input.texCoord;
-	result.normal = normalize(mul(input.normal, (float3x3)cWorld));
-	result.tangent = normalize(mul(input.tangent, (float3x3)cWorld));
-	result.bitangent = normalize(mul(input.bitangent, (float3x3)cWorld));
+	result.normal = normalize(mul(input.normal, (float3x3)cObjectData.World));
+	result.tangent = normalize(mul(input.tangent, (float3x3)cObjectData.World));
+	result.bitangent = normalize(mul(input.bitangent, (float3x3)cObjectData.World));
 	return result;
 }
 
@@ -119,16 +122,16 @@ float4 PSMain(PSInput input) : SV_TARGET
 
 	float3x3 TBN = float3x3(normalize(input.tangent), normalize(input.bitangent), normalize(input.normal));
 	float3 N = TangentSpaceNormalMapping(tNormalTexture, sDiffuseSampler, TBN, input.texCoord, true);
-	float3 V = normalize(cViewInverse[3].xyz - input.positionWS);
+	float3 V = normalize(cViewData.ViewInverse[3].xyz - input.positionWS);
 
 	LightResult lighting = DoLight(input.position, input.positionWS, input.positionVS, N, V, diffuseColor, specularColor, r);
 	
 	float3 color = lighting.Diffuse + lighting.Specular; 
 
 	//Constant ambient
-	float ao = tAO.SampleLevel(sDiffuseSampler, (float2)input.position.xy / cScreenDimensions, 0).r;
+	float ao = tAO.SampleLevel(sDiffuseSampler, (float2)input.position.xy / cViewData.ScreenDimensions, 0).r;
 	color += ApplyAmbientLight(diffuseColor, ao, tLights[0].GetColor().rgb * 0.1f);
-	color += ApplyVolumetricLighting(cViewInverse[3].xyz, input.positionWS.xyz, input.position.xyz, cView, tLights[0], 10);
+	color += ApplyVolumetricLighting(cViewData.ViewInverse[3].xyz, input.positionWS.xyz, input.position.xyz, cViewData.View, tLights[0], 10);
 
 	return float4(color, baseColor.a);
 }

@@ -12,21 +12,9 @@ class Buffer;
 class UnorderedAccessView;
 class RGGraph;
 
+struct SceneData;
 struct Batch;
 struct ShadowData;
-
-struct ClusteredForwardInputResources
-{
-	RGResourceHandle DepthBuffer;
-	Texture* pRenderTarget = nullptr;
-	Texture* pAO = nullptr;
-	std::vector<std::unique_ptr<Texture>>* pShadowMaps = nullptr;
-	const std::vector<Batch>* pOpaqueBatches = nullptr;
-	const std::vector<Batch>* pTransparantBatches = nullptr;
-	Buffer* pLightBuffer = nullptr;
-	Camera* pCamera = nullptr;
-	ShadowData* pShadowData = nullptr;
-};
 
 class ClusteredForward
 {
@@ -36,7 +24,7 @@ public:
 
 	void OnSwapchainCreated(int windowWidth, int windowHeight);
 
-	void Execute(RGGraph& graph, const ClusteredForwardInputResources& resources);
+	void Execute(RGGraph& graph, const SceneData& resources);
 	void VisualizeLightDensity(RGGraph& graph, Camera& camera, Texture* pTarget, Texture* pDepth);
 
 private:

@@ -37,7 +37,21 @@ struct ShadowData
 	Matrix LightViewProjections[MAX_SHADOW_CASTERS];
 	Vector4 ShadowMapOffsets[MAX_SHADOW_CASTERS];
 	float CascadeDepths[4];
-	uint32 NumCascades;
+	uint32 NumCascades = 0;
+};
+
+struct SceneData
+{
+	Texture* pDepthBuffer = nullptr;
+	Texture* pResolvedDepth = nullptr;
+	std::vector<std::unique_ptr<Texture>>* pShadowMaps = nullptr;
+	Texture* pRenderTarget = nullptr;
+	Texture* pAO = nullptr;
+	const std::vector<Batch>* pOpaqueBatches = nullptr;
+	const std::vector<Batch>* pTransparantBatches = nullptr;
+	Buffer* pLightBuffer = nullptr;
+	Camera* pCamera = nullptr;
+	ShadowData* pShadowData = nullptr;
 };
 
 enum class RenderPath

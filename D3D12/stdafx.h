@@ -1,20 +1,24 @@
 #pragma once
 
+
+//STL
+#include <assert.h>
+//Containers
 #include <string>
 #include <queue>
 #include <vector>
-#include <iostream>
 #include <memory>
 #include <array>
-#include <queue>
-#include <mutex>
 #include <map>
-#include <sstream>
-#include <algorithm>
-#include <assert.h>
 #include <unordered_map>
-#include <algorithm>
+//IO
+#include <sstream>
 #include <fstream>
+#include <iostream>
+//Misc
+#include <algorithm>
+#include <mutex>
+
 #include "Core/CoreTypes.h"
 
 #define WIN32_LEAN_AND_MEAN 
@@ -29,6 +33,7 @@ using ComPtr = Microsoft::WRL::ComPtr<T>;
 #include <d3d12.h>
 #include <dxgi1_6.h>
 
+#define D3DX12_NO_STATE_OBJECT_HELPERS
 #include "d3dx12/d3dx12.h"
 #include "d3dx12/d3dx12_extra.h"
 #include "Imgui/imgui.h"
