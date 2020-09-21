@@ -11,7 +11,7 @@
 #endif
 
 #define SM_MAJ 6
-#define SM_MIN 0
+#define SM_MIN 5
 
 namespace ShaderCompiler
 {

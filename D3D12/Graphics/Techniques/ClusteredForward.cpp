@@ -90,9 +90,9 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 				} constantBuffer;
 
 				constantBuffer.ScreenDimensionsInv = Vector2(1.0f / screenDimensions.x, 1.0f / screenDimensions.y);
-				constantBuffer.NearZ = m_pGraphics->GetCamera()->GetFar();
-				constantBuffer.FarZ = m_pGraphics->GetCamera()->GetNear();
-				constantBuffer.ProjectionInverse = m_pGraphics->GetCamera()->GetProjectionInverse();
+				constantBuffer.NearZ = resources.pCamera->GetFar();
+				constantBuffer.FarZ = resources.pCamera->GetNear();
+				constantBuffer.ProjectionInverse = resources.pCamera->GetProjectionInverse();
 				constantBuffer.ClusterSize = IntVector2(cClusterSize, cClusterSize);
 				constantBuffer.ClusterDimensions = IntVector3(m_ClusterCountX, m_ClusterCountY, cClusterCountZ);
 
@@ -258,11 +258,12 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 				Matrix View;
 				Matrix ViewInverse;
 				Matrix Projection;
-				Vector2 ScreenDimensions;
+				Matrix ProjectionInverse;
+				Vector2 InvScreenDimensions;
 				float NearZ;
 				float FarZ;
+				int FrameIndex;
 				IntVector3 ClusterDimensions;
-				int padding0;
 				IntVector2 ClusterSize;
 				Vector2 LightGridParams;
 			} frameData{};
@@ -270,18 +271,22 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 			Matrix view = resources.pCamera->GetView();
 			frameData.View = view;
 			frameData.Projection = resources.pCamera->GetProjection();
+			frameData.ProjectionInverse = resources.pCamera->GetProjectionInverse();
 			frameData.ViewInverse = resources.pCamera->GetViewInverse();
-			frameData.ScreenDimensions = screenDimensions;
-			frameData.NearZ = farZ;
-			frameData.FarZ = nearZ;
+			frameData.InvScreenDimensions = Vector2(1.0f / screenDimensions.x, 1.0f / screenDimensions.y);
+			frameData.NearZ = nearZ;
+			frameData.FarZ = farZ;
 			frameData.ClusterDimensions = IntVector3(m_ClusterCountX, m_ClusterCountY, cClusterCountZ);
 			frameData.ClusterSize = IntVector2(cClusterSize, cClusterSize);
 			frameData.LightGridParams = lightGridParams;
+			frameData.FrameIndex = resources.FrameIndex;
 
 			context.InsertResourceBarrier(m_pLightGrid.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(m_pLightIndexGrid.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(resources.pRenderTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
 			context.InsertResourceBarrier(resources.pAO, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+			context.InsertResourceBarrier(resources.pPreviousColor, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+			context.InsertResourceBarrier(resources.pResolvedDepth, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
 			context.BeginRenderPass(RenderPassInfo(resources.pRenderTarget, RenderPassAccess::Clear_Store, resources.pDepthBuffer, RenderPassAccess::Load_DontCare));
 			context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -297,6 +302,8 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 				context.SetDynamicDescriptors(3, 0, srvs, ARRAYSIZE(srvs));
 			};
 
+			context.GetCommandList()->SetGraphicsRootShaderResourceView(6, resources.pTLAS->GetGpuHandle());
+
 			{
 				GPU_PROFILE_SCOPE("Opaque", &context);
 				context.SetPipelineState(m_pDiffusePSO.get());
@@ -308,6 +315,8 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 				context.SetDynamicDescriptor(4, 1, m_pLightIndexGrid->GetSRV());
 				context.SetDynamicDescriptor(4, 2, resources.pLightBuffer->GetSRV());
 				context.SetDynamicDescriptor(4, 3, resources.pAO->GetSRV());
+				context.SetDynamicDescriptor(4, 4, resources.pResolvedDepth->GetSRV());
+				context.SetDynamicDescriptor(4, 5, resources.pPreviousColor->GetSRV());
 
 				int idx = 0;
 				for (auto& pShadowMap : *resources.pShadowMaps)

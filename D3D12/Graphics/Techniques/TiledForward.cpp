@@ -91,9 +91,11 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& resources)
 				Matrix View;
 				Matrix ViewInverse;
 				Matrix Projection;
-				Vector2 ScreenDimensions;
+				Matrix ProjectionInverse;
+				Vector2 InvScreenDimensions;
 				float NearZ;
 				float FarZ;
+				int FrameIndex;
 			} frameData;
 
 			struct PerObjectData
@@ -106,9 +108,11 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& resources)
 			frameData.ViewInverse = resources.pCamera->GetViewInverse();
 			frameData.View = resources.pCamera->GetView();
 			frameData.Projection = resources.pCamera->GetProjection();
-			frameData.ScreenDimensions = Vector2((float)resources.pRenderTarget->GetWidth(), (float)resources.pRenderTarget->GetHeight());
+			frameData.ProjectionInverse = resources.pCamera->GetProjectionInverse();
+			frameData.InvScreenDimensions = Vector2(1.0f / resources.pRenderTarget->GetWidth(), 1.0f / resources.pRenderTarget->GetHeight());
 			frameData.NearZ = resources.pCamera->GetNear();
 			frameData.FarZ = resources.pCamera->GetFar();
+			frameData.FrameIndex = resources.FrameIndex;
 
 			context.InsertResourceBarrier(m_pLightGridOpaque.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(m_pLightGridTransparant.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);

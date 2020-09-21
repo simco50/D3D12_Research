@@ -46,12 +46,15 @@ struct SceneData
 	Texture* pResolvedDepth = nullptr;
 	std::vector<std::unique_ptr<Texture>>* pShadowMaps = nullptr;
 	Texture* pRenderTarget = nullptr;
+	Texture* pPreviousColor = nullptr;
 	Texture* pAO = nullptr;
 	const std::vector<Batch>* pOpaqueBatches = nullptr;
 	const std::vector<Batch>* pTransparantBatches = nullptr;
 	Buffer* pLightBuffer = nullptr;
 	Camera* pCamera = nullptr;
 	ShadowData* pShadowData = nullptr;
+	int FrameIndex = 0;
+	Buffer* pTLAS = nullptr;
 };
 
 enum class RenderPath
@@ -179,6 +182,7 @@ private:
 	std::array<std::unique_ptr<Texture>, FRAME_COUNT> m_Backbuffers;
 	std::unique_ptr<Texture> m_pMultiSampleRenderTarget;
 	std::unique_ptr<Texture> m_pHDRRenderTarget;
+	std::unique_ptr<Texture> m_pPreviousColor;
 	std::unique_ptr<Texture> m_pTonemapTarget;
 	std::unique_ptr<Texture> m_pDepthStencil;
 	std::unique_ptr<Texture> m_pResolvedDepthStencil;

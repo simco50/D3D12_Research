@@ -90,7 +90,7 @@ void Console::Log(const char* message, LogType type)
 	stream << message << "\n";
 	const std::string output = stream.str();
 	printf(output.c_str());
-	OutputDebugString(output.c_str());
+	OutputDebugStringA(output.c_str());
 	if (sConsoleHandle)
 	{
 		SetConsoleTextAttribute(sConsoleHandle, FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY);
@@ -132,10 +132,10 @@ void Console::Log(const char* message, LogType type)
 
 void Console::LogFormat(LogType type, const char* format, ...)
 {
-	static char sConvertBuffer[8196];
+	static char sConvertBuffer[8196*2];
 	va_list ap;
 	va_start(ap, format);
-	vsnprintf_s(sConvertBuffer, 8196, format, ap);
+	vsnprintf_s(sConvertBuffer, 8196*2, format, ap);
 	va_end(ap);
 	Log(sConvertBuffer, type);
 }
