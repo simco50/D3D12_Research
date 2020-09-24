@@ -16,6 +16,8 @@
 static constexpr int cClusterSize = 64;
 static constexpr int cClusterCountZ = 32;
 
+int ssrSamples = 16;
+
 bool g_VisualizeClusters = false;
 
 ClusteredForward::ClusteredForward(Graphics* pGraphics)
@@ -68,6 +70,8 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 	float nearZ = resources.pCamera->GetNear();
 	float farZ = resources.pCamera->GetFar();
 	Vector2 lightGridParams = ComputeLightGridParams(nearZ, farZ);
+
+	ImGui::SliderInt("SSR Samples", &ssrSamples, 0, 128);
 
 	if (m_ViewportDirty)
 	{
@@ -263,6 +267,8 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 				float NearZ;
 				float FarZ;
 				int FrameIndex;
+				IntVector3 SsrSamples;
+				int poop;
 				IntVector3 ClusterDimensions;
 				IntVector2 ClusterSize;
 				Vector2 LightGridParams;
@@ -280,6 +286,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 			frameData.ClusterSize = IntVector2(cClusterSize, cClusterSize);
 			frameData.LightGridParams = lightGridParams;
 			frameData.FrameIndex = resources.FrameIndex;
+			frameData.SsrSamples.x = ssrSamples;
 
 			context.InsertResourceBarrier(m_pLightGrid.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(m_pLightIndexGrid.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);

@@ -327,6 +327,7 @@ void Texture::SetData(CommandContext* pContext, const void* pData)
 void Texture::CreateForSwapchain(ID3D12Resource* pTexture)
 {
 	Release();
+	D3D::SetObjectName(pTexture, "Backbuffer");
 	m_pResource = pTexture;
 	SetResourceState(D3D12_RESOURCE_STATE_PRESENT);
 	D3D12_RESOURCE_DESC desc = pTexture->GetDesc();
