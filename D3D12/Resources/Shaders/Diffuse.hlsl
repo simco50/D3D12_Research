@@ -214,23 +214,36 @@ float4 PSMain(PSInput input) : SV_TARGET
 				uint hitIndex = 0;
 				float3 bestHit = rayPos;
 				float prevSceneZ = rayStart.z;
-				for (uint currStep = 1; currStep <= maxSteps; currStep++)
+				for (uint currStep = 0; currStep < maxSteps; currStep += 4)
 				{
-					float2 texCoord = rayPos.xy + rayStep.xy * currStep;
-					float sceneZ = LinearizeDepth(tDepth.SampleLevel(sClampSampler, texCoord, 0).x, cViewData.NearZ, cViewData.FarZ);
-					float currentPosition = rayPos.z + rayStep.z * currStep;
-					if (abs(currentPosition - sceneZ - zThickness) < zThickness)
+					uint4 step = float4(1, 2, 3, 4) + currStep;
+					float4 sceneZ = float4(
+						LinearizeDepth(tDepth.SampleLevel(sClampSampler, rayPos.xy + rayStep.xy * step.x, 0).x, cViewData.NearZ, cViewData.FarZ),
+						LinearizeDepth(tDepth.SampleLevel(sClampSampler, rayPos.xy + rayStep.xy * step.y, 0).x, cViewData.NearZ, cViewData.FarZ),
+						LinearizeDepth(tDepth.SampleLevel(sClampSampler, rayPos.xy + rayStep.xy * step.z, 0).x, cViewData.NearZ, cViewData.FarZ),
+						LinearizeDepth(tDepth.SampleLevel(sClampSampler, rayPos.xy + rayStep.xy * step.w, 0).x, cViewData.NearZ, cViewData.FarZ)
+					);
+					float4 currentPosition = rayPos.z + rayStep.z * step;
+					uint4 zTest = abs(currentPosition - sceneZ - zThickness) < zThickness;
+                    uint zMask = (((zTest.x << 0) | (zTest.y << 1)) | (zTest.z << 2)) | (zTest.w << 3);
+					if(zMask > 0)
 					{
-						bestHit = rayPos + (rayStep * float(currStep));
-						float zAfter = sceneZ - bestHit.z;
+						uint firstHit = firstbitlow(zMask);
+						if(firstHit > 0)
+						{
+							prevSceneZ = sceneZ[firstHit - 1];
+						}
+
+						bestHit = rayPos + (rayStep * float(currStep + firstHit + 1));
+						float zAfter = sceneZ[firstHit] - bestHit.z;
 						float zBefore = (prevSceneZ - bestHit.z) + rayStep.z;
 						float weight = saturate(zAfter / (zAfter - zBefore));
 						float3 prevRayPos = bestHit - rayStep;
 						bestHit = (prevRayPos * weight) + (bestHit * (1.0f - weight));
-						hitIndex = currStep;
+						hitIndex = currStep + firstHit;
 						break;
 					}
-					prevSceneZ = sceneZ;
+					prevSceneZ = sceneZ.w;
 				}
 
 				float4 hitColor = 0;
