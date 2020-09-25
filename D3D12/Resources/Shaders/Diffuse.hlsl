@@ -116,43 +116,21 @@ PSInput VSMain(VSInput input)
 	return result;
 }
 
-float4 PSMain(PSInput input) : SV_TARGET
+float3 ScreenSpaceReflectionsRT(float3 positionWS, float3 positionVS, float3 N, float3 V, float R)
 {
-	float4 baseColor = tDiffuseTexture.Sample(sDiffuseSampler, input.texCoord);
-	float3 specular = 0.5f;
-	float metalness = 0;
-	float r = 0.5f;
-
-	float3 diffuseColor = ComputeDiffuseColor(baseColor.rgb, metalness);
-	float3 specularColor = ComputeF0(specular.r, baseColor.rgb, metalness);
-
-	float3x3 TBN = float3x3(normalize(input.tangent), normalize(input.bitangent), normalize(input.normal));
-	float3 N = TangentSpaceNormalMapping(tNormalTexture, sDiffuseSampler, TBN, input.texCoord, true);
-	float3 V = normalize(cViewData.ViewInverse[3].xyz - input.positionWS);	
-
 	float3 ssr = 0;
-	float ssrMode = 1.0f;
-	float roughnessThreshold = 0.1f;
-	bool ssrEnabled = false;
-	if (ssrMode > 0.0)
-	{
-		ssrEnabled = r > roughnessThreshold;
-	}
-	else
-	{
-		ssrEnabled = ssrMode > 0.0;
-	}
+	float roughnessThreshold = 0.7f;
+	bool ssrEnabled = R < roughnessThreshold;
 	if(ssrEnabled)
 	{
-#if 0
 		if(cViewData.SsrSamples.x > 64)
 		{
 			float3 reflectionWs = normalize(reflect(-V, N));
 			RayDesc ray;
-			ray.Origin = input.positionWS;
+			ray.Origin = positionWS;
 			ray.Direction = reflectionWs;
 			ray.TMin = 0.001;
-			ray.TMax = input.positionVS.z;
+			ray.TMax = positionVS.z;
 
 			RayQuery<RAY_FLAG_NONE> q;
 
@@ -172,99 +150,132 @@ float4 PSMain(PSInput input) : SV_TARGET
 				proj.xyz /= proj.w;
 				proj.x = (proj.x + 1) / 2.0f;
 				proj.y = (1 - proj.y) / 2.0f;
-				if(proj.z > 0 && proj.x > 0 && proj.x < 1 && proj.y > 0 && proj.y < 1)
-				{
-					ssr = gradient * saturate(0.5f * tPrevColor.SampleLevel(sClampSampler, proj.xy, 0).xyz);
-				}
-			}
-		}
-
-#endif
-		if (cViewData.SsrSamples.x > 0 && cViewData.SsrSamples.x <= 64)
-		{
-			float reflectionThreshold = 0.0f;
-			float3 reflectionWs = normalize(reflect(-V, N));
-			if (dot(V, reflectionWs) <= reflectionThreshold)
-			{
-				uint frameIndex = cViewData.FrameIndex;
-				float jitter = InterleavedGradientNoise(input.position.xy, frameIndex) - 1.0f;
-
-				uint maxSteps = cViewData.SsrSamples.x;
-
-				float3 rayStartVS = input.positionVS;
-				float linearDepth = rayStartVS.z;
-				float3 reflectionVs = mul(reflectionWs, (float3x3)cViewData.View);
-				float3 rayEndVS = rayStartVS + (reflectionVs * linearDepth);
-
-				float3 rayStart = 0;
-				rayStart.x = (rayStartVS.x * cViewData.Projection[0][0] / rayStartVS.z + 1) / 2;
-				rayStart.y = 1 - (rayStartVS.y * cViewData.Projection[1][1] / rayStartVS.z + 1) / 2;
-				rayStart.z = (rayStartVS.z - cViewData.FarZ) / (cViewData.NearZ - cViewData.FarZ);
-
-				float3 rayEnd = 0;
-				rayEnd.x = (rayEndVS.x * cViewData.Projection[0][0] / rayEndVS.z + 1) / 2;
-				rayEnd.y = 1 - (rayEndVS.y * cViewData.Projection[1][1] / rayEndVS.z + 1) / 2;
-				rayEnd.z = (rayEndVS.z - cViewData.FarZ) / (cViewData.NearZ - cViewData.FarZ);
-
-				float3 rayStep = ((rayEnd - rayStart) / float(maxSteps));
-				rayStep = rayStep / length(rayEnd.xy - rayStart.xy);
-				float3 rayPos = rayStart + (rayStep * jitter);
-				float zThickness = abs(rayStep.z);
-
-				uint hitIndex = 0;
-				float3 bestHit = rayPos;
-				float prevSceneZ = rayStart.z;
-				for (uint currStep = 0; currStep < maxSteps; currStep += 4)
-				{
-					uint4 step = float4(1, 2, 3, 4) + currStep;
-					float4 sceneZ = float4(
-						LinearizeDepth(tDepth.SampleLevel(sClampSampler, rayPos.xy + rayStep.xy * step.x, 0).x, cViewData.NearZ, cViewData.FarZ),
-						LinearizeDepth(tDepth.SampleLevel(sClampSampler, rayPos.xy + rayStep.xy * step.y, 0).x, cViewData.NearZ, cViewData.FarZ),
-						LinearizeDepth(tDepth.SampleLevel(sClampSampler, rayPos.xy + rayStep.xy * step.z, 0).x, cViewData.NearZ, cViewData.FarZ),
-						LinearizeDepth(tDepth.SampleLevel(sClampSampler, rayPos.xy + rayStep.xy * step.w, 0).x, cViewData.NearZ, cViewData.FarZ)
-					);
-					float4 currentPosition = rayPos.z + rayStep.z * step;
-					uint4 zTest = abs(currentPosition - sceneZ - zThickness) < zThickness;
-                    uint zMask = (((zTest.x << 0) | (zTest.y << 1)) | (zTest.z << 2)) | (zTest.w << 3);
-					if(zMask > 0)
-					{
-						uint firstHit = firstbitlow(zMask);
-						if(firstHit > 0)
-						{
-							prevSceneZ = sceneZ[firstHit - 1];
-						}
-
-						bestHit = rayPos + (rayStep * float(currStep + firstHit + 1));
-						float zAfter = sceneZ[firstHit] - bestHit.z;
-						float zBefore = (prevSceneZ - bestHit.z) + rayStep.z;
-						float weight = saturate(zAfter / (zAfter - zBefore));
-						float3 prevRayPos = bestHit - rayStep;
-						bestHit = (prevRayPos * weight) + (bestHit * (1.0f - weight));
-						hitIndex = currStep + firstHit;
-						break;
-					}
-					prevSceneZ = sceneZ.w;
-				}
-
-				float4 hitColor = 0;
-				if (hitIndex > 0)
-				{
-					float2 texCoord = bestHit.xy;
-					float2 dist = (float2(texCoord.x, 1.0f - texCoord.y) * 2.0f) - float2(1.0f, 1.0f);
-					float edgeAttenuation = (1.0 - (float(hitIndex - 1) / float(maxSteps))) * 4.0f;
-					edgeAttenuation = saturate(edgeAttenuation);
-					edgeAttenuation *= smoothstep(0.0f, 0.5f, saturate(1.0 - dot(dist, dist)));
-					float3 reflectionResult = tPrevColor.SampleLevel(sClampSampler, texCoord.xy, 0).xyz;
-					hitColor = float4(reflectionResult, edgeAttenuation);
-				}
-				float roughnessMask = 1.0f - (r / (1.0f - roughnessThreshold));
-				roughnessMask = saturate(roughnessMask);
-				float ssrWeight = (hitColor.w * roughnessMask);
-				ssr = saturate(hitColor.xyz * ssrWeight);
+				ssr = gradient * saturate(0.5f * tPrevColor.SampleLevel(sClampSampler, proj.xy, 0).xyz);
 			}
 		}
 	}
+	return ssr;
+}
 
+float3 ScreenSpaceReflections(float4 position, float3 positionVS, float3 N, float3 V, float R)
+{
+	float3 ssr = 0;
+	const float roughnessThreshold = 0.8f;
+	bool ssrEnabled = R < roughnessThreshold;
+	if(ssrEnabled)
+	{
+		float reflectionThreshold = 0.0f;
+		float3 reflectionWs = normalize(reflect(-V, N));
+		if (dot(V, reflectionWs) <= reflectionThreshold)
+		{
+			uint frameIndex = cViewData.FrameIndex;
+			float jitter = InterleavedGradientNoise(position.xy, frameIndex) - 1.0f;
+
+			uint maxSteps = cViewData.SsrSamples.x;
+
+			float3 rayStartVS = positionVS;
+			float linearDepth = rayStartVS.z;
+			float3 reflectionVs = mul(reflectionWs, (float3x3)cViewData.View);
+			float3 rayEndVS = rayStartVS + (reflectionVs * linearDepth);
+
+			float3 rayStart = 0;
+			rayStart.x = (rayStartVS.x * cViewData.Projection[0][0] / rayStartVS.z + 1) / 2;
+			rayStart.y = 1 - (rayStartVS.y * cViewData.Projection[1][1] / rayStartVS.z + 1) / 2;
+			rayStart.z = (rayStartVS.z - cViewData.FarZ) / (cViewData.NearZ - cViewData.FarZ);
+
+			float3 rayEnd = 0;
+			rayEnd.x = (rayEndVS.x * cViewData.Projection[0][0] / rayEndVS.z + 1) / 2;
+			rayEnd.y = 1 - (rayEndVS.y * cViewData.Projection[1][1] / rayEndVS.z + 1) / 2;
+			rayEnd.z = (rayEndVS.z - cViewData.FarZ) / (cViewData.NearZ - cViewData.FarZ);
+
+			float3 rayStep = ((rayEnd - rayStart) / float(maxSteps));
+			rayStep = rayStep / length(rayEnd.xy - rayStart.xy);
+			float3 rayPos = rayStart + (rayStep * jitter);
+			float zThickness = abs(rayStep.z);
+
+			uint hitIndex = 0;
+			float3 bestHit = rayPos;
+			float prevSceneZ = rayStart.z;
+			for (uint currStep = 0; currStep < maxSteps; currStep += 4)
+			{
+				uint4 step = float4(1, 2, 3, 4) + currStep;
+				float4 sceneZ = float4(
+					LinearizeDepth(tDepth.SampleLevel(sClampSampler, rayPos.xy + rayStep.xy * step.x, 0).x, cViewData.NearZ, cViewData.FarZ),
+					LinearizeDepth(tDepth.SampleLevel(sClampSampler, rayPos.xy + rayStep.xy * step.y, 0).x, cViewData.NearZ, cViewData.FarZ),
+					LinearizeDepth(tDepth.SampleLevel(sClampSampler, rayPos.xy + rayStep.xy * step.z, 0).x, cViewData.NearZ, cViewData.FarZ),
+					LinearizeDepth(tDepth.SampleLevel(sClampSampler, rayPos.xy + rayStep.xy * step.w, 0).x, cViewData.NearZ, cViewData.FarZ)
+				);
+				float4 currentPosition = rayPos.z + rayStep.z * step;
+				uint4 zTest = abs(currentPosition - sceneZ - zThickness) < zThickness;
+				uint zMask = (((zTest.x << 0) | (zTest.y << 1)) | (zTest.z << 2)) | (zTest.w << 3);
+				if(zMask > 0)
+				{
+					uint firstHit = firstbitlow(zMask);
+					if(firstHit > 0)
+					{
+						prevSceneZ = sceneZ[firstHit - 1];
+					}
+
+					bestHit = rayPos + (rayStep * float(currStep + firstHit + 1));
+					float zAfter = sceneZ[firstHit] - bestHit.z;
+					float zBefore = (prevSceneZ - bestHit.z) + rayStep.z;
+					float weight = saturate(zAfter / (zAfter - zBefore));
+					float3 prevRayPos = bestHit - rayStep;
+					bestHit = (prevRayPos * weight) + (bestHit * (1.0f - weight));
+					hitIndex = currStep + firstHit;
+					break;
+				}
+				prevSceneZ = sceneZ.w;
+			}
+
+			float4 hitColor = 0;
+			if (hitIndex > 0)
+			{
+				float2 texCoord = bestHit.xy;
+				float2 dist = (float2(texCoord.x, 1.0f - texCoord.y) * 2.0f) - float2(1.0f, 1.0f);
+				float edgeAttenuation = (1.0 - (float(hitIndex - 1) / float(maxSteps))) * 4.0f;
+				edgeAttenuation = saturate(edgeAttenuation);
+				edgeAttenuation *= smoothstep(0.0f, 0.5f, saturate(1.0 - dot(dist, dist)));
+				float3 reflectionResult = tPrevColor.SampleLevel(sClampSampler, texCoord.xy, 0).xyz;
+				hitColor = float4(reflectionResult, edgeAttenuation);
+			}
+			float roughnessMask = 1.0f - (R / roughnessThreshold);
+			roughnessMask = saturate(roughnessMask);
+			float ssrWeight = (hitColor.w * roughnessMask);
+			ssr = saturate(hitColor.xyz * ssrWeight);
+		}
+	}
+	return ssr;
+}
+
+float4 PSMain(PSInput input) : SV_TARGET
+{
+	float4 baseColor = tDiffuseTexture.Sample(sDiffuseSampler, input.texCoord);
+	float3 specular = 0.5f;
+	float metalness = 0;
+	float r = 0.5f;
+
+	float3 diffuseColor = ComputeDiffuseColor(baseColor.rgb, metalness);
+	float3 specularColor = ComputeF0(specular.r, baseColor.rgb, metalness);
+
+	float3x3 TBN = float3x3(normalize(input.tangent), normalize(input.bitangent), normalize(input.normal));
+	float3 N = TangentSpaceNormalMapping(tNormalTexture, sDiffuseSampler, TBN, input.texCoord, true);
+	float3 V = normalize(cViewData.ViewInverse[3].xyz - input.positionWS);	
+
+	float3 ssr = 0;
+
+
+	if (cViewData.SsrSamples.x > 0 )
+	{
+		if(cViewData.SsrSamples.x <= 64)
+		{
+			ssr = ScreenSpaceReflections(input.position, input.positionVS, N, V, r);
+		}
+		else
+		{
+			ssr = ScreenSpaceReflectionsRT(input.positionWS, input.positionVS, N, V, r);
+		}
+	}
 
 	LightResult lighting = DoLight(input.position, input.positionWS, input.positionVS, N, V, diffuseColor, specularColor, r);
 
