@@ -1,3 +1,6 @@
+#ifndef __INCLUDE_COMMON_BINDINGS__
+#define __INCLUDE_COMMON_BINDINGS__
+
 //SRVs
 Texture2D tDiffuseTexture :                 register(t0);
 Texture2D tNormalTexture :                  register(t1);
@@ -14,3 +17,5 @@ SamplerState sClampSampler :                register(s1);
 SamplerComparisonState sShadowMapSampler :  register(s2);
 
 RaytracingAccelerationStructure tAccelerationStructure :     register(t500);
+
+#endif

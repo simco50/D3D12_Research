@@ -123,7 +123,7 @@ float3 ScreenSpaceReflectionsRT(float3 positionWS, float3 positionVS, float3 N, 
 	bool ssrEnabled = R < roughnessThreshold;
 	if(ssrEnabled)
 	{
-#if 1
+#if _INLINE_RT
 		if(cViewData.SsrSamples.x > 64)
 		{
 			float3 reflectionWs = normalize(reflect(-V, N));

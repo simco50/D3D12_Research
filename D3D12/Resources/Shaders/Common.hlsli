@@ -1,3 +1,6 @@
+#ifndef __INCLUDE_COMMON__
+#define __INCLUDE_COMMON__
+
 #include "Constants.hlsli"
 
 float4 UIntToColor(uint c)
@@ -285,3 +288,5 @@ void SwizzleThreadID(uint2 dispatchDimensions, uint2 numThreads, int2 groupId, i
     swizzledvThreadID.x = (CTA_Dim.x)*swizzledvThreadGroupID.x + groupThreadIndex.x; 
     swizzledvThreadID.y = (CTA_Dim.y)*swizzledvThreadGroupID.y + groupThreadIndex.y;
 }
+
+#endif
