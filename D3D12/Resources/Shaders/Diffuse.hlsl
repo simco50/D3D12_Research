@@ -184,9 +184,6 @@ float3 ScreenSpaceReflections(float4 position, float3 positionVS, float3 N, floa
 		{
 			uint frameIndex = cViewData.FrameIndex;
 			float jitter = InterleavedGradientNoise(position.xy, frameIndex) - 1.0f;
-
-			//jitter = 0;
-
 			uint maxSteps = cViewData.SsrSamples.x;
 
 			float3 rayStartVS = positionVS;
@@ -209,7 +206,8 @@ float3 ScreenSpaceReflections(float4 position, float3 positionVS, float3 N, floa
 			rayEnd.z = proj.y / rayEndVS.z + proj.x;
 
 			float3 rayStep = ((rayEnd - rayStart) / float(maxSteps));
-			//rayStep = rayStep / length(rayEnd.xy - rayStart.xy).xxx;
+			//Not sure what we do here?
+			//rayStep = rayStep / length(rayEnd.xy - rayStart.xy);
 			float3 rayPos = rayStart + (rayStep * jitter);
 			float zThickness = abs(rayStep.z);
 
@@ -243,7 +241,7 @@ float3 ScreenSpaceReflections(float4 position, float3 positionVS, float3 N, floa
 					float3 prevRayPos = bestHit - rayStep;
 					bestHit = (prevRayPos * weight) + (bestHit * (1.0f - weight));
 					hitIndex = currStep + firstHit;
-					//return float3(0,1,0);
+					break;
 				}
 				prevSceneZ = sceneZ.w;
 			}
@@ -261,13 +259,8 @@ float3 ScreenSpaceReflections(float4 position, float3 positionVS, float3 N, floa
 			}
 			float roughnessMask = 1.0f - (R / roughnessThreshold);
 			roughnessMask = saturate(roughnessMask);
-			roughnessMask = 1;
 			float ssrWeight = (hitColor.w * roughnessMask);
 			ssr = saturate(hitColor.xyz * ssrWeight);
-		}
-		else
-		{
-			///ssr = float3(1,0,1);
 		}
 	}
 	return ssr;
@@ -294,11 +287,11 @@ float4 PSMain(PSInput input) : SV_TARGET
 	{
 		if(cViewData.SsrSamples.x != 128)
 		{
-			ssr = ScreenSpaceReflections(input.position, input.positionVS, input.normal, V, r);
+			ssr = ScreenSpaceReflections(input.position, input.positionVS, N, V, r);
 		}
 		else
 		{
-			ssr = ScreenSpaceReflectionsRT(input.positionWS, input.positionVS, input.normal, V, r);
+			ssr = ScreenSpaceReflectionsRT(input.positionWS, input.positionVS, N, V, r);
 		}
 	}
 
