@@ -119,15 +119,15 @@ PSInput VSMain(VSInput input)
 float3 ScreenSpaceReflectionsRT(float3 positionWS, float3 positionVS, float3 N, float3 V, float R)
 {
 	float3 ssr = 0;
-	float roughnessThreshold = 0.7f;
+#if _INLINE_RT
+	const float roughnessThreshold = 0.7f;
 	bool ssrEnabled = R < roughnessThreshold;
 	if(ssrEnabled)
 	{
-#if _INLINE_RT
 		if(cViewData.SsrSamples.x > 64)
 		{
 			float3 reflectionWs = normalize(reflect(-V, N));
-			float reflectionThreshold = 0.0f;
+			const float reflectionThreshold = 0.0f;
 			if (dot(V, reflectionWs) <= reflectionThreshold)
 			{
 				RayDesc ray;
@@ -147,34 +147,33 @@ float3 ScreenSpaceReflectionsRT(float3 positionWS, float3 positionVS, float3 N, 
 
 				if(q.CommittedStatus() == COMMITTED_TRIANGLE_HIT)
 				{
-					float distance = q.CommittedRayT();
-					float3 worldHit = ray.Origin + ray.Direction * q.CommittedRayT();
-					float3 hitVS = mul(float4(worldHit, 1), cViewData.View).xyz;
-					float4 texCoord = mul(float4(hitVS, 1), cViewData.Projection);
-					texCoord.xyz /= texCoord.w;
-					texCoord.x = (texCoord.x + 1) / 2.0f;
-					texCoord.y = (1 - texCoord.y) / 2.0f;
-					float sceneDepth = LinearizeDepth(tDepth.SampleLevel(sClampSampler, texCoord.xy, 0).r, cViewData.NearZ, cViewData.FarZ);
-					float viewDepth = (hitVS.z - cViewData.FarZ) / (cViewData.NearZ - cViewData.FarZ);
-					if(abs(sceneDepth - viewDepth) < 0.05)
-						ssr = saturate(0.5f * tPrevColor.SampleLevel(sClampSampler, texCoord.xy, 0).xyz);
+					float3 hitWS = ray.Origin + ray.Direction * q.CommittedRayT();
+					float3 hitVS = mul(float4(hitWS, 1), cViewData.View).xyz;
+					float3 texCoord = ViewToWindow(hitVS, cViewData.Projection);
+					float sceneDepth = tDepth.SampleLevel(sClampSampler, texCoord.xy, 0).r;
+					float viewDepth = texCoord.z;
+					const float thickness = 0.05f;
+					if(abs(sceneDepth - viewDepth) < thickness)
+					{
+						ssr = saturate(0.5f * tPreviousSceneColor.SampleLevel(sClampSampler, texCoord.xy, 0).xyz);
 						float2 dist = (float2(texCoord.x, 1.0f - texCoord.y) * 2.0f) - float2(1.0f, 1.0f);
 						float edgeAttenuation = (1.0 - q.CommittedRayT() / positionVS.z) * 4.0f;
 						edgeAttenuation = saturate(edgeAttenuation);
 						edgeAttenuation *= smoothstep(0.0f, 0.5f, saturate(1.0 - dot(dist, dist)));
 						ssr *= edgeAttenuation;
+					}
 				}
 			}
 		}
-#endif
 	}
+#endif
 	return ssr;
 }
 
 float3 ScreenSpaceReflections(float4 position, float3 positionVS, float3 N, float3 V, float R)
 {
 	float3 ssr = 0;
-	const float roughnessThreshold = 0.8f;
+	const float roughnessThreshold = 0.7f;
 	bool ssrEnabled = R < roughnessThreshold;
 	if(ssrEnabled)
 	{
@@ -191,23 +190,11 @@ float3 ScreenSpaceReflections(float4 position, float3 positionVS, float3 N, floa
 			float3 reflectionVs = mul(reflectionWs, (float3x3)cViewData.View);
 			float3 rayEndVS = rayStartVS + (reflectionVs * linearDepth);
 
-			float2 proj;
-			proj.x = cViewData.Projection[2][2];
-			proj.y = cViewData.Projection[3][2];
-
-			float3 rayStart = 0;
-			rayStart.x = (rayStartVS.x * cViewData.Projection[0][0] / rayStartVS.z + 1) / 2;
-			rayStart.y = 1 - (rayStartVS.y * cViewData.Projection[1][1] / rayStartVS.z + 1) / 2;
-			rayStart.z = proj.y / rayStartVS.z + proj.x;
-
-			float3 rayEnd = 0;
-			rayEnd.x = (rayEndVS.x * cViewData.Projection[0][0] / rayEndVS.z + 1) / 2;
-			rayEnd.y = 1 - (rayEndVS.y * cViewData.Projection[1][1] / rayEndVS.z + 1) / 2;
-			rayEnd.z = proj.y / rayEndVS.z + proj.x;
+			float3 rayStart = ViewToWindow(rayStartVS, cViewData.Projection);
+			float3 rayEnd = ViewToWindow(rayEndVS, cViewData.Projection);
 
 			float3 rayStep = ((rayEnd - rayStart) / float(maxSteps));
-			//Not sure what we do here?
-			//rayStep = rayStep / length(rayEnd.xy - rayStart.xy);
+			rayStep = rayStep / length(rayEnd.xy - rayStart.xy);
 			float3 rayPos = rayStart + (rayStep * jitter);
 			float zThickness = abs(rayStep.z);
 
@@ -233,7 +220,6 @@ float3 ScreenSpaceReflections(float4 position, float3 positionVS, float3 N, floa
 					{
 						prevSceneZ = sceneZ[firstHit - 1];
 					}
-
 					bestHit = rayPos + (rayStep * float(currStep + firstHit + 1));
 					float zAfter = sceneZ[firstHit] - bestHit.z;
 					float zBefore = (prevSceneZ - bestHit.z) + rayStep.z;
@@ -250,15 +236,13 @@ float3 ScreenSpaceReflections(float4 position, float3 positionVS, float3 N, floa
 			if (hitIndex > 0)
 			{
 				float2 texCoord = bestHit.xy;
-				float2 dist = (float2(texCoord.x, 1.0f - texCoord.y) * 2.0f) - float2(1.0f, 1.0f);
-				float edgeAttenuation = (1.0 - (float(hitIndex) / float(maxSteps))) * 4.0f;
-				edgeAttenuation = saturate(edgeAttenuation);
-				edgeAttenuation *= smoothstep(0.0f, 0.5f, saturate(1.0 - dot(dist, dist)));
-				float3 reflectionResult = tPrevColor.SampleLevel(sClampSampler, texCoord.xy, 0).xyz;
+				float2 distanceFromCenter = (float2(texCoord.x, texCoord.y) * 2.0f) - float2(1.0f, 1.0f);
+				float edgeAttenuation = saturate((1.0 - ((float)hitIndex / maxSteps)) * 4.0f);
+				edgeAttenuation *= smoothstep(0.0f, 0.5f, saturate(1.0 - dot(distanceFromCenter, distanceFromCenter)));
+				float3 reflectionResult = tPreviousSceneColor.SampleLevel(sClampSampler, texCoord.xy, 0).xyz;
 				hitColor = float4(reflectionResult, edgeAttenuation);
 			}
-			float roughnessMask = 1.0f - (R / roughnessThreshold);
-			roughnessMask = saturate(roughnessMask);
+			float roughnessMask = saturate(1.0f - (R / roughnessThreshold));
 			float ssrWeight = (hitColor.w * roughnessMask);
 			ssr = saturate(hitColor.xyz * ssrWeight);
 		}

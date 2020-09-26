@@ -126,7 +126,7 @@ Plane CalculatePlane(float3 a, float3 b, float3 c)
     return plane;
 }
 
-// Convert clip space coordinates to view space
+// Convert clip space (-1, 1) coordinates to view space
 float4 ClipToView(float4 clip, float4x4 projectionInverse)
 {
     // View space position.
@@ -136,7 +136,7 @@ float4 ClipToView(float4 clip, float4x4 projectionInverse)
     return view;
 }
  
-// Convert screen space coordinates to view space.
+// Convert screen space coordinates (0, width/height) to view space.
 float4 ScreenToView(float4 screen, float2 screenDimensionsInv, float4x4 projectionInverse)
 {
     // Convert to normalized texture coordinates
@@ -144,6 +144,16 @@ float4 ScreenToView(float4 screen, float2 screenDimensionsInv, float4x4 projecti
     // Convert to clip space
     float4 clip = float4(float2(texCoord.x, 1.0f - texCoord.y) * 2.0f - 1.0f, screen.z, screen.w);
     return ClipToView(clip, projectionInverse);
+}
+
+// Convert view space position to screen UVs (0, 1). Non-linear Z
+float3 ViewToWindow(float3 view, float4x4 projection)
+{
+    float4 proj = mul(float4(view, 1), projection);
+    proj.xyz /= proj.w;
+    proj.x = (proj.x + 1) / 2;
+    proj.y = 1 - (proj.y + 1) / 2;
+    return proj.xyz;
 }
 
 float3 WorldFromDepth(float2 uv, float depth, float4x4 viewProjectionInverse)
