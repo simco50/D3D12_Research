@@ -4,6 +4,9 @@ Usually, to jump between spaces, you transform to CIE XYZ and from there you can
 Super useful page for different transformations: http://www.brucelindbloom.com/index.html?Eqn_xyY_to_XYZ.html
 */
 
+#ifndef __INCLUDE_COLORS__
+#define __INCLUDE_COLORS__
+
 float3 sRGB_to_XYZ(float3 rgb)
 {
     //http://www.brucelindbloom.com/index.html?Eqn_RGB_to_XYZ.html
@@ -50,3 +53,5 @@ float3 xyY_to_sRGB(float3 xyY)
 {
 	return XYZ_to_sRGB(xyY_to_XYZ(xyY));
 }
+
+#endif

@@ -1,3 +1,6 @@
+#ifndef __INCLUDE_COMMON__
+#define __INCLUDE_COMMON__
+
 #include "Constants.hlsli"
 
 float4 UIntToColor(uint c)
@@ -123,7 +126,7 @@ Plane CalculatePlane(float3 a, float3 b, float3 c)
     return plane;
 }
 
-// Convert clip space coordinates to view space
+// Convert clip space (-1, 1) coordinates to view space
 float4 ClipToView(float4 clip, float4x4 projectionInverse)
 {
     // View space position.
@@ -133,7 +136,7 @@ float4 ClipToView(float4 clip, float4x4 projectionInverse)
     return view;
 }
  
-// Convert screen space coordinates to view space.
+// Convert screen space coordinates (0, width/height) to view space.
 float4 ScreenToView(float4 screen, float2 screenDimensionsInv, float4x4 projectionInverse)
 {
     // Convert to normalized texture coordinates
@@ -141,6 +144,16 @@ float4 ScreenToView(float4 screen, float2 screenDimensionsInv, float4x4 projecti
     // Convert to clip space
     float4 clip = float4(float2(texCoord.x, 1.0f - texCoord.y) * 2.0f - 1.0f, screen.z, screen.w);
     return ClipToView(clip, projectionInverse);
+}
+
+// Convert view space position to screen UVs (0, 1). Non-linear Z
+float3 ViewToWindow(float3 view, float4x4 projection)
+{
+    float4 proj = mul(float4(view, 1), projection);
+    proj.xyz /= proj.w;
+    proj.x = (proj.x + 1) / 2;
+    proj.y = 1 - (proj.y + 1) / 2;
+    return proj.xyz;
 }
 
 float3 WorldFromDepth(float2 uv, float depth, float4x4 viewProjectionInverse)
@@ -234,9 +247,15 @@ uint GetCubeFaceIndex(const float3 v)
 
 //From "NEXT GENERATION POST PROCESSING IN CALL OF DUTY: ADVANCED WARFARE"
 //http://advances.realtimerendering.com/s2014/index.html
-float InterleavedGradientNoise( float2 uv)
+float InterleavedGradientNoise(float2 uv)
 {
     const float3 magic = float3(0.06711056f, 0.00583715f, 52.9829189f);
+    return frac(magic.z * frac(dot(uv, magic.xy)));
+}
+float InterleavedGradientNoise(float2 uv, float offset)
+{
+	uv += offset * (float2(47, 17) * 0.695f);
+    const float3 magic = float3( 0.06711056f, 0.00583715f, 52.9829189f );
     return frac(magic.z * frac(dot(uv, magic.xy)));
 }
 
@@ -279,3 +298,5 @@ void SwizzleThreadID(uint2 dispatchDimensions, uint2 numThreads, int2 groupId, i
     swizzledvThreadID.x = (CTA_Dim.x)*swizzledvThreadGroupID.x + groupThreadIndex.x; 
     swizzledvThreadID.y = (CTA_Dim.y)*swizzledvThreadGroupID.y + groupThreadIndex.y;
 }
+
+#endif

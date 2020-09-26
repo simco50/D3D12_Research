@@ -8,10 +8,12 @@
 				"CBV(b1, visibility=SHADER_VISIBILITY_ALL), " \
 				"CBV(b2, visibility=SHADER_VISIBILITY_PIXEL), " \
 				"DescriptorTable(SRV(t0, numDescriptors = 3), visibility=SHADER_VISIBILITY_PIXEL), " \
-				"DescriptorTable(SRV(t3, numDescriptors = 4), visibility=SHADER_VISIBILITY_PIXEL), " \
+				"DescriptorTable(SRV(t3, numDescriptors = 7), visibility=SHADER_VISIBILITY_PIXEL), " \
 				"DescriptorTable(SRV(t10, numDescriptors = 32, space = 1), visibility=SHADER_VISIBILITY_PIXEL), " \
+				"SRV(t500, visibility=SHADER_VISIBILITY_PIXEL), " \
 				"StaticSampler(s0, filter=FILTER_ANISOTROPIC, maxAnisotropy = 4, visibility = SHADER_VISIBILITY_PIXEL), " \
-				"StaticSampler(s1, filter=FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT, visibility = SHADER_VISIBILITY_PIXEL, comparisonFunc=COMPARISON_GREATER), " \
+				"StaticSampler(s1, filter=FILTER_MIN_MAG_MIP_POINT, addressU = TEXTURE_ADDRESS_CLAMP, addressV = TEXTURE_ADDRESS_CLAMP, visibility = SHADER_VISIBILITY_PIXEL), " \
+				"StaticSampler(s2, filter=FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT, visibility = SHADER_VISIBILITY_PIXEL, comparisonFunc=COMPARISON_GREATER), " \
 
 struct PerObjectData
 {
@@ -24,9 +26,13 @@ struct PerViewData
 	float4x4 View;
 	float4x4 ViewInverse;
 	float4x4 Projection;
-	float2 ScreenDimensions;
+	float4x4 ProjectionInverse;
+	float2 InvScreenDimensions;
 	float NearZ;
 	float FarZ;
+	int FrameIndex;
+	int SsrSamples;
+	int2 padd;
 #if CLUSTERED_FORWARD
     int4 ClusterDimensions;
     int2 ClusterSize;
@@ -110,6 +116,137 @@ PSInput VSMain(VSInput input)
 	return result;
 }
 
+float3 ScreenSpaceReflectionsRT(float3 positionWS, float3 positionVS, float3 N, float3 V, float R)
+{
+	float3 ssr = 0;
+#if _INLINE_RT
+	const float roughnessThreshold = 0.7f;
+	bool ssrEnabled = R < roughnessThreshold;
+	if(ssrEnabled)
+	{
+		float3 reflectionWs = normalize(reflect(-V, N));
+		const float reflectionThreshold = 0.0f;
+		if (dot(V, reflectionWs) <= reflectionThreshold)
+		{
+			RayDesc ray;
+			ray.Origin = positionWS;
+			ray.Direction = reflectionWs;
+			ray.TMin = 0.001;
+			ray.TMax = positionVS.z;
+
+			RayQuery<RAY_FLAG_NONE> q;
+
+			q.TraceRayInline(
+				tAccelerationStructure,
+				RAY_FLAG_NONE,
+				~0,
+				ray);
+			q.Proceed();
+
+			if(q.CommittedStatus() == COMMITTED_TRIANGLE_HIT)
+			{
+				float3 hitWS = ray.Origin + ray.Direction * q.CommittedRayT();
+				float3 hitVS = mul(float4(hitWS, 1), cViewData.View).xyz;
+				float3 texCoord = ViewToWindow(hitVS, cViewData.Projection);
+				float sceneDepth = tDepth.SampleLevel(sClampSampler, texCoord.xy, 0).r;
+				float viewDepth = texCoord.z;
+				const float thickness = 0.05f;
+				if(abs(sceneDepth - viewDepth) < thickness)
+				{
+					ssr = saturate(0.5f * tPreviousSceneColor.SampleLevel(sClampSampler, texCoord.xy, 0).xyz);
+					float2 dist = (float2(texCoord.x, 1.0f - texCoord.y) * 2.0f) - float2(1.0f, 1.0f);
+					float edgeAttenuation = (1.0 - q.CommittedRayT() / positionVS.z) * 4.0f;
+					edgeAttenuation = saturate(edgeAttenuation);
+					edgeAttenuation *= smoothstep(0.0f, 0.5f, saturate(1.0 - dot(dist, dist)));
+					ssr *= edgeAttenuation;
+				}
+			}
+		}
+	}
+#endif
+	return ssr;
+}
+
+float3 ScreenSpaceReflections(float4 position, float3 positionVS, float3 N, float3 V, float R)
+{
+	float3 ssr = 0;
+	const float roughnessThreshold = 0.7f;
+	bool ssrEnabled = R < roughnessThreshold;
+	if(ssrEnabled)
+	{
+		float reflectionThreshold = 0.0f;
+		float3 reflectionWs = normalize(reflect(-V, N));
+		if (dot(V, reflectionWs) <= reflectionThreshold)
+		{
+			uint frameIndex = cViewData.FrameIndex;
+			float jitter = InterleavedGradientNoise(position.xy, frameIndex) - 1.0f;
+			uint maxSteps = cViewData.SsrSamples.x;
+
+			float3 rayStartVS = positionVS;
+			float linearDepth = rayStartVS.z;
+			float3 reflectionVs = mul(reflectionWs, (float3x3)cViewData.View);
+			float3 rayEndVS = rayStartVS + (reflectionVs * linearDepth);
+
+			float3 rayStart = ViewToWindow(rayStartVS, cViewData.Projection);
+			float3 rayEnd = ViewToWindow(rayEndVS, cViewData.Projection);
+
+			float3 rayStep = ((rayEnd - rayStart) / float(maxSteps));
+			rayStep = rayStep / length(rayEnd.xy - rayStart.xy);
+			float3 rayPos = rayStart + (rayStep * jitter);
+			float zThickness = abs(rayStep.z);
+
+			uint hitIndex = 0;
+			float3 bestHit = rayPos;
+			float prevSceneZ = rayStart.z;
+			for (uint currStep = 0; currStep < maxSteps; currStep += 4)
+			{
+				uint4 step = float4(1, 2, 3, 4) + currStep;
+				float4 sceneZ = float4(
+					tDepth.SampleLevel(sClampSampler, rayPos.xy + rayStep.xy * step.x, 0).x,
+					tDepth.SampleLevel(sClampSampler, rayPos.xy + rayStep.xy * step.y, 0).x,
+					tDepth.SampleLevel(sClampSampler, rayPos.xy + rayStep.xy * step.z, 0).x,
+					tDepth.SampleLevel(sClampSampler, rayPos.xy + rayStep.xy * step.w, 0).x
+				);
+				float4 currentPosition = rayPos.z + rayStep.z * step;
+				uint4 zTest = abs(sceneZ - currentPosition - zThickness) < zThickness;
+				uint zMask = (((zTest.x << 0) | (zTest.y << 1)) | (zTest.z << 2)) | (zTest.w << 3);
+				if(zMask > 0)
+				{
+					uint firstHit = firstbitlow(zMask);
+					if(firstHit > 0)
+					{
+						prevSceneZ = sceneZ[firstHit - 1];
+					}
+					bestHit = rayPos + (rayStep * float(currStep + firstHit + 1));
+					float zAfter = sceneZ[firstHit] - bestHit.z;
+					float zBefore = (prevSceneZ - bestHit.z) + rayStep.z;
+					float weight = saturate(zAfter / (zAfter - zBefore));
+					float3 prevRayPos = bestHit - rayStep;
+					bestHit = (prevRayPos * weight) + (bestHit * (1.0f - weight));
+					hitIndex = currStep + firstHit;
+					break;
+				}
+				prevSceneZ = sceneZ.w;
+			}
+
+			float4 hitColor = 0;
+			if (hitIndex > 0)
+			{
+				float2 texCoord = bestHit.xy;
+				float2 distanceFromCenter = (float2(texCoord.x, texCoord.y) * 2.0f) - float2(1.0f, 1.0f);
+				float edgeAttenuation = saturate((1.0 - ((float)hitIndex / maxSteps)) * 4.0f);
+				edgeAttenuation *= smoothstep(0.0f, 0.5f, saturate(1.0 - dot(distanceFromCenter, distanceFromCenter)));
+				float3 reflectionResult = tPreviousSceneColor.SampleLevel(sClampSampler, texCoord.xy, 0).xyz;
+				hitColor = float4(reflectionResult, edgeAttenuation);
+			}
+			float roughnessMask = saturate(1.0f - (R / roughnessThreshold));
+			float ssrWeight = (hitColor.w * roughnessMask);
+			ssr = saturate(hitColor.xyz * ssrWeight);
+		}
+	}
+	return ssr;
+}
+
 float4 PSMain(PSInput input) : SV_TARGET
 {
 	float4 baseColor = tDiffuseTexture.Sample(sDiffuseSampler, input.texCoord);
@@ -122,16 +259,27 @@ float4 PSMain(PSInput input) : SV_TARGET
 
 	float3x3 TBN = float3x3(normalize(input.tangent), normalize(input.bitangent), normalize(input.normal));
 	float3 N = TangentSpaceNormalMapping(tNormalTexture, sDiffuseSampler, TBN, input.texCoord, true);
-	float3 V = normalize(cViewData.ViewInverse[3].xyz - input.positionWS);
+	float3 V = normalize(cViewData.ViewInverse[3].xyz - input.positionWS);	
+
+	float3 ssr = 0;
+	if (cViewData.SsrSamples > 0)
+	{
+		if(cViewData.SsrSamples < 32)
+		{
+			ssr = ScreenSpaceReflections(input.position, input.positionVS, N, V, r);
+		}
+		else
+		{
+			ssr = ScreenSpaceReflectionsRT(input.positionWS, input.positionVS, N, V, r);
+		}
+	}
 
 	LightResult lighting = DoLight(input.position, input.positionWS, input.positionVS, N, V, diffuseColor, specularColor, r);
-	
-	float3 color = lighting.Diffuse + lighting.Specular; 
 
-	//Constant ambient
-	float ao = tAO.SampleLevel(sDiffuseSampler, (float2)input.position.xy / cViewData.ScreenDimensions, 0).r;
+	float ao = tAO.SampleLevel(sDiffuseSampler, (float2)input.position.xy * cViewData.InvScreenDimensions, 0).r;
+	float3 color = lighting.Diffuse + lighting.Specular + ssr * ao; 
 	color += ApplyAmbientLight(diffuseColor, ao, tLights[0].GetColor().rgb * 0.1f);
 	color += ApplyVolumetricLighting(cViewData.ViewInverse[3].xyz, input.positionWS.xyz, input.position.xyz, cViewData.View, tLights[0], 10);
-
+	
 	return float4(color, baseColor.a);
 }

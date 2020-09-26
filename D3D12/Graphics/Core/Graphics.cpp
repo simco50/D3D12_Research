@@ -66,6 +66,8 @@ float g_SunInclination = 0.579f;
 float g_SunOrientation = -3.055f;
 float g_SunTemperature = 5000.0f;
 
+int g_SsrSamples = 16;
+
 int g_ShadowMapIndex = 0;
 
 bool g_EnableUI = true;
@@ -658,6 +660,9 @@ void Graphics::Update()
 	sceneData.pShadowMaps = &m_ShadowMaps;
 	sceneData.pShadowData = &shadowData;
 	sceneData.pAO = m_pAmbientOcclusion.get();
+	sceneData.FrameIndex = m_Frame;
+	sceneData.pPreviousColor = m_pPreviousColor.get();
+	sceneData.pTLAS = m_pTLAS.get();
 
 	if (m_RenderPath == RenderPath::Tiled)
 	{
@@ -721,6 +726,7 @@ void Graphics::Update()
 				context.InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RESOLVE_SOURCE);
 				context.InsertResourceBarrier(m_pHDRRenderTarget.get(), D3D12_RESOURCE_STATE_RESOLVE_DEST);
 				context.ResolveResource(GetCurrentRenderTarget(), 0, m_pHDRRenderTarget.get(), 0, RENDER_TARGET_FORMAT);
+				context.CopyTexture(m_pHDRRenderTarget.get(), m_pPreviousColor.get());
 			});
 	}
 
@@ -1240,6 +1246,7 @@ void Graphics::InitD3D()
 		m_pMultiSampleRenderTarget = std::make_unique<Texture>(this, "MSAA Target");
 	}
 	m_pHDRRenderTarget = std::make_unique<Texture>(this, "HDR Target");
+	m_pPreviousColor = std::make_unique<Texture>(this, "Previous Color");
 	m_pTonemapTarget = std::make_unique<Texture>(this, "Tonemap Target");
 	m_pDownscaledColor = std::make_unique<Texture>(this, "Downscaled HDR Target");
 	m_pAmbientOcclusion = std::make_unique<Texture>(this, "SSAO");
@@ -1438,6 +1445,7 @@ void Graphics::OnResize(int width, int height)
 		m_pDepthStencil->Create(TextureDesc::CreateDepth(width, height, DEPTH_STENCIL_FORMAT, TextureFlag::DepthStencil | TextureFlag::ShaderResource, m_SampleCount, ClearBinding(0.0f, 0)));
 	}
 	m_pHDRRenderTarget->Create(TextureDesc::CreateRenderTarget(width, height, RENDER_TARGET_FORMAT, TextureFlag::ShaderResource | TextureFlag::RenderTarget | TextureFlag::UnorderedAccess));
+	m_pPreviousColor->Create(TextureDesc::Create2D(width, height, RENDER_TARGET_FORMAT, TextureFlag::ShaderResource));
 	m_pTonemapTarget->Create(TextureDesc::CreateRenderTarget(width, height, SWAPCHAIN_FORMAT, TextureFlag::ShaderResource | TextureFlag::RenderTarget | TextureFlag::UnorderedAccess));
 	m_pDownscaledColor->Create(TextureDesc::Create2D(Math::DivideAndRoundUp(width, 4), Math::DivideAndRoundUp(height, 4), RENDER_TARGET_FORMAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
 
@@ -1880,6 +1888,7 @@ void Graphics::UpdateImGui()
 	ImGui::Checkbox("Visualize Light Density", &g_VisualizeLightDensity);
 	extern bool g_VisualizeClusters;
 	ImGui::Checkbox("Visualize Clusters", &g_VisualizeClusters);
+	ImGui::SliderInt("SSR Samples", &g_SsrSamples, 0, 32);
 
 	if (ImGui::Checkbox("Raytracing", &g_ShowRaytraced))
 	{

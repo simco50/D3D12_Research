@@ -1,3 +1,6 @@
+#ifndef __INCLUDE_TONEMAPPING_COMMON__
+#define __INCLUDE_TONEMAPPING_COMMON__
+
 #include "Common.hlsli"
 
 #define NUM_HISTOGRAM_BINS 256
@@ -69,3 +72,5 @@ float GetLuminance(float3 color)
 {
     return dot(color, float3(0.2126729, 0.7151522, 0.0721750));
 }
+
+#endif
