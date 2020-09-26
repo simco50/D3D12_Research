@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "FileWatcher.h"
+#include <stdlib.h>
 
 FileWatcher::FileWatcher()
 {
@@ -91,7 +92,8 @@ int FileWatcher::ThreadFunction()
 					const wchar_t* src = record->FileName;
 					const wchar_t* end = src + record->FileNameLength / 2;
 					char fn[256];
-					std::wcstombs(fn, src, 256);
+					size_t n;
+					wcstombs_s(&n, fn, src, 256);
 					fn[end - src] = '\0';
 					std::string filename(fn);
 					std::replace(filename.begin(), filename.end(), '\\', '/');
