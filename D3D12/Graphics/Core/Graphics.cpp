@@ -66,6 +66,8 @@ float g_SunInclination = 0.579f;
 float g_SunOrientation = -3.055f;
 float g_SunTemperature = 5000.0f;
 
+int g_SsrSamples = 16;
+
 int g_ShadowMapIndex = 0;
 
 bool g_EnableUI = true;
@@ -1886,6 +1888,7 @@ void Graphics::UpdateImGui()
 	ImGui::Checkbox("Visualize Light Density", &g_VisualizeLightDensity);
 	extern bool g_VisualizeClusters;
 	ImGui::Checkbox("Visualize Clusters", &g_VisualizeClusters);
+	ImGui::SliderInt("SSR Samples", &g_SsrSamples, 0, 32);
 
 	if (ImGui::Checkbox("Raytracing", &g_ShowRaytraced))
 	{

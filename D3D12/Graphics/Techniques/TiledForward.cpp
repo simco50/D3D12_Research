@@ -15,6 +15,7 @@
 
 static constexpr int MAX_LIGHT_DENSITY = 72000;
 static constexpr int FORWARD_PLUS_BLOCK_SIZE = 16;
+extern int g_SsrSamples;
 
 TiledForward::TiledForward(Graphics* pGraphics)
 	: m_pGraphics(pGraphics)
@@ -96,6 +97,8 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& resources)
 				float NearZ;
 				float FarZ;
 				int FrameIndex;
+				int SsrSamples;
+				IntVector2 padd;
 			} frameData;
 
 			struct PerObjectData
@@ -113,6 +116,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& resources)
 			frameData.NearZ = resources.pCamera->GetNear();
 			frameData.FarZ = resources.pCamera->GetFar();
 			frameData.FrameIndex = resources.FrameIndex;
+			frameData.SsrSamples = g_SsrSamples;
 
 			context.InsertResourceBarrier(m_pLightGridOpaque.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(m_pLightGridTransparant.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
@@ -121,6 +125,8 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& resources)
 			context.InsertResourceBarrier(resources.pRenderTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
 			context.InsertResourceBarrier(resources.pDepthBuffer, D3D12_RESOURCE_STATE_DEPTH_READ);
 			context.InsertResourceBarrier(resources.pAO, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+			context.InsertResourceBarrier(resources.pPreviousColor, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+			context.InsertResourceBarrier(resources.pResolvedDepth, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
 			context.BeginRenderPass(RenderPassInfo(resources.pRenderTarget, RenderPassAccess::Clear_Store, resources.pDepthBuffer, RenderPassAccess::Load_DontCare));
 
@@ -138,6 +144,8 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& resources)
 
 			context.SetDynamicDescriptor(4, 2, resources.pLightBuffer->GetSRV());
 			context.SetDynamicDescriptor(4, 3, resources.pAO->GetSRV());
+			context.SetDynamicDescriptor(4, 4, resources.pResolvedDepth->GetSRV());
+			context.SetDynamicDescriptor(4, 5, resources.pPreviousColor->GetSRV());
 
 			auto setMaterialDescriptors = [](CommandContext& context, const Batch& b)
 			{

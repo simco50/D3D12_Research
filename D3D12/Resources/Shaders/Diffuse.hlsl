@@ -31,10 +31,10 @@ struct PerViewData
 	float NearZ;
 	float FarZ;
 	int FrameIndex;
-	int3 SsrSamples;
-	int test;
+	int SsrSamples;
+	int2 padd;
 #if CLUSTERED_FORWARD
-    int3 ClusterDimensions;
+    int4 ClusterDimensions;
     int2 ClusterSize;
 	float2 LightGridParams;
 #endif
@@ -124,44 +124,41 @@ float3 ScreenSpaceReflectionsRT(float3 positionWS, float3 positionVS, float3 N, 
 	bool ssrEnabled = R < roughnessThreshold;
 	if(ssrEnabled)
 	{
-		if(cViewData.SsrSamples.x > 64)
+		float3 reflectionWs = normalize(reflect(-V, N));
+		const float reflectionThreshold = 0.0f;
+		if (dot(V, reflectionWs) <= reflectionThreshold)
 		{
-			float3 reflectionWs = normalize(reflect(-V, N));
-			const float reflectionThreshold = 0.0f;
-			if (dot(V, reflectionWs) <= reflectionThreshold)
+			RayDesc ray;
+			ray.Origin = positionWS;
+			ray.Direction = reflectionWs;
+			ray.TMin = 0.001;
+			ray.TMax = positionVS.z;
+
+			RayQuery<RAY_FLAG_NONE> q;
+
+			q.TraceRayInline(
+				tAccelerationStructure,
+				RAY_FLAG_NONE,
+				~0,
+				ray);
+			q.Proceed();
+
+			if(q.CommittedStatus() == COMMITTED_TRIANGLE_HIT)
 			{
-				RayDesc ray;
-				ray.Origin = positionWS;
-				ray.Direction = reflectionWs;
-				ray.TMin = 0.001;
-				ray.TMax = positionVS.z;
-
-				RayQuery<RAY_FLAG_NONE> q;
-
-				q.TraceRayInline(
-					tAccelerationStructure,
-					RAY_FLAG_NONE,
-					~0,
-					ray);
-				q.Proceed();
-
-				if(q.CommittedStatus() == COMMITTED_TRIANGLE_HIT)
+				float3 hitWS = ray.Origin + ray.Direction * q.CommittedRayT();
+				float3 hitVS = mul(float4(hitWS, 1), cViewData.View).xyz;
+				float3 texCoord = ViewToWindow(hitVS, cViewData.Projection);
+				float sceneDepth = tDepth.SampleLevel(sClampSampler, texCoord.xy, 0).r;
+				float viewDepth = texCoord.z;
+				const float thickness = 0.05f;
+				if(abs(sceneDepth - viewDepth) < thickness)
 				{
-					float3 hitWS = ray.Origin + ray.Direction * q.CommittedRayT();
-					float3 hitVS = mul(float4(hitWS, 1), cViewData.View).xyz;
-					float3 texCoord = ViewToWindow(hitVS, cViewData.Projection);
-					float sceneDepth = tDepth.SampleLevel(sClampSampler, texCoord.xy, 0).r;
-					float viewDepth = texCoord.z;
-					const float thickness = 0.05f;
-					if(abs(sceneDepth - viewDepth) < thickness)
-					{
-						ssr = saturate(0.5f * tPreviousSceneColor.SampleLevel(sClampSampler, texCoord.xy, 0).xyz);
-						float2 dist = (float2(texCoord.x, 1.0f - texCoord.y) * 2.0f) - float2(1.0f, 1.0f);
-						float edgeAttenuation = (1.0 - q.CommittedRayT() / positionVS.z) * 4.0f;
-						edgeAttenuation = saturate(edgeAttenuation);
-						edgeAttenuation *= smoothstep(0.0f, 0.5f, saturate(1.0 - dot(dist, dist)));
-						ssr *= edgeAttenuation;
-					}
+					ssr = saturate(0.5f * tPreviousSceneColor.SampleLevel(sClampSampler, texCoord.xy, 0).xyz);
+					float2 dist = (float2(texCoord.x, 1.0f - texCoord.y) * 2.0f) - float2(1.0f, 1.0f);
+					float edgeAttenuation = (1.0 - q.CommittedRayT() / positionVS.z) * 4.0f;
+					edgeAttenuation = saturate(edgeAttenuation);
+					edgeAttenuation *= smoothstep(0.0f, 0.5f, saturate(1.0 - dot(dist, dist)));
+					ssr *= edgeAttenuation;
 				}
 			}
 		}
@@ -265,11 +262,9 @@ float4 PSMain(PSInput input) : SV_TARGET
 	float3 V = normalize(cViewData.ViewInverse[3].xyz - input.positionWS);	
 
 	float3 ssr = 0;
-
-
-	if (cViewData.SsrSamples.x > 0 )
+	if (cViewData.SsrSamples > 0)
 	{
-		if(cViewData.SsrSamples.x != 128)
+		if(cViewData.SsrSamples < 32)
 		{
 			ssr = ScreenSpaceReflections(input.position, input.positionVS, N, V, r);
 		}
