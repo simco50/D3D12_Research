@@ -293,6 +293,11 @@ bool Texture::Create(CommandContext* pContext, const Image& img, bool srgb /*= f
 	desc.Mips = img.GetMipLevels();
 	desc.Usage = TextureFlag::ShaderResource;
 	desc.Dimensions = img.IsCubemap() ? TextureDimension::TextureCube : TextureDimension::Texture2D;
+	if (D3D::IsBlockCompressFormat(desc.Format))
+	{
+		desc.Width = Math::Max(desc.Width, 4);
+		desc.Height = Math::Max(desc.Height, 4);
+	}
 
 	const Image* pImg = &img;
 	std::vector<D3D12_SUBRESOURCE_DATA> subResourceData;
