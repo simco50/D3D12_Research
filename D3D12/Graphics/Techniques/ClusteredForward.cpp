@@ -251,15 +251,14 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 			struct PerObjectData
 			{
 				Matrix World;
-				Matrix WorldViewProjection;
 			} objectData;
 
 			struct PerFrameData
 			{
 				Matrix View;
-				Matrix ViewInverse;
 				Matrix Projection;
-				Matrix ProjectionInverse;
+				Matrix ViewProjection;
+				Vector4 ViewPosition;
 				Vector2 InvScreenDimensions;
 				float NearZ;
 				float FarZ;
@@ -275,8 +274,6 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 			Matrix view = resources.pCamera->GetView();
 			frameData.View = view;
 			frameData.Projection = resources.pCamera->GetProjection();
-			frameData.ProjectionInverse = resources.pCamera->GetProjectionInverse();
-			frameData.ViewInverse = resources.pCamera->GetViewInverse();
 			frameData.InvScreenDimensions = Vector2(1.0f / screenDimensions.x, 1.0f / screenDimensions.y);
 			frameData.NearZ = nearZ;
 			frameData.FarZ = farZ;
@@ -285,6 +282,8 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 			frameData.LightGridParams = lightGridParams;
 			frameData.FrameIndex = resources.FrameIndex;
 			frameData.SsrSamples = g_SsrSamples;
+			frameData.ViewProjection = resources.pCamera->GetViewProjection();
+			frameData.ViewPosition = Vector4(resources.pCamera->GetPosition());
 
 			context.InsertResourceBarrier(m_pLightGrid.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(m_pLightIndexGrid.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
@@ -332,7 +331,6 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 				for (const Batch& b : *resources.pOpaqueBatches)
 				{
 					objectData.World = b.WorldMatrix;
-					objectData.WorldViewProjection = objectData.World * resources.pCamera->GetViewProjection();
 					context.SetDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
 					setMaterialDescriptors(context, b);
 					b.pMesh->Draw(&context);
@@ -346,7 +344,6 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 				for (const Batch& b : *resources.pTransparantBatches)
 				{
 					objectData.World = b.WorldMatrix;
-					objectData.WorldViewProjection = objectData.World * resources.pCamera->GetViewProjection();
 					context.SetDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
 					setMaterialDescriptors(context, b);
 					b.pMesh->Draw(&context);

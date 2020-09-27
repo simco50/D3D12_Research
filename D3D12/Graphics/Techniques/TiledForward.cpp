@@ -90,9 +90,9 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& resources)
 			struct PerFrameData
 			{
 				Matrix View;
-				Matrix ViewInverse;
 				Matrix Projection;
-				Matrix ProjectionInverse;
+				Matrix ViewProjection;
+				Vector4 ViewPosition;
 				Vector2 InvScreenDimensions;
 				float NearZ;
 				float FarZ;
@@ -104,19 +104,18 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& resources)
 			struct PerObjectData
 			{
 				Matrix World;
-				Matrix WorldViewProjection;
 			} ObjectData{};
 
 			//Camera constants
-			frameData.ViewInverse = resources.pCamera->GetViewInverse();
 			frameData.View = resources.pCamera->GetView();
 			frameData.Projection = resources.pCamera->GetProjection();
-			frameData.ProjectionInverse = resources.pCamera->GetProjectionInverse();
 			frameData.InvScreenDimensions = Vector2(1.0f / resources.pRenderTarget->GetWidth(), 1.0f / resources.pRenderTarget->GetHeight());
 			frameData.NearZ = resources.pCamera->GetNear();
 			frameData.FarZ = resources.pCamera->GetFar();
 			frameData.FrameIndex = resources.FrameIndex;
 			frameData.SsrSamples = g_SsrSamples;
+			frameData.ViewProjection = resources.pCamera->GetViewProjection();
+			frameData.ViewPosition = Vector4(resources.pCamera->GetPosition());
 
 			context.InsertResourceBarrier(m_pLightGridOpaque.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(m_pLightGridTransparant.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
@@ -167,7 +166,6 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& resources)
 				for (const Batch& b : *resources.pOpaqueBatches)
 				{
 					ObjectData.World = b.WorldMatrix;
-					ObjectData.WorldViewProjection = ObjectData.World * resources.pCamera->GetViewProjection();
 					context.SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
 					setMaterialDescriptors(context, b);
 					b.pMesh->Draw(&context);
@@ -184,7 +182,6 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& resources)
 				for (const Batch& b : *resources.pTransparantBatches)
 				{
 					ObjectData.World = b.WorldMatrix;
-					ObjectData.WorldViewProjection = ObjectData.World * resources.pCamera->GetViewProjection();
 					setMaterialDescriptors(context, b);
 					context.SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
 					b.pMesh->Draw(&context);

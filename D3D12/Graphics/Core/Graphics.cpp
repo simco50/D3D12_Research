@@ -493,15 +493,22 @@ void Graphics::Update()
 			renderContext.SetPipelineState(m_pDepthPrepassPSO.get());
 			renderContext.SetGraphicsRootSignature(m_pDepthPrepassRS.get());
 
-			struct Parameters
+			struct ViewData
 			{
-				Matrix WorldViewProj;
-			} constBuffer;
+				Matrix ViewProjection;
+			} viewData;
+			viewData.ViewProjection = m_pCamera->GetViewProjection();
+			renderContext.SetDynamicConstantBufferView(1, &viewData, sizeof(ViewData));
 
 			for (const Batch& b : m_OpaqueBatches)
 			{
-				constBuffer.WorldViewProj = b.WorldMatrix * m_pCamera->GetViewProjection();
-				renderContext.SetDynamicConstantBufferView(0, &constBuffer, sizeof(Parameters));
+				struct ObjectData
+				{
+					Matrix World;
+				} objectData;
+				objectData.World = b.WorldMatrix;
+
+				renderContext.SetDynamicConstantBufferView(0, &objectData, sizeof(ObjectData));
 				b.pMesh->Draw(&renderContext);
 			}
 			renderContext.EndRenderPass();
@@ -607,15 +614,23 @@ void Graphics::Update()
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 				context.SetGraphicsRootSignature(m_pShadowsRS.get());
 
+				struct ViewData
+				{
+					Matrix ViewProjection;
+				} viewData;
+
 				for (int i = 0; i < shadowIndex; ++i)
 				{
 					GPU_PROFILE_SCOPE("Light View", &context);
 					Texture* pShadowmap = m_ShadowMaps[i].get();
 					context.BeginRenderPass(RenderPassInfo(pShadowmap, RenderPassAccess::Clear_Store));
 
+					viewData.ViewProjection = shadowData.LightViewProjections[i];
+					context.SetDynamicConstantBufferView(1, &viewData, sizeof(ViewData));
+
 					struct PerObjectData
 					{
-						Matrix WorldViewProjection;
+						Matrix World;
 					} ObjectData{};
 
 					//Opaque
@@ -625,7 +640,7 @@ void Graphics::Update()
 
 						for (const Batch& b : m_OpaqueBatches)
 						{
-							ObjectData.WorldViewProjection = b.WorldMatrix * shadowData.LightViewProjections[i];
+							ObjectData.World = b.WorldMatrix;
 							context.SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
 							b.pMesh->Draw(&context);
 						}
@@ -635,12 +650,11 @@ void Graphics::Update()
 						GPU_PROFILE_SCOPE("Transparant", &context);
 						context.SetPipelineState(m_pShadowsAlphaPSO.get());
 
-						context.SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
 						for (const Batch& b : m_TransparantBatches)
 						{
-							ObjectData.WorldViewProjection = b.WorldMatrix * shadowData.LightViewProjections[i];
+							ObjectData.World = b.WorldMatrix;
 							context.SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
-							context.SetDynamicDescriptor(1, 0, b.pMaterial->pDiffuseTexture->GetSRV());
+							context.SetDynamicDescriptor(2, 0, b.pMaterial->pDiffuseTexture->GetSRV());
 							b.pMesh->Draw(&context);
 						}
 					}
