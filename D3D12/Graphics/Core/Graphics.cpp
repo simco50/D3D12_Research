@@ -1116,9 +1116,9 @@ void Graphics::InitD3D()
 		switch (featureLevel)
 		{
 		case D3D_FEATURE_LEVEL_12_1: return "D3D_FEATURE_LEVEL_12_1";
-		case D3D_FEATURE_LEVEL_12_0: return "D3D_FEATURE_LEVEL_12_1";
-		case D3D_FEATURE_LEVEL_11_1: return "D3D_FEATURE_LEVEL_12_1";
-		case D3D_FEATURE_LEVEL_11_0: return "D3D_FEATURE_LEVEL_12_1";
+		case D3D_FEATURE_LEVEL_12_0: return "D3D_FEATURE_LEVEL_12_0";
+		case D3D_FEATURE_LEVEL_11_1: return "D3D_FEATURE_LEVEL_11_1";
+		case D3D_FEATURE_LEVEL_11_0: return "D3D_FEATURE_LEVEL_11_0";
 		default: noEntry(); return "";
 		}
 	};
