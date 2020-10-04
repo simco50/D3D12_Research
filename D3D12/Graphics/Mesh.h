@@ -4,7 +4,6 @@ class CommandContext;
 class Texture;
 class Graphics;
 class CommandContext;
-struct aiMesh;
 
 class SubMesh
 {
@@ -17,19 +16,19 @@ public:
 	int GetMaterialId() const { return m_MaterialId; }
 	const BoundingBox& GetBounds() const { return m_Bounds; }
 
-	uint32 GetVertexByteOffset() const { return m_VertexByteOffset; }
-	uint32 GetIndexByteOffset() const { return m_IndexByteOffset; }
+	D3D12_GPU_VIRTUAL_ADDRESS GetVerticesLocation() const { return m_VerticesLocation; }
+	D3D12_GPU_VIRTUAL_ADDRESS GetIndicesLocation() const { return m_IndicesLocation; }
 	uint32 GetVertexCount() const { return m_VertexCount; }
 	uint32 GetIndexCount() const { return m_IndexCount; }
+	uint32 GetStride() const { return m_Stride; }
 
 private:
+	int m_Stride = 0;
 	int m_MaterialId = 0;
 	uint32 m_IndexCount = 0;
 	uint32 m_VertexCount = 0;
-	uint32 m_IndexOffset = 0;
-	uint32 m_VertexOffset = 0;
-	uint32 m_VertexByteOffset = 0;
-	uint32 m_IndexByteOffset = 0;
+	D3D12_GPU_VIRTUAL_ADDRESS m_VerticesLocation;
+	D3D12_GPU_VIRTUAL_ADDRESS m_IndicesLocation;
 	BoundingBox m_Bounds;
 	Mesh* m_pParent;
 };
@@ -51,12 +50,10 @@ public:
 	SubMesh* GetMesh(const int index) const { return m_Meshes[index].get(); }
 	const Material& GetMaterial(int materialId) const { return m_Materials[materialId]; }
 
-	Buffer* GetVertexBuffer() const { return m_pVertexBuffer.get(); }
-	Buffer* GetIndexBuffer() const { return m_pIndexBuffer.get(); }
+	Buffer* GetData() const { return m_pGeometryData.get(); }
 
 private:
 	std::vector<std::unique_ptr<SubMesh>> m_Meshes;
 	std::vector<Material> m_Materials;
-	std::unique_ptr<Buffer> m_pVertexBuffer;
-	std::unique_ptr<Buffer> m_pIndexBuffer;
+	std::unique_ptr<Buffer> m_pGeometryData;
 };

@@ -113,8 +113,8 @@ struct TextureDesc
 
 	static TextureDesc Create2D(int width, int height, DXGI_FORMAT format, TextureFlag flags = TextureFlag::ShaderResource, int sampleCount = 1, int mips = 1)
 	{
-		assert(width);
-		assert(height);
+		check(width);
+		check(height);
 		TextureDesc desc;
 		desc.Width = width;
 		desc.Height = height;
@@ -147,9 +147,9 @@ struct TextureDesc
 
 	static TextureDesc CreateDepth(int width, int height, DXGI_FORMAT format, TextureFlag flags = TextureFlag::DepthStencil, int sampleCount = 1, const ClearBinding& clearBinding = ClearBinding(1, 0))
 	{
-		assert(width);
-		assert(height);
-		assert(EnumHasAnyFlags(flags, TextureFlag::DepthStencil));
+		check(width);
+		check(height);
+		check(EnumHasAnyFlags(flags, TextureFlag::DepthStencil));
 		TextureDesc desc;
 		desc.Width = width;
 		desc.Height = height;
@@ -165,9 +165,9 @@ struct TextureDesc
 
 	static TextureDesc CreateRenderTarget(int width, int height, DXGI_FORMAT format, TextureFlag flags = TextureFlag::RenderTarget, int sampleCount = 1, const ClearBinding& clearBinding = ClearBinding(Color(0, 0, 0)))
 	{
-		assert(width);
-		assert(height);
-		assert(EnumHasAnyFlags(flags, TextureFlag::RenderTarget));
+		check(width);
+		check(height);
+		check(EnumHasAnyFlags(flags, TextureFlag::RenderTarget));
 		TextureDesc desc;
 		desc.Width = width;
 		desc.Height = height;
@@ -179,6 +179,24 @@ struct TextureDesc
 		desc.ClearBindingValue = clearBinding;
 		desc.Dimensions = TextureDimension::Texture2D;
 		return desc;
+	}
+
+	bool operator==(const TextureDesc& other) const
+	{
+		return Width == other.Width
+			&& Height == other.Height
+			&& DepthOrArraySize == other.DepthOrArraySize
+			&& Mips == other.Mips
+			&& SampleCount == other.SampleCount
+			&& Format == other.Format
+			&& Usage == other.Usage
+			&& ClearBindingValue == other.ClearBindingValue
+			&& Dimensions == other.Dimensions;
+	}
+
+	bool operator !=(const TextureDesc& other) const
+	{
+		return !operator==(other);
 	}
 };
 
@@ -212,12 +230,10 @@ public:
 	DXGI_FORMAT GetFormat() const { return m_Desc.Format; }
 	const ClearBinding& GetClearBinding() const { return m_Desc.ClearBindingValue; }
 
-	static int GetRowDataSize(DXGI_FORMAT format, unsigned int width);
-	static DXGI_FORMAT GetSrvFormatFromDepth(DXGI_FORMAT format);
+	static DXGI_FORMAT GetSrvFormat(DXGI_FORMAT format);
 
 private:
 	TextureDesc m_Desc;
-	std::vector<std::unique_ptr<ResourceView>> m_Descriptors;
 
 	//#SimonC: This can hold multiple handles as long as they're sequential in memory. 
 	//Need to adapt allocator to work with this nicely so it doesn't waste memory
@@ -227,8 +243,5 @@ private:
 	ShaderResourceView* m_pSrv = nullptr;
 	UnorderedAccessView* m_pUav = nullptr;
 
-	int m_SrvUavDescriptorSize = 0;
-	int m_RtvDescriptorSize = 0;
-	int m_DsvDescriptorSize = 0;
-	const char* m_pName = nullptr;
+	std::string m_Name;
 };

@@ -1,8 +1,12 @@
 #include "Common.hlsli"
 
-#define RootSig "CBV(b0, visibility=SHADER_VISIBILITY_GEOMETRY), " \
+#define RootSigVS "CBV(b0, visibility=SHADER_VISIBILITY_GEOMETRY), " \
 				"DescriptorTable(SRV(t0, numDescriptors = 4), visibility=SHADER_VISIBILITY_VERTEX), " \
-				"StaticSampler(s0, filter=FILTER_MIN_MAG_MIP_LINEAR, visibility = SHADER_VISIBILITY_VERTEX, addressU = TEXTURE_ADDRESS_CLAMP, addressV = TEXTURE_ADDRESS_CLAMP), " \
+				"StaticSampler(s0, filter=FILTER_MIN_MAG_MIP_LINEAR, visibility = SHADER_VISIBILITY_ALL, addressU = TEXTURE_ADDRESS_CLAMP, addressV = TEXTURE_ADDRESS_CLAMP), " \
+
+#define RootSigMS "CBV(b0, visibility=SHADER_VISIBILITY_MESH), " \
+				"DescriptorTable(SRV(t0, numDescriptors = 4), visibility=SHADER_VISIBILITY_MESH), " \
+				"StaticSampler(s0, filter=FILTER_MIN_MAG_MIP_LINEAR, visibility = SHADER_VISIBILITY_ALL, addressU = TEXTURE_ADDRESS_CLAMP, addressV = TEXTURE_ADDRESS_CLAMP), " \
 
 cbuffer PerFrameData : register(b0)
 {
@@ -29,7 +33,62 @@ struct PSInput
 	float4 color : COLOR;
 };
 
-[RootSignature(RootSig)]
+[RootSignature(RootSigMS)]
+[outputtopology("triangle")]
+[numthreads(1, 1, 1)]
+void MSMain(
+    in uint groupId : SV_GroupID,
+    out vertices PSInput outVerts[8], 
+    out indices uint3 outIndices[12])
+{
+    const uint vertexCount = 8;
+    const uint primitiveCount = 12;
+
+    uint clusterIndex = tCompactedClusters[groupId];
+    uint lightCount = tLightGrid[clusterIndex].y;
+    
+    if(lightCount <= 0)
+    {
+        return;
+    }
+
+    SetMeshOutputCounts(vertexCount, primitiveCount);
+
+    float4 color = tHeatmapTexture.SampleLevel(sHeatmapSampler, float2((float)lightCount / 30.0f, 0), 0);
+    AABB aabb = tAABBs[clusterIndex];
+
+    float4 center = aabb.Center;
+    float4 extents = float4(aabb.Extents.xyz, 1);
+
+    outVerts[0].position = mul(center + extents * float4(-1.0, -1.0,  1.0, 1.0), cProjection);
+    outVerts[1].position = mul(center + extents * float4( 1.0, -1.0,  1.0, 1.0), cProjection);
+    outVerts[2].position = mul(center + extents * float4( 1.0,  1.0,  1.0, 1.0), cProjection);
+    outVerts[3].position = mul(center + extents * float4(-1.0,  1.0,  1.0, 1.0), cProjection);
+    outVerts[4].position = mul(center + extents * float4(-1.0, -1.0, -1.0, 1.0), cProjection);
+    outVerts[5].position = mul(center + extents * float4( 1.0, -1.0, -1.0, 1.0), cProjection);
+    outVerts[6].position = mul(center + extents * float4( 1.0,  1.0, -1.0, 1.0), cProjection);
+    outVerts[7].position = mul(center + extents * float4(-1.0,  1.0, -1.0, 1.0), cProjection);
+
+    for(int i = 0; i < vertexCount; ++i)
+    {   
+        outVerts[i].color = color;
+    }
+
+    outIndices[0] = uint3(0, 1, 2);
+    outIndices[1] = uint3(2, 3, 0);
+    outIndices[2] = uint3(1, 5, 6);
+    outIndices[3] = uint3(6, 2, 1);
+    outIndices[4] = uint3(7, 6, 5);
+    outIndices[5] = uint3(5, 4, 7);
+    outIndices[6] = uint3(4, 0, 3);
+    outIndices[7] = uint3(3, 7, 4);
+    outIndices[8] = uint3(4, 5, 1);
+    outIndices[9] = uint3(1, 0, 4);
+    outIndices[10] = uint3(3, 2, 6);
+    outIndices[11] = uint3(6, 7, 3);
+}
+
+[RootSignature(RootSigVS)]
 GSInput VSMain(uint vertexId : SV_VertexID)
 {
 	GSInput result;

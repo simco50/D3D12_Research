@@ -1,12 +1,13 @@
+#include "TonemappingCommon.hlsli"
+
 #define RootSig "CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \
 				"DescriptorTable(UAV(u0, numDescriptors = 1))," \
 				"DescriptorTable(SRV(t0, numDescriptors = 1))"
 
-#define NUM_HISTOGRAM_BINS 256
 #define HISTOGRAM_AVERAGE_THREADS_PER_DIMENSION 16
 
 ByteAddressBuffer tLuminanceHistogram : register(t0);
-RWTexture2D<float> uLuminanceOutput : register(u0);
+RWStructuredBuffer<float> uLuminanceOutput : register(u0);
 
 cbuffer LuminanceHistogramAverageBuffer : register(b0)
 {
@@ -16,7 +17,7 @@ cbuffer LuminanceHistogramAverageBuffer : register(b0)
     float cTimeDelta;
     float cTau;
 };
-                        
+
 groupshared float gHistogramShared[NUM_HISTOGRAM_BINS];
 
 struct CSInput
@@ -24,13 +25,18 @@ struct CSInput
     uint groupIndex : SV_GroupIndex;
 };
 
+float Adaption(float current, float target, float dt, float speed)
+{
+    float factor = 1.0f - exp2(-dt * speed);
+    return current + (target - current) * factor;
+}
+
 [RootSignature(RootSig)]
 [numthreads(HISTOGRAM_AVERAGE_THREADS_PER_DIMENSION, HISTOGRAM_AVERAGE_THREADS_PER_DIMENSION, 1)]
 void CSMain(CSInput input)
 {
     float countForThisBin = (float)tLuminanceHistogram.Load(input.groupIndex * 4);
     gHistogramShared[input.groupIndex] = countForThisBin * (float)input.groupIndex;
-    
     GroupMemoryBarrierWithGroupSync();
     
     [unroll]
@@ -40,16 +46,18 @@ void CSMain(CSInput input)
         {
             gHistogramShared[input.groupIndex] += gHistogramShared[input.groupIndex + histogramSampleIndex];
         }
-
         GroupMemoryBarrierWithGroupSync();
     }
     
     if(input.groupIndex == 0)
     {
         float weightedLogAverage = (gHistogramShared[0].x / max((float)cPixelCount - countForThisBin, 1.0)) - 1.0;
-        float weightedAverageLuminance = exp2(((weightedLogAverage / 254.0) * cLogLuminanceRange) + cMinLogLuminance);
-        float luminanceLastFrame = uLuminanceOutput[uint2(0, 0)];
-        float adaptedLuminance = luminanceLastFrame + (weightedAverageLuminance - luminanceLastFrame) * (1 - exp(-cTimeDelta * cTau));
-        uLuminanceOutput[uint2(0, 0)] = adaptedLuminance;
+        float weightedAverageLuminance = exp2(((weightedLogAverage / (NUM_HISTOGRAM_BINS - 1)) * cLogLuminanceRange) + cMinLogLuminance);
+        float luminanceLastFrame = uLuminanceOutput[0];
+        float adaptedLuminance = Adaption(luminanceLastFrame, weightedAverageLuminance, cTimeDelta, cTau);
+
+        uLuminanceOutput[0] = adaptedLuminance;
+        uLuminanceOutput[1] = weightedAverageLuminance;
+        uLuminanceOutput[2] = Exposure(EV100FromLuminance(weightedAverageLuminance));
     }
 }

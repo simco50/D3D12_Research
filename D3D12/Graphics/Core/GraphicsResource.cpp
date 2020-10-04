@@ -1,13 +1,14 @@
 #include "stdafx.h"
 #include "GraphicsResource.h"
+#include "ResourceViews.h"
 
 GraphicsResource::GraphicsResource(Graphics* pParent) 
-	: GraphicsObject(pParent), m_pResource(nullptr), m_CurrentState(D3D12_RESOURCE_STATE_COMMON)
+	: GraphicsObject(pParent), m_pResource(nullptr), m_ResourceState(D3D12_RESOURCE_STATE_COMMON)
 {
 }
 
 GraphicsResource::GraphicsResource(Graphics* pParent, ID3D12Resource* pResource, D3D12_RESOURCE_STATES state)
-	: GraphicsObject(pParent), m_pResource(pResource), m_CurrentState(state)
+	: GraphicsObject(pParent), m_pResource(pResource), m_ResourceState(state)
 {
 }
 
@@ -27,7 +28,7 @@ void GraphicsResource::Release()
 
 void GraphicsResource::SetName(const char* pName)
 {
-	SetD3DObjectName(m_pResource, pName);
+	D3D::SetObjectName(m_pResource, pName);
 }
 
 std::string GraphicsResource::GetName() const
@@ -37,7 +38,7 @@ std::string GraphicsResource::GetName() const
 		uint32 size = 0;
 		m_pResource->GetPrivateData(WKPDID_D3DDebugObjectName, &size, nullptr);
 		std::string str(size, '\0');
-		m_pResource->GetPrivateData(WKPDID_D3DDebugObjectName, &size, str.data());
+		m_pResource->GetPrivateData(WKPDID_D3DDebugObjectName, &size, &str[0]);
 		return str;
 	}
 	return "";

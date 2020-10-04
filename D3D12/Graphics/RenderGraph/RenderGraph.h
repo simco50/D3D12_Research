@@ -3,6 +3,8 @@
 #include "Graphics/Core/Texture.h"
 #include "Graphics/Core/GraphicsBuffer.h"
 
+#define RG_GRAPH_SCOPE(name, graph) RGGraphScope rgScope_ ## __COUNTER__(name, graph)
+
 class Graphics;
 class CommandContext;
 
@@ -70,23 +72,6 @@ struct RGNode
 	int Reads = 0;
 };
 
-struct RGResourceHandle
-{
-	explicit RGResourceHandle(int id = InvalidIndex)
-		: Index(id)
-	{}
-
-	bool operator==(const RGResourceHandle& other) const { return Index == other.Index; }
-	bool operator!=(const RGResourceHandle& other) const { return Index != other.Index; }
-
-	constexpr static const int InvalidIndex = -1;
-
-	inline void Invalidate() { Index = InvalidIndex; }
-	inline bool IsValid() const { return Index != InvalidIndex; }
-
-	int Index;
-};
-
 class RGPassBuilder
 {
 public:
@@ -94,11 +79,14 @@ public:
 		: m_Pass(pass), m_RenderGraph(renderGraph)
 	{}
 
-	RGPassBuilder(const RGPassBuilder& other) = delete;
-	RGPassBuilder& operator=(const RGPassBuilder& other) = delete;
+	template<typename ExecuteCallback>
+	void Bind(ExecuteCallback&& callback)
+	{
+		m_Pass.SetCallback(std::move(callback));
+	}
 
 	RGResourceHandle Read(const RGResourceHandle& resource);
-	RGResourceHandle Write(RGResourceHandle& resource);
+	[[nodiscard]] RGResourceHandle Write(RGResourceHandle& resource);
 	RGResourceHandle CreateTexture(const char* pName, const TextureDesc& desc);
 	RGResourceHandle CreateBuffer(const char* pName, const BufferDesc& desc);
 	void NeverCull();
@@ -125,28 +113,6 @@ private:
 	RGPass& m_Pass;
 };
 
-class IPassExecutor
-{
-public:
-	virtual ~IPassExecutor() = default;
-	virtual void Execute(const RGPassResources& resources, CommandContext& renderContext) = 0;
-};
-
-template<typename ExecuteCallback>
-class PassExecutor : public IPassExecutor
-{
-public:
-	PassExecutor(ExecuteCallback&& callback)
-		: m_Callback(std::move(callback))
-	{}
-	virtual void Execute(const RGPassResources& resources, CommandContext& renderContext) override
-	{
-		m_Callback(renderContext, resources);
-	}
-private:
-	ExecuteCallback m_Callback;
-};
-
 class RGPass
 {
 public:
@@ -157,19 +123,18 @@ public:
 		: m_Name(pName), m_RenderGraph(graph), m_Id(id)
 	{}
 
-	void Execute(const RGPassResources& resources, CommandContext& renderContext)
+	void Execute(CommandContext& renderContext, const RGPassResources& resources)
 	{
-		assert(m_pPassExecutor);
-		m_pPassExecutor->Execute(resources, renderContext);
+		check(m_ExecuteCallback.IsBound());
+		m_ExecuteCallback.Execute(renderContext, resources);
 	}
 
 	template<typename ExecuteCallback>
 	void SetCallback(ExecuteCallback&& callback)
 	{
-		m_pPassExecutor = std::make_unique<PassExecutor<ExecuteCallback>>(std::move(callback));
+		RG_STATIC_ASSERT(sizeof(ExecuteCallback) < 4096, "The Execute callback exceeds the maximum size");
+		m_ExecuteCallback.BindLambda(std::move(callback));
 	}
-
-	const char* GetName() const { return m_Name; }
 
 	bool ReadsFrom(RGResourceHandle handle) const
 	{
@@ -181,8 +146,11 @@ public:
 		return std::find(m_Writes.begin(), m_Writes.end(), handle) != m_Writes.end();
 	}
 
+	const char* GetName() const { return m_Name; }
+
 private:
-	std::unique_ptr<IPassExecutor> m_pPassExecutor;
+	DECLARE_DELEGATE(ExecutePassDelegate, CommandContext& /*renderContext*/, const RGPassResources& /*resources*/);
+	ExecutePassDelegate m_ExecuteCallback;
 	const char* m_Name;
 	std::vector<RGResourceHandle> m_Reads;
 	std::vector<RGResourceHandle> m_Writes;
@@ -196,8 +164,39 @@ private:
 
 class RGGraph
 {
+	class Allocator
+	{
+	public:
+		Allocator(uint64 size)
+			: m_Size(size), m_pData(new char[size]), m_pCurrentOffset(m_pData)
+		{}
+		~Allocator()
+		{
+			delete[] m_pData;
+		}
+		template<typename T, typename ...Args>
+		T* Allocate(Args... args)
+		{
+			check(m_pCurrentOffset - m_pData + sizeof(T) < m_Size);
+			void* pData = m_pCurrentOffset;
+			m_pCurrentOffset += sizeof(T);
+			return new (pData) T(std::forward<Args>(args)...);
+		}
+
+		template<typename T>
+		void Release(T* pPtr)
+		{
+			pPtr->~T();
+		}
+
+	private:
+		uint64 m_Size;
+		char* m_pData;
+		char* m_pCurrentOffset;
+	};
+
 public:
-	explicit RGGraph(Graphics* pGraphics);
+	explicit RGGraph(Graphics* pGraphics, uint64 allocatorSize = 0xFFFF);
 	~RGGraph();
 
 	RGGraph(const RGGraph& other) = delete;
@@ -210,46 +209,40 @@ public:
 	void DumpGraphMermaid(const char* pPath) const;
 	RGResourceHandle MoveResource(RGResourceHandle From, RGResourceHandle To);
 
-	template<typename Callback>
-	RGPass& AddPass(const char* pName, const Callback& passCallback)
+	RGPassBuilder AddPass(const char* pName)
 	{
-		using ExecuteCallback = typename std::invoke_result<Callback, RGPassBuilder&>::type;
-		RG_STATIC_ASSERT(sizeof(ExecuteCallback) < 1024, "The Execute callback exceeds the maximum size");
-		RGPass* pPass = new RGPass(*this, pName, (int)m_RenderPasses.size());
-		RGPassBuilder builder(*this, *pPass);
-		pPass->SetCallback<ExecuteCallback>(std::move(passCallback(builder)));
-		return AddPass(pPass);
+		RGPass* pPass = m_Allocator.Allocate<RGPass>(std::ref(*this), pName, (int)m_RenderPasses.size());
+		AddPass(pPass);
+		return RGPassBuilder(*this, *pPass);
 	}
-
-	RGPass& AddPass(RGPass* pPass);
 
 	RGResourceHandle CreateTexture(const char* pName, const TextureDesc& desc)
 	{
-		RGResource* pResource = new RGTexture(pName, (int)m_Resources.size(), desc, nullptr);
+		RGResource* pResource = m_Allocator.Allocate<RGTexture>(pName, (int)m_Resources.size(), desc, nullptr);
 		m_Resources.push_back(pResource);
 		return CreateResourceNode(pResource);
 	}
 
 	RGResourceHandle CreateBuffer(const char* pName, const BufferDesc& desc)
 	{
-		RGResource* pResource = new RGBuffer(pName, (int)m_Resources.size(), desc, nullptr);
+		RGResource* pResource = m_Allocator.Allocate<RGBuffer>(pName, (int)m_Resources.size(), desc, nullptr);
 		m_Resources.push_back(pResource);
 		return CreateResourceNode(pResource);
 	}
 
 	RGResourceHandle ImportTexture(const char* pName, Texture* pTexture)
 	{
-		assert(pTexture);
-		RGResource* pResource = new RGTexture(pName, (int)m_Resources.size(), pTexture->GetDesc(), pTexture);
+		check(pTexture);
+		RGResource* pResource = m_Allocator.Allocate<RGTexture>(pName, (int)m_Resources.size(), pTexture->GetDesc(), pTexture);
 		m_Resources.push_back(pResource);
 		return CreateResourceNode(pResource);
 	}
 
 	RGResourceHandle ImportBuffer(const char* pName, Buffer* pBuffer)
 	{
-		assert(pBuffer);
+		check(pBuffer);
 		BufferDesc desc{};
-		RGResource* pResource = new RGBuffer(pName, (int)m_Resources.size(), desc, pBuffer);
+		RGResource* pResource = m_Allocator.Allocate<RGBuffer>(pName, (int)m_Resources.size(), desc, pBuffer);
 		m_Resources.push_back(pResource);
 		return CreateResourceNode(pResource);
 	}
@@ -278,7 +271,12 @@ public:
 		return node.pResource;
 	}
 
+	void PushEvent(const char* pName);
+
+	void PopEvent();
+
 private:
+	RGPass& AddPass(RGPass* pPass);
 	void ExecutePass(RGPass* pPass, CommandContext& context);
 	void PrepareResources(RGPass* pPass);
 	void ReleaseResources(RGPass* pPass);
@@ -287,6 +285,8 @@ private:
 	void ConditionallyCreateResource(RGResource* pResource);
 	void ConditionallyReleaseResource(RGResource* pResource);
 
+	void ProcessEvents(CommandContext& context, uint32 passIndex, bool begin);
+
 	struct RGResourceAlias
 	{
 		RGResourceHandle From;
@@ -294,12 +294,40 @@ private:
 	};
 
 	Graphics* m_pGraphics;
+	Allocator m_Allocator;
 	RGResourceAllocator* m_pAllocator;
 	uint64 m_LastFenceValue = 0;
 	bool m_ImmediateMode = false;
+
+	struct ProfileEvent
+	{
+		const char* pName;
+		bool Begin;
+		uint32 PassIndex;
+	};
+
+	uint32 m_CurrentEvent = 0;
+	std::vector<ProfileEvent> m_Events;
+	int m_EventStackSize = 0;
 
 	std::vector<RGResourceAlias> m_Aliases;
 	std::vector<RGPass*> m_RenderPasses;
 	std::vector<RGResource*> m_Resources;
 	std::vector<RGNode> m_ResourceNodes;
+};
+
+class RGGraphScope
+{
+public:
+	RGGraphScope(const char* pName, RGGraph& graph)
+		: m_Graph(graph)
+	{
+		graph.PushEvent(pName);
+	}
+	~RGGraphScope()
+	{
+		m_Graph.PopEvent();
+	}
+private:
+	RGGraph& m_Graph;
 };

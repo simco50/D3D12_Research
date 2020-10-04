@@ -11,7 +11,7 @@ private:
 public:
 	ShaderBindingTable(ID3D12StateObject* pStateObject)
 	{
-		HR(pStateObject->QueryInterface(IID_PPV_ARGS(m_pObjectProperties.GetAddressOf())));
+		VERIFY_HR(pStateObject->QueryInterface(IID_PPV_ARGS(m_pObjectProperties.GetAddressOf())));
 	}
 
 	void AddRayGenEntry(const char* pName, const std::vector<void*>& data)
@@ -97,7 +97,7 @@ private:
 			m_IdentifierMap[pName] = m_pObjectProperties->GetShaderIdentifier(wName);
 		}
 		entry.pIdentifier = m_IdentifierMap[pName];
-		assert(entry.pIdentifier);
+		check(entry.pIdentifier);
 		entry.data = data;
 		return entry;
 	}

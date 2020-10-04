@@ -5,7 +5,7 @@
 				"DescriptorTable(SRV(t0, numDescriptors = 1), visibility = SHADER_VISIBILITY_ALL), " \
 				"StaticSampler(s0, filter=FILTER_MIN_MAG_LINEAR_MIP_POINT, visibility = SHADER_VISIBILITY_ALL), "
 
-#define BLOCK_SIZE 16
+#define BLOCK_SIZE 8
 
 #define TEXTURE_STORAGE float4
 #define TEXTURE_INPUT_TYPE Texture2D<TEXTURE_STORAGE>
@@ -18,6 +18,7 @@ SamplerState sSampler : register(s0);
 cbuffer ShaderParameters : register(b0)
 {
     uint2 cTargetDimensions;
+    float2 cTargetDimensionsInv;
 }
 
 struct CS_INPUT
@@ -31,6 +32,6 @@ void CSMain(CS_INPUT input)
 {
     if(input.DispatchThreadId.x < cTargetDimensions.x && input.DispatchThreadId.y < cTargetDimensions.y)
     {
-        uOutput[input.DispatchThreadId.xy] = tInput.SampleLevel(sSampler, (input.DispatchThreadId.xy + 0.5f) * rcp((float2)cTargetDimensions), 0);
+        uOutput[input.DispatchThreadId.xy] = tInput.SampleLevel(sSampler, ((float2)input.DispatchThreadId.xy + 0.5f) * cTargetDimensionsInv, 0);
     }
 }

@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?> 
+<AutoVisualizer xmlns="http://schemas.microsoft.com/vstudio/debugger/natvis/2010">
+	<Type Name="MulticastDelegate&lt;*&gt;">
+		<DisplayString Condition="m_Locks == 0xcccccccc">Invalid</DisplayString>
+		<DisplayString Condition="m_Events.size() == 0">Unbound</DisplayString>
+		<DisplayString>Bound: {m_Events.size()}</DisplayString>
+		<Expand>
+      <Item Name="Locked">m_Locks &gt; 0</Item>
+      <CustomListItems MaxItemsPerView="100">
+        <Variable Name="i" InitialValue="0" />
+        <Size>m_Events.size()</Size>
+        <Loop>
+          <Item>m_Events[i].second.m_Allocator</Item>
+          <Exec>i++</Exec>
+        </Loop>
+      </CustomListItems>
+		</Expand>
+	</Type>
+	
+	<Type Name="Delegate&lt;*&gt;">
+    <DisplayString Condition="m_Allocator.m_Size &gt;= 0xcccccccc">Invalid</DisplayString>
+    <DisplayString Condition="m_Allocator.m_Size == 0">Unbound</DisplayString>
+    <DisplayString>Bound</DisplayString>
+	</Type>
+
+	<Type Name="DelegateHandle">
+		<DisplayString Condition="m_Id &lt; -1">Invalid</DisplayString>
+		<DisplayString Condition="m_Id == -1">Unbound</DisplayString>
+		<DisplayString>Bound [ID: {m_Id}]</DisplayString>
+	</Type>
+  
+  <Type Name="InlineAllocator&lt;*&gt;">
+		<DisplayString Condition="m_Size &gt;= 0xcccccccc">Invalid</DisplayString>
+		<DisplayString Condition="m_Size == 0">Unallocated: {m_Size} bytes</DisplayString>
+		<DisplayString Condition="m_Size &gt; $T1">Dynamic Memory: {m_Size} bytes</DisplayString>
+		<DisplayString Condition="m_Size &lt;= $T1">Inline Memory: {m_Size} bytes</DisplayString>
+    <Expand>
+      <Item Name="Data" Condition="m_Size &gt; $T1">pPtr</Item>
+      <Item Name="Data" Condition="m_Size &lt;= $T1">(void*)Buffer</Item>
+      <Item Name="Size">m_Size</Item>
+    </Expand>
+	</Type>
+</AutoVisualizer>

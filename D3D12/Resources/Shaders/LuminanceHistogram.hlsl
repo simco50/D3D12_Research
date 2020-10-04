@@ -1,10 +1,11 @@
+#include "TonemappingCommon.hlsli"
+
 #define RootSig "CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \
 				"DescriptorTable(UAV(u0, numDescriptors = 1))," \
 				"DescriptorTable(SRV(t0, numDescriptors = 1)), "
 
 #define EPSILON 0.0001f
 #define HISTOGRAM_THREADS_PER_DIMENSION 16
-#define NUM_HISTOGRAM_BINS 256
 
 Texture2D tHDRTexture : register(t0);
 RWByteAddressBuffer uLuminanceHistogram : register(u0);
@@ -17,11 +18,6 @@ cbuffer LuminanceHistogramBuffer : register(b0)
     float cOneOverLogLuminanceRange;
 };
 
-float GetLuminance(float3 color)
-{
-    return dot(color, float3(0.2127f, 0.7152f, 0.0722f));
-}
-
 uint HDRToHistogramBin(float3 hdrColor)
 {
     float luminance = GetLuminance(hdrColor);
@@ -32,7 +28,7 @@ uint HDRToHistogramBin(float3 hdrColor)
     }
     
     float logLuminance = saturate((log2(luminance) - cMinLogLuminance) * cOneOverLogLuminanceRange);
-    return (uint)(logLuminance * 254.0 + 1.0);
+    return (uint)(logLuminance * (NUM_HISTOGRAM_BINS - 1) + 1.0);
 }
     
 groupshared uint HistogramShared[NUM_HISTOGRAM_BINS];

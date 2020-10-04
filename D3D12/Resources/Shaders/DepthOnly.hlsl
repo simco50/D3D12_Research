@@ -1,17 +1,24 @@
 #include "Common.hlsli"
+#include "CommonBindings.hlsli"
 
 #define RootSig "RootFlags(ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT), " \
 				"CBV(b0, visibility=SHADER_VISIBILITY_VERTEX), " \
+				"CBV(b1, visibility=SHADER_VISIBILITY_VERTEX), " \
 				"DescriptorTable(SRV(t0, numDescriptors = 1), visibility=SHADER_VISIBILITY_PIXEL), " \
 				"StaticSampler(s0, filter=FILTER_MIN_MAG_MIP_LINEAR, visibility = SHADER_VISIBILITY_PIXEL), "
 
-cbuffer PerObjectData : register(b0)
+struct PerViewData
 {
-	float4x4 WorldViewProjection;
-}
+	float4x4 ViewProjection;
+};
 
-Texture2D tAlphaTexture : register(t0);
-SamplerState sAlphaSampler : register(s0);
+struct PerObjectData
+{
+	float4x4 World;
+};
+
+ConstantBuffer<PerObjectData> cObjectData : register(b0);
+ConstantBuffer<PerViewData> cViewData : register(b1);
 
 struct VSInput
 {
@@ -29,14 +36,14 @@ struct PSInput
 PSInput VSMain(VSInput input)
 {
 	PSInput result = (PSInput)0;
-	result.position = mul(float4(input.position, 1.0f), WorldViewProjection);
+	result.position = mul(mul(float4(input.position, 1.0f), cObjectData.World), cViewData.ViewProjection);
 	result.texCoord = input.texCoord;
 	return result;
 }
 
 void PSMain(PSInput input)
 {
-	if(tAlphaTexture.Sample(sAlphaSampler, input.texCoord).a < 0.5f)
+	if(tDiffuseTexture.Sample(sDiffuseSampler, input.texCoord).a < 0.5f)
 	{
 		discard;
 	}

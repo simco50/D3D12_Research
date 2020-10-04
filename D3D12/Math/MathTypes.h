@@ -1,9 +1,10 @@
-#pragma once
+ #pragma once
 
 #define __d3d12_h__
-#include "External/SimpleMath/SimpleMath.h"
+#include "SimpleMath/SimpleMath.h"
 using BoundingBox = DirectX::BoundingBox;
 using BoundingFrustum = DirectX::BoundingFrustum;
+using BoundingSphere = DirectX::BoundingSphere;
 using Vector2 = DirectX::SimpleMath::Vector2;
 using Vector3 = DirectX::SimpleMath::Vector3;
 using Vector4 = DirectX::SimpleMath::Vector4;
@@ -11,6 +12,34 @@ using Matrix = DirectX::SimpleMath::Matrix;
 using Quaternion = DirectX::SimpleMath::Quaternion;
 using Color = DirectX::SimpleMath::Color;
 using Ray = DirectX::SimpleMath::Ray;
+
+struct IntVector2
+{
+	IntVector2()
+		: x(0), y(0)
+	{}
+	IntVector2(int32 x, int32 y)
+		: x(x), y(y)
+	{}
+	IntVector2(const Vector2& v)
+		: x((int32)v.x), y((int32)v.y)
+	{}
+	int32 x, y;
+};
+
+struct IntVector3
+{
+	IntVector3()
+		: x(0), y(0), z(0)
+	{}
+	IntVector3(int32 x, int32 y, int32 z)
+		: x(x), y(y), z(z)
+	{}
+	IntVector3(const Vector3& v)
+		: x((int32)v.x), y((int32)v.y), z((int32)v.z)
+	{}
+	int32 x, y, z;
+};
 
 template<typename T>
 struct RectT

@@ -15,20 +15,16 @@ cbuffer PerObjectParameters : register(b0)
 
 cbuffer Parameters : register(b1)
 {
-    uint4 cClusterDimensions;
-    float2 cClusterSize;
-	float cSliceMagicA;
-	float cSliceMagicB;
+    int4 cClusterDimensions;
+    int2 cClusterSize;
+	float2 cLightGridParams;
 }
 
 RWStructuredBuffer<uint> uActiveClusters : register(u1);
 
-SamplerState sDiffuseSampler : register(s0);
-Texture2D tDiffuseTexture : register(t0);
-
 uint GetSliceFromDepth(float depth)
 {
-    return floor(log(depth) * cSliceMagicA - cSliceMagicB);
+    return floor(log(depth) * cLightGridParams.x - cLightGridParams.y);
 }
 
 struct VS_Input

@@ -6,9 +6,9 @@
 cbuffer Parameters : register(b0)
 {
     float4x4 cProjectionInverse;
-    float2 cScreenDimensions;
-    float2 cClusterSize;
-    uint3 cClusterDimensions;
+    float2 cScreenDimensionsInv;
+    int2 cClusterSize;
+    int3 cClusterDimensions;
     float cNearZ;
     float cFarZ;
 }
@@ -29,21 +29,25 @@ RWStructuredBuffer<AABB> uOutAABBs : register(u0);
 
 struct CS_Input
 {
-    uint3 GroupID : SV_GROUPID;
+    uint3 ThreadID : SV_DISPATCHTHREADID;
 };
 
 [RootSignature(RootSig)]
-[numthreads(1, 1, 1)]
+[numthreads(1, 1, 32)]
 void GenerateAABBs(CS_Input input)
-{
-    uint3 clusterIndex3D = input.GroupID;
-    uint clusterIndex1D = input.GroupID.x + (input.GroupID.y * cClusterDimensions.x) + (input.GroupID.z * (cClusterDimensions.x * cClusterDimensions.y));
+{   
+    uint3 clusterIndex3D = input.ThreadID;
+    if(clusterIndex3D.z >= cClusterDimensions.z)
+    {
+        return;
+    }
+    uint clusterIndex1D = clusterIndex3D.x + (clusterIndex3D.y * cClusterDimensions.x) + (clusterIndex3D.z * (cClusterDimensions.x * cClusterDimensions.y));
 
     float2 minPoint_SS = float2(clusterIndex3D.x * cClusterSize.x, clusterIndex3D.y * cClusterSize.y);
     float2 maxPoint_SS = float2((clusterIndex3D.x + 1) * cClusterSize.x, (clusterIndex3D.y + 1) * cClusterSize.y);
 
-    float3 minPoint_VS = ScreenToView(float4(minPoint_SS, 0, 1), cScreenDimensions, cProjectionInverse).xyz;
-    float3 maxPoint_VS = ScreenToView(float4(maxPoint_SS, 0, 1), cScreenDimensions, cProjectionInverse).xyz;
+    float3 minPoint_VS = ScreenToView(float4(minPoint_SS, 0, 1), cScreenDimensionsInv, cProjectionInverse).xyz;
+    float3 maxPoint_VS = ScreenToView(float4(maxPoint_SS, 0, 1), cScreenDimensionsInv, cProjectionInverse).xyz;
 
     float farZ = GetDepthFromSlice(clusterIndex3D.z);
     float nearZ = GetDepthFromSlice(clusterIndex3D.z + 1);

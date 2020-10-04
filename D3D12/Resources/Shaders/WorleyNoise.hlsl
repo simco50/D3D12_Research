@@ -1,3 +1,7 @@
+
+#define RootSig "CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \
+				"DescriptorTable(UAV(u0, numDescriptors = 1), visibility=SHADER_VISIBILITY_ALL), " \
+
 cbuffer Constants : register(b0)
 {
 	float4 cPoints[256];
@@ -33,6 +37,7 @@ float WorleyNoise(float3 uvw, uint pointsPerRow)
 	return sqrt(minDistSq);
 }
 
+[RootSignature(RootSig)]
 [numthreads(8, 8, 8)]
 void WorleyNoiseCS(uint3 threadId : SV_DISPATCHTHREADID)
 {

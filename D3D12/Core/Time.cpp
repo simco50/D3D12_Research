@@ -1,29 +1,20 @@
 #include "stdafx.h"
-#include "GameTimer.h"
+#include "Time.h"
 
-__int64 GameTimer::m_BaseTime = 0;
-__int64 GameTimer::m_PausedTime = 0;
-__int64 GameTimer::m_StopTime = 0;
-__int64 GameTimer::m_PrevTime = 0;
-__int64 GameTimer::m_CurrTime = 0;
+__int64 Time::m_BaseTime = 0;
+__int64 Time::m_PausedTime = 0;
+__int64 Time::m_StopTime = 0;
+__int64 Time::m_PrevTime = 0;
+__int64 Time::m_CurrTime = 0;
 
-double GameTimer::m_SecondsPerCount = 0.0;
-double GameTimer::m_DeltaTime = 0.016f;
+double Time::m_SecondsPerCount = 0.0;
+double Time::m_DeltaTime = 0.016f;
 
-bool GameTimer::m_IsStopped = false;
+bool Time::m_IsStopped = false;
 
-int GameTimer::m_Ticks = 0;;
+int Time::m_Ticks = 0;;
 
-GameTimer::GameTimer()
-{
-
-}
-
-GameTimer::~GameTimer()
-{
-}
-
-void GameTimer::Tick()
+void Time::Tick()
 {
 	if(m_IsStopped)
 	{
@@ -44,7 +35,7 @@ void GameTimer::Tick()
 	}
 }
 
-float GameTimer::GameTime()
+float Time::TotalTime()
 {
 	if (m_IsStopped)
 	{
@@ -53,12 +44,12 @@ float GameTimer::GameTime()
 	return (float)(((m_CurrTime - m_PausedTime) - m_BaseTime) * m_SecondsPerCount);
 }
 
-float GameTimer::DeltaTime()
+float Time::DeltaTime()
 {
 	return (float)m_DeltaTime;
 }
 
-void GameTimer::Reset()
+void Time::Reset()
 {
 	__int64 countsPerSec;
 	QueryPerformanceFrequency((LARGE_INTEGER*)&countsPerSec);
@@ -72,7 +63,7 @@ void GameTimer::Reset()
 	m_IsStopped = false;
 }
 
-void GameTimer::Start()
+void Time::Start()
 {
 	__int64 startTime;
 	QueryPerformanceCounter((LARGE_INTEGER*)&startTime);
@@ -87,7 +78,7 @@ void GameTimer::Start()
 	}
 }
 
-void GameTimer::Stop()
+void Time::Stop()
 {
 	if(!m_IsStopped)
 	{

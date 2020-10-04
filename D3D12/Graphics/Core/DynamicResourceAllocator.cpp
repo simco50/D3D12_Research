@@ -3,6 +3,8 @@
 #include "Graphics.h"
 #include "GraphicsBuffer.h"
 
+constexpr static uint64 PAGE_SIZE = Math::FromMegaBytes * 2;
+
 DynamicResourceAllocator::DynamicResourceAllocator(DynamicAllocationManager* pPageManager)
 	: m_pPageManager(pPageManager)
 {
@@ -115,6 +117,25 @@ void DynamicAllocationManager::FreeLargePages(uint64 fenceValue, const std::vect
 	{
 		m_DeleteQueue.emplace(fenceValue, pPage);
 	}
+}
+
+void DynamicAllocationManager::FlushAll()
+{
+	std::lock_guard<std::mutex> lockGuard(m_PageMutex);
+	m_pGraphics->IdleGPU();
+	m_Pages.clear();
+	m_FreedPages = {};
+	m_DeleteQueue = {};
+}
+
+uint64 DynamicAllocationManager::GetMemoryUsage() const
+{
+	uint64 size = 0;
+	for (const auto& pPage : m_Pages)
+	{
+		size += pPage->GetSize();
+	}
+	return size;
 }
 
 AllocationPage::AllocationPage(Graphics* pGraphics)

@@ -46,7 +46,7 @@ void OfflineDescriptorAllocator::FreeDescriptor(D3D12_CPU_DESCRIPTOR_HANDLE hand
 			break;
 		}
 	}
-	assert(heapIndex >= 0);
+	check(heapIndex >= 0);
 	Heap* pHeap = m_Heaps[heapIndex].get();
 
 	Heap::Range newRange{
@@ -98,6 +98,7 @@ void OfflineDescriptorAllocator::AllocateNewHeap()
 
 	std::unique_ptr<Heap> pHeap = std::make_unique<Heap>();
 	m_pGraphics->GetDevice()->CreateDescriptorHeap(&desc, IID_PPV_ARGS(pHeap->pHeap.GetAddressOf()));
+	D3D::SetObjectName(pHeap->pHeap.Get(), "Offline Pooled Descriptor Heap");
 	CD3DX12_CPU_DESCRIPTOR_HANDLE Begin = CD3DX12_CPU_DESCRIPTOR_HANDLE(pHeap->pHeap->GetCPUDescriptorHandleForHeapStart());
 	pHeap->FreeRanges.push_back(Heap::Range{ Begin, CD3DX12_CPU_DESCRIPTOR_HANDLE(Begin, m_DescriptorsPerHeap, m_DescriptorSize) });
 	m_Heaps.push_back(std::move(pHeap));

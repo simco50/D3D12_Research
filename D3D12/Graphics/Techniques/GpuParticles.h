@@ -7,6 +7,8 @@ class PipelineState;
 class RootSignature;
 class CommandContext;
 class Texture;
+class Camera;
+class RGGraph;
 
 class GpuParticles
 {
@@ -14,11 +16,10 @@ public:
 	GpuParticles(Graphics* pGraphics);
 	~GpuParticles();
 
-	void Initialize();
-	void Simulate(CommandContext& context, Texture* pSourceDepth, Texture* pNormals);
-	void Render(CommandContext& context);
+	void Simulate(RGGraph& graph, Texture* pSourceDepth, const Camera& camera);
+	void Render(RGGraph& graph, Texture* pTarget, Texture* pDepth, const Camera& camera);
 private:
-	Graphics* m_pGraphics;
+	void Initialize(Graphics* pGraphics);
 
 	std::unique_ptr<Buffer> m_pAliveList1;
 	std::unique_ptr<Buffer> m_pAliveList2;

@@ -20,25 +20,12 @@ Buffer::~Buffer()
 
 }
 
-void Buffer::Create(const BufferDesc& bufferDesc)
+D3D12_RESOURCE_DESC GetResourceDesc(const BufferDesc& bufferDesc)
 {
-	Release();
-	m_Desc = bufferDesc;
-
-	D3D12_RESOURCE_DESC desc;
-	desc.Alignment = 0;
-	desc.DepthOrArraySize = 1;
-	desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-	desc.Flags = D3D12_RESOURCE_FLAG_NONE;
-	desc.Format = DXGI_FORMAT_UNKNOWN;
-	desc.Height = 1;
-	desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-	desc.MipLevels = 1;
-	desc.Width = Math::AlignUp<int64>((int64)bufferDesc.ElementSize * bufferDesc.ElementCount, 16);
-	desc.SampleDesc.Count = 1;
-	desc.SampleDesc.Quality = 0;
-
-	D3D12_HEAP_TYPE heapType = D3D12_HEAP_TYPE_DEFAULT;
+	D3D12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Buffer(
+		Math::AlignUp<int64>((int64)bufferDesc.ElementSize * bufferDesc.ElementCount, D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT),
+		D3D12_RESOURCE_FLAG_NONE
+	);
 	if (EnumHasAnyFlags(bufferDesc.Usage, BufferFlag::ShaderResource | BufferFlag::AccelerationStructure) == false)
 	{
 		desc.Flags |= D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
@@ -47,23 +34,43 @@ void Buffer::Create(const BufferDesc& bufferDesc)
 	{
 		desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 	}
+	return desc;
+}
+
+void Buffer::Create(const BufferDesc& bufferDesc)
+{
+	Release();
+	m_Desc = bufferDesc;
+
+	D3D12_RESOURCE_DESC desc = GetResourceDesc(bufferDesc);
+	D3D12_HEAP_TYPE heapType = D3D12_HEAP_TYPE_DEFAULT;
+	D3D12_RESOURCE_STATES initialState = D3D12_RESOURCE_STATE_UNKNOWN;
 
 	if (EnumHasAnyFlags(bufferDesc.Usage, BufferFlag::Readback))
 	{
-		m_CurrentState = D3D12_RESOURCE_STATE_COPY_DEST;
+		check(initialState == D3D12_RESOURCE_STATE_UNKNOWN);
+		initialState = D3D12_RESOURCE_STATE_COPY_DEST;
 		heapType = D3D12_HEAP_TYPE_READBACK;
 	}
-	else if (EnumHasAnyFlags(bufferDesc.Usage, BufferFlag::Upload))
+	if (EnumHasAnyFlags(bufferDesc.Usage, BufferFlag::Upload))
 	{
+		check(initialState == D3D12_RESOURCE_STATE_UNKNOWN);
+		initialState = D3D12_RESOURCE_STATE_GENERIC_READ;
 		heapType = D3D12_HEAP_TYPE_UPLOAD;
-		m_CurrentState = D3D12_RESOURCE_STATE_GENERIC_READ;
 	}
 	if (EnumHasAnyFlags(bufferDesc.Usage, BufferFlag::AccelerationStructure))
 	{
-		m_CurrentState = D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE;
+		check(initialState == D3D12_RESOURCE_STATE_UNKNOWN);
+		initialState = D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE;
 	}
 
-	m_pResource = m_pGraphics->CreateResource(desc, m_CurrentState, heapType);
+	if (initialState == D3D12_RESOURCE_STATE_UNKNOWN)
+	{
+		initialState = D3D12_RESOURCE_STATE_COMMON;
+	}
+
+	m_pResource = m_pGraphics->CreateResource(desc, initialState, heapType);
+	SetResourceState(initialState);
 
 	SetName(m_Name.c_str());
 
@@ -72,28 +79,49 @@ void Buffer::Create(const BufferDesc& bufferDesc)
 	{
 		if (EnumHasAnyFlags(bufferDesc.Usage, BufferFlag::Structured))
 		{
+			//Structured Buffer
 			CreateUAV(&m_pUav, BufferUAVDesc(DXGI_FORMAT_UNKNOWN, false, true));
+		}
+		else if(EnumHasAnyFlags(bufferDesc.Usage, BufferFlag::ByteAddress))
+		{
+			//ByteAddress Buffer
+			CreateUAV(&m_pUav, BufferUAVDesc(DXGI_FORMAT_UNKNOWN, true, false));
 		}
 		else
 		{
-			CreateUAV(&m_pUav, BufferUAVDesc(DXGI_FORMAT_UNKNOWN, true, false));
+			//Typed buffer
+			CreateUAV(&m_pUav, BufferUAVDesc(bufferDesc.Format, false, false));
 		}
 	}
 	if (EnumHasAnyFlags(bufferDesc.Usage, BufferFlag::ShaderResource | BufferFlag::AccelerationStructure))
 	{
-		CreateSRV(&m_pSrv, BufferSRVDesc(DXGI_FORMAT_UNKNOWN));
+		if (EnumHasAnyFlags(bufferDesc.Usage, BufferFlag::Structured))
+		{
+			//Structured Buffer
+			CreateSRV(&m_pSrv, BufferSRVDesc(DXGI_FORMAT_UNKNOWN, false));
+		}
+		else if (EnumHasAnyFlags(bufferDesc.Usage, BufferFlag::ByteAddress))
+		{
+			//ByteAddress Buffer
+			CreateSRV(&m_pSrv, BufferSRVDesc(DXGI_FORMAT_UNKNOWN, true));
+		}
+		else
+		{
+			//Typed buffer
+			CreateSRV(&m_pSrv, BufferSRVDesc(bufferDesc.Format));
+		}
 	}
 }
 
 void Buffer::SetData(CommandContext* pContext, const void* pData, uint64 dataSize, uint32 offset)
 {
-	assert(dataSize + offset <= GetSize());
+	check(dataSize + offset <= GetSize());
 	pContext->InitializeBuffer(this, pData, dataSize, offset);
 }
 
 void* Buffer::Map(uint32 subResource /*= 0*/, uint64 readFrom /*= 0*/, uint64 readTo /*= 0*/)
 {
-	assert(m_pResource);
+	check(m_pResource);
 	CD3DX12_RANGE range(readFrom, readTo);
 	void* pMappedData = nullptr;
 	m_pResource->Map(subResource, &range, &pMappedData);
@@ -102,7 +130,7 @@ void* Buffer::Map(uint32 subResource /*= 0*/, uint64 readFrom /*= 0*/, uint64 re
 
 void Buffer::Unmap(uint32 subResource /*= 0*/, uint64 writtenFrom /*= 0*/, uint64 writtenTo /*= 0*/)
 {
-	assert(m_pResource);
+	check(m_pResource);
 	CD3DX12_RANGE range(writtenFrom, writtenFrom);
 	m_pResource->Unmap(subResource, &range);
 }

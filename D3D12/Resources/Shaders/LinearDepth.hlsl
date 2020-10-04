@@ -20,11 +20,6 @@ struct CS_INPUT
     uint3 DispatchThreadId : SV_DISPATCHTHREADID;
 };
 
-float LinearizeDepth(float depth)
-{
-    return cNear * cFar / (cFar + depth * (cNear - cFar));
-}
-
 [RootSignature(RootSig)]
 [numthreads(BLOCK_SIZE, BLOCK_SIZE, 1)]
 void CSMain(CS_INPUT input)
@@ -33,6 +28,6 @@ void CSMain(CS_INPUT input)
     uOutput.GetDimensions(width, height);
     if(input.DispatchThreadId.x < width && input.DispatchThreadId.y < height)
     {
-        uOutput[input.DispatchThreadId.xy] = LinearizeDepth(tInput[input.DispatchThreadId.xy]);
+        uOutput[input.DispatchThreadId.xy] = LinearizeDepth(tInput[input.DispatchThreadId.xy], cNear, cFar);
     }
 }

@@ -1,11 +1,11 @@
 #pragma once
-class GameTimer
+class Time
 {
 public:
-	GameTimer();
-	~GameTimer();
+	Time() = default;
+	~Time() = default;
 
-	static float GameTime();
+	static float TotalTime();
 	static float DeltaTime();
 
 	static void Reset();
@@ -29,4 +29,3 @@ private:
 
 	static int m_Ticks;
 };
-

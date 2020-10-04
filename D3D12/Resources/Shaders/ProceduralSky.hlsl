@@ -41,7 +41,7 @@ static const float4 CUBE[]=
 	float4(-1.0,1.0,-1.0,1.0),
 };
 
-cbuffer VSConstants : register (b0)
+cbuffer VSConstants : register(b0)
 {
 	float4x4 cView;
 	float4x4 cProjection;
@@ -58,7 +58,6 @@ struct VSOutput
 {
     float4 PositionCS : SV_POSITION;
 	float3 TexCoord : TEXCOORD;
-	float3 cBias : BIAS;
 };
 
 [RootSignature(RootSig)]

@@ -7,9 +7,9 @@ enum class ImageFormat
 	RGB32,
 	RGBA16,
 	RGBA32,
-	DXT1,
-	DXT3,
-	DXT5,
+	BC1,
+	BC2,
+	BC3,
 	BC4,
 	BC5,
 	BC6H,
@@ -27,22 +27,21 @@ struct MipLevelInfo
 	uint32 DataSize = 0;
 };
 
-class Image
+class Image final
 {
 public:
-	explicit Image();
-	virtual ~Image();
-
 	bool Load(const char* filePath);
 	bool Load(const void* pPixels, size_t dataSize, const char* pFormatHint);
+	void Save(const char* pFilePath);
 
-	bool SetSize(const int x, const int y, const int components);
-	bool SetData(const unsigned int* pPixels);
-	bool SetPixel(const int x, const int y, const Color& color);
-	bool SetPixelInt(const int x, const int y, const unsigned int color);
+	bool SetSize(int x, int y, int components);
+	bool SetData(const void* pPixels);
+	bool SetData(const void* pData, uint32 offsetInBytes, uint32 sizeInBytes);
+	bool SetPixel(int x, int y, const Color& color);
+	bool SetPixelInt(int x, int y, unsigned int color);
 
-	Color GetPixel(const int x, const int y) const;
-	unsigned int GetPixelInt(const int x, const int y) const;
+	Color GetPixel(int x, int y) const;
+	unsigned int GetPixelInt(int x, int y) const;
 
 	int GetWidth() const { return m_Width; }
 	int GetHeight() const { return m_Height; }
@@ -82,6 +81,6 @@ private:
 	bool m_IsCubemap = false;
 	std::unique_ptr<Image> m_pNextImage;
 	ImageFormat m_Format = ImageFormat::MAX;
-	std::array<uint32, D3D12_REQ_MIP_LEVELS> m_MipLevelDataOffsets;
+	std::array<uint32, D3D12_REQ_MIP_LEVELS> m_MipLevelDataOffsets{};
 	std::vector<unsigned char> m_Pixels;
 };

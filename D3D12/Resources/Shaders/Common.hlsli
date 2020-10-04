@@ -1,3 +1,6 @@
+#ifndef __INCLUDE_COMMON__
+#define __INCLUDE_COMMON__
+
 #include "Constants.hlsli"
 
 float4 UIntToColor(uint c)
@@ -21,6 +24,9 @@ struct Light
     float Intensity;
 	float Range;
     int ShadowIndex;
+    float InvShadowSize;
+
+    float padding;
 
     float4 GetColor()
     {
@@ -120,7 +126,7 @@ Plane CalculatePlane(float3 a, float3 b, float3 c)
     return plane;
 }
 
-// Convert clip space coordinates to view space
+// Convert clip space (-1, 1) coordinates to view space
 float4 ClipToView(float4 clip, float4x4 projectionInverse)
 {
     // View space position.
@@ -130,14 +136,24 @@ float4 ClipToView(float4 clip, float4x4 projectionInverse)
     return view;
 }
  
-// Convert screen space coordinates to view space.
-float4 ScreenToView(float4 screen, float2 screenDimensions, float4x4 projectionInverse)
+// Convert screen space coordinates (0, width/height) to view space.
+float4 ScreenToView(float4 screen, float2 screenDimensionsInv, float4x4 projectionInverse)
 {
     // Convert to normalized texture coordinates
-    float2 texCoord = screen.xy / screenDimensions;
+    float2 texCoord = screen.xy * screenDimensionsInv;
     // Convert to clip space
     float4 clip = float4(float2(texCoord.x, 1.0f - texCoord.y) * 2.0f - 1.0f, screen.z, screen.w);
     return ClipToView(clip, projectionInverse);
+}
+
+// Convert view space position to screen UVs (0, 1). Non-linear Z
+float3 ViewToWindow(float3 view, float4x4 projection)
+{
+    float4 proj = mul(float4(view, 1), projection);
+    proj.xyz /= proj.w;
+    proj.x = (proj.x + 1) / 2;
+    proj.y = 1 - (proj.y + 1) / 2;
+    return proj.xyz;
 }
 
 float3 WorldFromDepth(float2 uv, float depth, float4x4 viewProjectionInverse)
@@ -149,60 +165,13 @@ float3 WorldFromDepth(float2 uv, float depth, float4x4 viewProjectionInverse)
 
 float LinearizeDepth(float z, float near, float far)
 {
-    float z_n = 2.0 * z - 1.0;
-	return 2.0 * far * near / (near + far - z_n * (near - far));
+    return 1.0 / (((near - far) / far) * z + 1.0);
 }
 
 void AABBFromMinMax(inout AABB aabb, float3 minimum, float3 maximum)
 {
     aabb.Center = float4((minimum + maximum) / 2.0f, 0);
     aabb.Extents = float4(maximum, 0) - aabb.Center;
-}
-
-//Emulates sampling a TextureCube
-float2 SampleCube(const float3 v, out float faceIndex)
-{
-	float3 vAbs = abs(v);
-	float ma;
-	float2 uv;
-	if(vAbs.z >= vAbs.x && vAbs.z >= vAbs.y)
-	{
-		faceIndex = v.z < 0.0 ? 5.0 : 4.0;
-		ma = 0.5 / vAbs.z;
-		uv = float2(v.z < 0.0 ? -v.x : v.x, -v.y);
-	}
-	else if(vAbs.y >= vAbs.x)
-	{
-		faceIndex = v.y < 0.0 ? 3.0 : 2.0;
-		ma = 0.5 / vAbs.y;
-		uv = float2(v.x, v.y < 0.0 ? -v.z : v.z);
-	}
-	else
-	{
-		faceIndex = v.x < 0.0 ? 1.0 : 0.0;
-		ma = 0.5 / vAbs.x;
-		uv = float2(v.x < 0.0 ? v.z : -v.z, -v.y);
-	}
-	return uv * ma + 0.5;
-}
-
-float GetCubeFaceIndex(const float3 v)
-{
-	float3 vAbs = abs(v);
-	float faceIndex = 0;
-	if(vAbs.z >= vAbs.x && vAbs.z >= vAbs.y)
-	{
-		faceIndex = v.z < 0.0 ? 5.0 : 4.0;
-	}
-	else if(vAbs.y >= vAbs.x)
-	{
-		faceIndex = v.y < 0.0 ? 3.0 : 2.0;
-	}
-	else
-	{
-		faceIndex = v.x < 0.0 ? 1.0 : 0.0;
-	}
-    return faceIndex;
 }
 
 float Pow4(float x)
@@ -251,3 +220,83 @@ float LinearToSrgbFast(float x)
 {
     return pow(x, 1.0f / 2.2f);
 }
+
+float3 LinearToSrgbFast(float3 rgb)
+{
+    return pow(rgb, 1.0f / 2.2f);
+}
+
+uint GetCubeFaceIndex(const float3 v)
+{
+	float3 vAbs = abs(v);
+	uint faceIndex = 0;
+	if(vAbs.z >= vAbs.x && vAbs.z >= vAbs.y)
+	{
+		faceIndex = v.z < 0 ? 5 : 4;
+	}
+	else if(vAbs.y >= vAbs.x)
+	{
+		faceIndex = v.y < 0 ? 3 : 2;
+	}
+	else
+	{
+		faceIndex = v.x < 0 ? 1 : 0;
+	}
+    return faceIndex;
+}
+
+//From "NEXT GENERATION POST PROCESSING IN CALL OF DUTY: ADVANCED WARFARE"
+//http://advances.realtimerendering.com/s2014/index.html
+float InterleavedGradientNoise(float2 uv)
+{
+    const float3 magic = float3(0.06711056f, 0.00583715f, 52.9829189f);
+    return frac(magic.z * frac(dot(uv, magic.xy)));
+}
+float InterleavedGradientNoise(float2 uv, float offset)
+{
+	uv += offset * (float2(47, 17) * 0.695f);
+    const float3 magic = float3( 0.06711056f, 0.00583715f, 52.9829189f );
+    return frac(magic.z * frac(dot(uv, magic.xy)));
+}
+
+//Louis Bavoil
+//https://developer.nvidia.com/blog/optimizing-compute-shaders-for-l2-locality-using-thread-group-id-swizzling/
+void SwizzleThreadID(uint2 dispatchDimensions, uint2 numThreads, int2 groupId, int2 groupThreadIndex, out uint2 swizzledvThreadGroupID, out uint2 swizzledvThreadID)
+{
+    //Divide the 2d-Dispatch_Grid into tiles of dimension [N, Dispatch_Grid_Dim.y]
+    //“CTA” (Cooperative Thread Array) == Thread Group in DirectX terminology
+    uint2 Dispatch_Grid_Dim = dispatchDimensions; //Get this from the C++ side.
+    uint2 CTA_Dim = numThreads; // This already known in HLSL
+    uint Number_of_CTAs_to_launch_in_x_dim = 16; //Launch 16 CTAs in x-dimension
+    // A perfect tile is one with dimensions = [Number_of_CTAs_to_launch_in_x_dim, Dispatch_Grid_Dim.y]
+    uint Number_of_CTAs_in_a_perfect_tile = Number_of_CTAs_to_launch_in_x_dim * (Dispatch_Grid_Dim.y);
+    //Possible number of perfect tiles
+    uint Number_of_perfect_tiles = (Dispatch_Grid_Dim.x)/Number_of_CTAs_to_launch_in_x_dim;
+    //Total number of CTAs present in the perfect tiles
+    uint Total_CTAs_in_all_perfect_tiles = Number_of_perfect_tiles * Number_of_CTAs_to_launch_in_x_dim * Dispatch_Grid_Dim.y - 1;
+    uint vThreadGroupIDFlattened = (Dispatch_Grid_Dim.x)*groupId.y + groupId.x;
+    //Tile_ID_of_current_CTA : current CTA to TILE-ID mapping.
+    uint Tile_ID_of_current_CTA = (vThreadGroupIDFlattened)/Number_of_CTAs_in_a_perfect_tile;
+    uint Local_CTA_ID_within_current_tile = (vThreadGroupIDFlattened)%Number_of_CTAs_in_a_perfect_tile;
+    uint Local_CTA_ID_y_within_current_tile;
+    uint Local_CTA_ID_x_within_current_tile;
+    if(Total_CTAs_in_all_perfect_tiles < vThreadGroupIDFlattened)
+    {
+        //Path taken only if the last tile has imperfect dimensions and CTAs from the last tile are launched. 
+        uint X_dimension_of_last_tile = (Dispatch_Grid_Dim.x)%Number_of_CTAs_to_launch_in_x_dim;
+        Local_CTA_ID_y_within_current_tile = (Local_CTA_ID_within_current_tile) / X_dimension_of_last_tile;
+        Local_CTA_ID_x_within_current_tile = (Local_CTA_ID_within_current_tile) % X_dimension_of_last_tile;
+    }
+    else
+    {
+        Local_CTA_ID_y_within_current_tile = (Local_CTA_ID_within_current_tile) / Number_of_CTAs_to_launch_in_x_dim;
+        Local_CTA_ID_x_within_current_tile = (Local_CTA_ID_within_current_tile) % Number_of_CTAs_to_launch_in_x_dim;
+    }
+    uint Swizzled_vThreadGroupIDFlattened = Tile_ID_of_current_CTA * Number_of_CTAs_to_launch_in_x_dim + Local_CTA_ID_y_within_current_tile * Dispatch_Grid_Dim.x + Local_CTA_ID_x_within_current_tile;
+    swizzledvThreadGroupID.y = Swizzled_vThreadGroupIDFlattened / Dispatch_Grid_Dim.x;
+    swizzledvThreadGroupID.x = Swizzled_vThreadGroupIDFlattened % Dispatch_Grid_Dim.x;
+    swizzledvThreadID.x = (CTA_Dim.x)*swizzledvThreadGroupID.x + groupThreadIndex.x; 
+    swizzledvThreadID.y = (CTA_Dim.y)*swizzledvThreadGroupID.y + groupThreadIndex.y;
+}
+
+#endif

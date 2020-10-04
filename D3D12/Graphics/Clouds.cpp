@@ -56,15 +56,13 @@ void Clouds::Initialize(Graphics* pGraphics)
 
 	CommandContext* pContext = pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 	{
-		Shader shader("Resources/Shaders/WorleyNoise.hlsl", Shader::Type::Compute, "WorleyNoiseCS");
+		Shader shader("WorleyNoise.hlsl", ShaderType::Compute, "WorleyNoiseCS");
 
 		m_pWorleyNoiseRS = std::make_unique<RootSignature>();
-		m_pWorleyNoiseRS->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_ALL);
-		m_pWorleyNoiseRS->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, D3D12_SHADER_VISIBILITY_ALL);
-		m_pWorleyNoiseRS->Finalize("Worley Noise RS", pGraphics->GetDevice(), D3D12_ROOT_SIGNATURE_FLAG_NONE);
+		m_pWorleyNoiseRS->FinalizeFromShader("Worley Noise RS", shader, pGraphics->GetDevice());
 
 		m_pWorleyNoisePS = std::make_unique<PipelineState>();
-		m_pWorleyNoisePS->SetComputeShader(shader.GetByteCode(), shader.GetByteCodeSize());
+		m_pWorleyNoisePS->SetComputeShader(shader);
 		m_pWorleyNoisePS->SetRootSignature(m_pWorleyNoiseRS->GetRootSignature());
 		m_pWorleyNoisePS->Finalize("Worley Noise PS", pGraphics->GetDevice());
 
@@ -73,23 +71,10 @@ void Clouds::Initialize(Graphics* pGraphics)
 		m_pWorleyNoiseTexture->SetName("Worley Noise Texture");
 	}
 	{
-		Shader vertexShader("Resources/Shaders/Clouds.hlsl", Shader::Type::Vertex, "VSMain");
-		Shader pixelShader("Resources/Shaders/Clouds.hlsl", Shader::Type::Pixel, "PSMain");
+		Shader vertexShader("Clouds.hlsl", ShaderType::Vertex, "VSMain");
+		Shader pixelShader("Clouds.hlsl", ShaderType::Pixel, "PSMain");
 		m_pCloudsRS = std::make_unique<RootSignature>();
-		m_pCloudsRS->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_ALL);
-		m_pCloudsRS->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3, D3D12_SHADER_VISIBILITY_PIXEL);
-
-		D3D12_SAMPLER_DESC samplerDesc = {};
-		samplerDesc.AddressU = samplerDesc.AddressV = samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-		samplerDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_ALWAYS;
-		samplerDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
-		m_pCloudsRS->AddStaticSampler(0, samplerDesc, D3D12_SHADER_VISIBILITY_PIXEL);
-
-		samplerDesc.AddressU = samplerDesc.AddressV = samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-		samplerDesc.Filter = D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT;
-		m_pCloudsRS->AddStaticSampler(1, samplerDesc, D3D12_SHADER_VISIBILITY_PIXEL);
-
-		m_pCloudsRS->Finalize("Clouds RS", pGraphics->GetDevice(), D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+		m_pCloudsRS->FinalizeFromShader("Clouds RS", vertexShader, pGraphics->GetDevice());
 
 		D3D12_INPUT_ELEMENT_DESC quadIL[] = {
 			D3D12_INPUT_ELEMENT_DESC{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
@@ -97,13 +82,13 @@ void Clouds::Initialize(Graphics* pGraphics)
 		};
 
 		m_pCloudsPS = std::make_unique<PipelineState>();
-		m_pCloudsPS->SetVertexShader(vertexShader.GetByteCode(), vertexShader.GetByteCodeSize());
+		m_pCloudsPS->SetVertexShader(vertexShader);
 		m_pCloudsPS->SetInputLayout(quadIL, 2);
-		m_pCloudsPS->SetPixelShader(pixelShader.GetByteCode(), pixelShader.GetByteCodeSize());
+		m_pCloudsPS->SetPixelShader(pixelShader);
 		m_pCloudsPS->SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
 		m_pCloudsPS->SetDepthEnabled(false);
 		m_pCloudsPS->SetDepthWrite(false);
-		m_pCloudsPS->SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, pGraphics->GetMultiSampleCount(), pGraphics->GetMultiSampleQualityLevel(pGraphics->GetMultiSampleCount()));
+		m_pCloudsPS->SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, pGraphics->GetMultiSampleCount());
 		m_pCloudsPS->SetRootSignature(m_pCloudsRS->GetRootSignature());
 		m_pCloudsPS->Finalize("Clouds PS", pGraphics->GetDevice());
 	}
@@ -228,7 +213,7 @@ void Clouds::Render(CommandContext& context, Texture* pSceneTexture, Texture* pD
 		context.InsertResourceBarrier(pSceneTexture, D3D12_RESOURCE_STATE_COPY_DEST);
 		context.InsertResourceBarrier(m_pIntermediateColor.get(), D3D12_RESOURCE_STATE_COPY_SOURCE);
 		context.FlushResourceBarriers();
-		context.CopyResource(m_pIntermediateColor.get(), pSceneTexture);
+		context.CopyTexture(m_pIntermediateColor.get(), pSceneTexture);
 		context.InsertResourceBarrier(pSceneTexture, D3D12_RESOURCE_STATE_RENDER_TARGET);
 		context.FlushResourceBarriers();
 	}

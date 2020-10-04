@@ -4,6 +4,7 @@
 #include "Graphics/Core/CommandContext.h"
 #include "Graphics/Profiler.h"
 #include "ResourceAllocator.h"
+#include "Core/CommandLine.h"
 
 RGResourceHandle RGPassBuilder::Read(const RGResourceHandle& resource)
 {
@@ -48,8 +49,8 @@ void RGPassBuilder::NeverCull()
 	m_Pass.m_NeverCull = true;
 }
 
-RGGraph::RGGraph(Graphics* pGraphics)
-	: m_pGraphics(pGraphics)
+RGGraph::RGGraph(Graphics* pGraphics, uint64 allocatorSize /*= 0xFFFF*/)
+	: m_pGraphics(pGraphics), m_Allocator(allocatorSize)
 {
 	m_ImmediateMode = CommandLine::GetBool("rgimmediate");
 }
@@ -138,7 +139,7 @@ void RGGraph::Compile()
 		RGPass* pWriter = pNode->pWriter;
 		if (pWriter)
 		{
-			RG_ASSERT(pWriter->m_References >= 1, "Pass is expected to have references");
+			RG_ASSERT(pWriter->m_References >= 1, "Pass (%s) is expected to have references", pWriter->GetName());
 			--pWriter->m_References;
 			if (pWriter->m_References == 0)
 			{
@@ -167,12 +168,8 @@ void RGGraph::Present(RGResourceHandle resource)
 {
 	RG_ASSERT(IsValidHandle(resource), "Resource is invalid");
 
-	AddPass("Present",
-		[&](RGPassBuilder& builder) {
-			builder.Read(resource);
-			return [=](CommandContext&, const RGPassResources&) {
-			};
-		});
+	RGPassBuilder builder = AddPass("Present");
+	builder.Bind([=](CommandContext&, const RGPassResources&) {});
 }
 
 RGResourceHandle RGGraph::MoveResource(RGResourceHandle From, RGResourceHandle To)
@@ -187,43 +184,49 @@ RGResourceHandle RGGraph::MoveResource(RGResourceHandle From, RGResourceHandle T
 RGPass& RGGraph::AddPass(RGPass* pPass)
 {
 	m_RenderPasses.push_back(pPass);
-
-	if (m_ImmediateMode)
-	{
-		CommandContext* pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
-		ExecutePass(pPass, *pContext);
-		m_LastFenceValue = pContext->Execute(false);
-	}
-
 	return *pPass;
+}
+
+void RGGraph::PushEvent(const char* pName)
+{
+	ProfileEvent e;
+	e.Begin = true;
+	e.PassIndex = (uint32)m_RenderPasses.size();
+	e.pName = pName;
+	m_Events.push_back(e);
+	m_EventStackSize++;
+}
+
+void RGGraph::PopEvent()
+{
+	RG_ASSERT(m_RenderPasses.size() > 0, "Can't pop event before a RenderPass has been added");
+	RG_ASSERT(m_EventStackSize > 0, "No Event to Pop");
+	ProfileEvent e;
+	e.Begin = false;
+	e.PassIndex = (uint32)m_RenderPasses.size() - 1;
+	e.pName = nullptr;
+	m_Events.push_back(e);
+	m_EventStackSize--;
 }
 
 int64 RGGraph::Execute()
 {
+	RG_ASSERT(m_EventStackSize == 0, "Missing PopEvent");
 	if (m_ImmediateMode == false)
 	{
-		int eclFrequency = 4;
-		int i = 0;
 		CommandContext* pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
-		for (RGPass* pPass : m_RenderPasses)
+		for(uint32 passIndex = 0; passIndex < (uint32)m_RenderPasses.size(); ++passIndex)
 		{
+			RGPass* pPass = m_RenderPasses[passIndex];
+
+			ProcessEvents(*pContext, passIndex, true);
 			if (pPass->m_References > 0)
 			{
 				ExecutePass(pPass, *pContext);
 			}
-
-			++i;
-			if (i == eclFrequency)
-			{
-				i = 0;
-				m_LastFenceValue = pContext->Execute(false);
-				pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
-			}
+			ProcessEvents(*pContext, passIndex, false);
 		}
-		if (i > 0)
-		{
-			m_LastFenceValue = pContext->Execute(false);
-		}
+		m_LastFenceValue = pContext->Execute(false);
 	}
 	DestroyData();
 	return m_LastFenceValue;
@@ -240,7 +243,7 @@ void RGGraph::ExecutePass(RGPass* pPass, CommandContext& context)
 
 	{
 		GPU_PROFILE_SCOPE(pPass->m_Name, &context);
-		pPass->Execute(resources, context);
+		pPass->Execute(context, resources);
 	}
 
 	//#todo: Check if we're in a Graphics pass and automatically call EndRenderPass
@@ -276,12 +279,12 @@ void RGGraph::DestroyData()
 {
 	for (RGPass* pPass : m_RenderPasses)
 	{
-		delete pPass;
+		m_Allocator.Release(pPass);
 	}
 	m_RenderPasses.clear();
 	for (RGResource* pResource : m_Resources)
 	{
-		delete pResource;
+		m_Allocator.Release(pResource);
 	}
 	m_Resources.clear();
 	m_ResourceNodes.clear();
@@ -301,7 +304,7 @@ void RGGraph::ConditionallyCreateResource(RGResource* pResource)
 			break;
 		case RGResourceType::None:
 		default:
-			assert(0);
+			noEntry();
 			break;
 		}
 	}
@@ -321,8 +324,26 @@ void RGGraph::ConditionallyReleaseResource(RGResource* pResource)
 			break;
 		case RGResourceType::None:
 		default:
-			assert(0);
+			noEntry();
 			break;
+		}
+	}
+}
+
+void RGGraph::ProcessEvents(CommandContext& context, uint32 passIndex, bool begin)
+{
+	for (uint32 eventIdx = m_CurrentEvent; eventIdx < m_Events.size() && m_Events[eventIdx].PassIndex == passIndex; ++eventIdx)
+	{
+		ProfileEvent& e = m_Events[eventIdx];
+		if (e.Begin && begin)
+		{
+			m_CurrentEvent++;
+			GPU_PROFILE_BEGIN(e.pName, &context);
+		}
+		else if (!e.Begin && !begin)
+		{
+			m_CurrentEvent++;
+			GPU_PROFILE_END(&context);
 		}
 	}
 }
@@ -331,7 +352,7 @@ Texture* RGPassResources::GetTexture(RGResourceHandle handle) const
 {
 	RG_ASSERT(m_Pass.ReadsFrom(handle) || m_Pass.WritesTo(handle), "Pass doesn't read or write to this resource");
 	const RGNode& node = m_Graph.GetResourceNode(handle);
-	assert(node.pResource);
-	assert(node.pResource->m_Type == RGResourceType::Texture);
+	check(node.pResource);
+	check(node.pResource->m_Type == RGResourceType::Texture);
 	return static_cast<Texture*>(node.pResource->m_pPhysicalResource);
 }

@@ -7,21 +7,11 @@
 #define STBI_NO_PNM
 
 #define STB_IMAGE_IMPLEMENTATION
-#include "External/Stb/stb_image.h"
+#include "Stb/stb_image.h"
 #define STB_IMAGE_WRITE_IMPLEMENTATION
-#include "External/Stb/stb_image_write.h"
+#include "Stb/stb_image_write.h"
 #include <fstream>
 #include "Core/Paths.h"
-
-Image::Image()
-{
-
-}
-
-Image::~Image()
-{
-
-}
 
 bool Image::Load(const char* inputStream)
 {
@@ -58,7 +48,7 @@ bool Image::Load(const void* pInPixels, size_t dataSize, const char* pFormatHint
 	return true;
 }
 
-bool Image::SetSize(const int x, const int y, const int components)
+bool Image::SetSize(int x, int y, int components)
 {
 	m_Width = x;
 	m_Height = y;
@@ -70,14 +60,21 @@ bool Image::SetSize(const int x, const int y, const int components)
 	return true;
 }
 
-bool Image::SetData(const unsigned int* pPixels)
+bool Image::SetData(const void* pPixels)
 {
-	memcpy(m_Pixels.data(), pPixels, m_Pixels.size() * m_Depth * m_Components);
+	return SetData(pPixels, 0, (uint32)m_Pixels.size());
+}
+
+bool Image::SetData(const void* pData, uint32 offsetInBytes, uint32 sizeInBytes)
+{
+	check(offsetInBytes + sizeInBytes <= m_Pixels.size());
+	memcpy(m_Pixels.data() + offsetInBytes, pData, sizeInBytes);
 	return true;
 }
 
-bool Image::SetPixel(const int x, const int y, const Color& color)
+bool Image::SetPixel(int x, int y, const Color& color)
 {
+	checkf(!D3D::IsBlockCompressFormat((DXGI_FORMAT)TextureFormatFromCompressionFormat(m_Format, m_sRgb)), "Can't set pixel data from block compressed texture");
 	if (x + y * m_Width >= (int)m_Pixels.size())
 	{
 		return false;
@@ -90,8 +87,9 @@ bool Image::SetPixel(const int x, const int y, const Color& color)
 	return true;
 }
 
-bool Image::SetPixelInt(const int x, const int y, const unsigned int color)
+bool Image::SetPixelInt(int x, int y, unsigned int color)
 {
+	checkf(!D3D::IsBlockCompressFormat((DXGI_FORMAT)TextureFormatFromCompressionFormat(m_Format, m_sRgb)), "Can't set pixel data from block compressed texture");
 	if (x + y * m_Width >= (int)m_Pixels.size())
 	{
 		return false;
@@ -104,8 +102,9 @@ bool Image::SetPixelInt(const int x, const int y, const unsigned int color)
 	return true;
 }
 
-Color Image::GetPixel(const int x, const int y) const
+Color Image::GetPixel(int x, int y) const
 {
+	checkf(!D3D::IsBlockCompressFormat((DXGI_FORMAT)TextureFormatFromCompressionFormat(m_Format, m_sRgb)), "Can't get pixel data from block compressed texture");
 	Color c = {};
 	if (x + y * m_Width >= (int)m_Pixels.size())
 	{
@@ -119,8 +118,9 @@ Color Image::GetPixel(const int x, const int y) const
 	return c;
 }
 
-unsigned int Image::GetPixelInt(const int x, const int y) const
+unsigned int Image::GetPixelInt(int x, int y) const
 {
+	checkf(!D3D::IsBlockCompressFormat((DXGI_FORMAT)TextureFormatFromCompressionFormat(m_Format, m_sRgb)), "Can't get pixel data from block compressed texture");
 	unsigned int c = 0;
 	if (x + y * m_Width >= (int)m_Pixels.size())
 	{
@@ -176,7 +176,7 @@ bool Image::GetSurfaceInfo(int width, int height, int depth, int mipLevel, MipLe
 	}
 	else if (IsCompressed())
 	{
-		int blockSize = (m_Format == ImageFormat::DXT1 || m_Format == ImageFormat::BC4) ? 8 : 16;
+		int blockSize = (m_Format == ImageFormat::BC1 || m_Format == ImageFormat::BC4) ? 8 : 16;
 		mipLevelInfo.RowSize = ((mipLevelInfo.Width + 3) / 4) * blockSize;
 		mipLevelInfo.Rows = (mipLevelInfo.Height + 3) / 4;
 		mipLevelInfo.DataSize = mipLevelInfo.Depth * mipLevelInfo.Rows * mipLevelInfo.RowSize;
@@ -192,56 +192,21 @@ unsigned int Image::TextureFormatFromCompressionFormat(const ImageFormat& format
 {
 	switch (format)
 	{
-	case ImageFormat::RGBA:
-		if (sRgb)
-		{
-			return DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
-		}
-		return DXGI_FORMAT_R8G8B8A8_UNORM;
-	case ImageFormat::BGRA:
-		if (sRgb)
-		{
-			return DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
-		}
-		return DXGI_FORMAT_B8G8R8A8_UNORM;
-	case ImageFormat::RGB32:
-		return DXGI_FORMAT_R32G32B32_FLOAT;
-	case ImageFormat::RGBA16:
-		return DXGI_FORMAT_R16G16B16A16_FLOAT;
-	case ImageFormat::RGBA32:
-		return DXGI_FORMAT_R32G32B32A32_FLOAT;
-	case ImageFormat::DXT1:
-		if (sRgb)
-		{
-			return DXGI_FORMAT_BC1_UNORM_SRGB;
-		}
-		return DXGI_FORMAT_BC1_UNORM;
-	case ImageFormat::DXT3:
-		if (sRgb)
-		{
-			return DXGI_FORMAT_BC2_UNORM_SRGB;
-		}
-		return DXGI_FORMAT_BC2_UNORM;
-	case ImageFormat::DXT5:
-		if (sRgb)
-		{
-			return DXGI_FORMAT_BC3_UNORM_SRGB;
-		}
-		return DXGI_FORMAT_BC3_UNORM;
-	case ImageFormat::BC4:
-		return DXGI_FORMAT_BC4_UNORM;
-	case ImageFormat::BC5:
-		return DXGI_FORMAT_BC5_UNORM;
-	case ImageFormat::BC6H:
-		return DXGI_FORMAT_BC6H_UF16;
-	case ImageFormat::BC7:
-		if (sRgb)
-		{
-			return DXGI_FORMAT_BC7_UNORM_SRGB;
-		}
-		return DXGI_FORMAT_BC7_UNORM;
+	case ImageFormat::RGBA:		return sRgb ? DXGI_FORMAT_R8G8B8A8_UNORM_SRGB : DXGI_FORMAT_R8G8B8A8_UNORM;
+	case ImageFormat::BGRA:		return sRgb ? DXGI_FORMAT_B8G8R8A8_UNORM_SRGB : DXGI_FORMAT_B8G8R8A8_UNORM;
+	case ImageFormat::RGB32:	return DXGI_FORMAT_R32G32B32_FLOAT;
+	case ImageFormat::RGBA16:	return DXGI_FORMAT_R16G16B16A16_FLOAT;
+	case ImageFormat::RGBA32:	return DXGI_FORMAT_R32G32B32A32_FLOAT;
+	case ImageFormat::BC1:		return sRgb ? DXGI_FORMAT_BC1_UNORM_SRGB : DXGI_FORMAT_BC1_UNORM;
+	case ImageFormat::BC2:		return sRgb ? DXGI_FORMAT_BC2_UNORM_SRGB : DXGI_FORMAT_BC2_UNORM;
+	case ImageFormat::BC3:		return sRgb ? DXGI_FORMAT_BC3_UNORM_SRGB : DXGI_FORMAT_BC3_UNORM;
+	case ImageFormat::BC4:		return DXGI_FORMAT_BC4_UNORM;
+	case ImageFormat::BC5:		return DXGI_FORMAT_BC5_UNORM;
+	case ImageFormat::BC6H:		return DXGI_FORMAT_BC6H_UF16;
+	case ImageFormat::BC7:		return sRgb ? DXGI_FORMAT_BC7_UNORM_SRGB : DXGI_FORMAT_BC7_UNORM;
 	default:
-		return 0;
+		noEntry();
+		return DXGI_FORMAT_UNKNOWN;
 	}
 }
 
@@ -399,19 +364,19 @@ bool Image::LoadDds(const char* inputStream)
 				m_Components = 3;
 				m_sRgb = true;
 			case IMAGE_FORMAT::BC1_UNORM:
-				m_Format = ImageFormat::DXT1;
+				m_Format = ImageFormat::BC1;
 				break;
 			case IMAGE_FORMAT::BC2_UNORM_SRGB:
 				m_Components = 4;
 				m_sRgb = true;
 			case IMAGE_FORMAT::BC2_UNORM:
-				m_Format = ImageFormat::DXT3;
+				m_Format = ImageFormat::BC2;
 				break;
 			case IMAGE_FORMAT::BC3_UNORM_SRGB:
 				m_Components = 4;
 				m_sRgb = true;
 			case IMAGE_FORMAT::BC3_UNORM:
-				m_Format = ImageFormat::DXT5;
+				m_Format = ImageFormat::BC3;
 				break;
 			case IMAGE_FORMAT::BC4_UNORM:
 				m_Components = 4;
@@ -446,17 +411,17 @@ bool Image::LoadDds(const char* inputStream)
 			switch (fourCC)
 			{
 			case MAKEFOURCC('D', 'X', 'T', '1'):
-				m_Format = ImageFormat::DXT1;
+				m_Format = ImageFormat::BC1;
 				m_Components = 3;
 				m_sRgb = false;
 				break;
 			case MAKEFOURCC('D', 'X', 'T', '3'):
-				m_Format = ImageFormat::DXT3;
+				m_Format = ImageFormat::BC2;
 				m_Components = 4;
 				m_sRgb = false;
 				break;
 			case MAKEFOURCC('D', 'X', 'T', '5'):
-				m_Format = ImageFormat::DXT5;
+				m_Format = ImageFormat::BC3;
 				m_Components = 4;
 				m_sRgb = false;
 				break;
@@ -484,6 +449,8 @@ bool Image::LoadDds(const char* inputStream)
 						return false;
 					}
 				}
+#undef ISBITMASK
+#undef MAKEFOURCC
 				break;
 			default:
 				return false;
@@ -535,4 +502,10 @@ bool Image::LoadDds(const char* inputStream)
 		return false;
 	}
 	return true;
+}
+
+void Image::Save(const char* pFilePath)
+{
+	int result = stbi_write_jpg(pFilePath, m_Width, m_Height, m_Components, m_Pixels.data(), 100);
+	check(result);
 }

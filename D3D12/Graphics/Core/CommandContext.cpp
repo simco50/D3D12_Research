@@ -9,18 +9,10 @@
 #include "GraphicsBuffer.h"
 #include "Texture.h"
 #include "ResourceViews.h"
+#include "RaytracingCommon.h"
 
-constexpr int VALID_COMPUTE_QUEUE_RESOURCE_STATES = D3D12_RESOURCE_STATE_COMMON | D3D12_RESOURCE_STATE_UNORDERED_ACCESS | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_COPY_DEST | D3D12_RESOURCE_STATE_COPY_SOURCE | D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT;
-constexpr int VALID_COPY_QUEUE_RESOURCE_STATES = D3D12_RESOURCE_STATE_COMMON | D3D12_RESOURCE_STATE_COPY_DEST | D3D12_RESOURCE_STATE_COPY_SOURCE;
-
-#define USE_RENDERPASSES 1
-
-#ifndef USE_RENDERPASSES
-#define USE_RENDERPASSES 0
-#endif
-
-CommandContext::CommandContext(Graphics* pGraphics, ID3D12GraphicsCommandList* pCommandList, ID3D12CommandAllocator* pAllocator, D3D12_COMMAND_LIST_TYPE type)
-	: GraphicsObject(pGraphics), m_pCommandList(pCommandList), m_pAllocator(pAllocator), m_Type(type)
+CommandContext::CommandContext(Graphics* pGraphics, ID3D12GraphicsCommandList* pCommandList, D3D12_COMMAND_LIST_TYPE type)
+	: GraphicsObject(pGraphics), m_pCommandList(pCommandList), m_pAllocator(nullptr), m_Type(type)
 {
 	m_DynamicAllocator = std::make_unique<DynamicResourceAllocator>(pGraphics->GetAllocationManager());
 	if (m_Type != D3D12_COMMAND_LIST_TYPE_COPY)
@@ -29,6 +21,7 @@ CommandContext::CommandContext(Graphics* pGraphics, ID3D12GraphicsCommandList* p
 		m_pSamplerDescriptorAllocator = std::make_unique<OnlineDescriptorAllocator>(pGraphics, this, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
 	}
 	pCommandList->QueryInterface(IID_PPV_ARGS(m_pRaytracingCommandList.GetAddressOf()));
+	pCommandList->QueryInterface(IID_PPV_ARGS(m_pMeshShadingCommandList.GetAddressOf()));
 }
 
 CommandContext::~CommandContext()
@@ -38,29 +31,52 @@ CommandContext::~CommandContext()
 
 void CommandContext::Reset()
 {
-	assert(m_pCommandList);
+	check(m_pCommandList);
 	if (m_pAllocator == nullptr)
 	{
 		m_pAllocator = m_pGraphics->GetCommandQueue(m_Type)->RequestAllocator();
 		m_pCommandList->Reset(m_pAllocator, nullptr);
 	}
-	m_NumQueuedBarriers = 0;
+	m_BarrierBatcher.Reset();
 	BindDescriptorHeaps();
+
+	m_PendingBarriers.clear();
+	m_ResourceStates.clear();
 }
 
 uint64 CommandContext::Execute(bool wait)
 {
-	FlushResourceBarriers();
-	CommandQueue* pQueue = m_pGraphics->GetCommandQueue(m_Type);
-	uint64 fenceValue = pQueue->ExecuteCommandList(m_pCommandList);
+	CommandContext* pContexts[] = { this };
+	return Execute(pContexts, ARRAYSIZE(pContexts), wait);
+}
 
+uint64 CommandContext::Execute(CommandContext** pContexts, uint32 numContexts, bool wait)
+{
+	check(numContexts > 0);
+	CommandQueue* pQueue = pContexts[0]->m_pGraphics->GetCommandQueue(pContexts[0]->GetType());
+	for (uint32 i = 0; i < numContexts; ++i)
+	{
+		checkf(pContexts[i]->GetType() == pQueue->GetType(), "All commandlist types must match. Expected %s, got %s",
+			D3D::CommandlistTypeToString(pQueue->GetType()), D3D::CommandlistTypeToString(pContexts[i]->GetType()));
+		pContexts[i]->FlushResourceBarriers();
+	}
+	uint64 fenceValue = pQueue->ExecuteCommandLists(pContexts, numContexts);
 	if (wait)
 	{
 		pQueue->WaitForFence(fenceValue);
 	}
 
+	for (uint32 i = 0; i < numContexts; ++i)
+	{
+		pContexts[i]->Free(fenceValue);
+	}
+	return fenceValue;
+}
+
+void CommandContext::Free(uint64 fenceValue)
+{
 	m_DynamicAllocator->Free(fenceValue);
-	pQueue->FreeAllocator(fenceValue, m_pAllocator);
+	m_pGraphics->GetCommandQueue(m_Type)->FreeAllocator(fenceValue, m_pAllocator);
 	m_pAllocator = nullptr;
 	m_pGraphics->FreeCommandList(this);
 
@@ -72,93 +88,115 @@ uint64 CommandContext::Execute(bool wait)
 	{
 		m_pSamplerDescriptorAllocator->ReleaseUsedHeaps(fenceValue);
 	}
-
-	return fenceValue;
 }
 
-void CommandContext::InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESOURCE_STATES state, bool executeImmediate /*= false*/)
+bool NeedsTransition(D3D12_RESOURCE_STATES& before, D3D12_RESOURCE_STATES& after)
 {
-	if (state != pBuffer->m_CurrentState)
+	//Can read from 'write' DSV
+	if (before == D3D12_RESOURCE_STATE_DEPTH_WRITE && after == D3D12_RESOURCE_STATE_DEPTH_READ)
 	{
-		if (m_Type == D3D12_COMMAND_LIST_TYPE_COMPUTE)
-		{
-			D3D12_RESOURCE_STATES currentState = pBuffer->GetResourceState();
-			assert((currentState & VALID_COMPUTE_QUEUE_RESOURCE_STATES) == currentState);
-			assert((state & VALID_COMPUTE_QUEUE_RESOURCE_STATES) == state);
-		}
-		else if (m_Type == D3D12_COMMAND_LIST_TYPE_COPY)
-		{
-			D3D12_RESOURCE_STATES currentState = pBuffer->GetResourceState();
-			assert((currentState & VALID_COPY_QUEUE_RESOURCE_STATES) == currentState);
-			assert((state & VALID_COPY_QUEUE_RESOURCE_STATES) == state);
-		}
+		return false;
+	}
+	if (after == D3D12_RESOURCE_STATE_COMMON)
+	{
+		return before != D3D12_RESOURCE_STATE_COMMON;
+	}
+	//Combine already transitioned bits
+	D3D12_RESOURCE_STATES combined = before | after;
+	if ((combined & (D3D12_RESOURCE_STATE_GENERIC_READ | D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT)) == combined)
+	{
+		after = combined;
+	}
+	return before != after;
+}
 
-		m_QueuedBarriers[m_NumQueuedBarriers] = CD3DX12_RESOURCE_BARRIER::Transition(pBuffer->GetResource(), pBuffer->m_CurrentState, state);
-		++m_NumQueuedBarriers;
-		if (executeImmediate || m_NumQueuedBarriers >= m_QueuedBarriers.size())
+void CommandContext::InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESOURCE_STATES state, uint32 subResource /*= D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES*/)
+{
+	checkf(IsTransitionAllowed(m_Type, state), "After state (%s) is not valid on this commandlist type (%s)", D3D::ResourceStateToString(state).c_str(), D3D::CommandlistTypeToString(m_Type));
+
+	ResourceState& resourceState = m_ResourceStates[pBuffer];
+	D3D12_RESOURCE_STATES beforeState = resourceState.Get(subResource);
+	if (beforeState == D3D12_RESOURCE_STATE_UNKNOWN)
+	{
+		PendingBarrier barrier;
+		barrier.pResource = pBuffer;
+		barrier.State = state;
+		barrier.Subresource = subResource;
+		m_PendingBarriers.push_back(barrier);
+		resourceState.Set(state, subResource);
+	}
+	else
+	{
+		if (NeedsTransition(beforeState, state))
 		{
-			FlushResourceBarriers();
+			checkf(IsTransitionAllowed(m_Type, beforeState), "Current resource state (%s) is not valid to transition from in this commandlist type (%s)", D3D::ResourceStateToString(state).c_str(), D3D::CommandlistTypeToString(m_Type));
+			m_BarrierBatcher.AddTransition(pBuffer->GetResource(), beforeState, state, subResource);
+			resourceState.Set(state, subResource);
 		}
-		pBuffer->m_CurrentState = state;
 	}
 }
 
-void CommandContext::InsertUavBarrier(GraphicsResource* pBuffer /*= nullptr*/, bool executeImmediate /*= false*/)
+void CommandContext::InsertUavBarrier(GraphicsResource* pBuffer /*= nullptr*/)
 {
-	m_QueuedBarriers[m_NumQueuedBarriers] = CD3DX12_RESOURCE_BARRIER::UAV(pBuffer ? pBuffer->GetResource() : nullptr);
-	++m_NumQueuedBarriers;
-	if (executeImmediate || m_NumQueuedBarriers >= m_QueuedBarriers.size())
-	{
-		FlushResourceBarriers();
-	}
-	if (pBuffer)
-	{
-		pBuffer->m_CurrentState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-	}
+	m_BarrierBatcher.AddUAV(pBuffer ? pBuffer->GetResource() : nullptr);
 }
 
 void CommandContext::FlushResourceBarriers()
 {
-	if (m_NumQueuedBarriers > 0)
-	{
-		m_pCommandList->ResourceBarrier(m_NumQueuedBarriers, m_QueuedBarriers.data());
-		m_NumQueuedBarriers = 0;
-	}
+	m_BarrierBatcher.Flush(m_pCommandList);
 }
 
-void CommandContext::CopyResource(GraphicsResource* pSource, GraphicsResource* pTarget)
+void CommandContext::CopyTexture(GraphicsResource* pSource, GraphicsResource* pTarget)
 {
-	assert(pSource);
-	assert(pTarget);
-	D3D12_RESOURCE_STATES sourceState = pSource->GetResourceState();
-	D3D12_RESOURCE_STATES targetState = pTarget->GetResourceState();
+	check(pSource && pTarget);
 	InsertResourceBarrier(pSource, D3D12_RESOURCE_STATE_COPY_SOURCE);
-	InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_COPY_DEST, true);
+	InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_COPY_DEST);
+	FlushResourceBarriers();
 	m_pCommandList->CopyResource(pTarget->GetResource(), pSource->GetResource());
-	InsertResourceBarrier(pSource, sourceState);
-	InsertResourceBarrier(pTarget, targetState);
+}
+
+void CommandContext::CopyTexture(Texture* pSource, Buffer* pDestination, const D3D12_BOX& sourceRegion, int sourceSubregion /*= 0*/, int destinationOffset /*= 0*/)
+{
+	D3D12_PLACED_SUBRESOURCE_FOOTPRINT textureFootprint = {};
+	m_pGraphics->GetDevice()->GetCopyableFootprints(&pSource->GetResource()->GetDesc(), 0, 1, 0, &textureFootprint, nullptr, nullptr, nullptr);
+
+	CD3DX12_TEXTURE_COPY_LOCATION srcLocation(pSource->GetResource(), sourceSubregion);
+	CD3DX12_TEXTURE_COPY_LOCATION dstLocation(pDestination->GetResource(), textureFootprint);
+	m_pCommandList->CopyTextureRegion(&dstLocation, destinationOffset, 0, 0, &srcLocation, &sourceRegion);
+}
+
+void CommandContext::CopyTexture(Texture* pSource, Texture* pDestination, const D3D12_BOX& sourceRegion, const D3D12_BOX& destinationRegion, int sourceSubregion /*= 0*/, int destinationSubregion /*= 0*/)
+{
+	CD3DX12_TEXTURE_COPY_LOCATION srcLocation(pSource->GetResource(), sourceSubregion);
+	CD3DX12_TEXTURE_COPY_LOCATION dstLocation(pDestination->GetResource(), destinationSubregion);
+	m_pCommandList->CopyTextureRegion(&dstLocation, destinationRegion.left, destinationRegion.top, destinationRegion.front, &srcLocation, &sourceRegion);
+}
+
+void CommandContext::CopyBuffer(Buffer* pSource, Buffer* pDestination, uint32 size, uint32 sourceOffset, uint32 destinationOffset)
+{
+	m_pCommandList->CopyBufferRegion(pDestination->GetResource(), destinationOffset, pSource->GetResource(), sourceOffset, size);
 }
 
 void CommandContext::InitializeBuffer(Buffer* pResource, const void* pData, uint64 dataSize, uint64 offset)
 {
 	DynamicAllocation allocation = m_DynamicAllocator->Allocate(dataSize);
 	memcpy(allocation.pMappedMemory, pData, dataSize);
-	D3D12_RESOURCE_STATES previousState = pResource->GetResourceState();
-	InsertResourceBarrier(pResource, D3D12_RESOURCE_STATE_COPY_DEST, true);
+
+	ScopedBarrier barrier(*this, pResource, D3D12_RESOURCE_STATE_COPY_DEST);
+	FlushResourceBarriers();
 	m_pCommandList->CopyBufferRegion(pResource->GetResource(), offset, allocation.pBackingResource->GetResource(), allocation.Offset, dataSize);
-	InsertResourceBarrier(pResource, previousState, true);
 }
 
 void CommandContext::InitializeTexture(Texture* pResource, D3D12_SUBRESOURCE_DATA* pSubResourceDatas, int firstSubResource, int subResourceCount)
 {
 	D3D12_RESOURCE_DESC desc = pResource->GetResource()->GetDesc();
-	size_t requiredSize = 0;
+	uint64 requiredSize = 0;
 	m_pGraphics->GetDevice()->GetCopyableFootprints(&desc, firstSubResource, subResourceCount, 0, nullptr, nullptr, nullptr, &requiredSize);
 	DynamicAllocation allocation = m_DynamicAllocator->Allocate(requiredSize, D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT);
-	D3D12_RESOURCE_STATES previousState = pResource->GetResourceState();
-	InsertResourceBarrier(pResource, D3D12_RESOURCE_STATE_COPY_DEST, true);
+	
+	ScopedBarrier barrier(*this, pResource, D3D12_RESOURCE_STATE_COPY_DEST);
+	FlushResourceBarriers();
 	UpdateSubresources(m_pCommandList, pResource->GetResource(), allocation.pBackingResource->GetResource(), allocation.Offset, firstSubResource, subResourceCount, pSubResourceDatas);
-	InsertResourceBarrier(pResource, previousState, true);
 }
 
 void CommandContext::Dispatch(uint32 groupCountX, uint32 groupCountY, uint32 groupCountZ)
@@ -167,10 +205,22 @@ void CommandContext::Dispatch(uint32 groupCountX, uint32 groupCountY, uint32 gro
 	m_pCommandList->Dispatch(groupCountX, groupCountY, groupCountZ);
 }
 
-void CommandContext::ExecuteIndirect(ID3D12CommandSignature* pCommandSignature, Buffer* pIndirectArguments, bool isCompute)
+void CommandContext::Dispatch(const IntVector3& groupCounts)
+{
+	Dispatch(groupCounts.x, groupCounts.y, groupCounts.z);
+}
+
+void CommandContext::DispatchMesh(uint32 groupCountX, uint32 groupCountY /*= 1*/, uint32 groupCountZ /*= 1*/)
+{
+	check(m_pMeshShadingCommandList);
+	PrepareDraw(DescriptorTableType::Graphics);
+	m_pMeshShadingCommandList->DispatchMesh(groupCountX, groupCountY, groupCountZ);
+}
+
+void CommandContext::ExecuteIndirect(CommandSignature* pCommandSignature, Buffer* pIndirectArguments, bool isCompute)
 {
 	PrepareDraw(isCompute ? DescriptorTableType::Compute : DescriptorTableType::Graphics);
-	m_pCommandList->ExecuteIndirect(pCommandSignature, 1, pIndirectArguments->GetResource(), 0, nullptr, 0);
+	m_pCommandList->ExecuteIndirect(pCommandSignature->GetCommandSignature(), 1, pIndirectArguments->GetResource(), 0, nullptr, 0);
 }
 
 void CommandContext::ClearUavUInt(GraphicsResource* pBuffer, UnorderedAccessView* pUav, uint32* values /*= nullptr*/)
@@ -225,7 +275,7 @@ void CommandContext::SetDynamicDescriptor(int rootIndex, int offset, ShaderResou
 	SetDynamicDescriptor(rootIndex, offset, pView->GetDescriptor());
 }
 
-void CommandContext::SetDynamicDescriptors(int rootIndex, int offset, D3D12_CPU_DESCRIPTOR_HANDLE* handles, int count)
+void CommandContext::SetDynamicDescriptors(int rootIndex, int offset, const D3D12_CPU_DESCRIPTOR_HANDLE* handles, int count)
 {
 	m_pShaderResourceDescriptorAllocator->SetDescriptors(rootIndex, offset, count, handles);
 }
@@ -235,7 +285,7 @@ void CommandContext::SetDynamicSampler(int rootIndex, int offset, D3D12_CPU_DESC
 	m_pSamplerDescriptorAllocator->SetDescriptors(rootIndex, offset, 1, &handle);
 }
 
-void CommandContext::SetDynamicSamplers(int rootIndex, int offset, D3D12_CPU_DESCRIPTOR_HANDLE* handles, int count)
+void CommandContext::SetDynamicSamplers(int rootIndex, int offset, const D3D12_CPU_DESCRIPTOR_HANDLE* handles, int count)
 {
 	m_pSamplerDescriptorAllocator->SetDescriptors(rootIndex, offset, count, handles);
 }
@@ -249,19 +299,46 @@ void CommandContext::SetDescriptorHeap(ID3D12DescriptorHeap* pHeap, D3D12_DESCRI
 	}
 }
 
-DynamicAllocation CommandContext::AllocateTransientMemory(uint64 size, const void* pData /*= nullptr*/)
+void CommandContext::SetShadingRate(D3D12_SHADING_RATE shadingRate /*= D3D12_SHADING_RATE_1X1*/)
 {
-	DynamicAllocation allocation = m_DynamicAllocator->Allocate(size);
-	if (pData)
-	{
-		memcpy(allocation.pMappedMemory, pData, size);
-	}
-	return allocation;
+	check(m_pMeshShadingCommandList);
+	m_pMeshShadingCommandList->RSSetShadingRate(shadingRate, nullptr);
+}
+
+DynamicAllocation CommandContext::AllocateTransientMemory(uint64 size)
+{
+	return m_DynamicAllocator->Allocate(size);
 }
 
 DescriptorHandle CommandContext::AllocateTransientDescriptors(int descriptorCount, D3D12_DESCRIPTOR_HEAP_TYPE type)
 {
 	return m_pShaderResourceDescriptorAllocator->AllocateTransientDescriptor(descriptorCount);
+}
+
+bool CommandContext::IsTransitionAllowed(D3D12_COMMAND_LIST_TYPE commandlistType, D3D12_RESOURCE_STATES state)
+{
+	constexpr int VALID_COMPUTE_QUEUE_RESOURCE_STATES =
+		D3D12_RESOURCE_STATE_COMMON
+		| D3D12_RESOURCE_STATE_UNORDERED_ACCESS
+		| D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE
+		| D3D12_RESOURCE_STATE_COPY_DEST
+		| D3D12_RESOURCE_STATE_COPY_SOURCE
+		| D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT;
+
+	constexpr int VALID_COPY_QUEUE_RESOURCE_STATES =
+		D3D12_RESOURCE_STATE_COMMON
+		| D3D12_RESOURCE_STATE_COPY_DEST
+		| D3D12_RESOURCE_STATE_COPY_SOURCE;
+
+	if (commandlistType == D3D12_COMMAND_LIST_TYPE_COMPUTE)
+	{
+		return (state & VALID_COMPUTE_QUEUE_RESOURCE_STATES) == state;
+	}
+	else if (commandlistType == D3D12_COMMAND_LIST_TYPE_COPY)
+	{
+		return (state & VALID_COPY_QUEUE_RESOURCE_STATES) == state;
+	}
+	return true;
 }
 
 void CommandContext::BindDescriptorHeaps()
@@ -284,10 +361,12 @@ void CommandContext::BindDescriptorHeaps()
 
 void CommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 {
-	assert(!m_InRenderPass);
-	assert(renderPassInfo.DepthStencilTarget.Target || (renderPassInfo.DepthStencilTarget.Access == RenderPassAccess::NoAccess && renderPassInfo.DepthStencilTarget.StencilAccess == RenderPassAccess::NoAccess));
+	checkf(!m_InRenderPass, "Already in RenderPass");
+	checkf(renderPassInfo.DepthStencilTarget.Target 
+		|| (renderPassInfo.DepthStencilTarget.Access == RenderPassAccess::NoAccess && renderPassInfo.DepthStencilTarget.StencilAccess == RenderPassAccess::NoAccess),
+	"Either a depth texture must be assigned or the access should be 'NoAccess'");
 
-	auto ExtractBeginAccess = [](RenderPassAccess access) -> D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE
+	auto ExtractBeginAccess = [](RenderPassAccess access)
 	{
 		switch (RenderPassInfo::GetBeginAccess(access))
 		{
@@ -296,11 +375,11 @@ void CommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 		case RenderTargetLoadAction::Clear: return D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_CLEAR;
 		case RenderTargetLoadAction::NoAccess: return D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_NO_ACCESS;
 		}
-		assert(false);
+		noEntry();
 		return D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_NO_ACCESS;
 	};
 
-	auto ExtractEndingAccess = [](RenderPassAccess access) -> D3D12_RENDER_PASS_ENDING_ACCESS_TYPE
+	auto ExtractEndingAccess = [](RenderPassAccess access)
 	{
 		switch (RenderPassInfo::GetEndAccess(access))
 		{
@@ -309,20 +388,19 @@ void CommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 		case RenderTargetStoreAction::Resolve: return D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_RESOLVE;
 		case RenderTargetStoreAction::NoAccess: return D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_NO_ACCESS;
 		}
-		assert(false);
+		noEntry();
 		return D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_NO_ACCESS;
 	};
 
-#if USE_RENDERPASSES
-	ComPtr<ID3D12GraphicsCommandList4> pCmd;
-	if (m_pGraphics->UseRenderPasses() && m_pCommandList->QueryInterface(IID_PPV_ARGS(pCmd.GetAddressOf())) == S_OK)
+#if D3D12_USE_RENDERPASSES
+	if (m_pGraphics->UseRenderPasses() && m_pRaytracingCommandList)
 	{
 		D3D12_RENDER_PASS_DEPTH_STENCIL_DESC renderPassDepthStencilDesc{};
 		renderPassDepthStencilDesc.DepthBeginningAccess.Type = ExtractBeginAccess(renderPassInfo.DepthStencilTarget.Access);
 		if (renderPassDepthStencilDesc.DepthBeginningAccess.Type == D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_CLEAR)
 		{
-			assert(renderPassInfo.DepthStencilTarget.Target);
-			assert(renderPassInfo.DepthStencilTarget.Target->GetClearBinding().BindingValue == ClearBinding::ClearBindingValue::DepthStencil);
+			check(renderPassInfo.DepthStencilTarget.Target);
+			check(renderPassInfo.DepthStencilTarget.Target->GetClearBinding().BindingValue == ClearBinding::ClearBindingValue::DepthStencil);
 			renderPassDepthStencilDesc.DepthBeginningAccess.Clear.ClearValue.DepthStencil.Depth = renderPassInfo.DepthStencilTarget.Target->GetClearBinding().DepthStencil.Depth;
 			renderPassDepthStencilDesc.DepthBeginningAccess.Clear.ClearValue.Format = renderPassInfo.DepthStencilTarget.Target->GetFormat();
 		}
@@ -335,18 +413,19 @@ void CommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 		renderPassDepthStencilDesc.StencilBeginningAccess.Type = ExtractBeginAccess(renderPassInfo.DepthStencilTarget.StencilAccess);
 		if (renderPassDepthStencilDesc.StencilBeginningAccess.Type == D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_CLEAR)
 		{
-			assert(renderPassInfo.DepthStencilTarget.Target);
-			assert(renderPassInfo.DepthStencilTarget.Target->GetClearBinding().BindingValue == ClearBinding::ClearBindingValue::DepthStencil);
+			check(renderPassInfo.DepthStencilTarget.Target);
+			check(renderPassInfo.DepthStencilTarget.Target->GetClearBinding().BindingValue == ClearBinding::ClearBindingValue::DepthStencil);
 			renderPassDepthStencilDesc.StencilBeginningAccess.Clear.ClearValue.DepthStencil.Stencil = renderPassInfo.DepthStencilTarget.Target->GetClearBinding().DepthStencil.Stencil;
 			renderPassDepthStencilDesc.StencilBeginningAccess.Clear.ClearValue.Format = renderPassInfo.DepthStencilTarget.Target->GetFormat();
 		}
 		renderPassDepthStencilDesc.StencilEndingAccess.Type = ExtractEndingAccess(renderPassInfo.DepthStencilTarget.StencilAccess);
-		if (renderPassInfo.DepthStencilTarget.Target != nullptr)
+		if (renderPassInfo.DepthStencilTarget.Target)
 		{
 			renderPassDepthStencilDesc.cpuDescriptor = renderPassInfo.DepthStencilTarget.Target->GetDSV(writeable);
 		}
 
 		std::array<D3D12_RENDER_PASS_RENDER_TARGET_DESC, 4> renderTargetDescs{};
+		m_ResolveSubResourceParameters = {};
 		for (uint32 i = 0; i < renderPassInfo.RenderTargetCount; ++i)
 		{
 			const RenderPassInfo::RenderTargetInfo& data = renderPassInfo.RenderTargets[i];
@@ -355,19 +434,22 @@ void CommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 
 			if (renderTargetDescs[i].BeginningAccess.Type == D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_CLEAR)
 			{
-				assert(data.Target->GetClearBinding().BindingValue == ClearBinding::ClearBindingValue::Color);
-				memcpy(renderTargetDescs[i].BeginningAccess.Clear.ClearValue.Color, &data.Target->GetClearBinding().Color, sizeof(Color));
-				renderTargetDescs[i].BeginningAccess.Clear.ClearValue.Format = data.Target->GetFormat();
+				check(data.Target->GetClearBinding().BindingValue == ClearBinding::ClearBindingValue::Color);
+				const Color& clearColor = data.Target->GetClearBinding().Color;
+				D3D12_CLEAR_VALUE& clearValue = renderTargetDescs[i].BeginningAccess.Clear.ClearValue;
+				clearValue.Color[0] = clearColor.x;
+				clearValue.Color[1] = clearColor.y;
+				clearValue.Color[2] = clearColor.z;
+				clearValue.Color[3] = clearColor.w;
+				clearValue.Format = data.Target->GetFormat();
 			}
 			renderTargetDescs[i].EndingAccess.Type = ExtractEndingAccess(data.Access);
 
 			uint32 subResource = D3D12CalcSubresource(data.MipLevel, data.ArrayIndex, 0, data.Target->GetMipLevels(), data.Target->GetArraySize());
 
-			std::array<D3D12_RENDER_PASS_ENDING_ACCESS_RESOLVE_SUBRESOURCE_PARAMETERS, 4> subResourceParameters{};
-
 			if (renderTargetDescs[i].EndingAccess.Type == D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_RESOLVE)
 			{
-				assert(data.ResolveTarget);
+				checkf(data.ResolveTarget, "Expected ResolveTarget because ending access is 'Resolve'");
 				InsertResourceBarrier(data.ResolveTarget, D3D12_RESOURCE_STATE_RESOLVE_DEST);
 				renderTargetDescs[i].EndingAccess.Resolve.Format = data.Target->GetFormat();
 				renderTargetDescs[i].EndingAccess.Resolve.pDstResource = data.ResolveTarget->GetResource();
@@ -375,11 +457,11 @@ void CommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 				renderTargetDescs[i].EndingAccess.Resolve.PreserveResolveSource = false;
 				renderTargetDescs[i].EndingAccess.Resolve.ResolveMode = D3D12_RESOLVE_MODE_AVERAGE;
 				renderTargetDescs[i].EndingAccess.Resolve.SubresourceCount = 1;
-				subResourceParameters[i].DstSubresource = 0;
-				subResourceParameters[i].SrcSubresource = subResource;
-				subResourceParameters[i].DstX = 0;
-				subResourceParameters[i].DstY = 0;
-				renderTargetDescs[i].EndingAccess.Resolve.pSubresourceParameters = subResourceParameters.data();
+				m_ResolveSubResourceParameters[i].DstSubresource = 0;
+				m_ResolveSubResourceParameters[i].SrcSubresource = subResource;
+				m_ResolveSubResourceParameters[i].DstX = 0;
+				m_ResolveSubResourceParameters[i].DstY = 0;
+				renderTargetDescs[i].EndingAccess.Resolve.pSubresourceParameters = m_ResolveSubResourceParameters.data();
 			}
 
 			renderTargetDescs[i].cpuDescriptor = data.Target->GetRTV();
@@ -392,7 +474,7 @@ void CommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 		}
 
 		FlushResourceBarriers();
-		pCmd->BeginRenderPass(renderPassInfo.RenderTargetCount, renderTargetDescs.data(), renderPassInfo.DepthStencilTarget.Target ? &renderPassDepthStencilDesc : nullptr, renderPassFlags);
+		m_pRaytracingCommandList->BeginRenderPass(renderPassInfo.RenderTargetCount, renderTargetDescs.data(), renderPassInfo.DepthStencilTarget.Target ? &renderPassDepthStencilDesc : nullptr, renderPassFlags);
 	}
 	else
 #endif
@@ -416,7 +498,7 @@ void CommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 		if (clearFlags != (D3D12_CLEAR_FLAGS)0)
 		{
 			const ClearBinding& clearBinding = renderPassInfo.DepthStencilTarget.Target->GetClearBinding();
-			assert(clearBinding.BindingValue == ClearBinding::ClearBindingValue::DepthStencil);
+			check(clearBinding.BindingValue == ClearBinding::ClearBindingValue::DepthStencil);
 			m_pCommandList->ClearDepthStencilView(dsvHandle, clearFlags, clearBinding.DepthStencil.Depth, clearBinding.DepthStencil.Stencil, 0, nullptr);
 		}
 
@@ -428,7 +510,7 @@ void CommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 			
 			if (ExtractBeginAccess(data.Access) == D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_CLEAR)
 			{
-				assert(data.Target->GetClearBinding().BindingValue == ClearBinding::ClearBindingValue::Color);
+				check(data.Target->GetClearBinding().BindingValue == ClearBinding::ClearBindingValue::Color);
 				m_pCommandList->ClearRenderTargetView(data.Target->GetRTV(), &data.Target->GetClearBinding().Color.x, 0, nullptr);
 			}
 		}
@@ -436,11 +518,14 @@ void CommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 	}
 	m_InRenderPass = true;
 	m_CurrentRenderPassInfo = renderPassInfo;
+
+	Texture* pTargetTexture = renderPassInfo.DepthStencilTarget.Target ? renderPassInfo.DepthStencilTarget.Target : renderPassInfo.RenderTargets[0].Target;
+	SetViewport(FloatRect(0, 0, (float)pTargetTexture->GetWidth(), (float)pTargetTexture->GetHeight()), 0, 1);
 }
 
 void CommandContext::EndRenderPass()
 {
-	assert(m_InRenderPass);
+	check(m_InRenderPass);
 
 	auto ExtractEndingAccess = [](RenderPassAccess access) -> D3D12_RENDER_PASS_ENDING_ACCESS_TYPE
 	{
@@ -451,16 +536,14 @@ void CommandContext::EndRenderPass()
 		case RenderTargetStoreAction::Resolve: return D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_RESOLVE;
 		case RenderTargetStoreAction::NoAccess: return D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_NO_ACCESS;
 		}
-		assert(false);
+		noEntry();
 		return D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_NO_ACCESS;
 	};
 
-#if USE_RENDERPASSES
-	ComPtr<ID3D12GraphicsCommandList4> pCmd;
-
-	if (m_pGraphics->UseRenderPasses() && m_pCommandList->QueryInterface(IID_PPV_ARGS(pCmd.GetAddressOf())) == S_OK)
+#if D3D12_USE_RENDERPASSES
+	if (m_pGraphics->UseRenderPasses() && m_pRaytracingCommandList)
 	{
-		pCmd->EndRenderPass();
+		m_pRaytracingCommandList->EndRenderPass();
 	}
 	else
 #endif
@@ -480,8 +563,7 @@ void CommandContext::EndRenderPass()
 				else
 				{
 					FlushResourceBarriers();
-					CopyResource(data.Target, data.ResolveTarget);
-					FlushResourceBarriers();
+					CopyTexture(data.Target, data.ResolveTarget);
 				}
 			}
 		}
@@ -507,7 +589,19 @@ void CommandContext::DrawIndexedInstanced(int indexCount, int indexStart, int in
 	m_pCommandList->DrawIndexedInstanced(indexCount, instanceCount, indexStart, minVertex, instanceStart);
 }
 
-void CommandContext::ClearRenderTarget(D3D12_CPU_DESCRIPTOR_HANDLE rtv, const Color& color /*= Color(0.15f, 0.15f, 0.15f, 1.0f)*/)
+void CommandContext::DispatchRays(ShaderBindingTable& table, uint32 width /*= 1*/, uint32 height /*= 1*/, uint32 depth /*= 1*/)
+{
+	check(m_pRaytracingCommandList);
+	D3D12_DISPATCH_RAYS_DESC desc{};
+	table.Commit(*this, desc);
+	desc.Width = width;
+	desc.Height = height;
+	desc.Depth = depth;
+	PrepareDraw(DescriptorTableType::Compute);
+	m_pRaytracingCommandList->DispatchRays(&desc);
+}
+
+void CommandContext::ClearColor(D3D12_CPU_DESCRIPTOR_HANDLE rtv, const Color& color /*= Color(0.15f, 0.15f, 0.15f, 1.0f)*/)
 {
 	m_pCommandList->ClearRenderTargetView(rtv, &color.x, 0, nullptr);
 }
@@ -528,12 +622,17 @@ void CommandContext::PrepareDraw(DescriptorTableType type)
 	FlushResourceBarriers();
 	m_pShaderResourceDescriptorAllocator->UploadAndBindStagedDescriptors(type);
 	m_pSamplerDescriptorAllocator->UploadAndBindStagedDescriptors(type);
-
 }
 
 void CommandContext::SetPipelineState(PipelineState* pPipelineState)
 {
 	m_pCommandList->SetPipelineState(pPipelineState->GetPipelineState());
+}
+
+void CommandContext::SetPipelineState(ID3D12StateObject* pStateObject)
+{
+	check(m_pRaytracingCommandList);
+	m_pRaytracingCommandList->SetPipelineState1(pStateObject);
 }
 
 void CommandContext::SetGraphicsRootSignature(RootSignature* pRootSignature)
@@ -585,30 +684,31 @@ void CommandContext::SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY type)
 	m_pCommandList->IASetPrimitiveTopology(type);
 }
 
-void CommandContext::SetVertexBuffer(Buffer* pVertexBuffer)
+void CommandContext::SetVertexBuffer(const VertexBufferView& vertexBuffer)
 {
-	SetVertexBuffers(&pVertexBuffer, 1);
+	SetVertexBuffers(&vertexBuffer, 1);
 }
 
-void CommandContext::SetVertexBuffers(Buffer** pVertexBuffers, int bufferCount)
+void CommandContext::SetVertexBuffers(const VertexBufferView* pVertexBuffers, int bufferCount)
 {
-	assert(bufferCount <= 4);
-	std::array<D3D12_VERTEX_BUFFER_VIEW, 4> views = {};
+	constexpr int MAX_VERTEX_BUFFERS = 4;
+	checkf(bufferCount < MAX_VERTEX_BUFFERS, "VertexBuffer count (%d) exceeds the maximum (%d)", bufferCount, MAX_VERTEX_BUFFERS);
+	std::array<D3D12_VERTEX_BUFFER_VIEW, MAX_VERTEX_BUFFERS> views = {};
 	for (int i = 0; i < bufferCount; ++i)
 	{
-		views[i].BufferLocation = pVertexBuffers[i]->GetGpuHandle();
-		views[i].SizeInBytes = (uint32)pVertexBuffers[i]->GetSize();
-		views[i].StrideInBytes = pVertexBuffers[i]->GetDesc().ElementSize;
+		views[i].BufferLocation = pVertexBuffers[i].Location;
+		views[i].SizeInBytes = pVertexBuffers[i].Elements * pVertexBuffers[i].Stride;
+		views[i].StrideInBytes = pVertexBuffers[i].Stride;
 	}
 	m_pCommandList->IASetVertexBuffers(0, bufferCount, views.data());
 }
 
-void CommandContext::SetIndexBuffer(Buffer* pIndexBuffer)
+void CommandContext::SetIndexBuffer(const IndexBufferView& indexBuffer)
 {
 	D3D12_INDEX_BUFFER_VIEW view;
-	view.BufferLocation = pIndexBuffer->GetGpuHandle();
-	view.Format = pIndexBuffer->GetDesc().ElementSize == 4 ? DXGI_FORMAT_R32_UINT : DXGI_FORMAT_R16_UINT;
-	view.SizeInBytes = (uint32)pIndexBuffer->GetSize();
+	view.BufferLocation = indexBuffer.Location;
+	view.Format = indexBuffer.SmallIndices ? DXGI_FORMAT_R16_UINT : DXGI_FORMAT_R32_UINT;
+	view.SizeInBytes = indexBuffer.Elements * (indexBuffer.SmallIndices ? 2 : 4);
 	m_pCommandList->IASetIndexBuffer(&view);
 }
 
@@ -633,4 +733,91 @@ void CommandContext::SetScissorRect(const FloatRect& rect)
 	r.right = (LONG)rect.Right;
 	r.bottom = (LONG)rect.Bottom;
 	m_pCommandList->RSSetScissorRects(1, &r);
+}
+
+void ResourceBarrierBatcher::AddTransition(ID3D12Resource* pResource, D3D12_RESOURCE_STATES beforeState, D3D12_RESOURCE_STATES afterState, int subResource)
+{
+	if (beforeState == afterState)
+	{
+		return;
+	}
+	if (m_QueuedBarriers.size())
+	{
+		const D3D12_RESOURCE_BARRIER& last = m_QueuedBarriers.back();
+		if (last.Type == D3D12_RESOURCE_BARRIER_TYPE_TRANSITION
+			&& last.Transition.pResource == pResource
+			&& last.Transition.StateBefore == beforeState
+			&& last.Transition.StateAfter == afterState)
+		{
+			m_QueuedBarriers.pop_back();
+			return;
+		}
+	}
+	m_QueuedBarriers.emplace_back(
+		CD3DX12_RESOURCE_BARRIER::Transition(pResource,
+			beforeState,
+			afterState,
+			subResource,
+			D3D12_RESOURCE_BARRIER_FLAG_NONE
+		)
+	);
+}
+
+void ResourceBarrierBatcher::AddUAV(ID3D12Resource* pResource)
+{
+	m_QueuedBarriers.emplace_back(
+		CD3DX12_RESOURCE_BARRIER::UAV(pResource)
+	);
+}
+
+void ResourceBarrierBatcher::Flush(ID3D12GraphicsCommandList* pCmdList)
+{
+	if (m_QueuedBarriers.size())
+	{
+		pCmdList->ResourceBarrier((uint32)m_QueuedBarriers.size(), m_QueuedBarriers.data());
+		Reset();
+	}
+}
+
+void ResourceBarrierBatcher::Reset()
+{
+	m_QueuedBarriers.clear();
+}
+
+void CommandSignature::Finalize(const char* pName, ID3D12Device* pDevice)
+{
+	D3D12_COMMAND_SIGNATURE_DESC desc{};
+	desc.ByteStride = m_Stride;
+	desc.NodeMask = 0;
+	desc.NumArgumentDescs = (uint32)m_ArgumentDesc.size();
+	desc.pArgumentDescs = m_ArgumentDesc.data();
+	VERIFY_HR_EX(pDevice->CreateCommandSignature(&desc, m_pRootSignature, IID_PPV_ARGS(m_pCommandSignature.GetAddressOf())), pDevice);
+	D3D::SetObjectName(m_pCommandSignature.Get(), pName);
+}
+
+void CommandSignature::AddDispatch()
+{
+	D3D12_INDIRECT_ARGUMENT_DESC desc;
+	desc.Type = D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH;
+	m_ArgumentDesc.push_back(desc);
+	constexpr int dispatchArgumentsCount = 3;
+	m_Stride += dispatchArgumentsCount * sizeof(uint32);
+}
+
+void CommandSignature::AddDraw()
+{
+	D3D12_INDIRECT_ARGUMENT_DESC desc;
+	desc.Type = D3D12_INDIRECT_ARGUMENT_TYPE_DRAW;
+	m_ArgumentDesc.push_back(desc);
+	constexpr int drawArgumentsCount = 4;
+	m_Stride += drawArgumentsCount * sizeof(uint32);
+}
+
+void CommandSignature::AddDrawIndexed()
+{
+	D3D12_INDIRECT_ARGUMENT_DESC desc;
+	desc.Type = D3D12_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED;
+	m_ArgumentDesc.push_back(desc);
+	constexpr int drawArgumentsCount = 4;
+	m_Stride += drawArgumentsCount * sizeof(uint32);
 }

@@ -1,29 +1,20 @@
 #pragma once
-#include "RenderGraph/RenderGraph.h"
+#include "Graphics/RenderGraph/RenderGraphDefinitions.h"
+
 class Graphics;
 class PipelineState;
 class RootSignature;
 class Texture;
 class Camera;
-struct Batch;
+class CommandSignature;
 class CommandContext;
 class Buffer;
 class UnorderedAccessView;
 class RGGraph;
-struct ShadowData;
 
-struct ClusteredForwardInputResources
-{
-	RGResourceHandle DepthBuffer;
-	Texture* pRenderTarget = nullptr;
-	Texture* pAO = nullptr;
-	Texture* pShadowMap = nullptr;
-	const std::vector<Batch>* pOpaqueBatches = nullptr;
-	const std::vector<Batch>* pTransparantBatches = nullptr;
-	Buffer* pLightBuffer = nullptr;
-	Camera* pCamera = nullptr;
-	ShadowData* pShadowData = nullptr;
-};
+struct SceneData;
+struct Batch;
+struct ShadowData;
 
 class ClusteredForward
 {
@@ -33,7 +24,8 @@ public:
 
 	void OnSwapchainCreated(int windowWidth, int windowHeight);
 
-	void Execute(RGGraph& graph, const ClusteredForwardInputResources& resources);
+	void Execute(RGGraph& graph, const SceneData& resources);
+	void VisualizeLightDensity(RGGraph& graph, Camera& camera, Texture* pTarget, Texture* pDepth);
 
 private:
 	void SetupResources(Graphics* pGraphics);
@@ -72,7 +64,7 @@ private:
 	//Step 5: Light Culling
 	std::unique_ptr<RootSignature> m_pLightCullingRS;
 	std::unique_ptr<PipelineState> m_pLightCullingPSO;
-	ComPtr<ID3D12CommandSignature> m_pLightCullingCommandSignature;
+	std::unique_ptr<CommandSignature> m_pLightCullingCommandSignature;
 	std::unique_ptr<Buffer> m_pLightIndexCounter;
 	std::unique_ptr<Buffer> m_pLightIndexGrid;
 	std::unique_ptr<Buffer> m_pLightGrid;
@@ -90,5 +82,12 @@ private:
 	std::unique_ptr<Buffer> m_pDebugLightGrid;
 	Matrix m_DebugClustersViewMatrix;
 	bool m_DidCopyDebugClusterData = false;
+
+	//Visualize Light Count
+	std::unique_ptr<RootSignature> m_pVisualizeLightsRS;
+	std::unique_ptr<PipelineState> m_pVisualizeLightsPSO;
+	std::unique_ptr<Texture> m_pVisualizationIntermediateTexture;
+
+	bool m_ViewportDirty = true;
 };
 

@@ -13,11 +13,11 @@ cbuffer ShaderParameters : register(b0)
     float4x4 cView;
     float4x4 cProjectionInverse;
     uint4 cNumThreadGroups;
-    float2 cScreenDimensions;
+    float2 cScreenDimensionsInv;
     uint cLightCount;
 }
 
-StructuredBuffer<Light> Lights : register(t1);
+StructuredBuffer<Light> tLights : register(t1);
 Texture2D tDepthTexture : register(t0);
 
 globallycoherent RWStructuredBuffer<uint> uLightIndexCounter : register(u0);
@@ -123,14 +123,14 @@ void CSMain(CS_INPUT input)
     if(input.GroupIndex == 0)
     {
         float3 viewSpace[8];
-		viewSpace[0] = ScreenToView(float4(input.GroupId.xy * BLOCK_SIZE, fMinDepth, 1.0f), cScreenDimensions, cProjectionInverse).xyz;
-		viewSpace[1] = ScreenToView(float4(float2(input.GroupId.x + 1, input.GroupId.y) * BLOCK_SIZE, fMinDepth, 1.0f), cScreenDimensions, cProjectionInverse).xyz;
-		viewSpace[2] = ScreenToView(float4(float2(input.GroupId.x, input.GroupId.y + 1) * BLOCK_SIZE, fMinDepth, 1.0f), cScreenDimensions, cProjectionInverse).xyz;
-		viewSpace[3] = ScreenToView(float4(float2(input.GroupId.x + 1, input.GroupId.y + 1) * BLOCK_SIZE, fMinDepth, 1.0f), cScreenDimensions, cProjectionInverse).xyz;
-		viewSpace[4] = ScreenToView(float4(input.GroupId.xy * BLOCK_SIZE, fMaxDepth, 1.0f), cScreenDimensions, cProjectionInverse).xyz;
-		viewSpace[5] = ScreenToView(float4(float2(input.GroupId.x + 1, input.GroupId.y) * BLOCK_SIZE, fMaxDepth, 1.0f), cScreenDimensions, cProjectionInverse).xyz;
-		viewSpace[6] = ScreenToView(float4(float2(input.GroupId.x, input.GroupId.y + 1) * BLOCK_SIZE, fMaxDepth, 1.0f), cScreenDimensions, cProjectionInverse).xyz;
-		viewSpace[7] = ScreenToView(float4(float2(input.GroupId.x + 1, input.GroupId.y + 1) * BLOCK_SIZE, fMaxDepth, 1.0f), cScreenDimensions, cProjectionInverse).xyz;
+		viewSpace[0] = ScreenToView(float4(input.GroupId.xy * BLOCK_SIZE, fMinDepth, 1.0f), cScreenDimensionsInv, cProjectionInverse).xyz;
+		viewSpace[1] = ScreenToView(float4(float2(input.GroupId.x + 1, input.GroupId.y) * BLOCK_SIZE, fMinDepth, 1.0f), cScreenDimensionsInv, cProjectionInverse).xyz;
+		viewSpace[2] = ScreenToView(float4(float2(input.GroupId.x, input.GroupId.y + 1) * BLOCK_SIZE, fMinDepth, 1.0f), cScreenDimensionsInv, cProjectionInverse).xyz;
+		viewSpace[3] = ScreenToView(float4(float2(input.GroupId.x + 1, input.GroupId.y + 1) * BLOCK_SIZE, fMinDepth, 1.0f), cScreenDimensionsInv, cProjectionInverse).xyz;
+		viewSpace[4] = ScreenToView(float4(input.GroupId.xy * BLOCK_SIZE, fMaxDepth, 1.0f), cScreenDimensionsInv, cProjectionInverse).xyz;
+		viewSpace[5] = ScreenToView(float4(float2(input.GroupId.x + 1, input.GroupId.y) * BLOCK_SIZE, fMaxDepth, 1.0f), cScreenDimensionsInv, cProjectionInverse).xyz;
+		viewSpace[6] = ScreenToView(float4(float2(input.GroupId.x, input.GroupId.y + 1) * BLOCK_SIZE, fMaxDepth, 1.0f), cScreenDimensionsInv, cProjectionInverse).xyz;
+		viewSpace[7] = ScreenToView(float4(float2(input.GroupId.x + 1, input.GroupId.y + 1) * BLOCK_SIZE, fMaxDepth, 1.0f), cScreenDimensionsInv, cProjectionInverse).xyz;
 
         GroupFrustum.Planes[0] = CalculatePlane(float3(0, 0, 0), viewSpace[6], viewSpace[4]);
         GroupFrustum.Planes[1] = CalculatePlane(float3(0, 0, 0), viewSpace[5], viewSpace[7]);
@@ -149,12 +149,12 @@ void CSMain(CS_INPUT input)
     }
     
     // Convert depth values to view space.
-    float minDepthVS = ScreenToView(float4(0, 0, fMinDepth, 1), cScreenDimensions, cProjectionInverse).z;
-    float maxDepthVS = ScreenToView(float4(0, 0, fMaxDepth, 1), cScreenDimensions, cProjectionInverse).z;
-    float nearClipVS = ScreenToView(float4(0, 0, 1, 1), cScreenDimensions, cProjectionInverse).z;
+    float minDepthVS = ScreenToView(float4(0, 0, fMinDepth, 1), cScreenDimensionsInv, cProjectionInverse).z;
+    float maxDepthVS = ScreenToView(float4(0, 0, fMaxDepth, 1), cScreenDimensionsInv, cProjectionInverse).z;
+    float nearClipVS = ScreenToView(float4(0, 0, 1, 1), cScreenDimensionsInv, cProjectionInverse).z;
 
 #if SPLITZ_CULLING
-    float depthVS = ScreenToView(float4(0, 0, fDepth, 1), cScreenDimensions, cProjectionInverse).z;
+    float depthVS = ScreenToView(float4(0, 0, fDepth, 1), cScreenDimensionsInv, cProjectionInverse).z;
     float depthRange = 31.0f / (maxDepthVS - minDepthVS);
     uint cellIndex = max(0, min(31, floor((depthVS - minDepthVS) * depthRange)));
     InterlockedOr(DepthMask, 1 << cellIndex);
@@ -171,7 +171,7 @@ void CSMain(CS_INPUT input)
     [loop]
     for(uint i = input.GroupIndex; i < cLightCount; i += BLOCK_SIZE * BLOCK_SIZE)
     {
-        Light light = Lights[i];
+        Light light = tLights[i];
 
         switch(light.Type)
         {

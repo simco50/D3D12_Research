@@ -1,5 +1,4 @@
 #pragma once
-#include "Graphics/Core/DescriptorHandle.h"
 class CommandContext;
 class Graphics;
 class RootSignature;
@@ -15,19 +14,18 @@ public:
 	ImGuiRenderer(Graphics* pGraphics);
 	~ImGuiRenderer();
 
-	void NewFrame();
+	void NewFrame(uint32 width, uint32 height);
 	void Render(RGGraph& graph, Texture* pRenderTarget);
 	void Update();
 	DelegateHandle AddUpdateCallback(ImGuiCallbackDelegate&& callback);
 	void RemoveUpdateCallback(DelegateHandle handle);
 
 private:
-	void CreatePipeline();
-	void InitializeImGui();
+	void CreatePipeline(Graphics* pGraphics);
+	void InitializeImGui(Graphics* pGraphics);
 
 	ImGuiCallback m_UpdateCallback;
 
-	Graphics* m_pGraphics;
 	std::unique_ptr<PipelineState> m_pPipelineState;
 	std::unique_ptr<RootSignature> m_pRootSignature;
 	std::unique_ptr<Texture> m_pFontTexture;

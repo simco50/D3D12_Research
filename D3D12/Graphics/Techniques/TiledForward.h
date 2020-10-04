@@ -1,5 +1,5 @@
 #pragma once
-#include "RenderGraph/RenderGraph.h"
+#include "Graphics/RenderGraph/RenderGraphDefinitions.h"
 class Graphics;
 class RootSignature;
 class PipelineState;
@@ -11,19 +11,7 @@ class Buffer;
 class UnorderedAccessView;
 class RGGraph;
 struct ShadowData;
-
-struct TiledForwardInputResources
-{
-	RGResourceHandle ResolvedDepthBuffer;
-	RGResourceHandle DepthBuffer;
-	Texture* pShadowMap = nullptr;
-	Texture* pRenderTarget = nullptr;
-	const std::vector<Batch>* pOpaqueBatches = nullptr;
-	const std::vector<Batch>* pTransparantBatches = nullptr;
-	Buffer* pLightBuffer = nullptr;
-	Camera* pCamera = nullptr;
-	ShadowData* pShadowData = nullptr;
-};
+struct SceneData;
 
 class TiledForward
 {
@@ -32,11 +20,14 @@ public:
 
 	void OnSwapchainCreated(int windowWidth, int windowHeight);
 
-	void Execute(RGGraph& graph, const TiledForwardInputResources& resources);
+	void Execute(RGGraph& graph, const SceneData& resources);
+	void VisualizeLightDensity(RGGraph& graph, Camera& camera, Texture* pTarget, Texture* pDepth);
 
 private:
 	void SetupResources(Graphics* pGraphics);
 	void SetupPipelines(Graphics* pGraphics);
+
+	Graphics* m_pGraphics;
 
 	//Light Culling
 	std::unique_ptr<RootSignature> m_pComputeLightCullRS;
@@ -52,5 +43,9 @@ private:
 	std::unique_ptr<RootSignature> m_pDiffuseRS;
 	std::unique_ptr<PipelineState> m_pDiffusePSO;
 	std::unique_ptr<PipelineState> m_pDiffuseAlphaPSO;
-	std::unique_ptr<PipelineState> m_pVisualizeDensityPSO;
+
+	//Visualize Light Count
+	std::unique_ptr<RootSignature> m_pVisualizeLightsRS;
+	std::unique_ptr<PipelineState> m_pVisualizeLightsPSO;
+	std::unique_ptr<Texture> m_pVisualizationIntermediateTexture;
 };

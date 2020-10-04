@@ -5,7 +5,7 @@
 				"DescriptorTable(UAV(u0, numDescriptors = 3))"
 
 #define MAX_LIGHTS_PER_TILE 256
-#define THREAD_COUNT 512
+#define THREAD_COUNT 64
 
 cbuffer ShaderParameters : register(b0)
 {
@@ -13,7 +13,7 @@ cbuffer ShaderParameters : register(b0)
 	uint cLightCount;
 }
 
-StructuredBuffer<Light> Lights : register(t0);
+StructuredBuffer<Light> tLights : register(t0);
 StructuredBuffer<AABB> tClusterAABBs : register(t1);
 StructuredBuffer<uint> tActiveClusterIndices : register(t2);
 
@@ -21,8 +21,8 @@ globallycoherent RWStructuredBuffer<uint> uLightIndexCounter : register(u0);
 RWStructuredBuffer<uint> uLightIndexList : register(u1);
 RWStructuredBuffer<uint2> uOutLightGrid : register(u2);
 
-groupshared AABB GroupAABB;
-groupshared uint ClusterIndex;
+groupshared AABB gGroupAABB;
+groupshared uint gClusterIndex;
 
 groupshared uint gIndexStartOffset;
 groupshared uint gLightCount;
@@ -66,8 +66,8 @@ void LightCulling(CS_INPUT input)
 	if (input.GroupIndex == 0)
 	{
 		gLightCount = 0;
-		ClusterIndex = tActiveClusterIndices[input.GroupId.x];
-		GroupAABB = tClusterAABBs[ClusterIndex];
+		gClusterIndex = tActiveClusterIndices[input.GroupId.x];
+		gGroupAABB = tClusterAABBs[gClusterIndex];
 	}
 
 	//Wait for all the threads to finish
@@ -77,7 +77,7 @@ void LightCulling(CS_INPUT input)
 	[loop]
 	for (uint i = input.GroupIndex; i < cLightCount; i += THREAD_COUNT)
 	{
-		Light light = Lights[i];
+		Light light = tLights[i];
 
 		switch (light.Type)
 		{
@@ -86,7 +86,7 @@ void LightCulling(CS_INPUT input)
 			Sphere sphere = (Sphere)0;
 			sphere.Radius = light.Range;
 			sphere.Position = mul(float4(light.Position, 1.0f), cView).xyz;
-			if (SphereInAABB(sphere, GroupAABB))
+			if (SphereInAABB(sphere, gGroupAABB))
 			{
 				AddLight(i);
 			}
@@ -97,7 +97,7 @@ void LightCulling(CS_INPUT input)
 			Sphere sphere;
 			sphere.Radius = light.Range * 0.5f / pow(light.SpotlightAngles.y, 2);
 			sphere.Position = mul(float4(light.Position, 1), cView).xyz + mul(light.Direction, (float3x3)cView) * sphere.Radius;
-			if (SphereInAABB(sphere, GroupAABB))
+			if (SphereInAABB(sphere, gGroupAABB))
 			{
 				AddLight(i);
 			}
@@ -117,7 +117,7 @@ void LightCulling(CS_INPUT input)
 	if (input.GroupIndex == 0)
 	{
 		InterlockedAdd(uLightIndexCounter[0], gLightCount, gIndexStartOffset);
-		uOutLightGrid[ClusterIndex] = uint2(gIndexStartOffset, gLightCount);
+		uOutLightGrid[gClusterIndex] = uint2(gIndexStartOffset, gLightCount);
 	}
 
 	GroupMemoryBarrierWithGroupSync();

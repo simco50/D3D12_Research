@@ -23,7 +23,7 @@ Texture* RGResourceAllocator::CreateTexture(const TextureDesc& desc)
 			return pTex;
 		}
 	}
-	std::unique_ptr<Texture> pTex = std::make_unique<Texture>(m_pGraphics);
+	std::unique_ptr<Texture> pTex = std::make_unique<Texture>(m_pGraphics, "Pooled Texture");
 	pTex->Create(desc);
 	m_Textures.push_back(std::move(pTex));
 	return m_Textures.back().get();

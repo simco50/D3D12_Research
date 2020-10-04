@@ -19,6 +19,7 @@ void Input::Update()
 		m_KeyStates[i] = (KeyState)(m_KeyStates[i] & KeyState::Down);
 	}
 	m_LastMousePosition = m_CurrentMousePosition;
+	m_MouseWheel = 0;
 	UpdateMousePosition();
 }
 
@@ -30,6 +31,11 @@ void Input::UpdateKey(uint32 keyCode, bool isDown)
 void Input::UpdateMouseKey(uint32 keyCode, bool isDown)
 {
 	m_MouseStates[keyCode] = isDown ? KeyState::DownAndPressed : KeyState::None;
+}
+
+void Input::UpdateMouseWheel(float mouseWheel)
+{
+	m_MouseWheel = mouseWheel;
 }
 
 bool Input::IsKeyDown(uint32 keyCode)
