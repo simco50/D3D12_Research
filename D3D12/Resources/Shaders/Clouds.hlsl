@@ -28,6 +28,7 @@ SamplerState sCloudsSampler : register(s1);
 
 cbuffer Constants : register(b0)
 {
+	float4 cNoiseWeights;
 	float4 cFrustumCorners[4];
 	float4x4 cViewInverse;
 	float cFarPlane;
@@ -40,6 +41,8 @@ cbuffer Constants : register(b0)
 
 	float3 cMinExtents;
 	float3 cMaxExtents;
+	float3 cSunDirection;
+	float4 cSunColor;
 }
 
 [RootSignature(RootSig)]
@@ -77,7 +80,8 @@ float SampleDensity(float3 position)
 {
 	float3 uvw = position * cCloudScale + cCloudOffset;
 	float4 shape = tCloudsTexture.SampleLevel(sCloudsSampler, uvw, 0);
-	return max(0, cCloudTheshold - shape.r) * cCloudDensity;
+	float s = shape.r * cNoiseWeights.x + shape.g * cNoiseWeights.y + shape.b * cNoiseWeights.z + shape.a * cNoiseWeights.w;
+	return max(0, cCloudTheshold - s) * cCloudDensity;
 }
 
 float4 PSMain(PSInput input) : SV_TARGET

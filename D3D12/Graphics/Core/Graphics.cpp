@@ -731,7 +731,7 @@ void Graphics::Update()
 	RGPassBuilder clouds = graph.AddPass("Draw Clouds");
 	clouds.Bind([=](CommandContext& context, const RGPassResources& passResources)
 		{
-			m_pClouds->Render(context, GetCurrentRenderTarget(), GetDepthStencil(), GetCamera());
+			m_pClouds->Render(context, GetCurrentRenderTarget(), GetDepthStencil(), GetCamera(), m_Lights[0]);
 		});
 
 	DebugRenderer::Get()->Render(graph, m_pCamera->GetViewProjection(), GetCurrentRenderTarget(), GetDepthStencil());
@@ -1696,11 +1696,24 @@ void Graphics::UpdateImGui()
 {
 	m_FrameTimes[m_Frame % m_FrameTimes.size()] = Time::DeltaTime();
 
+	m_pVisualizeTexture = m_pClouds->GetNoiseTexture();
 
 	if(m_pVisualizeTexture)
 	{
 		ImGui::Begin("Visualize Texture");
+		static bool VisibleChannels[4] = { true,true,true,true };
+		static int MipLevel = 0;
+		static int SliceIndex = 0;
+		ImGui::Checkbox("R", &VisibleChannels[0]);
+		ImGui::SameLine();
+		ImGui::Checkbox("G", &VisibleChannels[1]);
+		ImGui::SameLine();
+		ImGui::Checkbox("B", &VisibleChannels[2]);
+		ImGui::SameLine();
+		ImGui::Checkbox("A", &VisibleChannels[3]);
+		ImGui::SameLine();
 		ImGui::Text("Resolution: %dx%d", m_pVisualizeTexture->GetWidth(), m_pVisualizeTexture->GetHeight());
+
 		Vector2 image((float)m_pVisualizeTexture->GetWidth(), (float)m_pVisualizeTexture->GetHeight());
 		Vector2 windowSize(ImGui::GetContentRegionAvail().x, ImGui::GetContentRegionAvail().y);
 		float width = windowSize.x;
@@ -1710,7 +1723,23 @@ void Graphics::UpdateImGui()
 			width = image.x / image.y * windowSize.y;
 			height = windowSize.y;
 		}
-		ImGui::Image(m_pVisualizeTexture, ImVec2(width, height));
+
+		ImGui::SameLine();
+		height -= ImGui::GetFontSize();
+		ImGui::Text("View Resolution: %dx%d", (int)width, (int)height);
+		if (m_pVisualizeTexture->GetMipLevels() > 1)
+		{
+			ImGui::SliderInt("Mip Level", &MipLevel, 0, m_pVisualizeTexture->GetMipLevels() - 1);
+		}
+		if (m_pVisualizeTexture->GetDepth() > 1)
+		{
+			ImGui::SliderInt("Slice", &SliceIndex, 0, m_pVisualizeTexture->GetDepth() - 1);
+		}
+
+		MipLevel = Math::Clamp(MipLevel, 0, m_pVisualizeTexture->GetMipLevels() - 1);
+		SliceIndex = Math::Clamp(SliceIndex, 0, m_pVisualizeTexture->GetDepth() - 1);
+
+		ImGui::Image(ImTextureData(m_pVisualizeTexture, VisibleChannels[0], VisibleChannels[1], VisibleChannels[2], VisibleChannels[3], MipLevel, SliceIndex), ImVec2(width, height));
 		ImGui::End();
 	}
 

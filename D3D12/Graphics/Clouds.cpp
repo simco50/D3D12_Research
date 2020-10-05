@@ -10,31 +10,36 @@
 #include "Scene/Camera.h"
 #include "ImGuiRenderer.h"
 
-static const int Resolution = 256;
-static const int MaxPoints = 256;
+static const int Resolution = 128;
+static const int MaxPoints = 2048;
+static Vector4 NoiseWeights = Vector4(0.625, 0.225, 0.15, 0.05);
 
 struct CloudParameters
 {
+	Vector4 NoiseWeights;
 	Vector4 FrustumCorners[4];
 	Matrix ViewInverse;
 	float NearPlane;
 	float FarPlane;
 
-	float CloudScale = 0.02f;
+	float CloudScale = 0.004f;
 	float CloudThreshold = 0.4f;
 	Vector3 CloudOffset;
-	float CloudDensity = 0.7f;
+	float CloudDensity = 0.3f;
 
 	Vector4 MinExtents;
 	Vector4 MaxExtents;
+
+	Vector4 SunDirection;
+	Vector4 SunColor;
 };
 
 static CloudParameters sCloudParameters;
 
 Clouds::Clouds()
 {
-	m_CloudBounds.Center = Vector3(0, 150, 0);
-	m_CloudBounds.Extents = Vector3(100, 20, 100);
+	m_CloudBounds.Center = Vector3(0, 200, 0);
+	m_CloudBounds.Extents = Vector3(300, 20, 300);
 }
 
 void Clouds::Initialize(Graphics* pGraphics)
@@ -47,6 +52,7 @@ void Clouds::Initialize(Graphics* pGraphics)
 		ImGui::SliderFloat("Scale", &sCloudParameters.CloudScale, 0, 0.02f);
 		ImGui::SliderFloat("Cloud Threshold", &sCloudParameters.CloudThreshold, 0, 0.5f);
 		ImGui::SliderFloat("Density", &sCloudParameters.CloudDensity, 0, 1);
+		ImGui::SliderFloat4("Noise Weights", &NoiseWeights.x, 0, 1);
 		if (ImGui::Button("Generate Noise"))
 		{
 			m_UpdateNoise = true;
@@ -116,7 +122,7 @@ void Clouds::Initialize(Graphics* pGraphics)
 	pContext->Execute(true);
 }
 
-void Clouds::Render(CommandContext& context, Texture* pSceneTexture, Texture* pDepthTexture, Camera* pCamera)
+void Clouds::Render(CommandContext& context, Texture* pSceneTexture, Texture* pDepthTexture, Camera* pCamera, const Light& sunLight)
 {
 	if (pSceneTexture->GetWidth() != m_pIntermediateColor->GetWidth() || pSceneTexture->GetHeight() != m_pIntermediateColor->GetHeight())
 	{
@@ -139,6 +145,7 @@ void Clouds::Render(CommandContext& context, Texture* pSceneTexture, Texture* pD
 			uint32 Resolution;
 		} Constants;
 
+		srand(0);
 		for (int i = 0; i < MaxPoints; ++i)
 		{
 			Constants.WorleyNoisePositions[i].x = Math::RandomRange(0.0f, 1.0f);
@@ -184,6 +191,8 @@ void Clouds::Render(CommandContext& context, Texture* pSceneTexture, Texture* pD
 		Vector3 toRight = Vector3::Right * tanFoV * aspect;
 		Vector3 toTop = Vector3::Up * tanFoV;
 
+		sCloudParameters.NoiseWeights = NoiseWeights;
+
 		sCloudParameters.FrustumCorners[0] = Vector4(-Vector3::Forward - toRight + toTop);
 		sCloudParameters.FrustumCorners[1] = Vector4(-Vector3::Forward + toRight + toTop);
 		sCloudParameters.FrustumCorners[2] = Vector4(-Vector3::Forward + toRight - toTop);
@@ -194,6 +203,9 @@ void Clouds::Render(CommandContext& context, Texture* pSceneTexture, Texture* pD
 		sCloudParameters.FarPlane = pCamera->GetFar();
 		sCloudParameters.MinExtents = Vector4(Vector3(m_CloudBounds.Center) - Vector3(m_CloudBounds.Extents));
 		sCloudParameters.MaxExtents = Vector4(Vector3(m_CloudBounds.Center) + Vector3(m_CloudBounds.Extents));
+
+		sCloudParameters.SunDirection = Vector4(sunLight.Direction);
+		sCloudParameters.SunColor = sunLight.Colour;
 
 		context.SetDynamicConstantBufferView(0, &sCloudParameters, sizeof(CloudParameters));
 

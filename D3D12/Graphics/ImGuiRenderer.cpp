@@ -180,7 +180,7 @@ void ImGuiRenderer::Render(RGGraph& graph, Texture* pRenderTarget)
 			context.SetPipelineState(m_pPipelineState.get());
 			context.SetGraphicsRootSignature(m_pRootSignature.get());
 			Matrix projectionMatrix = Math::CreateOrthographicOffCenterMatrix(0.0f, pDrawData->DisplayPos.x + pDrawData->DisplaySize.x, pDrawData->DisplayPos.y + pDrawData->DisplaySize.y, 0.0f, 0.0f, 1.0f);
-			context.SetDynamicConstantBufferView(0, &projectionMatrix, sizeof(Matrix));
+			context.SetDynamicConstantBufferView(1, &projectionMatrix, sizeof(Matrix));
 			context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 			context.SetViewport(FloatRect(pDrawData->DisplayPos.x, pDrawData->DisplayPos.y, pDrawData->DisplayPos.x + pDrawData->DisplaySize.x, pDrawData->DisplayPos.y + pDrawData->DisplaySize.y), 0, 1);
 
@@ -195,19 +195,43 @@ void ImGuiRenderer::Render(RGGraph& graph, Texture* pRenderTarget)
 				for (int i = 0; i < pCmdList->CmdBuffer.Size; i++)
 				{
 					const ImDrawCmd* pcmd = &pCmdList->CmdBuffer[i];
-					if (pcmd->UserCallback)
-						pcmd->UserCallback(pCmdList, pcmd);
-					else
+
+					struct ColorData
 					{
-						context.SetScissorRect(FloatRect(pcmd->ClipRect.x, pcmd->ClipRect.y, pcmd->ClipRect.z, pcmd->ClipRect.w));
-						if (pcmd->TextureId != nullptr)
+						uint32 VisibleChannels;
+						int UniqueChannel;
+						int MipIndex;
+						float SliceIndex;
+						int TextureType;
+					} BatchData{};
+
+					context.SetScissorRect(FloatRect(pcmd->ClipRect.x, pcmd->ClipRect.y, pcmd->ClipRect.z, pcmd->ClipRect.w));
+					ImTextureID textureData = pcmd->TextureId;
+					BatchData.VisibleChannels = textureData.VisibleChannels;
+					BatchData.MipIndex = textureData.MipLevel;
+					uint32 minBit = 0, maxBit = 0;
+					BitOperations::LeastSignificantBit(BatchData.VisibleChannels, &minBit);
+					BitOperations::MostSignificantBit(BatchData.VisibleChannels, &maxBit);
+					BatchData.UniqueChannel = maxBit == minBit ? minBit : -1;;
+
+					if (textureData.pTexture != nullptr)
+					{
+						context.InsertResourceBarrier(textureData.pTexture, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+						BatchData.SliceIndex = (float)textureData.SliceIndex / textureData.pTexture->GetDepth();
+						switch (textureData.pTexture->GetDesc().Dimensions)
 						{
-							Texture* pTex = static_cast<Texture*>(pcmd->TextureId);
-							context.InsertResourceBarrier(pTex, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-							context.SetDynamicDescriptor(1, 0, pTex->GetSRV());
+						case TextureDimension::Texture2D:
+							BatchData.TextureType = 1;
+							context.SetDynamicDescriptor(2, 0, textureData.pTexture->GetSRV());
+							break;
+						case TextureDimension::Texture3D:
+							BatchData.TextureType = 2;
+							context.SetDynamicDescriptor(3, 0, textureData.pTexture->GetSRV());
+							break;
 						}
-						context.DrawIndexed(pcmd->ElemCount, indexOffset, 0);
 					}
+					context.SetDynamicConstantBufferView(0, &BatchData, sizeof(ColorData));
+					context.DrawIndexed(pcmd->ElemCount, indexOffset, 0);
 					indexOffset += pcmd->ElemCount;
 				}
 			}
