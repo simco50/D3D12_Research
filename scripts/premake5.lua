@@ -17,11 +17,12 @@ workspace (ENGINE_NAME)
 	architecture "x64"
 	kind "WindowedApp"
 	characterset "MBCS"
-	flags {"MultiProcessorCompile", "ShadowedVariables","FatalWarnings"}
+	flags {"MultiProcessorCompile", "ShadowedVariables", "FatalWarnings"}
 	rtti "Off"
 	conformancemode "On"
 	warnings "Extra"
 
+	--Unreferenced variable
 	disablewarnings {"4100"}
 	
 	filter "configurations:Debug"
@@ -60,6 +61,7 @@ workspace (ENGINE_NAME)
 			(SOURCE_DIR .. "**.inl"),
 			(SOURCE_DIR .. "**.c"),
 			(SOURCE_DIR .. "**.natvis"),
+			(SOURCE_DIR .. "**.hlsl*"),
 		}
 
 		filter ("files:" .. SOURCE_DIR .. "External/**")
