@@ -68,7 +68,7 @@ float4 PSMain(PS_INPUT input) : SV_TARGET
 		outColor.r = color.r * ((cVisibleChannels & (1 << 0)) > 0);
 		outColor.g = color.g * ((cVisibleChannels & (1 << 1)) > 0);
 		outColor.b = color.b * ((cVisibleChannels & (1 << 2)) > 0);
-		outColor.a = color.a;
+		outColor.a = lerp(1, color.a, ((cVisibleChannels & (1 << 3)) > 0));
 	}
 	else
 	{
