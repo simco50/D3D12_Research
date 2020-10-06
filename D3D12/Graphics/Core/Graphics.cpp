@@ -729,11 +729,12 @@ void Graphics::Update()
 			renderContext.EndRenderPass();
 		});
 
-	RGPassBuilder clouds = graph.AddPass("Draw Clouds");
+
+	/*RGPassBuilder clouds = graph.AddPass("Draw Clouds");
 	clouds.Bind([=](CommandContext& context, const RGPassResources& passResources)
 		{
 			m_pClouds->Render(context, GetCurrentRenderTarget(), GetDepthStencil(), GetCamera(), m_Lights[0]);
-		});
+		});*/
 
 	DebugRenderer::Get()->Render(graph, m_pCamera->GetViewProjection(), GetCurrentRenderTarget(), GetDepthStencil());
 
