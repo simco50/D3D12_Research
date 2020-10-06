@@ -198,8 +198,8 @@ void RootSignature::FinalizeFromShader(const char* pName, const Shader& shader, 
 {
 	ComPtr<ID3D12VersionedRootSignatureDeserializer> pDeserializer;
 	VERIFY_HR_EX(D3D12CreateVersionedRootSignatureDeserializer(shader.GetByteCode(), shader.GetByteCodeSize(), IID_PPV_ARGS(pDeserializer.GetAddressOf())), pDevice);
-	const D3D12_VERSIONED_ROOT_SIGNATURE_DESC* pDesc = pDeserializer->GetUnconvertedRootSignatureDesc();
-
+	const D3D12_VERSIONED_ROOT_SIGNATURE_DESC* pDesc = nullptr;
+	pDeserializer->GetRootSignatureDescAtVersion(D3D_ROOT_SIGNATURE_VERSION::D3D_ROOT_SIGNATURE_VERSION_1_0, &pDesc);
 	m_NumParameters = pDesc->Desc_1_0.NumParameters;
 	m_DescriptorTableRanges.resize(m_NumParameters);
 	m_DescriptorTableSizes.resize(m_NumParameters);
