@@ -9,16 +9,20 @@ workspace (ENGINE_NAME)
 	basedir (ROOT)
 	configurations { "Debug", "Release" }
     platforms { "x64" }
-	defines {  "x64" }
-	language ("C++")
+	defines { "x64" }
+	language "C++"
 	cppdialect "c++17"
 	startproject (ENGINE_NAME)
-	symbols ("On")
-	architecture ("x64")
-	kind ("WindowedApp")
-	characterset ("MBCS")
-	flags {"MultiProcessorCompile", "ShadowedVariables"}
+	symbols "On"
+	architecture "x64"
+	kind "WindowedApp"
+	characterset "MBCS"
+	flags {"MultiProcessorCompile", "ShadowedVariables","FatalWarnings"}
 	rtti "Off"
+	conformancemode "On"
+	warnings "Extra"
+
+	disablewarnings {"4100"}
 	
 	filter "configurations:Debug"
 		defines { "_DEBUG" }
@@ -60,6 +64,8 @@ workspace (ENGINE_NAME)
 
 		filter ("files:" .. SOURCE_DIR .. "External/**")
 			flags { "NoPCH" }
+			removeflags "FatalWarnings"
+			warnings "Default"
 		filter {}
 
 		---- External libraries ----

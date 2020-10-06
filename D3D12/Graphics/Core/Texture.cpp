@@ -65,18 +65,18 @@ D3D12_RESOURCE_DESC GetResourceDesc(const TextureDesc& textureDesc)
 	{
 	case TextureDimension::Texture1D:
 	case TextureDimension::Texture1DArray:
-		desc = CD3DX12_RESOURCE_DESC::Tex1D(textureDesc.Format, width, textureDesc.DepthOrArraySize, textureDesc.Mips, D3D12_RESOURCE_FLAG_NONE, D3D12_TEXTURE_LAYOUT_UNKNOWN);
+		desc = CD3DX12_RESOURCE_DESC::Tex1D(textureDesc.Format, width, (UINT16)textureDesc.DepthOrArraySize, (UINT16)textureDesc.Mips, D3D12_RESOURCE_FLAG_NONE, D3D12_TEXTURE_LAYOUT_UNKNOWN);
 		break;
 	case TextureDimension::Texture2D:
 	case TextureDimension::Texture2DArray:
-		desc = CD3DX12_RESOURCE_DESC::Tex2D(textureDesc.Format, width, height, textureDesc.DepthOrArraySize, textureDesc.Mips, textureDesc.SampleCount, 0, D3D12_RESOURCE_FLAG_NONE, D3D12_TEXTURE_LAYOUT_UNKNOWN);
+		desc = CD3DX12_RESOURCE_DESC::Tex2D(textureDesc.Format, width, height, (UINT16)textureDesc.DepthOrArraySize, (UINT16)textureDesc.Mips, textureDesc.SampleCount, 0, D3D12_RESOURCE_FLAG_NONE, D3D12_TEXTURE_LAYOUT_UNKNOWN);
 		break;
 	case TextureDimension::TextureCube:
 	case TextureDimension::TextureCubeArray:
-		desc = CD3DX12_RESOURCE_DESC::Tex2D(textureDesc.Format, width, height, textureDesc.DepthOrArraySize * 6, textureDesc.Mips, textureDesc.SampleCount, 0, D3D12_RESOURCE_FLAG_NONE, D3D12_TEXTURE_LAYOUT_UNKNOWN);
+		desc = CD3DX12_RESOURCE_DESC::Tex2D(textureDesc.Format, width, height, (UINT16)textureDesc.DepthOrArraySize * 6, (UINT16)textureDesc.Mips, textureDesc.SampleCount, 0, D3D12_RESOURCE_FLAG_NONE, D3D12_TEXTURE_LAYOUT_UNKNOWN);
 		break;
 	case TextureDimension::Texture3D:
-		desc = CD3DX12_RESOURCE_DESC::Tex3D(textureDesc.Format, width, height, textureDesc.DepthOrArraySize, textureDesc.Mips, D3D12_RESOURCE_FLAG_NONE, D3D12_TEXTURE_LAYOUT_UNKNOWN);
+		desc = CD3DX12_RESOURCE_DESC::Tex3D(textureDesc.Format, width, height, (UINT16)textureDesc.DepthOrArraySize, (UINT16)textureDesc.Mips, D3D12_RESOURCE_FLAG_NONE, D3D12_TEXTURE_LAYOUT_UNKNOWN);
 		break;
 	default:
 		noEntry();

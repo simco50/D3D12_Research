@@ -223,9 +223,9 @@ void Graphics::Update()
 	}
 
 	int shadowIndex = 0;
-	for (size_t i = 0; i < m_Lights.size(); ++i)
+	for (size_t lightIndex = 0; lightIndex < m_Lights.size(); ++lightIndex)
 	{
-		Light& light = m_Lights[i];
+		Light& light = m_Lights[lightIndex];
 		if (!light.CastShadows)
 		{
 			continue;
@@ -413,7 +413,8 @@ void Graphics::Update()
 		screenshot.Bind([=](CommandContext& renderContext, const RGPassResources& resources)
 			{
 				D3D12_PLACED_SUBRESOURCE_FOOTPRINT textureFootprint = {};
-				m_pDevice->GetCopyableFootprints(&m_pTonemapTarget->GetResource()->GetDesc(), 0, 1, 0, &textureFootprint, nullptr, nullptr, nullptr);
+				D3D12_RESOURCE_DESC desc = m_pTonemapTarget->GetResource()->GetDesc();
+				m_pDevice->GetCopyableFootprints(&desc, 0, 1, 0, &textureFootprint, nullptr, nullptr, nullptr);
 				m_pScreenshotBuffer = std::make_unique<Buffer>(this, "Screenshot Texture");
 				m_pScreenshotBuffer->Create(BufferDesc::CreateReadback(textureFootprint.Footprint.RowPitch * textureFootprint.Footprint.Height));
 				renderContext.InsertResourceBarrier(m_pTonemapTarget.get(), D3D12_RESOURCE_STATE_COPY_SOURCE);
