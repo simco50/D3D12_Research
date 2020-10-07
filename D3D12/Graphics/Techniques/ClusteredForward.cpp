@@ -486,7 +486,7 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
 {
 	//AABB
 	{
-		Shader computeShader = Shader("CL_GenerateAABBs.hlsl", ShaderType::Compute, "GenerateAABBs");
+		Shader computeShader = Shader("ClusterAABBGeneration.hlsl", ShaderType::Compute, "GenerateAABBs");
 
 		m_pCreateAabbRS = std::make_unique<RootSignature>();
 		m_pCreateAabbRS->FinalizeFromShader("Create AABB", computeShader, pGraphics->GetDevice());
@@ -504,8 +504,8 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
 			CD3DX12_INPUT_ELEMENT_DESC("TEXCOORD", DXGI_FORMAT_R32G32_FLOAT),
 		};
 
-		Shader vertexShader("CL_MarkUniqueClusters.hlsl", ShaderType::Vertex, "MarkClusters_VS");
-		Shader pixelShaderOpaque("CL_MarkUniqueClusters.hlsl", ShaderType::Pixel, "MarkClusters_PS");
+		Shader vertexShader("ClusterMarking.hlsl", ShaderType::Vertex, "MarkClusters_VS");
+		Shader pixelShaderOpaque("ClusterMarking.hlsl", ShaderType::Pixel, "MarkClusters_PS");
 
 		m_pMarkUniqueClustersRS = std::make_unique<RootSignature>();
 		m_pMarkUniqueClustersRS->FinalizeFromShader("Mark Unique Clusters", vertexShader, pGraphics->GetDevice());
@@ -528,7 +528,7 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
 
 	//Compact Clusters
 	{
-		Shader computeShader = Shader("CL_CompactClusters.hlsl", ShaderType::Compute, "CompactClusters");
+		Shader computeShader = Shader("ClusterCompaction.hlsl", ShaderType::Compute, "CompactClusters");
 
 		m_pCompactClustersRS = std::make_unique<RootSignature>();
 		m_pCompactClustersRS->FinalizeFromShader("Compact Clusters", computeShader, pGraphics->GetDevice());
@@ -541,7 +541,7 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
 
 	//Prepare Indirect Dispatch Buffer
 	{
-		Shader computeShader = Shader("CL_UpdateIndirectArguments.hlsl", ShaderType::Compute, "UpdateIndirectArguments");
+		Shader computeShader = Shader("ClusteredLightCullingArguments.hlsl", ShaderType::Compute, "UpdateIndirectArguments");
 
 		m_pUpdateIndirectArgumentsRS = std::make_unique<RootSignature>();
 		m_pUpdateIndirectArgumentsRS->FinalizeFromShader("Update Indirect Dispatch Buffer", computeShader, pGraphics->GetDevice());
@@ -554,7 +554,7 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
 
 	//Light Culling
 	{
-		Shader computeShader = Shader("CL_LightCulling.hlsl", ShaderType::Compute, "LightCulling");
+		Shader computeShader = Shader("ClusteredLightCulling.hlsl", ShaderType::Compute, "LightCulling");
 
 		m_pLightCullingRS = std::make_unique<RootSignature>();
 		m_pLightCullingRS->FinalizeFromShader("Light Culling", computeShader, pGraphics->GetDevice());
@@ -607,7 +607,7 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
 
 	//Cluster debug rendering
 	{
-		Shader pixelShader("CL_DebugDrawClusters.hlsl", ShaderType::Pixel, "PSMain");
+		Shader pixelShader("ClusterDebugDrawing.hlsl", ShaderType::Pixel, "PSMain");
 
 		m_pDebugClustersRS = std::make_unique<RootSignature>();
 		m_pDebugClustersPSO = std::make_unique<PipelineState>();
@@ -620,16 +620,16 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
 
 		if (m_pGraphics->SupportsMeshShaders())
 		{
-			Shader meshShader("CL_DebugDrawClusters.hlsl", ShaderType::Mesh, "MSMain");
+			Shader meshShader("ClusterDebugDrawing.hlsl", ShaderType::Mesh, "MSMain");
 			m_pDebugClustersRS->FinalizeFromShader("Debug Clusters", meshShader, m_pGraphics->GetDevice());
-			
+
 			m_pDebugClustersPSO->SetRootSignature(m_pDebugClustersRS->GetRootSignature());
 			m_pDebugClustersPSO->SetMeshShader(meshShader);
 			m_pDebugClustersPSO->Finalize("Debug Clusters PSO", m_pGraphics->GetDevice());
 		}
 		else
 		{
-			Shader vertexShader("CL_DebugDrawClusters.hlsl", ShaderType::Vertex, "VSMain");
+			Shader vertexShader("ClusterDebugDrawing.hlsl", ShaderType::Vertex, "VSMain");
 			Shader geometryShader("CL_DebugDrawClusters.hlsl", ShaderType::Geometry, "GSMain");
 			m_pDebugClustersRS->FinalizeFromShader("Debug Clusters", vertexShader, m_pGraphics->GetDevice());
 
