@@ -39,7 +39,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& resources)
 	RGPassBuilder culling = graph.AddPass("Light Culling");
 	culling.Bind([=](CommandContext& context, const RGPassResources& passResources)
 		{
-			context.InsertResourceBarrier(resources.pDepthBuffer, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+			context.InsertResourceBarrier(resources.pResolvedDepth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(m_pLightIndexCounter.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
 			context.InsertResourceBarrier(m_pLightGridOpaque.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
@@ -63,10 +63,10 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& resources)
 			} Data{};
 
 			Data.CameraView = resources.pCamera->GetView();
-			Data.NumThreadGroups.x = Math::DivideAndRoundUp(resources.pDepthBuffer->GetWidth(), FORWARD_PLUS_BLOCK_SIZE);
-			Data.NumThreadGroups.y = Math::DivideAndRoundUp(resources.pDepthBuffer->GetHeight(), FORWARD_PLUS_BLOCK_SIZE);
+			Data.NumThreadGroups.x = Math::DivideAndRoundUp(resources.pResolvedDepth->GetWidth(), FORWARD_PLUS_BLOCK_SIZE);
+			Data.NumThreadGroups.y = Math::DivideAndRoundUp(resources.pResolvedDepth->GetHeight(), FORWARD_PLUS_BLOCK_SIZE);
 			Data.NumThreadGroups.z = 1;
-			Data.ScreenDimensionsInv = Vector2(1.0f / resources.pDepthBuffer->GetWidth(), 1.0f / resources.pDepthBuffer->GetHeight());
+			Data.ScreenDimensionsInv = Vector2(1.0f / resources.pResolvedDepth->GetWidth(), 1.0f / resources.pResolvedDepth->GetHeight());
 			Data.LightCount = (uint32)resources.pLightBuffer->GetDesc().ElementCount;
 			Data.ProjectionInverse = resources.pCamera->GetProjectionInverse();
 
@@ -76,7 +76,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& resources)
 			context.SetDynamicDescriptor(1, 2, m_pLightGridOpaque->GetUAV());
 			context.SetDynamicDescriptor(1, 3, m_pLightIndexListBufferTransparant->GetUAV());
 			context.SetDynamicDescriptor(1, 4, m_pLightGridTransparant->GetUAV());
-			context.SetDynamicDescriptor(2, 0, resources.pDepthBuffer->GetSRV());
+			context.SetDynamicDescriptor(2, 0, resources.pResolvedDepth->GetSRV());
 			context.SetDynamicDescriptor(2, 1, resources.pLightBuffer->GetSRV());
 
 			context.Dispatch(Data.NumThreadGroups);
