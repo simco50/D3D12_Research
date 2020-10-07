@@ -729,13 +729,6 @@ void Graphics::Update()
 			renderContext.EndRenderPass();
 		});
 
-
-	/*RGPassBuilder clouds = graph.AddPass("Draw Clouds");
-	clouds.Bind([=](CommandContext& context, const RGPassResources& passResources)
-		{
-			m_pClouds->Render(context, GetCurrentRenderTarget(), GetDepthStencil(), GetCamera(), m_Lights[0]);
-		});*/
-
 	DebugRenderer::Get()->Render(graph, m_pCamera->GetViewProjection(), GetCurrentRenderTarget(), GetDepthStencil());
 
 	//MSAA Render Target Resolve
@@ -752,6 +745,12 @@ void Graphics::Update()
 				context.CopyTexture(m_pHDRRenderTarget.get(), m_pPreviousColor.get());
 			});
 	}
+	
+	RGPassBuilder clouds = graph.AddPass("Draw Clouds");
+	clouds.Bind([=](CommandContext& context, const RGPassResources& passResources)
+	{
+		m_pClouds->Render(context, m_pHDRRenderTarget.get(), GetResolvedDepthStencil(), GetCamera(), m_Lights[0]);
+	});
 
 	//Tonemapping
 	{
