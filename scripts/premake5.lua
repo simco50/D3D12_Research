@@ -64,6 +64,12 @@ workspace (ENGINE_NAME)
 			(SOURCE_DIR .. "**.hlsl*"),
 		}
 
+		vpaths
+		{
+			{["Shaders/Include"] = (SOURCE_DIR .. "**.hlsli")},
+			{["Shaders/Source"] = (SOURCE_DIR .. "**.hlsl")},
+		}
+
 		filter ("files:" .. SOURCE_DIR .. "External/**")
 			flags { "NoPCH" }
 			removeflags "FatalWarnings"
