@@ -70,8 +70,8 @@ Vector2 Input::GetMouseDelta() const
 
 void Input::UpdateMousePosition()
 {
-	POINT p;
+	/*POINT p;
 	::GetCursorPos(&p);
 	::ScreenToClient(m_pWindow, &p);
-	m_CurrentMousePosition = Vector2((float)p.x, (float)p.y);
+	m_CurrentMousePosition = Vector2((float)p.x, (float)p.y);*/
 }

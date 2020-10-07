@@ -1,4 +1,5 @@
 require "utility"
+require "winrt"
 
 ENGINE_NAME = "D3D12"
 ROOT = "../"
@@ -9,7 +10,7 @@ workspace (ENGINE_NAME)
 	basedir (ROOT)
 	configurations { "Debug", "Release" }
     platforms { "x64" }
-	defines {  "x64" }
+	defines { "x64" }
 	language ("C++")
 	cppdialect "c++17"
 	startproject (ENGINE_NAME)
@@ -17,9 +18,9 @@ workspace (ENGINE_NAME)
 	architecture ("x64")
 	kind ("WindowedApp")
 	characterset ("MBCS")
-	flags {"MultiProcessorCompile", "ShadowedVariables"}
+	flags { "MultiProcessorCompile", "ShadowedVariables" }
 	rtti "Off"
-	
+
 	filter "configurations:Debug"
 		defines { "_DEBUG" }
 		optimize ("Off")
@@ -41,11 +42,33 @@ workspace (ENGINE_NAME)
 		pchsource (ROOT .. ENGINE_NAME .. "/stdafx.cpp")
 		includedirs { "$(ProjectDir)", "$(ProjectDir)External/" }
 
-		SetPlatformDefines()
-
-		filter {"system:windows", "action:vs*"}
+		if with_uwp then 
+			system "windowsuniversal"
+			defines { "PLATFORM_UWP" }
+			consumewinrtextension "true"
 			systemversion (WIN_SDK)
-		filter {}
+			defaultlanguage "en-GB"
+			certificatefile "D3D12_TemporaryKey.pfx"
+			certificatethumbprint "2d57c6a54a68231bb685c37101983fea01300641"
+
+			filter ("files:" ..(SOURCE_DIR .. "Resources/**"))
+				deploy "true"
+			filter ("files:../Libraries/**.dll")
+				deploy "true"
+			filter {}
+
+			files
+			{ 
+				(SOURCE_DIR .. "**.appxmanifest"),
+				(SOURCE_DIR .. "Resources/**"),
+				(SOURCE_DIR .. "Assets/**"),
+			("../Libraries/**.dll")
+		}
+		else
+			system "windows"
+			defines { "PLATFORM_WINDOWS" }
+			systemversion (WIN_SDK)
+		end
 
 		---- File setup ----
 		files
@@ -58,15 +81,15 @@ workspace (ENGINE_NAME)
 			(SOURCE_DIR .. "**.natvis"),
 		}
 
+
 		filter ("files:" .. SOURCE_DIR .. "External/**")
 			flags { "NoPCH" }
 		filter {}
 
 		---- External libraries ----
 		AddAssimp()
-		filter "system:Windows"
-			AddD3D12()
-			AddPix()
-			AddDxc()
+		AddD3D12()
+		AddPix()
+		AddDxc()
 			
 --------------------------------------------------------

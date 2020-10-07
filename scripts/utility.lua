@@ -1,9 +1,3 @@
-function SetPlatformDefines()
-	filter "system: windows"
-		defines { "PLATFORM_WINDOWS" }
-	filter {}
-end
-
 function AddPix()
 	filter {}
 	includedirs (ROOT .. "Libraries/Pix/include")
@@ -45,3 +39,10 @@ newaction {
 		os.remove(SOURCE_DIR .. "*.vcxproj.*")
 	end
 }
+
+newoption {
+	trigger     = "uwp",
+	description = "Generates a UWP solution"
+  }
+
+with_uwp = _OPTIONS["uwp"]

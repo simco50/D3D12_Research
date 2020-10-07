@@ -14,6 +14,7 @@ FileWatcher::~FileWatcher()
 
 bool FileWatcher::StartWatching(const std::string& directory, const bool recursiveWatch /*= true*/)
 {
+#if PLATFORM_WINDOWS
 	if (m_Exiting)
 	{
 		QueryPerformanceFrequency(&m_TimeFrequency);
@@ -36,6 +37,7 @@ bool FileWatcher::StartWatching(const std::string& directory, const bool recursi
 		}
 		return false;
 	}
+#endif
 	return false;
 }
 

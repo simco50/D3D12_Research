@@ -23,6 +23,15 @@ class RTAO;
 class SSAO;
 class GpuParticles;
 
+#ifdef PLATFORM_WINDOWS
+using WindowHandle = HWND;
+using WindowHandlePtr = HWND;
+#elif defined(PLATFORM_UWP)
+#include "agile.h"
+using WindowHandle = Windows::UI::Core::CoreWindow^;
+using WindowHandlePtr = Platform::Agile<Windows::UI::Core::CoreWindow>;
+#endif
+
 struct Batch
 {
 	const SubMesh* pMesh = nullptr;
@@ -69,7 +78,7 @@ public:
 	Graphics(uint32 width, uint32 height, int sampleCount = 1);
 	~Graphics();
 
-	void Initialize(HWND window);
+	void Initialize(WindowHandle window);
 	void Update();
 	void Shutdown();
 
@@ -155,7 +164,7 @@ private:
 
 	std::unique_ptr<Camera> m_pCamera;
 
-	HWND m_pWindow = nullptr;
+	WindowHandlePtr m_pWindow{};
 
 	ComPtr<IDXGISwapChain3> m_pSwapchain;
 	ComPtr<ID3D12Device> m_pDevice;

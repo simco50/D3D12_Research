@@ -81,7 +81,7 @@ Graphics::~Graphics()
 {
 }
 
-void Graphics::Initialize(HWND window)
+void Graphics::Initialize(WindowHandle window)
 {
 	m_pWindow = window;
 
@@ -445,8 +445,8 @@ void Graphics::Update()
 
 				SYSTEMTIME time;
 				GetSystemTime(&time);
-				char stringTarget[128];
-				GetTimeFormat(LOCALE_INVARIANT, TIME_FORCE24HOURFORMAT, &time, "hh_mm_ss", stringTarget, 128);
+				wchar_t stringTarget[128];
+				GetTimeFormatEx(LOCALE_NAME_INVARIANT, 0, &time, L"hh_mm_ss", stringTarget, 128);
 				std::stringstream filePath;
 				filePath << "Screenshot_" << stringTarget << ".jpg";
 				img.Save(filePath.str().c_str());
@@ -1231,6 +1231,8 @@ void Graphics::InitD3D()
 	fsDesc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
 	fsDesc.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED;
 	fsDesc.Windowed = true;
+
+#ifdef PLATFORM_WINDOWS
 	VERIFY_HR(pFactory->CreateSwapChainForHwnd(
 		m_CommandQueues[D3D12_COMMAND_LIST_TYPE_DIRECT]->GetCommandQueue(), 
 		m_pWindow, 
@@ -1238,6 +1240,13 @@ void Graphics::InitD3D()
 		&fsDesc, 
 		nullptr, 
 		swapChain.GetAddressOf()));
+#elif defined(PLATFORM_UWP)
+pFactory->CreateSwapChainForCoreWindow(m_CommandQueues[D3D12_COMMAND_LIST_TYPE_DIRECT]->GetCommandQueue(),
+	reinterpret_cast<IUnknown*>(m_pWindow.Get()),
+	&swapchainDesc,
+	nullptr,
+	swapChain.GetAddressOf());
+#endif
 
 	m_pSwapchain.Reset();
 	swapChain.As(&m_pSwapchain);
