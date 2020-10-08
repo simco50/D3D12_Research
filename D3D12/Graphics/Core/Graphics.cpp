@@ -1068,6 +1068,10 @@ void Graphics::InitD3D()
 	ComPtr<IDXGIFactory6> pFactory;
 	VERIFY_HR(CreateDXGIFactory2(dxgiFactoryFlags, IID_PPV_ARGS(&pFactory)));
 
+	BOOL allowTearing;
+	HRESULT hr = pFactory->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &allowTearing, sizeof(BOOL));
+	allowTearing &= SUCCEEDED(hr);
+
 	ComPtr<IDXGIAdapter4> pAdapter;
 	uint32 adapterIndex = 0;
 	E_LOG(Info, "Adapters:");
@@ -1219,12 +1223,14 @@ void Graphics::InitD3D()
 	swapchainDesc.SampleDesc.Quality = 0;
 	swapchainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
 	swapchainDesc.BufferCount = FRAME_COUNT;
-	swapchainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
-	swapchainDesc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
+	swapchainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+	swapchainDesc.Flags = 0;
 	swapchainDesc.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
 	swapchainDesc.Stereo = false;
 	ComPtr<IDXGISwapChain1> swapChain;
+	swapchainDesc.Flags |= DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
 
+#ifdef PLATFORM_WINDOWS
 	DXGI_SWAP_CHAIN_FULLSCREEN_DESC fsDesc{};
 	fsDesc.RefreshRate.Denominator = 60;
 	fsDesc.RefreshRate.Numerator = 1;
@@ -1232,7 +1238,6 @@ void Graphics::InitD3D()
 	fsDesc.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED;
 	fsDesc.Windowed = true;
 
-#ifdef PLATFORM_WINDOWS
 	VERIFY_HR(pFactory->CreateSwapChainForHwnd(
 		m_CommandQueues[D3D12_COMMAND_LIST_TYPE_DIRECT]->GetCommandQueue(), 
 		m_pWindow, 
@@ -1241,11 +1246,12 @@ void Graphics::InitD3D()
 		nullptr, 
 		swapChain.GetAddressOf()));
 #elif defined(PLATFORM_UWP)
-pFactory->CreateSwapChainForCoreWindow(m_CommandQueues[D3D12_COMMAND_LIST_TYPE_DIRECT]->GetCommandQueue(),
-	reinterpret_cast<IUnknown*>(m_pWindow.Get()),
-	&swapchainDesc,
-	nullptr,
-	swapChain.GetAddressOf());
+
+	VERIFY_HR(pFactory->CreateSwapChainForCoreWindow(m_CommandQueues[D3D12_COMMAND_LIST_TYPE_DIRECT]->GetCommandQueue(),
+		reinterpret_cast<IUnknown*>(Windows::UI::Core::CoreWindow::GetForCurrentThread()),
+		&swapchainDesc,
+		nullptr,
+		swapChain.GetAddressOf()));
 #endif
 
 	m_pSwapchain.Reset();
@@ -1441,12 +1447,15 @@ void Graphics::OnResize(int width, int height)
 	m_pDepthStencil->Release();
 
 	//Resize the buffers
+	DXGI_SWAP_CHAIN_DESC1 desc{};
+	m_pSwapchain->GetDesc1(&desc);
 	VERIFY_HR_EX(m_pSwapchain->ResizeBuffers(
 		FRAME_COUNT, 
 		m_WindowWidth, 
 		m_WindowHeight, 
-		SWAPCHAIN_FORMAT,
-		DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH), GetDevice());
+		desc.Format,
+		desc.Flags
+	), GetDevice());
 
 	m_CurrentBackBufferIndex = 0;
 

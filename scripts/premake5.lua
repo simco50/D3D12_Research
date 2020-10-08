@@ -49,7 +49,6 @@ workspace (ENGINE_NAME)
 			systemversion (WIN_SDK)
 			defaultlanguage "en-GB"
 			certificatefile "D3D12_TemporaryKey.pfx"
-			certificatethumbprint "2d57c6a54a68231bb685c37101983fea01300641"
 
 			filter ("files:" ..(SOURCE_DIR .. "Resources/**"))
 				deploy "true"

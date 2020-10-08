@@ -282,6 +282,7 @@ using namespace Windows::ApplicationModel::Core;
 using namespace Windows::ApplicationModel::Activation;
 using namespace Windows::UI::Core;
 using namespace Windows::UI::Input;
+using namespace Windows::Devices::Input;
 using namespace Windows::UI::ViewManagement;
 using namespace Windows::System;
 using namespace Windows::Foundation;
@@ -329,6 +330,7 @@ public:
 		window->PointerPressed += ref new TypedEventHandler<CoreWindow^, PointerEventArgs^>(this, &ViewProvider::OnPointerPressed);
 		window->PointerReleased += ref new TypedEventHandler<CoreWindow^, PointerEventArgs^>(this, &ViewProvider::OnPointerReleased);
 		window->PointerMoved += ref new TypedEventHandler<CoreWindow^, PointerEventArgs^>(this, &ViewProvider::OnPointerMoved);
+		MouseDevice::GetForCurrentView()->MouseMoved += ref new TypedEventHandler<MouseDevice^, MouseEventArgs^>(this, &ViewProvider::OnMouseMoved);
 #if defined(NTDDI_WIN10_RS2) && (NTDDI_VERSION >= NTDDI_WIN10_RS2)
 		try
 		{
@@ -373,8 +375,8 @@ public:
 			if (m_Visible)
 			{
 				Input::Instance().Update();
-				m_pGraphics->Update();
 				CoreWindow::GetForCurrentThread()->Dispatcher->ProcessEvents(CoreProcessEventsOption::ProcessAllIfPresent);
+				m_pGraphics->Update();
 			}
 			else
 			{
@@ -397,30 +399,26 @@ protected:
 
 	void OnPointerReleased(CoreWindow^ sender, PointerEventArgs^ args)
 	{
-		Input::Instance().UpdateMouseKey(0, true);
+		Input::Instance().UpdateMouseKey(0, args->CurrentPoint->Properties->IsLeftButtonPressed);
+		Input::Instance().UpdateMouseKey(1, args->CurrentPoint->Properties->IsRightButtonPressed);
+		Input::Instance().UpdateMouseKey(2, args->CurrentPoint->Properties->IsHorizontalMouseWheel);
 	}
 
 	void OnPointerPressed(CoreWindow^ sender, PointerEventArgs^ args)
 	{
-		Input::Instance().UpdateMouseKey(0, false);
-		if (m_CapturingMouse)
-		{
-			sender->ReleasePointerCapture();
-			m_CapturingMouse = false;
-		}
-		else
-		{
-			sender->SetPointerCapture();
-			m_CapturingMouse = true;
-			//Input::Instance().UpdateMousePosition(args->CurrentPoint->RawPosition.X, args->CurrentPoint->RawPosition.Y);
-		}
+		Input::Instance().UpdateMouseKey(0, args->CurrentPoint->Properties->IsLeftButtonPressed);
+		Input::Instance().UpdateMouseKey(1, args->CurrentPoint->Properties->IsRightButtonPressed);
+		Input::Instance().UpdateMouseKey(2, args->CurrentPoint->Properties->IsHorizontalMouseWheel);
 	}
 
 	void OnPointerMoved(CoreWindow^ sender, PointerEventArgs^ args)
 	{
-		if (!m_CapturingMouse)
-			return;
-		//Input::Instance().UpdateMousePosition(args->CurrentPoint->RawPosition.X, args->CurrentPoint->RawPosition.Y);
+		Input::Instance().UpdateMousePosition(args->CurrentPoint->RawPosition.X, args->CurrentPoint->RawPosition.Y);
+	}
+
+	void OnMouseMoved(MouseDevice^ device, MouseEventArgs^ args)
+	{
+		Input::Instance().UpdateMouseDelta(args->MouseDelta.X, args->MouseDelta.Y);
 	}
 
 	// Event handlers

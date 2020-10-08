@@ -139,7 +139,7 @@ public:
 	ID3D12Resource* CreateResource(const D3D12_RESOURCE_DESC& desc, D3D12_RESOURCE_STATES initialState, D3D12_HEAP_TYPE heapType, D3D12_CLEAR_VALUE* pClearValue = nullptr);
 
 	//CONSTANTS
-	static const int32 FRAME_COUNT = 3;
+	static const int32 FRAME_COUNT = 2;
 	static const DXGI_FORMAT DEPTH_STENCIL_FORMAT;
 	static const DXGI_FORMAT DEPTH_STENCIL_SHADOW_FORMAT;
 	static const DXGI_FORMAT RENDER_TARGET_FORMAT;
