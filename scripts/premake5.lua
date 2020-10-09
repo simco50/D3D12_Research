@@ -1,10 +1,10 @@
-require "utility"
 require "winrt"
 
 ENGINE_NAME = "D3D12"
 ROOT = "../"
 SOURCE_DIR = ROOT .. ENGINE_NAME .. "/"
 WIN_SDK = "10.0.19041.0"
+WITH_UWP = _OPTIONS["uwp"]
 
 workspace (ENGINE_NAME)
 	basedir (ROOT)
@@ -42,9 +42,9 @@ workspace (ENGINE_NAME)
 		pchsource (ROOT .. ENGINE_NAME .. "/stdafx.cpp")
 		includedirs { "$(ProjectDir)", "$(ProjectDir)External/" }
 
-		if with_uwp then 
+		if WITH_UWP then 
 			system "windowsuniversal"
-			defines { "PLATFORM_UWP" }
+			defines { "PLATFORM_UWP=1" }
 			consumewinrtextension "true"
 			systemversion (WIN_SDK)
 			defaultlanguage "en-GB"
@@ -61,11 +61,11 @@ workspace (ENGINE_NAME)
 				(SOURCE_DIR .. "**.appxmanifest"),
 				(SOURCE_DIR .. "Resources/**"),
 				(SOURCE_DIR .. "Assets/**"),
-			("../Libraries/**.dll")
-		}
+				("../Libraries/**.dll")
+			}
 		else
 			system "windows"
-			defines { "PLATFORM_WINDOWS" }
+			defines { "PLATFORM_WINDOWS=1" }
 			systemversion (WIN_SDK)
 		end
 
@@ -85,10 +85,45 @@ workspace (ENGINE_NAME)
 			flags { "NoPCH" }
 		filter {}
 
-		---- External libraries ----
-		AddAssimp()
-		AddD3D12()
-		AddPix()
-		AddDxc()
+		-- Pix
+		includedirs (ROOT .. "Libraries/Pix/include")
+		libdirs (ROOT .. "Libraries/Pix/lib")
+		postbuildcommands { ("{COPY} \"$(SolutionDir)Libraries\\Pix\\bin\\WinPixEventRuntime.dll\" \"$(OutDir)\"") }
+		links { "WinPixEventRuntime" }
+
+		-- D3D12
+		links {	"d3d12.lib", "dxgi", "d3dcompiler", "dxguid" }
+
+		-- Pix
+		includedirs (ROOT .. "Libraries/Assimp/include")
+		libdirs	(ROOT .. "Libraries/Assimp/lib/x64")
+		postbuildcommands { ("{COPY} \"$(SolutionDir)Libraries\\Assimp\\bin\\x64\\assimp-vc140-mt.dll\" \"$(OutDir)\"") }
+		links { "assimp-vc140-mt" }
+
+		-- DXC
+		links { "dxcompiler" }
+		libdirs	(ROOT .. "Libraries/Dxc/lib/")
+		includedirs (ROOT .. "Libraries/Dxc/include")
+		postbuildcommands { ("{COPY} \"$(SolutionDir)Libraries\\Dxc\\bin\\dxcompiler.dll\" \"$(OutDir)\"") }
+		postbuildcommands { ("{COPY} \"$(SolutionDir)Libraries\\Dxc\\bin\\dxil.dll\" \"$(OutDir)\"") }
+	
+
+newaction {
+	trigger     = "clean",
+	description = "Remove all binaries and generated files",
+
+	execute = function()
+		os.rmdir("../Build")
+		os.rmdir("../ipch")
+		os.rmdir("../.vs")
+		os.remove("../*.sln")
+		os.remove(SOURCE_DIR .. "*.vcxproj.*")
+	end
+}
+
+newoption {
+	trigger     = "uwp",
+	description = "Generates a UWP solution"
+	}
 			
 --------------------------------------------------------

@@ -12,7 +12,7 @@ const int gWindowWidth = 1240;
 const int gWindowHeight = 720;
 const int gMsaaSampleCount = 4;
 
-#ifdef PLATFORM_WINDOWS
+#if PLATFORM_WINDOWS
 
 class ViewWrapper
 {
@@ -274,8 +274,7 @@ int WINAPI WinMain(HINSTANCE hInstance,	HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	return vp.Run(hInstance, "D3D12", lpCmdLine);
 }
 
-#elif defined(PLATFORM_UWP)
-
+#elif PLATFORM_UWP
 
 using namespace Windows::ApplicationModel;
 using namespace Windows::ApplicationModel::Core;

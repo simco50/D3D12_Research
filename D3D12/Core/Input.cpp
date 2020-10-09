@@ -75,7 +75,7 @@ Vector2 Input::GetMouseDelta() const
 
 void Input::UpdateMousePosition(float x, float y)
 {
-#ifdef PLATFORM_WINDOWS
+#if PLATFORM_WINDOWS
 	m_MouseDelta = Vector2(x, y) - m_CurrentMousePosition;
 #endif
 	m_CurrentMousePosition = Vector2(x, y);

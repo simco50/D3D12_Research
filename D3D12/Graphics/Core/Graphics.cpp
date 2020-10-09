@@ -1230,7 +1230,7 @@ void Graphics::InitD3D()
 	ComPtr<IDXGISwapChain1> swapChain;
 	swapchainDesc.Flags |= DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
 
-#ifdef PLATFORM_WINDOWS
+#if PLATFORM_WINDOWS
 	DXGI_SWAP_CHAIN_FULLSCREEN_DESC fsDesc{};
 	fsDesc.RefreshRate.Denominator = 60;
 	fsDesc.RefreshRate.Numerator = 1;
@@ -1245,8 +1245,7 @@ void Graphics::InitD3D()
 		&fsDesc, 
 		nullptr, 
 		swapChain.GetAddressOf()));
-#elif defined(PLATFORM_UWP)
-
+#elif PLATFORM_UWP
 	VERIFY_HR(pFactory->CreateSwapChainForCoreWindow(m_CommandQueues[D3D12_COMMAND_LIST_TYPE_DIRECT]->GetCommandQueue(),
 		reinterpret_cast<IUnknown*>(Windows::UI::Core::CoreWindow::GetForCurrentThread()),
 		&swapchainDesc,

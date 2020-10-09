@@ -138,22 +138,14 @@ namespace Paths
 
 	bool FileExists(const std::string& filePath)
 	{
-#ifdef PLATFORM_WINDOWS
 		DWORD attributes = GetFileAttributesA(filePath.c_str());
 		return (attributes != INVALID_FILE_ATTRIBUTES && !(attributes & FILE_ATTRIBUTE_DIRECTORY));
-#else
-		return false;
-#endif
 	}
 
 	bool DirectoryExists(const std::string& filePath)
 	{
-#ifdef PLATFORM_WINDOWS
 		DWORD attributes = GetFileAttributesA(filePath.c_str());
 		return (attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY));
-#else
-		return false;
-#endif
 	}
 
 	std::string GameDir()

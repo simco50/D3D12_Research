@@ -23,10 +23,10 @@ class RTAO;
 class SSAO;
 class GpuParticles;
 
-#ifdef PLATFORM_WINDOWS
+#if PLATFORM_WINDOWS
 using WindowHandle = HWND;
 using WindowHandlePtr = HWND;
-#elif defined(PLATFORM_UWP)
+#elif PLATFORM_UWP
 #include "agile.h"
 using WindowHandle = Windows::UI::Core::CoreWindow^;
 using WindowHandlePtr = Platform::Agile<Windows::UI::Core::CoreWindow>;
