@@ -18,9 +18,14 @@ void Input::Update()
 	{
 		m_KeyStates[i] = (KeyState)(m_KeyStates[i] & KeyState::Down);
 	}
-	m_LastMousePosition = m_CurrentMousePosition;
 	m_MouseWheel = 0;
-	UpdateMousePosition();
+	m_MouseDelta = Vector2();
+#if PLATFORM_WINDOWS
+	POINT p;
+	::GetCursorPos(&p);
+	::ScreenToClient(m_pWindow, &p);
+	UpdateMousePosition((float)p.x, (float)p.y);
+#endif
 }
 
 void Input::UpdateKey(uint32 keyCode, bool isDown)
@@ -60,18 +65,23 @@ bool Input::IsMousePressed(uint32 keyCode)
 
 Vector2 Input::GetMousePosition() const
 {
-	return m_LastMousePosition;
+	return m_CurrentMousePosition;
 }
 
 Vector2 Input::GetMouseDelta() const
 {
-	return m_CurrentMousePosition - m_LastMousePosition;
+	return m_MouseDelta;
 }
 
-void Input::UpdateMousePosition()
+void Input::UpdateMousePosition(float x, float y)
 {
-	POINT p;
-	::GetCursorPos(&p);
-	::ScreenToClient(m_pWindow, &p);
-	m_CurrentMousePosition = Vector2((float)p.x, (float)p.y);
+#if PLATFORM_WINDOWS
+	m_MouseDelta = Vector2(x, y) - m_CurrentMousePosition;
+#endif
+	m_CurrentMousePosition = Vector2(x, y);
+}
+
+void Input::UpdateMouseDelta(float x, float y)
+{
+	m_MouseDelta = Vector2(x, y);
 }

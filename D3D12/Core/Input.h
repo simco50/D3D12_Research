@@ -19,6 +19,8 @@ public:
 	void UpdateKey(uint32 keyCode, bool isDown);
 	void UpdateMouseKey(uint32 keyCode, bool isDown);
 	void UpdateMouseWheel(float mouseWheel);
+	void UpdateMousePosition(float x, float y);
+	void UpdateMouseDelta(float x, float y);
 
 	bool IsKeyDown(uint32 keyCode);
 	bool IsKeyPressed(uint32 keyCode);
@@ -31,14 +33,12 @@ public:
 	float GetMouseWheelDelta() const { return m_MouseWheel; }
 
 private:
-	void UpdateMousePosition();
-
 	std::array<KeyState, 256> m_KeyStates = {};
 	std::array<KeyState, 3> m_MouseStates = {};
 
 	Input() = default;
 	HWND m_pWindow = nullptr;
-	Vector2 m_LastMousePosition;
+	Vector2 m_MouseDelta;
 	Vector2 m_CurrentMousePosition;
 	float m_MouseWheel = 0;
 };

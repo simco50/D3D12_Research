@@ -23,6 +23,15 @@ class RTAO;
 class SSAO;
 class GpuParticles;
 
+#if PLATFORM_WINDOWS
+using WindowHandle = HWND;
+using WindowHandlePtr = HWND;
+#elif PLATFORM_UWP
+#include "agile.h"
+using WindowHandle = Windows::UI::Core::CoreWindow^;
+using WindowHandlePtr = Platform::Agile<Windows::UI::Core::CoreWindow>;
+#endif
+
 struct Batch
 {
 	const SubMesh* pMesh = nullptr;
@@ -69,7 +78,7 @@ public:
 	Graphics(uint32 width, uint32 height, int sampleCount = 1);
 	~Graphics();
 
-	void Initialize(HWND window);
+	void Initialize(WindowHandle window);
 	void Update();
 	void Shutdown();
 
@@ -130,7 +139,7 @@ public:
 	ID3D12Resource* CreateResource(const D3D12_RESOURCE_DESC& desc, D3D12_RESOURCE_STATES initialState, D3D12_HEAP_TYPE heapType, D3D12_CLEAR_VALUE* pClearValue = nullptr);
 
 	//CONSTANTS
-	static const int32 FRAME_COUNT = 3;
+	static const int32 FRAME_COUNT = 2;
 	static const DXGI_FORMAT DEPTH_STENCIL_FORMAT;
 	static const DXGI_FORMAT DEPTH_STENCIL_SHADOW_FORMAT;
 	static const DXGI_FORMAT RENDER_TARGET_FORMAT;
@@ -155,7 +164,7 @@ private:
 
 	std::unique_ptr<Camera> m_pCamera;
 
-	HWND m_pWindow = nullptr;
+	WindowHandlePtr m_pWindow{};
 
 	ComPtr<IDXGISwapChain3> m_pSwapchain;
 	ComPtr<ID3D12Device> m_pDevice;

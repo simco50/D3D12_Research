@@ -138,22 +138,14 @@ namespace Paths
 
 	bool FileExists(const std::string& filePath)
 	{
-#ifdef PLATFORM_WINDOWS
-		DWORD attributes = GetFileAttributes(filePath.c_str());
+		DWORD attributes = GetFileAttributesA(filePath.c_str());
 		return (attributes != INVALID_FILE_ATTRIBUTES && !(attributes & FILE_ATTRIBUTE_DIRECTORY));
-#else
-		return false;
-#endif
 	}
 
 	bool DirectoryExists(const std::string& filePath)
 	{
-#ifdef PLATFORM_WINDOWS
-		DWORD attributes = GetFileAttributes(filePath.c_str());
+		DWORD attributes = GetFileAttributesA(filePath.c_str());
 		return (attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY));
-#else
-		return false;
-#endif
 	}
 
 	std::string GameDir()
@@ -219,7 +211,7 @@ namespace Paths
 	std::string WorkingDirectory()
 	{
 		char path[256];
-		GetModuleFileName(nullptr, path, 256);
+		GetModuleFileNameA(nullptr, path, 256);
 		return path;
 	}
 
@@ -231,7 +223,7 @@ namespace Paths
 			if (slash > 1)
 			{
 				std::string dirToCreate = path.substr(0, slash);
-				const BOOL success = CreateDirectory(dirToCreate.c_str(), nullptr);
+				const BOOL success = CreateDirectoryA(dirToCreate.c_str(), nullptr);
 				if (!success)
 				{
 					return false;

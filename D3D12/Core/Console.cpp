@@ -11,6 +11,7 @@ static std::deque<Console::LogEntry> sHistory;
 
 void InitializeConsoleWindow()
 {
+#if PLATFORM_WINDOWS
 	if (AllocConsole())
 	{
 		// Redirect the CRT standard input, output, and error handles to the console
@@ -45,6 +46,7 @@ void InitializeConsoleWindow()
 			}
 		}
 	}
+#endif
 }
 
 void Console::Initialize()

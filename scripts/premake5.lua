@@ -1,15 +1,16 @@
-require "utility"
+require "winrt"
 
 ENGINE_NAME = "D3D12"
 ROOT = "../"
 SOURCE_DIR = ROOT .. ENGINE_NAME .. "/"
 WIN_SDK = "10.0.19041.0"
+WITH_UWP = _OPTIONS["uwp"]
 
 workspace (ENGINE_NAME)
 	basedir (ROOT)
 	configurations { "Debug", "Release" }
     platforms { "x64" }
-	defines {  "x64" }
+	defines { "x64" }
 	language ("C++")
 	cppdialect "c++17"
 	startproject (ENGINE_NAME)
@@ -17,9 +18,9 @@ workspace (ENGINE_NAME)
 	architecture ("x64")
 	kind ("WindowedApp")
 	characterset ("MBCS")
-	flags {"MultiProcessorCompile", "ShadowedVariables"}
+	flags { "MultiProcessorCompile", "ShadowedVariables" }
 	rtti "Off"
-	
+
 	filter "configurations:Debug"
 		defines { "_DEBUG" }
 		optimize ("Off")
@@ -41,11 +42,32 @@ workspace (ENGINE_NAME)
 		pchsource (ROOT .. ENGINE_NAME .. "/stdafx.cpp")
 		includedirs { "$(ProjectDir)", "$(ProjectDir)External/" }
 
-		SetPlatformDefines()
-
-		filter {"system:windows", "action:vs*"}
+		if WITH_UWP then 
+			system "windowsuniversal"
+			defines { "PLATFORM_UWP=1" }
+			consumewinrtextension "true"
 			systemversion (WIN_SDK)
-		filter {}
+			defaultlanguage "en-GB"
+			certificatefile "D3D12_TemporaryKey.pfx"
+
+			filter ("files:" ..(SOURCE_DIR .. "Resources/**"))
+				deploy "true"
+			filter ("files:../Libraries/**.dll")
+				deploy "true"
+			filter {}
+
+			files
+			{ 
+				(SOURCE_DIR .. "**.appxmanifest"),
+				(SOURCE_DIR .. "Resources/**"),
+				(SOURCE_DIR .. "Assets/**"),
+				("../Libraries/**.dll")
+			}
+		else
+			system "windows"
+			defines { "PLATFORM_WINDOWS=1" }
+			systemversion (WIN_SDK)
+		end
 
 		---- File setup ----
 		files
@@ -58,15 +80,50 @@ workspace (ENGINE_NAME)
 			(SOURCE_DIR .. "**.natvis"),
 		}
 
+
 		filter ("files:" .. SOURCE_DIR .. "External/**")
 			flags { "NoPCH" }
 		filter {}
 
-		---- External libraries ----
-		AddAssimp()
-		filter "system:Windows"
-			AddD3D12()
-			AddPix()
-			AddDxc()
+		-- Pix
+		includedirs (ROOT .. "Libraries/Pix/include")
+		libdirs (ROOT .. "Libraries/Pix/lib")
+		postbuildcommands { ("{COPY} \"$(SolutionDir)Libraries\\Pix\\bin\\WinPixEventRuntime.dll\" \"$(OutDir)\"") }
+		links { "WinPixEventRuntime" }
+
+		-- D3D12
+		links {	"d3d12.lib", "dxgi", "d3dcompiler", "dxguid" }
+
+		-- Pix
+		includedirs (ROOT .. "Libraries/Assimp/include")
+		libdirs	(ROOT .. "Libraries/Assimp/lib/x64")
+		postbuildcommands { ("{COPY} \"$(SolutionDir)Libraries\\Assimp\\bin\\x64\\assimp-vc140-mt.dll\" \"$(OutDir)\"") }
+		links { "assimp-vc140-mt" }
+
+		-- DXC
+		links { "dxcompiler" }
+		libdirs	(ROOT .. "Libraries/Dxc/lib/")
+		includedirs (ROOT .. "Libraries/Dxc/include")
+		postbuildcommands { ("{COPY} \"$(SolutionDir)Libraries\\Dxc\\bin\\dxcompiler.dll\" \"$(OutDir)\"") }
+		postbuildcommands { ("{COPY} \"$(SolutionDir)Libraries\\Dxc\\bin\\dxil.dll\" \"$(OutDir)\"") }
+	
+
+newaction {
+	trigger     = "clean",
+	description = "Remove all binaries and generated files",
+
+	execute = function()
+		os.rmdir("../Build")
+		os.rmdir("../ipch")
+		os.rmdir("../.vs")
+		os.remove("../*.sln")
+		os.remove(SOURCE_DIR .. "*.vcxproj.*")
+	end
+}
+
+newoption {
+	trigger     = "uwp",
+	description = "Generates a UWP solution"
+	}
 			
 --------------------------------------------------------
