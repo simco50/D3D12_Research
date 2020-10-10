@@ -254,9 +254,9 @@ float4 PSMain(PSInput input) : SV_TARGET
 {
 	float4 baseColor = tMaterialTextures[cObjectData.Diffuse].Sample(sDiffuseSampler, input.texCoord);
 	float3 sampledNormal = tMaterialTextures[cObjectData.Normal].Sample(sDiffuseSampler, input.texCoord).xyz;
-	float metalness = 0;//tMaterialTextures[cObjectData.Metallic].Sample(sDiffuseSampler, input.texCoord).r;
+	float metalness = 0; //tMaterialTextures[cObjectData.Metallic].Sample(sDiffuseSampler, input.texCoord).r;
+	float r = 0.5; //tMaterialTextures[cObjectData.Roughness].Sample(sDiffuseSampler, input.texCoord).r;
 	float3 specular = 0.5f;
-	float r = 0.5;
 
 	float3 diffuseColor = ComputeDiffuseColor(baseColor.rgb, metalness);
 	float3 specularColor = ComputeF0(specular.r, baseColor.rgb, metalness);

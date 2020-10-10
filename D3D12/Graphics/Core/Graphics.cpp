@@ -1290,11 +1290,32 @@ void Graphics::InitD3D()
 	OnResize(m_WindowWidth, m_WindowHeight);
 }
 
-
 void Graphics::InitializeAssets(CommandContext& context)
 {
 	m_pMesh = std::make_unique<Mesh>();
 	m_pMesh->Load("Resources/sponza/sponza.dae", this, &context);
+
+	std::map<Texture*, int> textureToIndex;
+	int textureIndex = 0;
+	for (int i = 0; i < m_pMesh->GetMeshCount(); ++i)
+	{
+		const Material& material = m_pMesh->GetMaterial(m_pMesh->GetMesh(i)->GetMaterialId());
+		auto it = textureToIndex.find(material.pDiffuseTexture);
+		if (it == textureToIndex.end())
+			textureToIndex[material.pDiffuseTexture] = textureIndex++;
+		it = textureToIndex.find(material.pNormalTexture);
+		if (it == textureToIndex.end())
+			textureToIndex[material.pNormalTexture] = textureIndex++;
+		it = textureToIndex.find(material.pSpecularTexture);
+		if (it == textureToIndex.end())
+			textureToIndex[material.pSpecularTexture] = textureIndex++;
+	}
+
+	m_SceneData.MaterialTextures.resize(textureToIndex.size());
+	for (auto& pair : textureToIndex)
+	{
+		m_SceneData.MaterialTextures[pair.second] = pair.first->GetSRV();
+	}
 
 	for (int i = 0; i < m_pMesh->GetMeshCount(); ++i)
 	{
@@ -1303,12 +1324,11 @@ void Graphics::InitializeAssets(CommandContext& context)
 		b.WorldMatrix = Matrix::Identity;
 		b.Bounds = m_pMesh->GetMesh(i)->GetBounds();
 		b.pMesh = m_pMesh->GetMesh(i);
-		b.Material.Diffuse = (int)m_SceneData.MaterialTextures.size();
-		m_SceneData.MaterialTextures.push_back(material.pDiffuseTexture->GetSRV());
-		b.Material.Normal = (int)m_SceneData.MaterialTextures.size();
-		m_SceneData.MaterialTextures.push_back(material.pNormalTexture->GetSRV());
-		b.Material.Roughness = (int)m_SceneData.MaterialTextures.size();
-		m_SceneData.MaterialTextures.push_back(material.pSpecularTexture->GetSRV());
+		
+		b.Material.Diffuse = textureToIndex[material.pDiffuseTexture];
+		b.Material.Normal = textureToIndex[material.pNormalTexture];
+		b.Material.Roughness = textureToIndex[material.pSpecularTexture];
+
 		if (material.IsTransparent)
 		{
 			m_SceneData.TransparantBatches.push_back(b);

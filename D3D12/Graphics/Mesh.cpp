@@ -94,37 +94,47 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 
 	std::string dirPath = Paths::GetDirectoryPath(pFilePath);
 
-	auto loadTexture = [pGraphics, pContext](const char* basePath, aiMaterial* pMaterial, aiTextureType type, bool srgb)
+	auto loadTexture = [this, pGraphics, pContext](const char* basePath, aiMaterial* pMaterial, aiTextureType type, bool srgb)
 	{
-		std::unique_ptr<Texture> pTex;
 		aiString path;
 		aiReturn ret = pMaterial->GetTexture(type, 0, &path);
-		pTex = std::make_unique<Texture>(pGraphics, "Material Texture");
 		bool success = ret == aiReturn_SUCCESS;
-		if (success)
-		{
-			std::string p = path.C_Str();
-			std::stringstream str;
-			str << basePath << "/" << p;
-			success = pTex->Create(pContext, str.str().c_str(), srgb);
-		}
-		if(!success)
+		std::string pathStr = path.C_Str();
+		if (!success)
 		{
 			switch (type)
 			{
 			case aiTextureType_NORMALS:
-				pTex->Create(pContext, "Resources/textures/dummy_ddn.dds", srgb);
+				pathStr = "dummy_ddn.dds";
 				break;
 			case aiTextureType_SPECULAR:
-				pTex->Create(pContext, "Resources/textures/dummy_specular.dds", srgb);
+				pathStr = "dummy_specular.dds";
 				break;
 			case aiTextureType_DIFFUSE:
 			default:
-				pTex->Create(pContext, "Resources/textures/dummy.dds", srgb);
+				pathStr = "dummy.dds";
 				break;
 			}
 		}
-		return pTex;
+		StringHash pathHash = StringHash(pathStr.c_str());
+		auto it = m_ExistingTextures.find(pathHash);
+		if (it != m_ExistingTextures.end())
+		{
+			return it->second;
+		}
+		std::unique_ptr<Texture> pTex;
+		pTex = std::make_unique<Texture>(pGraphics, pathStr.c_str());
+		std::stringstream str;
+		str << basePath << pathStr;
+		success = pTex->Create(pContext, str.str().c_str(), srgb);
+		if (success)
+		{
+			E_LOG(Info, "Loading '%s'", pathStr.c_str());
+			m_Textures.push_back(std::move(pTex));
+			m_ExistingTextures[pathHash] = m_Textures.back().get();
+			return m_Textures.back().get();
+		}
+		return (Texture*)nullptr;
 	};
 
 	m_Materials.resize(pScene->mNumMaterials);
