@@ -129,7 +129,6 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 		success = pTex->Create(pContext, str.str().c_str(), srgb);
 		if (success)
 		{
-			E_LOG(Info, "Loading '%s'", pathStr.c_str());
 			m_Textures.push_back(std::move(pTex));
 			m_ExistingTextures[pathHash] = m_Textures.back().get();
 			return m_Textures.back().get();
