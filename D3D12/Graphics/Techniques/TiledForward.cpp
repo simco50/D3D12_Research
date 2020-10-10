@@ -129,7 +129,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& resources)
 
 			context.SetDynamicConstantBufferView(1, &frameData, sizeof(PerFrameData));
 			context.SetDynamicConstantBufferView(2, resources.pShadowData, sizeof(ShadowData));
-			context.SetDynamicDescriptors(3, 0, resources.MaterialTextures.data(), resources.MaterialTextures.size());
+			context.SetDynamicDescriptors(3, 0, resources.MaterialTextures.data(), (int)resources.MaterialTextures.size());
 			context.SetDynamicDescriptor(4, 2, resources.pLightBuffer->GetSRV());
 			context.SetDynamicDescriptor(4, 3, resources.pAO->GetSRV());
 			context.SetDynamicDescriptor(4, 4, resources.pResolvedDepth->GetSRV());
@@ -247,34 +247,36 @@ void TiledForward::SetupResources(Graphics* pGraphics)
 
 void TiledForward::SetupPipelines(Graphics* pGraphics)
 {
-	Shader computeShader("LightCulling.hlsl", ShaderType::Compute, "CSMain");
+	{
+		Shader computeShader("LightCulling.hlsl", ShaderType::Compute, "CSMain");
 
-	m_pComputeLightCullRS = std::make_unique<RootSignature>();
-	m_pComputeLightCullRS->FinalizeFromShader("Tiled Light Culling RS", computeShader, pGraphics->GetDevice());
+		m_pComputeLightCullRS = std::make_unique<RootSignature>();
+		m_pComputeLightCullRS->FinalizeFromShader("Tiled Light Culling RS", computeShader, pGraphics->GetDevice());
 
-	m_pComputeLightCullPSO = std::make_unique<PipelineState>();
-	m_pComputeLightCullPSO->SetComputeShader(computeShader);
-	m_pComputeLightCullPSO->SetRootSignature(m_pComputeLightCullRS->GetRootSignature());
-	m_pComputeLightCullPSO->Finalize("Tiled Light Culling PSO", pGraphics->GetDevice());
+		m_pComputeLightCullPSO = std::make_unique<PipelineState>();
+		m_pComputeLightCullPSO->SetComputeShader(computeShader);
+		m_pComputeLightCullPSO->SetRootSignature(m_pComputeLightCullRS->GetRootSignature());
+		m_pComputeLightCullPSO->Finalize("Tiled Light Culling PSO", pGraphics->GetDevice());
 
-	m_pLightIndexCounter = std::make_unique<Buffer>(pGraphics, "Light Index Counter");
-	m_pLightIndexCounter->Create(BufferDesc::CreateStructured(2, sizeof(uint32)));
-	m_pLightIndexCounter->CreateUAV(&m_pLightIndexCounterRawUAV, BufferUAVDesc::CreateRaw());
-	m_pLightIndexListBufferOpaque = std::make_unique<Buffer>(pGraphics, "Light List Opaque");
-	m_pLightIndexListBufferOpaque->Create(BufferDesc::CreateStructured(MAX_LIGHT_DENSITY, sizeof(uint32)));
-	m_pLightIndexListBufferTransparant = std::make_unique<Buffer>(pGraphics, "Light List Transparant");
-	m_pLightIndexListBufferTransparant->Create(BufferDesc::CreateStructured(MAX_LIGHT_DENSITY, sizeof(uint32)));
-
-	CD3DX12_INPUT_ELEMENT_DESC inputElements[] = {
-		CD3DX12_INPUT_ELEMENT_DESC("POSITION", DXGI_FORMAT_R32G32B32_FLOAT),
-		CD3DX12_INPUT_ELEMENT_DESC("TEXCOORD", DXGI_FORMAT_R32G32_FLOAT),
-		CD3DX12_INPUT_ELEMENT_DESC("NORMAL", DXGI_FORMAT_R32G32B32_FLOAT),
-		CD3DX12_INPUT_ELEMENT_DESC("TANGENT", DXGI_FORMAT_R32G32B32_FLOAT),
-		CD3DX12_INPUT_ELEMENT_DESC("TEXCOORD", DXGI_FORMAT_R32G32B32_FLOAT, 1),
-	};
+		m_pLightIndexCounter = std::make_unique<Buffer>(pGraphics, "Light Index Counter");
+		m_pLightIndexCounter->Create(BufferDesc::CreateStructured(2, sizeof(uint32)));
+		m_pLightIndexCounter->CreateUAV(&m_pLightIndexCounterRawUAV, BufferUAVDesc::CreateRaw());
+		m_pLightIndexListBufferOpaque = std::make_unique<Buffer>(pGraphics, "Light List Opaque");
+		m_pLightIndexListBufferOpaque->Create(BufferDesc::CreateStructured(MAX_LIGHT_DENSITY, sizeof(uint32)));
+		m_pLightIndexListBufferTransparant = std::make_unique<Buffer>(pGraphics, "Light List Transparant");
+		m_pLightIndexListBufferTransparant->Create(BufferDesc::CreateStructured(MAX_LIGHT_DENSITY, sizeof(uint32)));
+	}
 
 	//PBR Diffuse passes
 	{
+		CD3DX12_INPUT_ELEMENT_DESC inputElements[] = {
+			CD3DX12_INPUT_ELEMENT_DESC("POSITION", DXGI_FORMAT_R32G32B32_FLOAT),
+			CD3DX12_INPUT_ELEMENT_DESC("TEXCOORD", DXGI_FORMAT_R32G32_FLOAT),
+			CD3DX12_INPUT_ELEMENT_DESC("NORMAL", DXGI_FORMAT_R32G32B32_FLOAT),
+			CD3DX12_INPUT_ELEMENT_DESC("TANGENT", DXGI_FORMAT_R32G32B32_FLOAT),
+			CD3DX12_INPUT_ELEMENT_DESC("TEXCOORD", DXGI_FORMAT_R32G32B32_FLOAT, 1),
+		};
+
 		//Shaders
 		Shader vertexShader("Diffuse.hlsl", ShaderType::Vertex, "VSMain", { "TILED_FORWARD" });
 		Shader pixelShader("Diffuse.hlsl", ShaderType::Pixel, "PSMain", {"TILED_FORWARD" });

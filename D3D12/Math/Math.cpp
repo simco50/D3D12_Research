@@ -118,7 +118,7 @@ namespace Math
 			}
 			else
 			{
-				*pCurrent++ = '0' + mod;
+				*pCurrent++ = '0' + (char)mod;
 			}
 			number /= base;
 			++count;

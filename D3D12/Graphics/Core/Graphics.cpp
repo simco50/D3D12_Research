@@ -222,9 +222,9 @@ void Graphics::Update()
 	}
 
 	int shadowIndex = 0;
-	for (size_t i = 0; i < m_Lights.size(); ++i)
+	for (size_t lightIndex = 0; lightIndex < m_Lights.size(); ++lightIndex)
 	{
-		Light& light = m_Lights[i];
+		Light& light = m_Lights[lightIndex];
 		if (!light.CastShadows)
 		{
 			continue;
@@ -383,6 +383,18 @@ void Graphics::Update()
 		}
 	}
 
+	m_SceneData.pDepthBuffer = GetDepthStencil();
+	m_SceneData.pResolvedDepth = GetResolvedDepthStencil();
+	m_SceneData.pRenderTarget = GetCurrentRenderTarget();
+	m_SceneData.pLightBuffer = m_pLightBuffer.get();
+	m_SceneData.pCamera = m_pCamera.get();
+	m_SceneData.pShadowMaps = &m_ShadowMaps;
+	m_SceneData.pShadowData = &shadowData;
+	m_SceneData.pAO = m_pAmbientOcclusion.get();
+	m_SceneData.FrameIndex = m_Frame;
+	m_SceneData.pPreviousColor = m_pPreviousColor.get();
+	m_SceneData.pTLAS = m_pTLAS.get();
+
 	////////////////////////////////
 	// LET THE RENDERING BEGIN!
 	////////////////////////////////
@@ -412,7 +424,8 @@ void Graphics::Update()
 		screenshot.Bind([=](CommandContext& renderContext, const RGPassResources& resources)
 			{
 				D3D12_PLACED_SUBRESOURCE_FOOTPRINT textureFootprint = {};
-				m_pDevice->GetCopyableFootprints(&m_pTonemapTarget->GetResource()->GetDesc(), 0, 1, 0, &textureFootprint, nullptr, nullptr, nullptr);
+				D3D12_RESOURCE_DESC resourceDesc = m_pTonemapTarget->GetResource()->GetDesc();
+				m_pDevice->GetCopyableFootprints(&resourceDesc, 0, 1, 0, &textureFootprint, nullptr, nullptr, nullptr);
 				m_pScreenshotBuffer = std::make_unique<Buffer>(this, "Screenshot Texture");
 				m_pScreenshotBuffer->Create(BufferDesc::CreateReadback(textureFootprint.Footprint.RowPitch * textureFootprint.Footprint.Height));
 				renderContext.InsertResourceBarrier(m_pTonemapTarget.get(), D3D12_RESOURCE_STATE_COPY_SOURCE);
@@ -627,14 +640,7 @@ void Graphics::Update()
 
 					viewData.ViewProjection = shadowData.LightViewProjections[i];
 					context.SetDynamicConstantBufferView(1, &viewData, sizeof(ViewData));
-
-					struct PerObjectData
-					{
-						Matrix World;
-						MaterialData Material;
-					} ObjectData{};
-
-					context.SetDynamicDescriptors(2, 0, m_SceneData.MaterialTextures.data(), m_SceneData.MaterialTextures.size());
+					context.SetDynamicDescriptors(2, 0, m_SceneData.MaterialTextures.data(), (int)m_SceneData.MaterialTextures.size());
 
 					auto DrawBatches = [](CommandContext& context, const std::vector<Batch>& batches)
 					{
@@ -669,17 +675,6 @@ void Graphics::Update()
 				}
 			});
 	}
-	m_SceneData.pDepthBuffer = GetDepthStencil();
-	m_SceneData.pResolvedDepth = GetResolvedDepthStencil();
-	m_SceneData.pRenderTarget = GetCurrentRenderTarget();
-	m_SceneData.pLightBuffer = m_pLightBuffer.get();
-	m_SceneData.pCamera = m_pCamera.get();
-	m_SceneData.pShadowMaps = &m_ShadowMaps;
-	m_SceneData.pShadowData = &shadowData;
-	m_SceneData.pAO = m_pAmbientOcclusion.get();
-	m_SceneData.FrameIndex = m_Frame;
-	m_SceneData.pPreviousColor = m_pPreviousColor.get();
-	m_SceneData.pTLAS = m_pTLAS.get();
 
 	if (m_RenderPath == RenderPath::Tiled)
 	{
@@ -1308,11 +1303,11 @@ void Graphics::InitializeAssets(CommandContext& context)
 		b.WorldMatrix = Matrix::Identity;
 		b.Bounds = m_pMesh->GetMesh(i)->GetBounds();
 		b.pMesh = m_pMesh->GetMesh(i);
-		b.Material.Diffuse = m_SceneData.MaterialTextures.size();
+		b.Material.Diffuse = (int)m_SceneData.MaterialTextures.size();
 		m_SceneData.MaterialTextures.push_back(material.pDiffuseTexture->GetSRV());
-		b.Material.Normal = m_SceneData.MaterialTextures.size();
+		b.Material.Normal = (int)m_SceneData.MaterialTextures.size();
 		m_SceneData.MaterialTextures.push_back(material.pNormalTexture->GetSRV());
-		b.Material.Roughness = m_SceneData.MaterialTextures.size();
+		b.Material.Roughness = (int)m_SceneData.MaterialTextures.size();
 		m_SceneData.MaterialTextures.push_back(material.pSpecularTexture->GetSRV());
 		if (material.IsTransparent)
 		{

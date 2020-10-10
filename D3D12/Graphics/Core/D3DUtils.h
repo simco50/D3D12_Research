@@ -388,7 +388,6 @@ namespace D3D
 		default:
 			return format;
 		}
-		return format;
 	}
 
 	inline bool HasStencil(DXGI_FORMAT format)

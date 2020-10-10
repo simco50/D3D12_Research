@@ -292,7 +292,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 
 			context.SetDynamicConstantBufferView(1, &frameData, sizeof(PerFrameData));
 			context.SetDynamicConstantBufferView(2, resources.pShadowData, sizeof(ShadowData));
-			context.SetDynamicDescriptors(3, 0, resources.MaterialTextures.data(), resources.MaterialTextures.size());
+			context.SetDynamicDescriptors(3, 0, resources.MaterialTextures.data(), (int)resources.MaterialTextures.size());
 			context.SetDynamicDescriptor(4, 0, m_pLightGrid->GetSRV());
 			context.SetDynamicDescriptor(4, 1, m_pLightIndexGrid->GetSRV());
 			context.SetDynamicDescriptor(4, 2, resources.pLightBuffer->GetSRV());

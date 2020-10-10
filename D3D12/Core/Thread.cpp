@@ -22,6 +22,7 @@ bool Thread::RunThread(ThreadFunction function, void* pArgs)
 	if (m_pHandle == nullptr)
 	{
 		auto error = GetLastError();
+		E_LOG(Error, "%d", error);
 		return false;
 	}
 	return true;
@@ -37,6 +38,7 @@ void Thread::StopThread()
 	if (CloseHandle((HANDLE)m_pHandle) == 0)
 	{
 		auto error = GetLastError();
+		E_LOG(Error, "%d", error);
 	}
 	m_pHandle = nullptr;
 }
@@ -48,6 +50,7 @@ bool Thread::SetPriority(const int priority)
 		if (SetThreadPriority((HANDLE)m_pHandle, priority) == 0)
 		{
 			auto error = GetLastError();
+			E_LOG(Error, "%d", error);
 			return false;
 		}
 		return true;

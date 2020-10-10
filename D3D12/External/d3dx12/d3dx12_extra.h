@@ -344,7 +344,8 @@ public:
 			SubobjectType* pType = (SubobjectType*)(m_pSubobjectData + m_Size);
 			pType->ObjType = ObjectType;
 			m_pSubobjectLocations[ObjectType] = m_Size;
-			m_Size += Math::AlignUp<uint32>(sizeof(SubobjectType), sizeof(void*));
+			const auto AlignUp = [](uint32 value, uint32 alignment) {return (value + (alignment - 1)) & ~(alignment - 1); };
+			m_Size += AlignUp(sizeof(SubobjectType), sizeof(void*));
 			m_Subobjects++;
 		}
 		int offset = m_pSubobjectLocations[ObjectType];

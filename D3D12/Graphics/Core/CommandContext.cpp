@@ -158,7 +158,8 @@ void CommandContext::CopyTexture(GraphicsResource* pSource, GraphicsResource* pT
 void CommandContext::CopyTexture(Texture* pSource, Buffer* pDestination, const D3D12_BOX& sourceRegion, int sourceSubregion /*= 0*/, int destinationOffset /*= 0*/)
 {
 	D3D12_PLACED_SUBRESOURCE_FOOTPRINT textureFootprint = {};
-	m_pGraphics->GetDevice()->GetCopyableFootprints(&pSource->GetResource()->GetDesc(), 0, 1, 0, &textureFootprint, nullptr, nullptr, nullptr);
+	D3D12_RESOURCE_DESC resourceDesc = pSource->GetResource()->GetDesc();
+	m_pGraphics->GetDevice()->GetCopyableFootprints(&resourceDesc, 0, 1, 0, &textureFootprint, nullptr, nullptr, nullptr);
 
 	CD3DX12_TEXTURE_COPY_LOCATION srcLocation(pSource->GetResource(), sourceSubregion);
 	CD3DX12_TEXTURE_COPY_LOCATION dstLocation(pDestination->GetResource(), textureFootprint);
