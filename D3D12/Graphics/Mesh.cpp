@@ -94,6 +94,13 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 
 	std::string dirPath = Paths::GetDirectoryPath(pFilePath);
 
+	m_Textures.push_back(std::make_unique<Texture>(pGraphics, "Dummy Texture"));
+	m_Textures.back()->Create(pContext, "Resources/Textures/dummy.dds", true);
+	m_Textures.push_back(std::make_unique<Texture>(pGraphics, "Dummy Texture"));
+	m_Textures.back()->Create(pContext, "Resources/Textures/dummy_ddn.dds", true);
+	m_Textures.push_back(std::make_unique<Texture>(pGraphics, "Dummy Texture"));
+	m_Textures.back()->Create(pContext, "Resources/Textures/dummy_specular.dds", true);
+
 	auto loadTexture = [this, pGraphics, pContext](const char* basePath, aiMaterial* pMaterial, aiTextureType type, bool srgb)
 	{
 		aiString path;
@@ -104,16 +111,9 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 		{
 			switch (type)
 			{
-			case aiTextureType_NORMALS:
-				pathStr = "dummy_ddn.dds";
-				break;
-			case aiTextureType_SPECULAR:
-				pathStr = "dummy_specular.dds";
-				break;
-			case aiTextureType_DIFFUSE:
-			default:
-				pathStr = "dummy.dds";
-				break;
+			case aiTextureType_NORMALS:		return m_Textures[1].get();
+			case aiTextureType_SPECULAR:	return m_Textures[2].get();
+			default:						return m_Textures[0].get();
 			}
 		}
 		StringHash pathHash = StringHash(pathStr.c_str());
@@ -147,7 +147,6 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 		aiString p;
 		m.IsTransparent = pScene->mMaterials[i]->GetTexture(aiTextureType_OPACITY, 0, &p) == aiReturn_SUCCESS;
 	}
-
 	return true;
 }
 
