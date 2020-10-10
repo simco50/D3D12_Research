@@ -127,17 +127,20 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 				int padding0;
 				IntVector2 ClusterSize;
 				Vector2 LightGridParams;
+				Matrix View;
+				Matrix ViewProjection;
 			} perFrameParameters{};
 
 			struct PerObjectParameters
 			{
-				Matrix WorldView;
-				Matrix WorldViewProjection;
+				Matrix World;
 			} perObjectParameters{};
 
 			perFrameParameters.LightGridParams = lightGridParams;
 			perFrameParameters.ClusterDimensions = IntVector3(m_ClusterCountX, m_ClusterCountY, cClusterCountZ);
 			perFrameParameters.ClusterSize = IntVector2(cClusterSize, cClusterSize);
+			perFrameParameters.View = resources.pCamera->GetView();
+			perFrameParameters.ViewProjection = resources.pCamera->GetViewProjection();
 
 			context.SetDynamicConstantBufferView(1, &perFrameParameters, sizeof(PerFrameParameters));
 			context.SetDynamicDescriptor(2, 0, m_pUniqueClusters->GetUAV());
@@ -146,9 +149,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 				GPU_PROFILE_SCOPE("Opaque", &context);
 				for (const Batch& b : *resources.pOpaqueBatches)
 				{
-					perObjectParameters.WorldView = b.WorldMatrix * resources.pCamera->GetView();
-					perObjectParameters.WorldViewProjection = b.WorldMatrix * resources.pCamera->GetViewProjection();
-
+					perObjectParameters.World = b.WorldMatrix;
 					context.SetDynamicConstantBufferView(0, &perObjectParameters, sizeof(PerObjectParameters));
 					b.pMesh->Draw(&context);
 				}
@@ -159,11 +160,8 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 				context.SetPipelineState(m_pMarkUniqueClustersTransparantPSO.get());
 				for (const Batch& b : *resources.pTransparantBatches)
 				{
-					perObjectParameters.WorldView = b.WorldMatrix * resources.pCamera->GetView();
-					perObjectParameters.WorldViewProjection = b.WorldMatrix * resources.pCamera->GetViewProjection();
-
+					perObjectParameters.World = b.WorldMatrix;
 					context.SetDynamicConstantBufferView(0, &perObjectParameters, sizeof(PerObjectParameters));
-
 					context.SetDynamicDescriptor(3, 0, b.pMaterial->pDiffuseTexture->GetSRV());
 					b.pMesh->Draw(&context);
 				}
