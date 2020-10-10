@@ -101,11 +101,6 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& resources)
 				IntVector2 padd;
 			} frameData;
 
-			struct PerObjectData
-			{
-				Matrix World;
-			} ObjectData{};
-
 			//Camera constants
 			frameData.View = resources.pCamera->GetView();
 			frameData.Projection = resources.pCamera->GetProjection();
@@ -134,58 +129,49 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& resources)
 
 			context.SetDynamicConstantBufferView(1, &frameData, sizeof(PerFrameData));
 			context.SetDynamicConstantBufferView(2, resources.pShadowData, sizeof(ShadowData));
-
+			context.SetDynamicDescriptors(3, 0, resources.MaterialTextures.data(), resources.MaterialTextures.size());
+			context.SetDynamicDescriptor(4, 2, resources.pLightBuffer->GetSRV());
+			context.SetDynamicDescriptor(4, 3, resources.pAO->GetSRV());
+			context.SetDynamicDescriptor(4, 4, resources.pResolvedDepth->GetSRV());
+			context.SetDynamicDescriptor(4, 5, resources.pPreviousColor->GetSRV());
 			int idx = 0;
 			for (auto& pShadowMap : *resources.pShadowMaps)
 			{
 				context.SetDynamicDescriptor(5, idx++, pShadowMap->GetSRV());
 			}
+			context.GetCommandList()->SetGraphicsRootShaderResourceView(6, resources.pTLAS->GetGpuHandle());
 
-			context.SetDynamicDescriptor(4, 2, resources.pLightBuffer->GetSRV());
-			context.SetDynamicDescriptor(4, 3, resources.pAO->GetSRV());
-			context.SetDynamicDescriptor(4, 4, resources.pResolvedDepth->GetSRV());
-			context.SetDynamicDescriptor(4, 5, resources.pPreviousColor->GetSRV());
-
-			auto setMaterialDescriptors = [](CommandContext& context, const Batch& b)
+			auto DrawBatches = [](CommandContext& context, const std::vector<Batch>& batches)
 			{
-				D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
-						 b.pMaterial->pDiffuseTexture->GetSRV(),
-						 b.pMaterial->pNormalTexture->GetSRV(),
-						 b.pMaterial->pSpecularTexture->GetSRV(),
-				};
-				context.SetDynamicDescriptors(3, 0, srvs, ARRAYSIZE(srvs));
+				struct PerObjectData
+				{
+					Matrix World;
+					MaterialData Material;
+				} objectData{};
+
+				for (const Batch& b : batches)
+				{
+					objectData.World = b.WorldMatrix;
+					objectData.Material = b.Material;
+					context.SetDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
+					b.pMesh->Draw(&context);
+				}
 			};
 
 			{
 				GPU_PROFILE_SCOPE("Opaque", &context);
 				context.SetPipelineState(m_pDiffusePSO.get());
-
 				context.SetDynamicDescriptor(4, 0, m_pLightGridOpaque->GetSRV());
 				context.SetDynamicDescriptor(4, 1, m_pLightIndexListBufferOpaque->GetSRV()->GetDescriptor());
-
-				for (const Batch& b : *resources.pOpaqueBatches)
-				{
-					ObjectData.World = b.WorldMatrix;
-					context.SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
-					setMaterialDescriptors(context, b);
-					b.pMesh->Draw(&context);
-				}
+				DrawBatches(context, resources.OpaqueBatches);
 			}
 
 			{
 				GPU_PROFILE_SCOPE("Transparant", &context);
 				context.SetPipelineState(m_pDiffuseAlphaPSO.get());
-
 				context.SetDynamicDescriptor(4, 0, m_pLightGridTransparant->GetSRV());
 				context.SetDynamicDescriptor(4, 1, m_pLightIndexListBufferTransparant->GetSRV()->GetDescriptor());
-
-				for (const Batch& b : *resources.pTransparantBatches)
-				{
-					ObjectData.World = b.WorldMatrix;
-					setMaterialDescriptors(context, b);
-					context.SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
-					b.pMesh->Draw(&context);
-				}
+				DrawBatches(context, resources.TransparantBatches);
 			}
 			context.EndRenderPass();
 		});

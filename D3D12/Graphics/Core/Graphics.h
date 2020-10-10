@@ -32,10 +32,18 @@ using WindowHandle = Windows::UI::Core::CoreWindow^;
 using WindowHandlePtr = Platform::Agile<Windows::UI::Core::CoreWindow>;
 #endif
 
+struct MaterialData
+{
+	int Diffuse;
+	int Normal;
+	int Roughness;
+	int Metallic;
+};
+
 struct Batch
 {
 	const SubMesh* pMesh = nullptr;
-	const Material* pMaterial = nullptr;
+	MaterialData Material;
 	Matrix WorldMatrix;
 	BoundingBox Bounds;
 };
@@ -57,13 +65,14 @@ struct SceneData
 	Texture* pRenderTarget = nullptr;
 	Texture* pPreviousColor = nullptr;
 	Texture* pAO = nullptr;
-	const std::vector<Batch>* pOpaqueBatches = nullptr;
-	const std::vector<Batch>* pTransparantBatches = nullptr;
+	std::vector<Batch> OpaqueBatches;
+	std::vector<Batch> TransparantBatches;
+	std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> MaterialTextures;
 	Buffer* pLightBuffer = nullptr;
 	Camera* pCamera = nullptr;
 	ShadowData* pShadowData = nullptr;
-	int FrameIndex = 0;
 	Buffer* pTLAS = nullptr;
+	int FrameIndex = 0;
 };
 
 enum class RenderPath
@@ -222,9 +231,6 @@ private:
 	std::unique_ptr<Buffer> m_pBLASScratch;
 	std::unique_ptr<Buffer> m_pTLASScratch;
 
-	std::vector<Batch> m_OpaqueBatches;
-	std::vector<Batch> m_TransparantBatches;
-
 	//Shadow mapping
 	std::unique_ptr<RootSignature> m_pShadowsRS;
 	std::unique_ptr<PipelineState> m_pShadowsOpaquePSO;
@@ -278,6 +284,6 @@ private:
 	std::unique_ptr<Buffer> m_pLightBuffer;
 
 	Texture* m_pVisualizeTexture = nullptr;
-
+	SceneData m_SceneData;
 	bool m_CapturePix = false;
 };

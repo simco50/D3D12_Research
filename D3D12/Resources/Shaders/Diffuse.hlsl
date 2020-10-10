@@ -4,10 +4,10 @@
 #define BLOCK_SIZE 16
 
 #define RootSig "RootFlags(ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT), " \
-				"CBV(b0, visibility=SHADER_VISIBILITY_VERTEX), " \
+				"CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \
 				"CBV(b1, visibility=SHADER_VISIBILITY_ALL), " \
 				"CBV(b2, visibility=SHADER_VISIBILITY_PIXEL), " \
-				"DescriptorTable(SRV(t0, numDescriptors = 3), visibility=SHADER_VISIBILITY_PIXEL), " \
+				"DescriptorTable(SRV(t1000, numDescriptors = 128, space = 2), visibility=SHADER_VISIBILITY_PIXEL), " \
 				"DescriptorTable(SRV(t3, numDescriptors = 7), visibility=SHADER_VISIBILITY_PIXEL), " \
 				"DescriptorTable(SRV(t10, numDescriptors = 32, space = 1), visibility=SHADER_VISIBILITY_PIXEL), " \
 				"SRV(t500, visibility=SHADER_VISIBILITY_PIXEL), " \
@@ -18,6 +18,10 @@
 struct PerObjectData
 {
 	float4x4 World;
+    int Diffuse;
+    int Normal;
+    int Roughness;
+    int Metallic;
 };
 
 struct PerViewData
@@ -248,16 +252,17 @@ float3 ScreenSpaceReflections(float4 position, float3 positionVS, float3 N, floa
 
 float4 PSMain(PSInput input) : SV_TARGET
 {
-	float4 baseColor = tDiffuseTexture.Sample(sDiffuseSampler, input.texCoord);
+	float4 baseColor = tMaterialTextures[cObjectData.Diffuse].Sample(sDiffuseSampler, input.texCoord);
+	float3 sampledNormal = tMaterialTextures[cObjectData.Normal].Sample(sDiffuseSampler, input.texCoord).xyz;
+	float metalness = 0;//tMaterialTextures[cObjectData.Metallic].Sample(sDiffuseSampler, input.texCoord).r;
 	float3 specular = 0.5f;
-	float metalness = 0;
-	float r = 0.5f;
+	float r = 0.5;
 
 	float3 diffuseColor = ComputeDiffuseColor(baseColor.rgb, metalness);
 	float3 specularColor = ComputeF0(specular.r, baseColor.rgb, metalness);
 
 	float3x3 TBN = float3x3(normalize(input.tangent), normalize(input.bitangent), normalize(input.normal));
-	float3 N = TangentSpaceNormalMapping(tNormalTexture, sDiffuseSampler, TBN, input.texCoord, true);
+	float3 N = TangentSpaceNormalMapping(sampledNormal, TBN, input.texCoord, true);
 	float3 V = normalize(cViewData.ViewPosition.xyz - input.positionWS);	
 
 	float3 ssr = 0;

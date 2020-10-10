@@ -152,13 +152,13 @@ void Graphics::Update()
 		g_EnableUI = !g_EnableUI;
 	}
 
-	std::sort(m_TransparantBatches.begin(), m_TransparantBatches.end(), [this](const Batch& a, const Batch& b) {
+	std::sort(m_SceneData.TransparantBatches.begin(), m_SceneData.TransparantBatches.end(), [this](const Batch& a, const Batch& b) {
 		float aDist = Vector3::DistanceSquared(a.pMesh->GetBounds().Center, m_pCamera->GetPosition());
 		float bDist = Vector3::DistanceSquared(b.pMesh->GetBounds().Center, m_pCamera->GetPosition());
 		return aDist > bDist;
 		});
 
-	std::sort(m_OpaqueBatches.begin(), m_OpaqueBatches.end(), [this](const Batch& a, const Batch& b) {
+	std::sort(m_SceneData.OpaqueBatches.begin(), m_SceneData.OpaqueBatches.end(), [this](const Batch& a, const Batch& b) {
 		float aDist = Vector3::DistanceSquared(a.pMesh->GetBounds().Center, m_pCamera->GetPosition());
 		float bDist = Vector3::DistanceSquared(b.pMesh->GetBounds().Center, m_pCamera->GetPosition());
 		return aDist < bDist;
@@ -500,7 +500,7 @@ void Graphics::Update()
 			viewData.ViewProjection = m_pCamera->GetViewProjection();
 			renderContext.SetDynamicConstantBufferView(1, &viewData, sizeof(ViewData));
 
-			for (const Batch& b : m_OpaqueBatches)
+			for (const Batch& b : m_SceneData.OpaqueBatches)
 			{
 				struct ObjectData
 				{
@@ -631,60 +631,63 @@ void Graphics::Update()
 					struct PerObjectData
 					{
 						Matrix World;
+						MaterialData Material;
 					} ObjectData{};
+
+					context.SetDynamicDescriptors(2, 0, m_SceneData.MaterialTextures.data(), m_SceneData.MaterialTextures.size());
+
+					auto DrawBatches = [](CommandContext& context, const std::vector<Batch>& batches)
+					{
+						struct PerObjectData
+						{
+							Matrix World;
+							MaterialData Material;
+						} objectData{};
+
+						for (const Batch& b : batches)
+						{
+							objectData.World = b.WorldMatrix;
+							objectData.Material = b.Material;
+							context.SetDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
+							b.pMesh->Draw(&context);
+						}
+					};
 
 					//Opaque
 					{
 						GPU_PROFILE_SCOPE("Opaque", &context);
 						context.SetPipelineState(m_pShadowsOpaquePSO.get());
-
-						for (const Batch& b : m_OpaqueBatches)
-						{
-							ObjectData.World = b.WorldMatrix;
-							context.SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
-							b.pMesh->Draw(&context);
-						}
+						DrawBatches(context, m_SceneData.OpaqueBatches);
 					}
 					//Transparant
 					{
 						GPU_PROFILE_SCOPE("Transparant", &context);
 						context.SetPipelineState(m_pShadowsAlphaPSO.get());
-
-						for (const Batch& b : m_TransparantBatches)
-						{
-							ObjectData.World = b.WorldMatrix;
-							context.SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
-							context.SetDynamicDescriptor(2, 0, b.pMaterial->pDiffuseTexture->GetSRV());
-							b.pMesh->Draw(&context);
-						}
+						DrawBatches(context, m_SceneData.TransparantBatches);
 					}
 					context.EndRenderPass();
 				}
 			});
 	}
-
-	SceneData sceneData;
-	sceneData.pDepthBuffer = GetDepthStencil();
-	sceneData.pResolvedDepth = GetResolvedDepthStencil();
-	sceneData.pOpaqueBatches = &m_OpaqueBatches;
-	sceneData.pTransparantBatches = &m_TransparantBatches;
-	sceneData.pRenderTarget = GetCurrentRenderTarget();
-	sceneData.pLightBuffer = m_pLightBuffer.get();
-	sceneData.pCamera = m_pCamera.get();
-	sceneData.pShadowMaps = &m_ShadowMaps;
-	sceneData.pShadowData = &shadowData;
-	sceneData.pAO = m_pAmbientOcclusion.get();
-	sceneData.FrameIndex = m_Frame;
-	sceneData.pPreviousColor = m_pPreviousColor.get();
-	sceneData.pTLAS = m_pTLAS.get();
+	m_SceneData.pDepthBuffer = GetDepthStencil();
+	m_SceneData.pResolvedDepth = GetResolvedDepthStencil();
+	m_SceneData.pRenderTarget = GetCurrentRenderTarget();
+	m_SceneData.pLightBuffer = m_pLightBuffer.get();
+	m_SceneData.pCamera = m_pCamera.get();
+	m_SceneData.pShadowMaps = &m_ShadowMaps;
+	m_SceneData.pShadowData = &shadowData;
+	m_SceneData.pAO = m_pAmbientOcclusion.get();
+	m_SceneData.FrameIndex = m_Frame;
+	m_SceneData.pPreviousColor = m_pPreviousColor.get();
+	m_SceneData.pTLAS = m_pTLAS.get();
 
 	if (m_RenderPath == RenderPath::Tiled)
 	{
-		m_pTiledForward->Execute(graph, sceneData);
+		m_pTiledForward->Execute(graph, m_SceneData);
 	}
 	else if (m_RenderPath == RenderPath::Clustered)
 	{
-		m_pClusteredForward->Execute(graph, sceneData);
+		m_pClusteredForward->Execute(graph, m_SceneData);
 	}
 
 	m_pParticles->Render(graph, GetCurrentRenderTarget(), GetDepthStencil(), *m_pCamera);
@@ -1300,18 +1303,24 @@ void Graphics::InitializeAssets(CommandContext& context)
 
 	for (int i = 0; i < m_pMesh->GetMeshCount(); ++i)
 	{
+		const Material& material = m_pMesh->GetMaterial(m_pMesh->GetMesh(i)->GetMaterialId());
 		Batch b;
+		b.WorldMatrix = Matrix::Identity;
 		b.Bounds = m_pMesh->GetMesh(i)->GetBounds();
 		b.pMesh = m_pMesh->GetMesh(i);
-		b.pMaterial = &m_pMesh->GetMaterial(b.pMesh->GetMaterialId());
-		b.WorldMatrix = Matrix::Identity;
-		if (b.pMaterial->IsTransparent)
+		b.Material.Diffuse = m_SceneData.MaterialTextures.size();
+		m_SceneData.MaterialTextures.push_back(material.pDiffuseTexture->GetSRV());
+		b.Material.Normal = m_SceneData.MaterialTextures.size();
+		m_SceneData.MaterialTextures.push_back(material.pNormalTexture->GetSRV());
+		b.Material.Roughness = m_SceneData.MaterialTextures.size();
+		m_SceneData.MaterialTextures.push_back(material.pSpecularTexture->GetSRV());
+		if (material.IsTransparent)
 		{
-			m_TransparantBatches.push_back(b);
+			m_SceneData.TransparantBatches.push_back(b);
 		}
 		else
 		{
-			m_OpaqueBatches.push_back(b);
+			m_SceneData.OpaqueBatches.push_back(b);
 		}
 	}
 

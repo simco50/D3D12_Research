@@ -32,9 +32,8 @@ float RadialAttenuation(float3 L, float range)
 	return distanceAttenuation * windowing;
 }
 
-float3 TangentSpaceNormalMapping(Texture2D normalTexture, SamplerState normalSampler, float3x3 TBN, float2 tex, bool invertY)
+float3 TangentSpaceNormalMapping(float3 sampledNormal, float3x3 TBN, float2 tex, bool invertY)
 {
-	float3 sampledNormal = normalTexture.Sample(normalSampler, tex).rgb;
 	sampledNormal.xy = sampledNormal.xy * 2.0f - 1.0f;
 	if(invertY)
 	{
