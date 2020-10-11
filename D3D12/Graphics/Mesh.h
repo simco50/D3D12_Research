@@ -37,8 +37,8 @@ struct Material
 {
 	Texture* pDiffuseTexture = nullptr;
 	Texture* pNormalTexture = nullptr;
-	Texture* pSpecularTexture = nullptr;
-	Texture* pAlphaTexture = nullptr;
+	Texture* pRoughnessTexture = nullptr;
+	Texture* pMetallicTexture = nullptr;
 	bool IsTransparent;
 };
 

@@ -1306,9 +1306,12 @@ void Graphics::InitializeAssets(CommandContext& context)
 		it = textureToIndex.find(material.pNormalTexture);
 		if (it == textureToIndex.end())
 			textureToIndex[material.pNormalTexture] = textureIndex++;
-		it = textureToIndex.find(material.pSpecularTexture);
+		it = textureToIndex.find(material.pRoughnessTexture);
 		if (it == textureToIndex.end())
-			textureToIndex[material.pSpecularTexture] = textureIndex++;
+			textureToIndex[material.pRoughnessTexture] = textureIndex++;
+		it = textureToIndex.find(material.pMetallicTexture);
+		if (it == textureToIndex.end())
+			textureToIndex[material.pMetallicTexture] = textureIndex++;
 	}
 
 	m_SceneData.MaterialTextures.resize(textureToIndex.size());
@@ -1321,13 +1324,13 @@ void Graphics::InitializeAssets(CommandContext& context)
 	{
 		const Material& material = m_pMesh->GetMaterial(m_pMesh->GetMesh(i)->GetMaterialId());
 		Batch b;
-		b.WorldMatrix = Matrix::Identity;
 		b.Bounds = m_pMesh->GetMesh(i)->GetBounds();
 		b.pMesh = m_pMesh->GetMesh(i);
 		
 		b.Material.Diffuse = textureToIndex[material.pDiffuseTexture];
 		b.Material.Normal = textureToIndex[material.pNormalTexture];
-		b.Material.Roughness = textureToIndex[material.pSpecularTexture];
+		b.Material.Roughness = textureToIndex[material.pRoughnessTexture];
+		b.Material.Metallic = textureToIndex[material.pMetallicTexture];
 
 		if (material.IsTransparent)
 		{

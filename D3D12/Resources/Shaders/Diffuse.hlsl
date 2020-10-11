@@ -173,7 +173,7 @@ float3 ScreenSpaceReflectionsRT(float3 positionWS, float3 positionVS, float3 N, 
 float3 ScreenSpaceReflections(float4 position, float3 positionVS, float3 N, float3 V, float R)
 {
 	float3 ssr = 0;
-	const float roughnessThreshold = 0.7f;
+	const float roughnessThreshold = 0.6f;
 	bool ssrEnabled = R < roughnessThreshold;
 	if(ssrEnabled)
 	{
@@ -254,8 +254,8 @@ float4 PSMain(PSInput input) : SV_TARGET
 {
 	float4 baseColor = tMaterialTextures[cObjectData.Diffuse].Sample(sDiffuseSampler, input.texCoord);
 	float3 sampledNormal = tMaterialTextures[cObjectData.Normal].Sample(sDiffuseSampler, input.texCoord).xyz;
-	float metalness = 0; //tMaterialTextures[cObjectData.Metallic].Sample(sDiffuseSampler, input.texCoord).r;
-	float r = 0.5; //tMaterialTextures[cObjectData.Roughness].Sample(sDiffuseSampler, input.texCoord).r;
+	float metalness = tMaterialTextures[cObjectData.Metallic].Sample(sDiffuseSampler, input.texCoord).r;
+	float r = 0.5;// tMaterialTextures[cObjectData.Roughness].Sample(sDiffuseSampler, input.texCoord).r;
 	float3 specular = 0.5f;
 
 	float3 diffuseColor = ComputeDiffuseColor(baseColor.rgb, metalness);
@@ -283,7 +283,7 @@ float4 PSMain(PSInput input) : SV_TARGET
 	float ao = tAO.SampleLevel(sDiffuseSampler, (float2)input.position.xy * cViewData.InvScreenDimensions, 0).r;
 	float3 color = lighting.Diffuse + lighting.Specular + ssr * ao; 
 	color += ApplyAmbientLight(diffuseColor, ao, tLights[0].GetColor().rgb * 0.1f);
-	color += ApplyVolumetricLighting(cViewData.ViewPosition.xyz, input.positionWS.xyz, input.position.xyz, cViewData.View, tLights[0], 10);
+	color += 0.1*ApplyVolumetricLighting(cViewData.ViewPosition.xyz, input.positionWS.xyz, input.position.xyz, cViewData.View, tLights[0], 10);
 	
 	return float4(color, baseColor.a);
 }

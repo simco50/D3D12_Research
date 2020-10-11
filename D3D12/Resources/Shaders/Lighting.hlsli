@@ -35,6 +35,11 @@ float RadialAttenuation(float3 L, float range)
 float3 TangentSpaceNormalMapping(float3 sampledNormal, float3x3 TBN, float2 tex, bool invertY)
 {
 	sampledNormal.xy = sampledNormal.xy * 2.0f - 1.0f;
+
+//#define NORMAL_BC5
+#ifdef NORMAL_BC5
+	sampledNormal.z = sqrt(saturate(1.0f - dot(sampledNormal.xy, sampledNormal.xy)));
+#endif
 	if(invertY)
 	{
 		sampledNormal.x = -sampledNormal.x;
