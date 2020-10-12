@@ -11,8 +11,8 @@
 #include "ResourceViews.h"
 #include "RaytracingCommon.h"
 
-CommandContext::CommandContext(Graphics* pGraphics, ID3D12GraphicsCommandList* pCommandList, D3D12_COMMAND_LIST_TYPE type)
-	: GraphicsObject(pGraphics), m_pCommandList(pCommandList), m_pAllocator(nullptr), m_Type(type)
+CommandContext::CommandContext(Graphics* pGraphics, ID3D12GraphicsCommandList* pCommandList, D3D12_COMMAND_LIST_TYPE type, ID3D12CommandAllocator* pAllocator)
+	: GraphicsObject(pGraphics), m_pCommandList(pCommandList), m_Type(type), m_pAllocator(pAllocator)
 {
 	m_DynamicAllocator = std::make_unique<DynamicResourceAllocator>(pGraphics->GetAllocationManager());
 	if (m_Type != D3D12_COMMAND_LIST_TYPE_COPY)
@@ -218,10 +218,10 @@ void CommandContext::DispatchMesh(uint32 groupCountX, uint32 groupCountY /*= 1*/
 	m_pMeshShadingCommandList->DispatchMesh(groupCountX, groupCountY, groupCountZ);
 }
 
-void CommandContext::ExecuteIndirect(CommandSignature* pCommandSignature, Buffer* pIndirectArguments, bool isCompute)
+void CommandContext::ExecuteIndirect(CommandSignature* pCommandSignature, uint32 maxCount, Buffer* pIndirectArguments, Buffer* pCountBuffer, uint32 argumentsOffset /*= 0*/, uint32 countOffset /*= 0*/)
 {
-	PrepareDraw(isCompute ? DescriptorTableType::Compute : DescriptorTableType::Graphics);
-	m_pCommandList->ExecuteIndirect(pCommandSignature->GetCommandSignature(), 1, pIndirectArguments->GetResource(), 0, nullptr, 0);
+	PrepareDraw(pCommandSignature->IsCompute() ? DescriptorTableType::Compute : DescriptorTableType::Graphics);
+	m_pCommandList->ExecuteIndirect(pCommandSignature->GetCommandSignature(), maxCount, pIndirectArguments->GetResource(), argumentsOffset, pCountBuffer ? pCountBuffer->GetResource() : nullptr, countOffset);
 }
 
 void CommandContext::ClearUavUInt(GraphicsResource* pBuffer, UnorderedAccessView* pUav, uint32* values /*= nullptr*/)
@@ -801,8 +801,8 @@ void CommandSignature::AddDispatch()
 	D3D12_INDIRECT_ARGUMENT_DESC desc;
 	desc.Type = D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH;
 	m_ArgumentDesc.push_back(desc);
-	constexpr int dispatchArgumentsCount = 3;
-	m_Stride += dispatchArgumentsCount * sizeof(uint32);
+	m_Stride += sizeof(D3D12_DISPATCH_ARGUMENTS);
+	m_IsCompute = true;
 }
 
 void CommandSignature::AddDraw()
@@ -810,8 +810,8 @@ void CommandSignature::AddDraw()
 	D3D12_INDIRECT_ARGUMENT_DESC desc;
 	desc.Type = D3D12_INDIRECT_ARGUMENT_TYPE_DRAW;
 	m_ArgumentDesc.push_back(desc);
-	constexpr int drawArgumentsCount = 4;
-	m_Stride += drawArgumentsCount * sizeof(uint32);
+	m_Stride += sizeof(D3D12_DRAW_ARGUMENTS);
+	m_IsCompute = false;
 }
 
 void CommandSignature::AddDrawIndexed()
@@ -819,6 +819,61 @@ void CommandSignature::AddDrawIndexed()
 	D3D12_INDIRECT_ARGUMENT_DESC desc;
 	desc.Type = D3D12_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED;
 	m_ArgumentDesc.push_back(desc);
-	constexpr int drawArgumentsCount = 4;
-	m_Stride += drawArgumentsCount * sizeof(uint32);
+	m_Stride += sizeof(D3D12_DRAW_INDEXED_ARGUMENTS);
+	m_IsCompute = false;
+}
+
+void CommandSignature::AddConstants(uint32 numConstants, uint32 rootIndex, uint32 offset)
+{
+	D3D12_INDIRECT_ARGUMENT_DESC desc;
+	desc.Type = D3D12_INDIRECT_ARGUMENT_TYPE_CONSTANT;
+	desc.Constant.RootParameterIndex = rootIndex;
+	desc.Constant.DestOffsetIn32BitValues = offset;
+	desc.Constant.Num32BitValuesToSet = numConstants;
+	m_ArgumentDesc.push_back(desc);
+	m_Stride += numConstants * sizeof(uint32);
+}
+
+void CommandSignature::AddConstantBufferView(uint32 rootIndex)
+{
+	D3D12_INDIRECT_ARGUMENT_DESC desc;
+	desc.Type = D3D12_INDIRECT_ARGUMENT_TYPE_CONSTANT_BUFFER_VIEW;
+	desc.ConstantBufferView.RootParameterIndex = rootIndex;
+	m_ArgumentDesc.push_back(desc);
+	m_Stride += sizeof(uint64);
+}
+
+void CommandSignature::AddShaderResourceView(uint32 rootIndex)
+{
+	D3D12_INDIRECT_ARGUMENT_DESC desc;
+	desc.Type = D3D12_INDIRECT_ARGUMENT_TYPE_SHADER_RESOURCE_VIEW;
+	desc.ShaderResourceView.RootParameterIndex = rootIndex;
+	m_ArgumentDesc.push_back(desc);
+	m_Stride += 8;
+}
+
+void CommandSignature::AddUnorderedAccessView(uint32 rootIndex)
+{
+	D3D12_INDIRECT_ARGUMENT_DESC desc;
+	desc.Type = D3D12_INDIRECT_ARGUMENT_TYPE_UNORDERED_ACCESS_VIEW;
+	desc.UnorderedAccessView.RootParameterIndex = rootIndex;
+	m_ArgumentDesc.push_back(desc);
+	m_Stride += 8;
+}
+
+void CommandSignature::AddVertexBuffer(uint32 slot)
+{
+	D3D12_INDIRECT_ARGUMENT_DESC desc;
+	desc.Type = D3D12_INDIRECT_ARGUMENT_TYPE_VERTEX_BUFFER_VIEW;
+	desc.VertexBuffer.Slot = slot;
+	m_ArgumentDesc.push_back(desc);
+	m_Stride += sizeof(D3D12_VERTEX_BUFFER_VIEW);
+}
+
+void CommandSignature::AddIndexBuffer()
+{
+	D3D12_INDIRECT_ARGUMENT_DESC desc;
+	desc.Type = D3D12_INDIRECT_ARGUMENT_TYPE_INDEX_BUFFER_VIEW;
+	m_ArgumentDesc.push_back(desc);
+	m_Stride += sizeof(D3D12_INDEX_BUFFER_VIEW);
 }

@@ -484,6 +484,8 @@ void Graphics::Update()
 				*pTarget = light.GetData();
 				++pTarget;
 			}
+			renderContext.InsertResourceBarrier(m_pLightBuffer.get(), D3D12_RESOURCE_STATE_COPY_DEST);
+			renderContext.FlushResourceBarriers();
 			renderContext.CopyBuffer(allocation.pBackingResource, m_pLightBuffer.get(), (uint32)m_pLightBuffer->GetSize(), (uint32)allocation.Offset, 0);
 		});
 
@@ -1975,20 +1977,19 @@ CommandContext* Graphics::AllocateCommandContext(D3D12_COMMAND_LIST_TYPE type)
 		{
 			pContext = m_FreeCommandLists[typeIndex].front();
 			m_FreeCommandLists[typeIndex].pop();
+			pContext->Reset();
 		}
 		else
 		{
 			ComPtr<ID3D12CommandList> pCommandList;
-			ComPtr<ID3D12Device4> pDevice4;
-			VERIFY_HR(m_pDevice.As(&pDevice4));
-			pDevice4->CreateCommandList1(0, type, D3D12_COMMAND_LIST_FLAG_NONE, IID_PPV_ARGS(pCommandList.GetAddressOf()));
+			ID3D12CommandAllocator* pAllocator = m_CommandQueues[type]->RequestAllocator();
+			VERIFY_HR(m_pDevice->CreateCommandList(0, type, pAllocator, nullptr, IID_PPV_ARGS(pCommandList.GetAddressOf())));
 			D3D::SetObjectName(pCommandList.Get(), "Pooled Commandlist");
 			m_CommandLists.push_back(std::move(pCommandList));
-			m_CommandListPool[typeIndex].emplace_back(std::make_unique<CommandContext>(this, static_cast<ID3D12GraphicsCommandList*>(m_CommandLists.back().Get()), type));
+			m_CommandListPool[typeIndex].emplace_back(std::make_unique<CommandContext>(this, static_cast<ID3D12GraphicsCommandList*>(m_CommandLists.back().Get()), type, pAllocator));
 			pContext = m_CommandListPool[typeIndex].back().get();
 		}
 	}
-	pContext->Reset();
 	return pContext;
 }
 
