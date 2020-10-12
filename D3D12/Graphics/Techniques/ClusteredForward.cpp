@@ -216,6 +216,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 			context.InsertResourceBarrier(m_pAABBs.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(m_pLightGrid.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 			context.InsertResourceBarrier(m_pLightIndexGrid.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+			context.InsertResourceBarrier(resources.pLightBuffer, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
 			context.ClearUavUInt(m_pLightGrid.get(), m_pLightGridRawUAV);
 			context.ClearUavUInt(m_pLightIndexCounter.get(), m_pLightIndexCounter->GetUAV());
@@ -239,7 +240,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 			context.SetDynamicDescriptor(2, 1, m_pLightIndexGrid->GetUAV());
 			context.SetDynamicDescriptor(2, 2, m_pLightGrid->GetUAV());
 
-			context.ExecuteIndirect(m_pLightCullingCommandSignature.get(), m_pIndirectArguments.get());
+			context.ExecuteIndirect(m_pLightCullingCommandSignature.get(), 1, m_pIndirectArguments.get(), nullptr);
 		});
 
 	RGPassBuilder basePass = graph.AddPass("Base Pass");
@@ -304,16 +305,17 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 			}
 			context.GetCommandList()->SetGraphicsRootShaderResourceView(6, resources.pTLAS->GetGpuHandle());
 
+			struct PerObjectData
+			{
+				Matrix World;
+				MaterialData Material;
+			} objectData{};
+
 			auto DrawBatches = [](CommandContext& context, const std::vector<Batch>& batches)
 			{
-				struct PerObjectData
-				{
-					Matrix World;
-					MaterialData Material;
-				} objectData{};
-
 				for (const Batch& b : batches)
 				{
+					PerObjectData objectData;
 					objectData.World = b.WorldMatrix;
 					objectData.Material = b.Material;
 					context.SetDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
@@ -324,7 +326,69 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 			{
 				GPU_PROFILE_SCOPE("Opaque", &context);
 				context.SetPipelineState(m_pDiffusePSO.get());
+
+#define DRAW_INDIRECT_TEST 1
+#if DRAW_INDIRECT_TEST
+
+#pragma pack(push, 1)
+				struct DrawData
+				{
+					uint64 CBV;
+					D3D12_VERTEX_BUFFER_VIEW VertexBuffer;
+					D3D12_INDEX_BUFFER_VIEW IndexBuffer;
+					D3D12_DRAW_INDEXED_ARGUMENTS Arguments;
+				};
+#pragma pack(pop)
+
+				static std::unique_ptr<CommandSignature> pSignature;
+				if (!pSignature)
+				{
+					pSignature = std::make_unique<CommandSignature>();
+
+					pSignature->AddConstantBufferView(0);
+					pSignature->AddVertexBuffer(0);
+					pSignature->AddIndexBuffer();
+					pSignature->AddDrawIndexed();
+
+					pSignature->SetRootSignature(m_pDiffuseRS->GetRootSignature());
+					pSignature->Finalize("Test", m_pGraphics->GetDevice());
+				}
+
+				int numBatches = (int)resources.OpaqueBatches.size() + (int)resources.TransparantBatches.size();
+				uint32 constBufferSize = Math::AlignUp<uint32>(sizeof(PerObjectData), 256);
+				DynamicAllocation allocation = context.AllocateTransientMemory(sizeof(DrawData) * numBatches);
+				DynamicAllocation dataAllocation = context.AllocateTransientMemory(constBufferSize * numBatches);
+				DrawData* pDrawData = (DrawData*)allocation.pMappedMemory;
+				char* pData = (char*)dataAllocation.pMappedMemory;
+				for (uint32 i = 0; i < resources.OpaqueBatches.size(); ++i)
+				{
+					const Batch& b = resources.OpaqueBatches[i];
+
+					PerObjectData* pConstants = (PerObjectData*)pData;
+					pConstants->World = b.WorldMatrix;
+					pConstants->Material = b.Material;
+					pData += constBufferSize;
+
+					DrawData& drawData = pDrawData[i];
+					drawData.CBV = dataAllocation.GpuHandle + i * constBufferSize;
+					drawData.VertexBuffer.BufferLocation = b.pMesh->GetVerticesLocation();
+					drawData.VertexBuffer.SizeInBytes = b.pMesh->GetVertexCount() * b.pMesh->GetStride();
+					drawData.VertexBuffer.StrideInBytes = b.pMesh->GetStride();
+					drawData.IndexBuffer.BufferLocation = b.pMesh->GetIndicesLocation();
+					drawData.IndexBuffer.Format = DXGI_FORMAT_R32_UINT;
+					drawData.IndexBuffer.SizeInBytes = b.pMesh->GetIndexCount() * sizeof(uint32);
+
+					drawData.Arguments.BaseVertexLocation = 0;
+					drawData.Arguments.InstanceCount = 1;
+					drawData.Arguments.StartIndexLocation = 0;
+					drawData.Arguments.IndexCountPerInstance = b.pMesh->GetIndexCount();
+					drawData.Arguments.StartInstanceLocation = 0;
+				}
+
+				context.ExecuteIndirect(pSignature.get(), (uint32)resources.OpaqueBatches.size(), allocation.pBackingResource, nullptr, (uint32)allocation.Offset, 0);
+#else
 				DrawBatches(context, resources.OpaqueBatches);
+#endif
 			}
 
 			{
@@ -567,6 +631,8 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
 		Shader pixelShader("Diffuse.hlsl", ShaderType::Pixel, "PSMain", { "CLUSTERED_FORWARD" });
 
 		m_pDiffuseRS = std::make_unique<RootSignature>();
+
+
 		m_pDiffuseRS->FinalizeFromShader("Diffuse", vertexShader, pGraphics->GetDevice());
 
 		//Opaque
