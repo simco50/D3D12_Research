@@ -20,13 +20,12 @@ public:
 	int Run(HINSTANCE hInstance, const char* pTitle, const char* lpCmdLine)
 	{
 		Thread::SetMainThread();
-
 		CommandLine::Parse(lpCmdLine);
 
 		_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
 		//_CrtSetBreakAlloc(6528);
-		Console::Initialize();
 
+		Console::Initialize();
 		E_LOG(Info, "Startup");
 
 		TaskQueue::Initialize(std::thread::hardware_concurrency());

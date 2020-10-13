@@ -11,6 +11,10 @@
           "Command": "-dred"
         },
         {
+          "Id": "015f9270-ed55-45e4-b29d-a443d3b1bb5e",
+          "Command": "-d3dbreakvalidation"
+        },
+        {
           "Id": "4de03791-1cf7-46f4-a5a7-f2e2a0bce9d2",
           "Command": "-d3ddebug"
         },
@@ -27,6 +31,10 @@
     {
       "Id": "3e3a5cf0-56ee-4188-a439-5c6205a883ce",
       "Command": "-rgimmediate"
+    },
+    {
+      "Id": "19524aa9-eb3e-4cf0-9936-ef814e45c7d6",
+      "Command": "-noconsole"
     }
   ]
 }

@@ -460,9 +460,9 @@ void Graphics::Update()
 				GetSystemTime(&time);
 				wchar_t stringTarget[128];
 				GetTimeFormatEx(LOCALE_NAME_INVARIANT, 0, &time, L"hh_mm_ss", stringTarget, 128);
-				std::stringstream filePath;
-				filePath << "Screenshot_" << stringTarget << ".jpg";
-				img.Save(filePath.str().c_str());
+				char filePath[256];
+				sprintf_s(filePath, "Screenshot_%ls.jpg", stringTarget);
+				img.Save(filePath);
 				m_pScreenshotBuffer.reset();
 				}, taskContext);
 			m_ScreenshotDelay = -1;
@@ -1035,7 +1035,7 @@ void Graphics::InitD3D()
 		if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&pDebugController))))
 		{
 			pDebugController->EnableDebugLayer();
-			E_LOG(Info, "D3D12 Debug Layer Enabled");
+			E_LOG(Warning, "D3D12 Debug Layer Enabled");
 		}
 
 		if (gpuValidation)
@@ -1060,7 +1060,7 @@ void Graphics::InitD3D()
 			// Turn on auto-breadcrumbs and page fault reporting.
 			pDredSettings->SetAutoBreadcrumbsEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
 			pDredSettings->SetPageFaultEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
-			E_LOG(Info, "DRED Enabled");
+			E_LOG(Warning, "DRED Enabled");
 		}
 	}
 	
@@ -1174,6 +1174,7 @@ void Graphics::InitD3D()
 			if (CommandLine::GetBool("d3dbreakvalidation"))
 			{
 				VERIFY_HR_EX(pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, true), GetDevice());
+				E_LOG(Warning, "D3D Validation Break on Severity Enabled");
 			}
 			pInfoQueue->PushStorageFilter(&NewFilter);
 			pInfoQueue->Release();
@@ -1555,7 +1556,7 @@ void Graphics::InitializePipelines()
 		//Opaque
 		{
 			Shader vertexShader("DepthOnly.hlsl", ShaderType::Vertex, "VSMain");
-			Shader alphaPixelShader("DepthOnly.hlsl", ShaderType::Pixel, "PSMain");
+			Shader alphaClipPixelShader("DepthOnly.hlsl", ShaderType::Pixel, "PSMain");
 
 			//Rootsignature
 			m_pShadowsRS = std::make_unique<RootSignature>();
@@ -1570,11 +1571,11 @@ void Graphics::InitializePipelines()
 			m_pShadowsOpaquePSO->SetCullMode(D3D12_CULL_MODE_NONE);
 			m_pShadowsOpaquePSO->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
 			m_pShadowsOpaquePSO->SetDepthBias(-1, -5.0f, -4.0f);
-			m_pShadowsOpaquePSO->Finalize("Shadow Mapping (Opaque) Pipeline", m_pDevice.Get());
+			m_pShadowsOpaquePSO->Finalize("Shadow Mapping (Opaque)", m_pDevice.Get());
 
 			m_pShadowsAlphaPSO = std::make_unique<PipelineState>(*m_pShadowsOpaquePSO);
-			m_pShadowsAlphaPSO->SetPixelShader(alphaPixelShader);
-			m_pShadowsAlphaPSO->Finalize("Shadow Mapping (Alpha) Pipeline", m_pDevice.Get());
+			m_pShadowsAlphaPSO->SetPixelShader(alphaClipPixelShader);
+			m_pShadowsAlphaPSO->Finalize("Shadow Mapping (Alpha)", m_pDevice.Get());
 		}
 	}
 
@@ -1594,7 +1595,7 @@ void Graphics::InitializePipelines()
 		m_pDepthPrepassPSO->SetVertexShader(vertexShader);
 		m_pDepthPrepassPSO->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
 		m_pDepthPrepassPSO->SetRenderTargetFormats(nullptr, 0, DEPTH_STENCIL_FORMAT, m_SampleCount);
-		m_pDepthPrepassPSO->Finalize("Depth Prepass Pipeline", m_pDevice.Get());
+		m_pDepthPrepassPSO->Finalize("Depth Prepass", m_pDevice.Get());
 	}
 
 	//Luminance Historgram
