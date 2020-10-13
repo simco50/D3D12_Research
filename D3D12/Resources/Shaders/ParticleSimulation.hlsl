@@ -133,10 +133,10 @@ void Simulate(CS_INPUT input)
             {
                 float2 uv = screenPos.xy * float2(0.5f, -0.5f) + 0.5f;
                 float depth = tDepth.SampleLevel(sSampler, uv, 0).r;
-                float linearDepth = LinearizeDepth(depth, cFar, cNear);
-                const float thickness = 10.0f;
+                float linearDepth = LinearizeDepth(depth, cNear, cFar) * cNear;
+                const float thickness = 1;
 
-                if(screenPos.w + p.Size > linearDepth && screenPos.w - p.Size < linearDepth + thickness)
+                if(screenPos.w + p.Size > linearDepth && screenPos.w - p.Size - thickness < linearDepth)
                 {
                     float2 texCoord1 = uv + float2(cViewDimensionsInv.x, 0);
                     float2 texCoord2 = uv + float2(0, -cViewDimensionsInv.y);
