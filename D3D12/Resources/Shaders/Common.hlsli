@@ -135,15 +135,20 @@ float4 ClipToView(float4 clip, float4x4 projectionInverse)
     view = view / view.w;
     return view;
 }
+
+float4 NormalizedScreenToView(float4 screen, float4x4 projectionInverse)
+{
+    // Convert to clip space
+    float4 clip = float4(float2(screen.x, 1.0f - screen.y) * 2.0f - 1.0f, screen.z, screen.w);
+    return ClipToView(clip, projectionInverse);
+}
  
 // Convert screen space coordinates (0, width/height) to view space.
 float4 ScreenToView(float4 screen, float2 screenDimensionsInv, float4x4 projectionInverse)
 {
     // Convert to normalized texture coordinates
-    float2 texCoord = screen.xy * screenDimensionsInv;
-    // Convert to clip space
-    float4 clip = float4(float2(texCoord.x, 1.0f - texCoord.y) * 2.0f - 1.0f, screen.z, screen.w);
-    return ClipToView(clip, projectionInverse);
+    float4 screenNormalized = float4(screen.xy * screenDimensionsInv, screen.z, screen.w);
+    return NormalizedScreenToView(screenNormalized, projectionInverse);
 }
 
 // Convert view space position to screen UVs (0, 1). Non-linear Z
@@ -163,9 +168,16 @@ float3 WorldFromDepth(float2 uv, float depth, float4x4 viewProjectionInverse)
     return world.xyz / world.w;
 }
 
+//View space depth [0, far plane]
 float LinearizeDepth(float z, float near, float far)
 {
-    return 1.0 / (((near - far) / far) * z + 1.0);
+    return near * far / (far + z * (near - far));
+}
+
+//View space depth [0, 1]
+float LinearizeDepth01(float z, float near, float far)
+{
+    return far / (far + z * (near - far));
 }
 
 void AABBFromMinMax(inout AABB aabb, float3 minimum, float3 maximum)

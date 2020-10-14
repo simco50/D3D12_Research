@@ -61,7 +61,7 @@ void CSMain(CS_INPUT input)
 	{
 		float2 uv = ((float2)groupBegin + 0.5f + direction * (i - KERNEL_LENGTH)) * cInvDimensions;
 		gAoCache[i] = tAmbientOcclusion.SampleLevel(sSampler, uv, 0).r;
-		gDepthCache[i] = LinearizeDepth(tDepth.SampleLevel(sSampler, uv, 0).r, cNear, cFar);
+		gDepthCache[i] = LinearizeDepth01(tDepth.SampleLevel(sSampler, uv, 0).r, cNear, cFar);
 	}
 
 	GroupMemoryBarrierWithGroupSync();
@@ -75,7 +75,7 @@ void CSMain(CS_INPUT input)
     {
         uint samplePoint = center + i - KERNEL_LENGTH;
         float depth = gDepthCache[samplePoint];
-        float weight = saturate(abs(depth - currentDepth) * cNear * 0.001f);
+        float weight = saturate(abs(depth - currentDepth));
         avgOcclusion += lerp(gAoCache[samplePoint], currentAo, weight) * s_BlurWeightsNormalized[i];
     }
 
