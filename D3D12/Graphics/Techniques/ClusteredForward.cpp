@@ -16,7 +16,10 @@
 static constexpr int cClusterSize = 64;
 static constexpr int cClusterCountZ = 32;
 
-extern int g_SsrSamples;
+namespace Tweakables
+{
+	extern int g_SsrSamples;
+}
 bool g_VisualizeClusters = false;
 
 ClusteredForward::ClusteredForward(Graphics* pGraphics)
@@ -274,7 +277,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 			frameData.ClusterSize = IntVector2(cClusterSize, cClusterSize);
 			frameData.LightGridParams = lightGridParams;
 			frameData.FrameIndex = resources.FrameIndex;
-			frameData.SsrSamples = g_SsrSamples;
+			frameData.SsrSamples = Tweakables::g_SsrSamples;
 			frameData.ViewProjection = resources.pCamera->GetViewProjection();
 			frameData.ViewPosition = Vector4(resources.pCamera->GetPosition());
 

@@ -15,7 +15,11 @@
 
 static constexpr int MAX_LIGHT_DENSITY = 72000;
 static constexpr int FORWARD_PLUS_BLOCK_SIZE = 16;
-extern int g_SsrSamples;
+
+namespace Tweakables
+{
+	extern int g_SsrSamples;
+}
 
 TiledForward::TiledForward(Graphics* pGraphics)
 	: m_pGraphics(pGraphics)
@@ -108,7 +112,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& resources)
 			frameData.NearZ = resources.pCamera->GetNear();
 			frameData.FarZ = resources.pCamera->GetFar();
 			frameData.FrameIndex = resources.FrameIndex;
-			frameData.SsrSamples = g_SsrSamples;
+			frameData.SsrSamples = Tweakables::g_SsrSamples;
 			frameData.ViewProjection = resources.pCamera->GetViewProjection();
 			frameData.ViewPosition = Vector4(resources.pCamera->GetPosition());
 

@@ -32,7 +32,7 @@ public:
 
 	void FreePages(uint64 fenceValue, const std::vector<AllocationPage*> pPages);
 	void FreeLargePages(uint64 fenceValue, const std::vector<AllocationPage*> pLargePages);
-	void FlushAll();
+	void CollectGarbage();
 
 	uint64 GetMemoryUsage() const;
 

@@ -17,7 +17,7 @@
 	p.modules.winrt = {}
 
 	local m = p.modules.winrt
-	m._VERSION = "0.0.1"
+	m._VERSION = "0.0.2"
 
 --
 -- Register allowed config data
@@ -30,10 +30,7 @@
 	--
 
 	p.WINUNIVERSAL = "windowsuniversal"
-	p.ARM = "arm"
-
 	api.addAllowed("system", { p.WINUNIVERSAL })
-	api.addAllowed("architecture", { p.ARM })
 
 	--
 	-- Register the AppxManifest action
@@ -43,8 +40,6 @@
 		trigger = "appxmanifest",
 		shortname = "Package.appxmanifest",
 		description = "Generate Package.appxmanifest files",
-
-		valid_kinds = { "WindowedApp" },
 
 		onProject = function(prj)
 			p.modules.winrt.generateAppxManifest(prj)
@@ -352,7 +347,6 @@
 	function m.generateAppxManifest(prj)
 		p.eol("\r\n")
 		p.indent("  ")
-		p.escaper(vs2010.esc)
 
 		p.generate(prj, "Package.appxmanifest", m.generate)
 	end
@@ -360,27 +354,16 @@
 	function m.generate(prj)
 		_p('<?xml version="1.0" encoding="utf-8"?>')
 		_p('<Package')
-		if prj.system == p.WINUNIVERSAL then
-			_p('xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"')
-		end
-
-		if prj.system == p.WINUNIVERSAL then
-			_p('xmlns:m3="http://schemas.microsoft.com/appx/manifest/uap/windows10"')
-		end
-
-		if prj.system == p.WINUNIVERSAL then
-			_p('xmlns:mp="http://schemas.microsoft.com/appx/2014/phone/manifest"')
-		end
-
+		_p('xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"')
+		_p('xmlns:m3="http://schemas.microsoft.com/appx/manifest/uap/windows10"')
+		_p('xmlns:mp="http://schemas.microsoft.com/appx/2014/phone/manifest"')
 		_p('>')
 
 		_p(1,'<Identity Name="%s"', prj.uuid)
 		_p(2,'Publisher="CN=PublisherName"')
 		_p(2,'Version="0.0.0.0" />')
 
-		if prj.system == p.WINUNIVERSAL then
-			_p(1,'<mp:PhoneIdentity PhoneProductId="%s" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>', prj.uuid)
-		end
+		_p(1,'<mp:PhoneIdentity PhoneProductId="%s" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>', prj.uuid)
 
 		_p(1,'<Properties>')
 		_p(2,'<DisplayName>%s</DisplayName>', prj.name)
@@ -389,11 +372,9 @@
 		_p(1,'</Properties>')
 
 		_p(1,'<Prerequisites>')
-		if prj.system == p.WINUNIVERSAL then
-			_p(1,'<Dependencies>')
-			_p(2,'<TargetDeviceFamily Name="Windows.Universal" MinVersion="10.0.10069.0" MaxVersionTested="10.0.10069.0" />')
-			_p(1,'</Dependencies>')
-		end
+		_p(1,'<Dependencies>')
+		_p(2,'<TargetDeviceFamily Name="Windows.Universal" MinVersion="10.0.10069.0" MaxVersionTested="10.0.10069.0" />')
+		_p(1,'</Dependencies>')
 		_p(1,'</Prerequisites>')
 
 		_p(1,'<Resources>')

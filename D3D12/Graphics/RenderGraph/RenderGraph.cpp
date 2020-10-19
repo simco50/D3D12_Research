@@ -3,7 +3,6 @@
 #include "Graphics/Core/Graphics.h"
 #include "Graphics/Core/CommandContext.h"
 #include "Graphics/Profiler.h"
-#include "ResourceAllocator.h"
 #include "Core/CommandLine.h"
 
 RGResourceHandle RGPassBuilder::Read(const RGResourceHandle& resource)
@@ -298,7 +297,6 @@ void RGGraph::ConditionallyCreateResource(RGResource* pResource)
 		switch (pResource->m_Type)
 		{
 		case RGResourceType::Texture:
-			pResource->m_pPhysicalResource = m_pAllocator->CreateTexture(static_cast<RGTexture*>(pResource)->GetDesc());
 			break;
 		case RGResourceType::Buffer:
 			break;
@@ -318,7 +316,6 @@ void RGGraph::ConditionallyReleaseResource(RGResource* pResource)
 		switch (pResource->m_Type)
 		{
 		case RGResourceType::Texture:
-			m_pAllocator->ReleaseTexture(static_cast<Texture*>(pResource->m_pPhysicalResource));
 			break;
 		case RGResourceType::Buffer:
 			break;

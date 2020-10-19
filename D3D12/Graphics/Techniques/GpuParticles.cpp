@@ -149,14 +149,6 @@ void GpuParticles::Simulate(RGGraph& graph, Texture* pResolvedDepth, const Camer
 		return;
 	}
 
-	static float time = 0;
-	time += Time::DeltaTime();
-	if (time > g_LifeTime)
-	{
-		time = 0;
-		m_ParticlesToSpawn = 1000000;
-	}
-
 	D3D12_CPU_DESCRIPTOR_HANDLE uavs[] = {
 		m_pCountersBuffer->GetUAV()->GetDescriptor(),
 		m_pEmitArguments->GetUAV()->GetDescriptor(),
@@ -178,7 +170,7 @@ void GpuParticles::Simulate(RGGraph& graph, Texture* pResolvedDepth, const Camer
 	RGPassBuilder prepareArguments = graph.AddPass("Prepare Arguments");
 	prepareArguments.Bind([=](CommandContext& context, const RGPassResources& passResources)
 		{
-			//m_ParticlesToSpawn += (float)g_EmitCount * GameTimer::DeltaTime();
+			m_ParticlesToSpawn += (float)g_EmitCount * Time::DeltaTime();
 
 			context.InsertResourceBarrier(m_pDrawArguments.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 			context.InsertResourceBarrier(m_pEmitArguments.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);

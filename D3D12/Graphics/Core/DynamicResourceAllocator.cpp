@@ -119,7 +119,7 @@ void DynamicAllocationManager::FreeLargePages(uint64 fenceValue, const std::vect
 	}
 }
 
-void DynamicAllocationManager::FlushAll()
+void DynamicAllocationManager::CollectGarbage()
 {
 	std::lock_guard<std::mutex> lockGuard(m_PageMutex);
 	m_pGraphics->IdleGPU();

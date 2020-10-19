@@ -8,7 +8,6 @@
 class Graphics;
 class CommandContext;
 
-class RGResourceAllocator;
 class RGGraph;
 class RGPass;
 
@@ -295,7 +294,6 @@ private:
 
 	Graphics* m_pGraphics;
 	Allocator m_Allocator;
-	RGResourceAllocator* m_pAllocator;
 	uint64 m_LastFenceValue = 0;
 	bool m_ImmediateMode = false;
 

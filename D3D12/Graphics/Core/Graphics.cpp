@@ -17,7 +17,6 @@
 #include "Graphics/Profiler.h"
 #include "Graphics/RenderGraph/RenderGraph.h"
 #include "Graphics/RenderGraph/Blackboard.h"
-#include "Graphics/RenderGraph/ResourceAllocator.h"
 #include "Graphics/DebugRenderer.h"
 #include "Graphics/ImGuiRenderer.h"
 #include "Graphics/Techniques/ClusteredForward.h"
@@ -42,35 +41,37 @@ const DXGI_FORMAT Graphics::DEPTH_STENCIL_SHADOW_FORMAT = DXGI_FORMAT_D16_UNORM;
 const DXGI_FORMAT Graphics::RENDER_TARGET_FORMAT = DXGI_FORMAT_R11G11B10_FLOAT;
 const DXGI_FORMAT Graphics::SWAPCHAIN_FORMAT = DXGI_FORMAT_R8G8B8A8_UNORM;
 
+namespace Tweakables
+{
+	bool g_DumpRenderGraph = false;
+	bool g_Screenshot = false;
 
-bool gDumpRenderGraph = false;
-bool g_Screenshot = false;
+	float g_WhitePoint = 1;
+	float g_MinLogLuminance = -10;
+	float g_MaxLogLuminance = 20;
+	float g_Tau = 2;
+	bool g_DrawHistogram = false;
+	int32 g_ToneMapper = 1;
 
-float g_WhitePoint = 1;
-float g_MinLogLuminance = -10;
-float g_MaxLogLuminance = 20;
-float g_Tau = 2;
-bool g_DrawHistogram = false;
-int32 g_ToneMapper = 1;
+	bool g_SDSM = false;
+	bool g_StabilizeCascades = true;
+	bool g_VisualizeShadowCascades = false;
+	int g_ShadowCascades = 4;
+	float g_PSSMFactor = 1.0f;
+	bool g_ShowRaytraced = false;
+	bool g_VisualizeLights = false;
+	bool g_VisualizeLightDensity = false;
 
-bool g_SDSM = false;
-bool g_StabilizeCascades = true;
-bool g_VisualizeShadowCascades = false;
-int g_ShadowCascades = 4;
-float g_PSSMFactor = 1.0f;
-bool g_ShowRaytraced = false;
-bool g_VisualizeLights = false;
-bool g_VisualizeLightDensity = false;
+	float g_SunInclination = 0.579f;
+	float g_SunOrientation = -3.055f;
+	float g_SunTemperature = 5000.0f;
 
-float g_SunInclination = 0.579f;
-float g_SunOrientation = -3.055f;
-float g_SunTemperature = 5000.0f;
+	int g_SsrSamples = 16;
 
-int g_SsrSamples = 16;
+	int g_ShadowMapIndex = 0;
 
-int g_ShadowMapIndex = 0;
-
-bool g_EnableUI = true;
+	bool g_EnableUI = true;
+}
 
 Graphics::Graphics(uint32 width, uint32 height, int sampleCount /*= 1*/)
 	: m_SampleCount(sampleCount), m_WindowWidth(width), m_WindowHeight(height)
@@ -98,39 +99,9 @@ void Graphics::Initialize(WindowHandle window)
 	InitializeAssets(*pContext);
 	pContext->Execute(true);
 
-	g_ShowRaytraced = SupportsRayTracing() ? g_ShowRaytraced : false;
+	Tweakables::g_ShowRaytraced = SupportsRayTracing() ? Tweakables::g_ShowRaytraced : false;
 
-	m_DesiredLightCount = 3;
-	RandomizeLights(m_DesiredLightCount);
-
-	m_pDynamicAllocationManager->FlushAll();
-}
-
-void Graphics::RandomizeLights(int count)
-{
-	m_Lights.resize(count);
-
-	BoundingBox sceneBounds;
-	sceneBounds.Center = Vector3(0, 70, 0);
-	sceneBounds.Extents = Vector3(140, 70, 60);
-
-	Vector3 Position(-150, 160, -10);
-	Vector3 Direction;
-	Position.Normalize(Direction);
-	m_Lights[0] = Light::Directional(Position, -Direction, 10);
-	m_Lights[0].CastShadows = true;
-
-	m_Lights[1] = Light::Point(Vector3(0, 10, 0), 100, 5000, Color(1, 0.2f, 0.2f, 1));
-	m_Lights[1].CastShadows = true;
-
-	m_Lights[2] = Light::Spot(Vector3(0, 10, -10), 200, Vector3(0, 0, 1), 90, 70, 5000, Color(1, 0, 0, 1.0f));
-	m_Lights[2].CastShadows = true;
-
-	if (m_pLightBuffer->GetDesc().ElementCount != count)
-	{
-		IdleGPU();
-		m_pLightBuffer->Create(BufferDesc::CreateStructured(count, sizeof(Light), BufferFlag::ShaderResource));
-	}
+	m_pDynamicAllocationManager->CollectGarbage();
 }
 
 void Graphics::Update()
@@ -143,13 +114,9 @@ void Graphics::Update()
 
 	m_pCamera->Update();
 
-	if (Input::Instance().IsKeyPressed('O'))
+	if (Input::Instance().IsKeyPressed('U'))
 	{
-		RandomizeLights(m_DesiredLightCount);
-	}
-	else if (Input::Instance().IsKeyPressed('U'))
-	{
-		g_EnableUI = !g_EnableUI;
+		Tweakables::g_EnableUI = !Tweakables::g_EnableUI;
 	}
 
 	std::sort(m_SceneData.TransparantBatches.begin(), m_SceneData.TransparantBatches.end(), [this](const Batch& a, const Batch& b) {
@@ -164,16 +131,16 @@ void Graphics::Update()
 		return aDist < bDist;
 		});
 
-	float costheta = cosf(g_SunOrientation);
-	float sintheta = sinf(g_SunOrientation);
-	float cosphi = cosf(g_SunInclination * Math::PIDIV2);
-	float sinphi = sinf(g_SunInclination * Math::PIDIV2);
+	float costheta = cosf(Tweakables::g_SunOrientation);
+	float sintheta = sinf(Tweakables::g_SunOrientation);
+	float cosphi = cosf(Tweakables::g_SunInclination * Math::PIDIV2);
+	float sinphi = sinf(Tweakables::g_SunInclination * Math::PIDIV2);
 	m_Lights[0].Direction = -Vector3(costheta * cosphi, sinphi, sintheta * cosphi);
-	m_Lights[0].Colour = Math::EncodeColor(Math::MakeFromColorTemperature(g_SunTemperature));
+	m_Lights[0].Colour = Math::EncodeColor(Math::MakeFromColorTemperature(Tweakables::g_SunTemperature));
 
 	m_Lights[1].Position.x = 50 * sin(Time::TotalTime());
 
-	if (g_VisualizeLights)
+	if (Tweakables::g_VisualizeLights)
 	{
 		for (const Light& light : m_Lights)
 		{
@@ -189,9 +156,9 @@ void Graphics::Update()
 	float minPoint = 0;
 	float maxPoint = 1;
 
-	shadowData.NumCascades = g_ShadowCascades;
+	shadowData.NumCascades = Tweakables::g_ShadowCascades;
 
-	if (g_SDSM)
+	if (Tweakables::g_SDSM)
 	{
 		Buffer* pSourceBuffer = m_ReductionReadbackTargets[(m_Frame + 1) % FRAME_COUNT].get();
 		Vector2* pData = (Vector2*)pSourceBuffer->Map();
@@ -212,12 +179,12 @@ void Graphics::Update()
 	constexpr uint32 MAX_CASCADES = 4;
 	std::array<float, MAX_CASCADES> cascadeSplits{};
 
-	for (int i = 0; i < g_ShadowCascades; ++i)
+	for (int i = 0; i < Tweakables::g_ShadowCascades; ++i)
 	{
-		float p = (i + 1) / (float)g_ShadowCascades;
+		float p = (i + 1) / (float)Tweakables::g_ShadowCascades;
 		float log = minZ * std::pow(maxZ / minZ, p);
 		float uniform = minZ + (maxZ - minZ) * p;
-		float d = g_PSSMFactor * (log - uniform) + uniform;
+		float d = Tweakables::g_PSSMFactor * (log - uniform) + uniform;
 		cascadeSplits[i] = (d - nearPlane) / clipPlaneRange;
 	}
 
@@ -232,7 +199,7 @@ void Graphics::Update()
 		light.ShadowIndex = shadowIndex;
 		if (light.Type == LightType::Directional)
 		{
-			for (int i = 0; i < g_ShadowCascades; ++i)
+			for (int i = 0; i < Tweakables::g_ShadowCascades; ++i)
 			{
 				float previousCascadeSplit = i == 0 ? minPoint : cascadeSplits[i - 1];
 				float currentCascadeSplit = cascadeSplits[i];
@@ -279,7 +246,7 @@ void Graphics::Update()
 				Vector3 maxExtents(-FLT_MAX);
 
 				//Create a bounding sphere to maintain aspect in projection to avoid flickering when rotating
-				if (g_StabilizeCascades)
+				if (Tweakables::g_StabilizeCascades)
 				{
 					float radius = 0;
 					for (const Vector3& corner : frustumCorners)
@@ -307,7 +274,7 @@ void Graphics::Update()
 				Matrix lightViewProjection = shadowView * projectionMatrix;
 
 				//Snap projection to shadowmap texels to avoid flickering edges
-				if (g_StabilizeCascades)
+				if (Tweakables::g_StabilizeCascades)
 				{
 					float shadowMapSize = 2048;
 					Vector4 shadowOrigin = Vector4::Transform(Vector4(0, 0, 0, 1), lightViewProjection);
@@ -418,7 +385,7 @@ void Graphics::Update()
 
 	uint64 nextFenceValue = 0;
 
-	if (g_Screenshot && m_ScreenshotDelay < 0)
+	if (Tweakables::g_Screenshot && m_ScreenshotDelay < 0)
 	{
 		RGPassBuilder screenshot = graph.AddPass("Take Screenshot");
 		screenshot.Bind([=](CommandContext& renderContext, const RGPassResources& resources)
@@ -434,7 +401,7 @@ void Graphics::Update()
 				m_ScreenshotRowPitch = textureFootprint.Footprint.RowPitch;
 			});
 		m_ScreenshotDelay = 4;
-		g_Screenshot = false;
+		Tweakables::g_Screenshot = false;
 	}
 
 	if (m_pScreenshotBuffer)
@@ -559,7 +526,7 @@ void Graphics::Update()
 
 	m_pParticles->Simulate(graph, GetResolvedDepthStencil(), *m_pCamera);
 
-	if (g_ShowRaytraced)
+	if (Tweakables::g_ShowRaytraced)
 	{
 		m_pRTAO->Execute(graph, m_pAmbientOcclusion.get(), GetResolvedDepthStencil(), m_pTLAS.get(), *m_pCamera);
 	}
@@ -572,7 +539,7 @@ void Graphics::Update()
 	// - Renders the scene depth onto a separate depth buffer from the light's view
 	if (shadowIndex > 0)
 	{
-		if (g_SDSM)
+		if (Tweakables::g_SDSM)
 		{
 			RGPassBuilder depthReduce = graph.AddPass("Depth Reduce");
 			Data.DepthStencil = depthReduce.Write(Data.DepthStencil);
@@ -806,8 +773,8 @@ void Graphics::Update()
 				} Parameters;
 				Parameters.Width = pToneMapInput->GetWidth();
 				Parameters.Height = pToneMapInput->GetHeight();
-				Parameters.MinLogLuminance = g_MinLogLuminance;
-				Parameters.OneOverLogLuminanceRange = 1.0f / (g_MaxLogLuminance - g_MinLogLuminance);
+				Parameters.MinLogLuminance = Tweakables::g_MinLogLuminance;
+				Parameters.OneOverLogLuminanceRange = 1.0f / (Tweakables::g_MaxLogLuminance - Tweakables::g_MinLogLuminance);
 
 				context.SetComputeDynamicConstantBufferView(0, &Parameters, sizeof(HistogramParameters));
 				context.SetDynamicDescriptor(1, 0, m_pLuminanceHistogram->GetUAV());
@@ -838,10 +805,10 @@ void Graphics::Update()
 				} Parameters;
 
 				Parameters.PixelCount = pToneMapInput->GetWidth() * pToneMapInput->GetHeight();
-				Parameters.MinLogLuminance = g_MinLogLuminance;
-				Parameters.LogLuminanceRange = g_MaxLogLuminance - g_MinLogLuminance;
+				Parameters.MinLogLuminance = Tweakables::g_MinLogLuminance;
+				Parameters.LogLuminanceRange = Tweakables::g_MaxLogLuminance - Tweakables::g_MinLogLuminance;
 				Parameters.TimeDelta = Time::DeltaTime();
-				Parameters.Tau = g_Tau;
+				Parameters.Tau = Tweakables::g_Tau;
 
 				context.SetComputeDynamicConstantBufferView(0, &Parameters, sizeof(AverageParameters));
 				context.SetDynamicDescriptor(1, 0, m_pAverageLuminance->GetUAV());
@@ -858,8 +825,8 @@ void Graphics::Update()
 					float WhitePoint;
 					uint32 Tonemapper;
 				} constBuffer;
-				constBuffer.WhitePoint = g_WhitePoint;
-				constBuffer.Tonemapper = g_ToneMapper;
+				constBuffer.WhitePoint = Tweakables::g_WhitePoint;
+				constBuffer.Tonemapper = Tweakables::g_ToneMapper;
 
 				context.InsertResourceBarrier(m_pTonemapTarget.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 				context.InsertResourceBarrier(m_pAverageLuminance.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
@@ -880,7 +847,7 @@ void Graphics::Update()
 				);
 			});
 
-		if (g_EnableUI && g_DrawHistogram)
+		if (Tweakables::g_EnableUI && Tweakables::g_DrawHistogram)
 		{
 			RGPassBuilder drawHistogram = graph.AddPass("Draw Histogram");
 			drawHistogram.Bind([=](CommandContext& context, const RGPassResources& resources)
@@ -898,8 +865,8 @@ void Graphics::Update()
 						float InverseLogLuminanceRange;
 					} Parameters;
 
-					Parameters.MinLogLuminance = g_MinLogLuminance;
-					Parameters.InverseLogLuminanceRange = 1.0f / (g_MaxLogLuminance - g_MinLogLuminance);
+					Parameters.MinLogLuminance = Tweakables::g_MinLogLuminance;
+					Parameters.InverseLogLuminanceRange = 1.0f / (Tweakables::g_MaxLogLuminance - Tweakables::g_MinLogLuminance);
 
 					context.SetComputeDynamicConstantBufferView(0, &Parameters, sizeof(AverageParameters));
 					context.SetDynamicDescriptor(1, 0, m_pTonemapTarget->GetUAV());
@@ -911,7 +878,7 @@ void Graphics::Update()
 		}
 	}
 
-	if (g_VisualizeLightDensity)
+	if (Tweakables::g_VisualizeLightDensity)
 	{
 		if (m_RenderPath == RenderPath::Clustered)
 		{
@@ -955,7 +922,7 @@ void Graphics::Update()
 
 	//UI
 	// - ImGui render, pretty straight forward
-	if(g_EnableUI)
+	if(Tweakables::g_EnableUI)
 	{
 		m_pImGuiRenderer->Render(graph, m_pTonemapTarget.get());
 	}
@@ -973,10 +940,10 @@ void Graphics::Update()
 		});
 
 	graph.Compile();
-	if (gDumpRenderGraph)
+	if (Tweakables::g_DumpRenderGraph)
 	{
 		graph.DumpGraphMermaid("graph.html");
-		gDumpRenderGraph = false;
+		Tweakables::g_DumpRenderGraph = false;
 	}
 	nextFenceValue = graph.Execute();
 	PROFILE_END();
@@ -1257,12 +1224,6 @@ void Graphics::InitD3D()
 	m_pSwapchain.Reset();
 	swapChain.As(&m_pSwapchain);
 
-	m_pDynamicAllocationManager = std::make_unique<DynamicAllocationManager>(this);
-	m_pGraphAllocator = std::make_unique<RGResourceAllocator>(this);
-
-	Profiler::Get()->Initialize(this);
-
-	//Create the textures but don't create the resources themselves yet.
 	for (int i = 0; i < FRAME_COUNT; ++i)
 	{
 		m_Backbuffers[i] = std::make_unique<Texture>(this, "Render Target");
@@ -1274,12 +1235,14 @@ void Graphics::InitD3D()
 		m_pResolvedDepthStencil = std::make_unique<Texture>(this, "Resolved Depth Stencil");
 		m_pMultiSampleRenderTarget = std::make_unique<Texture>(this, "MSAA Target");
 	}
+
 	m_pHDRRenderTarget = std::make_unique<Texture>(this, "HDR Target");
 	m_pPreviousColor = std::make_unique<Texture>(this, "Previous Color");
 	m_pTonemapTarget = std::make_unique<Texture>(this, "Tonemap Target");
 	m_pDownscaledColor = std::make_unique<Texture>(this, "Downscaled HDR Target");
 	m_pAmbientOcclusion = std::make_unique<Texture>(this, "SSAO");
 
+	m_pDynamicAllocationManager = std::make_unique<DynamicAllocationManager>(this);
 	m_pClusteredForward = std::make_unique<ClusteredForward>(this);
 	m_pTiledForward = std::make_unique<TiledForward>(this);
 	m_pRTAO = std::make_unique<RTAO>(this);
@@ -1288,6 +1251,7 @@ void Graphics::InitD3D()
 	m_pImGuiRenderer->AddUpdateCallback(ImGuiCallbackDelegate::CreateRaw(this, &Graphics::UpdateImGui));
 	m_pParticles = std::make_unique<GpuParticles>(this);
 
+	Profiler::Get()->Initialize(this);
 	DebugRenderer::Get()->Initialize(this);
 
 	OnResize(m_WindowWidth, m_WindowHeight);
@@ -1459,6 +1423,26 @@ void Graphics::InitializeAssets(CommandContext& context)
 			context.InsertUavBarrier(m_pTLAS.get());
 		}
 	}
+
+	{
+		int lightCount = 3;
+		m_Lights.resize(lightCount);
+
+		Vector3 Position(-150, 160, -10);
+		Vector3 Direction;
+		Position.Normalize(Direction);
+		m_Lights[0] = Light::Directional(Position, -Direction, 10);
+		m_Lights[0].CastShadows = true;
+
+		m_Lights[1] = Light::Point(Vector3(0, 10, 0), 100, 5000, Color(1, 0.2f, 0.2f, 1));
+		m_Lights[1].CastShadows = true;
+
+		m_Lights[2] = Light::Spot(Vector3(0, 10, -10), 200, Vector3(0, 0, 1), 90, 70, 5000, Color(1, 0, 0, 1.0f));
+		m_Lights[2].CastShadows = true;
+
+		m_pLightBuffer = std::make_unique<Buffer>(this, "Lights");
+		m_pLightBuffer->Create(BufferDesc::CreateStructured(lightCount, sizeof(Light), BufferFlag::ShaderResource));
+	}
 }
 
 void Graphics::OnResize(int width, int height)
@@ -1541,7 +1525,6 @@ void Graphics::OnResize(int width, int height)
 
 void Graphics::InitializePipelines()
 {
-	m_pLightBuffer = std::make_unique<Buffer>(this, "Lights");
 
 	//Input layout
 	//UNIVERSAL
@@ -1753,7 +1736,7 @@ void Graphics::UpdateImGui()
 		ImGui::End();
 	}
 
-	if (g_VisualizeShadowCascades)
+	if (Tweakables::g_VisualizeShadowCascades)
 	{
 		if (m_ShadowMaps.size() >= 4)
 		{
@@ -1800,19 +1783,14 @@ void Graphics::UpdateImGui()
 			}, nullptr, 2);
 
 		ImGui::Separator();
-		ImGui::SliderInt("Lights", &m_DesiredLightCount, 10, 10000);
-		if (ImGui::Button("Generate Lights"))
-		{
-			RandomizeLights(m_DesiredLightCount);
-		}
 
 		if (ImGui::Button("Dump RenderGraph"))
 		{
-			gDumpRenderGraph = true;
+			Tweakables::g_DumpRenderGraph = true;
 		}
 		if (ImGui::Button("Screenshot"))
 		{
-			g_Screenshot = true;
+			Tweakables::g_Screenshot = true;
 		}
 		if (ImGui::Button("Pix Capture"))
 		{
@@ -1909,23 +1887,23 @@ void Graphics::UpdateImGui()
 	ImGui::Begin("Parameters");
 
 	ImGui::Text("Sky");
-	ImGui::SliderFloat("Sun Orientation", &g_SunOrientation, -Math::PI, Math::PI);
-	ImGui::SliderFloat("Sun Inclination", &g_SunInclination, 0, 1);
-	ImGui::SliderFloat("Sun Temperature", &g_SunTemperature, 1000, 15000);
+	ImGui::SliderFloat("Sun Orientation", &Tweakables::g_SunOrientation, -Math::PI, Math::PI);
+	ImGui::SliderFloat("Sun Inclination", &Tweakables::g_SunInclination, 0, 1);
+	ImGui::SliderFloat("Sun Temperature", &Tweakables::g_SunTemperature, 1000, 15000);
 
 	ImGui::Text("Shadows");
-	ImGui::SliderInt("Shadow Cascades", &g_ShadowCascades, 1, 4);
-	ImGui::Checkbox("SDSM", &g_SDSM);
-	ImGui::Checkbox("Stabilize Cascades", &g_StabilizeCascades);
-	ImGui::SliderFloat("PSSM Factor", &g_PSSMFactor, 0, 1);
-	ImGui::Checkbox("Visualize Cascades", &g_VisualizeShadowCascades);
+	ImGui::SliderInt("Shadow Cascades", &Tweakables::g_ShadowCascades, 1, 4);
+	ImGui::Checkbox("SDSM", &Tweakables::g_SDSM);
+	ImGui::Checkbox("Stabilize Cascades", &Tweakables::g_StabilizeCascades);
+	ImGui::SliderFloat("PSSM Factor", &Tweakables::g_PSSMFactor, 0, 1);
+	ImGui::Checkbox("Visualize Cascades", &Tweakables::g_VisualizeShadowCascades);
 
 	ImGui::Text("Expose/Tonemapping");
-	ImGui::SliderFloat("Min Log Luminance", &g_MinLogLuminance, -100, 20);
-	ImGui::SliderFloat("Max Log Luminance", &g_MaxLogLuminance, -50, 50);
-	ImGui::Checkbox("Draw Exposure Histogram", &g_DrawHistogram);
-	ImGui::SliderFloat("White Point", &g_WhitePoint, 0, 20);
-	ImGui::Combo("Tonemapper", (int*)&g_ToneMapper, [](void* data, int index, const char** outText)
+	ImGui::SliderFloat("Min Log Luminance", &Tweakables::g_MinLogLuminance, -100, 20);
+	ImGui::SliderFloat("Max Log Luminance", &Tweakables::g_MaxLogLuminance, -50, 50);
+	ImGui::Checkbox("Draw Exposure Histogram", &Tweakables::g_DrawHistogram);
+	ImGui::SliderFloat("White Point", &Tweakables::g_WhitePoint, 0, 20);
+	ImGui::Combo("Tonemapper", (int*)&Tweakables::g_ToneMapper, [](void* data, int index, const char** outText)
 		{
 			if (index == 0)
 				*outText = "Reinhard";
@@ -1942,20 +1920,20 @@ void Graphics::UpdateImGui()
 			return true;
 		}, nullptr, 5);
 
-	ImGui::SliderFloat("Tau", &g_Tau, 0, 5);
+	ImGui::SliderFloat("Tau", &Tweakables::g_Tau, 0, 5);
 
 	ImGui::Text("Misc");
-	ImGui::Checkbox("Debug Render Lights", &g_VisualizeLights);
-	ImGui::Checkbox("Visualize Light Density", &g_VisualizeLightDensity);
+	ImGui::Checkbox("Debug Render Lights", &Tweakables::g_VisualizeLights);
+	ImGui::Checkbox("Visualize Light Density", &Tweakables::g_VisualizeLightDensity);
 	extern bool g_VisualizeClusters;
 	ImGui::Checkbox("Visualize Clusters", &g_VisualizeClusters);
-	ImGui::SliderInt("SSR Samples", &g_SsrSamples, 0, 32);
+	ImGui::SliderInt("SSR Samples", &Tweakables::g_SsrSamples, 0, 32);
 
-	if (ImGui::Checkbox("Raytracing", &g_ShowRaytraced))
+	if (ImGui::Checkbox("Raytracing", &Tweakables::g_ShowRaytraced))
 	{
 		if (m_RayTracingTier == D3D12_RAYTRACING_TIER_NOT_SUPPORTED)
 		{
-			g_ShowRaytraced = false;
+			Tweakables::g_ShowRaytraced = false;
 		}
 	}
 

@@ -159,7 +159,7 @@ void ImGuiRenderer::CreatePipeline(Graphics* pGraphics)
 	m_pPipelineState->SetPixelShader(pixelShader);
 	m_pPipelineState->SetRootSignature(m_pRootSignature->GetRootSignature());
 	m_pPipelineState->SetInputLayout(elementDesc, ARRAYSIZE(elementDesc));
-	m_pPipelineState->SetRenderTargetFormat(DXGI_FORMAT_R8G8B8A8_UNORM, Graphics::DEPTH_STENCIL_FORMAT, 1);
+	m_pPipelineState->SetRenderTargetFormat(DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_UNKNOWN, 1);
 	m_pPipelineState->Finalize("ImGui Pipeline", pGraphics->GetDevice());
 }
 

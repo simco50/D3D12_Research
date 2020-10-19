@@ -416,7 +416,7 @@ protected:
 
 	void OnMouseMoved(MouseDevice^ device, MouseEventArgs^ args)
 	{
-		Input::Instance().UpdateMouseDelta(args->MouseDelta.X, args->MouseDelta.Y);
+		Input::Instance().UpdateMouseDelta((float)args->MouseDelta.X, (float)args->MouseDelta.Y);
 	}
 
 	// Event handlers
@@ -436,7 +436,6 @@ protected:
 				return;
 			}
 		}
-		m_CapturingMouse = false;
 		m_DPI = DisplayInformation::GetForCurrentView()->LogicalDpi;
 		ApplicationView::PreferredLaunchWindowingMode = ApplicationViewWindowingMode::PreferredLaunchViewSize;
 		// TODO: Change to ApplicationViewWindowingMode::FullScreen to default to full screen
@@ -545,7 +544,6 @@ private:
 	float m_DPI;
 	float m_LogicalWidth;
 	float m_LogicalHeight;
-	bool m_CapturingMouse = false;
 	std::unique_ptr<Graphics> m_pGraphics;
 
 	inline int ConvertDipsToPixels(float dips) const
@@ -579,10 +577,8 @@ public:
 int __cdecl main(Platform::Array<Platform::String^>^ argv)
 {
 	Console::Initialize();
-
 	auto viewProviderFactory = ref new ViewProviderFactory();
 	CoreApplication::Run(viewProviderFactory);
 	return 0;
 }
-
 #endif
