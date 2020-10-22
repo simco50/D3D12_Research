@@ -210,7 +210,6 @@ private:
 	uint32 m_ScreenshotRowPitch = 0;
 
 	uint32 m_CurrentBackBufferIndex = 0;
-	std::array<uint64, FRAME_COUNT> m_FenceValues = {};
 
 	RenderPath m_RenderPath = RenderPath::Clustered;
 

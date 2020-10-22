@@ -1,10 +1,13 @@
 #include "stdafx.h"
 #include "RootSignature.h"
 #include "Shader.h"
+#include "Graphics.h"
 
-RootSignature::RootSignature() 
-	: m_NumParameters(0)
+RootSignature::RootSignature(Graphics* pParent)
+	: GraphicsObject(pParent),
+	m_NumParameters(0)
 {
+
 }
 
 void RootSignature::SetSize(uint32 size, bool shrink /*= true*/)
@@ -92,7 +95,7 @@ void RootSignature::AddStaticSampler(uint32 shaderRegister, const D3D12_STATIC_S
 	m_StaticSamplers.push_back(samplerDesc);
 }
 
-void RootSignature::Finalize(const char* pName, ID3D12Device* pDevice, D3D12_ROOT_SIGNATURE_FLAGS flags)
+void RootSignature::Finalize(const char* pName, D3D12_ROOT_SIGNATURE_FLAGS flags)
 {
 	D3D12_ROOT_SIGNATURE_FLAGS visibilityFlags =
 		D3D12_ROOT_SIGNATURE_FLAG_DENY_VERTEX_SHADER_ROOT_ACCESS
@@ -101,7 +104,7 @@ void RootSignature::Finalize(const char* pName, ID3D12Device* pDevice, D3D12_ROO
 		| D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS;
 
 	D3D12_FEATURE_DATA_D3D12_OPTIONS7 featureCaps{};
-	pDevice->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS7, &featureCaps, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS7));
+	GetParent()->GetDevice()->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS7, &featureCaps, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS7));
 	if (featureCaps.MeshShaderTier != D3D12_MESH_SHADER_TIER_NOT_SUPPORTED)
 	{
 		visibilityFlags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_MESH_SHADER_ROOT_ACCESS
@@ -190,14 +193,14 @@ void RootSignature::Finalize(const char* pName, ID3D12Device* pDevice, D3D12_ROO
 		E_LOG(Error, "RootSignature serialization error: %s", pError);
 		return;
 	}
-	VERIFY_HR_EX(pDevice->CreateRootSignature(0, pDataBlob->GetBufferPointer(), pDataBlob->GetBufferSize(), IID_PPV_ARGS(m_pRootSignature.GetAddressOf())), pDevice);
+	VERIFY_HR_EX(GetParent()->GetDevice()->CreateRootSignature(0, pDataBlob->GetBufferPointer(), pDataBlob->GetBufferSize(), IID_PPV_ARGS(m_pRootSignature.GetAddressOf())), GetParent()->GetDevice());
 	D3D::SetObjectName(m_pRootSignature.Get(), pName);
 }
 
-void RootSignature::FinalizeFromShader(const char* pName, const Shader& shader, ID3D12Device* pDevice)
+void RootSignature::FinalizeFromShader(const char* pName, const Shader& shader)
 {
 	ComPtr<ID3D12VersionedRootSignatureDeserializer> pDeserializer;
-	VERIFY_HR_EX(D3D12CreateVersionedRootSignatureDeserializer(shader.GetByteCode(), shader.GetByteCodeSize(), IID_PPV_ARGS(pDeserializer.GetAddressOf())), pDevice);
+	VERIFY_HR_EX(D3D12CreateVersionedRootSignatureDeserializer(shader.GetByteCode(), shader.GetByteCodeSize(), IID_PPV_ARGS(pDeserializer.GetAddressOf())), GetParent()->GetDevice());
 	const D3D12_VERSIONED_ROOT_SIGNATURE_DESC* pDesc = pDeserializer->GetUnconvertedRootSignatureDesc();
 
 	m_NumParameters = pDesc->Desc_1_0.NumParameters;
@@ -218,7 +221,7 @@ void RootSignature::FinalizeFromShader(const char* pName, const Shader& shader, 
 		}
 	}
 
-	Finalize(pName, pDevice, pDesc->Desc_1_0.Flags);
+	Finalize(pName, pDesc->Desc_1_0.Flags);
 }
 
 uint32 RootSignature::GetDWordSize() const

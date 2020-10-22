@@ -24,7 +24,7 @@ ID3D12CommandAllocator* CommandAllocatorPool::GetAllocator(uint64 fenceValue)
 	}
 
 	ComPtr<ID3D12CommandAllocator> pAllocator;
-	m_pGraphics->GetDevice()->CreateCommandAllocator(m_Type, IID_PPV_ARGS(pAllocator.GetAddressOf()));
+	GetParent()->GetDevice()->CreateCommandAllocator(m_Type, IID_PPV_ARGS(pAllocator.GetAddressOf()));
 	D3D::SetObjectName(pAllocator.Get(), "Pooled Allocator");
 	m_CommandAllocators.push_back(std::move(pAllocator));
 	return m_CommandAllocators.back().Get();
@@ -50,9 +50,9 @@ CommandQueue::CommandQueue(Graphics* pGraphics, D3D12_COMMAND_LIST_TYPE type)
 	desc.Priority = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL;
 	desc.Type = type;
 
-	VERIFY_HR_EX(pGraphics->GetDevice()->CreateCommandQueue(&desc, IID_PPV_ARGS(m_pCommandQueue.GetAddressOf())), m_pGraphics->GetDevice());
+	VERIFY_HR_EX(pGraphics->GetDevice()->CreateCommandQueue(&desc, IID_PPV_ARGS(m_pCommandQueue.GetAddressOf())), pGraphics->GetDevice());
 	D3D::SetObjectName(m_pCommandQueue.Get(), "Main CommandQueue");
-	VERIFY_HR_EX(pGraphics->GetDevice()->CreateFence(m_LastCompletedFenceValue, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(m_pFence.GetAddressOf())), m_pGraphics->GetDevice());
+	VERIFY_HR_EX(pGraphics->GetDevice()->CreateFence(m_LastCompletedFenceValue, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(m_pFence.GetAddressOf())), pGraphics->GetDevice());
 	D3D::SetObjectName(m_pCommandQueue.Get(), "CommandQueue Fence");
 
 	m_pFenceEventHandle = CreateEventExA(nullptr, "CommandQueue Fence", 0, EVENT_ALL_ACCESS);
@@ -99,19 +99,19 @@ uint64 CommandQueue::ExecuteCommandLists(CommandContext** pCommandContexts, uint
 		{
 			if (!pCurrentContext)
 			{
-				pCurrentContext = m_pGraphics->AllocateCommandContext(m_Type);
+				pCurrentContext = GetParent()->AllocateCommandContext(m_Type);
 				pCurrentContext->Free(m_NextFenceValue);
 			}
 			barriers.Flush(pCurrentContext->GetCommandList());
 		}
 		if (pCurrentContext)
 		{
-			VERIFY_HR_EX(pCurrentContext->GetCommandList()->Close(), m_pGraphics->GetDevice());
+			VERIFY_HR_EX(pCurrentContext->GetCommandList()->Close(), GetParent()->GetDevice());
 			commandLists.push_back(pCurrentContext->GetCommandList());
 		}
 		pCurrentContext = pNextContext;
 	}
-	VERIFY_HR_EX(pCurrentContext->GetCommandList()->Close(), m_pGraphics->GetDevice());
+	VERIFY_HR_EX(pCurrentContext->GetCommandList()->Close(), GetParent()->GetDevice());
 	commandLists.push_back(pCurrentContext->GetCommandList());
 
 	m_pCommandQueue->ExecuteCommandLists((uint32)commandLists.size(), commandLists.data());
@@ -134,7 +134,7 @@ bool CommandQueue::IsFenceComplete(uint64 fenceValue)
 
 void CommandQueue::InsertWaitForFence(uint64 fenceValue)
 {
-	CommandQueue* pFenceValueOwner = m_pGraphics->GetCommandQueue((D3D12_COMMAND_LIST_TYPE)(fenceValue >> 56));
+	CommandQueue* pFenceValueOwner = GetParent()->GetCommandQueue((D3D12_COMMAND_LIST_TYPE)(fenceValue >> 56));
 	m_pCommandQueue->Wait(pFenceValueOwner->GetFence(), fenceValue);
 }
 

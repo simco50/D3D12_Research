@@ -11,7 +11,7 @@ std::mutex OnlineDescriptorAllocator::m_HeapAllocationMutex;
 OnlineDescriptorAllocator::OnlineDescriptorAllocator(Graphics* pGraphics, CommandContext* pContext, D3D12_DESCRIPTOR_HEAP_TYPE type)
 	: GraphicsObject(pGraphics), m_pOwner(pContext), m_Type(type)
 {
-	m_DescriptorSize = m_pGraphics->GetDevice()->GetDescriptorHandleIncrementSize(type);
+	m_DescriptorSize = pGraphics->GetDevice()->GetDescriptorHandleIncrementSize(type);
 }
 
 OnlineDescriptorAllocator::~OnlineDescriptorAllocator()
@@ -85,7 +85,7 @@ void OnlineDescriptorAllocator::UploadAndBindStagedDescriptors(DescriptorTableTy
 		//If the rangecount exceeds the max amount of descriptors per copy, flush
 		if (sourceRangeCount >= MAX_DESCRIPTORS_PER_TABLE)
 		{
-			m_pGraphics->GetDevice()->CopyDescriptors(destinationRangeCount, destinationRanges.data(), destinationRangeSizes.data(), sourceRangeCount, sourceRanges.data(), sourceRangeSizes.data(), m_Type);
+			GetParent()->GetDevice()->CopyDescriptors(destinationRangeCount, destinationRanges.data(), destinationRangeSizes.data(), sourceRangeCount, sourceRanges.data(), sourceRangeSizes.data(), m_Type);
 			sourceRangeCount = 0;
 			destinationRangeCount = 0;
 		}
@@ -114,7 +114,7 @@ void OnlineDescriptorAllocator::UploadAndBindStagedDescriptors(DescriptorTableTy
 		gpuHandle += rangeSize * m_DescriptorSize;
 	}
 
-	m_pGraphics->GetDevice()->CopyDescriptors(destinationRangeCount, destinationRanges.data(), destinationRangeSizes.data(), sourceRangeCount, sourceRanges.data(), sourceRangeSizes.data(), m_Type);
+	GetParent()->GetDevice()->CopyDescriptors(destinationRangeCount, destinationRanges.data(), destinationRangeSizes.data(), sourceRangeCount, sourceRanges.data(), sourceRangeSizes.data(), m_Type);
 
 	int i = 0;
 	for (auto it = m_StaleRootParameters.GetSetBitsIterator(); it.Valid(); ++it)
@@ -206,7 +206,7 @@ uint32 OnlineDescriptorAllocator::GetRequiredSpace()
 ID3D12DescriptorHeap* OnlineDescriptorAllocator::RequestNewHeap(D3D12_DESCRIPTOR_HEAP_TYPE type)
 {
 	std::scoped_lock<std::mutex> lock(m_HeapAllocationMutex);
-	if (m_FreeDescriptors[(int)m_Type].size() > 0 && m_pGraphics->IsFenceComplete(m_FreeDescriptors[(int)m_Type].front().first))
+	if (m_FreeDescriptors[(int)m_Type].size() > 0 && GetParent()->IsFenceComplete(m_FreeDescriptors[(int)m_Type].front().first))
 	{
 		ID3D12DescriptorHeap* pHeap = m_FreeDescriptors[(int)m_Type].front().second;
 		m_FreeDescriptors[(int)m_Type].pop();
@@ -220,7 +220,7 @@ ID3D12DescriptorHeap* OnlineDescriptorAllocator::RequestNewHeap(D3D12_DESCRIPTOR
 		desc.NumDescriptors = DESCRIPTORS_PER_HEAP;
 		desc.NodeMask = 0;
 		desc.Type = type;
-		VERIFY_HR_EX(m_pGraphics->GetDevice()->CreateDescriptorHeap(&desc, IID_PPV_ARGS(pHeap.GetAddressOf())), m_pGraphics->GetDevice());
+		VERIFY_HR_EX(GetParent()->GetDevice()->CreateDescriptorHeap(&desc, IID_PPV_ARGS(pHeap.GetAddressOf())), GetParent()->GetDevice());
 		D3D::SetObjectName(pHeap.Get(), "Online Pooled Descriptor Heap");
 		m_DescriptorHeaps.push_back(std::move(pHeap));
 		return m_DescriptorHeaps.back().Get();

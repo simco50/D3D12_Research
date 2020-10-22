@@ -965,6 +965,7 @@ void Graphics::Shutdown()
 {
 	// Wait for the GPU to be done with all resources.
 	IdleGPU();
+
 	m_pSwapchain->SetFullscreenState(false, nullptr);
 }
 
@@ -977,14 +978,8 @@ void Graphics::EndFrame(uint64 fenceValue)
 {
 	Profiler::Get()->Resolve(this, m_Frame);
 
-	//This always gets me confused!
-	//The 'm_CurrentBackBufferIndex' is the frame that just got queued so we set the fence value on that frame
-	//We present and request the new backbuffer index and wait for that one to finish on the GPU before starting to queue work for that frame.
-
-	m_FenceValues[m_CurrentBackBufferIndex] = fenceValue;
 	m_pSwapchain->Present(1, 0);
 	m_CurrentBackBufferIndex = m_pSwapchain->GetCurrentBackBufferIndex();
-	WaitForFence(m_FenceValues[m_CurrentBackBufferIndex]);
 	++m_Frame;
 }
 
@@ -1525,7 +1520,6 @@ void Graphics::OnResize(int width, int height)
 
 void Graphics::InitializePipelines()
 {
-
 	//Input layout
 	//UNIVERSAL
 	CD3DX12_INPUT_ELEMENT_DESC depthOnlyInputElements[] = {
@@ -1542,11 +1536,11 @@ void Graphics::InitializePipelines()
 			Shader alphaClipPixelShader("DepthOnly.hlsl", ShaderType::Pixel, "PSMain");
 
 			//Rootsignature
-			m_pShadowsRS = std::make_unique<RootSignature>();
-			m_pShadowsRS->FinalizeFromShader("Shadow Mapping (Opaque)", vertexShader, m_pDevice.Get());
+			m_pShadowsRS = std::make_unique<RootSignature>(this);
+			m_pShadowsRS->FinalizeFromShader("Shadow Mapping (Opaque)", vertexShader);
 
 			//Pipeline state
-			m_pShadowsOpaquePSO = std::make_unique<PipelineState>();
+			m_pShadowsOpaquePSO = std::make_unique<PipelineState>(this);
 			m_pShadowsOpaquePSO->SetInputLayout(depthOnlyInputElements, sizeof(depthOnlyInputElements) / sizeof(depthOnlyInputElements[0]));
 			m_pShadowsOpaquePSO->SetRootSignature(m_pShadowsRS->GetRootSignature());
 			m_pShadowsOpaquePSO->SetVertexShader(vertexShader);
@@ -1554,11 +1548,11 @@ void Graphics::InitializePipelines()
 			m_pShadowsOpaquePSO->SetCullMode(D3D12_CULL_MODE_NONE);
 			m_pShadowsOpaquePSO->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
 			m_pShadowsOpaquePSO->SetDepthBias(-1, -5.0f, -4.0f);
-			m_pShadowsOpaquePSO->Finalize("Shadow Mapping (Opaque)", m_pDevice.Get());
+			m_pShadowsOpaquePSO->Finalize("Shadow Mapping (Opaque)");
 
 			m_pShadowsAlphaPSO = std::make_unique<PipelineState>(*m_pShadowsOpaquePSO);
 			m_pShadowsAlphaPSO->SetPixelShader(alphaClipPixelShader);
-			m_pShadowsAlphaPSO->Finalize("Shadow Mapping (Alpha)", m_pDevice.Get());
+			m_pShadowsAlphaPSO->Finalize("Shadow Mapping (Alpha)");
 		}
 	}
 
@@ -1568,17 +1562,17 @@ void Graphics::InitializePipelines()
 		Shader vertexShader("DepthOnly.hlsl", ShaderType::Vertex, "VSMain");
 
 		//Rootsignature
-		m_pDepthPrepassRS = std::make_unique<RootSignature>();
-		m_pDepthPrepassRS->FinalizeFromShader("Depth Prepass", vertexShader, m_pDevice.Get());
+		m_pDepthPrepassRS = std::make_unique<RootSignature>(this);
+		m_pDepthPrepassRS->FinalizeFromShader("Depth Prepass", vertexShader);
 
 		//Pipeline state
-		m_pDepthPrepassPSO = std::make_unique<PipelineState>();
+		m_pDepthPrepassPSO = std::make_unique<PipelineState>(this);
 		m_pDepthPrepassPSO->SetInputLayout(depthOnlyInputElements, sizeof(depthOnlyInputElements) / sizeof(depthOnlyInputElements[0]));
 		m_pDepthPrepassPSO->SetRootSignature(m_pDepthPrepassRS->GetRootSignature());
 		m_pDepthPrepassPSO->SetVertexShader(vertexShader);
 		m_pDepthPrepassPSO->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
 		m_pDepthPrepassPSO->SetRenderTargetFormats(nullptr, 0, DEPTH_STENCIL_FORMAT, m_SampleCount);
-		m_pDepthPrepassPSO->Finalize("Depth Prepass", m_pDevice.Get());
+		m_pDepthPrepassPSO->Finalize("Depth Prepass");
 	}
 
 	//Luminance Historgram
@@ -1586,14 +1580,14 @@ void Graphics::InitializePipelines()
 		Shader computeShader("LuminanceHistogram.hlsl", ShaderType::Compute, "CSMain");
 
 		//Rootsignature
-		m_pLuminanceHistogramRS = std::make_unique<RootSignature>();
-		m_pLuminanceHistogramRS->FinalizeFromShader("Luminance Historgram", computeShader, m_pDevice.Get());
+		m_pLuminanceHistogramRS = std::make_unique<RootSignature>(this);
+		m_pLuminanceHistogramRS->FinalizeFromShader("Luminance Historgram", computeShader);
 
 		//Pipeline state
-		m_pLuminanceHistogramPSO = std::make_unique<PipelineState>();
+		m_pLuminanceHistogramPSO = std::make_unique<PipelineState>(this);
 		m_pLuminanceHistogramPSO->SetRootSignature(m_pLuminanceHistogramRS->GetRootSignature());
 		m_pLuminanceHistogramPSO->SetComputeShader(computeShader);
-		m_pLuminanceHistogramPSO->Finalize("Luminance Historgram", m_pDevice.Get());
+		m_pLuminanceHistogramPSO->Finalize("Luminance Historgram");
 
 		m_pLuminanceHistogram = std::make_unique<Buffer>(this, "Luminance Histogram");
 		m_pLuminanceHistogram->Create(BufferDesc::CreateByteAddress(sizeof(uint32) * 256));
@@ -1604,13 +1598,13 @@ void Graphics::InitializePipelines()
 	//Debug Draw Histogram
 	{
 		Shader computeDrawShader("DrawLuminanceHistogram.hlsl", ShaderType::Compute, "DrawLuminanceHistogram");
-		m_pDrawHistogramRS = std::make_unique<RootSignature>();
-		m_pDrawHistogramRS->FinalizeFromShader("Draw Luminance Historgram", computeDrawShader, m_pDevice.Get());
+		m_pDrawHistogramRS = std::make_unique<RootSignature>(this);
+		m_pDrawHistogramRS->FinalizeFromShader("Draw Luminance Historgram", computeDrawShader);
 
-		m_pDrawHistogramPSO = std::make_unique<PipelineState>();
+		m_pDrawHistogramPSO = std::make_unique<PipelineState>(this);
 		m_pDrawHistogramPSO->SetRootSignature(m_pDrawHistogramRS->GetRootSignature());
 		m_pDrawHistogramPSO->SetComputeShader(computeDrawShader);
-		m_pDrawHistogramPSO->Finalize("Draw Luminance Historgram", m_pDevice.Get());
+		m_pDrawHistogramPSO->Finalize("Draw Luminance Historgram");
 	}
 
 	//Average Luminance
@@ -1618,14 +1612,14 @@ void Graphics::InitializePipelines()
 		Shader computeShader("AverageLuminance.hlsl", ShaderType::Compute, "CSMain");
 
 		//Rootsignature
-		m_pAverageLuminanceRS = std::make_unique<RootSignature>();
-		m_pAverageLuminanceRS->FinalizeFromShader("Average Luminance", computeShader, m_pDevice.Get());
+		m_pAverageLuminanceRS = std::make_unique<RootSignature>(this);
+		m_pAverageLuminanceRS->FinalizeFromShader("Average Luminance", computeShader);
 
 		//Pipeline state
-		m_pAverageLuminancePSO = std::make_unique<PipelineState>();
+		m_pAverageLuminancePSO = std::make_unique<PipelineState>(this);
 		m_pAverageLuminancePSO->SetRootSignature(m_pAverageLuminanceRS->GetRootSignature());
 		m_pAverageLuminancePSO->SetComputeShader(computeShader);
-		m_pAverageLuminancePSO->Finalize("Average Luminance", m_pDevice.Get());
+		m_pAverageLuminancePSO->Finalize("Average Luminance");
 	}
 
 	//Tonemapping
@@ -1633,14 +1627,14 @@ void Graphics::InitializePipelines()
 		Shader computeShader("Tonemapping.hlsl", ShaderType::Compute, "CSMain");
 
 		//Rootsignature
-		m_pToneMapRS = std::make_unique<RootSignature>();
-		m_pToneMapRS->FinalizeFromShader("Tonemapping", computeShader, m_pDevice.Get());
+		m_pToneMapRS = std::make_unique<RootSignature>(this);
+		m_pToneMapRS->FinalizeFromShader("Tonemapping", computeShader);
 
 		//Pipeline state
-		m_pToneMapPSO = std::make_unique<PipelineState>();
+		m_pToneMapPSO = std::make_unique<PipelineState>(this);
 		m_pToneMapPSO->SetRootSignature(m_pToneMapRS->GetRootSignature());
 		m_pToneMapPSO->SetComputeShader(computeShader);
-		m_pToneMapPSO->Finalize("Tone mapping Pipeline", m_pDevice.Get());
+		m_pToneMapPSO->Finalize("Tone mapping Pipeline");
 	}
 
 	//Depth resolve
@@ -1649,13 +1643,13 @@ void Graphics::InitializePipelines()
 	{
 		Shader computeShader("ResolveDepth.hlsl", ShaderType::Compute, "CSMain", { "DEPTH_RESOLVE_MIN" });
 
-		m_pResolveDepthRS = std::make_unique<RootSignature>();
-		m_pResolveDepthRS->FinalizeFromShader("Depth Resolve", computeShader, m_pDevice.Get());
+		m_pResolveDepthRS = std::make_unique<RootSignature>(this);
+		m_pResolveDepthRS->FinalizeFromShader("Depth Resolve", computeShader);
 
-		m_pResolveDepthPSO = std::make_unique<PipelineState>();
+		m_pResolveDepthPSO = std::make_unique<PipelineState>(this);
 		m_pResolveDepthPSO->SetComputeShader(computeShader);
 		m_pResolveDepthPSO->SetRootSignature(m_pResolveDepthRS->GetRootSignature());
-		m_pResolveDepthPSO->Finalize("Resolve Depth Pipeline", m_pDevice.Get());
+		m_pResolveDepthPSO->Finalize("Resolve Depth Pipeline");
 	}
 
 	//Depth reduce
@@ -1664,33 +1658,33 @@ void Graphics::InitializePipelines()
 		Shader prepareReduceShaderMSAA("ReduceDepth.hlsl", ShaderType::Compute, "PrepareReduceDepth", { "WITH_MSAA" });
 		Shader reduceShader("ReduceDepth.hlsl", ShaderType::Compute, "ReduceDepth", { });
 
-		m_pReduceDepthRS = std::make_unique<RootSignature>();
-		m_pReduceDepthRS->FinalizeFromShader("Depth Reduce", prepareReduceShader, m_pDevice.Get());
+		m_pReduceDepthRS = std::make_unique<RootSignature>(this);
+		m_pReduceDepthRS->FinalizeFromShader("Depth Reduce", prepareReduceShader);
 
-		m_pPrepareReduceDepthPSO = std::make_unique<PipelineState>();
+		m_pPrepareReduceDepthPSO = std::make_unique<PipelineState>(this);
 		m_pPrepareReduceDepthPSO->SetComputeShader(prepareReduceShader);
 		m_pPrepareReduceDepthPSO->SetRootSignature(m_pReduceDepthRS->GetRootSignature());
-		m_pPrepareReduceDepthPSO->Finalize("Prepare Reduce Depth Pipeline", m_pDevice.Get());
+		m_pPrepareReduceDepthPSO->Finalize("Prepare Reduce Depth Pipeline");
 		m_pPrepareReduceDepthMsaaPSO = std::make_unique<PipelineState>(*m_pPrepareReduceDepthPSO);
 		m_pPrepareReduceDepthMsaaPSO->SetComputeShader(prepareReduceShaderMSAA);
-		m_pPrepareReduceDepthMsaaPSO->Finalize("Prepare Reduce Depth Pipeline MSAA", m_pDevice.Get());
+		m_pPrepareReduceDepthMsaaPSO->Finalize("Prepare Reduce Depth Pipeline MSAA");
 
 		m_pReduceDepthPSO = std::make_unique<PipelineState>(*m_pPrepareReduceDepthPSO);
 		m_pReduceDepthPSO->SetComputeShader(reduceShader);
-		m_pReduceDepthPSO->Finalize("Reduce Depth Pipeline", m_pDevice.Get());
+		m_pReduceDepthPSO->Finalize("Reduce Depth Pipeline");
 	}
 
 	//Mip generation
 	{
 		Shader computeShader("GenerateMips.hlsl", ShaderType::Compute, "CSMain");
 
-		m_pGenerateMipsRS = std::make_unique<RootSignature>();
-		m_pGenerateMipsRS->FinalizeFromShader("Generate Mips", computeShader, m_pDevice.Get());
+		m_pGenerateMipsRS = std::make_unique<RootSignature>(this);
+		m_pGenerateMipsRS->FinalizeFromShader("Generate Mips", computeShader);
 
-		m_pGenerateMipsPSO = std::make_unique<PipelineState>();
+		m_pGenerateMipsPSO = std::make_unique<PipelineState>(this);
 		m_pGenerateMipsPSO->SetComputeShader(computeShader);
 		m_pGenerateMipsPSO->SetRootSignature(m_pGenerateMipsRS->GetRootSignature());
-		m_pGenerateMipsPSO->Finalize("Generate Mips PSO", m_pDevice.Get());
+		m_pGenerateMipsPSO->Finalize("Generate Mips");
 	}
 
 	//Sky
@@ -1699,18 +1693,18 @@ void Graphics::InitializePipelines()
 		Shader pixelShader("ProceduralSky.hlsl", ShaderType::Pixel, "PSMain");
 
 		//Rootsignature
-		m_pSkyboxRS = std::make_unique<RootSignature>();
-		m_pSkyboxRS->FinalizeFromShader("Skybox", vertexShader, m_pDevice.Get());
+		m_pSkyboxRS = std::make_unique<RootSignature>(this);
+		m_pSkyboxRS->FinalizeFromShader("Skybox", vertexShader);
 
 		//Pipeline state
-		m_pSkyboxPSO = std::make_unique<PipelineState>();
+		m_pSkyboxPSO = std::make_unique<PipelineState>(this);
 		m_pSkyboxPSO->SetInputLayout(nullptr, 0);
 		m_pSkyboxPSO->SetRootSignature(m_pSkyboxRS->GetRootSignature());
 		m_pSkyboxPSO->SetVertexShader(vertexShader);
 		m_pSkyboxPSO->SetPixelShader(pixelShader);
 		m_pSkyboxPSO->SetRenderTargetFormat(RENDER_TARGET_FORMAT, DEPTH_STENCIL_FORMAT, m_SampleCount);
 		m_pSkyboxPSO->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
-		m_pSkyboxPSO->Finalize("Skybox", m_pDevice.Get());
+		m_pSkyboxPSO->Finalize("Skybox");
 	}
 }
 

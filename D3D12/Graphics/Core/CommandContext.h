@@ -282,10 +282,11 @@ private:
 	D3D12_RESOURCE_STATES m_BeforeState = D3D12_RESOURCE_STATE_UNKNOWN;
 };
 
-class CommandSignature
+class CommandSignature : public GraphicsObject
 {
 public:
-	void Finalize(const char* pName, ID3D12Device* pDevice);
+	CommandSignature(Graphics* pParent);
+	void Finalize(const char* pName);
 
 	void SetRootSignature(ID3D12RootSignature* pRootSignature) { m_pRootSignature = pRootSignature; }
 	void AddDispatch();

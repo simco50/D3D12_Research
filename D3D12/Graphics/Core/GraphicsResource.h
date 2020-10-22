@@ -7,13 +7,13 @@ class GraphicsObject
 {
 public:
 	GraphicsObject(Graphics* pParent = nullptr)
-		: m_pGraphics(pParent)
+		: m_pParent(pParent)
 	{}
 
-	Graphics* GetGraphics() const { return m_pGraphics; }
+	Graphics* GetParent() const { return m_pParent; }
 
 protected:
-	Graphics* m_pGraphics;
+	Graphics* m_pParent;
 };
 
 constexpr D3D12_RESOURCE_STATES D3D12_RESOURCE_STATE_UNKNOWN = (D3D12_RESOURCE_STATES)-1;
