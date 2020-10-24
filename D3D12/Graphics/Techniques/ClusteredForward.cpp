@@ -374,17 +374,17 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 
 					DrawData& drawData = pDrawData[i];
 					drawData.CBV = dataAllocation.GpuHandle + i * constBufferSize;
-					drawData.VertexBuffer.BufferLocation = b.pMesh->GetVerticesLocation();
-					drawData.VertexBuffer.SizeInBytes = b.pMesh->GetVertexCount() * b.pMesh->GetStride();
-					drawData.VertexBuffer.StrideInBytes = b.pMesh->GetStride();
-					drawData.IndexBuffer.BufferLocation = b.pMesh->GetIndicesLocation();
+					drawData.VertexBuffer.BufferLocation = b.pMesh->GetVertexBuffer().Location;
+					drawData.VertexBuffer.SizeInBytes = b.pMesh->GetVertexBuffer().Elements * b.pMesh->GetVertexBuffer().Stride;
+					drawData.VertexBuffer.StrideInBytes = b.pMesh->GetVertexBuffer().Stride;
+					drawData.IndexBuffer.BufferLocation = b.pMesh->GetIndexBuffer().Location;
 					drawData.IndexBuffer.Format = DXGI_FORMAT_R32_UINT;
-					drawData.IndexBuffer.SizeInBytes = b.pMesh->GetIndexCount() * sizeof(uint32);
+					drawData.IndexBuffer.SizeInBytes = b.pMesh->GetIndexBuffer().Elements * sizeof(uint32);
 
 					drawData.Arguments.BaseVertexLocation = 0;
 					drawData.Arguments.InstanceCount = 1;
 					drawData.Arguments.StartIndexLocation = 0;
-					drawData.Arguments.IndexCountPerInstance = b.pMesh->GetIndexCount();
+					drawData.Arguments.IndexCountPerInstance = b.pMesh->GetIndexBuffer().Elements;
 					drawData.Arguments.StartInstanceLocation = 0;
 				}
 

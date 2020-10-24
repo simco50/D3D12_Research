@@ -37,8 +37,10 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 		Vector3 Bitangent;
 	};
 
+	constexpr int test = sizeof(Vertex);
+
 	m_pGeometryData = std::make_unique<Buffer>(pGraphics, "Mesh VertexBuffer");
-	m_pGeometryData->Create(BufferDesc::CreateBuffer(vertexCount * sizeof(Vertex) + indexCount * sizeof(uint32)));
+	m_pGeometryData->Create(BufferDesc::CreateBuffer(vertexCount * sizeof(Vertex) + indexCount * sizeof(uint32), BufferFlag::ShaderResource));
 
 	uint32 dataOffset = 0;
 	for (uint32 i = 0; i < pScene->mNumMeshes; ++i)
@@ -161,7 +163,17 @@ SubMesh::~SubMesh()
 
 void SubMesh::Draw(CommandContext* pContext) const
 {
-	pContext->SetIndexBuffer(IndexBufferView(m_IndicesLocation, m_IndexCount, false));
-	pContext->SetVertexBuffer(VertexBufferView(m_VerticesLocation, m_VertexCount, m_Stride));
+	pContext->SetIndexBuffer(GetIndexBuffer());
+	pContext->SetVertexBuffer(GetVertexBuffer());
 	pContext->DrawIndexed(m_IndexCount, 0, 0);
+}
+
+VertexBufferView SubMesh::GetVertexBuffer() const
+{
+	return VertexBufferView(m_VerticesLocation, m_VertexCount, m_Stride);
+}
+
+IndexBufferView SubMesh::GetIndexBuffer() const
+{
+	return IndexBufferView(m_IndicesLocation, m_IndexCount, false);
 }
