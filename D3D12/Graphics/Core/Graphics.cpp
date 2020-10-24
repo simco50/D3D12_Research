@@ -59,7 +59,8 @@ namespace Tweakables
 	bool g_VisualizeShadowCascades = false;
 	int g_ShadowCascades = 4;
 	float g_PSSMFactor = 1.0f;
-	bool g_ShowRaytraced = false;
+	bool g_RaytracedAO = false;
+	bool g_RaytracedReflections = false;
 	bool g_VisualizeLights = false;
 	bool g_VisualizeLightDensity = false;
 
@@ -100,7 +101,7 @@ void Graphics::Initialize(WindowHandle window)
 	InitializeAssets(*pContext);
 	pContext->Execute(true);
 
-	Tweakables::g_ShowRaytraced = SupportsRayTracing() ? Tweakables::g_ShowRaytraced : false;
+	Tweakables::g_RaytracedAO = SupportsRayTracing() ? Tweakables::g_RaytracedAO : false;
 
 	m_pDynamicAllocationManager->CollectGarbage();
 }
@@ -528,7 +529,7 @@ void Graphics::Update()
 
 	m_pParticles->Simulate(graph, GetResolvedDepthStencil(), *m_pCamera);
 
-	if (Tweakables::g_ShowRaytraced)
+	if (Tweakables::g_RaytracedAO)
 	{
 		m_pRTAO->Execute(graph, m_pAmbientOcclusion.get(), GetResolvedDepthStencil(), m_pTLAS.get(), *m_pCamera);
 	}
@@ -537,7 +538,10 @@ void Graphics::Update()
 		m_pSSAO->Execute(graph, m_pAmbientOcclusion.get(), GetResolvedDepthStencil(), *m_pCamera);
 	}
 
-	m_pRTReflections->Execute(graph, m_SceneData);
+	if (Tweakables::g_RaytracedReflections)
+	{
+		m_pRTReflections->Execute(graph, m_SceneData);
+	}
 
 	//SHADOW MAPPING
 	// - Renders the scene depth onto a separate depth buffer from the light's view
@@ -1928,12 +1932,10 @@ void Graphics::UpdateImGui()
 	ImGui::Checkbox("Visualize Clusters", &g_VisualizeClusters);
 	ImGui::SliderInt("SSR Samples", &Tweakables::g_SsrSamples, 0, 32);
 
-	if (ImGui::Checkbox("Raytracing", &Tweakables::g_ShowRaytraced))
+	if (m_RayTracingTier != D3D12_RAYTRACING_TIER_NOT_SUPPORTED)
 	{
-		if (m_RayTracingTier == D3D12_RAYTRACING_TIER_NOT_SUPPORTED)
-		{
-			Tweakables::g_ShowRaytraced = false;
-		}
+		ImGui::Checkbox("Raytraced AO", &Tweakables::g_RaytracedAO);
+		ImGui::Checkbox("Raytraced Reflections", &Tweakables::g_RaytracedReflections);
 	}
 
 	ImGui::End();
