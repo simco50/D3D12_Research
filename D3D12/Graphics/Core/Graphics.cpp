@@ -23,6 +23,7 @@
 #include "Graphics/Techniques/TiledForward.h"
 #include "Graphics/Techniques/RTAO.h"
 #include "Graphics/Techniques/SSAO.h"
+#include "Graphics/Techniques/RTReflections.h"
 #include "Graphics/Techniques/GpuParticles.h"
 #include "Core/CommandLine.h"
 #include "Content/Image.h"
@@ -58,7 +59,8 @@ namespace Tweakables
 	bool g_VisualizeShadowCascades = false;
 	int g_ShadowCascades = 4;
 	float g_PSSMFactor = 1.0f;
-	bool g_ShowRaytraced = false;
+	bool g_RaytracedAO = false;
+	bool g_RaytracedReflections = false;
 	bool g_VisualizeLights = false;
 	bool g_VisualizeLightDensity = false;
 
@@ -99,7 +101,7 @@ void Graphics::Initialize(WindowHandle window)
 	InitializeAssets(*pContext);
 	pContext->Execute(true);
 
-	Tweakables::g_ShowRaytraced = SupportsRayTracing() ? Tweakables::g_ShowRaytraced : false;
+	Tweakables::g_RaytracedAO = SupportsRayTracing() ? Tweakables::g_RaytracedAO : false;
 
 	m_pDynamicAllocationManager->CollectGarbage();
 }
@@ -361,6 +363,7 @@ void Graphics::Update()
 	m_SceneData.FrameIndex = m_Frame;
 	m_SceneData.pPreviousColor = m_pPreviousColor.get();
 	m_SceneData.pTLAS = m_pTLAS.get();
+	m_SceneData.pMesh = m_pMesh.get();
 
 	////////////////////////////////
 	// LET THE RENDERING BEGIN!
@@ -526,13 +529,18 @@ void Graphics::Update()
 
 	m_pParticles->Simulate(graph, GetResolvedDepthStencil(), *m_pCamera);
 
-	if (Tweakables::g_ShowRaytraced)
+	if (Tweakables::g_RaytracedAO)
 	{
 		m_pRTAO->Execute(graph, m_pAmbientOcclusion.get(), GetResolvedDepthStencil(), m_pTLAS.get(), *m_pCamera);
 	}
 	else
 	{
 		m_pSSAO->Execute(graph, m_pAmbientOcclusion.get(), GetResolvedDepthStencil(), *m_pCamera);
+	}
+
+	if (Tweakables::g_RaytracedReflections)
+	{
+		m_pRTReflections->Execute(graph, m_SceneData);
 	}
 
 	//SHADOW MAPPING
@@ -1240,6 +1248,7 @@ void Graphics::InitD3D()
 	m_pDynamicAllocationManager = std::make_unique<DynamicAllocationManager>(this);
 	m_pClusteredForward = std::make_unique<ClusteredForward>(this);
 	m_pTiledForward = std::make_unique<TiledForward>(this);
+	m_pRTReflections = std::make_unique<RTReflections>(this);
 	m_pRTAO = std::make_unique<RTAO>(this);
 	m_pSSAO = std::make_unique<SSAO>(this);
 	m_pImGuiRenderer = std::make_unique<ImGuiRenderer>(this);
@@ -1321,13 +1330,13 @@ void Graphics::InitializeAssets(CommandContext& context)
 				D3D12_RAYTRACING_GEOMETRY_DESC geometryDesc{};
 				geometryDesc.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
 				geometryDesc.Flags = D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
-				geometryDesc.Triangles.IndexBuffer = pSubMesh->GetIndicesLocation();
-				geometryDesc.Triangles.IndexCount = pSubMesh->GetIndexCount();
+				geometryDesc.Triangles.IndexBuffer = pSubMesh->GetIndexBuffer().Location;
+				geometryDesc.Triangles.IndexCount = pSubMesh->GetIndexBuffer().Elements;
 				geometryDesc.Triangles.IndexFormat = DXGI_FORMAT_R32_UINT;
 				geometryDesc.Triangles.Transform3x4 = 0;
-				geometryDesc.Triangles.VertexBuffer.StartAddress = pSubMesh->GetVerticesLocation();
-				geometryDesc.Triangles.VertexBuffer.StrideInBytes = pSubMesh->GetStride();
-				geometryDesc.Triangles.VertexCount = pSubMesh->GetVertexCount();
+				geometryDesc.Triangles.VertexBuffer.StartAddress = pSubMesh->GetVertexBuffer().Location;
+				geometryDesc.Triangles.VertexBuffer.StrideInBytes = pSubMesh->GetVertexBuffer().Stride;
+				geometryDesc.Triangles.VertexCount = pSubMesh->GetVertexBuffer().Elements;
 				geometryDesc.Triangles.VertexFormat = DXGI_FORMAT_R32G32B32_FLOAT;
 				geometries.push_back(geometryDesc);
 			}
@@ -1923,12 +1932,10 @@ void Graphics::UpdateImGui()
 	ImGui::Checkbox("Visualize Clusters", &g_VisualizeClusters);
 	ImGui::SliderInt("SSR Samples", &Tweakables::g_SsrSamples, 0, 32);
 
-	if (ImGui::Checkbox("Raytracing", &Tweakables::g_ShowRaytraced))
+	if (m_RayTracingTier != D3D12_RAYTRACING_TIER_NOT_SUPPORTED)
 	{
-		if (m_RayTracingTier == D3D12_RAYTRACING_TIER_NOT_SUPPORTED)
-		{
-			Tweakables::g_ShowRaytraced = false;
-		}
+		ImGui::Checkbox("Raytraced AO", &Tweakables::g_RaytracedAO);
+		ImGui::Checkbox("Raytraced Reflections", &Tweakables::g_RaytracedReflections);
 	}
 
 	ImGui::End();

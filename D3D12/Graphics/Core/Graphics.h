@@ -19,6 +19,7 @@ class TiledForward;
 class Camera;
 class UnorderedAccessView;
 class RTAO;
+class RTReflections;
 class SSAO;
 class GpuParticles;
 
@@ -63,6 +64,7 @@ struct SceneData
 	Texture* pRenderTarget = nullptr;
 	Texture* pPreviousColor = nullptr;
 	Texture* pAO = nullptr;
+	Mesh* pMesh = nullptr;
 	std::vector<std::unique_ptr<Texture>>* pShadowMaps = nullptr;
 	std::vector<Batch> OpaqueBatches;
 	std::vector<Batch> TransparantBatches;
@@ -189,6 +191,7 @@ private:
 	std::unique_ptr<ClusteredForward> m_pClusteredForward;
 	std::unique_ptr<TiledForward> m_pTiledForward;
 	std::unique_ptr<RTAO> m_pRTAO;
+	std::unique_ptr<RTReflections> m_pRTReflections;
 	std::unique_ptr<SSAO> m_pSSAO;
 
 	std::unique_ptr<Camera> m_pCamera;
