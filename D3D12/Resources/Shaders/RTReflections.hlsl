@@ -1,10 +1,13 @@
 #include "Common.hlsli"
+#include "ShadingModels.hlsli"
 
 RWTexture2D<float4> gOutput : register(u0);
 
 RaytracingAccelerationStructure SceneBVH : register(t0);
 
 Texture2D tDepth : register(t1);
+
+StructuredBuffer<Light> tLights : register(t2);
 
 SamplerState sSceneSampler : register(s0);
 
@@ -40,6 +43,22 @@ struct RayPayload
 	float3 output;
 };
 
+float3 TangentSpaceNormalMapping(float3 sampledNormal, float3x3 TBN, float2 tex, bool invertY)
+{
+	sampledNormal.xy = sampledNormal.xy * 2.0f - 1.0f;
+
+//#define NORMAL_BC5
+#ifdef NORMAL_BC5
+	sampledNormal.z = sqrt(saturate(1.0f - dot(sampledNormal.xy, sampledNormal.xy)));
+#endif
+	if(invertY)
+	{
+		sampledNormal.x = -sampledNormal.x;
+	}
+	sampledNormal = normalize(sampledNormal);
+	return mul(sampledNormal, TBN);
+}
+
 [shader("closesthit")] 
 void ClosestHit(inout RayPayload payload, BuiltInTriangleIntersectionAttributes attrib) 
 {
@@ -49,11 +68,30 @@ void ClosestHit(inout RayPayload payload, BuiltInTriangleIntersectionAttributes 
 	Vertex v1 = tVertexData.Load<Vertex>(indices.y * sizeof(Vertex));
 	Vertex v2 = tVertexData.Load<Vertex>(indices.z * sizeof(Vertex));
 	float2 texCoord = v0.texCoord * b.x + v1.texCoord * b.y + v2.texCoord * b.z;
-	float3 normal = v0.normal * b.x + v1.normal * b.y + v2.normal * b.z;
-	float NoL = dot(normal, normalize(float3(1, -1, 1)));
+	float3 N = v0.normal * b.x + v1.normal * b.y + v2.normal * b.z;
+	float3 T = v0.tangent * b.x + v1.tangent * b.y + v2.tangent * b.z;
+	float3 B = v0.bitangent * b.x + v1.bitangent * b.y + v2.bitangent * b.z;
+	float3x3 TBN = float3x3(T, B, N);
+	float3 wPos = WorldRayOrigin() + WorldRayDirection() * RayTCurrent();
+	float3 V = normalize(wPos - cViewInverse[3].xyz);
+	float attenuation = 1;
 
-	float3 color = tMaterialTextures[DiffuseIndex].SampleLevel(sSceneSampler, texCoord, 0).rgb;
-	payload.output = saturate(NoL) * color;
+	Light light = tLights[0];
+
+	float3 L = light.Direction;
+
+	float3 diffuse = tMaterialTextures[DiffuseIndex].SampleLevel(sSceneSampler, texCoord, 0).rgb;
+	float3 sampledNormal = tMaterialTextures[NormalIndex].SampleLevel(sSceneSampler, texCoord, 0).rgb;
+	N = TangentSpaceNormalMapping(sampledNormal, TBN, texCoord, false);
+
+	float roughness = 0.5;
+	float3 specularColor = ComputeF0(0.5f, diffuse, 0);
+
+	LightResult result = DefaultLitBxDF(specularColor, roughness, diffuse, N, V, L, attenuation);
+	float4 color = light.GetColor();
+	result.Diffuse *= color.rgb * light.Intensity;
+	result.Specular *= color.rgb * light.Intensity;
+	payload.output = result.Diffuse + result.Specular;
 }
 
 [shader("miss")] 

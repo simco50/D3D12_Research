@@ -13,7 +13,7 @@ class RTReflections
 public:
 	RTReflections(Graphics* pGraphics);
 
-	void Execute(RGGraph& graph, const SceneData& sceneData);
+	Texture* Execute(RGGraph& graph, const SceneData& sceneData);
 
 private:
 	void SetupResources(Graphics* pGraphics);
@@ -26,6 +26,6 @@ private:
 	std::unique_ptr<RootSignature> m_pMissSignature;
 	std::unique_ptr<RootSignature> m_pGlobalRS;
 
-	std::unique_ptr<Texture> m_pTestOutput;
+	std::unique_ptr<Texture> m_pReflections;
 };
 
