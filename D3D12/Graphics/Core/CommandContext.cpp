@@ -11,8 +11,8 @@
 #include "ResourceViews.h"
 #include "RaytracingCommon.h"
 
-CommandContext::CommandContext(Graphics* pGraphics, ID3D12GraphicsCommandList* pCommandList, D3D12_COMMAND_LIST_TYPE type)
-	: GraphicsObject(pGraphics), m_pCommandList(pCommandList), m_pAllocator(nullptr), m_Type(type)
+CommandContext::CommandContext(Graphics* pGraphics, ID3D12GraphicsCommandList* pCommandList, D3D12_COMMAND_LIST_TYPE type, ID3D12CommandAllocator* pAllocator)
+	: GraphicsObject(pGraphics), m_pCommandList(pCommandList), m_Type(type), m_pAllocator(pAllocator)
 {
 	m_DynamicAllocator = std::make_unique<DynamicResourceAllocator>(pGraphics->GetAllocationManager());
 	if (m_Type != D3D12_COMMAND_LIST_TYPE_COPY)
@@ -34,7 +34,7 @@ void CommandContext::Reset()
 	check(m_pCommandList);
 	if (m_pAllocator == nullptr)
 	{
-		m_pAllocator = m_pGraphics->GetCommandQueue(m_Type)->RequestAllocator();
+		m_pAllocator = GetParent()->GetCommandQueue(m_Type)->RequestAllocator();
 		m_pCommandList->Reset(m_pAllocator, nullptr);
 	}
 	m_BarrierBatcher.Reset();
@@ -53,7 +53,7 @@ uint64 CommandContext::Execute(bool wait)
 uint64 CommandContext::Execute(CommandContext** pContexts, uint32 numContexts, bool wait)
 {
 	check(numContexts > 0);
-	CommandQueue* pQueue = pContexts[0]->m_pGraphics->GetCommandQueue(pContexts[0]->GetType());
+	CommandQueue* pQueue = pContexts[0]->GetParent()->GetCommandQueue(pContexts[0]->GetType());
 	for (uint32 i = 0; i < numContexts; ++i)
 	{
 		checkf(pContexts[i]->GetType() == pQueue->GetType(), "All commandlist types must match. Expected %s, got %s",
@@ -76,9 +76,9 @@ uint64 CommandContext::Execute(CommandContext** pContexts, uint32 numContexts, b
 void CommandContext::Free(uint64 fenceValue)
 {
 	m_DynamicAllocator->Free(fenceValue);
-	m_pGraphics->GetCommandQueue(m_Type)->FreeAllocator(fenceValue, m_pAllocator);
+	GetParent()->GetCommandQueue(m_Type)->FreeAllocator(fenceValue, m_pAllocator);
 	m_pAllocator = nullptr;
-	m_pGraphics->FreeCommandList(this);
+	GetParent()->FreeCommandList(this);
 
 	if (m_pShaderResourceDescriptorAllocator)
 	{
@@ -112,6 +112,7 @@ bool NeedsTransition(D3D12_RESOURCE_STATES& before, D3D12_RESOURCE_STATES& after
 
 void CommandContext::InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESOURCE_STATES state, uint32 subResource /*= D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES*/)
 {
+	check(pBuffer && pBuffer->GetResource());
 	checkf(IsTransitionAllowed(m_Type, state), "After state (%s) is not valid on this commandlist type (%s)", D3D::ResourceStateToString(state).c_str(), D3D::CommandlistTypeToString(m_Type));
 
 	ResourceState& resourceState = m_ResourceStates[pBuffer];
@@ -148,7 +149,8 @@ void CommandContext::FlushResourceBarriers()
 
 void CommandContext::CopyTexture(GraphicsResource* pSource, GraphicsResource* pTarget)
 {
-	check(pSource && pTarget);
+	checkf(pSource && pSource->GetResource(), "Source is invalid");
+	checkf(pTarget && pTarget->GetResource(), "Target is invalid");
 	InsertResourceBarrier(pSource, D3D12_RESOURCE_STATE_COPY_SOURCE);
 	InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_COPY_DEST);
 	FlushResourceBarriers();
@@ -158,7 +160,8 @@ void CommandContext::CopyTexture(GraphicsResource* pSource, GraphicsResource* pT
 void CommandContext::CopyTexture(Texture* pSource, Buffer* pDestination, const D3D12_BOX& sourceRegion, int sourceSubregion /*= 0*/, int destinationOffset /*= 0*/)
 {
 	D3D12_PLACED_SUBRESOURCE_FOOTPRINT textureFootprint = {};
-	m_pGraphics->GetDevice()->GetCopyableFootprints(&pSource->GetResource()->GetDesc(), 0, 1, 0, &textureFootprint, nullptr, nullptr, nullptr);
+	D3D12_RESOURCE_DESC resourceDesc = pSource->GetResource()->GetDesc();
+	GetParent()->GetDevice()->GetCopyableFootprints(&resourceDesc, 0, 1, 0, &textureFootprint, nullptr, nullptr, nullptr);
 
 	CD3DX12_TEXTURE_COPY_LOCATION srcLocation(pSource->GetResource(), sourceSubregion);
 	CD3DX12_TEXTURE_COPY_LOCATION dstLocation(pDestination->GetResource(), textureFootprint);
@@ -191,7 +194,7 @@ void CommandContext::InitializeTexture(Texture* pResource, D3D12_SUBRESOURCE_DAT
 {
 	D3D12_RESOURCE_DESC desc = pResource->GetResource()->GetDesc();
 	uint64 requiredSize = 0;
-	m_pGraphics->GetDevice()->GetCopyableFootprints(&desc, firstSubResource, subResourceCount, 0, nullptr, nullptr, nullptr, &requiredSize);
+	GetParent()->GetDevice()->GetCopyableFootprints(&desc, firstSubResource, subResourceCount, 0, nullptr, nullptr, nullptr, &requiredSize);
 	DynamicAllocation allocation = m_DynamicAllocator->Allocate(requiredSize, D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT);
 	
 	ScopedBarrier barrier(*this, pResource, D3D12_RESOURCE_STATE_COPY_DEST);
@@ -217,17 +220,17 @@ void CommandContext::DispatchMesh(uint32 groupCountX, uint32 groupCountY /*= 1*/
 	m_pMeshShadingCommandList->DispatchMesh(groupCountX, groupCountY, groupCountZ);
 }
 
-void CommandContext::ExecuteIndirect(CommandSignature* pCommandSignature, Buffer* pIndirectArguments, bool isCompute)
+void CommandContext::ExecuteIndirect(CommandSignature* pCommandSignature, uint32 maxCount, Buffer* pIndirectArguments, Buffer* pCountBuffer, uint32 argumentsOffset /*= 0*/, uint32 countOffset /*= 0*/)
 {
-	PrepareDraw(isCompute ? DescriptorTableType::Compute : DescriptorTableType::Graphics);
-	m_pCommandList->ExecuteIndirect(pCommandSignature->GetCommandSignature(), 1, pIndirectArguments->GetResource(), 0, nullptr, 0);
+	PrepareDraw(pCommandSignature->IsCompute() ? DescriptorTableType::Compute : DescriptorTableType::Graphics);
+	m_pCommandList->ExecuteIndirect(pCommandSignature->GetCommandSignature(), maxCount, pIndirectArguments->GetResource(), argumentsOffset, pCountBuffer ? pCountBuffer->GetResource() : nullptr, countOffset);
 }
 
 void CommandContext::ClearUavUInt(GraphicsResource* pBuffer, UnorderedAccessView* pUav, uint32* values /*= nullptr*/)
 {
 	FlushResourceBarriers();
 	DescriptorHandle gpuHandle = m_pShaderResourceDescriptorAllocator->AllocateTransientDescriptor(1);
-	m_pGraphics->GetDevice()->CopyDescriptorsSimple(1, gpuHandle.GetCpuHandle(), pUav->GetDescriptor(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	GetParent()->GetDevice()->CopyDescriptorsSimple(1, gpuHandle.GetCpuHandle(), pUav->GetDescriptor(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 	uint32 zeros[4] = { 0,0,0,0 };
 	m_pCommandList->ClearUnorderedAccessViewUint(gpuHandle.GetGpuHandle(), pUav->GetDescriptor(), pBuffer->GetResource(), values ? values : zeros, 0, nullptr);
 }
@@ -236,7 +239,7 @@ void CommandContext::ClearUavFloat(GraphicsResource* pBuffer, UnorderedAccessVie
 {
 	FlushResourceBarriers();
 	DescriptorHandle gpuHandle = m_pShaderResourceDescriptorAllocator->AllocateTransientDescriptor(1);
-	m_pGraphics->GetDevice()->CopyDescriptorsSimple(1, gpuHandle.GetCpuHandle(), pUav->GetDescriptor(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	GetParent()->GetDevice()->CopyDescriptorsSimple(1, gpuHandle.GetCpuHandle(), pUav->GetDescriptor(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 	float zeros[4] = { 0,0,0,0 };
 	m_pCommandList->ClearUnorderedAccessViewFloat(gpuHandle.GetGpuHandle(), pUav->GetDescriptor(), pBuffer->GetResource(), values ? values : zeros, 0, nullptr);
 }
@@ -393,7 +396,7 @@ void CommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 	};
 
 #if D3D12_USE_RENDERPASSES
-	if (m_pGraphics->UseRenderPasses() && m_pRaytracingCommandList)
+	if (GetParent()->UseRenderPasses() && m_pRaytracingCommandList)
 	{
 		D3D12_RENDER_PASS_DEPTH_STENCIL_DESC renderPassDepthStencilDesc{};
 		renderPassDepthStencilDesc.DepthBeginningAccess.Type = ExtractBeginAccess(renderPassInfo.DepthStencilTarget.Access);
@@ -541,7 +544,7 @@ void CommandContext::EndRenderPass()
 	};
 
 #if D3D12_USE_RENDERPASSES
-	if (m_pGraphics->UseRenderPasses() && m_pRaytracingCommandList)
+	if (GetParent()->UseRenderPasses() && m_pRaytracingCommandList)
 	{
 		m_pRaytracingCommandList->EndRenderPass();
 	}
@@ -784,14 +787,20 @@ void ResourceBarrierBatcher::Reset()
 	m_QueuedBarriers.clear();
 }
 
-void CommandSignature::Finalize(const char* pName, ID3D12Device* pDevice)
+CommandSignature::CommandSignature(Graphics* pParent)
+	: GraphicsObject(pParent)
+{
+
+}
+
+void CommandSignature::Finalize(const char* pName)
 {
 	D3D12_COMMAND_SIGNATURE_DESC desc{};
 	desc.ByteStride = m_Stride;
 	desc.NodeMask = 0;
 	desc.NumArgumentDescs = (uint32)m_ArgumentDesc.size();
 	desc.pArgumentDescs = m_ArgumentDesc.data();
-	VERIFY_HR_EX(pDevice->CreateCommandSignature(&desc, m_pRootSignature, IID_PPV_ARGS(m_pCommandSignature.GetAddressOf())), pDevice);
+	VERIFY_HR_EX(GetParent()->GetDevice()->CreateCommandSignature(&desc, m_pRootSignature, IID_PPV_ARGS(m_pCommandSignature.GetAddressOf())), GetParent()->GetDevice());
 	D3D::SetObjectName(m_pCommandSignature.Get(), pName);
 }
 
@@ -800,8 +809,8 @@ void CommandSignature::AddDispatch()
 	D3D12_INDIRECT_ARGUMENT_DESC desc;
 	desc.Type = D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH;
 	m_ArgumentDesc.push_back(desc);
-	constexpr int dispatchArgumentsCount = 3;
-	m_Stride += dispatchArgumentsCount * sizeof(uint32);
+	m_Stride += sizeof(D3D12_DISPATCH_ARGUMENTS);
+	m_IsCompute = true;
 }
 
 void CommandSignature::AddDraw()
@@ -809,8 +818,8 @@ void CommandSignature::AddDraw()
 	D3D12_INDIRECT_ARGUMENT_DESC desc;
 	desc.Type = D3D12_INDIRECT_ARGUMENT_TYPE_DRAW;
 	m_ArgumentDesc.push_back(desc);
-	constexpr int drawArgumentsCount = 4;
-	m_Stride += drawArgumentsCount * sizeof(uint32);
+	m_Stride += sizeof(D3D12_DRAW_ARGUMENTS);
+	m_IsCompute = false;
 }
 
 void CommandSignature::AddDrawIndexed()
@@ -818,6 +827,61 @@ void CommandSignature::AddDrawIndexed()
 	D3D12_INDIRECT_ARGUMENT_DESC desc;
 	desc.Type = D3D12_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED;
 	m_ArgumentDesc.push_back(desc);
-	constexpr int drawArgumentsCount = 4;
-	m_Stride += drawArgumentsCount * sizeof(uint32);
+	m_Stride += sizeof(D3D12_DRAW_INDEXED_ARGUMENTS);
+	m_IsCompute = false;
+}
+
+void CommandSignature::AddConstants(uint32 numConstants, uint32 rootIndex, uint32 offset)
+{
+	D3D12_INDIRECT_ARGUMENT_DESC desc;
+	desc.Type = D3D12_INDIRECT_ARGUMENT_TYPE_CONSTANT;
+	desc.Constant.RootParameterIndex = rootIndex;
+	desc.Constant.DestOffsetIn32BitValues = offset;
+	desc.Constant.Num32BitValuesToSet = numConstants;
+	m_ArgumentDesc.push_back(desc);
+	m_Stride += numConstants * sizeof(uint32);
+}
+
+void CommandSignature::AddConstantBufferView(uint32 rootIndex)
+{
+	D3D12_INDIRECT_ARGUMENT_DESC desc;
+	desc.Type = D3D12_INDIRECT_ARGUMENT_TYPE_CONSTANT_BUFFER_VIEW;
+	desc.ConstantBufferView.RootParameterIndex = rootIndex;
+	m_ArgumentDesc.push_back(desc);
+	m_Stride += sizeof(uint64);
+}
+
+void CommandSignature::AddShaderResourceView(uint32 rootIndex)
+{
+	D3D12_INDIRECT_ARGUMENT_DESC desc;
+	desc.Type = D3D12_INDIRECT_ARGUMENT_TYPE_SHADER_RESOURCE_VIEW;
+	desc.ShaderResourceView.RootParameterIndex = rootIndex;
+	m_ArgumentDesc.push_back(desc);
+	m_Stride += 8;
+}
+
+void CommandSignature::AddUnorderedAccessView(uint32 rootIndex)
+{
+	D3D12_INDIRECT_ARGUMENT_DESC desc;
+	desc.Type = D3D12_INDIRECT_ARGUMENT_TYPE_UNORDERED_ACCESS_VIEW;
+	desc.UnorderedAccessView.RootParameterIndex = rootIndex;
+	m_ArgumentDesc.push_back(desc);
+	m_Stride += 8;
+}
+
+void CommandSignature::AddVertexBuffer(uint32 slot)
+{
+	D3D12_INDIRECT_ARGUMENT_DESC desc;
+	desc.Type = D3D12_INDIRECT_ARGUMENT_TYPE_VERTEX_BUFFER_VIEW;
+	desc.VertexBuffer.Slot = slot;
+	m_ArgumentDesc.push_back(desc);
+	m_Stride += sizeof(D3D12_VERTEX_BUFFER_VIEW);
+}
+
+void CommandSignature::AddIndexBuffer()
+{
+	D3D12_INDIRECT_ARGUMENT_DESC desc;
+	desc.Type = D3D12_INDIRECT_ARGUMENT_TYPE_INDEX_BUFFER_VIEW;
+	m_ArgumentDesc.push_back(desc);
+	m_Stride += sizeof(D3D12_INDEX_BUFFER_VIEW);
 }

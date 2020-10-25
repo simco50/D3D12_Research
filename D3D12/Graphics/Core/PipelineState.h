@@ -1,4 +1,5 @@
 #pragma once
+#include "GraphicsResource.h"
 
 class Shader;
 class ShaderLibrary;
@@ -25,13 +26,14 @@ enum class PipelineStateType
 	MAX
 };
 
-class PipelineState
+class PipelineState : public GraphicsObject
 {
 public:
-	PipelineState();
+	PipelineState(Graphics* pParent);
 	PipelineState(const PipelineState& other);
+	~PipelineState();
 	ID3D12PipelineState* GetPipelineState() const { return m_pPipelineState.Get(); }
-	void Finalize(const char* pName, ID3D12Device* pDevice);
+	void Finalize(const char* pName);
 
 	void SetRenderTargetFormat(DXGI_FORMAT rtvFormat, DXGI_FORMAT dsvFormat, uint32 msaa);
 	void SetRenderTargetFormats(DXGI_FORMAT* rtvFormats, uint32 count, DXGI_FORMAT dsvFormat, uint32 msaa);

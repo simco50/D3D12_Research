@@ -141,8 +141,8 @@ void ImGuiRenderer::CreatePipeline(Graphics* pGraphics)
 	Shader pixelShader("ImGui.hlsl", ShaderType::Pixel, "PSMain");
 
 	//Root signature
-	m_pRootSignature = std::make_unique<RootSignature>();
-	m_pRootSignature->FinalizeFromShader("ImGui", vertexShader, pGraphics->GetDevice());
+	m_pRootSignature = std::make_unique<RootSignature>(pGraphics);
+	m_pRootSignature->FinalizeFromShader("ImGui", vertexShader);
 	//Input layout
 	CD3DX12_INPUT_ELEMENT_DESC elementDesc[] = {
 		CD3DX12_INPUT_ELEMENT_DESC("POSITION", DXGI_FORMAT_R32G32_FLOAT),
@@ -150,7 +150,7 @@ void ImGuiRenderer::CreatePipeline(Graphics* pGraphics)
 		CD3DX12_INPUT_ELEMENT_DESC("COLOR", DXGI_FORMAT_R8G8B8A8_UNORM),
 	};
 
-	m_pPipelineState = std::make_unique<PipelineState>();
+	m_pPipelineState = std::make_unique<PipelineState>(pGraphics);
 	m_pPipelineState->SetBlendMode(BlendMode::Alpha, false);
 	m_pPipelineState->SetDepthWrite(false);
 	m_pPipelineState->SetDepthEnabled(false);
@@ -159,8 +159,8 @@ void ImGuiRenderer::CreatePipeline(Graphics* pGraphics)
 	m_pPipelineState->SetPixelShader(pixelShader);
 	m_pPipelineState->SetRootSignature(m_pRootSignature->GetRootSignature());
 	m_pPipelineState->SetInputLayout(elementDesc, ARRAYSIZE(elementDesc));
-	m_pPipelineState->SetRenderTargetFormat(DXGI_FORMAT_R8G8B8A8_UNORM, Graphics::DEPTH_STENCIL_FORMAT, 1);
-	m_pPipelineState->Finalize("ImGui Pipeline", pGraphics->GetDevice());
+	m_pPipelineState->SetRenderTargetFormat(DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_UNKNOWN, 1);
+	m_pPipelineState->Finalize("ImGui Pipeline");
 }
 
 void ImGuiRenderer::Render(RGGraph& graph, Texture* pRenderTarget)

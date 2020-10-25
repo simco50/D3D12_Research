@@ -3,14 +3,17 @@
 class Buffer;
 class CommandContext;
 
+#define CONCAT_IMPL( x, y ) x##y
+#define MACRO_CONCAT( x, y ) CONCAT_IMPL( x, y )
+
 #define GPU_PROFILE_BEGIN(name, cmdlist) Profiler::Get()->Begin(name, cmdlist);
 #define GPU_PROFILE_END(cmdlist) Profiler::Get()->End(cmdlist);
 
 #define PROFILE_BEGIN(name) Profiler::Get()->Begin(name, nullptr);
 #define PROFILE_END() Profiler::Get()->End();
 
-#define GPU_PROFILE_SCOPE(name, cmdlist) ScopeProfiler profiler ## __COUNTER__(name, cmdlist)
-#define PROFILE_SCOPE(name) ScopeProfiler profiler ## __COUNTER__(name, nullptr)
+#define GPU_PROFILE_SCOPE(name, cmdlist) ScopeProfiler MACRO_CONCAT(profiler,__COUNTER__)(name, cmdlist)
+#define PROFILE_SCOPE(name) ScopeProfiler MACRO_CONCAT(profiler,__COUNTER__)(name, nullptr)
 
 class CpuTimer
 {

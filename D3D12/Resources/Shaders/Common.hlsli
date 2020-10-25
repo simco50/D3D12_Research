@@ -127,23 +127,13 @@ Plane CalculatePlane(float3 a, float3 b, float3 c)
 }
 
 // Convert clip space (-1, 1) coordinates to view space
-float4 ClipToView(float4 clip, float4x4 projectionInverse)
+float3 ClipToView(float4 clip, float4x4 projectionInverse)
 {
     // View space position.
     float4 view = mul(clip, projectionInverse);
     // Perspective projection.
     view = view / view.w;
-    return view;
-}
- 
-// Convert screen space coordinates (0, width/height) to view space.
-float4 ScreenToView(float4 screen, float2 screenDimensionsInv, float4x4 projectionInverse)
-{
-    // Convert to normalized texture coordinates
-    float2 texCoord = screen.xy * screenDimensionsInv;
-    // Convert to clip space
-    float4 clip = float4(float2(texCoord.x, 1.0f - texCoord.y) * 2.0f - 1.0f, screen.z, screen.w);
-    return ClipToView(clip, projectionInverse);
+    return view.xyz;
 }
 
 // Convert view space position to screen UVs (0, 1). Non-linear Z
@@ -156,6 +146,12 @@ float3 ViewToWindow(float3 view, float4x4 projection)
     return proj.xyz;
 }
 
+float3 ViewFromDepth(float2 uv, float depth, float4x4 projectionInverse)
+{
+    float4 clip = float4(float2(uv.x, 1.0f - uv.y) * 2.0f - 1.0f, depth, 1.0f);
+    return ClipToView(clip, projectionInverse);
+}
+
 float3 WorldFromDepth(float2 uv, float depth, float4x4 viewProjectionInverse)
 {
     float4 clip = float4(float2(uv.x, 1.0f - uv.y) * 2.0f - 1.0f, depth, 1.0f);
@@ -163,9 +159,24 @@ float3 WorldFromDepth(float2 uv, float depth, float4x4 viewProjectionInverse)
     return world.xyz / world.w;
 }
 
+// Convert screen space coordinates (0, width/height) to view space.
+float3 ScreenToView(float4 screen, float2 screenDimensionsInv, float4x4 projectionInverse)
+{
+    // Convert to normalized texture coordinates
+    float2 screenNormalized = screen.xy * screenDimensionsInv;
+    return ViewFromDepth(screenNormalized, screen.z, projectionInverse);
+}
+
+//View space depth [0, far plane]
 float LinearizeDepth(float z, float near, float far)
 {
-    return 1.0 / (((near - far) / far) * z + 1.0);
+    return near * far / (far + z * (near - far));
+}
+
+//View space depth [0, 1]
+float LinearizeDepth01(float z, float near, float far)
+{
+    return far / (far + z * (near - far));
 }
 
 void AABBFromMinMax(inout AABB aabb, float3 minimum, float3 maximum)

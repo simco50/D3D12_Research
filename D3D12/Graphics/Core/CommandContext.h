@@ -128,7 +128,7 @@ private:
 class CommandContext : public GraphicsObject
 {
 public:
-	CommandContext(Graphics* pGraphics, ID3D12GraphicsCommandList* pCommandList, D3D12_COMMAND_LIST_TYPE type);
+	CommandContext(Graphics* pGraphics, ID3D12GraphicsCommandList* pCommandList, D3D12_COMMAND_LIST_TYPE type, ID3D12CommandAllocator* pAllocator);
 	~CommandContext();
 
 	void Reset();
@@ -157,7 +157,8 @@ public:
 	void Dispatch(uint32 groupCountX, uint32 groupCountY = 1, uint32 groupCountZ = 1);
 	void Dispatch(const IntVector3& groupCounts);
 	void DispatchMesh(uint32 groupCountX, uint32 groupCountY = 1, uint32 groupCountZ = 1);
-	void ExecuteIndirect(CommandSignature* pCommandSignature, Buffer* pIndirectArguments, bool isCompute = true);
+
+	void ExecuteIndirect(CommandSignature* pCommandSignature, uint32 maxCount, Buffer* pIndirectArguments, Buffer* pCountBuffer, uint32 argumentsOffset = 0, uint32 countOffset = 0);
 	void Draw(int vertexStart, int vertexCount);
 	void DrawIndexed(int indexCount, int indexStart, int minVertex = 0);
 	void DrawIndexedInstanced(int indexCount, int indexStart, int instanceCount, int minVertex = 0, int instanceStart = 0);
@@ -281,21 +282,30 @@ private:
 	D3D12_RESOURCE_STATES m_BeforeState = D3D12_RESOURCE_STATE_UNKNOWN;
 };
 
-class CommandSignature
+class CommandSignature : public GraphicsObject
 {
 public:
-	void Finalize(const char* pName, ID3D12Device* pDevice);
+	CommandSignature(Graphics* pParent);
+	void Finalize(const char* pName);
 
 	void SetRootSignature(ID3D12RootSignature* pRootSignature) { m_pRootSignature = pRootSignature; }
 	void AddDispatch();
 	void AddDraw();
 	void AddDrawIndexed();
+	void AddConstants(uint32 numConstants, uint32 rootIndex, uint32 offset);
+	void AddConstantBufferView(uint32 rootIndex);
+	void AddShaderResourceView(uint32 rootIndex);
+	void AddUnorderedAccessView(uint32 rootIndex);
+	void AddVertexBuffer(uint32 slot);
+	void AddIndexBuffer();
 
 	ID3D12CommandSignature* GetCommandSignature() const { return m_pCommandSignature.Get(); }
+	bool IsCompute() const { return m_IsCompute; }
 
 private:
 	ComPtr<ID3D12CommandSignature> m_pCommandSignature;
 	ID3D12RootSignature* m_pRootSignature = nullptr;
 	uint32 m_Stride = 0;
 	std::vector<D3D12_INDIRECT_ARGUMENT_DESC> m_ArgumentDesc;
+	bool m_IsCompute = false;
 };

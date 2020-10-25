@@ -2,9 +2,9 @@
 #include "CommonBindings.hlsli"
 
 #define RootSig "RootFlags(ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT), " \
-				"CBV(b0, visibility=SHADER_VISIBILITY_VERTEX), " \
+				"CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \
 				"CBV(b1, visibility=SHADER_VISIBILITY_VERTEX), " \
-				"DescriptorTable(SRV(t0, numDescriptors = 1), visibility=SHADER_VISIBILITY_PIXEL), " \
+				"DescriptorTable(SRV(t1000, numDescriptors = 128, space = 2), visibility=SHADER_VISIBILITY_PIXEL), " \
 				"StaticSampler(s0, filter=FILTER_MIN_MAG_MIP_LINEAR, visibility = SHADER_VISIBILITY_PIXEL), "
 
 struct PerViewData
@@ -15,6 +15,10 @@ struct PerViewData
 struct PerObjectData
 {
 	float4x4 World;
+	int Diffuse;
+    int Normal;
+    int Roughness;
+    int Metallic;
 };
 
 ConstantBuffer<PerObjectData> cObjectData : register(b0);
@@ -43,7 +47,7 @@ PSInput VSMain(VSInput input)
 
 void PSMain(PSInput input)
 {
-	if(tDiffuseTexture.Sample(sDiffuseSampler, input.texCoord).a < 0.5f)
+	if(tMaterialTextures[cObjectData.Diffuse].Sample(sDiffuseSampler, input.texCoord).a < 0.5f)
 	{
 		discard;
 	}

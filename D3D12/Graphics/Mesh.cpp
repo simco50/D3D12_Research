@@ -37,8 +37,10 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 		Vector3 Bitangent;
 	};
 
+	constexpr int test = sizeof(Vertex);
+
 	m_pGeometryData = std::make_unique<Buffer>(pGraphics, "Mesh VertexBuffer");
-	m_pGeometryData->Create(BufferDesc::CreateBuffer(vertexCount * sizeof(Vertex) + indexCount * sizeof(uint32)));
+	m_pGeometryData->Create(BufferDesc::CreateBuffer(vertexCount * sizeof(Vertex) + indexCount * sizeof(uint32), BufferFlag::ShaderResource));
 
 	uint32 dataOffset = 0;
 	for (uint32 i = 0; i < pScene->mNumMeshes; ++i)
@@ -94,37 +96,50 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 
 	std::string dirPath = Paths::GetDirectoryPath(pFilePath);
 
-	auto loadTexture = [pGraphics, pContext](const char* basePath, aiMaterial* pMaterial, aiTextureType type, bool srgb)
+	m_Textures.push_back(std::make_unique<Texture>(pGraphics, "Dummy White"));
+	m_Textures.back()->Create(pContext, "Resources/Textures/dummy.dds", true);
+	m_Textures.push_back(std::make_unique<Texture>(pGraphics, "Dummy Normal"));
+	m_Textures.back()->Create(pContext, "Resources/Textures/dummy_ddn.dds", false);
+	m_Textures.push_back(std::make_unique<Texture>(pGraphics, "Dummy Black"));
+	m_Textures.back()->Create(pContext, "Resources/Textures/dummy_black.dds", false);
+	//m_Textures.push_back(std::make_unique<Texture>(pGraphics, "Dummy Gray"));
+	//m_Textures.back()->Create(pContext, "Resources/Textures/dummy_gray.dds", false);
+
+	auto loadTexture = [this, pGraphics, pContext](const char* basePath, aiMaterial* pMaterial, aiTextureType type, bool srgb)
 	{
-		std::unique_ptr<Texture> pTex;
 		aiString path;
 		aiReturn ret = pMaterial->GetTexture(type, 0, &path);
-		pTex = std::make_unique<Texture>(pGraphics, "Material Texture");
 		bool success = ret == aiReturn_SUCCESS;
-		if (success)
-		{
-			std::string p = path.C_Str();
-			std::stringstream str;
-			str << basePath << "/" << p;
-			success = pTex->Create(pContext, str.str().c_str(), srgb);
-		}
-		if(!success)
+		std::string pathStr = path.C_Str();
+		if (!success)
 		{
 			switch (type)
 			{
-			case aiTextureType_NORMALS:
-				pTex->Create(pContext, "Resources/textures/dummy_ddn.dds", srgb);
-				break;
-			case aiTextureType_SPECULAR:
-				pTex->Create(pContext, "Resources/textures/dummy_specular.dds", srgb);
-				break;
-			case aiTextureType_DIFFUSE:
-			default:
-				pTex->Create(pContext, "Resources/textures/dummy.dds", srgb);
-				break;
+			case aiTextureType_NORMALS:		return m_Textures[1].get();
+			case aiTextureType_SPECULAR:	return m_Textures[2].get();
+			//case aiTextureType_SHININESS:	return m_Textures[3].get();
+			case aiTextureType_AMBIENT:		return m_Textures[2].get();
+			default:						return m_Textures[0].get();
 			}
 		}
-		return pTex;
+		StringHash pathHash = StringHash(pathStr.c_str());
+		auto it = m_ExistingTextures.find(pathHash);
+		if (it != m_ExistingTextures.end())
+		{
+			return it->second;
+		}
+		std::unique_ptr<Texture> pTex;
+		pTex = std::make_unique<Texture>(pGraphics, pathStr.c_str());
+		std::stringstream str;
+		str << basePath << pathStr;
+		success = pTex->Create(pContext, str.str().c_str(), srgb);
+		if (success)
+		{
+			m_Textures.push_back(std::move(pTex));
+			m_ExistingTextures[pathHash] = m_Textures.back().get();
+			return m_Textures.back().get();
+		}
+		return (Texture*)nullptr;
 	};
 
 	m_Materials.resize(pScene->mNumMaterials);
@@ -133,11 +148,11 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 		Material& m = m_Materials[i];
 		m.pDiffuseTexture = loadTexture(dirPath.c_str(), pScene->mMaterials[i], aiTextureType_DIFFUSE, true);
 		m.pNormalTexture = loadTexture(dirPath.c_str(), pScene->mMaterials[i], aiTextureType_NORMALS, false);
-		m.pSpecularTexture = loadTexture(dirPath.c_str(), pScene->mMaterials[i], aiTextureType_SPECULAR, false);
+		m.pRoughnessTexture = loadTexture(dirPath.c_str(), pScene->mMaterials[i], aiTextureType_SHININESS, false);
+		m.pMetallicTexture = loadTexture(dirPath.c_str(), pScene->mMaterials[i], aiTextureType_AMBIENT, false);
 		aiString p;
 		m.IsTransparent = pScene->mMaterials[i]->GetTexture(aiTextureType_OPACITY, 0, &p) == aiReturn_SUCCESS;
 	}
-
 	return true;
 }
 
@@ -148,7 +163,17 @@ SubMesh::~SubMesh()
 
 void SubMesh::Draw(CommandContext* pContext) const
 {
-	pContext->SetIndexBuffer(IndexBufferView(m_IndicesLocation, m_IndexCount, false));
-	pContext->SetVertexBuffer(VertexBufferView(m_VerticesLocation, m_VertexCount, m_Stride));
+	pContext->SetIndexBuffer(GetIndexBuffer());
+	pContext->SetVertexBuffer(GetVertexBuffer());
 	pContext->DrawIndexed(m_IndexCount, 0, 0);
+}
+
+VertexBufferView SubMesh::GetVertexBuffer() const
+{
+	return VertexBufferView(m_VerticesLocation, m_VertexCount, m_Stride);
+}
+
+IndexBufferView SubMesh::GetIndexBuffer() const
+{
+	return IndexBufferView(m_IndicesLocation, m_IndexCount, false);
 }

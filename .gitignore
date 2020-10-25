@@ -14,6 +14,7 @@ AppPackages/
 BundleArtifacts/
 
 # Misc
+Notes/
 imgui.ini
 *.html
 *.gv

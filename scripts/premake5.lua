@@ -11,16 +11,20 @@ workspace (ENGINE_NAME)
 	configurations { "Debug", "Release" }
     platforms { "x64" }
 	defines { "x64" }
-	language ("C++")
+	language "C++"
 	cppdialect "c++17"
 	startproject (ENGINE_NAME)
-	symbols ("On")
-	architecture ("x64")
-	kind ("WindowedApp")
-	characterset ("MBCS")
-	flags { "MultiProcessorCompile", "ShadowedVariables" }
+	symbols "On"
+	architecture "x64"
+	kind "WindowedApp"
+	characterset "MBCS"
+	flags {"MultiProcessorCompile", "ShadowedVariables", "FatalWarnings"}
 	rtti "Off"
+	warnings "Extra"
 
+	--Unreferenced variable
+	disablewarnings {"4100"}
+	
 	filter "configurations:Debug"
 		defines { "_DEBUG" }
 		optimize ("Off")
@@ -65,6 +69,7 @@ workspace (ENGINE_NAME)
 			}
 		else
 			system "windows"
+			conformancemode "On"
 			defines { "PLATFORM_WINDOWS=1" }
 			systemversion (WIN_SDK)
 		end
@@ -78,11 +83,19 @@ workspace (ENGINE_NAME)
 			(SOURCE_DIR .. "**.inl"),
 			(SOURCE_DIR .. "**.c"),
 			(SOURCE_DIR .. "**.natvis"),
+			(SOURCE_DIR .. "**.hlsl*"),
 		}
 
+		vpaths
+		{
+			{["Shaders/Include"] = (SOURCE_DIR .. "**.hlsli")},
+			{["Shaders/Source"] = (SOURCE_DIR .. "**.hlsl")},
+		}
 
 		filter ("files:" .. SOURCE_DIR .. "External/**")
 			flags { "NoPCH" }
+			removeflags "FatalWarnings"
+			warnings "Default"
 		filter {}
 
 		-- Pix

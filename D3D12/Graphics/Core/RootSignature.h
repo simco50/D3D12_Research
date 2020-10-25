@@ -1,5 +1,6 @@
 #pragma once
 #include "Core/BitField.h"
+#include "GraphicsResource.h"
 
 /*
 	The RootSignature describes how the GPU resources map to the shader.
@@ -10,14 +11,14 @@
 
 class Shader;
 
-class RootSignature
+class RootSignature : public GraphicsObject
 {
 public:
 	static const int MAX_NUM_DESCRIPTORS = 16;
 	static const int MAX_RANGES_PER_TABLE = 2;
 	static_assert(MAX_NUM_DESCRIPTORS <= BitField32::Capacity(), "Descriptor bitfield is not large enough");
 
-	RootSignature();
+	RootSignature(Graphics* pParent);
 
 	void SetSize(uint32 size, bool shrink = true);
 
@@ -31,8 +32,8 @@ public:
 
 	void AddStaticSampler(uint32 shaderRegister, const D3D12_STATIC_SAMPLER_DESC& samplerDesc, D3D12_SHADER_VISIBILITY visibility);
 
-	void Finalize(const char* pName, ID3D12Device* pDevice, D3D12_ROOT_SIGNATURE_FLAGS flags);
-	void FinalizeFromShader(const char* pName, const Shader& shader, ID3D12Device* pDevice);
+	void Finalize(const char* pName, D3D12_ROOT_SIGNATURE_FLAGS flags);
+	void FinalizeFromShader(const char* pName, const Shader& shader);
 
 	ID3D12RootSignature* GetRootSignature() const { return m_pRootSignature.Get(); }
 

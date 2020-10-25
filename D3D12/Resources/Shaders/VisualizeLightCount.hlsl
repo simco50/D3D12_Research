@@ -42,7 +42,7 @@ static float4 DEBUG_COLORS[] = {
 
 float EdgeDetection(uint2 index, uint width, uint height)
 {
-    float reference = LinearizeDepth(tDepth.Load(uint3(index, 0)), cNear, cFar);
+    float reference = LinearizeDepth01(tDepth.Load(uint3(index, 0)), cNear, cFar);
     uint2 offsets[8] = {
         uint2(-1, -1),
         uint2(-1, 0),
@@ -56,7 +56,7 @@ float EdgeDetection(uint2 index, uint width, uint height)
     float sampledValue = 0;
     for(int j = 0; j < 8; j++) 
     {
-        sampledValue += LinearizeDepth(tDepth.Load(uint3(index + offsets[j], 0)), cNear, cFar);
+        sampledValue += LinearizeDepth01(tDepth.Load(uint3(index + offsets[j], 0)), cNear, cFar);
     }
     sampledValue /= 8;
     return lerp(1, 0, step(0.003f, length(reference - sampledValue)));
@@ -113,8 +113,8 @@ void DebugLightDensityCS(uint3 threadId : SV_DispatchThreadId)
         {
 
             float depth = tDepth.Load(uint3(threadId.xy, 0));
-            float3 viewPos = ScreenToView(float4(0, 0, depth, 1), float2(1, 1), cProjectionInverse).xyz;
-            uint slice = floor(log(viewPos.z) * cLightGridParams.x - cLightGridParams.y);
+            float viewDepth = LinearizeDepth(depth, cNear, cFar);
+            uint slice = floor(log(viewDepth) * cLightGridParams.x - cLightGridParams.y);
             uint3 clusterIndex3D = uint3(floor(threadId.xy / cClusterSize), slice);
             uint clusterIndex1D = clusterIndex3D.x + (cClusterDimensions.x * (clusterIndex3D.y + cClusterDimensions.y * clusterIndex3D.z));
             uint lightCount = tLightGrid[clusterIndex1D].y;

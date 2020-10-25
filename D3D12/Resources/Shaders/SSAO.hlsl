@@ -45,11 +45,11 @@ void CSMain(CS_INPUT input)
     float2 texCoord = (float2)input.DispatchThreadId.xy * dimInv;
     float depth = tDepthTexture.SampleLevel(sSampler, texCoord, 0).r;
 
-    float3 viewPos = ScreenToView(float4(texCoord.xy, depth, 1), float2(1, 1), cProjectionInverse).xyz;
+    float3 viewPos = ViewFromDepth(texCoord.xy, depth, cProjectionInverse).xyz;
     float2 texCoord1 = texCoord + float2(dimInv.x, 0);
     float2 texCoord2 = texCoord + float2(0, -dimInv.y);
-	float3 p1 = ScreenToView(float4(texCoord1, tDepthTexture.SampleLevel(sSampler, texCoord1, 0).r, 1), float2(1, 1), cProjectionInverse).xyz;
-	float3 p2 = ScreenToView(float4(texCoord2, tDepthTexture.SampleLevel(sSampler, texCoord2, 0).r, 1), float2(1, 1), cProjectionInverse).xyz;
+	float3 p1 = ViewFromDepth(texCoord1, tDepthTexture.SampleLevel(sSampler, texCoord1, 0).r, cProjectionInverse).xyz;
+	float3 p2 = ViewFromDepth(texCoord2, tDepthTexture.SampleLevel(sSampler, texCoord2, 0).r, cProjectionInverse).xyz;
     float3 normal = normalize(cross(p2 - viewPos, p1 - viewPos));
 
     uint state = SeedThread(input.DispatchThreadId.x + input.DispatchThreadId.y * cDimensions.x);
@@ -71,9 +71,9 @@ void CSMain(CS_INPUT input)
         if(newTexCoord.x >= 0 && newTexCoord.x <= 1 && newTexCoord.y >= 0 && newTexCoord.y <= 1)
         {
             float sampleDepth = tDepthTexture.SampleLevel(sSampler, newTexCoord.xy, 0).r;
-            float4 depthVpos = ScreenToView(float4(newTexCoord.xy, sampleDepth, 1), float2(1, 1), cProjectionInverse);
-            float rangeCheck = smoothstep(0.0f, 1.0f, cAoRadius / (viewPos.z - depthVpos.z));
-            occlusion += (vpos.z >= depthVpos.z + cAoDepthThreshold) * rangeCheck;
+            float depthVpos = LinearizeDepth(sampleDepth, cNear, cFar);
+            float rangeCheck = smoothstep(0.0f, 1.0f, cAoRadius / (viewPos.z - depthVpos));
+            occlusion += (vpos.z >= depthVpos + cAoDepthThreshold) * rangeCheck;
         }
     }
     occlusion = occlusion / cAoSamples;

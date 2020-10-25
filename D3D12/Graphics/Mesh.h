@@ -1,4 +1,5 @@
 #pragma once
+#include "Core/GraphicsBuffer.h"
 class Buffer;
 class CommandContext;
 class Texture;
@@ -16,11 +17,8 @@ public:
 	int GetMaterialId() const { return m_MaterialId; }
 	const BoundingBox& GetBounds() const { return m_Bounds; }
 
-	D3D12_GPU_VIRTUAL_ADDRESS GetVerticesLocation() const { return m_VerticesLocation; }
-	D3D12_GPU_VIRTUAL_ADDRESS GetIndicesLocation() const { return m_IndicesLocation; }
-	uint32 GetVertexCount() const { return m_VertexCount; }
-	uint32 GetIndexCount() const { return m_IndexCount; }
-	uint32 GetStride() const { return m_Stride; }
+	VertexBufferView GetVertexBuffer() const;
+	IndexBufferView GetIndexBuffer() const;
 
 private:
 	int m_Stride = 0;
@@ -35,10 +33,10 @@ private:
 
 struct Material
 {
-	std::unique_ptr<Texture> pDiffuseTexture;
-	std::unique_ptr<Texture> pNormalTexture;
-	std::unique_ptr<Texture> pSpecularTexture;
-	std::unique_ptr<Texture> pAlphaTexture;
+	Texture* pDiffuseTexture = nullptr;
+	Texture* pNormalTexture = nullptr;
+	Texture* pRoughnessTexture = nullptr;
+	Texture* pMetallicTexture = nullptr;
 	bool IsTransparent;
 };
 
@@ -56,4 +54,6 @@ private:
 	std::vector<std::unique_ptr<SubMesh>> m_Meshes;
 	std::vector<Material> m_Materials;
 	std::unique_ptr<Buffer> m_pGeometryData;
+	std::vector<std::unique_ptr<Texture>> m_Textures;
+	std::map<StringHash, Texture*> m_ExistingTextures;
 };

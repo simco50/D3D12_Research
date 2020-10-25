@@ -4,10 +4,10 @@
 #define BLOCK_SIZE 16
 
 #define RootSig "RootFlags(ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT), " \
-				"CBV(b0, visibility=SHADER_VISIBILITY_VERTEX), " \
+				"CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \
 				"CBV(b1, visibility=SHADER_VISIBILITY_ALL), " \
 				"CBV(b2, visibility=SHADER_VISIBILITY_PIXEL), " \
-				"DescriptorTable(SRV(t0, numDescriptors = 3), visibility=SHADER_VISIBILITY_PIXEL), " \
+				"DescriptorTable(SRV(t1000, numDescriptors = 128, space = 2), visibility=SHADER_VISIBILITY_PIXEL), " \
 				"DescriptorTable(SRV(t3, numDescriptors = 7), visibility=SHADER_VISIBILITY_PIXEL), " \
 				"DescriptorTable(SRV(t10, numDescriptors = 32, space = 1), visibility=SHADER_VISIBILITY_PIXEL), " \
 				"SRV(t500, visibility=SHADER_VISIBILITY_PIXEL), " \
@@ -18,6 +18,10 @@
 struct PerObjectData
 {
 	float4x4 World;
+    int Diffuse;
+    int Normal;
+    int Roughness;
+    int Metallic;
 };
 
 struct PerViewData
@@ -76,14 +80,14 @@ uint GetSliceFromDepth(float depth)
 }
 #endif
 
-LightResult DoLight(float4 pos, float3 worldPos, float3 vPos, float3 N, float3 V, float3 diffuseColor, float3 specularColor, float roughness)
+LightResult DoLight(float4 pos, float3 worldPos, float3 N, float3 V, float3 diffuseColor, float3 specularColor, float roughness)
 {
 #if TILED_FORWARD
 	uint2 tileIndex = uint2(floor(pos.xy / BLOCK_SIZE));
 	uint startOffset = tLightGrid[tileIndex].x;
 	uint lightCount = tLightGrid[tileIndex].y;
 #elif CLUSTERED_FORWARD
-	uint3 clusterIndex3D = uint3(floor(pos.xy / cViewData.ClusterSize), GetSliceFromDepth(vPos.z));
+	uint3 clusterIndex3D = uint3(floor(pos.xy / cViewData.ClusterSize), GetSliceFromDepth(pos.w));
     uint clusterIndex1D = clusterIndex3D.x + (cViewData.ClusterDimensions.x * (clusterIndex3D.y + cViewData.ClusterDimensions.y * clusterIndex3D.z));
 	uint startOffset = tLightGrid[clusterIndex1D].x;
 	uint lightCount = tLightGrid[clusterIndex1D].y;
@@ -94,7 +98,7 @@ LightResult DoLight(float4 pos, float3 worldPos, float3 vPos, float3 N, float3 V
 	{
 		uint lightIndex = tLightIndexList[startOffset + i];
 		Light light = tLights[lightIndex];
-		LightResult result = DoLight(light, specularColor, diffuseColor, roughness, pos, worldPos, vPos, N, V);
+		LightResult result = DoLight(light, specularColor, diffuseColor, roughness, pos, worldPos, N, V);
 		totalResult.Diffuse += result.Diffuse;
 		totalResult.Specular += result.Specular;
 	}
@@ -115,7 +119,7 @@ PSInput VSMain(VSInput input)
 	return result;
 }
 
-float3 ScreenSpaceReflectionsRT(float3 positionWS, float3 positionVS, float3 N, float3 V, float R)
+float3 ScreenSpaceReflectionsRT(float3 positionWS, float4 position, float3 N, float3 V, float R)
 {
 	float3 ssr = 0;
 #if _INLINE_RT
@@ -131,7 +135,7 @@ float3 ScreenSpaceReflectionsRT(float3 positionWS, float3 positionVS, float3 N, 
 			ray.Origin = positionWS;
 			ray.Direction = reflectionWs;
 			ray.TMin = 0.001;
-			ray.TMax = positionVS.z;
+			ray.TMax = position.w;
 
 			RayQuery<RAY_FLAG_NONE> q;
 
@@ -154,7 +158,7 @@ float3 ScreenSpaceReflectionsRT(float3 positionWS, float3 positionVS, float3 N, 
 				{
 					ssr = saturate(0.5f * tPreviousSceneColor.SampleLevel(sClampSampler, texCoord.xy, 0).xyz);
 					float2 dist = (float2(texCoord.x, 1.0f - texCoord.y) * 2.0f) - float2(1.0f, 1.0f);
-					float edgeAttenuation = (1.0 - q.CommittedRayT() / positionVS.z) * 4.0f;
+					float edgeAttenuation = (1.0 - q.CommittedRayT() / position.w) * 4.0f;
 					edgeAttenuation = saturate(edgeAttenuation);
 					edgeAttenuation *= smoothstep(0.0f, 0.5f, saturate(1.0 - dot(dist, dist)));
 					ssr *= edgeAttenuation;
@@ -169,7 +173,7 @@ float3 ScreenSpaceReflectionsRT(float3 positionWS, float3 positionVS, float3 N, 
 float3 ScreenSpaceReflections(float4 position, float3 positionVS, float3 N, float3 V, float R)
 {
 	float3 ssr = 0;
-	const float roughnessThreshold = 0.7f;
+	const float roughnessThreshold = 0.6f;
 	bool ssrEnabled = R < roughnessThreshold;
 	if(ssrEnabled)
 	{
@@ -248,16 +252,17 @@ float3 ScreenSpaceReflections(float4 position, float3 positionVS, float3 N, floa
 
 float4 PSMain(PSInput input) : SV_TARGET
 {
-	float4 baseColor = tDiffuseTexture.Sample(sDiffuseSampler, input.texCoord);
+	float4 baseColor = tMaterialTextures[cObjectData.Diffuse].Sample(sDiffuseSampler, input.texCoord);
+	float3 sampledNormal = tMaterialTextures[cObjectData.Normal].Sample(sDiffuseSampler, input.texCoord).xyz;
+	float metalness = tMaterialTextures[cObjectData.Metallic].Sample(sDiffuseSampler, input.texCoord).r;
+	float r = 0.5;// tMaterialTextures[cObjectData.Roughness].Sample(sDiffuseSampler, input.texCoord).r;
 	float3 specular = 0.5f;
-	float metalness = 0;
-	float r = 0.5f;
 
 	float3 diffuseColor = ComputeDiffuseColor(baseColor.rgb, metalness);
 	float3 specularColor = ComputeF0(specular.r, baseColor.rgb, metalness);
 
 	float3x3 TBN = float3x3(normalize(input.tangent), normalize(input.bitangent), normalize(input.normal));
-	float3 N = TangentSpaceNormalMapping(tNormalTexture, sDiffuseSampler, TBN, input.texCoord, true);
+	float3 N = TangentSpaceNormalMapping(sampledNormal, TBN, input.texCoord, true);
 	float3 V = normalize(cViewData.ViewPosition.xyz - input.positionWS);	
 
 	float3 ssr = 0;
@@ -269,16 +274,16 @@ float4 PSMain(PSInput input) : SV_TARGET
 		}
 		else
 		{
-			ssr = ScreenSpaceReflectionsRT(input.positionWS, input.positionVS, N, V, r);
+			ssr = ScreenSpaceReflectionsRT(input.positionWS, input.position, N, V, r);
 		}
 	}
 
-	LightResult lighting = DoLight(input.position, input.positionWS, input.positionVS, N, V, diffuseColor, specularColor, r);
+	LightResult lighting = DoLight(input.position, input.positionWS, N, V, diffuseColor, specularColor, r);
 
 	float ao = tAO.SampleLevel(sDiffuseSampler, (float2)input.position.xy * cViewData.InvScreenDimensions, 0).r;
 	float3 color = lighting.Diffuse + lighting.Specular + ssr * ao; 
 	color += ApplyAmbientLight(diffuseColor, ao, tLights[0].GetColor().rgb * 0.1f);
-	color += ApplyVolumetricLighting(cViewData.ViewPosition.xyz, input.positionWS.xyz, input.position.xyz, cViewData.View, tLights[0], 10);
+	color += 0.1*ApplyVolumetricLighting(cViewData.ViewPosition.xyz, input.positionWS.xyz, input.position, cViewData.View, tLights[0], 10);
 	
 	return float4(color, baseColor.a);
 }

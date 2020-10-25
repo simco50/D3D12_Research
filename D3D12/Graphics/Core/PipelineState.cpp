@@ -1,8 +1,10 @@
 #include "stdafx.h"
 #include "PipelineState.h"
 #include "Shader.h"
+#include "Graphics.h"
 
-PipelineState::PipelineState()
+PipelineState::PipelineState(Graphics* pParent)
+	: GraphicsObject(pParent)
 {
 	m_Desc.GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_BLEND>() = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
 	m_Desc.GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL1>() = CD3DX12_DEPTH_STENCIL_DESC1(D3D12_DEFAULT);
@@ -14,18 +16,23 @@ PipelineState::PipelineState()
 }
 
 PipelineState::PipelineState(const PipelineState& other)
-	: m_Desc(other.m_Desc),
+	: GraphicsObject(other),
+	m_Desc(other.m_Desc),
 	m_Type(other.m_Type)
 {
 }
 
-void PipelineState::Finalize(const char* pName, ID3D12Device* pDevice)
+PipelineState::~PipelineState()
+{
+}
+
+void PipelineState::Finalize(const char* pName)
 {
 	check(m_Type != PipelineStateType::MAX);
 	ComPtr<ID3D12Device2> pDevice2;
-	VERIFY_HR_EX(pDevice->QueryInterface(IID_PPV_ARGS(pDevice2.GetAddressOf())), pDevice);
+	VERIFY_HR_EX(GetParent()->GetDevice()->QueryInterface(IID_PPV_ARGS(pDevice2.GetAddressOf())), GetParent()->GetDevice());
 	D3D12_PIPELINE_STATE_STREAM_DESC streamDesc = m_Desc.Desc();
-	VERIFY_HR_EX(pDevice2->CreatePipelineState(&streamDesc, IID_PPV_ARGS(m_pPipelineState.GetAddressOf())), pDevice);
+	VERIFY_HR_EX(pDevice2->CreatePipelineState(&streamDesc, IID_PPV_ARGS(m_pPipelineState.GetAddressOf())), GetParent()->GetDevice());
 	D3D::SetObjectName(m_pPipelineState.Get(), pName);
 }
 

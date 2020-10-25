@@ -74,7 +74,7 @@ AllocationPage* DynamicAllocationManager::AllocatePage(size_t size)
 	std::lock_guard<std::mutex> lockGuard(m_PageMutex);
 
 	AllocationPage* pPage = nullptr;
-	if (m_FreedPages.size() > 0 && m_pGraphics->IsFenceComplete(m_FreedPages.front().first))
+	if (m_FreedPages.size() > 0 && GetParent()->IsFenceComplete(m_FreedPages.front().first))
 	{
 		pPage = m_FreedPages.front().second;
 		m_FreedPages.pop();
@@ -89,7 +89,7 @@ AllocationPage* DynamicAllocationManager::AllocatePage(size_t size)
 
 AllocationPage* DynamicAllocationManager::CreateNewPage(size_t size)
 {
-	AllocationPage* pNewPage = new AllocationPage(m_pGraphics);
+	AllocationPage* pNewPage = new AllocationPage(GetParent());
 	pNewPage->Create(size);
 	pNewPage->Map();
 	return pNewPage;
@@ -108,7 +108,7 @@ void DynamicAllocationManager::FreeLargePages(uint64 fenceValue, const std::vect
 {
 	std::lock_guard<std::mutex> lockGuard(m_PageMutex);
 
-	while (m_DeleteQueue.size() > 0 && m_pGraphics->IsFenceComplete(m_DeleteQueue.front().first))
+	while (m_DeleteQueue.size() > 0 && GetParent()->IsFenceComplete(m_DeleteQueue.front().first))
 	{
 		m_DeleteQueue.pop();
 	}
@@ -119,10 +119,10 @@ void DynamicAllocationManager::FreeLargePages(uint64 fenceValue, const std::vect
 	}
 }
 
-void DynamicAllocationManager::FlushAll()
+void DynamicAllocationManager::CollectGarbage()
 {
 	std::lock_guard<std::mutex> lockGuard(m_PageMutex);
-	m_pGraphics->IdleGPU();
+	GetParent()->IdleGPU();
 	m_Pages.clear();
 	m_FreedPages = {};
 	m_DeleteQueue = {};

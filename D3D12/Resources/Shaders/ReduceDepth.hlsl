@@ -51,7 +51,7 @@ void PrepareReduceDepth(CS_INPUT input)
         float depth = tDepthMap.Load(samplePos, sampleIdx);
         if(depth > 0.0f)
         {
-            depth = LinearizeDepth(depth, cNear, cFar);
+            depth = LinearizeDepth01(depth, cNear, cFar);
             depthMin = min(depthMin, depth);
             depthMax = max(depthMax, depth);
         }
@@ -64,7 +64,7 @@ void PrepareReduceDepth(CS_INPUT input)
     float depth = tDepthMap[samplePos];
     if(depth > 0.0f)
     {
-        depth = LinearizeDepth(depth, cNear, cFar);
+        depth = LinearizeDepth01(depth, cNear, cFar);
     }
     gsDepthSamples[input.GroupIndex] = float2(depth, depth);
 

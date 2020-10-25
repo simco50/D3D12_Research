@@ -32,10 +32,14 @@ float RadialAttenuation(float3 L, float range)
 	return distanceAttenuation * windowing;
 }
 
-float3 TangentSpaceNormalMapping(Texture2D normalTexture, SamplerState normalSampler, float3x3 TBN, float2 tex, bool invertY)
+float3 TangentSpaceNormalMapping(float3 sampledNormal, float3x3 TBN, float2 tex, bool invertY)
 {
-	float3 sampledNormal = normalTexture.Sample(normalSampler, tex).rgb;
 	sampledNormal.xy = sampledNormal.xy * 2.0f - 1.0f;
+
+//#define NORMAL_BC5
+#ifdef NORMAL_BC5
+	sampledNormal.z = sqrt(saturate(1.0f - dot(sampledNormal.xy, sampledNormal.xy)));
+#endif
 	if(invertY)
 	{
 		sampledNormal.x = -sampledNormal.x;
@@ -104,12 +108,12 @@ float3 ApplyAmbientLight(float3 diffuse, float ao, float3 lightColor)
     return ao * diffuse * lightColor;
 }
 
-uint GetShadowIndex(Light light, float3 pos, float3 wPos, float3 vPos)
+uint GetShadowIndex(Light light, float4 pos, float3 wPos)
 {
 	int shadowIndex = light.ShadowIndex;
 	if(light.Type == LIGHT_DIRECTIONAL)
 	{
-		float4 splits = vPos.z > cCascadeDepths;
+		float4 splits = pos.w > cCascadeDepths;
 		float4 cascades = cCascadeDepths > 0;
 		int cascadeIndex = dot(splits, cascades);
 
@@ -118,7 +122,7 @@ uint GetShadowIndex(Light light, float3 pos, float3 wPos, float3 vPos)
 	#if FADE_SHADOW_CASCADES
 			float nextSplit = cCascadeDepths[cascadeIndex];
 			float splitRange = cascadeIndex == 0 ? nextSplit : nextSplit - cCascadeDepths[cascadeIndex - 1];
-			float fadeFactor = (nextSplit - vPos.z) / splitRange;
+			float fadeFactor = (nextSplit - pos.w) / splitRange;
 			if(fadeFactor <= FADE_THRESHOLD && cascadeIndex != cNumCascades - 1)
 			{
 				float lerpAmount = smoothstep(0.0f, FADE_THRESHOLD, fadeFactor);
@@ -139,7 +143,7 @@ uint GetShadowIndex(Light light, float3 pos, float3 wPos, float3 vPos)
 	return shadowIndex;
 }
 
-LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, float roughness, float4 pos, float3 wPos, float3 vPos, float3 N, float3 V)
+LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, float roughness, float4 pos, float3 wPos, float3 N, float3 V)
 {
 	LightResult result = (LightResult)0;
 
@@ -174,7 +178,7 @@ LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, floa
 			visibility = 0;
 		}
 #else
-		int shadowIndex = GetShadowIndex(light, pos.xyz, wPos, vPos);
+		int shadowIndex = GetShadowIndex(light, pos, wPos);
 
 #define VISUALIZE_CASCADES 0
 #if VISUALIZE_CASCADES
@@ -218,7 +222,7 @@ float ComputeScattering(float LoV)
 	return result;
 }
 
-float3 ApplyVolumetricLighting(float3 cameraPos, float3 worldPos, float3 pos, float4x4 view, Light light, int samples)
+float3 ApplyVolumetricLighting(float3 cameraPos, float3 worldPos, float4 pos, float4x4 view, Light light, int samples)
 {
 	const float fogValue = 0.3f;
 	float3 rayVector = cameraPos - worldPos;
@@ -231,11 +235,10 @@ float3 ApplyVolumetricLighting(float3 cameraPos, float3 worldPos, float3 pos, fl
 
 	for(int i = 0; i < samples; ++i)
 	{
-		float4 vPos = mul(float4(currentPosition, 1), view);
 		float visibility = 1.0f;
 		if(light.ShadowIndex >= 0)
 		{
-			int shadowMapIndex = GetShadowIndex(light, pos, currentPosition, vPos.xyz);
+			int shadowMapIndex = GetShadowIndex(light, pos, currentPosition);
 			float4x4 lightViewProjection = cLightViewProjections[shadowMapIndex];
 			float4 lightPos = mul(float4(currentPosition, 1), lightViewProjection);
 			lightPos.xyz /= lightPos.w;

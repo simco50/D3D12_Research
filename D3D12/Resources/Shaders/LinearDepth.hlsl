@@ -28,6 +28,6 @@ void CSMain(CS_INPUT input)
     uOutput.GetDimensions(width, height);
     if(input.DispatchThreadId.x < width && input.DispatchThreadId.y < height)
     {
-        uOutput[input.DispatchThreadId.xy] = LinearizeDepth(tInput[input.DispatchThreadId.xy], cNear, cFar);
+        uOutput[input.DispatchThreadId.xy] = LinearizeDepth01(tInput[input.DispatchThreadId.xy], cNear, cFar);
     }
 }

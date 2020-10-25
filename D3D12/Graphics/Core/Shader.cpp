@@ -231,9 +231,9 @@ namespace ShaderCompiler
 		size_t i = strlen(pTarget);
 		memcpy(target, pTarget, i);
 		target[i++] = '_';
-		target[i++] = '0' + majVersion;
+		target[i++] = '0' + (char)majVersion;
 		target[i++] = '_';
-		target[i++] = '0' + minVersion;
+		target[i++] = '0' + (char)minVersion;
 		target[i++] = 0;
 
 		std::vector<std::string> definesActual(defines);
@@ -290,8 +290,8 @@ bool ShaderBase::ProcessSource(const std::string& sourcePath, const std::string&
 
 	while (getline(fileStream, line))
 	{
-		size_t start = line.find("#include");
-		if (start != std::string::npos)
+		size_t includeStart = line.find("#include");
+		if (includeStart != std::string::npos)
 		{
 			size_t start = line.find('"') + 1;
 			size_t end = line.rfind('"');
@@ -306,9 +306,9 @@ bool ShaderBase::ProcessSource(const std::string& sourcePath, const std::string&
 			{
 				processedIncludes.push_back(includeHash);
 				std::string basePath = Paths::GetDirectoryPath(filePath);
-				std::string filePath = basePath + includeFilePath;
+				std::string fullFilePath = basePath + includeFilePath;
 
-				if (!ProcessSource(sourcePath, filePath, output, processedIncludes, dependencies))
+				if (!ProcessSource(sourcePath, fullFilePath, output, processedIncludes, dependencies))
 				{
 					return false;
 				}

@@ -17,13 +17,13 @@
 #include "Graphics/Profiler.h"
 #include "Graphics/RenderGraph/RenderGraph.h"
 #include "Graphics/RenderGraph/Blackboard.h"
-#include "Graphics/RenderGraph/ResourceAllocator.h"
 #include "Graphics/DebugRenderer.h"
 #include "Graphics/ImGuiRenderer.h"
 #include "Graphics/Techniques/ClusteredForward.h"
 #include "Graphics/Techniques/TiledForward.h"
 #include "Graphics/Techniques/RTAO.h"
 #include "Graphics/Techniques/SSAO.h"
+#include "Graphics/Techniques/RTReflections.h"
 #include "Graphics/Techniques/GpuParticles.h"
 #include "Core/CommandLine.h"
 #include "Content/Image.h"
@@ -42,35 +42,38 @@ const DXGI_FORMAT Graphics::DEPTH_STENCIL_SHADOW_FORMAT = DXGI_FORMAT_D16_UNORM;
 const DXGI_FORMAT Graphics::RENDER_TARGET_FORMAT = DXGI_FORMAT_R11G11B10_FLOAT;
 const DXGI_FORMAT Graphics::SWAPCHAIN_FORMAT = DXGI_FORMAT_R8G8B8A8_UNORM;
 
+namespace Tweakables
+{
+	bool g_DumpRenderGraph = false;
+	bool g_Screenshot = false;
 
-bool gDumpRenderGraph = false;
-bool g_Screenshot = false;
+	float g_WhitePoint = 1;
+	float g_MinLogLuminance = -10;
+	float g_MaxLogLuminance = 20;
+	float g_Tau = 2;
+	bool g_DrawHistogram = false;
+	int32 g_ToneMapper = 1;
 
-float g_WhitePoint = 1;
-float g_MinLogLuminance = -10;
-float g_MaxLogLuminance = 20;
-float g_Tau = 2;
-bool g_DrawHistogram = false;
-int32 g_ToneMapper = 1;
+	bool g_SDSM = false;
+	bool g_StabilizeCascades = true;
+	bool g_VisualizeShadowCascades = false;
+	int g_ShadowCascades = 4;
+	float g_PSSMFactor = 1.0f;
+	bool g_RaytracedAO = false;
+	bool g_RaytracedReflections = false;
+	bool g_VisualizeLights = false;
+	bool g_VisualizeLightDensity = false;
 
-bool g_SDSM = false;
-bool g_StabilizeCascades = true;
-bool g_VisualizeShadowCascades = false;
-int g_ShadowCascades = 4;
-float g_PSSMFactor = 1.0f;
-bool g_ShowRaytraced = false;
-bool g_VisualizeLights = false;
-bool g_VisualizeLightDensity = false;
+	float g_SunInclination = 0.579f;
+	float g_SunOrientation = -3.055f;
+	float g_SunTemperature = 5000.0f;
 
-float g_SunInclination = 0.579f;
-float g_SunOrientation = -3.055f;
-float g_SunTemperature = 5000.0f;
+	int g_SsrSamples = 16;
 
-int g_SsrSamples = 16;
+	int g_ShadowMapIndex = 0;
 
-int g_ShadowMapIndex = 0;
-
-bool g_EnableUI = true;
+	bool g_EnableUI = true;
+}
 
 Graphics::Graphics(uint32 width, uint32 height, int sampleCount /*= 1*/)
 	: m_SampleCount(sampleCount), m_WindowWidth(width), m_WindowHeight(height)
@@ -98,39 +101,9 @@ void Graphics::Initialize(WindowHandle window)
 	InitializeAssets(*pContext);
 	pContext->Execute(true);
 
-	g_ShowRaytraced = SupportsRayTracing() ? g_ShowRaytraced : false;
+	Tweakables::g_RaytracedAO = SupportsRayTracing() ? Tweakables::g_RaytracedAO : false;
 
-	m_DesiredLightCount = 3;
-	RandomizeLights(m_DesiredLightCount);
-
-	m_pDynamicAllocationManager->FlushAll();
-}
-
-void Graphics::RandomizeLights(int count)
-{
-	m_Lights.resize(count);
-
-	BoundingBox sceneBounds;
-	sceneBounds.Center = Vector3(0, 70, 0);
-	sceneBounds.Extents = Vector3(140, 70, 60);
-
-	Vector3 Position(-150, 160, -10);
-	Vector3 Direction;
-	Position.Normalize(Direction);
-	m_Lights[0] = Light::Directional(Position, -Direction, 10);
-	m_Lights[0].CastShadows = true;
-
-	m_Lights[1] = Light::Point(Vector3(0, 10, 0), 100, 5000, Color(1, 0.2f, 0.2f, 1));
-	m_Lights[1].CastShadows = true;
-
-	m_Lights[2] = Light::Spot(Vector3(0, 10, -10), 200, Vector3(0, 0, 1), 90, 70, 5000, Color(1, 0, 0, 1.0f));
-	m_Lights[2].CastShadows = true;
-
-	if (m_pLightBuffer->GetDesc().ElementCount != count)
-	{
-		IdleGPU();
-		m_pLightBuffer->Create(BufferDesc::CreateStructured(count, sizeof(Light), BufferFlag::ShaderResource));
-	}
+	m_pDynamicAllocationManager->CollectGarbage();
 }
 
 void Graphics::Update()
@@ -143,37 +116,33 @@ void Graphics::Update()
 
 	m_pCamera->Update();
 
-	if (Input::Instance().IsKeyPressed('O'))
+	if (Input::Instance().IsKeyPressed('U'))
 	{
-		RandomizeLights(m_DesiredLightCount);
-	}
-	else if (Input::Instance().IsKeyPressed('U'))
-	{
-		g_EnableUI = !g_EnableUI;
+		Tweakables::g_EnableUI = !Tweakables::g_EnableUI;
 	}
 
-	std::sort(m_TransparantBatches.begin(), m_TransparantBatches.end(), [this](const Batch& a, const Batch& b) {
+	std::sort(m_SceneData.TransparantBatches.begin(), m_SceneData.TransparantBatches.end(), [this](const Batch& a, const Batch& b) {
 		float aDist = Vector3::DistanceSquared(a.pMesh->GetBounds().Center, m_pCamera->GetPosition());
 		float bDist = Vector3::DistanceSquared(b.pMesh->GetBounds().Center, m_pCamera->GetPosition());
 		return aDist > bDist;
 		});
 
-	std::sort(m_OpaqueBatches.begin(), m_OpaqueBatches.end(), [this](const Batch& a, const Batch& b) {
+	std::sort(m_SceneData.OpaqueBatches.begin(), m_SceneData.OpaqueBatches.end(), [this](const Batch& a, const Batch& b) {
 		float aDist = Vector3::DistanceSquared(a.pMesh->GetBounds().Center, m_pCamera->GetPosition());
 		float bDist = Vector3::DistanceSquared(b.pMesh->GetBounds().Center, m_pCamera->GetPosition());
 		return aDist < bDist;
 		});
 
-	float costheta = cosf(g_SunOrientation);
-	float sintheta = sinf(g_SunOrientation);
-	float cosphi = cosf(g_SunInclination * Math::PIDIV2);
-	float sinphi = sinf(g_SunInclination * Math::PIDIV2);
+	float costheta = cosf(Tweakables::g_SunOrientation);
+	float sintheta = sinf(Tweakables::g_SunOrientation);
+	float cosphi = cosf(Tweakables::g_SunInclination * Math::PIDIV2);
+	float sinphi = sinf(Tweakables::g_SunInclination * Math::PIDIV2);
 	m_Lights[0].Direction = -Vector3(costheta * cosphi, sinphi, sintheta * cosphi);
-	m_Lights[0].Colour = Math::EncodeColor(Math::MakeFromColorTemperature(g_SunTemperature));
+	m_Lights[0].Colour = Math::EncodeColor(Math::MakeFromColorTemperature(Tweakables::g_SunTemperature));
 
 	m_Lights[1].Position.x = 50 * sin(Time::TotalTime());
 
-	if (g_VisualizeLights)
+	if (Tweakables::g_VisualizeLights)
 	{
 		for (const Light& light : m_Lights)
 		{
@@ -189,9 +158,9 @@ void Graphics::Update()
 	float minPoint = 0;
 	float maxPoint = 1;
 
-	shadowData.NumCascades = g_ShadowCascades;
+	shadowData.NumCascades = Tweakables::g_ShadowCascades;
 
-	if (g_SDSM)
+	if (Tweakables::g_SDSM)
 	{
 		Buffer* pSourceBuffer = m_ReductionReadbackTargets[(m_Frame + 1) % FRAME_COUNT].get();
 		Vector2* pData = (Vector2*)pSourceBuffer->Map();
@@ -212,19 +181,19 @@ void Graphics::Update()
 	constexpr uint32 MAX_CASCADES = 4;
 	std::array<float, MAX_CASCADES> cascadeSplits{};
 
-	for (int i = 0; i < g_ShadowCascades; ++i)
+	for (int i = 0; i < Tweakables::g_ShadowCascades; ++i)
 	{
-		float p = (i + 1) / (float)g_ShadowCascades;
+		float p = (i + 1) / (float)Tweakables::g_ShadowCascades;
 		float log = minZ * std::pow(maxZ / minZ, p);
 		float uniform = minZ + (maxZ - minZ) * p;
-		float d = g_PSSMFactor * (log - uniform) + uniform;
+		float d = Tweakables::g_PSSMFactor * (log - uniform) + uniform;
 		cascadeSplits[i] = (d - nearPlane) / clipPlaneRange;
 	}
 
 	int shadowIndex = 0;
-	for (size_t i = 0; i < m_Lights.size(); ++i)
+	for (size_t lightIndex = 0; lightIndex < m_Lights.size(); ++lightIndex)
 	{
-		Light& light = m_Lights[i];
+		Light& light = m_Lights[lightIndex];
 		if (!light.CastShadows)
 		{
 			continue;
@@ -232,7 +201,7 @@ void Graphics::Update()
 		light.ShadowIndex = shadowIndex;
 		if (light.Type == LightType::Directional)
 		{
-			for (int i = 0; i < g_ShadowCascades; ++i)
+			for (int i = 0; i < Tweakables::g_ShadowCascades; ++i)
 			{
 				float previousCascadeSplit = i == 0 ? minPoint : cascadeSplits[i - 1];
 				float currentCascadeSplit = cascadeSplits[i];
@@ -279,7 +248,7 @@ void Graphics::Update()
 				Vector3 maxExtents(-FLT_MAX);
 
 				//Create a bounding sphere to maintain aspect in projection to avoid flickering when rotating
-				if (g_StabilizeCascades)
+				if (Tweakables::g_StabilizeCascades)
 				{
 					float radius = 0;
 					for (const Vector3& corner : frustumCorners)
@@ -307,7 +276,7 @@ void Graphics::Update()
 				Matrix lightViewProjection = shadowView * projectionMatrix;
 
 				//Snap projection to shadowmap texels to avoid flickering edges
-				if (g_StabilizeCascades)
+				if (Tweakables::g_StabilizeCascades)
 				{
 					float shadowMapSize = 2048;
 					Vector4 shadowOrigin = Vector4::Transform(Vector4(0, 0, 0, 1), lightViewProjection);
@@ -383,6 +352,19 @@ void Graphics::Update()
 		}
 	}
 
+	m_SceneData.pDepthBuffer = GetDepthStencil();
+	m_SceneData.pResolvedDepth = GetResolvedDepthStencil();
+	m_SceneData.pRenderTarget = GetCurrentRenderTarget();
+	m_SceneData.pLightBuffer = m_pLightBuffer.get();
+	m_SceneData.pCamera = m_pCamera.get();
+	m_SceneData.pShadowMaps = &m_ShadowMaps;
+	m_SceneData.pShadowData = &shadowData;
+	m_SceneData.pAO = m_pAmbientOcclusion.get();
+	m_SceneData.FrameIndex = m_Frame;
+	m_SceneData.pPreviousColor = m_pPreviousColor.get();
+	m_SceneData.pTLAS = m_pTLAS.get();
+	m_SceneData.pMesh = m_pMesh.get();
+
 	////////////////////////////////
 	// LET THE RENDERING BEGIN!
 	////////////////////////////////
@@ -406,13 +388,14 @@ void Graphics::Update()
 
 	uint64 nextFenceValue = 0;
 
-	if (g_Screenshot && m_ScreenshotDelay < 0)
+	if (Tweakables::g_Screenshot && m_ScreenshotDelay < 0)
 	{
 		RGPassBuilder screenshot = graph.AddPass("Take Screenshot");
 		screenshot.Bind([=](CommandContext& renderContext, const RGPassResources& resources)
 			{
 				D3D12_PLACED_SUBRESOURCE_FOOTPRINT textureFootprint = {};
-				m_pDevice->GetCopyableFootprints(&m_pTonemapTarget->GetResource()->GetDesc(), 0, 1, 0, &textureFootprint, nullptr, nullptr, nullptr);
+				D3D12_RESOURCE_DESC resourceDesc = m_pTonemapTarget->GetResource()->GetDesc();
+				m_pDevice->GetCopyableFootprints(&resourceDesc, 0, 1, 0, &textureFootprint, nullptr, nullptr, nullptr);
 				m_pScreenshotBuffer = std::make_unique<Buffer>(this, "Screenshot Texture");
 				m_pScreenshotBuffer->Create(BufferDesc::CreateReadback(textureFootprint.Footprint.RowPitch * textureFootprint.Footprint.Height));
 				renderContext.InsertResourceBarrier(m_pTonemapTarget.get(), D3D12_RESOURCE_STATE_COPY_SOURCE);
@@ -421,7 +404,7 @@ void Graphics::Update()
 				m_ScreenshotRowPitch = textureFootprint.Footprint.RowPitch;
 			});
 		m_ScreenshotDelay = 4;
-		g_Screenshot = false;
+		Tweakables::g_Screenshot = false;
 	}
 
 	if (m_pScreenshotBuffer)
@@ -447,9 +430,9 @@ void Graphics::Update()
 				GetSystemTime(&time);
 				wchar_t stringTarget[128];
 				GetTimeFormatEx(LOCALE_NAME_INVARIANT, 0, &time, L"hh_mm_ss", stringTarget, 128);
-				std::stringstream filePath;
-				filePath << "Screenshot_" << stringTarget << ".jpg";
-				img.Save(filePath.str().c_str());
+				char filePath[256];
+				sprintf_s(filePath, "Screenshot_%ls.jpg", stringTarget);
+				img.Save(filePath);
 				m_pScreenshotBuffer.reset();
 				}, taskContext);
 			m_ScreenshotDelay = -1;
@@ -471,6 +454,8 @@ void Graphics::Update()
 				*pTarget = light.GetData();
 				++pTarget;
 			}
+			renderContext.InsertResourceBarrier(m_pLightBuffer.get(), D3D12_RESOURCE_STATE_COPY_DEST);
+			renderContext.FlushResourceBarriers();
 			renderContext.CopyBuffer(allocation.pBackingResource, m_pLightBuffer.get(), (uint32)m_pLightBuffer->GetSize(), (uint32)allocation.Offset, 0);
 		});
 
@@ -500,7 +485,7 @@ void Graphics::Update()
 			viewData.ViewProjection = m_pCamera->GetViewProjection();
 			renderContext.SetDynamicConstantBufferView(1, &viewData, sizeof(ViewData));
 
-			for (const Batch& b : m_OpaqueBatches)
+			for (const Batch& b : m_SceneData.OpaqueBatches)
 			{
 				struct ObjectData
 				{
@@ -544,7 +529,7 @@ void Graphics::Update()
 
 	m_pParticles->Simulate(graph, GetResolvedDepthStencil(), *m_pCamera);
 
-	if (g_ShowRaytraced)
+	if (Tweakables::g_RaytracedAO)
 	{
 		m_pRTAO->Execute(graph, m_pAmbientOcclusion.get(), GetResolvedDepthStencil(), m_pTLAS.get(), *m_pCamera);
 	}
@@ -553,11 +538,16 @@ void Graphics::Update()
 		m_pSSAO->Execute(graph, m_pAmbientOcclusion.get(), GetResolvedDepthStencil(), *m_pCamera);
 	}
 
+	if (Tweakables::g_RaytracedReflections)
+	{
+		m_pRTReflections->Execute(graph, m_SceneData);
+	}
+
 	//SHADOW MAPPING
 	// - Renders the scene depth onto a separate depth buffer from the light's view
 	if (shadowIndex > 0)
 	{
-		if (g_SDSM)
+		if (Tweakables::g_SDSM)
 		{
 			RGPassBuilder depthReduce = graph.AddPass("Depth Reduce");
 			Data.DepthStencil = depthReduce.Write(Data.DepthStencil);
@@ -627,64 +617,49 @@ void Graphics::Update()
 
 					viewData.ViewProjection = shadowData.LightViewProjections[i];
 					context.SetDynamicConstantBufferView(1, &viewData, sizeof(ViewData));
+					context.SetDynamicDescriptors(2, 0, m_SceneData.MaterialTextures.data(), (int)m_SceneData.MaterialTextures.size());
 
-					struct PerObjectData
+					auto DrawBatches = [](CommandContext& context, const std::vector<Batch>& batches)
 					{
-						Matrix World;
-					} ObjectData{};
+						struct PerObjectData
+						{
+							Matrix World;
+							MaterialData Material;
+						} objectData{};
+
+						for (const Batch& b : batches)
+						{
+							objectData.World = b.WorldMatrix;
+							objectData.Material = b.Material;
+							context.SetDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
+							b.pMesh->Draw(&context);
+						}
+					};
 
 					//Opaque
 					{
 						GPU_PROFILE_SCOPE("Opaque", &context);
 						context.SetPipelineState(m_pShadowsOpaquePSO.get());
-
-						for (const Batch& b : m_OpaqueBatches)
-						{
-							ObjectData.World = b.WorldMatrix;
-							context.SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
-							b.pMesh->Draw(&context);
-						}
+						DrawBatches(context, m_SceneData.OpaqueBatches);
 					}
 					//Transparant
 					{
 						GPU_PROFILE_SCOPE("Transparant", &context);
 						context.SetPipelineState(m_pShadowsAlphaPSO.get());
-
-						for (const Batch& b : m_TransparantBatches)
-						{
-							ObjectData.World = b.WorldMatrix;
-							context.SetDynamicConstantBufferView(0, &ObjectData, sizeof(PerObjectData));
-							context.SetDynamicDescriptor(2, 0, b.pMaterial->pDiffuseTexture->GetSRV());
-							b.pMesh->Draw(&context);
-						}
+						DrawBatches(context, m_SceneData.TransparantBatches);
 					}
 					context.EndRenderPass();
 				}
 			});
 	}
 
-	SceneData sceneData;
-	sceneData.pDepthBuffer = GetDepthStencil();
-	sceneData.pResolvedDepth = GetResolvedDepthStencil();
-	sceneData.pOpaqueBatches = &m_OpaqueBatches;
-	sceneData.pTransparantBatches = &m_TransparantBatches;
-	sceneData.pRenderTarget = GetCurrentRenderTarget();
-	sceneData.pLightBuffer = m_pLightBuffer.get();
-	sceneData.pCamera = m_pCamera.get();
-	sceneData.pShadowMaps = &m_ShadowMaps;
-	sceneData.pShadowData = &shadowData;
-	sceneData.pAO = m_pAmbientOcclusion.get();
-	sceneData.FrameIndex = m_Frame;
-	sceneData.pPreviousColor = m_pPreviousColor.get();
-	sceneData.pTLAS = m_pTLAS.get();
-
 	if (m_RenderPath == RenderPath::Tiled)
 	{
-		m_pTiledForward->Execute(graph, sceneData);
+		m_pTiledForward->Execute(graph, m_SceneData);
 	}
 	else if (m_RenderPath == RenderPath::Clustered)
 	{
-		m_pClusteredForward->Execute(graph, sceneData);
+		m_pClusteredForward->Execute(graph, m_SceneData);
 	}
 
 	m_pParticles->Render(graph, GetCurrentRenderTarget(), GetDepthStencil(), *m_pCamera);
@@ -806,8 +781,8 @@ void Graphics::Update()
 				} Parameters;
 				Parameters.Width = pToneMapInput->GetWidth();
 				Parameters.Height = pToneMapInput->GetHeight();
-				Parameters.MinLogLuminance = g_MinLogLuminance;
-				Parameters.OneOverLogLuminanceRange = 1.0f / (g_MaxLogLuminance - g_MinLogLuminance);
+				Parameters.MinLogLuminance = Tweakables::g_MinLogLuminance;
+				Parameters.OneOverLogLuminanceRange = 1.0f / (Tweakables::g_MaxLogLuminance - Tweakables::g_MinLogLuminance);
 
 				context.SetComputeDynamicConstantBufferView(0, &Parameters, sizeof(HistogramParameters));
 				context.SetDynamicDescriptor(1, 0, m_pLuminanceHistogram->GetUAV());
@@ -838,10 +813,10 @@ void Graphics::Update()
 				} Parameters;
 
 				Parameters.PixelCount = pToneMapInput->GetWidth() * pToneMapInput->GetHeight();
-				Parameters.MinLogLuminance = g_MinLogLuminance;
-				Parameters.LogLuminanceRange = g_MaxLogLuminance - g_MinLogLuminance;
+				Parameters.MinLogLuminance = Tweakables::g_MinLogLuminance;
+				Parameters.LogLuminanceRange = Tweakables::g_MaxLogLuminance - Tweakables::g_MinLogLuminance;
 				Parameters.TimeDelta = Time::DeltaTime();
-				Parameters.Tau = g_Tau;
+				Parameters.Tau = Tweakables::g_Tau;
 
 				context.SetComputeDynamicConstantBufferView(0, &Parameters, sizeof(AverageParameters));
 				context.SetDynamicDescriptor(1, 0, m_pAverageLuminance->GetUAV());
@@ -858,8 +833,8 @@ void Graphics::Update()
 					float WhitePoint;
 					uint32 Tonemapper;
 				} constBuffer;
-				constBuffer.WhitePoint = g_WhitePoint;
-				constBuffer.Tonemapper = g_ToneMapper;
+				constBuffer.WhitePoint = Tweakables::g_WhitePoint;
+				constBuffer.Tonemapper = Tweakables::g_ToneMapper;
 
 				context.InsertResourceBarrier(m_pTonemapTarget.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 				context.InsertResourceBarrier(m_pAverageLuminance.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
@@ -880,7 +855,7 @@ void Graphics::Update()
 				);
 			});
 
-		if (g_EnableUI && g_DrawHistogram)
+		if (Tweakables::g_EnableUI && Tweakables::g_DrawHistogram)
 		{
 			RGPassBuilder drawHistogram = graph.AddPass("Draw Histogram");
 			drawHistogram.Bind([=](CommandContext& context, const RGPassResources& resources)
@@ -898,8 +873,8 @@ void Graphics::Update()
 						float InverseLogLuminanceRange;
 					} Parameters;
 
-					Parameters.MinLogLuminance = g_MinLogLuminance;
-					Parameters.InverseLogLuminanceRange = 1.0f / (g_MaxLogLuminance - g_MinLogLuminance);
+					Parameters.MinLogLuminance = Tweakables::g_MinLogLuminance;
+					Parameters.InverseLogLuminanceRange = 1.0f / (Tweakables::g_MaxLogLuminance - Tweakables::g_MinLogLuminance);
 
 					context.SetComputeDynamicConstantBufferView(0, &Parameters, sizeof(AverageParameters));
 					context.SetDynamicDescriptor(1, 0, m_pTonemapTarget->GetUAV());
@@ -911,7 +886,7 @@ void Graphics::Update()
 		}
 	}
 
-	if (g_VisualizeLightDensity)
+	if (Tweakables::g_VisualizeLightDensity)
 	{
 		if (m_RenderPath == RenderPath::Clustered)
 		{
@@ -955,7 +930,7 @@ void Graphics::Update()
 
 	//UI
 	// - ImGui render, pretty straight forward
-	if(g_EnableUI)
+	if(Tweakables::g_EnableUI)
 	{
 		m_pImGuiRenderer->Render(graph, m_pTonemapTarget.get());
 	}
@@ -973,10 +948,10 @@ void Graphics::Update()
 		});
 
 	graph.Compile();
-	if (gDumpRenderGraph)
+	if (Tweakables::g_DumpRenderGraph)
 	{
 		graph.DumpGraphMermaid("graph.html");
-		gDumpRenderGraph = false;
+		Tweakables::g_DumpRenderGraph = false;
 	}
 	nextFenceValue = graph.Execute();
 	PROFILE_END();
@@ -998,6 +973,7 @@ void Graphics::Shutdown()
 {
 	// Wait for the GPU to be done with all resources.
 	IdleGPU();
+
 	m_pSwapchain->SetFullscreenState(false, nullptr);
 }
 
@@ -1010,14 +986,8 @@ void Graphics::EndFrame(uint64 fenceValue)
 {
 	Profiler::Get()->Resolve(this, m_Frame);
 
-	//This always gets me confused!
-	//The 'm_CurrentBackBufferIndex' is the frame that just got queued so we set the fence value on that frame
-	//We present and request the new backbuffer index and wait for that one to finish on the GPU before starting to queue work for that frame.
-
-	m_FenceValues[m_CurrentBackBufferIndex] = fenceValue;
 	m_pSwapchain->Present(1, 0);
 	m_CurrentBackBufferIndex = m_pSwapchain->GetCurrentBackBufferIndex();
-	WaitForFence(m_FenceValues[m_CurrentBackBufferIndex]);
 	++m_Frame;
 }
 
@@ -1035,7 +1005,7 @@ void Graphics::InitD3D()
 		if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&pDebugController))))
 		{
 			pDebugController->EnableDebugLayer();
-			E_LOG(Info, "D3D12 Debug Layer Enabled");
+			E_LOG(Warning, "D3D12 Debug Layer Enabled");
 		}
 
 		if (gpuValidation)
@@ -1060,7 +1030,7 @@ void Graphics::InitD3D()
 			// Turn on auto-breadcrumbs and page fault reporting.
 			pDredSettings->SetAutoBreadcrumbsEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
 			pDredSettings->SetPageFaultEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
-			E_LOG(Info, "DRED Enabled");
+			E_LOG(Warning, "DRED Enabled");
 		}
 	}
 	
@@ -1174,6 +1144,7 @@ void Graphics::InitD3D()
 			if (CommandLine::GetBool("d3dbreakvalidation"))
 			{
 				VERIFY_HR_EX(pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, true), GetDevice());
+				E_LOG(Warning, "D3D Validation Break on Severity Enabled");
 			}
 			pInfoQueue->PushStorageFilter(&NewFilter);
 			pInfoQueue->Release();
@@ -1256,12 +1227,6 @@ void Graphics::InitD3D()
 	m_pSwapchain.Reset();
 	swapChain.As(&m_pSwapchain);
 
-	m_pDynamicAllocationManager = std::make_unique<DynamicAllocationManager>(this);
-	m_pGraphAllocator = std::make_unique<RGResourceAllocator>(this);
-
-	Profiler::Get()->Initialize(this);
-
-	//Create the textures but don't create the resources themselves yet.
 	for (int i = 0; i < FRAME_COUNT; ++i)
 	{
 		m_Backbuffers[i] = std::make_unique<Texture>(this, "Render Target");
@@ -1273,45 +1238,78 @@ void Graphics::InitD3D()
 		m_pResolvedDepthStencil = std::make_unique<Texture>(this, "Resolved Depth Stencil");
 		m_pMultiSampleRenderTarget = std::make_unique<Texture>(this, "MSAA Target");
 	}
+
 	m_pHDRRenderTarget = std::make_unique<Texture>(this, "HDR Target");
 	m_pPreviousColor = std::make_unique<Texture>(this, "Previous Color");
 	m_pTonemapTarget = std::make_unique<Texture>(this, "Tonemap Target");
 	m_pDownscaledColor = std::make_unique<Texture>(this, "Downscaled HDR Target");
 	m_pAmbientOcclusion = std::make_unique<Texture>(this, "SSAO");
 
+	m_pDynamicAllocationManager = std::make_unique<DynamicAllocationManager>(this);
 	m_pClusteredForward = std::make_unique<ClusteredForward>(this);
 	m_pTiledForward = std::make_unique<TiledForward>(this);
+	m_pRTReflections = std::make_unique<RTReflections>(this);
 	m_pRTAO = std::make_unique<RTAO>(this);
 	m_pSSAO = std::make_unique<SSAO>(this);
 	m_pImGuiRenderer = std::make_unique<ImGuiRenderer>(this);
 	m_pImGuiRenderer->AddUpdateCallback(ImGuiCallbackDelegate::CreateRaw(this, &Graphics::UpdateImGui));
 	m_pParticles = std::make_unique<GpuParticles>(this);
 
+	Profiler::Get()->Initialize(this);
 	DebugRenderer::Get()->Initialize(this);
 
 	OnResize(m_WindowWidth, m_WindowHeight);
 }
-
 
 void Graphics::InitializeAssets(CommandContext& context)
 {
 	m_pMesh = std::make_unique<Mesh>();
 	m_pMesh->Load("Resources/sponza/sponza.dae", this, &context);
 
+	std::map<Texture*, int> textureToIndex;
+	int textureIndex = 0;
 	for (int i = 0; i < m_pMesh->GetMeshCount(); ++i)
 	{
+		const Material& material = m_pMesh->GetMaterial(m_pMesh->GetMesh(i)->GetMaterialId());
+		auto it = textureToIndex.find(material.pDiffuseTexture);
+		if (it == textureToIndex.end())
+			textureToIndex[material.pDiffuseTexture] = textureIndex++;
+		it = textureToIndex.find(material.pNormalTexture);
+		if (it == textureToIndex.end())
+			textureToIndex[material.pNormalTexture] = textureIndex++;
+		it = textureToIndex.find(material.pRoughnessTexture);
+		if (it == textureToIndex.end())
+			textureToIndex[material.pRoughnessTexture] = textureIndex++;
+		it = textureToIndex.find(material.pMetallicTexture);
+		if (it == textureToIndex.end())
+			textureToIndex[material.pMetallicTexture] = textureIndex++;
+	}
+
+	m_SceneData.MaterialTextures.resize(textureToIndex.size());
+	for (auto& pair : textureToIndex)
+	{
+		m_SceneData.MaterialTextures[pair.second] = pair.first->GetSRV();
+	}
+
+	for (int i = 0; i < m_pMesh->GetMeshCount(); ++i)
+	{
+		const Material& material = m_pMesh->GetMaterial(m_pMesh->GetMesh(i)->GetMaterialId());
 		Batch b;
 		b.Bounds = m_pMesh->GetMesh(i)->GetBounds();
 		b.pMesh = m_pMesh->GetMesh(i);
-		b.pMaterial = &m_pMesh->GetMaterial(b.pMesh->GetMaterialId());
-		b.WorldMatrix = Matrix::Identity;
-		if (b.pMaterial->IsTransparent)
+		
+		b.Material.Diffuse = textureToIndex[material.pDiffuseTexture];
+		b.Material.Normal = textureToIndex[material.pNormalTexture];
+		b.Material.Roughness = textureToIndex[material.pRoughnessTexture];
+		b.Material.Metallic = textureToIndex[material.pMetallicTexture];
+
+		if (material.IsTransparent)
 		{
-			m_TransparantBatches.push_back(b);
+			m_SceneData.TransparantBatches.push_back(b);
 		}
 		else
 		{
-			m_OpaqueBatches.push_back(b);
+			m_SceneData.OpaqueBatches.push_back(b);
 		}
 	}
 
@@ -1332,13 +1330,13 @@ void Graphics::InitializeAssets(CommandContext& context)
 				D3D12_RAYTRACING_GEOMETRY_DESC geometryDesc{};
 				geometryDesc.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
 				geometryDesc.Flags = D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
-				geometryDesc.Triangles.IndexBuffer = pSubMesh->GetIndicesLocation();
-				geometryDesc.Triangles.IndexCount = pSubMesh->GetIndexCount();
+				geometryDesc.Triangles.IndexBuffer = pSubMesh->GetIndexBuffer().Location;
+				geometryDesc.Triangles.IndexCount = pSubMesh->GetIndexBuffer().Elements;
 				geometryDesc.Triangles.IndexFormat = DXGI_FORMAT_R32_UINT;
 				geometryDesc.Triangles.Transform3x4 = 0;
-				geometryDesc.Triangles.VertexBuffer.StartAddress = pSubMesh->GetVerticesLocation();
-				geometryDesc.Triangles.VertexBuffer.StrideInBytes = pSubMesh->GetStride();
-				geometryDesc.Triangles.VertexCount = pSubMesh->GetVertexCount();
+				geometryDesc.Triangles.VertexBuffer.StartAddress = pSubMesh->GetVertexBuffer().Location;
+				geometryDesc.Triangles.VertexBuffer.StrideInBytes = pSubMesh->GetVertexBuffer().Stride;
+				geometryDesc.Triangles.VertexCount = pSubMesh->GetVertexBuffer().Elements;
 				geometryDesc.Triangles.VertexFormat = DXGI_FORMAT_R32G32B32_FLOAT;
 				geometries.push_back(geometryDesc);
 			}
@@ -1429,6 +1427,26 @@ void Graphics::InitializeAssets(CommandContext& context)
 			context.InsertUavBarrier(m_pTLAS.get());
 		}
 	}
+
+	{
+		int lightCount = 3;
+		m_Lights.resize(lightCount);
+
+		Vector3 Position(-150, 160, -10);
+		Vector3 Direction;
+		Position.Normalize(Direction);
+		m_Lights[0] = Light::Directional(Position, -Direction, 10);
+		m_Lights[0].CastShadows = true;
+
+		m_Lights[1] = Light::Point(Vector3(0, 10, 0), 100, 5000, Color(1, 0.2f, 0.2f, 1));
+		m_Lights[1].CastShadows = true;
+
+		m_Lights[2] = Light::Spot(Vector3(0, 10, -10), 200, Vector3(0, 0, 1), 90, 70, 5000, Color(1, 0, 0, 1.0f));
+		m_Lights[2].CastShadows = true;
+
+		m_pLightBuffer = std::make_unique<Buffer>(this, "Lights");
+		m_pLightBuffer->Create(BufferDesc::CreateStructured(lightCount, sizeof(Light), BufferFlag::ShaderResource));
+	}
 }
 
 void Graphics::OnResize(int width, int height)
@@ -1511,8 +1529,6 @@ void Graphics::OnResize(int width, int height)
 
 void Graphics::InitializePipelines()
 {
-	m_pLightBuffer = std::make_unique<Buffer>(this, "Lights");
-
 	//Input layout
 	//UNIVERSAL
 	CD3DX12_INPUT_ELEMENT_DESC depthOnlyInputElements[] = {
@@ -1526,14 +1542,14 @@ void Graphics::InitializePipelines()
 		//Opaque
 		{
 			Shader vertexShader("DepthOnly.hlsl", ShaderType::Vertex, "VSMain");
-			Shader alphaPixelShader("DepthOnly.hlsl", ShaderType::Pixel, "PSMain");
+			Shader alphaClipPixelShader("DepthOnly.hlsl", ShaderType::Pixel, "PSMain");
 
 			//Rootsignature
-			m_pShadowsRS = std::make_unique<RootSignature>();
-			m_pShadowsRS->FinalizeFromShader("Shadow Mapping (Opaque)", vertexShader, m_pDevice.Get());
+			m_pShadowsRS = std::make_unique<RootSignature>(this);
+			m_pShadowsRS->FinalizeFromShader("Shadow Mapping (Opaque)", vertexShader);
 
 			//Pipeline state
-			m_pShadowsOpaquePSO = std::make_unique<PipelineState>();
+			m_pShadowsOpaquePSO = std::make_unique<PipelineState>(this);
 			m_pShadowsOpaquePSO->SetInputLayout(depthOnlyInputElements, sizeof(depthOnlyInputElements) / sizeof(depthOnlyInputElements[0]));
 			m_pShadowsOpaquePSO->SetRootSignature(m_pShadowsRS->GetRootSignature());
 			m_pShadowsOpaquePSO->SetVertexShader(vertexShader);
@@ -1541,11 +1557,11 @@ void Graphics::InitializePipelines()
 			m_pShadowsOpaquePSO->SetCullMode(D3D12_CULL_MODE_NONE);
 			m_pShadowsOpaquePSO->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
 			m_pShadowsOpaquePSO->SetDepthBias(-1, -5.0f, -4.0f);
-			m_pShadowsOpaquePSO->Finalize("Shadow Mapping (Opaque) Pipeline", m_pDevice.Get());
+			m_pShadowsOpaquePSO->Finalize("Shadow Mapping (Opaque)");
 
 			m_pShadowsAlphaPSO = std::make_unique<PipelineState>(*m_pShadowsOpaquePSO);
-			m_pShadowsAlphaPSO->SetPixelShader(alphaPixelShader);
-			m_pShadowsAlphaPSO->Finalize("Shadow Mapping (Alpha) Pipeline", m_pDevice.Get());
+			m_pShadowsAlphaPSO->SetPixelShader(alphaClipPixelShader);
+			m_pShadowsAlphaPSO->Finalize("Shadow Mapping (Alpha)");
 		}
 	}
 
@@ -1555,17 +1571,17 @@ void Graphics::InitializePipelines()
 		Shader vertexShader("DepthOnly.hlsl", ShaderType::Vertex, "VSMain");
 
 		//Rootsignature
-		m_pDepthPrepassRS = std::make_unique<RootSignature>();
-		m_pDepthPrepassRS->FinalizeFromShader("Depth Prepass", vertexShader, m_pDevice.Get());
+		m_pDepthPrepassRS = std::make_unique<RootSignature>(this);
+		m_pDepthPrepassRS->FinalizeFromShader("Depth Prepass", vertexShader);
 
 		//Pipeline state
-		m_pDepthPrepassPSO = std::make_unique<PipelineState>();
+		m_pDepthPrepassPSO = std::make_unique<PipelineState>(this);
 		m_pDepthPrepassPSO->SetInputLayout(depthOnlyInputElements, sizeof(depthOnlyInputElements) / sizeof(depthOnlyInputElements[0]));
 		m_pDepthPrepassPSO->SetRootSignature(m_pDepthPrepassRS->GetRootSignature());
 		m_pDepthPrepassPSO->SetVertexShader(vertexShader);
 		m_pDepthPrepassPSO->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
 		m_pDepthPrepassPSO->SetRenderTargetFormats(nullptr, 0, DEPTH_STENCIL_FORMAT, m_SampleCount);
-		m_pDepthPrepassPSO->Finalize("Depth Prepass Pipeline", m_pDevice.Get());
+		m_pDepthPrepassPSO->Finalize("Depth Prepass");
 	}
 
 	//Luminance Historgram
@@ -1573,14 +1589,14 @@ void Graphics::InitializePipelines()
 		Shader computeShader("LuminanceHistogram.hlsl", ShaderType::Compute, "CSMain");
 
 		//Rootsignature
-		m_pLuminanceHistogramRS = std::make_unique<RootSignature>();
-		m_pLuminanceHistogramRS->FinalizeFromShader("Luminance Historgram", computeShader, m_pDevice.Get());
+		m_pLuminanceHistogramRS = std::make_unique<RootSignature>(this);
+		m_pLuminanceHistogramRS->FinalizeFromShader("Luminance Historgram", computeShader);
 
 		//Pipeline state
-		m_pLuminanceHistogramPSO = std::make_unique<PipelineState>();
+		m_pLuminanceHistogramPSO = std::make_unique<PipelineState>(this);
 		m_pLuminanceHistogramPSO->SetRootSignature(m_pLuminanceHistogramRS->GetRootSignature());
 		m_pLuminanceHistogramPSO->SetComputeShader(computeShader);
-		m_pLuminanceHistogramPSO->Finalize("Luminance Historgram", m_pDevice.Get());
+		m_pLuminanceHistogramPSO->Finalize("Luminance Historgram");
 
 		m_pLuminanceHistogram = std::make_unique<Buffer>(this, "Luminance Histogram");
 		m_pLuminanceHistogram->Create(BufferDesc::CreateByteAddress(sizeof(uint32) * 256));
@@ -1591,13 +1607,13 @@ void Graphics::InitializePipelines()
 	//Debug Draw Histogram
 	{
 		Shader computeDrawShader("DrawLuminanceHistogram.hlsl", ShaderType::Compute, "DrawLuminanceHistogram");
-		m_pDrawHistogramRS = std::make_unique<RootSignature>();
-		m_pDrawHistogramRS->FinalizeFromShader("Draw Luminance Historgram", computeDrawShader, m_pDevice.Get());
+		m_pDrawHistogramRS = std::make_unique<RootSignature>(this);
+		m_pDrawHistogramRS->FinalizeFromShader("Draw Luminance Historgram", computeDrawShader);
 
-		m_pDrawHistogramPSO = std::make_unique<PipelineState>();
+		m_pDrawHistogramPSO = std::make_unique<PipelineState>(this);
 		m_pDrawHistogramPSO->SetRootSignature(m_pDrawHistogramRS->GetRootSignature());
 		m_pDrawHistogramPSO->SetComputeShader(computeDrawShader);
-		m_pDrawHistogramPSO->Finalize("Draw Luminance Historgram", m_pDevice.Get());
+		m_pDrawHistogramPSO->Finalize("Draw Luminance Historgram");
 	}
 
 	//Average Luminance
@@ -1605,14 +1621,14 @@ void Graphics::InitializePipelines()
 		Shader computeShader("AverageLuminance.hlsl", ShaderType::Compute, "CSMain");
 
 		//Rootsignature
-		m_pAverageLuminanceRS = std::make_unique<RootSignature>();
-		m_pAverageLuminanceRS->FinalizeFromShader("Average Luminance", computeShader, m_pDevice.Get());
+		m_pAverageLuminanceRS = std::make_unique<RootSignature>(this);
+		m_pAverageLuminanceRS->FinalizeFromShader("Average Luminance", computeShader);
 
 		//Pipeline state
-		m_pAverageLuminancePSO = std::make_unique<PipelineState>();
+		m_pAverageLuminancePSO = std::make_unique<PipelineState>(this);
 		m_pAverageLuminancePSO->SetRootSignature(m_pAverageLuminanceRS->GetRootSignature());
 		m_pAverageLuminancePSO->SetComputeShader(computeShader);
-		m_pAverageLuminancePSO->Finalize("Average Luminance", m_pDevice.Get());
+		m_pAverageLuminancePSO->Finalize("Average Luminance");
 	}
 
 	//Tonemapping
@@ -1620,14 +1636,14 @@ void Graphics::InitializePipelines()
 		Shader computeShader("Tonemapping.hlsl", ShaderType::Compute, "CSMain");
 
 		//Rootsignature
-		m_pToneMapRS = std::make_unique<RootSignature>();
-		m_pToneMapRS->FinalizeFromShader("Tonemapping", computeShader, m_pDevice.Get());
+		m_pToneMapRS = std::make_unique<RootSignature>(this);
+		m_pToneMapRS->FinalizeFromShader("Tonemapping", computeShader);
 
 		//Pipeline state
-		m_pToneMapPSO = std::make_unique<PipelineState>();
+		m_pToneMapPSO = std::make_unique<PipelineState>(this);
 		m_pToneMapPSO->SetRootSignature(m_pToneMapRS->GetRootSignature());
 		m_pToneMapPSO->SetComputeShader(computeShader);
-		m_pToneMapPSO->Finalize("Tone mapping Pipeline", m_pDevice.Get());
+		m_pToneMapPSO->Finalize("Tone mapping Pipeline");
 	}
 
 	//Depth resolve
@@ -1636,13 +1652,13 @@ void Graphics::InitializePipelines()
 	{
 		Shader computeShader("ResolveDepth.hlsl", ShaderType::Compute, "CSMain", { "DEPTH_RESOLVE_MIN" });
 
-		m_pResolveDepthRS = std::make_unique<RootSignature>();
-		m_pResolveDepthRS->FinalizeFromShader("Depth Resolve", computeShader, m_pDevice.Get());
+		m_pResolveDepthRS = std::make_unique<RootSignature>(this);
+		m_pResolveDepthRS->FinalizeFromShader("Depth Resolve", computeShader);
 
-		m_pResolveDepthPSO = std::make_unique<PipelineState>();
+		m_pResolveDepthPSO = std::make_unique<PipelineState>(this);
 		m_pResolveDepthPSO->SetComputeShader(computeShader);
 		m_pResolveDepthPSO->SetRootSignature(m_pResolveDepthRS->GetRootSignature());
-		m_pResolveDepthPSO->Finalize("Resolve Depth Pipeline", m_pDevice.Get());
+		m_pResolveDepthPSO->Finalize("Resolve Depth Pipeline");
 	}
 
 	//Depth reduce
@@ -1651,33 +1667,33 @@ void Graphics::InitializePipelines()
 		Shader prepareReduceShaderMSAA("ReduceDepth.hlsl", ShaderType::Compute, "PrepareReduceDepth", { "WITH_MSAA" });
 		Shader reduceShader("ReduceDepth.hlsl", ShaderType::Compute, "ReduceDepth", { });
 
-		m_pReduceDepthRS = std::make_unique<RootSignature>();
-		m_pReduceDepthRS->FinalizeFromShader("Depth Reduce", prepareReduceShader, m_pDevice.Get());
+		m_pReduceDepthRS = std::make_unique<RootSignature>(this);
+		m_pReduceDepthRS->FinalizeFromShader("Depth Reduce", prepareReduceShader);
 
-		m_pPrepareReduceDepthPSO = std::make_unique<PipelineState>();
+		m_pPrepareReduceDepthPSO = std::make_unique<PipelineState>(this);
 		m_pPrepareReduceDepthPSO->SetComputeShader(prepareReduceShader);
 		m_pPrepareReduceDepthPSO->SetRootSignature(m_pReduceDepthRS->GetRootSignature());
-		m_pPrepareReduceDepthPSO->Finalize("Prepare Reduce Depth Pipeline", m_pDevice.Get());
+		m_pPrepareReduceDepthPSO->Finalize("Prepare Reduce Depth Pipeline");
 		m_pPrepareReduceDepthMsaaPSO = std::make_unique<PipelineState>(*m_pPrepareReduceDepthPSO);
 		m_pPrepareReduceDepthMsaaPSO->SetComputeShader(prepareReduceShaderMSAA);
-		m_pPrepareReduceDepthMsaaPSO->Finalize("Prepare Reduce Depth Pipeline MSAA", m_pDevice.Get());
+		m_pPrepareReduceDepthMsaaPSO->Finalize("Prepare Reduce Depth Pipeline MSAA");
 
 		m_pReduceDepthPSO = std::make_unique<PipelineState>(*m_pPrepareReduceDepthPSO);
 		m_pReduceDepthPSO->SetComputeShader(reduceShader);
-		m_pReduceDepthPSO->Finalize("Reduce Depth Pipeline", m_pDevice.Get());
+		m_pReduceDepthPSO->Finalize("Reduce Depth Pipeline");
 	}
 
 	//Mip generation
 	{
 		Shader computeShader("GenerateMips.hlsl", ShaderType::Compute, "CSMain");
 
-		m_pGenerateMipsRS = std::make_unique<RootSignature>();
-		m_pGenerateMipsRS->FinalizeFromShader("Generate Mips", computeShader, m_pDevice.Get());
+		m_pGenerateMipsRS = std::make_unique<RootSignature>(this);
+		m_pGenerateMipsRS->FinalizeFromShader("Generate Mips", computeShader);
 
-		m_pGenerateMipsPSO = std::make_unique<PipelineState>();
+		m_pGenerateMipsPSO = std::make_unique<PipelineState>(this);
 		m_pGenerateMipsPSO->SetComputeShader(computeShader);
 		m_pGenerateMipsPSO->SetRootSignature(m_pGenerateMipsRS->GetRootSignature());
-		m_pGenerateMipsPSO->Finalize("Generate Mips PSO", m_pDevice.Get());
+		m_pGenerateMipsPSO->Finalize("Generate Mips");
 	}
 
 	//Sky
@@ -1686,18 +1702,18 @@ void Graphics::InitializePipelines()
 		Shader pixelShader("ProceduralSky.hlsl", ShaderType::Pixel, "PSMain");
 
 		//Rootsignature
-		m_pSkyboxRS = std::make_unique<RootSignature>();
-		m_pSkyboxRS->FinalizeFromShader("Skybox", vertexShader, m_pDevice.Get());
+		m_pSkyboxRS = std::make_unique<RootSignature>(this);
+		m_pSkyboxRS->FinalizeFromShader("Skybox", vertexShader);
 
 		//Pipeline state
-		m_pSkyboxPSO = std::make_unique<PipelineState>();
+		m_pSkyboxPSO = std::make_unique<PipelineState>(this);
 		m_pSkyboxPSO->SetInputLayout(nullptr, 0);
 		m_pSkyboxPSO->SetRootSignature(m_pSkyboxRS->GetRootSignature());
 		m_pSkyboxPSO->SetVertexShader(vertexShader);
 		m_pSkyboxPSO->SetPixelShader(pixelShader);
 		m_pSkyboxPSO->SetRenderTargetFormat(RENDER_TARGET_FORMAT, DEPTH_STENCIL_FORMAT, m_SampleCount);
 		m_pSkyboxPSO->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
-		m_pSkyboxPSO->Finalize("Skybox", m_pDevice.Get());
+		m_pSkyboxPSO->Finalize("Skybox");
 	}
 }
 
@@ -1723,7 +1739,7 @@ void Graphics::UpdateImGui()
 		ImGui::End();
 	}
 
-	if (g_VisualizeShadowCascades)
+	if (Tweakables::g_VisualizeShadowCascades)
 	{
 		if (m_ShadowMaps.size() >= 4)
 		{
@@ -1770,19 +1786,14 @@ void Graphics::UpdateImGui()
 			}, nullptr, 2);
 
 		ImGui::Separator();
-		ImGui::SliderInt("Lights", &m_DesiredLightCount, 10, 10000);
-		if (ImGui::Button("Generate Lights"))
-		{
-			RandomizeLights(m_DesiredLightCount);
-		}
 
 		if (ImGui::Button("Dump RenderGraph"))
 		{
-			gDumpRenderGraph = true;
+			Tweakables::g_DumpRenderGraph = true;
 		}
 		if (ImGui::Button("Screenshot"))
 		{
-			g_Screenshot = true;
+			Tweakables::g_Screenshot = true;
 		}
 		if (ImGui::Button("Pix Capture"))
 		{
@@ -1879,23 +1890,23 @@ void Graphics::UpdateImGui()
 	ImGui::Begin("Parameters");
 
 	ImGui::Text("Sky");
-	ImGui::SliderFloat("Sun Orientation", &g_SunOrientation, -Math::PI, Math::PI);
-	ImGui::SliderFloat("Sun Inclination", &g_SunInclination, 0, 1);
-	ImGui::SliderFloat("Sun Temperature", &g_SunTemperature, 1000, 15000);
+	ImGui::SliderFloat("Sun Orientation", &Tweakables::g_SunOrientation, -Math::PI, Math::PI);
+	ImGui::SliderFloat("Sun Inclination", &Tweakables::g_SunInclination, 0, 1);
+	ImGui::SliderFloat("Sun Temperature", &Tweakables::g_SunTemperature, 1000, 15000);
 
 	ImGui::Text("Shadows");
-	ImGui::SliderInt("Shadow Cascades", &g_ShadowCascades, 1, 4);
-	ImGui::Checkbox("SDSM", &g_SDSM);
-	ImGui::Checkbox("Stabilize Cascades", &g_StabilizeCascades);
-	ImGui::SliderFloat("PSSM Factor", &g_PSSMFactor, 0, 1);
-	ImGui::Checkbox("Visualize Cascades", &g_VisualizeShadowCascades);
+	ImGui::SliderInt("Shadow Cascades", &Tweakables::g_ShadowCascades, 1, 4);
+	ImGui::Checkbox("SDSM", &Tweakables::g_SDSM);
+	ImGui::Checkbox("Stabilize Cascades", &Tweakables::g_StabilizeCascades);
+	ImGui::SliderFloat("PSSM Factor", &Tweakables::g_PSSMFactor, 0, 1);
+	ImGui::Checkbox("Visualize Cascades", &Tweakables::g_VisualizeShadowCascades);
 
 	ImGui::Text("Expose/Tonemapping");
-	ImGui::SliderFloat("Min Log Luminance", &g_MinLogLuminance, -100, 20);
-	ImGui::SliderFloat("Max Log Luminance", &g_MaxLogLuminance, -50, 50);
-	ImGui::Checkbox("Draw Exposure Histogram", &g_DrawHistogram);
-	ImGui::SliderFloat("White Point", &g_WhitePoint, 0, 20);
-	ImGui::Combo("Tonemapper", (int*)&g_ToneMapper, [](void* data, int index, const char** outText)
+	ImGui::SliderFloat("Min Log Luminance", &Tweakables::g_MinLogLuminance, -100, 20);
+	ImGui::SliderFloat("Max Log Luminance", &Tweakables::g_MaxLogLuminance, -50, 50);
+	ImGui::Checkbox("Draw Exposure Histogram", &Tweakables::g_DrawHistogram);
+	ImGui::SliderFloat("White Point", &Tweakables::g_WhitePoint, 0, 20);
+	ImGui::Combo("Tonemapper", (int*)&Tweakables::g_ToneMapper, [](void* data, int index, const char** outText)
 		{
 			if (index == 0)
 				*outText = "Reinhard";
@@ -1912,21 +1923,19 @@ void Graphics::UpdateImGui()
 			return true;
 		}, nullptr, 5);
 
-	ImGui::SliderFloat("Tau", &g_Tau, 0, 5);
+	ImGui::SliderFloat("Tau", &Tweakables::g_Tau, 0, 5);
 
 	ImGui::Text("Misc");
-	ImGui::Checkbox("Debug Render Lights", &g_VisualizeLights);
-	ImGui::Checkbox("Visualize Light Density", &g_VisualizeLightDensity);
+	ImGui::Checkbox("Debug Render Lights", &Tweakables::g_VisualizeLights);
+	ImGui::Checkbox("Visualize Light Density", &Tweakables::g_VisualizeLightDensity);
 	extern bool g_VisualizeClusters;
 	ImGui::Checkbox("Visualize Clusters", &g_VisualizeClusters);
-	ImGui::SliderInt("SSR Samples", &g_SsrSamples, 0, 32);
+	ImGui::SliderInt("SSR Samples", &Tweakables::g_SsrSamples, 0, 32);
 
-	if (ImGui::Checkbox("Raytracing", &g_ShowRaytraced))
+	if (m_RayTracingTier != D3D12_RAYTRACING_TIER_NOT_SUPPORTED)
 	{
-		if (m_RayTracingTier == D3D12_RAYTRACING_TIER_NOT_SUPPORTED)
-		{
-			g_ShowRaytraced = false;
-		}
+		ImGui::Checkbox("Raytraced AO", &Tweakables::g_RaytracedAO);
+		ImGui::Checkbox("Raytraced Reflections", &Tweakables::g_RaytracedReflections);
 	}
 
 	ImGui::End();
@@ -1948,20 +1957,19 @@ CommandContext* Graphics::AllocateCommandContext(D3D12_COMMAND_LIST_TYPE type)
 		{
 			pContext = m_FreeCommandLists[typeIndex].front();
 			m_FreeCommandLists[typeIndex].pop();
+			pContext->Reset();
 		}
 		else
 		{
 			ComPtr<ID3D12CommandList> pCommandList;
-			ComPtr<ID3D12Device4> pDevice4;
-			VERIFY_HR(m_pDevice.As(&pDevice4));
-			pDevice4->CreateCommandList1(0, type, D3D12_COMMAND_LIST_FLAG_NONE, IID_PPV_ARGS(pCommandList.GetAddressOf()));
+			ID3D12CommandAllocator* pAllocator = m_CommandQueues[type]->RequestAllocator();
+			VERIFY_HR(m_pDevice->CreateCommandList(0, type, pAllocator, nullptr, IID_PPV_ARGS(pCommandList.GetAddressOf())));
 			D3D::SetObjectName(pCommandList.Get(), "Pooled Commandlist");
 			m_CommandLists.push_back(std::move(pCommandList));
-			m_CommandListPool[typeIndex].emplace_back(std::make_unique<CommandContext>(this, static_cast<ID3D12GraphicsCommandList*>(m_CommandLists.back().Get()), type));
+			m_CommandListPool[typeIndex].emplace_back(std::make_unique<CommandContext>(this, static_cast<ID3D12GraphicsCommandList*>(m_CommandLists.back().Get()), type, pAllocator));
 			pContext = m_CommandListPool[typeIndex].back().get();
 		}
 	}
-	pContext->Reset();
 	return pContext;
 }
 

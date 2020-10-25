@@ -303,6 +303,19 @@ namespace D3D
 		}
 	}
 
+	inline std::string GetObjectName(ID3D12Object* pObject)
+	{
+		std::string out;
+		if (pObject)
+		{
+			uint32 size = 0;
+			VERIFY_HR_EX(pObject->GetPrivateData(WKPDID_D3DDebugObjectName, &size, nullptr), nullptr);
+			out.resize(size);
+			VERIFY_HR_EX(pObject->GetPrivateData(WKPDID_D3DDebugObjectName, &size, &out[0]), nullptr);
+		}
+		return out;
+	}
+
 	inline bool IsBlockCompressFormat(DXGI_FORMAT format)
 	{
 		switch (format)
@@ -388,7 +401,6 @@ namespace D3D
 		default:
 			return format;
 		}
-		return format;
 	}
 
 	inline bool HasStencil(DXGI_FORMAT format)

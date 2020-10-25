@@ -8,7 +8,6 @@
 class Graphics;
 class CommandContext;
 
-class RGResourceAllocator;
 class RGGraph;
 class RGPass;
 
@@ -70,30 +69,6 @@ struct RGNode
 	//RenderGraph compile-time values
 	RGPass* pWriter = nullptr;
 	int Reads = 0;
-};
-
-class RGPassBuilder
-{
-public:
-	RGPassBuilder(RGGraph& renderGraph, RGPass& pass)
-		: m_Pass(pass), m_RenderGraph(renderGraph)
-	{}
-
-	template<typename ExecuteCallback>
-	void Bind(ExecuteCallback&& callback)
-	{
-		m_Pass.SetCallback(std::move(callback));
-	}
-
-	RGResourceHandle Read(const RGResourceHandle& resource);
-	[[nodiscard]] RGResourceHandle Write(RGResourceHandle& resource);
-	RGResourceHandle CreateTexture(const char* pName, const TextureDesc& desc);
-	RGResourceHandle CreateBuffer(const char* pName, const BufferDesc& desc);
-	void NeverCull();
-
-private:
-	RGPass& m_Pass;
-	RGGraph& m_RenderGraph;
 };
 
 class RGPassResources
@@ -160,6 +135,30 @@ private:
 
 	//RenderGraph compile-time values
 	int m_References = 0;
+};
+
+class RGPassBuilder
+{
+public:
+	RGPassBuilder(RGGraph& renderGraph, RGPass& pass)
+		: m_Pass(pass), m_RenderGraph(renderGraph)
+	{}
+
+	template<typename ExecuteCallback>
+	void Bind(ExecuteCallback&& callback)
+	{
+		m_Pass.SetCallback(std::move(callback));
+	}
+
+	RGResourceHandle Read(const RGResourceHandle& resource);
+	[[nodiscard]] RGResourceHandle Write(RGResourceHandle& resource);
+	RGResourceHandle CreateTexture(const char* pName, const TextureDesc& desc);
+	RGResourceHandle CreateBuffer(const char* pName, const BufferDesc& desc);
+	void NeverCull();
+
+private:
+	RGPass& m_Pass;
+	RGGraph& m_RenderGraph;
 };
 
 class RGGraph
@@ -295,7 +294,6 @@ private:
 
 	Graphics* m_pGraphics;
 	Allocator m_Allocator;
-	RGResourceAllocator* m_pAllocator;
 	uint64 m_LastFenceValue = 0;
 	bool m_ImmediateMode = false;
 

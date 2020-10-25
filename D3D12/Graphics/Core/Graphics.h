@@ -17,9 +17,9 @@ struct Material;
 class ClusteredForward;
 class TiledForward;
 class Camera;
-class RGResourceAllocator;
 class UnorderedAccessView;
 class RTAO;
+class RTReflections;
 class SSAO;
 class GpuParticles;
 
@@ -32,10 +32,18 @@ using WindowHandle = Windows::UI::Core::CoreWindow^;
 using WindowHandlePtr = Platform::Agile<Windows::UI::Core::CoreWindow>;
 #endif
 
+struct MaterialData
+{
+	int Diffuse;
+	int Normal;
+	int Roughness;
+	int Metallic;
+};
+
 struct Batch
 {
 	const SubMesh* pMesh = nullptr;
-	const Material* pMaterial = nullptr;
+	MaterialData Material;
 	Matrix WorldMatrix;
 	BoundingBox Bounds;
 };
@@ -51,19 +59,21 @@ struct ShadowData
 
 struct SceneData
 {
-	Texture* pDepthBuffer = nullptr;
 	Texture* pResolvedDepth = nullptr;
-	std::vector<std::unique_ptr<Texture>>* pShadowMaps = nullptr;
+	Texture* pDepthBuffer = nullptr;
 	Texture* pRenderTarget = nullptr;
 	Texture* pPreviousColor = nullptr;
 	Texture* pAO = nullptr;
-	const std::vector<Batch>* pOpaqueBatches = nullptr;
-	const std::vector<Batch>* pTransparantBatches = nullptr;
+	Mesh* pMesh = nullptr;
+	std::vector<std::unique_ptr<Texture>>* pShadowMaps = nullptr;
+	std::vector<Batch> OpaqueBatches;
+	std::vector<Batch> TransparantBatches;
+	std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> MaterialTextures;
 	Buffer* pLightBuffer = nullptr;
 	Camera* pCamera = nullptr;
 	ShadowData* pShadowData = nullptr;
-	int FrameIndex = 0;
 	Buffer* pTLAS = nullptr;
+	int FrameIndex = 0;
 };
 
 enum class RenderPath
@@ -81,15 +91,14 @@ public:
 	void Initialize(WindowHandle window);
 	void Update();
 	void Shutdown();
-
-	inline ID3D12Device* GetDevice() const { return m_pDevice.Get(); }
-	inline ID3D12Device5* GetRaytracingDevice() const { return m_pRaytracingDevice.Get(); }
 	void OnResize(int width, int height);
 
 	bool IsFenceComplete(uint64 fenceValue);
 	void WaitForFence(uint64 fenceValue);
 	void IdleGPU();
 
+	inline ID3D12Device* GetDevice() const { return m_pDevice.Get(); }
+	inline ID3D12Device5* GetRaytracingDevice() const { return m_pRaytracingDevice.Get(); }
 	ImGuiRenderer* GetImGui() const { return m_pImGuiRenderer.get(); }
 	CommandQueue* GetCommandQueue(D3D12_COMMAND_LIST_TYPE type) const;
 	CommandContext* AllocateCommandContext(D3D12_COMMAND_LIST_TYPE type = D3D12_COMMAND_LIST_TYPE_DIRECT);
@@ -131,8 +140,6 @@ public:
 	Texture* GetCurrentRenderTarget() const { return m_SampleCount > 1 ? m_pMultiSampleRenderTarget.get() : m_pHDRRenderTarget.get(); }
 	Texture* GetCurrentBackbuffer() const { return m_Backbuffers[m_CurrentBackBufferIndex].get(); }
 
-	Camera* GetCamera() const { return m_pCamera.get(); }
-
 	uint32 GetMultiSampleCount() const { return m_SampleCount; }
 	uint32 GetMaxMSAAQuality(uint32 msaa, DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN);
 
@@ -155,29 +162,12 @@ private:
 
 	void UpdateImGui();
 
-	void RandomizeLights(int count);
-
-	int m_Frame = 0;
-	std::array<float, 180> m_FrameTimes{};
-
-	int m_DesiredLightCount = 128;
-
-	std::unique_ptr<Camera> m_pCamera;
-
-	WindowHandlePtr m_pWindow{};
-
 	ComPtr<IDXGISwapChain3> m_pSwapchain;
 	ComPtr<ID3D12Device> m_pDevice;
 	ComPtr<ID3D12Device5> m_pRaytracingDevice;
 
-	D3D12_RENDER_PASS_TIER m_RenderPassTier = D3D12_RENDER_PASS_TIER_0;
-	D3D12_RAYTRACING_TIER m_RayTracingTier = D3D12_RAYTRACING_TIER_NOT_SUPPORTED;
-	int m_ShaderModelMajor = -1;
-	int m_ShaderModelMinor = -1;
-	D3D12_MESH_SHADER_TIER m_MeshShaderSupport = D3D12_MESH_SHADER_TIER_NOT_SUPPORTED;
-	D3D12_SAMPLER_FEEDBACK_TIER m_SamplerFeedbackSupport = D3D12_SAMPLER_FEEDBACK_TIER_NOT_SUPPORTED;
-
-	int m_SampleCount = 1;
+	int m_Frame = 0;
+	std::array<float, 180> m_FrameTimes{};
 
 	std::array<std::unique_ptr<OfflineDescriptorAllocator>, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES> m_DescriptorHeaps;
 	std::unique_ptr<DynamicAllocationManager> m_pDynamicAllocationManager;
@@ -198,11 +188,23 @@ private:
 	std::vector<std::unique_ptr<Texture>> m_ShadowMaps;
 
 	std::unique_ptr<ImGuiRenderer> m_pImGuiRenderer;
-	std::unique_ptr<RGResourceAllocator> m_pGraphAllocator;
 	std::unique_ptr<ClusteredForward> m_pClusteredForward;
 	std::unique_ptr<TiledForward> m_pTiledForward;
 	std::unique_ptr<RTAO> m_pRTAO;
+	std::unique_ptr<RTReflections> m_pRTReflections;
 	std::unique_ptr<SSAO> m_pSSAO;
+
+	std::unique_ptr<Camera> m_pCamera;
+	WindowHandlePtr m_pWindow{};
+
+	D3D12_RENDER_PASS_TIER m_RenderPassTier = D3D12_RENDER_PASS_TIER_0;
+	D3D12_RAYTRACING_TIER m_RayTracingTier = D3D12_RAYTRACING_TIER_NOT_SUPPORTED;
+	int m_ShaderModelMajor = -1;
+	int m_ShaderModelMinor = -1;
+	D3D12_MESH_SHADER_TIER m_MeshShaderSupport = D3D12_MESH_SHADER_TIER_NOT_SUPPORTED;
+	D3D12_SAMPLER_FEEDBACK_TIER m_SamplerFeedbackSupport = D3D12_SAMPLER_FEEDBACK_TIER_NOT_SUPPORTED;
+
+	int m_SampleCount = 1;
 
 	unsigned int m_WindowWidth;
 	unsigned int m_WindowHeight;
@@ -210,9 +212,7 @@ private:
 	int32 m_ScreenshotDelay = -1;
 	uint32 m_ScreenshotRowPitch = 0;
 
-	// Synchronization objects.
 	uint32 m_CurrentBackBufferIndex = 0;
-	std::array<uint64, FRAME_COUNT> m_FenceValues = {};
 
 	RenderPath m_RenderPath = RenderPath::Clustered;
 
@@ -221,9 +221,6 @@ private:
 	std::unique_ptr<Buffer> m_pTLAS;
 	std::unique_ptr<Buffer> m_pBLASScratch;
 	std::unique_ptr<Buffer> m_pTLASScratch;
-
-	std::vector<Batch> m_OpaqueBatches;
-	std::vector<Batch> m_TransparantBatches;
 
 	//Shadow mapping
 	std::unique_ptr<RootSignature> m_pShadowsRS;
@@ -278,6 +275,6 @@ private:
 	std::unique_ptr<Buffer> m_pLightBuffer;
 
 	Texture* m_pVisualizeTexture = nullptr;
-
+	SceneData m_SceneData;
 	bool m_CapturePix = false;
 };
