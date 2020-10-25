@@ -112,6 +112,7 @@ bool NeedsTransition(D3D12_RESOURCE_STATES& before, D3D12_RESOURCE_STATES& after
 
 void CommandContext::InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESOURCE_STATES state, uint32 subResource /*= D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES*/)
 {
+	check(pBuffer && pBuffer->GetResource());
 	checkf(IsTransitionAllowed(m_Type, state), "After state (%s) is not valid on this commandlist type (%s)", D3D::ResourceStateToString(state).c_str(), D3D::CommandlistTypeToString(m_Type));
 
 	ResourceState& resourceState = m_ResourceStates[pBuffer];
@@ -148,7 +149,8 @@ void CommandContext::FlushResourceBarriers()
 
 void CommandContext::CopyTexture(GraphicsResource* pSource, GraphicsResource* pTarget)
 {
-	check(pSource && pTarget);
+	checkf(pSource && pSource->GetResource(), "Source is invalid");
+	checkf(pTarget && pTarget->GetResource(), "Target is invalid");
 	InsertResourceBarrier(pSource, D3D12_RESOURCE_STATE_COPY_SOURCE);
 	InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_COPY_DEST);
 	FlushResourceBarriers();
