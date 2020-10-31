@@ -54,7 +54,7 @@ void OnlineDescriptorAllocator::SetDescriptors(uint32 rootIndex, uint32 offset, 
 
 void OnlineDescriptorAllocator::UploadAndBindStagedDescriptors(DescriptorTableType descriptorTableType)
 {
-	if (m_StaleRootParameters.AnyBitSet() == false)
+	if (m_StaleRootParameters.HasAnyBitSet() == false)
 	{
 		return;
 	}
@@ -117,9 +117,8 @@ void OnlineDescriptorAllocator::UploadAndBindStagedDescriptors(DescriptorTableTy
 	GetParent()->GetDevice()->CopyDescriptors(destinationRangeCount, destinationRanges.data(), destinationRangeSizes.data(), sourceRangeCount, sourceRanges.data(), sourceRangeSizes.data(), m_Type);
 
 	int i = 0;
-	for (auto it = m_StaleRootParameters.GetSetBitsIterator(); it.Valid(); ++it)
+	for (uint32 rootIndex : m_StaleRootParameters)
 	{
-		uint32 rootIndex = it.Value();
 		switch (descriptorTableType)
 		{
 		case DescriptorTableType::Graphics:
@@ -246,7 +245,7 @@ void OnlineDescriptorAllocator::UnbindAll()
 	for (auto it = m_RootDescriptorMask.GetSetBitsIterator(); it.Valid(); ++it)
 	{
 		uint32 rootIndex = it.Value();
-		if (m_RootDescriptorTable[rootIndex].AssignedHandlesBitMap.AnyBitSet())
+		if (m_RootDescriptorTable[rootIndex].AssignedHandlesBitMap.HasAnyBitSet())
 		{
 			m_StaleRootParameters.SetBit(rootIndex);
 		}
