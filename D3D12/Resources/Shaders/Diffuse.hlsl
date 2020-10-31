@@ -29,6 +29,7 @@ struct PerViewData
 	float4x4 View;
 	float4x4 Projection;
 	float4x4 ViewProjection;
+	float4x4 ReprojectionMatrix;
 	float4 ViewPosition;
 	float2 InvScreenDimensions;
 	float NearZ;
@@ -235,7 +236,8 @@ float3 ScreenSpaceReflections(float4 position, float3 positionVS, float3 N, floa
 			float4 hitColor = 0;
 			if (hitIndex > 0)
 			{
-				float2 texCoord = bestHit.xy;
+				float4 texCoord = float4(bestHit.xy, 0, 1);
+				texCoord = mul(texCoord, cViewData.ReprojectionMatrix);
 				float2 distanceFromCenter = (float2(texCoord.x, texCoord.y) * 2.0f) - float2(1.0f, 1.0f);
 				float edgeAttenuation = saturate((1.0 - ((float)hitIndex / maxSteps)) * 4.0f);
 				edgeAttenuation *= smoothstep(0.0f, 0.5f, saturate(1.0 - dot(distanceFromCenter, distanceFromCenter)));

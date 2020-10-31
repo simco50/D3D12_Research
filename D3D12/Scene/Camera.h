@@ -5,7 +5,7 @@ class Camera
 public:
 	virtual ~Camera() = default;
 
-	virtual void Update() {};
+	virtual void Update();
 
 	void SetPosition(const Vector3& position);
 	void SetRotation(const Quaternion& rotation);
@@ -32,6 +32,7 @@ public:
 	const Matrix& GetViewProjection() const;
 	const Matrix& GetViewInverse() const;
 	const Matrix& GetProjectionInverse() const;
+	const Matrix& GetPreviousViewProjection() const { return m_PreviousViewProjection; }
 	const BoundingFrustum& GetFrustum() const;
 	Ray GetMouseRay(uint32 windowWidth, uint32 windowHeight) const;
 
@@ -54,6 +55,7 @@ private:
 	mutable Matrix m_ViewProjection;
 	mutable Matrix m_ViewInverse;
 	mutable Matrix m_ProjectionInverse;
+	mutable Matrix m_PreviousViewProjection;
 	mutable BoundingFrustum m_Frustum;
 
 	bool m_Perspective = true;

@@ -96,6 +96,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& resources)
 				Matrix View;
 				Matrix Projection;
 				Matrix ViewProjection;
+				Matrix ReprojectionMatrix;
 				Vector4 ViewPosition;
 				Vector2 InvScreenDimensions;
 				float NearZ;
@@ -115,6 +116,23 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& resources)
 			frameData.SsrSamples = Tweakables::g_SsrSamples;
 			frameData.ViewProjection = resources.pCamera->GetViewProjection();
 			frameData.ViewPosition = Vector4(resources.pCamera->GetPosition());
+
+			Matrix reprojectionMatrix = resources.pCamera->GetViewProjection().Invert() * resources.pCamera->GetPreviousViewProjection();
+			// Transform from uv to clip space: texcoord * 2 - 1
+			Matrix premult = {
+				2.0f, 0, 0, 0,
+				0, -2.0f, 0, 0,
+				0, 0, 1, 0,
+				-1, 1, 0, 1
+			};
+			// Transform from clip to uv space: texcoord * 0.5 + 0.5
+			Matrix postmult = {
+				0.5f, 0, 0, 0,
+				0, -0.5f, 0, 0,
+				0, 0, 1, 0,
+				0.5f, 0.5f, 0, 1
+			};
+			frameData.ReprojectionMatrix = premult * reprojectionMatrix * postmult;
 
 			context.InsertResourceBarrier(m_pLightGridOpaque.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(m_pLightGridTransparant.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);

@@ -125,8 +125,14 @@ void Camera::UpdateMatrices() const
 	}
 }
 
+void Camera::Update()
+{
+	m_PreviousViewProjection = GetViewProjection();
+}
+
 void FreeCamera::Update()
 {
+	Camera::Update();
 	//Camera movement
 	Vector3 movement;
 	if (Input::Instance().IsMouseDown(1))
