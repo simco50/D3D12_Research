@@ -758,9 +758,38 @@ void Graphics::Update()
 				context.InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RESOLVE_SOURCE);
 				context.InsertResourceBarrier(m_pHDRRenderTarget.get(), D3D12_RESOURCE_STATE_RESOLVE_DEST);
 				context.ResolveResource(GetCurrentRenderTarget(), 0, m_pHDRRenderTarget.get(), 0, RENDER_TARGET_FORMAT);
-				context.CopyTexture(m_pHDRRenderTarget.get(), m_pPreviousColor.get());
 			});
 	}
+
+	// Temporal Resolve
+	RGPassBuilder temporalResolve = graph.AddPass("Temporal Resolve");
+	temporalResolve.Bind([=](CommandContext& renderContext, const RGPassResources& resources)
+		{
+			renderContext.InsertResourceBarrier(m_pHDRRenderTarget.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+			renderContext.InsertResourceBarrier(m_pVelocity.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+			renderContext.InsertResourceBarrier(m_pPreviousColor.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+
+			renderContext.SetComputeRootSignature(m_pTemporalResolveRS.get());
+			renderContext.SetPipelineState(m_pTemporalResolvePSO.get());
+
+			struct Parameters
+			{
+				Vector2 InvScreenDimensions;
+			} parameters;
+
+			parameters.InvScreenDimensions = Vector2(1.0f / m_WindowWidth, 1.0f / m_WindowHeight);
+			renderContext.SetComputeDynamicConstantBufferView(0, &parameters, sizeof(Parameters));
+
+			renderContext.SetDynamicDescriptor(1, 0, m_pHDRRenderTarget->GetUAV());
+			renderContext.SetDynamicDescriptor(2, 0, m_pVelocity->GetSRV());
+			renderContext.SetDynamicDescriptor(2, 1, m_pPreviousColor->GetSRV());
+
+			int dispatchGroupsX = Math::DivideAndRoundUp(m_WindowWidth, 8);
+			int dispatchGroupsY = Math::DivideAndRoundUp(m_WindowHeight, 8);
+			renderContext.Dispatch(dispatchGroupsX, dispatchGroupsY);
+
+			renderContext.CopyTexture(m_pHDRRenderTarget.get(), m_pPreviousColor.get());
+		});
 
 	//Tonemapping
 	{
@@ -1739,6 +1768,18 @@ void Graphics::InitializePipelines()
 		m_pCameraMotionPSO->SetComputeShader(computeShader);
 		m_pCameraMotionPSO->SetRootSignature(m_pCameraMotionRS->GetRootSignature());
 		m_pCameraMotionPSO->Finalize("Camera Motion");
+	}
+
+	{
+		Shader computeShader("TemporalResolve.hlsl", ShaderType::Compute, "CSMain");
+
+		m_pTemporalResolveRS = std::make_unique<RootSignature>(this);
+		m_pTemporalResolveRS->FinalizeFromShader("Temporal Resolve", computeShader);
+
+		m_pTemporalResolvePSO = std::make_unique<PipelineState>(this);
+		m_pTemporalResolvePSO->SetComputeShader(computeShader);
+		m_pTemporalResolvePSO->SetRootSignature(m_pTemporalResolveRS->GetRootSignature());
+		m_pTemporalResolvePSO->Finalize("Temporal Resolve");
 	}
 
 	//Mip generation

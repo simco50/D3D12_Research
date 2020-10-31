@@ -700,7 +700,7 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
 		else
 		{
 			Shader vertexShader("ClusterDebugDrawing.hlsl", ShaderType::Vertex, "VSMain");
-			Shader geometryShader("CL_DebugDrawClusters.hlsl", ShaderType::Geometry, "GSMain");
+			Shader geometryShader("ClusterDebugDrawing.hlsl", ShaderType::Geometry, "GSMain");
 			m_pDebugClustersRS->FinalizeFromShader("Debug Clusters", vertexShader);
 
 			m_pDebugClustersPSO->SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT);

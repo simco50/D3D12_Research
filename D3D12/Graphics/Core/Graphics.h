@@ -268,6 +268,10 @@ private:
 	std::unique_ptr<PipelineState> m_pCameraMotionPSO;
 	std::unique_ptr<RootSignature> m_pCameraMotionRS;
 
+	//TAA
+	std::unique_ptr<PipelineState> m_pTemporalResolvePSO;
+	std::unique_ptr<RootSignature> m_pTemporalResolveRS;
+
 	//Sky
 	std::unique_ptr<RootSignature> m_pSkyboxRS;
 	std::unique_ptr<PipelineState> m_pSkyboxPSO;
