@@ -185,6 +185,7 @@ private:
 	std::unique_ptr<Texture> m_pTonemapTarget;
 	std::unique_ptr<Texture> m_pDepthStencil;
 	std::unique_ptr<Texture> m_pResolvedDepthStencil;
+	std::unique_ptr<Texture> m_pVelocity;
 	std::vector<std::unique_ptr<Texture>> m_ShadowMaps;
 
 	std::unique_ptr<ImGuiRenderer> m_pImGuiRenderer;
@@ -262,6 +263,10 @@ private:
 	std::unique_ptr<RootSignature> m_pReduceDepthRS;
 	std::vector<std::unique_ptr<Texture>> m_ReductionTargets;
 	std::vector<std::unique_ptr<Buffer>> m_ReductionReadbackTargets;
+
+	//Camera motion
+	std::unique_ptr<PipelineState> m_pCameraMotionPSO;
+	std::unique_ptr<RootSignature> m_pCameraMotionRS;
 
 	//Sky
 	std::unique_ptr<RootSignature> m_pSkyboxRS;

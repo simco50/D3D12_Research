@@ -527,6 +527,49 @@ void Graphics::Update()
 			});
 	}
 
+	// Camera velocity
+	RGPassBuilder cameraMotion = graph.AddPass("Camera Motion");
+	cameraMotion.Bind([=](CommandContext& renderContext, const RGPassResources& resources)
+		{
+			renderContext.InsertResourceBarrier(GetResolvedDepthStencil(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+			renderContext.InsertResourceBarrier(m_pVelocity.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+			renderContext.SetComputeRootSignature(m_pCameraMotionRS.get());
+			renderContext.SetPipelineState(m_pCameraMotionPSO.get());
+
+			Matrix reprojectionMatrix = m_pCamera->GetViewProjection().Invert() * m_pCamera->GetPreviousViewProjection();
+			
+			float inv2Width = 2.0f / m_WindowWidth;
+			float inv2Height = 2.0f / m_WindowHeight;
+			
+			// Transform from screen to clip space: texcoord * 2 - 1
+			Matrix premult = {
+				inv2Width, 0, 0, 0,
+				0, -inv2Height, 0, 0,
+				0, 0, 1, 0,
+				-1, 1, 0, 1
+			};
+			// Transform from clip to screen space: texcoord * 0.5 + 0.5
+			Matrix postmult = {
+				1 / inv2Width, 0, 0, 0,
+				0, -1 / inv2Height, 0, 0,
+				0, 0, 1, 0,
+				1 / inv2Width, 1 / inv2Height, 0, 1
+			};
+			reprojectionMatrix = premult * reprojectionMatrix * postmult;
+
+			renderContext.SetComputeDynamicConstantBufferView(0, &reprojectionMatrix, sizeof(Matrix));
+
+			renderContext.SetDynamicDescriptor(1, 0, m_pVelocity->GetUAV());
+			renderContext.SetDynamicDescriptor(2, 0, GetResolvedDepthStencil()->GetSRV());
+
+			int dispatchGroupsX = Math::DivideAndRoundUp(m_WindowWidth, 8);
+			int dispatchGroupsY = Math::DivideAndRoundUp(m_WindowHeight, 8);
+			renderContext.Dispatch(dispatchGroupsX, dispatchGroupsY);
+		});
+
+	m_pVisualizeTexture = m_pVelocity.get();
+
 	m_pParticles->Simulate(graph, GetResolvedDepthStencil(), *m_pCamera);
 
 	if (Tweakables::g_RaytracedAO)
@@ -1244,6 +1287,7 @@ void Graphics::InitD3D()
 	m_pTonemapTarget = std::make_unique<Texture>(this, "Tonemap Target");
 	m_pDownscaledColor = std::make_unique<Texture>(this, "Downscaled HDR Target");
 	m_pAmbientOcclusion = std::make_unique<Texture>(this, "SSAO");
+	m_pVelocity = std::make_unique<Texture>(this, "Velocity");
 
 	m_pDynamicAllocationManager = std::make_unique<DynamicAllocationManager>(this);
 	m_pClusteredForward = std::make_unique<ClusteredForward>(this);
@@ -1497,6 +1541,7 @@ void Graphics::OnResize(int width, int height)
 	m_pPreviousColor->Create(TextureDesc::Create2D(width, height, RENDER_TARGET_FORMAT, TextureFlag::ShaderResource));
 	m_pTonemapTarget->Create(TextureDesc::CreateRenderTarget(width, height, SWAPCHAIN_FORMAT, TextureFlag::ShaderResource | TextureFlag::RenderTarget | TextureFlag::UnorderedAccess));
 	m_pDownscaledColor->Create(TextureDesc::Create2D(Math::DivideAndRoundUp(width, 4), Math::DivideAndRoundUp(height, 4), RENDER_TARGET_FORMAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
+	m_pVelocity->Create(TextureDesc::Create2D(width, height, DXGI_FORMAT_R32G32_FLOAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
 
 	m_pAmbientOcclusion->Create(TextureDesc::Create2D(Math::DivideAndRoundUp(width, 2), Math::DivideAndRoundUp(height, 2), DXGI_FORMAT_R8_UNORM, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource));
 
@@ -1681,6 +1726,19 @@ void Graphics::InitializePipelines()
 		m_pReduceDepthPSO = std::make_unique<PipelineState>(*m_pPrepareReduceDepthPSO);
 		m_pReduceDepthPSO->SetComputeShader(reduceShader);
 		m_pReduceDepthPSO->Finalize("Reduce Depth Pipeline");
+	}
+
+	//Camera motion
+	{
+		Shader computeShader("CameraMotionVectors.hlsl", ShaderType::Compute, "CSMain");
+
+		m_pCameraMotionRS = std::make_unique<RootSignature>(this);
+		m_pCameraMotionRS->FinalizeFromShader("Camera Motion", computeShader);
+
+		m_pCameraMotionPSO = std::make_unique<PipelineState>(this);
+		m_pCameraMotionPSO->SetComputeShader(computeShader);
+		m_pCameraMotionPSO->SetRootSignature(m_pCameraMotionRS->GetRootSignature());
+		m_pCameraMotionPSO->Finalize("Camera Motion");
 	}
 
 	//Mip generation
