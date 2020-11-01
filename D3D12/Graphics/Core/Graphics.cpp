@@ -756,8 +756,8 @@ void Graphics::Update()
 		resolve.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
 				context.InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RESOLVE_SOURCE);
-				context.InsertResourceBarrier(m_pHDRRenderTarget.get(), D3D12_RESOURCE_STATE_RESOLVE_DEST);
-				context.ResolveResource(GetCurrentRenderTarget(), 0, m_pHDRRenderTarget.get(), 0, RENDER_TARGET_FORMAT);
+				context.InsertResourceBarrier(m_pTAASource.get(), D3D12_RESOURCE_STATE_RESOLVE_DEST);
+				context.ResolveResource(GetCurrentRenderTarget(), 0, m_pTAASource.get(), 0, RENDER_TARGET_FORMAT);
 			});
 	}
 
@@ -765,7 +765,8 @@ void Graphics::Update()
 	RGPassBuilder temporalResolve = graph.AddPass("Temporal Resolve");
 	temporalResolve.Bind([=](CommandContext& renderContext, const RGPassResources& resources)
 		{
-			renderContext.InsertResourceBarrier(m_pHDRRenderTarget.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+			renderContext.InsertResourceBarrier(m_pTAASource.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+			renderContext.InsertResourceBarrier(m_pHDRRenderTarget.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 			renderContext.InsertResourceBarrier(m_pVelocity.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 			renderContext.InsertResourceBarrier(m_pPreviousColor.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
@@ -783,6 +784,7 @@ void Graphics::Update()
 			renderContext.SetDynamicDescriptor(1, 0, m_pHDRRenderTarget->GetUAV());
 			renderContext.SetDynamicDescriptor(2, 0, m_pVelocity->GetSRV());
 			renderContext.SetDynamicDescriptor(2, 1, m_pPreviousColor->GetSRV());
+			renderContext.SetDynamicDescriptor(2, 2, m_pTAASource->GetSRV());
 
 			int dispatchGroupsX = Math::DivideAndRoundUp(m_WindowWidth, 8);
 			int dispatchGroupsY = Math::DivideAndRoundUp(m_WindowHeight, 8);
@@ -1317,6 +1319,7 @@ void Graphics::InitD3D()
 	m_pDownscaledColor = std::make_unique<Texture>(this, "Downscaled HDR Target");
 	m_pAmbientOcclusion = std::make_unique<Texture>(this, "SSAO");
 	m_pVelocity = std::make_unique<Texture>(this, "Velocity");
+	m_pTAASource = std::make_unique<Texture>(this, "TAA Target");
 
 	m_pDynamicAllocationManager = std::make_unique<DynamicAllocationManager>(this);
 	m_pClusteredForward = std::make_unique<ClusteredForward>(this);
@@ -1567,6 +1570,7 @@ void Graphics::OnResize(int width, int height)
 		m_pDepthStencil->Create(TextureDesc::CreateDepth(width, height, DEPTH_STENCIL_FORMAT, TextureFlag::DepthStencil | TextureFlag::ShaderResource, m_SampleCount, ClearBinding(0.0f, 0)));
 	}
 	m_pHDRRenderTarget->Create(TextureDesc::CreateRenderTarget(width, height, RENDER_TARGET_FORMAT, TextureFlag::ShaderResource | TextureFlag::RenderTarget | TextureFlag::UnorderedAccess));
+	m_pTAASource->Create(TextureDesc::CreateRenderTarget(width, height, RENDER_TARGET_FORMAT, TextureFlag::ShaderResource | TextureFlag::RenderTarget | TextureFlag::UnorderedAccess));
 	m_pPreviousColor->Create(TextureDesc::Create2D(width, height, RENDER_TARGET_FORMAT, TextureFlag::ShaderResource));
 	m_pTonemapTarget->Create(TextureDesc::CreateRenderTarget(width, height, SWAPCHAIN_FORMAT, TextureFlag::ShaderResource | TextureFlag::RenderTarget | TextureFlag::UnorderedAccess));
 	m_pDownscaledColor->Create(TextureDesc::Create2D(Math::DivideAndRoundUp(width, 4), Math::DivideAndRoundUp(height, 4), RENDER_TARGET_FORMAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));

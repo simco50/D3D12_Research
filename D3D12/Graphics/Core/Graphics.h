@@ -185,6 +185,7 @@ private:
 	std::unique_ptr<Texture> m_pTonemapTarget;
 	std::unique_ptr<Texture> m_pDepthStencil;
 	std::unique_ptr<Texture> m_pResolvedDepthStencil;
+	std::unique_ptr<Texture> m_pTAASource;
 	std::unique_ptr<Texture> m_pVelocity;
 	std::vector<std::unique_ptr<Texture>> m_ShadowMaps;
 
