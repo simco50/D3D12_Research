@@ -141,7 +141,7 @@ void Graphics::Update()
 	m_Lights[0].Direction = -Vector3(costheta * cosphi, sinphi, sintheta * cosphi);
 	m_Lights[0].Colour = Math::EncodeColor(Math::MakeFromColorTemperature(Tweakables::g_SunTemperature));
 
-	m_Lights[1].Position.x = 50 * sin(Time::TotalTime());
+	//m_Lights[1].Position.x = 50 * sin(Time::TotalTime());
 
 	if (Tweakables::g_VisualizeLights)
 	{
@@ -571,8 +571,6 @@ void Graphics::Update()
 				renderContext.Dispatch(dispatchGroupsX, dispatchGroupsY);
 			});
 	}
-
-	m_pVisualizeTexture = m_pVelocity.get();
 
 	m_pParticles->Simulate(graph, GetResolvedDepthStencil(), *m_pCamera);
 
