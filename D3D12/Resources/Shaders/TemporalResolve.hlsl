@@ -25,8 +25,39 @@ struct CS_INPUT
 void CSMain(CS_INPUT input)
 {
     float2 texCoord = cInvScreenDimensions * ((float2)input.DispatchThreadId.xy + 0.5f);
-    float4 a = tCurrentColor.SampleLevel(sDefaultSampler, texCoord, 0);
-    float2 v = tVelocity.SampleLevel(sDefaultSampler, texCoord, 0).rg;
-    float4 b = tPreviousColor.SampleLevel(sDefaultSampler, texCoord - v * cInvScreenDimensions, 0);
-    uInOutColor[input.DispatchThreadId.xy] = lerp(a, b, 0.95f);
+    float2 dxdy = cInvScreenDimensions;
+    
+    float3 neighborhood[9];
+    neighborhood[0] = tCurrentColor.SampleLevel(sDefaultSampler, texCoord + dxdy * float2(-1, -1), 0).rgb;
+    neighborhood[1] = tCurrentColor.SampleLevel(sDefaultSampler, texCoord + dxdy * float2(0, -1), 0).rgb;
+    neighborhood[2] = tCurrentColor.SampleLevel(sDefaultSampler, texCoord + dxdy * float2(1, -1), 0).rgb;
+    neighborhood[3] = tCurrentColor.SampleLevel(sDefaultSampler, texCoord + dxdy * float2(-1, 0), 0).rgb;
+    neighborhood[4] = tCurrentColor.SampleLevel(sDefaultSampler, texCoord + dxdy * float2(0, 0), 0).rgb;
+    neighborhood[5] = tCurrentColor.SampleLevel(sDefaultSampler, texCoord + dxdy * float2(1, 0), 0).rgb;
+    neighborhood[6] = tCurrentColor.SampleLevel(sDefaultSampler, texCoord + dxdy * float2(-1, 1), 0).rgb;
+    neighborhood[7] = tCurrentColor.SampleLevel(sDefaultSampler, texCoord + dxdy * float2(0, 1), 0).rgb;
+    neighborhood[8] = tCurrentColor.SampleLevel(sDefaultSampler, texCoord + dxdy * float2(1, 1), 0).rgb;
+    
+    float3 minn = 1000000000;
+    float3 maxx = 0;
+    for(int i = 0; i < 9; ++i)
+    {
+        minn = min(minn, neighborhood[i]);
+        maxx = max(maxx, neighborhood[i]);
+    }
+
+    float2 v = tVelocity.SampleLevel(sDefaultSampler, texCoord, 0).rg * cInvScreenDimensions;
+    texCoord -= v;
+
+    float3 a = neighborhood[4];
+    float3 b = clamp(tPreviousColor.SampleLevel(sDefaultSampler, texCoord, 0).rgb, minn, maxx);
+    
+    float2 blendA = texCoord > float2(1, 1);
+    float2 blendB = texCoord < float2(0, 0);
+    float blend = 0.05;
+    if(texCoord.x < 0 || texCoord.x > 1 || texCoord.y < 0 || texCoord.y > 1)
+    {
+        blend = 1;
+    }
+    uInOutColor[input.DispatchThreadId.xy] = float4(lerp(b, a, blend), 1);
 }

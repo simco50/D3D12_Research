@@ -63,6 +63,7 @@ namespace Tweakables
 	bool g_RaytracedReflections = false;
 	bool g_VisualizeLights = false;
 	bool g_VisualizeLightDensity = false;
+	bool g_TAA = true;
 
 	float g_SunInclination = 0.579f;
 	float g_SunOrientation = -3.055f;
@@ -528,45 +529,48 @@ void Graphics::Update()
 	}
 
 	// Camera velocity
-	RGPassBuilder cameraMotion = graph.AddPass("Camera Motion");
-	cameraMotion.Bind([=](CommandContext& renderContext, const RGPassResources& resources)
-		{
-			renderContext.InsertResourceBarrier(GetResolvedDepthStencil(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-			renderContext.InsertResourceBarrier(m_pVelocity.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+	if (Tweakables::g_TAA)
+	{
+		RGPassBuilder cameraMotion = graph.AddPass("Camera Motion");
+		cameraMotion.Bind([=](CommandContext& renderContext, const RGPassResources& resources)
+			{
+				renderContext.InsertResourceBarrier(GetResolvedDepthStencil(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+				renderContext.InsertResourceBarrier(m_pVelocity.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-			renderContext.SetComputeRootSignature(m_pCameraMotionRS.get());
-			renderContext.SetPipelineState(m_pCameraMotionPSO.get());
+				renderContext.SetComputeRootSignature(m_pCameraMotionRS.get());
+				renderContext.SetPipelineState(m_pCameraMotionPSO.get());
 
-			Matrix reprojectionMatrix = m_pCamera->GetViewProjection().Invert() * m_pCamera->GetPreviousViewProjection();
-			
-			float inv2Width = 2.0f / m_WindowWidth;
-			float inv2Height = 2.0f / m_WindowHeight;
-			
-			// Transform from screen to clip space: texcoord * 2 - 1
-			Matrix premult = {
-				inv2Width, 0, 0, 0,
-				0, -inv2Height, 0, 0,
-				0, 0, 1, 0,
-				-1, 1, 0, 1
-			};
-			// Transform from clip to screen space: texcoord * 0.5 + 0.5
-			Matrix postmult = {
-				1 / inv2Width, 0, 0, 0,
-				0, -1 / inv2Height, 0, 0,
-				0, 0, 1, 0,
-				1 / inv2Width, 1 / inv2Height, 0, 1
-			};
-			reprojectionMatrix = premult * reprojectionMatrix * postmult;
+				Matrix reprojectionMatrix = m_pCamera->GetViewProjection().Invert() * m_pCamera->GetPreviousViewProjection();
 
-			renderContext.SetComputeDynamicConstantBufferView(0, &reprojectionMatrix, sizeof(Matrix));
+				float inv2Width = 2.0f / m_WindowWidth;
+				float inv2Height = 2.0f / m_WindowHeight;
 
-			renderContext.SetDynamicDescriptor(1, 0, m_pVelocity->GetUAV());
-			renderContext.SetDynamicDescriptor(2, 0, GetResolvedDepthStencil()->GetSRV());
+				// Transform from screen to clip space: texcoord * 2 - 1
+				Matrix premult = {
+					inv2Width, 0, 0, 0,
+					0, -inv2Height, 0, 0,
+					0, 0, 1, 0,
+					-1, 1, 0, 1
+				};
+				// Transform from clip to screen space: texcoord * 0.5 + 0.5
+				Matrix postmult = {
+					1 / inv2Width, 0, 0, 0,
+					0, -1 / inv2Height, 0, 0,
+					0, 0, 1, 0,
+					1 / inv2Width, 1 / inv2Height, 0, 1
+				};
+				reprojectionMatrix = premult * reprojectionMatrix * postmult;
 
-			int dispatchGroupsX = Math::DivideAndRoundUp(m_WindowWidth, 8);
-			int dispatchGroupsY = Math::DivideAndRoundUp(m_WindowHeight, 8);
-			renderContext.Dispatch(dispatchGroupsX, dispatchGroupsY);
-		});
+				renderContext.SetComputeDynamicConstantBufferView(0, &reprojectionMatrix, sizeof(Matrix));
+
+				renderContext.SetDynamicDescriptor(1, 0, m_pVelocity->GetUAV());
+				renderContext.SetDynamicDescriptor(2, 0, GetResolvedDepthStencil()->GetSRV());
+
+				int dispatchGroupsX = Math::DivideAndRoundUp(m_WindowWidth, 8);
+				int dispatchGroupsY = Math::DivideAndRoundUp(m_WindowHeight, 8);
+				renderContext.Dispatch(dispatchGroupsX, dispatchGroupsY);
+			});
+	}
 
 	m_pVisualizeTexture = m_pVelocity.get();
 
@@ -747,51 +751,56 @@ void Graphics::Update()
 
 	DebugRenderer::Get()->Render(graph, m_pCamera->GetViewProjection(), GetCurrentRenderTarget(), GetDepthStencil());
 
-	//MSAA Render Target Resolve
-	// - We have to resolve a MSAA render target ourselves. Unlike D3D11, this is not done automatically by the API.
-	//	Luckily, there's a method that does it for us!
 	if (m_SampleCount > 1)
 	{
 		RGPassBuilder resolve = graph.AddPass("Resolve");
 		resolve.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
 				context.InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RESOLVE_SOURCE);
-				context.InsertResourceBarrier(m_pTAASource.get(), D3D12_RESOURCE_STATE_RESOLVE_DEST);
-				context.ResolveResource(GetCurrentRenderTarget(), 0, m_pTAASource.get(), 0, RENDER_TARGET_FORMAT);
+				Texture* pTarget = Tweakables::g_TAA ? m_pTAASource.get() : m_pHDRRenderTarget.get();
+				context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_RESOLVE_DEST);
+				context.ResolveResource(GetCurrentRenderTarget(), 0, pTarget, 0, RENDER_TARGET_FORMAT);
+
+				if (!Tweakables::g_TAA)
+				{
+					context.CopyTexture(m_pHDRRenderTarget.get(), m_pPreviousColor.get());
+				}
 			});
 	}
 
-	// Temporal Resolve
-	RGPassBuilder temporalResolve = graph.AddPass("Temporal Resolve");
-	temporalResolve.Bind([=](CommandContext& renderContext, const RGPassResources& resources)
-		{
-			renderContext.InsertResourceBarrier(m_pTAASource.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-			renderContext.InsertResourceBarrier(m_pHDRRenderTarget.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-			renderContext.InsertResourceBarrier(m_pVelocity.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-			renderContext.InsertResourceBarrier(m_pPreviousColor.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-
-			renderContext.SetComputeRootSignature(m_pTemporalResolveRS.get());
-			renderContext.SetPipelineState(m_pTemporalResolvePSO.get());
-
-			struct Parameters
+	if (Tweakables::g_TAA)
+	{
+		RGPassBuilder temporalResolve = graph.AddPass("Temporal Resolve");
+		temporalResolve.Bind([=](CommandContext& renderContext, const RGPassResources& resources)
 			{
-				Vector2 InvScreenDimensions;
-			} parameters;
+				renderContext.InsertResourceBarrier(m_pTAASource.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+				renderContext.InsertResourceBarrier(m_pHDRRenderTarget.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+				renderContext.InsertResourceBarrier(m_pVelocity.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+				renderContext.InsertResourceBarrier(m_pPreviousColor.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
-			parameters.InvScreenDimensions = Vector2(1.0f / m_WindowWidth, 1.0f / m_WindowHeight);
-			renderContext.SetComputeDynamicConstantBufferView(0, &parameters, sizeof(Parameters));
+				renderContext.SetComputeRootSignature(m_pTemporalResolveRS.get());
+				renderContext.SetPipelineState(m_pTemporalResolvePSO.get());
 
-			renderContext.SetDynamicDescriptor(1, 0, m_pHDRRenderTarget->GetUAV());
-			renderContext.SetDynamicDescriptor(2, 0, m_pVelocity->GetSRV());
-			renderContext.SetDynamicDescriptor(2, 1, m_pPreviousColor->GetSRV());
-			renderContext.SetDynamicDescriptor(2, 2, m_pTAASource->GetSRV());
+				struct Parameters
+				{
+					Vector2 InvScreenDimensions;
+				} parameters;
 
-			int dispatchGroupsX = Math::DivideAndRoundUp(m_WindowWidth, 8);
-			int dispatchGroupsY = Math::DivideAndRoundUp(m_WindowHeight, 8);
-			renderContext.Dispatch(dispatchGroupsX, dispatchGroupsY);
+				parameters.InvScreenDimensions = Vector2(1.0f / m_WindowWidth, 1.0f / m_WindowHeight);
+				renderContext.SetComputeDynamicConstantBufferView(0, &parameters, sizeof(Parameters));
 
-			renderContext.CopyTexture(m_pHDRRenderTarget.get(), m_pPreviousColor.get());
-		});
+				renderContext.SetDynamicDescriptor(1, 0, m_pHDRRenderTarget->GetUAV());
+				renderContext.SetDynamicDescriptor(2, 0, m_pVelocity->GetSRV());
+				renderContext.SetDynamicDescriptor(2, 1, m_pPreviousColor->GetSRV());
+				renderContext.SetDynamicDescriptor(2, 2, m_pTAASource->GetSRV());
+
+				int dispatchGroupsX = Math::DivideAndRoundUp(m_WindowWidth, 8);
+				int dispatchGroupsY = Math::DivideAndRoundUp(m_WindowHeight, 8);
+				renderContext.Dispatch(dispatchGroupsX, dispatchGroupsY);
+
+				renderContext.CopyTexture(m_pHDRRenderTarget.get(), m_pPreviousColor.get());
+			});
+	}
 
 	//Tonemapping
 	{
@@ -2040,6 +2049,8 @@ void Graphics::UpdateImGui()
 		ImGui::Checkbox("Raytraced AO", &Tweakables::g_RaytracedAO);
 		ImGui::Checkbox("Raytraced Reflections", &Tweakables::g_RaytracedReflections);
 	}
+
+	ImGui::Checkbox("TAA", &Tweakables::g_TAA);
 
 	ImGui::End();
 }
