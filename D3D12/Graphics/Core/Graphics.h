@@ -136,7 +136,7 @@ public:
 	}
 
 	Texture* GetDepthStencil() const { return m_pDepthStencil.get(); }
-	Texture* GetResolvedDepthStencil() const { return m_SampleCount > 1 ? m_pResolvedDepthStencil.get() : m_pDepthStencil.get(); }
+	Texture* GetResolvedDepthStencil() const { return m_pResolvedDepthStencil.get(); }
 	Texture* GetCurrentRenderTarget() const { return m_SampleCount > 1 ? m_pMultiSampleRenderTarget.get() : m_pHDRRenderTarget.get(); }
 	Texture* GetCurrentBackbuffer() const { return m_Backbuffers[m_CurrentBackBufferIndex].get(); }
 

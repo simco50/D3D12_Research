@@ -5,6 +5,7 @@
 struct ShaderParameters
 {
     float4x4 ReprojectionMatrix;
+    float2 InvScreenDimensions;
 };
 
 ConstantBuffer<ShaderParameters> cParameters : register(b0);
@@ -21,8 +22,8 @@ struct CS_INPUT
 [numthreads(8, 8, 1)]
 void CSMain(CS_INPUT input)
 {
-    float4 pos = float4(input.DispatchThreadId.xy + 0.5f, 0, 1);
-    pos.z = tDepthTexture.Load(int3(input.DispatchThreadId.xy, 0)).r;
-    float4 posPrev = mul(pos, cParameters.ReprojectionMatrix);
-    uVelocity[input.DispatchThreadId.xy] = (pos - posPrev).xy;
+    float4 uv = float4((input.DispatchThreadId.xy + 0.5f) * cParameters.InvScreenDimensions, 0, 1);
+    uv.z = tDepthTexture.Load(int3(input.DispatchThreadId.xy, 0)).r;
+    float4 prevUv = mul(uv, cParameters.ReprojectionMatrix);
+    uVelocity[input.DispatchThreadId.xy] = (uv - prevUv).xy;
 }

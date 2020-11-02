@@ -39,7 +39,7 @@
 
 const DXGI_FORMAT Graphics::DEPTH_STENCIL_FORMAT = DXGI_FORMAT_D32_FLOAT;
 const DXGI_FORMAT Graphics::DEPTH_STENCIL_SHADOW_FORMAT = DXGI_FORMAT_D16_UNORM;
-const DXGI_FORMAT Graphics::RENDER_TARGET_FORMAT = DXGI_FORMAT_R11G11B10_FLOAT;
+const DXGI_FORMAT Graphics::RENDER_TARGET_FORMAT = DXGI_FORMAT_R16G16B16A16_FLOAT;
 const DXGI_FORMAT Graphics::SWAPCHAIN_FORMAT = DXGI_FORMAT_R8G8B8A8_UNORM;
 
 namespace Tweakables
@@ -150,6 +150,15 @@ void Graphics::Update()
 			DebugRenderer::Get()->AddLight(light);
 		}
 	}
+
+	/*
+	Vector3 pos = m_pCamera->GetPosition();
+	pos.z = 0;
+	pos.y = 50;
+	pos.x = 60 * sin(Time::TotalTime());
+	m_pCamera->SetPosition(pos);
+	m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(Math::PIDIV2, 0, 0));
+	*/
 
 	// SHADOW MAP PARTITIONING
 	/////////////////////////////////////////
@@ -527,6 +536,14 @@ void Graphics::Update()
 				renderContext.FlushResourceBarriers();
 			});
 	}
+	else
+	{
+		RGPassBuilder depthResolve = graph.AddPass("Depth Resolve");
+		depthResolve.Bind([=](CommandContext& renderContext, const RGPassResources& resources)
+			{
+				renderContext.CopyTexture(GetDepthStencil(), GetResolvedDepthStencil());
+			});
+	}
 
 	// Camera velocity
 	if (Tweakables::g_TAA)
@@ -542,22 +559,19 @@ void Graphics::Update()
 
 				Matrix reprojectionMatrix = m_pCamera->GetViewProjection().Invert() * m_pCamera->GetPreviousViewProjection();
 
-				float inv2Width = 2.0f / m_WindowWidth;
-				float inv2Height = 2.0f / m_WindowHeight;
-
-				// Transform from screen to clip space: texcoord * 2 - 1
+				// Transform from uv to clip space: texcoord * 2 - 1
 				Matrix premult = {
-					inv2Width, 0, 0, 0,
-					0, -inv2Height, 0, 0,
+					2.0f, 0, 0, 0,
+					0, -2.0f, 0, 0,
 					0, 0, 1, 0,
 					-1, 1, 0, 1
 				};
-				// Transform from clip to screen space: texcoord * 0.5 + 0.5
+				// Transform from clip to uv space: texcoord * 0.5 + 0.5
 				Matrix postmult = {
-					1 / inv2Width, 0, 0, 0,
-					0, -1 / inv2Height, 0, 0,
+					0.5f, 0, 0, 0,
+					0, -0.5f, 0, 0,
 					0, 0, 1, 0,
-					1 / inv2Width, 1 / inv2Height, 0, 1
+					0.5f, 0.5f, 0, 1
 				};
 				reprojectionMatrix = premult * reprojectionMatrix * postmult;
 
@@ -571,6 +585,7 @@ void Graphics::Update()
 				renderContext.Dispatch(dispatchGroupsX, dispatchGroupsY);
 			});
 	}
+	m_pVisualizeTexture = m_pVelocity.get();
 
 	m_pParticles->Simulate(graph, GetResolvedDepthStencil(), *m_pCamera);
 
@@ -771,6 +786,8 @@ void Graphics::Update()
 		RGPassBuilder temporalResolve = graph.AddPass("Temporal Resolve");
 		temporalResolve.Bind([=](CommandContext& renderContext, const RGPassResources& resources)
 			{
+				renderContext.CopyTexture(m_pHDRRenderTarget.get(), m_pTAASource.get());
+
 				renderContext.InsertResourceBarrier(m_pTAASource.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 				renderContext.InsertResourceBarrier(m_pHDRRenderTarget.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 				renderContext.InsertResourceBarrier(m_pVelocity.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
@@ -782,15 +799,19 @@ void Graphics::Update()
 				struct Parameters
 				{
 					Vector2 InvScreenDimensions;
+					Vector2 Jitter;
 				} parameters;
 
 				parameters.InvScreenDimensions = Vector2(1.0f / m_WindowWidth, 1.0f / m_WindowHeight);
+				parameters.Jitter.x = m_pCamera->GetJitter().x;
+				parameters.Jitter.y = m_pCamera->GetJitter().y;
 				renderContext.SetComputeDynamicConstantBufferView(0, &parameters, sizeof(Parameters));
 
 				renderContext.SetDynamicDescriptor(1, 0, m_pHDRRenderTarget->GetUAV());
 				renderContext.SetDynamicDescriptor(2, 0, m_pVelocity->GetSRV());
 				renderContext.SetDynamicDescriptor(2, 1, m_pPreviousColor->GetSRV());
 				renderContext.SetDynamicDescriptor(2, 2, m_pTAASource->GetSRV());
+				renderContext.SetDynamicDescriptor(2, 3, GetResolvedDepthStencil()->GetSRV());
 
 				int dispatchGroupsX = Math::DivideAndRoundUp(m_WindowWidth, 8);
 				int dispatchGroupsY = Math::DivideAndRoundUp(m_WindowHeight, 8);
@@ -1313,10 +1334,10 @@ void Graphics::InitD3D()
 		m_Backbuffers[i] = std::make_unique<Texture>(this, "Render Target");
 	}
 	m_pDepthStencil = std::make_unique<Texture>(this, "Depth Stencil");
+	m_pResolvedDepthStencil = std::make_unique<Texture>(this, "Resolved Depth Stencil");
 
 	if (m_SampleCount > 1)
 	{
-		m_pResolvedDepthStencil = std::make_unique<Texture>(this, "Resolved Depth Stencil");
 		m_pMultiSampleRenderTarget = std::make_unique<Texture>(this, "MSAA Target");
 	}
 
@@ -1568,20 +1589,16 @@ void Graphics::OnResize(int width, int height)
 	}
 	if (m_SampleCount > 1)
 	{
-		m_pDepthStencil->Create(TextureDesc::CreateDepth(width, height, DEPTH_STENCIL_FORMAT, TextureFlag::DepthStencil | TextureFlag::ShaderResource, m_SampleCount, ClearBinding(0.0f, 0)));
-		m_pResolvedDepthStencil->Create(TextureDesc::Create2D(width, height, DXGI_FORMAT_R32_FLOAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
 		m_pMultiSampleRenderTarget->Create(TextureDesc::CreateRenderTarget(width, height, RENDER_TARGET_FORMAT, TextureFlag::RenderTarget, m_SampleCount, ClearBinding(Color(0, 0, 0, 0))));
 	}
-	else
-	{
-		m_pDepthStencil->Create(TextureDesc::CreateDepth(width, height, DEPTH_STENCIL_FORMAT, TextureFlag::DepthStencil | TextureFlag::ShaderResource, m_SampleCount, ClearBinding(0.0f, 0)));
-	}
+	m_pDepthStencil->Create(TextureDesc::CreateDepth(width, height, DEPTH_STENCIL_FORMAT, TextureFlag::DepthStencil | TextureFlag::ShaderResource, m_SampleCount, ClearBinding(0.0f, 0)));
+	m_pResolvedDepthStencil->Create(TextureDesc::Create2D(width, height, DXGI_FORMAT_R32_FLOAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
 	m_pHDRRenderTarget->Create(TextureDesc::CreateRenderTarget(width, height, RENDER_TARGET_FORMAT, TextureFlag::ShaderResource | TextureFlag::RenderTarget | TextureFlag::UnorderedAccess));
 	m_pTAASource->Create(TextureDesc::CreateRenderTarget(width, height, RENDER_TARGET_FORMAT, TextureFlag::ShaderResource | TextureFlag::RenderTarget | TextureFlag::UnorderedAccess));
 	m_pPreviousColor->Create(TextureDesc::Create2D(width, height, RENDER_TARGET_FORMAT, TextureFlag::ShaderResource));
 	m_pTonemapTarget->Create(TextureDesc::CreateRenderTarget(width, height, SWAPCHAIN_FORMAT, TextureFlag::ShaderResource | TextureFlag::RenderTarget | TextureFlag::UnorderedAccess));
 	m_pDownscaledColor->Create(TextureDesc::Create2D(Math::DivideAndRoundUp(width, 4), Math::DivideAndRoundUp(height, 4), RENDER_TARGET_FORMAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
-	m_pVelocity->Create(TextureDesc::Create2D(width, height, DXGI_FORMAT_R32G32_FLOAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
+	m_pVelocity->Create(TextureDesc::Create2D(width, height, DXGI_FORMAT_R16G16_FLOAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
 
 	m_pAmbientOcclusion->Create(TextureDesc::Create2D(Math::DivideAndRoundUp(width, 2), Math::DivideAndRoundUp(height, 2), DXGI_FORMAT_R8_UNORM, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource));
 

@@ -132,5 +132,49 @@ namespace Math
 
 	Color MakeFromColorTemperature(float Temp);
 
-	Vector4 GetHalton(int index);
+	struct Halton
+	{
+		static constexpr int FloorConstExpr(const float val)
+		{
+			// casting to int truncates the value, which is floor(val) for positive values,
+			// but we have to substract 1 for negative values (unless val is already floored == recasted int val)
+			const auto val_int = (int64_t)val;
+			const float fval_int = (float)val_int;
+			return (int)(val >= (float)0 ? fval_int : (val == fval_int ? val : fval_int - (float)1));
+		}
+
+		constexpr float operator()(int index, int base) const
+		{
+			float f = 1;
+			float r = 0;
+			while (index > 0)
+			{
+				f = f / base;
+				r = r + f * (index % base);
+				index = FloorConstExpr((float)index / base);
+			}
+			return r;
+		}
+	};
+
+	template<uint32 SIZE, uint32 BASE>
+	struct HaltonSequence
+	{
+		constexpr HaltonSequence() 
+			: Sequence{}
+		{
+			Halton generator;
+			for (int i = 0; i < SIZE; ++i)
+			{
+				Sequence[i] = generator(i + 1, BASE);
+			}
+		}
+
+		constexpr float Get(int32 index) const
+		{
+			return Sequence[index % SIZE];
+		}
+
+		float Sequence[SIZE];
+	};
 };

@@ -113,11 +113,14 @@ void Camera::UpdateMatrices() const
 		}
 
 		/*
-		Vector4 jitter = Math::GetHalton(m_JitterIndex);
-		jitter.x = (jitter.x * 2 - 1) / 1240;
-		jitter.y = (jitter.y * 2 - 1) / 720;
-		m_Projection.m[2][0] = jitter.x;
-		m_Projection.m[2][1] = jitter.y;
+		constexpr Math::HaltonSequence<16, 2> x;
+		constexpr Math::HaltonSequence<16, 3> y;
+		constexpr float i = x.Get(4);
+
+		m_Jitter.x = x.Get(m_JitterIndex);
+		m_Jitter.y = y.Get(m_JitterIndex);
+		m_Projection.m[2][0] = (m_Jitter.x * 2 - 1) / 1920;
+		m_Projection.m[2][1] = (m_Jitter.y * 2 - 1) / 1080;
 		*/
 
 		m_Projection.Invert(m_ProjectionInverse);

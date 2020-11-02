@@ -27,6 +27,7 @@ public:
 	float GetFar() const { return m_FarPlane; }
 	float GetFoV() const { return m_FoV; }
 
+	const Vector2& GetJitter() const { return m_Jitter; }
 	const Matrix& GetView() const;
 	const Matrix& GetProjection() const;
 	const Matrix& GetViewProjection() const;
@@ -50,6 +51,7 @@ private:
 	float m_OrthographicSize = 1;
 	float m_AspectRatio = 1.0f;
 	int m_JitterIndex = 0;
+	mutable Vector2 m_Jitter;
 
 	mutable Matrix m_Projection;
 	mutable Matrix m_View;
