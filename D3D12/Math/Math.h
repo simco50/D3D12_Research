@@ -170,10 +170,12 @@ namespace Math
 			}
 		}
 
-		constexpr float Get(int32 index) const
+		constexpr float operator[](int32 index) const
 		{
 			return Sequence[index % SIZE];
 		}
+
+	private:
 
 		float Sequence[SIZE];
 	};

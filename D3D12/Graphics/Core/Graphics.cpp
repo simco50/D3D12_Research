@@ -557,6 +557,12 @@ void Graphics::Update()
 				renderContext.SetComputeRootSignature(m_pCameraMotionRS.get());
 				renderContext.SetPipelineState(m_pCameraMotionPSO.get());
 
+				struct Parameters
+				{
+					Matrix Reprojection;
+					Vector2 InvScreenDimensions;
+				} parameters;
+
 				Matrix reprojectionMatrix = m_pCamera->GetViewProjection().Invert() * m_pCamera->GetPreviousViewProjection();
 
 				// Transform from uv to clip space: texcoord * 2 - 1
@@ -573,9 +579,10 @@ void Graphics::Update()
 					0, 0, 1, 0,
 					0.5f, 0.5f, 0, 1
 				};
-				reprojectionMatrix = premult * reprojectionMatrix * postmult;
+				parameters.Reprojection = premult * reprojectionMatrix * postmult;
+				parameters.InvScreenDimensions = Vector2(1.0f / m_WindowWidth, 1.0f / m_WindowHeight);
 
-				renderContext.SetComputeDynamicConstantBufferView(0, &reprojectionMatrix, sizeof(Matrix));
+				renderContext.SetComputeDynamicConstantBufferView(0, &parameters, sizeof(Parameters));
 
 				renderContext.SetDynamicDescriptor(1, 0, m_pVelocity->GetUAV());
 				renderContext.SetDynamicDescriptor(2, 0, GetResolvedDepthStencil()->GetSRV());
@@ -764,30 +771,33 @@ void Graphics::Update()
 
 	DebugRenderer::Get()->Render(graph, m_pCamera->GetViewProjection(), GetCurrentRenderTarget(), GetDepthStencil());
 
-	if (m_SampleCount > 1)
-	{
-		RGPassBuilder resolve = graph.AddPass("Resolve");
-		resolve.Bind([=](CommandContext& context, const RGPassResources& resources)
+
+	RGPassBuilder resolve = graph.AddPass("Resolve");
+	resolve.Bind([=](CommandContext& context, const RGPassResources& resources)
+		{
+			if (m_SampleCount > 1)
 			{
 				context.InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RESOLVE_SOURCE);
 				Texture* pTarget = Tweakables::g_TAA ? m_pTAASource.get() : m_pHDRRenderTarget.get();
 				context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_RESOLVE_DEST);
 				context.ResolveResource(GetCurrentRenderTarget(), 0, pTarget, 0, RENDER_TARGET_FORMAT);
+			}
 
-				if (!Tweakables::g_TAA)
-				{
-					context.CopyTexture(m_pHDRRenderTarget.get(), m_pPreviousColor.get());
-				}
-			});
-	}
+			if (!Tweakables::g_TAA)
+			{
+				context.CopyTexture(m_pHDRRenderTarget.get(), m_pPreviousColor.get());
+			}
+			else
+			{
+				context.CopyTexture(m_pHDRRenderTarget.get(), m_pTAASource.get());
+			}
+		});
 
 	if (Tweakables::g_TAA)
 	{
 		RGPassBuilder temporalResolve = graph.AddPass("Temporal Resolve");
 		temporalResolve.Bind([=](CommandContext& renderContext, const RGPassResources& resources)
 			{
-				renderContext.CopyTexture(m_pHDRRenderTarget.get(), m_pTAASource.get());
-
 				renderContext.InsertResourceBarrier(m_pTAASource.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 				renderContext.InsertResourceBarrier(m_pHDRRenderTarget.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 				renderContext.InsertResourceBarrier(m_pVelocity.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
@@ -798,9 +808,27 @@ void Graphics::Update()
 
 				struct Parameters
 				{
+					Matrix ReprojectionMatrix;
 					Vector2 InvScreenDimensions;
 					Vector2 Jitter;
 				} parameters;
+
+				Matrix reprojectionMatrix = m_pCamera->GetViewProjection().Invert() * m_pCamera->GetPreviousViewProjection();
+				// Transform from uv to clip space: texcoord * 2 - 1
+				Matrix premult = {
+					2.0f, 0, 0, 0,
+					0, -2.0f, 0, 0,
+					0, 0, 1, 0,
+					-1, 1, 0, 1
+				};
+				// Transform from clip to uv space: texcoord * 0.5 + 0.5
+				Matrix postmult = {
+					0.5f, 0, 0, 0,
+					0, -0.5f, 0, 0,
+					0, 0, 1, 0,
+					0.5f, 0.5f, 0, 1
+				};
+				parameters.ReprojectionMatrix = /*premult **/ reprojectionMatrix /** postmult*/;
 
 				parameters.InvScreenDimensions = Vector2(1.0f / m_WindowWidth, 1.0f / m_WindowHeight);
 				parameters.Jitter.x = m_pCamera->GetJitter().x;
