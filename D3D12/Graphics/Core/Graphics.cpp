@@ -563,23 +563,28 @@ void Graphics::Update()
 					Vector2 InvScreenDimensions;
 				} parameters;
 
+
+				float RcpHalfDimX = 2.0f / m_WindowWidth;
+				float RcpHalfDimY = 2.0f / m_WindowHeight;
+
+				Matrix preMult = Matrix(
+					Vector4(RcpHalfDimX, 0.0f, 0.0f, 0.0f),
+					Vector4(0.0f, -RcpHalfDimY, 0.0f, 0.0f),
+					Vector4(0.0f, 0.0f, 1.0f, 0.0f),
+					Vector4(-1.0f, 1.0f,0.0f, 1.0f)
+				);
+
+				Matrix postMult = Matrix(
+					Vector4(1.0f / RcpHalfDimX, 0.0f, 0.0f, 0.0f),
+					Vector4(0.0f, -1.0f / RcpHalfDimY, 0.0f, 0.0f),
+					Vector4(0.0f, 0.0f, 1.0f, 0.0f),
+					Vector4(1.0f / RcpHalfDimX, 1.0f / RcpHalfDimY, 0.0f, 1.0f));
+
+
 				Matrix reprojectionMatrix = m_pCamera->GetViewProjection().Invert() * m_pCamera->GetPreviousViewProjection();
 
-				// Transform from uv to clip space: texcoord * 2 - 1
-				Matrix premult = {
-					2.0f, 0, 0, 0,
-					0, -2.0f, 0, 0,
-					0, 0, 1, 0,
-					-1, 1, 0, 1
-				};
-				// Transform from clip to uv space: texcoord * 0.5 + 0.5
-				Matrix postmult = {
-					0.5f, 0, 0, 0,
-					0, -0.5f, 0, 0,
-					0, 0, 1, 0,
-					0.5f, 0.5f, 0, 1
-				};
-				parameters.Reprojection = premult * reprojectionMatrix * postmult;
+
+				parameters.Reprojection = preMult * reprojectionMatrix * postMult;
 				parameters.InvScreenDimensions = Vector2(1.0f / m_WindowWidth, 1.0f / m_WindowHeight);
 
 				renderContext.SetComputeDynamicConstantBufferView(0, &parameters, sizeof(Parameters));

@@ -80,10 +80,10 @@ void CSMain(CS_INPUT input)
     }
     average /= 9;
 
-    float3 currColor = tCurrentColor.SampleLevel(sPointSampler, texCoord - cJitter * cInvScreenDimensions, 0).rgb;
+    float3 currColor = tCurrentColor.SampleLevel(sPointSampler, texCoord, 0).rgb;
     float2 velocity = tVelocity.SampleLevel(sPointSampler, texCoord, 0).rg;
 
-    texCoord -= velocity;
+    texCoord += velocity;
 
     float3 prevColor = tPreviousColor.SampleLevel(sLinearSampler, texCoord, 0).rgb;
     prevColor = clip_aabb(minn, maxx, float4(clamp(average, minn, maxx), 1), float4(prevColor, 1)).xyz;
