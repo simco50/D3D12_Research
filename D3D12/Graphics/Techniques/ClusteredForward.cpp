@@ -207,7 +207,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 			context.Dispatch(1);
 		});
 
-	
+
 	RGPassBuilder lightCulling = graph.AddPass("Clustered Light Culling");
 	lightCulling.Bind([=](CommandContext& context, const RGPassResources& passResources)
 		{
@@ -450,7 +450,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 
 				if (m_pDebugClustersPSO->GetType() == PipelineStateType::Mesh)
 				{
-					context.DispatchMesh(m_ClusterCountX* m_ClusterCountY* cClusterCountZ);
+					context.DispatchMesh(m_ClusterCountX * m_ClusterCountY * cClusterCountZ);
 				}
 				else
 				{

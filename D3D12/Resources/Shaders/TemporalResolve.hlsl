@@ -6,12 +6,14 @@
 				"StaticSampler(s0, filter=FILTER_MIN_MAG_MIP_POINT, visibility = SHADER_VISIBILITY_ALL, addressU = TEXTURE_ADDRESS_CLAMP, addressV = TEXTURE_ADDRESS_CLAMP), " \
 				"StaticSampler(s1, filter=FILTER_MIN_MAG_MIP_LINEAR, visibility = SHADER_VISIBILITY_ALL, addressU = TEXTURE_ADDRESS_CLAMP, addressV = TEXTURE_ADDRESS_CLAMP), " \
 
-cbuffer Parameters : register(b0)
+struct ShaderParameters
 {
-    float4x4 cReprojection;
-    float2 cInvScreenDimensions;
-    float2 cJitter;
-}
+    float4x4 Reprojection;
+    float2 InvScreenDimensions;
+    float2 Jitter;
+};
+
+ConstantBuffer<ShaderParameters> cParameters : register(b0);
 
 SamplerState sPointSampler : register(s0);
 SamplerState sLinearSampler : register(s1);
@@ -22,13 +24,8 @@ Texture2D tCurrentColor : register(t2);
 Texture2D tDepth : register(t3);
 RWTexture2D<float4> uInOutColor : register(u0);
 
-struct CS_INPUT
-{
-    uint3 DispatchThreadId : SV_DISPATCHTHREADID;
-};
-
 //Temporal Reprojection in Inside
-float4 clip_aabb(float3 aabb_min, float3 aabb_max, float4 p, float4 q)
+float4 ClipAABB(float3 aabb_min, float3 aabb_max, float4 p, float4 q)
 {
     // note: only clips towards aabb center (but fast!)
     float3 p_clip = 0.5 * (aabb_max + aabb_min);
@@ -47,17 +44,12 @@ float4 clip_aabb(float3 aabb_min, float3 aabb_max, float4 p, float4 q)
 
 [RootSignature(RootSig)]
 [numthreads(8, 8, 1)]
-void CSMain(CS_INPUT input)
+void CSMain(uint3 ThreadId : SV_DISPATCHTHREADID)
 {
-    float2 texCoord = cInvScreenDimensions * ((float2)input.DispatchThreadId.xy + 0.5f);
-    float2 dimensions;
-    tCurrentColor.GetDimensions(dimensions.x, dimensions.y);
+    uint2 pixelIndex = ThreadId.xy;
+    float2 texCoord = cParameters.InvScreenDimensions * ((float2)pixelIndex + 0.5f);
 
-    float2 dxdy = cInvScreenDimensions;
-    
     float3 neighborhood[9];
-    float3 average;
-
     int index = 0;
     [unroll]
     for(int x = -1; x <= 1; ++x)
@@ -65,42 +57,39 @@ void CSMain(CS_INPUT input)
         [unroll]
         for(int y = -1; y <= 1; ++y)
         {
-            float3 color = tCurrentColor.SampleLevel(sPointSampler, texCoord + dxdy * float2(x, y), 0).rgb;
+            float3 color = tCurrentColor.SampleLevel(sPointSampler, texCoord + cParameters.InvScreenDimensions * float2(x, y), 0).rgb;
             neighborhood[index++] = color;
-            average += color;
         }
     }
     
-    float3 minn = 1000000000;
-    float3 maxx = 0;
+    float3 aabb_min = 1000000000;
+    float3 aabb_max = 0;
     for(int i = 0; i < 9; ++i)
     {
-        minn = min(minn, neighborhood[i]);
-        maxx = max(maxx, neighborhood[i]);
+        aabb_min = min(aabb_min, neighborhood[i]);
+        aabb_max = max(aabb_max, neighborhood[i]);
     }
-    average /= 9;
 
-    float3 currColor = tCurrentColor.SampleLevel(sPointSampler, texCoord, 0).rgb;
-    float2 velocity = tVelocity.SampleLevel(sPointSampler, texCoord, 0).rg;
+    float3 currColor = tCurrentColor[pixelIndex].rgb;
+
+    float depth = tDepth[pixelIndex].r;
+    float4 pos = float4(texCoord, depth, 1);
+    float4 prevPos = mul(pos, cParameters.Reprojection);
+    prevPos.xyz /= prevPos.w;
+    float2 velocity = (prevPos - pos).xy / 2;
 
     texCoord += velocity;
 
     float3 prevColor = tPreviousColor.SampleLevel(sLinearSampler, texCoord, 0).rgb;
-    prevColor = clip_aabb(minn, maxx, float4(clamp(average, minn, maxx), 1), float4(prevColor, 1)).xyz;
+    prevColor = clamp(prevColor, aabb_min, aabb_max);
 
-	float lum0 = GetLuminance(currColor.rgb);
-	float lum1 = GetLuminance(prevColor.rgb);
-    float unbiased_diff = abs(lum0 - lum1) / max(lum0, max(lum1, 0.2));
-    float unbiased_weight = 1.0 - unbiased_diff;
-    float unbiased_weight_sqr = unbiased_weight * unbiased_weight;
-    float blend = lerp(0.88, 0.99, unbiased_weight_sqr);
-
+    float blend = 0.05f;
     float2 blendA = texCoord > float2(1, 1);
     float2 blendB = texCoord < float2(0, 0);
     if(texCoord.x < 0 || texCoord.x > 1 || texCoord.y < 0 || texCoord.y > 1)
     {
         blend = 1;
     }
-    currColor = lerp(currColor, prevColor, blend);
-    uInOutColor[input.DispatchThreadId.xy] = float4(currColor, 1);
+    currColor = lerp(prevColor, currColor, blend);
+    uInOutColor[pixelIndex] = float4(currColor, 1);
 }

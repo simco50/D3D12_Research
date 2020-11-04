@@ -545,60 +545,6 @@ void Graphics::Update()
 			});
 	}
 
-	// Camera velocity
-	if (Tweakables::g_TAA)
-	{
-		RGPassBuilder cameraMotion = graph.AddPass("Camera Motion");
-		cameraMotion.Bind([=](CommandContext& renderContext, const RGPassResources& resources)
-			{
-				renderContext.InsertResourceBarrier(GetResolvedDepthStencil(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-				renderContext.InsertResourceBarrier(m_pVelocity.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-
-				renderContext.SetComputeRootSignature(m_pCameraMotionRS.get());
-				renderContext.SetPipelineState(m_pCameraMotionPSO.get());
-
-				struct Parameters
-				{
-					Matrix Reprojection;
-					Vector2 InvScreenDimensions;
-				} parameters;
-
-
-				float RcpHalfDimX = 2.0f / m_WindowWidth;
-				float RcpHalfDimY = 2.0f / m_WindowHeight;
-
-				Matrix preMult = Matrix(
-					Vector4(RcpHalfDimX, 0.0f, 0.0f, 0.0f),
-					Vector4(0.0f, -RcpHalfDimY, 0.0f, 0.0f),
-					Vector4(0.0f, 0.0f, 1.0f, 0.0f),
-					Vector4(-1.0f, 1.0f,0.0f, 1.0f)
-				);
-
-				Matrix postMult = Matrix(
-					Vector4(1.0f / RcpHalfDimX, 0.0f, 0.0f, 0.0f),
-					Vector4(0.0f, -1.0f / RcpHalfDimY, 0.0f, 0.0f),
-					Vector4(0.0f, 0.0f, 1.0f, 0.0f),
-					Vector4(1.0f / RcpHalfDimX, 1.0f / RcpHalfDimY, 0.0f, 1.0f));
-
-
-				Matrix reprojectionMatrix = m_pCamera->GetViewProjection().Invert() * m_pCamera->GetPreviousViewProjection();
-
-
-				parameters.Reprojection = preMult * reprojectionMatrix * postMult;
-				parameters.InvScreenDimensions = Vector2(1.0f / m_WindowWidth, 1.0f / m_WindowHeight);
-
-				renderContext.SetComputeDynamicConstantBufferView(0, &parameters, sizeof(Parameters));
-
-				renderContext.SetDynamicDescriptor(1, 0, m_pVelocity->GetUAV());
-				renderContext.SetDynamicDescriptor(2, 0, GetResolvedDepthStencil()->GetSRV());
-
-				int dispatchGroupsX = Math::DivideAndRoundUp(m_WindowWidth, 8);
-				int dispatchGroupsY = Math::DivideAndRoundUp(m_WindowHeight, 8);
-				renderContext.Dispatch(dispatchGroupsX, dispatchGroupsY);
-			});
-	}
-	m_pVisualizeTexture = m_pVelocity.get();
-
 	m_pParticles->Simulate(graph, GetResolvedDepthStencil(), *m_pCamera);
 
 	if (Tweakables::g_RaytracedAO)
@@ -818,22 +764,24 @@ void Graphics::Update()
 					Vector2 Jitter;
 				} parameters;
 
+				float rcpHalfDimX = 2.0f;
+				float rcpHalfDimY = 2.0f;
+
+				Matrix preMult = Matrix(
+					Vector4(rcpHalfDimX, 0.0f, 0.0f, 0.0f),
+					Vector4(0.0f, -rcpHalfDimY, 0.0f, 0.0f),
+					Vector4(0.0f, 0.0f, 1.0f, 0.0f),
+					Vector4(-1.0f, 1.0f, 0.0f, 1.0f)
+				);
+
+				Matrix postMult = Matrix(
+					Vector4(1.0f / rcpHalfDimX, 0.0f, 0.0f, 0.0f),
+					Vector4(0.0f, -1.0f / rcpHalfDimY, 0.0f, 0.0f),
+					Vector4(0.0f, 0.0f, 1.0f, 0.0f),
+					Vector4(1.0f / rcpHalfDimX, 1.0f / rcpHalfDimY, 0.0f, 1.0f));
+
+
 				Matrix reprojectionMatrix = m_pCamera->GetViewProjection().Invert() * m_pCamera->GetPreviousViewProjection();
-				// Transform from uv to clip space: texcoord * 2 - 1
-				Matrix premult = {
-					2.0f, 0, 0, 0,
-					0, -2.0f, 0, 0,
-					0, 0, 1, 0,
-					-1, 1, 0, 1
-				};
-				// Transform from clip to uv space: texcoord * 0.5 + 0.5
-				Matrix postmult = {
-					0.5f, 0, 0, 0,
-					0, -0.5f, 0, 0,
-					0, 0, 1, 0,
-					0.5f, 0.5f, 0, 1
-				};
-				parameters.ReprojectionMatrix = /*premult **/ reprojectionMatrix /** postmult*/;
 
 				parameters.InvScreenDimensions = Vector2(1.0f / m_WindowWidth, 1.0f / m_WindowHeight);
 				parameters.Jitter.x = m_pCamera->GetJitter().x;
@@ -1056,7 +1004,7 @@ void Graphics::Update()
 			char number[16];
 			sprintf_s(number, "%d", i);
 			ImGui::PushStyleColor(ImGuiCol_Button, DEBUG_COLORS[i]);
-			ImGui::Button(number, ImVec2(40,  20));
+			ImGui::Button(number, ImVec2(40, 20));
 			ImGui::PopStyleColor();
 		}
 		ImGui::PopStyleColor();
@@ -1065,7 +1013,7 @@ void Graphics::Update()
 
 	//UI
 	// - ImGui render, pretty straight forward
-	if(Tweakables::g_EnableUI)
+	if (Tweakables::g_EnableUI)
 	{
 		m_pImGuiRenderer->Render(graph, m_pTonemapTarget.get());
 	}
@@ -1168,7 +1116,7 @@ void Graphics::InitD3D()
 			E_LOG(Warning, "DRED Enabled");
 		}
 	}
-	
+
 	//Create the factory
 	ComPtr<IDXGIFactory6> pFactory;
 	VERIFY_HR(CreateDXGIFactory2(dxgiFactoryFlags, IID_PPV_ARGS(&pFactory)));
@@ -1245,7 +1193,7 @@ void Graphics::InitD3D()
 	m_pDevice.As(&m_pRaytracingDevice);
 	D3D::SetObjectName(m_pDevice.Get(), "Main Device");
 
-	if(debugD3D)
+	if (debugD3D)
 	{
 		ID3D12InfoQueue* pInfoQueue = nullptr;
 		if (SUCCEEDED(m_pDevice->QueryInterface(IID_PPV_ARGS(&pInfoQueue))))
@@ -1287,7 +1235,7 @@ void Graphics::InitD3D()
 	}
 
 	//Feature checks
-	{	
+	{
 		D3D12_FEATURE_DATA_D3D12_OPTIONS5 featureSupport{};
 		if (SUCCEEDED(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &featureSupport, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS5))))
 		{
@@ -1345,11 +1293,11 @@ void Graphics::InitD3D()
 	fsDesc.Windowed = true;
 
 	VERIFY_HR(pFactory->CreateSwapChainForHwnd(
-		m_CommandQueues[D3D12_COMMAND_LIST_TYPE_DIRECT]->GetCommandQueue(), 
-		m_pWindow, 
-		&swapchainDesc, 
-		&fsDesc, 
-		nullptr, 
+		m_CommandQueues[D3D12_COMMAND_LIST_TYPE_DIRECT]->GetCommandQueue(),
+		m_pWindow,
+		&swapchainDesc,
+		&fsDesc,
+		nullptr,
 		swapChain.GetAddressOf()));
 #elif PLATFORM_UWP
 	VERIFY_HR(pFactory->CreateSwapChainForCoreWindow(m_CommandQueues[D3D12_COMMAND_LIST_TYPE_DIRECT]->GetCommandQueue(),
@@ -1434,7 +1382,7 @@ void Graphics::InitializeAssets(CommandContext& context)
 		Batch b;
 		b.Bounds = m_pMesh->GetMesh(i)->GetBounds();
 		b.pMesh = m_pMesh->GetMesh(i);
-		
+
 		b.Material.Diffuse = textureToIndex[material.pDiffuseTexture];
 		b.Material.Normal = textureToIndex[material.pNormalTexture];
 		b.Material.Roughness = textureToIndex[material.pRoughnessTexture];
@@ -1604,9 +1552,9 @@ void Graphics::OnResize(int width, int height)
 	DXGI_SWAP_CHAIN_DESC1 desc{};
 	m_pSwapchain->GetDesc1(&desc);
 	VERIFY_HR_EX(m_pSwapchain->ResizeBuffers(
-		FRAME_COUNT, 
-		m_WindowWidth, 
-		m_WindowHeight, 
+		FRAME_COUNT,
+		m_WindowWidth,
+		m_WindowHeight,
 		desc.Format,
 		desc.Flags
 	), GetDevice());
@@ -1818,19 +1766,6 @@ void Graphics::InitializePipelines()
 		m_pReduceDepthPSO->Finalize("Reduce Depth Pipeline");
 	}
 
-	//Camera motion
-	{
-		Shader computeShader("CameraMotionVectors.hlsl", ShaderType::Compute, "CSMain");
-
-		m_pCameraMotionRS = std::make_unique<RootSignature>(this);
-		m_pCameraMotionRS->FinalizeFromShader("Camera Motion", computeShader);
-
-		m_pCameraMotionPSO = std::make_unique<PipelineState>(this);
-		m_pCameraMotionPSO->SetComputeShader(computeShader);
-		m_pCameraMotionPSO->SetRootSignature(m_pCameraMotionRS->GetRootSignature());
-		m_pCameraMotionPSO->Finalize("Camera Motion");
-	}
-
 	{
 		Shader computeShader("TemporalResolve.hlsl", ShaderType::Compute, "CSMain");
 
@@ -1882,7 +1817,7 @@ void Graphics::UpdateImGui()
 	m_FrameTimes[m_Frame % m_FrameTimes.size()] = Time::DeltaTime();
 
 
-	if(m_pVisualizeTexture)
+	if (m_pVisualizeTexture)
 	{
 		ImGui::Begin("Visualize Texture");
 		ImGui::Text("Resolution: %dx%d", m_pVisualizeTexture->GetWidth(), m_pVisualizeTexture->GetHeight());
@@ -1928,7 +1863,7 @@ void Graphics::UpdateImGui()
 
 	if (ImGui::TreeNodeEx("Lighting", ImGuiTreeNodeFlags_DefaultOpen))
 	{
-		ImGui::Combo("Render Path", (int*)& m_RenderPath, [](void* data, int index, const char** outText)
+		ImGui::Combo("Render Path", (int*)&m_RenderPath, [](void* data, int index, const char** outText)
 			{
 				RenderPath p = (RenderPath)index;
 				switch (p)
@@ -1995,7 +1930,7 @@ void Graphics::UpdateImGui()
 	if (ImGui::TreeNodeEx("Memory", ImGuiTreeNodeFlags_DefaultOpen))
 	{
 		ImGui::Text("Dynamic Upload Memory");
-		ImGui::Text("%.2f MB", Math::ToMegaBytes* m_pDynamicAllocationManager->GetMemoryUsage());
+		ImGui::Text("%.2f MB", Math::ToMegaBytes * m_pDynamicAllocationManager->GetMemoryUsage());
 		ImGui::TreePop();
 	}
 	ImGui::End();
