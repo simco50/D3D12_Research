@@ -76,8 +76,7 @@ void CSMain(uint3 ThreadId : SV_DISPATCHTHREADID)
     float4 pos = float4(texCoord, depth, 1);
     float4 prevPos = mul(pos, cParameters.Reprojection);
     prevPos.xyz /= prevPos.w;
-    float2 velocity = (prevPos - pos).xy / 2;
-
+    float2 velocity = (prevPos - pos).xy;
     texCoord += velocity;
 
     float3 prevColor = tPreviousColor.SampleLevel(sLinearSampler, texCoord, 0).rgb;

@@ -781,8 +781,7 @@ void Graphics::Update()
 					Vector4(1.0f / rcpHalfDimX, 1.0f / rcpHalfDimY, 0.0f, 1.0f));
 
 
-				Matrix reprojectionMatrix = m_pCamera->GetViewProjection().Invert() * m_pCamera->GetPreviousViewProjection();
-
+				parameters.ReprojectionMatrix = preMult * m_pCamera->GetViewProjection().Invert() * m_pCamera->GetPreviousViewProjection() * postMult;
 				parameters.InvScreenDimensions = Vector2(1.0f / m_WindowWidth, 1.0f / m_WindowHeight);
 				parameters.Jitter.x = m_pCamera->GetJitter().x;
 				parameters.Jitter.y = m_pCamera->GetJitter().y;
