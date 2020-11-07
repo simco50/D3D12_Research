@@ -266,8 +266,18 @@ private:
 	std::vector<std::unique_ptr<Buffer>> m_ReductionReadbackTargets;
 
 	//TAA
-	std::unique_ptr<PipelineState> m_pTemporalResolvePSO;
+	std::map<std::string, std::unique_ptr<PipelineState>> m_pTemporalResolvePSO;
+	std::string m_CurrentTAAPSO;
 	std::unique_ptr<RootSignature> m_pTemporalResolveRS;
+	PipelineState* GetTAAPSO()
+	{
+		auto it = m_pTemporalResolvePSO.find(m_CurrentTAAPSO);
+		if (it != m_pTemporalResolvePSO.end())
+		{
+			return it->second.get();
+		}
+		return m_pTemporalResolvePSO.begin()->second.get();
+	}
 
 	//Sky
 	std::unique_ptr<RootSignature> m_pSkyboxRS;

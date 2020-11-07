@@ -222,7 +222,7 @@ float ComputeScattering(float LoV)
 	return result;
 }
 
-float3 ApplyVolumetricLighting(float3 cameraPos, float3 worldPos, float4 pos, float4x4 view, Light light, int samples)
+float3 ApplyVolumetricLighting(float3 cameraPos, float3 worldPos, float4 pos, float4x4 view, Light light, int samples, int frame)
 {
 	const float fogValue = 0.3f;
 	float3 rayVector = cameraPos - worldPos;
@@ -230,7 +230,7 @@ float3 ApplyVolumetricLighting(float3 cameraPos, float3 worldPos, float4 pos, fl
 	float3 accumFog = 0.0f.xxx;
 	float3 currentPosition = worldPos;
 		
-	float ditherValue = InterleavedGradientNoise(pos.xy);
+	float ditherValue = InterleavedGradientNoise(pos.xy, frame);
 	currentPosition += rayStep * ditherValue;
 
 	for(int i = 0; i < samples; ++i)
