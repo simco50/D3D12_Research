@@ -1,4 +1,5 @@
 #include "TonemappingCommon.hlsli"
+#include "Color.hlsli"
 
 #ifndef REPROJECT
 #define REPROJECT
@@ -49,7 +50,7 @@ float4 ClipAABB(float3 aabb_min, float3 aabb_max, float4 p, float4 q)
 
 float3 SampleColor(Texture2D texture, SamplerState samplerState, float2 texCoord)
 {
-    return texture.SampleLevel(samplerState, texCoord, 0).rgb;    
+    return texture.SampleLevel(samplerState, texCoord, 0).rgb;
 }
 
 [RootSignature(RootSig)]
@@ -60,12 +61,24 @@ void CSMain(uint3 ThreadId : SV_DISPATCHTHREADID)
     float2 texCoord = cParameters.InvScreenDimensions * ((float2)pixelIndex + 0.5f);
     float2 pixelSize = cParameters.InvScreenDimensions;
 
-    float3 neighborhood[9];
+    float3 cc = SampleColor(tCurrentColor, sLinearSampler, texCoord + float2(pixelSize.x, pixelSize.y));
+    float3 currColor = cc;
+    
+    float2 velocity = 0;
+#if defined(REPROJECT)
+    float depth = tDepth.SampleLevel(sLinearSampler, texCoord, 0).r;
+    float4 pos = float4(texCoord, depth, 1);
+    float4 prevPos = mul(pos, cParameters.Reprojection);
+    prevPos.xyz /= prevPos.w;
+    velocity = (prevPos - pos).xy;
+#endif
+    float3 prevColor = SampleColor(tPreviousColor, sLinearSampler, texCoord + velocity);
+
+#if defined(NEIGHBORHOOD_CLAMP) || defined(NEIGHBORHOOD_CLIP)
     float3 lt = SampleColor(tCurrentColor, sLinearSampler, texCoord + float2(-pixelSize.x, -pixelSize.y));
     float3 ct = SampleColor(tCurrentColor, sLinearSampler, texCoord + float2(pixelSize.x, -pixelSize.y));
     float3 rt = SampleColor(tCurrentColor, sLinearSampler, texCoord + float2(pixelSize.x, -pixelSize.y));
     float3 lc = SampleColor(tCurrentColor, sLinearSampler, texCoord + float2(-pixelSize.x, pixelSize.y));
-    float3 cc = SampleColor(tCurrentColor, sLinearSampler, texCoord + float2(pixelSize.x, pixelSize.y));
     float3 rc = SampleColor(tCurrentColor, sLinearSampler, texCoord + float2(pixelSize.x, pixelSize.y));
     float3 lb = SampleColor(tCurrentColor, sLinearSampler, texCoord + float2(-pixelSize.x, pixelSize.y));
     float3 cb = SampleColor(tCurrentColor, sLinearSampler, texCoord + float2(pixelSize.x, pixelSize.y));
@@ -73,8 +86,6 @@ void CSMain(uint3 ThreadId : SV_DISPATCHTHREADID)
     float3 aabb_min = min(lt, min(ct, min(rt, min(lc, min(cc, min(rc, min(lb, min(cb, rb))))))));
     float3 aabb_max = max(lt, max(ct, max(rt, max(lc, max(cc, max(rc, max(lb, max(cb, rb))))))));
     float3 aabb_avg = (lt + ct + rt + lc + cc + rc + lb + cb + rb) / 9.0f;
-
-    float3 currColor = cc;
 
 #if defined(AABB_ROUNDED) //Karis Siggraph 2014 - Shaped neighborhood clamp by averaging 2 neighborhoods
     float3 aabb_min2 = min(min(min(min(lc, cc), ct), rc), cb);
@@ -84,17 +95,7 @@ void CSMain(uint3 ThreadId : SV_DISPATCHTHREADID)
     aabb_max = (aabb_max + aabb_max2) * 0.5f;
     aabb_avg = (aabb_avg + aabb_avg2) * 0.5f;
 #endif
-
-#if defined(REPROJECT)
-    float depth = tDepth.SampleLevel(sLinearSampler, texCoord, 0).r;
-    float4 pos = float4(texCoord, depth, 1);
-    float4 prevPos = mul(pos, cParameters.Reprojection);
-    prevPos.xyz /= prevPos.w;
-    float2 velocity = (prevPos - pos).xy;
-    texCoord += velocity;
 #endif
-
-    float3 prevColor = SampleColor(tPreviousColor, sLinearSampler, texCoord);
 
 #if defined(DEBUG_RED_HISTORY)
     prevColor = float3(1,0,0);
