@@ -21,6 +21,7 @@ workspace (ENGINE_NAME)
 	flags {"MultiProcessorCompile", "ShadowedVariables", "FatalWarnings"}
 	rtti "Off"
 	warnings "Extra"
+	justmycode "Off"
 
 	--Unreferenced variable
 	disablewarnings {"4100"}
