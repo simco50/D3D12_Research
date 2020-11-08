@@ -18,6 +18,11 @@ TONEMAP_TYPE Reinhard(TONEMAP_TYPE x)
 	return x / (1.0 + x);
 }
 
+TONEMAP_TYPE InverseReinhard(TONEMAP_TYPE x)
+{
+	return x / (1.0 - x);
+}
+
 TONEMAP_TYPE ReinhardExtended(TONEMAP_TYPE x, float MaxWhite)
 {
 	return (x * (1.0 + x / Square(MaxWhite)) ) / (1.0 + x);

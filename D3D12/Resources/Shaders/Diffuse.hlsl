@@ -157,6 +157,7 @@ float3 ScreenSpaceReflectionsRT(float3 positionWS, float4 position, float3 N, fl
 				const float thickness = 0.05f;
 				if(abs(sceneDepth - viewDepth) < thickness)
 				{
+					texCoord = mul(float4(texCoord, 1), cViewData.ReprojectionMatrix).xyz;
 					ssr = saturate(0.5f * tPreviousSceneColor.SampleLevel(sClampSampler, texCoord.xy, 0).xyz);
 					float2 dist = (float2(texCoord.x, 1.0f - texCoord.y) * 2.0f) - float2(1.0f, 1.0f);
 					float edgeAttenuation = (1.0 - q.CommittedRayT() / position.w) * 4.0f;
@@ -285,7 +286,7 @@ float4 PSMain(PSInput input) : SV_TARGET
 	float ao = tAO.SampleLevel(sDiffuseSampler, (float2)input.position.xy * cViewData.InvScreenDimensions, 0).r;
 	float3 color = lighting.Diffuse + lighting.Specular + ssr * ao; 
 	color += ApplyAmbientLight(diffuseColor, ao, tLights[0].GetColor().rgb * 0.1f);
-	color += 0.1*ApplyVolumetricLighting(cViewData.ViewPosition.xyz, input.positionWS.xyz, input.position, cViewData.View, tLights[0], 10);
+	color += 0.1f * ApplyVolumetricLighting(cViewData.ViewPosition.xyz, input.positionWS.xyz, input.position, cViewData.View, tLights[0], 10, cViewData.FrameIndex);
 	
 	return float4(color, baseColor.a);
 }

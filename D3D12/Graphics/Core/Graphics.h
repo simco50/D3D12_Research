@@ -136,7 +136,7 @@ public:
 	}
 
 	Texture* GetDepthStencil() const { return m_pDepthStencil.get(); }
-	Texture* GetResolvedDepthStencil() const { return m_SampleCount > 1 ? m_pResolvedDepthStencil.get() : m_pDepthStencil.get(); }
+	Texture* GetResolvedDepthStencil() const { return m_pResolvedDepthStencil.get(); }
 	Texture* GetCurrentRenderTarget() const { return m_SampleCount > 1 ? m_pMultiSampleRenderTarget.get() : m_pHDRRenderTarget.get(); }
 	Texture* GetCurrentBackbuffer() const { return m_Backbuffers[m_CurrentBackBufferIndex].get(); }
 
@@ -185,6 +185,8 @@ private:
 	std::unique_ptr<Texture> m_pTonemapTarget;
 	std::unique_ptr<Texture> m_pDepthStencil;
 	std::unique_ptr<Texture> m_pResolvedDepthStencil;
+	std::unique_ptr<Texture> m_pTAASource;
+	std::unique_ptr<Texture> m_pVelocity;
 	std::vector<std::unique_ptr<Texture>> m_ShadowMaps;
 
 	std::unique_ptr<ImGuiRenderer> m_pImGuiRenderer;
@@ -262,6 +264,10 @@ private:
 	std::unique_ptr<RootSignature> m_pReduceDepthRS;
 	std::vector<std::unique_ptr<Texture>> m_ReductionTargets;
 	std::vector<std::unique_ptr<Buffer>> m_ReductionReadbackTargets;
+
+	//TAA
+	std::unique_ptr<PipelineState> m_pTemporalResolvePSO;
+	std::unique_ptr<RootSignature> m_pTemporalResolveRS;
 
 	//Sky
 	std::unique_ptr<RootSignature> m_pSkyboxRS;

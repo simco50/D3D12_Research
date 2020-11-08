@@ -39,7 +39,7 @@
 
 const DXGI_FORMAT Graphics::DEPTH_STENCIL_FORMAT = DXGI_FORMAT_D32_FLOAT;
 const DXGI_FORMAT Graphics::DEPTH_STENCIL_SHADOW_FORMAT = DXGI_FORMAT_D16_UNORM;
-const DXGI_FORMAT Graphics::RENDER_TARGET_FORMAT = DXGI_FORMAT_R11G11B10_FLOAT;
+const DXGI_FORMAT Graphics::RENDER_TARGET_FORMAT = DXGI_FORMAT_R16G16B16A16_FLOAT;
 const DXGI_FORMAT Graphics::SWAPCHAIN_FORMAT = DXGI_FORMAT_R8G8B8A8_UNORM;
 
 namespace Tweakables
@@ -63,6 +63,7 @@ namespace Tweakables
 	bool g_RaytracedReflections = false;
 	bool g_VisualizeLights = false;
 	bool g_VisualizeLightDensity = false;
+	bool g_TAA = true;
 
 	float g_SunInclination = 0.579f;
 	float g_SunOrientation = -3.055f;
@@ -140,7 +141,7 @@ void Graphics::Update()
 	m_Lights[0].Direction = -Vector3(costheta * cosphi, sinphi, sintheta * cosphi);
 	m_Lights[0].Colour = Math::EncodeColor(Math::MakeFromColorTemperature(Tweakables::g_SunTemperature));
 
-	m_Lights[1].Position.x = 50 * sin(Time::TotalTime());
+	//m_Lights[1].Position.x = 50 * sin(Time::TotalTime());
 
 	if (Tweakables::g_VisualizeLights)
 	{
@@ -149,6 +150,15 @@ void Graphics::Update()
 			DebugRenderer::Get()->AddLight(light);
 		}
 	}
+
+	/*
+	Vector3 pos = m_pCamera->GetPosition();
+	pos.z = 0;
+	pos.y = 50;
+	pos.x = 60 * sin(Time::TotalTime());
+	m_pCamera->SetPosition(pos);
+	m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(Math::PIDIV2, 0, 0));
+	*/
 
 	// SHADOW MAP PARTITIONING
 	/////////////////////////////////////////
@@ -526,6 +536,14 @@ void Graphics::Update()
 				renderContext.FlushResourceBarriers();
 			});
 	}
+	else
+	{
+		RGPassBuilder depthResolve = graph.AddPass("Depth Resolve");
+		depthResolve.Bind([=](CommandContext& renderContext, const RGPassResources& resources)
+			{
+				renderContext.CopyTexture(GetDepthStencil(), GetResolvedDepthStencil());
+			});
+	}
 
 	m_pParticles->Simulate(graph, GetResolvedDepthStencil(), *m_pCamera);
 
@@ -704,18 +722,80 @@ void Graphics::Update()
 
 	DebugRenderer::Get()->Render(graph, m_pCamera->GetViewProjection(), GetCurrentRenderTarget(), GetDepthStencil());
 
-	//MSAA Render Target Resolve
-	// - We have to resolve a MSAA render target ourselves. Unlike D3D11, this is not done automatically by the API.
-	//	Luckily, there's a method that does it for us!
-	if (m_SampleCount > 1)
-	{
-		RGPassBuilder resolve = graph.AddPass("Resolve");
-		resolve.Bind([=](CommandContext& context, const RGPassResources& resources)
+
+	RGPassBuilder resolve = graph.AddPass("Resolve");
+	resolve.Bind([=](CommandContext& context, const RGPassResources& resources)
+		{
+			if (m_SampleCount > 1)
 			{
 				context.InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RESOLVE_SOURCE);
-				context.InsertResourceBarrier(m_pHDRRenderTarget.get(), D3D12_RESOURCE_STATE_RESOLVE_DEST);
-				context.ResolveResource(GetCurrentRenderTarget(), 0, m_pHDRRenderTarget.get(), 0, RENDER_TARGET_FORMAT);
+				Texture* pTarget = Tweakables::g_TAA ? m_pTAASource.get() : m_pHDRRenderTarget.get();
+				context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_RESOLVE_DEST);
+				context.ResolveResource(GetCurrentRenderTarget(), 0, pTarget, 0, RENDER_TARGET_FORMAT);
+			}
+
+			if (!Tweakables::g_TAA)
+			{
 				context.CopyTexture(m_pHDRRenderTarget.get(), m_pPreviousColor.get());
+			}
+			else
+			{
+				context.CopyTexture(m_pHDRRenderTarget.get(), m_pTAASource.get());
+			}
+		});
+
+	if (Tweakables::g_TAA)
+	{
+		RGPassBuilder temporalResolve = graph.AddPass("Temporal Resolve");
+		temporalResolve.Bind([=](CommandContext& renderContext, const RGPassResources& resources)
+			{
+				renderContext.InsertResourceBarrier(m_pTAASource.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+				renderContext.InsertResourceBarrier(m_pHDRRenderTarget.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+				renderContext.InsertResourceBarrier(m_pVelocity.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+				renderContext.InsertResourceBarrier(m_pPreviousColor.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+				
+				renderContext.SetComputeRootSignature(m_pTemporalResolveRS.get());
+				renderContext.SetPipelineState(m_pTemporalResolvePSO.get());
+
+				struct Parameters
+				{
+					Matrix ReprojectionMatrix;
+					Vector2 InvScreenDimensions;
+					Vector2 Jitter;
+				} parameters;
+
+				// UV -> NDC
+				Matrix preMult = Matrix(
+					Vector4(2.0f, 0.0f, 0.0f, 0.0f),
+					Vector4(0.0f, -2.0f, 0.0f, 0.0f),
+					Vector4(0.0f, 0.0f, 1.0f, 0.0f),
+					Vector4(-1.0f, 1.0f, 0.0f, 1.0f)
+				);
+
+				// NDC - UV
+				Matrix postMult = Matrix(
+					Vector4(1.0f / 2.0f, 0.0f, 0.0f, 0.0f),
+					Vector4(0.0f, -1.0f / 2.0f, 0.0f, 0.0f),
+					Vector4(0.0f, 0.0f, 1.0f, 0.0f),
+					Vector4(1.0f / 2.0f, 1.0f / 2.0f, 0.0f, 1.0f));
+
+				parameters.ReprojectionMatrix = preMult * m_pCamera->GetViewProjection().Invert() * m_pCamera->GetPreviousViewProjection() * postMult;
+				parameters.InvScreenDimensions = Vector2(1.0f / m_WindowWidth, 1.0f / m_WindowHeight);
+				parameters.Jitter.x = m_pCamera->GetPreviousJitter().x - m_pCamera->GetJitter().x;
+				parameters.Jitter.y = m_pCamera->GetPreviousJitter().y - m_pCamera->GetJitter().y;
+				renderContext.SetComputeDynamicConstantBufferView(0, &parameters, sizeof(Parameters));
+
+				renderContext.SetDynamicDescriptor(1, 0, m_pHDRRenderTarget->GetUAV());
+				renderContext.SetDynamicDescriptor(2, 0, m_pVelocity->GetSRV());
+				renderContext.SetDynamicDescriptor(2, 1, m_pPreviousColor->GetSRV());
+				renderContext.SetDynamicDescriptor(2, 2, m_pTAASource->GetSRV());
+				renderContext.SetDynamicDescriptor(2, 3, GetResolvedDepthStencil()->GetSRV());
+
+				int dispatchGroupsX = Math::DivideAndRoundUp(m_WindowWidth, 8);
+				int dispatchGroupsY = Math::DivideAndRoundUp(m_WindowHeight, 8);
+				renderContext.Dispatch(dispatchGroupsX, dispatchGroupsY);
+
+				renderContext.CopyTexture(m_pHDRRenderTarget.get(), m_pPreviousColor.get());
 			});
 	}
 
@@ -921,7 +1001,7 @@ void Graphics::Update()
 			char number[16];
 			sprintf_s(number, "%d", i);
 			ImGui::PushStyleColor(ImGuiCol_Button, DEBUG_COLORS[i]);
-			ImGui::Button(number, ImVec2(40,  20));
+			ImGui::Button(number, ImVec2(40, 20));
 			ImGui::PopStyleColor();
 		}
 		ImGui::PopStyleColor();
@@ -930,7 +1010,7 @@ void Graphics::Update()
 
 	//UI
 	// - ImGui render, pretty straight forward
-	if(Tweakables::g_EnableUI)
+	if (Tweakables::g_EnableUI)
 	{
 		m_pImGuiRenderer->Render(graph, m_pTonemapTarget.get());
 	}
@@ -1033,7 +1113,7 @@ void Graphics::InitD3D()
 			E_LOG(Warning, "DRED Enabled");
 		}
 	}
-	
+
 	//Create the factory
 	ComPtr<IDXGIFactory6> pFactory;
 	VERIFY_HR(CreateDXGIFactory2(dxgiFactoryFlags, IID_PPV_ARGS(&pFactory)));
@@ -1110,7 +1190,7 @@ void Graphics::InitD3D()
 	m_pDevice.As(&m_pRaytracingDevice);
 	D3D::SetObjectName(m_pDevice.Get(), "Main Device");
 
-	if(debugD3D)
+	if (debugD3D)
 	{
 		ID3D12InfoQueue* pInfoQueue = nullptr;
 		if (SUCCEEDED(m_pDevice->QueryInterface(IID_PPV_ARGS(&pInfoQueue))))
@@ -1152,7 +1232,7 @@ void Graphics::InitD3D()
 	}
 
 	//Feature checks
-	{	
+	{
 		D3D12_FEATURE_DATA_D3D12_OPTIONS5 featureSupport{};
 		if (SUCCEEDED(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &featureSupport, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS5))))
 		{
@@ -1210,11 +1290,11 @@ void Graphics::InitD3D()
 	fsDesc.Windowed = true;
 
 	VERIFY_HR(pFactory->CreateSwapChainForHwnd(
-		m_CommandQueues[D3D12_COMMAND_LIST_TYPE_DIRECT]->GetCommandQueue(), 
-		m_pWindow, 
-		&swapchainDesc, 
-		&fsDesc, 
-		nullptr, 
+		m_CommandQueues[D3D12_COMMAND_LIST_TYPE_DIRECT]->GetCommandQueue(),
+		m_pWindow,
+		&swapchainDesc,
+		&fsDesc,
+		nullptr,
 		swapChain.GetAddressOf()));
 #elif PLATFORM_UWP
 	VERIFY_HR(pFactory->CreateSwapChainForCoreWindow(m_CommandQueues[D3D12_COMMAND_LIST_TYPE_DIRECT]->GetCommandQueue(),
@@ -1232,10 +1312,10 @@ void Graphics::InitD3D()
 		m_Backbuffers[i] = std::make_unique<Texture>(this, "Render Target");
 	}
 	m_pDepthStencil = std::make_unique<Texture>(this, "Depth Stencil");
+	m_pResolvedDepthStencil = std::make_unique<Texture>(this, "Resolved Depth Stencil");
 
 	if (m_SampleCount > 1)
 	{
-		m_pResolvedDepthStencil = std::make_unique<Texture>(this, "Resolved Depth Stencil");
 		m_pMultiSampleRenderTarget = std::make_unique<Texture>(this, "MSAA Target");
 	}
 
@@ -1244,6 +1324,8 @@ void Graphics::InitD3D()
 	m_pTonemapTarget = std::make_unique<Texture>(this, "Tonemap Target");
 	m_pDownscaledColor = std::make_unique<Texture>(this, "Downscaled HDR Target");
 	m_pAmbientOcclusion = std::make_unique<Texture>(this, "SSAO");
+	m_pVelocity = std::make_unique<Texture>(this, "Velocity");
+	m_pTAASource = std::make_unique<Texture>(this, "TAA Target");
 
 	m_pDynamicAllocationManager = std::make_unique<DynamicAllocationManager>(this);
 	m_pClusteredForward = std::make_unique<ClusteredForward>(this);
@@ -1297,7 +1379,7 @@ void Graphics::InitializeAssets(CommandContext& context)
 		Batch b;
 		b.Bounds = m_pMesh->GetMesh(i)->GetBounds();
 		b.pMesh = m_pMesh->GetMesh(i);
-		
+
 		b.Material.Diffuse = textureToIndex[material.pDiffuseTexture];
 		b.Material.Normal = textureToIndex[material.pNormalTexture];
 		b.Material.Roughness = textureToIndex[material.pRoughnessTexture];
@@ -1467,9 +1549,9 @@ void Graphics::OnResize(int width, int height)
 	DXGI_SWAP_CHAIN_DESC1 desc{};
 	m_pSwapchain->GetDesc1(&desc);
 	VERIFY_HR_EX(m_pSwapchain->ResizeBuffers(
-		FRAME_COUNT, 
-		m_WindowWidth, 
-		m_WindowHeight, 
+		FRAME_COUNT,
+		m_WindowWidth,
+		m_WindowHeight,
 		desc.Format,
 		desc.Flags
 	), GetDevice());
@@ -1485,18 +1567,16 @@ void Graphics::OnResize(int width, int height)
 	}
 	if (m_SampleCount > 1)
 	{
-		m_pDepthStencil->Create(TextureDesc::CreateDepth(width, height, DEPTH_STENCIL_FORMAT, TextureFlag::DepthStencil | TextureFlag::ShaderResource, m_SampleCount, ClearBinding(0.0f, 0)));
-		m_pResolvedDepthStencil->Create(TextureDesc::Create2D(width, height, DXGI_FORMAT_R32_FLOAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
 		m_pMultiSampleRenderTarget->Create(TextureDesc::CreateRenderTarget(width, height, RENDER_TARGET_FORMAT, TextureFlag::RenderTarget, m_SampleCount, ClearBinding(Color(0, 0, 0, 0))));
 	}
-	else
-	{
-		m_pDepthStencil->Create(TextureDesc::CreateDepth(width, height, DEPTH_STENCIL_FORMAT, TextureFlag::DepthStencil | TextureFlag::ShaderResource, m_SampleCount, ClearBinding(0.0f, 0)));
-	}
+	m_pDepthStencil->Create(TextureDesc::CreateDepth(width, height, DEPTH_STENCIL_FORMAT, TextureFlag::DepthStencil | TextureFlag::ShaderResource, m_SampleCount, ClearBinding(0.0f, 0)));
+	m_pResolvedDepthStencil->Create(TextureDesc::Create2D(width, height, DXGI_FORMAT_R32_FLOAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
 	m_pHDRRenderTarget->Create(TextureDesc::CreateRenderTarget(width, height, RENDER_TARGET_FORMAT, TextureFlag::ShaderResource | TextureFlag::RenderTarget | TextureFlag::UnorderedAccess));
+	m_pTAASource->Create(TextureDesc::CreateRenderTarget(width, height, RENDER_TARGET_FORMAT, TextureFlag::ShaderResource | TextureFlag::RenderTarget | TextureFlag::UnorderedAccess));
 	m_pPreviousColor->Create(TextureDesc::Create2D(width, height, RENDER_TARGET_FORMAT, TextureFlag::ShaderResource));
 	m_pTonemapTarget->Create(TextureDesc::CreateRenderTarget(width, height, SWAPCHAIN_FORMAT, TextureFlag::ShaderResource | TextureFlag::RenderTarget | TextureFlag::UnorderedAccess));
 	m_pDownscaledColor->Create(TextureDesc::Create2D(Math::DivideAndRoundUp(width, 4), Math::DivideAndRoundUp(height, 4), RENDER_TARGET_FORMAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
+	m_pVelocity->Create(TextureDesc::Create2D(width, height, DXGI_FORMAT_R16G16_FLOAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
 
 	m_pAmbientOcclusion->Create(TextureDesc::Create2D(Math::DivideAndRoundUp(width, 2), Math::DivideAndRoundUp(height, 2), DXGI_FORMAT_R8_UNORM, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource));
 
@@ -1683,6 +1763,18 @@ void Graphics::InitializePipelines()
 		m_pReduceDepthPSO->Finalize("Reduce Depth Pipeline");
 	}
 
+	//TAA
+	{
+		Shader computeShader("TemporalResolve.hlsl", ShaderType::Compute, "CSMain");
+		m_pTemporalResolveRS = std::make_unique<RootSignature>(this);
+		m_pTemporalResolveRS->FinalizeFromShader("Temporal Resolve", computeShader);
+
+		m_pTemporalResolvePSO = std::make_unique<PipelineState>(this);
+		m_pTemporalResolvePSO->SetComputeShader(computeShader);
+		m_pTemporalResolvePSO->SetRootSignature(m_pTemporalResolveRS->GetRootSignature());
+		m_pTemporalResolvePSO->Finalize("Temporal Resolve");
+	}
+
 	//Mip generation
 	{
 		Shader computeShader("GenerateMips.hlsl", ShaderType::Compute, "CSMain");
@@ -1722,7 +1814,7 @@ void Graphics::UpdateImGui()
 	m_FrameTimes[m_Frame % m_FrameTimes.size()] = Time::DeltaTime();
 
 
-	if(m_pVisualizeTexture)
+	if (m_pVisualizeTexture)
 	{
 		ImGui::Begin("Visualize Texture");
 		ImGui::Text("Resolution: %dx%d", m_pVisualizeTexture->GetWidth(), m_pVisualizeTexture->GetHeight());
@@ -1768,7 +1860,7 @@ void Graphics::UpdateImGui()
 
 	if (ImGui::TreeNodeEx("Lighting", ImGuiTreeNodeFlags_DefaultOpen))
 	{
-		ImGui::Combo("Render Path", (int*)& m_RenderPath, [](void* data, int index, const char** outText)
+		ImGui::Combo("Render Path", (int*)&m_RenderPath, [](void* data, int index, const char** outText)
 			{
 				RenderPath p = (RenderPath)index;
 				switch (p)
@@ -1835,7 +1927,7 @@ void Graphics::UpdateImGui()
 	if (ImGui::TreeNodeEx("Memory", ImGuiTreeNodeFlags_DefaultOpen))
 	{
 		ImGui::Text("Dynamic Upload Memory");
-		ImGui::Text("%.2f MB", Math::ToMegaBytes* m_pDynamicAllocationManager->GetMemoryUsage());
+		ImGui::Text("%.2f MB", Math::ToMegaBytes * m_pDynamicAllocationManager->GetMemoryUsage());
 		ImGui::TreePop();
 	}
 	ImGui::End();
@@ -1937,6 +2029,8 @@ void Graphics::UpdateImGui()
 		ImGui::Checkbox("Raytraced AO", &Tweakables::g_RaytracedAO);
 		ImGui::Checkbox("Raytraced Reflections", &Tweakables::g_RaytracedReflections);
 	}
+
+	ImGui::Checkbox("TAA", &Tweakables::g_TAA);
 
 	ImGui::End();
 }
