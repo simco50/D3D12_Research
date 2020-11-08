@@ -755,7 +755,7 @@ void Graphics::Update()
 				renderContext.InsertResourceBarrier(m_pPreviousColor.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 				
 				renderContext.SetComputeRootSignature(m_pTemporalResolveRS.get());
-				renderContext.SetPipelineState(GetTAAPSO());
+				renderContext.SetPipelineState(m_pTemporalResolvePSO.get());
 
 				struct Parameters
 				{
@@ -764,27 +764,25 @@ void Graphics::Update()
 					Vector2 Jitter;
 				} parameters;
 
-				float rcpHalfDimX = 2.0f;
-				float rcpHalfDimY = 2.0f;
-
+				// UV -> NDC
 				Matrix preMult = Matrix(
-					Vector4(rcpHalfDimX, 0.0f, 0.0f, 0.0f),
-					Vector4(0.0f, -rcpHalfDimY, 0.0f, 0.0f),
+					Vector4(2.0f, 0.0f, 0.0f, 0.0f),
+					Vector4(0.0f, -2.0f, 0.0f, 0.0f),
 					Vector4(0.0f, 0.0f, 1.0f, 0.0f),
 					Vector4(-1.0f, 1.0f, 0.0f, 1.0f)
 				);
 
+				// NDC - UV
 				Matrix postMult = Matrix(
-					Vector4(1.0f / rcpHalfDimX, 0.0f, 0.0f, 0.0f),
-					Vector4(0.0f, -1.0f / rcpHalfDimY, 0.0f, 0.0f),
+					Vector4(1.0f / 2.0f, 0.0f, 0.0f, 0.0f),
+					Vector4(0.0f, -1.0f / 2.0f, 0.0f, 0.0f),
 					Vector4(0.0f, 0.0f, 1.0f, 0.0f),
-					Vector4(1.0f / rcpHalfDimX, 1.0f / rcpHalfDimY, 0.0f, 1.0f));
-
+					Vector4(1.0f / 2.0f, 1.0f / 2.0f, 0.0f, 1.0f));
 
 				parameters.ReprojectionMatrix = preMult * m_pCamera->GetViewProjection().Invert() * m_pCamera->GetPreviousViewProjection() * postMult;
 				parameters.InvScreenDimensions = Vector2(1.0f / m_WindowWidth, 1.0f / m_WindowHeight);
-				parameters.Jitter.x = m_pCamera->GetJitter().x;
-				parameters.Jitter.y = m_pCamera->GetJitter().y;
+				parameters.Jitter.x = m_pCamera->GetPreviousJitter().x - m_pCamera->GetJitter().x;
+				parameters.Jitter.y = m_pCamera->GetPreviousJitter().y - m_pCamera->GetJitter().y;
 				renderContext.SetComputeDynamicConstantBufferView(0, &parameters, sizeof(Parameters));
 
 				renderContext.SetDynamicDescriptor(1, 0, m_pHDRRenderTarget->GetUAV());
@@ -1765,28 +1763,16 @@ void Graphics::InitializePipelines()
 		m_pReduceDepthPSO->Finalize("Reduce Depth Pipeline");
 	}
 
+	//TAA
 	{
-		const std::vector<std::string> permutations[] = {
-			{"NOTONEMAP", "AABB_ROUNDED", "NEIGHBORHOOD_CLIP", "VELOCITY_CORRECT", "REPROJECT"},
-			{"TONEMAP", "AABB_ROUNDED", "NEIGHBORHOOD_CLIP", "VELOCITY_CORRECT", "REPROJECT"},
-		};
-
-
-
 		Shader computeShader("TemporalResolve.hlsl", ShaderType::Compute, "CSMain");
 		m_pTemporalResolveRS = std::make_unique<RootSignature>(this);
 		m_pTemporalResolveRS->FinalizeFromShader("Temporal Resolve", computeShader);
 
-		for (int i = 0; i < ARRAYSIZE(permutations); ++i)
-		{
-
-			Shader permutedShader("TemporalResolve.hlsl", ShaderType::Compute, "CSMain", permutations[i]);
-			std::unique_ptr<PipelineState> pTemporalResolvePSO = std::make_unique<PipelineState>(this);
-			pTemporalResolvePSO->SetComputeShader(permutedShader);
-			pTemporalResolvePSO->SetRootSignature(m_pTemporalResolveRS->GetRootSignature());
-			pTemporalResolvePSO->Finalize("Temporal Resolve");
-			m_pTemporalResolvePSO[permutations[i][0]] = std::move(pTemporalResolvePSO);
-		}
+		m_pTemporalResolvePSO = std::make_unique<PipelineState>(this);
+		m_pTemporalResolvePSO->SetComputeShader(computeShader);
+		m_pTemporalResolvePSO->SetRootSignature(m_pTemporalResolveRS->GetRootSignature());
+		m_pTemporalResolvePSO->Finalize("Temporal Resolve");
 	}
 
 	//Mip generation
@@ -2045,40 +2031,6 @@ void Graphics::UpdateImGui()
 	}
 
 	ImGui::Checkbox("TAA", &Tweakables::g_TAA);
-
-	static int permutation = 0;
-	ImGui::Combo("TAA Permutations", &permutation, [](void* data, int index, const char** outText)
-		{
-			Graphics* pGraphics = (Graphics*)data;
-			int i = 0;
-			for (auto& it : pGraphics->m_pTemporalResolvePSO)
-			{
-				if (i == index)
-				{
-					*outText = it.first.c_str();
-					break;
-				}
-				++i;
-			}
-			return true;
-		}, this, (int)m_pTemporalResolvePSO.size());
-	int i = 0;
-	for (auto& it : m_pTemporalResolvePSO)
-	{
-		if (i++ == permutation)
-		{
-			m_CurrentTAAPSO = it.first.c_str();
-			break;
-		}
-	}
-	if (Input::Instance().IsKeyPressed('J'))
-	{
-		permutation = (permutation + m_pTemporalResolvePSO.size() - 1) % (int)m_pTemporalResolvePSO.size();
-	}
-	if (Input::Instance().IsKeyPressed('K'))
-	{
-		permutation = (permutation + 1) % m_pTemporalResolvePSO.size();
-	}
 
 	ImGui::End();
 }
