@@ -44,6 +44,7 @@ Texture* RTReflections::Execute(RGGraph& graph, const SceneData& sceneData)
 			ShaderBindingTable bindingTable(m_pRtSO.Get());
 			bindingTable.AddRayGenEntry("RayGen", {});
 			bindingTable.AddMissEntry("Miss", {});
+			bindingTable.AddMissEntry("ShadowMiss", {});
 
 			for (int i = 0; i < sceneData.pMesh->GetMeshCount(); ++i)
 			{
@@ -58,7 +59,9 @@ Texture* RTReflections::Execute(RGGraph& graph, const SceneData& sceneData)
 				DynamicAllocation allocation = context.AllocateTransientMemory(sizeof(MaterialData));
 				memcpy(allocation.pMappedMemory, &material, sizeof(MaterialData));
 				bindingTable.AddHitGroupEntry("HitGroup", {allocation.GpuHandle, pMesh->GetVertexBuffer().Location, pMesh->GetIndexBuffer().Location });
+				bindingTable.AddHitGroupEntry("ShadowHitGroup", { });
 			}
+
 
 			context.SetComputeDynamicConstantBufferView(0, &parameters, sizeof(Parameters));
 			context.SetDynamicDescriptor(1, 0, m_pReflections->GetUAV());
@@ -106,13 +109,16 @@ void RTReflections::SetupPipelines(Graphics* pGraphics)
 		ShaderLibrary shaderLibrary("RTReflections.hlsl");
 
 		CD3DX12_STATE_OBJECT_HELPER stateDesc;
-		stateDesc.AddLibrary(CD3DX12_SHADER_BYTECODE(shaderLibrary.GetByteCode(), shaderLibrary.GetByteCodeSize()), { "RayGen", "ClosestHit", "Miss" });
+		stateDesc.AddLibrary(CD3DX12_SHADER_BYTECODE(shaderLibrary.GetByteCode(), shaderLibrary.GetByteCodeSize()), { "RayGen", "ClosestHit", "Miss", "ShadowClosestHit", "ShadowMiss" });
 		stateDesc.AddHitGroup("HitGroup", "ClosestHit");
+		stateDesc.AddHitGroup("ShadowHitGroup", "ShadowClosestHit");
 		stateDesc.BindLocalRootSignature("RayGen", m_pRayGenSignature->GetRootSignature());
 		stateDesc.BindLocalRootSignature("Miss", m_pMissSignature->GetRootSignature());
+		stateDesc.BindLocalRootSignature("ShadowMiss", m_pMissSignature->GetRootSignature());
 		stateDesc.BindLocalRootSignature("HitGroup", m_pHitSignature->GetRootSignature());
+		stateDesc.BindLocalRootSignature("ShadowHitGroup", m_pMissSignature->GetRootSignature());
 		stateDesc.SetRaytracingShaderConfig(3 * sizeof(float), 2 * sizeof(float));
-		stateDesc.SetRaytracingPipelineConfig(1);
+		stateDesc.SetRaytracingPipelineConfig(2);
 		stateDesc.SetGlobalRootSignature(m_pGlobalRS->GetRootSignature());
 		D3D12_STATE_OBJECT_DESC desc = stateDesc.Desc();
 		pGraphics->GetRaytracingDevice()->CreateStateObject(&desc, IID_PPV_ARGS(m_pRtSO.GetAddressOf()));

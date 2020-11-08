@@ -43,6 +43,11 @@ struct RayPayload
 	float3 output;
 };
 
+struct ShadowRayPayload
+{
+	uint hit;
+};
+
 float3 TangentSpaceNormalMapping(float3 sampledNormal, float3x3 TBN, float2 tex, bool invertY)
 {
 	sampledNormal.xy = sampledNormal.xy * 2.0f - 1.0f;
@@ -73,6 +78,7 @@ void ClosestHit(inout RayPayload payload, BuiltInTriangleIntersectionAttributes 
 	float3 B = v0.bitangent * b.x + v1.bitangent * b.y + v2.bitangent * b.z;
 	float3x3 TBN = float3x3(T, B, N);
 	float3 wPos = WorldRayOrigin() + WorldRayDirection() * RayTCurrent();
+
 	float3 V = normalize(wPos - cViewInverse[3].xyz);
 	float attenuation = 1;
 
@@ -87,11 +93,47 @@ void ClosestHit(inout RayPayload payload, BuiltInTriangleIntersectionAttributes 
 	float roughness = 0.5;
 	float3 specularColor = ComputeF0(0.5f, diffuse, 0);
 
+
+	ShadowRayPayload shadowRay = (ShadowRayPayload)0;
+
+#if 1
+	RayDesc ray;
+	ray.Origin = wPos - L * 0.001f;
+	ray.Direction = -L;
+	ray.TMin = 0.0f;
+	ray.TMax = 10000;
+
+	// Trace the ray
+	TraceRay(
+		SceneBVH, //AccelerationStructure
+		RAY_FLAG_CULL_BACK_FACING_TRIANGLES | RAY_FLAG_FORCE_OPAQUE, //RayFlags
+		0xFF, //InstanceInclusionMask
+		1, //RayContributionToHitGroupIndex
+		2, //MultiplierForGeometryContributionToHitGroupIndex
+		1, //MissShaderIndex
+		ray, //Ray
+		shadowRay //Payload
+	);
+	attenuation *= shadowRay.hit;
+#endif
+
 	LightResult result = DefaultLitBxDF(specularColor, roughness, diffuse, N, V, L, attenuation);
 	float4 color = light.GetColor();
 	result.Diffuse *= color.rgb * light.Intensity;
 	result.Specular *= color.rgb * light.Intensity;
 	payload.output = result.Diffuse + result.Specular;
+}
+
+[shader("closesthit")] 
+void ShadowClosestHit(inout ShadowRayPayload payload, BuiltInTriangleIntersectionAttributes attrib) 
+{
+	payload.hit = 0;
+}
+
+[shader("miss")] 
+void ShadowMiss(inout ShadowRayPayload payload : SV_RayPayload) 
+{
+	payload.hit = 1;
 }
 
 [shader("miss")] 
@@ -154,7 +196,7 @@ void RayGen()
 		// application to group shaders in the SBT in the same order as they are added in the AS, in
 		// which case the value below represents the stride (4 bits representing the number of hit
 		// groups) between two consecutive objects.
-		1,
+		2,
 
 		//MissShaderIndex
 		// Index of the miss shader to use in case several consecutive miss shaders are present in the

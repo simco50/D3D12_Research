@@ -103,7 +103,7 @@ class CD3DX12_STATE_OBJECT_HELPER
 	}
 public:
 	CD3DX12_STATE_OBJECT_HELPER(D3D12_STATE_OBJECT_TYPE type = D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE)
-		: m_StateObjectAllocator(0xFF), m_ScratchAllocator(0xFFFF), m_Type(type)
+		: m_StateObjectAllocator(0xFFF), m_ScratchAllocator(0xFFFF), m_Type(type)
 	{}
 
 	uint32 AddLibrary(const D3D12_SHADER_BYTECODE& byteCode, const std::vector<std::string>& exports = {}) 
