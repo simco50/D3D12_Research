@@ -5,7 +5,9 @@
 
 #define NUM_HISTOGRAM_BINS 256
 
+#ifndef TONEMAP_LUMINANCE 
 #define TONEMAP_LUMINANCE 0
+#endif
 
 #if TONEMAP_LUMINANCE
 #define TONEMAP_TYPE float
