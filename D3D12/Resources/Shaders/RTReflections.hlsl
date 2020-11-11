@@ -6,8 +6,7 @@ RWTexture2D<float4> gOutput : register(u0);
 RaytracingAccelerationStructure SceneBVH : register(t0);
 Texture2D tDepth : register(t1);
 StructuredBuffer<Light> tLights : register(t2);
-ByteAddressBuffer tVertexData : register(t100);
-ByteAddressBuffer tIndexData : register(t101);
+ByteAddressBuffer tGeometryData : register(t3);
 Texture2D tMaterialTextures[] : register(t200);
 
 SamplerState sSceneSampler : register(s0);
@@ -27,6 +26,8 @@ cbuffer HitData : register(b1)
 	int NormalIndex;
 	int RoughnessIndex;
 	int MetallicIndex;
+	uint VertexBufferOffset;
+	uint IndexBufferOffset;
 }
 
 cbuffer ShaderParameters : register(b0)
@@ -66,14 +67,52 @@ float3 ApplyAmbientLight(float3 diffuse, float ao, float3 lightColor)
     return ao * diffuse * lightColor;
 }
 
+// Angle >= Umbra -> 0
+// Angle < Penumbra -> 1
+//Gradient between Umbra and Penumbra
+float DirectionalAttenuation(float3 L, float3 direction, float cosUmbra, float cosPenumbra)
+{
+	float cosAngle = dot(-normalize(L), direction);
+	float falloff = saturate((cosAngle - cosUmbra) / (cosPenumbra - cosUmbra));
+	return falloff * falloff;
+}
+
+//Distance between rays is proportional to distance squared
+//Extra windowing function to make light radius finite
+//https://blog.selfshadow.com/publications/s2013-shading-course/karis/s2013_pbs_epic_notes_v2.pdf
+float RadialAttenuation(float3 L, float range)
+{
+	float distSq = dot(L, L);
+	float distanceAttenuation = 1 / (distSq + 1);
+	float windowing = Square(saturate(1 - Square(distSq * Square(rcp(range)))));
+	return distanceAttenuation * windowing;
+}
+
+float GetAttenuation(Light light, float3 wPos)
+{
+	float attentuation = 1.0f;
+
+	if(light.Type >= LIGHT_POINT)
+	{
+		float3 L = light.Position - wPos;
+		attentuation *= RadialAttenuation(L, light.Range);
+		if(light.Type >= LIGHT_SPOT)
+		{
+			attentuation *= DirectionalAttenuation(L, light.Direction, light.SpotlightAngles.y, light.SpotlightAngles.x);
+		}
+	}
+
+	return attentuation;
+}
+
 [shader("closesthit")] 
 void ClosestHit(inout RayPayload payload, BuiltInTriangleIntersectionAttributes attrib) 
 {
 	float3 b = float3((1.0f - attrib.barycentrics.x - attrib.barycentrics.y), attrib.barycentrics.x, attrib.barycentrics.y);
-	uint3 indices = tIndexData.Load3(PrimitiveIndex() * sizeof(uint3));
-	Vertex v0 = tVertexData.Load<Vertex>(indices.x * sizeof(Vertex));
-	Vertex v1 = tVertexData.Load<Vertex>(indices.y * sizeof(Vertex));
-	Vertex v2 = tVertexData.Load<Vertex>(indices.z * sizeof(Vertex));
+	uint3 indices = tGeometryData.Load3(IndexBufferOffset + PrimitiveIndex() * sizeof(uint3));
+	Vertex v0 = tGeometryData.Load<Vertex>(VertexBufferOffset + indices.x * sizeof(Vertex));
+	Vertex v1 = tGeometryData.Load<Vertex>(VertexBufferOffset + indices.y * sizeof(Vertex));
+	Vertex v2 = tGeometryData.Load<Vertex>(VertexBufferOffset + indices.z * sizeof(Vertex));
 	float2 texCoord = v0.texCoord * b.x + v1.texCoord * b.y + v2.texCoord * b.z;
 	float3 N = v0.normal * b.x + v1.normal * b.y + v2.normal * b.z;
 	float3 T = v0.tangent * b.x + v1.tangent * b.y + v2.tangent * b.z;
@@ -82,47 +121,53 @@ void ClosestHit(inout RayPayload payload, BuiltInTriangleIntersectionAttributes 
 	float3 wPos = WorldRayOrigin() + WorldRayDirection() * RayTCurrent();
 
 	float3 V = normalize(wPos - cViewInverse[3].xyz);
-	float attenuation = 1;
-
-	Light light = tLights[0];
-
-	float3 L = light.Direction;
-
 	float3 diffuse = tMaterialTextures[DiffuseIndex].SampleLevel(sSceneSampler, texCoord, 0).rgb;
 	float3 sampledNormal = tMaterialTextures[NormalIndex].SampleLevel(sSceneSampler, texCoord, 0).rgb;
 	N = TangentSpaceNormalMapping(sampledNormal, TBN, texCoord, false);
-
 	float roughness = 0.5;
 	float3 specularColor = ComputeF0(0.5f, diffuse, 0);
 
-	ShadowRayPayload shadowRay = (ShadowRayPayload)0;
+	LightResult totalResult = (LightResult)0;
+	for(int i = 0; i < 3; ++i)
+	{
+		Light light = tLights[i];
+		float attenuation = GetAttenuation(light, wPos);
+		float3 L = normalize(light.Position - wPos);
+		if(light.Type == LIGHT_DIRECTIONAL)
+		{
+			L = -light.Direction;
+		}
 
-#if 1
-	RayDesc ray;
-	ray.Origin = wPos - L * 0.001f;
-	ray.Direction = -L;
-	ray.TMin = 0.0f;
-	ray.TMax = 10000;
+		ShadowRayPayload shadowRay = (ShadowRayPayload)0;
 
-	// Trace the ray
-	TraceRay(
-		SceneBVH, 														//AccelerationStructure
-		RAY_FLAG_CULL_BACK_FACING_TRIANGLES | RAY_FLAG_FORCE_OPAQUE, 	//RayFlags
-		0xFF, 															//InstanceInclusionMask
-		1, 																//RayContributionToHitGroupIndex
-		2, 																//MultiplierForGeometryContributionToHitGroupIndex
-		1, 																//MissShaderIndex
-		ray, 															//Ray
-		shadowRay 														//Payload
-	);
-	attenuation *= shadowRay.hit;
-#endif
+	#if 1
+		RayDesc ray;
+		ray.Origin = wPos + L * 0.001f;
+		ray.Direction = L;
+		ray.TMin = 0.0f;
+		ray.TMax = length(wPos - light.Position);
 
-	LightResult result = DefaultLitBxDF(specularColor, roughness, diffuse, N, V, L, attenuation);
-	float4 color = light.GetColor();
-	result.Diffuse *= color.rgb * light.Intensity;
-	result.Specular *= color.rgb * light.Intensity;
-	payload.output = result.Diffuse + result.Specular + ApplyAmbientLight(diffuse, 1.0f, color.rgb * 0.1f);
+		// Trace the ray
+		TraceRay(
+			SceneBVH, 														//AccelerationStructure
+			RAY_FLAG_FORCE_OPAQUE |
+			RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH,					 	//RayFlags
+			0xFF, 															//InstanceInclusionMask
+			1, 																//RayContributionToHitGroupIndex
+			2, 																//MultiplierForGeometryContributionToHitGroupIndex
+			1, 																//MissShaderIndex
+			ray, 															//Ray
+			shadowRay 														//Payload
+		);
+		attenuation *= shadowRay.hit;
+	#endif
+
+		LightResult result = DefaultLitBxDF(specularColor, roughness, diffuse, N, V, L, attenuation);
+		float4 color = light.GetColor();
+		totalResult.Diffuse += result.Diffuse * color.rgb * light.Intensity;
+		totalResult.Specular *= result.Specular * color.rgb * light.Intensity;
+	}
+	payload.output = totalResult.Diffuse + totalResult.Specular + ApplyAmbientLight(diffuse, 1.0f, 0.1f);
 }
 
 [shader("closesthit")] 

@@ -55,19 +55,28 @@ Texture* RTReflections::Execute(RGGraph& graph, const SceneData& sceneData)
 				}
 
 				auto it = std::find_if(sceneData.OpaqueBatches.begin(), sceneData.OpaqueBatches.end(), [pMesh](const Batch& b) { return b.pMesh == pMesh; });
-				const MaterialData& material = it->Material;
-				DynamicAllocation allocation = context.AllocateTransientMemory(sizeof(MaterialData));
-				memcpy(allocation.pMappedMemory, &material, sizeof(MaterialData));
-				bindingTable.AddHitGroupEntry("HitGroup", {allocation.GpuHandle, pMesh->GetVertexBuffer().Location, pMesh->GetIndexBuffer().Location });
+				struct HitData
+				{
+					MaterialData Material;
+					uint32 VertexBufferOffset;
+					uint32 IndexBufferOffset;
+				} hitData;
+				hitData.Material = it->Material;
+				hitData.VertexBufferOffset = (uint32)(pMesh->GetVertexBuffer().Location - sceneData.pMesh->GetData()->GetGpuHandle());
+				hitData.IndexBufferOffset = (uint32)(pMesh->GetIndexBuffer().Location - sceneData.pMesh->GetData()->GetGpuHandle());
+
+				DynamicAllocation allocation = context.AllocateTransientMemory(sizeof(HitData));
+				memcpy(allocation.pMappedMemory, &hitData, sizeof(HitData));
+				bindingTable.AddHitGroupEntry("HitGroup", { allocation.GpuHandle });
 				bindingTable.AddHitGroupEntry("ShadowHitGroup", { });
 			}
-
 
 			context.SetComputeDynamicConstantBufferView(0, &parameters, sizeof(Parameters));
 			context.SetDynamicDescriptor(1, 0, m_pReflections->GetUAV());
 			context.SetDynamicDescriptor(2, 0, sceneData.pTLAS->GetSRV());
 			context.SetDynamicDescriptor(2, 1, sceneData.pResolvedDepth->GetSRV());
 			context.SetDynamicDescriptor(2, 2, sceneData.pLightBuffer->GetSRV());
+			context.SetDynamicDescriptor(2, 3, sceneData.pMesh->GetData()->GetSRV());
 			context.SetDynamicDescriptors(3, 0, sceneData.MaterialTextures.data(), (int)sceneData.MaterialTextures.size());
 
 			context.DispatchRays(bindingTable, m_pReflections->GetWidth(), m_pReflections->GetHeight());
@@ -101,7 +110,7 @@ void RTReflections::SetupPipelines(Graphics* pGraphics)
 		m_pGlobalRS = std::make_unique<RootSignature>(pGraphics);
 		m_pGlobalRS->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_ALL);
 		m_pGlobalRS->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, D3D12_SHADER_VISIBILITY_ALL);
-		m_pGlobalRS->SetDescriptorTableSimple(2, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3, D3D12_SHADER_VISIBILITY_ALL);
+		m_pGlobalRS->SetDescriptorTableSimple(2, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 4, D3D12_SHADER_VISIBILITY_ALL);
 		m_pGlobalRS->SetDescriptorTableSimple(3, 200, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 128, D3D12_SHADER_VISIBILITY_ALL);
 		m_pGlobalRS->AddStaticSampler(0, CD3DX12_STATIC_SAMPLER_DESC(0, D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT), D3D12_SHADER_VISIBILITY_ALL);
 		m_pGlobalRS->Finalize("Dummy Global", D3D12_ROOT_SIGNATURE_FLAG_NONE);

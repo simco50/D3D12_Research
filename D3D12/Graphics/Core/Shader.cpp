@@ -71,6 +71,7 @@ namespace ShaderCompiler
 
 		arguments.push_back(L"-T");
 		arguments.push_back(target);
+		arguments.push_back(L"-all_resources_bound");
 
 		if (debugShaders)
 		{
