@@ -112,7 +112,7 @@ void Camera::UpdateMatrices() const
 			m_Projection = Math::CreateOrthographicMatrix(m_OrthographicSize * m_AspectRatio, m_OrthographicSize, m_NearPlane, m_FarPlane);
 		}
 
-#if 0
+#if 1
 		constexpr Math::HaltonSequence<8, 2> x;
 		constexpr Math::HaltonSequence<8, 3> y;
 
