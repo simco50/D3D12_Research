@@ -1,12 +1,20 @@
 #include "TonemappingCommon.hlsli"
 #include "Color.hlsli"
 
-#define TAA_REPROJECT
-#define TAA_AABB_ROUNDED
-#define TAA_NEIGHBORHOOD_CLIP
-//#define TAA_VELOCITY_CORRECT
-#define TAA_TONEMAP
-#define TAA_RESOLVE_CATMULL_ROM
+#define HISTORY_REJECT_NONE 0
+#define HISTORY_REJECT_CLAMP 1
+#define HISTORY_REJECT_CLIP 2
+
+#define HISTORY_RESOLVE_BILINEAR 0
+#define HISTORY_RESOLVE_CATMULL_ROM 1
+
+#define TAA_REPROJECT               1                           // Use per pixel velocity to reproject
+#define TAA_AABB_ROUNDED            1                           // Use combine 3x3 neighborhood with plus-pattern neighborhood
+#define TAA_HISTORY_REJECT_METHOD   HISTORY_REJECT_CLIP         // Use neighborhood clipping to reject history samples
+#define TAA_VELOCITY_CORRECT        0                           // Reduce blend factor when the subpixel motion is high to reduce blur under motion
+#define TAA_TONEMAP                 0                           // Tonemap before resolving history to prevent high luminance pixels from overpowering
+#define TAA_RESOLVE_METHOD          HISTORY_RESOLVE_CATMULL_ROM // History resolve filter
+#define TAA_DEBUG_RED_HISTORY       0
 
 #define RootSig "CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \
                 "DescriptorTable(UAV(u0, numDescriptors = 1), visibility=SHADER_VISIBILITY_ALL), " \
@@ -51,15 +59,15 @@ float4 ClipAABB(float3 aabb_min, float3 aabb_max, float4 p, float4 q)
         return q;// point inside aabb
 }
 
-float3 SampleColor(Texture2D texture, SamplerState samplerState, float2 texCoord)
+float3 SampleColor(Texture2D tex, SamplerState textureSampler, float2 uv)
 {
-    return texture.SampleLevel(samplerState, texCoord, 0).rgb;
+    return tex.SampleLevel(textureSampler, uv, 0).rgb;
 }
 
 // The following code is licensed under the MIT license: https://gist.github.com/TheRealMJP/bc503b0b87b643d3505d41eab8b332ae
 // Samples a texture with Catmull-Rom filtering, using 9 texture fetches instead of 16.
 // See http://vec3.ca/bicubic-filtering-in-fewer-taps/ for more details
-float4 SampleTextureCatmullRom(in Texture2D<float4> tex, in SamplerState linearSampler, in float2 uv, in float2 texSize)
+float4 SampleTextureCatmullRom(in Texture2D<float4> tex, in SamplerState textureSampler, in float2 uv, in float2 texSize)
 {
     // We're going to sample a a 4x4 grid of texels surrounding the target UV coordinate. We'll do this by rounding
     // down the sample location to get the exact center of our "starting" texel. The starting texel will be at
@@ -94,17 +102,17 @@ float4 SampleTextureCatmullRom(in Texture2D<float4> tex, in SamplerState linearS
     texPos12 /= texSize;
 
     float4 result = 0.0f;
-    result += tex.SampleLevel(linearSampler, float2(texPos0.x, texPos0.y), 0.0f) * w0.x * w0.y;
-    result += tex.SampleLevel(linearSampler, float2(texPos12.x, texPos0.y), 0.0f) * w12.x * w0.y;
-    result += tex.SampleLevel(linearSampler, float2(texPos3.x, texPos0.y), 0.0f) * w3.x * w0.y;
+    result += tex.SampleLevel(textureSampler, float2(texPos0.x, texPos0.y), 0.0f) * w0.x * w0.y;
+    result += tex.SampleLevel(textureSampler, float2(texPos12.x, texPos0.y), 0.0f) * w12.x * w0.y;
+    result += tex.SampleLevel(textureSampler, float2(texPos3.x, texPos0.y), 0.0f) * w3.x * w0.y;
 
-    result += tex.SampleLevel(linearSampler, float2(texPos0.x, texPos12.y), 0.0f) * w0.x * w12.y;
-    result += tex.SampleLevel(linearSampler, float2(texPos12.x, texPos12.y), 0.0f) * w12.x * w12.y;
-    result += tex.SampleLevel(linearSampler, float2(texPos3.x, texPos12.y), 0.0f) * w3.x * w12.y;
+    result += tex.SampleLevel(textureSampler, float2(texPos0.x, texPos12.y), 0.0f) * w0.x * w12.y;
+    result += tex.SampleLevel(textureSampler, float2(texPos12.x, texPos12.y), 0.0f) * w12.x * w12.y;
+    result += tex.SampleLevel(textureSampler, float2(texPos3.x, texPos12.y), 0.0f) * w3.x * w12.y;
 
-    result += tex.SampleLevel(linearSampler, float2(texPos0.x, texPos3.y), 0.0f) * w0.x * w3.y;
-    result += tex.SampleLevel(linearSampler, float2(texPos12.x, texPos3.y), 0.0f) * w12.x * w3.y;
-    result += tex.SampleLevel(linearSampler, float2(texPos3.x, texPos3.y), 0.0f) * w3.x * w3.y;
+    result += tex.SampleLevel(textureSampler, float2(texPos0.x, texPos3.y), 0.0f) * w0.x * w3.y;
+    result += tex.SampleLevel(textureSampler, float2(texPos12.x, texPos3.y), 0.0f) * w12.x * w3.y;
+    result += tex.SampleLevel(textureSampler, float2(texPos3.x, texPos3.y), 0.0f) * w3.x * w3.y;
 
     return result;
 }
@@ -113,44 +121,31 @@ float4 SampleTextureCatmullRom(in Texture2D<float4> tex, in SamplerState linearS
 [numthreads(8, 8, 1)]
 void CSMain(uint3 ThreadId : SV_DISPATCHTHREADID)
 {
+    const float2 dxdy = cParameters.InvScreenDimensions;
     uint2 pixelIndex = ThreadId.xy;
-    float2 texCoord = cParameters.InvScreenDimensions * ((float2)pixelIndex + 0.5f);
-    float2 pixelSize = cParameters.InvScreenDimensions;
-
-    float3 cc = SampleColor(tCurrentColor, sPointSampler, texCoord + float2(pixelSize.x, pixelSize.y));
-    float3 currColor = cc;
-    
-    float2 velocity = 0;
-#if defined(TAA_REPROJECT)
-    float depth = tDepth.SampleLevel(sPointSampler, texCoord, 0).r;
-    float4 pos = float4(texCoord, depth, 1);
-    float4 prevPos = mul(pos, cParameters.Reprojection);
-    prevPos.xyz /= prevPos.w;
-    velocity = (prevPos - pos).xy - cParameters.Jitter * cParameters.InvScreenDimensions;
-#endif
-
-#ifdef TAA_RESOLVE_CATMULL_ROM
+    float2 texCoord = dxdy * ((float2)pixelIndex + 0.5f);
     float2 dimensions;
     tPreviousColor.GetDimensions(dimensions.x, dimensions.y);
-    float3 prevColor = SampleTextureCatmullRom(tPreviousColor, sLinearSampler, texCoord + velocity, dimensions).rgb;
-#else
-    float3 prevColor = SampleColor(tPreviousColor, sLinearSampler, texCoord + velocity);
-#endif
 
-#if defined(TAA_NEIGHBORHOOD_CLAMP) || defined(TAA_NEIGHBORHOOD_CLIP)
-    float3 lt = SampleColor(tCurrentColor, sPointSampler, texCoord + float2(-pixelSize.x, -pixelSize.y));
-    float3 ct = SampleColor(tCurrentColor, sPointSampler, texCoord + float2(pixelSize.x, -pixelSize.y));
-    float3 rt = SampleColor(tCurrentColor, sPointSampler, texCoord + float2(pixelSize.x, -pixelSize.y));
-    float3 lc = SampleColor(tCurrentColor, sPointSampler, texCoord + float2(-pixelSize.x, pixelSize.y));
-    float3 rc = SampleColor(tCurrentColor, sPointSampler, texCoord + float2(pixelSize.x, pixelSize.y));
-    float3 lb = SampleColor(tCurrentColor, sPointSampler, texCoord + float2(-pixelSize.x, pixelSize.y));
-    float3 cb = SampleColor(tCurrentColor, sPointSampler, texCoord + float2(pixelSize.x, pixelSize.y));
-    float3 rb = SampleColor(tCurrentColor, sPointSampler, texCoord + float2(pixelSize.x, pixelSize.y));
+    float3 cc = SampleColor(tCurrentColor, sPointSampler, texCoord);
+    float3 currColor = cc;
+
+#if TAA_HISTORY_REJECT_METHOD != HISTORY_REJECT_NONE
+    // Get a 3x3 neighborhood to clip/clamp against
+    float3 lt = SampleColor(tCurrentColor, sPointSampler, texCoord + float2(-dxdy.x, -dxdy.y));
+    float3 ct = SampleColor(tCurrentColor, sPointSampler, texCoord + float2(0, -dxdy.y));
+    float3 rt = SampleColor(tCurrentColor, sPointSampler, texCoord + float2(dxdy.x, -dxdy.y));
+    float3 lc = SampleColor(tCurrentColor, sPointSampler, texCoord + float2(-dxdy.x, 0));
+    float3 rc = SampleColor(tCurrentColor, sPointSampler, texCoord + float2(dxdy.x, 0));
+    float3 lb = SampleColor(tCurrentColor, sPointSampler, texCoord + float2(-dxdy.x, dxdy.y));
+    float3 cb = SampleColor(tCurrentColor, sPointSampler, texCoord + float2(0, dxdy.y));
+    float3 rb = SampleColor(tCurrentColor, sPointSampler, texCoord + float2(dxdy.x, dxdy.y));
     float3 aabb_min = min(lt, min(ct, min(rt, min(lc, min(cc, min(rc, min(lb, min(cb, rb))))))));
     float3 aabb_max = max(lt, max(ct, max(rt, max(lc, max(cc, max(rc, max(lb, max(cb, rb))))))));
     float3 aabb_avg = (lt + ct + rt + lc + cc + rc + lb + cb + rb) / 9.0f;
 
-#if defined(TAA_AABB_ROUNDED) //Karis Siggraph 2014 - Shaped neighborhood clamp by averaging 2 neighborhoods
+#if TAA_AABB_ROUNDED //Karis Siggraph 2014 - Shaped neighborhood clamp by averaging 2 neighborhoods
+    // Average 3x3 neighborhoord with 5 sample plus pattern neighborhood to remove 'filtered' look
     float3 aabb_min2 = min(min(min(min(lc, cc), ct), rc), cb);
     float3 aabb_max2 = max(max(max(max(lc, cc), ct), rc), cb);
     float3 aabb_avg2 = (lc + cc + ct + rc + cb) / 5.0f;
@@ -160,37 +155,51 @@ void CSMain(uint3 ThreadId : SV_DISPATCHTHREADID)
 #endif
 #endif
 
-#if defined(TAA_DEBUG_RED_HISTORY)
+    float2 historyUV = texCoord;
+#if TAA_REPROJECT
+    float depth = tDepth.SampleLevel(sPointSampler, texCoord, 0).r;
+    float4 pos = float4(texCoord, depth, 1);
+    float4 prevPos = mul(pos, cParameters.Reprojection);
+    prevPos.xyz /= prevPos.w;
+    historyUV += (prevPos - pos).xy - cParameters.Jitter * dxdy;
+#endif
+
+#if TAA_RESOLVE_METHOD == HISTORY_RESOLVE_CATMULL_ROM //Karis Siggraph 2014 - Shaped neighborhood clamp by averaging 2 neighborhoods
+    // Catmull Rom filter to avoid blurry result from billinear filter
+    float3 prevColor = SampleTextureCatmullRom(tPreviousColor, sLinearSampler, historyUV, dimensions).rgb;
+#elif TAA_RESOLVE_METHOD == HISTORY_RESOLVE_BILINEAR
+    float3 prevColor = SampleColor(tPreviousColor, sLinearSampler, historyUV);
+#endif
+
+#if TAA_DEBUG_RED_HISTORY
+    // DEBUG: Use red history to debug how correct neighborhood clamp is
     prevColor = float3(1,0,0);
 #endif
 
-#if defined(TAA_NEIGHBORHOOD_CLAMP)
+#if TAA_HISTORY_REJECT_METHOD == HISTORY_REJECT_CLAMP
     prevColor = clamp(prevColor, aabb_min, aabb_max);
-#elif defined(TAA_NEIGHBORHOOD_CLIP) //Karis Siggraph 2014 - Clip instead of clamp
+#elif TAA_HISTORY_REJECT_METHOD == HISTORY_REJECT_CLIP //Karis Siggraph 2014 - Clip instead of clamp
     prevColor = ClipAABB(aabb_min, aabb_max, float4(aabb_avg, 1), float4(prevColor, 1)).xyz;
 #endif
 
     float blendFactor = 0.05f;
 
-#if defined(TAA_VELOCITY_CORRECT)
-    float2 dimensions;
-    tDepth.GetDimensions(dimensions.x, dimensions.y);
+#if TAA_VELOCITY_CORRECT
 	float subpixelCorrection = frac(max(abs(velocity.x)*dimensions.x, abs(velocity.y)*dimensions.y)) * 0.5f;
     blendFactor = saturate(lerp(blendFactor, 0.8f, subpixelCorrection));
 #endif
 
-    blendFactor = texCoord.x < 0 || texCoord.x > 1 || texCoord.y < 0 || texCoord.y > 1 ? 1 : blendFactor;
+    //blendFactor = texCoord.x < 0 || texCoord.x > 1 || texCoord.y < 0 || texCoord.y > 1 ? 1 : blendFactor;
 
-#if defined(TAA_TONEMAP) //Karis Siggraph 2014 - Cheap tonemap before/after
+#if TAA_TONEMAP
     currColor = Reinhard(currColor);
     prevColor = Reinhard(prevColor);
 #endif
 
     currColor = lerp(prevColor, currColor, blendFactor);
 
-#if defined(TAA_TONEMAP)
+#if TAA_TONEMAP
     currColor = InverseReinhard(currColor);
-    prevColor = InverseReinhard(prevColor);
 #endif
 
     uOutColor[pixelIndex] = float4(currColor, 1);

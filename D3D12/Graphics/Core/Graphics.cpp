@@ -64,6 +64,7 @@ namespace Tweakables
 	bool g_VisualizeLights = false;
 	bool g_VisualizeLightDensity = false;
 	bool g_TAA = true;
+	bool g_TestTAA = true;
 
 	float g_SunInclination = 0.579f;
 	float g_SunOrientation = -3.055f;
@@ -755,7 +756,7 @@ void Graphics::Update()
 				renderContext.InsertResourceBarrier(m_pPreviousColor.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 				
 				renderContext.SetComputeRootSignature(m_pTemporalResolveRS.get());
-				renderContext.SetPipelineState(m_pTemporalResolvePSO.get());
+				renderContext.SetPipelineState(Tweakables::g_TestTAA ? m_pTemporalResolveTestPSO.get() : m_pTemporalResolvePSO.get());
 
 				struct Parameters
 				{
@@ -1765,14 +1766,23 @@ void Graphics::InitializePipelines()
 
 	//TAA
 	{
-		Shader computeShader("TemporalResolve.hlsl", ShaderType::Compute, "CSMain");
-		m_pTemporalResolveRS = std::make_unique<RootSignature>(this);
-		m_pTemporalResolveRS->FinalizeFromShader("Temporal Resolve", computeShader);
+		{
+			Shader computeShader("TemporalResolve.hlsl", ShaderType::Compute, "CSMain");
+			m_pTemporalResolveRS = std::make_unique<RootSignature>(this);
+			m_pTemporalResolveRS->FinalizeFromShader("Temporal Resolve", computeShader);
 
-		m_pTemporalResolvePSO = std::make_unique<PipelineState>(this);
-		m_pTemporalResolvePSO->SetComputeShader(computeShader);
-		m_pTemporalResolvePSO->SetRootSignature(m_pTemporalResolveRS->GetRootSignature());
-		m_pTemporalResolvePSO->Finalize("Temporal Resolve");
+			m_pTemporalResolvePSO = std::make_unique<PipelineState>(this);
+			m_pTemporalResolvePSO->SetComputeShader(computeShader);
+			m_pTemporalResolvePSO->SetRootSignature(m_pTemporalResolveRS->GetRootSignature());
+			m_pTemporalResolvePSO->Finalize("Temporal Resolve");
+		}
+
+		{
+			Shader computeShader("TemporalResolve.hlsl", ShaderType::Compute, "CSMain", {"TAA_TEST"});
+			m_pTemporalResolveTestPSO = std::make_unique<PipelineState>(*m_pTemporalResolvePSO);
+			m_pTemporalResolveTestPSO->SetComputeShader(computeShader);
+			m_pTemporalResolveTestPSO->Finalize("Temporal Resolve Test");
+		}
 	}
 
 	//Mip generation
@@ -2031,6 +2041,11 @@ void Graphics::UpdateImGui()
 	}
 
 	ImGui::Checkbox("TAA", &Tweakables::g_TAA);
+	ImGui::Checkbox("Test TAA", &Tweakables::g_TestTAA);
+	if (Input::Instance().IsKeyPressed('G'))
+	{
+		Tweakables::g_TestTAA = !Tweakables::g_TestTAA;
+	}
 
 	ImGui::End();
 }

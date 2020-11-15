@@ -85,6 +85,7 @@ workspace (ENGINE_NAME)
 			(SOURCE_DIR .. "**.c"),
 			(SOURCE_DIR .. "**.natvis"),
 			(SOURCE_DIR .. "**.hlsl*"),
+			(SOURCE_DIR .. "**.editorconfig"),
 		}
 
 		vpaths
