@@ -25,8 +25,7 @@ struct Light
 	float Range;
     int ShadowIndex;
     float InvShadowSize;
-
-    float padding;
+    int VolumetricLighting;
 
     float4 GetColor()
     {

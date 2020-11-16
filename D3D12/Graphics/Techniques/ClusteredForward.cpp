@@ -261,7 +261,8 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 				float FarZ;
 				int FrameIndex;
 				int SsrSamples;
-				IntVector2 padd;
+				int LightCount;
+				int padd;
 				IntVector3 ClusterDimensions;
 				int pad;
 				IntVector2 ClusterSize;
@@ -279,6 +280,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 			frameData.LightGridParams = lightGridParams;
 			frameData.FrameIndex = resources.FrameIndex;
 			frameData.SsrSamples = Tweakables::g_SsrSamples;
+			frameData.LightCount = resources.pLightBuffer->GetDesc().ElementCount;
 			frameData.ViewProjection = resources.pCamera->GetViewProjection();
 			frameData.ViewPosition = Vector4(resources.pCamera->GetPosition());
 

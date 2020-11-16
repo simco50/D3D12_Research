@@ -103,7 +103,8 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& resources)
 				float FarZ;
 				int FrameIndex;
 				int SsrSamples;
-				IntVector2 padd;
+				int LightCount;
+				int padd;
 			} frameData;
 
 			//Camera constants
@@ -114,6 +115,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& resources)
 			frameData.FarZ = resources.pCamera->GetFar();
 			frameData.FrameIndex = resources.FrameIndex;
 			frameData.SsrSamples = Tweakables::g_SsrSamples;
+			frameData.LightCount = resources.pLightBuffer->GetDesc().ElementCount;
 			frameData.ViewProjection = resources.pCamera->GetViewProjection();
 			frameData.ViewPosition = Vector4(resources.pCamera->GetPosition());
 

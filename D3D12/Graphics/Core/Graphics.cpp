@@ -69,7 +69,7 @@ namespace Tweakables
 	float g_SunInclination = 0.579f;
 	float g_SunOrientation = -3.055f;
 	float g_SunTemperature = 5000.0f;
-	float g_SunIntensity = 10.0f;
+	float g_SunIntensity = 3.0f;
 
 	int g_SsrSamples = 16;
 
@@ -1514,7 +1514,7 @@ void Graphics::InitializeAssets(CommandContext& context)
 	}
 
 	{
-		int lightCount = 3;
+		int lightCount = 5;
 		m_Lights.resize(lightCount);
 
 		Vector3 Position(-150, 160, -10);
@@ -1522,12 +1522,21 @@ void Graphics::InitializeAssets(CommandContext& context)
 		Position.Normalize(Direction);
 		m_Lights[0] = Light::Directional(Position, -Direction, 10);
 		m_Lights[0].CastShadows = true;
+		m_Lights[0].VolumetricLighting = true;
 
-		m_Lights[1] = Light::Point(Vector3(0, 10, 0), 100, 5000, Color(1, 0.2f, 0.2f, 1));
+		m_Lights[1] = Light::Spot(Vector3(62, 10, -18), 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1.0f, 0.7f, 0.3f, 1.0f));
 		m_Lights[1].CastShadows = true;
-
-		m_Lights[2] = Light::Spot(Vector3(0, 10, -10), 200, Vector3(0, 0, 1), 90, 70, 5000, Color(1, 0, 0, 1.0f));
+		m_Lights[1].VolumetricLighting = true;
+		m_Lights[2] = Light::Spot(Vector3(-48, 10, 18), 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1.0f, 0.7f, 0.3f, 1.0f));
 		m_Lights[2].CastShadows = true;
+		m_Lights[2].VolumetricLighting = true;
+		m_Lights[3] = Light::Spot(Vector3(-48, 10, -18), 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1.0f, 0.7f, 0.3f, 1.0f));
+		m_Lights[3].CastShadows = true;
+		m_Lights[3].VolumetricLighting = true;
+		m_Lights[4] = Light::Spot(Vector3(62, 10, 18), 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1.0f, 0.7f, 0.3f, 1.0f));
+		m_Lights[4].CastShadows = true;
+		m_Lights[4].VolumetricLighting = true;
+
 
 		m_pLightBuffer = std::make_unique<Buffer>(this, "Lights");
 		m_pLightBuffer->Create(BufferDesc::CreateStructured(lightCount, sizeof(Light), BufferFlag::ShaderResource));
@@ -1869,6 +1878,8 @@ void Graphics::UpdateImGui()
 	ImGui::SameLine(180.0f);
 	ImGui::Text("%dx MSAA", m_SampleCount);
 	ImGui::PlotLines("", m_FrameTimes.data(), (int)m_FrameTimes.size(), m_Frame % m_FrameTimes.size(), 0, 0.0f, 0.03f, ImVec2(ImGui::GetContentRegionAvail().x, 100));
+
+	ImGui::Text("Camera: [%f, %f, %f]", m_pCamera->GetPosition().x, m_pCamera->GetPosition().y, m_pCamera->GetPosition().z);
 
 	if (ImGui::TreeNodeEx("Lighting", ImGuiTreeNodeFlags_DefaultOpen))
 	{
