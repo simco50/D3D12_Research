@@ -310,7 +310,7 @@ void Graphics::Update()
 		}
 		else if (light.Type == LightType::Spot)
 		{
-			Matrix projection = Math::CreatePerspectiveMatrix(2 * acos(light.UmbraAngle * Math::ToRadians), 1.0f, light.Range, 1.0f);
+			Matrix projection = Math::CreatePerspectiveMatrix(light.UmbraAngle * Math::ToRadians, 1.0f, light.Range, 1.0f);
 			shadowData.LightViewProjections[shadowIndex++] = Math::CreateLookToMatrix(light.Position, light.Direction, Vector3::Up) * projection;
 		}
 		else if (light.Type == LightType::Point)
@@ -342,9 +342,9 @@ void Graphics::Update()
 		}
 	}
 
-	if (shadowIndex >= m_ShadowMaps.size())
+	if (shadowIndex > m_ShadowMaps.size())
 	{
-		m_ShadowMaps.resize(shadowIndex + 1);
+		m_ShadowMaps.resize(shadowIndex);
 		int i = 0;
 		for (auto& pShadowMap : m_ShadowMaps)
 		{
