@@ -69,6 +69,7 @@ namespace Tweakables
 	float g_SunInclination = 0.579f;
 	float g_SunOrientation = -3.055f;
 	float g_SunTemperature = 5000.0f;
+	float g_SunIntensity = 10.0f;
 
 	int g_SsrSamples = 16;
 
@@ -141,6 +142,7 @@ void Graphics::Update()
 	float sinphi = sinf(Tweakables::g_SunInclination * Math::PIDIV2);
 	m_Lights[0].Direction = -Vector3(costheta * cosphi, sinphi, sintheta * cosphi);
 	m_Lights[0].Colour = Math::EncodeColor(Math::MakeFromColorTemperature(Tweakables::g_SunTemperature));
+	m_Lights[0].Intensity = Tweakables::g_SunIntensity;
 
 	//m_Lights[1].Position.x = 50 * sin(Time::TotalTime());
 
@@ -1995,6 +1997,8 @@ void Graphics::UpdateImGui()
 	ImGui::SliderFloat("Sun Orientation", &Tweakables::g_SunOrientation, -Math::PI, Math::PI);
 	ImGui::SliderFloat("Sun Inclination", &Tweakables::g_SunInclination, 0, 1);
 	ImGui::SliderFloat("Sun Temperature", &Tweakables::g_SunTemperature, 1000, 15000);
+	ImGui::SliderFloat("Sun Intensity", &Tweakables::g_SunIntensity, 0, 30);
+	
 
 	ImGui::Text("Shadows");
 	ImGui::SliderInt("Shadow Cascades", &Tweakables::g_ShadowCascades, 1, 4);
