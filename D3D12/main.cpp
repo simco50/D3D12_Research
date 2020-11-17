@@ -209,6 +209,8 @@ private:
 
 	HWND MakeWindow(HINSTANCE hInstance, const char* pTitle)
 	{
+		::SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_SYSTEM_AWARE);
+
 		WNDCLASSEX wc{};
 
 		wc.cbSize = sizeof(WNDCLASSEX);

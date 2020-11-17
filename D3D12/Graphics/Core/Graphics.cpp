@@ -64,7 +64,7 @@ namespace Tweakables
 	bool g_VisualizeLights = false;
 	bool g_VisualizeLightDensity = false;
 	bool g_TAA = true;
-	bool g_TestTAA = true;
+	bool g_TestTAA = false;
 
 	float g_SunInclination = 0.579f;
 	float g_SunOrientation = -3.055f;

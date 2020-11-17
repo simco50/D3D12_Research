@@ -8,16 +8,24 @@
 #define HISTORY_RESOLVE_BILINEAR 0
 #define HISTORY_RESOLVE_CATMULL_ROM 1
 
+#define COLOR_SPACE_RGB 0
+#define COLOR_SPACE_YCOCG 1
+
 #define MIN_BLEND_FACTOR 0.05
 #define MAX_BLEND_FACTOR 0.12
 
+#ifndef TAA_TEST
+#define TAA_TEST 0
+#endif
+
+#define TAA_COLOR_SPACE             COLOR_SPACE_YCOCG           // Color space to use for neighborhood clamping
 #define TAA_HISTORY_REJECT_METHOD   HISTORY_REJECT_CLIP         // Use neighborhood clipping to reject history samples
 #define TAA_RESOLVE_METHOD          HISTORY_RESOLVE_CATMULL_ROM // History resolve filter
 #define TAA_REPROJECT               1                           // Use per pixel velocity to reproject
 #define TAA_TONEMAP                 0                           // Tonemap before resolving history to prevent high luminance pixels from overpowering
 #define TAA_AABB_ROUNDED            1                           // Use combine 3x3 neighborhood with plus-pattern neighborhood
 #define TAA_VELOCITY_CORRECT        0                           // Reduce blend factor when the subpixel motion is high to reduce blur under motion
-#define TAA_DEBUG_RED_HISTORY       0
+#define TAA_DEBUG_RED_HISTORY       TAA_TEST
 #define TAA_LUMINANCE_WEIGHT        0                           // [Lottes]
 
 #define RootSig "CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \
@@ -67,9 +75,31 @@ float4 ClipAABB(float3 aabb_min, float3 aabb_max, float4 p, float4 q)
     }
 }
 
+float3 TransformColor(float3 color)
+{
+    #if TAA_COLOR_SPACE == COLOR_SPACE_RGB
+    return color;
+#elif TAA_COLOR_SPACE == COLOR_SPACE_YCOCG
+    return RGB_to_YCoCg(color);
+#else
+    #error No color space defined
+#endif
+}
+
+float3 ResolveColor(float3 color)
+{
+#if TAA_COLOR_SPACE == COLOR_SPACE_RGB
+    return color;
+#elif TAA_COLOR_SPACE == COLOR_SPACE_YCOCG
+    return YCoCg_to_RGB(color);
+#else
+    #error No color space defined
+#endif
+}
+
 float3 SampleColor(Texture2D tex, SamplerState textureSampler, float2 uv)
 {
-    return tex.SampleLevel(textureSampler, uv, 0).rgb;
+    return TransformColor(tex.SampleLevel(textureSampler, uv, 0).rgb);
 }
 
 // The following code is licensed under the MIT license: https://gist.github.com/TheRealMJP/bc503b0b87b643d3505d41eab8b332ae
@@ -122,7 +152,7 @@ float4 SampleTextureCatmullRom(in Texture2D<float4> tex, in SamplerState texture
     result += tex.SampleLevel(textureSampler, float2(texPos12.x, texPos3.y), 0.0f) * w12.x * w3.y;
     result += tex.SampleLevel(textureSampler, float2(texPos3.x, texPos3.y), 0.0f) * w3.x * w3.y;
 
-    return result;
+    return float4(TransformColor(result.rgb), result.a);
 }
 
 [RootSignature(RootSig)]
@@ -181,7 +211,7 @@ void CSMain(uint3 ThreadId : SV_DISPATCHTHREADID)
 
 #if TAA_DEBUG_RED_HISTORY
     // DEBUG: Use red history to debug how correct neighborhood clamp is
-    prevColor = float3(1,0,0);
+    prevColor = TransformColor(float3(1,0,0));
 #endif
 
 #if TAA_HISTORY_REJECT_METHOD == HISTORY_REJECT_CLAMP
@@ -216,6 +246,8 @@ void CSMain(uint3 ThreadId : SV_DISPATCHTHREADID)
 #if TAA_TONEMAP
     currColor = InverseReinhard(currColor);
 #endif
+
+    currColor = ResolveColor(currColor);
 
     uOutColor[pixelIndex] = float4(currColor, 1);
 }
