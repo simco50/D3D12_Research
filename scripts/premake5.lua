@@ -1,4 +1,4 @@
-require "winrt"
+require "uwp"
 
 ENGINE_NAME = "D3D12"
 ROOT = "../"
@@ -48,12 +48,13 @@ workspace (ENGINE_NAME)
 		includedirs { "$(ProjectDir)", "$(ProjectDir)External/" }
 
 		if WITH_UWP then 
-			system "windowsuniversal"
+			system "uwp"
 			defines { "PLATFORM_UWP=1" }
 			consumewinrtextension "true"
 			systemversion (WIN_SDK)
 			defaultlanguage "en-GB"
 			certificatefile "D3D12_TemporaryKey.pfx"
+			generatewinmd "true"
 
 			filter ("files:" ..(SOURCE_DIR .. "Resources/**"))
 				deploy "true"
