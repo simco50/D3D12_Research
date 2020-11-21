@@ -117,6 +117,13 @@ void Graphics::Update()
 
 	PROFILE_BEGIN("Update Game State");
 
+#if 0
+	Vector3 pos = m_pCamera->GetPosition();
+	pos.x = 48;
+	pos.y = sin(5*Time::TotalTime()) * 4 + 84;
+	pos.z = -2.6f;
+	m_pCamera->SetPosition(pos);
+#endif
 	m_pCamera->Update();
 
 	if (Input::Instance().IsKeyPressed('U'))

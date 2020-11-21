@@ -25,7 +25,7 @@
 #define TAA_TONEMAP                 0                           // Tonemap before resolving history to prevent high luminance pixels from overpowering
 #define TAA_AABB_ROUNDED            1                           // Use combine 3x3 neighborhood with plus-pattern neighborhood
 #define TAA_VELOCITY_CORRECT        0                           // Reduce blend factor when the subpixel motion is high to reduce blur under motion
-#define TAA_DEBUG_RED_HISTORY       TAA_TEST
+#define TAA_DEBUG_RED_HISTORY       0
 #define TAA_LUMINANCE_WEIGHT        0                           // [Lottes]
 
 #define RootSig "CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \
@@ -193,20 +193,52 @@ void CSMain(uint3 ThreadId : SV_DISPATCHTHREADID)
 #endif
 #endif
 
-    float2 historyUV = texCoord;
+    float2 uvReproj = texCoord;
 #if TAA_REPROJECT
-    float depth = tDepth.SampleLevel(sPointSampler, texCoord, 0).r;
-    float4 pos = float4(texCoord, depth, 1);
+
+    float depth = tDepth.SampleLevel(sPointSampler, uvReproj, 0).r;
+
+#if TAA_TEST
+    const float crossDilation = 2;
+    float4 crossDepths;
+    crossDepths.x = tDepth.SampleLevel(sPointSampler, uvReproj + float2(-crossDilation, -crossDilation) * dxdy, 0).r;
+    crossDepths.y = tDepth.SampleLevel(sPointSampler, uvReproj + float2(crossDilation, -crossDilation) * dxdy, 0).r;
+    crossDepths.z = tDepth.SampleLevel(sPointSampler, uvReproj + float2(-crossDilation, crossDilation) * dxdy, 0).r;
+    crossDepths.w = tDepth.SampleLevel(sPointSampler, uvReproj + float2(crossDilation, crossDilation) * dxdy, 0).r;
+    if(crossDepths.x > depth)
+    {
+        depth = crossDepths.x;
+        uvReproj = texCoord + float2(-crossDilation, -crossDilation) * dxdy;
+    }
+    if(crossDepths.y > depth)
+    {
+        depth = crossDepths.y;
+        uvReproj = texCoord + float2(crossDilation, -crossDilation) * dxdy;
+    }
+    if(crossDepths.z > depth)
+    {
+        depth = crossDepths.z;
+        uvReproj = texCoord + float2(-crossDilation, crossDilation) * dxdy;
+    }
+    if(crossDepths.w > depth)
+    {
+        depth = crossDepths.w;
+        uvReproj = texCoord + float2(crossDilation, crossDilation) * dxdy;
+    }
+#endif
+
+    float4 pos = float4(uvReproj, depth, 1);
     float4 prevPos = mul(pos, cParameters.Reprojection);
     prevPos.xyz /= prevPos.w;
-    historyUV += (prevPos - pos).xy - cParameters.Jitter * dxdy;
+    float2 velocity = (prevPos - pos).xy;
+    uvReproj = texCoord + velocity;
 #endif
 
 #if TAA_RESOLVE_METHOD == HISTORY_RESOLVE_CATMULL_ROM //Karis Siggraph 2014 - Shaped neighborhood clamp by averaging 2 neighborhoods
     // Catmull Rom filter to avoid blurry result from billinear filter
-    float3 prevColor = SampleTextureCatmullRom(tPreviousColor, sLinearSampler, historyUV, dimensions).rgb;
+    float3 prevColor = SampleTextureCatmullRom(tPreviousColor, sLinearSampler, uvReproj, dimensions).rgb;
 #elif TAA_RESOLVE_METHOD == HISTORY_RESOLVE_BILINEAR
-    float3 prevColor = SampleColor(tPreviousColor, sLinearSampler, historyUV);
+    float3 prevColor = SampleColor(tPreviousColor, sLinearSampler, uvReproj);
 #endif
 
 #if TAA_DEBUG_RED_HISTORY
@@ -228,8 +260,13 @@ void CSMain(uint3 ThreadId : SV_DISPATCHTHREADID)
 #endif
 
 #if TAA_LUMINANCE_WEIGHT // feedback weight from unbiased luminance diff (TLottes)
+#if TAA_COLOR_SPACE == COLOR_SPACE_RGB
     float lum0 = GetLuminance(currColor);
     float lum1 = GetLuminance(prevColor);
+#else
+    float lum0 = currColor.x;
+    float lum1 = prevColor.x;
+#endif
     float unbiased_diff = abs(lum0 - lum1) / max(lum0, max(lum1, 0.2));
     float unbiased_weight = unbiased_diff;
     float unbiased_weight_sqr = unbiased_weight * unbiased_weight;
