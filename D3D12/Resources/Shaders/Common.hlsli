@@ -201,6 +201,16 @@ float Square(float x)
     return x * x;
 }
 
+float2 Square(float2 x)
+{
+    return x * x;
+}
+
+float3 Square(float3 x)
+{
+    return x * x;
+}
+
 //This is still not totally exact as pow() has imprecisions
 float SrgbToLinear(float y)
 {
