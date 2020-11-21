@@ -27,6 +27,7 @@
 #define TAA_VELOCITY_CORRECT        0                           // Reduce blend factor when the subpixel motion is high to reduce blur under motion
 #define TAA_DEBUG_RED_HISTORY       0
 #define TAA_LUMINANCE_WEIGHT        0                           // [Lottes]
+#define TAA_DILATE_VELOCITY         0
 
 #define RootSig "CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \
                 "DescriptorTable(UAV(u0, numDescriptors = 1), visibility=SHADER_VISIBILITY_ALL), " \
@@ -36,7 +37,6 @@
 
 struct ShaderParameters
 {
-    float4x4 Reprojection;
     float2 InvScreenDimensions;
     float2 Jitter;
 };
@@ -194,11 +194,11 @@ void CSMain(uint3 ThreadId : SV_DISPATCHTHREADID)
 #endif
 
     float2 uvReproj = texCoord;
-#if TAA_REPROJECT
 
+#if TAA_REPROJECT
     float depth = tDepth.SampleLevel(sPointSampler, uvReproj, 0).r;
 
-#if TAA_TEST
+#if TAA_DILATE_VELOCITY
     const float crossDilation = 2;
     float4 crossDepths;
     crossDepths.x = tDepth.SampleLevel(sPointSampler, uvReproj + float2(-crossDilation, -crossDilation) * dxdy, 0).r;
@@ -227,10 +227,7 @@ void CSMain(uint3 ThreadId : SV_DISPATCHTHREADID)
     }
 #endif
 
-    float4 pos = float4(uvReproj, depth, 1);
-    float4 prevPos = mul(pos, cParameters.Reprojection);
-    prevPos.xyz /= prevPos.w;
-    float2 velocity = (prevPos - pos).xy;
+    float2 velocity = tVelocity.SampleLevel(sPointSampler, uvReproj, 0).xy;
     uvReproj = texCoord + velocity;
 #endif
 

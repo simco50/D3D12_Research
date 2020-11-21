@@ -555,6 +555,53 @@ void Graphics::Update()
 			});
 	}
 
+	// Camera velocity
+	if (Tweakables::g_TAA)
+	{
+		RGPassBuilder cameraMotion = graph.AddPass("Camera Motion");
+		cameraMotion.Bind([=](CommandContext& renderContext, const RGPassResources& resources)
+			{
+				renderContext.InsertResourceBarrier(GetResolvedDepthStencil(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+				renderContext.InsertResourceBarrier(m_pVelocity.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+				renderContext.SetComputeRootSignature(m_pCameraMotionRS.get());
+				renderContext.SetPipelineState(m_pCameraMotionPSO.get());
+
+				struct Parameters
+				{
+					Matrix ReprojectionMatrix;
+					Vector2 InvScreenDimensions;
+				} parameters;
+
+				Matrix preMult = Matrix(
+					Vector4(2.0f, 0.0f, 0.0f, 0.0f),
+					Vector4(0.0f, -2.0f, 0.0f, 0.0f),
+					Vector4(0.0f, 0.0f, 1.0f, 0.0f),
+					Vector4(-1.0f, 1.0f, 0.0f, 1.0f)
+				);
+
+				Matrix postMult = Matrix(
+					Vector4(1.0f / 2.0f, 0.0f, 0.0f, 0.0f),
+					Vector4(0.0f, -1.0f / 2.0f, 0.0f, 0.0f),
+					Vector4(0.0f, 0.0f, 1.0f, 0.0f),
+					Vector4(1.0f / 2.0f, 1.0f / 2.0f, 0.0f, 1.0f));
+
+				parameters.ReprojectionMatrix = preMult * m_pCamera->GetViewProjection().Invert() * m_pCamera->GetPreviousViewProjection() * postMult;
+				parameters.InvScreenDimensions = Vector2(1.0f / m_WindowWidth, 1.0f / m_WindowHeight);
+
+				renderContext.SetComputeDynamicConstantBufferView(0, &parameters, sizeof(Parameters));
+
+				renderContext.SetDynamicDescriptor(1, 0, m_pVelocity->GetUAV());
+				renderContext.SetDynamicDescriptor(2, 0, GetResolvedDepthStencil()->GetSRV());
+
+				int dispatchGroupsX = Math::DivideAndRoundUp(m_WindowWidth, 8);
+				int dispatchGroupsY = Math::DivideAndRoundUp(m_WindowHeight, 8);
+				renderContext.Dispatch(dispatchGroupsX, dispatchGroupsY);
+			});
+	}
+
+	m_pVisualizeTexture = m_pVelocity.get();
+
 	m_pParticles->Simulate(graph, GetResolvedDepthStencil(), *m_pCamera);
 
 	if (Tweakables::g_RaytracedAO)
@@ -769,27 +816,10 @@ void Graphics::Update()
 
 				struct Parameters
 				{
-					Matrix ReprojectionMatrix;
 					Vector2 InvScreenDimensions;
 					Vector2 Jitter;
 				} parameters;
 
-				// UV -> NDC
-				Matrix preMult = Matrix(
-					Vector4(2.0f, 0.0f, 0.0f, 0.0f),
-					Vector4(0.0f, -2.0f, 0.0f, 0.0f),
-					Vector4(0.0f, 0.0f, 1.0f, 0.0f),
-					Vector4(-1.0f, 1.0f, 0.0f, 1.0f)
-				);
-
-				// NDC - UV
-				Matrix postMult = Matrix(
-					Vector4(1.0f / 2.0f, 0.0f, 0.0f, 0.0f),
-					Vector4(0.0f, -1.0f / 2.0f, 0.0f, 0.0f),
-					Vector4(0.0f, 0.0f, 1.0f, 0.0f),
-					Vector4(1.0f / 2.0f, 1.0f / 2.0f, 0.0f, 1.0f));
-
-				parameters.ReprojectionMatrix = preMult * m_pCamera->GetViewProjection().Invert() * m_pCamera->GetPreviousViewProjection() * postMult;
 				parameters.InvScreenDimensions = Vector2(1.0f / m_WindowWidth, 1.0f / m_WindowHeight);
 				parameters.Jitter.x = m_pCamera->GetPreviousJitter().x - m_pCamera->GetJitter().x;
 				parameters.Jitter.y = -(m_pCamera->GetPreviousJitter().y - m_pCamera->GetJitter().y);
@@ -1728,6 +1758,19 @@ void Graphics::InitializePipelines()
 		m_pAverageLuminancePSO->SetRootSignature(m_pAverageLuminanceRS->GetRootSignature());
 		m_pAverageLuminancePSO->SetComputeShader(computeShader);
 		m_pAverageLuminancePSO->Finalize("Average Luminance");
+	}
+
+	//Camera motion
+	{
+		Shader computeShader("CameraMotionVectors.hlsl", ShaderType::Compute, "CSMain");
+
+		m_pCameraMotionRS = std::make_unique<RootSignature>(this);
+		m_pCameraMotionRS->FinalizeFromShader("Camera Motion", computeShader);
+
+		m_pCameraMotionPSO = std::make_unique<PipelineState>(this);
+		m_pCameraMotionPSO->SetComputeShader(computeShader);
+		m_pCameraMotionPSO->SetRootSignature(m_pCameraMotionRS->GetRootSignature());
+		m_pCameraMotionPSO->Finalize("Camera Motion");
 	}
 
 	//Tonemapping
