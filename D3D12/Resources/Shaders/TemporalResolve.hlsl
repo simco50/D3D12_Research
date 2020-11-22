@@ -28,7 +28,7 @@
 #define TAA_VELOCITY_CORRECT        0                           // Reduce blend factor when the subpixel motion is high to reduce blur under motion
 #define TAA_DEBUG_RED_HISTORY       0
 #define TAA_LUMINANCE_WEIGHT        0                           // [Lottes]
-#define TAA_DILATE_VELOCITY         0
+#define TAA_DILATE_VELOCITY         1
 
 #define RootSig "CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \
                 "DescriptorTable(UAV(u0, numDescriptors = 1), visibility=SHADER_VISIBILITY_ALL), " \
@@ -156,9 +156,21 @@ float4 SampleTextureCatmullRom(in Texture2D<float4> tex, in SamplerState texture
     return float4(TransformColor(result.rgb), result.a);
 }
 
+#define THREAD_GROUP_ROW_SIZE 8
+#define THREAD_GROUP_SIZE (THREAD_GROUP_ROW_SIZE * THREAD_GROUP_ROW_SIZE)
+#define GSM_ROW_SIZE (1 + THREAD_GROUP_ROW_SIZE + 1)
+#define GSM_SIZE (GSM_ROW_SIZE * GSM_ROW_SIZE)
+
+groupshared float3 gsColors[GSM_SIZE];
+groupshared float gsDepths[GSM_SIZE];
+
 [RootSignature(RootSig)]
-[numthreads(8, 8, 1)]
-void CSMain(uint3 ThreadId : SV_DISPATCHTHREADID)
+[numthreads(THREAD_GROUP_ROW_SIZE, THREAD_GROUP_ROW_SIZE, 1)]
+void CSMain(
+    uint3 ThreadId : SV_DISPATCHTHREADID, 
+    uint GroupIndex : SV_GROUPINDEX, 
+    uint3 GroupThreadId : SV_GROUPTHREADID,
+    uint3 GroupId : SV_GROUPID)
 {
     const float2 dxdy = cParameters.InvScreenDimensions;
     uint2 pixelIndex = ThreadId.xy;
@@ -166,19 +178,32 @@ void CSMain(uint3 ThreadId : SV_DISPATCHTHREADID)
     float2 dimensions;
     tCurrentColor.GetDimensions(dimensions.x, dimensions.y);
 
-    float3 cc = SampleColor(tCurrentColor, sPointSampler, texCoord);
+    int gsLocation = GroupThreadId.x + GroupThreadId.y * GSM_ROW_SIZE + GSM_ROW_SIZE + 1;
+    int gsPrefetchLocation0 = GroupThreadId.x + GroupThreadId.y * THREAD_GROUP_ROW_SIZE;
+    int gsPrefetchLocation1 = gsPrefetchLocation0 + GSM_SIZE - THREAD_GROUP_SIZE;
+    int2 prefetchLocation0 = int2(pixelIndex.x & -8, pixelIndex.y & -8) - 1 + int2(gsPrefetchLocation0 % 10, gsPrefetchLocation0 / 10);
+    int2 prefetchLocation1 = int2(pixelIndex.x & -8, pixelIndex.y & -8) - 1 + int2(gsPrefetchLocation1 % 10, gsPrefetchLocation1 / 10);
+
+    gsColors[gsPrefetchLocation0] = TransformColor(tCurrentColor[prefetchLocation0].rgb);
+    gsColors[gsPrefetchLocation1] = TransformColor(tCurrentColor[prefetchLocation1].rgb);
+    gsDepths[gsPrefetchLocation0] = tDepth[prefetchLocation0].r;
+    gsDepths[gsPrefetchLocation1] = tDepth[prefetchLocation1].r;
+
+    GroupMemoryBarrierWithGroupSync();
+
+    float3 cc = gsColors[gsLocation];
     float3 currColor = cc;
 
 #if TAA_HISTORY_REJECT_METHOD != HISTORY_REJECT_NONE
     // Get a 3x3 neighborhood to clip/clamp against
-    float3 lt = SampleColor(tCurrentColor, sPointSampler, texCoord + float2(-dxdy.x, -dxdy.y));
-    float3 ct = SampleColor(tCurrentColor, sPointSampler, texCoord + float2(0, -dxdy.y));
-    float3 rt = SampleColor(tCurrentColor, sPointSampler, texCoord + float2(dxdy.x, -dxdy.y));
-    float3 lc = SampleColor(tCurrentColor, sPointSampler, texCoord + float2(-dxdy.x, 0));
-    float3 rc = SampleColor(tCurrentColor, sPointSampler, texCoord + float2(dxdy.x, 0));
-    float3 lb = SampleColor(tCurrentColor, sPointSampler, texCoord + float2(-dxdy.x, dxdy.y));
-    float3 cb = SampleColor(tCurrentColor, sPointSampler, texCoord + float2(0, dxdy.y));
-    float3 rb = SampleColor(tCurrentColor, sPointSampler, texCoord + float2(dxdy.x, dxdy.y));
+    float3 lt = gsColors[gsLocation - 11];
+    float3 ct = gsColors[gsLocation - 10];
+    float3 rt = gsColors[gsLocation - 9];
+    float3 lc = gsColors[gsLocation - 1];
+    float3 rc = gsColors[gsLocation + 1];
+    float3 lb = gsColors[gsLocation + 9];
+    float3 cb = gsColors[gsLocation + 10];
+    float3 rb = gsColors[gsLocation + 11];
 
 #if TAA_HISTORY_REJECT_METHOD == HISTORY_REJECT_CLAMP || TAA_HISTORY_REJECT_METHOD == HISTORY_REJECT_CLIP
     float3 aabb_min = min(lt, min(ct, min(rt, min(lc, min(cc, min(rc, min(lb, min(cb, rb))))))));
@@ -216,34 +241,29 @@ void CSMain(uint3 ThreadId : SV_DISPATCHTHREADID)
 #if TAA_DILATE_VELOCITY
     // [Karis14] - Use closest pixel to move edge along
     const float crossDilation = 2;
-    float4 crossDepths;
-    crossDepths.x = tDepth.SampleLevel(sPointSampler, uvReproj + float2(-crossDilation, -crossDilation) * dxdy, 0).r;
-    crossDepths.y = tDepth.SampleLevel(sPointSampler, uvReproj + float2(crossDilation, -crossDilation) * dxdy, 0).r;
-    crossDepths.z = tDepth.SampleLevel(sPointSampler, uvReproj + float2(-crossDilation, crossDilation) * dxdy, 0).r;
-    crossDepths.w = tDepth.SampleLevel(sPointSampler, uvReproj + float2(crossDilation, crossDilation) * dxdy, 0).r;
-    if(crossDepths.x > depth)
+    float4 crossDepths = float4(
+        gsDepths[gsLocation - 11], 
+        gsDepths[gsLocation - 9], 
+        gsDepths[gsLocation + 9], 
+        gsDepths[gsLocation + 11]
+    );
+    float3 minOffset = float3(-1.0f, -1.0f, crossDepths.x);
+    if(crossDepths.y > minOffset.z)
     {
-        depth = crossDepths.x;
-        uvReproj = texCoord + float2(-crossDilation, -crossDilation) * dxdy;
+        minOffset = float3(1.0f, -1.0f, crossDepths.y);
     }
-    if(crossDepths.y > depth)
+    if(crossDepths.z > minOffset.z)
     {
-        depth = crossDepths.y;
-        uvReproj = texCoord + float2(crossDilation, -crossDilation) * dxdy;
+        minOffset = float3(-1.0f, 1.0f, crossDepths.z);
     }
-    if(crossDepths.z > depth)
+    if(crossDepths.w > minOffset.z)
     {
-        depth = crossDepths.z;
-        uvReproj = texCoord + float2(-crossDilation, crossDilation) * dxdy;
+        minOffset = float3(1.0f, 1.0f, crossDepths.w);
     }
-    if(crossDepths.w > depth)
-    {
-        depth = crossDepths.w;
-        uvReproj = texCoord + float2(crossDilation, crossDilation) * dxdy;
-    }
-#endif // TAA_DILATE_VELOCITY
-
+    float2 velocity = tVelocity.SampleLevel(sPointSampler, uvReproj + minOffset.xy * dxdy, 0).xy;
+#else
     float2 velocity = tVelocity.SampleLevel(sPointSampler, uvReproj, 0).xy;
+#endif // TAA_DILATE_VELOCITY
     uvReproj = texCoord + velocity;
 #endif // TAA_REPROJECT
 
@@ -261,9 +281,11 @@ void CSMain(uint3 ThreadId : SV_DISPATCHTHREADID)
 
 #if TAA_HISTORY_REJECT_METHOD == HISTORY_REJECT_CLAMP
     prevColor = clamp(prevColor, aabb_min, aabb_max);
-#elif TAA_HISTORY_REJECT_METHOD == HISTORY_REJECT_CLIP //Karis Siggraph 2014 - Clip instead of clamp
+#elif TAA_HISTORY_REJECT_METHOD == HISTORY_REJECT_CLIP 
+    // [Karis2014] - Clip instead of clamp
     prevColor = ClipAABB(aabb_min, aabb_max, float4(aabb_avg, 1), float4(prevColor, 1)).xyz;
 #elif TAA_HISTORY_REJECT_METHOD == HISTORY_REJECT_VARIANCE_CLIP
+    // [Salvi16]
     prevColor = ClipAABB(aabb_min, aabb_max, float4(aabb_avg, 1), float4(prevColor, 1)).xyz;
 #endif // TAA_HISTORY_REJECT_METHOD
 
