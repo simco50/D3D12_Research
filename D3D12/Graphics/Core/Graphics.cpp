@@ -600,8 +600,6 @@ void Graphics::Update()
 			});
 	}
 
-	m_pVisualizeTexture = m_pVelocity.get();
-
 	m_pParticles->Simulate(graph, GetResolvedDepthStencil(), *m_pCamera);
 
 	if (Tweakables::g_RaytracedAO)

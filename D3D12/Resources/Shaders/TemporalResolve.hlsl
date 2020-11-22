@@ -103,6 +103,36 @@ float3 SampleColor(Texture2D tex, SamplerState textureSampler, float2 uv)
     return TransformColor(tex.SampleLevel(textureSampler, uv, 0).rgb);
 }
 
+// [Jiminez16] - 5 tap cubic texture filter
+float3 FilterHistory(Texture2D tex, SamplerState textureSampler, float2 texcoord, float2 dimensions)
+{
+    float2 position = dimensions * texcoord;
+    float2 centerPosition = floor(position - 0.5) + 0.5;
+    float2 f = position - centerPosition;
+    float2 f2 = f * f;
+    float2 f3 = f * f2;
+
+    const float SHARPNESS = 50.0f;
+    float c = SHARPNESS / 100.0;
+    float2 w0 =        -c  * f3 +  2.0 * c         * f2 - c * f;
+    float2 w1 =  (2.0 - c) * f3 - (3.0 - c)        * f2         + 1.0;
+    float2 w2 = -(2.0 - c) * f3 + (3.0 -  2.0 * c) * f2 + c * f;
+    float2 w3 =         c  * f3 -                c * f2;
+
+    float2 w12 = w1 + w2;
+    float2 tc12 = cParameters.InvScreenDimensions * (centerPosition + w2 / w12);
+    float3 centerColor = SampleColor(tex, textureSampler, float2(tc12.x, tc12.y));
+
+    float2 tc0 = cParameters.InvScreenDimensions * (centerPosition - 1.0);
+    float2 tc3 = cParameters.InvScreenDimensions * (centerPosition + 2.0);
+    float3 color = SampleColor(tex, textureSampler, float2(tc12.x, tc0.y )) * (w12.x * w0.y ) +
+                   SampleColor(tex, textureSampler, float2(tc0.x,  tc12.y)) * (w0.x  * w12.y) +
+                   centerColor                                              * (w12.x * w12.y) +
+                   SampleColor(tex, textureSampler, float2(tc3.x,  tc12.y)) * (w3.x  * w12.y) +
+                   SampleColor(tex, textureSampler, float2(tc12.x, tc3.y )) * (w12.x * w3.y );
+    return color;
+}
+
 // The following code is licensed under the MIT license: https://gist.github.com/TheRealMJP/bc503b0b87b643d3505d41eab8b332ae
 // Samples a texture with Catmull-Rom filtering, using 9 texture fetches instead of 16.
 // See http://vec3.ca/bicubic-filtering-in-fewer-taps/ for more details
