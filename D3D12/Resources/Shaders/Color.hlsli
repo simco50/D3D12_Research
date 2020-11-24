@@ -73,11 +73,11 @@ float3 YCoCg_to_RGB(float3 c)
 	// R = Y + Co - Cg
 	// G = Y + Cg
 	// B = Y - Co - Cg
-	return saturate(float3(
+	return float3(
 		c.x + c.y - c.z,
 		c.x + c.z,
 		c.x - c.y - c.z
-	));
+	);
 }
 
 

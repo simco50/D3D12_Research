@@ -265,8 +265,13 @@ private:
 	std::vector<std::unique_ptr<Texture>> m_ReductionTargets;
 	std::vector<std::unique_ptr<Buffer>> m_ReductionReadbackTargets;
 
+	//Camera motion
+	std::unique_ptr<PipelineState> m_pCameraMotionPSO;
+	std::unique_ptr<RootSignature> m_pCameraMotionRS;
+
 	//TAA
 	std::unique_ptr<PipelineState> m_pTemporalResolvePSO;
+	std::unique_ptr<PipelineState> m_pTemporalResolveTestPSO;
 	std::unique_ptr<RootSignature> m_pTemporalResolveRS;
 
 	//Sky

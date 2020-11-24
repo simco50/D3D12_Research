@@ -64,10 +64,12 @@ namespace Tweakables
 	bool g_VisualizeLights = false;
 	bool g_VisualizeLightDensity = false;
 	bool g_TAA = true;
+	bool g_TestTAA = false;
 
 	float g_SunInclination = 0.579f;
 	float g_SunOrientation = -3.055f;
 	float g_SunTemperature = 5000.0f;
+	float g_SunIntensity = 3.0f;
 
 	int g_SsrSamples = 16;
 
@@ -115,6 +117,13 @@ void Graphics::Update()
 
 	PROFILE_BEGIN("Update Game State");
 
+#if 0
+	Vector3 pos = m_pCamera->GetPosition();
+	pos.x = 48;
+	pos.y = sin(5*Time::TotalTime()) * 4 + 84;
+	pos.z = -2.6f;
+	m_pCamera->SetPosition(pos);
+#endif
 	m_pCamera->Update();
 
 	if (Input::Instance().IsKeyPressed('U'))
@@ -140,6 +149,7 @@ void Graphics::Update()
 	float sinphi = sinf(Tweakables::g_SunInclination * Math::PIDIV2);
 	m_Lights[0].Direction = -Vector3(costheta * cosphi, sinphi, sintheta * cosphi);
 	m_Lights[0].Colour = Math::EncodeColor(Math::MakeFromColorTemperature(Tweakables::g_SunTemperature));
+	m_Lights[0].Intensity = Tweakables::g_SunIntensity;
 
 	//m_Lights[1].Position.x = 50 * sin(Time::TotalTime());
 
@@ -307,7 +317,7 @@ void Graphics::Update()
 		}
 		else if (light.Type == LightType::Spot)
 		{
-			Matrix projection = Math::CreatePerspectiveMatrix(2 * acos(light.UmbraAngle * Math::ToRadians), 1.0f, light.Range, 1.0f);
+			Matrix projection = Math::CreatePerspectiveMatrix(light.UmbraAngle * Math::ToRadians, 1.0f, light.Range, 1.0f);
 			shadowData.LightViewProjections[shadowIndex++] = Math::CreateLookToMatrix(light.Position, light.Direction, Vector3::Up) * projection;
 		}
 		else if (light.Type == LightType::Point)
@@ -339,9 +349,9 @@ void Graphics::Update()
 		}
 	}
 
-	if (shadowIndex >= m_ShadowMaps.size())
+	if (shadowIndex > m_ShadowMaps.size())
 	{
-		m_ShadowMaps.resize(shadowIndex + 1);
+		m_ShadowMaps.resize(shadowIndex);
 		int i = 0;
 		for (auto& pShadowMap : m_ShadowMaps)
 		{
@@ -542,6 +552,51 @@ void Graphics::Update()
 		depthResolve.Bind([=](CommandContext& renderContext, const RGPassResources& resources)
 			{
 				renderContext.CopyTexture(GetDepthStencil(), GetResolvedDepthStencil());
+			});
+	}
+
+	// Camera velocity
+	if (Tweakables::g_TAA)
+	{
+		RGPassBuilder cameraMotion = graph.AddPass("Camera Motion");
+		cameraMotion.Bind([=](CommandContext& renderContext, const RGPassResources& resources)
+			{
+				renderContext.InsertResourceBarrier(GetResolvedDepthStencil(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+				renderContext.InsertResourceBarrier(m_pVelocity.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+				renderContext.SetComputeRootSignature(m_pCameraMotionRS.get());
+				renderContext.SetPipelineState(m_pCameraMotionPSO.get());
+
+				struct Parameters
+				{
+					Matrix ReprojectionMatrix;
+					Vector2 InvScreenDimensions;
+				} parameters;
+
+				Matrix preMult = Matrix(
+					Vector4(2.0f, 0.0f, 0.0f, 0.0f),
+					Vector4(0.0f, -2.0f, 0.0f, 0.0f),
+					Vector4(0.0f, 0.0f, 1.0f, 0.0f),
+					Vector4(-1.0f, 1.0f, 0.0f, 1.0f)
+				);
+
+				Matrix postMult = Matrix(
+					Vector4(1.0f / 2.0f, 0.0f, 0.0f, 0.0f),
+					Vector4(0.0f, -1.0f / 2.0f, 0.0f, 0.0f),
+					Vector4(0.0f, 0.0f, 1.0f, 0.0f),
+					Vector4(1.0f / 2.0f, 1.0f / 2.0f, 0.0f, 1.0f));
+
+				parameters.ReprojectionMatrix = preMult * m_pCamera->GetViewProjection().Invert() * m_pCamera->GetPreviousViewProjection() * postMult;
+				parameters.InvScreenDimensions = Vector2(1.0f / m_WindowWidth, 1.0f / m_WindowHeight);
+
+				renderContext.SetComputeDynamicConstantBufferView(0, &parameters, sizeof(Parameters));
+
+				renderContext.SetDynamicDescriptor(1, 0, m_pVelocity->GetUAV());
+				renderContext.SetDynamicDescriptor(2, 0, GetResolvedDepthStencil()->GetSRV());
+
+				int dispatchGroupsX = Math::DivideAndRoundUp(m_WindowWidth, 8);
+				int dispatchGroupsY = Math::DivideAndRoundUp(m_WindowHeight, 8);
+				renderContext.Dispatch(dispatchGroupsX, dispatchGroupsY);
 			});
 	}
 
@@ -755,31 +810,14 @@ void Graphics::Update()
 				renderContext.InsertResourceBarrier(m_pPreviousColor.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 				
 				renderContext.SetComputeRootSignature(m_pTemporalResolveRS.get());
-				renderContext.SetPipelineState(m_pTemporalResolvePSO.get());
+				renderContext.SetPipelineState(Tweakables::g_TestTAA ? m_pTemporalResolveTestPSO.get() : m_pTemporalResolvePSO.get());
 
 				struct Parameters
 				{
-					Matrix ReprojectionMatrix;
 					Vector2 InvScreenDimensions;
 					Vector2 Jitter;
 				} parameters;
 
-				// UV -> NDC
-				Matrix preMult = Matrix(
-					Vector4(2.0f, 0.0f, 0.0f, 0.0f),
-					Vector4(0.0f, -2.0f, 0.0f, 0.0f),
-					Vector4(0.0f, 0.0f, 1.0f, 0.0f),
-					Vector4(-1.0f, 1.0f, 0.0f, 1.0f)
-				);
-
-				// NDC - UV
-				Matrix postMult = Matrix(
-					Vector4(1.0f / 2.0f, 0.0f, 0.0f, 0.0f),
-					Vector4(0.0f, -1.0f / 2.0f, 0.0f, 0.0f),
-					Vector4(0.0f, 0.0f, 1.0f, 0.0f),
-					Vector4(1.0f / 2.0f, 1.0f / 2.0f, 0.0f, 1.0f));
-
-				parameters.ReprojectionMatrix = preMult * m_pCamera->GetViewProjection().Invert() * m_pCamera->GetPreviousViewProjection() * postMult;
 				parameters.InvScreenDimensions = Vector2(1.0f / m_WindowWidth, 1.0f / m_WindowHeight);
 				parameters.Jitter.x = m_pCamera->GetPreviousJitter().x - m_pCamera->GetJitter().x;
 				parameters.Jitter.y = -(m_pCamera->GetPreviousJitter().y - m_pCamera->GetJitter().y);
@@ -1511,7 +1549,7 @@ void Graphics::InitializeAssets(CommandContext& context)
 	}
 
 	{
-		int lightCount = 3;
+		int lightCount = 5;
 		m_Lights.resize(lightCount);
 
 		Vector3 Position(-150, 160, -10);
@@ -1519,12 +1557,21 @@ void Graphics::InitializeAssets(CommandContext& context)
 		Position.Normalize(Direction);
 		m_Lights[0] = Light::Directional(Position, -Direction, 10);
 		m_Lights[0].CastShadows = true;
+		m_Lights[0].VolumetricLighting = true;
 
-		m_Lights[1] = Light::Point(Vector3(0, 10, 0), 100, 5000, Color(1, 0.2f, 0.2f, 1));
+		m_Lights[1] = Light::Spot(Vector3(62, 10, -18), 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1.0f, 0.7f, 0.3f, 1.0f));
 		m_Lights[1].CastShadows = true;
-
-		m_Lights[2] = Light::Spot(Vector3(0, 10, -10), 200, Vector3(0, 0, 1), 90, 70, 5000, Color(1, 0, 0, 1.0f));
+		m_Lights[1].VolumetricLighting = true;
+		m_Lights[2] = Light::Spot(Vector3(-48, 10, 18), 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1.0f, 0.7f, 0.3f, 1.0f));
 		m_Lights[2].CastShadows = true;
+		m_Lights[2].VolumetricLighting = true;
+		m_Lights[3] = Light::Spot(Vector3(-48, 10, -18), 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1.0f, 0.7f, 0.3f, 1.0f));
+		m_Lights[3].CastShadows = true;
+		m_Lights[3].VolumetricLighting = true;
+		m_Lights[4] = Light::Spot(Vector3(62, 10, 18), 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1.0f, 0.7f, 0.3f, 1.0f));
+		m_Lights[4].CastShadows = true;
+		m_Lights[4].VolumetricLighting = true;
+
 
 		m_pLightBuffer = std::make_unique<Buffer>(this, "Lights");
 		m_pLightBuffer->Create(BufferDesc::CreateStructured(lightCount, sizeof(Light), BufferFlag::ShaderResource));
@@ -1711,6 +1758,19 @@ void Graphics::InitializePipelines()
 		m_pAverageLuminancePSO->Finalize("Average Luminance");
 	}
 
+	//Camera motion
+	{
+		Shader computeShader("CameraMotionVectors.hlsl", ShaderType::Compute, "CSMain");
+
+		m_pCameraMotionRS = std::make_unique<RootSignature>(this);
+		m_pCameraMotionRS->FinalizeFromShader("Camera Motion", computeShader);
+
+		m_pCameraMotionPSO = std::make_unique<PipelineState>(this);
+		m_pCameraMotionPSO->SetComputeShader(computeShader);
+		m_pCameraMotionPSO->SetRootSignature(m_pCameraMotionRS->GetRootSignature());
+		m_pCameraMotionPSO->Finalize("Camera Motion");
+	}
+
 	//Tonemapping
 	{
 		Shader computeShader("Tonemapping.hlsl", ShaderType::Compute, "CSMain");
@@ -1765,14 +1825,23 @@ void Graphics::InitializePipelines()
 
 	//TAA
 	{
-		Shader computeShader("TemporalResolve.hlsl", ShaderType::Compute, "CSMain");
-		m_pTemporalResolveRS = std::make_unique<RootSignature>(this);
-		m_pTemporalResolveRS->FinalizeFromShader("Temporal Resolve", computeShader);
+		{
+			Shader computeShader("TemporalResolve.hlsl", ShaderType::Compute, "CSMain");
+			m_pTemporalResolveRS = std::make_unique<RootSignature>(this);
+			m_pTemporalResolveRS->FinalizeFromShader("Temporal Resolve", computeShader);
 
-		m_pTemporalResolvePSO = std::make_unique<PipelineState>(this);
-		m_pTemporalResolvePSO->SetComputeShader(computeShader);
-		m_pTemporalResolvePSO->SetRootSignature(m_pTemporalResolveRS->GetRootSignature());
-		m_pTemporalResolvePSO->Finalize("Temporal Resolve");
+			m_pTemporalResolvePSO = std::make_unique<PipelineState>(this);
+			m_pTemporalResolvePSO->SetComputeShader(computeShader);
+			m_pTemporalResolvePSO->SetRootSignature(m_pTemporalResolveRS->GetRootSignature());
+			m_pTemporalResolvePSO->Finalize("Temporal Resolve");
+		}
+
+		{
+			Shader computeShader("TemporalResolve.hlsl", ShaderType::Compute, "CSMain", {"TAA_TEST"});
+			m_pTemporalResolveTestPSO = std::make_unique<PipelineState>(*m_pTemporalResolvePSO);
+			m_pTemporalResolveTestPSO->SetComputeShader(computeShader);
+			m_pTemporalResolveTestPSO->Finalize("Temporal Resolve Test");
+		}
 	}
 
 	//Mip generation
@@ -1857,6 +1926,8 @@ void Graphics::UpdateImGui()
 	ImGui::SameLine(180.0f);
 	ImGui::Text("%dx MSAA", m_SampleCount);
 	ImGui::PlotLines("", m_FrameTimes.data(), (int)m_FrameTimes.size(), m_Frame % m_FrameTimes.size(), 0, 0.0f, 0.03f, ImVec2(ImGui::GetContentRegionAvail().x, 100));
+
+	ImGui::Text("Camera: [%f, %f, %f]", m_pCamera->GetPosition().x, m_pCamera->GetPosition().y, m_pCamera->GetPosition().z);
 
 	if (ImGui::TreeNodeEx("Lighting", ImGuiTreeNodeFlags_DefaultOpen))
 	{
@@ -1985,6 +2056,8 @@ void Graphics::UpdateImGui()
 	ImGui::SliderFloat("Sun Orientation", &Tweakables::g_SunOrientation, -Math::PI, Math::PI);
 	ImGui::SliderFloat("Sun Inclination", &Tweakables::g_SunInclination, 0, 1);
 	ImGui::SliderFloat("Sun Temperature", &Tweakables::g_SunTemperature, 1000, 15000);
+	ImGui::SliderFloat("Sun Intensity", &Tweakables::g_SunIntensity, 0, 30);
+	
 
 	ImGui::Text("Shadows");
 	ImGui::SliderInt("Shadow Cascades", &Tweakables::g_ShadowCascades, 1, 4);
@@ -2031,6 +2104,11 @@ void Graphics::UpdateImGui()
 	}
 
 	ImGui::Checkbox("TAA", &Tweakables::g_TAA);
+	ImGui::Checkbox("Test TAA", &Tweakables::g_TestTAA);
+	if (Input::Instance().IsKeyPressed('G'))
+	{
+		Tweakables::g_TestTAA = !Tweakables::g_TestTAA;
+	}
 
 	ImGui::End();
 }

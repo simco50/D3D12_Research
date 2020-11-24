@@ -25,8 +25,7 @@ struct Light
 	float Range;
     int ShadowIndex;
     float InvShadowSize;
-
-    float padding;
+    int VolumetricLighting;
 
     float4 GetColor()
     {
@@ -198,6 +197,16 @@ float Pow5(float x)
 }
 
 float Square(float x)
+{
+    return x * x;
+}
+
+float2 Square(float2 x)
+{
+    return x * x;
+}
+
+float3 Square(float3 x)
 {
     return x * x;
 }
