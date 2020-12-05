@@ -247,22 +247,20 @@ int32 Profiler::GetNextTimerIndex()
 void ProfileNode::RenderImGui(int frameIndex)
 {
 	ImGui::Spacing();
-	ImGui::Columns(3);
-
-	ImGui::PushID(ImGui::GetID(m_Name));
-	ImGui::Text("Event Name");
-	ImGui::NextColumn();
-	ImGui::Text("CPU (ms)");
-	ImGui::NextColumn();
-	ImGui::Text("GPU (ms)");
-	ImGui::NextColumn();
-
-	for (auto& pChild : m_Children)
+	if (ImGui::BeginTable("Profiling", 3, ImGuiTableFlags_None))
 	{
-		pChild->RenderNodeImgui(frameIndex);
+		ImGui::TableSetupColumn("Event", ImGuiTableColumnFlags_None, 3);
+		ImGui::TableSetupColumn("CPU (ms)", ImGuiTableColumnFlags_None, 1);
+		ImGui::TableSetupColumn("GPU (ms)", ImGuiTableColumnFlags_None, 1);
+		ImGui::TableHeadersRow();
+
+		for (auto& pChild : m_Children)
+		{
+			pChild->RenderNodeImgui(frameIndex);
+		}
+		ImGui::EndTable();
 	}
 
-	ImGui::PopID();
 	ImGui::Separator();
 }
 
@@ -270,6 +268,9 @@ void ProfileNode::RenderNodeImgui(int frameIndex)
 {
 	if (frameIndex - m_LastProcessedFrame < 60)
 	{
+
+		ImGui::TableNextRow();
+		ImGui::TableNextColumn();
 		ImGui::PushID(m_Hash);
 
 		bool expand = false;
@@ -282,12 +283,10 @@ void ProfileNode::RenderNodeImgui(int frameIndex)
 			ImGui::Bullet();
 			ImGui::Selectable(m_Name);
 		}
-
-		ImGui::NextColumn();
-
+		ImGui::TableNextColumn();
 		float time = m_CpuTimeHistory.GetAverage();
 		ImGui::Text("%4.2f ms", time);
-		ImGui::NextColumn();
+		ImGui::TableNextColumn();
 
 		time = m_GpuTimeHistory.GetAverage();
 		if (time > 0)
@@ -298,7 +297,6 @@ void ProfileNode::RenderNodeImgui(int frameIndex)
 		{
 			ImGui::Text("N/A");
 		}
-		ImGui::NextColumn();
 
 		if (expand)
 		{

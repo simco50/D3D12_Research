@@ -294,7 +294,7 @@ public:
 	}
 
 	CD3DX12_PIPELINE_STATE_STREAM_HELPER(const CD3DX12_PIPELINE_STATE_STREAM_HELPER& rhs)
-		: m_Size(rhs.m_Size), m_Subobjects(rhs.m_Subobjects)
+		: m_Subobjects(rhs.m_Subobjects), m_Size(rhs.m_Size)
 	{
 		m_pSubobjectData = new char[sizeof(CD3DX12_PIPELINE_STATE_STREAM2)];
 		m_pSubobjectLocations = new int[D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_MAX_VALID];

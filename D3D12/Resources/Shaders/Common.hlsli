@@ -158,6 +158,15 @@ float3 WorldFromDepth(float2 uv, float depth, float4x4 viewProjectionInverse)
     return world.xyz / world.w;
 }
 
+float3 NormalFromDepth(Texture2D depthTexture, SamplerState depthSampler, float2 uv, float2 invDimensions, float4x4 inverseProjection)
+{
+    float3 vpos0 = ViewFromDepth(uv, depthTexture.SampleLevel(depthSampler, uv, 0).x, inverseProjection);
+    float3 vpos1 = ViewFromDepth(uv + float2(invDimensions.x, 0), depthTexture.SampleLevel(depthSampler, uv + float2(invDimensions.x, 0), 0).x, inverseProjection);
+    float3 vpos2 = ViewFromDepth(uv + float2(0, -invDimensions.y), depthTexture.SampleLevel(depthSampler, uv + float2(0, -invDimensions.y), 0).x, inverseProjection);
+    float3 normal = normalize(cross(vpos2 - vpos0, vpos1 - vpos0));
+    return normal;
+}
+
 // Convert screen space coordinates (0, width/height) to view space.
 float3 ScreenToView(float4 screen, float2 screenDimensionsInv, float4x4 projectionInverse)
 {

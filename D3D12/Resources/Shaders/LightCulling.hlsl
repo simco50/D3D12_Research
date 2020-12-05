@@ -7,6 +7,7 @@
 
 #define MAX_LIGHTS_PER_TILE 256
 #define BLOCK_SIZE 16
+#define SPLITZ_CULLING 1
 
 cbuffer ShaderParameters : register(b0)
 {
