@@ -111,11 +111,7 @@ void RayGen()
 	float2 texCoord = (float2)launchIndex * dimInv;
 
 	float3 world = WorldFromDepth(texCoord, tDepth.SampleLevel(sSceneSampler, texCoord, 0).r, cViewProjectionInverse);
-	float2 texCoord1 = texCoord + float2(dimInv.x, 0);
-    float2 texCoord2 = texCoord + float2(0, -dimInv.y);
-	float3 p1 = WorldFromDepth(texCoord1, tDepth.SampleLevel(sSceneSampler, texCoord1, 0).r, cViewProjectionInverse);
-	float3 p2 = WorldFromDepth(texCoord2, tDepth.SampleLevel(sSceneSampler, texCoord2, 0).r, cViewProjectionInverse);
-	float3 N = normalize(cross(p2 - world, p1 - world));
+    float3 N = NormalFromDepth(tDepth, sSceneSampler, texCoord, dimInv, cViewProjectionInverse);
 
 	float3 V = normalize(world - cViewInverse[3].xyz);
 	float3 R = reflect(V, N);

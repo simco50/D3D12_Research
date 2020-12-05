@@ -138,13 +138,7 @@ void Simulate(CS_INPUT input)
 
                 if(screenPos.w + p.Size > linearDepth && screenPos.w - p.Size - thickness < linearDepth)
                 {
-                    float2 texCoord1 = uv + float2(cViewDimensionsInv.x, 0);
-                    float2 texCoord2 = uv + float2(0, -cViewDimensionsInv.y);
-                    float3 p0 = WorldFromDepth(uv, depth, cViewProjectionInv);
-                    float3 p1 = WorldFromDepth(texCoord1, tDepth.SampleLevel(sSampler, texCoord1, 0).r, cViewProjectionInv);
-                    float3 p2 = WorldFromDepth(texCoord2, tDepth.SampleLevel(sSampler, texCoord2, 0).r, cViewProjectionInv);
-                    float3 normal = normalize(cross(p2 - p0, p1 - p0));
-
+                    float3 normal = NormalFromDepth(tDepth, sSampler, uv, cViewDimensionsInv, cViewProjectionInv);
                     if(dot(normal, p.Velocity) < 0)
                     {
                         p.Velocity = reflect(p.Velocity, normal) * 0.85f;
