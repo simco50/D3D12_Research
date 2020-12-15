@@ -49,12 +49,7 @@ Texture* RTReflections::Execute(RGGraph& graph, const SceneData& sceneData)
 			for (int i = 0; i < sceneData.pMesh->GetMeshCount(); ++i)
 			{
 				SubMesh* pMesh = sceneData.pMesh->GetMesh(i);
-				if (sceneData.pMesh->GetMaterial(pMesh->GetMaterialId()).IsTransparent)
-				{
-					continue;
-				}
-
-				auto it = std::find_if(sceneData.OpaqueBatches.begin(), sceneData.OpaqueBatches.end(), [pMesh](const Batch& b) { return b.pMesh == pMesh; });
+				auto it = std::find_if(sceneData.Batches.begin(), sceneData.Batches.end(), [pMesh](const Batch& b) { return b.pMesh == pMesh; });
 				struct HitData
 				{
 					MaterialData Material;

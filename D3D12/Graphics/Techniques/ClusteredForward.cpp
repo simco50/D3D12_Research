@@ -120,7 +120,6 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 
 			context.BeginRenderPass(RenderPassInfo(resources.pDepthBuffer, RenderPassAccess::Load_DontCare, true));
 
-			context.SetPipelineState(m_pMarkUniqueClustersOpaquePSO.get());
 			context.SetGraphicsRootSignature(m_pMarkUniqueClustersRS.get());
 			context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
@@ -134,10 +133,6 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 				Matrix ViewProjection;
 			} perFrameParameters{};
 
-			struct PerObjectParameters
-			{
-				Matrix World;
-			} perObjectParameters{};
 
 			perFrameParameters.LightGridParams = lightGridParams;
 			perFrameParameters.ClusterDimensions = IntVector3(m_ClusterCountX, m_ClusterCountY, cClusterCountZ);
@@ -148,25 +143,33 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 			context.SetDynamicConstantBufferView(1, &perFrameParameters, sizeof(PerFrameParameters));
 			context.SetDynamicDescriptor(2, 0, m_pUniqueClusters->GetUAV());
 
+			auto DrawBatches = [&](Batch::Blending blendMode)
+			{
+				struct PerObjectData
+				{
+					Matrix World;
+				} objectData;
+				for (const Batch& b : resources.Batches)
+				{
+					if (EnumHasAnyFlags(b.BlendMode, blendMode) && resources.VisibilityMask.GetBit(b.Index))
+					{
+						objectData.World = b.WorldMatrix;
+						context.SetDynamicConstantBufferView(0, &objectData, sizeof(Matrix));
+						b.pMesh->Draw(&context);
+					}
+				}
+			};
+
 			{
 				GPU_PROFILE_SCOPE("Opaque", &context);
-				for (const Batch& b : resources.OpaqueBatches)
-				{
-					perObjectParameters.World = b.WorldMatrix;
-					context.SetDynamicConstantBufferView(0, &perObjectParameters, sizeof(PerObjectParameters));
-					b.pMesh->Draw(&context);
-				}
+				context.SetPipelineState(m_pMarkUniqueClustersOpaquePSO.get());
+				DrawBatches(Batch::Blending::Opaque);
 			}
 
 			{
 				GPU_PROFILE_SCOPE("Transparant", &context);
 				context.SetPipelineState(m_pMarkUniqueClustersTransparantPSO.get());
-				for (const Batch& b : resources.TransparantBatches)
-				{
-					perObjectParameters.World = b.WorldMatrix;
-					context.SetDynamicConstantBufferView(0, &perObjectParameters, sizeof(PerObjectParameters));
-					b.pMesh->Draw(&context);
-				}
+				DrawBatches(Batch::Blending::AlphaBlend | Batch::Blending::AlphaMask);
 			}
 			context.EndRenderPass();
 		});
@@ -328,96 +331,35 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 			}
 			context.GetCommandList()->SetGraphicsRootShaderResourceView(6, resources.pTLAS->GetGpuHandle());
 
-			struct PerObjectData
+			auto DrawBatches = [&](Batch::Blending blendMode)
 			{
-				Matrix World;
-				MaterialData Material;
-			} objectData{};
-
-			auto DrawBatches = [](CommandContext& context, const std::vector<Batch>& batches)
-			{
-				for (const Batch& b : batches)
+				struct PerObjectData
 				{
-					PerObjectData objectData;
-					objectData.World = b.WorldMatrix;
-					objectData.Material = b.Material;
-					context.SetDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
-					b.pMesh->Draw(&context);
+					Matrix World;
+					MaterialData Material;
+				} objectData;
+				for (const Batch& b : resources.Batches)
+				{
+					if (EnumHasAnyFlags(b.BlendMode, blendMode) && resources.VisibilityMask.GetBit(b.Index))
+					{
+						objectData.World = b.WorldMatrix;
+						objectData.Material = b.Material;
+						context.SetDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
+						b.pMesh->Draw(&context);
+					}
 				}
 			};
 
 			{
 				GPU_PROFILE_SCOPE("Opaque", &context);
 				context.SetPipelineState(m_pDiffusePSO.get());
-
-#define DRAW_INDIRECT_TEST 1
-#if DRAW_INDIRECT_TEST
-
-#pragma pack(push, 1)
-				struct DrawData
-				{
-					uint64 CBV;
-					D3D12_VERTEX_BUFFER_VIEW VertexBuffer;
-					D3D12_INDEX_BUFFER_VIEW IndexBuffer;
-					D3D12_DRAW_INDEXED_ARGUMENTS Arguments;
-				};
-#pragma pack(pop)
-
-				static std::unique_ptr<CommandSignature> pSignature;
-				if (!pSignature)
-				{
-					pSignature = std::make_unique<CommandSignature>(m_pGraphics);
-
-					pSignature->AddConstantBufferView(0);
-					pSignature->AddVertexBuffer(0);
-					pSignature->AddIndexBuffer();
-					pSignature->AddDrawIndexed();
-
-					pSignature->SetRootSignature(m_pDiffuseRS->GetRootSignature());
-					pSignature->Finalize("Test");
-				}
-
-				int numBatches = (int)resources.OpaqueBatches.size() + (int)resources.TransparantBatches.size();
-				uint32 constBufferSize = Math::AlignUp<uint32>(sizeof(PerObjectData), 256);
-				DynamicAllocation allocation = context.AllocateTransientMemory(sizeof(DrawData) * numBatches);
-				DynamicAllocation dataAllocation = context.AllocateTransientMemory(constBufferSize * numBatches);
-				DrawData* pDrawData = (DrawData*)allocation.pMappedMemory;
-				char* pData = (char*)dataAllocation.pMappedMemory;
-				for (uint32 i = 0; i < resources.OpaqueBatches.size(); ++i)
-				{
-					const Batch& b = resources.OpaqueBatches[i];
-
-					PerObjectData* pConstants = (PerObjectData*)pData;
-					pConstants->World = b.WorldMatrix;
-					pConstants->Material = b.Material;
-					pData += constBufferSize;
-
-					DrawData& drawData = pDrawData[i];
-					drawData.CBV = dataAllocation.GpuHandle + i * constBufferSize;
-					drawData.VertexBuffer.BufferLocation = b.pMesh->GetVertexBuffer().Location;
-					drawData.VertexBuffer.SizeInBytes = b.pMesh->GetVertexBuffer().Elements * b.pMesh->GetVertexBuffer().Stride;
-					drawData.VertexBuffer.StrideInBytes = b.pMesh->GetVertexBuffer().Stride;
-					drawData.IndexBuffer.BufferLocation = b.pMesh->GetIndexBuffer().Location;
-					drawData.IndexBuffer.Format = DXGI_FORMAT_R32_UINT;
-					drawData.IndexBuffer.SizeInBytes = b.pMesh->GetIndexBuffer().Elements * sizeof(uint32);
-
-					drawData.Arguments.BaseVertexLocation = 0;
-					drawData.Arguments.InstanceCount = 1;
-					drawData.Arguments.StartIndexLocation = 0;
-					drawData.Arguments.IndexCountPerInstance = b.pMesh->GetIndexBuffer().Elements;
-					drawData.Arguments.StartInstanceLocation = 0;
-				}
-
-				context.ExecuteIndirect(pSignature.get(), (uint32)resources.OpaqueBatches.size(), allocation.pBackingResource, nullptr, (uint32)allocation.Offset, 0);
-#else
-				DrawBatches(context, resources.OpaqueBatches);
-#endif
+				DrawBatches(Batch::Blending::Opaque | Batch::Blending::AlphaMask);
 			}
 
 			{
 				GPU_PROFILE_SCOPE("Transparant", &context);
 				context.SetPipelineState(m_pDiffuseTransparancyPSO.get());
-				DrawBatches(context, resources.TransparantBatches);
+				DrawBatches(Batch::Blending::AlphaBlend);
 			}
 
 			context.EndRenderPass();
@@ -587,7 +529,6 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
 		m_pMarkUniqueClustersOpaquePSO->SetPixelShader(pixelShaderOpaque);
 		m_pMarkUniqueClustersOpaquePSO->SetInputLayout(inputElements, ARRAYSIZE(inputElements));
 		m_pMarkUniqueClustersOpaquePSO->SetRenderTargetFormats(nullptr, 0, Graphics::DEPTH_STENCIL_FORMAT, m_pGraphics->GetMultiSampleCount());
-		m_pMarkUniqueClustersOpaquePSO->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
 		m_pMarkUniqueClustersOpaquePSO->SetDepthWrite(false);
 		m_pMarkUniqueClustersOpaquePSO->Finalize("Mark Unique Clusters");
 

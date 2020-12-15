@@ -41,7 +41,7 @@ struct CS_INPUT
 [numthreads(BLOCK_SIZE, BLOCK_SIZE, 1)]
 void CSMain(CS_INPUT input)
 {
-    float2 dimInv = rcp(cDimensions);
+    float2 dimInv = rcp((float2)cDimensions);
     float2 texCoord = (float2)input.DispatchThreadId.xy * dimInv;
     float depth = tDepthTexture.SampleLevel(sSampler, texCoord, 0).r;
     float3 normal = NormalFromDepth(tDepthTexture, sSampler, texCoord, dimInv, cProjectionInverse);

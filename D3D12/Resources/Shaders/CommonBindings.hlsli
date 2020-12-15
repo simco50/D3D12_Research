@@ -1,6 +1,8 @@
 #ifndef __INCLUDE_COMMON_BINDINGS__
 #define __INCLUDE_COMMON_BINDINGS__
 
+#include "Common.hlsli"
+
 //SRVs
 StructuredBuffer<Light> tLights :                           register(t5);
 Texture2D tAO :                                             register(t6);

@@ -43,7 +43,7 @@ void RayGen()
 {
 	RayPayload payload = (RayPayload)0;
 
-	float2 dimInv = rcp(DispatchRaysDimensions().xy);
+	float2 dimInv = rcp((float2)DispatchRaysDimensions().xy);
 	uint2 launchIndex = DispatchRaysIndex().xy;
 	uint launchIndex1d = launchIndex.x + launchIndex.y * DispatchRaysDimensions().x;
 	float2 texCoord = (float2)launchIndex * dimInv;

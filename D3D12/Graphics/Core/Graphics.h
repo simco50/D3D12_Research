@@ -1,5 +1,6 @@
 #pragma once
 #include "../Light.h"
+#include "Core/BitField.h"
 
 class CommandQueue;
 class CommandContext;
@@ -42,11 +43,20 @@ struct MaterialData
 
 struct Batch
 {
+	enum class Blending
+	{
+		Opaque = 1,
+		AlphaMask = 2,
+		AlphaBlend = 4,
+	};
+	int Index = 0;
+	Blending BlendMode = Blending::Opaque;
 	const SubMesh* pMesh = nullptr;
 	MaterialData Material;
 	Matrix WorldMatrix;
 	BoundingBox Bounds;
 };
+DECLARE_BITMASK_TYPE(Batch::Blending)
 
 constexpr const int MAX_SHADOW_CASTERS = 32;
 struct ShadowData
@@ -66,14 +76,14 @@ struct SceneData
 	Texture* pAO = nullptr;
 	Mesh* pMesh = nullptr;
 	std::vector<std::unique_ptr<Texture>>* pShadowMaps = nullptr;
-	std::vector<Batch> OpaqueBatches;
-	std::vector<Batch> TransparantBatches;
+	std::vector<Batch> Batches;
 	std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> MaterialTextures;
 	Buffer* pLightBuffer = nullptr;
 	Camera* pCamera = nullptr;
 	ShadowData* pShadowData = nullptr;
 	Buffer* pTLAS = nullptr;
 	int FrameIndex = 0;
+	BitField<128> VisibilityMask;
 };
 
 enum class RenderPath
@@ -165,6 +175,8 @@ private:
 	ComPtr<IDXGISwapChain3> m_pSwapchain;
 	ComPtr<ID3D12Device> m_pDevice;
 	ComPtr<ID3D12Device5> m_pRaytracingDevice;
+	ComPtr<ID3D12Fence> m_pDeviceRemovalFence;
+	HANDLE m_DeviceRemovedEvent = 0;
 
 	int m_Frame = 0;
 	std::array<float, 180> m_FrameTimes{};
@@ -227,11 +239,12 @@ private:
 	//Shadow mapping
 	std::unique_ptr<RootSignature> m_pShadowsRS;
 	std::unique_ptr<PipelineState> m_pShadowsOpaquePSO;
-	std::unique_ptr<PipelineState> m_pShadowsAlphaPSO;
+	std::unique_ptr<PipelineState> m_pShadowsAlphaMaskPSO;
 	
 	//Depth Prepass
 	std::unique_ptr<RootSignature> m_pDepthPrepassRS;
-	std::unique_ptr<PipelineState> m_pDepthPrepassPSO;
+	std::unique_ptr<PipelineState> m_pDepthPrepassOpaquePSO;
+	std::unique_ptr<PipelineState> m_pDepthPrepassAlphaMaskPSO;
 
 	//MSAA Depth resolve
 	std::unique_ptr<RootSignature> m_pResolveDepthRS;
@@ -271,7 +284,6 @@ private:
 
 	//TAA
 	std::unique_ptr<PipelineState> m_pTemporalResolvePSO;
-	std::unique_ptr<PipelineState> m_pTemporalResolveTestPSO;
 	std::unique_ptr<RootSignature> m_pTemporalResolveRS;
 
 	//Sky

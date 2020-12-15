@@ -37,8 +37,6 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 		Vector3 Bitangent;
 	};
 
-	constexpr int test = sizeof(Vertex);
-
 	m_pGeometryData = std::make_unique<Buffer>(pGraphics, "Mesh VertexBuffer");
 	m_pGeometryData->Create(BufferDesc::CreateBuffer(vertexCount * sizeof(Vertex) + indexCount * sizeof(uint32), BufferFlag::ShaderResource | BufferFlag::ByteAddress));
 

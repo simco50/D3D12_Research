@@ -165,20 +165,22 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& resources)
 			}
 			context.GetCommandList()->SetGraphicsRootShaderResourceView(6, resources.pTLAS->GetGpuHandle());
 
-			auto DrawBatches = [](CommandContext& context, const std::vector<Batch>& batches)
+			auto DrawBatches = [&](Batch::Blending blendMode)
 			{
 				struct PerObjectData
 				{
 					Matrix World;
 					MaterialData Material;
-				} objectData{};
-
-				for (const Batch& b : batches)
+				} objectData;
+				for (const Batch& b : resources.Batches)
 				{
-					objectData.World = b.WorldMatrix;
-					objectData.Material = b.Material;
-					context.SetDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
-					b.pMesh->Draw(&context);
+					if (EnumHasAnyFlags(b.BlendMode, blendMode) && resources.VisibilityMask.GetBit(b.Index))
+					{
+						objectData.World = b.WorldMatrix;
+						objectData.Material = b.Material;
+						context.SetDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
+						b.pMesh->Draw(&context);
+					}
 				}
 			};
 
@@ -187,7 +189,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& resources)
 				context.SetPipelineState(m_pDiffusePSO.get());
 				context.SetDynamicDescriptor(4, 0, m_pLightGridOpaque->GetSRV());
 				context.SetDynamicDescriptor(4, 1, m_pLightIndexListBufferOpaque->GetSRV()->GetDescriptor());
-				DrawBatches(context, resources.OpaqueBatches);
+				DrawBatches(Batch::Blending::Opaque | Batch::Blending::AlphaMask);
 			}
 
 			{
@@ -195,7 +197,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& resources)
 				context.SetPipelineState(m_pDiffuseAlphaPSO.get());
 				context.SetDynamicDescriptor(4, 0, m_pLightGridTransparant->GetSRV());
 				context.SetDynamicDescriptor(4, 1, m_pLightIndexListBufferTransparant->GetSRV()->GetDescriptor());
-				DrawBatches(context, resources.TransparantBatches);
+				DrawBatches(Batch::Blending::AlphaBlend);
 			}
 			context.EndRenderPass();
 		});
