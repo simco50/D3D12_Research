@@ -272,7 +272,7 @@ float4 PSMain(PSInput input) : SV_TARGET
 	float3 specularColor = ComputeF0(specular.r, baseColor.rgb, metalness);
 
 	float3x3 TBN = float3x3(normalize(input.tangent), normalize(input.bitangent), normalize(input.normal));
-	float3 N = TangentSpaceNormalMapping(sampledNormal, TBN, input.texCoord, true);
+	float3 N = TangentSpaceNormalMapping(sampledNormal, TBN, true);
 	float3 V = normalize(cViewData.ViewPosition.xyz - input.positionWS);	
 
 	float3 ssr = 0;

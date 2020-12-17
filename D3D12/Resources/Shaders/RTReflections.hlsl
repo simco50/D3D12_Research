@@ -46,7 +46,7 @@ struct ShadowRayPayload
 	uint hit;
 };
 
-float3 TangentSpaceNormalMapping(float3 sampledNormal, float3x3 TBN, float2 tex, bool invertY)
+float3 TangentSpaceNormalMapping(float3 sampledNormal, float3x3 TBN, bool invertY)
 {
 	sampledNormal.xy = sampledNormal.xy * 2.0f - 1.0f;
 
@@ -123,7 +123,7 @@ void ClosestHit(inout RayPayload payload, BuiltInTriangleIntersectionAttributes 
 	float3 V = normalize(wPos - cViewInverse[3].xyz);
 	float3 diffuse = tMaterialTextures[DiffuseIndex].SampleLevel(sSceneSampler, texCoord, 0).rgb;
 	float3 sampledNormal = tMaterialTextures[NormalIndex].SampleLevel(sSceneSampler, texCoord, 0).rgb;
-	N = TangentSpaceNormalMapping(sampledNormal, TBN, texCoord, false);
+	N = TangentSpaceNormalMapping(sampledNormal, TBN, false);
 	float roughness = 0.5;
 	float3 specularColor = ComputeF0(0.5f, diffuse, 0);
 

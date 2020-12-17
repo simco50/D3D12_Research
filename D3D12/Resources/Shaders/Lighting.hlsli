@@ -32,27 +32,30 @@ float RadialAttenuation(float3 L, float range)
 	return distanceAttenuation * windowing;
 }
 
-float3 TangentSpaceNormalMapping(float3 sampledNormal, float3x3 TBN, float2 tex, bool invertY)
+// Unpacks a 2 channel BC5 normal to xyz
+float3 UnpackBC5Normal(float2 packedNormal)
 {
-	sampledNormal.xy = sampledNormal.xy * 2.0f - 1.0f;
+    float3 normal;
+    normal.xy = packedNormal * 2.0f - 1.0f;
+    normal.z = sqrt(1 - saturate(dot(normal.xy, normal.xy)));
+    return normal;
+}
 
-//#define NORMAL_BC5
-#ifdef NORMAL_BC5
-	sampledNormal.z = sqrt(saturate(1.0f - dot(sampledNormal.xy, sampledNormal.xy)));
+float3 TangentSpaceNormalMapping(float3 sampledNormal, float3x3 TBN, bool invertY)
+{
+#if NORMAL_BC5
+	float3 normal = UnpackBC5Normal(sampledNormal);
+#else
+	float3 normal = sampledNormal;
+	sampledNormal.xy = sampledNormal.xy * 2.0f - 1.0f;
 #endif
+
 	if(invertY)
 	{
 		sampledNormal.x = -sampledNormal.x;
 	}
 	sampledNormal = normalize(sampledNormal);
 	return mul(sampledNormal, TBN);
-}
-
-float2 TransformShadowTexCoord(float2 texCoord, int shadowMapIndex)
-{
-	float2 shadowMapStart = cShadowMapOffsets[shadowMapIndex].xy;
-	float2 normalizedShadowMapSize = cShadowMapOffsets[shadowMapIndex].zw;
-	return shadowMapStart + float2(texCoord.x * normalizedShadowMapSize.x, texCoord.y * normalizedShadowMapSize.y); 
 }
 
 float DoShadow(float3 wPos, int shadowMapIndex, float invShadowSize)
@@ -117,23 +120,19 @@ uint GetShadowIndex(Light light, float4 pos, float3 wPos)
 		float4 cascades = cCascadeDepths > 0;
 		int cascadeIndex = dot(splits, cascades);
 
-	#define FADE_SHADOW_CASCADES 1
-	#define FADE_THRESHOLD 0.1f
-	#if FADE_SHADOW_CASCADES
-			float nextSplit = cCascadeDepths[cascadeIndex];
-			float splitRange = cascadeIndex == 0 ? nextSplit : nextSplit - cCascadeDepths[cascadeIndex - 1];
-			float fadeFactor = (nextSplit - pos.w) / splitRange;
-			if(fadeFactor <= FADE_THRESHOLD && cascadeIndex != cNumCascades - 1)
+		const float cascadeFadeTheshold = 0.1f;
+		float nextSplit = cCascadeDepths[cascadeIndex];
+		float splitRange = cascadeIndex == 0 ? nextSplit : nextSplit - cCascadeDepths[cascadeIndex - 1];
+		float fadeFactor = (nextSplit - pos.w) / splitRange;
+		if(fadeFactor <= cascadeFadeTheshold && cascadeIndex != cNumCascades - 1)
+		{
+			float lerpAmount = smoothstep(0.0f, cascadeFadeTheshold, fadeFactor);
+			float dither = InterleavedGradientNoise(pos.xy);
+			if(lerpAmount < dither)
 			{
-				float lerpAmount = smoothstep(0.0f, FADE_THRESHOLD, fadeFactor);
-				float dither = InterleavedGradientNoise(pos.xy);
-				if(lerpAmount < dither)
-				{
-					cascadeIndex++;
-				}
+				cascadeIndex++;
 			}
-	#endif
-
+		}
 		shadowIndex += cascadeIndex;
 	}
 	else if(light.Type == LIGHT_POINT)
