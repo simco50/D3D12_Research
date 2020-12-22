@@ -72,7 +72,10 @@ struct SceneData
 	Texture* pResolvedDepth = nullptr;
 	Texture* pDepthBuffer = nullptr;
 	Texture* pRenderTarget = nullptr;
+	Texture* pResolvedTarget = nullptr;
 	Texture* pPreviousColor = nullptr;
+	Texture* pNormals = nullptr;
+	Texture* pResolvedNormals = nullptr;
 	Texture* pAO = nullptr;
 	Mesh* pMesh = nullptr;
 	std::vector<std::unique_ptr<Texture>>* pShadowMaps = nullptr;
@@ -199,6 +202,8 @@ private:
 	std::unique_ptr<Texture> m_pResolvedDepthStencil;
 	std::unique_ptr<Texture> m_pTAASource;
 	std::unique_ptr<Texture> m_pVelocity;
+	std::unique_ptr<Texture> m_pNormals;
+	std::unique_ptr<Texture> m_pResolvedNormals;
 	std::vector<std::unique_ptr<Texture>> m_ShadowMaps;
 
 	std::unique_ptr<ImGuiRenderer> m_pImGuiRenderer;

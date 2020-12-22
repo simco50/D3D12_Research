@@ -376,6 +376,9 @@ void Graphics::Update()
 	m_SceneData.pPreviousColor = m_pPreviousColor.get();
 	m_SceneData.pTLAS = m_pTLAS.get();
 	m_SceneData.pMesh = m_pMesh.get();
+	m_SceneData.pNormals = m_pNormals.get();
+	m_SceneData.pResolvedNormals = m_pResolvedNormals.get();
+	m_SceneData.pResolvedTarget = Tweakables::g_TAA ? m_pTAASource.get() : m_pHDRRenderTarget.get();
 
 	BoundingFrustum frustum = m_pCamera->GetFrustum();
 	for (const Batch& b : m_SceneData.Batches)
@@ -623,11 +626,6 @@ void Graphics::Update()
 		m_pSSAO->Execute(graph, m_pAmbientOcclusion.get(), GetResolvedDepthStencil(), *m_pCamera);
 	}
 
-	if (Tweakables::g_RaytracedReflections)
-	{
-		m_SceneData.pAO = m_pRTReflections->Execute(graph, m_SceneData);
-	}
-
 	//SHADOW MAPPING
 	// - Renders the scene depth onto a separate depth buffer from the light's view
 	if (shadowIndex > 0)
@@ -788,7 +786,6 @@ void Graphics::Update()
 
 	DebugRenderer::Get()->Render(graph, m_pCamera->GetViewProjection(), GetCurrentRenderTarget(), GetDepthStencil());
 
-
 	RGPassBuilder resolve = graph.AddPass("Resolve");
 	resolve.Bind([=](CommandContext& context, const RGPassResources& resources)
 		{
@@ -809,6 +806,11 @@ void Graphics::Update()
 				context.CopyTexture(m_pHDRRenderTarget.get(), m_pTAASource.get());
 			}
 		});
+
+	if (Tweakables::g_RaytracedReflections)
+	{
+		m_pRTReflections->Execute(graph, m_SceneData);
+	}
 
 	if (Tweakables::g_TAA)
 	{
@@ -847,8 +849,6 @@ void Graphics::Update()
 				renderContext.CopyTexture(m_pHDRRenderTarget.get(), m_pPreviousColor.get());
 			});
 	}
-
-	m_pVisualizeTexture = m_pAmbientOcclusion.get();
 
 	//Tonemapping
 	{
@@ -1382,6 +1382,8 @@ void Graphics::InitD3D()
 		m_pMultiSampleRenderTarget = std::make_unique<Texture>(this, "MSAA Target");
 	}
 
+	m_pNormals = std::make_unique<Texture>(this, "MSAA Normals");
+	m_pResolvedNormals = std::make_unique<Texture>(this, "Normals");
 	m_pHDRRenderTarget = std::make_unique<Texture>(this, "HDR Target");
 	m_pPreviousColor = std::make_unique<Texture>(this, "Previous Color");
 	m_pTonemapTarget = std::make_unique<Texture>(this, "Tonemap Target");
@@ -1631,6 +1633,8 @@ void Graphics::OnResize(int width, int height)
 	{
 		m_pMultiSampleRenderTarget->Create(TextureDesc::CreateRenderTarget(width, height, RENDER_TARGET_FORMAT, TextureFlag::RenderTarget, m_SampleCount, ClearBinding(Color(0, 0, 0, 0))));
 	}
+	m_pNormals->Create(TextureDesc::CreateRenderTarget(width, height, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::RenderTarget, m_SampleCount, ClearBinding(Color(0, 0, 0, 0))));
+	m_pResolvedNormals->Create(TextureDesc::CreateRenderTarget(width, height, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::RenderTarget | TextureFlag::ShaderResource, 1, ClearBinding(Color(0, 0, 0, 0))));
 	m_pDepthStencil->Create(TextureDesc::CreateDepth(width, height, DEPTH_STENCIL_FORMAT, TextureFlag::DepthStencil | TextureFlag::ShaderResource, m_SampleCount, ClearBinding(0.0f, 0)));
 	m_pResolvedDepthStencil->Create(TextureDesc::Create2D(width, height, DXGI_FORMAT_R32_FLOAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
 	m_pHDRRenderTarget->Create(TextureDesc::CreateRenderTarget(width, height, RENDER_TARGET_FORMAT, TextureFlag::ShaderResource | TextureFlag::RenderTarget | TextureFlag::UnorderedAccess));
@@ -1648,6 +1652,7 @@ void Graphics::OnResize(int width, int height)
 	m_pClusteredForward->OnSwapchainCreated(width, height);
 	m_pTiledForward->OnSwapchainCreated(width, height);
 	m_pSSAO->OnSwapchainCreated(width, height);
+	m_pRTReflections->OnResize(width, height);
 
 	m_ReductionTargets.clear();
 	int w = width;
@@ -1892,7 +1897,6 @@ void Graphics::InitializePipelines()
 void Graphics::UpdateImGui()
 {
 	m_FrameTimes[m_Frame % m_FrameTimes.size()] = Time::DeltaTime();
-
 
 	if (m_pVisualizeTexture)
 	{

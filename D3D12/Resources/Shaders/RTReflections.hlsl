@@ -7,6 +7,8 @@ RaytracingAccelerationStructure SceneBVH : register(t0);
 Texture2D tDepth : register(t1);
 StructuredBuffer<Light> tLights : register(t2);
 ByteAddressBuffer tGeometryData : register(t3);
+Texture2D tNormals : register(t4);
+Texture2D tSceneColor : register(t5);
 Texture2D tMaterialTextures[] : register(t200);
 
 SamplerState sSceneSampler : register(s0);
@@ -120,9 +122,13 @@ void ClosestHit(inout RayPayload payload, BuiltInTriangleIntersectionAttributes 
 	float3x3 TBN = float3x3(T, B, N);
 	float3 wPos = WorldRayOrigin() + WorldRayDirection() * RayTCurrent();
 
+	float rayDistanceScale = RayTCurrent() / (500.0f - RayTMin());
+	float cosAngle = 1.0f - dot(WorldRayDirection(), N);
+	int mipLevel = (cosAngle / 2.0f + rayDistanceScale / 2.0f) * 7.0f;
+
 	float3 V = normalize(wPos - cViewInverse[3].xyz);
-	float3 diffuse = tMaterialTextures[DiffuseIndex].SampleLevel(sSceneSampler, texCoord, 0).rgb;
-	float3 sampledNormal = tMaterialTextures[NormalIndex].SampleLevel(sSceneSampler, texCoord, 0).rgb;
+	float3 diffuse = tMaterialTextures[DiffuseIndex].SampleLevel(sSceneSampler, texCoord, mipLevel).rgb;
+	float3 sampledNormal = tMaterialTextures[NormalIndex].SampleLevel(sSceneSampler, texCoord, mipLevel).rgb;
 	N = TangentSpaceNormalMapping(sampledNormal, TBN, false);
 	float roughness = 0.5;
 	float3 specularColor = ComputeF0(0.5f, diffuse, 0);
@@ -199,28 +205,32 @@ void RayGen()
 	float2 texCoord = (float2)launchIndex * dimInv;
 
 	float3 world = WorldFromDepth(texCoord, tDepth.SampleLevel(sSceneSampler, texCoord, 0).r, cViewProjectionInverse);
-    float3 N = NormalFromDepth(tDepth, sSceneSampler, texCoord, dimInv, cViewProjectionInverse);
+    float4 reflectionSample = tNormals.SampleLevel(sSceneSampler, texCoord, 0);
+	float3 N = reflectionSample.rgb;
+	float reflectivity = reflectionSample.a;
+	if(reflectivity > 0)
+	{
+		float3 V = normalize(world - cViewInverse[3].xyz);
+		float3 R = reflect(V, N);
 
-	float3 V = normalize(world - cViewInverse[3].xyz);
-	float3 R = reflect(V, N);
+		RayDesc ray;
+		ray.Origin = world + 0.001f * R;
+		ray.Direction = R;
+		ray.TMin = 0.0f;
+		ray.TMax = 10000;
 
-	RayDesc ray;
-	ray.Origin = world + 0.001f * R;
-	ray.Direction = R;
-	ray.TMin = 0.0f;
-	ray.TMax = 10000;
-
-	// Trace the ray
-	TraceRay(
-		SceneBVH, 														//AccelerationStructure
-		RAY_FLAG_CULL_BACK_FACING_TRIANGLES | RAY_FLAG_FORCE_OPAQUE, 	//RayFlags
-		0xFF, 															//InstanceInclusionMask
-		0,																//RayContributionToHitGroupIndex
-		2, 																//MultiplierForGeometryContributionToHitGroupIndex
-		0, 																//MissShaderIndex
-		ray, 															//Ray
-		payload 														//Payload
-	);
-
-	gOutput[launchIndex] = float4(payload.output, 1);
+		// Trace the ray
+		TraceRay(
+			SceneBVH, 														//AccelerationStructure
+			RAY_FLAG_CULL_BACK_FACING_TRIANGLES | RAY_FLAG_FORCE_OPAQUE, 	//RayFlags
+			0xFF, 															//InstanceInclusionMask
+			0,																//RayContributionToHitGroupIndex
+			2, 																//MultiplierForGeometryContributionToHitGroupIndex
+			0, 																//MissShaderIndex
+			ray, 															//Ray
+			payload 														//Payload
+		);
+	}
+	float4 colorSample = tSceneColor.SampleLevel(sSceneSampler, texCoord, 0);
+	gOutput[launchIndex] = colorSample + float4(reflectivity * payload.output, 0);
 }

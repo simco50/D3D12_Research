@@ -21,13 +21,17 @@ RTReflections::RTReflections(Graphics* pGraphics)
 	}
 }
 
-Texture* RTReflections::Execute(RGGraph& graph, const SceneData& sceneData)
+void RTReflections::Execute(RGGraph& graph, const SceneData& sceneData)
 {
 	RGPassBuilder rt = graph.AddPass("RT Reflections");
 	rt.Bind([=](CommandContext& context, const RGPassResources& passResources)
 		{
+			context.CopyTexture(sceneData.pResolvedTarget, m_pSceneColor.get());
+
 			context.InsertResourceBarrier(sceneData.pResolvedDepth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-			context.InsertResourceBarrier(m_pReflections.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+			context.InsertResourceBarrier(sceneData.pResolvedNormals, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+			context.InsertResourceBarrier(m_pSceneColor.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+			context.InsertResourceBarrier(sceneData.pResolvedTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
 			context.SetComputeRootSignature(m_pGlobalRS.get());
 			context.SetPipelineState(m_pRtSO.Get());
@@ -67,23 +71,27 @@ Texture* RTReflections::Execute(RGGraph& graph, const SceneData& sceneData)
 			}
 
 			context.SetComputeDynamicConstantBufferView(0, &parameters, sizeof(Parameters));
-			context.SetDynamicDescriptor(1, 0, m_pReflections->GetUAV());
+			context.SetDynamicDescriptor(1, 0, sceneData.pResolvedTarget->GetUAV());
 			context.SetDynamicDescriptor(2, 0, sceneData.pTLAS->GetSRV());
 			context.SetDynamicDescriptor(2, 1, sceneData.pResolvedDepth->GetSRV());
 			context.SetDynamicDescriptor(2, 2, sceneData.pLightBuffer->GetSRV());
 			context.SetDynamicDescriptor(2, 3, sceneData.pMesh->GetData()->GetSRV());
+			context.SetDynamicDescriptor(2, 4, sceneData.pResolvedNormals->GetSRV());
+			context.SetDynamicDescriptor(2, 5, m_pSceneColor->GetSRV());
 			context.SetDynamicDescriptors(3, 0, sceneData.MaterialTextures.data(), (int)sceneData.MaterialTextures.size());
 
-			context.DispatchRays(bindingTable, m_pReflections->GetWidth(), m_pReflections->GetHeight());
+			context.DispatchRays(bindingTable, sceneData.pResolvedTarget->GetWidth(), sceneData.pResolvedTarget->GetHeight());
 		});
+}
 
-	return m_pReflections.get();
+void RTReflections::OnResize(uint32 width, uint32 height)
+{
+	m_pSceneColor->Create(TextureDesc::Create2D(width, height, Graphics::RENDER_TARGET_FORMAT, TextureFlag::ShaderResource, 1, 1));
 }
 
 void RTReflections::SetupResources(Graphics* pGraphics)
 {
-	m_pReflections = std::make_unique<Texture>(pGraphics);
-	m_pReflections->Create(TextureDesc::Create2D(1920, 1080, DXGI_FORMAT_R8G8B8A8_UNORM, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource, 1, 1));
+	m_pSceneColor = std::make_unique<Texture>(pGraphics);
 }
 
 void RTReflections::SetupPipelines(Graphics* pGraphics)
@@ -105,7 +113,7 @@ void RTReflections::SetupPipelines(Graphics* pGraphics)
 		m_pGlobalRS = std::make_unique<RootSignature>(pGraphics);
 		m_pGlobalRS->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_ALL);
 		m_pGlobalRS->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, D3D12_SHADER_VISIBILITY_ALL);
-		m_pGlobalRS->SetDescriptorTableSimple(2, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 4, D3D12_SHADER_VISIBILITY_ALL);
+		m_pGlobalRS->SetDescriptorTableSimple(2, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 6, D3D12_SHADER_VISIBILITY_ALL);
 		m_pGlobalRS->SetDescriptorTableSimple(3, 200, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 128, D3D12_SHADER_VISIBILITY_ALL);
 		m_pGlobalRS->AddStaticSampler(0, CD3DX12_STATIC_SAMPLER_DESC(0, D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT), D3D12_SHADER_VISIBILITY_ALL);
 		m_pGlobalRS->Finalize("Dummy Global", D3D12_ROOT_SIGNATURE_FLAG_NONE);

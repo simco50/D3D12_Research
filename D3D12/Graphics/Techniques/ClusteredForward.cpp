@@ -306,12 +306,25 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 
 			context.InsertResourceBarrier(m_pLightGrid.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(m_pLightIndexGrid.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-			context.InsertResourceBarrier(resources.pRenderTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
 			context.InsertResourceBarrier(resources.pAO, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(resources.pPreviousColor, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(resources.pResolvedDepth, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
-			context.BeginRenderPass(RenderPassInfo(resources.pRenderTarget, RenderPassAccess::Clear_Store, resources.pDepthBuffer, RenderPassAccess::Load_DontCare));
+			context.InsertResourceBarrier(resources.pRenderTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
+			context.InsertResourceBarrier(resources.pNormals, D3D12_RESOURCE_STATE_RENDER_TARGET);
+
+			RenderPassInfo renderPass;
+			renderPass.DepthStencilTarget.Access = RenderPassAccess::Load_DontCare;
+			renderPass.DepthStencilTarget.StencilAccess = RenderPassAccess::DontCare_DontCare;
+			renderPass.DepthStencilTarget.Target = resources.pDepthBuffer;
+			renderPass.RenderTargetCount = 2;
+			renderPass.RenderTargets[0].Access = RenderPassAccess::Clear_Store;
+			renderPass.RenderTargets[0].Target = resources.pRenderTarget;
+			renderPass.RenderTargets[1].Access = RenderPassAccess::Clear_Resolve;
+			renderPass.RenderTargets[1].Target = resources.pNormals;
+			renderPass.RenderTargets[1].ResolveTarget = resources.pResolvedNormals;
+
+			context.BeginRenderPass(renderPass);
 			context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 			context.SetGraphicsRootSignature(m_pDiffuseRS.get());
 
@@ -595,9 +608,12 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
 		Shader pixelShader("Diffuse.hlsl", ShaderType::Pixel, "PSMain", { "CLUSTERED_FORWARD" });
 
 		m_pDiffuseRS = std::make_unique<RootSignature>(pGraphics);
-
-
 		m_pDiffuseRS->FinalizeFromShader("Diffuse", vertexShader);
+
+		DXGI_FORMAT formats[] = {
+			Graphics::RENDER_TARGET_FORMAT,
+			DXGI_FORMAT_R16G16B16A16_FLOAT,
+		};
 
 		//Opaque
 		m_pDiffusePSO = std::make_unique<PipelineState>(pGraphics);
@@ -608,7 +624,7 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
 		m_pDiffusePSO->SetInputLayout(inputElements, ARRAYSIZE(inputElements));
 		m_pDiffusePSO->SetDepthTest(D3D12_COMPARISON_FUNC_EQUAL);
 		m_pDiffusePSO->SetDepthWrite(false);
-		m_pDiffusePSO->SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, m_pGraphics->GetMultiSampleCount());
+		m_pDiffusePSO->SetRenderTargetFormats(formats, ARRAYSIZE(formats), Graphics::DEPTH_STENCIL_FORMAT, m_pGraphics->GetMultiSampleCount());
 		m_pDiffusePSO->Finalize("Diffuse (Opaque)");
 
 		//Transparant
