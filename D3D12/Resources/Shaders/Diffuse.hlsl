@@ -179,7 +179,7 @@ float3 ScreenSpaceReflectionsRT(float3 positionWS, float4 position, float3 N, fl
 	return ssr;
 }
 
-float3 ScreenSpaceReflections(float4 position, float3 positionVS, float3 N, float3 V, float R)
+float3 ScreenSpaceReflections(float4 position, float3 positionVS, float3 N, float3 V, float R, out float reflectionWeight)
 {
 	float3 ssr = 0;
 	const float roughnessThreshold = 0.6f;
@@ -255,6 +255,7 @@ float3 ScreenSpaceReflections(float4 position, float3 positionVS, float3 N, floa
 			float roughnessMask = saturate(1.0f - (R / roughnessThreshold));
 			float ssrWeight = (hitColor.w * roughnessMask);
 			ssr = saturate(hitColor.xyz * ssrWeight);
+			reflectionWeight = ssrWeight;
 		}
 	}
 	return ssr;
@@ -267,7 +268,7 @@ void PSMain(PSInput input,
 	float4 baseColor = tMaterialTextures[cObjectData.Diffuse].Sample(sDiffuseSampler, input.texCoord);
 	float3 sampledNormal = tMaterialTextures[cObjectData.Normal].Sample(sDiffuseSampler, input.texCoord).xyz;
 	float metalness = tMaterialTextures[cObjectData.Metallic].Sample(sDiffuseSampler, input.texCoord).r;
-	float r = 0.5;// tMaterialTextures[cObjectData.Roughness].Sample(sDiffuseSampler, input.texCoord).r;
+	float r = 0.2;// tMaterialTextures[cObjectData.Roughness].Sample(sDiffuseSampler, input.texCoord).r;
 	float3 specular = 0.5f;
 
 	float3 diffuseColor = ComputeDiffuseColor(baseColor.rgb, metalness);
@@ -278,11 +279,12 @@ void PSMain(PSInput input,
 	float3 V = normalize(cViewData.ViewPosition.xyz - input.positionWS);	
 
 	float3 ssr = 0;
+	float reflectionWeight = 0;
 	if (cViewData.SsrSamples > 0)
 	{
 		if(cViewData.SsrSamples < 32)
 		{
-			ssr = ScreenSpaceReflections(input.position, input.positionVS, N, V, r);
+			ssr = ScreenSpaceReflections(input.position, input.positionVS, N, V, r, reflectionWeight);
 		}
 		else
 		{
@@ -294,7 +296,8 @@ void PSMain(PSInput input,
 
 	float ao = tAO.SampleLevel(sDiffuseSampler, (float2)input.position.xy * cViewData.InvScreenDimensions, 0).r;
 	float3 color = lighting.Diffuse + lighting.Specular;
-	color += ApplyAmbientLight(diffuseColor, 1, tLights[0].GetColor().rgb * 0.1f) * ao;
+	color += ApplyAmbientLight(diffuseColor, ao, tLights[0].GetColor().rgb * 0.1f);
+	color += ssr * ao;
 
 	for(int i = 0; i < cViewData.LightCount; ++i)
 	{
@@ -307,6 +310,6 @@ void PSMain(PSInput input,
 
 	outColor = float4(color, baseColor.a);
 
-    float reflectivity = pow(1.0 - saturate(dot(V, N)), 5.0);
+    float reflectivity = saturate(pow(1.0 - saturate(dot(V, N)), 5.0) - reflectionWeight);
 	outNormalRoughness = float4(N, reflectivity);
 }
