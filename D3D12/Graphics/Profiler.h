@@ -3,9 +3,6 @@
 class Buffer;
 class CommandContext;
 
-#define CONCAT_IMPL( x, y ) x##y
-#define MACRO_CONCAT( x, y ) CONCAT_IMPL( x, y )
-
 #define GPU_PROFILE_BEGIN(name, cmdlist) Profiler::Get()->Begin(name, cmdlist);
 #define GPU_PROFILE_END(cmdlist) Profiler::Get()->End(cmdlist);
 
@@ -36,6 +33,7 @@ public:
 	float GetTime(const uint64* pReadbackData) const;
 
 private:
+
 	int m_TimerIndex = -1;
 };
 

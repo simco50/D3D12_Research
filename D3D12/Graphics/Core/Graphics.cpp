@@ -751,10 +751,10 @@ void Graphics::Update()
 	sky.Bind([=](CommandContext& renderContext, const RGPassResources& resources)
 		{
 			Texture* pDepthStencil = resources.GetTexture(Data.DepthStencil);
-			renderContext.InsertResourceBarrier(pDepthStencil, D3D12_RESOURCE_STATE_DEPTH_READ);
+			renderContext.InsertResourceBarrier(pDepthStencil, D3D12_RESOURCE_STATE_DEPTH_WRITE);
 			renderContext.InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RENDER_TARGET);
 
-			RenderPassInfo info = RenderPassInfo(GetCurrentRenderTarget(), RenderPassAccess::Load_Store, pDepthStencil, RenderPassAccess::Load_DontCare);
+			RenderPassInfo info = RenderPassInfo(GetCurrentRenderTarget(), RenderPassAccess::Load_Store, pDepthStencil, RenderPassAccess::Load_Store, false);
 
 			renderContext.BeginRenderPass(info);
 			renderContext.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -1578,16 +1578,16 @@ void Graphics::InitializeAssets(CommandContext& context)
 
 		m_Lights[1] = Light::Spot(Vector3(62, 10, -18), 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1.0f, 0.7f, 0.3f, 1.0f));
 		m_Lights[1].CastShadows = true;
-		m_Lights[1].VolumetricLighting = true;
+		m_Lights[1].VolumetricLighting = false;
 		m_Lights[2] = Light::Spot(Vector3(-48, 10, 18), 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1.0f, 0.7f, 0.3f, 1.0f));
 		m_Lights[2].CastShadows = true;
-		m_Lights[2].VolumetricLighting = true;
+		m_Lights[2].VolumetricLighting = false;
 		m_Lights[3] = Light::Spot(Vector3(-48, 10, -18), 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1.0f, 0.7f, 0.3f, 1.0f));
 		m_Lights[3].CastShadows = true;
-		m_Lights[3].VolumetricLighting = true;
+		m_Lights[3].VolumetricLighting = false;
 		m_Lights[4] = Light::Spot(Vector3(62, 10, 18), 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1.0f, 0.7f, 0.3f, 1.0f));
 		m_Lights[4].CastShadows = true;
-		m_Lights[4].VolumetricLighting = true;
+		m_Lights[4].VolumetricLighting = false;
 
 
 		m_pLightBuffer = std::make_unique<Buffer>(this, "Lights");
@@ -2073,7 +2073,6 @@ void Graphics::UpdateImGui()
 	ImGui::SliderFloat("Sun Temperature", &Tweakables::g_SunTemperature, 1000, 15000);
 	ImGui::SliderFloat("Sun Intensity", &Tweakables::g_SunIntensity, 0, 30);
 	
-
 	ImGui::Text("Shadows");
 	ImGui::SliderInt("Shadow Cascades", &Tweakables::g_ShadowCascades, 1, 4);
 	ImGui::Checkbox("SDSM", &Tweakables::g_SDSM);
@@ -2253,7 +2252,7 @@ bool Graphics::CheckTypedUAVSupport(DXGI_FORMAT format) const
 
 bool Graphics::UseRenderPasses() const
 {
-	return m_RenderPassTier > D3D12_RENDER_PASS_TIER_0;
+	return m_RenderPassTier >= D3D12_RENDER_PASS_TIER_0;
 }
 
 bool Graphics::GetShaderModel(int& major, int& minor) const

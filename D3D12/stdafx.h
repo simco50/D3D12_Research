@@ -67,9 +67,22 @@ inline int ToWidechar(const char* pStr, wchar_t* pOut, int len)
 #define WITH_CONSOLE 1
 #endif
 
-#define check(expression) if((expression)){} else Console::LogFormat(LogType::FatalError, #expression)
+#define CONCAT_IMPL( x, y ) x##y
+#define MACRO_CONCAT( x, y ) CONCAT_IMPL( x, y )
+
 #define checkf(expression, msg, ...) if((expression)){} else Console::LogFormat(LogType::FatalError, msg, ##__VA_ARGS__)
+#define check(expression) checkf(expression, "")
 #define noEntry() checkf(false, "Should not have reached this point!")
+#define validateOncef(expression, msg, ...) if(!(expression)) { \
+	static bool hasExecuted = false; \
+	if(!hasExecuted) \
+	{ \
+		Console::LogFormat(LogType::Warning, "Assertion failed: '" #expression "'. " msg, ##__VA_ARGS__); \
+		hasExecuted = true; \
+	} \
+} \
+
+#define validateOnce(expression) validateOncef(expression, "")
 
 #include "Core/Thread.h"
 #include "Math/MathTypes.h"

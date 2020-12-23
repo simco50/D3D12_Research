@@ -118,7 +118,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 
 			context.ClearUavUInt(m_pUniqueClusters.get(), m_pUniqueClustersRawUAV);
 
-			context.BeginRenderPass(RenderPassInfo(resources.pDepthBuffer, RenderPassAccess::Load_DontCare, true));
+			context.BeginRenderPass(RenderPassInfo(resources.pDepthBuffer, RenderPassAccess::Load_Store, true));
 
 			context.SetGraphicsRootSignature(m_pMarkUniqueClustersRS.get());
 			context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -310,21 +310,23 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 			context.InsertResourceBarrier(resources.pPreviousColor, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(resources.pResolvedDepth, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
+			context.InsertResourceBarrier(resources.pDepthBuffer, D3D12_RESOURCE_STATE_DEPTH_READ);
 			context.InsertResourceBarrier(resources.pRenderTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
 			context.InsertResourceBarrier(resources.pNormals, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
 			RenderPassInfo renderPass;
-			renderPass.DepthStencilTarget.Access = RenderPassAccess::Load_DontCare;
+			renderPass.DepthStencilTarget.Access = RenderPassAccess::Load_Store;
 			renderPass.DepthStencilTarget.StencilAccess = RenderPassAccess::DontCare_DontCare;
 			renderPass.DepthStencilTarget.Target = resources.pDepthBuffer;
+			renderPass.DepthStencilTarget.Write = false;
 			renderPass.RenderTargetCount = 2;
-			renderPass.RenderTargets[0].Access = RenderPassAccess::Clear_Store;
+			renderPass.RenderTargets[0].Access = RenderPassAccess::DontCare_Store;
 			renderPass.RenderTargets[0].Target = resources.pRenderTarget;
-			renderPass.RenderTargets[1].Access = RenderPassAccess::Clear_Resolve;
+			renderPass.RenderTargets[1].Access = RenderPassAccess::DontCare_Resolve;
 			renderPass.RenderTargets[1].Target = resources.pNormals;
 			renderPass.RenderTargets[1].ResolveTarget = resources.pResolvedNormals;
-
 			context.BeginRenderPass(renderPass);
+
 			context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 			context.SetGraphicsRootSignature(m_pDiffuseRS.get());
 
@@ -392,7 +394,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 					m_DidCopyDebugClusterData = true;
 				}
 
-				context.BeginRenderPass(RenderPassInfo(resources.pRenderTarget, RenderPassAccess::Load_Store, resources.pDepthBuffer, RenderPassAccess::Load_DontCare));
+				context.BeginRenderPass(RenderPassInfo(resources.pRenderTarget, RenderPassAccess::Load_Store, resources.pDepthBuffer, RenderPassAccess::Load_Store, false));
 
 				context.SetPipelineState(m_pDebugClustersPSO.get());
 				context.SetGraphicsRootSignature(m_pDebugClustersRS.get());
