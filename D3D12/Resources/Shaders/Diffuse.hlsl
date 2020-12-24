@@ -310,6 +310,6 @@ void PSMain(PSInput input,
 
 	outColor = float4(color, baseColor.a);
 
-    float reflectivity = saturate(pow(1.0 - saturate(dot(V, N)), 5.0) - reflectionWeight);
+    float reflectivity = ao * saturate(pow(1.0 - saturate(dot(V, N)), 5.0) - reflectionWeight);
 	outNormalRoughness = float4(N, reflectivity);
 }
