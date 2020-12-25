@@ -107,23 +107,23 @@ public:
 		: m_StateObjectAllocator(0xFFF), m_ScratchAllocator(0xFFFF), m_Type(type)
 	{}
 
-	uint32 AddLibrary(const D3D12_SHADER_BYTECODE& byteCode, const std::vector<std::string>& exports = {}) 
+	uint32 AddLibrary(const D3D12_SHADER_BYTECODE& byteCode, const char** pInExports, uint32 numExports) 
 	{
 		D3D12_DXIL_LIBRARY_DESC* pDesc = m_ScratchAllocator.Allocate<D3D12_DXIL_LIBRARY_DESC>();
 		pDesc->DXILLibrary = byteCode;
-		if (exports.size())
+		if (numExports)
 		{
-			D3D12_EXPORT_DESC* pExports = m_ScratchAllocator.Allocate<D3D12_EXPORT_DESC>((uint32)exports.size());
+			D3D12_EXPORT_DESC* pExports = m_ScratchAllocator.Allocate<D3D12_EXPORT_DESC>(numExports);
 			D3D12_EXPORT_DESC* pCurrentExport = pExports;
-			for (const std::string& exportName : exports)
+			for (uint32 i = 0; i < numExports; ++i)
 			{
-				wchar_t* pNameData = GetUnicode(exportName.c_str());
+				wchar_t* pNameData = GetUnicode(pInExports[i]);
 				pCurrentExport->ExportToRename = pNameData;
 				pCurrentExport->Name = pNameData;
 				pCurrentExport->Flags = D3D12_EXPORT_FLAG_NONE;
 				pCurrentExport++;
 			}
-			pDesc->NumExports = (uint32)exports.size();
+			pDesc->NumExports = numExports;
 			pDesc->pExports = pExports;
 		}
 		return AddStateObject(pDesc, D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY);

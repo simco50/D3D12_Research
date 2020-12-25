@@ -8,6 +8,7 @@
 #include "Graphics/Core/CommandContext.h"
 #include "Graphics/Core/Texture.h"
 #include "Graphics/Core/RaytracingCommon.h"
+#include "Graphics/Core/ResourceViews.h"
 #include "Graphics/RenderGraph/RenderGraph.h"
 #include "Graphics/Mesh.h"
 #include "Scene/Camera.h"
@@ -70,14 +71,18 @@ void RTReflections::Execute(RGGraph& graph, const SceneData& sceneData)
 				bindingTable.AddHitGroupEntry("ShadowHitGroup", { });
 			}
 
+			const D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
+				sceneData.pTLAS->GetSRV()->GetDescriptor(),
+				m_pSceneColor->GetSRV(),
+				sceneData.pResolvedDepth->GetSRV(),
+				sceneData.pResolvedNormals->GetSRV(),
+				sceneData.pLightBuffer->GetSRV()->GetDescriptor(),
+				sceneData.pMesh->GetData()->GetSRV()->GetDescriptor(),
+			};
+
 			context.SetComputeDynamicConstantBufferView(0, &parameters, sizeof(Parameters));
 			context.SetDynamicDescriptor(1, 0, sceneData.pResolvedTarget->GetUAV());
-			context.SetDynamicDescriptor(2, 0, sceneData.pTLAS->GetSRV());
-			context.SetDynamicDescriptor(2, 1, sceneData.pResolvedDepth->GetSRV());
-			context.SetDynamicDescriptor(2, 2, sceneData.pLightBuffer->GetSRV());
-			context.SetDynamicDescriptor(2, 3, sceneData.pMesh->GetData()->GetSRV());
-			context.SetDynamicDescriptor(2, 4, sceneData.pResolvedNormals->GetSRV());
-			context.SetDynamicDescriptor(2, 5, m_pSceneColor->GetSRV());
+			context.SetDynamicDescriptors(2, 0, srvs, ARRAYSIZE(srvs));
 			context.SetDynamicDescriptors(3, 0, sceneData.MaterialTextures.data(), (int)sceneData.MaterialTextures.size());
 
 			context.DispatchRays(bindingTable, sceneData.pResolvedTarget->GetWidth(), sceneData.pResolvedTarget->GetHeight());
@@ -98,6 +103,8 @@ void RTReflections::SetupPipelines(Graphics* pGraphics)
 {
 	//Raytracing Pipeline
 	{
+		ShaderLibrary shaderLibrary("RTReflections.hlsl");
+
 		m_pRayGenSignature = std::make_unique<RootSignature>(pGraphics);
 		m_pRayGenSignature->Finalize("Ray Gen", D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE);
 
@@ -118,10 +125,11 @@ void RTReflections::SetupPipelines(Graphics* pGraphics)
 		m_pGlobalRS->AddStaticSampler(0, CD3DX12_STATIC_SAMPLER_DESC(0, D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT), D3D12_SHADER_VISIBILITY_ALL);
 		m_pGlobalRS->Finalize("Dummy Global", D3D12_ROOT_SIGNATURE_FLAG_NONE);
 
-		ShaderLibrary shaderLibrary("RTReflections.hlsl");
-
 		CD3DX12_STATE_OBJECT_HELPER stateDesc;
-		stateDesc.AddLibrary(CD3DX12_SHADER_BYTECODE(shaderLibrary.GetByteCode(), shaderLibrary.GetByteCodeSize()), { "RayGen", "ClosestHit", "Miss", "ShadowClosestHit", "ShadowMiss" });
+		const char* pLibraryExports[] = {
+			"RayGen", "ClosestHit", "Miss", "ShadowClosestHit", "ShadowMiss"
+		};
+		stateDesc.AddLibrary(CD3DX12_SHADER_BYTECODE(shaderLibrary.GetByteCode(), shaderLibrary.GetByteCodeSize()), pLibraryExports, ARRAYSIZE(pLibraryExports));
 		stateDesc.AddHitGroup("HitGroup", "ClosestHit");
 		stateDesc.AddHitGroup("ShadowHitGroup", "ShadowClosestHit");
 		stateDesc.BindLocalRootSignature("RayGen", m_pRayGenSignature->GetRootSignature());

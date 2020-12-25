@@ -117,7 +117,10 @@ void RTAO::SetupPipelines(Graphics* pGraphics)
 		ShaderLibrary shaderLibrary("RTAO.hlsl");
 
 		CD3DX12_STATE_OBJECT_HELPER stateDesc;
-		stateDesc.AddLibrary(CD3DX12_SHADER_BYTECODE(shaderLibrary.GetByteCode(), shaderLibrary.GetByteCodeSize()), { "RayGen", "ClosestHit", "Miss" });
+		const char* pLibraryExports[] = {
+			"RayGen", "ClosestHit", "Miss"
+		};
+		stateDesc.AddLibrary(CD3DX12_SHADER_BYTECODE(shaderLibrary.GetByteCode(), shaderLibrary.GetByteCodeSize()), pLibraryExports, ARRAYSIZE(pLibraryExports));
 		stateDesc.AddHitGroup("HitGroup", "ClosestHit");
 		stateDesc.BindLocalRootSignature("RayGen", m_pRayGenSignature->GetRootSignature());
 		stateDesc.BindLocalRootSignature("Miss", m_pMissSignature->GetRootSignature());

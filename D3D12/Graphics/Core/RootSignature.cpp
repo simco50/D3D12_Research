@@ -193,11 +193,11 @@ void RootSignature::Finalize(const char* pName, D3D12_ROOT_SIGNATURE_FLAGS flags
 		E_LOG(Error, "RootSignature serialization error: %s", pError);
 		return;
 	}
-	VERIFY_HR_EX(GetParent()->GetDevice()->CreateRootSignature(0, pDataBlob->GetBufferPointer(), pDataBlob->GetBufferSize(), IID_PPV_ARGS(m_pRootSignature.GetAddressOf())), GetParent()->GetDevice());
+	VERIFY_HR_EX(GetParent()->GetDevice()->CreateRootSignature(0, pDataBlob->GetBufferPointer(), pDataBlob->GetBufferSize(), IID_PPV_ARGS(m_pRootSignature.ReleaseAndGetAddressOf())), GetParent()->GetDevice());
 	D3D::SetObjectName(m_pRootSignature.Get(), pName);
 }
 
-void RootSignature::FinalizeFromShader(const char* pName, const Shader& shader)
+void RootSignature::FinalizeFromShader(const char* pName, const ShaderBase& shader)
 {
 	ComPtr<ID3D12VersionedRootSignatureDeserializer> pDeserializer;
 	VERIFY_HR_EX(D3D12CreateVersionedRootSignatureDeserializer(shader.GetByteCode(), shader.GetByteCodeSize(), IID_PPV_ARGS(pDeserializer.GetAddressOf())), GetParent()->GetDevice());
