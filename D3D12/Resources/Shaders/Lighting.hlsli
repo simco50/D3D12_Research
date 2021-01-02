@@ -3,13 +3,14 @@
 #include "CommonBindings.hlsli"
 
 #define MAX_SHADOW_CASTERS 32
-cbuffer LightData : register(b2)
+struct ShadowData
 {
-	float4x4 cLightViewProjections[MAX_SHADOW_CASTERS];
-	float4 cShadowMapOffsets[MAX_SHADOW_CASTERS];
-	float4 cCascadeDepths;
-	uint cNumCascades;
-}
+	float4x4 LightViewProjections[MAX_SHADOW_CASTERS];
+	float4 CascadeDepths;
+	uint NumCascades;
+};
+
+ConstantBuffer<ShadowData> cShadowData : register(b2);
 
 // Angle >= Umbra -> 0
 // Angle < Penumbra -> 1
@@ -60,7 +61,7 @@ float3 TangentSpaceNormalMapping(float3 sampledNormal, float3x3 TBN, bool invert
 
 float DoShadow(float3 wPos, int shadowMapIndex, float invShadowSize)
 {
-	float4x4 lightViewProjection = cLightViewProjections[shadowMapIndex];
+	float4x4 lightViewProjection = cShadowData.LightViewProjections[shadowMapIndex];
 	float4 lightPos = mul(float4(wPos, 1), lightViewProjection);
 	lightPos.xyz /= lightPos.w;
 	lightPos.x = lightPos.x / 2.0f + 0.5f;
@@ -116,15 +117,15 @@ uint GetShadowIndex(Light light, float4 pos, float3 wPos)
 	int shadowIndex = light.ShadowIndex;
 	if(light.Type == LIGHT_DIRECTIONAL)
 	{
-		float4 splits = pos.w > cCascadeDepths;
-		float4 cascades = cCascadeDepths > 0;
+		float4 splits = pos.w > cShadowData.CascadeDepths;
+		float4 cascades = cShadowData.CascadeDepths > 0;
 		int cascadeIndex = dot(splits, cascades);
 
 		const float cascadeFadeTheshold = 0.1f;
-		float nextSplit = cCascadeDepths[cascadeIndex];
-		float splitRange = cascadeIndex == 0 ? nextSplit : nextSplit - cCascadeDepths[cascadeIndex - 1];
+		float nextSplit = cShadowData.CascadeDepths[cascadeIndex];
+		float splitRange = cascadeIndex == 0 ? nextSplit : nextSplit - cShadowData.CascadeDepths[cascadeIndex - 1];
 		float fadeFactor = (nextSplit - pos.w) / splitRange;
-		if(fadeFactor <= cascadeFadeTheshold && cascadeIndex != cNumCascades - 1)
+		if(fadeFactor <= cascadeFadeTheshold && cascadeIndex != cShadowData.NumCascades - 1)
 		{
 			float lerpAmount = smoothstep(0.0f, cascadeFadeTheshold, fadeFactor);
 			float dither = InterleavedGradientNoise(pos.xy);
@@ -245,7 +246,7 @@ float3 ApplyVolumetricLighting(float3 startPoint, float3 endPoint, float4 pos, f
 			if(light.ShadowIndex >= 0)
 			{
 				int shadowMapIndex = GetShadowIndex(light, pos, currentPosition);
-				float4x4 lightViewProjection = cLightViewProjections[shadowMapIndex];
+				float4x4 lightViewProjection = cShadowData.LightViewProjections[shadowMapIndex];
 				float4 lightPos = mul(float4(currentPosition, 1), lightViewProjection);
 
 				lightPos.xyz /= lightPos.w;
