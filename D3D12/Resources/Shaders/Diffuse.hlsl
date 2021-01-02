@@ -9,7 +9,7 @@
 				"CBV(b2, visibility=SHADER_VISIBILITY_PIXEL), " \
 				"DescriptorTable(SRV(t1000, numDescriptors = 128, space = 2), visibility=SHADER_VISIBILITY_PIXEL), " \
 				"DescriptorTable(SRV(t3, numDescriptors = 7), visibility=SHADER_VISIBILITY_PIXEL), " \
-				"DescriptorTable(SRV(t10, numDescriptors = 32, space = 1), visibility=SHADER_VISIBILITY_PIXEL), " \
+				"DescriptorTable(SRV(t100, numDescriptors = 32, space = 1), visibility=SHADER_VISIBILITY_PIXEL), " \
 				"SRV(t500, visibility=SHADER_VISIBILITY_PIXEL), " \
 				"StaticSampler(s0, filter=FILTER_ANISOTROPIC, maxAnisotropy = 4, visibility = SHADER_VISIBILITY_PIXEL), " \
 				"StaticSampler(s1, filter=FILTER_MIN_MAG_MIP_POINT, addressU = TEXTURE_ADDRESS_CLAMP, addressV = TEXTURE_ADDRESS_CLAMP, visibility = SHADER_VISIBILITY_PIXEL), " \

@@ -72,18 +72,19 @@ void RTReflections::Execute(RGGraph& graph, const SceneData& sceneData)
 			}
 
 			const D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
-				sceneData.pTLAS->GetSRV()->GetDescriptor(),
-				m_pSceneColor->GetSRV(),
-				sceneData.pResolvedDepth->GetSRV(),
-				sceneData.pResolvedNormals->GetSRV(),
 				sceneData.pLightBuffer->GetSRV()->GetDescriptor(),
+				sceneData.pLightBuffer->GetSRV()->GetDescriptor() /*dummy*/,
+				sceneData.pResolvedDepth->GetSRV(),
+				m_pSceneColor->GetSRV(),
+				sceneData.pResolvedNormals->GetSRV(),
 				sceneData.pMesh->GetData()->GetSRV()->GetDescriptor(),
 			};
 
 			context.SetComputeDynamicConstantBufferView(0, &parameters, sizeof(Parameters));
 			context.SetDynamicDescriptor(1, 0, sceneData.pResolvedTarget->GetUAV());
 			context.SetDynamicDescriptors(2, 0, srvs, ARRAYSIZE(srvs));
-			context.SetDynamicDescriptors(3, 0, sceneData.MaterialTextures.data(), (int)sceneData.MaterialTextures.size());
+			context.SetDynamicDescriptor(3, 0, sceneData.pTLAS->GetSRV()->GetDescriptor());
+			context.SetDynamicDescriptors(4, 0, sceneData.MaterialTextures.data(), (int)sceneData.MaterialTextures.size());
 
 			context.DispatchRays(bindingTable, sceneData.pResolvedTarget->GetWidth(), sceneData.pResolvedTarget->GetHeight());
 		});
@@ -118,12 +119,7 @@ void RTReflections::SetupPipelines(Graphics* pGraphics)
 		m_pMissSignature->Finalize("Miss", D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE);
 
 		m_pGlobalRS = std::make_unique<RootSignature>(pGraphics);
-		m_pGlobalRS->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_ALL);
-		m_pGlobalRS->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, D3D12_SHADER_VISIBILITY_ALL);
-		m_pGlobalRS->SetDescriptorTableSimple(2, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 6, D3D12_SHADER_VISIBILITY_ALL);
-		m_pGlobalRS->SetDescriptorTableSimple(3, 200, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 128, D3D12_SHADER_VISIBILITY_ALL);
-		m_pGlobalRS->AddStaticSampler(0, CD3DX12_STATIC_SAMPLER_DESC(0, D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT), D3D12_SHADER_VISIBILITY_ALL);
-		m_pGlobalRS->Finalize("Dummy Global", D3D12_ROOT_SIGNATURE_FLAG_NONE);
+		m_pGlobalRS->FinalizeFromShader("Global RS", shaderLibrary);
 
 		CD3DX12_STATE_OBJECT_HELPER stateDesc;
 		const char* pLibraryExports[] = {
