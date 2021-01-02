@@ -70,6 +70,7 @@ struct RenderPassInfo
 		RenderPassAccess Access = RenderPassAccess::DontCare_DontCare;
 		RenderPassAccess StencilAccess = RenderPassAccess::DontCare_DontCare;
 		Texture* Target = nullptr;
+		bool Write = true;
 	};
 
 	RenderPassInfo()
@@ -82,10 +83,11 @@ struct RenderPassInfo
 		DepthStencilTarget.Access = access;
 		DepthStencilTarget.Target = pDepthBuffer;
 		DepthStencilTarget.StencilAccess = RenderPassAccess::NoAccess;
+		DepthStencilTarget.Write = true;
 		WriteUAVs = uavWrites;
 	}
 
-	RenderPassInfo(Texture* pRenderTarget, RenderPassAccess renderTargetAccess, Texture* pDepthBuffer, RenderPassAccess depthAccess, bool uavWrites = false, RenderPassAccess stencilAccess = RenderPassAccess::NoAccess)
+	RenderPassInfo(Texture* pRenderTarget, RenderPassAccess renderTargetAccess, Texture* pDepthBuffer, RenderPassAccess depthAccess, bool depthWrite, bool uavWrites = false, RenderPassAccess stencilAccess = RenderPassAccess::NoAccess)
 		: RenderTargetCount(1)
 	{
 		RenderTargets[0].Access = renderTargetAccess;
@@ -93,6 +95,7 @@ struct RenderPassInfo
 		DepthStencilTarget.Access = depthAccess;
 		DepthStencilTarget.Target = pDepthBuffer;
 		DepthStencilTarget.StencilAccess = stencilAccess;
+		DepthStencilTarget.Write = depthWrite;
 		WriteUAVs = uavWrites;
 	}
 

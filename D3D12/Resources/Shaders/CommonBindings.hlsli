@@ -1,12 +1,16 @@
 #ifndef __INCLUDE_COMMON_BINDINGS__
 #define __INCLUDE_COMMON_BINDINGS__
 
+#include "Common.hlsli"
+
 //SRVs
 StructuredBuffer<Light> tLights :                           register(t5);
 Texture2D tAO :                                             register(t6);
 Texture2D tDepth :                                          register(t7);
 Texture2D tPreviousSceneColor :                             register(t8);
-Texture2D tShadowMapTextures[] :                            register(t10, space1);
+Texture2D tSceneNormals :                                   register(t9);
+ByteAddressBuffer tGeometryData :                           register(t10);
+Texture2D tShadowMapTextures[] :                            register(t100, space1);
 Texture2D tMaterialTextures[] :                             register(t1000, space2);
 
 //Samplers

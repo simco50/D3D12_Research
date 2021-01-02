@@ -8,6 +8,8 @@
 #include "Core/CommandLine.h"
 #include "Core/TaskQueue.h"
 
+#define BREAK_ON_ALLOC 0
+
 const int gWindowWidth = 1240;
 const int gWindowHeight = 720;
 const int gMsaaSampleCount = 1;
@@ -23,7 +25,10 @@ public:
 		CommandLine::Parse(lpCmdLine);
 
 		_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
-		//_CrtSetBreakAlloc(6528);
+
+#if BREAK_ON_ALLOC > 0
+		_CrtSetBreakAlloc(BREAK_ON_ALLOC);
+#endif
 
 		Console::Initialize();
 		E_LOG(Info, "Startup");
@@ -48,7 +53,7 @@ public:
 			while (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE))
 			{
 				TranslateMessage(&msg);
-				DispatchMessage(&msg);
+				DispatchMessageA(&msg);
 
 				if (msg.message == WM_QUIT)
 				{

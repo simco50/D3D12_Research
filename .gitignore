@@ -24,3 +24,4 @@ _Temp/
 *.opt
 vs-chromium-project.txt
 Screenshot*.jpg
+StructLayoutSettings.json

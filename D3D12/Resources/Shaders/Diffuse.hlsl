@@ -9,7 +9,7 @@
 				"CBV(b2, visibility=SHADER_VISIBILITY_PIXEL), " \
 				"DescriptorTable(SRV(t1000, numDescriptors = 128, space = 2), visibility=SHADER_VISIBILITY_PIXEL), " \
 				"DescriptorTable(SRV(t3, numDescriptors = 7), visibility=SHADER_VISIBILITY_PIXEL), " \
-				"DescriptorTable(SRV(t10, numDescriptors = 32, space = 1), visibility=SHADER_VISIBILITY_PIXEL), " \
+				"DescriptorTable(SRV(t100, numDescriptors = 32, space = 1), visibility=SHADER_VISIBILITY_PIXEL), " \
 				"SRV(t500, visibility=SHADER_VISIBILITY_PIXEL), " \
 				"StaticSampler(s0, filter=FILTER_ANISOTROPIC, maxAnisotropy = 4, visibility = SHADER_VISIBILITY_PIXEL), " \
 				"StaticSampler(s1, filter=FILTER_MIN_MAG_MIP_POINT, addressU = TEXTURE_ADDRESS_CLAMP, addressV = TEXTURE_ADDRESS_CLAMP, visibility = SHADER_VISIBILITY_PIXEL), " \
@@ -127,58 +127,6 @@ PSInput VSMain(VSInput input)
 	return result;
 }
 
-float3 ScreenSpaceReflectionsRT(float3 positionWS, float4 position, float3 N, float3 V, float R)
-{
-	float3 ssr = 0;
-#if _INLINE_RT
-	const float roughnessThreshold = 0.7f;
-	bool ssrEnabled = R < roughnessThreshold;
-	if(ssrEnabled)
-	{
-		float3 reflectionWs = normalize(reflect(-V, N));
-		const float reflectionThreshold = 0.0f;
-		if (dot(V, reflectionWs) <= reflectionThreshold)
-		{
-			RayDesc ray;
-			ray.Origin = positionWS;
-			ray.Direction = reflectionWs;
-			ray.TMin = 0.001;
-			ray.TMax = position.w;
-
-			RayQuery<RAY_FLAG_NONE> q;
-
-			q.TraceRayInline(
-				tAccelerationStructure,
-				RAY_FLAG_NONE,
-				~0,
-				ray);
-			q.Proceed();
-
-			if(q.CommittedStatus() == COMMITTED_TRIANGLE_HIT)
-			{
-				float3 hitWS = ray.Origin + ray.Direction * q.CommittedRayT();
-				float3 hitVS = mul(float4(hitWS, 1), cViewData.View).xyz;
-				float3 texCoord = ViewToWindow(hitVS, cViewData.Projection);
-				float sceneDepth = tDepth.SampleLevel(sClampSampler, texCoord.xy, 0).r;
-				float viewDepth = texCoord.z;
-				const float thickness = 0.05f;
-				if(abs(sceneDepth - viewDepth) < thickness)
-				{
-					texCoord = mul(float4(texCoord, 1), cViewData.ReprojectionMatrix).xyz;
-					ssr = saturate(0.5f * tPreviousSceneColor.SampleLevel(sClampSampler, texCoord.xy, 0).xyz);
-					float2 dist = (float2(texCoord.x, 1.0f - texCoord.y) * 2.0f) - float2(1.0f, 1.0f);
-					float edgeAttenuation = (1.0 - q.CommittedRayT() / position.w) * 4.0f;
-					edgeAttenuation = saturate(edgeAttenuation);
-					edgeAttenuation *= smoothstep(0.0f, 0.5f, saturate(1.0 - dot(dist, dist)));
-					ssr *= edgeAttenuation;
-				}
-			}
-		}
-	}
-#endif
-	return ssr;
-}
-
 float3 ScreenSpaceReflections(float4 position, float3 positionVS, float3 N, float3 V, float R)
 {
 	float3 ssr = 0;
@@ -260,39 +208,31 @@ float3 ScreenSpaceReflections(float4 position, float3 positionVS, float3 N, floa
 	return ssr;
 }
 
-float4 PSMain(PSInput input) : SV_TARGET
+void PSMain(PSInput input,
+			out float4 outColor : SV_TARGET0,
+			out float4 outNormalRoughness : SV_TARGET1)
 {
 	float4 baseColor = tMaterialTextures[cObjectData.Diffuse].Sample(sDiffuseSampler, input.texCoord);
 	float3 sampledNormal = tMaterialTextures[cObjectData.Normal].Sample(sDiffuseSampler, input.texCoord).xyz;
 	float metalness = tMaterialTextures[cObjectData.Metallic].Sample(sDiffuseSampler, input.texCoord).r;
-	float r = 0.5;// tMaterialTextures[cObjectData.Roughness].Sample(sDiffuseSampler, input.texCoord).r;
+	float r = 0.5; //tMaterialTextures[cObjectData.Roughness].Sample(sDiffuseSampler, input.texCoord).r;
 	float3 specular = 0.5f;
 
 	float3 diffuseColor = ComputeDiffuseColor(baseColor.rgb, metalness);
 	float3 specularColor = ComputeF0(specular.r, baseColor.rgb, metalness);
 
 	float3x3 TBN = float3x3(normalize(input.tangent), normalize(input.bitangent), normalize(input.normal));
-	float3 N = TangentSpaceNormalMapping(sampledNormal, TBN, input.texCoord, true);
+	float3 N = TangentSpaceNormalMapping(sampledNormal, TBN, true);
 	float3 V = normalize(cViewData.ViewPosition.xyz - input.positionWS);	
 
-	float3 ssr = 0;
-	if (cViewData.SsrSamples > 0)
-	{
-		if(cViewData.SsrSamples < 32)
-		{
-			ssr = ScreenSpaceReflections(input.position, input.positionVS, N, V, r);
-		}
-		else
-		{
-			ssr = ScreenSpaceReflectionsRT(input.positionWS, input.position, N, V, r);
-		}
-	}
+	float3 ssr = ScreenSpaceReflections(input.position, input.positionVS, N, V, r);
 
 	LightResult lighting = DoLight(input.position, input.positionWS, N, V, diffuseColor, specularColor, r);
 
 	float ao = tAO.SampleLevel(sDiffuseSampler, (float2)input.position.xy * cViewData.InvScreenDimensions, 0).r;
-	float3 color = lighting.Diffuse + lighting.Specular + ssr * ao; 
+	float3 color = lighting.Diffuse + lighting.Specular;
 	color += ApplyAmbientLight(diffuseColor, ao, tLights[0].GetColor().rgb * 0.1f);
+	color += ssr * ao;
 
 	for(int i = 0; i < cViewData.LightCount; ++i)
 	{
@@ -303,5 +243,8 @@ float4 PSMain(PSInput input) : SV_TARGET
 		}
 	}
 
-	return float4(color, baseColor.a);
+	outColor = float4(color, baseColor.a);
+
+    float reflectivity = ao * saturate(pow(1.0 - saturate(dot(V, N)), 5.0));
+	outNormalRoughness = float4(N, reflectivity);
 }
