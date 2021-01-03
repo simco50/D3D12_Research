@@ -1646,7 +1646,7 @@ void Graphics::OnResize(int width, int height)
 
 	m_pAmbientOcclusion->Create(TextureDesc::Create2D(Math::DivideAndRoundUp(width, 2), Math::DivideAndRoundUp(height, 2), DXGI_FORMAT_R8_UNORM, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource));
 
-	m_pCamera->SetAspectRatio((float)width / height);
+	m_pCamera->SetViewport(FloatRect(0, 0, (float)width, (float)height));
 	m_pCamera->SetDirty();
 
 	m_pClusteredForward->OnSwapchainCreated(width, height);

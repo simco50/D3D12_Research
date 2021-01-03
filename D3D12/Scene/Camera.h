@@ -13,15 +13,17 @@ public:
 	const Vector3& GetPosition() const { return m_Position; }
 	const Quaternion& GetRotation() const { return m_Rotation; }
 
+	void SetViewport(const FloatRect& rect);
 	void SetDirty() { m_Dirty = true; }
 	void SetFoV(float fov);
 	void SetClippingPlanes(float nearPlane, float farPlane);
-	void SetAspectRatio(float aspectRatio);
 
 	void SetOrthographic(bool orthographic, float size = -1.0);
 
 	void SetNearPlane(float nearPlane);
 	void SetFarPlane(float farPlane);
+
+	void SetJitterWeight(float weight);
 
 	float GetNear() const { return m_NearPlane; }
 	float GetFar() const { return m_FarPlane; }
@@ -46,12 +48,13 @@ protected:
 private:
 	void UpdateMatrices() const;
 
+	FloatRect m_Viewport;
 	float m_FoV = 60.0f * Math::PI / 180;
 	float m_NearPlane = 1.0f;
 	float m_FarPlane = 500.0f;
 	float m_OrthographicSize = 1;
-	float m_AspectRatio = 1.0f;
 	int m_JitterIndex = 0;
+	float m_JitterWeight = 1.0f;
 	mutable Vector2 m_Jitter;
 	Vector2 m_PreviousJitter;
 

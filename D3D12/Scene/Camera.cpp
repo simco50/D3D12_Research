@@ -15,6 +15,12 @@ void Camera::SetRotation(const Quaternion& rotation)
 	OnDirty();
 }
 
+void Camera::SetViewport(const FloatRect& rect)
+{
+	m_Viewport = rect;
+	OnDirty();
+}
+
 void Camera::SetFoV(float fov)
 {
 	m_FoV = fov;
@@ -25,12 +31,6 @@ void Camera::SetClippingPlanes(float nearPlane, float farPlane)
 {
 	m_NearPlane = nearPlane;
 	m_FarPlane = farPlane;
-	OnDirty();
-}
-
-void Camera::SetAspectRatio(float aspectRatio)
-{
-	m_AspectRatio = aspectRatio;
 	OnDirty();
 }
 
@@ -53,6 +53,12 @@ void Camera::SetNearPlane(float nearPlane)
 void Camera::SetFarPlane(float farPlane)
 {
 	m_FarPlane = farPlane;
+	OnDirty();
+}
+
+void Camera::SetJitterWeight(float weight)
+{
+	m_JitterWeight = weight;
 	OnDirty();
 }
 
@@ -103,24 +109,23 @@ void Camera::UpdateMatrices() const
 	{
 		m_ViewInverse = Matrix::CreateFromQuaternion(m_Rotation) * Matrix::CreateTranslation(m_Position);
 		m_ViewInverse.Invert(m_View);
+		float aspect = m_Viewport.GetWidth() / m_Viewport.GetHeight();
 		if (m_Perspective)
 		{
-			m_Projection = Math::CreatePerspectiveMatrix(m_FoV, m_AspectRatio, m_NearPlane, m_FarPlane);
+			m_Projection = Math::CreatePerspectiveMatrix(m_FoV, aspect, m_NearPlane, m_FarPlane);
 		}
 		else
 		{
-			m_Projection = Math::CreateOrthographicMatrix(m_OrthographicSize * m_AspectRatio, m_OrthographicSize, m_NearPlane, m_FarPlane);
+			m_Projection = Math::CreateOrthographicMatrix(m_OrthographicSize * aspect, m_OrthographicSize, m_NearPlane, m_FarPlane);
 		}
 
-#if 0
 		constexpr Math::HaltonSequence<8, 2> x;
 		constexpr Math::HaltonSequence<8, 3> y;
 
-		m_Jitter.x = x[m_JitterIndex];
-		m_Jitter.y = y[m_JitterIndex];
-		m_Projection.m[2][0] += (m_Jitter.x * 2.0f - 1.0f) / 1920.0f;
-		m_Projection.m[2][1] += (m_Jitter.y * 2.0f - 1.0f) / 1080.0f;;
-#endif
+		m_Jitter.x = m_JitterWeight * x[m_JitterIndex];
+		m_Jitter.y = m_JitterWeight * y[m_JitterIndex];
+		m_Projection.m[3][0] += (m_Jitter.x * 2.0f - 1.0f) / m_Viewport.GetWidth();
+		m_Projection.m[3][1] += (m_Jitter.y * 2.0f - 1.0f) / m_Viewport.GetHeight();
 
 		m_Projection.Invert(m_ProjectionInverse);
 		m_ViewProjection = m_View * m_Projection;
@@ -146,7 +151,7 @@ void Camera::Update()
 void FreeCamera::Update()
 {
 	Camera::Update();
-	//Camera movement
+
 	Vector3 movement;
 	if (Input::Instance().IsMouseDown(1))
 	{
