@@ -328,4 +328,10 @@ void SwizzleThreadID(uint2 dispatchDimensions, uint2 numThreads, int2 groupId, i
     swizzledvThreadID.y = (CTA_Dim.y)*swizzledvThreadGroupID.y + groupThreadIndex.y;
 }
 
+float ScreenFade(float2 uv)
+{
+    float2 fade = max(12.0f * abs(uv - 0.5f) - 5.0f, 0.0f);
+    return saturate(1.0 - dot(fade, fade));
+}
+
 #endif

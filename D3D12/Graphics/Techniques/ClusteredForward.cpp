@@ -256,6 +256,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 			{
 				Matrix View;
 				Matrix Projection;
+				Matrix ProjectionInverse;
 				Matrix ViewProjection;
 				Matrix ReprojectionMatrix;
 				Vector4 ViewPosition;
@@ -275,6 +276,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 			Matrix view = resources.pCamera->GetView();
 			frameData.View = view;
 			frameData.Projection = resources.pCamera->GetProjection();
+			frameData.ProjectionInverse = resources.pCamera->GetProjectionInverse();
 			frameData.InvScreenDimensions = Vector2(1.0f / screenDimensions.x, 1.0f / screenDimensions.y);
 			frameData.NearZ = nearZ;
 			frameData.FarZ = farZ;

@@ -7,11 +7,6 @@
 				"DescriptorTable(SRV(t1000, numDescriptors = 128, space = 2), visibility=SHADER_VISIBILITY_PIXEL), " \
 				"StaticSampler(s0, filter=FILTER_MIN_MAG_MIP_LINEAR, visibility = SHADER_VISIBILITY_PIXEL), "
 
-struct PerViewData
-{
-	float4x4 ViewProjection;
-};
-
 struct PerObjectData
 {
 	float4x4 World;
@@ -19,6 +14,11 @@ struct PerObjectData
     int Normal;
     int Roughness;
     int Metallic;
+};
+
+struct PerViewData
+{
+	float4x4 ViewProjection;
 };
 
 ConstantBuffer<PerObjectData> cObjectData : register(b0);

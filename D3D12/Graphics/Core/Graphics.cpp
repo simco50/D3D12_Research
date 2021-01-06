@@ -1566,7 +1566,7 @@ void Graphics::InitializeAssets(CommandContext& context)
 	}
 
 	{
-		int lightCount = 5;
+		int lightCount = 1;
 		m_Lights.resize(lightCount);
 
 		Vector3 Position(-150, 160, -10);
@@ -1576,7 +1576,7 @@ void Graphics::InitializeAssets(CommandContext& context)
 		m_Lights[0].CastShadows = true;
 		m_Lights[0].VolumetricLighting = true;
 
-		m_Lights[1] = Light::Spot(Vector3(62, 10, -18), 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1.0f, 0.7f, 0.3f, 1.0f));
+		/*m_Lights[1] = Light::Spot(Vector3(62, 10, -18), 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1.0f, 0.7f, 0.3f, 1.0f));
 		m_Lights[1].CastShadows = true;
 		m_Lights[1].VolumetricLighting = false;
 		m_Lights[2] = Light::Spot(Vector3(-48, 10, 18), 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1.0f, 0.7f, 0.3f, 1.0f));
@@ -1588,7 +1588,7 @@ void Graphics::InitializeAssets(CommandContext& context)
 		m_Lights[4] = Light::Spot(Vector3(62, 10, 18), 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1.0f, 0.7f, 0.3f, 1.0f));
 		m_Lights[4].CastShadows = true;
 		m_Lights[4].VolumetricLighting = false;
-
+		*/
 
 		m_pLightBuffer = std::make_unique<Buffer>(this, "Lights");
 		m_pLightBuffer->Create(BufferDesc::CreateStructured(lightCount, sizeof(Light), BufferFlag::ShaderResource));
@@ -2272,17 +2272,6 @@ void Graphics::IdleGPU()
 			pCommandQueue->WaitForIdle();
 		}
 	}
-}
-
-uint32 Graphics::GetMaxMSAAQuality(uint32 msaa, DXGI_FORMAT format)
-{
-	D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS qualityLevels;
-	qualityLevels.Flags = D3D12_MULTISAMPLE_QUALITY_LEVELS_FLAG_NONE;
-	qualityLevels.Format = format == DXGI_FORMAT_UNKNOWN ? RENDER_TARGET_FORMAT : format;
-	qualityLevels.NumQualityLevels = 0;
-	qualityLevels.SampleCount = msaa;
-	VERIFY_HR_EX(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS, &qualityLevels, sizeof(qualityLevels)), GetDevice());
-	return qualityLevels.NumQualityLevels - 1;
 }
 
 ID3D12Resource* Graphics::CreateResource(const D3D12_RESOURCE_DESC& desc, D3D12_RESOURCE_STATES initialState, D3D12_HEAP_TYPE heapType, D3D12_CLEAR_VALUE* pClearValue /*= nullptr*/)

@@ -95,6 +95,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& resources)
 			{
 				Matrix View;
 				Matrix Projection;
+				Matrix ProjectionInverse;
 				Matrix ViewProjection;
 				Matrix ReprojectionMatrix;
 				Vector4 ViewPosition;
@@ -110,6 +111,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& resources)
 			//Camera constants
 			frameData.View = resources.pCamera->GetView();
 			frameData.Projection = resources.pCamera->GetProjection();
+			frameData.ProjectionInverse = resources.pCamera->GetProjectionInverse();
 			frameData.InvScreenDimensions = Vector2(1.0f / resources.pRenderTarget->GetWidth(), 1.0f / resources.pRenderTarget->GetHeight());
 			frameData.NearZ = resources.pCamera->GetNear();
 			frameData.FarZ = resources.pCamera->GetFar();
