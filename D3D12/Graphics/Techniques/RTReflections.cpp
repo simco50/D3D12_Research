@@ -41,10 +41,12 @@ void RTReflections::Execute(RGGraph& graph, const SceneData& sceneData)
 			{
 				Matrix ViewInverse;
 				Matrix ViewProjectionInverse;
+				uint32 NumLights;
 			} parameters{};
 
 			parameters.ViewInverse = sceneData.pCamera->GetViewInverse();
 			parameters.ViewProjectionInverse = sceneData.pCamera->GetProjectionInverse() * sceneData.pCamera->GetViewInverse();
+			parameters.NumLights = sceneData.pLightBuffer->GetDesc().ElementCount;
 
 			ShaderBindingTable bindingTable(m_pRtSO.Get());
 			bindingTable.AddRayGenEntry("RayGen", {});

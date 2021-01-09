@@ -27,6 +27,7 @@ cbuffer ShaderParameters : register(b0)
 {
 	float4x4 cViewInverse;
 	float4x4 cViewProjectionInverse;
+	uint cNumLights;
 }
 
 cbuffer HitData : register(b1)
@@ -77,7 +78,7 @@ void ClosestHit(inout RayPayload payload, BuiltInTriangleIntersectionAttributes 
 	float3 specularColor = ComputeF0(0.5f, diffuse, 0);
 
 	LightResult totalResult = (LightResult)0;
-	for(int i = 0; i < 3; ++i)
+	for(int i = 0; i < cNumLights; ++i)
 	{
 		Light light = tLights[i];
 		float attenuation = GetAttenuation(light, wPos);
@@ -98,7 +99,7 @@ void ClosestHit(inout RayPayload payload, BuiltInTriangleIntersectionAttributes 
 
 		// Trace the ray
 		TraceRay(
-			tAccelerationStructure, 														//AccelerationStructure
+			tAccelerationStructure, 										//AccelerationStructure
 			RAY_FLAG_FORCE_OPAQUE |
 			RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH,					 	//RayFlags
 			0xFF, 															//InstanceInclusionMask
@@ -144,7 +145,6 @@ void RayGen()
 
 	float2 dimInv = rcp(DispatchRaysDimensions().xy);
 	uint2 launchIndex = DispatchRaysIndex().xy;
-	uint launchIndex1d = launchIndex.x + launchIndex.y * DispatchRaysDimensions().x;
 	float2 texCoord = (float2)launchIndex * dimInv;
 
 	float3 world = WorldFromDepth(texCoord, tDepth.SampleLevel(sDiffuseSampler, texCoord, 0).r, cViewProjectionInverse);

@@ -129,9 +129,6 @@ public:
 	void Create(const BufferDesc& desc);
 	void SetData(CommandContext* pContext, const void* pData, uint64 dataSize, uint32 offset = 0);
 
-	void* Map(uint32 subResource = 0, uint64 readFrom = 0, uint64 readTo = 0);
-	void Unmap(uint32 subResource = 0, uint64 writtenFrom = 0, uint64 writtenTo = 0);
-
 	inline uint64 GetSize() const { return (uint64)m_Desc.ElementCount * m_Desc.ElementSize; }
 	const BufferDesc& GetDesc() const { return m_Desc; }
 

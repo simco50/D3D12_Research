@@ -1392,7 +1392,7 @@ void Graphics::InitD3D()
 	m_pVelocity = std::make_unique<Texture>(this, "Velocity");
 	m_pTAASource = std::make_unique<Texture>(this, "TAA Target");
 
-	m_pDynamicAllocationManager = std::make_unique<DynamicAllocationManager>(this);
+	m_pDynamicAllocationManager = std::make_unique<DynamicAllocationManager>(this, BufferFlag::Upload);
 	m_pClusteredForward = std::make_unique<ClusteredForward>(this);
 	m_pTiledForward = std::make_unique<TiledForward>(this);
 	m_pRTReflections = std::make_unique<RTReflections>(this);

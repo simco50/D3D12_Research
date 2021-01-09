@@ -17,7 +17,6 @@ Buffer::Buffer(Graphics* pGraphics, ID3D12Resource* pResource, D3D12_RESOURCE_ST
 
 Buffer::~Buffer()
 {
-
 }
 
 D3D12_RESOURCE_DESC GetResourceDesc(const BufferDesc& bufferDesc)
@@ -117,22 +116,6 @@ void Buffer::SetData(CommandContext* pContext, const void* pData, uint64 dataSiz
 {
 	check(dataSize + offset <= GetSize());
 	pContext->InitializeBuffer(this, pData, dataSize, offset);
-}
-
-void* Buffer::Map(uint32 subResource /*= 0*/, uint64 readFrom /*= 0*/, uint64 readTo /*= 0*/)
-{
-	check(m_pResource);
-	CD3DX12_RANGE range(readFrom, readTo);
-	void* pMappedData = nullptr;
-	m_pResource->Map(subResource, &range, &pMappedData);
-	return pMappedData;
-}
-
-void Buffer::Unmap(uint32 subResource /*= 0*/, uint64 writtenFrom /*= 0*/, uint64 writtenTo /*= 0*/)
-{
-	check(m_pResource);
-	CD3DX12_RANGE range(writtenFrom, writtenFrom);
-	m_pResource->Unmap(subResource, &range);
 }
 
 void Buffer::CreateUAV(UnorderedAccessView** pView, const BufferUAVDesc& desc)

@@ -66,11 +66,14 @@ public:
 	GraphicsResource(Graphics* pParent, ID3D12Resource* pResource, D3D12_RESOURCE_STATES state);
 	virtual ~GraphicsResource();
 
+	void* Map(uint32 subResource = 0, uint64 readFrom = 0, uint64 readTo = 0);
+	void Unmap(uint32 subResource = 0, uint64 writtenFrom = 0, uint64 writtenTo = 0);
+	void* GetMappedData() const { return m_pMappedData; }
+
 	void Release();
 	void SetName(const char* pName);
 	std::string GetName() const;
 
-public:
 	inline ID3D12Resource* GetResource() const { return m_pResource; }
 	inline D3D12_GPU_VIRTUAL_ADDRESS GetGpuHandle() const { return m_pResource->GetGPUVirtualAddress(); }
 
@@ -79,6 +82,7 @@ public:
 
 protected:
 	ID3D12Resource* m_pResource = nullptr;
+	void* m_pMappedData = nullptr;
 	std::vector<std::unique_ptr<ResourceView>> m_Descriptors;
 	ResourceState m_ResourceState;
 };
