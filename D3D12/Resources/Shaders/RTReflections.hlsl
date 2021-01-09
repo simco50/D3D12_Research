@@ -82,21 +82,26 @@ void ClosestHit(inout RayPayload payload, BuiltInTriangleIntersectionAttributes 
 	{
 		Light light = tLights[i];
 		float attenuation = GetAttenuation(light, wPos);
+		if(attenuation <= 0.0f)
+		{
+			continue;
+		}
+		
 		float3 L = normalize(light.Position - wPos);
 		if(light.Type == LIGHT_DIRECTIONAL)
 		{
 			L = -light.Direction;
 		}
 
-		ShadowRayPayload shadowRay = (ShadowRayPayload)0;
-
-	#if 1
+#define SHADOW_RAY 1
+#if SHADOW_RAY
 		RayDesc ray;
 		ray.Origin = wPos + L * 0.001f;
 		ray.Direction = L;
 		ray.TMin = 0.0f;
 		ray.TMax = length(wPos - light.Position);
 
+		ShadowRayPayload shadowRay = (ShadowRayPayload)0;
 		// Trace the ray
 		TraceRay(
 			tAccelerationStructure, 										//AccelerationStructure
@@ -110,7 +115,7 @@ void ClosestHit(inout RayPayload payload, BuiltInTriangleIntersectionAttributes 
 			shadowRay 														//Payload
 		);
 		attenuation *= shadowRay.hit;
-	#endif
+#endif // SHADOW_RAY
 
 		LightResult result = DefaultLitBxDF(specularColor, roughness, diffuse, N, V, L, attenuation);
 		float4 color = light.GetColor();

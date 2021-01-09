@@ -1566,7 +1566,7 @@ void Graphics::InitializeAssets(CommandContext& context)
 	}
 
 	{
-		int lightCount = 1;
+		int lightCount = 5;
 		m_Lights.resize(lightCount);
 
 		Vector3 Position(-150, 160, -10);
@@ -1576,7 +1576,7 @@ void Graphics::InitializeAssets(CommandContext& context)
 		m_Lights[0].CastShadows = true;
 		m_Lights[0].VolumetricLighting = true;
 
-		/*m_Lights[1] = Light::Spot(Vector3(62, 10, -18), 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1.0f, 0.7f, 0.3f, 1.0f));
+		m_Lights[1] = Light::Spot(Vector3(62, 10, -18), 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1.0f, 0.7f, 0.3f, 1.0f));
 		m_Lights[1].CastShadows = true;
 		m_Lights[1].VolumetricLighting = false;
 		m_Lights[2] = Light::Spot(Vector3(-48, 10, 18), 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1.0f, 0.7f, 0.3f, 1.0f));
@@ -1588,7 +1588,7 @@ void Graphics::InitializeAssets(CommandContext& context)
 		m_Lights[4] = Light::Spot(Vector3(62, 10, 18), 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1.0f, 0.7f, 0.3f, 1.0f));
 		m_Lights[4].CastShadows = true;
 		m_Lights[4].VolumetricLighting = false;
-		*/
+		
 
 		m_pLightBuffer = std::make_unique<Buffer>(this, "Lights");
 		m_pLightBuffer->Create(BufferDesc::CreateStructured(lightCount, sizeof(Light), BufferFlag::ShaderResource));
