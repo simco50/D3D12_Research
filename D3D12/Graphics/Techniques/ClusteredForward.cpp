@@ -324,7 +324,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 			renderPass.RenderTargetCount = 2;
 			renderPass.RenderTargets[0].Access = RenderPassAccess::DontCare_Store;
 			renderPass.RenderTargets[0].Target = resources.pRenderTarget;
-			renderPass.RenderTargets[1].Access = RenderPassAccess::DontCare_Resolve;
+			renderPass.RenderTargets[1].Access = RenderPassAccess::Clear_Resolve;
 			renderPass.RenderTargets[1].Target = resources.pNormals;
 			renderPass.RenderTargets[1].ResolveTarget = resources.pResolvedNormals;
 			context.BeginRenderPass(renderPass);

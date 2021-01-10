@@ -1,6 +1,7 @@
 #include "Common.hlsli"
 #include "ShadingModels.hlsli"
 #include "Lighting.hlsli"
+#include "SkyCommon.hlsli"
 
 GlobalRootSignature GlobalRootSig =
 {
@@ -12,7 +13,7 @@ GlobalRootSignature GlobalRootSig =
 	"StaticSampler(s0, filter=FILTER_MIN_MAG_LINEAR_MIP_POINT, visibility = SHADER_VISIBILITY_ALL),"
 };
 
-RWTexture2D<float4> gOutput : register(u0);
+RWTexture2D<float4> uOutput : register(u0);
 
 struct Vertex
 {
@@ -23,14 +24,16 @@ struct Vertex
 	float3 bitangent;
 };
 
-cbuffer ShaderParameters : register(b0)
+struct ViewData
 {
-	float4x4 cViewInverse;
-	float4x4 cViewProjectionInverse;
-	uint cNumLights;
-}
+	float4x4 ViewInverse;
+	float4x4 ViewProjectionInverse;
+	uint NumLights;
+};
 
-cbuffer HitData : register(b1)
+ConstantBuffer<ViewData> cViewData : register(b0);
+
+struct HitData
 {
 	int DiffuseIndex;
 	int NormalIndex;
@@ -39,7 +42,9 @@ cbuffer HitData : register(b1)
 
 	uint VertexBufferOffset;
 	uint IndexBufferOffset;
-}
+};
+
+ConstantBuffer<HitData> cHitData : register(b1);
 
 struct RayPayload
 {
@@ -55,10 +60,10 @@ struct ShadowRayPayload
 void ClosestHit(inout RayPayload payload, BuiltInTriangleIntersectionAttributes attrib) 
 {
 	float3 b = float3((1.0f - attrib.barycentrics.x - attrib.barycentrics.y), attrib.barycentrics.x, attrib.barycentrics.y);
-	uint3 indices = tGeometryData.Load3(IndexBufferOffset + PrimitiveIndex() * sizeof(uint3));
-	Vertex v0 = tGeometryData.Load<Vertex>(VertexBufferOffset + indices.x * sizeof(Vertex));
-	Vertex v1 = tGeometryData.Load<Vertex>(VertexBufferOffset + indices.y * sizeof(Vertex));
-	Vertex v2 = tGeometryData.Load<Vertex>(VertexBufferOffset + indices.z * sizeof(Vertex));
+	uint3 indices = tGeometryData.Load3(cHitData.IndexBufferOffset + PrimitiveIndex() * sizeof(uint3));
+	Vertex v0 = tGeometryData.Load<Vertex>(cHitData.VertexBufferOffset + indices.x * sizeof(Vertex));
+	Vertex v1 = tGeometryData.Load<Vertex>(cHitData.VertexBufferOffset + indices.y * sizeof(Vertex));
+	Vertex v2 = tGeometryData.Load<Vertex>(cHitData.VertexBufferOffset + indices.z * sizeof(Vertex));
 	float2 texCoord = v0.texCoord * b.x + v1.texCoord * b.y + v2.texCoord * b.z;
 	float3 N = v0.normal * b.x + v1.normal * b.y + v2.normal * b.z;
 	float3 T = v0.tangent * b.x + v1.tangent * b.y + v2.tangent * b.z;
@@ -66,19 +71,15 @@ void ClosestHit(inout RayPayload payload, BuiltInTriangleIntersectionAttributes 
 	float3x3 TBN = float3x3(T, B, N);
 	float3 wPos = WorldRayOrigin() + WorldRayDirection() * RayTCurrent();
 
-	float rayDistanceScale = RayTCurrent() / (1000.0f - RayTMin());
-	float cosAngle = 1.0f - dot(WorldRayDirection(), N);
-	int mipLevel = (cosAngle / 2.0f + rayDistanceScale / 2.0f) * 6.0f;
-
-	float3 V = normalize(wPos - cViewInverse[3].xyz);
-	float3 diffuse = tMaterialTextures[DiffuseIndex].SampleLevel(sDiffuseSampler, texCoord, mipLevel).rgb;
-	float3 sampledNormal = tMaterialTextures[NormalIndex].SampleLevel(sDiffuseSampler, texCoord, mipLevel).rgb;
+	float3 V = normalize(wPos - cViewData.ViewInverse[3].xyz);
+	float3 diffuse = tMaterialTextures[cHitData.DiffuseIndex].SampleLevel(sDiffuseSampler, texCoord, 0).rgb;
+	float3 sampledNormal = tMaterialTextures[cHitData.NormalIndex].SampleLevel(sDiffuseSampler, texCoord, 0).rgb;
 	N = TangentSpaceNormalMapping(sampledNormal, TBN, false);
 	float roughness = 0.5;
 	float3 specularColor = ComputeF0(0.5f, diffuse, 0);
 
 	LightResult totalResult = (LightResult)0;
-	for(int i = 0; i < cNumLights; ++i)
+	for(int i = 0; i < cViewData.NumLights; ++i)
 	{
 		Light light = tLights[i];
 		float attenuation = GetAttenuation(light, wPos);
@@ -140,7 +141,7 @@ void ShadowMiss(inout ShadowRayPayload payload : SV_RayPayload)
 [shader("miss")] 
 void Miss(inout RayPayload payload : SV_RayPayload) 
 {
-	payload.output = 0;
+	payload.output = CIESky(WorldRayDirection(), -tLights[0].Direction);
 }
 
 [shader("raygeneration")] 
@@ -152,13 +153,13 @@ void RayGen()
 	uint2 launchIndex = DispatchRaysIndex().xy;
 	float2 texCoord = (float2)launchIndex * dimInv;
 
-	float3 world = WorldFromDepth(texCoord, tDepth.SampleLevel(sDiffuseSampler, texCoord, 0).r, cViewProjectionInverse);
+	float3 world = WorldFromDepth(texCoord, tDepth.SampleLevel(sDiffuseSampler, texCoord, 0).r, cViewData.ViewProjectionInverse);
     float4 reflectionSample = tSceneNormals.SampleLevel(sDiffuseSampler, texCoord, 0);
 	float3 N = reflectionSample.rgb;
 	float reflectivity = reflectionSample.a;
 	if(reflectivity > 0)
 	{
-		float3 V = normalize(world - cViewInverse[3].xyz);
+		float3 V = normalize(world - cViewData.ViewInverse[3].xyz);
 		float3 R = reflect(V, N);
 
 		RayDesc ray;
@@ -180,5 +181,5 @@ void RayGen()
 		);
 	}
 	float4 colorSample = tPreviousSceneColor.SampleLevel(sDiffuseSampler, texCoord, 0);
-	gOutput[launchIndex] = colorSample + float4(reflectivity * payload.output, 0);
+	uOutput[launchIndex] = colorSample + float4(reflectivity * payload.output, 0);
 }
