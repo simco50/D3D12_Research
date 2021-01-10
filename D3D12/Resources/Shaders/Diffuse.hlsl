@@ -153,7 +153,7 @@ LightResult DoLight(float4 pos, float3 worldPos, float3 N, float3 V, float3 diff
 		Light light = tLights[lightIndex];
 		LightResult result = DoLight(light, specularColor, diffuseColor, roughness, pos, worldPos, N, V);
 		
-		float3 L = normalize(light.Position - worldPos);
+		float3 L = normalize(worldPos - light.Position);
 		if(light.Type == LIGHT_DIRECTIONAL)
 		{
 			L = light.Direction;
