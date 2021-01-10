@@ -59,8 +59,9 @@ struct ShadowRayPayload
 [shader("closesthit")] 
 void ClosestHit(inout RayPayload payload, BuiltInTriangleIntersectionAttributes attrib) 
 {
-	float3 b = float3((1.0f - attrib.barycentrics.x - attrib.barycentrics.y), attrib.barycentrics.x, attrib.barycentrics.y);
+	// Resolve geometry data
 	uint3 indices = tGeometryData.Load3(cHitData.IndexBufferOffset + PrimitiveIndex() * sizeof(uint3));
+	float3 b = float3((1.0f - attrib.barycentrics.x - attrib.barycentrics.y), attrib.barycentrics.x, attrib.barycentrics.y);
 	Vertex v0 = tGeometryData.Load<Vertex>(cHitData.VertexBufferOffset + indices.x * sizeof(Vertex));
 	Vertex v1 = tGeometryData.Load<Vertex>(cHitData.VertexBufferOffset + indices.y * sizeof(Vertex));
 	Vertex v2 = tGeometryData.Load<Vertex>(cHitData.VertexBufferOffset + indices.z * sizeof(Vertex));
@@ -69,14 +70,18 @@ void ClosestHit(inout RayPayload payload, BuiltInTriangleIntersectionAttributes 
 	float3 T = v0.tangent * b.x + v1.tangent * b.y + v2.tangent * b.z;
 	float3 B = v0.bitangent * b.x + v1.bitangent * b.y + v2.bitangent * b.z;
 	float3x3 TBN = float3x3(T, B, N);
-	float3 wPos = WorldRayOrigin() + WorldRayDirection() * RayTCurrent();
 
-	float3 V = normalize(wPos - cViewData.ViewInverse[3].xyz);
+	// Get material data
 	float3 diffuse = tMaterialTextures[cHitData.DiffuseIndex].SampleLevel(sDiffuseSampler, texCoord, 0).rgb;
 	float3 sampledNormal = tMaterialTextures[cHitData.NormalIndex].SampleLevel(sDiffuseSampler, texCoord, 0).rgb;
+	float metalness = tMaterialTextures[cHitData.MetallicIndex].SampleLevel(sDiffuseSampler, texCoord, 0).r;
+	float roughness = 0.5; // tMaterialTextures[cHitData.RoughnessIndex].SampleLevel(sDiffuseSampler, texCoord, 0).r;
+	float specular = 0.5f;
 	N = TangentSpaceNormalMapping(sampledNormal, TBN, false);
-	float roughness = 0.5;
-	float3 specularColor = ComputeF0(0.5f, diffuse, 0);
+
+	float3 specularColor = ComputeF0(specular, diffuse, metalness);
+	float3 wPos = WorldRayOrigin() + WorldRayDirection() * RayTCurrent();
+	float3 V = normalize(-WorldRayDirection());
 
 	LightResult totalResult = (LightResult)0;
 	for(int i = 0; i < cViewData.NumLights; ++i)
