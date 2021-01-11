@@ -40,13 +40,15 @@ void RTReflections::Execute(RGGraph& graph, const SceneData& sceneData)
 			struct Parameters
 			{
 				Matrix ViewInverse;
-				Matrix ViewProjectionInverse;
+				Matrix ProjectionInverse;
 				uint32 NumLights;
+				float ViewPixelSpreadAngle;
 			} parameters{};
 
 			parameters.ViewInverse = sceneData.pCamera->GetViewInverse();
-			parameters.ViewProjectionInverse = sceneData.pCamera->GetProjectionInverse() * sceneData.pCamera->GetViewInverse();
+			parameters.ProjectionInverse = sceneData.pCamera->GetProjectionInverse();
 			parameters.NumLights = sceneData.pLightBuffer->GetDesc().ElementCount;
+			parameters.ViewPixelSpreadAngle = atanf(2.0f * tanf(sceneData.pCamera->GetFoV() / 2) / (float)m_pSceneColor->GetHeight());
 
 			ShaderBindingTable bindingTable(m_pRtSO.Get());
 			bindingTable.AddRayGenEntry("RayGen", {});
@@ -135,7 +137,7 @@ void RTReflections::SetupPipelines(Graphics* pGraphics)
 		stateDesc.BindLocalRootSignature("ShadowMiss", m_pMissSignature->GetRootSignature());
 		stateDesc.BindLocalRootSignature("HitGroup", m_pHitSignature->GetRootSignature());
 		stateDesc.BindLocalRootSignature("ShadowHitGroup", m_pMissSignature->GetRootSignature());
-		stateDesc.SetRaytracingShaderConfig(3 * sizeof(float), 2 * sizeof(float));
+		stateDesc.SetRaytracingShaderConfig(5 * sizeof(float), 2 * sizeof(float));
 		stateDesc.SetRaytracingPipelineConfig(2);
 		stateDesc.SetGlobalRootSignature(m_pGlobalRS->GetRootSignature());
 		D3D12_STATE_OBJECT_DESC desc = stateDesc.Desc();
