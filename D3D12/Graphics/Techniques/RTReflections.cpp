@@ -51,9 +51,9 @@ void RTReflections::Execute(RGGraph& graph, const SceneData& sceneData)
 			parameters.ViewPixelSpreadAngle = atanf(2.0f * tanf(sceneData.pCamera->GetFoV() / 2) / (float)m_pSceneColor->GetHeight());
 
 			ShaderBindingTable bindingTable(m_pRtSO.Get());
-			bindingTable.AddRayGenEntry("RayGen", {});
-			bindingTable.AddMissEntry("Miss", {});
-			bindingTable.AddMissEntry("ShadowMiss", {});
+			bindingTable.BindRayGenShader("RayGen");
+			bindingTable.BindMissShader("Miss", 0);
+			bindingTable.BindMissShader("ShadowMiss", 1);
 
 			for (int i = 0; i < sceneData.pMesh->GetMeshCount(); ++i)
 			{
@@ -71,8 +71,7 @@ void RTReflections::Execute(RGGraph& graph, const SceneData& sceneData)
 
 				DynamicAllocation allocation = context.AllocateTransientMemory(sizeof(HitData));
 				memcpy(allocation.pMappedMemory, &hitData, sizeof(HitData));
-				bindingTable.AddHitGroupEntry("HitGroup", { allocation.GpuHandle });
-				bindingTable.AddHitGroupEntry("ShadowHitGroup", { });
+				bindingTable.BindHitGroup("ReflectionHitGroup", { allocation.GpuHandle });
 			}
 
 			const D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
@@ -127,16 +126,14 @@ void RTReflections::SetupPipelines(Graphics* pGraphics)
 
 		CD3DX12_STATE_OBJECT_HELPER stateDesc;
 		const char* pLibraryExports[] = {
-			"RayGen", "ClosestHit", "Miss", "ShadowClosestHit", "ShadowMiss"
+			"RayGen", "ClosestHit", "Miss", "ShadowMiss"
 		};
 		stateDesc.AddLibrary(CD3DX12_SHADER_BYTECODE(shaderLibrary.GetByteCode(), shaderLibrary.GetByteCodeSize()), pLibraryExports, ARRAYSIZE(pLibraryExports));
-		stateDesc.AddHitGroup("HitGroup", "ClosestHit");
-		stateDesc.AddHitGroup("ShadowHitGroup", "ShadowClosestHit");
+		stateDesc.AddHitGroup("ReflectionHitGroup", "ClosestHit");
 		stateDesc.BindLocalRootSignature("RayGen", m_pRayGenSignature->GetRootSignature());
 		stateDesc.BindLocalRootSignature("Miss", m_pMissSignature->GetRootSignature());
 		stateDesc.BindLocalRootSignature("ShadowMiss", m_pMissSignature->GetRootSignature());
-		stateDesc.BindLocalRootSignature("HitGroup", m_pHitSignature->GetRootSignature());
-		stateDesc.BindLocalRootSignature("ShadowHitGroup", m_pMissSignature->GetRootSignature());
+		stateDesc.BindLocalRootSignature("ReflectionHitGroup", m_pHitSignature->GetRootSignature());
 		stateDesc.SetRaytracingShaderConfig(5 * sizeof(float), 2 * sizeof(float));
 		stateDesc.SetRaytracingPipelineConfig(2);
 		stateDesc.SetGlobalRootSignature(m_pGlobalRS->GetRootSignature());

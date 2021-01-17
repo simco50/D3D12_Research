@@ -77,9 +77,9 @@ void RTAO::Execute(RGGraph& graph, Texture* pColor, Texture* pDepth, Buffer* pTL
 			parameters.Samples = g_AoSamples;
 
 			ShaderBindingTable bindingTable(m_pRtSO.Get());
-			bindingTable.AddRayGenEntry("RayGen", {});
-			bindingTable.AddMissEntry("Miss", {});
-			bindingTable.AddHitGroupEntry("HitGroup", {});
+			bindingTable.BindRayGenShader("RayGen", {});
+			bindingTable.BindMissShader("Miss", {});
+			bindingTable.BindHitGroup("HitGroup", {});
 
 			context.SetComputeDynamicConstantBufferView(0, &parameters, sizeof(Parameters));
 			context.SetDynamicDescriptor(1, 0, pColor->GetUAV());

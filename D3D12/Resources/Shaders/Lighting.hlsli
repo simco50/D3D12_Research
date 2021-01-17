@@ -250,8 +250,8 @@ float3 ApplyVolumetricLighting(float3 startPoint, float3 endPoint, float4 pos, f
 				float4 lightPos = mul(float4(currentPosition, 1), lightViewProjection);
 
 				lightPos.xyz /= lightPos.w;
-				lightPos.x = lightPos.x / 2.0f + 0.5f;
-				lightPos.y = lightPos.y / -2.0f + 0.5f;
+				lightPos.x = lightPos.x * 0.5f + 0.5f;
+				lightPos.y = lightPos.y * -0.5f + 0.5f;
 				visibility = tShadowMapTextures[NonUniformResourceIndex(shadowMapIndex)].SampleCmpLevelZero(sShadowMapSampler, lightPos.xy, lightPos.z);
 			}
 			float phase = saturate(HenyeyGreenstrein(dot(ray, light.Direction)));

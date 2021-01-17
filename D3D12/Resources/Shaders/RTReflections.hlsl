@@ -129,10 +129,11 @@ void ClosestHit(inout RayPayload payload, BuiltInTriangleIntersectionAttributes 
 		TraceRay(
 			tAccelerationStructure, 										//AccelerationStructure
 			RAY_FLAG_FORCE_OPAQUE |
+			RAY_FLAG_SKIP_CLOSEST_HIT_SHADER |
 			RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH,					 	//RayFlags
 			0xFF, 															//InstanceInclusionMask
-			1, 																//RayContributionToHitGroupIndex
-			2, 																//MultiplierForGeometryContributionToHitGroupIndex
+			0, 																//RayContributionToHitGroupIndex
+			0, 																//MultiplierForGeometryContributionToHitGroupIndex
 			1, 																//MissShaderIndex
 			ray, 															//Ray
 			shadowRay 														//Payload
@@ -146,12 +147,6 @@ void ClosestHit(inout RayPayload payload, BuiltInTriangleIntersectionAttributes 
 		totalResult.Specular *= result.Specular * color.rgb * light.Intensity;
 	}
 	payload.output = totalResult.Diffuse + totalResult.Specular + ApplyAmbientLight(diffuse, 1.0f, 0.1f);
-}
-
-[shader("closesthit")] 
-void ShadowClosestHit(inout ShadowRayPayload payload, BuiltInTriangleIntersectionAttributes attrib) 
-{
-	payload.hit = 0;
 }
 
 [shader("miss")] 
@@ -205,7 +200,7 @@ void RayGen()
 			RAY_FLAG_CULL_BACK_FACING_TRIANGLES | RAY_FLAG_FORCE_OPAQUE, 	//RayFlags
 			0xFF, 															//InstanceInclusionMask
 			0,																//RayContributionToHitGroupIndex
-			2, 																//MultiplierForGeometryContributionToHitGroupIndex
+			1, 																//MultiplierForGeometryContributionToHitGroupIndex
 			0, 																//MissShaderIndex
 			ray, 															//Ray
 			payload 														//Payload

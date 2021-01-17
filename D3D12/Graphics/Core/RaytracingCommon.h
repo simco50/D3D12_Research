@@ -3,10 +3,10 @@
 class ShaderBindingTable
 {
 private:
-	struct TableEntry
+	struct ShaderRecord
 	{
 		std::vector<uint64> data;
-		void* pIdentifier = nullptr;
+		const void* pIdentifier = nullptr;
 	};
 public:
 	ShaderBindingTable(ID3D12StateObject* pStateObject)
@@ -14,100 +14,123 @@ public:
 		VERIFY_HR(pStateObject->QueryInterface(IID_PPV_ARGS(m_pObjectProperties.GetAddressOf())));
 	}
 
-	void AddRayGenEntry(const char* pName, const std::vector<uint64>& data)
+	void BindRayGenShader(const char* pName, const std::vector<uint64>& data = {})
 	{
-		m_RayGenTable.push_back(CreateEntry(pName, data));
-		uint32 entrySize = Math::AlignUp<uint32>(D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES + (uint32)data.size() * sizeof(uint64), D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT);
-		m_RayGenEntrySize = Math::Max<int>(m_RayGenEntrySize, entrySize);
+		m_RayGenRecord = CreateRecord(pName, data);
+		m_RayGenRecordSize = ComputeRecordSize((uint32)data.size());
 	}
 
-	void AddMissEntry(const char* pName, const std::vector<uint64>& data)
+	void BindMissShader(const char* pName, uint32 rayIndex, const std::vector<uint64>& data = {})
 	{
-		m_MissTable.push_back(CreateEntry(pName, data));
+		if (rayIndex >= (uint32)m_MissShaderRecords.size())
+		{
+			m_MissShaderRecords.resize(rayIndex + 1);
+		}
+		m_MissShaderRecords[rayIndex] = CreateRecord(pName, data);
+
 		uint32 entrySize = Math::AlignUp<uint32>(D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES + (uint32)data.size() * sizeof(uint64), D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT);
-		m_MissEntrySize = Math::Max<int>(m_MissEntrySize, entrySize);
+		m_MissRecordSize = Math::Max<int>(m_MissRecordSize, entrySize);
 	}
 
-	void AddHitGroupEntry(const char* pName, const std::vector<uint64>& data)
+	void BindHitGroup(const char* pName, const std::vector<uint64>& data = {})
 	{
-		m_HitTable.push_back(CreateEntry(pName, data));
+		m_HitGroupShaderRecords.push_back(CreateRecord(pName, data));
 		uint32 entrySize = Math::AlignUp<uint32>(D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES + (uint32)data.size() * sizeof(uint64), D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT);
-		m_HitEntrySize = Math::Max<int>(m_HitEntrySize, entrySize);
+		m_HitRecordSize = Math::Max<int>(m_HitRecordSize, entrySize);
 	}
 
 	void Commit(CommandContext& context, D3D12_DISPATCH_RAYS_DESC& desc)
 	{
 		uint32 totalSize = 0;
-		uint32 rayGenSection = m_RayGenEntrySize * (uint32)m_RayGenTable.size();
+		uint32 rayGenSection = m_RayGenRecordSize;
 		uint32 rayGenSectionAligned = Math::AlignUp<uint32>(rayGenSection, D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT);
-		uint32 missSection = m_MissEntrySize * (uint32)m_MissTable.size();
+		uint32 missSection = m_MissRecordSize * (uint32)m_MissShaderRecords.size();
 		uint32 missSectionAligned = Math::AlignUp<uint32>(missSection, D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT);
-		uint32 hitSection = m_HitEntrySize * (uint32)m_HitTable.size();
+		uint32 hitSection = m_HitRecordSize * (uint32)m_HitGroupShaderRecords.size();
 		uint32 hitSectionAligned = Math::AlignUp<uint32>(hitSection, D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT);
 		totalSize = Math::AlignUp<uint32>(rayGenSectionAligned + missSectionAligned + hitSectionAligned, 256);
 		DynamicAllocation allocation = context.AllocateTransientMemory(totalSize);
+		allocation.Clear();
+
 		char* pStart = (char*)allocation.pMappedMemory;
 		char* pData = pStart;
-		for (const TableEntry& e : m_RayGenTable)
+
+		// RayGen
 		{
-			memcpy(pData, e.pIdentifier, D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
-			memcpy(pData + D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES, e.data.data(), e.data.size() * sizeof(uint64));
-			pData += m_RayGenEntrySize;
+			memcpy(pData, m_RayGenRecord.pIdentifier, D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
+			memcpy(pData + D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES, m_RayGenRecord.data.data(), m_RayGenRecord.data.size() * sizeof(uint64));
+			pData += m_RayGenRecordSize;
 		}
 		pData = pStart + rayGenSectionAligned;
-		for (const TableEntry& e : m_MissTable)
+
+		// Miss
+		for (const ShaderRecord& e : m_MissShaderRecords)
 		{
 			memcpy(pData, e.pIdentifier, D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
 			memcpy(pData + D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES, e.data.data(), e.data.size() * sizeof(uint64));
-			pData += m_MissEntrySize;
+			pData += m_MissRecordSize;
 		}
 		pData = pStart + rayGenSectionAligned + missSectionAligned;
-		for (const TableEntry& e : m_HitTable)
+
+		// Hit
+		for (const ShaderRecord& e : m_HitGroupShaderRecords)
 		{
 			memcpy(pData, e.pIdentifier, D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
 			memcpy(pData + D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES, e.data.data(), e.data.size() * sizeof(uint64));
-			pData += m_HitEntrySize;
+			pData += m_HitRecordSize;
 		}
+
 		desc.RayGenerationShaderRecord.StartAddress = allocation.GpuHandle;
 		desc.RayGenerationShaderRecord.SizeInBytes = rayGenSection;
 		desc.MissShaderTable.StartAddress = allocation.GpuHandle + rayGenSectionAligned;
 		desc.MissShaderTable.SizeInBytes = missSection;
-		desc.MissShaderTable.StrideInBytes = m_MissEntrySize;
+		desc.MissShaderTable.StrideInBytes = m_MissRecordSize;
 		desc.HitGroupTable.StartAddress = allocation.GpuHandle + rayGenSectionAligned + missSectionAligned;
 		desc.HitGroupTable.SizeInBytes = hitSection;
-		desc.HitGroupTable.StrideInBytes = m_HitEntrySize;
+		desc.HitGroupTable.StrideInBytes = m_HitRecordSize;
 
-		m_RayGenTable.clear();
-		m_RayGenEntrySize = 0;
-		m_MissTable.clear();
-		m_MissEntrySize = 0;
-		m_HitTable.clear();
-		m_HitEntrySize = 0;
+		m_RayGenRecordSize = 0;
+		m_MissShaderRecords.clear();
+		m_MissRecordSize = 0;
+		m_HitGroupShaderRecords.clear();
+		m_HitRecordSize = 0;
 	}
 
 private:
-	TableEntry CreateEntry(const char* pName, const std::vector<uint64>& data)
+	uint32 ComputeRecordSize(uint32 elements)
 	{
-		TableEntry entry;
-		auto it = m_IdentifierMap.find(pName);
-		if (it == m_IdentifierMap.end())
-		{
-			wchar_t wName[256];
-			ToWidechar(pName, wName, 256);
-			m_IdentifierMap[pName] = m_pObjectProperties->GetShaderIdentifier(wName);
-		}
-		entry.pIdentifier = m_IdentifierMap[pName];
-		check(entry.pIdentifier);
-		entry.data = data;
-		return entry;
+		return Math::AlignUp<uint32>(D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES + elements * sizeof(uint64), D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT);
 	}
 
+	ShaderRecord CreateRecord(const char* pName, const std::vector<uint64>& data)
+	{
+		ShaderRecord entry;
+		if (pName)
+		{
+			auto it = m_IdentifierMap.find(pName);
+			if (it == m_IdentifierMap.end())
+			{
+				wchar_t wName[256];
+				ToWidechar(pName, wName, 256);
+				m_IdentifierMap[pName] = m_pObjectProperties->GetShaderIdentifier(wName);
+			}
+			entry.pIdentifier = m_IdentifierMap[pName];
+			check(entry.pIdentifier);
+			entry.data = data;
+		}
+		else
+		{
+			constexpr const void* NullEntry = (void*)"";
+			entry.pIdentifier = NullEntry;
+		}
+		return entry;
+	}
 	ComPtr<ID3D12StateObjectProperties> m_pObjectProperties;
-	std::vector<TableEntry> m_RayGenTable;
-	uint32 m_RayGenEntrySize = 0;
-	std::vector<TableEntry> m_MissTable;
-	uint32 m_MissEntrySize = 0;
-	std::vector<TableEntry> m_HitTable;
-	uint32 m_HitEntrySize = 0;
-	std::unordered_map<std::string, void*> m_IdentifierMap;
+	ShaderRecord m_RayGenRecord;
+	uint32 m_RayGenRecordSize = 0;
+	std::vector<ShaderRecord> m_MissShaderRecords;
+	uint32 m_MissRecordSize = 0;
+	std::vector<ShaderRecord> m_HitGroupShaderRecords;
+	uint32 m_HitRecordSize = 0;
+	std::unordered_map<std::string, const void*> m_IdentifierMap;
 };

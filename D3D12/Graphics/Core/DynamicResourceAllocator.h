@@ -9,6 +9,10 @@ struct DynamicAllocation
 	size_t Offset = 0;
 	size_t Size = 0;
 	void* pMappedMemory = nullptr;
+	void Clear(uint32 value = 0)
+	{
+		memset(pMappedMemory, value, Size);
+	}
 };
 
 class DynamicAllocationManager : public GraphicsObject
