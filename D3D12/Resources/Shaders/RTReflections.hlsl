@@ -196,7 +196,7 @@ void RayGen()
 
 		// Trace the ray
 		TraceRay(
-			tAccelerationStructure, 														//AccelerationStructure
+			tAccelerationStructure, 										//AccelerationStructure
 			RAY_FLAG_CULL_BACK_FACING_TRIANGLES | RAY_FLAG_FORCE_OPAQUE, 	//RayFlags
 			0xFF, 															//InstanceInclusionMask
 			0,																//RayContributionToHitGroupIndex

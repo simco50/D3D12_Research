@@ -105,39 +105,25 @@ void RTReflections::SetupResources(Graphics* pGraphics)
 
 void RTReflections::SetupPipelines(Graphics* pGraphics)
 {
-	//Raytracing Pipeline
-	{
-		ShaderLibrary shaderLibrary("RTReflections.hlsl");
+	ShaderLibrary shaderLibrary("RTReflections.hlsl");
 
-		m_pRayGenSignature = std::make_unique<RootSignature>(pGraphics);
-		m_pRayGenSignature->Finalize("Ray Gen", D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE);
+	m_pHitSignature = std::make_unique<RootSignature>(pGraphics);
+	m_pHitSignature->SetConstantBufferView(0, 1, D3D12_SHADER_VISIBILITY_ALL);
+	m_pHitSignature->Finalize("Hit", D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE);
 
-		m_pHitSignature = std::make_unique<RootSignature>(pGraphics);
-		m_pHitSignature->SetConstantBufferView(0, 1, D3D12_SHADER_VISIBILITY_ALL);
-		m_pHitSignature->SetShaderResourceView(1, 100, D3D12_SHADER_VISIBILITY_ALL);
-		m_pHitSignature->SetShaderResourceView(2, 101, D3D12_SHADER_VISIBILITY_ALL);
-		m_pHitSignature->Finalize("Hit", D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE);
+	m_pGlobalRS = std::make_unique<RootSignature>(pGraphics);
+	m_pGlobalRS->FinalizeFromShader("Global", shaderLibrary);
 
-		m_pMissSignature = std::make_unique<RootSignature>(pGraphics);
-		m_pMissSignature->Finalize("Miss", D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE);
-
-		m_pGlobalRS = std::make_unique<RootSignature>(pGraphics);
-		m_pGlobalRS->FinalizeFromShader("Global RS", shaderLibrary);
-
-		CD3DX12_STATE_OBJECT_HELPER stateDesc;
-		const char* pLibraryExports[] = {
-			"RayGen", "ClosestHit", "Miss", "ShadowMiss"
-		};
-		stateDesc.AddLibrary(CD3DX12_SHADER_BYTECODE(shaderLibrary.GetByteCode(), shaderLibrary.GetByteCodeSize()), pLibraryExports, ARRAYSIZE(pLibraryExports));
-		stateDesc.AddHitGroup("ReflectionHitGroup", "ClosestHit");
-		stateDesc.BindLocalRootSignature("RayGen", m_pRayGenSignature->GetRootSignature());
-		stateDesc.BindLocalRootSignature("Miss", m_pMissSignature->GetRootSignature());
-		stateDesc.BindLocalRootSignature("ShadowMiss", m_pMissSignature->GetRootSignature());
-		stateDesc.BindLocalRootSignature("ReflectionHitGroup", m_pHitSignature->GetRootSignature());
-		stateDesc.SetRaytracingShaderConfig(5 * sizeof(float), 2 * sizeof(float));
-		stateDesc.SetRaytracingPipelineConfig(2);
-		stateDesc.SetGlobalRootSignature(m_pGlobalRS->GetRootSignature());
-		D3D12_STATE_OBJECT_DESC desc = stateDesc.Desc();
-		pGraphics->GetRaytracingDevice()->CreateStateObject(&desc, IID_PPV_ARGS(m_pRtSO.GetAddressOf()));
-	}
+	CD3DX12_STATE_OBJECT_HELPER stateDesc;
+	const char* pLibraryExports[] = {
+		"RayGen", "ClosestHit", "Miss", "ShadowMiss"
+	};
+	stateDesc.AddLibrary(CD3DX12_SHADER_BYTECODE(shaderLibrary.GetByteCode(), shaderLibrary.GetByteCodeSize()), pLibraryExports, ARRAYSIZE(pLibraryExports));
+	stateDesc.AddHitGroup("ReflectionHitGroup", "ClosestHit");
+	stateDesc.BindLocalRootSignature("ReflectionHitGroup", m_pHitSignature->GetRootSignature());
+	stateDesc.SetRaytracingShaderConfig(5 * sizeof(float), 2 * sizeof(float));
+	stateDesc.SetRaytracingPipelineConfig(2);
+	stateDesc.SetGlobalRootSignature(m_pGlobalRS->GetRootSignature());
+	D3D12_STATE_OBJECT_DESC desc = stateDesc.Desc();
+	pGraphics->GetRaytracingDevice()->CreateStateObject(&desc, IID_PPV_ARGS(m_pRtSO.GetAddressOf()));
 }
