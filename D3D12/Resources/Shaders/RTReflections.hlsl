@@ -62,6 +62,61 @@ struct ShadowRayPayload
 	uint hit;
 };
 
+ShadowRayPayload CastShadowRay(float3 origin, float3 target)
+{
+	RayDesc ray;
+	ray.Origin = origin;
+	ray.Direction = target - origin;
+	ray.TMin = 0.0f;
+	ray.TMax = 1.0f;
+
+	ShadowRayPayload shadowRay = (ShadowRayPayload)0;
+
+	TraceRay(
+		tAccelerationStructure, 										//AccelerationStructure
+		RAY_FLAG_FORCE_OPAQUE |
+		RAY_FLAG_SKIP_CLOSEST_HIT_SHADER |
+		RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH,					 	//RayFlags
+		0xFF, 															//InstanceInclusionMask
+		0, 																//RayContributionToHitGroupIndex
+		0, 																//MultiplierForGeometryContributionToHitGroupIndex
+		1, 																//MissShaderIndex
+		ray, 															//Ray
+		shadowRay 														//Payload
+	);
+	return shadowRay;
+}
+
+RayPayload CastReflectionRay(float3 origin, float3 direction, float depth)
+{
+	RayCone cone;
+	cone.Width = 0;
+	cone.SpreadAngle = cViewData.ViewPixelSpreadAngle;
+
+	RayPayload payload;
+	payload.rayCone = PropagateRayCone(cone, 0.0f, depth);
+	payload.output = 0.0f;
+
+	RayDesc ray;
+	ray.Origin = origin;
+	ray.Direction = direction;
+	ray.TMin = 0.0f;
+	ray.TMax = 10000;
+
+	TraceRay(
+		tAccelerationStructure, 										//AccelerationStructure
+		RAY_FLAG_CULL_BACK_FACING_TRIANGLES | RAY_FLAG_FORCE_OPAQUE, 	//RayFlags
+		0xFF, 															//InstanceInclusionMask
+		0,																//RayContributionToHitGroupIndex
+		1, 																//MultiplierForGeometryContributionToHitGroupIndex
+		0, 																//MissShaderIndex
+		ray, 															//Ray
+		payload 														//Payload
+	);
+
+	return payload;
+}
+
 [shader("closesthit")] 
 void ClosestHit(inout RayPayload payload, BuiltInTriangleIntersectionAttributes attrib) 
 {
@@ -118,27 +173,12 @@ void ClosestHit(inout RayPayload payload, BuiltInTriangleIntersectionAttributes 
 		}
 
 #if SECONDARY_SHADOW_RAY
-		RayDesc ray;
-		ray.Origin = wPos + L * 0.001f;
-		ray.Direction = L;
-		ray.TMin = 0.0f;
-		ray.TMax = length(wPos - light.Position);
-
-		ShadowRayPayload shadowRay = (ShadowRayPayload)0;
-		// Trace the ray
-		TraceRay(
-			tAccelerationStructure, 										//AccelerationStructure
-			RAY_FLAG_FORCE_OPAQUE |
-			RAY_FLAG_SKIP_CLOSEST_HIT_SHADER |
-			RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH,					 	//RayFlags
-			0xFF, 															//InstanceInclusionMask
-			0, 																//RayContributionToHitGroupIndex
-			0, 																//MultiplierForGeometryContributionToHitGroupIndex
-			1, 																//MissShaderIndex
-			ray, 															//Ray
-			shadowRay 														//Payload
-		);
+		ShadowRayPayload shadowRay = CastShadowRay(wPos + L * 0.001f, light.Position);
 		attenuation *= shadowRay.hit;
+		if(attenuation <= 0.0f)
+		{
+			continue;
+		}
 #endif // SECONDARY_SHADOW_RAY
 
 		LightResult result = DefaultLitBxDF(specularColor, roughness, diffuse, N, V, L, attenuation);
@@ -146,7 +186,7 @@ void ClosestHit(inout RayPayload payload, BuiltInTriangleIntersectionAttributes 
 		totalResult.Diffuse += result.Diffuse * color.rgb * light.Intensity;
 		totalResult.Specular *= result.Specular * color.rgb * light.Intensity;
 	}
-	payload.output = totalResult.Diffuse + totalResult.Specular + ApplyAmbientLight(diffuse, 1.0f, 0.1f);
+	payload.output += totalResult.Diffuse + totalResult.Specular + ApplyAmbientLight(diffuse, 1.0f, 0.1f);
 }
 
 [shader("miss")] 
@@ -171,41 +211,18 @@ void RayGen()
 	float depth = tDepth.SampleLevel(sDiffuseSampler, texCoord, 0).r;
 	float3 view = ViewFromDepth(texCoord, depth, cViewData.ProjectionInverse);
 	float3 world = mul(float4(view, 1), cViewData.ViewInverse).xyz;
-    
-	RayCone cone;
-	cone.Width = 0;
-	cone.SpreadAngle = cViewData.ViewPixelSpreadAngle;
-
-	RayPayload payload;
-	payload.rayCone = PropagateRayCone(cone, 0.0f, depth);
-	payload.output = 0.0f;
 	
+	float4 colorSample = tPreviousSceneColor.SampleLevel(sDiffuseSampler, texCoord, 0);
 	float4 reflectionSample = tSceneNormals.SampleLevel(sDiffuseSampler, texCoord, 0);
 	float3 N = reflectionSample.rgb;
 	float reflectivity = reflectionSample.a;
-	if(reflectivity > 0)
+
+	if(reflectivity > 0.1f)
 	{
 		float3 V = normalize(world - cViewData.ViewInverse[3].xyz);
 		float3 R = reflect(V, N);
-
-		RayDesc ray;
-		ray.Origin = world + 0.001f * R;
-		ray.Direction = R;
-		ray.TMin = 0.0f;
-		ray.TMax = 10000;
-
-		// Trace the ray
-		TraceRay(
-			tAccelerationStructure, 										//AccelerationStructure
-			RAY_FLAG_CULL_BACK_FACING_TRIANGLES | RAY_FLAG_FORCE_OPAQUE, 	//RayFlags
-			0xFF, 															//InstanceInclusionMask
-			0,																//RayContributionToHitGroupIndex
-			1, 																//MultiplierForGeometryContributionToHitGroupIndex
-			0, 																//MissShaderIndex
-			ray, 															//Ray
-			payload 														//Payload
-		);
+		RayPayload payload = CastReflectionRay(world + 0.01f * R, R, depth);
+		colorSample += float4(reflectivity * payload.output, 0);
 	}
-	float4 colorSample = tPreviousSceneColor.SampleLevel(sDiffuseSampler, texCoord, 0);
-	uOutput[launchIndex] = colorSample + float4(reflectivity * payload.output, 0);
+	uOutput[launchIndex] = colorSample;
 }
