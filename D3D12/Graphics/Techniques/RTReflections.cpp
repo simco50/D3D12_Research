@@ -47,7 +47,7 @@ void RTReflections::Execute(RGGraph& graph, const SceneData& sceneData)
 
 			parameters.ViewInverse = sceneData.pCamera->GetViewInverse();
 			parameters.ProjectionInverse = sceneData.pCamera->GetProjectionInverse();
-			parameters.NumLights = sceneData.pLightBuffer->GetDesc().ElementCount;
+			parameters.NumLights = sceneData.pLightBuffer->GetNumElements();
 			parameters.ViewPixelSpreadAngle = atanf(2.0f * tanf(sceneData.pCamera->GetFoV() / 2) / (float)m_pSceneColor->GetHeight());
 
 			ShaderBindingTable bindingTable(m_pRtSO.Get());
@@ -55,23 +55,27 @@ void RTReflections::Execute(RGGraph& graph, const SceneData& sceneData)
 			bindingTable.BindMissShader("Miss", 0);
 			bindingTable.BindMissShader("ShadowMiss", 1);
 
-			for (int i = 0; i < sceneData.pMesh->GetMeshCount(); ++i)
+			std::vector<Batch> sortedBatches = sceneData.Batches;
+			std::sort(sortedBatches.begin(), sortedBatches.end(), [](const Batch& a, const Batch& b) { return a.Index < b.Index; });
+
+			for (const Batch& b : sortedBatches)
 			{
-				SubMesh* pMesh = sceneData.pMesh->GetMesh(i);
-				auto it = std::find_if(sceneData.Batches.begin(), sceneData.Batches.end(), [pMesh](const Batch& b) { return b.pMesh == pMesh; });
 				struct HitData
 				{
 					MaterialData Material;
-					uint32 VertexBufferOffset;
-					uint32 IndexBufferOffset;
 				} hitData;
-				hitData.Material = it->Material;
-				hitData.VertexBufferOffset = (uint32)(pMesh->GetVertexBuffer().Location - sceneData.pMesh->GetData()->GetGpuHandle());
-				hitData.IndexBufferOffset = (uint32)(pMesh->GetIndexBuffer().Location - sceneData.pMesh->GetData()->GetGpuHandle());
+				hitData.Material = b.Material;
 
 				DynamicAllocation allocation = context.AllocateTransientMemory(sizeof(HitData));
 				memcpy(allocation.pMappedMemory, &hitData, sizeof(HitData));
-				bindingTable.BindHitGroup("ReflectionHitGroup", { allocation.GpuHandle });
+
+				std::vector<uint64> handles = {
+					allocation.GpuHandle,
+					b.pMesh->GetVertexBuffer().Location,
+					b.pMesh->GetIndexBuffer().Location,
+				};
+
+				bindingTable.BindHitGroup("ReflectionHitGroup", handles);
 			}
 
 			const D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
@@ -80,7 +84,6 @@ void RTReflections::Execute(RGGraph& graph, const SceneData& sceneData)
 				sceneData.pResolvedDepth->GetSRV(),
 				m_pSceneColor->GetSRV(),
 				sceneData.pResolvedNormals->GetSRV(),
-				sceneData.pMesh->GetData()->GetSRV()->GetDescriptor(),
 			};
 
 			context.SetComputeDynamicConstantBufferView(0, &parameters, sizeof(Parameters));
@@ -109,6 +112,8 @@ void RTReflections::SetupPipelines(Graphics* pGraphics)
 
 	m_pHitSignature = std::make_unique<RootSignature>(pGraphics);
 	m_pHitSignature->SetConstantBufferView(0, 1, D3D12_SHADER_VISIBILITY_ALL);
+	m_pHitSignature->SetShaderResourceView(1, 0, D3D12_SHADER_VISIBILITY_ALL);
+	m_pHitSignature->SetShaderResourceView(2, 1, D3D12_SHADER_VISIBILITY_ALL);
 	m_pHitSignature->Finalize("Hit", D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE);
 
 	m_pGlobalRS = std::make_unique<RootSignature>(pGraphics);

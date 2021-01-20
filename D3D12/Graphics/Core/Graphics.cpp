@@ -44,37 +44,40 @@ const DXGI_FORMAT Graphics::SWAPCHAIN_FORMAT = DXGI_FORMAT_R8G8B8A8_UNORM;
 
 namespace Tweakables
 {
-	bool g_DumpRenderGraph = false;
-	bool g_Screenshot = false;
-
+	// Post processing
 	float g_WhitePoint = 1;
 	float g_MinLogLuminance = -10;
 	float g_MaxLogLuminance = 20;
 	float g_Tau = 2;
 	bool g_DrawHistogram = false;
 	int32 g_ToneMapper = 1;
+	bool g_TAA = true;
 
+	// Shadows
 	bool g_SDSM = false;
 	bool g_StabilizeCascades = true;
 	bool g_VisualizeShadowCascades = false;
 	int g_ShadowCascades = 4;
 	float g_PSSMFactor = 1.0f;
+
+	// Misc Lighting
 	bool g_RaytracedAO = false;
-	bool g_RaytracedReflections = false;
 	bool g_VisualizeLights = false;
 	bool g_VisualizeLightDensity = false;
-	bool g_TAA = true;
-	bool g_TestTAA = false;
 
+	// Lighting
 	float g_SunInclination = 0.579f;
 	float g_SunOrientation = -3.055f;
 	float g_SunTemperature = 5000.0f;
 	float g_SunIntensity = 3.0f;
 
+	// Reflections
+	bool g_RaytracedReflections = false;
 	int g_SsrSamples = 16;
 
-	int g_ShadowMapIndex = 0;
-
+	// Misc
+	bool g_DumpRenderGraph = false;
+	bool g_Screenshot = false;
 	bool g_EnableUI = true;
 }
 
@@ -375,7 +378,6 @@ void Graphics::Update()
 	m_SceneData.FrameIndex = m_Frame;
 	m_SceneData.pPreviousColor = m_pPreviousColor.get();
 	m_SceneData.pTLAS = m_pTLAS.get();
-	m_SceneData.pMesh = m_pMesh.get();
 	m_SceneData.pNormals = m_pNormals.get();
 	m_SceneData.pResolvedNormals = m_pResolvedNormals.get();
 	m_SceneData.pResolvedTarget = Tweakables::g_TAA ? m_pTAASource.get() : m_pHDRRenderTarget.get();
@@ -1012,7 +1014,7 @@ void Graphics::Update()
 					context.SetDynamicDescriptor(2, 0, m_pLuminanceHistogram->GetSRV());
 					context.SetDynamicDescriptor(2, 1, m_pAverageLuminance->GetSRV());
 
-					context.Dispatch(1, m_pLuminanceHistogram->GetDesc().ElementCount);
+					context.Dispatch(1, m_pLuminanceHistogram->GetNumElements());
 				});
 		}
 	}
@@ -2118,11 +2120,6 @@ void Graphics::UpdateImGui()
 	}
 
 	ImGui::Checkbox("TAA", &Tweakables::g_TAA);
-	ImGui::Checkbox("Test TAA", &Tweakables::g_TestTAA);
-	if (Input::Instance().IsKeyPressed('G'))
-	{
-		Tweakables::g_TestTAA = !Tweakables::g_TestTAA;
-	}
 
 	ImGui::End();
 }

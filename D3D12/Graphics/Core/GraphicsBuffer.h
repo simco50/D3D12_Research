@@ -26,11 +26,11 @@ DECLARE_BITMASK_TYPE(BufferFlag)
 struct BufferDesc
 {
 	BufferDesc() = default;
-	BufferDesc(int elements, int elementSize, BufferFlag usage = BufferFlag::None)
-		: ElementCount(elements), ElementSize(elementSize), Usage(usage)
+	BufferDesc(uint64 elements, uint32 elementSize, BufferFlag usage = BufferFlag::None)
+		: Size(elements * elementSize), ElementSize(elementSize), Usage(usage)
 	{}
 
-	static BufferDesc CreateBuffer(uint32 sizeInBytes, BufferFlag usage = BufferFlag::None)
+	static BufferDesc CreateBuffer(uint64 sizeInBytes, BufferFlag usage = BufferFlag::None)
 	{
 		return BufferDesc(sizeInBytes, 1, usage);
 	}
@@ -54,7 +54,7 @@ struct BufferDesc
 	{
 		check(bytes % 4 == 0);
 		BufferDesc desc;
-		desc.ElementCount = (uint32)(bytes / 4);
+		desc.Size = bytes;
 		desc.ElementSize = 4;
 		desc.Usage = usage | BufferFlag::ByteAddress | BufferFlag::UnorderedAccess;
 		return desc;
@@ -64,7 +64,7 @@ struct BufferDesc
 	{
 		check(bytes % 4 == 0);
 		BufferDesc desc;
-		desc.ElementCount = (uint32)(bytes / 4);
+		desc.Size = bytes;
 		desc.ElementSize = 4;
 		desc.Usage = desc.Usage | BufferFlag::AccelerationStructure | BufferFlag::UnorderedAccess;
 		return desc;
@@ -73,8 +73,8 @@ struct BufferDesc
 	static BufferDesc CreateStructured(int elementCount, int elementSize, BufferFlag usage = BufferFlag::ShaderResource | BufferFlag::UnorderedAccess)
 	{
 		BufferDesc desc;
-		desc.ElementCount = elementCount;
 		desc.ElementSize = elementSize;
+		desc.Size = elementCount * desc.ElementSize;
 		desc.Usage = usage | BufferFlag::Structured;
 		return desc;
 	}
@@ -83,8 +83,8 @@ struct BufferDesc
 	{
 		check(!D3D::IsBlockCompressFormat(format));
 		BufferDesc desc;
-		desc.ElementCount = elementCount;
 		desc.ElementSize = D3D::GetFormatRowDataSize(format, 1);
+		desc.Size = elementCount * desc.ElementSize;
 		desc.Format = format;
 		desc.Usage = usage;
 		return desc;
@@ -94,28 +94,30 @@ struct BufferDesc
 	static BufferDesc CreateIndirectArguments(int elements = 1, BufferFlag usage = BufferFlag::None)
 	{
 		BufferDesc desc;
-		desc.ElementCount = elements;
 		desc.ElementSize = sizeof(IndirectParameters);
+		desc.Size = elements * desc.ElementSize;
 		desc.Usage = usage | BufferFlag::IndirectArguments | BufferFlag::UnorderedAccess;
 		return desc;
 	}
 
+	uint32 NumElements() const { return (uint32)(Size / ElementSize); }
+
 	bool operator==(const BufferDesc& other) const
 	{
-		return ElementCount == other.ElementCount
+		return Size == other.Size
 			&& ElementSize == other.ElementSize
 			&& Usage == other.Usage;
 	}
 
 	bool operator!=(const BufferDesc& other) const
 	{
-		return ElementCount != other.ElementCount
+		return Size != other.Size
 			|| ElementSize != other.ElementSize
 			|| Usage != other.Usage;
 	}
 
-	int ElementCount = 0;
-	int ElementSize = 0;
+	uint64 Size = 0;
+	uint32 ElementSize = 0;
 	BufferFlag Usage = BufferFlag::None;
 	DXGI_FORMAT Format = DXGI_FORMAT_UNKNOWN;
 };
@@ -127,10 +129,11 @@ public:
 	Buffer(Graphics* pGraphics, ID3D12Resource * pResource, D3D12_RESOURCE_STATES state);
 	~Buffer();
 	void Create(const BufferDesc& desc);
-	void SetData(CommandContext* pContext, const void* pData, uint64 dataSize, uint32 offset = 0);
+	void SetData(CommandContext* pContext, const void* pData, uint64 dataSize, uint64 offset = 0);
 
-	inline uint64 GetSize() const { return (uint64)m_Desc.ElementCount * m_Desc.ElementSize; }
-	const BufferDesc& GetDesc() const { return m_Desc; }
+	inline uint64 GetSize() const { return m_Desc.Size; }
+	inline uint32 GetNumElements() const { return m_Desc.NumElements(); }
+	inline const BufferDesc& GetDesc() const { return m_Desc; }
 
 	void CreateUAV(UnorderedAccessView** pView, const BufferUAVDesc& desc);
 	void CreateSRV(ShaderResourceView** pView, const BufferSRVDesc& desc);
@@ -156,8 +159,8 @@ struct VertexBufferView
 	VertexBufferView(Buffer* pBuffer)
 	{
 		Location = pBuffer->GetGpuHandle();
-		Elements = (uint32)pBuffer->GetDesc().ElementCount;
 		Stride = pBuffer->GetDesc().ElementSize;
+		Elements = (uint32)(pBuffer->GetSize() / Stride);
 	}
 	D3D12_GPU_VIRTUAL_ADDRESS Location;
 	uint32 Elements;
@@ -172,7 +175,7 @@ struct IndexBufferView
 	IndexBufferView(Buffer* pBuffer)
 	{
 		Location = pBuffer->GetGpuHandle();
-		Elements = (uint32)pBuffer->GetDesc().ElementCount;
+		Elements = (uint32)(pBuffer->GetSize() / pBuffer->GetDesc().ElementSize);
 		SmallIndices = pBuffer->GetDesc().Format == DXGI_FORMAT_R16_UINT;
 	}
 	D3D12_GPU_VIRTUAL_ADDRESS Location;

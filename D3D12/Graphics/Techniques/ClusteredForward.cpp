@@ -234,7 +234,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 			} constantBuffer{};
 
 			constantBuffer.View = resources.pCamera->GetView();
-			constantBuffer.LightCount = (uint32)resources.pLightBuffer->GetDesc().ElementCount;
+			constantBuffer.LightCount = resources.pLightBuffer->GetNumElements();
 
 			context.SetComputeDynamicConstantBufferView(0, &constantBuffer, sizeof(ConstantBuffer));
 
@@ -285,7 +285,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 			frameData.LightGridParams = lightGridParams;
 			frameData.FrameIndex = resources.FrameIndex;
 			frameData.SsrSamples = Tweakables::g_SsrSamples;
-			frameData.LightCount = resources.pLightBuffer->GetDesc().ElementCount;
+			frameData.LightCount = resources.pLightBuffer->GetNumElements();
 			frameData.ViewProjection = resources.pCamera->GetViewProjection();
 			frameData.ViewPosition = Vector4(resources.pCamera->GetPosition());
 

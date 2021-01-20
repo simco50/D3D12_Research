@@ -185,9 +185,19 @@ void CommandContext::InitializeBuffer(Buffer* pResource, const void* pData, uint
 	DynamicAllocation allocation = m_DynamicAllocator->Allocate(dataSize);
 	memcpy(allocation.pMappedMemory, pData, dataSize);
 
-	ScopedBarrier barrier(*this, pResource, D3D12_RESOURCE_STATE_COPY_DEST);
-	FlushResourceBarriers();
+	bool resetState = false;
+	D3D12_RESOURCE_STATES previousState = GetResourceStateWithFallback(pResource, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES);
+	if (previousState != D3D12_RESOURCE_STATE_COPY_DEST)
+	{
+		resetState = true;
+		InsertResourceBarrier(pResource, D3D12_RESOURCE_STATE_COPY_DEST);
+		FlushResourceBarriers();
+	}
 	m_pCommandList->CopyBufferRegion(pResource->GetResource(), offset, allocation.pBackingResource->GetResource(), allocation.Offset, dataSize);
+	if (resetState)
+	{
+		InsertResourceBarrier(pResource, previousState);
+	}
 }
 
 void CommandContext::InitializeTexture(Texture* pResource, D3D12_SUBRESOURCE_DATA* pSubResourceDatas, int firstSubResource, int subResourceCount)
@@ -197,9 +207,19 @@ void CommandContext::InitializeTexture(Texture* pResource, D3D12_SUBRESOURCE_DAT
 	GetParent()->GetDevice()->GetCopyableFootprints(&desc, firstSubResource, subResourceCount, 0, nullptr, nullptr, nullptr, &requiredSize);
 	DynamicAllocation allocation = m_DynamicAllocator->Allocate(requiredSize, D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT);
 	
-	ScopedBarrier barrier(*this, pResource, D3D12_RESOURCE_STATE_COPY_DEST);
-	FlushResourceBarriers();
+	bool resetState = false;
+	D3D12_RESOURCE_STATES previousState = GetResourceStateWithFallback(pResource, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES);
+	if (previousState != D3D12_RESOURCE_STATE_COPY_DEST)
+	{
+		resetState = true;
+		InsertResourceBarrier(pResource, D3D12_RESOURCE_STATE_COPY_DEST);
+		FlushResourceBarriers();
+	}
 	UpdateSubresources(m_pCommandList, pResource->GetResource(), allocation.pBackingResource->GetResource(), allocation.Offset, firstSubResource, subResourceCount, pSubResourceDatas);
+	if (resetState)
+	{
+		InsertResourceBarrier(pResource, previousState);
+	}
 }
 
 void CommandContext::Dispatch(uint32 groupCountX, uint32 groupCountY, uint32 groupCountZ)

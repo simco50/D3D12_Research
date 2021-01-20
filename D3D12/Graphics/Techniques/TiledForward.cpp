@@ -71,7 +71,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& resources)
 			Data.NumThreadGroups.y = Math::DivideAndRoundUp(resources.pResolvedDepth->GetHeight(), FORWARD_PLUS_BLOCK_SIZE);
 			Data.NumThreadGroups.z = 1;
 			Data.ScreenDimensionsInv = Vector2(1.0f / resources.pResolvedDepth->GetWidth(), 1.0f / resources.pResolvedDepth->GetHeight());
-			Data.LightCount = (uint32)resources.pLightBuffer->GetDesc().ElementCount;
+			Data.LightCount = resources.pLightBuffer->GetNumElements();
 			Data.ProjectionInverse = resources.pCamera->GetProjectionInverse();
 
 			context.SetComputeDynamicConstantBufferView(0, &Data, sizeof(ShaderParameters));
@@ -117,7 +117,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& resources)
 			frameData.FarZ = resources.pCamera->GetFar();
 			frameData.FrameIndex = resources.FrameIndex;
 			frameData.SsrSamples = Tweakables::g_SsrSamples;
-			frameData.LightCount = resources.pLightBuffer->GetDesc().ElementCount;
+			frameData.LightCount = resources.pLightBuffer->GetNumElements();
 			frameData.ViewProjection = resources.pCamera->GetViewProjection();
 			frameData.ViewPosition = Vector4(resources.pCamera->GetPosition());
 

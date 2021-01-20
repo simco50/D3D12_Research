@@ -35,12 +35,12 @@ void ShaderResourceView::Create(Buffer* pBuffer, const BufferSRVDesc& desc)
 		srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 		srvDesc.Format = desc.Format;
 		srvDesc.Buffer.FirstElement = 0;
-		srvDesc.Buffer.NumElements = bufferDesc.ElementCount;
+		srvDesc.Buffer.NumElements = bufferDesc.NumElements();
 		srvDesc.Buffer.StructureByteStride = 0;
 		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
 		if (desc.Raw)
 		{
-			srvDesc.Buffer.NumElements = (bufferDesc.ElementCount * bufferDesc.ElementSize) / 4;
+			srvDesc.Buffer.NumElements = (uint32)(bufferDesc.Size / 4);
 			srvDesc.Buffer.Flags |= D3D12_BUFFER_SRV_FLAG_RAW;
 			srvDesc.Format = DXGI_FORMAT_R32_TYPELESS;
 		}
@@ -157,7 +157,7 @@ void UnorderedAccessView::Create(Buffer* pBuffer, const BufferUAVDesc& desc)
 	uavDesc.Buffer.CounterOffsetInBytes = 0;
 	uavDesc.Buffer.FirstElement = 0;
 	uavDesc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_NONE;
-	uavDesc.Buffer.NumElements = bufferDesc.ElementCount;
+	uavDesc.Buffer.NumElements = bufferDesc.NumElements();
 	uavDesc.Buffer.StructureByteStride = 0;
 	uavDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
 

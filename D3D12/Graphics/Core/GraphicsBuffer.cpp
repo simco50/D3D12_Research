@@ -22,7 +22,7 @@ Buffer::~Buffer()
 D3D12_RESOURCE_DESC GetResourceDesc(const BufferDesc& bufferDesc)
 {
 	D3D12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Buffer(
-		Math::AlignUp<int64>((int64)bufferDesc.ElementSize * bufferDesc.ElementCount, D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT),
+		Math::AlignUp<int64>((int64)bufferDesc.Size, D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT),
 		D3D12_RESOURCE_FLAG_NONE
 	);
 	if (EnumHasAnyFlags(bufferDesc.Usage, BufferFlag::ShaderResource | BufferFlag::AccelerationStructure) == false)
@@ -112,7 +112,7 @@ void Buffer::Create(const BufferDesc& bufferDesc)
 	}
 }
 
-void Buffer::SetData(CommandContext* pContext, const void* pData, uint64 dataSize, uint32 offset)
+void Buffer::SetData(CommandContext* pContext, const void* pData, uint64 dataSize, uint64 offset)
 {
 	check(dataSize + offset <= GetSize());
 	pContext->InitializeBuffer(this, pData, dataSize, offset);
