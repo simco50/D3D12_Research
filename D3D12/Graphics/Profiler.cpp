@@ -247,7 +247,7 @@ int32 Profiler::GetNextTimerIndex()
 void ProfileNode::RenderImGui(int frameIndex)
 {
 	ImGui::Spacing();
-	if (ImGui::BeginTable("Profiling", 3, ImGuiTableFlags_None))
+	if (ImGui::BeginTable("Profiling", 3, ImGuiTableFlags_SizingStretchProp))
 	{
 		ImGui::TableSetupColumn("Event", ImGuiTableColumnFlags_None, 3);
 		ImGui::TableSetupColumn("CPU (ms)", ImGuiTableColumnFlags_None, 1);

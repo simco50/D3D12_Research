@@ -1,8 +1,6 @@
 #pragma once
 #include "GraphicsResource.h"
-
-class Shader;
-class ShaderLibrary;
+#include "Shader.h"
 
 enum class BlendMode
 {
@@ -34,7 +32,7 @@ public:
 	~PipelineState();
 	ID3D12PipelineState* GetPipelineState() const { return m_pPipelineState.Get(); }
 	void Finalize(const char* pName);
-
+	void ConditionallyReload();
 	void SetRenderTargetFormat(DXGI_FORMAT rtvFormat, DXGI_FORMAT dsvFormat, uint32 msaa);
 	void SetRenderTargetFormats(DXGI_FORMAT* rtvFormats, uint32 count, DXGI_FORMAT dsvFormat, uint32 msaa);
 
@@ -71,9 +69,16 @@ public:
 	PipelineStateType GetType() const { return m_Type; }
 
 private:
+	void OnShaderReloaded(Shader* pOldShader, Shader* pNewShader);
+
+	std::string m_Name;
+	std::vector<D3D12_INPUT_ELEMENT_DESC> m_InputLayout;
 	ComPtr<ID3D12PipelineState> m_pPipelineState;
-
 	CD3DX12_PIPELINE_STATE_STREAM_HELPER m_Desc;
-
 	PipelineStateType m_Type = PipelineStateType::MAX;
+
+	std::array<Shader*, (int)ShaderType::MAX> m_Shaders{};
+
+	DelegateHandle m_ReloadHandle;
+	bool m_NeedsReload = false;
 };

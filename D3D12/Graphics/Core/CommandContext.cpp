@@ -670,6 +670,7 @@ void CommandContext::PrepareDraw(DescriptorTableType type)
 
 void CommandContext::SetPipelineState(PipelineState* pPipelineState)
 {
+	pPipelineState->ConditionallyReload();
 	m_pCommandList->SetPipelineState(pPipelineState->GetPipelineState());
 }
 

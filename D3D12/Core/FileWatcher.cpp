@@ -113,7 +113,20 @@ int FileWatcher::ThreadFunction()
 
 				QueryPerformanceCounter(&newEvent.Time);
 
-				m_Changes.push_back(newEvent);
+				bool add = true;
+
+				//Some events are duplicates
+				if (m_Changes.size() > 0)
+				{
+					const FileEvent& prevEvent = m_Changes.front();
+					add = prevEvent.Path != newEvent.Path ||
+						prevEvent.EventType != newEvent.EventType;
+				}
+
+				if (add)
+				{
+					m_Changes.push_back(newEvent);
+				}
 
 				if (!record->NextEntryOffset)
 				{

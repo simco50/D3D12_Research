@@ -13,6 +13,8 @@ PipelineState::PipelineState(Graphics* pParent)
 	m_Desc.GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_PRIMITIVE_TOPOLOGY>() = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
 	m_Desc.GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_FLAGS>() = D3D12_PIPELINE_STATE_FLAG_NONE;
 	m_Desc.GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_SAMPLE_MASK>() = DefaultSampleMask();
+
+	m_ReloadHandle = pParent->GetShaderManager()->OnShaderRecompiledEvent().AddRaw(this, &PipelineState::OnShaderReloaded);
 }
 
 PipelineState::PipelineState(const PipelineState& other)
@@ -20,6 +22,7 @@ PipelineState::PipelineState(const PipelineState& other)
 	m_Desc(other.m_Desc),
 	m_Type(other.m_Type)
 {
+	m_ReloadHandle = GetParent()->GetShaderManager()->OnShaderRecompiledEvent().AddRaw(this, &PipelineState::OnShaderReloaded);
 }
 
 PipelineState::~PipelineState()
@@ -31,9 +34,49 @@ void PipelineState::Finalize(const char* pName)
 	check(m_Type != PipelineStateType::MAX);
 	ComPtr<ID3D12Device2> pDevice2;
 	VERIFY_HR_EX(GetParent()->GetDevice()->QueryInterface(IID_PPV_ARGS(pDevice2.GetAddressOf())), GetParent()->GetDevice());
+
+	auto GetByteCode = [this](ShaderType type) -> D3D12_SHADER_BYTECODE& {
+		switch (type)
+		{
+		case ShaderType::Vertex: return m_Desc.GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_VS>();
+		case ShaderType::Pixel: return m_Desc.GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_PS>();
+		case ShaderType::Geometry: return m_Desc.GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_GS>();
+		case ShaderType::Hull: return m_Desc.GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_HS>();
+		case ShaderType::Domain: return m_Desc.GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DS>();
+		case ShaderType::Mesh: return m_Desc.GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_MS>();
+		case ShaderType::Amplification: return m_Desc.GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_AS>();
+		case ShaderType::Compute: return m_Desc.GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_CS>();
+		case ShaderType::MAX:
+		default:
+			noEntry();
+			static D3D12_SHADER_BYTECODE dummy;
+			return dummy;
+		}
+	};
+
+	for (uint32 i = 0; i < (int)ShaderType::MAX; ++i)
+	{
+		Shader* pShader = m_Shaders[i];
+		if (pShader)
+		{
+			GetByteCode((ShaderType)i) = D3D12_SHADER_BYTECODE{ pShader->GetByteCode(), pShader->GetByteCodeSize() };
+		}
+	}
+
 	D3D12_PIPELINE_STATE_STREAM_DESC streamDesc = m_Desc.Desc();
-	VERIFY_HR_EX(pDevice2->CreatePipelineState(&streamDesc, IID_PPV_ARGS(m_pPipelineState.GetAddressOf())), GetParent()->GetDevice());
+	VERIFY_HR_EX(pDevice2->CreatePipelineState(&streamDesc, IID_PPV_ARGS(m_pPipelineState.ReleaseAndGetAddressOf())), GetParent()->GetDevice());
 	D3D::SetObjectName(m_pPipelineState.Get(), pName);
+	m_Name = pName;
+}
+
+void PipelineState::ConditionallyReload()
+{
+	if (m_NeedsReload)
+	{
+		Finalize(m_Name.c_str());
+		m_NeedsReload = false;
+		E_LOG(Info, "Reloaded Pipeline: %s", m_Name.c_str());
+	}
 }
 
 void PipelineState::SetRenderTargetFormat(DXGI_FORMAT rtvFormat, DXGI_FORMAT dsvFormat, uint32 msaa)
@@ -198,8 +241,10 @@ void PipelineState::SetDepthBias(int depthBias, float depthBiasClamp, float slop
 void PipelineState::SetInputLayout(D3D12_INPUT_ELEMENT_DESC* pElements, uint32 count)
 {
 	D3D12_INPUT_LAYOUT_DESC& ilDesc = m_Desc.GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_INPUT_LAYOUT>();
+	m_InputLayout.resize(count);
+	memcpy(m_InputLayout.data(), pElements, sizeof(D3D12_INPUT_ELEMENT_DESC) * count);
 	ilDesc.NumElements = count;
-	ilDesc.pInputElementDescs = pElements;
+	ilDesc.pInputElementDescs = m_InputLayout.data();
 }
 
 void PipelineState::SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE topology)
@@ -215,46 +260,58 @@ void PipelineState::SetRootSignature(ID3D12RootSignature* pRootSignature)
 void PipelineState::SetVertexShader(Shader* pShader)
 {
 	m_Type = PipelineStateType::Graphics;
-	m_Desc.GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_VS>() = { pShader->GetByteCode(), pShader->GetByteCodeSize() };
+	m_Shaders[(int)ShaderType::Vertex] = pShader;
 }
 
 void PipelineState::SetPixelShader(Shader* pShader)
 {
-	m_Desc.GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_PS>() = { pShader->GetByteCode(), pShader->GetByteCodeSize() };
+	m_Shaders[(int)ShaderType::Pixel] = pShader;
 }
 
 void PipelineState::SetHullShader(Shader* pShader)
 {
 	m_Type = PipelineStateType::Graphics;
-	m_Desc.GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_HS>() = { pShader->GetByteCode(), pShader->GetByteCodeSize() };
+	m_Shaders[(int)ShaderType::Hull] = pShader;
 }
 
 void PipelineState::SetDomainShader(Shader* pShader)
 {
 	m_Type = PipelineStateType::Graphics;
-	m_Desc.GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DS>() = { pShader->GetByteCode(), pShader->GetByteCodeSize() };
+	m_Shaders[(int)ShaderType::Domain] = pShader;
 }
 
 void PipelineState::SetGeometryShader(Shader* pShader)
 {
 	m_Type = PipelineStateType::Graphics;
-	m_Desc.GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_GS>() = { pShader->GetByteCode(), pShader->GetByteCodeSize() };
+	m_Shaders[(int)ShaderType::Geometry] = pShader;
 }
 
 void PipelineState::SetComputeShader(Shader* pShader)
 {
 	m_Type = PipelineStateType::Compute;
-	m_Desc.GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_CS>() = { pShader->GetByteCode(), pShader->GetByteCodeSize() };
+	m_Shaders[(int)ShaderType::Compute] = pShader;
 }
 
 void PipelineState::SetMeshShader(Shader* pShader)
 {
 	m_Type = PipelineStateType::Mesh;
-	m_Desc.GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_MS>() = { pShader->GetByteCode(), pShader->GetByteCodeSize() };
+	m_Shaders[(int)ShaderType::Mesh] = pShader;
 }
 
 void PipelineState::SetAmplificationShader(Shader* pShader)
 {
 	m_Type = PipelineStateType::Mesh;
-	m_Desc.GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_AS>() = { pShader->GetByteCode(), pShader->GetByteCodeSize() };
+	m_Shaders[(int)ShaderType::Amplification] = pShader;
+}
+
+void PipelineState::OnShaderReloaded(Shader* pOldShader, Shader* pNewShader)
+{
+	for (Shader*& pShader : m_Shaders)
+	{
+		if (pShader && pShader == pOldShader)
+		{
+			pShader = pNewShader;
+			m_NeedsReload = true;
+		}
+	}
 }

@@ -374,33 +374,39 @@ private:
 class CD3DX12_PIPELINE_STATE_STREAM_HELPER
 {
 private:
-	template<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE T> struct CD3DX12_PIPELINE_STATE_SUBOJECT_TYPE_TRAITS;
-	template<> struct CD3DX12_PIPELINE_STATE_SUBOJECT_TYPE_TRAITS<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_FLAGS> { using Type = D3D12_PIPELINE_STATE_FLAGS; };
-	template<> struct CD3DX12_PIPELINE_STATE_SUBOJECT_TYPE_TRAITS<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_NODE_MASK> { using Type = UINT; };
-	template<> struct CD3DX12_PIPELINE_STATE_SUBOJECT_TYPE_TRAITS<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_ROOT_SIGNATURE> { using Type = ID3D12RootSignature*; };
-	template<> struct CD3DX12_PIPELINE_STATE_SUBOJECT_TYPE_TRAITS<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_INPUT_LAYOUT> { using Type = D3D12_INPUT_LAYOUT_DESC; };
-	template<> struct CD3DX12_PIPELINE_STATE_SUBOJECT_TYPE_TRAITS<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_IB_STRIP_CUT_VALUE> { using Type = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE; };
-	template<> struct CD3DX12_PIPELINE_STATE_SUBOJECT_TYPE_TRAITS<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_PRIMITIVE_TOPOLOGY> { using Type = D3D12_PRIMITIVE_TOPOLOGY_TYPE; };
-	template<> struct CD3DX12_PIPELINE_STATE_SUBOJECT_TYPE_TRAITS<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_VS> { using Type = D3D12_SHADER_BYTECODE; };
-	template<> struct CD3DX12_PIPELINE_STATE_SUBOJECT_TYPE_TRAITS<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_GS> { using Type = D3D12_SHADER_BYTECODE; };
-	template<> struct CD3DX12_PIPELINE_STATE_SUBOJECT_TYPE_TRAITS<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_STREAM_OUTPUT> { using Type = D3D12_STREAM_OUTPUT_DESC; };
-	template<> struct CD3DX12_PIPELINE_STATE_SUBOJECT_TYPE_TRAITS<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_HS> { using Type = D3D12_SHADER_BYTECODE; };
-	template<> struct CD3DX12_PIPELINE_STATE_SUBOJECT_TYPE_TRAITS<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DS> { using Type = D3D12_SHADER_BYTECODE; };
-	template<> struct CD3DX12_PIPELINE_STATE_SUBOJECT_TYPE_TRAITS<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_PS> { using Type = D3D12_SHADER_BYTECODE; };
-	template<> struct CD3DX12_PIPELINE_STATE_SUBOJECT_TYPE_TRAITS<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_CS> { using Type = D3D12_SHADER_BYTECODE; };
-	template<> struct CD3DX12_PIPELINE_STATE_SUBOJECT_TYPE_TRAITS<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_BLEND> { using Type = CD3DX12_BLEND_DESC; };
-	template<> struct CD3DX12_PIPELINE_STATE_SUBOJECT_TYPE_TRAITS<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL> { using Type = CD3DX12_DEPTH_STENCIL_DESC; };
-	template<> struct CD3DX12_PIPELINE_STATE_SUBOJECT_TYPE_TRAITS<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL1> { using Type = CD3DX12_DEPTH_STENCIL_DESC1; };
-	template<> struct CD3DX12_PIPELINE_STATE_SUBOJECT_TYPE_TRAITS<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL_FORMAT> { using Type = DXGI_FORMAT; };
-	template<> struct CD3DX12_PIPELINE_STATE_SUBOJECT_TYPE_TRAITS<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_RASTERIZER> { using Type = CD3DX12_RASTERIZER_DESC; };
-	template<> struct CD3DX12_PIPELINE_STATE_SUBOJECT_TYPE_TRAITS<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_RENDER_TARGET_FORMATS> { using Type = D3D12_RT_FORMAT_ARRAY; };
-	template<> struct CD3DX12_PIPELINE_STATE_SUBOJECT_TYPE_TRAITS<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_SAMPLE_DESC> { using Type = DXGI_SAMPLE_DESC; };
-	template<> struct CD3DX12_PIPELINE_STATE_SUBOJECT_TYPE_TRAITS<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_SAMPLE_MASK> { using Type = UINT; };
-	template<> struct CD3DX12_PIPELINE_STATE_SUBOJECT_TYPE_TRAITS<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_CACHED_PSO> { using Type = D3D12_CACHED_PIPELINE_STATE; };
-	template<> struct CD3DX12_PIPELINE_STATE_SUBOJECT_TYPE_TRAITS<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_VIEW_INSTANCING> { using Type = CD3DX12_VIEW_INSTANCING_DESC; };
 
-	template<> struct CD3DX12_PIPELINE_STATE_SUBOJECT_TYPE_TRAITS<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_AS> { using Type = D3D12_SHADER_BYTECODE; };
-	template<> struct CD3DX12_PIPELINE_STATE_SUBOJECT_TYPE_TRAITS<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_MS> { using Type = D3D12_SHADER_BYTECODE; };
+#define SUBOBJECT_TRAIT(value, type) \
+	template<> struct CD3DX12_PIPELINE_STATE_SUBOJECT_TYPE_TRAITS<value> \
+	{ \
+		using Type = type; \
+	};
+
+	template<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE T> struct CD3DX12_PIPELINE_STATE_SUBOJECT_TYPE_TRAITS;
+	SUBOBJECT_TRAIT(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_FLAGS, D3D12_PIPELINE_STATE_FLAGS)
+	SUBOBJECT_TRAIT(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_NODE_MASK, UINT)
+	SUBOBJECT_TRAIT(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_ROOT_SIGNATURE, ID3D12RootSignature*)
+	SUBOBJECT_TRAIT(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_INPUT_LAYOUT, D3D12_INPUT_LAYOUT_DESC)
+	SUBOBJECT_TRAIT(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_IB_STRIP_CUT_VALUE, D3D12_INDEX_BUFFER_STRIP_CUT_VALUE)
+	SUBOBJECT_TRAIT(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_PRIMITIVE_TOPOLOGY, D3D12_PRIMITIVE_TOPOLOGY_TYPE)
+	SUBOBJECT_TRAIT(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_VS, D3D12_SHADER_BYTECODE)
+	SUBOBJECT_TRAIT(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_GS, D3D12_SHADER_BYTECODE)
+	SUBOBJECT_TRAIT(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_STREAM_OUTPUT, D3D12_STREAM_OUTPUT_DESC)
+	SUBOBJECT_TRAIT(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_HS, D3D12_SHADER_BYTECODE)
+	SUBOBJECT_TRAIT(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DS, D3D12_SHADER_BYTECODE)
+	SUBOBJECT_TRAIT(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_PS, D3D12_SHADER_BYTECODE)
+	SUBOBJECT_TRAIT(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_CS, D3D12_SHADER_BYTECODE)
+	SUBOBJECT_TRAIT(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_BLEND, CD3DX12_BLEND_DESC)
+	SUBOBJECT_TRAIT(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL, CD3DX12_DEPTH_STENCIL_DESC)
+	SUBOBJECT_TRAIT(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL1, CD3DX12_DEPTH_STENCIL_DESC1)
+	SUBOBJECT_TRAIT(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL_FORMAT, DXGI_FORMAT)
+	SUBOBJECT_TRAIT(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_RASTERIZER, CD3DX12_RASTERIZER_DESC)
+	SUBOBJECT_TRAIT(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_RENDER_TARGET_FORMATS, D3D12_RT_FORMAT_ARRAY)
+	SUBOBJECT_TRAIT(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_SAMPLE_DESC, DXGI_SAMPLE_DESC)
+	SUBOBJECT_TRAIT(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_SAMPLE_MASK, UINT)
+	SUBOBJECT_TRAIT(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_CACHED_PSO, D3D12_CACHED_PIPELINE_STATE)
+	SUBOBJECT_TRAIT(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_VIEW_INSTANCING, CD3DX12_VIEW_INSTANCING_DESC)
+	SUBOBJECT_TRAIT(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_AS, D3D12_SHADER_BYTECODE)
+	SUBOBJECT_TRAIT(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_MS, D3D12_SHADER_BYTECODE)
 
 public:
 	CD3DX12_PIPELINE_STATE_STREAM_HELPER()
@@ -469,6 +475,139 @@ public:
 		int offset = m_pSubobjectLocations[ObjectType];
 		SubobjectType* pObj = (SubobjectType*)&m_pSubobjectData[offset];
 		return pObj->ObjectData;
+	}
+
+	std::string DebugPrint()
+	{
+		std::stringstream str;
+		str << "---------------------------------\n";
+		str << "| D3D12 Pipeline State Stream |\n";
+
+		for (uint32 i = 0; i < D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_MAX_VALID; ++i)
+		{
+			int offset = m_pSubobjectLocations[i];
+			if (offset >= 0)
+			{
+				str << "| [" << i << "]: ";
+
+				struct SubobjectType
+				{
+					D3D12_PIPELINE_STATE_SUBOBJECT_TYPE ObjType;
+					void* ObjectData;
+				};
+				SubobjectType* pSubObject = (SubobjectType*)&m_pSubobjectData[offset];
+				void* pSubObjectData = &pSubObject->ObjectData;
+
+				switch (pSubObject->ObjType)
+				{
+				case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_FLAGS:
+				{
+					D3D12_PIPELINE_STATE_FLAGS* pObjectData = reinterpret_cast<D3D12_PIPELINE_STATE_FLAGS*>(pSubObjectData);
+					str << "Flags: " << *pObjectData;
+					break;
+				}
+				case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_NODE_MASK:
+				{
+					UINT* pObjectData = reinterpret_cast<UINT*>(pSubObjectData);
+					str << "Node Mask: " << *pObjectData;
+					break;
+				}
+				case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_ROOT_SIGNATURE:
+				{
+					ID3D12RootSignature** pObjectData = reinterpret_cast<ID3D12RootSignature**>(pSubObjectData);
+					str << "Root Signature: " << *pObjectData;
+					break;
+				}
+				case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_INPUT_LAYOUT:
+				{
+					D3D12_INPUT_LAYOUT_DESC* pObjectData = reinterpret_cast<D3D12_INPUT_LAYOUT_DESC*>(pSubObjectData);
+					str << "Input Layout: \n";
+					str << "\tElements: " << pObjectData->NumElements;
+					for (uint32 elementIndex = 0; elementIndex < pObjectData->NumElements; ++elementIndex)
+					{
+						str << "\t[" << elementIndex << "] " << pObjectData->pInputElementDescs[elementIndex].SemanticName << pObjectData->pInputElementDescs[elementIndex].SemanticIndex;
+					}
+					break;
+				}
+				case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_IB_STRIP_CUT_VALUE:
+				{
+					D3D12_INDEX_BUFFER_STRIP_CUT_VALUE* pObjectData = reinterpret_cast<D3D12_INDEX_BUFFER_STRIP_CUT_VALUE*>(pSubObjectData);
+					str << "Index Buffer Strip Cut Value: " << *pObjectData;
+					break;
+				}
+				case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_PRIMITIVE_TOPOLOGY:
+				{
+					D3D12_PRIMITIVE_TOPOLOGY_TYPE* pObjectData = reinterpret_cast<D3D12_PRIMITIVE_TOPOLOGY_TYPE*>(pSubObjectData);
+					str << "Primitive Topology: " << *pObjectData;
+					break;
+				}
+				case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_VS:
+				{
+					D3D12_SHADER_BYTECODE* pObjectData = reinterpret_cast<D3D12_SHADER_BYTECODE*>(pSubObjectData);
+					str << "Vertex Shader - ByteCode: 0x" << pObjectData->pShaderBytecode << " - Length: " << pObjectData->BytecodeLength << " bytes";
+					break;
+				}
+				case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_GS:
+				{
+					D3D12_SHADER_BYTECODE* pObjectData = reinterpret_cast<D3D12_SHADER_BYTECODE*>(pSubObjectData);
+					str << "Geometry Shader - ByteCode: 0x" << pObjectData->pShaderBytecode << " - Length: " << pObjectData->BytecodeLength << " bytes";
+					break;
+				}
+				case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_PS:
+				{
+					D3D12_SHADER_BYTECODE* pObjectData = reinterpret_cast<D3D12_SHADER_BYTECODE*>(pSubObjectData);
+					str << "Pixel Shader - ByteCode: 0x" << pObjectData->pShaderBytecode << " - Length: " << pObjectData->BytecodeLength << " bytes";
+					break;
+				}
+				case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_CS:
+				{
+					D3D12_SHADER_BYTECODE* pObjectData = reinterpret_cast<D3D12_SHADER_BYTECODE*>(pSubObjectData);
+					str << "Compute Shader - ByteCode: 0x" << pObjectData->pShaderBytecode << " - Length: " << pObjectData->BytecodeLength << " bytes";
+					break;
+				}
+				case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_MS:
+				{
+					D3D12_SHADER_BYTECODE* pObjectData = reinterpret_cast<D3D12_SHADER_BYTECODE*>(pSubObjectData);
+					str << "Mesh Shader - ByteCode: 0x" << pObjectData->pShaderBytecode << " - Length: " << pObjectData->BytecodeLength << " bytes";
+					break;
+				}
+				case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_AS:
+				{
+					D3D12_SHADER_BYTECODE* pObjectData = reinterpret_cast<D3D12_SHADER_BYTECODE*>(pSubObjectData);
+					str << "Amplification Shader - ByteCode: 0x" << pObjectData->pShaderBytecode << " - Length: " << pObjectData->BytecodeLength << " bytes";
+					break;
+				}
+				case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_HS:
+				{
+					D3D12_SHADER_BYTECODE* pObjectData = reinterpret_cast<D3D12_SHADER_BYTECODE*>(pSubObjectData);
+					str << "Hull Shader - ByteCode: 0x" << pObjectData->pShaderBytecode << " - Length: " << pObjectData->BytecodeLength << " bytes";
+					break;
+				}
+				case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DS:
+				{
+					D3D12_SHADER_BYTECODE* pObjectData = reinterpret_cast<D3D12_SHADER_BYTECODE*>(pSubObjectData);
+					str << "Domain Shader - ByteCode: 0x" << pObjectData->pShaderBytecode << " - Length: " << pObjectData->BytecodeLength << " bytes";
+					break;
+				}
+				case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_STREAM_OUTPUT:
+				{
+					//D3D12_STREAM_OUTPUT_DESC* pObjectData = reinterpret_cast<D3D12_STREAM_OUTPUT_DESC*>(pSubObjectData);
+					str << "Stream Output";
+					break;
+				}
+				case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_BLEND:
+				{
+					//CD3DX12_BLEND_DESC* pObjectData = reinterpret_cast<CD3DX12_BLEND_DESC*>(pSubObjectData);
+					str << "Blend Desc";
+					break;
+				}
+				}
+
+				str << "\n";
+			}
+		}
+		str << "|--------------------------------------------------------------------\n";
+		return str.str();
 	}
 
 private:
