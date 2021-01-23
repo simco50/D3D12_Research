@@ -137,12 +137,12 @@ void ImGuiRenderer::InitializeImGui(Graphics* pGraphics)
 void ImGuiRenderer::CreatePipeline(Graphics* pGraphics)
 {
 	//Shaders
-	Shader vertexShader("ImGui.hlsl", ShaderType::Vertex, "VSMain");
-	Shader pixelShader("ImGui.hlsl", ShaderType::Pixel, "PSMain");
+	Shader* pVertexShader = pGraphics->GetShaderManager()->GetShader("ImGui.hlsl", ShaderType::Vertex, "VSMain");
+	Shader* pPixelShader = pGraphics->GetShaderManager()->GetShader("ImGui.hlsl", ShaderType::Pixel, "PSMain");
 
 	//Root signature
 	m_pRootSignature = std::make_unique<RootSignature>(pGraphics);
-	m_pRootSignature->FinalizeFromShader("ImGui", vertexShader);
+	m_pRootSignature->FinalizeFromShader("ImGui", pVertexShader);
 	//Input layout
 	CD3DX12_INPUT_ELEMENT_DESC elementDesc[] = {
 		CD3DX12_INPUT_ELEMENT_DESC("POSITION", DXGI_FORMAT_R32G32_FLOAT),
@@ -155,8 +155,8 @@ void ImGuiRenderer::CreatePipeline(Graphics* pGraphics)
 	m_pPipelineState->SetDepthWrite(false);
 	m_pPipelineState->SetDepthEnabled(false);
 	m_pPipelineState->SetCullMode(D3D12_CULL_MODE_NONE);
-	m_pPipelineState->SetVertexShader(vertexShader);
-	m_pPipelineState->SetPixelShader(pixelShader);
+	m_pPipelineState->SetVertexShader(pVertexShader);
+	m_pPipelineState->SetPixelShader(pPixelShader);
 	m_pPipelineState->SetRootSignature(m_pRootSignature->GetRootSignature());
 	m_pPipelineState->SetInputLayout(elementDesc, ARRAYSIZE(elementDesc));
 	m_pPipelineState->SetRenderTargetFormat(DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_UNKNOWN, 1);

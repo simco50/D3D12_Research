@@ -59,14 +59,14 @@ public:
 	void SetRootSignature(ID3D12RootSignature* pRootSignature);
 
 	//Shaders
-	void SetVertexShader(const Shader& shader);
-	void SetPixelShader(const Shader& shader);
-	void SetHullShader(const Shader& shader);
-	void SetDomainShader(const Shader& shader);
-	void SetGeometryShader(const Shader& shader);
-	void SetComputeShader(const Shader& shader);
-	void SetMeshShader(const Shader& shader);
-	void SetAmplificationShader(const Shader& shader);
+	void SetVertexShader(Shader* pShader);
+	void SetPixelShader(Shader* pShader);
+	void SetHullShader(Shader* pShader);
+	void SetDomainShader(Shader* pShader);
+	void SetGeometryShader(Shader* pShader);
+	void SetComputeShader(Shader* pShader);
+	void SetMeshShader(Shader* pShader);
+	void SetAmplificationShader(Shader* pShader);
 
 	PipelineStateType GetType() const { return m_Type; }
 

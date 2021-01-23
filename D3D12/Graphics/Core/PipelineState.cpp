@@ -212,49 +212,49 @@ void PipelineState::SetRootSignature(ID3D12RootSignature* pRootSignature)
 	m_Desc.GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_ROOT_SIGNATURE>() = pRootSignature;
 }
 
-void PipelineState::SetVertexShader(const Shader& shader)
+void PipelineState::SetVertexShader(Shader* pShader)
 {
 	m_Type = PipelineStateType::Graphics;
-	m_Desc.GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_VS>() = { shader.GetByteCode(), shader.GetByteCodeSize() };
+	m_Desc.GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_VS>() = { pShader->GetByteCode(), pShader->GetByteCodeSize() };
 }
 
-void PipelineState::SetPixelShader(const Shader& shader)
+void PipelineState::SetPixelShader(Shader* pShader)
 {
-	m_Desc.GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_PS>() = { shader.GetByteCode(), shader.GetByteCodeSize() };
+	m_Desc.GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_PS>() = { pShader->GetByteCode(), pShader->GetByteCodeSize() };
 }
 
-void PipelineState::SetHullShader(const Shader& shader)
-{
-	m_Type = PipelineStateType::Graphics;
-	m_Desc.GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_HS>() = { shader.GetByteCode(), shader.GetByteCodeSize() };
-}
-
-void PipelineState::SetDomainShader(const Shader& shader)
+void PipelineState::SetHullShader(Shader* pShader)
 {
 	m_Type = PipelineStateType::Graphics;
-	m_Desc.GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DS>() = { shader.GetByteCode(), shader.GetByteCodeSize() };
+	m_Desc.GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_HS>() = { pShader->GetByteCode(), pShader->GetByteCodeSize() };
 }
 
-void PipelineState::SetGeometryShader(const Shader& shader)
+void PipelineState::SetDomainShader(Shader* pShader)
 {
 	m_Type = PipelineStateType::Graphics;
-	m_Desc.GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_GS>() = { shader.GetByteCode(), shader.GetByteCodeSize() };
+	m_Desc.GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DS>() = { pShader->GetByteCode(), pShader->GetByteCodeSize() };
 }
 
-void PipelineState::SetComputeShader(const Shader& shader)
+void PipelineState::SetGeometryShader(Shader* pShader)
+{
+	m_Type = PipelineStateType::Graphics;
+	m_Desc.GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_GS>() = { pShader->GetByteCode(), pShader->GetByteCodeSize() };
+}
+
+void PipelineState::SetComputeShader(Shader* pShader)
 {
 	m_Type = PipelineStateType::Compute;
-	m_Desc.GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_CS>() = { shader.GetByteCode(), shader.GetByteCodeSize() };
+	m_Desc.GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_CS>() = { pShader->GetByteCode(), pShader->GetByteCodeSize() };
 }
 
-void PipelineState::SetMeshShader(const Shader& shader)
+void PipelineState::SetMeshShader(Shader* pShader)
 {
 	m_Type = PipelineStateType::Mesh;
-	m_Desc.GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_MS>() = { shader.GetByteCode(), shader.GetByteCodeSize() };
+	m_Desc.GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_MS>() = { pShader->GetByteCode(), pShader->GetByteCodeSize() };
 }
 
-void PipelineState::SetAmplificationShader(const Shader& shader)
+void PipelineState::SetAmplificationShader(Shader* pShader)
 {
 	m_Type = PipelineStateType::Mesh;
-	m_Desc.GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_AS>() = { shader.GetByteCode(), shader.GetByteCodeSize() };
+	m_Desc.GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_AS>() = { pShader->GetByteCode(), pShader->GetByteCodeSize() };
 }

@@ -79,49 +79,49 @@ void GpuParticles::Initialize(Graphics* pGraphics)
 	m_pSimpleDrawCommandSignature->Finalize("Simple Draw");
 
 	{
-		Shader computeShader("ParticleSimulation.hlsl", ShaderType::Compute, "UpdateSimulationParameters");
+		Shader* pComputeShader = pGraphics->GetShaderManager()->GetShader("ParticleSimulation.hlsl", ShaderType::Compute, "UpdateSimulationParameters");
 		m_pSimulateRS = std::make_unique<RootSignature>(pGraphics);
-		m_pSimulateRS->FinalizeFromShader("Particle Simulation", computeShader);
+		m_pSimulateRS->FinalizeFromShader("Particle Simulation", pComputeShader);
 	}
 
 	{
-		Shader computeShader("ParticleSimulation.hlsl", ShaderType::Compute, "UpdateSimulationParameters");
+		Shader* pComputeShader = pGraphics->GetShaderManager()->GetShader("ParticleSimulation.hlsl", ShaderType::Compute, "UpdateSimulationParameters");
 		m_pPrepareArgumentsPS = std::make_unique<PipelineState>(pGraphics);
-		m_pPrepareArgumentsPS->SetComputeShader(computeShader);
+		m_pPrepareArgumentsPS->SetComputeShader(pComputeShader);
 		m_pPrepareArgumentsPS->SetRootSignature(m_pSimulateRS->GetRootSignature());
 		m_pPrepareArgumentsPS->Finalize("Prepare Particle Arguments");
 	}
 	{
-		Shader computeShader("ParticleSimulation.hlsl", ShaderType::Compute, "Emit");
+		Shader* pComputeShader = pGraphics->GetShaderManager()->GetShader("ParticleSimulation.hlsl", ShaderType::Compute, "Emit");
 		m_pEmitPS = std::make_unique<PipelineState>(pGraphics);
-		m_pEmitPS->SetComputeShader(computeShader);
+		m_pEmitPS->SetComputeShader(pComputeShader);
 		m_pEmitPS->SetRootSignature(m_pSimulateRS->GetRootSignature());
 		m_pEmitPS->Finalize("Particle Emitter");
 	}
 	{
-		Shader computeShader("ParticleSimulation.hlsl", ShaderType::Compute, "Simulate");
+		Shader* pComputeShader = pGraphics->GetShaderManager()->GetShader("ParticleSimulation.hlsl", ShaderType::Compute, "Simulate");
 		m_pSimulatePS = std::make_unique<PipelineState>(pGraphics);
-		m_pSimulatePS->SetComputeShader(computeShader);
+		m_pSimulatePS->SetComputeShader(pComputeShader);
 		m_pSimulatePS->SetRootSignature(m_pSimulateRS->GetRootSignature());
 		m_pSimulatePS->Finalize("Particle Simulation");
 	}
 	{
-		Shader computeShader("ParticleSimulation.hlsl", ShaderType::Compute, "SimulateEnd");
+		Shader* pComputeShader = pGraphics->GetShaderManager()->GetShader("ParticleSimulation.hlsl", ShaderType::Compute, "SimulateEnd");
 		m_pSimulateEndPS = std::make_unique<PipelineState>(pGraphics);
-		m_pSimulateEndPS->SetComputeShader(computeShader);
+		m_pSimulateEndPS->SetComputeShader(pComputeShader);
 		m_pSimulateEndPS->SetRootSignature(m_pSimulateRS->GetRootSignature());
 		m_pSimulateEndPS->Finalize("Particle Simulation End");
 	}
 	{
-		Shader vertexShader("ParticleRendering.hlsl", ShaderType::Vertex, "VSMain");
-		Shader pixelShader("ParticleRendering.hlsl", ShaderType::Pixel, "PSMain");
+		Shader* pVertexShader = pGraphics->GetShaderManager()->GetShader("ParticleRendering.hlsl", ShaderType::Vertex, "VSMain");
+		Shader* pPixelShader = pGraphics->GetShaderManager()->GetShader("ParticleRendering.hlsl", ShaderType::Pixel, "PSMain");
 
 		m_pRenderParticlesRS = std::make_unique<RootSignature>(pGraphics);
-		m_pRenderParticlesRS->FinalizeFromShader("Particle Rendering", vertexShader);
+		m_pRenderParticlesRS->FinalizeFromShader("Particle Rendering", pVertexShader);
 
 		m_pRenderParticlesPS = std::make_unique<PipelineState>(pGraphics);
-		m_pRenderParticlesPS->SetVertexShader(vertexShader);
-		m_pRenderParticlesPS->SetPixelShader(pixelShader);
+		m_pRenderParticlesPS->SetVertexShader(pVertexShader);
+		m_pRenderParticlesPS->SetPixelShader(pPixelShader);
 		m_pRenderParticlesPS->SetRootSignature(m_pRenderParticlesRS->GetRootSignature());
 		m_pRenderParticlesPS->SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
 		m_pRenderParticlesPS->SetInputLayout(nullptr, 0);

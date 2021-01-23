@@ -102,13 +102,13 @@ void RTAO::SetupPipelines(Graphics* pGraphics)
 	m_pGlobalRS->AddStaticSampler(0, CD3DX12_STATIC_SAMPLER_DESC(0, D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP), D3D12_SHADER_VISIBILITY_ALL);
 	m_pGlobalRS->Finalize("Global", D3D12_ROOT_SIGNATURE_FLAG_NONE);
 
-	ShaderLibrary shaderLibrary("RTAO.hlsl");
+	ShaderLibrary* pShaderLibrary = pGraphics->GetShaderManager()->GetLibrary("RTAO.hlsl");
 
 	CD3DX12_STATE_OBJECT_HELPER stateDesc;
 	const char* pLibraryExports[] = {
 		"RayGen", "Miss"
 	};
-	stateDesc.AddLibrary(CD3DX12_SHADER_BYTECODE(shaderLibrary.GetByteCode(), shaderLibrary.GetByteCodeSize()), pLibraryExports, ARRAYSIZE(pLibraryExports));
+	stateDesc.AddLibrary(CD3DX12_SHADER_BYTECODE(pShaderLibrary->GetByteCode(), pShaderLibrary->GetByteCodeSize()), pLibraryExports, ARRAYSIZE(pLibraryExports));
 	stateDesc.SetRaytracingShaderConfig(sizeof(float), 2 * sizeof(float));
 	stateDesc.SetRaytracingPipelineConfig(1);
 	stateDesc.SetGlobalRootSignature(m_pGlobalRS->GetRootSignature());

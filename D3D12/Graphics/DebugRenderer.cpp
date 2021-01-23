@@ -46,19 +46,19 @@ void DebugRenderer::Initialize(Graphics* pGraphics)
 	};
 
 	//Shaders
-	Shader vertexShader("DebugRenderer.hlsl", ShaderType::Vertex, "VSMain", { });
-	Shader pixelShader("DebugRenderer.hlsl", ShaderType::Pixel, "PSMain", { });
+	Shader* pVertexShader = pGraphics->GetShaderManager()->GetShader("DebugRenderer.hlsl", ShaderType::Vertex, "VSMain");
+	Shader* pPixelShader = pGraphics->GetShaderManager()->GetShader("DebugRenderer.hlsl", ShaderType::Pixel, "PSMain");
 
 	//Rootsignature
 	m_pRS = std::make_unique<RootSignature>(pGraphics);
-	m_pRS->FinalizeFromShader("Diffuse", vertexShader);
+	m_pRS->FinalizeFromShader("Diffuse", pVertexShader);
 
 	//Opaque
 	m_pTrianglesPSO = std::make_unique<PipelineState>(pGraphics);
 	m_pTrianglesPSO->SetInputLayout(inputElements, sizeof(inputElements) / sizeof(inputElements[0]));
 	m_pTrianglesPSO->SetRootSignature(m_pRS->GetRootSignature());
-	m_pTrianglesPSO->SetVertexShader(vertexShader);
-	m_pTrianglesPSO->SetPixelShader(pixelShader);
+	m_pTrianglesPSO->SetVertexShader(pVertexShader);
+	m_pTrianglesPSO->SetPixelShader(pPixelShader);
 	m_pTrianglesPSO->SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, pGraphics->GetMultiSampleCount());
 	m_pTrianglesPSO->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
 	m_pTrianglesPSO->SetDepthWrite(true);

@@ -23,6 +23,7 @@ class RTAO;
 class RTReflections;
 class SSAO;
 class GpuParticles;
+class ShaderManager;
 
 #if PLATFORM_WINDOWS
 using WindowHandle = HWND;
@@ -125,6 +126,7 @@ public:
 	bool SupportsMeshShaders() const { return m_MeshShaderSupport != D3D12_MESH_SHADER_TIER_NOT_SUPPORTED; }
 	bool GetShaderModel(int& major, int& minor) const;
 
+	ShaderManager* GetShaderManager() const { return m_pShaderManager.get(); }
 	DynamicAllocationManager* GetAllocationManager() const { return m_pDynamicAllocationManager.get(); }
 
 	template<typename DESC_TYPE>
@@ -179,6 +181,8 @@ private:
 	ComPtr<ID3D12Fence> m_pDeviceRemovalFence;
 	HANDLE m_DeviceRemovedEvent = 0;
 
+	std::unique_ptr<ShaderManager> m_pShaderManager;
+
 	int m_Frame = 0;
 	std::array<float, 180> m_FrameTimes{};
 
@@ -216,8 +220,8 @@ private:
 
 	D3D12_RENDER_PASS_TIER m_RenderPassTier = D3D12_RENDER_PASS_TIER_0;
 	D3D12_RAYTRACING_TIER m_RayTracingTier = D3D12_RAYTRACING_TIER_NOT_SUPPORTED;
-	int m_ShaderModelMajor = -1;
-	int m_ShaderModelMinor = -1;
+	uint8 m_ShaderModelMajor = 0;
+	uint8 m_ShaderModelMinor = 0;
 	D3D12_MESH_SHADER_TIER m_MeshShaderSupport = D3D12_MESH_SHADER_TIER_NOT_SUPPORTED;
 	D3D12_SAMPLER_FEEDBACK_TIER m_SamplerFeedbackSupport = D3D12_SAMPLER_FEEDBACK_TIER_NOT_SUPPORTED;
 	D3D12_VARIABLE_SHADING_RATE_TIER m_VRSTier = D3D12_VARIABLE_SHADING_RATE_TIER_NOT_SUPPORTED;
