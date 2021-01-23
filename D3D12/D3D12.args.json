@@ -25,6 +25,10 @@
         {
           "Id": "105b6371-3768-4e96-a67d-ff8d99170742",
           "Command": "-debugshaders"
+        },
+        {
+          "Id": "90ad626d-b0a9-41aa-af1e-997b06ff37ea",
+          "Command": "-shaderhotreload"
         }
       ]
     },

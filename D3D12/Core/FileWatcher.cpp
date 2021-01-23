@@ -48,23 +48,22 @@ void FileWatcher::StopWatching()
 	CloseHandle(m_FileHandle);
 }
 
-bool FileWatcher::GetNextChange(std::string& fileName)
+bool FileWatcher::GetNextChange(FileEvent& fileEvent)
 {
 	std::scoped_lock<std::mutex> lock(m_Mutex);
 	if (m_Changes.size() == 0)
 	{
 		return false;
 	}
-	const std::pair<std::string, LARGE_INTEGER>& entry = *m_Changes.begin();
+	fileEvent = m_Changes[0];
 	LARGE_INTEGER currentTime;
 	QueryPerformanceCounter(&currentTime);
-	float timeDiff = ((float)currentTime.QuadPart - entry.second.QuadPart) / entry.second.QuadPart * 1000000;
+	float timeDiff = ((float)currentTime.QuadPart - fileEvent.Time.QuadPart) / fileEvent.Time.QuadPart * 1000000;
 	if (timeDiff < 100)
 	{
 		return false;
 	}
-	fileName = entry.first;
-	m_Changes.erase(fileName);
+	m_Changes.pop_front();
 	return true;
 }
 
@@ -85,22 +84,33 @@ int FileWatcher::ThreadFunction()
 		{
 			unsigned offset = 0;
 
+			std::scoped_lock<std::mutex> lock(m_Mutex);
 			while (offset < bytesFilled)
 			{
 				FILE_NOTIFY_INFORMATION* record = (FILE_NOTIFY_INFORMATION*)&buffer[offset];
 
-				if (record->Action == FILE_ACTION_MODIFIED || record->Action == FILE_ACTION_RENAMED_NEW_NAME)
+				wchar_t target[256];
+				memcpy(target, record->FileName, record->FileNameLength);
+				target[record->FileNameLength / sizeof(wchar_t)] = L'\0';
+
+				char cString[256];
+				ToMultibyte(target, cString, 256);
+
+				FileEvent newEvent;
+				newEvent.Path = cString;
+
+				switch (record->Action)
 				{
-					const wchar_t* src = record->FileName;
-					const wchar_t* end = src + record->FileNameLength / 2;
-					char fn[256];
-					size_t n;
-					wcstombs_s(&n, fn, src, 256);
-					fn[end - src] = '\0';
-					std::string filename(fn);
-					std::replace(filename.begin(), filename.end(), '\\', '/');
-					AddChange(filename);
+				case FILE_ACTION_MODIFIED: newEvent.EventType = FileEvent::Type::Modified; break;
+				case FILE_ACTION_REMOVED: newEvent.EventType = FileEvent::Type::Removed; break;
+				case FILE_ACTION_ADDED: newEvent.EventType = FileEvent::Type::Added; break;
+				case FILE_ACTION_RENAMED_NEW_NAME: newEvent.EventType = FileEvent::Type::Renamed; break;
+				case FILE_ACTION_RENAMED_OLD_NAME: newEvent.EventType = FileEvent::Type::Renamed; break;
 				}
+
+				QueryPerformanceCounter(&newEvent.Time);
+
+				m_Changes.push_back(newEvent);
 
 				if (!record->NextEntryOffset)
 				{
@@ -114,10 +124,4 @@ int FileWatcher::ThreadFunction()
 		}
 	}
 	return 0;
-}
-
-void FileWatcher::AddChange(const std::string& fileName)
-{
-	std::scoped_lock<std::mutex> lock(m_Mutex);
-	QueryPerformanceCounter(&m_Changes[fileName]);
 }

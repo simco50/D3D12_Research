@@ -114,12 +114,15 @@ void Graphics::Initialize(WindowHandle window)
 
 void Graphics::Update()
 {
+
 	PROFILE_BEGIN("Update");
 	BeginFrame();
 	m_pImGuiRenderer->Update();
 
 	PROFILE_BEGIN("Update Game State");
 
+	m_pShaderManager->ConditionallyReloadShaders();
+	m_pShaderManager->DrawImGuiStats();
 #if 0
 	Vector3 pos = m_pCamera->GetPosition();
 	pos.x = 48;
@@ -1377,6 +1380,14 @@ void Graphics::InitD3D()
 #endif
 
 	m_pShaderManager = std::make_unique<ShaderManager>("Resources/Shaders/", m_ShaderModelMajor, m_ShaderModelMinor);
+
+	m_pShaderManager->OnLibraryRecompiledEvent().AddLambda([](ShaderLibrary* pOldLib, ShaderLibrary* pNewLib) {
+		E_LOG(Info, "Recompiled Library: %s", pNewLib);
+		});
+
+	m_pShaderManager->OnShaderRecompiledEvent().AddLambda([](Shader* pOldShader, Shader* pNewShader) {
+		E_LOG(Info, "Recompiled Shader: %s", pNewShader->GetEntryPoint().c_str());
+		});
 
 	m_pSwapchain.Reset();
 	swapChain.As(&m_pSwapchain);
