@@ -10,9 +10,6 @@
 #define USE_SHADER_LINE_DIRECTIVE 1
 #endif
 
-#define SM_MAJ 6
-#define SM_MIN 5
-
 namespace ShaderCompiler
 {
 	constexpr const char* pShaderSymbolsPath = "_Temp/ShaderSymbols/";
@@ -157,12 +154,11 @@ namespace ShaderCompiler
 		{
 			ComPtr<IDxcBlobUtf16> pDebugDataPath;
 			pCompileResult->GetOutput(DXC_OUT_PDB, IID_PPV_ARGS(result.pSymbolsBlob.GetAddressOf()), pDebugDataPath.GetAddressOf());
-			Paths::CreateDirectoryTree(pShaderSymbolsPath);
 			std::stringstream pathStream;
 			char path[256];
 			ToMultibyte((wchar_t*)pDebugDataPath->GetBufferPointer(), path, 256);
 			pathStream << pShaderSymbolsPath << path;
-			result.DebugPath = pShaderSymbolsPath;
+			result.DebugPath = pathStream.str();
 		}
 
 		//Reflection
@@ -277,42 +273,131 @@ ShaderBase::~ShaderBase()
 
 }
 
+Shader* ShaderManager::LoadShader(const std::string& shaderPath, ShaderType shaderType, const std::string& entryPoint, const std::vector<ShaderDefine>& defines /*= {}*/)
+{
+	std::stringstream shaderSource;
+	std::vector<ShaderStringHash> includes;
+	std::string filePath = m_ShaderSourcePath + shaderPath;
+	if (!ProcessSource(filePath, filePath, shaderSource, includes))
+	{
+		return nullptr;
+	}
+
+	std::string source = shaderSource.str();
+	ShaderCompiler::CompileResult result = ShaderCompiler::Compile(
+		shaderPath.c_str(),
+		source.c_str(),
+		(uint32)source.size(),
+		ShaderCompiler::GetShaderTarget(shaderType),
+		entryPoint.c_str(),
+		m_ShaderModelMajor,
+		m_ShaderModelMinor, defines);
+
+	if (!result.Success)
+	{
+		E_LOG(Warning, "Failed to compile shader \"%s\": %s", shaderPath.c_str(), result.ErrorMessage.c_str());
+		return nullptr;
+	}
+
+	for (const ShaderStringHash& include : includes)
+	{
+		m_IncludeDependencyMap[include].insert(shaderPath);
+	}
+	m_IncludeDependencyMap[ShaderStringHash(shaderPath)].insert(shaderPath);
+
+	ShaderPtr pNewShader = std::make_unique<Shader>(result.pBlob, shaderType, entryPoint, defines);
+	m_Shaders.push_back(std::move(pNewShader));
+	Shader* pShader = m_Shaders.back().get();
+
+	StringHash hash(entryPoint);
+	for (const ShaderDefine& define : defines)
+	{
+		hash.Combine(StringHash(define.Value));
+	}
+	m_FilepathToObjectMap[ShaderStringHash(shaderPath)].Shaders[hash] = pShader;
+
+	return pShader;
+}
+
+ShaderLibrary* ShaderManager::LoadShaderLibrary(const std::string& shaderPath, const std::vector<ShaderDefine>& defines /*= {}*/)
+{
+	std::stringstream shaderSource;
+	std::vector<ShaderStringHash> includes;
+	std::string filePath = m_ShaderSourcePath + shaderPath;
+	if (!ProcessSource(filePath, filePath, shaderSource, includes))
+	{
+		return nullptr;
+	}
+
+	std::string source = shaderSource.str();
+	ShaderCompiler::CompileResult result = ShaderCompiler::Compile(
+		shaderPath.c_str(),
+		source.c_str(),
+		(uint32)source.size(),
+		"lib",
+		"",
+		m_ShaderModelMajor,
+		m_ShaderModelMinor, defines);
+
+	if (!result.Success)
+	{
+		E_LOG(Warning, "Failed to compile library \"%s\": %s", shaderPath.c_str(), result.ErrorMessage.c_str());
+		return nullptr;
+	}
+
+	for (const ShaderStringHash& include : includes)
+	{
+		m_IncludeDependencyMap[include].insert(shaderPath);
+	}
+	m_IncludeDependencyMap[ShaderStringHash(shaderPath)].insert(shaderPath);
+
+	LibraryPtr pNewShader = std::make_unique<ShaderLibrary>(result.pBlob, defines);
+	m_Libraries.push_back(std::move(pNewShader));
+
+	ShaderLibrary* pLibrary = m_Libraries.back().get();
+	StringHash hash;
+	for (const ShaderDefine& define : defines)
+	{
+		hash.Combine(StringHash(define.Value));
+	}
+	m_FilepathToObjectMap[ShaderStringHash(shaderPath)].Libraries[hash] = pLibrary;
+
+	return pLibrary;
+}
+
 void ShaderManager::RecompileFromFileChange(const std::string& filePath)
 {
-	auto it = m_IncludeDependencyMap.find(filePath);
+	auto it = m_IncludeDependencyMap.find(ShaderStringHash(filePath));
 	if (it != m_IncludeDependencyMap.end())
 	{
-		const std::set<std::string>& dependencies = it->second;
+		const std::unordered_set<std::string>& dependencies = it->second;
 		for (const std::string& dependency : dependencies)
 		{
-			auto objectMapIt = m_FilepathToObjectMap.find(dependency);
+			auto objectMapIt = m_FilepathToObjectMap.find(ShaderStringHash(dependency));
 			if (objectMapIt != m_FilepathToObjectMap.end())
 			{
 				ShadersInFileMap objectMap = objectMapIt->second;
 				for (auto shader : objectMap.Shaders)
 				{
 					Shader* pOldShader = shader.second;
-					Shader* pNewShader = GetShader(dependency, pOldShader->GetType(), pOldShader->GetEntryPoint().c_str(), pOldShader->GetDefines());
-					m_OnShaderRecompiledEvent.Broadcast(pOldShader, pNewShader);
+					Shader* pNewShader = LoadShader(dependency, pOldShader->GetType(), pOldShader->GetEntryPoint().c_str(), pOldShader->GetDefines());
+					m_OnShaderRecompiledEvent.Broadcast(dependency, pOldShader, pNewShader);
+					m_Shaders.remove_if([pOldShader](const std::unique_ptr<Shader>& pS) { return pS.get() == pOldShader; });
 				}
 				for (auto library : objectMap.Libraries)
 				{
 					ShaderLibrary* pOldLibrary = library.second;
-					ShaderLibrary* pNewLibrary = GetLibrary(dependency, pOldLibrary->GetDefines());
-					m_OnLibraryRecompiledEvent.Broadcast(pOldLibrary, pNewLibrary);
+					ShaderLibrary* pNewLibrary = LoadShaderLibrary(dependency, pOldLibrary->GetDefines());
+					m_OnLibraryRecompiledEvent.Broadcast(dependency, pOldLibrary, pNewLibrary);
+					m_Libraries.remove_if([pOldLibrary](const std::unique_ptr<ShaderLibrary>& pS) { return pS.get() == pOldLibrary; });
 				}
 			}
 		}
 	}
 }
 
-bool ShaderManager::ProcessSource(const std::string& sourcePath, const std::string& filePath, std::stringstream& output, std::vector<std::string>& processedIncludes, std::vector<std::string>& dependencies)
+bool ShaderManager::ProcessSource(const std::string& sourcePath, const std::string& filePath, std::stringstream& output, std::vector<ShaderStringHash>& processedIncludes)
 {
-	if (sourcePath != filePath)
-	{
-		dependencies.push_back(filePath);
-	}
-
 	std::string line;
 
 	int linesProcessed = 0;
@@ -339,14 +424,14 @@ bool ShaderManager::ProcessSource(const std::string& sourcePath, const std::stri
 				return false;
 			}
 			std::string includeFilePath = line.substr(start, end - start);
-			std::string includeHash(includeFilePath);
+			ShaderStringHash includeHash(includeFilePath);
 			if (std::find(processedIncludes.begin(), processedIncludes.end(), includeHash) == processedIncludes.end())
 			{
 				processedIncludes.push_back(includeHash);
 				std::string basePath = Paths::GetDirectoryPath(filePath);
 				std::string fullFilePath = basePath + includeFilePath;
 
-				if (!ProcessSource(sourcePath, fullFilePath, output, processedIncludes, dependencies))
+				if (!ProcessSource(sourcePath, fullFilePath, output, processedIncludes))
 				{
 					return false;
 				}
@@ -391,10 +476,6 @@ ShaderManager::ShaderManager(const std::string& shaderSourcePath, uint8 shaderMo
 
 ShaderManager::~ShaderManager()
 {
-	if (m_pFileWatcher)
-	{
-		m_pFileWatcher->StopWatching();
-	}
 }
 
 void ShaderManager::ConditionallyReloadShaders()
@@ -417,114 +498,36 @@ void ShaderManager::ConditionallyReloadShaders()
 
 Shader* ShaderManager::GetShader(const std::string& shaderPath, ShaderType shaderType, const std::string& entryPoint, const std::vector<ShaderDefine>& defines /*= {}*/)
 {
-	ShadersInFileMap::EntryPointAndDefinesHash hash(entryPoint);
+	StringHash hash(entryPoint);
 	for (const ShaderDefine& define : defines)
 	{
-		hash.Combine(ShadersInFileMap::EntryPointAndDefinesHash(define.Value));
+		hash.Combine(StringHash(define.Value));
 	}
 
-	auto& shaderMap = m_FilepathToObjectMap[shaderPath].Shaders;
+	auto& shaderMap = m_FilepathToObjectMap[ShaderStringHash(shaderPath)].Shaders;
 	auto it = shaderMap.find(hash);
 	if (it != shaderMap.end())
 	{
 		return it->second;
 	}
 
-	std::stringstream shaderSource;
-	std::vector<std::string> includes;
-	std::vector<std::string> dependencies;
-	std::string filePath = m_ShaderSourcePath + shaderPath;
-	if (!ProcessSource(filePath, filePath, shaderSource, includes, dependencies))
-	{
-		return nullptr;
-	}
-
-	std::string source = shaderSource.str();
-	ShaderCompiler::CompileResult result = ShaderCompiler::Compile(
-		shaderPath.c_str(),
-		source.c_str(),
-		(uint32)source.size(),
-		ShaderCompiler::GetShaderTarget(shaderType),
-		entryPoint.c_str(),
-		m_ShaderModelMajor,
-		m_ShaderModelMinor, defines);
-
-	if (!result.Success)
-	{
-		E_LOG(Warning, "Failed to compile shader \"%s\": %s", shaderPath.c_str(), result.ErrorMessage.c_str());
-		return nullptr;
-	}
-
-	for (const std::string& include : includes)
-	{
-		m_IncludeDependencyMap[include].insert(shaderPath);
-	}
-
-	ShaderPtr pNewShader = std::make_unique<Shader>(result.pBlob, shaderType, entryPoint, defines);
-	m_Shaders.push_back(std::move(pNewShader));
-	Shader* pShader = m_Shaders.back().get();
-
-	shaderMap[hash] = pShader;
-
-	return pShader;
+	return LoadShader(shaderPath, shaderType, entryPoint, defines);
 }
 
 ShaderLibrary* ShaderManager::GetLibrary(const std::string& shaderPath, const std::vector<ShaderDefine>& defines /*= {}*/)
 {
-	ShadersInFileMap::EntryPointAndDefinesHash hash;
+	StringHash hash;
 	for (const ShaderDefine& define : defines)
 	{
-		hash.Combine(ShadersInFileMap::EntryPointAndDefinesHash(define.Value));
+		hash.Combine(StringHash(define.Value));
 	}
 
-	auto& libraryMap = m_FilepathToObjectMap[shaderPath].Libraries;
+	auto& libraryMap = m_FilepathToObjectMap[ShaderStringHash(shaderPath)].Libraries;
 	auto it = libraryMap.find(hash);
 	if (it != libraryMap.end())
 	{
 		return it->second;
 	}
 
-	std::stringstream shaderSource;
-	std::vector<std::string> includes;
-	std::vector<std::string> dependencies;
-	std::string filePath = m_ShaderSourcePath + shaderPath;
-	if (!ProcessSource(filePath, filePath, shaderSource, includes, dependencies))
-	{
-		return nullptr;
-	}
-
-	std::string source = shaderSource.str();
-	ShaderCompiler::CompileResult result = ShaderCompiler::Compile(
-		shaderPath.c_str(),
-		source.c_str(),
-		(uint32)source.size(),
-		"lib",
-		"",
-		m_ShaderModelMajor,
-		m_ShaderModelMinor, defines);
-
-	if (!result.Success)
-	{
-		E_LOG(Warning, "Failed to compile library \"%s\": %s", shaderPath.c_str(), result.ErrorMessage.c_str());
-		return nullptr;
-	}
-
-	for (const std::string& include : includes)
-	{
-		m_IncludeDependencyMap[include].insert(shaderPath);
-	}
-
-	LibraryPtr pNewShader = std::make_unique<ShaderLibrary>(result.pBlob, defines);
-	m_Libraries.push_back(std::move(pNewShader));
-	ShaderLibrary* pLibrary = m_Libraries.back().get();
-
-	libraryMap[hash] = pLibrary;
-
-	return pLibrary;
-}
-
-void ShaderManager::DrawImGuiStats()
-{
-	ImGui::Text("# Shaders: %d", m_Shaders.size());
-	ImGui::Text("# Libraries: %d", m_Libraries.size());
+	return LoadShaderLibrary(shaderPath, defines);
 }

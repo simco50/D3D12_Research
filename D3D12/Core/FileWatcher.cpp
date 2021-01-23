@@ -43,9 +43,12 @@ bool FileWatcher::StartWatching(const std::string& directory, const bool recursi
 
 void FileWatcher::StopWatching()
 {
-	m_Exiting = true;
-	CancelIoEx(m_FileHandle, nullptr);
-	CloseHandle(m_FileHandle);
+	if (!m_Exiting)
+	{
+		m_Exiting = true;
+		CancelIoEx(m_FileHandle, nullptr);
+		CloseHandle(m_FileHandle);
+	}
 }
 
 bool FileWatcher::GetNextChange(FileEvent& fileEvent)
