@@ -44,7 +44,7 @@ void SSAO::Execute(RGGraph& graph, Texture* pColor, Texture* pDepth, Camera& cam
 			renderContext.InsertResourceBarrier(pColor, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
 			renderContext.SetComputeRootSignature(m_pSSAORS.get());
-			renderContext.SetPipelineState(m_pSSAOPSO.get());
+			renderContext.SetPipelineState(m_pSSAOPSO);
 
 			struct ShaderParameters
 			{
@@ -90,7 +90,7 @@ void SSAO::Execute(RGGraph& graph, Texture* pColor, Texture* pDepth, Camera& cam
 			renderContext.InsertResourceBarrier(pColor, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
 			renderContext.SetComputeRootSignature(m_pSSAOBlurRS.get());
-			renderContext.SetPipelineState(m_pSSAOBlurPSO.get());
+			renderContext.SetPipelineState(m_pSSAOBlurPSO);
 
 			struct ShaderParameters
 			{
@@ -139,10 +139,11 @@ void SSAO::SetupPipelines(Graphics* pGraphics)
 		m_pSSAORS = std::make_unique<RootSignature>(pGraphics);
 		m_pSSAORS->FinalizeFromShader("SSAO", pComputeShader);
 
-		m_pSSAOPSO = std::make_unique<PipelineState>(pGraphics);
-		m_pSSAOPSO->SetComputeShader(pComputeShader);
-		m_pSSAOPSO->SetRootSignature(m_pSSAORS->GetRootSignature());
-		m_pSSAOPSO->Finalize("SSAO");
+		PipelineStateInitializer psoDesc;
+		psoDesc.SetComputeShader(pComputeShader);
+		psoDesc.SetRootSignature(m_pSSAORS->GetRootSignature());
+		psoDesc.SetName("SSAO");
+		m_pSSAOPSO = pGraphics->CreatePipeline(psoDesc);
 	}
 
 	//SSAO Blur
@@ -152,9 +153,10 @@ void SSAO::SetupPipelines(Graphics* pGraphics)
 		m_pSSAOBlurRS = std::make_unique<RootSignature>(pGraphics);
 		m_pSSAOBlurRS->FinalizeFromShader("SSAO Blur", pComputeShader);
 
-		m_pSSAOBlurPSO = std::make_unique<PipelineState>(pGraphics);
-		m_pSSAOBlurPSO->SetComputeShader(pComputeShader);
-		m_pSSAOBlurPSO->SetRootSignature(m_pSSAOBlurRS->GetRootSignature());
-		m_pSSAOBlurPSO->Finalize("SSAO Blur");
+		PipelineStateInitializer psoDesc;
+		psoDesc.SetComputeShader(pComputeShader);
+		psoDesc.SetRootSignature(m_pSSAOBlurRS->GetRootSignature());
+		psoDesc.SetName("SSAO Blur");
+		m_pSSAOBlurPSO = pGraphics->CreatePipeline(psoDesc);
 	}
 }

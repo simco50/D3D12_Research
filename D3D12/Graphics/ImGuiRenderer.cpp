@@ -150,17 +150,18 @@ void ImGuiRenderer::CreatePipeline(Graphics* pGraphics)
 		CD3DX12_INPUT_ELEMENT_DESC("COLOR", DXGI_FORMAT_R8G8B8A8_UNORM),
 	};
 
-	m_pPipelineState = std::make_unique<PipelineState>(pGraphics);
-	m_pPipelineState->SetBlendMode(BlendMode::Alpha, false);
-	m_pPipelineState->SetDepthWrite(false);
-	m_pPipelineState->SetDepthEnabled(false);
-	m_pPipelineState->SetCullMode(D3D12_CULL_MODE_NONE);
-	m_pPipelineState->SetVertexShader(pVertexShader);
-	m_pPipelineState->SetPixelShader(pPixelShader);
-	m_pPipelineState->SetRootSignature(m_pRootSignature->GetRootSignature());
-	m_pPipelineState->SetInputLayout(elementDesc, ARRAYSIZE(elementDesc));
-	m_pPipelineState->SetRenderTargetFormat(DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_UNKNOWN, 1);
-	m_pPipelineState->Finalize("ImGui Pipeline");
+	PipelineStateInitializer psoDesc;
+	psoDesc.SetBlendMode(BlendMode::Alpha, false);
+	psoDesc.SetDepthWrite(false);
+	psoDesc.SetDepthEnabled(false);
+	psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
+	psoDesc.SetVertexShader(pVertexShader);
+	psoDesc.SetPixelShader(pPixelShader);
+	psoDesc.SetRootSignature(m_pRootSignature->GetRootSignature());
+	psoDesc.SetInputLayout(elementDesc, ARRAYSIZE(elementDesc));
+	psoDesc.SetRenderTargetFormat(DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_UNKNOWN, 1);
+	psoDesc.SetName("ImGui Pipeline");
+	m_pPipelineState = pGraphics->CreatePipeline(psoDesc);
 }
 
 void ImGuiRenderer::Render(RGGraph& graph, Texture* pRenderTarget)
@@ -177,7 +178,7 @@ void ImGuiRenderer::Render(RGGraph& graph, Texture* pRenderTarget)
 		{
 			context.InsertResourceBarrier(pRenderTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
-			context.SetPipelineState(m_pPipelineState.get());
+			context.SetPipelineState(m_pPipelineState);
 			context.SetGraphicsRootSignature(m_pRootSignature.get());
 			Matrix projectionMatrix = Math::CreateOrthographicOffCenterMatrix(0.0f, pDrawData->DisplayPos.x + pDrawData->DisplaySize.x, pDrawData->DisplayPos.y + pDrawData->DisplaySize.y, 0.0f, 0.0f, 1.0f);
 			context.SetDynamicConstantBufferView(0, &projectionMatrix, sizeof(Matrix));
