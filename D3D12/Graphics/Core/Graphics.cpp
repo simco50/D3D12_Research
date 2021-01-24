@@ -28,6 +28,7 @@
 #include "Core/CommandLine.h"
 #include "Content/Image.h"
 #include "Core/TaskQueue.h"
+#include "StateObject.h"
 
 #ifndef D3D_VALIDATION
 #define D3D_VALIDATION 0
@@ -2309,4 +2310,12 @@ PipelineState* Graphics::CreatePipeline(const PipelineStateInitializer& psoDesc)
 	pPipeline->Create(psoDesc);
 	m_Pipelines.push_back(std::move(pPipeline));
 	return m_Pipelines.back().get();
+}
+
+StateObject* Graphics::CreateStateObject(const StateObjectInitializer& stateDesc)
+{
+	std::unique_ptr<StateObject> pStateObject = std::make_unique<StateObject>(this);
+	pStateObject->Create(stateDesc);
+	m_StateObjects.push_back(std::move(pStateObject));
+	return m_StateObjects.back().get();
 }

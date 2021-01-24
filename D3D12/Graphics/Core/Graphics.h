@@ -25,6 +25,8 @@ class SSAO;
 class GpuParticles;
 class ShaderManager;
 class PipelineStateInitializer;
+class StateObject;
+class StateObjectInitializer;
 
 #if PLATFORM_WINDOWS
 using WindowHandle = HWND;
@@ -159,6 +161,7 @@ public:
 
 	ID3D12Resource* CreateResource(const D3D12_RESOURCE_DESC& desc, D3D12_RESOURCE_STATES initialState, D3D12_HEAP_TYPE heapType, D3D12_CLEAR_VALUE* pClearValue = nullptr);
 	PipelineState* CreatePipeline(const PipelineStateInitializer& psoDesc);
+	StateObject* CreateStateObject(const StateObjectInitializer& stateDesc);
 
 	//CONSTANTS
 	static const int32 FRAME_COUNT = 3;
@@ -186,6 +189,7 @@ private:
 	std::unique_ptr<ShaderManager> m_pShaderManager;
 
 	std::vector<std::unique_ptr<PipelineState>> m_Pipelines;
+	std::vector<std::unique_ptr<StateObject>> m_StateObjects;
 
 	int m_Frame = 0;
 	std::array<float, 180> m_FrameTimes{};

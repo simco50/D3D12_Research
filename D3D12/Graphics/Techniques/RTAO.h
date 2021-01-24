@@ -7,6 +7,7 @@ class Camera;
 class CommandContext;
 class RGGraph;
 class Buffer;
+class StateObject;
 
 class RTAO
 {
@@ -19,7 +20,7 @@ private:
 	void SetupResources(Graphics* pGraphics);
 	void SetupPipelines(Graphics* pGraphics);
 
-	ComPtr<ID3D12StateObject> m_pRtSO;
+	StateObject* m_pRtSO = nullptr;
 	std::unique_ptr<RootSignature> m_pGlobalRS;
 };
 

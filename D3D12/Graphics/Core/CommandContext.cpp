@@ -10,6 +10,7 @@
 #include "Texture.h"
 #include "ResourceViews.h"
 #include "RaytracingCommon.h"
+#include "StateObject.h"
 
 CommandContext::CommandContext(Graphics* pGraphics, ID3D12GraphicsCommandList* pCommandList, D3D12_COMMAND_LIST_TYPE type, ID3D12CommandAllocator* pAllocator)
 	: GraphicsObject(pGraphics), m_pCommandList(pCommandList), m_Type(type), m_pAllocator(pAllocator)
@@ -674,10 +675,10 @@ void CommandContext::SetPipelineState(PipelineState* pPipelineState)
 	m_pCommandList->SetPipelineState(pPipelineState->GetPipelineState());
 }
 
-void CommandContext::SetPipelineState(ID3D12StateObject* pStateObject)
+void CommandContext::SetPipelineState(StateObject* pStateObject)
 {
 	check(m_pRaytracingCommandList);
-	m_pRaytracingCommandList->SetPipelineState1(pStateObject);
+	m_pRaytracingCommandList->SetPipelineState1(pStateObject->GetStateObject());
 }
 
 void CommandContext::SetGraphicsRootSignature(RootSignature* pRootSignature)
