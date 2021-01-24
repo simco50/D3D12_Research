@@ -7,7 +7,7 @@
 StateObject::StateObject(Graphics* pGraphics)
 	: GraphicsObject(pGraphics)
 {
-
+	m_ReloadHandle = pGraphics->GetShaderManager()->OnLibraryRecompiledEvent().AddRaw(this, &StateObject::OnLibraryReloaded);
 }
 
 void StateObject::Create(const StateObjectInitializer& initializer)
@@ -16,6 +16,28 @@ void StateObject::Create(const StateObjectInitializer& initializer)
 	D3D12_STATE_OBJECT_DESC desc = m_Desc.Desc();
 	VERIFY_HR(GetParent()->GetRaytracingDevice()->CreateStateObject(&desc, IID_PPV_ARGS(m_pStateObject.ReleaseAndGetAddressOf())));
 	D3D::SetObjectName(m_pStateObject.Get(), m_Desc.Name.c_str());
+}
+
+void StateObject::ConditionallyReload()
+{
+	if (m_NeedsReload)
+	{
+		Create(m_Desc);
+		m_NeedsReload = false;
+		E_LOG(Info, "Reloaded StateObject: %s", m_Desc.Name.c_str());
+	}
+}
+
+void StateObject::OnLibraryReloaded(ShaderLibrary* pOldShaderLibrary, ShaderLibrary* pNewShaderLibrary)
+{
+	for (StateObjectInitializer::LibraryExports& library : m_Desc.m_Libraries)
+	{
+		if (library.pLibrary == pOldShaderLibrary)
+		{
+			library.pLibrary = pNewShaderLibrary;
+			m_NeedsReload = true;
+		}
+	}
 }
 
 void StateObjectInitializer::AddHitGroup(const std::string& name, const std::string& closestHit /*= ""*/, const std::string& anyHit /*= ""*/, const std::string& intersection /*= ""*/, RootSignature* pRootSignature /*= nullptr*/)

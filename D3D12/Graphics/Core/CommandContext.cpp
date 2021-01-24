@@ -678,6 +678,7 @@ void CommandContext::SetPipelineState(PipelineState* pPipelineState)
 void CommandContext::SetPipelineState(StateObject* pStateObject)
 {
 	check(m_pRaytracingCommandList);
+	pStateObject->ConditionallyReload();
 	m_pRaytracingCommandList->SetPipelineState1(pStateObject->GetStateObject());
 }
 

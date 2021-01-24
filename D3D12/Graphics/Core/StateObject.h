@@ -8,6 +8,8 @@ class StateObject;
 class StateObjectInitializer
 {
 public:
+	friend class StateObject;
+
 	std::string Name;
 	D3D12_STATE_OBJECT_TYPE Type = D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE;
 	uint32 MaxRecursion = 1;
@@ -66,7 +68,7 @@ private:
 		size_t Size() const { return m_Offset; }
 	private:
 		size_t m_Offset = 0;
-		std::array<char, SIZE> m_Data;
+		std::array<char, SIZE> m_Data{};
 	};
 
 	wchar_t* GetUnicode(const std::string& text)
@@ -85,11 +87,19 @@ class StateObject : public GraphicsObject
 {
 public:
 	StateObject(Graphics* pGraphics);
+	StateObject(const StateObject& rhs) = delete;
+	StateObject& operator=(const StateObject& rhs) = delete;
 
 	void Create(const StateObjectInitializer& initializer);
+	void ConditionallyReload();
+
 	ID3D12StateObject* GetStateObject() const { return m_pStateObject.Get(); }
 
 private:
+	void OnLibraryReloaded(ShaderLibrary* pOldShaderLibrary, ShaderLibrary* pNewShaderLibrary);
+
+	bool m_NeedsReload = false;
 	ComPtr<ID3D12StateObject> m_pStateObject;
 	StateObjectInitializer m_Desc;
+	DelegateHandle m_ReloadHandle;
 };
