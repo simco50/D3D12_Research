@@ -70,15 +70,13 @@ public:
 
 private:
 	void OnShaderReloaded(Shader* pOldShader, Shader* pNewShader);
+	ComPtr<ID3D12PipelineState> m_pPipelineState;
 
 	std::string m_Name;
 	std::vector<D3D12_INPUT_ELEMENT_DESC> m_InputLayout;
-	ComPtr<ID3D12PipelineState> m_pPipelineState;
 	CD3DX12_PIPELINE_STATE_STREAM_HELPER m_Desc;
 	PipelineStateType m_Type = PipelineStateType::MAX;
-
 	std::array<Shader*, (int)ShaderType::MAX> m_Shaders{};
-
 	DelegateHandle m_ReloadHandle;
 	bool m_NeedsReload = false;
 };

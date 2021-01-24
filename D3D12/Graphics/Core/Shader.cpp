@@ -372,6 +372,7 @@ void ShaderManager::RecompileFromFileChange(const std::string& filePath)
 	auto it = m_IncludeDependencyMap.find(ShaderStringHash(filePath));
 	if (it != m_IncludeDependencyMap.end())
 	{
+		E_LOG(Info, "Modified \"%s\". Recompiling dependencies...", filePath.c_str());
 		const std::unordered_set<std::string>& dependencies = it->second;
 		for (const std::string& dependency : dependencies)
 		{
@@ -498,7 +499,6 @@ void ShaderManager::ConditionallyReloadShaders()
 		{
 			switch (fileEvent.EventType)
 			{
-			case FileWatcher::FileEvent::Type::Added:
 			case FileWatcher::FileEvent::Type::Modified:
 				RecompileFromFileChange(fileEvent.Path);
 				break;

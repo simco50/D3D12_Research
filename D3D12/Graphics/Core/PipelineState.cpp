@@ -20,7 +20,9 @@ PipelineState::PipelineState(Graphics* pParent)
 PipelineState::PipelineState(const PipelineState& other)
 	: GraphicsObject(other),
 	m_Desc(other.m_Desc),
-	m_Type(other.m_Type)
+	m_Type(other.m_Type),
+	m_Shaders(other.m_Shaders),
+	m_InputLayout(other.m_InputLayout)
 {
 	m_ReloadHandle = GetParent()->GetShaderManager()->OnShaderRecompiledEvent().AddRaw(this, &PipelineState::OnShaderReloaded);
 }
