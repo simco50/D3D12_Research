@@ -433,9 +433,7 @@ protected:
 		{
 			auto launchArgs = static_cast<LaunchActivatedEventArgs^>(args);
 
-			char commandline[256];
-			ToMultibyte(launchArgs->Arguments->Data(), commandline, 256);
-			CommandLine::Parse(commandline);
+			CommandLine::Parse(UNICODE_TO_MULTIBYTE(launchArgs->Arguments->Data()));
 			if (launchArgs->PrelaunchActivated)
 			{
 				// Opt-out of Prelaunch

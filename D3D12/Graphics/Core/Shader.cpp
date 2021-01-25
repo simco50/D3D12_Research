@@ -3,23 +3,30 @@
 #include "Core/Paths.h"
 #include "Core/CommandLine.h"
 
-#include <dxc/dxcapi.h>
 #include <D3Dcompiler.h>
+#include "Core/FileWatcher.h"
 
 #ifndef USE_SHADER_LINE_DIRECTIVE
 #define USE_SHADER_LINE_DIRECTIVE 1
 #endif
 
-#define SM_MAJ 6
-#define SM_MIN 5
-
 namespace ShaderCompiler
 {
 	constexpr const char* pShaderSymbolsPath = "_Temp/ShaderSymbols/";
 
-	constexpr const char* GetShaderTarget(ShaderType t)
+	struct CompileResult
 	{
-		switch (t)
+		bool Success = false;
+		std::string ErrorMessage;
+		std::string DebugPath;
+		ShaderBlob pBlob;
+		ShaderBlob pSymbolsBlob;
+		ComPtr<IUnknown> pReflection;
+	};
+
+	constexpr const char* GetShaderTarget(ShaderType type)
+	{
+		switch (type)
 		{
 		case ShaderType::Vertex:		return "vs";
 		case ShaderType::Pixel:			return "ps";
@@ -33,7 +40,7 @@ namespace ShaderCompiler
 		}
 	}
 
-	bool CompileDxc(const char* pIdentifier, const char* pShaderSource, uint32 shaderSourceSize, IDxcBlob** pOutput, const char* pEntryPoint /*= ""*/, const char* pTarget /*= ""*/, const std::vector<std::string>& defines /*= {}*/)
+	CompileResult CompileDxc(const char* pIdentifier, const char* pShaderSource, uint32 shaderSourceSize, const char* pEntryPoint, const char* pTarget, const std::vector<std::string>& defines)
 	{
 		static ComPtr<IDxcUtils> pUtils;
 		static ComPtr<IDxcCompiler3> pCompiler;
@@ -48,31 +55,28 @@ namespace ShaderCompiler
 		ComPtr<IDxcBlobEncoding> pSource;
 		VERIFY_HR(pUtils->CreateBlob(pShaderSource, shaderSourceSize, CP_UTF8, pSource.GetAddressOf()));
 
-		wchar_t target[256], fileName[256], entryPoint[256];
-		ToWidechar(pIdentifier, fileName, 256);
-		ToWidechar(pEntryPoint, entryPoint, 256);
-		ToWidechar(pTarget, target, 256);
-
 		bool debugShaders = CommandLine::GetBool("debugshaders");
 
 		std::vector<std::wstring> wDefines;
 		for (const std::string& define : defines)
 		{
-			wchar_t intermediate[256];
-			ToWidechar(define.c_str(), intermediate, 256);
-			wDefines.push_back(intermediate);
+			wDefines.push_back(MULTIBYTE_TO_UNICODE(define.c_str()));
 		}
 
 		std::vector<LPCWSTR> arguments;
 		arguments.reserve(20);
 
 		arguments.push_back(L"-E");
-		arguments.push_back(entryPoint);
+
+		MultibyteToUnicode pwEntry(pEntryPoint);
+		arguments.push_back(*pwEntry);
 
 		arguments.push_back(L"-T");
-		arguments.push_back(target);
+		MultibyteToUnicode pwTarget(pTarget);
+		arguments.push_back(*pwTarget);
 		arguments.push_back(L"-all_resources_bound");
 
+		MultibyteToUnicode pwSymbolPath(pShaderSymbolsPath);
 		if (debugShaders)
 		{
 			arguments.push_back(DXC_ARG_SKIP_OPTIMIZATIONS);
@@ -82,10 +86,8 @@ namespace ShaderCompiler
 		{
 			arguments.push_back(DXC_ARG_OPTIMIZATION_LEVEL3);
 			arguments.push_back(L"-Qstrip_debug");
-			wchar_t symbolsPath[256];
-			ToWidechar(pShaderSymbolsPath, symbolsPath, 256);
 			arguments.push_back(L"/Fd");
-			arguments.push_back(symbolsPath);
+			arguments.push_back(*pwSymbolPath);
 			arguments.push_back(L"-Qstrip_reflect");
 		}
 
@@ -107,23 +109,27 @@ namespace ShaderCompiler
 		ComPtr<IDxcResult> pCompileResult;
 		VERIFY_HR(pCompiler->Compile(&sourceBuffer, arguments.data(), (uint32)arguments.size(), nullptr, IID_PPV_ARGS(pCompileResult.GetAddressOf())));
 
+		CompileResult result;
+
 		ComPtr<IDxcBlobUtf8> pErrors;
 		pCompileResult->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(pErrors.GetAddressOf()), nullptr);
 		if (pErrors && pErrors->GetStringLength() > 0)
 		{
-			E_LOG(Warning, "%s", (char*)pErrors->GetBufferPointer());
-			return false;
+			assert(false);
+			result.Success = false;
+			result.ErrorMessage = (char*)pErrors->GetBufferPointer();
+			return result;
 		}
 
 		//Shader object
 		{
-			VERIFY_HR(pCompileResult->GetOutput(DXC_OUT_OBJECT, IID_PPV_ARGS(pOutput), nullptr));
+			VERIFY_HR(pCompileResult->GetOutput(DXC_OUT_OBJECT, IID_PPV_ARGS(result.pBlob.GetAddressOf()), nullptr));
 		}
 
 		//Validation
 		{
 			ComPtr<IDxcOperationResult> pResult;
-			VERIFY_HR(pValidator->Validate(*pOutput, DxcValidatorFlags_InPlaceEdit, pResult.GetAddressOf()));
+			VERIFY_HR(pValidator->Validate(*result.pBlob.GetAddressOf(), DxcValidatorFlags_InPlaceEdit, pResult.GetAddressOf()));
 			HRESULT validationResult;
 			pResult->GetStatus(&validationResult);
 			if (validationResult != S_OK)
@@ -132,26 +138,23 @@ namespace ShaderCompiler
 				ComPtr<IDxcBlobUtf8> pPrintBlobUtf8;
 				pResult->GetErrorBuffer(pPrintBlob.GetAddressOf());
 				pUtils->GetBlobAsUtf8(pPrintBlob.Get(), pPrintBlobUtf8.GetAddressOf());
-				E_LOG(Warning, "%s", pPrintBlobUtf8->GetBufferPointer());
+				result.ErrorMessage = (char*)pPrintBlobUtf8->GetBufferPointer();
+				result.Success = false;
+				return result;
 			}
 		}
 
-#if 0
+		result.Success = true;
+
 		//Symbols
 		{
-			ComPtr<IDxcBlob> pDebugData;
 			ComPtr<IDxcBlobUtf16> pDebugDataPath;
-			pCompileResult->GetOutput(DXC_OUT_PDB, IID_PPV_ARGS(pDebugData.GetAddressOf()), pDebugDataPath.GetAddressOf());
-			Paths::CreateDirectoryTree(pShaderSymbolsPath);
+			pCompileResult->GetOutput(DXC_OUT_PDB, IID_PPV_ARGS(result.pSymbolsBlob.GetAddressOf()), pDebugDataPath.GetAddressOf());
 			std::stringstream pathStream;
-			char path[256];
-			ToMultibyte((wchar_t*)pDebugDataPath->GetBufferPointer(), path, 256);
-			pathStream << pShaderSymbolsPath << path;
-			std::ofstream fileStream(pathStream.str(), std::ios::binary);
-			fileStream.write((char*)pDebugData->GetBufferPointer(), pDebugData->GetBufferSize());
+			pathStream << pShaderSymbolsPath << UNICODE_TO_MULTIBYTE((wchar_t*)pDebugDataPath->GetBufferPointer());
+			result.DebugPath = pathStream.str();
 		}
-#endif
-#if 0
+
 		//Reflection
 		{
 			ComPtr<IDxcBlob> pReflectionData;
@@ -160,26 +163,13 @@ namespace ShaderCompiler
 			reflectionBuffer.Ptr = pReflectionData->GetBufferPointer();
 			reflectionBuffer.Size = pReflectionData->GetBufferSize();
 			reflectionBuffer.Encoding = 0;
-			if (strcmp(pEntryPoint, "") == 0)
-			{
-				ComPtr<ID3D12LibraryReflection> pLibraryReflection;
-				VERIFY_HR(pUtils->CreateReflection(&reflectionBuffer, IID_PPV_ARGS(pLibraryReflection.GetAddressOf())));
-				D3D12_LIBRARY_DESC libraryDesc;
-				pLibraryReflection->GetDesc(&libraryDesc);
-			}
-			else
-			{
-				ComPtr<ID3D12ShaderReflection> pShaderReflection;
-				VERIFY_HR(pUtils->CreateReflection(&reflectionBuffer, IID_PPV_ARGS(pShaderReflection.GetAddressOf())));
-				D3D12_SHADER_DESC shaderDesc;
-				pShaderReflection->GetDesc(&shaderDesc);
-			}
+			VERIFY_HR(pUtils->CreateReflection(&reflectionBuffer, IID_PPV_ARGS(result.pReflection.GetAddressOf())));
 		}
-#endif
-		return true;
+
+		return result;
 	}
 
-	bool CompileFxc(const char* pIdentifier, const char* pShaderSource, uint32 shaderSourceSize, ID3DBlob** pOutput, const char* pEntryPoint /*= ""*/, const char* pTarget /*= ""*/, const std::vector<std::string>& defines /*= {}*/)
+	CompileResult CompileFxc(const char* pIdentifier, const char* pShaderSource, uint32 shaderSourceSize, const char* pEntryPoint, const char* pTarget, const std::vector<std::string>& defines)
 	{
 		bool debugShaders = CommandLine::GetBool("debugshaders");
 
@@ -214,19 +204,23 @@ namespace ShaderCompiler
 		endMacro.Definition = nullptr;
 		shaderDefines.push_back(endMacro);
 
+		CompileResult result;
+
 		ComPtr<ID3DBlob> pErrorBlob;
-		D3DCompile(pShaderSource, shaderSourceSize, pIdentifier, shaderDefines.data(), nullptr, pEntryPoint, pTarget, compileFlags, 0, pOutput, pErrorBlob.GetAddressOf());
+		D3DCompile(pShaderSource, shaderSourceSize, pIdentifier, shaderDefines.data(), nullptr, pEntryPoint, pTarget, compileFlags, 0, (ID3DBlob**)result.pBlob.GetAddressOf(), pErrorBlob.GetAddressOf());
 		if (pErrorBlob != nullptr)
 		{
-			std::wstring errorMsg = std::wstring((char*)pErrorBlob->GetBufferPointer(), (char*)pErrorBlob->GetBufferPointer() + pErrorBlob->GetBufferSize());
-			std::wcout << errorMsg << std::endl;
-			return false;
+			result.ErrorMessage = (char*)pErrorBlob->GetBufferPointer();
+			result.Success = false;
 		}
-		pErrorBlob.Reset();
-		return true;
+		else
+		{
+			result.Success = true;
+		}
+		return result;
 	}
 
-	bool Compile(const char* pIdentifier, const char* pShaderSource, uint32 shaderSourceSize, const char* pTarget, IDxcBlob** pOutput, const char* pEntryPoint, uint32 majVersion, uint32 minVersion, const std::vector<std::string>& defines /*= {}*/)
+	CompileResult Compile(const char* pIdentifier, const char* pShaderSource, uint32 shaderSourceSize, const char* pTarget, const char* pEntryPoint, uint32 majVersion, uint32 minVersion, const std::vector<ShaderDefine>& defines /*= {}*/)
 	{
 		char target[16];
 		size_t i = strlen(pTarget);
@@ -237,7 +231,12 @@ namespace ShaderCompiler
 		target[i++] = '0' + (char)minVersion;
 		target[i++] = 0;
 
-		std::vector<std::string> definesActual(defines);
+		std::vector<std::string> definesActual;
+		for (const ShaderDefine& define : defines)
+		{
+			definesActual.push_back(define.Value);
+		}
+
 		for (std::string& define : definesActual)
 		{
 			if (define.find('=') == std::string::npos)
@@ -256,11 +255,10 @@ namespace ShaderCompiler
 		if (majVersion < 6)
 		{
 			definesActual.emplace_back("_FXC=1");
-			ID3DBlob** pBlob = reinterpret_cast<ID3DBlob**>(pOutput);
-			return CompileFxc(pIdentifier, pShaderSource, shaderSourceSize, pBlob, pEntryPoint, target, definesActual);
+			return CompileFxc(pIdentifier, pShaderSource, shaderSourceSize, pEntryPoint, target, definesActual);
 		}
 		definesActual.emplace_back("_DXC=1");
-		return CompileDxc(pIdentifier, pShaderSource, shaderSourceSize, pOutput, pEntryPoint, target, definesActual);
+		return CompileDxc(pIdentifier, pShaderSource, shaderSourceSize, pEntryPoint, target, definesActual);
 	}
 }
 
@@ -269,13 +267,142 @@ ShaderBase::~ShaderBase()
 
 }
 
-bool ShaderBase::ProcessSource(const std::string& sourcePath, const std::string& filePath, std::stringstream& output, std::vector<StringHash>& processedIncludes, std::vector<std::string>& dependencies)
+ShaderManager::ShaderStringHash ShaderManager::GetEntryPointHash(const std::string entryPoint, const std::vector<ShaderDefine>& defines)
 {
-	if (sourcePath != filePath)
+	StringHash hash(entryPoint);
+	for (const ShaderDefine& define : defines)
 	{
-		dependencies.push_back(filePath);
+		hash.Combine(StringHash(define.Value));
+	}
+	return hash;
+}
+
+Shader* ShaderManager::LoadShader(const std::string& shaderPath, ShaderType shaderType, const std::string& entryPoint, const std::vector<ShaderDefine>& defines /*= {}*/)
+{
+	std::stringstream shaderSource;
+	std::vector<ShaderStringHash> includes;
+	std::string filePath = m_ShaderSourcePath + shaderPath;
+	if (!ProcessSource(filePath, filePath, shaderSource, includes))
+	{
+		return nullptr;
 	}
 
+	std::string source = shaderSource.str();
+	ShaderCompiler::CompileResult result = ShaderCompiler::Compile(
+		shaderPath.c_str(),
+		source.c_str(),
+		(uint32)source.size(),
+		ShaderCompiler::GetShaderTarget(shaderType),
+		entryPoint.c_str(),
+		m_ShaderModelMajor,
+		m_ShaderModelMinor, defines);
+
+	if (!result.Success)
+	{
+		E_LOG(Warning, "Failed to compile shader \"%s\": %s", shaderPath.c_str(), result.ErrorMessage.c_str());
+		return nullptr;
+	}
+
+	ShaderPtr pNewShader = std::make_unique<Shader>(result.pBlob, shaderType, entryPoint, defines);
+	m_Shaders.push_back(std::move(pNewShader));
+	Shader* pShader = m_Shaders.back().get();
+
+	for (const ShaderStringHash& include : includes)
+	{
+		m_IncludeDependencyMap[include].insert(shaderPath);
+	}
+	m_IncludeDependencyMap[ShaderStringHash(shaderPath)].insert(shaderPath);
+
+	StringHash hash = GetEntryPointHash(entryPoint, defines);
+	m_FilepathToObjectMap[ShaderStringHash(shaderPath)].Shaders[hash] = pShader;
+
+	return pShader;
+}
+
+ShaderLibrary* ShaderManager::LoadShaderLibrary(const std::string& shaderPath, const std::vector<ShaderDefine>& defines /*= {}*/)
+{
+	std::stringstream shaderSource;
+	std::vector<ShaderStringHash> includes;
+	std::string filePath = m_ShaderSourcePath + shaderPath;
+	if (!ProcessSource(filePath, filePath, shaderSource, includes))
+	{
+		return nullptr;
+	}
+
+	std::string source = shaderSource.str();
+	ShaderCompiler::CompileResult result = ShaderCompiler::Compile(
+		shaderPath.c_str(),
+		source.c_str(),
+		(uint32)source.size(),
+		"lib",
+		"",
+		m_ShaderModelMajor,
+		m_ShaderModelMinor, defines);
+
+	if (!result.Success)
+	{
+		E_LOG(Warning, "Failed to compile library \"%s\": %s", shaderPath.c_str(), result.ErrorMessage.c_str());
+		return nullptr;
+	}
+
+	LibraryPtr pNewShader = std::make_unique<ShaderLibrary>(result.pBlob, defines);
+	m_Libraries.push_back(std::move(pNewShader));
+	ShaderLibrary* pLibrary = m_Libraries.back().get();
+
+	for (const ShaderStringHash& include : includes)
+	{
+		m_IncludeDependencyMap[include].insert(shaderPath);
+	}
+	m_IncludeDependencyMap[ShaderStringHash(shaderPath)].insert(shaderPath);
+
+	StringHash hash = GetEntryPointHash("", defines);
+	m_FilepathToObjectMap[ShaderStringHash(shaderPath)].Libraries[hash] = pLibrary;
+
+	return pLibrary;
+}
+
+void ShaderManager::RecompileFromFileChange(const std::string& filePath)
+{
+	auto it = m_IncludeDependencyMap.find(ShaderStringHash(filePath));
+	if (it != m_IncludeDependencyMap.end())
+	{
+		E_LOG(Info, "Modified \"%s\". Recompiling dependencies...", filePath.c_str());
+		const std::unordered_set<std::string>& dependencies = it->second;
+		for (const std::string& dependency : dependencies)
+		{
+			auto objectMapIt = m_FilepathToObjectMap.find(ShaderStringHash(dependency));
+			if (objectMapIt != m_FilepathToObjectMap.end())
+			{
+				ShadersInFileMap objectMap = objectMapIt->second;
+				for (auto shader : objectMap.Shaders)
+				{
+					Shader* pOldShader = shader.second;
+					Shader* pNewShader = LoadShader(dependency, pOldShader->GetType(), pOldShader->GetEntryPoint().c_str(), pOldShader->GetDefines());
+					if (pNewShader)
+					{
+						E_LOG(Info, "Reloaded shader: \"%s - %s\"", dependency.c_str(), pNewShader->GetEntryPoint().c_str());
+						m_OnShaderRecompiledEvent.Broadcast(pOldShader, pNewShader);
+						m_Shaders.remove_if([pOldShader](const std::unique_ptr<Shader>& pS) { return pS.get() == pOldShader; });
+					}
+				}
+				for (auto library : objectMap.Libraries)
+				{
+					ShaderLibrary* pOldLibrary = library.second;
+					ShaderLibrary* pNewLibrary = LoadShaderLibrary(dependency, pOldLibrary->GetDefines());
+					if (pNewLibrary)
+					{
+						E_LOG(Info, "Reloaded library: \"%s\"", dependency.c_str());
+						m_OnLibraryRecompiledEvent.Broadcast(pOldLibrary, pNewLibrary);
+						m_Libraries.remove_if([pOldLibrary](const std::unique_ptr<ShaderLibrary>& pS) { return pS.get() == pOldLibrary; });
+					}
+				}
+			}
+		}
+	}
+}
+
+bool ShaderManager::ProcessSource(const std::string& sourcePath, const std::string& filePath, std::stringstream& output, std::vector<ShaderStringHash>& processedIncludes)
+{
 	std::string line;
 
 	int linesProcessed = 0;
@@ -302,14 +429,14 @@ bool ShaderBase::ProcessSource(const std::string& sourcePath, const std::string&
 				return false;
 			}
 			std::string includeFilePath = line.substr(start, end - start);
-			StringHash includeHash(includeFilePath);
+			ShaderStringHash includeHash(includeFilePath);
 			if (std::find(processedIncludes.begin(), processedIncludes.end(), includeHash) == processedIncludes.end())
 			{
 				processedIncludes.push_back(includeHash);
 				std::string basePath = Paths::GetDirectoryPath(filePath);
 				std::string fullFilePath = basePath + includeFilePath;
 
-				if (!ProcessSource(sourcePath, fullFilePath, output, processedIncludes, dependencies))
+				if (!ProcessSource(sourcePath, fullFilePath, output, processedIncludes))
 				{
 					return false;
 				}
@@ -342,50 +469,60 @@ uint32 ShaderBase::GetByteCodeSize() const
 	return (uint32)m_pByteCode->GetBufferSize();
 }
 
-Shader::Shader(const char* pFilePath, ShaderType shaderType, const char* pEntryPoint, const std::vector<std::string> defines)
+ShaderManager::ShaderManager(const std::string& shaderSourcePath, uint8 shaderModelMaj, uint8 shaderModelMin)
+	: m_ShaderSourcePath(shaderSourcePath), m_ShaderModelMajor(shaderModelMaj), m_ShaderModelMinor(shaderModelMin)
 {
-	m_Path = Paths::ShadersDir() + pFilePath;
-	m_Type = shaderType;
-	Compile(m_Path.c_str(), shaderType, pEntryPoint, SM_MAJ, SM_MIN, defines);
+	if (CommandLine::GetBool("shaderhotreload"))
+	{
+		m_pFileWatcher = std::make_unique<FileWatcher>();
+		m_pFileWatcher->StartWatching(shaderSourcePath, true);
+		E_LOG(Info, "Shader Hot-Reload enabled: \"%s\"", shaderSourcePath.c_str());
+	}
 }
 
-bool Shader::Compile(const char* pFilePath, ShaderType shaderType, const char* pEntryPoint, uint32 shaderModelMajor, uint32 shaderModelMinor, const std::vector<std::string> defines /*= {}*/)
+ShaderManager::~ShaderManager()
 {
-	std::stringstream shaderSource;
-	std::vector<StringHash> includes;
-	if (!ShaderBase::ProcessSource(pFilePath, pFilePath, shaderSource, includes, m_Dependencies))
-	{
-		return false;
-	}
-
-	std::string source = shaderSource.str();
-
-	if (shaderType == ShaderType::Mesh || shaderType == ShaderType::Amplification)
-	{
-		shaderModelMajor = Math::Max<uint32>(shaderModelMajor, 6);
-		shaderModelMinor = Math::Max<uint32>(shaderModelMinor, 5);
-	}
-
-	return ShaderCompiler::Compile(pFilePath, source.c_str(), (uint32)source.size(), ShaderCompiler::GetShaderTarget(shaderType), m_pByteCode.GetAddressOf(), pEntryPoint, shaderModelMajor, shaderModelMinor, defines);
 }
 
-ShaderLibrary::ShaderLibrary(const char* pFilePath, const std::vector<std::string> defines)
+void ShaderManager::ConditionallyReloadShaders()
 {
-	m_Path = Paths::ShadersDir() + pFilePath;
-	Compile(m_Path.c_str(), SM_MAJ, SM_MIN, defines);
+	if (m_pFileWatcher)
+	{
+		FileWatcher::FileEvent fileEvent;
+		while (m_pFileWatcher->GetNextChange(fileEvent))
+		{
+			switch (fileEvent.EventType)
+			{
+			case FileWatcher::FileEvent::Type::Modified:
+				RecompileFromFileChange(fileEvent.Path);
+				break;
+			}
+		}
+	}
 }
 
-bool ShaderLibrary::Compile(const char* pFilePath, uint32 shaderModelMajor, uint32 shaderModelMinor, const std::vector<std::string> defines /*= {}*/)
+Shader* ShaderManager::GetShader(const std::string& shaderPath, ShaderType shaderType, const std::string& entryPoint, const std::vector<ShaderDefine>& defines /*= {}*/)
 {
-	std::stringstream shaderSource;
-	std::vector<StringHash> includes;
-	if (!ProcessSource(pFilePath, pFilePath, shaderSource, includes, m_Dependencies))
+	auto& shaderMap = m_FilepathToObjectMap[ShaderStringHash(shaderPath)].Shaders;
+	StringHash hash = GetEntryPointHash(entryPoint, defines);
+	auto it = shaderMap.find(hash);
+	if (it != shaderMap.end())
 	{
-		return false;
+		return it->second;
 	}
 
-	std::string source = shaderSource.str();
-	shaderModelMajor = Math::Max<uint32>(shaderModelMajor, 6);
-	shaderModelMinor = Math::Max<uint32>(shaderModelMinor, 3);
-	return ShaderCompiler::Compile(pFilePath, source.c_str(), (uint32)source.size(), "lib", m_pByteCode.GetAddressOf(), "", shaderModelMajor, shaderModelMinor, defines);
+	return LoadShader(shaderPath, shaderType, entryPoint, defines);
+}
+
+ShaderLibrary* ShaderManager::GetLibrary(const std::string& shaderPath, const std::vector<ShaderDefine>& defines /*= {}*/)
+{
+	auto& libraryMap = m_FilepathToObjectMap[ShaderStringHash(shaderPath)].Libraries;
+	StringHash hash = GetEntryPointHash("", defines);
+	auto it = libraryMap.find(hash);
+	if (it != libraryMap.end())
+	{
+		return it->second;
+	}
+
+	return LoadShaderLibrary(shaderPath, defines);
 }

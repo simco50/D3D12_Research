@@ -79,58 +79,63 @@ void GpuParticles::Initialize(Graphics* pGraphics)
 	m_pSimpleDrawCommandSignature->Finalize("Simple Draw");
 
 	{
-		Shader computeShader("ParticleSimulation.hlsl", ShaderType::Compute, "UpdateSimulationParameters");
+		Shader* pComputeShader = pGraphics->GetShaderManager()->GetShader("ParticleSimulation.hlsl", ShaderType::Compute, "UpdateSimulationParameters");
 		m_pSimulateRS = std::make_unique<RootSignature>(pGraphics);
-		m_pSimulateRS->FinalizeFromShader("Particle Simulation", computeShader);
+		m_pSimulateRS->FinalizeFromShader("Particle Simulation", pComputeShader);
 	}
 
 	{
-		Shader computeShader("ParticleSimulation.hlsl", ShaderType::Compute, "UpdateSimulationParameters");
-		m_pPrepareArgumentsPS = std::make_unique<PipelineState>(pGraphics);
-		m_pPrepareArgumentsPS->SetComputeShader(computeShader);
-		m_pPrepareArgumentsPS->SetRootSignature(m_pSimulateRS->GetRootSignature());
-		m_pPrepareArgumentsPS->Finalize("Prepare Particle Arguments");
+		Shader* pComputeShader = pGraphics->GetShaderManager()->GetShader("ParticleSimulation.hlsl", ShaderType::Compute, "UpdateSimulationParameters");
+		PipelineStateInitializer psoDesc;
+		psoDesc.SetComputeShader(pComputeShader);
+		psoDesc.SetRootSignature(m_pSimulateRS->GetRootSignature());
+		psoDesc.SetName("Prepare Particle Arguments");
+		m_pPrepareArgumentsPS = pGraphics->CreatePipeline(psoDesc);
 	}
 	{
-		Shader computeShader("ParticleSimulation.hlsl", ShaderType::Compute, "Emit");
-		m_pEmitPS = std::make_unique<PipelineState>(pGraphics);
-		m_pEmitPS->SetComputeShader(computeShader);
-		m_pEmitPS->SetRootSignature(m_pSimulateRS->GetRootSignature());
-		m_pEmitPS->Finalize("Particle Emitter");
+		Shader* pComputeShader = pGraphics->GetShaderManager()->GetShader("ParticleSimulation.hlsl", ShaderType::Compute, "Emit");
+		PipelineStateInitializer psoDesc;
+		psoDesc.SetComputeShader(pComputeShader);
+		psoDesc.SetRootSignature(m_pSimulateRS->GetRootSignature());
+		psoDesc.SetName("Particle Emitter");
+		m_pEmitPS = pGraphics->CreatePipeline(psoDesc);
 	}
 	{
-		Shader computeShader("ParticleSimulation.hlsl", ShaderType::Compute, "Simulate");
-		m_pSimulatePS = std::make_unique<PipelineState>(pGraphics);
-		m_pSimulatePS->SetComputeShader(computeShader);
-		m_pSimulatePS->SetRootSignature(m_pSimulateRS->GetRootSignature());
-		m_pSimulatePS->Finalize("Particle Simulation");
+		Shader* pComputeShader = pGraphics->GetShaderManager()->GetShader("ParticleSimulation.hlsl", ShaderType::Compute, "Simulate");
+		PipelineStateInitializer psoDesc;
+		psoDesc.SetComputeShader(pComputeShader);
+		psoDesc.SetRootSignature(m_pSimulateRS->GetRootSignature());
+		psoDesc.SetName("Particle Simulation");
+		m_pSimulatePS = pGraphics->CreatePipeline(psoDesc);
 	}
 	{
-		Shader computeShader("ParticleSimulation.hlsl", ShaderType::Compute, "SimulateEnd");
-		m_pSimulateEndPS = std::make_unique<PipelineState>(pGraphics);
-		m_pSimulateEndPS->SetComputeShader(computeShader);
-		m_pSimulateEndPS->SetRootSignature(m_pSimulateRS->GetRootSignature());
-		m_pSimulateEndPS->Finalize("Particle Simulation End");
+		Shader* pComputeShader = pGraphics->GetShaderManager()->GetShader("ParticleSimulation.hlsl", ShaderType::Compute, "SimulateEnd");
+		PipelineStateInitializer psoDesc;
+		psoDesc.SetComputeShader(pComputeShader);
+		psoDesc.SetRootSignature(m_pSimulateRS->GetRootSignature());
+		psoDesc.SetName("Particle Simulation End");
+		m_pSimulateEndPS = pGraphics->CreatePipeline(psoDesc);
 	}
 	{
-		Shader vertexShader("ParticleRendering.hlsl", ShaderType::Vertex, "VSMain");
-		Shader pixelShader("ParticleRendering.hlsl", ShaderType::Pixel, "PSMain");
+		Shader* pVertexShader = pGraphics->GetShaderManager()->GetShader("ParticleRendering.hlsl", ShaderType::Vertex, "VSMain");
+		Shader* pPixelShader = pGraphics->GetShaderManager()->GetShader("ParticleRendering.hlsl", ShaderType::Pixel, "PSMain");
 
 		m_pRenderParticlesRS = std::make_unique<RootSignature>(pGraphics);
-		m_pRenderParticlesRS->FinalizeFromShader("Particle Rendering", vertexShader);
+		m_pRenderParticlesRS->FinalizeFromShader("Particle Rendering", pVertexShader);
 
-		m_pRenderParticlesPS = std::make_unique<PipelineState>(pGraphics);
-		m_pRenderParticlesPS->SetVertexShader(vertexShader);
-		m_pRenderParticlesPS->SetPixelShader(pixelShader);
-		m_pRenderParticlesPS->SetRootSignature(m_pRenderParticlesRS->GetRootSignature());
-		m_pRenderParticlesPS->SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
-		m_pRenderParticlesPS->SetInputLayout(nullptr, 0);
-		m_pRenderParticlesPS->SetDepthWrite(false);
-		m_pRenderParticlesPS->SetBlendMode(BlendMode::Alpha, false);
-		m_pRenderParticlesPS->SetCullMode(D3D12_CULL_MODE_NONE);
-		m_pRenderParticlesPS->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
-		m_pRenderParticlesPS->SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, pGraphics->GetMultiSampleCount());
-		m_pRenderParticlesPS->Finalize("Particle Rendering PS");
+		PipelineStateInitializer psoDesc;
+		psoDesc.SetVertexShader(pVertexShader);
+		psoDesc.SetPixelShader(pPixelShader);
+		psoDesc.SetRootSignature(m_pRenderParticlesRS->GetRootSignature());
+		psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
+		psoDesc.SetInputLayout(nullptr, 0);
+		psoDesc.SetDepthWrite(false);
+		psoDesc.SetBlendMode(BlendMode::Alpha, false);
+		psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
+		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
+		psoDesc.SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, pGraphics->GetMultiSampleCount());
+		psoDesc.SetName("Particle Rendering PS");
+		m_pRenderParticlesPS = pGraphics->CreatePipeline(psoDesc);
 	}
 
 	pGraphics->GetImGui()->AddUpdateCallback(ImGuiCallbackDelegate::CreateLambda([]() {
@@ -186,7 +191,7 @@ void GpuParticles::Simulate(RGGraph& graph, Texture* pResolvedDepth, const Camer
 			context.SetDynamicDescriptors(1, 0, uavs, ARRAYSIZE(uavs));
 			context.SetDynamicDescriptors(2, 0, srvs, ARRAYSIZE(srvs));
 
-			context.SetPipelineState(m_pPrepareArgumentsPS.get());
+			context.SetPipelineState(m_pPrepareArgumentsPS);
 			struct Parameters
 			{
 				int32 EmitCount;
@@ -209,7 +214,7 @@ void GpuParticles::Simulate(RGGraph& graph, Texture* pResolvedDepth, const Camer
 			context.SetDynamicDescriptors(1, 0, uavs, ARRAYSIZE(uavs));
 			context.SetDynamicDescriptors(2, 0, srvs, ARRAYSIZE(srvs));
 
-			context.SetPipelineState(m_pEmitPS.get());
+			context.SetPipelineState(m_pEmitPS);
 
 			struct Parameters
 			{
@@ -240,7 +245,7 @@ void GpuParticles::Simulate(RGGraph& graph, Texture* pResolvedDepth, const Camer
 			context.SetDynamicDescriptors(1, 0, uavs, ARRAYSIZE(uavs));
 			context.SetDynamicDescriptors(2, 0, srvs, ARRAYSIZE(srvs));
 
-			context.SetPipelineState(m_pSimulatePS.get());
+			context.SetPipelineState(m_pSimulatePS);
 
 			struct Parameters
 			{
@@ -275,7 +280,7 @@ void GpuParticles::Simulate(RGGraph& graph, Texture* pResolvedDepth, const Camer
 			context.SetDynamicDescriptors(1, 0, uavs, ARRAYSIZE(uavs));
 			context.SetDynamicDescriptors(2, 0, srvs, ARRAYSIZE(srvs));
 
-			context.SetPipelineState(m_pSimulateEndPS.get());
+			context.SetPipelineState(m_pSimulateEndPS);
 			context.Dispatch(1);
 			context.InsertUavBarrier();
 		});
@@ -300,7 +305,7 @@ void GpuParticles::Render(RGGraph& graph, Texture* pTarget, Texture* pDepth, con
 
 			context.BeginRenderPass(RenderPassInfo(pTarget, RenderPassAccess::Load_Store, pDepth, RenderPassAccess::Load_Store, false));
 
-			context.SetPipelineState(m_pRenderParticlesPS.get());
+			context.SetPipelineState(m_pRenderParticlesPS);
 			context.SetGraphicsRootSignature(m_pRenderParticlesRS.get());
 
 			struct FrameData

@@ -4,6 +4,7 @@ Usually, to jump between spaces, you transform to CIE XYZ and from there you can
 Super useful page for different transformations: http://www.brucelindbloom.com/index.html?Eqn_xyY_to_XYZ.html
 */
 
+
 #ifndef __INCLUDE_COLORS__
 #define __INCLUDE_COLORS__
 

@@ -23,6 +23,10 @@ class RTAO;
 class RTReflections;
 class SSAO;
 class GpuParticles;
+class ShaderManager;
+class PipelineStateInitializer;
+class StateObject;
+class StateObjectInitializer;
 
 #if PLATFORM_WINDOWS
 using WindowHandle = HWND;
@@ -125,6 +129,7 @@ public:
 	bool SupportsMeshShaders() const { return m_MeshShaderSupport != D3D12_MESH_SHADER_TIER_NOT_SUPPORTED; }
 	bool GetShaderModel(int& major, int& minor) const;
 
+	ShaderManager* GetShaderManager() const { return m_pShaderManager.get(); }
 	DynamicAllocationManager* GetAllocationManager() const { return m_pDynamicAllocationManager.get(); }
 
 	template<typename DESC_TYPE>
@@ -155,6 +160,8 @@ public:
 	uint32 GetMultiSampleCount() const { return m_SampleCount; }
 
 	ID3D12Resource* CreateResource(const D3D12_RESOURCE_DESC& desc, D3D12_RESOURCE_STATES initialState, D3D12_HEAP_TYPE heapType, D3D12_CLEAR_VALUE* pClearValue = nullptr);
+	PipelineState* CreatePipeline(const PipelineStateInitializer& psoDesc);
+	StateObject* CreateStateObject(const StateObjectInitializer& stateDesc);
 
 	//CONSTANTS
 	static const int32 FRAME_COUNT = 3;
@@ -178,6 +185,11 @@ private:
 	ComPtr<ID3D12Device5> m_pRaytracingDevice;
 	ComPtr<ID3D12Fence> m_pDeviceRemovalFence;
 	HANDLE m_DeviceRemovedEvent = 0;
+
+	std::unique_ptr<ShaderManager> m_pShaderManager;
+
+	std::vector<std::unique_ptr<PipelineState>> m_Pipelines;
+	std::vector<std::unique_ptr<StateObject>> m_StateObjects;
 
 	int m_Frame = 0;
 	std::array<float, 180> m_FrameTimes{};
@@ -216,8 +228,8 @@ private:
 
 	D3D12_RENDER_PASS_TIER m_RenderPassTier = D3D12_RENDER_PASS_TIER_0;
 	D3D12_RAYTRACING_TIER m_RayTracingTier = D3D12_RAYTRACING_TIER_NOT_SUPPORTED;
-	int m_ShaderModelMajor = -1;
-	int m_ShaderModelMinor = -1;
+	uint8 m_ShaderModelMajor = 0;
+	uint8 m_ShaderModelMinor = 0;
 	D3D12_MESH_SHADER_TIER m_MeshShaderSupport = D3D12_MESH_SHADER_TIER_NOT_SUPPORTED;
 	D3D12_SAMPLER_FEEDBACK_TIER m_SamplerFeedbackSupport = D3D12_SAMPLER_FEEDBACK_TIER_NOT_SUPPORTED;
 	D3D12_VARIABLE_SHADING_RATE_TIER m_VRSTier = D3D12_VARIABLE_SHADING_RATE_TIER_NOT_SUPPORTED;
@@ -243,27 +255,27 @@ private:
 
 	//Shadow mapping
 	std::unique_ptr<RootSignature> m_pShadowsRS;
-	std::unique_ptr<PipelineState> m_pShadowsOpaquePSO;
-	std::unique_ptr<PipelineState> m_pShadowsAlphaMaskPSO;
+	PipelineState* m_pShadowsOpaquePSO = nullptr;
+	PipelineState* m_pShadowsAlphaMaskPSO = nullptr;
 	
 	//Depth Prepass
 	std::unique_ptr<RootSignature> m_pDepthPrepassRS;
-	std::unique_ptr<PipelineState> m_pDepthPrepassOpaquePSO;
-	std::unique_ptr<PipelineState> m_pDepthPrepassAlphaMaskPSO;
+	PipelineState* m_pDepthPrepassOpaquePSO = nullptr;
+	PipelineState* m_pDepthPrepassAlphaMaskPSO = nullptr;
 
 	//MSAA Depth resolve
 	std::unique_ptr<RootSignature> m_pResolveDepthRS;
-	std::unique_ptr<PipelineState> m_pResolveDepthPSO;
+	PipelineState* m_pResolveDepthPSO = nullptr;
 
 	//Tonemapping
 	std::unique_ptr<Texture> m_pDownscaledColor;
 	std::unique_ptr<RootSignature> m_pLuminanceHistogramRS;
-	std::unique_ptr<PipelineState> m_pLuminanceHistogramPSO;
+	PipelineState* m_pLuminanceHistogramPSO = nullptr;
 	std::unique_ptr<RootSignature> m_pAverageLuminanceRS;
-	std::unique_ptr<PipelineState> m_pAverageLuminancePSO;
+	PipelineState* m_pAverageLuminancePSO = nullptr;
 	std::unique_ptr<RootSignature> m_pToneMapRS;
-	std::unique_ptr<PipelineState> m_pToneMapPSO;
-	std::unique_ptr<PipelineState> m_pDrawHistogramPSO;
+	PipelineState* m_pToneMapPSO = nullptr;
+	PipelineState* m_pDrawHistogramPSO = nullptr;
 	std::unique_ptr<RootSignature> m_pDrawHistogramRS;
 	std::unique_ptr<Buffer> m_pLuminanceHistogram;
 	std::unique_ptr<Buffer> m_pAverageLuminance;
@@ -272,28 +284,28 @@ private:
 	std::unique_ptr<Texture> m_pAmbientOcclusion;
 
 	//Mip generation
-	std::unique_ptr<PipelineState> m_pGenerateMipsPSO;
+	PipelineState* m_pGenerateMipsPSO = nullptr;
 	std::unique_ptr<RootSignature> m_pGenerateMipsRS;
 
 	//Depth Reduction
-	std::unique_ptr<PipelineState> m_pPrepareReduceDepthPSO;
-	std::unique_ptr<PipelineState> m_pPrepareReduceDepthMsaaPSO;
-	std::unique_ptr<PipelineState> m_pReduceDepthPSO;
+	PipelineState* m_pPrepareReduceDepthPSO = nullptr;
+	PipelineState* m_pPrepareReduceDepthMsaaPSO = nullptr;
+	PipelineState* m_pReduceDepthPSO = nullptr;
 	std::unique_ptr<RootSignature> m_pReduceDepthRS;
 	std::vector<std::unique_ptr<Texture>> m_ReductionTargets;
 	std::vector<std::unique_ptr<Buffer>> m_ReductionReadbackTargets;
 
 	//Camera motion
-	std::unique_ptr<PipelineState> m_pCameraMotionPSO;
+	PipelineState* m_pCameraMotionPSO = nullptr;
 	std::unique_ptr<RootSignature> m_pCameraMotionRS;
 
 	//TAA
-	std::unique_ptr<PipelineState> m_pTemporalResolvePSO;
+	PipelineState* m_pTemporalResolvePSO = nullptr;
 	std::unique_ptr<RootSignature> m_pTemporalResolveRS;
 
 	//Sky
 	std::unique_ptr<RootSignature> m_pSkyboxRS;
-	std::unique_ptr<PipelineState> m_pSkyboxPSO;
+	PipelineState* m_pSkyboxPSO = nullptr;
 
 	//Particles
 	std::unique_ptr<GpuParticles> m_pParticles;

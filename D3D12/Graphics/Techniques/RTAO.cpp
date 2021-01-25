@@ -7,10 +7,11 @@
 #include "Graphics/Core/Graphics.h"
 #include "Graphics/Core/CommandContext.h"
 #include "Graphics/Core/Texture.h"
-#include "Graphics/Core/RaytracingCommon.h"
+#include "Graphics/Core/ShaderBindingTable.h"
 #include "Graphics/RenderGraph/RenderGraph.h"
 #include "Graphics/Mesh.h"
 #include "Scene/Camera.h"
+#include "../Core/StateObject.h"
 
 RTAO::RTAO(Graphics* pGraphics)
 {
@@ -41,7 +42,7 @@ void RTAO::Execute(RGGraph& graph, Texture* pColor, Texture* pDepth, Buffer* pTL
 			context.InsertResourceBarrier(pColor, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
 			context.SetComputeRootSignature(m_pGlobalRS.get());
-			context.SetPipelineState(m_pRtSO.Get());
+			context.SetPipelineState(m_pRtSO);
 
 			constexpr const int numRandomVectors = 64;
 			struct Parameters
@@ -76,7 +77,7 @@ void RTAO::Execute(RGGraph& graph, Texture* pColor, Texture* pDepth, Buffer* pTL
 			parameters.Radius = g_AoRadius;
 			parameters.Samples = g_AoSamples;
 
-			ShaderBindingTable bindingTable(m_pRtSO.Get());
+			ShaderBindingTable bindingTable(m_pRtSO);
 			bindingTable.BindRayGenShader("RayGen");
 			bindingTable.BindMissShader("Miss", {});
 
@@ -102,16 +103,15 @@ void RTAO::SetupPipelines(Graphics* pGraphics)
 	m_pGlobalRS->AddStaticSampler(0, CD3DX12_STATIC_SAMPLER_DESC(0, D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP), D3D12_SHADER_VISIBILITY_ALL);
 	m_pGlobalRS->Finalize("Global", D3D12_ROOT_SIGNATURE_FLAG_NONE);
 
-	ShaderLibrary shaderLibrary("RTAO.hlsl");
+	ShaderLibrary* pShaderLibrary = pGraphics->GetShaderManager()->GetLibrary("RTAO.hlsl");
 
-	CD3DX12_STATE_OBJECT_HELPER stateDesc;
-	const char* pLibraryExports[] = {
-		"RayGen", "Miss"
-	};
-	stateDesc.AddLibrary(CD3DX12_SHADER_BYTECODE(shaderLibrary.GetByteCode(), shaderLibrary.GetByteCodeSize()), pLibraryExports, ARRAYSIZE(pLibraryExports));
-	stateDesc.SetRaytracingShaderConfig(sizeof(float), 2 * sizeof(float));
-	stateDesc.SetRaytracingPipelineConfig(1);
-	stateDesc.SetGlobalRootSignature(m_pGlobalRS->GetRootSignature());
-	D3D12_STATE_OBJECT_DESC desc = stateDesc.Desc();
-	pGraphics->GetRaytracingDevice()->CreateStateObject(&desc, IID_PPV_ARGS(m_pRtSO.GetAddressOf()));
+	StateObjectInitializer stateDesc;
+	stateDesc.AddLibrary(pShaderLibrary, { "RayGen", "Miss" });
+	stateDesc.Name = "RT AO";
+	stateDesc.MaxPayloadSize = sizeof(float);
+	stateDesc.MaxAttributeSize = 2 * sizeof(float);
+	stateDesc.pGlobalRootSignature = m_pGlobalRS.get();
+	stateDesc.RayGenShader = "RayGen";
+	stateDesc.AddMissShader("Miss");
+	m_pRtSO = pGraphics->CreateStateObject(stateDesc);
 }

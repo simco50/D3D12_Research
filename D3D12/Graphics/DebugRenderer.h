@@ -60,8 +60,8 @@ public:
 	std::vector<DebugLine> m_Lines;
 	std::vector<DebugTriangle> m_Triangles;
 
-	std::unique_ptr<PipelineState> m_pTrianglesPSO;
-	std::unique_ptr<PipelineState> m_pLinesPSO;
+	PipelineState* m_pTrianglesPSO = nullptr;
+	PipelineState* m_pLinesPSO = nullptr;
 	std::unique_ptr<RootSignature> m_pRS;
 private:
 	DebugRenderer() = default;

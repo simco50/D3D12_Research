@@ -8,6 +8,7 @@ class Texture;
 class OnlineDescriptorAllocator;
 class RootSignature;
 class PipelineState;
+class StateObject;
 class DynamicResourceAllocator;
 class Buffer;
 class CommandSignature;
@@ -182,7 +183,7 @@ public:
 
 	//Bindings
 	void SetPipelineState(PipelineState* pPipelineState);
-	void SetPipelineState(ID3D12StateObject* pStateObject);
+	void SetPipelineState(StateObject* pStateObject);
 	void SetComputeRootSignature(RootSignature* pRootSignature);
 	void SetComputeRootConstants(int rootIndex, uint32 count, const void* pConstants);
 	void SetComputeDynamicConstantBufferView(int rootIndex, void* pData, uint32 dataSize);
