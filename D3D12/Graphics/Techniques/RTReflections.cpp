@@ -121,15 +121,15 @@ void RTReflections::SetupPipelines(Graphics* pGraphics)
 	m_pGlobalRS->FinalizeFromShader("Global", pShaderLibrary);
 
 	StateObjectInitializer stateDesc;
-	stateDesc.AddLibrary(pShaderLibrary, { "RayGen", "ClosestHit", "Miss", "ShadowMiss" });
 	stateDesc.Name = "RT Reflections";
-	stateDesc.MaxPayloadSize = 5 * sizeof(float);
-	stateDesc.MaxAttributeSize = 2 * sizeof(float);
-	stateDesc.AddHitGroup("ReflectionHitGroup", "ClosestHit", "", "", m_pHitSignature.get());
-	stateDesc.MaxRecursion = 2;
-	stateDesc.pGlobalRootSignature = m_pGlobalRS.get();
 	stateDesc.RayGenShader = "RayGen";
+	stateDesc.AddLibrary(pShaderLibrary, { "RayGen", "ClosestHit", "Miss", "ShadowMiss" });
+	stateDesc.AddHitGroup("ReflectionHitGroup", "ClosestHit", "", "", m_pHitSignature.get());
 	stateDesc.AddMissShader("Miss");
 	stateDesc.AddMissShader("ShadowMiss");
+	stateDesc.MaxPayloadSize = 5 * sizeof(float);
+	stateDesc.MaxAttributeSize = 2 * sizeof(float);
+	stateDesc.MaxRecursion = 2;
+	stateDesc.pGlobalRootSignature = m_pGlobalRS.get();
 	m_pRtSO = pGraphics->CreateStateObject(stateDesc);
 }

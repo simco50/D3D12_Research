@@ -55,31 +55,28 @@ namespace ShaderCompiler
 		ComPtr<IDxcBlobEncoding> pSource;
 		VERIFY_HR(pUtils->CreateBlob(pShaderSource, shaderSourceSize, CP_UTF8, pSource.GetAddressOf()));
 
-		wchar_t target[256], fileName[256], entryPoint[256];
-		ToWidechar(pIdentifier, fileName, 256);
-		ToWidechar(pEntryPoint, entryPoint, 256);
-		ToWidechar(pTarget, target, 256);
-
 		bool debugShaders = CommandLine::GetBool("debugshaders");
 
 		std::vector<std::wstring> wDefines;
 		for (const std::string& define : defines)
 		{
-			wchar_t intermediate[256];
-			ToWidechar(define.c_str(), intermediate, 256);
-			wDefines.push_back(intermediate);
+			wDefines.push_back(MULTIBYTE_TO_UNICODE(define.c_str()));
 		}
 
 		std::vector<LPCWSTR> arguments;
 		arguments.reserve(20);
 
 		arguments.push_back(L"-E");
-		arguments.push_back(entryPoint);
+
+		MultibyteToUnicode pwEntry(pEntryPoint);
+		arguments.push_back(*pwEntry);
 
 		arguments.push_back(L"-T");
-		arguments.push_back(target);
+		MultibyteToUnicode pwTarget(pTarget);
+		arguments.push_back(*pwTarget);
 		arguments.push_back(L"-all_resources_bound");
 
+		MultibyteToUnicode pwSymbolPath(pShaderSymbolsPath);
 		if (debugShaders)
 		{
 			arguments.push_back(DXC_ARG_SKIP_OPTIMIZATIONS);
@@ -89,10 +86,8 @@ namespace ShaderCompiler
 		{
 			arguments.push_back(DXC_ARG_OPTIMIZATION_LEVEL3);
 			arguments.push_back(L"-Qstrip_debug");
-			wchar_t symbolsPath[256];
-			ToWidechar(pShaderSymbolsPath, symbolsPath, 256);
 			arguments.push_back(L"/Fd");
-			arguments.push_back(symbolsPath);
+			arguments.push_back(*pwSymbolPath);
 			arguments.push_back(L"-Qstrip_reflect");
 		}
 
@@ -120,6 +115,7 @@ namespace ShaderCompiler
 		pCompileResult->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(pErrors.GetAddressOf()), nullptr);
 		if (pErrors && pErrors->GetStringLength() > 0)
 		{
+			assert(false);
 			result.Success = false;
 			result.ErrorMessage = (char*)pErrors->GetBufferPointer();
 			return result;
@@ -155,9 +151,7 @@ namespace ShaderCompiler
 			ComPtr<IDxcBlobUtf16> pDebugDataPath;
 			pCompileResult->GetOutput(DXC_OUT_PDB, IID_PPV_ARGS(result.pSymbolsBlob.GetAddressOf()), pDebugDataPath.GetAddressOf());
 			std::stringstream pathStream;
-			char path[256];
-			ToMultibyte((wchar_t*)pDebugDataPath->GetBufferPointer(), path, 256);
-			pathStream << pShaderSymbolsPath << path;
+			pathStream << pShaderSymbolsPath << UNICODE_TO_MULTIBYTE((wchar_t*)pDebugDataPath->GetBufferPointer());
 			result.DebugPath = pathStream.str();
 		}
 

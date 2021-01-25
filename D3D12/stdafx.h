@@ -46,19 +46,6 @@ using ComPtr = Microsoft::WRL::ComPtr<T>;
 #include "d3dx12/d3dx12_extra.h"
 #include "Imgui/imgui.h"
 
-inline int ToMultibyte(const wchar_t* pStr, char* pOut, int len)
-{
-	size_t converted = 0;
-	wcstombs_s(&converted, pOut, len, pStr, len);
-	return (int)converted;
-}
-
-inline int ToWidechar(const char* pStr, wchar_t* pOut, int len)
-{
-	size_t converted = 0;
-	mbstowcs_s(&converted, pOut, len, pStr, len - 1);
-	return (int)converted;
-}
 
 #ifndef D3D12_USE_RENDERPASSES
 #define D3D12_USE_RENDERPASSES 1
@@ -85,6 +72,7 @@ inline int ToWidechar(const char* pStr, wchar_t* pOut, int len)
 
 #define validateOnce(expression) validateOncef(expression, "")
 
+#include "Core/String.h"
 #include "Core/Thread.h"
 #include "Math/MathTypes.h"
 #include "Core/Time.h"

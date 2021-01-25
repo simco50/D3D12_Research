@@ -1110,7 +1110,9 @@ void Graphics::Shutdown()
 {
 	// Wait for the GPU to be done with all resources.
 	IdleGPU();
+#ifndef PLATFORM_UWP
 	UnregisterWait(m_DeviceRemovedEvent);
+#endif
 
 	m_pSwapchain->SetFullscreenState(false, nullptr);
 }
@@ -1188,9 +1190,7 @@ void Graphics::InitD3D()
 	{
 		DXGI_ADAPTER_DESC3 desc;
 		pAdapter->GetDesc3(&desc);
-		char name[256];
-		ToMultibyte(desc.Description, name, 256);
-		E_LOG(Info, "\t%s - %f GB", name, (float)desc.DedicatedVideoMemory * Math::ToGigaBytes);
+		E_LOG(Info, "\t%s - %f GB", UNICODE_TO_MULTIBYTE(desc.Description), (float)desc.DedicatedVideoMemory * Math::ToGigaBytes);
 
 		uint32 outputIndex = 0;
 		ComPtr<IDXGIOutput> pOutput;
@@ -1212,9 +1212,7 @@ void Graphics::InitD3D()
 	pFactory->EnumAdapterByGpuPreference(0, gpuPreference, IID_PPV_ARGS(pAdapter.GetAddressOf()));
 	DXGI_ADAPTER_DESC3 desc;
 	pAdapter->GetDesc3(&desc);
-	char name[256];
-	ToMultibyte(desc.Description, name, 256);
-	E_LOG(Info, "Using %s", name);
+	E_LOG(Info, "Using %s", UNICODE_TO_MULTIBYTE(desc.Description));
 
 	//Create the device
 	constexpr D3D_FEATURE_LEVEL featureLevels[] =
@@ -1242,6 +1240,7 @@ void Graphics::InitD3D()
 	VERIFY_HR_EX(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_FEATURE_LEVELS, &caps, sizeof(D3D12_FEATURE_DATA_FEATURE_LEVELS)), GetDevice());
 	VERIFY_HR_EX(D3D12CreateDevice(pAdapter.Get(), caps.MaxSupportedFeatureLevel, IID_PPV_ARGS(m_pDevice.ReleaseAndGetAddressOf())), GetDevice());
 
+#ifndef PLATFORM_UWP
 	auto OnDeviceRemovedCallback = [](void* pContext, BOOLEAN) {
 		Graphics* pGraphics = (Graphics*)pContext;
 		std::string error = D3D::GetErrorString(DXGI_ERROR_DEVICE_REMOVED, pGraphics->GetDevice());
@@ -1252,6 +1251,7 @@ void Graphics::InitD3D()
 	VERIFY_HR(m_pDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(m_pDeviceRemovalFence.GetAddressOf())));
 	m_pDeviceRemovalFence->SetEventOnCompletion(UINT64_MAX, deviceRemovedEvent);
 	RegisterWaitForSingleObject(&m_DeviceRemovedEvent, deviceRemovedEvent, OnDeviceRemovedCallback, this, INFINITE, 0);
+#endif
 
 	pAdapter.Reset();
 

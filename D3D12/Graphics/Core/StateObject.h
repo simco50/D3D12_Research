@@ -50,9 +50,9 @@ public:
 	void AddLibrary(ShaderLibrary* pLibrary, const std::vector<std::string>& exports = {});
 	void AddCollection(StateObject* pOtherObject);
 	void AddMissShader(const std::string& exportName, RootSignature* pRootSignature = nullptr);
-	void SetRayGenShader(const std::string& exportName);
 
 	void CreateStateObjectStream(StateObjectStream& stateObjectStream);
+	void SetMaxPipelineStackSize(StateObject* pStateObject);
 
 	std::string Name;
 	uint32 MaxRecursion = 1;

@@ -104,9 +104,7 @@ ShaderBindingTable::ShaderRecord ShaderBindingTable::CreateRecord(const char* pN
 		auto it = m_IdentifierMap.find(pName);
 		if (it == m_IdentifierMap.end())
 		{
-			wchar_t wName[256];
-			ToWidechar(pName, wName, 256);
-			m_IdentifierMap[pName] = m_pStateObject->GetStateObjectProperties()->GetShaderIdentifier(wName);
+			m_IdentifierMap[pName] = m_pStateObject->GetStateObjectProperties()->GetShaderIdentifier(MULTIBYTE_TO_UNICODE(pName));
 		}
 		entry.pIdentifier = m_IdentifierMap[pName];
 		check(entry.pIdentifier);

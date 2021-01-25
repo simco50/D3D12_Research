@@ -285,9 +285,9 @@ namespace D3D
 				for (uint64 i = 0; i < pInfo->GetNumStoredMessages(); ++i)
 				{
 					size_t messageLength = 0;
-					pInfo->GetMessageA(0, nullptr, &messageLength);
+					pInfo->GetMessage(0, nullptr, &messageLength);
 					D3D12_MESSAGE* pMessage = (D3D12_MESSAGE*)malloc(messageLength);
-					pInfo->GetMessageA(0, pMessage, &messageLength);
+					pInfo->GetMessage(0, pMessage, &messageLength);
 					str << pMessage->pDescription << "\n";
 					free(pMessage);
 				}

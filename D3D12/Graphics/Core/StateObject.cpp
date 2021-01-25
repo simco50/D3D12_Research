@@ -18,6 +18,7 @@ void StateObject::Create(const StateObjectInitializer& initializer)
 	VERIFY_HR(GetParent()->GetRaytracingDevice()->CreateStateObject(&stateObjectStream.Desc, IID_PPV_ARGS(m_pStateObject.ReleaseAndGetAddressOf())));
 	D3D::SetObjectName(m_pStateObject.Get(), m_Desc.Name.c_str());
 	m_pStateObject.As(&m_pStateObjectProperties);
+	m_Desc.SetMaxPipelineStackSize(this);
 }
 
 void StateObject::ConditionallyReload()
@@ -26,7 +27,7 @@ void StateObject::ConditionallyReload()
 	{
 		Create(m_Desc);
 		m_NeedsReload = false;
-		E_LOG(Info, "Reloaded StateObject: %s", m_Desc.Name.c_str());
+		E_LOG(Info, "Reloaded State Object: %s", m_Desc.Name.c_str());
 	}
 }
 
@@ -181,4 +182,44 @@ void StateObjectInitializer::CreateStateObjectStream(StateObjectStream& stateObj
 	stateObjectStream.Desc.Type = Type;
 	stateObjectStream.Desc.NumSubobjects = numObjects;
 	stateObjectStream.Desc.pSubobjects = (D3D12_STATE_SUBOBJECT*)stateObjectStream.StateObjectData.GetData();
+}
+
+void StateObjectInitializer::SetMaxPipelineStackSize(StateObject* pStateObject)
+{
+	ID3D12StateObjectProperties* pProperties = pStateObject->GetStateObjectProperties();
+
+	uint64 maxRayGenShader = pProperties->GetShaderStackSize(MULTIBYTE_TO_UNICODE(RayGenShader.c_str()));
+
+	uint64 maxMissShader = 0;
+	for (const LibraryShaderExport& missShader : m_MissShaders)
+	{
+		maxMissShader = Math::Max(maxMissShader, pProperties->GetShaderStackSize(MULTIBYTE_TO_UNICODE(missShader.Name.c_str())));
+	}
+
+	uint64 maxClosestHitShader = 0;
+	uint64 maxIntersectionShader = 0;
+	uint64 maxAnyHitShader = 0;
+	for (const HitGroupDefinition& hitGroup : m_HitGroups)
+	{
+		wchar_t nameBuffer[256];
+		uint32 offset = (uint32)StringConvert(hitGroup.Name.c_str(), nameBuffer, ARRAYSIZE(nameBuffer));
+
+		StringConvert("::closesthit", &nameBuffer[offset - 1], 256 - offset);
+		maxClosestHitShader = Math::Max(maxClosestHitShader, pProperties->GetShaderStackSize(nameBuffer));
+		if (!hitGroup.AnyHit.empty())
+		{
+			StringConvert("::anyhit", &nameBuffer[offset - 1], 256 - offset);
+			maxAnyHitShader = Math::Max(maxAnyHitShader, pProperties->GetShaderStackSize(nameBuffer));
+		}
+		if (!hitGroup.Intersection.empty())
+		{
+			StringConvert("::intersection", &nameBuffer[offset - 1], 256 - offset);
+			maxIntersectionShader = Math::Max(maxIntersectionShader, pProperties->GetShaderStackSize(nameBuffer));
+		}
+	}
+
+	uint64 maxSize = maxRayGenShader +
+		Math::Max(Math::Max(maxClosestHitShader, maxMissShader), maxIntersectionShader + maxAnyHitShader) * Math::Min(1u, MaxRecursion) +
+		Math::Max(maxClosestHitShader, maxMissShader) * Math::Max(MaxRecursion - 1, 0u);
+	pProperties->SetPipelineStackSize(maxSize);
 }
