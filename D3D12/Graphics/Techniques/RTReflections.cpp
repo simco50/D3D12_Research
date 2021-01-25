@@ -7,7 +7,7 @@
 #include "Graphics/Core/Graphics.h"
 #include "Graphics/Core/CommandContext.h"
 #include "Graphics/Core/Texture.h"
-#include "Graphics/Core/RaytracingCommon.h"
+#include "Graphics/Core/ShaderBindingTable.h"
 #include "Graphics/Core/ResourceViews.h"
 #include "Graphics/RenderGraph/RenderGraph.h"
 #include "Graphics/Mesh.h"
@@ -51,7 +51,7 @@ void RTReflections::Execute(RGGraph& graph, const SceneData& sceneData)
 			parameters.NumLights = sceneData.pLightBuffer->GetNumElements();
 			parameters.ViewPixelSpreadAngle = atanf(2.0f * tanf(sceneData.pCamera->GetFoV() / 2) / (float)m_pSceneColor->GetHeight());
 
-			ShaderBindingTable bindingTable(m_pRtSO->GetStateObject());
+			ShaderBindingTable bindingTable(m_pRtSO);
 			bindingTable.BindRayGenShader("RayGen");
 			bindingTable.BindMissShader("Miss", 0);
 			bindingTable.BindMissShader("ShadowMiss", 1);

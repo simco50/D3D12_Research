@@ -9,7 +9,7 @@
 #include "GraphicsBuffer.h"
 #include "Texture.h"
 #include "ResourceViews.h"
-#include "RaytracingCommon.h"
+#include "ShaderBindingTable.h"
 #include "StateObject.h"
 
 CommandContext::CommandContext(Graphics* pGraphics, ID3D12GraphicsCommandList* pCommandList, D3D12_COMMAND_LIST_TYPE type, ID3D12CommandAllocator* pAllocator)

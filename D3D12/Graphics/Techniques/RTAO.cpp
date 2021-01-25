@@ -7,7 +7,7 @@
 #include "Graphics/Core/Graphics.h"
 #include "Graphics/Core/CommandContext.h"
 #include "Graphics/Core/Texture.h"
-#include "Graphics/Core/RaytracingCommon.h"
+#include "Graphics/Core/ShaderBindingTable.h"
 #include "Graphics/RenderGraph/RenderGraph.h"
 #include "Graphics/Mesh.h"
 #include "Scene/Camera.h"
@@ -77,7 +77,7 @@ void RTAO::Execute(RGGraph& graph, Texture* pColor, Texture* pDepth, Buffer* pTL
 			parameters.Radius = g_AoRadius;
 			parameters.Samples = g_AoSamples;
 
-			ShaderBindingTable bindingTable(m_pRtSO->GetStateObject());
+			ShaderBindingTable bindingTable(m_pRtSO);
 			bindingTable.BindRayGenShader("RayGen");
 			bindingTable.BindMissShader("Miss", {});
 
