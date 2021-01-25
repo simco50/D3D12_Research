@@ -21,7 +21,11 @@ public:
 	RootSignature(Graphics* pParent);
 
 	void SetSize(uint32 size, bool shrink = true);
-
+	template<typename T>
+	void SetRootConstants(uint32 rootIndex, uint32 shaderRegister, D3D12_SHADER_VISIBILITY visibility)
+	{
+		SetRootConstants(rootIndex, shaderRegister, sizeof(T) / sizeof(uint32), visibility);
+	}
 	void SetRootConstants(uint32 rootIndex, uint32 shaderRegister, uint32 constantCount, D3D12_SHADER_VISIBILITY visibility);
 	void SetConstantBufferView(uint32 rootIndex, uint32 shaderRegister, D3D12_SHADER_VISIBILITY visibility);
 	void SetShaderResourceView(uint32 rootIndex, uint32 shaderRegister, D3D12_SHADER_VISIBILITY visibility);

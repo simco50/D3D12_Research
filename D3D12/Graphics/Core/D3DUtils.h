@@ -5,12 +5,6 @@
 #define VERIFY_HR(hr) D3D::LogHRESULT(hr, nullptr, #hr, __FILE__, __LINE__)
 #define VERIFY_HR_EX(hr, device) D3D::LogHRESULT(hr, device, #hr, __FILE__, __LINE__)
 
-#ifdef _DEBUG
-#define D3D_SETNAME(obj, name) D3D::SetD3DObjectName(obj, name)
-#else
-#define D3D_SETNAME(obj, name)
-#endif
-
 namespace D3D
 {
 	inline std::string ResourceStateToString(D3D12_RESOURCE_STATES state)
@@ -20,20 +14,21 @@ namespace D3D
 			return "COMMON";
 		}
 
-		char out[1024];
-		out[0] = '\0';
-		char* pCurrent = out;
+		char outString[1024];
+		outString[0] = '\0';
+		char* pCurrent = outString;
 		int i = 0;
-		auto addText = [&](const char* pText) {
+		auto AddText = [&](const char* pText)
+		{
 			if (i++ > 0)
 				*pCurrent++ = '/';
+			strcpy_s(pCurrent, 1024 - (pCurrent - outString), pText);
 			size_t len = strlen(pText);
-			memcpy(pCurrent, pText, len);
 			pCurrent += len;
-			*pCurrent = '\0';
 		};
 
-#define STATE_CASE(name) if((state & D3D12_RESOURCE_STATE_##name) == D3D12_RESOURCE_STATE_##name) addText(#name)
+#define STATE_CASE(name) if((state & D3D12_RESOURCE_STATE_##name) == D3D12_RESOURCE_STATE_##name) AddText(#name)
+
 		STATE_CASE(VERTEX_AND_CONSTANT_BUFFER);
 		STATE_CASE(INDEX_BUFFER);
 		STATE_CASE(RENDER_TARGET);
@@ -57,13 +52,8 @@ namespace D3D
 		STATE_CASE(VIDEO_PROCESS_WRITE);
 		STATE_CASE(VIDEO_ENCODE_READ);
 		STATE_CASE(VIDEO_ENCODE_WRITE);
-		
-		//STATE_CASE(COMMON);
-		//STATE_CASE_PRESENT;
-		//STATE_CASE_PREDICATION);
-
 #undef STATE_CASE
-		return out;
+		return outString;
 	}
 
 	inline const char* CommandlistTypeToString(D3D12_COMMAND_LIST_TYPE type)
