@@ -50,6 +50,7 @@ public:
 		bool quit = false;
 		while(!quit)
 		{
+			OPTICK_FRAME("MainThread");
 			while (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE))
 			{
 				TranslateMessage(&msg);
@@ -71,6 +72,8 @@ public:
 		delete m_pGraphics;
 
 		TaskQueue::Shutdown();
+
+		OPTICK_SHUTDOWN();
 		return 0;
 	}
 

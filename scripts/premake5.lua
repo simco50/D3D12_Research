@@ -122,7 +122,13 @@ workspace (ENGINE_NAME)
 		includedirs (ROOT .. "Libraries/Dxc/include")
 		postbuildcommands { ("{COPY} \"$(SolutionDir)Libraries\\Dxc\\bin\\dxcompiler.dll\" \"$(OutDir)\"") }
 		postbuildcommands { ("{COPY} \"$(SolutionDir)Libraries\\Dxc\\bin\\dxil.dll\" \"$(OutDir)\"") }
-	
+
+		-- Optick
+		links { "OptickCore" }
+		libdirs	(ROOT .. "Libraries/Optick/lib/")
+		includedirs (ROOT .. "Libraries/Optick/include")
+		postbuildcommands { ("{COPY} \"$(SolutionDir)Libraries\\Optick\\bin\\OptickCore.dll\" \"$(OutDir)\"") }
+
 
 newaction {
 	trigger     = "clean",

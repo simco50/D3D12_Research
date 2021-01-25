@@ -214,6 +214,7 @@ int64 RGGraph::Execute()
 	if (m_ImmediateMode == false)
 	{
 		CommandContext* pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+		OPTICK_GPU_CONTEXT(pContext->GetCommandList());
 		for(uint32 passIndex = 0; passIndex < (uint32)m_RenderPasses.size(); ++passIndex)
 		{
 			RGPass* pPass = m_RenderPasses[passIndex];

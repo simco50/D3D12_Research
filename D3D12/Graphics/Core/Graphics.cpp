@@ -1126,6 +1126,8 @@ void Graphics::EndFrame(uint64 fenceValue)
 {
 	Profiler::Get()->Resolve(this, m_Frame);
 
+	OPTICK_GPU_FLIP(m_pSwapchain.Get());
+	OPTICK_CATEGORY("Present", Optick::Category::Wait);
 	m_pSwapchain->Present(1, 0);
 	m_CurrentBackBufferIndex = m_pSwapchain->GetCurrentBackBufferIndex();
 	++m_Frame;
@@ -1379,6 +1381,9 @@ void Graphics::InitD3D()
 		nullptr,
 		swapChain.GetAddressOf()));
 #endif
+
+	ID3D12CommandQueue* pQueue = GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT)->GetCommandQueue();
+	OPTICK_GPU_INIT_D3D12(m_pDevice.Get(), &pQueue, 1);
 
 	m_pShaderManager = std::make_unique<ShaderManager>("Resources/Shaders/", m_ShaderModelMajor, m_ShaderModelMinor);
 

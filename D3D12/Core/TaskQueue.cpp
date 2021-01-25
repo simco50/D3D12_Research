@@ -51,9 +51,13 @@ bool DoWork(uint32 threadIndex)
 
 DWORD WINAPI WorkFunction(LPVOID lpParameter)
 {
+	wchar_t* pDescription;
+	GetThreadDescription(GetCurrentThread(), &pDescription);
+	OPTICK_THREAD(UNICODE_TO_MULTIBYTE(pDescription));
+
+	size_t threadIndex = reinterpret_cast<size_t>(lpParameter);
 	while (!m_Shutdown)
 	{
-		size_t threadIndex = reinterpret_cast<size_t>(lpParameter);
 		bool didWork = DoWork((uint32)threadIndex);
 		if (!didWork)
 		{

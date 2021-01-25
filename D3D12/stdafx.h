@@ -46,6 +46,7 @@ using ComPtr = Microsoft::WRL::ComPtr<T>;
 #include "d3dx12/d3dx12_extra.h"
 #include "Imgui/imgui.h"
 
+#include "optick.h"
 
 #ifndef D3D12_USE_RENDERPASSES
 #define D3D12_USE_RENDERPASSES 1
