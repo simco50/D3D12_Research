@@ -115,7 +115,6 @@ namespace ShaderCompiler
 		pCompileResult->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(pErrors.GetAddressOf()), nullptr);
 		if (pErrors && pErrors->GetStringLength() > 0)
 		{
-			assert(false);
 			result.Success = false;
 			result.ErrorMessage = (char*)pErrors->GetBufferPointer();
 			return result;
@@ -384,6 +383,10 @@ void ShaderManager::RecompileFromFileChange(const std::string& filePath)
 						m_OnShaderRecompiledEvent.Broadcast(pOldShader, pNewShader);
 						m_Shaders.remove_if([pOldShader](const std::unique_ptr<Shader>& pS) { return pS.get() == pOldShader; });
 					}
+					else
+					{
+						E_LOG(Warning, "Failed to reload shader: \"%s\"", dependency.c_str());
+					}
 				}
 				for (auto library : objectMap.Libraries)
 				{
@@ -394,6 +397,10 @@ void ShaderManager::RecompileFromFileChange(const std::string& filePath)
 						E_LOG(Info, "Reloaded library: \"%s\"", dependency.c_str());
 						m_OnLibraryRecompiledEvent.Broadcast(pOldLibrary, pNewLibrary);
 						m_Libraries.remove_if([pOldLibrary](const std::unique_ptr<ShaderLibrary>& pS) { return pS.get() == pOldLibrary; });
+					}
+					else
+					{
+						E_LOG(Warning, "Failed to reload library: \"%s\"", dependency.c_str());
 					}
 				}
 			}

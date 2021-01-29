@@ -129,6 +129,7 @@ private:
 
 	std::string m_Name;
 	std::vector<D3D12_INPUT_ELEMENT_DESC> m_InputLayout;
+	std::vector<std::string> m_InputLayoutSemanticNames;
 	PipelineStateType m_Type = PipelineStateType::MAX;
 	std::array<Shader*, (int)ShaderType::MAX> m_Shaders{};
 

@@ -193,8 +193,14 @@ void PipelineStateInitializer::SetDepthBias(int depthBias, float depthBiasClamp,
 void PipelineStateInitializer::SetInputLayout(D3D12_INPUT_ELEMENT_DESC* pElements, uint32 count)
 {
 	D3D12_INPUT_LAYOUT_DESC& ilDesc = GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_INPUT_LAYOUT>();
+	m_InputLayoutSemanticNames.resize(count);
 	m_InputLayout.resize(count);
-	memcpy(m_InputLayout.data(), pElements, sizeof(D3D12_INPUT_ELEMENT_DESC) * count);
+	for (uint32 i = 0; i < count; ++i)
+	{
+		m_InputLayoutSemanticNames[i] = pElements[i].SemanticName;
+		m_InputLayout[i] = pElements[i];
+		m_InputLayout[i].SemanticName = m_InputLayoutSemanticNames[i].c_str();
+	}
 	ilDesc.NumElements = count;
 	ilDesc.pInputElementDescs = m_InputLayout.data();
 }
@@ -442,6 +448,14 @@ void PipelineState::Create(const PipelineStateInitializer& initializer)
 	VERIFY_HR_EX(GetParent()->GetDevice()->QueryInterface(IID_PPV_ARGS(pDevice2.GetAddressOf())), GetParent()->GetDevice());
 
 	m_Desc = initializer;
+
+	// Messy hack to fixup the IL on reloads
+	D3D12_INPUT_LAYOUT_DESC& ilDesc = m_Desc.GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_INPUT_LAYOUT>();
+	ilDesc.pInputElementDescs = m_Desc.m_InputLayout.data();
+	for (uint32 i = 0; i < m_Desc.m_InputLayout.size(); ++i)
+	{
+		m_Desc.m_InputLayout[i].SemanticName = m_Desc.m_InputLayoutSemanticNames[i].c_str();
+	}
 
 	D3D12_PIPELINE_STATE_STREAM_DESC streamDesc = m_Desc.GetDesc();
 	VERIFY_HR_EX(pDevice2->CreatePipelineState(&streamDesc, IID_PPV_ARGS(m_pPipelineState.ReleaseAndGetAddressOf())), GetParent()->GetDevice());
