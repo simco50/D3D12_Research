@@ -12,37 +12,27 @@
 #include "ShaderBindingTable.h"
 #include "StateObject.h"
 
-CommandContext::CommandContext(Graphics* pGraphics, ID3D12GraphicsCommandList* pCommandList, D3D12_COMMAND_LIST_TYPE type, ID3D12CommandAllocator* pAllocator)
-	: GraphicsObject(pGraphics), m_pCommandList(pCommandList), m_Type(type), m_pAllocator(pAllocator)
+CommandContext::CommandContext(Graphics* pGraphics, CommandQueue* pQueue, DynamicAllocationManager* pDynamicAllocator)
+	: GraphicsObject(pGraphics), m_pQueue(pQueue)
 {
-	m_DynamicAllocator = std::make_unique<DynamicResourceAllocator>(pGraphics->GetAllocationManager());
-	if (m_Type != D3D12_COMMAND_LIST_TYPE_COPY)
+	m_DynamicAllocator = std::make_unique<DynamicResourceAllocator>(pDynamicAllocator);
+	if (pQueue->GetType() != D3D12_COMMAND_LIST_TYPE_COPY)
 	{
 		m_pShaderResourceDescriptorAllocator = std::make_unique<OnlineDescriptorAllocator>(pGraphics, this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 		m_pSamplerDescriptorAllocator = std::make_unique<OnlineDescriptorAllocator>(pGraphics, this, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
 	}
-	pCommandList->QueryInterface(IID_PPV_ARGS(m_pRaytracingCommandList.GetAddressOf()));
-	pCommandList->QueryInterface(IID_PPV_ARGS(m_pMeshShadingCommandList.GetAddressOf()));
+
+	m_pAllocator = pQueue->RequestAllocator();
+	VERIFY_HR(GetParent()->GetDevice()->CreateCommandList(0, pQueue->GetType(), m_pAllocator, nullptr, IID_PPV_ARGS(m_pCommandList.GetAddressOf())));
+	m_pCommandList->QueryInterface(IID_PPV_ARGS(m_pRaytracingCommandList.GetAddressOf()));
+	m_pCommandList->QueryInterface(IID_PPV_ARGS(m_pMeshShadingCommandList.GetAddressOf()));
+
+	D3D::SetObjectName(m_pCommandList.Get(), Sprintf("Commandlist - %s", D3D::CommandlistTypeToString(pQueue->GetType())).c_str());
 }
 
 CommandContext::~CommandContext()
 {
 
-}
-
-void CommandContext::Reset()
-{
-	check(m_pCommandList);
-	if (m_pAllocator == nullptr)
-	{
-		m_pAllocator = GetParent()->GetCommandQueue(m_Type)->RequestAllocator();
-		m_pCommandList->Reset(m_pAllocator, nullptr);
-	}
-	m_BarrierBatcher.Reset();
-	BindDescriptorHeaps();
-
-	m_PendingBarriers.clear();
-	m_ResourceStates.clear();
 }
 
 uint64 CommandContext::Execute(bool wait)
@@ -54,11 +44,10 @@ uint64 CommandContext::Execute(bool wait)
 uint64 CommandContext::Execute(CommandContext** pContexts, uint32 numContexts, bool wait)
 {
 	check(numContexts > 0);
-	CommandQueue* pQueue = pContexts[0]->GetParent()->GetCommandQueue(pContexts[0]->GetType());
+	CommandQueue* pQueue = pContexts[0]->GetQueue();
 	for (uint32 i = 0; i < numContexts; ++i)
 	{
-		checkf(pContexts[i]->GetType() == pQueue->GetType(), "All commandlist types must match. Expected %s, got %s",
-			D3D::CommandlistTypeToString(pQueue->GetType()), D3D::CommandlistTypeToString(pContexts[i]->GetType()));
+		checkf(pContexts[i]->GetQueue() == pQueue, "All commandlist types must come from the same queue");
 		pContexts[i]->FlushResourceBarriers();
 	}
 	uint64 fenceValue = pQueue->ExecuteCommandLists(pContexts, numContexts);
@@ -77,9 +66,7 @@ uint64 CommandContext::Execute(CommandContext** pContexts, uint32 numContexts, b
 void CommandContext::Free(uint64 fenceValue)
 {
 	m_DynamicAllocator->Free(fenceValue);
-	GetParent()->GetCommandQueue(m_Type)->FreeAllocator(fenceValue, m_pAllocator);
-	m_pAllocator = nullptr;
-	GetParent()->FreeCommandList(this);
+	m_pQueue->FreeAllocator(fenceValue, m_pAllocator);
 
 	if (m_pShaderResourceDescriptorAllocator)
 	{
@@ -89,6 +76,17 @@ void CommandContext::Free(uint64 fenceValue)
 	{
 		m_pSamplerDescriptorAllocator->ReleaseUsedHeaps(fenceValue);
 	}
+
+	m_BarrierBatcher.Reset();
+
+	m_PendingBarriers.clear();
+	m_ResourceStates.clear();
+
+	// Open commandlist again
+	m_pAllocator = m_pQueue->RequestAllocator();
+	m_pCommandList->Reset(m_pAllocator, nullptr);
+
+	BindDescriptorHeaps();
 }
 
 bool NeedsTransition(D3D12_RESOURCE_STATES& before, D3D12_RESOURCE_STATES& after)
@@ -114,7 +112,7 @@ bool NeedsTransition(D3D12_RESOURCE_STATES& before, D3D12_RESOURCE_STATES& after
 void CommandContext::InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESOURCE_STATES state, uint32 subResource /*= D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES*/)
 {
 	check(pBuffer && pBuffer->GetResource());
-	checkf(IsTransitionAllowed(m_Type, state), "After state (%s) is not valid on this commandlist type (%s)", D3D::ResourceStateToString(state).c_str(), D3D::CommandlistTypeToString(m_Type));
+	checkf(IsTransitionAllowed(m_pQueue->GetType(), state), "After state (%s) is not valid on this commandlist type (%s)", D3D::ResourceStateToString(state).c_str(), D3D::CommandlistTypeToString(m_pQueue->GetType()));
 
 	ResourceState& resourceState = m_ResourceStates[pBuffer];
 	D3D12_RESOURCE_STATES beforeState = resourceState.Get(subResource);
@@ -131,7 +129,7 @@ void CommandContext::InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESO
 	{
 		if (NeedsTransition(beforeState, state))
 		{
-			checkf(IsTransitionAllowed(m_Type, beforeState), "Current resource state (%s) is not valid to transition from in this commandlist type (%s)", D3D::ResourceStateToString(state).c_str(), D3D::CommandlistTypeToString(m_Type));
+			checkf(IsTransitionAllowed(m_pQueue->GetType(), beforeState), "Current resource state (%s) is not valid to transition from in this commandlist type (%s)", D3D::ResourceStateToString(state).c_str(), D3D::CommandlistTypeToString(m_pQueue->GetType()));
 			m_BarrierBatcher.AddTransition(pBuffer->GetResource(), beforeState, state, subResource);
 			resourceState.Set(state, subResource);
 		}
@@ -145,7 +143,7 @@ void CommandContext::InsertUavBarrier(GraphicsResource* pBuffer /*= nullptr*/)
 
 void CommandContext::FlushResourceBarriers()
 {
-	m_BarrierBatcher.Flush(m_pCommandList);
+	m_BarrierBatcher.Flush(m_pCommandList.Get());
 }
 
 void CommandContext::CopyTexture(GraphicsResource* pSource, GraphicsResource* pTarget)
@@ -216,7 +214,7 @@ void CommandContext::InitializeTexture(Texture* pResource, D3D12_SUBRESOURCE_DAT
 		InsertResourceBarrier(pResource, D3D12_RESOURCE_STATE_COPY_DEST);
 		FlushResourceBarriers();
 	}
-	UpdateSubresources(m_pCommandList, pResource->GetResource(), allocation.pBackingResource->GetResource(), allocation.Offset, firstSubResource, subResourceCount, pSubResourceDatas);
+	UpdateSubresources(m_pCommandList.Get(), pResource->GetResource(), allocation.pBackingResource->GetResource(), allocation.Offset, firstSubResource, subResourceCount, pSubResourceDatas);
 	if (resetState)
 	{
 		InsertResourceBarrier(pResource, previousState);

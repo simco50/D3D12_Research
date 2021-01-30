@@ -40,7 +40,7 @@ GpuParticles::~GpuParticles()
 
 void GpuParticles::Initialize(Graphics* pGraphics)
 {
-	CommandContext* pContext = pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+	CommandContext* pContext = pGraphics->GetCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 
 	m_pCountersBuffer = std::make_unique<Buffer>(pGraphics, "Particles Counter");
 	m_pCountersBuffer->Create(BufferDesc::CreateByteAddress(sizeof(uint32) * 4));

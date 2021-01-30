@@ -13,6 +13,8 @@ class DynamicResourceAllocator;
 class Buffer;
 class CommandSignature;
 class ShaderBindingTable;
+class CommandQueue;
+class DynamicAllocationManager;
 struct BufferView;
 
 enum class CommandListContext
@@ -132,10 +134,9 @@ private:
 class CommandContext : public GraphicsObject
 {
 public:
-	CommandContext(Graphics* pGraphics, ID3D12GraphicsCommandList* pCommandList, D3D12_COMMAND_LIST_TYPE type, ID3D12CommandAllocator* pAllocator);
+	CommandContext(Graphics* pGraphics, CommandQueue* pQueue, DynamicAllocationManager* pDynamicAllocator);
 	~CommandContext();
 
-	void Reset();
 	uint64 Execute(bool wait);
 	static uint64 Execute(CommandContext** pContexts, uint32 numContexts, bool wait);
 	void Free(uint64 fenceValue);
@@ -151,11 +152,11 @@ public:
 	void InitializeBuffer(Buffer* pResource, const void* pData, uint64 dataSize, uint64 offset = 0);
 	void InitializeTexture(Texture* pResource, D3D12_SUBRESOURCE_DATA* pSubResourceDatas, int firstSubResource, int subResourceCount);
 
-	ID3D12GraphicsCommandList* GetCommandList() const { return m_pCommandList; }
+	ID3D12GraphicsCommandList* GetCommandList() const { return m_pCommandList.Get(); }
 	ID3D12GraphicsCommandList4* GetRaytracingCommandList() const { return  m_pRaytracingCommandList.Get(); }
 	ID3D12GraphicsCommandList6* GetMeshShadingCommandList() const { return  m_pMeshShadingCommandList.Get(); }
 
-	D3D12_COMMAND_LIST_TYPE GetType() const { return m_Type; }
+	CommandQueue* GetQueue() const { return m_pQueue; }
 
 	//Commands
 	void Dispatch(uint32 groupCountX, uint32 groupCountY = 1, uint32 groupCountZ = 1);
@@ -255,11 +256,11 @@ private:
 	ResourceBarrierBatcher m_BarrierBatcher;
 
 	std::unique_ptr<DynamicResourceAllocator> m_DynamicAllocator;
-	ID3D12GraphicsCommandList* m_pCommandList;
+	ComPtr<ID3D12GraphicsCommandList> m_pCommandList;
 	ComPtr<ID3D12GraphicsCommandList4> m_pRaytracingCommandList;
 	ComPtr<ID3D12GraphicsCommandList6> m_pMeshShadingCommandList;
 	ID3D12CommandAllocator* m_pAllocator;
-	D3D12_COMMAND_LIST_TYPE m_Type;
+	CommandQueue* m_pQueue;
 	std::unordered_map<GraphicsResource*, ResourceState> m_ResourceStates;
 	std::vector<PendingBarrier> m_PendingBarriers;
 
