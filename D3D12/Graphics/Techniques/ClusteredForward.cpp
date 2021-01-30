@@ -505,7 +505,7 @@ void ClusteredForward::SetupResources(Graphics* pGraphics)
 	m_pLightGrid = std::make_unique<Buffer>(pGraphics, "Light Grid");
 	m_pDebugLightGrid = std::make_unique<Buffer>(pGraphics, "Debug Light Grid");
 
-	CommandContext* pContext = pGraphics->GetCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+	CommandContext* pContext = pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 	m_pHeatMapTexture = std::make_unique<Texture>(pGraphics, "Heatmap Texture");
 	m_pHeatMapTexture->Create(pContext, "Resources/Textures/Heatmap.png");
 	pContext->Execute(true);
@@ -548,7 +548,6 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
 		psoDesc.SetInputLayout(inputElements, ARRAYSIZE(inputElements));
 		psoDesc.SetDepthOnlyTarget(Graphics::DEPTH_STENCIL_FORMAT, m_pGraphics->GetMultiSampleCount());
 		psoDesc.SetDepthWrite(false);
-		psoDesc.SetName("Mark Unique Clusters");
 		m_pMarkUniqueClustersOpaquePSO = pGraphics->CreatePipeline(psoDesc);
 
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);

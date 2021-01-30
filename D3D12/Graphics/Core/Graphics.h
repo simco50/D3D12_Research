@@ -27,6 +27,7 @@ class ShaderManager;
 class PipelineStateInitializer;
 class StateObject;
 class StateObjectInitializer;
+class GlobalOnlineDescriptorHeap;
 
 #if PLATFORM_WINDOWS
 using WindowHandle = HWND;
@@ -117,7 +118,8 @@ public:
 	inline ID3D12Device5* GetRaytracingDevice() const { return m_pRaytracingDevice.Get(); }
 	ImGuiRenderer* GetImGui() const { return m_pImGuiRenderer.get(); }
 	CommandQueue* GetCommandQueue(D3D12_COMMAND_LIST_TYPE type) const;
-	CommandContext* GetCommandContext(D3D12_COMMAND_LIST_TYPE type = D3D12_COMMAND_LIST_TYPE_DIRECT);
+	CommandContext* AllocateCommandContext(D3D12_COMMAND_LIST_TYPE type = D3D12_COMMAND_LIST_TYPE_DIRECT);
+	void FreeCommandList(CommandContext* pCommandList);
 
 	uint32 GetWindowWidth() const { return m_WindowWidth; }
 	uint32 GetWindowHeight() const { return m_WindowHeight; }
@@ -151,6 +153,9 @@ public:
 		m_DescriptorHeaps[DescriptorSelector<DESC_TYPE>::Type()]->FreeDescriptor(descriptor);
 	}
 
+	GlobalOnlineDescriptorHeap* GetGlobalViewHeap() const { return m_pGlobalViewHeap.get(); }
+	GlobalOnlineDescriptorHeap* GetGlobalSamplerHeap() const { return m_pGlobalSamplerHeap.get(); }
+
 	Texture* GetDepthStencil() const { return m_pDepthStencil.get(); }
 	Texture* GetResolvedDepthStencil() const { return m_pResolvedDepthStencil.get(); }
 	Texture* GetCurrentRenderTarget() const { return m_SampleCount > 1 ? m_pMultiSampleRenderTarget.get() : m_pHDRRenderTarget.get(); }
@@ -179,10 +184,6 @@ private:
 
 	void UpdateImGui();
 
-	/*
-		BASE GRAPHICS OBJECTS
-	*/
-
 	ComPtr<ID3D12Device> m_pDevice;
 	ComPtr<ID3D12Device5> m_pRaytracingDevice;
 	ComPtr<ID3D12Fence> m_pDeviceRemovalFence;
@@ -196,6 +197,9 @@ private:
 	D3D12_SAMPLER_FEEDBACK_TIER m_SamplerFeedbackSupport = D3D12_SAMPLER_FEEDBACK_TIER_NOT_SUPPORTED;
 	D3D12_VARIABLE_SHADING_RATE_TIER m_VRSTier = D3D12_VARIABLE_SHADING_RATE_TIER_NOT_SUPPORTED;
 	int m_VRSTileSize = -1;
+
+	std::unique_ptr<GlobalOnlineDescriptorHeap> m_pGlobalViewHeap;
+	std::unique_ptr<GlobalOnlineDescriptorHeap> m_pGlobalSamplerHeap;
 
 	std::array<std::unique_ptr<OfflineDescriptorAllocator>, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES> m_DescriptorHeaps;
 	std::unique_ptr<DynamicAllocationManager> m_pDynamicAllocationManager;
@@ -216,17 +220,11 @@ private:
 	std::array<float, 180> m_FrameTimes{};
 
 	std::array<std::unique_ptr<CommandQueue>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_CommandQueues;
-	std::vector<std::unique_ptr<CommandContext>> m_GraphicsContexts;
-	std::unique_ptr<CommandContext> m_pComputeContext;
-	std::unique_ptr<CommandContext> m_pCopyContext;
+	std::array<std::vector<std::unique_ptr<CommandContext>>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_CommandListPool;
+	std::array < std::queue<CommandContext*>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_FreeCommandLists;
+	std::vector<ComPtr<ID3D12CommandList>> m_CommandLists;
+	std::mutex m_ContextAllocationMutex;
 
-	/*
-		RENDER PASS OBJECTS
-	*/
-
-	std::unique_ptr<Camera> m_pCamera;
-
-	int m_SampleCount = 1;
 	std::unique_ptr<Texture> m_pMultiSampleRenderTarget;
 	std::unique_ptr<Texture> m_pHDRRenderTarget;
 	std::unique_ptr<Texture> m_pPreviousColor;
@@ -245,6 +243,9 @@ private:
 	std::unique_ptr<RTAO> m_pRTAO;
 	std::unique_ptr<RTReflections> m_pRTReflections;
 	std::unique_ptr<SSAO> m_pSSAO;
+
+	int m_SampleCount = 1;
+	std::unique_ptr<Camera> m_pCamera;
 
 	std::unique_ptr<Buffer> m_pScreenshotBuffer;
 	int32 m_ScreenshotDelay = -1;

@@ -104,7 +104,7 @@ void Graphics::Initialize(WindowHandle window)
 	InitD3D();
 	InitializePipelines();
 
-	CommandContext* pContext = GetCommandContext();
+	CommandContext* pContext = AllocateCommandContext();
 	InitializeAssets(*pContext);
 	pContext->Execute(true);
 
@@ -1110,7 +1110,7 @@ void Graphics::Shutdown()
 {
 	// Wait for the GPU to be done with all resources.
 	IdleGPU();
-#if !PLATFORM_UWP
+#ifndef PLATFORM_UWP
 	UnregisterWait(m_DeviceRemovedEvent);
 #endif
 
@@ -1242,7 +1242,7 @@ void Graphics::InitD3D()
 	VERIFY_HR_EX(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_FEATURE_LEVELS, &caps, sizeof(D3D12_FEATURE_DATA_FEATURE_LEVELS)), GetDevice());
 	VERIFY_HR_EX(D3D12CreateDevice(pAdapter.Get(), caps.MaxSupportedFeatureLevel, IID_PPV_ARGS(m_pDevice.ReleaseAndGetAddressOf())), GetDevice());
 
-#if !PLATFORM_UWP
+#ifndef PLATFORM_UWP
 	auto OnDeviceRemovedCallback = [](void* pContext, BOOLEAN) {
 		Graphics* pGraphics = (Graphics*)pContext;
 		std::string error = D3D::GetErrorString(DXGI_ERROR_DEVICE_REMOVED, pGraphics->GetDevice());
@@ -1251,7 +1251,6 @@ void Graphics::InitD3D()
 
 	HANDLE deviceRemovedEvent = CreateEventA(nullptr, false, false, nullptr);
 	VERIFY_HR(m_pDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(m_pDeviceRemovalFence.GetAddressOf())));
-	D3D::SetObjectName(m_pDeviceRemovalFence.Get(), "Device Removal Fence");
 	m_pDeviceRemovalFence->SetEventOnCompletion(UINT64_MAX, deviceRemovedEvent);
 	RegisterWaitForSingleObject(&m_DeviceRemovedEvent, deviceRemovedEvent, OnDeviceRemovedCallback, this, INFINITE, 0);
 #endif
@@ -1340,15 +1339,10 @@ void Graphics::InitD3D()
 
 	m_pDynamicAllocationManager = std::make_unique<DynamicAllocationManager>(this, BufferFlag::Upload);
 
-	const uint32 numDirectContexts = 1;
-	for (uint32 i = 0; i < numDirectContexts; ++i)
-	{
-		std::unique_ptr<CommandContext> pContext = std::make_unique<CommandContext>(this, GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT), m_pDynamicAllocationManager.get());
-		m_GraphicsContexts.push_back(std::move(pContext));
-	}
-	m_pComputeContext = std::make_unique<CommandContext>(this, GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COMPUTE), m_pDynamicAllocationManager.get());
-	m_pCopyContext = std::make_unique<CommandContext>(this, GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY), m_pDynamicAllocationManager.get());
+	m_pGlobalViewHeap = std::make_unique<GlobalOnlineDescriptorHeap>(this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 2000, 1000000);
+	m_pGlobalSamplerHeap = std::make_unique<GlobalOnlineDescriptorHeap>(this, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, 256, 2048);
 
+	
 	check(m_DescriptorHeaps.size() == D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES);
 	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV] = std::make_unique<OfflineDescriptorAllocator>(this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 256);
 	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER] = std::make_unique<OfflineDescriptorAllocator>(this, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, 128);
@@ -1423,6 +1417,7 @@ void Graphics::InitD3D()
 	m_pVelocity = std::make_unique<Texture>(this, "Velocity");
 	m_pTAASource = std::make_unique<Texture>(this, "TAA Target");
 
+	m_pDynamicAllocationManager = std::make_unique<DynamicAllocationManager>(this, BufferFlag::Upload);
 	m_pClusteredForward = std::make_unique<ClusteredForward>(this);
 	m_pTiledForward = std::make_unique<TiledForward>(this);
 	m_pRTReflections = std::make_unique<RTReflections>(this);
@@ -1440,32 +1435,6 @@ void Graphics::InitD3D()
 
 void Graphics::InitializeAssets(CommandContext& context)
 {
-	int lightCount = 5;
-	m_Lights.resize(lightCount);
-
-	Vector3 Position(-150, 160, -10);
-	Vector3 Direction;
-	Position.Normalize(Direction);
-	m_Lights[0] = Light::Directional(Position, -Direction, 10);
-	m_Lights[0].CastShadows = true;
-	m_Lights[0].VolumetricLighting = true;
-
-	m_Lights[1] = Light::Spot(Vector3(62, 10, -18), 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1.0f, 0.7f, 0.3f, 1.0f));
-	m_Lights[1].CastShadows = true;
-	m_Lights[1].VolumetricLighting = false;
-	m_Lights[2] = Light::Spot(Vector3(-48, 10, 18), 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1.0f, 0.7f, 0.3f, 1.0f));
-	m_Lights[2].CastShadows = true;
-	m_Lights[2].VolumetricLighting = false;
-	m_Lights[3] = Light::Spot(Vector3(-48, 10, -18), 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1.0f, 0.7f, 0.3f, 1.0f));
-	m_Lights[3].CastShadows = true;
-	m_Lights[3].VolumetricLighting = false;
-	m_Lights[4] = Light::Spot(Vector3(62, 10, 18), 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1.0f, 0.7f, 0.3f, 1.0f));
-	m_Lights[4].CastShadows = true;
-	m_Lights[4].VolumetricLighting = false;
-
-	m_pLightBuffer = std::make_unique<Buffer>(this, "Lights");
-	m_pLightBuffer->Create(BufferDesc::CreateStructured(lightCount, sizeof(Light), BufferFlag::ShaderResource));
-
 	m_pMesh = std::make_unique<Mesh>();
 	m_pMesh->Load("Resources/sponza/sponza.dae", this, &context);
 
@@ -1619,6 +1588,35 @@ void Graphics::InitializeAssets(CommandContext& context)
 			pCmd->BuildRaytracingAccelerationStructure(&asDesc, 0, nullptr);
 			context.InsertUavBarrier(m_pTLAS.get());
 		}
+	}
+
+	{
+		int lightCount = 5;
+		m_Lights.resize(lightCount);
+
+		Vector3 Position(-150, 160, -10);
+		Vector3 Direction;
+		Position.Normalize(Direction);
+		m_Lights[0] = Light::Directional(Position, -Direction, 10);
+		m_Lights[0].CastShadows = true;
+		m_Lights[0].VolumetricLighting = true;
+
+		m_Lights[1] = Light::Spot(Vector3(62, 10, -18), 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1.0f, 0.7f, 0.3f, 1.0f));
+		m_Lights[1].CastShadows = true;
+		m_Lights[1].VolumetricLighting = false;
+		m_Lights[2] = Light::Spot(Vector3(-48, 10, 18), 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1.0f, 0.7f, 0.3f, 1.0f));
+		m_Lights[2].CastShadows = true;
+		m_Lights[2].VolumetricLighting = false;
+		m_Lights[3] = Light::Spot(Vector3(-48, 10, -18), 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1.0f, 0.7f, 0.3f, 1.0f));
+		m_Lights[3].CastShadows = true;
+		m_Lights[3].VolumetricLighting = false;
+		m_Lights[4] = Light::Spot(Vector3(62, 10, 18), 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1.0f, 0.7f, 0.3f, 1.0f));
+		m_Lights[4].CastShadows = true;
+		m_Lights[4].VolumetricLighting = false;
+		
+
+		m_pLightBuffer = std::make_unique<Buffer>(this, "Lights");
+		m_pLightBuffer->Create(BufferDesc::CreateStructured(lightCount, sizeof(Light), BufferFlag::ShaderResource));
 	}
 }
 
@@ -2066,7 +2064,6 @@ void Graphics::UpdateImGui()
 	showOutputLog = ImGui::Begin("Output Log", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
 	if (showOutputLog)
 	{
-		ImGui::SetScrollHereY(0.0f);
 		for (const Console::LogEntry& entry : Console::GetHistory())
 		{
 			switch (entry.Type)
@@ -2089,6 +2086,7 @@ void Graphics::UpdateImGui()
 			}
 			ImGui::PopStyleColor();
 		}
+		ImGui::SetScrollHereY(0.0f);
 	}
 	ImGui::End();
 
@@ -2166,18 +2164,31 @@ CommandQueue* Graphics::GetCommandQueue(D3D12_COMMAND_LIST_TYPE type) const
 	return m_CommandQueues.at(type).get();
 }
 
-CommandContext* Graphics::GetCommandContext(D3D12_COMMAND_LIST_TYPE type /*= D3D12_COMMAND_LIST_TYPE_DIRECT*/)
+CommandContext* Graphics::AllocateCommandContext(D3D12_COMMAND_LIST_TYPE type)
 {
-	switch (type)
+	int typeIndex = (int)type;
+	CommandContext* pContext = nullptr;
+
 	{
-	case D3D12_COMMAND_LIST_TYPE_DIRECT: return m_GraphicsContexts[0].get();
-	case D3D12_COMMAND_LIST_TYPE_COMPUTE: return m_pComputeContext.get();
-	case D3D12_COMMAND_LIST_TYPE_COPY: return m_pCopyContext.get();
-	default:
-		noEntry();
-		return nullptr;
-		break;
+		std::scoped_lock<std::mutex> lock(m_ContextAllocationMutex);
+		if (m_FreeCommandLists[typeIndex].size() > 0)
+		{
+			pContext = m_FreeCommandLists[typeIndex].front();
+			m_FreeCommandLists[typeIndex].pop();
+			pContext->Reset();
+		}
+		else
+		{
+			ComPtr<ID3D12CommandList> pCommandList;
+			ID3D12CommandAllocator* pAllocator = m_CommandQueues[type]->RequestAllocator();
+			VERIFY_HR(m_pDevice->CreateCommandList(0, type, pAllocator, nullptr, IID_PPV_ARGS(pCommandList.GetAddressOf())));
+			D3D::SetObjectName(pCommandList.Get(), "Pooled Commandlist");
+			m_CommandLists.push_back(std::move(pCommandList));
+			m_CommandListPool[typeIndex].emplace_back(std::make_unique<CommandContext>(this, static_cast<ID3D12GraphicsCommandList*>(m_CommandLists.back().Get()), type, pAllocator));
+			pContext = m_CommandListPool[typeIndex].back().get();
+		}
 	}
+	return pContext;
 }
 
 bool Graphics::IsFenceComplete(uint64 fenceValue)
@@ -2192,6 +2203,12 @@ void Graphics::WaitForFence(uint64 fenceValue)
 	D3D12_COMMAND_LIST_TYPE type = (D3D12_COMMAND_LIST_TYPE)(fenceValue >> 56);
 	CommandQueue* pQueue = GetCommandQueue(type);
 	pQueue->WaitForFence(fenceValue);
+}
+
+void Graphics::FreeCommandList(CommandContext* pCommandList)
+{
+	std::lock_guard<std::mutex> lockGuard(m_ContextAllocationMutex);
+	m_FreeCommandLists[(int)pCommandList->GetType()].push(pCommandList);
 }
 
 bool Graphics::CheckTypedUAVSupport(DXGI_FORMAT format) const

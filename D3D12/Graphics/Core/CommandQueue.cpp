@@ -17,18 +17,11 @@ CommandQueue::CommandQueue(Graphics* pGraphics, D3D12_COMMAND_LIST_TYPE type)
 	desc.Type = type;
 
 	VERIFY_HR_EX(pGraphics->GetDevice()->CreateCommandQueue(&desc, IID_PPV_ARGS(m_pCommandQueue.GetAddressOf())), pGraphics->GetDevice());
-	D3D::SetObjectName(m_pCommandQueue.Get(), Sprintf("CommandQueue - %s", D3D::CommandlistTypeToString(m_Type)).c_str());
+	D3D::SetObjectName(m_pCommandQueue.Get(), "Main CommandQueue");
 	VERIFY_HR_EX(pGraphics->GetDevice()->CreateFence(m_LastCompletedFenceValue, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(m_pFence.GetAddressOf())), pGraphics->GetDevice());
-	D3D::SetObjectName(m_pFence.Get(), Sprintf("CommandQueue Fence - %s", D3D::CommandlistTypeToString(m_Type)).c_str());
+	D3D::SetObjectName(m_pCommandQueue.Get(), "CommandQueue Fence");
 
 	m_pFenceEventHandle = CreateEventExA(nullptr, "CommandQueue Fence", 0, EVENT_ALL_ACCESS);
-
-	// Create new commandlist and immediately close it
-	ID3D12CommandAllocator* pAllocator = RequestAllocator();
-	GetParent()->GetDevice()->CreateCommandList(0, type, pAllocator, nullptr, IID_PPV_ARGS(m_pTransitionCommandlist.GetAddressOf()));
-	m_pTransitionCommandlist->Close();
-	FreeAllocator(0, pAllocator);
-	D3D::SetObjectName(m_pTransitionCommandlist.Get(), Sprintf("Transition Commandlist - %s", D3D::CommandlistTypeToString(m_Type)).c_str());
 }
 
 CommandQueue::~CommandQueue()
@@ -73,18 +66,10 @@ uint64 CommandQueue::ExecuteCommandLists(CommandContext** pCommandContexts, uint
 		{
 			if (!pCurrentContext)
 			{
-				// Commandlist to flush all the initial barriers
-				ID3D12CommandAllocator* pTransitionAllocator = RequestAllocator();
-				FreeAllocator(m_NextFenceValue, pTransitionAllocator);
-				m_pTransitionCommandlist->Reset(pTransitionAllocator, nullptr);
-				barriers.Flush(m_pTransitionCommandlist.Get());
-				m_pTransitionCommandlist->Close();
-				commandLists.push_back(m_pTransitionCommandlist.Get());
+				pCurrentContext = GetParent()->AllocateCommandContext(m_Type);
+				pCurrentContext->Free(m_NextFenceValue);
 			}
-			else
-			{
-				barriers.Flush(pCurrentContext->GetCommandList());
-			}
+			barriers.Flush(pCurrentContext->GetCommandList());
 		}
 		if (pCurrentContext)
 		{
@@ -172,11 +157,15 @@ void CommandQueue::WaitForFence(uint64 fenceValue)
 	m_pFence->SetEventOnCompletion(fenceValue, m_pFenceEventHandle);
 	DWORD result = WaitForSingleObject(m_pFenceEventHandle, INFINITE);
 
+#if USE_PIX
 	// The event was successfully signaled, so notify PIX
 	if(result == WAIT_OBJECT_0)
 	{
 		PIXNotifyWakeFromFenceSignal(m_pFenceEventHandle);
 	}
+#else
+	UNREFERENCED_PARAMETER(result);
+#endif
 
 	m_LastCompletedFenceValue = fenceValue;
 }
