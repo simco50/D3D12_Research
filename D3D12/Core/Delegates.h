@@ -840,6 +840,11 @@ public:
 		return *this;
 	}
 
+	DelegateHandle operator+=(void(*pCallback)(Args...))
+	{
+		return Add(DelegateT::CreateStatic(pCallback));
+	}
+
 	//Add delegate with the += operator
 	DelegateHandle operator+=(DelegateT&& handler) noexcept
 	{
