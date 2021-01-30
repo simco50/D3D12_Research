@@ -27,8 +27,7 @@ struct DescriptorHeapBlock
 class GlobalOnlineDescriptorHeap : public GraphicsObject
 {
 public:
-	static const int BLOCK_SIZE = 2000;
-	GlobalOnlineDescriptorHeap(Graphics* pParent, D3D12_DESCRIPTOR_HEAP_TYPE type, uint32 numDescriptors);
+	GlobalOnlineDescriptorHeap(Graphics* pParent, D3D12_DESCRIPTOR_HEAP_TYPE type, uint32 blockSize, uint32 numDescriptors);
 
 	DescriptorHeapBlock* AllocateBlock();
 	void FreeBlock(uint64 fenceValue, DescriptorHeapBlock* pBlock);

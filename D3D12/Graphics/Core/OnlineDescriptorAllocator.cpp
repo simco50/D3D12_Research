@@ -4,10 +4,10 @@
 #include "RootSignature.h"
 #include "CommandContext.h"
 
-GlobalOnlineDescriptorHeap::GlobalOnlineDescriptorHeap(Graphics* pParent, D3D12_DESCRIPTOR_HEAP_TYPE type, uint32 numDescriptors)
+GlobalOnlineDescriptorHeap::GlobalOnlineDescriptorHeap(Graphics* pParent, D3D12_DESCRIPTOR_HEAP_TYPE type, uint32 blockSize, uint32 numDescriptors)
 	: GraphicsObject(pParent), m_Type(type), m_NumDescriptors(numDescriptors)
 {
-	checkf(numDescriptors % BLOCK_SIZE == 0, "Number of descriptors must be a multiple of BLOCK_SIZE (%d)", BLOCK_SIZE);
+	checkf(numDescriptors % blockSize == 0, "Number of descriptors must be a multiple of blockSize (%d)", blockSize);
 
 	D3D12_DESCRIPTOR_HEAP_DESC desc{};
 	desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
@@ -20,14 +20,14 @@ GlobalOnlineDescriptorHeap::GlobalOnlineDescriptorHeap(Graphics* pParent, D3D12_
 	m_DescriptorSize = pParent->GetDevice()->GetDescriptorHandleIncrementSize(type);
 	m_StartHandle = DescriptorHandle(m_pHeap->GetCPUDescriptorHandleForHeapStart(), m_pHeap->GetGPUDescriptorHandleForHeapStart());
 
-	uint32 numBlocks = m_NumDescriptors / BLOCK_SIZE;
+	uint32 numBlocks = m_NumDescriptors / blockSize;
 
 	DescriptorHandle currentOffset = m_StartHandle;
 	for (uint32 i = 0; i < numBlocks; ++i)
 	{
-		m_HeapBlocks.emplace_back(std::make_unique<DescriptorHeapBlock>(currentOffset, BLOCK_SIZE, 0));
+		m_HeapBlocks.emplace_back(std::make_unique<DescriptorHeapBlock>(currentOffset, blockSize, 0));
 		m_FreeBlocks.push(m_HeapBlocks.back().get());
-		currentOffset += BLOCK_SIZE * m_DescriptorSize;
+		currentOffset += blockSize * m_DescriptorSize;
 	}
 }
 
