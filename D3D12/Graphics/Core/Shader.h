@@ -69,8 +69,6 @@ public:
 	{}
 };
 
-DECLARE_MULTICAST_DELEGATE(OnShaderRecompiled, Shader* /*pOldShader*/, Shader* /*pRecompiledShader*/);
-DECLARE_MULTICAST_DELEGATE(OnLibraryRecompiled, ShaderLibrary* /*pOldShader*/, ShaderLibrary* /*pRecompiledShader*/);
 
 class ShaderManager
 {
@@ -83,7 +81,9 @@ public:
 	Shader* GetShader(const std::string& shaderPath, ShaderType shaderType, const std::string& entryPoint, const std::vector<ShaderDefine>& defines = {});
 	ShaderLibrary* GetLibrary(const std::string& shaderPath, const std::vector<ShaderDefine>& defines = {});
 
+	DECLARE_MULTICAST_DELEGATE(OnShaderRecompiled, Shader* /*pOldShader*/, Shader* /*pRecompiledShader*/);
 	OnShaderRecompiled& OnShaderRecompiledEvent() { return m_OnShaderRecompiledEvent; }
+	DECLARE_MULTICAST_DELEGATE(OnLibraryRecompiled, ShaderLibrary* /*pOldShader*/, ShaderLibrary* /*pRecompiledShader*/);
 	OnLibraryRecompiled& OnLibraryRecompiledEvent() { return m_OnLibraryRecompiledEvent; }
 
 private:
@@ -94,7 +94,7 @@ private:
 	using ShaderStringHash = StringHash;
 #endif
 
-	ShaderStringHash GetEntryPointHash(const std::string entryPoint, const std::vector<ShaderDefine>& defines);
+	ShaderStringHash GetEntryPointHash(const std::string& entryPoint, const std::vector<ShaderDefine>& defines);
 	Shader* LoadShader(const std::string& shaderPath, ShaderType shaderType, const std::string& entryPoint, const std::vector<ShaderDefine>& defines = {});
 	ShaderLibrary* LoadShaderLibrary(const std::string& shaderPath, const std::vector<ShaderDefine>& defines = {});
 

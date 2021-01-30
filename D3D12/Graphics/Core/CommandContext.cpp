@@ -43,11 +43,8 @@ void CommandContext::Reset()
 	m_PendingBarriers.clear();
 	m_ResourceStates.clear();
 
-	ID3D12DescriptorHeap* pHeaps[] = {
-		GetParent()->GetGlobalViewHeap()->GetHeap(),
-		GetParent()->GetGlobalSamplerHeap()->GetHeap()
-	};
-	m_pCommandList->SetDescriptorHeaps(2, pHeaps);
+	ID3D12DescriptorHeap* pHeaps[] = { GetParent()->GetGlobalViewHeap()->GetHeap(),	GetParent()->GetGlobalSamplerHeap()->GetHeap() };
+	m_pCommandList->SetDescriptorHeaps(ARRAYSIZE(pHeaps), pHeaps);
 }
 
 uint64 CommandContext::Execute(bool wait)

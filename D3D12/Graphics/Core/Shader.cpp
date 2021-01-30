@@ -266,7 +266,7 @@ ShaderBase::~ShaderBase()
 
 }
 
-ShaderManager::ShaderStringHash ShaderManager::GetEntryPointHash(const std::string entryPoint, const std::vector<ShaderDefine>& defines)
+ShaderManager::ShaderStringHash ShaderManager::GetEntryPointHash(const std::string& entryPoint, const std::vector<ShaderDefine>& defines)
 {
 	StringHash hash(entryPoint);
 	for (const ShaderDefine& define : defines)

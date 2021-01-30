@@ -2182,7 +2182,7 @@ CommandContext* Graphics::AllocateCommandContext(D3D12_COMMAND_LIST_TYPE type)
 			ComPtr<ID3D12CommandList> pCommandList;
 			ID3D12CommandAllocator* pAllocator = m_CommandQueues[type]->RequestAllocator();
 			VERIFY_HR(m_pDevice->CreateCommandList(0, type, pAllocator, nullptr, IID_PPV_ARGS(pCommandList.GetAddressOf())));
-			D3D::SetObjectName(pCommandList.Get(), "Pooled Commandlist");
+			D3D::SetObjectName(pCommandList.Get(), Sprintf("Pooled Commandlist - %d", m_CommandLists.size()).c_str());
 			m_CommandLists.push_back(std::move(pCommandList));
 			m_CommandListPool[typeIndex].emplace_back(std::make_unique<CommandContext>(this, static_cast<ID3D12GraphicsCommandList*>(m_CommandLists.back().Get()), type, pAllocator));
 			pContext = m_CommandListPool[typeIndex].back().get();
