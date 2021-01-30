@@ -33,6 +33,7 @@ public:
 	void FreeBlock(uint64 fenceValue, DescriptorHeapBlock* pBlock);
 	uint32 GetDescriptorSize() const { return m_DescriptorSize; }
 	ID3D12DescriptorHeap* GetHeap() const { return m_pHeap.Get(); }
+	D3D12_DESCRIPTOR_HEAP_TYPE GetType() const { return m_Type; }
 
 private:
 	std::mutex m_BlockAllocateMutex;
@@ -51,7 +52,7 @@ private:
 class OnlineDescriptorAllocator : public GraphicsObject
 {
 public:
-	OnlineDescriptorAllocator(Graphics* pGraphics, CommandContext* pContext, D3D12_DESCRIPTOR_HEAP_TYPE type);
+	OnlineDescriptorAllocator(GlobalOnlineDescriptorHeap* pGlobalHeap, CommandContext* pContext);
 	~OnlineDescriptorAllocator();
 
 	DescriptorHandle Allocate(int count);
@@ -66,9 +67,8 @@ private:
 	static const int MAX_NUM_ROOT_PARAMETERS = 10;
 	static const int MAX_DESCRIPTORS_PER_TABLE = 128;
 
-	uint32 GetRequiredSpace();
 	void UnbindAll();
-	bool EnsureSpace(uint32 count);
+	void EnsureSpace(uint32 count);
 
 	struct RootDescriptorEntry
 	{

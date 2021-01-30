@@ -213,7 +213,6 @@ public:
 	void SetShadingRateImage(Texture* pTexture);
 
 	DynamicAllocation AllocateTransientMemory(uint64 size);
-	DescriptorHandle AllocateTransientDescriptors(int descriptorCount, D3D12_DESCRIPTOR_HEAP_TYPE type);
 
 	struct PendingBarrier
 	{
@@ -243,7 +242,6 @@ public:
 	static bool IsTransitionAllowed(D3D12_COMMAND_LIST_TYPE commandlistType, D3D12_RESOURCE_STATES state);
 
 private:
-	void BindDescriptorHeaps();
 	std::unique_ptr<OnlineDescriptorAllocator> m_pShaderResourceDescriptorAllocator;
 	std::unique_ptr<OnlineDescriptorAllocator> m_pSamplerDescriptorAllocator;
 

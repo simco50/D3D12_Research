@@ -18,8 +18,8 @@ CommandContext::CommandContext(Graphics* pGraphics, ID3D12GraphicsCommandList* p
 	m_DynamicAllocator = std::make_unique<DynamicResourceAllocator>(pGraphics->GetAllocationManager());
 	if (m_Type != D3D12_COMMAND_LIST_TYPE_COPY)
 	{
-		m_pShaderResourceDescriptorAllocator = std::make_unique<OnlineDescriptorAllocator>(pGraphics, this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-		m_pSamplerDescriptorAllocator = std::make_unique<OnlineDescriptorAllocator>(pGraphics, this, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
+		m_pShaderResourceDescriptorAllocator = std::make_unique<OnlineDescriptorAllocator>(pGraphics->GetGlobalViewHeap(), this);
+		m_pSamplerDescriptorAllocator = std::make_unique<OnlineDescriptorAllocator>(pGraphics->GetGlobalSamplerHeap(), this);
 	}
 	pCommandList->QueryInterface(IID_PPV_ARGS(m_pRaytracingCommandList.GetAddressOf()));
 	pCommandList->QueryInterface(IID_PPV_ARGS(m_pMeshShadingCommandList.GetAddressOf()));
@@ -38,11 +38,16 @@ void CommandContext::Reset()
 		m_pAllocator = GetParent()->GetCommandQueue(m_Type)->RequestAllocator();
 		m_pCommandList->Reset(m_pAllocator, nullptr);
 	}
-	m_BarrierBatcher.Reset();
-	BindDescriptorHeaps();
 
+	m_BarrierBatcher.Reset();
 	m_PendingBarriers.clear();
 	m_ResourceStates.clear();
+
+	ID3D12DescriptorHeap* pHeaps[] = {
+		GetParent()->GetGlobalViewHeap()->GetHeap(),
+		GetParent()->GetGlobalSamplerHeap()->GetHeap()
+	};
+	m_pCommandList->SetDescriptorHeaps(2, pHeaps);
 }
 
 uint64 CommandContext::Execute(bool wait)
@@ -81,12 +86,9 @@ void CommandContext::Free(uint64 fenceValue)
 	m_pAllocator = nullptr;
 	GetParent()->FreeCommandList(this);
 
-	if (m_pShaderResourceDescriptorAllocator)
+	if (m_Type != D3D12_COMMAND_LIST_TYPE_COPY)
 	{
 		m_pShaderResourceDescriptorAllocator->ReleaseUsedHeaps(fenceValue);
-	}
-	if (m_pSamplerDescriptorAllocator)
-	{
 		m_pSamplerDescriptorAllocator->ReleaseUsedHeaps(fenceValue);
 	}
 }
@@ -331,11 +333,6 @@ DynamicAllocation CommandContext::AllocateTransientMemory(uint64 size)
 	return m_DynamicAllocator->Allocate(size);
 }
 
-DescriptorHandle CommandContext::AllocateTransientDescriptors(int descriptorCount, D3D12_DESCRIPTOR_HEAP_TYPE type)
-{
-	return m_pShaderResourceDescriptorAllocator->Allocate(descriptorCount);
-}
-
 bool CommandContext::IsTransitionAllowed(D3D12_COMMAND_LIST_TYPE commandlistType, D3D12_RESOURCE_STATES state)
 {
 	constexpr int VALID_COMPUTE_QUEUE_RESOURCE_STATES =
@@ -360,15 +357,6 @@ bool CommandContext::IsTransitionAllowed(D3D12_COMMAND_LIST_TYPE commandlistType
 		return (state & VALID_COPY_QUEUE_RESOURCE_STATES) == state;
 	}
 	return true;
-}
-
-void CommandContext::BindDescriptorHeaps()
-{
-	ID3D12DescriptorHeap* pHeaps[] = {
-		GetParent()->GetGlobalViewHeap()->GetHeap(),
-		GetParent()->GetGlobalSamplerHeap()->GetHeap()
-	};
-	m_pCommandList->SetDescriptorHeaps(2, pHeaps);
 }
 
 void CommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
