@@ -4,30 +4,88 @@
 #include "RootSignature.h"
 #include "CommandContext.h"
 
-std::vector<ComPtr<ID3D12DescriptorHeap>> OnlineDescriptorAllocator::m_DescriptorHeaps;
-std::array<std::queue<std::pair<uint64, ID3D12DescriptorHeap*>>, 2> OnlineDescriptorAllocator::m_FreeDescriptors;
-std::mutex OnlineDescriptorAllocator::m_HeapAllocationMutex;
+GlobalOnlineDescriptorHeap::GlobalOnlineDescriptorHeap(Graphics* pParent, D3D12_DESCRIPTOR_HEAP_TYPE type, uint32 numDescriptors)
+	: GraphicsObject(pParent), m_Type(type), m_NumDescriptors(numDescriptors)
+{
+	checkf(numDescriptors % BLOCK_SIZE == 0, "Number of descriptors must be a multiple of BLOCK_SIZE (%d)", BLOCK_SIZE);
+
+	D3D12_DESCRIPTOR_HEAP_DESC desc{};
+	desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+	desc.NodeMask = 0;
+	desc.NumDescriptors = numDescriptors;
+	desc.Type = type;
+	pParent->GetDevice()->CreateDescriptorHeap(&desc, IID_PPV_ARGS(m_pHeap.GetAddressOf()));
+	D3D::SetObjectName(m_pHeap.Get(), "Global Online Descriptor Heap");
+
+	m_DescriptorSize = pParent->GetDevice()->GetDescriptorHandleIncrementSize(type);
+	m_StartHandle = DescriptorHandle(m_pHeap->GetCPUDescriptorHandleForHeapStart(), m_pHeap->GetGPUDescriptorHandleForHeapStart());
+
+	uint32 numBlocks = m_NumDescriptors / BLOCK_SIZE;
+
+	DescriptorHandle currentOffset = m_StartHandle;
+	for (uint32 i = 0; i < numBlocks; ++i)
+	{
+		m_HeapBlocks.emplace_back(std::make_unique<HeapBlock>(currentOffset, BLOCK_SIZE, 0));
+		m_FreeBlocks.push(m_HeapBlocks.back().get());
+		currentOffset += BLOCK_SIZE * m_DescriptorSize;
+	}
+}
+
+GlobalOnlineDescriptorHeap::HeapBlock* GlobalOnlineDescriptorHeap::AllocateBlock()
+{
+	std::lock_guard<std::mutex> lock(m_BlockAllocateMutex);
+
+	// Check if we can free so finished blocks
+	for (int i = 0; i < m_ReleasedBlocks.size(); ++i)
+	{
+		GlobalOnlineDescriptorHeap::HeapBlock* pBlock = m_ReleasedBlocks[i];
+		if (GetParent()->IsFenceComplete(pBlock->FenceValue))
+		{
+			std::swap(m_ReleasedBlocks[i], m_ReleasedBlocks.back());
+			m_ReleasedBlocks.pop_back();
+			m_FreeBlocks.push(pBlock);
+			--i;
+		}
+	}
+
+	checkf(!m_FreeBlocks.empty(), "Ran out of descriptor heap space. Must increase the number of descriptors.");
+
+	GlobalOnlineDescriptorHeap::HeapBlock* pBlock = m_FreeBlocks.front();
+	m_FreeBlocks.pop();
+	return pBlock;
+}
+
+void GlobalOnlineDescriptorHeap::FreeBlock(uint64 fenceValue, GlobalOnlineDescriptorHeap::HeapBlock* pBlock)
+{
+	std::lock_guard<std::mutex> lock(m_BlockAllocateMutex);
+	pBlock->FenceValue = fenceValue;
+	pBlock->CurrentOffset = 0;
+	m_ReleasedBlocks.push_back(pBlock);
+}
+
 
 OnlineDescriptorAllocator::OnlineDescriptorAllocator(Graphics* pGraphics, CommandContext* pContext, D3D12_DESCRIPTOR_HEAP_TYPE type)
 	: GraphicsObject(pGraphics), m_pOwner(pContext), m_Type(type)
 {
+	if (type == D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV)
+	{
+		m_pHeapAllocator = pGraphics->GetGlobalViewHeap();
+	}
+	else if (type == D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER)
+	{
+		m_pHeapAllocator = pGraphics->GetGlobalSamplerHeap();
+	}
+	else
+	{
+		noEntry();
+	}
+
 	m_DescriptorSize = pGraphics->GetDevice()->GetDescriptorHandleIncrementSize(type);
 }
 
 OnlineDescriptorAllocator::~OnlineDescriptorAllocator()
 {
 
-}
-
-DescriptorHandle OnlineDescriptorAllocator::AllocateTransientDescriptor(int count)
-{
-	if (HasSpace(count) == false)
-	{
-		ReleaseHeap();
-		UnbindAll();
-	}
-	m_pOwner->SetDescriptorHeap(GetHeap(), m_Type);
-	return Allocate(count);
 }
 
 void OnlineDescriptorAllocator::SetDescriptors(uint32 rootIndex, uint32 offset, uint32 numHandles, const D3D12_CPU_DESCRIPTOR_HANDLE* pHandles)
@@ -60,14 +118,6 @@ void OnlineDescriptorAllocator::UploadAndBindStagedDescriptors(DescriptorTableTy
 	}
 
 	uint32 requiredSpace = GetRequiredSpace();
-	if (HasSpace(requiredSpace) == false)
-	{
-		ReleaseHeap();
-		UnbindAll();
-		requiredSpace = GetRequiredSpace();
-	}
-	m_pOwner->SetDescriptorHeap(GetHeap(), m_Type);
-
 	DescriptorHandle gpuHandle = Allocate(requiredSpace);
 
 	uint32 sourceRangeCount = 0;
@@ -136,19 +186,17 @@ void OnlineDescriptorAllocator::UploadAndBindStagedDescriptors(DescriptorTableTy
 	m_StaleRootParameters.ClearAll();
 }
 
-bool OnlineDescriptorAllocator::HasSpace(int count)
+bool OnlineDescriptorAllocator::EnsureSpace(uint32 count)
 {
-	return m_pCurrentHeap && m_CurrentOffset + count <= DESCRIPTORS_PER_HEAP;
-}
-
-ID3D12DescriptorHeap* OnlineDescriptorAllocator::GetHeap()
-{
-	if (m_pCurrentHeap == nullptr)
+	if (!m_pCurrentHeapBlock || m_pCurrentHeapBlock->Size - m_pCurrentHeapBlock->CurrentOffset < count)
 	{
-		m_pCurrentHeap = RequestNewHeap(m_Type);
-		m_StartHandle = DescriptorHandle(m_pCurrentHeap->GetCPUDescriptorHandleForHeapStart(), m_pCurrentHeap->GetGPUDescriptorHandleForHeapStart());
+		if (m_pCurrentHeapBlock)
+		{
+			m_ReleasedBlocks.push_back(m_pCurrentHeapBlock);
+		}
+		m_pCurrentHeapBlock = m_pHeapAllocator->AllocateBlock();
 	}
-	return m_pCurrentHeap;
+	return true;
 }
 
 void OnlineDescriptorAllocator::ParseRootSignature(RootSignature* pRootSignature)
@@ -171,21 +219,17 @@ void OnlineDescriptorAllocator::ParseRootSignature(RootSignature* pRootSignature
 		entry.TableSize = tableSize;
 		entry.TableStart = &m_HandleCache[offset];
 		offset += entry.TableSize;
-		checkf(offset <= DESCRIPTORS_PER_HEAP, "Out of DescriptorTable handles!");
+		checkf(offset <= m_HandleCache.size(), "Out of DescriptorTable handles!");
 	}
 }
 
 void OnlineDescriptorAllocator::ReleaseUsedHeaps(uint64 fenceValue)
 {
-	ReleaseHeap();
+	for (GlobalOnlineDescriptorHeap::HeapBlock* pBlock : m_ReleasedBlocks)
 	{
-		std::scoped_lock<std::mutex> lock(m_HeapAllocationMutex);
-		for (ID3D12DescriptorHeap* pHeap : m_UsedDescriptorHeaps)
-		{
-			m_FreeDescriptors[(int)m_Type].emplace(fenceValue, pHeap);
-		}
+		m_pHeapAllocator->FreeBlock(fenceValue, pBlock);
 	}
-	m_UsedDescriptorHeaps.clear();
+	m_ReleasedBlocks.clear();
 }
 
 uint32 OnlineDescriptorAllocator::GetRequiredSpace()
@@ -200,43 +244,6 @@ uint32 OnlineDescriptorAllocator::GetRequiredSpace()
 	}
 
 	return requiredSpace;
-}
-
-ID3D12DescriptorHeap* OnlineDescriptorAllocator::RequestNewHeap(D3D12_DESCRIPTOR_HEAP_TYPE type)
-{
-	std::scoped_lock<std::mutex> lock(m_HeapAllocationMutex);
-	if (m_FreeDescriptors[(int)m_Type].size() > 0 && GetParent()->IsFenceComplete(m_FreeDescriptors[(int)m_Type].front().first))
-	{
-		ID3D12DescriptorHeap* pHeap = m_FreeDescriptors[(int)m_Type].front().second;
-		m_FreeDescriptors[(int)m_Type].pop();
-		return pHeap;
-	}
-	else
-	{
-		ComPtr<ID3D12DescriptorHeap> pHeap;
-		D3D12_DESCRIPTOR_HEAP_DESC desc = {};
-		desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-		desc.NumDescriptors = DESCRIPTORS_PER_HEAP;
-		desc.NodeMask = 0;
-		desc.Type = type;
-		VERIFY_HR_EX(GetParent()->GetDevice()->CreateDescriptorHeap(&desc, IID_PPV_ARGS(pHeap.GetAddressOf())), GetParent()->GetDevice());
-		D3D::SetObjectName(pHeap.Get(), "Online Pooled Descriptor Heap");
-		m_DescriptorHeaps.push_back(std::move(pHeap));
-		return m_DescriptorHeaps.back().Get();
-	}
-}
-
-void OnlineDescriptorAllocator::ReleaseHeap()
-{
-	if (m_CurrentOffset == 0)
-	{
-		check(m_pCurrentHeap == nullptr);
-		return;
-	}
-	check(m_pCurrentHeap);
-	m_UsedDescriptorHeaps.push_back(m_pCurrentHeap);
-	m_pCurrentHeap = nullptr;
-	m_CurrentOffset = 0;
 }
 
 void OnlineDescriptorAllocator::UnbindAll()
@@ -254,7 +261,8 @@ void OnlineDescriptorAllocator::UnbindAll()
 
 DescriptorHandle OnlineDescriptorAllocator::Allocate(int descriptorCount)
 {
-	DescriptorHandle handle = m_StartHandle + m_CurrentOffset * m_DescriptorSize;
-	m_CurrentOffset += descriptorCount;
+	EnsureSpace(descriptorCount);
+	DescriptorHandle handle = m_pCurrentHeapBlock->StartHandle + m_pCurrentHeapBlock->CurrentOffset * m_DescriptorSize;
+	m_pCurrentHeapBlock->CurrentOffset += descriptorCount;
 	return handle;
 }

@@ -1339,6 +1339,8 @@ void Graphics::InitD3D()
 	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_COPY] = std::make_unique<CommandQueue>(this, D3D12_COMMAND_LIST_TYPE_COPY);
 
 	m_pDynamicAllocationManager = std::make_unique<DynamicAllocationManager>(this, BufferFlag::Upload);
+	m_pGlobalViewHeap = std::make_unique<GlobalOnlineDescriptorHeap>(this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 1000000);
+	m_pGlobalSamplerHeap = std::make_unique<GlobalOnlineDescriptorHeap>(this, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, 2000);
 
 	const uint32 numDirectContexts = 1;
 	for (uint32 i = 0; i < numDirectContexts; ++i)
@@ -1349,6 +1351,7 @@ void Graphics::InitD3D()
 	m_pComputeContext = std::make_unique<CommandContext>(this, GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COMPUTE), m_pDynamicAllocationManager.get());
 	m_pCopyContext = std::make_unique<CommandContext>(this, GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY), m_pDynamicAllocationManager.get());
 
+	
 	check(m_DescriptorHeaps.size() == D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES);
 	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV] = std::make_unique<OfflineDescriptorAllocator>(this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 256);
 	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER] = std::make_unique<OfflineDescriptorAllocator>(this, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, 128);

@@ -86,7 +86,11 @@ void CommandContext::Free(uint64 fenceValue)
 	m_pAllocator = m_pQueue->RequestAllocator();
 	m_pCommandList->Reset(m_pAllocator, nullptr);
 
-	BindDescriptorHeaps();
+	ID3D12DescriptorHeap* pHeaps[] = {
+		GetParent()->GetGlobalViewHeap()->GetHeap(),
+		GetParent()->GetGlobalSamplerHeap()->GetHeap()
+	};
+	m_pCommandList->SetDescriptorHeaps(2, pHeaps);
 }
 
 bool NeedsTransition(D3D12_RESOURCE_STATES& before, D3D12_RESOURCE_STATES& after)
@@ -248,7 +252,7 @@ void CommandContext::ExecuteIndirect(CommandSignature* pCommandSignature, uint32
 void CommandContext::ClearUavUInt(GraphicsResource* pBuffer, UnorderedAccessView* pUav, uint32* values /*= nullptr*/)
 {
 	FlushResourceBarriers();
-	DescriptorHandle gpuHandle = m_pShaderResourceDescriptorAllocator->AllocateTransientDescriptor(1);
+	DescriptorHandle gpuHandle = m_pShaderResourceDescriptorAllocator->Allocate(1);
 	GetParent()->GetDevice()->CopyDescriptorsSimple(1, gpuHandle.GetCpuHandle(), pUav->GetDescriptor(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 	uint32 zeros[4] = { 0,0,0,0 };
 	m_pCommandList->ClearUnorderedAccessViewUint(gpuHandle.GetGpuHandle(), pUav->GetDescriptor(), pBuffer->GetResource(), values ? values : zeros, 0, nullptr);
@@ -257,7 +261,7 @@ void CommandContext::ClearUavUInt(GraphicsResource* pBuffer, UnorderedAccessView
 void CommandContext::ClearUavFloat(GraphicsResource* pBuffer, UnorderedAccessView* pUav, float* values /*= nullptr*/)
 {
 	FlushResourceBarriers();
-	DescriptorHandle gpuHandle = m_pShaderResourceDescriptorAllocator->AllocateTransientDescriptor(1);
+	DescriptorHandle gpuHandle = m_pShaderResourceDescriptorAllocator->Allocate(1);
 	GetParent()->GetDevice()->CopyDescriptorsSimple(1, gpuHandle.GetCpuHandle(), pUav->GetDescriptor(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 	float zeros[4] = { 0,0,0,0 };
 	m_pCommandList->ClearUnorderedAccessViewFloat(gpuHandle.GetGpuHandle(), pUav->GetDescriptor(), pBuffer->GetResource(), values ? values : zeros, 0, nullptr);
@@ -312,15 +316,6 @@ void CommandContext::SetDynamicSamplers(int rootIndex, int offset, const D3D12_C
 	m_pSamplerDescriptorAllocator->SetDescriptors(rootIndex, offset, count, handles);
 }
 
-void CommandContext::SetDescriptorHeap(ID3D12DescriptorHeap* pHeap, D3D12_DESCRIPTOR_HEAP_TYPE type)
-{
-	if (m_CurrentDescriptorHeaps[(int)type] != pHeap)
-	{
-		m_CurrentDescriptorHeaps[(int)type] = pHeap;
-		BindDescriptorHeaps();
-	}
-}
-
 void CommandContext::SetShadingRate(D3D12_SHADING_RATE shadingRate /*= D3D12_SHADING_RATE_1X1*/)
 {
 	check(m_pMeshShadingCommandList);
@@ -340,7 +335,7 @@ DynamicAllocation CommandContext::AllocateTransientMemory(uint64 size)
 
 DescriptorHandle CommandContext::AllocateTransientDescriptors(int descriptorCount, D3D12_DESCRIPTOR_HEAP_TYPE type)
 {
-	return m_pShaderResourceDescriptorAllocator->AllocateTransientDescriptor(descriptorCount);
+	return m_pShaderResourceDescriptorAllocator->Allocate(descriptorCount);
 }
 
 bool CommandContext::IsTransitionAllowed(D3D12_COMMAND_LIST_TYPE commandlistType, D3D12_RESOURCE_STATES state)
@@ -367,24 +362,6 @@ bool CommandContext::IsTransitionAllowed(D3D12_COMMAND_LIST_TYPE commandlistType
 		return (state & VALID_COPY_QUEUE_RESOURCE_STATES) == state;
 	}
 	return true;
-}
-
-void CommandContext::BindDescriptorHeaps()
-{
-	std::array<ID3D12DescriptorHeap*, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES> heapsToBind = {};
-	int heapCount = 0;
-	for (size_t i = 0; i < heapsToBind.size(); ++i)
-	{
-		if (m_CurrentDescriptorHeaps[i] != nullptr)
-		{
-			heapsToBind[heapCount] = m_CurrentDescriptorHeaps[i];
-			++heapCount;
-		}
-	}
-	if (heapCount > 0)
-	{
-		m_pCommandList->SetDescriptorHeaps(heapCount, heapsToBind.data());
-	}
 }
 
 void CommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
