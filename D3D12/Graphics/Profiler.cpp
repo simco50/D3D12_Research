@@ -194,7 +194,7 @@ void Profiler::Resolve(Graphics* pGraphics, int frameIndex)
 
 	//Start the resolve on the current frame
 	int offset = MAX_GPU_TIME_QUERIES * QUERY_PAIR_NUM * m_CurrentReadbackFrame;
-	CommandContext* pContext = pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+	CommandContext* pContext = pGraphics->GetCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 	pContext->GetCommandList()->ResolveQueryData(m_pQueryHeap.Get(), D3D12_QUERY_TYPE_TIMESTAMP, 0, m_CurrentTimer * QUERY_PAIR_NUM, m_pReadBackBuffer->GetResource(), offset * sizeof(uint64));
 	m_FenceValues[m_CurrentReadbackFrame] = pContext->Execute(false);
 

@@ -46,6 +46,10 @@ using ComPtr = Microsoft::WRL::ComPtr<T>;
 #include "d3dx12/d3dx12_extra.h"
 #include "Imgui/imgui.h"
 
+#define USE_OPTICK 1
+#define OPTICK_ENABLE_TRACING 1
+#define OPTICK_ENABLE_GPU_D3D12 1
+#define OPTICK_ENABLE_GPU_VULKAN 0
 #include "optick.h"
 
 #ifndef D3D12_USE_RENDERPASSES
@@ -72,6 +76,14 @@ using ComPtr = Microsoft::WRL::ComPtr<T>;
 } \
 
 #define validateOnce(expression) validateOncef(expression, "")
+
+template<typename... Args>
+std::string Sprintf(const char* pFormat, Args... args)
+{
+	char buff[256];
+	sprintf_s(buff, pFormat, args...);
+	return buff;
+}
 
 #include "Core/String.h"
 #include "Core/Thread.h"

@@ -4,22 +4,6 @@
 class Graphics;
 class CommandContext;
 
-class CommandAllocatorPool : public GraphicsObject
-{
-public:
-	CommandAllocatorPool(Graphics* pGraphics, D3D12_COMMAND_LIST_TYPE type);
-
-	ID3D12CommandAllocator* GetAllocator(uint64 fenceValue);
-	void FreeAllocator(ID3D12CommandAllocator* pAllocator, uint64 fenceValue);
-
-private:
-	std::vector<ComPtr<ID3D12CommandAllocator>> m_CommandAllocators;
-	std::queue<std::pair<ID3D12CommandAllocator*, uint64>> m_FreeAllocators;
-	std::mutex m_AllocationMutex;
-
-	D3D12_COMMAND_LIST_TYPE m_Type;
-};
-
 class CommandQueue : public GraphicsObject
 {
 public:
@@ -49,7 +33,11 @@ public:
 	void FreeAllocator(uint64 fenceValue, ID3D12CommandAllocator* pAllocator);
 
 private:
-	std::unique_ptr<CommandAllocatorPool> m_pAllocatorPool;
+	ComPtr<ID3D12GraphicsCommandList> m_pTransitionCommandlist;
+
+	std::vector<ComPtr<ID3D12CommandAllocator>> m_CommandAllocators;
+	std::queue<std::pair<ID3D12CommandAllocator*, uint64>> m_FreeAllocators;
+	std::mutex m_AllocationMutex;
 
     ComPtr<ID3D12CommandQueue> m_pCommandQueue;
     std::mutex m_FenceMutex;
