@@ -13,26 +13,26 @@ enum class DescriptorTableType
 	Compute,
 };
 
+struct DescriptorHeapBlock
+{
+	DescriptorHeapBlock(DescriptorHandle startHandle, uint32 size, uint32 currentOffset)
+		: StartHandle(startHandle), Size(size), CurrentOffset(currentOffset), FenceValue(0)
+	{}
+	DescriptorHandle StartHandle;
+	uint32 Size;
+	uint32 CurrentOffset;
+	uint64 FenceValue;
+};
+
 class GlobalOnlineDescriptorHeap : public GraphicsObject
 {
 public:
-	struct HeapBlock
-	{
-		HeapBlock(DescriptorHandle startHandle, uint32 size, uint32 currentOffset)
-			: StartHandle(startHandle), Size(size), CurrentOffset(currentOffset), FenceValue(0)
-		{}
-		DescriptorHandle StartHandle;
-		uint32 Size;
-		uint32 CurrentOffset;
-		uint64 FenceValue;
-	};
-
 	static const int BLOCK_SIZE = 2000;
 	GlobalOnlineDescriptorHeap(Graphics* pParent, D3D12_DESCRIPTOR_HEAP_TYPE type, uint32 numDescriptors);
 
-	HeapBlock* AllocateBlock();
-	void FreeBlock(uint64 fenceValue, HeapBlock* pBlock);
-
+	DescriptorHeapBlock* AllocateBlock();
+	void FreeBlock(uint64 fenceValue, DescriptorHeapBlock* pBlock);
+	uint32 GetDescriptorSize() const { return m_DescriptorSize; }
 	ID3D12DescriptorHeap* GetHeap() const { return m_pHeap.Get(); }
 
 private:
@@ -44,9 +44,9 @@ private:
 	DescriptorHandle m_StartHandle;
 
 	ComPtr<ID3D12DescriptorHeap> m_pHeap;
-	std::vector<std::unique_ptr<HeapBlock>> m_HeapBlocks;
-	std::vector<HeapBlock*> m_ReleasedBlocks;
-	std::queue<HeapBlock*> m_FreeBlocks;
+	std::vector<std::unique_ptr<DescriptorHeapBlock>> m_HeapBlocks;
+	std::vector<DescriptorHeapBlock*> m_ReleasedBlocks;
+	std::queue<DescriptorHeapBlock*> m_FreeBlocks;
 };
 
 class OnlineDescriptorAllocator : public GraphicsObject
@@ -84,10 +84,9 @@ private:
 	BitField32 m_StaleRootParameters {};
 
 	GlobalOnlineDescriptorHeap* m_pHeapAllocator;
-	GlobalOnlineDescriptorHeap::HeapBlock* m_pCurrentHeapBlock = nullptr;
-	std::vector<GlobalOnlineDescriptorHeap::HeapBlock*> m_ReleasedBlocks;
+	DescriptorHeapBlock* m_pCurrentHeapBlock = nullptr;
+	std::vector<DescriptorHeapBlock*> m_ReleasedBlocks;
 
 	CommandContext* m_pOwner;
 	D3D12_DESCRIPTOR_HEAP_TYPE m_Type;
-	uint32 m_DescriptorSize = 0;
 };

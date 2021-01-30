@@ -25,20 +25,20 @@ GlobalOnlineDescriptorHeap::GlobalOnlineDescriptorHeap(Graphics* pParent, D3D12_
 	DescriptorHandle currentOffset = m_StartHandle;
 	for (uint32 i = 0; i < numBlocks; ++i)
 	{
-		m_HeapBlocks.emplace_back(std::make_unique<HeapBlock>(currentOffset, BLOCK_SIZE, 0));
+		m_HeapBlocks.emplace_back(std::make_unique<DescriptorHeapBlock>(currentOffset, BLOCK_SIZE, 0));
 		m_FreeBlocks.push(m_HeapBlocks.back().get());
 		currentOffset += BLOCK_SIZE * m_DescriptorSize;
 	}
 }
 
-GlobalOnlineDescriptorHeap::HeapBlock* GlobalOnlineDescriptorHeap::AllocateBlock()
+DescriptorHeapBlock* GlobalOnlineDescriptorHeap::AllocateBlock()
 {
 	std::lock_guard<std::mutex> lock(m_BlockAllocateMutex);
 
 	// Check if we can free so finished blocks
 	for (int i = 0; i < m_ReleasedBlocks.size(); ++i)
 	{
-		GlobalOnlineDescriptorHeap::HeapBlock* pBlock = m_ReleasedBlocks[i];
+		DescriptorHeapBlock* pBlock = m_ReleasedBlocks[i];
 		if (GetParent()->IsFenceComplete(pBlock->FenceValue))
 		{
 			std::swap(m_ReleasedBlocks[i], m_ReleasedBlocks.back());
@@ -50,12 +50,12 @@ GlobalOnlineDescriptorHeap::HeapBlock* GlobalOnlineDescriptorHeap::AllocateBlock
 
 	checkf(!m_FreeBlocks.empty(), "Ran out of descriptor heap space. Must increase the number of descriptors.");
 
-	GlobalOnlineDescriptorHeap::HeapBlock* pBlock = m_FreeBlocks.front();
+	DescriptorHeapBlock* pBlock = m_FreeBlocks.front();
 	m_FreeBlocks.pop();
 	return pBlock;
 }
 
-void GlobalOnlineDescriptorHeap::FreeBlock(uint64 fenceValue, GlobalOnlineDescriptorHeap::HeapBlock* pBlock)
+void GlobalOnlineDescriptorHeap::FreeBlock(uint64 fenceValue, DescriptorHeapBlock* pBlock)
 {
 	std::lock_guard<std::mutex> lock(m_BlockAllocateMutex);
 	pBlock->FenceValue = fenceValue;
@@ -79,8 +79,6 @@ OnlineDescriptorAllocator::OnlineDescriptorAllocator(Graphics* pGraphics, Comman
 	{
 		noEntry();
 	}
-
-	m_DescriptorSize = pGraphics->GetDevice()->GetDescriptorHandleIncrementSize(type);
 }
 
 OnlineDescriptorAllocator::~OnlineDescriptorAllocator()
@@ -116,6 +114,8 @@ void OnlineDescriptorAllocator::UploadAndBindStagedDescriptors(DescriptorTableTy
 	{
 		return;
 	}
+
+	OPTICK_EVENT();
 
 	uint32 requiredSpace = GetRequiredSpace();
 	DescriptorHandle gpuHandle = Allocate(requiredSpace);
@@ -161,7 +161,7 @@ void OnlineDescriptorAllocator::UploadAndBindStagedDescriptors(DescriptorTableTy
 
 		newDescriptorTables[tableCount++] = gpuHandle.GetGpuHandle();
 
-		gpuHandle += rangeSize * m_DescriptorSize;
+		gpuHandle += rangeSize * m_pHeapAllocator->GetDescriptorSize();
 	}
 
 	GetParent()->GetDevice()->CopyDescriptors(destinationRangeCount, destinationRanges.data(), destinationRangeSizes.data(), sourceRangeCount, sourceRanges.data(), sourceRangeSizes.data(), m_Type);
@@ -225,7 +225,7 @@ void OnlineDescriptorAllocator::ParseRootSignature(RootSignature* pRootSignature
 
 void OnlineDescriptorAllocator::ReleaseUsedHeaps(uint64 fenceValue)
 {
-	for (GlobalOnlineDescriptorHeap::HeapBlock* pBlock : m_ReleasedBlocks)
+	for (DescriptorHeapBlock* pBlock : m_ReleasedBlocks)
 	{
 		m_pHeapAllocator->FreeBlock(fenceValue, pBlock);
 	}
@@ -262,7 +262,7 @@ void OnlineDescriptorAllocator::UnbindAll()
 DescriptorHandle OnlineDescriptorAllocator::Allocate(int descriptorCount)
 {
 	EnsureSpace(descriptorCount);
-	DescriptorHandle handle = m_pCurrentHeapBlock->StartHandle + m_pCurrentHeapBlock->CurrentOffset * m_DescriptorSize;
+	DescriptorHandle handle = m_pCurrentHeapBlock->StartHandle + m_pCurrentHeapBlock->CurrentOffset * m_pHeapAllocator->GetDescriptorSize();
 	m_pCurrentHeapBlock->CurrentOffset += descriptorCount;
 	return handle;
 }
