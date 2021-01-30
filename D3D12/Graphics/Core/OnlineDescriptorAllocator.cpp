@@ -115,8 +115,6 @@ void OnlineDescriptorAllocator::UploadAndBindStagedDescriptors(DescriptorTableTy
 		return;
 	}
 
-	OPTICK_EVENT();
-
 	uint32 requiredSpace = GetRequiredSpace();
 	DescriptorHandle gpuHandle = Allocate(requiredSpace);
 
