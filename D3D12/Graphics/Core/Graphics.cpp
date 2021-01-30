@@ -2064,7 +2064,6 @@ void Graphics::UpdateImGui()
 	showOutputLog = ImGui::Begin("Output Log", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
 	if (showOutputLog)
 	{
-		ImGui::SetScrollHereY(0.0f);
 		for (const Console::LogEntry& entry : Console::GetHistory())
 		{
 			switch (entry.Type)
@@ -2087,6 +2086,7 @@ void Graphics::UpdateImGui()
 			}
 			ImGui::PopStyleColor();
 		}
+		ImGui::SetScrollHereY(0.0f);
 	}
 	ImGui::End();
 
