@@ -81,7 +81,6 @@ struct SceneData
 	Texture* pNormals = nullptr;
 	Texture* pResolvedNormals = nullptr;
 	Texture* pAO = nullptr;
-	Mesh* pMesh = nullptr;
 	std::vector<std::unique_ptr<Texture>>* pShadowMaps = nullptr;
 	std::vector<Batch> Batches;
 	std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> MaterialTextures;
@@ -244,6 +243,11 @@ private:
 	std::unique_ptr<RTReflections> m_pRTReflections;
 	std::unique_ptr<SSAO> m_pSSAO;
 
+	std::unique_ptr<Texture> m_pBlackTexture;
+	std::unique_ptr<Texture> m_pWhiteTexture;
+	std::unique_ptr<Texture> m_pGrayTexture;
+	std::unique_ptr<Texture> m_pDummyNormalTexture;
+
 	int m_SampleCount = 1;
 	std::unique_ptr<Camera> m_pCamera;
 
@@ -323,4 +327,7 @@ private:
 	Texture* m_pVisualizeTexture = nullptr;
 	SceneData m_SceneData;
 	bool m_CapturePix = false;
+
+	std::map<Texture*, int> m_TextureToDescriptorIndex;
+	int RegisterBindlessTexture(Texture* pTexture, Texture* pFallback = nullptr);
 };

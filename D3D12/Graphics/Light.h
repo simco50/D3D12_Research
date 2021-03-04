@@ -89,7 +89,7 @@ struct Light
 		l.UmbraAngle = umbraAngleInDegrees;
 		l.Type = LightType::Spot;
 		l.Intensity = intensity;
-		l.Colour = Math::EncodeColor(color);
+		l.Colour = color;
 		return l;
 	}
 };

@@ -147,7 +147,9 @@ LightResult DoLight(float4 pos, float3 worldPos, float3 N, float3 V, float3 diff
 #endif
 		Light light = tLights[lightIndex];
 		LightResult result = DoLight(light, specularColor, diffuseColor, roughness, pos, worldPos, N, V);
-		
+
+#define SCREEN_SPACE_SHADOWS 0
+#if SCREEN_SPACE_SHADOWS
 		float3 L = normalize(worldPos - light.Position);
 		if(light.Type == LIGHT_DIRECTIONAL)
 		{
@@ -158,8 +160,12 @@ LightResult DoLight(float4 pos, float3 worldPos, float3 N, float3 V, float3 diff
 		float length = 0.1f * pos.w * cViewData.ProjectionInverse[1][1];
 		float occlusion = ScreenSpaceShadows(worldPos, L, 8, length, ditherValue);
 
-		totalResult.Diffuse += result.Diffuse * occlusion;
-		totalResult.Specular += result.Specular * occlusion;
+		result.Diffuse *= occlusion;
+		result.Specular *= occlusion;
+#endif
+
+		totalResult.Diffuse += result.Diffuse;
+		totalResult.Specular += result.Specular;
 	}
 	return totalResult;
 }
@@ -266,7 +272,7 @@ void PSMain(PSInput input,
 	float4 baseColor = tMaterialTextures[cObjectData.Diffuse].Sample(sDiffuseSampler, input.texCoord);
 	float3 sampledNormal = tMaterialTextures[cObjectData.Normal].Sample(sDiffuseSampler, input.texCoord).xyz;
 	float metalness = tMaterialTextures[cObjectData.Metallic].Sample(sDiffuseSampler, input.texCoord).r;
-	float r = 0.5; //tMaterialTextures[cObjectData.Roughness].Sample(sDiffuseSampler, input.texCoord).r;
+	float r = tMaterialTextures[cObjectData.Roughness].Sample(sDiffuseSampler, input.texCoord).r;
 	float3 specular = 0.5f;
 
 	float3 diffuseColor = ComputeDiffuseColor(baseColor.rgb, metalness);

@@ -69,7 +69,7 @@ namespace Tweakables
 	// Lighting
 	float g_SunInclination = 0.579f;
 	float g_SunOrientation = -3.055f;
-	float g_SunTemperature = 5000.0f;
+	float g_SunTemperature = 5900.0f;
 	float g_SunIntensity = 3.0f;
 
 	// Reflections
@@ -158,7 +158,7 @@ void Graphics::Update()
 	float cosphi = cosf(Tweakables::g_SunInclination * Math::PIDIV2);
 	float sinphi = sinf(Tweakables::g_SunInclination * Math::PIDIV2);
 	m_Lights[0].Direction = -Vector3(costheta * cosphi, sinphi, sintheta * cosphi);
-	m_Lights[0].Colour = Math::EncodeColor(Math::MakeFromColorTemperature(Tweakables::g_SunTemperature));
+	m_Lights[0].Colour = Math::MakeFromColorTemperature(Tweakables::g_SunTemperature);
 	m_Lights[0].Intensity = Tweakables::g_SunIntensity;
 
 	if (Tweakables::g_VisualizeLights)
@@ -1435,48 +1435,44 @@ void Graphics::InitD3D()
 
 void Graphics::InitializeAssets(CommandContext& context)
 {
+	uint32 BLACK = 0xFF000000;
+	m_pBlackTexture = std::make_unique<Texture>(this, "Default Black");
+	m_pBlackTexture->Create(&context, Image(1, 1, ImageFormat::RGBA, &BLACK));
+
+	uint32 WHITE = 0xFFFFFFFF;
+	m_pWhiteTexture = std::make_unique<Texture>(this, "Default White");
+	m_pWhiteTexture->Create(&context, Image(1, 1, ImageFormat::RGBA, &WHITE));
+
+	uint32 GRAY = 0xFF808080;
+	m_pGrayTexture = std::make_unique<Texture>(this, "Default Gray");
+	m_pGrayTexture->Create(&context, Image(1, 1, ImageFormat::RGBA, &GRAY));
+
+	uint32 DEFAULT_NORMAL = 0xFFFF8080;
+	m_pDummyNormalTexture = std::make_unique<Texture>(this, "Default Normal");
+	m_pDummyNormalTexture->Create(&context, Image(1, 1, ImageFormat::RGBA, &DEFAULT_NORMAL));
+
+	RegisterBindlessTexture(m_pBlackTexture.get());
+	RegisterBindlessTexture(m_pWhiteTexture.get());
+	RegisterBindlessTexture(m_pGrayTexture.get());
+	RegisterBindlessTexture(m_pDummyNormalTexture.get());
+
 	m_pMesh = std::make_unique<Mesh>();
 	m_pMesh->Load("Resources/sponza/sponza.dae", this, &context);
 
-	std::map<Texture*, int> textureToIndex;
-	int textureIndex = 0;
+	m_SceneData.Batches.resize(m_pMesh->GetMeshCount());
 	for (int i = 0; i < m_pMesh->GetMeshCount(); ++i)
 	{
 		const Material& material = m_pMesh->GetMaterial(m_pMesh->GetMesh(i)->GetMaterialId());
-		auto it = textureToIndex.find(material.pDiffuseTexture);
-		if (it == textureToIndex.end())
-			textureToIndex[material.pDiffuseTexture] = textureIndex++;
-		it = textureToIndex.find(material.pNormalTexture);
-		if (it == textureToIndex.end())
-			textureToIndex[material.pNormalTexture] = textureIndex++;
-		it = textureToIndex.find(material.pRoughnessTexture);
-		if (it == textureToIndex.end())
-			textureToIndex[material.pRoughnessTexture] = textureIndex++;
-		it = textureToIndex.find(material.pMetallicTexture);
-		if (it == textureToIndex.end())
-			textureToIndex[material.pMetallicTexture] = textureIndex++;
-	}
-
-	m_SceneData.MaterialTextures.resize(textureToIndex.size());
-	for (auto& pair : textureToIndex)
-	{
-		m_SceneData.MaterialTextures[pair.second] = pair.first->GetSRV();
-	}
-
-	for (int i = 0; i < m_pMesh->GetMeshCount(); ++i)
-	{
-		const Material& material = m_pMesh->GetMaterial(m_pMesh->GetMesh(i)->GetMaterialId());
-		Batch b;
+		Batch& b = m_SceneData.Batches[i];
 		b.Index = i;
 		b.Bounds = m_pMesh->GetMesh(i)->GetBounds();
 		b.pMesh = m_pMesh->GetMesh(i);
 
-		b.Material.Diffuse = textureToIndex[material.pDiffuseTexture];
-		b.Material.Normal = textureToIndex[material.pNormalTexture];
-		b.Material.Roughness = textureToIndex[material.pRoughnessTexture];
-		b.Material.Metallic = textureToIndex[material.pMetallicTexture];
+		b.Material.Diffuse = RegisterBindlessTexture(material.pDiffuseTexture, m_pGrayTexture.get());
+		b.Material.Normal = RegisterBindlessTexture(material.pNormalTexture, m_pDummyNormalTexture.get());
+		b.Material.Roughness = RegisterBindlessTexture(material.pRoughnessTexture, m_pGrayTexture.get());
+		b.Material.Metallic = RegisterBindlessTexture(material.pMetallicTexture, m_pBlackTexture.get());
 		b.BlendMode = material.IsTransparent ? Batch::Blending::AlphaMask : Batch::Blending::Opaque;
-		m_SceneData.Batches.push_back(b);
 	}
 
 	if (SupportsRayTracing())
@@ -1591,32 +1587,32 @@ void Graphics::InitializeAssets(CommandContext& context)
 	}
 
 	{
-		int lightCount = 5;
-		m_Lights.resize(lightCount);
+		{
+			Vector3 Position(-150, 160, -10);
+			Vector3 Direction;
+			Position.Normalize(Direction);
+			Light sunLight = Light::Directional(Position, -Direction, 10);
+			sunLight.CastShadows = true;
+			sunLight.VolumetricLighting = true;
+			m_Lights.push_back(sunLight);
+		}
 
-		Vector3 Position(-150, 160, -10);
-		Vector3 Direction;
-		Position.Normalize(Direction);
-		m_Lights[0] = Light::Directional(Position, -Direction, 10);
-		m_Lights[0].CastShadows = true;
-		m_Lights[0].VolumetricLighting = true;
-
-		m_Lights[1] = Light::Spot(Vector3(62, 10, -18), 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1.0f, 0.7f, 0.3f, 1.0f));
-		m_Lights[1].CastShadows = true;
-		m_Lights[1].VolumetricLighting = false;
-		m_Lights[2] = Light::Spot(Vector3(-48, 10, 18), 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1.0f, 0.7f, 0.3f, 1.0f));
-		m_Lights[2].CastShadows = true;
-		m_Lights[2].VolumetricLighting = false;
-		m_Lights[3] = Light::Spot(Vector3(-48, 10, -18), 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1.0f, 0.7f, 0.3f, 1.0f));
-		m_Lights[3].CastShadows = true;
-		m_Lights[3].VolumetricLighting = false;
-		m_Lights[4] = Light::Spot(Vector3(62, 10, 18), 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1.0f, 0.7f, 0.3f, 1.0f));
-		m_Lights[4].CastShadows = true;
-		m_Lights[4].VolumetricLighting = false;
-		
+		Vector3 spotLocations[] = {
+			Vector3(62, 10, -18),
+			Vector3(-48, 10, 18),
+			Vector3(-48, 10, -18),
+			Vector3(62, 10, 18)
+		};
+		for(int i = 0; i < ARRAYSIZE(spotLocations); ++i)
+		{
+			Light spotLight = Light::Spot(spotLocations[i], 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1.0f, 0.7f, 0.3f, 1.0f));
+			spotLight.CastShadows = true;
+			spotLight.VolumetricLighting = false;
+			m_Lights.push_back(spotLight);
+		}
 
 		m_pLightBuffer = std::make_unique<Buffer>(this, "Lights");
-		m_pLightBuffer->Create(BufferDesc::CreateStructured(lightCount, sizeof(Light), BufferFlag::ShaderResource));
+		m_pLightBuffer->Create(BufferDesc::CreateStructured((int)m_Lights.size(), sizeof(Light), BufferFlag::ShaderResource));
 	}
 }
 
@@ -2157,6 +2153,33 @@ void Graphics::UpdateImGui()
 	ImGui::Checkbox("TAA", &Tweakables::g_TAA);
 
 	ImGui::End();
+}
+
+int Graphics::RegisterBindlessTexture(Texture* pTexture, Texture* pFallback)
+{
+	auto it = m_TextureToDescriptorIndex.find(pTexture);
+	if (it != m_TextureToDescriptorIndex.end())
+	{
+		return it->second;
+	}
+	int index = (int)m_TextureToDescriptorIndex.size();
+	if (pTexture)
+	{
+		m_TextureToDescriptorIndex[pTexture] = index;
+		m_SceneData.MaterialTextures.push_back(pTexture->GetSRV());
+	}
+	else
+	{
+		if (pFallback)
+		{
+			index = RegisterBindlessTexture(pFallback);
+		}
+		else
+		{
+			index = 0;
+		}
+	}
+	return index;
 }
 
 CommandQueue* Graphics::GetCommandQueue(D3D12_COMMAND_LIST_TYPE type) const

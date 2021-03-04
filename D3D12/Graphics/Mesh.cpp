@@ -103,48 +103,31 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 
 	std::string dirPath = Paths::GetDirectoryPath(pFilePath);
 
-	m_Textures.push_back(std::make_unique<Texture>(pGraphics, "Dummy White"));
-	m_Textures.back()->Create(pContext, "Resources/Textures/dummy.dds", true);
-	m_Textures.push_back(std::make_unique<Texture>(pGraphics, "Dummy Normal"));
-	m_Textures.back()->Create(pContext, "Resources/Textures/dummy_ddn.dds", false);
-	m_Textures.push_back(std::make_unique<Texture>(pGraphics, "Dummy Black"));
-	m_Textures.back()->Create(pContext, "Resources/Textures/dummy_black.dds", false);
-	//m_Textures.push_back(std::make_unique<Texture>(pGraphics, "Dummy Gray"));
-	//m_Textures.back()->Create(pContext, "Resources/Textures/dummy_gray.dds", false);
-
 	auto loadTexture = [this, pGraphics, pContext](const char* basePath, aiMaterial* pMaterial, aiTextureType type, bool srgb)
 	{
 		aiString path;
 		aiReturn ret = pMaterial->GetTexture(type, 0, &path);
 		bool success = ret == aiReturn_SUCCESS;
 		std::string pathStr = path.C_Str();
-		if (!success)
-		{
-			switch (type)
-			{
-			case aiTextureType_NORMALS:		return m_Textures[1].get();
-			case aiTextureType_SPECULAR:	return m_Textures[2].get();
-			//case aiTextureType_SHININESS:	return m_Textures[3].get();
-			case aiTextureType_AMBIENT:		return m_Textures[2].get();
-			default:						return m_Textures[0].get();
-			}
-		}
-		StringHash pathHash = StringHash(pathStr.c_str());
-		auto it = m_ExistingTextures.find(pathHash);
-		if (it != m_ExistingTextures.end())
-		{
-			return it->second;
-		}
-		std::unique_ptr<Texture> pTex;
-		pTex = std::make_unique<Texture>(pGraphics, pathStr.c_str());
-		std::stringstream str;
-		str << basePath << pathStr;
-		success = pTex->Create(pContext, str.str().c_str(), srgb);
 		if (success)
 		{
-			m_Textures.push_back(std::move(pTex));
-			m_ExistingTextures[pathHash] = m_Textures.back().get();
-			return m_Textures.back().get();
+			StringHash pathHash = StringHash(pathStr.c_str());
+			auto it = m_ExistingTextures.find(pathHash);
+			if (it != m_ExistingTextures.end())
+			{
+				return it->second;
+			}
+			std::unique_ptr<Texture> pTex;
+			pTex = std::make_unique<Texture>(pGraphics, pathStr.c_str());
+			std::stringstream str;
+			str << basePath << pathStr;
+			success = pTex->Create(pContext, str.str().c_str(), srgb);
+			if (success)
+			{
+				m_Textures.push_back(std::move(pTex));
+				m_ExistingTextures[pathHash] = m_Textures.back().get();
+				return m_Textures.back().get();
+			}
 		}
 		return (Texture*)nullptr;
 	};

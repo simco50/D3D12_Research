@@ -98,25 +98,30 @@ namespace Math
 
 	Vector3 RandCircleVector();
 
-	inline uint32 EncodeColor(const Color& color)
+	inline uint32 EncodeColor(float r, float g, float b, float a = 1.0f)
 	{
 		uint32 output = 0;
-		//unsigned int layout: AAAA RRRR GGGG BBBB
-		output |= (unsigned char)(Clamp01(color.x) * 255.0f) << 16;
-		output |= (unsigned char)(Clamp01(color.y) * 255.0f) << 8;
-		output |= (unsigned char)(Clamp01(color.z) * 255.0f);
-		output |= (unsigned char)(Clamp01(color.w) * 255.0f) << 24;
+		//unsigned int layout: RRRR GGGG BBBB AAAA
+		output |= (unsigned char)(Clamp01(r) * 255.0f) << 24;
+		output |= (unsigned char)(Clamp01(g) * 255.0f) << 16;
+		output |= (unsigned char)(Clamp01(b) * 255.0f) << 8;
+		output |= (unsigned char)(Clamp01(a) * 255.0f) << 0;
 		return output;
+	}
+
+	inline uint32 EncodeColor(const Color& color)
+	{
+		return EncodeColor(color.x, color.y, color.z, color.w);
 	}
 
 	inline Color DecodeColor(uint32 color)
 	{
 		Color output;
-		//unsigned int layout: AAAA RRRR GGGG BBBB
-		output.x = (float)((color >> 16) & 0xFF) / 255.0f;
-		output.y = (float)((color >> 8) & 0xFF) / 255.0f;
-		output.z = (float)(color & 0xFF) / 255.0f;
-		output.w = (float)((color >> 24) & 0xFF) / 255.0f;
+		//unsigned int layout: RRRR GGGG BBBB AAAA
+		output.x = (float)((color >> 24) & 0xFF) / 255.0f;
+		output.y = (float)((color >> 16) & 0xFF) / 255.0f;
+		output.z = (float)((color >> 8) & 0xFF) / 255.0f;
+		output.w = (float)((color >> 0) & 0xFF) / 255.0f;
 		return output;
 	}
 

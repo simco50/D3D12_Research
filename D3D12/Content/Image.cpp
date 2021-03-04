@@ -13,6 +13,16 @@
 #include <fstream>
 #include "Core/Paths.h"
 
+Image::Image(int width, int height, ImageFormat format, void* pInitialData /*= nullptr*/)
+{
+	SetSize(width, height, GetNumChannels(format));
+	m_Format = format;
+	if (pInitialData)
+	{
+		SetData(pInitialData);
+	}
+}
+
 bool Image::Load(const char* inputStream)
 {
 	const std::string extension = Paths::GetFileExtenstion(inputStream);
@@ -56,6 +66,7 @@ bool Image::SetSize(int x, int y, int components)
 	m_Components = components;
 	m_Pixels.clear();
 	m_Pixels.resize(x * y * components);
+	m_Format = ImageFormat::RGBA;
 
 	return true;
 }
@@ -508,4 +519,29 @@ void Image::Save(const char* pFilePath)
 {
 	int result = stbi_write_jpg(pFilePath, m_Width, m_Height, m_Components, m_Pixels.data(), 100);
 	check(result);
+}
+
+int32 Image::GetNumChannels(ImageFormat format)
+{
+	switch (format)
+	{
+	case ImageFormat::RGBA16:
+	case ImageFormat::RGBA32:
+	case ImageFormat::RGBA:
+	case ImageFormat::BGRA:
+		return 4;
+	case ImageFormat::RGB32:
+		return 3;
+	case ImageFormat::BC1:
+	case ImageFormat::BC2:
+	case ImageFormat::BC3:
+	case ImageFormat::BC4:
+	case ImageFormat::BC5:
+	case ImageFormat::BC6H:
+	case ImageFormat::BC7:
+		return -1;
+	default:
+		noEntry();
+		return -1;
+	}
 }

@@ -6,10 +6,10 @@
 float4 UIntToColor(uint c)
 {
     return float4(
-            (float)((c & 0x00FF0000) >> 16) / 255.0f,
-            (float)((c & 0x0000FF00) >> 8) / 255.0f,
-            (float)((c & 0x000000FF) >> 0) / 255.0f,
-            (float)((c & 0xFF000000) >> 24) / 255.0f
+            (float)(((c >> 24) & 0xFF) / 255.0f),
+            (float)(((c >> 16) & 0xFF) / 255.0f),
+            (float)(((c >> 8) & 0xFF) / 255.0f),
+            (float)(((c >> 0) & 0xFF) / 255.0f)
         );
 }
 

@@ -15,7 +15,7 @@ public:
 	ShaderBindingTable(StateObject* pStateObject);
 	void BindRayGenShader(const char* pName, const std::vector<uint64>& data = {});
 	void BindMissShader(const char* pName, uint32 rayIndex, const std::vector<uint64>& data = {});
-	void BindHitGroup(const char* pName, const std::vector<uint64>& data = {});
+	void BindHitGroup(const char* pName, uint32 index, const std::vector<uint64>& data = {});
 	void Commit(CommandContext& context, D3D12_DISPATCH_RAYS_DESC& desc);
 
 private:

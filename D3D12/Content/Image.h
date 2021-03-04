@@ -30,6 +30,8 @@ struct MipLevelInfo
 class Image final
 {
 public:
+	Image() = default;
+	Image(int width, int height, ImageFormat format, void* pInitialData = nullptr);
 	bool Load(const char* filePath);
 	bool Load(const void* pPixels, size_t dataSize, const char* pFormatHint);
 	void Save(const char* pFilePath);
@@ -63,6 +65,7 @@ public:
 
 	const Image* GetNextImage() const { return m_pNextImage.get(); }
 
+	static int32 GetNumChannels(ImageFormat format);
 	static unsigned int TextureFormatFromCompressionFormat(const ImageFormat& format, bool sRgb);
 
 private:

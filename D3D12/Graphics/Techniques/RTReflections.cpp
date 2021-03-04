@@ -56,10 +56,7 @@ void RTReflections::Execute(RGGraph& graph, const SceneData& sceneData)
 			bindingTable.BindMissShader("Miss", 0);
 			bindingTable.BindMissShader("ShadowMiss", 1);
 
-			std::vector<Batch> sortedBatches = sceneData.Batches;
-			std::sort(sortedBatches.begin(), sortedBatches.end(), [](const Batch& a, const Batch& b) { return a.Index < b.Index; });
-
-			for (const Batch& b : sortedBatches)
+			for (const Batch& b : sceneData.Batches)
 			{
 				struct HitData
 				{
@@ -76,7 +73,7 @@ void RTReflections::Execute(RGGraph& graph, const SceneData& sceneData)
 					b.pMesh->GetIndexBuffer().Location,
 				};
 
-				bindingTable.BindHitGroup("ReflectionHitGroup", handles);
+				bindingTable.BindHitGroup("ReflectionHitGroup", b.Index, handles);
 			}
 
 			const D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
