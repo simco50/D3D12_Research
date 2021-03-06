@@ -42,6 +42,7 @@ enum class DefaultTexture
 {
 	White2D,
 	Black2D,
+	Magenta2D,
 	Gray2D,
 	Normal2D,
 	BlackCube,
@@ -266,10 +267,8 @@ private:
 
 	RenderPath m_RenderPath = RenderPath::Clustered;
 
-	std::unique_ptr<Mesh> m_pMesh;
-	std::unique_ptr<Buffer> m_pBLAS;
+	std::vector<std::unique_ptr<Mesh>> m_Meshes;
 	std::unique_ptr<Buffer> m_pTLAS;
-	std::unique_ptr<Buffer> m_pBLASScratch;
 	std::unique_ptr<Buffer> m_pTLASScratch;
 
 	//Shadow mapping

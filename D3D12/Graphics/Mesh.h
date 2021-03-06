@@ -49,6 +49,7 @@ public:
 	SubMesh* GetMesh(const int index) const { return m_Meshes[index].get(); }
 	const Material& GetMaterial(int materialId) const { return m_Materials[materialId]; }
 
+	Buffer* GetBLAS() const { return m_pBLAS.get(); }
 	Buffer* GetData() const { return m_pGeometryData.get(); }
 
 private:
@@ -57,4 +58,6 @@ private:
 	std::unique_ptr<Buffer> m_pGeometryData;
 	std::vector<std::unique_ptr<Texture>> m_Textures;
 	std::map<StringHash, Texture*> m_ExistingTextures;
+	std::unique_ptr<Buffer> m_pBLAS;
+	std::unique_ptr<Buffer> m_pBLASScratch;
 };
