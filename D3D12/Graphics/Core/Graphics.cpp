@@ -1180,67 +1180,83 @@ void Graphics::InitD3D()
 	ComPtr<IDXGIFactory6> pFactory;
 	VERIFY_HR(CreateDXGIFactory2(dxgiFactoryFlags, IID_PPV_ARGS(&pFactory)));
 
-	BOOL allowTearing;
+	BOOL allowTearing = true;
 	HRESULT hr = pFactory->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &allowTearing, sizeof(BOOL));
 	allowTearing &= SUCCEEDED(hr);
 
 	ComPtr<IDXGIAdapter4> pAdapter;
-	uint32 adapterIndex = 0;
-	E_LOG(Info, "Adapters:");
-	DXGI_GPU_PREFERENCE gpuPreference = DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE;
-	while (pFactory->EnumAdapterByGpuPreference(adapterIndex++, gpuPreference, IID_PPV_ARGS(pAdapter.ReleaseAndGetAddressOf())) == S_OK)
+
+	bool useWarpAdapter = CommandLine::GetBool("warp");
+	if (!useWarpAdapter)
 	{
+		uint32 adapterIndex = 0;
+		E_LOG(Info, "Adapters:");
+		DXGI_GPU_PREFERENCE gpuPreference = DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE;
+		while (pFactory->EnumAdapterByGpuPreference(adapterIndex++, gpuPreference, IID_PPV_ARGS(pAdapter.ReleaseAndGetAddressOf())) == S_OK)
+		{
+			DXGI_ADAPTER_DESC3 desc;
+			pAdapter->GetDesc3(&desc);
+			E_LOG(Info, "\t%s - %f GB", UNICODE_TO_MULTIBYTE(desc.Description), (float)desc.DedicatedVideoMemory * Math::ToGigaBytes);
+
+			uint32 outputIndex = 0;
+			ComPtr<IDXGIOutput> pOutput;
+			while (pAdapter->EnumOutputs(outputIndex++, pOutput.ReleaseAndGetAddressOf()) == S_OK)
+			{
+				ComPtr<IDXGIOutput6> pOutput1;
+				pOutput.As(&pOutput1);
+				DXGI_OUTPUT_DESC1 outputDesc;
+				pOutput1->GetDesc1(&outputDesc);
+
+				E_LOG(Info, "\t\tMonitor %d - %dx%d - HDR: %s - %d BPP",
+					outputIndex,
+					outputDesc.DesktopCoordinates.right - outputDesc.DesktopCoordinates.left,
+					outputDesc.DesktopCoordinates.bottom - outputDesc.DesktopCoordinates.top,
+					outputDesc.ColorSpace == DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020 ? "Yes" : "No",
+					outputDesc.BitsPerColor);
+			}
+		}
+		pFactory->EnumAdapterByGpuPreference(0, gpuPreference, IID_PPV_ARGS(pAdapter.GetAddressOf()));
 		DXGI_ADAPTER_DESC3 desc;
 		pAdapter->GetDesc3(&desc);
-		E_LOG(Info, "\t%s - %f GB", UNICODE_TO_MULTIBYTE(desc.Description), (float)desc.DedicatedVideoMemory * Math::ToGigaBytes);
+		E_LOG(Info, "Using %s", UNICODE_TO_MULTIBYTE(desc.Description));
 
-		uint32 outputIndex = 0;
-		ComPtr<IDXGIOutput> pOutput;
-		while (pAdapter->EnumOutputs(outputIndex++, pOutput.ReleaseAndGetAddressOf()) == S_OK)
+		//Create the device
+		constexpr D3D_FEATURE_LEVEL featureLevels[] =
 		{
-			ComPtr<IDXGIOutput6> pOutput1;
-			pOutput.As(&pOutput1);
-			DXGI_OUTPUT_DESC1 outputDesc;
-			pOutput1->GetDesc1(&outputDesc);
+			D3D_FEATURE_LEVEL_12_1,
+			D3D_FEATURE_LEVEL_12_0,
+			D3D_FEATURE_LEVEL_11_1,
+			D3D_FEATURE_LEVEL_11_0
+		};
+		auto GetFeatureLevelName = [](D3D_FEATURE_LEVEL featureLevel) {
+			switch (featureLevel)
+			{
+			case D3D_FEATURE_LEVEL_12_1: return "D3D_FEATURE_LEVEL_12_1";
+			case D3D_FEATURE_LEVEL_12_0: return "D3D_FEATURE_LEVEL_12_0";
+			case D3D_FEATURE_LEVEL_11_1: return "D3D_FEATURE_LEVEL_11_1";
+			case D3D_FEATURE_LEVEL_11_0: return "D3D_FEATURE_LEVEL_11_0";
+			default: noEntry(); return "";
+			}
+		};
 
-			E_LOG(Info, "\t\tMonitor %d - %dx%d - HDR: %s - %d BPP",
-				outputIndex,
-				outputDesc.DesktopCoordinates.right - outputDesc.DesktopCoordinates.left,
-				outputDesc.DesktopCoordinates.bottom - outputDesc.DesktopCoordinates.top,
-				outputDesc.ColorSpace == DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020 ? "Yes" : "No",
-				outputDesc.BitsPerColor);
-		}
+		VERIFY_HR(D3D12CreateDevice(pAdapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&m_pDevice)));
+		D3D12_FEATURE_DATA_FEATURE_LEVELS caps{};
+		caps.pFeatureLevelsRequested = featureLevels;
+		caps.NumFeatureLevels = ARRAYSIZE(featureLevels);
+		VERIFY_HR_EX(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_FEATURE_LEVELS, &caps, sizeof(D3D12_FEATURE_DATA_FEATURE_LEVELS)), GetDevice());
+		VERIFY_HR_EX(D3D12CreateDevice(pAdapter.Get(), caps.MaxSupportedFeatureLevel, IID_PPV_ARGS(m_pDevice.ReleaseAndGetAddressOf())), GetDevice());
+		E_LOG(Info, "D3D12 Device Created: %s", GetFeatureLevelName(caps.MaxSupportedFeatureLevel));
 	}
-	pFactory->EnumAdapterByGpuPreference(0, gpuPreference, IID_PPV_ARGS(pAdapter.GetAddressOf()));
-	DXGI_ADAPTER_DESC3 desc;
-	pAdapter->GetDesc3(&desc);
-	E_LOG(Info, "Using %s", UNICODE_TO_MULTIBYTE(desc.Description));
 
-	//Create the device
-	constexpr D3D_FEATURE_LEVEL featureLevels[] =
+	if (!m_pDevice)
 	{
-		D3D_FEATURE_LEVEL_12_1,
-		D3D_FEATURE_LEVEL_12_0,
-		D3D_FEATURE_LEVEL_11_1,
-		D3D_FEATURE_LEVEL_11_0
-	};
-	auto GetFeatureLevelName = [](D3D_FEATURE_LEVEL featureLevel) {
-		switch (featureLevel)
-		{
-		case D3D_FEATURE_LEVEL_12_1: return "D3D_FEATURE_LEVEL_12_1";
-		case D3D_FEATURE_LEVEL_12_0: return "D3D_FEATURE_LEVEL_12_0";
-		case D3D_FEATURE_LEVEL_11_1: return "D3D_FEATURE_LEVEL_11_1";
-		case D3D_FEATURE_LEVEL_11_0: return "D3D_FEATURE_LEVEL_11_0";
-		default: noEntry(); return "";
-		}
-	};
+		E_LOG(Warning, "No D3D12 Adapter selected. Falling back to WARP");
+		pFactory->EnumWarpAdapter(IID_PPV_ARGS(pAdapter.GetAddressOf()));
+		VERIFY_HR(D3D12CreateDevice(pAdapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(m_pDevice.ReleaseAndGetAddressOf())));
+	}
 
-	VERIFY_HR(D3D12CreateDevice(pAdapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&m_pDevice)));
-	D3D12_FEATURE_DATA_FEATURE_LEVELS caps{};
-	caps.pFeatureLevelsRequested = featureLevels;
-	caps.NumFeatureLevels = ARRAYSIZE(featureLevels);
-	VERIFY_HR_EX(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_FEATURE_LEVELS, &caps, sizeof(D3D12_FEATURE_DATA_FEATURE_LEVELS)), GetDevice());
-	VERIFY_HR_EX(D3D12CreateDevice(pAdapter.Get(), caps.MaxSupportedFeatureLevel, IID_PPV_ARGS(m_pDevice.ReleaseAndGetAddressOf())), GetDevice());
+	m_pDevice.As(&m_pRaytracingDevice);
+	D3D::SetObjectName(m_pDevice.Get(), "Main Device");
 
 #ifndef PLATFORM_UWP
 	auto OnDeviceRemovedCallback = [](void* pContext, BOOLEAN) {
@@ -1254,12 +1270,6 @@ void Graphics::InitD3D()
 	m_pDeviceRemovalFence->SetEventOnCompletion(UINT64_MAX, deviceRemovedEvent);
 	RegisterWaitForSingleObject(&m_DeviceRemovedEvent, deviceRemovedEvent, OnDeviceRemovedCallback, this, INFINITE, 0);
 #endif
-
-	pAdapter.Reset();
-
-	E_LOG(Info, "D3D12 Device Created: %s", GetFeatureLevelName(caps.MaxSupportedFeatureLevel));
-	m_pDevice.As(&m_pRaytracingDevice);
-	D3D::SetObjectName(m_pDevice.Get(), "Main Device");
 
 	if (debugD3D)
 	{
