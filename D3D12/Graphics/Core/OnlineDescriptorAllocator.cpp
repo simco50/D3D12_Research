@@ -66,7 +66,6 @@ void GlobalOnlineDescriptorHeap::FreeBlock(uint64 fenceValue, DescriptorHeapBloc
 OnlineDescriptorAllocator::OnlineDescriptorAllocator(GlobalOnlineDescriptorHeap* pGlobalHeap, CommandContext* pContext)
 	: GraphicsObject(pGlobalHeap->GetParent()), m_pOwner(pContext), m_Type(pGlobalHeap->GetType()), m_pHeapAllocator(pGlobalHeap)
 {
-	
 }
 
 OnlineDescriptorAllocator::~OnlineDescriptorAllocator()
@@ -88,6 +87,7 @@ void OnlineDescriptorAllocator::SetDescriptors(uint32 rootIndex, uint32 offset, 
 	targetHandle += offset * m_pHeapAllocator->GetDescriptorSize();
 	for (uint32 i = 0; i < numHandles; ++i)
 	{
+		checkf(pHandles[i].ptr != DescriptorHandle::InvalidCPUHandle.ptr, "Invalid Descriptor provided (RootIndex: %d, Offset: %d)", rootIndex, offset + i);
 		GetParent()->GetDevice()->CopyDescriptorsSimple(1, targetHandle.GetCpuHandle(), pHandles[i], m_Type);
 		targetHandle += m_pHeapAllocator->GetDescriptorSize();
 	}

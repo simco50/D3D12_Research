@@ -75,13 +75,13 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& resources)
 			Data.ProjectionInverse = resources.pCamera->GetProjectionInverse();
 
 			context.SetComputeDynamicConstantBufferView(0, &Data, sizeof(ShaderParameters));
-			context.SetDynamicDescriptor(1, 0, m_pLightIndexCounter->GetUAV());
-			context.SetDynamicDescriptor(1, 1, m_pLightIndexListBufferOpaque->GetUAV());
-			context.SetDynamicDescriptor(1, 2, m_pLightGridOpaque->GetUAV());
-			context.SetDynamicDescriptor(1, 3, m_pLightIndexListBufferTransparant->GetUAV());
-			context.SetDynamicDescriptor(1, 4, m_pLightGridTransparant->GetUAV());
-			context.SetDynamicDescriptor(2, 0, resources.pResolvedDepth->GetSRV());
-			context.SetDynamicDescriptor(2, 1, resources.pLightBuffer->GetSRV());
+			context.BindResource(1, 0, m_pLightIndexCounter->GetUAV());
+			context.BindResource(1, 1, m_pLightIndexListBufferOpaque->GetUAV());
+			context.BindResource(1, 2, m_pLightGridOpaque->GetUAV());
+			context.BindResource(1, 3, m_pLightIndexListBufferTransparant->GetUAV());
+			context.BindResource(1, 4, m_pLightGridTransparant->GetUAV());
+			context.BindResource(2, 0, resources.pResolvedDepth->GetSRV());
+			context.BindResource(2, 1, resources.pLightBuffer->GetSRV());
 
 			context.Dispatch(Data.NumThreadGroups);
 		});
@@ -166,17 +166,17 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& resources)
 			context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 			context.SetGraphicsRootSignature(m_pDiffuseRS.get());
 
-			context.SetDynamicConstantBufferView(1, &frameData, sizeof(PerFrameData));
-			context.SetDynamicConstantBufferView(2, resources.pShadowData, sizeof(ShadowData));
-			context.SetDynamicDescriptors(3, 0, resources.MaterialTextures.data(), (int)resources.MaterialTextures.size());
-			context.SetDynamicDescriptor(4, 2, resources.pLightBuffer->GetSRV());
-			context.SetDynamicDescriptor(4, 3, resources.pAO->GetSRV());
-			context.SetDynamicDescriptor(4, 4, resources.pResolvedDepth->GetSRV());
-			context.SetDynamicDescriptor(4, 5, resources.pPreviousColor->GetSRV());
+			context.SetGraphicsDynamicConstantBufferView(1, &frameData, sizeof(PerFrameData));
+			context.SetGraphicsDynamicConstantBufferView(2, resources.pShadowData, sizeof(ShadowData));
+			context.BindResources(3, 0, resources.MaterialTextures.data(), (int)resources.MaterialTextures.size());
+			context.BindResource(4, 2, resources.pLightBuffer->GetSRV());
+			context.BindResource(4, 3, resources.pAO->GetSRV());
+			context.BindResource(4, 4, resources.pResolvedDepth->GetSRV());
+			context.BindResource(4, 5, resources.pPreviousColor->GetSRV());
 			int idx = 0;
 			for (auto& pShadowMap : *resources.pShadowMaps)
 			{
-				context.SetDynamicDescriptor(5, idx++, pShadowMap->GetSRV());
+				context.BindResource(5, idx++, pShadowMap->GetSRV());
 			}
 			context.GetCommandList()->SetGraphicsRootShaderResourceView(6, resources.pTLAS->GetGpuHandle());
 
@@ -193,7 +193,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& resources)
 					{
 						objectData.World = b.WorldMatrix;
 						objectData.Material = b.Material;
-						context.SetDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
+						context.SetGraphicsDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
 						b.pMesh->Draw(&context);
 					}
 				}
@@ -202,16 +202,16 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& resources)
 			{
 				GPU_PROFILE_SCOPE("Opaque", &context);
 				context.SetPipelineState(m_pDiffusePSO);
-				context.SetDynamicDescriptor(4, 0, m_pLightGridOpaque->GetSRV());
-				context.SetDynamicDescriptor(4, 1, m_pLightIndexListBufferOpaque->GetSRV()->GetDescriptor());
+				context.BindResource(4, 0, m_pLightGridOpaque->GetSRV());
+				context.BindResource(4, 1, m_pLightIndexListBufferOpaque->GetSRV()->GetDescriptor());
 				DrawBatches(Batch::Blending::Opaque | Batch::Blending::AlphaMask);
 			}
 
 			{
 				GPU_PROFILE_SCOPE("Transparant", &context);
 				context.SetPipelineState(m_pDiffuseAlphaPSO);
-				context.SetDynamicDescriptor(4, 0, m_pLightGridTransparant->GetSRV());
-				context.SetDynamicDescriptor(4, 1, m_pLightIndexListBufferTransparant->GetSRV()->GetDescriptor());
+				context.BindResource(4, 0, m_pLightGridTransparant->GetSRV());
+				context.BindResource(4, 1, m_pLightIndexListBufferTransparant->GetSRV()->GetDescriptor());
 				DrawBatches(Batch::Blending::AlphaBlend);
 			}
 			context.EndRenderPass();
@@ -267,11 +267,11 @@ void TiledForward::VisualizeLightDensity(RGGraph& graph, Camera& camera, Texture
 
 			context.SetComputeDynamicConstantBufferView(0, &constantData, sizeof(Data));
 
-			context.SetDynamicDescriptor(1, 0, pTarget->GetSRV());
-			context.SetDynamicDescriptor(1, 1, pDepth->GetSRV());
-			context.SetDynamicDescriptor(1, 2, m_pLightGridOpaque->GetSRV());
+			context.BindResource(1, 0, pTarget->GetSRV());
+			context.BindResource(1, 1, pDepth->GetSRV());
+			context.BindResource(1, 2, m_pLightGridOpaque->GetSRV());
 
-			context.SetDynamicDescriptor(2, 0, m_pVisualizationIntermediateTexture->GetUAV());
+			context.BindResource(2, 0, m_pVisualizationIntermediateTexture->GetUAV());
 
 			context.Dispatch(Math::DivideAndRoundUp(pTarget->GetWidth(), 16), Math::DivideAndRoundUp(pTarget->GetHeight(), 16));
 			context.InsertUavBarrier();

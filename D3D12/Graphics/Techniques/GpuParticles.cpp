@@ -188,8 +188,8 @@ void GpuParticles::Simulate(RGGraph& graph, Texture* pResolvedDepth, const Camer
 			context.InsertResourceBarrier(m_pParticleBuffer.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
 			context.SetComputeRootSignature(m_pSimulateRS.get());
-			context.SetDynamicDescriptors(1, 0, uavs, ARRAYSIZE(uavs));
-			context.SetDynamicDescriptors(2, 0, srvs, ARRAYSIZE(srvs));
+			context.BindResources(1, 0, uavs, ARRAYSIZE(uavs));
+			context.BindResources(2, 0, srvs, ARRAYSIZE(srvs));
 
 			context.SetPipelineState(m_pPrepareArgumentsPS);
 			struct Parameters
@@ -211,8 +211,8 @@ void GpuParticles::Simulate(RGGraph& graph, Texture* pResolvedDepth, const Camer
 	emit.Bind([=](CommandContext& context, const RGPassResources& passResources)
 		{
 			context.SetComputeRootSignature(m_pSimulateRS.get());
-			context.SetDynamicDescriptors(1, 0, uavs, ARRAYSIZE(uavs));
-			context.SetDynamicDescriptors(2, 0, srvs, ARRAYSIZE(srvs));
+			context.BindResources(1, 0, uavs, ARRAYSIZE(uavs));
+			context.BindResources(2, 0, srvs, ARRAYSIZE(srvs));
 
 			context.SetPipelineState(m_pEmitPS);
 
@@ -242,8 +242,8 @@ void GpuParticles::Simulate(RGGraph& graph, Texture* pResolvedDepth, const Camer
 	simulate.Bind([=](CommandContext& context, const RGPassResources& passResources)
 		{
 			context.SetComputeRootSignature(m_pSimulateRS.get());
-			context.SetDynamicDescriptors(1, 0, uavs, ARRAYSIZE(uavs));
-			context.SetDynamicDescriptors(2, 0, srvs, ARRAYSIZE(srvs));
+			context.BindResources(1, 0, uavs, ARRAYSIZE(uavs));
+			context.BindResources(2, 0, srvs, ARRAYSIZE(srvs));
 
 			context.SetPipelineState(m_pSimulatePS);
 
@@ -277,8 +277,8 @@ void GpuParticles::Simulate(RGGraph& graph, Texture* pResolvedDepth, const Camer
 			context.InsertResourceBarrier(m_pCountersBuffer.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
 			context.SetComputeRootSignature(m_pSimulateRS.get());
-			context.SetDynamicDescriptors(1, 0, uavs, ARRAYSIZE(uavs));
-			context.SetDynamicDescriptors(2, 0, srvs, ARRAYSIZE(srvs));
+			context.BindResources(1, 0, uavs, ARRAYSIZE(uavs));
+			context.BindResources(2, 0, srvs, ARRAYSIZE(srvs));
 
 			context.SetPipelineState(m_pSimulateEndPS);
 			context.Dispatch(1);
@@ -319,13 +319,13 @@ void GpuParticles::Render(RGGraph& graph, Texture* pTarget, Texture* pDepth, con
 			frameData.Projection = camera.GetProjection();
 
 			context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-			context.SetDynamicConstantBufferView(0, &frameData, sizeof(FrameData));
+			context.SetGraphicsDynamicConstantBufferView(0, &frameData, sizeof(FrameData));
 
 			D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
 				m_pParticleBuffer->GetSRV()->GetDescriptor(),
 				m_pAliveList1->GetSRV()->GetDescriptor()
 			};
-			context.SetDynamicDescriptors(1, 0, srvs, 2);
+			context.BindResources(1, 0, srvs, 2);
 			context.ExecuteIndirect(m_pSimpleDrawCommandSignature.get(), 1, m_pDrawArguments.get(), nullptr);
 			context.EndRenderPass();
 		});

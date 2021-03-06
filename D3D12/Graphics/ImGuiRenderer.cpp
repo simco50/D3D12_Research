@@ -181,7 +181,7 @@ void ImGuiRenderer::Render(RGGraph& graph, Texture* pRenderTarget)
 			context.SetPipelineState(m_pPipelineState);
 			context.SetGraphicsRootSignature(m_pRootSignature.get());
 			Matrix projectionMatrix = Math::CreateOrthographicOffCenterMatrix(0.0f, pDrawData->DisplayPos.x + pDrawData->DisplaySize.x, pDrawData->DisplayPos.y + pDrawData->DisplaySize.y, 0.0f, 0.0f, 1.0f);
-			context.SetDynamicConstantBufferView(0, &projectionMatrix, sizeof(Matrix));
+			context.SetGraphicsDynamicConstantBufferView(0, &projectionMatrix, sizeof(Matrix));
 			context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 			context.SetViewport(FloatRect(pDrawData->DisplayPos.x, pDrawData->DisplayPos.y, pDrawData->DisplayPos.x + pDrawData->DisplaySize.x, pDrawData->DisplayPos.y + pDrawData->DisplaySize.y), 0, 1);
 
@@ -205,7 +205,7 @@ void ImGuiRenderer::Render(RGGraph& graph, Texture* pRenderTarget)
 						{
 							Texture* pTex = static_cast<Texture*>(pcmd->TextureId);
 							context.InsertResourceBarrier(pTex, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-							context.SetDynamicDescriptor(1, 0, pTex->GetSRV());
+							context.BindResource(1, 0, pTex->GetSRV());
 						}
 						context.DrawIndexed(pcmd->ElemCount, indexOffset, 0);
 					}

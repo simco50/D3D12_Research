@@ -2,7 +2,9 @@
 #include "ShadingModels.hlsli"
 #include "CommonBindings.hlsli"
 
+#define SUPPORT_BC5 1
 #define MAX_SHADOW_CASTERS 32
+
 struct ShadowData
 {
 	float4x4 LightViewProjections[MAX_SHADOW_CASTERS];
@@ -36,19 +38,16 @@ float RadialAttenuation(float3 L, float range)
 // Unpacks a 2 channel BC5 normal to xyz
 float3 UnpackBC5Normal(float2 packedNormal)
 {
-    float3 normal;
-    normal.xy = packedNormal * 2.0f - 1.0f;
-    normal.z = sqrt(1 - saturate(dot(normal.xy, normal.xy)));
-    return normal;
+    return float3(packedNormal, sqrt(1 - saturate(dot(packedNormal.xy, packedNormal.xy))));
 }
 
 float3 TangentSpaceNormalMapping(float3 sampledNormal, float3x3 TBN, bool invertY)
 {
-#if NORMAL_BC5
-	float3 normal = UnpackBC5Normal(sampledNormal);
-#else
 	float3 normal = sampledNormal;
-	sampledNormal.xy = sampledNormal.xy * 2.0f - 1.0f;
+	normal.xy = sampledNormal.xy * 2.0f - 1.0f;
+
+#if SUPPORT_BC5
+	normal = UnpackBC5Normal(sampledNormal.xy);
 #endif
 
 	if(invertY)

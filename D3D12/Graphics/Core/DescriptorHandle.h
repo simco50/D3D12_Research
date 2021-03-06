@@ -5,12 +5,12 @@ class DescriptorHandle
 public:
 	DescriptorHandle()
 	{
-		m_CpuHandle.ptr = InvalidHandle;
-		m_GpuHandle.ptr = InvalidHandle;
+		m_CpuHandle = InvalidCPUHandle;
+		m_GpuHandle = InvalidGPUHandle;
 	}
 
 	DescriptorHandle(D3D12_CPU_DESCRIPTOR_HANDLE CpuHandle)
-		: m_CpuHandle(CpuHandle), m_GpuHandle({InvalidHandle})
+		: m_CpuHandle(CpuHandle), m_GpuHandle(InvalidGPUHandle)
 	{
 	}
 
@@ -28,25 +28,26 @@ public:
 
 	void operator += (uint32 offsetScaledByDescriptorSize)
 	{
-		if (m_CpuHandle.ptr != InvalidHandle)
+		if (m_CpuHandle != InvalidCPUHandle)
 		{
-			m_CpuHandle.ptr += offsetScaledByDescriptorSize;
+			m_CpuHandle.Offset(1, offsetScaledByDescriptorSize);
 		}
-		if (m_GpuHandle.ptr != InvalidHandle)
+		if (m_GpuHandle != InvalidGPUHandle)
 		{
-			m_GpuHandle.ptr += offsetScaledByDescriptorSize;
+			m_GpuHandle.Offset(1, offsetScaledByDescriptorSize);
 		}
 	}
 
 	D3D12_CPU_DESCRIPTOR_HANDLE GetCpuHandle() const { return m_CpuHandle; }
 	D3D12_GPU_DESCRIPTOR_HANDLE GetGpuHandle() const { return m_GpuHandle; }
 
-	bool IsNull() const { return m_CpuHandle.ptr == InvalidHandle; }
-	bool IsShaderVisible() const { return m_GpuHandle.ptr != InvalidHandle; }
+	bool IsNull() const { return m_CpuHandle == InvalidCPUHandle; }
+	bool IsShaderVisible() const { return m_GpuHandle != InvalidGPUHandle; }
 
-	constexpr static size_t InvalidHandle = (size_t)-1;
+	constexpr static D3D12_CPU_DESCRIPTOR_HANDLE InvalidCPUHandle = { ~0u };
+	constexpr static D3D12_GPU_DESCRIPTOR_HANDLE InvalidGPUHandle = { ~0u };
 
 private:
-	D3D12_CPU_DESCRIPTOR_HANDLE m_CpuHandle;
-	D3D12_GPU_DESCRIPTOR_HANDLE m_GpuHandle;
+	CD3DX12_CPU_DESCRIPTOR_HANDLE m_CpuHandle;
+	CD3DX12_GPU_DESCRIPTOR_HANDLE m_GpuHandle;
 };

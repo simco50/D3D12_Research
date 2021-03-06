@@ -145,55 +145,58 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 		m.IsTransparent = pScene->mMaterials[i]->GetTexture(aiTextureType_OPACITY, 0, &p) == aiReturn_SUCCESS;
 	}
 
-	ID3D12GraphicsCommandList4* pCmd = pContext->GetRaytracingCommandList();
-
-	//Bottom Level Acceleration Structure
+	if (pGraphics->SupportsRayTracing())
 	{
-		std::vector<D3D12_RAYTRACING_GEOMETRY_DESC> geometries;
-		for (size_t i = 0; i < GetMeshCount(); ++i)
+		ID3D12GraphicsCommandList4* pCmd = pContext->GetRaytracingCommandList();
+
+		//Bottom Level Acceleration Structure
 		{
-			const SubMesh* pSubMesh = GetMesh((int)i);
-			D3D12_RAYTRACING_GEOMETRY_DESC geometryDesc{};
-			geometryDesc.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
-			geometryDesc.Flags = D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
-			geometryDesc.Triangles.IndexBuffer = pSubMesh->GetIndexBuffer().Location;
-			geometryDesc.Triangles.IndexCount = pSubMesh->GetIndexBuffer().Elements;
-			geometryDesc.Triangles.IndexFormat = DXGI_FORMAT_R32_UINT;
-			geometryDesc.Triangles.Transform3x4 = 0;
-			geometryDesc.Triangles.VertexBuffer.StartAddress = pSubMesh->GetVertexBuffer().Location;
-			geometryDesc.Triangles.VertexBuffer.StrideInBytes = pSubMesh->GetVertexBuffer().Stride;
-			geometryDesc.Triangles.VertexCount = pSubMesh->GetVertexBuffer().Elements;
-			geometryDesc.Triangles.VertexFormat = DXGI_FORMAT_R32G32B32_FLOAT;
-			geometries.push_back(geometryDesc);
+			std::vector<D3D12_RAYTRACING_GEOMETRY_DESC> geometries;
+			for (size_t i = 0; i < GetMeshCount(); ++i)
+			{
+				const SubMesh* pSubMesh = GetMesh((int)i);
+				D3D12_RAYTRACING_GEOMETRY_DESC geometryDesc{};
+				geometryDesc.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
+				geometryDesc.Flags = D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
+				geometryDesc.Triangles.IndexBuffer = pSubMesh->GetIndexBuffer().Location;
+				geometryDesc.Triangles.IndexCount = pSubMesh->GetIndexBuffer().Elements;
+				geometryDesc.Triangles.IndexFormat = DXGI_FORMAT_R32_UINT;
+				geometryDesc.Triangles.Transform3x4 = 0;
+				geometryDesc.Triangles.VertexBuffer.StartAddress = pSubMesh->GetVertexBuffer().Location;
+				geometryDesc.Triangles.VertexBuffer.StrideInBytes = pSubMesh->GetVertexBuffer().Stride;
+				geometryDesc.Triangles.VertexCount = pSubMesh->GetVertexBuffer().Elements;
+				geometryDesc.Triangles.VertexFormat = DXGI_FORMAT_R32G32B32_FLOAT;
+				geometries.push_back(geometryDesc);
+			}
+
+			D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS prebuildInfo{};
+			prebuildInfo.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
+			prebuildInfo.Flags =
+				D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE
+				| D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_COMPACTION;
+			prebuildInfo.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
+			prebuildInfo.NumDescs = (uint32)geometries.size();
+			prebuildInfo.pGeometryDescs = geometries.data();
+
+			D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO info{};
+			pGraphics->GetRaytracingDevice()->GetRaytracingAccelerationStructurePrebuildInfo(&prebuildInfo, &info);
+
+			m_pBLASScratch = std::make_unique<Buffer>(pGraphics, "BLAS Scratch Buffer");
+			m_pBLASScratch->Create(BufferDesc::CreateByteAddress(Math::AlignUp<uint64>(info.ScratchDataSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT), BufferFlag::UnorderedAccess));
+
+			m_pBLAS = std::make_unique<Buffer>(pGraphics, "BLAS");
+			m_pBLAS->Create(BufferDesc::CreateAccelerationStructure(Math::AlignUp<uint64>(info.ResultDataMaxSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT)));
+
+			D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC asDesc{};
+			asDesc.Inputs = prebuildInfo;
+			asDesc.DestAccelerationStructureData = m_pBLAS->GetGpuHandle();
+			asDesc.ScratchAccelerationStructureData = m_pBLASScratch->GetGpuHandle();
+			asDesc.SourceAccelerationStructureData = 0;
+
+			pCmd->BuildRaytracingAccelerationStructure(&asDesc, 0, nullptr);
+			pContext->InsertUavBarrier(m_pBLAS.get());
+			pContext->FlushResourceBarriers();
 		}
-
-		D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS prebuildInfo{};
-		prebuildInfo.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
-		prebuildInfo.Flags =
-			D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE
-			| D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_COMPACTION;
-		prebuildInfo.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
-		prebuildInfo.NumDescs = (uint32)geometries.size();
-		prebuildInfo.pGeometryDescs = geometries.data();
-
-		D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO info{};
-		pGraphics->GetRaytracingDevice()->GetRaytracingAccelerationStructurePrebuildInfo(&prebuildInfo, &info);
-
-		m_pBLASScratch = std::make_unique<Buffer>(pGraphics, "BLAS Scratch Buffer");
-		m_pBLASScratch->Create(BufferDesc::CreateByteAddress(Math::AlignUp<uint64>(info.ScratchDataSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT), BufferFlag::UnorderedAccess));
-
-		m_pBLAS = std::make_unique<Buffer>(pGraphics, "BLAS");
-		m_pBLAS->Create(BufferDesc::CreateAccelerationStructure(Math::AlignUp<uint64>(info.ResultDataMaxSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT)));
-
-		D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC asDesc{};
-		asDesc.Inputs = prebuildInfo;
-		asDesc.DestAccelerationStructureData = m_pBLAS->GetGpuHandle();
-		asDesc.ScratchAccelerationStructureData = m_pBLASScratch->GetGpuHandle();
-		asDesc.SourceAccelerationStructureData = 0;
-
-		pCmd->BuildRaytracingAccelerationStructure(&asDesc, 0, nullptr);
-		pContext->InsertUavBarrier(m_pBLAS.get());
-		pContext->FlushResourceBarriers();
 	}
 
 	return true;
@@ -207,7 +210,8 @@ SubMesh::~SubMesh()
 void SubMesh::Draw(CommandContext* pContext) const
 {
 	pContext->SetIndexBuffer(GetIndexBuffer());
-	pContext->SetVertexBuffer(GetVertexBuffer());
+	VertexBufferView vbView = GetVertexBuffer();
+	pContext->SetVertexBuffers(&vbView, 1);
 	pContext->DrawIndexed(m_IndexCount, 0, 0);
 }
 

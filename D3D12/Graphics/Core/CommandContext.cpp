@@ -271,6 +271,16 @@ void CommandContext::SetComputeRootSignature(RootSignature* pRootSignature)
 	m_pSamplerDescriptorAllocator->ParseRootSignature(pRootSignature);
 }
 
+void CommandContext::SetComputeRootSRV(int rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address)
+{
+	m_pCommandList->SetComputeRootShaderResourceView(rootIndex, address);
+}
+
+void CommandContext::SetComputeRootUAV(int rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address)
+{
+	m_pCommandList->SetComputeRootUnorderedAccessView(rootIndex, address);
+}
+
 void CommandContext::SetComputeRootConstants(int rootIndex, uint32 count, const void* pConstants)
 {
 	m_pCommandList->SetComputeRoot32BitConstants(rootIndex, count, pConstants, 0);
@@ -283,34 +293,29 @@ void CommandContext::SetComputeDynamicConstantBufferView(int rootIndex, void* pD
 	m_pCommandList->SetComputeRootConstantBufferView(rootIndex, allocation.GpuHandle);
 }
 
-void CommandContext::SetDynamicDescriptor(int rootIndex, int offset, D3D12_CPU_DESCRIPTOR_HANDLE handle)
+void CommandContext::BindResource(int rootIndex, int offset, D3D12_CPU_DESCRIPTOR_HANDLE handle)
 {
 	m_pShaderResourceDescriptorAllocator->SetDescriptors(rootIndex, offset, 1, &handle);
 }
 
-void CommandContext::SetDynamicDescriptor(int rootIndex, int offset, UnorderedAccessView* pView)
+void CommandContext::BindResource(int rootIndex, int offset, UnorderedAccessView* pView)
 {
-	SetDynamicDescriptor(rootIndex, offset, pView->GetDescriptor());
+	BindResource(rootIndex, offset, pView->GetDescriptor());
 }
 
-void CommandContext::SetDynamicDescriptor(int rootIndex, int offset, ShaderResourceView* pView)
+void CommandContext::BindResource(int rootIndex, int offset, ShaderResourceView* pView)
 {
-	SetDynamicDescriptor(rootIndex, offset, pView->GetDescriptor());
+	BindResource(rootIndex, offset, pView->GetDescriptor());
 }
 
-void CommandContext::SetDynamicDescriptors(int rootIndex, int offset, const D3D12_CPU_DESCRIPTOR_HANDLE* handles, int count)
+void CommandContext::BindResources(int rootIndex, int offset, const D3D12_CPU_DESCRIPTOR_HANDLE* handles, int count)
 {
 	m_pShaderResourceDescriptorAllocator->SetDescriptors(rootIndex, offset, count, handles);
 }
 
-void CommandContext::SetDynamicSampler(int rootIndex, int offset, D3D12_CPU_DESCRIPTOR_HANDLE handle)
+void CommandContext::BindSampler(int rootIndex, int offset, D3D12_CPU_DESCRIPTOR_HANDLE handle)
 {
 	m_pSamplerDescriptorAllocator->SetDescriptors(rootIndex, offset, 1, &handle);
-}
-
-void CommandContext::SetDynamicSamplers(int rootIndex, int offset, const D3D12_CPU_DESCRIPTOR_HANDLE* handles, int count)
-{
-	m_pSamplerDescriptorAllocator->SetDescriptors(rootIndex, offset, count, handles);
 }
 
 void CommandContext::SetShadingRate(D3D12_SHADING_RATE shadingRate /*= D3D12_SHADING_RATE_1X1*/)
@@ -325,9 +330,9 @@ void CommandContext::SetShadingRateImage(Texture* pTexture)
 	m_pMeshShadingCommandList->RSSetShadingRateImage(pTexture->GetResource());
 }
 
-DynamicAllocation CommandContext::AllocateTransientMemory(uint64 size)
+DynamicAllocation CommandContext::AllocateTransientMemory(uint64 size, uint32 alignment /*= 256*/)
 {
-	return m_DynamicAllocator->Allocate(size);
+	return m_DynamicAllocator->Allocate(size, alignment);
 }
 
 bool CommandContext::IsTransitionAllowed(D3D12_COMMAND_LIST_TYPE commandlistType, D3D12_RESOURCE_STATES state)
@@ -664,12 +669,17 @@ void CommandContext::SetGraphicsRootSRV(int rootIndex, D3D12_GPU_VIRTUAL_ADDRESS
 	m_pCommandList->SetGraphicsRootShaderResourceView(rootIndex, address);
 }
 
+void CommandContext::SetGraphicsRootUAV(int rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address)
+{
+	m_pCommandList->SetGraphicsRootUnorderedAccessView(rootIndex, address);
+}
+
 void CommandContext::SetGraphicsRootConstants(int rootIndex, uint32 count, const void* pConstants)
 {
 	m_pCommandList->SetGraphicsRoot32BitConstants(rootIndex, count, pConstants, 0);
 }
 
-void CommandContext::SetDynamicConstantBufferView(int rootIndex, const void* pData, uint32 dataSize)
+void CommandContext::SetGraphicsDynamicConstantBufferView(int rootIndex, const void* pData, uint32 dataSize)
 {
 	DynamicAllocation allocation = m_DynamicAllocator->Allocate(dataSize);
 	memcpy(allocation.pMappedMemory, pData, dataSize);
@@ -704,11 +714,6 @@ void CommandContext::SetDynamicIndexBuffer(int elementCount, const void* pData, 
 void CommandContext::SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY type)
 {
 	m_pCommandList->IASetPrimitiveTopology(type);
-}
-
-void CommandContext::SetVertexBuffer(const VertexBufferView& vertexBuffer)
-{
-	SetVertexBuffers(&vertexBuffer, 1);
 }
 
 void CommandContext::SetVertexBuffers(const VertexBufferView* pVertexBuffers, int bufferCount)

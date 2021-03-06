@@ -151,13 +151,6 @@ public:
 	void InitializeBuffer(Buffer* pResource, const void* pData, uint64 dataSize, uint64 offset = 0);
 	void InitializeTexture(Texture* pResource, D3D12_SUBRESOURCE_DATA* pSubResourceDatas, int firstSubResource, int subResourceCount);
 
-	ID3D12GraphicsCommandList* GetCommandList() const { return m_pCommandList; }
-	ID3D12GraphicsCommandList4* GetRaytracingCommandList() const { return  m_pRaytracingCommandList.Get(); }
-	ID3D12GraphicsCommandList6* GetMeshShadingCommandList() const { return  m_pMeshShadingCommandList.Get(); }
-
-	D3D12_COMMAND_LIST_TYPE GetType() const { return m_Type; }
-
-	//Commands
 	void Dispatch(uint32 groupCountX, uint32 groupCountY = 1, uint32 groupCountZ = 1);
 	void Dispatch(const IntVector3& groupCounts);
 	void DispatchMesh(uint32 groupCountX, uint32 groupCountY = 1, uint32 groupCountZ = 1);
@@ -181,29 +174,18 @@ public:
 	void ClearUavUInt(GraphicsResource* pBuffer, UnorderedAccessView* pUav, uint32* values = nullptr);
 	void ClearUavFloat(GraphicsResource* pBuffer, UnorderedAccessView* pUav, float* values = nullptr);
 
-	//Bindings
 	void SetPipelineState(PipelineState* pPipelineState);
 	void SetPipelineState(StateObject* pStateObject);
-	void SetComputeRootSignature(RootSignature* pRootSignature);
-	void SetComputeRootConstants(int rootIndex, uint32 count, const void* pConstants);
-	void SetComputeDynamicConstantBufferView(int rootIndex, void* pData, uint32 dataSize);
 
-	void SetDynamicDescriptor(int rootIndex, int offset, D3D12_CPU_DESCRIPTOR_HANDLE handle);
-	void SetDynamicDescriptor(int rootIndex, int offset, UnorderedAccessView* pView);
-	void SetDynamicDescriptor(int rootIndex, int offset, ShaderResourceView* pView);
-	void SetDynamicDescriptors(int rootIndex, int offset, const D3D12_CPU_DESCRIPTOR_HANDLE* handles, int count = 1);
-	void SetDynamicSampler(int rootIndex, int offset, D3D12_CPU_DESCRIPTOR_HANDLE handle);
-	void SetDynamicSamplers(int rootIndex, int offset, const D3D12_CPU_DESCRIPTOR_HANDLE* handles, int count = 1);
+	void BindResource(int rootIndex, int offset, D3D12_CPU_DESCRIPTOR_HANDLE handle);
+	void BindResource(int rootIndex, int offset, UnorderedAccessView* pView);
+	void BindResource(int rootIndex, int offset, ShaderResourceView* pView);
+	void BindResources(int rootIndex, int offset, const D3D12_CPU_DESCRIPTOR_HANDLE* handles, int count = 1);
+	void BindSampler(int rootIndex, int offset, D3D12_CPU_DESCRIPTOR_HANDLE handle);
 
-	void SetGraphicsRootSignature(RootSignature* pRootSignature);
-
-	void SetGraphicsRootSRV(int rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address);
-	void SetGraphicsRootConstants(int rootIndex, uint32 count, const void* pConstants);
-	void SetDynamicConstantBufferView(int rootIndex, const void* pData, uint32 dataSize);
 	void SetDynamicVertexBuffer(int slot, int elementCount, int elementSize, const void* pData);
 	void SetDynamicIndexBuffer(int elementCount, const void* pData, bool smallIndices = false);
 	void SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY type);
-	void SetVertexBuffer(const VertexBufferView& buffer);
 	void SetVertexBuffers(const VertexBufferView* pBuffers, int bufferCount);
 	void SetIndexBuffer(const IndexBufferView& indexBuffer);
 	void SetViewport(const FloatRect& rect, float minDepth = 0.0f, float maxDepth = 1.0f);
@@ -212,7 +194,27 @@ public:
 	void SetShadingRate(D3D12_SHADING_RATE shadingRate = D3D12_SHADING_RATE_1X1);
 	void SetShadingRateImage(Texture* pTexture);
 
-	DynamicAllocation AllocateTransientMemory(uint64 size);
+	// Compute
+	void SetComputeRootSignature(RootSignature* pRootSignature);
+	void SetComputeRootSRV(int rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address);
+	void SetComputeRootUAV(int rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address);
+	void SetComputeRootConstants(int rootIndex, uint32 count, const void* pConstants);
+	void SetComputeDynamicConstantBufferView(int rootIndex, void* pData, uint32 dataSize);
+
+	// Graphics
+	void SetGraphicsRootSignature(RootSignature* pRootSignature);
+	void SetGraphicsRootSRV(int rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address);
+	void SetGraphicsRootUAV(int rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address);
+	void SetGraphicsRootConstants(int rootIndex, uint32 count, const void* pConstants);
+	void SetGraphicsDynamicConstantBufferView(int rootIndex, const void* pData, uint32 dataSize);
+
+	DynamicAllocation AllocateTransientMemory(uint64 size, uint32 alignment = 256);
+
+	ID3D12GraphicsCommandList* GetCommandList() const { return m_pCommandList; }
+	ID3D12GraphicsCommandList4* GetRaytracingCommandList() const { return  m_pRaytracingCommandList.Get(); }
+	ID3D12GraphicsCommandList6* GetMeshShadingCommandList() const { return  m_pMeshShadingCommandList.Get(); }
+
+	D3D12_COMMAND_LIST_TYPE GetType() const { return m_Type; }
 
 	struct PendingBarrier
 	{

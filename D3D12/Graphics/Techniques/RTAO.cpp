@@ -82,9 +82,9 @@ void RTAO::Execute(RGGraph& graph, Texture* pColor, Texture* pDepth, Buffer* pTL
 			bindingTable.BindMissShader("Miss", {});
 
 			context.SetComputeDynamicConstantBufferView(0, &parameters, sizeof(Parameters));
-			context.SetDynamicDescriptor(1, 0, pColor->GetUAV());
-			context.SetDynamicDescriptor(2, 0, pTLAS->GetSRV());
-			context.SetDynamicDescriptor(2, 1, pDepth->GetSRV());
+			context.BindResource(1, 0, pColor->GetUAV());
+			context.BindResource(2, 0, pTLAS->GetSRV());
+			context.BindResource(2, 1, pDepth->GetSRV());
 
 			context.DispatchRays(bindingTable, pColor->GetWidth(), pColor->GetHeight());
 		});

@@ -85,10 +85,10 @@ void RTReflections::Execute(RGGraph& graph, const SceneData& sceneData)
 			};
 
 			context.SetComputeDynamicConstantBufferView(0, &parameters, sizeof(Parameters));
-			context.SetDynamicDescriptor(1, 0, sceneData.pResolvedTarget->GetUAV());
-			context.SetDynamicDescriptors(2, 0, srvs, ARRAYSIZE(srvs));
-			context.SetDynamicDescriptor(3, 0, sceneData.pTLAS->GetSRV()->GetDescriptor());
-			context.SetDynamicDescriptors(4, 0, sceneData.MaterialTextures.data(), (int)sceneData.MaterialTextures.size());
+			context.BindResource(1, 0, sceneData.pResolvedTarget->GetUAV());
+			context.BindResources(2, 0, srvs, ARRAYSIZE(srvs));
+			context.BindResource(3, 0, sceneData.pTLAS->GetSRV()->GetDescriptor());
+			context.BindResources(4, 0, sceneData.MaterialTextures.data(), (int)sceneData.MaterialTextures.size());
 
 			context.DispatchRays(bindingTable, sceneData.pResolvedTarget->GetWidth(), sceneData.pResolvedTarget->GetHeight());
 		});

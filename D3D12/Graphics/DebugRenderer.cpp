@@ -92,7 +92,7 @@ void DebugRenderer::Render(RGGraph& graph, const Matrix& viewProjection, Texture
 			context.BeginRenderPass(RenderPassInfo(pTarget, RenderPassAccess::Load_Store, pDepth, RenderPassAccess::Load_Store, false));
 			context.SetGraphicsRootSignature(m_pRS.get());
 
-			context.SetDynamicConstantBufferView(0, &viewProjection, sizeof(Matrix));
+			context.SetGraphicsDynamicConstantBufferView(0, &viewProjection, sizeof(Matrix));
 
 			if (linePrimitives != 0)
 			{
