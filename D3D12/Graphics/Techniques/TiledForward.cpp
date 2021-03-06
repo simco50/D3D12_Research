@@ -168,16 +168,11 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& resources)
 
 			context.SetGraphicsDynamicConstantBufferView(1, &frameData, sizeof(PerFrameData));
 			context.SetGraphicsDynamicConstantBufferView(2, resources.pShadowData, sizeof(ShadowData));
-			context.BindResources(3, 0, resources.MaterialTextures.data(), (int)resources.MaterialTextures.size());
+			context.BindResourceTable(3, resources.GlobalSRVHeapHandle, CommandListContext::Graphics);
 			context.BindResource(4, 2, resources.pLightBuffer->GetSRV());
 			context.BindResource(4, 3, resources.pAO->GetSRV());
 			context.BindResource(4, 4, resources.pResolvedDepth->GetSRV());
 			context.BindResource(4, 5, resources.pPreviousColor->GetSRV());
-			int idx = 0;
-			for (auto& pShadowMap : *resources.pShadowMaps)
-			{
-				context.BindResource(5, idx++, pShadowMap->GetSRV());
-			}
 			context.GetCommandList()->SetGraphicsRootShaderResourceView(6, resources.pTLAS->GetGpuHandle());
 
 			auto DrawBatches = [&](Batch::Blending blendMode)

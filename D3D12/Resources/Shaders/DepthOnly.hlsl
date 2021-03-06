@@ -47,7 +47,7 @@ PSInput VSMain(VSInput input)
 
 void PSMain(PSInput input)
 {
-	if(tMaterialTextures[cObjectData.Diffuse].Sample(sDiffuseSampler, input.texCoord).a < 0.5f)
+	if(tTableTexture2D[cObjectData.Diffuse].Sample(sDiffuseSampler, input.texCoord).a < 0.5f)
 	{
 		discard;
 	}

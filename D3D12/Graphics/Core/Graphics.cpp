@@ -360,8 +360,11 @@ void Graphics::Update()
 			else
 				pShadowMap->Create(TextureDesc::CreateDepth(512, 512, DEPTH_STENCIL_SHADOW_FORMAT, TextureFlag::DepthStencil | TextureFlag::ShaderResource, 1, ClearBinding(0.0f, 0)));
 			++i;
+			RegisterBindlessTexture(pShadowMap.get(), nullptr);
 		}
 	}
+
+	shadowData.ShadowMapOffset = RegisterBindlessTexture(m_ShadowMaps[0].get());
 
 	for (Light& light : m_Lights)
 	{
@@ -376,7 +379,6 @@ void Graphics::Update()
 	m_SceneData.pRenderTarget = GetCurrentRenderTarget();
 	m_SceneData.pLightBuffer = m_pLightBuffer.get();
 	m_SceneData.pCamera = m_pCamera.get();
-	m_SceneData.pShadowMaps = &m_ShadowMaps;
 	m_SceneData.pShadowData = &shadowData;
 	m_SceneData.pAO = m_pAmbientOcclusion.get();
 	m_SceneData.FrameIndex = m_Frame;
@@ -504,7 +506,7 @@ void Graphics::Update()
 
 			renderContext.SetGraphicsRootSignature(m_pDepthPrepassRS.get());
 
-			renderContext.BindResources(2, 0, m_SceneData.MaterialTextures.data(), (int)m_SceneData.MaterialTextures.size());
+			renderContext.BindResourceTable(2, m_SceneData.GlobalSRVHeapHandle, CommandListContext::Graphics);
 
 			struct ViewData
 			{
@@ -706,7 +708,7 @@ void Graphics::Update()
 
 					viewData.ViewProjection = shadowData.LightViewProjections[i];
 					context.SetGraphicsDynamicConstantBufferView(1, &viewData, sizeof(ViewData));
-					context.BindResources(2, 0, m_SceneData.MaterialTextures.data(), (int)m_SceneData.MaterialTextures.size());
+					context.BindResourceTable(2, m_SceneData.GlobalSRVHeapHandle, CommandListContext::Graphics);
 
 					auto DrawBatches = [&](const Batch::Blending& blendmodes)
 					{
@@ -1349,7 +1351,8 @@ void Graphics::InitD3D()
 
 	m_pGlobalViewHeap = std::make_unique<GlobalOnlineDescriptorHeap>(this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 2000, 1000000);
 	m_pGlobalSamplerHeap = std::make_unique<GlobalOnlineDescriptorHeap>(this, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, 256, 2048);
-
+	m_pPersistentDescriptorHeap = std::make_unique<OnlineDescriptorAllocator>(m_pGlobalViewHeap.get(), nullptr);
+	m_SceneData.GlobalSRVHeapHandle = m_pGlobalViewHeap->GetHeap()->GetGPUDescriptorHandleForHeapStart();
 	
 	check(m_DescriptorHeaps.size() == D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES);
 	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV] = std::make_unique<OfflineDescriptorAllocator>(this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 256);
@@ -1580,20 +1583,21 @@ void Graphics::InitializeAssets(CommandContext& context)
 			m_Lights.push_back(sunLight);
 		}
 
-		Vector3 spotLocations[] = {
+		{
+			Vector3 spotLocations[] = {
 			Vector3(62, 10, -18),
 			Vector3(-48, 10, 18),
 			Vector3(-48, 10, -18),
 			Vector3(62, 10, 18)
-		};
-		for(int i = 0; i < ARRAYSIZE(spotLocations); ++i)
-		{
-			Light spotLight = Light::Spot(spotLocations[i], 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1.0f, 0.7f, 0.3f, 1.0f));
-			spotLight.CastShadows = true;
-			spotLight.VolumetricLighting = false;
-			m_Lights.push_back(spotLight);
+			};
+			for (int i = 0; i < ARRAYSIZE(spotLocations); ++i)
+			{
+				Light spotLight = Light::Spot(spotLocations[i], 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1.0f, 0.7f, 0.3f, 1.0f));
+				spotLight.CastShadows = true;
+				spotLight.VolumetricLighting = false;
+				m_Lights.push_back(spotLight);
+			}
 		}
-
 		m_pLightBuffer = std::make_unique<Buffer>(this, "Lights");
 		m_pLightBuffer->Create(BufferDesc::CreateStructured((int)m_Lights.size(), sizeof(Light), BufferFlag::ShaderResource));
 	}
@@ -2145,24 +2149,14 @@ int Graphics::RegisterBindlessTexture(Texture* pTexture, Texture* pFallback)
 	{
 		return it->second;
 	}
-	int index = (int)m_TextureToDescriptorIndex.size();
 	if (pTexture)
 	{
-		m_TextureToDescriptorIndex[pTexture] = index;
-		m_SceneData.MaterialTextures.push_back(pTexture->GetSRV());
+		DescriptorHandle handle = m_pPersistentDescriptorHeap->Allocate(1);
+		m_pDevice->CopyDescriptorsSimple(1, handle.CpuHandle, pTexture->GetSRV(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+		m_TextureToDescriptorIndex[pTexture] = handle.HeapIndex;
+		return handle.HeapIndex;
 	}
-	else
-	{
-		if (pFallback)
-		{
-			index = RegisterBindlessTexture(pFallback);
-		}
-		else
-		{
-			index = 0;
-		}
-	}
-	return index;
+	return pFallback ? RegisterBindlessTexture(pFallback) : 0;
 }
 
 CommandQueue* Graphics::GetCommandQueue(D3D12_COMMAND_LIST_TYPE type) const

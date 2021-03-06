@@ -88,7 +88,7 @@ void RTReflections::Execute(RGGraph& graph, const SceneData& sceneData)
 			context.BindResource(1, 0, sceneData.pResolvedTarget->GetUAV());
 			context.BindResources(2, 0, srvs, ARRAYSIZE(srvs));
 			context.BindResource(3, 0, sceneData.pTLAS->GetSRV()->GetDescriptor());
-			context.BindResources(4, 0, sceneData.MaterialTextures.data(), (int)sceneData.MaterialTextures.size());
+			context.BindResourceTable(4, sceneData.GlobalSRVHeapHandle, CommandListContext::Compute);
 
 			context.DispatchRays(bindingTable, sceneData.pResolvedTarget->GetWidth(), sceneData.pResolvedTarget->GetHeight());
 		});

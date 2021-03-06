@@ -64,10 +64,12 @@ public:
 	void ReleaseUsedHeaps(uint64 fenceValue);
 
 private:
+	CommandContext* m_pOwner;
+	D3D12_DESCRIPTOR_HEAP_TYPE m_Type;
 	struct RootDescriptorEntry
 	{
 		uint32 TableSize = 0;
-		DescriptorHandle GpuHandle;
+		DescriptorHandle Descriptor;
 	};
 	std::array<RootDescriptorEntry, MAX_NUM_ROOT_PARAMETERS> m_RootDescriptorTable = {};
 
@@ -77,7 +79,4 @@ private:
 	GlobalOnlineDescriptorHeap* m_pHeapAllocator;
 	DescriptorHeapBlock* m_pCurrentHeapBlock = nullptr;
 	std::vector<DescriptorHeapBlock*> m_ReleasedBlocks;
-
-	CommandContext* m_pOwner;
-	D3D12_DESCRIPTOR_HEAP_TYPE m_Type;
 };

@@ -80,6 +80,7 @@ struct ShadowData
 	Matrix LightViewProjections[MAX_SHADOW_CASTERS];
 	float CascadeDepths[4];
 	uint32 NumCascades = 0;
+	uint32 ShadowMapOffset = 0;
 };
 
 struct SceneData
@@ -92,9 +93,8 @@ struct SceneData
 	Texture* pNormals = nullptr;
 	Texture* pResolvedNormals = nullptr;
 	Texture* pAO = nullptr;
-	std::vector<std::unique_ptr<Texture>>* pShadowMaps = nullptr;
 	std::vector<Batch> Batches;
-	std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> MaterialTextures;
+	D3D12_GPU_DESCRIPTOR_HANDLE GlobalSRVHeapHandle{};
 	Buffer* pLightBuffer = nullptr;
 	Camera* pCamera = nullptr;
 	ShadowData* pShadowData = nullptr;
@@ -210,6 +210,7 @@ private:
 	D3D12_VARIABLE_SHADING_RATE_TIER m_VRSTier = D3D12_VARIABLE_SHADING_RATE_TIER_NOT_SUPPORTED;
 	int m_VRSTileSize = -1;
 
+	std::unique_ptr<class OnlineDescriptorAllocator> m_pPersistentDescriptorHeap;
 	std::unique_ptr<GlobalOnlineDescriptorHeap> m_pGlobalViewHeap;
 	std::unique_ptr<GlobalOnlineDescriptorHeap> m_pGlobalSamplerHeap;
 

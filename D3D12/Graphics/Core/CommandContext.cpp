@@ -13,14 +13,9 @@
 #include "StateObject.h"
 
 CommandContext::CommandContext(Graphics* pGraphics, ID3D12GraphicsCommandList* pCommandList, D3D12_COMMAND_LIST_TYPE type, ID3D12CommandAllocator* pAllocator)
-	: GraphicsObject(pGraphics), m_pCommandList(pCommandList), m_Type(type), m_pAllocator(pAllocator)
+	: GraphicsObject(pGraphics), m_pCommandList(pCommandList), m_Type(type), m_pAllocator(pAllocator), m_ShaderResourceDescriptorAllocator(pGraphics->GetGlobalViewHeap(), this)
 {
 	m_DynamicAllocator = std::make_unique<DynamicResourceAllocator>(pGraphics->GetAllocationManager());
-	if (m_Type != D3D12_COMMAND_LIST_TYPE_COPY)
-	{
-		m_pShaderResourceDescriptorAllocator = std::make_unique<OnlineDescriptorAllocator>(pGraphics->GetGlobalViewHeap(), this);
-		m_pSamplerDescriptorAllocator = std::make_unique<OnlineDescriptorAllocator>(pGraphics->GetGlobalSamplerHeap(), this);
-	}
 	pCommandList->QueryInterface(IID_PPV_ARGS(m_pRaytracingCommandList.GetAddressOf()));
 	pCommandList->QueryInterface(IID_PPV_ARGS(m_pMeshShadingCommandList.GetAddressOf()));
 }
@@ -85,8 +80,7 @@ void CommandContext::Free(uint64 fenceValue)
 
 	if (m_Type != D3D12_COMMAND_LIST_TYPE_COPY)
 	{
-		m_pShaderResourceDescriptorAllocator->ReleaseUsedHeaps(fenceValue);
-		m_pSamplerDescriptorAllocator->ReleaseUsedHeaps(fenceValue);
+		m_ShaderResourceDescriptorAllocator.ReleaseUsedHeaps(fenceValue);
 	}
 }
 
@@ -249,26 +243,25 @@ void CommandContext::ExecuteIndirect(CommandSignature* pCommandSignature, uint32
 void CommandContext::ClearUavUInt(GraphicsResource* pBuffer, UnorderedAccessView* pUav, uint32* values /*= nullptr*/)
 {
 	FlushResourceBarriers();
-	DescriptorHandle gpuHandle = m_pShaderResourceDescriptorAllocator->Allocate(1);
-	GetParent()->GetDevice()->CopyDescriptorsSimple(1, gpuHandle.GetCpuHandle(), pUav->GetDescriptor(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	DescriptorHandle gpuHandle = m_ShaderResourceDescriptorAllocator.Allocate(1);
+	GetParent()->GetDevice()->CopyDescriptorsSimple(1, gpuHandle.CpuHandle, pUav->GetDescriptor(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 	uint32 zeros[4] = { 0,0,0,0 };
-	m_pCommandList->ClearUnorderedAccessViewUint(gpuHandle.GetGpuHandle(), pUav->GetDescriptor(), pBuffer->GetResource(), values ? values : zeros, 0, nullptr);
+	m_pCommandList->ClearUnorderedAccessViewUint(gpuHandle.GpuHandle, pUav->GetDescriptor(), pBuffer->GetResource(), values ? values : zeros, 0, nullptr);
 }
 
 void CommandContext::ClearUavFloat(GraphicsResource* pBuffer, UnorderedAccessView* pUav, float* values /*= nullptr*/)
 {
 	FlushResourceBarriers();
-	DescriptorHandle gpuHandle = m_pShaderResourceDescriptorAllocator->Allocate(1);
-	GetParent()->GetDevice()->CopyDescriptorsSimple(1, gpuHandle.GetCpuHandle(), pUav->GetDescriptor(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	DescriptorHandle gpuHandle = m_ShaderResourceDescriptorAllocator.Allocate(1);
+	GetParent()->GetDevice()->CopyDescriptorsSimple(1, gpuHandle.CpuHandle, pUav->GetDescriptor(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 	float zeros[4] = { 0,0,0,0 };
-	m_pCommandList->ClearUnorderedAccessViewFloat(gpuHandle.GetGpuHandle(), pUav->GetDescriptor(), pBuffer->GetResource(), values ? values : zeros, 0, nullptr);
+	m_pCommandList->ClearUnorderedAccessViewFloat(gpuHandle.GpuHandle, pUav->GetDescriptor(), pBuffer->GetResource(), values ? values : zeros, 0, nullptr);
 }
 
 void CommandContext::SetComputeRootSignature(RootSignature* pRootSignature)
 {
 	m_pCommandList->SetComputeRootSignature(pRootSignature->GetRootSignature());
-	m_pShaderResourceDescriptorAllocator->ParseRootSignature(pRootSignature);
-	m_pSamplerDescriptorAllocator->ParseRootSignature(pRootSignature);
+	m_ShaderResourceDescriptorAllocator.ParseRootSignature(pRootSignature);
 }
 
 void CommandContext::SetComputeRootSRV(int rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address)
@@ -295,7 +288,7 @@ void CommandContext::SetComputeDynamicConstantBufferView(int rootIndex, void* pD
 
 void CommandContext::BindResource(int rootIndex, int offset, D3D12_CPU_DESCRIPTOR_HANDLE handle)
 {
-	m_pShaderResourceDescriptorAllocator->SetDescriptors(rootIndex, offset, 1, &handle);
+	m_ShaderResourceDescriptorAllocator.SetDescriptors(rootIndex, offset, 1, &handle);
 }
 
 void CommandContext::BindResource(int rootIndex, int offset, UnorderedAccessView* pView)
@@ -310,12 +303,19 @@ void CommandContext::BindResource(int rootIndex, int offset, ShaderResourceView*
 
 void CommandContext::BindResources(int rootIndex, int offset, const D3D12_CPU_DESCRIPTOR_HANDLE* handles, int count)
 {
-	m_pShaderResourceDescriptorAllocator->SetDescriptors(rootIndex, offset, count, handles);
+	m_ShaderResourceDescriptorAllocator.SetDescriptors(rootIndex, offset, count, handles);
 }
 
-void CommandContext::BindSampler(int rootIndex, int offset, D3D12_CPU_DESCRIPTOR_HANDLE handle)
+void CommandContext::BindResourceTable(int rootIndex, D3D12_GPU_DESCRIPTOR_HANDLE handle, CommandListContext context)
 {
-	m_pSamplerDescriptorAllocator->SetDescriptors(rootIndex, offset, 1, &handle);
+	if (context == CommandListContext::Graphics)
+	{
+		m_pCommandList->SetGraphicsRootDescriptorTable(rootIndex, handle);
+	}
+	else
+	{
+		m_pCommandList->SetComputeRootDescriptorTable(rootIndex, handle);
+	}
 }
 
 void CommandContext::SetShadingRate(D3D12_SHADING_RATE shadingRate /*= D3D12_SHADING_RATE_1X1*/)
@@ -640,8 +640,7 @@ void CommandContext::ResolveResource(Texture* pSource, uint32 sourceSubResource,
 void CommandContext::PrepareDraw(GraphicsPipelineType type)
 {
 	FlushResourceBarriers();
-	m_pShaderResourceDescriptorAllocator->BindStagedDescriptors(type);
-	m_pSamplerDescriptorAllocator->BindStagedDescriptors(type);
+	m_ShaderResourceDescriptorAllocator.BindStagedDescriptors(type);
 }
 
 void CommandContext::SetPipelineState(PipelineState* pPipelineState)
@@ -660,8 +659,7 @@ void CommandContext::SetPipelineState(StateObject* pStateObject)
 void CommandContext::SetGraphicsRootSignature(RootSignature* pRootSignature)
 {
 	m_pCommandList->SetGraphicsRootSignature(pRootSignature->GetRootSignature());
-	m_pShaderResourceDescriptorAllocator->ParseRootSignature(pRootSignature);
-	m_pSamplerDescriptorAllocator->ParseRootSignature(pRootSignature);
+	m_ShaderResourceDescriptorAllocator.ParseRootSignature(pRootSignature);
 }
 
 void CommandContext::SetGraphicsRootSRV(int rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address)
