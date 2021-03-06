@@ -240,6 +240,15 @@ void Texture::Create(const TextureDesc& textureDesc)
 	SetName(m_Name.c_str());
 }
 
+void Texture::Create(CommandContext* pContext, const TextureDesc& desc, void* pInitData)
+{
+	Create(desc);
+	if (pInitData)
+	{
+		SetData(pContext, pInitData);
+	}
+}
+
 DXGI_FORMAT Texture::GetSrvFormat(DXGI_FORMAT format)
 {
 	switch (format)

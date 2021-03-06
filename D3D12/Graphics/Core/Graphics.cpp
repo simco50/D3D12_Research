@@ -1126,8 +1126,6 @@ void Graphics::EndFrame(uint64 fenceValue)
 {
 	Profiler::Get()->Resolve(this, m_Frame);
 
-	OPTICK_GPU_FLIP(m_pSwapchain.Get());
-	OPTICK_CATEGORY("Present", Optick::Category::Wait);
 	m_pSwapchain->Present(1, 0);
 	m_CurrentBackBufferIndex = m_pSwapchain->GetCurrentBackBufferIndex();
 	++m_Frame;
@@ -1397,9 +1395,6 @@ void Graphics::InitD3D()
 		swapChain.GetAddressOf()));
 #endif
 
-	ID3D12CommandQueue* pQueue = GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT)->GetCommandQueue();
-	OPTICK_GPU_INIT_D3D12(m_pDevice.Get(), &pQueue, 1);
-
 	m_pShaderManager = std::make_unique<ShaderManager>("Resources/Shaders/", m_ShaderModelMajor, m_ShaderModelMinor);
 
 	m_pSwapchain.Reset();
@@ -1446,25 +1441,24 @@ void Graphics::InitD3D()
 void Graphics::InitializeAssets(CommandContext& context)
 {
 	uint32 BLACK = 0xFF000000;
-	m_pBlackTexture = std::make_unique<Texture>(this, "Default Black");
-	m_pBlackTexture->Create(&context, Image(1, 1, ImageFormat::RGBA, &BLACK));
+	m_DefaultTextures[(int)DefaultTexture::Black2D] = std::make_unique<Texture>(this, "Default Black");
+	m_DefaultTextures[(int)DefaultTexture::Black2D]->Create(&context, TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &BLACK);
 
 	uint32 WHITE = 0xFFFFFFFF;
-	m_pWhiteTexture = std::make_unique<Texture>(this, "Default White");
-	m_pWhiteTexture->Create(&context, Image(1, 1, ImageFormat::RGBA, &WHITE));
+	m_DefaultTextures[(int)DefaultTexture::White2D] = std::make_unique<Texture>(this, "Default White");
+	m_DefaultTextures[(int)DefaultTexture::White2D]->Create(&context, TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &WHITE);
 
 	uint32 GRAY = 0xFF808080;
-	m_pGrayTexture = std::make_unique<Texture>(this, "Default Gray");
-	m_pGrayTexture->Create(&context, Image(1, 1, ImageFormat::RGBA, &GRAY));
+	m_DefaultTextures[(int)DefaultTexture::Gray2D] = std::make_unique<Texture>(this, "Default Gray");
+	m_DefaultTextures[(int)DefaultTexture::Gray2D]->Create(&context, TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &GRAY);
 
 	uint32 DEFAULT_NORMAL = 0xFFFF8080;
-	m_pDummyNormalTexture = std::make_unique<Texture>(this, "Default Normal");
-	m_pDummyNormalTexture->Create(&context, Image(1, 1, ImageFormat::RGBA, &DEFAULT_NORMAL));
+	m_DefaultTextures[(int)DefaultTexture::Normal2D] = std::make_unique<Texture>(this, "Default Normal");
+	m_DefaultTextures[(int)DefaultTexture::Normal2D]->Create(&context, TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &DEFAULT_NORMAL);
 
-	RegisterBindlessTexture(m_pBlackTexture.get());
-	RegisterBindlessTexture(m_pWhiteTexture.get());
-	RegisterBindlessTexture(m_pGrayTexture.get());
-	RegisterBindlessTexture(m_pDummyNormalTexture.get());
+	uint32 BLACK_CUBE[6] = {};
+	m_DefaultTextures[(int)DefaultTexture::BlackCube] = std::make_unique<Texture>(this, "Default Black Cube");
+	m_DefaultTextures[(int)DefaultTexture::BlackCube]->Create(&context, TextureDesc::CreateCube(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &BLACK_CUBE);
 
 	m_pMesh = std::make_unique<Mesh>();
 	m_pMesh->Load("Resources/sponza/sponza.dae", this, &context);
@@ -1478,10 +1472,10 @@ void Graphics::InitializeAssets(CommandContext& context)
 		b.Bounds = m_pMesh->GetMesh(i)->GetBounds();
 		b.pMesh = m_pMesh->GetMesh(i);
 
-		b.Material.Diffuse = RegisterBindlessTexture(material.pDiffuseTexture, m_pGrayTexture.get());
-		b.Material.Normal = RegisterBindlessTexture(material.pNormalTexture, m_pDummyNormalTexture.get());
-		b.Material.Roughness = RegisterBindlessTexture(material.pRoughnessTexture, m_pGrayTexture.get());
-		b.Material.Metallic = RegisterBindlessTexture(material.pMetallicTexture, m_pBlackTexture.get());
+		b.Material.Diffuse = RegisterBindlessTexture(material.pDiffuseTexture, GetDefaultTexture(DefaultTexture::Gray2D));
+		b.Material.Normal = RegisterBindlessTexture(material.pNormalTexture, GetDefaultTexture(DefaultTexture::Normal2D));
+		b.Material.Roughness = RegisterBindlessTexture(material.pRoughnessTexture, GetDefaultTexture(DefaultTexture::Gray2D));
+		b.Material.Metallic = RegisterBindlessTexture(material.pMetallicTexture, GetDefaultTexture(DefaultTexture::Black2D));
 		b.BlendMode = material.IsTransparent ? Batch::Blending::AlphaMask : Batch::Blending::Opaque;
 	}
 

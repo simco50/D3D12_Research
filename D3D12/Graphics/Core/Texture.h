@@ -111,6 +111,24 @@ struct TextureDesc
 	ClearBinding ClearBindingValue;
 	TextureDimension Dimensions;
 
+
+	static TextureDesc CreateCube(int width, int height, DXGI_FORMAT format, TextureFlag flags = TextureFlag::ShaderResource, int sampleCount = 1, int mips = 1)
+	{
+		check(width);
+		check(height);
+		TextureDesc desc;
+		desc.Width = width;
+		desc.Height = height;
+		desc.DepthOrArraySize = 1;
+		desc.Mips = mips;
+		desc.SampleCount = sampleCount;
+		desc.Format = format;
+		desc.Usage = flags;
+		desc.ClearBindingValue = ClearBinding();
+		desc.Dimensions = TextureDimension::TextureCube;
+		return desc;
+	}
+
 	static TextureDesc Create2D(int width, int height, DXGI_FORMAT format, TextureFlag flags = TextureFlag::ShaderResource, int sampleCount = 1, int mips = 1)
 	{
 		check(width);
@@ -192,6 +210,7 @@ public:
 	void Create(const TextureDesc& desc);
 	void CreateForSwapchain(ID3D12Resource* pTexture);
 	bool Create(CommandContext* pContext, const char* pFilePath, bool srgb = false);
+	void Create(CommandContext* pContext, const TextureDesc& desc, void* pInitData);
 	bool Create(CommandContext* pContext, const Image& img, bool srgb = false);
 	void SetData(CommandContext* pContext, const void* pData);
 

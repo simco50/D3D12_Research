@@ -38,6 +38,16 @@ using WindowHandle = Windows::UI::Core::CoreWindow^;
 using WindowHandlePtr = Platform::Agile<Windows::UI::Core::CoreWindow>;
 #endif
 
+enum class DefaultTexture
+{
+	White2D,
+	Black2D,
+	Gray2D,
+	Normal2D,
+	BlackCube,
+	MAX,
+};
+
 struct MaterialData
 {
 	int Diffuse;
@@ -113,6 +123,7 @@ public:
 	void WaitForFence(uint64 fenceValue);
 	void IdleGPU();
 
+	IDXGISwapChain3* GetSwapchain() const { return m_pSwapchain.Get(); }
 	inline ID3D12Device* GetDevice() const { return m_pDevice.Get(); }
 	inline ID3D12Device5* GetRaytracingDevice() const { return m_pRaytracingDevice.Get(); }
 	ImGuiRenderer* GetImGui() const { return m_pImGuiRenderer.get(); }
@@ -155,6 +166,7 @@ public:
 	GlobalOnlineDescriptorHeap* GetGlobalViewHeap() const { return m_pGlobalViewHeap.get(); }
 	GlobalOnlineDescriptorHeap* GetGlobalSamplerHeap() const { return m_pGlobalSamplerHeap.get(); }
 
+	Texture* GetDefaultTexture(DefaultTexture type) const { return m_DefaultTextures[(int)type].get(); }
 	Texture* GetDepthStencil() const { return m_pDepthStencil.get(); }
 	Texture* GetResolvedDepthStencil() const { return m_pResolvedDepthStencil.get(); }
 	Texture* GetCurrentRenderTarget() const { return m_SampleCount > 1 ? m_pMultiSampleRenderTarget.get() : m_pHDRRenderTarget.get(); }
@@ -243,10 +255,7 @@ private:
 	std::unique_ptr<RTReflections> m_pRTReflections;
 	std::unique_ptr<SSAO> m_pSSAO;
 
-	std::unique_ptr<Texture> m_pBlackTexture;
-	std::unique_ptr<Texture> m_pWhiteTexture;
-	std::unique_ptr<Texture> m_pGrayTexture;
-	std::unique_ptr<Texture> m_pDummyNormalTexture;
+	std::array<std::unique_ptr<Texture>, (int)DefaultTexture::MAX> m_DefaultTextures;
 
 	int m_SampleCount = 1;
 	std::unique_ptr<Camera> m_pCamera;
