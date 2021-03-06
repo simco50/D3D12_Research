@@ -903,7 +903,7 @@ void Graphics::Update()
 				Texture* pToneMapInput = resources.GetTexture(toneMappingInput);
 
 				context.InsertResourceBarrier(m_pLuminanceHistogram.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-				context.InsertResourceBarrier(pToneMapInput, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+				context.InsertResourceBarrier(pToneMapInput, D3D12_RESOURCE_STATE_SHADER_RESOURCE);
 				context.ClearUavUInt(m_pLuminanceHistogram.get(), m_pLuminanceHistogram->GetUAV());
 
 				context.SetPipelineState(m_pLuminanceHistogramPSO);

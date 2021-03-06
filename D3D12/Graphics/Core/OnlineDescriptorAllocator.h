@@ -2,12 +2,12 @@
 #include "DescriptorHandle.h"
 #include "GraphicsResource.h"
 #include "Core/BitField.h"
+#include "RootSignature.h"
 
 class CommandContext;
-class RootSignature;
 class Graphics;
 
-enum class DescriptorTableType
+enum class GraphicsPipelineType
 {
 	Graphics,
 	Compute,
@@ -58,14 +58,12 @@ public:
 	DescriptorHandle Allocate(uint32 count);
 
 	void SetDescriptors(uint32 rootIndex, uint32 offset, uint32 numHandles, const D3D12_CPU_DESCRIPTOR_HANDLE* pHandles);
-	void BindStagedDescriptors(DescriptorTableType descriptorTableType);
+	void BindStagedDescriptors(GraphicsPipelineType descriptorTableType);
 
 	void ParseRootSignature(RootSignature* pRootSignature);
 	void ReleaseUsedHeaps(uint64 fenceValue);
 
 private:
-	static const int MAX_NUM_ROOT_PARAMETERS = 16;
-
 	struct RootDescriptorEntry
 	{
 		uint32 TableSize = 0;
@@ -73,8 +71,8 @@ private:
 	};
 	std::array<RootDescriptorEntry, MAX_NUM_ROOT_PARAMETERS> m_RootDescriptorTable = {};
 
-	BitField32 m_RootDescriptorMask {};
-	BitField32 m_StaleRootParameters {};
+	RootSignatureMask m_RootDescriptorMask {};
+	RootSignatureMask m_StaleRootParameters {};
 
 	GlobalOnlineDescriptorHeap* m_pHeapAllocator;
 	DescriptorHeapBlock* m_pCurrentHeapBlock = nullptr;

@@ -47,6 +47,7 @@ namespace BitOperations
 template<uint32 Bits, typename Storage = uint32>
 class BitField;
 
+using BitField16 = BitField<16, uint16>;
 using BitField32 = BitField<32, uint32>;
 using BitField64 = BitField<64, uint32>;
 

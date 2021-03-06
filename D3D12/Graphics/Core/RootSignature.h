@@ -11,16 +11,16 @@
 
 class ShaderBase;
 
+using RootSignatureMask = BitField16;
+static constexpr int MAX_NUM_ROOT_PARAMETERS = RootSignatureMask::Size();
+
 class RootSignature : public GraphicsObject
 {
 public:
-	static const int MAX_NUM_DESCRIPTORS = 16;
-	static const int MAX_RANGES_PER_TABLE = 2;
-	static_assert(MAX_NUM_DESCRIPTORS <= BitField32::Capacity(), "Descriptor bitfield is not large enough");
+	static constexpr int MAX_RANGES_PER_TABLE = 2;
 
 	RootSignature(Graphics* pParent);
 
-	void SetSize(uint32 size, bool shrink = true);
 	template<typename T>
 	void SetRootConstants(uint32 rootIndex, uint32 shaderRegister, D3D12_SHADER_VISIBILITY visibility)
 	{
@@ -41,20 +41,34 @@ public:
 
 	ID3D12RootSignature* GetRootSignature() const { return m_pRootSignature.Get(); }
 
-	const BitField32& GetSamplerTableMask() const { return m_SamplerMask; }
-	const BitField32& GetDescriptorTableMask() const { return m_DescriptorTableMask; }
-	const std::vector<uint32>& GetDescriptorTableSizes() const { return m_DescriptorTableSizes; }
+	const RootSignatureMask& GetSamplerTableMask() const { return m_SamplerMask; }
+	const RootSignatureMask& GetDescriptorTableMask() const { return m_DescriptorTableMask; }
+	const std::array<uint32, MAX_NUM_ROOT_PARAMETERS>& GetDescriptorTableSizes() const { return m_DescriptorTableSizes; }
 
 	uint32 GetDWordSize() const;
 
 private:
-	std::vector<D3D12_ROOT_PARAMETER> m_RootParameters;
-	std::vector<uint32> m_DescriptorTableSizes;
-	std::vector<D3D12_STATIC_SAMPLER_DESC> m_StaticSamplers;
-	std::vector<std::array<D3D12_DESCRIPTOR_RANGE, MAX_RANGES_PER_TABLE>> m_DescriptorTableRanges;
+	CD3DX12_ROOT_PARAMETER& Get(uint32 index)
+	{
+		check(index < MAX_NUM_ROOT_PARAMETERS);
+		m_NumParameters = Math::Max(index + 1, m_NumParameters);
+		return m_RootParameters[index];
+	}
+
+	CD3DX12_DESCRIPTOR_RANGE& GetRange(uint32 rootIndex, uint32 rangeIndex)
+	{
+		check(rootIndex < MAX_NUM_ROOT_PARAMETERS);
+		check(rangeIndex < MAX_NUM_ROOT_PARAMETERS);
+		return m_DescriptorTableRanges[rootIndex][rangeIndex];
+	}
+
+	std::array<CD3DX12_ROOT_PARAMETER, MAX_NUM_ROOT_PARAMETERS> m_RootParameters{};
+	std::array<uint32, MAX_NUM_ROOT_PARAMETERS> m_DescriptorTableSizes{};
+	std::vector<CD3DX12_STATIC_SAMPLER_DESC> m_StaticSamplers;
+	std::array<std::array<CD3DX12_DESCRIPTOR_RANGE, MAX_RANGES_PER_TABLE>, MAX_NUM_ROOT_PARAMETERS> m_DescriptorTableRanges{};
 	ComPtr<ID3D12RootSignature> m_pRootSignature;
 
-	BitField32 m_DescriptorTableMask;
-	BitField32 m_SamplerMask;
+	RootSignatureMask m_DescriptorTableMask;
+	RootSignatureMask m_SamplerMask;
 	uint32 m_NumParameters;
 };

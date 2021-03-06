@@ -93,7 +93,7 @@ void OnlineDescriptorAllocator::SetDescriptors(uint32 rootIndex, uint32 offset, 
 	}
 }
 
-void OnlineDescriptorAllocator::BindStagedDescriptors(DescriptorTableType descriptorTableType)
+void OnlineDescriptorAllocator::BindStagedDescriptors(GraphicsPipelineType descriptorTableType)
 {
 	if (m_StaleRootParameters.HasAnyBitSet() == false)
 	{
@@ -105,10 +105,10 @@ void OnlineDescriptorAllocator::BindStagedDescriptors(DescriptorTableType descri
 		RootDescriptorEntry& entry = m_RootDescriptorTable[rootIndex];
 		switch (descriptorTableType)
 		{
-		case DescriptorTableType::Graphics:
+		case GraphicsPipelineType::Graphics:
 			m_pOwner->GetCommandList()->SetGraphicsRootDescriptorTable(rootIndex, entry.GpuHandle.GetGpuHandle());
 			break;
-		case DescriptorTableType::Compute:
+		case GraphicsPipelineType::Compute:
 			m_pOwner->GetCommandList()->SetComputeRootDescriptorTable(rootIndex, entry.GpuHandle.GetGpuHandle());
 			break;
 		default:

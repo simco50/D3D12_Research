@@ -224,7 +224,7 @@ void CommandContext::InitializeTexture(Texture* pResource, D3D12_SUBRESOURCE_DAT
 
 void CommandContext::Dispatch(uint32 groupCountX, uint32 groupCountY, uint32 groupCountZ)
 {
-	PrepareDraw(DescriptorTableType::Compute);
+	PrepareDraw(GraphicsPipelineType::Compute);
 	m_pCommandList->Dispatch(groupCountX, groupCountY, groupCountZ);
 }
 
@@ -236,13 +236,13 @@ void CommandContext::Dispatch(const IntVector3& groupCounts)
 void CommandContext::DispatchMesh(uint32 groupCountX, uint32 groupCountY /*= 1*/, uint32 groupCountZ /*= 1*/)
 {
 	check(m_pMeshShadingCommandList);
-	PrepareDraw(DescriptorTableType::Graphics);
+	PrepareDraw(GraphicsPipelineType::Graphics);
 	m_pMeshShadingCommandList->DispatchMesh(groupCountX, groupCountY, groupCountZ);
 }
 
 void CommandContext::ExecuteIndirect(CommandSignature* pCommandSignature, uint32 maxCount, Buffer* pIndirectArguments, Buffer* pCountBuffer, uint32 argumentsOffset /*= 0*/, uint32 countOffset /*= 0*/)
 {
-	PrepareDraw(pCommandSignature->IsCompute() ? DescriptorTableType::Compute : DescriptorTableType::Graphics);
+	PrepareDraw(pCommandSignature->IsCompute() ? GraphicsPipelineType::Compute : GraphicsPipelineType::Graphics);
 	m_pCommandList->ExecuteIndirect(pCommandSignature->GetCommandSignature(), maxCount, pIndirectArguments->GetResource(), argumentsOffset, pCountBuffer ? pCountBuffer->GetResource() : nullptr, countOffset);
 }
 
@@ -593,19 +593,19 @@ void CommandContext::EndRenderPass()
 
 void CommandContext::Draw(int vertexStart, int vertexCount)
 {
-	PrepareDraw(DescriptorTableType::Graphics);
+	PrepareDraw(GraphicsPipelineType::Graphics);
 	m_pCommandList->DrawInstanced(vertexCount, 1, vertexStart, 0);
 }
 
 void CommandContext::DrawIndexed(int indexCount, int indexStart, int minVertex /*= 0*/)
 {
-	PrepareDraw(DescriptorTableType::Graphics);
+	PrepareDraw(GraphicsPipelineType::Graphics);
 	m_pCommandList->DrawIndexedInstanced(indexCount, 1, indexStart, minVertex, 0);
 }
 
 void CommandContext::DrawIndexedInstanced(int indexCount, int indexStart, int instanceCount, int minVertex /*= 0*/, int instanceStart /*= 0*/)
 {
-	PrepareDraw(DescriptorTableType::Graphics);
+	PrepareDraw(GraphicsPipelineType::Graphics);
 	m_pCommandList->DrawIndexedInstanced(indexCount, instanceCount, indexStart, minVertex, instanceStart);
 }
 
@@ -617,7 +617,7 @@ void CommandContext::DispatchRays(ShaderBindingTable& table, uint32 width /*= 1*
 	desc.Width = width;
 	desc.Height = height;
 	desc.Depth = depth;
-	PrepareDraw(DescriptorTableType::Compute);
+	PrepareDraw(GraphicsPipelineType::Compute);
 	m_pRaytracingCommandList->DispatchRays(&desc);
 }
 
@@ -637,7 +637,7 @@ void CommandContext::ResolveResource(Texture* pSource, uint32 sourceSubResource,
 	m_pCommandList->ResolveSubresource(pTarget->GetResource(), targetSubResource, pSource->GetResource(), sourceSubResource, format);
 }
 
-void CommandContext::PrepareDraw(DescriptorTableType type)
+void CommandContext::PrepareDraw(GraphicsPipelineType type)
 {
 	FlushResourceBarriers();
 	m_pShaderResourceDescriptorAllocator->BindStagedDescriptors(type);
