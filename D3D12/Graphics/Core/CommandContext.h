@@ -2,6 +2,7 @@
 #include "DynamicResourceAllocator.h"
 #include "GraphicsResource.h"
 #include "OnlineDescriptorAllocator.h"
+#include "ResourceViews.h"
 class Graphics;
 class GraphicsResource;
 class Texture;
@@ -166,7 +167,7 @@ public:
 	void ClearDepth(D3D12_CPU_DESCRIPTOR_HANDLE dsv, D3D12_CLEAR_FLAGS clearFlags = D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, float depth = 1.0f, unsigned char stencil = 0);
 	void ResolveResource(Texture* pSource, uint32 sourceSubResource, Texture* pTarget, uint32 targetSubResource, DXGI_FORMAT format);
 
-	void PrepareDraw(GraphicsPipelineType type);
+	void PrepareDraw(CommandListContext type);
 
 	void BeginRenderPass(const RenderPassInfo& renderPassInfo);
 	void EndRenderPass();
@@ -177,11 +178,9 @@ public:
 	void SetPipelineState(PipelineState* pPipelineState);
 	void SetPipelineState(StateObject* pStateObject);
 
-	void BindResource(int rootIndex, int offset, D3D12_CPU_DESCRIPTOR_HANDLE handle);
-	void BindResource(int rootIndex, int offset, UnorderedAccessView* pView);
-	void BindResource(int rootIndex, int offset, ShaderResourceView* pView);
+	void BindResource(int rootIndex, int offset, ResourceView* pView);
 	void BindResources(int rootIndex, int offset, const D3D12_CPU_DESCRIPTOR_HANDLE* handles, int count = 1);
-	void BindSampler(int rootIndex, int offset, D3D12_CPU_DESCRIPTOR_HANDLE handle);
+	void BindResourceTable(int rootIndex, D3D12_GPU_DESCRIPTOR_HANDLE handle, CommandListContext context);
 
 	void SetDynamicVertexBuffer(int slot, int elementCount, int elementSize, const void* pData);
 	void SetDynamicIndexBuffer(int elementCount, const void* pData, bool smallIndices = false);
@@ -244,8 +243,7 @@ public:
 	static bool IsTransitionAllowed(D3D12_COMMAND_LIST_TYPE commandlistType, D3D12_RESOURCE_STATES state);
 
 private:
-	std::unique_ptr<OnlineDescriptorAllocator> m_pShaderResourceDescriptorAllocator;
-	std::unique_ptr<OnlineDescriptorAllocator> m_pSamplerDescriptorAllocator;
+	OnlineDescriptorAllocator m_ShaderResourceDescriptorAllocator;
 
 	ResourceBarrierBatcher m_BarrierBatcher;
 

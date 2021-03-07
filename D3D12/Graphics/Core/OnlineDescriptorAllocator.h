@@ -6,12 +6,7 @@
 
 class CommandContext;
 class Graphics;
-
-enum class GraphicsPipelineType
-{
-	Graphics,
-	Compute,
-};
+enum class CommandListContext;
 
 struct DescriptorHeapBlock
 {
@@ -34,6 +29,7 @@ public:
 	uint32 GetDescriptorSize() const { return m_DescriptorSize; }
 	ID3D12DescriptorHeap* GetHeap() const { return m_pHeap.Get(); }
 	D3D12_DESCRIPTOR_HEAP_TYPE GetType() const { return m_Type; }
+	DescriptorHandle GetStartHandle() const { return m_StartHandle; }
 
 private:
 	std::mutex m_BlockAllocateMutex;
@@ -58,16 +54,18 @@ public:
 	DescriptorHandle Allocate(uint32 count);
 
 	void SetDescriptors(uint32 rootIndex, uint32 offset, uint32 numHandles, const D3D12_CPU_DESCRIPTOR_HANDLE* pHandles);
-	void BindStagedDescriptors(GraphicsPipelineType descriptorTableType);
+	void BindStagedDescriptors(CommandListContext descriptorTableType);
 
 	void ParseRootSignature(RootSignature* pRootSignature);
 	void ReleaseUsedHeaps(uint64 fenceValue);
 
 private:
+	CommandContext* m_pOwner;
+	D3D12_DESCRIPTOR_HEAP_TYPE m_Type;
 	struct RootDescriptorEntry
 	{
 		uint32 TableSize = 0;
-		DescriptorHandle GpuHandle;
+		DescriptorHandle Descriptor;
 	};
 	std::array<RootDescriptorEntry, MAX_NUM_ROOT_PARAMETERS> m_RootDescriptorTable = {};
 
@@ -77,7 +75,4 @@ private:
 	GlobalOnlineDescriptorHeap* m_pHeapAllocator;
 	DescriptorHeapBlock* m_pCurrentHeapBlock = nullptr;
 	std::vector<DescriptorHeapBlock*> m_ReleasedBlocks;
-
-	CommandContext* m_pOwner;
-	D3D12_DESCRIPTOR_HEAP_TYPE m_Type;
 };

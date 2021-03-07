@@ -360,8 +360,10 @@ void Graphics::Update()
 			else
 				pShadowMap->Create(TextureDesc::CreateDepth(512, 512, DEPTH_STENCIL_SHADOW_FORMAT, TextureFlag::DepthStencil | TextureFlag::ShaderResource, 1, ClearBinding(0.0f, 0)));
 			++i;
+			RegisterBindlessResource(pShadowMap.get(), nullptr);
 		}
 	}
+
 
 	for (Light& light : m_Lights)
 	{
@@ -371,12 +373,12 @@ void Graphics::Update()
 		}
 	}
 
+	shadowData.ShadowMapOffset = RegisterBindlessResource(m_ShadowMaps[0].get());
 	m_SceneData.pDepthBuffer = GetDepthStencil();
 	m_SceneData.pResolvedDepth = GetResolvedDepthStencil();
 	m_SceneData.pRenderTarget = GetCurrentRenderTarget();
 	m_SceneData.pLightBuffer = m_pLightBuffer.get();
 	m_SceneData.pCamera = m_pCamera.get();
-	m_SceneData.pShadowMaps = &m_ShadowMaps;
 	m_SceneData.pShadowData = &shadowData;
 	m_SceneData.pAO = m_pAmbientOcclusion.get();
 	m_SceneData.FrameIndex = m_Frame;
@@ -504,7 +506,7 @@ void Graphics::Update()
 
 			renderContext.SetGraphicsRootSignature(m_pDepthPrepassRS.get());
 
-			renderContext.BindResources(2, 0, m_SceneData.MaterialTextures.data(), (int)m_SceneData.MaterialTextures.size());
+			renderContext.BindResourceTable(2, m_SceneData.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Graphics);
 
 			struct ViewData
 			{
@@ -706,7 +708,7 @@ void Graphics::Update()
 
 					viewData.ViewProjection = shadowData.LightViewProjections[i];
 					context.SetGraphicsDynamicConstantBufferView(1, &viewData, sizeof(ViewData));
-					context.BindResources(2, 0, m_SceneData.MaterialTextures.data(), (int)m_SceneData.MaterialTextures.size());
+					context.BindResourceTable(2, m_SceneData.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Graphics);
 
 					auto DrawBatches = [&](const Batch::Blending& blendmodes)
 					{
@@ -1312,20 +1314,18 @@ void Graphics::InitD3D()
 
 	//Feature checks
 	{
-		D3D12_FEATURE_DATA_D3D12_OPTIONS5 featureSupport{};
-		if (SUCCEEDED(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &featureSupport, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS5))))
+		D3D12_FEATURE_DATA_D3D12_OPTIONS caps0{};
+		if (SUCCEEDED(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &caps0, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS))))
 		{
-			m_RenderPassTier = featureSupport.RenderPassesTier;
-			m_RayTracingTier = featureSupport.RaytracingTier;
+			checkf(caps0.ResourceHeapTier >= D3D12_RESOURCE_HEAP_TIER_2, "Device does not support Resource Heap Tier 2 or higher. Tier 1 is not supported");
+			checkf(caps0.ResourceBindingTier >= D3D12_RESOURCE_BINDING_TIER_2, "Device does not support Resource Binding Tier 2 or higher. Tier 1 is not supported.");
 		}
-		D3D12_FEATURE_DATA_SHADER_MODEL shaderModelSupport{};
-		shaderModelSupport.HighestShaderModel = D3D_SHADER_MODEL_6_6;
-		if (SUCCEEDED(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &shaderModelSupport, sizeof(D3D12_FEATURE_DATA_SHADER_MODEL))))
+		D3D12_FEATURE_DATA_D3D12_OPTIONS5 caps5{};
+		if (SUCCEEDED(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &caps5, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS5))))
 		{
-			m_ShaderModelMajor = (uint8)(shaderModelSupport.HighestShaderModel >> 0x4);
-			m_ShaderModelMinor = (uint8)(shaderModelSupport.HighestShaderModel & 0xF);
+			m_RenderPassTier = caps5.RenderPassesTier;
+			m_RayTracingTier = caps5.RaytracingTier;
 		}
-
 		D3D12_FEATURE_DATA_D3D12_OPTIONS6 caps6{};
 		if (SUCCEEDED(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS6, &caps6, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS6))))
 		{
@@ -1338,6 +1338,13 @@ void Graphics::InitD3D()
 			m_MeshShaderSupport = caps7.MeshShaderTier;
 			m_SamplerFeedbackSupport = caps7.SamplerFeedbackTier;
 		}
+		D3D12_FEATURE_DATA_SHADER_MODEL shaderModelSupport{};
+		shaderModelSupport.HighestShaderModel = D3D_SHADER_MODEL_6_6;
+		if (SUCCEEDED(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &shaderModelSupport, sizeof(D3D12_FEATURE_DATA_SHADER_MODEL))))
+		{
+			m_ShaderModelMajor = (uint8)(shaderModelSupport.HighestShaderModel >> 0x4);
+			m_ShaderModelMinor = (uint8)(shaderModelSupport.HighestShaderModel & 0xF);
+		}
 	}
 
 	//Create all the required command queues
@@ -1348,8 +1355,8 @@ void Graphics::InitD3D()
 	m_pDynamicAllocationManager = std::make_unique<DynamicAllocationManager>(this, BufferFlag::Upload);
 
 	m_pGlobalViewHeap = std::make_unique<GlobalOnlineDescriptorHeap>(this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 2000, 1000000);
-	m_pGlobalSamplerHeap = std::make_unique<GlobalOnlineDescriptorHeap>(this, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, 256, 2048);
-
+	m_pPersistentDescriptorHeap = std::make_unique<OnlineDescriptorAllocator>(m_pGlobalViewHeap.get(), nullptr);
+	m_SceneData.GlobalSRVHeapHandle = m_pGlobalViewHeap->GetStartHandle();
 	
 	check(m_DescriptorHeaps.size() == D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES);
 	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV] = std::make_unique<OfflineDescriptorAllocator>(this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 256);
@@ -1488,10 +1495,10 @@ void Graphics::InitializeAssets(CommandContext& context)
 			b.WorldMatrix = transforms[j];
 			b.Bounds.Transform(b.Bounds, b.WorldMatrix);
 
-			b.Material.Diffuse = RegisterBindlessTexture(material.pDiffuseTexture, GetDefaultTexture(DefaultTexture::Gray2D));
-			b.Material.Normal = RegisterBindlessTexture(material.pNormalTexture, GetDefaultTexture(DefaultTexture::Normal2D));
-			b.Material.Roughness = RegisterBindlessTexture(material.pRoughnessTexture, GetDefaultTexture(DefaultTexture::Gray2D));
-			b.Material.Metallic = RegisterBindlessTexture(material.pMetallicTexture, GetDefaultTexture(DefaultTexture::Black2D));
+			b.Material.Diffuse = RegisterBindlessResource(material.pDiffuseTexture, GetDefaultTexture(DefaultTexture::Gray2D));
+			b.Material.Normal = RegisterBindlessResource(material.pNormalTexture, GetDefaultTexture(DefaultTexture::Normal2D));
+			b.Material.Roughness = RegisterBindlessResource(material.pRoughnessTexture, GetDefaultTexture(DefaultTexture::Gray2D));
+			b.Material.Metallic = RegisterBindlessResource(material.pMetallicTexture, GetDefaultTexture(DefaultTexture::Black2D));
 			b.BlendMode = material.IsTransparent ? Batch::Blending::AlphaMask : Batch::Blending::Opaque;
 		}
 	}
@@ -1580,20 +1587,21 @@ void Graphics::InitializeAssets(CommandContext& context)
 			m_Lights.push_back(sunLight);
 		}
 
-		Vector3 spotLocations[] = {
-			Vector3(62, 10, -18),
-			Vector3(-48, 10, 18),
-			Vector3(-48, 10, -18),
-			Vector3(62, 10, 18)
-		};
-		for(int i = 0; i < ARRAYSIZE(spotLocations); ++i)
 		{
-			Light spotLight = Light::Spot(spotLocations[i], 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1.0f, 0.7f, 0.3f, 1.0f));
-			spotLight.CastShadows = true;
-			spotLight.VolumetricLighting = false;
-			m_Lights.push_back(spotLight);
+			Vector3 spotLocations[] = {
+				Vector3(62, 10, -18),
+				Vector3(-48, 10, 18),
+				Vector3(-48, 10, -18),
+				Vector3(62, 10, 18)
+			};
+			for (int i = 0; i < ARRAYSIZE(spotLocations); ++i)
+			{
+				Light spotLight = Light::Spot(spotLocations[i], 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1.0f, 0.7f, 0.3f, 1.0f));
+				spotLight.CastShadows = true;
+				spotLight.VolumetricLighting = false;
+				m_Lights.push_back(spotLight);
+			}
 		}
-
 		m_pLightBuffer = std::make_unique<Buffer>(this, "Lights");
 		m_pLightBuffer->Create(BufferDesc::CreateStructured((int)m_Lights.size(), sizeof(Light), BufferFlag::ShaderResource));
 	}
@@ -2138,31 +2146,26 @@ void Graphics::UpdateImGui()
 	ImGui::End();
 }
 
-int Graphics::RegisterBindlessTexture(Texture* pTexture, Texture* pFallback)
+int Graphics::RegisterBindlessResource(ResourceView* pResourceView, ResourceView* pFallback)
 {
-	auto it = m_TextureToDescriptorIndex.find(pTexture);
-	if (it != m_TextureToDescriptorIndex.end())
+	auto it = m_ViewToDescriptorIndex.find(pResourceView);
+	if (it != m_ViewToDescriptorIndex.end())
 	{
 		return it->second;
 	}
-	int index = (int)m_TextureToDescriptorIndex.size();
-	if (pTexture)
+	if (pResourceView)
 	{
-		m_TextureToDescriptorIndex[pTexture] = index;
-		m_SceneData.MaterialTextures.push_back(pTexture->GetSRV());
+		DescriptorHandle handle = m_pPersistentDescriptorHeap->Allocate(1);
+		m_pDevice->CopyDescriptorsSimple(1, handle.CpuHandle, pResourceView->GetDescriptor(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+		m_ViewToDescriptorIndex[pResourceView] = handle.HeapIndex;
+		return handle.HeapIndex;
 	}
-	else
-	{
-		if (pFallback)
-		{
-			index = RegisterBindlessTexture(pFallback);
-		}
-		else
-		{
-			index = 0;
-		}
-	}
-	return index;
+	return pFallback ? RegisterBindlessResource(pFallback) : 0;
+}
+
+int Graphics::RegisterBindlessResource(Texture* pTexture, Texture* pFallback /*= nullptr*/)
+{
+	return RegisterBindlessResource(pTexture ? pTexture->GetSRV() : nullptr, pFallback ? pFallback->GetSRV() : nullptr);
 }
 
 CommandQueue* Graphics::GetCommandQueue(D3D12_COMMAND_LIST_TYPE type) const

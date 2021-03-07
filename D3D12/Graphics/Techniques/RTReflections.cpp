@@ -79,16 +79,16 @@ void RTReflections::Execute(RGGraph& graph, const SceneData& sceneData)
 			const D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
 				sceneData.pLightBuffer->GetSRV()->GetDescriptor(),
 				sceneData.pLightBuffer->GetSRV()->GetDescriptor() /*dummy*/,
-				sceneData.pResolvedDepth->GetSRV(),
-				m_pSceneColor->GetSRV(),
-				sceneData.pResolvedNormals->GetSRV(),
+				sceneData.pResolvedDepth->GetSRV()->GetDescriptor(),
+				m_pSceneColor->GetSRV()->GetDescriptor(),
+				sceneData.pResolvedNormals->GetSRV()->GetDescriptor(),
 			};
 
 			context.SetComputeDynamicConstantBufferView(0, &parameters, sizeof(Parameters));
 			context.BindResource(1, 0, sceneData.pResolvedTarget->GetUAV());
 			context.BindResources(2, 0, srvs, ARRAYSIZE(srvs));
-			context.BindResource(3, 0, sceneData.pTLAS->GetSRV()->GetDescriptor());
-			context.BindResources(4, 0, sceneData.MaterialTextures.data(), (int)sceneData.MaterialTextures.size());
+			context.BindResource(3, 0, sceneData.pTLAS->GetSRV());
+			context.BindResourceTable(4, sceneData.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Compute);
 
 			context.DispatchRays(bindingTable, sceneData.pResolvedTarget->GetWidth(), sceneData.pResolvedTarget->GetHeight());
 		});

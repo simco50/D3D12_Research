@@ -4,50 +4,57 @@ class DescriptorHandle
 {
 public:
 	DescriptorHandle()
+		: CpuHandle(InvalidCPUHandle), GpuHandle(InvalidGPUHandle), HeapIndex(InvalidHeapIndex)
 	{
-		m_CpuHandle = InvalidCPUHandle;
-		m_GpuHandle = InvalidGPUHandle;
+
 	}
 
-	DescriptorHandle(D3D12_CPU_DESCRIPTOR_HANDLE CpuHandle)
-		: m_CpuHandle(CpuHandle), m_GpuHandle(InvalidGPUHandle)
+	DescriptorHandle(
+		D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle,
+		uint32 heapIndex,
+		D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle = InvalidGPUHandle)
+		: CpuHandle(cpuHandle), GpuHandle(gpuHandle), HeapIndex(heapIndex)
 	{
 	}
 
-	DescriptorHandle(D3D12_CPU_DESCRIPTOR_HANDLE CpuHandle, D3D12_GPU_DESCRIPTOR_HANDLE GpuHandle)
-		: m_CpuHandle(CpuHandle), m_GpuHandle(GpuHandle)
+	DescriptorHandle& OffsetInline(uint32 numDescriptors, uint32 descriptorSize)
 	{
-	}
-
-	DescriptorHandle operator+ (uint32 offsetScaledByDescriptorSize) const
-	{
-		DescriptorHandle ret = *this;
-		ret += offsetScaledByDescriptorSize;
-		return ret;
-	}
-
-	void operator += (uint32 offsetScaledByDescriptorSize)
-	{
-		if (m_CpuHandle != InvalidCPUHandle)
+		if (CpuHandle != InvalidCPUHandle)
 		{
-			m_CpuHandle.Offset(1, offsetScaledByDescriptorSize);
+			CpuHandle.Offset(numDescriptors, descriptorSize);
 		}
-		if (m_GpuHandle != InvalidGPUHandle)
+		if (GpuHandle != InvalidGPUHandle)
 		{
-			m_GpuHandle.Offset(1, offsetScaledByDescriptorSize);
+			GpuHandle.Offset(numDescriptors, descriptorSize);
 		}
+		if (HeapIndex != InvalidHeapIndex)
+		{
+			HeapIndex += numDescriptors;
+		}
+		return *this;
 	}
 
-	D3D12_CPU_DESCRIPTOR_HANDLE GetCpuHandle() const { return m_CpuHandle; }
-	D3D12_GPU_DESCRIPTOR_HANDLE GetGpuHandle() const { return m_GpuHandle; }
+	DescriptorHandle Offset(uint32 numDescriptors, uint32 descriptorSize)
+	{
+		DescriptorHandle handle = *this;
+		return handle.OffsetInline(numDescriptors, descriptorSize);
+	}
 
-	bool IsNull() const { return m_CpuHandle == InvalidCPUHandle; }
-	bool IsShaderVisible() const { return m_GpuHandle != InvalidGPUHandle; }
+	void Reset()
+	{
+		CpuHandle = InvalidCPUHandle;
+		GpuHandle = InvalidGPUHandle;
+		HeapIndex = InvalidHeapIndex;
+	}
+
+	bool IsNull() const { return CpuHandle == InvalidCPUHandle; }
+	bool IsShaderVisible() const { return GpuHandle != InvalidGPUHandle; }
 
 	constexpr static D3D12_CPU_DESCRIPTOR_HANDLE InvalidCPUHandle = { ~0u };
 	constexpr static D3D12_GPU_DESCRIPTOR_HANDLE InvalidGPUHandle = { ~0u };
+	constexpr static uint32 InvalidHeapIndex = ~0u;
 
-private:
-	CD3DX12_CPU_DESCRIPTOR_HANDLE m_CpuHandle;
-	CD3DX12_GPU_DESCRIPTOR_HANDLE m_GpuHandle;
+	CD3DX12_CPU_DESCRIPTOR_HANDLE CpuHandle;
+	CD3DX12_GPU_DESCRIPTOR_HANDLE GpuHandle;
+	uint32 HeapIndex;
 };
