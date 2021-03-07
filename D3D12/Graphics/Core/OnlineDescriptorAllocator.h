@@ -34,6 +34,7 @@ public:
 	uint32 GetDescriptorSize() const { return m_DescriptorSize; }
 	ID3D12DescriptorHeap* GetHeap() const { return m_pHeap.Get(); }
 	D3D12_DESCRIPTOR_HEAP_TYPE GetType() const { return m_Type; }
+	DescriptorHandle GetStartHandle() const { return m_StartHandle; }
 
 private:
 	std::mutex m_BlockAllocateMutex;

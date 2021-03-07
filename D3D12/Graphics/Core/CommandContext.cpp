@@ -38,7 +38,10 @@ void CommandContext::Reset()
 	m_PendingBarriers.clear();
 	m_ResourceStates.clear();
 
-	ID3D12DescriptorHeap* pHeaps[] = { GetParent()->GetGlobalViewHeap()->GetHeap(),	GetParent()->GetGlobalSamplerHeap()->GetHeap() };
+	ID3D12DescriptorHeap* pHeaps[] =
+	{
+		GetParent()->GetGlobalViewHeap()->GetHeap(),
+	};
 	m_pCommandList->SetDescriptorHeaps(ARRAYSIZE(pHeaps), pHeaps);
 }
 
@@ -286,19 +289,10 @@ void CommandContext::SetComputeDynamicConstantBufferView(int rootIndex, void* pD
 	m_pCommandList->SetComputeRootConstantBufferView(rootIndex, allocation.GpuHandle);
 }
 
-void CommandContext::BindResource(int rootIndex, int offset, D3D12_CPU_DESCRIPTOR_HANDLE handle)
+void CommandContext::BindResource(int rootIndex, int offset, ResourceView* pView)
 {
+	D3D12_CPU_DESCRIPTOR_HANDLE handle = pView->GetDescriptor();
 	m_ShaderResourceDescriptorAllocator.SetDescriptors(rootIndex, offset, 1, &handle);
-}
-
-void CommandContext::BindResource(int rootIndex, int offset, UnorderedAccessView* pView)
-{
-	BindResource(rootIndex, offset, pView->GetDescriptor());
-}
-
-void CommandContext::BindResource(int rootIndex, int offset, ShaderResourceView* pView)
-{
-	BindResource(rootIndex, offset, pView->GetDescriptor());
 }
 
 void CommandContext::BindResources(int rootIndex, int offset, const D3D12_CPU_DESCRIPTOR_HANDLE* handles, int count)

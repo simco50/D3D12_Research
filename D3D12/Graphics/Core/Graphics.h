@@ -1,6 +1,7 @@
 #pragma once
 #include "../Light.h"
 #include "Core/BitField.h"
+#include "DescriptorHandle.h"
 
 class CommandQueue;
 class CommandContext;
@@ -28,6 +29,7 @@ class PipelineStateInitializer;
 class StateObject;
 class StateObjectInitializer;
 class GlobalOnlineDescriptorHeap;
+class ResourceView;
 
 #if PLATFORM_WINDOWS
 using WindowHandle = HWND;
@@ -94,7 +96,7 @@ struct SceneData
 	Texture* pResolvedNormals = nullptr;
 	Texture* pAO = nullptr;
 	std::vector<Batch> Batches;
-	D3D12_GPU_DESCRIPTOR_HANDLE GlobalSRVHeapHandle{};
+	DescriptorHandle GlobalSRVHeapHandle{};
 	Buffer* pLightBuffer = nullptr;
 	Camera* pCamera = nullptr;
 	ShadowData* pShadowData = nullptr;
@@ -165,7 +167,6 @@ public:
 	}
 
 	GlobalOnlineDescriptorHeap* GetGlobalViewHeap() const { return m_pGlobalViewHeap.get(); }
-	GlobalOnlineDescriptorHeap* GetGlobalSamplerHeap() const { return m_pGlobalSamplerHeap.get(); }
 
 	Texture* GetDefaultTexture(DefaultTexture type) const { return m_DefaultTextures[(int)type].get(); }
 	Texture* GetDepthStencil() const { return m_pDepthStencil.get(); }
@@ -212,7 +213,6 @@ private:
 
 	std::unique_ptr<class OnlineDescriptorAllocator> m_pPersistentDescriptorHeap;
 	std::unique_ptr<GlobalOnlineDescriptorHeap> m_pGlobalViewHeap;
-	std::unique_ptr<GlobalOnlineDescriptorHeap> m_pGlobalSamplerHeap;
 
 	std::array<std::unique_ptr<OfflineDescriptorAllocator>, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES> m_DescriptorHeaps;
 	std::unique_ptr<DynamicAllocationManager> m_pDynamicAllocationManager;
@@ -337,6 +337,7 @@ private:
 	SceneData m_SceneData;
 	bool m_CapturePix = false;
 
-	std::map<Texture*, int> m_TextureToDescriptorIndex;
-	int RegisterBindlessTexture(Texture* pTexture, Texture* pFallback = nullptr);
+	std::map<ResourceView*, int> m_ViewToDescriptorIndex;
+	int RegisterBindlessResource(ResourceView* pView, ResourceView* pFallback = nullptr);
+	int RegisterBindlessResource(Texture* pTexture, Texture* pFallback = nullptr);
 };

@@ -2,6 +2,7 @@
 #include "DynamicResourceAllocator.h"
 #include "GraphicsResource.h"
 #include "OnlineDescriptorAllocator.h"
+#include "ResourceViews.h"
 class Graphics;
 class GraphicsResource;
 class Texture;
@@ -177,9 +178,7 @@ public:
 	void SetPipelineState(PipelineState* pPipelineState);
 	void SetPipelineState(StateObject* pStateObject);
 
-	void BindResource(int rootIndex, int offset, D3D12_CPU_DESCRIPTOR_HANDLE handle);
-	void BindResource(int rootIndex, int offset, UnorderedAccessView* pView);
-	void BindResource(int rootIndex, int offset, ShaderResourceView* pView);
+	void BindResource(int rootIndex, int offset, ResourceView* pView);
 	void BindResources(int rootIndex, int offset, const D3D12_CPU_DESCRIPTOR_HANDLE* handles, int count = 1);
 	void BindResourceTable(int rootIndex, D3D12_GPU_DESCRIPTOR_HANDLE handle, CommandListContext context);
 

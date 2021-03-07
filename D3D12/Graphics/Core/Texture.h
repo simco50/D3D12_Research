@@ -225,9 +225,9 @@ public:
 	void CreateSRV(ShaderResourceView** pView, const TextureSRVDesc& desc);
 
 	D3D12_CPU_DESCRIPTOR_HANDLE GetRTV() const;
-	D3D12_CPU_DESCRIPTOR_HANDLE GetUAV() const;
-	D3D12_CPU_DESCRIPTOR_HANDLE GetSRV() const;
 	D3D12_CPU_DESCRIPTOR_HANDLE GetDSV(bool writeable = true) const;
+	UnorderedAccessView* GetUAV() const { return m_pUav; }
+	ShaderResourceView* GetSRV() const { return m_pSrv; }
 
 	DXGI_FORMAT GetFormat() const { return m_Desc.Format; }
 	const ClearBinding& GetClearBinding() const { return m_Desc.ClearBindingValue; }

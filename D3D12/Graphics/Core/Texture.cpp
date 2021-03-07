@@ -16,11 +16,6 @@ Texture::~Texture()
 
 }
 
-D3D12_CPU_DESCRIPTOR_HANDLE Texture::GetSRV() const
-{
-	return m_pSrv->GetDescriptor();
-}
-
 D3D12_CPU_DESCRIPTOR_HANDLE Texture::GetDSV(bool writeable /*= true*/) const
 {
 	return writeable ? m_Rtv : m_ReadOnlyDsv;
@@ -49,11 +44,6 @@ void Texture::CreateSRV(ShaderResourceView** pView, const TextureSRVDesc& desc)
 D3D12_CPU_DESCRIPTOR_HANDLE Texture::GetRTV() const
 {
 	return m_Rtv;
-}
-
-D3D12_CPU_DESCRIPTOR_HANDLE Texture::GetUAV() const
-{
-	return m_pUav->GetDescriptor();
 }
 
 D3D12_RESOURCE_DESC GetResourceDesc(const TextureDesc& textureDesc)

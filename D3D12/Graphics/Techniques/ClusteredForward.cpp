@@ -334,7 +334,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 
 			context.SetGraphicsDynamicConstantBufferView(1, &frameData, sizeof(PerFrameData));
 			context.SetGraphicsDynamicConstantBufferView(2, resources.pShadowData, sizeof(ShadowData));
-			context.BindResourceTable(3, resources.GlobalSRVHeapHandle, CommandListContext::Graphics);
+			context.BindResourceTable(3, resources.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Graphics);
 			context.BindResource(4, 0, m_pLightGrid->GetSRV());
 			context.BindResource(4, 1, m_pLightIndexGrid->GetSRV());
 			context.BindResource(4, 2, resources.pLightBuffer->GetSRV());
