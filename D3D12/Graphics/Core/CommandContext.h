@@ -167,7 +167,7 @@ public:
 	void ClearDepth(D3D12_CPU_DESCRIPTOR_HANDLE dsv, D3D12_CLEAR_FLAGS clearFlags = D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, float depth = 1.0f, unsigned char stencil = 0);
 	void ResolveResource(Texture* pSource, uint32 sourceSubResource, Texture* pTarget, uint32 targetSubResource, DXGI_FORMAT format);
 
-	void PrepareDraw(GraphicsPipelineType type);
+	void PrepareDraw(CommandListContext type);
 
 	void BeginRenderPass(const RenderPassInfo& renderPassInfo);
 	void EndRenderPass();

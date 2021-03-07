@@ -18,7 +18,7 @@ GlobalOnlineDescriptorHeap::GlobalOnlineDescriptorHeap(Graphics* pParent, D3D12_
 	D3D::SetObjectName(m_pHeap.Get(), "Global Online Descriptor Heap");
 
 	m_DescriptorSize = pParent->GetDevice()->GetDescriptorHandleIncrementSize(type);
-	m_StartHandle = DescriptorHandle(m_pHeap->GetCPUDescriptorHandleForHeapStart(), m_pHeap->GetGPUDescriptorHandleForHeapStart(), 0);
+	m_StartHandle = DescriptorHandle(m_pHeap->GetCPUDescriptorHandleForHeapStart(), 0, m_pHeap->GetGPUDescriptorHandleForHeapStart());
 
 	uint32 numBlocks = m_NumDescriptors / blockSize;
 
@@ -27,7 +27,7 @@ GlobalOnlineDescriptorHeap::GlobalOnlineDescriptorHeap(Graphics* pParent, D3D12_
 	{
 		m_HeapBlocks.emplace_back(std::make_unique<DescriptorHeapBlock>(currentOffset, blockSize, 0));
 		m_FreeBlocks.push(m_HeapBlocks.back().get());
-		currentOffset.Offset(blockSize, m_DescriptorSize);
+		currentOffset.OffsetInline(blockSize, m_DescriptorSize);
 	}
 }
 
@@ -83,17 +83,16 @@ void OnlineDescriptorAllocator::SetDescriptors(uint32 rootIndex, uint32 offset, 
 		m_StaleRootParameters.SetBit(rootIndex);
 	}
 
-	DescriptorHandle targetHandle = entry.Descriptor;
-	targetHandle.Offset(offset, m_pHeapAllocator->GetDescriptorSize());
+	DescriptorHandle targetHandle = entry.Descriptor.Offset(offset, m_pHeapAllocator->GetDescriptorSize());
 	for (uint32 i = 0; i < numHandles; ++i)
 	{
 		checkf(pHandles[i].ptr != DescriptorHandle::InvalidCPUHandle.ptr, "Invalid Descriptor provided (RootIndex: %d, Offset: %d)", rootIndex, offset + i);
 		GetParent()->GetDevice()->CopyDescriptorsSimple(1, targetHandle.CpuHandle, pHandles[i], m_Type);
-		targetHandle.Offset(1, m_pHeapAllocator->GetDescriptorSize());
+		targetHandle.OffsetInline(1, m_pHeapAllocator->GetDescriptorSize());
 	}
 }
 
-void OnlineDescriptorAllocator::BindStagedDescriptors(GraphicsPipelineType descriptorTableType)
+void OnlineDescriptorAllocator::BindStagedDescriptors(CommandListContext descriptorTableType)
 {
 	if (m_StaleRootParameters.HasAnyBitSet() == false)
 	{
@@ -105,10 +104,10 @@ void OnlineDescriptorAllocator::BindStagedDescriptors(GraphicsPipelineType descr
 		RootDescriptorEntry& entry = m_RootDescriptorTable[rootIndex];
 		switch (descriptorTableType)
 		{
-		case GraphicsPipelineType::Graphics:
+		case CommandListContext::Graphics:
 			m_pOwner->GetCommandList()->SetGraphicsRootDescriptorTable(rootIndex, entry.Descriptor.GpuHandle);
 			break;
-		case GraphicsPipelineType::Compute:
+		case CommandListContext::Compute:
 			m_pOwner->GetCommandList()->SetComputeRootDescriptorTable(rootIndex, entry.Descriptor.GpuHandle);
 			break;
 		default:
@@ -131,7 +130,7 @@ void OnlineDescriptorAllocator::ParseRootSignature(RootSignature* pRootSignature
 	{
 		RootDescriptorEntry& entry = m_RootDescriptorTable[rootIndex];
 		entry.TableSize = pRootSignature->GetDescriptorTableSizes()[rootIndex];
-		entry.Descriptor = DescriptorHandle();
+		entry.Descriptor.Reset();
 	}
 }
 
@@ -155,8 +154,7 @@ DescriptorHandle OnlineDescriptorAllocator::Allocate(uint32 descriptorCount)
 		m_pCurrentHeapBlock = m_pHeapAllocator->AllocateBlock();
 	}
 
-	DescriptorHandle handle = m_pCurrentHeapBlock->StartHandle;
-	handle.Offset(m_pCurrentHeapBlock->CurrentOffset, m_pHeapAllocator->GetDescriptorSize());
+	DescriptorHandle handle = m_pCurrentHeapBlock->StartHandle.Offset(m_pCurrentHeapBlock->CurrentOffset, m_pHeapAllocator->GetDescriptorSize());
 	m_pCurrentHeapBlock->CurrentOffset += descriptorCount;
 	return handle;
 }
