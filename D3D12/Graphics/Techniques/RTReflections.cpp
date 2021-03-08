@@ -61,19 +61,18 @@ void RTReflections::Execute(RGGraph& graph, const SceneData& sceneData)
 				struct HitData
 				{
 					MaterialData Material;
+					uint32 MeshIndex;
+					uint32 VertexDataOffset;
+					uint32 IndexDataOffset;
 				} hitData;
 				hitData.Material = b.Material;
+				hitData.MeshIndex = b.GeometryDescriptor;
+				hitData.VertexDataOffset = (uint32)(b.pMesh->GetVertexBuffer().Location - b.pMesh->GetSourceBuffer()->GetGpuHandle());
+				hitData.IndexDataOffset = (uint32)(b.pMesh->GetIndexBuffer().Location - b.pMesh->GetSourceBuffer()->GetGpuHandle());
 
 				DynamicAllocation allocation = context.AllocateTransientMemory(sizeof(HitData));
 				memcpy(allocation.pMappedMemory, &hitData, sizeof(HitData));
-
-				std::vector<uint64> handles = {
-					allocation.GpuHandle,
-					b.pMesh->GetVertexBuffer().Location,
-					b.pMesh->GetIndexBuffer().Location,
-				};
-
-				bindingTable.BindHitGroup("ReflectionHitGroup", b.Index, handles);
+				bindingTable.BindHitGroup("ReflectionHitGroup", b.Index, { allocation.GpuHandle });
 			}
 
 			const D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
@@ -88,7 +87,8 @@ void RTReflections::Execute(RGGraph& graph, const SceneData& sceneData)
 			context.BindResource(1, 0, sceneData.pResolvedTarget->GetUAV());
 			context.BindResources(2, 0, srvs, ARRAYSIZE(srvs));
 			context.BindResource(3, 0, sceneData.pTLAS->GetSRV());
-			context.BindResourceTable(4, sceneData.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Compute);
+			context.BindResourceTable(4, sceneData.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Compute); // Texture2D
+			context.BindResourceTable(5, sceneData.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Compute); // ByteAddressBuffer
 
 			context.DispatchRays(bindingTable, sceneData.pResolvedTarget->GetWidth(), sceneData.pResolvedTarget->GetHeight());
 		});
@@ -110,8 +110,6 @@ void RTReflections::SetupPipelines(Graphics* pGraphics)
 
 	m_pHitSignature = std::make_unique<RootSignature>(pGraphics);
 	m_pHitSignature->SetConstantBufferView(0, 1, D3D12_SHADER_VISIBILITY_ALL);
-	m_pHitSignature->SetShaderResourceView(1, 0, D3D12_SHADER_VISIBILITY_ALL);
-	m_pHitSignature->SetShaderResourceView(2, 1, D3D12_SHADER_VISIBILITY_ALL);
 	m_pHitSignature->Finalize("Hit", D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE);
 
 	m_pGlobalRS = std::make_unique<RootSignature>(pGraphics);

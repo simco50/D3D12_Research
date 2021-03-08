@@ -73,6 +73,7 @@ struct Batch
 	MaterialData Material;
 	Matrix WorldMatrix;
 	BoundingBox Bounds;
+	int GeometryDescriptor = -1;
 };
 DECLARE_BITMASK_TYPE(Batch::Blending)
 

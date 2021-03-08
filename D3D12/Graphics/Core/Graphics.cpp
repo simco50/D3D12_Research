@@ -1484,6 +1484,7 @@ void Graphics::InitializeAssets(CommandContext& context)
 	for (uint32 j = 0; j < (uint32)m_Meshes.size(); ++j)
 	{
 		auto& pMesh = m_Meshes[j];
+		int geometrySRV = RegisterBindlessResource(pMesh->GetData()->GetSRV());
 		for (int i = 0; i < pMesh->GetMeshCount(); ++i)
 		{
 			const Material& material = pMesh->GetMaterial(pMesh->GetMesh(i)->GetMaterialId());
@@ -1494,6 +1495,7 @@ void Graphics::InitializeAssets(CommandContext& context)
 			b.pMesh = pMesh->GetMesh(i);
 			b.WorldMatrix = transforms[j];
 			b.Bounds.Transform(b.Bounds, b.WorldMatrix);
+			b.GeometryDescriptor = geometrySRV;
 
 			b.Material.Diffuse = RegisterBindlessResource(material.pDiffuseTexture, GetDefaultTexture(DefaultTexture::Gray2D));
 			b.Material.Normal = RegisterBindlessResource(material.pNormalTexture, GetDefaultTexture(DefaultTexture::Normal2D));
