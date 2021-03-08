@@ -18,5 +18,6 @@ SamplerComparisonState sShadowMapSampler :                  register(s2);
 RaytracingAccelerationStructure tAccelerationStructure :    register(t500);
 
 Texture2D tTexture2DTable[] :                               register(t1000, space2);
+ByteAddressBuffer tBufferTable[] :                          register(t1000, space3);
 
 #endif

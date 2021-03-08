@@ -45,18 +45,17 @@ float3 UnpackBC5Normal(float2 packedNormal)
 float3 TangentSpaceNormalMapping(float3 sampledNormal, float3x3 TBN, bool invertY)
 {
 	float3 normal = sampledNormal;
-	normal.xy = sampledNormal.xy * 2.0f - 1.0f;
-
 #if SUPPORT_BC5
 	normal = UnpackBC5Normal(sampledNormal.xy);
 #endif
+	normal.xy = sampledNormal.xy * 2.0f - 1.0f;
 
 	if(invertY)
 	{
-		sampledNormal.x = -sampledNormal.x;
+		normal.x = -normal.x;
 	}
-	sampledNormal = normalize(sampledNormal);
-	return mul(sampledNormal, TBN);
+	normal = normalize(normal);
+	return mul(normal, TBN);
 }
 
 float DoShadow(float3 wPos, int shadowMapIndex, float invShadowSize)
