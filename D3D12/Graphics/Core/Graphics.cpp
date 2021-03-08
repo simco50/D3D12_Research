@@ -1396,7 +1396,7 @@ void Graphics::InitD3D()
 		swapChain.GetAddressOf()));
 #elif PLATFORM_UWP
 	VERIFY_HR(pFactory->CreateSwapChainForCoreWindow(m_CommandQueues[D3D12_COMMAND_LIST_TYPE_DIRECT]->GetCommandQueue(),
-		reinterpret_cast<IUnknown*>(Windows::UI::Core::CoreWindow::GetForCurrentThread()),
+		reinterpret_cast<IUnknown*>(winrt::get_abi(winrt::Windows::UI::Core::CoreWindow::GetForCurrentThread())),
 		&swapchainDesc,
 		nullptr,
 		swapChain.GetAddressOf()));

@@ -285,19 +285,27 @@ int WINAPI WinMain(HINSTANCE hInstance,	HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
 #elif PLATFORM_UWP
 
-using namespace Windows::ApplicationModel;
-using namespace Windows::ApplicationModel::Core;
-using namespace Windows::ApplicationModel::Activation;
-using namespace Windows::UI::Core;
-using namespace Windows::UI::Input;
-using namespace Windows::Devices::Input;
-using namespace Windows::UI::ViewManagement;
-using namespace Windows::System;
-using namespace Windows::Foundation;
-using namespace Windows::Graphics::Display;
-using namespace DirectX;
+#include "winrt/Windows.ApplicationModel.h"
+#include "winrt/Windows.ApplicationModel.Core.h"
+#include "winrt/Windows.ApplicationModel.Activation.h"
+#include "winrt/Windows.Foundation.h"
+#include "winrt/Windows.Graphics.Display.h"
+#include "winrt/Windows.System.h"
+#include "winrt/Windows.UI.Core.h"
+#include "winrt/Windows.UI.Input.h"
+#include "winrt/Windows.UI.ViewManagement.h"
 
-ref class ViewProvider sealed : public IFrameworkView
+using namespace winrt::Windows::ApplicationModel;
+using namespace winrt::Windows::ApplicationModel::Core;
+using namespace winrt::Windows::ApplicationModel::Activation;
+using namespace winrt::Windows::UI::Core;
+using namespace winrt::Windows::UI::Input;
+using namespace winrt::Windows::UI::ViewManagement;
+using namespace winrt::Windows::System;
+using namespace winrt::Windows::Foundation;
+using namespace winrt::Windows::Graphics::Display;
+
+class ViewProvider : public winrt::implements<ViewProvider, IFrameworkView>
 {
 public:
 	ViewProvider() :
@@ -309,17 +317,9 @@ public:
 	}
 
 	// IFrameworkView methods
-	virtual void Initialize(CoreApplicationView^ applicationView)
+	virtual void Initialize(const CoreApplicationView& applicationView)
 	{
-		applicationView->Activated +=
-			ref new TypedEventHandler<CoreApplicationView^, IActivatedEventArgs^>(this, &ViewProvider::OnActivated);
-
-		CoreApplication::Suspending +=
-			ref new EventHandler<SuspendingEventArgs^>(this, &ViewProvider::OnSuspending);
-
-		CoreApplication::Resuming +=
-			ref new EventHandler<Platform::Object^>(this, &ViewProvider::OnResuming);
-
+		applicationView.Activated({ this, &ViewProvider::OnActivated });
 		m_pGraphics = std::make_unique<Graphics>(gWindowWidth, gWindowHeight, gMsaaSampleCount);
 	}
 
@@ -328,22 +328,21 @@ public:
 		m_pGraphics.reset();
 	}
 
-	virtual void SetWindow(CoreWindow^ window)
+	virtual void SetWindow(const CoreWindow& window)
 	{
-		window->SizeChanged += ref new TypedEventHandler<CoreWindow^, WindowSizeChangedEventArgs^>(this, &ViewProvider::OnWindowSizeChanged);
-		window->VisibilityChanged += ref new TypedEventHandler<CoreWindow^, VisibilityChangedEventArgs^>(this, &ViewProvider::OnVisibilityChanged);
-		window->Closed += ref new TypedEventHandler<CoreWindow^, CoreWindowEventArgs^>(this, &ViewProvider::OnWindowClosed);
-		window->KeyDown += ref new TypedEventHandler<CoreWindow^, KeyEventArgs^>(this, &ViewProvider::OnKeyDown);
-		window->KeyUp += ref new TypedEventHandler<CoreWindow^, KeyEventArgs^>(this, &ViewProvider::OnKeyUp);
-		window->PointerPressed += ref new TypedEventHandler<CoreWindow^, PointerEventArgs^>(this, &ViewProvider::OnPointerPressed);
-		window->PointerReleased += ref new TypedEventHandler<CoreWindow^, PointerEventArgs^>(this, &ViewProvider::OnPointerReleased);
-		window->PointerMoved += ref new TypedEventHandler<CoreWindow^, PointerEventArgs^>(this, &ViewProvider::OnPointerMoved);
-		MouseDevice::GetForCurrentView()->MouseMoved += ref new TypedEventHandler<MouseDevice^, MouseEventArgs^>(this, &ViewProvider::OnMouseMoved);
+		window.SizeChanged({ this, &ViewProvider::OnWindowSizeChanged });
+		window.Closed({ this, &ViewProvider::OnWindowClosed });
+		window.KeyDown({ this, &ViewProvider::OnKeyDown });
+		window.KeyUp({ this, &ViewProvider::OnKeyUp });
+		window.PointerPressed({ this, &ViewProvider::OnPointerPressed });
+		window.PointerReleased({ this, &ViewProvider::OnPointerReleased });
+		window.PointerMoved({ this, &ViewProvider::OnPointerMoved });
+
 #if defined(NTDDI_WIN10_RS2) && (NTDDI_VERSION >= NTDDI_WIN10_RS2)
 		try
 		{
-			window->ResizeStarted += ref new TypedEventHandler<CoreWindow^, Object^>(this, &ViewProvider::OnResizeStarted);
-			window->ResizeCompleted += ref new TypedEventHandler<CoreWindow^, Object^>(this, &ViewProvider::OnResizeCompleted);
+			window.ResizeStarted({ this, &ViewProvider::OnResizeStarted });
+			window.ResizeCompleted({ this, &ViewProvider::OnResizeCompleted });
 		}
 		catch (...)
 		{
@@ -351,28 +350,24 @@ public:
 		}
 #endif
 
-
-		auto dispatcher = CoreWindow::GetForCurrentThread()->Dispatcher;
-		dispatcher->AcceleratorKeyActivated += ref new TypedEventHandler<CoreDispatcher^, AcceleratorKeyEventArgs^>(this, &ViewProvider::OnAcceleratorKeyActivated);
-
-		auto navigation = Windows::UI::Core::SystemNavigationManager::GetForCurrentView();
-		navigation->BackRequested += ref new EventHandler<BackRequestedEventArgs^>(this, &ViewProvider::OnBackRequested);
+		auto dispatcher = CoreWindow::GetForCurrentThread().Dispatcher();
+		dispatcher.AcceleratorKeyActivated({ this, &ViewProvider::OnAcceleratorKeyActivated });
 
 		auto currentDisplayInformation = DisplayInformation::GetForCurrentView();
-		currentDisplayInformation->DpiChanged += ref new TypedEventHandler<DisplayInformation^, Object^>(this, &ViewProvider::OnDpiChanged);
-		currentDisplayInformation->OrientationChanged += ref new TypedEventHandler<DisplayInformation^, Object^>(this, &ViewProvider::OnOrientationChanged);
+		currentDisplayInformation.DpiChanged({ this, &ViewProvider::OnDpiChanged });
+		currentDisplayInformation.OrientationChanged({ this, &ViewProvider::OnOrientationChanged });
 
-		DisplayInformation::DisplayContentsInvalidated += ref new TypedEventHandler<DisplayInformation^, Object^>(this, &ViewProvider::OnDisplayContentsInvalidated);
+		DisplayInformation::DisplayContentsInvalidated({ this, &ViewProvider::OnDisplayContentsInvalidated });
 
-		m_DPI = currentDisplayInformation->LogicalDpi;
+		m_DPI = currentDisplayInformation.LogicalDpi();
 
-		m_LogicalWidth = window->Bounds.Width;
-		m_LogicalHeight = window->Bounds.Height;
+		m_LogicalWidth = window.Bounds().Width;
+		m_LogicalHeight = window.Bounds().Height;
 
-		m_pGraphics->Initialize(window);
+		m_pGraphics->Initialize(&window);
 	}
 
-	virtual void Load(Platform::String^ entryPoint)
+	virtual void Load(winrt::hstring const& entryPoint)
 	{
 	}
 
@@ -383,92 +378,79 @@ public:
 			if (m_Visible)
 			{
 				Input::Instance().Update();
-				CoreWindow::GetForCurrentThread()->Dispatcher->ProcessEvents(CoreProcessEventsOption::ProcessAllIfPresent);
+				CoreWindow::GetForCurrentThread().Dispatcher().ProcessEvents(CoreProcessEventsOption::ProcessAllIfPresent);
 				m_pGraphics->Update();
 			}
 			else
 			{
-				CoreWindow::GetForCurrentThread()->Dispatcher->ProcessEvents(CoreProcessEventsOption::ProcessOneAndAllPending);
+				CoreWindow::GetForCurrentThread().Dispatcher().ProcessEvents(CoreProcessEventsOption::ProcessOneAndAllPending);
 			}
 		}
 	}
 
 protected:
 
-	void OnKeyDown(CoreWindow^ sender, KeyEventArgs^ args)
+	void OnKeyDown(const CoreWindow& sender, const KeyEventArgs& args)
 	{
-		Input::Instance().UpdateKey((uint32)args->VirtualKey, true);
+		Input::Instance().UpdateKey((uint32)args.VirtualKey(), true);
 	}
 
-	void OnKeyUp(CoreWindow^ sender, KeyEventArgs^ args)
+	void OnKeyUp(const CoreWindow& sender, const KeyEventArgs& args)
 	{
-		Input::Instance().UpdateKey((uint32)args->VirtualKey, false);
+		Input::Instance().UpdateKey((uint32)args.VirtualKey(), false);
 	}
 
-	void OnPointerReleased(CoreWindow^ sender, PointerEventArgs^ args)
+	void OnPointerReleased(const CoreWindow& sender, const PointerEventArgs& args)
 	{
-		Input::Instance().UpdateMouseKey(0, args->CurrentPoint->Properties->IsLeftButtonPressed);
-		Input::Instance().UpdateMouseKey(1, args->CurrentPoint->Properties->IsRightButtonPressed);
-		Input::Instance().UpdateMouseKey(2, args->CurrentPoint->Properties->IsHorizontalMouseWheel);
+		Input::Instance().UpdateMouseKey(0, args.CurrentPoint().Properties().IsLeftButtonPressed());
+		Input::Instance().UpdateMouseKey(1, args.CurrentPoint().Properties().IsRightButtonPressed());
+		Input::Instance().UpdateMouseKey(2, args.CurrentPoint().Properties().IsHorizontalMouseWheel());
 	}
 
-	void OnPointerPressed(CoreWindow^ sender, PointerEventArgs^ args)
+	void OnPointerPressed(const CoreWindow& sender, const PointerEventArgs& args)
 	{
-		Input::Instance().UpdateMouseKey(0, args->CurrentPoint->Properties->IsLeftButtonPressed);
-		Input::Instance().UpdateMouseKey(1, args->CurrentPoint->Properties->IsRightButtonPressed);
-		Input::Instance().UpdateMouseKey(2, args->CurrentPoint->Properties->IsHorizontalMouseWheel);
+		Input::Instance().UpdateMouseKey(0, args.CurrentPoint().Properties().IsLeftButtonPressed());
+		Input::Instance().UpdateMouseKey(1, args.CurrentPoint().Properties().IsRightButtonPressed());
+		Input::Instance().UpdateMouseKey(2, args.CurrentPoint().Properties().IsHorizontalMouseWheel());
 	}
 
-	void OnPointerMoved(CoreWindow^ sender, PointerEventArgs^ args)
+	void OnPointerMoved(const CoreWindow& sender, const PointerEventArgs& args)
 	{
-		Input::Instance().UpdateMousePosition(args->CurrentPoint->RawPosition.X, args->CurrentPoint->RawPosition.Y);
-	}
-
-	void OnMouseMoved(MouseDevice^ device, MouseEventArgs^ args)
-	{
-		Input::Instance().UpdateMouseDelta((float)args->MouseDelta.X, (float)args->MouseDelta.Y);
+		Input::Instance().UpdateMousePosition(args.CurrentPoint().RawPosition().X, args.CurrentPoint().RawPosition().Y);
 	}
 
 	// Event handlers
-	void OnActivated(CoreApplicationView^ applicationView, IActivatedEventArgs^ args)
+	void OnActivated(const CoreApplicationView& applicationView, const IActivatedEventArgs& args)
 	{
-		if (args->Kind == ActivationKind::Launch)
+		if (args.Kind() == ActivationKind::Launch)
 		{
-			auto launchArgs = static_cast<LaunchActivatedEventArgs^>(args);
+			auto launchArgs = args.as<LaunchActivatedEventArgs>();
 
-			CommandLine::Parse(UNICODE_TO_MULTIBYTE(launchArgs->Arguments->Data()));
-			if (launchArgs->PrelaunchActivated)
+			CommandLine::Parse(UNICODE_TO_MULTIBYTE(launchArgs.Arguments().c_str()));
+			if (launchArgs.PrelaunchActivated())
 			{
 				// Opt-out of Prelaunch
 				CoreApplication::Exit();
 				return;
 			}
 		}
-		m_DPI = DisplayInformation::GetForCurrentView()->LogicalDpi;
-		ApplicationView::PreferredLaunchWindowingMode = ApplicationViewWindowingMode::PreferredLaunchViewSize;
+		m_DPI = DisplayInformation::GetForCurrentView().LogicalDpi();
+		ApplicationView::PreferredLaunchWindowingMode(ApplicationViewWindowingMode::PreferredLaunchViewSize);
 		// TODO: Change to ApplicationViewWindowingMode::FullScreen to default to full screen
 		auto desiredSize = Size(ConvertPixelsToDips(gWindowWidth), ConvertPixelsToDips(gWindowHeight));
-		ApplicationView::PreferredLaunchViewSize = desiredSize;
+		ApplicationView::PreferredLaunchViewSize(desiredSize);
 		auto view = ApplicationView::GetForCurrentView();
 		auto minSize = Size(ConvertPixelsToDips(320), ConvertPixelsToDips(200));
-		view->SetPreferredMinSize(minSize);
-		CoreWindow::GetForCurrentThread()->Activate();
-		view->FullScreenSystemOverlayMode = FullScreenSystemOverlayMode::Minimal;
-		view->TryResizeView(desiredSize);
+		view.SetPreferredMinSize(minSize);
+		CoreWindow::GetForCurrentThread().Activate();
+		view.FullScreenSystemOverlayMode(FullScreenSystemOverlayMode::Minimal);
+		view.TryResizeView(desiredSize);
 	}
 
-	void OnSuspending(Platform::Object^ sender, SuspendingEventArgs^ args)
+	void OnWindowSizeChanged(const CoreWindow& sender, const WindowSizeChangedEventArgs& args)
 	{
-	}
-
-	void OnResuming(Platform::Object^ sender, Platform::Object^ args)
-	{
-	}
-
-	void OnWindowSizeChanged(CoreWindow^ sender, WindowSizeChangedEventArgs^ args)
-	{
-		m_LogicalWidth = sender->Bounds.Width;
-		m_LogicalHeight = sender->Bounds.Height;
+		m_LogicalWidth = sender.Bounds().Width;
+		m_LogicalHeight = sender.Bounds().Height;
 
 		if (m_InSizeMove)
 			return;
@@ -477,13 +459,13 @@ protected:
 	}
 
 #if defined(NTDDI_WIN10_RS2) && (NTDDI_VERSION >= NTDDI_WIN10_RS2)
-	void OnResizeStarted(CoreWindow^ sender, Platform::Object^ args)
+	void OnResizeStarted(const CoreWindow& sender, const IInspectable& args)
 	{
 		m_InSizeMove = true;
 		Time::Stop();
 	}
 
-	void OnResizeCompleted(CoreWindow^ sender, Platform::Object^ args)
+	void OnResizeCompleted(const CoreWindow& sender, const IInspectable& args)
 	{
 		m_InSizeMove = false;
 		HandleWindowSizeChanged();
@@ -491,57 +473,50 @@ protected:
 	}
 #endif
 
-	void OnVisibilityChanged(CoreWindow^ sender, VisibilityChangedEventArgs^ args)
+	void OnVisibilityChanged(const CoreWindow& sender, const VisibilityChangedEventArgs& args)
 	{
 
 	}
 
-	void OnWindowClosed(CoreWindow^ sender, CoreWindowEventArgs^ args)
+	void OnWindowClosed(const CoreWindow& sender, const CoreWindowEventArgs& args)
 	{
 		m_Exit = true;
 	}
 
-	void OnAcceleratorKeyActivated(CoreDispatcher^, AcceleratorKeyEventArgs^ args)
+	void OnAcceleratorKeyActivated(const CoreDispatcher&, const AcceleratorKeyEventArgs& args)
 	{
-		if (args->EventType == CoreAcceleratorKeyEventType::SystemKeyDown
-			&& args->VirtualKey == VirtualKey::Enter
-			&& args->KeyStatus.IsMenuKeyDown
-			&& !args->KeyStatus.WasKeyDown)
+		if (args.EventType()== CoreAcceleratorKeyEventType::SystemKeyDown
+			&& args.VirtualKey()== VirtualKey::Enter
+			&& args.KeyStatus().IsMenuKeyDown
+			&& !args.KeyStatus().WasKeyDown)
 		{
 			// Implements the classic ALT+ENTER fullscreen toggle
 			auto view = ApplicationView::GetForCurrentView();
 
-			if (view->IsFullScreenMode)
-				view->ExitFullScreenMode();
+			if (view.IsFullScreenMode())
+				view.ExitFullScreenMode();
 			else
-				view->TryEnterFullScreenMode();
+				view.TryEnterFullScreenMode();
 
-			args->Handled = true;
+			args.Handled(true);
 		}
 	}
 
-	void OnBackRequested(Platform::Object^, Windows::UI::Core::BackRequestedEventArgs^ args)
+	void OnDpiChanged(const DisplayInformation& sender, const IInspectable& args)
 	{
-		// UWP on Xbox One triggers a back request whenever the B button is pressed
-		// which can result in the app being suspended if unhandled
-		args->Handled = true;
-	}
-
-	void OnDpiChanged(DisplayInformation^ sender, Object^ args)
-	{
-		m_DPI = sender->LogicalDpi;
+		m_DPI = sender.LogicalDpi();
 		HandleWindowSizeChanged();
 	}
 
-	void OnOrientationChanged(DisplayInformation^ sender, Object^ args)
+	void OnOrientationChanged(const DisplayInformation& sender, const IInspectable& args)
 	{
 		auto resizeManager = CoreWindowResizeManager::GetForCurrentView();
-		resizeManager->ShouldWaitForLayoutCompletion = true;
+		resizeManager.ShouldWaitForLayoutCompletion(true);
 		HandleWindowSizeChanged();
-		resizeManager->NotifyLayoutCompleted();
+		resizeManager.NotifyLayoutCompleted();
 	}
 
-	void OnDisplayContentsInvalidated(DisplayInformation^ sender, Object^ args)
+	void OnDisplayContentsInvalidated(const DisplayInformation& sender, const IInspectable& args)
 	{
 	}
 
@@ -572,21 +547,21 @@ private:
 	}
 };
 
-ref class ViewProviderFactory : IFrameworkViewSource
+class ViewProviderFactory : public winrt::implements<ViewProviderFactory, IFrameworkViewSource>
 {
 public:
-	virtual IFrameworkView^ CreateView()
+	IFrameworkView CreateView()
 	{
-		return ref new ViewProvider();
+		return winrt::make<ViewProvider>();
 	}
 };
 
-[Platform::MTAThread]
-int __cdecl main(Platform::Array<Platform::String^>^ argv)
+int WINAPI WinMain(_In_ HINSTANCE, _In_ HINSTANCE, _In_ LPSTR, _In_ int)
 {
 	Console::Initialize();
-	auto viewProviderFactory = ref new ViewProviderFactory();
+	auto viewProviderFactory = winrt::make<ViewProviderFactory>();
 	CoreApplication::Run(viewProviderFactory);
 	return 0;
 }
+
 #endif

@@ -50,11 +50,11 @@ workspace (ENGINE_NAME)
 		if WITH_UWP then 
 			system "uwp"
 			defines { "PLATFORM_UWP=1" }
-			consumewinrtextension "true"
+			consumewinrtextension "false"
 			systemversion (WIN_SDK)
 			defaultlanguage "en-GB"
 			certificatefile "D3D12_TemporaryKey.pfx"
-			generatewinmd "true"
+			generatewinmd "false"
 
 			filter ("files:" ..(SOURCE_DIR .. "Resources/**"))
 				deploy "true"

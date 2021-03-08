@@ -35,9 +35,9 @@ class ResourceView;
 using WindowHandle = HWND;
 using WindowHandlePtr = HWND;
 #elif PLATFORM_UWP
-#include "agile.h"
-using WindowHandle = Windows::UI::Core::CoreWindow^;
-using WindowHandlePtr = Platform::Agile<Windows::UI::Core::CoreWindow>;
+#include "winrt/Windows.UI.Core.h"
+using WindowHandle = const winrt::Windows::UI::Core::CoreWindow*;
+using WindowHandlePtr = const winrt::Windows::UI::Core::CoreWindow*;
 #endif
 
 enum class DefaultTexture
@@ -126,9 +126,6 @@ public:
 	void WaitForFence(uint64 fenceValue);
 	void IdleGPU();
 
-	IDXGISwapChain3* GetSwapchain() const { return m_pSwapchain.Get(); }
-	inline ID3D12Device* GetDevice() const { return m_pDevice.Get(); }
-	inline ID3D12Device5* GetRaytracingDevice() const { return m_pRaytracingDevice.Get(); }
 	ImGuiRenderer* GetImGui() const { return m_pImGuiRenderer.get(); }
 	CommandQueue* GetCommandQueue(D3D12_COMMAND_LIST_TYPE type) const;
 	CommandContext* AllocateCommandContext(D3D12_COMMAND_LIST_TYPE type = D3D12_COMMAND_LIST_TYPE_DIRECT);
@@ -143,6 +140,7 @@ public:
 	bool SupportsMeshShaders() const { return m_MeshShaderSupport != D3D12_MESH_SHADER_TIER_NOT_SUPPORTED; }
 	bool GetShaderModel(int& major, int& minor) const;
 
+	GlobalOnlineDescriptorHeap* GetGlobalViewHeap() const { return m_pGlobalViewHeap.get(); }
 	ShaderManager* GetShaderManager() const { return m_pShaderManager.get(); }
 	DynamicAllocationManager* GetAllocationManager() const { return m_pDynamicAllocationManager.get(); }
 
@@ -166,8 +164,6 @@ public:
 		m_DescriptorHeaps[DescriptorSelector<DESC_TYPE>::Type()]->FreeDescriptor(descriptor);
 	}
 
-	GlobalOnlineDescriptorHeap* GetGlobalViewHeap() const { return m_pGlobalViewHeap.get(); }
-
 	Texture* GetDefaultTexture(DefaultTexture type) const { return m_DefaultTextures[(int)type].get(); }
 	Texture* GetDepthStencil() const { return m_pDepthStencil.get(); }
 	Texture* GetResolvedDepthStencil() const { return m_pResolvedDepthStencil.get(); }
@@ -179,6 +175,10 @@ public:
 	ID3D12Resource* CreateResource(const D3D12_RESOURCE_DESC& desc, D3D12_RESOURCE_STATES initialState, D3D12_HEAP_TYPE heapType, D3D12_CLEAR_VALUE* pClearValue = nullptr);
 	PipelineState* CreatePipeline(const PipelineStateInitializer& psoDesc);
 	StateObject* CreateStateObject(const StateObjectInitializer& stateDesc);
+
+	IDXGISwapChain3* GetSwapchain() const { return m_pSwapchain.Get(); }
+	ID3D12Device* GetDevice() const { return m_pDevice.Get(); }
+	ID3D12Device5* GetRaytracingDevice() const { return m_pRaytracingDevice.Get(); }
 
 	//CONSTANTS
 	static const int32 FRAME_COUNT = 3;
