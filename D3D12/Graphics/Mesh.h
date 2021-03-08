@@ -17,17 +17,15 @@ public:
 	int GetMaterialId() const { return m_MaterialId; }
 	const BoundingBox& GetBounds() const { return m_Bounds; }
 
-	VertexBufferView GetVertexBuffer() const;
-	IndexBufferView GetIndexBuffer() const;
+	const VertexBufferView& GetVertexBuffer() const { return m_VerticesLocation; }
+	const IndexBufferView& GetIndexBuffer() const { return m_IndicesLocation; }
 	Buffer* GetSourceBuffer() const;
 
 private:
 	int m_Stride = 0;
 	int m_MaterialId = 0;
-	uint32 m_IndexCount = 0;
-	uint32 m_VertexCount = 0;
-	D3D12_GPU_VIRTUAL_ADDRESS m_VerticesLocation;
-	D3D12_GPU_VIRTUAL_ADDRESS m_IndicesLocation;
+	VertexBufferView m_VerticesLocation;
+	IndexBufferView m_IndicesLocation;
 	BoundingBox m_Bounds;
 	Mesh* m_pParent;
 };

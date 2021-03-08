@@ -34,7 +34,7 @@ void ShaderResourceView::Create(Buffer* pBuffer, const BufferSRVDesc& desc)
 	{
 		srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 		srvDesc.Format = desc.Format;
-		srvDesc.Buffer.FirstElement = 0;
+		srvDesc.Buffer.FirstElement = desc.IndexOffset;
 		srvDesc.Buffer.NumElements = bufferDesc.NumElements();
 		srvDesc.Buffer.StructureByteStride = 0;
 		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
