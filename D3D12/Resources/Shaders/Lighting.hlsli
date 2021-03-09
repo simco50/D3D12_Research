@@ -155,28 +155,6 @@ LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, floa
 	float visibility = 1.0f;
 	if(light.ShadowIndex >= 0)
 	{
-#define INLINE_RT_SHADOWS 0
-#if INLINE_RT_SHADOWS
-		RayDesc ray;
-		ray.Origin = wPos + N * 0.01f;
-		ray.Direction = light.Position - wPos;
-		ray.TMin = 0.001;
-		ray.TMax = 1;
-
-		RayQuery<RAY_FLAG_NONE> q;
-
-		q.TraceRayInline(
-			tAccelerationStructure,
-			RAY_FLAG_NONE,
-			~0,
-			ray);
-		q.Proceed();
-
-		if(q.CommittedStatus() == COMMITTED_TRIANGLE_HIT)
-		{
-			visibility = 0;
-		}
-#else
 		int shadowIndex = GetShadowIndex(light, pos, wPos);
 
 #define VISUALIZE_CASCADES 0
@@ -200,7 +178,6 @@ LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, floa
 		{
 			return result;
 		}
-#endif
 	}
 
 	float3 L = normalize(light.Position - wPos);

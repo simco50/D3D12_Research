@@ -383,7 +383,7 @@ void Graphics::Update()
 	m_SceneData.pAO = m_pAmbientOcclusion.get();
 	m_SceneData.FrameIndex = m_Frame;
 	m_SceneData.pPreviousColor = m_pPreviousColor.get();
-	m_SceneData.pTLAS = m_pTLAS.get();
+	m_SceneData.SceneTLAS = RegisterBindlessResource(m_pTLAS->GetSRV());
 	m_SceneData.pNormals = m_pNormals.get();
 	m_SceneData.pResolvedNormals = m_pResolvedNormals.get();
 	m_SceneData.pResolvedTarget = Tweakables::g_TAA ? m_pTAASource.get() : m_pHDRRenderTarget.get();
@@ -627,7 +627,7 @@ void Graphics::Update()
 
 	if (Tweakables::g_RaytracedAO)
 	{
-		m_pRTAO->Execute(graph, m_pAmbientOcclusion.get(), GetResolvedDepthStencil(), m_pTLAS.get(), *m_pCamera);
+		m_pRTAO->Execute(graph, m_pAmbientOcclusion.get(), GetResolvedDepthStencil(), m_SceneData, *m_pCamera);
 	}
 	else
 	{

@@ -157,7 +157,8 @@ void RootSignature::FinalizeFromShader(const char* pName, const ShaderBase* pSha
 {
 	ComPtr<ID3D12VersionedRootSignatureDeserializer> pDeserializer;
 	VERIFY_HR_EX(D3D12CreateVersionedRootSignatureDeserializer(pShader->GetByteCode(), pShader->GetByteCodeSize(), IID_PPV_ARGS(pDeserializer.GetAddressOf())), GetParent()->GetDevice());
-	const D3D12_VERSIONED_ROOT_SIGNATURE_DESC* pDesc = pDeserializer->GetUnconvertedRootSignatureDesc();
+	const D3D12_VERSIONED_ROOT_SIGNATURE_DESC* pDesc;
+	pDeserializer->GetRootSignatureDescAtVersion(D3D_ROOT_SIGNATURE_VERSION_1_0, &pDesc);
 	const D3D12_ROOT_SIGNATURE_DESC& rsDesc = pDesc->Desc_1_0;
 
 	m_NumParameters = rsDesc.NumParameters;

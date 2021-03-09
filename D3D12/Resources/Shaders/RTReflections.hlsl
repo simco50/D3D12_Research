@@ -12,9 +12,7 @@ GlobalRootSignature GlobalRootSig =
 	"CBV(b0, visibility=SHADER_VISIBILITY_ALL),"
 	"DescriptorTable(UAV(u0, numDescriptors = 1), visibility=SHADER_VISIBILITY_ALL),"
 	"DescriptorTable(SRV(t5, numDescriptors = 6), visibility=SHADER_VISIBILITY_ALL),"
-	"DescriptorTable(SRV(t500, numDescriptors = 1), visibility=SHADER_VISIBILITY_ALL),"
-	"DescriptorTable(SRV(t1000, numDescriptors = 128, space = 2), visibility=SHADER_VISIBILITY_ALL),"
-	"DescriptorTable(SRV(t1000, numDescriptors = 128, space = 3), visibility=SHADER_VISIBILITY_ALL),"
+	GLOBAL_BINDLESS_TABLE ", "
 	"StaticSampler(s0, filter=FILTER_MIN_MAG_LINEAR_MIP_POINT, visibility = SHADER_VISIBILITY_ALL),"
 };
 
@@ -34,6 +32,7 @@ struct ViewData
 	float4x4 ProjectionInverse;
 	uint NumLights;
 	float ViewPixelSpreadAngle;
+	uint TLASIndex;
 };
 
 struct HitData
@@ -73,7 +72,7 @@ ShadowRayPayload CastShadowRay(float3 origin, float3 direction)
 	ShadowRayPayload shadowRay = (ShadowRayPayload)0;
 
 	TraceRay(
-		tAccelerationStructure, 										//AccelerationStructure
+		tTLASTable[cViewData.TLASIndex], 								//AccelerationStructure
 		RAY_FLAG_FORCE_OPAQUE |
 		RAY_FLAG_SKIP_CLOSEST_HIT_SHADER |
 		RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH,					 	//RayFlags
@@ -104,7 +103,7 @@ RayPayload CastReflectionRay(float3 origin, float3 direction, float depth)
 	ray.TMax = 10000;
 
 	TraceRay(
-		tAccelerationStructure, 										//AccelerationStructure
+		tTLASTable[cViewData.TLASIndex],		 						//AccelerationStructure
 		RAY_FLAG_CULL_BACK_FACING_TRIANGLES | RAY_FLAG_FORCE_OPAQUE, 	//RayFlags
 		0xFF, 															//InstanceInclusionMask
 		0,																//RayContributionToHitGroupIndex

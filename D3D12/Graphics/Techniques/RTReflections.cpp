@@ -44,12 +44,14 @@ void RTReflections::Execute(RGGraph& graph, const SceneData& sceneData)
 				Matrix ProjectionInverse;
 				uint32 NumLights;
 				float ViewPixelSpreadAngle;
+				uint32 TLASIndex;
 			} parameters{};
 
 			parameters.ViewInverse = sceneData.pCamera->GetViewInverse();
 			parameters.ProjectionInverse = sceneData.pCamera->GetProjectionInverse();
 			parameters.NumLights = sceneData.pLightBuffer->GetNumElements();
 			parameters.ViewPixelSpreadAngle = atanf(2.0f * tanf(sceneData.pCamera->GetFoV() / 2) / (float)m_pSceneColor->GetHeight());
+			parameters.TLASIndex = sceneData.SceneTLAS;
 
 			ShaderBindingTable bindingTable(m_pRtSO);
 			bindingTable.BindRayGenShader("RayGen");
@@ -86,9 +88,7 @@ void RTReflections::Execute(RGGraph& graph, const SceneData& sceneData)
 			context.SetComputeDynamicConstantBufferView(0, &parameters, sizeof(Parameters));
 			context.BindResource(1, 0, sceneData.pResolvedTarget->GetUAV());
 			context.BindResources(2, 0, srvs, ARRAYSIZE(srvs));
-			context.BindResource(3, 0, sceneData.pTLAS->GetSRV());
-			context.BindResourceTable(4, sceneData.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Compute); // Texture2D
-			context.BindResourceTable(5, sceneData.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Compute); // ByteAddressBuffer
+			context.BindResourceTable(3, sceneData.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Compute);
 
 			context.DispatchRays(bindingTable, sceneData.pResolvedTarget->GetWidth(), sceneData.pResolvedTarget->GetHeight());
 		});

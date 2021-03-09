@@ -1,13 +1,19 @@
 #include "RNG.hlsli"
 #include "Common.hlsli"
+#include "CommonBindings.hlsli"
+
+GlobalRootSignature GlobalRootSig =
+{
+	"CBV(b0, visibility=SHADER_VISIBILITY_ALL),"
+	"DescriptorTable(UAV(u0, numDescriptors = 1), visibility=SHADER_VISIBILITY_ALL),"
+	"DescriptorTable(SRV(t0, numDescriptors = 1), visibility=SHADER_VISIBILITY_ALL),"
+	GLOBAL_BINDLESS_TABLE ", "
+	"StaticSampler(s0, filter=FILTER_MIN_MAG_LINEAR_MIP_POINT, visibility = SHADER_VISIBILITY_ALL),"
+};
 
 #define RPP 64
 RWTexture2D<float> uOutput : register(u0);
-
-RaytracingAccelerationStructure SceneBVH : register(t0);
-
-Texture2D tDepth : register(t1);
-
+Texture2D tSceneDepth : register(t0);
 SamplerState sSceneSampler : register(s0);
 
 cbuffer ShaderParameters : register(b0)
@@ -18,6 +24,7 @@ cbuffer ShaderParameters : register(b0)
 	float cPower;
 	float cRadius;
 	int cSamples;
+	uint TLASIndex;
 }
 
 struct RayPayload
@@ -42,8 +49,8 @@ void RayGen()
 	uint launchIndex1d = launchIndex.x + launchIndex.y * DispatchRaysDimensions().x;
 	float2 texCoord = (float2)launchIndex * dimInv;
 
-	float3 world = WorldFromDepth(texCoord, tDepth.SampleLevel(sSceneSampler, texCoord, 0).r, mul(cProjectionInverse, cViewInverse));
-    float3 normal = NormalFromDepth(tDepth, sSceneSampler, texCoord, dimInv, cProjectionInverse);
+	float3 world = WorldFromDepth(texCoord, tSceneDepth.SampleLevel(sSceneSampler, texCoord, 0).r, mul(cProjectionInverse, cViewInverse));
+    float3 normal = NormalFromDepth(tSceneDepth, sSceneSampler, texCoord, dimInv, cProjectionInverse);
  	
 	uint state = SeedThread(launchIndex1d);
 	float3 randomVec = float3(Random01(state), Random01(state), Random01(state)) * 2.0f - 1.0f;
@@ -63,7 +70,7 @@ void RayGen()
 		ray.TMax = cRadius;
 
 		TraceRay(
-			SceneBVH, 														//AccelerationStructure
+			tTLASTable[TLASIndex], 											//AccelerationStructure
 			RAY_FLAG_CULL_BACK_FACING_TRIANGLES | RAY_FLAG_FORCE_OPAQUE, 	//RayFlags
 			0xFF, 															//InstanceInclusionMask
 			0, 																//RayContributionToHitGroupIndex

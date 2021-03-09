@@ -101,7 +101,7 @@ struct SceneData
 	Buffer* pLightBuffer = nullptr;
 	Camera* pCamera = nullptr;
 	ShadowData* pShadowData = nullptr;
-	Buffer* pTLAS = nullptr;
+	int SceneTLAS = 0;
 	int FrameIndex = 0;
 	BitField<128> VisibilityMask;
 };

@@ -22,6 +22,7 @@ workspace (ENGINE_NAME)
 	rtti "Off"
 	warnings "Extra"
 	justmycode "Off"
+	editAndContinue "Off"
 
 	--Unreferenced variable
 	disablewarnings {"4100"}
