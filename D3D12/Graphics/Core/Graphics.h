@@ -128,6 +128,9 @@ public:
 	void WaitForFence(uint64 fenceValue);
 	void IdleGPU();
 
+	int RegisterBindlessResource(ResourceView* pView, ResourceView* pFallback = nullptr);
+	int RegisterBindlessResource(Texture* pTexture, Texture* pFallback = nullptr);
+
 	ImGuiRenderer* GetImGui() const { return m_pImGuiRenderer.get(); }
 	CommandQueue* GetCommandQueue(D3D12_COMMAND_LIST_TYPE type) const;
 	CommandContext* AllocateCommandContext(D3D12_COMMAND_LIST_TYPE type = D3D12_COMMAND_LIST_TYPE_DIRECT);
@@ -340,6 +343,4 @@ private:
 	bool m_CapturePix = false;
 
 	std::map<ResourceView*, int> m_ViewToDescriptorIndex;
-	int RegisterBindlessResource(ResourceView* pView, ResourceView* pFallback = nullptr);
-	int RegisterBindlessResource(Texture* pTexture, Texture* pFallback = nullptr);
 };

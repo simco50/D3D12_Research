@@ -1,13 +1,15 @@
 #include "Common.hlsli"
+#include "CommonBindings.hlsli"
 
 #define RootSig "RootFlags(ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT), " \
-				"CBV(b0, visibility=SHADER_VISIBILITY_VERTEX), " \
-				"DescriptorTable(SRV(t0, numDescriptors = 1), visibility = SHADER_VISIBILITY_PIXEL), " \
+				"CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \
+				GLOBAL_BINDLESS_TABLE ", " \
 				"StaticSampler(s0, filter=FILTER_MIN_MAG_MIP_POINT, visibility = SHADER_VISIBILITY_PIXEL)"
 
 cbuffer Data : register(b0)
 {
 	float4x4 cViewProj;
+	uint TextureID;
 }
 
 struct VS_INPUT
@@ -24,9 +26,6 @@ struct PS_INPUT
 	float4 color : COLOR0;
 };
 
-SamplerState sDiffuse : register(s0);
-Texture2D tDiffuse : register(t0);
-
 [RootSignature(RootSig)]
 PS_INPUT VSMain(VS_INPUT input)
 {
@@ -41,5 +40,5 @@ PS_INPUT VSMain(VS_INPUT input)
 
 float4 PSMain(PS_INPUT input) : SV_TARGET
 {
-	return input.color* tDiffuse.Sample(sDiffuse, input.texCoord);
+	return input.color * tTexture2DTable[TextureID].Sample(sDiffuseSampler, input.texCoord);
 }

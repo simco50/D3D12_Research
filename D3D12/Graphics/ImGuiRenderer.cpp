@@ -164,7 +164,7 @@ void ImGuiRenderer::CreatePipeline(Graphics* pGraphics)
 	m_pPipelineState = pGraphics->CreatePipeline(psoDesc);
 }
 
-void ImGuiRenderer::Render(RGGraph& graph, Texture* pRenderTarget)
+void ImGuiRenderer::Render(RGGraph& graph, const SceneData& sceneData, Texture* pRenderTarget)
 {
 	ImGui::Render();
 	ImDrawData* pDrawData = ImGui::GetDrawData();
@@ -181,7 +181,6 @@ void ImGuiRenderer::Render(RGGraph& graph, Texture* pRenderTarget)
 			context.SetPipelineState(m_pPipelineState);
 			context.SetGraphicsRootSignature(m_pRootSignature.get());
 			Matrix projectionMatrix = Math::CreateOrthographicOffCenterMatrix(0.0f, pDrawData->DisplayPos.x + pDrawData->DisplaySize.x, pDrawData->DisplayPos.y + pDrawData->DisplaySize.y, 0.0f, 0.0f, 1.0f);
-			context.SetGraphicsDynamicConstantBufferView(0, &projectionMatrix, sizeof(Matrix));
 			context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 			context.SetViewport(FloatRect(pDrawData->DisplayPos.x, pDrawData->DisplayPos.y, pDrawData->DisplayPos.x + pDrawData->DisplaySize.x, pDrawData->DisplayPos.y + pDrawData->DisplaySize.y), 0, 1);
 
@@ -200,13 +199,21 @@ void ImGuiRenderer::Render(RGGraph& graph, Texture* pRenderTarget)
 						pcmd->UserCallback(pCmdList, pcmd);
 					else
 					{
+						struct Data
+						{
+							Matrix ProjectionMatrix;
+							int TextureIndex;
+						} drawData;
+						drawData.ProjectionMatrix = projectionMatrix;
 						context.SetScissorRect(FloatRect(pcmd->ClipRect.x, pcmd->ClipRect.y, pcmd->ClipRect.z, pcmd->ClipRect.w));
 						if (pcmd->TextureId != nullptr)
 						{
 							Texture* pTex = static_cast<Texture*>(pcmd->TextureId);
 							context.InsertResourceBarrier(pTex, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-							context.BindResource(1, 0, pTex->GetSRV());
+							drawData.TextureIndex = pTex->GetParent()->RegisterBindlessResource(pTex);
 						}
+						context.SetGraphicsDynamicConstantBufferView(0, &drawData, sizeof(Data));
+						context.BindResourceTable(1, sceneData.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Graphics);
 						context.DrawIndexed(pcmd->ElemCount, indexOffset, 0);
 					}
 					indexOffset += pcmd->ElemCount;

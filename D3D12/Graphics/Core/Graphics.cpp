@@ -1077,7 +1077,7 @@ void Graphics::Update()
 	// - ImGui render, pretty straight forward
 	if (Tweakables::g_EnableUI)
 	{
-		m_pImGuiRenderer->Render(graph, m_pTonemapTarget.get());
+		m_pImGuiRenderer->Render(graph, m_SceneData, m_pTonemapTarget.get());
 	}
 	else
 	{

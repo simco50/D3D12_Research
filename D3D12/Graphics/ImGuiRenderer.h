@@ -5,6 +5,7 @@ class RootSignature;
 class PipelineState;
 class Texture;
 class RGGraph;
+struct SceneData;
 
 DECLARE_MULTICAST_DELEGATE(ImGuiCallback);
 
@@ -15,7 +16,7 @@ public:
 	~ImGuiRenderer();
 
 	void NewFrame(uint32 width, uint32 height);
-	void Render(RGGraph& graph, Texture* pRenderTarget);
+	void Render(RGGraph& graph, const SceneData& sceneData, Texture* pRenderTarget);
 	void Update();
 	DelegateHandle AddUpdateCallback(ImGuiCallbackDelegate&& callback);
 	void RemoveUpdateCallback(DelegateHandle handle);
