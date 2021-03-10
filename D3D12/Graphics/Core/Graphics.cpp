@@ -142,8 +142,8 @@ void Graphics::Update()
 	{
 		if (a.BlendMode == b.BlendMode)
 		{
-			float aDist = Vector3::DistanceSquared(a.pMesh->GetBounds().Center, m_pCamera->GetPosition());
-			float bDist = Vector3::DistanceSquared(b.pMesh->GetBounds().Center, m_pCamera->GetPosition());
+			float aDist = Vector3::DistanceSquared(a.pMesh->Bounds.Center, m_pCamera->GetPosition());
+			float bDist = Vector3::DistanceSquared(b.pMesh->Bounds.Center, m_pCamera->GetPosition());
 			if (a.BlendMode == Batch::Blending::AlphaBlend)
 			{
 				return aDist > bDist;
@@ -1486,17 +1486,17 @@ void Graphics::InitializeAssets(CommandContext& context)
 		auto& pMesh = m_Meshes[j];
 		for (int i = 0; i < pMesh->GetMeshCount(); ++i)
 		{
-			SubMesh* pSubMesh = pMesh->GetMesh(i);
-			const Material& material = pMesh->GetMaterial(pSubMesh->GetMaterialId());
+			const SubMesh& subMesh = pMesh->GetMesh(i);
+			const Material& material = pMesh->GetMaterial(subMesh.MaterialId);
 			m_SceneData.Batches.push_back(Batch{});
 			Batch& b = m_SceneData.Batches.back();
 			b.Index = (int)m_SceneData.Batches.size() - 1;
-			b.Bounds = pSubMesh->GetBounds();
-			b.pMesh = pSubMesh;
+			b.Bounds = subMesh.Bounds;
+			b.pMesh = &subMesh;
 			b.WorldMatrix = transforms[j];
 			b.Bounds.Transform(b.Bounds, b.WorldMatrix);
-			b.VertexBufferDescriptor = RegisterBindlessResource(pSubMesh->GetVertexSRV());
-			b.IndexBufferDescriptor = RegisterBindlessResource(pSubMesh->GetIndexSRV());
+			b.VertexBufferDescriptor = RegisterBindlessResource(subMesh.pVertexSRV);
+			b.IndexBufferDescriptor = RegisterBindlessResource(subMesh.pIndexSRV);
 
 			b.Material.Diffuse = RegisterBindlessResource(material.pDiffuseTexture, GetDefaultTexture(DefaultTexture::Gray2D));
 			b.Material.Normal = RegisterBindlessResource(material.pNormalTexture, GetDefaultTexture(DefaultTexture::Normal2D));

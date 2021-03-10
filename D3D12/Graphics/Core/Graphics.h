@@ -14,7 +14,7 @@ class Texture;
 class PipelineState;
 class Mesh;
 class Buffer;
-class SubMesh;
+struct SubMesh;
 struct Material;
 class ClusteredForward;
 class TiledForward;

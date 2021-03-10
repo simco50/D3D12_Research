@@ -6,33 +6,21 @@ class Texture;
 class Graphics;
 class CommandContext;
 class ShaderResourceView;
+class Mesh;
 
-class SubMesh
+struct SubMesh
 {
-	friend class Mesh;
-
-public:
-	~SubMesh();
-
 	void Draw(CommandContext* pContext) const;
-	int GetMaterialId() const { return m_MaterialId; }
-	const BoundingBox& GetBounds() const { return m_Bounds; }
+	void Destroy();
 
-	const VertexBufferView& GetVertexBuffer() const { return m_VerticesLocation; }
-	const IndexBufferView& GetIndexBuffer() const { return m_IndicesLocation; }
-	Buffer* GetSourceBuffer() const;
-	ShaderResourceView* GetVertexSRV() const { return m_pVertexSRV.get(); }
-	ShaderResourceView* GetIndexSRV() const { return m_pIndexSRV.get(); }
-
-private:
-	int m_Stride = 0;
-	int m_MaterialId = 0;
-	std::unique_ptr<ShaderResourceView> m_pVertexSRV;
-	std::unique_ptr<ShaderResourceView> m_pIndexSRV;
-	VertexBufferView m_VerticesLocation;
-	IndexBufferView m_IndicesLocation;
-	BoundingBox m_Bounds;
-	Mesh* m_pParent;
+	int Stride = 0;
+	int MaterialId = 0;
+	ShaderResourceView* pVertexSRV = nullptr;
+	ShaderResourceView* pIndexSRV = nullptr;
+	VertexBufferView VerticesLocation;
+	IndexBufferView IndicesLocation;
+	BoundingBox Bounds;
+	Mesh* pParent = nullptr;
 };
 
 struct Material
@@ -47,9 +35,10 @@ struct Material
 class Mesh
 {
 public:
+	~Mesh();
 	bool Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pContext);
 	int GetMeshCount() const { return (int)m_Meshes.size(); }
-	SubMesh* GetMesh(const int index) const { return m_Meshes[index].get(); }
+	const SubMesh& GetMesh(const int index) const { return m_Meshes[index]; }
 	const Material& GetMaterial(int materialId) const { return m_Materials[materialId]; }
 
 	Buffer* GetBLAS() const { return m_pBLAS.get(); }
@@ -58,7 +47,7 @@ public:
 private:
 	std::vector<Material> m_Materials;
 	std::unique_ptr<Buffer> m_pGeometryData;
-	std::vector<std::unique_ptr<SubMesh>> m_Meshes;
+	std::vector<SubMesh> m_Meshes;
 	std::vector<std::unique_ptr<Texture>> m_Textures;
 	std::map<StringHash, Texture*> m_ExistingTextures;
 	std::unique_ptr<Buffer> m_pBLAS;
