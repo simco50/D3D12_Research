@@ -37,8 +37,10 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 		Vector3 Bitangent;
 	};
 
+	// SubAllocated buffers need to be 16 byte aligned
+	static constexpr uint64 sBufferAlignment = 16;
 	uint64 bufferSize = vertexCount * sizeof(Vertex) +
-		indexCount * sizeof(uint32);
+		indexCount * sizeof(uint32) + pScene->mNumMeshes * sBufferAlignment;
 
 	m_pGeometryData = std::make_unique<Buffer>(pGraphics, "Mesh VertexBuffer");
 	m_pGeometryData->Create(BufferDesc::CreateBuffer(bufferSize, BufferFlag::ShaderResource | BufferFlag::ByteAddress));
@@ -50,6 +52,7 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 	{
 		m_pGeometryData->SetData(pContext, pSource, size, dataOffset);
 		dataOffset += size;
+		dataOffset = Math::AlignUp<uint64>(dataOffset, sBufferAlignment);
 	};
 
 	for (uint32 i = 0; i < pScene->mNumMeshes; ++i)
@@ -88,14 +91,19 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 
 		VertexBufferView vbv(m_pGeometryData->GetGpuHandle() + dataOffset, (uint32)vertices.size(), sizeof(Vertex));
 		pSubMesh->m_VerticesLocation = vbv;
+		pSubMesh->m_pVertexSRV = std::make_unique<ShaderResourceView>();
+		pSubMesh->m_pVertexSRV->Create(m_pGeometryData.get(), BufferSRVDesc(DXGI_FORMAT_UNKNOWN, true, (uint32)dataOffset, (uint32)vertices.size() * sizeof(Vertex)));
 		CopyData(vertices.data(), sizeof(Vertex) * vertices.size());
 
 		IndexBufferView ibv(m_pGeometryData->GetGpuHandle() + dataOffset, (uint32)indices.size(), false);
 		pSubMesh->m_IndicesLocation = ibv;
+		pSubMesh->m_pIndexSRV = std::make_unique<ShaderResourceView>();
+		pSubMesh->m_pIndexSRV->Create(m_pGeometryData.get(), BufferSRVDesc(DXGI_FORMAT_UNKNOWN, true, (uint32)dataOffset, (uint32)indices.size() * sizeof(uint32)));
 		CopyData(indices.data(), sizeof(uint32) * indices.size());
 
 		pSubMesh->m_Stride = sizeof(Vertex);
 		pSubMesh->m_pParent = this;
+
 
 		m_Meshes.push_back(std::move(pSubMesh));
 	}

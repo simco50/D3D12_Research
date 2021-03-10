@@ -5,6 +5,7 @@ class CommandContext;
 class Texture;
 class Graphics;
 class CommandContext;
+class ShaderResourceView;
 
 class SubMesh
 {
@@ -20,10 +21,14 @@ public:
 	const VertexBufferView& GetVertexBuffer() const { return m_VerticesLocation; }
 	const IndexBufferView& GetIndexBuffer() const { return m_IndicesLocation; }
 	Buffer* GetSourceBuffer() const;
+	ShaderResourceView* GetVertexSRV() const { return m_pVertexSRV.get(); }
+	ShaderResourceView* GetIndexSRV() const { return m_pIndexSRV.get(); }
 
 private:
 	int m_Stride = 0;
 	int m_MaterialId = 0;
+	std::unique_ptr<ShaderResourceView> m_pVertexSRV;
+	std::unique_ptr<ShaderResourceView> m_pIndexSRV;
 	VertexBufferView m_VerticesLocation;
 	IndexBufferView m_IndicesLocation;
 	BoundingBox m_Bounds;
@@ -51,9 +56,9 @@ public:
 	Buffer* GetData() const { return m_pGeometryData.get(); }
 
 private:
-	std::vector<std::unique_ptr<SubMesh>> m_Meshes;
 	std::vector<Material> m_Materials;
 	std::unique_ptr<Buffer> m_pGeometryData;
+	std::vector<std::unique_ptr<SubMesh>> m_Meshes;
 	std::vector<std::unique_ptr<Texture>> m_Textures;
 	std::map<StringHash, Texture*> m_ExistingTextures;
 	std::unique_ptr<Buffer> m_pBLAS;

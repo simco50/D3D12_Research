@@ -41,9 +41,8 @@ struct HitData
 	int NormalIndex;
 	int RoughnessIndex;
 	int MetallicIndex;
-	uint MeshIndex;
-	uint VertexDataOffset;
-	uint IndexDataOffset;
+	uint VertexBuffer;
+	uint IndexBuffer;
 };
 
 RWTexture2D<float4> uOutput : register(u0);
@@ -122,11 +121,11 @@ void ClosestHit(inout RayPayload payload, BuiltInTriangleIntersectionAttributes 
 	payload.rayCone = PropagateRayCone(payload.rayCone, 0, RayTCurrent());
 
 	// Resolve geometry data
-	uint3 indices = tBufferTable[cHitData.MeshIndex].Load<uint3>(cHitData.IndexDataOffset + PrimitiveIndex() * sizeof(uint3));
+	uint3 indices = tBufferTable[cHitData.IndexBuffer].Load<uint3>(PrimitiveIndex() * sizeof(uint3));
 	float3 b = float3((1.0f - attrib.barycentrics.x - attrib.barycentrics.y), attrib.barycentrics.x, attrib.barycentrics.y);
-	Vertex v0 = tBufferTable[cHitData.MeshIndex].Load<Vertex>(cHitData.VertexDataOffset + indices.x * sizeof(Vertex));
-	Vertex v1 = tBufferTable[cHitData.MeshIndex].Load<Vertex>(cHitData.VertexDataOffset + indices.y * sizeof(Vertex));
-	Vertex v2 = tBufferTable[cHitData.MeshIndex].Load<Vertex>(cHitData.VertexDataOffset + indices.z * sizeof(Vertex));
+	Vertex v0 = tBufferTable[cHitData.VertexBuffer].Load<Vertex>(indices.x * sizeof(Vertex));
+	Vertex v1 = tBufferTable[cHitData.VertexBuffer].Load<Vertex>(indices.y * sizeof(Vertex));
+	Vertex v2 = tBufferTable[cHitData.VertexBuffer].Load<Vertex>(indices.z * sizeof(Vertex));
 	float2 texCoord = v0.texCoord * b.x + v1.texCoord * b.y + v2.texCoord * b.z;
 	float3 N = v0.normal * b.x + v1.normal * b.y + v2.normal * b.z;
 	float3 T = v0.tangent * b.x + v1.tangent * b.y + v2.tangent * b.z;

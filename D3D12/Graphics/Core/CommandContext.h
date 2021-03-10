@@ -198,6 +198,11 @@ public:
 	void SetComputeRootSRV(int rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address);
 	void SetComputeRootUAV(int rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address);
 	void SetComputeRootConstants(int rootIndex, uint32 count, const void* pConstants);
+	template<typename T>
+	void SetComputeRootConstants(int rootIndex, const T& data)
+	{
+		SetComputeRootConstants(rootIndex, sizeof(T) / sizeof(int32), &data);
+	}
 	void SetComputeDynamicConstantBufferView(int rootIndex, void* pData, uint32 dataSize);
 
 	// Graphics
@@ -205,6 +210,11 @@ public:
 	void SetGraphicsRootSRV(int rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address);
 	void SetGraphicsRootUAV(int rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address);
 	void SetGraphicsRootConstants(int rootIndex, uint32 count, const void* pConstants);
+	template<typename T>
+	void SetGraphicsRootConstants(int rootIndex, const T& data)
+	{
+		SetGraphicsRootConstants(rootIndex, sizeof(T) / sizeof(int32), &data);
+	}
 	void SetGraphicsDynamicConstantBufferView(int rootIndex, const void* pData, uint32 dataSize);
 
 	DynamicAllocation AllocateTransientMemory(uint64 size, uint32 alignment = 256);

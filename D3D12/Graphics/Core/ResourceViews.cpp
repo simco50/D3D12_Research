@@ -17,12 +17,13 @@ void ShaderResourceView::Create(Buffer* pBuffer, const BufferSRVDesc& desc)
 	const BufferDesc& bufferDesc = pBuffer->GetDesc();
 
 	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+
 	if (EnumHasAnyFlags(bufferDesc.Usage, BufferFlag::AccelerationStructure))
 	{
-		srvDesc.Format = DXGI_FORMAT_UNKNOWN;
 		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_RAYTRACING_ACCELERATION_STRUCTURE;
+		srvDesc.Format = DXGI_FORMAT_UNKNOWN;
 		srvDesc.RaytracingAccelerationStructure.Location = pBuffer->GetGpuHandle();
-		srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 
 		if (m_Descriptor.ptr == 0)
 		{
@@ -32,21 +33,21 @@ void ShaderResourceView::Create(Buffer* pBuffer, const BufferSRVDesc& desc)
 	}
 	else
 	{
-		srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-		srvDesc.Format = desc.Format;
-		srvDesc.Buffer.FirstElement = desc.IndexOffset;
-		srvDesc.Buffer.NumElements = bufferDesc.NumElements();
-		srvDesc.Buffer.StructureByteStride = 0;
 		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
 		if (desc.Raw)
 		{
-			srvDesc.Buffer.NumElements = (uint32)(bufferDesc.Size / 4);
-			srvDesc.Buffer.Flags |= D3D12_BUFFER_SRV_FLAG_RAW;
 			srvDesc.Format = DXGI_FORMAT_R32_TYPELESS;
+			srvDesc.Buffer.StructureByteStride = 0;
+			srvDesc.Buffer.FirstElement = desc.ElementOffset / 4;
+			srvDesc.Buffer.NumElements = desc.NumElements > 0 ? desc.NumElements / 4 : (uint32)(bufferDesc.Size / 4);
+			srvDesc.Buffer.Flags |= D3D12_BUFFER_SRV_FLAG_RAW;
 		}
 		else
 		{
+			srvDesc.Format = desc.Format;
 			srvDesc.Buffer.StructureByteStride = bufferDesc.ElementSize;
+			srvDesc.Buffer.FirstElement = desc.ElementOffset;
+			srvDesc.Buffer.NumElements = desc.NumElements > 0 ? desc.NumElements : bufferDesc.NumElements();
 		}
 
 		if (m_Descriptor.ptr == 0)
