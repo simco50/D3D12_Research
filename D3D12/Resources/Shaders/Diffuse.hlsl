@@ -3,8 +3,7 @@
 
 #define BLOCK_SIZE 16
 
-#define RootSig "RootFlags(ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT), " \
-				"CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \
+#define RootSig "CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \
 				"CBV(b1, visibility=SHADER_VISIBILITY_ALL), " \
 				"CBV(b2, visibility=SHADER_VISIBILITY_PIXEL), " \
 				GLOBAL_BINDLESS_TABLE ", " \
@@ -21,6 +20,7 @@ struct PerObjectData
     int Normal;
     int Roughness;
     int Metallic;
+	int VertexBuffer;
 };
 
 struct PerViewData
@@ -170,9 +170,10 @@ LightResult DoLight(float4 pos, float3 worldPos, float3 N, float3 V, float3 diff
 }
 
 [RootSignature(RootSig)]
-PSInput VSMain(VSInput input)
+PSInput VSMain(uint VertexId : SV_VertexID)
 {
 	PSInput result;
+	VSInput input = tBufferTable[cObjectData.VertexBuffer].Load<VSInput>(VertexId * sizeof(VSInput));
 	result.positionWS = mul(float4(input.position, 1.0f), cObjectData.World).xyz;
 	result.positionVS = mul(float4(result.positionWS, 1.0f), cViewData.View).xyz;
 	result.position = mul(float4(result.positionWS, 1.0f), cViewData.ViewProjection);

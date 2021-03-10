@@ -10,7 +10,6 @@ class Mesh;
 
 struct SubMesh
 {
-	void Draw(CommandContext* pContext) const;
 	void Destroy();
 
 	int Stride = 0;

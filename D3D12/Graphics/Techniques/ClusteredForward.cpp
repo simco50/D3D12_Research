@@ -142,20 +142,24 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 
 			context.SetGraphicsDynamicConstantBufferView(1, &perFrameParameters, sizeof(PerFrameParameters));
 			context.BindResource(2, 0, m_pUniqueClusters->GetUAV());
+			context.BindResourceTable(3, resources.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Graphics);
 
 			auto DrawBatches = [&](Batch::Blending blendMode)
 			{
 				struct PerObjectData
 				{
 					Matrix World;
+					int VertexBuffer;
 				} objectData;
 				for (const Batch& b : resources.Batches)
 				{
 					if (EnumHasAnyFlags(b.BlendMode, blendMode) && resources.VisibilityMask.GetBit(b.Index))
 					{
 						objectData.World = b.WorldMatrix;
-						context.SetGraphicsDynamicConstantBufferView(0, &objectData, sizeof(Matrix));
-						b.pMesh->Draw(&context);
+						objectData.VertexBuffer = b.VertexBufferDescriptor;
+						context.SetGraphicsDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
+						context.SetIndexBuffer(b.pMesh->IndicesLocation);
+						context.DrawIndexed(b.pMesh->IndicesLocation.Elements, 0, 0);
 					}
 				}
 			};
@@ -348,6 +352,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 				{
 					Matrix World;
 					MaterialData Material;
+					uint32 VertexBuffer;
 				} objectData;
 				for (const Batch& b : resources.Batches)
 				{
@@ -355,8 +360,10 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 					{
 						objectData.World = b.WorldMatrix;
 						objectData.Material = b.Material;
+						objectData.VertexBuffer = b.VertexBufferDescriptor;
 						context.SetGraphicsDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
-						b.pMesh->Draw(&context);
+						context.SetIndexBuffer(b.pMesh->IndicesLocation);
+						context.DrawIndexed(b.pMesh->IndicesLocation.Elements, 0, 0);
 					}
 				}
 			};
@@ -523,11 +530,6 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
 
 	//Mark Clusters
 	{
-		CD3DX12_INPUT_ELEMENT_DESC inputElements[] = {
-			CD3DX12_INPUT_ELEMENT_DESC("POSITION", DXGI_FORMAT_R32G32B32_FLOAT),
-			CD3DX12_INPUT_ELEMENT_DESC("TEXCOORD", DXGI_FORMAT_R32G32_FLOAT),
-		};
-
 		Shader* pVertexShader = pGraphics->GetShaderManager()->GetShader("ClusterMarking.hlsl", ShaderType::Vertex, "MarkClusters_VS");
 		Shader* pPixelShaderOpaque = pGraphics->GetShaderManager()->GetShader("ClusterMarking.hlsl", ShaderType::Pixel, "MarkClusters_PS");
 
@@ -539,7 +541,6 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
 		psoDesc.SetRootSignature(m_pMarkUniqueClustersRS->GetRootSignature());
 		psoDesc.SetVertexShader(pVertexShader);
 		psoDesc.SetPixelShader(pPixelShaderOpaque);
-		psoDesc.SetInputLayout(inputElements, ARRAYSIZE(inputElements));
 		psoDesc.SetDepthOnlyTarget(Graphics::DEPTH_STENCIL_FORMAT, m_pGraphics->GetMultiSampleCount());
 		psoDesc.SetDepthWrite(false);
 		m_pMarkUniqueClustersOpaquePSO = pGraphics->CreatePipeline(psoDesc);
@@ -596,14 +597,6 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
 
 	//Diffuse
 	{
-		CD3DX12_INPUT_ELEMENT_DESC inputElements[] = {
-			CD3DX12_INPUT_ELEMENT_DESC("POSITION", DXGI_FORMAT_R32G32B32_FLOAT),
-			CD3DX12_INPUT_ELEMENT_DESC("TEXCOORD", DXGI_FORMAT_R32G32_FLOAT),
-			CD3DX12_INPUT_ELEMENT_DESC("NORMAL", DXGI_FORMAT_R32G32B32_FLOAT),
-			CD3DX12_INPUT_ELEMENT_DESC("TANGENT", DXGI_FORMAT_R32G32B32_FLOAT),
-			CD3DX12_INPUT_ELEMENT_DESC("TEXCOORD", DXGI_FORMAT_R32G32B32_FLOAT, 1),
-		};
-
 		Shader* pVertexShader = pGraphics->GetShaderManager()->GetShader("Diffuse.hlsl", ShaderType::Vertex, "VSMain", { "CLUSTERED_FORWARD" });
 		Shader* pPixelShader = pGraphics->GetShaderManager()->GetShader("Diffuse.hlsl", ShaderType::Pixel, "PSMain", { "CLUSTERED_FORWARD" });
 
@@ -621,7 +614,6 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
 		psoDesc.SetBlendMode(BlendMode::Replace, false);
 		psoDesc.SetVertexShader(pVertexShader);
 		psoDesc.SetPixelShader(pPixelShader);
-		psoDesc.SetInputLayout(inputElements, ARRAYSIZE(inputElements));
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_EQUAL);
 		psoDesc.SetDepthWrite(false);
 		psoDesc.SetRenderTargetFormats(formats, ARRAYSIZE(formats), Graphics::DEPTH_STENCIL_FORMAT, m_pGraphics->GetMultiSampleCount());

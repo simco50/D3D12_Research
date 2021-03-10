@@ -180,6 +180,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& resources)
 				{
 					Matrix World;
 					MaterialData Material;
+					uint32 VertexBuffer;
 				} objectData;
 				for (const Batch& b : resources.Batches)
 				{
@@ -187,8 +188,10 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& resources)
 					{
 						objectData.World = b.WorldMatrix;
 						objectData.Material = b.Material;
+						objectData.VertexBuffer = b.VertexBufferDescriptor;
 						context.SetGraphicsDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
-						b.pMesh->Draw(&context);
+						context.SetIndexBuffer(b.pMesh->IndicesLocation);
+						context.DrawIndexed(b.pMesh->IndicesLocation.Elements, 0, 0);
 					}
 				}
 			};
@@ -305,14 +308,6 @@ void TiledForward::SetupPipelines(Graphics* pGraphics)
 
 	//PBR Diffuse passes
 	{
-		CD3DX12_INPUT_ELEMENT_DESC inputElements[] = {
-			CD3DX12_INPUT_ELEMENT_DESC("POSITION", DXGI_FORMAT_R32G32B32_FLOAT),
-			CD3DX12_INPUT_ELEMENT_DESC("TEXCOORD", DXGI_FORMAT_R32G32_FLOAT),
-			CD3DX12_INPUT_ELEMENT_DESC("NORMAL", DXGI_FORMAT_R32G32B32_FLOAT),
-			CD3DX12_INPUT_ELEMENT_DESC("TANGENT", DXGI_FORMAT_R32G32B32_FLOAT),
-			CD3DX12_INPUT_ELEMENT_DESC("TEXCOORD", DXGI_FORMAT_R32G32B32_FLOAT, 1),
-		};
-
 		//Shaders
 		Shader* pVertexShader = pGraphics->GetShaderManager()->GetShader("Diffuse.hlsl", ShaderType::Vertex, "VSMain", { "TILED_FORWARD" });
 		Shader* pPixelShader = pGraphics->GetShaderManager()->GetShader("Diffuse.hlsl", ShaderType::Pixel, "PSMain", {"TILED_FORWARD" });
@@ -329,7 +324,6 @@ void TiledForward::SetupPipelines(Graphics* pGraphics)
 
 			//Opaque
 			PipelineStateInitializer psoDesc;
-			psoDesc.SetInputLayout(inputElements, sizeof(inputElements) / sizeof(inputElements[0]));
 			psoDesc.SetRootSignature(m_pDiffuseRS->GetRootSignature());
 			psoDesc.SetVertexShader(pVertexShader);
 			psoDesc.SetPixelShader(pPixelShader);

@@ -521,6 +521,7 @@ void Graphics::Update()
 				{
 					Matrix World;
 					MaterialData Material;
+					uint32 VertexBuffer;
 				} objectData;
 				for (const Batch& b : m_SceneData.Batches)
 				{
@@ -528,8 +529,10 @@ void Graphics::Update()
 					{
 						objectData.World = b.WorldMatrix;
 						objectData.Material = b.Material;
+						objectData.VertexBuffer = b.VertexBufferDescriptor;
 						renderContext.SetGraphicsDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
-						b.pMesh->Draw(&renderContext);
+						renderContext.SetIndexBuffer(b.pMesh->IndicesLocation);
+						renderContext.DrawIndexed(b.pMesh->IndicesLocation.Elements, 0, 0);
 					}
 				}
 			};
@@ -716,6 +719,7 @@ void Graphics::Update()
 						{
 							Matrix World;
 							MaterialData Material;
+							uint32 VertexBuffer;
 						} objectData{};
 
 						for (const Batch& b : m_SceneData.Batches)
@@ -724,8 +728,10 @@ void Graphics::Update()
 							{
 								objectData.World = b.WorldMatrix;
 								objectData.Material = b.Material;
+								objectData.VertexBuffer = b.VertexBufferDescriptor;
 								context.SetGraphicsDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
-								b.pMesh->Draw(&context);
+								context.SetIndexBuffer(b.pMesh->IndicesLocation);
+								context.DrawIndexed(b.pMesh->IndicesLocation.Elements, 0, 0);
 							}
 						}
 					};
@@ -1692,12 +1698,6 @@ void Graphics::OnResize(int width, int height)
 void Graphics::InitializePipelines()
 {
 	//Input layout
-	//UNIVERSAL
-	CD3DX12_INPUT_ELEMENT_DESC depthOnlyInputElements[] = {
-		CD3DX12_INPUT_ELEMENT_DESC("POSITION", DXGI_FORMAT_R32G32B32_FLOAT),
-		CD3DX12_INPUT_ELEMENT_DESC("TEXCOORD", DXGI_FORMAT_R32G32_FLOAT),
-	};
-
 	//Shadow mapping
 	//Vertex shader-only pass that writes to the depth buffer using the light matrix
 	{
@@ -1712,7 +1712,6 @@ void Graphics::InitializePipelines()
 
 			//Pipeline state
 			PipelineStateInitializer psoDesc;
-			psoDesc.SetInputLayout(depthOnlyInputElements, sizeof(depthOnlyInputElements) / sizeof(depthOnlyInputElements[0]));
 			psoDesc.SetRootSignature(m_pShadowsRS->GetRootSignature());
 			psoDesc.SetVertexShader(pVertexShader);
 			psoDesc.SetRenderTargetFormats(nullptr, 0, DEPTH_STENCIL_SHADOW_FORMAT, 1);
@@ -1740,7 +1739,6 @@ void Graphics::InitializePipelines()
 
 		//Pipeline state
 		PipelineStateInitializer psoDesc;
-		psoDesc.SetInputLayout(depthOnlyInputElements, sizeof(depthOnlyInputElements) / sizeof(depthOnlyInputElements[0]));
 		psoDesc.SetRootSignature(m_pDepthPrepassRS->GetRootSignature());
 		psoDesc.SetVertexShader(pVertexShader);
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);

@@ -1,40 +1,47 @@
 #include "Common.hlsli"
+#include "CommonBindings.hlsli"
 
-#define RootSig "RootFlags(ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT), " \
-				"CBV(b0, visibility=SHADER_VISIBILITY_VERTEX), " \
+#define RootSig "CBV(b0, visibility=SHADER_VISIBILITY_VERTEX), " \
 				"CBV(b1, visibility=SHADER_VISIBILITY_ALL), " \
 				"DescriptorTable(UAV(u1, numDescriptors = 1), visibility = SHADER_VISIBILITY_PIXEL), " \
-				"DescriptorTable(SRV(t0, numDescriptors = 1), visibility = SHADER_VISIBILITY_PIXEL), " \
+				GLOBAL_BINDLESS_TABLE ", " \
 				"StaticSampler(s0, filter=FILTER_MIN_MAG_MIP_LINEAR, visibility = SHADER_VISIBILITY_PIXEL)"
 
-cbuffer PerObjectParameters : register(b0)
+struct ObjectData
 {
-    float4x4 cWorld;
-}
+    float4x4 World;
+	uint VertexBuffer;
+};
 
-cbuffer PerViewData : register(b1)
+struct ViewData
 {
-    int4 cClusterDimensions;
-    int2 cClusterSize;
-	float2 cLightGridParams;
-    float4x4 cView;
-    float4x4 cViewProjection;
-}
+    int4 ClusterDimensions;
+    int2 ClusterSize;
+	float2 LightGridParams;
+    float4x4 View;
+    float4x4 ViewProjection;
+};
+
+ConstantBuffer<ObjectData> cObjectData : register(b0);
+ConstantBuffer<ViewData> cViewData : register(b1);
 
 RWStructuredBuffer<uint> uActiveClusters : register(u1);
 
 uint GetSliceFromDepth(float depth)
 {
-    return floor(log(depth) * cLightGridParams.x - cLightGridParams.y);
+    return floor(log(depth) * cViewData.LightGridParams.x - cViewData.LightGridParams.y);
 }
 
-struct VS_Input
+struct VSInput
 {
-    float3 position : POSITION;
-    float2 texCoord : TEXCOORD;
+	float3 position : POSITION;
+	float2 texCoord : TEXCOORD;
+	float3 normal : NORMAL;
+	float3 tangent : TANGENT;
+	float3 bitangent : TEXCOORD1;
 };
 
-struct PS_Input
+struct PSInput
 {
     float4 position : SV_POSITION;
     float4 positionVS : VIEWSPACE_POSITION;
@@ -42,20 +49,21 @@ struct PS_Input
 };
 
 [RootSignature(RootSig)]
-PS_Input MarkClusters_VS(VS_Input input)
+PSInput MarkClusters_VS(uint VertexId : SV_VertexID)
 {
-    PS_Input output = (PS_Input)0;
-    float4 wPos = mul(float4(input.position, 1), cWorld);
-    output.positionVS = mul(wPos, cView);
-    output.position = mul(wPos, cViewProjection);
+    PSInput output = (PSInput)0;
+	VSInput input = tBufferTable[cObjectData.VertexBuffer].Load<VSInput>(VertexId * sizeof(VSInput));
+    float4 wPos = mul(float4(input.position, 1), cObjectData.World);
+    output.positionVS = mul(wPos, cViewData.View);
+    output.position = mul(wPos, cViewData.ViewProjection);
     output.texCoord = input.texCoord;
     return output;
 }
 
 [earlydepthstencil]
-void MarkClusters_PS(PS_Input input)
+void MarkClusters_PS(PSInput input)
 {
-    uint3 clusterIndex3D = uint3(floor(input.position.xy / cClusterSize), GetSliceFromDepth(input.positionVS.z));
-    uint clusterIndex1D = clusterIndex3D.x + (cClusterDimensions.x * (clusterIndex3D.y + cClusterDimensions.y * clusterIndex3D.z));
+    uint3 clusterIndex3D = uint3(floor(input.position.xy / cViewData.ClusterSize), GetSliceFromDepth(input.positionVS.z));
+    uint clusterIndex1D = clusterIndex3D.x + (cViewData.ClusterDimensions.x * (clusterIndex3D.y + cViewData.ClusterDimensions.y * clusterIndex3D.z));
     uActiveClusters[clusterIndex1D] = 1;
 }

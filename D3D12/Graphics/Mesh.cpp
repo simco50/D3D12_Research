@@ -217,13 +217,6 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 	return true;
 }
 
-void SubMesh::Draw(CommandContext* pContext) const
-{
-	pContext->SetIndexBuffer(IndicesLocation);
-	pContext->SetVertexBuffers(&VerticesLocation, 1);
-	pContext->DrawIndexed(IndicesLocation.Elements, 0, 0);
-}
-
 void SubMesh::Destroy()
 {
 	delete pIndexSRV;
