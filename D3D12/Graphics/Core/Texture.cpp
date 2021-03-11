@@ -211,10 +211,15 @@ void Texture::Create(const TextureDesc& textureDesc)
 			dsvDesc.ViewDimension = textureDesc.SampleCount > 1 ? D3D12_DSV_DIMENSION_TEXTURE2DMS : D3D12_DSV_DIMENSION_TEXTURE2D;
 			break;
 		case TextureDimension::Texture3D:
-		case TextureDimension::TextureCube:
-		case TextureDimension::TextureCubeArray:
 		case TextureDimension::Texture2DArray:
 			dsvDesc.Texture2DArray.ArraySize = textureDesc.DepthOrArraySize;
+			dsvDesc.Texture2DArray.FirstArraySlice = 0;
+			dsvDesc.Texture2DArray.MipSlice = 0;
+			dsvDesc.ViewDimension = textureDesc.SampleCount > 1 ? D3D12_DSV_DIMENSION_TEXTURE2DMSARRAY : D3D12_DSV_DIMENSION_TEXTURE2DARRAY;
+			break;
+		case TextureDimension::TextureCube:
+		case TextureDimension::TextureCubeArray:
+			dsvDesc.Texture2DArray.ArraySize = textureDesc.DepthOrArraySize * 6;
 			dsvDesc.Texture2DArray.FirstArraySlice = 0;
 			dsvDesc.Texture2DArray.MipSlice = 0;
 			dsvDesc.ViewDimension = textureDesc.SampleCount > 1 ? D3D12_DSV_DIMENSION_TEXTURE2DMSARRAY : D3D12_DSV_DIMENSION_TEXTURE2DARRAY;
