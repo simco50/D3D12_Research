@@ -17,7 +17,7 @@
 #ifndef _PIX3_WIN_H_
 #define _PIX3_WIN_H_
 
- // PIXEventsThreadInfo is defined in PIXEventsCommon.h
+// PIXEventsThreadInfo is defined in PIXEventsCommon.h
 struct PIXEventsThreadInfo;
 
 extern "C" PIXEventsThreadInfo* PIXGetThreadInfo() noexcept;
