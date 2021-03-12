@@ -136,6 +136,7 @@ void Profiler::Initialize(Graphics* pGraphics)
 
 	m_pReadBackBuffer = std::make_unique<Buffer>(pGraphics, "Profiling Readback Buffer");
 	m_pReadBackBuffer->Create(BufferDesc::CreateReadback(sizeof(uint64) * Graphics::FRAME_COUNT * HEAP_SIZE));
+	m_pReadBackBuffer->Map();
 
 	{
 		//GPU Frequency
@@ -206,11 +207,7 @@ void Profiler::Resolve(Graphics* pGraphics, int frameIndex)
 		//Make sure the resolve from 2 frames ago is finished before we read.
 		uint32 readFromIndex = (m_CurrentReadbackFrame + Graphics::FRAME_COUNT - 1) % Graphics::FRAME_COUNT;
 		pGraphics->WaitForFence(m_FenceValues[readFromIndex]);
-
-		const uint64* pReadbackData = (uint64*)m_pReadBackBuffer->Map(0, 0, m_pReadBackBuffer->GetSize());
-		check(pReadbackData);
-		m_pCurrentBlock->PopulateTimes(pReadbackData, frameIndex - 2);
-		m_pReadBackBuffer->Unmap();
+		m_pCurrentBlock->PopulateTimes((const uint64*)m_pReadBackBuffer->GetMappedData(), frameIndex - 2);
 	}
 	m_CurrentReadbackFrame = (m_CurrentReadbackFrame + 1) % Graphics::FRAME_COUNT;
 

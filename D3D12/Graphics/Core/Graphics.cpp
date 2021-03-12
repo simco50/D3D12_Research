@@ -182,10 +182,9 @@ void Graphics::Update()
 	if (Tweakables::g_SDSM)
 	{
 		Buffer* pSourceBuffer = m_ReductionReadbackTargets[(m_Frame + 1) % FRAME_COUNT].get();
-		Vector2* pData = (Vector2*)pSourceBuffer->Map();
+		Vector2* pData = (Vector2*)pSourceBuffer->GetMappedData();
 		minPoint = pData->x;
 		maxPoint = pData->y;
-		pSourceBuffer->Unmap();
 	}
 
 	float n = m_pCamera->GetNear();
@@ -427,6 +426,7 @@ void Graphics::Update()
 				m_pDevice->GetCopyableFootprints(&resourceDesc, 0, 1, 0, &textureFootprint, nullptr, nullptr, nullptr);
 				m_pScreenshotBuffer = std::make_unique<Buffer>(this, "Screenshot Texture");
 				m_pScreenshotBuffer->Create(BufferDesc::CreateReadback(textureFootprint.Footprint.RowPitch * textureFootprint.Footprint.Height));
+				m_pScreenshotBuffer->Map();
 				renderContext.InsertResourceBarrier(m_pTonemapTarget.get(), D3D12_RESOURCE_STATE_COPY_SOURCE);
 				renderContext.InsertResourceBarrier(m_pScreenshotBuffer.get(), D3D12_RESOURCE_STATE_COPY_DEST);
 				renderContext.CopyTexture(m_pTonemapTarget.get(), m_pScreenshotBuffer.get(), CD3DX12_BOX(0, 0, m_pTonemapTarget->GetWidth(), m_pTonemapTarget->GetHeight()));
@@ -442,7 +442,7 @@ void Graphics::Update()
 		{
 			TaskContext taskContext;
 			TaskQueue::Execute([&](uint32) {
-				char* pData = (char*)m_pScreenshotBuffer->Map(0, m_pScreenshotBuffer->GetSize());
+				char* pData = (char*)m_pScreenshotBuffer->GetMappedData();
 				Image img;
 				img.SetSize(m_pTonemapTarget->GetWidth(), m_pTonemapTarget->GetHeight(), 4);
 				uint32 imageRowPitch = m_pTonemapTarget->GetWidth() * 4;
@@ -453,7 +453,6 @@ void Graphics::Update()
 					pData += m_ScreenshotRowPitch;
 					targetOffset += imageRowPitch;
 				}
-				m_pScreenshotBuffer->Unmap();
 
 				SYSTEMTIME time;
 				GetSystemTime(&time);
@@ -1691,6 +1690,7 @@ void Graphics::OnResize(int width, int height)
 	{
 		std::unique_ptr<Buffer> pBuffer = std::make_unique<Buffer>(this, "SDSM Reduction Readback Target");
 		pBuffer->Create(BufferDesc::CreateTyped(1, DXGI_FORMAT_R32G32_FLOAT, BufferFlag::Readback));
+		pBuffer->Map();
 		m_ReductionReadbackTargets.push_back(std::move(pBuffer));
 	}
 }
