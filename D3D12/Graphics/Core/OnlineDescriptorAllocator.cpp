@@ -64,8 +64,8 @@ void GlobalOnlineDescriptorHeap::FreeBlock(uint64 fenceValue, DescriptorHeapBloc
 	m_ReleasedBlocks.push_back(pBlock);
 }
 
-OnlineDescriptorAllocator::OnlineDescriptorAllocator(GlobalOnlineDescriptorHeap* pGlobalHeap, CommandContext* pContext)
-	: GraphicsObject(pGlobalHeap->GetParent()), m_pOwner(pContext), m_Type(pGlobalHeap->GetType()), m_pHeapAllocator(pGlobalHeap)
+OnlineDescriptorAllocator::OnlineDescriptorAllocator(GlobalOnlineDescriptorHeap* pGlobalHeap)
+	: GraphicsObject(pGlobalHeap->GetParent()), m_Type(pGlobalHeap->GetType()), m_pHeapAllocator(pGlobalHeap)
 {
 }
 
@@ -93,7 +93,7 @@ void OnlineDescriptorAllocator::SetDescriptors(uint32 rootIndex, uint32 offset, 
 	}
 }
 
-void OnlineDescriptorAllocator::BindStagedDescriptors(CommandListContext descriptorTableType)
+void OnlineDescriptorAllocator::BindStagedDescriptors(ID3D12GraphicsCommandList* pCmdList, CommandListContext descriptorTableType)
 {
 	for (uint32 rootIndex : m_StaleRootParameters)
 	{
@@ -103,10 +103,10 @@ void OnlineDescriptorAllocator::BindStagedDescriptors(CommandListContext descrip
 			switch (descriptorTableType)
 			{
 			case CommandListContext::Graphics:
-				m_pOwner->GetCommandList()->SetGraphicsRootDescriptorTable(rootIndex, entry.Descriptor.GpuHandle);
+				pCmdList->SetGraphicsRootDescriptorTable(rootIndex, entry.Descriptor.GpuHandle);
 				break;
 			case CommandListContext::Compute:
-				m_pOwner->GetCommandList()->SetComputeRootDescriptorTable(rootIndex, entry.Descriptor.GpuHandle);
+				pCmdList->SetComputeRootDescriptorTable(rootIndex, entry.Descriptor.GpuHandle);
 				break;
 			default:
 				noEntry();

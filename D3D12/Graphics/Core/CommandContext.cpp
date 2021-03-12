@@ -13,7 +13,7 @@
 #include "StateObject.h"
 
 CommandContext::CommandContext(Graphics* pGraphics, ID3D12GraphicsCommandList* pCommandList, D3D12_COMMAND_LIST_TYPE type, ID3D12CommandAllocator* pAllocator)
-	: GraphicsObject(pGraphics), m_pCommandList(pCommandList), m_Type(type), m_pAllocator(pAllocator), m_ShaderResourceDescriptorAllocator(pGraphics->GetGlobalViewHeap(), this)
+	: GraphicsObject(pGraphics), m_pCommandList(pCommandList), m_Type(type), m_pAllocator(pAllocator), m_ShaderResourceDescriptorAllocator(pGraphics->GetGlobalViewHeap())
 {
 	m_DynamicAllocator = std::make_unique<DynamicResourceAllocator>(pGraphics->GetAllocationManager());
 	pCommandList->QueryInterface(IID_PPV_ARGS(m_pRaytracingCommandList.GetAddressOf()));
@@ -634,7 +634,7 @@ void CommandContext::ResolveResource(Texture* pSource, uint32 sourceSubResource,
 void CommandContext::PrepareDraw(CommandListContext type)
 {
 	FlushResourceBarriers();
-	m_ShaderResourceDescriptorAllocator.BindStagedDescriptors(type);
+	m_ShaderResourceDescriptorAllocator.BindStagedDescriptors(m_pCommandList, type);
 }
 
 void CommandContext::SetPipelineState(PipelineState* pPipelineState)

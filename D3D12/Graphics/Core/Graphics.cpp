@@ -1360,7 +1360,7 @@ void Graphics::InitD3D()
 	m_pDynamicAllocationManager = std::make_unique<DynamicAllocationManager>(this, BufferFlag::Upload);
 
 	m_pGlobalViewHeap = std::make_unique<GlobalOnlineDescriptorHeap>(this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 2000, 1000000);
-	m_pPersistentDescriptorHeap = std::make_unique<OnlineDescriptorAllocator>(m_pGlobalViewHeap.get(), nullptr);
+	m_pPersistentDescriptorHeap = std::make_unique<OnlineDescriptorAllocator>(m_pGlobalViewHeap.get());
 	m_SceneData.GlobalSRVHeapHandle = m_pGlobalViewHeap->GetStartHandle();
 	
 	check(m_DescriptorHeaps.size() == D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES);
@@ -1452,29 +1452,23 @@ void Graphics::InitD3D()
 
 void Graphics::InitializeAssets(CommandContext& context)
 {
+	auto RegisterDefaultTexture = [this, &context](DefaultTexture type, const char* pName, const TextureDesc& desc, uint32* pData) {
+		m_DefaultTextures[(int)type] = std::make_unique<Texture>(this, pName);
+		m_DefaultTextures[(int)type]->Create(&context, desc, pData);
+	};
+
 	uint32 BLACK = 0xFF000000;
-	m_DefaultTextures[(int)DefaultTexture::Black2D] = std::make_unique<Texture>(this, "Default Black");
-	m_DefaultTextures[(int)DefaultTexture::Black2D]->Create(&context, TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &BLACK);
-
+	RegisterDefaultTexture(DefaultTexture::Black2D, "Default Black", TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &BLACK);
 	uint32 WHITE = 0xFFFFFFFF;
-	m_DefaultTextures[(int)DefaultTexture::White2D] = std::make_unique<Texture>(this, "Default White");
-	m_DefaultTextures[(int)DefaultTexture::White2D]->Create(&context, TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &WHITE);
-
+	RegisterDefaultTexture(DefaultTexture::White2D, "Default White", TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &WHITE);
 	uint32 MAGENTA = 0xFFFF00FF;
-	m_DefaultTextures[(int)DefaultTexture::Magenta2D] = std::make_unique<Texture>(this, "Default Magenta");
-	m_DefaultTextures[(int)DefaultTexture::Magenta2D]->Create(&context, TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &MAGENTA);
-
+	RegisterDefaultTexture(DefaultTexture::Magenta2D, "Default Magenta", TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &MAGENTA);
 	uint32 GRAY = 0xFF808080;
-	m_DefaultTextures[(int)DefaultTexture::Gray2D] = std::make_unique<Texture>(this, "Default Gray");
-	m_DefaultTextures[(int)DefaultTexture::Gray2D]->Create(&context, TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &GRAY);
-
+	RegisterDefaultTexture(DefaultTexture::Gray2D, "Default Gray", TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &GRAY);
 	uint32 DEFAULT_NORMAL = 0xFFFF8080;
-	m_DefaultTextures[(int)DefaultTexture::Normal2D] = std::make_unique<Texture>(this, "Default Normal");
-	m_DefaultTextures[(int)DefaultTexture::Normal2D]->Create(&context, TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &DEFAULT_NORMAL);
-
+	RegisterDefaultTexture(DefaultTexture::Normal2D, "Default Normal", TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &DEFAULT_NORMAL);
 	uint32 BLACK_CUBE[6] = {};
-	m_DefaultTextures[(int)DefaultTexture::BlackCube] = std::make_unique<Texture>(this, "Default Black Cube");
-	m_DefaultTextures[(int)DefaultTexture::BlackCube]->Create(&context, TextureDesc::CreateCube(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &BLACK_CUBE);
+	RegisterDefaultTexture(DefaultTexture::BlackCube, "Default Black Cube", TextureDesc::CreateCube(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), BLACK_CUBE);
 
 	{
 		std::unique_ptr<Mesh> pMesh = std::make_unique<Mesh>();
@@ -2136,7 +2130,7 @@ void Graphics::UpdateImGui()
 	ImGui::Checkbox("Visualize Clusters", &g_VisualizeClusters);
 	ImGui::SliderInt("SSR Samples", &Tweakables::g_SsrSamples, 0, 32);
 
-	if (m_RayTracingTier != D3D12_RAYTRACING_TIER_NOT_SUPPORTED)
+	if (SupportsRayTracing())
 	{
 		ImGui::Checkbox("Raytraced AO", &Tweakables::g_RaytracedAO);
 		ImGui::Checkbox("Raytraced Reflections", &Tweakables::g_RaytracedReflections);
