@@ -29,9 +29,7 @@
 
 #include "Core/CoreTypes.h"
 
-#define WIN32_LEAN_AND_MEAN 
-#define NOMINMAX
-#include <Windows.h>
+#include "Core/MinWindows.h"
 #include <wrl/client.h>
 template<typename T>
 using ComPtr = Microsoft::WRL::ComPtr<T>;
