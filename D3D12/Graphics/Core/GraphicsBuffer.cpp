@@ -22,7 +22,7 @@ Buffer::~Buffer()
 D3D12_RESOURCE_DESC GetResourceDesc(const BufferDesc& bufferDesc)
 {
 	D3D12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Buffer(
-		Math::AlignUp<int64>((int64)bufferDesc.Size, D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT),
+		Math::AlignUp<uint64>(bufferDesc.Size, D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT),
 		D3D12_RESOURCE_FLAG_NONE
 	);
 	if (EnumHasAnyFlags(bufferDesc.Usage, BufferFlag::ShaderResource | BufferFlag::AccelerationStructure) == false)
@@ -32,6 +32,11 @@ D3D12_RESOURCE_DESC GetResourceDesc(const BufferDesc& bufferDesc)
 	if (EnumHasAnyFlags(bufferDesc.Usage, BufferFlag::UnorderedAccess))
 	{
 		desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+	}
+	//PIX: This will improve the shaders' performance on some hardware.
+	if (EnumHasAnyFlags(bufferDesc.Usage, BufferFlag::Structured))
+	{
+		desc.Width = Math::Max(desc.Width, 16ull);
 	}
 	return desc;
 }

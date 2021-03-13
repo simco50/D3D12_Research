@@ -566,7 +566,7 @@ void Graphics::Update()
 				int dispatchGroupsY = Math::DivideAndRoundUp(m_WindowHeight, 16);
 				renderContext.Dispatch(dispatchGroupsX, dispatchGroupsY);
 
-				renderContext.InsertResourceBarrier(resources.GetTexture(Data.DepthStencilResolved), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+				renderContext.InsertResourceBarrier(resources.GetTexture(Data.DepthStencilResolved), D3D12_RESOURCE_STATE_SHADER_RESOURCE);
 				renderContext.InsertResourceBarrier(resources.GetTexture(Data.DepthStencil), D3D12_RESOURCE_STATE_DEPTH_READ);
 				renderContext.FlushResourceBarriers();
 			});
@@ -833,7 +833,7 @@ void Graphics::Update()
 				renderContext.InsertResourceBarrier(m_pTAASource.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 				renderContext.InsertResourceBarrier(m_pHDRRenderTarget.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 				renderContext.InsertResourceBarrier(m_pVelocity.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-				renderContext.InsertResourceBarrier(m_pPreviousColor.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+				renderContext.InsertResourceBarrier(m_pPreviousColor.get(), D3D12_RESOURCE_STATE_SHADER_RESOURCE);
 				
 				renderContext.SetComputeRootSignature(m_pTemporalResolveRS.get());
 				renderContext.SetPipelineState(m_pTemporalResolvePSO);

@@ -74,12 +74,13 @@ namespace ShaderCompiler
 		arguments.push_back(L"-T");
 		MultibyteToUnicode pwTarget(pTarget);
 		arguments.push_back(*pwTarget);
-		arguments.push_back(L"-all_resources_bound");
+		arguments.push_back(DXC_ARG_ALL_RESOURCES_BOUND);
 
 		MultibyteToUnicode pwSymbolPath(pShaderSymbolsPath);
 		if (debugShaders)
 		{
 			arguments.push_back(DXC_ARG_SKIP_OPTIMIZATIONS);
+			arguments.push_back(DXC_ARG_DEBUG);
 			arguments.push_back(L"-Qembed_debug");
 		}
 		else
@@ -92,7 +93,6 @@ namespace ShaderCompiler
 		}
 
 		arguments.push_back(DXC_ARG_WARNINGS_ARE_ERRORS);
-		arguments.push_back(DXC_ARG_DEBUG);
 		arguments.push_back(DXC_ARG_PACK_MATRIX_ROW_MAJOR);
 
 		for (size_t i = 0; i < wDefines.size(); ++i)
@@ -148,21 +148,25 @@ namespace ShaderCompiler
 		//Symbols
 		{
 			ComPtr<IDxcBlobUtf16> pDebugDataPath;
-			pCompileResult->GetOutput(DXC_OUT_PDB, IID_PPV_ARGS(result.pSymbolsBlob.GetAddressOf()), pDebugDataPath.GetAddressOf());
-			std::stringstream pathStream;
-			pathStream << pShaderSymbolsPath << UNICODE_TO_MULTIBYTE((wchar_t*)pDebugDataPath->GetBufferPointer());
-			result.DebugPath = pathStream.str();
+			if (SUCCEEDED(pCompileResult->GetOutput(DXC_OUT_PDB, IID_PPV_ARGS(result.pSymbolsBlob.GetAddressOf()), pDebugDataPath.GetAddressOf())))
+			{
+				std::stringstream pathStream;
+				pathStream << pShaderSymbolsPath << UNICODE_TO_MULTIBYTE((wchar_t*)pDebugDataPath->GetBufferPointer());
+				result.DebugPath = pathStream.str();
+			}
 		}
 
 		//Reflection
 		{
 			ComPtr<IDxcBlob> pReflectionData;
-			pCompileResult->GetOutput(DXC_OUT_REFLECTION, IID_PPV_ARGS(pReflectionData.GetAddressOf()), nullptr);
-			DxcBuffer reflectionBuffer;
-			reflectionBuffer.Ptr = pReflectionData->GetBufferPointer();
-			reflectionBuffer.Size = pReflectionData->GetBufferSize();
-			reflectionBuffer.Encoding = 0;
-			VERIFY_HR(pUtils->CreateReflection(&reflectionBuffer, IID_PPV_ARGS(result.pReflection.GetAddressOf())));
+			if (SUCCEEDED(pCompileResult->GetOutput(DXC_OUT_REFLECTION, IID_PPV_ARGS(pReflectionData.GetAddressOf()), nullptr)))
+			{
+				DxcBuffer reflectionBuffer;
+				reflectionBuffer.Ptr = pReflectionData->GetBufferPointer();
+				reflectionBuffer.Size = pReflectionData->GetBufferSize();
+				reflectionBuffer.Encoding = 0;
+				VERIFY_HR(pUtils->CreateReflection(&reflectionBuffer, IID_PPV_ARGS(result.pReflection.GetAddressOf())));
+			}
 		}
 
 		return result;
