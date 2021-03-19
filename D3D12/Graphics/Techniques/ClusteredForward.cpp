@@ -51,6 +51,12 @@ void ClusteredForward::OnSwapchainCreated(int windowWidth, int windowHeight)
 	m_pLightGrid->CreateUAV(&m_pLightGridRawUAV, BufferUAVDesc::CreateRaw());
 	m_pDebugLightGrid->Create(BufferDesc::CreateStructured(totalClusterCount, 2 * sizeof(uint32)));
 
+	uint32 froxelSize = 8;
+	uint32 numDepthFroxels = 64;
+	TextureDesc volumeDesc = TextureDesc::Create3D(Math::DivideAndRoundUp(windowWidth, froxelSize), Math::DivideAndRoundUp(windowHeight, froxelSize), numDepthFroxels, DXGI_FORMAT_R11G11B10_FLOAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess);
+	m_pLightScatteringVolume->Create(volumeDesc);
+	m_pFinalVolumeFog->Create(volumeDesc);
+
 	m_ViewportDirty = true;
 }
 
@@ -252,6 +258,53 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 
 			context.ExecuteIndirect(m_pLightCullingCommandSignature.get(), 1, m_pIndirectArguments.get(), nullptr);
 		});
+
+	RGPassBuilder injectVolumeLighting = graph.AddPass("Inject Volumetric Lights");
+	injectVolumeLighting.Bind([=](CommandContext& context, const RGPassResources& passResources)
+		{
+			context.InsertResourceBarrier(m_pLightScatteringVolume.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+			context.SetComputeRootSignature(m_pVolumetricLightingRS.get());
+			context.SetPipelineState(m_pInjectVolumeLightPSO);
+
+			struct ShaderData
+			{
+				IntVector3 ClusterDimensions;
+				int NoiseTexture;
+				Vector3 InvClusterDimensions;
+				int NumLights;
+				Matrix ViewProjectionInv;
+				Matrix ProjectionInv;
+				Matrix ViewInv;
+			} constantBuffer{};
+
+			constantBuffer.ClusterDimensions = IntVector3(m_pLightScatteringVolume->GetWidth(), m_pLightScatteringVolume->GetHeight(), m_pLightScatteringVolume->GetDepth());
+			constantBuffer.InvClusterDimensions = Vector3(1.0f / m_pLightScatteringVolume->GetWidth(), 1.0f / m_pLightScatteringVolume->GetHeight(), 1.0f / m_pLightScatteringVolume->GetDepth());
+			constantBuffer.NoiseTexture = m_pGraphics->RegisterBindlessResource(m_pGraphics->GetDefaultTexture(DefaultTexture::ColorNoise256));
+			constantBuffer.ViewInv = resources.pCamera->GetViewInverse();
+			constantBuffer.ProjectionInv = resources.pCamera->GetProjectionInverse();
+			constantBuffer.ViewProjectionInv = resources.pCamera->GetProjectionInverse() * resources.pCamera->GetViewInverse();
+			constantBuffer.NumLights = resources.pLightBuffer->GetNumElements();
+
+			D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
+				resources.pLightBuffer->GetSRV()->GetDescriptor(),
+				resources.pAO->GetSRV()->GetDescriptor(),
+				resources.pResolvedDepth->GetSRV()->GetDescriptor(),
+			};
+
+			context.SetComputeDynamicConstantBufferView(0, &constantBuffer, sizeof(ShaderData));
+			context.BindResource(1, 0, m_pLightScatteringVolume->GetUAV());
+			context.BindResources(2, 5, srvs, ARRAYSIZE(srvs));
+			context.BindResourceTable(3, resources.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Compute);
+
+			context.Dispatch(
+				Math::DivideAndRoundUp(m_pLightScatteringVolume->GetWidth(), 8),
+				Math::DivideAndRoundUp(m_pLightScatteringVolume->GetHeight(), 8),
+				Math::DivideAndRoundUp(m_pLightScatteringVolume->GetDepth(), 4)
+			);
+		});
+
+	m_pGraphics->SetVisualize(m_pLightScatteringVolume.get());
 
 	RGPassBuilder basePass = graph.AddPass("Base Pass");
 	basePass.Bind([=](CommandContext& context, const RGPassResources& passResources)
@@ -506,6 +559,9 @@ void ClusteredForward::SetupResources(Graphics* pGraphics)
 	m_pLightGrid = std::make_unique<Buffer>(pGraphics, "Light Grid");
 	m_pDebugLightGrid = std::make_unique<Buffer>(pGraphics, "Debug Light Grid");
 
+	m_pLightScatteringVolume = std::make_unique<Texture>(pGraphics, "Light Scattering Volume");
+	m_pFinalVolumeFog = std::make_unique<Texture>(pGraphics, "Final Light Scattering Volume");
+
 	CommandContext* pContext = pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 	m_pHeatMapTexture = std::make_unique<Texture>(pGraphics, "Heatmap Texture");
 	m_pHeatMapTexture->Create(pContext, "Resources/Textures/Heatmap.png");
@@ -675,5 +731,18 @@ void ClusteredForward::SetupPipelines(Graphics* pGraphics)
 		psoDesc.SetRootSignature(m_pVisualizeLightsRS->GetRootSignature());
 		psoDesc.SetName("Light Density Visualization");
 		m_pVisualizeLightsPSO = pGraphics->CreatePipeline(psoDesc);
+	}
+
+	{
+		Shader* pComputeShader = pGraphics->GetShaderManager()->GetShader("VolumetricFog.hlsl", ShaderType::Compute, "InjectFogLightingCS", { });
+
+		m_pVolumetricLightingRS = std::make_unique<RootSignature>(pGraphics);
+		m_pVolumetricLightingRS->FinalizeFromShader("Inject Fog Lighting", pComputeShader);
+
+		PipelineStateInitializer psoDesc;
+		psoDesc.SetComputeShader(pComputeShader);
+		psoDesc.SetRootSignature(m_pVolumetricLightingRS->GetRootSignature());
+		psoDesc.SetName("Inject Fog Lighting");
+		m_pInjectVolumeLightPSO = pGraphics->CreatePipeline(psoDesc);
 	}
 }

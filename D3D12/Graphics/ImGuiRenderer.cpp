@@ -196,13 +196,16 @@ void ImGuiRenderer::Render(RGGraph& graph, const SceneData& sceneData, Texture* 
 				{
 					const ImDrawCmd* pcmd = &pCmdList->CmdBuffer[i];
 					if (pcmd->UserCallback)
+					{
 						pcmd->UserCallback(pCmdList, pcmd);
+					}
 					else
 					{
 						struct Data
 						{
 							Matrix ProjectionMatrix;
 							int TextureIndex;
+							TextureDimension TextureType;
 						} drawData;
 						drawData.ProjectionMatrix = projectionMatrix;
 						context.SetScissorRect(FloatRect(pcmd->ClipRect.x, pcmd->ClipRect.y, pcmd->ClipRect.z, pcmd->ClipRect.w));
@@ -211,6 +214,7 @@ void ImGuiRenderer::Render(RGGraph& graph, const SceneData& sceneData, Texture* 
 							Texture* pTex = static_cast<Texture*>(pcmd->TextureId);
 							context.InsertResourceBarrier(pTex, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 							drawData.TextureIndex = pTex->GetParent()->RegisterBindlessResource(pTex);
+							drawData.TextureType = pTex->GetDesc().Dimensions;
 						}
 						context.SetGraphicsDynamicConstantBufferView(0, &drawData, sizeof(Data));
 						context.BindResourceTable(1, sceneData.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Graphics);

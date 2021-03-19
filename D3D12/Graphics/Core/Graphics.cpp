@@ -1470,6 +1470,9 @@ void Graphics::InitializeAssets(CommandContext& context)
 	uint32 BLACK_CUBE[6] = {};
 	RegisterDefaultTexture(DefaultTexture::BlackCube, "Default Black Cube", TextureDesc::CreateCube(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), BLACK_CUBE);
 
+	m_DefaultTextures[(int)DefaultTexture::ColorNoise256] = std::make_unique<Texture>(this, "Color Noise 256px");
+	m_DefaultTextures[(int)DefaultTexture::ColorNoise256]->Create(&context, "Resources/Textures/Noise.png", false);
+
 	{
 		std::unique_ptr<Mesh> pMesh = std::make_unique<Mesh>();
 		pMesh->Load("Resources/sponza/sponza.dae", this, &context);

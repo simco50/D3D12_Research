@@ -88,6 +88,13 @@ private:
 	PipelineState* m_pVisualizeLightsPSO = nullptr;
 	std::unique_ptr<Texture> m_pVisualizationIntermediateTexture;
 
+	//Volumetric Fog
+	std::unique_ptr<Texture> m_pLightScatteringVolume;
+	std::unique_ptr<Texture> m_pFinalVolumeFog;
+	std::unique_ptr<RootSignature> m_pVolumetricLightingRS;
+	PipelineState* m_pInjectVolumeLightPSO = nullptr;
+	PipelineState* m_pAccumulateVolumeLightPSO = nullptr;
+
 	bool m_ViewportDirty = true;
 };
 
