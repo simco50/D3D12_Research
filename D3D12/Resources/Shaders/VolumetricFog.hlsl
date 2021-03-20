@@ -21,6 +21,8 @@ struct ShaderData
 	float4x4 ViewProjectionInv;
 	float4x4 ProjectionInv;
 	float4x4 ViewInv;
+	float NearZ;
+	float FarZ;
 };
 
 ConstantBuffer<ShaderData> cData : register(b0);
@@ -122,17 +124,42 @@ void InjectFogLightingCS(uint3 threadId : SV_DISPATCHTHREADID)
 	uOutLightScattering[threadId] = float4(lightScattering, cellDensity);
 }
 
+float Max4(float4 v)
+{
+	return max(v.x, max(v.y, max(v.z, v.w)));
+}
+
+groupshared uint gsMaxDepth;
+
 [RootSignature(RootSig)]
 [numthreads(8, 8, 1)]
-void AccumulateFogCS(uint3 threadId : SV_DISPATCHTHREADID)
+void AccumulateFogCS(uint3 threadId : SV_DISPATCHTHREADID, uint groupIndex : SV_GROUPINDEX)
 {
+	float2 texCoord = threadId.xy * cData.InvClusterDimensions.xy;
+	float depth = tDepth.SampleLevel(sDiffuseSampler, texCoord, 0).r;
+
+	if(groupIndex == 0)
+	{
+		gsMaxDepth = 0xffffffff;
+	}
+
+    GroupMemoryBarrierWithGroupSync();
+
+	InterlockedMin(gsMaxDepth, asuint(depth));
+
+    GroupMemoryBarrierWithGroupSync();
+
+	float maxDepth = asfloat(gsMaxDepth);
+
+	uint lastSlice = (maxDepth) * cData.ClusterDimensions.z;
+
 	float3 lightScattering = 0;
 	float cellDensity = 0;
 	float transmittance = 1;
 
 	uOutLightScattering[int3(threadId.xy, 0)] = float4(lightScattering, transmittance);
 
-	for(int sliceIndex = 1; sliceIndex <= cData.ClusterDimensions.z; ++sliceIndex)
+	for(int sliceIndex = 1; sliceIndex <= lastSlice; ++sliceIndex)
 	{
 		float4 scatteringDensity = tLightScattering[int3(threadId.xy, sliceIndex - 1)];
 		lightScattering += scatteringDensity.xyz * transmittance;

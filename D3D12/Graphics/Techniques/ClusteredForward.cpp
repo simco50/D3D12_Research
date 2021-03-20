@@ -276,6 +276,8 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 				Matrix ViewProjectionInv;
 				Matrix ProjectionInv;
 				Matrix ViewInv;
+				float NearZ;
+				float FarZ;
 			} constantBuffer{};
 
 			constantBuffer.ClusterDimensions = IntVector3(m_pLightScatteringVolume->GetWidth(), m_pLightScatteringVolume->GetHeight(), m_pLightScatteringVolume->GetDepth());
@@ -285,6 +287,8 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 			constantBuffer.ProjectionInv = resources.pCamera->GetProjectionInverse();
 			constantBuffer.ViewProjectionInv = resources.pCamera->GetProjectionInverse() * resources.pCamera->GetViewInverse();
 			constantBuffer.NumLights = resources.pLightBuffer->GetNumElements();
+			constantBuffer.NearZ = resources.pCamera->GetNear();
+			constantBuffer.FarZ = resources.pCamera->GetFar();
 
 			D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
 				resources.pLightBuffer->GetSRV()->GetDescriptor(),
@@ -315,6 +319,9 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 			context.SetComputeRootSignature(m_pVolumetricLightingRS.get());
 			context.SetPipelineState(m_pAccumulateVolumeLightPSO);
 
+			float values[] = { 0,0,0,0 };
+			context.ClearUavFloat(m_pFinalVolumeFog.get(), m_pFinalVolumeFog->GetUAV(), values);
+
 			struct ShaderData
 			{
 				IntVector3 ClusterDimensions;
@@ -324,6 +331,8 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 				Matrix ViewProjectionInv;
 				Matrix ProjectionInv;
 				Matrix ViewInv;
+				float NearZ;
+				float FarZ;
 			} constantBuffer{};
 
 			constantBuffer.ClusterDimensions = IntVector3(m_pLightScatteringVolume->GetWidth(), m_pLightScatteringVolume->GetHeight(), m_pLightScatteringVolume->GetDepth());
@@ -333,6 +342,8 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 			constantBuffer.ProjectionInv = resources.pCamera->GetProjectionInverse();
 			constantBuffer.ViewProjectionInv = resources.pCamera->GetProjectionInverse() * resources.pCamera->GetViewInverse();
 			constantBuffer.NumLights = resources.pLightBuffer->GetNumElements();
+			constantBuffer.NearZ = resources.pCamera->GetNear();
+			constantBuffer.FarZ = resources.pCamera->GetFar();
 
 			D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
 				m_pLightScatteringVolume->GetSRV()->GetDescriptor(),
@@ -350,7 +361,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 			context.Dispatch(
 				Math::DivideAndRoundUp(m_pFinalVolumeFog->GetWidth(), 8),
 				Math::DivideAndRoundUp(m_pFinalVolumeFog->GetHeight(), 8),
-				Math::DivideAndRoundUp(m_pFinalVolumeFog->GetDepth(), 4)
+				m_pFinalVolumeFog->GetDepth()
 			);
 		});
 
@@ -378,6 +389,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 				int pad;
 				IntVector2 ClusterSize;
 				Vector2 LightGridParams;
+				IntVector3 VolumeFogDimensions;
 			} frameData{};
 
 			Matrix view = resources.pCamera->GetView();
@@ -395,6 +407,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 			frameData.LightCount = resources.pLightBuffer->GetNumElements();
 			frameData.ViewProjection = resources.pCamera->GetViewProjection();
 			frameData.ViewPosition = Vector4(resources.pCamera->GetPosition());
+			frameData.VolumeFogDimensions = IntVector3(m_pFinalVolumeFog->GetWidth(), m_pFinalVolumeFog->GetHeight(), m_pFinalVolumeFog->GetDepth());
 
 			Matrix reprojectionMatrix = resources.pCamera->GetViewProjection().Invert() * resources.pCamera->GetPreviousViewProjection();
 			// Transform from uv to clip space: texcoord * 2 - 1
@@ -418,6 +431,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 			context.InsertResourceBarrier(resources.pAO, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(resources.pPreviousColor, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(resources.pResolvedDepth, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+			context.InsertResourceBarrier(m_pFinalVolumeFog.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
 			context.InsertResourceBarrier(resources.pDepthBuffer, D3D12_RESOURCE_STATE_DEPTH_READ);
 			context.InsertResourceBarrier(resources.pRenderTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
@@ -442,12 +456,17 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 			context.SetGraphicsDynamicConstantBufferView(1, &frameData, sizeof(PerFrameData));
 			context.SetGraphicsDynamicConstantBufferView(2, resources.pShadowData, sizeof(ShadowData));
 			context.BindResourceTable(3, resources.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Graphics);
-			context.BindResource(4, 0, m_pLightGrid->GetSRV());
-			context.BindResource(4, 1, m_pLightIndexGrid->GetSRV());
-			context.BindResource(4, 2, resources.pLightBuffer->GetSRV());
-			context.BindResource(4, 3, resources.pAO->GetSRV());
-			context.BindResource(4, 4, resources.pResolvedDepth->GetSRV());
-			context.BindResource(4, 5, resources.pPreviousColor->GetSRV());
+
+			D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
+				m_pFinalVolumeFog->GetSRV()->GetDescriptor(),
+				m_pLightGrid->GetSRV()->GetDescriptor(),
+				m_pLightIndexGrid->GetSRV()->GetDescriptor(),
+				resources.pLightBuffer->GetSRV()->GetDescriptor(),
+				resources.pAO->GetSRV()->GetDescriptor(),
+				resources.pResolvedDepth->GetSRV()->GetDescriptor(),
+				resources.pPreviousColor->GetSRV()->GetDescriptor(),
+			};
+			context.BindResources(4, 0, srvs, ARRAYSIZE(srvs));
 
 			auto DrawBatches = [&](Batch::Blending blendMode)
 			{
