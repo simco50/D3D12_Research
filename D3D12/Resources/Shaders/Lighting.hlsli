@@ -58,7 +58,7 @@ float3 TangentSpaceNormalMapping(float3 sampledNormal, float3x3 TBN, bool invert
 	return mul(normal, TBN);
 }
 
-float DoShadow(float3 wPos, int shadowMapIndex, float invShadowSize)
+float Shadow3x3PCF(float3 wPos, int shadowMapIndex, float invShadowSize)
 {
 	float4x4 lightViewProjection = cShadowData.LightViewProjections[shadowMapIndex];
 	float4 lightPos = mul(float4(wPos, 1), lightViewProjection);
@@ -87,6 +87,18 @@ float DoShadow(float3 wPos, int shadowMapIndex, float invShadowSize)
         shadowTexture.SampleCmpLevelZero(sShadowMapSampler, texCoord + float2( d3,  d4), lightPos.z)
         ) / 10.0f;
     return result * result;
+}
+
+float ShadowNoPCF(float3 wPos, int shadowMapIndex, float invShadowSize)
+{
+	float4x4 lightViewProjection = cShadowData.LightViewProjections[shadowMapIndex];
+	float4 lightPos = mul(float4(wPos, 1), lightViewProjection);
+	lightPos.xyz /= lightPos.w;
+	lightPos.x = lightPos.x / 2.0f + 0.5f;
+	lightPos.y = lightPos.y / -2.0f + 0.5f;
+	float2 texCoord = lightPos.xy;
+	Texture2D shadowTexture = tTexture2DTable[NonUniformResourceIndex(cShadowData.ShadowMapOffset + shadowMapIndex)];
+    return shadowTexture.SampleCmpLevelZero(sShadowMapSampler, texCoord, lightPos.z);
 }
 
 float GetAttenuation(Light light, float3 wPos)
@@ -173,7 +185,7 @@ LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, floa
 		}
 #endif
 
-		visibility = DoShadow(wPos, shadowIndex, light.InvShadowSize);
+		visibility = Shadow3x3PCF(wPos, shadowIndex, light.InvShadowSize);
 		if(visibility <= 0)
 		{
 			return result;
@@ -222,13 +234,7 @@ float3 ApplyVolumetricLighting(float3 startPoint, float3 endPoint, float4 pos, f
 			if(light.ShadowIndex >= 0)
 			{
 				int shadowMapIndex = GetShadowIndex(light, pos, currentPosition);
-				float4x4 lightViewProjection = cShadowData.LightViewProjections[shadowMapIndex];
-				float4 lightPos = mul(float4(currentPosition, 1), lightViewProjection);
-
-				lightPos.xyz /= lightPos.w;
-				lightPos.x = lightPos.x * 0.5f + 0.5f;
-				lightPos.y = lightPos.y * -0.5f + 0.5f;
-				visibility = tTexture2DTable[NonUniformResourceIndex(cShadowData.ShadowMapOffset + shadowMapIndex)].SampleCmpLevelZero(sShadowMapSampler, lightPos.xy, lightPos.z);
+				visibility = ShadowNoPCF(currentPosition, shadowMapIndex, light.InvShadowSize);
 			}
 			float phase = saturate(HenyeyGreenstrein(dot(ray, light.Direction)));
 			accumFog += attenuation * visibility * phase * light.GetColor().rgb * light.Intensity;

@@ -1,12 +1,16 @@
 #include "Common.hlsli"
 #include "CommonBindings.hlsli"
+#include "Lighting.hlsli"
 
 #define RootSig \
 		"CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \
+		"CBV(b2, visibility=SHADER_VISIBILITY_ALL), " \
 		"DescriptorTable(UAV(u0, numDescriptors = 1), visibility=SHADER_VISIBILITY_ALL), " \
-		"DescriptorTable(SRV(t5, numDescriptors = 10), visibility=SHADER_VISIBILITY_ALL), " \
+		"DescriptorTable(SRV(t4, numDescriptors = 10), visibility=SHADER_VISIBILITY_ALL), " \
 		GLOBAL_BINDLESS_TABLE ", " \
 		"StaticSampler(s0, filter=FILTER_MIN_MAG_MIP_POINT, addressU = TEXTURE_ADDRESS_WRAP, addressV = TEXTURE_ADDRESS_WRAP), " \
+		"StaticSampler(s1, filter=FILTER_MIN_MAG_MIP_POINT, addressU = TEXTURE_ADDRESS_CLAMP, addressV = TEXTURE_ADDRESS_CLAMP), " \
+		"StaticSampler(s2, filter=FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT, comparisonFunc=COMPARISON_GREATER), " \
 
 struct ShaderData
 {
@@ -21,26 +25,35 @@ struct ShaderData
 
 ConstantBuffer<ShaderData> cData : register(b0);
 
-RWTexture3D<float3> uOutputTexture : register(u0);
+Texture3D<float4> tLightScattering : register(t4);
+RWTexture3D<float4> uOutLightScattering : register(u0);
+
+float HGPhase(float VdotL, float g)
+{
+    float denom = 1.0 - sqrt(g);
+    float div = (1.0 + sqrt(g)) + ((2.0 * g) * (-VdotL));
+    return denom / ((12.56637096405029296875 * div) * sqrt(div));
+}
 
 [RootSignature(RootSig)]
 [numthreads(8, 8, 4)]
 void InjectFogLightingCS(uint3 threadId : SV_DISPATCHTHREADID)
 {
+
 	float nearPlane = 0.1f;
 	float farPlane = 100.0f;
 
 	// Compute the sample point inside the froxel. Jittered
 	float2 texelUV = (threadId.xy + 0.5f) * cData.InvClusterDimensions.xy;
 	float sliceMinZ = threadId.z * cData.InvClusterDimensions.z;
-	float minLinearZ = sliceMinZ * (farPlane - nearPlane);
+	float minLinearZ = nearPlane + sliceMinZ * (farPlane - nearPlane);
 	float sliceMaxZ = (threadId.z + 1) * cData.InvClusterDimensions.z;
-	float maxLinearZ = sliceMaxZ * (farPlane - nearPlane);
+	float maxLinearZ = nearPlane + sliceMaxZ * (farPlane - nearPlane);
 	float sliceThickness = sliceMaxZ - sliceMinZ;
 
-	float3 worldPosition = WorldFromDepth(texelUV, (minLinearZ + maxLinearZ) * 0.5f, cData.ViewProjectionInv);
+	float3 worldPosition = WorldFromDepth(texelUV, (sliceMinZ + sliceMaxZ) * 0.5f, cData.ViewProjectionInv);
 
-	worldPosition = float3(texelUV * 200 - 100, 0);
+	//worldPosition = float3(texelUV * 200 - 100, 0);
 
 	// Calculate Density based on the fog volumes
 	float cellDensity = 0.0f;
@@ -74,11 +87,57 @@ void InjectFogLightingCS(uint3 threadId : SV_DISPATCHTHREADID)
 	
 	densityVariation /= 30.0f;
 
+	float3 lightScattering = 0;
+
+	float3 V = normalize(cData.ViewInv[3].xyz - worldPosition);
+
 	// Iterate over all the lights and light the froxel
-	/*for(int i = 0; i < cData.NumLights; ++i)
+	for(int i = 0; i < cData.NumLights; ++i)
 	{
+		Light light = tLights[i];
+		float attentuation = GetAttenuation(light, worldPosition);
+		if(attentuation <= 0.0f)
+		{
+			continue;
+		}
 
-	}*/
+		float4 pos = float4(texelUV, 0, (minLinearZ + maxLinearZ) * 0.5f);
+		if(light.ShadowIndex >= 0)
+		{
+			int shadowIndex = GetShadowIndex(light, pos, worldPosition);
+			attentuation *= ShadowNoPCF(worldPosition, shadowIndex, light.InvShadowSize);
+		}
 
-	uOutputTexture[threadId] = float3(densityVariation, 0, 0);
+		float3 L = normalize(worldPosition - light.Position);
+		if(light.Type == LIGHT_DIRECTIONAL)
+		{
+			L = -normalize(light.Direction);
+		}
+		float VdotL = dot(V, L);
+		float4 lightColor = light.GetColor() * light.Intensity;
+
+		lightScattering += attentuation * lightColor.xyz * HenyeyGreenstrein(VdotL);
+	}
+
+	uOutLightScattering[threadId] = float4(lightScattering, cellDensity);
+}
+
+[RootSignature(RootSig)]
+[numthreads(8, 8, 1)]
+void AccumulateFogCS(uint3 threadId : SV_DISPATCHTHREADID)
+{
+	float3 lightScattering = 0;
+	float cellDensity = 0;
+	float transmittance = 1;
+
+	uOutLightScattering[int3(threadId.xy, 0)] = float4(lightScattering, transmittance);
+
+	for(int sliceIndex = 1; sliceIndex <= cData.ClusterDimensions.z; ++sliceIndex)
+	{
+		float4 scatteringDensity = tLightScattering[int3(threadId.xy, sliceIndex - 1)];
+		lightScattering += scatteringDensity.xyz * transmittance;
+		cellDensity += scatteringDensity.w;
+		transmittance = saturate(exp(-cellDensity));
+		uOutLightScattering[int3(threadId.xy, sliceIndex)] = float4(lightScattering, transmittance);
+	}
 }

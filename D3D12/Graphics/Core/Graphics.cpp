@@ -1591,7 +1591,7 @@ void Graphics::InitializeAssets(CommandContext& context)
 			sunLight.VolumetricLighting = true;
 			m_Lights.push_back(sunLight);
 		}
-
+		if(0)
 		{
 			Vector3 spotLocations[] = {
 				Vector3(62, 10, -18),
@@ -1599,6 +1599,7 @@ void Graphics::InitializeAssets(CommandContext& context)
 				Vector3(-48, 10, -18),
 				Vector3(62, 10, 18)
 			};
+
 			for (int i = 0; i < ARRAYSIZE(spotLocations); ++i)
 			{
 				Light spotLight = Light::Spot(spotLocations[i], 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1.0f, 0.7f, 0.3f, 1.0f));
@@ -1606,6 +1607,12 @@ void Graphics::InitializeAssets(CommandContext& context)
 				spotLight.VolumetricLighting = false;
 				m_Lights.push_back(spotLight);
 			}
+		}
+		if (1)
+		{
+			Light pointLight = Light::Point(Vector3(0, 20, 0), 150, 1000, Color(1, 0, 1, 1));
+			pointLight.CastShadows = true;
+			m_Lights.push_back(pointLight);
 		}
 		m_pLightBuffer = std::make_unique<Buffer>(this, "Lights");
 		m_pLightBuffer->Create(BufferDesc::CreateStructured((int)m_Lights.size(), sizeof(Light), BufferFlag::ShaderResource));
