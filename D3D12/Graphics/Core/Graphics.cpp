@@ -98,7 +98,7 @@ void Graphics::Initialize(WindowHandle window)
 	m_pCamera = std::make_unique<FreeCamera>();
 	m_pCamera->SetPosition(Vector3(0, 100, -15));
 	m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(Math::PIDIV4, Math::PIDIV4, 0));
-	m_pCamera->SetNearPlane(500.0f);
+	m_pCamera->SetNearPlane(300.0f);
 	m_pCamera->SetFarPlane(10.0f);
 
 	InitD3D();
@@ -1587,7 +1587,7 @@ void Graphics::InitializeAssets(CommandContext& context)
 			Vector3 Direction;
 			Position.Normalize(Direction);
 			Light sunLight = Light::Directional(Position, -Direction, 10);
-			sunLight.CastShadows = false;
+			sunLight.CastShadows = true;
 			sunLight.VolumetricLighting = false;
 			m_Lights.push_back(sunLight);
 		}

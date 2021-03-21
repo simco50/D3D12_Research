@@ -303,9 +303,9 @@ void PSMain(PSInput input,
 		}
 	}
 
-	float slice = tDepth.SampleLevel(sClampSampler, screenUV, 0).x;
-	float3 scattering = tLightScattering.SampleLevel(sClampSampler, float3(screenUV, slice), 0).rgb;
-	color += scattering;
+	float slice = (input.positionVS.z) / (cViewData.NearZ - cViewData.FarZ) - cViewData.FarZ;
+	float4 scatteringTransmittance = tLightScattering.SampleLevel(sClampSampler, float3(screenUV, slice), 0);
+	color = color * scatteringTransmittance.w + scatteringTransmittance.rgb;
 
 	outColor = float4(color, baseColor.a);
 

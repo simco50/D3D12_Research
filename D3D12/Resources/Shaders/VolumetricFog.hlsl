@@ -37,31 +37,36 @@ float HGPhase(float VdotL, float g)
     return denom / ((12.56637096405029296875 * div) * sqrt(div));
 }
 
+float3 LineFromOriginZIntersection(float3 lineFromOrigin, float depth)
+{
+    float3 normal = float3(0.0f, 0.0f, 1.0f);
+    float t = depth / dot(normal, lineFromOrigin);
+    return t * lineFromOrigin;
+}
+
 [RootSignature(RootSig)]
 [numthreads(8, 8, 4)]
 void InjectFogLightingCS(uint3 threadId : SV_DISPATCHTHREADID)
 {
-
-	float nearPlane = 0.1f;
-	float farPlane = 100.0f;
-
 	// Compute the sample point inside the froxel. Jittered
 	float2 texelUV = (threadId.xy + 0.5f) * cData.InvClusterDimensions.xy;
-	float sliceMinZ = threadId.z * cData.InvClusterDimensions.z;
-	float minLinearZ = nearPlane + sliceMinZ * (farPlane - nearPlane);
-	float sliceMaxZ = (threadId.z + 1) * cData.InvClusterDimensions.z;
-	float maxLinearZ = nearPlane + sliceMaxZ * (farPlane - nearPlane);
-	float sliceThickness = sliceMaxZ - sliceMinZ;
+	float minZ = (float)threadId.z * cData.InvClusterDimensions.z;
+	float maxZ = (float)(threadId.z + 1) * cData.InvClusterDimensions.z;
+	float minLinearZ = cData.FarZ + minZ * (cData.NearZ - cData.FarZ);
+	float maxLinearZ = cData.FarZ + maxZ * (cData.NearZ - cData.FarZ);
 
-	float3 worldPosition = WorldFromDepth(texelUV, (sliceMinZ + sliceMaxZ) * 0.5f, cData.ViewProjectionInv);
-
-	//worldPosition = float3(texelUV * 200 - 100, 0);
+	float3 viewRay = ViewFromDepth(texelUV, 1, cData.ProjectionInv);
+	float3 vPos = LineFromOriginZIntersection(viewRay, lerp(minLinearZ, maxLinearZ, 0.5f));
+	float3 worldPosition = mul(float4(vPos, 1), cData.ViewInv).xyz;
 
 	// Calculate Density based on the fog volumes
-	float cellDensity = 0.0f;
+	float cellThickness = maxLinearZ - minLinearZ;
+	float cellDensity = 0.1f;
 	float3 cellAbsorption = 0.0f;
 	float densityVariation = 0.0f;
+	float3 lightScattering = 0;
 
+	// Density variation based on noise
 	float3 p = floor(worldPosition * 1.0f);
 	float3 f = frac(worldPosition * 1.0f);
 	f = (f * f) * (3.0f - (f * 2.0f));
@@ -86,12 +91,10 @@ void InjectFogLightingCS(uint3 threadId : SV_DISPATCHTHREADID)
 	uv = (p.xy + (float2(37.0f, 17.0f) * p.z)) + f.xy;
 	rg = tTexture2DTable[cData.NoiseTexture].SampleLevel(sDiffuseSampler, (uv + 0.5f) / 256.0f, 0).yx;
 	densityVariation += (lerp(rg.x, rg.y, f.z) * 2.0f);
-	
 	densityVariation /= 30.0f;
 
-	float3 lightScattering = 0;
-
 	float3 V = normalize(cData.ViewInv[3].xyz - worldPosition);
+	float4 pos = float4(texelUV, 0, (minLinearZ + maxLinearZ) * 0.5f);
 
 	// Iterate over all the lights and light the froxel
 	for(int i = 0; i < cData.NumLights; ++i)
@@ -103,7 +106,6 @@ void InjectFogLightingCS(uint3 threadId : SV_DISPATCHTHREADID)
 			continue;
 		}
 
-		float4 pos = float4(texelUV, 0, (minLinearZ + maxLinearZ) * 0.5f);
 		if(light.ShadowIndex >= 0)
 		{
 			int shadowIndex = GetShadowIndex(light, pos, worldPosition);
@@ -118,15 +120,10 @@ void InjectFogLightingCS(uint3 threadId : SV_DISPATCHTHREADID)
 		float VdotL = dot(V, L);
 		float4 lightColor = light.GetColor() * light.Intensity;
 
-		lightScattering += attentuation * lightColor.xyz * HenyeyGreenstrein(VdotL);
+		lightScattering += attentuation * lightColor.xyz * HenyeyGreenstrein(-VdotL);
 	}
 
 	uOutLightScattering[threadId] = float4(lightScattering, cellDensity);
-}
-
-float Max4(float4 v)
-{
-	return max(v.x, max(v.y, max(v.z, v.w)));
 }
 
 groupshared uint gsMaxDepth;
@@ -151,7 +148,7 @@ void AccumulateFogCS(uint3 threadId : SV_DISPATCHTHREADID, uint groupIndex : SV_
 
 	float maxDepth = asfloat(gsMaxDepth);
 
-	uint lastSlice = (maxDepth) * cData.ClusterDimensions.z;
+	uint lastSlice = cData.ClusterDimensions.z;
 
 	float3 lightScattering = 0;
 	float cellDensity = 0;
