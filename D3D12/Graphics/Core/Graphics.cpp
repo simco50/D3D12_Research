@@ -1587,8 +1587,8 @@ void Graphics::InitializeAssets(CommandContext& context)
 			Vector3 Direction;
 			Position.Normalize(Direction);
 			Light sunLight = Light::Directional(Position, -Direction, 10);
-			sunLight.CastShadows = true;
-			sunLight.VolumetricLighting = true;
+			sunLight.CastShadows = false;
+			sunLight.VolumetricLighting = false;
 			m_Lights.push_back(sunLight);
 		}
 		if(0)

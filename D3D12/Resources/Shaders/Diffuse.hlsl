@@ -299,7 +299,7 @@ void PSMain(PSInput input,
 		Light l = tLights[i];
 		if(l.VolumetricLighting)
 		{
-			//color += 0.3f * ApplyVolumetricLighting(cViewData.ViewPosition.xyz, input.positionWS.xyz, input.position, cViewData.View, l, 16, cViewData.FrameIndex);
+			color += 0.3f * ApplyVolumetricLighting(cViewData.ViewPosition.xyz, input.positionWS.xyz, input.position, cViewData.View, l, 16, cViewData.FrameIndex);
 		}
 	}
 
