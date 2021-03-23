@@ -3,7 +3,7 @@
 #include "Graphics/Core/Texture.h"
 #include "Graphics/Core/GraphicsBuffer.h"
 
-#define RG_GRAPH_SCOPE(name, graph) RGGraphScope rgScope_ ## __COUNTER__(name, graph)
+#define RG_GRAPH_SCOPE(name, graph) RGGraphScope MACRO_CONCAT(rgScope_,__COUNTER__)(name, graph)
 
 class Graphics;
 class CommandContext;

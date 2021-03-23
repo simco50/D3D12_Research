@@ -459,7 +459,8 @@ void Graphics::Update()
 				wchar_t stringTarget[128];
 				GetTimeFormatEx(LOCALE_NAME_INVARIANT, 0, &time, L"hh_mm_ss", stringTarget, 128);
 				char filePath[256];
-				sprintf_s(filePath, "Screenshot_%ls.jpg", stringTarget);
+				Paths::CreateDirectoryTree(Paths::ScreenshotDir());
+				sprintf_s(filePath, "%sScreenshot_%ls.jpg", Paths::ScreenshotDir().c_str(), stringTarget);
 				img.Save(filePath);
 				m_pScreenshotBuffer.reset();
 				}, taskContext);

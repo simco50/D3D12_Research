@@ -9,6 +9,7 @@
 #include "RenderGraph/RenderGraph.h"
 #include "Core/Input.h"
 #include "ImGuizmo/ImGuizmo.h"
+#include "Core/Paths.h"
 
 ImGuiRenderer::ImGuiRenderer(Graphics* pGraphics)
 {
@@ -43,6 +44,9 @@ void ImGuiRenderer::InitializeImGui(Graphics* pGraphics)
 {
 	ImGui::CreateContext();
 	ImGuiIO& io = ImGui::GetIO();
+	Paths::CreateDirectoryTree(Paths::SavedDir());
+	static std::string imguiPath = Paths::SavedDir() + "imgui.ini";
+	io.IniFilename = imguiPath.c_str();
 
 	io.KeyMap[ImGuiKey_Tab] = VK_TAB;
 	io.KeyMap[ImGuiKey_LeftArrow] = VK_LEFT;
