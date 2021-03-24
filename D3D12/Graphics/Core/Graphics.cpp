@@ -29,6 +29,8 @@
 #include "Content/Image.h"
 #include "Core/TaskQueue.h"
 #include "StateObject.h"
+#include "ImGuizmo/ImGuizmo.h"
+#include "Core/Paths.h"
 
 #ifndef D3D_VALIDATION
 #define D3D_VALIDATION 0
@@ -113,6 +115,81 @@ void Graphics::Initialize(WindowHandle window)
 	m_pDynamicAllocationManager->CollectGarbage();
 }
 
+void EditTransform(const Camera& camera, Matrix& matrix)
+{
+	static ImGuizmo::OPERATION mCurrentGizmoOperation(ImGuizmo::ROTATE);
+	static ImGuizmo::MODE mCurrentGizmoMode(ImGuizmo::WORLD);
+
+	if (!Input::Instance().IsMouseDown(1))
+	{
+		if (Input::Instance().IsKeyPressed('W'))
+			mCurrentGizmoOperation = ImGuizmo::TRANSLATE;
+		else if (Input::Instance().IsKeyPressed('E'))
+			mCurrentGizmoOperation = ImGuizmo::ROTATE;
+		else if (Input::Instance().IsKeyPressed('R'))
+			mCurrentGizmoOperation = ImGuizmo::SCALE;
+	}
+
+	if (ImGui::RadioButton("Translate", mCurrentGizmoOperation == ImGuizmo::TRANSLATE))
+		mCurrentGizmoOperation = ImGuizmo::TRANSLATE;
+	ImGui::SameLine();
+	if (ImGui::RadioButton("Rotate", mCurrentGizmoOperation == ImGuizmo::ROTATE))
+		mCurrentGizmoOperation = ImGuizmo::ROTATE;
+	ImGui::SameLine();
+	if (ImGui::RadioButton("Scale", mCurrentGizmoOperation == ImGuizmo::SCALE))
+		mCurrentGizmoOperation = ImGuizmo::SCALE;
+	float matrixTranslation[3], matrixRotation[3], matrixScale[3];
+	ImGuizmo::DecomposeMatrixToComponents(&matrix.m[0][0], matrixTranslation, matrixRotation, matrixScale);
+	ImGui::InputFloat3("Tr", matrixTranslation);
+	ImGui::InputFloat3("Rt", matrixRotation);
+	ImGui::InputFloat3("Sc", matrixScale);
+	ImGuizmo::RecomposeMatrixFromComponents(matrixTranslation, matrixRotation, matrixScale, &matrix.m[0][0]);
+
+	if (mCurrentGizmoOperation != ImGuizmo::SCALE)
+	{
+		if (ImGui::RadioButton("Local", mCurrentGizmoMode == ImGuizmo::LOCAL))
+			mCurrentGizmoMode = ImGuizmo::LOCAL;
+		ImGui::SameLine();
+		if (ImGui::RadioButton("World", mCurrentGizmoMode == ImGuizmo::WORLD))
+			mCurrentGizmoMode = ImGuizmo::WORLD;
+
+		if (Input::Instance().IsKeyPressed(VK_SPACE))
+		{
+			mCurrentGizmoMode = mCurrentGizmoMode == ImGuizmo::LOCAL ? ImGuizmo::WORLD : ImGuizmo::LOCAL;
+		}
+	}
+
+	static Vector3 translationSnap = Vector3(1);
+	static float rotateSnap = 5;
+	static float scaleSnap = 0.1f;
+	float* pSnapValue = &translationSnap.x;
+
+	switch (mCurrentGizmoOperation)
+	{
+	case ImGuizmo::TRANSLATE:
+		ImGui::InputFloat3("Snap", &translationSnap.x);
+		pSnapValue = &translationSnap.x;
+		break;
+	case ImGuizmo::ROTATE:
+		ImGui::InputFloat("Angle Snap", &rotateSnap);
+		pSnapValue = &rotateSnap;
+		break;
+	case ImGuizmo::SCALE:
+		ImGui::InputFloat("Scale Snap", &scaleSnap);
+		pSnapValue = &scaleSnap;
+		break;
+	}
+
+	ImGuiIO& io = ImGui::GetIO();
+	ImGuizmo::SetRect(0, 0, io.DisplaySize.x, io.DisplaySize.y);
+	Matrix view = camera.GetView();
+	Matrix projection = camera.GetProjection();
+	Math::ReverseZProjection(projection);
+	ImGuizmo::Manipulate(&view.m[0][0], &projection.m[0][0], mCurrentGizmoOperation, mCurrentGizmoMode, &matrix.m[0][0], NULL, pSnapValue);
+}
+
+Matrix spotMatrix = Matrix::CreateScale(100.0f, 0.2f, 1) * Matrix::CreateFromYawPitchRoll(0.1f, 0, 0) * Matrix::CreateTranslation(0, 10, 0);
+
 void Graphics::Update()
 {
 
@@ -123,6 +200,14 @@ void Graphics::Update()
 	PROFILE_BEGIN("Update Game State");
 
 	m_pShaderManager->ConditionallyReloadShaders();
+
+	EditTransform(*m_pCamera, spotMatrix);
+	Vector3 scale, position;
+	Quaternion rotation;
+	spotMatrix.Decompose(scale, rotation, position);
+	m_Lights[1].Range = scale.x;
+	m_Lights[1].Position = position;
+	m_Lights[1].Direction = spotMatrix.Forward();
 
 #if 0
 	Vector3 pos = m_pCamera->GetPosition();
@@ -1473,6 +1558,8 @@ void Graphics::InitializeAssets(CommandContext& context)
 
 	m_DefaultTextures[(int)DefaultTexture::ColorNoise256] = std::make_unique<Texture>(this, "Color Noise 256px");
 	m_DefaultTextures[(int)DefaultTexture::ColorNoise256]->Create(&context, "Resources/Textures/Noise.png", false);
+	m_DefaultTextures[(int)DefaultTexture::BlueNoise512] = std::make_unique<Texture>(this, "Blue Noise 512px");
+	m_DefaultTextures[(int)DefaultTexture::BlueNoise512]->Create(&context, "Resources/Textures/BlueNoise.dds", false);
 
 	{
 		std::unique_ptr<Mesh> pMesh = std::make_unique<Mesh>();
@@ -1611,9 +1698,9 @@ void Graphics::InitializeAssets(CommandContext& context)
 		}
 		if (1)
 		{
-			Light pointLight = Light::Point(Vector3(0, 20, 0), 150, 1000, Color(1, 0, 1, 1));
-			pointLight.CastShadows = true;
-			m_Lights.push_back(pointLight);
+			Light spotLight = Light::Spot(Vector3(), 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1.0f, 0.7f, 0.3f, 1.0f));
+			spotLight.CastShadows = true;
+			m_Lights.push_back(spotLight);
 		}
 		m_pLightBuffer = std::make_unique<Buffer>(this, "Lights");
 		m_pLightBuffer->Create(BufferDesc::CreateStructured((int)m_Lights.size(), sizeof(Light), BufferFlag::ShaderResource));

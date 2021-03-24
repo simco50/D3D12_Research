@@ -51,7 +51,7 @@ public:
 		while(!quit)
 		{
 			OPTICK_FRAME("MainThread");
-			while (PeekMessageA(&msg, window, 0, 0, PM_REMOVE))
+			while (PeekMessageA(&msg, nullptr, 0, 0, PM_REMOVE))
 			{
 				TranslateMessage(&msg);
 				DispatchMessageA(&msg);

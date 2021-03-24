@@ -52,7 +52,7 @@ void ClusteredForward::OnSwapchainCreated(int windowWidth, int windowHeight)
 	m_pDebugLightGrid->Create(BufferDesc::CreateStructured(totalClusterCount, 2 * sizeof(uint32)));
 
 	uint32 froxelSize = 8;
-	uint32 numDepthFroxels = 64;
+	uint32 numDepthFroxels = 128;
 	TextureDesc volumeDesc = TextureDesc::Create3D(Math::DivideAndRoundUp(windowWidth, froxelSize), Math::DivideAndRoundUp(windowHeight, froxelSize), numDepthFroxels, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess);
 	m_pLightScatteringVolume[0]->Create(volumeDesc);
 	m_pLightScatteringVolume[1]->Create(volumeDesc);

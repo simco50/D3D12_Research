@@ -108,7 +108,7 @@ void InjectFogLightingCS(uint3 threadId : SV_DISPATCHTHREADID)
 	densityVariation /= 30.0f;
 
 	float3 V = normalize(cData.ViewInv[3].xyz - worldPosition);
-	float4 pos = float4(texelUV, 0, (minLinearZ + maxLinearZ) * 0.5f);
+	float4 pos = float4(texelUV, 0, z);
 
 	float3 totalScattering = 0;
 
@@ -128,7 +128,7 @@ void InjectFogLightingCS(uint3 threadId : SV_DISPATCHTHREADID)
 			attentuation *= ShadowNoPCF(worldPosition, shadowIndex, light.InvShadowSize);
 		}
 
-		float3 L = normalize(worldPosition - light.Position);
+		float3 L = normalize(light.Position - worldPosition);
 		if(light.Type == LIGHT_DIRECTIONAL)
 		{
 			L = -normalize(light.Direction);
@@ -136,7 +136,7 @@ void InjectFogLightingCS(uint3 threadId : SV_DISPATCHTHREADID)
 		float VdotL = dot(V, L);
 		float4 lightColor = light.GetColor() * light.Intensity;
 
-		totalScattering += attentuation * lightColor.xyz * HGPhase(VdotL, 0.5);
+		totalScattering += attentuation * lightColor.xyz * HGPhase(-VdotL, 0.5);
 	}
 
 	totalScattering += ApplyAmbientLight(1, 1, tLights[0].GetColor().rgb * 0.001f);

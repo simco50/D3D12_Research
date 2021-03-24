@@ -49,6 +49,7 @@ enum class DefaultTexture
 	Normal2D,
 	BlackCube,
 	ColorNoise256,
+	BlueNoise512,
 	MAX,
 };
 
