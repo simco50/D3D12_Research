@@ -266,6 +266,7 @@ private:
 	std::unique_ptr<RTReflections> m_pRTReflections;
 	std::unique_ptr<SSAO> m_pSSAO;
 
+	std::unique_ptr<Texture> m_pLightCookie;
 	std::array<std::unique_ptr<Texture>, (int)DefaultTexture::MAX> m_DefaultTextures;
 
 	int m_SampleCount = 1;

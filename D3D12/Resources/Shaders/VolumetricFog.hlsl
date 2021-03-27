@@ -116,30 +116,41 @@ void InjectFogLightingCS(uint3 threadId : SV_DISPATCHTHREADID)
 	for(int i = 0; i < cData.NumLights; ++i)
 	{
 		Light light = tLights[i];
-		float attentuation = GetAttenuation(light, worldPosition);
-		if(attentuation <= 0.0f)
+		if(light.VolumetricLighting > 0)
 		{
-			continue;
-		}
+			float attenuation = GetAttenuation(light, worldPosition);
+			if(attenuation <= 0.0f)
+			{
+				continue;
+			}
 
-		if(light.ShadowIndex >= 0)
-		{
-			int shadowIndex = GetShadowIndex(light, pos, worldPosition);
-			attentuation *= ShadowNoPCF(worldPosition, shadowIndex, light.InvShadowSize);
-		}
+			if(light.ShadowIndex >= 0)
+			{
+				int shadowIndex = GetShadowIndex(light, pos, worldPosition);
+				attenuation *= ShadowNoPCF(worldPosition, shadowIndex, light.InvShadowSize);
+				if(light.LightTexture >= 0)
+				{
+					float4 lightPos = mul(float4(worldPosition, 1), cShadowData.LightViewProjections[shadowIndex]);
+					lightPos.xyz /= lightPos.w;
+					lightPos.xy = (lightPos.xy + 1) / 2;
+					float mask = tTexture2DTable[light.LightTexture].SampleLevel(sClampSampler, lightPos.xy, 0).r;
+					attenuation *= mask;
+				}
+			}
 
-		float3 L = normalize(light.Position - worldPosition);
-		if(light.Type == LIGHT_DIRECTIONAL)
-		{
-			L = -normalize(light.Direction);
-		}
-		float VdotL = dot(V, L);
-		float4 lightColor = light.GetColor() * light.Intensity;
+			float3 L = normalize(light.Position - worldPosition);
+			if(light.Type == LIGHT_DIRECTIONAL)
+			{
+				L = -normalize(light.Direction);
+			}
+			float VdotL = dot(V, L);
+			float4 lightColor = light.GetColor() * light.Intensity;
 
-		totalScattering += attentuation * lightColor.xyz * HGPhase(-VdotL, 0.5);
+			totalScattering += attenuation * lightColor.xyz * HGPhase(-VdotL, 0.5);
+		}
 	}
 
-	totalScattering += ApplyAmbientLight(1, 1, tLights[0].GetColor().rgb * 0.001f);
+	//totalScattering += ApplyAmbientLight(1, 1, tLights[0].GetColor().rgb * 0.001f);
 
 	float4 prevScattering = tLightScattering[threadId];
 	float4 newScattering = float4(lightScattering * totalScattering, cellDensity);

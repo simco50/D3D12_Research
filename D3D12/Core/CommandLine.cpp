@@ -41,6 +41,7 @@ bool CommandLine::Parse(const char* pCommandLine)
 				}
 
 				m_Parameters[identifier] = value;
+				hasValue = false;
 			}
 			else
 			{
@@ -61,6 +62,7 @@ bool CommandLine::Parse(const char* pCommandLine)
 			}
 
 			m_Parameters[identifier] = value;
+			hasValue = false;
 		}
 		else
 		{
@@ -70,6 +72,26 @@ bool CommandLine::Parse(const char* pCommandLine)
 	}
 
 	return true;
+}
+
+bool CommandLine::GetInt(const std::string& name, int& value, int defaultValue /*= 0*/)
+{
+	auto it = m_Parameters.find(name);
+	if (it != m_Parameters.end())
+	{
+		for (char c : it->second)
+		{
+			if (!std::isdigit(c))
+			{
+				value = defaultValue;
+				return false;
+			}
+		}
+		value = std::stoi(it->second);
+		return true;
+	}
+	value = defaultValue;
+	return false;
 }
 
 bool CommandLine::GetBool(const std::string& parameter)

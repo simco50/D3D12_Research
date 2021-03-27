@@ -164,7 +164,6 @@ LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, floa
 		return result;
 	}
 
-	float visibility = 1.0f;
 	if(light.ShadowIndex >= 0)
 	{
 		int shadowIndex = GetShadowIndex(light, pos, wPos);
@@ -185,10 +184,19 @@ LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, floa
 		}
 #endif
 
-		visibility = Shadow3x3PCF(wPos, shadowIndex, light.InvShadowSize);
-		if(visibility <= 0)
+		attenuation *= Shadow3x3PCF(wPos, shadowIndex, light.InvShadowSize);
+		if(attenuation <= 0)
 		{
 			return result;
+		}
+
+		if(light.LightTexture >= 0)
+		{
+			float4 lightPos = mul(float4(wPos, 1), cShadowData.LightViewProjections[shadowIndex]);
+			lightPos.xyz /= lightPos.w;
+			lightPos.xy = (lightPos.xy + 1) / 2;
+			float mask = tTexture2DTable[light.LightTexture].SampleLevel(sClampSampler, lightPos.xy, 0).r;
+			attenuation *= mask;
 		}
 	}
 
@@ -200,8 +208,8 @@ LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, floa
 	result = DefaultLitBxDF(specularColor, roughness, diffuseColor, N, V, L, attenuation);
 
 	float4 color = light.GetColor();
-	result.Diffuse *= color.rgb * light.Intensity * visibility;
-	result.Specular *= color.rgb * light.Intensity * visibility;
+	result.Diffuse *= color.rgb * light.Intensity;
+	result.Specular *= color.rgb * light.Intensity;
 
 	return result;
 }

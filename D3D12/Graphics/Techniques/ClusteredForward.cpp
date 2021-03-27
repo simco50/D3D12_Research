@@ -61,13 +61,13 @@ void ClusteredForward::OnSwapchainCreated(int windowWidth, int windowHeight)
 	m_ViewportDirty = true;
 }
 
-Vector2 ComputeLightGridParams(float nearZ, float farZ)
+Vector2 ComputeVolumeGridParams(float nearZ, float farZ, int numSlices)
 {
 	Vector2 lightGridParams;
 	float n = Math::Min(nearZ, farZ);
 	float f = Math::Max(nearZ, farZ);
-	lightGridParams.x = (float)cClusterCountZ / log(f / n);
-	lightGridParams.y = ((float)cClusterCountZ * log(n)) / log(f / n);
+	lightGridParams.x = (float)numSlices / log(f / n);
+	lightGridParams.y = ((float)numSlices * log(n)) / log(f / n);
 	return lightGridParams;
 }
 
@@ -78,7 +78,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 	Vector2 screenDimensions((float)resources.pRenderTarget->GetWidth(), (float)resources.pRenderTarget->GetHeight());
 	float nearZ = resources.pCamera->GetNear();
 	float farZ = resources.pCamera->GetFar();
-	Vector2 lightGridParams = ComputeLightGridParams(nearZ, farZ);
+	Vector2 lightGridParams = ComputeVolumeGridParams(nearZ, farZ, cClusterCountZ);
 
 	if (m_ViewportDirty)
 	{
@@ -314,7 +314,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 				constantBuffer.NearZ = resources.pCamera->GetNear();
 				constantBuffer.FarZ = resources.pCamera->GetFar();
 				constantBuffer.FrameIndex = resources.FrameIndex;
-				constantBuffer.Jitter = Math::HaltonSequence<32, 3>()[resources.FrameIndex % 32];
+				constantBuffer.Jitter = Math::HaltonSequence<1024, 2>()[resources.FrameIndex & 1023];
 				constantBuffer.ReprojectionMatrix = preMult * resources.pCamera->GetViewProjection().Invert() * resources.pCamera->GetPreviousViewProjection() * postMult;
 
 				D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
@@ -612,7 +612,7 @@ void ClusteredForward::VisualizeLightDensity(RGGraph& graph, Camera& camera, Tex
 	Vector2 screenDimensions((float)pTarget->GetWidth(), (float)pTarget->GetHeight());
 	float nearZ = camera.GetNear();
 	float farZ = camera.GetFar();
-	Vector2 lightGridParams = ComputeLightGridParams(nearZ, farZ);
+	Vector2 lightGridParams = ComputeVolumeGridParams(nearZ, farZ, cClusterCountZ);
 
 	RGPassBuilder basePass = graph.AddPass("Visualize Light Density");
 	basePass.Bind([=](CommandContext& context, const RGPassResources& passResources)

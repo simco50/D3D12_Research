@@ -23,6 +23,8 @@ struct Light
 		int32 ShadowIndex = -1;
 		float InvShadowSize = 0;
 		int VolumetricLight = 1;
+		int LightTexture = -1;
+		int pad[3];
 	};
 	
 	Vector3 Position = Vector3::Zero;
@@ -34,6 +36,7 @@ struct Light
 	float Intensity = 1;
 	float Range = 1;
 	bool VolumetricLighting = false;
+	int LightTexture = -1;
 	
 	int ShadowIndex = -1;
 	int ShadowMapSize = 512;
@@ -54,6 +57,7 @@ struct Light
 		data.ShadowIndex = CastShadows ? ShadowIndex : -1;
 		data.InvShadowSize = 1.0f / ShadowMapSize;
 		data.VolumetricLight = VolumetricLighting;
+		data.LightTexture = LightTexture;
 		return data;
 	}
 

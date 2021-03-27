@@ -26,6 +26,8 @@ struct Light
     int ShadowIndex;
     float InvShadowSize;
     int VolumetricLighting;
+    int LightTexture;
+    int3 pad;
 
     float4 GetColor()
     {
@@ -62,6 +64,12 @@ struct AABB
 {
     float4 Center;
     float4 Extents;
+};
+
+struct Ray
+{
+    float3 Origin;
+    float3 Direction;
 };
 
 bool SphereInAABB(Sphere sphere, AABB aabb)
@@ -332,6 +340,40 @@ float ScreenFade(float2 uv)
 {
     float2 fade = max(12.0f * abs(uv - 0.5f) - 5.0f, 0.0f);
     return saturate(1.0 - dot(fade, fade));
+}
+
+
+bool RaySphereIntersect(Ray ray, Sphere sphere, out float intersectionA, out float intersectionB)
+{
+    float3 L = ray.Origin - sphere.Position;
+    float a = dot(ray.Direction, ray.Direction);
+    float b = 2.0f * dot(ray.Direction, L);
+    float c = dot(L, L) - Square(sphere.Radius);
+    float D = b * b - 4 * a * c;
+    if(D < 0)
+    {
+        return false;
+    }
+    if(D == 0)
+    {
+        intersectionA = -0.5 * b / a;
+        intersectionB = intersectionA;
+    }
+    else
+    {
+        float q = (b > 0) ?
+            -0.5f * (b + sqrt(D)) :
+            -0.5f * (b - sqrt(D));
+        intersectionA = q / a;
+        intersectionB = c / q;
+    }
+    if(intersectionA > intersectionB)
+    {
+        float temp = intersectionA;
+        intersectionA = intersectionB;
+        intersectionB = temp;
+    }
+    return true;
 }
 
 #endif

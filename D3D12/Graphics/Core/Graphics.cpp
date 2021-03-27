@@ -1561,6 +1561,9 @@ void Graphics::InitializeAssets(CommandContext& context)
 	m_DefaultTextures[(int)DefaultTexture::BlueNoise512] = std::make_unique<Texture>(this, "Blue Noise 512px");
 	m_DefaultTextures[(int)DefaultTexture::BlueNoise512]->Create(&context, "Resources/Textures/BlueNoise.dds", false);
 
+	m_pLightCookie = std::make_unique<Texture>(this, "Light Cookie");
+	m_pLightCookie->Create(&context, "Resources/Textures/LightProjector.png", false);
+
 	{
 		std::unique_ptr<Mesh> pMesh = std::make_unique<Mesh>();
 		pMesh->Load("Resources/sponza/sponza.dae", this, &context);
@@ -1676,7 +1679,7 @@ void Graphics::InitializeAssets(CommandContext& context)
 			Position.Normalize(Direction);
 			Light sunLight = Light::Directional(Position, -Direction, 10);
 			sunLight.CastShadows = true;
-			sunLight.VolumetricLighting = false;
+			sunLight.VolumetricLighting = true;
 			m_Lights.push_back(sunLight);
 		}
 		if(0)
@@ -1698,8 +1701,10 @@ void Graphics::InitializeAssets(CommandContext& context)
 		}
 		if (1)
 		{
-			Light spotLight = Light::Spot(Vector3(), 200, Vector3(0, 1, 0), 90, 70, 1000, Color(1.0f, 0.7f, 0.3f, 1.0f));
+			Light spotLight = Light::Spot(Vector3(-5, 16, 16), 800, Vector3(0, 1, 0), 90, 70, 1000, Color(1.0f, 0.7f, 0.3f, 1.0f));
 			spotLight.CastShadows = true;
+			spotLight.LightTexture = RegisterBindlessResource(m_pLightCookie.get(), GetDefaultTexture(DefaultTexture::White2D));
+			spotLight.VolumetricLighting = true;
 			m_Lights.push_back(spotLight);
 		}
 		m_pLightBuffer = std::make_unique<Buffer>(this, "Lights");
