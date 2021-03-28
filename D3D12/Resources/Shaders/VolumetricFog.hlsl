@@ -33,11 +33,11 @@ ConstantBuffer<ShaderData> cData : register(b0);
 Texture3D<float4> tLightScattering : register(t4);
 RWTexture3D<float4> uOutLightScattering : register(u0);
 
-float HGPhase(float VdotL, float g)
+float HenyeyGreenstreinPhase(float LoV, float G)
 {
-    float denom = 1.0 - sqrt(g);
-    float div = (1.0 + sqrt(g)) + ((2.0 * g) * (-VdotL));
-    return denom / ((12.56637096405029296875 * div) * sqrt(div));
+	float result = 1.0f - G * G;
+	result /= (4.0f * PI * pow(1.0f + G * G - (2.0f * G) * LoV, 1.5f));
+	return result;
 }
 
 float3 LineFromOriginZIntersection(float3 lineFromOrigin, float depth)
@@ -73,39 +73,11 @@ void InjectFogLightingCS(uint3 threadId : SV_DISPATCHTHREADID)
 	// Calculate Density based on the fog volumes
 	float cellThickness = maxLinearZ - minLinearZ;
 	float3 cellAbsorption = 0.0f;
-	float densityVariation = 0.0f;
 
 	float volumeAttenuation = saturate(1 - sdBox(worldPosition, float3(200, 100, 200)));
 
 	float3 lightScattering = 0.5f * volumeAttenuation;
 	float cellDensity = 0.05f * volumeAttenuation;
-
-	// Density variation based on noise
-	float3 p = floor(worldPosition * 1.0f);
-	float3 f = frac(worldPosition * 1.0f);
-	f = (f * f) * (3.0f - (f * 2.0f));
-	float2 uv = (p.xy + (float2(37.0f, 17.0f) * p.z)) + f.xy;
-	float2 rg = tTexture2DTable[cData.NoiseTexture].SampleLevel(sDiffuseSampler, (uv + 0.5f) / 256.0f, 0).yx;
-	densityVariation += (lerp(rg.x, rg.y, f.z) * 16.0f);
-	p = floor(worldPosition * 2.0f);
-	f = frac(worldPosition * 2.0f);
-	f = (f * f) * (3.0f - (f * 2.0f));
-	uv = (p.xy + (float2(37.0f, 17.0f) * p.z)) + f.xy;
-	rg = tTexture2DTable[cData.NoiseTexture].SampleLevel(sDiffuseSampler, (uv + 0.5f) / 256.0f, 0).yx;
-	densityVariation += (lerp(rg.x, rg.y, f.z) * 8.0f);
-	p = floor(worldPosition * 4.0f);
-	f = frac(worldPosition * 4.0f);
-	f = (f * f) * (3.0f - (f * 2.0f));
-	uv = (p.xy + (float2(37.0f, 17.0f) * p.z)) + f.xy;
-	rg = tTexture2DTable[cData.NoiseTexture].SampleLevel(sDiffuseSampler, (uv + 0.5f) / 256.0f, 0).yx;
-	densityVariation += (lerp(rg.x, rg.y, f.z) * 4.0f);
-	p = floor(worldPosition * 8.0f);
-	f = frac(worldPosition * 8.0f);
-	f = (f * f) * (3.0f - (f * 2.0f));
-	uv = (p.xy + (float2(37.0f, 17.0f) * p.z)) + f.xy;
-	rg = tTexture2DTable[cData.NoiseTexture].SampleLevel(sDiffuseSampler, (uv + 0.5f) / 256.0f, 0).yx;
-	densityVariation += (lerp(rg.x, rg.y, f.z) * 2.0f);
-	densityVariation /= 30.0f;
 
 	float3 V = normalize(cData.ViewInv[3].xyz - worldPosition);
 	float4 pos = float4(texelUV, 0, z);
@@ -146,7 +118,7 @@ void InjectFogLightingCS(uint3 threadId : SV_DISPATCHTHREADID)
 			float VdotL = dot(V, L);
 			float4 lightColor = light.GetColor() * light.Intensity;
 
-			totalScattering += attenuation * lightColor.xyz * HGPhase(-VdotL, 0.5);
+			totalScattering += attenuation * lightColor.xyz * HenyeyGreenstreinPhase(-VdotL, 0.5);
 		}
 	}
 
