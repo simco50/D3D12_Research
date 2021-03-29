@@ -2128,7 +2128,7 @@ void Graphics::UpdateImGui()
 			uint32 usedDescriptors = pAllocator->GetNumAllocatedDescriptors();
 			std::stringstream str;
 			str << usedDescriptors << "/" << totalDescriptors;
-			ImGui::ProgressBar((float)usedDescriptors / totalDescriptors, ImVec2(-1, 0), str.str().c_str());
+			ImGui::ProgressBar((float)usedDescriptors / Math::Max(1u, totalDescriptors), ImVec2(-1, 0), str.str().c_str());
 		}
 		ImGui::TreePop();
 	}
