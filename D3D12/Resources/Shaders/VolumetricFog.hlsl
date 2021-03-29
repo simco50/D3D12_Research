@@ -76,7 +76,7 @@ void InjectFogLightingCS(uint3 threadId : SV_DISPATCHTHREADID)
 
 	float volumeAttenuation = saturate(1 - sdBox(worldPosition, float3(200, 100, 200)));
 
-	float3 lightScattering = 0.5f * volumeAttenuation;
+	float3 lightScattering = 0.05f * volumeAttenuation;
 	float cellDensity = 0.05f * volumeAttenuation;
 
 	float3 V = normalize(cData.ViewInv[3].xyz - worldPosition);
