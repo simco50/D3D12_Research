@@ -137,8 +137,14 @@ void AccumulateFogCS(uint3 threadId : SV_DISPATCHTHREADID, uint groupIndex : SV_
 
     GroupMemoryBarrierWithGroupSync();
 
+#if 0
 	float maxDepth = asfloat(gsMaxDepth);
-	uint lastSlice = (1 - maxDepth) * cData.ClusterDimensions.z;
+	float linearDepth = LinearizeDepth(maxDepth, cData.NearZ, cData.FarZ);
+	float volumeDepth = sqrt((linearDepth - cData.FarZ) / (cData.NearZ - cData.FarZ));
+	uint lastSlice = ceil((volumeDepth) * cData.ClusterDimensions.z);
+#else
+	uint lastSlice = cData.ClusterDimensions.z;
+#endif
 
 	float3 accumulatedLight = 0;
 	float accumulatedTransmittance = 1;
