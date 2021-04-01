@@ -26,39 +26,69 @@ namespace Math
 		return (value - a) / (b - a);
 	}
 
-	Matrix CreatePerspectiveMatrix(float FoV, float aspectRatio, float nearPlane, float farPlane)
+	// Create left-handed DX style perspective matrix
+	// FoV is vertical FoV in radians
+	Matrix CreatePerspectiveMatrix(float FoV, float aspectRatio, float nearZ, float farZ)
+	{
+		Matrix m;
+		float sinFov, cosFov;
+		DirectX::XMScalarSinCos(&sinFov, &cosFov, FoV * 0.5f);
+
+		float B = cosFov / sinFov;
+		float A = B / aspectRatio;
+		float C = farZ / (farZ - nearZ);
+		float D = 1.0f; // Needs to be -1 for right handed
+		float E = -nearZ * C; // Positive in right handed
+
+		m.m[0][0] = A;		m.m[0][1] = 0.0f;	m.m[0][2] = 0.0f;	m.m[0][3] = 0.0f;
+		m.m[1][0] = 0.0f;	m.m[1][1] = B;		m.m[1][2] = 0.0f;	m.m[1][3] = 0.0f;
+		m.m[2][0] = 0.0f;	m.m[2][1] = 0;		m.m[2][2] = C;		m.m[2][3] = D;
+		m.m[3][0] = 0.0f;	m.m[3][1] = 0;		m.m[3][2] = E;		m.m[3][3] = 0.0f;
+
+		return m;
+	}
+
+	// Create left-handed DX style perspective off center matrix
+	// FoV is vertical FoV in radians
+	Matrix CreatePerspectiveOffCenterMatrix(float left, float right, float bottom, float top, float nearZ, float farZ)
+	{
+		Matrix m;
+		float near2 = nearZ * nearZ;
+		float oneOverWidth = 1.0f / (right - left);
+		float oneOverHeight = 1.0f / (bottom - top);
+
+		float A = near2 * oneOverWidth;
+		float B = near2 * oneOverHeight;
+		float C = farZ / (farZ - nearZ);
+		float D = 1.0f; // Needs to be -1 for right handed
+		float E = -nearZ * C; // Positive in right handed
+
+		float F = -(left + right) * oneOverWidth; // Positive in right handed
+		float G = -(top + bottom) * oneOverHeight; // Positive in right handed
+
+		m.m[0][0] = A;		m.m[0][1] = 0.0f;	m.m[0][2] = 0.0f;	m.m[0][3] = 0.0f;
+		m.m[1][0] = 0.0f;	m.m[1][1] = B;		m.m[1][2] = 0.0f;	m.m[1][3] = 0.0f;
+		m.m[2][0] = F;		m.m[2][1] = G;		m.m[2][2] = C;		m.m[2][3] = D;
+		m.m[3][0] = 0.0f;	m.m[3][1] = 0;		m.m[3][2] = E;		m.m[3][3] = 0.0f;
+
+		return m;
+	}
+
+	Matrix CreateOrthographicMatrix(float width, float height, float nearZ, float farZ)
 	{
 #ifdef WORLD_RIGHT_HANDED
-		return DirectX::XMMatrixPerspectiveFovRH(FoV, aspectRatio, nearPlane, farPlane);
+		return DirectX::XMMatrixOrthographicRH(width, height, nearZ, farZ);
 #else
-		return DirectX::XMMatrixPerspectiveFovLH(FoV, aspectRatio, nearPlane, farPlane);
+		return DirectX::XMMatrixOrthographicLH(width, height, nearZ, farZ);
 #endif
 	}
 
-	Matrix CreatePerspectiveOffCenterMatrix(float left, float right, float bottom, float top, float nearPlane, float farPlane)
+	Matrix CreateOrthographicOffCenterMatrix(float left, float right, float bottom, float top, float nearZ, float farZ)
 	{
 #ifdef WORLD_RIGHT_HANDED
-		return DirectX::XMMatrixPerspectiveOffCenterRH(left, right, bottom, top, nearPlane, farPlane);
+		return DirectX::XMMatrixOrthographicOffCenterRH(left, right, bottom, top, nearZ, farZ);
 #else
-		return DirectX::XMMatrixPerspectiveOffCenterLH(left, right, bottom, top, nearPlane, farPlane);
-#endif
-	}
-
-	Matrix CreateOrthographicMatrix(float width, float height, float nearPlane, float farPlane)
-	{
-#ifdef WORLD_RIGHT_HANDED
-		return DirectX::XMMatrixOrthographicRH(width, height, nearPlane, farPlane);
-#else
-		return DirectX::XMMatrixOrthographicLH(width, height, nearPlane, farPlane);
-#endif
-	}
-
-	Matrix CreateOrthographicOffCenterMatrix(float left, float right, float bottom, float top, float nearPlane, float farPlane)
-	{
-#ifdef WORLD_RIGHT_HANDED
-		return DirectX::XMMatrixOrthographicOffCenterRH(left, right, bottom, top, nearPlane, farPlane);
-#else
-		return DirectX::XMMatrixOrthographicOffCenterLH(left, right, bottom, top, nearPlane, farPlane);
+		return DirectX::XMMatrixOrthographicOffCenterLH(left, right, bottom, top, nearZ, farZ);
 #endif
 	}
 
@@ -71,10 +101,10 @@ namespace Math
 #endif
 	}
 
-	void GetProjectionClipPlanes(const Matrix& projection, float& nearPlane, float& farPlane)
+	void GetProjectionClipPlanes(const Matrix& projection, float& nearZ, float& farZ)
 	{
-		nearPlane = -projection._43 / projection._33;
-		farPlane = nearPlane * projection._33 / (projection._33 - 1);
+		nearZ = -projection._43 / projection._33;
+		farZ = nearZ * projection._33 / (projection._33 - 1);
 	}
 
 	void ReverseZProjection(Matrix& projection)

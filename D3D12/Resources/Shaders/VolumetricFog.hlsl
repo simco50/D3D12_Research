@@ -14,18 +14,15 @@
 
 struct ShaderData
 {
-	int3 ClusterDimensions;
-	int NoiseTexture;
-	float3 InvClusterDimensions;
-	int NumLights;
 	float4x4 ViewProjectionInv;
-	float4x4 ProjectionInv;
-	float4x4 ViewInv;
+	float4x4 Projection;
+	int3 ClusterDimensions;
+	int NumLights;
+	float3 InvClusterDimensions;
 	float NearZ;
+	float3 ViewLocation;
 	float FarZ;
-	int FrameIndex;
 	float Jitter;
-	float4x4 ReprojectionMatrix;
 };
 
 ConstantBuffer<ShaderData> cData : register(b0);
@@ -38,19 +35,6 @@ float HenyeyGreenstreinPhase(float LoV, float G)
 	float result = 1.0f - G * G;
 	result /= (4.0f * PI * pow(1.0f + G * G - (2.0f * G) * LoV, 1.5f));
 	return result;
-}
-
-float3 LineFromOriginZIntersection(float3 lineFromOrigin, float depth)
-{
-    float3 normal = float3(0.0f, 0.0f, 1.0f);
-    float t = depth / dot(normal, lineFromOrigin);
-    return t * lineFromOrigin;
-}
-
-float sdBox( float3 p, float3 b )
-{
-  float3 q = abs(p) - b;
-  return length(max(q,0.0)) + min(max(q.x,max(q.y,q.z)),0.0);
 }
 
 [RootSignature(RootSig)]
@@ -66,20 +50,23 @@ void InjectFogLightingCS(uint3 threadId : SV_DISPATCHTHREADID)
 
 	float z = lerp(minLinearZ, maxLinearZ, cData.Jitter);
 
-	float3 viewRay = ViewFromDepth(texelUV, 1, cData.ProjectionInv);
-	float3 vPos = LineFromOriginZIntersection(viewRay, z);
-	float3 worldPosition = mul(float4(vPos, 1), cData.ViewInv).xyz;
+	texelUV += cData.Jitter * 0.03;
+
+	float ndcZ = LinearDepthToNDC(z, cData.Projection);
+	float3 worldPosition = WorldFromDepth(texelUV, ndcZ, cData.ViewProjectionInv);
 
 	// Calculate Density based on the fog volumes
 	float cellThickness = maxLinearZ - minLinearZ;
 	float3 cellAbsorption = 0.0f;
 
-	float volumeAttenuation = saturate(1 - sdBox(worldPosition, float3(200, 100, 200)));
+	float fogVolumeMaxHeight = 30.0f;
+	float densityAtBase = 0.4f;
+	float heightAbsorption = exp(min(0.0, fogVolumeMaxHeight - worldPosition.y)) * densityAtBase;
 
-	float3 lightScattering = 0.05f * volumeAttenuation;
-	float cellDensity = 0.05f * volumeAttenuation;
+	float3 lightScattering = heightAbsorption;
+	float cellDensity = 0.4*heightAbsorption;
 
-	float3 V = normalize(cData.ViewInv[3].xyz - worldPosition);
+	float3 V = normalize(cData.ViewLocation.xyz - worldPosition);
 	float4 pos = float4(texelUV, 0, z);
 
 	float3 totalScattering = 0;
@@ -122,7 +109,7 @@ void InjectFogLightingCS(uint3 threadId : SV_DISPATCHTHREADID)
 		}
 	}
 
-	//totalScattering += ApplyAmbientLight(1, 1, tLights[0].GetColor().rgb * 0.001f);
+	//totalScattering += ApplyAmbientLight(1, 1, tLights[0].GetColor().rgb * 0.02f).x;
 
 	float4 prevScattering = tLightScattering[threadId];
 	float4 newScattering = float4(lightScattering * totalScattering, cellDensity);
@@ -151,21 +138,22 @@ void AccumulateFogCS(uint3 threadId : SV_DISPATCHTHREADID, uint groupIndex : SV_
     GroupMemoryBarrierWithGroupSync();
 
 	float maxDepth = asfloat(gsMaxDepth);
-
 	uint lastSlice = (1 - maxDepth) * cData.ClusterDimensions.z;
 
-	float3 lightScattering = 0;
-	float cellDensity = 0;
-	float transmittance = 1;
+	float3 accumulatedLight = 0;
+	float accumulatedTransmittance = 1;
 
-	uOutLightScattering[int3(threadId.xy, 0)] = float4(lightScattering, transmittance);
+	uOutLightScattering[int3(threadId.xy, 0)] = float4(accumulatedLight, accumulatedTransmittance);
 
 	for(int sliceIndex = 1; sliceIndex <= lastSlice; ++sliceIndex)
 	{
-		float4 scatteringDensity = tLightScattering[int3(threadId.xy, sliceIndex - 1)];
-		lightScattering += scatteringDensity.xyz * transmittance;
-		cellDensity += scatteringDensity.w;
-		transmittance = saturate(exp(-cellDensity));
-		uOutLightScattering[int3(threadId.xy, sliceIndex)] = float4(lightScattering, transmittance);
+		float4 scatteringAndDensity = tLightScattering[int3(threadId.xy, sliceIndex - 1)];
+		float transmittance = saturate(exp(-scatteringAndDensity.w));
+
+		float3 scatteringOverSlice = (scatteringAndDensity.xyz - scatteringAndDensity.xyz * transmittance) / max(scatteringAndDensity.w, 0.000001f);
+		accumulatedLight += scatteringOverSlice * accumulatedTransmittance;
+		accumulatedTransmittance *= transmittance;
+
+		uOutLightScattering[int3(threadId.xy, sliceIndex)] = float4(accumulatedLight, accumulatedTransmittance);
 	}
 }

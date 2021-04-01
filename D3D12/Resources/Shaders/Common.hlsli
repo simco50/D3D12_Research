@@ -183,16 +183,22 @@ float3 ScreenToView(float4 screen, float2 screenDimensionsInv, float4x4 projecti
     return ViewFromDepth(screenNormalized, screen.z, projectionInverse);
 }
 
-//View space depth [0, far plane]
-float LinearizeDepth(float z, float near, float far)
-{
-    return near * far / (far + z * (near - far));
-}
-
 //View space depth [0, 1]
 float LinearizeDepth01(float z, float near, float far)
 {
     return far / (far + z * (near - far));
+}
+
+//View space depth [0, far plane]
+float LinearizeDepth(float z, float near, float far)
+{
+    return near * LinearizeDepth01(z, near, far);
+}
+
+// View space depth [0, far plane] to NDC [0, 1]
+float LinearDepthToNDC(float z, float4x4 projection)
+{
+    return (z * projection[2][2] + projection[3][2]) / z;
 }
 
 void AABBFromMinMax(inout AABB aabb, float3 minimum, float3 maximum)
@@ -213,17 +219,8 @@ float Pow5(float x)
 	return xx * xx * x;
 }
 
-float Square(float x)
-{
-    return x * x;
-}
-
-float2 Square(float2 x)
-{
-    return x * x;
-}
-
-float3 Square(float3 x)
+template<typename T>
+T Square(T x)
 {
     return x * x;
 }

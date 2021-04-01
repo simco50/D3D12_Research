@@ -158,7 +158,7 @@ void CSMain(CS_INPUT input)
     float depthVS = ScreenToView(float4(0, 0, fDepth, 1), cScreenDimensionsInv, cProjectionInverse).z;
     float depthRange = 31.0f / (maxDepthVS - minDepthVS);
     uint cellIndex = max(0, min(31, floor((depthVS - minDepthVS) * depthRange)));
-    InterlockedOr(DepthMask, 1 << cellIndex);
+    InterlockedOr(DepthMask, 1u << cellIndex);
 #endif
 
     // Clipping plane for minimum depth value 

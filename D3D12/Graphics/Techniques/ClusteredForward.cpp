@@ -266,6 +266,29 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 		Texture* pSourceVolume = m_pLightScatteringVolume[resources.FrameIndex % 2].get();
 		Texture* pDestinationVolume = m_pLightScatteringVolume[(resources.FrameIndex + 1) % 2].get();
 
+		struct ShaderData
+		{
+			Matrix ViewProjectionInv;
+			Matrix Projection;
+			IntVector3 ClusterDimensions;
+			int NumLights;
+			Vector3 InvClusterDimensions;
+			float NearZ;
+			Vector3 ViewLocation;
+			float FarZ;
+			float Jitter;
+		} constantBuffer{};
+
+		constantBuffer.ClusterDimensions = IntVector3(pDestinationVolume->GetWidth(), pDestinationVolume->GetHeight(), pDestinationVolume->GetDepth());
+		constantBuffer.InvClusterDimensions = Vector3(1.0f / pDestinationVolume->GetWidth(), 1.0f / pDestinationVolume->GetHeight(), 1.0f / pDestinationVolume->GetDepth());
+		constantBuffer.ViewLocation = resources.pCamera->GetPosition();
+		constantBuffer.Projection = resources.pCamera->GetProjection();
+		constantBuffer.ViewProjectionInv = resources.pCamera->GetProjectionInverse() * resources.pCamera->GetViewInverse();
+		constantBuffer.NumLights = resources.pLightBuffer->GetNumElements();
+		constantBuffer.NearZ = resources.pCamera->GetNear();
+		constantBuffer.FarZ = resources.pCamera->GetFar();
+		constantBuffer.Jitter = Math::HaltonSequence<1024, 2>()[resources.FrameIndex & 1023];
+
 		RGPassBuilder injectVolumeLighting = graph.AddPass("Inject Volume Lights");
 		injectVolumeLighting.Bind([=](CommandContext& context, const RGPassResources& passResources)
 			{
@@ -274,48 +297,6 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 
 				context.SetComputeRootSignature(m_pVolumetricLightingRS.get());
 				context.SetPipelineState(m_pInjectVolumeLightPSO);
-
-				struct ShaderData
-				{
-					IntVector3 ClusterDimensions;
-					int NoiseTexture;
-					Vector3 InvClusterDimensions;
-					int NumLights;
-					Matrix ViewProjectionInv;
-					Matrix ProjectionInv;
-					Matrix ViewInv;
-					float NearZ;
-					float FarZ;
-					int FrameIndex;
-					float Jitter;
-					Matrix ReprojectionMatrix;
-				} constantBuffer{};
-
-				Matrix preMult = Matrix(
-					Vector4(2.0f, 0.0f, 0.0f, 0.0f),
-					Vector4(0.0f, -2.0f, 0.0f, 0.0f),
-					Vector4(0.0f, 0.0f, 1.0f, 0.0f),
-					Vector4(-1.0f, 1.0f, 0.0f, 1.0f)
-				);
-
-				Matrix postMult = Matrix(
-					Vector4(1.0f / 2.0f, 0.0f, 0.0f, 0.0f),
-					Vector4(0.0f, -1.0f / 2.0f, 0.0f, 0.0f),
-					Vector4(0.0f, 0.0f, 1.0f, 0.0f),
-					Vector4(1.0f / 2.0f, 1.0f / 2.0f, 0.0f, 1.0f));
-
-				constantBuffer.ClusterDimensions = IntVector3(pDestinationVolume->GetWidth(), pDestinationVolume->GetHeight(), pDestinationVolume->GetDepth());
-				constantBuffer.InvClusterDimensions = Vector3(1.0f / pDestinationVolume->GetWidth(), 1.0f / pDestinationVolume->GetHeight(), 1.0f / pDestinationVolume->GetDepth());
-				constantBuffer.NoiseTexture = m_pGraphics->RegisterBindlessResource(m_pGraphics->GetDefaultTexture(DefaultTexture::ColorNoise256));
-				constantBuffer.ViewInv = resources.pCamera->GetViewInverse();
-				constantBuffer.ProjectionInv = resources.pCamera->GetProjectionInverse();
-				constantBuffer.ViewProjectionInv = resources.pCamera->GetProjectionInverse() * resources.pCamera->GetViewInverse();
-				constantBuffer.NumLights = resources.pLightBuffer->GetNumElements();
-				constantBuffer.NearZ = resources.pCamera->GetNear();
-				constantBuffer.FarZ = resources.pCamera->GetFar();
-				constantBuffer.FrameIndex = resources.FrameIndex;
-				constantBuffer.Jitter = Math::HaltonSequence<1024, 2>()[resources.FrameIndex & 1023];
-				constantBuffer.ReprojectionMatrix = preMult * resources.pCamera->GetViewProjection().Invert() * resources.pCamera->GetPreviousViewProjection() * postMult;
 
 				D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
 					pSourceVolume->GetSRV()->GetDescriptor(),
@@ -348,48 +329,6 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 
 				float values[] = { 0,0,0,0 };
 				context.ClearUavFloat(m_pFinalVolumeFog.get(), m_pFinalVolumeFog->GetUAV(), values);
-
-				struct ShaderData
-				{
-					IntVector3 ClusterDimensions;
-					int NoiseTexture;
-					Vector3 InvClusterDimensions;
-					int NumLights;
-					Matrix ViewProjectionInv;
-					Matrix ProjectionInv;
-					Matrix ViewInv;
-					float NearZ;
-					float FarZ;
-					int FrameIndex;
-					float Jitter;
-					Matrix ReprojectionMatrix;
-				} constantBuffer{};
-
-				Matrix preMult = Matrix(
-					Vector4(2.0f, 0.0f, 0.0f, 0.0f),
-					Vector4(0.0f, -2.0f, 0.0f, 0.0f),
-					Vector4(0.0f, 0.0f, 1.0f, 0.0f),
-					Vector4(-1.0f, 1.0f, 0.0f, 1.0f)
-				);
-
-				Matrix postMult = Matrix(
-					Vector4(1.0f / 2.0f, 0.0f, 0.0f, 0.0f),
-					Vector4(0.0f, -1.0f / 2.0f, 0.0f, 0.0f),
-					Vector4(0.0f, 0.0f, 1.0f, 0.0f),
-					Vector4(1.0f / 2.0f, 1.0f / 2.0f, 0.0f, 1.0f));
-
-				constantBuffer.ClusterDimensions = IntVector3(pDestinationVolume->GetWidth(), pDestinationVolume->GetHeight(), pDestinationVolume->GetDepth());
-				constantBuffer.InvClusterDimensions = Vector3(1.0f / pDestinationVolume->GetWidth(), 1.0f / pDestinationVolume->GetHeight(), 1.0f / pDestinationVolume->GetDepth());
-				constantBuffer.NoiseTexture = m_pGraphics->RegisterBindlessResource(m_pGraphics->GetDefaultTexture(DefaultTexture::ColorNoise256));
-				constantBuffer.ViewInv = resources.pCamera->GetViewInverse();
-				constantBuffer.ProjectionInv = resources.pCamera->GetProjectionInverse();
-				constantBuffer.ViewProjectionInv = resources.pCamera->GetProjectionInverse() * resources.pCamera->GetViewInverse();
-				constantBuffer.NumLights = resources.pLightBuffer->GetNumElements();
-				constantBuffer.NearZ = resources.pCamera->GetNear();
-				constantBuffer.FarZ = resources.pCamera->GetFar();
-				constantBuffer.FrameIndex = resources.FrameIndex;
-				constantBuffer.Jitter = Math::HaltonSequence<32, 3>()[resources.FrameIndex % 32];
-				constantBuffer.ReprojectionMatrix = preMult * resources.pCamera->GetViewProjection().Invert() * resources.pCamera->GetPreviousViewProjection() * postMult;
 
 				D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
 					pDestinationVolume->GetSRV()->GetDescriptor(),

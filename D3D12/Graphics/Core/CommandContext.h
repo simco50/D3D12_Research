@@ -203,7 +203,7 @@ public:
 	{
 		SetComputeRootConstants(rootIndex, sizeof(T) / sizeof(int32), &data);
 	}
-	void SetComputeDynamicConstantBufferView(int rootIndex, void* pData, uint32 dataSize);
+	void SetComputeDynamicConstantBufferView(int rootIndex, const void* pData, uint32 dataSize);
 
 	// Graphics
 	void SetGraphicsRootSignature(RootSignature* pRootSignature);
