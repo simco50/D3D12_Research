@@ -50,8 +50,6 @@ void InjectFogLightingCS(uint3 threadId : SV_DISPATCHTHREADID)
 
 	float z = lerp(minLinearZ, maxLinearZ, cData.Jitter);
 
-	texelUV += cData.Jitter * 0.03;
-
 	float ndcZ = LinearDepthToNDC(z, cData.Projection);
 	float3 worldPosition = WorldFromDepth(texelUV, ndcZ, cData.ViewProjectionInv);
 
