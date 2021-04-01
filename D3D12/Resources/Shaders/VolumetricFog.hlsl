@@ -45,8 +45,8 @@ void InjectFogLightingCS(uint3 threadId : SV_DISPATCHTHREADID)
 	float2 texelUV = (threadId.xy + 0.5f) * cData.InvClusterDimensions.xy;
 	float minZ = (float)threadId.z * cData.InvClusterDimensions.z;
 	float maxZ = (float)(threadId.z + 1) * cData.InvClusterDimensions.z;
-	float minLinearZ = cData.FarZ + minZ * (cData.NearZ - cData.FarZ);
-	float maxLinearZ = cData.FarZ + maxZ * (cData.NearZ - cData.FarZ);
+	float minLinearZ = cData.FarZ + Square(saturate(minZ)) * (cData.NearZ - cData.FarZ);
+	float maxLinearZ = cData.FarZ + Square(saturate(maxZ)) * (cData.NearZ - cData.FarZ);
 
 	float z = lerp(minLinearZ, maxLinearZ, cData.Jitter);
 
@@ -61,10 +61,10 @@ void InjectFogLightingCS(uint3 threadId : SV_DISPATCHTHREADID)
 
 	float fogVolumeMaxHeight = 30.0f;
 	float densityAtBase = 0.4f;
-	float heightAbsorption = exp(min(0.0, fogVolumeMaxHeight - worldPosition.y)) * densityAtBase;
+	float heightAbsorption = cellThickness * exp(min(0.0, fogVolumeMaxHeight - worldPosition.y)) * densityAtBase;
 
 	float3 lightScattering = heightAbsorption;
-	float cellDensity = 0.4*heightAbsorption;
+	float cellDensity = 0.05 * heightAbsorption;
 
 	float3 V = normalize(cData.ViewLocation.xyz - worldPosition);
 	float4 pos = float4(texelUV, 0, z);

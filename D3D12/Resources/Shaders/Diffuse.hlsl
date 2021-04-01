@@ -294,7 +294,7 @@ void PSMain(PSInput input,
 	color += ApplyAmbientLight(diffuseColor, ao, tLights[0].GetColor().rgb * 0.1f);
 	color += ssr * ao;
 
-	float slice = (input.positionVS.z - cViewData.FarZ) / (cViewData.NearZ - cViewData.FarZ);
+	float slice = sqrt((input.positionVS.z - cViewData.FarZ) / (cViewData.NearZ - cViewData.FarZ));
 	float4 scatteringTransmittance = tLightScattering.SampleLevel(sClampSampler, float3(screenUV, slice), 0);
 	color = color * scatteringTransmittance.w + scatteringTransmittance.rgb;
 
