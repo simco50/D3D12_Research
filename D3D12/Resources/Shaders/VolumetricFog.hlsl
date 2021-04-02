@@ -11,11 +11,13 @@
 		"StaticSampler(s0, filter=FILTER_MIN_MAG_MIP_POINT, addressU = TEXTURE_ADDRESS_WRAP, addressV = TEXTURE_ADDRESS_WRAP), " \
 		"StaticSampler(s1, filter=FILTER_MIN_MAG_MIP_POINT, addressU = TEXTURE_ADDRESS_CLAMP, addressV = TEXTURE_ADDRESS_CLAMP), " \
 		"StaticSampler(s2, filter=FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT, comparisonFunc=COMPARISON_GREATER), " \
+		"StaticSampler(s3, filter=FILTER_MIN_MAG_LINEAR_MIP_POINT, addressU = TEXTURE_ADDRESS_CLAMP, addressV = TEXTURE_ADDRESS_CLAMP, addressW = TEXTURE_ADDRESS_CLAMP)" \
 
 struct ShaderData
 {
 	float4x4 ViewProjectionInv;
 	float4x4 Projection;
+	float4x4 PrevViewProjection;
 	int3 ClusterDimensions;
 	int NumLights;
 	float3 InvClusterDimensions;
@@ -25,6 +27,7 @@ struct ShaderData
 	float Jitter;
 };
 
+SamplerState sVolumeSampler : register(s3);
 ConstantBuffer<ShaderData> cData : register(b0);
 
 Texture3D<float4> tLightScattering : register(t4);
@@ -53,12 +56,21 @@ void InjectFogLightingCS(uint3 threadId : SV_DISPATCHTHREADID)
 	float ndcZ = LinearDepthToNDC(z, cData.Projection);
 	float3 worldPosition = WorldFromDepth(texelUV, ndcZ, cData.ViewProjectionInv);
 
+	float reprojZ = (minLinearZ + maxLinearZ) * 0.5f;
+	float reprojNdcZ = LinearDepthToNDC(reprojZ, cData.Projection);
+	float3 reprojWorldPosition = WorldFromDepth(texelUV, reprojNdcZ, cData.ViewProjectionInv);
+	float4 reprojNDC = mul(float4(reprojWorldPosition, 1), cData.PrevViewProjection);
+	reprojNDC.xyz /= reprojNDC.w;
+	float3 reprojUV = float3(reprojNDC.x * 0.5f + 0.5f, -reprojNDC.y * 0.5f + 0.5f, reprojNDC.z);
+	reprojUV.z = LinearizeDepth(reprojUV.z, cData.NearZ, cData.FarZ);
+	reprojUV.z = sqrt((reprojUV.z - cData.FarZ) / (cData.NearZ - cData.FarZ));
+
 	// Calculate Density based on the fog volumes
 	float cellThickness = maxLinearZ - minLinearZ;
 	float3 cellAbsorption = 0.0f;
 
-	float fogVolumeMaxHeight = 30.0f;
-	float densityAtBase = 0.4f;
+	float fogVolumeMaxHeight = 300.0f;
+	float densityAtBase = 0.03f;
 	float heightAbsorption = cellThickness * exp(min(0.0, fogVolumeMaxHeight - worldPosition.y)) * densityAtBase;
 
 	float3 lightScattering = heightAbsorption;
@@ -107,12 +119,18 @@ void InjectFogLightingCS(uint3 threadId : SV_DISPATCHTHREADID)
 		}
 	}
 
-	//totalScattering += ApplyAmbientLight(1, 1, tLights[0].GetColor().rgb * 0.02f).x;
+	totalScattering += ApplyAmbientLight(1, 1, tLights[0].GetColor().rgb * 0.02f).x;
 
-	float4 prevScattering = tLightScattering[threadId];
+	float blendFactor = 0.05f;
+	if(any(reprojUV < 0) || any(reprojUV > 1))
+	{
+		blendFactor = 1.0f;
+	}
+
+	float4 prevScattering = tLightScattering.SampleLevel(sVolumeSampler, reprojUV, 0);
 	float4 newScattering = float4(lightScattering * totalScattering, cellDensity);
 
-	uOutLightScattering[threadId] = lerp(prevScattering, newScattering, 0.05);
+	uOutLightScattering[threadId] = lerp(prevScattering, newScattering, blendFactor);
 }
 
 groupshared uint gsMaxDepth;
