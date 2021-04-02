@@ -13,8 +13,11 @@
 #include "Graphics/Profiler.h"
 #include "Scene/Camera.h"
 
-static constexpr int cClusterSize = 64;
-static constexpr int cClusterCountZ = 32;
+static constexpr int gLightClusterTexelSize = 64;
+static constexpr int gLightClustersNumZ = 32;
+
+static constexpr int gVolumetricFroxelTexelSize = 8;
+static constexpr int gVolumetricNumZSlices = 128;
 
 namespace Tweakables
 {
@@ -36,10 +39,10 @@ ClusteredForward::~ClusteredForward()
 
 void ClusteredForward::OnSwapchainCreated(int windowWidth, int windowHeight)
 {
-	m_ClusterCountX = Math::RoundUp((float)windowWidth / cClusterSize);
-	m_ClusterCountY = Math::RoundUp((float)windowHeight / cClusterSize);
+	m_ClusterCountX = Math::RoundUp((float)windowWidth / gLightClusterTexelSize);
+	m_ClusterCountY = Math::RoundUp((float)windowHeight / gLightClusterTexelSize);
 
-	uint32 totalClusterCount = m_ClusterCountX * m_ClusterCountY * cClusterCountZ;
+	uint32 totalClusterCount = m_ClusterCountX * m_ClusterCountY * gLightClustersNumZ;
 	m_pAABBs->Create(BufferDesc::CreateStructured(totalClusterCount, sizeof(Vector4) * 2));
 	m_pUniqueClusters->Create(BufferDesc::CreateStructured(totalClusterCount, sizeof(uint32)));
 	m_pUniqueClusters->CreateUAV(&m_pUniqueClustersRawUAV, BufferUAVDesc::CreateRaw());
@@ -51,9 +54,12 @@ void ClusteredForward::OnSwapchainCreated(int windowWidth, int windowHeight)
 	m_pLightGrid->CreateUAV(&m_pLightGridRawUAV, BufferUAVDesc::CreateRaw());
 	m_pDebugLightGrid->Create(BufferDesc::CreateStructured(totalClusterCount, 2 * sizeof(uint32)));
 
-	uint32 froxelSize = 8;
-	uint32 numDepthFroxels = 128;
-	TextureDesc volumeDesc = TextureDesc::Create3D(Math::DivideAndRoundUp(windowWidth, froxelSize), Math::DivideAndRoundUp(windowHeight, froxelSize), numDepthFroxels, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess);
+	TextureDesc volumeDesc = TextureDesc::Create3D(
+		Math::DivideAndRoundUp(windowWidth, gVolumetricFroxelTexelSize),
+		Math::DivideAndRoundUp(windowHeight, gVolumetricFroxelTexelSize),
+		gVolumetricNumZSlices,
+		DXGI_FORMAT_R16G16B16A16_FLOAT,
+		TextureFlag::ShaderResource | TextureFlag::UnorderedAccess);
 	m_pLightScatteringVolume[0]->Create(volumeDesc);
 	m_pLightScatteringVolume[1]->Create(volumeDesc);
 	m_pFinalVolumeFog->Create(volumeDesc);
@@ -78,7 +84,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 	Vector2 screenDimensions((float)resources.pRenderTarget->GetWidth(), (float)resources.pRenderTarget->GetHeight());
 	float nearZ = resources.pCamera->GetNear();
 	float farZ = resources.pCamera->GetFar();
-	Vector2 lightGridParams = ComputeVolumeGridParams(nearZ, farZ, cClusterCountZ);
+	Vector2 lightGridParams = ComputeVolumeGridParams(nearZ, farZ, gLightClustersNumZ);
 
 	if (m_ViewportDirty)
 	{
@@ -104,14 +110,14 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 				constantBuffer.NearZ = resources.pCamera->GetFar();
 				constantBuffer.FarZ = resources.pCamera->GetNear();
 				constantBuffer.ProjectionInverse = resources.pCamera->GetProjectionInverse();
-				constantBuffer.ClusterSize = IntVector2(cClusterSize, cClusterSize);
-				constantBuffer.ClusterDimensions = IntVector3(m_ClusterCountX, m_ClusterCountY, cClusterCountZ);
+				constantBuffer.ClusterSize = IntVector2(gLightClusterTexelSize, gLightClusterTexelSize);
+				constantBuffer.ClusterDimensions = IntVector3(m_ClusterCountX, m_ClusterCountY, gLightClustersNumZ);
 
 				context.SetComputeDynamicConstantBufferView(0, &constantBuffer, sizeof(ConstantBuffer));
 				context.BindResource(1, 0, m_pAABBs->GetUAV());
 
 				//Cluster count in z is 32 so fits nicely in a wavefront on Nvidia so make groupsize in shader 32
-				context.Dispatch(m_ClusterCountX, m_ClusterCountY, Math::DivideAndRoundUp(cClusterCountZ, 32));
+				context.Dispatch(m_ClusterCountX, m_ClusterCountY, Math::DivideAndRoundUp(gLightClustersNumZ, 32));
 			});
 		m_ViewportDirty = false;
 	}
@@ -142,8 +148,8 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 
 
 			perFrameParameters.LightGridParams = lightGridParams;
-			perFrameParameters.ClusterDimensions = IntVector3(m_ClusterCountX, m_ClusterCountY, cClusterCountZ);
-			perFrameParameters.ClusterSize = IntVector2(cClusterSize, cClusterSize);
+			perFrameParameters.ClusterDimensions = IntVector3(m_ClusterCountX, m_ClusterCountY, gLightClustersNumZ);
+			perFrameParameters.ClusterSize = IntVector2(gLightClusterTexelSize, gLightClusterTexelSize);
 			perFrameParameters.View = resources.pCamera->GetView();
 			perFrameParameters.ViewProjection = resources.pCamera->GetViewProjection();
 
@@ -202,7 +208,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 			context.BindResource(0, 0, m_pUniqueClusters->GetSRV());
 			context.BindResource(1, 0, m_pCompactedClusters->GetUAV());
 
-			context.Dispatch(Math::RoundUp(m_ClusterCountX * m_ClusterCountY * cClusterCountZ / 64.0f));
+			context.Dispatch(Math::RoundUp(m_ClusterCountX * m_ClusterCountY * gLightClustersNumZ / 64.0f));
 		});
 
 	RGPassBuilder updateArguments = graph.AddPass("Update Indirect Arguments");
@@ -289,7 +295,8 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 		constantBuffer.NumLights = resources.pLightBuffer->GetNumElements();
 		constantBuffer.NearZ = resources.pCamera->GetNear();
 		constantBuffer.FarZ = resources.pCamera->GetFar();
-		constantBuffer.Jitter = Math::HaltonSequence<1024, 2>()[resources.FrameIndex & 1023];
+		constexpr Math::HaltonSequence<1024, 2> halton;
+		constantBuffer.Jitter = halton[resources.FrameIndex & 1023];
 
 		RGPassBuilder injectVolumeLighting = graph.AddPass("Inject Volume Lights");
 		injectVolumeLighting.Bind([=](CommandContext& context, const RGPassResources& passResources)
@@ -313,11 +320,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 				context.BindResources(3, 0, srvs, ARRAYSIZE(srvs));
 				context.BindResourceTable(4, resources.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Compute);
 
-				context.Dispatch(
-					Math::DivideAndRoundUp(pDestinationVolume->GetWidth(), 8),
-					Math::DivideAndRoundUp(pDestinationVolume->GetHeight(), 8),
-					Math::DivideAndRoundUp(pDestinationVolume->GetDepth(), 4)
-				);
+				context.Dispatch(ComputeUtils::GetNumThreadGroups(pDestinationVolume->GetWidth(), 8, pDestinationVolume->GetHeight(), 8, pDestinationVolume->GetDepth(), 4));
 			});
 
 		RGPassBuilder accumulateFog = graph.AddPass("Accumulate Volume Fog");
@@ -329,8 +332,8 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 				context.SetComputeRootSignature(m_pVolumetricLightingRS.get());
 				context.SetPipelineState(m_pAccumulateVolumeLightPSO);
 
-				float values[] = { 0,0,0,0 };
-				context.ClearUavFloat(m_pFinalVolumeFog.get(), m_pFinalVolumeFog->GetUAV(), values);
+				//float values[] = { 0,0,0,0 };
+				//context.ClearUavFloat(m_pFinalVolumeFog.get(), m_pFinalVolumeFog->GetUAV(), values);
 
 				D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
 					pDestinationVolume->GetSRV()->GetDescriptor(),
@@ -345,11 +348,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 				context.BindResources(3, 0, srvs, ARRAYSIZE(srvs));
 				context.BindResourceTable(4, resources.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Compute);
 
-				context.Dispatch(
-					Math::DivideAndRoundUp(m_pFinalVolumeFog->GetWidth(), 8),
-					Math::DivideAndRoundUp(m_pFinalVolumeFog->GetHeight(), 8),
-					1
-				);
+				context.Dispatch(ComputeUtils::GetNumThreadGroups(pDestinationVolume->GetWidth(), 8, pDestinationVolume->GetHeight(), 8));
 			});
 
 		m_pGraphics->SetVisualize(m_pFinalVolumeFog.get());
@@ -387,8 +386,8 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 			frameData.InvScreenDimensions = Vector2(1.0f / screenDimensions.x, 1.0f / screenDimensions.y);
 			frameData.NearZ = nearZ;
 			frameData.FarZ = farZ;
-			frameData.ClusterDimensions = IntVector3(m_ClusterCountX, m_ClusterCountY, cClusterCountZ);
-			frameData.ClusterSize = IntVector2(cClusterSize, cClusterSize);
+			frameData.ClusterDimensions = IntVector3(m_ClusterCountX, m_ClusterCountY, gLightClustersNumZ);
+			frameData.ClusterSize = IntVector2(gLightClusterTexelSize, gLightClusterTexelSize);
 			frameData.LightGridParams = lightGridParams;
 			frameData.FrameIndex = resources.FrameIndex;
 			frameData.SsrSamples = Tweakables::g_SsrSamples;
@@ -522,12 +521,12 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 
 				if (m_pDebugClustersPSO->GetType() == PipelineStateType::Mesh)
 				{
-					context.DispatchMesh(m_ClusterCountX * m_ClusterCountY * cClusterCountZ);
+					context.DispatchMesh(m_ClusterCountX * m_ClusterCountY * gLightClustersNumZ);
 				}
 				else
 				{
 					context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_POINTLIST);
-					context.Draw(0, m_ClusterCountX * m_ClusterCountY * cClusterCountZ);
+					context.Draw(0, m_ClusterCountX * m_ClusterCountY * gLightClustersNumZ);
 				}
 
 				context.EndRenderPass();
@@ -553,7 +552,7 @@ void ClusteredForward::VisualizeLightDensity(RGGraph& graph, Camera& camera, Tex
 	Vector2 screenDimensions((float)pTarget->GetWidth(), (float)pTarget->GetHeight());
 	float nearZ = camera.GetNear();
 	float farZ = camera.GetFar();
-	Vector2 lightGridParams = ComputeVolumeGridParams(nearZ, farZ, cClusterCountZ);
+	Vector2 lightGridParams = ComputeVolumeGridParams(nearZ, farZ, gLightClustersNumZ);
 
 	RGPassBuilder basePass = graph.AddPass("Visualize Light Density");
 	basePass.Bind([=](CommandContext& context, const RGPassResources& passResources)
@@ -572,8 +571,8 @@ void ClusteredForward::VisualizeLightDensity(RGGraph& graph, Camera& camera, Tex
 			} constantData{};
 
 			constantData.ProjectionInverse = camera.GetProjectionInverse();
-			constantData.ClusterDimensions = IntVector3(m_ClusterCountX, m_ClusterCountY, cClusterCountZ);
-			constantData.ClusterSize = IntVector2(cClusterSize, cClusterSize);
+			constantData.ClusterDimensions = IntVector3(m_ClusterCountX, m_ClusterCountY, gLightClustersNumZ);
+			constantData.ClusterSize = IntVector2(gLightClusterTexelSize, gLightClusterTexelSize);
 			constantData.Near = nearZ;
 			constantData.Far = farZ;
 			constantData.FoV = camera.GetFoV();

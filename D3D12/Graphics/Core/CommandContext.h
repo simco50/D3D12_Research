@@ -130,6 +130,18 @@ private:
 	std::vector<D3D12_RESOURCE_BARRIER> m_QueuedBarriers;
 };
 
+namespace ComputeUtils
+{
+	inline IntVector3 GetNumThreadGroups(uint32 threadsX = 1, uint32 groupSizeX = 1, uint32 threadsY = 1, uint32 groupSizeY = 1, uint32 threadsZ = 1, uint32 groupSizeZ = 1)
+	{
+		IntVector3 groups;
+		groups.x = Math::DivideAndRoundUp(threadsX, groupSizeX);
+		groups.y = Math::DivideAndRoundUp(threadsY, groupSizeY);
+		groups.z = Math::DivideAndRoundUp(threadsZ, groupSizeZ);
+		return groups;
+	}
+}
+
 class CommandContext : public GraphicsObject
 {
 public:
