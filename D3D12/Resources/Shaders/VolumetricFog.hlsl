@@ -82,7 +82,6 @@ void InjectFogLightingCS(uint3 threadId : SV_DISPATCHTHREADID)
 	float fogVolumeMaxHeight = 300.0f;
 	float densityAtBase = 0.03f;
 	float heightAbsorption = cellThickness * exp(min(0.0, fogVolumeMaxHeight - worldPosition.y)) * densityAtBase;
-	
 	float3 lightScattering = heightAbsorption;
 	float cellDensity = 0.05 * heightAbsorption;
 
@@ -92,6 +91,7 @@ void InjectFogLightingCS(uint3 threadId : SV_DISPATCHTHREADID)
 	float3 totalScattering = 0;
 
 	// Iterate over all the lights and light the froxel
+	// todo: Leverage clustered light culling
 	for(int i = 0; i < cData.NumLights; ++i)
 	{
 		Light light = tLights[i];
@@ -137,10 +137,14 @@ void InjectFogLightingCS(uint3 threadId : SV_DISPATCHTHREADID)
 		blendFactor = 1.0f;
 	}
 
-	float4 prevScattering = tLightScattering.SampleLevel(sVolumeSampler, reprojUV, 0);
 	float4 newScattering = float4(lightScattering * totalScattering, cellDensity);
+	if(blendFactor < 1.0f)
+	{
+		float4 prevScattering = tLightScattering.SampleLevel(sVolumeSampler, reprojUV, 0);
+		newScattering = lerp(prevScattering, newScattering, blendFactor);
+	}
 
-	uOutLightScattering[threadId] = lerp(prevScattering, newScattering, blendFactor);
+	uOutLightScattering[threadId] = newScattering;
 }
 
 groupshared uint gsMaxDepth;
@@ -149,6 +153,7 @@ groupshared uint gsMaxDepth;
 [numthreads(8, 8, 1)]
 void AccumulateFogCS(uint3 threadId : SV_DISPATCHTHREADID, uint groupIndex : SV_GROUPINDEX)
 {
+#if 0
 	float2 texCoord = threadId.xy * cData.InvClusterDimensions.xy;
 	float depth = tDepth.SampleLevel(sDiffuseSampler, texCoord, 0).r;
 
@@ -163,7 +168,6 @@ void AccumulateFogCS(uint3 threadId : SV_DISPATCHTHREADID, uint groupIndex : SV_
 
     GroupMemoryBarrierWithGroupSync();
 
-#if 0
 	float maxDepth = asfloat(gsMaxDepth);
 	float linearDepth = LinearizeDepth(maxDepth, cData.NearZ, cData.FarZ);
 	float volumeDepth = sqrt((linearDepth - cData.FarZ) / (cData.NearZ - cData.FarZ));
