@@ -146,6 +146,23 @@ struct TextureDesc
 		return desc;
 	}
 
+	static TextureDesc Create3D(int width, int height, int depth, DXGI_FORMAT format, TextureFlag flags = TextureFlag::ShaderResource, int sampleCount = 1, int mips = 1)
+	{
+		check(width);
+		check(height);
+		TextureDesc desc;
+		desc.Width = width;
+		desc.Height = height;
+		desc.DepthOrArraySize = depth;
+		desc.Mips = mips;
+		desc.SampleCount = sampleCount;
+		desc.Format = format;
+		desc.Usage = flags;
+		desc.ClearBindingValue = ClearBinding();
+		desc.Dimensions = TextureDimension::Texture3D;
+		return desc;
+	}
+
 	static TextureDesc CreateDepth(int width, int height, DXGI_FORMAT format, TextureFlag flags = TextureFlag::DepthStencil, int sampleCount = 1, const ClearBinding& clearBinding = ClearBinding(1, 0))
 	{
 		check(width);

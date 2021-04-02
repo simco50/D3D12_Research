@@ -15,7 +15,6 @@ BundleArtifacts/
 
 # Misc
 Notes/
-imgui.ini
 *.html
 *.gv
 .vscode/
@@ -25,3 +24,4 @@ _Temp/
 vs-chromium-project.txt
 Screenshot*.jpg
 StructLayoutSettings.json
+Saved

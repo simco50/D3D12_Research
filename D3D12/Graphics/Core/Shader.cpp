@@ -76,6 +76,8 @@ namespace ShaderCompiler
 		arguments.push_back(*pwTarget);
 		arguments.push_back(DXC_ARG_ALL_RESOURCES_BOUND);
 
+		arguments.push_back(L"-enable-templates");
+
 		MultibyteToUnicode pwSymbolPath(pShaderSymbolsPath);
 		if (debugShaders)
 		{

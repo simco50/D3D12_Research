@@ -48,6 +48,8 @@ enum class DefaultTexture
 	Gray2D,
 	Normal2D,
 	BlackCube,
+	ColorNoise256,
+	BlueNoise512,
 	MAX,
 };
 
@@ -148,6 +150,8 @@ public:
 	GlobalOnlineDescriptorHeap* GetGlobalViewHeap() const { return m_pGlobalViewHeap.get(); }
 	ShaderManager* GetShaderManager() const { return m_pShaderManager.get(); }
 	DynamicAllocationManager* GetAllocationManager() const { return m_pDynamicAllocationManager.get(); }
+
+	void SetVisualize(Texture* pTexture) { m_pVisualizeTexture = pTexture; }
 
 	template<typename DESC_TYPE>
 	struct DescriptorSelector {};
@@ -262,6 +266,7 @@ private:
 	std::unique_ptr<RTReflections> m_pRTReflections;
 	std::unique_ptr<SSAO> m_pSSAO;
 
+	std::unique_ptr<Texture> m_pLightCookie;
 	std::array<std::unique_ptr<Texture>, (int)DefaultTexture::MAX> m_DefaultTextures;
 
 	int m_SampleCount = 1;

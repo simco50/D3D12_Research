@@ -26,6 +26,8 @@ struct Light
     int ShadowIndex;
     float InvShadowSize;
     int VolumetricLighting;
+    int LightTexture;
+    int3 pad;
 
     float4 GetColor()
     {
@@ -62,6 +64,12 @@ struct AABB
 {
     float4 Center;
     float4 Extents;
+};
+
+struct Ray
+{
+    float3 Origin;
+    float3 Direction;
 };
 
 bool SphereInAABB(Sphere sphere, AABB aabb)
@@ -175,16 +183,22 @@ float3 ScreenToView(float4 screen, float2 screenDimensionsInv, float4x4 projecti
     return ViewFromDepth(screenNormalized, screen.z, projectionInverse);
 }
 
-//View space depth [0, far plane]
-float LinearizeDepth(float z, float near, float far)
-{
-    return near * far / (far + z * (near - far));
-}
-
 //View space depth [0, 1]
 float LinearizeDepth01(float z, float near, float far)
 {
     return far / (far + z * (near - far));
+}
+
+//View space depth [0, far plane]
+float LinearizeDepth(float z, float near, float far)
+{
+    return near * LinearizeDepth01(z, near, far);
+}
+
+// View space depth [0, far plane] to NDC [0, 1]
+float LinearDepthToNDC(float z, float4x4 projection)
+{
+    return (z * projection[2][2] + projection[3][2]) / z;
 }
 
 void AABBFromMinMax(inout AABB aabb, float3 minimum, float3 maximum)
@@ -205,17 +219,8 @@ float Pow5(float x)
 	return xx * xx * x;
 }
 
-float Square(float x)
-{
-    return x * x;
-}
-
-float2 Square(float2 x)
-{
-    return x * x;
-}
-
-float3 Square(float3 x)
+template<typename T>
+T Square(T x)
 {
     return x * x;
 }
@@ -332,6 +337,40 @@ float ScreenFade(float2 uv)
 {
     float2 fade = max(12.0f * abs(uv - 0.5f) - 5.0f, 0.0f);
     return saturate(1.0 - dot(fade, fade));
+}
+
+
+bool RaySphereIntersect(Ray ray, Sphere sphere, out float intersectionA, out float intersectionB)
+{
+    float3 L = ray.Origin - sphere.Position;
+    float a = dot(ray.Direction, ray.Direction);
+    float b = 2.0f * dot(ray.Direction, L);
+    float c = dot(L, L) - Square(sphere.Radius);
+    float D = b * b - 4 * a * c;
+    if(D < 0)
+    {
+        return false;
+    }
+    if(D == 0)
+    {
+        intersectionA = -0.5 * b / a;
+        intersectionB = intersectionA;
+    }
+    else
+    {
+        float q = (b > 0) ?
+            -0.5f * (b + sqrt(D)) :
+            -0.5f * (b - sqrt(D));
+        intersectionA = q / a;
+        intersectionB = c / q;
+    }
+    if(intersectionA > intersectionB)
+    {
+        float temp = intersectionA;
+        intersectionA = intersectionB;
+        intersectionB = temp;
+    }
+    return true;
 }
 
 #endif

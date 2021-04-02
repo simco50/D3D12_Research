@@ -7,9 +7,9 @@
 				"CBV(b1, visibility=SHADER_VISIBILITY_ALL), " \
 				"CBV(b2, visibility=SHADER_VISIBILITY_PIXEL), " \
 				GLOBAL_BINDLESS_TABLE ", " \
-				"DescriptorTable(SRV(t3, numDescriptors = 7), visibility=SHADER_VISIBILITY_PIXEL), " \
+				"DescriptorTable(SRV(t2, numDescriptors = 8), visibility=SHADER_VISIBILITY_PIXEL), " \
 				"StaticSampler(s0, filter=FILTER_ANISOTROPIC, maxAnisotropy = 4, visibility = SHADER_VISIBILITY_PIXEL), " \
-				"StaticSampler(s1, filter=FILTER_MIN_MAG_MIP_POINT, addressU = TEXTURE_ADDRESS_CLAMP, addressV = TEXTURE_ADDRESS_CLAMP, visibility = SHADER_VISIBILITY_PIXEL), " \
+				"StaticSampler(s1, filter=FILTER_MIN_MAG_MIP_LINEAR, addressU = TEXTURE_ADDRESS_CLAMP, addressV = TEXTURE_ADDRESS_CLAMP, visibility = SHADER_VISIBILITY_PIXEL), " \
 				"StaticSampler(s2, filter=FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT, visibility = SHADER_VISIBILITY_PIXEL, comparisonFunc=COMPARISON_GREATER), " \
 
 struct PerObjectData
@@ -42,6 +42,7 @@ struct PerViewData
     int2 ClusterSize;
 	float2 LightGridParams;
 #endif
+	int3 VolumeFogDimensions;
 };
 
 ConstantBuffer<PerObjectData> cObjectData : register(b0);
@@ -66,6 +67,8 @@ struct PSInput
 	float3 tangent : TANGENT;
 	float3 bitangent : TEXCOORD1;
 };
+
+Texture3D<float4> tLightScattering : register(t2);
 
 #if TILED_FORWARD
 Texture2D<uint2> tLightGrid : register(t3);
@@ -165,6 +168,7 @@ LightResult DoLight(float4 pos, float3 worldPos, float3 N, float3 V, float3 diff
 		totalResult.Diffuse += result.Diffuse;
 		totalResult.Specular += result.Specular;
 	}
+
 	return totalResult;
 }
 
@@ -284,23 +288,19 @@ void PSMain(PSInput input,
 
 	LightResult lighting = DoLight(input.position, input.positionWS, N, V, diffuseColor, specularColor, r);
 
-	float ao = tAO.SampleLevel(sDiffuseSampler, (float2)input.position.xy * cViewData.InvScreenDimensions, 0).r;
+	float2 screenUV = (float2)input.position.xy * cViewData.InvScreenDimensions;
+	float ao = tAO.SampleLevel(sDiffuseSampler, screenUV, 0).r;
 	float3 color = lighting.Diffuse + lighting.Specular;
 	color += ApplyAmbientLight(diffuseColor, ao, tLights[0].GetColor().rgb * 0.1f);
 	color += ssr * ao;
 
-	for(int i = 0; i < cViewData.LightCount; ++i)
-	{
-		Light l = tLights[i];
-		if(l.VolumetricLighting)
-		{
-			color += 0.3f * ApplyVolumetricLighting(cViewData.ViewPosition.xyz, input.positionWS.xyz, input.position, cViewData.View, l, 16, cViewData.FrameIndex);
-		}
-	}
+	float slice = sqrt((input.positionVS.z - cViewData.FarZ) / (cViewData.NearZ - cViewData.FarZ));
+	float4 scatteringTransmittance = tLightScattering.SampleLevel(sClampSampler, float3(screenUV, slice), 0);
+	color = color * scatteringTransmittance.w + scatteringTransmittance.rgb;
 
 	outColor = float4(color, baseColor.a);
 
-    float reflectivity = ao * saturate(pow(1.0 - saturate(dot(V, N)), 5.0));
+    float reflectivity = scatteringTransmittance.w * ao * saturate(pow(1.0 - saturate(dot(V, N)), 5.0));
 	outNormalRoughness = float4(N, reflectivity);
 	//outNormalRoughness = float4(input.normal, 1);
 }

@@ -224,7 +224,8 @@ namespace Paths
 			{
 				std::string dirToCreate = path.substr(0, slash);
 				const BOOL success = CreateDirectoryA(dirToCreate.c_str(), nullptr);
-				if (!success)
+				DWORD error = GetLastError();
+				if (success != S_OK && error == ERROR_PATH_NOT_FOUND)
 				{
 					return false;
 				}
