@@ -40,44 +40,54 @@ float HenyeyGreenstreinPhase(float LoV, float G)
 	return result;
 }
 
+float3 WorldPositionFromFroxel(uint3 index, float offset, out float linearDepth)
+{
+	float2 texelUV = ((float2)index.xy + 0.5f) * cData.InvClusterDimensions.xy;
+	float z = (float)(index.z + offset) * cData.InvClusterDimensions.z;
+	linearDepth = cData.FarZ + Square(saturate(z)) * (cData.NearZ - cData.FarZ);
+	float ndcZ = LinearDepthToNDC(linearDepth, cData.Projection);
+	return WorldFromDepth(texelUV, ndcZ, cData.ViewProjectionInv);
+}
+
+float3 WorldPositionFromFroxel(uint3 index, float offset)
+{
+	float depth;
+	return WorldPositionFromFroxel(index, offset, depth);
+}
+
 [RootSignature(RootSig)]
 [numthreads(8, 8, 4)]
 void InjectFogLightingCS(uint3 threadId : SV_DISPATCHTHREADID)
 {
-	// Compute the sample point inside the froxel. Jittered
-	float2 texelUV = (threadId.xy + 0.5f) * cData.InvClusterDimensions.xy;
 	float minZ = (float)threadId.z * cData.InvClusterDimensions.z;
 	float maxZ = (float)(threadId.z + 1) * cData.InvClusterDimensions.z;
 	float minLinearZ = cData.FarZ + Square(saturate(minZ)) * (cData.NearZ - cData.FarZ);
 	float maxLinearZ = cData.FarZ + Square(saturate(maxZ)) * (cData.NearZ - cData.FarZ);
+	float cellThickness = maxLinearZ - minLinearZ;
 
-	float z = lerp(minLinearZ, maxLinearZ, cData.Jitter);
+	float z;
+	float3 worldPosition = WorldPositionFromFroxel(threadId, cData.Jitter, z);
 
-	float ndcZ = LinearDepthToNDC(z, cData.Projection);
-	float3 worldPosition = WorldFromDepth(texelUV, ndcZ, cData.ViewProjectionInv);
-
-	float reprojZ = (minLinearZ + maxLinearZ) * 0.5f;
-	float reprojNdcZ = LinearDepthToNDC(reprojZ, cData.Projection);
-	float3 reprojWorldPosition = WorldFromDepth(texelUV, reprojNdcZ, cData.ViewProjectionInv);
+	// Compute reprojected UVW
+	float3 reprojWorldPosition = WorldPositionFromFroxel(threadId, 0.5f);
 	float4 reprojNDC = mul(float4(reprojWorldPosition, 1), cData.PrevViewProjection);
 	reprojNDC.xyz /= reprojNDC.w;
 	float3 reprojUV = float3(reprojNDC.x * 0.5f + 0.5f, -reprojNDC.y * 0.5f + 0.5f, reprojNDC.z);
 	reprojUV.z = LinearizeDepth(reprojUV.z, cData.NearZ, cData.FarZ);
 	reprojUV.z = sqrt((reprojUV.z - cData.FarZ) / (cData.NearZ - cData.FarZ));
 
-	// Calculate Density based on the fog volumes
-	float cellThickness = maxLinearZ - minLinearZ;
 	float3 cellAbsorption = 0.0f;
 
+	// Test exponential height fog
 	float fogVolumeMaxHeight = 300.0f;
 	float densityAtBase = 0.03f;
 	float heightAbsorption = cellThickness * exp(min(0.0, fogVolumeMaxHeight - worldPosition.y)) * densityAtBase;
-
+	
 	float3 lightScattering = heightAbsorption;
 	float cellDensity = 0.05 * heightAbsorption;
 
 	float3 V = normalize(cData.ViewLocation.xyz - worldPosition);
-	float4 pos = float4(texelUV, 0, z);
+	float4 pos = float4(threadId.xy, 0, z);
 
 	float3 totalScattering = 0;
 
