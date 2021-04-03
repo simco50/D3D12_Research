@@ -58,6 +58,19 @@ float3 TangentSpaceNormalMapping(float3 sampledNormal, float3x3 TBN, bool invert
 	return mul(normal, TBN);
 }
 
+float LightTextureMask(Light light, int shadowMapIndex, float3 worldPosition)
+{
+	float mask = 1.0f;
+	if(light.LightTexture >= 0)
+	{
+		float4 lightPos = mul(float4(worldPosition, 1), cShadowData.LightViewProjections[shadowMapIndex]);
+		lightPos.xyz /= lightPos.w;
+		lightPos.xy = (lightPos.xy + 1) / 2;
+		mask = tTexture2DTable[light.LightTexture].SampleLevel(sClampSampler, lightPos.xy, 0).r;
+	}
+	return mask;
+}
+
 float Shadow3x3PCF(float3 wPos, int shadowMapIndex, float invShadowSize)
 {
 	float4x4 lightViewProjection = cShadowData.LightViewProjections[shadowMapIndex];
@@ -184,19 +197,11 @@ LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, floa
 		}
 #endif
 
+		attenuation *= LightTextureMask(light, shadowIndex, wPos);
 		attenuation *= Shadow3x3PCF(wPos, shadowIndex, light.InvShadowSize);
 		if(attenuation <= 0)
 		{
 			return result;
-		}
-
-		if(light.LightTexture >= 0)
-		{
-			float4 lightPos = mul(float4(wPos, 1), cShadowData.LightViewProjections[shadowIndex]);
-			lightPos.xyz /= lightPos.w;
-			lightPos.xy = (lightPos.xy + 1) / 2;
-			float mask = tTexture2DTable[light.LightTexture].SampleLevel(sClampSampler, lightPos.xy, 0).r;
-			attenuation *= mask;
 		}
 	}
 

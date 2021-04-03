@@ -59,12 +59,6 @@ float3 WorldPositionFromFroxel(uint3 index, float offset)
 [numthreads(8, 8, 4)]
 void InjectFogLightingCS(uint3 threadId : SV_DISPATCHTHREADID)
 {
-	float minZ = (float)threadId.z * cData.InvClusterDimensions.z;
-	float maxZ = (float)(threadId.z + 1) * cData.InvClusterDimensions.z;
-	float minLinearZ = cData.FarZ + Square(saturate(minZ)) * (cData.NearZ - cData.FarZ);
-	float maxLinearZ = cData.FarZ + Square(saturate(maxZ)) * (cData.NearZ - cData.FarZ);
-	float cellThickness = maxLinearZ - minLinearZ;
-
 	float z;
 	float3 worldPosition = WorldPositionFromFroxel(threadId, cData.Jitter, z);
 
@@ -81,7 +75,7 @@ void InjectFogLightingCS(uint3 threadId : SV_DISPATCHTHREADID)
 	// Test exponential height fog
 	float fogVolumeMaxHeight = 300.0f;
 	float densityAtBase = 0.03f;
-	float heightAbsorption = cellThickness * exp(min(0.0, fogVolumeMaxHeight - worldPosition.y)) * densityAtBase;
+	float heightAbsorption = exp(min(0.0, fogVolumeMaxHeight - worldPosition.y)) * densityAtBase;
 	float3 lightScattering = heightAbsorption;
 	float cellDensity = 0.05 * heightAbsorption;
 
@@ -107,14 +101,7 @@ void InjectFogLightingCS(uint3 threadId : SV_DISPATCHTHREADID)
 			{
 				int shadowIndex = GetShadowIndex(light, pos, worldPosition);
 				attenuation *= ShadowNoPCF(worldPosition, shadowIndex, light.InvShadowSize);
-				if(light.LightTexture >= 0)
-				{
-					float4 lightPos = mul(float4(worldPosition, 1), cShadowData.LightViewProjections[shadowIndex]);
-					lightPos.xyz /= lightPos.w;
-					lightPos.xy = (lightPos.xy + 1) / 2;
-					float mask = tTexture2DTable[light.LightTexture].SampleLevel(sClampSampler, lightPos.xy, 0).r;
-					attenuation *= mask;
-				}
+				attenuation *= LightTextureMask(light, shadowIndex, worldPosition);
 			}
 
 			float3 L = normalize(light.Position - worldPosition);
@@ -147,44 +134,24 @@ void InjectFogLightingCS(uint3 threadId : SV_DISPATCHTHREADID)
 	uOutLightScattering[threadId] = newScattering;
 }
 
-groupshared uint gsMaxDepth;
-
 [RootSignature(RootSig)]
 [numthreads(8, 8, 1)]
 void AccumulateFogCS(uint3 threadId : SV_DISPATCHTHREADID, uint groupIndex : SV_GROUPINDEX)
 {
-#if 0
-	float2 texCoord = threadId.xy * cData.InvClusterDimensions.xy;
-	float depth = tDepth.SampleLevel(sDiffuseSampler, texCoord, 0).r;
-
-	if(groupIndex == 0)
-	{
-		gsMaxDepth = 0xffffffff;
-	}
-
-    GroupMemoryBarrierWithGroupSync();
-
-	InterlockedMin(gsMaxDepth, asuint(depth));
-
-    GroupMemoryBarrierWithGroupSync();
-
-	float maxDepth = asfloat(gsMaxDepth);
-	float linearDepth = LinearizeDepth(maxDepth, cData.NearZ, cData.FarZ);
-	float volumeDepth = sqrt((linearDepth - cData.FarZ) / (cData.NearZ - cData.FarZ));
-	uint lastSlice = ceil((volumeDepth) * cData.ClusterDimensions.z);
-#else
-	uint lastSlice = cData.ClusterDimensions.z;
-#endif
-
 	float3 accumulatedLight = 0;
 	float accumulatedTransmittance = 1;
 
+	float3 previousPosition = WorldPositionFromFroxel(int3(threadId.xy, 0), 0.5f);
 	uOutLightScattering[int3(threadId.xy, 0)] = float4(accumulatedLight, accumulatedTransmittance);
 
-	for(int sliceIndex = 1; sliceIndex <= lastSlice; ++sliceIndex)
+	for(int sliceIndex = 1; sliceIndex < cData.ClusterDimensions.z; ++sliceIndex)
 	{
+		float3 worldPosition = WorldPositionFromFroxel(int3(threadId.xy, sliceIndex), 0.5f);
+		float froxelLength = length(worldPosition - previousPosition);
+		previousPosition = worldPosition;
+
 		float4 scatteringAndDensity = tLightScattering[int3(threadId.xy, sliceIndex - 1)];
-		float transmittance = saturate(exp(-scatteringAndDensity.w));
+		float transmittance = exp(-scatteringAndDensity.w * froxelLength);
 
 		float3 scatteringOverSlice = (scatteringAndDensity.xyz - scatteringAndDensity.xyz * transmittance) / max(scatteringAndDensity.w, 0.000001f);
 		accumulatedLight += scatteringOverSlice * accumulatedTransmittance;
