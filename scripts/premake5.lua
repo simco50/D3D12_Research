@@ -114,8 +114,8 @@ workspace (ENGINE_NAME)
 		-- Pix
 		includedirs (ROOT .. "Libraries/Assimp/include")
 		libdirs	(ROOT .. "Libraries/Assimp/lib/x64")
-		postbuildcommands { ("{COPY} \"$(SolutionDir)Libraries\\Assimp\\bin\\x64\\assimp-vc140-mt.dll\" \"$(OutDir)\"") }
-		links { "assimp-vc140-mt" }
+		postbuildcommands { ("{COPY} \"$(SolutionDir)Libraries\\Assimp\\bin\\x64\\assimp-vc142-mt.dll\" \"$(OutDir)\"") }
+		links { "assimp-vc142-mt" }
 
 		-- DXC
 		links { "dxcompiler" }
