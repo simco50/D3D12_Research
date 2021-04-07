@@ -17,8 +17,7 @@ struct PerObjectData
 	float4x4 World;
     int Diffuse;
     int Normal;
-    int Roughness;
-    int Metallic;
+    int RoughnessMetalness;
 	int VertexBuffer;
 };
 
@@ -69,12 +68,8 @@ struct PSInput
 };
 
 Texture3D<float4> tLightScattering : register(t2);
-
-#if TILED_FORWARD
-Texture2D<uint2> tLightGrid : register(t3);
-#elif CLUSTERED_FORWARD
-StructuredBuffer<uint2> tLightGrid : register(t3);
-#endif
+Texture2D<uint2> tLightGrid2D : register(t3);
+StructuredBuffer<uint2> tLightGrid3D : register(t3);
 StructuredBuffer<uint> tLightIndexList : register(t4);
 
 #if CLUSTERED_FORWARD
@@ -127,13 +122,13 @@ LightResult DoLight(float4 pos, float3 worldPos, float3 N, float3 V, float3 diff
 {
 #if TILED_FORWARD
 	uint2 tileIndex = uint2(floor(pos.xy / BLOCK_SIZE));
-	uint startOffset = tLightGrid[tileIndex].x;
-	uint lightCount = tLightGrid[tileIndex].y;
+	uint startOffset = tLightGrid2D[tileIndex].x;
+	uint lightCount = tLightGrid2D[tileIndex].y;
 #elif CLUSTERED_FORWARD
 	uint3 clusterIndex3D = uint3(floor(pos.xy / cViewData.ClusterSize), GetSliceFromDepth(pos.w));
     uint clusterIndex1D = clusterIndex3D.x + (cViewData.ClusterDimensions.x * (clusterIndex3D.y + cViewData.ClusterDimensions.y * clusterIndex3D.z));
-	uint startOffset = tLightGrid[clusterIndex1D].x;
-	uint lightCount = tLightGrid[clusterIndex1D].y;
+	uint startOffset = tLightGrid3D[clusterIndex1D].x;
+	uint lightCount = tLightGrid3D[clusterIndex1D].y;
 #else
 	uint lightCount = cViewData.LightCount;
 #endif
@@ -272,10 +267,14 @@ void PSMain(PSInput input,
 			out float4 outColor : SV_TARGET0,
 			out float4 outNormalRoughness : SV_TARGET1)
 {
-	float4 baseColor = tTexture2DTable[cObjectData.Diffuse].Sample(sDiffuseSampler, input.texCoord);
-	float3 sampledNormal = tTexture2DTable[cObjectData.Normal].Sample(sDiffuseSampler, input.texCoord).xyz;
-	float metalness = tTexture2DTable[cObjectData.Metallic].Sample(sDiffuseSampler, input.texCoord).r;
-	float r = tTexture2DTable[cObjectData.Roughness].Sample(sDiffuseSampler, input.texCoord).r;
+	float4 diffuseSample = tTexture2DTable[cObjectData.Diffuse].Sample(sDiffuseSampler, input.texCoord);
+	float4 normalSample = tTexture2DTable[cObjectData.Normal].Sample(sDiffuseSampler, input.texCoord);
+	float4 roughnessMetalnessSample = tTexture2DTable[cObjectData.RoughnessMetalness].Sample(sDiffuseSampler, input.texCoord);
+
+	float4 baseColor = diffuseSample;
+	float3 sampledNormal = normalSample.xyz;
+	float metalness = roughnessMetalnessSample.b;
+	float roughness = roughnessMetalnessSample.g;
 	float3 specular = 0.5f;
 
 	float3 diffuseColor = ComputeDiffuseColor(baseColor.rgb, metalness);
@@ -284,9 +283,9 @@ void PSMain(PSInput input,
 	float3x3 TBN = float3x3(normalize(input.tangent), normalize(input.bitangent), normalize(input.normal));
 	float3 N = TangentSpaceNormalMapping(sampledNormal, TBN, true);
 	float3 V = normalize(cViewData.ViewPosition.xyz - input.positionWS);	
-	float3 ssr = ScreenSpaceReflections(input.position, input.positionVS, N, V, r);
+	float3 ssr = ScreenSpaceReflections(input.position, input.positionVS, N, V, roughness);
 
-	LightResult lighting = DoLight(input.position, input.positionWS, N, V, diffuseColor, specularColor, r);
+	LightResult lighting = DoLight(input.position, input.positionWS, N, V, diffuseColor, specularColor, roughness);
 
 	float2 screenUV = (float2)input.position.xy * cViewData.InvScreenDimensions;
 	float ao = tAO.SampleLevel(sDiffuseSampler, screenUV, 0).r;
@@ -300,7 +299,7 @@ void PSMain(PSInput input,
 
 	outColor = float4(color, baseColor.a);
 
-    float reflectivity = scatteringTransmittance.w * ao * saturate(pow(1.0 - saturate(dot(V, N)), 5.0));
+    float reflectivity = scatteringTransmittance.w * ao * Square(1 - roughness);
 	outNormalRoughness = float4(N, reflectivity);
 	//outNormalRoughness = float4(input.normal, 1);
 }

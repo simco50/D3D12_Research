@@ -37,10 +37,10 @@ struct ViewData
 
 struct HitData
 {
-	int DiffuseIndex;
-	int NormalIndex;
-	int RoughnessIndex;
-	int MetallicIndex;
+	float4x4 WorldMatrix;
+	int Diffuse;
+	int Normal;
+	int RoughnessMetalness;
 	uint VertexBuffer;
 	uint IndexBuffer;
 };
@@ -106,7 +106,7 @@ RayPayload CastReflectionRay(float3 origin, float3 direction, float depth)
 		RAY_FLAG_CULL_BACK_FACING_TRIANGLES | RAY_FLAG_FORCE_OPAQUE, 	//RayFlags
 		0xFF, 															//InstanceInclusionMask
 		0,																//RayContributionToHitGroupIndex
-		1, 																//MultiplierForGeometryContributionToHitGroupIndex
+		0, 																//MultiplierForGeometryContributionToHitGroupIndex
 		0, 																//MissShaderIndex
 		ray, 															//Ray
 		payload 														//Payload
@@ -127,30 +127,35 @@ void ClosestHit(inout RayPayload payload, BuiltInTriangleIntersectionAttributes 
 	Vertex v1 = tBufferTable[cHitData.VertexBuffer].Load<Vertex>(indices.y * sizeof(Vertex));
 	Vertex v2 = tBufferTable[cHitData.VertexBuffer].Load<Vertex>(indices.z * sizeof(Vertex));
 	float2 texCoord = v0.texCoord * b.x + v1.texCoord * b.y + v2.texCoord * b.z;
-	float3 N = v0.normal * b.x + v1.normal * b.y + v2.normal * b.z;
-	float3 T = v0.tangent * b.x + v1.tangent * b.y + v2.tangent * b.z;
-	float3 B = v0.bitangent * b.x + v1.bitangent * b.y + v2.bitangent * b.z;
+	float3 N = mul(v0.normal * b.x + v1.normal * b.y + v2.normal * b.z, (float3x3)cHitData.WorldMatrix);
+	float3 T = mul(v0.tangent * b.x + v1.tangent * b.y + v2.tangent * b.z, (float3x3)cHitData.WorldMatrix);
+	float3 B = mul(v0.bitangent * b.x + v1.bitangent * b.y + v2.bitangent * b.z, (float3x3)cHitData.WorldMatrix);
 	float3x3 TBN = float3x3(T, B, N);
 
 #if RAY_CONE_TEXTURE_LOD
-	float3 positions[3] = { v0.position, v1.position, v2.position };
 	float2 texcoords[3] = { v0.texCoord, v1.texCoord, v2.texCoord };
 	float2 textureDimensions;
-	tTexture2DTable[cHitData.DiffuseIndex].GetDimensions(textureDimensions.x, textureDimensions.y);
-	float mipLevel = ComputeRayConeMip(payload.rayCone, positions, texcoords, textureDimensions);
+	tTexture2DTable[cHitData.Diffuse].GetDimensions(textureDimensions.x, textureDimensions.y);
+	float mipLevel = ComputeRayConeMip(payload.rayCone, N, texcoords, textureDimensions);
 #else
 	float mipLevel = 2;
 #endif //RAY_CONE_TEXTURE_LOD
 
 	// Get material data
-	float3 diffuse = tTexture2DTable[cHitData.DiffuseIndex].SampleLevel(sDiffuseSampler, texCoord, mipLevel).rgb;
-	float3 sampledNormal = tTexture2DTable[cHitData.NormalIndex].SampleLevel(sDiffuseSampler, texCoord, mipLevel).rgb;
-	float metalness = tTexture2DTable[cHitData.MetallicIndex].SampleLevel(sDiffuseSampler, texCoord, mipLevel).r;
-	float roughness = tTexture2DTable[cHitData.RoughnessIndex].SampleLevel(sDiffuseSampler, texCoord, mipLevel).r;
-	float specular = 0.5f;
+	float4 diffuseSample = tTexture2DTable[cHitData.Diffuse].SampleLevel(sDiffuseSampler, texCoord, mipLevel);
+	float4 normalSample = tTexture2DTable[cHitData.Normal].SampleLevel(sDiffuseSampler, texCoord, mipLevel);
+	float4 roughnessMetalnessSample = tTexture2DTable[cHitData.RoughnessMetalness].SampleLevel(sDiffuseSampler, texCoord, mipLevel);
+
+	float4 baseColor = diffuseSample;
+	float3 sampledNormal = normalSample.xyz;
+	float metalness = roughnessMetalnessSample.g;
+	float roughness = roughnessMetalnessSample.b;
+	float3 specular = 0.5f;
+
 	N = TangentSpaceNormalMapping(sampledNormal, TBN, false);
 
-	float3 specularColor = ComputeF0(specular, diffuse, metalness);
+	float3 diffuseColor = ComputeDiffuseColor(baseColor.rgb, metalness);
+	float3 specularColor = ComputeF0(specular.r, diffuseColor, metalness);
 	float3 wPos = WorldRayOrigin() + WorldRayDirection() * RayTCurrent();
 	float3 V = normalize(-WorldRayDirection());
 
@@ -179,12 +184,12 @@ void ClosestHit(inout RayPayload payload, BuiltInTriangleIntersectionAttributes 
 		}
 #endif // SECONDARY_SHADOW_RAY
 
-		LightResult result = DefaultLitBxDF(specularColor, roughness, diffuse, N, V, L, attenuation);
+		LightResult result = DefaultLitBxDF(specularColor, roughness, diffuseColor, N, V, L, attenuation);
 		float4 color = light.GetColor();
 		totalResult.Diffuse += result.Diffuse * color.rgb * light.Intensity;
 		totalResult.Specular *= result.Specular * color.rgb * light.Intensity;
 	}
-	payload.output += totalResult.Diffuse + totalResult.Specular + ApplyAmbientLight(diffuse, 1.0f, 0.1f);
+	payload.output += totalResult.Diffuse + totalResult.Specular + ApplyAmbientLight(diffuseColor, 1.0f, 0.1f);
 }
 
 [shader("miss")] 

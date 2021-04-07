@@ -235,7 +235,7 @@ void Texture::Create(const TextureDesc& textureDesc)
 	SetName(m_Name.c_str());
 }
 
-void Texture::Create(CommandContext* pContext, const TextureDesc& desc, void* pInitData)
+void Texture::Create(CommandContext* pContext, const TextureDesc& desc, const void* pInitData)
 {
 	Create(desc);
 	if (pInitData)

@@ -85,7 +85,6 @@ private:
 		{
 			pThis = static_cast<ViewWrapper*>(reinterpret_cast<CREATESTRUCT*>(lParam)->lpCreateParams);
 			SetWindowLongPtrA(hWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(pThis));
-
 		}
 		else
 		{
@@ -111,8 +110,14 @@ private:
 		case WM_SIZE:
 		{
 			// Save the new client area dimensions.
+			int newWidth = LOWORD(lParam);
+			int newHeight = HIWORD(lParam);
+			bool resized = newWidth != m_DisplayWidth || newHeight != m_DisplayHeight;
+			bool shouldResize = false;
+
 			m_DisplayWidth = LOWORD(lParam);
 			m_DisplayHeight = HIWORD(lParam);
+
 			if (m_pGraphics)
 			{
 				if (wParam == SIZE_MINIMIZED)
@@ -126,7 +131,7 @@ private:
 					Time::Start();
 					m_Minimized = false;
 					m_Maximized = true;
-					OnResize();
+					shouldResize = true;
 				}
 				else if (wParam == SIZE_RESTORED)
 				{
@@ -135,21 +140,27 @@ private:
 					{
 						Time::Start();
 						m_Minimized = false;
-						OnResize();
+						shouldResize = true;
 					}
 					// Restoring from maximized state?
 					else if (m_Maximized)
 					{
 						Time::Start();
 						m_Maximized = false;
-						OnResize();
+						shouldResize = true;
 					}
 					else if (!m_IsResizing) // API call such as SetWindowPos or mSwapChain->SetFullscreenState.
 					{
-						OnResize();
+						shouldResize = true;
 					}
 				}
 			}
+
+			if (shouldResize && resized)
+			{
+				OnResize();
+			}
+
 			return 0;
 		}
 		case WM_MOUSEWHEEL:
@@ -207,8 +218,16 @@ private:
 			break;
 		case WM_EXITSIZEMOVE:
 			Time::Start();
+			RECT rect;
+			GetClientRect(hWnd, &rect);
+			int newWidth = rect.right - rect.left;
+			int newHeight = rect.bottom - rect.top;
+			bool resized = newWidth != m_DisplayWidth || newHeight != m_DisplayHeight;
+			if (resized)
+			{
+				OnResize();
+			}
 			m_IsResizing = false;
-			OnResize();
 			break;
 		}
 

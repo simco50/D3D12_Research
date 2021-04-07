@@ -29,7 +29,7 @@ float3 Diffuse_Lambert(float3 DiffuseColor)
 float D_GGX(float a2, float NoH)
 {
 	float d = (NoH * a2 - NoH) * NoH + 1;	// 2 mad
-	return a2 / (PI * d * d);				// 4 mul, 1 rcp
+	return a2 / max(PI * d * d, 0.00001);				// 4 mul, 1 rcp
 }
 
 // Appoximation of joint Smith term for GGX

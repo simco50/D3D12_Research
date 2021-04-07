@@ -47,6 +47,7 @@ enum class DefaultTexture
 	Magenta2D,
 	Gray2D,
 	Normal2D,
+	RoughnessMetalness,
 	BlackCube,
 	ColorNoise256,
 	BlueNoise512,
@@ -57,8 +58,7 @@ struct MaterialData
 {
 	int Diffuse;
 	int Normal;
-	int Roughness;
-	int Metallic;
+	int RoughnessMetalness;
 };
 
 struct Batch

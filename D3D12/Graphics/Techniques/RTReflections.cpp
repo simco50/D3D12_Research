@@ -23,14 +23,6 @@ RTReflections::RTReflections(Graphics* pGraphics)
 	}
 }
 
-struct HitData
-{
-	MaterialData Material;
-	uint32 VertexBuffer;
-	uint32 IndexBuffer;
-};
-static constexpr int gNumHitDataRootConstants = sizeof(HitData) / sizeof(int32);
-
 void RTReflections::Execute(RGGraph& graph, const SceneData& sceneData)
 {
 	RGPassBuilder rt = graph.AddPass("RT Reflections");
@@ -68,11 +60,24 @@ void RTReflections::Execute(RGGraph& graph, const SceneData& sceneData)
 
 			for (const Batch& b : sceneData.Batches)
 			{
+				struct HitData
+				{
+					Matrix WorldTransform;
+					MaterialData Material;
+					uint32 VertexBuffer;
+					uint32 IndexBuffer;
+				};
+
 				HitData hitData;
 				hitData.Material = b.Material;
 				hitData.VertexBuffer = b.VertexBufferDescriptor;
 				hitData.IndexBuffer = b.IndexBufferDescriptor;
-				bindingTable.BindHitGroup<HitData>("ReflectionHitGroup", b.Index, hitData);
+				hitData.WorldTransform = b.WorldMatrix;
+
+				DynamicAllocation allocation = context.AllocateTransientMemory(sizeof(HitData));
+				memcpy(allocation.pMappedMemory, &hitData, sizeof(HitData));
+
+				bindingTable.BindHitGroup("ReflectionHitGroup", b.Index, { allocation.GpuHandle });
 			}
 
 			const D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
@@ -107,7 +112,7 @@ void RTReflections::SetupPipelines(Graphics* pGraphics)
 	ShaderLibrary* pShaderLibrary = pGraphics->GetShaderManager()->GetLibrary("RTReflections.hlsl");
 
 	m_pHitSignature = std::make_unique<RootSignature>(pGraphics);
-	m_pHitSignature->SetRootConstants(0, 1, gNumHitDataRootConstants, D3D12_SHADER_VISIBILITY_ALL);
+	m_pHitSignature->SetConstantBufferView(0, 1, D3D12_SHADER_VISIBILITY_ALL);
 	m_pHitSignature->Finalize("Hit", D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE);
 
 	m_pGlobalRS = std::make_unique<RootSignature>(pGraphics);

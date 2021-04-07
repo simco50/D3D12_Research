@@ -11,8 +11,7 @@ struct PerObjectData
 	float4x4 World;
 	int Diffuse;
     int Normal;
-    int Roughness;
-    int Metallic;
+    int RoughnessMetalness;
 	uint VertexBuffer;
 };
 

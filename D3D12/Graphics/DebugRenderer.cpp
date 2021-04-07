@@ -337,7 +337,7 @@ void DebugRenderer::AddWireCone(const Vector3& position, const Vector3& directio
 	Vector3 d;
 	direction.Normalize(d);
 
-	float radius = tan(Math::ToRadians * angle) * height;
+	float radius = tanf(0.5f * angle) * height;
 	DebugSphere sphere(position, radius);
 	float t = Math::PI * 2 / (segments + 1);
 
