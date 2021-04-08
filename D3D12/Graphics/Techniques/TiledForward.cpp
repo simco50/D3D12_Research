@@ -74,7 +74,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& resources)
 			Data.LightCount = resources.pLightBuffer->GetNumElements();
 			Data.ProjectionInverse = resources.pCamera->GetProjectionInverse();
 
-			context.SetComputeDynamicConstantBufferView(0, &Data, sizeof(ShaderParameters));
+			context.SetComputeDynamicConstantBufferView(0, Data);
 			context.BindResource(1, 0, m_pLightIndexCounter->GetUAV());
 			context.BindResource(1, 1, m_pLightIndexListBufferOpaque->GetUAV());
 			context.BindResource(1, 2, m_pLightGridOpaque->GetUAV());
@@ -166,8 +166,8 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& resources)
 			context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 			context.SetGraphicsRootSignature(m_pDiffuseRS.get());
 
-			context.SetGraphicsDynamicConstantBufferView(1, &frameData, sizeof(PerFrameData));
-			context.SetGraphicsDynamicConstantBufferView(2, resources.pShadowData, sizeof(ShadowData));
+			context.SetGraphicsDynamicConstantBufferView(1, frameData);
+			context.SetGraphicsDynamicConstantBufferView(2, *resources.pShadowData);
 			context.BindResourceTable(3, resources.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Graphics);
 			context.BindResource(4, 2, resources.pLightBuffer->GetSRV());
 			context.BindResource(4, 3, resources.pAO->GetSRV());
@@ -189,7 +189,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& resources)
 						objectData.World = b.WorldMatrix;
 						objectData.Material = b.Material;
 						objectData.VertexBuffer = b.VertexBufferDescriptor;
-						context.SetGraphicsDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
+						context.SetGraphicsDynamicConstantBufferView(0, objectData);
 						context.SetIndexBuffer(b.pMesh->IndicesLocation);
 						context.DrawIndexed(b.pMesh->IndicesLocation.Elements, 0, 0);
 					}
@@ -262,7 +262,7 @@ void TiledForward::VisualizeLightDensity(RGGraph& graph, Camera& camera, Texture
 			context.InsertResourceBarrier(m_pLightGridOpaque.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(m_pVisualizationIntermediateTexture.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-			context.SetComputeDynamicConstantBufferView(0, &constantData, sizeof(Data));
+			context.SetComputeDynamicConstantBufferView(0, constantData);
 
 			context.BindResource(1, 0, pTarget->GetSRV());
 			context.BindResource(1, 1, pDepth->GetSRV());

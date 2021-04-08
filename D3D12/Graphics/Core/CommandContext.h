@@ -216,6 +216,12 @@ public:
 		SetComputeRootConstants(rootIndex, sizeof(T) / sizeof(int32), &data);
 	}
 	void SetComputeDynamicConstantBufferView(int rootIndex, const void* pData, uint32 dataSize);
+	template<typename T>
+	void SetComputeDynamicConstantBufferView(int rootIndex, const T& data)
+	{
+		static_assert(!std::is_pointer<T>::value, "Provided type is a pointer. This is probably unintentional.");
+		SetComputeDynamicConstantBufferView(rootIndex, &data, sizeof(T));
+	}
 
 	// Graphics
 	void SetGraphicsRootSignature(RootSignature* pRootSignature);
@@ -228,6 +234,12 @@ public:
 		SetGraphicsRootConstants(rootIndex, sizeof(T) / sizeof(int32), &data);
 	}
 	void SetGraphicsDynamicConstantBufferView(int rootIndex, const void* pData, uint32 dataSize);
+	template<typename T>
+	void SetGraphicsDynamicConstantBufferView(int rootIndex, const T& data)
+	{
+		static_assert(!std::is_pointer<T>::value, "Provided type is a pointer. This is probably unintentional.");
+		SetGraphicsDynamicConstantBufferView(rootIndex, &data, sizeof(T));
+	}
 
 	DynamicAllocation AllocateTransientMemory(uint64 size, uint32 alignment = 256);
 

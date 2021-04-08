@@ -88,8 +88,8 @@ void RTReflections::Execute(RGGraph& graph, const SceneData& sceneData)
 				sceneData.pResolvedNormals->GetSRV()->GetDescriptor(),
 			};
 
-			context.SetComputeDynamicConstantBufferView(0, &parameters, sizeof(Parameters));
-			context.SetComputeDynamicConstantBufferView(1, sceneData.pShadowData, sizeof(ShadowData));
+			context.SetComputeDynamicConstantBufferView(0, parameters);
+			context.SetComputeDynamicConstantBufferView(1, *sceneData.pShadowData);
 			context.BindResource(2, 0, sceneData.pResolvedTarget->GetUAV());
 			context.BindResources(3, 0, srvs, ARRAYSIZE(srvs));
 			context.BindResourceTable(4, sceneData.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Compute);

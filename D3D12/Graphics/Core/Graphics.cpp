@@ -598,7 +598,7 @@ void Graphics::Update()
 				Matrix ViewProjection;
 			} viewData;
 			viewData.ViewProjection = m_pCamera->GetViewProjection();
-			renderContext.SetGraphicsDynamicConstantBufferView(1, &viewData, sizeof(ViewData));
+			renderContext.SetGraphicsDynamicConstantBufferView(1, viewData);
 
 			auto DrawBatches = [&](Batch::Blending blendMode)
 			{
@@ -615,7 +615,7 @@ void Graphics::Update()
 						objectData.World = b.WorldMatrix;
 						objectData.Material = b.Material;
 						objectData.VertexBuffer = b.VertexBufferDescriptor;
-						renderContext.SetGraphicsDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
+						renderContext.SetGraphicsDynamicConstantBufferView(0, objectData);
 						renderContext.SetIndexBuffer(b.pMesh->IndicesLocation);
 						renderContext.DrawIndexed(b.pMesh->IndicesLocation.Elements, 0, 0);
 					}
@@ -700,7 +700,7 @@ void Graphics::Update()
 				parameters.ReprojectionMatrix = preMult * m_pCamera->GetViewProjection().Invert() * m_pCamera->GetPreviousViewProjection() * postMult;
 				parameters.InvScreenDimensions = Vector2(1.0f / m_WindowWidth, 1.0f / m_WindowHeight);
 
-				renderContext.SetComputeDynamicConstantBufferView(0, &parameters, sizeof(Parameters));
+				renderContext.SetComputeDynamicConstantBufferView(0, parameters);
 
 				renderContext.BindResource(1, 0, m_pVelocity->GetUAV());
 				renderContext.BindResource(2, 0, GetResolvedDepthStencil()->GetSRV());
@@ -747,7 +747,7 @@ void Graphics::Update()
 					parameters.Near = m_pCamera->GetNear();
 					parameters.Far = m_pCamera->GetFar();
 
-					renderContext.SetComputeDynamicConstantBufferView(0, &parameters, sizeof(ShaderParameters));
+					renderContext.SetComputeDynamicConstantBufferView(0, parameters);
 					renderContext.BindResource(1, 0, m_ReductionTargets[0]->GetUAV());
 					renderContext.BindResource(2, 0, pDepthStencil->GetSRV());
 
@@ -795,7 +795,7 @@ void Graphics::Update()
 					context.BeginRenderPass(RenderPassInfo(pShadowmap, RenderPassAccess::Clear_Store));
 
 					viewData.ViewProjection = shadowData.LightViewProjections[i];
-					context.SetGraphicsDynamicConstantBufferView(1, &viewData, sizeof(ViewData));
+					context.SetGraphicsDynamicConstantBufferView(1, viewData);
 					context.BindResourceTable(2, m_SceneData.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Graphics);
 
 					auto DrawBatches = [&](const Batch::Blending& blendmodes)
@@ -814,7 +814,7 @@ void Graphics::Update()
 								objectData.World = b.WorldMatrix;
 								objectData.Material = b.Material;
 								objectData.VertexBuffer = b.VertexBufferDescriptor;
-								context.SetGraphicsDynamicConstantBufferView(0, &objectData, sizeof(PerObjectData));
+								context.SetGraphicsDynamicConstantBufferView(0, objectData);
 								context.SetIndexBuffer(b.pMesh->IndicesLocation);
 								context.DrawIndexed(b.pMesh->IndicesLocation.Elements, 0, 0);
 							}
@@ -876,7 +876,7 @@ void Graphics::Update()
 			constBuffer.SunDirection = -m_Lights[0].Direction;
 			constBuffer.SunDirection.Normalize();
 
-			renderContext.SetGraphicsDynamicConstantBufferView(0, &constBuffer, sizeof(Parameters));
+			renderContext.SetGraphicsDynamicConstantBufferView(0, constBuffer);
 
 			renderContext.Draw(0, 36);
 
@@ -933,7 +933,7 @@ void Graphics::Update()
 				parameters.InvScreenDimensions = Vector2(1.0f / m_WindowWidth, 1.0f / m_WindowHeight);
 				parameters.Jitter.x = m_pCamera->GetPreviousJitter().x - m_pCamera->GetJitter().x;
 				parameters.Jitter.y = -(m_pCamera->GetPreviousJitter().y - m_pCamera->GetJitter().y);
-				renderContext.SetComputeDynamicConstantBufferView(0, &parameters, sizeof(Parameters));
+				renderContext.SetComputeDynamicConstantBufferView(0, parameters);
 
 				renderContext.BindResource(1, 0, m_pHDRRenderTarget->GetUAV());
 				renderContext.BindResource(2, 0, m_pVelocity->GetSRV());
@@ -978,7 +978,7 @@ void Graphics::Update()
 					Parameters.TargetDimensions.y = pToneMapInput->GetHeight();
 					Parameters.TargetDimensionsInv = Vector2(1.0f / pToneMapInput->GetWidth(), 1.0f / pToneMapInput->GetHeight());
 
-					context.SetComputeDynamicConstantBufferView(0, &Parameters, sizeof(DownscaleParameters));
+					context.SetComputeDynamicConstantBufferView(0, Parameters);
 					context.BindResource(1, 0, pToneMapInput->GetUAV());
 					context.BindResource(2, 0, m_pHDRRenderTarget->GetSRV());
 
@@ -1014,7 +1014,7 @@ void Graphics::Update()
 				Parameters.MinLogLuminance = Tweakables::g_MinLogLuminance;
 				Parameters.OneOverLogLuminanceRange = 1.0f / (Tweakables::g_MaxLogLuminance - Tweakables::g_MinLogLuminance);
 
-				context.SetComputeDynamicConstantBufferView(0, &Parameters, sizeof(HistogramParameters));
+				context.SetComputeDynamicConstantBufferView(0, Parameters);
 				context.BindResource(1, 0, m_pLuminanceHistogram->GetUAV());
 				context.BindResource(2, 0, pToneMapInput->GetSRV());
 
@@ -1048,7 +1048,7 @@ void Graphics::Update()
 				Parameters.TimeDelta = Time::DeltaTime();
 				Parameters.Tau = Tweakables::g_Tau;
 
-				context.SetComputeDynamicConstantBufferView(0, &Parameters, sizeof(AverageParameters));
+				context.SetComputeDynamicConstantBufferView(0, Parameters);
 				context.BindResource(1, 0, m_pAverageLuminance->GetUAV());
 				context.BindResource(2, 0, m_pLuminanceHistogram->GetSRV());
 
@@ -1073,7 +1073,7 @@ void Graphics::Update()
 				context.SetPipelineState(m_pToneMapPSO);
 				context.SetComputeRootSignature(m_pToneMapRS.get());
 
-				context.SetComputeDynamicConstantBufferView(0, &constBuffer, sizeof(Parameters));
+				context.SetComputeDynamicConstantBufferView(0, constBuffer);
 
 				context.BindResource(1, 0, m_pTonemapTarget->GetUAV());
 				context.BindResource(2, 0, m_pHDRRenderTarget->GetSRV());
@@ -1106,7 +1106,7 @@ void Graphics::Update()
 					Parameters.MinLogLuminance = Tweakables::g_MinLogLuminance;
 					Parameters.InverseLogLuminanceRange = 1.0f / (Tweakables::g_MaxLogLuminance - Tweakables::g_MinLogLuminance);
 
-					context.SetComputeDynamicConstantBufferView(0, &Parameters, sizeof(AverageParameters));
+					context.SetComputeDynamicConstantBufferView(0, Parameters);
 					context.BindResource(1, 0, m_pTonemapTarget->GetUAV());
 					context.BindResource(2, 0, m_pLuminanceHistogram->GetSRV());
 					context.BindResource(2, 1, m_pAverageLuminance->GetSRV());
