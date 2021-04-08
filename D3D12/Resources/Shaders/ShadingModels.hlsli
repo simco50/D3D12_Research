@@ -3,15 +3,20 @@
 
 #include "Common.hlsli"
 
+// 0.08 is a max F0 we define for dielectrics which matches with Crystalware and gems (0.05 - 0.08)
+// This means we cannot represent Diamond-like surfaces as they have an F0 of 0.1 - 0.2
 float DielectricSpecularToF0(float specular)
 {
 	return 0.08f * specular;
 }
 
 //Note from Filament: vec3 f0 = 0.16 * reflectance * reflectance * (1.0 - metallic) + baseColor * metallic;
+// F0 is the base specular reflectance of a surface
+// For dielectrics, this is monochromatic commonly between 0.02 (water) and 0.08 (gems)
+// For conductors, this is based on the base color we provided
 float3 ComputeF0(float specular, float3 baseColor, float metalness)
 {
-	return lerp(DielectricSpecularToF0(specular).xxx, baseColor, metalness.xxx);
+	return lerp(DielectricSpecularToF0(specular).xxx, baseColor, metalness);
 }
 
 float3 ComputeDiffuseColor(float3 baseColor, float metalness)
@@ -19,37 +24,35 @@ float3 ComputeDiffuseColor(float3 baseColor, float metalness)
 	return baseColor * (1 - metalness);
 }
 
-float3 Diffuse_Lambert(float3 DiffuseColor)
+// Diffuse BRDF: Lambertian Diffuse
+float3 Diffuse_Lambert(float3 diffuseColor)
 {
-	return DiffuseColor * (1 / PI);
+	return diffuseColor * (1.0f / PI);
 }
 
 // GGX / Trowbridge-Reitz
 // [Walter et al. 2007, "Microfacet models for refraction through rough surfaces"]
 float D_GGX(float a2, float NoH)
 {
+	a2 = max(0.0000001f, a2);
 	float d = (NoH * a2 - NoH) * NoH + 1;	// 2 mad
-	return a2 / max(PI * d * d, 0.00001);				// 4 mul, 1 rcp
+	return a2 / (PI * d * d);				// 4 mul, 1 rcp
 }
 
 // Appoximation of joint Smith term for GGX
 // [Heitz 2014, "Understanding the Masking-Shadowing Function in Microfacet-Based BRDFs"]
 float Vis_SmithJointApprox(float a2, float NoV, float NoL)
 {
-	float a = sqrt(a2);
-	float Vis_SmithV = NoL * (NoV * (1 - a) + a);
-	float Vis_SmithL = NoV * (NoL * (1 - a) + a);
+	float Vis_SmithV = NoL * (NoV * (1 - a2) + a2);
+	float Vis_SmithL = NoV * (NoL * (1 - a2) + a2);
 	return 0.5 * rcp(Vis_SmithV + Vis_SmithL);
 }
 
 // [Schlick 1994, "An Inexpensive BRDF Model for Physically-Based Rendering"]
-float3 F_Schlick(float3 SpecularColor, float VoH)
+float3 F_Schlick(float3 f0, float VoH)
 {
-	float Fc = Pow5(1 - VoH);					// 1 sub, 3 mul
-	//return Fc + (1 - Fc) * SpecularColor;		// 1 add, 3 mad
-	
-	// Anything less than 2% is physically impossible and is instead considered to be shadowing
-	return saturate(50.0 * SpecularColor.g) * Fc + (1 - Fc) * SpecularColor;
+	float Fc = Pow5(1 - VoH);		// 1 sub, 3 mul
+	return Fc + (1 - Fc) * f0;		// 1 add, 3 mad
 }
 
 struct LightResult
@@ -60,6 +63,8 @@ struct LightResult
 
 //Microfacet Specular Model:
 /*
+	Cook Torrence
+
 		D * G * F
 	----------------- == D * Vis * F
 	  4 * NoL * NoV
@@ -73,23 +78,22 @@ struct LightResult
 - G(l, v, h) - Geometry/ShadowMasking function - How many light rays are actually reaching the view
 */
 
-
-float3 SpecularGGX(float Roughness, float3 SpecularColor, float NoL, float NoH, float NoV, float VoH)
+float3 SpecularGGX(float specularRoughness, float3 specularColor, float NoL, float NoH, float NoV, float VoH)
 {
-	float a2 = Pow4(Roughness);
-	
+	float a2 = Pow4(specularRoughness);
+
 	// Generalized microfacet specular
 	float D = D_GGX(a2, NoH);
 	float Vis = Vis_SmithJointApprox(a2, NoV, NoL);
-	float3 F = F_Schlick(SpecularColor, VoH);
+	float3 F = F_Schlick(specularColor, VoH);
 
 	return (D * Vis) * F;
 }
 
-LightResult DefaultLitBxDF(float3 SpecularColor, float Roughness, float3 DiffuseColor, half3 N, half3 V, half3 L, float Falloff)
+LightResult DefaultLitBxDF(float3 specularColor, float specularRoughness, float3 diffuseColor, half3 N, half3 V, half3 L, float falloff)
 {
 	LightResult lighting = (LightResult)0;
-	if(Falloff <= 0)
+	if(falloff <= 0)
 		return lighting;
 	float NoL = saturate(dot(N, L));
 	if(NoL == 0)
@@ -99,10 +103,10 @@ LightResult DefaultLitBxDF(float3 SpecularColor, float Roughness, float3 Diffuse
 	float NoV = saturate(abs(dot(N, V)) + 1e-5);
 	float NoH = saturate(dot(N, H));
 	float VoH = saturate(dot(V, H));
-	NoV = saturate(abs(NoV) + 1e-5);
+	NoV = saturate(abs(NoV) + 1e-5); // Bias to avoid NaNs
 
-	lighting.Diffuse  = (Falloff * NoL) * Diffuse_Lambert(DiffuseColor);
-	lighting.Specular = (Falloff * NoL) * SpecularGGX(Roughness, SpecularColor, NoL, NoH, NoV, VoH);
+	lighting.Diffuse  = (falloff * NoL) * Diffuse_Lambert(diffuseColor);
+	lighting.Specular = (falloff * NoL) * SpecularGGX(specularRoughness, specularColor, NoL, NoH, NoV, VoH);
 	return lighting;
 }
 
