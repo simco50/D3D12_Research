@@ -150,8 +150,8 @@ void ClosestHit(inout RayPayload payload, BuiltInTriangleIntersectionAttributes 
 
 	float4 baseColor = diffuseSample;
 	float3 sampledNormal = normalSample.xyz;
-	float metalness = roughnessMetalnessSample.g;
-	float roughness = roughnessMetalnessSample.b;
+	float metalness = roughnessMetalnessSample.b;
+	float roughness = roughnessMetalnessSample.g;
 	float3 specular = 0.5f;
 
 	N = TangentSpaceNormalMapping(sampledNormal, TBN, false);
@@ -191,7 +191,7 @@ void ClosestHit(inout RayPayload payload, BuiltInTriangleIntersectionAttributes 
 		LightResult result = DefaultLitBxDF(specularColor, roughness, diffuseColor, N, V, L, attenuation);
 		float4 color = light.GetColor();
 		totalResult.Diffuse += result.Diffuse * color.rgb * light.Intensity;
-		totalResult.Specular *= result.Specular * color.rgb * light.Intensity;
+		totalResult.Specular += result.Specular * color.rgb * light.Intensity;
 	}
 	payload.output += totalResult.Diffuse + totalResult.Specular + ApplyAmbientLight(diffuseColor, 1.0f, 0.1f);
 }
