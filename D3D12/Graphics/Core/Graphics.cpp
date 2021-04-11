@@ -2179,8 +2179,8 @@ void Graphics::UpdateTLAS(CommandContext& context)
 			D3D12_RAYTRACING_INSTANCE_DESC instanceDesc{};
 			instanceDesc.AccelerationStructure = subMesh.pBLAS->GetGpuHandle();
 			instanceDesc.Flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE;
-			instanceDesc.InstanceContributionToHitGroupIndex = instanceIndex;
-			instanceDesc.InstanceID = instanceIndex;
+			instanceDesc.InstanceContributionToHitGroupIndex = batch.Index;
+			instanceDesc.InstanceID = batch.Index;
 			instanceDesc.InstanceMask = 0xFF;
 
 			//The layout of Transform is a transpose of how affine matrices are typically stored in memory. Instead of four 3-vectors, Transform is laid out as three 4-vectors.
