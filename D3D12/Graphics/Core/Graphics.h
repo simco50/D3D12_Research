@@ -151,8 +151,6 @@ public:
 	ShaderManager* GetShaderManager() const { return m_pShaderManager.get(); }
 	DynamicAllocationManager* GetAllocationManager() const { return m_pDynamicAllocationManager.get(); }
 
-	void SetVisualize(Texture* pTexture) { m_pVisualizeTexture = pTexture; }
-
 	template<typename DESC_TYPE>
 	struct DescriptorSelector {};
 	template<> struct DescriptorSelector<D3D12_SHADER_RESOURCE_VIEW_DESC> { static constexpr D3D12_DESCRIPTOR_HEAP_TYPE Type() { return D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV; } };

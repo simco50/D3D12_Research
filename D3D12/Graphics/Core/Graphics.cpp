@@ -2054,12 +2054,19 @@ void Graphics::UpdateImGui()
 		ImGui::Text("%.2f MB", Math::ToMegaBytes * m_pDynamicAllocationManager->GetMemoryUsage());
 		ImGui::TreePop();
 	}
+	if (ImGui::TreeNodeEx("Profiler", ImGuiTreeNodeFlags_DefaultOpen))
+	{
+		ProfileNode* pRootNode = Profiler::Get()->GetRootNode();
+		pRootNode->RenderImGui(m_Frame);
+		ImGui::TreePop();
+	}
+
 	ImGui::End();
 
 	static bool showOutputLog = false;
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0);
-	ImGui::SetNextWindowPos(ImVec2(300, showOutputLog ? (float)m_WindowHeight - 250 : (float)m_WindowHeight - 20));
-	ImGui::SetNextWindowSize(ImVec2(showOutputLog ? (float)(m_WindowWidth - 300) * 0.5f : m_WindowWidth - 250, 250));
+	ImGui::SetNextWindowPos(ImVec2(300, (float)m_WindowHeight), 0, ImVec2(0, 1));
+	ImGui::SetNextWindowSize(ImVec2((float)m_WindowWidth - 300 * 2, 250));
 	ImGui::SetNextWindowCollapsed(!showOutputLog);
 
 	showOutputLog = ImGui::Begin("Output Log", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
@@ -2089,21 +2096,12 @@ void Graphics::UpdateImGui()
 		}
 		ImGui::SetScrollHereY(0.0f);
 	}
+	ImGui::PopStyleVar();
 	ImGui::End();
 
-	if (showOutputLog)
-	{
-		ImGui::SetNextWindowPos(ImVec2(300 + (m_WindowWidth - 300) / 2.0f, showOutputLog ? (float)m_WindowHeight - 250 : (float)m_WindowHeight - 20));
-		ImGui::SetNextWindowSize(ImVec2((float)(m_WindowWidth - 300) * 0.5f, 250));
-		ImGui::SetNextWindowCollapsed(!showOutputLog);
-		ImGui::Begin("Profiler", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
-		ProfileNode* pRootNode = Profiler::Get()->GetRootNode();
-		pRootNode->RenderImGui(m_Frame);
-		ImGui::End();
-	}
-	ImGui::PopStyleVar();
-
-	ImGui::Begin("Parameters");
+	ImGui::SetNextWindowPos(ImVec2((float)m_WindowWidth, 0), 0, ImVec2(1, 0));
+	ImGui::SetNextWindowSize(ImVec2(300, (float)m_WindowHeight));
+	ImGui::Begin("Parameters", 0, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
 
 	ImGui::Text("Sky");
 	ImGui::SliderFloat("Sun Orientation", &Tweakables::g_SunOrientation, -Math::PI, Math::PI);
