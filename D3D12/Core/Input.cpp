@@ -18,6 +18,10 @@ void Input::Update()
 	{
 		m_KeyStates[i] = (KeyState)(m_KeyStates[i] & KeyState::Down);
 	}
+	for (size_t i = 0; i < m_MouseStates.size(); ++i)
+	{
+		m_MouseStates[i] = (KeyState)(m_MouseStates[i] & KeyState::Down);
+	}
 	m_MouseWheel = 0;
 	m_MouseDelta = Vector2();
 #if PLATFORM_WINDOWS
