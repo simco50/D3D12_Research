@@ -571,6 +571,8 @@ void Graphics::Update()
 			renderContext.InsertResourceBarrier(m_pLightBuffer.get(), D3D12_RESOURCE_STATE_COPY_DEST);
 			renderContext.FlushResourceBarriers();
 			renderContext.CopyBuffer(allocation.pBackingResource, m_pLightBuffer.get(), (uint32)m_pLightBuffer->GetSize(), (uint32)allocation.Offset, 0);
+
+			UpdateTLAS(renderContext);
 		});
 
 	//DEPTH PREPASS
@@ -1601,69 +1603,7 @@ void Graphics::InitializeAssets(CommandContext& context)
 		}
 	}
 
-	if (SupportsRayTracing())
-	{
-		ID3D12GraphicsCommandList4* pCmd = context.GetRaytracingCommandList();
-
-		//Top Level Acceleration Structure
-		{
-			std::vector<D3D12_RAYTRACING_INSTANCE_DESC> instanceDescs;
-			for (uint32 instanceIndex = 0; instanceIndex < (uint32)m_SceneData.Batches.size(); ++instanceIndex)
-			{
-				const Batch& batch = m_SceneData.Batches[instanceIndex];
-				const SubMesh& subMesh = *batch.pMesh;
-				D3D12_RAYTRACING_INSTANCE_DESC instanceDesc{};
-				instanceDesc.AccelerationStructure = subMesh.pBLAS->GetGpuHandle();
-				instanceDesc.Flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE;
-				instanceDesc.InstanceContributionToHitGroupIndex = instanceIndex;
-				instanceDesc.InstanceID = instanceIndex;
-				instanceDesc.InstanceMask = 0xFF;
-
-				//The layout of Transform is a transpose of how affine matrices are typically stored in memory. Instead of four 3-vectors, Transform is laid out as three 4-vectors.
-				auto ApplyTransform = [](const Matrix& m, D3D12_RAYTRACING_INSTANCE_DESC& desc)
-				{
-					Matrix transpose = m.Transpose();
-					memcpy(&desc.Transform, &transpose, sizeof(float) * 12);
-				};
-
-				ApplyTransform(batch.WorldMatrix, instanceDesc);
-				instanceDescs.push_back(instanceDesc);
-			}
-
-			D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS prebuildInfo{};
-			prebuildInfo.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
-			prebuildInfo.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
-			prebuildInfo.Flags =
-				D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE
-				| D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_COMPACTION;
-			prebuildInfo.NumDescs = (uint32)instanceDescs.size();
-
-			D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO info{};
-			m_pRaytracingDevice->GetRaytracingAccelerationStructurePrebuildInfo(&prebuildInfo, &info);
-
-			m_pTLASScratch = std::make_unique<Buffer>(this, "TLAS Scratch");
-			m_pTLASScratch->Create(BufferDesc::CreateByteAddress(Math::AlignUp<uint64>(info.ScratchDataSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT), BufferFlag::None));
-			m_pTLAS = std::make_unique<Buffer>(this, "TLAS");
-			m_pTLAS->Create(BufferDesc::CreateAccelerationStructure(Math::AlignUp<uint64>(info.ResultDataMaxSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT)));
-
-			DynamicAllocation allocation = context.AllocateTransientMemory(instanceDescs.size() * sizeof(D3D12_RAYTRACING_INSTANCE_DESC));
-			memcpy(allocation.pMappedMemory, instanceDescs.data(), instanceDescs.size() * sizeof(D3D12_RAYTRACING_INSTANCE_DESC));
-
-			D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC asDesc{};
-			asDesc.DestAccelerationStructureData = m_pTLAS->GetGpuHandle();
-			asDesc.ScratchAccelerationStructureData = m_pTLASScratch->GetGpuHandle();
-			asDesc.Inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
-			asDesc.Inputs.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE
-				| D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_COMPACTION;
-			asDesc.Inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
-			asDesc.Inputs.InstanceDescs = allocation.GpuHandle;
-			asDesc.Inputs.NumDescs = (uint32)instanceDescs.size();
-			asDesc.SourceAccelerationStructureData = 0;
-
-			pCmd->BuildRaytracingAccelerationStructure(&asDesc, 0, nullptr);
-			context.InsertUavBarrier(m_pTLAS.get());
-		}
-	}
+	UpdateTLAS(context);
 
 	{
 		{
@@ -2218,6 +2158,75 @@ void Graphics::UpdateImGui()
 	ImGui::Checkbox("TAA", &Tweakables::g_TAA);
 
 	ImGui::End();
+}
+
+void Graphics::UpdateTLAS(CommandContext& context)
+{
+	if (SupportsRayTracing())
+	{
+		ID3D12GraphicsCommandList4* pCmd = context.GetRaytracingCommandList();
+
+		bool isUpdate = m_pTLAS != nullptr;
+
+		D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAGS buildFlags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_BUILD;
+		buildFlags |= isUpdate ? D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PERFORM_UPDATE : D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_UPDATE;
+
+		std::vector<D3D12_RAYTRACING_INSTANCE_DESC> instanceDescs;
+		for (uint32 instanceIndex = 0; instanceIndex < (uint32)m_SceneData.Batches.size(); ++instanceIndex)
+		{
+			const Batch& batch = m_SceneData.Batches[instanceIndex];
+			const SubMesh& subMesh = *batch.pMesh;
+			D3D12_RAYTRACING_INSTANCE_DESC instanceDesc{};
+			instanceDesc.AccelerationStructure = subMesh.pBLAS->GetGpuHandle();
+			instanceDesc.Flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE;
+			instanceDesc.InstanceContributionToHitGroupIndex = instanceIndex;
+			instanceDesc.InstanceID = instanceIndex;
+			instanceDesc.InstanceMask = 0xFF;
+
+			//The layout of Transform is a transpose of how affine matrices are typically stored in memory. Instead of four 3-vectors, Transform is laid out as three 4-vectors.
+			auto ApplyTransform = [](const Matrix& m, D3D12_RAYTRACING_INSTANCE_DESC& desc)
+			{
+				Matrix transpose = m.Transpose();
+				memcpy(&desc.Transform, &transpose, sizeof(float) * 12);
+			};
+
+			ApplyTransform(batch.WorldMatrix, instanceDesc);
+			instanceDescs.push_back(instanceDesc);
+		}
+
+		if (!isUpdate)
+		{
+			D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS prebuildInfo{};
+			prebuildInfo.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
+			prebuildInfo.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
+			prebuildInfo.Flags = buildFlags;
+			prebuildInfo.NumDescs = (uint32)instanceDescs.size();
+
+			D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO info{};
+			m_pRaytracingDevice->GetRaytracingAccelerationStructurePrebuildInfo(&prebuildInfo, &info);
+
+			m_pTLASScratch = std::make_unique<Buffer>(this, "TLAS Scratch");
+			m_pTLASScratch->Create(BufferDesc::CreateByteAddress(Math::AlignUp<uint64>(info.ScratchDataSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT), BufferFlag::None));
+			m_pTLAS = std::make_unique<Buffer>(this, "TLAS");
+			m_pTLAS->Create(BufferDesc::CreateAccelerationStructure(Math::AlignUp<uint64>(info.ResultDataMaxSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT)));
+		}
+
+		DynamicAllocation allocation = context.AllocateTransientMemory(instanceDescs.size() * sizeof(D3D12_RAYTRACING_INSTANCE_DESC));
+		memcpy(allocation.pMappedMemory, instanceDescs.data(), instanceDescs.size() * sizeof(D3D12_RAYTRACING_INSTANCE_DESC));
+
+		D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC asDesc{};
+		asDesc.DestAccelerationStructureData = m_pTLAS->GetGpuHandle();
+		asDesc.ScratchAccelerationStructureData = m_pTLASScratch->GetGpuHandle();
+		asDesc.Inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
+		asDesc.Inputs.Flags = buildFlags;
+		asDesc.Inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
+		asDesc.Inputs.InstanceDescs = allocation.GpuHandle;
+		asDesc.Inputs.NumDescs = (uint32)instanceDescs.size();
+		asDesc.SourceAccelerationStructureData = isUpdate ? m_pTLAS->GetGpuHandle() : 0;
+
+		pCmd->BuildRaytracingAccelerationStructure(&asDesc, 0, nullptr);
+		context.InsertUavBarrier(m_pTLAS.get());
+	}
 }
 
 int Graphics::RegisterBindlessResource(ResourceView* pResourceView, ResourceView* pFallback)

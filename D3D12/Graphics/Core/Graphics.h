@@ -205,6 +205,7 @@ private:
 	void InitializeAssets(CommandContext& context);
 
 	void UpdateImGui();
+	void UpdateTLAS(CommandContext& context);
 
 	ComPtr<ID3D12Device> m_pDevice;
 	ComPtr<ID3D12Device5> m_pRaytracingDevice;
