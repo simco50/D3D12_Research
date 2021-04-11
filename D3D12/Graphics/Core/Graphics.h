@@ -74,6 +74,7 @@ struct Batch
 	const SubMesh* pMesh = nullptr;
 	MaterialData Material;
 	Matrix WorldMatrix;
+	BoundingBox LocalBounds;
 	BoundingBox Bounds;
 	int VertexBufferDescriptor = -1;
 	int IndexBufferDescriptor = -1;

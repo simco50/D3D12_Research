@@ -201,6 +201,10 @@ void Graphics::Update()
 
 	m_pShaderManager->ConditionallyReloadShaders();
 
+	for (Batch& b : m_SceneData.Batches)
+	{
+		b.LocalBounds.Transform(b.Bounds, b.WorldMatrix);
+	}
 	EditTransform(*m_pCamera, spotMatrix);
 	Vector3 scale, position;
 	Quaternion rotation;
@@ -1589,10 +1593,9 @@ void Graphics::InitializeAssets(CommandContext& context)
 			m_SceneData.Batches.push_back(Batch{});
 			Batch& b = m_SceneData.Batches.back();
 			b.Index = (int)m_SceneData.Batches.size() - 1;
-			b.Bounds = subMesh.Bounds;
+			b.LocalBounds = subMesh.Bounds;
 			b.pMesh = &subMesh;
 			b.WorldMatrix = node.Transform;
-			b.Bounds.Transform(b.Bounds, b.WorldMatrix);
 			b.VertexBufferDescriptor = RegisterBindlessResource(subMesh.pVertexSRV);
 			b.IndexBufferDescriptor = RegisterBindlessResource(subMesh.pIndexSRV);
 
