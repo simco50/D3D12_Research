@@ -64,11 +64,13 @@ struct ShadowRayPayload
 
 ShadowRayPayload CastShadowRay(float3 origin, float3 direction)
 {
+	float len = length(direction);
+
 	RayDesc ray;
 	ray.Origin = origin;
-	ray.Direction = direction;
-	ray.TMin = 0.0f;
-	ray.TMax = 1.0f;
+	ray.Direction = direction / len;
+	ray.TMin = 0.001f;
+	ray.TMax = len;
 
 	ShadowRayPayload shadowRay = (ShadowRayPayload)0;
 
@@ -87,21 +89,21 @@ ShadowRayPayload CastShadowRay(float3 origin, float3 direction)
 	return shadowRay;
 }
 
-RayPayload CastReflectionRay(float3 origin, float3 direction, float depth)
+RayPayload CastReflectionRay(float3 origin, float3 direction, float T)
 {
 	RayCone cone;
 	cone.Width = 0;
 	cone.SpreadAngle = cViewData.ViewPixelSpreadAngle;
 
 	RayPayload payload;
-	payload.rayCone = PropagateRayCone(cone, 0.0f, depth);
+	payload.rayCone = PropagateRayCone(cone, 0.0f, T);
 	payload.output = 0.0f;
 
 	RayDesc ray;
 	ray.Origin = origin;
 	ray.Direction = direction;
-	ray.TMin = 0.0f;
-	ray.TMax = 10000;
+	ray.TMin = 0.001f;
+	ray.TMax = 1000000.f;
 
 	TraceRay(
 		tTLASTable[cViewData.TLASIndex],		 						//AccelerationStructure
@@ -180,7 +182,7 @@ void ClosestHit(inout RayPayload payload, BuiltInTriangleIntersectionAttributes 
 		attenuation *= LightTextureMask(light, light.ShadowIndex, wPos);
 
 #if SECONDARY_SHADOW_RAY
-		ShadowRayPayload shadowRay = CastShadowRay(wPos + normalize(L) * 0.001f, L);
+		ShadowRayPayload shadowRay = CastShadowRay(wPos, L);
 		attenuation *= shadowRay.hit;
 		if(attenuation <= 0.0f)
 		{
@@ -228,7 +230,7 @@ void RayGen()
 	{
 		float3 V = normalize(world - cViewData.ViewInverse[3].xyz);
 		float3 R = reflect(V, N);
-		RayPayload payload = CastReflectionRay(world + 0.01f * R, R, depth);
+		RayPayload payload = CastReflectionRay(world, R, depth);
 		colorSample += float4(reflectivity * payload.output, 0);
 	}
 	uOutput[launchIndex] = colorSample;
