@@ -18,7 +18,7 @@ void StateObject::Create(const StateObjectInitializer& initializer)
 	VERIFY_HR(GetParent()->GetRaytracingDevice()->CreateStateObject(&stateObjectStream.Desc, IID_PPV_ARGS(m_pStateObject.ReleaseAndGetAddressOf())));
 	D3D::SetObjectName(m_pStateObject.Get(), m_Desc.Name.c_str());
 	m_pStateObject.As(&m_pStateObjectProperties);
-	m_Desc.SetMaxPipelineStackSize(this);
+	//m_Desc.SetMaxPipelineStackSize(this); #todo: This is causing trouble with recursion!
 }
 
 void StateObject::ConditionallyReload()
