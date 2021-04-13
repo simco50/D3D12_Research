@@ -121,7 +121,7 @@ namespace Paths
 		for (size_t i = 0; i < elements.size(); i++)
 		{
 			stream << elements[i];
-			if (i != elements.size() - 1)
+			if (elements[i].back() != '/' && i != elements.size() - 1)
 			{
 				stream << "/";
 			}

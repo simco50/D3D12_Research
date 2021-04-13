@@ -16,6 +16,7 @@ GlobalRootSignature GlobalRootSig =
 	GLOBAL_BINDLESS_TABLE ", "
 	"StaticSampler(s0, filter=FILTER_MIN_MAG_LINEAR_MIP_POINT, visibility = SHADER_VISIBILITY_ALL),"
 	"StaticSampler(s1, filter=FILTER_MIN_MAG_MIP_LINEAR, addressU = TEXTURE_ADDRESS_CLAMP, addressV = TEXTURE_ADDRESS_CLAMP, visibility=SHADER_VISIBILITY_ALL), " \
+	"StaticSampler(s2, filter=FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT, visibility = SHADER_VISIBILITY_ALL, comparisonFunc=COMPARISON_GREATER), " \
 };
 
 
@@ -30,6 +31,7 @@ struct Vertex
 
 struct ViewData
 {
+	float4x4 View;
 	float4x4 ViewInverse;
 	float4x4 ProjectionInverse;
 	uint NumLights;
@@ -179,11 +181,28 @@ void ClosestHit(inout RayPayload payload, BuiltInTriangleIntersectionAttributes 
 			L = 1000 * -light.Direction;
 		}
 
-		attenuation *= LightTextureMask(light, light.ShadowIndex, wPos);
-
 #if SECONDARY_SHADOW_RAY
-		ShadowRayPayload shadowRay = CastShadowRay(wPos, L);
-		attenuation *= shadowRay.hit;
+
+		float3 viewPosition = mul(float4(wPos, 1), cViewData.View).xyz;
+		float4 pos = float4(0, 0, 0, viewPosition.z);
+		int shadowIndex = GetShadowIndex(light, pos, wPos);
+		float4x4 lightViewProjection = cShadowData.LightViewProjections[shadowIndex];
+		float4 lightPos = mul(float4(wPos, 1), lightViewProjection);
+		lightPos.xyz /= lightPos.w;
+		lightPos.x = lightPos.x / 2.0f + 0.5f;
+		lightPos.y = lightPos.y / -2.0f + 0.5f;
+		attenuation *= LightTextureMask(light, shadowIndex, wPos);
+
+		if(lightPos.x >= 0 && lightPos.x <= 1 && lightPos.y >= 0 && lightPos.y < 1.0f)
+		{
+			Texture2D shadowTexture = tTexture2DTable[NonUniformResourceIndex(cShadowData.ShadowMapOffset + shadowIndex)];
+    		attenuation *= shadowTexture.SampleCmpLevelZero(sShadowMapSampler, lightPos.xy, lightPos.z);
+		}
+		else
+		{
+			ShadowRayPayload shadowRay = CastShadowRay(wPos, L);
+			attenuation *= shadowRay.hit;
+		}
 		if(attenuation <= 0.0f)
 		{
 			continue;
