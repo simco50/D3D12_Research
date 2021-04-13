@@ -10,9 +10,21 @@ float DielectricSpecularToF0(float specular)
 	return 0.08f * specular;
 }
 
+// Cool list of IOR values for different surfaces
+// https://pixelandpoly.com/ior.html
+float IORToF0(float IOR)
+{
+	return Square((IOR - 1) / (IOR + 1));
+}
+
+float IORToSpecular(float IOR)
+{
+	return IORToF0(IOR) / 0.08f;
+}
+
 //Note from Filament: vec3 f0 = 0.16 * reflectance * reflectance * (1.0 - metallic) + baseColor * metallic;
 // F0 is the base specular reflectance of a surface
-// For dielectrics, this is monochromatic commonly between 0.02 (water) and 0.08 (gems)
+// For dielectrics, this is monochromatic commonly between 0.02 (water) and 0.08 (gems) and derived from a separate specular value
 // For conductors, this is based on the base color we provided
 float3 ComputeF0(float specular, float3 baseColor, float metalness)
 {

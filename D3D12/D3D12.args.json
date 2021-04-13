@@ -33,6 +33,10 @@
         {
           "Id": "b14291b9-8b9b-42c6-92dc-47ee31668e9d",
           "Command": "-warp"
+        },
+        {
+          "Id": "cd37ff2c-874f-462b-a4f4-ad7a2fba2619",
+          "Command": "-stablepowerstate"
         }
       ]
     },

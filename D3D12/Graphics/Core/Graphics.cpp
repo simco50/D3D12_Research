@@ -1209,7 +1209,7 @@ void Graphics::Shutdown()
 {
 	// Wait for the GPU to be done with all resources.
 	IdleGPU();
-#ifndef PLATFORM_UWP
+#if !PLATFORM_UWP
 	UnregisterWait(m_DeviceRemovedEvent);
 #endif
 
@@ -1280,6 +1280,13 @@ void Graphics::InitD3D()
 	BOOL allowTearing = true;
 	HRESULT hr = pFactory->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &allowTearing, sizeof(BOOL));
 	allowTearing &= SUCCEEDED(hr);
+
+	bool setStablePowerState = CommandLine::GetBool("stablepowerstate");
+
+	if (setStablePowerState)
+	{
+		D3D12EnableExperimentalFeatures(0, nullptr, nullptr, nullptr);
+	}
 
 	ComPtr<IDXGIAdapter4> pAdapter;
 
@@ -1355,7 +1362,7 @@ void Graphics::InitD3D()
 	m_pDevice.As(&m_pRaytracingDevice);
 	D3D::SetObjectName(m_pDevice.Get(), "Main Device");
 
-#ifndef PLATFORM_UWP
+#if !PLATFORM_UWP
 	auto OnDeviceRemovedCallback = [](void* pContext, BOOLEAN) {
 		Graphics* pGraphics = (Graphics*)pContext;
 		std::string error = D3D::GetErrorString(DXGI_ERROR_DEVICE_REMOVED, pGraphics->GetDevice());
@@ -1367,6 +1374,11 @@ void Graphics::InitD3D()
 	m_pDeviceRemovalFence->SetEventOnCompletion(UINT64_MAX, deviceRemovedEvent);
 	RegisterWaitForSingleObject(&m_DeviceRemovedEvent, deviceRemovedEvent, OnDeviceRemovedCallback, this, INFINITE, 0);
 #endif
+
+	if (setStablePowerState)
+	{
+		VERIFY_HR(m_pDevice->SetStablePowerState(true));
+	}
 
 	if (debugD3D)
 	{
@@ -2169,8 +2181,7 @@ void Graphics::UpdateTLAS(CommandContext& context)
 
 		bool isUpdate = m_pTLAS != nullptr;
 
-		D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAGS buildFlags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_BUILD;
-		buildFlags |= isUpdate ? D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PERFORM_UPDATE : D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_UPDATE;
+		D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAGS buildFlags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
 
 		std::vector<D3D12_RAYTRACING_INSTANCE_DESC> instanceDescs;
 		for (uint32 instanceIndex = 0; instanceIndex < (uint32)m_SceneData.Batches.size(); ++instanceIndex)
@@ -2223,7 +2234,7 @@ void Graphics::UpdateTLAS(CommandContext& context)
 		asDesc.Inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
 		asDesc.Inputs.InstanceDescs = allocation.GpuHandle;
 		asDesc.Inputs.NumDescs = (uint32)instanceDescs.size();
-		asDesc.SourceAccelerationStructureData = isUpdate ? m_pTLAS->GetGpuHandle() : 0;
+		asDesc.SourceAccelerationStructureData = 0;
 
 		pCmd->BuildRaytracingAccelerationStructure(&asDesc, 0, nullptr);
 		context.InsertUavBarrier(m_pTLAS.get());

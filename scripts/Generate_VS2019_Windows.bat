@@ -1,1 +1,1 @@
-premake5.exe vs2019 --os=windows
+premake5.exe vs2019 --os=windows %*
