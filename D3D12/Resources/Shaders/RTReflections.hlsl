@@ -1,7 +1,6 @@
 #include "Common.hlsli"
 #include "ShadingModels.hlsli"
 #include "Lighting.hlsli"
-#include "SkyCommon.hlsli"
 #include "RaytracingCommon.hlsli"
 
 #define RAY_CONE_TEXTURE_LOD 1
@@ -77,15 +76,15 @@ float CastShadowRay(float3 origin, float3 direction)
 	ShadowRayPayload shadowRay = { 0 };
 
 	TraceRay(
-		tTLASTable[cViewData.TLASIndex], 								//AccelerationStructure
-		RAY_FLAG_SKIP_CLOSEST_HIT_SHADER |								//RayFlags
+		tTLASTable[cViewData.TLASIndex], 						//AccelerationStructure
+		RAY_FLAG_SKIP_CLOSEST_HIT_SHADER |						//RayFlags
 			RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH,
-		0xFF, 															//InstanceInclusionMask
-		0, 																//RayContributionToHitGroupIndex
-		0, 																//MultiplierForGeometryContributionToHitGroupIndex
-		1, 																//MissShaderIndex
-		ray, 															//Ray
-		shadowRay 														//Payload
+		0xFF, 													//InstanceInclusionMask
+		0, 														//RayContributionToHitGroupIndex
+		0, 														//MultiplierForGeometryContributionToHitGroupIndex
+		1, 														//MissShaderIndex
+		ray, 													//Ray
+		shadowRay 												//Payload
 	);
 	return shadowRay.hit;
 }
@@ -107,14 +106,15 @@ ReflectionRayPayload CastReflectionRay(float3 origin, float3 direction, float T)
 	ray.TMax = RAY_MAX_T;
 
 	TraceRay(
-		tTLASTable[cViewData.TLASIndex],		 						//AccelerationStructure
-		RAY_FLAG_CULL_BACK_FACING_TRIANGLES | RAY_FLAG_FORCE_OPAQUE, 	//RayFlags
-		0xFF, 															//InstanceInclusionMask
-		0,																//RayContributionToHitGroupIndex
-		0, 																//MultiplierForGeometryContributionToHitGroupIndex
-		0, 																//MissShaderIndex
-		ray, 															//Ray
-		payload 														//Payload
+		tTLASTable[cViewData.TLASIndex],		 			//AccelerationStructure
+		RAY_FLAG_CULL_BACK_FACING_TRIANGLES | 				//RayFlags
+			RAY_FLAG_FORCE_OPAQUE, 	
+		0xFF, 												//InstanceInclusionMask
+		0,													//RayContributionToHitGroupIndex
+		0, 													//MultiplierForGeometryContributionToHitGroupIndex
+		0, 													//MissShaderIndex
+		ray, 												//Ray
+		payload 											//Payload
 	);
 
 	return payload;
@@ -260,7 +260,7 @@ void ShadowMiss(inout ShadowRayPayload payload : SV_RayPayload)
 [shader("miss")] 
 void ReflectionMiss(inout ReflectionRayPayload payload : SV_RayPayload) 
 {
-	payload.output = CIESky(WorldRayDirection(), -tLights[0].Direction);
+	payload.output = DefaultSkyBackground();
 }
 
 [shader("raygeneration")] 
