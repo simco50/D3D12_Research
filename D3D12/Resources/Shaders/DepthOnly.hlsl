@@ -12,6 +12,7 @@ struct PerObjectData
 	int Diffuse;
     int Normal;
     int RoughnessMetalness;
+	int Emissive;
 	uint VertexBuffer;
 };
 

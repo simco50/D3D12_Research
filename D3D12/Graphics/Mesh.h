@@ -36,7 +36,7 @@ struct Material
 	Texture* pDiffuseTexture = nullptr;
 	Texture* pNormalTexture = nullptr;
 	Texture* pRoughnessMetalnessTexture = nullptr;
-	Texture* pMetallicTexture = nullptr;
+	Texture* pEmissiveTexture = nullptr;
 	bool IsTransparent;
 };
 

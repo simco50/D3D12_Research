@@ -18,6 +18,7 @@ struct PerObjectData
     int Diffuse;
     int Normal;
     int RoughnessMetalness;
+	int Emissive;
 	int VertexBuffer;
 };
 
@@ -270,6 +271,7 @@ void PSMain(PSInput input,
 	float4 diffuseSample = tTexture2DTable[cObjectData.Diffuse].Sample(sDiffuseSampler, input.texCoord);
 	float4 normalSample = tTexture2DTable[cObjectData.Normal].Sample(sDiffuseSampler, input.texCoord);
 	float4 roughnessMetalnessSample = tTexture2DTable[cObjectData.RoughnessMetalness].Sample(sDiffuseSampler, input.texCoord);
+	float4 emissiveSample = tTexture2DTable[cObjectData.Emissive].Sample(sDiffuseSampler, input.texCoord);
 
 	float4 baseColor = diffuseSample;
 	float3 sampledNormal = normalSample.xyz;
@@ -294,6 +296,7 @@ void PSMain(PSInput input,
 	float3 color = lighting.Diffuse + lighting.Specular;
 	color += ApplyAmbientLight(diffuseColor, ao, tLights[0].GetColor().rgb * 0.1f);
 	color += ssr * ao;
+	color += emissiveSample.rgb;
 
 	float slice = sqrt((input.positionVS.z - cViewData.FarZ) / (cViewData.NearZ - cViewData.FarZ));
 	float4 scatteringTransmittance = tLightScattering.SampleLevel(sClampSampler, float3(screenUV, slice), 0);

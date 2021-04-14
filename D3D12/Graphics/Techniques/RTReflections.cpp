@@ -57,7 +57,7 @@ void RTReflections::Execute(RGGraph& graph, const SceneData& sceneData)
 
 			ShaderBindingTable bindingTable(m_pRtSO);
 			bindingTable.BindRayGenShader("RayGen");
-			bindingTable.BindMissShader("Miss", 0);
+			bindingTable.BindMissShader("ReflectionMiss", 0);
 			bindingTable.BindMissShader("ShadowMiss", 1);
 
 			for (const Batch& b : sceneData.Batches)
@@ -124,9 +124,9 @@ void RTReflections::SetupPipelines(Graphics* pGraphics)
 	StateObjectInitializer stateDesc;
 	stateDesc.Name = "RT Reflections";
 	stateDesc.RayGenShader = "RayGen";
-	stateDesc.AddLibrary(pShaderLibrary, { "RayGen", "ClosestHit", "Miss", "ShadowMiss" });
-	stateDesc.AddHitGroup("ReflectionHitGroup", "ClosestHit", "", "", m_pHitSignature.get());
-	stateDesc.AddMissShader("Miss");
+	stateDesc.AddLibrary(pShaderLibrary, { "RayGen", "ReflectionClosestHit", "ReflectionMiss", "ShadowMiss" });
+	stateDesc.AddHitGroup("ReflectionHitGroup", "ReflectionClosestHit", "", "", m_pHitSignature.get());
+	stateDesc.AddMissShader("ReflectionMiss");
 	stateDesc.AddMissShader("ShadowMiss");
 	stateDesc.MaxPayloadSize = 5 * sizeof(float);
 	stateDesc.MaxAttributeSize = 2 * sizeof(float);

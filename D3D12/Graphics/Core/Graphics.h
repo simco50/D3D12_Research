@@ -59,6 +59,7 @@ struct MaterialData
 	int Diffuse;
 	int Normal;
 	int RoughnessMetalness;
+	int Emissive;
 };
 
 struct Batch
