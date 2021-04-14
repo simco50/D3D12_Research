@@ -49,35 +49,23 @@ void RTAO::Execute(RGGraph& graph, Texture* pColor, Texture* pDepth, const Scene
 			{
 				Matrix ViewInverse;
 				Matrix ProjectionInverse;
-				Vector4 RandomVectors[numRandomVectors];
+				Matrix ViewProjectionInverse;
 				float Power;
 				float Radius;
-				int32 Samples;
+				uint32 Samples;
 				uint32 TLASIndex;
+				uint32 FrameIndex;
 			} parameters{};
 
-			static bool written = false;
-			static Vector4 randoms[numRandomVectors];
-			if (!written)
-			{
-				srand(2);
-				written = true;
-				for (int i = 0; i < numRandomVectors; ++i)
-				{
-					randoms[i] = Vector4(Math::RandVector());
-					randoms[i].z = Math::Lerp(0.1f, 0.8f, (float)abs(randoms[i].z));
-					randoms[i].Normalize();
-					randoms[i] *= Math::Lerp(0.1f, 1.0f, (float)pow(Math::RandomRange(0, 1), 2));
-				}
-			}
-			memcpy(parameters.RandomVectors, randoms, sizeof(Vector4) * numRandomVectors);
 
 			parameters.ViewInverse = camera.GetViewInverse();
 			parameters.ProjectionInverse = camera.GetProjectionInverse();
+			parameters.ViewProjectionInverse = camera.GetViewProjectionInverse();
 			parameters.Power = g_AoPower;
 			parameters.Radius = g_AoRadius;
 			parameters.Samples = g_AoSamples;
 			parameters.TLASIndex = sceneData.SceneTLAS;
+			parameters.FrameIndex = sceneData.FrameIndex;
 
 			ShaderBindingTable bindingTable(m_pRtSO);
 			bindingTable.BindRayGenShader("RayGen");

@@ -80,6 +80,11 @@ const Matrix& Camera::GetViewProjection() const
 	return m_ViewProjection;
 }
 
+const Matrix Camera::GetViewProjectionInverse() const
+{
+	return GetProjectionInverse() * GetViewInverse();
+}
+
 const Matrix& Camera::GetViewInverse() const
 {
 	UpdateMatrices();
@@ -189,8 +194,8 @@ Ray Camera::GetMouseRay(uint32 windowWidth, uint32 windowHeight) const
 	Vector3 nearPoint, farPoint;
 	Matrix viewProjInverse;
 	m_ViewProjection.Invert(viewProjInverse);
-	nearPoint = Vector3::Transform(Vector3(ndc.x, ndc.y, 0), viewProjInverse);
-	farPoint = Vector3::Transform(Vector3(ndc.x, ndc.y, 1), viewProjInverse);
+	nearPoint = Vector3::Transform(Vector3(ndc.x, ndc.y, 1), viewProjInverse);
+	farPoint = Vector3::Transform(Vector3(ndc.x, ndc.y, 0), viewProjInverse);
 	ray.position = Vector3(nearPoint.x, nearPoint.y, nearPoint.z);
 
 	ray.direction = farPoint - nearPoint;

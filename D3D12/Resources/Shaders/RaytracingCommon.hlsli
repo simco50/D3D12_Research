@@ -2,7 +2,7 @@
 #define __INCLUDE_RAYTRACING_COMMON__
 
 #define RAY_BIAS 1.0e-4f
-#define RAY_MAX_T 1.0e38f
+#define RAY_MAX_T 1.0e10f
 
 struct RayCone
 {

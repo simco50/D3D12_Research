@@ -259,7 +259,7 @@ void GpuParticles::Simulate(RGGraph& graph, Texture* pResolvedDepth, const Camer
 			} parameters;
 			parameters.DimensionsInv.x = 1.0f / pResolvedDepth->GetWidth();
 			parameters.DimensionsInv.y = 1.0f / pResolvedDepth->GetHeight();
-			parameters.ViewProjectionInv = camera.GetProjectionInverse() * camera.GetViewInverse();
+			parameters.ViewProjectionInv = camera.GetViewProjectionInverse();
 			parameters.DeltaTime = Time::DeltaTime();
 			parameters.ParticleLifeTime = g_LifeTime;
 			parameters.ViewProjection = camera.GetViewProjection();

@@ -34,6 +34,7 @@ public:
 	const Matrix& GetView() const;
 	const Matrix& GetProjection() const;
 	const Matrix& GetViewProjection() const;
+	const Matrix GetViewProjectionInverse() const;
 	const Matrix& GetViewInverse() const;
 	const Matrix& GetProjectionInverse() const;
 	const Matrix& GetPreviousViewProjection() const { return m_PreviousViewProjection; }

@@ -1,77 +1,112 @@
 #include "RNG.hlsli"
 #include "Common.hlsli"
 #include "CommonBindings.hlsli"
+#include "RaytracingCommon.hlsli"
 
 GlobalRootSignature GlobalRootSig =
 {
-	"CBV(b0, visibility=SHADER_VISIBILITY_ALL),"
-	"DescriptorTable(UAV(u0, numDescriptors = 1), visibility=SHADER_VISIBILITY_ALL),"
-	"DescriptorTable(SRV(t0, numDescriptors = 1), visibility=SHADER_VISIBILITY_ALL),"
+	"CBV(b0),"
+	"DescriptorTable(UAV(u0, numDescriptors = 1)),"
+	"DescriptorTable(SRV(t0, numDescriptors = 1)),"
 	GLOBAL_BINDLESS_TABLE ", "
-	"StaticSampler(s0, filter=FILTER_MIN_MAG_LINEAR_MIP_POINT, visibility = SHADER_VISIBILITY_ALL),"
+	"StaticSampler(s0, filter=FILTER_MIN_MAG_LINEAR_MIP_POINT),"
 };
 
-#define RPP 64
 RWTexture2D<float> uOutput : register(u0);
 Texture2D tSceneDepth : register(t0);
 SamplerState sSceneSampler : register(s0);
 
-cbuffer ShaderParameters : register(b0)
+struct Data
 {
-	float4x4 cViewInverse;
-	float4x4 cProjectionInverse;
-	float4 cRandomVectors[RPP];
-	float cPower;
-	float cRadius;
-	int cSamples;
+	float4x4 ViewInverse;
+	float4x4 ProjectionInverse;
+	float4x4 ViewProjectionInverse;
+	float Power;
+	float Radius;
+	uint Samples;
 	uint TLASIndex;
-}
+	uint FrameIndex;
+};
+
+ConstantBuffer<Data> cData : register(b0);
 
 struct RayPayload
 {
-	int hit;
+	float hit;
 };
+
+// Utility function to get a vector perpendicular to an input vector 
+// From Michael M. Stark - https://blog.selfshadow.com/2011/10/17/perp-vectors/
+float3 GetPerpendicularVector(float3 u)
+{
+	float3 a = abs(u);
+	uint uyx = sign(a.x - a.y);
+	uint uzx = sign(a.x - a.z);
+	uint uzy = sign(a.y - a.z);
+
+	uint xm = uyx & uzx;
+	uint ym = (1^xm) & uzy;
+	uint zm = 1^(xm & ym);
+
+	float3 v = cross(u, float3(xm, ym, zm));
+	return v;
+}
+
+// Get a cosine-weighted random vector centered around a specified normal direction.
+float3 GetCosHemisphereSample(inout uint randSeed, float3 hitNorm)
+{
+	// Get 2 random numbers to select our sample with
+	float2 randVal = float2(Random01(randSeed), Random01(randSeed));
+
+	// Cosine weighted hemisphere sample from RNG
+	float3 bitangent = GetPerpendicularVector(hitNorm);
+	float3 tangent = cross(bitangent, hitNorm);
+	float r = sqrt(randVal.x);
+	float phi = 2.0f * 3.14159265f * randVal.y;
+
+	// Get our cosine-weighted hemisphere lobe sample direction
+	return tangent * (r * cos(phi)) + bitangent * (r * sin(phi)) + hitNorm.xyz * sqrt(1 - randVal.x);
+}
 
 [shader("miss")] 
 void Miss(inout RayPayload payload : SV_RayPayload) 
 {
-	payload.hit = 0;
+	payload.hit = 0.0f;
 }
 
 [shader("raygeneration")] 
 void RayGen() 
 {
-	RayPayload payload = (RayPayload)0;
-	payload.hit = 1;
-
-	float2 dimInv = rcp((float2)DispatchRaysDimensions().xy);
+	uint2 launchDim = DispatchRaysDimensions().xy;
+	float2 dimInv = rcp((float2)launchDim.xy);
 	uint2 launchIndex = DispatchRaysIndex().xy;
-	uint launchIndex1d = launchIndex.x + launchIndex.y * DispatchRaysDimensions().x;
+	uint launchIndex1d = launchIndex.x + launchIndex.y * launchDim.x;
 	float2 texCoord = (float2)launchIndex * dimInv;
 
-	float3 world = WorldFromDepth(texCoord, tSceneDepth.SampleLevel(sSceneSampler, texCoord, 0).r, mul(cProjectionInverse, cViewInverse));
-    float3 normal = NormalFromDepth(tSceneDepth, sSceneSampler, texCoord, dimInv, cProjectionInverse);
+	float3 world = WorldFromDepth(texCoord, tSceneDepth.SampleLevel(sSceneSampler, texCoord, 0).r, cData.ViewProjectionInverse);
+    float3 normal = NormalFromDepth(tSceneDepth, sSceneSampler, texCoord, dimInv, cData.ProjectionInverse);
+	normal = mul(normal, (float3x3)cData.ViewInverse);
  	
-	uint state = SeedThread(launchIndex1d);
-	float3 randomVec = float3(Random01(state), Random01(state), Random01(state)) * 2.0f - 1.0f;
+	uint randSeed = SeedThread(launchIndex1d + cData.FrameIndex * launchDim.x * launchDim.y);
 
-	float3 tangent = normalize(randomVec - normal * dot(randomVec, normal));
-	float3 bitangent = cross(tangent, normal);
-	float3x3 TBN = float3x3(tangent, bitangent, normal);
-	
 	float accumulatedAo = 0.0f;
-	for(int i = 0; i < cSamples; ++i)
+	for(int i = 0; i < cData.Samples; ++i)
 	{
-		float3 n = mul(cRandomVectors[Random(state, 0, RPP - 1)].xyz, TBN);
+		RayPayload payload = { 1.0f };
+		float3 randomDirection = GetCosHemisphereSample(randSeed, normal.xyz);
+		
 		RayDesc ray;
-		ray.Origin = world + 0.01f * n;
-		ray.Direction = n;
-		ray.TMin = 0.0f;
-		ray.TMax = cRadius;
+		ray.Origin = world;
+		ray.Direction = randomDirection;
+		ray.TMin = RAY_BIAS;
+		ray.TMax = cData.Radius;
 
 		TraceRay(
-			tTLASTable[TLASIndex], 											//AccelerationStructure
-			RAY_FLAG_CULL_BACK_FACING_TRIANGLES | RAY_FLAG_FORCE_OPAQUE, 	//RayFlags
+			tTLASTable[cData.TLASIndex], 									//AccelerationStructure
+			RAY_FLAG_CULL_BACK_FACING_TRIANGLES | 							//RayFlags
+				RAY_FLAG_FORCE_OPAQUE | 
+				RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH | 
+				RAY_FLAG_SKIP_CLOSEST_HIT_SHADER, 	
 			0xFF, 															//InstanceInclusionMask
 			0, 																//RayContributionToHitGroupIndex
 			0, 																//MultiplierForGeometryContributionToHitGroupIndex
@@ -82,6 +117,6 @@ void RayGen()
 
 		accumulatedAo += payload.hit;
 	}
-	accumulatedAo /= cSamples;
-	uOutput[launchIndex] = pow(saturate(1 - accumulatedAo), cPower);
+	accumulatedAo /= cData.Samples;
+	uOutput[launchIndex] = pow(saturate(1 - accumulatedAo), cData.Power);
 }

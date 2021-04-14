@@ -74,12 +74,12 @@ float CastShadowRay(float3 origin, float3 direction)
 	ray.TMin = RAY_BIAS;
 	ray.TMax = len;
 
-	ShadowRayPayload shadowRay = (ShadowRayPayload)0;
+	ShadowRayPayload shadowRay = { 0 };
 
 	TraceRay(
 		tTLASTable[cViewData.TLASIndex], 								//AccelerationStructure
-		RAY_FLAG_SKIP_CLOSEST_HIT_SHADER |
-		RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH,					 	//RayFlags
+		RAY_FLAG_SKIP_CLOSEST_HIT_SHADER |								//RayFlags
+			RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH,
 		0xFF, 															//InstanceInclusionMask
 		0, 																//RayContributionToHitGroupIndex
 		0, 																//MultiplierForGeometryContributionToHitGroupIndex
@@ -271,12 +271,12 @@ void RayGen()
 	float2 texCoord = (float2)launchIndex * dimInv;
 
 	float depth = tDepth.SampleLevel(sDiffuseSampler, texCoord, 0).r;
+	float4 colorSample = tPreviousSceneColor.SampleLevel(sDiffuseSampler, texCoord, 0);
+	float4 reflectionSample = tSceneNormals.SampleLevel(sDiffuseSampler, texCoord, 0);
 
 	float3 view = ViewFromDepth(texCoord, depth, cViewData.ProjectionInverse);
 	float3 world = mul(float4(view, 1), cViewData.ViewInverse).xyz;
 	
-	float4 colorSample = tPreviousSceneColor.SampleLevel(sDiffuseSampler, texCoord, 0);
-	float4 reflectionSample = tSceneNormals.SampleLevel(sDiffuseSampler, texCoord, 0);
 	float3 N = reflectionSample.rgb;
 	float reflectivity = reflectionSample.a;
 
