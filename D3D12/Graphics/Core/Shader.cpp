@@ -56,6 +56,7 @@ namespace ShaderCompiler
 		VERIFY_HR(pUtils->CreateBlob(pShaderSource, shaderSourceSize, CP_UTF8, pSource.GetAddressOf()));
 
 		bool debugShaders = CommandLine::GetBool("debugshaders");
+		bool shaderSymbols = CommandLine::GetBool("shadersymbols");
 
 		std::vector<std::wstring> wDefines;
 		for (const std::string& define : defines)
@@ -79,19 +80,26 @@ namespace ShaderCompiler
 		arguments.push_back(L"-enable-templates");
 
 		MultibyteToUnicode pwSymbolPath(pShaderSymbolsPath);
-		if (debugShaders)
+		if (debugShaders || shaderSymbols)
 		{
-			arguments.push_back(DXC_ARG_SKIP_OPTIMIZATIONS);
-			arguments.push_back(DXC_ARG_DEBUG);
 			arguments.push_back(L"-Qembed_debug");
+			arguments.push_back(DXC_ARG_DEBUG);
 		}
 		else
 		{
-			arguments.push_back(DXC_ARG_OPTIMIZATION_LEVEL3);
 			arguments.push_back(L"-Qstrip_debug");
 			arguments.push_back(L"/Fd");
 			arguments.push_back(*pwSymbolPath);
 			arguments.push_back(L"-Qstrip_reflect");
+		}
+
+		if (debugShaders)
+		{
+			arguments.push_back(DXC_ARG_SKIP_OPTIMIZATIONS);
+		}
+		else
+		{
+			arguments.push_back(DXC_ARG_OPTIMIZATION_LEVEL3);
 		}
 
 		arguments.push_back(DXC_ARG_WARNINGS_ARE_ERRORS);

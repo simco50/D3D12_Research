@@ -280,7 +280,7 @@ void RayGen()
 	float3 N = reflectionSample.rgb;
 	float reflectivity = reflectionSample.a;
 
-	if(depth > 0 && reflectivity > 0.1f)
+	if(depth > 0 && reflectivity > 0.3f)
 	{
 		float3 V = normalize(world - cViewData.ViewInverse[3].xyz);
 		float3 R = reflect(V, N);
