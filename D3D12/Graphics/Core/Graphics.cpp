@@ -75,7 +75,7 @@ namespace Tweakables
 	float g_SunIntensity = 3.0f;
 
 	// Reflections
-	bool g_RaytracedReflections = false;
+	bool g_RaytracedReflections = true;
 	int g_SsrSamples = 8;
 
 	// Misc
@@ -108,9 +108,12 @@ void Graphics::Initialize(WindowHandle window)
 
 	CommandContext* pContext = AllocateCommandContext();
 	InitializeAssets(*pContext);
+	SetupScene(*pContext);
+	UpdateTLAS(*pContext);
 	pContext->Execute(true);
 
 	Tweakables::g_RaytracedAO = SupportsRayTracing() ? Tweakables::g_RaytracedAO : false;
+	Tweakables::g_RaytracedReflections = SupportsRayTracing() ? Tweakables::g_RaytracedReflections : false;
 
 	m_pDynamicAllocationManager->CollectGarbage();
 }
@@ -192,7 +195,6 @@ Matrix spotMatrix = Matrix::CreateScale(100.0f, 0.2f, 1) * Matrix::CreateFromYaw
 
 void Graphics::Update()
 {
-
 	PROFILE_BEGIN("Update");
 	BeginFrame();
 	m_pImGuiRenderer->Update();
@@ -575,8 +577,6 @@ void Graphics::Update()
 			renderContext.InsertResourceBarrier(m_pLightBuffer.get(), D3D12_RESOURCE_STATE_COPY_DEST);
 			renderContext.FlushResourceBarriers();
 			renderContext.CopyBuffer(allocation.pBackingResource, m_pLightBuffer.get(), (uint32)m_pLightBuffer->GetSize(), (uint32)allocation.Offset, 0);
-
-			UpdateTLAS(renderContext);
 		});
 
 	//DEPTH PREPASS
@@ -1581,7 +1581,10 @@ void Graphics::InitializeAssets(CommandContext& context)
 	m_DefaultTextures[(int)DefaultTexture::ColorNoise256]->Create(&context, "Resources/Textures/Noise.png", false);
 	m_DefaultTextures[(int)DefaultTexture::BlueNoise512] = std::make_unique<Texture>(this, "Blue Noise 512px");
 	m_DefaultTextures[(int)DefaultTexture::BlueNoise512]->Create(&context, "Resources/Textures/BlueNoise.dds", false);
+}
 
+void Graphics::SetupScene(CommandContext& context)
+{
 	m_pLightCookie = std::make_unique<Texture>(this, "Light Cookie");
 	m_pLightCookie->Create(&context, "Resources/Textures/LightProjector.png", false);
 
@@ -1618,8 +1621,6 @@ void Graphics::InitializeAssets(CommandContext& context)
 			b.BlendMode = material.IsTransparent ? Batch::Blending::AlphaMask : Batch::Blending::Opaque;
 		}
 	}
-
-	UpdateTLAS(context);
 
 	{
 		{

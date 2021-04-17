@@ -203,6 +203,7 @@ private:
 	void InitD3D();
 	void InitializePipelines();
 	void InitializeAssets(CommandContext& context);
+	void SetupScene(CommandContext& context);
 
 	void UpdateImGui();
 	void UpdateTLAS(CommandContext& context);
