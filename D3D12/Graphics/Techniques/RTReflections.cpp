@@ -124,8 +124,8 @@ void RTReflections::SetupPipelines(Graphics* pGraphics)
 	StateObjectInitializer stateDesc;
 	stateDesc.Name = "RT Reflections";
 	stateDesc.RayGenShader = "RayGen";
-	stateDesc.AddLibrary(pShaderLibrary, { "RayGen", "ReflectionClosestHit", "ReflectionMiss", "ShadowMiss" });
-	stateDesc.AddHitGroup("ReflectionHitGroup", "ReflectionClosestHit", "", "", m_pHitSignature.get());
+	stateDesc.AddLibrary(pShaderLibrary, { "RayGen", "ReflectionClosestHit", "ReflectionMiss", "ShadowMiss", "ReflectionAnyHit" });
+	stateDesc.AddHitGroup("ReflectionHitGroup", "ReflectionClosestHit", "ReflectionAnyHit", "", m_pHitSignature.get());
 	stateDesc.AddMissShader("ReflectionMiss");
 	stateDesc.AddMissShader("ShadowMiss");
 	stateDesc.MaxPayloadSize = 5 * sizeof(float);

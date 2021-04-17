@@ -107,8 +107,7 @@ ReflectionRayPayload CastReflectionRay(float3 origin, float3 direction, float T)
 
 	TraceRay(
 		tTLASTable[cViewData.TLASIndex],		 			//AccelerationStructure
-		RAY_FLAG_CULL_BACK_FACING_TRIANGLES | 				//RayFlags
-			RAY_FLAG_FORCE_OPAQUE, 	
+		RAY_FLAG_CULL_BACK_FACING_TRIANGLES, 				//RayFlags
 		0xFF, 												//InstanceInclusionMask
 		0,													//RayContributionToHitGroupIndex
 		0, 													//MultiplierForGeometryContributionToHitGroupIndex
@@ -127,6 +126,7 @@ struct ShadingData
 	float3 N;
 	float2 UV;
 
+	float Opacity;
 	float3 Diffuse;
 	float3 Specular;
 	float Roughness;
@@ -179,6 +179,7 @@ ShadingData GetShadingData(BuiltInTriangleIntersectionAttributes attrib, float3 
 	outData.Specular = ComputeF0(specular, diffuseSample.rgb, roughnessMetalnessSample.b);
 	outData.Roughness = roughnessMetalnessSample.g;
 	outData.Emissive = emissiveSample.rgb;
+	outData.Opacity = diffuseSample.a;
 	return outData;
 }
 
@@ -251,6 +252,16 @@ void ReflectionClosestHit(inout ReflectionRayPayload payload, BuiltInTriangleInt
 	payload.output += shadingData.Emissive + totalResult.Diffuse + totalResult.Specular + ApplyAmbientLight(shadingData.Diffuse, 1.0f, 0.1f);
 }
 
+[shader("anyhit")]
+void ReflectionAnyHit(inout ReflectionRayPayload payload, BuiltInTriangleIntersectionAttributes attrib)
+{
+	ShadingData shadingData = GetShadingData(attrib, WorldRayOrigin(), 2);
+	if(shadingData.Opacity < 0.5)
+	{
+		IgnoreHit();
+	}
+}
+
 [shader("miss")] 
 void ShadowMiss(inout ShadowRayPayload payload : SV_RayPayload) 
 {
@@ -280,12 +291,12 @@ void RayGen()
 	float3 N = reflectionSample.rgb;
 	float reflectivity = reflectionSample.a;
 
-	if(depth > 0 && reflectivity > 0.3f)
+	if(depth > 0 && reflectivity > 0.0f)
 	{
 		float3 V = normalize(world - cViewData.ViewInverse[3].xyz);
 		float3 R = reflect(V, N);
 		ReflectionRayPayload payload = CastReflectionRay(world, R, depth);
-		colorSample += float4(reflectivity * payload.output, 0);
+		colorSample += reflectivity * float4(payload.output, 0);
 	}
 	uOutput[launchIndex] = colorSample;
 }
