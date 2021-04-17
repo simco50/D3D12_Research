@@ -76,7 +76,7 @@ namespace Tweakables
 
 	// Reflections
 	bool g_RaytracedReflections = false;
-	int g_SsrSamples = 16;
+	int g_SsrSamples = 8;
 
 	// Misc
 	bool g_DumpRenderGraph = false;
@@ -101,7 +101,7 @@ void Graphics::Initialize(WindowHandle window)
 	m_pCamera->SetPosition(Vector3(-30, 35, 48));
 	m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(3 * Math::PIDIV4, Math::PIDIV4 * 0.3f, 0));
 	m_pCamera->SetNearPlane(300.0f);
-	m_pCamera->SetFarPlane(10.0f);
+	m_pCamera->SetFarPlane(1.0f);
 
 	InitD3D();
 	InitializePipelines();
