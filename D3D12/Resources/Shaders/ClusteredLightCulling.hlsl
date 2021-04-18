@@ -95,9 +95,13 @@ void LightCulling(CS_INPUT input)
 		case LIGHT_SPOT:
 		{
 			Sphere sphere;
-			sphere.Radius = light.Range * 0.5f / pow(light.SpotlightAngles.y, 2);
-			sphere.Position = mul(float4(light.Position, 1), cView).xyz + mul(light.Direction, (float3x3)cView) * sphere.Radius;
-			if (SphereInAABB(sphere, gGroupAABB))
+			sphere.Radius = sqrt(dot(gGroupAABB.Extents.xyz, gGroupAABB.Extents.xyz));
+			sphere.Position = gGroupAABB.Center.xyz;
+
+			float3 conePosition = mul(float4(light.Position, 1), cView).xyz;
+			float3 coneDirection = mul(light.Direction, (float3x3)cView);
+			float angle = acos(light.SpotlightAngles.y);
+			if (ConeInSphere(conePosition, coneDirection, light.Range, float2(sin(angle), light.SpotlightAngles.y), sphere))
 			{
 				AddLight(i);
 			}

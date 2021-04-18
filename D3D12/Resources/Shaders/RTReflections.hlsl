@@ -172,7 +172,7 @@ ShadingData GetShadingData(BuiltInTriangleIntersectionAttributes attrib, float3 
 
 	ShadingData outData = (ShadingData)0;
 	outData.WorldPos = v.position;
-	outData.V = normalize(outData.WorldPos - cameraLocation);
+	outData.V = -WorldRayDirection();
 	outData.N = TangentSpaceNormalMapping(normalSample.xyz, TBN, false);
 	outData.UV = v.texCoord;
 	outData.Diffuse = diffuseSample.rgb;
@@ -208,7 +208,7 @@ LightResult EvaluateLight(Light light, ShadingData shadingData)
 	lightPos.y = lightPos.y / -2.0f + 0.5f;
 	attenuation *= LightTextureMask(light, shadowIndex, shadingData.WorldPos);
 
-	if(lightPos.x >= 0 && lightPos.x <= 1 && lightPos.y >= 0 && lightPos.y < 1.0f)
+	if(lightPos.x >= 0 && lightPos.x <= 1 && lightPos.y >= 0 && lightPos.y <= 1.0f && lightPos.z >= 0 && lightPos.z <= 1)
 	{
 		Texture2D shadowTexture = tTexture2DTable[NonUniformResourceIndex(cShadowData.ShadowMapOffset + shadowIndex)];
 		attenuation *= shadowTexture.SampleCmpLevelZero(sShadowMapSampler, lightPos.xy, lightPos.z);

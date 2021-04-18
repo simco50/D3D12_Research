@@ -49,8 +49,8 @@ struct Light
 		data.Enabled = Intensity > 0;
 		data.Direction = Direction;
 		data.Type = Type;
-		data.SpotlightAngles.x = cos(PenumbraAngle / 2.0f * Math::PI / 180.0f);
-		data.SpotlightAngles.y = cos(UmbraAngle / 2.0f * Math::PI / 180.0f);
+		data.SpotlightAngles.x = cos(PenumbraAngle * Math::ToRadians / 2.0f);
+		data.SpotlightAngles.y = cos(UmbraAngle * Math::ToRadians / 2.0f);
 		data.Colour = Math::EncodeColor(Colour);
 		data.Intensity = Intensity;
 		data.Range = Range;
