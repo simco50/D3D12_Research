@@ -97,7 +97,7 @@ namespace ShaderCompiler
 		arguments.AddArgument(pIdentifier);
 		arguments.AddArgument("-E", pEntryPoint);
 		arguments.AddArgument("-T", pTarget);
-		arguments.AddArgument("-enable-templates");
+		//arguments.AddArgument("-enable-templates");
 		arguments.AddArgument(DXC_ARG_ALL_RESOURCES_BOUND);
 
 		if (debugShaders || shaderSymbols)

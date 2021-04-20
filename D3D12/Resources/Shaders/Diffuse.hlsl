@@ -305,8 +305,8 @@ void PSMain(PSInput input,
 	float4 scatteringTransmittance = tLightScattering.SampleLevel(sClampSampler, float3(screenUV, fogSlice), 0);
 	outRadiance = outRadiance * scatteringTransmittance.w + scatteringTransmittance.rgb;
 
-	outColor = float4(outRadiance, baseColor.a);
-    float reflectivity = saturate(scatteringTransmittance.w * ao * Square(1 - roughness));
+	outColor = float4(outRadiance, diffuseSample.a);
+    float reflectivity = saturate(scatteringTransmittance.w * ambientOcclusion * Square(1 - roughness));
 	outNormalRoughness = float4(N, saturate(reflectivity - ssrWeight));
 	//outNormalRoughness = float4(input.normal, 1);
 }

@@ -190,37 +190,43 @@ namespace D3D
 		};
 		static_assert(ARRAYSIZE(AllocTypesNames) == D3D12_DRED_ALLOCATION_TYPE_VIDEO_EXTENSION_COMMAND - D3D12_DRED_ALLOCATION_TYPE_COMMAND_QUEUE + 1, "AllocTypes array length mismatch");
 
-		ID3D12DeviceRemovedExtendedData* Dred = nullptr;
-		if (SUCCEEDED(pDevice->QueryInterface(IID_PPV_ARGS(&Dred))))
+		ID3D12DeviceRemovedExtendedData2* pDred = nullptr;
+		if (SUCCEEDED(pDevice->QueryInterface(IID_PPV_ARGS(&pDred))))
 		{
-			D3D12_DRED_AUTO_BREADCRUMBS_OUTPUT DredAutoBreadcrumbsOutput;
-			if (SUCCEEDED(Dred->GetAutoBreadcrumbsOutput(&DredAutoBreadcrumbsOutput)))
+			D3D12_DRED_AUTO_BREADCRUMBS_OUTPUT1 pDredAutoBreadcrumbsOutput;
+			if (SUCCEEDED(pDred->GetAutoBreadcrumbsOutput1(&pDredAutoBreadcrumbsOutput)))
 			{
 				E_LOG(Warning, "[DRED] Last tracked GPU operations:");
 
-				const D3D12_AUTO_BREADCRUMB_NODE* Node = DredAutoBreadcrumbsOutput.pHeadAutoBreadcrumbNode;
-				while (Node)
+				const D3D12_AUTO_BREADCRUMB_NODE1* pNode = pDredAutoBreadcrumbsOutput.pHeadAutoBreadcrumbNode;
+				while (pNode)
 				{
-					int32 LastCompletedOp = *Node->pLastBreadcrumbValue;
+					int32 LastCompletedOp = *pNode->pLastBreadcrumbValue;
 
-					E_LOG(Warning, "[DRED] Commandlist \"%s\" on CommandQueue \"%s\", %d completed of %d", Node->pCommandListDebugNameW, Node->pCommandQueueDebugNameW, LastCompletedOp, Node->BreadcrumbCount);
+					E_LOG(Warning, "[DRED] Commandlist \"%s\" on CommandQueue \"%s\", %d completed of %d", pNode->pCommandListDebugNameW, pNode->pCommandQueueDebugNameW, LastCompletedOp, pNode->BreadcrumbCount);
 
 					int32 FirstOp = Math::Max(LastCompletedOp - 5, 0);
-					int32 LastOp = Math::Min(LastCompletedOp + 5, int32(Node->BreadcrumbCount) - 1);
+					int32 LastOp = Math::Min(LastCompletedOp + 5, int32(pNode->BreadcrumbCount) - 1);
+
+					for (uint32 breadcrumbContext = FirstOp; breadcrumbContext < pNode->BreadcrumbContextsCount; ++breadcrumbContext)
+					{
+						const D3D12_DRED_BREADCRUMB_CONTEXT& context = pNode->pBreadcrumbContexts[breadcrumbContext];
+						E_LOG(Warning, "\tBreadcrumb %d: %s", context.BreadcrumbIndex, UNICODE_TO_MULTIBYTE(context.pContextString));
+					}
 
 					for (int32 Op = FirstOp; Op <= LastOp; ++Op)
 					{
 						//uint32 LastOpIndex = (*Node->pLastBreadcrumbValue - 1) % 65536;
-						D3D12_AUTO_BREADCRUMB_OP BreadcrumbOp = Node->pCommandHistory[Op];
+						D3D12_AUTO_BREADCRUMB_OP BreadcrumbOp = pNode->pCommandHistory[Op];
 						const TCHAR* OpName = (BreadcrumbOp < ARRAYSIZE(OpNames)) ? OpNames[BreadcrumbOp] : TEXT("Unknown Op");
 						E_LOG(Warning, "\tOp: %d, %s%s", Op, OpName, (Op + 1 == LastCompletedOp) ? TEXT(" - Last completed") : TEXT(""));
 					}
-					Node = Node->pNext;
+					pNode = pNode->pNext;
 				}
 			}
 
 			D3D12_DRED_PAGE_FAULT_OUTPUT DredPageFaultOutput;
-			if (SUCCEEDED(Dred->GetPageFaultAllocationOutput(&DredPageFaultOutput)) && DredPageFaultOutput.PageFaultVA != 0)
+			if (SUCCEEDED(pDred->GetPageFaultAllocationOutput(&DredPageFaultOutput)) && DredPageFaultOutput.PageFaultVA != 0)
 			{
 				E_LOG(Warning, "[DRED] PageFault at VA GPUAddress \"0x%x\"", DredPageFaultOutput.PageFaultVA);
 

@@ -664,7 +664,7 @@ void Graphics::Update()
 				int dispatchGroupsY = Math::DivideAndRoundUp(m_WindowHeight, 16);
 				renderContext.Dispatch(dispatchGroupsX, dispatchGroupsY);
 
-				renderContext.InsertResourceBarrier(resources.GetTexture(Data.DepthStencilResolved), D3D12_RESOURCE_STATE_SHADER_RESOURCE);
+				renderContext.InsertResourceBarrier(resources.GetTexture(Data.DepthStencilResolved), D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 				renderContext.InsertResourceBarrier(resources.GetTexture(Data.DepthStencil), D3D12_RESOURCE_STATE_DEPTH_READ);
 				renderContext.FlushResourceBarriers();
 			});
@@ -933,8 +933,8 @@ void Graphics::Update()
 				renderContext.InsertResourceBarrier(m_pTAASource.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 				renderContext.InsertResourceBarrier(m_pHDRRenderTarget.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 				renderContext.InsertResourceBarrier(m_pVelocity.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-				renderContext.InsertResourceBarrier(m_pPreviousColor.get(), D3D12_RESOURCE_STATE_SHADER_RESOURCE);
-				
+				renderContext.InsertResourceBarrier(m_pPreviousColor.get(), D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
+
 				renderContext.SetComputeRootSignature(m_pTemporalResolveRS.get());
 				renderContext.SetPipelineState(m_pTemporalResolvePSO);
 
@@ -1010,7 +1010,7 @@ void Graphics::Update()
 				Texture* pToneMapInput = resources.GetTexture(toneMappingInput);
 
 				context.InsertResourceBarrier(m_pLuminanceHistogram.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-				context.InsertResourceBarrier(pToneMapInput, D3D12_RESOURCE_STATE_SHADER_RESOURCE);
+				context.InsertResourceBarrier(pToneMapInput, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 				context.ClearUavUInt(m_pLuminanceHistogram.get(), m_pLuminanceHistogram->GetUAV());
 
 				context.SetPipelineState(m_pLuminanceHistogramPSO);
@@ -1335,6 +1335,7 @@ void Graphics::InitD3D()
 		//Create the device
 		constexpr D3D_FEATURE_LEVEL featureLevels[] =
 		{
+			D3D_FEATURE_LEVEL_12_2,
 			D3D_FEATURE_LEVEL_12_1,
 			D3D_FEATURE_LEVEL_12_0,
 			D3D_FEATURE_LEVEL_11_1,
@@ -1343,6 +1344,7 @@ void Graphics::InitD3D()
 		auto GetFeatureLevelName = [](D3D_FEATURE_LEVEL featureLevel) {
 			switch (featureLevel)
 			{
+			case D3D_FEATURE_LEVEL_12_2: return "D3D_FEATURE_LEVEL_12_2";
 			case D3D_FEATURE_LEVEL_12_1: return "D3D_FEATURE_LEVEL_12_1";
 			case D3D_FEATURE_LEVEL_12_0: return "D3D_FEATURE_LEVEL_12_0";
 			case D3D_FEATURE_LEVEL_11_1: return "D3D_FEATURE_LEVEL_11_1";
@@ -1435,7 +1437,7 @@ void Graphics::InitD3D()
 		if (SUCCEEDED(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &caps0, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS))))
 		{
 			checkf(caps0.ResourceHeapTier >= D3D12_RESOURCE_HEAP_TIER_2, "Device does not support Resource Heap Tier 2 or higher. Tier 1 is not supported");
-			checkf(caps0.ResourceBindingTier >= D3D12_RESOURCE_BINDING_TIER_2, "Device does not support Resource Binding Tier 2 or higher. Tier 1 is not supported.");
+			checkf(caps0.ResourceBindingTier >= D3D12_RESOURCE_BINDING_TIER_3, "Device does not support Resource Binding Tier 3 or higher. Tier 2 and under is not supported.");
 		}
 		D3D12_FEATURE_DATA_D3D12_OPTIONS5 caps5{};
 		if (SUCCEEDED(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &caps5, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS5))))
@@ -1456,7 +1458,7 @@ void Graphics::InitD3D()
 			m_SamplerFeedbackSupport = caps7.SamplerFeedbackTier;
 		}
 		D3D12_FEATURE_DATA_SHADER_MODEL shaderModelSupport{};
-		shaderModelSupport.HighestShaderModel = D3D_SHADER_MODEL_6_6;
+		shaderModelSupport.HighestShaderModel = D3D_SHADER_MODEL_6_7;
 		if (SUCCEEDED(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &shaderModelSupport, sizeof(D3D12_FEATURE_DATA_SHADER_MODEL))))
 		{
 			m_ShaderModelMajor = (uint8)(shaderModelSupport.HighestShaderModel >> 0x4);

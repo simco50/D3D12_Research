@@ -102,6 +102,11 @@ workspace (ENGINE_NAME)
 			warnings "Default"
 		filter {}
 
+		-- D3D12
+		includedirs (ROOT .. "Libraries/D3D12/include")
+		postbuildcommands { ("{COPY} \"$(SolutionDir)Libraries\\D3D12\\bin\\D3D12Core.dll\" \"$(OutDir)\\D3D12\\\"") }
+		postbuildcommands { ("{COPY} \"$(SolutionDir)Libraries\\D3D12\\bin\\d3d12SDKLayers.dll\" \"$(OutDir)\\D3D12\\\"") }
+
 		-- Pix
 		includedirs (ROOT .. "Libraries/Pix/include")
 		libdirs (ROOT .. "Libraries/Pix/lib")

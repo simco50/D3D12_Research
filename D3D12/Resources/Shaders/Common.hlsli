@@ -258,8 +258,7 @@ float Pow5(float x)
 	return xx * xx * x;
 }
 
-template<typename T>
-T Square(T x)
+float Square(float x)
 {
     return x * x;
 }

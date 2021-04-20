@@ -179,7 +179,7 @@ bool Image::GetSurfaceInfo(int width, int height, int depth, int mipLevel, MipLe
 	mipLevelInfo.Height = std::max(1, height >> mipLevel);
 	mipLevelInfo.Depth = std::max(1, depth >> mipLevel);
 
-	if (m_Format == ImageFormat::RGBA || m_Format == ImageFormat::BGRA)
+	if (m_Format == ImageFormat::RGBA || m_Format == ImageFormat::BGRA || m_Format == ImageFormat::RG32 || m_Format == ImageFormat::RGBA32)
 	{
 		mipLevelInfo.RowSize = mipLevelInfo.Width * m_BBP / 8;
 		mipLevelInfo.Rows = mipLevelInfo.Height;
@@ -417,10 +417,12 @@ bool Image::LoadDds(const char* inputStream)
 			case DXGI_FORMAT_R32G32B32A32_FLOAT:
 				m_Components = 4;
 				m_Format = ImageFormat::RGBA32;
+				m_BBP = 128;
 				break;
 			case DXGI_FORMAT_R32G32_FLOAT:
 				m_Components = 2;
 				m_Format = ImageFormat::RG32;
+				m_BBP = 64;
 				break;
 			default:
 				return false;

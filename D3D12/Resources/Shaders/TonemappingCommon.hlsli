@@ -5,26 +5,22 @@
 
 #define NUM_HISTOGRAM_BINS 256
 
-template<typename T>
-T Reinhard(T x)
+float3 Reinhard(float3 x)
 {
 	return x / (1.0 + x);
 }
 
-template<typename T>
-T InverseReinhard(T x)
+float3 InverseReinhard(float3 x)
 {
 	return x / (1.0 - x);
 }
 
-template<typename T>
-T ReinhardExtended(T x, float MaxWhite)
+float3 ReinhardExtended(float3 x, float MaxWhite)
 {
 	return (x * (1.0 + x / Square(MaxWhite)) ) / (1.0 + x);
 }
 
-template<typename T>
-T ACES_Fast(T x) 
+float3 ACES_Fast(float3 x) 
 {
     // Narkowicz 2015, "ACES Filmic Tone Mapping Curve"
     const float a = 2.51;
@@ -35,8 +31,7 @@ T ACES_Fast(T x)
     return (x * (a * x + b)) / (x * (c * x + d) + e);
 }
 
-template<typename T>
-T Unreal3(T x) 
+float3 Unreal3(float3 x) 
 {
     // Unreal 3, Documentation: "Color Grading"
     // Adapted to be close to Tonemap_ACES, with similar range
@@ -44,8 +39,7 @@ T Unreal3(T x)
     return x / (x + 0.155) * 1.019;
 }
 
-template<typename T>
-T Uncharted2(T x)
+float3 Uncharted2(float3 x)
 {
 	const float A = 0.15;
 	const float B = 0.50;
