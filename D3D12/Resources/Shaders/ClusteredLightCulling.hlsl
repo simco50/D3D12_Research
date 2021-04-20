@@ -78,10 +78,7 @@ void LightCulling(CS_INPUT input)
 	for (uint i = input.GroupIndex; i < cLightCount; i += THREAD_COUNT)
 	{
 		Light light = tLights[i];
-
-		switch (light.Type)
-		{
-		case LIGHT_POINT:
+		if(light.IsPoint())
 		{
 			Sphere sphere = (Sphere)0;
 			sphere.Radius = light.Range;
@@ -91,8 +88,7 @@ void LightCulling(CS_INPUT input)
 				AddLight(i);
 			}
 		}
-		break;
-		case LIGHT_SPOT:
+		else if(light.IsSpot())
 		{
 			Sphere sphere;
 			sphere.Radius = sqrt(dot(gGroupAABB.Extents.xyz, gGroupAABB.Extents.xyz));
@@ -106,12 +102,9 @@ void LightCulling(CS_INPUT input)
 				AddLight(i);
 			}
 		}
-		break;
-		case LIGHT_DIRECTIONAL:
+		else
 		{
 			AddLight(i);
-		}
-		break;
 		}
 	}
 

@@ -208,6 +208,7 @@ unsigned int Image::TextureFormatFromCompressionFormat(const ImageFormat& format
 	case ImageFormat::RGB32:	return DXGI_FORMAT_R32G32B32_FLOAT;
 	case ImageFormat::RGBA16:	return DXGI_FORMAT_R16G16B16A16_FLOAT;
 	case ImageFormat::RGBA32:	return DXGI_FORMAT_R32G32B32A32_FLOAT;
+	case ImageFormat::RG32:		return DXGI_FORMAT_R32G32_FLOAT;
 	case ImageFormat::BC1:		return sRgb ? DXGI_FORMAT_BC1_UNORM_SRGB : DXGI_FORMAT_BC1_UNORM;
 	case ImageFormat::BC2:		return sRgb ? DXGI_FORMAT_BC2_UNORM_SRGB : DXGI_FORMAT_BC2_UNORM;
 	case ImageFormat::BC3:		return sRgb ? DXGI_FORMAT_BC3_UNORM_SRGB : DXGI_FORMAT_BC3_UNORM;
@@ -412,6 +413,14 @@ bool Image::LoadDds(const char* inputStream)
 				m_sRgb = true;
 			case IMAGE_FORMAT::R8G8B8A8_UNORM:
 				m_Format = ImageFormat::RGBA;
+				break;
+			case DXGI_FORMAT_R32G32B32A32_FLOAT:
+				m_Components = 4;
+				m_Format = ImageFormat::RGBA32;
+				break;
+			case DXGI_FORMAT_R32G32_FLOAT:
+				m_Components = 2;
+				m_Format = ImageFormat::RG32;
 				break;
 			default:
 				return false;

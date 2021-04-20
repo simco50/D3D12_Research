@@ -1,4 +1,4 @@
-#include "RNG.hlsli"
+#include "Random.hlsli"
 #include "Common.hlsli"
 
 #define RootSig "CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \

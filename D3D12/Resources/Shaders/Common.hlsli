@@ -3,6 +3,7 @@
 
 #include "Constants.hlsli"
 
+//todo: SM6.6 replace with unpack_u8u32
 float4 UIntToColor(uint c)
 {
     return float4(
@@ -13,26 +14,64 @@ float4 UIntToColor(uint c)
         );
 }
 
+bool EnumHasAnyFlag(uint value, uint mask)
+{
+    return (value & mask) != 0;    
+}
+
+bool EnumHasAllFlags(uint value, uint mask)
+{
+    return (value & mask) == mask;    
+}
+
+enum LightFlags : uint
+{
+    LF_None =                       0,
+    LF_Enabled =                    1 << 0,
+    LF_CastShadow =                 1 << 1,
+    LF_Volumetrics =                1 << 2,
+    LF_PointAttenuation =           1 << 3,
+    LF_DirectionalAttenuation =     1 << 4,
+
+    LF_LightTypeMask = LF_PointAttenuation | LF_DirectionalAttenuation,
+    LF_PointLight = LF_PointAttenuation,
+    LF_SpotLight = LF_PointAttenuation | LF_DirectionalAttenuation,
+    LF_DirectionalLight = LF_None,
+};
+
 struct Light
 {
 	float3 Position;
-	int Enabled;
+    uint Flags;
 	float3 Direction;
-	int Type;
-	float2 SpotlightAngles;
 	uint Color;
+	float2 SpotlightAngles;
     float Intensity;
 	float Range;
     int ShadowIndex;
     float InvShadowSize;
-    int VolumetricLighting;
     int LightTexture;
-    int3 pad;
 
-    float4 GetColor()
-    {
-        return UIntToColor(Color);
-    }
+    float4 GetColor() { return UIntToColor(Color); }
+
+    bool IsEnabled() { return EnumHasAllFlags(Flags, LF_Enabled); }
+    bool CastShadows() { return EnumHasAllFlags(Flags, LF_CastShadow); }
+    bool IsVolumetric() { return EnumHasAllFlags(Flags, LF_Volumetrics); }
+    bool PointAttenuation() { return EnumHasAllFlags(Flags, LF_PointAttenuation); }
+    bool DirectionalAttenuation() { return EnumHasAllFlags(Flags, LF_DirectionalAttenuation); }
+
+    bool IsDirectional() { return (Flags & LF_LightTypeMask) == LF_DirectionalLight; }
+    bool IsPoint() { return (Flags & LF_LightTypeMask) == LF_PointLight; }
+    bool IsSpot() { return (Flags & LF_LightTypeMask) == LF_SpotLight; }
+};
+
+#define MAX_SHADOW_CASTERS 32
+struct ShadowData
+{
+	float4x4 LightViewProjections[MAX_SHADOW_CASTERS];
+	float4 CascadeDepths;
+	uint NumCascades;
+	uint ShadowMapOffset;
 };
 
 struct Plane

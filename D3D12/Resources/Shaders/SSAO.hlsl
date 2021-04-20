@@ -1,5 +1,5 @@
 #include "Common.hlsli"
-#include "RNG.hlsli"
+#include "Random.hlsli"
 
 #define SSAO_SAMPLES 64
 #define BLOCK_SIZE 16

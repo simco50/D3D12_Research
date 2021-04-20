@@ -10,34 +10,44 @@ enum class LightType
 
 struct Light
 {
+	enum Flags
+	{
+		None =						0,
+		Enabled =					1 << 0,
+		Shadows =					1 << 1,
+		Volumetric =				1 << 2,
+		PointAttenuation =			1 << 3,
+		DirectionalAttenuation =	1 << 4,
+
+		PointLight =				PointAttenuation,
+		SpotLight =					PointAttenuation | DirectionalAttenuation,
+		DirectionalLight =			None,
+	};
+
 	struct RenderData
 	{
 		Vector3 Position = Vector3::Zero;
-		int Enabled = 1;
+		uint32 Flags = 0;
 		Vector3 Direction = Vector3::Forward;
-		LightType Type = LightType::MAX;
-		Vector2 SpotlightAngles = Vector2::Zero;
 		uint32 Colour = 0xFFFFFFFF;
+		Vector2 SpotlightAngles = Vector2::Zero;
 		float Intensity = 1.0f;
 		float Range = 1.0f;
 		int32 ShadowIndex = -1;
 		float InvShadowSize = 0;
-		int VolumetricLight = 1;
 		int LightTexture = -1;
-		int pad[3];
 	};
 	
 	Vector3 Position = Vector3::Zero;
 	Vector3 Direction = Vector3::Forward;
 	LightType Type = LightType::MAX;
-	float UmbraAngle = 0;
-	float PenumbraAngle = 0;
+	float UmbraAngleDegrees = 0;
+	float PenumbraAngleDegrees = 0;
 	Color Colour = Color(1, 1, 1, 1);
 	float Intensity = 1;
 	float Range = 1;
 	bool VolumetricLighting = false;
 	int LightTexture = -1;
-	
 	int ShadowIndex = -1;
 	int ShadowMapSize = 512;
 	bool CastShadows = false;
@@ -46,18 +56,39 @@ struct Light
 	{
 		RenderData data;
 		data.Position = Position;
-		data.Enabled = Intensity > 0;
 		data.Direction = Direction;
-		data.Type = Type;
-		data.SpotlightAngles.x = cos(PenumbraAngle * Math::ToRadians / 2.0f);
-		data.SpotlightAngles.y = cos(UmbraAngle * Math::ToRadians / 2.0f);
+		data.SpotlightAngles.x = cos(PenumbraAngleDegrees * Math::DegreesToRadians / 2.0f);
+		data.SpotlightAngles.y = cos(UmbraAngleDegrees * Math::DegreesToRadians / 2.0f);
 		data.Colour = Math::EncodeColor(Colour);
 		data.Intensity = Intensity;
 		data.Range = Range;
 		data.ShadowIndex = CastShadows ? ShadowIndex : -1;
 		data.InvShadowSize = 1.0f / ShadowMapSize;
-		data.VolumetricLight = VolumetricLighting;
 		data.LightTexture = LightTexture;
+		if (VolumetricLighting)
+		{
+			data.Flags |= Flags::Volumetric;
+		}
+		if (Intensity > 0)
+		{
+			data.Flags |= Flags::Enabled;
+		}
+		if (CastShadows)
+		{
+			data.Flags |= Flags::Shadows;
+		}
+		if (Type == LightType::Point)
+		{
+			data.Flags |= Flags::PointLight;
+		}
+		else if (Type == LightType::Spot)
+		{
+			data.Flags |= Flags::SpotLight;
+		}
+		else if (Type == LightType::Directional)
+		{
+			data.Flags |= Flags::DirectionalLight;
+		}
 		return data;
 	}
 
@@ -89,8 +120,8 @@ struct Light
 		l.Position = position;
 		l.Range = range;
 		l.Direction = direction;
-		l.PenumbraAngle = penumbraAngleInDegrees;
-		l.UmbraAngle = umbraAngleInDegrees;
+		l.PenumbraAngleDegrees = penumbraAngleInDegrees;
+		l.UmbraAngleDegrees = umbraAngleInDegrees;
 		l.Type = LightType::Spot;
 		l.Intensity = intensity;
 		l.Colour = color;

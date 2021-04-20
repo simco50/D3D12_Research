@@ -121,8 +121,8 @@ void RootSignature::Finalize(const char* pName, D3D12_ROOT_SIGNATURE_FLAGS flags
 
 			for (uint32 j = 0; j < rootParameter.DescriptorTable.NumDescriptorRanges; ++j)
 			{
-				m_DescriptorTableSizes[i] = rootParameter.DescriptorTable.pDescriptorRanges[j].NumDescriptors;
-				checkf(m_DescriptorTableSizes[i] != (uint32)~0, "Unbounded descriptors not supported in RootSignature (%s). Use a large number instead", pName);
+				const D3D12_DESCRIPTOR_RANGE& range = rootParameter.DescriptorTable.pDescriptorRanges[j];
+				m_DescriptorTableSizes[i] = range.NumDescriptors;
 			}
 		}
 	}

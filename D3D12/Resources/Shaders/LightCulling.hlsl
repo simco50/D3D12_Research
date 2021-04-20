@@ -174,9 +174,7 @@ void CSMain(CS_INPUT input)
     {
         Light light = tLights[i];
 
-        switch(light.Type)
-        {
-        case LIGHT_POINT:
+        if(light.IsPoint())
         {
             Sphere sphere = (Sphere)0;
             sphere.Radius = light.Range;
@@ -196,8 +194,7 @@ void CSMain(CS_INPUT input)
                 }
             }
         }
-        break;
-        case LIGHT_SPOT:
+        else if(light.IsSpot())
         {
             Sphere sphere;
             sphere.Radius = light.Range * 0.5f / pow(light.SpotlightAngles.y, 2);
@@ -217,13 +214,10 @@ void CSMain(CS_INPUT input)
                 }
             }
         }
-        break;
-        case LIGHT_DIRECTIONAL:
+        else
         {
             AddLightForTransparant(i);
             AddLightForOpaque(i);
-        }
-        break;
         }
     }
 

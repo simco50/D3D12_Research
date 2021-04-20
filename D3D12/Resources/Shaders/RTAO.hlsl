@@ -1,4 +1,4 @@
-#include "RNG.hlsli"
+#include "Random.hlsli"
 #include "Common.hlsli"
 #include "CommonBindings.hlsli"
 #include "RaytracingCommon.hlsli"

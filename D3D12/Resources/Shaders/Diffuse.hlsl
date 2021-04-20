@@ -69,15 +69,16 @@ struct PSInput
 };
 
 Texture3D<float4> tLightScattering : register(t2);
-Texture2D<uint2> tLightGrid2D : register(t3);
-StructuredBuffer<uint2> tLightGrid3D : register(t3);
 StructuredBuffer<uint> tLightIndexList : register(t4);
 
 #if CLUSTERED_FORWARD
+StructuredBuffer<uint2> tLightGrid : register(t3);
 uint GetSliceFromDepth(float depth)
 {
     return floor(log(depth) * cViewData.LightGridParams.x - cViewData.LightGridParams.y);
 }
+#elif TILED_FORWARD
+Texture2D<uint2> tLightGrid : register(t3);
 #endif
 
 float ScreenSpaceShadows(float3 worldPos, float3 lightDirection, int stepCount, float rayLength, float ditherOffset)
@@ -123,16 +124,18 @@ LightResult DoLight(float4 pos, float3 worldPos, float3 N, float3 V, float3 diff
 {
 #if TILED_FORWARD
 	uint2 tileIndex = uint2(floor(pos.xy / BLOCK_SIZE));
-	uint startOffset = tLightGrid2D[tileIndex].x;
-	uint lightCount = tLightGrid2D[tileIndex].y;
 #elif CLUSTERED_FORWARD
 	uint3 clusterIndex3D = uint3(floor(pos.xy / cViewData.ClusterSize), GetSliceFromDepth(pos.w));
-    uint clusterIndex1D = clusterIndex3D.x + (cViewData.ClusterDimensions.x * (clusterIndex3D.y + cViewData.ClusterDimensions.y * clusterIndex3D.z));
-	uint startOffset = tLightGrid3D[clusterIndex1D].x;
-	uint lightCount = tLightGrid3D[clusterIndex1D].y;
+    uint tileIndex = clusterIndex3D.x + (cViewData.ClusterDimensions.x * (clusterIndex3D.y + cViewData.ClusterDimensions.y * clusterIndex3D.z));
+#endif
+
+#if TILED_FORWARD || CLUSTERED_FORWARD
+	uint startOffset = tLightGrid[tileIndex].x;
+	uint lightCount = tLightGrid[tileIndex].y;
 #else
 	uint lightCount = cViewData.LightCount;
 #endif
+
 	LightResult totalResult = (LightResult)0;
 
 	for(uint i = 0; i < lightCount; ++i)
@@ -148,7 +151,7 @@ LightResult DoLight(float4 pos, float3 worldPos, float3 N, float3 V, float3 diff
 #define SCREEN_SPACE_SHADOWS 0
 #if SCREEN_SPACE_SHADOWS
 		float3 L = normalize(worldPos - light.Position);
-		if(light.Type == LIGHT_DIRECTIONAL)
+		if(light.IsDirectional())
 		{
 			L = light.Direction;
 		}
@@ -268,42 +271,41 @@ void PSMain(PSInput input,
 			out float4 outColor : SV_TARGET0,
 			out float4 outNormalRoughness : SV_TARGET1)
 {
+	float2 screenUV = (float2)input.position.xy * cViewData.InvScreenDimensions;
+	float ambientOcclusion = tAO.SampleLevel(sDiffuseSampler, screenUV, 0).r;
+
+// Surface Shader BEGIN
 	float4 diffuseSample = tTexture2DTable[cObjectData.Diffuse].Sample(sDiffuseSampler, input.texCoord);
-	float4 normalSample = tTexture2DTable[cObjectData.Normal].Sample(sDiffuseSampler, input.texCoord);
-	float4 roughnessMetalnessSample = tTexture2DTable[cObjectData.RoughnessMetalness].Sample(sDiffuseSampler, input.texCoord);
-	float4 emissiveSample = tTexture2DTable[cObjectData.Emissive].Sample(sDiffuseSampler, input.texCoord);
-
-	float4 baseColor = diffuseSample;
-	float3 sampledNormal = normalSample.xyz;
-	float metalness = roughnessMetalnessSample.b;
-	float roughness = roughnessMetalnessSample.g;
+	float3 tangentNormal = tTexture2DTable[cObjectData.Normal].Sample(sDiffuseSampler, input.texCoord).xyz;
+	float4 roughnessMetalness = tTexture2DTable[cObjectData.RoughnessMetalness].Sample(sDiffuseSampler, input.texCoord);
+	float4 emissive = tTexture2DTable[cObjectData.Emissive].Sample(sDiffuseSampler, input.texCoord);
+	float metalness = roughnessMetalness.b;
+	float roughness = roughnessMetalness.g;
 	float3 specular = 0.5f;
-
-	float3 diffuseColor = ComputeDiffuseColor(baseColor.rgb, metalness);
-	float3 specularColor = ComputeF0(specular.r, baseColor.rgb, metalness);
+// Surface Shader END
 
 	float3x3 TBN = float3x3(normalize(input.tangent), normalize(input.bitangent), normalize(input.normal));
-	float3 N = TangentSpaceNormalMapping(sampledNormal, TBN, true);
+	float3 N = TangentSpaceNormalMapping(tangentNormal, TBN, true);
+	float3 diffuseColor = ComputeDiffuseColor(diffuseSample.rgb, metalness);
+	float3 specularColor = ComputeF0(specular.r, diffuseSample.rgb, metalness);
 	float3 V = normalize(cViewData.ViewPosition.xyz - input.positionWS);
 
 	float ssrWeight = 0;	
 	float3 ssr = ScreenSpaceReflections(input.position, input.positionVS, N, V, roughness, ssrWeight);
 
-	LightResult lighting = DoLight(input.position, input.positionWS, N, V, diffuseColor, specularColor, roughness);
+	LightResult lighting = DoLight(input.position, input.positionWS, input.normal, V, diffuseColor, specularColor, roughness);
 
-	float2 screenUV = (float2)input.position.xy * cViewData.InvScreenDimensions;
-	float ao = tAO.SampleLevel(sDiffuseSampler, screenUV, 0).r;
-	float3 color = lighting.Diffuse + lighting.Specular;
-	color += ApplyAmbientLight(diffuseColor, ao, tLights[0].GetColor().rgb * 0.1f);
-	color += ssr * ao;
-	color += emissiveSample.rgb;
+	float3 outRadiance = 0;
+	outRadiance += lighting.Diffuse + lighting.Specular;
+	outRadiance += ApplyAmbientLight(diffuseColor, ambientOcclusion, tLights[0].GetColor().rgb * 0.1f);
+	outRadiance += ssr * ambientOcclusion;
+	outRadiance += emissive.rgb;
 
-	float slice = sqrt((input.positionVS.z - cViewData.FarZ) / (cViewData.NearZ - cViewData.FarZ));
-	float4 scatteringTransmittance = tLightScattering.SampleLevel(sClampSampler, float3(screenUV, slice), 0);
-	color = color * scatteringTransmittance.w + scatteringTransmittance.rgb;
+	float fogSlice = sqrt((input.positionVS.z - cViewData.FarZ) / (cViewData.NearZ - cViewData.FarZ));
+	float4 scatteringTransmittance = tLightScattering.SampleLevel(sClampSampler, float3(screenUV, fogSlice), 0);
+	outRadiance = outRadiance * scatteringTransmittance.w + scatteringTransmittance.rgb;
 
-	outColor = float4(color, baseColor.a);
-
+	outColor = float4(outRadiance, baseColor.a);
     float reflectivity = saturate(scatteringTransmittance.w * ao * Square(1 - roughness));
 	outNormalRoughness = float4(N, saturate(reflectivity - ssrWeight));
 	//outNormalRoughness = float4(input.normal, 1);

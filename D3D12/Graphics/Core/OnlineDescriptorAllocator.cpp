@@ -80,6 +80,9 @@ void OnlineDescriptorAllocator::SetDescriptors(uint32 rootIndex, uint32 offset, 
 	if (!m_StaleRootParameters.GetBit(rootIndex))
 	{
 		uint32 tableSize = entry.TableSize;
+		checkf(tableSize != ~0u, "Descriptor table at RootIndex '%d' is unbounded and should not use the descriptor allocator", rootIndex);
+		checkf(offset + numHandles <= tableSize, "Attempted to set a descriptor (Offset: %d, Range: %d) out of the descriptor table bounds (Size: %d)", offset, numHandles, rootIndex);
+		
 		entry.Descriptor = Allocate(tableSize);
 		m_StaleRootParameters.SetBit(rootIndex);
 	}
@@ -125,10 +128,11 @@ void OnlineDescriptorAllocator::ParseRootSignature(RootSignature* pRootSignature
 
 	m_StaleRootParameters.ClearAll();
 
+	const std::array<uint32, MAX_NUM_ROOT_PARAMETERS>& descriptorTableSizes = pRootSignature->GetDescriptorTableSizes();
 	for (uint32 rootIndex : m_RootDescriptorMask)
 	{
 		RootDescriptorEntry& entry = m_RootDescriptorTable[rootIndex];
-		entry.TableSize = pRootSignature->GetDescriptorTableSizes()[rootIndex];
+		entry.TableSize = descriptorTableSizes[rootIndex];
 		entry.Descriptor.Reset();
 	}
 }

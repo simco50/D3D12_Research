@@ -3,10 +3,10 @@
 #include "Lighting.hlsli"
 
 #define RootSig \
-		"CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \
-		"CBV(b2, visibility=SHADER_VISIBILITY_ALL), " \
-		"DescriptorTable(UAV(u0, numDescriptors = 1), visibility=SHADER_VISIBILITY_ALL), " \
-		"DescriptorTable(SRV(t4, numDescriptors = 10), visibility=SHADER_VISIBILITY_ALL), " \
+		"CBV(b0), " \
+		"CBV(b2), " \
+		"DescriptorTable(UAV(u0, numDescriptors = 1)), " \
+		"DescriptorTable(SRV(t4, numDescriptors = 10)), " \
 		GLOBAL_BINDLESS_TABLE ", " \
 		"StaticSampler(s0, filter=FILTER_MIN_MAG_MIP_POINT, addressU = TEXTURE_ADDRESS_WRAP, addressV = TEXTURE_ADDRESS_WRAP), " \
 		"StaticSampler(s1, filter=FILTER_MIN_MAG_MIP_POINT, addressU = TEXTURE_ADDRESS_CLAMP, addressV = TEXTURE_ADDRESS_CLAMP), " \
@@ -90,7 +90,7 @@ void InjectFogLightingCS(uint3 threadId : SV_DISPATCHTHREADID)
 	for(int i = 0; i < cData.NumLights; ++i)
 	{
 		Light light = tLights[i];
-		if(light.VolumetricLighting > 0)
+		if(light.IsEnabled() && light.IsVolumetric())
 		{
 			float attenuation = GetAttenuation(light, worldPosition);
 			if(attenuation <= 0.0f)
@@ -98,7 +98,7 @@ void InjectFogLightingCS(uint3 threadId : SV_DISPATCHTHREADID)
 				continue;
 			}
 
-			if(light.ShadowIndex >= 0)
+			if(light.CastShadows())
 			{
 				int shadowIndex = GetShadowIndex(light, pos, worldPosition);
 				attenuation *= ShadowNoPCF(worldPosition, shadowIndex, light.InvShadowSize);
@@ -106,7 +106,7 @@ void InjectFogLightingCS(uint3 threadId : SV_DISPATCHTHREADID)
 			}
 
 			float3 L = normalize(light.Position - worldPosition);
-			if(light.Type == LIGHT_DIRECTIONAL)
+			if(light.IsDirectional())
 			{
 				L = -normalize(light.Direction);
 			}

@@ -337,7 +337,7 @@ void DebugRenderer::AddWireCone(const Vector3& position, const Vector3& directio
 	Vector3 d;
 	direction.Normalize(d);
 
-	float radius = tanf(0.5f * angle * Math::ToRadians) * height;
+	float radius = tanf(0.5f * angle * Math::DegreesToRadians) * height;
 	DebugSphere sphere(position, radius);
 	float t = Math::PI * 2 / (segments + 1);
 
@@ -383,7 +383,7 @@ void DebugRenderer::AddLight(const Light& light)
 		AddSphere(light.Position, light.Range, 8, 8, Color(1.0f, 1.0f, 0.0f, 1.0f), false);
 		break;
 	case LightType::Spot:
-		AddWireCone(light.Position, light.Direction, light.Range, light.UmbraAngle, 10, Color(1.0f, 1.0f, 0.0f, 1.0f));
+		AddWireCone(light.Position, light.Direction, light.Range, light.UmbraAngleDegrees, 10, Color(1.0f, 1.0f, 0.0f, 1.0f));
 		break;
 	default:
 		break;

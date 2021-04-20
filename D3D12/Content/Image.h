@@ -7,6 +7,7 @@ enum class ImageFormat
 	RGB32,
 	RGBA16,
 	RGBA32,
+	RG32,
 	BC1,
 	BC2,
 	BC3,

@@ -8,6 +8,8 @@
 				"DescriptorTable(SRV(t0, numDescriptors = 4), visibility=SHADER_VISIBILITY_MESH), " \
 				"StaticSampler(s0, filter=FILTER_MIN_MAG_MIP_LINEAR, visibility = SHADER_VISIBILITY_ALL, addressU = TEXTURE_ADDRESS_CLAMP, addressV = TEXTURE_ADDRESS_CLAMP), " \
 
+#define MAX_LIGHTS_PER_BUCKET 10
+
 cbuffer PerFrameData : register(b0)
 {
 	float4x4 cProjection;
@@ -54,7 +56,7 @@ void MSMain(
 
     SetMeshOutputCounts(vertexCount, primitiveCount);
 
-    float4 color = tHeatmapTexture.SampleLevel(sHeatmapSampler, float2((float)lightCount / 30.0f, 0), 0);
+    float4 color = tHeatmapTexture.SampleLevel(sHeatmapSampler, float2((float)lightCount / MAX_LIGHTS_PER_BUCKET, 0), 0);
     AABB aabb = tAABBs[clusterIndex];
 
     float4 center = aabb.Center;
@@ -99,7 +101,7 @@ GSInput VSMain(uint vertexId : SV_VertexID)
 	result.extents = aabb.Extents;
 
     result.lightCount = tLightGrid[clusterIndex].y;
-	result.color = tHeatmapTexture.SampleLevel(sHeatmapSampler, float2((float)result.lightCount / 30.0f, 0), 0);
+	result.color = tHeatmapTexture.SampleLevel(sHeatmapSampler, float2((float)result.lightCount / MAX_LIGHTS_PER_BUCKET, 0), 0);
 	return result;
 }
 

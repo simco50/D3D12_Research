@@ -3,17 +3,6 @@
 #include "CommonBindings.hlsli"
 
 #define SUPPORT_BC5 1
-#define MAX_SHADOW_CASTERS 32
-
-struct ShadowData
-{
-	float4x4 LightViewProjections[MAX_SHADOW_CASTERS];
-	float4 CascadeDepths;
-	uint NumCascades;
-	uint ShadowMapOffset;
-};
-
-ConstantBuffer<ShadowData> cShadowData : register(b2);
 
 // Angle >= Umbra -> 0
 // Angle < Penumbra -> 1
@@ -118,11 +107,11 @@ float GetAttenuation(Light light, float3 wPos)
 {
 	float attentuation = 1.0f;
 
-	if(light.Type >= LIGHT_POINT)
+	if(light.PointAttenuation())
 	{
 		float3 L = light.Position - wPos;
 		attentuation *= RadialAttenuation(L, light.Range);
-		if(light.Type >= LIGHT_SPOT)
+		if(light.DirectionalAttenuation())
 		{
 			attentuation *= DirectionalAttenuation(L, light.Direction, light.SpotlightAngles.y, light.SpotlightAngles.x);
 		}
@@ -139,7 +128,7 @@ float3 ApplyAmbientLight(float3 diffuse, float ao, float3 lightColor)
 uint GetShadowIndex(Light light, float4 pos, float3 wPos)
 {
 	int shadowIndex = light.ShadowIndex;
-	if(light.Type == LIGHT_DIRECTIONAL)
+	if(light.IsDirectional())
 	{
 		float4 splits = pos.w > cShadowData.CascadeDepths;
 		float4 cascades = cShadowData.CascadeDepths > 0;
@@ -160,7 +149,7 @@ uint GetShadowIndex(Light light, float4 pos, float3 wPos)
 		}
 		shadowIndex += cascadeIndex;
 	}
-	else if(light.Type == LIGHT_POINT)
+	else if(light.IsPoint())
 	{
 		shadowIndex += GetCubeFaceIndex(wPos - light.Position);
 	}
@@ -183,7 +172,7 @@ LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, floa
 
 #define VISUALIZE_CASCADES 0
 #if VISUALIZE_CASCADES
-		if(light.Type == LIGHT_DIRECTIONAL)
+		if(light.IsDirectional())
 		{
 			static float4 COLORS[4] = {
 				float4(1,0,0,1),
@@ -206,7 +195,7 @@ LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, floa
 	}
 
 	float3 L = normalize(light.Position - wPos);
-	if(light.Type == LIGHT_DIRECTIONAL)
+	if(light.IsDirectional())
 	{
 		L = -light.Direction;
 	}

@@ -2,20 +2,22 @@
 #include "ShadingModels.hlsli"
 #include "Lighting.hlsli"
 #include "RaytracingCommon.hlsli"
+#include "Random.hlsli"
 
 #define RAY_CONE_TEXTURE_LOD 1
 #define SECONDARY_SHADOW_RAY 1
 
 GlobalRootSignature GlobalRootSig =
 {
-	"CBV(b0, visibility=SHADER_VISIBILITY_ALL),"
-	"CBV(b2, visibility=SHADER_VISIBILITY_ALL),"
-	"DescriptorTable(UAV(u0, numDescriptors = 1), visibility=SHADER_VISIBILITY_ALL),"
-	"DescriptorTable(SRV(t5, numDescriptors = 6), visibility=SHADER_VISIBILITY_ALL),"
+	"CBV(b0),"
+	"CBV(b2),"
+	"DescriptorTable(UAV(u0, numDescriptors = 1)),"
+	"DescriptorTable(SRV(t5, numDescriptors = 5)),"
+	"SRV(t10), "
 	GLOBAL_BINDLESS_TABLE ", "
-	"StaticSampler(s0, filter=FILTER_MIN_MAG_LINEAR_MIP_POINT, visibility = SHADER_VISIBILITY_ALL),"
-	"StaticSampler(s1, filter=FILTER_MIN_MAG_MIP_LINEAR, addressU = TEXTURE_ADDRESS_CLAMP, addressV = TEXTURE_ADDRESS_CLAMP, visibility=SHADER_VISIBILITY_ALL), " \
-	"StaticSampler(s2, filter=FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT, visibility = SHADER_VISIBILITY_ALL, comparisonFunc=COMPARISON_GREATER), " \
+	"StaticSampler(s0, filter=FILTER_MIN_MAG_LINEAR_MIP_POINT),"
+	"StaticSampler(s1, filter=FILTER_MIN_MAG_MIP_LINEAR, addressU = TEXTURE_ADDRESS_CLAMP, addressV = TEXTURE_ADDRESS_CLAMP), " \
+	"StaticSampler(s2, filter=FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT, comparisonFunc=COMPARISON_GREATER), " \
 };
 
 
@@ -51,7 +53,7 @@ struct HitData
 
 RWTexture2D<float4> uOutput : register(u0);
 ConstantBuffer<ViewData> cViewData : register(b0);
-ConstantBuffer<HitData> cHitData : register(b1);
+StructuredBuffer<HitData> tHitGroupData : register(t10);
 
 struct ReflectionRayPayload
 {
@@ -135,7 +137,8 @@ struct ShadingData
 
 Vertex GetVertexAttributes(float3 barycentrics)
 {
-	uint3 indices = tBufferTable[cHitData.IndexBuffer].Load<uint3>(PrimitiveIndex() * sizeof(uint3));
+	HitData hitData = tHitGroupData[InstanceID()];
+	uint3 indices = tBufferTable[hitData.IndexBuffer].Load<uint3>(PrimitiveIndex() * sizeof(uint3));
 	Vertex vertexOut;
 	vertexOut.position = 0;
 	vertexOut.texCoord = 0;
@@ -144,29 +147,30 @@ Vertex GetVertexAttributes(float3 barycentrics)
 	vertexOut.bitangent = 0;
 	for(int i = 0; i < 3; ++i)
 	{
-		Vertex v = tBufferTable[cHitData.VertexBuffer].Load<Vertex>(indices[i] * sizeof(Vertex));
+		Vertex v = tBufferTable[hitData.VertexBuffer].Load<Vertex>(indices[i] * sizeof(Vertex));
 		vertexOut.position += v.position * barycentrics[i];
 		vertexOut.texCoord += v.texCoord * barycentrics[i];
 		vertexOut.normal += v.normal * barycentrics[i];
 		vertexOut.tangent += v.tangent * barycentrics[i];
 		vertexOut.bitangent += v.bitangent * barycentrics[i];
 	}
-	vertexOut.position = mul(float4(vertexOut.position, 1), cHitData.WorldMatrix).xyz;
-	vertexOut.normal = mul(vertexOut.normal, (float3x3)cHitData.WorldMatrix);
-	vertexOut.tangent = mul(vertexOut.tangent, (float3x3)cHitData.WorldMatrix);
-	vertexOut.bitangent = mul(vertexOut.bitangent, (float3x3)cHitData.WorldMatrix);
+	vertexOut.position = mul(float4(vertexOut.position, 1), hitData.WorldMatrix).xyz;
+	vertexOut.normal = mul(vertexOut.normal, (float3x3)hitData.WorldMatrix);
+	vertexOut.tangent = mul(vertexOut.tangent, (float3x3)hitData.WorldMatrix);
+	vertexOut.bitangent = mul(vertexOut.bitangent, (float3x3)hitData.WorldMatrix);
 	return vertexOut;
 }
 
 ShadingData GetShadingData(BuiltInTriangleIntersectionAttributes attrib, float3 cameraLocation, float mipLevel)
 {
+	HitData hitData = tHitGroupData[InstanceID()];
 	float3 barycentrics = float3((1.0f - attrib.barycentrics.x - attrib.barycentrics.y), attrib.barycentrics.x, attrib.barycentrics.y);
 	Vertex v = GetVertexAttributes(barycentrics);
 
-	float4 diffuseSample = tTexture2DTable[cHitData.Diffuse].SampleLevel(sDiffuseSampler, v.texCoord, mipLevel);
-	float4 normalSample = tTexture2DTable[cHitData.Normal].SampleLevel(sDiffuseSampler, v.texCoord, mipLevel);
-	float4 roughnessMetalnessSample = tTexture2DTable[cHitData.RoughnessMetalness].SampleLevel(sDiffuseSampler, v.texCoord, mipLevel);
-	float4 emissiveSample = tTexture2DTable[cHitData.Emissive].SampleLevel(sDiffuseSampler, v.texCoord, mipLevel);
+	float4 diffuseSample = tTexture2DTable[hitData.Diffuse].SampleLevel(sDiffuseSampler, v.texCoord, mipLevel);
+	float4 normalSample = tTexture2DTable[hitData.Normal].SampleLevel(sDiffuseSampler, v.texCoord, mipLevel);
+	float4 roughnessMetalnessSample = tTexture2DTable[hitData.RoughnessMetalness].SampleLevel(sDiffuseSampler, v.texCoord, mipLevel);
+	float4 emissiveSample = tTexture2DTable[hitData.Emissive].SampleLevel(sDiffuseSampler, v.texCoord, mipLevel);
 	float specular = 0.5f;
 	float3x3 TBN = float3x3(v.tangent, v.bitangent, v.normal);
 
@@ -193,7 +197,7 @@ LightResult EvaluateLight(Light light, ShadingData shadingData)
 	}
 	
 	float3 L = light.Position - shadingData.WorldPos;
-	if(light.Type == LIGHT_DIRECTIONAL)
+	if(light.IsDirectional())
 	{
 		L = RAY_MAX_T * -light.Direction;
 	}
@@ -208,7 +212,7 @@ LightResult EvaluateLight(Light light, ShadingData shadingData)
 	lightPos.y = lightPos.y / -2.0f + 0.5f;
 	attenuation *= LightTextureMask(light, shadowIndex, shadingData.WorldPos);
 
-	if(lightPos.x >= 0 && lightPos.x <= 1 && lightPos.y >= 0 && lightPos.y <= 1.0f && lightPos.z >= 0 && lightPos.z <= 1)
+	if(all(lightPos >= 0) && all(lightPos <= 1))
 	{
 		Texture2D shadowTexture = tTexture2DTable[NonUniformResourceIndex(cShadowData.ShadowMapOffset + shadowIndex)];
 		attenuation *= shadowTexture.SampleCmpLevelZero(sShadowMapSampler, lightPos.xy, lightPos.z);

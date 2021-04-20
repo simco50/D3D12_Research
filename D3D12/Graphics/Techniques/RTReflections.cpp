@@ -59,27 +59,27 @@ void RTReflections::Execute(RGGraph& graph, const SceneData& sceneData)
 			bindingTable.BindRayGenShader("RayGen");
 			bindingTable.BindMissShader("ReflectionMiss", 0);
 			bindingTable.BindMissShader("ShadowMiss", 1);
+			bindingTable.BindHitGroup("ReflectionHitGroup", 0);
+
+			struct HitData
+			{
+				Matrix WorldTransform;
+				MaterialData Material;
+				uint32 VertexBuffer;
+				uint32 IndexBuffer;
+			};
+
+			DynamicAllocation allocation = context.AllocateTransientMemory(sizeof(HitData) * sceneData.Batches.size());
+			HitData* pCurrent = (HitData*)allocation.pMappedMemory;
 
 			for (const Batch& b : sceneData.Batches)
 			{
-				struct HitData
-				{
-					Matrix WorldTransform;
-					MaterialData Material;
-					uint32 VertexBuffer;
-					uint32 IndexBuffer;
-				};
-
-				HitData hitData;
+				HitData& hitData = *pCurrent;
 				hitData.Material = b.Material;
 				hitData.VertexBuffer = b.VertexBufferDescriptor;
 				hitData.IndexBuffer = b.IndexBufferDescriptor;
 				hitData.WorldTransform = b.WorldMatrix;
-
-				DynamicAllocation allocation = context.AllocateTransientMemory(sizeof(HitData));
-				memcpy(allocation.pMappedMemory, &hitData, sizeof(HitData));
-
-				bindingTable.BindHitGroup("ReflectionHitGroup", b.Index, { allocation.GpuHandle });
+				++pCurrent;
 			}
 
 			const D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
@@ -94,7 +94,8 @@ void RTReflections::Execute(RGGraph& graph, const SceneData& sceneData)
 			context.SetComputeDynamicConstantBufferView(1, *sceneData.pShadowData);
 			context.BindResource(2, 0, sceneData.pResolvedTarget->GetUAV());
 			context.BindResources(3, 0, srvs, ARRAYSIZE(srvs));
-			context.BindResourceTable(4, sceneData.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Compute);
+			context.SetComputeRootSRV(4, allocation.GpuHandle);
+			context.BindResourceTable(5, sceneData.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Compute);
 
 			context.DispatchRays(bindingTable, sceneData.pResolvedTarget->GetWidth(), sceneData.pResolvedTarget->GetHeight());
 		});
@@ -115,7 +116,6 @@ void RTReflections::SetupPipelines(Graphics* pGraphics)
 	ShaderLibrary* pShaderLibrary = pGraphics->GetShaderManager()->GetLibrary("RTReflections.hlsl");
 
 	m_pHitSignature = std::make_unique<RootSignature>(pGraphics);
-	m_pHitSignature->SetConstantBufferView(0, 1, D3D12_SHADER_VISIBILITY_ALL);
 	m_pHitSignature->Finalize("Hit", D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE);
 
 	m_pGlobalRS = std::make_unique<RootSignature>(pGraphics);

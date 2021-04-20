@@ -406,7 +406,7 @@ void Graphics::Update()
 		}
 		else if (light.Type == LightType::Spot)
 		{
-			Matrix projection = Math::CreatePerspectiveMatrix(light.UmbraAngle * Math::ToRadians, 1.0f, light.Range, 1.0f);
+			Matrix projection = Math::CreatePerspectiveMatrix(light.UmbraAngleDegrees * Math::DegreesToRadians, 1.0f, light.Range, 1.0f);
 			shadowData.LightViewProjections[shadowIndex++] = Math::CreateLookToMatrix(light.Position, light.Direction, Vector3::Up) * projection;
 		}
 		else if (light.Type == LightType::Point)
@@ -628,10 +628,16 @@ void Graphics::Update()
 				}
 			};
 
-			renderContext.SetPipelineState(m_pDepthPrepassOpaquePSO);
-			DrawBatches(Batch::Blending::Opaque);
-			renderContext.SetPipelineState(m_pDepthPrepassAlphaMaskPSO);
-			DrawBatches(Batch::Blending::AlphaMask);
+			{
+				GPU_PROFILE_SCOPE("Opaque", &renderContext);
+				renderContext.SetPipelineState(m_pDepthPrepassOpaquePSO);
+				DrawBatches(Batch::Blending::Opaque);
+			}
+			{
+				GPU_PROFILE_SCOPE("Masked", &renderContext);
+				renderContext.SetPipelineState(m_pDepthPrepassAlphaMaskPSO);
+				DrawBatches(Batch::Blending::AlphaMask);
+			}
 
 			renderContext.EndRenderPass();
 		});
@@ -827,11 +833,13 @@ void Graphics::Update()
 						}
 					};
 
-					//Opaque
 					{
 						GPU_PROFILE_SCOPE("Opaque", &context);
 						context.SetPipelineState(m_pShadowsOpaquePSO);
 						DrawBatches(Batch::Blending::Opaque);
+					}
+					{
+						GPU_PROFILE_SCOPE("Masked", &context);
 						context.SetPipelineState(m_pShadowsAlphaMaskPSO);
 						DrawBatches(Batch::Blending::AlphaMask);
 					}
@@ -1300,7 +1308,7 @@ void Graphics::InitD3D()
 		{
 			DXGI_ADAPTER_DESC3 desc;
 			pAdapter->GetDesc3(&desc);
-			E_LOG(Info, "\t%s - %f GB", UNICODE_TO_MULTIBYTE(desc.Description), (float)desc.DedicatedVideoMemory * Math::ToGigaBytes);
+			E_LOG(Info, "\t%s - %f GB", UNICODE_TO_MULTIBYTE(desc.Description), (float)desc.DedicatedVideoMemory * Math::BytesToGigaBytes);
 
 			uint32 outputIndex = 0;
 			ComPtr<IDXGIOutput> pOutput;
@@ -2068,7 +2076,7 @@ void Graphics::UpdateImGui()
 	if (ImGui::TreeNodeEx("Memory", ImGuiTreeNodeFlags_DefaultOpen))
 	{
 		ImGui::Text("Dynamic Upload Memory");
-		ImGui::Text("%.2f MB", Math::ToMegaBytes * m_pDynamicAllocationManager->GetMemoryUsage());
+		ImGui::Text("%.2f MB", Math::BytesToMegaBytes * m_pDynamicAllocationManager->GetMemoryUsage());
 		ImGui::TreePop();
 	}
 	if (ImGui::TreeNodeEx("Profiler", ImGuiTreeNodeFlags_DefaultOpen))
@@ -2193,7 +2201,7 @@ void Graphics::UpdateTLAS(CommandContext& context)
 			D3D12_RAYTRACING_INSTANCE_DESC instanceDesc{};
 			instanceDesc.AccelerationStructure = subMesh.pBLAS->GetGpuHandle();
 			instanceDesc.Flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE;
-			instanceDesc.InstanceContributionToHitGroupIndex = batch.Index;
+			instanceDesc.InstanceContributionToHitGroupIndex = 0;
 			instanceDesc.InstanceID = batch.Index;
 			instanceDesc.InstanceMask = 0xFF;
 

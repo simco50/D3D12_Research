@@ -238,15 +238,18 @@ namespace ShaderCompiler
 		CompileResult result;
 
 		ComPtr<ID3DBlob> pErrorBlob;
-		D3DCompile(pShaderSource, shaderSourceSize, pIdentifier, shaderDefines.data(), nullptr, pEntryPoint, pTarget, compileFlags, 0, (ID3DBlob**)result.pBlob.GetAddressOf(), pErrorBlob.GetAddressOf());
-		if (pErrorBlob != nullptr)
+		if (SUCCEEDED(D3DCompile(pShaderSource, shaderSourceSize, pIdentifier, shaderDefines.data(), nullptr, pEntryPoint, pTarget, compileFlags, 0, (ID3DBlob**)result.pBlob.GetAddressOf(), pErrorBlob.GetAddressOf()) != S_OK))
 		{
-			result.ErrorMessage = (char*)pErrorBlob->GetBufferPointer();
-			result.Success = false;
+			result.Success = true;
+			D3DReflect(result.pBlob->GetBufferPointer(), result.pBlob->GetBufferSize(), IID_PPV_ARGS(result.pReflection.GetAddressOf()));
 		}
 		else
 		{
-			result.Success = true;
+			if (pErrorBlob != nullptr)
+			{
+				result.ErrorMessage = (char*)pErrorBlob->GetBufferPointer();
+				result.Success = false;
+			}
 		}
 		return result;
 	}
@@ -326,7 +329,8 @@ Shader* ShaderManager::LoadShader(const std::string& shaderPath, ShaderType shad
 		ShaderCompiler::GetShaderTarget(shaderType),
 		entryPoint.c_str(),
 		m_ShaderModelMajor,
-		m_ShaderModelMinor, defines);
+		m_ShaderModelMinor,
+		defines);
 
 	if (!result.Success)
 	{
@@ -368,7 +372,8 @@ ShaderLibrary* ShaderManager::LoadShaderLibrary(const std::string& shaderPath, c
 		"lib",
 		"",
 		m_ShaderModelMajor,
-		m_ShaderModelMinor, defines);
+		m_ShaderModelMinor,
+		defines);
 
 	if (!result.Success)
 	{
