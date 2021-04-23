@@ -76,6 +76,7 @@ namespace Tweakables
 
 	// Reflections
 	bool g_RaytracedReflections = true;
+	float g_TLASBoundsThreshold = 5.0f * Math::DegreesToRadians;
 	int g_SsrSamples = 8;
 
 	// Misc
@@ -578,6 +579,8 @@ void Graphics::Update()
 			renderContext.InsertResourceBarrier(m_pLightBuffer.get(), D3D12_RESOURCE_STATE_COPY_DEST);
 			renderContext.FlushResourceBarriers();
 			renderContext.CopyBuffer(allocation.pBackingResource, m_pLightBuffer.get(), (uint32)m_pLightBuffer->GetSize(), (uint32)allocation.Offset, 0);
+
+			UpdateTLAS(renderContext);
 		});
 
 	//DEPTH PREPASS
@@ -2178,6 +2181,7 @@ void Graphics::UpdateImGui()
 	{
 		ImGui::Checkbox("Raytraced AO", &Tweakables::g_RaytracedAO);
 		ImGui::Checkbox("Raytraced Reflections", &Tweakables::g_RaytracedReflections);
+		ImGui::SliderAngle("TLAS Bounds Threshold", &Tweakables::g_TLASBoundsThreshold, 0, 40);
 	}
 
 	ImGui::Checkbox("TAA", &Tweakables::g_TAA);
@@ -2199,6 +2203,16 @@ void Graphics::UpdateTLAS(CommandContext& context)
 		for (uint32 instanceIndex = 0; instanceIndex < (uint32)m_SceneData.Batches.size(); ++instanceIndex)
 		{
 			const Batch& batch = m_SceneData.Batches[instanceIndex];
+
+			// Cull object that are small to the viewer - Deligiannis2019
+			float radius = Vector3(batch.Bounds.Extents).Length();
+			Vector3 cameraVec = (batch.Bounds.Center - m_pCamera->GetPosition());
+			float angle = tanf(radius / cameraVec.Length());
+			if (angle < Tweakables::g_TLASBoundsThreshold && cameraVec.Length() > radius)
+			{
+				continue;
+			}
+
 			const SubMesh& subMesh = *batch.pMesh;
 			D3D12_RAYTRACING_INSTANCE_DESC instanceDesc{};
 			instanceDesc.AccelerationStructure = subMesh.pBLAS->GetGpuHandle();
