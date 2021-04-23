@@ -44,7 +44,7 @@ class Mesh
 {
 public:
 	~Mesh();
-	bool Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pContext);
+	bool Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pContext, float scale = 1.0f);
 	int GetMeshCount() const { return (int)m_Meshes.size(); }
 	const SubMesh& GetMesh(const int index) const { return m_Meshes[index]; }
 	const Material& GetMaterial(int materialId) const { return m_Materials[materialId]; }

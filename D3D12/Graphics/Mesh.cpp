@@ -19,7 +19,7 @@ Mesh::~Mesh()
 	}
 }
 
-bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pContext)
+bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pContext, float scale /*= 1.0f*/)
 {
 	struct Vertex
 	{
@@ -31,7 +31,7 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 	};
 
 	Assimp::Importer importer;
-	importer.SetPropertyFloat(AI_CONFIG_GLOBAL_SCALE_FACTOR_KEY, 1.0f);
+	importer.SetPropertyFloat(AI_CONFIG_GLOBAL_SCALE_FACTOR_KEY, scale);
 	const aiScene* pScene = importer.ReadFile(pFilePath,
 		aiProcess_Triangulate
 		| aiProcess_GlobalScale

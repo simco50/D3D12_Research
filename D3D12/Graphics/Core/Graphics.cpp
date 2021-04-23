@@ -547,11 +547,12 @@ void Graphics::Update()
 
 				SYSTEMTIME time;
 				GetSystemTime(&time);
-				wchar_t stringTarget[128];
-				GetTimeFormatEx(LOCALE_NAME_INVARIANT, 0, &time, L"hh_mm_ss", stringTarget, 128);
-				char filePath[256];
 				Paths::CreateDirectoryTree(Paths::ScreenshotDir());
-				sprintf_s(filePath, "%sScreenshot_%ls.jpg", Paths::ScreenshotDir().c_str(), stringTarget);
+				char filePath[128];
+				sprintf_s(filePath, "%sScreenshot_%d_%02d_%02d__%02d_%02d_%02d.jpg",
+					Paths::ScreenshotDir().c_str(),
+					time.wYear, time.wMonth, time.wDay,
+					time.wHour, time.wMinute, time.wSecond);
 				img.Save(filePath);
 				m_pScreenshotBuffer.reset();
 				}, taskContext);
@@ -1277,6 +1278,7 @@ void Graphics::InitD3D()
 			// Turn on auto-breadcrumbs and page fault reporting.
 			pDredSettings->SetAutoBreadcrumbsEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
 			pDredSettings->SetPageFaultEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
+			pDredSettings->SetBreadcrumbContextEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
 			E_LOG(Warning, "DRED Enabled");
 		}
 	}
@@ -1600,13 +1602,11 @@ void Graphics::SetupScene(CommandContext& context)
 
 	{
 		std::unique_ptr<Mesh> pMesh = std::make_unique<Mesh>();
-		pMesh->Load("Resources/sponza/sponza.dae", this, &context);
+		//pMesh->Load("Resources/Bistro_Godot/Bistro_Godot.gltf", this, &context, 3.0f);
+		//pMesh->Load("Resources/Bathroom/scene.gltf", this, &context, 0.2f);
+		pMesh->Load("Resources/sponza/sponza.dae", this, &context, 1.0f);
 		m_Meshes.push_back(std::move(pMesh));
 	}
-
-	Matrix transforms[] = {
-		Matrix::CreateTranslation(0, 0, 0),
-	};
 
 	for (uint32 j = 0; j < (uint32)m_Meshes.size(); ++j)
 	{
