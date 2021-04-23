@@ -55,15 +55,15 @@ RWTexture2D<float4> uOutput : register(u0);
 ConstantBuffer<ViewData> cViewData : register(b0);
 StructuredBuffer<HitData> tHitGroupData : register(t10);
 
-struct ReflectionRayPayload
+struct RAYPAYLOAD ReflectionRayPayload
 {
-	float3 output;
-	RayCone rayCone;
+	float3 output RAYQUALIFIER(read(caller) : write(caller, closesthit, miss));
+	RayCone rayCone RAYQUALIFIER(read(caller, closesthit) : write(caller, closesthit));
 };
 
-struct ShadowRayPayload
+struct RAYPAYLOAD ShadowRayPayload
 {
-	float hit;
+	float hit RAYQUALIFIER(read(caller) : write(caller, miss));
 };
 
 float CastShadowRay(float3 origin, float3 direction)

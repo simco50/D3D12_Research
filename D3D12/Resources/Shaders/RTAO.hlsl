@@ -30,9 +30,9 @@ struct Data
 
 ConstantBuffer<Data> cData : register(b0);
 
-struct RayPayload
+struct RAYPAYLOAD RayPayload
 {
-	float hit;
+	float hit RAYQUALIFIER(read(caller) : write(caller, miss));
 };
 
 // Utility function to get a vector perpendicular to an input vector 
