@@ -43,9 +43,4 @@ float ComputeRayConeMip(RayCone cone, float3 vertexNormal, float2 vertexUVs[3], 
 	return lambda;
 }
 
-float3 DefaultSkyBackground()
-{
-    return CIESky(WorldRayDirection(), -tLights[0].Direction);
-}
-
 #endif

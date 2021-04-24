@@ -155,9 +155,9 @@ Vertex GetVertexAttributes(float3 barycentrics)
 	}
 	float4x3 worldMatrix = ObjectToWorld4x3();
 	vertexOut.position = mul(float4(vertexOut.position, 1), worldMatrix).xyz;
-	vertexOut.normal = mul(vertexOut.normal, (float3x3)worldMatrix);
-	vertexOut.tangent = mul(vertexOut.tangent, (float3x3)worldMatrix);
-	vertexOut.bitangent = mul(vertexOut.bitangent, (float3x3)worldMatrix);
+	vertexOut.normal = normalize(mul(vertexOut.normal, (float3x3)worldMatrix));
+	vertexOut.tangent = normalize(mul(vertexOut.tangent, (float3x3)worldMatrix));
+	vertexOut.bitangent = normalize(mul(vertexOut.bitangent, (float3x3)worldMatrix));
 	return vertexOut;
 }
 
@@ -214,7 +214,7 @@ LightResult EvaluateLight(Light light, ShadingData shadingData)
 
 	if(all(lightPos >= 0) && all(lightPos <= 1))
 	{
-		Texture2D shadowTexture = tTexture2DTable[NonUniformResourceIndex(cShadowData.ShadowMapOffset + shadowIndex)];
+		Texture2D shadowTexture = tTexture2DTable[cShadowData.ShadowMapOffset + shadowIndex];
 		attenuation *= shadowTexture.SampleCmpLevelZero(sShadowMapSampler, lightPos.xy, lightPos.z);
 	}
 	else
@@ -275,7 +275,7 @@ void ShadowMiss(inout ShadowRayPayload payload : SV_RayPayload)
 [shader("miss")] 
 void ReflectionMiss(inout ReflectionRayPayload payload : SV_RayPayload) 
 {
-	payload.output = DefaultSkyBackground();
+	payload.output = CIESky(WorldRayDirection(), -tLights[0].Direction);
 }
 
 [shader("raygeneration")] 
