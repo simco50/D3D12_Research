@@ -58,6 +58,6 @@ void CSMain(CSInput input)
 
         uLuminanceOutput[0] = adaptedLuminance;
         uLuminanceOutput[1] = weightedAverageLuminance;
-        uLuminanceOutput[2] = Exposure(EV100FromLuminance(weightedAverageLuminance));
+        uLuminanceOutput[2] = Exposure(EV100FromLuminance(adaptedLuminance));
     }
 }

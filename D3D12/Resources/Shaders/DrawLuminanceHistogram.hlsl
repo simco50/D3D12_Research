@@ -42,7 +42,7 @@ void DrawLuminanceHistogram(uint groupIndex : SV_GroupIndex, uint3 threadId : SV
 
     uint2 dimensions;
     uOutTexture.GetDimensions(dimensions.x, dimensions.y);
-    uint2 s = uint2(dimensions.x, 0) + uint2(-NUM_HISTOGRAM_BINS * 4 + groupIndex * 4, threadId.y);
+    uint2 s = uint2(dimensions.x - 300, 0) + uint2(-NUM_HISTOGRAM_BINS * 4 + groupIndex * 4, threadId.y);
 
     float currentAverage = tAverageLuminance[0];
     float targetAverage = tAverageLuminance[1];

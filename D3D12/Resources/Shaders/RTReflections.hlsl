@@ -74,7 +74,8 @@ float CastShadowRay(float3 origin, float3 direction)
 	ray.TMin = RAY_BIAS;
 	ray.TMax = len;
 
-	ShadowRayPayload shadowRay = { 0 };
+	ShadowRayPayload shadowRay;
+	shadowRay.hit = 0.0f;
 
 	TraceRay(
 		tTLASTable[cViewData.TLASIndex], 						//AccelerationStructure

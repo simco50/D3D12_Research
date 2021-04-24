@@ -91,7 +91,8 @@ void RayGen()
 	float accumulatedAo = 0.0f;
 	for(int i = 0; i < cData.Samples; ++i)
 	{
-		RayPayload payload = { 1.0f };
+		RayPayload payload;
+		payload.hit = 1.0f;
 		float3 randomDirection = GetCosHemisphereSample(randSeed, normal.xyz);
 		
 		RayDesc ray;
@@ -113,8 +114,8 @@ void RayGen()
 			ray, 															//Ray
 			payload 														//Payload
 		);
-
-		accumulatedAo += payload.hit;
+		float hit = payload.hit;
+		accumulatedAo += hit;
 	}
 	accumulatedAo /= cData.Samples;
 	uOutput[launchIndex] = pow(saturate(1 - accumulatedAo), cData.Power);
