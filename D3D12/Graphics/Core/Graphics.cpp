@@ -83,6 +83,7 @@ namespace Tweakables
 	bool g_DumpRenderGraph = false;
 	bool g_Screenshot = false;
 	bool g_EnableUI = true;
+	bool g_RenderObjectBounds = false;
 }
 
 Graphics::Graphics(uint32 width, uint32 height, int sampleCount /*= 1*/)
@@ -207,6 +208,7 @@ void Graphics::Update()
 	for (Batch& b : m_SceneData.Batches)
 	{
 		b.LocalBounds.Transform(b.Bounds, b.WorldMatrix);
+		b.Radius = Vector3(b.Bounds.Extents).Length();
 	}
 	EditTransform(*m_pCamera, spotMatrix);
 	Vector3 scale, position;
@@ -231,6 +233,14 @@ void Graphics::Update()
 	}
 
 	std::sort(m_SceneData.Batches.begin(), m_SceneData.Batches.end(), [this](const Batch& a, const Batch& b)
+	if (Tweakables::g_RenderObjectBounds)
+	{
+		for (const Batch& b : m_SceneData.Batches)
+		{
+			DebugRenderer::Get()->AddBoundingBox(b.Bounds, Color(0.2f, 0.2f, 0.9f, 1.0f));
+			DebugRenderer::Get()->AddSphere(b.Bounds.Center, b.Radius, 6, 6, Color(0.2f, 0.6f, 0.2f, 1.0f));
+		}
+	}
 	{
 		if (a.BlendMode == b.BlendMode)
 		{
@@ -2176,6 +2186,7 @@ void Graphics::UpdateImGui()
 	extern bool g_VisualizeClusters;
 	ImGui::Checkbox("Visualize Clusters", &g_VisualizeClusters);
 	ImGui::SliderInt("SSR Samples", &Tweakables::g_SsrSamples, 0, 32);
+	ImGui::Checkbox("Object Bounds", &Tweakables::g_RenderObjectBounds);
 
 	if (SupportsRayTracing())
 	{
@@ -2205,10 +2216,9 @@ void Graphics::UpdateTLAS(CommandContext& context)
 			const Batch& batch = m_SceneData.Batches[instanceIndex];
 
 			// Cull object that are small to the viewer - Deligiannis2019
-			float radius = Vector3(batch.Bounds.Extents).Length();
 			Vector3 cameraVec = (batch.Bounds.Center - m_pCamera->GetPosition());
-			float angle = tanf(radius / cameraVec.Length());
-			if (angle < Tweakables::g_TLASBoundsThreshold && cameraVec.Length() > radius)
+			float angle = tanf(batch.Radius / cameraVec.Length());
+			if (angle < Tweakables::g_TLASBoundsThreshold && cameraVec.Length() > batch.Radius)
 			{
 				continue;
 			}

@@ -77,6 +77,7 @@ struct Batch
 	Matrix WorldMatrix;
 	BoundingBox LocalBounds;
 	BoundingBox Bounds;
+	float Radius;
 	int VertexBufferDescriptor = -1;
 	int IndexBufferDescriptor = -1;
 };
