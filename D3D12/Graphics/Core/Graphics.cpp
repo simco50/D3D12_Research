@@ -210,6 +210,42 @@ void Graphics::Update()
 		b.LocalBounds.Transform(b.Bounds, b.WorldMatrix);
 		b.Radius = Vector3(b.Bounds.Extents).Length();
 	}
+
+#if 0
+	static int selectedBatch = -1;
+	Ray camRay = m_pCamera->GetMouseRay(m_WindowWidth, m_WindowHeight);
+	float minDist = FLT_MAX;
+
+	if (Input::Instance().IsMousePressed(0))
+	{
+		if (!ImGuizmo::IsOver() && !ImGuizmo::IsUsing())
+		{
+			selectedBatch = -1;
+			for (Batch& b : m_SceneData.Batches)
+			{
+				float distance = 0;
+				if (!b.Bounds.Contains(camRay.position) && camRay.Intersects(b.Bounds, distance))
+				{
+					distance = Vector3::Distance(camRay.position + distance * camRay.direction, b.Bounds.Center);
+					if (distance < minDist)
+					{
+						selectedBatch = b.Index;
+						minDist = distance;
+					}
+				}
+			}
+		}
+	}
+
+	if (selectedBatch >= 0)
+	{
+		Batch& b = m_SceneData.Batches[selectedBatch];
+		EditTransform(*m_pCamera, b.WorldMatrix);
+		DebugRenderer::Get()->AddBoundingBox(b.Bounds, Color(1, 0, 1, 1));
+	}
+
+#elif 0
+
 	EditTransform(*m_pCamera, spotMatrix);
 	Vector3 scale, position;
 	Quaternion rotation;
@@ -217,6 +253,8 @@ void Graphics::Update()
 	m_Lights[1].Range = scale.x;
 	m_Lights[1].Position = position;
 	m_Lights[1].Direction = spotMatrix.Forward();
+
+#endif
 
 #if 0
 	Vector3 pos = m_pCamera->GetPosition();
@@ -232,7 +270,6 @@ void Graphics::Update()
 		Tweakables::g_EnableUI = !Tweakables::g_EnableUI;
 	}
 
-	std::sort(m_SceneData.Batches.begin(), m_SceneData.Batches.end(), [this](const Batch& a, const Batch& b)
 	if (Tweakables::g_RenderObjectBounds)
 	{
 		for (const Batch& b : m_SceneData.Batches)
@@ -241,6 +278,8 @@ void Graphics::Update()
 			DebugRenderer::Get()->AddSphere(b.Bounds.Center, b.Radius, 6, 6, Color(0.2f, 0.6f, 0.2f, 1.0f));
 		}
 	}
+
+	/*std::sort(m_SceneData.Batches.begin(), m_SceneData.Batches.end(), [this](const Batch& a, const Batch& b)
 	{
 		if (a.BlendMode == b.BlendMode)
 		{
@@ -253,7 +292,7 @@ void Graphics::Update()
 			return aDist < bDist;
 		}
 		return a.BlendMode < b.BlendMode;
-	});
+	});*/
 
 	float costheta = cosf(Tweakables::g_SunOrientation);
 	float sintheta = sinf(Tweakables::g_SunOrientation);

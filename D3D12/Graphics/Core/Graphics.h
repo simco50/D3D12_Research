@@ -109,7 +109,7 @@ struct SceneData
 	ShadowData* pShadowData = nullptr;
 	int SceneTLAS = 0;
 	int FrameIndex = 0;
-	BitField<128> VisibilityMask;
+	BitField<2048> VisibilityMask;
 };
 
 enum class RenderPath

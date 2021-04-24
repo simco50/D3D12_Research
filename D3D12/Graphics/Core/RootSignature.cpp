@@ -130,6 +130,10 @@ void RootSignature::Finalize(const char* pName, D3D12_ROOT_SIGNATURE_FLAGS flags
 	if ((flags & D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE) == 0)
 	{
 		flags |= visibilityFlags;
+#if 0 // #todo: Bugged! Try again once there is a new Nvidia driver
+		flags |= D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED;
+		flags |= D3D12_ROOT_SIGNATURE_FLAG_SAMPLER_HEAP_DIRECTLY_INDEXED;
+#endif
 	}
 
 	constexpr uint32 recommendedDwords = 12;

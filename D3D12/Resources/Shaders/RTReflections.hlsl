@@ -173,11 +173,12 @@ ShadingData GetShadingData(BuiltInTriangleIntersectionAttributes attrib, float3 
 	float4 emissiveSample = tTexture2DTable[hitData.Emissive].SampleLevel(sDiffuseSampler, v.texCoord, mipLevel);
 	float specular = 0.5f;
 	float3x3 TBN = float3x3(v.tangent, v.bitangent, v.normal);
+	float3 N = TangentSpaceNormalMapping(normalSample.xyz, TBN, false);
 
 	ShadingData outData = (ShadingData)0;
 	outData.WorldPos = v.position;
 	outData.V = -WorldRayDirection();
-	outData.N = TangentSpaceNormalMapping(normalSample.xyz, TBN, false);
+	outData.N = N;
 	outData.UV = v.texCoord;
 	outData.Diffuse = diffuseSample.rgb;
 	outData.Specular = ComputeF0(specular, diffuseSample.rgb, roughnessMetalnessSample.b);
