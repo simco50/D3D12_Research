@@ -42,7 +42,6 @@ struct ViewData
 
 struct HitData
 {
-	float4x4 WorldMatrix;
 	int Diffuse;
 	int Normal;
 	int RoughnessMetalness;
@@ -154,10 +153,11 @@ Vertex GetVertexAttributes(float3 barycentrics)
 		vertexOut.tangent += v.tangent * barycentrics[i];
 		vertexOut.bitangent += v.bitangent * barycentrics[i];
 	}
-	vertexOut.position = mul(float4(vertexOut.position, 1), hitData.WorldMatrix).xyz;
-	vertexOut.normal = mul(vertexOut.normal, (float3x3)hitData.WorldMatrix);
-	vertexOut.tangent = mul(vertexOut.tangent, (float3x3)hitData.WorldMatrix);
-	vertexOut.bitangent = mul(vertexOut.bitangent, (float3x3)hitData.WorldMatrix);
+	float4x3 worldMatrix = ObjectToWorld4x3();
+	vertexOut.position = mul(float4(vertexOut.position, 1), worldMatrix).xyz;
+	vertexOut.normal = mul(vertexOut.normal, (float3x3)worldMatrix);
+	vertexOut.tangent = mul(vertexOut.tangent, (float3x3)worldMatrix);
+	vertexOut.bitangent = mul(vertexOut.bitangent, (float3x3)worldMatrix);
 	return vertexOut;
 }
 

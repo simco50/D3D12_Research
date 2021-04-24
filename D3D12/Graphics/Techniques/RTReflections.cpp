@@ -63,7 +63,6 @@ void RTReflections::Execute(RGGraph& graph, const SceneData& sceneData)
 
 			struct HitData
 			{
-				Matrix WorldTransform;
 				MaterialData Material;
 				uint32 VertexBuffer;
 				uint32 IndexBuffer;
@@ -78,7 +77,6 @@ void RTReflections::Execute(RGGraph& graph, const SceneData& sceneData)
 				hitData.Material = b.Material;
 				hitData.VertexBuffer = b.VertexBufferDescriptor;
 				hitData.IndexBuffer = b.IndexBufferDescriptor;
-				hitData.WorldTransform = b.WorldMatrix;
 				++pCurrent;
 			}
 
