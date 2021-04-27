@@ -160,7 +160,7 @@ void FreeCamera::Update()
 	Camera::Update();
 
 	Vector3 movement;
-	if (Input::Instance().IsMouseDown(1))
+	if (Input::Instance().IsMouseDown(VK_RBUTTON))
 	{
 		if (!ImGui::IsAnyItemActive() && !ImGuizmo::IsUsing())
 		{

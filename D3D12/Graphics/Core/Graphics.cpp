@@ -42,7 +42,7 @@
 
 const DXGI_FORMAT Graphics::DEPTH_STENCIL_FORMAT = DXGI_FORMAT_D32_FLOAT;
 const DXGI_FORMAT Graphics::DEPTH_STENCIL_SHADOW_FORMAT = DXGI_FORMAT_D16_UNORM;
-const DXGI_FORMAT Graphics::RENDER_TARGET_FORMAT = DXGI_FORMAT_R16G16B16A16_FLOAT;
+const DXGI_FORMAT Graphics::RENDER_TARGET_FORMAT = DXGI_FORMAT_R11G11B10_FLOAT;
 const DXGI_FORMAT Graphics::SWAPCHAIN_FORMAT = DXGI_FORMAT_R8G8B8A8_UNORM;
 
 namespace Tweakables
@@ -125,7 +125,7 @@ void EditTransform(const Camera& camera, Matrix& matrix)
 	static ImGuizmo::OPERATION mCurrentGizmoOperation(ImGuizmo::ROTATE);
 	static ImGuizmo::MODE mCurrentGizmoMode(ImGuizmo::WORLD);
 
-	if (!Input::Instance().IsMouseDown(1))
+	if (!Input::Instance().IsMouseDown(VK_LBUTTON))
 	{
 		if (Input::Instance().IsKeyPressed('W'))
 			mCurrentGizmoOperation = ImGuizmo::TRANSLATE;

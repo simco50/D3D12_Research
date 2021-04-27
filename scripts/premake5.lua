@@ -106,6 +106,7 @@ workspace (ENGINE_NAME)
 		includedirs (ROOT .. "Libraries/D3D12/include")
 		postbuildcommands { ("{COPY} \"$(SolutionDir)Libraries\\D3D12\\bin\\D3D12Core.dll\" \"$(OutDir)\\D3D12\\\"") }
 		postbuildcommands { ("{COPY} \"$(SolutionDir)Libraries\\D3D12\\bin\\d3d12SDKLayers.dll\" \"$(OutDir)\\D3D12\\\"") }
+		links {	"d3d12.lib", "dxgi", "d3dcompiler", "dxguid" }
 
 		-- Pix
 		includedirs (ROOT .. "Libraries/Pix/include")
@@ -113,10 +114,7 @@ workspace (ENGINE_NAME)
 		postbuildcommands { ("{COPY} \"$(SolutionDir)Libraries\\Pix\\bin\\WinPixEventRuntime.dll\" \"$(OutDir)\"") }
 		links { "WinPixEventRuntime" }
 
-		-- D3D12
-		links {	"d3d12.lib", "dxgi", "d3dcompiler", "dxguid" }
-
-		-- Pix
+		-- Assimp
 		includedirs (ROOT .. "Libraries/Assimp/include")
 		libdirs	(ROOT .. "Libraries/Assimp/lib/x64")
 		postbuildcommands { ("{COPY} \"$(SolutionDir)Libraries\\Assimp\\bin\\x64\\assimp-vc142-mt.dll\" \"$(OutDir)\"") }

@@ -195,22 +195,22 @@ private:
 			return 0;
 		}
 		case WM_LBUTTONDOWN:
-			Input::Instance().UpdateMouseKey(0, true);
+			Input::Instance().UpdateMouseKey(VK_LBUTTON, true);
 			break;
 		case WM_MBUTTONDOWN:
-			Input::Instance().UpdateMouseKey(2, true);
+			Input::Instance().UpdateMouseKey(VK_MBUTTON, true);
 			break;
 		case WM_RBUTTONDOWN:
-			Input::Instance().UpdateMouseKey(1, true);
+			Input::Instance().UpdateMouseKey(VK_RBUTTON, true);
 			break;
 		case WM_LBUTTONUP:
-			Input::Instance().UpdateMouseKey(0, false);
+			Input::Instance().UpdateMouseKey(VK_LBUTTON, false);
 			break;
 		case WM_MBUTTONUP:
-			Input::Instance().UpdateMouseKey(2, false);
+			Input::Instance().UpdateMouseKey(VK_MBUTTON, false);
 			break;
 		case WM_RBUTTONUP:
-			Input::Instance().UpdateMouseKey(1, false);
+			Input::Instance().UpdateMouseKey(VK_RBUTTON, false);
 			break;
 		case WM_ENTERSIZEMOVE:
 			Time::Stop();

@@ -27,9 +27,9 @@ void ImGuiRenderer::NewFrame(uint32 width, uint32 height)
 	ImGuiIO& io = ImGui::GetIO();
 	io.DisplaySize = ImVec2((float)width, (float)height);
 
-	io.MouseDown[0] = Input::Instance().IsMouseDown(0);
-	io.MouseDown[1] = Input::Instance().IsMouseDown(1);
-	io.MouseDown[2] = Input::Instance().IsMouseDown(2);
+	io.MouseDown[0] = Input::Instance().IsMouseDown(VK_LBUTTON);
+	io.MouseDown[1] = Input::Instance().IsMouseDown(VK_RBUTTON);
+	io.MouseDown[2] = Input::Instance().IsMouseDown(VK_MBUTTON);
 	io.MouseWheel = Input::Instance().GetMouseWheelDelta();
 
 	Vector2 mousePos = Input::Instance().GetMousePosition();

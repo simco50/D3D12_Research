@@ -34,7 +34,7 @@ public:
 
 private:
 	std::array<KeyState, 256> m_KeyStates = {};
-	std::array<KeyState, 3> m_MouseStates = {};
+	std::array<KeyState, 16> m_MouseStates = {};
 
 	Input() = default;
 	HWND m_pWindow = nullptr;
