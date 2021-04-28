@@ -65,6 +65,14 @@ struct Light
     bool IsSpot() { return (Flags & LF_LightTypeMask) == LF_SpotLight; }
 };
 
+struct MaterialData
+{
+    int Diffuse;
+    int Normal;
+    int RoughnessMetalness;
+	int Emissive;
+};
+
 #define MAX_SHADOW_CASTERS 32
 struct ShadowData
 {

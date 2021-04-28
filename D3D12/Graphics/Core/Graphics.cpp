@@ -40,6 +40,43 @@
 #define GPU_VALIDATION 0
 #endif
 
+void DrawScene(CommandContext& context, const SceneData& scene, Batch::Blending blendModes)
+{
+	std::vector<const Batch*> meshes;
+	for (const Batch& b : scene.Batches)
+	{
+		if (EnumHasAnyFlags(b.BlendMode, blendModes) && scene.VisibilityMask.GetBit(b.Index))
+		{
+			meshes.push_back(&b);
+		}
+	}
+
+	auto CompareSort = [&scene, blendModes](const Batch* a, const Batch* b)
+	{
+		float aDist = Vector3::DistanceSquared(a->pMesh->Bounds.Center, scene.pCamera->GetPosition());
+		float bDist = Vector3::DistanceSquared(b->pMesh->Bounds.Center, scene.pCamera->GetPosition());
+		return EnumHasAnyFlags(blendModes, Batch::Blending::AlphaBlend) ? bDist < aDist : aDist < bDist;
+	};
+	std::sort(meshes.begin(), meshes.end(), CompareSort);
+
+	struct PerObjectData
+	{
+		Matrix World;
+		MaterialData Material;
+		uint32 VertexBuffer;
+	} objectData;
+
+	for (const Batch* b : meshes)
+	{
+		objectData.World = b->WorldMatrix;
+		objectData.Material = b->Material;
+		objectData.VertexBuffer = b->VertexBufferDescriptor;
+		context.SetGraphicsDynamicConstantBufferView(0, objectData);
+		context.SetIndexBuffer(b->pMesh->IndicesLocation);
+		context.DrawIndexed(b->pMesh->IndicesLocation.Elements, 0, 0);
+	}
+}
+
 const DXGI_FORMAT Graphics::DEPTH_STENCIL_FORMAT = DXGI_FORMAT_D32_FLOAT;
 const DXGI_FORMAT Graphics::DEPTH_STENCIL_SHADOW_FORMAT = DXGI_FORMAT_D16_UNORM;
 const DXGI_FORMAT Graphics::RENDER_TARGET_FORMAT = DXGI_FORMAT_R11G11B10_FLOAT;
@@ -278,21 +315,6 @@ void Graphics::Update()
 			DebugRenderer::Get()->AddSphere(b.Bounds.Center, b.Radius, 6, 6, Color(0.2f, 0.6f, 0.2f, 1.0f));
 		}
 	}
-
-	/*std::sort(m_SceneData.Batches.begin(), m_SceneData.Batches.end(), [this](const Batch& a, const Batch& b)
-	{
-		if (a.BlendMode == b.BlendMode)
-		{
-			float aDist = Vector3::DistanceSquared(a.pMesh->Bounds.Center, m_pCamera->GetPosition());
-			float bDist = Vector3::DistanceSquared(b.pMesh->Bounds.Center, m_pCamera->GetPosition());
-			if (a.BlendMode == Batch::Blending::AlphaBlend)
-			{
-				return aDist > bDist;
-			}
-			return aDist < bDist;
-		}
-		return a.BlendMode < b.BlendMode;
-	});*/
 
 	float costheta = cosf(Tweakables::g_SunOrientation);
 	float sintheta = sinf(Tweakables::g_SunOrientation);
@@ -614,6 +636,14 @@ void Graphics::Update()
 		}
 	}
 
+	RGPassBuilder updateTLAS = graph.AddPass("Update TLAS");
+	updateTLAS.Bind([=](CommandContext& renderContext, const RGPassResources& resources)
+		{
+			UpdateTLAS(renderContext);
+		}
+	);
+
+
 	RGPassBuilder setupLights = graph.AddPass("Setup Lights");
 	Data.DepthStencil = setupLights.Write(Data.DepthStencil);
 	setupLights.Bind([=](CommandContext& renderContext, const RGPassResources& resources)
@@ -628,8 +658,6 @@ void Graphics::Update()
 			renderContext.InsertResourceBarrier(m_pLightBuffer.get(), D3D12_RESOURCE_STATE_COPY_DEST);
 			renderContext.FlushResourceBarriers();
 			renderContext.CopyBuffer(allocation.pBackingResource, m_pLightBuffer.get(), (uint32)m_pLightBuffer->GetSize(), (uint32)allocation.Offset, 0);
-
-			UpdateTLAS(renderContext);
 		});
 
 	//DEPTH PREPASS
@@ -659,37 +687,15 @@ void Graphics::Update()
 			viewData.ViewProjection = m_pCamera->GetViewProjection();
 			renderContext.SetGraphicsDynamicConstantBufferView(1, viewData);
 
-			auto DrawBatches = [&](Batch::Blending blendMode)
-			{
-				struct PerObjectData
-				{
-					Matrix World;
-					MaterialData Material;
-					uint32 VertexBuffer;
-				} objectData;
-				for (const Batch& b : m_SceneData.Batches)
-				{
-					if (EnumHasAnyFlags(b.BlendMode, blendMode) && m_SceneData.VisibilityMask.GetBit(b.Index))
-					{
-						objectData.World = b.WorldMatrix;
-						objectData.Material = b.Material;
-						objectData.VertexBuffer = b.VertexBufferDescriptor;
-						renderContext.SetGraphicsDynamicConstantBufferView(0, objectData);
-						renderContext.SetIndexBuffer(b.pMesh->IndicesLocation);
-						renderContext.DrawIndexed(b.pMesh->IndicesLocation.Elements, 0, 0);
-					}
-				}
-			};
-
 			{
 				GPU_PROFILE_SCOPE("Opaque", &renderContext);
 				renderContext.SetPipelineState(m_pDepthPrepassOpaquePSO);
-				DrawBatches(Batch::Blending::Opaque);
+				DrawScene(renderContext, m_SceneData, Batch::Blending::Opaque);
 			}
 			{
 				GPU_PROFILE_SCOPE("Masked", &renderContext);
 				renderContext.SetPipelineState(m_pDepthPrepassAlphaMaskPSO);
-				DrawBatches(Batch::Blending::AlphaMask);
+				DrawScene(renderContext, m_SceneData, Batch::Blending::AlphaMask);
 			}
 
 			renderContext.EndRenderPass();
@@ -863,38 +869,15 @@ void Graphics::Update()
 					context.SetGraphicsDynamicConstantBufferView(1, viewData);
 					context.BindResourceTable(2, m_SceneData.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Graphics);
 
-					auto DrawBatches = [&](const Batch::Blending& blendmodes)
-					{
-						struct PerObjectData
-						{
-							Matrix World;
-							MaterialData Material;
-							uint32 VertexBuffer;
-						} objectData{};
-
-						for (const Batch& b : m_SceneData.Batches)
-						{
-							if (EnumHasAnyFlags(b.BlendMode, blendmodes))
-							{
-								objectData.World = b.WorldMatrix;
-								objectData.Material = b.Material;
-								objectData.VertexBuffer = b.VertexBufferDescriptor;
-								context.SetGraphicsDynamicConstantBufferView(0, objectData);
-								context.SetIndexBuffer(b.pMesh->IndicesLocation);
-								context.DrawIndexed(b.pMesh->IndicesLocation.Elements, 0, 0);
-							}
-						}
-					};
-
 					{
 						GPU_PROFILE_SCOPE("Opaque", &context);
 						context.SetPipelineState(m_pShadowsOpaquePSO);
-						DrawBatches(Batch::Blending::Opaque);
+						DrawScene(context, m_SceneData, Batch::Blending::Opaque);
 					}
 					{
 						GPU_PROFILE_SCOPE("Masked", &context);
 						context.SetPipelineState(m_pShadowsAlphaMaskPSO);
-						DrawBatches(Batch::Blending::AlphaMask);
+						DrawScene(context, m_SceneData, Batch::Blending::AlphaMask);
 					}
 					context.EndRenderPass();
 				}

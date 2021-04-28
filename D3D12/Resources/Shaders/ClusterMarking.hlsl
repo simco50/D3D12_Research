@@ -10,6 +10,7 @@
 struct ObjectData
 {
     float4x4 World;
+    MaterialData Material;
 	uint VertexBuffer;
 };
 

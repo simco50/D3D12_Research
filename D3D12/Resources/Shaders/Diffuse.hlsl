@@ -15,10 +15,7 @@
 struct PerObjectData
 {
 	float4x4 World;
-    int Diffuse;
-    int Normal;
-    int RoughnessMetalness;
-	int Emissive;
+	MaterialData Material;
 	int VertexBuffer;
 };
 
@@ -275,10 +272,11 @@ void PSMain(PSInput input,
 	float ambientOcclusion = tAO.SampleLevel(sDiffuseSampler, screenUV, 0).r;
 
 // Surface Shader BEGIN
-	float4 diffuseSample = tTexture2DTable[cObjectData.Diffuse].Sample(sDiffuseSampler, input.texCoord);
-	float3 tangentNormal = tTexture2DTable[cObjectData.Normal].Sample(sDiffuseSampler, input.texCoord).xyz;
-	float4 roughnessMetalness = tTexture2DTable[cObjectData.RoughnessMetalness].Sample(sDiffuseSampler, input.texCoord);
-	float4 emissive = tTexture2DTable[cObjectData.Emissive].Sample(sDiffuseSampler, input.texCoord);
+	MaterialData material = cObjectData.Material;
+	float4 diffuseSample = tTexture2DTable[material.Diffuse].Sample(sDiffuseSampler, input.texCoord);
+	float3 tangentNormal = tTexture2DTable[material.Normal].Sample(sDiffuseSampler, input.texCoord).xyz;
+	float4 roughnessMetalness = tTexture2DTable[material.RoughnessMetalness].Sample(sDiffuseSampler, input.texCoord);
+	float4 emissive = tTexture2DTable[material.Emissive].Sample(sDiffuseSampler, input.texCoord);
 	float metalness = roughnessMetalness.b;
 	float roughness = roughnessMetalness.g;
 	float3 specular = 0.5f;

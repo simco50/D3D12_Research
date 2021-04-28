@@ -42,10 +42,7 @@ struct ViewData
 
 struct HitData
 {
-	int Diffuse;
-	int Normal;
-	int RoughnessMetalness;
-	int Emissive;
+	MaterialData Material;
 	uint VertexBuffer;
 	uint IndexBuffer;
 };
@@ -168,10 +165,11 @@ ShadingData GetShadingData(BuiltInTriangleIntersectionAttributes attrib, float3 
 	float3 barycentrics = float3((1.0f - attrib.barycentrics.x - attrib.barycentrics.y), attrib.barycentrics.x, attrib.barycentrics.y);
 	Vertex v = GetVertexAttributes(barycentrics);
 
-	float4 diffuseSample = tTexture2DTable[hitData.Diffuse].SampleLevel(sDiffuseSampler, v.texCoord, mipLevel);
-	float4 normalSample = tTexture2DTable[hitData.Normal].SampleLevel(sDiffuseSampler, v.texCoord, mipLevel);
-	float4 roughnessMetalnessSample = tTexture2DTable[hitData.RoughnessMetalness].SampleLevel(sDiffuseSampler, v.texCoord, mipLevel);
-	float4 emissiveSample = tTexture2DTable[hitData.Emissive].SampleLevel(sDiffuseSampler, v.texCoord, mipLevel);
+	MaterialData material = hitData.Material;
+	float4 diffuseSample = tTexture2DTable[material.Diffuse].SampleLevel(sDiffuseSampler, v.texCoord, mipLevel);
+	float4 normalSample = tTexture2DTable[material.Normal].SampleLevel(sDiffuseSampler, v.texCoord, mipLevel);
+	float4 roughnessMetalnessSample = tTexture2DTable[material.RoughnessMetalness].SampleLevel(sDiffuseSampler, v.texCoord, mipLevel);
+	float4 emissiveSample = tTexture2DTable[material.Emissive].SampleLevel(sDiffuseSampler, v.texCoord, mipLevel);
 	float specular = 0.5f;
 	float3x3 TBN = float3x3(v.tangent, v.bitangent, v.normal);
 	float3 N = TangentSpaceNormalMapping(normalSample.xyz, TBN, false);

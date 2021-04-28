@@ -112,6 +112,8 @@ struct SceneData
 	BitField<2048> VisibilityMask;
 };
 
+void DrawScene(CommandContext& context, const SceneData& scene, Batch::Blending blendModes);
+
 enum class RenderPath
 {
 	Tiled,

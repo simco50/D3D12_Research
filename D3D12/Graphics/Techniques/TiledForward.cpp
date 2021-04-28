@@ -174,34 +174,12 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& resources)
 			context.BindResource(4, 4, resources.pResolvedDepth->GetSRV());
 			context.BindResource(4, 5, resources.pPreviousColor->GetSRV());
 
-			auto DrawBatches = [&](Batch::Blending blendMode)
-			{
-				struct PerObjectData
-				{
-					Matrix World;
-					MaterialData Material;
-					uint32 VertexBuffer;
-				} objectData;
-				for (const Batch& b : resources.Batches)
-				{
-					if (EnumHasAnyFlags(b.BlendMode, blendMode) && resources.VisibilityMask.GetBit(b.Index))
-					{
-						objectData.World = b.WorldMatrix;
-						objectData.Material = b.Material;
-						objectData.VertexBuffer = b.VertexBufferDescriptor;
-						context.SetGraphicsDynamicConstantBufferView(0, objectData);
-						context.SetIndexBuffer(b.pMesh->IndicesLocation);
-						context.DrawIndexed(b.pMesh->IndicesLocation.Elements, 0, 0);
-					}
-				}
-			};
-
 			{
 				GPU_PROFILE_SCOPE("Opaque", &context);
 				context.SetPipelineState(m_pDiffusePSO);
 				context.BindResource(4, 0, m_pLightGridOpaque->GetSRV());
 				context.BindResource(4, 1, m_pLightIndexListBufferOpaque->GetSRV());
-				DrawBatches(Batch::Blending::Opaque | Batch::Blending::AlphaMask);
+				DrawScene(context, resources, Batch::Blending::Opaque | Batch::Blending::AlphaMask);
 			}
 
 			{
@@ -209,7 +187,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& resources)
 				context.SetPipelineState(m_pDiffuseAlphaPSO);
 				context.BindResource(4, 0, m_pLightGridTransparant->GetSRV());
 				context.BindResource(4, 1, m_pLightIndexListBufferTransparant->GetSRV());
-				DrawBatches(Batch::Blending::AlphaBlend);
+				DrawScene(context, resources, Batch::Blending::AlphaBlend);
 			}
 			context.EndRenderPass();
 		});

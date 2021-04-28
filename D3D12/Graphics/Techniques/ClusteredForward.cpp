@@ -157,36 +157,16 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 			context.BindResource(2, 0, m_pUniqueClusters->GetUAV());
 			context.BindResourceTable(3, resources.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Graphics);
 
-			auto DrawBatches = [&](Batch::Blending blendMode)
-			{
-				struct PerObjectData
-				{
-					Matrix World;
-					int VertexBuffer;
-				} objectData;
-				for (const Batch& b : resources.Batches)
-				{
-					if (EnumHasAnyFlags(b.BlendMode, blendMode) && resources.VisibilityMask.GetBit(b.Index))
-					{
-						objectData.World = b.WorldMatrix;
-						objectData.VertexBuffer = b.VertexBufferDescriptor;
-						context.SetGraphicsDynamicConstantBufferView(0, objectData);
-						context.SetIndexBuffer(b.pMesh->IndicesLocation);
-						context.DrawIndexed(b.pMesh->IndicesLocation.Elements, 0, 0);
-					}
-				}
-			};
-
 			{
 				GPU_PROFILE_SCOPE("Opaque", &context);
 				context.SetPipelineState(m_pMarkUniqueClustersOpaquePSO);
-				DrawBatches(Batch::Blending::Opaque);
+				DrawScene(context, resources, Batch::Blending::Opaque);
 			}
 
 			{
 				GPU_PROFILE_SCOPE("Transparant", &context);
 				context.SetPipelineState(m_pMarkUniqueClustersTransparantPSO);
-				DrawBatches(Batch::Blending::AlphaBlend | Batch::Blending::AlphaMask);
+				DrawScene(context, resources, Batch::Blending::AlphaMask);
 			}
 			context.EndRenderPass();
 		});
@@ -453,38 +433,16 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 			};
 			context.BindResources(4, 0, srvs, ARRAYSIZE(srvs));
 
-			auto DrawBatches = [&](Batch::Blending blendMode)
-			{
-				struct PerObjectData
-				{
-					Matrix World;
-					MaterialData Material;
-					uint32 VertexBuffer;
-				} objectData;
-				for (const Batch& b : resources.Batches)
-				{
-					if (EnumHasAnyFlags(b.BlendMode, blendMode) && resources.VisibilityMask.GetBit(b.Index))
-					{
-						objectData.World = b.WorldMatrix;
-						objectData.Material = b.Material;
-						objectData.VertexBuffer = b.VertexBufferDescriptor;
-						context.SetGraphicsDynamicConstantBufferView(0, objectData);
-						context.SetIndexBuffer(b.pMesh->IndicesLocation);
-						context.DrawIndexed(b.pMesh->IndicesLocation.Elements, 0, 0);
-					}
-				}
-			};
-
 			{
 				GPU_PROFILE_SCOPE("Opaque", &context);
 				context.SetPipelineState(m_pDiffusePSO);
-				DrawBatches(Batch::Blending::Opaque | Batch::Blending::AlphaMask);
+				DrawScene(context, resources, Batch::Blending::Opaque | Batch::Blending::AlphaMask);
 			}
 
 			{
 				GPU_PROFILE_SCOPE("Transparant", &context);
 				context.SetPipelineState(m_pDiffuseTransparancyPSO);
-				DrawBatches(Batch::Blending::AlphaBlend);
+				DrawScene(context, resources, Batch::Blending::AlphaBlend);
 			}
 
 			context.EndRenderPass();

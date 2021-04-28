@@ -9,10 +9,7 @@
 struct PerObjectData
 {
 	float4x4 World;
-	int Diffuse;
-    int Normal;
-    int RoughnessMetalness;
-	int Emissive;
+	MaterialData Material;
 	uint VertexBuffer;
 };
 
@@ -51,7 +48,7 @@ PSInput VSMain(uint VertexId : SV_VertexID)
 
 void PSMain(PSInput input)
 {
-	if(tTexture2DTable[cObjectData.Diffuse].Sample(sDiffuseSampler, input.texCoord).a < 0.5f)
+	if(tTexture2DTable[cObjectData.Material.Diffuse].Sample(sDiffuseSampler, input.texCoord).a < 0.5f)
 	{
 		discard;
 	}
