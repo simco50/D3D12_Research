@@ -39,7 +39,7 @@ float3 ComputeDiffuseColor(float3 baseColor, float metalness)
 // Diffuse BRDF: Lambertian Diffuse
 float3 Diffuse_Lambert(float3 diffuseColor)
 {
-	return diffuseColor * (1.0f / PI);
+	return diffuseColor * INV_PI;
 }
 
 // GGX / Trowbridge-Reitz

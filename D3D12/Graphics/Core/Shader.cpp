@@ -99,7 +99,7 @@ namespace ShaderCompiler
 		arguments.AddArgument(pIdentifier);
 		arguments.AddArgument("-E", pEntryPoint);
 		arguments.AddArgument("-T", target.c_str());
-		//arguments.AddArgument("-enable-templates");
+		arguments.AddArgument("-enable-templates");
 		arguments.AddArgument(DXC_ARG_ALL_RESOURCES_BOUND);
 
 #if 0 // #todo: PAQ seems broken right now... :(

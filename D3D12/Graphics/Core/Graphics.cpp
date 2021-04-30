@@ -1277,11 +1277,26 @@ void Graphics::EndFrame(uint64 fenceValue)
 void Graphics::InitD3D()
 {
 	E_LOG(Info, "Graphics::InitD3D()");
-	UINT dxgiFactoryFlags = 0;
+
+	if (CommandLine::GetBool("pix"))
+	{
+		if (GetModuleHandleA("WinPixGpuCapturer.dll") == 0)
+		{
+			std::string pixPath;
+			if (D3D::GetLatestWinPixGpuCapturerPath(pixPath))
+			{
+				if (LoadLibraryA(pixPath.c_str()))
+				{
+					E_LOG(Warning, "Dynamically loaded PIX ('%s')", pixPath.c_str());
+				}
+			}
+		}
+	}
 
 	bool debugD3D = CommandLine::GetBool("d3ddebug") || D3D_VALIDATION;
 	bool gpuValidation = CommandLine::GetBool("gpuvalidation") || GPU_VALIDATION;
 
+	UINT dxgiFactoryFlags = 0;
 	if (debugD3D)
 	{
 		ComPtr<ID3D12Debug> pDebugController;
@@ -1425,6 +1440,7 @@ void Graphics::InitD3D()
 	if (setStablePowerState)
 	{
 		VERIFY_HR(m_pDevice->SetStablePowerState(true));
+		E_LOG(Warning, "Stable Power State enabled");
 	}
 
 	if (debugD3D)

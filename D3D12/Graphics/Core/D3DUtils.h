@@ -1,6 +1,7 @@
 #pragma once
 
 #include <DXProgrammableCapture.h>
+#include <shlobj.h>
 
 #define VERIFY_HR(hr) D3D::LogHRESULT(hr, nullptr, #hr, __FILE__, __LINE__)
 #define VERIFY_HR_EX(hr, device) D3D::LogHRESULT(hr, device, #hr, __FILE__, __LINE__)
@@ -490,4 +491,46 @@ namespace D3D
 		}
 	}
 
+	static bool GetLatestWinPixGpuCapturerPath(std::string& path)
+	{
+		LPWSTR programFilesPath = nullptr;
+		SHGetKnownFolderPath(FOLDERID_ProgramFiles, KF_FLAG_DEFAULT, NULL, &programFilesPath);
+
+		std::string pixSearchPath = UNICODE_TO_MULTIBYTE(programFilesPath) + std::string("\\Microsoft PIX\\*");
+
+		WIN32_FIND_DATA findData;
+		bool foundPixInstallation = false;
+		char newestVersionFound[MAX_PATH];
+
+		HANDLE hFind = FindFirstFileA(pixSearchPath.c_str(), &findData);
+		if (hFind != INVALID_HANDLE_VALUE)
+		{
+			do
+			{
+				if (((findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) == FILE_ATTRIBUTE_DIRECTORY) &&
+					(findData.cFileName[0] != '.'))
+				{
+					if (!foundPixInstallation || strcmp(newestVersionFound, findData.cFileName) <= 0)
+					{
+						foundPixInstallation = true;
+						strcpy_s(newestVersionFound, _countof(newestVersionFound), findData.cFileName);
+					}
+				}
+			} while (FindNextFile(hFind, &findData) != 0);
+		}
+
+		FindClose(hFind);
+
+		if (!foundPixInstallation)
+		{
+			return false;
+		}
+		pixSearchPath.pop_back();
+		std::stringstream str;
+		str << pixSearchPath;
+		str << newestVersionFound;
+		str << "\\WinPixGpuCapturer.dll";
+		path = str.str();
+		return true;
+	}
 }

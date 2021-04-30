@@ -254,19 +254,22 @@ void AABBFromMinMax(inout AABB aabb, float3 minimum, float3 maximum)
     aabb.Extents = float4(maximum, 0) - aabb.Center;
 }
 
-float Pow4(float x)
+template<typename T>
+T Pow4(T x)
 {
-	float xx = x * x;
+	T xx = x * x;
 	return xx * xx;
 }
 
-float Pow5(float x)
+template<typename T>
+T Pow5(T x)
 {
-	float xx = x * x;
+	T xx = x * x;
 	return xx * xx * x;
 }
 
-float Square(float x)
+template<typename T>
+T Square(T x)
 {
     return x * x;
 }

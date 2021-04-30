@@ -37,6 +37,10 @@
         {
           "Id": "cd37ff2c-874f-462b-a4f4-ad7a2fba2619",
           "Command": "-stablepowerstate"
+        },
+        {
+          "Id": "2152451a-5cea-4170-b68e-d53827a75806",
+          "Command": "-pix"
         }
       ]
     },
