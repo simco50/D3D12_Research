@@ -57,6 +57,7 @@ void Console::Initialize()
 		InitializeConsoleWindow();
 	}
 #endif
+	E_LOG(Info, "Startup");
 }
 
 void Console::Log(const char* message, LogType type)

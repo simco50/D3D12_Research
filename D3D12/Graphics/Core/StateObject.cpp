@@ -156,7 +156,7 @@ void StateObjectInitializer::CreateStateObjectStream(StateObjectStream& stateObj
 		}
 	}
 
-	if (Flags != D3D12_STATE_OBJECT_FLAG_NONE)
+	if (Flags != D3D12_RAYTRACING_PIPELINE_FLAG_NONE)
 	{
 		D3D12_RAYTRACING_PIPELINE_CONFIG1* pDesc = stateObjectStream.ContentData.Allocate<D3D12_RAYTRACING_PIPELINE_CONFIG1>();
 		pDesc->MaxTraceRecursionDepth = MaxRecursion;

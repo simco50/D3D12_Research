@@ -2,11 +2,13 @@
 #include "Graphics/Core/Graphics.h"
 #include "Core/Input.h"
 #include "Core/Console.h"
-
-#define _CRTDBG_MAP_ALLOC
-#include <crtdbg.h>
 #include "Core/CommandLine.h"
 #include "Core/TaskQueue.h"
+
+#ifdef _DEBUG
+#define _CRTDBG_MAP_ALLOC
+#include <crtdbg.h>
+#endif
 
 #define BREAK_ON_ALLOC 0
 
@@ -21,23 +23,20 @@ class ViewWrapper
 public:
 	int Run(HINSTANCE hInstance, const char* pTitle, const char* lpCmdLine)
 	{
-		Thread::SetMainThread();
-		CommandLine::Parse(lpCmdLine);
-
+#ifdef _DEBUG
 		_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
-
 #if BREAK_ON_ALLOC > 0
 		_CrtSetBreakAlloc(BREAK_ON_ALLOC);
 #endif
+#endif
 
+		Thread::SetMainThread();
+		CommandLine::Parse(lpCmdLine);
 		Console::Initialize();
-		E_LOG(Info, "Startup");
-
 		TaskQueue::Initialize(std::thread::hardware_concurrency());
 
 		m_DisplayWidth = gWindowWidth;
 		m_DisplayHeight = gWindowHeight;
-
 		HWND window = MakeWindow(hInstance, pTitle);
 		Input::Instance().SetWindow(window);
 
@@ -72,6 +71,7 @@ public:
 		delete m_pGraphics;
 
 		TaskQueue::Shutdown();
+		DestroyWindow(hInstance, window);
 
 		OPTICK_SHUTDOWN();
 		return 0;
@@ -91,7 +91,7 @@ private:
 			pThis = reinterpret_cast<ViewWrapper*>(GetWindowLongPtrA(hWnd, GWLP_USERDATA));
 			return pThis->WndProc(hWnd, message, wParam, lParam);
 		}
-		return DefWindowProc(hWnd, message, wParam, lParam);
+		return DefWindowProcA(hWnd, message, wParam, lParam);
 	}
 
 	void OnResize()
@@ -239,19 +239,14 @@ private:
 		::SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_SYSTEM_AWARE);
 
 		WNDCLASSEX wc{};
-
 		wc.cbSize = sizeof(WNDCLASSEX);
 		wc.hInstance = hInstance;
 		wc.hbrBackground = (HBRUSH)GetStockObject(WHITE_BRUSH);
 		wc.lpfnWndProc = WndProcStatic;
 		wc.style = CS_HREDRAW | CS_VREDRAW;
 		wc.lpszClassName = TEXT("wndClass");
-		wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
-
-		if (!RegisterClassEx(&wc))
-		{
-			return nullptr;
-		}
+		wc.hCursor = LoadCursorA(nullptr, IDC_ARROW);
+		check(RegisterClassExA(&wc));
 
 		int displayWidth = GetSystemMetrics(SM_CXSCREEN);
 		int displayHeight = GetSystemMetrics(SM_CYSCREEN);
@@ -263,28 +258,19 @@ private:
 		int x = (displayWidth - m_DisplayWidth) / 2;
 		int y = (displayHeight - m_DisplayHeight) / 2;
 
-		HWND window = CreateWindowA(
-			TEXT("wndClass"),
-			pTitle,
-			windowStyle,
-			x,
-			y,
-			windowRect.right - windowRect.left,
-			windowRect.bottom - windowRect.top,
-			nullptr,
-			nullptr,
-			hInstance,
-			this
-		);
-
-		if (window == nullptr)
-		{
-			return window;
-		}
-
+		HWND window = CreateWindowExA(0, "wndClass", pTitle, windowStyle, x, y, windowRect.right - windowRect.left, windowRect.bottom - windowRect.top, nullptr, nullptr, hInstance, this);
+		check(window);
 		ShowWindow(window, SW_SHOWDEFAULT);
-
+		UpdateWindow(window);
 		return window;
+	}
+
+	void DestroyWindow(HINSTANCE hInstance, HWND hwnd)
+	{
+		CloseWindow(hwnd);
+		char className[256];
+		GetClassNameA(hwnd, className, 256);
+		UnregisterClassA(className, hInstance);
 	}
 
 private:

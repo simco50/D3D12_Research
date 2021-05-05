@@ -14,14 +14,9 @@ void Input::SetWindow(HWND window)
 
 void Input::Update()
 {
-	for (size_t i = 0; i < m_KeyStates.size(); ++i)
-	{
-		m_KeyStates[i] = (KeyState)(m_KeyStates[i] & KeyState::Down);
-	}
-	for (size_t i = 0; i < m_MouseStates.size(); ++i)
-	{
-		m_MouseStates[i] = (KeyState)(m_MouseStates[i] & KeyState::Down);
-	}
+	m_CurrentKeyStates.ClearAll();
+	m_CurrentMouseStates.ClearAll();
+
 	m_MouseWheel = 0;
 	m_MouseDelta = Vector2();
 #if PLATFORM_WINDOWS
@@ -34,12 +29,14 @@ void Input::Update()
 
 void Input::UpdateKey(uint32 keyCode, bool isDown)
 {
-	m_KeyStates[keyCode] = isDown ? KeyState::DownAndPressed : KeyState::None;
+	m_PersistentKeyStates.AssignBit(keyCode, isDown);
+	m_CurrentKeyStates.AssignBit(keyCode, isDown);
 }
 
 void Input::UpdateMouseKey(uint32 keyCode, bool isDown)
 {
-	m_MouseStates[keyCode] = isDown ? KeyState::DownAndPressed : KeyState::None;
+	m_PersistentMouseStates.AssignBit(keyCode, isDown);
+	m_CurrentMouseStates.AssignBit(keyCode, isDown);
 }
 
 void Input::UpdateMouseWheel(float mouseWheel)
@@ -49,22 +46,22 @@ void Input::UpdateMouseWheel(float mouseWheel)
 
 bool Input::IsKeyDown(uint32 keyCode)
 {
-	return m_KeyStates[keyCode] > KeyState::None;
+	return m_PersistentKeyStates.GetBit(keyCode);
 }
 
 bool Input::IsKeyPressed(uint32 keyCode)
 {
-	return (m_KeyStates[keyCode] & KeyState::Pressed) == KeyState::Pressed;
+	return m_PersistentKeyStates.GetBit(keyCode) && m_CurrentKeyStates.GetBit(keyCode);
 }
 
 bool Input::IsMouseDown(uint32 keyCode)
 {
-	return m_MouseStates[keyCode] > KeyState::None;
+	return m_PersistentMouseStates.GetBit(keyCode);
 }
 
 bool Input::IsMousePressed(uint32 keyCode)
 {
-	return (m_MouseStates[keyCode] & KeyState::Pressed) == KeyState::Pressed;
+	return m_PersistentMouseStates.GetBit(keyCode) && m_CurrentMouseStates.GetBit(keyCode);
 }
 
 Vector2 Input::GetMousePosition() const
