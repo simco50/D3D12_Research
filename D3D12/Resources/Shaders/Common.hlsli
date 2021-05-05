@@ -213,14 +213,86 @@ float3 WorldFromDepth(float2 uv, float depth, float4x4 viewProjectionInverse)
     return world.xyz / world.w;
 }
 
+#if 1
 float3 NormalFromDepth(Texture2D depthTexture, SamplerState depthSampler, float2 uv, float2 invDimensions, float4x4 inverseProjection)
 {
     float3 vpos0 = ViewFromDepth(uv, depthTexture.SampleLevel(depthSampler, uv, 0).x, inverseProjection);
-    float3 vpos1 = ViewFromDepth(uv + float2(invDimensions.x, 0), depthTexture.SampleLevel(depthSampler, uv + float2(invDimensions.x, 0), 0).x, inverseProjection);
-    float3 vpos2 = ViewFromDepth(uv + float2(0, -invDimensions.y), depthTexture.SampleLevel(depthSampler, uv + float2(0, -invDimensions.y), 0).x, inverseProjection);
+    float3 vpos1 = ViewFromDepth(uv + float2(1, 0) * invDimensions, depthTexture.SampleLevel(depthSampler, uv + float2(1, 0) * invDimensions, 0).x, inverseProjection);
+    float3 vpos2 = ViewFromDepth(uv + float2(0, -1) * invDimensions, depthTexture.SampleLevel(depthSampler, uv + float2(0, -1) * invDimensions, 0).x, inverseProjection);
     float3 normal = normalize(cross(vpos2 - vpos0, vpos1 - vpos0));
     return normal;
 }
+#elif 0
+// János Turánszki' - Improved Normal Reconstruction
+// https://wickedengine.net/2019/09/22/improved-normal-reconstruction-from-depth/
+float3 NormalFromDepth(Texture2D depthTexture, SamplerState depthSampler, float2 uv, float2 invDimensions, float4x4 inverseProjection)
+{
+    float3 vposc = ViewFromDepth(uv, depthTexture.SampleLevel(depthSampler, uv, 0).x, inverseProjection);
+    float3 vposl = ViewFromDepth(uv + float2(-1, 0) * invDimensions, depthTexture.SampleLevel(depthSampler, uv + float2(-1, 0) * invDimensions, 0).x, inverseProjection);
+    float3 vposr = ViewFromDepth(uv + float2(1, 0) * invDimensions, depthTexture.SampleLevel(depthSampler, uv + float2(1, 0) * invDimensions, 0).x, inverseProjection);
+    float3 vposd = ViewFromDepth(uv + float2(0, -1) * invDimensions, depthTexture.SampleLevel(depthSampler, uv + float2(0, -1) * invDimensions, 0).x, inverseProjection);
+    float3 vposu = ViewFromDepth(uv + float2(0, 1) * invDimensions, depthTexture.SampleLevel(depthSampler, uv + float2(0, 1) * invDimensions, 0).x, inverseProjection);
+    
+    float3 l = vposc - vposl;
+    float3 r = vposr - vposc;
+    float3 d = vposc - vposd;
+    float3 u = vposu - vposc;
+
+    float3 hDeriv = abs(l.z) < abs(r.z) ? l : r;
+    float3 vDeriv = abs(d.z) < abs(u.z) ? d : u;
+
+    float3 viewNormal = normalize(cross(hDeriv, vDeriv));
+    return viewNormal;
+}
+#elif 0
+// Yuwen Wu - Accurate Normal Reconstruction 
+// https://atyuwen.github.io/posts/normal-reconstruction/
+float3 NormalFromDepth(Texture2D depthTexture, SamplerState depthSampler, float2 uv, float2 invDimensions, float4x4 inverseProjection)
+{
+    float c = depthTexture.SampleLevel(depthSampler, uv, 0).x;
+
+    float3 vposc = ViewFromDepth(uv, depthTexture.SampleLevel(depthSampler, uv, 0).x, inverseProjection);
+    float3 vposl = ViewFromDepth(uv + float2(-1, 0) * invDimensions, depthTexture.SampleLevel(depthSampler, uv + float2(-1, 0) * invDimensions, 0).x, inverseProjection);
+    float3 vposr = ViewFromDepth(uv + float2(1, 0) * invDimensions, depthTexture.SampleLevel(depthSampler, uv + float2(1, 0) * invDimensions, 0).x, inverseProjection);
+    float3 vposd = ViewFromDepth(uv + float2(0, -1) * invDimensions, depthTexture.SampleLevel(depthSampler, uv + float2(0, -1) * invDimensions, 0).x, inverseProjection);
+    float3 vposu = ViewFromDepth(uv + float2(0, 1) * invDimensions, depthTexture.SampleLevel(depthSampler, uv + float2(0, 1) * invDimensions, 0).x, inverseProjection);
+    
+    float3 l = vposc - vposl;
+    float3 r = vposr - vposc;
+    float3 d = vposc - vposd;
+    float3 u = vposu - vposc;
+
+    // get depth values at 1 & 2 pixels offsets from current along the horizontal axis
+    float4 H = float4(
+        depthTexture.SampleLevel(depthSampler, uv + float2(-1.0, 0.0) * invDimensions, 0).x,
+        depthTexture.SampleLevel(depthSampler, uv + float2( 1.0, 0.0) * invDimensions, 0).x,
+        depthTexture.SampleLevel(depthSampler, uv + float2(-2.0, 0.0) * invDimensions, 0).x,
+        depthTexture.SampleLevel(depthSampler, uv + float2( 2.0, 0.0) * invDimensions, 0).x
+    );
+
+    // get depth values at 1 & 2 pixels offsets from current along the vertical axis
+    float4 V = float4(
+        depthTexture.SampleLevel(depthSampler, uv + float2(0.0,-1.0) * invDimensions, 0).x,
+        depthTexture.SampleLevel(depthSampler, uv + float2(0.0, 1.0) * invDimensions, 0).x,
+        depthTexture.SampleLevel(depthSampler, uv + float2(0.0,-2.0) * invDimensions, 0).x,
+        depthTexture.SampleLevel(depthSampler, uv + float2(0.0, 2.0) * invDimensions, 0).x
+    );
+
+    // current pixel's depth difference from slope of offset depth samples
+    // differs from original article because we're using non-linear depth values
+    // see article's comments
+    float2 he = abs((2 * H.xy - H.zw) - c);
+    float2 ve = abs((2 * V.xy - V.zw) - c);
+
+    // pick horizontal and vertical diff with the smallest depth difference from slopes
+    float3 hDeriv = he.x < he.y ? l : r;
+    float3 vDeriv = ve.x < ve.y ? d : u;
+
+    // get view space normal from the cross product of the best derivatives
+    float3 viewNormal = normalize(cross(hDeriv, vDeriv));
+    return viewNormal;
+}
+#endif
 
 // Convert screen space coordinates (0, width/height) to view space.
 float3 ScreenToView(float4 screen, float2 screenDimensionsInv, float4x4 projectionInverse)
