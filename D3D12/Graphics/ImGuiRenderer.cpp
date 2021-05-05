@@ -147,12 +147,11 @@ void ImGuiRenderer::CreatePipeline(Graphics* pGraphics)
 	//Root signature
 	m_pRootSignature = std::make_unique<RootSignature>(pGraphics);
 	m_pRootSignature->FinalizeFromShader("ImGui", pVertexShader);
-	//Input layout
-	CD3DX12_INPUT_ELEMENT_DESC elementDesc[] = {
-		CD3DX12_INPUT_ELEMENT_DESC("POSITION", DXGI_FORMAT_R32G32_FLOAT),
-		CD3DX12_INPUT_ELEMENT_DESC("TEXCOORD", DXGI_FORMAT_R32G32_FLOAT),
-		CD3DX12_INPUT_ELEMENT_DESC("COLOR", DXGI_FORMAT_R8G8B8A8_UNORM),
-	};
+
+	VertexElementLayout inputLayout;
+	inputLayout.AddVertexElement("POSITION", DXGI_FORMAT_R32G32_FLOAT);
+	inputLayout.AddVertexElement("TEXCOORD", DXGI_FORMAT_R32G32_FLOAT);
+	inputLayout.AddVertexElement("COLOR", DXGI_FORMAT_R8G8B8A8_UNORM);
 
 	PipelineStateInitializer psoDesc;
 	psoDesc.SetBlendMode(BlendMode::Alpha, false);
@@ -162,7 +161,7 @@ void ImGuiRenderer::CreatePipeline(Graphics* pGraphics)
 	psoDesc.SetVertexShader(pVertexShader);
 	psoDesc.SetPixelShader(pPixelShader);
 	psoDesc.SetRootSignature(m_pRootSignature->GetRootSignature());
-	psoDesc.SetInputLayout(elementDesc, ARRAYSIZE(elementDesc));
+	psoDesc.SetInputLayout(inputLayout);
 	psoDesc.SetRenderTargetFormat(DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_UNKNOWN, 1);
 	psoDesc.SetName("ImGui Pipeline");
 	m_pPipelineState = pGraphics->CreatePipeline(psoDesc);

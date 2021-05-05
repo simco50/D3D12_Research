@@ -130,7 +130,10 @@ Profiler* Profiler::Get()
 
 void Profiler::Initialize(Graphics* pGraphics)
 {
-	CD3DX12_QUERY_HEAP_DESC desc(HEAP_SIZE, D3D12_QUERY_HEAP_TYPE_TIMESTAMP);
+	D3D12_QUERY_HEAP_DESC desc{};
+	desc.Count = HEAP_SIZE;
+	desc.Type = D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
+	desc.NodeMask = 0;
 	VERIFY_HR_EX(pGraphics->GetDevice()->CreateQueryHeap(&desc, IID_PPV_ARGS(m_pQueryHeap.GetAddressOf())), pGraphics->GetDevice());
 	D3D::SetObjectName(m_pQueryHeap.Get(), "Profiler Timestamp Query Heap");
 

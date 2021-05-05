@@ -1999,7 +1999,6 @@ void Graphics::InitializePipelines()
 
 		//Pipeline state
 		PipelineStateInitializer psoDesc;
-		psoDesc.SetInputLayout(nullptr, 0);
 		psoDesc.SetRootSignature(m_pSkyboxRS->GetRootSignature());
 		psoDesc.SetVertexShader(pVertexShader);
 		psoDesc.SetPixelShader(pPixelShader);

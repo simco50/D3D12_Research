@@ -24,6 +24,24 @@ enum class PipelineStateType
 	MAX
 };
 
+class VertexElementLayout
+{
+public:
+	VertexElementLayout() = default;
+	VertexElementLayout(const VertexElementLayout& rhs);
+	VertexElementLayout& operator=(const VertexElementLayout& rhs);
+
+	void AddVertexElement(const char* pSemantic, DXGI_FORMAT format, uint32 semanticIndex = 0, uint32 byteOffset = D3D12_APPEND_ALIGNED_ELEMENT, uint32 inputSlot = 0);
+	void AddInstanceElement(const char* pSemantic, DXGI_FORMAT format, uint32 semanticIndex, uint32 byteOffset, uint32 inputSlot, uint32 stepRate);
+
+	const std::vector<D3D12_INPUT_ELEMENT_DESC>& GetDesc() const { return m_ElementDesc; }
+private:
+	void FixupStrings();
+
+	std::vector<D3D12_INPUT_ELEMENT_DESC> m_ElementDesc;
+	std::vector<std::string> m_SemanticNames;
+};
+
 class PipelineStateInitializer
 {
 private:
@@ -85,7 +103,7 @@ public:
 	void SetLineAntialias(bool lineAntiAlias);
 	void SetDepthBias(int depthBias, float depthBiasClamp, float slopeScaledDepthBias);
 
-	void SetInputLayout(D3D12_INPUT_ELEMENT_DESC* pElements, uint32 count);
+	void SetInputLayout(const VertexElementLayout& layout);
 	void SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE topology);
 
 	void SetRootSignature(ID3D12RootSignature* pRootSignature);
@@ -128,8 +146,7 @@ private:
 	}
 
 	std::string m_Name;
-	std::vector<D3D12_INPUT_ELEMENT_DESC> m_InputLayout;
-	std::vector<std::string> m_InputLayoutSemanticNames;
+	VertexElementLayout m_InputLayout;
 	PipelineStateType m_Type = PipelineStateType::MAX;
 	std::array<Shader*, (int)ShaderType::MAX> m_Shaders{};
 
