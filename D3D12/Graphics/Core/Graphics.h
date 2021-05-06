@@ -123,12 +123,10 @@ enum class RenderPath
 class Graphics
 {
 public:
-	Graphics(uint32 width, uint32 height, int sampleCount = 1);
+	Graphics(WindowHandle window, int sampleCount = 1);
 	~Graphics();
 
-	void Initialize(WindowHandle window);
 	void Update();
-	void Shutdown();
 	void OnResize(int width, int height);
 
 	bool IsFenceComplete(uint64 fenceValue);

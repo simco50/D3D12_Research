@@ -6,7 +6,6 @@ class Input
 public:
 	static Input& Instance();
 
-	void SetWindow(HWND window);
 	void Update();
 	void UpdateKey(uint32 keyCode, bool isDown);
 	void UpdateMouseKey(uint32 keyCode, bool isDown);
@@ -31,7 +30,6 @@ private:
 	BitField<16> m_CurrentMouseStates = {};
 
 	Input() = default;
-	HWND m_pWindow = nullptr;
 	Vector2 m_MouseDelta;
 	Vector2 m_CurrentMousePosition;
 	float m_MouseWheel = 0;

@@ -123,16 +123,8 @@ namespace Tweakables
 	bool g_RenderObjectBounds = false;
 }
 
-Graphics::Graphics(uint32 width, uint32 height, int sampleCount /*= 1*/)
-	: m_SampleCount(sampleCount), m_WindowWidth(width), m_WindowHeight(height)
-{
-}
-
-Graphics::~Graphics()
-{
-}
-
-void Graphics::Initialize(WindowHandle window)
+Graphics::Graphics(WindowHandle window, int sampleCount /*= 1*/)
+	: m_SampleCount(sampleCount)
 {
 	m_pWindow = window;
 
@@ -155,6 +147,15 @@ void Graphics::Initialize(WindowHandle window)
 	Tweakables::g_RaytracedReflections = SupportsRayTracing() ? Tweakables::g_RaytracedReflections : false;
 
 	m_pDynamicAllocationManager->CollectGarbage();
+}
+
+Graphics::~Graphics()
+{
+	IdleGPU();
+#if !PLATFORM_UWP
+	check(UnregisterWait(m_DeviceRemovedEvent) != 0);
+#endif
+	m_pSwapchain->SetFullscreenState(false, nullptr);
 }
 
 void EditTransform(const Camera& camera, Matrix& matrix)
@@ -1249,17 +1250,6 @@ void Graphics::Update()
 	}
 }
 
-void Graphics::Shutdown()
-{
-	// Wait for the GPU to be done with all resources.
-	IdleGPU();
-#if !PLATFORM_UWP
-	UnregisterWait(m_DeviceRemovedEvent);
-#endif
-
-	m_pSwapchain->SetFullscreenState(false, nullptr);
-}
-
 void Graphics::BeginFrame()
 {
 	m_pImGuiRenderer->NewFrame(m_WindowWidth, m_WindowHeight);
@@ -1278,6 +1268,7 @@ void Graphics::InitD3D()
 {
 	E_LOG(Info, "Graphics::InitD3D()");
 
+#if PLATFORM_WINDOWS
 	if (CommandLine::GetBool("pix"))
 	{
 		if (GetModuleHandleA("WinPixGpuCapturer.dll") == 0)
@@ -1292,6 +1283,7 @@ void Graphics::InitD3D()
 			}
 		}
 	}
+#endif
 
 	bool debugD3D = CommandLine::GetBool("d3ddebug") || D3D_VALIDATION;
 	bool gpuValidation = CommandLine::GetBool("gpuvalidation") || GPU_VALIDATION;
@@ -1536,9 +1528,19 @@ void Graphics::InitD3D()
 	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_RTV] = std::make_unique<OfflineDescriptorAllocator>(this, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, 128);
 	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_DSV] = std::make_unique<OfflineDescriptorAllocator>(this, D3D12_DESCRIPTOR_HEAP_TYPE_DSV, 64);
 
+#if PLATFORM_WINDOWS
+	RECT rect;
+	check(GetClientRect(m_pWindow, &rect));
+	uint32 width = rect.right - rect.left;
+	uint32 height = rect.bottom - rect.top;
+#else
+	uint32 width = (uint32)m_pWindow->Bounds().Width;
+	uint32 height = (uint32)m_pWindow->Bounds().Height;
+#endif
+
 	DXGI_SWAP_CHAIN_DESC1 swapchainDesc = {};
-	swapchainDesc.Width = m_WindowWidth;
-	swapchainDesc.Height = m_WindowHeight;
+	swapchainDesc.Width = width;
+	swapchainDesc.Height = height;
 	swapchainDesc.Format = SWAPCHAIN_FORMAT;
 	swapchainDesc.SampleDesc.Count = 1;
 	swapchainDesc.SampleDesc.Quality = 0;
@@ -1614,7 +1616,7 @@ void Graphics::InitD3D()
 	Profiler::Get()->Initialize(this);
 	DebugRenderer::Get()->Initialize(this);
 
-	OnResize(m_WindowWidth, m_WindowHeight);
+	OnResize(width, height);
 }
 
 void Graphics::InitializeAssets(CommandContext& context)

@@ -493,6 +493,7 @@ namespace D3D
 
 	static bool GetLatestWinPixGpuCapturerPath(std::string& path)
 	{
+#if PLATFORM_WINDOWS
 		LPWSTR programFilesPath = nullptr;
 		SHGetKnownFolderPath(FOLDERID_ProgramFiles, KF_FLAG_DEFAULT, NULL, &programFilesPath);
 
@@ -532,5 +533,8 @@ namespace D3D
 		str << "\\WinPixGpuCapturer.dll";
 		path = str.str();
 		return true;
+#else
+		return false;
+#endif
 	}
 }
