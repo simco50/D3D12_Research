@@ -83,7 +83,7 @@ void DebugRenderer::Render(RGGraph& graph, const Matrix& viewProjection, Texture
 	constexpr uint32 VertexStride = sizeof(DebugLine) / 2;
 
 	RGPassBuilder pass = graph.AddPass("Debug Rendering");
-	pass.Bind([=](CommandContext& context, const RGPassResources& resources)
+	pass.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
 		{
 			context.InsertResourceBarrier(pDepth, D3D12_RESOURCE_STATE_DEPTH_WRITE);
 			context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);

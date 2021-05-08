@@ -37,7 +37,7 @@ DescriptorHeapBlock* GlobalOnlineDescriptorHeap::AllocateBlock()
 	std::lock_guard<std::mutex> lock(m_BlockAllocateMutex);
 
 	// Check if we can free so finished blocks
-	for (int i = 0; i < m_ReleasedBlocks.size(); ++i)
+	for (uint32 i = 0; i < (uint32)m_ReleasedBlocks.size(); ++i)
 	{
 		DescriptorHeapBlock* pBlock = m_ReleasedBlocks[i];
 		if (GetParent()->IsFenceComplete(pBlock->FenceValue))

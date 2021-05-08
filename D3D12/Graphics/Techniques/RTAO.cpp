@@ -36,7 +36,7 @@ void RTAO::Execute(RGGraph& graph, Texture* pColor, Texture* pDepth, const Scene
 	ImGui::End();
 
 	RGPassBuilder rt = graph.AddPass("RTAO");
-	rt.Bind([=](CommandContext& context, const RGPassResources& passResources)
+	rt.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
 		{
 			context.InsertResourceBarrier(pDepth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(pColor, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
@@ -44,7 +44,6 @@ void RTAO::Execute(RGGraph& graph, Texture* pColor, Texture* pDepth, const Scene
 			context.SetComputeRootSignature(m_pGlobalRS.get());
 			context.SetPipelineState(m_pRtSO);
 
-			constexpr const int numRandomVectors = 64;
 			struct Parameters
 			{
 				Matrix ViewInverse;
@@ -80,7 +79,7 @@ void RTAO::Execute(RGGraph& graph, Texture* pColor, Texture* pDepth, const Scene
 		});
 }
 
-void RTAO::SetupResources(Graphics* pGraphics)
+void RTAO::SetupResources(Graphics* /*pGraphics*/)
 {
 }
 

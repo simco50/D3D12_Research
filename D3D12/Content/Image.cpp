@@ -39,7 +39,7 @@ bool Image::Load(const char* inputStream)
 	return success;
 }
 
-bool Image::Load(const void* pInPixels, size_t dataSize, const char* pFormatHint)
+bool Image::Load(const void* pInPixels, size_t dataSize, const char* /*pFormatHint*/)
 {
 	m_Components = 4;
 	m_Depth = 1;

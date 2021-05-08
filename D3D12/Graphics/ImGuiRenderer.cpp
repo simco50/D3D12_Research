@@ -177,7 +177,7 @@ void ImGuiRenderer::Render(RGGraph& graph, const SceneData& sceneData, Texture* 
 		return;
 	}
 	RGPassBuilder pass = graph.AddPass("Render UI");
-	pass.Bind([=](CommandContext& context, const RGPassResources& resources)
+	pass.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
 		{
 			context.InsertResourceBarrier(pRenderTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
 

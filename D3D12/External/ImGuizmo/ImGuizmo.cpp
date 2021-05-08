@@ -20,11 +20,11 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-#include "ImGui/imgui.h"
+#include "Imgui/imgui.h"
 #ifndef IMGUI_DEFINE_MATH_OPERATORS
 #define IMGUI_DEFINE_MATH_OPERATORS
 #endif
-#include "ImGui/imgui_internal.h"
+#include "Imgui/imgui_internal.h"
 #include "ImGuizmo.h"
 #if !defined(_WIN32)
 #define _malloca(x) alloca(x)
@@ -51,11 +51,6 @@ namespace ImGuizmo
    static bool operator!=(OPERATION lhs, int rhs)
    {
      return static_cast<int>(lhs) != rhs;
-   }
-
-   static bool operator==(OPERATION lhs, int rhs)
-   {
-     return static_cast<int>(lhs) == rhs;
    }
 
    static bool Intersects(OPERATION lhs, OPERATION rhs)

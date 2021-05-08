@@ -34,7 +34,7 @@ public:
 	void SetDescriptorTableRange(uint32 rootIndex, uint32 rangeIndex, uint32 startRegisterSlot, D3D12_DESCRIPTOR_RANGE_TYPE type, uint32 count, uint32 heapSlotOffset);
 	void SetDescriptorTableSimple(uint32 rootIndex, uint32 startRegisterSlot, D3D12_DESCRIPTOR_RANGE_TYPE type, uint32 count, D3D12_SHADER_VISIBILITY visibility);
 
-	void AddStaticSampler(uint32 shaderRegister, const D3D12_STATIC_SAMPLER_DESC& samplerDesc, D3D12_SHADER_VISIBILITY visibility);
+	void AddStaticSampler(const D3D12_STATIC_SAMPLER_DESC& samplerDesc);
 
 	void Finalize(const char* pName, D3D12_ROOT_SIGNATURE_FLAGS flags);
 	void FinalizeFromShader(const char* pName, const ShaderBase* pShader);

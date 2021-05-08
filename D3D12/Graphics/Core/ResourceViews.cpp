@@ -58,7 +58,7 @@ void ShaderResourceView::Create(Buffer* pBuffer, const BufferSRVDesc& desc)
 	}
 }
 
-void ShaderResourceView::Create(Texture* pTexture, const TextureSRVDesc& desc)
+void ShaderResourceView::Create(Texture* pTexture, const TextureSRVDesc& /*desc*/)
 {
 	check(pTexture);
 	m_pParent = pTexture;

@@ -221,6 +221,8 @@ void EditTransform(const Camera& camera, Matrix& matrix)
 		ImGui::InputFloat("Scale Snap", &scaleSnap);
 		pSnapValue = &scaleSnap;
 		break;
+	default:
+		break;
 	}
 
 	ImGuiIO& io = ImGui::GetIO();
@@ -511,7 +513,7 @@ void Graphics::Update()
 		}
 	}
 
-	if (shadowIndex > m_ShadowMaps.size())
+	if (shadowIndex > (int)m_ShadowMaps.size())
 	{
 		m_ShadowMaps.resize(shadowIndex);
 		int i = 0;
@@ -583,7 +585,7 @@ void Graphics::Update()
 	if (Tweakables::g_Screenshot && m_ScreenshotDelay < 0)
 	{
 		RGPassBuilder screenshot = graph.AddPass("Take Screenshot");
-		screenshot.Bind([=](CommandContext& renderContext, const RGPassResources& resources)
+		screenshot.Bind([=](CommandContext& renderContext, const RGPassResources& /*resources*/)
 			{
 				D3D12_PLACED_SUBRESOURCE_FOOTPRINT textureFootprint = {};
 				D3D12_RESOURCE_DESC resourceDesc = m_pTonemapTarget->GetResource()->GetDesc();
@@ -638,7 +640,7 @@ void Graphics::Update()
 	}
 
 	RGPassBuilder updateTLAS = graph.AddPass("Update TLAS");
-	updateTLAS.Bind([=](CommandContext& renderContext, const RGPassResources& resources)
+	updateTLAS.Bind([=](CommandContext& renderContext, const RGPassResources& /*resources*/)
 		{
 			UpdateTLAS(renderContext);
 		}
@@ -647,7 +649,7 @@ void Graphics::Update()
 
 	RGPassBuilder setupLights = graph.AddPass("Setup Lights");
 	Data.DepthStencil = setupLights.Write(Data.DepthStencil);
-	setupLights.Bind([=](CommandContext& renderContext, const RGPassResources& resources)
+	setupLights.Bind([=](CommandContext& renderContext, const RGPassResources& /*resources*/)
 		{
 			DynamicAllocation allocation = renderContext.AllocateTransientMemory(m_Lights.size() * sizeof(Light::RenderData));
 			Light::RenderData* pTarget = (Light::RenderData*)allocation.pMappedMemory;
@@ -732,7 +734,7 @@ void Graphics::Update()
 	else
 	{
 		RGPassBuilder depthResolve = graph.AddPass("Depth Resolve");
-		depthResolve.Bind([=](CommandContext& renderContext, const RGPassResources& resources)
+		depthResolve.Bind([=](CommandContext& renderContext, const RGPassResources& /*resources*/)
 			{
 				renderContext.CopyTexture(GetDepthStencil(), GetResolvedDepthStencil());
 			});
@@ -742,7 +744,7 @@ void Graphics::Update()
 	if (Tweakables::g_TAA)
 	{
 		RGPassBuilder cameraMotion = graph.AddPass("Camera Motion");
-		cameraMotion.Bind([=](CommandContext& renderContext, const RGPassResources& resources)
+		cameraMotion.Bind([=](CommandContext& renderContext, const RGPassResources& /*resources*/)
 			{
 				renderContext.InsertResourceBarrier(GetResolvedDepthStencil(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 				renderContext.InsertResourceBarrier(m_pVelocity.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
@@ -845,7 +847,7 @@ void Graphics::Update()
 		}
 
 		RGPassBuilder shadows = graph.AddPass("Shadow Mapping");
-		shadows.Bind([=](CommandContext& context, const RGPassResources& resources)
+		shadows.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
 			{
 				for (auto& pShadowmap : m_ShadowMaps)
 				{
@@ -937,7 +939,7 @@ void Graphics::Update()
 	DebugRenderer::Get()->Render(graph, m_pCamera->GetViewProjection(), GetCurrentRenderTarget(), GetDepthStencil());
 
 	RGPassBuilder resolve = graph.AddPass("Resolve");
-	resolve.Bind([=](CommandContext& context, const RGPassResources& resources)
+	resolve.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
 		{
 			if (m_SampleCount > 1)
 			{
@@ -965,7 +967,7 @@ void Graphics::Update()
 	if (Tweakables::g_TAA)
 	{
 		RGPassBuilder temporalResolve = graph.AddPass("Temporal Resolve");
-		temporalResolve.Bind([=](CommandContext& renderContext, const RGPassResources& resources)
+		temporalResolve.Bind([=](CommandContext& renderContext, const RGPassResources& /*resources*/)
 			{
 				renderContext.InsertResourceBarrier(m_pTAASource.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 				renderContext.InsertResourceBarrier(m_pHDRRenderTarget.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
@@ -1076,7 +1078,7 @@ void Graphics::Update()
 			});
 
 		RGPassBuilder avgLuminance = graph.AddPass("Average Luminance");
-		avgLuminance.Bind([=](CommandContext& context, const RGPassResources& resources)
+		avgLuminance.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
 			{
 				context.InsertResourceBarrier(m_pLuminanceHistogram.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 				context.InsertResourceBarrier(m_pAverageLuminance.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
@@ -1107,7 +1109,7 @@ void Graphics::Update()
 			});
 
 		RGPassBuilder tonemap = graph.AddPass("Tonemap");
-		tonemap.Bind([=](CommandContext& context, const RGPassResources& resources)
+		tonemap.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
 			{
 				struct Parameters
 				{
@@ -1139,7 +1141,7 @@ void Graphics::Update()
 		if (Tweakables::g_EnableUI && Tweakables::g_DrawHistogram)
 		{
 			RGPassBuilder drawHistogram = graph.AddPass("Draw Histogram");
-			drawHistogram.Bind([=](CommandContext& context, const RGPassResources& resources)
+			drawHistogram.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
 				{
 					context.InsertResourceBarrier(m_pLuminanceHistogram.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 					context.InsertResourceBarrier(m_pAverageLuminance.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
@@ -1197,7 +1199,7 @@ void Graphics::Update()
 			IM_COL32(65,0,1, 255),
 		};
 
-		for (int i = 0; i < ARRAYSIZE(DEBUG_COLORS); ++i)
+		for (uint32 i = 0; i < ARRAYSIZE(DEBUG_COLORS); ++i)
 		{
 			char number[16];
 			sprintf_s(number, "%d", i);
@@ -1221,7 +1223,7 @@ void Graphics::Update()
 	}
 
 	RGPassBuilder temp = graph.AddPass("Temp Barriers");
-	temp.Bind([=](CommandContext& context, const RGPassResources& resources)
+	temp.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
 		{
 			context.CopyTexture(m_pTonemapTarget.get(), GetCurrentBackbuffer());
 			context.InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RENDER_TARGET);
@@ -1241,7 +1243,7 @@ void Graphics::Update()
 	//	- Set fence for the currently queued frame
 	//	- Present the frame buffer
 	//	- Wait for the next frame to be finished to start queueing work for it
-	EndFrame(nextFenceValue);
+	EndFrame();
 
 	if (m_CapturePix)
 	{
@@ -1255,7 +1257,7 @@ void Graphics::BeginFrame()
 	m_pImGuiRenderer->NewFrame(m_WindowWidth, m_WindowHeight);
 }
 
-void Graphics::EndFrame(uint64 fenceValue)
+void Graphics::EndFrame()
 {
 	Profiler::Get()->Resolve(this, m_Frame);
 
@@ -2063,7 +2065,7 @@ void Graphics::UpdateImGui()
 
 	if (ImGui::TreeNodeEx("Lighting", ImGuiTreeNodeFlags_DefaultOpen))
 	{
-		ImGui::Combo("Render Path", (int*)&m_RenderPath, [](void* data, int index, const char** outText)
+		ImGui::Combo("Render Path", (int*)&m_RenderPath, [](void* /*data*/, int index, const char** outText)
 			{
 				RenderPath p = (RenderPath)index;
 				switch (p)
@@ -2200,7 +2202,7 @@ void Graphics::UpdateImGui()
 	ImGui::SliderFloat("Max Log Luminance", &Tweakables::g_MaxLogLuminance, -50, 50);
 	ImGui::Checkbox("Draw Exposure Histogram", &Tweakables::g_DrawHistogram);
 	ImGui::SliderFloat("White Point", &Tweakables::g_WhitePoint, 0, 20);
-	ImGui::Combo("Tonemapper", (int*)&Tweakables::g_ToneMapper, [](void* data, int index, const char** outText)
+	ImGui::Combo("Tonemapper", (int*)&Tweakables::g_ToneMapper, [](void* /*data*/, int index, const char** outText)
 		{
 			if (index == 0)
 				*outText = "Reinhard";

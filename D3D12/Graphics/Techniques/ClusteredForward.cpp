@@ -89,7 +89,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 	if (m_ViewportDirty)
 	{
 		RGPassBuilder calculateAabbs = graph.AddPass("Create AABBs");
-		calculateAabbs.Bind([=](CommandContext& context, const RGPassResources& passResources)
+		calculateAabbs.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
 			{
 				context.InsertResourceBarrier(m_pAABBs.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
@@ -123,7 +123,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 	}
 
 	RGPassBuilder markClusters = graph.AddPass("Mark Clusters");
-	markClusters.Bind([=](CommandContext& context, const RGPassResources& passResources)
+	markClusters.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
 		{
 			context.InsertResourceBarrier(resources.pRenderTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
 			context.InsertResourceBarrier(resources.pDepthBuffer, D3D12_RESOURCE_STATE_DEPTH_READ);
@@ -172,7 +172,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 		});
 
 	RGPassBuilder compactClusters = graph.AddPass("Compact Clusters");
-	compactClusters.Bind([=](CommandContext& context, const RGPassResources& passResources)
+	compactClusters.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
 		{
 			context.SetPipelineState(m_pCompactClustersPSO);
 			context.SetComputeRootSignature(m_pCompactClustersRS.get());
@@ -192,7 +192,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 		});
 
 	RGPassBuilder updateArguments = graph.AddPass("Update Indirect Arguments");
-	updateArguments.Bind([=](CommandContext& context, const RGPassResources& passResources)
+	updateArguments.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
 		{
 			UnorderedAccessView* pCompactedClustersUAV = m_pCompactedClusters->GetUAV();
 			context.InsertResourceBarrier(pCompactedClustersUAV->GetCounter(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
@@ -209,7 +209,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 
 
 	RGPassBuilder lightCulling = graph.AddPass("Clustered Light Culling");
-	lightCulling.Bind([=](CommandContext& context, const RGPassResources& passResources)
+	lightCulling.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
 		{
 			context.SetPipelineState(m_pLightCullingPSO);
 			context.SetComputeRootSignature(m_pLightCullingRS.get());
@@ -219,7 +219,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 			context.InsertResourceBarrier(m_pAABBs.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(m_pLightGrid.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 			context.InsertResourceBarrier(m_pLightIndexGrid.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-			context.InsertResourceBarrier(resources.pLightBuffer, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+			context.InsertResourceBarrier(resources.pLightBuffer, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 
 			context.ClearUavUInt(m_pLightGrid.get(), m_pLightGridRawUAV);
 			context.ClearUavUInt(m_pLightIndexCounter.get(), m_pLightIndexCounter->GetUAV());
@@ -279,7 +279,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 		constantBuffer.Jitter = halton[resources.FrameIndex & 1023];
 
 		RGPassBuilder injectVolumeLighting = graph.AddPass("Inject Volume Lights");
-		injectVolumeLighting.Bind([=](CommandContext& context, const RGPassResources& passResources)
+		injectVolumeLighting.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
 			{
 				context.InsertResourceBarrier(pSourceVolume, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 				context.InsertResourceBarrier(pDestinationVolume, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
@@ -304,7 +304,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 			});
 
 		RGPassBuilder accumulateFog = graph.AddPass("Accumulate Volume Fog");
-		accumulateFog.Bind([=](CommandContext& context, const RGPassResources& passResources)
+		accumulateFog.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
 			{
 				context.InsertResourceBarrier(pDestinationVolume, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 				context.InsertResourceBarrier(m_pFinalVolumeFog.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
@@ -333,7 +333,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 	}
 
 	RGPassBuilder basePass = graph.AddPass("Base Pass");
-	basePass.Bind([=](CommandContext& context, const RGPassResources& passResources)
+	basePass.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
 		{
 			struct PerFrameData
 			{
@@ -451,7 +451,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 	if (g_VisualizeClusters)
 	{
 		RGPassBuilder visualize = graph.AddPass("Visualize Clusters");
-		visualize.Bind([=](CommandContext& context, const RGPassResources& passResources)
+		visualize.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
 			{
 				if (m_DidCopyDebugClusterData == false)
 				{
@@ -511,7 +511,7 @@ void ClusteredForward::VisualizeLightDensity(RGGraph& graph, Camera& camera, Tex
 	Vector2 lightGridParams = ComputeVolumeGridParams(nearZ, farZ, gLightClustersNumZ);
 
 	RGPassBuilder basePass = graph.AddPass("Visualize Light Density");
-	basePass.Bind([=](CommandContext& context, const RGPassResources& passResources)
+	basePass.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
 		{
 			struct Data
 			{

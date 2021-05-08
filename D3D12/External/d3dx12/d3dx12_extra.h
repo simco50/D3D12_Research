@@ -123,6 +123,8 @@ namespace CD3DX12_STATE_OBJECT_HELPER
 				wstr << L"|  [2]: Intersection Import: " << (hitGroup->IntersectionShaderImport ? hitGroup->IntersectionShaderImport : L"[none]") << L"\n";
 				break;
 			}
+			default:
+				break;
 			}
 			wstr << L"|--------------------------------------------------------------------\n";
 		}

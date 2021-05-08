@@ -199,7 +199,7 @@ public:
 
 private:
 	void BeginFrame();
-	void EndFrame(uint64 fenceValue);
+	void EndFrame();
 
 	void InitD3D();
 	void InitializePipelines();

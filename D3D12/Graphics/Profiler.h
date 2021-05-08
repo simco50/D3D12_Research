@@ -112,12 +112,12 @@ public:
 		return m_pParent;
 	}
 
-	size_t GetChildCount() const
+	uint32 GetChildCount() const
 	{
-		return m_Children.size();
+		return (uint32)m_Children.size();
 	}
 
-	const ProfileNode* GetChild(int index) const
+	const ProfileNode* GetChild(uint32 index) const
 	{
 		return m_Children[index].get();
 	}

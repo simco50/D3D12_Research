@@ -170,7 +170,7 @@ namespace Math
 			: Sequence{}
 		{
 			Halton generator;
-			for (int i = 0; i < SIZE; ++i)
+			for (uint32 i = 0; i < SIZE; ++i)
 			{
 				Sequence[i] = generator(i + 1, BASE);
 			}

@@ -92,7 +92,7 @@ void Console::Log(const char* message, LogType type)
 
 	stream << message << "\n";
 	const std::string output = stream.str();
-	printf(output.c_str());
+	printf("%s", output.c_str());
 	OutputDebugStringA(output.c_str());
 	if (sConsoleHandle)
 	{

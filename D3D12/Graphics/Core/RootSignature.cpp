@@ -46,7 +46,7 @@ void RootSignature::SetDescriptorTableSimple(uint32 rootIndex, uint32 startRegis
 	SetDescriptorTableRange(rootIndex, 0, startRegisterSlot, type, count, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND);
 }
 
-void RootSignature::AddStaticSampler(uint32 shaderRegister, const D3D12_STATIC_SAMPLER_DESC& samplerDesc, D3D12_SHADER_VISIBILITY visibility)
+void RootSignature::AddStaticSampler(const D3D12_STATIC_SAMPLER_DESC& samplerDesc)
 {
 	m_StaticSamplers.push_back(CD3DX12_STATIC_SAMPLER_DESC(samplerDesc));
 }

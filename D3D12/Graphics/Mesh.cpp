@@ -216,7 +216,7 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 
 		//Bottom Level Acceleration Structure
 		{
-			for (size_t i = 0; i < GetMeshCount(); ++i)
+			for (int i = 0; i < GetMeshCount(); ++i)
 			{
 				SubMesh& subMesh = m_Meshes[i];
 				const Material& material = m_Materials[subMesh.MaterialId];

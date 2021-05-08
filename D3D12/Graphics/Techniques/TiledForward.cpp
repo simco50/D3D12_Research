@@ -41,7 +41,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& resources)
 	RG_GRAPH_SCOPE("Tiled Lighting", graph);
 
 	RGPassBuilder culling = graph.AddPass("Light Culling");
-	culling.Bind([=](CommandContext& context, const RGPassResources& passResources)
+	culling.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
 		{
 			context.InsertResourceBarrier(resources.pResolvedDepth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(m_pLightIndexCounter.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
@@ -89,7 +89,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& resources)
 	//5. BASE PASS
 	// - Render the scene using the shadow mapping result and the light culling buffers
 	RGPassBuilder basePass = graph.AddPass("Base Pass");
-	basePass.Bind([=](CommandContext& context, const RGPassResources& passResources)
+	basePass.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
 		{
 			struct PerFrameData
 			{
@@ -207,10 +207,11 @@ void TiledForward::VisualizeLightDensity(RGGraph& graph, Camera& camera, Texture
 	Vector2 screenDimensions((float)pTarget->GetWidth(), (float)pTarget->GetHeight());
 	float nearZ = camera.GetNear();
 	float farZ = camera.GetFar();
-	float sliceMagicA, sliceMagicB;
+	float sliceMagicA = 0;
+	float sliceMagicB = 0;
 
 	RGPassBuilder basePass = graph.AddPass("Visualize Light Density");
-	basePass.Bind([=](CommandContext& context, const RGPassResources& passResources)
+	basePass.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
 		{
 			struct Data
 			{

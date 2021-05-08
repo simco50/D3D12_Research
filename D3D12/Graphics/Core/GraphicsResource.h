@@ -24,7 +24,7 @@ public:
 	ResourceState(D3D12_RESOURCE_STATES initialState = D3D12_RESOURCE_STATE_UNKNOWN)
 		: m_CommonState(initialState), m_AllSameState(true)
 	{}
-	void Set(D3D12_RESOURCE_STATES state, int subResource)
+	void Set(D3D12_RESOURCE_STATES state, uint32 subResource)
 	{
 		if (subResource != D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES)
 		{
@@ -45,9 +45,9 @@ public:
 			m_CommonState = state;
 		}
 	}
-	D3D12_RESOURCE_STATES Get(int subResource) const
+	D3D12_RESOURCE_STATES Get(uint32 subResource) const
 	{
-		assert(m_AllSameState || subResource < m_ResourceStates.size());
+		assert(m_AllSameState || subResource < (uint32)m_ResourceStates.size());
 		return m_AllSameState ? m_CommonState : m_ResourceStates[subResource];
 	}
 private:

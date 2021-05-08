@@ -465,6 +465,8 @@ std::string PipelineStateInitializer::DebugPrint() const
 				str << "Blend Desc";
 				break;
 			}
+			default:
+				break;
 			}
 
 			str << "\n";

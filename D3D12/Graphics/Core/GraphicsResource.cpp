@@ -29,7 +29,7 @@ void* GraphicsResource::Map(uint32 subResource /*= 0*/, uint64 readFrom /*= 0*/,
 void GraphicsResource::Unmap(uint32 subResource /*= 0*/, uint64 writtenFrom /*= 0*/, uint64 writtenTo /*= 0*/)
 {
 	check(m_pResource);
-	CD3DX12_RANGE range(writtenFrom, writtenFrom);
+	CD3DX12_RANGE range(writtenFrom, writtenTo);
 	m_pResource->Unmap(subResource, &range);
 	m_pMappedData = nullptr;
 }

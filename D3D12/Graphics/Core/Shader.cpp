@@ -546,6 +546,10 @@ void ShaderManager::ConditionallyReloadShaders()
 			case FileWatcher::FileEvent::Type::Modified:
 				RecompileFromFileChange(fileEvent.Path);
 				break;
+			case FileWatcher::FileEvent::Type::Added:
+				break;
+			case FileWatcher::FileEvent::Type::Removed:
+				break;
 			}
 		}
 	}

@@ -26,7 +26,7 @@ RTReflections::RTReflections(Graphics* pGraphics)
 void RTReflections::Execute(RGGraph& graph, const SceneData& sceneData)
 {
 	RGPassBuilder rt = graph.AddPass("RT Reflections");
-	rt.Bind([=](CommandContext& context, const RGPassResources& passResources)
+	rt.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
 		{
 			context.CopyTexture(sceneData.pResolvedTarget, m_pSceneColor.get());
 

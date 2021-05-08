@@ -38,7 +38,7 @@ void SSAO::Execute(RGGraph& graph, Texture* pColor, Texture* pDepth, Camera& cam
 	RG_GRAPH_SCOPE("Ambient Occlusion", graph);
 
 	RGPassBuilder ssao = graph.AddPass("SSAO");
-	ssao.Bind([=](CommandContext& renderContext, const RGPassResources& passResources)
+	ssao.Bind([=](CommandContext& renderContext, const RGPassResources& /*passResources*/)
 		{
 			renderContext.InsertResourceBarrier(pDepth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 			renderContext.InsertResourceBarrier(pColor, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
@@ -84,10 +84,10 @@ void SSAO::Execute(RGGraph& graph, Texture* pColor, Texture* pDepth, Camera& cam
 		});
 
 	RGPassBuilder blur = graph.AddPass("Blur SSAO");
-	blur.Bind([=](CommandContext& renderContext, const RGPassResources& passResources)
+	blur.Bind([=](CommandContext& renderContext, const RGPassResources& /*passResources*/)
 		{
 			renderContext.InsertResourceBarrier(m_pAmbientOcclusionIntermediate.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-			renderContext.InsertResourceBarrier(pColor, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+			renderContext.InsertResourceBarrier(pColor, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 
 			renderContext.SetComputeRootSignature(m_pSSAOBlurRS.get());
 			renderContext.SetPipelineState(m_pSSAOBlurPSO);

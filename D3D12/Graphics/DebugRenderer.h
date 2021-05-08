@@ -22,7 +22,7 @@ private:
 	struct DebugLine
 	{
 		DebugLine(const Vector3& start, const Vector3& end, const uint32& color)
-			: Start(start), End(end), ColorA(color), ColorB(color)
+			: Start(start), ColorA(color), End(end), ColorB(color)
 		{}
 		Vector3 Start;
 		uint32 ColorA;
@@ -33,7 +33,7 @@ private:
 	struct DebugTriangle
 	{
 		DebugTriangle(const Vector3& a, const Vector3& b, const Vector3& c, const uint32& color)
-			: A(a), B(b), C(c), ColorA(color), ColorB(color), ColorC(color)
+			: A(a), ColorA(color), B(b), ColorB(color), C(c), ColorC(color)
 		{}
 		Vector3 A;
 		uint32 ColorA;

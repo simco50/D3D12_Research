@@ -171,7 +171,7 @@ void Profiler::Begin(const char* pName, CommandContext* pContext)
 	}
 	else
 	{
-		int i = 0;
+		uint32 i = 0;
 		if (m_pPreviousBlock)
 		{
 			for (; i < m_pCurrentBlock->GetChildCount(); ++i)
