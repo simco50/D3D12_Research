@@ -152,7 +152,7 @@ private:
 class GraphicsInstance
 {
 public:
-	static GraphicsInstance CreateInstance(GraphicsFlags createFlags = GraphicsFlags::None);
+	static std::unique_ptr<GraphicsInstance> CreateInstance(GraphicsFlags createFlags = GraphicsFlags::None);
 	std::unique_ptr<SwapChain> CreateSwapchain(GraphicsDevice* pDevice, void* pNativeWindow, DXGI_FORMAT format, uint32 width, uint32 height, uint32 numFrames, bool vsync);
 	ComPtr<IDXGIAdapter4> EnumerateAdapter(bool useWarp);
 	std::unique_ptr<GraphicsDevice> CreateDevice(ComPtr<IDXGIAdapter4> pAdapter, GraphicsFlags createFlags = GraphicsFlags::None);
@@ -270,7 +270,7 @@ enum class RenderPath
 class Graphics
 {
 public:
-	Graphics(WindowHandle window, int sampleCount = 1);
+	Graphics(WindowHandle window, const IntVector2& windowRect, int sampleCount = 1);
 	~Graphics();
 
 	void Update();
@@ -296,7 +296,7 @@ private:
 	void BeginFrame();
 	void EndFrame();
 
-	void InitD3D(WindowHandle window);
+	void InitD3D(WindowHandle window, const IntVector2& windowRect);
 	void InitializePipelines();
 	void InitializeAssets(CommandContext& context);
 	void SetupScene(CommandContext& context);

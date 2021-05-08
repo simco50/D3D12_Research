@@ -444,19 +444,19 @@ StateObject* GraphicsDevice::CreateStateObject(const StateObjectInitializer& sta
 	return m_StateObjects.back().get();
 }
 
-GraphicsInstance GraphicsInstance::CreateInstance(GraphicsFlags createFlags /*= GraphicsFlags::None*/)
+std::unique_ptr<GraphicsInstance> GraphicsInstance::CreateInstance(GraphicsFlags createFlags /*= GraphicsFlags::None*/)
 {
-	GraphicsInstance instance;
+	std::unique_ptr<GraphicsInstance> pInstance = std::make_unique<GraphicsInstance>();
 	UINT flags = 0;
 	if (EnumHasAnyFlags(createFlags, GraphicsFlags::DebugDevice))
 	{
 		flags |= DXGI_CREATE_FACTORY_DEBUG;
 	}
-	VERIFY_HR(CreateDXGIFactory2(flags, IID_PPV_ARGS(instance.m_pFactory.GetAddressOf())));
+	VERIFY_HR(CreateDXGIFactory2(flags, IID_PPV_ARGS(pInstance->m_pFactory.GetAddressOf())));
 	BOOL allowTearing;
-	if (SUCCEEDED(instance.m_pFactory->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &allowTearing, sizeof(BOOL))))
+	if (SUCCEEDED(pInstance->m_pFactory->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &allowTearing, sizeof(BOOL))))
 	{
-		instance.m_AllowTearing = allowTearing;
+		pInstance->m_AllowTearing = allowTearing;
 	}
 
 #if PLATFORM_WINDOWS
@@ -489,7 +489,7 @@ GraphicsInstance GraphicsInstance::CreateInstance(GraphicsFlags createFlags /*= 
 		}
 	}
 
-	return instance;
+	return pInstance;
 }
 
 std::unique_ptr<SwapChain> GraphicsInstance::CreateSwapchain(GraphicsDevice* pDevice, void* pNativeWindow, DXGI_FORMAT format, uint32 width, uint32 height, uint32 numFrames, bool vsync)
@@ -660,13 +660,13 @@ void SwapChain::Present()
 	m_CurrentImage = m_pSwapchain->GetCurrentBackBufferIndex();
 }
 
-Graphics::Graphics(WindowHandle window, int sampleCount /*= 1*/)
+Graphics::Graphics(WindowHandle window, const IntVector2& windowRect, int sampleCount /*= 1*/)
 	: m_SampleCount(sampleCount)
 {
 	// #todo fixup MSAA :(
 	checkf(sampleCount == 1, "I broke MSAA! TODO");
 
-	InitD3D(window);
+	InitD3D(window, windowRect);
 	InitializePipelines();
 
 	m_pCamera = std::make_unique<FreeCamera>();
@@ -1799,12 +1799,12 @@ void Graphics::EndFrame()
 	++m_Frame;
 }
 
-void Graphics::InitD3D(WindowHandle window)
+void Graphics::InitD3D(WindowHandle window, const IntVector2& windowRect)
 {
 	E_LOG(Info, "Graphics::InitD3D()");
-	GraphicsInstance instance = GraphicsInstance::CreateInstance();
-	ComPtr<IDXGIAdapter4> pAdapter = instance.EnumerateAdapter(false);
-	m_pDevice = instance.CreateDevice(pAdapter.Get());
+	std::unique_ptr<GraphicsInstance> instance = GraphicsInstance::CreateInstance();
+	ComPtr<IDXGIAdapter4> pAdapter = instance->EnumerateAdapter(false);
+	m_pDevice = instance->CreateDevice(pAdapter.Get());
 
 	bool setStablePowerState = CommandLine::GetBool("stablepowerstate");
 	if (setStablePowerState)
@@ -1812,17 +1812,7 @@ void Graphics::InitD3D(WindowHandle window)
 		D3D12EnableExperimentalFeatures(0, nullptr, nullptr, nullptr);
 	}
 
-#if PLATFORM_WINDOWS
-	RECT rect;
-	check(GetClientRect(window, &rect));
-	uint32 width = rect.right - rect.left;
-	uint32 height = rect.bottom - rect.top;
-#else
-	uint32 width = (uint32)m_pWindow->Bounds().Width;
-	uint32 height = (uint32)m_pWindow->Bounds().Height;
-#endif
-
-	m_pSwapchain = instance.CreateSwapchain(m_pDevice.get(), window, SWAPCHAIN_FORMAT, width, height, FRAME_COUNT, true);
+	m_pSwapchain = instance->CreateSwapchain(m_pDevice.get(), window, SWAPCHAIN_FORMAT, windowRect.x, windowRect.y, FRAME_COUNT, true);
 
 	m_pDepthStencil = std::make_unique<Texture>(m_pDevice.get(), "Depth Stencil");
 	m_pResolvedDepthStencil = std::make_unique<Texture>(m_pDevice.get(), "Resolved Depth Stencil");
@@ -1858,7 +1848,7 @@ void Graphics::InitD3D(WindowHandle window)
 
 	m_SceneData.GlobalSRVHeapHandle = m_pDevice->GetGlobalViewHeap()->GetStartHandle();
 
-	OnResize(width, height);
+	OnResize(windowRect.x, windowRect.y);
 }
 
 void Graphics::InitializeAssets(CommandContext& context)

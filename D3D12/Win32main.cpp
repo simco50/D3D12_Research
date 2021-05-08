@@ -15,10 +15,6 @@
 
 #define BREAK_ON_ALLOC 0
 
-const int gWindowWidth = 1240;
-const int gWindowHeight = 720;
-const int gMsaaSampleCount = 1;
-
 class Win32AppContainer
 {
 public:
@@ -103,6 +99,7 @@ public:
 	}
 
 	HWND GetNativeWindow() const { return m_Window; }
+	IntVector2 GetRect() const { return IntVector2(m_DisplayWidth, m_DisplayHeight); }
 
 	DECLARE_MULTICAST_DELEGATE(OnFocusChanged, bool);
 	OnFocusChanged OnFocusChangedEvent;
@@ -294,8 +291,8 @@ int WINAPI WinMain(_In_ HINSTANCE /*hInstance*/, _In_opt_ HINSTANCE /*hPrevInsta
 	Console::Initialize();
 	TaskQueue::Initialize(std::thread::hardware_concurrency());
 
-	Win32AppContainer app("D3D12", gWindowWidth, gWindowHeight);
-	Graphics graphics(app.GetNativeWindow(), gMsaaSampleCount);
+	Win32AppContainer app("D3D12", 1240, 720);
+	Graphics graphics(app.GetNativeWindow(), app.GetRect(), 1);
 
 	app.OnKeyInputEvent += [](uint32 character, bool isDown) { Input::Instance().UpdateKey(character, isDown); };
 	app.OnMouseInputEvent += [](uint32 mouse, bool isDown) { Input::Instance().UpdateMouseKey(mouse, isDown); };
