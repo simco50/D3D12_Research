@@ -4,10 +4,10 @@
 #include "RootSignature.h"
 #include "Graphics.h"
 
-StateObject::StateObject(ShaderManager* pShaderManager, GraphicsDevice* pParent)
+StateObject::StateObject(GraphicsDevice* pParent)
 	: GraphicsObject(pParent)
 {
-	m_ReloadHandle = pShaderManager->OnLibraryRecompiledEvent().AddRaw(this, &StateObject::OnLibraryReloaded);
+	m_ReloadHandle = pParent->GetShaderManager()->OnLibraryRecompiledEvent().AddRaw(this, &StateObject::OnLibraryReloaded);
 }
 
 void StateObject::Create(const StateObjectInitializer& initializer)

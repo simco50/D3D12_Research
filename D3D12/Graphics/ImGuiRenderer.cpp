@@ -11,9 +11,9 @@
 #include "ImGuizmo/ImGuizmo.h"
 #include "Core/Paths.h"
 
-ImGuiRenderer::ImGuiRenderer(ShaderManager* pShaderManager, GraphicsDevice* pDevice)
+ImGuiRenderer::ImGuiRenderer(GraphicsDevice* pDevice)
 {
-	CreatePipeline(pShaderManager, pDevice);
+	CreatePipeline(pDevice);
 	InitializeImGui(pDevice);
 }
 
@@ -138,11 +138,11 @@ void ImGuiRenderer::InitializeImGui(GraphicsDevice* pDevice)
 	colors[ImGuiCol_ModalWindowDimBg] = ImVec4(0.80f, 0.80f, 0.80f, 0.35f);
 }
 
-void ImGuiRenderer::CreatePipeline(ShaderManager* pShaderManager, GraphicsDevice* pDevice)
+void ImGuiRenderer::CreatePipeline(GraphicsDevice* pDevice)
 {
 	//Shaders
-	Shader* pVertexShader = pShaderManager->GetShader("ImGui.hlsl", ShaderType::Vertex, "VSMain");
-	Shader* pPixelShader = pShaderManager->GetShader("ImGui.hlsl", ShaderType::Pixel, "PSMain");
+	Shader* pVertexShader = pDevice->GetShaderManager()->GetShader("ImGui.hlsl", ShaderType::Vertex, "VSMain");
+	Shader* pPixelShader = pDevice->GetShaderManager()->GetShader("ImGui.hlsl", ShaderType::Pixel, "PSMain");
 
 	//Root signature
 	m_pRootSignature = std::make_unique<RootSignature>(pDevice);

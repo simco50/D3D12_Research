@@ -5,12 +5,11 @@ class Texture;
 class Camera;
 class RGGraph;
 class PipelineState;
-class ShaderManager;
 
 class SSAO
 {
 public:
-	SSAO(ShaderManager* pShaderManager, GraphicsDevice* pDevice);
+	SSAO(GraphicsDevice* pDevice);
 
 	void OnSwapchainCreated(int windowWidth, int windowHeight);
 
@@ -18,7 +17,7 @@ public:
 
 private:
 	void SetupResources(GraphicsDevice* pDevice);
-	void SetupPipelines(ShaderManager* pShaderManager, GraphicsDevice* pDevice);
+	void SetupPipelines(GraphicsDevice* pDevice);
 
 	std::unique_ptr<Texture> m_pAmbientOcclusionIntermediate;
 	std::unique_ptr<RootSignature> m_pSSAORS;

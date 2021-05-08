@@ -38,15 +38,15 @@ DebugRenderer* DebugRenderer::Get()
 	return &instance;
 }
 
-void DebugRenderer::Initialize(ShaderManager* pShaderManager, GraphicsDevice* pDevice)
+void DebugRenderer::Initialize(GraphicsDevice* pDevice)
 {
 	VertexElementLayout inputLayout;
 	inputLayout.AddVertexElement("POSITION", DXGI_FORMAT_R32G32B32_FLOAT);
 	inputLayout.AddVertexElement("COLOR", DXGI_FORMAT_R32_UINT);
 
 	//Shaders
-	Shader* pVertexShader = pShaderManager->GetShader("DebugRenderer.hlsl", ShaderType::Vertex, "VSMain");
-	Shader* pPixelShader = pShaderManager->GetShader("DebugRenderer.hlsl", ShaderType::Pixel, "PSMain");
+	Shader* pVertexShader = pDevice->GetShaderManager()->GetShader("DebugRenderer.hlsl", ShaderType::Vertex, "VSMain");
+	Shader* pPixelShader = pDevice->GetShaderManager()->GetShader("DebugRenderer.hlsl", ShaderType::Pixel, "PSMain");
 
 	//Rootsignature
 	m_pRS = std::make_unique<RootSignature>(pDevice);
@@ -58,7 +58,7 @@ void DebugRenderer::Initialize(ShaderManager* pShaderManager, GraphicsDevice* pD
 	psoDesc.SetRootSignature(m_pRS->GetRootSignature());
 	psoDesc.SetVertexShader(pVertexShader);
 	psoDesc.SetPixelShader(pPixelShader);
-	psoDesc.SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, pDevice->GetMultiSampleCount());
+	psoDesc.SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, /* pDevice->GetMultiSampleCount() */ 1);
 	psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
 	psoDesc.SetDepthWrite(true);
 	psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);

@@ -1,7 +1,6 @@
 #pragma once
 
 class GraphicsDevice;
-class ShaderManager;
 class Buffer;
 class CommandSignature;
 class PipelineState;
@@ -10,17 +9,18 @@ class CommandContext;
 class Texture;
 class Camera;
 class RGGraph;
+struct Configuration;
 
 class GpuParticles
 {
 public:
-	GpuParticles(ShaderManager* pShaderManager, GraphicsDevice* pDevice);
+	GpuParticles(GraphicsDevice* pDevice);
 	~GpuParticles();
 
 	void Simulate(RGGraph& graph, Texture* pSourceDepth, const Camera& camera);
 	void Render(RGGraph& graph, Texture* pTarget, Texture* pDepth, const Camera& camera);
 private:
-	void Initialize(ShaderManager* pShaderManager, GraphicsDevice* pDevice);
+	void Initialize(GraphicsDevice* pDevice);
 
 	std::unique_ptr<Buffer> m_pAliveList1;
 	std::unique_ptr<Buffer> m_pAliveList2;

@@ -9,10 +9,10 @@
 #include "Graphics/RenderGraph/RenderGraph.h"
 #include "Scene/Camera.h"
 
-SSAO::SSAO(ShaderManager* pShaderManager, GraphicsDevice* pDevice)
+SSAO::SSAO(GraphicsDevice* pDevice)
 {
 	SetupResources(pDevice);
-	SetupPipelines(pShaderManager, pDevice);
+	SetupPipelines(pDevice);
 }
 
 void SSAO::OnSwapchainCreated(int windowWidth, int windowHeight)
@@ -130,11 +130,11 @@ void SSAO::SetupResources(GraphicsDevice* pDevice)
 	m_pAmbientOcclusionIntermediate = std::make_unique<Texture>(pDevice, "SSAO Blurred");
 }
 
-void SSAO::SetupPipelines(ShaderManager* pShaderManager, GraphicsDevice* pDevice)
+void SSAO::SetupPipelines(GraphicsDevice* pDevice)
 {
 	//SSAO
 	{
-		Shader* pComputeShader = pShaderManager->GetShader("SSAO.hlsl", ShaderType::Compute, "CSMain");
+		Shader* pComputeShader = pDevice->GetShaderManager()->GetShader("SSAO.hlsl", ShaderType::Compute, "CSMain");
 
 		m_pSSAORS = std::make_unique<RootSignature>(pDevice);
 		m_pSSAORS->FinalizeFromShader("SSAO", pComputeShader);
@@ -148,7 +148,7 @@ void SSAO::SetupPipelines(ShaderManager* pShaderManager, GraphicsDevice* pDevice
 
 	//SSAO Blur
 	{
-		Shader* pComputeShader = pShaderManager->GetShader("SSAOBlur.hlsl", ShaderType::Compute, "CSMain");
+		Shader* pComputeShader = pDevice->GetShaderManager()->GetShader("SSAOBlur.hlsl", ShaderType::Compute, "CSMain");
 
 		m_pSSAOBlurRS = std::make_unique<RootSignature>(pDevice);
 		m_pSSAOBlurRS->FinalizeFromShader("SSAO Blur", pComputeShader);

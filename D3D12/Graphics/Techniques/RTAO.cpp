@@ -13,12 +13,12 @@
 #include "Graphics/Mesh.h"
 #include "Scene/Camera.h"
 
-RTAO::RTAO(ShaderManager* pShaderManager, GraphicsDevice* pDevice)
+RTAO::RTAO(GraphicsDevice* pDevice)
 {
 	if (pDevice->SupportsRayTracing())
 	{
 		SetupResources(pDevice);
-		SetupPipelines(pShaderManager, pDevice);
+		SetupPipelines(pDevice);
 	}
 }
 
@@ -83,9 +83,9 @@ void RTAO::SetupResources(GraphicsDevice* pDevice)
 {
 }
 
-void RTAO::SetupPipelines(ShaderManager* pShaderManager, GraphicsDevice* pDevice)
+void RTAO::SetupPipelines(GraphicsDevice* pDevice)
 {
-	ShaderLibrary* pShaderLibrary = pShaderManager->GetLibrary("RTAO.hlsl");
+	ShaderLibrary* pShaderLibrary = pDevice->GetShaderManager()->GetLibrary("RTAO.hlsl");
 	m_pGlobalRS = std::make_unique<RootSignature>(pDevice);
 	m_pGlobalRS->FinalizeFromShader("Global", pShaderLibrary);
 

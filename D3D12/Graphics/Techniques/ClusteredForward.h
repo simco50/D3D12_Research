@@ -2,7 +2,6 @@
 #include "Graphics/RenderGraph/RenderGraphDefinitions.h"
 
 class GraphicsDevice;
-class ShaderManager;
 class PipelineState;
 class RootSignature;
 class Texture;
@@ -20,7 +19,7 @@ struct ShadowData;
 class ClusteredForward
 {
 public:
-	ClusteredForward(ShaderManager* pShaderManager, GraphicsDevice* pDevice);
+	ClusteredForward(GraphicsDevice* pDevice);
 	~ClusteredForward();
 
 	void OnSwapchainCreated(int windowWidth, int windowHeight);
@@ -30,7 +29,7 @@ public:
 
 private:
 	void SetupResources(GraphicsDevice* pDevice);
-	void SetupPipelines(ShaderManager* pShaderManager, GraphicsDevice* pDevice);
+	void SetupPipelines(GraphicsDevice* pDevice);
 
 	uint32 m_ClusterCountX = 0;
 	uint32 m_ClusterCountY = 0;

@@ -13,7 +13,7 @@ DECLARE_MULTICAST_DELEGATE(ImGuiCallback);
 class ImGuiRenderer
 {
 public:
-	ImGuiRenderer(ShaderManager* pShaderManager, GraphicsDevice* pParent);
+	ImGuiRenderer(GraphicsDevice* pParent);
 	~ImGuiRenderer();
 
 	void NewFrame(uint32 width, uint32 height);
@@ -23,7 +23,7 @@ public:
 	void RemoveUpdateCallback(DelegateHandle handle);
 
 private:
-	void CreatePipeline(ShaderManager* pShaderManager, GraphicsDevice* pDevice);
+	void CreatePipeline(GraphicsDevice* pDevice);
 	void InitializeImGui(GraphicsDevice* pDevice);
 
 	ImGuiCallback m_UpdateCallback;

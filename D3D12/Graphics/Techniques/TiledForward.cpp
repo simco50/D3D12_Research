@@ -21,10 +21,10 @@ namespace Tweakables
 	extern int g_SsrSamples;
 }
 
-TiledForward::TiledForward(ShaderManager* pShaderManager, GraphicsDevice* pDevice)
+TiledForward::TiledForward(GraphicsDevice* pDevice)
 {
 	SetupResources(pDevice);
-	SetupPipelines(pShaderManager, pDevice);
+	SetupPipelines(pDevice);
 }
 
 void TiledForward::OnSwapchainCreated(int windowWidth, int windowHeight)
@@ -261,10 +261,10 @@ void TiledForward::SetupResources(GraphicsDevice* pDevice)
 	m_pLightGridTransparant = std::make_unique<Texture>(pDevice, "Transparant Light Grid");
 }
 
-void TiledForward::SetupPipelines(ShaderManager* pShaderManager, GraphicsDevice* pDevice)
+void TiledForward::SetupPipelines(GraphicsDevice* pDevice)
 {
 	{
-		Shader* pComputeShader = pShaderManager->GetShader("LightCulling.hlsl", ShaderType::Compute, "CSMain");
+		Shader* pComputeShader = pDevice->GetShaderManager()->GetShader("LightCulling.hlsl", ShaderType::Compute, "CSMain");
 
 		m_pComputeLightCullRS = std::make_unique<RootSignature>(pDevice);
 		m_pComputeLightCullRS->FinalizeFromShader("Tiled Light Culling", pComputeShader);
@@ -287,8 +287,8 @@ void TiledForward::SetupPipelines(ShaderManager* pShaderManager, GraphicsDevice*
 	//PBR Diffuse passes
 	{
 		//Shaders
-		Shader* pVertexShader = pShaderManager->GetShader("Diffuse.hlsl", ShaderType::Vertex, "VSMain", { "TILED_FORWARD" });
-		Shader* pPixelShader = pShaderManager->GetShader("Diffuse.hlsl", ShaderType::Pixel, "PSMain", { "TILED_FORWARD" });
+		Shader* pVertexShader = pDevice->GetShaderManager()->GetShader("Diffuse.hlsl", ShaderType::Vertex, "VSMain", { "TILED_FORWARD" });
+		Shader* pPixelShader = pDevice->GetShaderManager()->GetShader("Diffuse.hlsl", ShaderType::Pixel, "PSMain", { "TILED_FORWARD" });
 
 		//Rootsignature
 		m_pDiffuseRS = std::make_unique<RootSignature>(pDevice);
@@ -305,7 +305,7 @@ void TiledForward::SetupPipelines(ShaderManager* pShaderManager, GraphicsDevice*
 			psoDesc.SetRootSignature(m_pDiffuseRS->GetRootSignature());
 			psoDesc.SetVertexShader(pVertexShader);
 			psoDesc.SetPixelShader(pPixelShader);
-			psoDesc.SetRenderTargetFormats(formats, ARRAYSIZE(formats), Graphics::DEPTH_STENCIL_FORMAT, pDevice->GetMultiSampleCount());
+			psoDesc.SetRenderTargetFormats(formats, ARRAYSIZE(formats), Graphics::DEPTH_STENCIL_FORMAT, /* pDevice->GetMultiSampleCount() */ 1);
 			psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_EQUAL);
 			psoDesc.SetDepthWrite(false);
 			psoDesc.SetName("Diffuse PBR Pipeline");
@@ -320,7 +320,7 @@ void TiledForward::SetupPipelines(ShaderManager* pShaderManager, GraphicsDevice*
 	}
 
 	{
-		Shader* pComputeShader = pShaderManager->GetShader("VisualizeLightCount.hlsl", ShaderType::Compute, "DebugLightDensityCS", { "TILED_FORWARD" });
+		Shader* pComputeShader = pDevice->GetShaderManager()->GetShader("VisualizeLightCount.hlsl", ShaderType::Compute, "DebugLightDensityCS", { "TILED_FORWARD" });
 
 		m_pVisualizeLightsRS = std::make_unique<RootSignature>(pDevice);
 		m_pVisualizeLightsRS->FinalizeFromShader("Light Density Visualization", pComputeShader);

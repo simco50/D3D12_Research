@@ -161,7 +161,7 @@ private:
 class PipelineState : public GraphicsObject
 {
 public:
-	PipelineState(ShaderManager* pShaderManager, GraphicsDevice* pParent);
+	PipelineState(GraphicsDevice* pParent);
 	PipelineState(const PipelineState& rhs) = delete;
 	PipelineState& operator=(const PipelineState& rhs) = delete;
 	~PipelineState();

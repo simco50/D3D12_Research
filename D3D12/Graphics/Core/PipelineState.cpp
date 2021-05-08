@@ -476,10 +476,10 @@ std::string PipelineStateInitializer::DebugPrint() const
 	return str.str();
 }
 
-PipelineState::PipelineState(ShaderManager* pShaderManager, GraphicsDevice* pParent)
+PipelineState::PipelineState(GraphicsDevice* pParent)
 	: GraphicsObject(pParent)
 {
-	m_ReloadHandle = pShaderManager->OnShaderRecompiledEvent().AddRaw(this, &PipelineState::OnShaderReloaded);
+	m_ReloadHandle = pParent->GetShaderManager()->OnShaderRecompiledEvent().AddRaw(this, &PipelineState::OnShaderReloaded);
 }
 
 PipelineState::~PipelineState()

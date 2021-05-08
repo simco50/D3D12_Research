@@ -43,6 +43,11 @@ using WindowHandlePtr = const winrt::Windows::UI::Core::CoreWindow*;
 class Graphics;
 class SwapChain;
 
+struct Configuration
+{
+	int SampleCount;
+};
+
 enum class GraphicsFlags
 {
 	None			= 0,
@@ -106,6 +111,7 @@ public:
 
 	ID3D12Device* GetDevice() const { return m_pDevice.Get(); }
 	ID3D12Device5* GetRaytracingDevice() const { return m_pRaytracingDevice.Get(); }
+	ShaderManager* GetShaderManager() const { return m_pShaderManager.get(); }
 
 private:
 	ComPtr<ID3D12Device> m_pDevice;
@@ -113,6 +119,8 @@ private:
 
 	ComPtr<ID3D12Fence> m_pDeviceRemovalFence;
 	HANDLE m_DeviceRemovedEvent = 0;
+
+	std::unique_ptr<ShaderManager> m_pShaderManager;
 
 	std::unique_ptr<class OnlineDescriptorAllocator> m_pPersistentDescriptorHeap;
 	std::unique_ptr<GlobalOnlineDescriptorHeap> m_pGlobalViewHeap;
@@ -268,18 +276,12 @@ public:
 	void Update();
 	void OnResize(int width, int height);
 
-	uint32 GetWindowWidth() const { return m_WindowWidth; }
-	uint32 GetWindowHeight() const { return m_WindowHeight; }
-
 	ImGuiRenderer* GetImGui() const { return m_pImGuiRenderer.get(); }
 	Texture* GetDefaultTexture(DefaultTexture type) const { return m_DefaultTextures[(int)type].get(); }
 	Texture* GetDepthStencil() const { return m_pDepthStencil.get(); }
 	Texture* GetResolvedDepthStencil() const { return m_pResolvedDepthStencil.get(); }
 	Texture* GetCurrentRenderTarget() const { return m_SampleCount > 1 ? m_pMultiSampleRenderTarget.get() : m_pHDRRenderTarget.get(); }
 	Texture* GetCurrentBackbuffer() const { return m_pSwapchain->GetBackBuffer(); }
-
-	uint32 GetMultiSampleCount() const { return m_SampleCount; }
-	ShaderManager* GetShaderManager() const { return m_pShaderManager.get(); }
 
 	GraphicsDevice* GetDevice() const { return m_pDevice.get(); }
 
@@ -294,7 +296,7 @@ private:
 	void BeginFrame();
 	void EndFrame();
 
-	void InitD3D();
+	void InitD3D(WindowHandle window);
 	void InitializePipelines();
 	void InitializeAssets(CommandContext& context);
 	void SetupScene(CommandContext& context);
@@ -304,13 +306,9 @@ private:
 
 	std::unique_ptr<GraphicsDevice> m_pDevice;
 
-	
-
-	WindowHandlePtr m_pWindow{};
 	unsigned int m_WindowWidth;
 	unsigned int m_WindowHeight;
 	std::unique_ptr<SwapChain> m_pSwapchain;
-	std::unique_ptr<ShaderManager> m_pShaderManager;
 
 	int m_Frame = 0;
 	std::array<float, 180> m_FrameTimes{};

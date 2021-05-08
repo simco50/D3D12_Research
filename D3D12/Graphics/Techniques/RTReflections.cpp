@@ -14,12 +14,12 @@
 #include "Graphics/Mesh.h"
 #include "Scene/Camera.h"
 
-RTReflections::RTReflections(ShaderManager* pShaderManager, GraphicsDevice* pDevice)
+RTReflections::RTReflections(GraphicsDevice* pDevice)
 {
 	if (pDevice->SupportsRayTracing())
 	{
 		SetupResources(pDevice);
-		SetupPipelines(pShaderManager, pDevice);
+		SetupPipelines(pDevice);
 	}
 }
 
@@ -109,9 +109,9 @@ void RTReflections::SetupResources(GraphicsDevice* pDevice)
 	m_pSceneColor = std::make_unique<Texture>(pDevice);
 }
 
-void RTReflections::SetupPipelines(ShaderManager* pShaderManager, GraphicsDevice* pDevice)
+void RTReflections::SetupPipelines(GraphicsDevice* pDevice)
 {
-	ShaderLibrary* pShaderLibrary = pShaderManager->GetLibrary("RTReflections.hlsl");
+	ShaderLibrary* pShaderLibrary = pDevice->GetShaderManager()->GetLibrary("RTReflections.hlsl");
 
 	m_pHitSignature = std::make_unique<RootSignature>(pDevice);
 	m_pHitSignature->Finalize("Hit", D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE);

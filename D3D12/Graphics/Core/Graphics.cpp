@@ -223,8 +223,8 @@ GraphicsDevice::GraphicsDevice(IDXGIAdapter4* pAdapter)
 	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_COMPUTE] = std::make_unique<CommandQueue>(this, D3D12_COMMAND_LIST_TYPE_COMPUTE);
 	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_COPY] = std::make_unique<CommandQueue>(this, D3D12_COMMAND_LIST_TYPE_COPY);
 
+	// Allocators
 	m_pDynamicAllocationManager = std::make_unique<DynamicAllocationManager>(this, BufferFlag::Upload);
-
 	m_pGlobalViewHeap = std::make_unique<GlobalOnlineDescriptorHeap>(this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 2000, 1000000);
 	m_pPersistentDescriptorHeap = std::make_unique<OnlineDescriptorAllocator>(m_pGlobalViewHeap.get());
 
@@ -234,7 +234,8 @@ GraphicsDevice::GraphicsDevice(IDXGIAdapter4* pAdapter)
 	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_RTV] = std::make_unique<OfflineDescriptorAllocator>(this, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, 128);
 	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_DSV] = std::make_unique<OfflineDescriptorAllocator>(this, D3D12_DESCRIPTOR_HEAP_TYPE_DSV, 64);
 
-	m_pDynamicAllocationManager = std::make_unique<DynamicAllocationManager>(this, BufferFlag::Upload);
+	// Shaders
+	m_pShaderManager = std::make_unique<ShaderManager>("Resources/Shaders/", m_ShaderModelMajor, m_ShaderModelMinor);
 }
 
 void GraphicsDevice::Destroy()
@@ -662,16 +663,17 @@ void SwapChain::Present()
 Graphics::Graphics(WindowHandle window, int sampleCount /*= 1*/)
 	: m_SampleCount(sampleCount)
 {
-	m_pWindow = window;
+	// #todo fixup MSAA :(
+	checkf(sampleCount == 1, "I broke MSAA! TODO");
+
+	InitD3D(window);
+	InitializePipelines();
 
 	m_pCamera = std::make_unique<FreeCamera>();
 	m_pCamera->SetPosition(Vector3(-30, 35, 48));
 	m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(3 * Math::PIDIV4, Math::PIDIV4 * 0.3f, 0));
 	m_pCamera->SetNearPlane(300.0f);
 	m_pCamera->SetFarPlane(1.0f);
-
-	InitD3D();
-	InitializePipelines();
 
 	CommandContext* pContext = m_pDevice->AllocateCommandContext();
 	InitializeAssets(*pContext);
@@ -776,7 +778,7 @@ void Graphics::Update()
 
 	PROFILE_BEGIN("Update Game State");
 
-	m_pShaderManager->ConditionallyReloadShaders();
+	m_pDevice->GetShaderManager()->ConditionallyReloadShaders();
 
 	for (Batch& b : m_SceneData.Batches)
 	{
@@ -1052,7 +1054,7 @@ void Graphics::Update()
 		int i = 0;
 		for (auto& pShadowMap : m_ShadowMaps)
 		{
-			pShadowMap = std::make_unique<Texture>(this, "Shadow Map");
+			pShadowMap = std::make_unique<Texture>(m_pDevice.get(), "Shadow Map");
 			if (i < 4)
 				pShadowMap->Create(TextureDesc::CreateDepth(2048, 2048, DEPTH_STENCIL_SHADOW_FORMAT, TextureFlag::DepthStencil | TextureFlag::ShaderResource, 1, ClearBinding(0.0f, 0)));
 			else
@@ -1123,7 +1125,7 @@ void Graphics::Update()
 				D3D12_PLACED_SUBRESOURCE_FOOTPRINT textureFootprint = {};
 				D3D12_RESOURCE_DESC resourceDesc = m_pTonemapTarget->GetResource()->GetDesc();
 				m_pDevice->GetDevice()->GetCopyableFootprints(&resourceDesc, 0, 1, 0, &textureFootprint, nullptr, nullptr, nullptr);
-				m_pScreenshotBuffer = std::make_unique<Buffer>(this, "Screenshot Texture");
+				m_pScreenshotBuffer = std::make_unique<Buffer>(m_pDevice.get(), "Screenshot Texture");
 				m_pScreenshotBuffer->Create(BufferDesc::CreateReadback(textureFootprint.Footprint.RowPitch * textureFootprint.Footprint.Height));
 				m_pScreenshotBuffer->Map();
 				renderContext.InsertResourceBarrier(m_pTonemapTarget.get(), D3D12_RESOURCE_STATE_COPY_SOURCE);
@@ -1797,7 +1799,7 @@ void Graphics::EndFrame()
 	++m_Frame;
 }
 
-void Graphics::InitD3D()
+void Graphics::InitD3D(WindowHandle window)
 {
 	E_LOG(Info, "Graphics::InitD3D()");
 	GraphicsInstance instance = GraphicsInstance::CreateInstance();
@@ -1812,7 +1814,7 @@ void Graphics::InitD3D()
 
 #if PLATFORM_WINDOWS
 	RECT rect;
-	check(GetClientRect(m_pWindow, &rect));
+	check(GetClientRect(window, &rect));
 	uint32 width = rect.right - rect.left;
 	uint32 height = rect.bottom - rect.top;
 #else
@@ -1820,11 +1822,7 @@ void Graphics::InitD3D()
 	uint32 height = (uint32)m_pWindow->Bounds().Height;
 #endif
 
-	m_pSwapchain = instance.CreateSwapchain(m_pDevice.get(), m_pWindow, SWAPCHAIN_FORMAT, width, height, FRAME_COUNT, true);
-
-	int maj, min;
-	m_pDevice->GetShaderModel(maj, min);
-	m_pShaderManager = std::make_unique<ShaderManager>("Resources/Shaders/", maj, min);
+	m_pSwapchain = instance.CreateSwapchain(m_pDevice.get(), window, SWAPCHAIN_FORMAT, width, height, FRAME_COUNT, true);
 
 	m_pDepthStencil = std::make_unique<Texture>(m_pDevice.get(), "Depth Stencil");
 	m_pResolvedDepthStencil = std::make_unique<Texture>(m_pDevice.get(), "Resolved Depth Stencil");
@@ -1844,19 +1842,21 @@ void Graphics::InitD3D()
 	m_pVelocity = std::make_unique<Texture>(m_pDevice.get(), "Velocity");
 	m_pTAASource = std::make_unique<Texture>(m_pDevice.get(), "TAA Target");
 
-	m_pImGuiRenderer = std::make_unique<ImGuiRenderer>(m_pShaderManager.get(), m_pDevice.get());
+	m_pImGuiRenderer = std::make_unique<ImGuiRenderer>(m_pDevice.get());
 
-	m_pClusteredForward = std::make_unique<ClusteredForward>(m_pShaderManager.get(), m_pDevice.get());
-	m_pTiledForward = std::make_unique<TiledForward>(m_pShaderManager.get(), m_pDevice.get());
-	m_pRTReflections = std::make_unique<RTReflections>(m_pShaderManager.get(), m_pDevice.get());
-	m_pRTAO = std::make_unique<RTAO>(m_pShaderManager.get(), m_pDevice.get());
-	m_pSSAO = std::make_unique<SSAO>(m_pShaderManager.get(), m_pDevice.get());
-	m_pParticles = std::make_unique<GpuParticles>(m_pShaderManager.get(), m_pDevice.get());
+	m_pClusteredForward = std::make_unique<ClusteredForward>(m_pDevice.get());
+	m_pTiledForward = std::make_unique<TiledForward>(m_pDevice.get());
+	m_pRTReflections = std::make_unique<RTReflections>(m_pDevice.get());
+	m_pRTAO = std::make_unique<RTAO>(m_pDevice.get());
+	m_pSSAO = std::make_unique<SSAO>(m_pDevice.get());
+	m_pParticles = std::make_unique<GpuParticles>(m_pDevice.get());
 
 	Profiler::Get()->Initialize(m_pDevice.get());
-	DebugRenderer::Get()->Initialize(m_pShaderManager.get(), m_pDevice.get());
+	DebugRenderer::Get()->Initialize(m_pDevice.get());
 
 	m_pImGuiRenderer->AddUpdateCallback(ImGuiCallbackDelegate::CreateRaw(this, &Graphics::UpdateImGui));
+
+	m_SceneData.GlobalSRVHeapHandle = m_pDevice->GetGlobalViewHeap()->GetStartHandle();
 
 	OnResize(width, height);
 }
@@ -1892,13 +1892,13 @@ void Graphics::InitializeAssets(CommandContext& context)
 
 void Graphics::SetupScene(CommandContext& context)
 {
-	m_pLightCookie = std::make_unique<Texture>(this, "Light Cookie");
+	m_pLightCookie = std::make_unique<Texture>(m_pDevice.get(), "Light Cookie");
 	m_pLightCookie->Create(&context, "Resources/Textures/LightProjector.png", false);
 
 	{
 		std::unique_ptr<Mesh> pMesh = std::make_unique<Mesh>();
-		//pMesh->Load("Resources/Bistro_Godot/Bistro_Godot.gltf", this, &context, 3.0f);
-		//pMesh->Load("Resources/Bathroom/scene.gltf", this, &context, 0.2f);
+		//pMesh->Load("Resources/Bistro_Godot/Bistro_Godot.gltf", m_pDevice.get(), &context, 3.0f);
+		//pMesh->Load("Resources/Bathroom/scene.gltf", m_pDevice.get(), &context, 0.2f);
 		pMesh->Load("Resources/sponza/sponza.dae", m_pDevice.get(), &context, 1.0f);
 		m_Meshes.push_back(std::move(pMesh));
 	}
@@ -1993,14 +1993,14 @@ void Graphics::OnResize(int width, int height)
 	{
 		w = Math::DivideAndRoundUp(w, 16);
 		h = Math::DivideAndRoundUp(h, 16);
-		std::unique_ptr<Texture> pTexture = std::make_unique<Texture>(this, "SDSM Reduction Target");
+		std::unique_ptr<Texture> pTexture = std::make_unique<Texture>(m_pDevice.get(), "SDSM Reduction Target");
 		pTexture->Create(TextureDesc::Create2D(w, h, DXGI_FORMAT_R32G32_FLOAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
 		m_ReductionTargets.push_back(std::move(pTexture));
 	}
 
 	for (int i = 0; i < FRAME_COUNT; ++i)
 	{
-		std::unique_ptr<Buffer> pBuffer = std::make_unique<Buffer>(this, "SDSM Reduction Readback Target");
+		std::unique_ptr<Buffer> pBuffer = std::make_unique<Buffer>(m_pDevice.get(), "SDSM Reduction Readback Target");
 		pBuffer->Create(BufferDesc::CreateTyped(1, DXGI_FORMAT_R32G32_FLOAT, BufferFlag::Readback));
 		pBuffer->Map();
 		m_ReductionReadbackTargets.push_back(std::move(pBuffer));
@@ -2015,11 +2015,11 @@ void Graphics::InitializePipelines()
 	{
 		//Opaque
 		{
-			Shader* pVertexShader = GetShaderManager()->GetShader("DepthOnly.hlsl", ShaderType::Vertex, "VSMain");
-			Shader* pAlphaClipShader = GetShaderManager()->GetShader("DepthOnly.hlsl", ShaderType::Pixel, "PSMain");
+			Shader* pVertexShader = m_pDevice->GetShaderManager()->GetShader("DepthOnly.hlsl", ShaderType::Vertex, "VSMain");
+			Shader* pAlphaClipShader = m_pDevice->GetShaderManager()->GetShader("DepthOnly.hlsl", ShaderType::Pixel, "PSMain");
 
 			//Rootsignature
-			m_pShadowsRS = std::make_unique<RootSignature>(this);
+			m_pShadowsRS = std::make_unique<RootSignature>(m_pDevice.get());
 			m_pShadowsRS->FinalizeFromShader("Shadow Mapping (Opaque)", pVertexShader);
 
 			//Pipeline state
@@ -2042,11 +2042,11 @@ void Graphics::InitializePipelines()
 	//Depth prepass
 	//Simple vertex shader to fill the depth buffer to optimize later passes
 	{
-		Shader* pVertexShader = GetShaderManager()->GetShader("DepthOnly.hlsl", ShaderType::Vertex, "VSMain");
-		Shader* pPixelShader = GetShaderManager()->GetShader("DepthOnly.hlsl", ShaderType::Pixel, "PSMain");
+		Shader* pVertexShader = m_pDevice->GetShaderManager()->GetShader("DepthOnly.hlsl", ShaderType::Vertex, "VSMain");
+		Shader* pPixelShader = m_pDevice->GetShaderManager()->GetShader("DepthOnly.hlsl", ShaderType::Pixel, "PSMain");
 
 		//Rootsignature
-		m_pDepthPrepassRS = std::make_unique<RootSignature>(this);
+		m_pDepthPrepassRS = std::make_unique<RootSignature>(m_pDevice.get());
 		m_pDepthPrepassRS->FinalizeFromShader("Depth Prepass", pVertexShader);
 
 		//Pipeline state
@@ -2065,10 +2065,10 @@ void Graphics::InitializePipelines()
 
 	//Luminance Historgram
 	{
-		Shader* pComputeShader = GetShaderManager()->GetShader("LuminanceHistogram.hlsl", ShaderType::Compute, "CSMain");
+		Shader* pComputeShader = m_pDevice->GetShaderManager()->GetShader("LuminanceHistogram.hlsl", ShaderType::Compute, "CSMain");
 
 		//Rootsignature
-		m_pLuminanceHistogramRS = std::make_unique<RootSignature>(this);
+		m_pLuminanceHistogramRS = std::make_unique<RootSignature>(m_pDevice.get());
 		m_pLuminanceHistogramRS->FinalizeFromShader("Luminance Historgram", pComputeShader);
 
 		//Pipeline state
@@ -2078,16 +2078,16 @@ void Graphics::InitializePipelines()
 		psoDesc.SetName("Luminance Historgram");
 		m_pLuminanceHistogramPSO = m_pDevice->CreatePipeline(psoDesc);
 
-		m_pLuminanceHistogram = std::make_unique<Buffer>(this, "Luminance Histogram");
+		m_pLuminanceHistogram = std::make_unique<Buffer>(m_pDevice.get(), "Luminance Histogram");
 		m_pLuminanceHistogram->Create(BufferDesc::CreateByteAddress(sizeof(uint32) * 256));
-		m_pAverageLuminance = std::make_unique<Buffer>(this, "Average Luminance");
+		m_pAverageLuminance = std::make_unique<Buffer>(m_pDevice.get(), "Average Luminance");
 		m_pAverageLuminance->Create(BufferDesc::CreateStructured(3, sizeof(float), BufferFlag::UnorderedAccess | BufferFlag::ShaderResource));
 	}
 
 	//Debug Draw Histogram
 	{
-		Shader* pComputeShader = GetShaderManager()->GetShader("DrawLuminanceHistogram.hlsl", ShaderType::Compute, "DrawLuminanceHistogram");
-		m_pDrawHistogramRS = std::make_unique<RootSignature>(this);
+		Shader* pComputeShader = m_pDevice->GetShaderManager()->GetShader("DrawLuminanceHistogram.hlsl", ShaderType::Compute, "DrawLuminanceHistogram");
+		m_pDrawHistogramRS = std::make_unique<RootSignature>(m_pDevice.get());
 		m_pDrawHistogramRS->FinalizeFromShader("Draw Luminance Historgram", pComputeShader);
 
 		PipelineStateInitializer psoDesc;
@@ -2099,10 +2099,10 @@ void Graphics::InitializePipelines()
 
 	//Average Luminance
 	{
-		Shader* pComputeShader = GetShaderManager()->GetShader("AverageLuminance.hlsl", ShaderType::Compute, "CSMain");
+		Shader* pComputeShader = m_pDevice->GetShaderManager()->GetShader("AverageLuminance.hlsl", ShaderType::Compute, "CSMain");
 
 		//Rootsignature
-		m_pAverageLuminanceRS = std::make_unique<RootSignature>(this);
+		m_pAverageLuminanceRS = std::make_unique<RootSignature>(m_pDevice.get());
 		m_pAverageLuminanceRS->FinalizeFromShader("Average Luminance", pComputeShader);
 
 		//Pipeline state
@@ -2115,9 +2115,9 @@ void Graphics::InitializePipelines()
 
 	//Camera motion
 	{
-		Shader* pComputeShader = GetShaderManager()->GetShader("CameraMotionVectors.hlsl", ShaderType::Compute, "CSMain");
+		Shader* pComputeShader = m_pDevice->GetShaderManager()->GetShader("CameraMotionVectors.hlsl", ShaderType::Compute, "CSMain");
 
-		m_pCameraMotionRS = std::make_unique<RootSignature>(this);
+		m_pCameraMotionRS = std::make_unique<RootSignature>(m_pDevice.get());
 		m_pCameraMotionRS->FinalizeFromShader("Camera Motion", pComputeShader);
 
 		PipelineStateInitializer psoDesc;
@@ -2129,10 +2129,10 @@ void Graphics::InitializePipelines()
 
 	//Tonemapping
 	{
-		Shader* pComputeShader = GetShaderManager()->GetShader("Tonemapping.hlsl", ShaderType::Compute, "CSMain");
+		Shader* pComputeShader = m_pDevice->GetShaderManager()->GetShader("Tonemapping.hlsl", ShaderType::Compute, "CSMain");
 
 		//Rootsignature
-		m_pToneMapRS = std::make_unique<RootSignature>(this);
+		m_pToneMapRS = std::make_unique<RootSignature>(m_pDevice.get());
 		m_pToneMapRS->FinalizeFromShader("Tonemapping", pComputeShader);
 
 		//Pipeline state
@@ -2147,9 +2147,9 @@ void Graphics::InitializePipelines()
 	//Resolves a multisampled depth buffer to a normal depth buffer
 	//Only required when the sample count > 1
 	{
-		Shader* pComputeShader = GetShaderManager()->GetShader("ResolveDepth.hlsl", ShaderType::Compute, "CSMain", { "DEPTH_RESOLVE_MIN" });
+		Shader* pComputeShader = m_pDevice->GetShaderManager()->GetShader("ResolveDepth.hlsl", ShaderType::Compute, "CSMain", { "DEPTH_RESOLVE_MIN" });
 
-		m_pResolveDepthRS = std::make_unique<RootSignature>(this);
+		m_pResolveDepthRS = std::make_unique<RootSignature>(m_pDevice.get());
 		m_pResolveDepthRS->FinalizeFromShader("Depth Resolve", pComputeShader);
 
 		PipelineStateInitializer psoDesc;
@@ -2161,11 +2161,11 @@ void Graphics::InitializePipelines()
 
 	//Depth reduce
 	{
-		Shader* pPrepareReduceShader = GetShaderManager()->GetShader("ReduceDepth.hlsl", ShaderType::Compute, "PrepareReduceDepth", { });
-		Shader* pPrepareReduceShaderMSAA = GetShaderManager()->GetShader("ReduceDepth.hlsl", ShaderType::Compute, "PrepareReduceDepth", { "WITH_MSAA" });
-		Shader* pReduceShader = GetShaderManager()->GetShader("ReduceDepth.hlsl", ShaderType::Compute, "ReduceDepth", { });
+		Shader* pPrepareReduceShader = m_pDevice->GetShaderManager()->GetShader("ReduceDepth.hlsl", ShaderType::Compute, "PrepareReduceDepth", { });
+		Shader* pPrepareReduceShaderMSAA = m_pDevice->GetShaderManager()->GetShader("ReduceDepth.hlsl", ShaderType::Compute, "PrepareReduceDepth", { "WITH_MSAA" });
+		Shader* pReduceShader = m_pDevice->GetShaderManager()->GetShader("ReduceDepth.hlsl", ShaderType::Compute, "ReduceDepth", { });
 
-		m_pReduceDepthRS = std::make_unique<RootSignature>(this);
+		m_pReduceDepthRS = std::make_unique<RootSignature>(m_pDevice.get());
 		m_pReduceDepthRS->FinalizeFromShader("Depth Reduce", pPrepareReduceShader);
 
 		PipelineStateInitializer psoDesc;
@@ -2184,8 +2184,8 @@ void Graphics::InitializePipelines()
 
 	//TAA
 	{
-		Shader* pComputeShader = GetShaderManager()->GetShader("TemporalResolve.hlsl", ShaderType::Compute, "CSMain");
-		m_pTemporalResolveRS = std::make_unique<RootSignature>(this);
+		Shader* pComputeShader = m_pDevice->GetShaderManager()->GetShader("TemporalResolve.hlsl", ShaderType::Compute, "CSMain");
+		m_pTemporalResolveRS = std::make_unique<RootSignature>(m_pDevice.get());
 		m_pTemporalResolveRS->FinalizeFromShader("Temporal Resolve", pComputeShader);
 
 		PipelineStateInitializer psoDesc;
@@ -2197,9 +2197,9 @@ void Graphics::InitializePipelines()
 
 	//Mip generation
 	{
-		Shader* pComputeShader = GetShaderManager()->GetShader("GenerateMips.hlsl", ShaderType::Compute, "CSMain");
+		Shader* pComputeShader = m_pDevice->GetShaderManager()->GetShader("GenerateMips.hlsl", ShaderType::Compute, "CSMain");
 
-		m_pGenerateMipsRS = std::make_unique<RootSignature>(this);
+		m_pGenerateMipsRS = std::make_unique<RootSignature>(m_pDevice.get());
 		m_pGenerateMipsRS->FinalizeFromShader("Generate Mips", pComputeShader);
 
 		PipelineStateInitializer psoDesc;
@@ -2211,11 +2211,11 @@ void Graphics::InitializePipelines()
 
 	//Sky
 	{
-		Shader* pVertexShader = GetShaderManager()->GetShader("ProceduralSky.hlsl", ShaderType::Vertex, "VSMain");
-		Shader* pPixelShader = GetShaderManager()->GetShader("ProceduralSky.hlsl", ShaderType::Pixel, "PSMain");
+		Shader* pVertexShader = m_pDevice->GetShaderManager()->GetShader("ProceduralSky.hlsl", ShaderType::Vertex, "VSMain");
+		Shader* pPixelShader = m_pDevice->GetShaderManager()->GetShader("ProceduralSky.hlsl", ShaderType::Pixel, "PSMain");
 
 		//Rootsignature
-		m_pSkyboxRS = std::make_unique<RootSignature>(this);
+		m_pSkyboxRS = std::make_unique<RootSignature>(m_pDevice.get());
 		m_pSkyboxRS->FinalizeFromShader("Skybox", pVertexShader);
 
 		//Pipeline state
@@ -2511,9 +2511,9 @@ void Graphics::UpdateTLAS(CommandContext& context)
 			D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO info{};
 			m_pDevice->GetRaytracingDevice()->GetRaytracingAccelerationStructurePrebuildInfo(&prebuildInfo, &info);
 
-			m_pTLASScratch = std::make_unique<Buffer>(this, "TLAS Scratch");
+			m_pTLASScratch = std::make_unique<Buffer>(m_pDevice.get(), "TLAS Scratch");
 			m_pTLASScratch->Create(BufferDesc::CreateByteAddress(Math::AlignUp<uint64>(info.ScratchDataSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT), BufferFlag::None));
-			m_pTLAS = std::make_unique<Buffer>(this, "TLAS");
+			m_pTLAS = std::make_unique<Buffer>(m_pDevice.get(), "TLAS");
 			m_pTLAS->Create(BufferDesc::CreateAccelerationStructure(Math::AlignUp<uint64>(info.ResultDataMaxSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT)));
 		}
 

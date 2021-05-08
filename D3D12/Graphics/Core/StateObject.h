@@ -93,7 +93,7 @@ private:
 class StateObject : public GraphicsObject
 {
 public:
-	StateObject(ShaderManager* pShaderManager, GraphicsDevice* pParent);
+	StateObject(GraphicsDevice* pParent);
 	StateObject(const StateObject& rhs) = delete;
 	StateObject& operator=(const StateObject& rhs) = delete;
 

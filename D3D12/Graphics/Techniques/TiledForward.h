@@ -17,7 +17,7 @@ struct SceneData;
 class TiledForward
 {
 public:
-	TiledForward(ShaderManager* pShaderManager, GraphicsDevice* pDevice);
+	TiledForward(GraphicsDevice* pDevice);
 
 	void OnSwapchainCreated(int windowWidth, int windowHeight);
 
@@ -26,7 +26,7 @@ public:
 
 private:
 	void SetupResources(GraphicsDevice* pDevice);
-	void SetupPipelines(ShaderManager* pShaderManager, GraphicsDevice* pDevice);
+	void SetupPipelines(GraphicsDevice* pDevice);
 
 	//Light Culling
 	std::unique_ptr<RootSignature> m_pComputeLightCullRS;
