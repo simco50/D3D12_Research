@@ -138,7 +138,7 @@ void Profiler::Initialize(GraphicsDevice* pParent)
 	D3D::SetObjectName(m_pQueryHeap.Get(), "Profiler Timestamp Query Heap");
 
 	m_pReadBackBuffer = std::make_unique<Buffer>(pParent, "Profiling Readback Buffer");
-	m_pReadBackBuffer->Create(BufferDesc::CreateReadback(sizeof(uint64) * Graphics::FRAME_COUNT * HEAP_SIZE));
+	m_pReadBackBuffer->Create(BufferDesc::CreateReadback(sizeof(uint64) * GraphicsDevice::FRAME_COUNT * HEAP_SIZE));
 	m_pReadBackBuffer->Map();
 
 	{
@@ -205,14 +205,14 @@ void Profiler::Resolve(SwapChain* pSwapchain, GraphicsDevice* pParent, int frame
 	pContext->GetCommandList()->ResolveQueryData(m_pQueryHeap.Get(), D3D12_QUERY_TYPE_TIMESTAMP, 0, m_CurrentTimer * QUERY_PAIR_NUM, m_pReadBackBuffer->GetResource(), offset * sizeof(uint64));
 	m_FenceValues[m_CurrentReadbackFrame] = pContext->Execute(false);
 
-	if (frameIndex >= Graphics::FRAME_COUNT)
+	if (frameIndex >= GraphicsDevice::FRAME_COUNT)
 	{
 		//Make sure the resolve from 2 frames ago is finished before we read.
-		uint32 readFromIndex = (m_CurrentReadbackFrame + Graphics::FRAME_COUNT - 1) % Graphics::FRAME_COUNT;
+		uint32 readFromIndex = (m_CurrentReadbackFrame + GraphicsDevice::FRAME_COUNT - 1) % GraphicsDevice::FRAME_COUNT;
 		pParent->WaitForFence(m_FenceValues[readFromIndex]);
 		m_pCurrentBlock->PopulateTimes((const uint64*)m_pReadBackBuffer->GetMappedData(), frameIndex - 2);
 	}
-	m_CurrentReadbackFrame = (m_CurrentReadbackFrame + 1) % Graphics::FRAME_COUNT;
+	m_CurrentReadbackFrame = (m_CurrentReadbackFrame + 1) % GraphicsDevice::FRAME_COUNT;
 
 	m_pPreviousBlock = nullptr;
 	m_pCurrentBlock->StartTimer(nullptr);

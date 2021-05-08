@@ -84,7 +84,7 @@ public:
 		m_LogicalWidth = window.Bounds().Width;
 		m_LogicalHeight = window.Bounds().Height;
 
-		m_pGraphics = std::make_unique<Graphics>(&window, gMsaaSampleCount);
+		m_pGraphics = std::make_unique<DemoApp>(&window, gMsaaSampleCount);
 	}
 
 	virtual void Load(winrt::hstring const& entryPoint)
@@ -267,7 +267,7 @@ private:
 	float m_LogicalWidth;
 	float m_LogicalHeight;
 	const char* m_pTitle;
-	std::unique_ptr<Graphics> m_pGraphics;
+	std::unique_ptr<DemoApp> m_pGraphics;
 
 	inline int ConvertDipsToPixels(float dips) const
 	{

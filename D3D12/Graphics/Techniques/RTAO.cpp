@@ -12,6 +12,7 @@
 #include "Graphics/RenderGraph/RenderGraph.h"
 #include "Graphics/Mesh.h"
 #include "Scene/Camera.h"
+#include "DemoApp.h"
 
 RTAO::RTAO(GraphicsDevice* pDevice)
 {

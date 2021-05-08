@@ -3,7 +3,6 @@
 class Buffer;
 class CommandContext;
 class Texture;
-class Graphics;
 class CommandContext;
 class ShaderResourceView;
 class Mesh;

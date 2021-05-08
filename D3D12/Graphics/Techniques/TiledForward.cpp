@@ -12,6 +12,7 @@
 #include "Graphics/Mesh.h"
 #include "Graphics/Profiler.h"
 #include "Scene/Camera.h"
+#include "DemoApp.h"
 
 static constexpr int MAX_LIGHT_DENSITY = 72000;
 static constexpr int FORWARD_PLUS_BLOCK_SIZE = 16;
@@ -296,7 +297,7 @@ void TiledForward::SetupPipelines(GraphicsDevice* pDevice)
 
 		{
 			DXGI_FORMAT formats[] = {
-				Graphics::RENDER_TARGET_FORMAT,
+				GraphicsDevice::RENDER_TARGET_FORMAT,
 				DXGI_FORMAT_R16G16B16A16_FLOAT,
 			};
 
@@ -305,7 +306,7 @@ void TiledForward::SetupPipelines(GraphicsDevice* pDevice)
 			psoDesc.SetRootSignature(m_pDiffuseRS->GetRootSignature());
 			psoDesc.SetVertexShader(pVertexShader);
 			psoDesc.SetPixelShader(pPixelShader);
-			psoDesc.SetRenderTargetFormats(formats, ARRAYSIZE(formats), Graphics::DEPTH_STENCIL_FORMAT, /* pDevice->GetMultiSampleCount() */ 1);
+			psoDesc.SetRenderTargetFormats(formats, ARRAYSIZE(formats), GraphicsDevice::DEPTH_STENCIL_FORMAT, /* pDevice->GetMultiSampleCount() */ 1);
 			psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_EQUAL);
 			psoDesc.SetDepthWrite(false);
 			psoDesc.SetName("Diffuse PBR Pipeline");

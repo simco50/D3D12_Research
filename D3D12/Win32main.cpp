@@ -7,6 +7,7 @@
 #include "Core/Console.h"
 #include "Core/CommandLine.h"
 #include "Core/TaskQueue.h"
+#include "DemoApp.h"
 
 #ifdef _DEBUG
 #define _CRTDBG_MAP_ALLOC
@@ -292,7 +293,7 @@ int WINAPI WinMain(_In_ HINSTANCE /*hInstance*/, _In_opt_ HINSTANCE /*hPrevInsta
 	TaskQueue::Initialize(std::thread::hardware_concurrency());
 
 	Win32AppContainer app("D3D12", 1240, 720);
-	Graphics graphics(app.GetNativeWindow(), app.GetRect(), 1);
+	DemoApp graphics(app.GetNativeWindow(), app.GetRect(), 1);
 
 	app.OnKeyInputEvent += [](uint32 character, bool isDown) { Input::Instance().UpdateKey(character, isDown); };
 	app.OnMouseInputEvent += [](uint32 mouse, bool isDown) { Input::Instance().UpdateMouseKey(mouse, isDown); };

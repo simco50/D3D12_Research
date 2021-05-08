@@ -12,6 +12,7 @@
 #include "Graphics/Mesh.h"
 #include "Graphics/Profiler.h"
 #include "Scene/Camera.h"
+#include "DemoApp.h"
 
 static constexpr int gLightClusterTexelSize = 64;
 static constexpr int gLightClustersNumZ = 32;
@@ -609,7 +610,7 @@ void ClusteredForward::SetupPipelines(GraphicsDevice* pDevice)
 		psoDesc.SetRootSignature(m_pMarkUniqueClustersRS->GetRootSignature());
 		psoDesc.SetVertexShader(pVertexShader);
 		psoDesc.SetPixelShader(pPixelShaderOpaque);
-		psoDesc.SetDepthOnlyTarget(Graphics::DEPTH_STENCIL_FORMAT, /* pDevice->GetMultiSampleCount() */ 1);
+		psoDesc.SetDepthOnlyTarget(GraphicsDevice::DEPTH_STENCIL_FORMAT, /* pDevice->GetMultiSampleCount() */ 1);
 		psoDesc.SetDepthWrite(false);
 		psoDesc.SetName("Mark Unique Opaque Clusters");
 		m_pMarkUniqueClustersOpaquePSO = pDevice->CreatePipeline(psoDesc);
@@ -674,7 +675,7 @@ void ClusteredForward::SetupPipelines(GraphicsDevice* pDevice)
 		m_pDiffuseRS->FinalizeFromShader("Diffuse", pVertexShader);
 
 		DXGI_FORMAT formats[] = {
-			Graphics::RENDER_TARGET_FORMAT,
+			GraphicsDevice::RENDER_TARGET_FORMAT,
 			DXGI_FORMAT_R16G16B16A16_FLOAT,
 		};
 
@@ -686,7 +687,7 @@ void ClusteredForward::SetupPipelines(GraphicsDevice* pDevice)
 		psoDesc.SetPixelShader(pPixelShader);
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_EQUAL);
 		psoDesc.SetDepthWrite(false);
-		psoDesc.SetRenderTargetFormats(formats, ARRAYSIZE(formats), Graphics::DEPTH_STENCIL_FORMAT, /* pDevice->GetMultiSampleCount() */ 1);
+		psoDesc.SetRenderTargetFormats(formats, ARRAYSIZE(formats), GraphicsDevice::DEPTH_STENCIL_FORMAT, /* pDevice->GetMultiSampleCount() */ 1);
 		psoDesc.SetName("Diffuse (Opaque)");
 		m_pDiffusePSO = pDevice->CreatePipeline(psoDesc);
 
@@ -707,7 +708,7 @@ void ClusteredForward::SetupPipelines(GraphicsDevice* pDevice)
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
 		psoDesc.SetDepthWrite(false);
 		psoDesc.SetPixelShader(pPixelShader);
-		psoDesc.SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, /* pDevice->GetMultiSampleCount() */ 1);
+		psoDesc.SetRenderTargetFormat(GraphicsDevice::RENDER_TARGET_FORMAT, GraphicsDevice::DEPTH_STENCIL_FORMAT, /* pDevice->GetMultiSampleCount() */ 1);
 		psoDesc.SetBlendMode(BlendMode::Additive, false);
 
 		if (pDevice->SupportsMeshShaders())

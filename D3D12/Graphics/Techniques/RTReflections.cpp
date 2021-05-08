@@ -13,6 +13,7 @@
 #include "Graphics/RenderGraph/RenderGraph.h"
 #include "Graphics/Mesh.h"
 #include "Scene/Camera.h"
+#include "DemoApp.h"
 
 RTReflections::RTReflections(GraphicsDevice* pDevice)
 {
@@ -101,7 +102,7 @@ void RTReflections::Execute(RGGraph& graph, const SceneData& sceneData)
 
 void RTReflections::OnResize(uint32 width, uint32 height)
 {
-	m_pSceneColor->Create(TextureDesc::Create2D(width, height, Graphics::RENDER_TARGET_FORMAT, TextureFlag::ShaderResource, 1, 1));
+	m_pSceneColor->Create(TextureDesc::Create2D(width, height, GraphicsDevice::RENDER_TARGET_FORMAT, TextureFlag::ShaderResource, 1, 1));
 }
 
 void RTReflections::SetupResources(GraphicsDevice* pDevice)

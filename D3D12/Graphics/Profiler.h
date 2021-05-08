@@ -172,7 +172,7 @@ private:
 	constexpr static int QUERY_PAIR_NUM = 2;
 	constexpr static int HEAP_SIZE = MAX_GPU_TIME_QUERIES * QUERY_PAIR_NUM;
 
-	std::array<uint64, Graphics::FRAME_COUNT> m_FenceValues = {};
+	std::array<uint64, GraphicsDevice::FRAME_COUNT> m_FenceValues = {};
 
 	float m_SecondsPerGpuTick = 0.0f;
 	float m_SecondsPerCpuTick = 0.0f;

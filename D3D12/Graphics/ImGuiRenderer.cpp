@@ -10,6 +10,7 @@
 #include "Core/Input.h"
 #include "ImGuizmo/ImGuizmo.h"
 #include "Core/Paths.h"
+#include "DemoApp.h"
 
 ImGuiRenderer::ImGuiRenderer(GraphicsDevice* pDevice)
 {
