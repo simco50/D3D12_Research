@@ -405,7 +405,7 @@ std::unique_ptr<GraphicsInstance> GraphicsInstance::CreateInstance(GraphicsFlags
 	return pInstance;
 }
 
-std::unique_ptr<SwapChain> GraphicsInstance::CreateSwapchain(GraphicsDevice* pDevice, void* pNativeWindow, DXGI_FORMAT format, uint32 width, uint32 height, uint32 numFrames, bool vsync)
+std::unique_ptr<SwapChain> GraphicsInstance::CreateSwapchain(GraphicsDevice* pDevice, WindowHandle pNativeWindow, DXGI_FORMAT format, uint32 width, uint32 height, uint32 numFrames, bool vsync)
 {
 	return std::make_unique<SwapChain>(pDevice, m_pFactory.Get(), pNativeWindow, format, width, height, numFrames, vsync);
 }
@@ -489,7 +489,7 @@ std::unique_ptr<GraphicsDevice> GraphicsInstance::CreateDevice(ComPtr<IDXGIAdapt
 	return std::make_unique<GraphicsDevice>(pAdapter.Get());
 }
 
-SwapChain::SwapChain(GraphicsDevice* pDevice, IDXGIFactory6* pFactory, void* pNativeWindow, DXGI_FORMAT format, uint32 width, uint32 height, uint32 numFrames, bool vsync) : m_Format(format), m_CurrentImage(0), m_Vsync(vsync)
+SwapChain::SwapChain(GraphicsDevice* pDevice, IDXGIFactory6* pFactory, WindowHandle pNativeWindow, DXGI_FORMAT format, uint32 width, uint32 height, uint32 numFrames, bool vsync) : m_Format(format), m_CurrentImage(0), m_Vsync(vsync)
 {
 	DXGI_SWAP_CHAIN_DESC1 desc{};
 	desc.AlphaMode = DXGI_ALPHA_MODE_IGNORE;
@@ -513,8 +513,16 @@ SwapChain::SwapChain(GraphicsDevice* pDevice, IDXGIFactory6* pFactory, void* pNa
 	fsDesc.Windowed = true;
 
 	CommandQueue* pPresentQueue = pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT);
-
 	ComPtr<IDXGISwapChain1> swapChain;
+	
+#if PLATFORM_UWP
+	pFactory->CreateSwapChainForCoreWindow(
+		pPresentQueue->GetCommandQueue(),
+		reinterpret_cast<IUnknown*>(winrt::get_abi(winrt::Windows::UI::Core::CoreWindow::GetForCurrentThread())),
+		&desc,
+		nullptr,
+		swapChain.GetAddressOf());
+#elif PLATFORM_WINDOWS
 	VERIFY_HR(pFactory->CreateSwapChainForHwnd(
 		pPresentQueue->GetCommandQueue(),
 		(HWND)pNativeWindow,
@@ -522,7 +530,7 @@ SwapChain::SwapChain(GraphicsDevice* pDevice, IDXGIFactory6* pFactory, void* pNa
 		&fsDesc,
 		nullptr,
 		swapChain.GetAddressOf()));
-
+#endif
 	m_pSwapchain.Reset();
 	swapChain.As(&m_pSwapchain);
 

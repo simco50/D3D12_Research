@@ -145,7 +145,7 @@ class GraphicsInstance
 {
 public:
 	static std::unique_ptr<GraphicsInstance> CreateInstance(GraphicsFlags createFlags = GraphicsFlags::None);
-	std::unique_ptr<SwapChain> CreateSwapchain(GraphicsDevice* pDevice, void* pNativeWindow, DXGI_FORMAT format, uint32 width, uint32 height, uint32 numFrames, bool vsync);
+	std::unique_ptr<SwapChain> CreateSwapchain(GraphicsDevice* pDevice, WindowHandle pNativeWindow, DXGI_FORMAT format, uint32 width, uint32 height, uint32 numFrames, bool vsync);
 	ComPtr<IDXGIAdapter4> EnumerateAdapter(bool useWarp);
 	std::unique_ptr<GraphicsDevice> CreateDevice(ComPtr<IDXGIAdapter4> pAdapter, GraphicsFlags createFlags = GraphicsFlags::None);
 
@@ -159,7 +159,7 @@ private:
 class SwapChain
 {
 public:
-	SwapChain(GraphicsDevice* pDevice, IDXGIFactory6* pFactory, void* pNativeWindow, DXGI_FORMAT format, uint32 width, uint32 height, uint32 numFrames, bool vsync);
+	SwapChain(GraphicsDevice* pDevice, IDXGIFactory6* pFactory, WindowHandle pNativeWindow, DXGI_FORMAT format, uint32 width, uint32 height, uint32 numFrames, bool vsync);
 	void Destroy();
 	void OnResize(uint32 width, uint32 height);
 	void Present();
