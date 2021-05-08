@@ -40,6 +40,31 @@ using WindowHandle = const winrt::Windows::UI::Core::CoreWindow*;
 using WindowHandlePtr = const winrt::Windows::UI::Core::CoreWindow*;
 #endif
 
+class Graphics;
+
+class Swapchain
+{
+public:
+	Swapchain(Graphics* pGraphics, IDXGIFactory6* pFactory, void* pNativeWindow, DXGI_FORMAT format, uint32 width, uint32 height, uint32 numFrames, bool vsync);
+	void Destroy();
+	void OnResize(uint32 width, uint32 height);
+	void Present();
+
+	void SetVsync(bool enabled) { m_Vsync = enabled; }
+	IDXGISwapChain4* GetSwapChain() const { return m_pSwapchain.Get(); }
+	Texture* GetBackBuffer() const { return m_Backbuffers[m_CurrentImage].get(); }
+	Texture* GetBackBuffer(uint32 index) const { return m_Backbuffers[index].get(); }
+	uint32 GetBackbufferIndex() const { return m_CurrentImage; }
+	DXGI_FORMAT GetFormat() const { return m_Format; }
+
+private:
+	std::vector<std::unique_ptr<Texture>> m_Backbuffers;
+	ComPtr<IDXGISwapChain4> m_pSwapchain;
+	DXGI_FORMAT m_Format;
+	uint32 m_CurrentImage;
+	bool m_Vsync;
+};
+
 enum class DefaultTexture
 {
 	White2D,
@@ -178,7 +203,7 @@ public:
 	Texture* GetDepthStencil() const { return m_pDepthStencil.get(); }
 	Texture* GetResolvedDepthStencil() const { return m_pResolvedDepthStencil.get(); }
 	Texture* GetCurrentRenderTarget() const { return m_SampleCount > 1 ? m_pMultiSampleRenderTarget.get() : m_pHDRRenderTarget.get(); }
-	Texture* GetCurrentBackbuffer() const { return m_Backbuffers[m_CurrentBackBufferIndex].get(); }
+	Texture* GetCurrentBackbuffer() const { return m_pSwapchain->GetBackBuffer(); }
 
 	uint32 GetMultiSampleCount() const { return m_SampleCount; }
 
@@ -186,7 +211,6 @@ public:
 	PipelineState* CreatePipeline(const PipelineStateInitializer& psoDesc);
 	StateObject* CreateStateObject(const StateObjectInitializer& stateDesc);
 
-	IDXGISwapChain3* GetSwapchain() const { return m_pSwapchain.Get(); }
 	ID3D12Device* GetDevice() const { return m_pDevice.Get(); }
 	ID3D12Device5* GetRaytracingDevice() const { return m_pRaytracingDevice.Get(); }
 
@@ -232,9 +256,7 @@ private:
 	WindowHandlePtr m_pWindow{};
 	unsigned int m_WindowWidth;
 	unsigned int m_WindowHeight;
-	uint32 m_CurrentBackBufferIndex = 0;
-	ComPtr<IDXGISwapChain3> m_pSwapchain;
-	std::array<std::unique_ptr<Texture>, FRAME_COUNT> m_Backbuffers;
+	std::unique_ptr<Swapchain> m_pSwapchain;
 
 	std::unique_ptr<ShaderManager> m_pShaderManager;
 

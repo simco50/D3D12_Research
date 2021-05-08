@@ -195,7 +195,7 @@ void Profiler::End(CommandContext* pContext)
 	m_pCurrentBlock = m_pCurrentBlock->GetParent();
 }
 
-void Profiler::Resolve(Graphics* pGraphics, int frameIndex)
+void Profiler::Resolve(Swapchain* pSwapchain, Graphics* pGraphics, int frameIndex)
 {
 	checkf(m_pCurrentBlock == m_pRootBlock.get(), "The current block isn't the root block then something must've gone wrong!");
 
@@ -218,7 +218,7 @@ void Profiler::Resolve(Graphics* pGraphics, int frameIndex)
 	m_pCurrentBlock->StartTimer(nullptr);
 	m_pCurrentBlock->EndTimer(nullptr);
 
-	OPTICK_GPU_FLIP(pGraphics->GetSwapchain());
+	OPTICK_GPU_FLIP(pSwapchain->GetSwapChain());
 	OPTICK_CATEGORY("Present", Optick::Category::Wait);
 }
 

@@ -2,6 +2,7 @@
 #include "Graphics/Core/Graphics.h"
 class Buffer;
 class CommandContext;
+class Swapchain;
 
 #define GPU_PROFILE_BEGIN(name, cmdlist) Profiler::Get()->Begin(name, cmdlist);
 #define GPU_PROFILE_END(cmdlist) Profiler::Get()->End(cmdlist);
@@ -149,7 +150,7 @@ public:
 	void Begin(const char* pName, CommandContext* pContext = nullptr);
 	void End(CommandContext* pContext = nullptr);
 
-	void Resolve(Graphics* pGraphics, int frameIndex);
+	void Resolve(Swapchain* pSwapchain, Graphics* pGraphics, int frameIndex);
 
 	float GetGpuTime(const uint64* pReadbackData, int timerIndex) const;
 	void StartGpuTimer(CommandContext* pContext, int timerIndex);

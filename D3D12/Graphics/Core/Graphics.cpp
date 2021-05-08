@@ -123,6 +123,90 @@ namespace Tweakables
 	bool g_RenderObjectBounds = false;
 }
 
+Swapchain::Swapchain(Graphics* pGraphics, IDXGIFactory6* pFactory, void* pNativeWindow, DXGI_FORMAT format, uint32 width, uint32 height, uint32 numFrames, bool vsync) : m_Format(format), m_CurrentImage(0), m_Vsync(vsync)
+{
+	DXGI_SWAP_CHAIN_DESC1 desc{};
+	desc.AlphaMode = DXGI_ALPHA_MODE_IGNORE;
+	desc.BufferCount = numFrames;
+	desc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+	desc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
+	desc.Format = format;
+	desc.Width = width;
+	desc.Height = height;
+	desc.Scaling = DXGI_SCALING_NONE;
+	desc.Stereo = FALSE;
+	desc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+	desc.SampleDesc.Count = 1;
+	desc.SampleDesc.Quality = 0;
+
+	DXGI_SWAP_CHAIN_FULLSCREEN_DESC fsDesc{};
+	fsDesc.RefreshRate.Denominator = 60;
+	fsDesc.RefreshRate.Numerator = 1;
+	fsDesc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
+	fsDesc.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED;
+	fsDesc.Windowed = true;
+
+	CommandQueue* pPresentQueue = pGraphics->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT);
+
+	ComPtr<IDXGISwapChain1> swapChain;
+	VERIFY_HR(pFactory->CreateSwapChainForHwnd(
+		pPresentQueue->GetCommandQueue(),
+		(HWND)pNativeWindow,
+		&desc,
+		&fsDesc,
+		nullptr,
+		swapChain.GetAddressOf()));
+
+	m_pSwapchain.Reset();
+	swapChain.As(&m_pSwapchain);
+
+	m_Backbuffers.resize(numFrames);
+	for (uint32 i = 0; i < numFrames; ++i)
+	{
+		m_Backbuffers[i] = std::make_unique<Texture>(pGraphics, "Render Target");
+	}
+}
+
+void Swapchain::Destroy()
+{
+	m_pSwapchain->SetFullscreenState(false, nullptr);
+}
+
+void Swapchain::OnResize(uint32 width, uint32 height)
+{
+	for (size_t i = 0; i < m_Backbuffers.size(); ++i)
+	{
+		m_Backbuffers[i]->Release();
+	}
+
+	//Resize the buffers
+	DXGI_SWAP_CHAIN_DESC1 desc{};
+	m_pSwapchain->GetDesc1(&desc);
+	VERIFY_HR(m_pSwapchain->ResizeBuffers(
+		(uint32)m_Backbuffers.size(),
+		width,
+		height,
+		desc.Format,
+		desc.Flags
+	));
+
+	m_CurrentImage = 0;
+
+	//Recreate the render target views
+	for (uint32 i = 0; i < (uint32)m_Backbuffers.size(); ++i)
+	{
+		ID3D12Resource* pResource = nullptr;
+		VERIFY_HR(m_pSwapchain->GetBuffer(i, IID_PPV_ARGS(&pResource)));
+		m_Backbuffers[i]->CreateForSwapchain(pResource);
+	}
+}
+
+void Swapchain::Present()
+{
+	m_pSwapchain->Present(m_Vsync, m_Vsync ? 0 : DXGI_PRESENT_ALLOW_TEARING);
+	m_CurrentImage = m_pSwapchain->GetCurrentBackBufferIndex();
+}
+
 Graphics::Graphics(WindowHandle window, int sampleCount /*= 1*/)
 	: m_SampleCount(sampleCount)
 {
@@ -152,10 +236,10 @@ Graphics::Graphics(WindowHandle window, int sampleCount /*= 1*/)
 Graphics::~Graphics()
 {
 	IdleGPU();
+	m_pSwapchain->Destroy();
 #if !PLATFORM_UWP
 	check(UnregisterWait(m_DeviceRemovedEvent) != 0);
 #endif
-	m_pSwapchain->SetFullscreenState(false, nullptr);
 }
 
 void EditTransform(const Camera& camera, Matrix& matrix)
@@ -1259,10 +1343,8 @@ void Graphics::BeginFrame()
 
 void Graphics::EndFrame()
 {
-	Profiler::Get()->Resolve(this, m_Frame);
-
-	m_pSwapchain->Present(1, 0);
-	m_CurrentBackBufferIndex = m_pSwapchain->GetCurrentBackBufferIndex();
+	Profiler::Get()->Resolve(m_pSwapchain.get(), this, m_Frame);
+	m_pSwapchain->Present();
 	++m_Frame;
 }
 
@@ -1540,53 +1622,10 @@ void Graphics::InitD3D()
 	uint32 height = (uint32)m_pWindow->Bounds().Height;
 #endif
 
-	DXGI_SWAP_CHAIN_DESC1 swapchainDesc = {};
-	swapchainDesc.Width = width;
-	swapchainDesc.Height = height;
-	swapchainDesc.Format = SWAPCHAIN_FORMAT;
-	swapchainDesc.SampleDesc.Count = 1;
-	swapchainDesc.SampleDesc.Quality = 0;
-	swapchainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-	swapchainDesc.BufferCount = FRAME_COUNT;
-	swapchainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
-	swapchainDesc.Flags = 0;
-	swapchainDesc.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
-	swapchainDesc.Stereo = false;
-	ComPtr<IDXGISwapChain1> swapChain;
-	swapchainDesc.Flags |= DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
-
-#if PLATFORM_WINDOWS
-	DXGI_SWAP_CHAIN_FULLSCREEN_DESC fsDesc{};
-	fsDesc.RefreshRate.Denominator = 60;
-	fsDesc.RefreshRate.Numerator = 1;
-	fsDesc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
-	fsDesc.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED;
-	fsDesc.Windowed = true;
-
-	VERIFY_HR(pFactory->CreateSwapChainForHwnd(
-		m_CommandQueues[D3D12_COMMAND_LIST_TYPE_DIRECT]->GetCommandQueue(),
-		m_pWindow,
-		&swapchainDesc,
-		&fsDesc,
-		nullptr,
-		swapChain.GetAddressOf()));
-#elif PLATFORM_UWP
-	VERIFY_HR(pFactory->CreateSwapChainForCoreWindow(m_CommandQueues[D3D12_COMMAND_LIST_TYPE_DIRECT]->GetCommandQueue(),
-		reinterpret_cast<IUnknown*>(winrt::get_abi(winrt::Windows::UI::Core::CoreWindow::GetForCurrentThread())),
-		&swapchainDesc,
-		nullptr,
-		swapChain.GetAddressOf()));
-#endif
+	m_pSwapchain = std::make_unique<Swapchain>(this, pFactory.Get(), m_pWindow, SWAPCHAIN_FORMAT, width, height, FRAME_COUNT, true);
 
 	m_pShaderManager = std::make_unique<ShaderManager>("Resources/Shaders/", m_ShaderModelMajor, m_ShaderModelMinor);
 
-	m_pSwapchain.Reset();
-	swapChain.As(&m_pSwapchain);
-
-	for (int i = 0; i < FRAME_COUNT; ++i)
-	{
-		m_Backbuffers[i] = std::make_unique<Texture>(this, "Render Target");
-	}
 	m_pDepthStencil = std::make_unique<Texture>(this, "Depth Stencil");
 	m_pResolvedDepthStencil = std::make_unique<Texture>(this, "Resolved Depth Stencil");
 
@@ -1717,33 +1756,10 @@ void Graphics::OnResize(int width, int height)
 	m_WindowHeight = height;
 
 	IdleGPU();
-
-	for (int i = 0; i < FRAME_COUNT; ++i)
-	{
-		m_Backbuffers[i]->Release();
-	}
 	m_pDepthStencil->Release();
 
-	//Resize the buffers
-	DXGI_SWAP_CHAIN_DESC1 desc{};
-	m_pSwapchain->GetDesc1(&desc);
-	VERIFY_HR_EX(m_pSwapchain->ResizeBuffers(
-		FRAME_COUNT,
-		m_WindowWidth,
-		m_WindowHeight,
-		desc.Format,
-		desc.Flags
-	), GetDevice());
+	m_pSwapchain->OnResize(width, height);
 
-	m_CurrentBackBufferIndex = 0;
-
-	//Recreate the render target views
-	for (int i = 0; i < FRAME_COUNT; ++i)
-	{
-		ID3D12Resource* pResource = nullptr;
-		VERIFY_HR_EX(m_pSwapchain->GetBuffer(i, IID_PPV_ARGS(&pResource)), GetDevice());
-		m_Backbuffers[i]->CreateForSwapchain(pResource);
-	}
 	if (m_SampleCount > 1)
 	{
 		m_pMultiSampleRenderTarget->Create(TextureDesc::CreateRenderTarget(width, height, RENDER_TARGET_FORMAT, TextureFlag::RenderTarget, m_SampleCount, ClearBinding(Color(0, 0, 0, 0))));
