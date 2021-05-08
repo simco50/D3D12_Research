@@ -38,18 +38,18 @@ DebugRenderer* DebugRenderer::Get()
 	return &instance;
 }
 
-void DebugRenderer::Initialize(Graphics* pGraphics)
+void DebugRenderer::Initialize(ShaderManager* pShaderManager, GraphicsDevice* pDevice)
 {
 	VertexElementLayout inputLayout;
 	inputLayout.AddVertexElement("POSITION", DXGI_FORMAT_R32G32B32_FLOAT);
 	inputLayout.AddVertexElement("COLOR", DXGI_FORMAT_R32_UINT);
 
 	//Shaders
-	Shader* pVertexShader = pGraphics->GetShaderManager()->GetShader("DebugRenderer.hlsl", ShaderType::Vertex, "VSMain");
-	Shader* pPixelShader = pGraphics->GetShaderManager()->GetShader("DebugRenderer.hlsl", ShaderType::Pixel, "PSMain");
+	Shader* pVertexShader = pShaderManager->GetShader("DebugRenderer.hlsl", ShaderType::Vertex, "VSMain");
+	Shader* pPixelShader = pShaderManager->GetShader("DebugRenderer.hlsl", ShaderType::Pixel, "PSMain");
 
 	//Rootsignature
-	m_pRS = std::make_unique<RootSignature>(pGraphics);
+	m_pRS = std::make_unique<RootSignature>(pDevice);
 	m_pRS->FinalizeFromShader("Diffuse", pVertexShader);
 
 	//Opaque
@@ -58,16 +58,16 @@ void DebugRenderer::Initialize(Graphics* pGraphics)
 	psoDesc.SetRootSignature(m_pRS->GetRootSignature());
 	psoDesc.SetVertexShader(pVertexShader);
 	psoDesc.SetPixelShader(pPixelShader);
-	psoDesc.SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, pGraphics->GetMultiSampleCount());
+	psoDesc.SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, pDevice->GetMultiSampleCount());
 	psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
 	psoDesc.SetDepthWrite(true);
 	psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
 	psoDesc.SetName("Triangle DebugRenderer");
-	m_pTrianglesPSO = pGraphics->CreatePipeline(psoDesc);
+	m_pTrianglesPSO = pDevice->CreatePipeline(psoDesc);
 
 	psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE);
 	psoDesc.SetName("Lines DebugRenderer");
-	m_pLinesPSO = pGraphics->CreatePipeline(psoDesc);
+	m_pLinesPSO = pDevice->CreatePipeline(psoDesc);
 }
 
 void DebugRenderer::Render(RGGraph& graph, const Matrix& viewProjection, Texture* pTarget, Texture* pDepth)

@@ -2,12 +2,12 @@
 #include "GraphicsResource.h"
 #include "ResourceViews.h"
 
-GraphicsResource::GraphicsResource(Graphics* pParent) 
+GraphicsResource::GraphicsResource(GraphicsDevice* pParent)
 	: GraphicsObject(pParent), m_pResource(nullptr), m_ResourceState(D3D12_RESOURCE_STATE_COMMON)
 {
 }
 
-GraphicsResource::GraphicsResource(Graphics* pParent, ID3D12Resource* pResource, D3D12_RESOURCE_STATES state)
+GraphicsResource::GraphicsResource(GraphicsDevice* pParent, ID3D12Resource* pResource, D3D12_RESOURCE_STATES state)
 	: GraphicsObject(pParent), m_pResource(pResource), m_ResourceState(state)
 {
 }

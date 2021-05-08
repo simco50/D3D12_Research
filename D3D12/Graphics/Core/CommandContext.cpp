@@ -12,10 +12,10 @@
 #include "ShaderBindingTable.h"
 #include "StateObject.h"
 
-CommandContext::CommandContext(Graphics* pGraphics, ID3D12GraphicsCommandList* pCommandList, D3D12_COMMAND_LIST_TYPE type, ID3D12CommandAllocator* pAllocator)
-	: GraphicsObject(pGraphics), m_ShaderResourceDescriptorAllocator(pGraphics->GetGlobalViewHeap()), m_pCommandList(pCommandList), m_pAllocator(pAllocator), m_Type(type)
+CommandContext::CommandContext(GraphicsDevice* pParent, ID3D12GraphicsCommandList* pCommandList, D3D12_COMMAND_LIST_TYPE type, ID3D12CommandAllocator* pAllocator)
+	: GraphicsObject(pParent), m_ShaderResourceDescriptorAllocator(pParent->GetGlobalViewHeap()), m_pCommandList(pCommandList), m_pAllocator(pAllocator), m_Type(type)
 {
-	m_DynamicAllocator = std::make_unique<DynamicResourceAllocator>(pGraphics->GetAllocationManager());
+	m_DynamicAllocator = std::make_unique<DynamicResourceAllocator>(pParent->GetAllocationManager());
 	pCommandList->QueryInterface(IID_PPV_ARGS(m_pRaytracingCommandList.GetAddressOf()));
 	pCommandList->QueryInterface(IID_PPV_ARGS(m_pMeshShadingCommandList.GetAddressOf()));
 }
@@ -803,7 +803,7 @@ void ResourceBarrierBatcher::Reset()
 	m_QueuedBarriers.clear();
 }
 
-CommandSignature::CommandSignature(Graphics* pParent)
+CommandSignature::CommandSignature(GraphicsDevice* pParent)
 	: GraphicsObject(pParent)
 {
 

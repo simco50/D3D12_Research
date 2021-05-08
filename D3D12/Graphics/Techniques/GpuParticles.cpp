@@ -29,28 +29,28 @@ struct ParticleData
 	float Size;
 };
 
-GpuParticles::GpuParticles(Graphics* pGraphics)
+GpuParticles::GpuParticles(ShaderManager* pShaderManager, GraphicsDevice* pDevice)
 {
-	Initialize(pGraphics);
+	Initialize(pShaderManager, pDevice);
 }
 
 GpuParticles::~GpuParticles()
 {
 }
 
-void GpuParticles::Initialize(Graphics* pGraphics)
+void GpuParticles::Initialize(ShaderManager* pShaderManager, GraphicsDevice* pDevice)
 {
-	CommandContext* pContext = pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+	CommandContext* pContext = pDevice->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 
-	m_pCountersBuffer = std::make_unique<Buffer>(pGraphics, "Particles Counter");
+	m_pCountersBuffer = std::make_unique<Buffer>(pDevice, "Particles Counter");
 	m_pCountersBuffer->Create(BufferDesc::CreateByteAddress(sizeof(uint32) * 4));
 
 	BufferDesc particleBufferDesc = BufferDesc::CreateStructured(cMaxParticleCount, sizeof(uint32));
-	m_pAliveList1 = std::make_unique<Buffer>(pGraphics, "Particles Alive List 1");
+	m_pAliveList1 = std::make_unique<Buffer>(pDevice, "Particles Alive List 1");
 	m_pAliveList1->Create(particleBufferDesc);
-	m_pAliveList2 = std::make_unique<Buffer>(pGraphics, "Particles Alive List 2");
+	m_pAliveList2 = std::make_unique<Buffer>(pDevice, "Particles Alive List 2");
 	m_pAliveList2->Create(particleBufferDesc);
-	m_pDeadList = std::make_unique<Buffer>(pGraphics, "Particles Dead List");
+	m_pDeadList = std::make_unique<Buffer>(pDevice, "Particles Dead List");
 	m_pDeadList->Create(particleBufferDesc);
 	std::vector<uint32> deadList(cMaxParticleCount);
 	std::generate(deadList.begin(), deadList.end(), [n = 0]() mutable { return n++; });
@@ -58,69 +58,69 @@ void GpuParticles::Initialize(Graphics* pGraphics)
 	uint32 aliveCount = cMaxParticleCount;
 	m_pCountersBuffer->SetData(pContext, &aliveCount, sizeof(uint32), 0);
 
-	m_pParticleBuffer = std::make_unique<Buffer>(pGraphics, "Particle Buffer");
+	m_pParticleBuffer = std::make_unique<Buffer>(pDevice, "Particle Buffer");
 	m_pParticleBuffer->Create(BufferDesc::CreateStructured(cMaxParticleCount, sizeof(ParticleData)));
 
-	m_pEmitArguments = std::make_unique<Buffer>(pGraphics, "Emit Indirect Arguments");
+	m_pEmitArguments = std::make_unique<Buffer>(pDevice, "Emit Indirect Arguments");
 	m_pEmitArguments->Create(BufferDesc::CreateIndirectArguments<uint32>(3));
-	m_pSimulateArguments = std::make_unique<Buffer>(pGraphics, "Simulate Indirect Arguments");
+	m_pSimulateArguments = std::make_unique<Buffer>(pDevice, "Simulate Indirect Arguments");
 	m_pSimulateArguments->Create(BufferDesc::CreateIndirectArguments<uint32>(3));
-	m_pDrawArguments = std::make_unique<Buffer>(pGraphics, "Draw Indirect Arguments");
+	m_pDrawArguments = std::make_unique<Buffer>(pDevice, "Draw Indirect Arguments");
 	m_pDrawArguments->Create(BufferDesc::CreateIndirectArguments<uint32>(4));
 
 	pContext->Execute(true);
 
-	m_pSimpleDispatchCommandSignature = std::make_unique<CommandSignature>(pGraphics);
+	m_pSimpleDispatchCommandSignature = std::make_unique<CommandSignature>(pDevice);
 	m_pSimpleDispatchCommandSignature->AddDispatch();
 	m_pSimpleDispatchCommandSignature->Finalize("Simple Dispatch");
 
-	m_pSimpleDrawCommandSignature = std::make_unique<CommandSignature>(pGraphics);
+	m_pSimpleDrawCommandSignature = std::make_unique<CommandSignature>(pDevice);
 	m_pSimpleDrawCommandSignature->AddDraw();
 	m_pSimpleDrawCommandSignature->Finalize("Simple Draw");
 
 	{
-		Shader* pComputeShader = pGraphics->GetShaderManager()->GetShader("ParticleSimulation.hlsl", ShaderType::Compute, "UpdateSimulationParameters");
-		m_pSimulateRS = std::make_unique<RootSignature>(pGraphics);
+		Shader* pComputeShader = pShaderManager->GetShader("ParticleSimulation.hlsl", ShaderType::Compute, "UpdateSimulationParameters");
+		m_pSimulateRS = std::make_unique<RootSignature>(pDevice);
 		m_pSimulateRS->FinalizeFromShader("Particle Simulation", pComputeShader);
 	}
 
 	{
-		Shader* pComputeShader = pGraphics->GetShaderManager()->GetShader("ParticleSimulation.hlsl", ShaderType::Compute, "UpdateSimulationParameters");
+		Shader* pComputeShader = pShaderManager->GetShader("ParticleSimulation.hlsl", ShaderType::Compute, "UpdateSimulationParameters");
 		PipelineStateInitializer psoDesc;
 		psoDesc.SetComputeShader(pComputeShader);
 		psoDesc.SetRootSignature(m_pSimulateRS->GetRootSignature());
 		psoDesc.SetName("Prepare Particle Arguments");
-		m_pPrepareArgumentsPS = pGraphics->CreatePipeline(psoDesc);
+		m_pPrepareArgumentsPS = pDevice->CreatePipeline(psoDesc);
 	}
 	{
-		Shader* pComputeShader = pGraphics->GetShaderManager()->GetShader("ParticleSimulation.hlsl", ShaderType::Compute, "Emit");
+		Shader* pComputeShader = pShaderManager->GetShader("ParticleSimulation.hlsl", ShaderType::Compute, "Emit");
 		PipelineStateInitializer psoDesc;
 		psoDesc.SetComputeShader(pComputeShader);
 		psoDesc.SetRootSignature(m_pSimulateRS->GetRootSignature());
 		psoDesc.SetName("Particle Emitter");
-		m_pEmitPS = pGraphics->CreatePipeline(psoDesc);
+		m_pEmitPS = pDevice->CreatePipeline(psoDesc);
 	}
 	{
-		Shader* pComputeShader = pGraphics->GetShaderManager()->GetShader("ParticleSimulation.hlsl", ShaderType::Compute, "Simulate");
+		Shader* pComputeShader = pShaderManager->GetShader("ParticleSimulation.hlsl", ShaderType::Compute, "Simulate");
 		PipelineStateInitializer psoDesc;
 		psoDesc.SetComputeShader(pComputeShader);
 		psoDesc.SetRootSignature(m_pSimulateRS->GetRootSignature());
 		psoDesc.SetName("Particle Simulation");
-		m_pSimulatePS = pGraphics->CreatePipeline(psoDesc);
+		m_pSimulatePS = pDevice->CreatePipeline(psoDesc);
 	}
 	{
-		Shader* pComputeShader = pGraphics->GetShaderManager()->GetShader("ParticleSimulation.hlsl", ShaderType::Compute, "SimulateEnd");
+		Shader* pComputeShader = pShaderManager->GetShader("ParticleSimulation.hlsl", ShaderType::Compute, "SimulateEnd");
 		PipelineStateInitializer psoDesc;
 		psoDesc.SetComputeShader(pComputeShader);
 		psoDesc.SetRootSignature(m_pSimulateRS->GetRootSignature());
 		psoDesc.SetName("Particle Simulation End");
-		m_pSimulateEndPS = pGraphics->CreatePipeline(psoDesc);
+		m_pSimulateEndPS = pDevice->CreatePipeline(psoDesc);
 	}
 	{
-		Shader* pVertexShader = pGraphics->GetShaderManager()->GetShader("ParticleRendering.hlsl", ShaderType::Vertex, "VSMain");
-		Shader* pPixelShader = pGraphics->GetShaderManager()->GetShader("ParticleRendering.hlsl", ShaderType::Pixel, "PSMain");
+		Shader* pVertexShader = pShaderManager->GetShader("ParticleRendering.hlsl", ShaderType::Vertex, "VSMain");
+		Shader* pPixelShader = pShaderManager->GetShader("ParticleRendering.hlsl", ShaderType::Pixel, "PSMain");
 
-		m_pRenderParticlesRS = std::make_unique<RootSignature>(pGraphics);
+		m_pRenderParticlesRS = std::make_unique<RootSignature>(pDevice);
 		m_pRenderParticlesRS->FinalizeFromShader("Particle Rendering", pVertexShader);
 
 		PipelineStateInitializer psoDesc;
@@ -132,12 +132,12 @@ void GpuParticles::Initialize(Graphics* pGraphics)
 		psoDesc.SetBlendMode(BlendMode::Alpha, false);
 		psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
-		psoDesc.SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, pGraphics->GetMultiSampleCount());
+		psoDesc.SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, pDevice->GetMultiSampleCount());
 		psoDesc.SetName("Particle Rendering PS");
-		m_pRenderParticlesPS = pGraphics->CreatePipeline(psoDesc);
+		m_pRenderParticlesPS = pDevice->CreatePipeline(psoDesc);
 	}
 
-	pGraphics->GetImGui()->AddUpdateCallback(ImGuiCallbackDelegate::CreateLambda([]() {
+	pDevice->GetImGui()->AddUpdateCallback(ImGuiCallbackDelegate::CreateLambda([]() {
 		ImGui::Begin("Parameters");
 		ImGui::Text("Particles");
 		ImGui::Checkbox("Enabled", &g_Enabled);

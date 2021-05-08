@@ -1,7 +1,8 @@
 #pragma once
 #include "Graphics/RenderGraph/RenderGraphDefinitions.h"
 
-class Graphics;
+class GraphicsDevice;
+class ShaderManager;
 class PipelineState;
 class RootSignature;
 class Texture;
@@ -19,19 +20,17 @@ struct ShadowData;
 class ClusteredForward
 {
 public:
-	ClusteredForward(Graphics* pGraphics);
+	ClusteredForward(ShaderManager* pShaderManager, GraphicsDevice* pDevice);
 	~ClusteredForward();
 
 	void OnSwapchainCreated(int windowWidth, int windowHeight);
 
 	void Execute(RGGraph& graph, const SceneData& resources);
-	void VisualizeLightDensity(RGGraph& graph, Camera& camera, Texture* pTarget, Texture* pDepth);
+	void VisualizeLightDensity(RGGraph& graph, GraphicsDevice* pDevice, Camera& camera, Texture* pTarget, Texture* pDepth);
 
 private:
-	void SetupResources(Graphics* pGraphics);
-	void SetupPipelines(Graphics* pGraphics);
-
-	Graphics* m_pGraphics;
+	void SetupResources(GraphicsDevice* pDevice);
+	void SetupPipelines(ShaderManager* pShaderManager, GraphicsDevice* pDevice);
 
 	uint32 m_ClusterCountX = 0;
 	uint32 m_ClusterCountY = 0;

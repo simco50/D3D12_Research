@@ -19,7 +19,7 @@ class RootSignature : public GraphicsObject
 public:
 	static constexpr int MAX_RANGES_PER_TABLE = 5;
 
-	RootSignature(Graphics* pParent);
+	RootSignature(GraphicsDevice* pParent);
 
 	template<typename T>
 	void SetRootConstants(uint32 rootIndex, uint32 shaderRegister, D3D12_SHADER_VISIBILITY visibility)

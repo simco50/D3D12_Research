@@ -1,7 +1,8 @@
 #pragma once
 #include "Graphics/RenderGraph/RenderGraphDefinitions.h"
-class Graphics;
 class RootSignature;
+class GraphicsDevice;
+class ShaderManager;
 class PipelineState;
 class Texture;
 class Camera;
@@ -16,18 +17,16 @@ struct SceneData;
 class TiledForward
 {
 public:
-	TiledForward(Graphics* pGraphics);
+	TiledForward(ShaderManager* pShaderManager, GraphicsDevice* pDevice);
 
 	void OnSwapchainCreated(int windowWidth, int windowHeight);
 
 	void Execute(RGGraph& graph, const SceneData& resources);
-	void VisualizeLightDensity(RGGraph& graph, Camera& camera, Texture* pTarget, Texture* pDepth);
+	void VisualizeLightDensity(RGGraph& graph, GraphicsDevice* pDevice, Camera& camera, Texture* pTarget, Texture* pDepth);
 
 private:
-	void SetupResources(Graphics* pGraphics);
-	void SetupPipelines(Graphics* pGraphics);
-
-	Graphics* m_pGraphics;
+	void SetupResources(GraphicsDevice* pDevice);
+	void SetupPipelines(ShaderManager* pShaderManager, GraphicsDevice* pDevice);
 
 	//Light Culling
 	std::unique_ptr<RootSignature> m_pComputeLightCullRS;

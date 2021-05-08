@@ -19,7 +19,7 @@ Mesh::~Mesh()
 	}
 }
 
-bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pContext, float scale /*= 1.0f*/)
+bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* pContext, float scale /*= 1.0f*/)
 {
 	struct Vertex
 	{
@@ -59,7 +59,7 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 	uint64 bufferSize = vertexCount * sizeof(Vertex) +
 		indexCount * sizeof(uint32) + pScene->mNumMeshes * sBufferAlignment;
 
-	m_pGeometryData = std::make_unique<Buffer>(pGraphics, "Mesh VertexBuffer");
+	m_pGeometryData = std::make_unique<Buffer>(pDevice, "Mesh VertexBuffer");
 	m_pGeometryData->Create(BufferDesc::CreateBuffer(bufferSize, BufferFlag::ShaderResource | BufferFlag::ByteAddress));
 
 	pContext->InsertResourceBarrier(m_pGeometryData.get(), D3D12_RESOURCE_STATE_COPY_DEST);
@@ -154,7 +154,7 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 
 	std::map<StringHash, Texture*> textureMap;
 
-	auto loadTexture = [this, pGraphics, pContext, &textureMap](const char* basePath, const aiMaterial* pMaterial, aiTextureType type, int index, bool srgb)
+	auto loadTexture = [this, pDevice, pContext, &textureMap](const char* basePath, const aiMaterial* pMaterial, aiTextureType type, int index, bool srgb)
 	{
 		aiString path;
 		aiReturn ret = pMaterial->GetTexture(type, index, &path);
@@ -169,7 +169,7 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 				return it->second;
 			}
 			std::unique_ptr<Texture> pTex;
-			pTex = std::make_unique<Texture>(pGraphics, pathStr.c_str());
+			pTex = std::make_unique<Texture>(pDevice, pathStr.c_str());
 			std::stringstream str;
 			str << basePath << pathStr;
 			success = pTex->Create(pContext, str.str().c_str(), srgb);
@@ -210,7 +210,7 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 		}
 	}
 
-	if (pGraphics->SupportsRayTracing())
+	if (pDevice->SupportsRayTracing())
 	{
 		ID3D12GraphicsCommandList4* pCmd = pContext->GetRaytracingCommandList();
 
@@ -246,12 +246,12 @@ bool Mesh::Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pCon
 				prebuildInfo.pGeometryDescs = &geometryDesc;
 
 				D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO info{};
-				pGraphics->GetRaytracingDevice()->GetRaytracingAccelerationStructurePrebuildInfo(&prebuildInfo, &info);
+				pDevice->GetRaytracingDevice()->GetRaytracingAccelerationStructurePrebuildInfo(&prebuildInfo, &info);
 
-				subMesh.pBLASScratch = new Buffer(pGraphics, "BLAS Scratch Buffer");
+				subMesh.pBLASScratch = new Buffer(pDevice, "BLAS Scratch Buffer");
 				subMesh.pBLASScratch->Create(BufferDesc::CreateByteAddress(Math::AlignUp<uint64>(info.ScratchDataSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT), BufferFlag::UnorderedAccess));
 
-				subMesh.pBLAS= new Buffer(pGraphics, "BLAS");
+				subMesh.pBLAS = new Buffer(pDevice, "BLAS");
 				subMesh.pBLAS->Create(BufferDesc::CreateAccelerationStructure(Math::AlignUp<uint64>(info.ResultDataMaxSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT)));
 
 				D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC asDesc{};

@@ -13,12 +13,12 @@
 #include "Graphics/Mesh.h"
 #include "Scene/Camera.h"
 
-RTAO::RTAO(Graphics* pGraphics)
+RTAO::RTAO(ShaderManager* pShaderManager, GraphicsDevice* pDevice)
 {
-	if (pGraphics->SupportsRayTracing())
+	if (pDevice->SupportsRayTracing())
 	{
-		SetupResources(pGraphics);
-		SetupPipelines(pGraphics);
+		SetupResources(pDevice);
+		SetupPipelines(pShaderManager, pDevice);
 	}
 }
 
@@ -79,14 +79,14 @@ void RTAO::Execute(RGGraph& graph, Texture* pColor, Texture* pDepth, const Scene
 		});
 }
 
-void RTAO::SetupResources(Graphics* /*pGraphics*/)
+void RTAO::SetupResources(GraphicsDevice* pDevice)
 {
 }
 
-void RTAO::SetupPipelines(Graphics* pGraphics)
+void RTAO::SetupPipelines(ShaderManager* pShaderManager, GraphicsDevice* pDevice)
 {
-	ShaderLibrary* pShaderLibrary = pGraphics->GetShaderManager()->GetLibrary("RTAO.hlsl");
-	m_pGlobalRS = std::make_unique<RootSignature>(pGraphics);
+	ShaderLibrary* pShaderLibrary = pShaderManager->GetLibrary("RTAO.hlsl");
+	m_pGlobalRS = std::make_unique<RootSignature>(pDevice);
 	m_pGlobalRS->FinalizeFromShader("Global", pShaderLibrary);
 
 	StateObjectInitializer stateDesc;
@@ -97,5 +97,5 @@ void RTAO::SetupPipelines(Graphics* pGraphics)
 	stateDesc.pGlobalRootSignature = m_pGlobalRS.get();
 	stateDesc.RayGenShader = "RayGen";
 	stateDesc.AddMissShader("Miss");
-	m_pRtSO = pGraphics->CreateStateObject(stateDesc);
+	m_pRtSO = pDevice->CreateStateObject(stateDesc);
 }

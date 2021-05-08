@@ -280,7 +280,7 @@ private:
 	bool m_IsResizing = false;
 };
 
-int WINAPI WinMain(_In_ HINSTANCE /*hInstance*/, _In_opt_ HINSTANCE /*hPrevInstance*/, _In_ LPSTR lpCmdLine, _In_ int /*nShowCmd*/)
+int WINAPI WinMain(_In_ HINSTANCE /*hInstance*/, _In_opt_ HINSTANCE /*hPrevInstance*/, _In_ LPSTR /*lpCmdLine*/, _In_ int /*nShowCmd*/)
 {
 #ifdef _DEBUG
 	_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
@@ -290,7 +290,7 @@ int WINAPI WinMain(_In_ HINSTANCE /*hInstance*/, _In_opt_ HINSTANCE /*hPrevInsta
 #endif
 
 	Thread::SetMainThread();
-	CommandLine::Parse(lpCmdLine);
+	CommandLine::Parse(GetCommandLineA());
 	Console::Initialize();
 	TaskQueue::Initialize(std::thread::hardware_concurrency());
 

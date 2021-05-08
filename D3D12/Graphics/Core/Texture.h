@@ -1,7 +1,6 @@
 #pragma once
 #include "GraphicsResource.h"
 
-class Graphics;
 class CommandContext;
 class UnorderedAccessView;
 class ShaderResourceView;
@@ -221,7 +220,7 @@ struct TextureDesc
 class Texture : public GraphicsResource
 {
 public:
-	Texture(Graphics* pGraphics, const char* pName = "");
+	Texture(GraphicsDevice* pParent, const char* pName = "");
 	~Texture();
 
 	void Create(const TextureDesc& desc);

@@ -1,10 +1,11 @@
 #pragma once
 class CommandContext;
-class Graphics;
+class GraphicsDevice;
 class RootSignature;
 class PipelineState;
 class Texture;
 class RGGraph;
+class ShaderManager;
 struct SceneData;
 
 DECLARE_MULTICAST_DELEGATE(ImGuiCallback);
@@ -12,7 +13,7 @@ DECLARE_MULTICAST_DELEGATE(ImGuiCallback);
 class ImGuiRenderer
 {
 public:
-	ImGuiRenderer(Graphics* pGraphics);
+	ImGuiRenderer(ShaderManager* pShaderManager, GraphicsDevice* pParent);
 	~ImGuiRenderer();
 
 	void NewFrame(uint32 width, uint32 height);
@@ -22,8 +23,8 @@ public:
 	void RemoveUpdateCallback(DelegateHandle handle);
 
 private:
-	void CreatePipeline(Graphics* pGraphics);
-	void InitializeImGui(Graphics* pGraphics);
+	void CreatePipeline(ShaderManager* pShaderManager, GraphicsDevice* pDevice);
+	void InitializeImGui(GraphicsDevice* pDevice);
 
 	ImGuiCallback m_UpdateCallback;
 

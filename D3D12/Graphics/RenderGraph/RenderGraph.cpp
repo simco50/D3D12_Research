@@ -48,8 +48,8 @@ void RGPassBuilder::NeverCull()
 	m_Pass.m_NeverCull = true;
 }
 
-RGGraph::RGGraph(Graphics* pGraphics, uint64 allocatorSize /*= 0xFFFF*/)
-	: m_pGraphics(pGraphics), m_Allocator(allocatorSize)
+RGGraph::RGGraph(GraphicsDevice* pDevice, uint64 allocatorSize /*= 0xFFFF*/)
+	: m_pDevice(pDevice), m_Allocator(allocatorSize)
 {
 	m_ImmediateMode = CommandLine::GetBool("rgimmediate");
 }
@@ -213,7 +213,7 @@ int64 RGGraph::Execute()
 	RG_ASSERT(m_EventStackSize == 0, "Missing PopEvent");
 	if (m_ImmediateMode == false)
 	{
-		CommandContext* pContext = m_pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+		CommandContext* pContext = m_pDevice->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 		OPTICK_GPU_CONTEXT(pContext->GetCommandList());
 		for(uint32 passIndex = 0; passIndex < (uint32)m_RenderPasses.size(); ++passIndex)
 		{

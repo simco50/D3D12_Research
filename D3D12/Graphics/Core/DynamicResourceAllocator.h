@@ -1,6 +1,5 @@
 #pragma once
 #include "GraphicsBuffer.h"
-class Graphics;
 
 struct DynamicAllocation
 {
@@ -18,7 +17,7 @@ struct DynamicAllocation
 class DynamicAllocationManager : public GraphicsObject
 {
 public:
-	DynamicAllocationManager(Graphics* pGraphics, BufferFlag bufferFlags);
+	DynamicAllocationManager(GraphicsDevice* pParent, BufferFlag bufferFlags);
 	~DynamicAllocationManager();
 
 	Buffer* AllocatePage(size_t size);
