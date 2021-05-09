@@ -3,7 +3,7 @@
 #include "Shader.h"
 #include "Graphics.h"
 
-RootSignature::RootSignature(Graphics* pParent)
+RootSignature::RootSignature(GraphicsDevice* pParent)
 	: GraphicsObject(pParent),
 	m_NumParameters(0)
 {

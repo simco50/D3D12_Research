@@ -1,7 +1,6 @@
 #pragma once
 #include "GraphicsResource.h"
 class CommandContext;
-class Graphics;
 class Buffer;
 class ShaderResourceView;
 class UnorderedAccessView;
@@ -125,8 +124,8 @@ struct BufferDesc
 class Buffer : public GraphicsResource
 {
 public:
-	Buffer(Graphics* pGraphics, const char* pName = "");
-	Buffer(Graphics* pGraphics, ID3D12Resource * pResource, D3D12_RESOURCE_STATES state);
+	Buffer(GraphicsDevice* pParent, const char* pName = "");
+	Buffer(GraphicsDevice* pParent, ID3D12Resource * pResource, D3D12_RESOURCE_STATES state);
 	~Buffer();
 	void Create(const BufferDesc& desc);
 	void SetData(CommandContext* pContext, const void* pData, uint64 dataSize, uint64 offset = 0);

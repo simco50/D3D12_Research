@@ -10,11 +10,14 @@
 #include "Core/Input.h"
 #include "ImGuizmo/ImGuizmo.h"
 #include "Core/Paths.h"
+#include "DemoApp.h"
 
-ImGuiRenderer::ImGuiRenderer(Graphics* pGraphics)
+ImGui::OnImGuiRender ImGui::RenderCallbacks;
+
+ImGuiRenderer::ImGuiRenderer(GraphicsDevice* pDevice)
 {
-	CreatePipeline(pGraphics);
-	InitializeImGui(pGraphics);
+	CreatePipeline(pDevice);
+	InitializeImGui(pDevice);
 }
 
 ImGuiRenderer::~ImGuiRenderer()
@@ -40,7 +43,7 @@ void ImGuiRenderer::NewFrame(uint32 width, uint32 height)
 	ImGuizmo::BeginFrame();
 }
 
-void ImGuiRenderer::InitializeImGui(Graphics* pGraphics)
+void ImGuiRenderer::InitializeImGui(GraphicsDevice* pDevice)
 {
 	ImGui::CreateContext();
 	ImGuiIO& io = ImGui::GetIO();
@@ -76,10 +79,10 @@ void ImGuiRenderer::InitializeImGui(Graphics* pGraphics)
 	unsigned char* pPixels;
 	int width, height;
 	io.Fonts->GetTexDataAsRGBA32(&pPixels, &width, &height);
-	m_pFontTexture = std::make_unique<Texture>(pGraphics, "ImGui Font");
+	m_pFontTexture = std::make_unique<Texture>(pDevice, "ImGui Font");
 	m_pFontTexture->Create(TextureDesc::Create2D(width, height, DXGI_FORMAT_R8G8B8A8_UNORM, TextureFlag::ShaderResource, 1));
 
-	CommandContext* pContext = pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+	CommandContext* pContext = pDevice->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 	m_pFontTexture->SetData(pContext, pPixels);
 	io.Fonts->TexID = m_pFontTexture.get();
 	pContext->Execute(true);
@@ -138,14 +141,14 @@ void ImGuiRenderer::InitializeImGui(Graphics* pGraphics)
 	colors[ImGuiCol_ModalWindowDimBg] = ImVec4(0.80f, 0.80f, 0.80f, 0.35f);
 }
 
-void ImGuiRenderer::CreatePipeline(Graphics* pGraphics)
+void ImGuiRenderer::CreatePipeline(GraphicsDevice* pDevice)
 {
 	//Shaders
-	Shader* pVertexShader = pGraphics->GetShaderManager()->GetShader("ImGui.hlsl", ShaderType::Vertex, "VSMain");
-	Shader* pPixelShader = pGraphics->GetShaderManager()->GetShader("ImGui.hlsl", ShaderType::Pixel, "PSMain");
+	Shader* pVertexShader = pDevice->GetShaderManager()->GetShader("ImGui.hlsl", ShaderType::Vertex, "VSMain");
+	Shader* pPixelShader = pDevice->GetShaderManager()->GetShader("ImGui.hlsl", ShaderType::Pixel, "PSMain");
 
 	//Root signature
-	m_pRootSignature = std::make_unique<RootSignature>(pGraphics);
+	m_pRootSignature = std::make_unique<RootSignature>(pDevice);
 	m_pRootSignature->FinalizeFromShader("ImGui", pVertexShader);
 
 	VertexElementLayout inputLayout;
@@ -164,11 +167,12 @@ void ImGuiRenderer::CreatePipeline(Graphics* pGraphics)
 	psoDesc.SetInputLayout(inputLayout);
 	psoDesc.SetRenderTargetFormat(DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_UNKNOWN, 1);
 	psoDesc.SetName("ImGui Pipeline");
-	m_pPipelineState = pGraphics->CreatePipeline(psoDesc);
+	m_pPipelineState = pDevice->CreatePipeline(psoDesc);
 }
 
 void ImGuiRenderer::Render(RGGraph& graph, const SceneData& sceneData, Texture* pRenderTarget)
 {
+	ImGui::ExecuteCallbacks();
 	ImGui::Render();
 	ImDrawData* pDrawData = ImGui::GetDrawData();
 
@@ -228,19 +232,4 @@ void ImGuiRenderer::Render(RGGraph& graph, const SceneData& sceneData, Texture* 
 			}
 			context.EndRenderPass();
 		});
-}
-
-void ImGuiRenderer::Update()
-{
-	m_UpdateCallback.Broadcast();
-}
-
-DelegateHandle ImGuiRenderer::AddUpdateCallback(ImGuiCallbackDelegate&& callback)
-{
-	return m_UpdateCallback.Add(std::move(callback));
-}
-
-void ImGuiRenderer::RemoveUpdateCallback(DelegateHandle handle)
-{
-	m_UpdateCallback.Remove(handle);
 }

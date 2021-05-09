@@ -9,10 +9,10 @@
 #include "Graphics/RenderGraph/RenderGraph.h"
 #include "Scene/Camera.h"
 
-SSAO::SSAO(Graphics* pGraphics)
+SSAO::SSAO(GraphicsDevice* pDevice)
 {
-	SetupResources(pGraphics);
-	SetupPipelines(pGraphics);
+	SetupResources(pDevice);
+	SetupPipelines(pDevice);
 }
 
 void SSAO::OnSwapchainCreated(int windowWidth, int windowHeight)
@@ -125,38 +125,38 @@ void SSAO::Execute(RGGraph& graph, Texture* pColor, Texture* pDepth, Camera& cam
 		});
 }
 
-void SSAO::SetupResources(Graphics* pGraphics)
+void SSAO::SetupResources(GraphicsDevice* pDevice)
 {
-	m_pAmbientOcclusionIntermediate = std::make_unique<Texture>(pGraphics, "SSAO Blurred");
+	m_pAmbientOcclusionIntermediate = std::make_unique<Texture>(pDevice, "SSAO Blurred");
 }
 
-void SSAO::SetupPipelines(Graphics* pGraphics)
+void SSAO::SetupPipelines(GraphicsDevice* pDevice)
 {
 	//SSAO
 	{
-		Shader* pComputeShader = pGraphics->GetShaderManager()->GetShader("SSAO.hlsl", ShaderType::Compute, "CSMain");
+		Shader* pComputeShader = pDevice->GetShaderManager()->GetShader("SSAO.hlsl", ShaderType::Compute, "CSMain");
 
-		m_pSSAORS = std::make_unique<RootSignature>(pGraphics);
+		m_pSSAORS = std::make_unique<RootSignature>(pDevice);
 		m_pSSAORS->FinalizeFromShader("SSAO", pComputeShader);
 
 		PipelineStateInitializer psoDesc;
 		psoDesc.SetComputeShader(pComputeShader);
 		psoDesc.SetRootSignature(m_pSSAORS->GetRootSignature());
 		psoDesc.SetName("SSAO");
-		m_pSSAOPSO = pGraphics->CreatePipeline(psoDesc);
+		m_pSSAOPSO = pDevice->CreatePipeline(psoDesc);
 	}
 
 	//SSAO Blur
 	{
-		Shader* pComputeShader = pGraphics->GetShaderManager()->GetShader("SSAOBlur.hlsl", ShaderType::Compute, "CSMain");
+		Shader* pComputeShader = pDevice->GetShaderManager()->GetShader("SSAOBlur.hlsl", ShaderType::Compute, "CSMain");
 
-		m_pSSAOBlurRS = std::make_unique<RootSignature>(pGraphics);
+		m_pSSAOBlurRS = std::make_unique<RootSignature>(pDevice);
 		m_pSSAOBlurRS->FinalizeFromShader("SSAO Blur", pComputeShader);
 
 		PipelineStateInitializer psoDesc;
 		psoDesc.SetComputeShader(pComputeShader);
 		psoDesc.SetRootSignature(m_pSSAOBlurRS->GetRootSignature());
 		psoDesc.SetName("SSAO Blur");
-		m_pSSAOBlurPSO = pGraphics->CreatePipeline(psoDesc);
+		m_pSSAOBlurPSO = pDevice->CreatePipeline(psoDesc);
 	}
 }

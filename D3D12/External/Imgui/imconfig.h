@@ -64,9 +64,28 @@
 //#define ImDrawIdx unsigned int
 
 //---- Tip: You can add extra functions within the ImGui:: namespace, here or in your own headers files.
-/*
+
+#include "Core/Delegates.h"
+
 namespace ImGui
 {
-    void MyFunction(const char* name, const MyMatrix44& v);
+	DECLARE_MULTICAST_DELEGATE(OnImGuiRender);
+
+	extern OnImGuiRender RenderCallbacks;
+
+	inline void ExecuteCallbacks()
+	{
+		RenderCallbacks.Broadcast();
+	}
+
+	inline DelegateHandle RegisterCallback(OnImGuiRender::DelegateT&& callback)
+	{
+		return RenderCallbacks.Add(std::move(callback));
+	}
+
+	inline bool UnregisterCallback(DelegateHandle& handle)
+	{
+		return RenderCallbacks.Remove(handle);
+	}
 }
-*/
+

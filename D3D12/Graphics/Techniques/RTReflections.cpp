@@ -13,13 +13,14 @@
 #include "Graphics/RenderGraph/RenderGraph.h"
 #include "Graphics/Mesh.h"
 #include "Scene/Camera.h"
+#include "DemoApp.h"
 
-RTReflections::RTReflections(Graphics* pGraphics)
+RTReflections::RTReflections(GraphicsDevice* pDevice)
 {
-	if (pGraphics->SupportsRayTracing())
+	if (pDevice->SupportsRayTracing())
 	{
-		SetupResources(pGraphics);
-		SetupPipelines(pGraphics);
+		SetupResources(pDevice);
+		SetupPipelines(pDevice);
 	}
 }
 
@@ -101,22 +102,22 @@ void RTReflections::Execute(RGGraph& graph, const SceneData& sceneData)
 
 void RTReflections::OnResize(uint32 width, uint32 height)
 {
-	m_pSceneColor->Create(TextureDesc::Create2D(width, height, Graphics::RENDER_TARGET_FORMAT, TextureFlag::ShaderResource, 1, 1));
+	m_pSceneColor->Create(TextureDesc::Create2D(width, height, GraphicsDevice::RENDER_TARGET_FORMAT, TextureFlag::ShaderResource, 1, 1));
 }
 
-void RTReflections::SetupResources(Graphics* pGraphics)
+void RTReflections::SetupResources(GraphicsDevice* pDevice)
 {
-	m_pSceneColor = std::make_unique<Texture>(pGraphics);
+	m_pSceneColor = std::make_unique<Texture>(pDevice);
 }
 
-void RTReflections::SetupPipelines(Graphics* pGraphics)
+void RTReflections::SetupPipelines(GraphicsDevice* pDevice)
 {
-	ShaderLibrary* pShaderLibrary = pGraphics->GetShaderManager()->GetLibrary("RTReflections.hlsl");
+	ShaderLibrary* pShaderLibrary = pDevice->GetShaderManager()->GetLibrary("RTReflections.hlsl");
 
-	m_pHitSignature = std::make_unique<RootSignature>(pGraphics);
+	m_pHitSignature = std::make_unique<RootSignature>(pDevice);
 	m_pHitSignature->Finalize("Hit", D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE);
 
-	m_pGlobalRS = std::make_unique<RootSignature>(pGraphics);
+	m_pGlobalRS = std::make_unique<RootSignature>(pDevice);
 	m_pGlobalRS->FinalizeFromShader("Global", pShaderLibrary);
 
 	StateObjectInitializer stateDesc;
@@ -130,5 +131,5 @@ void RTReflections::SetupPipelines(Graphics* pGraphics)
 	stateDesc.MaxAttributeSize = 2 * sizeof(float);
 	stateDesc.MaxRecursion = 2;
 	stateDesc.pGlobalRootSignature = m_pGlobalRS.get();
-	m_pRtSO = pGraphics->CreateStateObject(stateDesc);
+	m_pRtSO = pDevice->CreateStateObject(stateDesc);
 }

@@ -1,13 +1,12 @@
 #pragma once
 #include "GraphicsResource.h"
 
-class Graphics;
 class CommandContext;
 
 class CommandQueue : public GraphicsObject
 {
 public:
-	CommandQueue(Graphics* pGraphics, D3D12_COMMAND_LIST_TYPE type);
+	CommandQueue(GraphicsDevice* pParent, D3D12_COMMAND_LIST_TYPE type);
 	~CommandQueue();
 
 	uint64 ExecuteCommandLists(CommandContext** pCommandContexts, uint32 numContexts);

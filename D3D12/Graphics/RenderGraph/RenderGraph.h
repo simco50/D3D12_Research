@@ -5,7 +5,6 @@
 
 #define RG_GRAPH_SCOPE(name, graph) RGGraphScope MACRO_CONCAT(rgScope_,__COUNTER__)(name, graph)
 
-class Graphics;
 class CommandContext;
 
 class RGGraph;
@@ -195,7 +194,7 @@ class RGGraph
 	};
 
 public:
-	explicit RGGraph(Graphics* pGraphics, uint64 allocatorSize = 0xFFFF);
+	explicit RGGraph(GraphicsDevice* pDevice, uint64 allocatorSize = 0xFFFF);
 	~RGGraph();
 
 	RGGraph(const RGGraph& other) = delete;
@@ -292,7 +291,7 @@ private:
 		RGResourceHandle To;
 	};
 
-	Graphics* m_pGraphics;
+	GraphicsDevice* m_pDevice;
 	Allocator m_Allocator;
 	uint64 m_LastFenceValue = 0;
 	bool m_ImmediateMode = false;

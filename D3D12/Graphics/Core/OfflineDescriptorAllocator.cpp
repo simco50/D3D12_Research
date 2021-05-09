@@ -2,10 +2,10 @@
 #include "OfflineDescriptorAllocator.h"
 #include "Graphics.h"
 
-OfflineDescriptorAllocator::OfflineDescriptorAllocator(Graphics* pGraphics, D3D12_DESCRIPTOR_HEAP_TYPE type, uint32 descriptorsPerHeap)
-	: GraphicsObject(pGraphics), m_DescriptorsPerHeap(descriptorsPerHeap), m_Type(type)
+OfflineDescriptorAllocator::OfflineDescriptorAllocator(GraphicsDevice* pParent, D3D12_DESCRIPTOR_HEAP_TYPE type, uint32 descriptorsPerHeap)
+	: GraphicsObject(pParent), m_DescriptorsPerHeap(descriptorsPerHeap), m_Type(type)
 {
-	m_DescriptorSize = pGraphics->GetDevice()->GetDescriptorHandleIncrementSize(type);
+	m_DescriptorSize = pParent->GetDevice()->GetDescriptorHandleIncrementSize(type);
 }
 
 OfflineDescriptorAllocator::~OfflineDescriptorAllocator()

@@ -1,5 +1,5 @@
 #pragma once
-class Graphics;
+class GraphicsDevice;
 class RootSignature;
 class Texture;
 class Camera;
@@ -9,15 +9,15 @@ class PipelineState;
 class SSAO
 {
 public:
-	SSAO(Graphics* pGraphics);
+	SSAO(GraphicsDevice* pDevice);
 
 	void OnSwapchainCreated(int windowWidth, int windowHeight);
 
 	void Execute(RGGraph& graph, Texture* pColor, Texture* pDepth, Camera& camera);
 
 private:
-	void SetupResources(Graphics* pGraphics);
-	void SetupPipelines(Graphics* pGraphics);
+	void SetupResources(GraphicsDevice* pDevice);
+	void SetupPipelines(GraphicsDevice* pDevice);
 
 	std::unique_ptr<Texture> m_pAmbientOcclusionIntermediate;
 	std::unique_ptr<RootSignature> m_pSSAORS;

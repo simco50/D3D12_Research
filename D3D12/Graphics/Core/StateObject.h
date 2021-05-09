@@ -4,6 +4,7 @@
 class RootSignature;
 class ShaderLibrary;
 class StateObject;
+class ShaderManager;
 
 class StateObjectInitializer
 {
@@ -92,7 +93,7 @@ private:
 class StateObject : public GraphicsObject
 {
 public:
-	StateObject(Graphics* pGraphics);
+	StateObject(GraphicsDevice* pParent);
 	StateObject(const StateObject& rhs) = delete;
 	StateObject& operator=(const StateObject& rhs) = delete;
 

@@ -4,7 +4,7 @@
 #include "RootSignature.h"
 #include "CommandContext.h"
 
-GlobalOnlineDescriptorHeap::GlobalOnlineDescriptorHeap(Graphics* pParent, D3D12_DESCRIPTOR_HEAP_TYPE type, uint32 blockSize, uint32 numDescriptors)
+GlobalOnlineDescriptorHeap::GlobalOnlineDescriptorHeap(GraphicsDevice* pParent, D3D12_DESCRIPTOR_HEAP_TYPE type, uint32 blockSize, uint32 numDescriptors)
 	: GraphicsObject(pParent), m_Type(type), m_NumDescriptors(numDescriptors)
 {
 	checkf(numDescriptors % blockSize == 0, "Number of descriptors must be a multiple of blockSize (%d)", blockSize);

@@ -3,7 +3,6 @@
 #include "GraphicsResource.h"
 #include "OnlineDescriptorAllocator.h"
 #include "ResourceViews.h"
-class Graphics;
 class GraphicsResource;
 class Texture;
 class OnlineDescriptorAllocator;
@@ -145,7 +144,7 @@ namespace ComputeUtils
 class CommandContext : public GraphicsObject
 {
 public:
-	CommandContext(Graphics* pGraphics, ID3D12GraphicsCommandList* pCommandList, D3D12_COMMAND_LIST_TYPE type, ID3D12CommandAllocator* pAllocator);
+	CommandContext(GraphicsDevice* pParent, ID3D12GraphicsCommandList* pCommandList, D3D12_COMMAND_LIST_TYPE type, ID3D12CommandAllocator* pAllocator);
 	~CommandContext();
 
 	void Reset();
@@ -318,7 +317,7 @@ private:
 class CommandSignature : public GraphicsObject
 {
 public:
-	CommandSignature(Graphics* pParent);
+	CommandSignature(GraphicsDevice* pParent);
 	void Finalize(const char* pName);
 
 	void SetRootSignature(ID3D12RootSignature* pRootSignature) { m_pRootSignature = pRootSignature; }

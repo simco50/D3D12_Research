@@ -2,6 +2,11 @@
 
 #if PLATFORM_UWP
 
+#include "Core/TaskQueue.h"
+#include "Core/Input.h"
+#include "DemoApp.h"
+#include "Core/CommandLine.h"
+
 #include "winrt/Windows.ApplicationModel.h"
 #include "winrt/Windows.ApplicationModel.Core.h"
 #include "winrt/Windows.ApplicationModel.Activation.h"
@@ -84,7 +89,7 @@ public:
 		m_LogicalWidth = window.Bounds().Width;
 		m_LogicalHeight = window.Bounds().Height;
 
-		m_pGraphics = std::make_unique<Graphics>(&window, gMsaaSampleCount);
+		m_pGraphics = std::make_unique<DemoApp>(&window, IntVector2((int)m_LogicalWidth, (int)m_LogicalHeight), 1);
 	}
 
 	virtual void Load(winrt::hstring const& entryPoint)
@@ -267,7 +272,7 @@ private:
 	float m_LogicalWidth;
 	float m_LogicalHeight;
 	const char* m_pTitle;
-	std::unique_ptr<Graphics> m_pGraphics;
+	std::unique_ptr<DemoApp> m_pGraphics;
 
 	inline int ConvertDipsToPixels(float dips) const
 	{
@@ -292,7 +297,7 @@ class UWPAppContainerFactory : public winrt::implements<UWPAppContainerFactory, 
 public:
 	IFrameworkView CreateView()
 	{
-		return winrt::make<UWPAppContainer>("D3D12", gWindowWidth, gWindowHeight);
+		return winrt::make<UWPAppContainer>("D3D12", 1240, 720);
 	}
 };
 

@@ -12,6 +12,7 @@
 #include "Graphics/Mesh.h"
 #include "Graphics/Profiler.h"
 #include "Scene/Camera.h"
+#include "DemoApp.h"
 
 static constexpr int MAX_LIGHT_DENSITY = 72000;
 static constexpr int FORWARD_PLUS_BLOCK_SIZE = 16;
@@ -21,11 +22,10 @@ namespace Tweakables
 	extern int g_SsrSamples;
 }
 
-TiledForward::TiledForward(Graphics* pGraphics)
-	: m_pGraphics(pGraphics)
+TiledForward::TiledForward(GraphicsDevice* pDevice)
 {
-	SetupResources(pGraphics);
-	SetupPipelines(pGraphics);
+	SetupResources(pDevice);
+	SetupPipelines(pDevice);
 }
 
 void TiledForward::OnSwapchainCreated(int windowWidth, int windowHeight)
@@ -193,11 +193,11 @@ void TiledForward::Execute(RGGraph& graph, const SceneData& resources)
 		});
 }
 
-void TiledForward::VisualizeLightDensity(RGGraph& graph, Camera& camera, Texture* pTarget, Texture* pDepth)
+void TiledForward::VisualizeLightDensity(RGGraph& graph, GraphicsDevice* pDevice, Camera& camera, Texture* pTarget, Texture* pDepth)
 {
 	if (!m_pVisualizationIntermediateTexture)
 	{
-		m_pVisualizationIntermediateTexture = std::make_unique<Texture>(m_pGraphics, "LightDensity Debug Texture");
+		m_pVisualizationIntermediateTexture = std::make_unique<Texture>(pDevice, "LightDensity Debug Texture");
 	}
 	if (m_pVisualizationIntermediateTexture->GetDesc() != pTarget->GetDesc())
 	{
@@ -256,48 +256,48 @@ void TiledForward::VisualizeLightDensity(RGGraph& graph, Camera& camera, Texture
 		});
 }
 
-void TiledForward::SetupResources(Graphics* pGraphics)
+void TiledForward::SetupResources(GraphicsDevice* pDevice)
 {
-	m_pLightGridOpaque = std::make_unique<Texture>(pGraphics, "Opaque Light Grid");
-	m_pLightGridTransparant = std::make_unique<Texture>(pGraphics, "Transparant Light Grid");
+	m_pLightGridOpaque = std::make_unique<Texture>(pDevice, "Opaque Light Grid");
+	m_pLightGridTransparant = std::make_unique<Texture>(pDevice, "Transparant Light Grid");
 }
 
-void TiledForward::SetupPipelines(Graphics* pGraphics)
+void TiledForward::SetupPipelines(GraphicsDevice* pDevice)
 {
 	{
-		Shader* pComputeShader = pGraphics->GetShaderManager()->GetShader("LightCulling.hlsl", ShaderType::Compute, "CSMain");
+		Shader* pComputeShader = pDevice->GetShaderManager()->GetShader("LightCulling.hlsl", ShaderType::Compute, "CSMain");
 
-		m_pComputeLightCullRS = std::make_unique<RootSignature>(pGraphics);
+		m_pComputeLightCullRS = std::make_unique<RootSignature>(pDevice);
 		m_pComputeLightCullRS->FinalizeFromShader("Tiled Light Culling", pComputeShader);
 
 		PipelineStateInitializer psoDesc;
 		psoDesc.SetComputeShader(pComputeShader);
 		psoDesc.SetRootSignature(m_pComputeLightCullRS->GetRootSignature());
 		psoDesc.SetName("Tiled Light Culling");
-		m_pComputeLightCullPSO = pGraphics->CreatePipeline(psoDesc);
+		m_pComputeLightCullPSO = pDevice->CreatePipeline(psoDesc);
 
-		m_pLightIndexCounter = std::make_unique<Buffer>(pGraphics, "Light Index Counter");
+		m_pLightIndexCounter = std::make_unique<Buffer>(pDevice, "Light Index Counter");
 		m_pLightIndexCounter->Create(BufferDesc::CreateStructured(2, sizeof(uint32)));
 		m_pLightIndexCounter->CreateUAV(&m_pLightIndexCounterRawUAV, BufferUAVDesc::CreateRaw());
-		m_pLightIndexListBufferOpaque = std::make_unique<Buffer>(pGraphics, "Light List Opaque");
+		m_pLightIndexListBufferOpaque = std::make_unique<Buffer>(pDevice, "Light List Opaque");
 		m_pLightIndexListBufferOpaque->Create(BufferDesc::CreateStructured(MAX_LIGHT_DENSITY, sizeof(uint32)));
-		m_pLightIndexListBufferTransparant = std::make_unique<Buffer>(pGraphics, "Light List Transparant");
+		m_pLightIndexListBufferTransparant = std::make_unique<Buffer>(pDevice, "Light List Transparant");
 		m_pLightIndexListBufferTransparant->Create(BufferDesc::CreateStructured(MAX_LIGHT_DENSITY, sizeof(uint32)));
 	}
 
 	//PBR Diffuse passes
 	{
 		//Shaders
-		Shader* pVertexShader = pGraphics->GetShaderManager()->GetShader("Diffuse.hlsl", ShaderType::Vertex, "VSMain", { "TILED_FORWARD" });
-		Shader* pPixelShader = pGraphics->GetShaderManager()->GetShader("Diffuse.hlsl", ShaderType::Pixel, "PSMain", {"TILED_FORWARD" });
+		Shader* pVertexShader = pDevice->GetShaderManager()->GetShader("Diffuse.hlsl", ShaderType::Vertex, "VSMain", { "TILED_FORWARD" });
+		Shader* pPixelShader = pDevice->GetShaderManager()->GetShader("Diffuse.hlsl", ShaderType::Pixel, "PSMain", { "TILED_FORWARD" });
 
 		//Rootsignature
-		m_pDiffuseRS = std::make_unique<RootSignature>(pGraphics);
+		m_pDiffuseRS = std::make_unique<RootSignature>(pDevice);
 		m_pDiffuseRS->FinalizeFromShader("Diffuse", pVertexShader);
 
 		{
 			DXGI_FORMAT formats[] = {
-				Graphics::RENDER_TARGET_FORMAT,
+				GraphicsDevice::RENDER_TARGET_FORMAT,
 				DXGI_FORMAT_R16G16B16A16_FLOAT,
 			};
 
@@ -306,30 +306,30 @@ void TiledForward::SetupPipelines(Graphics* pGraphics)
 			psoDesc.SetRootSignature(m_pDiffuseRS->GetRootSignature());
 			psoDesc.SetVertexShader(pVertexShader);
 			psoDesc.SetPixelShader(pPixelShader);
-			psoDesc.SetRenderTargetFormats(formats, ARRAYSIZE(formats), Graphics::DEPTH_STENCIL_FORMAT, pGraphics->GetMultiSampleCount());
+			psoDesc.SetRenderTargetFormats(formats, ARRAYSIZE(formats), GraphicsDevice::DEPTH_STENCIL_FORMAT, /* pDevice->GetMultiSampleCount() */ 1);
 			psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_EQUAL);
 			psoDesc.SetDepthWrite(false);
 			psoDesc.SetName("Diffuse PBR Pipeline");
-			m_pDiffusePSO = pGraphics->CreatePipeline(psoDesc);
+			m_pDiffusePSO = pDevice->CreatePipeline(psoDesc);
 
 			//Transparant
 			psoDesc.SetBlendMode(BlendMode::Alpha, false);
 			psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
 			psoDesc.SetName("Diffuse PBR (Alpha) Pipeline");
-			m_pDiffuseAlphaPSO = pGraphics->CreatePipeline(psoDesc);
+			m_pDiffuseAlphaPSO = pDevice->CreatePipeline(psoDesc);
 		}
 	}
 
 	{
-		Shader* pComputeShader = pGraphics->GetShaderManager()->GetShader("VisualizeLightCount.hlsl", ShaderType::Compute, "DebugLightDensityCS", { "TILED_FORWARD" });
+		Shader* pComputeShader = pDevice->GetShaderManager()->GetShader("VisualizeLightCount.hlsl", ShaderType::Compute, "DebugLightDensityCS", { "TILED_FORWARD" });
 
-		m_pVisualizeLightsRS = std::make_unique<RootSignature>(pGraphics);
+		m_pVisualizeLightsRS = std::make_unique<RootSignature>(pDevice);
 		m_pVisualizeLightsRS->FinalizeFromShader("Light Density Visualization", pComputeShader);
 
 		PipelineStateInitializer psoDesc;
 		psoDesc.SetComputeShader(pComputeShader);
 		psoDesc.SetRootSignature(m_pVisualizeLightsRS->GetRootSignature());
 		psoDesc.SetName("Light Density Visualization");
-		m_pVisualizeLightsPSO = pGraphics->CreatePipeline(psoDesc);
+		m_pVisualizeLightsPSO = pDevice->CreatePipeline(psoDesc);
 	}
 }

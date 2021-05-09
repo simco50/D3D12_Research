@@ -476,7 +476,7 @@ std::string PipelineStateInitializer::DebugPrint() const
 	return str.str();
 }
 
-PipelineState::PipelineState(Graphics* pParent)
+PipelineState::PipelineState(GraphicsDevice* pParent)
 	: GraphicsObject(pParent)
 {
 	m_ReloadHandle = pParent->GetShaderManager()->OnShaderRecompiledEvent().AddRaw(this, &PipelineState::OnShaderReloaded);

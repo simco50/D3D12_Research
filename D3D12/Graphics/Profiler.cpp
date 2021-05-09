@@ -128,23 +128,24 @@ Profiler* Profiler::Get()
 	return &profiler;
 }
 
-void Profiler::Initialize(Graphics* pGraphics)
+void Profiler::Initialize(GraphicsDevice* pParent, uint32 numBackbuffers)
 {
 	D3D12_QUERY_HEAP_DESC desc{};
 	desc.Count = HEAP_SIZE;
 	desc.Type = D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
 	desc.NodeMask = 0;
-	VERIFY_HR_EX(pGraphics->GetDevice()->CreateQueryHeap(&desc, IID_PPV_ARGS(m_pQueryHeap.GetAddressOf())), pGraphics->GetDevice());
+	VERIFY_HR_EX(pParent->GetDevice()->CreateQueryHeap(&desc, IID_PPV_ARGS(m_pQueryHeap.GetAddressOf())), pParent->GetDevice());
 	D3D::SetObjectName(m_pQueryHeap.Get(), "Profiler Timestamp Query Heap");
 
-	m_pReadBackBuffer = std::make_unique<Buffer>(pGraphics, "Profiling Readback Buffer");
-	m_pReadBackBuffer->Create(BufferDesc::CreateReadback(sizeof(uint64) * Graphics::FRAME_COUNT * HEAP_SIZE));
+	m_FenceValues.resize(numBackbuffers);
+	m_pReadBackBuffer = std::make_unique<Buffer>(pParent, "Profiling Readback Buffer");
+	m_pReadBackBuffer->Create(BufferDesc::CreateReadback(sizeof(uint64) * numBackbuffers * HEAP_SIZE));
 	m_pReadBackBuffer->Map();
 
 	{
 		//GPU Frequency
 		uint64 timeStampFrequency;
-		pGraphics->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT)->GetCommandQueue()->GetTimestampFrequency(&timeStampFrequency);
+		pParent->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT)->GetCommandQueue()->GetTimestampFrequency(&timeStampFrequency);
 		m_SecondsPerGpuTick = 1.0f / timeStampFrequency;
 	}
 
@@ -158,8 +159,8 @@ void Profiler::Initialize(Graphics* pGraphics)
 	m_pRootBlock = std::make_unique<ProfileNode>("", StringHash(""), nullptr);
 	m_pCurrentBlock = m_pRootBlock.get();
 
-	ID3D12CommandQueue* pQueue = pGraphics->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT)->GetCommandQueue();
-	OPTICK_GPU_INIT_D3D12(pGraphics->GetDevice(), &pQueue, 1);
+	ID3D12CommandQueue* pQueue = pParent->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT)->GetCommandQueue();
+	OPTICK_GPU_INIT_D3D12(pParent->GetDevice(), &pQueue, 1);
 }
 
 void Profiler::Begin(const char* pName, CommandContext* pContext)
@@ -195,30 +196,31 @@ void Profiler::End(CommandContext* pContext)
 	m_pCurrentBlock = m_pCurrentBlock->GetParent();
 }
 
-void Profiler::Resolve(Graphics* pGraphics, int frameIndex)
+void Profiler::Resolve(SwapChain* pSwapchain, GraphicsDevice* pParent, int frameIndex)
 {
 	checkf(m_pCurrentBlock == m_pRootBlock.get(), "The current block isn't the root block then something must've gone wrong!");
 
 	//Start the resolve on the current frame
 	int offset = MAX_GPU_TIME_QUERIES * QUERY_PAIR_NUM * m_CurrentReadbackFrame;
-	CommandContext* pContext = pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+	CommandContext* pContext = pParent->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 	pContext->GetCommandList()->ResolveQueryData(m_pQueryHeap.Get(), D3D12_QUERY_TYPE_TIMESTAMP, 0, m_CurrentTimer * QUERY_PAIR_NUM, m_pReadBackBuffer->GetResource(), offset * sizeof(uint64));
 	m_FenceValues[m_CurrentReadbackFrame] = pContext->Execute(false);
 
-	if (frameIndex >= Graphics::FRAME_COUNT)
+	int numFrames = (int)m_FenceValues.size();
+	if (frameIndex >= numFrames)
 	{
 		//Make sure the resolve from 2 frames ago is finished before we read.
-		uint32 readFromIndex = (m_CurrentReadbackFrame + Graphics::FRAME_COUNT - 1) % Graphics::FRAME_COUNT;
-		pGraphics->WaitForFence(m_FenceValues[readFromIndex]);
+		uint32 readFromIndex = (m_CurrentReadbackFrame + numFrames - 1) % numFrames;
+		pParent->WaitForFence(m_FenceValues[readFromIndex]);
 		m_pCurrentBlock->PopulateTimes((const uint64*)m_pReadBackBuffer->GetMappedData(), frameIndex - 2);
 	}
-	m_CurrentReadbackFrame = (m_CurrentReadbackFrame + 1) % Graphics::FRAME_COUNT;
+	m_CurrentReadbackFrame = (m_CurrentReadbackFrame + 1) % numFrames;
 
 	m_pPreviousBlock = nullptr;
 	m_pCurrentBlock->StartTimer(nullptr);
 	m_pCurrentBlock->EndTimer(nullptr);
 
-	OPTICK_GPU_FLIP(pGraphics->GetSwapchain());
+	OPTICK_GPU_FLIP(pSwapchain->GetSwapChain());
 	OPTICK_CATEGORY("Present", Optick::Category::Wait);
 }
 

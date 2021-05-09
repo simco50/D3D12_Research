@@ -7,6 +7,7 @@
 #include "Core/Console.h"
 #include "Core/CommandLine.h"
 #include "Core/TaskQueue.h"
+#include "DemoApp.h"
 
 #ifdef _DEBUG
 #define _CRTDBG_MAP_ALLOC
@@ -14,10 +15,6 @@
 #endif
 
 #define BREAK_ON_ALLOC 0
-
-const int gWindowWidth = 1240;
-const int gWindowHeight = 720;
-const int gMsaaSampleCount = 1;
 
 class Win32AppContainer
 {
@@ -103,6 +100,7 @@ public:
 	}
 
 	HWND GetNativeWindow() const { return m_Window; }
+	IntVector2 GetRect() const { return IntVector2(m_DisplayWidth, m_DisplayHeight); }
 
 	DECLARE_MULTICAST_DELEGATE(OnFocusChanged, bool);
 	OnFocusChanged OnFocusChangedEvent;
@@ -280,7 +278,7 @@ private:
 	bool m_IsResizing = false;
 };
 
-int WINAPI WinMain(_In_ HINSTANCE /*hInstance*/, _In_opt_ HINSTANCE /*hPrevInstance*/, _In_ LPSTR lpCmdLine, _In_ int /*nShowCmd*/)
+int WINAPI WinMain(_In_ HINSTANCE /*hInstance*/, _In_opt_ HINSTANCE /*hPrevInstance*/, _In_ LPSTR /*lpCmdLine*/, _In_ int /*nShowCmd*/)
 {
 #ifdef _DEBUG
 	_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
@@ -290,17 +288,22 @@ int WINAPI WinMain(_In_ HINSTANCE /*hInstance*/, _In_opt_ HINSTANCE /*hPrevInsta
 #endif
 
 	Thread::SetMainThread();
-	CommandLine::Parse(lpCmdLine);
+	CommandLine::Parse(GetCommandLineA());
 	Console::Initialize();
 	TaskQueue::Initialize(std::thread::hardware_concurrency());
 
-	Win32AppContainer app("D3D12", gWindowWidth, gWindowHeight);
-	Graphics graphics(app.GetNativeWindow(), gMsaaSampleCount);
+	Win32AppContainer app("D3D12", 1240, 720);
+	DemoApp graphics(app.GetNativeWindow(), app.GetRect(), 1);
 
-	app.OnKeyInputEvent += [](uint32 character, bool isDown) { Input::Instance().UpdateKey(character, isDown); };
+	app.OnKeyInputEvent += [](uint32 character, bool isDown) {
+		Input::Instance().UpdateKey(character, isDown);
+		ImGui::GetIO().KeysDown[character] = isDown;
+	};
 	app.OnMouseInputEvent += [](uint32 mouse, bool isDown) { Input::Instance().UpdateMouseKey(mouse, isDown); };
 	app.OnMouseMoveEvent += [](uint32 x, uint32 y) { Input::Instance().UpdateMousePosition((float)x, (float)y); };
 	app.OnResizeEvent += [&graphics](uint32 width, uint32 height) { graphics.OnResize(width, height); };
+	app.OnCharInputEvent += [](uint32 character) { ImGui::GetIO().AddInputCharacter(character); };
+
 
 	Time::Reset();
 

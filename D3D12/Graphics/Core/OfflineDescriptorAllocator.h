@@ -16,7 +16,7 @@ struct Heap
 class OfflineDescriptorAllocator : public GraphicsObject
 {
 public:
-	OfflineDescriptorAllocator(Graphics* pGraphics, D3D12_DESCRIPTOR_HEAP_TYPE type, uint32 descriptorsPerHeap);
+	OfflineDescriptorAllocator(GraphicsDevice* pParent, D3D12_DESCRIPTOR_HEAP_TYPE type, uint32 descriptorsPerHeap);
 	~OfflineDescriptorAllocator();
 
 	CD3DX12_CPU_DESCRIPTOR_HANDLE AllocateDescriptor();
