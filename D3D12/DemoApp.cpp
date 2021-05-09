@@ -24,6 +24,10 @@
 #include "Core/Paths.h"
 #include "Content/Image.h"
 
+static const int32 FRAME_COUNT = 3;
+static const DXGI_FORMAT SWAPCHAIN_FORMAT = DXGI_FORMAT_R8G8B8A8_UNORM;
+static const DXGI_FORMAT DEPTH_STENCIL_SHADOW_FORMAT = DXGI_FORMAT_D16_UNORM;
+
 void DrawScene(CommandContext& context, const SceneData& scene, Batch::Blending blendModes)
 {
 	std::vector<const Batch*> meshes;
@@ -200,7 +204,7 @@ DemoApp::DemoApp(WindowHandle window, const IntVector2& windowRect, int sampleCo
 
 	ComPtr<IDXGIAdapter4> pAdapter = instance->EnumerateAdapter(CommandLine::GetBool("warp"));
 	m_pDevice = instance->CreateDevice(pAdapter.Get());
-	m_pSwapchain = instance->CreateSwapchain(m_pDevice.get(), window, GraphicsDevice::SWAPCHAIN_FORMAT, windowRect.x, windowRect.y, GraphicsDevice::FRAME_COUNT, true);
+	m_pSwapchain = instance->CreateSwapchain(m_pDevice.get(), window, SWAPCHAIN_FORMAT, windowRect.x, windowRect.y, FRAME_COUNT, true);
 
 	m_pDepthStencil = std::make_unique<Texture>(m_pDevice.get(), "Depth Stencil");
 	m_pResolvedDepthStencil = std::make_unique<Texture>(m_pDevice.get(), "Resolved Depth Stencil");
@@ -229,7 +233,7 @@ DemoApp::DemoApp(WindowHandle window, const IntVector2& windowRect, int sampleCo
 	m_pSSAO = std::make_unique<SSAO>(m_pDevice.get());
 	m_pParticles = std::make_unique<GpuParticles>(m_pDevice.get());
 
-	Profiler::Get()->Initialize(m_pDevice.get());
+	Profiler::Get()->Initialize(m_pDevice.get(), FRAME_COUNT);
 	DebugRenderer::Get()->Initialize(m_pDevice.get());
 
 	m_pImGuiRenderer->AddUpdateCallback(ImGuiCallbackDelegate::CreateRaw(this, &DemoApp::UpdateImGui));
@@ -464,7 +468,7 @@ void DemoApp::Update()
 
 		if (Tweakables::g_SDSM)
 		{
-			Buffer* pSourceBuffer = m_ReductionReadbackTargets[(m_Frame + 1) % GraphicsDevice::FRAME_COUNT].get();
+			Buffer* pSourceBuffer = m_ReductionReadbackTargets[(m_Frame + 1) % FRAME_COUNT].get();
 			Vector2* pData = (Vector2*)pSourceBuffer->GetMappedData();
 			minPoint = pData->x;
 			maxPoint = pData->y;
@@ -637,9 +641,9 @@ void DemoApp::Update()
 			{
 				pShadowMap = std::make_unique<Texture>(m_pDevice.get(), "Shadow Map");
 				if (i < 4)
-					pShadowMap->Create(TextureDesc::CreateDepth(2048, 2048, GraphicsDevice::DEPTH_STENCIL_SHADOW_FORMAT, TextureFlag::DepthStencil | TextureFlag::ShaderResource, 1, ClearBinding(0.0f, 0)));
+					pShadowMap->Create(TextureDesc::CreateDepth(2048, 2048, DEPTH_STENCIL_SHADOW_FORMAT, TextureFlag::DepthStencil | TextureFlag::ShaderResource, 1, ClearBinding(0.0f, 0)));
 				else
-					pShadowMap->Create(TextureDesc::CreateDepth(512, 512, GraphicsDevice::DEPTH_STENCIL_SHADOW_FORMAT, TextureFlag::DepthStencil | TextureFlag::ShaderResource, 1, ClearBinding(0.0f, 0)));
+					pShadowMap->Create(TextureDesc::CreateDepth(512, 512, DEPTH_STENCIL_SHADOW_FORMAT, TextureFlag::DepthStencil | TextureFlag::ShaderResource, 1, ClearBinding(0.0f, 0)));
 				++i;
 				m_pDevice->RegisterBindlessResource(pShadowMap.get(), nullptr);
 			}
@@ -962,7 +966,7 @@ void DemoApp::Update()
 					renderContext.InsertResourceBarrier(m_ReductionTargets.back().get(), D3D12_RESOURCE_STATE_COPY_SOURCE);
 					renderContext.FlushResourceBarriers();
 
-					renderContext.CopyTexture(m_ReductionTargets.back().get(), m_ReductionReadbackTargets[m_Frame % GraphicsDevice::FRAME_COUNT].get(), CD3DX12_BOX(0, 1));
+					renderContext.CopyTexture(m_ReductionTargets.back().get(), m_ReductionReadbackTargets[m_Frame % FRAME_COUNT].get(), CD3DX12_BOX(0, 1));
 				});
 		}
 
@@ -1396,7 +1400,7 @@ void DemoApp::OnResize(int width, int height)
 	m_pHDRRenderTarget->Create(TextureDesc::CreateRenderTarget(width, height, GraphicsDevice::RENDER_TARGET_FORMAT, TextureFlag::ShaderResource | TextureFlag::RenderTarget | TextureFlag::UnorderedAccess));
 	m_pTAASource->Create(TextureDesc::CreateRenderTarget(width, height, GraphicsDevice::RENDER_TARGET_FORMAT, TextureFlag::ShaderResource | TextureFlag::RenderTarget | TextureFlag::UnorderedAccess));
 	m_pPreviousColor->Create(TextureDesc::Create2D(width, height, GraphicsDevice::RENDER_TARGET_FORMAT, TextureFlag::ShaderResource));
-	m_pTonemapTarget->Create(TextureDesc::CreateRenderTarget(width, height, GraphicsDevice::SWAPCHAIN_FORMAT, TextureFlag::ShaderResource | TextureFlag::RenderTarget | TextureFlag::UnorderedAccess));
+	m_pTonemapTarget->Create(TextureDesc::CreateRenderTarget(width, height, SWAPCHAIN_FORMAT, TextureFlag::ShaderResource | TextureFlag::RenderTarget | TextureFlag::UnorderedAccess));
 	m_pDownscaledColor->Create(TextureDesc::Create2D(Math::DivideAndRoundUp(width, 4), Math::DivideAndRoundUp(height, 4), GraphicsDevice::RENDER_TARGET_FORMAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
 	m_pVelocity->Create(TextureDesc::Create2D(width, height, DXGI_FORMAT_R16G16_FLOAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
 
@@ -1422,7 +1426,7 @@ void DemoApp::OnResize(int width, int height)
 		m_ReductionTargets.push_back(std::move(pTexture));
 	}
 
-	for (int i = 0; i < GraphicsDevice::FRAME_COUNT; ++i)
+	for (int i = 0; i < FRAME_COUNT; ++i)
 	{
 		std::unique_ptr<Buffer> pBuffer = std::make_unique<Buffer>(m_pDevice.get(), "SDSM Reduction Readback Target");
 		pBuffer->Create(BufferDesc::CreateTyped(1, DXGI_FORMAT_R32G32_FLOAT, BufferFlag::Readback));
@@ -1450,7 +1454,7 @@ void DemoApp::InitializePipelines()
 			PipelineStateInitializer psoDesc;
 			psoDesc.SetRootSignature(m_pShadowsRS->GetRootSignature());
 			psoDesc.SetVertexShader(pVertexShader);
-			psoDesc.SetRenderTargetFormats(nullptr, 0, GraphicsDevice::DEPTH_STENCIL_SHADOW_FORMAT, 1);
+			psoDesc.SetRenderTargetFormats(nullptr, 0, DEPTH_STENCIL_SHADOW_FORMAT, 1);
 			psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
 			psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
 			psoDesc.SetDepthBias(-1, -5.0f, -4.0f);

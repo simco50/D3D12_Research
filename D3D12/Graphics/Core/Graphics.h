@@ -45,12 +45,8 @@ DECLARE_BITMASK_TYPE(GraphicsInstanceFlags);
 class GraphicsDevice
 {
 public:
-	//CONSTANTS
-	static const int32 FRAME_COUNT = 3;
 	static const DXGI_FORMAT DEPTH_STENCIL_FORMAT;
-	static const DXGI_FORMAT DEPTH_STENCIL_SHADOW_FORMAT;
 	static const DXGI_FORMAT RENDER_TARGET_FORMAT;
-	static const DXGI_FORMAT SWAPCHAIN_FORMAT;
 
 	GraphicsDevice(IDXGIAdapter4* pAdapter);
 	~GraphicsDevice();
