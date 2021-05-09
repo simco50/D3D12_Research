@@ -232,7 +232,7 @@ void GraphicsDevice::FreeCommandList(CommandContext* pCommandList)
 	m_FreeCommandLists[(int)pCommandList->GetType()].push(pCommandList);
 }
 
-bool GraphicsDevice::CheckTypedUAVSupport(DXGI_FORMAT format) const
+bool GraphicsDevice::SupportsTypedUAV(DXGI_FORMAT format) const
 {
 	D3D12_FEATURE_DATA_D3D12_OPTIONS featureData{};
 	VERIFY_HR_EX(GetDevice()->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &featureData, sizeof(featureData)), GetDevice());
@@ -303,7 +303,7 @@ bool GraphicsDevice::CheckTypedUAVSupport(DXGI_FORMAT format) const
 	}
 }
 
-bool GraphicsDevice::UseRenderPasses() const
+bool GraphicsDevice::SupportsRenderPasses() const
 {
 	return m_RenderPassTier >= D3D12_RENDER_PASS_TIER_0;
 }
