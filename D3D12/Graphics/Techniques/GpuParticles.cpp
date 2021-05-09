@@ -137,8 +137,7 @@ void GpuParticles::Initialize(GraphicsDevice* pDevice)
 		m_pRenderParticlesPS = pDevice->CreatePipeline(psoDesc);
 	}
 
-	/*
-	pDevice->GetImGui()->AddUpdateCallback(ImGuiCallbackDelegate::CreateLambda([]() {
+	ImGui::RegisterCallback(ImGui::OnImGuiRenderDelegate::CreateLambda([]() {
 		ImGui::Begin("Parameters");
 		ImGui::Text("Particles");
 		ImGui::Checkbox("Enabled", &g_Enabled);
@@ -146,8 +145,7 @@ void GpuParticles::Initialize(GraphicsDevice* pDevice)
 		ImGui::SliderInt("Emit Count", &g_EmitCount, 0, cMaxParticleCount / 50);
 		ImGui::SliderFloat("Life Time", &g_LifeTime, 0, 10);
 		ImGui::End();
-		}));
-	*/
+	}));
 }
 
 void GpuParticles::Simulate(RGGraph& graph, Texture* pResolvedDepth, const Camera& camera)

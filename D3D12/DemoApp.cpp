@@ -236,7 +236,7 @@ DemoApp::DemoApp(WindowHandle window, const IntVector2& windowRect, int sampleCo
 	Profiler::Get()->Initialize(m_pDevice.get(), FRAME_COUNT);
 	DebugRenderer::Get()->Initialize(m_pDevice.get());
 
-	m_pImGuiRenderer->AddUpdateCallback(ImGuiCallbackDelegate::CreateRaw(this, &DemoApp::UpdateImGui));
+	ImGui::RegisterCallback(ImGui::OnImGuiRenderDelegate::CreateRaw(this, &DemoApp::UpdateImGui));
 
 	m_SceneData.GlobalSRVHeapHandle = m_pDevice->GetGlobalViewHeap()->GetStartHandle();
 
@@ -357,7 +357,6 @@ void DemoApp::Update()
 {
 	PROFILE_BEGIN("Update");
 	m_pImGuiRenderer->NewFrame(m_WindowWidth, m_WindowHeight);
-	m_pImGuiRenderer->Update();
 
 	PROFILE_BEGIN("Update Game State");
 	m_pDevice->GetShaderManager()->ConditionallyReloadShaders();
