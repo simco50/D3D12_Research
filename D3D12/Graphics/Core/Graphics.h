@@ -32,7 +32,7 @@ struct Configuration
 	int SampleCount;
 };
 
-enum class GraphicsFlags
+enum class GraphicsInstanceFlags
 {
 	None			= 0,
 	DebugDevice		= 1 << 0,
@@ -40,7 +40,7 @@ enum class GraphicsFlags
 	GpuValidation	= 1 << 2,
 	Pix				= 1 << 3,
 };
-DECLARE_BITMASK_TYPE(GraphicsFlags);
+DECLARE_BITMASK_TYPE(GraphicsInstanceFlags);
 
 class GraphicsDevice
 {
@@ -72,7 +72,6 @@ public:
 	bool UseRenderPasses() const;
 	bool SupportsRayTracing() const { return m_RayTracingTier != D3D12_RAYTRACING_TIER_NOT_SUPPORTED; }
 	bool SupportsMeshShaders() const { return m_MeshShaderSupport != D3D12_MESH_SHADER_TIER_NOT_SUPPORTED; }
-	bool GetShaderModel(int& major, int& minor) const;
 
 	GlobalOnlineDescriptorHeap* GetGlobalViewHeap() const { return m_pGlobalViewHeap.get(); }
 	DynamicAllocationManager* GetAllocationManager() const { return m_pDynamicAllocationManager.get(); }
@@ -144,10 +143,12 @@ private:
 class GraphicsInstance
 {
 public:
-	static std::unique_ptr<GraphicsInstance> CreateInstance(GraphicsFlags createFlags = GraphicsFlags::None);
+	GraphicsInstance(GraphicsInstanceFlags createFlags);
 	std::unique_ptr<SwapChain> CreateSwapchain(GraphicsDevice* pDevice, WindowHandle pNativeWindow, DXGI_FORMAT format, uint32 width, uint32 height, uint32 numFrames, bool vsync);
 	ComPtr<IDXGIAdapter4> EnumerateAdapter(bool useWarp);
-	std::unique_ptr<GraphicsDevice> CreateDevice(ComPtr<IDXGIAdapter4> pAdapter, GraphicsFlags createFlags = GraphicsFlags::None);
+	std::unique_ptr<GraphicsDevice> CreateDevice(ComPtr<IDXGIAdapter4> pAdapter);
+
+	static std::unique_ptr<GraphicsInstance> CreateInstance(GraphicsInstanceFlags createFlags = GraphicsInstanceFlags::None);
 
 	bool AllowTearing() const { return m_AllowTearing; }
 

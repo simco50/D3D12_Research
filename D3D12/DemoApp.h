@@ -130,10 +130,6 @@ public:
 	GraphicsDevice* GetDevice() const { return m_pDevice.get(); }
 
 private:
-	void BeginFrame();
-	void EndFrame();
-
-	void InitD3D(WindowHandle window, const IntVector2& windowRect);
 	void InitializePipelines();
 	void InitializeAssets(CommandContext& context);
 	void SetupScene(CommandContext& context);

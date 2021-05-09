@@ -61,80 +61,6 @@ void DrawScene(CommandContext& context, const SceneData& scene, Batch::Blending 
 	}
 }
 
-namespace Tweakables
-{
-	// Post processing
-	float g_WhitePoint = 1;
-	float g_MinLogLuminance = -10;
-	float g_MaxLogLuminance = 20;
-	float g_Tau = 2;
-	bool g_DrawHistogram = false;
-	int32 g_ToneMapper = 1;
-	bool g_TAA = true;
-
-	// Shadows
-	bool g_SDSM = false;
-	bool g_StabilizeCascades = true;
-	bool g_VisualizeShadowCascades = false;
-	int g_ShadowCascades = 4;
-	float g_PSSMFactor = 1.0f;
-
-	// Misc Lighting
-	bool g_RaytracedAO = false;
-	bool g_VisualizeLights = false;
-	bool g_VisualizeLightDensity = false;
-
-	// Lighting
-	float g_SunInclination = 0.579f;
-	float g_SunOrientation = -3.055f;
-	float g_SunTemperature = 5900.0f;
-	float g_SunIntensity = 3.0f;
-
-	// Reflections
-	bool g_RaytracedReflections = true;
-	float g_TLASBoundsThreshold = 5.0f * Math::DegreesToRadians;
-	int g_SsrSamples = 8;
-
-	// Misc
-	bool g_DumpRenderGraph = false;
-	bool g_Screenshot = false;
-	bool g_EnableUI = true;
-	bool g_RenderObjectBounds = false;
-}
-
-DemoApp::DemoApp(WindowHandle window, const IntVector2& windowRect, int sampleCount /*= 1*/)
-	: m_SampleCount(sampleCount)
-{
-	// #todo fixup MSAA :(
-	checkf(sampleCount == 1, "I broke MSAA! TODO");
-
-	m_pCamera = std::make_unique<FreeCamera>();
-	m_pCamera->SetPosition(Vector3(-30, 35, 48));
-	m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(3 * Math::PIDIV4, Math::PIDIV4 * 0.3f, 0));
-	m_pCamera->SetNearPlane(300.0f);
-	m_pCamera->SetFarPlane(1.0f);
-
-	InitD3D(window, windowRect);
-	InitializePipelines();
-
-	CommandContext* pContext = m_pDevice->AllocateCommandContext();
-	InitializeAssets(*pContext);
-	SetupScene(*pContext);
-	UpdateTLAS(*pContext);
-	pContext->Execute(true);
-
-	Tweakables::g_RaytracedAO = m_pDevice->SupportsRayTracing() ? Tweakables::g_RaytracedAO : false;
-	Tweakables::g_RaytracedReflections = m_pDevice->SupportsRayTracing() ? Tweakables::g_RaytracedReflections : false;
-
-	m_pDevice->GarbageCollect();
-}
-
-DemoApp::~DemoApp()
-{
-	m_pDevice->Destroy();
-	m_pSwapchain->Destroy();
-}
-
 void EditTransform(const Camera& camera, Matrix& matrix)
 {
 	static ImGuizmo::OPERATION mCurrentGizmoOperation(ImGuizmo::ROTATE);
@@ -210,16 +136,226 @@ void EditTransform(const Camera& camera, Matrix& matrix)
 	ImGuizmo::Manipulate(&view.m[0][0], &projection.m[0][0], mCurrentGizmoOperation, mCurrentGizmoMode, &matrix.m[0][0], NULL, pSnapValue);
 }
 
+namespace Tweakables
+{
+	// Post processing
+	float g_WhitePoint = 1;
+	float g_MinLogLuminance = -10;
+	float g_MaxLogLuminance = 20;
+	float g_Tau = 2;
+	bool g_DrawHistogram = false;
+	int32 g_ToneMapper = 1;
+	bool g_TAA = true;
+
+	// Shadows
+	bool g_SDSM = false;
+	bool g_StabilizeCascades = true;
+	bool g_VisualizeShadowCascades = false;
+	int g_ShadowCascades = 4;
+	float g_PSSMFactor = 1.0f;
+
+	// Misc Lighting
+	bool g_RaytracedAO = false;
+	bool g_VisualizeLights = false;
+	bool g_VisualizeLightDensity = false;
+
+	// Lighting
+	float g_SunInclination = 0.579f;
+	float g_SunOrientation = -3.055f;
+	float g_SunTemperature = 5900.0f;
+	float g_SunIntensity = 3.0f;
+
+	// Reflections
+	bool g_RaytracedReflections = true;
+	float g_TLASBoundsThreshold = 5.0f * Math::DegreesToRadians;
+	int g_SsrSamples = 8;
+
+	// Misc
+	bool g_DumpRenderGraph = false;
+	bool g_Screenshot = false;
+	bool g_EnableUI = true;
+	bool g_RenderObjectBounds = false;
+}
+
+DemoApp::DemoApp(WindowHandle window, const IntVector2& windowRect, int sampleCount /*= 1*/)
+	: m_SampleCount(sampleCount)
+{
+	// #todo fixup MSAA :(
+	checkf(sampleCount == 1, "I broke MSAA! TODO");
+
+	m_pCamera = std::make_unique<FreeCamera>();
+	m_pCamera->SetPosition(Vector3(-30, 35, 48));
+	m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(3 * Math::PIDIV4, Math::PIDIV4 * 0.3f, 0));
+	m_pCamera->SetNearPlane(300.0f);
+	m_pCamera->SetFarPlane(1.0f);
+
+	E_LOG(Info, "Graphics::InitD3D()");
+
+	GraphicsInstanceFlags instanceFlags = GraphicsInstanceFlags::None;
+	instanceFlags |= CommandLine::GetBool("d3ddebug") ? GraphicsInstanceFlags::DebugDevice : GraphicsInstanceFlags::None;
+	instanceFlags |= CommandLine::GetBool("dred") ? GraphicsInstanceFlags::DRED : GraphicsInstanceFlags::None;
+	instanceFlags |= CommandLine::GetBool("gpuvalidation") ? GraphicsInstanceFlags::GpuValidation : GraphicsInstanceFlags::None;
+	instanceFlags |= CommandLine::GetBool("pix") ? GraphicsInstanceFlags::Pix : GraphicsInstanceFlags::None;
+	std::unique_ptr<GraphicsInstance> instance = GraphicsInstance::CreateInstance(instanceFlags);
+
+	ComPtr<IDXGIAdapter4> pAdapter = instance->EnumerateAdapter(CommandLine::GetBool("warp"));
+	m_pDevice = instance->CreateDevice(pAdapter.Get());
+	m_pSwapchain = instance->CreateSwapchain(m_pDevice.get(), window, GraphicsDevice::SWAPCHAIN_FORMAT, windowRect.x, windowRect.y, GraphicsDevice::FRAME_COUNT, true);
+
+	m_pDepthStencil = std::make_unique<Texture>(m_pDevice.get(), "Depth Stencil");
+	m_pResolvedDepthStencil = std::make_unique<Texture>(m_pDevice.get(), "Resolved Depth Stencil");
+
+	if (m_SampleCount > 1)
+	{
+		m_pMultiSampleRenderTarget = std::make_unique<Texture>(m_pDevice.get(), "MSAA Target");
+	}
+
+	m_pNormals = std::make_unique<Texture>(m_pDevice.get(), "MSAA Normals");
+	m_pResolvedNormals = std::make_unique<Texture>(m_pDevice.get(), "Normals");
+	m_pHDRRenderTarget = std::make_unique<Texture>(m_pDevice.get(), "HDR Target");
+	m_pPreviousColor = std::make_unique<Texture>(m_pDevice.get(), "Previous Color");
+	m_pTonemapTarget = std::make_unique<Texture>(m_pDevice.get(), "Tonemap Target");
+	m_pDownscaledColor = std::make_unique<Texture>(m_pDevice.get(), "Downscaled HDR Target");
+	m_pAmbientOcclusion = std::make_unique<Texture>(m_pDevice.get(), "SSAO");
+	m_pVelocity = std::make_unique<Texture>(m_pDevice.get(), "Velocity");
+	m_pTAASource = std::make_unique<Texture>(m_pDevice.get(), "TAA Target");
+
+	m_pImGuiRenderer = std::make_unique<ImGuiRenderer>(m_pDevice.get());
+
+	m_pClusteredForward = std::make_unique<ClusteredForward>(m_pDevice.get());
+	m_pTiledForward = std::make_unique<TiledForward>(m_pDevice.get());
+	m_pRTReflections = std::make_unique<RTReflections>(m_pDevice.get());
+	m_pRTAO = std::make_unique<RTAO>(m_pDevice.get());
+	m_pSSAO = std::make_unique<SSAO>(m_pDevice.get());
+	m_pParticles = std::make_unique<GpuParticles>(m_pDevice.get());
+
+	Profiler::Get()->Initialize(m_pDevice.get());
+	DebugRenderer::Get()->Initialize(m_pDevice.get());
+
+	m_pImGuiRenderer->AddUpdateCallback(ImGuiCallbackDelegate::CreateRaw(this, &DemoApp::UpdateImGui));
+
+	m_SceneData.GlobalSRVHeapHandle = m_pDevice->GetGlobalViewHeap()->GetStartHandle();
+
+	OnResize(windowRect.x, windowRect.y);
+
+	CommandContext* pContext = m_pDevice->AllocateCommandContext();
+	InitializePipelines();
+	InitializeAssets(*pContext);
+	SetupScene(*pContext);
+	UpdateTLAS(*pContext);
+	pContext->Execute(true);
+
+	Tweakables::g_RaytracedAO = m_pDevice->SupportsRayTracing() ? Tweakables::g_RaytracedAO : false;
+	Tweakables::g_RaytracedReflections = m_pDevice->SupportsRayTracing() ? Tweakables::g_RaytracedReflections : false;
+
+	m_pDevice->GarbageCollect();
+}
+
+DemoApp::~DemoApp()
+{
+	m_pDevice->Destroy();
+	m_pSwapchain->Destroy();
+}
+
+void DemoApp::InitializeAssets(CommandContext& context)
+{
+	auto RegisterDefaultTexture = [this, &context](DefaultTexture type, const char* pName, const TextureDesc& desc, uint32* pData)
+	{
+		m_DefaultTextures[(int)type] = std::make_unique<Texture>(m_pDevice.get(), pName);
+		m_DefaultTextures[(int)type]->Create(&context, desc, pData);
+	};
+
+	uint32 BLACK = 0xFF000000;
+	RegisterDefaultTexture(DefaultTexture::Black2D, "Default Black", TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &BLACK);
+	uint32 WHITE = 0xFFFFFFFF;
+	RegisterDefaultTexture(DefaultTexture::White2D, "Default White", TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &WHITE);
+	uint32 MAGENTA = 0xFFFF00FF;
+	RegisterDefaultTexture(DefaultTexture::Magenta2D, "Default Magenta", TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &MAGENTA);
+	uint32 GRAY = 0xFF808080;
+	RegisterDefaultTexture(DefaultTexture::Gray2D, "Default Gray", TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &GRAY);
+	uint32 DEFAULT_NORMAL = 0xFFFF8080;
+	RegisterDefaultTexture(DefaultTexture::Normal2D, "Default Normal", TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &DEFAULT_NORMAL);
+	uint32 DEFAULT_ROUGHNESS_METALNESS = 0xFF0080FF;
+	RegisterDefaultTexture(DefaultTexture::RoughnessMetalness, "Default Roughness/Metalness", TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &DEFAULT_ROUGHNESS_METALNESS);
+
+	uint32 BLACK_CUBE[6] = {};
+	RegisterDefaultTexture(DefaultTexture::BlackCube, "Default Black Cube", TextureDesc::CreateCube(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), BLACK_CUBE);
+
+	m_DefaultTextures[(int)DefaultTexture::ColorNoise256] = std::make_unique<Texture>(m_pDevice.get(), "Color Noise 256px");
+	m_DefaultTextures[(int)DefaultTexture::ColorNoise256]->Create(&context, "Resources/Textures/Noise.png", false);
+	m_DefaultTextures[(int)DefaultTexture::BlueNoise512] = std::make_unique<Texture>(m_pDevice.get(), "Blue Noise 512px");
+	m_DefaultTextures[(int)DefaultTexture::BlueNoise512]->Create(&context, "Resources/Textures/BlueNoise.dds", false);
+}
+
+void DemoApp::SetupScene(CommandContext& context)
+{
+	m_pLightCookie = std::make_unique<Texture>(m_pDevice.get(), "Light Cookie");
+	m_pLightCookie->Create(&context, "Resources/Textures/LightProjector.png", false);
+
+	{
+		std::unique_ptr<Mesh> pMesh = std::make_unique<Mesh>();
+		//pMesh->Load("Resources/Bistro_Godot/Bistro_Godot.gltf", m_pDevice.get(), &context, 3.0f);
+		//pMesh->Load("Resources/Bathroom/scene.gltf", m_pDevice.get(), &context, 0.2f);
+		pMesh->Load("Resources/sponza/sponza.dae", m_pDevice.get(), &context, 1.0f);
+		m_Meshes.push_back(std::move(pMesh));
+	}
+
+	for (uint32 j = 0; j < (uint32)m_Meshes.size(); ++j)
+	{
+		auto& pMesh = m_Meshes[j];
+		for (const SubMeshInstance& node : pMesh->GetMeshInstances())
+		{
+			const SubMesh& subMesh = pMesh->GetMesh(node.MeshIndex);
+			const Material& material = pMesh->GetMaterial(subMesh.MaterialId);
+			m_SceneData.Batches.push_back(Batch{});
+			Batch& b = m_SceneData.Batches.back();
+			b.Index = (int)m_SceneData.Batches.size() - 1;
+			b.LocalBounds = subMesh.Bounds;
+			b.pMesh = &subMesh;
+			b.WorldMatrix = node.Transform;
+			b.VertexBufferDescriptor = m_pDevice->RegisterBindlessResource(subMesh.pVertexSRV);
+			b.IndexBufferDescriptor = m_pDevice->RegisterBindlessResource(subMesh.pIndexSRV);
+
+			b.Material.Diffuse = m_pDevice->RegisterBindlessResource(material.pDiffuseTexture, GetDefaultTexture(DefaultTexture::Gray2D));
+			b.Material.Normal = m_pDevice->RegisterBindlessResource(material.pNormalTexture, GetDefaultTexture(DefaultTexture::Normal2D));
+			b.Material.RoughnessMetalness = m_pDevice->RegisterBindlessResource(material.pRoughnessMetalnessTexture, GetDefaultTexture(DefaultTexture::RoughnessMetalness));
+			b.Material.Emissive = m_pDevice->RegisterBindlessResource(material.pEmissiveTexture, GetDefaultTexture(DefaultTexture::Black2D));
+			b.BlendMode = material.IsTransparent ? Batch::Blending::AlphaMask : Batch::Blending::Opaque;
+		}
+	}
+
+	{
+		{
+			Vector3 Position(-150, 160, -10);
+			Vector3 Direction;
+			Position.Normalize(Direction);
+			Light sunLight = Light::Directional(Position, -Direction, 10);
+			sunLight.CastShadows = true;
+			sunLight.VolumetricLighting = true;
+			m_Lights.push_back(sunLight);
+		}
+
+		{
+			Light spotLight = Light::Spot(Vector3(-5, 16, 16), 800, Vector3(0, 1, 0), 90, 70, 1000, Color(1.0f, 0.7f, 0.3f, 1.0f));
+			spotLight.CastShadows = true;
+			spotLight.LightTexture = m_pDevice->RegisterBindlessResource(m_pLightCookie.get(), GetDefaultTexture(DefaultTexture::White2D));
+			spotLight.VolumetricLighting = true;
+			m_Lights.push_back(spotLight);
+		}
+		m_pLightBuffer = std::make_unique<Buffer>(m_pDevice.get(), "Lights");
+		m_pLightBuffer->Create(BufferDesc::CreateStructured((int)m_Lights.size(), sizeof(Light), BufferFlag::ShaderResource));
+	}
+}
+
 Matrix spotMatrix = Matrix::CreateScale(100.0f, 0.2f, 1) * Matrix::CreateFromYawPitchRoll(0.1f, 0, 0) * Matrix::CreateTranslation(0, 10, 0);
 
 void DemoApp::Update()
 {
 	PROFILE_BEGIN("Update");
-	BeginFrame();
+	m_pImGuiRenderer->NewFrame(m_WindowWidth, m_WindowHeight);
 	m_pImGuiRenderer->Update();
 
 	PROFILE_BEGIN("Update Game State");
-
 	m_pDevice->GetShaderManager()->ConditionallyReloadShaders();
 
 	for (Batch& b : m_SceneData.Batches)
@@ -316,206 +452,219 @@ void DemoApp::Update()
 	/////////////////////////////////////////
 
 	ShadowData shadowData;
-
-	float minPoint = 0;
-	float maxPoint = 1;
-
-	shadowData.NumCascades = Tweakables::g_ShadowCascades;
-
-	if (Tweakables::g_SDSM)
-	{
-		Buffer* pSourceBuffer = m_ReductionReadbackTargets[(m_Frame + 1) % GraphicsDevice::FRAME_COUNT].get();
-		Vector2* pData = (Vector2*)pSourceBuffer->GetMappedData();
-		minPoint = pData->x;
-		maxPoint = pData->y;
-	}
-
-	float n = m_pCamera->GetNear();
-	float f = m_pCamera->GetFar();
-	float nearPlane = Math::Min(n, f);
-	float farPlane = Math::Max(n, f);
-	float clipPlaneRange = farPlane - nearPlane;
-
-	float minZ = nearPlane + minPoint * clipPlaneRange;
-	float maxZ = nearPlane + maxPoint * clipPlaneRange;
-
-	constexpr uint32 MAX_CASCADES = 4;
-	std::array<float, MAX_CASCADES> cascadeSplits{};
-
-	for (int i = 0; i < Tweakables::g_ShadowCascades; ++i)
-	{
-		float p = (i + 1) / (float)Tweakables::g_ShadowCascades;
-		float log = minZ * std::pow(maxZ / minZ, p);
-		float uniform = minZ + (maxZ - minZ) * p;
-		float d = Tweakables::g_PSSMFactor * (log - uniform) + uniform;
-		cascadeSplits[i] = (d - nearPlane) / clipPlaneRange;
-	}
-
 	int shadowIndex = 0;
-	for (size_t lightIndex = 0; lightIndex < m_Lights.size(); ++lightIndex)
+
 	{
-		Light& light = m_Lights[lightIndex];
-		if (!light.CastShadows)
+		PROFILE_SCOPE("Shadow Setup");
+
+		float minPoint = 0;
+		float maxPoint = 1;
+
+		shadowData.NumCascades = Tweakables::g_ShadowCascades;
+
+		if (Tweakables::g_SDSM)
 		{
-			continue;
+			Buffer* pSourceBuffer = m_ReductionReadbackTargets[(m_Frame + 1) % GraphicsDevice::FRAME_COUNT].get();
+			Vector2* pData = (Vector2*)pSourceBuffer->GetMappedData();
+			minPoint = pData->x;
+			maxPoint = pData->y;
 		}
-		light.ShadowIndex = shadowIndex;
-		if (light.Type == LightType::Directional)
+
+		float n = m_pCamera->GetNear();
+		float f = m_pCamera->GetFar();
+		float nearPlane = Math::Min(n, f);
+		float farPlane = Math::Max(n, f);
+		float clipPlaneRange = farPlane - nearPlane;
+
+		float minZ = nearPlane + minPoint * clipPlaneRange;
+		float maxZ = nearPlane + maxPoint * clipPlaneRange;
+
+		constexpr uint32 MAX_CASCADES = 4;
+		std::array<float, MAX_CASCADES> cascadeSplits{};
+
+		for (int i = 0; i < Tweakables::g_ShadowCascades; ++i)
 		{
-			for (int i = 0; i < Tweakables::g_ShadowCascades; ++i)
+			float p = (i + 1) / (float)Tweakables::g_ShadowCascades;
+			float log = minZ * std::pow(maxZ / minZ, p);
+			float uniform = minZ + (maxZ - minZ) * p;
+			float d = Tweakables::g_PSSMFactor * (log - uniform) + uniform;
+			cascadeSplits[i] = (d - nearPlane) / clipPlaneRange;
+		}
+
+		for (size_t lightIndex = 0; lightIndex < m_Lights.size(); ++lightIndex)
+		{
+			Light& light = m_Lights[lightIndex];
+			if (!light.CastShadows)
 			{
-				float previousCascadeSplit = i == 0 ? minPoint : cascadeSplits[i - 1];
-				float currentCascadeSplit = cascadeSplits[i];
+				continue;
+			}
+			light.ShadowIndex = shadowIndex;
+			if (light.Type == LightType::Directional)
+			{
+				for (int i = 0; i < Tweakables::g_ShadowCascades; ++i)
+				{
+					float previousCascadeSplit = i == 0 ? minPoint : cascadeSplits[i - 1];
+					float currentCascadeSplit = cascadeSplits[i];
 
-				Vector3 frustumCorners[] = {
-					//near
-					Vector3(-1, -1, 1),
-					Vector3(-1, 1, 1),
-					Vector3(1, 1, 1),
-					Vector3(1, -1, 1),
+					Vector3 frustumCorners[] = {
+						//near
+						Vector3(-1, -1, 1),
+						Vector3(-1, 1, 1),
+						Vector3(1, 1, 1),
+						Vector3(1, -1, 1),
 
-					//far
-					Vector3(-1, -1, 0),
-					Vector3(-1, 1, 0),
-					Vector3(1, 1, 0),
-					Vector3(1, -1, 0),
+						//far
+						Vector3(-1, -1, 0),
+						Vector3(-1, 1, 0),
+						Vector3(1, 1, 0),
+						Vector3(1, -1, 0),
+					};
+
+					//Retrieve frustum corners in world space
+					for (Vector3& corner : frustumCorners)
+					{
+						corner = Vector3::Transform(corner, m_pCamera->GetProjectionInverse());
+						corner = Vector3::Transform(corner, m_pCamera->GetViewInverse());
+					}
+
+					//Adjust frustum corners based on cascade splits
+					for (int j = 0; j < 4; ++j)
+					{
+						Vector3 cornerRay = frustumCorners[j + 4] - frustumCorners[j];
+						Vector3 nearPoint = previousCascadeSplit * cornerRay;
+						Vector3 farPoint = currentCascadeSplit * cornerRay;
+						frustumCorners[j + 4] = frustumCorners[j] + farPoint;
+						frustumCorners[j] = frustumCorners[j] + nearPoint;
+					}
+
+					Vector3 center = Vector3::Zero;
+					for (const Vector3& corner : frustumCorners)
+					{
+						center += corner;
+					}
+					center /= 8;
+
+					Vector3 minExtents(FLT_MAX);
+					Vector3 maxExtents(-FLT_MAX);
+
+					//Create a bounding sphere to maintain aspect in projection to avoid flickering when rotating
+					if (Tweakables::g_StabilizeCascades)
+					{
+						float radius = 0;
+						for (const Vector3& corner : frustumCorners)
+						{
+							float dist = Vector3::Distance(center, corner);
+							radius = Math::Max(dist, radius);
+						}
+						maxExtents = Vector3(radius, radius, radius);
+						minExtents = -maxExtents;
+					}
+					else
+					{
+						Matrix lightView = Math::CreateLookToMatrix(center, light.Direction, Vector3::Up);
+						for (const Vector3& corner : frustumCorners)
+						{
+							Vector3 p = Vector3::Transform(corner, lightView);
+							minExtents = Vector3::Min(minExtents, p);
+							maxExtents = Vector3::Max(maxExtents, p);
+						}
+					}
+
+					Matrix shadowView = Math::CreateLookToMatrix(center + light.Direction * -400, light.Direction, Vector3::Up);
+
+					Matrix projectionMatrix = Math::CreateOrthographicOffCenterMatrix(minExtents.x, maxExtents.x, minExtents.y, maxExtents.y, maxExtents.z + 400, 0);
+					Matrix lightViewProjection = shadowView * projectionMatrix;
+
+					//Snap projection to shadowmap texels to avoid flickering edges
+					if (Tweakables::g_StabilizeCascades)
+					{
+						float shadowMapSize = 2048;
+						Vector4 shadowOrigin = Vector4::Transform(Vector4(0, 0, 0, 1), lightViewProjection);
+						shadowOrigin *= shadowMapSize / 2.0f;
+						Vector4 rounded = XMVectorRound(shadowOrigin);
+						Vector4 roundedOffset = rounded - shadowOrigin;
+						roundedOffset *= 2.0f / shadowMapSize;
+						roundedOffset.z = 0;
+						roundedOffset.w = 0;
+
+						projectionMatrix *= Matrix::CreateTranslation(Vector3(roundedOffset));
+						lightViewProjection = shadowView * projectionMatrix;
+					}
+
+					shadowData.CascadeDepths[shadowIndex] = currentCascadeSplit * (farPlane - nearPlane) + nearPlane;
+					shadowData.LightViewProjections[shadowIndex++] = lightViewProjection;
+				}
+			}
+			else if (light.Type == LightType::Spot)
+			{
+				Matrix projection = Math::CreatePerspectiveMatrix(light.UmbraAngleDegrees * Math::DegreesToRadians, 1.0f, light.Range, 1.0f);
+				shadowData.LightViewProjections[shadowIndex++] = Math::CreateLookToMatrix(light.Position, light.Direction, Vector3::Up) * projection;
+			}
+			else if (light.Type == LightType::Point)
+			{
+				Matrix projection = Math::CreatePerspectiveMatrix(Math::PIDIV2, 1, light.Range, 1.0f);
+
+				constexpr Vector3 cubemapDirections[] = {
+					Vector3(-1.0f, 0.0f, 0.0f),
+					Vector3(1.0f, 0.0f, 0.0f),
+					Vector3(0.0f, -1.0f, 0.0f),
+					Vector3(0.0f, 1.0f, 0.0f),
+					Vector3(0.0f, 0.0f, -1.0f),
+					Vector3(0.0f, 0.0f, 1.0f),
+				};
+				constexpr Vector3 cubemapUpDirections[] = {
+					Vector3(0.0f, 1.0f, 0.0f),
+					Vector3(0.0f, 1.0f, 0.0f),
+					Vector3(0.0f, 0.0f, -1.0f),
+					Vector3(0.0f, 0.0f, 1.0f),
+					Vector3(0.0f, 1.0f, 0.0f),
+					Vector3(0.0f, 1.0f, 0.0f),
 				};
 
-				//Retrieve frustum corners in world space
-				for (Vector3& corner : frustumCorners)
+				for (int i = 0; i < 6; ++i)
 				{
-					corner = Vector3::Transform(corner, m_pCamera->GetProjectionInverse());
-					corner = Vector3::Transform(corner, m_pCamera->GetViewInverse());
+					shadowData.LightViewProjections[shadowIndex] = Matrix::CreateLookAt(light.Position, light.Position + cubemapDirections[i], cubemapUpDirections[i]) * projection;
+					++shadowIndex;
 				}
-
-				//Adjust frustum corners based on cascade splits
-				for (int j = 0; j < 4; ++j)
-				{
-					Vector3 cornerRay = frustumCorners[j + 4] - frustumCorners[j];
-					Vector3 nearPoint = previousCascadeSplit * cornerRay;
-					Vector3 farPoint = currentCascadeSplit * cornerRay;
-					frustumCorners[j + 4] = frustumCorners[j] + farPoint;
-					frustumCorners[j] = frustumCorners[j] + nearPoint;
-				}
-
-				Vector3 center = Vector3::Zero;
-				for (const Vector3& corner : frustumCorners)
-				{
-					center += corner;
-				}
-				center /= 8;
-
-				Vector3 minExtents(FLT_MAX);
-				Vector3 maxExtents(-FLT_MAX);
-
-				//Create a bounding sphere to maintain aspect in projection to avoid flickering when rotating
-				if (Tweakables::g_StabilizeCascades)
-				{
-					float radius = 0;
-					for (const Vector3& corner : frustumCorners)
-					{
-						float dist = Vector3::Distance(center, corner);
-						radius = Math::Max(dist, radius);
-					}
-					maxExtents = Vector3(radius, radius, radius);
-					minExtents = -maxExtents;
-				}
-				else
-				{
-					Matrix lightView = Math::CreateLookToMatrix(center, light.Direction, Vector3::Up);
-					for (const Vector3& corner : frustumCorners)
-					{
-						Vector3 p = Vector3::Transform(corner, lightView);
-						minExtents = Vector3::Min(minExtents, p);
-						maxExtents = Vector3::Max(maxExtents, p);
-					}
-				}
-
-				Matrix shadowView = Math::CreateLookToMatrix(center + light.Direction * -400, light.Direction, Vector3::Up);
-
-				Matrix projectionMatrix = Math::CreateOrthographicOffCenterMatrix(minExtents.x, maxExtents.x, minExtents.y, maxExtents.y, maxExtents.z + 400, 0);
-				Matrix lightViewProjection = shadowView * projectionMatrix;
-
-				//Snap projection to shadowmap texels to avoid flickering edges
-				if (Tweakables::g_StabilizeCascades)
-				{
-					float shadowMapSize = 2048;
-					Vector4 shadowOrigin = Vector4::Transform(Vector4(0, 0, 0, 1), lightViewProjection);
-					shadowOrigin *= shadowMapSize / 2.0f;
-					Vector4 rounded = XMVectorRound(shadowOrigin);
-					Vector4 roundedOffset = rounded - shadowOrigin;
-					roundedOffset *= 2.0f / shadowMapSize;
-					roundedOffset.z = 0;
-					roundedOffset.w = 0;
-
-					projectionMatrix *= Matrix::CreateTranslation(Vector3(roundedOffset));
-					lightViewProjection = shadowView * projectionMatrix;
-				}
-
-				shadowData.CascadeDepths[shadowIndex] = currentCascadeSplit * (farPlane - nearPlane) + nearPlane;
-				shadowData.LightViewProjections[shadowIndex++] = lightViewProjection;
 			}
 		}
-		else if (light.Type == LightType::Spot)
-		{
-			Matrix projection = Math::CreatePerspectiveMatrix(light.UmbraAngleDegrees * Math::DegreesToRadians, 1.0f, light.Range, 1.0f);
-			shadowData.LightViewProjections[shadowIndex++] = Math::CreateLookToMatrix(light.Position, light.Direction, Vector3::Up) * projection;
-		}
-		else if (light.Type == LightType::Point)
-		{
-			Matrix projection = Math::CreatePerspectiveMatrix(Math::PIDIV2, 1, light.Range, 1.0f);
 
-			constexpr Vector3 cubemapDirections[] = {
-				Vector3(-1.0f, 0.0f, 0.0f),
-				Vector3(1.0f, 0.0f, 0.0f),
-				Vector3(0.0f, -1.0f, 0.0f),
-				Vector3(0.0f, 1.0f, 0.0f),
-				Vector3(0.0f, 0.0f, -1.0f),
-				Vector3(0.0f, 0.0f, 1.0f),
-			};
-			constexpr Vector3 cubemapUpDirections[] = {
-				Vector3(0.0f, 1.0f, 0.0f),
-				Vector3(0.0f, 1.0f, 0.0f),
-				Vector3(0.0f, 0.0f, -1.0f),
-				Vector3(0.0f, 0.0f, 1.0f),
-				Vector3(0.0f, 1.0f, 0.0f),
-				Vector3(0.0f, 1.0f, 0.0f),
-			};
-
-			for (int i = 0; i < 6; ++i)
+		if (shadowIndex > (int)m_ShadowMaps.size())
+		{
+			m_ShadowMaps.resize(shadowIndex);
+			int i = 0;
+			for (auto& pShadowMap : m_ShadowMaps)
 			{
-				shadowData.LightViewProjections[shadowIndex] = Matrix::CreateLookAt(light.Position, light.Position + cubemapDirections[i], cubemapUpDirections[i]) * projection;
-				++shadowIndex;
+				pShadowMap = std::make_unique<Texture>(m_pDevice.get(), "Shadow Map");
+				if (i < 4)
+					pShadowMap->Create(TextureDesc::CreateDepth(2048, 2048, GraphicsDevice::DEPTH_STENCIL_SHADOW_FORMAT, TextureFlag::DepthStencil | TextureFlag::ShaderResource, 1, ClearBinding(0.0f, 0)));
+				else
+					pShadowMap->Create(TextureDesc::CreateDepth(512, 512, GraphicsDevice::DEPTH_STENCIL_SHADOW_FORMAT, TextureFlag::DepthStencil | TextureFlag::ShaderResource, 1, ClearBinding(0.0f, 0)));
+				++i;
+				m_pDevice->RegisterBindlessResource(pShadowMap.get(), nullptr);
 			}
 		}
+
+
+		for (Light& light : m_Lights)
+		{
+			if (light.ShadowIndex >= 0)
+			{
+				light.ShadowMapSize = m_ShadowMaps[light.ShadowIndex]->GetWidth();
+			}
+		}
+		shadowData.ShadowMapOffset = m_pDevice->RegisterBindlessResource(m_ShadowMaps[0].get());
 	}
 
-	if (shadowIndex > (int)m_ShadowMaps.size())
 	{
-		m_ShadowMaps.resize(shadowIndex);
-		int i = 0;
-		for (auto& pShadowMap : m_ShadowMaps)
+		PROFILE_SCOPE("Frustum Culling");
+		BoundingFrustum frustum = m_pCamera->GetFrustum();
+		for (const Batch& b : m_SceneData.Batches)
 		{
-			pShadowMap = std::make_unique<Texture>(m_pDevice.get(), "Shadow Map");
-			if (i < 4)
-				pShadowMap->Create(TextureDesc::CreateDepth(2048, 2048, GraphicsDevice::DEPTH_STENCIL_SHADOW_FORMAT, TextureFlag::DepthStencil | TextureFlag::ShaderResource, 1, ClearBinding(0.0f, 0)));
-			else
-				pShadowMap->Create(TextureDesc::CreateDepth(512, 512, GraphicsDevice::DEPTH_STENCIL_SHADOW_FORMAT, TextureFlag::DepthStencil | TextureFlag::ShaderResource, 1, ClearBinding(0.0f, 0)));
-			++i;
-			m_pDevice->RegisterBindlessResource(pShadowMap.get(), nullptr);
+			m_SceneData.VisibilityMask.AssignBit(b.Index, frustum.Contains(b.Bounds));
 		}
 	}
 
-
-	for (Light& light : m_Lights)
-	{
-		if (light.ShadowIndex >= 0)
-		{
-			light.ShadowMapSize = m_ShadowMaps[light.ShadowIndex]->GetWidth();
-		}
-	}
-
-	shadowData.ShadowMapOffset = m_pDevice->RegisterBindlessResource(m_ShadowMaps[0].get());
 	m_SceneData.pDepthBuffer = GetDepthStencil();
 	m_SceneData.pResolvedDepth = GetResolvedDepthStencil();
 	m_SceneData.pRenderTarget = GetCurrentRenderTarget();
@@ -530,17 +679,11 @@ void DemoApp::Update()
 	m_SceneData.pResolvedNormals = m_pResolvedNormals.get();
 	m_SceneData.pResolvedTarget = Tweakables::g_TAA ? m_pTAASource.get() : m_pHDRRenderTarget.get();
 
-	BoundingFrustum frustum = m_pCamera->GetFrustum();
-	for (const Batch& b : m_SceneData.Batches)
-	{
-		m_SceneData.VisibilityMask.AssignBit(b.Index, frustum.Contains(b.Bounds));
-	}
+	PROFILE_END();
 
 	////////////////////////////////
 	// LET THE RENDERING BEGIN!
 	////////////////////////////////
-
-	PROFILE_END();
 
 	if (m_CapturePix)
 	{
@@ -1220,165 +1363,14 @@ void DemoApp::Update()
 	//	- Set fence for the currently queued frame
 	//	- Present the frame buffer
 	//	- Wait for the next frame to be finished to start queueing work for it
-	EndFrame();
+	Profiler::Get()->Resolve(m_pSwapchain.get(), m_pDevice.get(), m_Frame);
+	m_pSwapchain->Present();
+	++m_Frame;
 
 	if (m_CapturePix)
 	{
 		D3D::EndPixCapture();
 		m_CapturePix = false;
-	}
-}
-
-void DemoApp::BeginFrame()
-{
-	m_pImGuiRenderer->NewFrame(m_WindowWidth, m_WindowHeight);
-}
-
-void DemoApp::EndFrame()
-{
-	Profiler::Get()->Resolve(m_pSwapchain.get(), m_pDevice.get(), m_Frame);
-	m_pSwapchain->Present();
-	++m_Frame;
-}
-
-void DemoApp::InitD3D(WindowHandle window, const IntVector2& windowRect)
-{
-	E_LOG(Info, "Graphics::InitD3D()");
-	std::unique_ptr<GraphicsInstance> instance = GraphicsInstance::CreateInstance();
-	ComPtr<IDXGIAdapter4> pAdapter = instance->EnumerateAdapter(false);
-	m_pDevice = instance->CreateDevice(pAdapter.Get());
-
-	bool setStablePowerState = CommandLine::GetBool("stablepowerstate");
-	if (setStablePowerState)
-	{
-		D3D12EnableExperimentalFeatures(0, nullptr, nullptr, nullptr);
-	}
-
-	m_pSwapchain = instance->CreateSwapchain(m_pDevice.get(), window, GraphicsDevice::SWAPCHAIN_FORMAT, windowRect.x, windowRect.y, GraphicsDevice::FRAME_COUNT, true);
-
-	m_pDepthStencil = std::make_unique<Texture>(m_pDevice.get(), "Depth Stencil");
-	m_pResolvedDepthStencil = std::make_unique<Texture>(m_pDevice.get(), "Resolved Depth Stencil");
-
-	if (m_SampleCount > 1)
-	{
-		m_pMultiSampleRenderTarget = std::make_unique<Texture>(m_pDevice.get(), "MSAA Target");
-	}
-
-	m_pNormals = std::make_unique<Texture>(m_pDevice.get(), "MSAA Normals");
-	m_pResolvedNormals = std::make_unique<Texture>(m_pDevice.get(), "Normals");
-	m_pHDRRenderTarget = std::make_unique<Texture>(m_pDevice.get(), "HDR Target");
-	m_pPreviousColor = std::make_unique<Texture>(m_pDevice.get(), "Previous Color");
-	m_pTonemapTarget = std::make_unique<Texture>(m_pDevice.get(), "Tonemap Target");
-	m_pDownscaledColor = std::make_unique<Texture>(m_pDevice.get(), "Downscaled HDR Target");
-	m_pAmbientOcclusion = std::make_unique<Texture>(m_pDevice.get(), "SSAO");
-	m_pVelocity = std::make_unique<Texture>(m_pDevice.get(), "Velocity");
-	m_pTAASource = std::make_unique<Texture>(m_pDevice.get(), "TAA Target");
-
-	m_pImGuiRenderer = std::make_unique<ImGuiRenderer>(m_pDevice.get());
-
-	m_pClusteredForward = std::make_unique<ClusteredForward>(m_pDevice.get());
-	m_pTiledForward = std::make_unique<TiledForward>(m_pDevice.get());
-	m_pRTReflections = std::make_unique<RTReflections>(m_pDevice.get());
-	m_pRTAO = std::make_unique<RTAO>(m_pDevice.get());
-	m_pSSAO = std::make_unique<SSAO>(m_pDevice.get());
-	m_pParticles = std::make_unique<GpuParticles>(m_pDevice.get());
-
-	Profiler::Get()->Initialize(m_pDevice.get());
-	DebugRenderer::Get()->Initialize(m_pDevice.get());
-
-	m_pImGuiRenderer->AddUpdateCallback(ImGuiCallbackDelegate::CreateRaw(this, &DemoApp::UpdateImGui));
-
-	m_SceneData.GlobalSRVHeapHandle = m_pDevice->GetGlobalViewHeap()->GetStartHandle();
-
-	OnResize(windowRect.x, windowRect.y);
-}
-
-void DemoApp::InitializeAssets(CommandContext& context)
-{
-	auto RegisterDefaultTexture = [this, &context](DefaultTexture type, const char* pName, const TextureDesc& desc, uint32* pData) {
-		m_DefaultTextures[(int)type] = std::make_unique<Texture>(m_pDevice.get(), pName);
-		m_DefaultTextures[(int)type]->Create(&context, desc, pData);
-	};
-
-	uint32 BLACK = 0xFF000000;
-	RegisterDefaultTexture(DefaultTexture::Black2D, "Default Black", TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &BLACK);
-	uint32 WHITE = 0xFFFFFFFF;
-	RegisterDefaultTexture(DefaultTexture::White2D, "Default White", TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &WHITE);
-	uint32 MAGENTA = 0xFFFF00FF;
-	RegisterDefaultTexture(DefaultTexture::Magenta2D, "Default Magenta", TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &MAGENTA);
-	uint32 GRAY = 0xFF808080;
-	RegisterDefaultTexture(DefaultTexture::Gray2D, "Default Gray", TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &GRAY);
-	uint32 DEFAULT_NORMAL = 0xFFFF8080;
-	RegisterDefaultTexture(DefaultTexture::Normal2D, "Default Normal", TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &DEFAULT_NORMAL);
-	uint32 DEFAULT_ROUGHNESS_METALNESS = 0xFF0080FF;
-	RegisterDefaultTexture(DefaultTexture::RoughnessMetalness, "Default Roughness/Metalness", TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &DEFAULT_ROUGHNESS_METALNESS);
-
-	uint32 BLACK_CUBE[6] = {};
-	RegisterDefaultTexture(DefaultTexture::BlackCube, "Default Black Cube", TextureDesc::CreateCube(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), BLACK_CUBE);
-
-	m_DefaultTextures[(int)DefaultTexture::ColorNoise256] = std::make_unique<Texture>(m_pDevice.get(), "Color Noise 256px");
-	m_DefaultTextures[(int)DefaultTexture::ColorNoise256]->Create(&context, "Resources/Textures/Noise.png", false);
-	m_DefaultTextures[(int)DefaultTexture::BlueNoise512] = std::make_unique<Texture>(m_pDevice.get(), "Blue Noise 512px");
-	m_DefaultTextures[(int)DefaultTexture::BlueNoise512]->Create(&context, "Resources/Textures/BlueNoise.dds", false);
-}
-
-void DemoApp::SetupScene(CommandContext& context)
-{
-	m_pLightCookie = std::make_unique<Texture>(m_pDevice.get(), "Light Cookie");
-	m_pLightCookie->Create(&context, "Resources/Textures/LightProjector.png", false);
-
-	{
-		std::unique_ptr<Mesh> pMesh = std::make_unique<Mesh>();
-		//pMesh->Load("Resources/Bistro_Godot/Bistro_Godot.gltf", m_pDevice.get(), &context, 3.0f);
-		//pMesh->Load("Resources/Bathroom/scene.gltf", m_pDevice.get(), &context, 0.2f);
-		pMesh->Load("Resources/sponza/sponza.dae", m_pDevice.get(), &context, 1.0f);
-		m_Meshes.push_back(std::move(pMesh));
-	}
-
-	for (uint32 j = 0; j < (uint32)m_Meshes.size(); ++j)
-	{
-		auto& pMesh = m_Meshes[j];
-		for (const SubMeshInstance& node : pMesh->GetMeshInstances())
-		{
-			const SubMesh& subMesh = pMesh->GetMesh(node.MeshIndex);
-			const Material& material = pMesh->GetMaterial(subMesh.MaterialId);
-			m_SceneData.Batches.push_back(Batch{});
-			Batch& b = m_SceneData.Batches.back();
-			b.Index = (int)m_SceneData.Batches.size() - 1;
-			b.LocalBounds = subMesh.Bounds;
-			b.pMesh = &subMesh;
-			b.WorldMatrix = node.Transform;
-			b.VertexBufferDescriptor = m_pDevice->RegisterBindlessResource(subMesh.pVertexSRV);
-			b.IndexBufferDescriptor = m_pDevice->RegisterBindlessResource(subMesh.pIndexSRV);
-
-			b.Material.Diffuse = m_pDevice->RegisterBindlessResource(material.pDiffuseTexture, GetDefaultTexture(DefaultTexture::Gray2D));
-			b.Material.Normal = m_pDevice->RegisterBindlessResource(material.pNormalTexture, GetDefaultTexture(DefaultTexture::Normal2D));
-			b.Material.RoughnessMetalness = m_pDevice->RegisterBindlessResource(material.pRoughnessMetalnessTexture, GetDefaultTexture(DefaultTexture::RoughnessMetalness));
-			b.Material.Emissive = m_pDevice->RegisterBindlessResource(material.pEmissiveTexture, GetDefaultTexture(DefaultTexture::Black2D));
-			b.BlendMode = material.IsTransparent ? Batch::Blending::AlphaMask : Batch::Blending::Opaque;
-		}
-	}
-
-	{
-		{
-			Vector3 Position(-150, 160, -10);
-			Vector3 Direction;
-			Position.Normalize(Direction);
-			Light sunLight = Light::Directional(Position, -Direction, 10);
-			sunLight.CastShadows = true;
-			sunLight.VolumetricLighting = true;
-			m_Lights.push_back(sunLight);
-		}
-
-		{
-			Light spotLight = Light::Spot(Vector3(-5, 16, 16), 800, Vector3(0, 1, 0), 90, 70, 1000, Color(1.0f, 0.7f, 0.3f, 1.0f));
-			spotLight.CastShadows = true;
-			spotLight.LightTexture = m_pDevice->RegisterBindlessResource(m_pLightCookie.get(), GetDefaultTexture(DefaultTexture::White2D));
-			spotLight.VolumetricLighting = true;
-			m_Lights.push_back(spotLight);
-		}
-		m_pLightBuffer = std::make_unique<Buffer>(m_pDevice.get(), "Lights");
-		m_pLightBuffer->Create(BufferDesc::CreateStructured((int)m_Lights.size(), sizeof(Light), BufferFlag::ShaderResource));
 	}
 }
 

@@ -18,14 +18,6 @@
 #include "StateObject.h"
 #include "Core/CommandLine.h"
 
-#ifndef D3D_VALIDATION
-#define D3D_VALIDATION 0
-#endif
-
-#ifndef GPU_VALIDATION
-#define GPU_VALIDATION 0
-#endif
-
 const DXGI_FORMAT GraphicsDevice::DEPTH_STENCIL_FORMAT = DXGI_FORMAT_D32_FLOAT;
 const DXGI_FORMAT GraphicsDevice::DEPTH_STENCIL_SHADOW_FORMAT = DXGI_FORMAT_D16_UNORM;
 const DXGI_FORMAT GraphicsDevice::RENDER_TARGET_FORMAT = DXGI_FORMAT_R11G11B10_FLOAT;
@@ -50,45 +42,49 @@ GraphicsDevice::GraphicsDevice(IDXGIAdapter4* pAdapter)
 	RegisterWaitForSingleObject(&m_DeviceRemovedEvent, deviceRemovedEvent, OnDeviceRemovedCallback, this, INFINITE, 0);
 #endif
 
-	if (true)
+	ID3D12InfoQueue* pInfoQueue = nullptr;
+	if (SUCCEEDED(m_pDevice->QueryInterface(IID_PPV_ARGS(&pInfoQueue))))
 	{
-		ID3D12InfoQueue* pInfoQueue = nullptr;
-		if (SUCCEEDED(m_pDevice->QueryInterface(IID_PPV_ARGS(&pInfoQueue))))
+		// Suppress whole categories of messages
+		//D3D12_MESSAGE_CATEGORY Categories[] = {};
+
+		// Suppress messages based on their severity level
+		D3D12_MESSAGE_SEVERITY Severities[] =
 		{
-			// Suppress whole categories of messages
-			//D3D12_MESSAGE_CATEGORY Categories[] = {};
+			D3D12_MESSAGE_SEVERITY_INFO
+		};
 
-			// Suppress messages based on their severity level
-			D3D12_MESSAGE_SEVERITY Severities[] =
-			{
-				D3D12_MESSAGE_SEVERITY_INFO
-			};
+		// Suppress individual messages by their ID
+		D3D12_MESSAGE_ID DenyIds[] =
+		{
+			// This occurs when there are uninitialized descriptors in a descriptor table, even when a
+			// shader does not access the missing descriptors.  I find this is common when switching
+			// shader permutations and not wanting to change much code to reorder resources.
+			D3D12_MESSAGE_ID_INVALID_DESCRIPTOR_HANDLE,
+		};
 
-			// Suppress individual messages by their ID
-			D3D12_MESSAGE_ID DenyIds[] =
-			{
-				// This occurs when there are uninitialized descriptors in a descriptor table, even when a
-				// shader does not access the missing descriptors.  I find this is common when switching
-				// shader permutations and not wanting to change much code to reorder resources.
-				D3D12_MESSAGE_ID_INVALID_DESCRIPTOR_HANDLE,
-			};
+		D3D12_INFO_QUEUE_FILTER NewFilter = {};
+		//NewFilter.DenyList.NumCategories = _countof(Categories);
+		//NewFilter.DenyList.pCategoryList = Categories;
+		NewFilter.DenyList.NumSeverities = _countof(Severities);
+		NewFilter.DenyList.pSeverityList = Severities;
+		NewFilter.DenyList.NumIDs = _countof(DenyIds);
+		NewFilter.DenyList.pIDList = DenyIds;
 
-			D3D12_INFO_QUEUE_FILTER NewFilter = {};
-			//NewFilter.DenyList.NumCategories = _countof(Categories);
-			//NewFilter.DenyList.pCategoryList = Categories;
-			NewFilter.DenyList.NumSeverities = _countof(Severities);
-			NewFilter.DenyList.pSeverityList = Severities;
-			NewFilter.DenyList.NumIDs = _countof(DenyIds);
-			NewFilter.DenyList.pIDList = DenyIds;
-
-			if (CommandLine::GetBool("d3dbreakvalidation"))
-			{
-				VERIFY_HR_EX(pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, true), GetDevice());
-				E_LOG(Warning, "D3D Validation Break on Severity Enabled");
-			}
-			pInfoQueue->PushStorageFilter(&NewFilter);
-			pInfoQueue->Release();
+		if (CommandLine::GetBool("d3dbreakvalidation"))
+		{
+			VERIFY_HR_EX(pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, true), GetDevice());
+			E_LOG(Warning, "D3D Validation Break on Severity Enabled");
 		}
+		pInfoQueue->PushStorageFilter(&NewFilter);
+		pInfoQueue->Release();
+	}
+
+	bool setStablePowerState = CommandLine::GetBool("stablepowerstate");
+	if (setStablePowerState)
+	{
+		D3D12EnableExperimentalFeatures(0, nullptr, nullptr, nullptr);
+		m_pDevice->SetStablePowerState(TRUE);
 	}
 
 	//Feature checks
@@ -314,14 +310,6 @@ bool GraphicsDevice::UseRenderPasses() const
 	return m_RenderPassTier >= D3D12_RENDER_PASS_TIER_0;
 }
 
-bool GraphicsDevice::GetShaderModel(int& major, int& minor) const
-{
-	bool supported = m_ShaderModelMajor > major || (m_ShaderModelMajor == major && m_ShaderModelMinor >= minor);
-	major = m_ShaderModelMajor;
-	minor = m_ShaderModelMinor;
-	return supported;
-}
-
 void GraphicsDevice::IdleGPU()
 {
 	for (auto& pCommandQueue : m_CommandQueues)
@@ -357,23 +345,58 @@ StateObject* GraphicsDevice::CreateStateObject(const StateObjectInitializer& sta
 	return m_StateObjects.back().get();
 }
 
-std::unique_ptr<GraphicsInstance> GraphicsInstance::CreateInstance(GraphicsFlags createFlags /*= GraphicsFlags::None*/)
+std::unique_ptr<GraphicsInstance> GraphicsInstance::CreateInstance(GraphicsInstanceFlags createFlags /*= GraphicsFlags::None*/)
 {
-	std::unique_ptr<GraphicsInstance> pInstance = std::make_unique<GraphicsInstance>();
+	return std::make_unique<GraphicsInstance>(createFlags);
+}
+
+GraphicsInstance::GraphicsInstance(GraphicsInstanceFlags createFlags)
+{
 	UINT flags = 0;
-	if (EnumHasAnyFlags(createFlags, GraphicsFlags::DebugDevice))
+	if (EnumHasAnyFlags(createFlags, GraphicsInstanceFlags::DebugDevice))
 	{
 		flags |= DXGI_CREATE_FACTORY_DEBUG;
 	}
-	VERIFY_HR(CreateDXGIFactory2(flags, IID_PPV_ARGS(pInstance->m_pFactory.GetAddressOf())));
+	VERIFY_HR(CreateDXGIFactory2(flags, IID_PPV_ARGS(m_pFactory.GetAddressOf())));
 	BOOL allowTearing;
-	if (SUCCEEDED(pInstance->m_pFactory->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &allowTearing, sizeof(BOOL))))
+	if (SUCCEEDED(m_pFactory->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &allowTearing, sizeof(BOOL))))
 	{
-		pInstance->m_AllowTearing = allowTearing;
+		m_AllowTearing = allowTearing;
+	}
+
+	if (EnumHasAnyFlags(createFlags, GraphicsInstanceFlags::DebugDevice))
+	{
+		ComPtr<ID3D12Debug> pDebugController;
+		if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&pDebugController))))
+		{
+			pDebugController->EnableDebugLayer();
+		}
+	}
+
+	if (EnumHasAnyFlags(createFlags, GraphicsInstanceFlags::DRED))
+	{
+		ComPtr<ID3D12DeviceRemovedExtendedDataSettings1> pDredSettings;
+		if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&pDredSettings))))
+		{
+			// Turn on auto-breadcrumbs and page fault reporting.
+			pDredSettings->SetAutoBreadcrumbsEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
+			pDredSettings->SetPageFaultEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
+			pDredSettings->SetBreadcrumbContextEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
+			E_LOG(Warning, "DRED Enabled");
+		}
+	}
+
+	if (EnumHasAnyFlags(createFlags, GraphicsInstanceFlags::GpuValidation))
+	{
+		ComPtr<ID3D12Debug1> pDebugController;
+		if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&pDebugController))))
+		{
+			pDebugController->SetEnableGPUBasedValidation(true);
+		}
 	}
 
 #if PLATFORM_WINDOWS
-	if (EnumHasAnyFlags(createFlags, GraphicsFlags::Pix))
+	if (EnumHasAnyFlags(createFlags, GraphicsInstanceFlags::Pix))
 	{
 		if (GetModuleHandleA("WinPixGpuCapturer.dll") == 0)
 		{
@@ -388,21 +411,6 @@ std::unique_ptr<GraphicsInstance> GraphicsInstance::CreateInstance(GraphicsFlags
 		}
 	}
 #endif
-
-	if (EnumHasAnyFlags(createFlags, GraphicsFlags::DRED))
-	{
-		ComPtr<ID3D12DeviceRemovedExtendedDataSettings1> pDredSettings;
-		if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&pDredSettings))))
-		{
-			// Turn on auto-breadcrumbs and page fault reporting.
-			pDredSettings->SetAutoBreadcrumbsEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
-			pDredSettings->SetPageFaultEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
-			pDredSettings->SetBreadcrumbContextEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
-			E_LOG(Warning, "DRED Enabled");
-		}
-	}
-
-	return pInstance;
 }
 
 std::unique_ptr<SwapChain> GraphicsInstance::CreateSwapchain(GraphicsDevice* pDevice, WindowHandle pNativeWindow, DXGI_FORMAT format, uint32 width, uint32 height, uint32 numFrames, bool vsync)
@@ -447,7 +455,6 @@ ComPtr<IDXGIAdapter4> GraphicsInstance::EnumerateAdapter(bool useWarp)
 		pAdapter->GetDesc3(&desc);
 		E_LOG(Info, "Using %s", UNICODE_TO_MULTIBYTE(desc.Description));
 
-		//Create the device
 		constexpr D3D_FEATURE_LEVEL featureLevels[] =
 		{
 			D3D_FEATURE_LEVEL_12_2,
@@ -484,7 +491,7 @@ ComPtr<IDXGIAdapter4> GraphicsInstance::EnumerateAdapter(bool useWarp)
 	return pAdapter;
 }
 
-std::unique_ptr<GraphicsDevice> GraphicsInstance::CreateDevice(ComPtr<IDXGIAdapter4> pAdapter, GraphicsFlags createFlags /*= GraphicsFlags::None*/)
+std::unique_ptr<GraphicsDevice> GraphicsInstance::CreateDevice(ComPtr<IDXGIAdapter4> pAdapter)
 {
 	return std::make_unique<GraphicsDevice>(pAdapter.Get());
 }
