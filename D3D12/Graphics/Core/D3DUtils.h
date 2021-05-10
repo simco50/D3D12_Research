@@ -310,7 +310,7 @@ namespace D3D
 
 	inline void SetObjectName(ID3D12Object* pObject, const char* pName)
 	{
-		if (pObject)
+		if (pObject && pName)
 		{
 			VERIFY_HR_EX(pObject->SetPrivateData(WKPDID_D3DDebugObjectName, (uint32)strlen(pName), pName), nullptr);
 		}

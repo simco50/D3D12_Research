@@ -4,7 +4,7 @@
 #include "Graphics.h"
 
 VertexElementLayout::VertexElementLayout(const VertexElementLayout& rhs)
-	: m_ElementDesc(rhs.m_ElementDesc), m_SemanticNames(rhs.m_SemanticNames)
+	: m_ElementDesc(rhs.m_ElementDesc), m_SemanticNames(rhs.m_SemanticNames), m_NumElements(rhs.m_NumElements)
 {
 	FixupStrings();
 }
@@ -13,43 +13,44 @@ VertexElementLayout& VertexElementLayout::operator=(const VertexElementLayout& r
 {
 	m_ElementDesc = rhs.m_ElementDesc;
 	m_SemanticNames = rhs.m_SemanticNames;
+	m_NumElements = rhs.m_NumElements;
 	FixupStrings();
 	return *this;
 }
 
 void VertexElementLayout::AddVertexElement(const char* pSemantic, DXGI_FORMAT format, uint32 semanticIndex /*= 0*/, uint32 byteOffset /*= D3D12_APPEND_ALIGNED_ELEMENT*/, uint32 inputSlot /*= 0*/)
 {
-	m_SemanticNames.push_back(pSemantic);
-	m_ElementDesc.resize(m_ElementDesc.size() + 1);
-	D3D12_INPUT_ELEMENT_DESC& element = m_ElementDesc.back();
+	strcpy_s(m_SemanticNames[m_NumElements], pSemantic);
+	D3D12_INPUT_ELEMENT_DESC& element = m_ElementDesc[m_NumElements];
 	element.AlignedByteOffset = byteOffset;
 	element.Format = format;
 	element.InputSlot = inputSlot;
 	element.InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA;
 	element.InstanceDataStepRate = 0;
 	element.SemanticIndex = semanticIndex;
-	FixupStrings();
+	element.SemanticName = m_SemanticNames[m_NumElements];
+	++m_NumElements;
 }
 
 void VertexElementLayout::AddInstanceElement(const char* pSemantic, DXGI_FORMAT format, uint32 semanticIndex, uint32 byteOffset, uint32 inputSlot, uint32 stepRate)
 {
-	m_SemanticNames.push_back(pSemantic);
-	m_ElementDesc.resize(m_ElementDesc.size() + 1);
-	D3D12_INPUT_ELEMENT_DESC& element = m_ElementDesc.back();
+	strcpy_s(m_SemanticNames[m_NumElements], pSemantic);
+	D3D12_INPUT_ELEMENT_DESC& element = m_ElementDesc[m_NumElements];
 	element.AlignedByteOffset = byteOffset;
 	element.Format = format;
 	element.InputSlot = inputSlot;
 	element.InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA;
 	element.InstanceDataStepRate = stepRate;
 	element.SemanticIndex = semanticIndex;
-	FixupStrings();
+	element.SemanticName = m_SemanticNames[m_NumElements];
+	++m_NumElements;
 }
 
 void VertexElementLayout::FixupStrings()
 {
 	for (size_t i = 0; i < m_ElementDesc.size(); ++i)
 	{
-		m_ElementDesc[i].SemanticName = m_SemanticNames[i].c_str();
+		m_ElementDesc[i].SemanticName = m_SemanticNames[i];
 	}
 }
 
@@ -68,7 +69,7 @@ PipelineStateInitializer::PipelineStateInitializer()
 
 void PipelineStateInitializer::SetName(const char* pName)
 {
-	m_Name = pName;
+	m_pName = pName;
 }
 
 void PipelineStateInitializer::SetDepthOnlyTarget(DXGI_FORMAT dsvFormat, uint32 msaa)
@@ -244,8 +245,8 @@ void PipelineStateInitializer::SetInputLayout(const VertexElementLayout& layout)
 {
 	D3D12_INPUT_LAYOUT_DESC& ilDesc = GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_INPUT_LAYOUT>();
 	m_InputLayout = layout;
-	ilDesc.NumElements = (uint32)m_InputLayout.GetDesc().size();
-	ilDesc.pInputElementDescs = m_InputLayout.GetDesc().data();
+	ilDesc.NumElements = (uint32)m_InputLayout.GetNumElements();
+	ilDesc.pInputElementDescs = m_InputLayout.GetElements();
 }
 
 void PipelineStateInitializer::SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE topology)
@@ -493,13 +494,15 @@ void PipelineState::Create(const PipelineStateInitializer& initializer)
 	VERIFY_HR_EX(GetParent()->GetDevice()->QueryInterface(IID_PPV_ARGS(pDevice2.GetAddressOf())), GetParent()->GetDevice());
 
 	m_Desc = initializer;
-
-	D3D12_INPUT_LAYOUT_DESC& ilDesc = m_Desc.GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_INPUT_LAYOUT>();
-	ilDesc.pInputElementDescs = m_Desc.m_InputLayout.GetDesc().data();
+	if (initializer.m_InputLayout.GetNumElements() > 0)
+	{
+		D3D12_INPUT_LAYOUT_DESC& ilDesc = m_Desc.GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_INPUT_LAYOUT>();
+		ilDesc.pInputElementDescs = m_Desc.m_InputLayout.GetElements();
+	}
 
 	D3D12_PIPELINE_STATE_STREAM_DESC streamDesc = m_Desc.GetDesc();
 	VERIFY_HR_EX(pDevice2->CreatePipelineState(&streamDesc, IID_PPV_ARGS(m_pPipelineState.ReleaseAndGetAddressOf())), GetParent()->GetDevice());
-	D3D::SetObjectName(m_pPipelineState.Get(), m_Desc.m_Name.c_str());
+	D3D::SetObjectName(m_pPipelineState.Get(), m_Desc.m_pName);
 }
 
 void PipelineState::ConditionallyReload()
@@ -508,7 +511,7 @@ void PipelineState::ConditionallyReload()
 	{
 		Create(m_Desc);
 		m_NeedsReload = false;
-		E_LOG(Info, "Reloaded Pipeline: %s", m_Desc.m_Name.c_str());
+		E_LOG(Info, "Reloaded Pipeline: %s", m_Desc.m_pName);
 	}
 }
 
