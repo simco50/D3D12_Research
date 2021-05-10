@@ -65,27 +65,8 @@
 
 //---- Tip: You can add extra functions within the ImGui:: namespace, here or in your own headers files.
 
-#include "Core/Delegates.h"
-
 namespace ImGui
 {
-	DECLARE_MULTICAST_DELEGATE(OnImGuiRender);
 
-	extern OnImGuiRender RenderCallbacks;
-
-	inline void ExecuteCallbacks()
-	{
-		RenderCallbacks.Broadcast();
-	}
-
-	inline DelegateHandle RegisterCallback(OnImGuiRender::DelegateT&& callback)
-	{
-		return RenderCallbacks.Add(std::move(callback));
-	}
-
-	inline bool UnregisterCallback(DelegateHandle& handle)
-	{
-		return RenderCallbacks.Remove(handle);
-	}
 }
 

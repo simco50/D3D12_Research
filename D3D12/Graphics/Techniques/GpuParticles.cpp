@@ -136,16 +136,6 @@ void GpuParticles::Initialize(GraphicsDevice* pDevice)
 		psoDesc.SetName("Particle Rendering PS");
 		m_pRenderParticlesPS = pDevice->CreatePipeline(psoDesc);
 	}
-
-	ImGui::RegisterCallback(ImGui::OnImGuiRenderDelegate::CreateLambda([]() {
-		ImGui::Begin("Parameters");
-		ImGui::Text("Particles");
-		ImGui::Checkbox("Enabled", &g_Enabled);
-		ImGui::Checkbox("Simulate", &g_Simulate);
-		ImGui::SliderInt("Emit Count", &g_EmitCount, 0, cMaxParticleCount / 50);
-		ImGui::SliderFloat("Life Time", &g_LifeTime, 0, 10);
-		ImGui::End();
-	}));
 }
 
 void GpuParticles::Simulate(RGGraph& graph, Texture* pResolvedDepth, const Camera& camera)
@@ -154,6 +144,14 @@ void GpuParticles::Simulate(RGGraph& graph, Texture* pResolvedDepth, const Camer
 	{
 		return;
 	}
+
+	ImGui::Begin("Parameters");
+	ImGui::Text("Particles");
+	ImGui::Checkbox("Enabled", &g_Enabled);
+	ImGui::Checkbox("Simulate", &g_Simulate);
+	ImGui::SliderInt("Emit Count", &g_EmitCount, 0, cMaxParticleCount / 50);
+	ImGui::SliderFloat("Life Time", &g_LifeTime, 0, 10);
+	ImGui::End();
 
 	D3D12_CPU_DESCRIPTOR_HANDLE uavs[] = {
 		m_pCountersBuffer->GetUAV()->GetDescriptor(),

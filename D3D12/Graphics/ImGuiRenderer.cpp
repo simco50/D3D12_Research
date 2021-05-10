@@ -12,8 +12,6 @@
 #include "Core/Paths.h"
 #include "DemoApp.h"
 
-ImGui::OnImGuiRender ImGui::RenderCallbacks;
-
 ImGuiRenderer::ImGuiRenderer(GraphicsDevice* pDevice)
 {
 	CreatePipeline(pDevice);
@@ -172,7 +170,6 @@ void ImGuiRenderer::CreatePipeline(GraphicsDevice* pDevice)
 
 void ImGuiRenderer::Render(RGGraph& graph, const SceneData& sceneData, Texture* pRenderTarget)
 {
-	ImGui::ExecuteCallbacks();
 	ImGui::Render();
 	ImDrawData* pDrawData = ImGui::GetDrawData();
 
