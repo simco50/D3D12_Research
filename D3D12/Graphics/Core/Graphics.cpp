@@ -205,7 +205,7 @@ CommandContext* GraphicsDevice::AllocateCommandContext(D3D12_COMMAND_LIST_TYPE t
 			VERIFY_HR(GetDevice()->CreateCommandList(0, type, pAllocator, nullptr, IID_PPV_ARGS(pCommandList.GetAddressOf())));
 			D3D::SetObjectName(pCommandList.Get(), Sprintf("Pooled Commandlist - %d", m_CommandLists.size()).c_str());
 			m_CommandLists.push_back(std::move(pCommandList));
-			m_CommandListPool[typeIndex].emplace_back(std::make_unique<CommandContext>(this, static_cast<ID3D12GraphicsCommandList*>(m_CommandLists.back().Get()), type, pAllocator));
+			m_CommandListPool[typeIndex].emplace_back(std::make_unique<CommandContext>(this, static_cast<ID3D12GraphicsCommandList*>(m_CommandLists.back().Get()), type, m_pGlobalViewHeap.get(), m_pDynamicAllocationManager.get(), pAllocator));
 			pContext = m_CommandListPool[typeIndex].back().get();
 		}
 	}
@@ -230,6 +230,11 @@ void GraphicsDevice::FreeCommandList(CommandContext* pCommandList)
 {
 	std::lock_guard<std::mutex> lockGuard(m_ContextAllocationMutex);
 	m_FreeCommandLists[(int)pCommandList->GetType()].push(pCommandList);
+}
+
+DescriptorHandle GraphicsDevice::GetViewHeapHandle() const
+{
+	return m_pGlobalViewHeap->GetStartHandle();
 }
 
 bool GraphicsDevice::SupportsTypedUAV(DXGI_FORMAT format) const
@@ -341,6 +346,16 @@ StateObject* GraphicsDevice::CreateStateObject(const StateObjectInitializer& sta
 	pStateObject->Create(stateDesc);
 	m_StateObjects.push_back(std::move(pStateObject));
 	return m_StateObjects.back().get();
+}
+
+Shader* GraphicsDevice::GetShader(const std::string& shaderPath, ShaderType shaderType, const std::string& entryPoint, const std::vector<ShaderDefine>& defines /*= {}*/)
+{
+	return m_pShaderManager->GetShader(shaderPath, shaderType, entryPoint, defines);
+}
+
+ShaderLibrary* GraphicsDevice::GetLibrary(const std::string& shaderPath, const std::vector<ShaderDefine>& defines /*= {}*/)
+{
+	return m_pShaderManager->GetLibrary(shaderPath, defines);
 }
 
 std::unique_ptr<GraphicsInstance> GraphicsInstance::CreateInstance(GraphicsInstanceFlags createFlags /*= GraphicsFlags::None*/)

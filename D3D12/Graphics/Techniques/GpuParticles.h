@@ -9,7 +9,6 @@ class CommandContext;
 class Texture;
 class Camera;
 class RGGraph;
-struct Configuration;
 
 class GpuParticles
 {

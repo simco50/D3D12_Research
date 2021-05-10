@@ -1,5 +1,8 @@
 #pragma once
 
+#include "Shader.h"
+#include "DescriptorHandle.h"
+
 class CommandQueue;
 class CommandContext;
 class OfflineDescriptorAllocator;
@@ -15,6 +18,7 @@ class StateObject;
 class StateObjectInitializer;
 class GlobalOnlineDescriptorHeap;
 class ResourceView;
+class SwapChain;
 
 #if PLATFORM_WINDOWS
 using WindowHandle = HWND;
@@ -24,13 +28,6 @@ using WindowHandlePtr = HWND;
 using WindowHandle = const winrt::Windows::UI::Core::CoreWindow*;
 using WindowHandlePtr = const winrt::Windows::UI::Core::CoreWindow*;
 #endif
-
-class SwapChain;
-
-struct Configuration
-{
-	int SampleCount;
-};
 
 enum class GraphicsInstanceFlags
 {
@@ -64,8 +61,8 @@ public:
 	CommandContext* AllocateCommandContext(D3D12_COMMAND_LIST_TYPE type = D3D12_COMMAND_LIST_TYPE_DIRECT);
 	void FreeCommandList(CommandContext* pCommandList);
 
+	DescriptorHandle GetViewHeapHandle() const;
 	GlobalOnlineDescriptorHeap* GetGlobalViewHeap() const { return m_pGlobalViewHeap.get(); }
-	DynamicAllocationManager* GetAllocationManager() const { return m_pDynamicAllocationManager.get(); }
 
 	template<typename DESC_TYPE>
 	struct DescriptorSelector {};
@@ -95,6 +92,9 @@ public:
 	ID3D12Resource* CreateResource(const D3D12_RESOURCE_DESC& desc, D3D12_RESOURCE_STATES initialState, D3D12_HEAP_TYPE heapType, D3D12_CLEAR_VALUE* pClearValue = nullptr);
 	PipelineState* CreatePipeline(const PipelineStateInitializer& psoDesc);
 	StateObject* CreateStateObject(const StateObjectInitializer& stateDesc);
+
+	Shader* GetShader(const std::string& shaderPath, ShaderType shaderType, const std::string& entryPoint, const std::vector<ShaderDefine>& defines = {});
+	ShaderLibrary* GetLibrary(const std::string& shaderPath, const std::vector<ShaderDefine>& defines = {});
 
 	ID3D12Device* GetDevice() const { return m_pDevice.Get(); }
 	ID3D12Device5* GetRaytracingDevice() const { return m_pRaytracingDevice.Get(); }

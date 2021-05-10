@@ -79,13 +79,13 @@ void GpuParticles::Initialize(GraphicsDevice* pDevice)
 	m_pSimpleDrawCommandSignature->Finalize("Simple Draw");
 
 	{
-		Shader* pComputeShader = pDevice->GetShaderManager()->GetShader("ParticleSimulation.hlsl", ShaderType::Compute, "UpdateSimulationParameters");
+		Shader* pComputeShader = pDevice->GetShader("ParticleSimulation.hlsl", ShaderType::Compute, "UpdateSimulationParameters");
 		m_pSimulateRS = std::make_unique<RootSignature>(pDevice);
 		m_pSimulateRS->FinalizeFromShader("Particle Simulation", pComputeShader);
 	}
 
 	{
-		Shader* pComputeShader = pDevice->GetShaderManager()->GetShader("ParticleSimulation.hlsl", ShaderType::Compute, "UpdateSimulationParameters");
+		Shader* pComputeShader = pDevice->GetShader("ParticleSimulation.hlsl", ShaderType::Compute, "UpdateSimulationParameters");
 		PipelineStateInitializer psoDesc;
 		psoDesc.SetComputeShader(pComputeShader);
 		psoDesc.SetRootSignature(m_pSimulateRS->GetRootSignature());
@@ -93,7 +93,7 @@ void GpuParticles::Initialize(GraphicsDevice* pDevice)
 		m_pPrepareArgumentsPS = pDevice->CreatePipeline(psoDesc);
 	}
 	{
-		Shader* pComputeShader = pDevice->GetShaderManager()->GetShader("ParticleSimulation.hlsl", ShaderType::Compute, "Emit");
+		Shader* pComputeShader = pDevice->GetShader("ParticleSimulation.hlsl", ShaderType::Compute, "Emit");
 		PipelineStateInitializer psoDesc;
 		psoDesc.SetComputeShader(pComputeShader);
 		psoDesc.SetRootSignature(m_pSimulateRS->GetRootSignature());
@@ -101,7 +101,7 @@ void GpuParticles::Initialize(GraphicsDevice* pDevice)
 		m_pEmitPS = pDevice->CreatePipeline(psoDesc);
 	}
 	{
-		Shader* pComputeShader = pDevice->GetShaderManager()->GetShader("ParticleSimulation.hlsl", ShaderType::Compute, "Simulate");
+		Shader* pComputeShader = pDevice->GetShader("ParticleSimulation.hlsl", ShaderType::Compute, "Simulate");
 		PipelineStateInitializer psoDesc;
 		psoDesc.SetComputeShader(pComputeShader);
 		psoDesc.SetRootSignature(m_pSimulateRS->GetRootSignature());
@@ -109,7 +109,7 @@ void GpuParticles::Initialize(GraphicsDevice* pDevice)
 		m_pSimulatePS = pDevice->CreatePipeline(psoDesc);
 	}
 	{
-		Shader* pComputeShader = pDevice->GetShaderManager()->GetShader("ParticleSimulation.hlsl", ShaderType::Compute, "SimulateEnd");
+		Shader* pComputeShader = pDevice->GetShader("ParticleSimulation.hlsl", ShaderType::Compute, "SimulateEnd");
 		PipelineStateInitializer psoDesc;
 		psoDesc.SetComputeShader(pComputeShader);
 		psoDesc.SetRootSignature(m_pSimulateRS->GetRootSignature());
@@ -117,8 +117,8 @@ void GpuParticles::Initialize(GraphicsDevice* pDevice)
 		m_pSimulateEndPS = pDevice->CreatePipeline(psoDesc);
 	}
 	{
-		Shader* pVertexShader = pDevice->GetShaderManager()->GetShader("ParticleRendering.hlsl", ShaderType::Vertex, "VSMain");
-		Shader* pPixelShader = pDevice->GetShaderManager()->GetShader("ParticleRendering.hlsl", ShaderType::Pixel, "PSMain");
+		Shader* pVertexShader = pDevice->GetShader("ParticleRendering.hlsl", ShaderType::Vertex, "VSMain");
+		Shader* pPixelShader = pDevice->GetShader("ParticleRendering.hlsl", ShaderType::Pixel, "PSMain");
 
 		m_pRenderParticlesRS = std::make_unique<RootSignature>(pDevice);
 		m_pRenderParticlesRS->FinalizeFromShader("Particle Rendering", pVertexShader);

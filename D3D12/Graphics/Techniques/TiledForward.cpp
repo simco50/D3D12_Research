@@ -265,7 +265,7 @@ void TiledForward::SetupResources(GraphicsDevice* pDevice)
 void TiledForward::SetupPipelines(GraphicsDevice* pDevice)
 {
 	{
-		Shader* pComputeShader = pDevice->GetShaderManager()->GetShader("LightCulling.hlsl", ShaderType::Compute, "CSMain");
+		Shader* pComputeShader = pDevice->GetShader("LightCulling.hlsl", ShaderType::Compute, "CSMain");
 
 		m_pComputeLightCullRS = std::make_unique<RootSignature>(pDevice);
 		m_pComputeLightCullRS->FinalizeFromShader("Tiled Light Culling", pComputeShader);
@@ -288,8 +288,8 @@ void TiledForward::SetupPipelines(GraphicsDevice* pDevice)
 	//PBR Diffuse passes
 	{
 		//Shaders
-		Shader* pVertexShader = pDevice->GetShaderManager()->GetShader("Diffuse.hlsl", ShaderType::Vertex, "VSMain", { "TILED_FORWARD" });
-		Shader* pPixelShader = pDevice->GetShaderManager()->GetShader("Diffuse.hlsl", ShaderType::Pixel, "PSMain", { "TILED_FORWARD" });
+		Shader* pVertexShader = pDevice->GetShader("Diffuse.hlsl", ShaderType::Vertex, "VSMain", { "TILED_FORWARD" });
+		Shader* pPixelShader = pDevice->GetShader("Diffuse.hlsl", ShaderType::Pixel, "PSMain", { "TILED_FORWARD" });
 
 		//Rootsignature
 		m_pDiffuseRS = std::make_unique<RootSignature>(pDevice);
@@ -321,7 +321,7 @@ void TiledForward::SetupPipelines(GraphicsDevice* pDevice)
 	}
 
 	{
-		Shader* pComputeShader = pDevice->GetShaderManager()->GetShader("VisualizeLightCount.hlsl", ShaderType::Compute, "DebugLightDensityCS", { "TILED_FORWARD" });
+		Shader* pComputeShader = pDevice->GetShader("VisualizeLightCount.hlsl", ShaderType::Compute, "DebugLightDensityCS", { "TILED_FORWARD" });
 
 		m_pVisualizeLightsRS = std::make_unique<RootSignature>(pDevice);
 		m_pVisualizeLightsRS->FinalizeFromShader("Light Density Visualization", pComputeShader);

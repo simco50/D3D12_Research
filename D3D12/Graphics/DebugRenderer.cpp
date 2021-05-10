@@ -45,8 +45,8 @@ void DebugRenderer::Initialize(GraphicsDevice* pDevice)
 	inputLayout.AddVertexElement("COLOR", DXGI_FORMAT_R32_UINT);
 
 	//Shaders
-	Shader* pVertexShader = pDevice->GetShaderManager()->GetShader("DebugRenderer.hlsl", ShaderType::Vertex, "VSMain");
-	Shader* pPixelShader = pDevice->GetShaderManager()->GetShader("DebugRenderer.hlsl", ShaderType::Pixel, "PSMain");
+	Shader* pVertexShader = pDevice->GetShader("DebugRenderer.hlsl", ShaderType::Vertex, "VSMain");
+	Shader* pPixelShader = pDevice->GetShader("DebugRenderer.hlsl", ShaderType::Pixel, "PSMain");
 
 	//Rootsignature
 	m_pRS = std::make_unique<RootSignature>(pDevice);

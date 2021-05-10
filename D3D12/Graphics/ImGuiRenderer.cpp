@@ -144,8 +144,8 @@ void ImGuiRenderer::InitializeImGui(GraphicsDevice* pDevice)
 void ImGuiRenderer::CreatePipeline(GraphicsDevice* pDevice)
 {
 	//Shaders
-	Shader* pVertexShader = pDevice->GetShaderManager()->GetShader("ImGui.hlsl", ShaderType::Vertex, "VSMain");
-	Shader* pPixelShader = pDevice->GetShaderManager()->GetShader("ImGui.hlsl", ShaderType::Pixel, "PSMain");
+	Shader* pVertexShader = pDevice->GetShader("ImGui.hlsl", ShaderType::Vertex, "VSMain");
+	Shader* pPixelShader = pDevice->GetShader("ImGui.hlsl", ShaderType::Pixel, "PSMain");
 
 	//Root signature
 	m_pRootSignature = std::make_unique<RootSignature>(pDevice);

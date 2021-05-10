@@ -112,7 +112,7 @@ void RTReflections::SetupResources(GraphicsDevice* pDevice)
 
 void RTReflections::SetupPipelines(GraphicsDevice* pDevice)
 {
-	ShaderLibrary* pShaderLibrary = pDevice->GetShaderManager()->GetLibrary("RTReflections.hlsl");
+	ShaderLibrary* pShaderLibrary = pDevice->GetLibrary("RTReflections.hlsl");
 
 	m_pHitSignature = std::make_unique<RootSignature>(pDevice);
 	m_pHitSignature->Finalize("Hit", D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE);

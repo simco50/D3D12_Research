@@ -144,7 +144,7 @@ namespace ComputeUtils
 class CommandContext : public GraphicsObject
 {
 public:
-	CommandContext(GraphicsDevice* pParent, ID3D12GraphicsCommandList* pCommandList, D3D12_COMMAND_LIST_TYPE type, ID3D12CommandAllocator* pAllocator);
+	CommandContext(GraphicsDevice* pParent, ID3D12GraphicsCommandList* pCommandList, D3D12_COMMAND_LIST_TYPE type, GlobalOnlineDescriptorHeap* pDescriptorHeap, DynamicAllocationManager* pDynamicMemoryManager, ID3D12CommandAllocator* pAllocator);
 	~CommandContext();
 
 	void Reset();
