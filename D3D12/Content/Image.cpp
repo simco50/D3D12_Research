@@ -6,9 +6,7 @@
 #define STBI_NO_PIC
 #define STBI_NO_PNM
 
-#define STB_IMAGE_IMPLEMENTATION
 #include "Stb/stb_image.h"
-#define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "Stb/stb_image_write.h"
 #include <fstream>
 #include "Core/Paths.h"
@@ -175,9 +173,9 @@ bool Image::GetSurfaceInfo(int width, int height, int depth, int mipLevel, MipLe
 		return false;
 	}
 
-	mipLevelInfo.Width = std::max(1, width >> mipLevel);
-	mipLevelInfo.Height = std::max(1, height >> mipLevel);
-	mipLevelInfo.Depth = std::max(1, depth >> mipLevel);
+	mipLevelInfo.Width = Math::Max(1, width >> mipLevel);
+	mipLevelInfo.Height = Math::Max(1, height >> mipLevel);
+	mipLevelInfo.Depth = Math::Max(1, depth >> mipLevel);
 
 	if (m_Format == ImageFormat::RGBA || m_Format == ImageFormat::BGRA || m_Format == ImageFormat::RG32 || m_Format == ImageFormat::RGBA32)
 	{
@@ -492,7 +490,7 @@ bool Image::LoadDds(const char* inputStream)
 			m_IsArray = true;
 		}
 		uint32 totalDataSize = 0;
-		m_MipLevels = std::max(1, (int)header.dwMipMapCount);
+		m_MipLevels = Math::Max(1, (int)header.dwMipMapCount);
 		for (int mipLevel = 0; mipLevel < m_MipLevels; ++mipLevel)
 		{
 			MipLevelInfo mipInfo;
