@@ -37,5 +37,5 @@ private:
 	TaskQueue();
 	static void Distribute(TaskContext& context, const AsyncDistributeDelegate& action, uint32 count, int32 groupSize = -1);
 	static void AddWorkItem(const AsyncTaskDelegate& action, TaskContext& context);
-	static void CreateThreads(size_t count);
+	static void CreateThreads(uint32 count);
 };

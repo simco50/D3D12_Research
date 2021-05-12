@@ -24,6 +24,7 @@ public:
 		LogType Type;
 	};
 	static void Initialize();
+	static void Shutdown();
 	static void Log(const char* message, LogType type = LogType::Info);
 	static void LogFormat(LogType type, const char* format, ...);
 	static void SetVerbosity(LogType type);

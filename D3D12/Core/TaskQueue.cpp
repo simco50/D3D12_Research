@@ -68,17 +68,17 @@ DWORD WINAPI WorkFunction(LPVOID lpParameter)
 	return 0;
 }
 
-void TaskQueue::CreateThreads(size_t count)
+void TaskQueue::CreateThreads(uint32 count)
 {
 	m_Threads.resize(count);
-	for (size_t i = 1; i < count; ++i)
+	for (uint32 i = 1; i < count; ++i)
 	{
 		Thread& thread = m_Threads[i];
-		thread.RunThread(WorkFunction, reinterpret_cast<LPVOID>(i));
+		thread.RunThread(WorkFunction, reinterpret_cast<LPVOID>((size_t)i));
 
-		std::stringstream name;
-		name << "TaskQueue Thread " << i;
-		thread.SetName(name.str());
+		char threadName[256];
+		sprintf_s(threadName, "TaskQueue Thread %d", i);
+		thread.SetName(threadName);
 	}
 }
 

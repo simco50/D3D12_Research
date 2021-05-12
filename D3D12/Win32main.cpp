@@ -303,7 +303,7 @@ int WINAPI WinMain(_In_ HINSTANCE /*hInstance*/, _In_opt_ HINSTANCE /*hPrevInsta
 	app.OnMouseMoveEvent += [](uint32 x, uint32 y) { Input::Instance().UpdateMousePosition((float)x, (float)y); };
 	app.OnResizeEvent += [&graphics](uint32 width, uint32 height) { graphics.OnResize(width, height); };
 	app.OnCharInputEvent += [](uint32 character) { ImGui::GetIO().AddInputCharacter(character); };
-
+	app.OnMouseScrollEvent += [](float wheel) { Input::Instance().UpdateMouseWheel(wheel); };
 
 	Time::Reset();
 
@@ -317,6 +317,7 @@ int WINAPI WinMain(_In_ HINSTANCE /*hInstance*/, _In_opt_ HINSTANCE /*hPrevInsta
 
 	OPTICK_SHUTDOWN();
 	TaskQueue::Shutdown();
+	Console::Shutdown();
 
 	return 0;
 }

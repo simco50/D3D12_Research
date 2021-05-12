@@ -207,6 +207,7 @@ private:
 	std::unique_ptr<RootSignature> m_pDrawHistogramRS;
 	std::unique_ptr<Buffer> m_pLuminanceHistogram;
 	std::unique_ptr<Buffer> m_pAverageLuminance;
+	std::unique_ptr<Texture> m_pDebugHistogramTexture;
 
 	//SSAO
 	std::unique_ptr<Texture> m_pAmbientOcclusion;

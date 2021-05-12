@@ -11,7 +11,7 @@ public:
 	bool SetPriority(const int priority);
 	void SetAffinity(const uint64 affinity);
 	void LockToCore(const uint32 core);
-	void SetName(const std::string& name);
+	void SetName(const char* pName);
 
 	static void SetCurrentAffinity(const uint64 affinity);
 	static void LockCurrentToCore(const uint32 core);

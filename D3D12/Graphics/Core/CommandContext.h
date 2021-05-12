@@ -294,26 +294,6 @@ private:
 	bool m_InRenderPass = false;
 };
 
-class ScopedBarrier
-{
-public:
-	ScopedBarrier(CommandContext& context, GraphicsResource* pResource, D3D12_RESOURCE_STATES state, uint32 subResources = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES) : m_Context(context), m_pResource(pResource), m_Subresources(subResources)
-	{
-		m_BeforeState = context.GetResourceStateWithFallback(pResource, subResources);
-		context.InsertResourceBarrier(pResource, state, subResources);
-	}
-
-	~ScopedBarrier()
-	{
-		m_Context.InsertResourceBarrier(m_pResource, m_BeforeState, m_Subresources);
-	}
-private:
-	CommandContext& m_Context;
-	GraphicsResource* m_pResource;
-	uint32 m_Subresources;
-	D3D12_RESOURCE_STATES m_BeforeState = D3D12_RESOURCE_STATE_UNKNOWN;
-};
-
 class CommandSignature : public GraphicsObject
 {
 public:

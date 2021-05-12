@@ -9,42 +9,6 @@ class ShaderManager;
 class StateObjectInitializer
 {
 public:
-	class StateObjectStream
-	{
-		friend class StateObjectInitializer;
-	public:
-		D3D12_STATE_OBJECT_DESC Desc;
-	private:
-		template<size_t SIZE>
-		struct DataAllocator
-		{
-			template<typename T>
-			T* Allocate(uint32 count = 1)
-			{
-				assert(m_Offset + count * sizeof(T) <= SIZE);
-				T* pData = reinterpret_cast<T*>(&m_Data[m_Offset]);
-				m_Offset += count * sizeof(T);
-				return pData;
-			}
-			void Reset() { m_Offset = 0; }
-			const void* GetData() const { return m_Data.data(); }
-			size_t Size() const { return m_Offset; }
-		private:
-			size_t m_Offset = 0;
-			std::array<char, SIZE> m_Data{};
-		};
-
-		wchar_t* GetUnicode(const std::string& text)
-		{
-			size_t len = text.length();
-			wchar_t* pData = ContentData.Allocate<wchar_t>((int)len + 1);
-			MultiByteToWideChar(0, 0, text.c_str(), (int)len, pData, (int)len);
-			return pData;
-		}
-		DataAllocator<1 << 8> StateObjectData{};
-		DataAllocator<1 << 10> ContentData{};
-	};
-
 	friend class StateObject;
 
 	void AddHitGroup(const std::string& name, const std::string& closestHit = "", const std::string& anyHit = "", const std::string& intersection = "", RootSignature* pRootSignature = nullptr);
@@ -52,7 +16,7 @@ public:
 	void AddCollection(StateObject* pOtherObject);
 	void AddMissShader(const std::string& exportName, RootSignature* pRootSignature = nullptr);
 
-	void CreateStateObjectStream(StateObjectStream& stateObjectStream);
+	void CreateStateObjectStream(class StateObjectStream& stateObjectStream);
 	void SetMaxPipelineStackSize(StateObject* pStateObject);
 
 	std::string Name;

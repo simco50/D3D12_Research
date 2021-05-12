@@ -348,14 +348,14 @@ StateObject* GraphicsDevice::CreateStateObject(const StateObjectInitializer& sta
 	return m_StateObjects.back().get();
 }
 
-Shader* GraphicsDevice::GetShader(const std::string& shaderPath, ShaderType shaderType, const std::string& entryPoint, const std::vector<ShaderDefine>& defines /*= {}*/)
+Shader* GraphicsDevice::GetShader(const char* pShaderPath, ShaderType shaderType, const char* pEntryPoint, const std::vector<ShaderDefine>& defines /*= {}*/)
 {
-	return m_pShaderManager->GetShader(shaderPath, shaderType, entryPoint, defines);
+	return m_pShaderManager->GetShader(pShaderPath, shaderType, pEntryPoint, defines);
 }
 
-ShaderLibrary* GraphicsDevice::GetLibrary(const std::string& shaderPath, const std::vector<ShaderDefine>& defines /*= {}*/)
+ShaderLibrary* GraphicsDevice::GetLibrary(const char* pShaderPath, const std::vector<ShaderDefine>& defines /*= {}*/)
 {
-	return m_pShaderManager->GetLibrary(shaderPath, defines);
+	return m_pShaderManager->GetLibrary(pShaderPath, defines);
 }
 
 std::unique_ptr<GraphicsInstance> GraphicsInstance::CreateInstance(GraphicsInstanceFlags createFlags /*= GraphicsFlags::None*/)

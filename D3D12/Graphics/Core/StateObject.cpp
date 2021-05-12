@@ -4,6 +4,42 @@
 #include "RootSignature.h"
 #include "Graphics.h"
 
+class StateObjectStream
+{
+	friend class StateObjectInitializer;
+public:
+	D3D12_STATE_OBJECT_DESC Desc;
+private:
+	template<size_t SIZE>
+	struct DataAllocator
+	{
+		template<typename T>
+		T* Allocate(uint32 count = 1)
+		{
+			assert(m_Offset + count * sizeof(T) <= SIZE);
+			T* pData = reinterpret_cast<T*>(&m_Data[m_Offset]);
+			m_Offset += count * sizeof(T);
+			return pData;
+		}
+		void Reset() { m_Offset = 0; }
+		const void* GetData() const { return m_Data.data(); }
+		size_t Size() const { return m_Offset; }
+	private:
+		size_t m_Offset = 0;
+		std::array<char, SIZE> m_Data{};
+	};
+
+	wchar_t* GetUnicode(const std::string& text)
+	{
+		size_t len = text.length();
+		wchar_t* pData = ContentData.Allocate<wchar_t>((int)len + 1);
+		MultiByteToWideChar(0, 0, text.c_str(), (int)len, pData, (int)len);
+		return pData;
+	}
+	DataAllocator<1 << 8> StateObjectData{};
+	DataAllocator<1 << 10> ContentData{};
+};
+
 StateObject::StateObject(GraphicsDevice* pParent)
 	: GraphicsObject(pParent)
 {
@@ -13,7 +49,7 @@ StateObject::StateObject(GraphicsDevice* pParent)
 void StateObject::Create(const StateObjectInitializer& initializer)
 {
 	m_Desc = initializer;
-	StateObjectInitializer::StateObjectStream stateObjectStream;
+	StateObjectStream stateObjectStream;
 	m_Desc.CreateStateObjectStream(stateObjectStream);
 	VERIFY_HR(GetParent()->GetRaytracingDevice()->CreateStateObject(&stateObjectStream.Desc, IID_PPV_ARGS(m_pStateObject.ReleaseAndGetAddressOf())));
 	D3D::SetObjectName(m_pStateObject.Get(), m_Desc.Name.c_str());

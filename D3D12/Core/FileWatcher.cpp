@@ -11,13 +11,13 @@ FileWatcher::~FileWatcher()
 	StopWatching();
 }
 
-bool FileWatcher::StartWatching(const std::string& directory, const bool recursiveWatch /*= true*/)
+bool FileWatcher::StartWatching(const char* pDirectory, const bool recursiveWatch /*= true*/)
 {
 #if PLATFORM_WINDOWS
 	if (m_Exiting)
 	{
 		QueryPerformanceFrequency(&m_TimeFrequency);
-		m_FileHandle = CreateFileA(directory.c_str(),
+		m_FileHandle = CreateFileA(pDirectory,
 			FILE_LIST_DIRECTORY,
 			FILE_SHARE_WRITE | FILE_SHARE_READ | FILE_SHARE_DELETE,
 			nullptr,

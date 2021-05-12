@@ -1,8 +1,8 @@
 #include "stdafx.h"
 #include "CommandLine.h"
 
-std::unordered_map<std::string, std::string> CommandLine::m_Parameters;
-std::string CommandLine::m_CommandLine;
+static std::unordered_map<StringHash, std::string> m_Parameters;
+static std::string m_CommandLine;
 
 bool CommandLine::Parse(const char* pCommandLine)
 {
@@ -40,12 +40,12 @@ bool CommandLine::Parse(const char* pCommandLine)
 					value = value.substr(1, value.length() - 2);
 				}
 
-				m_Parameters[identifier] = value;
+				m_Parameters[StringHash(identifier)] = value;
 				hasValue = false;
 			}
 			else
 			{
-				m_Parameters[m_CommandLine.substr(commandStart, i - commandStart)] = "1";
+				m_Parameters[StringHash(m_CommandLine.substr(commandStart, i - commandStart))] = "1";
 			}
 			commandStart = -1;
 		}
@@ -61,12 +61,12 @@ bool CommandLine::Parse(const char* pCommandLine)
 				value = value.substr(1, value.length() - 2);
 			}
 
-			m_Parameters[identifier] = value;
+			m_Parameters[StringHash(identifier)] = value;
 			hasValue = false;
 		}
 		else
 		{
-			m_Parameters[m_CommandLine.substr(commandStart)] = "1";
+			m_Parameters[StringHash(m_CommandLine.substr(commandStart))] = "1";
 		}
 		commandStart = -1;
 	}
@@ -74,7 +74,7 @@ bool CommandLine::Parse(const char* pCommandLine)
 	return true;
 }
 
-bool CommandLine::GetInt(const std::string& name, int& value, int defaultValue /*= 0*/)
+bool CommandLine::GetInt(const char* name, int& value, int defaultValue /*= 0*/)
 {
 	auto it = m_Parameters.find(name);
 	if (it != m_Parameters.end())
@@ -94,7 +94,12 @@ bool CommandLine::GetInt(const std::string& name, int& value, int defaultValue /
 	return false;
 }
 
-bool CommandLine::GetBool(const std::string& parameter)
+bool CommandLine::GetBool(const char* parameter)
 {
 	return m_Parameters.find(parameter) != m_Parameters.end();
+}
+
+const std::string& CommandLine::Get()
+{
+	return m_CommandLine;
 }
