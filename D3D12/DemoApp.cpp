@@ -1668,6 +1668,503 @@ void DemoApp::InitializePipelines()
 	}
 }
 
+
+namespace CharConv
+{
+	bool StrCmp(const char* pStrA, const char* pStrB, bool caseSensitive)
+	{
+		while (*pStrA && *pStrB)
+		{
+			if (caseSensitive && *pStrA != *pStrB)
+			{
+				return false;
+			}
+			else if (!caseSensitive && std::tolower(*pStrA) != std::tolower(*pStrB))
+			{
+				return false;
+			}
+			++pStrA;
+			++pStrB;
+		}
+		return *pStrA == *pStrB;
+	}
+
+	template<typename T>
+	bool StrConvert(const char* pStr, T& out)
+	{
+		static_assert(false, "Not implemented.");
+	}
+
+	template<>
+	bool StrConvert(const char* pStr, char*& pOut)
+	{
+		pOut = const_cast<char*>(pStr);
+		return true;
+	}
+
+	template<>
+	bool StrConvert(const char* pStr, char& out)
+	{
+		out = pStr[0];
+		return true;
+	}
+
+	template<>
+	bool StrConvert(const char* pStr, int& out)
+	{
+		size_t idx = 0;
+		char sign = 1;
+		out = 0;
+		while (*pStr != '\0')
+		{
+			if (idx == 0 && *pStr == '-')
+			{
+				sign = -1;
+			}
+			else if (*pStr && *pStr >= '0' && *pStr <= '9')
+			{
+				out *= 10;
+				out += *pStr - '0';
+			}
+			else
+			{
+				return false;
+			}
+
+			++pStr;
+			++idx;
+		}
+		out *= sign;
+		return true;
+	}
+
+	template<>
+	bool StrConvert(const char* pStr, float& out)
+	{
+		size_t idx = 0;
+		char sign = 1;
+		char comma = 0;
+		int divisor = 1;
+		out = 0.0f;
+		while (*pStr != '\0')
+		{
+			if (idx == 0 && *pStr == '-')
+			{
+				sign = -1;
+			}
+			else if (*pStr == '.' && comma == 0)
+			{
+				comma = 1;
+			}
+			else if (*pStr && *pStr >= '0' && *pStr <= '9')
+			{
+				out *= 10;
+				out += *pStr - '0';
+				if (comma)
+				{
+					divisor *= 10;
+				}
+			}
+			else if (*pStr == 'f' && pStr[1] == '\0')
+			{
+
+			}
+			else
+			{
+				return false;
+			}
+
+			++pStr;
+			++idx;
+		}
+		out *= sign;
+		out /= divisor;
+		return true;
+	}
+
+	template<>
+	bool StrConvert(const char* pStr, double& out)
+	{
+		size_t idx = 0;
+		char sign = 1;
+		char comma = 0;
+		int divisor = 1;
+		out = 0.0;
+		while (*pStr != '\0')
+		{
+			if (idx == 0 && *pStr == '-')
+			{
+				sign = -1;
+			}
+			else if (*pStr == '.' && comma == 0)
+			{
+				comma = 1;
+			}
+			else if (*pStr && *pStr >= '0' && *pStr <= '9')
+			{
+				out *= 10;
+				out += *pStr - '0';
+				if (comma)
+				{
+					divisor *= 10;
+				}
+			}
+			else
+			{
+				return false;
+			}
+
+			++pStr;
+			++idx;
+		}
+		out *= sign;
+		out /= divisor;
+		return true;
+	}
+
+	template<>
+	bool StrConvert(const char* pStr, bool& out)
+	{
+		if (*pStr == '0' || StrCmp(pStr, "false", false))
+		{
+			out = false;
+			return true;
+		}
+		else if (*pStr == '1' || StrCmp(pStr, "true", false))
+		{
+			out = true;
+			return true;
+		}
+		return false;
+	}
+
+	template<size_t I>
+	int SplitString(const char* pStr, char(&buffer)[I], const char** pOut, char delimiter = ' ')
+	{
+		int idx = 0;
+		char* pStart = buffer;
+		strcpy_s(buffer, pStr);
+		char* pDelim = strchr(buffer, delimiter);
+		while (pDelim)
+		{
+			while (*pDelim == delimiter)
+			{
+				*pDelim = '\0';
+				++pDelim;
+			}
+			if (*pStart != '\0')
+			{
+				*pOut++ = pStart;
+				++idx;
+			}
+			pStart = pDelim;
+			pDelim = strchr(pDelim, delimiter);
+		}
+		if (*pStart != '\0')
+		{
+			*pOut++ = pStart;
+			++idx;
+		}
+		return idx;
+	}
+
+	template<typename T, size_t VALUES>
+	bool StrArrayConvert(const char* pStr, T* pValue)
+	{
+		const char* pArgs[VALUES];
+		char buffer[1024];
+		int numValues = SplitString(pStr, buffer, &pArgs[0], ',');
+		if (numValues != VALUES)
+		{
+			return false;
+		}
+		for (int i = 0; i < VALUES; ++i)
+		{
+			if (!StrConvert(pArgs[i], pValue[i]))
+			{
+				return false;
+			}
+		}
+		return true;
+	}
+
+	template<> bool StrConvert(const char* pStr, Vector4& out) { return StrArrayConvert<float, 4>(pStr, &out.x); }
+	template<> bool StrConvert(const char* pStr, Vector3& out) { return StrArrayConvert<float, 3>(pStr, &out.x); }
+	template<> bool StrConvert(const char* pStr, Vector2& out) { return StrArrayConvert<float, 2>(pStr, &out.x); }
+	template<> bool StrConvert(const char* pStr, IntVector2& out) { return StrArrayConvert<int, 2>(pStr, &out.x); }
+	template<> bool StrConvert(const char* pStr, IntVector3& out) { return StrArrayConvert<int, 3>(pStr, &out.x); }
+
+	/// /////////////////////////////////////////////////////////////////////////
+
+	namespace Private
+	{
+		// INTERNAL: Create a tuple from string arguments
+		template<size_t I, typename... Args>
+		void TupleFromArguments(std::tuple<Args...>& t, const char** pArgs, int& failIndex)
+		{
+			if (failIndex == -1)
+			{
+				if (!CharConv::StrConvert(pArgs[I], std::get<I>(t)))
+				{
+					failIndex = I;
+				}
+				if constexpr (I < sizeof...(Args) - 1)
+				{
+					TupleFromArguments<I + 1>(t, pArgs, failIndex);
+				}
+			}
+		}
+	}
+
+	// Create a tuple from string arguments
+	template<typename... Args>
+	std::tuple<Args...> TupleFromArguments(const char** pArgs, int* pFailIndex)
+	{
+		std::tuple<Args...> pTuple;
+		if constexpr (sizeof...(Args) > 0)
+		{
+			Private::TupleFromArguments<0>(pTuple, pArgs, *pFailIndex);
+		}
+		return pTuple;
+	}
+}
+
+class IConsoleObject;
+
+class CVarManager
+{
+public:
+	void RegisterConsoleObject(const char* pName, IConsoleObject* pObject)
+	{
+		m_CvarMap[pName] = pObject;
+	}
+
+	IConsoleObject* GetConsoleObject(const char* pName)
+	{
+		return m_CvarMap[pName];
+	}
+
+	template<typename T>
+	void ForEachCvar(T&& callback) const
+	{
+		for (const auto& cvar : m_CvarMap)
+		{
+			callback(cvar.second);
+		}
+	}
+
+	bool ExecuteCommand(const char* pCommand, const char* pArguments);
+
+private:
+	std::unordered_map<StringHash, IConsoleObject*> m_CvarMap;
+};
+
+CVarManager gConsoleManager;
+
+class IConsoleObject
+{
+public:
+	IConsoleObject(const char* pName)
+		: m_pName(pName)
+	{
+		gConsoleManager.RegisterConsoleObject(pName, this);
+	}
+	virtual ~IConsoleObject() = default;
+	virtual bool Execute(const char** pArgs, uint32 numArgs) = 0;
+
+	const char* GetName() const { return m_pName; }
+
+private:
+	const char* m_pName;
+};
+
+#ifdef CPP_DELEGATES
+
+template<typename ...Args>
+class DelegateConsoleCommand : public IConsoleObject
+{
+public:
+	DelegateConsoleCommand(const char* pName, Delegate<void, Args...>&& delegate)
+		: IConsoleObject(pName), m_Callback(std::move(delegate))
+	{
+	}
+
+	virtual bool Execute(const char** pArgs, uint32 numArgs) override
+	{
+		if (numArgs == sizeof...(Args))
+		{
+			ExecuteInternal(pArgs, numArgs, std::index_sequence_for<Args...>());
+			return true;
+		}
+		else
+		{
+			E_LOG(Warning, "Incorrect number of arguments. Expected: %d. Given: %d", sizeof...(Args), numArgs);
+		}
+		return false;
+	}
+
+private:
+	template<size_t... Is>
+	bool ExecuteInternal(const char** pArgs, uint32 numArgs, std::index_sequence<Is...>)
+	{
+		int failIndex = -1;
+		std::tuple<std::decay_t<Args>...> arguments = CharConv::TupleFromArguments<std::decay_t<Args>...>(pArgs, &failIndex);
+		if (failIndex >= 0)
+		{
+			E_LOG(Warning, "Failed to convert argument '%s'", pArgs[failIndex]);
+			return false;
+		}
+		m_Callback.Execute(std::get<Is>(arguments)...);
+		return true;
+	}
+	Delegate<void, Args...> m_Callback;
+};
+
+#endif
+
+template<typename ...Args>
+class ConsoleCommand : public IConsoleObject
+{
+public:
+	using CallbackFn = void(*)(Args...);
+
+	ConsoleCommand(const char* pName, CallbackFn fn)
+		: IConsoleObject(pName), m_Callback(fn)
+	{
+	}
+
+	virtual bool Execute(const char** pArgs, uint32 numArgs) override
+	{
+		if (numArgs == sizeof...(Args))
+		{
+			return ExecuteInternal(pArgs, numArgs, std::index_sequence_for<Args...>());
+		}
+		else
+		{
+			E_LOG(Warning, "Incorrect number of arguments. Expected: %d. Given: %d", sizeof...(Args), numArgs);
+		}
+		return false;
+	}
+
+private:
+	template<size_t... Is>
+	bool ExecuteInternal(const char** pArgs, uint32 numArgs, std::index_sequence<Is...>)
+	{
+		int failIndex = -1;
+		std::tuple<std::decay_t<Args>...> arguments = CharConv::TupleFromArguments<std::decay_t<Args>...>(pArgs, &failIndex);
+		if (failIndex >= 0)
+		{
+			E_LOG(Warning, "Failed to convert argument '%s'", pArgs[failIndex]);
+			return false;
+		}
+		m_Callback(std::get<Is>(arguments)...);
+		return true;
+	}
+
+	CallbackFn m_Callback;
+};
+
+template<typename T>
+class ConsoleVariable : public IConsoleObject
+{
+public:
+	ConsoleVariable(const char* pName, T defaultValue, Delegate<void, IConsoleObject*> onModified = {})
+		: IConsoleObject(pName), m_Value(defaultValue), m_OnModified(onModified)
+	{}
+
+	void SetValue(const T& value)
+	{
+		m_Value = value;
+	}
+
+	virtual bool Execute(const char** pArgs, uint32 numArgs) override
+	{
+		if (numArgs > 0)
+		{
+			T val;
+			if (CharConv::StrConvert(pArgs[0], val))
+			{
+				SetValue(val);
+				m_OnModified.ExecuteIfBound(this);
+				return true;
+			}
+		}
+		return false;
+	}
+
+	T& Get() { return m_Value; }
+	const T& Get() const { return m_Value; }
+
+private:
+	T m_Value;
+	Delegate<void, IConsoleObject*> m_OnModified;
+};
+
+template<typename T>
+class ConsoleVariableRef : public IConsoleObject
+{
+public:
+	ConsoleVariableRef(const char* pName, T& value, Delegate<void, IConsoleObject*> onModified = {})
+		: IConsoleObject(pName), m_Value(value), m_OnModified(onModified)
+	{}
+
+	virtual bool Execute(const char** pArgs, uint32 numArgs) override
+	{
+		if (numArgs > 0)
+		{
+			T val;
+			if (CharConv::StrConvert(pArgs[0], val))
+			{
+				m_Value = val;
+				m_OnModified.ExecuteIfBound(this);
+				return true;
+			}
+		}
+		return false;
+	}
+
+	T& Get() { return m_Value; }
+	const T& Get() const { return m_Value; }
+
+private:
+	T& m_Value;
+	Delegate<void, IConsoleObject*> m_OnModified;
+};
+
+bool CVarManager::ExecuteCommand(const char* pCommand, const char* pArguments)
+{
+	const char* argList[16];
+	char buffer[1024];
+	int numArgs = CharConv::SplitString(pArguments, buffer, &argList[0]);
+	auto it = m_CvarMap.find(pCommand);
+	if (it != m_CvarMap.end())
+	{
+		return it->second->Execute(argList, numArgs);
+	}
+	else
+	{
+		return false;
+	}
+}
+
+struct Object
+{
+	static void SetPosition(const Vector3& v)
+	{
+		E_LOG(Info, "Set position %f, %f, %f", v.x, v.y, v.z);
+	}
+
+	static void SetPosition(float x, float y, float z)
+	{
+		E_LOG(Info, "Set position %f, %f, %f", x, y, z);
+	}
+};
+
+ConsoleVariableRef gShadow("vis.histogram", Tweakables::g_DrawHistogram);
+ConsoleVariableRef gTonemapper("r.tonemapper", Tweakables::g_ToneMapper);
+
+#include "ImGuiConsole.h"
+
 void DemoApp::UpdateImGui()
 {
 	m_FrameTimes[m_Frame % m_FrameTimes.size()] = Time::DeltaTime();
@@ -1790,41 +2287,9 @@ void DemoApp::UpdateImGui()
 
 	ImGui::End();
 
-	static bool showOutputLog = false;
-	ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0);
-	ImGui::SetNextWindowPos(ImVec2(300, (float)m_WindowHeight), 0, ImVec2(0, 1));
-	ImGui::SetNextWindowSize(ImVec2((float)m_WindowWidth - 300 * 2, 250));
-	ImGui::SetNextWindowCollapsed(!showOutputLog);
+	static ImGuiConsole console;
+	console.Update(ImVec2(300, (float)m_WindowHeight), ImVec2((float)m_WindowWidth - 300 * 2, 250));
 
-	showOutputLog = ImGui::Begin("Output Log", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
-	if (showOutputLog)
-	{
-		for (const Console::LogEntry& entry : Console::GetHistory())
-		{
-			switch (entry.Type)
-			{
-			case LogType::VeryVerbose:
-			case LogType::Verbose:
-			case LogType::Info:
-				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 1, 1, 1));
-				ImGui::TextWrapped("[Info] %s", entry.Message.c_str());
-				break;
-			case LogType::Warning:
-				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 1, 0, 1));
-				ImGui::TextWrapped("[Warning] %s", entry.Message.c_str());
-				break;
-			case LogType::Error:
-			case LogType::FatalError:
-				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 0, 0, 1));
-				ImGui::TextWrapped("[Error] %s", entry.Message.c_str());
-				break;
-			}
-			ImGui::PopStyleColor();
-		}
-		ImGui::SetScrollHereY(0.0f);
-	}
-	ImGui::PopStyleVar();
-	ImGui::End();
 
 	ImGui::SetNextWindowPos(ImVec2((float)m_WindowWidth, 0), 0, ImVec2(1, 0));
 	ImGui::SetNextWindowSize(ImVec2(300, (float)m_WindowHeight));
