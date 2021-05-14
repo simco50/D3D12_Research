@@ -79,16 +79,7 @@ extern "C" { _declspec(dllexport) extern const char* D3D12SDKPath = ".\\D3D12\\"
 
 #define validateOnce(expression) validateOncef(expression, "")
 
-#include "Stb/stb_sprintf.h"
-
-template<typename... Args>
-std::string Sprintf(const char* pFormat, Args... args)
-{
-	char buff[256];
-	stbsp_sprintf(buff, pFormat, args...);
-	return buff;
-}
-
+#include "Core/CharConv.h"
 #include "Core/String.h"
 #include "Core/Thread.h"
 #include "Math/MathTypes.h"

@@ -80,7 +80,7 @@ void RTAO::Execute(RGGraph& graph, Texture* pColor, Texture* pDepth, const Scene
 		});
 }
 
-void RTAO::SetupResources(GraphicsDevice* pDevice)
+void RTAO::SetupResources(GraphicsDevice* /*pDevice*/)
 {
 }
 

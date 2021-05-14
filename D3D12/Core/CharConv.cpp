@@ -21,15 +21,13 @@ namespace CharConv
 		return *pStrA == *pStrB;
 	}
 
-	template<>
-	bool StrConvert(const char* pStr, char& out)
+	bool FromString(const char* pStr, char& out)
 	{
 		out = pStr[0];
 		return true;
 	}
 
-	template<>
-	bool StrConvert(const char* pStr, int& out)
+	bool FromString(const char* pStr, int& out)
 	{
 		size_t idx = 0;
 		char sign = 1;
@@ -57,7 +55,7 @@ namespace CharConv
 		return true;
 	}
 
-	template<> bool StrConvert(const char* pStr, float& out)
+	bool FromString(const char* pStr, float& out)
 	{
 		size_t idx = 0;
 		char sign = 1;
@@ -100,8 +98,7 @@ namespace CharConv
 		return true;
 	}
 
-	template<>
-	bool StrConvert(const char* pStr, double& out)
+	bool FromString(const char* pStr, double& out)
 	{
 		size_t idx = 0;
 		char sign = 1;
@@ -140,15 +137,13 @@ namespace CharConv
 		return true;
 	}
 
-	template<>
-	bool StrConvert(const char* pStr, const char*& pOut)
+	bool FromString(const char* pStr, const char*& pOut)
 	{
 		pOut = pStr;
 		return true;
 	}
 
-	template<>
-	bool StrConvert(const char* pStr, bool& out)
+	bool FromString(const char* pStr, bool& out)
 	{
 		if (*pStr == '0' || StrCmp(pStr, "false", false))
 		{

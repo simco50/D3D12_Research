@@ -21,6 +21,52 @@
 const DXGI_FORMAT GraphicsDevice::DEPTH_STENCIL_FORMAT = DXGI_FORMAT_D32_FLOAT;
 const DXGI_FORMAT GraphicsDevice::RENDER_TARGET_FORMAT = DXGI_FORMAT_R11G11B10_FLOAT;
 
+
+#if PLATFORM_WINDOWS
+static bool GetLatestWinPixGpuCapturerPath(std::string& path)
+{
+	LPWSTR programFilesPath = nullptr;
+	SHGetKnownFolderPath(FOLDERID_ProgramFiles, KF_FLAG_DEFAULT, NULL, &programFilesPath);
+
+	std::string pixSearchPath = UNICODE_TO_MULTIBYTE(programFilesPath) + std::string("\\Microsoft PIX\\*");
+
+	WIN32_FIND_DATA findData;
+	bool foundPixInstallation = false;
+	char newestVersionFound[MAX_PATH];
+
+	HANDLE hFind = FindFirstFileA(pixSearchPath.c_str(), &findData);
+	if (hFind != INVALID_HANDLE_VALUE)
+	{
+		do
+		{
+			if (((findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) == FILE_ATTRIBUTE_DIRECTORY) &&
+				(findData.cFileName[0] != '.'))
+			{
+				if (!foundPixInstallation || strcmp(newestVersionFound, findData.cFileName) <= 0)
+				{
+					foundPixInstallation = true;
+					strcpy_s(newestVersionFound, _countof(newestVersionFound), findData.cFileName);
+				}
+			}
+		} while (FindNextFile(hFind, &findData) != 0);
+	}
+
+	FindClose(hFind);
+
+	if (!foundPixInstallation)
+	{
+		return false;
+	}
+	pixSearchPath.pop_back();
+	std::stringstream str;
+	str << pixSearchPath;
+	str << newestVersionFound;
+	str << "\\WinPixGpuCapturer.dll";
+	path = str.str();
+	return true;
+}
+#endif
+
 GraphicsDevice::GraphicsDevice(IDXGIAdapter4* pAdapter)
 {
 	VERIFY_HR(D3D12CreateDevice(pAdapter, D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(m_pDevice.ReleaseAndGetAddressOf())));
@@ -414,7 +460,7 @@ GraphicsInstance::GraphicsInstance(GraphicsInstanceFlags createFlags)
 		if (GetModuleHandleA("WinPixGpuCapturer.dll") == 0)
 		{
 			std::string pixPath;
-			if (D3D::GetLatestWinPixGpuCapturerPath(pixPath))
+			if (GetLatestWinPixGpuCapturerPath(pixPath))
 			{
 				if (LoadLibraryA(pixPath.c_str()))
 				{
@@ -475,17 +521,6 @@ ComPtr<IDXGIAdapter4> GraphicsInstance::EnumerateAdapter(bool useWarp)
 			D3D_FEATURE_LEVEL_12_0,
 			D3D_FEATURE_LEVEL_11_1,
 			D3D_FEATURE_LEVEL_11_0
-		};
-		auto GetFeatureLevelName = [](D3D_FEATURE_LEVEL featureLevel) {
-			switch (featureLevel)
-			{
-			case D3D_FEATURE_LEVEL_12_2: return "D3D_FEATURE_LEVEL_12_2";
-			case D3D_FEATURE_LEVEL_12_1: return "D3D_FEATURE_LEVEL_12_1";
-			case D3D_FEATURE_LEVEL_12_0: return "D3D_FEATURE_LEVEL_12_0";
-			case D3D_FEATURE_LEVEL_11_1: return "D3D_FEATURE_LEVEL_11_1";
-			case D3D_FEATURE_LEVEL_11_0: return "D3D_FEATURE_LEVEL_11_0";
-			default: noEntry(); return "";
-			}
 		};
 
 		VERIFY_HR(D3D12CreateDevice(pAdapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&pDevice)));
