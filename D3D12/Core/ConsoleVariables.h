@@ -7,9 +7,10 @@ class CVarManager
 {
 public:
 	static CVarManager& Get();
+	void Initialize();
 
 	void RegisterConsoleObject(const char* pName, IConsoleObject* pObject);
-	bool ExecuteCommand(const char* pCommand, const char* pArguments);
+	bool Execute(const char* pCommand);
 
 	IConsoleObject* FindConsoleObject(const char* pName)
 	{

@@ -12,6 +12,7 @@
 #ifdef _DEBUG
 #define _CRTDBG_MAP_ALLOC
 #include <crtdbg.h>
+#include "Core/ConsoleVariables.h"
 #endif
 
 #define BREAK_ON_ALLOC 0
@@ -290,6 +291,7 @@ int WINAPI WinMain(_In_ HINSTANCE /*hInstance*/, _In_opt_ HINSTANCE /*hPrevInsta
 	Thread::SetMainThread();
 	CommandLine::Parse(GetCommandLineA());
 	Console::Initialize();
+	CVarManager::Get().Initialize();
 	TaskQueue::Initialize(std::thread::hardware_concurrency());
 
 	Win32AppContainer app("D3D12", 1240, 720);

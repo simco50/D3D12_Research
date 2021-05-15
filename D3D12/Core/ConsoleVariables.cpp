@@ -1,12 +1,23 @@
 #include "stdafx.h"
 #include "ConsoleVariables.h"
 #include "Core/Input.h"
+#include "Paths.h"
 
 CVarManager gConsoleManager;
 
 CVarManager& CVarManager::Get()
 {
 	return gConsoleManager;
+}
+
+void CVarManager::Initialize()
+{
+	std::ifstream fs(Sprintf("%sConsoleVariables.ini", Paths::SavedDir().c_str()));
+	std::string line;
+	while (getline(fs, line))
+	{
+		Execute(line.c_str());
+	}
 }
 
 void CVarManager::RegisterConsoleObject(const char* pName, IConsoleObject* pObject)
@@ -18,21 +29,28 @@ void CVarManager::RegisterConsoleObject(const char* pName, IConsoleObject* pObje
 	std::sort(m_Objects.begin(), m_Objects.end(), [](IConsoleObject* pA, IConsoleObject* pB) { return strcmp(pA->GetName(), pB->GetName()) < 0; });
 }
 
-bool CVarManager::ExecuteCommand(const char* pCommand, const char* pArguments)
+bool CVarManager::Execute(const char* pCommand)
 {
+	char cmdLower[1024];
+	CharConv::ToLower(pCommand, cmdLower);
+
 	const char* argList[16];
 	char buffer[1024];
-	int numArgs = CharConv::SplitString(pArguments, buffer, &argList[0], 16, true, ' ');
-	auto it = m_Map.find(pCommand);
-	if (it != m_Map.end())
+	int numArgs = CharConv::SplitString(cmdLower, buffer, &argList[0], 16, true, ' ');
+	if (numArgs > 0)
 	{
-		return it->second->Execute(argList, numArgs);
+		auto it = m_Map.find(argList[0]);
+		if (it != m_Map.end())
+		{
+			return it->second->Execute(argList + 1, numArgs - 1);
+		}
+		else
+		{
+			E_LOG(Warning, "Unknown command '%s'", pCommand);
+			return false;
+		}
 	}
-	else
-	{
-		E_LOG(Warning, "Unknown command '%s'", pCommand);
-		return false;
-	}
+	return false;
 }
 
 void ImGuiConsole::Update(const ImVec2& position, const ImVec2& size)
@@ -85,16 +103,9 @@ void ImGuiConsole::Update(const ImVec2& position, const ImVec2& size)
 		ImGui::PushItemWidth(size.x);
 		if (ImGui::InputText("", m_Input.data(), (int)m_Input.size(), inputFlags, inputCallback, this))
 		{
-			char lowerName[256];
-			CharConv::ToLower(m_Input.data(), lowerName);
-			if (*lowerName != '\0')
+			if (m_Input[0] != '\0')
 			{
-				char* pArgs = strchr(lowerName, ' ');
-				if (pArgs)
-				{
-					*pArgs++ = '\0';
-				}
-				CVarManager::Get().ExecuteCommand(lowerName, pArgs ? pArgs : "");
+				CVarManager::Get().Execute(m_Input.data());
 				m_Suggestions.clear();
 				m_History.push_back(m_Input.data());
 				m_HistoryPos = -1;
@@ -156,7 +167,7 @@ int ImGuiConsole::InputCallback(ImGuiInputTextCallbackData* pCallbackData)
 		{
 			CVarManager::Get().ForEachCvar([this, pCallbackData](IConsoleObject* pObject)
 				{
-					if (_strnicmp(pObject->GetName(), pCallbackData->Buf, strlen(pCallbackData->Buf)) == 0)
+					if (_strnicmp(pObject->GetName(), pCallbackData->Buf, strlen(pCallbackData->Buf)) == 0 && m_Suggestions.size() < 10)
 					{
 						m_Suggestions.push_back(pObject->GetName());
 					}
