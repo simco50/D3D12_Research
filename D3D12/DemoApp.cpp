@@ -23,6 +23,7 @@
 #include "Core/CommandLine.h"
 #include "Core/Paths.h"
 #include "Content/Image.h"
+#include "Core/ConsoleVariables.h"
 
 static const int32 FRAME_COUNT = 3;
 static const DXGI_FORMAT SWAPCHAIN_FORMAT = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -143,42 +144,43 @@ void EditTransform(const Camera& camera, Matrix& matrix)
 namespace Tweakables
 {
 	// Post processing
-	float g_WhitePoint = 1;
-	float g_MinLogLuminance = -10;
-	float g_MaxLogLuminance = 20;
-	float g_Tau = 2;
-	bool g_DrawHistogram = false;
-	int32 g_ToneMapper = 1;
-	bool g_TAA = true;
+	ConsoleVariable g_WhitePoint("r.Exposure.WhitePoint", 1.0f);
+	ConsoleVariable g_MinLogLuminance("r.Exposure.MinLogLuminance", -10.0f);
+	ConsoleVariable g_MaxLogLuminance("r.Exposure.MaxLogLuminance", 20.0f);
+	ConsoleVariable g_Tau("r.Exposure.Tau", 2.0f);
+	ConsoleVariable g_DrawHistogram("vis.Histogram", false);
+	ConsoleVariable g_ToneMapper("r.Tonemapper", 1);
+	ConsoleVariable g_TAA("r.Taa", true);
 
 	// Shadows
-	bool g_SDSM = false;
-	bool g_StabilizeCascades = true;
-	bool g_VisualizeShadowCascades = false;
-	int g_ShadowCascades = 4;
-	float g_PSSMFactor = 1.0f;
+	ConsoleVariable g_SDSM("r.Shadows.SDSM", false);
+	ConsoleVariable g_StabilizeCascades("r.Shadows.StabilizeCascades", true);
+	ConsoleVariable g_VisualizeShadowCascades("vis.ShadowCascades", false);
+	ConsoleVariable g_ShadowCascades("r.Shadows.CascadeCount", 4);
+	ConsoleVariable g_PSSMFactor("r.Shadow.PSSMFactor", 1.0f);
 
 	// Misc Lighting
-	bool g_RaytracedAO = false;
-	bool g_VisualizeLights = false;
-	bool g_VisualizeLightDensity = false;
+	ConsoleVariable g_RaytracedAO("r.Raytracing.AO", false);
+	ConsoleVariable g_VisualizeLights("vis.Lights", false);
+	ConsoleVariable g_VisualizeLightDensity("vis.LightDensity", false);
+	ConsoleVariable g_RenderObjectBounds("r.vis.ObjectBounds", false);
+
+	ConsoleVariable g_RaytracedReflections("r.Raytracing.Reflections", true);
+	ConsoleVariable g_TLASBoundsThreshold("r.Raytracing.TLASBoundsThreshold", 5.0f * Math::DegreesToRadians);
+	ConsoleVariable g_SsrSamples("r.SSRSamples", 8);
+
+	// Misc
+	bool g_DumpRenderGraph = false;
+	DelegateConsoleCommand<> gDumpRenderGraph("DumpRenderGraph", []() { g_DumpRenderGraph = true; });
+	bool g_Screenshot = false;
+	DelegateConsoleCommand<> gScreenshot("Screenshot", []() { g_Screenshot = true; });
+	bool g_EnableUI = true;
 
 	// Lighting
 	float g_SunInclination = 0.579f;
 	float g_SunOrientation = -3.055f;
 	float g_SunTemperature = 5900.0f;
 	float g_SunIntensity = 3.0f;
-
-	// Reflections
-	bool g_RaytracedReflections = true;
-	float g_TLASBoundsThreshold = 5.0f * Math::DegreesToRadians;
-	int g_SsrSamples = 8;
-
-	// Misc
-	bool g_DumpRenderGraph = false;
-	bool g_Screenshot = false;
-	bool g_EnableUI = true;
-	bool g_RenderObjectBounds = false;
 }
 
 DemoApp::DemoApp(WindowHandle window, const IntVector2& windowRect, int sampleCount /*= 1*/)
@@ -463,7 +465,7 @@ void DemoApp::Update()
 		float minPoint = 0;
 		float maxPoint = 1;
 
-		shadowData.NumCascades = Tweakables::g_ShadowCascades;
+		shadowData.NumCascades = Tweakables::g_ShadowCascades.Get();
 
 		if (Tweakables::g_SDSM)
 		{
@@ -680,7 +682,7 @@ void DemoApp::Update()
 	m_SceneData.SceneTLAS = m_pDevice->RegisterBindlessResource(m_pTLAS->GetSRV());
 	m_SceneData.pNormals = m_pNormals.get();
 	m_SceneData.pResolvedNormals = m_pResolvedNormals.get();
-	m_SceneData.pResolvedTarget = Tweakables::g_TAA ? m_pTAASource.get() : m_pHDRRenderTarget.get();
+	m_SceneData.pResolvedTarget = Tweakables::g_TAA.Get() ? m_pTAASource.get() : m_pHDRRenderTarget.get();
 
 	PROFILE_END();
 
@@ -747,7 +749,7 @@ void DemoApp::Update()
 				GetSystemTime(&time);
 				Paths::CreateDirectoryTree(Paths::ScreenshotDir());
 				char filePath[128];
-				stbsp_sprintf(filePath, "%sScreenshot_%d_%02d_%02d__%02d_%02d_%02d.jpg",
+				FormatString(filePath, ARRAYSIZE(filePath), "%sScreenshot_%d_%02d_%02d__%02d_%02d_%02d.jpg",
 					Paths::ScreenshotDir().c_str(),
 					time.wYear, time.wMonth, time.wDay,
 					time.wHour, time.wMinute, time.wSecond);
@@ -864,7 +866,7 @@ void DemoApp::Update()
 	}
 
 	// Camera velocity
-	if (Tweakables::g_TAA)
+	if (Tweakables::g_TAA.Get())
 	{
 		RGPassBuilder cameraMotion = graph.AddPass("Camera Motion");
 		cameraMotion.Bind([=](CommandContext& renderContext, const RGPassResources& /*resources*/)
@@ -1067,12 +1069,12 @@ void DemoApp::Update()
 			if (m_SampleCount > 1)
 			{
 				context.InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RESOLVE_SOURCE);
-				Texture* pTarget = Tweakables::g_TAA ? m_pTAASource.get() : m_pHDRRenderTarget.get();
+				Texture* pTarget = Tweakables::g_TAA.Get() ? m_pTAASource.get() : m_pHDRRenderTarget.get();
 				context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_RESOLVE_DEST);
 				context.ResolveResource(GetCurrentRenderTarget(), 0, pTarget, 0, GraphicsDevice::RENDER_TARGET_FORMAT);
 			}
 
-			if (!Tweakables::g_TAA)
+			if (!Tweakables::g_TAA.Get())
 			{
 				context.CopyTexture(m_pHDRRenderTarget.get(), m_pPreviousColor.get());
 			}
@@ -1087,7 +1089,7 @@ void DemoApp::Update()
 		m_pRTReflections->Execute(graph, m_SceneData);
 	}
 
-	if (Tweakables::g_TAA)
+	if (Tweakables::g_TAA.Get())
 	{
 		RGPassBuilder temporalResolve = graph.AddPass("Temporal Resolve");
 		temporalResolve.Bind([=](CommandContext& renderContext, const RGPassResources& /*resources*/)
@@ -1187,8 +1189,8 @@ void DemoApp::Update()
 				} Parameters;
 				Parameters.Width = pToneMapInput->GetWidth();
 				Parameters.Height = pToneMapInput->GetHeight();
-				Parameters.MinLogLuminance = Tweakables::g_MinLogLuminance;
-				Parameters.OneOverLogLuminanceRange = 1.0f / (Tweakables::g_MaxLogLuminance - Tweakables::g_MinLogLuminance);
+				Parameters.MinLogLuminance = Tweakables::g_MinLogLuminance.Get();
+				Parameters.OneOverLogLuminanceRange = 1.0f / (Tweakables::g_MaxLogLuminance.Get() - Tweakables::g_MinLogLuminance.Get());
 
 				context.SetComputeDynamicConstantBufferView(0, Parameters);
 				context.BindResource(1, 0, m_pLuminanceHistogram->GetUAV());
@@ -1219,10 +1221,10 @@ void DemoApp::Update()
 				} Parameters;
 
 				Parameters.PixelCount = pToneMapInput->GetWidth() * pToneMapInput->GetHeight();
-				Parameters.MinLogLuminance = Tweakables::g_MinLogLuminance;
-				Parameters.LogLuminanceRange = Tweakables::g_MaxLogLuminance - Tweakables::g_MinLogLuminance;
+				Parameters.MinLogLuminance = Tweakables::g_MinLogLuminance.Get();
+				Parameters.LogLuminanceRange = Tweakables::g_MaxLogLuminance.Get() - Tweakables::g_MinLogLuminance.Get();
 				Parameters.TimeDelta = Time::DeltaTime();
-				Parameters.Tau = Tweakables::g_Tau;
+				Parameters.Tau = Tweakables::g_Tau.Get();
 
 				context.SetComputeDynamicConstantBufferView(0, Parameters);
 				context.BindResource(1, 0, m_pAverageLuminance->GetUAV());
@@ -1239,8 +1241,8 @@ void DemoApp::Update()
 					float WhitePoint;
 					uint32 Tonemapper;
 				} constBuffer;
-				constBuffer.WhitePoint = Tweakables::g_WhitePoint;
-				constBuffer.Tonemapper = Tweakables::g_ToneMapper;
+				constBuffer.WhitePoint = Tweakables::g_WhitePoint.Get();
+				constBuffer.Tonemapper = Tweakables::g_ToneMapper.Get();
 
 				context.InsertResourceBarrier(m_pTonemapTarget.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 				context.InsertResourceBarrier(m_pAverageLuminance.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
@@ -1261,7 +1263,7 @@ void DemoApp::Update()
 				);
 			});
 
-		if (Tweakables::g_EnableUI && Tweakables::g_DrawHistogram)
+		if (Tweakables::g_EnableUI && Tweakables::g_DrawHistogram.Get())
 		{
 			if (!m_pDebugHistogramTexture)
 			{
@@ -1286,8 +1288,8 @@ void DemoApp::Update()
 						Vector2 InvTextureDimensions;
 					} Parameters;
 
-					Parameters.MinLogLuminance = Tweakables::g_MinLogLuminance;
-					Parameters.InverseLogLuminanceRange = 1.0f / (Tweakables::g_MaxLogLuminance - Tweakables::g_MinLogLuminance);
+					Parameters.MinLogLuminance = Tweakables::g_MinLogLuminance.Get();
+					Parameters.InverseLogLuminanceRange = 1.0f / (Tweakables::g_MaxLogLuminance.Get() - Tweakables::g_MinLogLuminance.Get());
 					Parameters.InvTextureDimensions.x = 1.0f / m_pDebugHistogramTexture->GetWidth();
 					Parameters.InvTextureDimensions.y = 1.0f / m_pDebugHistogramTexture->GetHeight();
 
@@ -1336,7 +1338,7 @@ void DemoApp::Update()
 		for (uint32 i = 0; i < ARRAYSIZE(DEBUG_COLORS); ++i)
 		{
 			char number[16];
-			stbsp_sprintf(number, "%d", i);
+			FormatString(number, ARRAYSIZE(number), "%d", i);
 			ImGui::PushStyleColor(ImGuiCol_Button, DEBUG_COLORS[i]);
 			ImGui::Button(number, ImVec2(40, 20));
 			ImGui::PopStyleColor();
@@ -1790,41 +1792,9 @@ void DemoApp::UpdateImGui()
 
 	ImGui::End();
 
-	static bool showOutputLog = false;
-	ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0);
-	ImGui::SetNextWindowPos(ImVec2(300, (float)m_WindowHeight), 0, ImVec2(0, 1));
-	ImGui::SetNextWindowSize(ImVec2((float)m_WindowWidth - 300 * 2, 250));
-	ImGui::SetNextWindowCollapsed(!showOutputLog);
+	static ImGuiConsole console;
+	console.Update(ImVec2(300, (float)m_WindowHeight), ImVec2((float)m_WindowWidth - 300 * 2, 250));
 
-	showOutputLog = ImGui::Begin("Output Log", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
-	if (showOutputLog)
-	{
-		for (const Console::LogEntry& entry : Console::GetHistory())
-		{
-			switch (entry.Type)
-			{
-			case LogType::VeryVerbose:
-			case LogType::Verbose:
-			case LogType::Info:
-				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 1, 1, 1));
-				ImGui::TextWrapped("[Info] %s", entry.Message.c_str());
-				break;
-			case LogType::Warning:
-				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 1, 0, 1));
-				ImGui::TextWrapped("[Warning] %s", entry.Message.c_str());
-				break;
-			case LogType::Error:
-			case LogType::FatalError:
-				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 0, 0, 1));
-				ImGui::TextWrapped("[Error] %s", entry.Message.c_str());
-				break;
-			}
-			ImGui::PopStyleColor();
-		}
-		ImGui::SetScrollHereY(0.0f);
-	}
-	ImGui::PopStyleVar();
-	ImGui::End();
 
 	ImGui::SetNextWindowPos(ImVec2((float)m_WindowWidth, 0), 0, ImVec2(1, 0));
 	ImGui::SetNextWindowSize(ImVec2(300, (float)m_WindowHeight));
@@ -1837,18 +1807,19 @@ void DemoApp::UpdateImGui()
 	ImGui::SliderFloat("Sun Intensity", &Tweakables::g_SunIntensity, 0, 30);
 
 	ImGui::Text("Shadows");
-	ImGui::SliderInt("Shadow Cascades", &Tweakables::g_ShadowCascades, 1, 4);
-	ImGui::Checkbox("SDSM", &Tweakables::g_SDSM);
-	ImGui::Checkbox("Stabilize Cascades", &Tweakables::g_StabilizeCascades);
-	ImGui::SliderFloat("PSSM Factor", &Tweakables::g_PSSMFactor, 0, 1);
-	ImGui::Checkbox("Visualize Cascades", &Tweakables::g_VisualizeShadowCascades);
+	ImGui::SliderInt("Shadow Cascades", &Tweakables::g_ShadowCascades.Get(), 1, 4);
+	ImGui::Checkbox("SDSM", &Tweakables::g_SDSM.Get());
+	ImGui::Checkbox("Stabilize Cascades", &Tweakables::g_StabilizeCascades.Get());
+	ImGui::SliderFloat("PSSM Factor", &Tweakables::g_PSSMFactor.Get(), 0, 1);
+	ImGui::Checkbox("Visualize Cascades", &Tweakables::g_VisualizeShadowCascades.Get());
 
 	ImGui::Text("Expose/Tonemapping");
-	ImGui::SliderFloat("Min Log Luminance", &Tweakables::g_MinLogLuminance, -100, 20);
-	ImGui::SliderFloat("Max Log Luminance", &Tweakables::g_MaxLogLuminance, -50, 50);
-	ImGui::Checkbox("Draw Exposure Histogram", &Tweakables::g_DrawHistogram);
-	ImGui::SliderFloat("White Point", &Tweakables::g_WhitePoint, 0, 20);
-	ImGui::Combo("Tonemapper", (int*)&Tweakables::g_ToneMapper, [](void* /*data*/, int index, const char** outText)
+
+	ImGui::SliderFloat("Min Log Luminance", &Tweakables::g_MinLogLuminance.Get(), -100, 20);
+	ImGui::SliderFloat("Max Log Luminance", &Tweakables::g_MaxLogLuminance.Get(), -50, 50);
+	ImGui::Checkbox("Draw Exposure Histogram", &Tweakables::g_DrawHistogram.Get());
+	ImGui::SliderFloat("White Point", &Tweakables::g_WhitePoint.Get(), 0, 20);
+	ImGui::Combo("Tonemapper", (int*)&Tweakables::g_ToneMapper.Get(), [](void* /*data*/, int index, const char** outText)
 		{
 			if (index == 0)
 				*outText = "Reinhard";
@@ -1865,24 +1836,24 @@ void DemoApp::UpdateImGui()
 			return true;
 		}, nullptr, 5);
 
-	ImGui::SliderFloat("Tau", &Tweakables::g_Tau, 0, 5);
+	ImGui::SliderFloat("Tau", &Tweakables::g_Tau.Get(), 0, 5);
 
 	ImGui::Text("Misc");
-	ImGui::Checkbox("Debug Render Lights", &Tweakables::g_VisualizeLights);
-	ImGui::Checkbox("Visualize Light Density", &Tweakables::g_VisualizeLightDensity);
+	ImGui::Checkbox("Debug Render Lights", &Tweakables::g_VisualizeLights.Get());
+	ImGui::Checkbox("Visualize Light Density", &Tweakables::g_VisualizeLightDensity.Get());
 	extern bool g_VisualizeClusters;
 	ImGui::Checkbox("Visualize Clusters", &g_VisualizeClusters);
-	ImGui::SliderInt("SSR Samples", &Tweakables::g_SsrSamples, 0, 32);
-	ImGui::Checkbox("Object Bounds", &Tweakables::g_RenderObjectBounds);
+	ImGui::SliderInt("SSR Samples", &Tweakables::g_SsrSamples.Get(), 0, 32);
+	ImGui::Checkbox("Object Bounds", &Tweakables::g_RenderObjectBounds.Get());
 
 	if (m_pDevice->SupportsRayTracing())
 	{
-		ImGui::Checkbox("Raytraced AO", &Tweakables::g_RaytracedAO);
-		ImGui::Checkbox("Raytraced Reflections", &Tweakables::g_RaytracedReflections);
-		ImGui::SliderAngle("TLAS Bounds Threshold", &Tweakables::g_TLASBoundsThreshold, 0, 40);
+		ImGui::Checkbox("Raytraced AO", &Tweakables::g_RaytracedAO.Get());
+		ImGui::Checkbox("Raytraced Reflections", &Tweakables::g_RaytracedReflections.Get());
+		ImGui::SliderAngle("TLAS Bounds Threshold", &Tweakables::g_TLASBoundsThreshold.Get(), 0, 40);
 	}
 
-	ImGui::Checkbox("TAA", &Tweakables::g_TAA);
+	ImGui::Checkbox("TAA", &Tweakables::g_TAA.Get());
 
 	ImGui::End();
 }

@@ -13,13 +13,14 @@
 #include "Graphics/Profiler.h"
 #include "Scene/Camera.h"
 #include "DemoApp.h"
+#include "Core/ConsoleVariables.h"
 
 static constexpr int MAX_LIGHT_DENSITY = 72000;
 static constexpr int FORWARD_PLUS_BLOCK_SIZE = 16;
 
 namespace Tweakables
 {
-	extern int g_SsrSamples;
+	extern ConsoleVariable<int> g_SsrSamples;
 }
 
 TiledForward::TiledForward(GraphicsDevice* pDevice)

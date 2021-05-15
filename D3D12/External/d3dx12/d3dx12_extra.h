@@ -20,6 +20,7 @@
 
 namespace CD3DX12_STATE_OBJECT_HELPER
 {
+	/*
 	static std::string DebugPrint(const D3D12_STATE_OBJECT_DESC* desc)
 	{
 		std::wstringstream wstr;
@@ -137,7 +138,7 @@ namespace CD3DX12_STATE_OBJECT_HELPER
 		std::string result = aOutput;
 		delete[] aOutput;
 		return result;
-	}
+	}*/
 };
 
 #endif //__D3DX12_EXTRA_H__
