@@ -6,30 +6,22 @@ class IConsoleObject;
 class CVarManager
 {
 public:
-	static CVarManager& Get();
-	void Initialize();
+	static void Initialize();
+	static void RegisterConsoleObject(const char* pName, IConsoleObject* pObject);
+	static bool Execute(const char* pCommand);
 
-	void RegisterConsoleObject(const char* pName, IConsoleObject* pObject);
-	bool Execute(const char* pCommand);
-
-	IConsoleObject* FindConsoleObject(const char* pName)
-	{
-		auto it = m_Map.find(pName);
-		return it != m_Map.end() ? it->second : nullptr;
-	}
+	static IConsoleObject* FindConsoleObject(const char* pName);
 
 	template<typename T>
-	void ForEachCvar(T&& callback) const
+	static void ForEachCvar(T&& callback)
 	{
-		for (const auto& cvar : m_Objects)
+		for (const auto& cvar : GetObjects())
 		{
 			callback(cvar);
 		}
 	}
 
-private:
-	std::unordered_map<StringHash, IConsoleObject*> m_Map;
-	std::vector<IConsoleObject*> m_Objects;
+	static const std::vector<IConsoleObject*>& GetObjects();
 };
 
 class IConsoleObject
@@ -38,7 +30,7 @@ public:
 	IConsoleObject(const char* pName)
 		: m_pName(pName)
 	{
-		CVarManager::Get().RegisterConsoleObject(pName, this);
+		CVarManager::RegisterConsoleObject(pName, this);
 	}
 	virtual ~IConsoleObject() = default;
 	virtual bool Execute(const char** pArgs, int numArgs) = 0;
@@ -187,7 +179,7 @@ public:
 		}
 		else if (numArgs > 0)
 		{
-			T val;
+			std::remove_reference_t<T> val;
 			if (CharConv::FromString(pArgs[0], val))
 			{
 				SetValue(val);
@@ -200,7 +192,6 @@ public:
 	}
 
 	operator const T& () const { return m_Value; }
-	T* operator&() { return &m_Value; }
 
 	T& Get() { return m_Value; }
 	const T& Get() const { return m_Value; }
@@ -211,35 +202,7 @@ private:
 };
 
 template<typename T>
-class ConsoleVariableRef : public IConsoleObject
-{
-public:
-	ConsoleVariableRef(const char* pName, T& value, Delegate<void, IConsoleObject*> onModified = {})
-		: IConsoleObject(pName), m_Value(value), m_OnModified(onModified)
-	{}
-
-	virtual bool Execute(const char** pArgs, int numArgs) override
-	{
-		if (numArgs > 0)
-		{
-			T val;
-			if (CharConv::FromString(pArgs[0], val))
-			{
-				m_Value = val;
-				m_OnModified.ExecuteIfBound(this);
-				return true;
-			}
-		}
-		return false;
-	}
-
-	T& Get() { return m_Value; }
-	const T& Get() const { return m_Value; }
-
-private:
-	T& m_Value;
-	Delegate<void, IConsoleObject*> m_OnModified;
-};
+using ConsoleVariableRef = ConsoleVariable<T&>;
 
 class ImGuiConsole
 {

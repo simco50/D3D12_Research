@@ -3,12 +3,8 @@
 #include "Core/Input.h"
 #include "Paths.h"
 
-CVarManager gConsoleManager;
-
-CVarManager& CVarManager::Get()
-{
-	return gConsoleManager;
-}
+static std::unordered_map<StringHash, IConsoleObject*> gCvarMap;
+static std::vector<IConsoleObject*> gConsoleObjects;
 
 void CVarManager::Initialize()
 {
@@ -24,9 +20,12 @@ void CVarManager::RegisterConsoleObject(const char* pName, IConsoleObject* pObje
 {
 	char lowerName[256];
 	CharConv::ToLower(pName, lowerName);
-	m_Map[lowerName] = pObject;
-	m_Objects.push_back(pObject);
-	std::sort(m_Objects.begin(), m_Objects.end(), [](IConsoleObject* pA, IConsoleObject* pB) { return strcmp(pA->GetName(), pB->GetName()) < 0; });
+	if (gCvarMap.find(lowerName) == gCvarMap.end())
+	{
+		gCvarMap[lowerName] = pObject;
+		gConsoleObjects.push_back(pObject);
+		std::sort(gConsoleObjects.begin(), gConsoleObjects.end(), [](IConsoleObject* pA, IConsoleObject* pB) { return strcmp(pA->GetName(), pB->GetName()) < 0; });
+	}
 }
 
 bool CVarManager::Execute(const char* pCommand)
@@ -36,11 +35,11 @@ bool CVarManager::Execute(const char* pCommand)
 
 	const char* argList[16];
 	char buffer[1024];
-	int numArgs = CharConv::SplitString(cmdLower, buffer, &argList[0], 16, true, ' ');
+	int numArgs = CharConv::SplitString(cmdLower, buffer, &argList[0], ARRAYSIZE(argList), true, ' ');
 	if (numArgs > 0)
 	{
-		auto it = m_Map.find(argList[0]);
-		if (it != m_Map.end())
+		auto it = gCvarMap.find(*argList);
+		if (it != gCvarMap.end())
 		{
 			return it->second->Execute(argList + 1, numArgs - 1);
 		}
@@ -51,6 +50,17 @@ bool CVarManager::Execute(const char* pCommand)
 		}
 	}
 	return false;
+}
+
+IConsoleObject* CVarManager::FindConsoleObject(const char* pName)
+{
+	auto it = gCvarMap.find(pName);
+	return it != gCvarMap.end() ? it->second : nullptr;
+}
+
+const std::vector<IConsoleObject*>& CVarManager::GetObjects()
+{
+	return gConsoleObjects;
 }
 
 void ImGuiConsole::Update(const ImVec2& position, const ImVec2& size)
@@ -105,12 +115,13 @@ void ImGuiConsole::Update(const ImVec2& position, const ImVec2& size)
 		{
 			if (m_Input[0] != '\0')
 			{
-				CVarManager::Get().Execute(m_Input.data());
+				CVarManager::Execute(m_Input.data());
 				m_Suggestions.clear();
 				m_History.push_back(m_Input.data());
 				m_HistoryPos = -1;
 				m_SuggestionPos = -1;
 				m_Input[0] = '\0';
+				m_FocusConsole = false;
 			}
 		}
 		if (m_FocusConsole)
@@ -165,7 +176,7 @@ int ImGuiConsole::InputCallback(ImGuiInputTextCallbackData* pCallbackData)
 		m_Suggestions.clear();
 		if (strlen(pCallbackData->Buf) > 0)
 		{
-			CVarManager::Get().ForEachCvar([this, pCallbackData](IConsoleObject* pObject)
+			CVarManager::ForEachCvar([this, pCallbackData](IConsoleObject* pObject)
 				{
 					if (_strnicmp(pObject->GetName(), pCallbackData->Buf, strlen(pCallbackData->Buf)) == 0 && m_Suggestions.size() < 10)
 					{

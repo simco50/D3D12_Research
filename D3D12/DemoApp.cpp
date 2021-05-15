@@ -1807,13 +1807,14 @@ void DemoApp::UpdateImGui()
 	ImGui::SliderFloat("Sun Intensity", &Tweakables::g_SunIntensity, 0, 30);
 
 	ImGui::Text("Shadows");
-	ImGui::SliderInt("Shadow Cascades", &Tweakables::g_ShadowCascades, 1, 4);
-	ImGui::Checkbox("SDSM", &Tweakables::g_SDSM);
-	ImGui::Checkbox("Stabilize Cascades", &Tweakables::g_StabilizeCascades);
-	ImGui::SliderFloat("PSSM Factor", &Tweakables::g_PSSMFactor, 0, 1);
-	ImGui::Checkbox("Visualize Cascades", &Tweakables::g_VisualizeShadowCascades);
+	ImGui::SliderInt("Shadow Cascades", &Tweakables::g_ShadowCascades.Get(), 1, 4);
+	ImGui::Checkbox("SDSM", &Tweakables::g_SDSM.Get());
+	ImGui::Checkbox("Stabilize Cascades", &Tweakables::g_StabilizeCascades.Get());
+	ImGui::SliderFloat("PSSM Factor", &Tweakables::g_PSSMFactor.Get(), 0, 1);
+	ImGui::Checkbox("Visualize Cascades", &Tweakables::g_VisualizeShadowCascades.Get());
 
 	ImGui::Text("Expose/Tonemapping");
+
 	ImGui::SliderFloat("Min Log Luminance", &Tweakables::g_MinLogLuminance.Get(), -100, 20);
 	ImGui::SliderFloat("Max Log Luminance", &Tweakables::g_MaxLogLuminance.Get(), -50, 50);
 	ImGui::Checkbox("Draw Exposure Histogram", &Tweakables::g_DrawHistogram.Get());
@@ -1838,18 +1839,18 @@ void DemoApp::UpdateImGui()
 	ImGui::SliderFloat("Tau", &Tweakables::g_Tau.Get(), 0, 5);
 
 	ImGui::Text("Misc");
-	ImGui::Checkbox("Debug Render Lights", &Tweakables::g_VisualizeLights);
-	ImGui::Checkbox("Visualize Light Density", &Tweakables::g_VisualizeLightDensity);
+	ImGui::Checkbox("Debug Render Lights", &Tweakables::g_VisualizeLights.Get());
+	ImGui::Checkbox("Visualize Light Density", &Tweakables::g_VisualizeLightDensity.Get());
 	extern bool g_VisualizeClusters;
 	ImGui::Checkbox("Visualize Clusters", &g_VisualizeClusters);
-	ImGui::SliderInt("SSR Samples", &Tweakables::g_SsrSamples, 0, 32);
-	ImGui::Checkbox("Object Bounds", &Tweakables::g_RenderObjectBounds);
+	ImGui::SliderInt("SSR Samples", &Tweakables::g_SsrSamples.Get(), 0, 32);
+	ImGui::Checkbox("Object Bounds", &Tweakables::g_RenderObjectBounds.Get());
 
 	if (m_pDevice->SupportsRayTracing())
 	{
-		ImGui::Checkbox("Raytraced AO", &Tweakables::g_RaytracedAO);
-		ImGui::Checkbox("Raytraced Reflections", &Tweakables::g_RaytracedReflections);
-		ImGui::SliderAngle("TLAS Bounds Threshold", &Tweakables::g_TLASBoundsThreshold, 0, 40);
+		ImGui::Checkbox("Raytraced AO", &Tweakables::g_RaytracedAO.Get());
+		ImGui::Checkbox("Raytraced Reflections", &Tweakables::g_RaytracedReflections.Get());
+		ImGui::SliderAngle("TLAS Bounds Threshold", &Tweakables::g_TLASBoundsThreshold.Get(), 0, 40);
 	}
 
 	ImGui::Checkbox("TAA", &Tweakables::g_TAA.Get());
