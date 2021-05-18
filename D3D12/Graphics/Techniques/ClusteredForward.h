@@ -7,14 +7,10 @@ class RootSignature;
 class Texture;
 class Camera;
 class CommandSignature;
-class CommandContext;
 class Buffer;
 class UnorderedAccessView;
 class RGGraph;
-
 struct SceneData;
-struct Batch;
-struct ShadowData;
 
 class ClusteredForward
 {

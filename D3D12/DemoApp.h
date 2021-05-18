@@ -3,33 +3,17 @@
 #include "Graphics/Core/DescriptorHandle.h"
 #include "Graphics/Core/Graphics.h"
 
-class CommandQueue;
-class CommandContext;
-class OfflineDescriptorAllocator;
-class DynamicAllocationManager;
 class ImGuiRenderer;
-class GraphicsResource;
-class RootSignature;
-class Texture;
-class PipelineState;
 class Mesh;
-class Buffer;
 struct SubMesh;
 struct Material;
 class ClusteredForward;
 class TiledForward;
 class Camera;
-class UnorderedAccessView;
 class RTAO;
 class RTReflections;
 class SSAO;
 class GpuParticles;
-class ShaderManager;
-class PipelineStateInitializer;
-class StateObject;
-class StateObjectInitializer;
-class GlobalOnlineDescriptorHeap;
-class ResourceView;
 
 enum class DefaultTexture
 {

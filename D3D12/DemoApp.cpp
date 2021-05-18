@@ -351,8 +351,6 @@ void DemoApp::SetupScene(CommandContext& context)
 	}
 }
 
-Matrix spotMatrix = Matrix::CreateScale(100.0f, 0.2f, 1) * Matrix::CreateFromYawPitchRoll(0.1f, 0, 0) * Matrix::CreateTranslation(0, 10, 0);
-
 void DemoApp::Update()
 {
 	PROFILE_BEGIN("Update");
@@ -401,17 +399,6 @@ void DemoApp::Update()
 		EditTransform(*m_pCamera, b.WorldMatrix);
 		DebugRenderer::Get()->AddBoundingBox(b.Bounds, Color(1, 0, 1, 1));
 	}
-
-#elif 0
-
-	EditTransform(*m_pCamera, spotMatrix);
-	Vector3 scale, position;
-	Quaternion rotation;
-	spotMatrix.Decompose(scale, rotation, position);
-	m_Lights[1].Range = scale.x;
-	m_Lights[1].Position = position;
-	m_Lights[1].Direction = spotMatrix.Forward();
-
 #endif
 
 #if 0
@@ -496,6 +483,27 @@ void DemoApp::Update()
 			cascadeSplits[i] = (d - nearPlane) / clipPlaneRange;
 		}
 
+		Vector3 frustumCorners[] = {
+			//near
+			Vector3(-1, -1, 1),
+			Vector3(-1, 1, 1),
+			Vector3(1, 1, 1),
+			Vector3(1, -1, 1),
+
+			//far
+			Vector3(-1, -1, 0),
+			Vector3(-1, 1, 0),
+			Vector3(1, 1, 0),
+			Vector3(1, -1, 0),
+		};
+
+		//Retrieve frustum corners in world space
+		for (Vector3& corner : frustumCorners)
+		{
+			corner = Vector3::Transform(corner, m_pCamera->GetProjectionInverse());
+			corner = Vector3::Transform(corner, m_pCamera->GetViewInverse());
+		}
+
 		for (size_t lightIndex = 0; lightIndex < m_Lights.size(); ++lightIndex)
 		{
 			Light& light = m_Lights[lightIndex];
@@ -510,27 +518,6 @@ void DemoApp::Update()
 				{
 					float previousCascadeSplit = i == 0 ? minPoint : cascadeSplits[i - 1];
 					float currentCascadeSplit = cascadeSplits[i];
-
-					Vector3 frustumCorners[] = {
-						//near
-						Vector3(-1, -1, 1),
-						Vector3(-1, 1, 1),
-						Vector3(1, 1, 1),
-						Vector3(1, -1, 1),
-
-						//far
-						Vector3(-1, -1, 0),
-						Vector3(-1, 1, 0),
-						Vector3(1, 1, 0),
-						Vector3(1, -1, 0),
-					};
-
-					//Retrieve frustum corners in world space
-					for (Vector3& corner : frustumCorners)
-					{
-						corner = Vector3::Transform(corner, m_pCamera->GetProjectionInverse());
-						corner = Vector3::Transform(corner, m_pCamera->GetViewInverse());
-					}
 
 					//Adjust frustum corners based on cascade splits
 					for (int j = 0; j < 4; ++j)
@@ -607,28 +594,19 @@ void DemoApp::Update()
 			}
 			else if (light.Type == LightType::Point)
 			{
+				Matrix viewMatrices[] = {
+					Math::CreateLookToMatrix(light.Position, Vector3::Left, Vector3::Up),
+					Math::CreateLookToMatrix(light.Position, Vector3::Right, Vector3::Up),
+					Math::CreateLookToMatrix(light.Position, Vector3::Down, Vector3::Backward),
+					Math::CreateLookToMatrix(light.Position, Vector3::Up, Vector3::Forward),
+					Math::CreateLookToMatrix(light.Position, Vector3::Backward, Vector3::Up),
+					Math::CreateLookToMatrix(light.Position, Vector3::Forward, Vector3::Up),
+				};
 				Matrix projection = Math::CreatePerspectiveMatrix(Math::PIDIV2, 1, light.Range, 1.0f);
-
-				constexpr Vector3 cubemapDirections[] = {
-					Vector3(-1.0f, 0.0f, 0.0f),
-					Vector3(1.0f, 0.0f, 0.0f),
-					Vector3(0.0f, -1.0f, 0.0f),
-					Vector3(0.0f, 1.0f, 0.0f),
-					Vector3(0.0f, 0.0f, -1.0f),
-					Vector3(0.0f, 0.0f, 1.0f),
-				};
-				constexpr Vector3 cubemapUpDirections[] = {
-					Vector3(0.0f, 1.0f, 0.0f),
-					Vector3(0.0f, 1.0f, 0.0f),
-					Vector3(0.0f, 0.0f, -1.0f),
-					Vector3(0.0f, 0.0f, 1.0f),
-					Vector3(0.0f, 1.0f, 0.0f),
-					Vector3(0.0f, 1.0f, 0.0f),
-				};
 
 				for (int i = 0; i < 6; ++i)
 				{
-					shadowData.LightViewProjections[shadowIndex] = Matrix::CreateLookAt(light.Position, light.Position + cubemapDirections[i], cubemapUpDirections[i]) * projection;
+					shadowData.LightViewProjections[shadowIndex] = viewMatrices[i] * projection;
 					++shadowIndex;
 				}
 			}

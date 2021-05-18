@@ -1,11 +1,9 @@
 #pragma once
-class CommandContext;
 class GraphicsDevice;
 class RootSignature;
 class PipelineState;
 class Texture;
 class RGGraph;
-class ShaderManager;
 struct SceneData;
 
 class ImGuiRenderer
