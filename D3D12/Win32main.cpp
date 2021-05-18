@@ -7,12 +7,12 @@
 #include "Core/Console.h"
 #include "Core/CommandLine.h"
 #include "Core/TaskQueue.h"
+#include "Core/ConsoleVariables.h"
 #include "DemoApp.h"
 
 #ifdef _DEBUG
 #define _CRTDBG_MAP_ALLOC
 #include <crtdbg.h>
-#include "Core/ConsoleVariables.h"
 #endif
 
 #define BREAK_ON_ALLOC 0
