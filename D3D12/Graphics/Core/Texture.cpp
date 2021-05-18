@@ -344,7 +344,7 @@ void Texture::CreateForSwapchain(ID3D12Resource* pTexture)
 	m_Desc.Width = (uint32)desc.Width;
 	m_Desc.Height = (uint32)desc.Height;
 	m_Desc.Format = desc.Format;
-	m_Desc.ClearBindingValue = ClearBinding(Color(0, 0, 0, 1));
+	m_Desc.ClearBindingValue = ClearBinding(Colors::Black);
 	m_Desc.Mips = desc.MipLevels;
 	m_Desc.SampleCount = desc.SampleDesc.Count;
 	m_Desc.Usage = TextureFlag::RenderTarget;

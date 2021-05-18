@@ -117,16 +117,16 @@ namespace Paths
 
 	void Combine(const std::vector<std::string>& elements, std::string& output)
 	{
-		std::stringstream stream;
+		// Reserve some conservative amount
+		output.reserve(elements.size() * 20);
 		for (size_t i = 0; i < elements.size(); i++)
 		{
-			stream << elements[i];
+			output += elements[i];
 			if (elements[i].back() != '/' && i != elements.size() - 1)
 			{
-				stream << "/";
+				output += "/";
 			}
 		}
-		output = stream.str();
 	}
 
 	std::string Combine(const std::string& a, const std::string& b)

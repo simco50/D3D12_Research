@@ -170,9 +170,9 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 			}
 			std::unique_ptr<Texture> pTex;
 			pTex = std::make_unique<Texture>(pDevice, pathStr.c_str());
-			std::stringstream str;
-			str << basePath << pathStr;
-			success = pTex->Create(pContext, str.str().c_str(), srgb);
+			std::string str;
+			str += basePath + pathStr;
+			success = pTex->Create(pContext, str.c_str(), srgb);
 			if (success)
 			{
 				m_Textures.push_back(std::move(pTex));

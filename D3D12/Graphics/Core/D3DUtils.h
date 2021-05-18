@@ -262,14 +262,14 @@ namespace D3D
 
 	inline std::string GetErrorString(HRESULT errorCode, ID3D12Device* pDevice)
 	{
-		std::stringstream str;
+		std::string str;
 		char* errorMsg;
 		if (FormatMessageA(
 			FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM,
 			nullptr, errorCode, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
 			(LPSTR)&errorMsg, 0, nullptr) != 0)
 		{
-			str << errorMsg;
+			str += errorMsg;
 			LocalFree(errorMsg);
 		}
 		if (errorCode == DXGI_ERROR_DEVICE_REMOVED && pDevice)
@@ -278,23 +278,24 @@ namespace D3D
 			pDevice->QueryInterface(pInfo.GetAddressOf());
 			if (pInfo)
 			{
-				str << "Validation Layer: \n";
+				str += "Validation Layer: \n";
 				for (uint64 i = 0; i < pInfo->GetNumStoredMessages(); ++i)
 				{
 					size_t messageLength = 0;
-					pInfo->GetMessage(0, nullptr, &messageLength);
+					pInfo->GetMessageA(0, nullptr, &messageLength);
 					D3D12_MESSAGE* pMessage = (D3D12_MESSAGE*)malloc(messageLength);
-					pInfo->GetMessage(0, pMessage, &messageLength);
-					str << pMessage->pDescription << "\n";
+					pInfo->GetMessageA(0, pMessage, &messageLength);
+					str += pMessage->pDescription;
+					str += "\n";
 					free(pMessage);
 				}
 			}
 
 			HRESULT removedReason = pDevice->GetDeviceRemovedReason();
-			str << "\nDRED: " << GetErrorString(removedReason, nullptr);
+			str += "\nDRED: " + GetErrorString(removedReason, nullptr);
 			DREDHandler(pDevice);
 		}
-		return str.str();
+		return str;
 	}
 
 	inline bool LogHRESULT(HRESULT hr, ID3D12Device* pDevice, const char* pCode, const char* pFileName, uint32 lineNumber)

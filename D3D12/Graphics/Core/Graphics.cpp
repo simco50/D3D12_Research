@@ -58,11 +58,10 @@ static bool GetLatestWinPixGpuCapturerPath(std::string& path)
 		return false;
 	}
 	pixSearchPath.pop_back();
-	std::stringstream str;
-	str << pixSearchPath;
-	str << newestVersionFound;
-	str << "\\WinPixGpuCapturer.dll";
-	path = str.str();
+
+	path = pixSearchPath;
+	path += newestVersionFound;
+	path += "\\WinPixGpuCapturer.dll";
 	return true;
 }
 #endif

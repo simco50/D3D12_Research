@@ -127,13 +127,3 @@ void DynamicAllocationManager::CollectGarbage()
 	m_FreedPages = {};
 	m_DeleteQueue = {};
 }
-
-uint64 DynamicAllocationManager::GetMemoryUsage() const
-{
-	uint64 size = 0;
-	for (const auto& pPage : m_Pages)
-	{
-		size += pPage->GetSize();
-	}
-	return size;
-}

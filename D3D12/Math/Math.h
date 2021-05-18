@@ -1,5 +1,19 @@
 #pragma once
 
+namespace Colors
+{
+	constexpr Color Transparent =	Color(0.0f, 0.0f, 0.0f, 0.0f);
+	constexpr Color White =			Color(1.0f, 1.0f, 1.0f, 1.0f);
+	constexpr Color Black =			Color(0.0f, 0.0f, 0.0f, 1.0f);
+	constexpr Color Red =			Color(1.0f, 0.0f, 0.0f, 1.0f);
+	constexpr Color Green =			Color(0.0f, 1.0f, 0.0f, 1.0f);
+	constexpr Color Blue =			Color(0.0f, 0.0f, 1.0f, 1.0f);
+	constexpr Color Yellow =		Color(1.0f, 1.0f, 0.0f, 1.0f);
+	constexpr Color Magenta =		Color(1.0f, 0.0f, 1.0f, 1.0f);
+	constexpr Color Cyan =			Color(0.0f, 1.0f, 1.0f, 1.0f);
+	constexpr Color Gray =			Color(0.5f, 0.5f, 0.5f, 1.0f);
+};
+
 namespace Math
 {
 	constexpr float PI = 3.141592654f;

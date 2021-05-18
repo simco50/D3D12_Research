@@ -27,8 +27,6 @@ public:
 	void FreeLargePages(uint64 fenceValue, const std::vector<Buffer*> pLargePages);
 	void CollectGarbage();
 
-	uint64 GetMemoryUsage() const;
-
 private:
 	BufferFlag m_BufferFlags;
 	std::mutex m_PageMutex;

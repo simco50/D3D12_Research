@@ -30,7 +30,6 @@ CD3DX12_CPU_DESCRIPTOR_HANDLE OfflineDescriptorAllocator::AllocateDescriptor()
 			m_FreeHeaps.remove(m_FreeHeaps.front());
 		}
 	}
-	++m_NumAllocatedDescriptors;
 	return outHandle;
 }
 
@@ -85,7 +84,6 @@ void OfflineDescriptorAllocator::FreeDescriptor(D3D12_CPU_DESCRIPTOR_HANDLE hand
 		}
 		pHeap->FreeRanges.push_back(newRange);
 	}
-	--m_NumAllocatedDescriptors;
 }
 
 void OfflineDescriptorAllocator::AllocateNewHeap()
@@ -103,6 +101,4 @@ void OfflineDescriptorAllocator::AllocateNewHeap()
 	pHeap->FreeRanges.push_back(Heap::Range{ Begin, CD3DX12_CPU_DESCRIPTOR_HANDLE(Begin, m_DescriptorsPerHeap, m_DescriptorSize) });
 	m_Heaps.push_back(std::move(pHeap));
 	m_FreeHeaps.push_back((int)m_Heaps.size() - 1);
-
-	m_NumDescriptors += m_DescriptorsPerHeap;
 }
