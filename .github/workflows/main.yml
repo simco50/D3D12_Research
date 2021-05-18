@@ -32,11 +32,3 @@ jobs:
         
       - name: Run MSBuild
         run: msbuild.exe D3D12.sln /p:Configuration=Release /p:Platform=x64
-        
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v2.2.3
-        with:
-          name: Artifacts
-          path: |
-            Build/D3D12_x64_Release
-            D3D12/Resources/
