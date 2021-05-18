@@ -483,27 +483,6 @@ void DemoApp::Update()
 			cascadeSplits[i] = (d - nearPlane) / clipPlaneRange;
 		}
 
-		Vector3 frustumCorners[] = {
-			//near
-			Vector3(-1, -1, 1),
-			Vector3(-1, 1, 1),
-			Vector3(1, 1, 1),
-			Vector3(1, -1, 1),
-
-			//far
-			Vector3(-1, -1, 0),
-			Vector3(-1, 1, 0),
-			Vector3(1, 1, 0),
-			Vector3(1, -1, 0),
-		};
-
-		//Retrieve frustum corners in world space
-		for (Vector3& corner : frustumCorners)
-		{
-			corner = Vector3::Transform(corner, m_pCamera->GetProjectionInverse());
-			corner = Vector3::Transform(corner, m_pCamera->GetViewInverse());
-		}
-
 		for (size_t lightIndex = 0; lightIndex < m_Lights.size(); ++lightIndex)
 		{
 			Light& light = m_Lights[lightIndex];
@@ -518,6 +497,27 @@ void DemoApp::Update()
 				{
 					float previousCascadeSplit = i == 0 ? minPoint : cascadeSplits[i - 1];
 					float currentCascadeSplit = cascadeSplits[i];
+
+					Vector3 frustumCorners[] = {
+						//near
+						Vector3(-1, -1, 1),
+						Vector3(-1, 1, 1),
+						Vector3(1, 1, 1),
+						Vector3(1, -1, 1),
+
+						//far
+						Vector3(-1, -1, 0),
+						Vector3(-1, 1, 0),
+						Vector3(1, 1, 0),
+						Vector3(1, -1, 0),
+					};
+
+					//Retrieve frustum corners in world space
+					for (Vector3& corner : frustumCorners)
+					{
+						corner = Vector3::Transform(corner, m_pCamera->GetProjectionInverse());
+						corner = Vector3::Transform(corner, m_pCamera->GetViewInverse());
+					}
 
 					//Adjust frustum corners based on cascade splits
 					for (int j = 0; j < 4; ++j)
