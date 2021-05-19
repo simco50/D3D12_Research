@@ -260,6 +260,4 @@ private:
 
 	ShaderResourceView* m_pSrv = nullptr;
 	UnorderedAccessView* m_pUav = nullptr;
-
-	std::string m_Name;
 };

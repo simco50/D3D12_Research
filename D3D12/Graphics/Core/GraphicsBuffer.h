@@ -147,7 +147,6 @@ protected:
 	ShaderResourceView* m_pSrv = nullptr;
 
 	BufferDesc m_Desc;
-	std::string m_Name;
 };
 
 struct VertexBufferView

@@ -5,7 +5,7 @@
 #include "ResourceViews.h"
 
 Buffer::Buffer(GraphicsDevice* pParent, const char* pName /*= ""*/)
-	: GraphicsResource(pParent), m_Name(pName)
+	: GraphicsResource(pParent)
 {
 }
 

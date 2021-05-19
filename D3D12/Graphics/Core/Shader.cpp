@@ -313,10 +313,11 @@ ShaderManager::ShaderStringHash ShaderManager::GetEntryPointHash(const char* pEn
 
 Shader* ShaderManager::LoadShader(const char* pShaderPath, ShaderType shaderType, const char* pEntryPoint, const std::vector<ShaderDefine>& defines /*= {}*/)
 {
-	std::stringstream shaderSource;
 	std::vector<ShaderStringHash> includes;
 	char filePath[1024];
 	FormatString(filePath, ARRAYSIZE(filePath), "%s%s", m_pShaderSourcePath, pShaderPath);
+
+	std::stringstream shaderSource;
 	if (!ProcessSource(filePath, filePath, shaderSource, includes))
 	{
 		return nullptr;

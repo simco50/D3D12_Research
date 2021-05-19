@@ -270,7 +270,6 @@ public:
 	}
 
 	void PushEvent(const char* pName);
-
 	void PopEvent();
 
 private:
