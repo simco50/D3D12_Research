@@ -19,7 +19,7 @@ void CVarManager::Initialize()
 void CVarManager::RegisterConsoleObject(const char* pName, IConsoleObject* pObject)
 {
 	char lowerName[256];
-	CharConv::ToLower(pName, lowerName);
+	CString::ToLower(pName, lowerName);
 	if (gCvarMap.find(lowerName) == gCvarMap.end())
 	{
 		gCvarMap[lowerName] = pObject;
@@ -31,11 +31,12 @@ void CVarManager::RegisterConsoleObject(const char* pName, IConsoleObject* pObje
 bool CVarManager::Execute(const char* pCommand)
 {
 	char cmdLower[1024];
-	CharConv::ToLower(pCommand, cmdLower);
+	CString::ToLower(pCommand, cmdLower);
+	CString::TrimSpaces(cmdLower);
 
 	const char* argList[16];
 	char buffer[1024];
-	int numArgs = CharConv::SplitString(cmdLower, buffer, &argList[0], ARRAYSIZE(argList), true, ' ');
+	int numArgs = CString::SplitString(cmdLower, buffer, &argList[0], ARRAYSIZE(argList), true, ' ');
 	if (numArgs > 0)
 	{
 		auto it = gCvarMap.find(*argList);
@@ -54,7 +55,9 @@ bool CVarManager::Execute(const char* pCommand)
 
 IConsoleObject* CVarManager::FindConsoleObject(const char* pName)
 {
-	auto it = gCvarMap.find(pName);
+	char lowerName[256];
+	CString::ToLower(pName, lowerName);
+	auto it = gCvarMap.find(lowerName);
 	return it != gCvarMap.end() ? it->second : nullptr;
 }
 
@@ -62,6 +65,26 @@ const std::vector<IConsoleObject*>& CVarManager::GetObjects()
 {
 	return gConsoleObjects;
 }
+
+template<> int ConsoleVariable<int>::GetInt() const { return m_Value; }
+template<> float ConsoleVariable<int>::GetFloat() const { return (float)m_Value; }
+template<> bool ConsoleVariable<int>::GetBool() const { return m_Value > 0; }
+template<> std::string ConsoleVariable<int>::GetString() const { std::string out; CString::ToString(m_Value, &out); return out; }
+
+template<> int ConsoleVariable<float>::GetInt() const { return (int)m_Value; }
+template<> float ConsoleVariable<float>::GetFloat() const { return m_Value; }
+template<> bool ConsoleVariable<float>::GetBool() const { return m_Value > 0.0f; }
+template<> std::string ConsoleVariable<float>::GetString() const { std::string out; CString::ToString(m_Value, &out); return out; }
+
+template<> int ConsoleVariable<bool>::GetInt() const { return (int)m_Value; }
+template<> float ConsoleVariable<bool>::GetFloat() const { return (float)m_Value; }
+template<> bool ConsoleVariable<bool>::GetBool() const { return m_Value; }
+template<> std::string ConsoleVariable<bool>::GetString() const { return m_Value ? "True" : "False"; }
+
+template<> int ConsoleVariable<const char*>::GetInt() const { int out; CString::FromString(m_Value, out); return out; }
+template<> float ConsoleVariable<const char*>::GetFloat() const { float out; CString::FromString(m_Value, out); return out; }
+template<> bool ConsoleVariable<const char*>::GetBool() const { bool out; CString::FromString(m_Value, out); return out; }
+template<> std::string ConsoleVariable<const char*>::GetString() const { return m_Value; }
 
 void ImGuiConsole::Update(const ImVec2& position, const ImVec2& size)
 {

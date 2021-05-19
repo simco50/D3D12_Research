@@ -36,15 +36,17 @@ std::string Sprintf(const char* pFormat, Args... args)
 	return str;
 }
 
-namespace CharConv
+namespace CString
 {
+	void TrimSpaces(char* pStr);
+
 	bool StrCmp(const char* pStrA, const char* pStrB, bool caseSensitive);
 
 	inline void ToUpper(const char* pStr, char* pOut)
 	{
 		while (*pStr)
 		{
-			*pOut++ = (char)std::toupper(*pStr++);
+			*pOut++ = (char)toupper(*pStr++);
 		}
 		*pOut = '\0';
 	}
@@ -53,7 +55,7 @@ namespace CharConv
 	{
 		while (*pStr)
 		{
-			*pOut++ = (char)std::tolower(*pStr++);
+			*pOut++ = (char)tolower(*pStr++);
 		}
 		*pOut = '\0';
 	}
@@ -134,17 +136,9 @@ namespace CharConv
 	inline void ToString(const char* val, std::string* pOut) { *pOut = val; }
 	inline void ToString(bool val, std::string* pOut) { *pOut = Sprintf("%d", val ? "True" : "False"); }
 
-	/*
-	template<> inline bool StrConvert(const char* pStr, Vector4& out) { return StrArrayConvert<float, 4>(pStr, &out.x); }
-	template<> inline bool StrConvert(const char* pStr, Vector3& out) { return StrArrayConvert<float, 3>(pStr, &out.x); }
-	template<> inline bool StrConvert(const char* pStr, Vector2& out) { return StrArrayConvert<float, 2>(pStr, &out.x); }
-	template<> inline bool StrConvert(const char* pStr, IntVector2& out) { return StrArrayConvert<int, 2>(pStr, &out.x); }
-	template<> inline bool StrConvert(const char* pStr, IntVector3& out) { return StrArrayConvert<int, 3>(pStr, &out.x); }
-	*/
-
 	/// /////////////////////////////////////////////////////////////////////////
 
-	namespace Private
+	namespace _Private
 	{
 		// INTERNAL: Create a tuple from string arguments
 		template<size_t I, typename... Args>
@@ -152,7 +146,7 @@ namespace CharConv
 		{
 			if (failIndex == -1)
 			{
-				if (!CharConv::FromString(pArgs[I], std::get<I>(t)))
+				if (!CString::FromString(pArgs[I], std::get<I>(t)))
 				{
 					failIndex = I;
 				}
@@ -171,7 +165,7 @@ namespace CharConv
 		std::tuple<Args...> pTuple;
 		if constexpr (sizeof...(Args) > 0)
 		{
-			Private::TupleFromArguments<0>(pTuple, pArgs, *pFailIndex);
+			_Private::TupleFromArguments<0>(pTuple, pArgs, *pFailIndex);
 		}
 		return pTuple;
 	}

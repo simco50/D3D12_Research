@@ -1652,6 +1652,8 @@ void DemoApp::UpdateImGui()
 {
 	m_FrameTimes[m_Frame % m_FrameTimes.size()] = Time::DeltaTime();
 
+	ImGui::ShowDemoWindow();
+
 	if (m_pVisualizeTexture)
 	{
 		ImGui::Begin("Visualize Texture");
@@ -1792,25 +1794,26 @@ void DemoApp::UpdateImGui()
 
 	ImGui::Text("Expose/Tonemapping");
 
-	ImGui::SliderFloat("Min Log Luminance", &Tweakables::g_MinLogLuminance.Get(), -100, 20);
-	ImGui::SliderFloat("Max Log Luminance", &Tweakables::g_MaxLogLuminance.Get(), -50, 50);
+	ImGui::DragFloatRange2("Log Luminance", &Tweakables::g_MinLogLuminance.Get(), &Tweakables::g_MaxLogLuminance.Get(), 1.0f, -100, 50);
 	ImGui::Checkbox("Draw Exposure Histogram", &Tweakables::g_DrawHistogram.Get());
 	ImGui::SliderFloat("White Point", &Tweakables::g_WhitePoint.Get(), 0, 20);
+
+	constexpr static const char* tonemappers[] = {
+		"Reinhard",
+		"Reinhard Extended",
+		"ACES Fast",
+		"Unreal 3",
+		"Uncharted 2",
+	};
+
 	ImGui::Combo("Tonemapper", (int*)&Tweakables::g_ToneMapper.Get(), [](void* /*data*/, int index, const char** outText)
 		{
-			if (index == 0)
-				*outText = "Reinhard";
-			else if (index == 1)
-				*outText = "Reinhard Extended";
-			else if (index == 2)
-				*outText = "ACES Fast";
-			else if (index == 3)
-				*outText = "Unreal 3";
-			else if (index == 4)
-				*outText = "Uncharted 2";
-			else
-				return false;
-			return true;
+			if (index < ARRAYSIZE(tonemappers))
+			{
+				*outText = tonemappers[index];
+				return true;
+			}
+			return false;
 		}, nullptr, 5);
 
 	ImGui::SliderFloat("Tau", &Tweakables::g_Tau.Get(), 0, 5);

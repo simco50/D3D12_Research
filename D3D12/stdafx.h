@@ -79,7 +79,7 @@ extern "C" { _declspec(dllexport) extern const char* D3D12SDKPath = ".\\D3D12\\"
 
 #define validateOnce(expression) validateOncef(expression, "")
 
-#include "Core/CharConv.h"
+#include "Core/CString.h"
 #include "Core/String.h"
 #include "Core/Thread.h"
 #include "Math/MathTypes.h"
