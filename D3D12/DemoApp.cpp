@@ -31,10 +31,15 @@ static const DXGI_FORMAT DEPTH_STENCIL_SHADOW_FORMAT = DXGI_FORMAT_D16_UNORM;
 
 void DrawScene(CommandContext& context, const SceneData& scene, Batch::Blending blendModes)
 {
+	DrawScene(context, scene, scene.VisibilityMask, blendModes);
+}
+
+void DrawScene(CommandContext& context, const SceneData& scene, const VisibilityMask& visibility, Batch::Blending blendModes)
+{
 	std::vector<const Batch*> meshes;
 	for (const Batch& b : scene.Batches)
 	{
-		if (EnumHasAnyFlags(b.BlendMode, blendModes) && scene.VisibilityMask.GetBit(b.Index))
+		if (EnumHasAnyFlags(b.BlendMode, blendModes) && visibility.GetBit(b.Index))
 		{
 			meshes.push_back(&b);
 		}
@@ -975,15 +980,17 @@ void DemoApp::Update()
 					context.SetGraphicsDynamicConstantBufferView(1, viewData);
 					context.BindResourceTable(2, m_SceneData.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Graphics);
 
+					VisibilityMask mask;
+					mask.SetAll();
 					{
 						GPU_PROFILE_SCOPE("Opaque", &context);
 						context.SetPipelineState(m_pShadowsOpaquePSO);
-						DrawScene(context, m_SceneData, Batch::Blending::Opaque);
+						DrawScene(context, m_SceneData, mask, Batch::Blending::Opaque);
 					}
 					{
 						GPU_PROFILE_SCOPE("Masked", &context);
 						context.SetPipelineState(m_pShadowsAlphaMaskPSO);
-						DrawScene(context, m_SceneData, Batch::Blending::AlphaMask);
+						DrawScene(context, m_SceneData, mask, Batch::Blending::AlphaMask);
 					}
 					context.EndRenderPass();
 				}

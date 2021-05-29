@@ -2,16 +2,12 @@
 #include "Graphics/RenderGraph/RenderGraphDefinitions.h"
 class RootSignature;
 class GraphicsDevice;
-class ShaderManager;
 class PipelineState;
 class Texture;
 class Camera;
-struct Batch;
-class CommandContext;
 class Buffer;
 class UnorderedAccessView;
 class RGGraph;
-struct ShadowData;
 struct SceneData;
 
 class TiledForward

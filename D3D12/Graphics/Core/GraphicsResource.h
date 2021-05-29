@@ -10,9 +10,9 @@ public:
 		: m_pParent(pParent)
 	{}
 
-	GraphicsDevice* GetParent() const { return m_pParent; }
+	inline GraphicsDevice* GetParent() const { return m_pParent; }
 
-protected:
+private:
 	GraphicsDevice* m_pParent;
 };
 
