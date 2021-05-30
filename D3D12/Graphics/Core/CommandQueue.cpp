@@ -4,10 +4,69 @@
 #include "pix3.h"
 #include "CommandContext.h"
 
+Fence::Fence(GraphicsDevice* pParent, uint64 fenceValue, const char* pName)
+	: m_CurrentValue(fenceValue), m_LastCompleted(0), m_LastSignaled(0)
+{
+	VERIFY_HR_EX(pParent->GetDevice()->CreateFence(m_LastCompleted, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(m_pFence.GetAddressOf())), pParent->GetDevice());
+	D3D::SetObjectName(m_pFence.Get(), pName);
+	m_CompleteEvent = CreateEventExA(nullptr, "Fence Event", 0, EVENT_ALL_ACCESS);
+}
+
+Fence::~Fence()
+{
+	CloseHandle(m_CompleteEvent);
+}
+
+uint64 Fence::Signal(CommandQueue* pQueue)
+{
+	pQueue->GetCommandQueue()->Signal(m_pFence.Get(), m_CurrentValue);
+	m_LastSignaled = m_CurrentValue;
+	m_CurrentValue++;
+	return m_LastSignaled;
+}
+
+void Fence::GpuWait(CommandQueue* pQueue, uint64 fenceValue)
+{
+	VERIFY_HR(pQueue->GetCommandQueue()->Wait(m_pFence.Get(), fenceValue));
+}
+
+void Fence::CpuWait(uint64 fenceValue)
+{
+	if (IsComplete(fenceValue))
+	{
+		return;
+	}
+
+	std::lock_guard<std::mutex> lockGuard(m_FenceWaitCS);
+
+	m_pFence->SetEventOnCompletion(fenceValue, m_CompleteEvent);
+	DWORD result = WaitForSingleObject(m_CompleteEvent, INFINITE);
+
+#if USE_PIX
+	// The event was successfully signaled, so notify PIX
+	if (result == WAIT_OBJECT_0)
+	{
+		PIXNotifyWakeFromFenceSignal(m_CompleteEvent);
+	}
+#else
+	UNREFERENCED_PARAMETER(result);
+#endif
+
+	m_LastCompleted = fenceValue;
+}
+
+bool Fence::IsComplete(uint64 fenceValue)
+{
+	if (fenceValue <= m_LastCompleted)
+	{
+		return true;
+	}
+	m_LastCompleted = Math::Max(m_LastCompleted, m_pFence->GetCompletedValue());
+	return fenceValue <= m_LastCompleted;
+}
+
 CommandQueue::CommandQueue(GraphicsDevice* pParent, D3D12_COMMAND_LIST_TYPE type)
 	: GraphicsObject(pParent),
-	m_NextFenceValue((uint64)type << 56 | 1),
-	m_LastCompletedFenceValue((uint64)type << 56),
 	m_Type(type)
 {
 	D3D12_COMMAND_QUEUE_DESC desc = {};
@@ -16,17 +75,10 @@ CommandQueue::CommandQueue(GraphicsDevice* pParent, D3D12_COMMAND_LIST_TYPE type
 	desc.Priority = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL;
 	desc.Type = type;
 
+	m_pFence = std::make_unique<Fence>(pParent, (uint64)type << 56, "CommandQueue Fence");
+
 	VERIFY_HR_EX(pParent->GetDevice()->CreateCommandQueue(&desc, IID_PPV_ARGS(m_pCommandQueue.GetAddressOf())), pParent->GetDevice());
 	D3D::SetObjectName(m_pCommandQueue.Get(), "Main CommandQueue");
-	VERIFY_HR_EX(pParent->GetDevice()->CreateFence(m_LastCompletedFenceValue, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(m_pFence.GetAddressOf())), pParent->GetDevice());
-	D3D::SetObjectName(m_pCommandQueue.Get(), "CommandQueue Fence");
-
-	m_pFenceEventHandle = CreateEventExA(nullptr, "CommandQueue Fence", 0, EVENT_ALL_ACCESS);
-}
-
-CommandQueue::~CommandQueue()
-{
-	CloseHandle(m_pFenceEventHandle);
 }
 
 uint64 CommandQueue::ExecuteCommandLists(CommandContext** pCommandContexts, uint32 numContexts)
@@ -44,6 +96,7 @@ uint64 CommandQueue::ExecuteCommandLists(CommandContext** pCommandContexts, uint
 	std::vector<ID3D12CommandList*> commandLists;
 	commandLists.reserve(numContexts + 1);
 
+	CommandContext* pBarrierCommandlist = nullptr;
 	CommandContext* pCurrentContext = nullptr;
 	for (uint32 i = 0; i < numContexts; ++i)
 	{
@@ -66,8 +119,8 @@ uint64 CommandQueue::ExecuteCommandLists(CommandContext** pCommandContexts, uint
 		{
 			if (!pCurrentContext)
 			{
-				pCurrentContext = GetParent()->AllocateCommandContext(m_Type);
-				pCurrentContext->Free(m_NextFenceValue);
+				pBarrierCommandlist = GetParent()->AllocateCommandContext(m_Type);
+				pCurrentContext = pBarrierCommandlist;
 			}
 			barriers.Flush(pCurrentContext->GetCommandList());
 		}
@@ -84,47 +137,21 @@ uint64 CommandQueue::ExecuteCommandLists(CommandContext** pCommandContexts, uint
 	m_pCommandQueue->ExecuteCommandLists((uint32)commandLists.size(), commandLists.data());
 	
 	std::lock_guard<std::mutex> lock(m_FenceMutex);
-	m_pCommandQueue->Signal(m_pFence.Get(), m_NextFenceValue);
-
-	return m_NextFenceValue++;
-}
-
-bool CommandQueue::IsFenceComplete(uint64 fenceValue)
-{
-	if (fenceValue > m_LastCompletedFenceValue)
+	uint64 fenceValue = m_pFence->Signal(this);
+	if (pBarrierCommandlist)
 	{
-		m_LastCompletedFenceValue = std::max(m_LastCompletedFenceValue, m_pFence->GetCompletedValue());
+		pBarrierCommandlist->Free(fenceValue);
 	}
-
-	return fenceValue <= m_LastCompletedFenceValue;
-}
-
-void CommandQueue::InsertWaitForFence(uint64 fenceValue)
-{
-	CommandQueue* pFenceValueOwner = GetParent()->GetCommandQueue((D3D12_COMMAND_LIST_TYPE)(fenceValue >> 56));
-	m_pCommandQueue->Wait(pFenceValueOwner->GetFence(), fenceValue);
-}
-
-void CommandQueue::InsertWaitForQueue(CommandQueue* pQueue)
-{
-	m_pCommandQueue->Wait(pQueue->GetFence(), pQueue->GetNextFenceValue() - 1);
-}
-
-uint64 CommandQueue::IncrementFence()
-{
-	std::lock_guard<std::mutex> LockGuard(m_FenceMutex);
-	m_pCommandQueue->Signal(m_pFence.Get(), m_NextFenceValue);
-	return m_NextFenceValue++;
+	return fenceValue;
 }
 
 ID3D12CommandAllocator* CommandQueue::RequestAllocator()
 {
-	uint64 completedFence = m_pFence->GetCompletedValue();
 	std::scoped_lock<std::mutex> lock(m_AllocationMutex);
 	if (m_FreeAllocators.empty() == false)
 	{
 		std::pair<ID3D12CommandAllocator*, uint64>& pFirst = m_FreeAllocators.front();
-		if (pFirst.second <= completedFence)
+		if (m_pFence->IsComplete(pFirst.second))
 		{
 			m_FreeAllocators.pop();
 			pFirst.first->Reset();
@@ -147,30 +174,11 @@ void CommandQueue::FreeAllocator(uint64 fenceValue, ID3D12CommandAllocator* pAll
 
 void CommandQueue::WaitForFence(uint64 fenceValue)
 {
-	if (IsFenceComplete(fenceValue))
-	{
-		return;
-	}
-
-	std::lock_guard<std::mutex> lockGuard(m_EventMutex);
-
-	m_pFence->SetEventOnCompletion(fenceValue, m_pFenceEventHandle);
-	DWORD result = WaitForSingleObject(m_pFenceEventHandle, INFINITE);
-
-#if USE_PIX
-	// The event was successfully signaled, so notify PIX
-	if(result == WAIT_OBJECT_0)
-	{
-		PIXNotifyWakeFromFenceSignal(m_pFenceEventHandle);
-	}
-#else
-	UNREFERENCED_PARAMETER(result);
-#endif
-
-	m_LastCompletedFenceValue = fenceValue;
+	m_pFence->CpuWait(fenceValue);
 }
 
 void CommandQueue::WaitForIdle()
 {
-	WaitForFence(IncrementFence());
+	uint64 fenceValue = m_pFence->Signal(this);
+	m_pFence->CpuWait(fenceValue);
 }

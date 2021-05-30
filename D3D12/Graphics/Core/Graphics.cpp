@@ -218,10 +218,10 @@ GraphicsDevice::GraphicsDevice(IDXGIAdapter4* pAdapter)
 		E_LOG(Error, "%s", error.c_str());
 	};
 
-	HANDLE deviceRemovedEvent = CreateEventA(nullptr, false, false, nullptr);
-	VERIFY_HR(m_pDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(m_pDeviceRemovalFence.GetAddressOf())));
-	m_pDeviceRemovalFence->SetEventOnCompletion(UINT64_MAX, deviceRemovedEvent);
-	RegisterWaitForSingleObject(&m_DeviceRemovedEvent, deviceRemovedEvent, OnDeviceRemovedCallback, this, INFINITE, 0);
+	m_pDeviceRemovalFence = std::make_unique<Fence>(this, UINT64_MAX, "Device Removed Fence");
+	m_DeviceRemovedEvent = CreateEventA(nullptr, false, false, nullptr);
+	m_pDeviceRemovalFence->GetFence()->SetEventOnCompletion(UINT64_MAX, m_DeviceRemovedEvent);
+	RegisterWaitForSingleObject(&m_DeviceRemovedEvent, m_DeviceRemovedEvent, OnDeviceRemovedCallback, this, INFINITE, 0);
 #endif
 
 	ID3D12InfoQueue* pInfoQueue = nullptr;
@@ -400,7 +400,7 @@ bool GraphicsDevice::IsFenceComplete(uint64 fenceValue)
 {
 	D3D12_COMMAND_LIST_TYPE type = (D3D12_COMMAND_LIST_TYPE)(fenceValue >> 56);
 	CommandQueue* pQueue = GetCommandQueue(type);
-	return pQueue->IsFenceComplete(fenceValue);
+	return pQueue->GetFence()->IsComplete(fenceValue);
 }
 
 void GraphicsDevice::WaitForFence(uint64 fenceValue)

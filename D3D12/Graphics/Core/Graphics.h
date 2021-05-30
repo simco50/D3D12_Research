@@ -20,6 +20,7 @@ class GlobalOnlineDescriptorHeap;
 class ResourceView;
 class SwapChain;
 class GraphicsDevice;
+class Fence;
 
 #if PLATFORM_WINDOWS
 using WindowHandle = HWND;
@@ -145,8 +146,8 @@ private:
 	ComPtr<ID3D12Device> m_pDevice;
 	ComPtr<ID3D12Device5> m_pRaytracingDevice;
 
-	ComPtr<ID3D12Fence> m_pDeviceRemovalFence;
 	HANDLE m_DeviceRemovedEvent = 0;
+	std::unique_ptr<Fence> m_pDeviceRemovalFence;
 
 	std::unique_ptr<ShaderManager> m_pShaderManager;
 
