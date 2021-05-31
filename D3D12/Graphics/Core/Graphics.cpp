@@ -211,6 +211,8 @@ GraphicsDevice::GraphicsDevice(IDXGIAdapter4* pAdapter)
 	m_pDevice.As(&m_pRaytracingDevice);
 	D3D::SetObjectName(m_pDevice.Get(), "Main Device");
 
+	Capabilities.Initialize(this);
+
 #if !PLATFORM_UWP
 	auto OnDeviceRemovedCallback = [](void* pContext, BOOLEAN) {
 		GraphicsDevice* pDevice = (GraphicsDevice*)pContext;
@@ -269,41 +271,6 @@ GraphicsDevice::GraphicsDevice(IDXGIAdapter4* pAdapter)
 		m_pDevice->SetStablePowerState(TRUE);
 	}
 
-	//Feature checks
-	{
-		D3D12_FEATURE_DATA_D3D12_OPTIONS caps0{};
-		if (SUCCEEDED(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &caps0, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS))))
-		{
-			checkf(caps0.ResourceHeapTier >= D3D12_RESOURCE_HEAP_TIER_2, "Device does not support Resource Heap Tier 2 or higher. Tier 1 is not supported");
-			checkf(caps0.ResourceBindingTier >= D3D12_RESOURCE_BINDING_TIER_3, "Device does not support Resource Binding Tier 3 or higher. Tier 2 and under is not supported.");
-		}
-		D3D12_FEATURE_DATA_D3D12_OPTIONS5 caps5{};
-		if (SUCCEEDED(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &caps5, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS5))))
-		{
-			m_RenderPassTier = caps5.RenderPassesTier;
-			m_RayTracingTier = caps5.RaytracingTier;
-		}
-		D3D12_FEATURE_DATA_D3D12_OPTIONS6 caps6{};
-		if (SUCCEEDED(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS6, &caps6, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS6))))
-		{
-			m_VRSTier = caps6.VariableShadingRateTier;
-			m_VRSTileSize = caps6.ShadingRateImageTileSize;
-		}
-		D3D12_FEATURE_DATA_D3D12_OPTIONS7 caps7{};
-		if (SUCCEEDED(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS7, &caps7, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS7))))
-		{
-			m_MeshShaderSupport = caps7.MeshShaderTier;
-			m_SamplerFeedbackSupport = caps7.SamplerFeedbackTier;
-		}
-		D3D12_FEATURE_DATA_SHADER_MODEL shaderModelSupport{};
-		shaderModelSupport.HighestShaderModel = D3D_SHADER_MODEL_6_7;
-		if (SUCCEEDED(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &shaderModelSupport, sizeof(D3D12_FEATURE_DATA_SHADER_MODEL))))
-		{
-			m_ShaderModelMajor = (uint8)(shaderModelSupport.HighestShaderModel >> 0x4);
-			m_ShaderModelMinor = (uint8)(shaderModelSupport.HighestShaderModel & 0xF);
-		}
-	}
-
 	//Create all the required command queues
 	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_DIRECT] = std::make_unique<CommandQueue>(this, D3D12_COMMAND_LIST_TYPE_DIRECT);
 	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_COMPUTE] = std::make_unique<CommandQueue>(this, D3D12_COMMAND_LIST_TYPE_COMPUTE);
@@ -321,7 +288,9 @@ GraphicsDevice::GraphicsDevice(IDXGIAdapter4* pAdapter)
 	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_DSV] = std::make_unique<OfflineDescriptorAllocator>(this, D3D12_DESCRIPTOR_HEAP_TYPE_DSV, 64);
 
 	// Shaders
-	m_pShaderManager = std::make_unique<ShaderManager>("Resources/Shaders/", m_ShaderModelMajor, m_ShaderModelMinor);
+	uint8 smMaj, smMin;
+	Capabilities.GetShaderModel(smMaj, smMin);
+	m_pShaderManager = std::make_unique<ShaderManager>("Resources/Shaders/", smMaj, smMin);
 }
 
 GraphicsDevice::~GraphicsDevice()
@@ -419,82 +388,6 @@ void GraphicsDevice::FreeCommandList(CommandContext* pCommandList)
 DescriptorHandle GraphicsDevice::GetViewHeapHandle() const
 {
 	return m_pGlobalViewHeap->GetStartHandle();
-}
-
-bool GraphicsDevice::SupportsTypedUAV(DXGI_FORMAT format) const
-{
-	D3D12_FEATURE_DATA_D3D12_OPTIONS featureData{};
-	VERIFY_HR_EX(GetDevice()->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &featureData, sizeof(featureData)), GetDevice());
-
-	switch (format)
-	{
-	case DXGI_FORMAT_R32_FLOAT:
-	case DXGI_FORMAT_R32_UINT:
-	case DXGI_FORMAT_R32_SINT:
-		// Unconditionally supported.
-		return true;
-
-	case DXGI_FORMAT_R32G32B32A32_FLOAT:
-	case DXGI_FORMAT_R32G32B32A32_UINT:
-	case DXGI_FORMAT_R32G32B32A32_SINT:
-	case DXGI_FORMAT_R16G16B16A16_FLOAT:
-	case DXGI_FORMAT_R16G16B16A16_UINT:
-	case DXGI_FORMAT_R16G16B16A16_SINT:
-	case DXGI_FORMAT_R8G8B8A8_UNORM:
-	case DXGI_FORMAT_R8G8B8A8_UINT:
-	case DXGI_FORMAT_R8G8B8A8_SINT:
-	case DXGI_FORMAT_R16_FLOAT:
-	case DXGI_FORMAT_R16_UINT:
-	case DXGI_FORMAT_R16_SINT:
-	case DXGI_FORMAT_R8_UNORM:
-	case DXGI_FORMAT_R8_UINT:
-	case DXGI_FORMAT_R8_SINT:
-		// All these are supported if this optional feature is set.
-		return featureData.TypedUAVLoadAdditionalFormats;
-
-	case DXGI_FORMAT_R16G16B16A16_UNORM:
-	case DXGI_FORMAT_R16G16B16A16_SNORM:
-	case DXGI_FORMAT_R32G32_FLOAT:
-	case DXGI_FORMAT_R32G32_UINT:
-	case DXGI_FORMAT_R32G32_SINT:
-	case DXGI_FORMAT_R10G10B10A2_UNORM:
-	case DXGI_FORMAT_R10G10B10A2_UINT:
-	case DXGI_FORMAT_R11G11B10_FLOAT:
-	case DXGI_FORMAT_R8G8B8A8_SNORM:
-	case DXGI_FORMAT_R16G16_FLOAT:
-	case DXGI_FORMAT_R16G16_UNORM:
-	case DXGI_FORMAT_R16G16_UINT:
-	case DXGI_FORMAT_R16G16_SNORM:
-	case DXGI_FORMAT_R16G16_SINT:
-	case DXGI_FORMAT_R8G8_UNORM:
-	case DXGI_FORMAT_R8G8_UINT:
-	case DXGI_FORMAT_R8G8_SNORM:
-	case DXGI_FORMAT_R8G8_SINT:
-	case DXGI_FORMAT_R16_UNORM:
-	case DXGI_FORMAT_R16_SNORM:
-	case DXGI_FORMAT_R8_SNORM:
-	case DXGI_FORMAT_A8_UNORM:
-	case DXGI_FORMAT_B5G6R5_UNORM:
-	case DXGI_FORMAT_B5G5R5A1_UNORM:
-	case DXGI_FORMAT_B4G4R4A4_UNORM:
-		// Conditionally supported by specific pDevices.
-		if (featureData.TypedUAVLoadAdditionalFormats)
-		{
-			D3D12_FEATURE_DATA_FORMAT_SUPPORT formatSupport = { format, D3D12_FORMAT_SUPPORT1_NONE, D3D12_FORMAT_SUPPORT2_NONE };
-			VERIFY_HR_EX(GetDevice()->CheckFeatureSupport(D3D12_FEATURE_FORMAT_SUPPORT, &formatSupport, sizeof(formatSupport)), GetDevice());
-			const DWORD mask = D3D12_FORMAT_SUPPORT2_UAV_TYPED_LOAD | D3D12_FORMAT_SUPPORT2_UAV_TYPED_STORE;
-			return ((formatSupport.Support2 & mask) == mask);
-		}
-		return false;
-
-	default:
-		return false;
-	}
-}
-
-bool GraphicsDevice::SupportsRenderPasses() const
-{
-	return m_RenderPassTier >= D3D12_RENDER_PASS_TIER_0;
 }
 
 void GraphicsDevice::IdleGPU()
@@ -632,4 +525,112 @@ void SwapChain::Present()
 {
 	m_pSwapchain->Present(m_Vsync, m_Vsync ? 0 : DXGI_PRESENT_ALLOW_TEARING);
 	m_CurrentImage = m_pSwapchain->GetCurrentBackBufferIndex();
+}
+
+void GraphicsCapabilities::Initialize(GraphicsDevice* pDevice)
+{
+	m_pDevice = pDevice;
+	{
+		D3D12_FEATURE_DATA_D3D12_OPTIONS caps0{};
+		if (SUCCEEDED(m_pDevice->GetDevice()->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &caps0, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS))))
+		{
+			checkf(caps0.ResourceHeapTier >= D3D12_RESOURCE_HEAP_TIER_2, "Device does not support Resource Heap Tier 2 or higher. Tier 1 is not supported");
+			checkf(caps0.ResourceBindingTier >= D3D12_RESOURCE_BINDING_TIER_3, "Device does not support Resource Binding Tier 3 or higher. Tier 2 and under is not supported.");
+		}
+		D3D12_FEATURE_DATA_D3D12_OPTIONS5 caps5{};
+		if (SUCCEEDED(m_pDevice->GetDevice()->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &caps5, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS5))))
+		{
+			RenderPassTier = caps5.RenderPassesTier;
+			RayTracingTier = caps5.RaytracingTier;
+		}
+		D3D12_FEATURE_DATA_D3D12_OPTIONS6 caps6{};
+		if (SUCCEEDED(m_pDevice->GetDevice()->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS6, &caps6, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS6))))
+		{
+			VRSTier = caps6.VariableShadingRateTier;
+			VRSTileSize = caps6.ShadingRateImageTileSize;
+		}
+		D3D12_FEATURE_DATA_D3D12_OPTIONS7 caps7{};
+		if (SUCCEEDED(m_pDevice->GetDevice()->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS7, &caps7, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS7))))
+		{
+			MeshShaderSupport = caps7.MeshShaderTier;
+			SamplerFeedbackSupport = caps7.SamplerFeedbackTier;
+		}
+		D3D12_FEATURE_DATA_SHADER_MODEL shaderModelSupport{};
+		shaderModelSupport.HighestShaderModel = D3D_SHADER_MODEL_6_7;
+		if (SUCCEEDED(m_pDevice->GetDevice()->CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &shaderModelSupport, sizeof(D3D12_FEATURE_DATA_SHADER_MODEL))))
+		{
+			ShaderModel = (uint16)shaderModelSupport.HighestShaderModel;
+		}
+	}
+}
+
+bool GraphicsCapabilities::CheckUAVSupport(DXGI_FORMAT format) const
+{
+	D3D12_FEATURE_DATA_D3D12_OPTIONS featureData{};
+	VERIFY_HR(m_pDevice->GetDevice()->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &featureData, sizeof(featureData)));
+
+	switch (format)
+	{
+	case DXGI_FORMAT_R32_FLOAT:
+	case DXGI_FORMAT_R32_UINT:
+	case DXGI_FORMAT_R32_SINT:
+		// Unconditionally supported.
+		return true;
+
+	case DXGI_FORMAT_R32G32B32A32_FLOAT:
+	case DXGI_FORMAT_R32G32B32A32_UINT:
+	case DXGI_FORMAT_R32G32B32A32_SINT:
+	case DXGI_FORMAT_R16G16B16A16_FLOAT:
+	case DXGI_FORMAT_R16G16B16A16_UINT:
+	case DXGI_FORMAT_R16G16B16A16_SINT:
+	case DXGI_FORMAT_R8G8B8A8_UNORM:
+	case DXGI_FORMAT_R8G8B8A8_UINT:
+	case DXGI_FORMAT_R8G8B8A8_SINT:
+	case DXGI_FORMAT_R16_FLOAT:
+	case DXGI_FORMAT_R16_UINT:
+	case DXGI_FORMAT_R16_SINT:
+	case DXGI_FORMAT_R8_UNORM:
+	case DXGI_FORMAT_R8_UINT:
+	case DXGI_FORMAT_R8_SINT:
+		// All these are supported if this optional feature is set.
+		return featureData.TypedUAVLoadAdditionalFormats;
+
+	case DXGI_FORMAT_R16G16B16A16_UNORM:
+	case DXGI_FORMAT_R16G16B16A16_SNORM:
+	case DXGI_FORMAT_R32G32_FLOAT:
+	case DXGI_FORMAT_R32G32_UINT:
+	case DXGI_FORMAT_R32G32_SINT:
+	case DXGI_FORMAT_R10G10B10A2_UNORM:
+	case DXGI_FORMAT_R10G10B10A2_UINT:
+	case DXGI_FORMAT_R11G11B10_FLOAT:
+	case DXGI_FORMAT_R8G8B8A8_SNORM:
+	case DXGI_FORMAT_R16G16_FLOAT:
+	case DXGI_FORMAT_R16G16_UNORM:
+	case DXGI_FORMAT_R16G16_UINT:
+	case DXGI_FORMAT_R16G16_SNORM:
+	case DXGI_FORMAT_R16G16_SINT:
+	case DXGI_FORMAT_R8G8_UNORM:
+	case DXGI_FORMAT_R8G8_UINT:
+	case DXGI_FORMAT_R8G8_SNORM:
+	case DXGI_FORMAT_R8G8_SINT:
+	case DXGI_FORMAT_R16_UNORM:
+	case DXGI_FORMAT_R16_SNORM:
+	case DXGI_FORMAT_R8_SNORM:
+	case DXGI_FORMAT_A8_UNORM:
+	case DXGI_FORMAT_B5G6R5_UNORM:
+	case DXGI_FORMAT_B5G5R5A1_UNORM:
+	case DXGI_FORMAT_B4G4R4A4_UNORM:
+		// Conditionally supported by specific pDevices.
+		if (featureData.TypedUAVLoadAdditionalFormats)
+		{
+			D3D12_FEATURE_DATA_FORMAT_SUPPORT formatSupport = { format, D3D12_FORMAT_SUPPORT1_NONE, D3D12_FORMAT_SUPPORT2_NONE };
+			VERIFY_HR(m_pDevice->GetDevice()->CheckFeatureSupport(D3D12_FEATURE_FORMAT_SUPPORT, &formatSupport, sizeof(formatSupport)));
+			const DWORD mask = D3D12_FORMAT_SUPPORT2_UAV_TYPED_LOAD | D3D12_FORMAT_SUPPORT2_UAV_TYPED_STORE;
+			return ((formatSupport.Support2 & mask) == mask);
+		}
+		return false;
+
+	default:
+		return false;
+	}
 }

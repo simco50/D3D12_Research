@@ -712,7 +712,7 @@ void ClusteredForward::SetupPipelines(GraphicsDevice* pDevice)
 		psoDesc.SetRenderTargetFormat(GraphicsDevice::RENDER_TARGET_FORMAT, GraphicsDevice::DEPTH_STENCIL_FORMAT, /* pDevice->GetMultiSampleCount() */ 1);
 		psoDesc.SetBlendMode(BlendMode::Additive, false);
 
-		if (pDevice->SupportsMeshShaders())
+		if (pDevice->GetCapabilities().SupportsRaytracing())
 		{
 			Shader* pMeshShader = pDevice->GetShader("ClusterDebugDrawing.hlsl", ShaderType::Mesh, "MSMain");
 			m_pDebugClustersRS->FinalizeFromShader("Debug Clusters", pMeshShader);

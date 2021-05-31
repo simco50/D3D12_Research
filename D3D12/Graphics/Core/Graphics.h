@@ -19,8 +19,9 @@ class StateObjectInitializer;
 class GlobalOnlineDescriptorHeap;
 class ResourceView;
 class SwapChain;
-class GraphicsDevice;
+class OnlineDescriptorAllocator;
 class Fence;
+class GraphicsDevice;
 
 #if PLATFORM_WINDOWS
 using WindowHandle = HWND;
@@ -81,6 +82,30 @@ private:
 	bool m_Vsync;
 };
 
+class GraphicsCapabilities
+{
+public:
+	void Initialize(GraphicsDevice* pDevice);
+
+	bool SupportsRaytracing() const { return RayTracingTier != D3D12_RAYTRACING_TIER_NOT_SUPPORTED; }
+	bool SupportsMeshShading() const { return MeshShaderSupport != D3D12_MESH_SHADER_TIER_NOT_SUPPORTED; }
+	bool SupportsVRS() const { return VRSTier != D3D12_VARIABLE_SHADING_RATE_TIER_NOT_SUPPORTED; }
+	bool SupportsSamplerFeedback() const { return SamplerFeedbackSupport != D3D12_SAMPLER_FEEDBACK_TIER_NOT_SUPPORTED; }
+	void GetShaderModel(uint8& maj, uint8& min) const { maj = (uint8)(ShaderModel >> 0x4); min = (uint8)(ShaderModel & 0xF); }
+	bool CheckUAVSupport(DXGI_FORMAT format) const;
+
+	D3D12_RENDER_PASS_TIER RenderPassTier = D3D12_RENDER_PASS_TIER_0;
+	D3D12_RAYTRACING_TIER RayTracingTier = D3D12_RAYTRACING_TIER_NOT_SUPPORTED;
+	uint16 ShaderModel = (D3D_SHADER_MODEL)0;
+	D3D12_MESH_SHADER_TIER MeshShaderSupport = D3D12_MESH_SHADER_TIER_NOT_SUPPORTED;
+	D3D12_SAMPLER_FEEDBACK_TIER SamplerFeedbackSupport = D3D12_SAMPLER_FEEDBACK_TIER_NOT_SUPPORTED;
+	D3D12_VARIABLE_SHADING_RATE_TIER VRSTier = D3D12_VARIABLE_SHADING_RATE_TIER_NOT_SUPPORTED;
+	int VRSTileSize = -1;
+
+private:
+	GraphicsDevice* m_pDevice = nullptr;
+};
+
 class GraphicsDevice
 {
 public:
@@ -126,11 +151,6 @@ public:
 		m_DescriptorHeaps[DescriptorSelector<DESC_TYPE>::Type()]->FreeDescriptor(descriptor);
 	}
 
-	bool SupportsTypedUAV(DXGI_FORMAT format) const;
-	bool SupportsRenderPasses() const;
-	bool SupportsRayTracing() const { return m_RayTracingTier != D3D12_RAYTRACING_TIER_NOT_SUPPORTED; }
-	bool SupportsMeshShaders() const { return m_MeshShaderSupport != D3D12_MESH_SHADER_TIER_NOT_SUPPORTED; }
-
 	ID3D12Resource* CreateResource(const D3D12_RESOURCE_DESC& desc, D3D12_RESOURCE_STATES initialState, D3D12_HEAP_TYPE heapType, D3D12_CLEAR_VALUE* pClearValue = nullptr);
 	PipelineState* CreatePipeline(const PipelineStateInitializer& psoDesc);
 	StateObject* CreateStateObject(const StateObjectInitializer& stateDesc);
@@ -142,6 +162,8 @@ public:
 	ID3D12Device5* GetRaytracingDevice() const { return m_pRaytracingDevice.Get(); }
 	ShaderManager* GetShaderManager() const { return m_pShaderManager.get(); }
 
+	const GraphicsCapabilities& GetCapabilities() const { return Capabilities; }
+
 private:
 	ComPtr<ID3D12Device> m_pDevice;
 	ComPtr<ID3D12Device5> m_pRaytracingDevice;
@@ -151,7 +173,7 @@ private:
 
 	std::unique_ptr<ShaderManager> m_pShaderManager;
 
-	std::unique_ptr<class OnlineDescriptorAllocator> m_pPersistentDescriptorHeap;
+	std::unique_ptr<OnlineDescriptorAllocator> m_pPersistentDescriptorHeap;
 	std::unique_ptr<GlobalOnlineDescriptorHeap> m_pGlobalViewHeap;
 
 	std::array<std::unique_ptr<OfflineDescriptorAllocator>, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES> m_DescriptorHeaps;
@@ -166,14 +188,7 @@ private:
 	std::vector<ComPtr<ID3D12CommandList>> m_CommandLists;
 	std::mutex m_ContextAllocationMutex;
 
-	D3D12_RENDER_PASS_TIER m_RenderPassTier = D3D12_RENDER_PASS_TIER_0;
-	D3D12_RAYTRACING_TIER m_RayTracingTier = D3D12_RAYTRACING_TIER_NOT_SUPPORTED;
-	uint8 m_ShaderModelMajor = 0;
-	uint8 m_ShaderModelMinor = 0;
-	D3D12_MESH_SHADER_TIER m_MeshShaderSupport = D3D12_MESH_SHADER_TIER_NOT_SUPPORTED;
-	D3D12_SAMPLER_FEEDBACK_TIER m_SamplerFeedbackSupport = D3D12_SAMPLER_FEEDBACK_TIER_NOT_SUPPORTED;
-	D3D12_VARIABLE_SHADING_RATE_TIER m_VRSTier = D3D12_VARIABLE_SHADING_RATE_TIER_NOT_SUPPORTED;
-	int m_VRSTileSize = -1;
+	GraphicsCapabilities Capabilities;
 
 	std::map<ResourceView*, int> m_ViewToDescriptorIndex;
 };

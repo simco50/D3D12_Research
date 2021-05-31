@@ -254,8 +254,8 @@ DemoApp::DemoApp(WindowHandle window, const IntVector2& windowRect, int sampleCo
 	UpdateTLAS(*pContext);
 	pContext->Execute(true);
 
-	Tweakables::g_RaytracedAO = m_pDevice->SupportsRayTracing() ? Tweakables::g_RaytracedAO : false;
-	Tweakables::g_RaytracedReflections = m_pDevice->SupportsRayTracing() ? Tweakables::g_RaytracedReflections : false;
+	Tweakables::g_RaytracedAO = m_pDevice->GetCapabilities().SupportsRaytracing() ? Tweakables::g_RaytracedAO : false;
+	Tweakables::g_RaytracedReflections = m_pDevice->GetCapabilities().SupportsRaytracing() ? Tweakables::g_RaytracedReflections : false;
 
 	m_pDevice->GarbageCollect();
 }
@@ -1833,7 +1833,7 @@ void DemoApp::UpdateImGui()
 	ImGui::SliderInt("SSR Samples", &Tweakables::g_SsrSamples.Get(), 0, 32);
 	ImGui::Checkbox("Object Bounds", &Tweakables::g_RenderObjectBounds.Get());
 
-	if (m_pDevice->SupportsRayTracing())
+	if (m_pDevice->GetCapabilities().SupportsRaytracing())
 	{
 		ImGui::Checkbox("Raytraced AO", &Tweakables::g_RaytracedAO.Get());
 		ImGui::Checkbox("Raytraced Reflections", &Tweakables::g_RaytracedReflections.Get());
@@ -1847,7 +1847,7 @@ void DemoApp::UpdateImGui()
 
 void DemoApp::UpdateTLAS(CommandContext& context)
 {
-	if (m_pDevice->SupportsRayTracing())
+	if (m_pDevice->GetCapabilities().SupportsRaytracing())
 	{
 		ID3D12GraphicsCommandList4* pCmd = context.GetRaytracingCommandList();
 

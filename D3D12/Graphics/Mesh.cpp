@@ -210,7 +210,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 		}
 	}
 
-	if (pDevice->SupportsRayTracing())
+	if (pDevice->GetCapabilities().SupportsRaytracing())
 	{
 		ID3D12GraphicsCommandList4* pCmd = pContext->GetRaytracingCommandList();
 
