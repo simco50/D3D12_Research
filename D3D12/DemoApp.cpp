@@ -244,8 +244,9 @@ DemoApp::DemoApp(WindowHandle window, const IntVector2& windowRect, int sampleCo
 
 DemoApp::~DemoApp()
 {
-	m_pSwapchain->Destroy();
-	m_pDevice->Destroy();
+	m_pDevice->IdleGPU();
+	DebugRenderer::Get()->Shutdown();
+
 }
 
 void DemoApp::InitializeAssets(CommandContext& context)

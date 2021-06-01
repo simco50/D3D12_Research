@@ -306,13 +306,9 @@ GraphicsDevice::GraphicsDevice(IDXGIAdapter4* pAdapter)
 GraphicsDevice::~GraphicsDevice()
 {
 	m_pFrameFence->CpuWait(TickFrameFence());
-	GarbageCollect();
-}
-
-void GraphicsDevice::Destroy()
-{
-	m_pFrameFence->CpuWait(TickFrameFence());
 	Profiler::Get()->Shutdown();
+	m_pFrameFence->CpuWait(TickFrameFence());
+	GarbageCollect();
 
 #if !PLATFORM_UWP
 	check(UnregisterWait(m_DeviceRemovedEvent) != 0);
@@ -531,7 +527,7 @@ SwapChain::SwapChain(GraphicsDevice* pDevice, IDXGIFactory6* pFactory, WindowHan
 	}
 }
 
-void SwapChain::Destroy()
+SwapChain::~SwapChain()
 {
 	m_pSwapchain->SetFullscreenState(false, nullptr);
 }

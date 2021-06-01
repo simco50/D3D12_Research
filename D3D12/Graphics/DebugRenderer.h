@@ -48,6 +48,7 @@ public:
 	static DebugRenderer* Get();
 	
 	void Initialize(GraphicsDevice* pDevice);
+	void Shutdown();
 	void Render(RGGraph& graph, const Matrix& viewProjection, Texture* pTarget, Texture* pDepth);
 
 	void AddLine(const Vector3& start, const Vector3& end, const IntColor& color);

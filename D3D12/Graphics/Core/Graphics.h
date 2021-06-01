@@ -66,7 +66,7 @@ class SwapChain
 {
 public:
 	SwapChain(GraphicsDevice* pDevice, IDXGIFactory6* pFactory, WindowHandle pNativeWindow, DXGI_FORMAT format, uint32 width, uint32 height, uint32 numFrames, bool vsync);
-	void Destroy();
+	~SwapChain();
 	void OnResize(uint32 width, uint32 height);
 	void Present();
 
@@ -117,7 +117,6 @@ public:
 
 	GraphicsDevice(IDXGIAdapter4* pAdapter);
 	~GraphicsDevice();
-	void Destroy();
 	void GarbageCollect();
 
 	bool IsFenceComplete(uint64 fenceValue);
