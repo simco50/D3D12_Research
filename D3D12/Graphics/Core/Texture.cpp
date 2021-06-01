@@ -11,6 +11,12 @@ Texture::Texture(GraphicsDevice* pParent, const char* pName)
 {
 }
 
+Texture::Texture(GraphicsDevice* pParent, const TextureDesc& desc, const char* pName /*= ""*/)
+	: Texture(pParent, pName)
+{
+	Create(desc);
+}
+
 Texture::~Texture()
 {
 
@@ -336,6 +342,7 @@ void Texture::SetData(CommandContext* pContext, const void* pData)
 void Texture::CreateForSwapchain(ID3D12Resource* pTexture)
 {
 	Release();
+	SetImmediateDelete(true);
 	D3D::SetObjectName(pTexture, "Backbuffer");
 	m_pResource = pTexture;
 	SetResourceState(D3D12_RESOURCE_STATE_PRESENT);

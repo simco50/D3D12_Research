@@ -18,14 +18,15 @@ public:
 	ClusteredForward(GraphicsDevice* pDevice);
 	~ClusteredForward();
 
-	void OnSwapchainCreated(int windowWidth, int windowHeight);
+	void OnResize(int windowWidth, int windowHeight);
 
 	void Execute(RGGraph& graph, const SceneData& resources);
-	void VisualizeLightDensity(RGGraph& graph, GraphicsDevice* pDevice, Camera& camera, Texture* pTarget, Texture* pDepth);
+	void VisualizeLightDensity(RGGraph& graph, Camera& camera, Texture* pTarget, Texture* pDepth);
 
 private:
-	void SetupResources(GraphicsDevice* pDevice);
-	void SetupPipelines(GraphicsDevice* pDevice);
+	void SetupPipelines();
+
+	GraphicsDevice* m_pDevice;
 
 	uint32 m_ClusterCountX = 0;
 	uint32 m_ClusterCountY = 0;

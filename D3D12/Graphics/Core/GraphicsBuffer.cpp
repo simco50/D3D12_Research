@@ -15,6 +15,12 @@ Buffer::Buffer(GraphicsDevice* pParent, ID3D12Resource* pResource, D3D12_RESOURC
 
 }
 
+Buffer::Buffer(GraphicsDevice* pParent, const BufferDesc& desc, const char* pName /*= ""*/)
+	: Buffer(pParent, pName)
+{
+	Create(desc);
+}
+
 Buffer::~Buffer()
 {
 }

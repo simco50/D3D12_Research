@@ -69,6 +69,7 @@ public:
 	void* Map(uint32 subResource = 0, uint64 readFrom = 0, uint64 readTo = 0);
 	void Unmap(uint32 subResource = 0, uint64 writtenFrom = 0, uint64 writtenTo = 0);
 	void* GetMappedData() const { return m_pMappedData; }
+	void SetImmediateDelete(bool immediate) { m_ImmediateDelete = immediate; }
 
 	void Release();
 	void SetName(const char* pName);
@@ -82,6 +83,7 @@ public:
 
 protected:
 	std::string m_Name;
+	bool m_ImmediateDelete = false;
 	ID3D12Resource* m_pResource = nullptr;
 	void* m_pMappedData = nullptr;
 	std::vector<std::unique_ptr<ResourceView>> m_Descriptors;

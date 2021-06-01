@@ -22,6 +22,9 @@ class SwapChain;
 class OnlineDescriptorAllocator;
 class Fence;
 class GraphicsDevice;
+class CommandSignature;
+struct TextureDesc;
+struct BufferDesc;
 
 #if PLATFORM_WINDOWS
 using WindowHandle = HWND;
@@ -119,6 +122,7 @@ public:
 
 	bool IsFenceComplete(uint64 fenceValue);
 	void WaitForFence(uint64 fenceValue);
+	uint64 TickFrameFence();
 	void IdleGPU();
 
 	int RegisterBindlessResource(ResourceView* pView, ResourceView* pFallback = nullptr);
@@ -151,9 +155,17 @@ public:
 		m_DescriptorHeaps[DescriptorSelector<DESC_TYPE>::Type()]->FreeDescriptor(descriptor);
 	}
 
+	std::unique_ptr<Texture> CreateTexture(const TextureDesc& desc, const char* pName);
+	std::unique_ptr<Buffer> CreateBuffer(const BufferDesc& desc, const char* pName);
+
 	ID3D12Resource* CreateResource(const D3D12_RESOURCE_DESC& desc, D3D12_RESOURCE_STATES initialState, D3D12_HEAP_TYPE heapType, D3D12_CLEAR_VALUE* pClearValue = nullptr);
+	void ReleaseResource(ID3D12Resource* pResource);
 	PipelineState* CreatePipeline(const PipelineStateInitializer& psoDesc);
 	StateObject* CreateStateObject(const StateObjectInitializer& stateDesc);
+	CommandSignature* GetIndirectDrawSignature() const { return m_pIndirectDrawSignature.get(); }
+	CommandSignature* GetIndirectDispatchSignature() const { return m_pIndirectDispatchSignature.get(); }
+
+	Fence* GetFrameFence() const { return m_pFrameFence.get(); }
 
 	Shader* GetShader(const char* pShaderPath, ShaderType shaderType, const char* entryPoint = "", const std::vector<ShaderDefine>& defines = {});
 	ShaderLibrary* GetLibrary(const char* pShaderPath, const std::vector<ShaderDefine>& defines = {});
@@ -165,11 +177,14 @@ public:
 	const GraphicsCapabilities& GetCapabilities() const { return Capabilities; }
 
 private:
+	GraphicsCapabilities Capabilities;
+
 	ComPtr<ID3D12Device> m_pDevice;
 	ComPtr<ID3D12Device5> m_pRaytracingDevice;
 
 	HANDLE m_DeviceRemovedEvent = 0;
 	std::unique_ptr<Fence> m_pDeviceRemovalFence;
+	std::unique_ptr<Fence> m_pFrameFence;
 
 	std::unique_ptr<ShaderManager> m_pShaderManager;
 
@@ -188,7 +203,10 @@ private:
 	std::vector<ComPtr<ID3D12CommandList>> m_CommandLists;
 	std::mutex m_ContextAllocationMutex;
 
-	GraphicsCapabilities Capabilities;
+	std::queue<std::pair<uint64, ID3D12Resource*>> m_DeferredDeletionQueue;
 
 	std::map<ResourceView*, int> m_ViewToDescriptorIndex;
+
+	std::unique_ptr<CommandSignature> m_pIndirectDrawSignature;
+	std::unique_ptr<CommandSignature> m_pIndirectDispatchSignature;
 };

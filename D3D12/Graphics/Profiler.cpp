@@ -138,8 +138,7 @@ void Profiler::Initialize(GraphicsDevice* pParent, uint32 numBackbuffers)
 	D3D::SetObjectName(m_pQueryHeap.Get(), "Profiler Timestamp Query Heap");
 
 	m_FenceValues.resize(numBackbuffers);
-	m_pReadBackBuffer = std::make_unique<Buffer>(pParent, "Profiling Readback Buffer");
-	m_pReadBackBuffer->Create(BufferDesc::CreateReadback(sizeof(uint64) * numBackbuffers * HEAP_SIZE));
+	m_pReadBackBuffer = pParent->CreateBuffer(BufferDesc::CreateReadback(sizeof(uint64) * numBackbuffers * HEAP_SIZE), "Profiling Readback Buffer");
 	m_pReadBackBuffer->Map();
 
 	{
@@ -161,6 +160,12 @@ void Profiler::Initialize(GraphicsDevice* pParent, uint32 numBackbuffers)
 
 	ID3D12CommandQueue* pQueue = pParent->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT)->GetCommandQueue();
 	OPTICK_GPU_INIT_D3D12(pParent->GetDevice(), &pQueue, 1);
+}
+
+void Profiler::Shutdown()
+{
+	m_pReadBackBuffer->Release();
+	m_pQueryHeap.Reset();
 }
 
 void Profiler::Begin(const char* pName, CommandContext* pContext)
