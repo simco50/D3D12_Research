@@ -247,21 +247,24 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 				D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO info{};
 				pDevice->GetRaytracingDevice()->GetRaytracingAccelerationStructurePrebuildInfo(&prebuildInfo, &info);
 
-				subMesh.pBLASScratch = new Buffer(pDevice, "BLAS Scratch Buffer");
-				subMesh.pBLASScratch->Create(BufferDesc::CreateByteAddress(Math::AlignUp<uint64>(info.ScratchDataSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT), BufferFlag::UnorderedAccess));
-
-				subMesh.pBLAS = new Buffer(pDevice, "BLAS");
-				subMesh.pBLAS->Create(BufferDesc::CreateAccelerationStructure(Math::AlignUp<uint64>(info.ResultDataMaxSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT)));
+				std::unique_ptr<Buffer> pBLASScratch = pDevice->CreateBuffer(BufferDesc::CreateByteAddress(Math::AlignUp<uint64>(info.ScratchDataSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT), BufferFlag::UnorderedAccess), "BLAS Scratch Buffer");
+				std::unique_ptr<Buffer> pBLAS = pDevice->CreateBuffer(BufferDesc::CreateByteAddress(Math::AlignUp<uint64>(info.ResultDataMaxSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT), BufferFlag::UnorderedAccess), "BLAS Buffer");
 
 				D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC asDesc{};
 				asDesc.Inputs = prebuildInfo;
-				asDesc.DestAccelerationStructureData = subMesh.pBLAS->GetGpuHandle();
-				asDesc.ScratchAccelerationStructureData = subMesh.pBLASScratch->GetGpuHandle();
+				asDesc.DestAccelerationStructureData = pBLAS->GetGpuHandle();
+				asDesc.ScratchAccelerationStructureData = pBLASScratch->GetGpuHandle();
 				asDesc.SourceAccelerationStructureData = 0;
 
 				pCmd->BuildRaytracingAccelerationStructure(&asDesc, 0, nullptr);
 				pContext->InsertUavBarrier(subMesh.pBLAS);
 				pContext->FlushResourceBarriers();
+
+				subMesh.pBLAS = pBLAS.release();
+				if (0) //#todo: Can delete scratch buffer if no upload is required
+				{
+					subMesh.pBLASScratch = pBLASScratch.release();
+				}
 			}
 		}
 	}
