@@ -246,7 +246,7 @@ DemoApp::~DemoApp()
 {
 	m_pDevice->IdleGPU();
 	DebugRenderer::Get()->Shutdown();
-
+	Profiler::Get()->Shutdown();
 }
 
 void DemoApp::InitializeAssets(CommandContext& context)

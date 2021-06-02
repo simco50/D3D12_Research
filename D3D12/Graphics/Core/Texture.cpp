@@ -9,6 +9,7 @@
 Texture::Texture(GraphicsDevice* pParent, const char* pName)
 	: GraphicsResource(pParent)
 {
+	m_Name = pName;
 }
 
 Texture::Texture(GraphicsDevice* pParent, const TextureDesc& desc, const char* pName /*= ""*/)

@@ -305,9 +305,9 @@ GraphicsDevice::GraphicsDevice(IDXGIAdapter4* pAdapter)
 
 GraphicsDevice::~GraphicsDevice()
 {
-	m_pFrameFence->CpuWait(TickFrameFence());
-	Profiler::Get()->Shutdown();
-	m_pFrameFence->CpuWait(TickFrameFence());
+	m_IsTearingDown = true;
+
+	IdleGPU();
 	GarbageCollect();
 
 #if !PLATFORM_UWP
@@ -446,7 +446,14 @@ ID3D12Resource* GraphicsDevice::CreateResource(const D3D12_RESOURCE_DESC& desc, 
 
 void GraphicsDevice::ReleaseResource(ID3D12Resource* pResource)
 {
-	m_DeferredDeletionQueue.emplace(std::pair<uint64, ID3D12Resource*>(m_pFrameFence->GetCurrentValue(), pResource));
+	if (m_IsTearingDown)
+	{
+		pResource->Release();
+	}
+	else
+	{
+		m_DeferredDeletionQueue.push(std::pair<uint64, ID3D12Resource*>(m_pFrameFence->GetCurrentValue(), pResource));
+	}
 }
 
 PipelineState* GraphicsDevice::CreatePipeline(const PipelineStateInitializer& psoDesc)

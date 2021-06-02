@@ -176,6 +176,7 @@ public:
 	const GraphicsCapabilities& GetCapabilities() const { return Capabilities; }
 
 private:
+	bool m_IsTearingDown = false;
 	GraphicsCapabilities Capabilities;
 
 	ComPtr<ID3D12Device> m_pDevice;
