@@ -206,6 +206,7 @@ std::unique_ptr<GraphicsDevice> GraphicsInstance::CreateDevice(ComPtr<IDXGIAdapt
 }
 
 GraphicsDevice::GraphicsDevice(IDXGIAdapter4* pAdapter)
+	: m_DeleteQueue(this)
 {
 	VERIFY_HR(D3D12CreateDevice(pAdapter, D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(m_pDevice.ReleaseAndGetAddressOf())));
 	m_pDevice.As(&m_pRaytracingDevice);
@@ -305,28 +306,10 @@ GraphicsDevice::GraphicsDevice(IDXGIAdapter4* pAdapter)
 
 GraphicsDevice::~GraphicsDevice()
 {
-	m_IsTearingDown = true;
-
 	IdleGPU();
-	GarbageCollect();
-
 #if !PLATFORM_UWP
 	check(UnregisterWait(m_DeviceRemovedEvent) != 0);
 #endif
-}
-
-void GraphicsDevice::GarbageCollect()
-{
-	while (!m_DeferredDeletionQueue.empty())
-	{
-		auto& p = m_DeferredDeletionQueue.front();
-		if (!m_pFrameFence->IsComplete(p.first))
-		{
-			break;
-		}
-		p.second->Release();
-		m_DeferredDeletionQueue.pop();
-	}
 }
 
 int GraphicsDevice::RegisterBindlessResource(ResourceView* pResourceView, ResourceView* pFallback)
@@ -399,9 +382,9 @@ void GraphicsDevice::WaitForFence(uint64 fenceValue)
 
 uint64 GraphicsDevice::TickFrameFence()
 {
-	uint64 signalledValue = m_pFrameFence->Signal(GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT));
-	GarbageCollect();
-	return signalledValue;
+	uint64 signaledValue = m_pFrameFence->Signal(GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT));
+	m_DeleteQueue.Clean(signaledValue);
+	return signaledValue;
 }
 
 void GraphicsDevice::FreeCommandList(CommandContext* pCommandList)
@@ -446,14 +429,7 @@ ID3D12Resource* GraphicsDevice::CreateResource(const D3D12_RESOURCE_DESC& desc, 
 
 void GraphicsDevice::ReleaseResource(ID3D12Resource* pResource)
 {
-	if (m_IsTearingDown)
-	{
-		pResource->Release();
-	}
-	else
-	{
-		m_DeferredDeletionQueue.push(std::pair<uint64, ID3D12Resource*>(m_pFrameFence->GetCurrentValue(), pResource));
-	}
+	m_DeleteQueue.EnqueueResource(pResource, GetFrameFence()->GetCurrentValue());
 }
 
 PipelineState* GraphicsDevice::CreatePipeline(const PipelineStateInitializer& psoDesc)
@@ -679,5 +655,49 @@ bool GraphicsCapabilities::CheckUAVSupport(DXGI_FORMAT format) const
 
 	default:
 		return false;
+	}
+}
+
+DeferredDeleteQueue::DeferredDeleteQueue(GraphicsDevice* pParent)
+	: GraphicsObject(pParent)
+{
+}
+
+DeferredDeleteQueue::~DeferredDeleteQueue()
+{
+	std::scoped_lock<std::mutex> lock(m_QueueCS);
+	if (!m_DeletionQueue.empty())
+	{
+		GetParent()->GetFrameFence()->CpuWait(m_DeletionQueue.back().first);
+		while (!m_DeletionQueue.empty())
+		{
+			auto& p = m_DeletionQueue.front();
+			p.second->Release();
+			m_DeletionQueue.pop();
+		}
+	}
+}
+
+void DeferredDeleteQueue::EnqueueResource(GraphicsResource* pResource, uint64 fenceValue)
+{
+	std::scoped_lock<std::mutex> lock(m_QueueCS);
+	FencedObject object;
+	object.FenceValue = fenceValue;
+	object.pResource = pResource;
+	m_DeletionQueue.push(object);
+}
+
+void DeferredDeleteQueue::Clean(uint64 fenceValue)
+{
+	std::scoped_lock<std::mutex> lock(m_QueueCS);
+	while (!m_DeletionQueue.empty())
+	{
+		const FencedObject& p = m_DeletionQueue.front();
+		if (!GetParent()->GetFrameFence()->IsComplete(p.FenceValue))
+		{
+			break;
+		}
+		p.pResource->GetResource()->Release();
+		m_DeletionQueue.pop();
 	}
 }

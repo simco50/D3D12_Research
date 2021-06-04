@@ -2,6 +2,7 @@
 
 #include "Shader.h"
 #include "DescriptorHandle.h"
+#include "GraphicsResource.h"
 
 class CommandQueue;
 class CommandContext;
@@ -109,6 +110,27 @@ private:
 	GraphicsDevice* m_pDevice = nullptr;
 };
 
+class DeferredDeleteQueue : public GraphicsObject
+{
+private:
+	struct FencedObject
+	{
+		uint64 FenceValue;
+		GraphicsResource* pResource;
+	};
+
+public:
+	DeferredDeleteQueue(GraphicsDevice* pParent);
+	~DeferredDeleteQueue();
+
+	void EnqueueResource(GraphicsResource* pResource, uint64 fenceValue);
+
+	void Clean(uint64 fenceValue);
+private:
+	std::mutex m_QueueCS;
+	std::queue<FencedObject> m_DeletionQueue;
+};
+
 class GraphicsDevice
 {
 public:
@@ -117,7 +139,6 @@ public:
 
 	GraphicsDevice(IDXGIAdapter4* pAdapter);
 	~GraphicsDevice();
-	void GarbageCollect();
 
 	bool IsFenceComplete(uint64 fenceValue);
 	void WaitForFence(uint64 fenceValue);
@@ -181,6 +202,7 @@ private:
 
 	ComPtr<ID3D12Device> m_pDevice;
 	ComPtr<ID3D12Device5> m_pRaytracingDevice;
+	DeferredDeleteQueue m_DeleteQueue;
 
 	HANDLE m_DeviceRemovedEvent = 0;
 	std::unique_ptr<Fence> m_pDeviceRemovalFence;
@@ -202,8 +224,6 @@ private:
 	std::array < std::queue<CommandContext*>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_FreeCommandLists;
 	std::vector<ComPtr<ID3D12CommandList>> m_CommandLists;
 	std::mutex m_ContextAllocationMutex;
-
-	std::queue<std::pair<uint64, ID3D12Resource*>> m_DeferredDeletionQueue;
 
 	std::map<ResourceView*, int> m_ViewToDescriptorIndex;
 
