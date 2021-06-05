@@ -1340,7 +1340,7 @@ void DemoApp::Update()
 	//	- Present the frame buffer
 	//	- Wait for the next frame to be finished to start queueing work for it
 	Profiler::Get()->Resolve(m_pSwapchain.get(), m_pDevice.get(), m_Frame);
-	m_pDevice->TickFrameFence();
+	m_pDevice->TickFrame();
 	m_pSwapchain->Present();
 	++m_Frame;
 

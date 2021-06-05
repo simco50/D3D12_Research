@@ -115,17 +115,18 @@ class DeferredDeleteQueue : public GraphicsObject
 private:
 	struct FencedObject
 	{
+		Fence* pFence;
 		uint64 FenceValue;
-		ID3D12Resource* pResource;
+		ID3D12Object* pResource;
 	};
 
 public:
 	DeferredDeleteQueue(GraphicsDevice* pParent);
 	~DeferredDeleteQueue();
 
-	void EnqueueResource(ID3D12Resource* pResource, uint64 fenceValue);
+	void EnqueueResource(ID3D12Object* pResource, Fence* pFence);
 
-	void Clean(uint64 fenceValue);
+	void Clean();
 private:
 	std::mutex m_QueueCS;
 	std::queue<FencedObject> m_DeletionQueue;
@@ -142,7 +143,7 @@ public:
 
 	bool IsFenceComplete(uint64 fenceValue);
 	void WaitForFence(uint64 fenceValue);
-	uint64 TickFrameFence();
+	void TickFrame();
 	void IdleGPU();
 
 	int RegisterBindlessResource(ResourceView* pView, ResourceView* pFallback = nullptr);
@@ -185,8 +186,6 @@ public:
 	CommandSignature* GetIndirectDrawSignature() const { return m_pIndirectDrawSignature.get(); }
 	CommandSignature* GetIndirectDispatchSignature() const { return m_pIndirectDispatchSignature.get(); }
 
-	Fence* GetFrameFence() const { return m_pFrameFence.get(); }
-
 	Shader* GetShader(const char* pShaderPath, ShaderType shaderType, const char* entryPoint = "", const std::vector<ShaderDefine>& defines = {});
 	ShaderLibrary* GetLibrary(const char* pShaderPath, const std::vector<ShaderDefine>& defines = {});
 
@@ -202,11 +201,16 @@ private:
 
 	ComPtr<ID3D12Device> m_pDevice;
 	ComPtr<ID3D12Device5> m_pRaytracingDevice;
+
+	std::array<std::unique_ptr<CommandQueue>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_CommandQueues;
+	std::array<std::vector<std::unique_ptr<CommandContext>>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_CommandListPool;
+	std::array < std::queue<CommandContext*>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_FreeCommandLists;
+	std::vector<ComPtr<ID3D12CommandList>> m_CommandLists;
+
 	DeferredDeleteQueue m_DeleteQueue;
 
 	HANDLE m_DeviceRemovedEvent = 0;
 	std::unique_ptr<Fence> m_pDeviceRemovalFence;
-	std::unique_ptr<Fence> m_pFrameFence;
 
 	std::unique_ptr<ShaderManager> m_pShaderManager;
 
@@ -219,10 +223,6 @@ private:
 	std::vector<std::unique_ptr<PipelineState>> m_Pipelines;
 	std::vector<std::unique_ptr<StateObject>> m_StateObjects;
 
-	std::array<std::unique_ptr<CommandQueue>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_CommandQueues;
-	std::array<std::vector<std::unique_ptr<CommandContext>>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_CommandListPool;
-	std::array < std::queue<CommandContext*>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_FreeCommandLists;
-	std::vector<ComPtr<ID3D12CommandList>> m_CommandLists;
 	std::mutex m_ContextAllocationMutex;
 
 	std::map<ResourceView*, int> m_ViewToDescriptorIndex;
