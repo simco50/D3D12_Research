@@ -7,12 +7,19 @@
 Buffer::Buffer(GraphicsDevice* pParent, const char* pName /*= ""*/)
 	: GraphicsResource(pParent)
 {
+	m_Name = pName;
 }
 
 Buffer::Buffer(GraphicsDevice* pParent, ID3D12Resource* pResource, D3D12_RESOURCE_STATES state)
 	: GraphicsResource(pParent, pResource, state)
 {
 
+}
+
+Buffer::Buffer(GraphicsDevice* pParent, const BufferDesc& desc, const char* pName /*= ""*/)
+	: Buffer(pParent, pName)
+{
+	Create(desc);
 }
 
 Buffer::~Buffer()

@@ -16,10 +16,10 @@
 #include "DemoApp.h"
 
 RTReflections::RTReflections(GraphicsDevice* pDevice)
+	: m_pDevice(pDevice)
 {
 	if (pDevice->GetCapabilities().SupportsRaytracing())
 	{
-		SetupResources(pDevice);
 		SetupPipelines(pDevice);
 	}
 }
@@ -102,12 +102,7 @@ void RTReflections::Execute(RGGraph& graph, const SceneData& sceneData)
 
 void RTReflections::OnResize(uint32 width, uint32 height)
 {
-	m_pSceneColor->Create(TextureDesc::Create2D(width, height, GraphicsDevice::RENDER_TARGET_FORMAT, TextureFlag::ShaderResource, 1, 1));
-}
-
-void RTReflections::SetupResources(GraphicsDevice* pDevice)
-{
-	m_pSceneColor = std::make_unique<Texture>(pDevice);
+	m_pSceneColor = m_pDevice->CreateTexture(TextureDesc::Create2D(width, height, GraphicsDevice::RENDER_TARGET_FORMAT, TextureFlag::ShaderResource, 1, 1), "SceneColor Copy");
 }
 
 void RTReflections::SetupPipelines(GraphicsDevice* pDevice)

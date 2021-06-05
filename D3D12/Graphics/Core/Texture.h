@@ -220,6 +220,7 @@ struct TextureDesc
 class Texture : public GraphicsResource
 {
 public:
+	Texture(GraphicsDevice* pParent, const TextureDesc& desc, const char* pName = "");
 	Texture(GraphicsDevice* pParent, const char* pName = "");
 	~Texture();
 

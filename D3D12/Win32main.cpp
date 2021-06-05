@@ -90,7 +90,7 @@ public:
 		POINT p;
 		::GetCursorPos(&p);
 		::ScreenToClient(m_Window, &p);
-		OnMouseMoveEvent.Broadcast(p.x, p.y);
+		OnMouseMove.Broadcast(p.x, p.y);
 
 		return true;
 	}
@@ -103,26 +103,26 @@ public:
 	HWND GetNativeWindow() const { return m_Window; }
 	IntVector2 GetRect() const { return IntVector2(m_DisplayWidth, m_DisplayHeight); }
 
-	DECLARE_MULTICAST_DELEGATE(OnFocusChanged, bool);
-	OnFocusChanged OnFocusChangedEvent;
+	DECLARE_MULTICAST_DELEGATE(OnFocusChangedDelegate, bool);
+	OnFocusChangedDelegate OnFocusChanged;
 
-	DECLARE_MULTICAST_DELEGATE(OnResize, uint32, uint32);
-	OnResize OnResizeEvent;
+	DECLARE_MULTICAST_DELEGATE(OnResizeDelegate, uint32, uint32);
+	OnResizeDelegate OnResize;
 
-	DECLARE_MULTICAST_DELEGATE(OnCharInput, uint32);
-	OnCharInput OnCharInputEvent;
+	DECLARE_MULTICAST_DELEGATE(OnCharInputDelegate, uint32);
+	OnCharInputDelegate OnCharInput;
 
-	DECLARE_MULTICAST_DELEGATE(OnKeyInput, uint32, bool);
-	OnKeyInput OnKeyInputEvent;
+	DECLARE_MULTICAST_DELEGATE(OnKeyInputDelegate, uint32, bool);
+	OnKeyInputDelegate OnKeyInput;
 
-	DECLARE_MULTICAST_DELEGATE(OnMouseInput, uint32, bool);
-	OnMouseInput OnMouseInputEvent;
+	DECLARE_MULTICAST_DELEGATE(OnMouseInputDelegate, uint32, bool);
+	OnMouseInputDelegate OnMouseInput;
 
-	DECLARE_MULTICAST_DELEGATE(OnMouseMove, uint32, uint32);
-	OnMouseMove OnMouseMoveEvent;
+	DECLARE_MULTICAST_DELEGATE(OnMouseMoveDelegate, uint32, uint32);
+	OnMouseMoveDelegate OnMouseMove;
 
-	DECLARE_MULTICAST_DELEGATE(OnMouseScroll, float);
-	OnMouseScroll OnMouseScrollEvent;
+	DECLARE_MULTICAST_DELEGATE(OnMouseScrollDelegate, float);
+	OnMouseScrollDelegate OnMouseScroll;
 
 private:
 	static LRESULT CALLBACK WndProcStatic(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
@@ -168,13 +168,13 @@ private:
 
 			if (wParam == SIZE_MINIMIZED)
 			{
-				OnFocusChangedEvent.Broadcast(false);
+				OnFocusChanged.Broadcast(false);
 				m_Minimized = true;
 				m_Maximized = false;
 			}
 			else if (wParam == SIZE_MAXIMIZED)
 			{
-				OnFocusChangedEvent.Broadcast(true);
+				OnFocusChanged.Broadcast(true);
 				m_Minimized = false;
 				m_Maximized = true;
 				shouldResize = true;
@@ -184,14 +184,14 @@ private:
 				// Restoring from minimized state?
 				if (m_Minimized)
 				{
-					OnFocusChangedEvent.Broadcast(true);
+					OnFocusChanged.Broadcast(true);
 					m_Minimized = false;
 					shouldResize = true;
 				}
 				// Restoring from maximized state?
 				else if (m_Maximized)
 				{
-					OnFocusChangedEvent.Broadcast(true);
+					OnFocusChanged.Broadcast(true);
 					m_Maximized = false;
 					shouldResize = true;
 				}
@@ -203,56 +203,56 @@ private:
 
 			if (shouldResize && resized)
 			{
-				OnResizeEvent.Broadcast(m_DisplayWidth, m_DisplayHeight);
+				OnResize.Broadcast(m_DisplayWidth, m_DisplayHeight);
 			}
 			break;
 		}
 		case WM_MOUSEWHEEL:
 		{
 			float mouseWheel = (float)GET_WHEEL_DELTA_WPARAM(wParam) / WHEEL_DELTA;
-			OnMouseScrollEvent.Broadcast(mouseWheel);
+			OnMouseScroll.Broadcast(mouseWheel);
 			break;
 		}
 		case WM_KEYUP:
 		{
-			OnKeyInputEvent.Broadcast((uint32)wParam, false);
+			OnKeyInput.Broadcast((uint32)wParam, false);
 			break;
 		}
 		case WM_KEYDOWN:
 		{
-			OnKeyInputEvent.Broadcast((uint32)wParam, true);
+			OnKeyInput.Broadcast((uint32)wParam, true);
 			break;
 		}
 		case WM_CHAR:
 		{
 			if (wParam < 256)
-				OnCharInputEvent.Broadcast((uint32)wParam);
+				OnCharInput.Broadcast((uint32)wParam);
 			break;
 		}
 		case WM_LBUTTONDOWN:
-			OnMouseInputEvent.Broadcast(VK_LBUTTON, true);
+			OnMouseInput.Broadcast(VK_LBUTTON, true);
 			break;
 		case WM_MBUTTONDOWN:
-			OnMouseInputEvent.Broadcast(VK_MBUTTON, true);
+			OnMouseInput.Broadcast(VK_MBUTTON, true);
 			break;
 		case WM_RBUTTONDOWN:
-			OnMouseInputEvent.Broadcast(VK_RBUTTON, true);
+			OnMouseInput.Broadcast(VK_RBUTTON, true);
 			break;
 		case WM_LBUTTONUP:
-			OnMouseInputEvent.Broadcast(VK_LBUTTON, false);
+			OnMouseInput.Broadcast(VK_LBUTTON, false);
 			break;
 		case WM_MBUTTONUP:
-			OnMouseInputEvent.Broadcast(VK_MBUTTON, false);
+			OnMouseInput.Broadcast(VK_MBUTTON, false);
 			break;
 		case WM_RBUTTONUP:
-			OnMouseInputEvent.Broadcast(VK_RBUTTON, false);
+			OnMouseInput.Broadcast(VK_RBUTTON, false);
 			break;
 		case WM_ENTERSIZEMOVE:
-			OnFocusChangedEvent.Broadcast(false);
+			OnFocusChanged.Broadcast(false);
 			m_IsResizing = true;
 			break;
 		case WM_EXITSIZEMOVE:
-			OnFocusChangedEvent.Broadcast(true);
+			OnFocusChanged.Broadcast(true);
 			RECT rect;
 			GetClientRect(hWnd, &rect);
 			int newWidth = rect.right - rect.left;
@@ -262,7 +262,7 @@ private:
 			{
 				m_DisplayWidth = newWidth;
 				m_DisplayHeight = newHeight;
-				OnResizeEvent.Broadcast(newWidth, newHeight);
+				OnResize.Broadcast(newWidth, newHeight);
 			}
 			m_IsResizing = false;
 			break;
@@ -297,15 +297,15 @@ int WINAPI WinMain(_In_ HINSTANCE /*hInstance*/, _In_opt_ HINSTANCE /*hPrevInsta
 	Win32AppContainer app("D3D12", 1240, 720);
 	DemoApp graphics(app.GetNativeWindow(), app.GetRect(), 1);
 
-	app.OnKeyInputEvent += [](uint32 character, bool isDown) {
+	app.OnKeyInput += [](uint32 character, bool isDown) {
 		Input::Instance().UpdateKey(character, isDown);
 		ImGui::GetIO().KeysDown[character] = isDown;
 	};
-	app.OnMouseInputEvent += [](uint32 mouse, bool isDown) { Input::Instance().UpdateMouseKey(mouse, isDown); };
-	app.OnMouseMoveEvent += [](uint32 x, uint32 y) { Input::Instance().UpdateMousePosition((float)x, (float)y); };
-	app.OnResizeEvent += [&graphics](uint32 width, uint32 height) { graphics.OnResize(width, height); };
-	app.OnCharInputEvent += [](uint32 character) { ImGui::GetIO().AddInputCharacter(character); };
-	app.OnMouseScrollEvent += [](float wheel) { Input::Instance().UpdateMouseWheel(wheel); };
+	app.OnMouseInput += [](uint32 mouse, bool isDown) { Input::Instance().UpdateMouseKey(mouse, isDown); };
+	app.OnMouseMove += [](uint32 x, uint32 y) { Input::Instance().UpdateMousePosition((float)x, (float)y); };
+	app.OnResize += [&graphics](uint32 width, uint32 height) { graphics.OnResize(width, height); };
+	app.OnCharInput += [](uint32 character) { ImGui::GetIO().AddInputCharacter(character); };
+	app.OnMouseScroll += [](float wheel) { Input::Instance().UpdateMouseWheel(wheel); };
 
 	Time::Reset();
 

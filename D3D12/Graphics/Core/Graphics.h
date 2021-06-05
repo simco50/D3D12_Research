@@ -2,6 +2,7 @@
 
 #include "Shader.h"
 #include "DescriptorHandle.h"
+#include "GraphicsResource.h"
 
 class CommandQueue;
 class CommandContext;
@@ -22,6 +23,9 @@ class SwapChain;
 class OnlineDescriptorAllocator;
 class Fence;
 class GraphicsDevice;
+class CommandSignature;
+struct TextureDesc;
+struct BufferDesc;
 
 #if PLATFORM_WINDOWS
 using WindowHandle = HWND;
@@ -63,7 +67,7 @@ class SwapChain
 {
 public:
 	SwapChain(GraphicsDevice* pDevice, IDXGIFactory6* pFactory, WindowHandle pNativeWindow, DXGI_FORMAT format, uint32 width, uint32 height, uint32 numFrames, bool vsync);
-	void Destroy();
+	~SwapChain();
 	void OnResize(uint32 width, uint32 height);
 	void Present();
 
@@ -106,6 +110,28 @@ private:
 	GraphicsDevice* m_pDevice = nullptr;
 };
 
+class DeferredDeleteQueue : public GraphicsObject
+{
+private:
+	struct FencedObject
+	{
+		Fence* pFence;
+		uint64 FenceValue;
+		ID3D12Object* pResource;
+	};
+
+public:
+	DeferredDeleteQueue(GraphicsDevice* pParent);
+	~DeferredDeleteQueue();
+
+	void EnqueueResource(ID3D12Object* pResource, Fence* pFence);
+
+	void Clean();
+private:
+	std::mutex m_QueueCS;
+	std::queue<FencedObject> m_DeletionQueue;
+};
+
 class GraphicsDevice
 {
 public:
@@ -114,11 +140,10 @@ public:
 
 	GraphicsDevice(IDXGIAdapter4* pAdapter);
 	~GraphicsDevice();
-	void Destroy();
-	void GarbageCollect();
 
 	bool IsFenceComplete(uint64 fenceValue);
 	void WaitForFence(uint64 fenceValue);
+	void TickFrame();
 	void IdleGPU();
 
 	int RegisterBindlessResource(ResourceView* pView, ResourceView* pFallback = nullptr);
@@ -151,9 +176,15 @@ public:
 		m_DescriptorHeaps[DescriptorSelector<DESC_TYPE>::Type()]->FreeDescriptor(descriptor);
 	}
 
+	std::unique_ptr<Texture> CreateTexture(const TextureDesc& desc, const char* pName);
+	std::unique_ptr<Buffer> CreateBuffer(const BufferDesc& desc, const char* pName);
+
 	ID3D12Resource* CreateResource(const D3D12_RESOURCE_DESC& desc, D3D12_RESOURCE_STATES initialState, D3D12_HEAP_TYPE heapType, D3D12_CLEAR_VALUE* pClearValue = nullptr);
+	void ReleaseResource(ID3D12Resource* pResource);
 	PipelineState* CreatePipeline(const PipelineStateInitializer& psoDesc);
 	StateObject* CreateStateObject(const StateObjectInitializer& stateDesc);
+	CommandSignature* GetIndirectDrawSignature() const { return m_pIndirectDrawSignature.get(); }
+	CommandSignature* GetIndirectDispatchSignature() const { return m_pIndirectDispatchSignature.get(); }
 
 	Shader* GetShader(const char* pShaderPath, ShaderType shaderType, const char* entryPoint = "", const std::vector<ShaderDefine>& defines = {});
 	ShaderLibrary* GetLibrary(const char* pShaderPath, const std::vector<ShaderDefine>& defines = {});
@@ -165,8 +196,18 @@ public:
 	const GraphicsCapabilities& GetCapabilities() const { return Capabilities; }
 
 private:
+	bool m_IsTearingDown = false;
+	GraphicsCapabilities Capabilities;
+
 	ComPtr<ID3D12Device> m_pDevice;
 	ComPtr<ID3D12Device5> m_pRaytracingDevice;
+
+	std::array<std::unique_ptr<CommandQueue>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_CommandQueues;
+	std::array<std::vector<std::unique_ptr<CommandContext>>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_CommandListPool;
+	std::array < std::queue<CommandContext*>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_FreeCommandLists;
+	std::vector<ComPtr<ID3D12CommandList>> m_CommandLists;
+
+	DeferredDeleteQueue m_DeleteQueue;
 
 	HANDLE m_DeviceRemovedEvent = 0;
 	std::unique_ptr<Fence> m_pDeviceRemovalFence;
@@ -182,13 +223,10 @@ private:
 	std::vector<std::unique_ptr<PipelineState>> m_Pipelines;
 	std::vector<std::unique_ptr<StateObject>> m_StateObjects;
 
-	std::array<std::unique_ptr<CommandQueue>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_CommandQueues;
-	std::array<std::vector<std::unique_ptr<CommandContext>>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_CommandListPool;
-	std::array < std::queue<CommandContext*>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_FreeCommandLists;
-	std::vector<ComPtr<ID3D12CommandList>> m_CommandLists;
 	std::mutex m_ContextAllocationMutex;
 
-	GraphicsCapabilities Capabilities;
-
 	std::map<ResourceView*, int> m_ViewToDescriptorIndex;
+
+	std::unique_ptr<CommandSignature> m_pIndirectDrawSignature;
+	std::unique_ptr<CommandSignature> m_pIndirectDispatchSignature;
 };

@@ -18,8 +18,12 @@ public:
 	void CpuWait(uint64 fenceValue);
 	// Returns true if the fence has reached this value or higher
 	bool IsComplete(uint64 fenceValue);
+	// Get the fence value that will get signaled next
+	uint64 GetCurrentValue() const { return m_CurrentValue; }
+	uint64 GetLastSignaledValue() const { return m_LastSignaled; }
 
 	inline ID3D12Fence* GetFence() const { return m_pFence.Get(); }
+
 
 private:
 	ComPtr<ID3D12Fence> m_pFence;

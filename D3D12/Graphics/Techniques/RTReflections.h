@@ -19,8 +19,9 @@ public:
 	void OnResize(uint32 width, uint32 height);
 
 private:
-	void SetupResources(GraphicsDevice* pDevice);
 	void SetupPipelines(GraphicsDevice* pDevice);
+
+	GraphicsDevice* m_pDevice;
 
 	StateObject* m_pRtSO = nullptr;
 

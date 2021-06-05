@@ -125,10 +125,10 @@ private:
 	void UpdateTLAS(CommandContext& context);
 
 	std::unique_ptr<GraphicsDevice> m_pDevice;
+	std::unique_ptr<SwapChain> m_pSwapchain;
 
 	unsigned int m_WindowWidth;
 	unsigned int m_WindowHeight;
-	std::unique_ptr<SwapChain> m_pSwapchain;
 
 	int m_Frame = 0;
 	std::array<float, 180> m_FrameTimes{};

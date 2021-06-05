@@ -15,14 +15,15 @@ class TiledForward
 public:
 	TiledForward(GraphicsDevice* pDevice);
 
-	void OnSwapchainCreated(int windowWidth, int windowHeight);
+	void OnResize(int windowWidth, int windowHeight);
 
 	void Execute(RGGraph& graph, const SceneData& resources);
 	void VisualizeLightDensity(RGGraph& graph, GraphicsDevice* pDevice, Camera& camera, Texture* pTarget, Texture* pDepth);
 
 private:
-	void SetupResources(GraphicsDevice* pDevice);
-	void SetupPipelines(GraphicsDevice* pDevice);
+	void SetupPipelines();
+
+	GraphicsDevice* m_pDevice;
 
 	//Light Culling
 	std::unique_ptr<RootSignature> m_pComputeLightCullRS;

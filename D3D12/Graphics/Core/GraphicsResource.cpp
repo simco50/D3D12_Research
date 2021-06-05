@@ -1,6 +1,7 @@
 #include "stdafx.h"
 #include "GraphicsResource.h"
 #include "ResourceViews.h"
+#include "Graphics.h"
 
 GraphicsResource::GraphicsResource(GraphicsDevice* pParent)
 	: GraphicsObject(pParent), m_pResource(nullptr), m_ResourceState(D3D12_RESOURCE_STATE_COMMON)
@@ -38,7 +39,14 @@ void GraphicsResource::Release()
 {
 	if (m_pResource)
 	{
-		m_pResource->Release();
+		if (m_ImmediateDelete)
+		{
+			m_pResource->Release();
+		}
+		else
+		{
+			GetParent()->ReleaseResource(m_pResource);
+		}
 		m_pResource = nullptr;
 	}
 }

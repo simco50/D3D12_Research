@@ -15,10 +15,10 @@
 #include "DemoApp.h"
 
 RTAO::RTAO(GraphicsDevice* pDevice)
+	: m_pDevice(pDevice)
 {
 	if (pDevice->GetCapabilities().SupportsRaytracing())
 	{
-		SetupResources(pDevice);
 		SetupPipelines(pDevice);
 	}
 }
@@ -78,10 +78,6 @@ void RTAO::Execute(RGGraph& graph, Texture* pColor, Texture* pDepth, const Scene
 
 			context.DispatchRays(bindingTable, pColor->GetWidth(), pColor->GetHeight());
 		});
-}
-
-void RTAO::SetupResources(GraphicsDevice* /*pDevice*/)
-{
 }
 
 void RTAO::SetupPipelines(GraphicsDevice* pDevice)

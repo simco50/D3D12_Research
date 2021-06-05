@@ -206,6 +206,7 @@ std::unique_ptr<GraphicsDevice> GraphicsInstance::CreateDevice(ComPtr<IDXGIAdapt
 }
 
 GraphicsDevice::GraphicsDevice(IDXGIAdapter4* pAdapter)
+	: m_DeleteQueue(this)
 {
 	VERIFY_HR(D3D12CreateDevice(pAdapter, D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(m_pDevice.ReleaseAndGetAddressOf())));
 	m_pDevice.As(&m_pRaytracingDevice);
@@ -287,6 +288,14 @@ GraphicsDevice::GraphicsDevice(IDXGIAdapter4* pAdapter)
 	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_RTV] = std::make_unique<OfflineDescriptorAllocator>(this, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, 128);
 	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_DSV] = std::make_unique<OfflineDescriptorAllocator>(this, D3D12_DESCRIPTOR_HEAP_TYPE_DSV, 64);
 
+	m_pIndirectDispatchSignature = std::make_unique<CommandSignature>(this);
+	m_pIndirectDispatchSignature->AddDispatch();
+	m_pIndirectDispatchSignature->Finalize("Default Indirect Dispatch");
+
+	m_pIndirectDrawSignature = std::make_unique<CommandSignature>(this);
+	m_pIndirectDrawSignature->AddDraw();
+	m_pIndirectDrawSignature->Finalize("Default Indirect Draw");
+
 	// Shaders
 	uint8 smMaj, smMin;
 	Capabilities.GetShaderModel(smMaj, smMin);
@@ -295,20 +304,10 @@ GraphicsDevice::GraphicsDevice(IDXGIAdapter4* pAdapter)
 
 GraphicsDevice::~GraphicsDevice()
 {
-
-}
-
-void GraphicsDevice::Destroy()
-{
 	IdleGPU();
 #if !PLATFORM_UWP
 	check(UnregisterWait(m_DeviceRemovedEvent) != 0);
 #endif
-}
-
-void GraphicsDevice::GarbageCollect()
-{
-	m_pDynamicAllocationManager->CollectGarbage();
 }
 
 int GraphicsDevice::RegisterBindlessResource(ResourceView* pResourceView, ResourceView* pFallback)
@@ -356,13 +355,19 @@ CommandContext* GraphicsDevice::AllocateCommandContext(D3D12_COMMAND_LIST_TYPE t
 			ComPtr<ID3D12CommandList> pCommandList;
 			ID3D12CommandAllocator* pAllocator = m_CommandQueues[type]->RequestAllocator();
 			VERIFY_HR(GetDevice()->CreateCommandList(0, type, pAllocator, nullptr, IID_PPV_ARGS(pCommandList.GetAddressOf())));
-			D3D::SetObjectName(pCommandList.Get(), Sprintf("Pooled Commandlist - %d", m_CommandLists.size()).c_str());
+			D3D::SetObjectName(pCommandList.Get(), Sprintf("Pooled Commandlist %d", m_CommandLists.size()).c_str());
 			m_CommandLists.push_back(std::move(pCommandList));
 			m_CommandListPool[typeIndex].emplace_back(std::make_unique<CommandContext>(this, static_cast<ID3D12GraphicsCommandList*>(m_CommandLists.back().Get()), type, m_pGlobalViewHeap.get(), m_pDynamicAllocationManager.get(), pAllocator));
 			pContext = m_CommandListPool[typeIndex].back().get();
 		}
 	}
 	return pContext;
+}
+
+void GraphicsDevice::FreeCommandList(CommandContext* pCommandList)
+{
+	std::lock_guard<std::mutex> lockGuard(m_ContextAllocationMutex);
+	m_FreeCommandLists[(int)pCommandList->GetType()].push(pCommandList);
 }
 
 bool GraphicsDevice::IsFenceComplete(uint64 fenceValue)
@@ -379,10 +384,9 @@ void GraphicsDevice::WaitForFence(uint64 fenceValue)
 	pQueue->WaitForFence(fenceValue);
 }
 
-void GraphicsDevice::FreeCommandList(CommandContext* pCommandList)
+void GraphicsDevice::TickFrame()
 {
-	std::lock_guard<std::mutex> lockGuard(m_ContextAllocationMutex);
-	m_FreeCommandLists[(int)pCommandList->GetType()].push(pCommandList);
+	m_DeleteQueue.Clean();
 }
 
 DescriptorHandle GraphicsDevice::GetViewHeapHandle() const
@@ -401,12 +405,27 @@ void GraphicsDevice::IdleGPU()
 	}
 }
 
+std::unique_ptr<Texture> GraphicsDevice::CreateTexture(const TextureDesc& desc, const char* pName)
+{
+	return std::make_unique<Texture>(this, desc, pName);
+}
+
+std::unique_ptr<Buffer> GraphicsDevice::CreateBuffer(const BufferDesc& desc, const char* pName)
+{
+	return std::make_unique<Buffer>(this, desc, pName);
+}
+
 ID3D12Resource* GraphicsDevice::CreateResource(const D3D12_RESOURCE_DESC& desc, D3D12_RESOURCE_STATES initialState, D3D12_HEAP_TYPE heapType, D3D12_CLEAR_VALUE* pClearValue /*= nullptr*/)
 {
 	ID3D12Resource* pResource;
 	D3D12_HEAP_PROPERTIES properties = CD3DX12_HEAP_PROPERTIES(heapType);
 	VERIFY_HR_EX(GetDevice()->CreateCommittedResource(&properties, D3D12_HEAP_FLAG_NONE, &desc, initialState, pClearValue, IID_PPV_ARGS(&pResource)), GetDevice());
 	return pResource;
+}
+
+void GraphicsDevice::ReleaseResource(ID3D12Resource* pResource)
+{
+	m_DeleteQueue.EnqueueResource(pResource, GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT)->GetFence());
 }
 
 PipelineState* GraphicsDevice::CreatePipeline(const PipelineStateInitializer& psoDesc)
@@ -435,96 +454,41 @@ ShaderLibrary* GraphicsDevice::GetLibrary(const char* pShaderPath, const std::ve
 	return m_pShaderManager->GetLibrary(pShaderPath, defines);
 }
 
-SwapChain::SwapChain(GraphicsDevice* pDevice, IDXGIFactory6* pFactory, WindowHandle pNativeWindow, DXGI_FORMAT format, uint32 width, uint32 height, uint32 numFrames, bool vsync) : m_Format(format), m_CurrentImage(0), m_Vsync(vsync)
+DeferredDeleteQueue::DeferredDeleteQueue(GraphicsDevice* pParent)
+	: GraphicsObject(pParent)
 {
-	DXGI_SWAP_CHAIN_DESC1 desc{};
-	desc.AlphaMode = DXGI_ALPHA_MODE_IGNORE;
-	desc.BufferCount = numFrames;
-	desc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-	desc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
-	desc.Format = format;
-	desc.Width = width;
-	desc.Height = height;
-	desc.Scaling = DXGI_SCALING_NONE;
-	desc.Stereo = FALSE;
-	desc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
-	desc.SampleDesc.Count = 1;
-	desc.SampleDesc.Quality = 0;
-
-	DXGI_SWAP_CHAIN_FULLSCREEN_DESC fsDesc{};
-	fsDesc.RefreshRate.Denominator = 60;
-	fsDesc.RefreshRate.Numerator = 1;
-	fsDesc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
-	fsDesc.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED;
-	fsDesc.Windowed = true;
-
-	CommandQueue* pPresentQueue = pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT);
-	ComPtr<IDXGISwapChain1> swapChain;
-	
-#if PLATFORM_UWP
-	pFactory->CreateSwapChainForCoreWindow(
-		pPresentQueue->GetCommandQueue(),
-		reinterpret_cast<IUnknown*>(winrt::get_abi(winrt::Windows::UI::Core::CoreWindow::GetForCurrentThread())),
-		&desc,
-		nullptr,
-		swapChain.GetAddressOf());
-#elif PLATFORM_WINDOWS
-	VERIFY_HR(pFactory->CreateSwapChainForHwnd(
-		pPresentQueue->GetCommandQueue(),
-		(HWND)pNativeWindow,
-		&desc,
-		&fsDesc,
-		nullptr,
-		swapChain.GetAddressOf()));
-#endif
-	m_pSwapchain.Reset();
-	swapChain.As(&m_pSwapchain);
-
-	m_Backbuffers.resize(numFrames);
-	for (uint32 i = 0; i < numFrames; ++i)
-	{
-		m_Backbuffers[i] = std::make_unique<Texture>(pDevice, "Render Target");
-	}
 }
 
-void SwapChain::Destroy()
+DeferredDeleteQueue::~DeferredDeleteQueue()
 {
-	m_pSwapchain->SetFullscreenState(false, nullptr);
+	GetParent()->IdleGPU();
+	Clean();
+	check(m_DeletionQueue.empty());
 }
 
-void SwapChain::OnResize(uint32 width, uint32 height)
+void DeferredDeleteQueue::EnqueueResource(ID3D12Object* pResource, Fence* pFence)
 {
-	for (size_t i = 0; i < m_Backbuffers.size(); ++i)
-	{
-		m_Backbuffers[i]->Release();
-	}
-
-	//Resize the buffers
-	DXGI_SWAP_CHAIN_DESC1 desc{};
-	m_pSwapchain->GetDesc1(&desc);
-	VERIFY_HR(m_pSwapchain->ResizeBuffers(
-		(uint32)m_Backbuffers.size(),
-		width,
-		height,
-		desc.Format,
-		desc.Flags
-	));
-
-	m_CurrentImage = 0;
-
-	//Recreate the render target views
-	for (uint32 i = 0; i < (uint32)m_Backbuffers.size(); ++i)
-	{
-		ID3D12Resource* pResource = nullptr;
-		VERIFY_HR(m_pSwapchain->GetBuffer(i, IID_PPV_ARGS(&pResource)));
-		m_Backbuffers[i]->CreateForSwapchain(pResource);
-	}
+	std::scoped_lock<std::mutex> lock(m_QueueCS);
+	FencedObject object;
+	object.pFence = pFence;
+	object.FenceValue = pFence->GetCurrentValue();
+	object.pResource = pResource;
+	m_DeletionQueue.push(object);
 }
 
-void SwapChain::Present()
+void DeferredDeleteQueue::Clean()
 {
-	m_pSwapchain->Present(m_Vsync, m_Vsync ? 0 : DXGI_PRESENT_ALLOW_TEARING);
-	m_CurrentImage = m_pSwapchain->GetCurrentBackBufferIndex();
+	std::scoped_lock<std::mutex> lock(m_QueueCS);
+	while (!m_DeletionQueue.empty())
+	{
+		const FencedObject& p = m_DeletionQueue.front();
+		if (!p.pFence->IsComplete(p.FenceValue))
+		{
+			break;
+		}
+		p.pResource->Release();
+		m_DeletionQueue.pop();
+	}
 }
 
 void GraphicsCapabilities::Initialize(GraphicsDevice* pDevice)
@@ -633,4 +597,96 @@ bool GraphicsCapabilities::CheckUAVSupport(DXGI_FORMAT format) const
 	default:
 		return false;
 	}
+}
+
+SwapChain::SwapChain(GraphicsDevice* pDevice, IDXGIFactory6* pFactory, WindowHandle pNativeWindow, DXGI_FORMAT format, uint32 width, uint32 height, uint32 numFrames, bool vsync) : m_Format(format), m_CurrentImage(0), m_Vsync(vsync)
+{
+	DXGI_SWAP_CHAIN_DESC1 desc{};
+	desc.AlphaMode = DXGI_ALPHA_MODE_IGNORE;
+	desc.BufferCount = numFrames;
+	desc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+	desc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
+	desc.Format = format;
+	desc.Width = width;
+	desc.Height = height;
+	desc.Scaling = DXGI_SCALING_NONE;
+	desc.Stereo = FALSE;
+	desc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+	desc.SampleDesc.Count = 1;
+	desc.SampleDesc.Quality = 0;
+
+	DXGI_SWAP_CHAIN_FULLSCREEN_DESC fsDesc{};
+	fsDesc.RefreshRate.Denominator = 60;
+	fsDesc.RefreshRate.Numerator = 1;
+	fsDesc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
+	fsDesc.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED;
+	fsDesc.Windowed = true;
+
+	CommandQueue* pPresentQueue = pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT);
+	ComPtr<IDXGISwapChain1> swapChain;
+	
+#if PLATFORM_UWP
+	pFactory->CreateSwapChainForCoreWindow(
+		pPresentQueue->GetCommandQueue(),
+		reinterpret_cast<IUnknown*>(winrt::get_abi(winrt::Windows::UI::Core::CoreWindow::GetForCurrentThread())),
+		&desc,
+		nullptr,
+		swapChain.GetAddressOf());
+#elif PLATFORM_WINDOWS
+	VERIFY_HR(pFactory->CreateSwapChainForHwnd(
+		pPresentQueue->GetCommandQueue(),
+		(HWND)pNativeWindow,
+		&desc,
+		&fsDesc,
+		nullptr,
+		swapChain.GetAddressOf()));
+#endif
+	m_pSwapchain.Reset();
+	swapChain.As(&m_pSwapchain);
+
+	m_Backbuffers.resize(numFrames);
+	for (uint32 i = 0; i < numFrames; ++i)
+	{
+		m_Backbuffers[i] = std::make_unique<Texture>(pDevice, "Render Target");
+	}
+}
+
+SwapChain::~SwapChain()
+{
+	m_pSwapchain->SetFullscreenState(false, nullptr);
+}
+
+void SwapChain::OnResize(uint32 width, uint32 height)
+{
+	for (size_t i = 0; i < m_Backbuffers.size(); ++i)
+	{
+		m_Backbuffers[i]->Release();
+	}
+
+	//Resize the buffers
+	DXGI_SWAP_CHAIN_DESC1 desc{};
+	m_pSwapchain->GetDesc1(&desc);
+	VERIFY_HR(m_pSwapchain->ResizeBuffers(
+		(uint32)m_Backbuffers.size(),
+		width,
+		height,
+		desc.Format,
+		desc.Flags
+	));
+
+	m_CurrentImage = 0;
+
+	//Recreate the render target views
+	for (uint32 i = 0; i < (uint32)m_Backbuffers.size(); ++i)
+	{
+		ID3D12Resource* pResource = nullptr;
+		VERIFY_HR(m_pSwapchain->GetBuffer(i, IID_PPV_ARGS(&pResource)));
+		m_Backbuffers[i]->CreateForSwapchain(pResource);
+	}
+}
+
+void SwapChain::Present()
+{
+	m_pSwapchain->Present(m_Vsync, m_Vsync ? 0 : DXGI_PRESENT_ALLOW_TEARING);
+	m_CurrentImage = m_pSwapchain->GetCurrentBackBufferIndex();
 }

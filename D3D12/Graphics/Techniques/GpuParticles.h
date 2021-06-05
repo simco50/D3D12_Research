@@ -2,7 +2,6 @@
 
 class GraphicsDevice;
 class Buffer;
-class CommandSignature;
 class PipelineState;
 class RootSignature;
 class CommandContext;
@@ -14,12 +13,13 @@ class GpuParticles
 {
 public:
 	GpuParticles(GraphicsDevice* pDevice);
-	~GpuParticles();
+	~GpuParticles() = default;
 
 	void Simulate(RGGraph& graph, Texture* pSourceDepth, const Camera& camera);
 	void Render(RGGraph& graph, Texture* pTarget, Texture* pDepth, const Camera& camera);
 private:
-	void Initialize(GraphicsDevice* pDevice);
+
+	GraphicsDevice* m_pDevice;
 
 	std::unique_ptr<Buffer> m_pAliveList1;
 	std::unique_ptr<Buffer> m_pAliveList2;
@@ -38,9 +38,6 @@ private:
 
 	PipelineState* m_pSimulateEndPS = nullptr;
 	std::unique_ptr<Buffer> m_pDrawArguments;
-
-	std::unique_ptr<CommandSignature> m_pSimpleDispatchCommandSignature;
-	std::unique_ptr<CommandSignature> m_pSimpleDrawCommandSignature;
 
 	std::unique_ptr<RootSignature> m_pRenderParticlesRS;
 	PipelineState* m_pRenderParticlesPS = nullptr;
