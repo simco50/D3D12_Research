@@ -116,14 +116,14 @@ private:
 	struct FencedObject
 	{
 		uint64 FenceValue;
-		GraphicsResource* pResource;
+		ID3D12Resource* pResource;
 	};
 
 public:
 	DeferredDeleteQueue(GraphicsDevice* pParent);
 	~DeferredDeleteQueue();
 
-	void EnqueueResource(GraphicsResource* pResource, uint64 fenceValue);
+	void EnqueueResource(ID3D12Resource* pResource, uint64 fenceValue);
 
 	void Clean(uint64 fenceValue);
 private:

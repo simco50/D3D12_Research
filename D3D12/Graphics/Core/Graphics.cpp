@@ -665,20 +665,11 @@ DeferredDeleteQueue::DeferredDeleteQueue(GraphicsDevice* pParent)
 
 DeferredDeleteQueue::~DeferredDeleteQueue()
 {
-	std::scoped_lock<std::mutex> lock(m_QueueCS);
-	if (!m_DeletionQueue.empty())
-	{
-		GetParent()->GetFrameFence()->CpuWait(m_DeletionQueue.back().first);
-		while (!m_DeletionQueue.empty())
-		{
-			auto& p = m_DeletionQueue.front();
-			p.second->Release();
-			m_DeletionQueue.pop();
-		}
-	}
+	Clean(GetParent()->GetFrameFence()->GetLastSignaledValue());
+	check(m_DeletionQueue.empty());
 }
 
-void DeferredDeleteQueue::EnqueueResource(GraphicsResource* pResource, uint64 fenceValue)
+void DeferredDeleteQueue::EnqueueResource(ID3D12Resource* pResource, uint64 fenceValue)
 {
 	std::scoped_lock<std::mutex> lock(m_QueueCS);
 	FencedObject object;
@@ -697,7 +688,7 @@ void DeferredDeleteQueue::Clean(uint64 fenceValue)
 		{
 			break;
 		}
-		p.pResource->GetResource()->Release();
+		p.pResource->Release();
 		m_DeletionQueue.pop();
 	}
 }
