@@ -166,9 +166,12 @@ ShadingData GetShadingData(BuiltInTriangleIntersectionAttributes attrib, float3 
 	Vertex v = GetVertexAttributes(barycentrics);
 
 	MaterialData material = hitData.Material;
-	float4 diffuseSample = tTexture2DTable[material.Diffuse].SampleLevel(sDiffuseSampler, v.texCoord, mipLevel);
+	float4 diffuseSample = material.BaseColorFactor * tTexture2DTable[material.Diffuse].SampleLevel(sDiffuseSampler, v.texCoord, mipLevel);
 	float4 normalSample = tTexture2DTable[material.Normal].SampleLevel(sDiffuseSampler, v.texCoord, mipLevel);
 	float4 roughnessMetalnessSample = tTexture2DTable[material.RoughnessMetalness].SampleLevel(sDiffuseSampler, v.texCoord, mipLevel);
+	float metalness = material.MetalnessFactor * roughnessMetalnessSample.b;
+	float roughness = material.RoughnessFactor * roughnessMetalnessSample.g;
+	
 	float4 emissiveSample = tTexture2DTable[material.Emissive].SampleLevel(sDiffuseSampler, v.texCoord, mipLevel);
 	float specular = 0.5f;
 	float3x3 TBN = float3x3(v.tangent, v.bitangent, v.normal);
@@ -180,8 +183,8 @@ ShadingData GetShadingData(BuiltInTriangleIntersectionAttributes attrib, float3 
 	outData.N = N;
 	outData.UV = v.texCoord;
 	outData.Diffuse = diffuseSample.rgb;
-	outData.Specular = ComputeF0(specular, diffuseSample.rgb, roughnessMetalnessSample.b);
-	outData.Roughness = roughnessMetalnessSample.g;
+	outData.Specular = ComputeF0(specular, diffuseSample.rgb, metalness);
+	outData.Roughness = roughness;
 	outData.Emissive = emissiveSample.rgb;
 	outData.Opacity = diffuseSample.a;
 	return outData;

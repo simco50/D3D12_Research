@@ -191,7 +191,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 		m.pNormalTexture = loadTexture(dirPath.c_str(), pSceneMaterial, aiTextureType_NORMALS, 0, false);
 		m.pRoughnessMetalnessTexture = loadTexture(dirPath.c_str(), pSceneMaterial, AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_METALLICROUGHNESS_TEXTURE, false);
 		m.pEmissiveTexture = loadTexture(dirPath.c_str(), pSceneMaterial, aiTextureType_EMISSIVE, 0, false);
-
+		
 		if (!m.pDiffuseTexture)
 		{
 			m.pDiffuseTexture = loadTexture(dirPath.c_str(), pSceneMaterial, aiTextureType_DIFFUSE, 0, true);
@@ -207,6 +207,11 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 			aiString p;
 			m.IsTransparent = pScene->mMaterials[i]->GetTexture(aiTextureType_OPACITY, 0, &p) == aiReturn_SUCCESS;
 		}
+
+		uint32 max = 4;
+		aiReturn result = pSceneMaterial->Get(AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_BASE_COLOR_FACTOR, &m.BaseColorFactor.x, &max);
+		result = pSceneMaterial->Get(AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_METALLIC_FACTOR, m.MetalnessFactor);
+		result = pSceneMaterial->Get(AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_ROUGHNESS_FACTOR, m.RoughnessFactor);
 	}
 
 	if (pDevice->GetCapabilities().SupportsRaytracing())
