@@ -38,6 +38,7 @@ struct Light
 		data.ShadowIndex = CastShadows ? ShadowIndex : -1;
 		data.InvShadowSize = 1.0f / ShadowMapSize;
 		data.LightTexture = LightTexture;
+		data.Flags = 0;
 		if (VolumetricLighting)
 		{
 			data.Flags |= ShaderInterop::LF_Volumetrics;
