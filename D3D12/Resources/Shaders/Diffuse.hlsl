@@ -273,19 +273,38 @@ void PSMain(PSInput input,
 
 // Surface Shader BEGIN
 	MaterialData material = cObjectData.Material;
-	float4 diffuseSample = material.BaseColorFactor * tTexture2DTable[material.Diffuse].Sample(sDiffuseSampler, input.texCoord);
-	float3 tangentNormal = tTexture2DTable[material.Normal].Sample(sDiffuseSampler, input.texCoord).xyz;
-	float4 roughnessMetalness = tTexture2DTable[material.RoughnessMetalness].Sample(sDiffuseSampler, input.texCoord);
-	float4 emissive = tTexture2DTable[material.Emissive].Sample(sDiffuseSampler, input.texCoord);
-	float metalness = material.MetalnessFactor * roughnessMetalness.b;
-	float roughness = material.RoughnessFactor * roughnessMetalness.g;
+
+	float4 baseColor = material.BaseColorFactor;
+	if(material.Diffuse >= 0)
+	{
+		baseColor *= tTexture2DTable[material.Diffuse].Sample(sDiffuseSampler, input.texCoord);
+	}
+	float roughness = material.RoughnessFactor;
+	float metalness = material.MetalnessFactor;
+	if(material.RoughnessMetalness >= 0)
+	{
+		float4 roughnessMetalness = tTexture2DTable[material.RoughnessMetalness].Sample(sDiffuseSampler, input.texCoord);
+		metalness *= roughnessMetalness.b;
+		roughness *= roughnessMetalness.g;
+	}
+	float4 emissive = material.EmissiveFactor;
+	if(material.Emissive >= 0)
+	{
+		emissive *= tTexture2DTable[material.Emissive].Sample(sDiffuseSampler, input.texCoord);
+	}
 	float3 specular = 0.5f;
+
+	float3 N = normalize(input.normal);
+	if(material.Normal >= 0)
+	{
+		float3x3 TBN = float3x3(normalize(input.tangent), normalize(input.bitangent), N);
+		float3 tangentNormal = tTexture2DTable[material.Normal].Sample(sDiffuseSampler, input.texCoord).xyz;
+		N = TangentSpaceNormalMapping(tangentNormal, TBN, true);
+	}
 // Surface Shader END
 
-	float3x3 TBN = float3x3(normalize(input.tangent), normalize(input.bitangent), normalize(input.normal));
-	float3 N = TangentSpaceNormalMapping(tangentNormal, TBN, true);
-	float3 diffuseColor = ComputeDiffuseColor(diffuseSample.rgb, metalness);
-	float3 specularColor = ComputeF0(specular.r, diffuseSample.rgb, metalness);
+	float3 diffuseColor = ComputeDiffuseColor(baseColor.rgb, metalness);
+	float3 specularColor = ComputeF0(specular.r, baseColor.rgb, metalness);
 	float3 V = normalize(cViewData.ViewPosition.xyz - input.positionWS);
 
 	float ssrWeight = 0;	
@@ -303,8 +322,8 @@ void PSMain(PSInput input,
 	float4 scatteringTransmittance = tLightScattering.SampleLevel(sClampSampler, float3(screenUV, fogSlice), 0);
 	outRadiance = outRadiance * scatteringTransmittance.w + scatteringTransmittance.rgb;
 
-	outColor = float4(outRadiance, diffuseSample.a);
-    float reflectivity = 0.2*saturate(scatteringTransmittance.w * ambientOcclusion * Square(1 - roughness));
+	outColor = float4(outRadiance, baseColor.a);
+    float reflectivity = saturate(scatteringTransmittance.w * ambientOcclusion * Square(1 - roughness));
 	outNormalRoughness = float4(N, saturate(reflectivity - ssrWeight));
 	//outNormalRoughness = float4(input.normal, 1);
 }

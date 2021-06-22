@@ -265,7 +265,7 @@ void DemoApp::InitializeAssets(CommandContext& context)
 	RegisterDefaultTexture(DefaultTexture::Gray2D, "Default Gray", TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &GRAY);
 	uint32 DEFAULT_NORMAL = 0xFFFF8080;
 	RegisterDefaultTexture(DefaultTexture::Normal2D, "Default Normal", TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &DEFAULT_NORMAL);
-	uint32 DEFAULT_ROUGHNESS_METALNESS = 0xFF0080FF;
+	uint32 DEFAULT_ROUGHNESS_METALNESS = 0xFFFF80FF;
 	RegisterDefaultTexture(DefaultTexture::RoughnessMetalness, "Default Roughness/Metalness", TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &DEFAULT_ROUGHNESS_METALNESS);
 
 	uint32 BLACK_CUBE[6] = {};
@@ -284,9 +284,13 @@ void DemoApp::SetupScene(CommandContext& context)
 
 	{
 		std::unique_ptr<Mesh> pMesh = std::make_unique<Mesh>();
-		//pMesh->Load("Resources/Bistro_Godot/Bistro_Godot.gltf", m_pDevice.get(), &context, 3.0f);
-		//pMesh->Load("Resources/Bathroom/scene.gltf", m_pDevice.get(), &context, 0.2f);
-		pMesh->Load("Resources/sponza/sponza.dae", m_pDevice.get(), &context, 1.0f);
+		pMesh->Load("Resources/motorbike/scene.gltf", m_pDevice.get(), &context, 0.04f);
+		m_Meshes.push_back(std::move(pMesh));
+	}
+
+	{
+		std::unique_ptr<Mesh> pMesh = std::make_unique<Mesh>();
+		pMesh->Load("Resources/Sponza/Sponza.gltf", m_pDevice.get(), &context, 10.0f);
 		m_Meshes.push_back(std::move(pMesh));
 	}
 
@@ -306,13 +310,15 @@ void DemoApp::SetupScene(CommandContext& context)
 			b.VertexBufferDescriptor = m_pDevice->RegisterBindlessResource(subMesh.pVertexSRV);
 			b.IndexBufferDescriptor = m_pDevice->RegisterBindlessResource(subMesh.pIndexSRV);
 
-			b.Material.Diffuse = m_pDevice->RegisterBindlessResource(material.pDiffuseTexture, GetDefaultTexture(DefaultTexture::Gray2D));
-			b.Material.Normal = m_pDevice->RegisterBindlessResource(material.pNormalTexture, GetDefaultTexture(DefaultTexture::Normal2D));
-			b.Material.RoughnessMetalness = m_pDevice->RegisterBindlessResource(material.pRoughnessMetalnessTexture, GetDefaultTexture(DefaultTexture::RoughnessMetalness));
-			b.Material.Emissive = m_pDevice->RegisterBindlessResource(material.pEmissiveTexture, GetDefaultTexture(DefaultTexture::Black2D));
+			b.Material.Diffuse = m_pDevice->RegisterBindlessResource(material.pDiffuseTexture);
+			b.Material.Normal = m_pDevice->RegisterBindlessResource(material.pNormalTexture);
+			b.Material.RoughnessMetalness = m_pDevice->RegisterBindlessResource(material.pRoughnessMetalnessTexture);
+			b.Material.Emissive = m_pDevice->RegisterBindlessResource(material.pEmissiveTexture);
 			b.Material.BaseColorFactor = material.BaseColorFactor;
 			b.Material.MetalnessFactor = material.MetalnessFactor;
 			b.Material.RoughnessFactor = material.RoughnessFactor;
+			b.Material.EmissiveFactor = material.EmissiveFactor;
+			b.Material.AlphaCutoff = material.AlphaCutoff;
 
 			b.BlendMode = material.IsTransparent ? Batch::Blending::AlphaMask : Batch::Blending::Opaque;
 		}
@@ -1825,6 +1831,64 @@ void DemoApp::UpdateTLAS(CommandContext& context)
 	{
 		ID3D12GraphicsCommandList4* pCmd = context.GetRaytracingCommandList();
 
+		for (auto& pMesh : m_Meshes)
+		{
+			for (int i = 0; i < pMesh->GetMeshCount(); ++i)
+			{
+				SubMesh& subMesh = pMesh->GetMesh(i);
+				if (!subMesh.pBLAS)
+				{
+					const Material& material = pMesh->GetMaterial(subMesh.MaterialId);
+					D3D12_RAYTRACING_GEOMETRY_DESC geometryDesc{};
+					geometryDesc.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
+					geometryDesc.Flags = D3D12_RAYTRACING_GEOMETRY_FLAG_NONE;
+					if (material.IsTransparent == false)
+					{
+						geometryDesc.Flags |= D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
+					}
+					geometryDesc.Triangles.IndexBuffer = subMesh.IndicesLocation.Location;
+					geometryDesc.Triangles.IndexCount = subMesh.IndicesLocation.Elements;
+					geometryDesc.Triangles.IndexFormat = DXGI_FORMAT_R32_UINT;
+					geometryDesc.Triangles.Transform3x4 = 0;
+					geometryDesc.Triangles.VertexBuffer.StartAddress = subMesh.VerticesLocation.Location;
+					geometryDesc.Triangles.VertexBuffer.StrideInBytes = subMesh.VerticesLocation.Stride;
+					geometryDesc.Triangles.VertexCount = subMesh.VerticesLocation.Elements;
+					geometryDesc.Triangles.VertexFormat = DXGI_FORMAT_R32G32B32_FLOAT;
+
+					D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS prebuildInfo{};
+					prebuildInfo.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
+					prebuildInfo.Flags =
+						D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE
+						| D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_COMPACTION;
+					prebuildInfo.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
+					prebuildInfo.NumDescs = 1;
+					prebuildInfo.pGeometryDescs = &geometryDesc;
+
+					D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO info{};
+					GetDevice()->GetRaytracingDevice()->GetRaytracingAccelerationStructurePrebuildInfo(&prebuildInfo, &info);
+
+					std::unique_ptr<Buffer> pBLASScratch = GetDevice()->CreateBuffer(BufferDesc::CreateByteAddress(Math::AlignUp<uint64>(info.ScratchDataSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT), BufferFlag::UnorderedAccess), "BLAS Scratch Buffer");
+					std::unique_ptr<Buffer> pBLAS = GetDevice()->CreateBuffer(BufferDesc::CreateByteAddress(Math::AlignUp<uint64>(info.ResultDataMaxSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT), BufferFlag::UnorderedAccess | BufferFlag::AccelerationStructure), "BLAS Buffer");
+
+					D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC asDesc{};
+					asDesc.Inputs = prebuildInfo;
+					asDesc.DestAccelerationStructureData = pBLAS->GetGpuHandle();
+					asDesc.ScratchAccelerationStructureData = pBLASScratch->GetGpuHandle();
+					asDesc.SourceAccelerationStructureData = 0;
+
+					pCmd->BuildRaytracingAccelerationStructure(&asDesc, 0, nullptr);
+					context.InsertUavBarrier(subMesh.pBLAS);
+					context.FlushResourceBarriers();
+
+					subMesh.pBLAS = pBLAS.release();
+					if (0) //#todo: Can delete scratch buffer if no upload is required
+					{
+						subMesh.pBLASScratch = pBLASScratch.release();
+					}
+				}
+			}
+		}
+
 		bool isUpdate = m_pTLAS != nullptr;
 
 		D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAGS buildFlags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
@@ -1843,6 +1907,12 @@ void DemoApp::UpdateTLAS(CommandContext& context)
 			}
 
 			const SubMesh& subMesh = *batch.pMesh;
+
+			if (!subMesh.pBLAS)
+			{
+				continue;
+			}
+
 			D3D12_RAYTRACING_INSTANCE_DESC instanceDesc{};
 			instanceDesc.AccelerationStructure = subMesh.pBLAS->GetGpuHandle();
 			instanceDesc.Flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE;

@@ -324,7 +324,7 @@ int GraphicsDevice::RegisterBindlessResource(ResourceView* pResourceView, Resour
 		m_ViewToDescriptorIndex[pResourceView] = handle.HeapIndex;
 		return handle.HeapIndex;
 	}
-	return pFallback ? RegisterBindlessResource(pFallback) : 0;
+	return pFallback ? RegisterBindlessResource(pFallback) : -1;
 }
 
 int GraphicsDevice::RegisterBindlessResource(Texture* pTexture, Texture* pFallback /*= nullptr*/)

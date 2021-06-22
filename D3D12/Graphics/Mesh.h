@@ -33,8 +33,10 @@ struct SubMeshInstance
 struct Material
 {
 	Color BaseColorFactor = Color(1, 1, 1, 1);
+	Color EmissiveFactor = Color(0, 0, 0, 1);
 	float MetalnessFactor = 1.0f;
 	float RoughnessFactor = 1.0f;
+	float AlphaCutoff = 0.5f;
 	Texture* pDiffuseTexture = nullptr;
 	Texture* pNormalTexture = nullptr;
 	Texture* pRoughnessMetalnessTexture = nullptr;
@@ -48,7 +50,7 @@ public:
 	~Mesh();
 	bool Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* pContext, float scale = 1.0f);
 	int GetMeshCount() const { return (int)m_Meshes.size(); }
-	const SubMesh& GetMesh(const int index) const { return m_Meshes[index]; }
+	SubMesh& GetMesh(const int index) { return m_Meshes[index]; }
 	const Material& GetMaterial(int materialId) const { return m_Materials[materialId]; }
 	const std::vector<SubMeshInstance>& GetMeshInstances() const { return m_MeshInstances; }
 

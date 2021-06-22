@@ -72,8 +72,10 @@ struct MaterialData
     int RoughnessMetalness;
 	int Emissive;
     float4 BaseColorFactor;
+    float4 EmissiveFactor;
 	float MetalnessFactor;
 	float RoughnessFactor;
+    float AlphaCutoff;
 };
 
 #define MAX_SHADOW_CASTERS 32

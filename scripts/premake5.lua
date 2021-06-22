@@ -114,12 +114,6 @@ workspace (ENGINE_NAME)
 		postbuildcommands { ("{COPY} \"$(SolutionDir)Libraries\\Pix\\bin\\WinPixEventRuntime.dll\" \"$(OutDir)\"") }
 		links { "WinPixEventRuntime" }
 
-		-- Assimp
-		includedirs (ROOT .. "Libraries/Assimp/include")
-		libdirs	(ROOT .. "Libraries/Assimp/lib/x64")
-		postbuildcommands { ("{COPY} \"$(SolutionDir)Libraries\\Assimp\\bin\\x64\\assimp-vc142-mt.dll\" \"$(OutDir)\"") }
-		links { "assimp-vc142-mt" }
-
 		-- DXC
 		links { "dxcompiler" }
 		libdirs	(ROOT .. "Libraries/Dxc/lib/")

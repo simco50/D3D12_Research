@@ -36,8 +36,10 @@ struct MaterialData
 	int RoughnessMetalness;
 	int Emissive;
 	Color BaseColorFactor;
+	Color EmissiveFactor;
 	float MetalnessFactor;
 	float RoughnessFactor;
+	float AlphaCutoff;
 };
 
 struct Batch

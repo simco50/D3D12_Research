@@ -48,7 +48,8 @@ PSInput VSMain(uint VertexId : SV_VertexID)
 
 void PSMain(PSInput input)
 {
-	if(tTexture2DTable[cObjectData.Material.Diffuse].Sample(sDiffuseSampler, input.texCoord).a < 0.5f)
+	MaterialData material = cObjectData.Material;
+	if(tTexture2DTable[material.Diffuse].Sample(sDiffuseSampler, input.texCoord).a < material.AlphaCutoff)
 	{
 		discard;
 	}
