@@ -1,4 +1,5 @@
 #pragma once
+#include "ShaderCommon.h"
 
 enum class LightType
 {
@@ -10,34 +11,6 @@ enum class LightType
 
 struct Light
 {
-	enum Flags
-	{
-		None =						0,
-		Enabled =					1 << 0,
-		Shadows =					1 << 1,
-		Volumetric =				1 << 2,
-		PointAttenuation =			1 << 3,
-		DirectionalAttenuation =	1 << 4,
-
-		PointLight =				PointAttenuation,
-		SpotLight =					PointAttenuation | DirectionalAttenuation,
-		DirectionalLight =			None,
-	};
-
-	struct RenderData
-	{
-		Vector3 Position = Vector3::Zero;
-		uint32 Flags = 0;
-		Vector3 Direction = Vector3::Forward;
-		uint32 Colour = 0xFFFFFFFF;
-		Vector2 SpotlightAngles = Vector2::Zero;
-		float Intensity = 1.0f;
-		float Range = 1.0f;
-		int32 ShadowIndex = -1;
-		float InvShadowSize = 0;
-		int LightTexture = -1;
-	};
-	
 	Vector3 Position = Vector3::Zero;
 	Vector3 Direction = Vector3::Forward;
 	LightType Type = LightType::MAX;
@@ -52,14 +25,14 @@ struct Light
 	int ShadowMapSize = 512;
 	bool CastShadows = false;
 
-	RenderData GetData() const
+	ShaderInterop::Light GetData() const
 	{
-		RenderData data;
+		ShaderInterop::Light data;
 		data.Position = Position;
 		data.Direction = Direction;
 		data.SpotlightAngles.x = cos(PenumbraAngleDegrees * Math::DegreesToRadians / 2.0f);
 		data.SpotlightAngles.y = cos(UmbraAngleDegrees * Math::DegreesToRadians / 2.0f);
-		data.Colour = Math::EncodeColor(Colour);
+		data.Color = Math::EncodeColor(Colour);
 		data.Intensity = Intensity;
 		data.Range = Range;
 		data.ShadowIndex = CastShadows ? ShadowIndex : -1;
@@ -67,27 +40,27 @@ struct Light
 		data.LightTexture = LightTexture;
 		if (VolumetricLighting)
 		{
-			data.Flags |= Flags::Volumetric;
+			data.Flags |= ShaderInterop::LF_Volumetrics;
 		}
 		if (Intensity > 0)
 		{
-			data.Flags |= Flags::Enabled;
+			data.Flags |= ShaderInterop::LF_Enabled;
 		}
 		if (CastShadows)
 		{
-			data.Flags |= Flags::Shadows;
+			data.Flags |= ShaderInterop::LF_CastShadow;
 		}
 		if (Type == LightType::Point)
 		{
-			data.Flags |= Flags::PointLight;
+			data.Flags |= ShaderInterop::LF_PointLight;
 		}
 		else if (Type == LightType::Spot)
 		{
-			data.Flags |= Flags::SpotLight;
+			data.Flags |= ShaderInterop::LF_SpotLight;
 		}
 		else if (Type == LightType::Directional)
 		{
-			data.Flags |= Flags::DirectionalLight;
+			data.Flags |= ShaderInterop::LF_DirectionalLight;
 		}
 		return data;
 	}

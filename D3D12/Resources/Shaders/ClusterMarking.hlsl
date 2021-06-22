@@ -1,17 +1,18 @@
 #include "Common.hlsli"
 #include "CommonBindings.hlsli"
 
-#define RootSig "CBV(b0, visibility=SHADER_VISIBILITY_VERTEX), " \
+#define RootSig \
+				"RootConstants(num32BitConstants=2, b0), " \
 				"CBV(b1, visibility=SHADER_VISIBILITY_ALL), " \
+				"DescriptorTable(SRV(t11, numDescriptors = 1)), " \
 				"DescriptorTable(UAV(u1, numDescriptors = 1), visibility = SHADER_VISIBILITY_PIXEL), " \
 				GLOBAL_BINDLESS_TABLE ", " \
 				"StaticSampler(s0, filter=FILTER_MIN_MAG_MIP_LINEAR, visibility = SHADER_VISIBILITY_PIXEL)"
 
 struct ObjectData
 {
-    float4x4 World;
-    MaterialData Material;
-	uint VertexBuffer;
+	uint Mesh;
+	uint Material;
 };
 
 struct ViewData
@@ -53,8 +54,9 @@ struct PSInput
 PSInput MarkClusters_VS(uint VertexId : SV_VertexID)
 {
     PSInput output = (PSInput)0;
-	VSInput input = tBufferTable[cObjectData.VertexBuffer].Load<VSInput>(VertexId * sizeof(VSInput));
-    float4 wPos = mul(float4(input.position, 1), cObjectData.World);
+    MeshData mesh = tMeshes[cObjectData.Mesh];
+	VSInput input = tBufferTable[mesh.VertexBuffer].Load<VSInput>(VertexId * sizeof(VSInput));
+    float4 wPos = mul(float4(input.position, 1), mesh.World);
     output.positionVS = mul(wPos, cViewData.View);
     output.position = mul(wPos, cViewData.ViewProjection);
     output.texCoord = input.texCoord;

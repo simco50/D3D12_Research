@@ -3,20 +3,20 @@
 
 #define BLOCK_SIZE 16
 
-#define RootSig "CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \
+#define RootSig \
+				"RootConstants(num32BitConstants=2, b0), " \
 				"CBV(b1, visibility=SHADER_VISIBILITY_ALL), " \
 				"CBV(b2, visibility=SHADER_VISIBILITY_PIXEL), " \
 				GLOBAL_BINDLESS_TABLE ", " \
-				"DescriptorTable(SRV(t2, numDescriptors = 8), visibility=SHADER_VISIBILITY_PIXEL), " \
+				"DescriptorTable(SRV(t2, numDescriptors = 10)), " \
 				"StaticSampler(s0, filter=FILTER_ANISOTROPIC, maxAnisotropy = 4, visibility = SHADER_VISIBILITY_PIXEL), " \
 				"StaticSampler(s1, filter=FILTER_MIN_MAG_MIP_LINEAR, addressU = TEXTURE_ADDRESS_CLAMP, addressV = TEXTURE_ADDRESS_CLAMP, visibility = SHADER_VISIBILITY_PIXEL), " \
 				"StaticSampler(s2, filter=FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT, visibility = SHADER_VISIBILITY_PIXEL, comparisonFunc=COMPARISON_GREATER), " \
 
 struct PerObjectData
 {
-	float4x4 World;
-	MaterialData Material;
-	int VertexBuffer;
+	uint Mesh;
+	uint Material;
 };
 
 struct PerViewData
@@ -172,14 +172,15 @@ LightResult DoLight(float4 pos, float3 worldPos, float3 N, float3 V, float3 diff
 PSInput VSMain(uint VertexId : SV_VertexID)
 {
 	PSInput result;
-	VSInput input = tBufferTable[cObjectData.VertexBuffer].Load<VSInput>(VertexId * sizeof(VSInput));
-	result.positionWS = mul(float4(input.position, 1.0f), cObjectData.World).xyz;
+    MeshData mesh = tMeshes[cObjectData.Mesh];
+	VSInput input = tBufferTable[mesh.VertexBuffer].Load<VSInput>(VertexId * sizeof(VSInput));
+	result.positionWS = mul(float4(input.position, 1.0f), mesh.World).xyz;
 	result.positionVS = mul(float4(result.positionWS, 1.0f), cViewData.View).xyz;
 	result.position = mul(float4(result.positionWS, 1.0f), cViewData.ViewProjection);
 	result.texCoord = input.texCoord;
-	result.normal = normalize(mul(input.normal, (float3x3)cObjectData.World));
-	result.tangent = normalize(mul(input.tangent, (float3x3)cObjectData.World));
-	result.bitangent = normalize(mul(input.bitangent, (float3x3)cObjectData.World));
+	result.normal = normalize(mul(input.normal, (float3x3)mesh.World));
+	result.tangent = normalize(mul(input.tangent, (float3x3)mesh.World));
+	result.bitangent = normalize(mul(input.bitangent, (float3x3)mesh.World));
 	return result;
 }
 
@@ -272,7 +273,7 @@ void PSMain(PSInput input,
 	float ambientOcclusion = tAO.SampleLevel(sDiffuseSampler, screenUV, 0).r;
 
 // Surface Shader BEGIN
-	MaterialData material = cObjectData.Material;
+	MaterialData material = tMaterials[cObjectData.Material];
 
 	float4 baseColor = material.BaseColorFactor;
 	if(material.Diffuse >= 0)

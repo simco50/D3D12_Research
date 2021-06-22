@@ -62,39 +62,21 @@ void RTReflections::Execute(RGGraph& graph, const SceneData& sceneData)
 			bindingTable.BindMissShader("ShadowMiss", 1);
 			bindingTable.BindHitGroup("ReflectionHitGroup", 0);
 
-			struct HitData
-			{
-				MaterialData Material;
-				uint32 VertexBuffer;
-				uint32 IndexBuffer;
-			};
-
-			DynamicAllocation allocation = context.AllocateTransientMemory(sizeof(HitData) * sceneData.Batches.size());
-			HitData* pCurrent = (HitData*)allocation.pMappedMemory;
-
-			for (const Batch& b : sceneData.Batches)
-			{
-				HitData& hitData = *pCurrent;
-				hitData.Material = b.Material;
-				hitData.VertexBuffer = b.VertexBufferDescriptor;
-				hitData.IndexBuffer = b.IndexBufferDescriptor;
-				++pCurrent;
-			}
-
 			const D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
 				sceneData.pLightBuffer->GetSRV()->GetDescriptor(),
 				sceneData.pLightBuffer->GetSRV()->GetDescriptor() /*dummy*/,
 				sceneData.pResolvedDepth->GetSRV()->GetDescriptor(),
 				m_pSceneColor->GetSRV()->GetDescriptor(),
 				sceneData.pResolvedNormals->GetSRV()->GetDescriptor(),
+				sceneData.pMaterialBuffer->GetSRV()->GetDescriptor(),
+				sceneData.pMeshBuffer->GetSRV()->GetDescriptor(),
 			};
 
 			context.SetComputeDynamicConstantBufferView(0, parameters);
 			context.SetComputeDynamicConstantBufferView(1, *sceneData.pShadowData);
 			context.BindResource(2, 0, sceneData.pResolvedTarget->GetUAV());
 			context.BindResources(3, 0, srvs, ARRAYSIZE(srvs));
-			context.SetComputeRootSRV(4, allocation.GpuHandle);
-			context.BindResourceTable(5, sceneData.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Compute);
+			context.BindResourceTable(4, sceneData.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Compute);
 
 			context.DispatchRays(bindingTable, sceneData.pResolvedTarget->GetWidth(), sceneData.pResolvedTarget->GetHeight());
 		});

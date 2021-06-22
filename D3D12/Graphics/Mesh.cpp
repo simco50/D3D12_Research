@@ -5,16 +5,19 @@
 #include "Graphics/Core/Texture.h"
 #include "Graphics/Core/GraphicsBuffer.h"
 #include "Core/Paths.h"
+#include "Content/Image.h"
 
 #include "External/Stb/stb_image.h"
 #include "External/Stb/stb_image_write.h"
+#include "External/json/json.hpp"
+
+#pragma warning(push)
+#pragma warning(disable: 4702) //unreachable code
+#define TINYGLTF_NO_INCLUDE_JSON
 #define TINYGLTF_NO_EXTERNAL_IMAGE 
 #define TINYGLTF_NO_INCLUDE_STB_IMAGE
 #define TINYGLTF_NO_INCLUDE_STB_IMAGE_WRITE
 #define TINYGLTF_IMPLEMENTATION
-
-#pragma warning(push)
-#pragma warning(disable: 4702) //unreachable code
 #include "External/tinygltf/tiny_gltf.h"
 #pragma warning(pop)
 
@@ -135,10 +138,23 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 					StringHash pathHash = StringHash(image.uri.c_str());
 					pathHash.Combine((int)srgb);
 					auto it = textureMap.find(pathHash);
+					std::unique_ptr<Texture> pTex = std::make_unique<Texture>(pDevice, image.uri.c_str());
 					if (it == textureMap.end())
 					{
-						std::unique_ptr<Texture> pTex = std::make_unique<Texture>(pDevice, image.name.c_str());
-						bool success = pTex->Create(pContext, Paths::Combine(Paths::GetDirectoryPath(pFilePath), image.uri).c_str(), srgb);
+						bool success = false;
+						if (image.uri.empty())
+						{
+							Image img;
+							img.SetSize(image.width, image.height, 4);
+							if (img.SetData(image.image.data()))
+							{
+								success = pTex->Create(pContext, img, srgb);
+							}
+						}
+						else
+						{
+							success = pTex->Create(pContext, Paths::Combine(Paths::GetDirectoryPath(pFilePath), image.uri).c_str(), srgb);
+						}
 						if (success)
 						{
 							m_Textures.push_back(std::move(pTex));

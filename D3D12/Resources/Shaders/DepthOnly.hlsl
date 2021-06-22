@@ -1,16 +1,17 @@
 #include "Common.hlsli"
 #include "CommonBindings.hlsli"
 
-#define RootSig "CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \
+#define RootSig \
+				"RootConstants(num32BitConstants=2, b0), " \
 				"CBV(b1, visibility=SHADER_VISIBILITY_VERTEX), " \
+				"DescriptorTable(SRV(t10, numDescriptors = 11)), " \
 				GLOBAL_BINDLESS_TABLE ", " \
 				"StaticSampler(s0, filter=FILTER_MIN_MAG_MIP_LINEAR, visibility = SHADER_VISIBILITY_PIXEL), "
 
 struct PerObjectData
 {
-	float4x4 World;
-	MaterialData Material;
-	uint VertexBuffer;
+	uint Mesh;
+	uint Material;
 };
 
 struct PerViewData
@@ -40,15 +41,16 @@ struct PSInput
 PSInput VSMain(uint VertexId : SV_VertexID)
 {
 	PSInput result = (PSInput)0;
-	VSInput input = tBufferTable[cObjectData.VertexBuffer].Load<VSInput>(VertexId * sizeof(VSInput));
-	result.position = mul(mul(float4(input.position, 1.0f), cObjectData.World), cViewData.ViewProjection);
+    MeshData mesh = tMeshes[cObjectData.Mesh];
+	VSInput input = tBufferTable[mesh.VertexBuffer].Load<VSInput>(VertexId * sizeof(VSInput));
+	result.position = mul(mul(float4(input.position, 1.0f), mesh.World), cViewData.ViewProjection);
 	result.texCoord = input.texCoord;
 	return result;
 }
 
 void PSMain(PSInput input)
 {
-	MaterialData material = cObjectData.Material;
+	MaterialData material = tMaterials[cObjectData.Material];
 	if(tTexture2DTable[material.Diffuse].Sample(sDiffuseSampler, input.texCoord).a < material.AlphaCutoff)
 	{
 		discard;

@@ -88,13 +88,17 @@ workspace (ENGINE_NAME)
 			(SOURCE_DIR .. "**.natvis"),
 			(SOURCE_DIR .. "**.hlsl*"),
 			(SOURCE_DIR .. "**.editorconfig"),
+			(SOURCE_DIR .. "Resources/Shaders/Interop/**")
 		}
 
 		vpaths
 		{
 			{["Shaders/Include"] = (SOURCE_DIR .. "**.hlsli")},
 			{["Shaders/Source"] = (SOURCE_DIR .. "**.hlsl")},
+			{["Shaders/Interop"] = (SOURCE_DIR .. "**/Interop/**.h")}
 		}
+
+		includedirs ("$(ProjectDir)Resources/Shaders/Interop")
 
 		filter ("files:" .. SOURCE_DIR .. "External/**")
 			flags { "NoPCH" }
