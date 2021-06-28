@@ -55,17 +55,15 @@ void DrawScene(CommandContext& context, const SceneData& scene, const Visibility
 
 	struct PerObjectData
 	{
-		Matrix World;
-		MaterialData Material;
-		uint32 VertexBuffer;
-	} objectData;
+		uint32 Mesh;
+		uint32 Material;
+	} ObjectData;
 
 	for (const Batch* b : meshes)
 	{
-		objectData.World = b->WorldMatrix;
-		objectData.Material = b->Material;
-		objectData.VertexBuffer = b->VertexBufferDescriptor;
-		context.SetGraphicsDynamicConstantBufferView(0, objectData);
+		ObjectData.Material = b->Material;
+		ObjectData.Mesh = b->Index;
+		context.SetGraphicsRootConstants(0, ObjectData);
 		context.SetIndexBuffer(b->pMesh->IndicesLocation);
 		context.DrawIndexed(b->pMesh->IndicesLocation.Elements, 0, 0);
 	}
@@ -265,7 +263,7 @@ void DemoApp::InitializeAssets(CommandContext& context)
 	RegisterDefaultTexture(DefaultTexture::Gray2D, "Default Gray", TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &GRAY);
 	uint32 DEFAULT_NORMAL = 0xFFFF8080;
 	RegisterDefaultTexture(DefaultTexture::Normal2D, "Default Normal", TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &DEFAULT_NORMAL);
-	uint32 DEFAULT_ROUGHNESS_METALNESS = 0xFF0080FF;
+	uint32 DEFAULT_ROUGHNESS_METALNESS = 0xFFFF80FF;
 	RegisterDefaultTexture(DefaultTexture::RoughnessMetalness, "Default Roughness/Metalness", TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &DEFAULT_ROUGHNESS_METALNESS);
 
 	uint32 BLACK_CUBE[6] = {};
@@ -284,60 +282,75 @@ void DemoApp::SetupScene(CommandContext& context)
 
 	{
 		std::unique_ptr<Mesh> pMesh = std::make_unique<Mesh>();
-		//pMesh->Load("Resources/Bistro_Godot/Bistro_Godot.gltf", m_pDevice.get(), &context, 3.0f);
-		//pMesh->Load("Resources/Bathroom/scene.gltf", m_pDevice.get(), &context, 0.2f);
-		pMesh->Load("Resources/sponza/sponza.dae", m_pDevice.get(), &context, 1.0f);
+		pMesh->Load("Resources/Sponza/Sponza.gltf", m_pDevice.get(), &context, 10.0f);
 		m_Meshes.push_back(std::move(pMesh));
 	}
 
-	for (uint32 j = 0; j < (uint32)m_Meshes.size(); ++j)
+	std::vector<ShaderInterop::MaterialData> materials;
+	std::vector<ShaderInterop::MeshData> meshes;
+
+	for (const auto& pMesh : m_Meshes)
 	{
-		auto& pMesh = m_Meshes[j];
 		for (const SubMeshInstance& node : pMesh->GetMeshInstances())
 		{
 			const SubMesh& subMesh = pMesh->GetMesh(node.MeshIndex);
 			const Material& material = pMesh->GetMaterial(subMesh.MaterialId);
-			m_SceneData.Batches.push_back(Batch{});
-			Batch& b = m_SceneData.Batches.back();
-			b.Index = (int)m_SceneData.Batches.size() - 1;
-			b.LocalBounds = subMesh.Bounds;
-			b.pMesh = &subMesh;
-			b.WorldMatrix = node.Transform;
-			b.VertexBufferDescriptor = m_pDevice->RegisterBindlessResource(subMesh.pVertexSRV);
-			b.IndexBufferDescriptor = m_pDevice->RegisterBindlessResource(subMesh.pIndexSRV);
+			Batch batch;
+			batch.Index = (int)m_SceneData.Batches.size();
+			batch.LocalBounds = subMesh.Bounds;
+			batch.pMesh = &subMesh;
+			batch.BlendMode = material.IsTransparent ? Batch::Blending::AlphaMask : Batch::Blending::Opaque;
+			batch.WorldMatrix = node.Transform;
+			batch.Material = (uint32)materials.size() + subMesh.MaterialId;
+			m_SceneData.Batches.push_back(batch);
 
-			b.Material.Diffuse = m_pDevice->RegisterBindlessResource(material.pDiffuseTexture, GetDefaultTexture(DefaultTexture::Gray2D));
-			b.Material.Normal = m_pDevice->RegisterBindlessResource(material.pNormalTexture, GetDefaultTexture(DefaultTexture::Normal2D));
-			b.Material.RoughnessMetalness = m_pDevice->RegisterBindlessResource(material.pRoughnessMetalnessTexture, GetDefaultTexture(DefaultTexture::RoughnessMetalness));
-			b.Material.Emissive = m_pDevice->RegisterBindlessResource(material.pEmissiveTexture, GetDefaultTexture(DefaultTexture::Black2D));
-			b.Material.BaseColorFactor = material.BaseColorFactor;
-			b.Material.MetalnessFactor = material.MetalnessFactor;
-			b.Material.RoughnessFactor = material.RoughnessFactor;
-
-			b.BlendMode = material.IsTransparent ? Batch::Blending::AlphaMask : Batch::Blending::Opaque;
+			ShaderInterop::MeshData mesh;
+			mesh.IndexBuffer = m_pDevice->RegisterBindlessResource(subMesh.pIndexSRV);
+			mesh.VertexBuffer = m_pDevice->RegisterBindlessResource(subMesh.pVertexSRV);
+			mesh.Material = (uint32)materials.size() + subMesh.MaterialId;
+			mesh.World = node.Transform;
+			meshes.push_back(mesh);
 		}
+		for (const Material& material : pMesh->GetMaterials())
+		{
+			ShaderInterop::MaterialData materialData;
+			materialData.Diffuse = m_pDevice->RegisterBindlessResource(material.pDiffuseTexture);
+			materialData.Normal = m_pDevice->RegisterBindlessResource(material.pNormalTexture);
+			materialData.RoughnessMetalness = m_pDevice->RegisterBindlessResource(material.pRoughnessMetalnessTexture);
+			materialData.Emissive = m_pDevice->RegisterBindlessResource(material.pEmissiveTexture);
+			materialData.BaseColorFactor = material.BaseColorFactor;
+			materialData.MetalnessFactor = material.MetalnessFactor;
+			materialData.RoughnessFactor = material.RoughnessFactor;
+			materialData.EmissiveFactor = material.EmissiveFactor;
+			materialData.AlphaCutoff = material.AlphaCutoff;
+			materials.push_back(materialData);
+		}
+	}
+
+	m_pMeshBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateStructured((int)meshes.size(), sizeof(ShaderInterop::MeshData), BufferFlag::ShaderResource), "Meshes");
+	m_pMeshBuffer->SetData(&context, meshes.data(), meshes.size() * sizeof(ShaderInterop::MeshData));
+
+	m_pMaterialBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateStructured((int)materials.size(), sizeof(ShaderInterop::MaterialData), BufferFlag::ShaderResource), "Materials");
+	m_pMaterialBuffer->SetData(&context, materials.data(), materials.size() * sizeof(ShaderInterop::MaterialData));
+
+	{
+		Vector3 Position(-150, 160, -10);
+		Vector3 Direction;
+		Position.Normalize(Direction);
+		Light sunLight = Light::Directional(Position, -Direction, 10);
+		sunLight.CastShadows = true;
+		sunLight.VolumetricLighting = true;
+		m_Lights.push_back(sunLight);
 	}
 
 	{
-		{
-			Vector3 Position(-150, 160, -10);
-			Vector3 Direction;
-			Position.Normalize(Direction);
-			Light sunLight = Light::Directional(Position, -Direction, 10);
-			sunLight.CastShadows = true;
-			sunLight.VolumetricLighting = true;
-			m_Lights.push_back(sunLight);
-		}
-
-		{
-			Light spotLight = Light::Spot(Vector3(-5, 16, 16), 800, Vector3(0, 1, 0), 90, 70, 1000, Color(1.0f, 0.7f, 0.3f, 1.0f));
-			spotLight.CastShadows = true;
-			spotLight.LightTexture = m_pDevice->RegisterBindlessResource(m_pLightCookie.get(), GetDefaultTexture(DefaultTexture::White2D));
-			spotLight.VolumetricLighting = true;
-			m_Lights.push_back(spotLight);
-		}
-		m_pLightBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateStructured((int)m_Lights.size(), sizeof(Light), BufferFlag::ShaderResource), "Lights");
+		Light spotLight = Light::Spot(Vector3(-5, 16, 16), 800, Vector3(0, 1, 0), 90, 70, 1000, Color(1.0f, 0.7f, 0.3f, 1.0f));
+		spotLight.CastShadows = true;
+		spotLight.LightTexture = m_pDevice->RegisterBindlessResource(m_pLightCookie.get(), GetDefaultTexture(DefaultTexture::White2D));
+		spotLight.VolumetricLighting = true;
+		m_Lights.push_back(spotLight);
 	}
+	m_pLightBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateStructured((int)m_Lights.size(), sizeof(Light), BufferFlag::ShaderResource), "Lights");
 }
 
 void DemoApp::Update()
@@ -432,7 +445,7 @@ void DemoApp::Update()
 	// SHADOW MAP PARTITIONING
 	/////////////////////////////////////////
 
-	ShadowData shadowData;
+	ShaderInterop::ShadowData shadowData;
 	int shadowIndex = 0;
 
 	{
@@ -572,7 +585,8 @@ void DemoApp::Update()
 						lightViewProjection = shadowView * projectionMatrix;
 					}
 
-					shadowData.CascadeDepths[shadowIndex] = currentCascadeSplit * (farPlane - nearPlane) + nearPlane;
+					float* values = &shadowData.CascadeDepths.x;
+					values[shadowIndex] = currentCascadeSplit * (farPlane - nearPlane) + nearPlane;
 					shadowData.LightViewProjections[shadowIndex++] = lightViewProjection;
 				}
 			}
@@ -638,6 +652,8 @@ void DemoApp::Update()
 	m_SceneData.pResolvedDepth = GetResolvedDepthStencil();
 	m_SceneData.pRenderTarget = GetCurrentRenderTarget();
 	m_SceneData.pLightBuffer = m_pLightBuffer.get();
+	m_SceneData.pMaterialBuffer = m_pMaterialBuffer.get();
+	m_SceneData.pMeshBuffer = m_pMeshBuffer.get();
 	m_SceneData.pCamera = m_pCamera.get();
 	m_SceneData.pShadowData = &shadowData;
 	m_SceneData.pAO = m_pAmbientOcclusion.get();
@@ -739,8 +755,8 @@ void DemoApp::Update()
 	Data.DepthStencil = setupLights.Write(Data.DepthStencil);
 	setupLights.Bind([=](CommandContext& renderContext, const RGPassResources& /*resources*/)
 		{
-			DynamicAllocation allocation = renderContext.AllocateTransientMemory(m_Lights.size() * sizeof(Light::RenderData));
-			Light::RenderData* pTarget = (Light::RenderData*)allocation.pMappedMemory;
+			DynamicAllocation allocation = renderContext.AllocateTransientMemory(m_Lights.size() * sizeof(ShaderInterop::Light));
+			ShaderInterop::Light* pTarget = (ShaderInterop::Light*)allocation.pMappedMemory;
 			for (const Light& light : m_Lights)
 			{
 				*pTarget = light.GetData();
@@ -769,7 +785,13 @@ void DemoApp::Update()
 
 			renderContext.SetGraphicsRootSignature(m_pDepthPrepassRS.get());
 
-			renderContext.BindResourceTable(2, m_SceneData.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Graphics);
+			const D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
+				m_SceneData.pMaterialBuffer->GetSRV()->GetDescriptor(),
+				m_SceneData.pMeshBuffer->GetSRV()->GetDescriptor(),
+			};
+
+			renderContext.BindResources(2, 0, srvs, ARRAYSIZE(srvs));
+			renderContext.BindResourceTable(3, m_SceneData.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Graphics);
 
 			struct ViewData
 			{
@@ -958,7 +980,13 @@ void DemoApp::Update()
 
 					viewData.ViewProjection = shadowData.LightViewProjections[i];
 					context.SetGraphicsDynamicConstantBufferView(1, viewData);
-					context.BindResourceTable(2, m_SceneData.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Graphics);
+
+					const D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
+						m_SceneData.pMaterialBuffer->GetSRV()->GetDescriptor(),
+						m_SceneData.pMeshBuffer->GetSRV()->GetDescriptor(),
+					};
+					context.BindResources(2, 0, srvs, ARRAYSIZE(srvs));
+					context.BindResourceTable(3, m_SceneData.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Graphics);
 
 					VisibilityMask mask;
 					mask.SetAll();
@@ -1825,6 +1853,64 @@ void DemoApp::UpdateTLAS(CommandContext& context)
 	{
 		ID3D12GraphicsCommandList4* pCmd = context.GetRaytracingCommandList();
 
+		for (auto& pMesh : m_Meshes)
+		{
+			for (int i = 0; i < pMesh->GetMeshCount(); ++i)
+			{
+				SubMesh& subMesh = pMesh->GetMesh(i);
+				if (!subMesh.pBLAS)
+				{
+					const Material& material = pMesh->GetMaterial(subMesh.MaterialId);
+					D3D12_RAYTRACING_GEOMETRY_DESC geometryDesc{};
+					geometryDesc.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
+					geometryDesc.Flags = D3D12_RAYTRACING_GEOMETRY_FLAG_NONE;
+					if (material.IsTransparent == false)
+					{
+						geometryDesc.Flags |= D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
+					}
+					geometryDesc.Triangles.IndexBuffer = subMesh.IndicesLocation.Location;
+					geometryDesc.Triangles.IndexCount = subMesh.IndicesLocation.Elements;
+					geometryDesc.Triangles.IndexFormat = DXGI_FORMAT_R32_UINT;
+					geometryDesc.Triangles.Transform3x4 = 0;
+					geometryDesc.Triangles.VertexBuffer.StartAddress = subMesh.VerticesLocation.Location;
+					geometryDesc.Triangles.VertexBuffer.StrideInBytes = subMesh.VerticesLocation.Stride;
+					geometryDesc.Triangles.VertexCount = subMesh.VerticesLocation.Elements;
+					geometryDesc.Triangles.VertexFormat = DXGI_FORMAT_R32G32B32_FLOAT;
+
+					D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS prebuildInfo{};
+					prebuildInfo.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
+					prebuildInfo.Flags =
+						D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE
+						| D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_COMPACTION;
+					prebuildInfo.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
+					prebuildInfo.NumDescs = 1;
+					prebuildInfo.pGeometryDescs = &geometryDesc;
+
+					D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO info{};
+					GetDevice()->GetRaytracingDevice()->GetRaytracingAccelerationStructurePrebuildInfo(&prebuildInfo, &info);
+
+					std::unique_ptr<Buffer> pBLASScratch = GetDevice()->CreateBuffer(BufferDesc::CreateByteAddress(Math::AlignUp<uint64>(info.ScratchDataSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT), BufferFlag::UnorderedAccess), "BLAS Scratch Buffer");
+					std::unique_ptr<Buffer> pBLAS = GetDevice()->CreateBuffer(BufferDesc::CreateByteAddress(Math::AlignUp<uint64>(info.ResultDataMaxSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT), BufferFlag::UnorderedAccess | BufferFlag::AccelerationStructure), "BLAS Buffer");
+
+					D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC asDesc{};
+					asDesc.Inputs = prebuildInfo;
+					asDesc.DestAccelerationStructureData = pBLAS->GetGpuHandle();
+					asDesc.ScratchAccelerationStructureData = pBLASScratch->GetGpuHandle();
+					asDesc.SourceAccelerationStructureData = 0;
+
+					pCmd->BuildRaytracingAccelerationStructure(&asDesc, 0, nullptr);
+					context.InsertUavBarrier(subMesh.pBLAS);
+					context.FlushResourceBarriers();
+
+					subMesh.pBLAS = pBLAS.release();
+					if (0) //#todo: Can delete scratch buffer if no upload is required
+					{
+						subMesh.pBLASScratch = pBLASScratch.release();
+					}
+				}
+			}
+		}
+
 		bool isUpdate = m_pTLAS != nullptr;
 
 		D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAGS buildFlags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
@@ -1843,6 +1929,12 @@ void DemoApp::UpdateTLAS(CommandContext& context)
 			}
 
 			const SubMesh& subMesh = *batch.pMesh;
+
+			if (!subMesh.pBLAS)
+			{
+				continue;
+			}
+
 			D3D12_RAYTRACING_INSTANCE_DESC instanceDesc{};
 			instanceDesc.AccelerationStructure = subMesh.pBLAS->GetGpuHandle();
 			instanceDesc.Flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE;

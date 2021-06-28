@@ -12,6 +12,8 @@ Texture2D tAO :                                             register(t6);
 Texture2D tDepth :                                          register(t7);
 Texture2D tPreviousSceneColor :                             register(t8);
 Texture2D tSceneNormals :                                   register(t9);
+StructuredBuffer<MaterialData> tMaterials :                 register(t10);
+StructuredBuffer<MeshData> tMeshes :                        register(t11);
 
 //Samplers
 SamplerState sDiffuseSampler :                              register(s0);

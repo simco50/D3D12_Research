@@ -88,13 +88,17 @@ workspace (ENGINE_NAME)
 			(SOURCE_DIR .. "**.natvis"),
 			(SOURCE_DIR .. "**.hlsl*"),
 			(SOURCE_DIR .. "**.editorconfig"),
+			(SOURCE_DIR .. "Resources/Shaders/Interop/**")
 		}
 
 		vpaths
 		{
 			{["Shaders/Include"] = (SOURCE_DIR .. "**.hlsli")},
 			{["Shaders/Source"] = (SOURCE_DIR .. "**.hlsl")},
+			{["Shaders/Interop"] = (SOURCE_DIR .. "**/Interop/**.h")}
 		}
+
+		includedirs ("$(ProjectDir)Resources/Shaders/Interop")
 
 		filter ("files:" .. SOURCE_DIR .. "External/**")
 			flags { "NoPCH" }
@@ -113,12 +117,6 @@ workspace (ENGINE_NAME)
 		libdirs (ROOT .. "Libraries/Pix/lib")
 		postbuildcommands { ("{COPY} \"$(SolutionDir)Libraries\\Pix\\bin\\WinPixEventRuntime.dll\" \"$(OutDir)\"") }
 		links { "WinPixEventRuntime" }
-
-		-- Assimp
-		includedirs (ROOT .. "Libraries/Assimp/include")
-		libdirs	(ROOT .. "Libraries/Assimp/lib/x64")
-		postbuildcommands { ("{COPY} \"$(SolutionDir)Libraries\\Assimp\\bin\\x64\\assimp-vc142-mt.dll\" \"$(OutDir)\"") }
-		links { "assimp-vc142-mt" }
 
 		-- DXC
 		links { "dxcompiler" }

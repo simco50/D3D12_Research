@@ -167,8 +167,9 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 			perFrameParameters.ViewProjection = resources.pCamera->GetViewProjection();
 
 			context.SetGraphicsDynamicConstantBufferView(1, perFrameParameters);
-			context.BindResource(2, 0, m_pUniqueClusters->GetUAV());
-			context.BindResourceTable(3, resources.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Graphics);
+			context.BindResource(2, 0, resources.pMeshBuffer->GetSRV());
+			context.BindResource(3, 0, m_pUniqueClusters->GetUAV());
+			context.BindResourceTable(4, resources.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Graphics);
 
 			{
 				GPU_PROFILE_SCOPE("Opaque", &context);
@@ -443,6 +444,9 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 				resources.pAO->GetSRV()->GetDescriptor(),
 				resources.pResolvedDepth->GetSRV()->GetDescriptor(),
 				resources.pPreviousColor->GetSRV()->GetDescriptor(),
+				resources.pMaterialBuffer->GetSRV()->GetDescriptor(),
+				resources.pMaterialBuffer->GetSRV()->GetDescriptor(),
+				resources.pMeshBuffer->GetSRV()->GetDescriptor(),
 			};
 			context.BindResources(4, 0, srvs, ARRAYSIZE(srvs));
 

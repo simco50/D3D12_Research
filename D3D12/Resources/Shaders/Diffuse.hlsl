@@ -3,20 +3,20 @@
 
 #define BLOCK_SIZE 16
 
-#define RootSig "CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \
+#define RootSig \
+				"RootConstants(num32BitConstants=2, b0), " \
 				"CBV(b1, visibility=SHADER_VISIBILITY_ALL), " \
 				"CBV(b2, visibility=SHADER_VISIBILITY_PIXEL), " \
 				GLOBAL_BINDLESS_TABLE ", " \
-				"DescriptorTable(SRV(t2, numDescriptors = 8), visibility=SHADER_VISIBILITY_PIXEL), " \
+				"DescriptorTable(SRV(t2, numDescriptors = 10)), " \
 				"StaticSampler(s0, filter=FILTER_ANISOTROPIC, maxAnisotropy = 4, visibility = SHADER_VISIBILITY_PIXEL), " \
 				"StaticSampler(s1, filter=FILTER_MIN_MAG_MIP_LINEAR, addressU = TEXTURE_ADDRESS_CLAMP, addressV = TEXTURE_ADDRESS_CLAMP, visibility = SHADER_VISIBILITY_PIXEL), " \
 				"StaticSampler(s2, filter=FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT, visibility = SHADER_VISIBILITY_PIXEL, comparisonFunc=COMPARISON_GREATER), " \
 
 struct PerObjectData
 {
-	float4x4 World;
-	MaterialData Material;
-	int VertexBuffer;
+	uint Mesh;
+	uint Material;
 };
 
 struct PerViewData
@@ -172,14 +172,15 @@ LightResult DoLight(float4 pos, float3 worldPos, float3 N, float3 V, float3 diff
 PSInput VSMain(uint VertexId : SV_VertexID)
 {
 	PSInput result;
-	VSInput input = tBufferTable[cObjectData.VertexBuffer].Load<VSInput>(VertexId * sizeof(VSInput));
-	result.positionWS = mul(float4(input.position, 1.0f), cObjectData.World).xyz;
+    MeshData mesh = tMeshes[cObjectData.Mesh];
+	VSInput input = tBufferTable[mesh.VertexBuffer].Load<VSInput>(VertexId * sizeof(VSInput));
+	result.positionWS = mul(float4(input.position, 1.0f), mesh.World).xyz;
 	result.positionVS = mul(float4(result.positionWS, 1.0f), cViewData.View).xyz;
 	result.position = mul(float4(result.positionWS, 1.0f), cViewData.ViewProjection);
 	result.texCoord = input.texCoord;
-	result.normal = normalize(mul(input.normal, (float3x3)cObjectData.World));
-	result.tangent = normalize(mul(input.tangent, (float3x3)cObjectData.World));
-	result.bitangent = normalize(mul(input.bitangent, (float3x3)cObjectData.World));
+	result.normal = normalize(mul(input.normal, (float3x3)mesh.World));
+	result.tangent = normalize(mul(input.tangent, (float3x3)mesh.World));
+	result.bitangent = normalize(mul(input.bitangent, (float3x3)mesh.World));
 	return result;
 }
 
@@ -272,20 +273,39 @@ void PSMain(PSInput input,
 	float ambientOcclusion = tAO.SampleLevel(sDiffuseSampler, screenUV, 0).r;
 
 // Surface Shader BEGIN
-	MaterialData material = cObjectData.Material;
-	float4 diffuseSample = material.BaseColorFactor * tTexture2DTable[material.Diffuse].Sample(sDiffuseSampler, input.texCoord);
-	float3 tangentNormal = tTexture2DTable[material.Normal].Sample(sDiffuseSampler, input.texCoord).xyz;
-	float4 roughnessMetalness = tTexture2DTable[material.RoughnessMetalness].Sample(sDiffuseSampler, input.texCoord);
-	float4 emissive = tTexture2DTable[material.Emissive].Sample(sDiffuseSampler, input.texCoord);
-	float metalness = material.MetalnessFactor * roughnessMetalness.b;
-	float roughness = material.RoughnessFactor * roughnessMetalness.g;
+	MaterialData material = tMaterials[cObjectData.Material];
+
+	float4 baseColor = material.BaseColorFactor;
+	if(material.Diffuse >= 0)
+	{
+		baseColor *= tTexture2DTable[material.Diffuse].Sample(sDiffuseSampler, input.texCoord);
+	}
+	float roughness = material.RoughnessFactor;
+	float metalness = material.MetalnessFactor;
+	if(material.RoughnessMetalness >= 0)
+	{
+		float4 roughnessMetalness = tTexture2DTable[material.RoughnessMetalness].Sample(sDiffuseSampler, input.texCoord);
+		metalness *= roughnessMetalness.b;
+		roughness *= roughnessMetalness.g;
+	}
+	float4 emissive = material.EmissiveFactor;
+	if(material.Emissive >= 0)
+	{
+		emissive *= tTexture2DTable[material.Emissive].Sample(sDiffuseSampler, input.texCoord);
+	}
 	float3 specular = 0.5f;
+
+	float3 N = normalize(input.normal);
+	if(material.Normal >= 0)
+	{
+		float3x3 TBN = float3x3(normalize(input.tangent), normalize(input.bitangent), N);
+		float3 tangentNormal = tTexture2DTable[material.Normal].Sample(sDiffuseSampler, input.texCoord).xyz;
+		N = TangentSpaceNormalMapping(tangentNormal, TBN, true);
+	}
 // Surface Shader END
 
-	float3x3 TBN = float3x3(normalize(input.tangent), normalize(input.bitangent), normalize(input.normal));
-	float3 N = TangentSpaceNormalMapping(tangentNormal, TBN, true);
-	float3 diffuseColor = ComputeDiffuseColor(diffuseSample.rgb, metalness);
-	float3 specularColor = ComputeF0(specular.r, diffuseSample.rgb, metalness);
+	float3 diffuseColor = ComputeDiffuseColor(baseColor.rgb, metalness);
+	float3 specularColor = ComputeF0(specular.r, baseColor.rgb, metalness);
 	float3 V = normalize(cViewData.ViewPosition.xyz - input.positionWS);
 
 	float ssrWeight = 0;	
@@ -303,8 +323,8 @@ void PSMain(PSInput input,
 	float4 scatteringTransmittance = tLightScattering.SampleLevel(sClampSampler, float3(screenUV, fogSlice), 0);
 	outRadiance = outRadiance * scatteringTransmittance.w + scatteringTransmittance.rgb;
 
-	outColor = float4(outRadiance, diffuseSample.a);
-    float reflectivity = 0.2*saturate(scatteringTransmittance.w * ambientOcclusion * Square(1 - roughness));
+	outColor = float4(outRadiance, baseColor.a);
+    float reflectivity = saturate(scatteringTransmittance.w * ambientOcclusion * Square(1 - roughness));
 	outNormalRoughness = float4(N, saturate(reflectivity - ssrWeight));
 	//outNormalRoughness = float4(input.normal, 1);
 }

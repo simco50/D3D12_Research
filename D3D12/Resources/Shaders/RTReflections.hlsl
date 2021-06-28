@@ -12,14 +12,12 @@ GlobalRootSignature GlobalRootSig =
 	"CBV(b0),"
 	"CBV(b2),"
 	"DescriptorTable(UAV(u0, numDescriptors = 1)),"
-	"DescriptorTable(SRV(t5, numDescriptors = 5)),"
-	"SRV(t10), "
+	"DescriptorTable(SRV(t5, numDescriptors = 7)),"
 	GLOBAL_BINDLESS_TABLE ", "
 	"StaticSampler(s0, filter=FILTER_MIN_MAG_LINEAR_MIP_POINT),"
 	"StaticSampler(s1, filter=FILTER_MIN_MAG_MIP_LINEAR, addressU = TEXTURE_ADDRESS_CLAMP, addressV = TEXTURE_ADDRESS_CLAMP), " \
 	"StaticSampler(s2, filter=FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT, comparisonFunc=COMPARISON_GREATER), " \
 };
-
 
 struct Vertex
 {
@@ -40,16 +38,8 @@ struct ViewData
 	uint TLASIndex;
 };
 
-struct HitData
-{
-	MaterialData Material;
-	uint VertexBuffer;
-	uint IndexBuffer;
-};
-
 RWTexture2D<float4> uOutput : register(u0);
 ConstantBuffer<ViewData> cViewData : register(b0);
-StructuredBuffer<HitData> tHitGroupData : register(t10);
 
 struct RAYPAYLOAD ReflectionRayPayload
 {
@@ -134,8 +124,8 @@ struct ShadingData
 
 Vertex GetVertexAttributes(float3 barycentrics)
 {
-	HitData hitData = tHitGroupData[InstanceID()];
-	uint3 indices = tBufferTable[hitData.IndexBuffer].Load<uint3>(PrimitiveIndex() * sizeof(uint3));
+	MeshData mesh = tMeshes[InstanceID()];
+	uint3 indices = tBufferTable[mesh.IndexBuffer].Load<uint3>(PrimitiveIndex() * sizeof(uint3));
 	Vertex vertexOut;
 	vertexOut.position = 0;
 	vertexOut.texCoord = 0;
@@ -144,7 +134,7 @@ Vertex GetVertexAttributes(float3 barycentrics)
 	vertexOut.bitangent = 0;
 	for(int i = 0; i < 3; ++i)
 	{
-		Vertex v = tBufferTable[hitData.VertexBuffer].Load<Vertex>(indices[i] * sizeof(Vertex));
+		Vertex v = tBufferTable[mesh.VertexBuffer].Load<Vertex>(indices[i] * sizeof(Vertex));
 		vertexOut.position += v.position * barycentrics[i];
 		vertexOut.texCoord += v.texCoord * barycentrics[i];
 		vertexOut.normal += v.normal * barycentrics[i];
@@ -161,32 +151,52 @@ Vertex GetVertexAttributes(float3 barycentrics)
 
 ShadingData GetShadingData(BuiltInTriangleIntersectionAttributes attrib, float3 cameraLocation, float mipLevel)
 {
-	HitData hitData = tHitGroupData[InstanceID()];
+	MeshData mesh = tMeshes[InstanceID()];
 	float3 barycentrics = float3((1.0f - attrib.barycentrics.x - attrib.barycentrics.y), attrib.barycentrics.x, attrib.barycentrics.y);
 	Vertex v = GetVertexAttributes(barycentrics);
 
-	MaterialData material = hitData.Material;
-	float4 diffuseSample = material.BaseColorFactor * tTexture2DTable[material.Diffuse].SampleLevel(sDiffuseSampler, v.texCoord, mipLevel);
-	float4 normalSample = tTexture2DTable[material.Normal].SampleLevel(sDiffuseSampler, v.texCoord, mipLevel);
-	float4 roughnessMetalnessSample = tTexture2DTable[material.RoughnessMetalness].SampleLevel(sDiffuseSampler, v.texCoord, mipLevel);
-	float metalness = material.MetalnessFactor * roughnessMetalnessSample.b;
-	float roughness = material.RoughnessFactor * roughnessMetalnessSample.g;
+// Surface Shader BEGIN
+	MaterialData material = tMaterials[mesh.Material];
+	float4 baseColor = material.BaseColorFactor;
+	if(material.Diffuse >= 0)
+	{
+		baseColor *= tTexture2DTable[material.Diffuse].SampleLevel(sDiffuseSampler, v.texCoord, mipLevel);
+	}
+	float metalness = material.MetalnessFactor;
+	float roughness = material.RoughnessFactor;
+	if(material.RoughnessMetalness >= 0)
+	{
+		float4 roughnessMetalnessSample = tTexture2DTable[material.RoughnessMetalness].SampleLevel(sDiffuseSampler, v.texCoord, mipLevel);
+	 	metalness *= roughnessMetalnessSample.b;
+	 	roughness *= roughnessMetalnessSample.g;
+	}
 	
-	float4 emissiveSample = tTexture2DTable[material.Emissive].SampleLevel(sDiffuseSampler, v.texCoord, mipLevel);
+	float3 emissive = material.EmissiveFactor.rgb;
+	if(material.Emissive >= 0)
+	{
+		emissive *= tTexture2DTable[material.Emissive].SampleLevel(sDiffuseSampler, v.texCoord, mipLevel).rgb;
+	}
 	float specular = 0.5f;
-	float3x3 TBN = float3x3(v.tangent, v.bitangent, v.normal);
-	float3 N = TangentSpaceNormalMapping(normalSample.xyz, TBN, false);
+
+	float3 N = v.normal;
+	if(material.Normal >= 0)
+	{
+		float4 normalSample = tTexture2DTable[material.Normal].SampleLevel(sDiffuseSampler, v.texCoord, mipLevel);
+		float3x3 TBN = float3x3(v.tangent, v.bitangent, v.normal);
+		N = TangentSpaceNormalMapping(normalSample.xyz, TBN, false);
+	}
+// Surface Shader END
 
 	ShadingData outData = (ShadingData)0;
 	outData.WorldPos = v.position;
 	outData.V = -WorldRayDirection();
 	outData.N = N;
 	outData.UV = v.texCoord;
-	outData.Diffuse = diffuseSample.rgb;
-	outData.Specular = ComputeF0(specular, diffuseSample.rgb, metalness);
+	outData.Diffuse = baseColor.rgb;
+	outData.Specular = ComputeF0(specular, baseColor.rgb, metalness);
 	outData.Roughness = roughness;
-	outData.Emissive = emissiveSample.rgb;
-	outData.Opacity = diffuseSample.a;
+	outData.Emissive = emissive;
+	outData.Opacity = baseColor.a;
 	return outData;
 }
 
