@@ -6228,7 +6228,7 @@
         },
         {
             "uri": "5061699253647017043.dds",
-            "mimeType": "image/png"
+            "mimeType": "image/dds"
         },
         {
             "uri": "11872827283454512094.dds",
@@ -6240,7 +6240,7 @@
         },
         {
             "uri": "8006627369776289000.dds",
-            "mimeType": "image/png"
+            "mimeType": "image/dds"
         },
         {
             "uri": "715093869573992647.dds",
@@ -6440,7 +6440,7 @@
         },
         {
             "uri": "16275776544635328252.dds",
-            "mimeType": "image/png"
+            "mimeType": "image/dds"
         },
         {
             "uri": "1219024358953944284.dds",
@@ -6820,10 +6820,7 @@
                     0.5879999995231628,
                     0.5879999995231628,
                     1.0
-                ],
-                "baseColorTexture": {
-                    "index": 68
-                }
+                ]
             }
         },
         {
