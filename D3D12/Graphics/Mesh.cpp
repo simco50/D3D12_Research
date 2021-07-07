@@ -104,11 +104,10 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 
 	struct Vertex
 	{
-		Vector3 Position;
-		Vector2 TexCoord;
-		Vector3 Normal;
-		Vector3 Tangent;
-		Vector3 Bitangent;
+		Vector3 Position = Vector3::Zero;
+		Vector2 TexCoord = Vector2::Zero;
+		Vector3 Normal = Vector3::Forward;
+		Vector4 Tangent = Vector4(1, 0, 0, 1);
 	};
 
 	std::vector<uint32> indices;
@@ -177,16 +176,9 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 				}
 				else if (strcmp(pName, "TANGENT") == 0)
 				{
-					const cgltf_buffer_view* pAttrView = attribute.data->buffer_view;
-					size_t stride = attribute.data->stride;
-					const char* pData = (char*)pAttrView->buffer->data + pAttrView->offset + attribute.data->offset;
-					check(stride == sizeof(Vector4));
-					const Vector4* pTangents = (Vector4*)pData;
 					for (size_t i = 0; i < attribute.data->count; ++i)
 					{
-						vertices[i + vertexOffset].Tangent = Vector3(pTangents[i]);
-						float sign = pTangents[i].w;
-						vertices[i + vertexOffset].Bitangent = Vector3(sign, sign, sign);
+						check(cgltf_accessor_read_float(attribute.data, i, &vertices[i + vertexOffset].Tangent.x, 4));
 					}
 				}
 				else if (strcmp(pName, "TEXCOORD_0") == 0)
@@ -206,21 +198,6 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 		meshToPrimitives[&mesh] = primtives;
 	}
 
-	// Generate bitangents.
-	// B = N x T * T.w
-	for (Vertex& v : vertices)
-	{
-		if (v.Normal == Vector3::Zero)
-			v.Normal = Vector3::Forward;
-		if (v.Tangent == Vector3::Zero)
-			v.Tangent = Vector3::Right;
-		if (v.Bitangent == Vector3::Zero)
-			v.Bitangent = Vector3::Up;
-
-		v.Bitangent *= v.Normal.Cross(v.Tangent);
-		v.Bitangent.Normalize();
-	}
-
 	const cgltf_scene* pGltfScene = pGltfData->scene;
 	for (size_t i = 0; i < pGltfScene->nodes_count; i++)
 	{
@@ -232,7 +209,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 		if (pNode->mesh)
 		{
 			SubMeshInstance newNode;
-			newNode.Transform = Matrix(matrix);
+			newNode.Transform = Matrix(matrix) * Matrix::CreateScale(uniformScale);
 			for (int primitive : meshToPrimitives[pNode->mesh])
 			{
 				newNode.MeshIndex = primitive;

@@ -24,8 +24,7 @@ struct Vertex
 	float3 position;
 	float2 texCoord;
 	float3 normal;
-	float3 tangent;
-	float3 bitangent;
+	float4 tangent;
 };
 
 struct ViewData
@@ -131,7 +130,6 @@ Vertex GetVertexAttributes(float3 barycentrics)
 	vertexOut.texCoord = 0;
 	vertexOut.normal = 0;
 	vertexOut.tangent = 0;
-	vertexOut.bitangent = 0;
 	for(int i = 0; i < 3; ++i)
 	{
 		Vertex v = tBufferTable[mesh.VertexBuffer].Load<Vertex>(indices[i] * sizeof(Vertex));
@@ -139,13 +137,11 @@ Vertex GetVertexAttributes(float3 barycentrics)
 		vertexOut.texCoord += v.texCoord * barycentrics[i];
 		vertexOut.normal += v.normal * barycentrics[i];
 		vertexOut.tangent += v.tangent * barycentrics[i];
-		vertexOut.bitangent += v.bitangent * barycentrics[i];
 	}
 	float4x3 worldMatrix = ObjectToWorld4x3();
 	vertexOut.position = mul(float4(vertexOut.position, 1), worldMatrix).xyz;
 	vertexOut.normal = normalize(mul(vertexOut.normal, (float3x3)worldMatrix));
-	vertexOut.tangent = normalize(mul(vertexOut.tangent, (float3x3)worldMatrix));
-	vertexOut.bitangent = normalize(mul(vertexOut.bitangent, (float3x3)worldMatrix));
+	vertexOut.tangent.xyz = normalize(mul(vertexOut.tangent.xyz, (float3x3)worldMatrix));
 	return vertexOut;
 }
 
@@ -182,7 +178,8 @@ ShadingData GetShadingData(BuiltInTriangleIntersectionAttributes attrib, float3 
 	if(material.Normal >= 0)
 	{
 		float4 normalSample = tTexture2DTable[material.Normal].SampleLevel(sDiffuseSampler, v.texCoord, mipLevel);
-		float3x3 TBN = float3x3(v.tangent, v.bitangent, v.normal);
+		float3 B = cross(v.normal, v.tangent.xyz) * v.tangent.w;
+		float3x3 TBN = float3x3(v.tangent.xyz, B, v.normal);
 		N = TangentSpaceNormalMapping(normalSample.xyz, TBN, false);
 	}
 // Surface Shader END
