@@ -13,16 +13,6 @@
 #include "External/cgltf/cgltf.h"
 #pragma warning(pop)
 
-struct Vertex
-{
-	Vector3 Position;
-	Vector2 TexCoord;
-	Vector3 Normal;
-	Vector3 Tangent;
-	Vector3 Bitangent;
-};
-
-
 Mesh::~Mesh()
 {
 	for (SubMesh& subMesh : m_Meshes)
@@ -50,13 +40,13 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 
 	// Load unique textures;
 	std::map<StringHash, Texture*> textureMap;
-	std::map<const cgltf_material*, int> materialMap;
+
+	auto MaterialIndex = [&](const cgltf_material* pMat) -> int { return (int)(pMat - pGltfData->materials); };
 
 	m_Materials.reserve(pGltfData->materials_count);
 	for (size_t i = 0; i < pGltfData->materials_count; ++i)
 	{
 		const cgltf_material& gltfMaterial = pGltfData->materials[i];
-		materialMap[&gltfMaterial] = (int)m_Materials.size();
 
 		m_Materials.push_back(Material());
 		Material& material = m_Materials.back();
@@ -112,6 +102,15 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 		material.pNormalTexture = RetrieveTexture(gltfMaterial.normal_texture, false);
 	}
 
+	struct Vertex
+	{
+		Vector3 Position;
+		Vector2 TexCoord;
+		Vector3 Normal;
+		Vector3 Tangent;
+		Vector3 Bitangent;
+	};
+
 	std::vector<uint32> indices;
 	std::vector<Vertex> vertices;
 	struct MeshData
@@ -138,45 +137,23 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 			uint32 vertexOffset = (uint32)vertices.size();
 			meshData.VertexOffset = vertexOffset;
 
-			size_t indexStride = primitive.indices->stride;
 			size_t indexCount = primitive.indices->count;
 			uint32 indexOffset = (uint32)indices.size();
 			indices.resize(indices.size() + indexCount);
 
 			meshData.IndexOffset = indexOffset;
 			meshData.NumIndices = (uint32)indexCount;
-			meshData.MaterialIndex = materialMap[primitive.material];
+			meshData.MaterialIndex = MaterialIndex(primitive.material);
 
-			const cgltf_buffer_view* pIndexView = primitive.indices->buffer_view;
-			const char* indexData = (char*)pIndexView->buffer->data + pIndexView->offset + primitive.indices->offset;
-
-			if (indexStride == 4)
+			for (size_t i = 0; i < indexCount; ++i)
 			{
-				for (size_t i = 0; i < indexCount; ++i)
-				{
-					indices[indexOffset + i] = ((uint32*)indexData)[i];
-				}
-			}
-			else if (indexStride == 2)
-			{
-				for (size_t i = 0; i < indexCount; ++i)
-				{
-					indices[indexOffset + i] = ((uint16*)indexData)[i];
-				}
-			}
-			else
-			{
-				noEntry();
+				indices[indexOffset + i] = (int)cgltf_accessor_read_index(primitive.indices, i);
 			}
 
 			for (size_t attrIdx = 0; attrIdx < primitive.attributes_count; ++attrIdx)
 			{
 				const cgltf_attribute& attribute = primitive.attributes[attrIdx];
 				const char* pName = attribute.name;
-
-				const cgltf_buffer_view* pAttrView = attribute.data->buffer_view;
-				size_t stride = attribute.data->stride;
-				const char* pData = (char*)pAttrView->buffer->data + pAttrView->offset + attribute.data->offset;
 
 				if (meshData.NumVertices == 0)
 				{
@@ -186,24 +163,23 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 
 				if (strcmp(pName, "POSITION") == 0)
 				{
-					check(stride == sizeof(Vector3));
-					const Vector3* pPositions = (Vector3*)pData;
 					for (size_t i = 0; i < attribute.data->count; ++i)
 					{
-						vertices[i + vertexOffset].Position = pPositions[i];
+						check(cgltf_accessor_read_float(attribute.data, i, &vertices[i + vertexOffset].Position.x, 3));
 					}
 				}
 				else if (strcmp(pName, "NORMAL") == 0)
 				{
-					check(stride == sizeof(Vector3));
-					const Vector3* pNormals = (Vector3*)pData;
 					for (size_t i = 0; i < attribute.data->count; ++i)
 					{
-						vertices[i + vertexOffset].Normal = pNormals[i];
+						check(cgltf_accessor_read_float(attribute.data, i, &vertices[i + vertexOffset].Normal.x, 3));
 					}
 				}
 				else if (strcmp(pName, "TANGENT") == 0)
 				{
+					const cgltf_buffer_view* pAttrView = attribute.data->buffer_view;
+					size_t stride = attribute.data->stride;
+					const char* pData = (char*)pAttrView->buffer->data + pAttrView->offset + attribute.data->offset;
 					check(stride == sizeof(Vector4));
 					const Vector4* pTangents = (Vector4*)pData;
 					for (size_t i = 0; i < attribute.data->count; ++i)
@@ -215,11 +191,9 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 				}
 				else if (strcmp(pName, "TEXCOORD_0") == 0)
 				{
-					check(stride == sizeof(Vector2));
-					Vector2* pTexCoords = (Vector2*)pData;
 					for (size_t i = 0; i < attribute.data->count; ++i)
 					{
-						vertices[i + vertexOffset].TexCoord = pTexCoords[i];
+						check(cgltf_accessor_read_float(attribute.data, i, &vertices[i + vertexOffset].TexCoord.x, 2));
 					}
 				}
 				else
@@ -247,72 +221,33 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 		v.Bitangent.Normalize();
 	}
 
-	// Load in the data
-	static constexpr uint64 sBufferAlignment = 16;
-	uint64 bufferSize = vertices.size() * sizeof(Vertex) + indices.size() * sizeof(uint32) + meshDatas.size() * sBufferAlignment;
-	m_pGeometryData = pDevice->CreateBuffer(BufferDesc::CreateBuffer(bufferSize, BufferFlag::ShaderResource | BufferFlag::ByteAddress), "Geometry Buffer");
-	pContext->InsertResourceBarrier(m_pGeometryData.get(), D3D12_RESOURCE_STATE_COPY_DEST);
-
-		
 	const cgltf_scene* pGltfScene = pGltfData->scene;
 	for (size_t i = 0; i < pGltfScene->nodes_count; i++)
 	{
-		const cgltf_node* pParent = pGltfScene->nodes[i];
-		struct QueuedNode
-		{
-			const cgltf_node* pNode;
-			Matrix Transform;
-		};
-		std::queue<QueuedNode> toProcess;
-		QueuedNode rootNode;
-		rootNode.pNode = pParent;
-		rootNode.Transform = Matrix::CreateScale(uniformScale);
-		toProcess.push(rootNode);
-		while (!toProcess.empty())
-		{
-			QueuedNode currentNode = toProcess.front();
-			toProcess.pop();
-			const cgltf_node* pNode = currentNode.pNode;
-			Matrix transform = currentNode.Transform;
-			if (pNode->has_matrix)
-			{
-				transform *= Matrix(pNode->matrix);
-			}
-			if (pNode->has_scale)
-			{
-				transform *= Matrix::CreateScale(Vector3(pNode->scale));
-			}
-			if (pNode->has_rotation)
-			{
-				transform *= Matrix::CreateFromQuaternion(Quaternion(pNode->rotation));
-			}
-			if (pNode->has_translation)
-			{
-				transform *= Matrix::CreateTranslation(Vector3(pNode->translation));
-			}
+		const cgltf_node* pNode = pGltfScene->nodes[i];
 
+		cgltf_float matrix[16];
+		cgltf_node_transform_world(pNode, matrix);
+
+		if (pNode->mesh)
+		{
 			SubMeshInstance newNode;
-			newNode.Transform = transform;
-			if (pNode->mesh)
+			newNode.Transform = Matrix(matrix);
+			for (int primitive : meshToPrimitives[pNode->mesh])
 			{
-				for (int primitive : meshToPrimitives[pNode->mesh])
-				{
-					newNode.MeshIndex = primitive;
-					m_MeshInstances.push_back(newNode);
-				}
-			}
-
-			for (size_t childIdx = 0; childIdx < pNode->children_count; ++childIdx)
-			{
-				QueuedNode q;
-				q.pNode = pNode->children[childIdx];
-				q.Transform = newNode.Transform;
-				toProcess.push(q);
+				newNode.MeshIndex = primitive;
+				m_MeshInstances.push_back(newNode);
 			}
 		}
 	}
 
 	cgltf_free(pGltfData);
+
+	// Load in the data
+	static constexpr uint64 sBufferAlignment = 16;
+	uint64 bufferSize = vertices.size() * sizeof(Vertex) + indices.size() * sizeof(uint32) + meshDatas.size() * sBufferAlignment;
+	m_pGeometryData = pDevice->CreateBuffer(BufferDesc::CreateBuffer(bufferSize, BufferFlag::ShaderResource | BufferFlag::ByteAddress), "Geometry Buffer");
+	pContext->InsertResourceBarrier(m_pGeometryData.get(), D3D12_RESOURCE_STATE_COPY_DEST);
 
 	uint64 dataOffset = 0;
 	auto CopyData = [this, &dataOffset, &pContext](void* pSource, uint64 size)
