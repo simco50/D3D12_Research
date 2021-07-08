@@ -39,7 +39,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 	}
 
 	// Load unique textures;
-	std::map<StringHash, Texture*> textureMap;
+	std::map<const cgltf_image*, Texture*> textureMap;
 
 	auto MaterialIndex = [&](const cgltf_material* pMat) -> int { return (int)(pMat - pGltfData->materials); };
 
@@ -56,17 +56,27 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 			if (texture.texture)
 			{
 				const cgltf_image* pImage = texture.texture->image;
-				StringHash pathHash = StringHash(pImage->uri);
-				pathHash.Combine((int)srgb);
-				auto it = textureMap.find(pathHash);
-				std::unique_ptr<Texture> pTex = std::make_unique<Texture>(pDevice, pImage->uri);
+				auto it = textureMap.find(pImage);
+				std::unique_ptr<Texture> pTex = std::make_unique<Texture>(pDevice, pImage->uri ? pImage->uri : "Material Texture");
 				if (it == textureMap.end())
 				{
-					bool success = pTex->Create(pContext, Paths::Combine(Paths::GetDirectoryPath(pFilePath), pImage->uri).c_str(), srgb);
+					bool success = false;
+					if (pImage->buffer_view)
+					{
+						Image newImg;
+						if (newImg.Load((char*)pImage->buffer_view->buffer->data + pImage->buffer_view->offset, pImage->buffer_view->size, pImage->mime_type))
+						{
+							success = pTex->Create(pContext, newImg, srgb);
+						}
+					}
+					else
+					{
+						success = pTex->Create(pContext, Paths::Combine(Paths::GetDirectoryPath(pFilePath), pImage->uri).c_str(), srgb);
+					}
 					if (success)
 					{
 						m_Textures.push_back(std::move(pTex));
-						textureMap[pathHash] = m_Textures.back().get();
+						textureMap[pImage] = m_Textures.back().get();
 						return m_Textures.back().get();
 					}
 					else
@@ -198,19 +208,18 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 		meshToPrimitives[&mesh] = primtives;
 	}
 
-	const cgltf_scene* pGltfScene = pGltfData->scene;
-	for (size_t i = 0; i < pGltfScene->nodes_count; i++)
+	for (size_t i = 0; i < pGltfData->nodes_count; i++)
 	{
-		const cgltf_node* pNode = pGltfScene->nodes[i];
+		const cgltf_node& node = pGltfData->nodes[i];
 
 		cgltf_float matrix[16];
-		cgltf_node_transform_world(pNode, matrix);
+		cgltf_node_transform_world(&node, matrix);
 
-		if (pNode->mesh)
+		if (node.mesh)
 		{
 			SubMeshInstance newNode;
 			newNode.Transform = Matrix(matrix) * Matrix::CreateScale(uniformScale);
-			for (int primitive : meshToPrimitives[pNode->mesh])
+			for (int primitive : meshToPrimitives[node.mesh])
 			{
 				newNode.MeshIndex = primitive;
 				m_MeshInstances.push_back(newNode);
