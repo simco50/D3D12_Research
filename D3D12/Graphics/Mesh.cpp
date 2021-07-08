@@ -258,12 +258,13 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 		subMesh.MaterialId = meshData.MaterialIndex;
 
 		VertexBufferView vbv(m_pGeometryData->GetGpuHandle() + dataOffset, meshData.NumVertices, sizeof(Vertex));
+		subMesh.PositionsFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
 		subMesh.VerticesLocation = vbv;
 		subMesh.pVertexSRV = new ShaderResourceView();
 		subMesh.pVertexSRV->Create(m_pGeometryData.get(), BufferSRVDesc(DXGI_FORMAT_UNKNOWN, true, (uint32)dataOffset, meshData.NumVertices * sizeof(Vertex)));
 		CopyData(&vertices[meshData.VertexOffset], sizeof(Vertex) * meshData.NumVertices);
 
-		IndexBufferView ibv(m_pGeometryData->GetGpuHandle() + dataOffset, meshData.NumIndices, false);
+		IndexBufferView ibv(m_pGeometryData->GetGpuHandle() + dataOffset, meshData.NumIndices, DXGI_FORMAT_R32_UINT);
 		subMesh.IndicesLocation = ibv;
 		subMesh.pIndexSRV = new ShaderResourceView();
 		subMesh.pIndexSRV->Create(m_pGeometryData.get(), BufferSRVDesc(DXGI_FORMAT_UNKNOWN, true, (uint32)dataOffset, meshData.NumIndices * sizeof(uint32)));

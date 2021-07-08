@@ -13,6 +13,7 @@ struct SubMesh
 
 	int Stride = 0;
 	int MaterialId = 0;
+	DXGI_FORMAT PositionsFormat = DXGI_FORMAT_R32G32B32_FLOAT;
 	ShaderResourceView* pVertexSRV = nullptr;
 	ShaderResourceView* pIndexSRV = nullptr;
 	VertexBufferView VerticesLocation;

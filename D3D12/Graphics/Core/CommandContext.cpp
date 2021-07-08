@@ -726,8 +726,8 @@ void CommandContext::SetIndexBuffer(const IndexBufferView& indexBuffer)
 {
 	D3D12_INDEX_BUFFER_VIEW view;
 	view.BufferLocation = indexBuffer.Location;
-	view.Format = indexBuffer.SmallIndices ? DXGI_FORMAT_R16_UINT : DXGI_FORMAT_R32_UINT;
-	view.SizeInBytes = indexBuffer.Elements * (indexBuffer.SmallIndices ? 2 : 4);
+	view.Format = indexBuffer.Format;
+	view.SizeInBytes = indexBuffer.Stride() * indexBuffer.Elements;
 	m_pCommandList->IASetIndexBuffer(&view);
 }
 

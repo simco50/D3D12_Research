@@ -172,18 +172,24 @@ struct VertexBufferView
 struct IndexBufferView
 {
 	IndexBufferView()
-		: Location(~0u), Elements(0), SmallIndices(false)
+		: Location(~0u), Elements(0), Format(DXGI_FORMAT_R32_UINT)
 	{}
-	IndexBufferView(D3D12_GPU_VIRTUAL_ADDRESS location, uint32 elements, bool smallIndices = false)
-		: Location(location), Elements(elements), SmallIndices(smallIndices)
+	IndexBufferView(D3D12_GPU_VIRTUAL_ADDRESS location, uint32 elements, DXGI_FORMAT format = DXGI_FORMAT_R32_UINT)
+		: Location(location), Elements(elements), Format(format)
 	{}
 	IndexBufferView(Buffer* pBuffer)
 	{
 		Location = pBuffer->GetGpuHandle();
 		Elements = (uint32)(pBuffer->GetSize() / pBuffer->GetDesc().ElementSize);
-		SmallIndices = pBuffer->GetDesc().Format == DXGI_FORMAT_R16_UINT;
+		Format = pBuffer->GetDesc().Format;
 	}
+
+	uint32 Stride() const
+	{
+		return D3D::GetFormatRowDataSize(Format, 1);
+	}
+
 	D3D12_GPU_VIRTUAL_ADDRESS Location;
 	uint32 Elements;
-	bool SmallIndices;
+	DXGI_FORMAT Format;
 };
