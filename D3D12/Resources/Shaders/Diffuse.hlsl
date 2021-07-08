@@ -45,12 +45,12 @@ struct PerViewData
 ConstantBuffer<PerObjectData> cObjectData : register(b0);
 ConstantBuffer<PerViewData> cViewData : register(b1);
 
-struct VSInput
+struct Vertex
 {
-	float3 position : POSITION;
-	float2 texCoord : TEXCOORD;
-	float3 normal : NORMAL;
-	float4 tangent : TANGENT;
+	float3 position;
+	float2 texCoord;
+	float3 normal;
+	float4 tangent;
 };
 
 struct PSInput
@@ -171,7 +171,7 @@ PSInput VSMain(uint VertexId : SV_VertexID)
 {
 	PSInput result;
     MeshData mesh = tMeshes[cObjectData.Mesh];
-	VSInput input = tBufferTable[mesh.VertexBuffer].Load<VSInput>(VertexId * sizeof(VSInput));
+	Vertex input = tBufferTable[mesh.VertexBuffer].Load<Vertex>(VertexId * sizeof(Vertex));
 	result.positionWS = mul(float4(input.position, 1.0f), mesh.World).xyz;
 	result.positionVS = mul(float4(result.positionWS, 1.0f), cViewData.View).xyz;
 	result.position = mul(float4(result.positionWS, 1.0f), cViewData.ViewProjection);
