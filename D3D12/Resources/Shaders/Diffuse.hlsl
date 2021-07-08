@@ -47,8 +47,8 @@ ConstantBuffer<PerViewData> cViewData : register(b1);
 
 struct Vertex
 {
-	float3 position;
-	float2 texCoord;
+	uint2 position;
+	uint texCoord;
 	float3 normal;
 	float4 tangent;
 };
@@ -172,10 +172,10 @@ PSInput VSMain(uint VertexId : SV_VertexID)
 	PSInput result;
     MeshData mesh = tMeshes[cObjectData.Mesh];
 	Vertex input = tBufferTable[mesh.VertexBuffer].Load<Vertex>(VertexId * sizeof(Vertex));
-	result.positionWS = mul(float4(input.position, 1.0f), mesh.World).xyz;
+	result.positionWS = mul(float4(UnpackHalf3(input.position), 1.0f), mesh.World).xyz;
 	result.positionVS = mul(float4(result.positionWS, 1.0f), cViewData.View).xyz;
 	result.position = mul(float4(result.positionWS, 1.0f), cViewData.ViewProjection);
-	result.texCoord = input.texCoord;
+	result.texCoord = UnpackHalf2(input.texCoord);
 	result.normal = normalize(mul(input.normal, (float3x3)mesh.World));
 	result.tangent = float4(normalize(mul(input.tangent.xyz, (float3x3)mesh.World)), input.tangent.w);
 	return result;

@@ -13,6 +13,11 @@ using Quaternion = DirectX::SimpleMath::Quaternion;
 using Color = DirectX::SimpleMath::Color;
 using Ray = DirectX::SimpleMath::Ray;
 
+#include <DirectXPackedVector.h>
+using PackedVector2 = DirectX::PackedVector::XMHALF2;
+using PackedVector3 = DirectX::PackedVector::XMHALF4;
+using PackedVector4 = DirectX::PackedVector::XMHALF4;
+
 struct IntVector2
 {
 	IntVector2()

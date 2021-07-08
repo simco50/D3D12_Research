@@ -36,8 +36,8 @@ uint GetSliceFromDepth(float depth)
 
 struct Vertex
 {
-	float3 position;
-	float2 texCoord;
+	uint2 position;
+	uint texCoord;
 	float3 normal;
 	float4 tangent;
 };
@@ -54,7 +54,7 @@ PSInput MarkClusters_VS(uint VertexId : SV_VertexID)
     PSInput output = (PSInput)0;
     MeshData mesh = tMeshes[cObjectData.Mesh];
 	Vertex input = tBufferTable[mesh.VertexBuffer].Load<Vertex>(VertexId * sizeof(Vertex));
-    float4 wPos = mul(float4(input.position, 1), mesh.World);
+    float4 wPos = mul(float4(UnpackHalf3(input.position), 1), mesh.World);
     output.positionVS = mul(wPos, cViewData.View);
     output.position = mul(wPos, cViewData.ViewProjection);
     return output;

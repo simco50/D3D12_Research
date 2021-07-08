@@ -41,6 +41,33 @@ struct Ray
     float3 Direction;
 };
 
+float2 UnpackHalf2(in uint value)
+{
+	float2 retVal;
+	retVal.x = f16tof32(value.x);
+	retVal.y = f16tof32(value.x >> 16);
+	return retVal;
+}
+
+float4 UnpackHalf4(in uint2 value)
+{
+	float4 retVal;
+	retVal.x = f16tof32(value.x);
+	retVal.y = f16tof32(value.x >> 16);
+	retVal.z = f16tof32(value.y);
+	retVal.w = f16tof32(value.y >> 16);
+	return retVal;
+}
+
+float3 UnpackHalf3(in uint2 value)
+{
+	float3 retVal;
+	retVal.x = f16tof32(value.x);
+	retVal.y = f16tof32(value.x >> 16);
+	retVal.z = f16tof32(value.y);
+	return retVal;
+}
+
 bool SphereInAABB(Sphere sphere, AABB aabb)
 {
     float3 d = max(0, abs(aabb.Center.xyz - sphere.Position) - aabb.Extents.xyz);

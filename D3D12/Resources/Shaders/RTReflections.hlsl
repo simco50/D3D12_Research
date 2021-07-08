@@ -27,6 +27,14 @@ struct Vertex
 	float4 tangent;
 };
 
+struct VertexInput
+{
+	uint2 position;
+	uint texCoord;
+	float3 normal;
+	float4 tangent;
+};
+
 struct ViewData
 {
 	float4x4 View;
@@ -132,9 +140,9 @@ Vertex GetVertexAttributes(float3 barycentrics)
 	vertexOut.tangent = 0;
 	for(int i = 0; i < 3; ++i)
 	{
-		Vertex v = tBufferTable[mesh.VertexBuffer].Load<Vertex>(indices[i] * sizeof(Vertex));
-		vertexOut.position += v.position * barycentrics[i];
-		vertexOut.texCoord += v.texCoord * barycentrics[i];
+		VertexInput v = tBufferTable[mesh.VertexBuffer].Load<VertexInput>(indices[i] * sizeof(VertexInput));
+		vertexOut.position += UnpackHalf3(v.position) * barycentrics[i];
+		vertexOut.texCoord += UnpackHalf2(v.texCoord) * barycentrics[i];
 		vertexOut.normal += v.normal * barycentrics[i];
 		vertexOut.tangent += v.tangent * barycentrics[i];
 	}

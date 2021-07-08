@@ -114,8 +114,8 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 
 	struct Vertex
 	{
-		Vector3 Position = Vector3::Zero;
-		Vector2 TexCoord = Vector2::Zero;
+		PackedVector3 Position = PackedVector3(0.0f, 0.0f, 0.0f, 0.0f);
+		PackedVector2 TexCoord = PackedVector2(0.0f, 0.0f);
 		Vector3 Normal = Vector3::Forward;
 		Vector4 Tangent = Vector4(1, 0, 0, 1);
 	};
@@ -124,6 +124,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 	std::vector<Vertex> vertices;
 	struct MeshData
 	{
+		BoundingBox Bounds;
 		uint32 NumIndices = 0;
 		uint32 IndexOffset = 0;
 		uint32 NumVertices = 0;
@@ -172,10 +173,15 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 
 				if (strcmp(pName, "POSITION") == 0)
 				{
+					std::vector<Vector3> positions;
 					for (size_t i = 0; i < attribute.data->count; ++i)
 					{
-						check(cgltf_accessor_read_float(attribute.data, i, &vertices[i + vertexOffset].Position.x, 3));
+						Vector3 position;
+						check(cgltf_accessor_read_float(attribute.data, i, &position.x, 3));
+						vertices[i + vertexOffset].Position = PackedVector3(position.x, position.y, position.z, 0);
+						positions.push_back(position);
 					}
+					meshData.Bounds.CreateFromPoints(meshData.Bounds, positions.size(), (DirectX::XMFLOAT3*)positions.data(), sizeof(Vector3));
 				}
 				else if (strcmp(pName, "NORMAL") == 0)
 				{
@@ -195,7 +201,9 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 				{
 					for (size_t i = 0; i < attribute.data->count; ++i)
 					{
-						check(cgltf_accessor_read_float(attribute.data, i, &vertices[i + vertexOffset].TexCoord.x, 2));
+						Vector2 texCoord;
+						check(cgltf_accessor_read_float(attribute.data, i, &texCoord.x, 2));
+						vertices[i + vertexOffset].TexCoord = PackedVector2(texCoord.x, texCoord.y);
 					}
 				}
 				else
@@ -246,7 +254,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 	for (const MeshData& meshData : meshDatas)
 	{
 		SubMesh subMesh;
-		BoundingBox::CreateFromPoints(subMesh.Bounds, meshData.NumVertices, (Vector3*)&vertices[meshData.VertexOffset], sizeof(Vertex));
+		subMesh.Bounds = meshData.Bounds;
 		subMesh.MaterialId = meshData.MaterialIndex;
 
 		VertexBufferView vbv(m_pGeometryData->GetGpuHandle() + dataOffset, meshData.NumVertices, sizeof(Vertex));
