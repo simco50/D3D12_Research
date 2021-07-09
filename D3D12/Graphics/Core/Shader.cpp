@@ -102,14 +102,12 @@ namespace ShaderCompiler
 		arguments.AddArgument("-enable-templates");
 		arguments.AddArgument(DXC_ARG_ALL_RESOURCES_BOUND);
 
-#if 0 // #todo: PAQ seems broken right now... :(
 		if (majVersion >= 6 && minVersion >= 6)
 		{
 			arguments.AddArgument("-enable-payload-qualifiers");
 			arguments.AddDefine("_PAYLOAD_QUALIFIERS=1");
 		}
 		else
-#endif
 		{
 			arguments.AddDefine("_PAYLOAD_QUALIFIERS=0");
 		}

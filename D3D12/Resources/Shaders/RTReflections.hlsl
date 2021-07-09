@@ -50,13 +50,13 @@ ConstantBuffer<ViewData> cViewData : register(b0);
 
 struct RAYPAYLOAD ReflectionRayPayload
 {
-	float3 output RAYQUALIFIER(read(caller) : write(caller, closesthit, miss));
-	RayCone rayCone RAYQUALIFIER(read(caller, closesthit) : write(caller, closesthit));
+	float3 output 		RAYQUALIFIER(read(caller, closesthit) : write(caller, closesthit, miss));
+	RayCone rayCone 	RAYQUALIFIER(read(caller, closesthit) : write(caller, closesthit));
 };
 
 struct RAYPAYLOAD ShadowRayPayload
 {
-	float hit RAYQUALIFIER(read(caller) : write(caller, miss));
+	float hit 			RAYQUALIFIER(read(caller) : write(caller, miss));
 };
 
 float CastShadowRay(float3 origin, float3 direction)
