@@ -91,9 +91,6 @@ void RTReflections::SetupPipelines(GraphicsDevice* pDevice)
 {
 	ShaderLibrary* pShaderLibrary = pDevice->GetLibrary("RTReflections.hlsl");
 
-	m_pHitSignature = std::make_unique<RootSignature>(pDevice);
-	m_pHitSignature->Finalize("Hit", D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE);
-
 	m_pGlobalRS = std::make_unique<RootSignature>(pDevice);
 	m_pGlobalRS->FinalizeFromShader("Global", pShaderLibrary);
 
@@ -101,7 +98,7 @@ void RTReflections::SetupPipelines(GraphicsDevice* pDevice)
 	stateDesc.Name = "RT Reflections";
 	stateDesc.RayGenShader = "RayGen";
 	stateDesc.AddLibrary(pShaderLibrary, { "RayGen", "ReflectionClosestHit", "ReflectionMiss", "ShadowMiss", "ReflectionAnyHit" });
-	stateDesc.AddHitGroup("ReflectionHitGroup", "ReflectionClosestHit", "ReflectionAnyHit", "", m_pHitSignature.get());
+	stateDesc.AddHitGroup("ReflectionHitGroup", "ReflectionClosestHit", "ReflectionAnyHit");
 	stateDesc.AddMissShader("ReflectionMiss");
 	stateDesc.AddMissShader("ShadowMiss");
 	stateDesc.MaxPayloadSize = 5 * sizeof(float);

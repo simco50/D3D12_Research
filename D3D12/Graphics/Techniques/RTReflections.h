@@ -24,10 +24,7 @@ private:
 	GraphicsDevice* m_pDevice;
 
 	StateObject* m_pRtSO = nullptr;
-
-	std::unique_ptr<RootSignature> m_pHitSignature;
 	std::unique_ptr<RootSignature> m_pGlobalRS;
-
 	std::unique_ptr<Texture> m_pSceneColor;
 };
 
