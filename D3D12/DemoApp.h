@@ -15,6 +15,7 @@ class RTAO;
 class RTReflections;
 class SSAO;
 class GpuParticles;
+class PathTracing;
 
 enum class DefaultTexture
 {
@@ -80,6 +81,8 @@ enum class RenderPath
 {
 	Tiled,
 	Clustered,
+	PathTracing,
+	MAX
 };
 
 class DemoApp
@@ -135,6 +138,7 @@ private:
 	std::unique_ptr<RTAO> m_pRTAO;
 	std::unique_ptr<RTReflections> m_pRTReflections;
 	std::unique_ptr<SSAO> m_pSSAO;
+	std::unique_ptr<PathTracing> m_pPathTracing;
 
 	std::unique_ptr<Texture> m_pLightCookie;
 	std::array<std::unique_ptr<Texture>, (int)DefaultTexture::MAX> m_DefaultTextures;
@@ -146,7 +150,7 @@ private:
 	int32 m_ScreenshotDelay = -1;
 	uint32 m_ScreenshotRowPitch = 0;
 
-	RenderPath m_RenderPath = RenderPath::Clustered;
+	RenderPath m_RenderPath = RenderPath::PathTracing;
 
 	std::vector<std::unique_ptr<Mesh>> m_Meshes;
 	std::unique_ptr<Buffer> m_pTLAS;
