@@ -70,6 +70,26 @@ struct ShadingData
 	float3 Emissive;
 };
 
+void CastPrimaryRay(inout PrimaryRayPayload payload, Ray ray)
+{
+	RayDesc desc;
+	desc.Origin = ray.Origin;
+	desc.Direction = ray.Direction;
+	desc.TMin = 0.0f;
+	desc.TMax = RAY_MAX_T;
+
+	TraceRay(
+		tTLASTable[cViewData.TLASIndex],		 			//AccelerationStructure
+		0, 													//RayFlags
+		0xFF, 												//InstanceInclusionMask
+		0,													//RayContributionToHitGroupIndex
+		0, 													//MultiplierForGeometryContributionToHitGroupIndex
+		0, 													//MissShaderIndex
+		desc, 												//Ray
+		payload 											//Payload
+	);
+}
+
 float CastShadowRay(float3 origin, float3 direction)
 {
 	float len = length(direction);
@@ -228,7 +248,7 @@ void PrimaryCHS(inout PrimaryRayPayload payload, BuiltInTriangleIntersectionAttr
 		totalResult.Diffuse += result.Diffuse;
 		totalResult.Specular += result.Specular;
 	}
-	payload.output = shadingData.Emissive + totalResult.Diffuse + totalResult.Specular;
+	payload.output += shadingData.Emissive + totalResult.Diffuse + totalResult.Specular;
 }
 
 [shader("anyhit")]
@@ -259,21 +279,11 @@ void RayGen()
 	float2 pixel = float2(DispatchRaysIndex().xy);
 	float2 resolution = float2(DispatchRaysDimensions().xy);
 	pixel = (((pixel + 0.5f) / resolution) * 2.f - 1.f);
-	RayDesc ray = GeneratePinholeCameraRay(pixel, cViewData.ViewInverse, cViewData.Projection);
+	Ray ray = GeneratePinholeCameraRay(pixel, cViewData.ViewInverse, cViewData.Projection);
 
 	PrimaryRayPayload payload;
 	payload.output = 0.0f;
-	
-	TraceRay(
-		tTLASTable[cViewData.TLASIndex],		 			//AccelerationStructure
-		0, 													//RayFlags
-		0xFF, 												//InstanceInclusionMask
-		0,													//RayContributionToHitGroupIndex
-		0, 													//MultiplierForGeometryContributionToHitGroupIndex
-		0, 													//MissShaderIndex
-		ray, 												//Ray
-		payload 											//Payload
-	);
+	CastPrimaryRay(payload, ray);
 
 	uOutput[DispatchRaysIndex().xy] = float4(payload.output, 1);
 }
