@@ -49,6 +49,7 @@ ConstantBuffer<ViewData> cViewData : register(b0);
 struct RAYPAYLOAD PrimaryRayPayload
 {
 	float3 output 		RAYQUALIFIER(read(caller, closesthit) : write(caller, closesthit, miss));
+	int depth			RAYQUALIFIER(read(caller) : write(closesthit));
 };
 
 struct RAYPAYLOAD ShadowRayPayload
@@ -70,12 +71,21 @@ struct ShadingData
 	float3 Emissive;
 };
 
-void CastPrimaryRay(inout PrimaryRayPayload payload, Ray ray)
+PrimaryRayPayload CastPrimaryRay(float3 origin, float3 direction, int depth)
 {
+	PrimaryRayPayload payload;
+	payload.depth = depth;
+	payload.output = 0;
+
+	if(depth >= 2)
+	{
+		return payload;
+	}
+
 	RayDesc desc;
-	desc.Origin = ray.Origin;
-	desc.Direction = ray.Direction;
-	desc.TMin = 0.0f;
+	desc.Origin = origin;
+	desc.Direction = direction;
+	desc.TMin = RAY_BIAS;
 	desc.TMax = RAY_MAX_T;
 
 	TraceRay(
@@ -88,6 +98,7 @@ void CastPrimaryRay(inout PrimaryRayPayload payload, Ray ray)
 		desc, 												//Ray
 		payload 											//Payload
 	);
+	return payload;
 }
 
 float CastShadowRay(float3 origin, float3 direction)
@@ -140,7 +151,7 @@ Vertex GetVertexAttributes(float3 barycentrics)
 	return vertexOut;
 }
 
-ShadingData GetShadingData(BuiltInTriangleIntersectionAttributes attrib, float3 cameraLocation, float mipLevel)
+ShadingData GetShadingData(BuiltInTriangleIntersectionAttributes attrib, float mipLevel)
 {
 	MeshData mesh = tMeshes[InstanceID()];
 	float3 barycentrics = float3((1.0f - attrib.barycentrics.x - attrib.barycentrics.y), attrib.barycentrics.x, attrib.barycentrics.y);
@@ -238,7 +249,7 @@ LightResult EvaluateLight(Light light, ShadingData shadingData)
 void PrimaryCHS(inout PrimaryRayPayload payload, BuiltInTriangleIntersectionAttributes attrib) 
 {
 	float mipLevel = 0;
-	ShadingData shadingData = GetShadingData(attrib, WorldRayOrigin(), mipLevel);
+	ShadingData shadingData = GetShadingData(attrib, mipLevel);
 
 	LightResult totalResult = (LightResult)0;
 	for(int i = 0; i < cViewData.NumLights; ++i)
@@ -249,12 +260,16 @@ void PrimaryCHS(inout PrimaryRayPayload payload, BuiltInTriangleIntersectionAttr
 		totalResult.Specular += result.Specular;
 	}
 	payload.output += shadingData.Emissive + totalResult.Diffuse + totalResult.Specular;
+	payload.depth++;
+
+	float3 direction = reflect(WorldRayDirection(), shadingData.N);
+	payload.output += CastPrimaryRay(shadingData.WorldPos, direction, payload.depth).output;
 }
 
 [shader("anyhit")]
 void PrimaryAHS(inout PrimaryRayPayload payload, BuiltInTriangleIntersectionAttributes attrib)
 {
-	ShadingData shadingData = GetShadingData(attrib, WorldRayOrigin(), 2);
+	ShadingData shadingData = GetShadingData(attrib, 2);
 	if(shadingData.Opacity < 0.5)
 	{
 		IgnoreHit();
@@ -264,7 +279,7 @@ void PrimaryAHS(inout PrimaryRayPayload payload, BuiltInTriangleIntersectionAttr
 [shader("miss")] 
 void PrimaryMS(inout PrimaryRayPayload payload : SV_RayPayload) 
 {
-	payload.output = CIESky(WorldRayDirection(), -tLights[0].Direction);
+	payload.output += CIESky(WorldRayDirection(), -tLights[0].Direction);
 }
 
 [shader("miss")] 
@@ -281,9 +296,6 @@ void RayGen()
 	pixel = (((pixel + 0.5f) / resolution) * 2.f - 1.f);
 	Ray ray = GeneratePinholeCameraRay(pixel, cViewData.ViewInverse, cViewData.Projection);
 
-	PrimaryRayPayload payload;
-	payload.output = 0.0f;
-	CastPrimaryRay(payload, ray);
-
-	uOutput[DispatchRaysIndex().xy] = float4(payload.output, 1);
+	PrimaryRayPayload payload = CastPrimaryRay(ray.Origin, ray.Direction, 0);
+	uOutput[DispatchRaysIndex().xy] = float4(payload.output, payload.depth);
 }
