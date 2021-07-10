@@ -346,7 +346,7 @@ void DemoApp::SetupScene(CommandContext& context)
 	}
 
 	{
-		Light spotLight = Light::Spot(Vector3(-5, 16, 16), 800, Vector3(0, 1, 0), 90, 70, 1000, Color(1.0f, 0.7f, 0.3f, 1.0f));
+		Light spotLight = Light::Spot(Vector3(-8, 10, 25), 800, Vector3(0, 1, 0), 90, 70, 1000, Color(1.0f, 0.7f, 0.3f, 1.0f));
 		spotLight.CastShadows = true;
 		spotLight.LightTexture = m_pDevice->RegisterBindlessResource(m_pLightCookie.get(), GetDefaultTexture(DefaultTexture::White2D));
 		spotLight.VolumetricLighting = true;
@@ -413,6 +413,11 @@ void DemoApp::Update()
 	m_pCamera->SetPosition(pos);
 #endif
 	m_pCamera->Update();
+
+	if (Input::Instance().IsKeyPressed('H'))
+	{
+		m_RenderPath = m_RenderPath == RenderPath::PathTracing ? RenderPath::Clustered : RenderPath::PathTracing;
+	}
 
 	if (Input::Instance().IsKeyPressed('U'))
 	{
@@ -1087,48 +1092,50 @@ void DemoApp::Update()
 			}
 		});
 
-	if (Tweakables::g_RaytracedReflections)
+	if (m_RenderPath != RenderPath::PathTracing)
 	{
-		m_pRTReflections->Execute(graph, m_SceneData);
-	}
+		if (Tweakables::g_RaytracedReflections)
+		{
+			m_pRTReflections->Execute(graph, m_SceneData);
+		}
 
-
-	if (Tweakables::g_TAA.Get())
-	{
-		RGPassBuilder temporalResolve = graph.AddPass("Temporal Resolve");
-		temporalResolve.Bind([=](CommandContext& renderContext, const RGPassResources& /*resources*/)
-			{
-				renderContext.InsertResourceBarrier(m_pTAASource.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-				renderContext.InsertResourceBarrier(m_pHDRRenderTarget.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-				renderContext.InsertResourceBarrier(m_pVelocity.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-				renderContext.InsertResourceBarrier(m_pPreviousColor.get(), D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
-
-				renderContext.SetComputeRootSignature(m_pTemporalResolveRS.get());
-				renderContext.SetPipelineState(m_pTemporalResolvePSO);
-
-				struct Parameters
+		if (Tweakables::g_TAA.Get())
+		{
+			RGPassBuilder temporalResolve = graph.AddPass("Temporal Resolve");
+			temporalResolve.Bind([=](CommandContext& renderContext, const RGPassResources& /*resources*/)
 				{
-					Vector2 InvScreenDimensions;
-					Vector2 Jitter;
-				} parameters;
+					renderContext.InsertResourceBarrier(m_pTAASource.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+					renderContext.InsertResourceBarrier(m_pHDRRenderTarget.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+					renderContext.InsertResourceBarrier(m_pVelocity.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+					renderContext.InsertResourceBarrier(m_pPreviousColor.get(), D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 
-				parameters.InvScreenDimensions = Vector2(1.0f / m_WindowWidth, 1.0f / m_WindowHeight);
-				parameters.Jitter.x = m_pCamera->GetPreviousJitter().x - m_pCamera->GetJitter().x;
-				parameters.Jitter.y = -(m_pCamera->GetPreviousJitter().y - m_pCamera->GetJitter().y);
-				renderContext.SetComputeDynamicConstantBufferView(0, parameters);
+					renderContext.SetComputeRootSignature(m_pTemporalResolveRS.get());
+					renderContext.SetPipelineState(m_pTemporalResolvePSO);
 
-				renderContext.BindResource(1, 0, m_pHDRRenderTarget->GetUAV());
-				renderContext.BindResource(2, 0, m_pVelocity->GetSRV());
-				renderContext.BindResource(2, 1, m_pPreviousColor->GetSRV());
-				renderContext.BindResource(2, 2, m_pTAASource->GetSRV());
-				renderContext.BindResource(2, 3, GetResolvedDepthStencil()->GetSRV());
+					struct Parameters
+					{
+						Vector2 InvScreenDimensions;
+						Vector2 Jitter;
+					} parameters;
 
-				int dispatchGroupsX = Math::DivideAndRoundUp(m_WindowWidth, 8);
-				int dispatchGroupsY = Math::DivideAndRoundUp(m_WindowHeight, 8);
-				renderContext.Dispatch(dispatchGroupsX, dispatchGroupsY);
+					parameters.InvScreenDimensions = Vector2(1.0f / m_WindowWidth, 1.0f / m_WindowHeight);
+					parameters.Jitter.x = m_pCamera->GetPreviousJitter().x - m_pCamera->GetJitter().x;
+					parameters.Jitter.y = -(m_pCamera->GetPreviousJitter().y - m_pCamera->GetJitter().y);
+					renderContext.SetComputeDynamicConstantBufferView(0, parameters);
 
-				renderContext.CopyTexture(m_pHDRRenderTarget.get(), m_pPreviousColor.get());
-			});
+					renderContext.BindResource(1, 0, m_pHDRRenderTarget->GetUAV());
+					renderContext.BindResource(2, 0, m_pVelocity->GetSRV());
+					renderContext.BindResource(2, 1, m_pPreviousColor->GetSRV());
+					renderContext.BindResource(2, 2, m_pTAASource->GetSRV());
+					renderContext.BindResource(2, 3, GetResolvedDepthStencil()->GetSRV());
+
+					int dispatchGroupsX = Math::DivideAndRoundUp(m_WindowWidth, 8);
+					int dispatchGroupsY = Math::DivideAndRoundUp(m_WindowHeight, 8);
+					renderContext.Dispatch(dispatchGroupsX, dispatchGroupsY);
+
+					renderContext.CopyTexture(m_pHDRRenderTarget.get(), m_pPreviousColor.get());
+				});
+		}
 	}
 
 	//Tonemapping
