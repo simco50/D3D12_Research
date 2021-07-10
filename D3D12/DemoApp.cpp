@@ -1501,6 +1501,7 @@ void DemoApp::InitializePipelines()
 
 		psoDesc.SetPixelShader(pPixelShader);
 		psoDesc.SetName("Depth Prepass Alpha Mask");
+		psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
 		m_pDepthPrepassAlphaMaskPSO = m_pDevice->CreatePipeline(psoDesc);
 	}
 
@@ -1939,7 +1940,7 @@ void DemoApp::UpdateTLAS(CommandContext& context)
 			// Cull object that are small to the viewer - Deligiannis2019
 			Vector3 cameraVec = (batch.Bounds.Center - m_pCamera->GetPosition());
 			float angle = tanf(batch.Radius / cameraVec.Length());
-			if (angle < Tweakables::g_TLASBoundsThreshold && cameraVec.Length() > batch.Radius)
+			if (angle < Tweakables::g_TLASBoundsThreshold && cameraVec.Length() > batch.Radius && m_RenderPath != RenderPath::PathTracing)
 			{
 				continue;
 			}

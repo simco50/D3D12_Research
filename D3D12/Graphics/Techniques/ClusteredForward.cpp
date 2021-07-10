@@ -174,7 +174,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 			{
 				GPU_PROFILE_SCOPE("Opaque", &context);
 				context.SetPipelineState(m_pMarkUniqueClustersOpaquePSO);
-				DrawScene(context, resources, Batch::Blending::Opaque);
+				DrawScene(context, resources, Batch::Blending::Opaque | Batch::Blending::AlphaMask);
 			}
 
 			{
@@ -453,9 +453,14 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
 			{
 				GPU_PROFILE_SCOPE("Opaque", &context);
 				context.SetPipelineState(m_pDiffusePSO);
-				DrawScene(context, resources, Batch::Blending::Opaque | Batch::Blending::AlphaMask);
+				DrawScene(context, resources, Batch::Blending::Opaque);
 			}
-
+			{
+				GPU_PROFILE_SCOPE("Opaque - Masked", &context);
+				context.SetPipelineState(m_pDiffuseMaskedPSO);
+				DrawScene(context, resources, Batch::Blending::AlphaMask);
+				
+			}
 			{
 				GPU_PROFILE_SCOPE("Transparant", &context);
 				context.SetPipelineState(m_pDiffuseTransparancyPSO);
@@ -680,10 +685,15 @@ void ClusteredForward::SetupPipelines()
 		psoDesc.SetName("Diffuse (Opaque)");
 		m_pDiffusePSO = m_pDevice->CreatePipeline(psoDesc);
 
+		//Opaque Masked
+		psoDesc.SetName("Diffuse Masked (Opaque)");
+		psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
+		m_pDiffuseMaskedPSO = m_pDevice->CreatePipeline(psoDesc);
+
 		//Transparant
+		psoDesc.SetName("Diffuse (Transparant)");
 		psoDesc.SetBlendMode(BlendMode::Alpha, false);
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
-		psoDesc.SetName("Diffuse (Transparant)");
 		m_pDiffuseTransparancyPSO = m_pDevice->CreatePipeline(psoDesc);
 	}
 

@@ -31,18 +31,13 @@ float3 UnpackBC5Normal(float2 packedNormal)
     return float3(packedNormal, sqrt(1 - saturate(dot(packedNormal.xy, packedNormal.xy))));
 }
 
-float3 TangentSpaceNormalMapping(float3 sampledNormal, float3x3 TBN, bool invertY)
+float3 TangentSpaceNormalMapping(float3 sampledNormal, float3x3 TBN)
 {
 	float3 normal = sampledNormal;
 #if SUPPORT_BC5
 	normal = UnpackBC5Normal(sampledNormal.xy);
 #endif
 	normal.xy = sampledNormal.xy * 2.0f - 1.0f;
-
-	if(invertY)
-	{
-		normal.x = -normal.x;
-	}
 	normal = normalize(normal);
 	return mul(normal, TBN);
 }

@@ -25,7 +25,7 @@ PathTracing::PathTracing(GraphicsDevice* pDevice)
 	desc.MaxAttributeSize = 2 * sizeof(float);
 	desc.Type = D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE;
 	desc.AddLibrary(pLibrary);
-	desc.AddHitGroup("PrimaryHG", "PrimaryCHS", "");
+	desc.AddHitGroup("PrimaryHG", "PrimaryCHS", "PrimaryAHS");
 	desc.AddMissShader("PrimaryMS");
 	desc.pGlobalRootSignature = m_pRS.get();
 	m_pSO = pDevice->CreateStateObject(desc);
