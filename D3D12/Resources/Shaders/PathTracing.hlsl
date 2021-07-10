@@ -51,6 +51,11 @@ struct RAYPAYLOAD PrimaryRayPayload
 	float3 output 		RAYQUALIFIER(read(caller, closesthit) : write(caller, closesthit, miss));
 };
 
+struct RAYPAYLOAD ShadowRayPayload
+{
+	float hit 			RAYQUALIFIER(read(caller) : write(caller, miss));
+};
+
 struct ShadingData
 {
 	float3 WorldPos;
@@ -64,6 +69,32 @@ struct ShadingData
 	float Roughness;
 	float3 Emissive;
 };
+
+float CastShadowRay(float3 origin, float3 direction)
+{
+	float len = length(direction);
+	RayDesc ray;
+	ray.Origin = origin;
+	ray.Direction = direction / len;
+	ray.TMin = RAY_BIAS;
+	ray.TMax = len;
+
+	ShadowRayPayload shadowRay;
+	shadowRay.hit = 0.0f;
+
+	TraceRay(
+		tTLASTable[cViewData.TLASIndex], 						//AccelerationStructure
+		RAY_FLAG_SKIP_CLOSEST_HIT_SHADER |						//RayFlags
+			RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH,
+		0xFF, 													//InstanceInclusionMask
+		0, 														//RayContributionToHitGroupIndex
+		0, 														//MultiplierForGeometryContributionToHitGroupIndex
+		1, 														//MissShaderIndex
+		ray, 													//Ray
+		shadowRay 												//Payload
+	);
+	return shadowRay.hit;
+}
 
 Vertex GetVertexAttributes(float3 barycentrics)
 {
@@ -161,6 +192,20 @@ LightResult EvaluateLight(Light light, ShadingData shadingData)
 		return result;
 	}
 
+	float3 viewPosition = mul(float4(shadingData.WorldPos, 1), cViewData.View).xyz;
+	float4 pos = float4(0, 0, 0, viewPosition.z);
+	int shadowIndex = GetShadowIndex(light, pos, shadingData.WorldPos);
+	float4x4 lightViewProjection = cShadowData.LightViewProjections[shadowIndex];
+	float4 lightPos = mul(float4(shadingData.WorldPos, 1), lightViewProjection);
+	lightPos.xyz /= lightPos.w;
+	lightPos.x = lightPos.x / 2.0f + 0.5f;
+	lightPos.y = lightPos.y / -2.0f + 0.5f;
+	if(shadowIndex >= 0)
+	{
+		attenuation *= LightTextureMask(light, shadowIndex, shadingData.WorldPos);
+		attenuation *= CastShadowRay(shadingData.WorldPos, L); 
+	}
+
 	L = normalize(L);
 	result = DefaultLitBxDF(shadingData.Specular, shadingData.Roughness, shadingData.Diffuse, shadingData.N, shadingData.V, L, attenuation);
 	float4 color = light.GetColor();
@@ -200,6 +245,12 @@ void PrimaryAHS(inout PrimaryRayPayload payload, BuiltInTriangleIntersectionAttr
 void PrimaryMS(inout PrimaryRayPayload payload : SV_RayPayload) 
 {
 	payload.output = CIESky(WorldRayDirection(), -tLights[0].Direction);
+}
+
+[shader("miss")] 
+void ShadowMS(inout ShadowRayPayload payload : SV_RayPayload) 
+{
+	payload.hit = 1;
 }
 
 [shader("raygeneration")] 

@@ -27,6 +27,7 @@ PathTracing::PathTracing(GraphicsDevice* pDevice)
 	desc.AddLibrary(pLibrary);
 	desc.AddHitGroup("PrimaryHG", "PrimaryCHS", "PrimaryAHS");
 	desc.AddMissShader("PrimaryMS");
+	desc.AddMissShader("ShadowMS");
 	desc.pGlobalRootSignature = m_pRS.get();
 	m_pSO = pDevice->CreateStateObject(desc);
 }
@@ -68,6 +69,7 @@ void PathTracing::Render(RGGraph& graph, const SceneData& sceneData)
 			ShaderBindingTable bindingTable(m_pSO);
 			bindingTable.BindRayGenShader("RayGen");
 			bindingTable.BindMissShader("PrimaryMS", 0);
+			bindingTable.BindMissShader("ShadowMS", 1);
 			bindingTable.BindHitGroup("PrimaryHG", 0);
 
 			const D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
