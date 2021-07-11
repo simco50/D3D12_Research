@@ -24,14 +24,6 @@ struct VertexAttribute
 	int Material;
 };
 
-struct VertexInput
-{
-	uint2 Position;
-	uint UV;
-	float3 Normal;
-	float4 Tangent;
-};
-
 struct ViewData
 {
 	float4x4 View;
@@ -184,6 +176,14 @@ LightResult EvaluateLight(Light light, float3 worldPos, float3 V, SurfaceData su
 	return result;
 }
 
+struct VertexInput
+{
+	uint2 Position;
+	uint UV;
+	float3 Normal;
+	float4 Tangent;
+};
+
 VertexAttribute GetVertexAttributes(float3 barycentrics)
 {
 	MeshData mesh = tMeshes[InstanceID()];
@@ -194,12 +194,20 @@ VertexAttribute GetVertexAttributes(float3 barycentrics)
 	outData.Normal = 0;
 	outData.Tangent = 0;
 	outData.Material = mesh.Material;
+
+	const uint vertexStride = sizeof(VertexInput);
+	ByteAddressBuffer geometryBuffer = tBufferTable[mesh.VertexBuffer];
+
 	for(int i = 0; i < 3; ++i)
 	{
-		VertexInput vertex = tBufferTable[mesh.VertexBuffer].Load<VertexInput>(indices[i] * sizeof(VertexInput));
-		outData.UV += UnpackHalf2(vertex.UV) * barycentrics[i];
-		outData.Normal += vertex.Normal * barycentrics[i];
-		outData.Tangent += vertex.Tangent * barycentrics[i];
+		uint dataOffset = 0;
+		dataOffset += sizeof(uint2);
+		outData.UV += UnpackHalf2(geometryBuffer.Load<uint>(indices[i] * vertexStride + dataOffset)) * barycentrics[i];
+		dataOffset += sizeof(uint);
+		outData.Normal += geometryBuffer.Load<float3>(indices[i] * vertexStride + dataOffset) * barycentrics[i];
+		dataOffset += sizeof(float3);
+		outData.Tangent += geometryBuffer.Load<float4>(indices[i] * vertexStride + dataOffset) * barycentrics[i];
+		dataOffset += sizeof(float4);
 	}
 	float4x3 worldMatrix = ObjectToWorld4x3();
 	outData.Normal = normalize(mul(outData.Normal, (float3x3)worldMatrix));
