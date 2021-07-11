@@ -41,7 +41,11 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 	// Load unique textures;
 	std::map<const cgltf_image*, Texture*> textureMap;
 
-	auto MaterialIndex = [&](const cgltf_material* pMat) -> int { return (int)(pMat - pGltfData->materials); };
+	auto MaterialIndex = [&](const cgltf_material* pMat) -> int
+	{
+		check(pMat);
+		return (int)(pMat - pGltfData->materials);
+	};
 
 	m_Materials.reserve(pGltfData->materials_count);
 	for (size_t i = 0; i < pGltfData->materials_count; ++i)

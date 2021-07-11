@@ -2,6 +2,7 @@
 #include "ShadingModels.hlsli"
 #include "Lighting.hlsli"
 #include "RaytracingCommon.hlsli"
+#include "Random.hlsli"
 
 GlobalRootSignature GlobalRootSig =
 {
@@ -39,6 +40,8 @@ struct ViewData
 	uint NumLights;
 	float ViewPixelSpreadAngle;
 	uint TLASIndex;
+	uint FrameIndex;
+	uint Accumulate;
 };
 
 RWTexture2D<float4> uOutput : register(u0);
@@ -231,11 +234,19 @@ void RayGen()
 {
 	float2 pixel = float2(DispatchRaysIndex().xy);
 	float2 resolution = float2(DispatchRaysDimensions().xy);
+	uint seed = SeedThread(cViewData.FrameIndex * (DispatchRaysIndex().x + DispatchRaysDimensions().x * DispatchRaysIndex().y));
+
+	// Anti aliasing
+	float2 offset = float2(Random01(seed), Random01(seed));
+	pixel += lerp(-0.5.xx, 0.5f.xx, offset);
+
 	pixel = (((pixel + 0.5f) / resolution) * 2.f - 1.f);
+
 	Ray ray = GeneratePinholeCameraRay(pixel, cViewData.ViewInverse, cViewData.Projection);
 
-	float3 output = 0;
-	uint numBounces = 3;
+	float3 radiance = 0;
+	float3 throughput = 1;
+	uint numBounces = 2;
 	for(int i = 0; i < numBounces; ++i)
 	{
 		PrimaryRayPayload payload = (PrimaryRayPayload)0;
@@ -259,7 +270,7 @@ void RayGen()
 
 		if(!payload.Hit)
 		{
-			output += CIESky(ray.Direction, -tLights[0].Direction);
+			radiance += throughput * CIESky(ray.Direction, -tLights[0].Direction);
 			break;
 		}
 
@@ -267,12 +278,18 @@ void RayGen()
 		for(int j = 0; j < cViewData.NumLights; ++j)
 		{
 			LightResult result = EvaluateLight(tLights[j], payload.Position, desc.Direction, payload.Normal, surface);
-			output += result.Diffuse + result.Specular + surface.Emissive;
+			radiance += throughput * (result.Diffuse + result.Specular);
 		}
+		radiance += throughput * surface.Emissive;
 
 		ray.Origin = payload.Position;
 		ray.Direction = reflect(ray.Direction, payload.Normal);
 	}
-
-	uOutput[DispatchRaysIndex().xy] = float4(output, 1);
+	
+	if(cViewData.Accumulate)
+	{
+		float3 c = uOutput[DispatchRaysIndex().xy].xyz;
+		radiance = lerp(c, radiance, 0.02f);
+	}
+	uOutput[DispatchRaysIndex().xy] = float4(radiance, 1);
 }

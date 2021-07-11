@@ -56,6 +56,8 @@ void PathTracing::Render(RGGraph& graph, const SceneData& sceneData)
 				uint32 NumLights;
 				float ViewPixelSpreadAngle;
 				uint32 TLASIndex;
+				uint32 FrameIndex;
+				uint32 Accumulate;
 			} parameters{};
 
 			parameters.View = sceneData.pCamera->GetView();
@@ -65,6 +67,8 @@ void PathTracing::Render(RGGraph& graph, const SceneData& sceneData)
 			parameters.NumLights = sceneData.pLightBuffer->GetNumElements();
 			parameters.ViewPixelSpreadAngle = atanf(2.0f * tanf(sceneData.pCamera->GetFoV() / 2) / (float)sceneData.pRenderTarget->GetHeight());
 			parameters.TLASIndex = sceneData.SceneTLAS;
+			parameters.FrameIndex = sceneData.FrameIndex;
+			parameters.Accumulate = sceneData.pCamera->GetPreviousViewProjection() == sceneData.pCamera->GetViewProjection();
 
 			ShaderBindingTable bindingTable(m_pSO);
 			bindingTable.BindRayGenShader("RayGen");
