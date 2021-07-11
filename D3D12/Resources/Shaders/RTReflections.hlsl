@@ -103,7 +103,7 @@ ReflectionRayPayload CastReflectionRay(float3 origin, float3 direction, float T)
 
 	TraceRay(
 		tTLASTable[cViewData.TLASIndex],		 			//AccelerationStructure
-		RAY_FLAG_CULL_BACK_FACING_TRIANGLES, 				//RayFlags
+		0,									 				//RayFlags
 		0xFF, 												//InstanceInclusionMask
 		0,													//RayContributionToHitGroupIndex
 		0, 													//MultiplierForGeometryContributionToHitGroupIndex
