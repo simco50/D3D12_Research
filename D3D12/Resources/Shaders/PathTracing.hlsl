@@ -20,7 +20,6 @@ struct VertexAttribute
 {
 	float2 UV;
 	float3 Normal;
-	float4 Tangent;
 	int Material;
 };
 
@@ -45,7 +44,6 @@ struct RAYPAYLOAD PrimaryRayPayload
 	float2 UV;
 	float3 Position;
 	float3 Normal;
-	float4 Tangent;
 	uint Material;
 	uint Hit;
 };
@@ -62,7 +60,6 @@ struct SurfaceData
 	float3 Specular;
 	float Roughness;
 	float3 Emissive;
-	float3 Normal;
 };
 
 float CastShadowRay(float3 origin, float3 direction)
@@ -91,7 +88,7 @@ float CastShadowRay(float3 origin, float3 direction)
 	return shadowRay.Hit;
 }
 
-SurfaceData GetShadingData(uint materialIndex, float3 normal, float4 tangent, float2 uv, float mipLevel)
+SurfaceData GetShadingData(uint materialIndex, float2 uv, float mipLevel)
 {
 	MaterialData material = tMaterials[materialIndex];
 	float4 baseColor = material.BaseColorFactor;
@@ -115,26 +112,16 @@ SurfaceData GetShadingData(uint materialIndex, float3 normal, float4 tangent, fl
 	}
 	float specular = 0.5f;
 
-	float3 N = normal;
-	if(material.Normal >= 0)
-	{
-		float4 normalSample = tTexture2DTable[material.Normal].SampleLevel(sDiffuseSampler, uv, mipLevel);
-		float3 B = cross(N, tangent.xyz) * tangent.w;
-		float3x3 TBN = float3x3(tangent.xyz, B, N);
-		N = TangentSpaceNormalMapping(normalSample.xyz, TBN);
-	}
-
 	SurfaceData outData = (SurfaceData)0;
 	outData.Diffuse = ComputeDiffuseColor(baseColor.rgb, metalness);
 	outData.Specular = ComputeF0(specular, baseColor.rgb, metalness);
 	outData.Roughness = roughness;
 	outData.Emissive = emissive;
 	outData.Opacity = baseColor.a;
-	outData.Normal = N;
 	return outData;
 }
 
-LightResult EvaluateLight(Light light, float3 worldPos, float3 V, SurfaceData surface)
+LightResult EvaluateLight(Light light, float3 worldPos, float3 V, float3 N, SurfaceData surface)
 {
 	LightResult result = (LightResult)0;
 	float attenuation = GetAttenuation(light, worldPos);
@@ -169,7 +156,7 @@ LightResult EvaluateLight(Light light, float3 worldPos, float3 V, SurfaceData su
 	}
 
 	L = normalize(L);
-	result = DefaultLitBxDF(surface.Specular, surface.Roughness, surface.Diffuse, surface.Normal, V, L, attenuation);
+	result = DefaultLitBxDF(surface.Specular, surface.Roughness, surface.Diffuse, N, V, L, attenuation);
 	float4 color = light.GetColor();
 	result.Diffuse *= color.rgb * light.Intensity;
 	result.Specular *= color.rgb * light.Intensity;
@@ -192,7 +179,6 @@ VertexAttribute GetVertexAttributes(float3 barycentrics)
 
 	outData.UV = 0;
 	outData.Normal = 0;
-	outData.Tangent = 0;
 	outData.Material = mesh.Material;
 
 	const uint vertexStride = sizeof(VertexInput);
@@ -206,12 +192,10 @@ VertexAttribute GetVertexAttributes(float3 barycentrics)
 		dataOffset += sizeof(uint);
 		outData.Normal += geometryBuffer.Load<float3>(indices[i] * vertexStride + dataOffset) * barycentrics[i];
 		dataOffset += sizeof(float3);
-		outData.Tangent += geometryBuffer.Load<float4>(indices[i] * vertexStride + dataOffset) * barycentrics[i];
 		dataOffset += sizeof(float4);
 	}
 	float4x3 worldMatrix = ObjectToWorld4x3();
 	outData.Normal = normalize(mul(outData.Normal, (float3x3)worldMatrix));
-	outData.Tangent.xyz = normalize(mul(outData.Tangent.xyz, (float3x3)worldMatrix));
 	return outData;
 }
 
@@ -225,7 +209,6 @@ void PrimaryCHS(inout PrimaryRayPayload payload, BuiltInTriangleIntersectionAttr
 	payload.Material = vertex.Material;
 	payload.UV = vertex.UV;
 	payload.Normal = vertex.Normal;
-	payload.Tangent = vertex.Tangent;
 	payload.Position = WorldRayOrigin() + WorldRayDirection() * RayTCurrent();
 }
 
@@ -235,7 +218,7 @@ void PrimaryAHS(inout PrimaryRayPayload payload, BuiltInTriangleIntersectionAttr
 	float3 barycentrics = float3((1.0f - attrib.barycentrics.x - attrib.barycentrics.y), attrib.barycentrics.x, attrib.barycentrics.y);
 	VertexAttribute vertex = GetVertexAttributes(barycentrics);
 
-	SurfaceData surface = GetShadingData(vertex.Material, vertex.Normal, vertex.Tangent, vertex.UV, 0);
+	SurfaceData surface = GetShadingData(vertex.Material, vertex.UV, 0);
 	if(surface.Opacity < 0.5)
 	{
 		IgnoreHit();
@@ -295,22 +278,28 @@ void RayGen()
 
 		if(!payload.Hit)
 		{
-			radiance += throughput * CIESky(ray.Direction, -tLights[0].Direction);
+			radiance += 1;
 			break;
 		}
 
-		SurfaceData surface = GetShadingData(payload.Material, payload.Normal, payload.Tangent, payload.UV, 0);
+		SurfaceData surface = GetShadingData(payload.Material, payload.UV, 0);
 		for(int j = 0; j < cViewData.NumLights; ++j)
 		{
-			LightResult result = EvaluateLight(tLights[j], payload.Position, desc.Direction, surface);
-			radiance += throughput * (result.Diffuse + result.Specular);
+			LightResult result = EvaluateLight(tLights[j], payload.Position, desc.Direction, payload.Normal, surface);
+			radiance += throughput * result.Diffuse + result.Specular;
 		}
 		radiance += throughput * surface.Emissive;
 
+		float3 dir = HemisphereSampleUniform(Random01(seed), Random01(seed));
+		float3 b = float3(1, 0, 0);
+		float3 t = normalize(cross(dir, b));
+		b = cross(t, payload.Normal);
+		dir = mul(dir, float3x3(t, b, payload.Normal));
+
 		ray.Origin = payload.Position;
-		ray.Direction = reflect(ray.Direction, surface.Normal);
+		ray.Direction = dir;
 	}
-	
+
 	if(cViewData.Accumulate)
 	{
 		float3 c = uOutput[DispatchRaysIndex().xy].xyz;

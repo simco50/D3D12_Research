@@ -194,8 +194,8 @@ DemoApp::DemoApp(WindowHandle window, const IntVector2& windowRect, int sampleCo
 	checkf(sampleCount == 1, "I broke MSAA! TODO");
 
 	m_pCamera = std::make_unique<FreeCamera>();
-	m_pCamera->SetPosition(Vector3(-30, 35, 48));
-	m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(3 * Math::PIDIV4, Math::PIDIV4 * 0.3f, 0));
+	m_pCamera->SetPosition(Vector3(-13, 24, -15));
+	m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(Math::PIDIV4, Math::PIDIV4 * 0.5f, 0));
 	m_pCamera->SetNearPlane(300.0f);
 	m_pCamera->SetFarPlane(1.0f);
 
