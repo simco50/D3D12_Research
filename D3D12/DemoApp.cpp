@@ -908,11 +908,11 @@ void DemoApp::Update()
 
 		if (Tweakables::g_RaytracedAO)
 		{
-			m_pRTAO->Execute(graph, m_pAmbientOcclusion.get(), GetResolvedDepthStencil(), m_SceneData, *m_pCamera);
+			m_pRTAO->Execute(graph, m_pAmbientOcclusion.get(), m_SceneData);
 		}
 		else
 		{
-			m_pSSAO->Execute(graph, m_pAmbientOcclusion.get(), GetResolvedDepthStencil(), *m_pCamera);
+			m_pSSAO->Execute(graph, m_pAmbientOcclusion.get(), m_SceneData);
 		}
 
 		//SHADOW MAPPING

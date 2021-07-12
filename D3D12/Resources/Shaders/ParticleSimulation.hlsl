@@ -101,7 +101,7 @@ void Emit(CS_INPUT input)
         uCounters.InterlockedAdd(DEAD_LIST_COUNTER, -1, deadSlot);
         uint particleIndex = uDeadList[deadSlot - 1];
 
-        uint seed = deadSlot * particleIndex;
+        uint seed = SeedThread(deadSlot * particleIndex);
 
         ParticleData p;
         p.LifeTime = 0;

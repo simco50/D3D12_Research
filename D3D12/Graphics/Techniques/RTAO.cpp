@@ -23,7 +23,7 @@ RTAO::RTAO(GraphicsDevice* pDevice)
 	}
 }
 
-void RTAO::Execute(RGGraph& graph, Texture* pColor, Texture* pDepth, const SceneData& sceneData, Camera& camera)
+void RTAO::Execute(RGGraph& graph, Texture* pTarget, const SceneData& sceneData)
 {
 	static float g_AoPower = 3;
 	static float g_AoRadius = 0.5f;
@@ -39,8 +39,8 @@ void RTAO::Execute(RGGraph& graph, Texture* pColor, Texture* pDepth, const Scene
 	RGPassBuilder rt = graph.AddPass("RTAO");
 	rt.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
 		{
-			context.InsertResourceBarrier(pDepth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-			context.InsertResourceBarrier(pColor, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+			context.InsertResourceBarrier(sceneData.pResolvedDepth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+			context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
 			context.SetComputeRootSignature(m_pGlobalRS.get());
 			context.SetPipelineState(m_pRtSO);
@@ -58,9 +58,9 @@ void RTAO::Execute(RGGraph& graph, Texture* pColor, Texture* pDepth, const Scene
 			} parameters{};
 
 
-			parameters.ViewInverse = camera.GetViewInverse();
-			parameters.ProjectionInverse = camera.GetProjectionInverse();
-			parameters.ViewProjectionInverse = camera.GetViewProjectionInverse();
+			parameters.ViewInverse = sceneData.pCamera->GetViewInverse();
+			parameters.ProjectionInverse = sceneData.pCamera->GetProjectionInverse();
+			parameters.ViewProjectionInverse = sceneData.pCamera->GetViewProjectionInverse();
 			parameters.Power = g_AoPower;
 			parameters.Radius = g_AoRadius;
 			parameters.Samples = g_AoSamples;
@@ -72,11 +72,11 @@ void RTAO::Execute(RGGraph& graph, Texture* pColor, Texture* pDepth, const Scene
 			bindingTable.BindMissShader("Miss", {});
 
 			context.SetComputeDynamicConstantBufferView(0, parameters);
-			context.BindResource(1, 0, pColor->GetUAV());
-			context.BindResource(2, 0, pDepth->GetSRV());
+			context.BindResource(1, 0, pTarget->GetUAV());
+			context.BindResource(2, 0, sceneData.pResolvedDepth->GetSRV());
 			context.BindResourceTable(3, sceneData.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Compute);
 
-			context.DispatchRays(bindingTable, pColor->GetWidth(), pColor->GetHeight());
+			context.DispatchRays(bindingTable, pTarget->GetWidth(), pTarget->GetHeight());
 		});
 }
 

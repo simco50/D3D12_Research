@@ -259,7 +259,7 @@ void RayGen()
 {
 	float2 pixel = float2(DispatchRaysIndex().xy);
 	float2 resolution = float2(DispatchRaysDimensions().xy);
-	uint seed = SeedThread(cViewData.FrameIndex * (DispatchRaysIndex().x + DispatchRaysDimensions().x * DispatchRaysIndex().y));
+	uint seed = SeedThread(DispatchRaysIndex().xy, DispatchRaysDimensions().xy, cViewData.FrameIndex);
 
 	// Anti aliasing
 	float2 offset = float2(Random01(seed), Random01(seed));
