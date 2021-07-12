@@ -1,30 +1,30 @@
 #include "stdafx.h"
 #include "DemoApp.h"
-#include "Graphics/Core/Graphics.h"
-#include "Graphics/Core/CommandContext.h"
 #include "Scene/Camera.h"
 #include "ImGuizmo/ImGuizmo.h"
+#include "Content/Image.h"
 #include "Graphics/DebugRenderer.h"
-#include "Core/Input.h"
-#include "Graphics/Core/Texture.h"
-#include "Core/TaskQueue.h"
-#include "Graphics/RenderGraph/RenderGraph.h"
 #include "Graphics/Profiler.h"
+#include "Graphics/Mesh.h"
+#include "Graphics/Core/Graphics.h"
+#include "Graphics/Core/Texture.h"
+#include "Graphics/Core/CommandContext.h"
+#include "Graphics/Core/Shader.h"
+#include "Graphics/Core/PipelineState.h"
+#include "Graphics/RenderGraph/RenderGraph.h"
 #include "Graphics/Techniques/GpuParticles.h"
 #include "Graphics/Techniques/RTAO.h"
 #include "Graphics/Techniques/TiledForward.h"
 #include "Graphics/Techniques/ClusteredForward.h"
 #include "Graphics/Techniques/RTReflections.h"
-#include "Graphics/ImGuiRenderer.h"
-#include "Graphics/Mesh.h"
-#include "Graphics/Core/Shader.h"
-#include "Graphics/Core/PipelineState.h"
+#include "Graphics/Techniques/PathTracing.h"
 #include "Graphics/Techniques/SSAO.h"
+#include "Graphics/ImGuiRenderer.h"
+#include "Core/TaskQueue.h"
 #include "Core/CommandLine.h"
 #include "Core/Paths.h"
-#include "Content/Image.h"
+#include "Core/Input.h"
 #include "Core/ConsoleVariables.h"
-#include "Graphics/Techniques/PathTracing.h"
 
 static const int32 FRAME_COUNT = 3;
 static const DXGI_FORMAT SWAPCHAIN_FORMAT = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -776,7 +776,6 @@ void DemoApp::Update()
 
 	if (m_RenderPath != RenderPath::PathTracing)
 	{
-
 		//DEPTH PREPASS
 		// - Depth only pass that renders the entire scene
 		// - Optimization that prevents wasteful lighting calculations during the base pass
@@ -1944,12 +1943,15 @@ void DemoApp::UpdateTLAS(CommandContext& context)
 		{
 			const Batch& batch = m_SceneData.Batches[instanceIndex];
 
-			// Cull object that are small to the viewer - Deligiannis2019
-			Vector3 cameraVec = (batch.Bounds.Center - m_pCamera->GetPosition());
-			float angle = tanf(batch.Radius / cameraVec.Length());
-			if (angle < Tweakables::g_TLASBoundsThreshold && cameraVec.Length() > batch.Radius && m_RenderPath != RenderPath::PathTracing)
+			if (m_RenderPath != RenderPath::PathTracing)
 			{
-				continue;
+				// Cull object that are small to the viewer - Deligiannis2019
+				Vector3 cameraVec = (batch.Bounds.Center - m_pCamera->GetPosition());
+				float angle = tanf(batch.Radius / cameraVec.Length());
+				if (angle < Tweakables::g_TLASBoundsThreshold && cameraVec.Length() > batch.Radius)
+				{
+					continue;
+				}
 			}
 
 			const SubMesh& subMesh = *batch.pMesh;
