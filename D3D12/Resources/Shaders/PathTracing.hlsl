@@ -3,6 +3,11 @@
 #include "Lighting.hlsli"
 #include "RaytracingCommon.hlsli"
 #include "Random.hlsli"
+#include "TonemappingCommon.hlsli"
+
+#define MIN_BOUNCES 3
+#define RIS_CANDIDATES_LIGHTS 8
+#define BLEND_FACTOR 0.02f
 
 GlobalRootSignature GlobalRootSig =
 {
@@ -20,6 +25,7 @@ struct VertexAttribute
 {
 	float2 UV;
 	float3 Normal;
+	float3 GeometryNormal;
 	int Material;
 };
 
@@ -34,6 +40,7 @@ struct ViewData
 	uint TLASIndex;
 	uint FrameIndex;
 	uint Accumulate;
+	int NumBounces;
 };
 
 RWTexture2D<float4> uOutput : register(u0);
@@ -44,6 +51,7 @@ struct RAYPAYLOAD PrimaryRayPayload
 	float2 UV;
 	float3 Position;
 	float3 Normal;
+	float3 GeometryNormal;
 	uint Material;
 	uint Hit;
 };
@@ -181,12 +189,15 @@ VertexAttribute GetVertexAttributes(float3 barycentrics)
 	outData.Normal = 0;
 	outData.Material = mesh.Material;
 
+	float3 positions[3];
+
 	const uint vertexStride = sizeof(VertexInput);
 	ByteAddressBuffer geometryBuffer = tBufferTable[mesh.VertexBuffer];
 
 	for(int i = 0; i < 3; ++i)
 	{
 		uint dataOffset = 0;
+		positions[i] += UnpackHalf3(geometryBuffer.Load<uint2>(indices[i] * vertexStride + dataOffset));
 		dataOffset += sizeof(uint2);
 		outData.UV += UnpackHalf2(geometryBuffer.Load<uint>(indices[i] * vertexStride + dataOffset)) * barycentrics[i];
 		dataOffset += sizeof(uint);
@@ -196,6 +207,13 @@ VertexAttribute GetVertexAttributes(float3 barycentrics)
 	}
 	float4x3 worldMatrix = ObjectToWorld4x3();
 	outData.Normal = normalize(mul(outData.Normal, (float3x3)worldMatrix));
+
+	// Calculate geometry normal from triangle vertices positions
+	float3 edge20 = positions[2] - positions[0];
+	float3 edge21 = positions[2] - positions[1];
+	float3 edge10 = positions[1] - positions[0];
+	outData.GeometryNormal = mul(normalize(cross(edge20, edge10)), (float3x3)worldMatrix);
+
 	return outData;
 }
 
@@ -209,6 +227,7 @@ void PrimaryCHS(inout PrimaryRayPayload payload, BuiltInTriangleIntersectionAttr
 	payload.Material = vertex.Material;
 	payload.UV = vertex.UV;
 	payload.Normal = vertex.Normal;
+	payload.GeometryNormal = vertex.GeometryNormal;
 	payload.Position = WorldRayOrigin() + WorldRayDirection() * RayTCurrent();
 }
 
@@ -237,6 +256,65 @@ void ShadowMS(inout ShadowRayPayload payload : SV_RayPayload)
 	payload.Hit = 1;
 }
 
+bool EvaluateDiffuseRay(float2 u, SurfaceData surface, float3 N, float3 V, out float3 direction, out float3 weight)
+{
+	direction = HemisphereSampleUniform(u.x, u.y);
+	float3 b = float3(1, 0, 0);
+	float3 t = normalize(cross(direction, b));
+	b = cross(t, N);
+	direction = mul(direction, float3x3(t, b, N));
+
+	weight = surface.Diffuse;
+
+	if(dot(N, direction) <= 0.0f)
+	{
+		return false;
+	}
+
+	if(GetLuminance(weight) < 0)
+	{
+		return false;
+	}
+	return true;
+}
+
+bool SampleLightRIS(inout uint seed, float3 position, float3 N, out int lightIndex, out float sampleWeight)
+{
+	if(cViewData.NumLights <= 0)
+	{
+		return false;
+	}
+	lightIndex = 0;
+	float totalWeights = 0;
+	float samplePdfG = 0;
+	for(int i = 0; i < RIS_CANDIDATES_LIGHTS; ++i)
+	{
+		float candidateWeight = (float)cViewData.NumLights;
+		int candidate = Random(seed, 0, cViewData.NumLights);
+		Light light = tLights[candidate];
+		float3 L = normalize(light.Position - position);
+		if(dot(N, L) < 0.00001f) 
+		{
+			continue;
+		}
+		float candidatePdfG = GetLuminance(GetAttenuation(light, position) * light.GetColor().xyz);
+		float candidateRISWeight = candidatePdfG * candidateWeight;
+		totalWeights += candidateRISWeight;
+		if(Random01(seed) < (candidateRISWeight / totalWeights))
+		{
+			lightIndex = candidate;
+			samplePdfG = candidatePdfG;
+		}
+	}
+
+	if(totalWeights == 0.0f)
+	{
+		return false;
+	}
+	sampleWeight = (totalWeights / (float)cViewData.NumLights) / samplePdfG;
+	return true;
+}
+
 [shader("raygeneration")] 
 void RayGen() 
 {
@@ -246,16 +324,15 @@ void RayGen()
 
 	// Anti aliasing
 	float2 offset = float2(Random01(seed), Random01(seed));
-	pixel += lerp(-0.5.xx, 0.5f.xx, offset);
+	pixel += lerp(-0.5f.xx, 0.5f.xx, offset);
 
-	pixel = (((pixel + 0.5f) / resolution) * 2.f - 1.f);
+	pixel = (((pixel + 0.5f) / resolution) * 2.0f - 1.0f);
 
 	Ray ray = GeneratePinholeCameraRay(pixel, cViewData.ViewInverse, cViewData.Projection);
 
 	float3 radiance = 0;
 	float3 throughput = 1;
-	uint numBounces = 3;
-	for(int i = 0; i < numBounces; ++i)
+	for(int i = 0; i < cViewData.NumBounces; ++i)
 	{
 		PrimaryRayPayload payload = (PrimaryRayPayload)0;
 
@@ -278,32 +355,65 @@ void RayGen()
 
 		if(!payload.Hit)
 		{
-			radiance += 1;
+			const float3 SkyColor = 1;
+			radiance += throughput * SkyColor;
 			break;
 		}
 
 		SurfaceData surface = GetShadingData(payload.Material, payload.UV, 0);
-		for(int j = 0; j < cViewData.NumLights; ++j)
-		{
-			LightResult result = EvaluateLight(tLights[j], payload.Position, desc.Direction, payload.Normal, surface);
-			radiance += throughput * result.Diffuse + result.Specular;
+
+		float3 N = payload.Normal;
+		float3 V = -desc.Direction;
+		float3 geometryNormal = payload.GeometryNormal;
+		if(dot(geometryNormal, V) < 0.0f)
+		{ 
+			geometryNormal = -geometryNormal;
 		}
+		if(dot(geometryNormal, N) < 0.0f)
+		{
+			N = -N;
+		}
+
 		radiance += throughput * surface.Emissive;
 
-		float3 dir = HemisphereSampleUniform(Random01(seed), Random01(seed));
-		float3 b = float3(1, 0, 0);
-		float3 t = normalize(cross(dir, b));
-		b = cross(t, payload.Normal);
-		dir = mul(dir, float3x3(t, b, payload.Normal));
+		// Direct light evaluation
+		int lightIndex = 0;
+		float lightWeight = 0.0f;
+		if(SampleLightRIS(seed, payload.Position, N, lightIndex, lightWeight))
+		{
+			LightResult result = EvaluateLight(tLights[lightIndex], payload.Position, V, N, surface);
+			radiance += throughput * (result.Diffuse + result.Specular) * lightWeight;
+		}
 
+		// Russian Roulette ray elimination
+		if(i > MIN_BOUNCES)
+		{
+			float rrProbability = min(0.95f, GetLuminance(throughput));
+			if(rrProbability < Random01(seed))
+			{
+				break;
+			}
+			else
+			{
+				throughput /= rrProbability;
+			}
+		}
+
+		float3 direction;
+		float3 weight;
+		if(!EvaluateDiffuseRay(float2(Random01(seed), Random01(seed)), surface, N, V, direction, weight))
+		{
+			break;
+		}
+		throughput *= weight;
 		ray.Origin = payload.Position;
-		ray.Direction = dir;
+		ray.Direction = direction;
 	}
 
 	if(cViewData.Accumulate)
 	{
-		float3 c = uOutput[DispatchRaysIndex().xy].xyz;
-		radiance = lerp(c, radiance, 0.02f);
+		float3 previousColor = uOutput[DispatchRaysIndex().xy].xyz;
+		radiance = lerp(previousColor, radiance, BLEND_FACTOR);
 	}
-	uOutput[DispatchRaysIndex().xy] = float4(radiance, 1);
+	uOutput[DispatchRaysIndex().xy] = float4(radiance, 1.0f);
 }
