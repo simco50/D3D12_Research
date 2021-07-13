@@ -230,7 +230,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 		if (node.mesh)
 		{
 			SubMeshInstance newNode;
-			newNode.Transform = Matrix(matrix) * Matrix::CreateScale(uniformScale);
+			newNode.Transform = Matrix(matrix) * Matrix::CreateScale(uniformScale, uniformScale, -uniformScale);
 			for (int primitive : meshToPrimitives[node.mesh])
 			{
 				newNode.MeshIndex = primitive;
