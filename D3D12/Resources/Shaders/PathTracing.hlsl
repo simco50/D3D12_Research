@@ -39,7 +39,6 @@ struct ViewData
 	float4x4 ProjectionInverse;
 	float4x4 Projection;
 	uint NumLights;
-	float ViewPixelSpreadAngle;
 	uint TLASIndex;
 	uint FrameIndex;
 	uint NumBounces;

@@ -92,7 +92,6 @@ void PathTracing::Render(RGGraph& graph, const SceneData& sceneData)
 				Matrix ProjectionInverse;
 				Matrix Projection;
 				uint32 NumLights;
-				float ViewPixelSpreadAngle;
 				uint32 TLASIndex;
 				uint32 FrameIndex;
 				uint32 NumBounces;
@@ -104,7 +103,6 @@ void PathTracing::Render(RGGraph& graph, const SceneData& sceneData)
 			parameters.ProjectionInverse = sceneData.pCamera->GetProjectionInverse();
 			parameters.Projection = sceneData.pCamera->GetProjection();
 			parameters.NumLights = sceneData.pLightBuffer->GetNumElements();
-			parameters.ViewPixelSpreadAngle = atanf(2.0f * tanf(sceneData.pCamera->GetFoV() / 2) / (float)sceneData.pRenderTarget->GetHeight());
 			parameters.TLASIndex = sceneData.SceneTLAS;
 			parameters.FrameIndex = sceneData.FrameIndex;
 			parameters.NumBounces = numBounces;
