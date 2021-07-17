@@ -150,7 +150,7 @@ private:
 	int32 m_ScreenshotDelay = -1;
 	uint32 m_ScreenshotRowPitch = 0;
 
-	RenderPath m_RenderPath = RenderPath::PathTracing;
+	RenderPath m_RenderPath = RenderPath::Clustered;
 
 	std::vector<std::unique_ptr<Mesh>> m_Meshes;
 	std::unique_ptr<Buffer> m_pTLAS;
