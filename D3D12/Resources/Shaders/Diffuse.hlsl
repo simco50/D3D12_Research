@@ -299,7 +299,7 @@ void PSMain(PSInput input,
 		float3 B = cross(N, T) * input.tangent.w;
 		float3x3 TBN = float3x3(T, B, N);
 		float3 tangentNormal = tTexture2DTable[material.Normal].Sample(sDiffuseSampler, input.texCoord).xyz;
-		N = TangentSpaceNormalMapping(tangentNormal, TBN, true);
+		N = TangentSpaceNormalMapping(tangentNormal, TBN);
 	}
 // Surface Shader END
 

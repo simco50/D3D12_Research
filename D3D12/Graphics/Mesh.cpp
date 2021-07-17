@@ -41,7 +41,11 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 	// Load unique textures;
 	std::map<const cgltf_image*, Texture*> textureMap;
 
-	auto MaterialIndex = [&](const cgltf_material* pMat) -> int { return (int)(pMat - pGltfData->materials); };
+	auto MaterialIndex = [&](const cgltf_material* pMat) -> int
+	{
+		check(pMat);
+		return (int)(pMat - pGltfData->materials);
+	};
 
 	m_Materials.reserve(pGltfData->materials_count);
 	for (size_t i = 0; i < pGltfData->materials_count; ++i)
@@ -155,9 +159,12 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 			meshData.NumIndices = (uint32)indexCount;
 			meshData.MaterialIndex = MaterialIndex(primitive.material);
 
-			for (size_t i = 0; i < indexCount; ++i)
+			constexpr int indexMap[] = { 0, 2, 1 };
+			for (size_t i = 0; i < indexCount; i += 3)
 			{
-				indices[indexOffset + i] = (int)cgltf_accessor_read_index(primitive.indices, i);
+				indices[indexOffset + i + 0] = (int)cgltf_accessor_read_index(primitive.indices, i + indexMap[0]);
+				indices[indexOffset + i + 1] = (int)cgltf_accessor_read_index(primitive.indices, i + indexMap[1]);
+				indices[indexOffset + i + 2] = (int)cgltf_accessor_read_index(primitive.indices, i + indexMap[2]);
 			}
 
 			for (size_t attrIdx = 0; attrIdx < primitive.attributes_count; ++attrIdx)
@@ -226,7 +233,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 		if (node.mesh)
 		{
 			SubMeshInstance newNode;
-			newNode.Transform = Matrix(matrix) * Matrix::CreateScale(uniformScale);
+			newNode.Transform = Matrix(matrix) * Matrix::CreateScale(uniformScale, uniformScale, -uniformScale);
 			for (int primitive : meshToPrimitives[node.mesh])
 			{
 				newNode.MeshIndex = primitive;

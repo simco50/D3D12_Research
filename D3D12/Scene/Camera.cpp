@@ -180,7 +180,7 @@ void FreeCamera::Update()
 	}
 	m_Velocity = Vector3::SmoothStep(m_Velocity, movement, 0.2f);
 
-	m_Position += m_Velocity * Time::DeltaTime() * 40.0f;
+	m_Position += m_Velocity * Time::DeltaTime() * 4.0f;
 	OnDirty();
 }
 

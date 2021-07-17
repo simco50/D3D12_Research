@@ -86,7 +86,7 @@ void RayGen()
 	float3 world = WorldFromDepth(texCoord, tSceneDepth.SampleLevel(sSceneSampler, texCoord, 0).r, cData.ViewProjectionInverse);
     float3 normal = NormalFromDepth(tSceneDepth, sSceneSampler, texCoord, dimInv, cData.ViewProjectionInverse);
  	
-	uint randSeed = SeedThread(launchIndex1d + cData.FrameIndex * launchDim.x * launchDim.y);
+	uint randSeed = SeedThread(launchIndex, launchDim, cData.FrameIndex);
 
 	float accumulatedAo = 0.0f;
 	for(int i = 0; i < cData.Samples; ++i)
@@ -103,7 +103,7 @@ void RayGen()
 
 		TraceRay(
 			tTLASTable[cData.TLASIndex], 									//AccelerationStructure
-			RAY_FLAG_CULL_BACK_FACING_TRIANGLES | 							//RayFlags
+										//RayFlags
 				RAY_FLAG_FORCE_OPAQUE | 
 				RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH | 
 				RAY_FLAG_SKIP_CLOSEST_HIT_SHADER, 	

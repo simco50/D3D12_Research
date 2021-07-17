@@ -18,7 +18,13 @@ uint SeedThread(uint seed)
     return seed;
 }
 
-uint Random(inout uint rng_state)
+uint SeedThread(uint2 pixel, uint2 resolution, uint frameIndex)
+{
+    uint rngState = dot(pixel, uint2(1, resolution.x)) ^ SeedThread(frameIndex);
+    return SeedThread(rngState);
+}
+
+uint XORShift(inout uint rng_state)
 {
     // Xorshift algorithm from George Marsaglia's paper.
     rng_state ^= (rng_state << 13);
@@ -29,7 +35,7 @@ uint Random(inout uint rng_state)
 
 float Random01(inout uint rng_state)
 {
-    return asfloat(0x3f800000 | Random(rng_state) >> 9) - 1.0;
+    return asfloat(0x3f800000 | XORShift(rng_state) >> 9) - 1.0;
 }
 
 uint Random(inout uint rng_state, uint minimum, uint maximum)
@@ -65,6 +71,23 @@ float3 HemisphereSampleUniform(float u, float v)
 	float cosTheta = 1.0 - u;
 	float sinTheta = sqrt(1.0 - cosTheta * cosTheta);
 	return float3(cos(phi) * sinTheta, sin(phi) * sinTheta, cosTheta);
+}
+
+// Samples a direction within a hemisphere oriented along +Z axis with a cosine-weighted distribution 
+// Source: "Sampling Transformations Zoo" in Ray Tracing Gems by Shirley et al.
+float3 HemisphereSampleCosineWeight(float2 u, out float pdf) 
+{
+	float a = sqrt(u.x);
+	float b = 2.0f * PI * u.y;
+
+	float3 result = float3(
+		a * cos(b),
+		a * sin(b),
+		sqrt(1.0f - u.x));
+
+	pdf = result.z * INV_PI;
+
+	return result;
 }
 
 //-----------------------------------------------------------------------------------------

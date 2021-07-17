@@ -96,7 +96,7 @@ namespace Math
 
 	Vector3 ScaleFromMatrix(const Matrix& m);
 
-	Quaternion LookRotation(const Vector3& direction);
+	Quaternion LookRotation(const Vector3& direction, const Vector3& up = Vector3::Up);
 
 	std::string ToBase(unsigned int number, unsigned int base, bool addPrefix = true);
 	inline std::string ToBinary(uint32 number, bool addPrefix = true)
