@@ -6,9 +6,26 @@ SOURCE_DIR = ROOT .. ENGINE_NAME .. "/"
 WIN_SDK = "10.0.19041.0"
 WITH_UWP = _OPTIONS["uwp"]
 
+-- Address Sanitizer API
+premake.api.register{
+	name="enableASAN",
+	scope="config",
+	kind="string",
+	allowed={"true", "false"}
+ }
+ premake.override(premake.vstudio.vc2010, "configurationProperties", function(base, cfg)
+	local m = premake.vstudio.vc2010
+	m.propertyGroup(cfg, "Configuration")
+	premake.callArray(m.elements.configurationProperties, cfg)
+	if cfg.enableASAN then
+	   m.element("EnableASAN", nil, cfg.enableASAN)
+	end
+	premake.pop('</PropertyGroup>')
+ end)
+
 workspace (ENGINE_NAME)
 	basedir (ROOT)
-	configurations { "Debug", "Release" }
+	configurations { "Debug", "Release", "DebugASAN" }
     platforms { "x64" }
 	defines { "x64" }
 	language "C++"
@@ -28,14 +45,23 @@ workspace (ENGINE_NAME)
 	disablewarnings {"4100"}
 	
 	filter "configurations:Debug"
+ 		runtime "Debug"
 		defines { "_DEBUG" }
 		optimize ("Off")
 		--inlining "Explicit"
 
 	filter "configurations:Release"
+ 		runtime "Release"
 		defines { "RELEASE" }
 		optimize ("Full")
 		flags { "NoIncrementalLink" }
+
+	filter "configurations:DebugASAN"
+ 		runtime "Debug"
+		defines { "_DEBUG" }
+		optimize ("Off")
+		flags{ "NoRuntimeChecks", "NoIncrementalLink"}
+		enableASAN "true"
 
 	filter {}
 
