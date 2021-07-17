@@ -159,9 +159,12 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 			meshData.NumIndices = (uint32)indexCount;
 			meshData.MaterialIndex = MaterialIndex(primitive.material);
 
-			for (size_t i = 0; i < indexCount; ++i)
+			constexpr int indexMap[] = { 0, 2, 1 };
+			for (size_t i = 0; i < indexCount; i += 3)
 			{
-				indices[indexOffset + i] = (int)cgltf_accessor_read_index(primitive.indices, i);
+				indices[indexOffset + i + 0] = (int)cgltf_accessor_read_index(primitive.indices, i + indexMap[0]);
+				indices[indexOffset + i + 1] = (int)cgltf_accessor_read_index(primitive.indices, i + indexMap[1]);
+				indices[indexOffset + i + 2] = (int)cgltf_accessor_read_index(primitive.indices, i + indexMap[2]);
 			}
 
 			for (size_t attrIdx = 0; attrIdx < primitive.attributes_count; ++attrIdx)

@@ -164,7 +164,9 @@ LightResult EvaluateLight(Light light, float3 worldPos, float3 V, float3 N, floa
 	if(shadowIndex >= 0)
 	{
 		attenuation *= LightTextureMask(light, shadowIndex, worldPos);
-		attenuation *= CastShadowRay(OffsetRay(worldPos, geometryNormal), L); 
+		float3 rayOrigin = worldPos;
+		//float3 rayOrigin = OffsetRay(worldPos, geometryNormal);
+		attenuation *= CastShadowRay(rayOrigin, L); 
 	}
 
 	L = normalize(L);
@@ -432,7 +434,7 @@ void RayGen()
 		RayDesc desc;
 		desc.Origin = ray.Origin;
 		desc.Direction = ray.Direction;
-		desc.TMin = 0;
+		desc.TMin = RAY_BIAS;
 		desc.TMax = RAY_MAX_T;
 
 		TraceRay(
@@ -527,7 +529,8 @@ void RayGen()
 
 		// Propagate the weight and define the new ray origin
 		throughput *= weight;
-		ray.Origin = OffsetRay(payload.Position, geometryNormal);
+		//ray.Origin = OffsetRay(payload.Position, geometryNormal);
+		ray.Origin = payload.Position;
 	}
 
 	// Accumulation and output
