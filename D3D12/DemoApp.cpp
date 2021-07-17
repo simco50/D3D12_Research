@@ -194,8 +194,6 @@ DemoApp::DemoApp(WindowHandle window, const IntVector2& windowRect, int sampleCo
 	checkf(sampleCount == 1, "I broke MSAA! TODO");
 
 	m_pCamera = std::make_unique<FreeCamera>();
-	m_pCamera->SetPosition(Vector3(-13, 24, -15));
-	m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(Math::PIDIV4, Math::PIDIV4 * 0.5f, 0));
 	m_pCamera->SetNearPlane(300.0f);
 	m_pCamera->SetFarPlane(1.0f);
 
@@ -284,7 +282,26 @@ void DemoApp::SetupScene(CommandContext& context)
 
 	{
 		std::unique_ptr<Mesh> pMesh = std::make_unique<Mesh>();
-		pMesh->Load("Resources/Sponza/Sponza.gltf", m_pDevice.get(), &context, 10.0f);
+#if 0
+		// Hardcode the camera of the scene :-)
+		Matrix m(
+			0.868393660f, 8.00937414e-08f, -0.495875478f, 0,
+			0.0342082977f, 0.997617662f, 0.0599068627f, 0,
+			0.494694114f, -0.0689857975f, 0.866324782f, 0,
+			0, 0, 0, 1
+		);
+
+		m_pCamera->SetPosition(Vector3(-2.22535753f, 0.957680941f, -5.52742338f));
+		m_pCamera->SetFoV(68.75f * Math::PI / 180.0f);
+		m_pCamera->SetRotation(Quaternion::CreateFromRotationMatrix(m));
+
+		pMesh->Load("Resources/bathroom_pt/LAZIENKA.gltf", m_pDevice.get(), &context, 1.0f);
+#else
+		m_pCamera->SetPosition(Vector3(-1.3f, 2.4f, -1.5f));
+		m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(Math::PIDIV4, Math::PIDIV4 * 0.5f, 0));
+
+		pMesh->Load("Resources/Sponza/Sponza.gltf", m_pDevice.get(), &context, 1.0f);
+#endif
 		m_Meshes.push_back(std::move(pMesh));
 	}
 
