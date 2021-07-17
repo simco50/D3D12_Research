@@ -409,38 +409,26 @@ float ScreenFade(float2 uv)
     return saturate(1.0 - dot(fade, fade));
 }
 
-
-bool RaySphereIntersect(Ray ray, Sphere sphere, out float intersectionA, out float intersectionB)
+// Helpers for octahedron encoding of normals
+float2 OctWrap(float2 v)
 {
-    float3 L = ray.Origin - sphere.Position;
-    float a = dot(ray.Direction, ray.Direction);
-    float b = 2.0f * dot(ray.Direction, L);
-    float c = dot(L, L) - Square(sphere.Radius);
-    float D = b * b - 4 * a * c;
-    if(D < 0)
-    {
-        return false;
-    }
-    if(D == 0)
-    {
-        intersectionA = -0.5 * b / a;
-        intersectionB = intersectionA;
-    }
-    else
-    {
-        float q = (b > 0) ?
-            -0.5f * (b + sqrt(D)) :
-            -0.5f * (b - sqrt(D));
-        intersectionA = q / a;
-        intersectionB = c / q;
-    }
-    if(intersectionA > intersectionB)
-    {
-        float temp = intersectionA;
-        intersectionA = intersectionB;
-        intersectionB = temp;
-    }
-    return true;
+    return float2((1.0f - abs(v.y)) * (v.x >= 0.0f ? 1.0f : -1.0f), (1.0f - abs(v.x)) * (v.y >= 0.0f ? 1.0f : -1.0f));
+}
+
+float2 EncodeNormalOctahedron(float3 n)
+{
+    float2 p = float2(n.x, n.y) * (1.0f / (abs(n.x) + abs(n.y) + abs(n.z)));
+    p = (n.z < 0.0f) ? OctWrap(p) : p;
+    return p;
+}
+
+float3 DecodeNormalOctahedron(float2 p)
+{
+    float3 n = float3(p.x, p.y, 1.0f - abs(p.x) - abs(p.y));
+    float2 tmp = (n.z < 0.0f) ? OctWrap(float2(n.x, n.y)) : float2(n.x, n.y);
+    n.x = tmp.x;
+    n.y = tmp.y;
+    return normalize(n);
 }
 
 #endif
