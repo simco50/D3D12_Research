@@ -60,11 +60,6 @@ struct RAYPAYLOAD PrimaryRayPayload
 	uint Hit;
 };
 
-struct RAYPAYLOAD ShadowRayPayload
-{
-	uint Hit;
-};
-
 struct SurfaceData
 {
 	float Opacity;
@@ -83,21 +78,20 @@ float CastShadowRay(float3 origin, float3 direction)
 	ray.TMin = RAY_BIAS;
 	ray.TMax = len;
 
-	ShadowRayPayload shadowRay;
-	shadowRay.Hit = 0;
+	RayQuery<
+		RAY_FLAG_SKIP_CLOSEST_HIT_SHADER |
+		RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> rayQuery;
 
-	TraceRay(
-		tTLASTable[cViewData.TLASIndex], 						//AccelerationStructure
-		RAY_FLAG_SKIP_CLOSEST_HIT_SHADER |						//RayFlags
-			RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH,
-		0xFF, 													//InstanceInclusionMask
-		0, 														//RayContributionToHitGroupIndex
-		0, 														//MultiplierForGeometryContributionToHitGroupIndex
-		1, 														//MissShaderIndex
-		ray, 													//Ray
-		shadowRay 												//Payload
+	rayQuery.TraceRayInline(
+		tTLASTable[cViewData.TLASIndex], 	// AccelerationStructure
+		0,									// RayFlags
+		0xFF, 								// InstanceMask
+		ray									// Ray
 	);
-	return shadowRay.Hit;
+
+	rayQuery.Proceed();
+
+	return rayQuery.CommittedStatus() != COMMITTED_TRIANGLE_HIT;
 }
 
 SurfaceData GetShadingData(uint materialIndex, float2 uv, float mipLevel)
@@ -254,12 +248,6 @@ void PrimaryAHS(inout PrimaryRayPayload payload, BuiltInTriangleIntersectionAttr
 void PrimaryMS(inout PrimaryRayPayload payload : SV_RayPayload) 
 {
 	payload.Hit = 0;
-}
-
-[shader("miss")] 
-void ShadowMS(inout ShadowRayPayload payload : SV_RayPayload) 
-{
-	payload.Hit = 1;
 }
 
 // Compute the probability of a specular ray depending on Fresnel term

@@ -13,6 +13,11 @@
 PathTracing::PathTracing(GraphicsDevice* pDevice)
 	: m_pDevice(pDevice)
 {
+	if (!IsSupported())
+	{
+		return;
+	}
+
 	ShaderLibrary* pLibrary = pDevice->GetLibrary("PathTracing.hlsl");
 
 	m_pRS = std::make_unique<RootSignature>(pDevice);
@@ -27,7 +32,6 @@ PathTracing::PathTracing(GraphicsDevice* pDevice)
 	desc.AddLibrary(pLibrary);
 	desc.AddHitGroup("PrimaryHG", "PrimaryCHS", "PrimaryAHS");
 	desc.AddMissShader("PrimaryMS");
-	desc.AddMissShader("ShadowMS");
 	desc.pGlobalRootSignature = m_pRS.get();
 	m_pSO = pDevice->CreateStateObject(desc);
 
@@ -39,11 +43,19 @@ PathTracing::PathTracing(GraphicsDevice* pDevice)
 
 PathTracing::~PathTracing()
 {
-	m_pDevice->GetShaderManager()->OnLibraryRecompiledEvent().Remove(m_OnShaderCompiledHandle);
+	if (m_OnShaderCompiledHandle.IsValid())
+	{
+		m_pDevice->GetShaderManager()->OnLibraryRecompiledEvent().Remove(m_OnShaderCompiledHandle);
+	}
 }
 
 void PathTracing::Render(RGGraph& graph, const SceneData& sceneData)
 {
+	if (!IsSupported())
+	{
+		return;
+	}
+
 	static int32 numBounces = 3;
 
 	ImGui::Begin("Parameters");
@@ -101,7 +113,6 @@ void PathTracing::Render(RGGraph& graph, const SceneData& sceneData)
 			ShaderBindingTable bindingTable(m_pSO);
 			bindingTable.BindRayGenShader("RayGen");
 			bindingTable.BindMissShader("PrimaryMS", 0);
-			bindingTable.BindMissShader("ShadowMS", 1);
 			bindingTable.BindHitGroup("PrimaryHG", 0);
 
 			const D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
@@ -131,10 +142,20 @@ void PathTracing::Render(RGGraph& graph, const SceneData& sceneData)
 
 void PathTracing::OnResize(uint32 width, uint32 height)
 {
+	if (!IsSupported())
+	{
+		return;
+	}
 	m_pAccumulationTexture = m_pDevice->CreateTexture(TextureDesc::Create2D(width, height, DXGI_FORMAT_R32G32B32A32_FLOAT, TextureFlag::UnorderedAccess), "Accumulation Target");
 }
 
 void PathTracing::Reset()
 {
 	m_NumAccumulatedFrames = 0;
+}
+
+bool PathTracing::IsSupported()
+{
+	// Using Inline RT, requires Tier 1.1
+	return m_pDevice->GetCapabilities().RayTracingTier >= D3D12_RAYTRACING_TIER_1_1;
 }
