@@ -295,12 +295,12 @@ void DemoApp::SetupScene(CommandContext& context)
 		m_pCamera->SetFoV(68.75f * Math::PI / 180.0f);
 		m_pCamera->SetRotation(Quaternion::CreateFromRotationMatrix(m));
 
-		pMesh->Load("Resources/bathroom_pt/LAZIENKA.gltf", m_pDevice.get(), &context, 1.0f);
+		pMesh->Load("Resources/Scenes/_Local/bathroom_pt/LAZIENKA.gltf", m_pDevice.get(), &context, 1.0f);
 #else
 		m_pCamera->SetPosition(Vector3(-1.3f, 2.4f, -1.5f));
 		m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(Math::PIDIV4, Math::PIDIV4 * 0.5f, 0));
 
-		pMesh->Load("Resources/Sponza/Sponza.gltf", m_pDevice.get(), &context, 1.0f);
+		pMesh->Load("Resources/Scenes/Sponza/Sponza.gltf", m_pDevice.get(), &context, 1.0f);
 #endif
 		m_Meshes.push_back(std::move(pMesh));
 	}
