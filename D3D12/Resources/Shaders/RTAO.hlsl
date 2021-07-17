@@ -103,7 +103,7 @@ void RayGen()
 
 		TraceRay(
 			tTLASTable[cData.TLASIndex], 									//AccelerationStructure
-			RAY_FLAG_CULL_BACK_FACING_TRIANGLES | 							//RayFlags
+										//RayFlags
 				RAY_FLAG_FORCE_OPAQUE | 
 				RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH | 
 				RAY_FLAG_SKIP_CLOSEST_HIT_SHADER, 	

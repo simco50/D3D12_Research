@@ -73,6 +73,23 @@ float3 HemisphereSampleUniform(float u, float v)
 	return float3(cos(phi) * sinTheta, sin(phi) * sinTheta, cosTheta);
 }
 
+// Samples a direction within a hemisphere oriented along +Z axis with a cosine-weighted distribution 
+// Source: "Sampling Transformations Zoo" in Ray Tracing Gems by Shirley et al.
+float3 HemisphereSampleCosineWeight(float2 u, out float pdf) 
+{
+	float a = sqrt(u.x);
+	float b = 2.0f * PI * u.y;
+
+	float3 result = float3(
+		a * cos(b),
+		a * sin(b),
+		sqrt(1.0f - u.x));
+
+	pdf = result.z * INV_PI;
+
+	return result;
+}
+
 //-----------------------------------------------------------------------------------------
 
 #endif
