@@ -49,6 +49,11 @@ RWTexture2D<float4> uOutput : register(u0);
 RWTexture2D<float4> uAccumulation : register(u1);
 ConstantBuffer<ViewData> cViewData : register(b0);
 
+struct RAYPAYLOAD ShadowRayPayload
+{
+	uint Hit;
+};
+
 struct RAYPAYLOAD PrimaryRayPayload
 {
 	float2 UV;
@@ -72,31 +77,6 @@ struct SurfaceData
 	float3 Emissive;
 	float3 Normal;
 };
-
-float CastShadowRay(float3 origin, float3 direction)
-{
-	float len = length(direction);
-	RayDesc ray;
-	ray.Origin = origin;
-	ray.Direction = direction / len;
-	ray.TMin = RAY_BIAS;
-	ray.TMax = len;
-
-	RayQuery<
-		RAY_FLAG_SKIP_CLOSEST_HIT_SHADER |
-		RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> rayQuery;
-
-	rayQuery.TraceRayInline(
-		tTLASTable[cViewData.TLASIndex], 	// AccelerationStructure
-		0,									// RayFlags
-		0xFF, 								// InstanceMask
-		ray									// Ray
-	);
-
-	rayQuery.Proceed();
-
-	return rayQuery.CommittedStatus() != COMMITTED_TRIANGLE_HIT;
-}
 
 SurfaceData GetShadingData(uint materialIndex, float2 uv, float mipLevel)
 {
@@ -129,6 +109,114 @@ SurfaceData GetShadingData(uint materialIndex, float2 uv, float mipLevel)
 	outData.Emissive = emissive;
 	outData.Opacity = baseColor.a;
 	return outData;
+}
+
+struct VertexInput
+{
+	uint2 Position;
+	uint UV;
+	float3 Normal;
+	float4 Tangent;
+};
+
+VertexAttribute GetVertexAttributes(float2 attribBarycentrics, uint instanceID, uint primitiveIndex)
+{
+	float3 barycentrics = float3((1.0f - attribBarycentrics.x - attribBarycentrics.y), attribBarycentrics.x, attribBarycentrics.y);
+	MeshData mesh = tMeshes[instanceID];
+	uint3 indices = tBufferTable[mesh.IndexBuffer].Load<uint3>(primitiveIndex * sizeof(uint3));
+	VertexAttribute outData;
+
+	outData.UV = 0;
+	outData.Normal = 0;
+	outData.Material = mesh.Material;
+
+	float3 positions[3];
+
+	const uint vertexStride = sizeof(VertexInput);
+	ByteAddressBuffer geometryBuffer = tBufferTable[mesh.VertexBuffer];
+
+	for(int i = 0; i < 3; ++i)
+	{
+		uint dataOffset = 0;
+		positions[i] += UnpackHalf3(geometryBuffer.Load<uint2>(indices[i] * vertexStride + dataOffset));
+		dataOffset += sizeof(uint2);
+		outData.UV += UnpackHalf2(geometryBuffer.Load<uint>(indices[i] * vertexStride + dataOffset)) * barycentrics[i];
+		dataOffset += sizeof(uint);
+		outData.Normal += geometryBuffer.Load<float3>(indices[i] * vertexStride + dataOffset) * barycentrics[i];
+		dataOffset += sizeof(float3);
+		dataOffset += sizeof(float4);
+	}
+	float4x3 worldMatrix = ObjectToWorld4x3();
+	outData.Normal = normalize(mul(outData.Normal, (float3x3)worldMatrix));
+
+	// Calculate geometry normal from triangle vertices positions
+	float3 edge20 = positions[2] - positions[0];
+	float3 edge21 = positions[2] - positions[1];
+	float3 edge10 = positions[1] - positions[0];
+	outData.GeometryNormal = mul(normalize(cross(edge20, edge10)), (float3x3)worldMatrix);
+
+	return outData;
+}
+
+float CastShadowRay(float3 origin, float3 direction)
+{
+	float len = length(direction);
+	RayDesc ray;
+	ray.Origin = origin;
+	ray.Direction = direction / len;
+	ray.TMin = RAY_BIAS;
+	ray.TMax = len;
+
+	const int rayFlags = 
+		RAY_FLAG_SKIP_CLOSEST_HIT_SHADER |
+		RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH |
+		RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES;
+
+	RaytracingAccelerationStructure TLAS = tTLASTable[cViewData.TLASIndex];
+
+// Inline RT for the shadow rays has better performance. Use it when available.
+#if _INLINE_RT
+	RayQuery<rayFlags> q;
+
+	q.TraceRayInline(
+		TLAS, 	// AccelerationStructure
+		0,		// RayFlags
+		0xFF, 	// InstanceMask
+		ray		// Ray
+	);
+
+	while(q.Proceed())
+	{
+		switch(q.CandidateType())
+		{
+			case CANDIDATE_NON_OPAQUE_TRIANGLE:
+			{
+				VertexAttribute vertex = GetVertexAttributes(q.CandidateTriangleBarycentrics(), q.CandidateInstanceID(), q.CandidatePrimitiveIndex());
+				SurfaceData surface = GetShadingData(vertex.Material, vertex.UV, 0);
+				if(surface.Opacity > 0.5f)
+				{
+					q.CommitNonOpaqueTriangleHit();
+				}
+			}
+			break;
+		}
+	}
+	return q.CommittedStatus() != COMMITTED_TRIANGLE_HIT;
+#else
+	ShadowRayPayload payload;
+	payload.Hit = 1;
+	TraceRay(
+		TLAS,		//AccelerationStructure
+		rayFlags, 	//RayFlags
+		0xFF, 		//InstanceInclusionMask
+		0,			//RayContributionToHitGroupIndex
+		0, 			//MultiplierForGeometryContributionToHitGroupIndex
+		1, 			//MissShaderIndex
+		ray, 		//Ray
+		payload 	//Payload
+	);
+	return !payload.Hit;
+#endif
 }
 
 LightResult EvaluateLight(Light light, float3 worldPos, float3 V, float3 N, float3 geometryNormal, SurfaceData surface)
@@ -175,58 +263,10 @@ LightResult EvaluateLight(Light light, float3 worldPos, float3 V, float3 N, floa
 	return result;
 }
 
-struct VertexInput
-{
-	uint2 Position;
-	uint UV;
-	float3 Normal;
-	float4 Tangent;
-};
-
-VertexAttribute GetVertexAttributes(float3 barycentrics)
-{
-	MeshData mesh = tMeshes[InstanceID()];
-	uint3 indices = tBufferTable[mesh.IndexBuffer].Load<uint3>(PrimitiveIndex() * sizeof(uint3));
-	VertexAttribute outData;
-
-	outData.UV = 0;
-	outData.Normal = 0;
-	outData.Material = mesh.Material;
-
-	float3 positions[3];
-
-	const uint vertexStride = sizeof(VertexInput);
-	ByteAddressBuffer geometryBuffer = tBufferTable[mesh.VertexBuffer];
-
-	for(int i = 0; i < 3; ++i)
-	{
-		uint dataOffset = 0;
-		positions[i] += UnpackHalf3(geometryBuffer.Load<uint2>(indices[i] * vertexStride + dataOffset));
-		dataOffset += sizeof(uint2);
-		outData.UV += UnpackHalf2(geometryBuffer.Load<uint>(indices[i] * vertexStride + dataOffset)) * barycentrics[i];
-		dataOffset += sizeof(uint);
-		outData.Normal += geometryBuffer.Load<float3>(indices[i] * vertexStride + dataOffset) * barycentrics[i];
-		dataOffset += sizeof(float3);
-		dataOffset += sizeof(float4);
-	}
-	float4x3 worldMatrix = ObjectToWorld4x3();
-	outData.Normal = normalize(mul(outData.Normal, (float3x3)worldMatrix));
-
-	// Calculate geometry normal from triangle vertices positions
-	float3 edge20 = positions[2] - positions[0];
-	float3 edge21 = positions[2] - positions[1];
-	float3 edge10 = positions[1] - positions[0];
-	outData.GeometryNormal = mul(normalize(cross(edge20, edge10)), (float3x3)worldMatrix);
-
-	return outData;
-}
-
 [shader("closesthit")] 
 void PrimaryCHS(inout PrimaryRayPayload payload, BuiltInTriangleIntersectionAttributes attrib) 
 {
-	float3 barycentrics = float3((1.0f - attrib.barycentrics.x - attrib.barycentrics.y), attrib.barycentrics.x, attrib.barycentrics.y);
-	VertexAttribute vertex = GetVertexAttributes(barycentrics);
-
+	VertexAttribute vertex = GetVertexAttributes(attrib.barycentrics, InstanceID(), PrimitiveIndex());
 	payload.Material = vertex.Material;
 	payload.UV = vertex.UV;
 	payload.Normal = EncodeNormalOctahedron(vertex.Normal);
@@ -237,9 +277,7 @@ void PrimaryCHS(inout PrimaryRayPayload payload, BuiltInTriangleIntersectionAttr
 [shader("anyhit")]
 void PrimaryAHS(inout PrimaryRayPayload payload, BuiltInTriangleIntersectionAttributes attrib)
 {
-	float3 barycentrics = float3((1.0f - attrib.barycentrics.x - attrib.barycentrics.y), attrib.barycentrics.x, attrib.barycentrics.y);
-	VertexAttribute vertex = GetVertexAttributes(barycentrics);
-
+	VertexAttribute vertex = GetVertexAttributes(attrib.barycentrics, InstanceID(), PrimitiveIndex());
 	SurfaceData surface = GetShadingData(vertex.Material, vertex.UV, 0);
 	if(surface.Opacity < 0.5)
 	{
@@ -250,6 +288,13 @@ void PrimaryAHS(inout PrimaryRayPayload payload, BuiltInTriangleIntersectionAttr
 [shader("miss")] 
 void PrimaryMS(inout PrimaryRayPayload payload : SV_RayPayload) 
 {
+	// Nothing to do here! :)
+}
+
+[shader("miss")] 
+void ShadowMS(inout ShadowRayPayload payload : SV_RayPayload) 
+{
+	payload.Hit = 0;
 }
 
 // Compute the probability of a specular ray depending on Fresnel term

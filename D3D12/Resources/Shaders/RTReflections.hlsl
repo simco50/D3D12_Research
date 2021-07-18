@@ -43,6 +43,7 @@ struct ViewData
 	uint NumLights;
 	float ViewPixelSpreadAngle;
 	uint TLASIndex;
+	uint FrameIndex;
 };
 
 RWTexture2D<float4> uOutput : register(u0);

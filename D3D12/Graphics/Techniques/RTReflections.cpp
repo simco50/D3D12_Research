@@ -47,6 +47,7 @@ void RTReflections::Execute(RGGraph& graph, const SceneData& sceneData)
 				uint32 NumLights;
 				float ViewPixelSpreadAngle;
 				uint32 TLASIndex;
+				uint32 FrameIndex;
 			} parameters{};
 
 			parameters.View = sceneData.pCamera->GetView();
@@ -55,6 +56,7 @@ void RTReflections::Execute(RGGraph& graph, const SceneData& sceneData)
 			parameters.NumLights = sceneData.pLightBuffer->GetNumElements();
 			parameters.ViewPixelSpreadAngle = atanf(2.0f * tanf(sceneData.pCamera->GetFoV() / 2) / (float)m_pSceneColor->GetHeight());
 			parameters.TLASIndex = sceneData.SceneTLAS;
+			parameters.FrameIndex = sceneData.FrameIndex;
 
 			ShaderBindingTable bindingTable(m_pRtSO);
 			bindingTable.BindRayGenShader("RayGen");
