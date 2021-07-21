@@ -305,6 +305,13 @@ void DemoApp::SetupScene(CommandContext& context)
 		m_Meshes.push_back(std::move(pMesh));
 	}
 
+	{
+		std::unique_ptr<Mesh> pMesh = std::make_unique<Mesh>();
+
+		pMesh->Load("Resources/Scenes/_Local/Sphere/scene.gltf", m_pDevice.get(), &context, 1.0f);
+		m_Meshes.push_back(std::move(pMesh));
+	}
+
 	std::vector<ShaderInterop::MaterialData> materials;
 	std::vector<ShaderInterop::MeshData> meshes;
 

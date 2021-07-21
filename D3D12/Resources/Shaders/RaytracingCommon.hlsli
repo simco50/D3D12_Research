@@ -2,9 +2,72 @@
 #define __INCLUDE_RAYTRACING_COMMON__
 
 #include "SkyCommon.hlsli"
+#include "ShadingModels.hlsli"
 
 #define RAY_BIAS 1.0e-2f
 #define RAY_MAX_T 1.0e10f
+
+struct MaterialProperties
+{
+    float3 BaseColor;
+    float3 NormalTS;
+    float Metalness;
+    float3 Emissive;
+    float Roughness;
+    float Opacity;
+    float Specular;
+};
+
+MaterialProperties GetMaterialProperties(uint materialIndex, float2 UV, int mipLevel)
+{
+    MaterialData material = tMaterials[materialIndex];
+    MaterialProperties properties;
+    float4 baseColor = material.BaseColorFactor;
+    if(material.Diffuse >= 0)
+    {
+        baseColor *= tTexture2DTable[material.Diffuse].SampleLevel(sDiffuseSampler, UV, mipLevel);
+    }
+    properties.BaseColor = baseColor.rgb;
+    properties.Opacity = baseColor.a;
+
+    properties.Metalness = material.MetalnessFactor;
+    properties.Roughness = material.RoughnessFactor;
+    if(material.RoughnessMetalness >= 0)
+    {
+        float4 roughnessMetalnessSample = tTexture2DTable[material.RoughnessMetalness].SampleLevel(sDiffuseSampler, UV, mipLevel);
+        properties.Metalness *= roughnessMetalnessSample.b;
+        properties.Roughness *= roughnessMetalnessSample.g;
+    }
+    properties.Emissive = material.EmissiveFactor.rgb;
+    if(material.Emissive >= 0)
+    {
+        properties.Emissive *= tTexture2DTable[material.Emissive].SampleLevel(sDiffuseSampler, UV, mipLevel).rgb;
+    }
+    properties.Specular = 0.5f;
+
+    properties.NormalTS = float3(0, 0, 1);
+    if(material.Normal >= 0)
+    {
+        properties.NormalTS = tTexture2DTable[material.Normal].SampleLevel(sDiffuseSampler, UV, mipLevel).rgb;
+    }
+    return properties;
+}
+
+struct BrdfData
+{
+    float3 Diffuse;
+    float3 Specular;
+    float Roughness;
+};
+
+BrdfData GetBrdfData(MaterialProperties material)
+{
+    BrdfData data;
+    data.Diffuse = ComputeDiffuseColor(material.BaseColor, material.Metalness);
+    data.Specular = ComputeF0(material.Specular, material.BaseColor, material.Metalness);
+    data.Roughness = material.Roughness;
+    return data;
+}
 
 struct RayCone
 {
@@ -80,32 +143,6 @@ float3 OffsetRay(float3 position, float3 geometryNormal)
     return float3(abs(position.x) < origin ? position.x + float_scale * geometryNormal.x : p_i.x,
         abs(position.y) < origin ? position.y + float_scale * geometryNormal.y : p_i.y,
         abs(position.z) < origin ? position.z + float_scale * geometryNormal.z : p_i.z);
-}
-
-// Calculates rotation quaternion from input vector to the vector (0, 0, 1)
-// Input vector must be normalized!
-float4 GetRotationToZAxis(float3 input) 
-{
-    // Handle special case when input is exact or near opposite of (0, 0, 1)
-    if (input.z < -0.99999f)
-    {
-        return float4(1.0f, 0.0f, 0.0f, 0.0f);
-    }
-    return normalize(float4(input.y, -input.x, 0.0f, 1.0f + input.z));
-}
-
-// Returns the quaternion with inverted rotation
-float4 InvertRotation(float4 q)
-{
-    return float4(-q.x, -q.y, -q.z, q.w);
-}
-
-// Optimized point rotation using quaternion
-// Source: https://gamedev.stackexchange.com/questions/28395/rotating-vector3-by-a-quaternion
-float3 RotatePoint(float4 q, float3 v) 
-{
-    float3 qAxis = float3(q.x, q.y, q.z);
-    return 2.0f * dot(qAxis, v) * qAxis + (q.w * q.w - dot(qAxis, qAxis)) * v + 2.0f * q.w * cross(qAxis, v);
 }
 
 #endif
