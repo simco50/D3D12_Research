@@ -7,6 +7,63 @@
 #define RAY_BIAS 1.0e-2f
 #define RAY_MAX_T 1.0e10f
 
+struct VertexAttribute
+{
+    float2 UV;
+    float3 Normal;
+    float4 Tangent;
+    float3 GeometryNormal;
+    uint Material;
+};
+
+struct VertexInput
+{
+    uint2 Position;
+    uint UV;
+    float3 Normal;
+    float4 Tangent;
+};
+
+VertexAttribute GetVertexAttributes(float2 attribBarycentrics, uint instanceID, uint primitiveIndex)
+{
+    float3 barycentrics = float3((1.0f - attribBarycentrics.x - attribBarycentrics.y), attribBarycentrics.x, attribBarycentrics.y);
+    MeshData mesh = tMeshes[instanceID];
+    uint3 indices = tBufferTable[mesh.IndexBuffer].Load<uint3>(primitiveIndex * sizeof(uint3));
+    VertexAttribute outData;
+
+    outData.UV = 0;
+    outData.Normal = 0;
+    outData.Material = mesh.Material;
+
+    float3 positions[3];
+    const uint vertexStride = sizeof(VertexInput);
+    ByteAddressBuffer geometryBuffer = tBufferTable[mesh.VertexBuffer];
+
+    for(int i = 0; i < 3; ++i)
+    {
+        uint dataOffset = 0;
+        positions[i] += UnpackHalf3(geometryBuffer.Load<uint2>(indices[i] * vertexStride + dataOffset));
+        dataOffset += sizeof(uint2);
+        outData.UV += UnpackHalf2(geometryBuffer.Load<uint>(indices[i] * vertexStride + dataOffset)) * barycentrics[i];
+        dataOffset += sizeof(uint);
+        outData.Normal += geometryBuffer.Load<float3>(indices[i] * vertexStride + dataOffset) * barycentrics[i];
+        dataOffset += sizeof(float3);
+        outData.Tangent += geometryBuffer.Load<float4>(indices[i] * vertexStride + dataOffset) * barycentrics[i];
+        dataOffset += sizeof(float4);
+    }
+    float4x3 worldMatrix = ObjectToWorld4x3();
+    outData.Normal = normalize(mul(outData.Normal, (float3x3)worldMatrix));
+    outData.Tangent.xyz = normalize(mul(outData.Tangent.xyz, (float3x3)worldMatrix));
+
+    // Calculate geometry normal from triangle vertices positions
+    float3 edge20 = positions[2] - positions[0];
+    float3 edge21 = positions[2] - positions[1];
+    float3 edge10 = positions[1] - positions[0];
+    outData.GeometryNormal = mul(normalize(cross(edge20, edge10)), (float3x3)worldMatrix);
+
+    return outData;
+}
+
 struct MaterialProperties
 {
     float3 BaseColor;

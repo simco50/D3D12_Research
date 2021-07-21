@@ -19,22 +19,6 @@ GlobalRootSignature GlobalRootSig =
 	"StaticSampler(s2, filter=FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT, comparisonFunc=COMPARISON_GREATER), " \
 };
 
-struct VertexAttribute
-{
-	float2 UV;
-	float3 Normal;
-	float4 Tangent;
-	uint Material;
-};
-
-struct VertexInput
-{
-	uint2 Position;
-	uint UV;
-	float3 Normal;
-	float4 Tangent;
-};
-
 struct ViewData
 {
 	float4x4 View;
@@ -57,7 +41,7 @@ struct RAYPAYLOAD ReflectionRayPayload
 
 struct RAYPAYLOAD ShadowRayPayload
 {
-	float hit 			RAYQUALIFIER(read(caller) : write(caller, miss));
+	uint Hit RAYQUALIFIER(read(caller) : write(caller, miss));
 };
 
 float CastShadowRay(float3 origin, float3 direction)
@@ -69,21 +53,56 @@ float CastShadowRay(float3 origin, float3 direction)
 	ray.TMin = RAY_BIAS;
 	ray.TMax = len;
 
-	ShadowRayPayload shadowRay;
-	shadowRay.hit = 0.0f;
+	const int rayFlags = 
+		RAY_FLAG_SKIP_CLOSEST_HIT_SHADER |
+		RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH |
+		RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES;
 
-	TraceRay(
-		tTLASTable[cViewData.TLASIndex], 						//AccelerationStructure
-		RAY_FLAG_SKIP_CLOSEST_HIT_SHADER |						//RayFlags
-			RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH,
-		0xFF, 													//InstanceInclusionMask
-		0, 														//RayContributionToHitGroupIndex
-		0, 														//MultiplierForGeometryContributionToHitGroupIndex
-		1, 														//MissShaderIndex
-		ray, 													//Ray
-		shadowRay 												//Payload
+	RaytracingAccelerationStructure TLAS = tTLASTable[cViewData.TLASIndex];
+
+// Inline RT for the shadow rays has better performance. Use it when available.
+#if _INLINE_RT
+	RayQuery<rayFlags> q;
+
+	q.TraceRayInline(
+		TLAS, 	// AccelerationStructure
+		0,		// RayFlags
+		0xFF, 	// InstanceMask
+		ray		// Ray
 	);
-	return shadowRay.hit;
+
+	while(q.Proceed())
+	{
+		switch(q.CandidateType())
+		{
+			case CANDIDATE_NON_OPAQUE_TRIANGLE:
+			{
+				VertexAttribute vertex = GetVertexAttributes(q.CandidateTriangleBarycentrics(), q.CandidateInstanceID(), q.CandidatePrimitiveIndex());
+				MaterialProperties surface = GetMaterialProperties(vertex.Material, vertex.UV, 0);
+				if(surface.Opacity > 0.5f)
+				{
+					q.CommitNonOpaqueTriangleHit();
+				}
+			}
+			break;
+		}
+	}
+	return q.CommittedStatus() != COMMITTED_TRIANGLE_HIT;
+#else
+	ShadowRayPayload payload;
+	payload.Hit = 1;
+	TraceRay(
+		TLAS,		//AccelerationStructure
+		rayFlags, 	//RayFlags
+		0xFF, 		//InstanceInclusionMask
+		0,			//RayContributionToHitGroupIndex
+		0, 			//MultiplierForGeometryContributionToHitGroupIndex
+		1, 			//MissShaderIndex
+		ray, 		//Ray
+		payload 	//Payload
+	);
+	return !payload.Hit;
+#endif
 }
 
 ReflectionRayPayload CastReflectionRay(float3 origin, float3 direction, float T)
@@ -114,38 +133,6 @@ ReflectionRayPayload CastReflectionRay(float3 origin, float3 direction, float T)
 	);
 
 	return payload;
-}
-
-VertexAttribute GetVertexAttributes(float2 attribBarycentrics, uint instanceID, uint primitiveIndex)
-{
-	float3 barycentrics = float3((1.0f - attribBarycentrics.x - attribBarycentrics.y), attribBarycentrics.x, attribBarycentrics.y);
-	MeshData mesh = tMeshes[instanceID];
-	uint3 indices = tBufferTable[mesh.IndexBuffer].Load<uint3>(primitiveIndex * sizeof(uint3));
-	VertexAttribute outData;
-
-	outData.UV = 0;
-	outData.Normal = 0;
-	outData.Material = mesh.Material;
-
-	const uint vertexStride = sizeof(VertexInput);
-	ByteAddressBuffer geometryBuffer = tBufferTable[mesh.VertexBuffer];
-
-	for(int i = 0; i < 3; ++i)
-	{
-		uint dataOffset = 0;
-		dataOffset += sizeof(uint2);
-		outData.UV += UnpackHalf2(geometryBuffer.Load<uint>(indices[i] * vertexStride + dataOffset)) * barycentrics[i];
-		dataOffset += sizeof(uint);
-		outData.Normal += geometryBuffer.Load<float3>(indices[i] * vertexStride + dataOffset) * barycentrics[i];
-		dataOffset += sizeof(float3);
-		outData.Tangent += geometryBuffer.Load<float4>(indices[i] * vertexStride + dataOffset) * barycentrics[i];
-		dataOffset += sizeof(float4);
-	}
-	float4x3 worldMatrix = ObjectToWorld4x3();
-	outData.Normal = normalize(mul(outData.Normal, (float3x3)worldMatrix));
-	outData.Tangent.xyz = normalize(mul(outData.Tangent.xyz, (float3x3)worldMatrix));
-
-	return outData;
 }
 
 LightResult EvaluateLight(Light light, float3 worldPos, float3 V, float3 N, BrdfData brdfData)
@@ -237,7 +224,7 @@ void ReflectionAnyHit(inout ReflectionRayPayload payload, BuiltInTriangleInterse
 [shader("miss")] 
 void ShadowMiss(inout ShadowRayPayload payload : SV_RayPayload) 
 {
-	payload.hit = 1;
+	payload.Hit = 0;
 }
 
 [shader("miss")] 
