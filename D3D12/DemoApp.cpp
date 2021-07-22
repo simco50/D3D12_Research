@@ -281,7 +281,6 @@ void DemoApp::SetupScene(CommandContext& context)
 	m_pLightCookie->Create(&context, "Resources/Textures/LightProjector.png", false);
 
 	{
-		std::unique_ptr<Mesh> pMesh = std::make_unique<Mesh>();
 #if 0
 		// Hardcode the camera of the scene :-)
 		Matrix m(
@@ -295,21 +294,26 @@ void DemoApp::SetupScene(CommandContext& context)
 		m_pCamera->SetFoV(68.75f * Math::PI / 180.0f);
 		m_pCamera->SetRotation(Quaternion::CreateFromRotationMatrix(m));
 
+		std::unique_ptr<Mesh> pMesh = std::make_unique<Mesh>();
 		pMesh->Load("Resources/Scenes/_Local/bathroom_pt/LAZIENKA.gltf", m_pDevice.get(), &context, 1.0f);
-#else
+		m_Meshes.push_back(std::move(pMesh));
+#elif 1
 		m_pCamera->SetPosition(Vector3(-1.3f, 2.4f, -1.5f));
 		m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(Math::PIDIV4, Math::PIDIV4 * 0.5f, 0));
 
+		std::unique_ptr<Mesh> pMesh = std::make_unique<Mesh>();
 		pMesh->Load("Resources/Scenes/Sponza/Sponza.gltf", m_pDevice.get(), &context, 1.0f);
-#endif
 		m_Meshes.push_back(std::move(pMesh));
+#endif
 	}
 
 	{
+#if 0
 		std::unique_ptr<Mesh> pMesh = std::make_unique<Mesh>();
 
 		pMesh->Load("Resources/Scenes/_Local/Sphere/scene.gltf", m_pDevice.get(), &context, 1.0f);
 		m_Meshes.push_back(std::move(pMesh));
+#endif
 	}
 
 	std::vector<ShaderInterop::MaterialData> materials;
@@ -353,10 +357,10 @@ void DemoApp::SetupScene(CommandContext& context)
 		}
 	}
 
-	m_pMeshBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateStructured((int)meshes.size(), sizeof(ShaderInterop::MeshData), BufferFlag::ShaderResource), "Meshes");
+	m_pMeshBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(Math::Max(1, (int)meshes.size()), sizeof(ShaderInterop::MeshData), BufferFlag::ShaderResource), "Meshes");
 	m_pMeshBuffer->SetData(&context, meshes.data(), meshes.size() * sizeof(ShaderInterop::MeshData));
 
-	m_pMaterialBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateStructured((int)materials.size(), sizeof(ShaderInterop::MaterialData), BufferFlag::ShaderResource), "Materials");
+	m_pMaterialBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(Math::Max(1, (int)materials.size()), sizeof(ShaderInterop::MaterialData), BufferFlag::ShaderResource), "Materials");
 	m_pMaterialBuffer->SetData(&context, materials.data(), materials.size() * sizeof(ShaderInterop::MaterialData));
 
 	{

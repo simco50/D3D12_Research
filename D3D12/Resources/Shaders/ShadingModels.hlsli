@@ -47,20 +47,34 @@ struct LightResult
 LightResult DefaultLitBxDF(float3 specularColor, float specularRoughness, float3 diffuseColor, half3 N, half3 V, half3 L, float falloff)
 {
 	LightResult lighting = (LightResult)0;
-	if(falloff <= 0)
+	if(falloff <= 0.0f)
+	{
 		return lighting;
-	float NoL = saturate(dot(N, L));
-	if(NoL == 0)
+	}
+
+	float NdotL = saturate(dot(N, L));
+	if(NdotL == 0.0f)
+	{
 		return lighting;
+	}
 
 	float3 H = normalize(V + L);
-	float NoV = saturate(abs(dot(N, V)) + 1e-5);
-	float NoH = saturate(dot(N, H));
-	float VoH = saturate(dot(V, H));
-	NoV = saturate(abs(NoV) + 1e-5); // Bias to avoid NaNs
+	float NdotV = saturate(abs(dot(N, V)) + 1e-5); // Bias to avoid artifacting
+	float NdotH = saturate(dot(N, H));
+	float VdotH = saturate(dot(V, H));
 
-	lighting.Diffuse  = (falloff * NoL) * Diffuse_Lambert(diffuseColor);
-	lighting.Specular = (falloff * NoL) * SpecularGGX(specularRoughness, specularColor, NoL, NoH, NoV, VoH);
+	// Generalized microfacet Specular BRDF
+	specularRoughness = clamp(specularRoughness, 0.0001f, 1.0f);
+	float a = Square(specularRoughness);
+	float a2 = Square(a);
+	float D = D_GGX(a2, NdotH);
+	float Vis = Vis_SmithJointApprox(a2, NdotV, NdotL);
+	float3 F = F_Schlick(specularColor, VdotH);
+	lighting.Specular = (falloff * NdotL) * (D * Vis) * F;
+
+	// Diffuse BRDF
+	lighting.Diffuse  = (falloff * NdotL) * Diffuse_Lambert(diffuseColor);
+
 	return lighting;
 }
 

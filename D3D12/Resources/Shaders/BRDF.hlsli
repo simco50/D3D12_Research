@@ -12,20 +12,22 @@ MICROFACET SPECULAR MODEL
 - V = View vector (towards viewer)
 - L = Light vector
 
-	Cook Torrence
+	Cook-Torrence
 
 		D * G * F
 	----------------- == D * Vis * F
-	  4 * NoL * NoV
+	  4 * NdotL * NdotV
 
 				  G
 	Vis = ------------------
-		    4 * NoL * NoV
+		    4 * NdotL * NdotV
 
 - D(H) - Normal Distribution Function - How many microfacets are pointing in the right direction
-- G(L, V, H) - Geometry/ShadowMasking function - How many light rays are actually reaching the view
+- G2(L, V, H) - Geometry/ShadowMasking function - The amount of rays reaching both the view and the light from the surface
 - F(L, H) - Fresnel Reflectance - What fraction of light is reflected as opposed to refracted (How reflective is the surfce)
 - Vis - The G term predivided by the denominator of the specular BRDF so they cancel out.
+
+# D * G1 gives the 'distribution of visible normals' which is useful for importance sampling
 
 */
 
@@ -57,36 +59,36 @@ float Smith_G2_Over_G1_Height_Correlated(float alpha, float alphaSquared, float 
 // Appoximation of joint Smith term for GGX
 // Returned value is G2 / (4 * NdotL * NdotV). So predivided by specular BRDF denominator
 // [Heitz 2014, "Understanding the Masking-Shadowing Function in Microfacet-Based BRDFs"]
-float Vis_SmithJointApprox(float a2, float NoV, float NoL)
+float Vis_SmithJointApprox(float a2, float NdotV, float NdotL)
 {
-	float Vis_SmithV = NoL * (NoV * (1 - a2) + a2);
-	float Vis_SmithL = NoV * (NoL * (1 - a2) + a2);
+	float Vis_SmithV = NdotL * (NdotV * (1 - a2) + a2);
+	float Vis_SmithL = NdotV * (NdotL * (1 - a2) + a2);
 	return 0.5 * rcp(Vis_SmithV + Vis_SmithL);
 }
 
 /* NORMAL DISTRIBUTION FUNCTIONS D */
 
 // GGX / Trowbridge-Reitz
+// Note the division by PI here
 // [Walter et al. 2007, "Microfacet models for refraction through rough surfaces"]
-float D_GGX(float a2, float NoH)
+float D_GGX(float a2, float NdotH)
 {
-	a2 = max(0.0000001f, a2); // Hack: a2 values of 0 causes NaNs
-	float d = (NoH * a2 - NoH) * NoH + 1;
+	float d = (NdotH * a2 - NdotH) * NdotH + 1;
 	return a2 / (PI * d * d);
 }
 
 /* FRESNEL */
 
 // [Schlick 1994, "An Inexpensive BRDF Model for Physically-Based Rendering"]
-float3 F_Schlick(float3 f0, float VoH)
+float3 F_Schlick(float3 f0, float VdotH)
 {
-	float Fc = Pow5(1.0f - VoH);
+	float Fc = Pow5(1.0f - VdotH);
 	return Fc + (1.0f - Fc) * f0;
 }
 
-float3 F_Schlick(float3 f0, float3 f90, float VoH)
+float3 F_Schlick(float3 f0, float3 f90, float VdotH)
 {
-	float Fc = Pow5(1.0f - VoH);
+	float Fc = Pow5(1.0f - VdotH);
 	return f90 * Fc + (1.0f - Fc) * f0;
 }
 
@@ -120,18 +122,6 @@ float3 SampleGGXVNDF(float3 V, float2 alpha2D, float2 u)
 
 	// Section 3.4: transforming the normal back to the ellipsoid configuration
 	return normalize(float3(alpha2D.x * Nh.x, alpha2D.y * Nh.y, max(0.0f, Nh.z)));
-}
-
-float3 SpecularGGX(float specularRoughness, float3 specularColor, float NoL, float NoH, float NoV, float VoH)
-{
-	float a2 = Pow4(specularRoughness);
-
-	// Generalized microfacet specular
-	float D = D_GGX(a2, NoH);
-	float Vis = Vis_SmithJointApprox(a2, NoV, NoL);
-	float3 F = F_Schlick(specularColor, VoH);
-
-	return (D * Vis) * F;
 }
 
 #endif

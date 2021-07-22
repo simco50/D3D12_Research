@@ -93,7 +93,7 @@ float CastShadowRay(float3 origin, float3 direction)
 		{
 			case CANDIDATE_NON_OPAQUE_TRIANGLE:
 			{
-				VertexAttribute vertex = GetVertexAttributes(q.CandidateTriangleBarycentrics(), q.CandidateInstanceID(), q.CandidatePrimitiveIndex());
+				VertexAttribute vertex = GetVertexAttributes(q.CandidateTriangleBarycentrics(), q.CandidateInstanceID(), q.CandidatePrimitiveIndex(), q.CandidateObjectToWorld4x3());
 				MaterialProperties surface = GetMaterialProperties(vertex.Material, vertex.UV, 0);
 				if(surface.Opacity > 0.5f)
 				{
@@ -163,7 +163,7 @@ LightResult EvaluateLight(Light light, float3 worldPos, float3 V, float3 N, floa
 [shader("closesthit")] 
 void PrimaryCHS(inout PrimaryRayPayload payload, BuiltInTriangleIntersectionAttributes attrib) 
 {
-	VertexAttribute vertex = GetVertexAttributes(attrib.barycentrics, InstanceID(), PrimitiveIndex());
+	VertexAttribute vertex = GetVertexAttributes(attrib.barycentrics, InstanceID(), PrimitiveIndex(), ObjectToWorld4x3());
 	payload.Material = vertex.Material;
 	payload.UV = vertex.UV;
 	payload.Normal = EncodeNormalOctahedron(vertex.Normal);
@@ -174,7 +174,7 @@ void PrimaryCHS(inout PrimaryRayPayload payload, BuiltInTriangleIntersectionAttr
 [shader("anyhit")]
 void PrimaryAHS(inout PrimaryRayPayload payload, BuiltInTriangleIntersectionAttributes attrib)
 {
-	VertexAttribute vertex = GetVertexAttributes(attrib.barycentrics, InstanceID(), PrimitiveIndex());
+	VertexAttribute vertex = GetVertexAttributes(attrib.barycentrics, InstanceID(), PrimitiveIndex(), ObjectToWorld4x3());
 	MaterialProperties surface = GetMaterialProperties(vertex.Material, vertex.UV, 0);
 	if(surface.Opacity < 0.5)
 	{
@@ -277,6 +277,7 @@ bool EvaluateIndirectBRDF(int rayType, float2 u, BrdfData brdfData, float3 N, fl
 
 		// Calculate weight of the sample specific for selected sampling method 
 		// This is microfacet BRDF divided by PDF of sampling method
+		// Due to the clever VNDF sampling method, many of the terms cancel out
 		weight = F * G;
 
 		directionLocal = Llocal;

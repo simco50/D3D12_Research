@@ -24,7 +24,7 @@ struct VertexInput
     float4 Tangent;
 };
 
-VertexAttribute GetVertexAttributes(float2 attribBarycentrics, uint instanceID, uint primitiveIndex)
+VertexAttribute GetVertexAttributes(float2 attribBarycentrics, uint instanceID, uint primitiveIndex, float4x3 worldMatrix)
 {
     float3 barycentrics = float3((1.0f - attribBarycentrics.x - attribBarycentrics.y), attribBarycentrics.x, attribBarycentrics.y);
     MeshData mesh = tMeshes[instanceID];
@@ -51,7 +51,6 @@ VertexAttribute GetVertexAttributes(float2 attribBarycentrics, uint instanceID, 
         outData.Tangent += geometryBuffer.Load<float4>(indices[i] * vertexStride + dataOffset) * barycentrics[i];
         dataOffset += sizeof(float4);
     }
-    float4x3 worldMatrix = ObjectToWorld4x3();
     outData.Normal = normalize(mul(outData.Normal, (float3x3)worldMatrix));
     outData.Tangent.xyz = normalize(mul(outData.Tangent.xyz, (float3x3)worldMatrix));
 
