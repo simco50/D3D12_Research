@@ -82,6 +82,7 @@ enum class RenderPath
 	Tiled,
 	Clustered,
 	PathTracing,
+	Visibility,
 	MAX
 };
 
@@ -150,7 +151,7 @@ private:
 	int32 m_ScreenshotDelay = -1;
 	uint32 m_ScreenshotRowPitch = 0;
 
-	RenderPath m_RenderPath = RenderPath::Clustered;
+	RenderPath m_RenderPath = RenderPath::Visibility;
 
 	std::vector<std::unique_ptr<Mesh>> m_Meshes;
 	std::unique_ptr<Buffer> m_pTLAS;
@@ -219,6 +220,14 @@ private:
 	std::unique_ptr<Buffer> m_pMeshBuffer;
 	std::vector<Light> m_Lights;
 	std::unique_ptr<Buffer> m_pLightBuffer;
+
+	// Visibility buffer
+	std::unique_ptr<RootSignature> m_pVisibilityRenderingRS;
+	PipelineState* m_pVisibilityRenderingPSO = nullptr;
+	std::unique_ptr<Texture> m_pVisibilityTexture;
+	std::unique_ptr<Texture> m_pBarycentricsTexture;
+	std::unique_ptr<RootSignature> m_pVisibilityShadingRS;
+	PipelineState* m_pVisibilityShadingPSO = nullptr;
 
 	Texture* m_pVisualizeTexture = nullptr;
 	SceneData m_SceneData;
