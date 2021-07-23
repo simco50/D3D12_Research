@@ -4,7 +4,7 @@ class RootSignature;
 class PipelineState;
 class Texture;
 class RGGraph;
-struct SceneData;
+struct SceneView;
 
 class ImGuiRenderer
 {
@@ -13,7 +13,7 @@ public:
 	~ImGuiRenderer();
 
 	void NewFrame(uint32 width, uint32 height);
-	void Render(RGGraph& graph, const SceneData& sceneData, Texture* pRenderTarget);
+	void Render(RGGraph& graph, const SceneView& sceneData, Texture* pRenderTarget);
 
 private:
 	void CreatePipeline(GraphicsDevice* pDevice);

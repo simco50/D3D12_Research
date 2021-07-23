@@ -13,7 +13,7 @@
 #include "Graphics/RenderGraph/RenderGraph.h"
 #include "Graphics/Mesh.h"
 #include "Scene/Camera.h"
-#include "DemoApp.h"
+#include "Graphics/SceneView.h"
 
 RTReflections::RTReflections(GraphicsDevice* pDevice)
 	: m_pDevice(pDevice)
@@ -24,7 +24,7 @@ RTReflections::RTReflections(GraphicsDevice* pDevice)
 	}
 }
 
-void RTReflections::Execute(RGGraph& graph, const SceneData& sceneData)
+void RTReflections::Execute(RGGraph& graph, const SceneView& sceneData)
 {
 	RGPassBuilder rt = graph.AddPass("RT Reflections");
 	rt.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)

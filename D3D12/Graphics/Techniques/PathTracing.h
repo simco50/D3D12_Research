@@ -5,14 +5,14 @@ class StateObject;
 class Texture;
 class GraphicsDevice;
 class RGGraph;
-struct SceneData;
+struct SceneView;
 
 class PathTracing
 {
 public:
 	PathTracing(GraphicsDevice* pDevice);
 	~PathTracing();
-	void Render(RGGraph& graph, const SceneData& scene);
+	void Render(RGGraph& graph, const SceneView& scene);
 	void OnResize(uint32 width, uint32 height);
 	void Reset();
 	bool IsSupported();

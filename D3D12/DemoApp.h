@@ -2,12 +2,11 @@
 #include "Core/BitField.h"
 #include "Graphics/Core/DescriptorHandle.h"
 #include "Graphics/Core/Graphics.h"
+#include "Graphics/SceneView.h"
 #include "ShaderCommon.h"
 
 class ImGuiRenderer;
 class Mesh;
-struct SubMesh;
-struct Material;
 class ClusteredForward;
 class TiledForward;
 class Camera;
@@ -16,6 +15,8 @@ class RTReflections;
 class SSAO;
 class GpuParticles;
 class PathTracing;
+struct SubMesh;
+struct Material;
 
 enum class DefaultTexture
 {
@@ -30,52 +31,6 @@ enum class DefaultTexture
 	BlueNoise512,
 	MAX,
 };
-
-struct Batch
-{
-	enum class Blending
-	{
-		Opaque = 1,
-		AlphaMask = 2,
-		AlphaBlend = 4,
-	};
-	int Index = 0;
-	Blending BlendMode = Blending::Opaque;
-	const SubMesh* pMesh = nullptr;
-	Matrix WorldMatrix;
-	BoundingBox LocalBounds;
-	BoundingBox Bounds;
-	float Radius;
-	int Material;
-};
-DECLARE_BITMASK_TYPE(Batch::Blending)
-
-using VisibilityMask = BitField<2048>;
-
-struct SceneData
-{
-	Texture* pResolvedDepth = nullptr;
-	Texture* pDepthBuffer = nullptr;
-	Texture* pRenderTarget = nullptr;
-	Texture* pResolvedTarget = nullptr;
-	Texture* pPreviousColor = nullptr;
-	Texture* pNormals = nullptr;
-	Texture* pResolvedNormals = nullptr;
-	Texture* pAO = nullptr;
-	std::vector<Batch> Batches;
-	DescriptorHandle GlobalSRVHeapHandle{};
-	Buffer* pLightBuffer = nullptr;
-	Buffer* pMaterialBuffer = nullptr;
-	Buffer* pMeshBuffer = nullptr;
-	Camera* pCamera = nullptr;
-	ShaderInterop::ShadowData* pShadowData = nullptr;
-	int SceneTLAS = 0;
-	int FrameIndex = 0;
-	VisibilityMask VisibilityMask;
-};
-
-void DrawScene(CommandContext& context, const SceneData& scene, const VisibilityMask& visibility, Batch::Blending blendModes);
-void DrawScene(CommandContext& context, const SceneData& scene, Batch::Blending blendModes);
 
 enum class RenderPath
 {
@@ -94,15 +49,6 @@ public:
 	void Update();
 	void OnResize(int width, int height);
 
-	ImGuiRenderer* GetImGui() const { return m_pImGuiRenderer.get(); }
-	Texture* GetDefaultTexture(DefaultTexture type) const { return m_DefaultTextures[(int)type].get(); }
-	Texture* GetDepthStencil() const { return m_pDepthStencil.get(); }
-	Texture* GetResolvedDepthStencil() const { return m_pResolvedDepthStencil.get(); }
-	Texture* GetCurrentRenderTarget() const { return m_SampleCount > 1 ? m_pMultiSampleRenderTarget.get() : m_pHDRRenderTarget.get(); }
-	Texture* GetCurrentBackbuffer() const { return m_pSwapchain->GetBackBuffer(); }
-
-	GraphicsDevice* GetDevice() const { return m_pDevice.get(); }
-
 private:
 	void InitializePipelines();
 	void InitializeAssets(CommandContext& context);
@@ -111,13 +57,19 @@ private:
 	void UpdateImGui();
 	void UpdateTLAS(CommandContext& context);
 
+	Texture* GetDefaultTexture(DefaultTexture type) const { return m_DefaultTextures[(int)type].get(); }
+	Texture* GetDepthStencil() const { return m_pDepthStencil.get(); }
+	Texture* GetResolvedDepthStencil() const { return m_pResolvedDepthStencil.get(); }
+	Texture* GetCurrentRenderTarget() const { return m_SampleCount > 1 ? m_pMultiSampleRenderTarget.get() : m_pHDRRenderTarget.get(); }
+	Texture* GetCurrentBackbuffer() const { return m_pSwapchain->GetBackBuffer(); }
+
 	std::unique_ptr<GraphicsDevice> m_pDevice;
 	std::unique_ptr<SwapChain> m_pSwapchain;
 
-	unsigned int m_WindowWidth;
-	unsigned int m_WindowHeight;
+	uint32 m_WindowWidth;
+	uint32 m_WindowHeight;
 
-	int m_Frame = 0;
+	uint32 m_Frame = 0;
 	std::array<float, 180> m_FrameTimes{};
 
 	std::unique_ptr<Texture> m_pMultiSampleRenderTarget;
@@ -143,7 +95,7 @@ private:
 	std::unique_ptr<Texture> m_pLightCookie;
 	std::array<std::unique_ptr<Texture>, (int)DefaultTexture::MAX> m_DefaultTextures;
 
-	int m_SampleCount = 1;
+	uint32 m_SampleCount = 1;
 	std::unique_ptr<Camera> m_pCamera;
 
 	std::unique_ptr<Buffer> m_pScreenshotBuffer;
@@ -221,6 +173,6 @@ private:
 	std::unique_ptr<Buffer> m_pLightBuffer;
 
 	Texture* m_pVisualizeTexture = nullptr;
-	SceneData m_SceneData;
+	SceneView m_SceneData;
 	bool m_CapturePix = false;
 };

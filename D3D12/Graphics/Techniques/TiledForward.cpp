@@ -12,7 +12,7 @@
 #include "Graphics/Mesh.h"
 #include "Graphics/Profiler.h"
 #include "Scene/Camera.h"
-#include "DemoApp.h"
+#include "Graphics/SceneView.h"
 #include "Core/ConsoleVariables.h"
 
 static constexpr int MAX_LIGHT_DENSITY = 72000;
@@ -37,7 +37,7 @@ void TiledForward::OnResize(int windowWidth, int windowHeight)
 	m_pLightGridTransparant = m_pDevice->CreateTexture(TextureDesc::Create2D(frustumCountX, frustumCountY, DXGI_FORMAT_R32G32_UINT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess), "Light Grid - Transparent");
 }
 
-void TiledForward::Execute(RGGraph& graph, const SceneData& resources)
+void TiledForward::Execute(RGGraph& graph, const SceneView& resources)
 {
 	RG_GRAPH_SCOPE("Tiled Lighting", graph);
 

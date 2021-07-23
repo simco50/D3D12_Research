@@ -7,8 +7,8 @@
 #include "Graphics/RenderGraph/RenderGraph.h"
 #include "Graphics/Core/CommandContext.h"
 #include "Graphics/Core/ShaderBindingTable.h"
+#include "Graphics/SceneView.h"
 #include "Scene/Camera.h"
-#include "DemoApp.h"
 
 PathTracing::PathTracing(GraphicsDevice* pDevice)
 	: m_pDevice(pDevice)
@@ -50,7 +50,7 @@ PathTracing::~PathTracing()
 	}
 }
 
-void PathTracing::Render(RGGraph& graph, const SceneData& sceneData)
+void PathTracing::Render(RGGraph& graph, const SceneView& sceneData)
 {
 	if (!IsSupported())
 	{
