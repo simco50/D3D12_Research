@@ -96,6 +96,7 @@ void ImGuiConsole::Update(const ImVec2& position, const ImVec2& size)
 	bool show = ImGui::Begin("Output Log", &m_ShowConsole, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus);
 	if (show)
 	{
+		m_ShowConsole = true;
 		for (const Console::LogEntry& entry : Console::GetHistory())
 		{
 			switch (entry.Type)

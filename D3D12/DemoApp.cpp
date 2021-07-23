@@ -1708,7 +1708,7 @@ void DemoApp::UpdateImGui()
 {
 	m_FrameTimes[m_Frame % m_FrameTimes.size()] = Time::DeltaTime();
 
-	ImGui::ShowDemoWindow();
+	//ImGui::ShowDemoWindow();
 
 	if (m_pVisualizeTexture)
 	{
@@ -1738,90 +1738,11 @@ void DemoApp::UpdateImGui()
 	ImGui::SetNextWindowPos(ImVec2(0, 0), 0, ImVec2(0, 0));
 	ImGui::SetNextWindowSize(ImVec2(300, (float)m_WindowHeight));
 	ImGui::Begin("GPU Stats", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
-	ImGui::Text("MS: %4.2f", Time::DeltaTime() * 1000.0f);
-	ImGui::SameLine(100.0f);
-	ImGui::Text("%d x %d", m_WindowWidth, m_WindowHeight);
-	ImGui::SameLine(180.0f);
-	ImGui::Text("%dx MSAA", m_SampleCount);
+	ImGui::Text("MS: %4.2f | FPS: %4.2f | %d x %d", Time::DeltaTime() * 1000.0f, 1.0f / Time::DeltaTime(), m_WindowWidth, m_WindowHeight);
 	ImGui::PlotLines("", m_FrameTimes.data(), (int)m_FrameTimes.size(), m_Frame % m_FrameTimes.size(), 0, 0.0f, 0.03f, ImVec2(ImGui::GetContentRegionAvail().x, 100));
 
-	ImGui::Text("Camera: [%f, %f, %f]", m_pCamera->GetPosition().x, m_pCamera->GetPosition().y, m_pCamera->GetPosition().z);
+	ImGui::Text("Camera: [%.2f, %.2f, %.2f]", m_pCamera->GetPosition().x, m_pCamera->GetPosition().y, m_pCamera->GetPosition().z);
 
-	if (ImGui::TreeNodeEx("Lighting", ImGuiTreeNodeFlags_DefaultOpen))
-	{
-		ImGui::Combo("Render Path", (int*)&m_RenderPath, [](void* /*data*/, int index, const char** outText)
-			{
-				RenderPath p = (RenderPath)index;
-				switch (p)
-				{
-				case RenderPath::Tiled:
-					*outText = "Tiled";
-					break;
-				case RenderPath::Clustered:
-					*outText = "Clustered";
-					break;
-				case RenderPath::PathTracing:
-					*outText = "Path Tracing";
-					break;
-				default:
-					noEntry();
-					break;
-				}
-				return true;
-			}, nullptr, (int)RenderPath::MAX);
-
-		ImGui::Separator();
-
-		if (ImGui::Button("Dump RenderGraph"))
-		{
-			Tweakables::g_DumpRenderGraph = true;
-		}
-		if (ImGui::Button("Screenshot"))
-		{
-			Tweakables::g_Screenshot = true;
-		}
-		if (ImGui::Button("Pix Capture"))
-		{
-			m_CapturePix = true;
-		}
-
-		ImGui::TreePop();
-	}
-	/*if (ImGui::TreeNodeEx("Descriptor Heaps", ImGuiTreeNodeFlags_DefaultOpen))
-	{
-		ImGui::Text("Used CPU Descriptor Heaps");
-		for (const auto& pAllocator : m_DescriptorHeaps)
-		{
-			switch (pAllocator->GetType())
-			{
-			case D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV:
-				ImGui::TextWrapped("Constant/Shader/Unordered Access Views");
-				break;
-			case D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER:
-				ImGui::TextWrapped("Samplers");
-				break;
-			case D3D12_DESCRIPTOR_HEAP_TYPE_RTV:
-				ImGui::TextWrapped("Render Target Views");
-				break;
-			case D3D12_DESCRIPTOR_HEAP_TYPE_DSV:
-				ImGui::TextWrapped("Depth Stencil Views");
-				break;
-			default:
-				break;
-			}
-			uint32 totalDescriptors = pAllocator->GetNumDescriptors();
-			uint32 usedDescriptors = pAllocator->GetNumAllocatedDescriptors();
-			std::string str = SPrintf("%d/%d", usedDescriptors, totalDescriptors);
-			ImGui::ProgressBar((float)usedDescriptors / Math::Max(1u, totalDescriptors), ImVec2(-1, 0), str.c_str());
-		}
-		ImGui::TreePop();
-	}
-	if (ImGui::TreeNodeEx("Memory", ImGuiTreeNodeFlags_DefaultOpen))
-	{
-		ImGui::Text("Dynamic Upload Memory");
-		ImGui::Text("%.2f MB", Math::BytesToMegaBytes * m_pDynamicAllocationManager->GetMemoryUsage());
-		ImGui::TreePop();
-	}*/
 	if (ImGui::TreeNodeEx("Profiler", ImGuiTreeNodeFlags_DefaultOpen))
 	{
 		ProfileNode* pRootNode = Profiler::Get()->GetRootNode();
@@ -1829,15 +1750,49 @@ void DemoApp::UpdateImGui()
 		ImGui::TreePop();
 	}
 
+	if (ImGui::Button("Dump RenderGraph"))
+	{
+		Tweakables::g_DumpRenderGraph = true;
+	}
+	if (ImGui::Button("Screenshot"))
+	{
+		Tweakables::g_Screenshot = true;
+	}
+	if (ImGui::Button("Pix Capture"))
+	{
+		m_CapturePix = true;
+	}
+
 	ImGui::End();
 
 	static ImGuiConsole console;
 	console.Update(ImVec2(300, (float)m_WindowHeight), ImVec2((float)m_WindowWidth - 300 * 2, 250));
 
-
 	ImGui::SetNextWindowPos(ImVec2((float)m_WindowWidth, 0), 0, ImVec2(1, 0));
 	ImGui::SetNextWindowSize(ImVec2(300, (float)m_WindowHeight));
 	ImGui::Begin("Parameters", 0, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
+
+	ImGui::Text("Global");
+	ImGui::Combo("Render Path", (int*)&m_RenderPath, [](void* /*data*/, int index, const char** outText)
+		{
+			RenderPath p = (RenderPath)index;
+			switch (p)
+			{
+			case RenderPath::Tiled:
+				*outText = "Tiled";
+				break;
+			case RenderPath::Clustered:
+				*outText = "Clustered";
+				break;
+			case RenderPath::PathTracing:
+				*outText = "Path Tracing";
+				break;
+			default:
+				noEntry();
+				break;
+			}
+			return true;
+		}, nullptr, (int)RenderPath::MAX);
 
 	ImGui::Text("Sky");
 	ImGui::SliderFloat("Sun Orientation", &Tweakables::g_SunOrientation, -Math::PI, Math::PI);
@@ -1858,21 +1813,22 @@ void DemoApp::UpdateImGui()
 	ImGui::Checkbox("Draw Exposure Histogram", &Tweakables::g_DrawHistogram.Get());
 	ImGui::SliderFloat("White Point", &Tweakables::g_WhitePoint.Get(), 0, 20);
 
-	constexpr static const char* tonemappers[] = {
-		"Reinhard",
-		"Reinhard Extended",
-		"ACES Fast",
-		"Unreal 3",
-		"Uncharted 2",
-	};
-
 	ImGui::Combo("Tonemapper", (int*)&Tweakables::g_ToneMapper.Get(), [](void* /*data*/, int index, const char** outText)
 		{
+			constexpr static const char* tonemappers[] = {
+				"Reinhard",
+				"Reinhard Extended",
+				"ACES Fast",
+				"Unreal 3",
+				"Uncharted 2",
+			};
+
 			if (index < ARRAYSIZE(tonemappers))
 			{
 				*outText = tonemappers[index];
 				return true;
 			}
+			noEntry();
 			return false;
 		}, nullptr, 5);
 
