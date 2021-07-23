@@ -42,7 +42,6 @@ ClusteredForward::~ClusteredForward()
 {
 }
 
-
 void ClusteredForward::OnResize(int windowWidth, int windowHeight)
 {
 	m_ClusterCountX = Math::RoundUp((float)windowWidth / gLightClusterTexelSize);
@@ -520,7 +519,7 @@ void ClusteredForward::VisualizeLightDensity(RGGraph& graph, Camera& camera, Tex
 {
 	if (!m_pVisualizationIntermediateTexture || m_pVisualizationIntermediateTexture->GetDesc() != pTarget->GetDesc())
 	{
-		m_pVisualizationIntermediateTexture = m_pDevice->CreateTexture(pTarget->GetDesc(), "LightDensity Debug Texture");
+		m_pVisualizationIntermediateTexture = m_pDevice->CreateTexture(pTarget->GetDesc(), "Light Density Debug Texture");
 	}
 
 	Vector2 screenDimensions((float)pTarget->GetWidth(), (float)pTarget->GetHeight());

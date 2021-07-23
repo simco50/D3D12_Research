@@ -29,7 +29,7 @@ enum class PipelineStateType
 class VertexElementLayout
 {
 public:
-	static const int MAX_INPUT_ELEMENTS = 16;
+	static const int MAX_INPUT_ELEMENTS = 8;
 
 	VertexElementLayout() = default;
 	VertexElementLayout(const VertexElementLayout& rhs);
@@ -45,7 +45,7 @@ private:
 	void FixupStrings();
 
 	std::array<D3D12_INPUT_ELEMENT_DESC, MAX_INPUT_ELEMENTS> m_ElementDesc{};
-	std::array<char[64], MAX_INPUT_ELEMENTS> m_SemanticNames{};
+	std::array<char[16], MAX_INPUT_ELEMENTS> m_SemanticNames{};
 	uint32 m_NumElements = 0;
 };
 
