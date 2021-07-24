@@ -7,7 +7,7 @@ class Camera;
 class CommandContext;
 class RGGraph;
 class Buffer;
-struct SceneData;
+struct SceneView;
 class StateObject;
 
 class RTReflections
@@ -15,7 +15,7 @@ class RTReflections
 public:
 	RTReflections(GraphicsDevice* pDevice);
 
-	void Execute(RGGraph& graph, const SceneData& sceneData);
+	void Execute(RGGraph& graph, const SceneView& sceneData);
 	void OnResize(uint32 width, uint32 height);
 
 private:

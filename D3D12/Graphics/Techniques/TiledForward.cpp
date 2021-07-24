@@ -12,7 +12,7 @@
 #include "Graphics/Mesh.h"
 #include "Graphics/Profiler.h"
 #include "Scene/Camera.h"
-#include "DemoApp.h"
+#include "Graphics/SceneView.h"
 #include "Core/ConsoleVariables.h"
 
 static constexpr int MAX_LIGHT_DENSITY = 72000;
@@ -37,11 +37,11 @@ void TiledForward::OnResize(int windowWidth, int windowHeight)
 	m_pLightGridTransparant = m_pDevice->CreateTexture(TextureDesc::Create2D(frustumCountX, frustumCountY, DXGI_FORMAT_R32G32_UINT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess), "Light Grid - Transparent");
 }
 
-void TiledForward::Execute(RGGraph& graph, const SceneData& resources)
+void TiledForward::Execute(RGGraph& graph, const SceneView& resources)
 {
 	RG_GRAPH_SCOPE("Tiled Lighting", graph);
 
-	RGPassBuilder culling = graph.AddPass("Light Culling");
+	RGPassBuilder culling = graph.AddPass("Tiled Light Culling");
 	culling.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
 		{
 			context.InsertResourceBarrier(resources.pResolvedDepth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
@@ -255,6 +255,7 @@ void TiledForward::VisualizeLightDensity(RGGraph& graph, GraphicsDevice* pDevice
 
 void TiledForward::SetupPipelines()
 {
+	// Light culling
 	{
 		Shader* pComputeShader = m_pDevice->GetShader("LightCulling.hlsl", ShaderType::Compute, "CSMain");
 
@@ -273,13 +274,11 @@ void TiledForward::SetupPipelines()
 		m_pLightIndexListBufferTransparant = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(MAX_LIGHT_DENSITY, sizeof(uint32)), "Light List Transparant");
 	}
 
-	//PBR Diffuse passes
+	// Shading pipelines
 	{
-		//Shaders
 		Shader* pVertexShader = m_pDevice->GetShader("Diffuse.hlsl", ShaderType::Vertex, "VSMain", { "TILED_FORWARD" });
 		Shader* pPixelShader = m_pDevice->GetShader("Diffuse.hlsl", ShaderType::Pixel, "PSMain", { "TILED_FORWARD" });
 
-		//Rootsignature
 		m_pDiffuseRS = std::make_unique<RootSignature>(m_pDevice);
 		m_pDiffuseRS->FinalizeFromShader("Diffuse", pVertexShader);
 
@@ -308,6 +307,7 @@ void TiledForward::SetupPipelines()
 		}
 	}
 
+	// Light count visualization
 	{
 		Shader* pComputeShader = m_pDevice->GetShader("VisualizeLightCount.hlsl", ShaderType::Compute, "DebugLightDensityCS", { "TILED_FORWARD" });
 

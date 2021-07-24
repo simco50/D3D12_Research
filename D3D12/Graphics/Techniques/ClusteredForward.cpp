@@ -11,8 +11,8 @@
 #include "Graphics/RenderGraph/RenderGraph.h"
 #include "Graphics/Mesh.h"
 #include "Graphics/Profiler.h"
+#include "Graphics/SceneView.h"
 #include "Scene/Camera.h"
-#include "DemoApp.h"
 #include "Core/ConsoleVariables.h"
 
 static constexpr int gLightClusterTexelSize = 64;
@@ -41,7 +41,6 @@ ClusteredForward::ClusteredForward(GraphicsDevice* pDevice)
 ClusteredForward::~ClusteredForward()
 {
 }
-
 
 void ClusteredForward::OnResize(int windowWidth, int windowHeight)
 {
@@ -90,7 +89,7 @@ Vector2 ComputeVolumeGridParams(float nearZ, float farZ, int numSlices)
 	return lightGridParams;
 }
 
-void ClusteredForward::Execute(RGGraph& graph, const SceneData& resources)
+void ClusteredForward::Execute(RGGraph& graph, const SceneView& resources)
 {
 	RG_GRAPH_SCOPE("Clustered Lighting", graph);
 
@@ -520,7 +519,7 @@ void ClusteredForward::VisualizeLightDensity(RGGraph& graph, Camera& camera, Tex
 {
 	if (!m_pVisualizationIntermediateTexture || m_pVisualizationIntermediateTexture->GetDesc() != pTarget->GetDesc())
 	{
-		m_pVisualizationIntermediateTexture = m_pDevice->CreateTexture(pTarget->GetDesc(), "LightDensity Debug Texture");
+		m_pVisualizationIntermediateTexture = m_pDevice->CreateTexture(pTarget->GetDesc(), "Light Density Debug Texture");
 	}
 
 	Vector2 screenDimensions((float)pTarget->GetWidth(), (float)pTarget->GetHeight());

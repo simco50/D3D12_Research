@@ -12,7 +12,7 @@
 #include "Graphics/RenderGraph/RenderGraph.h"
 #include "Graphics/Mesh.h"
 #include "Scene/Camera.h"
-#include "DemoApp.h"
+#include "Graphics/SceneView.h"
 
 RTAO::RTAO(GraphicsDevice* pDevice)
 	: m_pDevice(pDevice)
@@ -23,7 +23,7 @@ RTAO::RTAO(GraphicsDevice* pDevice)
 	}
 }
 
-void RTAO::Execute(RGGraph& graph, Texture* pTarget, const SceneData& sceneData)
+void RTAO::Execute(RGGraph& graph, Texture* pTarget, const SceneView& sceneData)
 {
 	static float g_AoPower = 3;
 	static float g_AoRadius = 0.5f;

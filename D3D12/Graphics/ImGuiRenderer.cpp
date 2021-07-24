@@ -6,11 +6,11 @@
 #include "Graphics/Core/RootSignature.h"
 #include "Graphics/Core/Shader.h"
 #include "Graphics/Core/Texture.h"
+#include "Graphics/SceneView.h"
 #include "RenderGraph/RenderGraph.h"
 #include "Core/Input.h"
 #include "ImGuizmo/ImGuizmo.h"
 #include "Core/Paths.h"
-#include "DemoApp.h"
 
 ImGuiRenderer::ImGuiRenderer(GraphicsDevice* pDevice)
 {
@@ -168,7 +168,7 @@ void ImGuiRenderer::CreatePipeline(GraphicsDevice* pDevice)
 	m_pPipelineState = pDevice->CreatePipeline(psoDesc);
 }
 
-void ImGuiRenderer::Render(RGGraph& graph, const SceneData& sceneData, Texture* pRenderTarget)
+void ImGuiRenderer::Render(RGGraph& graph, const SceneView& sceneData, Texture* pRenderTarget)
 {
 	ImGui::Render();
 	ImDrawData* pDrawData = ImGui::GetDrawData();

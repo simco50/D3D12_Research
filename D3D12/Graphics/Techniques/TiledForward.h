@@ -8,7 +8,7 @@ class Camera;
 class Buffer;
 class UnorderedAccessView;
 class RGGraph;
-struct SceneData;
+struct SceneView;
 
 class TiledForward
 {
@@ -17,7 +17,7 @@ public:
 
 	void OnResize(int windowWidth, int windowHeight);
 
-	void Execute(RGGraph& graph, const SceneData& resources);
+	void Execute(RGGraph& graph, const SceneView& resources);
 	void VisualizeLightDensity(RGGraph& graph, GraphicsDevice* pDevice, Camera& camera, Texture* pTarget, Texture* pDepth);
 
 private:
