@@ -24,6 +24,14 @@ struct VertexInput
     float4 Tangent;
 };
 
+template<typename T>
+T LoadGeometryData(ByteAddressBuffer buffer, uint index, uint vertexStride, inout uint offset)
+{
+    T v = buffer.Load<T>(index * vertexStride + offset);
+    offset += sizeof(T);
+    return v;
+}
+
 VertexAttribute GetVertexAttributes(float2 attribBarycentrics, uint instanceID, uint primitiveIndex, float4x3 worldMatrix)
 {
     float3 barycentrics = float3((1.0f - attribBarycentrics.x - attribBarycentrics.y), attribBarycentrics.x, attribBarycentrics.y);
@@ -42,14 +50,10 @@ VertexAttribute GetVertexAttributes(float2 attribBarycentrics, uint instanceID, 
     for(int i = 0; i < 3; ++i)
     {
         uint dataOffset = 0;
-        positions[i] += UnpackHalf3(geometryBuffer.Load<uint2>(indices[i] * vertexStride + dataOffset));
-        dataOffset += sizeof(uint2);
-        outData.UV += UnpackHalf2(geometryBuffer.Load<uint>(indices[i] * vertexStride + dataOffset)) * barycentrics[i];
-        dataOffset += sizeof(uint);
-        outData.Normal += geometryBuffer.Load<float3>(indices[i] * vertexStride + dataOffset) * barycentrics[i];
-        dataOffset += sizeof(float3);
-        outData.Tangent += geometryBuffer.Load<float4>(indices[i] * vertexStride + dataOffset) * barycentrics[i];
-        dataOffset += sizeof(float4);
+        positions[i] = UnpackHalf3(LoadGeometryData<uint2>(geometryBuffer, indices[i], vertexStride, dataOffset));
+        outData.UV += UnpackHalf2(LoadGeometryData<uint>(geometryBuffer, indices[i], vertexStride, dataOffset)) * barycentrics[i];
+        outData.Normal += LoadGeometryData<float3>(geometryBuffer, indices[i], vertexStride, dataOffset) * barycentrics[i];
+        outData.Tangent += LoadGeometryData<float4>(geometryBuffer, indices[i], vertexStride, dataOffset) * barycentrics[i];
     }
     outData.Normal = normalize(mul(outData.Normal, (float3x3)worldMatrix));
     outData.Tangent.xyz = normalize(mul(outData.Tangent.xyz, (float3x3)worldMatrix));
