@@ -152,7 +152,7 @@ private:
 		}
 		case WM_ACTIVATE:
 		{
-			LOWORD(wParam) == WA_INACTIVE ? Time::Stop() : Time::Start();
+			OnFocusChanged.Broadcast(LOWORD(wParam) != WA_INACTIVE);
 			break;
 		}
 		case WM_SIZE:
