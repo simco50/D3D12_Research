@@ -310,7 +310,7 @@ void PSMain(PSInput input,
 	float ssrWeight = 0;	
 	float3 ssr = ScreenSpaceReflections(input.position, input.positionVS, N, V, roughness, ssrWeight);
 
-	LightResult lighting = DoLight(input.position, input.positionWS, input.normal, V, diffuseColor, specularColor, roughness);
+	LightResult lighting = DoLight(input.position, input.positionWS, N, V, diffuseColor, specularColor, roughness);
 
 	float3 outRadiance = 0;
 	outRadiance += lighting.Diffuse + lighting.Specular;
