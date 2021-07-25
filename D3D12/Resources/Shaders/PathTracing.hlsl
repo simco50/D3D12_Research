@@ -328,6 +328,10 @@ bool SampleLightRIS(inout uint seed, float3 position, float3 N, out int lightInd
 		int candidate = Random(seed, 0, cViewData.NumLights);
 		Light light = tLights[candidate];
 		float3 L = normalize(light.Position - position);
+		if(light.IsDirectional())
+		{
+			L = -light.Direction;
+		}
 		if(dot(N, L) < 0.0f) 
 		{
 			continue;
