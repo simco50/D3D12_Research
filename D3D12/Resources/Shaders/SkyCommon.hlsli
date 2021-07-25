@@ -10,7 +10,7 @@ float AngleBetween(float3 dir0, float3 dir1)
 //A. J. Preetham, Peter Shirley, Brian Smits
 //https://dl.acm.org/doi/pdf/10.1145/311535.311545
 
-float3 CIESky(float3 dir, float3 sunDir)
+float3 CIESky(float3 dir, float3 sunDir, bool withSun = true)
 {
 	float3 skyDir = float3(dir.x, saturate(dir.y), dir.z);
 	float gamma = AngleBetween(skyDir, sunDir);
@@ -33,9 +33,12 @@ float3 CIESky(float3 dir, float3 sunDir)
 
 	float3 color = SkyColor;
 
-  	// Draw a circle for the sun
-	float sunGamma = AngleBetween(dir, sunDir);
-	color = lerp(SunColor, SkyColor, saturate(abs(sunGamma) / SunWidth));
+	if(withSun)
+	{
+  		// Draw a circle for the sun
+		float sunGamma = AngleBetween(dir, sunDir);
+		color = lerp(SunColor, SkyColor, saturate(abs(sunGamma) / SunWidth));
+	}
 
 	return max(color * luminance, 0);
 }

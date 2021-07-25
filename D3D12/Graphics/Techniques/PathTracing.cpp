@@ -26,7 +26,7 @@ PathTracing::PathTracing(GraphicsDevice* pDevice)
 	StateObjectInitializer desc{};
 	desc.Name = "Path Tracing";
 	desc.MaxRecursion = 1;
-	desc.MaxPayloadSize = 10 * sizeof(float);
+	desc.MaxPayloadSize = 13 * sizeof(float);
 	desc.MaxAttributeSize = 2 * sizeof(float);
 	desc.Type = D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE;
 	desc.AddLibrary(pLibrary);
