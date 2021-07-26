@@ -143,10 +143,12 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& resources)
 			struct ConstantBuffer
 			{
 				Matrix View;
+				IntVector3 ClusterDimensions;
 				int LightCount;
 			} constantBuffer{};
 
 			constantBuffer.View = resources.pCamera->GetView();
+			constantBuffer.ClusterDimensions = IntVector3(m_ClusterCountX, m_ClusterCountY, gLightClustersNumZ);
 			constantBuffer.LightCount = resources.pLightBuffer->GetNumElements();
 
 			context.SetComputeDynamicConstantBufferView(0, constantBuffer);
@@ -158,7 +160,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& resources)
 			context.BindResource(2, 1, m_pLightIndexGrid->GetUAV());
 			context.BindResource(2, 2, m_pLightGrid->GetUAV());
 
-			context.Dispatch(m_ClusterCountX * m_ClusterCountY * gLightClustersNumZ);
+			context.Dispatch(ComputeUtils::GetNumThreadGroups(m_ClusterCountX, 4, m_ClusterCountY, 4, gLightClustersNumZ, 4));
 		});
 
 	{
