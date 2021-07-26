@@ -7,12 +7,14 @@
 #define MAX_LIGHTS_PER_TILE 256
 #define THREAD_COUNT 4
 
-cbuffer ShaderParameters : register(b0)
+struct ViewData
 {
-	float4x4 cView;
-	int3 cClusterDimensions;
-	uint cLightCount;
-}
+	float4x4 View;
+	int3 ClusterDimensions;
+	uint LightCount;	
+};
+
+ConstantBuffer<ViewData> cViewData : register(b0);
 
 StructuredBuffer<Light> tLights : register(t0);
 StructuredBuffer<AABB> tClusterAABBs : register(t1);
@@ -44,19 +46,19 @@ void LightCulling(CS_INPUT input)
 {
 	uint lightList[MAX_LIGHTS_PER_TILE];
 	uint lightCount = 0;
-	uint clusterIndex = input.DispatchThreadId.x + input.DispatchThreadId.y * cClusterDimensions.x + input.DispatchThreadId.z * cClusterDimensions.x * cClusterDimensions.y;
+	uint clusterIndex = input.DispatchThreadId.x + input.DispatchThreadId.y * cViewData.ClusterDimensions.x + input.DispatchThreadId.z * cViewData.ClusterDimensions.x * cViewData.ClusterDimensions.y;
 	AABB clusterAABB = tClusterAABBs[clusterIndex];
 
 	//Perform the light culling
 	[loop]
-	for (uint i = 0; i < cLightCount; ++i)
+	for (uint i = 0; i < cViewData.LightCount; ++i)
 	{
 		Light light = tLights[i];
 		if(light.IsPoint())
 		{
 			Sphere sphere = (Sphere)0;
 			sphere.Radius = light.Range;
-			sphere.Position = mul(float4(light.Position, 1.0f), cView).xyz;
+			sphere.Position = mul(float4(light.Position, 1.0f), cViewData.View).xyz;
 			if (SphereInAABB(sphere, clusterAABB))
 			{
 				uint index = lightCount;
@@ -73,8 +75,8 @@ void LightCulling(CS_INPUT input)
 			sphere.Radius = sqrt(dot(clusterAABB.Extents.xyz, clusterAABB.Extents.xyz));
 			sphere.Position = clusterAABB.Center.xyz;
 
-			float3 conePosition = mul(float4(light.Position, 1), cView).xyz;
-			float3 coneDirection = mul(light.Direction, (float3x3)cView);
+			float3 conePosition = mul(float4(light.Position, 1), cViewData.View).xyz;
+			float3 coneDirection = mul(light.Direction, (float3x3)cViewData.View);
 			float angle = acos(light.SpotlightAngles.y);
 			if (ConeInSphere(conePosition, coneDirection, light.Range, float2(sin(angle), light.SpotlightAngles.y), sphere))
 			{
