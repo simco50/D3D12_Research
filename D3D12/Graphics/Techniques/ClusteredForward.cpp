@@ -181,6 +181,9 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& resources)
 			Vector3 ViewLocation;
 			float FarZ;
 			float Jitter;
+			float LightClusterSizeFactor;
+			Vector2 LightGridParams;
+			IntVector3 LightClusterDimensions;
 		} constantBuffer{};
 
 		constantBuffer.ClusterDimensions = IntVector3(pDestinationVolume->GetWidth(), pDestinationVolume->GetHeight(), pDestinationVolume->GetDepth());
@@ -194,6 +197,9 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& resources)
 		constantBuffer.FarZ = resources.pCamera->GetFar();
 		constexpr Math::HaltonSequence<1024, 2> halton;
 		constantBuffer.Jitter = halton[resources.FrameIndex & 1023];
+		constantBuffer.LightClusterSizeFactor = (float)gVolumetricFroxelTexelSize / gLightClusterTexelSize;
+		constantBuffer.LightGridParams = lightGridParams;
+		constantBuffer.LightClusterDimensions = IntVector3(m_ClusterCountX, m_ClusterCountY, gLightClustersNumZ);
 
 		RGPassBuilder injectVolumeLighting = graph.AddPass("Inject Volume Lights");
 		injectVolumeLighting.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
@@ -205,6 +211,8 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& resources)
 				context.SetPipelineState(m_pInjectVolumeLightPSO);
 
 				D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
+					m_pLightGrid->GetSRV()->GetDescriptor(),
+					m_pLightIndexGrid->GetSRV()->GetDescriptor(),
 					pSourceVolume->GetSRV()->GetDescriptor(),
 					resources.pLightBuffer->GetSRV()->GetDescriptor(),
 					resources.pAO->GetSRV()->GetDescriptor(),
@@ -233,6 +241,8 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& resources)
 				//context.ClearUavFloat(m_pFinalVolumeFog.get(), m_pFinalVolumeFog->GetUAV(), values);
 
 				D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
+					m_pLightGrid->GetSRV()->GetDescriptor(),
+					m_pLightIndexGrid->GetSRV()->GetDescriptor(),
 					pDestinationVolume->GetSRV()->GetDescriptor(),
 					resources.pLightBuffer->GetSRV()->GetDescriptor(),
 					resources.pAO->GetSRV()->GetDescriptor(),

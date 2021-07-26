@@ -6,7 +6,7 @@
 		"CBV(b0), " \
 		"CBV(b2), " \
 		"DescriptorTable(UAV(u0, numDescriptors = 1)), " \
-		"DescriptorTable(SRV(t4, numDescriptors = 10)), " \
+		"DescriptorTable(SRV(t2, numDescriptors = 12)), " \
 		GLOBAL_BINDLESS_TABLE ", " \
 		"StaticSampler(s0, filter=FILTER_MIN_MAG_MIP_POINT, addressU = TEXTURE_ADDRESS_WRAP, addressV = TEXTURE_ADDRESS_WRAP), " \
 		"StaticSampler(s1, filter=FILTER_MIN_MAG_MIP_POINT, addressU = TEXTURE_ADDRESS_CLAMP, addressV = TEXTURE_ADDRESS_CLAMP), " \
@@ -25,11 +25,16 @@ struct ShaderData
 	float3 ViewLocation;
 	float FarZ;
 	float Jitter;
+	float LightClusterSizeFactor;
+	float2 LightGridParams;
+	int3 LightClusterDimensions;
 };
 
 SamplerState sVolumeSampler : register(s3);
 ConstantBuffer<ShaderData> cData : register(b0);
 
+StructuredBuffer<uint2> tLightGrid : register(t2);
+StructuredBuffer<uint> tLightIndexList : register(t3);
 Texture3D<float4> tLightScattering : register(t4);
 RWTexture3D<float4> uOutLightScattering : register(u0);
 
@@ -53,6 +58,18 @@ float3 WorldPositionFromFroxel(uint3 index, float offset)
 {
 	float depth;
 	return WorldPositionFromFroxel(index, offset, depth);
+}
+
+uint GetSliceFromDepth(float depth)
+{
+    return floor(log(depth) * cData.LightGridParams.x - cData.LightGridParams.y);
+}
+
+uint GetLightCluster(uint2 fogCellIndex, float depth)
+{
+	uint slice = GetSliceFromDepth(depth);
+	uint3 clusterIndex3D = uint3(floor(fogCellIndex * cData.LightClusterSizeFactor), slice);
+	return clusterIndex3D.x + (cData.LightClusterDimensions.x * (clusterIndex3D.y + cData.LightClusterDimensions.y * clusterIndex3D.z));
 }
 
 [RootSignature(RootSig)]
@@ -85,11 +102,16 @@ void InjectFogLightingCS(uint3 threadId : SV_DISPATCHTHREADID)
 
 	float3 totalScattering = 0;
 
+	uint tileIndex = GetLightCluster(threadId.xy, z);
+	uint lightOffset = tLightGrid[tileIndex].x;
+	uint lightCount = tLightGrid[tileIndex].y;
+
 	// Iterate over all the lights and light the froxel
 	// todo: Leverage clustered light culling
-	for(int i = 0; i < cData.NumLights; ++i)
+	for(int i = 0; i < lightCount; ++i)
 	{
-		Light light = tLights[i];
+		int lightIndex = tLightIndexList[lightOffset + i];
+		Light light = tLights[lightIndex];
 		if(light.IsEnabled() && light.IsVolumetric())
 		{
 			float attenuation = GetAttenuation(light, worldPosition);
