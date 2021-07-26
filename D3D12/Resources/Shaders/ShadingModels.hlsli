@@ -64,9 +64,8 @@ LightResult DefaultLitBxDF(float3 specularColor, float specularRoughness, float3
 	float VdotH = saturate(dot(V, H));
 
 	// Generalized microfacet Specular BRDF
-	specularRoughness = clamp(specularRoughness, 0.0001f, 1.0f);
 	float a = Square(specularRoughness);
-	float a2 = Square(a);
+	float a2 = clamp(Square(a), 0.0001f, 1.0f);
 	float D = D_GGX(a2, NdotH);
 	float Vis = Vis_SmithJointApprox(a2, NdotV, NdotL);
 	float3 F = F_Schlick(specularColor, VdotH);
