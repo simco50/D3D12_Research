@@ -154,7 +154,7 @@ DemoApp::DemoApp(WindowHandle window, const IntVector2& windowRect, int sampleCo
 	checkf(sampleCount == 1, "I broke MSAA! TODO");
 
 	m_pCamera = std::make_unique<FreeCamera>();
-	m_pCamera->SetNearPlane(300.0f);
+	m_pCamera->SetNearPlane(80.0f);
 	m_pCamera->SetFarPlane(1.0f);
 
 	E_LOG(Info, "Graphics::InitD3D()");
