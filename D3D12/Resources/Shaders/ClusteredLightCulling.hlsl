@@ -1,7 +1,7 @@
 #include "Common.hlsli"
 
 #define RootSig "CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \
-				"DescriptorTable(SRV(t0, numDescriptors = 3)), " \
+				"DescriptorTable(SRV(t0, numDescriptors = 2)), " \
 				"DescriptorTable(UAV(u0, numDescriptors = 3))"
 
 #define MAX_LIGHTS_PER_TILE 256
@@ -15,7 +15,6 @@ cbuffer ShaderParameters : register(b0)
 
 StructuredBuffer<Light> tLights : register(t0);
 StructuredBuffer<AABB> tClusterAABBs : register(t1);
-StructuredBuffer<uint> tActiveClusterIndices : register(t2);
 
 globallycoherent RWStructuredBuffer<uint> uLightIndexCounter : register(u0);
 RWStructuredBuffer<uint> uLightIndexList : register(u1);
@@ -65,7 +64,7 @@ void LightCulling(CS_INPUT input)
 	if (input.GroupIndex == 0)
 	{
 		gLightCount = 0;
-		gClusterIndex = tActiveClusterIndices[input.GroupId.x];
+		gClusterIndex = input.GroupId.x;
 		gGroupAABB = tClusterAABBs[gClusterIndex];
 	}
 

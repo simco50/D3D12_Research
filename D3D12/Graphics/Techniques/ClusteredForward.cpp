@@ -48,23 +48,8 @@ void ClusteredForward::OnResize(int windowWidth, int windowHeight)
 	m_ClusterCountY = Math::RoundUp((float)windowHeight / gLightClusterTexelSize);
 
 	uint32 totalClusterCount = m_ClusterCountX * m_ClusterCountY * gLightClustersNumZ;
-	TextureDesc volumeDesc = TextureDesc::Create3D(
-		Math::DivideAndRoundUp(windowWidth, gVolumetricFroxelTexelSize),
-		Math::DivideAndRoundUp(windowHeight, gVolumetricFroxelTexelSize),
-		gVolumetricNumZSlices,
-		DXGI_FORMAT_R16G16B16A16_FLOAT,
-		TextureFlag::ShaderResource | TextureFlag::UnorderedAccess);
-
 	m_pAABBs = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(totalClusterCount, sizeof(Vector4) * 2), "AABBs");
-	m_pUniqueClusters = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(totalClusterCount, sizeof(uint32)), "Unique Clusters");
-	m_pUniqueClustersRawUAV = nullptr;
-	m_pUniqueClusters->CreateUAV(&m_pUniqueClustersRawUAV, BufferUAVDesc::CreateRaw());
 
-	m_pCompactedClusters = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(totalClusterCount, sizeof(uint32)), "Compacted Clusters");
-	m_pCompactedClustersRawUAV = nullptr;
-	m_pCompactedClusters->CreateUAV(&m_pCompactedClustersRawUAV, BufferUAVDesc::CreateRaw());
-	m_pDebugCompactedClusters = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(totalClusterCount, sizeof(uint32)), "Debug Compacted Clusters");
-	m_pIndirectArguments = m_pDevice->CreateBuffer(BufferDesc::CreateIndirectArguments<uint32>(3), "Light Culling Indirect Arguments");
 	m_pLightIndexCounter = m_pDevice->CreateBuffer(BufferDesc::CreateByteAddress(sizeof(uint32)), "Light Index Counter");
 	m_pLightIndexGrid = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(32 * totalClusterCount, sizeof(uint32)), "Light Index Grid");
 	m_pLightGrid = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(totalClusterCount, 2 * sizeof(uint32)), "Light Grid");
@@ -72,8 +57,15 @@ void ClusteredForward::OnResize(int windowWidth, int windowHeight)
 	m_pLightGrid->CreateUAV(&m_pLightGridRawUAV, BufferUAVDesc::CreateRaw());
 	m_pDebugLightGrid = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(totalClusterCount, 2 * sizeof(uint32)), "Debug Light Grid");
 
-	m_pLightScatteringVolume[0] = m_pDevice->CreateTexture(volumeDesc, "Light Scattering Volume");
-	m_pLightScatteringVolume[1] = m_pDevice->CreateTexture(volumeDesc, "Light Scattering Volume");
+	TextureDesc volumeDesc = TextureDesc::Create3D(
+		Math::DivideAndRoundUp(windowWidth, gVolumetricFroxelTexelSize),
+		Math::DivideAndRoundUp(windowHeight, gVolumetricFroxelTexelSize),
+		gVolumetricNumZSlices,
+		DXGI_FORMAT_R16G16B16A16_FLOAT,
+		TextureFlag::ShaderResource | TextureFlag::UnorderedAccess);
+
+	m_pLightScatteringVolume[0] = m_pDevice->CreateTexture(volumeDesc, "Light Scattering Volume 0");
+	m_pLightScatteringVolume[1] = m_pDevice->CreateTexture(volumeDesc, "Light Scattering Volume 1");
 	m_pFinalVolumeFog = m_pDevice->CreateTexture(volumeDesc, "Final Light Scattering Volume");
 
 	m_ViewportDirty = true;
@@ -100,7 +92,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& resources)
 
 	if (m_ViewportDirty)
 	{
-		RGPassBuilder calculateAabbs = graph.AddPass("Create AABBs");
+		RGPassBuilder calculateAabbs = graph.AddPass("Cluster AABBs");
 		calculateAabbs.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
 			{
 				context.InsertResourceBarrier(m_pAABBs.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
@@ -134,101 +126,12 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& resources)
 		m_ViewportDirty = false;
 	}
 
-	RGPassBuilder markClusters = graph.AddPass("Mark Clusters");
-	markClusters.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
-		{
-			context.InsertResourceBarrier(resources.pRenderTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
-			context.InsertResourceBarrier(resources.pDepthBuffer, D3D12_RESOURCE_STATE_DEPTH_READ);
-			context.InsertResourceBarrier(m_pUniqueClusters.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-
-			context.ClearUavUInt(m_pUniqueClusters.get(), m_pUniqueClustersRawUAV);
-
-			context.BeginRenderPass(RenderPassInfo(resources.pDepthBuffer, RenderPassAccess::Load_Store, true));
-
-			context.SetGraphicsRootSignature(m_pMarkUniqueClustersRS.get());
-			context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-			struct PerFrameParameters
-			{
-				IntVector3 ClusterDimensions;
-				int padding0;
-				IntVector2 ClusterSize;
-				Vector2 LightGridParams;
-				Matrix View;
-				Matrix ViewProjection;
-			} perFrameParameters{};
-
-
-			perFrameParameters.LightGridParams = lightGridParams;
-			perFrameParameters.ClusterDimensions = IntVector3(m_ClusterCountX, m_ClusterCountY, gLightClustersNumZ);
-			perFrameParameters.ClusterSize = IntVector2(gLightClusterTexelSize, gLightClusterTexelSize);
-			perFrameParameters.View = resources.pCamera->GetView();
-			perFrameParameters.ViewProjection = resources.pCamera->GetViewProjection();
-
-			context.SetGraphicsDynamicConstantBufferView(1, perFrameParameters);
-			context.BindResource(2, 0, resources.pMeshBuffer->GetSRV());
-			context.BindResource(3, 0, m_pUniqueClusters->GetUAV());
-			context.BindResourceTable(4, resources.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Graphics);
-
-			{
-				GPU_PROFILE_SCOPE("Opaque", &context);
-				context.SetPipelineState(m_pMarkUniqueClustersOpaquePSO);
-				DrawScene(context, resources, Batch::Blending::Opaque | Batch::Blending::AlphaMask);
-			}
-
-			{
-				GPU_PROFILE_SCOPE("Transparant", &context);
-				context.SetPipelineState(m_pMarkUniqueClustersTransparantPSO);
-				DrawScene(context, resources, Batch::Blending::AlphaMask);
-			}
-			context.EndRenderPass();
-		});
-
-	RGPassBuilder compactClusters = graph.AddPass("Compact Clusters");
-	compactClusters.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
-		{
-			context.SetPipelineState(m_pCompactClustersPSO);
-			context.SetComputeRootSignature(m_pCompactClustersRS.get());
-
-			context.InsertResourceBarrier(m_pUniqueClusters.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-			context.InsertResourceBarrier(m_pCompactedClusters.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-			UnorderedAccessView* pCompactedClustersUAV = m_pCompactedClusters->GetUAV();
-			context.InsertResourceBarrier(pCompactedClustersUAV->GetCounter(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-
-			context.ClearUavUInt(m_pCompactedClusters.get(), m_pCompactedClustersRawUAV);
-			context.ClearUavUInt(pCompactedClustersUAV->GetCounter(), pCompactedClustersUAV->GetCounterUAV());
-
-			context.BindResource(0, 0, m_pUniqueClusters->GetSRV());
-			context.BindResource(1, 0, m_pCompactedClusters->GetUAV());
-
-			context.Dispatch(Math::RoundUp(m_ClusterCountX * m_ClusterCountY * gLightClustersNumZ / 64.0f));
-		});
-
-	RGPassBuilder updateArguments = graph.AddPass("Update Indirect Arguments");
-	updateArguments.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
-		{
-			UnorderedAccessView* pCompactedClustersUAV = m_pCompactedClusters->GetUAV();
-			context.InsertResourceBarrier(pCompactedClustersUAV->GetCounter(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-			context.InsertResourceBarrier(m_pIndirectArguments.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-
-			context.SetPipelineState(m_pUpdateIndirectArgumentsPSO);
-			context.SetComputeRootSignature(m_pUpdateIndirectArgumentsRS.get());
-
-			context.BindResource(0, 0, m_pCompactedClusters->GetUAV()->GetCounter()->GetSRV());
-			context.BindResource(1, 0, m_pIndirectArguments->GetUAV());
-
-			context.Dispatch(1);
-		});
-
-
-	RGPassBuilder lightCulling = graph.AddPass("Clustered Light Culling");
+	RGPassBuilder lightCulling = graph.AddPass("Light Culling");
 	lightCulling.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
 		{
 			context.SetPipelineState(m_pLightCullingPSO);
 			context.SetComputeRootSignature(m_pLightCullingRS.get());
 
-			context.InsertResourceBarrier(m_pIndirectArguments.get(), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
-			context.InsertResourceBarrier(m_pCompactedClusters.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(m_pAABBs.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(m_pLightGrid.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 			context.InsertResourceBarrier(m_pLightIndexGrid.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
@@ -250,13 +153,12 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& resources)
 
 			context.BindResource(1, 0, resources.pLightBuffer->GetSRV());
 			context.BindResource(1, 1, m_pAABBs->GetSRV());
-			context.BindResource(1, 2, m_pCompactedClusters->GetSRV());
 
 			context.BindResource(2, 0, m_pLightIndexCounter->GetUAV());
 			context.BindResource(2, 1, m_pLightIndexGrid->GetUAV());
 			context.BindResource(2, 2, m_pLightGrid->GetUAV());
 
-			context.ExecuteIndirect(m_pLightCullingCommandSignature.get(), 1, m_pIndirectArguments.get(), nullptr);
+			context.Dispatch(m_ClusterCountX * m_ClusterCountY * gLightClustersNumZ);
 		});
 
 	{
@@ -476,7 +378,6 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& resources)
 			{
 				if (m_DidCopyDebugClusterData == false)
 				{
-					context.CopyTexture(m_pCompactedClusters.get(), m_pDebugCompactedClusters.get());
 					context.CopyTexture(m_pLightGrid.get(), m_pDebugLightGrid.get());
 					m_DebugClustersViewMatrix = resources.pCamera->GetView();
 					m_DebugClustersViewMatrix.Invert(m_DebugClustersViewMatrix);
@@ -492,9 +393,8 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& resources)
 
 				context.SetGraphicsDynamicConstantBufferView(0, p);
 				context.BindResource(1, 0, m_pAABBs->GetSRV());
-				context.BindResource(1, 1, m_pDebugCompactedClusters->GetSRV());
-				context.BindResource(1, 2, m_pDebugLightGrid->GetSRV());
-				context.BindResource(1, 3, m_pHeatMapTexture->GetSRV());
+				context.BindResource(1, 1, m_pDebugLightGrid->GetSRV());
+				context.BindResource(1, 2, m_pHeatMapTexture->GetSRV());
 
 				if (m_pDebugClustersPSO->GetType() == PipelineStateType::Mesh)
 				{
@@ -590,57 +490,6 @@ void ClusteredForward::SetupPipelines()
 		m_pCreateAabbPSO = m_pDevice->CreatePipeline(psoDesc);
 	}
 
-	//Mark Clusters
-	{
-		Shader* pVertexShader = m_pDevice->GetShader("ClusterMarking.hlsl", ShaderType::Vertex, "MarkClusters_VS");
-		Shader* pPixelShaderOpaque = m_pDevice->GetShader("ClusterMarking.hlsl", ShaderType::Pixel, "MarkClusters_PS");
-
-		m_pMarkUniqueClustersRS = std::make_unique<RootSignature>(m_pDevice);
-		m_pMarkUniqueClustersRS->FinalizeFromShader("Mark Unique Clusters", pVertexShader);
-
-		PipelineStateInitializer psoDesc;
-		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_EQUAL);
-		psoDesc.SetRootSignature(m_pMarkUniqueClustersRS->GetRootSignature());
-		psoDesc.SetVertexShader(pVertexShader);
-		psoDesc.SetPixelShader(pPixelShaderOpaque);
-		psoDesc.SetDepthOnlyTarget(GraphicsDevice::DEPTH_STENCIL_FORMAT, /* m_pDevice->GetMultiSampleCount() */ 1);
-		psoDesc.SetDepthWrite(false);
-		psoDesc.SetName("Mark Unique Opaque Clusters");
-		m_pMarkUniqueClustersOpaquePSO = m_pDevice->CreatePipeline(psoDesc);
-
-		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
-		psoDesc.SetName("Mark Unique Transparent Clusters");
-		m_pMarkUniqueClustersTransparantPSO = m_pDevice->CreatePipeline(psoDesc);
-	}
-
-	//Compact Clusters
-	{
-		Shader* pComputeShader = m_pDevice->GetShader("ClusterCompaction.hlsl", ShaderType::Compute, "CompactClusters");
-
-		m_pCompactClustersRS = std::make_unique<RootSignature>(m_pDevice);
-		m_pCompactClustersRS->FinalizeFromShader("Compact Clusters", pComputeShader);
-
-		PipelineStateInitializer psoDesc;
-		psoDesc.SetComputeShader(pComputeShader);
-		psoDesc.SetRootSignature(m_pCompactClustersRS->GetRootSignature());
-		psoDesc.SetName("Compact Clusters");
-		m_pCompactClustersPSO = m_pDevice->CreatePipeline(psoDesc);
-	}
-
-	//Prepare Indirect Dispatch Buffer
-	{
-		Shader* pComputeShader = m_pDevice->GetShader("ClusteredLightCullingArguments.hlsl", ShaderType::Compute, "UpdateIndirectArguments");
-
-		m_pUpdateIndirectArgumentsRS = std::make_unique<RootSignature>(m_pDevice);
-		m_pUpdateIndirectArgumentsRS->FinalizeFromShader("Update Indirect Dispatch Buffer", pComputeShader);
-
-		PipelineStateInitializer psoDesc;
-		psoDesc.SetComputeShader(pComputeShader);
-		psoDesc.SetRootSignature(m_pUpdateIndirectArgumentsRS->GetRootSignature());
-		psoDesc.SetName("Update Indirect Dispatch Buffer");
-		m_pUpdateIndirectArgumentsPSO = m_pDevice->CreatePipeline(psoDesc);
-	}
-
 	//Light Culling
 	{
 		Shader* pComputeShader = m_pDevice->GetShader("ClusteredLightCulling.hlsl", ShaderType::Compute, "LightCulling");
@@ -698,7 +547,9 @@ void ClusteredForward::SetupPipelines()
 
 	//Cluster debug rendering
 	{
-		Shader* pPixelShader = m_pDevice->GetShader("ClusterDebugDrawing.hlsl", ShaderType::Pixel, "PSMain");
+		Shader* pVertexShader = m_pDevice->GetShader("VisualizeLightClusters.hlsl", ShaderType::Vertex, "VSMain");
+		Shader* pGeometryShader = m_pDevice->GetShader("VisualizeLightClusters.hlsl", ShaderType::Geometry, "GSMain");
+		Shader* pPixelShader = m_pDevice->GetShader("VisualizeLightClusters.hlsl", ShaderType::Pixel, "PSMain");
 
 		m_pDebugClustersRS = std::make_unique<RootSignature>(m_pDevice);
 
@@ -709,27 +560,13 @@ void ClusteredForward::SetupPipelines()
 		psoDesc.SetRenderTargetFormat(GraphicsDevice::RENDER_TARGET_FORMAT, GraphicsDevice::DEPTH_STENCIL_FORMAT, /* m_pDevice->GetMultiSampleCount() */ 1);
 		psoDesc.SetBlendMode(BlendMode::Additive, false);
 
-		if (m_pDevice->GetCapabilities().SupportsRaytracing())
-		{
-			Shader* pMeshShader = m_pDevice->GetShader("ClusterDebugDrawing.hlsl", ShaderType::Mesh, "MSMain");
-			m_pDebugClustersRS->FinalizeFromShader("Debug Clusters", pMeshShader);
+		m_pDebugClustersRS->FinalizeFromShader("Debug Clusters", pVertexShader);
 
-			psoDesc.SetRootSignature(m_pDebugClustersRS->GetRootSignature());
-			psoDesc.SetMeshShader(pMeshShader);
-			psoDesc.SetName("Debug Clusters");
-		}
-		else
-		{
-			Shader* pVertexShader = m_pDevice->GetShader("ClusterDebugDrawing.hlsl", ShaderType::Vertex, "VSMain");
-			Shader* pGeometryShader = m_pDevice->GetShader("ClusterDebugDrawing.hlsl", ShaderType::Geometry, "GSMain");
-			m_pDebugClustersRS->FinalizeFromShader("Debug Clusters", pVertexShader);
-
-			psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT);
-			psoDesc.SetRootSignature(m_pDebugClustersRS->GetRootSignature());
-			psoDesc.SetVertexShader(pVertexShader);
-			psoDesc.SetGeometryShader(pGeometryShader);
-			psoDesc.SetName("Debug Clusters");
-		}
+		psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT);
+		psoDesc.SetRootSignature(m_pDebugClustersRS->GetRootSignature());
+		psoDesc.SetVertexShader(pVertexShader);
+		psoDesc.SetGeometryShader(pGeometryShader);
+		psoDesc.SetName("Debug Clusters");
 		m_pDebugClustersPSO = m_pDevice->CreatePipeline(psoDesc);
 	}
 
