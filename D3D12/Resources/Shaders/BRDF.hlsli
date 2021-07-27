@@ -41,7 +41,7 @@ float3 Diffuse_Lambert(float3 diffuseColor)
 
 /* SMITH G TERM */
 
-// Smith G1 term (masking function) further optimized for GGX distribution (by substituting G_a into G1_GGX)
+// Smith G1 term (masking function) optimized for the GGX distribution by substituting the GGX lambda function
 float Smith_G1_GGX(float alpha, float NdotS, float alphaSquared, float NdotSSquared) 
 {
 	return 2.0f / (sqrt(((alphaSquared * (1.0f - NdotSSquared)) + NdotSSquared) / NdotSSquared) + 1.0f);

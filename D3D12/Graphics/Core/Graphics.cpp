@@ -90,6 +90,7 @@ GraphicsInstance::GraphicsInstance(GraphicsInstanceFlags createFlags)
 		if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&pDebugController))))
 		{
 			pDebugController->EnableDebugLayer();
+			E_LOG(Warning, "D3D12 Debug Layer Enabled");
 		}
 	}
 
@@ -112,6 +113,7 @@ GraphicsInstance::GraphicsInstance(GraphicsInstanceFlags createFlags)
 		if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&pDebugController))))
 		{
 			pDebugController->SetEnableGPUBasedValidation(true);
+			E_LOG(Warning, "D3D12 GPU Based Validation Enabled");
 		}
 	}
 
@@ -296,7 +298,6 @@ GraphicsDevice::GraphicsDevice(IDXGIAdapter4* pAdapter)
 	m_pIndirectDrawSignature->AddDraw();
 	m_pIndirectDrawSignature->Finalize("Default Indirect Draw");
 
-	// Shaders
 	uint8 smMaj, smMin;
 	Capabilities.GetShaderModel(smMaj, smMin);
 	m_pShaderManager = std::make_unique<ShaderManager>("Resources/Shaders/", smMaj, smMin);

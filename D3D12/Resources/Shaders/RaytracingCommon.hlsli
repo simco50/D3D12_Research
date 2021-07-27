@@ -105,7 +105,7 @@ MaterialProperties GetMaterialProperties(uint materialIndex, float2 UV, int mipL
     }
     properties.Specular = 0.5f;
 
-    properties.NormalTS = float3(0, 0, 1);
+    properties.NormalTS = float3(0.5f, 0.5f, 1.0f);
     if(material.Normal >= 0)
     {
         properties.NormalTS = tTexture2DTable[material.Normal].SampleLevel(sDiffuseSampler, UV, mipLevel).rgb;

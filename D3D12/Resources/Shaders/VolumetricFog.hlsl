@@ -130,12 +130,12 @@ void InjectFogLightingCS(uint3 threadId : SV_DISPATCHTHREADID)
 			float3 L = normalize(light.Position - worldPosition);
 			if(light.IsDirectional())
 			{
-				L = -normalize(light.Direction);
+				L = normalize(light.Direction);
 			}
 			float VdotL = dot(V, L);
 			float4 lightColor = light.GetColor() * light.Intensity;
 
-			totalScattering += attenuation * lightColor.xyz * HenyeyGreenstreinPhase(-VdotL, 0.5);
+			totalScattering += attenuation * lightColor.xyz * HenyeyGreenstreinPhase(VdotL, 0.8f);
 		}
 	}
 

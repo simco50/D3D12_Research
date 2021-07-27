@@ -54,8 +54,8 @@ private:
 	PipelineState* m_pDiffuseTransparancyPSO = nullptr;
 
 	//Cluster debug rendering
-	std::unique_ptr<RootSignature> m_pDebugClustersRS;
-	PipelineState* m_pDebugClustersPSO = nullptr;
+	std::unique_ptr<RootSignature> m_pVisualizeLightClustersRS;
+	PipelineState* m_pVisualizeLightClustersPSO = nullptr;
 	std::unique_ptr<Buffer> m_pDebugLightGrid;
 	Matrix m_DebugClustersViewMatrix;
 	bool m_DidCopyDebugClusterData = false;

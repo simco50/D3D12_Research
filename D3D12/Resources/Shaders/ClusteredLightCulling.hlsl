@@ -35,78 +35,80 @@ bool ConeInSphere(float3 conePosition, float3 coneDirection, float coneRange, fl
 	return !(angleCull || frontCull || backCull);
 }
 
-struct CS_INPUT
+uint GetClusterIndex1D(uint3 clusterIndex)
 {
-	uint3 DispatchThreadId : SV_DISPATCHTHREADID;
-};
+	return clusterIndex.x + clusterIndex.y * cViewData.ClusterDimensions.x + clusterIndex.z * cViewData.ClusterDimensions.x * cViewData.ClusterDimensions.y;
+}
 
 [RootSignature(RootSig)]
 [numthreads(THREAD_COUNT, THREAD_COUNT, THREAD_COUNT)]
-void LightCulling(CS_INPUT input)
+void LightCulling(uint3 dispatchThreadId : SV_DISPATCHTHREADID)
 {
-	uint lightList[MAX_LIGHTS_PER_TILE];
-	uint lightCount = 0;
-	uint clusterIndex = input.DispatchThreadId.x + input.DispatchThreadId.y * cViewData.ClusterDimensions.x + input.DispatchThreadId.z * cViewData.ClusterDimensions.x * cViewData.ClusterDimensions.y;
-	AABB clusterAABB = tClusterAABBs[clusterIndex];
+	uint3 clusterIndex3D = dispatchThreadId;
 
-	//Perform the light culling
-	[loop]
-	for (uint i = 0; i < cViewData.LightCount; ++i)
+	if(all(clusterIndex3D < cViewData.ClusterDimensions))
 	{
-		Light light = tLights[i];
-		if(light.IsPoint())
+		uint lightList[MAX_LIGHTS_PER_TILE];
+		uint lightCount = 0;
+		uint clusterIndex = GetClusterIndex1D(dispatchThreadId);
+		AABB clusterAABB = tClusterAABBs[clusterIndex];
+
+		//Perform the light culling
+		[loop]
+		for (uint i = 0; i < cViewData.LightCount; ++i)
 		{
-			Sphere sphere = (Sphere)0;
-			sphere.Radius = light.Range;
-			sphere.Position = mul(float4(light.Position, 1.0f), cViewData.View).xyz;
-			if (SphereInAABB(sphere, clusterAABB))
+			Light light = tLights[i];
+			if(light.IsPoint())
 			{
-				uint index = lightCount;
-				lightCount++;
-				if (index < MAX_LIGHTS_PER_TILE)
+				Sphere sphere = (Sphere)0;
+				sphere.Radius = light.Range;
+				sphere.Position = mul(float4(light.Position, 1.0f), cViewData.View).xyz;
+				if (SphereInAABB(sphere, clusterAABB))
 				{
-					lightList[index] = i;
+					if (lightCount < MAX_LIGHTS_PER_TILE)
+					{
+						lightList[lightCount] = i;
+						lightCount++;
+					}
+				}
+			}
+			else if(light.IsSpot())
+			{
+				Sphere sphere;
+				sphere.Radius = sqrt(dot(clusterAABB.Extents.xyz, clusterAABB.Extents.xyz));
+				sphere.Position = clusterAABB.Center.xyz;
+
+				float3 conePosition = mul(float4(light.Position, 1), cViewData.View).xyz;
+				float3 coneDirection = mul(light.Direction, (float3x3)cViewData.View);
+				float angle = acos(light.SpotlightAngles.y);
+				if (ConeInSphere(conePosition, coneDirection, light.Range, float2(sin(angle), light.SpotlightAngles.y), sphere))
+				{
+					if (lightCount < MAX_LIGHTS_PER_TILE)
+					{
+						lightList[lightCount] = i;
+						lightCount++;
+					}
+				}
+			}
+			else
+			{
+				if (lightCount < MAX_LIGHTS_PER_TILE)
+				{
+					lightList[lightCount] = i;
+					lightCount++;
 				}
 			}
 		}
-		else if(light.IsSpot())
+
+		//Populate the light grid only on the first thread in the group
+		uint startOffset = 0;
+		InterlockedAdd(uLightIndexCounter[0], lightCount, startOffset);
+		uOutLightGrid[clusterIndex] = uint2(startOffset, lightCount);
+
+		//Distribute populating the light index light amonst threads in the thread group
+		for (i = 0; i < lightCount; i++)
 		{
-			Sphere sphere;
-			sphere.Radius = sqrt(dot(clusterAABB.Extents.xyz, clusterAABB.Extents.xyz));
-			sphere.Position = clusterAABB.Center.xyz;
-
-			float3 conePosition = mul(float4(light.Position, 1), cViewData.View).xyz;
-			float3 coneDirection = mul(light.Direction, (float3x3)cViewData.View);
-			float angle = acos(light.SpotlightAngles.y);
-			if (ConeInSphere(conePosition, coneDirection, light.Range, float2(sin(angle), light.SpotlightAngles.y), sphere))
-			{
-				uint index = lightCount;
-				lightCount++;
-				if (index < MAX_LIGHTS_PER_TILE)
-				{
-					lightList[index] = i;
-				}
-			}
+			uLightIndexList[startOffset + i] = lightList[i];
 		}
-		else
-		{
-			uint index = lightCount;
-			lightCount++;
-			if (index < MAX_LIGHTS_PER_TILE)
-			{
-				lightList[index] = i;
-			}
-		}
-	}
-
-	//Populate the light grid only on the first thread in the group
-	uint startOffset = 0;
-	InterlockedAdd(uLightIndexCounter[0], lightCount, startOffset);
-	uOutLightGrid[clusterIndex] = uint2(startOffset, lightCount);
-
-	//Distribute populating the light index light amonst threads in the thread group
-	for (i = 0; i < lightCount; i++)
-	{
-		uLightIndexList[startOffset + i] = lightList[i];
 	}
 }
