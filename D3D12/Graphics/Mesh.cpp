@@ -215,7 +215,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 				}
 				else
 				{
-					E_LOG(Warning, "GLTF - Attribute '%s' is unsupported", pName);
+					validateOncef(false, "GLTF - Attribute '%s' is unsupported", pName);
 				}
 			}
 			meshDatas.push_back(meshData);

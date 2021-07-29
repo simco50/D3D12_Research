@@ -31,9 +31,14 @@ namespace ShaderInterop
 
 	struct MeshData
 	{
-		uint Material;
 		uint VertexBuffer;
 		uint IndexBuffer;
+	};
+
+	struct MeshInstance
+	{
+		uint Material;
+		uint Mesh;
 		float4x4 World;
 	};
 

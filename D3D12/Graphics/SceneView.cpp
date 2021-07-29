@@ -31,14 +31,12 @@ void DrawScene(CommandContext& context, const SceneView& scene, const Visibility
 
 	struct PerObjectData
 	{
-		uint32 Mesh;
-		uint32 Material;
+		uint32 Index;
 	} ObjectData;
 
 	for (const Batch* b : meshes)
 	{
-		ObjectData.Material = b->Material;
-		ObjectData.Mesh = b->Index;
+		ObjectData.Index = b->Index;
 		context.SetGraphicsRootConstants(0, ObjectData);
 		context.SetIndexBuffer(b->pMesh->IndicesLocation);
 		context.DrawIndexed(b->pMesh->IndicesLocation.Elements, 0, 0);

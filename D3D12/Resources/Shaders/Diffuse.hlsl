@@ -8,15 +8,14 @@
 				"CBV(b1, visibility=SHADER_VISIBILITY_ALL), " \
 				"CBV(b2, visibility=SHADER_VISIBILITY_PIXEL), " \
 				GLOBAL_BINDLESS_TABLE ", " \
-				"DescriptorTable(SRV(t2, numDescriptors = 10)), " \
+				"DescriptorTable(SRV(t2, numDescriptors = 11)), " \
 				"StaticSampler(s0, filter=FILTER_ANISOTROPIC, maxAnisotropy = 4, visibility = SHADER_VISIBILITY_PIXEL), " \
 				"StaticSampler(s1, filter=FILTER_MIN_MAG_MIP_LINEAR, addressU = TEXTURE_ADDRESS_CLAMP, addressV = TEXTURE_ADDRESS_CLAMP, visibility = SHADER_VISIBILITY_PIXEL), " \
 				"StaticSampler(s2, filter=FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT, visibility = SHADER_VISIBILITY_PIXEL, comparisonFunc=COMPARISON_GREATER), " \
 
 struct PerObjectData
 {
-	uint Mesh;
-	uint Material;
+	uint Index;
 };
 
 struct PerViewData
@@ -173,14 +172,15 @@ LightResult DoLight(float4 pos, float3 worldPos, float3 N, float3 V, float3 diff
 PSInput VSMain(uint VertexId : SV_VertexID)
 {
 	PSInput result;
-    MeshData mesh = tMeshes[cObjectData.Mesh];
+	MeshInstance instance = tMeshInstances[cObjectData.Index];
+    MeshData mesh = tMeshes[instance.Mesh];
 	Vertex input = tBufferTable[mesh.VertexBuffer].Load<Vertex>(VertexId * sizeof(Vertex));
-	result.positionWS = mul(float4(UnpackHalf3(input.position), 1.0f), mesh.World).xyz;
+	result.positionWS = mul(float4(UnpackHalf3(input.position), 1.0f), instance.World).xyz;
 	result.positionVS = mul(float4(result.positionWS, 1.0f), cViewData.View).xyz;
 	result.position = mul(float4(result.positionWS, 1.0f), cViewData.ViewProjection);
 	result.texCoord = UnpackHalf2(input.texCoord);
-	result.normal = normalize(mul(input.normal, (float3x3)mesh.World));
-	result.tangent = float4(normalize(mul(input.tangent.xyz, (float3x3)mesh.World)), input.tangent.w);
+	result.normal = normalize(mul(input.normal, (float3x3)instance.World));
+	result.tangent = float4(normalize(mul(input.tangent.xyz, (float3x3)instance.World)), input.tangent.w);
 	return result;
 }
 
@@ -273,7 +273,8 @@ void PSMain(PSInput input,
 	float ambientOcclusion = tAO.SampleLevel(sDiffuseSampler, screenUV, 0).r;
 
 // Surface Shader BEGIN
-	MaterialData material = tMaterials[cObjectData.Material];
+	MeshInstance instance = tMeshInstances[cObjectData.Index];
+	MaterialData material = tMaterials[instance.Material];
 
 	float4 baseColor = material.BaseColorFactor;
 	if(material.Diffuse >= 0)

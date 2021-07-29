@@ -12,7 +12,7 @@ GlobalRootSignature GlobalRootSig =
 	"CBV(b0),"
 	"CBV(b2),"
 	"DescriptorTable(UAV(u0, numDescriptors = 1)),"
-	"DescriptorTable(SRV(t5, numDescriptors = 7)),"
+	"DescriptorTable(SRV(t5, numDescriptors = 8)),"
 	GLOBAL_BINDLESS_TABLE ", "
 	"StaticSampler(s0, filter=FILTER_MIN_MAG_LINEAR_MIP_POINT),"
 	"StaticSampler(s1, filter=FILTER_MIN_MAG_MIP_LINEAR, addressU = TEXTURE_ADDRESS_CLAMP, addressV = TEXTURE_ADDRESS_CLAMP), " \
@@ -77,8 +77,9 @@ float CastShadowRay(float3 origin, float3 direction)
 		{
 			case CANDIDATE_NON_OPAQUE_TRIANGLE:
 			{
-				VertexAttribute vertex = GetVertexAttributes(q.CandidateTriangleBarycentrics(), q.CandidateInstanceID(), q.CandidatePrimitiveIndex(), q.CandidateObjectToWorld4x3());
-				MaterialProperties surface = GetMaterialProperties(vertex.Material, vertex.UV, 0);
+				MeshInstance instance = tMeshInstances[q.CandidateInstanceID()];
+				VertexAttribute vertex = GetVertexAttributes(instance, q.CandidateTriangleBarycentrics(), q.CandidatePrimitiveIndex(), q.CandidateObjectToWorld4x3());
+				MaterialProperties surface = GetMaterialProperties(instance.Material, vertex.UV, 0);
 				if(surface.Opacity > 0.5f)
 				{
 					q.CommitNonOpaqueTriangleHit();
@@ -196,9 +197,10 @@ void ReflectionClosestHit(inout ReflectionRayPayload payload, BuiltInTriangleInt
 {
 	payload.rayCone = PropagateRayCone(payload.rayCone, 0, RayTCurrent());
 
-	VertexAttribute v = GetVertexAttributes(attrib.barycentrics, InstanceID(), PrimitiveIndex(), ObjectToWorld4x3());
+	MeshInstance instance = tMeshInstances[InstanceID()];
+	VertexAttribute v = GetVertexAttributes(instance, attrib.barycentrics, PrimitiveIndex(), ObjectToWorld4x3());
 	float mipLevel = 2;
-	MaterialProperties material = GetMaterialProperties(v.Material, v.UV, mipLevel);
+	MaterialProperties material = GetMaterialProperties(instance.Material, v.UV, mipLevel);
 	BrdfData brdfData = GetBrdfData(material);
 
 	float3 hitLocation = WorldRayOrigin() + WorldRayDirection() * RayTCurrent();
@@ -219,8 +221,9 @@ void ReflectionClosestHit(inout ReflectionRayPayload payload, BuiltInTriangleInt
 [shader("anyhit")]
 void ReflectionAnyHit(inout ReflectionRayPayload payload, BuiltInTriangleIntersectionAttributes attrib)
 {
-	VertexAttribute vertex = GetVertexAttributes(attrib.barycentrics, InstanceID(), PrimitiveIndex(), ObjectToWorld4x3());
-	MaterialProperties material = GetMaterialProperties(vertex.Material, vertex.UV, 2);
+	MeshInstance instance = tMeshInstances[InstanceID()];
+	VertexAttribute vertex = GetVertexAttributes(instance, attrib.barycentrics, PrimitiveIndex(), ObjectToWorld4x3());
+	MaterialProperties material = GetMaterialProperties(instance.Material, vertex.UV, 2);
 	if(material.Opacity < 0.5)
 	{
 		IgnoreHit();

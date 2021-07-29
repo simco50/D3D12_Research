@@ -123,6 +123,7 @@ void PathTracing::Render(RGGraph& graph, const SceneView& sceneData)
 				sceneData.pResolvedNormals->GetSRV()->GetDescriptor(),
 				sceneData.pMaterialBuffer->GetSRV()->GetDescriptor(),
 				sceneData.pMeshBuffer->GetSRV()->GetDescriptor(),
+				sceneData.pMeshInstanceBuffer->GetSRV()->GetDescriptor(),
 			};
 
 			const D3D12_CPU_DESCRIPTOR_HANDLE uavs[] = {

@@ -241,7 +241,14 @@ void DemoApp::SetupScene(CommandContext& context)
 	m_pLightCookie->Create(&context, "Resources/Textures/LightProjector.png", false);
 
 	{
-#if 0
+#if 1
+		m_pCamera->SetPosition(Vector3(-1.3f, 2.4f, -1.5f));
+		m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(Math::PIDIV4, Math::PIDIV4 * 0.5f, 0));
+
+		std::unique_ptr<Mesh> pMesh = std::make_unique<Mesh>();
+		pMesh->Load("Resources/Scenes/Sponza/Sponza.gltf", m_pDevice.get(), &context, 1.0f);
+		m_Meshes.push_back(std::move(pMesh));
+#elif 0
 		// Hardcode the camera of the scene :-)
 		Matrix m(
 			0.868393660f, 8.00937414e-08f, -0.495875478f, 0,
@@ -255,52 +262,53 @@ void DemoApp::SetupScene(CommandContext& context)
 		m_pCamera->SetRotation(Quaternion::CreateFromRotationMatrix(m));
 
 		std::unique_ptr<Mesh> pMesh = std::make_unique<Mesh>();
-		pMesh->Load("Resources/Scenes/_Local/bathroom_pt/LAZIENKA.gltf", m_pDevice.get(), &context, 1.0f);
+		pMesh->Load("D:/References/GltfScenes/bathroom_pt/LAZIENKA.gltf", m_pDevice.get(), &context, 1.0f);
 		m_Meshes.push_back(std::move(pMesh));
-#elif 1
-		m_pCamera->SetPosition(Vector3(-1.3f, 2.4f, -1.5f));
-		m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(Math::PIDIV4, Math::PIDIV4 * 0.5f, 0));
-
+#elif 0
 		std::unique_ptr<Mesh> pMesh = std::make_unique<Mesh>();
-		pMesh->Load("Resources/Scenes/Sponza/Sponza.gltf", m_pDevice.get(), &context, 1.0f);
+		pMesh->Load("D:/References/GltfScenes/Sphere/scene.gltf", m_pDevice.get(), &context, 1.0f);
 		m_Meshes.push_back(std::move(pMesh));
-#endif
-	}
-
-	{
-#if 0
+#elif 0
 		std::unique_ptr<Mesh> pMesh = std::make_unique<Mesh>();
-
-		pMesh->Load("Resources/Scenes/_Local/Sphere/scene.gltf", m_pDevice.get(), &context, 1.0f);
+		pMesh->Load("D:/References/GltfScenes/BlenderSplash/MyScene.gltf", m_pDevice.get(), &context, 1.0f);
 		m_Meshes.push_back(std::move(pMesh));
 #endif
 	}
 
 	std::vector<ShaderInterop::MaterialData> materials;
 	std::vector<ShaderInterop::MeshData> meshes;
+	std::vector<ShaderInterop::MeshInstance> meshInstances;
 
 	for (const auto& pMesh : m_Meshes)
 	{
-		for (const SubMeshInstance& node : pMesh->GetMeshInstances())
+		for (const SubMesh& subMesh : pMesh->GetMeshes())
 		{
-			const SubMesh& subMesh = pMesh->GetMesh(node.MeshIndex);
-			const Material& material = pMesh->GetMaterial(subMesh.MaterialId);
-			Batch batch;
-			batch.Index = (int)m_SceneData.Batches.size();
-			batch.LocalBounds = subMesh.Bounds;
-			batch.pMesh = &subMesh;
-			batch.BlendMode = material.IsTransparent ? Batch::Blending::AlphaMask : Batch::Blending::Opaque;
-			batch.WorldMatrix = node.Transform;
-			batch.Material = (uint32)materials.size() + subMesh.MaterialId;
-			m_SceneData.Batches.push_back(batch);
-
 			ShaderInterop::MeshData mesh;
 			mesh.IndexBuffer = m_pDevice->RegisterBindlessResource(subMesh.pIndexSRV);
 			mesh.VertexBuffer = m_pDevice->RegisterBindlessResource(subMesh.pVertexSRV);
-			mesh.Material = (uint32)materials.size() + subMesh.MaterialId;
-			mesh.World = node.Transform;
 			meshes.push_back(mesh);
 		}
+
+		for (const SubMeshInstance& node : pMesh->GetMeshInstances())
+		{
+			const SubMesh& parentMesh = pMesh->GetMesh(node.MeshIndex);
+			const Material& meshMaterial = pMesh->GetMaterial(parentMesh.MaterialId);
+			ShaderInterop::MeshInstance meshInstance;
+			meshInstance.Mesh = node.MeshIndex;
+			meshInstance.Material = (uint32)materials.size() + parentMesh.MaterialId;
+			meshInstance.World = node.Transform;
+			meshInstances.push_back(meshInstance);
+			
+			Batch batch;
+			batch.Index = (int)m_SceneData.Batches.size();
+			batch.LocalBounds = parentMesh.Bounds;
+			batch.pMesh = &parentMesh;
+			batch.BlendMode = meshMaterial.IsTransparent ? Batch::Blending::AlphaMask : Batch::Blending::Opaque;
+			batch.WorldMatrix = node.Transform;
+			batch.Material = (uint32)materials.size() + parentMesh.MaterialId;
+			m_SceneData.Batches.push_back(batch);
+		}
+
 		for (const Material& material : pMesh->GetMaterials())
 		{
 			ShaderInterop::MaterialData materialData;
@@ -320,6 +328,9 @@ void DemoApp::SetupScene(CommandContext& context)
 	m_pMeshBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(Math::Max(1, (int)meshes.size()), sizeof(ShaderInterop::MeshData), BufferFlag::ShaderResource), "Meshes");
 	m_pMeshBuffer->SetData(&context, meshes.data(), meshes.size() * sizeof(ShaderInterop::MeshData));
 
+	m_pMeshInstanceBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(Math::Max(1, (int)meshInstances.size()), sizeof(ShaderInterop::MeshInstance), BufferFlag::ShaderResource), "Meshes");
+	m_pMeshInstanceBuffer->SetData(&context, meshInstances.data(), meshInstances.size() * sizeof(ShaderInterop::MeshInstance));
+
 	m_pMaterialBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(Math::Max(1, (int)materials.size()), sizeof(ShaderInterop::MaterialData), BufferFlag::ShaderResource), "Materials");
 	m_pMaterialBuffer->SetData(&context, materials.data(), materials.size() * sizeof(ShaderInterop::MaterialData));
 
@@ -333,13 +344,22 @@ void DemoApp::SetupScene(CommandContext& context)
 		m_Lights.push_back(sunLight);
 	}
 
+#if 0
+	for(int i = 0; i < 50; ++i)
 	{
-		Light spotLight = Light::Spot(Vector3(-8, 10, 25), 800, Vector3(0, 1, 0), 90, 70, 1000, Color(1.0f, 0.7f, 0.3f, 1.0f));
-		spotLight.CastShadows = true;
-		spotLight.LightTexture = m_pDevice->RegisterBindlessResource(m_pLightCookie.get(), GetDefaultTexture(DefaultTexture::White2D));
+		Vector3 loc(
+			Math::RandomRange(-10.0f, 10.0f),
+			Math::RandomRange(-4.0f, 5.0f),
+			Math::RandomRange(-10.0f, 10.0f)
+		);
+		Light spotLight = Light::Spot(loc, 100, Vector3(0, 1, 0), 65, 50, 1000, Color(1.0f, 0.7f, 0.3f, 1.0f));
+		//spotLight.CastShadows = true;
+		//spotLight.LightTexture = m_pDevice->RegisterBindlessResource(m_pLightCookie.get(), GetDefaultTexture(DefaultTexture::White2D));
 		spotLight.VolumetricLighting = true;
 		m_Lights.push_back(spotLight);
 	}
+#endif
+
 	m_pLightBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateStructured((int)m_Lights.size(), sizeof(Light), BufferFlag::ShaderResource), "Lights");
 }
 
@@ -649,6 +669,7 @@ void DemoApp::Update()
 	m_SceneData.pLightBuffer = m_pLightBuffer.get();
 	m_SceneData.pMaterialBuffer = m_pMaterialBuffer.get();
 	m_SceneData.pMeshBuffer = m_pMeshBuffer.get();
+	m_SceneData.pMeshInstanceBuffer = m_pMeshInstanceBuffer.get();
 	m_SceneData.pCamera = m_pCamera.get();
 	m_SceneData.pShadowData = &shadowData;
 	m_SceneData.pAO = m_pAmbientOcclusion.get();
@@ -785,6 +806,7 @@ void DemoApp::Update()
 				const D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
 					m_SceneData.pMaterialBuffer->GetSRV()->GetDescriptor(),
 					m_SceneData.pMeshBuffer->GetSRV()->GetDescriptor(),
+					m_SceneData.pMeshInstanceBuffer->GetSRV()->GetDescriptor(),
 				};
 
 				renderContext.BindResources(2, 0, srvs, ARRAYSIZE(srvs));
@@ -981,6 +1003,7 @@ void DemoApp::Update()
 						const D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
 							m_SceneData.pMaterialBuffer->GetSRV()->GetDescriptor(),
 							m_SceneData.pMeshBuffer->GetSRV()->GetDescriptor(),
+							m_SceneData.pMeshInstanceBuffer->GetSRV()->GetDescriptor(),
 						};
 						context.BindResources(2, 0, srvs, ARRAYSIZE(srvs));
 						context.BindResourceTable(3, m_SceneData.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Graphics);

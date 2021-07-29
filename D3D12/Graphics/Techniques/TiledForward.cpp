@@ -179,6 +179,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& resources)
 				resources.pMaterialBuffer->GetSRV()->GetDescriptor(),
 				resources.pMaterialBuffer->GetSRV()->GetDescriptor(),
 				resources.pMeshBuffer->GetSRV()->GetDescriptor(),
+				resources.pMeshInstanceBuffer->GetSRV()->GetDescriptor(),
 			};
 			context.BindResources(4, 3, srvs, ARRAYSIZE(srvs));
 
