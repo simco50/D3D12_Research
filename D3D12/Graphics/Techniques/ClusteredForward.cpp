@@ -17,6 +17,7 @@
 
 static constexpr int gLightClusterTexelSize = 64;
 static constexpr int gLightClustersNumZ = 32;
+static constexpr int gMaxLightsPerCluster = 32;
 
 static constexpr int gVolumetricFroxelTexelSize = 8;
 static constexpr int gVolumetricNumZSlices = 128;
@@ -50,12 +51,13 @@ void ClusteredForward::OnResize(int windowWidth, int windowHeight)
 	uint32 totalClusterCount = m_ClusterCountX * m_ClusterCountY * gLightClustersNumZ;
 	m_pAABBs = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(totalClusterCount, sizeof(Vector4) * 2), "AABBs");
 
-	m_pLightIndexCounter = m_pDevice->CreateBuffer(BufferDesc::CreateByteAddress(sizeof(uint32)), "Light Index Counter");
-	m_pLightIndexGrid = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(32 * totalClusterCount, sizeof(uint32)), "Light Index Grid");
-	m_pLightGrid = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(totalClusterCount, 2 * sizeof(uint32)), "Light Grid");
+	m_pLightIndexGrid = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(gMaxLightsPerCluster * totalClusterCount, sizeof(uint32)), "Light Index Grid");
+	// LightGrid.x : Offset
+	// LightGrid.y : Count
+	m_pLightGrid = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(2 * totalClusterCount, sizeof(uint32)), "Light Grid");
 	m_pLightGridRawUAV = nullptr;
 	m_pLightGrid->CreateUAV(&m_pLightGridRawUAV, BufferUAVDesc::CreateRaw());
-	m_pDebugLightGrid = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(totalClusterCount, 2 * sizeof(uint32)), "Debug Light Grid");
+	m_pDebugLightGrid = m_pDevice->CreateBuffer(m_pLightIndexGrid->GetDesc(), "Debug Light Grid");
 
 	TextureDesc volumeDesc = TextureDesc::Create3D(
 		Math::DivideAndRoundUp(windowWidth, gVolumetricFroxelTexelSize),
@@ -143,8 +145,8 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& resources)
 			context.InsertResourceBarrier(m_pLightIndexGrid.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 			context.InsertResourceBarrier(resources.pLightBuffer, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 
+			// Clear the light grid because we're accumulating the light count in the shader
 			context.ClearUavUInt(m_pLightGrid.get(), m_pLightGridRawUAV);
-			context.ClearUavUInt(m_pLightIndexCounter.get(), m_pLightIndexCounter->GetUAV());
 
 			struct ConstantBuffer
 			{
@@ -162,9 +164,8 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& resources)
 			context.BindResource(1, 0, resources.pLightBuffer->GetSRV());
 			context.BindResource(1, 1, m_pAABBs->GetSRV());
 
-			context.BindResource(2, 0, m_pLightIndexCounter->GetUAV());
-			context.BindResource(2, 1, m_pLightIndexGrid->GetUAV());
-			context.BindResource(2, 2, m_pLightGrid->GetUAV());
+			context.BindResource(2, 0, m_pLightIndexGrid->GetUAV());
+			context.BindResource(2, 1, m_pLightGrid->GetUAV());
 
 			constexpr uint32 threadGroupSize = 4;
 			context.Dispatch(

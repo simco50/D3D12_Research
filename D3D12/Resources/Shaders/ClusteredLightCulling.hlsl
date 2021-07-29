@@ -2,9 +2,9 @@
 
 #define RootSig "CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \
 				"DescriptorTable(SRV(t0, numDescriptors = 2)), " \
-				"DescriptorTable(UAV(u0, numDescriptors = 3))"
+				"DescriptorTable(UAV(u0, numDescriptors = 2))"
 
-#define MAX_LIGHTS_PER_TILE 256
+#define MAX_LIGHTS_PER_TILE 32
 #define THREAD_COUNT 4
 
 struct ViewData
@@ -19,9 +19,8 @@ ConstantBuffer<ViewData> cViewData : register(b0);
 StructuredBuffer<Light> tLights : register(t0);
 StructuredBuffer<AABB> tClusterAABBs : register(t1);
 
-globallycoherent RWStructuredBuffer<uint> uLightIndexCounter : register(u0);
-RWStructuredBuffer<uint> uLightIndexList : register(u1);
-RWStructuredBuffer<uint2> uOutLightGrid : register(u2);
+RWStructuredBuffer<uint> uLightIndexList : register(u0);
+RWStructuredBuffer<uint> uOutLightGrid : register(u1);
 
 bool ConeInSphere(float3 conePosition, float3 coneDirection, float coneRange, float2 coneAngleSinCos, Sphere sphere)
 {
@@ -37,7 +36,18 @@ bool ConeInSphere(float3 conePosition, float3 coneDirection, float coneRange, fl
 
 uint GetClusterIndex1D(uint3 clusterIndex)
 {
-	return clusterIndex.x + clusterIndex.y * cViewData.ClusterDimensions.x + clusterIndex.z * cViewData.ClusterDimensions.x * cViewData.ClusterDimensions.y;
+	return clusterIndex.x + (clusterIndex.y + clusterIndex.z * cViewData.ClusterDimensions.y) * cViewData.ClusterDimensions.x;
+}
+
+void AddLight(uint clusterIndex, uint lightIndex)
+{
+	uint culledLightIndex;
+	InterlockedAdd(uOutLightGrid[clusterIndex * 2 + 1], 1, culledLightIndex);
+	uOutLightGrid[clusterIndex * 2] = clusterIndex * MAX_LIGHTS_PER_TILE;
+	if(culledLightIndex < MAX_LIGHTS_PER_TILE)
+	{
+		uLightIndexList[clusterIndex * MAX_LIGHTS_PER_TILE + culledLightIndex] = lightIndex;
+	}
 }
 
 [RootSignature(RootSig)]
@@ -48,8 +58,6 @@ void LightCulling(uint3 dispatchThreadId : SV_DISPATCHTHREADID)
 
 	if(all(clusterIndex3D < cViewData.ClusterDimensions))
 	{
-		uint lightList[MAX_LIGHTS_PER_TILE];
-		uint lightCount = 0;
 		uint clusterIndex = GetClusterIndex1D(dispatchThreadId);
 		AABB clusterAABB = tClusterAABBs[clusterIndex];
 
@@ -65,11 +73,7 @@ void LightCulling(uint3 dispatchThreadId : SV_DISPATCHTHREADID)
 				sphere.Position = mul(float4(light.Position, 1.0f), cViewData.View).xyz;
 				if (SphereInAABB(sphere, clusterAABB))
 				{
-					if (lightCount < MAX_LIGHTS_PER_TILE)
-					{
-						lightList[lightCount] = i;
-						lightCount++;
-					}
+					AddLight(clusterIndex, i);
 				}
 			}
 			else if(light.IsSpot())
@@ -83,32 +87,13 @@ void LightCulling(uint3 dispatchThreadId : SV_DISPATCHTHREADID)
 				float angle = acos(light.SpotlightAngles.y);
 				if (ConeInSphere(conePosition, coneDirection, light.Range, float2(sin(angle), light.SpotlightAngles.y), sphere))
 				{
-					if (lightCount < MAX_LIGHTS_PER_TILE)
-					{
-						lightList[lightCount] = i;
-						lightCount++;
-					}
+					AddLight(clusterIndex, i);
 				}
 			}
 			else
 			{
-				if (lightCount < MAX_LIGHTS_PER_TILE)
-				{
-					lightList[lightCount] = i;
-					lightCount++;
-				}
+				AddLight(clusterIndex, i);
 			}
-		}
-
-		//Populate the light grid only on the first thread in the group
-		uint startOffset = 0;
-		InterlockedAdd(uLightIndexCounter[0], lightCount, startOffset);
-		uOutLightGrid[clusterIndex] = uint2(startOffset, lightCount);
-
-		//Distribute populating the light index light amonst threads in the thread group
-		for (i = 0; i < lightCount; i++)
-		{
-			uLightIndexList[startOffset + i] = lightList[i];
 		}
 	}
 }

@@ -33,7 +33,7 @@ struct ShaderData
 SamplerState sVolumeSampler : register(s3);
 ConstantBuffer<ShaderData> cData : register(b0);
 
-StructuredBuffer<uint2> tLightGrid : register(t2);
+StructuredBuffer<uint> tLightGrid : register(t2);
 StructuredBuffer<uint> tLightIndexList : register(t3);
 Texture3D<float4> tLightScattering : register(t4);
 RWTexture3D<float4> uOutLightScattering : register(u0);
@@ -103,11 +103,10 @@ void InjectFogLightingCS(uint3 threadId : SV_DISPATCHTHREADID)
 	float3 totalScattering = 0;
 
 	uint tileIndex = GetLightCluster(threadId.xy, z);
-	uint lightOffset = tLightGrid[tileIndex].x;
-	uint lightCount = tLightGrid[tileIndex].y;
+	uint lightOffset = tLightGrid[tileIndex * 2];
+	uint lightCount = tLightGrid[tileIndex * 2 + 1];
 
 	// Iterate over all the lights and light the froxel
-	// todo: Leverage clustered light culling
 	for(int i = 0; i < lightCount; ++i)
 	{
 		int lightIndex = tLightIndexList[lightOffset + i];

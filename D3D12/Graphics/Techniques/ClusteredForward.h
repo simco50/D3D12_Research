@@ -42,7 +42,6 @@ private:
 	std::unique_ptr<RootSignature> m_pLightCullingRS;
 	PipelineState* m_pLightCullingPSO = nullptr;
 	std::unique_ptr<CommandSignature> m_pLightCullingCommandSignature;
-	std::unique_ptr<Buffer> m_pLightIndexCounter;
 	std::unique_ptr<Buffer> m_pLightIndexGrid;
 	std::unique_ptr<Buffer> m_pLightGrid;
 	UnorderedAccessView* m_pLightGridRawUAV = nullptr;
