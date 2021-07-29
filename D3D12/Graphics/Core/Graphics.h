@@ -27,14 +27,8 @@ class CommandSignature;
 struct TextureDesc;
 struct BufferDesc;
 
-#if PLATFORM_WINDOWS
 using WindowHandle = HWND;
 using WindowHandlePtr = HWND;
-#elif PLATFORM_UWP
-#include "winrt/Windows.UI.Core.h"
-using WindowHandle = const winrt::Windows::UI::Core::CoreWindow*;
-using WindowHandlePtr = const winrt::Windows::UI::Core::CoreWindow*;
-#endif
 
 enum class GraphicsInstanceFlags
 {

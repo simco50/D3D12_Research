@@ -4,10 +4,6 @@
 #define PLATFORM_WINDOWS 0
 #endif
 
-#ifndef PLATFORM_UWP
-#define PLATFORM_UWP 0
-#endif
-
 //STL
 #include <assert.h>
 //Containers
