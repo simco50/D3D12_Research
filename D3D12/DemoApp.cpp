@@ -284,8 +284,10 @@ void DemoApp::SetupScene(CommandContext& context)
 		for (const SubMesh& subMesh : pMesh->GetMeshes())
 		{
 			ShaderInterop::MeshData mesh;
-			mesh.IndexBuffer = m_pDevice->RegisterBindlessResource(subMesh.pIndexSRV);
-			mesh.VertexBuffer = m_pDevice->RegisterBindlessResource(subMesh.pVertexSRV);
+			mesh.IndexStream = m_pDevice->RegisterBindlessResource(subMesh.pIndexSRV);
+			mesh.PositionStream = m_pDevice->RegisterBindlessResource(subMesh.pPositionsStreamSRV);
+			mesh.NormalStream = m_pDevice->RegisterBindlessResource(subMesh.pNormalsStreamSRV);
+			mesh.UVStream = m_pDevice->RegisterBindlessResource(subMesh.pUVStreamSRV);
 			meshes.push_back(mesh);
 		}
 
@@ -1862,9 +1864,9 @@ void DemoApp::UpdateTLAS(CommandContext& context)
 					geometryDesc.Triangles.IndexCount = subMesh.IndicesLocation.Elements;
 					geometryDesc.Triangles.IndexFormat = subMesh.IndicesLocation.Format;
 					geometryDesc.Triangles.Transform3x4 = 0;
-					geometryDesc.Triangles.VertexBuffer.StartAddress = subMesh.VerticesLocation.Location;
-					geometryDesc.Triangles.VertexBuffer.StrideInBytes = subMesh.VerticesLocation.Stride;
-					geometryDesc.Triangles.VertexCount = subMesh.VerticesLocation.Elements;
+					geometryDesc.Triangles.VertexBuffer.StartAddress = subMesh.PositionStreamLocation.Location;
+					geometryDesc.Triangles.VertexBuffer.StrideInBytes = subMesh.PositionStreamLocation.Stride;
+					geometryDesc.Triangles.VertexCount = subMesh.PositionStreamLocation.Elements;
 					geometryDesc.Triangles.VertexFormat = subMesh.PositionsFormat;
 
 					D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS prebuildInfo{};

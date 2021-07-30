@@ -29,15 +29,11 @@ void DrawScene(CommandContext& context, const SceneView& scene, const Visibility
 	};
 	std::sort(meshes.begin(), meshes.end(), CompareSort);
 
-	struct PerObjectData
-	{
-		uint32 Index;
-	} ObjectData;
-
+	ShaderInterop::PerObjectData objectData;
 	for (const Batch* b : meshes)
 	{
-		ObjectData.Index = b->Index;
-		context.SetGraphicsRootConstants(0, ObjectData);
+		objectData.Index = b->Index;
+		context.SetGraphicsRootConstants(0, objectData);
 		context.SetIndexBuffer(b->pMesh->IndicesLocation);
 		context.DrawIndexed(b->pMesh->IndicesLocation.Elements, 0, 0);
 	}

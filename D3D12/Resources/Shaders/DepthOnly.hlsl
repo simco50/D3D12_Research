@@ -8,11 +8,6 @@
 				GLOBAL_BINDLESS_TABLE ", " \
 				"StaticSampler(s0, filter=FILTER_MIN_MAG_MIP_LINEAR, visibility = SHADER_VISIBILITY_PIXEL), "
 
-struct PerObjectData
-{
-	uint Index;
-};
-
 struct PerViewData
 {
 	float4x4 ViewProjection;
@@ -21,14 +16,6 @@ struct PerViewData
 ConstantBuffer<PerObjectData> cObjectData : register(b0);
 ConstantBuffer<PerViewData> cViewData : register(b1);
 
-struct Vertex
-{
-	uint2 position;
-	uint texCoord;
-	float3 normal;
-	float4 tangent;
-};
-
 struct PSInput
 {
 	float4 position : SV_POSITION;
@@ -36,14 +23,15 @@ struct PSInput
 };
 
 [RootSignature(RootSig)]
-PSInput VSMain(uint VertexId : SV_VertexID)
+PSInput VSMain(uint vertexId : SV_VertexID)
 {
 	PSInput result = (PSInput)0;
 	MeshInstance instance = tMeshInstances[cObjectData.Index];
     MeshData mesh = tMeshes[instance.Mesh];
-	Vertex input = tBufferTable[mesh.VertexBuffer].Load<Vertex>(VertexId * sizeof(Vertex));
-	result.position = mul(mul(float4(UnpackHalf3(input.position), 1.0f), instance.World), cViewData.ViewProjection);
-	result.texCoord = UnpackHalf2(input.texCoord);
+
+    float3 position = UnpackHalf3(GetVertexData<uint2>(mesh.PositionStream, vertexId));
+	result.position = mul(mul(float4(position, 1.0f), instance.World), cViewData.ViewProjection);
+	result.texCoord = UnpackHalf2(GetVertexData<uint>(mesh.UVStream, vertexId));
 	return result;
 }
 

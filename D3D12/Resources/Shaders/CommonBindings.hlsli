@@ -45,4 +45,11 @@ RaytracingAccelerationStructure tTLASTable[] :              register(t1000, spac
         "Sampler(s1000, numDescriptors = unbounded, space = 1) ," \
     "visibility=SHADER_VISIBILITY_ALL)"
 
+
+template<typename T>
+T GetVertexData(uint bufferIndex, uint vertexId)
+{
+    return tBufferTable[bufferIndex].Load<T>(vertexId * sizeof(T));
+}
+
 #endif

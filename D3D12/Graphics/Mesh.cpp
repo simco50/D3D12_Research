@@ -116,16 +116,27 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 		material.pNormalTexture = RetrieveTexture(gltfMaterial.normal_texture, false);
 	}
 
-	struct Vertex
+	struct VS_Position
 	{
 		PackedVector3 Position = PackedVector3(0.0f, 0.0f, 0.0f, 0.0f);
-		PackedVector2 TexCoord = PackedVector2(0.0f, 0.0f);
+	};
+
+	struct VS_UV
+	{
+		PackedVector2 UV = PackedVector2(0.0f, 0.0f);
+	};
+
+	struct VS_Normal
+	{
 		Vector3 Normal = Vector3::Forward;
 		Vector4 Tangent = Vector4(1, 0, 0, 1);
 	};
 
-	std::vector<uint32> indices;
-	std::vector<Vertex> vertices;
+	std::vector<uint32> indicesStream;
+	std::vector<VS_Position> positionsStream;
+	std::vector<VS_UV> uvStream;
+	std::vector<VS_Normal> normalStream;
+
 	struct MeshData
 	{
 		BoundingBox Bounds;
@@ -148,12 +159,12 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 			const cgltf_primitive& primitive = mesh.primitives[primIdx];
 			primtives.push_back(primitiveIndex++);
 			MeshData meshData;
-			uint32 vertexOffset = (uint32)vertices.size();
+			uint32 vertexOffset = (uint32)positionsStream.size();
 			meshData.VertexOffset = vertexOffset;
 
 			size_t indexCount = primitive.indices->count;
-			uint32 indexOffset = (uint32)indices.size();
-			indices.resize(indices.size() + indexCount);
+			uint32 indexOffset = (uint32)indicesStream.size();
+			indicesStream.resize(indicesStream.size() + indexCount);
 
 			meshData.IndexOffset = indexOffset;
 			meshData.NumIndices = (uint32)indexCount;
@@ -162,9 +173,9 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 			constexpr int indexMap[] = { 0, 2, 1 };
 			for (size_t i = 0; i < indexCount; i += 3)
 			{
-				indices[indexOffset + i + 0] = (int)cgltf_accessor_read_index(primitive.indices, i + indexMap[0]);
-				indices[indexOffset + i + 1] = (int)cgltf_accessor_read_index(primitive.indices, i + indexMap[1]);
-				indices[indexOffset + i + 2] = (int)cgltf_accessor_read_index(primitive.indices, i + indexMap[2]);
+				indicesStream[indexOffset + i + 0] = (int)cgltf_accessor_read_index(primitive.indices, i + indexMap[0]);
+				indicesStream[indexOffset + i + 1] = (int)cgltf_accessor_read_index(primitive.indices, i + indexMap[1]);
+				indicesStream[indexOffset + i + 2] = (int)cgltf_accessor_read_index(primitive.indices, i + indexMap[2]);
 			}
 
 			for (size_t attrIdx = 0; attrIdx < primitive.attributes_count; ++attrIdx)
@@ -174,7 +185,9 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 
 				if (meshData.NumVertices == 0)
 				{
-					vertices.resize(vertices.size() + attribute.data->count);
+					positionsStream.resize(positionsStream.size() + attribute.data->count);
+					uvStream.resize(uvStream.size() + attribute.data->count);
+					normalStream.resize(normalStream.size() + attribute.data->count);
 					meshData.NumVertices = (uint32)attribute.data->count;
 				}
 
@@ -185,7 +198,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 					{
 						Vector3 position;
 						check(cgltf_accessor_read_float(attribute.data, i, &position.x, 3));
-						vertices[i + vertexOffset].Position = PackedVector3(position.x, position.y, position.z, 0);
+						positionsStream[i + vertexOffset].Position = PackedVector3(position.x, position.y, position.z, 0);
 						positions.push_back(position);
 					}
 					meshData.Bounds.CreateFromPoints(meshData.Bounds, positions.size(), (DirectX::XMFLOAT3*)positions.data(), sizeof(Vector3));
@@ -194,14 +207,14 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 				{
 					for (size_t i = 0; i < attribute.data->count; ++i)
 					{
-						check(cgltf_accessor_read_float(attribute.data, i, &vertices[i + vertexOffset].Normal.x, 3));
+						check(cgltf_accessor_read_float(attribute.data, i, &normalStream[i + vertexOffset].Normal.x, 3));
 					}
 				}
 				else if (strcmp(pName, "TANGENT") == 0)
 				{
 					for (size_t i = 0; i < attribute.data->count; ++i)
 					{
-						check(cgltf_accessor_read_float(attribute.data, i, &vertices[i + vertexOffset].Tangent.x, 4));
+						check(cgltf_accessor_read_float(attribute.data, i, &normalStream[i + vertexOffset].Tangent.x, 4));
 					}
 				}
 				else if (strcmp(pName, "TEXCOORD_0") == 0)
@@ -210,7 +223,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 					{
 						Vector2 texCoord;
 						check(cgltf_accessor_read_float(attribute.data, i, &texCoord.x, 2));
-						vertices[i + vertexOffset].TexCoord = PackedVector2(texCoord.x, texCoord.y);
+						uvStream[i + vertexOffset].UV = PackedVector2(texCoord.x, texCoord.y);
 					}
 				}
 				else
@@ -246,7 +259,11 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 
 	// Load in the data
 	static constexpr uint64 sBufferAlignment = 16;
-	uint64 bufferSize = vertices.size() * sizeof(Vertex) + indices.size() * sizeof(uint32) + meshDatas.size() * sBufferAlignment;
+	uint64 bufferSize = indicesStream.size() * sizeof(uint32);
+	bufferSize += positionsStream.size() * sizeof(VS_Position);
+	bufferSize += uvStream.size() * sizeof(VS_UV);
+	bufferSize += normalStream.size() * sizeof(VS_Normal);
+	bufferSize += (positionsStream.size() * 3 + indicesStream.size()) * sBufferAlignment;
 	m_pGeometryData = pDevice->CreateBuffer(BufferDesc::CreateBuffer(bufferSize, BufferFlag::ShaderResource | BufferFlag::ByteAddress), "Geometry Buffer");
 	pContext->InsertResourceBarrier(m_pGeometryData.get(), D3D12_RESOURCE_STATE_COPY_DEST);
 
@@ -263,21 +280,30 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 		SubMesh subMesh;
 		subMesh.Bounds = meshData.Bounds;
 		subMesh.MaterialId = meshData.MaterialIndex;
-
-		VertexBufferView vbv(m_pGeometryData->GetGpuHandle() + dataOffset, meshData.NumVertices, sizeof(Vertex));
 		subMesh.PositionsFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
-		subMesh.VerticesLocation = vbv;
-		subMesh.pVertexSRV = new ShaderResourceView();
-		subMesh.pVertexSRV->Create(m_pGeometryData.get(), BufferSRVDesc(DXGI_FORMAT_UNKNOWN, true, (uint32)dataOffset, meshData.NumVertices * sizeof(Vertex)));
-		CopyData(&vertices[meshData.VertexOffset], sizeof(Vertex) * meshData.NumVertices);
+		subMesh.PositionsStride = sizeof(VS_Position);
+
+		subMesh.PositionStreamLocation = VertexBufferView(m_pGeometryData->GetGpuHandle() + dataOffset, meshData.NumVertices, sizeof(VS_Position));
+		subMesh.pPositionsStreamSRV = new ShaderResourceView();
+		subMesh.pPositionsStreamSRV->Create(m_pGeometryData.get(), BufferSRVDesc(DXGI_FORMAT_UNKNOWN, true, (uint32)dataOffset, meshData.NumVertices * sizeof(VS_Position)));
+		CopyData(&positionsStream[meshData.VertexOffset], sizeof(VS_Position) * meshData.NumVertices);
+
+		subMesh.NormalStreamLocation = VertexBufferView(m_pGeometryData->GetGpuHandle() + dataOffset, meshData.NumVertices, sizeof(VS_Normal));
+		subMesh.pNormalsStreamSRV = new ShaderResourceView();
+		subMesh.pNormalsStreamSRV->Create(m_pGeometryData.get(), BufferSRVDesc(DXGI_FORMAT_UNKNOWN, true, (uint32)dataOffset, meshData.NumVertices * sizeof(VS_Normal)));
+		CopyData(&normalStream[meshData.VertexOffset], sizeof(VS_Normal)* meshData.NumVertices);
+
+		subMesh.UVStreamLocation = VertexBufferView(m_pGeometryData->GetGpuHandle() + dataOffset, meshData.NumVertices, sizeof(VS_UV));
+		subMesh.pUVStreamSRV = new ShaderResourceView();
+		subMesh.pUVStreamSRV->Create(m_pGeometryData.get(), BufferSRVDesc(DXGI_FORMAT_UNKNOWN, true, (uint32)dataOffset, meshData.NumVertices * sizeof(VS_UV)));
+		CopyData(&uvStream[meshData.VertexOffset], sizeof(VS_UV)* meshData.NumVertices);
 
 		IndexBufferView ibv(m_pGeometryData->GetGpuHandle() + dataOffset, meshData.NumIndices, DXGI_FORMAT_R32_UINT);
 		subMesh.IndicesLocation = ibv;
 		subMesh.pIndexSRV = new ShaderResourceView();
 		subMesh.pIndexSRV->Create(m_pGeometryData.get(), BufferSRVDesc(DXGI_FORMAT_UNKNOWN, true, (uint32)dataOffset, meshData.NumIndices * sizeof(uint32)));
-		CopyData(&indices[meshData.IndexOffset], sizeof(uint32) * meshData.NumIndices);
+		CopyData(&indicesStream[meshData.IndexOffset], sizeof(uint32) * meshData.NumIndices);
 
-		subMesh.Stride = sizeof(Vertex);
 		subMesh.pParent = this;
 		m_Meshes.push_back(subMesh);
 	}
@@ -291,7 +317,9 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 void SubMesh::Destroy()
 {
 	delete pIndexSRV;
-	delete pVertexSRV;
+	delete pPositionsStreamSRV;
+	delete pUVStreamSRV;
+	delete pNormalsStreamSRV;
 
 	delete pBLAS;
 	delete pBLASScratch;

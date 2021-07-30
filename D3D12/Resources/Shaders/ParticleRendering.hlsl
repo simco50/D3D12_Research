@@ -20,11 +20,6 @@ cbuffer FrameData : register(b0)
 StructuredBuffer<ParticleData> tParticleData : register(t0);
 StructuredBuffer<uint> tAliveList : register(t1);
 
-struct VS_Input
-{
-	uint vertexId : SV_VERTEXID;
-};
-
 struct PS_Input
 {
     float4 position : SV_POSITION;
@@ -42,12 +37,12 @@ static const float3 BILLBOARD[] = {
 };
 
 [RootSignature(RootSig)]
-PS_Input VSMain(VS_Input input)
+PS_Input VSMain(uint vertexId : SV_VertexID)
 {
     PS_Input output;
 
-    uint vertexID = input.vertexId % 6;
-	uint instanceID = input.vertexId / 6;
+    uint vertexID = vertexId % 6;
+	uint instanceID = vertexId / 6;
 
     uint particleIndex = tAliveList[instanceID];
     ParticleData particle = tParticleData[particleIndex];
