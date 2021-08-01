@@ -295,6 +295,18 @@ T Square(T x)
     return x * x;
 }
 
+template<typename T>
+T min3(T a, T b, T c)
+{
+    return min(min(a, b), c);
+}
+
+template<typename T>
+T max3(T a, T b, T c)
+{
+    return max(max(a, b), c);
+}
+
 //This is still not totally exact as pow() has imprecisions
 float SrgbToLinear(float y)
 {
