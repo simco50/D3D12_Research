@@ -1318,12 +1318,15 @@ void DemoApp::Update()
 					context.SetComputeDynamicConstantBufferView(0, Parameters);
 					context.BindResource(1, 0, m_pDebugHistogramTexture->GetUAV());
 					context.BindResource(2, 0, m_pLuminanceHistogram->GetSRV());
-					context.BindResource(2, 1, m_pLuminanceHistogram->GetSRV());
+					context.BindResource(2, 1, m_pAverageLuminance->GetSRV());
 					context.ClearUavUInt(m_pDebugHistogramTexture.get(), m_pDebugHistogramTexture->GetUAV());
 					context.Dispatch(1, m_pLuminanceHistogram->GetNumElements());
 				});
-
+			ImGui::Begin("Luminance Histogram");
+			ImVec2 cursor = ImGui::GetCursorPos();
 			ImGui::ImageAutoSize(m_pDebugHistogramTexture.get(), ImVec2((float)m_pDebugHistogramTexture->GetWidth(), (float)m_pDebugHistogramTexture->GetHeight()));
+			ImGui::GetWindowDrawList()->AddText(cursor, IM_COL32(255, 255, 255, 255), Sprintf("%.2f", Tweakables::g_MinLogLuminance.Get()).c_str());
+			ImGui::End();
 		}
 	}
 
