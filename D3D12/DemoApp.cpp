@@ -155,7 +155,7 @@ DemoApp::DemoApp(WindowHandle window, const IntVector2& windowRect, int sampleCo
 
 	m_pCamera = std::make_unique<FreeCamera>();
 	m_pCamera->SetNearPlane(80.0f);
-	m_pCamera->SetFarPlane(1.0f);
+	m_pCamera->SetFarPlane(0.1f);
 
 	E_LOG(Info, "Graphics::InitD3D()");
 

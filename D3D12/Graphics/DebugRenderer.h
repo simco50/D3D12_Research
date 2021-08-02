@@ -9,10 +9,10 @@ struct Light;
 
 struct IntColor
 {
-	IntColor(const Color& color) : Color(Math::EncodeColor(color)) {}
+	IntColor(const Color& color) : Color(Math::EncodeRGBA(color)) {}
 	IntColor(uint32 color = 0) : Color(color) {}
 	operator uint32() const { return Color; }
-	operator Color() const { return Math::DecodeColor(Color); }
+	operator Color() const { return Math::DecodeRGBA(Color); }
 
 	uint32 Color;
 };
