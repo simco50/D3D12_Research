@@ -499,7 +499,7 @@ void DemoApp::Update()
 			float log = minZ * std::pow(maxZ / minZ, p);
 			float uniform = minZ + (maxZ - minZ) * p;
 			float d = Tweakables::g_PSSMFactor * (log - uniform) + uniform;
-			cascadeSplits[i] = (d - nearPlane) / clipPlaneRange;
+			cascadeSplits[i] = d - nearPlane;
 		}
 
 		for (size_t lightIndex = 0; lightIndex < m_Lights.size(); ++lightIndex)
@@ -541,7 +541,8 @@ void DemoApp::Update()
 					//Adjust frustum corners based on cascade splits
 					for (int j = 0; j < 4; ++j)
 					{
-						Vector3 cornerRay = frustumCorners[j + 4] - frustumCorners[j];
+						Vector3 cornerRay = (frustumCorners[j + 4] - frustumCorners[j]);
+						cornerRay.Normalize();
 						Vector3 nearPoint = previousCascadeSplit * cornerRay;
 						Vector3 farPoint = currentCascadeSplit * cornerRay;
 						frustumCorners[j + 4] = frustumCorners[j] + farPoint;
@@ -601,9 +602,7 @@ void DemoApp::Update()
 						projectionMatrix *= Matrix::CreateTranslation(Vector3(roundedOffset));
 						lightViewProjection = shadowView * projectionMatrix;
 					}
-
-					float* values = &shadowData.CascadeDepths.x;
-					values[shadowIndex] = currentCascadeSplit * (farPlane - nearPlane) + nearPlane;
+					static_cast<float*>(&shadowData.CascadeDepths.x)[shadowIndex] = currentCascadeSplit;
 					shadowData.LightViewProjections[shadowIndex++] = lightViewProjection;
 				}
 			}
@@ -1781,6 +1780,19 @@ void DemoApp::UpdateImGui()
 			}
 			return true;
 		}, nullptr, (int)RenderPath::MAX);
+
+	ImGui::Text("Camera");
+	float fov = m_pCamera->GetFoV();
+	if (ImGui::SliderAngle("Field of View", &fov, 10, 120))
+	{
+		m_pCamera->SetFoV(fov);
+	}
+	Vector2 farNear(m_pCamera->GetFar(), m_pCamera->GetNear());
+	if (ImGui::DragFloatRange2("Near/Far", &farNear.x, &farNear.y, 1, 0.1f, 100))
+	{
+		m_pCamera->SetFarPlane(farNear.x);
+		m_pCamera->SetNearPlane(farNear.y);
+	}
 
 	ImGui::Text("Sky");
 	ImGui::SliderFloat("Sun Orientation", &Tweakables::g_SunOrientation, -Math::PI, Math::PI);
