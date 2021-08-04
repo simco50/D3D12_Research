@@ -692,6 +692,65 @@ void DemoApp::Update()
 		D3D::BeginPixCapture();
 	}
 
+	if (Tweakables::g_Screenshot)
+	{
+		Tweakables::g_Screenshot = false;
+
+		CommandContext* pContext = m_pDevice->AllocateCommandContext();
+		Texture* pSource = m_pTonemapTarget.get();
+		D3D12_PLACED_SUBRESOURCE_FOOTPRINT textureFootprint = {};
+		D3D12_RESOURCE_DESC resourceDesc = m_pTonemapTarget->GetResource()->GetDesc();
+		m_pDevice->GetDevice()->GetCopyableFootprints(&resourceDesc, 0, 1, 0, &textureFootprint, nullptr, nullptr, nullptr);
+		std::unique_ptr<Buffer> pScreenshotBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateReadback(textureFootprint.Footprint.RowPitch * textureFootprint.Footprint.Height), "Screenshot Texture");
+		pScreenshotBuffer->Map();
+		pContext->InsertResourceBarrier(m_pTonemapTarget.get(), D3D12_RESOURCE_STATE_COPY_SOURCE);
+		pContext->InsertResourceBarrier(pScreenshotBuffer.get(), D3D12_RESOURCE_STATE_COPY_DEST);
+		pContext->CopyTexture(m_pTonemapTarget.get(), pScreenshotBuffer.get(), CD3DX12_BOX(0, 0, m_pTonemapTarget->GetWidth(), m_pTonemapTarget->GetHeight()));
+
+		ScreenshotRequest request;
+		request.Width = pSource->GetWidth();
+		request.Height = pSource->GetHeight();
+		request.RowPitch = textureFootprint.Footprint.RowPitch;
+		request.pBuffer = pScreenshotBuffer.release();
+		request.Fence = pContext->Execute(false);
+		m_ScreenshotBuffers.emplace(request);
+	}
+
+	if(!m_ScreenshotBuffers.empty())
+	{
+		while (!m_ScreenshotBuffers.empty() && m_pDevice->IsFenceComplete(m_ScreenshotBuffers.front().Fence))
+		{
+			const ScreenshotRequest& request = m_ScreenshotBuffers.front();
+			
+			TaskContext taskContext;
+			TaskQueue::Execute([request](uint32)
+				{
+					char* pData = (char*)request.pBuffer->GetMappedData();
+					Image img;
+					img.SetSize(request.Width, request.Height, 4);
+					uint32 imageRowPitch = request.Width * 4;
+					uint32 targetOffset = 0;
+					for (uint32 i = 0; i < request.Height; ++i)
+					{
+						img.SetData((uint32*)pData, targetOffset, imageRowPitch);
+						pData += request.RowPitch;
+						targetOffset += imageRowPitch;
+					}
+
+					SYSTEMTIME time;
+					GetSystemTime(&time);
+					Paths::CreateDirectoryTree(Paths::ScreenshotDir());
+					char filePath[128];
+					FormatString(filePath, ARRAYSIZE(filePath), "%sScreenshot_%d_%02d_%02d__%02d_%02d_%02d_%d.png",
+						Paths::ScreenshotDir().c_str(),
+						time.wYear, time.wMonth, time.wDay,
+						time.wHour, time.wMinute, time.wSecond, time.wMilliseconds);
+					img.Save(filePath);
+				}, taskContext);
+			m_ScreenshotBuffers.pop();
+		}
+	}
+
 	RGGraph graph(m_pDevice.get());
 	struct MainData
 	{
@@ -704,69 +763,12 @@ void DemoApp::Update()
 
 	uint64 nextFenceValue = 0;
 
-	if (Tweakables::g_Screenshot && m_ScreenshotDelay < 0)
-	{
-		RGPassBuilder screenshot = graph.AddPass("Take Screenshot");
-		screenshot.Bind([=](CommandContext& renderContext, const RGPassResources& /*resources*/)
-			{
-				D3D12_PLACED_SUBRESOURCE_FOOTPRINT textureFootprint = {};
-				D3D12_RESOURCE_DESC resourceDesc = m_pTonemapTarget->GetResource()->GetDesc();
-				m_pDevice->GetDevice()->GetCopyableFootprints(&resourceDesc, 0, 1, 0, &textureFootprint, nullptr, nullptr, nullptr);
-				m_pScreenshotBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateReadback(textureFootprint.Footprint.RowPitch * textureFootprint.Footprint.Height), "Screenshot Texture");
-				m_pScreenshotBuffer->Map();
-				renderContext.InsertResourceBarrier(m_pTonemapTarget.get(), D3D12_RESOURCE_STATE_COPY_SOURCE);
-				renderContext.InsertResourceBarrier(m_pScreenshotBuffer.get(), D3D12_RESOURCE_STATE_COPY_DEST);
-				renderContext.CopyTexture(m_pTonemapTarget.get(), m_pScreenshotBuffer.get(), CD3DX12_BOX(0, 0, m_pTonemapTarget->GetWidth(), m_pTonemapTarget->GetHeight()));
-				m_ScreenshotRowPitch = textureFootprint.Footprint.RowPitch;
-			});
-		m_ScreenshotDelay = 4;
-		Tweakables::g_Screenshot = false;
-	}
-
-	if (m_pScreenshotBuffer)
-	{
-		if (m_ScreenshotDelay == 0)
-		{
-			TaskContext taskContext;
-			TaskQueue::Execute([&](uint32) {
-				char* pData = (char*)m_pScreenshotBuffer->GetMappedData();
-				Image img;
-				img.SetSize(m_pTonemapTarget->GetWidth(), m_pTonemapTarget->GetHeight(), 4);
-				uint32 imageRowPitch = m_pTonemapTarget->GetWidth() * 4;
-				uint32 targetOffset = 0;
-				for (int i = 0; i < m_pTonemapTarget->GetHeight(); ++i)
-				{
-					img.SetData((uint32*)pData, targetOffset, imageRowPitch);
-					pData += m_ScreenshotRowPitch;
-					targetOffset += imageRowPitch;
-				}
-
-				SYSTEMTIME time;
-				GetSystemTime(&time);
-				Paths::CreateDirectoryTree(Paths::ScreenshotDir());
-				char filePath[128];
-				FormatString(filePath, ARRAYSIZE(filePath), "%sScreenshot_%d_%02d_%02d__%02d_%02d_%02d.jpg",
-					Paths::ScreenshotDir().c_str(),
-					time.wYear, time.wMonth, time.wDay,
-					time.wHour, time.wMinute, time.wSecond);
-				img.Save(filePath);
-				m_pScreenshotBuffer.reset();
-				}, taskContext);
-			m_ScreenshotDelay = -1;
-		}
-		else
-		{
-			m_ScreenshotDelay--;
-		}
-	}
-
 	RGPassBuilder updateTLAS = graph.AddPass("Update TLAS");
 	updateTLAS.Bind([=](CommandContext& renderContext, const RGPassResources& /*resources*/)
 		{
 			UpdateTLAS(renderContext);
 		}
 	);
-
 
 	RGPassBuilder setupLights = graph.AddPass("Setup Lights");
 	Data.DepthStencil = setupLights.Write(Data.DepthStencil);
