@@ -25,28 +25,32 @@ DECLARE_BITMASK_TYPE(BufferFlag)
 struct BufferDesc
 {
 	BufferDesc() = default;
-	BufferDesc(uint64 elements, uint32 elementSize, BufferFlag usage = BufferFlag::None)
+	BufferDesc(uint32 elements, uint32 elementSize, BufferFlag usage = BufferFlag::None)
 		: Size(elements * elementSize), ElementSize(elementSize), Usage(usage)
 	{}
 
 	static BufferDesc CreateBuffer(uint64 sizeInBytes, BufferFlag usage = BufferFlag::None)
 	{
-		return BufferDesc(sizeInBytes, 1, usage);
+		BufferDesc desc;
+		desc.Size = sizeInBytes;
+		desc.ElementSize = 1;
+		desc.Usage = usage;
+		return desc;
 	}
 
-	static BufferDesc CreateIndexBuffer(int elements, bool smallIndices, BufferFlag usage = BufferFlag::None)
+	static BufferDesc CreateIndexBuffer(uint32 elements, bool smallIndices, BufferFlag usage = BufferFlag::None)
 	{
 		return BufferDesc(elements, smallIndices ? 2 : 4, usage);
 	}
 
-	static BufferDesc CreateVertexBuffer(int elements, int vertexSize, BufferFlag usage = BufferFlag::None)
+	static BufferDesc CreateVertexBuffer(uint32 elements, uint32 vertexSize, BufferFlag usage = BufferFlag::None)
 	{
 		return BufferDesc(elements, vertexSize, usage);
 	}
 
-	static BufferDesc CreateReadback(int size)
+	static BufferDesc CreateReadback(uint64 size)
 	{
-		return BufferDesc(size, sizeof(uint8), BufferFlag::Readback);
+		return CreateBuffer(size, BufferFlag::Readback);
 	}
 
 	static BufferDesc CreateByteAddress(uint64 bytes, BufferFlag usage = BufferFlag::ShaderResource)
@@ -69,32 +73,32 @@ struct BufferDesc
 		return desc;
 	}
 
-	static BufferDesc CreateStructured(int elementCount, int elementSize, BufferFlag usage = BufferFlag::ShaderResource | BufferFlag::UnorderedAccess)
+	static BufferDesc CreateStructured(uint32 elementCount, uint32 elementSize, BufferFlag usage = BufferFlag::ShaderResource | BufferFlag::UnorderedAccess)
 	{
 		BufferDesc desc;
 		desc.ElementSize = elementSize;
-		desc.Size = elementCount * desc.ElementSize;
+		desc.Size = (uint64)elementCount * desc.ElementSize;
 		desc.Usage = usage | BufferFlag::Structured;
 		return desc;
 	}
 
-	static BufferDesc CreateTyped(int elementCount, DXGI_FORMAT format, BufferFlag usage = BufferFlag::ShaderResource | BufferFlag::UnorderedAccess)
+	static BufferDesc CreateTyped(uint32 elementCount, DXGI_FORMAT format, BufferFlag usage = BufferFlag::ShaderResource | BufferFlag::UnorderedAccess)
 	{
 		check(!D3D::IsBlockCompressFormat(format));
 		BufferDesc desc;
 		desc.ElementSize = D3D::GetFormatRowDataSize(format, 1);
-		desc.Size = elementCount * desc.ElementSize;
+		desc.Size = (uint64)elementCount * desc.ElementSize;
 		desc.Format = format;
 		desc.Usage = usage;
 		return desc;
 	}
 
 	template<typename IndirectParameters>
-	static BufferDesc CreateIndirectArguments(int elements = 1, BufferFlag usage = BufferFlag::None)
+	static BufferDesc CreateIndirectArguments(uint32 elements = 1, BufferFlag usage = BufferFlag::None)
 	{
 		BufferDesc desc;
 		desc.ElementSize = sizeof(IndirectParameters);
-		desc.Size = elements * desc.ElementSize;
+		desc.Size = (uint64)elements * desc.ElementSize;
 		desc.Usage = usage | BufferFlag::IndirectArguments | BufferFlag::UnorderedAccess;
 		return desc;
 	}
@@ -158,12 +162,7 @@ struct VertexBufferView
 	VertexBufferView(D3D12_GPU_VIRTUAL_ADDRESS location, uint32 elements, uint32 stride)
 		: Location(location), Elements(elements), Stride(stride)
 	{}
-	VertexBufferView(Buffer* pBuffer)
-	{
-		Location = pBuffer->GetGpuHandle();
-		Stride = pBuffer->GetDesc().ElementSize;
-		Elements = (uint32)(pBuffer->GetSize() / Stride);
-	}
+
 	D3D12_GPU_VIRTUAL_ADDRESS Location;
 	uint32 Elements;
 	uint32 Stride;
@@ -177,12 +176,6 @@ struct IndexBufferView
 	IndexBufferView(D3D12_GPU_VIRTUAL_ADDRESS location, uint32 elements, DXGI_FORMAT format = DXGI_FORMAT_R32_UINT)
 		: Location(location), Elements(elements), Format(format)
 	{}
-	IndexBufferView(Buffer* pBuffer)
-	{
-		Location = pBuffer->GetGpuHandle();
-		Elements = (uint32)(pBuffer->GetSize() / pBuffer->GetDesc().ElementSize);
-		Format = pBuffer->GetDesc().Format;
-	}
 
 	uint32 Stride() const
 	{

@@ -100,18 +100,18 @@ struct TextureDesc
 		Dimensions(TextureDimension::Texture2D)
 	{}
 
-	int Width;
-	int Height;
-	int DepthOrArraySize;
-	int Mips;
-	int SampleCount;
+	uint32 Width;
+	uint32 Height;
+	uint32 DepthOrArraySize;
+	uint32 Mips;
+	uint32 SampleCount;
 	DXGI_FORMAT Format;
 	TextureFlag Usage;
 	ClearBinding ClearBindingValue;
 	TextureDimension Dimensions;
 
 
-	static TextureDesc CreateCube(int width, int height, DXGI_FORMAT format, TextureFlag flags = TextureFlag::ShaderResource, int sampleCount = 1, int mips = 1)
+	static TextureDesc CreateCube(uint32 width, uint32 height, DXGI_FORMAT format, TextureFlag flags = TextureFlag::ShaderResource, uint32 sampleCount = 1, uint32 mips = 1)
 	{
 		check(width);
 		check(height);
@@ -128,7 +128,7 @@ struct TextureDesc
 		return desc;
 	}
 
-	static TextureDesc Create2D(int width, int height, DXGI_FORMAT format, TextureFlag flags = TextureFlag::ShaderResource, int sampleCount = 1, int mips = 1)
+	static TextureDesc Create2D(uint32 width, uint32 height, DXGI_FORMAT format, TextureFlag flags = TextureFlag::ShaderResource, uint32 sampleCount = 1, uint32 mips = 1)
 	{
 		check(width);
 		check(height);
@@ -145,7 +145,7 @@ struct TextureDesc
 		return desc;
 	}
 
-	static TextureDesc Create3D(int width, int height, int depth, DXGI_FORMAT format, TextureFlag flags = TextureFlag::ShaderResource, int sampleCount = 1, int mips = 1)
+	static TextureDesc Create3D(uint32 width, uint32 height, uint32 depth, DXGI_FORMAT format, TextureFlag flags = TextureFlag::ShaderResource, uint32 sampleCount = 1, uint32 mips = 1)
 	{
 		check(width);
 		check(height);
@@ -162,7 +162,7 @@ struct TextureDesc
 		return desc;
 	}
 
-	static TextureDesc CreateDepth(int width, int height, DXGI_FORMAT format, TextureFlag flags = TextureFlag::DepthStencil, int sampleCount = 1, const ClearBinding& clearBinding = ClearBinding(1, 0))
+	static TextureDesc CreateDepth(uint32 width, uint32 height, DXGI_FORMAT format, TextureFlag flags = TextureFlag::DepthStencil, uint32 sampleCount = 1, const ClearBinding& clearBinding = ClearBinding(1, 0))
 	{
 		check(width);
 		check(height);
@@ -180,7 +180,7 @@ struct TextureDesc
 		return desc;
 	}
 
-	static TextureDesc CreateRenderTarget(int width, int height, DXGI_FORMAT format, TextureFlag flags = TextureFlag::RenderTarget, int sampleCount = 1, const ClearBinding& clearBinding = ClearBinding(Color(0, 0, 0)))
+	static TextureDesc CreateRenderTarget(uint32 width, uint32 height, DXGI_FORMAT format, TextureFlag flags = TextureFlag::RenderTarget, uint32 sampleCount = 1, const ClearBinding& clearBinding = ClearBinding(Color(0, 0, 0)))
 	{
 		check(width);
 		check(height);
@@ -231,11 +231,11 @@ public:
 	bool Create(CommandContext* pContext, const Image& img, bool srgb = false);
 	void SetData(CommandContext* pContext, const void* pData);
 
-	int GetWidth() const { return m_Desc.Width; }
-	int GetHeight() const { return m_Desc.Height; }
-	int GetDepth() const { return m_Desc.DepthOrArraySize; }
-	int GetArraySize() const { return m_Desc.DepthOrArraySize; }
-	int GetMipLevels() const { return m_Desc.Mips; }
+	uint32 GetWidth() const { return m_Desc.Width; }
+	uint32 GetHeight() const { return m_Desc.Height; }
+	uint32 GetDepth() const { return m_Desc.DepthOrArraySize; }
+	uint32 GetArraySize() const { return m_Desc.DepthOrArraySize; }
+	uint32 GetMipLevels() const { return m_Desc.Mips; }
 	const TextureDesc& GetDesc() const { return m_Desc; }
 
 	void CreateUAV(UnorderedAccessView** pView, const TextureUAVDesc& desc);

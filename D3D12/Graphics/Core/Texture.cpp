@@ -55,8 +55,8 @@ D3D12_CPU_DESCRIPTOR_HANDLE Texture::GetRTV() const
 
 D3D12_RESOURCE_DESC GetResourceDesc(const TextureDesc& textureDesc)
 {
-	uint32 width = D3D::IsBlockCompressFormat(textureDesc.Format) ? Math::Clamp(textureDesc.Width, 0, textureDesc.Width) : textureDesc.Width;
-	uint32 height = D3D::IsBlockCompressFormat(textureDesc.Format) ? Math::Clamp(textureDesc.Height, 0, textureDesc.Height) : textureDesc.Height;
+	uint32 width = D3D::IsBlockCompressFormat(textureDesc.Format) ? Math::Clamp(textureDesc.Width, 0u, textureDesc.Width) : textureDesc.Width;
+	uint32 height = D3D::IsBlockCompressFormat(textureDesc.Format) ? Math::Clamp(textureDesc.Height, 0u, textureDesc.Height) : textureDesc.Height;
 	D3D12_RESOURCE_DESC desc{};
 	switch (textureDesc.Dimensions)
 	{
@@ -306,8 +306,8 @@ bool Texture::Create(CommandContext* pContext, const Image& img, bool srgb /*= f
 	desc.Dimensions = img.IsCubemap() ? TextureDimension::TextureCube : TextureDimension::Texture2D;
 	if (D3D::IsBlockCompressFormat(desc.Format))
 	{
-		desc.Width = Math::Max(desc.Width, 4);
-		desc.Height = Math::Max(desc.Height, 4);
+		desc.Width = Math::Max(desc.Width, 4u);
+		desc.Height = Math::Max(desc.Height, 4u);
 	}
 
 	const Image* pImg = &img;
@@ -316,7 +316,7 @@ bool Texture::Create(CommandContext* pContext, const Image& img, bool srgb /*= f
 	while (pImg)
 	{
 		subResourceData.resize(subResourceData.size() + desc.Mips);
-		for (int i = 0; i < desc.Mips; ++i)
+		for (uint32 i = 0; i < desc.Mips; ++i)
 		{
 			D3D12_SUBRESOURCE_DATA& data = subResourceData[resourceOffset++];
 			MipLevelInfo info = pImg->GetMipInfo(i);
