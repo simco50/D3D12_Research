@@ -9,12 +9,6 @@
                 GLOBAL_BINDLESS_TABLE ", " \
                 "StaticSampler(s0, filter=FILTER_MIN_MAG_MIP_LINEAR, visibility = SHADER_VISIBILITY_PIXEL), "
 
-struct PerObjectData
-{
-    uint Mesh;
-    uint Material;
-};
-
 struct PerViewData
 {
     float4x4 ViewProjection;
@@ -32,11 +26,13 @@ struct Vertex
 };
 
 [RootSignature(RootSig)]
-float4 VSMain(uint VertexId : SV_VertexID) : SV_POSITION
+float4 VSMain(uint vertexId : SV_VertexID) : SV_POSITION
 {
-    MeshData mesh = tMeshes[cObjectData.Mesh];
-    float3 Position = UnpackHalf3(tBufferTable[mesh.VertexBuffer].Load<uint2>(VertexId * sizeof(Vertex)));
-    return mul(mul(float4(Position, 1.0f), mesh.World), cViewData.ViewProjection);
+    MeshInstance instance = tMeshInstances[cObjectData.Index];
+    MeshData mesh = tMeshes[instance.Mesh];
+
+    float3 position = UnpackHalf3(GetVertexData<uint2>(mesh.PositionStream, vertexId));
+    return mul(mul(float4(position, 1.0f), instance.World), cViewData.ViewProjection);
 }
 
 void PSMain(
@@ -46,6 +42,6 @@ void PSMain(
     out uint outPrimitiveMask : SV_TARGET0,
     out float2 ouBarycentrics : SV_TARGET1)
 {
-    outPrimitiveMask = (cObjectData.Mesh << 16) | (primitiveIndex & 0xFFFF);
+    outPrimitiveMask = (cObjectData.Index << 16) | (primitiveIndex & 0xFFFF);
     ouBarycentrics = barycentrics.xy;
 }

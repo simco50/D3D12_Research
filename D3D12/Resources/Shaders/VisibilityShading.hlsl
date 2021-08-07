@@ -5,13 +5,13 @@
 
 #define RootSig \
 				"CBV(b1, visibility=SHADER_VISIBILITY_ALL), " \
-				"DescriptorTable(SRV(t5, numDescriptors = 12)), " \
+				"DescriptorTable(SRV(t5, numDescriptors = 13)), " \
 				"DescriptorTable(UAV(u0, numDescriptors = 1)), " \
 				GLOBAL_BINDLESS_TABLE ", " \
 				"StaticSampler(s0, filter=FILTER_MIN_MAG_MIP_LINEAR), "
 
-Texture2D<uint> tVisibilityTexture : register(t12);
-Texture2D<float2> tBarycentricsTexture : register(t13);
+Texture2D<uint> tVisibilityTexture : register(t13);
+Texture2D<float2> tBarycentricsTexture : register(t14);
 RWTexture2D<float4> uTarget : register(u0);
 
 struct PerViewData
@@ -37,8 +37,6 @@ struct VertexAttribute
 	float2 UV;
 	float3 Normal;
 	float4 Tangent;
-	float3 GeometryNormal;
-	uint Material;
 };
 
 struct MaterialProperties
@@ -118,31 +116,25 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 	uint meshIndex = visibilityMask >> 16;
 	uint triangleIndex = visibilityMask & 0xFFFF;
 
-	MeshData mesh = tMeshes[meshIndex];
-	uint3 indices = tBufferTable[mesh.IndexBuffer].Load<uint3>(triangleIndex * sizeof(uint3));
-
-	const uint vertexStride = sizeof(VertexInput);
-	ByteAddressBuffer geometryBuffer = tBufferTable[mesh.VertexBuffer];
+    MeshInstance instance = tMeshInstances[meshIndex];
+	MeshData mesh = tMeshes[instance.Mesh];
+	uint3 indices = tBufferTable[mesh.IndexStream].Load<uint3>(triangleIndex * sizeof(uint3));
 
 	VertexAttribute vertex;
 	vertex.Position = 0;
 	vertex.UV = 0;
 	vertex.Normal = 0;
-	vertex.Material = mesh.Material;
 	for(uint i = 0; i < 3; ++i)
 	{
-		uint dataOffset = 0;
-		vertex.Position += UnpackHalf3(geometryBuffer.Load<uint2>(indices[i] * vertexStride + dataOffset)) * barycentrics[i];
-		dataOffset += sizeof(uint2);
-		vertex.UV += UnpackHalf2(geometryBuffer.Load<uint>(indices[i] * vertexStride + dataOffset)) * barycentrics[i];
-		dataOffset += sizeof(uint);
-		vertex.Normal += geometryBuffer.Load<float3>(indices[i] * vertexStride + dataOffset) * barycentrics[i];
-		dataOffset += sizeof(float3);
-		vertex.Tangent += geometryBuffer.Load<float4>(indices[i] * vertexStride + dataOffset) * barycentrics[i];
-		dataOffset += sizeof(float4);
+		uint vertexId = indices[i];
+        vertex.Position += UnpackHalf3(GetVertexData<uint2>(mesh.PositionStream, vertexId)) * barycentrics[i];
+        vertex.UV += UnpackHalf2(GetVertexData<uint>(mesh.UVStream, vertexId)) * barycentrics[i];
+        NormalData normalData = GetVertexData<NormalData>(mesh.NormalStream, vertexId);
+        vertex.Normal += normalData.Normal * barycentrics[i];
+        vertex.Tangent += normalData.Tangent * barycentrics[i];
 	}
 
-	MaterialProperties properties = GetMaterialProperties(mesh.Material, vertex.UV, 0);
+	MaterialProperties properties = GetMaterialProperties(instance.Material, vertex.UV, 0);
 	BrdfData brdfData = GetBrdfData(properties);
 
 	float3 V = normalize(vertex.Position - cViewData.ViewInverse[3].xyz);

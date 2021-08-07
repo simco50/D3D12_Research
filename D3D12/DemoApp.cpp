@@ -812,6 +812,7 @@ void DemoApp::Update()
 				const D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
 					m_SceneData.pMaterialBuffer->GetSRV()->GetDescriptor(),
 					m_SceneData.pMeshBuffer->GetSRV()->GetDescriptor(),
+					m_SceneData.pMeshInstanceBuffer->GetSRV()->GetDescriptor(),
 				};
 
 				renderContext.BindResources(2, 0, srvs, ARRAYSIZE(srvs));
@@ -865,6 +866,7 @@ void DemoApp::Update()
 					m_SceneData.pMaterialBuffer->GetSRV()->GetDescriptor(),
 					m_SceneData.pMaterialBuffer->GetSRV()->GetDescriptor(),
 					m_SceneData.pMeshBuffer->GetSRV()->GetDescriptor(),
+					m_SceneData.pMeshInstanceBuffer->GetSRV()->GetDescriptor(),
 					m_pVisibilityTexture->GetSRV()->GetDescriptor(),
 					m_pBarycentricsTexture->GetSRV()->GetDescriptor(),
 				};
