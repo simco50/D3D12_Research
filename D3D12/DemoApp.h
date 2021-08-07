@@ -99,8 +99,15 @@ private:
 	uint32 m_SampleCount = 1;
 	std::unique_ptr<Camera> m_pCamera;
 
-	std::unique_ptr<Buffer> m_pScreenshotBuffer;
-	int32 m_ScreenshotDelay = -1;
+	struct ScreenshotRequest
+	{
+		uint64 Fence;
+		uint32 Width;
+		uint32 Height;
+		uint32 RowPitch;
+		Buffer* pBuffer;
+	};
+	std::queue<ScreenshotRequest> m_ScreenshotBuffers;
 	uint32 m_ScreenshotRowPitch = 0;
 
 	RenderPath m_RenderPath = RenderPath::Visibility;
@@ -170,6 +177,7 @@ private:
 	//Light data
 	std::unique_ptr<Buffer> m_pMaterialBuffer;
 	std::unique_ptr<Buffer> m_pMeshBuffer;
+	std::unique_ptr<Buffer> m_pMeshInstanceBuffer;
 	std::vector<Light> m_Lights;
 	std::unique_ptr<Buffer> m_pLightBuffer;
 

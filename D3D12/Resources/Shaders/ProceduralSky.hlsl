@@ -51,11 +51,6 @@ cbuffer VSConstants : register(b0)
 	float3 cSunDirection;
 }
 
-struct VSInput
-{
-	uint vertexId : SV_VERTEXID;
-};
-
 struct VSOutput
 {
     float4 PositionCS : SV_POSITION;
@@ -63,13 +58,13 @@ struct VSOutput
 };
 
 [RootSignature(RootSig)]
-VSOutput VSMain(in VSInput input)
+VSOutput VSMain(uint vertexId : SV_VertexID)
 {
 	VSOutput output;
-    float3 positionVS = mul(CUBE[input.vertexId].xyz, (float3x3)cView);
+    float3 positionVS = mul(CUBE[vertexId].xyz, (float3x3)cView);
     output.PositionCS = mul(float4(positionVS, 1.0f), cProjection);
 	output.PositionCS.z = 0.0001f;
-	output.TexCoord = CUBE[input.vertexId].xyz;
+	output.TexCoord = CUBE[vertexId].xyz;
 	return output;
 }
 

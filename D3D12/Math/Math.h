@@ -112,7 +112,7 @@ namespace Math
 
 	Vector3 RandCircleVector();
 
-	inline uint32 EncodeColor(float r, float g, float b, float a = 1.0f)
+	inline uint32 EncodeRGBA(float r, float g, float b, float a = 1.0f)
 	{
 		uint32 output = 0;
 		//unsigned int layout: RRRR GGGG BBBB AAAA
@@ -123,12 +123,12 @@ namespace Math
 		return output;
 	}
 
-	inline uint32 EncodeColor(const Color& color)
+	inline uint32 EncodeRGBA(const Color& color)
 	{
-		return EncodeColor(color.x, color.y, color.z, color.w);
+		return EncodeRGBA(color.x, color.y, color.z, color.w);
 	}
 
-	inline Color DecodeColor(uint32 color)
+	inline Color DecodeRGBA(uint32 color)
 	{
 		Color output;
 		constexpr float rcp_255 = 1.0f / 255.0f;
@@ -138,6 +138,25 @@ namespace Math
 		output.z = (float)((color >> 8) & 0xFF) * rcp_255;
 		output.w = (float)((color >> 0) & 0xFF) * rcp_255;
 		return output;
+	}
+
+	inline uint32 EncodeRGBE(const Vector3& color)
+	{
+		float maxComponent = Max(Max(color.x, color.y), color.z);
+		float exponent = ceilf(log2(maxComponent));
+		uint32 output = 0;
+		output |= (unsigned char)(color.x / exp2(exponent) * 255) << 24;
+		output |= (unsigned char)(color.y / exp2(exponent) * 255) << 16;
+		output |= (unsigned char)(color.z / exp2(exponent) * 255) << 8;
+		output |= (unsigned char)((exponent + 128)) << 0;
+		return output;
+	}
+
+	inline Vector3 DecodeRGBE(uint32 encoded)
+	{
+		Color c = DecodeRGBA(encoded);
+		float exponent = c.w * 255 - 128;
+		return Vector3(c.x, c.y, c.z) * exp2(exponent);
 	}
 
 	inline int32 RoundUp(float value)

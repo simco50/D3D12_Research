@@ -38,6 +38,7 @@ float3 TangentSpaceNormalMapping(float3 sampledNormal, float3x3 TBN)
 	normal = UnpackBC5Normal(sampledNormal.xy);
 #endif
 	normal.xy = sampledNormal.xy * 2.0f - 1.0f;
+	normal.y = -normal.y;
 	normal = normalize(normal);
 	return mul(normal, TBN);
 }

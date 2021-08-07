@@ -1,19 +1,20 @@
-require "uwp"
+require "vstudio"
 
 ENGINE_NAME = "D3D12"
 ROOT = "../"
 SOURCE_DIR = ROOT .. ENGINE_NAME .. "/"
 WIN_SDK = "10.0.19041.0"
-WITH_UWP = _OPTIONS["uwp"]
 
 -- Address Sanitizer API
+
 premake.api.register{
 	name="enableASAN",
 	scope="config",
 	kind="string",
 	allowed={"true", "false"}
- }
- premake.override(premake.vstudio.vc2010, "configurationProperties", function(base, cfg)
+}
+
+premake.override(premake.vstudio.vc2010, "configurationProperties", function(base, cfg)
 	local m = premake.vstudio.vc2010
 	m.propertyGroup(cfg, "Configuration")
 	premake.callArray(m.elements.configurationProperties, cfg)
@@ -21,7 +22,7 @@ premake.api.register{
 	   m.element("EnableASAN", nil, cfg.enableASAN)
 	end
 	premake.pop('</PropertyGroup>')
- end)
+end)
 
 workspace (ENGINE_NAME)
 	basedir (ROOT)
@@ -74,34 +75,10 @@ workspace (ENGINE_NAME)
 		pchsource (ROOT .. ENGINE_NAME .. "/stdafx.cpp")
 		includedirs { "$(ProjectDir)", "$(ProjectDir)External/" }
 
-		if WITH_UWP then 
-			system "uwp"
-			defines { "PLATFORM_UWP=1" }
-			consumewinrtextension "false"
-			systemversion (WIN_SDK)
-			defaultlanguage "en-GB"
-			certificatefile "D3D12_TemporaryKey.pfx"
-			generatewinmd "false"
-
-			filter ("files:" ..(SOURCE_DIR .. "Resources/**"))
-				deploy "true"
-			filter ("files:../Libraries/**.dll")
-				deploy "true"
-			filter {}
-
-			files
-			{ 
-				(SOURCE_DIR .. "**.appxmanifest"),
-				(SOURCE_DIR .. "Resources/**"),
-				(SOURCE_DIR .. "Assets/**"),
-				("../Libraries/**.dll")
-			}
-		else
-			system "windows"
-			conformancemode "On"
-			defines { "PLATFORM_WINDOWS=1" }
-			systemversion (WIN_SDK)
-		end
+		system "windows"
+		conformancemode "On"
+		defines { "PLATFORM_WINDOWS=1" }
+		systemversion (WIN_SDK)
 
 		---- File setup ----
 		files
@@ -170,10 +147,5 @@ newaction {
 		os.remove(SOURCE_DIR .. "*.vcxproj.*")
 	end
 }
-
-newoption {
-	trigger     = "uwp",
-	description = "Generates a UWP solution"
-	}
 			
 --------------------------------------------------------

@@ -13,47 +13,29 @@ struct VertexAttribute
     float3 Normal;
     float4 Tangent;
     float3 GeometryNormal;
-    uint Material;
 };
 
-struct VertexInput
-{
-    uint2 Position;
-    uint UV;
-    float3 Normal;
-    float4 Tangent;
-};
-
-template<typename T>
-T LoadGeometryData(ByteAddressBuffer buffer, uint index, uint vertexStride, inout uint offset)
-{
-    T v = buffer.Load<T>(index * vertexStride + offset);
-    offset += sizeof(T);
-    return v;
-}
-
-VertexAttribute GetVertexAttributes(float2 attribBarycentrics, uint instanceID, uint primitiveIndex, float4x3 worldMatrix)
+VertexAttribute GetVertexAttributes(MeshInstance instance, float2 attribBarycentrics, uint primitiveIndex, float4x3 worldMatrix)
 {
     float3 barycentrics = float3((1.0f - attribBarycentrics.x - attribBarycentrics.y), attribBarycentrics.x, attribBarycentrics.y);
-    MeshData mesh = tMeshes[instanceID];
-    uint3 indices = tBufferTable[mesh.IndexBuffer].Load<uint3>(primitiveIndex * sizeof(uint3));
+
+    MeshData mesh = tMeshes[instance.Mesh];
+    uint3 indices = tBufferTable[mesh.IndexStream].Load<uint3>(primitiveIndex * sizeof(uint3));
     VertexAttribute outData;
 
     outData.UV = 0;
     outData.Normal = 0;
-    outData.Material = mesh.Material;
 
     float3 positions[3];
-    const uint vertexStride = sizeof(VertexInput);
-    ByteAddressBuffer geometryBuffer = tBufferTable[mesh.VertexBuffer];
 
     for(int i = 0; i < 3; ++i)
     {
-        uint dataOffset = 0;
-        positions[i] = UnpackHalf3(LoadGeometryData<uint2>(geometryBuffer, indices[i], vertexStride, dataOffset));
-        outData.UV += UnpackHalf2(LoadGeometryData<uint>(geometryBuffer, indices[i], vertexStride, dataOffset)) * barycentrics[i];
-        outData.Normal += LoadGeometryData<float3>(geometryBuffer, indices[i], vertexStride, dataOffset) * barycentrics[i];
-        outData.Tangent += LoadGeometryData<float4>(geometryBuffer, indices[i], vertexStride, dataOffset) * barycentrics[i];
+        uint vertexId = indices[i];
+        positions[i] = UnpackHalf3(GetVertexData<uint2>(mesh.PositionStream, vertexId));
+        outData.UV += UnpackHalf2(GetVertexData<uint>(mesh.UVStream, vertexId)) * barycentrics[i];
+        NormalData normalData = GetVertexData<NormalData>(mesh.NormalStream, vertexId);
+        outData.Normal += normalData.Normal * barycentrics[i];
+        outData.Tangent += normalData.Tangent * barycentrics[i];
     }
     outData.Normal = normalize(mul(outData.Normal, (float3x3)worldMatrix));
     outData.Tangent.xyz = normalize(mul(outData.Tangent.xyz, (float3x3)worldMatrix));
@@ -105,7 +87,7 @@ MaterialProperties GetMaterialProperties(uint materialIndex, float2 UV, int mipL
     }
     properties.Specular = 0.5f;
 
-    properties.NormalTS = float3(0, 0, 1);
+    properties.NormalTS = float3(0.5f, 0.5f, 1.0f);
     if(material.Normal >= 0)
     {
         properties.NormalTS = tTexture2DTable[material.Normal].SampleLevel(sDiffuseSampler, UV, mipLevel).rgb;

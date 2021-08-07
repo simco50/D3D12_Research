@@ -126,7 +126,7 @@ public:
 	void SetAmplificationShader(Shader* pShader);
 
 	D3D12_PIPELINE_STATE_STREAM_DESC GetDesc();
-	std::string DebugPrint() const;
+	std::string DebugPrint();
 
 private:
 	template<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE ObjectType>

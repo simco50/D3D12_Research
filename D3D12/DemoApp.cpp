@@ -154,8 +154,8 @@ DemoApp::DemoApp(WindowHandle window, const IntVector2& windowRect, int sampleCo
 	checkf(sampleCount == 1, "I broke MSAA! TODO");
 
 	m_pCamera = std::make_unique<FreeCamera>();
-	m_pCamera->SetNearPlane(300.0f);
-	m_pCamera->SetFarPlane(1.0f);
+	m_pCamera->SetNearPlane(80.0f);
+	m_pCamera->SetFarPlane(0.1f);
 
 	E_LOG(Info, "Graphics::InitD3D()");
 
@@ -241,7 +241,14 @@ void DemoApp::SetupScene(CommandContext& context)
 	m_pLightCookie->Create(&context, "Resources/Textures/LightProjector.png", false);
 
 	{
-#if 0
+#if 1
+		m_pCamera->SetPosition(Vector3(-1.3f, 2.4f, -1.5f));
+		m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(Math::PIDIV4, Math::PIDIV4 * 0.5f, 0));
+
+		std::unique_ptr<Mesh> pMesh = std::make_unique<Mesh>();
+		pMesh->Load("Resources/Scenes/Sponza/Sponza.gltf", m_pDevice.get(), &context, 1.0f);
+		m_Meshes.push_back(std::move(pMesh));
+#elif 0
 		// Hardcode the camera of the scene :-)
 		Matrix m(
 			0.868393660f, 8.00937414e-08f, -0.495875478f, 0,
@@ -255,52 +262,55 @@ void DemoApp::SetupScene(CommandContext& context)
 		m_pCamera->SetRotation(Quaternion::CreateFromRotationMatrix(m));
 
 		std::unique_ptr<Mesh> pMesh = std::make_unique<Mesh>();
-		pMesh->Load("Resources/Scenes/_Local/bathroom_pt/LAZIENKA.gltf", m_pDevice.get(), &context, 1.0f);
+		pMesh->Load("D:/References/GltfScenes/bathroom_pt/LAZIENKA.gltf", m_pDevice.get(), &context, 1.0f);
 		m_Meshes.push_back(std::move(pMesh));
-#elif 1
-		m_pCamera->SetPosition(Vector3(-1.3f, 2.4f, -1.5f));
-		m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(Math::PIDIV4, Math::PIDIV4 * 0.5f, 0));
-
+#elif 0
 		std::unique_ptr<Mesh> pMesh = std::make_unique<Mesh>();
-		pMesh->Load("Resources/Scenes/Sponza/Sponza.gltf", m_pDevice.get(), &context, 1.0f);
+		pMesh->Load("D:/References/GltfScenes/Sphere/scene.gltf", m_pDevice.get(), &context, 1.0f);
 		m_Meshes.push_back(std::move(pMesh));
-#endif
-	}
-
-	{
-#if 0
+#elif 0
 		std::unique_ptr<Mesh> pMesh = std::make_unique<Mesh>();
-
-		pMesh->Load("Resources/Scenes/_Local/Sphere/scene.gltf", m_pDevice.get(), &context, 1.0f);
+		pMesh->Load("D:/References/GltfScenes/BlenderSplash/MyScene.gltf", m_pDevice.get(), &context, 1.0f);
 		m_Meshes.push_back(std::move(pMesh));
 #endif
 	}
 
 	std::vector<ShaderInterop::MaterialData> materials;
 	std::vector<ShaderInterop::MeshData> meshes;
+	std::vector<ShaderInterop::MeshInstance> meshInstances;
 
 	for (const auto& pMesh : m_Meshes)
 	{
-		for (const SubMeshInstance& node : pMesh->GetMeshInstances())
+		for (const SubMesh& subMesh : pMesh->GetMeshes())
 		{
-			const SubMesh& subMesh = pMesh->GetMesh(node.MeshIndex);
-			const Material& material = pMesh->GetMaterial(subMesh.MaterialId);
-			Batch batch;
-			batch.Index = (int)m_SceneData.Batches.size();
-			batch.LocalBounds = subMesh.Bounds;
-			batch.pMesh = &subMesh;
-			batch.BlendMode = material.IsTransparent ? Batch::Blending::AlphaMask : Batch::Blending::Opaque;
-			batch.WorldMatrix = node.Transform;
-			batch.Material = (uint32)materials.size() + subMesh.MaterialId;
-			m_SceneData.Batches.push_back(batch);
-
 			ShaderInterop::MeshData mesh;
-			mesh.IndexBuffer = m_pDevice->RegisterBindlessResource(subMesh.pIndexSRV);
-			mesh.VertexBuffer = m_pDevice->RegisterBindlessResource(subMesh.pVertexSRV);
-			mesh.Material = (uint32)materials.size() + subMesh.MaterialId;
-			mesh.World = node.Transform;
+			mesh.IndexStream = m_pDevice->RegisterBindlessResource(subMesh.pIndexSRV);
+			mesh.PositionStream = m_pDevice->RegisterBindlessResource(subMesh.pPositionsStreamSRV);
+			mesh.NormalStream = m_pDevice->RegisterBindlessResource(subMesh.pNormalsStreamSRV);
+			mesh.UVStream = m_pDevice->RegisterBindlessResource(subMesh.pUVStreamSRV);
 			meshes.push_back(mesh);
 		}
+
+		for (const SubMeshInstance& node : pMesh->GetMeshInstances())
+		{
+			const SubMesh& parentMesh = pMesh->GetMesh(node.MeshIndex);
+			const Material& meshMaterial = pMesh->GetMaterial(parentMesh.MaterialId);
+			ShaderInterop::MeshInstance meshInstance;
+			meshInstance.Mesh = node.MeshIndex;
+			meshInstance.Material = (uint32)materials.size() + parentMesh.MaterialId;
+			meshInstance.World = node.Transform;
+			meshInstances.push_back(meshInstance);
+			
+			Batch batch;
+			batch.Index = (int)m_SceneData.Batches.size();
+			batch.LocalBounds = parentMesh.Bounds;
+			batch.pMesh = &parentMesh;
+			batch.BlendMode = meshMaterial.IsTransparent ? Batch::Blending::AlphaMask : Batch::Blending::Opaque;
+			batch.WorldMatrix = node.Transform;
+			batch.Material = (uint32)materials.size() + parentMesh.MaterialId;
+			m_SceneData.Batches.push_back(batch);
+		}
+
 		for (const Material& material : pMesh->GetMaterials())
 		{
 			ShaderInterop::MaterialData materialData;
@@ -320,6 +330,9 @@ void DemoApp::SetupScene(CommandContext& context)
 	m_pMeshBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(Math::Max(1, (int)meshes.size()), sizeof(ShaderInterop::MeshData), BufferFlag::ShaderResource), "Meshes");
 	m_pMeshBuffer->SetData(&context, meshes.data(), meshes.size() * sizeof(ShaderInterop::MeshData));
 
+	m_pMeshInstanceBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(Math::Max(1, (int)meshInstances.size()), sizeof(ShaderInterop::MeshInstance), BufferFlag::ShaderResource), "Meshes");
+	m_pMeshInstanceBuffer->SetData(&context, meshInstances.data(), meshInstances.size() * sizeof(ShaderInterop::MeshInstance));
+
 	m_pMaterialBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(Math::Max(1, (int)materials.size()), sizeof(ShaderInterop::MaterialData), BufferFlag::ShaderResource), "Materials");
 	m_pMaterialBuffer->SetData(&context, materials.data(), materials.size() * sizeof(ShaderInterop::MaterialData));
 
@@ -333,13 +346,22 @@ void DemoApp::SetupScene(CommandContext& context)
 		m_Lights.push_back(sunLight);
 	}
 
+#if 0
+	for(int i = 0; i < 50; ++i)
 	{
-		Light spotLight = Light::Spot(Vector3(-8, 10, 25), 800, Vector3(0, 1, 0), 90, 70, 1000, Color(1.0f, 0.7f, 0.3f, 1.0f));
-		spotLight.CastShadows = true;
-		spotLight.LightTexture = m_pDevice->RegisterBindlessResource(m_pLightCookie.get(), GetDefaultTexture(DefaultTexture::White2D));
+		Vector3 loc(
+			Math::RandomRange(-10.0f, 10.0f),
+			Math::RandomRange(-4.0f, 5.0f),
+			Math::RandomRange(-10.0f, 10.0f)
+		);
+		Light spotLight = Light::Spot(loc, 100, Vector3(0, 1, 0), 65, 50, 1000, Color(1.0f, 0.7f, 0.3f, 1.0f));
+		//spotLight.CastShadows = true;
+		//spotLight.LightTexture = m_pDevice->RegisterBindlessResource(m_pLightCookie.get(), GetDefaultTexture(DefaultTexture::White2D));
 		spotLight.VolumetricLighting = true;
 		m_Lights.push_back(spotLight);
 	}
+#endif
+
 	m_pLightBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateStructured((int)m_Lights.size(), sizeof(Light), BufferFlag::ShaderResource), "Lights");
 }
 
@@ -477,7 +499,7 @@ void DemoApp::Update()
 			float log = minZ * std::pow(maxZ / minZ, p);
 			float uniform = minZ + (maxZ - minZ) * p;
 			float d = Tweakables::g_PSSMFactor * (log - uniform) + uniform;
-			cascadeSplits[i] = (d - nearPlane) / clipPlaneRange;
+			cascadeSplits[i] = d - nearPlane;
 		}
 
 		for (size_t lightIndex = 0; lightIndex < m_Lights.size(); ++lightIndex)
@@ -519,7 +541,8 @@ void DemoApp::Update()
 					//Adjust frustum corners based on cascade splits
 					for (int j = 0; j < 4; ++j)
 					{
-						Vector3 cornerRay = frustumCorners[j + 4] - frustumCorners[j];
+						Vector3 cornerRay = (frustumCorners[j + 4] - frustumCorners[j]);
+						cornerRay.Normalize();
 						Vector3 nearPoint = previousCascadeSplit * cornerRay;
 						Vector3 farPoint = currentCascadeSplit * cornerRay;
 						frustumCorners[j + 4] = frustumCorners[j] + farPoint;
@@ -579,9 +602,7 @@ void DemoApp::Update()
 						projectionMatrix *= Matrix::CreateTranslation(Vector3(roundedOffset));
 						lightViewProjection = shadowView * projectionMatrix;
 					}
-
-					float* values = &shadowData.CascadeDepths.x;
-					values[shadowIndex] = currentCascadeSplit * (farPlane - nearPlane) + nearPlane;
+					static_cast<float*>(&shadowData.CascadeDepths.x)[shadowIndex] = currentCascadeSplit;
 					shadowData.LightViewProjections[shadowIndex++] = lightViewProjection;
 				}
 			}
@@ -649,6 +670,7 @@ void DemoApp::Update()
 	m_SceneData.pLightBuffer = m_pLightBuffer.get();
 	m_SceneData.pMaterialBuffer = m_pMaterialBuffer.get();
 	m_SceneData.pMeshBuffer = m_pMeshBuffer.get();
+	m_SceneData.pMeshInstanceBuffer = m_pMeshInstanceBuffer.get();
 	m_SceneData.pCamera = m_pCamera.get();
 	m_SceneData.pShadowData = &shadowData;
 	m_SceneData.pAO = m_pAmbientOcclusion.get();
@@ -670,6 +692,65 @@ void DemoApp::Update()
 		D3D::BeginPixCapture();
 	}
 
+	if (Tweakables::g_Screenshot)
+	{
+		Tweakables::g_Screenshot = false;
+
+		CommandContext* pContext = m_pDevice->AllocateCommandContext();
+		Texture* pSource = m_pTonemapTarget.get();
+		D3D12_PLACED_SUBRESOURCE_FOOTPRINT textureFootprint = {};
+		D3D12_RESOURCE_DESC resourceDesc = m_pTonemapTarget->GetResource()->GetDesc();
+		m_pDevice->GetDevice()->GetCopyableFootprints(&resourceDesc, 0, 1, 0, &textureFootprint, nullptr, nullptr, nullptr);
+		std::unique_ptr<Buffer> pScreenshotBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateReadback(textureFootprint.Footprint.RowPitch * textureFootprint.Footprint.Height), "Screenshot Texture");
+		pScreenshotBuffer->Map();
+		pContext->InsertResourceBarrier(m_pTonemapTarget.get(), D3D12_RESOURCE_STATE_COPY_SOURCE);
+		pContext->InsertResourceBarrier(pScreenshotBuffer.get(), D3D12_RESOURCE_STATE_COPY_DEST);
+		pContext->CopyTexture(m_pTonemapTarget.get(), pScreenshotBuffer.get(), CD3DX12_BOX(0, 0, m_pTonemapTarget->GetWidth(), m_pTonemapTarget->GetHeight()));
+
+		ScreenshotRequest request;
+		request.Width = pSource->GetWidth();
+		request.Height = pSource->GetHeight();
+		request.RowPitch = textureFootprint.Footprint.RowPitch;
+		request.pBuffer = pScreenshotBuffer.release();
+		request.Fence = pContext->Execute(false);
+		m_ScreenshotBuffers.emplace(request);
+	}
+
+	if(!m_ScreenshotBuffers.empty())
+	{
+		while (!m_ScreenshotBuffers.empty() && m_pDevice->IsFenceComplete(m_ScreenshotBuffers.front().Fence))
+		{
+			const ScreenshotRequest& request = m_ScreenshotBuffers.front();
+			
+			TaskContext taskContext;
+			TaskQueue::Execute([request](uint32)
+				{
+					char* pData = (char*)request.pBuffer->GetMappedData();
+					Image img;
+					img.SetSize(request.Width, request.Height, 4);
+					uint32 imageRowPitch = request.Width * 4;
+					uint32 targetOffset = 0;
+					for (uint32 i = 0; i < request.Height; ++i)
+					{
+						img.SetData((uint32*)pData, targetOffset, imageRowPitch);
+						pData += request.RowPitch;
+						targetOffset += imageRowPitch;
+					}
+
+					SYSTEMTIME time;
+					GetSystemTime(&time);
+					Paths::CreateDirectoryTree(Paths::ScreenshotDir());
+					char filePath[128];
+					FormatString(filePath, ARRAYSIZE(filePath), "%sScreenshot_%d_%02d_%02d__%02d_%02d_%02d_%d.png",
+						Paths::ScreenshotDir().c_str(),
+						time.wYear, time.wMonth, time.wDay,
+						time.wHour, time.wMinute, time.wSecond, time.wMilliseconds);
+					img.Save(filePath);
+				}, taskContext);
+			m_ScreenshotBuffers.pop();
+		}
+	}
+
 	RGGraph graph(m_pDevice.get());
 	struct MainData
 	{
@@ -681,62 +762,6 @@ void DemoApp::Update()
 	Data.DepthStencilResolved = graph.ImportTexture("Resolved Depth Stencil", GetResolvedDepthStencil());
 
 	uint64 nextFenceValue = 0;
-
-	if (Tweakables::g_Screenshot && m_ScreenshotDelay < 0)
-	{
-		RGPassBuilder screenshot = graph.AddPass("Take Screenshot");
-		screenshot.Bind([=](CommandContext& renderContext, const RGPassResources& /*resources*/)
-			{
-				D3D12_PLACED_SUBRESOURCE_FOOTPRINT textureFootprint = {};
-				D3D12_RESOURCE_DESC resourceDesc = m_pTonemapTarget->GetResource()->GetDesc();
-				m_pDevice->GetDevice()->GetCopyableFootprints(&resourceDesc, 0, 1, 0, &textureFootprint, nullptr, nullptr, nullptr);
-				m_pScreenshotBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateReadback(textureFootprint.Footprint.RowPitch * textureFootprint.Footprint.Height), "Screenshot Texture");
-				m_pScreenshotBuffer->Map();
-				renderContext.InsertResourceBarrier(m_pTonemapTarget.get(), D3D12_RESOURCE_STATE_COPY_SOURCE);
-				renderContext.InsertResourceBarrier(m_pScreenshotBuffer.get(), D3D12_RESOURCE_STATE_COPY_DEST);
-				renderContext.CopyTexture(m_pTonemapTarget.get(), m_pScreenshotBuffer.get(), CD3DX12_BOX(0, 0, m_pTonemapTarget->GetWidth(), m_pTonemapTarget->GetHeight()));
-				m_ScreenshotRowPitch = textureFootprint.Footprint.RowPitch;
-			});
-		m_ScreenshotDelay = 4;
-		Tweakables::g_Screenshot = false;
-	}
-
-	if (m_pScreenshotBuffer)
-	{
-		if (m_ScreenshotDelay == 0)
-		{
-			TaskContext taskContext;
-			TaskQueue::Execute([&](uint32) {
-				char* pData = (char*)m_pScreenshotBuffer->GetMappedData();
-				Image img;
-				img.SetSize(m_pTonemapTarget->GetWidth(), m_pTonemapTarget->GetHeight(), 4);
-				uint32 imageRowPitch = m_pTonemapTarget->GetWidth() * 4;
-				uint32 targetOffset = 0;
-				for (int i = 0; i < m_pTonemapTarget->GetHeight(); ++i)
-				{
-					img.SetData((uint32*)pData, targetOffset, imageRowPitch);
-					pData += m_ScreenshotRowPitch;
-					targetOffset += imageRowPitch;
-				}
-
-				SYSTEMTIME time;
-				GetSystemTime(&time);
-				Paths::CreateDirectoryTree(Paths::ScreenshotDir());
-				char filePath[128];
-				FormatString(filePath, ARRAYSIZE(filePath), "%sScreenshot_%d_%02d_%02d__%02d_%02d_%02d.jpg",
-					Paths::ScreenshotDir().c_str(),
-					time.wYear, time.wMonth, time.wDay,
-					time.wHour, time.wMinute, time.wSecond);
-				img.Save(filePath);
-				m_pScreenshotBuffer.reset();
-				}, taskContext);
-			m_ScreenshotDelay = -1;
-		}
-		else
-		{
-			m_ScreenshotDelay--;
-		}
-	}
 
 	RGPassBuilder updateTLAS = graph.AddPass("Update TLAS");
 	updateTLAS.Bind([=](CommandContext& renderContext, const RGPassResources& /*resources*/)
@@ -880,6 +905,7 @@ void DemoApp::Update()
 				const D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
 					m_SceneData.pMaterialBuffer->GetSRV()->GetDescriptor(),
 					m_SceneData.pMeshBuffer->GetSRV()->GetDescriptor(),
+					m_SceneData.pMeshInstanceBuffer->GetSRV()->GetDescriptor(),
 				};
 
 				renderContext.BindResources(2, 0, srvs, ARRAYSIZE(srvs));
@@ -1076,6 +1102,7 @@ void DemoApp::Update()
 						const D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
 							m_SceneData.pMaterialBuffer->GetSRV()->GetDescriptor(),
 							m_SceneData.pMeshBuffer->GetSRV()->GetDescriptor(),
+							m_SceneData.pMeshInstanceBuffer->GetSRV()->GetDescriptor(),
 						};
 						context.BindResources(2, 0, srvs, ARRAYSIZE(srvs));
 						context.BindResourceTable(3, m_SceneData.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Graphics);
@@ -1388,12 +1415,15 @@ void DemoApp::Update()
 					context.SetComputeDynamicConstantBufferView(0, Parameters);
 					context.BindResource(1, 0, m_pDebugHistogramTexture->GetUAV());
 					context.BindResource(2, 0, m_pLuminanceHistogram->GetSRV());
-					context.BindResource(2, 1, m_pLuminanceHistogram->GetSRV());
+					context.BindResource(2, 1, m_pAverageLuminance->GetSRV());
 					context.ClearUavUInt(m_pDebugHistogramTexture.get(), m_pDebugHistogramTexture->GetUAV());
 					context.Dispatch(1, m_pLuminanceHistogram->GetNumElements());
 				});
-
+			ImGui::Begin("Luminance Histogram");
+			ImVec2 cursor = ImGui::GetCursorPos();
 			ImGui::ImageAutoSize(m_pDebugHistogramTexture.get(), ImVec2((float)m_pDebugHistogramTexture->GetWidth(), (float)m_pDebugHistogramTexture->GetHeight()));
+			ImGui::GetWindowDrawList()->AddText(cursor, IM_COL32(255, 255, 255, 255), Sprintf("%.2f", Tweakables::g_MinLogLuminance.Get()).c_str());
+			ImGui::End();
 		}
 	}
 
@@ -1894,6 +1924,19 @@ void DemoApp::UpdateImGui()
 			return true;
 		}, nullptr, (int)RenderPath::MAX);
 
+	ImGui::Text("Camera");
+	float fov = m_pCamera->GetFoV();
+	if (ImGui::SliderAngle("Field of View", &fov, 10, 120))
+	{
+		m_pCamera->SetFoV(fov);
+	}
+	Vector2 farNear(m_pCamera->GetFar(), m_pCamera->GetNear());
+	if (ImGui::DragFloatRange2("Near/Far", &farNear.x, &farNear.y, 1, 0.1f, 100))
+	{
+		m_pCamera->SetFarPlane(farNear.x);
+		m_pCamera->SetNearPlane(farNear.y);
+	}
+
 	ImGui::Text("Sky");
 	ImGui::SliderFloat("Sun Orientation", &Tweakables::g_SunOrientation, -Math::PI, Math::PI);
 	ImGui::SliderFloat("Sun Inclination", &Tweakables::g_SunInclination, 0, 1);
@@ -1979,9 +2022,9 @@ void DemoApp::UpdateTLAS(CommandContext& context)
 					geometryDesc.Triangles.IndexCount = subMesh.IndicesLocation.Elements;
 					geometryDesc.Triangles.IndexFormat = subMesh.IndicesLocation.Format;
 					geometryDesc.Triangles.Transform3x4 = 0;
-					geometryDesc.Triangles.VertexBuffer.StartAddress = subMesh.VerticesLocation.Location;
-					geometryDesc.Triangles.VertexBuffer.StrideInBytes = subMesh.VerticesLocation.Stride;
-					geometryDesc.Triangles.VertexCount = subMesh.VerticesLocation.Elements;
+					geometryDesc.Triangles.VertexBuffer.StartAddress = subMesh.PositionStreamLocation.Location;
+					geometryDesc.Triangles.VertexBuffer.StrideInBytes = subMesh.PositionStreamLocation.Stride;
+					geometryDesc.Triangles.VertexCount = subMesh.PositionStreamLocation.Elements;
 					geometryDesc.Triangles.VertexFormat = subMesh.PositionsFormat;
 
 					D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS prebuildInfo{};

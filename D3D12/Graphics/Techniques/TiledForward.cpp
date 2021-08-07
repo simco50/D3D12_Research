@@ -159,7 +159,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& resources)
 			renderPass.RenderTargetCount = 2;
 			renderPass.RenderTargets[0].Access = RenderPassAccess::DontCare_Store;
 			renderPass.RenderTargets[0].Target = resources.pRenderTarget;
-			renderPass.RenderTargets[1].Access = RenderPassAccess::DontCare_Resolve;
+			renderPass.RenderTargets[1].Access = RenderPassAccess::Clear_Resolve;
 			renderPass.RenderTargets[1].Target = resources.pNormals;
 			renderPass.RenderTargets[1].ResolveTarget = resources.pResolvedNormals;
 			context.BeginRenderPass(renderPass);
@@ -170,24 +170,32 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& resources)
 			context.SetGraphicsDynamicConstantBufferView(1, frameData);
 			context.SetGraphicsDynamicConstantBufferView(2, *resources.pShadowData);
 			context.BindResourceTable(3, resources.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Graphics);
-			context.BindResource(4, 2, resources.pLightBuffer->GetSRV());
-			context.BindResource(4, 3, resources.pAO->GetSRV());
-			context.BindResource(4, 4, resources.pResolvedDepth->GetSRV());
-			context.BindResource(4, 5, resources.pPreviousColor->GetSRV());
+
+			D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
+				resources.pLightBuffer->GetSRV()->GetDescriptor(),
+				resources.pAO->GetSRV()->GetDescriptor(),
+				resources.pResolvedDepth->GetSRV()->GetDescriptor(),
+				resources.pPreviousColor->GetSRV()->GetDescriptor(),
+				resources.pMaterialBuffer->GetSRV()->GetDescriptor(),
+				resources.pMaterialBuffer->GetSRV()->GetDescriptor(),
+				resources.pMeshBuffer->GetSRV()->GetDescriptor(),
+				resources.pMeshInstanceBuffer->GetSRV()->GetDescriptor(),
+			};
+			context.BindResources(4, 3, srvs, ARRAYSIZE(srvs));
 
 			{
 				GPU_PROFILE_SCOPE("Opaque", &context);
 				context.SetPipelineState(m_pDiffusePSO);
-				context.BindResource(4, 0, m_pLightGridOpaque->GetSRV());
-				context.BindResource(4, 1, m_pLightIndexListBufferOpaque->GetSRV());
+				context.BindResource(4, 1, m_pLightGridOpaque->GetSRV());
+				context.BindResource(4, 2, m_pLightIndexListBufferOpaque->GetSRV());
 				DrawScene(context, resources, Batch::Blending::Opaque | Batch::Blending::AlphaMask);
 			}
 
 			{
 				GPU_PROFILE_SCOPE("Transparant", &context);
 				context.SetPipelineState(m_pDiffuseAlphaPSO);
-				context.BindResource(4, 0, m_pLightGridTransparant->GetSRV());
-				context.BindResource(4, 1, m_pLightIndexListBufferTransparant->GetSRV());
+				context.BindResource(4, 1, m_pLightGridTransparant->GetSRV());
+				context.BindResource(4, 2, m_pLightIndexListBufferTransparant->GetSRV());
 				DrawScene(context, resources, Batch::Blending::AlphaBlend);
 			}
 			context.EndRenderPass();

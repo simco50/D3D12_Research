@@ -16,6 +16,7 @@ namespace ShaderInterop
 	using float4x4 = Matrix;
 #endif
 
+	// Per material shader data
 	struct MaterialData
 	{
 		int Diffuse;
@@ -29,12 +30,31 @@ namespace ShaderInterop
 		float AlphaCutoff;
 	};
 
+	// The normals vertex stream data
+	struct NormalData
+	{
+		float3 Normal;
+		float4 Tangent;
+	};
+
 	struct MeshData
 	{
+		uint PositionStream;
+		uint UVStream;
+		uint NormalStream;
+		uint IndexStream;
+	};
+
+	struct MeshInstance
+	{
 		uint Material;
-		uint VertexBuffer;
-		uint IndexBuffer;
+		uint Mesh;
 		float4x4 World;
+	};
+
+	struct PerObjectData
+	{
+		uint Index;
 	};
 
 	enum LightFlags : uint

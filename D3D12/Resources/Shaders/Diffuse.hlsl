@@ -8,16 +8,10 @@
 				"CBV(b1, visibility=SHADER_VISIBILITY_ALL), " \
 				"CBV(b2, visibility=SHADER_VISIBILITY_PIXEL), " \
 				GLOBAL_BINDLESS_TABLE ", " \
-				"DescriptorTable(SRV(t2, numDescriptors = 10)), " \
+				"DescriptorTable(SRV(t2, numDescriptors = 11)), " \
 				"StaticSampler(s0, filter=FILTER_ANISOTROPIC, maxAnisotropy = 4, visibility = SHADER_VISIBILITY_PIXEL), " \
 				"StaticSampler(s1, filter=FILTER_MIN_MAG_MIP_LINEAR, addressU = TEXTURE_ADDRESS_CLAMP, addressV = TEXTURE_ADDRESS_CLAMP, visibility = SHADER_VISIBILITY_PIXEL), " \
 				"StaticSampler(s2, filter=FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT, visibility = SHADER_VISIBILITY_PIXEL, comparisonFunc=COMPARISON_GREATER), " \
-
-struct PerObjectData
-{
-	uint Mesh;
-	uint Material;
-};
 
 struct PerViewData
 {
@@ -45,14 +39,6 @@ struct PerViewData
 ConstantBuffer<PerObjectData> cObjectData : register(b0);
 ConstantBuffer<PerViewData> cViewData : register(b1);
 
-struct Vertex
-{
-	uint2 position;
-	uint texCoord;
-	float3 normal;
-	float4 tangent;
-};
-
 struct PSInput
 {
 	float4 position : SV_POSITION;
@@ -67,7 +53,7 @@ Texture3D<float4> tLightScattering : register(t2);
 StructuredBuffer<uint> tLightIndexList : register(t4);
 
 #if CLUSTERED_FORWARD
-StructuredBuffer<uint2> tLightGrid : register(t3);
+StructuredBuffer<uint> tLightGrid : register(t3);
 uint GetSliceFromDepth(float depth)
 {
     return floor(log(depth) * cViewData.LightGridParams.x - cViewData.LightGridParams.y);
@@ -124,9 +110,12 @@ LightResult DoLight(float4 pos, float3 worldPos, float3 N, float3 V, float3 diff
     uint tileIndex = clusterIndex3D.x + (cViewData.ClusterDimensions.x * (clusterIndex3D.y + cViewData.ClusterDimensions.y * clusterIndex3D.z));
 #endif
 
-#if TILED_FORWARD || CLUSTERED_FORWARD
+#if TILED_FORWARD
 	uint startOffset = tLightGrid[tileIndex].x;
 	uint lightCount = tLightGrid[tileIndex].y;
+#elif CLUSTERED_FORWARD
+	uint startOffset = tLightGrid[tileIndex * 2];
+	uint lightCount = tLightGrid[tileIndex * 2 + 1];
 #else
 	uint lightCount = cViewData.LightCount;
 #endif
@@ -167,17 +156,24 @@ LightResult DoLight(float4 pos, float3 worldPos, float3 N, float3 V, float3 diff
 }
 
 [RootSignature(RootSig)]
-PSInput VSMain(uint VertexId : SV_VertexID)
+PSInput VSMain(uint vertexId : SV_VertexID)
 {
 	PSInput result;
-    MeshData mesh = tMeshes[cObjectData.Mesh];
-	Vertex input = tBufferTable[mesh.VertexBuffer].Load<Vertex>(VertexId * sizeof(Vertex));
-	result.positionWS = mul(float4(UnpackHalf3(input.position), 1.0f), mesh.World).xyz;
+	MeshInstance instance = tMeshInstances[cObjectData.Index];
+    MeshData mesh = tMeshes[instance.Mesh];
+
+    float3 position = UnpackHalf3(GetVertexData<uint2>(mesh.PositionStream, vertexId));
+	result.positionWS = mul(float4(position, 1.0f), instance.World).xyz;
 	result.positionVS = mul(float4(result.positionWS, 1.0f), cViewData.View).xyz;
 	result.position = mul(float4(result.positionWS, 1.0f), cViewData.ViewProjection);
-	result.texCoord = UnpackHalf2(input.texCoord);
-	result.normal = normalize(mul(input.normal, (float3x3)mesh.World));
-	result.tangent = float4(normalize(mul(input.tangent.xyz, (float3x3)mesh.World)), input.tangent.w);
+    
+    uint texCoordPacked = tBufferTable[mesh.UVStream].Load<uint>(vertexId * sizeof(uint));
+	result.texCoord = UnpackHalf2(GetVertexData<uint>(mesh.UVStream, vertexId));
+    
+    NormalData normalData = GetVertexData<NormalData>(mesh.NormalStream, vertexId);
+	result.normal = normalize(mul(normalData.Normal, (float3x3)instance.World));
+	result.tangent = float4(normalize(mul(normalData.Tangent.xyz, (float3x3)instance.World)), normalData.Tangent.w);
+
 	return result;
 }
 
@@ -270,7 +266,8 @@ void PSMain(PSInput input,
 	float ambientOcclusion = tAO.SampleLevel(sDiffuseSampler, screenUV, 0).r;
 
 // Surface Shader BEGIN
-	MaterialData material = tMaterials[cObjectData.Material];
+	MeshInstance instance = tMeshInstances[cObjectData.Index];
+	MaterialData material = tMaterials[instance.Material];
 
 	float4 baseColor = material.BaseColorFactor;
 	if(material.Diffuse >= 0)
@@ -310,7 +307,7 @@ void PSMain(PSInput input,
 	float ssrWeight = 0;	
 	float3 ssr = ScreenSpaceReflections(input.position, input.positionVS, N, V, roughness, ssrWeight);
 
-	LightResult lighting = DoLight(input.position, input.positionWS, input.normal, V, diffuseColor, specularColor, roughness);
+	LightResult lighting = DoLight(input.position, input.positionWS, N, V, diffuseColor, specularColor, roughness);
 
 	float3 outRadiance = 0;
 	outRadiance += lighting.Diffuse + lighting.Specular;
@@ -318,9 +315,14 @@ void PSMain(PSInput input,
 	outRadiance += ssr * ambientOcclusion;
 	outRadiance += emissive.rgb;
 
+// Hack: volfog only working in clustered path right now...
+#if CLUSTERED_FORWARD
 	float fogSlice = sqrt((input.positionVS.z - cViewData.FarZ) / (cViewData.NearZ - cViewData.FarZ));
 	float4 scatteringTransmittance = tLightScattering.SampleLevel(sClampSampler, float3(screenUV, fogSlice), 0);
 	outRadiance = outRadiance * scatteringTransmittance.w + scatteringTransmittance.rgb;
+#else
+	float4 scatteringTransmittance = 1;
+#endif
 
 	outColor = float4(outRadiance, baseColor.a);
     float reflectivity = saturate(scatteringTransmittance.w * ambientOcclusion * Square(1 - roughness));

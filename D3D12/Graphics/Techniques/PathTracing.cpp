@@ -26,7 +26,7 @@ PathTracing::PathTracing(GraphicsDevice* pDevice)
 	StateObjectInitializer desc{};
 	desc.Name = "Path Tracing";
 	desc.MaxRecursion = 1;
-	desc.MaxPayloadSize = 10 * sizeof(float);
+	desc.MaxPayloadSize = 13 * sizeof(float);
 	desc.MaxAttributeSize = 2 * sizeof(float);
 	desc.Type = D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE;
 	desc.AddLibrary(pLibrary);
@@ -123,6 +123,7 @@ void PathTracing::Render(RGGraph& graph, const SceneView& sceneData)
 				sceneData.pResolvedNormals->GetSRV()->GetDescriptor(),
 				sceneData.pMaterialBuffer->GetSRV()->GetDescriptor(),
 				sceneData.pMeshBuffer->GetSRV()->GetDescriptor(),
+				sceneData.pMeshInstanceBuffer->GetSRV()->GetDescriptor(),
 			};
 
 			const D3D12_CPU_DESCRIPTOR_HANDLE uavs[] = {

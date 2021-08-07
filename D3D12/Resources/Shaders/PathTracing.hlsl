@@ -17,7 +17,7 @@ GlobalRootSignature GlobalRootSig =
 	"CBV(b0),"
 	"CBV(b2),"
 	"DescriptorTable(UAV(u0, numDescriptors = 2)),"
-	"DescriptorTable(SRV(t5, numDescriptors = 7)),"
+	"DescriptorTable(SRV(t5, numDescriptors = 8)),"
 	GLOBAL_BINDLESS_TABLE ", "
 	"StaticSampler(s0, filter=FILTER_MIN_MAG_LINEAR_MIP_POINT),"
 	"StaticSampler(s1, filter=FILTER_MIN_MAG_MIP_LINEAR, addressU = TEXTURE_ADDRESS_CLAMP, addressV = TEXTURE_ADDRESS_CLAMP), " \
@@ -50,6 +50,8 @@ struct RAYPAYLOAD PrimaryRayPayload
 {
 	float2 UV;
 	float2 Normal;
+	float2 Tangent;
+	int TangentSign;
 	float2 GeometryNormal;
 	float3 Position;
 	uint Material;
@@ -93,8 +95,9 @@ float CastShadowRay(float3 origin, float3 direction)
 		{
 			case CANDIDATE_NON_OPAQUE_TRIANGLE:
 			{
-				VertexAttribute vertex = GetVertexAttributes(q.CandidateTriangleBarycentrics(), q.CandidateInstanceID(), q.CandidatePrimitiveIndex(), q.CandidateObjectToWorld4x3());
-				MaterialProperties surface = GetMaterialProperties(vertex.Material, vertex.UV, 0);
+				MeshInstance instance = tMeshInstances[q.CandidateInstanceID()];
+				VertexAttribute vertex = GetVertexAttributes(instance, q.CandidateTriangleBarycentrics(), q.CandidatePrimitiveIndex(), q.CandidateObjectToWorld4x3());
+				MaterialProperties surface = GetMaterialProperties(instance.Material, vertex.UV, 0);
 				if(surface.Opacity > 0.5f)
 				{
 					q.CommitNonOpaqueTriangleHit();
@@ -163,10 +166,13 @@ LightResult EvaluateLight(Light light, float3 worldPos, float3 V, float3 N, floa
 [shader("closesthit")] 
 void PrimaryCHS(inout PrimaryRayPayload payload, BuiltInTriangleIntersectionAttributes attrib) 
 {
-	VertexAttribute vertex = GetVertexAttributes(attrib.barycentrics, InstanceID(), PrimitiveIndex(), ObjectToWorld4x3());
-	payload.Material = vertex.Material;
+	MeshInstance instance = tMeshInstances[InstanceID()];
+	VertexAttribute vertex = GetVertexAttributes(instance, attrib.barycentrics, PrimitiveIndex(), ObjectToWorld4x3());
+	payload.Material = instance.Material;
 	payload.UV = vertex.UV;
 	payload.Normal = EncodeNormalOctahedron(vertex.Normal);
+	payload.Tangent = EncodeNormalOctahedron(vertex.Tangent.xyz);
+	payload.TangentSign = vertex.Tangent.w;
 	payload.GeometryNormal = EncodeNormalOctahedron(vertex.GeometryNormal);
 	payload.Position = WorldRayOrigin() + WorldRayDirection() * RayTCurrent();
 }
@@ -174,8 +180,9 @@ void PrimaryCHS(inout PrimaryRayPayload payload, BuiltInTriangleIntersectionAttr
 [shader("anyhit")]
 void PrimaryAHS(inout PrimaryRayPayload payload, BuiltInTriangleIntersectionAttributes attrib)
 {
-	VertexAttribute vertex = GetVertexAttributes(attrib.barycentrics, InstanceID(), PrimitiveIndex(), ObjectToWorld4x3());
-	MaterialProperties surface = GetMaterialProperties(vertex.Material, vertex.UV, 0);
+	MeshInstance instance = tMeshInstances[InstanceID()];
+	VertexAttribute vertex = GetVertexAttributes(instance, attrib.barycentrics, PrimitiveIndex(), ObjectToWorld4x3());
+	MaterialProperties surface = GetMaterialProperties(instance.Material, vertex.UV, 0);
 	if(surface.Opacity < 0.5)
 	{
 		IgnoreHit();
@@ -280,6 +287,12 @@ bool EvaluateIndirectBRDF(int rayType, float2 u, BrdfData brdfData, float3 N, fl
 		// Due to the clever VNDF sampling method, many of the terms cancel out
 		weight = F * G;
 
+		// Kulla17 - Energy conervation due to multiple scattering
+		float gloss = Pow4(1 - brdfData.Roughness);
+		float3 DFG = EnvDFGPolynomial(brdfData.Specular, gloss, NdotV);
+		float3 energyCompensation = 1.0f + brdfData.Specular * (1.0f / DFG.y - 1.0f);
+		weight *= energyCompensation;
+
 		directionLocal = Llocal;
 	}
 
@@ -322,6 +335,10 @@ bool SampleLightRIS(inout uint seed, float3 position, float3 N, out int lightInd
 		int candidate = Random(seed, 0, cViewData.NumLights);
 		Light light = tLights[candidate];
 		float3 L = normalize(light.Position - position);
+		if(light.IsDirectional())
+		{
+			L = -light.Direction;
+		}
 		if(dot(N, L) < 0.0f) 
 		{
 			continue;
@@ -385,7 +402,7 @@ void RayGen()
 		// If the ray didn't hit anything, accumulate the sky and break the loop
 		if(!payload.IsHit())
 		{
-			const float3 SkyColor = 3; //CIESky(desc.Direction, -tLights[0].Direction);
+			const float3 SkyColor = 1;//CIESky(desc.Direction, -tLights[0].Direction, false);
 			radiance += throughput * SkyColor;
 			break;
 		}
@@ -394,8 +411,10 @@ void RayGen()
 		MaterialProperties surface = GetMaterialProperties(payload.Material, payload.UV, 0);
 		BrdfData brdfData = GetBrdfData(surface);
 
+
 		// Flip the normal towards the incoming ray
 		float3 N = DecodeNormalOctahedron(payload.Normal);
+		float3 T = DecodeNormalOctahedron(payload.Tangent);
 		float3 V = -desc.Direction;
 		float3 geometryNormal = DecodeNormalOctahedron(payload.GeometryNormal);
 		if(dot(geometryNormal, V) < 0.0f)
@@ -405,7 +424,11 @@ void RayGen()
 		if(dot(geometryNormal, N) < 0.0f)
 		{
 			N = -N;
+			T = -T;
 		}
+
+		float3x3 TBN = { T, cross(N, T) * payload.TangentSign, N };
+		N = TangentSpaceNormalMapping(surface.NormalTS, TBN);
 
 		// The Emissive properties is like a light source and directly applied on top
 		radiance += throughput * surface.Emissive;

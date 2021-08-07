@@ -32,7 +32,7 @@ struct Light
 		data.Direction = Direction;
 		data.SpotlightAngles.x = cos(PenumbraAngleDegrees * Math::DegreesToRadians / 2.0f);
 		data.SpotlightAngles.y = cos(UmbraAngleDegrees * Math::DegreesToRadians / 2.0f);
-		data.Color = Math::EncodeColor(Colour);
+		data.Color = Math::EncodeRGBA(Colour);
 		data.Intensity = Intensity;
 		data.Range = Range;
 		data.ShadowIndex = CastShadows ? ShadowIndex : -1;

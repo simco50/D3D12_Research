@@ -342,11 +342,14 @@ D3D12_PIPELINE_STATE_STREAM_DESC PipelineStateInitializer::GetDesc()
 	return streamDesc;
 }
 
-std::string PipelineStateInitializer::DebugPrint() const
+std::string PipelineStateInitializer::DebugPrint()
 {
 	std::stringstream str;
 	str << "---------------------------------\n";
 	str << "| D3D12 Pipeline State Stream |\n";
+
+	// Fix up the assigned shaders
+	GetDesc();
 
 	for (uint32 i = 0; i < D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_MAX_VALID; ++i)
 	{

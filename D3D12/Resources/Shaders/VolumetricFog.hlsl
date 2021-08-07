@@ -6,7 +6,7 @@
 		"CBV(b0), " \
 		"CBV(b2), " \
 		"DescriptorTable(UAV(u0, numDescriptors = 1)), " \
-		"DescriptorTable(SRV(t4, numDescriptors = 10)), " \
+		"DescriptorTable(SRV(t2, numDescriptors = 12)), " \
 		GLOBAL_BINDLESS_TABLE ", " \
 		"StaticSampler(s0, filter=FILTER_MIN_MAG_MIP_POINT, addressU = TEXTURE_ADDRESS_WRAP, addressV = TEXTURE_ADDRESS_WRAP), " \
 		"StaticSampler(s1, filter=FILTER_MIN_MAG_MIP_POINT, addressU = TEXTURE_ADDRESS_CLAMP, addressV = TEXTURE_ADDRESS_CLAMP), " \
@@ -25,11 +25,16 @@ struct ShaderData
 	float3 ViewLocation;
 	float FarZ;
 	float Jitter;
+	float LightClusterSizeFactor;
+	float2 LightGridParams;
+	int3 LightClusterDimensions;
 };
 
 SamplerState sVolumeSampler : register(s3);
 ConstantBuffer<ShaderData> cData : register(b0);
 
+StructuredBuffer<uint> tLightGrid : register(t2);
+StructuredBuffer<uint> tLightIndexList : register(t3);
 Texture3D<float4> tLightScattering : register(t4);
 RWTexture3D<float4> uOutLightScattering : register(u0);
 
@@ -40,7 +45,7 @@ float HenyeyGreenstreinPhase(float LoV, float G)
 	return result;
 }
 
-float3 WorldPositionFromFroxel(uint3 index, float offset, out float linearDepth)
+float3 GetWorldPosition(uint3 index, float offset, out float linearDepth)
 {
 	float2 texelUV = ((float2)index.xy + 0.5f) * cData.InvClusterDimensions.xy;
 	float z = (float)(index.z + offset) * cData.InvClusterDimensions.z;
@@ -49,86 +54,145 @@ float3 WorldPositionFromFroxel(uint3 index, float offset, out float linearDepth)
 	return WorldFromDepth(texelUV, ndcZ, cData.ViewProjectionInv);
 }
 
-float3 WorldPositionFromFroxel(uint3 index, float offset)
+float3 GetWorldPosition(uint3 index, float offset)
 {
 	float depth;
-	return WorldPositionFromFroxel(index, offset, depth);
+	return GetWorldPosition(index, offset, depth);
 }
+
+uint GetLightClusterSliceFromDepth(float depth)
+{
+    return floor(log(depth) * cData.LightGridParams.x - cData.LightGridParams.y);
+}
+
+uint GetLightCluster(uint2 fogCellIndex, float depth)
+{
+	uint slice = GetLightClusterSliceFromDepth(depth);
+	uint3 clusterIndex3D = uint3(floor(fogCellIndex * cData.LightClusterSizeFactor), slice);
+	return clusterIndex3D.x + (cData.LightClusterDimensions.x * (clusterIndex3D.y + cData.LightClusterDimensions.y * clusterIndex3D.z));
+}
+
+struct FogVolume
+{
+	float3 Location;
+	float3 Extents;
+	float3 Color;
+	float DensityChange;
+	float DensityBase;
+};
 
 [RootSignature(RootSig)]
 [numthreads(8, 8, 4)]
 void InjectFogLightingCS(uint3 threadId : SV_DISPATCHTHREADID)
 {
+	uint3 cellIndex = threadId;
+
 	float z;
-	float3 worldPosition = WorldPositionFromFroxel(threadId, cData.Jitter, z);
+	float3 worldPosition = GetWorldPosition(cellIndex, cData.Jitter, z);
 
 	// Compute reprojected UVW
-	float3 reprojWorldPosition = WorldPositionFromFroxel(threadId, 0.5f);
-	float4 reprojNDC = mul(float4(reprojWorldPosition, 1), cData.PrevViewProjection);
+	float3 voxelCenterWS = GetWorldPosition(cellIndex, 0.5f);
+	float4 reprojNDC = mul(float4(voxelCenterWS, 1), cData.PrevViewProjection);
 	reprojNDC.xyz /= reprojNDC.w;
 	float3 reprojUV = float3(reprojNDC.x * 0.5f + 0.5f, -reprojNDC.y * 0.5f + 0.5f, reprojNDC.z);
 	reprojUV.z = LinearizeDepth(reprojUV.z, cData.NearZ, cData.FarZ);
 	reprojUV.z = sqrt((reprojUV.z - cData.FarZ) / (cData.NearZ - cData.FarZ));
 	float4 prevScattering = tLightScattering.SampleLevel(sVolumeSampler, reprojUV, 0);
 
+	float3 inScattering = 0.0f;
 	float3 cellAbsorption = 0.0f;
+	float cellDensity = 0.0f;
 
-	// Test exponential height fog
-	float fogVolumeMaxHeight = 300.0f;
-	float densityAtBase = 0.03f;
-	float heightAbsorption = exp(min(0.0, fogVolumeMaxHeight - worldPosition.y)) * densityAtBase;
-	float3 lightScattering = heightAbsorption;
-	float cellDensity = 0.05 * heightAbsorption;
+	const int numFogVolumes = 1;
+	FogVolume fogVolumes[numFogVolumes];
+	fogVolumes[0].Location = float3(0, 1, 0);
+	fogVolumes[0].Extents = float3(100, 100, 100);
+	fogVolumes[0].Color = float3(1, 1, 1);
+	fogVolumes[0].DensityBase = 0;
+	fogVolumes[0].DensityChange = 0.1f;
 
-	float3 V = normalize(cData.ViewLocation.xyz - worldPosition);
-	float4 pos = float4(threadId.xy, 0, z);
-
-	float3 totalScattering = 0;
-
-	// Iterate over all the lights and light the froxel
-	// todo: Leverage clustered light culling
-	for(int i = 0; i < cData.NumLights; ++i)
+	uint i;
+	for(i = 0; i < numFogVolumes; ++i)
 	{
-		Light light = tLights[i];
-		if(light.IsEnabled() && light.IsVolumetric())
+		FogVolume fogVolume = fogVolumes[i];
+
+		float3 posFogLocal = (worldPosition - fogVolume.Location) / fogVolume.Extents;
+		float heightNormalized = posFogLocal.y * 0.5f + 0.5f;
+		if(min3(posFogLocal.x, posFogLocal.y, posFogLocal.z) < -1 || max3(posFogLocal.x, posFogLocal.y, posFogLocal.z) > 1)
 		{
-			float attenuation = GetAttenuation(light, worldPosition);
-			if(attenuation <= 0.0f)
-			{
-				continue;
-			}
+			continue;
+		}
 
-			if(light.CastShadows())
-			{
-				int shadowIndex = GetShadowIndex(light, pos, worldPosition);
-				attenuation *= ShadowNoPCF(worldPosition, shadowIndex, light.InvShadowSize);
-				attenuation *= LightTextureMask(light, shadowIndex, worldPosition);
-			}
+		float density = min(1.0f, fogVolume.DensityBase + Square(1.0f - heightNormalized) * fogVolume.DensityChange);
 
-			float3 L = normalize(light.Position - worldPosition);
-			if(light.IsDirectional())
-			{
-				L = -normalize(light.Direction);
-			}
-			float VdotL = dot(V, L);
-			float4 lightColor = light.GetColor() * light.Intensity;
+		if(density < 0.0f)
+		{
+			continue;
+		}
 
-			totalScattering += attenuation * lightColor.xyz * HenyeyGreenstreinPhase(-VdotL, 0.5);
+		cellAbsorption += density * fogVolume.Color;
+		cellDensity += density;
+	}
+
+	inScattering = cellAbsorption;
+	cellDensity = cellDensity;
+
+	float3 totalLighting = 0;
+
+	if(dot(inScattering, float3(1, 1, 1)) > 0.0f)
+	{
+		float3 V = normalize(cData.ViewLocation.xyz - worldPosition);
+		float4 pos = float4(threadId.xy, 0, z);
+
+		// Iterate over all the lights and light the froxel
+		uint tileIndex = GetLightCluster(threadId.xy, z);
+		uint lightOffset = tLightGrid[tileIndex * 2];
+		uint lightCount = tLightGrid[tileIndex * 2 + 1];
+
+		for(i = 0; i < lightCount; ++i)
+		{
+			int lightIndex = tLightIndexList[lightOffset + i];
+			Light light = tLights[lightIndex];
+			if(light.IsEnabled() && light.IsVolumetric())
+			{
+				float attenuation = GetAttenuation(light, worldPosition);
+				if(attenuation <= 0.0f)
+				{
+					continue;
+				}
+
+				if(light.CastShadows())
+				{
+					int shadowIndex = GetShadowIndex(light, pos, worldPosition);
+					attenuation *= ShadowNoPCF(worldPosition, shadowIndex, light.InvShadowSize);
+					attenuation *= LightTextureMask(light, shadowIndex, worldPosition);
+				}
+
+				float3 L = normalize(light.Position - worldPosition);
+				if(light.IsDirectional())
+				{
+					L = normalize(light.Direction);
+				}
+				float VdotL = dot(V, L);
+				float4 lightColor = light.GetColor() * light.Intensity;
+
+				totalLighting += attenuation * lightColor.xyz * saturate(HenyeyGreenstreinPhase(VdotL, 0.3f));
+			}
 		}
 	}
 
-	totalScattering += ApplyAmbientLight(1, 1, tLights[0].GetColor().rgb * 0.005f).x;
+	totalLighting += ApplyAmbientLight(1, 1, tLights[0].GetColor().rgb * 0.05f).x;
 
 	float blendFactor = 0.05f;
-	if(any(reprojUV < 0) || any(reprojUV > 1))
+	if(any(reprojUV < 0.05f) || any(reprojUV > 0.95f))
 	{
 		blendFactor = 1.0f;
 	}
 
-	float4 newScattering = float4(lightScattering * totalScattering, cellDensity);
+	float4 newScattering = float4(inScattering * totalLighting, cellDensity);
 	if(blendFactor < 1.0f)
 	{
-		newScattering = lerp(prevScattering, newScattering, blendFactor);
+	newScattering = lerp(prevScattering, newScattering, blendFactor);
 	}
 
 	uOutLightScattering[threadId] = newScattering;
@@ -140,13 +204,11 @@ void AccumulateFogCS(uint3 threadId : SV_DISPATCHTHREADID, uint groupIndex : SV_
 {
 	float3 accumulatedLight = 0;
 	float accumulatedTransmittance = 1;
+	float3 previousPosition = cData.ViewLocation;
 
-	float3 previousPosition = WorldPositionFromFroxel(int3(threadId.xy, 0), 0.5f);
-	uOutLightScattering[int3(threadId.xy, 0)] = float4(accumulatedLight, accumulatedTransmittance);
-
-	for(int sliceIndex = 1; sliceIndex < cData.ClusterDimensions.z; ++sliceIndex)
+	for(int sliceIndex = 0; sliceIndex < cData.ClusterDimensions.z; ++sliceIndex)
 	{
-		float3 worldPosition = WorldPositionFromFroxel(int3(threadId.xy, sliceIndex), 0.5f);
+		float3 worldPosition = GetWorldPosition(int3(threadId.xy, sliceIndex), 0.5f);
 		float froxelLength = length(worldPosition - previousPosition);
 		previousPosition = worldPosition;
 

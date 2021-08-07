@@ -14,6 +14,7 @@ Texture2D tPreviousSceneColor :                             register(t8);
 Texture2D tSceneNormals :                                   register(t9);
 StructuredBuffer<MaterialData> tMaterials :                 register(t10);
 StructuredBuffer<MeshData> tMeshes :                        register(t11);
+StructuredBuffer<MeshInstance> tMeshInstances :             register(t12);
 
 //Samplers
 SamplerState sDiffuseSampler :                              register(s0);
@@ -43,5 +44,12 @@ RaytracingAccelerationStructure tTLASTable[] :              register(t1000, spac
     "DescriptorTable("\
         "Sampler(s1000, numDescriptors = unbounded, space = 1) ," \
     "visibility=SHADER_VISIBILITY_ALL)"
+
+
+template<typename T>
+T GetVertexData(uint bufferIndex, uint vertexId)
+{
+    return tBufferTable[bufferIndex].Load<T>(vertexId * sizeof(T));
+}
 
 #endif

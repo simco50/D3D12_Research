@@ -41,7 +41,7 @@ float3 Diffuse_Lambert(float3 diffuseColor)
 
 /* SMITH G TERM */
 
-// Smith G1 term (masking function) further optimized for GGX distribution (by substituting G_a into G1_GGX)
+// Smith G1 term (masking function) optimized for the GGX distribution by substituting the GGX lambda function
 float Smith_G1_GGX(float alpha, float NdotS, float alphaSquared, float NdotSSquared) 
 {
 	return 2.0f / (sqrt(((alphaSquared * (1.0f - NdotSSquared)) + NdotSSquared) / NdotSSquared) + 1.0f);
@@ -122,6 +122,35 @@ float3 SampleGGXVNDF(float3 V, float2 alpha2D, float2 u)
 
 	// Section 3.4: transforming the normal back to the ellipsoid configuration
 	return normalize(float3(alpha2D.x * Nh.x, alpha2D.y * Nh.y, max(0.0f, Nh.z)));
+}
+
+// Narkowicz2014 - Analytical DFG Term for IBL
+// Source: https://knarkowicz.wordpress.com/2014/12/27/analytical-dfg-term-for-ibl/
+float3 EnvDFGPolynomial(float3 specularColor, float gloss, float ndotv)
+{
+    float x = gloss;
+    float y = ndotv;
+ 
+    float b1 = -0.1688;
+    float b2 = 1.895;
+    float b3 = 0.9903;
+    float b4 = -4.853;
+    float b5 = 8.404;
+    float b6 = -5.069;
+    float bias = saturate( min( b1 * x + b2 * x * x, b3 + b4 * y + b5 * y * y + b6 * y * y * y ) );
+ 
+    float d0 = 0.6045;
+    float d1 = 1.699;
+    float d2 = -0.5228;
+    float d3 = -3.603;
+    float d4 = 1.404;
+    float d5 = 0.1939;
+    float d6 = 2.661;
+    float delta = saturate( d0 + d1 * x + d2 * y + d3 * x * x + d4 * x * y + d5 * y * y + d6 * x * x * x );
+    float scale = delta - bias;
+ 
+    bias *= saturate( 50.0 * specularColor.y );
+    return specularColor * scale + bias;
 }
 
 #endif

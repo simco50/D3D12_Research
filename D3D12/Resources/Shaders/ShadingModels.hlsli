@@ -64,16 +64,23 @@ LightResult DefaultLitBxDF(float3 specularColor, float specularRoughness, float3
 	float VdotH = saturate(dot(V, H));
 
 	// Generalized microfacet Specular BRDF
-	specularRoughness = clamp(specularRoughness, 0.0001f, 1.0f);
 	float a = Square(specularRoughness);
-	float a2 = Square(a);
+	float a2 = clamp(Square(a), 0.0001f, 1.0f);
 	float D = D_GGX(a2, NdotH);
 	float Vis = Vis_SmithJointApprox(a2, NdotV, NdotL);
 	float3 F = F_Schlick(specularColor, VdotH);
 	lighting.Specular = (falloff * NdotL) * (D * Vis) * F;
 
+	// Kulla17 - Energy conervation due to multiple scattering
+#if 0
+	float gloss = Pow4(1 - specularRoughness);
+	float3 DFG = EnvDFGPolynomial(specularColor, gloss, NdotV);
+	float3 energyCompensation = 1.0f + specularColor * (1.0f / DFG.y - 1.0f);
+	lighting.Specular *= energyCompensation;
+#endif
+
 	// Diffuse BRDF
-	lighting.Diffuse  = (falloff * NdotL) * Diffuse_Lambert(diffuseColor);
+	lighting.Diffuse = (falloff * NdotL) * Diffuse_Lambert(diffuseColor);
 
 	return lighting;
 }

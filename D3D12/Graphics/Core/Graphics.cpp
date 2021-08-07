@@ -90,6 +90,7 @@ GraphicsInstance::GraphicsInstance(GraphicsInstanceFlags createFlags)
 		if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&pDebugController))))
 		{
 			pDebugController->EnableDebugLayer();
+			E_LOG(Warning, "D3D12 Debug Layer Enabled");
 		}
 	}
 
@@ -112,6 +113,7 @@ GraphicsInstance::GraphicsInstance(GraphicsInstanceFlags createFlags)
 		if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&pDebugController))))
 		{
 			pDebugController->SetEnableGPUBasedValidation(true);
+			E_LOG(Warning, "D3D12 GPU Based Validation Enabled");
 		}
 	}
 
@@ -214,7 +216,6 @@ GraphicsDevice::GraphicsDevice(IDXGIAdapter4* pAdapter)
 
 	Capabilities.Initialize(this);
 
-#if !PLATFORM_UWP
 	auto OnDeviceRemovedCallback = [](void* pContext, BOOLEAN) {
 		GraphicsDevice* pDevice = (GraphicsDevice*)pContext;
 		std::string error = D3D::GetErrorString(DXGI_ERROR_DEVICE_REMOVED, pDevice->m_pDevice.Get());
@@ -225,7 +226,6 @@ GraphicsDevice::GraphicsDevice(IDXGIAdapter4* pAdapter)
 	m_DeviceRemovedEvent = CreateEventA(nullptr, false, false, nullptr);
 	m_pDeviceRemovalFence->GetFence()->SetEventOnCompletion(UINT64_MAX, m_DeviceRemovedEvent);
 	RegisterWaitForSingleObject(&m_DeviceRemovedEvent, m_DeviceRemovedEvent, OnDeviceRemovedCallback, this, INFINITE, 0);
-#endif
 
 	ID3D12InfoQueue* pInfoQueue = nullptr;
 	if (SUCCEEDED(m_pDevice->QueryInterface(IID_PPV_ARGS(&pInfoQueue))))
@@ -296,7 +296,6 @@ GraphicsDevice::GraphicsDevice(IDXGIAdapter4* pAdapter)
 	m_pIndirectDrawSignature->AddDraw();
 	m_pIndirectDrawSignature->Finalize("Default Indirect Draw");
 
-	// Shaders
 	uint8 smMaj, smMin;
 	Capabilities.GetShaderModel(smMaj, smMin);
 	m_pShaderManager = std::make_unique<ShaderManager>("Resources/Shaders/", smMaj, smMin);
@@ -305,9 +304,7 @@ GraphicsDevice::GraphicsDevice(IDXGIAdapter4* pAdapter)
 GraphicsDevice::~GraphicsDevice()
 {
 	IdleGPU();
-#if !PLATFORM_UWP
 	check(UnregisterWait(m_DeviceRemovedEvent) != 0);
-#endif
 }
 
 int GraphicsDevice::RegisterBindlessResource(ResourceView* pResourceView, ResourceView* pFallback)

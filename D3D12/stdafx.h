@@ -4,10 +4,6 @@
 #define PLATFORM_WINDOWS 0
 #endif
 
-#ifndef PLATFORM_UWP
-#define PLATFORM_UWP 0
-#endif
-
 //STL
 #include <assert.h>
 //Containers
@@ -72,7 +68,7 @@ extern "C" { _declspec(dllexport) extern const char* D3D12SDKPath = ".\\D3D12\\"
 	static bool hasExecuted = false; \
 	if(!hasExecuted) \
 	{ \
-		Console::LogFormat(LogType::Warning, "Assertion failed: '" #expression "'. " msg, ##__VA_ARGS__); \
+		Console::LogFormat(LogType::Warning, "Validate failed: '" #expression "'. " msg, ##__VA_ARGS__); \
 		hasExecuted = true; \
 	} \
 } \

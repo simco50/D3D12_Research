@@ -45,6 +45,7 @@ struct SceneView
 	Buffer* pLightBuffer = nullptr;
 	Buffer* pMaterialBuffer = nullptr;
 	Buffer* pMeshBuffer = nullptr;
+	Buffer* pMeshInstanceBuffer = nullptr;
 	Camera* pCamera = nullptr;
 	ShaderInterop::ShadowData* pShadowData = nullptr;
 	int SceneTLAS = 0;

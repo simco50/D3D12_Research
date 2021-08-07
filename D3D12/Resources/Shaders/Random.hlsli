@@ -4,11 +4,14 @@
 #include "Constants.hlsli"
 //-----------------------------------------------------------------------------------------
 
-//Quick And Easy GPU Random Numbers In D3D11 - Nathan Reed - 2013
-//source: http://www.reedbeta.com/blog/quick-and-easy-gpu-random-numbers-in-d3d11/
+// Quick And Easy GPU Random Numbers In D3D11 - Nathan Reed - 2013
+// http://www.reedbeta.com/blog/quick-and-easy-gpu-random-numbers-in-d3d11/
+// Hash Functions for GPU Rendering - Nathan Reed
+// https://www.reedbeta.com/blog/hash-functions-for-gpu-rendering/
 
 uint SeedThread(uint seed)
 {
+#if 0
     //Wang hash to initialize the seed
     seed = (seed ^ 61) ^ (seed >> 16);
     seed *= 9;
@@ -16,6 +19,11 @@ uint SeedThread(uint seed)
     seed *= 0x27d4eb2d;
     seed = seed ^ (seed >> 15);
     return seed;
+#else
+  	uint state = seed * 747796405u + 2891336453u;
+  	uint word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
+   	return (word >> 22u) ^ word;
+#endif
 }
 
 uint SeedThread(uint2 pixel, uint2 resolution, uint frameIndex)
