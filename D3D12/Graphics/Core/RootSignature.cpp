@@ -176,6 +176,7 @@ void RootSignature::FinalizeFromShader(const char* pName, const ShaderBase* pSha
 		const D3D12_ROOT_PARAMETER& rootParameter = rsDesc.pParameters[i];
 		if (rootParameter.ParameterType == D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE)
 		{
+			checkf(rootParameter.DescriptorTable.NumDescriptorRanges <= MAX_RANGES_PER_TABLE, "Descriptor has more ranges (%d) than allowed (%d).", rootParameter.DescriptorTable.NumDescriptorRanges, MAX_RANGES_PER_TABLE);
 			memcpy(m_DescriptorTableRanges[i].data(), rootParameter.DescriptorTable.pDescriptorRanges, rootParameter.DescriptorTable.NumDescriptorRanges * sizeof(D3D12_DESCRIPTOR_RANGE));
 		}
 	}

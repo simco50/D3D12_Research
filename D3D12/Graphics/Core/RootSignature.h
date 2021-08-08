@@ -17,7 +17,7 @@ static constexpr int MAX_NUM_ROOT_PARAMETERS = RootSignatureMask::Size();
 class RootSignature : public GraphicsObject
 {
 public:
-	static constexpr int MAX_RANGES_PER_TABLE = 5;
+	static constexpr int MAX_RANGES_PER_TABLE = 10;
 
 	RootSignature(GraphicsDevice* pParent);
 
