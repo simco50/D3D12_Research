@@ -491,38 +491,20 @@ void DeferredDeleteQueue::Clean()
 void GraphicsCapabilities::Initialize(GraphicsDevice* pDevice)
 {
 	m_pDevice = pDevice;
-	{
-		D3D12_FEATURE_DATA_D3D12_OPTIONS caps0{};
-		if (SUCCEEDED(m_pDevice->GetDevice()->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &caps0, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS))))
-		{
-			checkf(caps0.ResourceHeapTier >= D3D12_RESOURCE_HEAP_TIER_2, "Device does not support Resource Heap Tier 2 or higher. Tier 1 is not supported");
-			checkf(caps0.ResourceBindingTier >= D3D12_RESOURCE_BINDING_TIER_3, "Device does not support Resource Binding Tier 3 or higher. Tier 2 and under is not supported.");
-		}
-		D3D12_FEATURE_DATA_D3D12_OPTIONS5 caps5{};
-		if (SUCCEEDED(m_pDevice->GetDevice()->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &caps5, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS5))))
-		{
-			RenderPassTier = caps5.RenderPassesTier;
-			RayTracingTier = caps5.RaytracingTier;
-		}
-		D3D12_FEATURE_DATA_D3D12_OPTIONS6 caps6{};
-		if (SUCCEEDED(m_pDevice->GetDevice()->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS6, &caps6, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS6))))
-		{
-			VRSTier = caps6.VariableShadingRateTier;
-			VRSTileSize = caps6.ShadingRateImageTileSize;
-		}
-		D3D12_FEATURE_DATA_D3D12_OPTIONS7 caps7{};
-		if (SUCCEEDED(m_pDevice->GetDevice()->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS7, &caps7, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS7))))
-		{
-			MeshShaderSupport = caps7.MeshShaderTier;
-			SamplerFeedbackSupport = caps7.SamplerFeedbackTier;
-		}
-		D3D12_FEATURE_DATA_SHADER_MODEL shaderModelSupport{};
-		shaderModelSupport.HighestShaderModel = D3D_SHADER_MODEL_6_7;
-		if (SUCCEEDED(m_pDevice->GetDevice()->CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &shaderModelSupport, sizeof(D3D12_FEATURE_DATA_SHADER_MODEL))))
-		{
-			ShaderModel = (uint16)shaderModelSupport.HighestShaderModel;
-		}
-	}
+
+	CD3DX12FeatureSupport support;
+	check(support.Init(pDevice->GetDevice()) == S_OK);
+
+	checkf(support.ResourceHeapTier() >= D3D12_RESOURCE_HEAP_TIER_2, "Device does not support Resource Heap Tier 2 or higher. Tier 1 is not supported");
+	checkf(support.ResourceBindingTier() >= D3D12_RESOURCE_BINDING_TIER_3, "Device does not support Resource Binding Tier 3 or higher. Tier 2 and under is not supported.");
+
+	RenderPassTier = support.RenderPassesTier();
+	RayTracingTier = support.RaytracingTier();
+	VRSTier = support.VariableShadingRateTier();
+	VRSTileSize = support.ShadingRateImageTileSize();
+	MeshShaderSupport = support.MeshShaderTier();
+	SamplerFeedbackSupport = support.SamplerFeedbackTier();
+	ShaderModel = (uint16)support.HighestShaderModel();
 }
 
 bool GraphicsCapabilities::CheckUAVSupport(DXGI_FORMAT format) const
