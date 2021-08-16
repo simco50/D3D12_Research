@@ -25,6 +25,7 @@
 #include "Core/Paths.h"
 #include "Core/Input.h"
 #include "Core/ConsoleVariables.h"
+#include "CBT.h"
 
 static const int32 FRAME_COUNT = 3;
 static const DXGI_FORMAT SWAPCHAIN_FORMAT = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -241,7 +242,7 @@ void DemoApp::SetupScene(CommandContext& context)
 	m_pLightCookie->Create(&context, "Resources/Textures/LightProjector.png", false);
 
 	{
-#if 1
+#if 0
 		m_pCamera->SetPosition(Vector3(-1.3f, 2.4f, -1.5f));
 		m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(Math::PIDIV4, Math::PIDIV4 * 0.5f, 0));
 
@@ -1695,6 +1696,69 @@ void DemoApp::InitializePipelines()
 
 void DemoApp::UpdateImGui()
 {
+	static bool init = false;
+	static CBT cbt(4);
+	if (!init)
+	{
+		cbt.InitAtDepth(0);
+		init = true;
+	}
+
+	bool modified = false;
+
+	uint32 heapID = 1;
+	for (uint32 d = 0; d <= cbt.MaxDepth; ++d)
+	{
+		for (uint32 j = 0; j < CBT::Exp2(d); ++j)
+		{
+			uint32 bitIndex = cbt.BitfieldHeapID(heapID);
+			ImGui::PushID(heapID);
+			bool active = cbt.IsLeafNode(bitIndex);
+			if (!active)
+				ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.1f, 0.1f, 0.1f, 1.0f));
+			if (ImGui::Button(Sprintf("%d", cbt.Bits[heapID]).c_str(), ImVec2(30, 0)))
+			{
+				if (active)
+				{
+					cbt.SplitNode(heapID);
+				}
+				else
+				{
+					cbt.MergeNode(heapID);
+				}
+				modified = true;
+			}
+			bool isLast = j + 1 == CBT::Exp2(d);
+			if (!isLast)
+			{
+				ImGui::SameLine();
+			}
+			if (!active)
+			{
+				ImGui::PopStyleColor();
+			}
+			ImGui::PopID();
+			++heapID;
+		}
+	}
+
+	ImGui::Separator();
+
+	for (uint32 leafIndex = 0; leafIndex < cbt.NumBitfieldBits(); ++leafIndex)
+	{
+		ImGui::PushID(10000 + leafIndex);
+		if (ImGui::Button(Sprintf("%d", cbt.Bits[(int)CBT::Exp2(cbt.MaxDepth) + leafIndex]).c_str()))
+		{
+		}
+		ImGui::SameLine();
+		ImGui::PopID();
+	}
+
+	if (modified)
+	{
+		cbt.SumReduction();
+	}
+
 	m_FrameTimes[m_Frame % m_FrameTimes.size()] = Time::DeltaTime();
 
 	//ImGui::ShowDemoWindow();
