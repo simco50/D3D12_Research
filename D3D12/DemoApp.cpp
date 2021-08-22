@@ -1711,31 +1711,23 @@ void DemoApp::UpdateImGui()
 	{
 		for (uint32 j = 0; j < CBT::Exp2(d); ++j)
 		{
-			uint32 bitIndex = cbt.BitfieldHeapID(heapID);
 			ImGui::PushID(heapID);
-			bool active = cbt.IsLeafNode(bitIndex);
-			if (!active)
-				ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.1f, 0.1f, 0.1f, 1.0f));
-			if (ImGui::Button(Sprintf("%d", cbt.Bits[heapID]).c_str(), ImVec2(30, 0)))
+			ImGui::Button(Sprintf("%d", cbt.Bits[heapID]).c_str(), ImVec2(30, 0));
+			if(ImGui::IsItemClicked(ImGuiMouseButton_Left))
 			{
-				if (active)
-				{
-					cbt.SplitNode(heapID);
-				}
-				else
-				{
-					cbt.MergeNode(heapID);
-				}
+				cbt.SplitNode(heapID);
 				modified = true;
 			}
+			else if (ImGui::IsItemClicked(ImGuiMouseButton_Right))
+			{
+				cbt.MergeNode(heapID);
+				modified = true;
+			}
+
 			bool isLast = j + 1 == CBT::Exp2(d);
 			if (!isLast)
 			{
 				ImGui::SameLine();
-			}
-			if (!active)
-			{
-				ImGui::PopStyleColor();
 			}
 			ImGui::PopID();
 			++heapID;
