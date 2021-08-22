@@ -688,11 +688,6 @@ void DemoApp::Update()
 	// LET THE RENDERING BEGIN!
 	////////////////////////////////
 
-	if (m_CapturePix)
-	{
-		D3D::BeginPixCapture();
-	}
-
 	if (Tweakables::g_Screenshot)
 	{
 		Tweakables::g_Screenshot = false;
@@ -1402,6 +1397,12 @@ void DemoApp::Update()
 	nextFenceValue = graph.Execute();
 	PROFILE_END();
 
+	if (m_CapturePix)
+	{
+		D3D::EnqueuePIXCapture();
+		m_CapturePix = false;
+	}
+
 	//PRESENT
 	//	- Set fence for the currently queued frame
 	//	- Present the frame buffer
@@ -1410,12 +1411,6 @@ void DemoApp::Update()
 	m_pDevice->TickFrame();
 	m_pSwapchain->Present();
 	++m_Frame;
-
-	if (m_CapturePix)
-	{
-		D3D::EndPixCapture();
-		m_CapturePix = false;
-	}
 }
 
 void DemoApp::OnResize(int width, int height)

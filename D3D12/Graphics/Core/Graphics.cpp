@@ -17,53 +17,10 @@
 #include "Graphics/Profiler.h"
 #include "StateObject.h"
 #include "Core/CommandLine.h"
+#include "pix3.h"
 
 const DXGI_FORMAT GraphicsDevice::DEPTH_STENCIL_FORMAT = DXGI_FORMAT_D32_FLOAT;
 const DXGI_FORMAT GraphicsDevice::RENDER_TARGET_FORMAT = DXGI_FORMAT_R11G11B10_FLOAT;
-
-#if PLATFORM_WINDOWS
-static bool GetLatestWinPixGpuCapturerPath(std::string& path)
-{
-	LPWSTR programFilesPath = nullptr;
-	SHGetKnownFolderPath(FOLDERID_ProgramFiles, KF_FLAG_DEFAULT, NULL, &programFilesPath);
-
-	std::string pixSearchPath = UNICODE_TO_MULTIBYTE(programFilesPath) + std::string("\\Microsoft PIX\\*");
-
-	WIN32_FIND_DATA findData;
-	bool foundPixInstallation = false;
-	char newestVersionFound[MAX_PATH];
-
-	HANDLE hFind = FindFirstFileA(pixSearchPath.c_str(), &findData);
-	if (hFind != INVALID_HANDLE_VALUE)
-	{
-		do
-		{
-			if (((findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) == FILE_ATTRIBUTE_DIRECTORY) &&
-				(findData.cFileName[0] != '.'))
-			{
-				if (!foundPixInstallation || strcmp(newestVersionFound, findData.cFileName) <= 0)
-				{
-					foundPixInstallation = true;
-					strcpy_s(newestVersionFound, _countof(newestVersionFound), findData.cFileName);
-				}
-			}
-		} while (FindNextFileA(hFind, &findData) != 0);
-	}
-
-	FindClose(hFind);
-
-	if (!foundPixInstallation)
-	{
-		return false;
-	}
-	pixSearchPath.pop_back();
-
-	path = pixSearchPath;
-	path += newestVersionFound;
-	path += "\\WinPixGpuCapturer.dll";
-	return true;
-}
-#endif
 
 std::unique_ptr<GraphicsInstance> GraphicsInstance::CreateInstance(GraphicsInstanceFlags createFlags /*= GraphicsFlags::None*/)
 {
@@ -120,16 +77,9 @@ GraphicsInstance::GraphicsInstance(GraphicsInstanceFlags createFlags)
 #if PLATFORM_WINDOWS
 	if (EnumHasAnyFlags(createFlags, GraphicsInstanceFlags::Pix))
 	{
-		if (GetModuleHandleA("WinPixGpuCapturer.dll") == 0)
+		if(PIXLoadLatestWinPixGpuCapturerLibrary())
 		{
-			std::string pixPath;
-			if (GetLatestWinPixGpuCapturerPath(pixPath))
-			{
-				if (LoadLibraryA(pixPath.c_str()))
-				{
-					E_LOG(Warning, "Dynamically loaded PIX ('%s')", pixPath.c_str());
-				}
-			}
+			E_LOG(Warning, "Dynamically loaded PIX");
 		}
 	}
 #endif
@@ -578,7 +528,8 @@ bool GraphicsCapabilities::CheckUAVSupport(DXGI_FORMAT format) const
 	}
 }
 
-SwapChain::SwapChain(GraphicsDevice* pDevice, IDXGIFactory6* pFactory, WindowHandle pNativeWindow, DXGI_FORMAT format, uint32 width, uint32 height, uint32 numFrames, bool vsync) : m_Format(format), m_CurrentImage(0), m_Vsync(vsync)
+SwapChain::SwapChain(GraphicsDevice* pDevice, IDXGIFactory6* pFactory, WindowHandle pNativeWindow, DXGI_FORMAT format, uint32 width, uint32 height, uint32 numFrames, bool vsync)
+	: m_Format(format), m_CurrentImage(0), m_Vsync(vsync)
 {
 	DXGI_SWAP_CHAIN_DESC1 desc{};
 	desc.AlphaMode = DXGI_ALPHA_MODE_IGNORE;
@@ -604,14 +555,7 @@ SwapChain::SwapChain(GraphicsDevice* pDevice, IDXGIFactory6* pFactory, WindowHan
 	CommandQueue* pPresentQueue = pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT);
 	ComPtr<IDXGISwapChain1> swapChain;
 	
-#if PLATFORM_UWP
-	pFactory->CreateSwapChainForCoreWindow(
-		pPresentQueue->GetCommandQueue(),
-		reinterpret_cast<IUnknown*>(winrt::get_abi(winrt::Windows::UI::Core::CoreWindow::GetForCurrentThread())),
-		&desc,
-		nullptr,
-		swapChain.GetAddressOf());
-#elif PLATFORM_WINDOWS
+#if PLATFORM_WINDOWS
 	VERIFY_HR(pFactory->CreateSwapChainForHwnd(
 		pPresentQueue->GetCommandQueue(),
 		(HWND)pNativeWindow,

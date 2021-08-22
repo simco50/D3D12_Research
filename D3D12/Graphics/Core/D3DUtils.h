@@ -1,7 +1,9 @@
 #pragma once
 
 #include <DXProgrammableCapture.h>
-#include <shlobj.h>
+#include "pix3.h"
+#include "Core/Paths.h"
+#include <winuser.h>
 
 #define VERIFY_HR(hr) D3D::LogHRESULT(hr, nullptr, #hr, __FILE__, __LINE__)
 #define VERIFY_HR_EX(hr, device) D3D::LogHRESULT(hr, device, #hr, __FILE__, __LINE__)
@@ -72,6 +74,26 @@ namespace D3D
 			default: return "";
 		}
 #undef STATE_CASE
+	}
+
+	inline void EnqueuePIXCapture(uint32 numFrames = 1)
+	{
+		HWND window = GetActiveWindow();
+		if (SUCCEEDED(PIXSetTargetWindow(window)))
+		{
+			SYSTEMTIME time;
+			GetSystemTime(&time);
+			Paths::CreateDirectoryTree(Paths::SavedDir());
+			char filePath[128];
+			FormatString(filePath, ARRAYSIZE(filePath), "%sGPU_Capture_%d_%02d_%02d__%02d_%02d_%02d_%d.wpix",
+				Paths::SavedDir().c_str(),
+				time.wYear, time.wMonth, time.wDay,
+				time.wHour, time.wMinute, time.wSecond, time.wMilliseconds);
+			if (SUCCEEDED(PIXGpuCaptureNextFrames(MULTIBYTE_TO_UNICODE(filePath), numFrames)))
+			{
+				E_LOG(Info, "Captured %d frames to '%s'", numFrames, filePath);
+			}
+		}
 	}
 
 	inline void BeginPixCapture()
