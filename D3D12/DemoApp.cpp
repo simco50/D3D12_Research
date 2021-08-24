@@ -1692,15 +1692,15 @@ void DemoApp::InitializePipelines()
 
 void DemoApp::UpdateImGui()
 {
+	ImGui::Begin("Triangles");
+
 	static bool init = false;
-	static CBT cbt(4);
+	static CBT cbt(5);
 	if (!init)
 	{
-		cbt.InitAtDepth(0);
+		cbt.InitAtDepth(5);
 		init = true;
 	}
-
-	bool modified = false;
 
 	uint32 begin, size;
 	cbt.GetElementRange(1, begin, size);
@@ -1711,16 +1711,12 @@ void DemoApp::UpdateImGui()
 		for (uint32 j = 0; j < Math::Exp2(d); ++j)
 		{
 			ImGui::PushID(heapID);
-			ImGui::Button(Sprintf("%d", cbt.Bits[heapID]).c_str(), ImVec2(30, 0));
+			ImGui::Button(Sprintf("%d", cbt.Bits[heapID]).c_str(), ImVec2(20, 0));
 			if (ImGui::IsItemClicked(ImGuiMouseButton_Left))
 			{
-				cbt.SplitNode(heapID);
-				modified = true;
 			}
 			else if (ImGui::IsItemClicked(ImGuiMouseButton_Right))
 			{
-				cbt.MergeNode(heapID);
-				modified = true;
 			}
 
 			bool isLast = j + 1 == Math::Exp2(d);
@@ -1738,20 +1734,18 @@ void DemoApp::UpdateImGui()
 	for (uint32 leafIndex = 0; leafIndex < cbt.NumBitfieldBits(); ++leafIndex)
 	{
 		ImGui::PushID(10000 + leafIndex);
-		if (ImGui::Button(Sprintf("%d", cbt.Bits[(int)Math::Exp2(cbt.MaxDepth) + leafIndex]).c_str()))
+		uint32 index = (int)Math::Exp2(cbt.MaxDepth) + leafIndex;
+		if (ImGui::Button(Sprintf("%d", cbt.Bits[index]).c_str(), ImVec2(20, 0)))
 		{
+			cbt.Bits[index] = !cbt.Bits[index];
 		}
 		ImGui::SameLine();
 		ImGui::PopID();
 	}
 
-	if (modified)
-	{
-		cbt.SumReduction();
-	}
+	ImGui::Spacing();
 
-	ImGui::SetNextWindowSize(ImVec2(400, 400));
-	ImGui::Begin("Triangles");
+	cbt.SumReduction();
 
 	for (uint32 i = 0; i < cbt.NumNodes(); ++i)
 	{
@@ -1761,38 +1755,44 @@ void DemoApp::UpdateImGui()
 
 	ImVec2 cPos = ImGui::GetCursorScreenPos();
 
-	Matrix triangle = DirectX::XMFLOAT3X3{
-		0, 200, 0,
-		0, 0, 0,
-		200, 0, 0,
-	};
 
-	ImGui::GetWindowDrawList()->AddTriangleFilled(
-		cPos + ImVec2(triangle._11, 200 - triangle._12),
-		cPos + ImVec2(triangle._21, 200 - triangle._22),
-		cPos + ImVec2(triangle._31, 200 - triangle._32),
+	float scale = 400;
+
+	ImGui::GetWindowDrawList()->AddQuadFilled(
+		cPos + ImVec2(0, 0),
+		cPos + ImVec2(scale, 0),
+		cPos + ImVec2(scale, scale),
+		cPos + ImVec2(0, scale),
 		ImColor(1.0f, 1.0f, 1.0f, 0.3f));
 
-	auto LEBTriangle = [&](uint32 heapIndex, Color color) {
-		Matrix triangle0 = LEB::GetMatrix(heapIndex) * triangle;
-		
-		ImGui::GetWindowDrawList()->AddTriangleFilled(
-			cPos + ImVec2(triangle0._11, 200 - triangle0._12),
-			cPos + ImVec2(triangle0._21, 200 - triangle0._22),
-			cPos + ImVec2(triangle0._31, 200 - triangle0._32),
+	auto LEBTriangle = [&](uint32 heapIndex, Color color, float scale)
+	{
+		Vector3 a, b, c;
+		LEB::GetTriangleVertices(heapIndex, a, b, c);
+		a *= scale;
+		b *= scale;
+		c *= scale;
+
+		ImGui::GetWindowDrawList()->AddTriangle(
+			cPos + ImVec2(a.x, a.y),
+			cPos + ImVec2(b.x, b.y),
+			cPos + ImVec2(c.x, c.y),
 			ImColor(color.x, color.y, color.z, color.w));
 
 		Vector2 pos = Vector2::Zero;
-		pos += Vector2(triangle0._11, 200 - triangle0._12);
-		pos += Vector2(triangle0._21, 200 - triangle0._22);
-		pos += Vector2(triangle0._31, 200 - triangle0._32);
+		pos += Vector2(a.x, a.y);
+		pos += Vector2(b.x, b.y);
+		pos += Vector2(c.x, c.y);
 		pos /= 3;
-		ImGui::GetWindowDrawList()->AddText(cPos + ImVec2(pos.x, pos.y), ImColor(1.0f, 1.0f, 1.0f, 1.0f), Sprintf("%d", heapIndex).c_str());
+		std::string text = Sprintf("%d", heapIndex);
+		ImGui::GetWindowDrawList()->AddText(cPos + ImVec2(pos.x - ImGui::GetFontSize() * text.length() * 0.3f, pos.y - ImGui::GetTextLineHeight() * 0.5f), ImColor(1.0f, 1.0f, 1.0f, 1.0f), text.c_str());
 	};
 
-	static int heapIndex = 2;
-	ImGui::SliderInt("Heap Index", &heapIndex, 1, 20);
-	LEBTriangle(heapIndex, Color(1, 0, 0, 0.5f));
+	for (uint32 i = 0; i < cbt.NumNodes(); ++i)
+	{
+		uint32 heapIndex = cbt.LeafIndexToHeapIndex(i);
+		LEBTriangle(heapIndex, Color(1, 0, 0, 0.5f), scale);
+	}
 
 	ImGui::End();
 

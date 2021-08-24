@@ -56,14 +56,15 @@ struct CBT
 		uint32 heapID = 1;
 		while (Bits[heapID] > 1)
 		{
-			if (leafIndex < Bits[heapID])
+			uint32 leftChildValue = Bits[LeftChildID(heapID)];
+			if (leafIndex < leftChildValue)
 			{
-				heapID = 2 * heapID;
+				heapID = LeftChildID(heapID);
 			}
 			else
 			{
-				leafIndex -= Bits[heapID];
-				heapID = 2 * heapID + 1;
+				leafIndex -= leftChildValue;
+				heapID = RightChildID(heapID);
 			}
 		}
 		return heapID;
@@ -186,22 +187,71 @@ namespace LEB
 			float b = (float)bit;
 			float c = 1.0f - b;
 			return DirectX::XMFLOAT3X3(
-				c, 0.0f, b,
-				0.0f, 1.0f, 0.0f,
-				b, 0.0f, c
+				c,		0.0f,	b,
+				0.0f,	1.0f,	0.0f,
+				b,		0.0f,	c
+			);
+		}
+
+		inline Matrix GetSquareMatrix(uint32 quadBit)
+		{
+			float b = float(quadBit);
+			float c = 1.0f - b;
+
+			return DirectX::XMFLOAT3X3(
+				c,	0.0f,	b,
+				b,	c,		b,
+				b,	0.0f,	c
 			);
 		}
 	}
 
 	inline Matrix GetMatrix(uint32 heapID)
 	{
-		Matrix m = Matrix::Identity;
 		uint32 d;
 		BitOperations::MostSignificantBit(heapID, &d);
-		for (int32 bitID = d - 1; bitID >= 0; --bitID)
+
+		int32 bitID = Math::Max(0, (int32)d - 1);
+		Matrix m = Private::GetSquareMatrix(Private::GetBitValue(heapID, bitID));
+
+		for (bitID = d - 2; bitID >= 0; --bitID)
 		{
 			m = Private::GetSplitMatrix(Private::GetBitValue(heapID, bitID)) * m;
 		}
-		return Private::GetWindingMatrix(d & 1) * m;
+		return Private::GetWindingMatrix((d ^ 1) & 1) * m;
+	}
+
+	inline void GetTriangleVertices(uint32 heapIndex, Vector3& a, Vector3& b, Vector3& c)
+	{
+		static const Matrix baseTriangle = DirectX::XMFLOAT3X3{
+			0, 1, 0,
+			0, 0, 0,
+			1, 0, 0,
+		};
+		Matrix t = GetMatrix(heapIndex) * baseTriangle;
+		a = Vector3(t._11, t._12, t._13);
+		b = Vector3(t._21, t._22, t._23);
+		c = Vector3(t._31, t._32, t._33);
+	}
+
+	float sign(const Vector2& p1, const Vector2& p2, const Vector2& p3)
+	{
+		return (p1.x - p3.x) * (p2.y - p3.y) - (p2.x - p3.x) * (p1.y - p3.y);
+	}
+
+	bool PointInTriangle(const Vector2& pt, const Vector2& v1, const Vector2& v2, const Vector2& v3)
+	{
+		float d1, d2, d3;
+		bool has_neg, has_pos;
+
+		d1 = sign(pt, v1, v2);
+		d2 = sign(pt, v2, v3);
+		d3 = sign(pt, v3, v1);
+
+		has_neg = (d1 < 0) || (d2 < 0) || (d3 < 0);
+		has_pos = (d1 > 0) || (d2 > 0) || (d3 > 0);
+
+		return !(has_neg && has_pos);
 	}
 }
+
