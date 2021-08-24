@@ -26,6 +26,7 @@
 #include "Core/Input.h"
 #include "Core/ConsoleVariables.h"
 #include "CBT.h"
+#include "Imgui/imgui_internal.h"
 
 static const int32 FRAME_COUNT = 3;
 static const DXGI_FORMAT SWAPCHAIN_FORMAT = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -1701,14 +1702,17 @@ void DemoApp::UpdateImGui()
 
 	bool modified = false;
 
+	uint32 begin, size;
+	cbt.GetElementRange(1, begin, size);
+
 	uint32 heapID = 1;
 	for (uint32 d = 0; d <= cbt.MaxDepth; ++d)
 	{
-		for (uint32 j = 0; j < CBT::Exp2(d); ++j)
+		for (uint32 j = 0; j < Math::Exp2(d); ++j)
 		{
 			ImGui::PushID(heapID);
 			ImGui::Button(Sprintf("%d", cbt.Bits[heapID]).c_str(), ImVec2(30, 0));
-			if(ImGui::IsItemClicked(ImGuiMouseButton_Left))
+			if (ImGui::IsItemClicked(ImGuiMouseButton_Left))
 			{
 				cbt.SplitNode(heapID);
 				modified = true;
@@ -1719,7 +1723,7 @@ void DemoApp::UpdateImGui()
 				modified = true;
 			}
 
-			bool isLast = j + 1 == CBT::Exp2(d);
+			bool isLast = j + 1 == Math::Exp2(d);
 			if (!isLast)
 			{
 				ImGui::SameLine();
@@ -1734,7 +1738,7 @@ void DemoApp::UpdateImGui()
 	for (uint32 leafIndex = 0; leafIndex < cbt.NumBitfieldBits(); ++leafIndex)
 	{
 		ImGui::PushID(10000 + leafIndex);
-		if (ImGui::Button(Sprintf("%d", cbt.Bits[(int)CBT::Exp2(cbt.MaxDepth) + leafIndex]).c_str()))
+		if (ImGui::Button(Sprintf("%d", cbt.Bits[(int)Math::Exp2(cbt.MaxDepth) + leafIndex]).c_str()))
 		{
 		}
 		ImGui::SameLine();
@@ -1745,6 +1749,52 @@ void DemoApp::UpdateImGui()
 	{
 		cbt.SumReduction();
 	}
+
+	ImGui::SetNextWindowSize(ImVec2(400, 400));
+	ImGui::Begin("Triangles");
+
+	for (uint32 i = 0; i < cbt.NumNodes(); ++i)
+	{
+		uint32 heapIndex = cbt.LeafIndexToHeapIndex(i);
+		Matrix m = LEB::GetMatrix(heapIndex);
+	}
+
+	ImVec2 cPos = ImGui::GetCursorScreenPos();
+
+	Matrix triangle = DirectX::XMFLOAT3X3{
+		0, 200, 0,
+		0, 0, 0,
+		200, 0, 0,
+	};
+
+	ImGui::GetWindowDrawList()->AddTriangleFilled(
+		cPos + ImVec2(triangle._11, 200 - triangle._12),
+		cPos + ImVec2(triangle._21, 200 - triangle._22),
+		cPos + ImVec2(triangle._31, 200 - triangle._32),
+		ImColor(1.0f, 1.0f, 1.0f, 0.3f));
+
+	auto LEBTriangle = [&](uint32 heapIndex, Color color) {
+		Matrix triangle0 = LEB::GetMatrix(heapIndex) * triangle;
+		
+		ImGui::GetWindowDrawList()->AddTriangleFilled(
+			cPos + ImVec2(triangle0._11, 200 - triangle0._12),
+			cPos + ImVec2(triangle0._21, 200 - triangle0._22),
+			cPos + ImVec2(triangle0._31, 200 - triangle0._32),
+			ImColor(color.x, color.y, color.z, color.w));
+
+		Vector2 pos = Vector2::Zero;
+		pos += Vector2(triangle0._11, 200 - triangle0._12);
+		pos += Vector2(triangle0._21, 200 - triangle0._22);
+		pos += Vector2(triangle0._31, 200 - triangle0._32);
+		pos /= 3;
+		ImGui::GetWindowDrawList()->AddText(cPos + ImVec2(pos.x, pos.y), ImColor(1.0f, 1.0f, 1.0f, 1.0f), Sprintf("%d", heapIndex).c_str());
+	};
+
+	static int heapIndex = 2;
+	ImGui::SliderInt("Heap Index", &heapIndex, 1, 20);
+	LEBTriangle(heapIndex, Color(1, 0, 0, 0.5f));
+
+	ImGui::End();
 
 	m_FrameTimes[m_Frame % m_FrameTimes.size()] = Time::DeltaTime();
 

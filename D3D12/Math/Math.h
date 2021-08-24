@@ -218,4 +218,9 @@ namespace Math
 
 		float Sequence[SIZE];
 	};
+
+	inline uint32 Exp2(uint32 exp)
+	{
+		return (uint32)ldexp(1.0f, exp);
+	}
 };
