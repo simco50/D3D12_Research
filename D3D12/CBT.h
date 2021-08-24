@@ -42,13 +42,19 @@ struct CBT
 	template<typename HeapFn>
 	void Update(HeapFn&& fn)
 	{
+		IterateLeaves(fn);
+		SumReduction();
+	}
+
+	template<typename HeapFn>
+	void IterateLeaves(HeapFn&& fn)
+	{
 		uint32 numNodes = NumNodes();
 		for (uint32 leafIndex = 0; leafIndex < numNodes; ++leafIndex)
 		{
 			uint32 heapIndex = LeafIndexToHeapIndex(leafIndex);
 			fn(heapIndex);
 		}
-		SumReduction();
 	}
 
 	uint32 LeafIndexToHeapIndex(uint32 leafIndex) const

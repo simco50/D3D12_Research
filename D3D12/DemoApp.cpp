@@ -1706,28 +1706,20 @@ void DemoApp::UpdateImGui()
 	cbt.GetElementRange(1, begin, size);
 
 	uint32 heapID = 1;
+	ImGui::BeginDisabled(true);
 	for (uint32 d = 0; d <= cbt.MaxDepth; ++d)
 	{
+		ImGui::Spacing();
 		for (uint32 j = 0; j < Math::Exp2(d); ++j)
 		{
 			ImGui::PushID(heapID);
 			ImGui::Button(Sprintf("%d", cbt.Bits[heapID]).c_str(), ImVec2(20, 0));
-			if (ImGui::IsItemClicked(ImGuiMouseButton_Left))
-			{
-			}
-			else if (ImGui::IsItemClicked(ImGuiMouseButton_Right))
-			{
-			}
-
-			bool isLast = j + 1 == Math::Exp2(d);
-			if (!isLast)
-			{
-				ImGui::SameLine();
-			}
+			ImGui::SameLine();
 			ImGui::PopID();
 			++heapID;
 		}
 	}
+	ImGui::EndDisabled();
 
 	ImGui::Separator();
 
@@ -1745,17 +1737,9 @@ void DemoApp::UpdateImGui()
 
 	ImGui::Spacing();
 
-	cbt.SumReduction();
+	cbt.Update([](uint32) {});
 
-	for (uint32 i = 0; i < cbt.NumNodes(); ++i)
-	{
-		uint32 heapIndex = cbt.LeafIndexToHeapIndex(i);
-		Matrix m = LEB::GetMatrix(heapIndex);
-	}
-
-	ImVec2 cPos = ImGui::GetCursorScreenPos();
-
-
+	const ImVec2 cPos = ImGui::GetCursorScreenPos();
 	float scale = 400;
 
 	ImGui::GetWindowDrawList()->AddQuadFilled(
@@ -1779,20 +1763,16 @@ void DemoApp::UpdateImGui()
 			cPos + ImVec2(c.x, c.y),
 			ImColor(color.x, color.y, color.z, color.w));
 
-		Vector2 pos = Vector2::Zero;
-		pos += Vector2(a.x, a.y);
-		pos += Vector2(b.x, b.y);
-		pos += Vector2(c.x, c.y);
-		pos /= 3;
+		ImVec2 pos = (ImVec2(a.x, a.y) + ImVec2(b.x, b.y) + ImVec2(c.x, c.y)) / 3;
 		std::string text = Sprintf("%d", heapIndex);
-		ImGui::GetWindowDrawList()->AddText(cPos + ImVec2(pos.x - ImGui::GetFontSize() * text.length() * 0.3f, pos.y - ImGui::GetTextLineHeight() * 0.5f), ImColor(1.0f, 1.0f, 1.0f, 1.0f), text.c_str());
+		ImGui::GetWindowDrawList()->AddText(cPos + pos - ImGui::CalcTextSize(text.c_str()) * 0.5f, ImColor(1.0f, 1.0f, 1.0f, 1.0f), text.c_str());
 	};
 
-	for (uint32 i = 0; i < cbt.NumNodes(); ++i)
+	auto iterateFn = [&](uint32 heapIndex)
 	{
-		uint32 heapIndex = cbt.LeafIndexToHeapIndex(i);
 		LEBTriangle(heapIndex, Color(1, 0, 0, 0.5f), scale);
-	}
+	};
+	cbt.IterateLeaves(iterateFn);
 
 	ImGui::End();
 
