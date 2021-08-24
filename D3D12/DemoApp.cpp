@@ -1694,11 +1694,13 @@ void DemoApp::UpdateImGui()
 {
 	ImGui::Begin("Triangles");
 
+	static int maxDepth = 5;
 	static bool init = false;
-	static CBT cbt(5);
-	if (!init)
+
+	static CBT cbt;
+	if (ImGui::SliderInt("Max Depth", &maxDepth, 2, 8) || !init)
 	{
-		cbt.InitAtDepth(5);
+		cbt.Init(maxDepth, maxDepth);
 		init = true;
 	}
 
@@ -1707,13 +1709,13 @@ void DemoApp::UpdateImGui()
 
 	uint32 heapID = 1;
 	ImGui::BeginDisabled(true);
-	for (uint32 d = 0; d <= cbt.MaxDepth; ++d)
+	for (uint32 d = 0; d <= cbt.GetMaxDepth(); ++d)
 	{
 		ImGui::Spacing();
 		for (uint32 j = 0; j < Math::Exp2(d); ++j)
 		{
 			ImGui::PushID(heapID);
-			ImGui::Button(Sprintf("%d", cbt.Bits[heapID]).c_str(), ImVec2(20, 0));
+			ImGui::Button(Sprintf("%d", cbt.GetData(heapID)).c_str(), ImVec2(20, 0));
 			ImGui::SameLine();
 			ImGui::PopID();
 			++heapID;
@@ -1726,10 +1728,10 @@ void DemoApp::UpdateImGui()
 	for (uint32 leafIndex = 0; leafIndex < cbt.NumBitfieldBits(); ++leafIndex)
 	{
 		ImGui::PushID(10000 + leafIndex);
-		uint32 index = (int)Math::Exp2(cbt.MaxDepth) + leafIndex;
-		if (ImGui::Button(Sprintf("%d", cbt.Bits[index]).c_str(), ImVec2(20, 0)))
+		uint32 index = (int)Math::Exp2(cbt.GetMaxDepth()) + leafIndex;
+		if (ImGui::Button(Sprintf("%d", cbt.GetData(index)).c_str(), ImVec2(20, 0)))
 		{
-			cbt.Bits[index] = !cbt.Bits[index];
+			cbt.SetData(index, !cbt.GetData(index));
 		}
 		ImGui::SameLine();
 		ImGui::PopID();
