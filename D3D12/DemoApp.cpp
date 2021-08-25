@@ -1767,14 +1767,36 @@ void DemoApp::UpdateImGui()
 
 		ImVec2 pos = (ImVec2(a.x, a.y) + ImVec2(b.x, b.y) + ImVec2(c.x, c.y)) / 3;
 		std::string text = Sprintf("%d", heapIndex);
-		ImGui::GetWindowDrawList()->AddText(cPos + pos - ImGui::CalcTextSize(text.c_str()) * 0.5f, ImColor(1.0f, 1.0f, 1.0f, 1.0f), text.c_str());
+		ImGui::GetWindowDrawList()->AddText(cPos + pos - ImGui::CalcTextSize(text.c_str()) * 0.5f, ImColor(1.0f, 1.0f, 1.0f, 0.1f), text.c_str());
 	};
 
 	{
 		PROFILE_SCOPE("CBT Update");
-		cbt.Update([](uint32 heapIndex)
+		cbt.Update([&](uint32 heapIndex)
 			{
+				Vector3 a, b, c;
+				LEB::GetTriangleVertices(heapIndex, a, b, c);
+				a *= scale;
+				b *= scale;
+				c *= scale;
 
+				Vector2 relMousePos = Input::Instance().GetMousePosition() - Vector2(cPos.x, cPos.y);
+
+				if (LEB::PointInTriangle(relMousePos, Vector2(a), Vector2(b), Vector2(c)))
+				{
+					cbt.SplitNode(heapIndex);
+				}
+				else
+				{
+					LEB::GetTriangleVertices(CBT<uint32>::SiblingID(heapIndex), a, b, c);
+					a *= scale;
+					b *= scale;
+					c *= scale;
+					if (!LEB::PointInTriangle(relMousePos, Vector2(a), Vector2(b), Vector2(c)) && heapIndex > 3)
+					{
+						cbt.MergeNode(heapIndex);
+					}
+				}
 			});
 	}
 	{
