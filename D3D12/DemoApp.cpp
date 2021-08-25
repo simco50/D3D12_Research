@@ -1694,15 +1694,17 @@ void DemoApp::UpdateImGui()
 {
 	ImGui::Begin("Triangles");
 
-	static int maxDepth = 5;
+	static int maxDepth = 4;
 	static bool init = false;
 
 	static CBT cbt;
-	if (ImGui::SliderInt("Max Depth", &maxDepth, 2, 8) || !init)
+	if (ImGui::SliderInt("Max Depth", &maxDepth, 2, 16) || !init)
 	{
 		cbt.Init(maxDepth, maxDepth);
 		init = true;
 	}
+
+	ImGui::Text("Size: %s", Math::PrettyPrintDataSize(cbt.GetMemoryUse()).c_str());
 
 	uint32 begin, size;
 	cbt.GetElementRange(1, begin, size);
@@ -1738,9 +1740,7 @@ void DemoApp::UpdateImGui()
 	}
 
 	ImGui::Spacing();
-
-	cbt.Update([](uint32) {});
-
+	
 	const ImVec2 cPos = ImGui::GetCursorScreenPos();
 	float scale = 400;
 
@@ -1770,11 +1770,20 @@ void DemoApp::UpdateImGui()
 		ImGui::GetWindowDrawList()->AddText(cPos + pos - ImGui::CalcTextSize(text.c_str()) * 0.5f, ImColor(1.0f, 1.0f, 1.0f, 1.0f), text.c_str());
 	};
 
-	auto iterateFn = [&](uint32 heapIndex)
 	{
-		LEBTriangle(heapIndex, Color(1, 0, 0, 0.5f), scale);
-	};
-	cbt.IterateLeaves(iterateFn);
+		PROFILE_SCOPE("CBT Update");
+		cbt.Update([](uint32 heapIndex)
+			{
+
+			});
+	}
+	{
+		PROFILE_SCOPE("CBT Draw");
+		cbt.IterateLeaves([&](uint32 heapIndex)
+			{
+				LEBTriangle(heapIndex, Color(1, 0, 0, 0.5f), scale);
+			});
+	}
 
 	ImGui::End();
 

@@ -1,29 +1,71 @@
 #pragma once
 
+template<typename StorageType = uint32>
 class CBT
 {
 public:
+	constexpr static uint32 DataTypeBitSize = sizeof(StorageType) * 8;
+
 	void Init(uint32 maxDepth, uint32 depth)
 	{
 		assert(depth <= maxDepth);
 
 		MaxDepth = maxDepth;
-		Size = Math::Exp2(maxDepth + 1);
 		if (Bits)
 		{
 			delete[] Bits;
 		}
-		Bits = new uint32[Size];
-		memset(Bits, 0, Size * sizeof(uint32));
-		SetData(0, MaxDepth);
+		uint32 NumBits = Math::Exp2(maxDepth + 2);
+		assert(NumBits < DataTypeBitSize || NumBits % DataTypeBitSize == 0);
+		NumDataElements = NumBits / DataTypeBitSize;
+		Bits = new uint32[NumDataElements];
+		memset(Bits, 0, NumBits / 8);
+		SetData(0, maxDepth);
 		uint32 minRange = Math::Exp2(depth);
 		uint32 maxRange = Math::Exp2(depth + 1);
-		uint32 interval = Math::Exp2(MaxDepth - depth);
+		uint32 interval = Math::Exp2(maxDepth - depth);
 		for (uint32 heapID = minRange; heapID < maxRange; ++heapID)
 		{
 			SetData(heapID * interval, 1);
 		}
 		SumReduction();
+	}
+
+	static uint32 BitfieldGet_Single(StorageType buffer, uint32 bitOffset, uint32 bitCount)
+	{
+		assert(bitOffset + bitCount <= DataTypeBitSize);
+		uint32 bitMask = ~(~0u << bitCount);
+		return (buffer >> bitOffset) & bitMask;
+	}
+
+	static void BitfieldSet_Single(StorageType& buffer, uint32 bitOffset, uint32 bitCount, uint32 value)
+	{
+		assert(bitOffset + bitCount <= DataTypeBitSize);
+		uint32 bitMask = ~(~(~0u << bitCount) << bitOffset);
+		buffer &= bitMask;
+		buffer |= value << bitOffset;
+	}
+
+	uint32 BinaryHeapGet(uint32 bitOffset, uint32 bitCount) const
+	{
+		uint32 elementIndex = bitOffset / DataTypeBitSize;
+		uint32 elementOffsetLSB = bitOffset % DataTypeBitSize;
+		uint32 bitCountLSB = Math::Min(bitCount, DataTypeBitSize - elementOffsetLSB);
+		uint32 bitCountMSB = bitCount - bitCountLSB;
+		uint32 valueLSB = BitfieldGet_Single(Bits[elementIndex], elementOffsetLSB, bitCountLSB);
+		uint32 valueMSB = BitfieldGet_Single(Bits[Math::Min(elementIndex + 1, NumDataElements - 1)], 0, bitCountMSB);
+		uint32 val = valueLSB | (valueMSB << bitCountLSB);
+		return val;
+	}
+
+	void BinaryHeapSet(uint32 bitOffset, uint32 bitCount, uint32 value)
+	{
+		uint32 elementIndex = bitOffset / DataTypeBitSize;
+		uint32 elementOffsetLSB = bitOffset % DataTypeBitSize;
+		uint32 bitCountLSB = Math::Min(bitCount, DataTypeBitSize - elementOffsetLSB);
+		uint32 bitCountMSB = bitCount - bitCountLSB;
+		BitfieldSet_Single(Bits[elementIndex], elementOffsetLSB, bitCountLSB, value);
+		BitfieldSet_Single(Bits[Math::Min(elementIndex + 1, NumDataElements - 1)], 0, bitCountMSB, value >> bitCountLSB);
 	}
 
 	void SumReduction()
@@ -41,14 +83,26 @@ public:
 		}
 	}
 
+	void GetDataRange(uint32 heapIndex, uint32* pOffset, uint32* pSize) const
+	{
+		uint32 depth = (uint32)floor(log2(heapIndex));
+		*pSize = MaxDepth - depth + 1;
+		*pOffset = Math::Exp2(depth + 1) + heapIndex * *pSize;
+		assert(*pSize < DataTypeBitSize);
+	}
+
 	uint32 GetData(uint32 index) const
 	{
-		return Bits[index];
+		uint32 offset, size;
+		GetDataRange(index, &offset, &size);
+		return BinaryHeapGet(offset, size);
 	}
 
 	void SetData(uint32 index, uint32 value)
 	{
-		Bits[index] = value;
+		uint32 offset, size;
+		GetDataRange(index, &offset, &size);
+		BinaryHeapSet(offset, size, value);
 	}
 
 	template<typename HeapFn>
@@ -175,6 +229,11 @@ public:
 		begin = Math::Exp2(depth + 1) + heapID * size;
 	}
 
+	uint32 GetMemoryUse() const
+	{
+		return NumDataElements * sizeof(StorageType);
+	}
+
 	~CBT()
 	{
 		delete[] Bits;
@@ -182,7 +241,7 @@ public:
 
 private:
 	uint32 MaxDepth;
-	uint32 Size;
+	uint32 NumDataElements;
 	uint32* Bits = nullptr;
 };
 
@@ -258,12 +317,12 @@ namespace LEB
 		c = Vector3(t._31, t._32, t._33);
 	}
 
-	float sign(const Vector2& p1, const Vector2& p2, const Vector2& p3)
+	inline float sign(const Vector2& p1, const Vector2& p2, const Vector2& p3)
 	{
 		return (p1.x - p3.x) * (p2.y - p3.y) - (p2.x - p3.x) * (p1.y - p3.y);
 	}
 
-	bool PointInTriangle(const Vector2& pt, const Vector2& v1, const Vector2& v2, const Vector2& v3)
+	inline bool PointInTriangle(const Vector2& pt, const Vector2& v1, const Vector2& v2, const Vector2& v3)
 	{
 		float d1, d2, d3;
 		bool has_neg, has_pos;
