@@ -46,6 +46,20 @@ struct IntVector3
 	int32 x, y, z;
 };
 
+struct IntVector4
+{
+	IntVector4()
+		: x(0), y(0), z(0), w(0)
+	{}
+	IntVector4(int32 x, int32 y, int32 z, int32 w)
+		: x(x), y(y), z(z), w(w)
+	{}
+	IntVector4(const Vector4& v)
+		: x((int32)v.x), y((int32)v.y), z((int32)v.z), w((int32)v.w)
+	{}
+	int32 x, y, z, w;
+};
+
 template<typename T>
 struct RectT
 {

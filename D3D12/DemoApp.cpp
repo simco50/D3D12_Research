@@ -1700,7 +1700,7 @@ void DemoApp::UpdateImGui()
 	static CBT cbt;
 	if (ImGui::SliderInt("Max Depth", &maxDepth, 2, 16) || !init)
 	{
-		cbt.Init(maxDepth, maxDepth);
+		cbt.Init(maxDepth, 1);
 		init = true;
 	}
 
@@ -1742,7 +1742,7 @@ void DemoApp::UpdateImGui()
 	ImGui::Spacing();
 	
 	const ImVec2 cPos = ImGui::GetCursorScreenPos();
-	float scale = 400;
+	float scale = 800;
 
 	ImGui::GetWindowDrawList()->AddQuadFilled(
 		cPos + ImVec2(0, 0),
@@ -1750,6 +1750,9 @@ void DemoApp::UpdateImGui()
 		cPos + ImVec2(scale, scale),
 		cPos + ImVec2(0, scale),
 		ImColor(1.0f, 1.0f, 1.0f, 0.3f));
+
+	LEB::NeighborIDs ids = LEB::GetNeighbors(20);
+	ids;
 
 	auto LEBTriangle = [&](uint32 heapIndex, Color color, float scale)
 	{
@@ -1772,32 +1775,25 @@ void DemoApp::UpdateImGui()
 
 	{
 		PROFILE_SCOPE("CBT Update");
-		cbt.Update([&](uint32 heapIndex)
+		cbt.IterateLeaves([&](uint32 heapIndex)
 			{
-				Vector3 a, b, c;
-				LEB::GetTriangleVertices(heapIndex, a, b, c);
-				a *= scale;
-				b *= scale;
-				c *= scale;
-
 				Vector2 relMousePos = Input::Instance().GetMousePosition() - Vector2(cPos.x, cPos.y);
 
-				if (LEB::PointInTriangle(relMousePos, Vector2(a), Vector2(b), Vector2(c)))
+				if (LEB::PointInTriangle(relMousePos, heapIndex, scale))
 				{
-					cbt.SplitNode(heapIndex);
+					LEB::CBTSplitConformed(cbt, heapIndex);
 				}
-				else
+
+				LEB::DiamondIDs diamond = LEB::GetDiamond(heapIndex);
+				if (!LEB::PointInTriangle(relMousePos, diamond.Base, scale) && !LEB::PointInTriangle(relMousePos, diamond.Top, scale))
 				{
-					LEB::GetTriangleVertices(CBT<uint32>::SiblingID(heapIndex), a, b, c);
-					a *= scale;
-					b *= scale;
-					c *= scale;
-					if (!LEB::PointInTriangle(relMousePos, Vector2(a), Vector2(b), Vector2(c)) && heapIndex > 3)
-					{
-						cbt.MergeNode(heapIndex);
-					}
+					LEB::CBTMergeConformed(cbt, heapIndex);
 				}
 			});
+	}
+	{
+		PROFILE_SCOPE("CBT Sum Reduction");
+		cbt.SumReduction();
 	}
 	{
 		PROFILE_SCOPE("CBT Draw");
