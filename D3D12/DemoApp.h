@@ -180,6 +180,15 @@ private:
 	std::vector<Light> m_Lights;
 	std::unique_ptr<Buffer> m_pLightBuffer;
 
+	//CBT
+	std::unique_ptr<Buffer> pCBTTarget;
+	std::unique_ptr<RootSignature> m_pCBTRS;
+	std::unique_ptr<Buffer> m_pCBTBuffer;
+	std::unique_ptr<Buffer> m_pCBTIndirectArgs;
+	PipelineState* m_pCBTIndirectArgsPSO = nullptr;
+	PipelineState* m_pCBTSumReductionPSO = nullptr;
+	PipelineState* m_pCBTUpdatePSO = nullptr;
+
 	Texture* m_pVisualizeTexture = nullptr;
 	SceneView m_SceneData;
 	bool m_CapturePix = false;

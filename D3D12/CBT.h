@@ -1,5 +1,7 @@
 #pragma once
 
+#define CBT_MEMORY_COMPACT 1
+
 class CBT
 {
 public:
@@ -14,8 +16,14 @@ public:
 		assert(NumBits < NumBitsPerElement || NumBits % NumBitsPerElement == 0);
 
 		Bits.clear();
+
+#if CBT_MEMORY_COMPACT
 		Bits.resize(NumBits / NumBitsPerElement);
 		Bits[0] |= 1 << maxDepth;
+#else
+		Bits.resize(NumBits);
+		Bits[0] = maxDepth;
+#endif
 
 		uint32 minRange = Math::Exp2(initialDepth);
 		uint32 maxRange = Math::Exp2(initialDepth + 1);
@@ -26,6 +34,8 @@ public:
 		}
 		SumReduction();
 	}
+
+#if CBT_MEMORY_COMPACT
 
 	// Get a value from the bag of bits. We must read from 2 elements in case the value crosses the boundary
 	uint32 BinaryHeapGet(uint32 bitOffset, uint32 bitCount) const
@@ -66,22 +76,6 @@ public:
 		BitfieldSet_Single(Bits[Math::Min(elementIndex + 1, (uint32)Bits.size() - 1)], 0, bitCountMSB, value >> bitCountLSB);
 	}
 
-	// Sum reduction bottom to top. This can be parallelized per layer
-	void SumReduction()
-	{
-		int32 depth = GetMaxDepth() - 1;
-		while (depth >= 0)
-		{
-			uint32 minRange = Math::Exp2(depth);
-			uint32 maxRange = Math::Exp2(depth + 1);
-			for (uint32 k = minRange; k < maxRange; ++k)
-			{
-				SetData(k, GetData(LeftChildID(k)) + GetData(RightChildID(k)));
-			}
-			--depth;
-		}
-	}
-
 	void GetDataRange(uint32 heapIndex, uint32* pOffset, uint32* pSize) const
 	{
 		uint32 depth = (uint32)floor(log2(heapIndex));
@@ -89,19 +83,43 @@ public:
 		*pOffset = Math::Exp2(depth + 1) + heapIndex * *pSize;
 		assert(*pSize < NumBitsPerElement);
 	}
+#endif
+
+	// Sum reduction bottom to top. This can be parallelized per layer
+	void SumReduction()
+	{
+		int32 depth = GetMaxDepth() - 1;
+		while (depth >= 0)
+		{
+			uint32 count = 1u << depth;
+			for (uint32 k = count; k < count << 1u; ++k)
+			{
+				SetData(k, GetData(LeftChildID(k)) + GetData(RightChildID(k)));
+			}
+			--depth;
+		}
+	}
 
 	uint32 GetData(uint32 index) const
 	{
+#if CBT_MEMORY_COMPACT
 		uint32 offset, size;
 		GetDataRange(index, &offset, &size);
 		return BinaryHeapGet(offset, size);
+#else
+		return Bits[index];
+#endif
 	}
 
 	void SetData(uint32 index, uint32 value)
 	{
+#if CBT_MEMORY_COMPACT
 		uint32 offset, size;
 		GetDataRange(index, &offset, &size);
 		BinaryHeapSet(offset, size, value);
+#else
+		Bits[index] = value;
+#endif
 	}
 
 	template<typename HeapFn>
@@ -117,42 +135,42 @@ public:
 
 	uint32 LeafIndexToHeapIndex(uint32 leafIndex) const
 	{
-		uint32 heapIndex = 1;
-		while (GetData(heapIndex) > 1)
+		uint32 heapIndex = 1u;
+		while (GetData(heapIndex) > 1u)
 		{
-			uint32 leftChildValue = GetData(LeftChildID(heapIndex));
-			if (leafIndex < leftChildValue)
-			{
-				heapIndex = LeftChildID(heapIndex);
-			}
-			else
-			{
-				leafIndex -= leftChildValue;
-				heapIndex = RightChildID(heapIndex);
-			}
+			uint32 leftChild = LeftChildID(heapIndex);
+			uint32 leftChildValue = GetData(leftChild);
+			uint32 bit = leafIndex < leftChildValue ? 0 : 1;
+
+			heapIndex = leftChild | bit;
+			leafIndex -= bit * leftChildValue;
 		}
 		return heapIndex;
 	}
 
 	uint32 BitfieldHeapID(uint32 heapIndex) const
 	{
-		uint32 msb = 0;
-		assert(BitOperations::MostSignificantBit(heapIndex, &msb));
-		return heapIndex * Math::Exp2(GetMaxDepth() - msb);
+		return heapIndex * Math::Exp2(GetMaxDepth() - GetDepth(heapIndex));
 	}
 
 	void SplitNode(uint32 heapIndex)
 	{
-		uint32 rightChild = RightChildID(heapIndex);
-		uint32 bit = BitfieldHeapID(rightChild);
-		SetData(bit, 1);
+		if (!IsCeilNode(heapIndex))
+		{
+			uint32 rightChild = RightChildID(heapIndex);
+			uint32 bit = BitfieldHeapID(rightChild);
+			SetData(bit, 1);
+		}
 	}
 
 	void MergeNode(uint32 heapIndex)
 	{
-		uint32 rightSibling = heapIndex | 1;
-		uint32 bit = BitfieldHeapID(rightSibling);
-		SetData(bit, 0);
+		if (!IsRootNode(heapIndex))
+		{
+			uint32 rightSibling = heapIndex | 1;
+			uint32 bit = BitfieldHeapID(rightSibling);
+			SetData(bit, 0);
+		}
 	}
 
 	// Returns true if the node is at the bottom of the tree and can't be split further
@@ -163,6 +181,11 @@ public:
 		return msb == GetMaxDepth();
 	}
 
+	static bool IsRootNode(uint32 heapIndex)
+	{
+		return heapIndex == 1u;
+	}
+
 	// Contains the final sum reduction value == number of leaf nodes
 	uint32 NumNodes() const
 	{
@@ -171,9 +194,13 @@ public:
 
 	uint32 GetMaxDepth() const
 	{
+#if CBT_MEMORY_COMPACT
 		uint32 maxDepth;
 		assert(BitOperations::LeastSignificantBit(Bits[0], &maxDepth));
 		return maxDepth;
+#else
+		return Bits[0];
+#endif
 	}
 
 	uint32 NumBitfieldBits() const
@@ -197,12 +224,12 @@ public:
 
 	static uint32 LeftChildID(uint32 heapIndex)
 	{
-		return heapIndex * 2;
+		return heapIndex << 1;
 	}
 
 	static uint32 RightChildID(uint32 heapIndex)
 	{
-		return heapIndex * 2 + 1;
+		return (heapIndex << 1) | 1;
 	}
 
 	static uint32 ParentID(uint32 heapIndex)
@@ -217,7 +244,19 @@ public:
 
 	static uint32 GetDepth(uint32 heapIndex)
 	{
-		return (uint32)floor(log2(heapIndex));
+		uint32 msb;
+		BitOperations::MostSignificantBit(heapIndex, &msb);
+		return msb;
+	}
+
+	const void* GetData() const
+	{
+		return Bits.data();
+	}
+
+	void* GetData()
+	{
+		return Bits.data();
 	}
 
 private:
@@ -308,11 +347,11 @@ namespace LEB
 	inline NeighborIDs GetNeighbors(uint32 heapIndex)
 	{
 		uint32 depth;
-		BitOperations::MostSignificantBit(heapIndex, &depth);
+		assert(BitOperations::MostSignificantBit(heapIndex, &depth));
 
-		int32 bitID = depth > 0 ? (int32)depth - 1 : 0;
+		int32 bitID = Math::Max(0u, depth - 1u);
 		uint32 b = Private::GetBitValue(heapIndex, bitID);
-		NeighborIDs neighbors{ 0, 0, 3u - b, 2u + b };
+		NeighborIDs neighbors{ 0u, 0u, 3u - b, 2u + b };
 
 		for (bitID = depth - 2; bitID >= 0; --bitID)
 		{
@@ -324,8 +363,7 @@ namespace LEB
 			uint32 b2 = n2 == 0 ? 0 : 1;
 			uint32 b3 = n3 == 0 ? 0 : 1;
 
-			uint32 bit = Private::GetBitValue(heapIndex, bitID);
-			if (bit == 0)
+			if (Private::GetBitValue(heapIndex, bitID) == 0)
 			{
 				neighbors = NeighborIDs{ (n4 << 1) | 1, (n3 << 1) | b3, (n2 << 1) | b2, (n4 << 1) };
 			}
@@ -359,6 +397,7 @@ namespace LEB
 
 			cbt.SplitNode(heapIndex);
 			uint32 edgeNeighbor = GetNeighbors(heapIndex).Edge;
+
 			while (edgeNeighbor > minNodeID)
 			{
 				cbt.SplitNode(edgeNeighbor);
