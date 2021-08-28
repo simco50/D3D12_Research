@@ -1728,43 +1728,63 @@ void DemoApp::UpdateImGui()
 
 	static bool gpuUpdate = false;
 	ImGui::Checkbox("GPU Update", &gpuUpdate);
+	ImGui::SameLine();
 	static bool splitting = true;
 	static bool merging = true;
 	ImGui::Checkbox("Splitting", &splitting);
-	ImGui::Checkbox("Mergning", &merging);
-
+	ImGui::SameLine();
+	ImGui::Checkbox("Merging", &merging);
+	ImGui::SameLine();
 
 	ImGui::Text("Size: %s", Math::PrettyPrintDataSize(cbt.GetMemoryUse()).c_str());
 
+	const float itemWidth = 20;
+	const float itemSpacing = 3;
+
+	ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(itemSpacing, itemSpacing));
+
+	ImDrawList* bgList = ImGui::GetWindowDrawList();
+
 	uint32 heapID = 1;
-	ImGui::BeginDisabled(true);
-	for (uint32 d = 0; d <= cbt.GetMaxDepth(); ++d)
+	for (uint32 d = 0; d < cbt.GetMaxDepth(); ++d)
 	{
 		ImGui::Spacing();
 		for (uint32 j = 0; j < Math::Exp2(d); ++j)
 		{
+			ImVec2 cursor = ImGui::GetCursorScreenPos();
+			cursor += ImVec2(itemWidth, itemWidth * 0.5f);
+			float rightChildPos = (itemWidth + itemSpacing) * ((1u << (cbt.GetMaxDepth() - d - 1)) - 0.5f);
+
 			ImGui::PushID(heapID);
-			ImGui::Button(Sprintf("%d", cbt.GetData(heapID)).c_str(), ImVec2(20, 0));
+			ImGui::Button(Sprintf("%d", cbt.GetData(heapID)).c_str(), ImVec2(itemWidth, itemWidth));
+			bgList->AddLine(cursor, ImVec2(cursor.x + rightChildPos, cursor.y), 0xFFFFFFFF);
+			bgList->AddLine(ImVec2(cursor.x - itemWidth * 0.5f, cursor.y + itemWidth * 0.5f), ImVec2(cursor.x - itemWidth * 0.5f, cursor.y + itemWidth * 0.5f + itemSpacing), 0xFFFFFFFF);
+			bgList->AddLine(ImVec2(cursor.x + rightChildPos, cursor.y), ImVec2(cursor.x + rightChildPos, cursor.y + itemWidth * 0.5f + itemSpacing), 0xFFFFFFFF);
 			ImGui::SameLine();
+			ImGui::Spacing();
+			ImGui::SameLine(0, (itemWidth + itemSpacing) * ((1u << (cbt.GetMaxDepth() - d)) - 1));
 			ImGui::PopID();
 			++heapID;
 		}
 	}
-	ImGui::EndDisabled();
 
+	ImGui::Spacing();
 	ImGui::Separator();
 
 	for (uint32 leafIndex = 0; leafIndex < cbt.NumBitfieldBits(); ++leafIndex)
 	{
 		ImGui::PushID(10000 + leafIndex);
 		uint32 index = (int)Math::Exp2(cbt.GetMaxDepth()) + leafIndex;
-		if (ImGui::Button(Sprintf("%d", cbt.GetData(index)).c_str(), ImVec2(20, 0)))
+		if (ImGui::Button(Sprintf("%d", cbt.GetData(index)).c_str(), ImVec2(itemWidth, itemWidth)))
 		{
 			cbt.SetData(index, !cbt.GetData(index));
 		}
 		ImGui::SameLine();
 		ImGui::PopID();
 	}
+
+	ImGui::PopStyleVar();
+
 
 	ImGui::Spacing();
 	
@@ -1798,25 +1818,28 @@ void DemoApp::UpdateImGui()
 	};
 
 	{
-		PROFILE_SCOPE("CBT Update");
-		cbt.IterateLeaves([&](uint32 heapIndex)
-			{
-				Vector2 relMousePos = Input::Instance().GetMousePosition() - Vector2(cPos.x, cPos.y);
-
-				if (splitting && LEB::PointInTriangle(relMousePos, heapIndex, scale))
+		if (Input::Instance().IsMouseDown(VK_LBUTTON))
+		{
+			PROFILE_SCOPE("CBT Update");
+			cbt.IterateLeaves([&](uint32 heapIndex)
 				{
-					LEB::CBTSplitConformed(cbt, heapIndex);
-				}
+					Vector2 relMousePos = Input::Instance().GetMousePosition() - Vector2(cPos.x, cPos.y);
 
-				if (!CBT::IsRootNode(heapIndex))
-				{
-					LEB::DiamondIDs diamond = LEB::GetDiamond(heapIndex);
-					if (merging && !LEB::PointInTriangle(relMousePos, diamond.Base, scale) && !LEB::PointInTriangle(relMousePos, diamond.Top, scale))
+					if (splitting && LEB::PointInTriangle(relMousePos, heapIndex, scale))
 					{
-						LEB::CBTMergeConformed(cbt, heapIndex);
+						LEB::CBTSplitConformed(cbt, heapIndex);
 					}
-				}
-			});
+
+					if (!CBT::IsRootNode(heapIndex))
+					{
+						LEB::DiamondIDs diamond = LEB::GetDiamond(heapIndex);
+						if (merging && !LEB::PointInTriangle(relMousePos, diamond.Base, scale) && !LEB::PointInTriangle(relMousePos, diamond.Top, scale))
+						{
+							LEB::CBTMergeConformed(cbt, heapIndex);
+						}
+					}
+				});
+		}
 	}
 	{
 		if (gpuUpdate)
@@ -1902,7 +1925,7 @@ void DemoApp::UpdateImGui()
 
 	m_FrameTimes[m_Frame % m_FrameTimes.size()] = Time::DeltaTime();
 
-	//ImGui::ShowDemoWindow();
+	ImGui::ShowDemoWindow();
 
 	if (m_pVisualizeTexture)
 	{

@@ -346,10 +346,8 @@ namespace LEB
 
 	inline NeighborIDs GetNeighbors(uint32 heapIndex)
 	{
-		uint32 depth;
-		assert(BitOperations::MostSignificantBit(heapIndex, &depth));
-
-		int32 bitID = Math::Max(0u, depth - 1u);
+		uint32 depth = CBT::GetDepth(heapIndex);
+		int32 bitID = depth > 0 ? depth - 1 : 0;
 		uint32 b = Private::GetBitValue(heapIndex, bitID);
 		NeighborIDs neighbors{ 0u, 0u, 3u - b, 2u + b };
 
@@ -375,6 +373,11 @@ namespace LEB
 		return neighbors;
 	}
 
+	inline uint32 GetEdgeNeighbor(uint32 heapIndex)
+	{
+		return GetNeighbors(heapIndex).Edge;
+	}
+
 	struct DiamondIDs
 	{
 		uint32 Base;
@@ -384,7 +387,7 @@ namespace LEB
 	inline DiamondIDs GetDiamond(uint32 heapIndex)
 	{
 		uint32 parent = CBT::ParentID(heapIndex);
-		uint32 edge = GetNeighbors(parent).Edge;
+		uint32 edge = GetEdgeNeighbor(parent);
 		edge = edge > 0 ? edge : parent;
 		return DiamondIDs{ parent, edge };
 	}
@@ -396,16 +399,16 @@ namespace LEB
 			const uint32 minNodeID = 1u;
 
 			cbt.SplitNode(heapIndex);
-			uint32 edgeNeighbor = GetNeighbors(heapIndex).Edge;
+			uint32 edgeNeighbor = GetEdgeNeighbor(heapIndex);
 
 			while (edgeNeighbor > minNodeID)
 			{
 				cbt.SplitNode(edgeNeighbor);
-				edgeNeighbor >>= 1;
+				edgeNeighbor = CBT::ParentID(edgeNeighbor);
 				if (edgeNeighbor > minNodeID)
 				{
 					cbt.SplitNode(edgeNeighbor);
-					edgeNeighbor = GetNeighbors(edgeNeighbor).Edge;
+					edgeNeighbor = GetEdgeNeighbor(edgeNeighbor);
 				}
 			}
 		}
