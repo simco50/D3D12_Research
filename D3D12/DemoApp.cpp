@@ -1751,84 +1751,9 @@ void DemoApp::UpdateImGui()
 
 	ImGui::Text("Size: %s", Math::PrettyPrintDataSize(cbt.GetMemoryUse()).c_str());
 
-	const float itemWidth = 20;
-	const float itemSpacing = 3;
 
-	ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(itemSpacing, itemSpacing));
-
-	ImDrawList* bgList = ImGui::GetWindowDrawList();
-
-	uint32 heapID = 1;
-	for (uint32 d = 0; d < cbt.GetMaxDepth(); ++d)
-	{
-		ImGui::Spacing();
-		for (uint32 j = 0; j < Math::Exp2(d); ++j)
-		{
-			ImVec2 cursor = ImGui::GetCursorScreenPos();
-			cursor += ImVec2(itemWidth, itemWidth * 0.5f);
-			float rightChildPos = (itemWidth + itemSpacing) * ((1u << (cbt.GetMaxDepth() - d - 1)) - 0.5f);
-
-			ImGui::PushID(heapID);
-			ImGui::Button(Sprintf("%d", cbt.GetData(heapID)).c_str(), ImVec2(itemWidth, itemWidth));
-			bgList->AddLine(cursor, ImVec2(cursor.x + rightChildPos, cursor.y), 0xFFFFFFFF);
-			bgList->AddLine(ImVec2(cursor.x - itemWidth * 0.5f, cursor.y + itemWidth * 0.5f), ImVec2(cursor.x - itemWidth * 0.5f, cursor.y + itemWidth * 0.5f + itemSpacing), 0xFFFFFFFF);
-			bgList->AddLine(ImVec2(cursor.x + rightChildPos, cursor.y), ImVec2(cursor.x + rightChildPos, cursor.y + itemWidth * 0.5f + itemSpacing), 0xFFFFFFFF);
-			ImGui::SameLine();
-			ImGui::Spacing();
-			ImGui::SameLine(0, (itemWidth + itemSpacing) * ((1u << (cbt.GetMaxDepth() - d)) - 1));
-			ImGui::PopID();
-			++heapID;
-		}
-	}
-
-	ImGui::Spacing();
-	ImGui::Separator();
-
-	for (uint32 leafIndex = 0; leafIndex < cbt.NumBitfieldBits(); ++leafIndex)
-	{
-		ImGui::PushID(10000 + leafIndex);
-		uint32 index = (int)Math::Exp2(cbt.GetMaxDepth()) + leafIndex;
-		if (ImGui::Button(Sprintf("%d", cbt.GetData(index)).c_str(), ImVec2(itemWidth, itemWidth)))
-		{
-			cbt.SetData(index, !cbt.GetData(index));
-		}
-		ImGui::SameLine();
-		ImGui::PopID();
-	}
-
-	ImGui::PopStyleVar();
-
-
-	ImGui::Spacing();
-
-	const ImVec2 cPos = ImGui::GetCursorScreenPos();
+	ImVec2 cPos = ImGui::GetCursorScreenPos();
 	float scale = 600;
-
-	ImGui::GetWindowDrawList()->AddQuadFilled(
-		cPos + ImVec2(0, 0),
-		cPos + ImVec2(scale, 0),
-		cPos + ImVec2(scale, scale),
-		cPos + ImVec2(0, scale),
-		ImColor(1.0f, 1.0f, 1.0f, 0.3f));
-
-	auto LEBTriangle = [&](uint32 heapIndex, Color color, float scale)
-	{
-		Vector3 a, b, c;
-		LEB::GetTriangleVertices(heapIndex, a, b, c);
-		a *= scale;
-		b *= scale;
-		c *= scale;
-
-		ImGui::GetWindowDrawList()->AddTriangle(
-			cPos + ImVec2(a.x, a.y),
-			cPos + ImVec2(b.x, b.y),
-			cPos + ImVec2(c.x, c.y),
-			ImColor(color.x, color.y, color.z, color.w));
-
-		ImVec2 pos = (ImVec2(a.x, a.y) + ImVec2(b.x, b.y) + ImVec2(c.x, c.y)) / 3;
-		std::string text = Sprintf("%d", heapIndex);
-		ImGui::GetWindowDrawList()->AddText(cPos + pos - ImGui::CalcTextSize(text.c_str()) * 0.5f, ImColor(1.0f, 1.0f, 1.0f, 0.1f), text.c_str());
-	};
 
 	{
 		if (gpuUpdate)
@@ -1841,9 +1766,7 @@ void DemoApp::UpdateImGui()
 				if (!m_pCBTBuffer || m_pCBTBuffer->GetSize() != size)
 				{
 					m_pCBTBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateByteAddress(size, BufferFlag::ShaderResource | BufferFlag::UnorderedAccess), "CBT");
-					pCBTTarget = m_pDevice->CreateBuffer(BufferDesc::CreateReadback(size), "CBT Readback");
 					m_pCBTTargetTexture = m_pDevice->CreateTexture(TextureDesc::CreateRenderTarget(512, 512, SWAPCHAIN_FORMAT, TextureFlag::ShaderResource), "CBT RT");
-					pCBTTarget->Map();
 					m_pCBTBuffer->SetData(pContext, cbt.GetData(), cbt.GetMemoryUse());
 				}
 				pContext->FlushResourceBarriers();
@@ -1896,7 +1819,7 @@ void DemoApp::UpdateImGui()
 						pContext->SetComputeDynamicConstantBufferView(1, reductionArgs);
 
 						pContext->SetPipelineState(m_pCBTSumReductionPSO);
-						pContext->Dispatch(1 << currentDepth);
+						pContext->Dispatch(ComputeUtils::GetNumThreadGroups(1 << currentDepth, 64));
 						pContext->InsertUavBarrier();
 					}
 				}
@@ -1922,21 +1845,71 @@ void DemoApp::UpdateImGui()
 					pContext->EndRenderPass();
 				}
 
-				pContext->InsertResourceBarrier(pCBTTarget.get(), D3D12_RESOURCE_STATE_COPY_DEST);
-				pContext->InsertResourceBarrier(m_pCBTBuffer.get(), D3D12_RESOURCE_STATE_COPY_SOURCE);
-				pContext->FlushResourceBarriers();
-				pContext->CopyBuffer(m_pCBTBuffer.get(), pCBTTarget.get(), (uint32)pCBTTarget->GetSize(), 0, 0);
-
 				ImGui::Image(m_pCBTTargetTexture.get(), ImVec2(scale, scale));
 			}
 
-			pContext->Execute(true);
-
-			void* pSource = pCBTTarget->GetMappedData();
-			memcpy(cbt.GetData(), pSource, pCBTTarget->GetSize());
+			pContext->Execute(false);
 		}
 		else
 		{
+			const float itemWidth = 20;
+			const float itemSpacing = 3;
+
+			ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(itemSpacing, itemSpacing));
+
+			ImDrawList* bgList = ImGui::GetWindowDrawList();
+
+			uint32 heapID = 1;
+			for (uint32 d = 0; d < cbt.GetMaxDepth(); ++d)
+			{
+				ImGui::Spacing();
+				for (uint32 j = 0; j < Math::Exp2(d); ++j)
+				{
+					ImVec2 cursor = ImGui::GetCursorScreenPos();
+					cursor += ImVec2(itemWidth, itemWidth * 0.5f);
+					float rightChildPos = (itemWidth + itemSpacing) * ((1u << (cbt.GetMaxDepth() - d - 1)) - 0.5f);
+
+					ImGui::PushID(heapID);
+					ImGui::Button(Sprintf("%d", cbt.GetData(heapID)).c_str(), ImVec2(itemWidth, itemWidth));
+					bgList->AddLine(cursor, ImVec2(cursor.x + rightChildPos, cursor.y), 0xFFFFFFFF);
+					bgList->AddLine(ImVec2(cursor.x - itemWidth * 0.5f, cursor.y + itemWidth * 0.5f), ImVec2(cursor.x - itemWidth * 0.5f, cursor.y + itemWidth * 0.5f + itemSpacing), 0xFFFFFFFF);
+					bgList->AddLine(ImVec2(cursor.x + rightChildPos, cursor.y), ImVec2(cursor.x + rightChildPos, cursor.y + itemWidth * 0.5f + itemSpacing), 0xFFFFFFFF);
+					ImGui::SameLine();
+					ImGui::Spacing();
+					ImGui::SameLine(0, (itemWidth + itemSpacing) * ((1u << (cbt.GetMaxDepth() - d)) - 1));
+					ImGui::PopID();
+					++heapID;
+				}
+			}
+
+			ImGui::Spacing();
+			ImGui::Separator();
+
+			for (uint32 leafIndex = 0; leafIndex < cbt.NumBitfieldBits(); ++leafIndex)
+			{
+				ImGui::PushID(10000 + leafIndex);
+				uint32 index = (int)Math::Exp2(cbt.GetMaxDepth()) + leafIndex;
+				if (ImGui::Button(Sprintf("%d", cbt.GetData(index)).c_str(), ImVec2(itemWidth, itemWidth)))
+				{
+					cbt.SetData(index, !cbt.GetData(index));
+				}
+				ImGui::SameLine();
+				ImGui::PopID();
+			}
+
+			ImGui::PopStyleVar();
+
+			ImGui::Spacing();
+
+			cPos = ImGui::GetCursorScreenPos();
+
+			ImGui::GetWindowDrawList()->AddQuadFilled(
+				cPos + ImVec2(0, 0),
+				cPos + ImVec2(scale, 0),
+				cPos + ImVec2(scale, scale),
+				cPos + ImVec2(0, scale),
+				ImColor(1.0f, 1.0f, 1.0f, 0.3f));
+
 			if (alwaysUpdate || Input::Instance().IsMouseDown(VK_LBUTTON))
 			{
 				PROFILE_SCOPE("CBT Update");
@@ -1960,6 +1933,25 @@ void DemoApp::UpdateImGui()
 					});
 			}
 			cbt.SumReduction();
+
+			auto LEBTriangle = [&](uint32 heapIndex, Color color, float scale)
+			{
+				Vector3 a, b, c;
+				LEB::GetTriangleVertices(heapIndex, a, b, c);
+				a *= scale;
+				b *= scale;
+				c *= scale;
+
+				ImGui::GetWindowDrawList()->AddTriangle(
+					cPos + ImVec2(a.x, a.y),
+					cPos + ImVec2(b.x, b.y),
+					cPos + ImVec2(c.x, c.y),
+					ImColor(color.x, color.y, color.z, color.w));
+
+				ImVec2 pos = (ImVec2(a.x, a.y) + ImVec2(b.x, b.y) + ImVec2(c.x, c.y)) / 3;
+				std::string text = Sprintf("%d", heapIndex);
+				ImGui::GetWindowDrawList()->AddText(cPos + pos - ImGui::CalcTextSize(text.c_str()) * 0.5f, ImColor(1.0f, 1.0f, 1.0f, 0.1f), text.c_str());
+			};
 
 			PROFILE_SCOPE("CBT Draw");
 			cbt.IterateLeaves([&](uint32 heapIndex)

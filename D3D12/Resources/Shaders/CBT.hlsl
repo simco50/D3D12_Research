@@ -34,12 +34,12 @@ void PrepareDispatchArgsCS(uint threadID : SV_DispatchThreadID)
 {
 	CBT cbt;
 	cbt.Init(uCBT, cCommonArgs.NumElements);
-	uIndirectArgs.Store3(0, uint3(cbt.NumNodes(), 1, 1));
+	uIndirectArgs.Store3(0, uint3(ceil((float)cbt.NumNodes() / 64), 1, 1));
 	uIndirectArgs.Store2(4 * 3, uint2(cbt.NumNodes() * 3, 1));
 }
 
 [RootSignature(RootSig)]
-[numthreads(1, 1, 1)]
+[numthreads(64, 1, 1)]
 void SumReductionCS(uint threadID : SV_DispatchThreadID)
 {
 	CBT cbt;
@@ -78,7 +78,7 @@ bool PointInTriangle(float2 pt, uint heapIndex, float scale)
 	return !(has_neg && has_pos);
 }
 
-[numthreads(1, 1, 1)]
+[numthreads(64, 1, 1)]
 void UpdateCS(uint3 threadID : SV_DispatchThreadID)
 {
 	CBT cbt;
