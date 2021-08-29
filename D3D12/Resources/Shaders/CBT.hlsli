@@ -37,9 +37,8 @@ struct CBT
 	void BitfieldSet_Single(uint elementIndex, uint bitOffset, uint bitCount, uint value)
 	{
 		uint bitMask = ~(~(~0u << bitCount) << bitOffset);
-		uint t;
-		Storage.InterlockedAnd(elementIndex * 4, bitMask, t);
-		Storage.InterlockedOr(elementIndex * 4, value << bitOffset, t);
+		Storage.InterlockedAnd(elementIndex * 4, bitMask);
+		Storage.InterlockedOr(elementIndex * 4, value << bitOffset);
 	}
 
 	uint BinaryHeapGet(uint bitOffset, uint bitCount)
@@ -108,14 +107,14 @@ struct CBT
 	{
 		uint rightChild = RightChildIndex(heapIndex);
 		uint bit = BitfieldHeapIndex(rightChild);
-		SetData(bit, 1);
+		SetData(bit, 1u);
 	}
 	
 	void MergeNode_Single(uint heapIndex)
 	{
-		uint rightChild = RightChildIndex(heapIndex);
-		uint bit = BitfieldHeapIndex(rightChild);
-		SetData(bit, 0);
+		uint rightSibling = heapIndex | 1u;
+		uint bit = BitfieldHeapIndex(rightSibling);
+		SetData(bit, 0u);
 	}
 
 	uint GetDepth(uint heapIndex)
@@ -126,22 +125,22 @@ struct CBT
 	// Helpers
 	uint LeftChildIndex(uint heapIndex)
 	{
-		return heapIndex << 1;
+		return heapIndex << 1u;
 	}
 	
 	uint RightChildIndex(uint heapIndex)
 	{
-		return (heapIndex << 1) | 1;
+		return (heapIndex << 1u) | 1u;
 	}
 	
 	uint ParentIndex(uint heapIndex)
 	{
-		return heapIndex >> 1;
+		return heapIndex >> 1u;
 	}
 	
 	uint SiblingIndex(uint heapIndex)
 	{
-		return heapIndex ^ 1;
+		return heapIndex ^ 1u;
 	}
 };
 
@@ -199,8 +198,14 @@ namespace LEB
 		return mul(windingMatrix, m);
 	}
 
-	float3x3 GetTriangleVertices(uint heapIndex, float3x3 baseTriangle)
+	float3x3 GetTriangleVertices(uint heapIndex)
 	{
+		float3x3 baseTriangle = float3x3(
+			0, 1, 0,
+			0, 0, 0,
+			1, 0, 0
+		);
+
 		float3x3 triMatrix = GetMatrix(heapIndex);
 		return mul(triMatrix, baseTriangle);
 	}
@@ -216,7 +221,7 @@ namespace LEB
 	NeighborIDs GetNeighbors(uint heapIndex)
 	{
 		int depth = firstbithigh(heapIndex);
-		uint bitID = depth > 0 ? depth - 1 : 0;
+		int bitID = depth > 0 ? depth - 1 : 0;
 		uint b = GetBitValue(heapIndex, bitID);
 
 		NeighborIDs neighbors;

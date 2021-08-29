@@ -1831,30 +1831,6 @@ void DemoApp::UpdateImGui()
 	};
 
 	{
-		if (alwaysUpdate || Input::Instance().IsMouseDown(VK_LBUTTON))
-		{
-			PROFILE_SCOPE("CBT Update");
-			cbt.IterateLeaves([&](uint32 heapIndex)
-				{
-					Vector2 relMousePos = Input::Instance().GetMousePosition() - Vector2(cPos.x, cPos.y);
-
-					if (splitting && LEB::PointInTriangle(relMousePos, heapIndex, scale))
-					{
-						LEB::CBTSplitConformed(cbt, heapIndex);
-					}
-
-					if (!CBT::IsRootNode(heapIndex))
-					{
-						LEB::DiamondIDs diamond = LEB::GetDiamond(heapIndex);
-						if (merging && !LEB::PointInTriangle(relMousePos, diamond.Base, scale) && !LEB::PointInTriangle(relMousePos, diamond.Top, scale))
-						{
-							LEB::CBTMergeConformed(cbt, heapIndex);
-						}
-					}
-				});
-		}
-	}
-	{
 		if (gpuUpdate)
 		{
 			CommandContext* pContext = m_pDevice->AllocateCommandContext();
@@ -1868,11 +1844,12 @@ void DemoApp::UpdateImGui()
 					pCBTTarget = m_pDevice->CreateBuffer(BufferDesc::CreateReadback(size), "CBT Readback");
 					m_pCBTTargetTexture = m_pDevice->CreateTexture(TextureDesc::CreateRenderTarget(512, 512, SWAPCHAIN_FORMAT, TextureFlag::ShaderResource), "CBT RT");
 					pCBTTarget->Map();
+					m_pCBTBuffer->SetData(pContext, cbt.GetData(), cbt.GetMemoryUse());
 				}
-				m_pCBTBuffer->SetData(pContext, cbt.GetData(), cbt.GetMemoryUse());
 				pContext->FlushResourceBarriers();
 
 				pContext->InsertResourceBarrier(m_pCBTBuffer.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+				pContext->InsertResourceBarrier(m_pCBTIndirectArgs.get(), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
 				pContext->SetComputeRootSignature(m_pCBTRS.get());
 
 				struct CommonArgs
@@ -1885,6 +1862,26 @@ void DemoApp::UpdateImGui()
 
 				pContext->BindResource(2, 0, m_pCBTBuffer->GetUAV());
 				pContext->BindResource(2, 1, m_pCBTIndirectArgs->GetUAV());
+
+				if (alwaysUpdate || Input::Instance().IsMouseDown(VK_LBUTTON))
+				{
+					GPU_PROFILE_SCOPE("CBT Update", pContext);
+
+					struct SubdivisionData
+					{
+						IntVector2 MouseLocation;
+						float Scale;
+					} subdivisionData;
+					subdivisionData.MouseLocation = Input::Instance().GetMousePosition();
+					subdivisionData.MouseLocation.x -= (int)cPos.x;
+					subdivisionData.MouseLocation.y -= (int)cPos.y;
+					subdivisionData.Scale = scale;
+					pContext->SetComputeDynamicConstantBufferView(1, subdivisionData);
+
+					pContext->SetPipelineState(m_pCBTUpdatePSO);
+					pContext->ExecuteIndirect(m_pDevice->GetIndirectDispatchSignature(), 1, m_pCBTIndirectArgs.get(), nullptr);
+					pContext->InsertUavBarrier();
+				}
 
 				{
 					GPU_PROFILE_SCOPE("CBT Sum Reduction", pContext);
@@ -1906,21 +1903,14 @@ void DemoApp::UpdateImGui()
 
 				{
 					GPU_PROFILE_SCOPE("CBT Update Indirect Args", pContext);
-
+					pContext->InsertResourceBarrier(m_pCBTIndirectArgs.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 					pContext->SetPipelineState(m_pCBTIndirectArgsPSO);
 					pContext->Dispatch(1);
 				}
 
 				{
-					GPU_PROFILE_SCOPE("CBT Update", pContext);
-
-					pContext->SetPipelineState(m_pCBTUpdatePSO);
-					pContext->ExecuteIndirect(m_pDevice->GetIndirectDispatchSignature(), 1, m_pCBTIndirectArgs.get(), nullptr);
-				}
-
-				{
 					GPU_PROFILE_SCOPE("CBT Render", pContext);
-
+					pContext->InsertResourceBarrier(m_pCBTIndirectArgs.get(), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
 					pContext->InsertResourceBarrier(m_pCBTTargetTexture.get(), D3D12_RESOURCE_STATE_RENDER_TARGET);
 					pContext->SetGraphicsRootSignature(m_pCBTRS.get());
 					pContext->SetPipelineState(m_pCBTRenderPSO);
@@ -1930,14 +1920,14 @@ void DemoApp::UpdateImGui()
 					pContext->BeginRenderPass(RenderPassInfo(m_pCBTTargetTexture.get(), RenderPassAccess::Clear_Store, nullptr, RenderPassAccess::NoAccess, false));
 					pContext->ExecuteIndirect(m_pDevice->GetIndirectDrawSignature(), 1, m_pCBTIndirectArgs.get(), nullptr, sizeof(uint32) * 3);
 					pContext->EndRenderPass();
-
-					m_pVisualizeTexture = m_pCBTTargetTexture.get();
 				}
 
 				pContext->InsertResourceBarrier(pCBTTarget.get(), D3D12_RESOURCE_STATE_COPY_DEST);
 				pContext->InsertResourceBarrier(m_pCBTBuffer.get(), D3D12_RESOURCE_STATE_COPY_SOURCE);
 				pContext->FlushResourceBarriers();
 				pContext->CopyBuffer(m_pCBTBuffer.get(), pCBTTarget.get(), (uint32)pCBTTarget->GetSize(), 0, 0);
+
+				ImGui::Image(m_pCBTTargetTexture.get(), ImVec2(scale, scale));
 			}
 
 			pContext->Execute(true);
@@ -1947,15 +1937,36 @@ void DemoApp::UpdateImGui()
 		}
 		else
 		{
-			cbt.SumReduction();
-		}
-	}
-	{
-		PROFILE_SCOPE("CBT Draw");
-		cbt.IterateLeaves([&](uint32 heapIndex)
+			if (alwaysUpdate || Input::Instance().IsMouseDown(VK_LBUTTON))
 			{
-				LEBTriangle(heapIndex, Color(1, 0, 0, 0.5f), scale);
-			});
+				PROFILE_SCOPE("CBT Update");
+				cbt.IterateLeaves([&](uint32 heapIndex)
+					{
+						Vector2 relMousePos = Input::Instance().GetMousePosition() - Vector2(cPos.x, cPos.y);
+
+						if (splitting && LEB::PointInTriangle(relMousePos, heapIndex, scale))
+						{
+							LEB::CBTSplitConformed(cbt, heapIndex);
+						}
+
+						if (!CBT::IsRootNode(heapIndex))
+						{
+							LEB::DiamondIDs diamond = LEB::GetDiamond(heapIndex);
+							if (merging && !LEB::PointInTriangle(relMousePos, diamond.Base, scale) && !LEB::PointInTriangle(relMousePos, diamond.Top, scale))
+							{
+								LEB::CBTMergeConformed(cbt, heapIndex);
+							}
+						}
+					});
+			}
+			cbt.SumReduction();
+
+			PROFILE_SCOPE("CBT Draw");
+			cbt.IterateLeaves([&](uint32 heapIndex)
+				{
+					LEBTriangle(heapIndex, Color(1, 0, 0, 0.5f), scale);
+				});
+		}
 	}
 
 	ImGui::End();

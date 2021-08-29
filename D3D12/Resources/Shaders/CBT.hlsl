@@ -19,8 +19,15 @@ struct SumReductionData
 	uint Depth;
 };
 
+struct SubdivisionData
+{
+	uint2 MouseLocation;
+	float Scale;
+};
+
 ConstantBuffer<CommonArgs> cCommonArgs : register(b0);
 ConstantBuffer<SumReductionData> cSumReductionData : register(b1);
+ConstantBuffer<SubdivisionData>  cSubdivisionData : register(b1);
 
 [numthreads(1, 1, 1)]
 void PrepareDispatchArgsCS(uint threadID : SV_DispatchThreadID)
@@ -48,10 +55,50 @@ void SumReductionCS(uint threadID : SV_DispatchThreadID)
 	}
 }
 
-[numthreads(16, 1, 1)]
-void UpdateCS(uint threadID : SV_DispatchThreadID)
+float Sign(float2 p1, float2 p2, float2 p3)
 {
-	
+	return (p1.x - p3.x) * (p2.y - p3.y) - (p2.x - p3.x) * (p1.y - p3.y);
+}
+
+bool PointInTriangle(float2 pt, uint heapIndex, float scale)
+{
+	float d1, d2, d3;
+	bool has_neg, has_pos;
+
+	float3x3 tri = LEB::GetTriangleVertices(heapIndex);
+	tri *= scale;
+
+	d1 = Sign(pt, tri[0].xy, tri[1].xy);
+	d2 = Sign(pt, tri[1].xy, tri[2].xy);
+	d3 = Sign(pt, tri[2].xy, tri[0].xy);
+
+	has_neg = (d1 < 0) || (d2 < 0) || (d3 < 0);
+	has_pos = (d1 > 0) || (d2 > 0) || (d3 > 0);
+
+	return !(has_neg && has_pos);
+}
+
+[numthreads(1, 1, 1)]
+void UpdateCS(uint3 threadID : SV_DispatchThreadID)
+{
+	CBT cbt;
+	cbt.Init(uCBT, cCommonArgs.NumElements);
+	uint heapIndex = cbt.LeafToHeapIndex(threadID.x);
+
+	if(PointInTriangle(cSubdivisionData.MouseLocation, heapIndex, cSubdivisionData.Scale))
+	{
+		LEB::CBTSplitConformed(cbt, heapIndex);
+	}
+
+	if(heapIndex > 1)
+	{
+		LEB::DiamondIDs diamond = LEB::GetDiamond(heapIndex);
+		if(!PointInTriangle(cSubdivisionData.MouseLocation, diamond.Base, cSubdivisionData.Scale)  &&
+			!PointInTriangle(cSubdivisionData.MouseLocation, diamond.Top, cSubdivisionData.Scale))
+		{
+			LEB::CBTMergeConformed(cbt, heapIndex);
+		}
+	}
 }
 
 void RenderVS(uint vertexID : SV_VertexID, out float4 pos : SV_POSITION, out float4 color : COLOR)
@@ -63,13 +110,7 @@ void RenderVS(uint vertexID : SV_VertexID, out float4 pos : SV_POSITION, out flo
 	uint vertexIndex = vertexID % 3;
 	uint heapIndex = cbt.LeafToHeapIndex(triangleIndex);
 
-	float3x3 baseTriangle = float3x3(
-		0, 1, 0,
-		0, 0, 0,
-		1, 0, 0
-	);
-
-	float3x3 tri = LEB::GetTriangleVertices(heapIndex, baseTriangle);
+	float3x3 tri = LEB::GetTriangleVertices(heapIndex);
 	float2 position = tri[vertexIndex].xy;
 	position = position * 2 - 1;
 	position.y = -position.y;
