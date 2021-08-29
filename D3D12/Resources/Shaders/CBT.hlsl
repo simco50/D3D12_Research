@@ -120,7 +120,12 @@ void RenderVS(uint vertexID : SV_VertexID, out float4 pos : SV_POSITION, out flo
 	color = float4(Random01(state), Random01(state), Random01(state), 1);
 }
 
-float4 RenderPS(float4 position : SV_POSITION, float4 color : COLOR) : SV_TARGET
+float4 RenderPS(float4 position : SV_POSITION, float4 color : COLOR, float3 bary : SV_Barycentrics) : SV_TARGET
 {
-	return color;
+	float3 deltas = fwidth(bary);
+	float3 smoothing = deltas * 1;
+	float3 thickness = deltas * 0.2;
+	bary = smoothstep(thickness, thickness + smoothing, bary);
+	float minBary = min(bary.x, min(bary.y, bary.z));
+	return float4(color.xyz * minBary, 1);
 }
