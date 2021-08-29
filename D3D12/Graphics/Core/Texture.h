@@ -162,11 +162,10 @@ struct TextureDesc
 		return desc;
 	}
 
-	static TextureDesc CreateDepth(uint32 width, uint32 height, DXGI_FORMAT format, TextureFlag flags = TextureFlag::DepthStencil, uint32 sampleCount = 1, const ClearBinding& clearBinding = ClearBinding(1, 0))
+	static TextureDesc CreateDepth(uint32 width, uint32 height, DXGI_FORMAT format, TextureFlag flags = TextureFlag::None, uint32 sampleCount = 1, const ClearBinding& clearBinding = ClearBinding(1, 0))
 	{
 		check(width);
 		check(height);
-		check(EnumHasAnyFlags(flags, TextureFlag::DepthStencil));
 		TextureDesc desc;
 		desc.Width = width;
 		desc.Height = height;
@@ -174,17 +173,16 @@ struct TextureDesc
 		desc.Mips = 1;
 		desc.SampleCount = sampleCount;
 		desc.Format = format;
-		desc.Usage = flags;
+		desc.Usage = flags | TextureFlag::DepthStencil;
 		desc.ClearBindingValue = clearBinding;
 		desc.Dimensions = TextureDimension::Texture2D;
 		return desc;
 	}
 
-	static TextureDesc CreateRenderTarget(uint32 width, uint32 height, DXGI_FORMAT format, TextureFlag flags = TextureFlag::RenderTarget, uint32 sampleCount = 1, const ClearBinding& clearBinding = ClearBinding(Color(0, 0, 0)))
+	static TextureDesc CreateRenderTarget(uint32 width, uint32 height, DXGI_FORMAT format, TextureFlag flags = TextureFlag::None, uint32 sampleCount = 1, const ClearBinding& clearBinding = ClearBinding(Color(0, 0, 0)))
 	{
 		check(width);
 		check(height);
-		check(EnumHasAnyFlags(flags, TextureFlag::RenderTarget));
 		TextureDesc desc;
 		desc.Width = width;
 		desc.Height = height;
@@ -192,7 +190,7 @@ struct TextureDesc
 		desc.Mips = 1;
 		desc.SampleCount = sampleCount;
 		desc.Format = format;
-		desc.Usage = flags;
+		desc.Usage = flags | TextureFlag::RenderTarget;
 		desc.ClearBindingValue = clearBinding;
 		desc.Dimensions = TextureDimension::Texture2D;
 		return desc;

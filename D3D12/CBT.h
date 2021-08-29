@@ -346,7 +346,7 @@ namespace LEB
 
 	inline NeighborIDs GetNeighbors(uint32 heapIndex)
 	{
-		uint32 depth = CBT::GetDepth(heapIndex);
+		int32 depth = (int32)CBT::GetDepth(heapIndex);
 		int32 bitID = depth > 0 ? depth - 1 : 0;
 		uint32 b = Private::GetBitValue(heapIndex, bitID);
 		NeighborIDs neighbors{ 0u, 0u, 3u - b, 2u + b };

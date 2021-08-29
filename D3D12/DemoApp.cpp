@@ -1708,7 +1708,17 @@ void DemoApp::InitializePipelines()
 		psoDesc.SetName("CBT Update");
 		m_pCBTUpdatePSO = m_pDevice->CreatePipeline(psoDesc);
 
-		m_pCBTIndirectArgs = m_pDevice->CreateBuffer(BufferDesc::CreateIndirectArguments<uint32>(3), "CBT Indirect Args");
+		PipelineStateInitializer drawPsoDesc;
+		drawPsoDesc.SetRootSignature(m_pCBTRS->GetRootSignature());
+		drawPsoDesc.SetPixelShader(m_pDevice->GetShader("CBT.hlsl", ShaderType::Pixel, "RenderPS"));
+		drawPsoDesc.SetVertexShader(m_pDevice->GetShader("CBT.hlsl", ShaderType::Vertex, "RenderVS"));
+		drawPsoDesc.SetRenderTargetFormat(SWAPCHAIN_FORMAT, DXGI_FORMAT_D32_FLOAT, 1);
+		drawPsoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
+		drawPsoDesc.SetDepthEnabled(false);
+		drawPsoDesc.SetName("Draw CBT");
+		m_pCBTRenderPSO = m_pDevice->CreatePipeline(drawPsoDesc);
+
+		m_pCBTIndirectArgs = m_pDevice->CreateBuffer(BufferDesc::CreateIndirectArguments<uint32>(5), "CBT Indirect Args");
 	}
 }
 
@@ -1731,6 +1741,9 @@ void DemoApp::UpdateImGui()
 	ImGui::SameLine();
 	static bool splitting = true;
 	static bool merging = true;
+	static bool alwaysUpdate = false;
+	ImGui::Checkbox("Always Update", &alwaysUpdate);
+	ImGui::SameLine();
 	ImGui::Checkbox("Splitting", &splitting);
 	ImGui::SameLine();
 	ImGui::Checkbox("Merging", &merging);
@@ -1787,7 +1800,7 @@ void DemoApp::UpdateImGui()
 
 
 	ImGui::Spacing();
-	
+
 	const ImVec2 cPos = ImGui::GetCursorScreenPos();
 	float scale = 600;
 
@@ -1818,7 +1831,7 @@ void DemoApp::UpdateImGui()
 	};
 
 	{
-		if (Input::Instance().IsMouseDown(VK_LBUTTON))
+		if (alwaysUpdate || Input::Instance().IsMouseDown(VK_LBUTTON))
 		{
 			PROFILE_SCOPE("CBT Update");
 			cbt.IterateLeaves([&](uint32 heapIndex)
@@ -1846,16 +1859,18 @@ void DemoApp::UpdateImGui()
 		{
 			CommandContext* pContext = m_pDevice->AllocateCommandContext();
 			{
-				GPU_PROFILE_SCOPE("CBT Sum Reduction", pContext);
+				GPU_PROFILE_SCOPE("GPU CBT", pContext);
 
 				uint32 size = cbt.GetMemoryUse();
 				if (!m_pCBTBuffer || m_pCBTBuffer->GetSize() != size)
 				{
 					m_pCBTBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateByteAddress(size, BufferFlag::ShaderResource | BufferFlag::UnorderedAccess), "CBT");
 					pCBTTarget = m_pDevice->CreateBuffer(BufferDesc::CreateReadback(size), "CBT Readback");
+					m_pCBTTargetTexture = m_pDevice->CreateTexture(TextureDesc::CreateRenderTarget(512, 512, SWAPCHAIN_FORMAT, TextureFlag::ShaderResource), "CBT RT");
 					pCBTTarget->Map();
 				}
 				m_pCBTBuffer->SetData(pContext, cbt.GetData(), cbt.GetMemoryUse());
+				pContext->FlushResourceBarriers();
 
 				pContext->InsertResourceBarrier(m_pCBTBuffer.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 				pContext->SetComputeRootSignature(m_pCBTRS.get());
@@ -1872,6 +1887,8 @@ void DemoApp::UpdateImGui()
 				pContext->BindResource(2, 1, m_pCBTIndirectArgs->GetUAV());
 
 				{
+					GPU_PROFILE_SCOPE("CBT Sum Reduction", pContext);
+
 					for (int32 currentDepth = (int32)cbt.GetMaxDepth() - 1; currentDepth >= 0; --currentDepth)
 					{
 						struct SumReductionData
@@ -1888,13 +1905,33 @@ void DemoApp::UpdateImGui()
 				}
 
 				{
+					GPU_PROFILE_SCOPE("CBT Update Indirect Args", pContext);
+
 					pContext->SetPipelineState(m_pCBTIndirectArgsPSO);
 					pContext->Dispatch(1);
 				}
 
 				{
+					GPU_PROFILE_SCOPE("CBT Update", pContext);
+
 					pContext->SetPipelineState(m_pCBTUpdatePSO);
 					pContext->ExecuteIndirect(m_pDevice->GetIndirectDispatchSignature(), 1, m_pCBTIndirectArgs.get(), nullptr);
+				}
+
+				{
+					GPU_PROFILE_SCOPE("CBT Render", pContext);
+
+					pContext->InsertResourceBarrier(m_pCBTTargetTexture.get(), D3D12_RESOURCE_STATE_RENDER_TARGET);
+					pContext->SetGraphicsRootSignature(m_pCBTRS.get());
+					pContext->SetPipelineState(m_pCBTRenderPSO);
+					pContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+					pContext->SetGraphicsDynamicConstantBufferView(0, commonArgs);
+					pContext->BindResource(2, 0, m_pCBTBuffer->GetUAV());
+					pContext->BeginRenderPass(RenderPassInfo(m_pCBTTargetTexture.get(), RenderPassAccess::Clear_Store, nullptr, RenderPassAccess::NoAccess, false));
+					pContext->ExecuteIndirect(m_pDevice->GetIndirectDrawSignature(), 1, m_pCBTIndirectArgs.get(), nullptr, sizeof(uint32) * 3);
+					pContext->EndRenderPass();
+
+					m_pVisualizeTexture = m_pCBTTargetTexture.get();
 				}
 
 				pContext->InsertResourceBarrier(pCBTTarget.get(), D3D12_RESOURCE_STATE_COPY_DEST);

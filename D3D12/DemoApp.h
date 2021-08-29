@@ -189,6 +189,9 @@ private:
 	PipelineState* m_pCBTSumReductionPSO = nullptr;
 	PipelineState* m_pCBTUpdatePSO = nullptr;
 
+	PipelineState* m_pCBTRenderPSO = nullptr;
+	std::unique_ptr<Texture> m_pCBTTargetTexture;
+
 	Texture* m_pVisualizeTexture = nullptr;
 	SceneView m_SceneData;
 	bool m_CapturePix = false;
