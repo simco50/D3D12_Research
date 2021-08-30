@@ -205,6 +205,11 @@ void ImGuiRenderer::Render(RGGraph& graph, const SceneView& sceneData, Texture* 
 					}
 					else
 					{
+						// Avoid trying to render things with a 0 cliprect
+						if (pcmd->ClipRect.z <= pcmd->ClipRect.x || pcmd->ClipRect.w <= pcmd->ClipRect.y)
+						{
+							continue;
+						}
 						struct Data
 						{
 							Matrix ProjectionMatrix;

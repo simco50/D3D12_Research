@@ -19,14 +19,13 @@
 #include "Graphics/Techniques/RTReflections.h"
 #include "Graphics/Techniques/PathTracing.h"
 #include "Graphics/Techniques/SSAO.h"
+#include "Graphics/Techniques/CBTTessellation.h"
 #include "Graphics/ImGuiRenderer.h"
 #include "Core/TaskQueue.h"
 #include "Core/CommandLine.h"
 #include "Core/Paths.h"
 #include "Core/Input.h"
 #include "Core/ConsoleVariables.h"
-#include "CBT.h"
-#include "Imgui/imgui_internal.h"
 
 static const int32 FRAME_COUNT = 3;
 static const DXGI_FORMAT SWAPCHAIN_FORMAT = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -181,6 +180,7 @@ DemoApp::DemoApp(WindowHandle window, const IntVector2& windowRect, int sampleCo
 	m_pSSAO = std::make_unique<SSAO>(m_pDevice.get());
 	m_pParticles = std::make_unique<GpuParticles>(m_pDevice.get());
 	m_pPathTracing = std::make_unique<PathTracing>(m_pDevice.get());
+	m_pCBTTessellation = std::make_unique<CBTTessellation>(m_pDevice.get());
 
 	Profiler::Get()->Initialize(m_pDevice.get(), FRAME_COUNT);
 	DebugRenderer::Get()->Initialize(m_pDevice.get());
@@ -302,7 +302,7 @@ void DemoApp::SetupScene(CommandContext& context)
 			meshInstance.Material = (uint32)materials.size() + parentMesh.MaterialId;
 			meshInstance.World = node.Transform;
 			meshInstances.push_back(meshInstance);
-			
+
 			Batch batch;
 			batch.Index = (int)m_SceneData.Batches.size();
 			batch.LocalBounds = parentMesh.Bounds;
@@ -349,7 +349,7 @@ void DemoApp::SetupScene(CommandContext& context)
 	}
 
 #if 0
-	for(int i = 0; i < 50; ++i)
+	for (int i = 0; i < 50; ++i)
 	{
 		Vector3 loc(
 			Math::RandomRange(-10.0f, 10.0f),
@@ -713,12 +713,12 @@ void DemoApp::Update()
 		m_ScreenshotBuffers.emplace(request);
 	}
 
-	if(!m_ScreenshotBuffers.empty())
+	if (!m_ScreenshotBuffers.empty())
 	{
 		while (!m_ScreenshotBuffers.empty() && m_pDevice->IsFenceComplete(m_ScreenshotBuffers.front().Fence))
 		{
 			const ScreenshotRequest& request = m_ScreenshotBuffers.front();
-			
+
 			TaskContext taskContext;
 			TaskQueue::Execute([request](uint32)
 				{
@@ -1036,11 +1036,12 @@ void DemoApp::Update()
 
 		m_pParticles->Render(graph, GetCurrentRenderTarget(), GetDepthStencil(), *m_pCamera);
 
+		m_pCBTTessellation->Execute(graph, GetCurrentRenderTarget(), GetDepthStencil(), m_SceneData);
+
 		RGPassBuilder sky = graph.AddPass("Sky");
-		Data.DepthStencil = sky.Read(Data.DepthStencil);
 		sky.Bind([=](CommandContext& renderContext, const RGPassResources& resources)
 			{
-				Texture* pDepthStencil = resources.GetTexture(Data.DepthStencil);
+				Texture* pDepthStencil = GetDepthStencil();
 				renderContext.InsertResourceBarrier(pDepthStencil, D3D12_RESOURCE_STATE_DEPTH_WRITE);
 				renderContext.InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RENDER_TARGET);
 
@@ -1688,284 +1689,13 @@ void DemoApp::InitializePipelines()
 		psoDesc.SetName("Skybox");
 		m_pSkyboxPSO = m_pDevice->CreatePipeline(psoDesc);
 	}
-
-	// CBT
-	{
-		m_pCBTRS = std::make_unique<RootSignature>(m_pDevice.get());
-		m_pCBTRS->FinalizeFromShader("CBT", m_pDevice->GetShader("CBT.hlsl", ShaderType::Compute, "SumReductionCS"));
-
-		PipelineStateInitializer psoDesc;
-		psoDesc.SetRootSignature(m_pCBTRS->GetRootSignature());
-		psoDesc.SetComputeShader(m_pDevice->GetShader("CBT.hlsl", ShaderType::Compute, "PrepareDispatchArgsCS"));
-		psoDesc.SetName("CBT Indirect Args");
-		m_pCBTIndirectArgsPSO = m_pDevice->CreatePipeline(psoDesc);
-
-		psoDesc.SetComputeShader(m_pDevice->GetShader("CBT.hlsl", ShaderType::Compute, "SumReductionCS"));
-		psoDesc.SetName("CBT Sum Reduction");
-		m_pCBTSumReductionPSO = m_pDevice->CreatePipeline(psoDesc);
-
-		psoDesc.SetComputeShader(m_pDevice->GetShader("CBT.hlsl", ShaderType::Compute, "UpdateCS"));
-		psoDesc.SetName("CBT Update");
-		m_pCBTUpdatePSO = m_pDevice->CreatePipeline(psoDesc);
-
-		PipelineStateInitializer drawPsoDesc;
-		drawPsoDesc.SetRootSignature(m_pCBTRS->GetRootSignature());
-		drawPsoDesc.SetPixelShader(m_pDevice->GetShader("CBT.hlsl", ShaderType::Pixel, "RenderPS"));
-		drawPsoDesc.SetVertexShader(m_pDevice->GetShader("CBT.hlsl", ShaderType::Vertex, "RenderVS"));
-		drawPsoDesc.SetRenderTargetFormat(SWAPCHAIN_FORMAT, DXGI_FORMAT_D32_FLOAT, 1);
-		drawPsoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
-		drawPsoDesc.SetDepthEnabled(false);
-		drawPsoDesc.SetName("Draw CBT");
-		m_pCBTRenderPSO = m_pDevice->CreatePipeline(drawPsoDesc);
-
-		m_pCBTIndirectArgs = m_pDevice->CreateBuffer(BufferDesc::CreateIndirectArguments<uint32>(5), "CBT Indirect Args");
-	}
 }
 
 void DemoApp::UpdateImGui()
 {
-	ImGui::Begin("Triangles");
-
-	static int maxDepth = 4;
-	static bool init = false;
-
-	static CBT cbt;
-	if (ImGui::SliderInt("Max Depth", &maxDepth, 2, 16) || !init)
-	{
-		cbt.Init(maxDepth, 1);
-		init = true;
-	}
-
-	static bool gpuUpdate = false;
-	ImGui::Checkbox("GPU Update", &gpuUpdate);
-	ImGui::SameLine();
-	static bool splitting = true;
-	static bool merging = true;
-	static bool alwaysUpdate = false;
-	ImGui::Checkbox("Always Update", &alwaysUpdate);
-	ImGui::SameLine();
-	ImGui::Checkbox("Splitting", &splitting);
-	ImGui::SameLine();
-	ImGui::Checkbox("Merging", &merging);
-	ImGui::SameLine();
-
-	ImGui::Text("Size: %s", Math::PrettyPrintDataSize(cbt.GetMemoryUse()).c_str());
-
-
-	ImVec2 cPos = ImGui::GetCursorScreenPos();
-	float scale = 600;
-
-	{
-		if (gpuUpdate)
-		{
-			CommandContext* pContext = m_pDevice->AllocateCommandContext();
-			{
-				GPU_PROFILE_SCOPE("GPU CBT", pContext);
-
-				uint32 size = cbt.GetMemoryUse();
-				if (!m_pCBTBuffer || m_pCBTBuffer->GetSize() != size)
-				{
-					m_pCBTBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateByteAddress(size, BufferFlag::ShaderResource | BufferFlag::UnorderedAccess), "CBT");
-					m_pCBTTargetTexture = m_pDevice->CreateTexture(TextureDesc::CreateRenderTarget(512, 512, SWAPCHAIN_FORMAT, TextureFlag::ShaderResource), "CBT RT");
-					m_pCBTBuffer->SetData(pContext, cbt.GetData(), cbt.GetMemoryUse());
-				}
-				pContext->FlushResourceBarriers();
-
-				pContext->InsertResourceBarrier(m_pCBTBuffer.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-				pContext->InsertResourceBarrier(m_pCBTIndirectArgs.get(), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
-				pContext->SetComputeRootSignature(m_pCBTRS.get());
-
-				struct CommonArgs
-				{
-					uint32 NumElements;
-				} commonArgs;
-				commonArgs.NumElements = cbt.GetMemoryUse() / sizeof(uint32);
-
-				pContext->SetComputeDynamicConstantBufferView(0, commonArgs);
-
-				pContext->BindResource(2, 0, m_pCBTBuffer->GetUAV());
-				pContext->BindResource(2, 1, m_pCBTIndirectArgs->GetUAV());
-
-				if (alwaysUpdate || Input::Instance().IsMouseDown(VK_LBUTTON))
-				{
-					GPU_PROFILE_SCOPE("CBT Update", pContext);
-
-					struct SubdivisionData
-					{
-						IntVector2 MouseLocation;
-						float Scale;
-					} subdivisionData;
-					subdivisionData.MouseLocation = Input::Instance().GetMousePosition();
-					subdivisionData.MouseLocation.x -= (int)cPos.x;
-					subdivisionData.MouseLocation.y -= (int)cPos.y;
-					subdivisionData.Scale = scale;
-					pContext->SetComputeDynamicConstantBufferView(1, subdivisionData);
-
-					pContext->SetPipelineState(m_pCBTUpdatePSO);
-					pContext->ExecuteIndirect(m_pDevice->GetIndirectDispatchSignature(), 1, m_pCBTIndirectArgs.get(), nullptr);
-					pContext->InsertUavBarrier();
-				}
-
-				{
-					GPU_PROFILE_SCOPE("CBT Sum Reduction", pContext);
-
-					for (int32 currentDepth = (int32)cbt.GetMaxDepth() - 1; currentDepth >= 0; --currentDepth)
-					{
-						struct SumReductionData
-						{
-							uint32 Depth;
-						} reductionArgs;
-						reductionArgs.Depth = currentDepth;
-						pContext->SetComputeDynamicConstantBufferView(1, reductionArgs);
-
-						pContext->SetPipelineState(m_pCBTSumReductionPSO);
-						pContext->Dispatch(ComputeUtils::GetNumThreadGroups(1 << currentDepth, 64));
-						pContext->InsertUavBarrier();
-					}
-				}
-
-				{
-					GPU_PROFILE_SCOPE("CBT Update Indirect Args", pContext);
-					pContext->InsertResourceBarrier(m_pCBTIndirectArgs.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-					pContext->SetPipelineState(m_pCBTIndirectArgsPSO);
-					pContext->Dispatch(1);
-				}
-
-				{
-					GPU_PROFILE_SCOPE("CBT Render", pContext);
-					pContext->InsertResourceBarrier(m_pCBTIndirectArgs.get(), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
-					pContext->InsertResourceBarrier(m_pCBTTargetTexture.get(), D3D12_RESOURCE_STATE_RENDER_TARGET);
-					pContext->SetGraphicsRootSignature(m_pCBTRS.get());
-					pContext->SetPipelineState(m_pCBTRenderPSO);
-					pContext->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-					pContext->SetGraphicsDynamicConstantBufferView(0, commonArgs);
-					pContext->BindResource(2, 0, m_pCBTBuffer->GetUAV());
-					pContext->BeginRenderPass(RenderPassInfo(m_pCBTTargetTexture.get(), RenderPassAccess::Clear_Store, nullptr, RenderPassAccess::NoAccess, false));
-					pContext->ExecuteIndirect(m_pDevice->GetIndirectDrawSignature(), 1, m_pCBTIndirectArgs.get(), nullptr, sizeof(uint32) * 3);
-					pContext->EndRenderPass();
-				}
-
-				ImGui::Image(m_pCBTTargetTexture.get(), ImVec2(scale, scale));
-			}
-
-			pContext->Execute(false);
-		}
-		else
-		{
-			const float itemWidth = 20;
-			const float itemSpacing = 3;
-
-			ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(itemSpacing, itemSpacing));
-
-			ImDrawList* bgList = ImGui::GetWindowDrawList();
-
-			uint32 heapID = 1;
-			for (uint32 d = 0; d < cbt.GetMaxDepth(); ++d)
-			{
-				ImGui::Spacing();
-				for (uint32 j = 0; j < Math::Exp2(d); ++j)
-				{
-					ImVec2 cursor = ImGui::GetCursorScreenPos();
-					cursor += ImVec2(itemWidth, itemWidth * 0.5f);
-					float rightChildPos = (itemWidth + itemSpacing) * ((1u << (cbt.GetMaxDepth() - d - 1)) - 0.5f);
-
-					ImGui::PushID(heapID);
-					ImGui::Button(Sprintf("%d", cbt.GetData(heapID)).c_str(), ImVec2(itemWidth, itemWidth));
-					bgList->AddLine(cursor, ImVec2(cursor.x + rightChildPos, cursor.y), 0xFFFFFFFF);
-					bgList->AddLine(ImVec2(cursor.x - itemWidth * 0.5f, cursor.y + itemWidth * 0.5f), ImVec2(cursor.x - itemWidth * 0.5f, cursor.y + itemWidth * 0.5f + itemSpacing), 0xFFFFFFFF);
-					bgList->AddLine(ImVec2(cursor.x + rightChildPos, cursor.y), ImVec2(cursor.x + rightChildPos, cursor.y + itemWidth * 0.5f + itemSpacing), 0xFFFFFFFF);
-					ImGui::SameLine();
-					ImGui::Spacing();
-					ImGui::SameLine(0, (itemWidth + itemSpacing) * ((1u << (cbt.GetMaxDepth() - d)) - 1));
-					ImGui::PopID();
-					++heapID;
-				}
-			}
-
-			ImGui::Spacing();
-			ImGui::Separator();
-
-			for (uint32 leafIndex = 0; leafIndex < cbt.NumBitfieldBits(); ++leafIndex)
-			{
-				ImGui::PushID(10000 + leafIndex);
-				uint32 index = (int)Math::Exp2(cbt.GetMaxDepth()) + leafIndex;
-				if (ImGui::Button(Sprintf("%d", cbt.GetData(index)).c_str(), ImVec2(itemWidth, itemWidth)))
-				{
-					cbt.SetData(index, !cbt.GetData(index));
-				}
-				ImGui::SameLine();
-				ImGui::PopID();
-			}
-
-			ImGui::PopStyleVar();
-
-			ImGui::Spacing();
-
-			cPos = ImGui::GetCursorScreenPos();
-
-			ImGui::GetWindowDrawList()->AddQuadFilled(
-				cPos + ImVec2(0, 0),
-				cPos + ImVec2(scale, 0),
-				cPos + ImVec2(scale, scale),
-				cPos + ImVec2(0, scale),
-				ImColor(1.0f, 1.0f, 1.0f, 0.3f));
-
-			if (alwaysUpdate || Input::Instance().IsMouseDown(VK_LBUTTON))
-			{
-				PROFILE_SCOPE("CBT Update");
-				cbt.IterateLeaves([&](uint32 heapIndex)
-					{
-						Vector2 relMousePos = Input::Instance().GetMousePosition() - Vector2(cPos.x, cPos.y);
-
-						if (splitting && LEB::PointInTriangle(relMousePos, heapIndex, scale))
-						{
-							LEB::CBTSplitConformed(cbt, heapIndex);
-						}
-
-						if (!CBT::IsRootNode(heapIndex))
-						{
-							LEB::DiamondIDs diamond = LEB::GetDiamond(heapIndex);
-							if (merging && !LEB::PointInTriangle(relMousePos, diamond.Base, scale) && !LEB::PointInTriangle(relMousePos, diamond.Top, scale))
-							{
-								LEB::CBTMergeConformed(cbt, heapIndex);
-							}
-						}
-					});
-			}
-			cbt.SumReduction();
-
-			auto LEBTriangle = [&](uint32 heapIndex, Color color, float scale)
-			{
-				Vector3 a, b, c;
-				LEB::GetTriangleVertices(heapIndex, a, b, c);
-				a *= scale;
-				b *= scale;
-				c *= scale;
-
-				ImGui::GetWindowDrawList()->AddTriangle(
-					cPos + ImVec2(a.x, a.y),
-					cPos + ImVec2(b.x, b.y),
-					cPos + ImVec2(c.x, c.y),
-					ImColor(color.x, color.y, color.z, color.w));
-
-				ImVec2 pos = (ImVec2(a.x, a.y) + ImVec2(b.x, b.y) + ImVec2(c.x, c.y)) / 3;
-				std::string text = Sprintf("%d", heapIndex);
-				ImGui::GetWindowDrawList()->AddText(cPos + pos - ImGui::CalcTextSize(text.c_str()) * 0.5f, ImColor(1.0f, 1.0f, 1.0f, 0.1f), text.c_str());
-			};
-
-			PROFILE_SCOPE("CBT Draw");
-			cbt.IterateLeaves([&](uint32 heapIndex)
-				{
-					LEBTriangle(heapIndex, Color(1, 0, 0, 0.5f), scale);
-				});
-		}
-	}
-
-	ImGui::End();
-
 	m_FrameTimes[m_Frame % m_FrameTimes.size()] = Time::DeltaTime();
 
-	ImGui::ShowDemoWindow();
+	//ImGui::ShowDemoWindow();
 
 	if (m_pVisualizeTexture)
 	{

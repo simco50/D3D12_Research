@@ -15,6 +15,7 @@ class RTReflections;
 class SSAO;
 class GpuParticles;
 class PathTracing;
+class CBTTessellation;
 struct SubMesh;
 struct Material;
 
@@ -91,6 +92,7 @@ private:
 	std::unique_ptr<RTReflections> m_pRTReflections;
 	std::unique_ptr<SSAO> m_pSSAO;
 	std::unique_ptr<PathTracing> m_pPathTracing;
+	std::unique_ptr<CBTTessellation> m_pCBTTessellation;
 
 	std::unique_ptr<Texture> m_pLightCookie;
 	std::array<std::unique_ptr<Texture>, (int)DefaultTexture::MAX> m_DefaultTextures;
@@ -179,17 +181,6 @@ private:
 	std::unique_ptr<Buffer> m_pMeshInstanceBuffer;
 	std::vector<Light> m_Lights;
 	std::unique_ptr<Buffer> m_pLightBuffer;
-
-	//CBT
-	std::unique_ptr<RootSignature> m_pCBTRS;
-	std::unique_ptr<Buffer> m_pCBTBuffer;
-	std::unique_ptr<Buffer> m_pCBTIndirectArgs;
-	PipelineState* m_pCBTIndirectArgsPSO = nullptr;
-	PipelineState* m_pCBTSumReductionPSO = nullptr;
-	PipelineState* m_pCBTUpdatePSO = nullptr;
-
-	PipelineState* m_pCBTRenderPSO = nullptr;
-	std::unique_ptr<Texture> m_pCBTTargetTexture;
 
 	Texture* m_pVisualizeTexture = nullptr;
 	SceneView m_SceneData;

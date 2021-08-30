@@ -201,7 +201,7 @@ namespace LEB
 	float3x3 GetTriangleVertices(uint heapIndex)
 	{
 		float3x3 baseTriangle = float3x3(
-			0, 1, 0,
+			0, 0, 1,
 			0, 0, 0,
 			1, 0, 0
 		);

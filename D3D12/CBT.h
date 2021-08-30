@@ -1,4 +1,5 @@
 #pragma once
+#include "Core/BitField.h"
 
 #define CBT_MEMORY_COMPACT 1
 
@@ -8,7 +9,7 @@ public:
 	using StorageType = uint32;
 	constexpr static uint32 NumBitsPerElement = sizeof(StorageType) * 8;
 
-	void Init(uint32 maxDepth, uint32 initialDepth)
+	void InitBare(uint32 maxDepth, uint32 initialDepth)
 	{
 		assert(initialDepth <= maxDepth);
 
@@ -32,6 +33,11 @@ public:
 		{
 			SetData(heapIndex * interval, 1);
 		}
+	}
+
+	void Init(uint32 maxDepth, uint32 initialDepth)
+	{
+		InitBare(maxDepth, initialDepth);
 		SumReduction();
 	}
 
@@ -89,6 +95,7 @@ public:
 	void SumReduction()
 	{
 		int32 depth = GetMaxDepth() - 1;
+
 		while (depth >= 0)
 		{
 			uint32 count = 1u << depth;
