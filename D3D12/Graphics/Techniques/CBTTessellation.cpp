@@ -25,7 +25,7 @@ void CBTTessellation::Execute(RGGraph& graph, Texture* pRenderTarget, Texture* p
 	static bool debugVisualize = false;
 	static bool cpuDemo = false;
 
-	Matrix terrainTransform = Matrix::CreateScale(30, 8, 30) * Matrix::CreateTranslation(-15, -5, -15);
+	Matrix terrainTransform = Matrix::CreateScale(30, 3, 30) * Matrix::CreateTranslation(-15, 0, -15);
 
 	ImGui::Begin("Parameters");
 	ImGui::Text("CBT");
@@ -73,14 +73,27 @@ void CBTTessellation::Execute(RGGraph& graph, Texture* pRenderTarget, Texture* p
 			context.SetComputeDynamicConstantBufferView(0, commonArgs);
 
 			context.BindResource(2, 0, m_pCBTBuffer->GetUAV());
+			context.BindResource(3, 0, m_pHeightmap->GetSRV());
 
 			struct SubdivisionData
 			{
 				Matrix Transform;
-				Matrix ViewInverse;
+				Matrix View;
+				Matrix ViewProjection;
+				Vector4 FrustumPlanes[6];
 			} subdivisionData;
-			subdivisionData.ViewInverse = resources.pCamera->GetViewInverse();
+			subdivisionData.View = resources.pCamera->GetView();
+			subdivisionData.ViewProjection = resources.pCamera->GetViewProjection();
 			subdivisionData.Transform = terrainTransform;
+			DirectX::XMVECTOR nearPlane, farPlane, left, right, top, bottom;
+			resources.pCamera->GetFrustum().GetPlanes(&nearPlane, &farPlane, &right, &left, &top, &bottom);
+			subdivisionData.FrustumPlanes[0] = Vector4(nearPlane);
+			subdivisionData.FrustumPlanes[1] = Vector4(farPlane);
+			subdivisionData.FrustumPlanes[2] = Vector4(left);
+			subdivisionData.FrustumPlanes[3] = Vector4(right);
+			subdivisionData.FrustumPlanes[4] = Vector4(top);
+			subdivisionData.FrustumPlanes[5] = Vector4(bottom);
+
 			context.SetComputeDynamicConstantBufferView(1, subdivisionData);
 
 			context.SetPipelineState(m_pCBTUpdatePSO);
@@ -205,7 +218,7 @@ void CBTTessellation::SetupPipelines()
 {
 	CommandContext* pContext = m_pDevice->AllocateCommandContext();
 	m_pHeightmap = std::make_unique<Texture>(m_pDevice);
-	m_pHeightmap->Create(pContext, "Resources/Terrain_Alpha-_7_.hdr");
+	m_pHeightmap->Create(pContext, "Resources/Terrain.dds");
 	pContext->Execute(true);
 
 	m_pCBTRS = std::make_unique<RootSignature>(m_pDevice);
@@ -230,14 +243,27 @@ void CBTTessellation::SetupPipelines()
 	{
 		PipelineStateInitializer psoDesc;
 		psoDesc.SetRootSignature(m_pCBTRS->GetRootSignature());
-		psoDesc.SetPixelShader(m_pDevice->GetShader("CBT.hlsl", ShaderType::Pixel, "RenderPS"));
 		psoDesc.SetVertexShader(m_pDevice->GetShader("CBT.hlsl", ShaderType::Vertex, "RenderVS"));
+		psoDesc.SetPixelShader(m_pDevice->GetShader("CBT.hlsl", ShaderType::Pixel, "RenderPS"));
 		psoDesc.SetRenderTargetFormat(GraphicsDevice::RENDER_TARGET_FORMAT, GraphicsDevice::DEPTH_STENCIL_FORMAT, 1);
 		psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
 		psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
 		psoDesc.SetName("Draw CBT");
 		m_pCBTRenderPSO = m_pDevice->CreatePipeline(psoDesc);
+	}
+
+	{
+		PipelineStateInitializer psoDesc;
+		psoDesc.SetRootSignature(m_pCBTRS->GetRootSignature());
+		psoDesc.SetMeshShader(m_pDevice->GetShader("CBT.hlsl", ShaderType::Mesh, "RenderMS"));
+		psoDesc.SetPixelShader(m_pDevice->GetShader("CBT.hlsl", ShaderType::Pixel, "RenderPS"));
+		psoDesc.SetRenderTargetFormat(GraphicsDevice::RENDER_TARGET_FORMAT, GraphicsDevice::DEPTH_STENCIL_FORMAT, 1);
+		psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
+		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
+		psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
+		psoDesc.SetName("Draw CBT");
+		m_pCBTRenderMeshShaderPSO = m_pDevice->CreatePipeline(psoDesc);
 	}
 
 	{

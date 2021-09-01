@@ -39,4 +39,5 @@ private:
 	PipelineState* m_pCBTUpdatePSO = nullptr;
 	PipelineState* m_pCBTDebugVisualizePSO = nullptr;
 	PipelineState* m_pCBTRenderPSO = nullptr;
+	PipelineState* m_pCBTRenderMeshShaderPSO = nullptr;
 };
