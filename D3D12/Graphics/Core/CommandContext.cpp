@@ -829,6 +829,15 @@ void CommandSignature::AddDispatch()
 	m_IsCompute = true;
 }
 
+void CommandSignature::AddDispatchMesh()
+{
+	D3D12_INDIRECT_ARGUMENT_DESC desc;
+	desc.Type = D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH_MESH;
+	m_ArgumentDesc.push_back(desc);
+	m_Stride += sizeof(D3D12_DISPATCH_MESH_ARGUMENTS);
+	m_IsCompute = false;
+}
+
 void CommandSignature::AddDraw()
 {
 	D3D12_INDIRECT_ARGUMENT_DESC desc;
