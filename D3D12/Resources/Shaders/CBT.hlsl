@@ -30,9 +30,10 @@ struct SumReductionData
 
 struct UpdateData
 {
-	float4x4 Transform;
-	float4x4 View;
+	float4x4 World;
+	float4x4 WorldView;
 	float4x4 ViewProjection;
+	float4x4 WorldViewProjection;
 	float4 FrustumPlanes[6];
 	float HeightmapSizeInv;
 };
@@ -90,7 +91,7 @@ void SumReductionCS(uint3 threadID : SV_DispatchThreadID)
 	}
 }
 
-[numthreads(64, 1, 1)]
+[numthreads(256, 1, 1)]
 void SumReductionFirstPassCS(uint3 threadID : SV_DispatchThreadID)
 {
 	CBT cbt;
@@ -186,8 +187,8 @@ bool BoxFrustumIntersect(AABB aabb, float4 planes[6])
 
 bool TriangleFrustumIntersect(float3x3 tri)
 {
-    float3 bmin = mul(float4(min(min(tri[0], tri[1]), tri[2]), 1), cUpdateData.Transform).xyz;
-    float3 bmax = mul(float4(max(max(tri[0], tri[1]), tri[2]), 1), cUpdateData.Transform).xyz;
+    float3 bmin = mul(float4(min(min(tri[0], tri[1]), tri[2]), 1), cUpdateData.World).xyz;
+    float3 bmax = mul(float4(max(max(tri[0], tri[1]), tri[2]), 1), cUpdateData.World).xyz;
 	AABB aabb;
 	AABBFromMinMax(aabb, bmin, bmax);
     return BoxFrustumIntersect(aabb, cUpdateData.FrustumPlanes);
@@ -338,9 +339,9 @@ void RenderMS(
 		uint heapIndex = cbt.LeafToHeapIndex(threadID.x);
 		float3x3 tri = GetVertices(heapIndex);
 
-		vertices[0].Position = mul(mul(float4(tri[0], 1), cUpdateData.Transform), cUpdateData.ViewProjection);
-		vertices[1].Position = mul(mul(float4(tri[1], 1), cUpdateData.Transform), cUpdateData.ViewProjection);
-		vertices[2].Position = mul(mul(float4(tri[2], 1), cUpdateData.Transform), cUpdateData.ViewProjection);
+		vertices[0].Position = mul(float4(tri[0], 1), cUpdateData.WorldViewProjection);
+		vertices[1].Position = mul(float4(tri[1], 1), cUpdateData.WorldViewProjection);
+		vertices[2].Position = mul(float4(tri[2], 1), cUpdateData.WorldViewProjection);
 		
 		vertices[0].UV = tri[0].xz;
 		vertices[1].UV = tri[1].xz;
@@ -359,7 +360,7 @@ void RenderVS(uint vertexID : SV_VertexID, uint instanceID : SV_InstanceID, out 
 	float3 tri = GetVertices(heapIndex)[vertexID];
 
 	vertex.UV = tri.xz;
-	vertex.Position = mul(mul(float4(tri, 1), cUpdateData.Transform), cUpdateData.ViewProjection);
+	vertex.Position = mul(float4(tri, 1), cUpdateData.WorldViewProjection);
 }
 
 float4 RenderPS(

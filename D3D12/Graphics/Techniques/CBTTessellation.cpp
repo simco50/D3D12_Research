@@ -36,7 +36,7 @@ void CBTTessellation::Execute(RGGraph& graph, Texture* pRenderTarget, Texture* p
 
 	ImGui::Begin("Parameters");
 	ImGui::Text("CBT");
-	if (ImGui::SliderInt("CBT Depth", &m_MaxDepth, 10, 30))
+	if (ImGui::SliderInt("CBT Depth", &m_MaxDepth, 10, 25))
 	{
 		AllocateCBT();
 	}
@@ -68,15 +68,17 @@ void CBTTessellation::Execute(RGGraph& graph, Texture* pRenderTarget, Texture* p
 
 	struct UpdateData
 	{
-		Matrix Transform;
-		Matrix View;
+		Matrix World;
+		Matrix WorldView;
 		Matrix ViewProjection;
+		Matrix WorldViewProjection;
 		Vector4 FrustumPlanes[6];
 		float HeightmapSizeInv;
 	} updateData;
-	updateData.View = m_CachedViewMatrix;
+	updateData.WorldView = terrainTransform * m_CachedViewMatrix;
 	updateData.ViewProjection = resources.pCamera->GetViewProjection();
-	updateData.Transform = terrainTransform;
+	updateData.WorldViewProjection = terrainTransform * resources.pCamera->GetViewProjection();
+	updateData.World = terrainTransform;
 	DirectX::XMVECTOR nearPlane, farPlane, left, right, top, bottom;
 	m_CachedFrustum.GetPlanes(&nearPlane, &farPlane, &right, &left, &top, &bottom);
 	updateData.FrustumPlanes[0] = Vector4(nearPlane);
@@ -138,7 +140,7 @@ void CBTTessellation::Execute(RGGraph& graph, Texture* pRenderTarget, Texture* p
 				context.SetComputeDynamicConstantBufferView(1, reductionArgs);
 
 				context.SetPipelineState(m_pCBTSumReductionFirstPassPSO);
-				context.Dispatch(ComputeUtils::GetNumThreadGroups(1u << currentDepth, 64 * sizeof(32)));
+				context.Dispatch(ComputeUtils::GetNumThreadGroups(1u << currentDepth, 256 * sizeof(uint32)));
 				context.InsertUavBarrier();
 				currentDepth -= 5;
 			}
