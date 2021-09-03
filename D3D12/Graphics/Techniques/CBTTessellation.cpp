@@ -32,7 +32,7 @@ void CBTTessellation::Execute(RGGraph& graph, Texture* pRenderTarget, Texture* p
 	static bool meshShader = false;
 	static bool sumReductionOptimized = true;
 
-	Matrix terrainTransform = Matrix::CreateScale(30, 3, 30) * Matrix::CreateTranslation(-15, 0, -15);
+	Matrix terrainTransform = Matrix::CreateScale(30, 6, 30) * Matrix::CreateTranslation(-15, 0, -15);
 
 	ImGui::Begin("Parameters");
 	ImGui::Text("CBT");

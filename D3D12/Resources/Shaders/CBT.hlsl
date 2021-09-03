@@ -265,22 +265,24 @@ struct VertexOut
 
 struct ASPayload
 {
-	uint IDs[32];
+	float4 Triangles[32 * 3];
 };
 
+groupshared ASPayload gsPayload;
+
 [numthreads(32, 1, 1)]
-void UpdateAS(
-	uint3 threadID : SV_DispatchThreadID)
+void UpdateAS(uint3 threadID : SV_DispatchThreadID)
 {
 	CBT cbt;
 	cbt.Init(uCBT, cCommonArgs.NumElements);
 	bool isVisible = false;
+	float3x3 tri = 0;
 
 	if(threadID.x < cbt.NumNodes())
 	{
 		uint heapIndex = cbt.LeafToHeapIndex(threadID.x);
 		
-		float3x3 tri = GetVertices(heapIndex);
+		tri = GetVertices(heapIndex);
 
 #if DEBUG_ALWAYS_SUBDIVIDE
 		float2 lod = 1;
@@ -307,48 +309,39 @@ void UpdateAS(
 		isVisible = lod.y > 0;
 	}
 
-	uint count = WaveActiveCountBits(isVisible);
-	uint laneIndex = WavePrefixCountBits(isVisible);
-
-	ASPayload payload;
 	if(isVisible)
 	{
-		payload.IDs[laneIndex] = threadID.x;
+		uint laneIndex = WavePrefixCountBits(isVisible);
+		gsPayload.Triangles[laneIndex * 3 + 0] = float4(tri[0], 1);
+		gsPayload.Triangles[laneIndex * 3 + 1] = float4(tri[1], 1);
+		gsPayload.Triangles[laneIndex * 3 + 2] = float4(tri[2], 1);
 	}
-	DispatchMesh(count, 1, 1, payload);
+
+	uint count = WaveActiveCountBits(isVisible);
+	DispatchMesh(count, 1, 1, gsPayload);
 }
 
 [outputtopology("triangle")]
 [numthreads(1, 1, 1)]
 void RenderMS(
+	uint3 groupThreadID : SV_GroupThreadID,
+	uint3 groupID : SV_GroupID,
 	uint3 threadID : SV_DispatchThreadID,
-	uint groupIndex : SV_GroupIndex,
 	in payload ASPayload payload,
 	out vertices VertexOut vertices[3],
 	out indices uint3 triangles[1])
 {
-	CBT cbt;
-	cbt.Init(uCBT, cCommonArgs.NumElements);
-
+	uint idx = groupThreadID.x;
+	
 	SetMeshOutputCounts(3, 1);
 
-	threadID.x = payload.IDs[threadID.x];
-
-	if(threadID.x < cbt.NumNodes())
+	for(uint i = 0; i < 3; ++i)
 	{
-		uint heapIndex = cbt.LeafToHeapIndex(threadID.x);
-		float3x3 tri = GetVertices(heapIndex);
-
-		vertices[0].Position = mul(float4(tri[0], 1), cUpdateData.WorldViewProjection);
-		vertices[1].Position = mul(float4(tri[1], 1), cUpdateData.WorldViewProjection);
-		vertices[2].Position = mul(float4(tri[2], 1), cUpdateData.WorldViewProjection);
-		
-		vertices[0].UV = tri[0].xz;
-		vertices[1].UV = tri[1].xz;
-		vertices[2].UV = tri[2].xz;
-
-		triangles[groupIndex] = uint3(0, 1, 2);
+		float4 v = payload.Triangles[groupID.x * 3 + i];
+		vertices[idx * 3 + i].Position = mul(v, cUpdateData.WorldViewProjection);
+		vertices[idx * 3 + i].UV = v.xz;
 	}
+	triangles[idx] = uint3(0, 1, 2);
 }
 
 void RenderVS(uint vertexID : SV_VertexID, uint instanceID : SV_InstanceID, out VertexOut vertex)
