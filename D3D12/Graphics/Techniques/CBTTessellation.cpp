@@ -270,7 +270,6 @@ void CBTTessellation::SetupPipelines()
 		psoDesc.SetRenderTargetFormat(GraphicsDevice::RENDER_TARGET_FORMAT, GraphicsDevice::DEPTH_STENCIL_FORMAT, 1);
 		psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
-		psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
 		psoDesc.SetName("Draw CBT");
 		m_pCBTRenderPSO = m_pDevice->CreatePipeline(psoDesc);
 	}
@@ -284,7 +283,6 @@ void CBTTessellation::SetupPipelines()
 		psoDesc.SetRenderTargetFormat(GraphicsDevice::RENDER_TARGET_FORMAT, GraphicsDevice::DEPTH_STENCIL_FORMAT, 1);
 		psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
-		psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
 		psoDesc.SetName("Draw CBT");
 		m_pCBTRenderMeshShaderPSO = m_pDevice->CreatePipeline(psoDesc);
 	}
@@ -297,7 +295,6 @@ void CBTTessellation::SetupPipelines()
 		psoDesc.SetRenderTargetFormat(DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_UNKNOWN, 1);
 		psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
 		psoDesc.SetDepthEnabled(false);
-		psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
 		psoDesc.SetName("Debug Visualize CBT");
 		m_pCBTDebugVisualizePSO = m_pDevice->CreatePipeline(psoDesc);
 	}

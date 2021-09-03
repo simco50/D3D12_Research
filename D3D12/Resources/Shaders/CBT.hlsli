@@ -171,8 +171,8 @@ namespace LEB
 
 	float3x3 GetWindingMatrix(uint bit)
 	{
-		float b = bit;
-		float c = 1.0f - bit;
+		float b = 1.0f - bit;
+		float c = bit;
 		return float3x3(
 			c,      0,      b,
 			0.0f,   1.0f,   0.0f,
