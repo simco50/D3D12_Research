@@ -28,6 +28,13 @@ struct CBT
 		return GetData(1);
 	}
 
+	uint BitIndexFromHeap(uint heapIndex, uint depth)
+	{
+		uint a = 2u << depth;
+		uint b = 1u + GetMaxDepth() - depth;
+		return a + heapIndex * b;
+	}
+
 	uint BitfieldGet_Single(uint elementIndex, uint bitOffset, uint bitCount)
 	{
 		uint bitMask = ~(~0u << bitCount);

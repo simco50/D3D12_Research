@@ -94,17 +94,73 @@ public:
 	// Sum reduction bottom to top. This can be parallelized per layer
 	void SumReduction()
 	{
-		int32 depth = GetMaxDepth() - 1;
+		int32 depth = GetMaxDepth();
 
-		while (depth >= 0)
+		constexpr bool doPrepass = true;
+		if constexpr (doPrepass)
+		{
+			uint32 count = 1 << depth;
+			
+			for (uint32 bitIndex = 0; bitIndex < count; bitIndex += (1 << 5))
+			{
+				uint32 nodeIndex = bitIndex + count;
+				uint32 bitOffset = BitIndexFromHeap(nodeIndex, depth);
+				uint32 elementIndex = bitOffset >> 5u;
+
+				uint32 bitField = Bits[elementIndex];
+				bitField = (bitField & 0x55555555u) + ((bitField >> 1u) & 0x55555555u);
+				uint32 data = bitField;
+				Bits[(bitOffset - count) >> 5] = data;
+
+				bitField = (bitField & 0x33333333u) + ((bitField >> 2u) & 0x33333333u);
+				data = (bitField >> 0u) & (7u << 0u) |
+					(bitField >> 1u) & (7u << 3u) |
+					(bitField >> 2u) & (7u << 6u) |
+					(bitField >> 3u) & (7u << 9u) |
+					(bitField >> 4u) & (7u << 12u) |
+					(bitField >> 5u) & (7u << 15u) |
+					(bitField >> 6u) & (7u << 18u) |
+					(bitField >> 7u) & (7u << 21u);
+
+				BinaryHeapSet(BitIndexFromHeap(nodeIndex >> 2, depth - 2), 24, data);
+
+				bitField = (bitField & 0x0F0F0F0Fu) + ((bitField >> 4u) & 0x0F0F0F0Fu);
+				data = (bitField >> 0u) & (15u << 0u) |
+					(bitField >> 4u) & (15u << 4u) |
+					(bitField >> 8u) & (15u << 8u) |
+					(bitField >> 12u) & (15u << 12u);
+
+				BinaryHeapSet(BitIndexFromHeap(nodeIndex >> 3, depth - 3), 16, data);
+
+				bitField = (bitField & 0x00FF00FFu) + ((bitField >> 8u) & 0x00FF00FFu);
+				data = (bitField >> 0u) & (31u << 0u) |
+					(bitField >> 11u) & (31u << 5u);
+
+				BinaryHeapSet(BitIndexFromHeap(nodeIndex >> 4, depth - 4), 10, data);
+
+				bitField = (bitField & 0x0000FFFFu) + ((bitField >> 16u) & 0x0000FFFFu);
+				data = bitField;
+				BinaryHeapSet(BitIndexFromHeap(nodeIndex >> 5, depth - 5), 6, data);
+			}
+
+			depth -= 5;
+		}
+
+		while (--depth >= 0)
 		{
 			uint32 count = 1u << depth;
 			for (uint32 k = count; k < count << 1u; ++k)
 			{
 				SetData(k, GetData(LeftChildID(k)) + GetData(RightChildID(k)));
 			}
-			--depth;
 		}
+	}
+
+	uint32 BitIndexFromHeap(uint32 heapIndex, uint32 depth)
+	{
+		uint32 a = 2u << depth;
+		uint32 b = 1u + GetMaxDepth() - depth;
+		return a + heapIndex * b;
 	}
 
 	uint32 GetData(uint32 index) const

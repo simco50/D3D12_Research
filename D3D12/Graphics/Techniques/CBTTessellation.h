@@ -39,6 +39,7 @@ private:
 	std::unique_ptr<Texture> m_pDebugVisualizeTexture;
 	PipelineState* m_pCBTIndirectArgsPSO = nullptr;
 	PipelineState* m_pCBTSumReductionPSO = nullptr;
+	PipelineState* m_pCBTSumReductionFirstPassPSO = nullptr;
 	PipelineState* m_pCBTUpdatePSO = nullptr;
 	PipelineState* m_pCBTDebugVisualizePSO = nullptr;
 	PipelineState* m_pCBTRenderPSO = nullptr;

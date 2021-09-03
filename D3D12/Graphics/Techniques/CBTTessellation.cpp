@@ -30,6 +30,7 @@ void CBTTessellation::Execute(RGGraph& graph, Texture* pRenderTarget, Texture* p
 	static bool debugVisualize = false;
 	static bool cpuDemo = false;
 	static bool meshShader = false;
+	static bool sumReductionOptimized = true;
 
 	Matrix terrainTransform = Matrix::CreateScale(30, 3, 30) * Matrix::CreateTranslation(-15, 0, -15);
 
@@ -43,6 +44,7 @@ void CBTTessellation::Execute(RGGraph& graph, Texture* pRenderTarget, Texture* p
 	ImGui::Checkbox("CPU Demo", &cpuDemo);
 	ImGui::Checkbox("Mesh Shader", &meshShader);
 	ImGui::Checkbox("Freeze Camera", &freezeCamera);
+	ImGui::Checkbox("Optimized Sum Reduction", &sumReductionOptimized);
 	ImGui::End();
 
 	if (cpuDemo)
@@ -124,17 +126,30 @@ void CBTTessellation::Execute(RGGraph& graph, Texture* pRenderTarget, Texture* p
 
 			context.BindResource(2, 0, m_pCBTBuffer->GetUAV());
 
-			for (int32 currentDepth = m_MaxDepth - 1; currentDepth >= 0; --currentDepth)
+			struct SumReductionData
 			{
-				struct SumReductionData
-				{
-					uint32 Depth;
-				} reductionArgs;
+				uint32 Depth;
+			} reductionArgs;
+			int32 currentDepth = m_MaxDepth;
+
+			if (sumReductionOptimized)
+			{
+				reductionArgs.Depth = currentDepth;
+				context.SetComputeDynamicConstantBufferView(1, reductionArgs);
+
+				context.SetPipelineState(m_pCBTSumReductionFirstPassPSO);
+				context.Dispatch(ComputeUtils::GetNumThreadGroups(1u << currentDepth, 64 * sizeof(32)));
+				context.InsertUavBarrier();
+				currentDepth -= 5;
+			}
+
+			for (currentDepth = currentDepth - 1; currentDepth >= 0; --currentDepth)
+			{
 				reductionArgs.Depth = currentDepth;
 				context.SetComputeDynamicConstantBufferView(1, reductionArgs);
 
 				context.SetPipelineState(m_pCBTSumReductionPSO);
-				context.Dispatch(ComputeUtils::GetNumThreadGroups(1 << currentDepth, 64));
+				context.Dispatch(ComputeUtils::GetNumThreadGroups(1 << currentDepth, 256));
 				context.InsertUavBarrier();
 			}
 		});
@@ -234,6 +249,10 @@ void CBTTessellation::SetupPipelines()
 		psoDesc.SetName("CBT Indirect Args");
 		m_pCBTIndirectArgsPSO = m_pDevice->CreatePipeline(psoDesc);
 
+		psoDesc.SetComputeShader(m_pDevice->GetShader("CBT.hlsl", ShaderType::Compute, "SumReductionFirstPassCS"));
+		psoDesc.SetName("CBT Sum Reduction First Pass");
+		m_pCBTSumReductionFirstPassPSO = m_pDevice->CreatePipeline(psoDesc);
+
 		psoDesc.SetComputeShader(m_pDevice->GetShader("CBT.hlsl", ShaderType::Compute, "SumReductionCS"));
 		psoDesc.SetName("CBT Sum Reduction");
 		m_pCBTSumReductionPSO = m_pDevice->CreatePipeline(psoDesc);
@@ -294,13 +313,13 @@ void CBTTessellation::DemoCpuCBT()
 
 	ImGui::Begin("CBT Demo");
 
-	static int maxDepth = 4;
+	static int maxDepth = 7;
 	static bool init = false;
 
 	static CBT cbt;
 	if (ImGui::SliderInt("Max Depth", &maxDepth, 2, 16) || !init)
 	{
-		cbt.Init(maxDepth, 1);
+		cbt.Init(maxDepth, maxDepth);
 		init = true;
 	}
 
