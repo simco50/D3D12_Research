@@ -20,6 +20,7 @@ public:
 private:
 	void AllocateCBT();
 	void SetupPipelines();
+	void CreateResources();
 
 	void DemoCpuCBT();
 

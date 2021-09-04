@@ -2,10 +2,25 @@
 #include "Random.hlsli"
 #include "CBT.hlsli"
 
+#ifndef DEBUG_ALWAYS_SUBDIVIDE
 #define DEBUG_ALWAYS_SUBDIVIDE 0
+#endif
+
+#ifndef RENDER_WIREFRAME
+#define RENDER_WIREFRAME 1
+#endif
+
+#ifndef FRUSTUM_CULL
 #define FRUSTUM_CULL 1
+#endif
+
+#ifndef DISPLACEMENT_LOD
 #define DISPLACEMENT_LOD 1
+#endif
+
+#ifndef DISTANCE_LOD
 #define DISTANCE_LOD 1
+#endif
 
 #define RootSig "CBV(b0), " \
 				"CBV(b1), " \
@@ -234,9 +249,10 @@ float2 GetLOD(float3x3 tri)
 float3x3 GetVertices(uint heapIndex)
 {
 	float3x3 tri = LEB::GetTriangleVertices(heapIndex);
-	tri[0].y += tHeightmap.SampleLevel(sSampler, tri[0].xz, 0).r;
-	tri[1].y += tHeightmap.SampleLevel(sSampler, tri[1].xz, 0).r;
-	tri[2].y += tHeightmap.SampleLevel(sSampler, tri[2].xz, 0).r;
+	for(int i = 0; i < 3; ++i)
+	{
+		tri[i].y += tHeightmap.SampleLevel(sSampler, tri[i].xz, 0).r;
+	}
 	return tri;
 }
 
@@ -378,28 +394,31 @@ float4 RenderPS(
 	VertexOut vertex, 
 	float3 bary : SV_Barycentrics) : SV_TARGET
 {
-	float tl = tHeightmap.SampleLevel(sSampler, vertex.UV, 0, uint2(-1, -1)).r;
-	float t  = tHeightmap.SampleLevel(sSampler, vertex.UV, 0, uint2( 0, -1)).r;
-	float tr = tHeightmap.SampleLevel(sSampler, vertex.UV, 0, uint2( 1, -1)).r;
-	float l  = tHeightmap.SampleLevel(sSampler, vertex.UV, 0, uint2(-1,  0)).r;
-	float r  = tHeightmap.SampleLevel(sSampler, vertex.UV, 0, uint2( 1,  0)).r;
-	float bl = tHeightmap.SampleLevel(sSampler, vertex.UV, 0, uint2(-1,  1)).r;
-	float b  = tHeightmap.SampleLevel(sSampler, vertex.UV, 0, uint2( 0,  1)).r;
-	float br = tHeightmap.SampleLevel(sSampler, vertex.UV, 0, uint2( 1,  1)).r;
+	float tl = tHeightmap.Sample(sSampler, vertex.UV, uint2(-1, -1)).r;
+	float t  = tHeightmap.Sample(sSampler, vertex.UV, uint2( 0, -1)).r;
+	float tr = tHeightmap.Sample(sSampler, vertex.UV, uint2( 1, -1)).r;
+	float l  = tHeightmap.Sample(sSampler, vertex.UV, uint2(-1,  0)).r;
+	float r  = tHeightmap.Sample(sSampler, vertex.UV, uint2( 1,  0)).r;
+	float bl = tHeightmap.Sample(sSampler, vertex.UV, uint2(-1,  1)).r;
+	float b  = tHeightmap.Sample(sSampler, vertex.UV, uint2( 0,  1)).r;
+	float br = tHeightmap.Sample(sSampler, vertex.UV, uint2( 1,  1)).r;
 
 	float dX = tr + 2 * r + br - tl - 2 * l - bl;
 	float dY = bl + 2 * b + br - tl - 2 * t - tr;
-	float3 normal = normalize(float3(dX, 1.0f / 100, dY));
+	float3 normal = normalize(float3(dX, 1.0f / 20, dY));
 
 	float3 dir = normalize(float3(1, 1, 1));
 	float4 color = float4(saturate(dot(dir, normalize(normal)).xxx), 1);
 
+#if RENDER_WIREFRAME
 	float3 deltas = fwidth(bary);
 	float3 smoothing = deltas * 1;
 	float3 thickness = deltas * 0.2;
 	bary = smoothstep(thickness, thickness + smoothing, bary);
 	float minBary = min(bary.x, min(bary.y, bary.z));
-	return float4(color.xyz * saturate(minBary + 0.5), 1);
+	color.xyz *= saturate(minBary + 0.5f);
+#endif
+	return color;
 }
 
 void DebugVisualizeVS(
