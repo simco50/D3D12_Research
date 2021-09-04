@@ -58,7 +58,7 @@ ConstantBuffer<SumReductionData> cSumReductionData : register(b1);
 ConstantBuffer<UpdateData> cUpdateData : register(b1);
 
 [numthreads(1, 1, 1)]
-void PrepareDispatchArgsCS(uint3 threadID : SV_DispatchThreadID)
+void PrepareDispatchArgsCS(uint threadID : SV_DispatchThreadID)
 {
 	CBT cbt;
 	cbt.Init(uCBT, cCommonArgs.NumElements);
@@ -91,12 +91,12 @@ void PrepareDispatchArgsCS(uint3 threadID : SV_DispatchThreadID)
 
 [RootSignature(RootSig)]
 [numthreads(256, 1, 1)]
-void SumReductionCS(uint3 threadID : SV_DispatchThreadID)
+void SumReductionCS(uint threadID : SV_DispatchThreadID)
 {
 	CBT cbt;
 	cbt.Init(uCBT, cCommonArgs.NumElements);
 	uint count = 1u << cSumReductionData.Depth;
-	uint index = threadID.x;
+	uint index = threadID;
 	if(index < count)
 	{
 		index += count;
@@ -107,13 +107,13 @@ void SumReductionCS(uint3 threadID : SV_DispatchThreadID)
 }
 
 [numthreads(256, 1, 1)]
-void SumReductionFirstPassCS(uint3 threadID : SV_DispatchThreadID)
+void SumReductionFirstPassCS(uint threadID : SV_DispatchThreadID)
 {
 	CBT cbt;
 	cbt.Init(uCBT, cCommonArgs.NumElements);
 	uint depth = cSumReductionData.Depth;
 	uint count = 1u << depth;
-	uint thread = threadID.x << 5u;
+	uint thread = threadID << 5u;
 	if(thread < count)
 	{
 		uint nodeIndex = thread + count;
@@ -257,13 +257,13 @@ float3x3 GetVertices(uint heapIndex)
 }
 
 [numthreads(256, 1, 1)]
-void UpdateCS(uint3 threadID : SV_DispatchThreadID)
+void UpdateCS(uint threadID : SV_DispatchThreadID)
 {
 	CBT cbt;
 	cbt.Init(uCBT, cCommonArgs.NumElements);
-	if(threadID.x < cbt.NumNodes())
+	if(threadID < cbt.NumNodes())
 	{
-		uint heapIndex = cbt.LeafToHeapIndex(threadID.x);
+		uint heapIndex = cbt.LeafToHeapIndex(threadID);
 		
 		float3x3 tri = GetVertices(heapIndex);
 
@@ -305,7 +305,7 @@ struct ASPayload
 groupshared ASPayload gsPayload;
 
 [numthreads(32, 1, 1)]
-void UpdateAS(uint3 threadID : SV_DispatchThreadID)
+void UpdateAS(uint threadID : SV_DispatchThreadID)
 {
 	CBT cbt;
 	cbt.Init(uCBT, cCommonArgs.NumElements);
@@ -313,9 +313,9 @@ void UpdateAS(uint3 threadID : SV_DispatchThreadID)
 	float3x3 tri = 0;
 	uint heapIndex = 0;
 
-	if(threadID.x < cbt.NumNodes())
+	if(threadID < cbt.NumNodes())
 	{
-		heapIndex = cbt.LeafToHeapIndex(threadID.x);
+		heapIndex = cbt.LeafToHeapIndex(threadID);
 		
 		tri = GetVertices(heapIndex);
 
@@ -360,14 +360,14 @@ void UpdateAS(uint3 threadID : SV_DispatchThreadID)
 [outputtopology("triangle")]
 [numthreads(NUM_SUBD_TRIANGLES, 1, 1)]
 void RenderMS(
-	uint3 groupThreadID : SV_GroupThreadID,
-	uint3 groupID : SV_GroupID,
+	uint groupThreadID : SV_GroupThreadID,
+	uint groupID : SV_GroupID,
 	in payload ASPayload payload,
 	out vertices VertexOut vertices[NUM_SUBD_TRIANGLES * 3],
 	out indices uint3 triangles[NUM_SUBD_TRIANGLES])
 {
 	SetMeshOutputCounts(NUM_SUBD_TRIANGLES * 3, NUM_SUBD_TRIANGLES * 1);
-	uint outputIndex = groupThreadID.x;
+	uint outputIndex = groupThreadID;
 	uint heapIndex = payload.IDs[groupID.x];
 	float3x3 tri = GetVertices(heapIndex * NUM_SUBD_TRIANGLES + outputIndex);
 
