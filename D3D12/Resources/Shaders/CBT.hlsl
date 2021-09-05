@@ -210,17 +210,17 @@ bool TriangleFrustumIntersect(float3x3 tri)
     return BoxFrustumIntersect(aabb, cUpdateData.FrustumPlanes);
 }
 
-float TriangleLOD(float3x3 tri)
+float2 TriangleLOD(float3x3 tri)
 {
     float3 p0 = mul(float4(tri[0], 1), cUpdateData.WorldView).xyz;
-    float3 p1 = mul(float4(tri[2], 1), cUpdateData.WorldView).xyz;
+    float3 p2 = mul(float4(tri[2], 1), cUpdateData.WorldView).xyz;
 
-    float3 c = (p0 + p1) * 0.5f;
-    float3 v = (p1 - p0);
+    float3 c = (p0 + p2) * 0.5f;
+    float3 v = (p2 - p0);
     float distSq = dot(c, c);
     float lenSq = dot(v, v);
 
-    return cUpdateData.ScreenSizeBias + log2(lenSq / distSq);
+    return float2(cUpdateData.ScreenSizeBias + log2(lenSq / distSq), 1.0f);
 }
 
 float2 GetLOD(float3x3 tri)
@@ -244,7 +244,7 @@ float2 GetLOD(float3x3 tri)
 #endif
 
 #if DISTANCE_LOD
-	return float2(TriangleLOD(tri), 1);
+	return TriangleLOD(tri);
 #endif
 
 	return float2(1, 1);
