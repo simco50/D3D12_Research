@@ -348,7 +348,9 @@ void UpdateAS(uint threadID : SV_DispatchThreadID)
 	DispatchMesh(count, 1, 1, gsPayload);
 }
 
-#define MESH_SHADER_SUBD_LEVEL 5
+// Must be a multiple of 2 to avoid cracks
+// MS max number of triangles is 256 so need to deduplicate somehow :(
+#define MESH_SHADER_SUBD_LEVEL 6
 #define NUM_SUBD_TRIANGLES (1 << MESH_SHADER_SUBD_LEVEL)
 
 [outputtopology("triangle")]
