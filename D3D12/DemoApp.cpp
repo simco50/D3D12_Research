@@ -242,6 +242,9 @@ void DemoApp::SetupScene(CommandContext& context)
 	m_pLightCookie = std::make_unique<Texture>(m_pDevice.get(), "Light Cookie");
 	m_pLightCookie->Create(&context, "Resources/Textures/LightProjector.png", false);
 
+	m_pCamera->SetPosition(Vector3(-1.3f, 2.4f, -1.5f));
+	m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(Math::PIDIV4, Math::PIDIV4 * 0.5f, 0));
+
 	{
 #if 0
 		m_pCamera->SetPosition(Vector3(-1.3f, 2.4f, -1.5f));

@@ -19,11 +19,15 @@ constexpr uint32 IndirectDrawArgsOffset = IndirectDispatchMeshArgsOffset + sizeo
 
 namespace CBTSettings
 {
+	static int CBTDepth = 22;
 	static bool FreezeCamera = false;
 	static bool DebugVisualize = false;
 	static bool CpuDemo = false;
-	static bool MeshShader = false;
+	static bool MeshShader = true;
 	static bool SumReductionOptimized = true;
+	static int TriangleSubdivision = 3;
+	static float ScreenSizeBias = 9.0f;
+	static float HeightmapVarianceBias = 0.02f;
 
 	//PSO Settings
 	static bool Wireframe = true;
@@ -36,6 +40,11 @@ namespace CBTSettings
 CBTTessellation::CBTTessellation(GraphicsDevice* pDevice)
 	: m_pDevice(pDevice)
 {
+	if (!pDevice->GetCapabilities().SupportsMeshShading())
+	{
+		CBTSettings::MeshShader = false;
+	}
+
 	CreateResources();
 	SetupPipelines();
 	AllocateCBT();
@@ -47,34 +56,47 @@ void CBTTessellation::Execute(RGGraph& graph, Texture* pRenderTarget, Texture* p
 
 	ImGui::Begin("Parameters");
 	ImGui::Text("CBT");
-	if (ImGui::SliderInt("CBT Depth", &m_MaxDepth, 10, 25))
+	if (ImGui::SliderInt("CBT Depth", &CBTSettings::CBTDepth, 10, 22))
 	{
 		AllocateCBT();
 	}
-	ImGui::Checkbox("Debug Visualize", &CBTSettings::DebugVisualize);
-	ImGui::Checkbox("CPU Demo", &CBTSettings::CpuDemo);
-	ImGui::Checkbox("Mesh Shader", &CBTSettings::MeshShader);
-	ImGui::Checkbox("Freeze Camera", &CBTSettings::FreezeCamera);
-	ImGui::Checkbox("Optimized Sum Reduction", &CBTSettings::SumReductionOptimized);
-	if (ImGui::Checkbox("Wireframe", &CBTSettings::Wireframe))
+	if (ImGui::SliderInt("Triangle SubD", &CBTSettings::TriangleSubdivision, 0, 3))
 	{
 		SetupPipelines();
 	}
-	if (ImGui::Checkbox("Frustum Cull", &CBTSettings::FrustumCull))
+	ImGui::SliderFloat("Screen Size Bias", &CBTSettings::ScreenSizeBias, 0, 15);
+	ImGui::SliderFloat("Heightmap Variance Bias", &CBTSettings::HeightmapVarianceBias, 0, 0.1f);
+	if (ImGui::TreeNode("Debug"))
 	{
-		SetupPipelines();
-	}
-	if (ImGui::Checkbox("Displacement LOD", &CBTSettings::DisplacementLOD))
-	{
-		SetupPipelines();
-	}
-	if (ImGui::Checkbox("Distance LOD", &CBTSettings::DistanceLOD))
-	{
-		SetupPipelines();
-	}
-	if (ImGui::Checkbox("Always Subdivide", &CBTSettings::AlwaysSubdivide))
-	{
-		SetupPipelines();
+		ImGui::Checkbox("Debug Visualize", &CBTSettings::DebugVisualize);
+		ImGui::Checkbox("CPU Demo", &CBTSettings::CpuDemo);
+		if (m_pDevice->GetCapabilities().SupportsMeshShading())
+		{
+			ImGui::Checkbox("Mesh Shader", &CBTSettings::MeshShader);
+		}
+		ImGui::Checkbox("Freeze Camera", &CBTSettings::FreezeCamera);
+		ImGui::Checkbox("Optimized Sum Reduction", &CBTSettings::SumReductionOptimized);
+		if (ImGui::Checkbox("Wireframe", &CBTSettings::Wireframe))
+		{
+			SetupPipelines();
+		}
+		if (ImGui::Checkbox("Frustum Cull", &CBTSettings::FrustumCull))
+		{
+			SetupPipelines();
+		}
+		if (ImGui::Checkbox("Displacement LOD", &CBTSettings::DisplacementLOD))
+		{
+			SetupPipelines();
+		}
+		if (ImGui::Checkbox("Distance LOD", &CBTSettings::DistanceLOD))
+		{
+			SetupPipelines();
+		}
+		if (ImGui::Checkbox("Always Subdivide", &CBTSettings::AlwaysSubdivide))
+		{
+			SetupPipelines();
+		}
+		ImGui::TreePop();
 	}
 	ImGui::End();
 
@@ -105,6 +127,8 @@ void CBTTessellation::Execute(RGGraph& graph, Texture* pRenderTarget, Texture* p
 		Matrix WorldViewProjection;
 		Vector4 FrustumPlanes[6];
 		float HeightmapSizeInv;
+		float ScreenSizeBias;
+		float HeightmapVarianceBias;
 	} updateData;
 	updateData.WorldView = terrainTransform * m_CachedViewMatrix;
 	updateData.ViewProjection = resources.pCamera->GetViewProjection();
@@ -119,6 +143,8 @@ void CBTTessellation::Execute(RGGraph& graph, Texture* pRenderTarget, Texture* p
 	updateData.FrustumPlanes[4] = Vector4(top);
 	updateData.FrustumPlanes[5] = Vector4(bottom);
 	updateData.HeightmapSizeInv = 1.0f / m_pHeightmap->GetWidth();
+	updateData.ScreenSizeBias = CBTSettings::ScreenSizeBias;
+	updateData.HeightmapVarianceBias = CBTSettings::HeightmapVarianceBias;
 
 	if (m_IsDirty)
 	{
@@ -163,7 +189,7 @@ void CBTTessellation::Execute(RGGraph& graph, Texture* pRenderTarget, Texture* p
 			{
 				uint32 Depth;
 			} reductionArgs;
-			int32 currentDepth = m_MaxDepth;
+			int32 currentDepth = CBTSettings::CBTDepth;
 
 			if (CBTSettings::SumReductionOptimized)
 			{
@@ -259,7 +285,7 @@ void CBTTessellation::Execute(RGGraph& graph, Texture* pRenderTarget, Texture* p
 
 void CBTTessellation::AllocateCBT()
 {
-	m_CBT.InitBare(m_MaxDepth, 1);
+	m_CBT.InitBare(CBTSettings::CBTDepth, 1);
 	uint32 size = m_CBT.GetMemoryUse();
 	m_pCBTBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateByteAddress(size, BufferFlag::ShaderResource | BufferFlag::UnorderedAccess), "CBT");
 	m_IsDirty = true;
@@ -273,6 +299,7 @@ void CBTTessellation::SetupPipelines()
 		ShaderDefine(Sprintf("DISPLACEMENT_LOD=%d", CBTSettings::DisplacementLOD ? 1 : 0).c_str()),
 		ShaderDefine(Sprintf("DISTANCE_LOD=%d", CBTSettings::DistanceLOD ? 1 : 0).c_str()),
 		ShaderDefine(Sprintf("DEBUG_ALWAYS_SUBDIVIDE=%d", CBTSettings::AlwaysSubdivide ? 1 : 0).c_str()),
+		ShaderDefine(Sprintf("MESH_SHADER_SUBD_LEVEL=%d", CBTSettings::TriangleSubdivision * 2).c_str()),
 	};
 
 	m_pCBTRS = std::make_unique<RootSignature>(m_pDevice);
@@ -310,6 +337,7 @@ void CBTTessellation::SetupPipelines()
 		m_pCBTRenderPSO = m_pDevice->CreatePipeline(psoDesc);
 	}
 
+	if (m_pDevice->GetCapabilities().SupportsMeshShading())
 	{
 		PipelineStateInitializer psoDesc;
 		psoDesc.SetRootSignature(m_pCBTRS->GetRootSignature());

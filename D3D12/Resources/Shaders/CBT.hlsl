@@ -51,6 +51,8 @@ struct UpdateData
 	float4x4 WorldViewProjection;
 	float4 FrustumPlanes[6];
 	float HeightmapSizeInv;
+	float ScreenSizeBias;
+	float HeightmapVarianceBias;
 };
 
 ConstantBuffer<CommonArgs> cCommonArgs : register(b0);
@@ -172,13 +174,12 @@ void SumReductionFirstPassCS(uint threadID : SV_DispatchThreadID)
 
 bool HeightmapFlatness(float3x3 tri)
 {
-	const float minVariance = 0.015f;
     float2 center = (tri[0].xz + tri[1].xz + tri[2].xz) / 3.0f;
     float2 dx = tri[0].xz - tri[1].xz;
     float2 dy = tri[0].xz - tri[2].xz;
     float height = tHeightmap.SampleGrad(sSampler, center, dx, dy).x;
     float heightVariance = saturate(height - Square(height));
-    return heightVariance >= minVariance;
+    return heightVariance >= cUpdateData.HeightmapVarianceBias;
 }
 
 bool BoxPlaneIntersect(AABB aabb, float4 plane)
@@ -219,8 +220,7 @@ float TriangleLOD(float3x3 tri)
     float distSq = dot(c, c);
     float lenSq = dot(v, v);
 
-	const float bias = 14.0f;
-    return bias + log2(lenSq / distSq);
+    return cUpdateData.ScreenSizeBias + log2(lenSq / distSq);
 }
 
 float2 GetLOD(float3x3 tri)
@@ -350,7 +350,9 @@ void UpdateAS(uint threadID : SV_DispatchThreadID)
 
 // Must be a multiple of 2 to avoid cracks
 // MS max number of triangles is 256 so need to deduplicate somehow :(
+#ifndef MESH_SHADER_SUBD_LEVEL
 #define MESH_SHADER_SUBD_LEVEL 6
+#endif
 #define NUM_SUBD_TRIANGLES (1 << MESH_SHADER_SUBD_LEVEL)
 
 [outputtopology("triangle")]

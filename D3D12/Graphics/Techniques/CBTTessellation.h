@@ -27,7 +27,6 @@ private:
 	GraphicsDevice* m_pDevice;
 
 	CBT m_CBT;
-	int m_MaxDepth = 14;
 	bool m_IsDirty = true;
 	BoundingFrustum m_CachedFrustum;
 	Matrix m_CachedViewMatrix;
