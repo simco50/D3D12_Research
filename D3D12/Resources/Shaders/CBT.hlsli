@@ -73,7 +73,7 @@ struct CBT
 	{
 		uint depth = GetDepth(heapIndex);
 		size = GetMaxDepth() - depth + 1;
-		offset = exp2(depth + 1) + heapIndex * size;
+		offset = (2u << depth) + heapIndex * size;
 	}
 
 	uint GetData(uint heapIndex)
@@ -107,7 +107,7 @@ struct CBT
 	uint BitfieldHeapIndex(uint heapIndex)
 	{
 		uint msb = firstbithigh(heapIndex);
-		return heapIndex * exp2(GetMaxDepth() - msb);
+		return heapIndex * (1u << (GetMaxDepth() - msb));
 	}
 	
 	void SplitNode_Single(uint heapIndex)
@@ -126,7 +126,7 @@ struct CBT
 
 	uint GetDepth(uint heapIndex)
 	{
-		return floor(log2(heapIndex));
+		return firstbithigh(heapIndex);
 	}
 	
 	// Helpers
