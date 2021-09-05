@@ -225,6 +225,10 @@ float TriangleLOD(float3x3 tri)
 
 float2 GetLOD(float3x3 tri)
 {
+#if DEBUG_ALWAYS_SUBDIVIDE
+	return 1;
+#endif
+
 #if FRUSTUM_CULL
 	if(!TriangleFrustumIntersect(tri))
 	{
@@ -266,12 +270,7 @@ void UpdateCS(uint threadID : SV_DispatchThreadID)
 		uint heapIndex = cbt.LeafToHeapIndex(threadID);
 		
 		float3x3 tri = GetVertices(heapIndex);
-
-#if DEBUG_ALWAYS_SUBDIVIDE
-		float2 lod = 1;
-#else
 		float2 lod = GetLOD(tri);
-#endif
 
 		if(lod.x >= 1)
 		{
@@ -318,12 +317,7 @@ void UpdateAS(uint threadID : SV_DispatchThreadID)
 		heapIndex = cbt.LeafToHeapIndex(threadID);
 		
 		tri = GetVertices(heapIndex);
-
-#if DEBUG_ALWAYS_SUBDIVIDE
-		float2 lod = 1;
-#else
 		float2 lod = GetLOD(tri);
-#endif
 
 		if(lod.x >= 1)
 		{
