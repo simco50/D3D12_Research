@@ -60,7 +60,7 @@ void CBTTessellation::Execute(RGGraph& graph, Texture* pRenderTarget, Texture* p
 	{
 		AllocateCBT();
 	}
-	if (ImGui::SliderInt("Triangle SubD", &CBTSettings::TriangleSubdivision, 0, 3))
+	if (ImGui::SliderInt("Triangle SubD", &CBTSettings::TriangleSubdivision, 0, 4))
 	{
 		SetupPipelines();
 	}
@@ -299,7 +299,8 @@ void CBTTessellation::SetupPipelines()
 		ShaderDefine(Sprintf("DISPLACEMENT_LOD=%d", CBTSettings::DisplacementLOD ? 1 : 0).c_str()),
 		ShaderDefine(Sprintf("DISTANCE_LOD=%d", CBTSettings::DistanceLOD ? 1 : 0).c_str()),
 		ShaderDefine(Sprintf("DEBUG_ALWAYS_SUBDIVIDE=%d", CBTSettings::AlwaysSubdivide ? 1 : 0).c_str()),
-		ShaderDefine(Sprintf("MESH_SHADER_SUBD_LEVEL=%d", CBTSettings::TriangleSubdivision * 2).c_str()),
+		ShaderDefine(Sprintf("MESH_SHADER_SUBD_LEVEL=%du", Math::Min(CBTSettings::TriangleSubdivision * 2, 6)).c_str()),
+		ShaderDefine(Sprintf("AMPLIFICATION_SHADER_SUBD_LEVEL=%du", Math::Max(CBTSettings::TriangleSubdivision * 2 - 6, 0)).c_str()),
 	};
 
 	m_pCBTRS = std::make_unique<RootSignature>(m_pDevice);

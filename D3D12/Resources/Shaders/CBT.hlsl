@@ -2,6 +2,9 @@
 #include "Random.hlsli"
 #include "CBT.hlsli"
 
+#define MESH_SHADER_THREAD_GROUP_SIZE 32
+#define COMPUTE_THREAD_GROUP_SIZE 256
+
 #ifndef DEBUG_ALWAYS_SUBDIVIDE
 #define DEBUG_ALWAYS_SUBDIVIDE 0
 #endif
@@ -67,14 +70,14 @@ void PrepareDispatchArgsCS(uint threadID : SV_DispatchThreadID)
 
 	uint offset = 0;
 
-	uint numThreads = ceil((float)cbt.NumNodes() / 256);
+	uint numThreads = ceil((float)cbt.NumNodes() / COMPUTE_THREAD_GROUP_SIZE);
 	uIndirectArgs.Store(offset + 0, numThreads);
 	uIndirectArgs.Store(offset + 4, 1);
 	uIndirectArgs.Store(offset + 8, 1);
 
 	offset += sizeof(uint3);
 	
-	uint numMeshThreads = ceil((float)cbt.NumNodes() / 32);
+	uint numMeshThreads = ceil((float)cbt.NumNodes() / MESH_SHADER_THREAD_GROUP_SIZE);
 	uIndirectArgs.Store(offset + 0, numMeshThreads);
 	uIndirectArgs.Store(offset + 4, 1);
 	uIndirectArgs.Store(offset + 8, 1);
@@ -92,7 +95,7 @@ void PrepareDispatchArgsCS(uint threadID : SV_DispatchThreadID)
 }
 
 [RootSignature(RootSig)]
-[numthreads(256, 1, 1)]
+[numthreads(COMPUTE_THREAD_GROUP_SIZE, 1, 1)]
 void SumReductionCS(uint threadID : SV_DispatchThreadID)
 {
 	CBT cbt;
@@ -108,7 +111,7 @@ void SumReductionCS(uint threadID : SV_DispatchThreadID)
 	}
 }
 
-[numthreads(256, 1, 1)]
+[numthreads(COMPUTE_THREAD_GROUP_SIZE, 1, 1)]
 void SumReductionFirstPassCS(uint threadID : SV_DispatchThreadID)
 {
 	CBT cbt;
@@ -260,7 +263,7 @@ float3x3 GetVertices(uint heapIndex)
 	return tri;
 }
 
-[numthreads(256, 1, 1)]
+[numthreads(COMPUTE_THREAD_GROUP_SIZE, 1, 1)]
 void UpdateCS(uint threadID : SV_DispatchThreadID)
 {
 	CBT cbt;
@@ -296,14 +299,26 @@ struct VertexOut
 	float2 UV : TEXCOORD;
 };
 
+// Must be a multiple of 2 to avoid cracks
+// MS max number of triangles is 256. To solve this, execute more mesh shader groups from AS
+#ifndef MESH_SHADER_SUBD_LEVEL
+#define MESH_SHADER_SUBD_LEVEL 6
+#endif
+
+#ifndef AMPLIFICATION_SHADER_SUBD_LEVEL
+#define AMPLIFICATION_SHADER_SUBD_LEVEL 0
+#endif
+
+#define NUM_MESH_SHADER_TRIANGLES (1u << MESH_SHADER_SUBD_LEVEL)
+
 struct ASPayload
 {
-	uint IDs[32];
+	uint IDs[MESH_SHADER_THREAD_GROUP_SIZE];
 };
 
 groupshared ASPayload gsPayload;
 
-[numthreads(32, 1, 1)]
+[numthreads(MESH_SHADER_THREAD_GROUP_SIZE, 1, 1)]
 void UpdateAS(uint threadID : SV_DispatchThreadID)
 {
 	CBT cbt;
@@ -345,36 +360,32 @@ void UpdateAS(uint threadID : SV_DispatchThreadID)
 	}
 
 	uint count = WaveActiveCountBits(isVisible);
-	DispatchMesh(count, 1, 1, gsPayload);
+	DispatchMesh((1u << AMPLIFICATION_SHADER_SUBD_LEVEL) * count, 1, 1, gsPayload);
 }
 
-// Must be a multiple of 2 to avoid cracks
-// MS max number of triangles is 256 so need to deduplicate somehow :(
-#ifndef MESH_SHADER_SUBD_LEVEL
-#define MESH_SHADER_SUBD_LEVEL 6
-#endif
-#define NUM_SUBD_TRIANGLES (1 << MESH_SHADER_SUBD_LEVEL)
-
 [outputtopology("triangle")]
-[numthreads(NUM_SUBD_TRIANGLES, 1, 1)]
+[numthreads(NUM_MESH_SHADER_TRIANGLES, 1, 1)]
 void RenderMS(
 	uint groupThreadID : SV_GroupThreadID,
 	uint groupID : SV_GroupID,
 	in payload ASPayload payload,
-	out vertices VertexOut vertices[NUM_SUBD_TRIANGLES * 3],
-	out indices uint3 triangles[NUM_SUBD_TRIANGLES])
+	out vertices VertexOut vertices[NUM_MESH_SHADER_TRIANGLES * 3],
+	out indices uint3 triangles[NUM_MESH_SHADER_TRIANGLES])
 {
-	SetMeshOutputCounts(NUM_SUBD_TRIANGLES * 3, NUM_SUBD_TRIANGLES * 1);
+	SetMeshOutputCounts(NUM_MESH_SHADER_TRIANGLES * 3, NUM_MESH_SHADER_TRIANGLES * 1);
 	uint outputIndex = groupThreadID;
-	uint heapIndex = payload.IDs[groupID.x];
-	float3x3 tri = GetVertices(heapIndex * NUM_SUBD_TRIANGLES + outputIndex);
+	uint heapIndex = payload.IDs[groupID / (1u << AMPLIFICATION_SHADER_SUBD_LEVEL)];
+	float3x3 tri = GetVertices((((heapIndex << MESH_SHADER_SUBD_LEVEL) | outputIndex) << AMPLIFICATION_SHADER_SUBD_LEVEL) | groupID % (1u << AMPLIFICATION_SHADER_SUBD_LEVEL));
 
 	for(uint i = 0; i < 3; ++i)
 	{
 		vertices[outputIndex * 3 + i].Position = mul(float4(tri[i], 1), cUpdateData.WorldViewProjection);
 		vertices[outputIndex * 3 + i].UV = tri[i].xz;
 	}
-	triangles[outputIndex] = uint3(outputIndex * 3 + 0, outputIndex * 3 + 1, outputIndex * 3 + 2);
+	triangles[outputIndex] = uint3(
+		outputIndex * 3 + 0, 
+		outputIndex * 3 + 1, 
+		outputIndex * 3 + 2);
 }
 
 void RenderVS(uint vertexID : SV_VertexID, uint instanceID : SV_InstanceID, out VertexOut vertex)
