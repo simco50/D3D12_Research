@@ -96,6 +96,7 @@ public:
 	{
 		int32 depth = GetMaxDepth();
 
+#if CBT_MEMORY_COMPACT
 		constexpr bool doPrepass = true;
 		if constexpr (doPrepass)
 		{
@@ -145,6 +146,7 @@ public:
 
 			depth -= 5;
 		}
+#endif
 
 		while (--depth >= 0)
 		{

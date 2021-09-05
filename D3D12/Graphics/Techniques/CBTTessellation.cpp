@@ -25,7 +25,6 @@ namespace CBTSettings
 	static bool CpuDemo = false;
 	static bool MeshShader = true;
 	static bool SumReductionOptimized = true;
-	static int TriangleSubdivision = 3;
 	static float ScreenSizeBias = 9.0f;
 	static float HeightmapVarianceBias = 0.02f;
 
@@ -35,6 +34,7 @@ namespace CBTSettings
 	static bool DisplacementLOD = true;
 	static bool DistanceLOD = true;
 	static bool AlwaysSubdivide = false;
+	static int TriangleSubdivision = 3;
 }
 
 CBTTessellation::CBTTessellation(GraphicsDevice* pDevice)
