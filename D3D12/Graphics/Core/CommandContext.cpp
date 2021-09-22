@@ -200,8 +200,7 @@ void CommandContext::InitializeBuffer(Buffer* pResource, const void* pData, uint
 void CommandContext::InitializeTexture(Texture* pResource, D3D12_SUBRESOURCE_DATA* pSubResourceDatas, int firstSubResource, int subResourceCount)
 {
 	D3D12_RESOURCE_DESC desc = pResource->GetResource()->GetDesc();
-	uint64 requiredSize = 0;
-	GetParent()->GetDevice()->GetCopyableFootprints(&desc, firstSubResource, subResourceCount, 0, nullptr, nullptr, nullptr, &requiredSize);
+	uint64 requiredSize = GetRequiredIntermediateSize(pResource->GetResource(), firstSubResource, subResourceCount);
 	DynamicAllocation allocation = m_DynamicAllocator->Allocate(requiredSize, D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT);
 	
 	bool resetState = false;

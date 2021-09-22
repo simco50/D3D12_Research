@@ -48,6 +48,7 @@ void ImGuiRenderer::InitializeImGui(GraphicsDevice* pDevice)
 	Paths::CreateDirectoryTree(Paths::SavedDir());
 	static std::string imguiPath = Paths::SavedDir() + "imgui.ini";
 	io.IniFilename = imguiPath.c_str();
+	io.ConfigWindowsMoveFromTitleBarOnly = true;
 
 	io.KeyMap[ImGuiKey_Tab] = VK_TAB;
 	io.KeyMap[ImGuiKey_LeftArrow] = VK_LEFT;

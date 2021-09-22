@@ -347,7 +347,6 @@ void CBTTessellation::SetupPipelines()
 		psoDesc.SetPixelShader(m_pDevice->GetShader("CBT.hlsl", ShaderType::Pixel, "RenderPS", defines));
 		psoDesc.SetRenderTargetFormat(GraphicsDevice::RENDER_TARGET_FORMAT, GraphicsDevice::DEPTH_STENCIL_FORMAT, 1);
 		psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
-		psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
 		psoDesc.SetName("Draw CBT");
 		m_pCBTRenderMeshShaderPSO = m_pDevice->CreatePipeline(psoDesc);
@@ -383,6 +382,7 @@ void CBTTessellation::DemoCpuCBT()
 
 	ImGui::Begin("CBT Demo");
 
+	static float scale = 600;
 	static int maxDepth = 7;
 	static bool init = false;
 
@@ -392,12 +392,10 @@ void CBTTessellation::DemoCpuCBT()
 		cbt.Init(maxDepth, maxDepth);
 		init = true;
 	}
+	ImGui::SliderFloat("Scale", &scale, 200, 1200);
 
 	static bool splitting = true;
 	static bool merging = true;
-	static bool alwaysUpdate = false;
-	ImGui::Checkbox("Always Update", &alwaysUpdate);
-	ImGui::SameLine();
 	ImGui::Checkbox("Splitting", &splitting);
 	ImGui::SameLine();
 	ImGui::Checkbox("Merging", &merging);
@@ -406,7 +404,6 @@ void CBTTessellation::DemoCpuCBT()
 	ImGui::Text("Size: %s", Math::PrettyPrintDataSize(cbt.GetMemoryUse()).c_str());
 
 	ImVec2 cPos = ImGui::GetCursorScreenPos();
-	float scale = 600;
 
 	const float itemWidth = 20;
 	const float itemSpacing = 3;
@@ -456,22 +453,19 @@ void CBTTessellation::DemoCpuCBT()
 	ImGui::Spacing();
 
 	cPos = ImGui::GetCursorScreenPos();
+	static Vector2 mousePos;
+	Vector2 relMousePos = Input::Instance().GetMousePosition() - Vector2(cPos.x, cPos.y);
+	bool inBounds = relMousePos.x > 0 && relMousePos.y > 0 && relMousePos.x < scale&& relMousePos.y < scale;
+	if (inBounds && Input::Instance().IsMouseDown(VK_LBUTTON))
+	{
+		mousePos = Input::Instance().GetMousePosition() - Vector2(cPos.x, cPos.y);
+	}
 
-	ImGui::GetWindowDrawList()->AddQuadFilled(
-		cPos + ImVec2(0, 0),
-		cPos + ImVec2(scale, 0),
-		cPos + ImVec2(scale, scale),
-		cPos + ImVec2(0, scale),
-		ImColor(1.0f, 1.0f, 1.0f, 0.3f));
-
-	if (alwaysUpdate || Input::Instance().IsMouseDown(VK_LBUTTON))
 	{
 		PROFILE_SCOPE("CBT Update");
 		cbt.IterateLeaves([&](uint32 heapIndex)
 			{
-				Vector2 relMousePos = Input::Instance().GetMousePosition() - Vector2(cPos.x, cPos.y);
-
-				if (splitting && LEB::PointInTriangle(relMousePos, heapIndex, scale))
+				if (splitting && LEB::PointInTriangle(mousePos, heapIndex, scale))
 				{
 					LEB::CBTSplitConformed(cbt, heapIndex);
 				}
@@ -479,14 +473,15 @@ void CBTTessellation::DemoCpuCBT()
 				if (!CBT::IsRootNode(heapIndex))
 				{
 					LEB::DiamondIDs diamond = LEB::GetDiamond(heapIndex);
-					if (merging && !LEB::PointInTriangle(relMousePos, diamond.Base, scale) && !LEB::PointInTriangle(relMousePos, diamond.Top, scale))
+					if (merging && !LEB::PointInTriangle(mousePos, diamond.Base, scale) && !LEB::PointInTriangle(mousePos, diamond.Top, scale))
 					{
 						LEB::CBTMergeConformed(cbt, heapIndex);
 					}
 				}
 			});
+
+		cbt.SumReduction();
 	}
-	cbt.SumReduction();
 
 	auto LEBTriangle = [&](uint32 heapIndex, Color color, float scale)
 	{
@@ -500,18 +495,31 @@ void CBTTessellation::DemoCpuCBT()
 			cPos + ImVec2(a.x, a.y),
 			cPos + ImVec2(b.x, b.y),
 			cPos + ImVec2(c.x, c.y),
-			ImColor(color.x, color.y, color.z, color.w));
+			ImColor(color.x, color.y, color.z, color.w),
+			2.0f);
 
 		ImVec2 pos = (ImVec2(a.x, a.y) + ImVec2(b.x, b.y) + ImVec2(c.x, c.y)) / 3;
 		std::string text = Sprintf("%d", heapIndex);
-		ImGui::GetWindowDrawList()->AddText(cPos + pos - ImGui::CalcTextSize(text.c_str()) * 0.5f, ImColor(1.0f, 1.0f, 1.0f, 0.1f), text.c_str());
+		ImGui::GetWindowDrawList()->AddText(cPos + pos - ImGui::CalcTextSize(text.c_str()) * 0.5f, ImColor(1.0f, 1.0f, 1.0f, 0.3f), text.c_str());
 	};
 
-	PROFILE_SCOPE("CBT Draw");
-	cbt.IterateLeaves([&](uint32 heapIndex)
-		{
-			LEBTriangle(heapIndex, Color(1, 0, 0, 0.5f), scale);
-		});
+	{
+		PROFILE_SCOPE("CBT Draw");
+		ImGui::GetWindowDrawList()->AddQuadFilled(
+			cPos + ImVec2(0, 0),
+			cPos + ImVec2(scale, 0),
+			cPos + ImVec2(scale, scale),
+			cPos + ImVec2(0, scale),
+			ImColor(1.0f, 1.0f, 1.0f, 0.3f));
+
+		cbt.IterateLeaves([&](uint32 heapIndex)
+			{
+				LEBTriangle(heapIndex, Color(1, 1, 1, 1), scale);
+			});
+
+		ImGui::GetWindowDrawList()->AddCircleFilled(cPos + ImVec2(mousePos.x, mousePos.y), 8, 0xFF0000FF, 20);
+		ImGui::GetWindowDrawList()->AddCircle(cPos + ImVec2(mousePos.x, mousePos.y), 14, 0xFF0000FF, 20, 2.0f);
+	}
 
 	ImGui::End();
 }

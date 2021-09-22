@@ -487,6 +487,8 @@ namespace LEB
 			if(cbt.GetData(diamond.Base) <= 2 && cbt.GetData(diamond.Top) <= 2)
 			{
 				cbt.MergeNode(heapIndex);
+				// Bug?
+				cbt.MergeNode(cbt.RightChildID(diamond.Top));
 			}
 		}
 	}
