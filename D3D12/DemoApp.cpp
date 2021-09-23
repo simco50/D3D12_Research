@@ -1039,7 +1039,9 @@ void DemoApp::Update()
 
 		m_pParticles->Render(graph, GetCurrentRenderTarget(), GetDepthStencil(), *m_pCamera);
 
+#if 0
 		m_pCBTTessellation->Execute(graph, GetCurrentRenderTarget(), GetDepthStencil(), m_SceneData);
+#endif
 
 		RGPassBuilder sky = graph.AddPass("Sky");
 		sky.Bind([=](CommandContext& renderContext, const RGPassResources& resources)
