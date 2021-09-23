@@ -52,7 +52,8 @@ CBTTessellation::CBTTessellation(GraphicsDevice* pDevice)
 
 void CBTTessellation::Execute(RGGraph& graph, Texture* pRenderTarget, Texture* pDepthTexture, const SceneView& resources)
 {
-	Matrix terrainTransform = Matrix::CreateScale(30, 6, 30) * Matrix::CreateTranslation(-15, 0, -15);
+	float scale = 100;
+	Matrix terrainTransform = Matrix::CreateScale(scale, scale * 0.2f, scale) * Matrix::CreateTranslation(-scale * 0.5f, -10, -scale * 0.5f);
 
 	ImGui::Begin("Parameters");
 	ImGui::Text("CBT");

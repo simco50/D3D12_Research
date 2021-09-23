@@ -255,7 +255,13 @@ float2 GetLOD(float3x3 tri)
 
 float3x3 GetVertices(uint heapIndex)
 {
-	float3x3 tri = LEB::GetTriangleVertices(heapIndex);
+	float3x3 baseTriangle = float3x3(
+		0, 0, 1,
+		0, 0, 0,
+		1, 0, 0
+	);
+
+	float3x3 tri = LEB::GetTriangleVertices(heapIndex, baseTriangle);
 	for(int i = 0; i < 3; ++i)
 	{
 		tri[i].y += tHeightmap.SampleLevel(sSampler, tri[i].xz, 0).r;
@@ -442,8 +448,13 @@ void DebugVisualizeVS(
 
 	uint heapIndex = cbt.LeafToHeapIndex(instanceID);
 
-	float3 tri = LEB::GetTriangleVertices(heapIndex)[vertexID];
-	tri.y = tri.z;
+	float3x3 baseTriangle = float3x3(
+		0, 1, 0,
+		0, 0, 0,
+		1, 0, 0
+	);
+
+	float3 tri = LEB::GetTriangleVertices(heapIndex, baseTriangle)[vertexID];
 	tri.xy = tri.xy * 2 - 1;
 	pos = float4(tri, 1);
 	
