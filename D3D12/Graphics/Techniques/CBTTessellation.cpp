@@ -55,51 +55,51 @@ void CBTTessellation::Execute(RGGraph& graph, Texture* pRenderTarget, Texture* p
 	float scale = 100;
 	Matrix terrainTransform = Matrix::CreateScale(scale, scale * 0.2f, scale) * Matrix::CreateTranslation(-scale * 0.5f, -10, -scale * 0.5f);
 
-	ImGui::Begin("Parameters");
-	ImGui::Text("CBT");
-	if (ImGui::SliderInt("CBT Depth", &CBTSettings::CBTDepth, 10, 22))
+	if (ImGui::Begin("Parameters"))
 	{
-		AllocateCBT();
+		if (ImGui::CollapsingHeader("CBT"))
+		{
+			if (ImGui::SliderInt("CBT Depth", &CBTSettings::CBTDepth, 10, 22))
+			{
+				AllocateCBT();
+			}
+			if (ImGui::SliderInt("Triangle SubD", &CBTSettings::TriangleSubdivision, 0, 4))
+			{
+				SetupPipelines();
+			}
+			ImGui::SliderFloat("Screen Size Bias", &CBTSettings::ScreenSizeBias, 0, 15);
+			ImGui::SliderFloat("Heightmap Variance Bias", &CBTSettings::HeightmapVarianceBias, 0, 0.1f);
+			ImGui::Checkbox("Debug Visualize", &CBTSettings::DebugVisualize);
+			ImGui::Checkbox("CPU Demo", &CBTSettings::CpuDemo);
+			if (m_pDevice->GetCapabilities().SupportsMeshShading())
+			{
+				ImGui::Checkbox("Mesh Shader", &CBTSettings::MeshShader);
+			}
+			ImGui::Checkbox("Freeze Camera", &CBTSettings::FreezeCamera);
+			ImGui::Checkbox("Optimized Sum Reduction", &CBTSettings::SumReductionOptimized);
+			if (ImGui::Checkbox("Wireframe", &CBTSettings::Wireframe))
+			{
+				SetupPipelines();
+			}
+			if (ImGui::Checkbox("Frustum Cull", &CBTSettings::FrustumCull))
+			{
+				SetupPipelines();
+			}
+			if (ImGui::Checkbox("Displacement LOD", &CBTSettings::DisplacementLOD))
+			{
+				SetupPipelines();
+			}
+			if (ImGui::Checkbox("Distance LOD", &CBTSettings::DistanceLOD))
+			{
+				SetupPipelines();
+			}
+			if (ImGui::Checkbox("Always Subdivide", &CBTSettings::AlwaysSubdivide))
+			{
+				SetupPipelines();
+			}
+		}
+		ImGui::End();
 	}
-	if (ImGui::SliderInt("Triangle SubD", &CBTSettings::TriangleSubdivision, 0, 4))
-	{
-		SetupPipelines();
-	}
-	ImGui::SliderFloat("Screen Size Bias", &CBTSettings::ScreenSizeBias, 0, 15);
-	ImGui::SliderFloat("Heightmap Variance Bias", &CBTSettings::HeightmapVarianceBias, 0, 0.1f);
-	if (ImGui::TreeNode("Debug"))
-	{
-		ImGui::Checkbox("Debug Visualize", &CBTSettings::DebugVisualize);
-		ImGui::Checkbox("CPU Demo", &CBTSettings::CpuDemo);
-		if (m_pDevice->GetCapabilities().SupportsMeshShading())
-		{
-			ImGui::Checkbox("Mesh Shader", &CBTSettings::MeshShader);
-		}
-		ImGui::Checkbox("Freeze Camera", &CBTSettings::FreezeCamera);
-		ImGui::Checkbox("Optimized Sum Reduction", &CBTSettings::SumReductionOptimized);
-		if (ImGui::Checkbox("Wireframe", &CBTSettings::Wireframe))
-		{
-			SetupPipelines();
-		}
-		if (ImGui::Checkbox("Frustum Cull", &CBTSettings::FrustumCull))
-		{
-			SetupPipelines();
-		}
-		if (ImGui::Checkbox("Displacement LOD", &CBTSettings::DisplacementLOD))
-		{
-			SetupPipelines();
-		}
-		if (ImGui::Checkbox("Distance LOD", &CBTSettings::DistanceLOD))
-		{
-			SetupPipelines();
-		}
-		if (ImGui::Checkbox("Always Subdivide", &CBTSettings::AlwaysSubdivide))
-		{
-			SetupPipelines();
-		}
-		ImGui::TreePop();
-	}
-	ImGui::End();
 
 	if (CBTSettings::CpuDemo)
 	{

@@ -29,12 +29,16 @@ void RTAO::Execute(RGGraph& graph, Texture* pTarget, const SceneView& sceneData)
 	static float g_AoRadius = 0.5f;
 	static int32 g_AoSamples = 1;
 
-	ImGui::Begin("Parameters");
-	ImGui::Text("Ambient Occlusion");
-	ImGui::SliderFloat("Power", &g_AoPower, 0, 10);
-	ImGui::SliderFloat("Radius", &g_AoRadius, 0.1f, 5.0f);
-	ImGui::SliderInt("Samples", &g_AoSamples, 1, 64);
-	ImGui::End();
+	if (ImGui::Begin("Parameters"))
+	{
+		if (ImGui::CollapsingHeader("Ambient Occlusion"))
+		{
+			ImGui::SliderFloat("Power", &g_AoPower, 0, 10);
+			ImGui::SliderFloat("Radius", &g_AoRadius, 0.1f, 5.0f);
+			ImGui::SliderInt("Samples", &g_AoSamples, 1, 64);
+		}
+		ImGui::End();
+	}
 
 	RGPassBuilder rt = graph.AddPass("RTAO");
 	rt.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
