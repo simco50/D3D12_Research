@@ -37,8 +37,8 @@ void SSAO::Execute(RGGraph& graph, Texture* pTarget, const SceneView& sceneData)
 			ImGui::SliderFloat("Radius", &g_AoRadius, 0, 2);
 			ImGui::SliderInt("Samples", &g_AoSamples, 1, 64);
 		}
-		ImGui::End();
 	}
+	ImGui::End();
 
 	RG_GRAPH_SCOPE("Ambient Occlusion", graph);
 

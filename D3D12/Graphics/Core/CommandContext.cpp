@@ -220,9 +220,11 @@ void CommandContext::InitializeTexture(Texture* pResource, D3D12_SUBRESOURCE_DAT
 
 void CommandContext::Dispatch(uint32 groupCountX, uint32 groupCountY, uint32 groupCountZ)
 {
-	checkf(groupCountX <= D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION, "Dispatch group size X (%d) can not exceed %d", groupCountX, D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION);
-	checkf(groupCountY <= D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION, "Dispatch group size Y (%d) can not exceed %d", groupCountY, D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION);
-	checkf(groupCountZ <= D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION, "Dispatch group size Z (%d) can not exceed %d", groupCountZ, D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION);
+	checkf(
+		groupCountX <= D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION &&
+		groupCountY <= D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION &&
+		groupCountZ <= D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION,
+		"Dispatch group size (%d x %d x %d) can not exceed %d", groupCountX, groupCountY, groupCountZ, D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION);
 	PrepareDraw(CommandListContext::Compute);
 	m_pCommandList->Dispatch(groupCountX, groupCountY, groupCountZ);
 }

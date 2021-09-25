@@ -129,8 +129,8 @@ void GpuParticles::Simulate(RGGraph& graph, Texture* pResolvedDepth, const Camer
 			ImGui::SliderInt("Emit Count", &g_EmitCount, 0, cMaxParticleCount / 50);
 			ImGui::SliderFloat("Life Time", &g_LifeTime, 0, 10);
 		}
-		ImGui::End();
 	}
+	ImGui::End();
 
 	D3D12_CPU_DESCRIPTOR_HANDLE uavs[] = {
 		m_pCountersBuffer->GetUAV()->GetDescriptor(),

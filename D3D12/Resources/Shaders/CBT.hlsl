@@ -381,7 +381,8 @@ void RenderMS(
 	SetMeshOutputCounts(NUM_MESH_SHADER_TRIANGLES * 3, NUM_MESH_SHADER_TRIANGLES * 1);
 	uint outputIndex = groupThreadID;
 	uint heapIndex = payload.IDs[groupID / (1u << AMPLIFICATION_SHADER_SUBD_LEVEL)];
-	float3x3 tri = GetVertices((((heapIndex << MESH_SHADER_SUBD_LEVEL) | outputIndex) << AMPLIFICATION_SHADER_SUBD_LEVEL) | groupID % (1u << AMPLIFICATION_SHADER_SUBD_LEVEL));
+	uint subdHeapIndex = (((heapIndex << MESH_SHADER_SUBD_LEVEL) | outputIndex) << AMPLIFICATION_SHADER_SUBD_LEVEL) | groupID % (1u << AMPLIFICATION_SHADER_SUBD_LEVEL);
+	float3x3 tri = GetVertices(subdHeapIndex);
 
 	for(uint i = 0; i < 3; ++i)
 	{

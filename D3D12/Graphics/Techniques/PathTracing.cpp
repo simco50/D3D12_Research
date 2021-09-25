@@ -72,8 +72,8 @@ void PathTracing::Render(RGGraph& graph, const SceneView& sceneData)
 				Reset();
 			}
 		}
-		ImGui::End();
 	}
+	ImGui::End();
 
 	if (sceneData.pCamera->GetPreviousViewProjection() != sceneData.pCamera->GetViewProjection())
 	{

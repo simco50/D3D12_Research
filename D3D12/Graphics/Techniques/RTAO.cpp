@@ -37,8 +37,8 @@ void RTAO::Execute(RGGraph& graph, Texture* pTarget, const SceneView& sceneData)
 			ImGui::SliderFloat("Radius", &g_AoRadius, 0.1f, 5.0f);
 			ImGui::SliderInt("Samples", &g_AoSamples, 1, 64);
 		}
-		ImGui::End();
 	}
+	ImGui::End();
 
 	RGPassBuilder rt = graph.AddPass("RTAO");
 	rt.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
