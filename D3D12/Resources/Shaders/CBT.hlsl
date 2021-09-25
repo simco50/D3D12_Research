@@ -94,6 +94,8 @@ void PrepareDispatchArgsCS(uint threadID : SV_DispatchThreadID)
 	offset += sizeof(uint4);
 }
 
+/* SUM REDUCTION ALGORITHM */
+
 [RootSignature(RootSig)]
 [numthreads(COMPUTE_THREAD_GROUP_SIZE, 1, 1)]
 void SumReductionCS(uint threadID : SV_DispatchThreadID)
@@ -174,6 +176,8 @@ void SumReductionFirstPassCS(uint threadID : SV_DispatchThreadID)
 		cbt.BinaryHeapSet(cbt.BitIndexFromHeap(nodeIndex, depth), 6, data);
 	}
 }
+
+/* SUBDIVISION ALGORITHM  */
 
 bool HeightmapFlatness(float3x3 tri)
 {
@@ -305,6 +309,8 @@ struct VertexOut
 	float2 UV : TEXCOORD;
 };
 
+/* MESH SHADER TECHNIQUE */
+
 // Must be a multiple of 2 to avoid cracks
 // MS max number of triangles is 256. To solve this, execute more mesh shader groups from AS
 #ifndef MESH_SHADER_SUBD_LEVEL
@@ -395,6 +401,37 @@ void RenderMS(
 		outputIndex * 3 + 2);
 }
 
+/* VERTEX SHADING TECHNIQUE */
+
+#define GEOMETRY_SHADER_SUB_D (1u << GEOMETRY_SHADER_SUBD_LEVEL)
+
+#if GEOMETRY_SHADER_SUBD_LEVEL > 0
+uint RenderVS(uint instanceID : SV_InstanceID) : INSTANCE_ID
+{
+	return instanceID;
+}
+[maxvertexcount(GEOMETRY_SHADER_SUB_D * 3)]
+void RenderGS(point uint instanceID[1] : INSTANCE_ID, inout TriangleStream<VertexOut> triStream)
+{
+	CBT cbt;
+	cbt.Init(uCBT, cCommonArgs.NumElements);
+	uint heapIndex = cbt.LeafToHeapIndex(instanceID[0]);
+
+	for(uint d = 0; d < GEOMETRY_SHADER_SUB_D; ++d)
+	{
+		float3x3 tri = GetVertices(heapIndex * GEOMETRY_SHADER_SUB_D + d);
+		uint i = 0;
+		for(i = 0; i < 3; ++i)
+		{
+			VertexOut v;
+			v.UV = tri[i].xz;
+			v.Position = mul(float4(tri[i], 1), cUpdateData.WorldViewProjection);
+			triStream.Append(v);
+		}
+		triStream.RestartStrip();
+	}
+}
+#else
 void RenderVS(uint vertexID : SV_VertexID, uint instanceID : SV_InstanceID, out VertexOut vertex)
 {
 	CBT cbt;
@@ -406,6 +443,7 @@ void RenderVS(uint vertexID : SV_VertexID, uint instanceID : SV_InstanceID, out 
 	vertex.UV = tri.xz;
 	vertex.Position = mul(float4(tri, 1), cUpdateData.WorldViewProjection);
 }
+#endif
 
 float4 RenderPS(
 	VertexOut vertex, 
@@ -437,6 +475,8 @@ float4 RenderPS(
 #endif
 	return color;
 }
+
+/* DEBUG VISUALIZATION TECHNIQUE */
 
 void DebugVisualizeVS(
 	uint vertexID : SV_VertexID, 

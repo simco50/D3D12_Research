@@ -35,7 +35,8 @@ namespace CBTSettings
 	static bool DisplacementLOD = true;
 	static bool DistanceLOD = true;
 	static bool AlwaysSubdivide = false;
-	static int TriangleSubdivision = 3;
+	static int MeshShaderSubD = 3;
+	static int GeometryShaderSubD = 2;
 }
 
 CBTTessellation::CBTTessellation(GraphicsDevice* pDevice)
@@ -65,7 +66,9 @@ void CBTTessellation::Execute(RGGraph& graph, Texture* pRenderTarget, Texture* p
 			{
 				AllocateCBT();
 			}
-			if (ImGui::SliderInt("Triangle SubD", &CBTSettings::TriangleSubdivision, 0, 4))
+			int& subd = CBTSettings::MeshShader ? CBTSettings::MeshShaderSubD : CBTSettings::GeometryShaderSubD;
+			int maxSubD = CBTSettings::MeshShader ? 3 : 2;
+			if (ImGui::SliderInt("Triangle SubD", &subd, 0, maxSubD))
 			{
 				SetupPipelines();
 			}
@@ -257,7 +260,6 @@ void CBTTessellation::Execute(RGGraph& graph, Texture* pRenderTarget, Texture* p
 
 			context.SetGraphicsRootSignature(m_pCBTRS.get());
 			context.SetPipelineState(CBTSettings::MeshShader ? m_pCBTRenderMeshShaderPSO : m_pCBTRenderPSO);
-			context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
 			context.SetGraphicsDynamicConstantBufferView(0, commonArgs);
 			context.SetGraphicsDynamicConstantBufferView(1, updateData);
@@ -268,10 +270,12 @@ void CBTTessellation::Execute(RGGraph& graph, Texture* pRenderTarget, Texture* p
 			context.BeginRenderPass(RenderPassInfo(pRenderTarget, RenderPassAccess::Load_Store, pDepthTexture, RenderPassAccess::Load_Store, true));
 			if (CBTSettings::MeshShader)
 			{
+				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 				context.ExecuteIndirect(m_pDevice->GetIndirectDispatchMeshSignature(), 1, m_pCBTIndirectArgs.get(), nullptr, IndirectDispatchMeshArgsOffset);
 			}
 			else
 			{
+				context.SetPrimitiveTopology(CBTSettings::GeometryShaderSubD > 0 ? D3D_PRIMITIVE_TOPOLOGY_POINTLIST : D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 				context.ExecuteIndirect(m_pDevice->GetIndirectDrawSignature(), 1, m_pCBTIndirectArgs.get(), nullptr, IndirectDrawArgsOffset);
 			}
 			context.EndRenderPass();
@@ -321,8 +325,9 @@ void CBTTessellation::SetupPipelines()
 		ShaderDefine(Sprintf("DISPLACEMENT_LOD=%d", CBTSettings::DisplacementLOD ? 1 : 0).c_str()),
 		ShaderDefine(Sprintf("DISTANCE_LOD=%d", CBTSettings::DistanceLOD ? 1 : 0).c_str()),
 		ShaderDefine(Sprintf("DEBUG_ALWAYS_SUBDIVIDE=%d", CBTSettings::AlwaysSubdivide ? 1 : 0).c_str()),
-		ShaderDefine(Sprintf("MESH_SHADER_SUBD_LEVEL=%du", Math::Min(CBTSettings::TriangleSubdivision * 2, 6)).c_str()),
-		ShaderDefine(Sprintf("AMPLIFICATION_SHADER_SUBD_LEVEL=%du", Math::Max(CBTSettings::TriangleSubdivision * 2 - 6, 0)).c_str()),
+		ShaderDefine(Sprintf("MESH_SHADER_SUBD_LEVEL=%du", Math::Min(CBTSettings::MeshShaderSubD * 2, 6)).c_str()),
+		ShaderDefine(Sprintf("GEOMETRY_SHADER_SUBD_LEVEL=%du", Math::Min(CBTSettings::GeometryShaderSubD * 2, 4)).c_str()),
+		ShaderDefine(Sprintf("AMPLIFICATION_SHADER_SUBD_LEVEL=%du", Math::Max(CBTSettings::MeshShaderSubD * 2 - 6, 0)).c_str()),
 	};
 
 	m_pCBTRS = std::make_unique<RootSignature>(m_pDevice);
@@ -352,9 +357,17 @@ void CBTTessellation::SetupPipelines()
 		PipelineStateInitializer psoDesc;
 		psoDesc.SetRootSignature(m_pCBTRS->GetRootSignature());
 		psoDesc.SetVertexShader(m_pDevice->GetShader("CBT.hlsl", ShaderType::Vertex, "RenderVS", defines));
+		if (CBTSettings::GeometryShaderSubD > 0)
+		{
+			psoDesc.SetGeometryShader(m_pDevice->GetShader("CBT.hlsl", ShaderType::Geometry, "RenderGS", defines));
+			psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT);
+		}
+		else
+		{
+			psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
+		}
 		psoDesc.SetPixelShader(m_pDevice->GetShader("CBT.hlsl", ShaderType::Pixel, "RenderPS", defines));
 		psoDesc.SetRenderTargetFormat(GraphicsDevice::RENDER_TARGET_FORMAT, GraphicsDevice::DEPTH_STENCIL_FORMAT, 1);
-		psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
 		psoDesc.SetName("Draw CBT");
 		m_pCBTRenderPSO = m_pDevice->CreatePipeline(psoDesc);
