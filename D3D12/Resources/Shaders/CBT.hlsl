@@ -420,15 +420,20 @@ void RenderGS(point uint instanceID[1] : INSTANCE_ID, inout TriangleStream<Verte
 	for(uint d = 0; d < GEOMETRY_SHADER_SUB_D; ++d)
 	{
 		float3x3 tri = GetVertices(heapIndex * GEOMETRY_SHADER_SUB_D + d);
-		uint i = 0;
-		for(i = 0; i < 3; ++i)
+
+		float2 lod = GetLOD(tri);
+		if(lod.y > 0)
 		{
-			VertexOut v;
-			v.UV = tri[i].xz;
-			v.Position = mul(float4(tri[i], 1), cUpdateData.WorldViewProjection);
-			triStream.Append(v);
+			uint i = 0;
+			for(i = 0; i < 3; ++i)
+			{
+				VertexOut v;
+				v.UV = tri[i].xz;
+				v.Position = mul(float4(tri[i], 1), cUpdateData.WorldViewProjection);
+				triStream.Append(v);
+			}
+			triStream.RestartStrip();
 		}
-		triStream.RestartStrip();
 	}
 }
 #else
