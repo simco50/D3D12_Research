@@ -1702,13 +1702,63 @@ void DemoApp::UpdateImGui()
 {
 	m_FrameTimes[m_Frame % m_FrameTimes.size()] = Time::DeltaTime();
 
+	static ImGuiConsole console;
+	static bool showProfiler = false;
+	static bool showImguiDemo = false;
+
+	if (ImGui::BeginMainMenuBar())
+	{
+		if (ImGui::BeginMenu("Windows"))
+		{
+			if (ImGui::MenuItem("Profiler", 0, showProfiler))
+			{
+				showProfiler = !showProfiler;
+			}
+			bool& showConsole = console.IsVisible();
+			if (ImGui::MenuItem("Output Log", 0, showConsole))
+			{
+				showConsole = !showConsole;
+			}
+			if (ImGui::MenuItem("ImGui Demo", 0, showImguiDemo))
+			{
+				showImguiDemo = !showImguiDemo;
+			}
+			ImGui::EndMenu();
+		}
+		if (ImGui::BeginMenu("Tools"))
+		{
+			if (ImGui::MenuItem("Dump RenderGraph"))
+			{
+				Tweakables::g_DumpRenderGraph = true;
+			}
+			if (ImGui::MenuItem("Screenshot"))
+			{
+				Tweakables::g_Screenshot = true;
+			}
+			if (ImGui::MenuItem("Pix Capture"))
+			{
+				m_CapturePix = true;
+			}
+			ImGui::EndMenu();
+		}
+
+		ImGui::EndMainMenuBar();
+	}
+
+	console.Update(ImVec2(300, (float)m_WindowHeight), ImVec2((float)m_WindowWidth - 300 * 2, 250));
+
+	if (showImguiDemo)
+	{
 	ImGui::ShowDemoWindow();
+	}
 
 	if (m_pVisualizeTexture)
 	{
-		ImGui::Begin("Visualize Texture");
+		if (ImGui::Begin("Visualize Texture"))
+		{
 		ImGui::Text("Resolution: %dx%d", m_pVisualizeTexture->GetWidth(), m_pVisualizeTexture->GetHeight());
 		ImGui::ImageAutoSize(m_pVisualizeTexture, ImVec2((float)m_pVisualizeTexture->GetWidth(), (float)m_pVisualizeTexture->GetHeight()));
+		}
 		ImGui::End();
 	}
 
@@ -1719,23 +1769,24 @@ void DemoApp::UpdateImGui()
 			float imageSize = 230;
 			ImGui::SetNextWindowSize(ImVec2(imageSize, 1024));
 			ImGui::SetNextWindowPos(ImVec2(m_WindowWidth - imageSize, 0));
-			ImGui::Begin("Shadow Cascades", 0, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoScrollbar);
+			if (ImGui::Begin("Shadow Cascades", 0, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoScrollbar))
+			{
 			const Light& sunLight = m_Lights[0];
-			for (int i = 0; i < 4; ++i)
+				for (int i = 0; i < Tweakables::g_ShadowCascades; ++i)
 			{
 				ImGui::Image(m_ShadowMaps[sunLight.ShadowIndex + i].get(), ImVec2(imageSize, imageSize));
+			}
 			}
 			ImGui::End();
 		}
 	}
 
-	ImGui::SetNextWindowPos(ImVec2(0, 0), 0, ImVec2(0, 0));
-	ImGui::SetNextWindowSize(ImVec2(300, (float)m_WindowHeight));
-	ImGui::Begin("GPU Stats", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
+	if (showProfiler)
+	{
+		if (ImGui::Begin("Profiler", &showProfiler))
+		{
 	ImGui::Text("MS: %4.2f | FPS: %4.2f | %d x %d", Time::DeltaTime() * 1000.0f, 1.0f / Time::DeltaTime(), m_WindowWidth, m_WindowHeight);
 	ImGui::PlotLines("", m_FrameTimes.data(), (int)m_FrameTimes.size(), m_Frame % m_FrameTimes.size(), 0, 0.0f, 0.03f, ImVec2(ImGui::GetContentRegionAvail().x, 100));
-
-	ImGui::Text("Camera: [%.2f, %.2f, %.2f]", m_pCamera->GetPosition().x, m_pCamera->GetPosition().y, m_pCamera->GetPosition().z);
 
 	if (ImGui::TreeNodeEx("Profiler", ImGuiTreeNodeFlags_DefaultOpen))
 	{
@@ -1743,29 +1794,12 @@ void DemoApp::UpdateImGui()
 		pRootNode->RenderImGui(m_Frame);
 		ImGui::TreePop();
 	}
-
-	if (ImGui::Button("Dump RenderGraph"))
-	{
-		Tweakables::g_DumpRenderGraph = true;
 	}
-	if (ImGui::Button("Screenshot"))
-	{
-		Tweakables::g_Screenshot = true;
-	}
-	if (ImGui::Button("Pix Capture"))
-	{
-		m_CapturePix = true;
-	}
-
 	ImGui::End();
+	}
 
-	static ImGuiConsole console;
-	console.Update(ImVec2(300, (float)m_WindowHeight), ImVec2((float)m_WindowWidth - 300 * 2, 250));
-
-	ImGui::SetNextWindowPos(ImVec2((float)m_WindowWidth, 0), 0, ImVec2(1, 0));
-	ImGui::SetNextWindowSize(ImVec2(300, (float)m_WindowHeight));
-	ImGui::Begin("Parameters", 0, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
-
+	if (ImGui::Begin("Parameters"))
+	{
 	if (ImGui::CollapsingHeader("Global"))
 	{
 		ImGui::Combo("Render Path", (int*)&m_RenderPath, [](void* /*data*/, int index, const char** outText)
@@ -1789,8 +1823,8 @@ void DemoApp::UpdateImGui()
 				return true;
 			}, nullptr, (int)RenderPath::MAX);
 
-
 		ImGui::Text("Camera");
+			ImGui::Text("Location: [%.2f, %.2f, %.2f]", m_pCamera->GetPosition().x, m_pCamera->GetPosition().y, m_pCamera->GetPosition().z);
 		float fov = m_pCamera->GetFoV();
 		if (ImGui::SliderAngle("Field of View", &fov, 10, 120))
 		{
@@ -1870,8 +1904,7 @@ void DemoApp::UpdateImGui()
 			ImGui::SliderAngle("TLAS Bounds Threshold", &Tweakables::g_TLASBoundsThreshold.Get(), 0, 40);
 		}
 	}
-
-
+	}
 	ImGui::End();
 }
 

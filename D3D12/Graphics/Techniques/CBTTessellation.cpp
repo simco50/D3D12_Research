@@ -25,9 +25,9 @@ namespace CBTSettings
 	static bool CpuDemo = false;
 	static bool MeshShader = true;
 	static bool SumReductionOptimized = true;
-	static float ScreenSizeBias = 9.0f;
-	static float HeightmapVarianceBias = 0.02f;
-	static float HeightScale = 0.4f;
+	static float ScreenSizeBias = 8.7f;
+	static float HeightmapVarianceBias = 0.01f;
+	static float HeightScale = 0.1f;
 
 	//PSO Settings
 	static bool Wireframe = true;
@@ -394,7 +394,7 @@ void CBTTessellation::CreateResources()
 	m_pHeightmap->Create(pContext, "Resources/Terrain.dds");
 	pContext->Execute(true);
 
-	m_pDebugVisualizeTexture = m_pDevice->CreateTexture(TextureDesc::CreateRenderTarget(512, 512, DXGI_FORMAT_R8G8B8A8_UNORM, TextureFlag::ShaderResource), "CBT Visualize Texture");
+	m_pDebugVisualizeTexture = m_pDevice->CreateTexture(TextureDesc::CreateRenderTarget(1024, 1024, DXGI_FORMAT_R8G8B8A8_UNORM, TextureFlag::ShaderResource), "CBT Visualize Texture");
 	m_pCBTIndirectArgs = m_pDevice->CreateBuffer(BufferDesc::CreateIndirectArguments<uint32>(10), "CBT Indirect Args");
 }
 

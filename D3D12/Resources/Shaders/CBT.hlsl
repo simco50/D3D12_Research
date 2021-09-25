@@ -422,7 +422,7 @@ float4 RenderPS(
 
 	float dX = tr + 2 * r + br - tl - 2 * l - bl;
 	float dY = bl + 2 * b + br - tl - 2 * t - tr;
-	float3 normal = normalize(float3(dX, 1.0f / 20, dY));
+	float3 normal = normalize(float3(dX, 1.0f / 50, dY));
 
 	float3 dir = normalize(float3(1, 1, 1));
 	float4 color = float4(saturate(dot(dir, normalize(normal)).xxx), 1);
