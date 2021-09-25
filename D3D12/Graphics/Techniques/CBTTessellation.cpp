@@ -19,7 +19,7 @@ constexpr uint32 IndirectDrawArgsOffset = IndirectDispatchMeshArgsOffset + sizeo
 
 namespace CBTSettings
 {
-	static int CBTDepth = 22;
+	static int CBTDepth = 25;
 	static bool FreezeCamera = false;
 	static bool DebugVisualize = false;
 	static bool CpuDemo = false;
@@ -59,7 +59,7 @@ void CBTTessellation::Execute(RGGraph& graph, Texture* pRenderTarget, Texture* p
 	{
 		if (ImGui::CollapsingHeader("CBT"))
 		{
-			if (ImGui::SliderInt("CBT Depth", &CBTSettings::CBTDepth, 10, 22))
+			if (ImGui::SliderInt("CBT Depth", &CBTSettings::CBTDepth, 10, 28))
 			{
 				AllocateCBT();
 			}
@@ -198,7 +198,7 @@ void CBTTessellation::Execute(RGGraph& graph, Texture* pRenderTarget, Texture* p
 				context.SetComputeDynamicConstantBufferView(1, reductionArgs);
 
 				context.SetPipelineState(m_pCBTSumReductionFirstPassPSO);
-				context.Dispatch(ComputeUtils::GetNumThreadGroups(1u << currentDepth, 256 * sizeof(uint32)));
+				context.Dispatch(ComputeUtils::GetNumThreadGroups(1u << currentDepth, 256 * 32));
 				context.InsertUavBarrier(m_pCBTBuffer.get());
 				currentDepth -= 5;
 			}
@@ -416,7 +416,7 @@ void CBTTessellation::DemoCpuCBT()
 	for (uint32 d = 0; d < cbt.GetMaxDepth(); ++d)
 	{
 		ImGui::Spacing();
-		for (uint32 j = 0; j < Math::Exp2(d); ++j)
+		for (uint32 j = 0; j < 1u << d; ++j)
 		{
 			ImVec2 cursor = ImGui::GetCursorScreenPos();
 			cursor += ImVec2(itemWidth, itemWidth * 0.5f);
@@ -441,7 +441,7 @@ void CBTTessellation::DemoCpuCBT()
 	for (uint32 leafIndex = 0; leafIndex < cbt.NumBitfieldBits(); ++leafIndex)
 	{
 		ImGui::PushID(10000 + leafIndex);
-		uint32 index = (int)Math::Exp2(cbt.GetMaxDepth()) + leafIndex;
+		uint32 index = (1u << cbt.GetMaxDepth()) + leafIndex;
 		if (ImGui::Button(Sprintf("%d", cbt.GetData(index)).c_str(), ImVec2(itemWidth, itemWidth)))
 		{
 			cbt.SetData(index, !cbt.GetData(index));

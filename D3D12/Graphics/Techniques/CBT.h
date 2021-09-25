@@ -13,7 +13,7 @@ public:
 	{
 		assert(initialDepth <= maxDepth);
 
-		uint32 NumBits = Math::Exp2(maxDepth + 2);
+		uint64 NumBits = 1ull << (maxDepth + 2);
 		assert(NumBits < NumBitsPerElement || NumBits % NumBitsPerElement == 0);
 
 		Bits.clear();
@@ -26,9 +26,9 @@ public:
 		Bits[0] = maxDepth;
 #endif
 
-		uint32 minRange = Math::Exp2(initialDepth);
-		uint32 maxRange = Math::Exp2(initialDepth + 1);
-		uint32 interval = Math::Exp2(maxDepth - initialDepth);
+		uint32 minRange = 1u << initialDepth;
+		uint32 maxRange = 1u << (initialDepth + 1);
+		uint32 interval = 1u << (maxDepth - initialDepth);
 		for (uint32 heapIndex = minRange; heapIndex < maxRange; ++heapIndex)
 		{
 			SetData(heapIndex * interval, 1);
@@ -86,7 +86,7 @@ public:
 	{
 		uint32 depth = (uint32)floor(log2(heapIndex));
 		*pSize = GetMaxDepth() - depth + 1;
-		*pOffset = Math::Exp2(depth + 1) + heapIndex * *pSize;
+		*pOffset = (1u << (depth + 1)) + heapIndex * *pSize;
 		assert(*pSize < NumBitsPerElement);
 	}
 #endif
@@ -215,7 +215,7 @@ public:
 
 	uint32 BitfieldHeapID(uint32 heapIndex) const
 	{
-		return heapIndex * Math::Exp2(GetMaxDepth() - GetDepth(heapIndex));
+		return heapIndex * (1u << (GetMaxDepth() - GetDepth(heapIndex)));
 	}
 
 	void SplitNode(uint32 heapIndex)
@@ -270,14 +270,14 @@ public:
 
 	uint32 NumBitfieldBits() const
 	{
-		return Math::Exp2(GetMaxDepth());
+		return (1u << GetMaxDepth());
 	}
 
 	void GetElementRange(uint32 heapIndex, uint32& begin, uint32& size) const
 	{
 		uint32 depth = GetDepth(heapIndex);
 		size = GetMaxDepth() - depth + 1;
-		begin = Math::Exp2(depth + 1) + heapIndex * size;
+		begin = (1u << (depth + 1)) + heapIndex * size;
 	}
 
 	uint32 GetMemoryUse() const
