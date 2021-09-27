@@ -124,7 +124,7 @@ void SumReductionFirstPassCS(uint threadID : SV_DispatchThreadID)
 	if(thread < count)
 	{
 		uint nodeIndex = thread + count;
-		uint bitOffset = cbt.BitIndexFromHeap(nodeIndex, depth);
+		uint bitOffset = cbt.NodeBitIndex(nodeIndex);
 		uint elementIndex = bitOffset >> 5u;
 
 		uint bitField = cbt.Storage.Load(4 * elementIndex);
@@ -148,7 +148,7 @@ void SumReductionFirstPassCS(uint threadID : SV_DispatchThreadID)
 				((bitField >> 5u) & (7u << 15u)) |
 				((bitField >> 6u) & (7u << 18u)) |
 				((bitField >> 7u) & (7u << 21u));
-		cbt.BinaryHeapSet(cbt.BitIndexFromHeap(nodeIndex, depth), 24, data);
+		cbt.BinaryHeapSet(cbt.NodeBitIndex(nodeIndex), 24, data);
 
 		// Sum of 3 bit pairs -> 4 * 4 bits
 		depth -= 1;
@@ -158,7 +158,7 @@ void SumReductionFirstPassCS(uint threadID : SV_DispatchThreadID)
 				((bitField >> 4u) & (15u << 4u)) |
 				((bitField >> 8u) & (15u << 8u)) |
 				((bitField >> 12u) & (15u << 12u));
-		cbt.BinaryHeapSet(cbt.BitIndexFromHeap(nodeIndex, depth), 16, data);
+		cbt.BinaryHeapSet(cbt.NodeBitIndex(nodeIndex), 16, data);
 
 		// Sum of 4 bit pairs -> 2 * 5 bits
 		depth -= 1;
@@ -166,14 +166,14 @@ void SumReductionFirstPassCS(uint threadID : SV_DispatchThreadID)
 		bitField = (bitField & 0x00FF00FFu) + ((bitField >> 8u) & 0x00FF00FFu);
 		data = 	((bitField >> 0u) & (31u << 0u)) |
 				((bitField >> 11u) & (31u << 5u));
-		cbt.BinaryHeapSet(cbt.BitIndexFromHeap(nodeIndex, depth), 10, data);
+		cbt.BinaryHeapSet(cbt.NodeBitIndex(nodeIndex), 10, data);
 
 		// Sum of 5 bit pairs -> 1 * 6 bits	
 		depth -= 1;
 		nodeIndex >>= 1;	
 		bitField = (bitField & 0x0000FFFFu) + ((bitField >> 16u) & 0x0000FFFFu);
 		data = bitField;
-		cbt.BinaryHeapSet(cbt.BitIndexFromHeap(nodeIndex, depth), 6, data);
+		cbt.BinaryHeapSet(cbt.NodeBitIndex(nodeIndex), 6, data);
 	}
 }
 

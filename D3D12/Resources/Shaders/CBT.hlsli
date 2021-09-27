@@ -14,13 +14,6 @@ struct CBT
 		MaxDepth = firstbitlow(buffer.Load(0));
 	}
 
-	uint BitIndexFromHeap(uint heapIndex, uint depth)
-	{
-		uint a = 2u << depth;
-		uint b = 1u + GetMaxDepth() - depth;
-		return a + heapIndex * b;
-	}
-
 	uint BitfieldGet_Single(uint elementIndex, uint bitOffset, uint bitCount)
 	{
 		uint bitMask = ~(~0u << bitCount);
@@ -108,6 +101,14 @@ struct CBT
 	{
 		uint msb = GetDepth(heapIndex);	
 		return heapIndex * (1u << (GetMaxDepth() - msb));
+	}
+
+	uint NodeBitIndex(uint heapIndex)
+	{
+		uint depth = GetDepth(heapIndex);
+		uint a = 2u << depth;
+		uint b = 1u + GetMaxDepth() - depth;
+		return a + heapIndex * b;
 	}
 	
 	void SplitNode_Single(uint heapIndex)
