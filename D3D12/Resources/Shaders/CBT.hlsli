@@ -1,31 +1,17 @@
 
-#define CBT_BITS_PER_ELEMENT 32
+#define CBT_BITS_PER_ELEMENT (sizeof(uint) * 8)
 
 struct CBT
 {
 	RWByteAddressBuffer Storage;
 	uint NumElements;
+	uint MaxDepth;
 
 	void Init(RWByteAddressBuffer buffer, uint numElements)
 	{
 		Storage = buffer;
 		NumElements = numElements;
-	}
-	
-	uint GetMaxDepth()
-	{
-		return firstbitlow(Storage.Load(0));
-	}
-
-	bool IsCeilNode(uint heapIndex)
-	{
-		uint msb = firstbithigh(heapIndex);
-		return msb == GetMaxDepth();
-	}
-
-	uint NumNodes()
-	{
-		return GetData(1);
+		MaxDepth = firstbitlow(buffer.Load(0));
 	}
 
 	uint BitIndexFromHeap(uint heapIndex, uint depth)
@@ -48,25 +34,39 @@ struct CBT
 		Storage.InterlockedOr(elementIndex * 4, value << bitOffset);
 	}
 
+	struct DataMutateArgs
+	{
+		uint ElementIndexLSB;
+		uint ElementIndexMSB;
+		uint ElementOffsetLSB;
+		uint BitCountLSB;
+		uint BitCountMSB;
+	};
+
+	DataMutateArgs GetDataArgs(uint bitOffset, uint bitCount)
+	{
+		DataMutateArgs args;
+		args.ElementIndexLSB = bitOffset / CBT_BITS_PER_ELEMENT;
+		args.ElementIndexMSB = min(args.ElementIndexLSB + 1, NumElements - 1);
+		args.ElementOffsetLSB = bitOffset % CBT_BITS_PER_ELEMENT;
+		args.BitCountLSB = min(bitCount, CBT_BITS_PER_ELEMENT - args.ElementOffsetLSB);
+		args.BitCountMSB = bitCount - args.BitCountLSB;
+		return args;
+	}
+
 	uint BinaryHeapGet(uint bitOffset, uint bitCount)
 	{
-		uint elementIndex = bitOffset / CBT_BITS_PER_ELEMENT;
-		uint elementOffsetLSB = bitOffset % CBT_BITS_PER_ELEMENT;
-		uint bitCountLSB = min(bitCount, CBT_BITS_PER_ELEMENT - elementOffsetLSB);
-		uint bitCountMSB = bitCount - bitCountLSB;
-		uint valueLSB = BitfieldGet_Single(elementIndex, elementOffsetLSB, bitCountLSB);
-		uint valueMSB = BitfieldGet_Single(min(elementIndex + 1, NumElements - 1), 0, bitCountMSB);
-		return valueLSB | (valueMSB << bitCountLSB);
+		DataMutateArgs args = GetDataArgs(bitOffset, bitCount);
+		uint valueLSB = BitfieldGet_Single(args.ElementIndexLSB, args.ElementOffsetLSB, args.BitCountLSB);
+		uint valueMSB = BitfieldGet_Single(args.ElementIndexMSB, 0, args.BitCountMSB);
+		return valueLSB | (valueMSB << args.BitCountLSB);
 	}
 
 	void BinaryHeapSet(uint bitOffset, uint bitCount, uint value)
 	{
-		uint elementIndex = bitOffset / CBT_BITS_PER_ELEMENT;
-		uint elementOffsetLSB = bitOffset % CBT_BITS_PER_ELEMENT;
-		uint bitCountLSB = min(bitCount, CBT_BITS_PER_ELEMENT - elementOffsetLSB);
-		uint bitCountMSB = bitCount - bitCountLSB;
-		BitfieldSet_Single(elementIndex, elementOffsetLSB, bitCountLSB, value);
-		BitfieldSet_Single(min(elementIndex + 1, NumElements - 1), 0, bitCountMSB, value >> bitCountLSB);
+		DataMutateArgs args = GetDataArgs(bitOffset, bitCount);
+		BitfieldSet_Single(args.ElementIndexLSB, args.ElementOffsetLSB, args.BitCountLSB, value);
+		BitfieldSet_Single(args.ElementIndexMSB, 0, args.BitCountMSB, value >> args.BitCountLSB);
 	}
 
 	void GetDataRange(uint heapIndex, out uint offset, out uint size)
@@ -106,7 +106,7 @@ struct CBT
 	
 	uint BitfieldHeapIndex(uint heapIndex)
 	{
-		uint msb = firstbithigh(heapIndex);
+		uint msb = GetDepth(heapIndex);	
 		return heapIndex * (1u << (GetMaxDepth() - msb));
 	}
 	
@@ -124,12 +124,27 @@ struct CBT
 		SetData(bit, 0u);
 	}
 
+	uint GetMaxDepth()
+	{
+		return MaxDepth;
+	}
+
+	bool IsCeilNode(uint heapIndex)
+	{
+		uint msb = GetDepth(heapIndex);
+		return msb == GetMaxDepth();
+	}
+
+	uint NumNodes()
+	{
+		return GetData(1);
+	}
+
 	uint GetDepth(uint heapIndex)
 	{
 		return firstbithigh(heapIndex);
 	}
 	
-	// Helpers
 	uint LeftChildIndex(uint heapIndex)
 	{
 		return heapIndex << 1u;
@@ -138,16 +153,6 @@ struct CBT
 	uint RightChildIndex(uint heapIndex)
 	{
 		return (heapIndex << 1u) | 1u;
-	}
-	
-	uint ParentIndex(uint heapIndex)
-	{
-		return heapIndex >> 1u;
-	}
-	
-	uint SiblingIndex(uint heapIndex)
-	{
-		return heapIndex ^ 1u;
 	}
 };
 

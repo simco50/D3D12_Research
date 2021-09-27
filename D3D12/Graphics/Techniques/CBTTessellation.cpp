@@ -24,12 +24,12 @@ namespace CBTSettings
 	static bool DebugVisualize = false;
 	static bool CpuDemo = false;
 	static bool MeshShader = true;
-	static bool SumReductionOptimized = true;
 	static float ScreenSizeBias = 8.7f;
 	static float HeightmapVarianceBias = 0.01f;
 	static float HeightScale = 0.1f;
 
 	//PSO Settings
+	static bool ColorLevels = false;
 	static bool Wireframe = true;
 	static bool FrustumCull = true;
 	static bool DisplacementLOD = true;
@@ -81,8 +81,11 @@ void CBTTessellation::Execute(RGGraph& graph, Texture* pRenderTarget, Texture* p
 				ImGui::Checkbox("Mesh Shader", &CBTSettings::MeshShader);
 			}
 			ImGui::Checkbox("Freeze Camera", &CBTSettings::FreezeCamera);
-			ImGui::Checkbox("Optimized Sum Reduction", &CBTSettings::SumReductionOptimized);
 			if (ImGui::Checkbox("Wireframe", &CBTSettings::Wireframe))
+			{
+				SetupPipelines();
+			}
+			if (ImGui::Checkbox("Color Levels", &CBTSettings::ColorLevels))
 			{
 				SetupPipelines();
 			}
@@ -183,30 +186,27 @@ void CBTTessellation::Execute(RGGraph& graph, Texture* pRenderTarget, Texture* p
 			});
 	}
 
-	if (CBTSettings::SumReductionOptimized)
-	{
-		RGPassBuilder cbtSumReductionPrepass = graph.AddPass("CBT Sum Reduction Prepass");
-		cbtSumReductionPrepass.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
+	RGPassBuilder cbtSumReductionPrepass = graph.AddPass("CBT Sum Reduction Prepass");
+	cbtSumReductionPrepass.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
+		{
+			context.SetComputeRootSignature(m_pCBTRS.get());
+			context.SetComputeDynamicConstantBufferView(0, commonArgs);
+
+			context.BindResource(2, 0, m_pCBTBuffer->GetUAV());
+
+			struct SumReductionData
 			{
-				context.SetComputeRootSignature(m_pCBTRS.get());
-				context.SetComputeDynamicConstantBufferView(0, commonArgs);
+				uint32 Depth;
+			} reductionArgs;
+			int32 currentDepth = CBTSettings::CBTDepth;
 
-				context.BindResource(2, 0, m_pCBTBuffer->GetUAV());
+			reductionArgs.Depth = currentDepth;
+			context.SetComputeDynamicConstantBufferView(1, reductionArgs);
 
-				struct SumReductionData
-				{
-					uint32 Depth;
-				} reductionArgs;
-				int32 currentDepth = CBTSettings::CBTDepth;
-
-				reductionArgs.Depth = currentDepth;
-				context.SetComputeDynamicConstantBufferView(1, reductionArgs);
-
-				context.SetPipelineState(m_pCBTSumReductionFirstPassPSO);
-				context.Dispatch(ComputeUtils::GetNumThreadGroups(1u << currentDepth, 256 * 32));
-				context.InsertUavBarrier(m_pCBTBuffer.get());
-			});
-	}
+			context.SetPipelineState(m_pCBTSumReductionFirstPassPSO);
+			context.Dispatch(ComputeUtils::GetNumThreadGroups(1u << currentDepth, 256 * 32));
+			context.InsertUavBarrier(m_pCBTBuffer.get());
+		});
 
 	RGPassBuilder cbtSumReduction = graph.AddPass("CBT Sum Reduction");
 	cbtSumReduction.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
@@ -220,12 +220,7 @@ void CBTTessellation::Execute(RGGraph& graph, Texture* pRenderTarget, Texture* p
 			{
 				uint32 Depth;
 			} reductionArgs;
-			int32 currentDepth = CBTSettings::CBTDepth;
-
-			if (CBTSettings::SumReductionOptimized)
-			{
-				currentDepth -= 5;
-			}
+			int32 currentDepth = CBTSettings::CBTDepth - 5;
 
 			for (currentDepth = currentDepth - 1; currentDepth >= 0; --currentDepth)
 			{
@@ -328,6 +323,7 @@ void CBTTessellation::SetupPipelines()
 		ShaderDefine(Sprintf("MESH_SHADER_SUBD_LEVEL=%du", Math::Min(CBTSettings::MeshShaderSubD * 2, 6)).c_str()),
 		ShaderDefine(Sprintf("GEOMETRY_SHADER_SUBD_LEVEL=%du", Math::Min(CBTSettings::GeometryShaderSubD * 2, 4)).c_str()),
 		ShaderDefine(Sprintf("AMPLIFICATION_SHADER_SUBD_LEVEL=%du", Math::Max(CBTSettings::MeshShaderSubD * 2 - 6, 0)).c_str()),
+		ShaderDefine(Sprintf("COLOR_LEVELS=%d", CBTSettings::ColorLevels ? 1 : 0).c_str()),
 	};
 
 	m_pCBTRS = std::make_unique<RootSignature>(m_pDevice);
@@ -422,7 +418,7 @@ void CBTTessellation::DemoCpuCBT()
 	static bool init = false;
 
 	static CBT cbt;
-	if (ImGui::SliderInt("Max Depth", &maxDepth, 2, 16) || !init)
+	if (ImGui::SliderInt("Max Depth", &maxDepth, 5, 12) || !init)
 	{
 		cbt.Init(maxDepth, maxDepth);
 		init = true;

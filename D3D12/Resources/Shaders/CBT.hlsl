@@ -307,6 +307,7 @@ struct VertexOut
 {
 	float4 Position : SV_POSITION;
 	float2 UV : TEXCOORD;
+	uint HeapIndex : HEAP_INDEX;
 };
 
 /* MESH SHADER TECHNIQUE */
@@ -392,8 +393,10 @@ void RenderMS(
 
 	for(uint i = 0; i < 3; ++i)
 	{
-		vertices[outputIndex * 3 + i].Position = mul(float4(tri[i], 1), cUpdateData.WorldViewProjection);
-		vertices[outputIndex * 3 + i].UV = tri[i].xz;
+		uint index = outputIndex * 3 + i;
+		vertices[index].Position = mul(float4(tri[i], 1), cUpdateData.WorldViewProjection);
+		vertices[index].UV = tri[i].xz;
+		vertices[index].HeapIndex = heapIndex;
 	}
 	triangles[outputIndex] = uint3(
 		outputIndex * 3 + 0, 
@@ -430,6 +433,7 @@ void RenderGS(point uint instanceID[1] : INSTANCE_ID, inout TriangleStream<Verte
 				VertexOut v;
 				v.UV = tri[i].xz;
 				v.Position = mul(float4(tri[i], 1), cUpdateData.WorldViewProjection);
+				v.HeapIndex = heapIndex;
 				triStream.Append(v);
 			}
 			triStream.RestartStrip();
@@ -447,6 +451,7 @@ void RenderVS(uint vertexID : SV_VertexID, uint instanceID : SV_InstanceID, out 
 
 	vertex.UV = tri.xz;
 	vertex.Position = mul(float4(tri, 1), cUpdateData.WorldViewProjection);
+	vertex.HeapIndex = heapIndex;
 }
 #endif
 
@@ -467,8 +472,15 @@ float4 RenderPS(
 	float dY = bl + 2 * b + br - tl - 2 * t - tr;
 	float3 normal = normalize(float3(dX, 1.0f / 50, dY));
 
+	float3 color = 1;
+
+#if COLOR_LEVELS
+	uint state = SeedThread(firstbithigh(vertex.HeapIndex));
+	color = float3(Random01(state), Random01(state), Random01(state));
+#endif
+
 	float3 dir = normalize(float3(1, 1, 1));
-	float4 color = float4(saturate(dot(dir, normalize(normal)).xxx), 1);
+	float4 output = float4(color * saturate(dot(dir, normalize(normal))), 1);
 
 #if RENDER_WIREFRAME
 	float3 deltas = fwidth(bary);
@@ -476,9 +488,9 @@ float4 RenderPS(
 	float3 thickness = deltas * 0.2;
 	bary = smoothstep(thickness, thickness + smoothing, bary);
 	float minBary = min(bary.x, min(bary.y, bary.z));
-	color.xyz *= saturate(minBary + 0.5f);
+	output.xyz *= saturate(minBary + 0.5f);
 #endif
-	return color;
+	return output;
 }
 
 /* DEBUG VISUALIZATION TECHNIQUE */
