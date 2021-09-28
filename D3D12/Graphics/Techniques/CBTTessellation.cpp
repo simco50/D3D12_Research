@@ -186,6 +186,49 @@ void CBTTessellation::Execute(RGGraph& graph, Texture* pRenderTarget, Texture* p
 			});
 	}
 
+	RGPassBuilder cbtIndirectArgs = graph.AddPass("CBT Update Indirect Args");
+	cbtIndirectArgs.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
+		{
+			context.SetComputeRootSignature(m_pCBTRS.get());
+			context.SetComputeDynamicConstantBufferView(0, commonArgs);
+
+			context.BindResource(2, 0, m_pCBTBuffer->GetUAV());
+			context.BindResource(2, 1, m_pCBTIndirectArgs->GetUAV());
+
+			context.InsertResourceBarrier(m_pCBTIndirectArgs.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+			context.SetPipelineState(m_pCBTIndirectArgsPSO);
+			context.Dispatch(1);
+		});
+
+	RGPassBuilder cbtRender = graph.AddPass("CBT Render");
+	cbtRender.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
+		{
+			context.InsertResourceBarrier(m_pCBTIndirectArgs.get(), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
+			context.InsertResourceBarrier(pDepthTexture, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+
+			context.SetGraphicsRootSignature(m_pCBTRS.get());
+			context.SetPipelineState(CBTSettings::MeshShader ? m_pCBTRenderMeshShaderPSO : m_pCBTRenderPSO);
+
+			context.SetGraphicsDynamicConstantBufferView(0, commonArgs);
+			context.SetGraphicsDynamicConstantBufferView(1, updateData);
+
+			context.BindResource(2, 0, m_pCBTBuffer->GetUAV());
+			context.BindResource(3, 0, m_pHeightmap->GetSRV());
+
+			context.BeginRenderPass(RenderPassInfo(pRenderTarget, RenderPassAccess::Load_Store, pDepthTexture, RenderPassAccess::Load_Store, true));
+			if (CBTSettings::MeshShader)
+			{
+				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+				context.ExecuteIndirect(m_pDevice->GetIndirectDispatchMeshSignature(), 1, m_pCBTIndirectArgs.get(), nullptr, IndirectDispatchMeshArgsOffset);
+			}
+			else
+			{
+				context.SetPrimitiveTopology(CBTSettings::GeometryShaderSubD > 0 ? D3D_PRIMITIVE_TOPOLOGY_POINTLIST : D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+				context.ExecuteIndirect(m_pDevice->GetIndirectDrawSignature(), 1, m_pCBTIndirectArgs.get(), nullptr, IndirectDrawArgsOffset);
+			}
+			context.EndRenderPass();
+		});
+
 	RGPassBuilder cbtSumReductionPrepass = graph.AddPass("CBT Sum Reduction Prepass");
 	cbtSumReductionPrepass.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
 		{
@@ -231,49 +274,6 @@ void CBTTessellation::Execute(RGGraph& graph, Texture* pRenderTarget, Texture* p
 				context.Dispatch(ComputeUtils::GetNumThreadGroups(1 << currentDepth, 256));
 				context.InsertUavBarrier(m_pCBTBuffer.get());
 			}
-		});
-
-	RGPassBuilder cbtIndirectArgs = graph.AddPass("CBT Update Indirect Args");
-	cbtIndirectArgs.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
-		{
-			context.SetComputeRootSignature(m_pCBTRS.get());
-			context.SetComputeDynamicConstantBufferView(0, commonArgs);
-
-			context.BindResource(2, 0, m_pCBTBuffer->GetUAV());
-			context.BindResource(2, 1, m_pCBTIndirectArgs->GetUAV());
-
-			context.InsertResourceBarrier(m_pCBTIndirectArgs.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-			context.SetPipelineState(m_pCBTIndirectArgsPSO);
-			context.Dispatch(1);
-		});
-
-	RGPassBuilder cbtRender = graph.AddPass("CBT Render");
-	cbtRender.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
-		{
-			context.InsertResourceBarrier(m_pCBTIndirectArgs.get(), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
-			context.InsertResourceBarrier(pDepthTexture, D3D12_RESOURCE_STATE_DEPTH_WRITE);
-
-			context.SetGraphicsRootSignature(m_pCBTRS.get());
-			context.SetPipelineState(CBTSettings::MeshShader ? m_pCBTRenderMeshShaderPSO : m_pCBTRenderPSO);
-
-			context.SetGraphicsDynamicConstantBufferView(0, commonArgs);
-			context.SetGraphicsDynamicConstantBufferView(1, updateData);
-
-			context.BindResource(2, 0, m_pCBTBuffer->GetUAV());
-			context.BindResource(3, 0, m_pHeightmap->GetSRV());
-
-			context.BeginRenderPass(RenderPassInfo(pRenderTarget, RenderPassAccess::Load_Store, pDepthTexture, RenderPassAccess::Load_Store, true));
-			if (CBTSettings::MeshShader)
-			{
-				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-				context.ExecuteIndirect(m_pDevice->GetIndirectDispatchMeshSignature(), 1, m_pCBTIndirectArgs.get(), nullptr, IndirectDispatchMeshArgsOffset);
-			}
-			else
-			{
-				context.SetPrimitiveTopology(CBTSettings::GeometryShaderSubD > 0 ? D3D_PRIMITIVE_TOPOLOGY_POINTLIST : D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-				context.ExecuteIndirect(m_pDevice->GetIndirectDrawSignature(), 1, m_pCBTIndirectArgs.get(), nullptr, IndirectDrawArgsOffset);
-			}
-			context.EndRenderPass();
 		});
 
 	if (CBTSettings::DebugVisualize)

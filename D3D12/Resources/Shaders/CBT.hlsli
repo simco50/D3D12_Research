@@ -1,6 +1,4 @@
 
-#define CBT_BITS_PER_ELEMENT (sizeof(uint) * 8)
-
 struct CBT
 {
 	RWByteAddressBuffer Storage;
@@ -11,20 +9,34 @@ struct CBT
 	{
 		Storage = buffer;
 		NumElements = numElements;
-		MaxDepth = firstbitlow(buffer.Load(0));
+		MaxDepth = firstbitlow(buffer.Load(0u));
+	}
+
+	void SplitNode_Single(uint heapIndex)
+	{
+		uint rightChild = RightChildIndex(heapIndex);
+		uint bit = NodeBitIndex(CeilNode(rightChild));
+		BitfieldSet_Single(bit >> 5u, bit & 31u, 1u, 1u);
+	}
+	
+	void MergeNode_Single(uint heapIndex)
+	{
+		uint rightSibling = heapIndex | 1u;
+		uint bit = NodeBitIndex(CeilNode(rightSibling));
+		BitfieldSet_Single(bit >> 5u, bit & 31u, 1u, 0u);
 	}
 
 	uint BitfieldGet_Single(uint elementIndex, uint bitOffset, uint bitCount)
 	{
 		uint bitMask = ~(~0u << bitCount);
-		return (Storage.Load(elementIndex * 4) >> bitOffset) & bitMask;
+		return (Storage.Load(elementIndex * 4u) >> bitOffset) & bitMask;
 	}
 
 	void BitfieldSet_Single(uint elementIndex, uint bitOffset, uint bitCount, uint value)
 	{
 		uint bitMask = ~(~(~0u << bitCount) << bitOffset);
-		Storage.InterlockedAnd(elementIndex * 4, bitMask);
-		Storage.InterlockedOr(elementIndex * 4, value << bitOffset);
+		Storage.InterlockedAnd(elementIndex * 4u, bitMask);
+		Storage.InterlockedOr(elementIndex * 4u, value << bitOffset);
 	}
 
 	struct DataMutateArgs
@@ -39,10 +51,10 @@ struct CBT
 	DataMutateArgs GetDataArgs(uint bitOffset, uint bitCount)
 	{
 		DataMutateArgs args;
-		args.ElementIndexLSB = bitOffset / CBT_BITS_PER_ELEMENT;
-		args.ElementIndexMSB = min(args.ElementIndexLSB + 1, NumElements - 1);
-		args.ElementOffsetLSB = bitOffset % CBT_BITS_PER_ELEMENT;
-		args.BitCountLSB = min(bitCount, CBT_BITS_PER_ELEMENT - args.ElementOffsetLSB);
+		args.ElementIndexLSB = bitOffset >> 5u;
+		args.ElementIndexMSB = min(args.ElementIndexLSB + 1u, NumElements - 1u);
+		args.ElementOffsetLSB = bitOffset & 31u;
+		args.BitCountLSB = min(bitCount, 32u - args.ElementOffsetLSB);
 		args.BitCountMSB = bitCount - args.BitCountLSB;
 		return args;
 	}
@@ -51,7 +63,7 @@ struct CBT
 	{
 		DataMutateArgs args = GetDataArgs(bitOffset, bitCount);
 		uint valueLSB = BitfieldGet_Single(args.ElementIndexLSB, args.ElementOffsetLSB, args.BitCountLSB);
-		uint valueMSB = BitfieldGet_Single(args.ElementIndexMSB, 0, args.BitCountMSB);
+		uint valueMSB = BitfieldGet_Single(args.ElementIndexMSB, 0u, args.BitCountMSB);
 		return valueLSB | (valueMSB << args.BitCountLSB);
 	}
 
@@ -59,38 +71,27 @@ struct CBT
 	{
 		DataMutateArgs args = GetDataArgs(bitOffset, bitCount);
 		BitfieldSet_Single(args.ElementIndexLSB, args.ElementOffsetLSB, args.BitCountLSB, value);
-		BitfieldSet_Single(args.ElementIndexMSB, 0, args.BitCountMSB, value >> args.BitCountLSB);
-	}
-
-	void GetDataRange(uint heapIndex, out uint offset, out uint size)
-	{
-		uint depth = GetDepth(heapIndex);
-		size = GetMaxDepth() - depth + 1;
-		offset = (2u << depth) + heapIndex * size;
+		BitfieldSet_Single(args.ElementIndexMSB, 0u, args.BitCountMSB, value >> args.BitCountLSB);
 	}
 
 	uint GetData(uint heapIndex)
 	{
-		uint offset, size;
-		GetDataRange(heapIndex, offset, size);
-		return BinaryHeapGet(offset, size);
+		return BinaryHeapGet(NodeBitIndex(heapIndex), NodeBitSize(heapIndex));
 	}
 
 	void SetData(uint heapIndex, uint value)
 	{
-		uint offset, size;
-		GetDataRange(heapIndex, offset, size);
-		BinaryHeapSet(offset, size, value);
+		BinaryHeapSet(NodeBitIndex(heapIndex), NodeBitSize(heapIndex), value);
 	}
 
 	uint LeafToHeapIndex(uint leafIndex)
 	{
-		uint heapIndex = 1;
-		while(GetData(heapIndex) > 1)
+		uint heapIndex = 1u;
+		while(GetData(heapIndex) > 1u)
 		{
 			uint leftChild = LeftChildIndex(heapIndex);
 			uint leftChildValue = GetData(leftChild);
-			uint bit = leafIndex < leftChildValue ? 0 : 1;
+			uint bit = leafIndex < leftChildValue ? 0u : 1u;
 			heapIndex = leftChild | bit;
 			leafIndex -= bit * leftChildValue;
 		}
@@ -103,6 +104,12 @@ struct CBT
 		return heapIndex * (1u << (GetMaxDepth() - msb));
 	}
 
+	uint NodeBitSize(uint heapIndex)
+	{
+		uint depth = GetDepth(heapIndex);
+		return GetMaxDepth() - depth + 1u;
+	}
+
 	uint NodeBitIndex(uint heapIndex)
 	{
 		uint depth = GetDepth(heapIndex);
@@ -110,19 +117,11 @@ struct CBT
 		uint b = 1u + GetMaxDepth() - depth;
 		return a + heapIndex * b;
 	}
-	
-	void SplitNode_Single(uint heapIndex)
+
+	uint CeilNode(uint heapIndex)
 	{
-		uint rightChild = RightChildIndex(heapIndex);
-		uint bit = BitfieldHeapIndex(rightChild);
-		SetData(bit, 1u);
-	}
-	
-	void MergeNode_Single(uint heapIndex)
-	{
-		uint rightSibling = heapIndex | 1u;
-		uint bit = BitfieldHeapIndex(rightSibling);
-		SetData(bit, 0u);
+		uint depth = GetDepth(heapIndex);
+		return heapIndex << (GetMaxDepth() - depth);
 	}
 
 	uint GetMaxDepth()
@@ -138,7 +137,7 @@ struct CBT
 
 	uint NumNodes()
 	{
-		return GetData(1);
+		return GetData(1u);
 	}
 
 	uint GetDepth(uint heapIndex)
