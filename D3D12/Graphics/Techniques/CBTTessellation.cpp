@@ -132,7 +132,6 @@ void CBTTessellation::Execute(RGGraph& graph, Texture* pRenderTarget, Texture* p
 	{
 		Matrix World;
 		Matrix WorldView;
-		Matrix ViewProjection;
 		Matrix WorldViewProjection;
 		Vector4 FrustumPlanes[6];
 		float HeightmapSizeInv;
@@ -140,7 +139,6 @@ void CBTTessellation::Execute(RGGraph& graph, Texture* pRenderTarget, Texture* p
 		float HeightmapVarianceBias;
 	} updateData;
 	updateData.WorldView = terrainTransform * m_CachedViewMatrix;
-	updateData.ViewProjection = resources.pCamera->GetViewProjection();
 	updateData.WorldViewProjection = terrainTransform * resources.pCamera->GetViewProjection();
 	updateData.World = terrainTransform;
 	DirectX::XMVECTOR nearPlane, farPlane, left, right, top, bottom;

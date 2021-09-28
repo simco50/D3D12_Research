@@ -50,7 +50,6 @@ struct UpdateData
 {
 	float4x4 World;
 	float4x4 WorldView;
-	float4x4 ViewProjection;
 	float4x4 WorldViewProjection;
 	float4 FrustumPlanes[6];
 	float HeightmapSizeInv;
@@ -70,6 +69,7 @@ void PrepareDispatchArgsCS(uint threadID : SV_DispatchThreadID)
 
 	uint offset = 0;
 
+	// Dispatch args
 	uint numThreads = ceil((float)cbt.NumNodes() / COMPUTE_THREAD_GROUP_SIZE);
 	uIndirectArgs.Store(offset + 0, numThreads);
 	uIndirectArgs.Store(offset + 4, 1);
@@ -77,6 +77,7 @@ void PrepareDispatchArgsCS(uint threadID : SV_DispatchThreadID)
 
 	offset += sizeof(uint3);
 	
+	// Task/mesh shader args
 	uint numMeshThreads = ceil((float)cbt.NumNodes() / MESH_SHADER_THREAD_GROUP_SIZE);
 	uIndirectArgs.Store(offset + 0, numMeshThreads);
 	uIndirectArgs.Store(offset + 4, 1);
@@ -84,6 +85,7 @@ void PrepareDispatchArgsCS(uint threadID : SV_DispatchThreadID)
 
 	offset += sizeof(uint3);
 
+	// Draw args
 	uint numVertices = 3;
 	uint numInstances = cbt.NumNodes();
 	uIndirectArgs.Store(offset + 0, numVertices);
@@ -265,7 +267,7 @@ float3x3 GetVertices(uint heapIndex)
 		1, 0, 0
 	);
 
-	float3x3 tri = LEB::GetTriangleVertices(heapIndex, baseTriangle);
+	float3x3 tri = LEB::TransformAttributes(heapIndex, baseTriangle);
 	for(int i = 0; i < 3; ++i)
 	{
 		tri[i].y += tHeightmap.SampleLevel(sSampler, tri[i].xz, 0).r;
@@ -512,7 +514,7 @@ void DebugVisualizeVS(
 		1, 0, 0
 	);
 
-	float3 tri = LEB::GetTriangleVertices(heapIndex, baseTriangle)[vertexID];
+	float3 tri = LEB::TransformAttributes(heapIndex, baseTriangle)[vertexID];
 	tri.xy = tri.xy * 2 - 1;
 	pos = float4(tri, 1);
 	

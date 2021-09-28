@@ -21,8 +21,9 @@ struct CBT
 	
 	void MergeNode_Single(uint heapIndex)
 	{
-		uint rightSibling = heapIndex | 1u;
-		uint bit = NodeBitIndex(CeilNode(rightSibling));
+		uint rightSibling = RightSiblingIndex(heapIndex);
+		uint bitfieldHeapIndex = CeilNode(rightSibling);
+		uint bit = NodeBitIndex(bitfieldHeapIndex);
 		BitfieldSet_Single(bit >> 5u, bit & 31u, 1u, 0u);
 	}
 
@@ -98,18 +99,21 @@ struct CBT
 		return heapIndex;
 	}
 	
+	// Returns the heap index of bitfield node for a heap node
 	uint BitfieldHeapIndex(uint heapIndex)
 	{
 		uint msb = GetDepth(heapIndex);	
 		return heapIndex * (1u << (GetMaxDepth() - msb));
 	}
 
+	// Returns the size in bits for a heap node
 	uint NodeBitSize(uint heapIndex)
 	{
 		uint depth = GetDepth(heapIndex);
 		return GetMaxDepth() - depth + 1u;
 	}
 
+	// Returns the offset in bits in CTB for a heap node
 	uint NodeBitIndex(uint heapIndex)
 	{
 		uint depth = GetDepth(heapIndex);
@@ -153,6 +157,11 @@ struct CBT
 	uint RightChildIndex(uint heapIndex)
 	{
 		return (heapIndex << 1u) | 1u;
+	}
+
+	uint RightSiblingIndex(uint heapIndex)
+	{
+		return heapIndex | 1u;
 	}
 };
 
@@ -208,12 +217,6 @@ namespace LEB
 		}
 		float3x3 windingMatrix = GetWindingMatrix((depth ^ 1u) & 1u); 
 		return mul(windingMatrix, m);
-	}
-
-	float3x3 GetTriangleVertices(uint heapIndex, float3x3 baseTriangle)
-	{
-		float3x3 triMatrix = GetMatrix(heapIndex);
-		return mul(triMatrix, baseTriangle);
 	}
 
 	struct NeighborIDs
@@ -318,5 +321,11 @@ namespace LEB
 				cbt.MergeNode_Single(cbt.RightChildIndex(diamond.Top));
 			}
 		}
+	}
+	
+	float3x3 TransformAttributes(uint heapIndex, float3x3 attributes)
+	{
+		float3x3 transformMatrix = GetMatrix(heapIndex);
+		return mul(transformMatrix, attributes);
 	}
 }
