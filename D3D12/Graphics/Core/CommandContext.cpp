@@ -172,7 +172,7 @@ void CommandContext::CopyTexture(Texture* pSource, Texture* pDestination, const 
 	m_pCommandList->CopyTextureRegion(&dstLocation, destinationRegion.left, destinationRegion.top, destinationRegion.front, &srcLocation, &sourceRegion);
 }
 
-void CommandContext::CopyBuffer(Buffer* pSource, Buffer* pDestination, uint32 size, uint32 sourceOffset, uint32 destinationOffset)
+void CommandContext::CopyBuffer(Buffer* pSource, Buffer* pDestination, uint64 size, uint64 sourceOffset, uint64 destinationOffset)
 {
 	m_pCommandList->CopyBufferRegion(pDestination->GetResource(), destinationOffset, pSource->GetResource(), sourceOffset, size);
 }

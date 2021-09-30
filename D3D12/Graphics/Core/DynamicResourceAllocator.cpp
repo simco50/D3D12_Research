@@ -11,9 +11,9 @@ DynamicResourceAllocator::DynamicResourceAllocator(DynamicAllocationManager* pPa
 
 }
 
-DynamicAllocation DynamicResourceAllocator::Allocate(size_t size, int alignment)
+DynamicAllocation DynamicResourceAllocator::Allocate(uint64 size, int alignment)
 {
-	size_t bufferSize = Math::AlignUp<size_t>(size, alignment);
+	uint64 bufferSize = Math::AlignUp<uint64>(size, alignment);
 	DynamicAllocation allocation;
 	allocation.Size = bufferSize;
 
@@ -28,7 +28,7 @@ DynamicAllocation DynamicResourceAllocator::Allocate(size_t size, int alignment)
 	}
 	else
 	{
-		m_CurrentOffset = Math::AlignUp<size_t>(m_CurrentOffset, alignment);
+		m_CurrentOffset = Math::AlignUp<uint64>(m_CurrentOffset, alignment);
 
 		if (m_pCurrentPage == nullptr || m_CurrentOffset + bufferSize >= PAGE_SIZE)
 		{
@@ -43,6 +43,7 @@ DynamicAllocation DynamicResourceAllocator::Allocate(size_t size, int alignment)
 
 		m_CurrentOffset += bufferSize;
 	}
+	memset(allocation.pMappedMemory, 0, allocation.Size);
 	return allocation;
 }
 
@@ -87,7 +88,7 @@ Buffer* DynamicAllocationManager::AllocatePage(size_t size)
 	return pPage;
 }
 
-Buffer* DynamicAllocationManager::CreateNewPage(size_t size)
+Buffer* DynamicAllocationManager::CreateNewPage(uint64 size)
 {
 	std::unique_ptr<Buffer> pNewPage = GetParent()->CreateBuffer(BufferDesc::CreateBuffer((uint32)size, m_BufferFlags), "Dynamic Allocation Buffer");
 	pNewPage->Map();
