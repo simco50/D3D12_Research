@@ -7,16 +7,19 @@ public:
 	using StorageType = uint32;
 	constexpr static uint32 NumBitsPerElement = sizeof(StorageType) * 8;
 
+	static uint64 ComputeSize(uint64 maxDepth)
+	{
+		uint64 numBits = 1ull << (maxDepth + 2);
+		return numBits / NumBitsPerElement;
+	}
+
 	void InitBare(uint32 maxDepth, uint32 initialDepth)
 	{
 		assert(initialDepth <= maxDepth);
 
-		uint64 NumBits = 1ull << (maxDepth + 2);
-		assert(NumBits < NumBitsPerElement || NumBits % NumBitsPerElement == 0);
-
-		Bits.clear();
-		Bits.resize(NumBits / NumBitsPerElement);
-		Bits[0] |= 1 << maxDepth;
+		Storage.clear();
+		Storage.resize(ComputeSize(maxDepth));
+		Storage[0] |= 1 << maxDepth;
 
 		uint32 minRange = 1u << initialDepth;
 		uint32 maxRange = 1u << (initialDepth + 1);
@@ -47,8 +50,8 @@ public:
 		uint32 elementOffsetLSB = bitOffset % NumBitsPerElement;
 		uint32 bitCountLSB = Math::Min(bitCount, NumBitsPerElement - elementOffsetLSB);
 		uint32 bitCountMSB = bitCount - bitCountLSB;
-		uint32 valueLSB = BitfieldGet_Single(Bits[elementIndex], elementOffsetLSB, bitCountLSB);
-		uint32 valueMSB = BitfieldGet_Single(Bits[Math::Min(elementIndex + 1, (uint32)Bits.size() - 1)], 0, bitCountMSB);
+		uint32 valueLSB = BitfieldGet_Single(Storage[elementIndex], elementOffsetLSB, bitCountLSB);
+		uint32 valueMSB = BitfieldGet_Single(Storage[Math::Min(elementIndex + 1, (uint32)Storage.size() - 1)], 0, bitCountMSB);
 		uint32 val = valueLSB | (valueMSB << bitCountLSB);
 		return val;
 	}
@@ -68,8 +71,8 @@ public:
 		uint32 elementOffsetLSB = bitOffset % NumBitsPerElement;
 		uint32 bitCountLSB = Math::Min(bitCount, NumBitsPerElement - elementOffsetLSB);
 		uint32 bitCountMSB = bitCount - bitCountLSB;
-		BitfieldSet_Single(Bits[elementIndex], elementOffsetLSB, bitCountLSB, value);
-		BitfieldSet_Single(Bits[Math::Min(elementIndex + 1, (uint32)Bits.size() - 1)], 0, bitCountMSB, value >> bitCountLSB);
+		BitfieldSet_Single(Storage[elementIndex], elementOffsetLSB, bitCountLSB, value);
+		BitfieldSet_Single(Storage[Math::Min(elementIndex + 1, (uint32)Storage.size() - 1)], 0, bitCountMSB, value >> bitCountLSB);
 	}
 
 	void GetDataRange(uint32 heapIndex, uint32* pOffset, uint32* pSize) const
@@ -94,10 +97,10 @@ public:
 			uint32 bitOffset = NodeBitIndex(nodeIndex);
 			uint32 elementIndex = bitOffset >> 5u;
 
-			uint32 bitField = Bits[elementIndex];
+			uint32 bitField = Storage[elementIndex];
 			bitField = (bitField & 0x55555555u) + ((bitField >> 1u) & 0x55555555u);
 			uint32 data = bitField;
-			Bits[(bitOffset - count) >> 5] = data;
+			Storage[(bitOffset - count) >> 5] = data;
 
 			bitField = (bitField & 0x33333333u) + ((bitField >> 2u) & 0x33333333u);
 			data = (bitField >> 0u) & (7u << 0u) |
@@ -242,7 +245,7 @@ public:
 	uint32 GetMaxDepth() const
 	{
 		uint32 maxDepth;
-		assert(BitOperations::LeastSignificantBit(Bits[0], &maxDepth));
+		assert(BitOperations::LeastSignificantBit(Storage[0], &maxDepth));
 		return maxDepth;
 	}
 
@@ -260,7 +263,7 @@ public:
 
 	uint32 GetMemoryUse() const
 	{
-		return (uint32)Bits.size() * sizeof(StorageType);
+		return (uint32)Storage.size() * sizeof(StorageType);
 	}
 
 	// Utility functions
@@ -294,16 +297,17 @@ public:
 
 	const void* GetData() const
 	{
-		return Bits.data();
+		return Storage.data();
 	}
 
 	void* GetData()
 	{
-		return Bits.data();
+		return Storage.data();
 	}
 
 private:
-	std::vector<uint32> Bits;
+	std::vector<uint32> Storage;
+	std::vector<uint32> CachedBitfield;
 };
 
 namespace LEB
