@@ -520,12 +520,22 @@ void CBTTessellation::DemoCpuCBT()
 		b *= scale;
 		c *= scale;
 
+		srand(CBT::GetDepth(heapIndex));
+
+		ImGui::GetWindowDrawList()->AddTriangleFilled(
+			cPos + ImVec2(a.x, a.y),
+			cPos + ImVec2(b.x, b.y),
+			cPos + ImVec2(c.x, c.y),
+			ImColor(Math::RandomRange(0.0f, 1.0f), Math::RandomRange(0.0f, 1.0f), Math::RandomRange(0.0f, 1.0f), 0.5f)
+		);
+
 		ImGui::GetWindowDrawList()->AddTriangle(
 			cPos + ImVec2(a.x, a.y),
 			cPos + ImVec2(b.x, b.y),
 			cPos + ImVec2(c.x, c.y),
 			ImColor(color.x, color.y, color.z, color.w),
-			2.0f);
+			2.0f
+		);
 
 		ImVec2 pos = (ImVec2(a.x, a.y) + ImVec2(b.x, b.y) + ImVec2(c.x, c.y)) / 3;
 		std::string text = Sprintf("%d", heapIndex);

@@ -87,10 +87,9 @@ public:
 	void SumReduction()
 	{
 		int32 depth = GetMaxDepth();
-
-		// Prepass
 		uint32 count = 1 << depth;
 
+		// Prepass
 		for (uint32 bitIndex = 0; bitIndex < count; bitIndex += (1 << 5))
 		{
 			uint32 nodeIndex = bitIndex + count;
@@ -203,13 +202,24 @@ public:
 		return heapIndex;
 	}
 
+	void BitfieldSet(uint32 bitOffset, uint32 value)
+	{
+		uint32 elementIndex = bitOffset / NumBitsPerElement;
+		uint32 bitIndex = bitOffset % NumBitsPerElement;
+		uint32 bitMask = ~(1u << bitIndex);
+
+		Storage[elementIndex] &= bitMask;
+		Storage[elementIndex] |= value << bitIndex;
+	};
+
 	void SplitNode(uint32 heapIndex)
 	{
 		if (!IsCeilNode(heapIndex))
 		{
 			uint32 rightChild = RightChildID(heapIndex);
-			uint32 bit = BitfieldHeapIndex(rightChild);
-			SetData(bit, 1);
+			uint32 bitfieldIndex = BitfieldHeapIndex(rightChild);
+			uint32 bit = NodeBitIndex(bitfieldIndex);
+			BitfieldSet(bit, 1);
 		}
 	}
 
@@ -218,8 +228,9 @@ public:
 		if (!IsRootNode(heapIndex))
 		{
 			uint32 rightSibling = heapIndex | 1;
-			uint32 bit = BitfieldHeapIndex(rightSibling);
-			SetData(bit, 0);
+			uint32 bitfieldIndex = BitfieldHeapIndex(rightSibling);
+			uint32 bit = NodeBitIndex(bitfieldIndex);
+			BitfieldSet(bit, 0);
 		}
 	}
 
@@ -252,13 +263,6 @@ public:
 	uint32 NumBitfieldBits() const
 	{
 		return (1u << GetMaxDepth());
-	}
-
-	void GetElementRange(uint32 heapIndex, uint32& begin, uint32& size) const
-	{
-		uint32 depth = GetDepth(heapIndex);
-		size = GetMaxDepth() - depth + 1;
-		begin = (1u << (depth + 1)) + heapIndex * size;
 	}
 
 	uint32 GetMemoryUse() const
