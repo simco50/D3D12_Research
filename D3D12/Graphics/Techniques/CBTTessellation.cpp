@@ -494,20 +494,27 @@ void CBTTessellation::DemoCpuCBT()
 		PROFILE_SCOPE("CBT Update");
 		cbt.IterateLeaves([&](uint32 heapIndex)
 			{
-				if (splitting && LEB::PointInTriangle(mousePos, heapIndex, scale))
+				if (m_SplitMode)
 				{
-					LEB::CBTSplitConformed(cbt, heapIndex);
-				}
-
-				if (!CBT::IsRootNode(heapIndex))
-				{
-					LEB::DiamondIDs diamond = LEB::GetDiamond(heapIndex);
-					if (merging && !LEB::PointInTriangle(mousePos, diamond.Base, scale) && !LEB::PointInTriangle(mousePos, diamond.Top, scale))
+					if (splitting && LEB::PointInTriangle(mousePos, heapIndex, scale))
 					{
-						LEB::CBTMergeConformed(cbt, heapIndex);
+						LEB::CBTSplitConformed(cbt, heapIndex);
+					}
+				}
+				else
+				{
+
+					if (!CBT::IsRootNode(heapIndex))
+					{
+						LEB::DiamondIDs diamond = LEB::GetDiamond(heapIndex);
+						if (merging && !LEB::PointInTriangle(mousePos, diamond.Base, scale) && !LEB::PointInTriangle(mousePos, diamond.Top, scale))
+						{
+							LEB::CBTMergeConformed(cbt, heapIndex);
+						}
 					}
 				}
 			});
+		m_SplitMode = !m_SplitMode;
 
 		cbt.SumReduction();
 	}
