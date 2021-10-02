@@ -77,12 +77,34 @@ struct CBT
 
 	uint GetData(uint heapIndex)
 	{
-		return BinaryHeapGet(NodeBitIndex(heapIndex), NodeBitSize(heapIndex));
+		// If we want to get data from the last 5 levels, count the bits in the int directly
+		uint depth = GetDepth(heapIndex);
+		if (GetMaxDepth() - depth <= 5u)
+		{
+			uint bitfieldSize = (1u << GetMaxDepth());
+			uint bitfieldElements = bitfieldSize >> 5u;
+			uint numBits = 1u << (GetMaxDepth() - depth);
+			uint bitfieldBitIndex = NodeBitIndex(BitfieldHeapIndex(heapIndex));
+			uint offset = bitfieldBitIndex & 31u;
+			uint elementIndex = bitfieldBitIndex >> 5u;
+			// The bitfield is cached in the layer above the bitfield so that it is immutable during subdivision.
+			uint element = Storage.Load(4 * (elementIndex - bitfieldElements));
+			uint mask = (uint)~(~0ull << numBits);
+			element >>= offset;
+			element &= mask;
+			return countbits(element);
+		}
+
+		uint bitIndex = NodeBitIndex(heapIndex);
+		uint size = NodeBitSize(heapIndex);
+		return BinaryHeapGet(bitIndex, size);
 	}
 
 	void SetData(uint heapIndex, uint value)
 	{
-		BinaryHeapSet(NodeBitIndex(heapIndex), NodeBitSize(heapIndex), value);
+		uint bitIndex = NodeBitIndex(heapIndex);
+		uint size = NodeBitSize(heapIndex);
+		BinaryHeapSet(bitIndex, size, value);
 	}
 
 	uint LeafToHeapIndex(uint leafIndex)

@@ -116,6 +116,25 @@ void SumReductionCS(uint threadID : SV_DispatchThreadID)
 }
 
 [numthreads(COMPUTE_THREAD_GROUP_SIZE, 1, 1)]
+void CacheBitfieldCS(uint threadID : SV_DispatchThreadID)
+{
+	CBT cbt;
+	cbt.Init(uCBT, cCommonArgs.NumElements);
+	uint depth = cSumReductionData.Depth;
+	uint count = 1u << depth;
+	uint elementCount = count >> 5u;
+	if(threadID < elementCount)
+	{
+		uint nodeIndex = (threadID << 5u) + count;
+		uint bitOffset = cbt.NodeBitIndex(nodeIndex);
+		uint elementIndex = bitOffset >> 5u;
+		uint v = cbt.Storage.Load(4 * elementIndex);
+		// Cache the bitfield in the layer above it so that it's immutable during the subdivision pass
+		cbt.Storage.Store(4 * (elementIndex - elementCount), v);
+	}
+}
+
+[numthreads(COMPUTE_THREAD_GROUP_SIZE, 1, 1)]
 void SumReductionFirstPassCS(uint threadID : SV_DispatchThreadID)
 {
 	CBT cbt;

@@ -39,6 +39,7 @@ private:
 	std::unique_ptr<Buffer> m_pCBTIndirectArgs;
 	std::unique_ptr<Texture> m_pDebugVisualizeTexture;
 	PipelineState* m_pCBTIndirectArgsPSO = nullptr;
+	PipelineState* m_pCBTCacheBitfieldPSO = nullptr;
 	PipelineState* m_pCBTSumReductionPSO = nullptr;
 	PipelineState* m_pCBTSumReductionFirstPassPSO = nullptr;
 	PipelineState* m_pCBTUpdatePSO = nullptr;
