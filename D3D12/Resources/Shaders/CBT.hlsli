@@ -219,55 +219,53 @@ namespace LEB
 		return mul(windingMatrix, m);
 	}
 
-	struct NeighborIDs
+	uint4 SplitNeighborIDs(uint4 neighbors, uint bit)
 	{
-		uint Left;
-		uint Right;
-		uint Edge;
-		uint Current;
-	};
+		uint n1 = neighbors.x;
+		uint n2 = neighbors.y;
+		uint n3 = neighbors.z;
+		uint n4 = neighbors.w;
+		uint b2 = n2 == 0 ? 0 : 1;
+		uint b3 = n3 == 0 ? 0 : 1;
+		if(bit == 0)
+		{
+			neighbors.x = (n4 << 1) | 1;
+			neighbors.y = (n3 << 1) | b3;
+			neighbors.z = (n2 << 1) | b2;
+			neighbors.w = (n4 << 1);
+		}
+		else
+		{
+			neighbors.x = (n3 << 1);
+			neighbors.y = (n4 << 1);
+			neighbors.z = (n1 << 1);
+			neighbors.w = (n4 << 1) | 1;
+		}
+		return neighbors;
+	}
 
-	NeighborIDs GetNeighbors(uint heapIndex)
+	uint4 GetNeighbors(uint heapIndex)
 	{
 		int depth = firstbithigh(heapIndex);
 		int bitID = depth > 0 ? depth - 1 : 0;
 		uint b = GetBitValue(heapIndex, bitID);
 
-		NeighborIDs neighbors;
-		neighbors.Left = 0u;
-		neighbors.Right = 0u;
-		neighbors.Edge = 3u - b;
-		neighbors.Current = 2u + b;
+		uint4 neighbors;
+		neighbors.x = 0u;
+		neighbors.y = 0u;
+		neighbors.z = 3u - b;
+		neighbors.w = 2u + b;
 
 		for(bitID = depth - 2; bitID >= 0; --bitID)
 		{
-			uint n1 = neighbors.Left;
-			uint n2 = neighbors.Right;
-			uint n3 = neighbors.Edge;
-			uint n4 = neighbors.Current;
-			uint b2 = n2 == 0 ? 0 : 1;
-			uint b3 = n3 == 0 ? 0 : 1;
-			if(GetBitValue(heapIndex, bitID) == 0)
-			{
-				neighbors.Left = (n4 << 1) | 1;
-				neighbors.Right = (n3 << 1) | b3;
-				neighbors.Edge = (n2 << 1) | b2;
-				neighbors.Current = (n4 << 1);
-			}
-			else
-			{
-				neighbors.Left = (n3 << 1);
-				neighbors.Right = (n4 << 1);
-				neighbors.Edge = (n1 << 1);
-				neighbors.Current = (n4 << 1) | 1;
-			}
+			neighbors = SplitNeighborIDs(neighbors, GetBitValue(heapIndex, bitID));
 		}
 		return neighbors;
 	}
 
 	uint GetEdgeNeighbor(uint heapIndex)
 	{
-		return GetNeighbors(heapIndex).Edge;
+		return GetNeighbors(heapIndex).z;
 	}
 
 	struct DiamondIDs
