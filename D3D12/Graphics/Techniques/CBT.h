@@ -395,6 +395,26 @@ namespace LEB
 		uint32 Current;
 	};
 
+	inline NeighborIDs GetNeighbors(const NeighborIDs& neighbors, uint32 bit)
+	{
+		uint32 n1 = neighbors.Left;
+		uint32 n2 = neighbors.Right;
+		uint32 n3 = neighbors.Edge;
+		uint32 n4 = neighbors.Current;
+
+		uint32 b2 = n2 == 0u ? 0u : 1u;
+		uint32 b3 = n3 == 0u ? 0u : 1u;
+
+		if (bit == 0u)
+		{
+			return NeighborIDs{ (n4 << 1u) | 1u, (n3 << 1u) | b3, (n2 << 1u) | b2, (n4 << 1u) };
+		}
+		else
+		{
+			return NeighborIDs{ (n3 << 1u), (n4 << 1u), (n1 << 1u), (n4 << 1u) | 1u };
+		}
+	}
+
 	inline NeighborIDs GetNeighbors(uint32 heapIndex)
 	{
 		uint32 depth = (int32)CBT::GetDepth(heapIndex);
@@ -408,23 +428,10 @@ namespace LEB
 
 		for (bitID = depth - 2; bitID >= 0; --bitID)
 		{
-			uint32 n1 = neighbors.Left;
-			uint32 n2 = neighbors.Right;
-			uint32 n3 = neighbors.Edge;
-			uint32 n4 = neighbors.Current;
-
-			uint32 b2 = n2 == 0 ? 0 : 1;
-			uint32 b3 = n3 == 0 ? 0 : 1;
-
-			if (Private::GetBitValue(heapIndex, bitID) == 0)
-			{
-				neighbors = NeighborIDs{ (n4 << 1) | 1, (n3 << 1) | b3, (n2 << 1) | b2, (n4 << 1) };
-			}
-			else
-			{
-				neighbors = NeighborIDs{ (n3 << 1), (n4 << 1), (n1 << 1), (n4 << 1) | 1 };
-			}
+			uint32 bitValue = Private::GetBitValue(heapIndex, bitID);
+			neighbors = GetNeighbors(neighbors, bitValue);
 		}
+
 		return neighbors;
 	}
 
