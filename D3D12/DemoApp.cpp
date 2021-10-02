@@ -133,7 +133,7 @@ namespace Tweakables
 	ConsoleVariable g_RaytracedReflections("r.Raytracing.Reflections", true);
 	ConsoleVariable g_TLASBoundsThreshold("r.Raytracing.TLASBoundsThreshold", 5.0f * Math::DegreesToRadians);
 	ConsoleVariable g_SsrSamples("r.SSRSamples", 8);
-	ConsoleVariable g_RenderTerrain("r.Terrain", false);
+	ConsoleVariable g_RenderTerrain("r.Terrain", true);
 
 	// Misc
 	bool g_DumpRenderGraph = false;
@@ -247,7 +247,7 @@ void DemoApp::SetupScene(CommandContext& context)
 	m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(Math::PIDIV4, Math::PIDIV4 * 0.5f, 0));
 
 	{
-#if 1
+#if 0
 		m_pCamera->SetPosition(Vector3(-1.3f, 2.4f, -1.5f));
 		m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(Math::PIDIV4, Math::PIDIV4 * 0.5f, 0));
 
