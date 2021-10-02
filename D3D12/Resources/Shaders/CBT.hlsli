@@ -221,6 +221,17 @@ namespace LEB
 
 	uint4 SplitNeighborIDs(uint4 neighbors, uint bit)
 	{
+#if 1
+		uint b = bit;
+		uint c = bit ^ 1u;
+		bool cb = c;
+		uint4 n;
+		n.x = (neighbors[2 + b] << 1u) 	| (cb && neighbors[2 + b]);
+		n.y = (neighbors[2 + c] << 1u) 	| (cb && neighbors[2 + c]);
+		n.z = (neighbors[b] << 1u) 		| (cb && neighbors[b]);
+		n.w = (neighbors[3] << 1u) 		| b;
+		return n;
+#else
 		uint n1 = neighbors.x;
 		uint n2 = neighbors.y;
 		uint n3 = neighbors.z;
@@ -242,6 +253,7 @@ namespace LEB
 			neighbors.w = (n4 << 1) | 1;
 		}
 		return neighbors;
+#endif
 	}
 
 	uint4 GetNeighbors(uint heapIndex)
