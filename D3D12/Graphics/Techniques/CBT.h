@@ -102,28 +102,28 @@ public:
 			Storage[(bitOffset - count) >> 5] = data;
 
 			bitField = (bitField & 0x33333333u) + ((bitField >> 2u) & 0x33333333u);
-			data = (bitField >> 0u) & (7u << 0u) |
-				(bitField >> 1u) & (7u << 3u) |
-				(bitField >> 2u) & (7u << 6u) |
-				(bitField >> 3u) & (7u << 9u) |
-				(bitField >> 4u) & (7u << 12u) |
-				(bitField >> 5u) & (7u << 15u) |
-				(bitField >> 6u) & (7u << 18u) |
-				(bitField >> 7u) & (7u << 21u);
+			data = ((bitField >> 0u) & (7u << 0u)) |
+				((bitField >> 1u) & (7u << 3u)) |
+				((bitField >> 2u) & (7u << 6u)) |
+				((bitField >> 3u) & (7u << 9u)) |
+				((bitField >> 4u) & (7u << 12u)) |
+				((bitField >> 5u) & (7u << 15u)) |
+				((bitField >> 6u) & (7u << 18u)) |
+				((bitField >> 7u) & (7u << 21u));
 
 			BinaryHeapSet(NodeBitIndex(nodeIndex >> 2), 24, data);
 
 			bitField = (bitField & 0x0F0F0F0Fu) + ((bitField >> 4u) & 0x0F0F0F0Fu);
-			data = (bitField >> 0u) & (15u << 0u) |
-				(bitField >> 4u) & (15u << 4u) |
-				(bitField >> 8u) & (15u << 8u) |
-				(bitField >> 12u) & (15u << 12u);
+			data = ((bitField >> 0u) & (15u << 0u)) |
+				((bitField >> 4u) & (15u << 4u)) |
+				((bitField >> 8u) & (15u << 8u)) |
+				((bitField >> 12u) & (15u << 12u));
 
 			BinaryHeapSet(NodeBitIndex(nodeIndex >> 3), 16, data);
 
 			bitField = (bitField & 0x00FF00FFu) + ((bitField >> 8u) & 0x00FF00FFu);
-			data = (bitField >> 0u) & (31u << 0u) |
-				(bitField >> 11u) & (31u << 5u);
+			data = ((bitField >> 0u) & (31u << 0u)) |
+				((bitField >> 11u) & (31u << 5u));
 
 			BinaryHeapSet(NodeBitIndex(nodeIndex >> 4), 10, data);
 
@@ -397,8 +397,12 @@ namespace LEB
 
 	inline NeighborIDs GetNeighbors(uint32 heapIndex)
 	{
-		int32 depth = (int32)CBT::GetDepth(heapIndex);
-		int32 bitID = depth > 0 ? depth - 1 : 0;
+		uint32 depth = (int32)CBT::GetDepth(heapIndex);
+		int32 bitID = 0;
+		if (depth > 0u)
+		{
+			bitID = depth - 1u;
+		}
 		uint32 b = Private::GetBitValue(heapIndex, bitID);
 		NeighborIDs neighbors{ 0u, 0u, 3u - b, 2u + b };
 
@@ -439,7 +443,7 @@ namespace LEB
 	{
 		uint32 parent = CBT::ParentID(heapIndex);
 		uint32 edge = GetEdgeNeighbor(parent);
-		edge = edge > 0 ? edge : parent;
+		edge = edge > 0u ? edge : parent;
 		return DiamondIDs{ parent, edge };
 	}
 
@@ -506,4 +510,3 @@ namespace LEB
 		return !(has_neg && has_pos);
 	}
 }
-

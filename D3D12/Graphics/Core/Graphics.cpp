@@ -19,6 +19,10 @@
 #include "Core/CommandLine.h"
 #include "pix3.h"
 
+// Setup the Agility D3D12 SDK
+extern "C" { _declspec(dllexport) extern const UINT D3D12SDKVersion = D3D12_SDK_VERSION; }
+extern "C" { _declspec(dllexport) extern const char* D3D12SDKPath = ".\\D3D12\\"; }
+
 const DXGI_FORMAT GraphicsDevice::DEPTH_STENCIL_FORMAT = DXGI_FORMAT_D32_FLOAT;
 const DXGI_FORMAT GraphicsDevice::RENDER_TARGET_FORMAT = DXGI_FORMAT_R11G11B10_FLOAT;
 
