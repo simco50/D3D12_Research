@@ -75,12 +75,10 @@ public:
 		BitfieldSet_Single(Storage[Math::Min(elementIndex + 1, (uint32)Storage.size() - 1)], 0, bitCountMSB, value >> bitCountLSB);
 	}
 
-	void GetDataRange(uint32 heapIndex, uint32* pOffset, uint32* pSize) const
+	uint32 GetNodeBitSize(uint32 heapIndex) const
 	{
 		uint32 depth = GetDepth(heapIndex);
-		*pSize = GetMaxDepth() - depth + 1;
-		*pOffset = (1u << (depth + 1)) + heapIndex * *pSize;
-		assert(*pSize < NumBitsPerElement);
+		return GetMaxDepth() - depth + 1;
 	}
 
 	// Sum reduction bottom to top. This can be parallelized per layer
@@ -143,17 +141,17 @@ public:
 		}
 	}
 
-	uint32 GetData(uint32 index) const
+	uint32 GetData(uint32 heapIndex) const
 	{
-		uint32 offset, size;
-		GetDataRange(index, &offset, &size);
+		uint32 offset = NodeBitIndex(heapIndex);
+		uint32 size = GetNodeBitSize(heapIndex);
 		return BinaryHeapGet(offset, size);
 	}
 
-	void SetData(uint32 index, uint32 value)
+	void SetData(uint32 heapIndex, uint32 value)
 	{
-		uint32 offset, size;
-		GetDataRange(index, &offset, &size);
+		uint32 offset = NodeBitIndex(heapIndex);
+		uint32 size = GetNodeBitSize(heapIndex);
 		BinaryHeapSet(offset, size, value);
 	}
 
@@ -311,7 +309,6 @@ public:
 
 private:
 	std::vector<uint32> Storage;
-	std::vector<uint32> CachedBitfield;
 };
 
 namespace LEB
