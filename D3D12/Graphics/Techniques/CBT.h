@@ -7,9 +7,9 @@ public:
 	using StorageType = uint32;
 	constexpr static uint32 NumBitsPerElement = sizeof(StorageType) * 8;
 
-	static uint64 ComputeSize(uint64 maxDepth)
+	static uint32 ComputeSize(uint32 maxDepth)
 	{
-		uint64 numBits = 1ull << (maxDepth + 2);
+		uint32 numBits = 1u << (maxDepth + 2);
 		return numBits / NumBitsPerElement;
 	}
 

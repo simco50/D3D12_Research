@@ -397,7 +397,7 @@ void UpdateCS(uint threadID : SV_DispatchThreadID)
 		float3x3 tri = GetVertices(heapIndex);
 		float2 lod = GetLOD(tri);
 
-		if(lod.x >= 1)
+		if(lod.x >= 1.0f)
 		{
 			LEB::CBTSplitConformed(cbt, heapIndex);
 		}
@@ -405,8 +405,8 @@ void UpdateCS(uint threadID : SV_DispatchThreadID)
 		if(heapIndex > 1)
 		{
 			LEB::DiamondIDs diamond = LEB::GetDiamond(heapIndex);
-			bool mergeTop = GetLOD(GetVertices(diamond.Top)).x < 1.0;
-			bool mergeBase = GetLOD(GetVertices(diamond.Base)).x < 1.0;
+			bool mergeTop = GetLOD(GetVertices(diamond.Top)).x < 1.0f;
+			bool mergeBase = GetLOD(GetVertices(diamond.Base)).x < 1.0f;
 			if(mergeTop && mergeBase)
 			{
 				LEB::CBTMergeConformed(cbt, heapIndex);
@@ -449,17 +449,16 @@ void UpdateAS(uint threadID : SV_DispatchThreadID)
 	CBT cbt;
 	cbt.Init(uCBT, cCommonArgs.NumElements);
 	bool isVisible = false;
-	float3x3 tri = 0;
 	uint heapIndex = 0;
 
 	if(threadID < cbt.NumNodes())
 	{
 		heapIndex = cbt.LeafToHeapIndex(threadID);
 		
-		tri = GetVertices(heapIndex);
+		float3x3 tri = GetVertices(heapIndex);
 		float2 lod = GetLOD(tri);
 
-		if(lod.x >= 1)
+		if(lod.x >= 1.0f)
 		{
 			LEB::CBTSplitConformed(cbt, heapIndex);
 		}
@@ -467,15 +466,15 @@ void UpdateAS(uint threadID : SV_DispatchThreadID)
 		if(heapIndex > 1)
 		{
 			LEB::DiamondIDs diamond = LEB::GetDiamond(heapIndex);
-			bool mergeTop = GetLOD(GetVertices(diamond.Top)).x < 1.0;
-			bool mergeBase = GetLOD(GetVertices(diamond.Base)).x < 1.0;
+			bool mergeTop = GetLOD(GetVertices(diamond.Top)).x < 1.0f;
+			bool mergeBase = GetLOD(GetVertices(diamond.Base)).x < 1.0f;
 			if(mergeTop && mergeBase)
 			{
 				LEB::CBTMergeConformed(cbt, heapIndex);
 			}
 		}
 
-		isVisible = lod.y > 0;
+		isVisible = lod.y > 0.0f;
 	}
 
 	if(isVisible)
