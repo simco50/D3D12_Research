@@ -98,7 +98,7 @@ void PrepareDispatchArgsCS(uint threadID : SV_DispatchThreadID)
 
 /* SUM REDUCTION ALGORITHM */
 
-#if 0
+#if 1
 groupshared uint gsSumCache[COMPUTE_THREAD_GROUP_SIZE];
 
 // Num of nodes writes per thread
