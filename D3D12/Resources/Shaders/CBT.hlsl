@@ -55,6 +55,7 @@ struct UpdateData
 	float HeightmapSizeInv;
 	float ScreenSizeBias;
 	float HeightmapVarianceBias;
+	uint SplitMode;
 };
 
 ConstantBuffer<CommonArgs> cCommonArgs : register(b0);
@@ -397,19 +398,24 @@ void UpdateCS(uint threadID : SV_DispatchThreadID)
 		float3x3 tri = GetVertices(heapIndex);
 		float2 lod = GetLOD(tri);
 
-		if(lod.x >= 1.0f)
+		if(cUpdateData.SplitMode == 1u)
 		{
-			LEB::CBTSplitConformed(cbt, heapIndex);
-		}
-
-		if(heapIndex > 1)
-		{
-			LEB::DiamondIDs diamond = LEB::GetDiamond(heapIndex);
-			bool mergeTop = GetLOD(GetVertices(diamond.Top)).x < 1.0f;
-			bool mergeBase = GetLOD(GetVertices(diamond.Base)).x < 1.0f;
-			if(mergeTop && mergeBase)
+			if(lod.x >= 1.0f)
 			{
-				LEB::CBTMergeConformed(cbt, heapIndex);
+				LEB::CBTSplitConformed(cbt, heapIndex);
+			}
+		}
+		else
+		{
+			if(heapIndex > 1)
+			{
+				LEB::DiamondIDs diamond = LEB::GetDiamond(heapIndex);
+				bool mergeTop = GetLOD(GetVertices(diamond.Top)).x < 1.0f;
+				bool mergeBase = GetLOD(GetVertices(diamond.Base)).x < 1.0f;
+				if(mergeTop && mergeBase)
+				{
+					LEB::CBTMergeConformed(cbt, heapIndex);
+				}
 			}
 		}
 	}
@@ -458,19 +464,24 @@ void UpdateAS(uint threadID : SV_DispatchThreadID)
 		float3x3 tri = GetVertices(heapIndex);
 		float2 lod = GetLOD(tri);
 
-		if(lod.x >= 1.0f)
+		if(cUpdateData.SplitMode == 1u)
 		{
-			LEB::CBTSplitConformed(cbt, heapIndex);
-		}
-
-		if(heapIndex > 1)
-		{
-			LEB::DiamondIDs diamond = LEB::GetDiamond(heapIndex);
-			bool mergeTop = GetLOD(GetVertices(diamond.Top)).x < 1.0f;
-			bool mergeBase = GetLOD(GetVertices(diamond.Base)).x < 1.0f;
-			if(mergeTop && mergeBase)
+			if(lod.x >= 1.0f)
 			{
-				LEB::CBTMergeConformed(cbt, heapIndex);
+				LEB::CBTSplitConformed(cbt, heapIndex);
+			}
+		}
+		else
+		{
+			if(heapIndex > 1)
+			{
+				LEB::DiamondIDs diamond = LEB::GetDiamond(heapIndex);
+				bool mergeTop = GetLOD(GetVertices(diamond.Top)).x < 1.0f;
+				bool mergeBase = GetLOD(GetVertices(diamond.Base)).x < 1.0f;
+				if(mergeTop && mergeBase)
+				{
+					LEB::CBTMergeConformed(cbt, heapIndex);
+				}
 			}
 		}
 

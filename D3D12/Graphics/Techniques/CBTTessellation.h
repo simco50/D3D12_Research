@@ -28,9 +28,9 @@ private:
 
 	CBT m_CBT;
 	bool m_IsDirty = true;
-	bool m_SplitMode = false;
 	BoundingFrustum m_CachedFrustum;
 	Matrix m_CachedViewMatrix;
+	uint32 m_SplitMode = 0;
 
 	std::unique_ptr<Texture> m_pHeightmap;
 

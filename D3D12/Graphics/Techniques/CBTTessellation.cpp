@@ -137,6 +137,7 @@ void CBTTessellation::Execute(RGGraph& graph, Texture* pRenderTarget, Texture* p
 		float HeightmapSizeInv;
 		float ScreenSizeBias;
 		float HeightmapVarianceBias;
+		uint32 SplitMode;
 	} updateData;
 	updateData.WorldView = terrainTransform * m_CachedViewMatrix;
 	updateData.WorldViewProjection = terrainTransform * resources.pCamera->GetViewProjection();
@@ -152,6 +153,8 @@ void CBTTessellation::Execute(RGGraph& graph, Texture* pRenderTarget, Texture* p
 	updateData.HeightmapSizeInv = 1.0f / m_pHeightmap->GetWidth();
 	updateData.ScreenSizeBias = CBTSettings::ScreenSizeBias;
 	updateData.HeightmapVarianceBias = CBTSettings::HeightmapVarianceBias;
+	updateData.SplitMode = m_SplitMode;
+	m_SplitMode = 1 - m_SplitMode;
 
 	if (m_IsDirty)
 	{
@@ -549,7 +552,6 @@ void CBTTessellation::DemoCpuCBT()
 					}
 				}
 			});
-		m_SplitMode = !m_SplitMode;
 
 		cbt.SumReduction();
 	}
