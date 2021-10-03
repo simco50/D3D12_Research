@@ -40,6 +40,15 @@ struct CBT
 		Storage.InterlockedOr(elementIndex * 4u, value << bitOffset);
 	}
 
+	void BitfieldSet_Single_Lockless(uint elementIndex, uint bitOffset, uint bitCount, uint value)
+	{
+		uint bitMask = ~(~(~0u << bitCount) << bitOffset);
+		uint element = Storage.Load(elementIndex * 4u);
+		element &= bitMask;
+		element |= (value << bitOffset);
+		Storage.Store(elementIndex * 4u, element);
+	}
+
 	struct DataMutateArgs
 	{
 		uint ElementIndexLSB;

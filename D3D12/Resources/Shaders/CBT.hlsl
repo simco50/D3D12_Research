@@ -98,6 +98,94 @@ void PrepareDispatchArgsCS(uint threadID : SV_DispatchThreadID)
 
 /* SUM REDUCTION ALGORITHM */
 
+#if 0
+groupshared uint gsSumCache[COMPUTE_THREAD_GROUP_SIZE];
+
+// X: Num uints to write at depth N every Y threads
+// Y: Num of nodes writes per thread
+static uint2 SUM_REDUCTION_LUT[] = {
+	uint2(0, 0),
+	uint2(1, 32),
+	uint2(1, 16),
+	uint2(3, 32),
+	uint2(1, 8),
+	uint2(5, 32),
+	uint2(3, 16),
+	uint2(7, 32),
+	uint2(1, 4),
+	uint2(9, 32),
+	uint2(5, 16),
+	uint2(11, 32),
+	uint2(3, 8),
+	uint2(13, 32),
+	uint2(7, 16),
+	uint2(15, 32),
+	uint2(1, 2),
+	uint2(17, 32),
+	uint2(9, 16),
+	uint2(19, 32),
+	uint2(5, 8),
+	uint2(21, 32),
+	uint2(11, 16),
+	uint2(23, 32),
+	uint2(3, 4),
+	uint2(25, 32),
+	uint2(13, 16),
+	uint2(27, 32),
+	uint2(7, 8),
+	uint2(29, 32),
+	uint2(15, 16),
+	uint2(31, 32),
+	uint2(1, 1)
+};
+
+[RootSignature(RootSig)]
+[numthreads(COMPUTE_THREAD_GROUP_SIZE, 1, 1)]
+void SumReductionCS(uint threadID : SV_DispatchThreadID, uint groupThreadID : SV_GroupThreadID, uint groupIndex : SV_GroupID)
+{
+	CBT cbt;
+	cbt.Init(uCBT, cCommonArgs.NumElements);
+	uint count = 1u << cSumReductionData.Depth;
+	uint index = threadID;
+	if(index < count)
+	{
+		index += count;
+		uint leftChild = cbt.GetData(cbt.LeftChildIndex(index));
+		uint rightChild = cbt.GetData(cbt.RightChildIndex(index));
+		gsSumCache[groupThreadID] = leftChild + rightChild;
+	}
+
+	uint numThreadGroups = max(1, count / COMPUTE_THREAD_GROUP_SIZE);
+
+	GroupMemoryBarrierWithGroupSync();
+
+	uint bitSize = cbt.NodeBitSize(index);
+	uint2 settings = SUM_REDUCTION_LUT[bitSize];
+	uint numNodesPerWrite = min(count / numThreadGroups, settings.y);
+	uint numThreads = max(1, count / numThreadGroups / settings.y);
+	uint numNodesPerGroup = numNodesPerWrite * numThreads;
+
+	if(groupThreadID < numThreads)
+	{
+		uint nodeOffset = groupThreadID * numNodesPerWrite;
+		for(uint i = 0; i < numNodesPerWrite; ++i)
+		{
+			uint value = gsSumCache[nodeOffset + i]; 
+            uint groupOffset = groupIndex * numNodesPerGroup;
+            uint nodeIndex = groupOffset + nodeOffset + i + count;
+			uint bitIndex = cbt.NodeBitIndex(nodeIndex);
+			uint nodeSize = cbt.NodeBitSize(nodeIndex);
+
+			CBT::DataMutateArgs args = cbt.GetDataArgs(bitIndex, nodeSize);
+			cbt.BitfieldSet_Single_Lockless(args.ElementIndexLSB, args.ElementOffsetLSB, args.BitCountLSB, value);
+			if(args.BitCountMSB > 0u)
+				cbt.BitfieldSet_Single_Lockless(args.ElementIndexMSB, 0u, args.BitCountMSB, value >> args.BitCountLSB);
+		}
+	}
+}
+
+#else
+
 [RootSignature(RootSig)]
 [numthreads(COMPUTE_THREAD_GROUP_SIZE, 1, 1)]
 void SumReductionCS(uint threadID : SV_DispatchThreadID)
@@ -114,6 +202,9 @@ void SumReductionCS(uint threadID : SV_DispatchThreadID)
 		cbt.SetData(index, leftChild + rightChild);
 	}
 }
+
+#endif
+
 
 [numthreads(COMPUTE_THREAD_GROUP_SIZE, 1, 1)]
 void CacheBitfieldCS(uint threadID : SV_DispatchThreadID)
