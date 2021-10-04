@@ -109,8 +109,6 @@ private:
 		Buffer* pBuffer;
 	};
 	std::queue<ScreenshotRequest> m_ScreenshotBuffers;
-	uint32 m_ScreenshotRowPitch = 0;
-
 	RenderPath m_RenderPath = RenderPath::Clustered;
 
 	std::vector<std::unique_ptr<Mesh>> m_Meshes;

@@ -1873,7 +1873,7 @@ void DemoApp::UpdateImGui()
 					"Uncharted 2",
 				};
 
-				if (index < ARRAYSIZE(tonemappers))
+				if (index < (int)ARRAYSIZE(tonemappers))
 				{
 					*outText = tonemappers[index];
 					return true;
