@@ -150,15 +150,14 @@ void SumReductionCS(uint threadID : SV_DispatchThreadID, uint groupThreadID : SV
 	if(index < count)
 	{
 		index += count;
-		uint leftChild = cbt.GetData(cbt.LeftChildIndex(index));
-		uint rightChild = cbt.GetData(cbt.RightChildIndex(index));
+		uint leftChild = cbt.GetNodeData(cbt.LeftChildIndex(index));
+		uint rightChild = cbt.GetNodeData(cbt.RightChildIndex(index));
 		gsSumCache[groupThreadID] = leftChild + rightChild;
 	}
 
-	uint numThreadGroups = max(1, count / COMPUTE_THREAD_GROUP_SIZE);
-
 	GroupMemoryBarrierWithGroupSync();
 
+	uint numThreadGroups = max(1, count / COMPUTE_THREAD_GROUP_SIZE);
 	uint nodeSize = cbt.NodeBitSize(index);
 	uint numNodesPerThread = SUM_REDUCTION_LUT[nodeSize];
 	uint numNodesPerWrite = min(count / numThreadGroups, numNodesPerThread);
@@ -198,9 +197,9 @@ void SumReductionCS(uint threadID : SV_DispatchThreadID)
 	if(index < count)
 	{
 		index += count;
-		uint leftChild = cbt.GetData(cbt.LeftChildIndex(index));
-		uint rightChild = cbt.GetData(cbt.RightChildIndex(index));
-		cbt.SetData(index, leftChild + rightChild);
+		uint leftChild = cbt.GetNodeData(cbt.LeftChildIndex(index));
+		uint rightChild = cbt.GetNodeData(cbt.RightChildIndex(index));
+		cbt.SetNodeData(index, leftChild + rightChild);
 	}
 }
 

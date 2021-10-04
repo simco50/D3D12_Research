@@ -84,10 +84,10 @@ struct CBT
 		BitfieldSet_Single(args.ElementIndexMSB, 0u, args.BitCountMSB, value >> args.BitCountLSB);
 	}
 
-	uint GetData(uint heapIndex)
+	uint GetNodeData(uint heapIndex)
 	{
 		// If we want to get data from the last 5 levels, count the bits in the int directly
-		uint depth = GetDepth(heapIndex);
+		uint depth = GetNodeDepth(heapIndex);
 		if (GetMaxDepth() - depth <= 5u)
 		{
 			uint bitfieldSize = (1u << GetMaxDepth());
@@ -109,7 +109,7 @@ struct CBT
 		return BinaryHeapGet(bitIndex, size);
 	}
 
-	void SetData(uint heapIndex, uint value)
+	void SetNodeData(uint heapIndex, uint value)
 	{
 		uint bitIndex = NodeBitIndex(heapIndex);
 		uint size = NodeBitSize(heapIndex);
@@ -119,10 +119,10 @@ struct CBT
 	uint LeafToHeapIndex(uint leafIndex)
 	{
 		uint heapIndex = 1u;
-		while(GetData(heapIndex) > 1u)
+		while(GetNodeData(heapIndex) > 1u)
 		{
 			uint leftChild = LeftChildIndex(heapIndex);
-			uint leftChildValue = GetData(leftChild);
+			uint leftChildValue = GetNodeData(leftChild);
 			uint bit = leafIndex < leftChildValue ? 0u : 1u;
 			heapIndex = leftChild | bit;
 			leafIndex -= bit * leftChildValue;
@@ -133,21 +133,21 @@ struct CBT
 	// Returns the heap index of bitfield node for a heap node
 	uint BitfieldHeapIndex(uint heapIndex)
 	{
-		uint msb = GetDepth(heapIndex);	
+		uint msb = GetNodeDepth(heapIndex);	
 		return heapIndex * (1u << (GetMaxDepth() - msb));
 	}
 
 	// Returns the size in bits for a heap node
 	uint NodeBitSize(uint heapIndex)
 	{
-		uint depth = GetDepth(heapIndex);
+		uint depth = GetNodeDepth(heapIndex);
 		return GetMaxDepth() - depth + 1u;
 	}
 
 	// Returns the offset in bits in CTB for a heap node
 	uint NodeBitIndex(uint heapIndex)
 	{
-		uint depth = GetDepth(heapIndex);
+		uint depth = GetNodeDepth(heapIndex);
 		uint a = 2u << depth;
 		uint b = 1u + GetMaxDepth() - depth;
 		return a + heapIndex * b;
@@ -155,8 +155,19 @@ struct CBT
 
 	uint CeilNode(uint heapIndex)
 	{
-		uint depth = GetDepth(heapIndex);
+		uint depth = GetNodeDepth(heapIndex);
 		return heapIndex << (GetMaxDepth() - depth);
+	}
+
+	bool IsCeilNode(uint heapIndex)
+	{
+		uint msb = GetNodeDepth(heapIndex);
+		return msb == GetMaxDepth();
+	}
+
+	uint GetNodeDepth(uint heapIndex)
+	{
+		return firstbithigh(heapIndex);
 	}
 
 	uint GetMaxDepth()
@@ -164,20 +175,9 @@ struct CBT
 		return MaxDepth;
 	}
 
-	bool IsCeilNode(uint heapIndex)
-	{
-		uint msb = GetDepth(heapIndex);
-		return msb == GetMaxDepth();
-	}
-
 	uint NumNodes()
 	{
-		return GetData(1u);
-	}
-
-	uint GetDepth(uint heapIndex)
-	{
-		return firstbithigh(heapIndex);
+		return GetNodeData(1u);
 	}
 	
 	uint LeftChildIndex(uint heapIndex)
@@ -252,7 +252,7 @@ namespace LEB
 
 	uint4 SplitNeighborIDs(uint4 neighbors, uint bit)
 	{
-#if 1
+#if 1 // Branchless version
 		uint b = bit;
 		uint c = bit ^ 1u;
 		bool cb = c;
@@ -352,10 +352,10 @@ namespace LEB
 
 	void CBTMergeConformed(CBT cbt, uint heapIndex)
 	{
-		if (cbt.GetDepth(heapIndex) > 1)
+		if (cbt.GetNodeDepth(heapIndex) > 1)
 		{
 			DiamondIDs diamond = GetDiamond(heapIndex);
-			if(cbt.GetData(diamond.Base) <= 2 && cbt.GetData(diamond.Top) <= 2)
+			if(cbt.GetNodeData(diamond.Base) <= 2 && cbt.GetNodeData(diamond.Top) <= 2)
 			{
 				cbt.MergeNode_Single(heapIndex);
 				// If splitting/merging is not alternated, it causes bugs and this extra hack was necessary
