@@ -277,7 +277,6 @@ void CBTTessellation::Execute(RGGraph& graph, Texture* pRenderTarget, Texture* p
 
 			context.SetPipelineState(m_pCBTCacheBitfieldPSO);
 			context.Dispatch(ComputeUtils::GetNumThreadGroups(1u << currentDepth, 256 * 32));
-			context.InsertUavBarrier(m_pCBTBuffer.get());
 		});
 
 	RGPassBuilder cbtSumReduction = graph.AddPass("CBT Sum Reduction");
