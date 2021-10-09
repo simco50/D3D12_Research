@@ -33,9 +33,6 @@ using ComPtr = Microsoft::WRL::ComPtr<T>;
 #define USE_PIX 1
 
 #include <d3d12.h>
-// Setup the Agility D3D12 SDK
-extern "C" { _declspec(dllexport) extern const UINT D3D12SDKVersion = D3D12_SDK_VERSION; }
-extern "C" { _declspec(dllexport) extern const char* D3D12SDKPath = ".\\D3D12\\"; }
 
 #include <dxgi1_6.h>
 

@@ -172,7 +172,7 @@ void CommandContext::CopyTexture(Texture* pSource, Texture* pDestination, const 
 	m_pCommandList->CopyTextureRegion(&dstLocation, destinationRegion.left, destinationRegion.top, destinationRegion.front, &srcLocation, &sourceRegion);
 }
 
-void CommandContext::CopyBuffer(Buffer* pSource, Buffer* pDestination, uint32 size, uint32 sourceOffset, uint32 destinationOffset)
+void CommandContext::CopyBuffer(Buffer* pSource, Buffer* pDestination, uint64 size, uint64 sourceOffset, uint64 destinationOffset)
 {
 	m_pCommandList->CopyBufferRegion(pDestination->GetResource(), destinationOffset, pSource->GetResource(), sourceOffset, size);
 }
@@ -199,9 +199,7 @@ void CommandContext::InitializeBuffer(Buffer* pResource, const void* pData, uint
 
 void CommandContext::InitializeTexture(Texture* pResource, D3D12_SUBRESOURCE_DATA* pSubResourceDatas, int firstSubResource, int subResourceCount)
 {
-	D3D12_RESOURCE_DESC desc = pResource->GetResource()->GetDesc();
-	uint64 requiredSize = 0;
-	GetParent()->GetDevice()->GetCopyableFootprints(&desc, firstSubResource, subResourceCount, 0, nullptr, nullptr, nullptr, &requiredSize);
+	uint64 requiredSize = GetRequiredIntermediateSize(pResource->GetResource(), firstSubResource, subResourceCount);
 	DynamicAllocation allocation = m_DynamicAllocator->Allocate(requiredSize, D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT);
 	
 	bool resetState = false;
@@ -221,6 +219,11 @@ void CommandContext::InitializeTexture(Texture* pResource, D3D12_SUBRESOURCE_DAT
 
 void CommandContext::Dispatch(uint32 groupCountX, uint32 groupCountY, uint32 groupCountZ)
 {
+	checkf(
+		groupCountX <= D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION &&
+		groupCountY <= D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION &&
+		groupCountZ <= D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION,
+		"Dispatch group size (%d x %d x %d) can not exceed %d", groupCountX, groupCountY, groupCountZ, D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION);
 	PrepareDraw(CommandListContext::Compute);
 	m_pCommandList->Dispatch(groupCountX, groupCountY, groupCountZ);
 }
@@ -827,6 +830,15 @@ void CommandSignature::AddDispatch()
 	m_ArgumentDesc.push_back(desc);
 	m_Stride += sizeof(D3D12_DISPATCH_ARGUMENTS);
 	m_IsCompute = true;
+}
+
+void CommandSignature::AddDispatchMesh()
+{
+	D3D12_INDIRECT_ARGUMENT_DESC desc;
+	desc.Type = D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH_MESH;
+	m_ArgumentDesc.push_back(desc);
+	m_Stride += sizeof(D3D12_DISPATCH_MESH_ARGUMENTS);
+	m_IsCompute = false;
 }
 
 void CommandSignature::AddDraw()

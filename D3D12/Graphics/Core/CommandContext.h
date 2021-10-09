@@ -159,7 +159,7 @@ public:
 	void CopyTexture(GraphicsResource* pSource, GraphicsResource* pTarget);
 	void CopyTexture(Texture* pSource, Buffer* pDestination, const D3D12_BOX& sourceRegion, int sourceSubregion = 0, int destinationOffset = 0);
 	void CopyTexture(Texture* pSource, Texture* pDestination, const D3D12_BOX& sourceRegion, const D3D12_BOX& destinationRegion, int sourceSubregion = 0, int destinationSubregion = 0);
-	void CopyBuffer(Buffer* pSource, Buffer* pDestination, uint32 size, uint32 sourceOffset, uint32 destinationOffset);
+	void CopyBuffer(Buffer* pSource, Buffer* pDestination, uint64 size, uint64 sourceOffset, uint64 destinationOffset);
 	void InitializeBuffer(Buffer* pResource, const void* pData, uint64 dataSize, uint64 offset = 0);
 	void InitializeTexture(Texture* pResource, D3D12_SUBRESOURCE_DATA* pSubResourceDatas, int firstSubResource, int subResourceCount);
 
@@ -302,6 +302,7 @@ public:
 
 	void SetRootSignature(ID3D12RootSignature* pRootSignature) { m_pRootSignature = pRootSignature; }
 	void AddDispatch();
+	void AddDispatchMesh();
 	void AddDraw();
 	void AddDrawIndexed();
 	void AddConstants(uint32 numConstants, uint32 rootIndex, uint32 offset);

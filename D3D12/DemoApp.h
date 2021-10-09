@@ -15,6 +15,7 @@ class RTReflections;
 class SSAO;
 class GpuParticles;
 class PathTracing;
+class CBTTessellation;
 struct SubMesh;
 struct Material;
 
@@ -92,6 +93,7 @@ private:
 	std::unique_ptr<RTReflections> m_pRTReflections;
 	std::unique_ptr<SSAO> m_pSSAO;
 	std::unique_ptr<PathTracing> m_pPathTracing;
+	std::unique_ptr<CBTTessellation> m_pCBTTessellation;
 
 	std::unique_ptr<Texture> m_pLightCookie;
 	std::array<std::unique_ptr<Texture>, (int)DefaultTexture::MAX> m_DefaultTextures;
@@ -108,9 +110,7 @@ private:
 		Buffer* pBuffer;
 	};
 	std::queue<ScreenshotRequest> m_ScreenshotBuffers;
-	uint32 m_ScreenshotRowPitch = 0;
-
-	RenderPath m_RenderPath = RenderPath::Visibility;
+	RenderPath m_RenderPath = RenderPath::Clustered;
 
 	std::vector<std::unique_ptr<Mesh>> m_Meshes;
 	std::unique_ptr<Buffer> m_pTLAS;

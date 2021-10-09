@@ -59,15 +59,19 @@ void PathTracing::Render(RGGraph& graph, const SceneView& sceneData)
 
 	static int32 numBounces = 3;
 
-	ImGui::Begin("Parameters");
-	ImGui::Text("Path Tracing");
-	if (ImGui::SliderInt("Bounces", &numBounces, 1, 15))
+	if (ImGui::Begin("Parameters"))
 	{
-		Reset();
-	}
-	if (ImGui::Button("Reset"))
-	{
-		Reset();
+		if (ImGui::CollapsingHeader("Path Tracing"))
+		{
+			if (ImGui::SliderInt("Bounces", &numBounces, 1, 15))
+			{
+				Reset();
+			}
+			if (ImGui::Button("Reset"))
+			{
+				Reset();
+			}
+		}
 	}
 	ImGui::End();
 

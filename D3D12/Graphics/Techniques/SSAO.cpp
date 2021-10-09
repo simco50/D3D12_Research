@@ -28,12 +28,16 @@ void SSAO::Execute(RGGraph& graph, Texture* pTarget, const SceneView& sceneData)
 	static float g_AoRadius = 0.5f;
 	static int g_AoSamples = 16;
 
-	ImGui::Begin("Parameters");
-	ImGui::Text("Ambient Occlusion");
-	ImGui::SliderFloat("Power", &g_AoPower, 0, 10);
-	ImGui::SliderFloat("Threshold", &g_AoThreshold, 0.0001f, 0.01f);
-	ImGui::SliderFloat("Radius", &g_AoRadius, 0, 2);
-	ImGui::SliderInt("Samples", &g_AoSamples, 1, 64);
+	if (ImGui::Begin("Parameters"))
+	{
+		if (ImGui::CollapsingHeader("Ambient Occlusion"))
+		{
+			ImGui::SliderFloat("Power", &g_AoPower, 0, 10);
+			ImGui::SliderFloat("Threshold", &g_AoThreshold, 0.0001f, 0.01f);
+			ImGui::SliderFloat("Radius", &g_AoRadius, 0, 2);
+			ImGui::SliderInt("Samples", &g_AoSamples, 1, 64);
+		}
+	}
 	ImGui::End();
 
 	RG_GRAPH_SCOPE("Ambient Occlusion", graph);

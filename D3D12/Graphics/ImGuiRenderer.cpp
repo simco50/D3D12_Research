@@ -48,6 +48,7 @@ void ImGuiRenderer::InitializeImGui(GraphicsDevice* pDevice)
 	Paths::CreateDirectoryTree(Paths::SavedDir());
 	static std::string imguiPath = Paths::SavedDir() + "imgui.ini";
 	io.IniFilename = imguiPath.c_str();
+	io.ConfigWindowsMoveFromTitleBarOnly = true;
 
 	io.KeyMap[ImGuiKey_Tab] = VK_TAB;
 	io.KeyMap[ImGuiKey_LeftArrow] = VK_LEFT;
@@ -194,7 +195,7 @@ void ImGuiRenderer::Render(RGGraph& graph, const SceneView& sceneData, Texture* 
 			{
 				const ImDrawList* pCmdList = pDrawData->CmdLists[n];
 				context.SetDynamicVertexBuffer(0, pCmdList->VtxBuffer.Size, sizeof(ImDrawVert), pCmdList->VtxBuffer.Data);
-				context.SetDynamicIndexBuffer(pCmdList->IdxBuffer.Size, pCmdList->IdxBuffer.Data, true);
+				context.SetDynamicIndexBuffer(pCmdList->IdxBuffer.Size, pCmdList->IdxBuffer.Data, sizeof(ImDrawIdx) == 2);
 				int indexOffset = 0;
 				for (int i = 0; i < pCmdList->CmdBuffer.Size; i++)
 				{
@@ -205,6 +206,11 @@ void ImGuiRenderer::Render(RGGraph& graph, const SceneView& sceneData, Texture* 
 					}
 					else
 					{
+						// Avoid trying to render things with a 0 cliprect
+						if (pcmd->ClipRect.z <= pcmd->ClipRect.x || pcmd->ClipRect.w <= pcmd->ClipRect.y)
+						{
+							continue;
+						}
 						struct Data
 						{
 							Matrix ProjectionMatrix;

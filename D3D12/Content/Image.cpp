@@ -260,7 +260,7 @@ bool Image::LoadSTB(const void* pBytes, uint32 numBytes)
 	}
 }
 
-bool Image::LoadDDS(const void* pData, uint32 numBytes)
+bool Image::LoadDDS(const void* pData, uint32 /*numBytes*/)
 {
 	char* pBytes = (char*)pData;
 

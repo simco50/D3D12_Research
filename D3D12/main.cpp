@@ -294,7 +294,7 @@ int WINAPI WinMain(_In_ HINSTANCE /*hInstance*/, _In_opt_ HINSTANCE /*hPrevInsta
 	CVarManager::Initialize();
 	TaskQueue::Initialize(std::thread::hardware_concurrency());
 
-	Win32AppContainer app("D3D12", 1240, 720);
+	Win32AppContainer app("D3D12", 1920, 1080);
 	DemoApp graphics(app.GetNativeWindow(), app.GetRect(), 1);
 
 	app.OnKeyInput += [](uint32 character, bool isDown) {

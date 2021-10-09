@@ -120,12 +120,16 @@ void GpuParticles::Simulate(RGGraph& graph, Texture* pResolvedDepth, const Camer
 		return;
 	}
 
-	ImGui::Begin("Parameters");
-	ImGui::Text("Particles");
-	ImGui::Checkbox("Enabled", &g_Enabled);
-	ImGui::Checkbox("Simulate", &g_Simulate);
-	ImGui::SliderInt("Emit Count", &g_EmitCount, 0, cMaxParticleCount / 50);
-	ImGui::SliderFloat("Life Time", &g_LifeTime, 0, 10);
+	if (ImGui::Begin("Parameters"))
+	{
+		if (ImGui::CollapsingHeader("Particles"))
+		{
+			ImGui::Checkbox("Enabled", &g_Enabled);
+			ImGui::Checkbox("Simulate", &g_Simulate);
+			ImGui::SliderInt("Emit Count", &g_EmitCount, 0, cMaxParticleCount / 50);
+			ImGui::SliderFloat("Life Time", &g_LifeTime, 0, 10);
+		}
+	}
 	ImGui::End();
 
 	D3D12_CPU_DESCRIPTOR_HANDLE uavs[] = {

@@ -179,6 +179,7 @@ public:
 	StateObject* CreateStateObject(const StateObjectInitializer& stateDesc);
 	CommandSignature* GetIndirectDrawSignature() const { return m_pIndirectDrawSignature.get(); }
 	CommandSignature* GetIndirectDispatchSignature() const { return m_pIndirectDispatchSignature.get(); }
+	CommandSignature* GetIndirectDispatchMeshSignature() const { return m_pIndirectDispatchMeshSignature.get(); }
 
 	Shader* GetShader(const char* pShaderPath, ShaderType shaderType, const char* entryPoint = "", const std::vector<ShaderDefine>& defines = {});
 	ShaderLibrary* GetLibrary(const char* pShaderPath, const std::vector<ShaderDefine>& defines = {});
@@ -223,4 +224,5 @@ private:
 
 	std::unique_ptr<CommandSignature> m_pIndirectDrawSignature;
 	std::unique_ptr<CommandSignature> m_pIndirectDispatchSignature;
+	std::unique_ptr<CommandSignature> m_pIndirectDispatchMeshSignature;
 };

@@ -20,8 +20,6 @@ public:
 private:
 	void SetupPipelines(GraphicsDevice* pDevice);
 
-	GraphicsDevice* m_pDevice;
-
 	StateObject* m_pRtSO = nullptr;
 	std::unique_ptr<RootSignature> m_pGlobalRS;
 };

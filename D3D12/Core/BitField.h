@@ -34,13 +34,16 @@ namespace BitOperations
 	template<typename T>
 	bool MostSignificantBit(T mask, uint32* pIndex)
 	{
-		*pIndex = ~0u;
-		while (mask)
+		if (mask == 0)
 		{
-			mask >>= 1;
+			return false;
+		}
+		*pIndex = 0;
+		while (mask >>= 1)
+		{
 			++(*pIndex);
 		}
-		return *pIndex != ~0;
+		return true;
 	}
 }
 
