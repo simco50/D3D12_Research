@@ -18,47 +18,54 @@ using PackedVector2 = DirectX::PackedVector::XMHALF2;
 using PackedVector3 = DirectX::PackedVector::XMHALF4;
 using PackedVector4 = DirectX::PackedVector::XMHALF4;
 
-struct IntVector2
+template<typename T>
+struct TIntVector2
 {
-	IntVector2()
+	TIntVector2()
 		: x(0), y(0)
 	{}
-	IntVector2(int32 x, int32 y)
+	TIntVector2(T x, T y)
 		: x(x), y(y)
 	{}
-	IntVector2(const Vector2& v)
-		: x((int32)v.x), y((int32)v.y)
+	TIntVector2(const Vector2& v)
+		: x((T)v.x), y((T)v.y)
 	{}
-	int32 x, y;
+	T x, y;
 };
 
-struct IntVector3
+template<typename T>
+struct TIntVector3
 {
-	IntVector3()
+	TIntVector3()
 		: x(0), y(0), z(0)
 	{}
-	IntVector3(int32 x, int32 y, int32 z)
+	TIntVector3(T x, T y, T z)
 		: x(x), y(y), z(z)
 	{}
-	IntVector3(const Vector3& v)
-		: x((int32)v.x), y((int32)v.y), z((int32)v.z)
+	TIntVector3(const Vector3& v)
+		: x((T)v.x), y((T)v.y), z((T)v.z)
 	{}
-	int32 x, y, z;
+	T x, y, z;
 };
 
-struct IntVector4
+template<typename T>
+struct TIntVector4
 {
-	IntVector4()
+	TIntVector4()
 		: x(0), y(0), z(0), w(0)
 	{}
-	IntVector4(int32 x, int32 y, int32 z, int32 w)
+	TIntVector4(T x, T y, T z, T w)
 		: x(x), y(y), z(z), w(w)
 	{}
-	IntVector4(const Vector4& v)
-		: x((int32)v.x), y((int32)v.y), z((int32)v.z), w((int32)v.w)
+	TIntVector4(const Vector4& v)
+		: x((T)v.x), y((T)v.y), z((T)v.z), w((T)v.w)
 	{}
-	int32 x, y, z, w;
+	T x, y, z, w;
 };
+
+using IntVector2 = TIntVector2<int32>;
+using IntVector3 = TIntVector3<int32>;
+using IntVector4 = TIntVector4<int32>;
 
 template<typename T>
 struct RectT
