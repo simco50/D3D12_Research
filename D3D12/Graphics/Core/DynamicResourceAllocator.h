@@ -1,5 +1,5 @@
 #pragma once
-#include "GraphicsBuffer.h"
+#include "Buffer.h"
 
 struct DynamicAllocation
 {

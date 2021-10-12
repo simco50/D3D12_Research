@@ -13,7 +13,7 @@
 #include "Texture.h"
 #include "Scene/Camera.h"
 #include "ResourceViews.h"
-#include "GraphicsBuffer.h"
+#include "Buffer.h"
 #include "Graphics/Profiler.h"
 #include "StateObject.h"
 #include "Core/CommandLine.h"

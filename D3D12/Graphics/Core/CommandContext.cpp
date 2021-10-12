@@ -6,7 +6,7 @@
 #include "OnlineDescriptorAllocator.h"
 #include "PipelineState.h"
 #include "RootSignature.h"
-#include "GraphicsBuffer.h"
+#include "Buffer.h"
 #include "Texture.h"
 #include "ResourceViews.h"
 #include "ShaderBindingTable.h"

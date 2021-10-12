@@ -1,5 +1,5 @@
 #pragma once
-#include "Core/GraphicsBuffer.h"
+#include "Core/Buffer.h"
 class Buffer;
 class CommandContext;
 class Texture;

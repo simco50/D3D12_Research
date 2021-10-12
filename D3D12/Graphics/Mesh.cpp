@@ -3,7 +3,7 @@
 #include "Graphics/Core/CommandContext.h"
 #include "Graphics/Core/Graphics.h"
 #include "Graphics/Core/Texture.h"
-#include "Graphics/Core/GraphicsBuffer.h"
+#include "Graphics/Core/Buffer.h"
 #include "Core/Paths.h"
 #include "Content/Image.h"
 

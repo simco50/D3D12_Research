@@ -1,5 +1,5 @@
 #include "stdafx.h"
-#include "GraphicsBuffer.h"
+#include "Buffer.h"
 #include "CommandContext.h"
 #include "Graphics.h"
 #include "ResourceViews.h"

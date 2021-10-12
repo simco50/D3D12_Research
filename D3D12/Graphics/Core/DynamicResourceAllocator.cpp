@@ -1,7 +1,7 @@
 #include "stdafx.h"
 #include "DynamicResourceAllocator.h"
 #include "Graphics.h"
-#include "GraphicsBuffer.h"
+#include "Buffer.h"
 
 constexpr static uint64 PAGE_SIZE = Math::MegaBytesToBytes * 2;
 
