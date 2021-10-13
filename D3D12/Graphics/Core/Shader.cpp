@@ -48,10 +48,11 @@ namespace ShaderCompiler
 			}
 		}
 
-		void AddDefine(const char* pDefine)
+		void AddDefine(const char* pDefine, const char* pValue = nullptr)
 		{
-			AddArgument(Sprintf("-D %s", pDefine).c_str());
+			AddArgument(Sprintf("-D %s=%s", pDefine, pValue ? pValue : "1").c_str());
 		}
+
 		const wchar_t** GetArguments() { return pArguments.data(); }
 		size_t GetNumArguments() const { return argumentStrings.size(); }
 	private:
@@ -105,12 +106,12 @@ namespace ShaderCompiler
 		if (majVersion >= 6 && minVersion >= 6)
 		{
 			arguments.AddArgument("-enable-payload-qualifiers");
-			arguments.AddDefine("_PAYLOAD_QUALIFIERS=1");
+			arguments.AddDefine("_PAYLOAD_QUALIFIERS", "1");
 		}
 		else
 #endif
 		{
-			arguments.AddDefine("_PAYLOAD_QUALIFIERS=0");
+			arguments.AddDefine("_PAYLOAD_QUALIFIERS", "0");
 		}
 
 		if (debugShaders || shaderSymbols)
@@ -211,61 +212,6 @@ namespace ShaderCompiler
 		return result;
 	}
 
-	CompileResult CompileFxc(const char* pIdentifier, const char* pShaderSource, uint32 shaderSourceSize, const char* pEntryPoint, const char* pTarget, uint8 majVersion, uint8 minVersion, const std::vector<std::string>& defines)
-	{
-		bool debugShaders = CommandLine::GetBool("debugshaders");
-
-		uint32 compileFlags = D3DCOMPILE_PACK_MATRIX_ROW_MAJOR;
-
-		if (debugShaders)
-		{
-			// Enable better shader debugging with the graphics debugging tools.
-			compileFlags |= D3DCOMPILE_DEBUG;
-			compileFlags |= D3DCOMPILE_SKIP_OPTIMIZATION;
-			compileFlags |= D3DCOMPILE_PREFER_FLOW_CONTROL;
-		}
-		else
-		{
-			compileFlags |= D3DCOMPILE_OPTIMIZATION_LEVEL3;
-		}
-
-		std::vector<std::pair<std::string, std::string>> defineValues(defines.size());
-		std::vector<D3D_SHADER_MACRO> shaderDefines;
-		for (size_t i = 0; i < defines.size(); ++i)
-		{
-			D3D_SHADER_MACRO m;
-			const std::string& define = defines[i];
-			defineValues[i] = std::make_pair<std::string,std::string>(define.substr(0, define.find('=')), define.substr(define.find('=') + 1));
-			m.Name = defineValues[i].first.c_str();
-			m.Definition = defineValues[i].second.c_str();
-			shaderDefines.push_back(m);
-		}
-
-		D3D_SHADER_MACRO endMacro;
-		endMacro.Name = nullptr;
-		endMacro.Definition = nullptr;
-		shaderDefines.push_back(endMacro);
-
-		CompileResult result;
-
-		ComPtr<ID3DBlob> pErrorBlob;
-		std::string target = Sprintf("%s_%d_%d", pTarget, majVersion, minVersion);
-		if (SUCCEEDED(D3DCompile(pShaderSource, shaderSourceSize, pIdentifier, shaderDefines.data(), nullptr, pEntryPoint, target.c_str(), compileFlags, 0, (ID3DBlob**)result.pBlob.GetAddressOf(), pErrorBlob.GetAddressOf())) != S_OK)
-		{
-			result.Success = true;
-			D3DReflect(result.pBlob->GetBufferPointer(), result.pBlob->GetBufferSize(), IID_PPV_ARGS(result.pReflection.GetAddressOf()));
-		}
-		else
-		{
-			if (pErrorBlob != nullptr)
-			{
-				result.ErrorMessage = (char*)pErrorBlob->GetBufferPointer();
-				result.Success = false;
-			}
-		}
-		return result;
-	}
-
 	CompileResult Compile(const char* pIdentifier, const char* pShaderSource, uint32 shaderSourceSize, const char* pTarget, const char* pEntryPoint, uint8 majVersion, uint8 minVersion, const std::vector<ShaderDefine>& defines /*= {}*/)
 	{
 		std::vector<std::string> definesActual;
@@ -284,12 +230,6 @@ namespace ShaderCompiler
 
 		definesActual.push_back(Sprintf("_SM_MAJ=%d", majVersion));
 		definesActual.push_back(Sprintf("_SM_MIN=%d", minVersion));
-
-		if (majVersion < 6)
-		{
-			definesActual.emplace_back("_FXC=1");
-			return CompileFxc(pIdentifier, pShaderSource, shaderSourceSize, pEntryPoint, pTarget, majVersion, minVersion, definesActual);
-		}
 		definesActual.emplace_back("_DXC=1");
 		return CompileDxc(pIdentifier, pShaderSource, shaderSourceSize, pEntryPoint, pTarget, majVersion, minVersion, definesActual);
 	}
@@ -464,30 +404,32 @@ bool ShaderManager::ProcessSource(const std::string& sourcePath, const std::stri
 
 	while (getline(fileStream, line))
 	{
-		size_t includeStart = line.find("#include");
-		if (includeStart != std::string::npos)
+		if (line.length() > 0 && line[0] == '#')
 		{
-			size_t start = line.find('"') + 1;
-			size_t end = line.rfind('"');
-			if (end == std::string::npos || start == std::string::npos || start == end)
+			if (line.rfind("#include", 0) == 0)
 			{
-				E_LOG(Error, "Include syntax errror: %s", line.c_str());
-				return false;
-			}
-			std::string includeFilePath = line.substr(start, end - start);
-			ShaderStringHash includeHash(includeFilePath);
-			if (std::find(processedIncludes.begin(), processedIncludes.end(), includeHash) == processedIncludes.end())
-			{
-				processedIncludes.push_back(includeHash);
-				std::string basePath = Paths::GetDirectoryPath(filePath);
-				std::string fullFilePath = basePath + includeFilePath;
-
-				if (!ProcessSource(sourcePath, fullFilePath, output, processedIncludes))
+				size_t start = line.find('"') + 1;
+				size_t end = line.rfind('"');
+				if (end == std::string::npos || start == std::string::npos || start == end)
 				{
+					E_LOG(Error, "Include syntax errror: %s", line.c_str());
 					return false;
 				}
+				std::string includeFilePath = line.substr(start, end - start);
+				ShaderStringHash includeHash(includeFilePath);
+				if (std::find(processedIncludes.begin(), processedIncludes.end(), includeHash) == processedIncludes.end())
+				{
+					processedIncludes.push_back(includeHash);
+					std::string basePath = Paths::GetDirectoryPath(filePath);
+					std::string fullFilePath = basePath + includeFilePath;
+
+					if (!ProcessSource(sourcePath, fullFilePath, output, processedIncludes))
+					{
+						return false;
+					}
+				}
+				placedLineDirective = false;
 			}
-			placedLineDirective = false;
 		}
 		else
 		{

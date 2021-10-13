@@ -20,7 +20,6 @@
 #include <fstream>
 #include <iostream>
 //Misc
-#include <algorithm>
 #include <mutex>
 
 #include "Core/CoreTypes.h"
@@ -38,7 +37,6 @@ using ComPtr = Microsoft::WRL::ComPtr<T>;
 
 #define D3DX12_NO_STATE_OBJECT_HELPERS
 #include "d3dx12/d3dx12.h"
-#include "d3dx12/d3dx12_extra.h"
 #include "Imgui/imgui.h"
 
 #define USE_OPTICK 1

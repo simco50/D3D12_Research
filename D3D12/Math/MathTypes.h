@@ -68,22 +68,20 @@ using IntVector3 = TIntVector3<int32>;
 using IntVector4 = TIntVector4<int32>;
 
 template<typename T>
-struct RectT
+struct TRect
 {
-	RectT()
+	TRect()
 		: Left(T()), Top(T()), Right(T()), Bottom(T())
 	{}
 
-	RectT(const T left, const T top, const T right, const T bottom)
+	TRect(const T left, const T top, const T right, const T bottom)
 		: Left(left), Top(top), Right(right), Bottom(bottom)
 	{}
 
 	template<typename U>
-	RectT(const RectT<U>& other)
+	TRect(const TRect<U>& other)
 		: Left((T)other.Left), Top((T)other.Top), Right((T)other.Right), Bottom((T)other.Bottom)
-	{
-
-	}
+	{}
 
 	T Left;
 	T Top;
@@ -97,31 +95,26 @@ struct RectT
 		return GetWidth() / GetHeight();
 	}
 
-	RectT Scale(const float scale) const
+	TRect Scale(const float scale) const
 	{
-		return RectT(Left * scale, Top * scale, Right * scale, Bottom * scale);
+		return TRect(Left * scale, Top * scale, Right * scale, Bottom * scale);
 	}
 
-	RectT Scale(const float scaleX, const float scaleY) const
+	TRect Scale(const float scaleX, const float scaleY) const
 	{
-		return RectT(Left * scaleX, Top * scaleY, Right * scaleX, Bottom * scaleY);
+		return TRect(Left * scaleX, Top * scaleY, Right * scaleX, Bottom * scaleY);
 	}
 
-	bool operator==(const RectT& other) const
+	bool operator==(const TRect& other) const
 	{
 		return Left == other.Left && Top == other.Top && Right == other.Right && Bottom == other.Bottom;
 	}
 
-	bool operator!=(const RectT& other) const
+	bool operator!=(const TRect& other) const
 	{
 		return Left != other.Left || Top != other.Top || Right != other.Right || Bottom != other.Bottom;
 	}
-
-	static RectT ZERO()
-	{
-		return RectT();
-	}
 };
 
-using FloatRect = RectT<float>;
-using IntRect = RectT<int>;
+using FloatRect = TRect<float>;
+using IntRect = TRect<int>;
