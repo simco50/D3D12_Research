@@ -74,11 +74,10 @@ namespace Paths
 	{
 		for (char& c : filePath)
 		{
-			if (c == '/')
+			if (c == '\\')
 			{
 				c = '/';
 			}
-			c = (char)tolower(c);
 		}
 		if (filePath.find("./") == 0)
 		{

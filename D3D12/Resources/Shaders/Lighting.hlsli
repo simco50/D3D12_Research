@@ -1,6 +1,5 @@
 #include "Common.hlsli"
 #include "ShadingModels.hlsli"
-#include "CommonBindings.hlsli"
 
 #define SUPPORT_BC5 1
 

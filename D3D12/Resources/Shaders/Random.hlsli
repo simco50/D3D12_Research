@@ -1,6 +1,3 @@
-#ifndef __INCLUDE_RNG__
-#define __INCLUDE_RNG__
-
 #include "Constants.hlsli"
 //-----------------------------------------------------------------------------------------
 
@@ -99,5 +96,3 @@ float3 HemisphereSampleCosineWeight(float2 u, out float pdf)
 }
 
 //-----------------------------------------------------------------------------------------
-
-#endif

@@ -5,9 +5,6 @@ Super useful page for different transformations: http://www.brucelindbloom.com/i
 */
 
 
-#ifndef __INCLUDE_COLORS__
-#define __INCLUDE_COLORS__
-
 float3 sRGB_to_XYZ(float3 rgb)
 {
     //http://www.brucelindbloom.com/index.html?Eqn_RGB_to_XYZ.html
@@ -80,6 +77,3 @@ float3 YCoCg_to_RGB(float3 c)
 		c.x - c.y - c.z
 	);
 }
-
-
-#endif

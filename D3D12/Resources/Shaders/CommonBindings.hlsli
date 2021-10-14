@@ -1,6 +1,3 @@
-#ifndef __INCLUDE_COMMON_BINDINGS__
-#define __INCLUDE_COMMON_BINDINGS__
-
 #include "Common.hlsli"
 
 //CBVs
@@ -52,5 +49,3 @@ T GetVertexData(uint bufferIndex, uint vertexId)
 {
     return tBufferTable[bufferIndex].Load<T>(vertexId * sizeof(T));
 }
-
-#endif
