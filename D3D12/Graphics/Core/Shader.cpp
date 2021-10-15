@@ -53,6 +53,7 @@ namespace ShaderCompiler
 		VERIFY_HR(createInstance(CLSID_DxcCompiler, IID_PPV_ARGS(pCompiler3.GetAddressOf())));
 		VERIFY_HR(createInstance(CLSID_DxcValidator, IID_PPV_ARGS(pValidator.GetAddressOf())));
 		VERIFY_HR(pUtils->CreateDefaultIncludeHandler(pDefaultIncludeHandler.GetAddressOf()));
+		E_LOG(Info, "Loaded dxcompiler.dll");
 	}
 
 	CompileResult CompileDxc(const char* pFilePath, const char* pEntryPoint, const char* pTarget, uint8 majVersion, uint8 minVersion, const std::vector<ShaderDefine>& defines)
@@ -174,6 +175,11 @@ namespace ShaderCompiler
 			{
 				ComPtr<IDxcBlobEncoding> pEncoding;
 				std::string path = Paths::Normalize(UNICODE_TO_MULTIBYTE(pFilename));
+				if (!Paths::FileExists(path))
+				{
+					return E_FAIL;
+				}
+
 				if (IncludedFiles.find(path) != IncludedFiles.end())
 				{
 					static const char nullStr[] = " ";
@@ -208,7 +214,6 @@ namespace ShaderCompiler
 
 		ComPtr<IDxcResult> pCompileResult;
 		VERIFY_HR(pCompiler3->Compile(&sourceBuffer, arguments.GetArguments(), (uint32)arguments.GetNumArguments(), &includeHandler, IID_PPV_ARGS(pCompileResult.GetAddressOf())));
-
 #if 0
 		// Preprocessed source
 		ComPtr<IDxcResult> pPreprocessOutput;
