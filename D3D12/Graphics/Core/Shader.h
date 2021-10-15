@@ -1,5 +1,4 @@
 #pragma once
-#include "dxc/dxcapi.h"
 
 #ifndef SHADER_HASH_DEBUG
 #define SHADER_HASH_DEBUG 0
@@ -7,7 +6,7 @@
 
 class FileWatcher;
 
-using ShaderBlob = ComPtr<IDxcBlob>;
+using ShaderBlob = ComPtr<ID3DBlob>;
 
 enum class ShaderType
 {

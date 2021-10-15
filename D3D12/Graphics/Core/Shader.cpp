@@ -3,6 +3,7 @@
 #include "Core/Paths.h"
 #include "Core/CommandLine.h"
 #include "Core/FileWatcher.h"
+#include "dxc/dxcapi.h"
 
 namespace ShaderCompiler
 {
@@ -42,16 +43,20 @@ namespace ShaderCompiler
 		}
 	}
 
+	void LoadDXC()
+	{
+		HMODULE lib = LoadLibraryA("dxcompiler.dll");
+		check(lib);
+		DxcCreateInstanceProc createInstance = (DxcCreateInstanceProc)GetProcAddress(lib, "DxcCreateInstance");
+		check(createInstance);
+		VERIFY_HR(createInstance(CLSID_DxcUtils, IID_PPV_ARGS(pUtils.GetAddressOf())));
+		VERIFY_HR(createInstance(CLSID_DxcCompiler, IID_PPV_ARGS(pCompiler3.GetAddressOf())));
+		VERIFY_HR(createInstance(CLSID_DxcValidator, IID_PPV_ARGS(pValidator.GetAddressOf())));
+		VERIFY_HR(pUtils->CreateDefaultIncludeHandler(pDefaultIncludeHandler.GetAddressOf()));
+	}
+
 	CompileResult CompileDxc(const char* pFilePath, const char* pEntryPoint, const char* pTarget, uint8 majVersion, uint8 minVersion, const std::vector<ShaderDefine>& defines)
 	{
-		if (!pUtils)
-		{
-			VERIFY_HR(DxcCreateInstance(CLSID_DxcUtils, IID_PPV_ARGS(pUtils.GetAddressOf())));
-			VERIFY_HR(DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(pCompiler3.GetAddressOf())));
-			VERIFY_HR(DxcCreateInstance(CLSID_DxcValidator, IID_PPV_ARGS(pValidator.GetAddressOf())));
-			VERIFY_HR(pUtils->CreateDefaultIncludeHandler(pDefaultIncludeHandler.GetAddressOf()));
-		}
-
 		CompileResult result;
 
 		ComPtr<IDxcBlobEncoding> pSource;
@@ -235,7 +240,7 @@ namespace ShaderCompiler
 		//Validation
 		{
 			ComPtr<IDxcOperationResult> pResult;
-			VERIFY_HR(pValidator->Validate(*result.pBlob.GetAddressOf(), DxcValidatorFlags_InPlaceEdit, pResult.GetAddressOf()));
+			VERIFY_HR(pValidator->Validate((IDxcBlob*)result.pBlob.Get(), DxcValidatorFlags_InPlaceEdit, pResult.GetAddressOf()));
 			HRESULT validationResult;
 			pResult->GetStatus(&validationResult);
 			if (validationResult != S_OK)
@@ -433,6 +438,7 @@ uint32 ShaderBase::GetByteCodeSize() const
 ShaderManager::ShaderManager(const char* pShaderSourcePath, uint8 shaderModelMaj, uint8 shaderModelMin)
 	: m_pShaderSourcePath(pShaderSourcePath), m_ShaderModelMajor(shaderModelMaj), m_ShaderModelMinor(shaderModelMin)
 {
+	ShaderCompiler::LoadDXC();
 	if (CommandLine::GetBool("shaderhotreload"))
 	{
 		m_pFileWatcher = std::make_unique<FileWatcher>();
