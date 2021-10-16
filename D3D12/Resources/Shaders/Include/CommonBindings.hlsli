@@ -1,5 +1,5 @@
-#ifndef __INCLUDE_COMMON_BINDINGS__
-#define __INCLUDE_COMMON_BINDINGS__
+#ifndef __COMMON_BINDINGS_INCLUDE__
+#define __COMMON_BINDINGS_INCLUDE__
 
 #include "Common.hlsli"
 

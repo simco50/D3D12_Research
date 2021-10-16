@@ -156,7 +156,9 @@ namespace ShaderCompiler
 		arguments.AddArgument(DXC_ARG_WARNINGS_ARE_ERRORS);
 		arguments.AddArgument(DXC_ARG_PACK_MATRIX_ROW_MAJOR);
 
-		arguments.AddArgument("-I", Paths::GetDirectoryPath(pFilePath).c_str());
+		std::string shaderDir = Paths::GetDirectoryPath(pFilePath);
+		arguments.AddArgument("-I", shaderDir.c_str());
+		arguments.AddArgument("-I", Paths::Combine(shaderDir, "include").c_str());
 
 		for (const ShaderDefine& define : defines)
 		{

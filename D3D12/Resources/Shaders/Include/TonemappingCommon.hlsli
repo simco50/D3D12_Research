@@ -1,5 +1,5 @@
-#ifndef __INCLUDE_TONEMAPPING_COMMON__
-#define __INCLUDE_TONEMAPPING_COMMON__
+#ifndef __TONEMAPPING_COMMON_INCLUDE__
+#define __TONEMAPPING_COMMON_INCLUDE__
 
 #include "Common.hlsli"
 

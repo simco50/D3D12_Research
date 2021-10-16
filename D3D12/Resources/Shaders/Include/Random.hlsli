@@ -1,3 +1,6 @@
+#ifndef __RANDOM_INCLUDE__
+#define __RANDOM_INCLUDE__
+
 #include "Constants.hlsli"
 //-----------------------------------------------------------------------------------------
 
@@ -96,3 +99,5 @@ float3 HemisphereSampleCosineWeight(float2 u, out float pdf)
 }
 
 //-----------------------------------------------------------------------------------------
+
+#endif
