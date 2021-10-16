@@ -1,6 +1,8 @@
-#define RootSig "RootFlags(ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT), " \
+#include "CommonBindings.hlsli"
+
+#define RootSig ROOT_SIG("RootFlags(ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT), " \
 				"CBV(b0, visibility=SHADER_VISIBILITY_VERTEX), " \
-				"DescriptorTable(SRV(t0, numDescriptors = 2), visibility=SHADER_VISIBILITY_VERTEX), " \
+				"DescriptorTable(SRV(t0, numDescriptors = 2), visibility=SHADER_VISIBILITY_VERTEX)")
 
 struct ParticleData
 {

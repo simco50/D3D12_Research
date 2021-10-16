@@ -169,7 +169,6 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& resources)
 
 			context.SetGraphicsDynamicConstantBufferView(1, frameData);
 			context.SetGraphicsDynamicConstantBufferView(2, *resources.pShadowData);
-			context.BindResourceTable(3, resources.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Graphics);
 
 			D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
 				resources.pLightBuffer->GetSRV()->GetDescriptor(),
@@ -181,7 +180,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& resources)
 				resources.pMeshBuffer->GetSRV()->GetDescriptor(),
 				resources.pMeshInstanceBuffer->GetSRV()->GetDescriptor(),
 			};
-			context.BindResources(4, 3, srvs, ARRAYSIZE(srvs));
+			context.BindResources(3, 3, srvs, ARRAYSIZE(srvs));
 
 			{
 				GPU_PROFILE_SCOPE("Opaque", &context);

@@ -1,3 +1,6 @@
+#ifndef __INCLUDE_COMMON_BINDINGS__
+#define __INCLUDE_COMMON_BINDINGS__
+
 #include "Common.hlsli"
 
 //CBVs
@@ -14,9 +17,17 @@ StructuredBuffer<MeshData> tMeshes :                        register(t11);
 StructuredBuffer<MeshInstance> tMeshInstances :             register(t12);
 
 //Samplers
-SamplerState sDiffuseSampler :                              register(s0);
-SamplerState sClampSampler :                                register(s1);
-SamplerComparisonState sShadowMapSampler :                  register(s2);
+SamplerState sLinearWrap :                                  register(s10);
+SamplerState sLinearClamp :                                 register(s11);
+SamplerState sLinearBorder :                                register(s12);
+SamplerState sPointWrap :                                   register(s13);
+SamplerState sPointClamp :                                  register(s14);
+SamplerState sPointBorder :                                 register(s15);
+SamplerState sAnisoWrap :                                   register(s16);
+SamplerState sAnisoClamp :                                  register(s17);
+SamplerState sAnisoBorder :                                 register(s18);
+SamplerState sMaterialSampler :                             register(s19);
+SamplerComparisonState sDepthComparison :                   register(s20);
 
 //Bindless samples
 SamplerState sSamplerTable[] :                              register(s1000, space100);
@@ -28,24 +39,40 @@ TextureCube tTextureCubeTable[] :                           register(t1000, spac
 ByteAddressBuffer tBufferTable[] :                          register(t1000, space103);
 RaytracingAccelerationStructure tTLASTable[] :              register(t1000, space104);
 
-// Add a range for each bindless resource table
-#define GLOBAL_BINDLESS_TABLE \
-    "DescriptorTable("\
-        "SRV(t1000, numDescriptors = unbounded, space = 100, offset = 0), " \
-        "SRV(t1000, numDescriptors = unbounded, space = 101, offset = 0), " \
-        "SRV(t1000, numDescriptors = unbounded, space = 102, offset = 0), " \
-        "SRV(t1000, numDescriptors = unbounded, space = 103, offset = 0), " \
-        "SRV(t1000, numDescriptors = unbounded, space = 104, offset = 0), " \
-    "visibility=SHADER_VISIBILITY_ALL)"
-
-#define GLOBAL_BINDLESS_SAMPLER_TABLE \
-    "DescriptorTable("\
-        "Sampler(s1000, numDescriptors = unbounded, space = 1, offset = 0) ," \
-    "visibility=SHADER_VISIBILITY_ALL)"
-
-
 template<typename T>
 T GetVertexData(uint bufferIndex, uint vertexId)
 {
     return tBufferTable[bufferIndex].Load<T>(vertexId * sizeof(T));
 }
+
+#define ROOT_SIG(elements) elements ", " DEFAULT_ROOT_SIG_PARAMS
+
+#define DEFAULT_ROOT_SIG_PARAMS \
+    "DescriptorTable(" \
+        "SRV(t1000, numDescriptors = unbounded, space = 100, offset = 0), " \
+        "SRV(t1000, numDescriptors = unbounded, space = 101, offset = 0), " \
+        "SRV(t1000, numDescriptors = unbounded, space = 102, offset = 0), " \
+        "SRV(t1000, numDescriptors = unbounded, space = 103, offset = 0), " \
+        "SRV(t1000, numDescriptors = unbounded, space = 104, offset = 0), " \
+        "UAV(u1000, numDescriptors = unbounded, space = 105, offset = 0), " \
+        "UAV(u1000, numDescriptors = unbounded, space = 106, offset = 0), " \
+        "UAV(u1000, numDescriptors = unbounded, space = 107, offset = 0), " \
+        "UAV(u1000, numDescriptors = unbounded, space = 108, offset = 0), " \
+        "UAV(u1000, numDescriptors = unbounded, space = 109, offset = 0), " \
+    "visibility=SHADER_VISIBILITY_ALL), " \
+    "DescriptorTable(" \
+        "Sampler(s1000, numDescriptors = unbounded, space = 100, offset = 0) ," \
+    "visibility=SHADER_VISIBILITY_ALL), " \
+	"StaticSampler(s10, filter=FILTER_MIN_MAG_MIP_LINEAR, addressU=TEXTURE_ADDRESS_WRAP, addressV=TEXTURE_ADDRESS_WRAP, addressW=TEXTURE_ADDRESS_WRAP), " \
+	"StaticSampler(s11, filter=FILTER_MIN_MAG_MIP_LINEAR, addressU=TEXTURE_ADDRESS_CLAMP, addressV=TEXTURE_ADDRESS_CLAMP, addressW=TEXTURE_ADDRESS_CLAMP), " \
+	"StaticSampler(s12, filter=FILTER_MIN_MAG_MIP_LINEAR, addressU=TEXTURE_ADDRESS_BORDER, addressV=TEXTURE_ADDRESS_BORDER, addressW=TEXTURE_ADDRESS_BORDER), " \
+    "StaticSampler(s13, filter=FILTER_MIN_MAG_MIP_POINT, addressU=TEXTURE_ADDRESS_WRAP, addressV=TEXTURE_ADDRESS_WRAP, addressW=TEXTURE_ADDRESS_WRAP), " \
+	"StaticSampler(s14, filter=FILTER_MIN_MAG_MIP_POINT, addressU=TEXTURE_ADDRESS_CLAMP, addressV=TEXTURE_ADDRESS_CLAMP, addressW=TEXTURE_ADDRESS_CLAMP), " \
+	"StaticSampler(s15, filter=FILTER_MIN_MAG_MIP_POINT, addressU=TEXTURE_ADDRESS_BORDER, addressV=TEXTURE_ADDRESS_BORDER, addressW=TEXTURE_ADDRESS_BORDER), " \
+    "StaticSampler(s16, filter=FILTER_ANISOTROPIC, maxAnisotropy = 4, addressU=TEXTURE_ADDRESS_WRAP, addressV=TEXTURE_ADDRESS_WRAP, addressW=TEXTURE_ADDRESS_WRAP), " \
+    "StaticSampler(s17, filter=FILTER_ANISOTROPIC, maxAnisotropy = 4, addressU=TEXTURE_ADDRESS_CLAMP, addressV=TEXTURE_ADDRESS_CLAMP, addressW=TEXTURE_ADDRESS_CLAMP), " \
+    "StaticSampler(s18, filter=FILTER_ANISOTROPIC, maxAnisotropy = 4, addressU=TEXTURE_ADDRESS_BORDER, addressV=TEXTURE_ADDRESS_BORDER, addressW=TEXTURE_ADDRESS_BORDER), " \
+    "StaticSampler(s19, filter=FILTER_ANISOTROPIC, maxAnisotropy = 4, addressU=TEXTURE_ADDRESS_WRAP, addressV=TEXTURE_ADDRESS_WRAP, addressW=TEXTURE_ADDRESS_WRAP), " \
+    "StaticSampler(s20, filter=FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT, comparisonFunc=COMPARISON_GREATER)" \
+
+#endif

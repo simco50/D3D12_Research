@@ -64,7 +64,7 @@ MaterialProperties GetMaterialProperties(uint materialIndex, float2 UV, int mipL
     float4 baseColor = material.BaseColorFactor;
     if(material.Diffuse >= 0)
     {
-        baseColor *= tTexture2DTable[material.Diffuse].SampleLevel(sDiffuseSampler, UV, mipLevel);
+        baseColor *= tTexture2DTable[material.Diffuse].SampleLevel(sMaterialSampler, UV, mipLevel);
     }
     properties.BaseColor = baseColor.rgb;
     properties.Opacity = baseColor.a;
@@ -73,21 +73,21 @@ MaterialProperties GetMaterialProperties(uint materialIndex, float2 UV, int mipL
     properties.Roughness = material.RoughnessFactor;
     if(material.RoughnessMetalness >= 0)
     {
-        float4 roughnessMetalnessSample = tTexture2DTable[material.RoughnessMetalness].SampleLevel(sDiffuseSampler, UV, mipLevel);
+        float4 roughnessMetalnessSample = tTexture2DTable[material.RoughnessMetalness].SampleLevel(sMaterialSampler, UV, mipLevel);
         properties.Metalness *= roughnessMetalnessSample.b;
         properties.Roughness *= roughnessMetalnessSample.g;
     }
     properties.Emissive = material.EmissiveFactor.rgb;
     if(material.Emissive >= 0)
     {
-        properties.Emissive *= tTexture2DTable[material.Emissive].SampleLevel(sDiffuseSampler, UV, mipLevel).rgb;
+        properties.Emissive *= tTexture2DTable[material.Emissive].SampleLevel(sMaterialSampler, UV, mipLevel).rgb;
     }
     properties.Specular = 0.5f;
 
     properties.NormalTS = float3(0.5f, 0.5f, 1.0f);
     if(material.Normal >= 0)
     {
-        properties.NormalTS = tTexture2DTable[material.Normal].SampleLevel(sDiffuseSampler, UV, mipLevel).rgb;
+        properties.NormalTS = tTexture2DTable[material.Normal].SampleLevel(sMaterialSampler, UV, mipLevel).rgb;
     }
     return properties;
 }

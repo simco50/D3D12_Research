@@ -17,8 +17,6 @@ static constexpr int MAX_NUM_ROOT_PARAMETERS = RootSignatureMask::Size();
 class RootSignature : public GraphicsObject
 {
 public:
-	static constexpr int MAX_RANGES_PER_TABLE = 10;
-
 	RootSignature(GraphicsDevice* pParent);
 
 	template<typename T>
@@ -31,7 +29,7 @@ public:
 	void SetShaderResourceView(uint32 rootIndex, uint32 shaderRegister, D3D12_SHADER_VISIBILITY visibility);
 	void SetUnorderedAccessView(uint32 rootIndex, uint32 shaderRegister, D3D12_SHADER_VISIBILITY visibility);
 	void SetDescriptorTable(uint32 rootIndex, uint32 rangeCount, D3D12_SHADER_VISIBILITY visibility);
-	void SetDescriptorTableRange(uint32 rootIndex, uint32 rangeIndex, uint32 startRegisterSlot, D3D12_DESCRIPTOR_RANGE_TYPE type, uint32 count, uint32 heapSlotOffset);
+	void SetDescriptorTableRange(uint32 rootIndex, uint32 rangeIndex, uint32 startRegisterSlot, uint32 space, D3D12_DESCRIPTOR_RANGE_TYPE type, uint32 count, uint32 heapSlotOffset);
 	void SetDescriptorTableSimple(uint32 rootIndex, uint32 startRegisterSlot, D3D12_DESCRIPTOR_RANGE_TYPE type, uint32 count, D3D12_SHADER_VISIBILITY visibility);
 
 	void AddStaticSampler(const D3D12_STATIC_SAMPLER_DESC& samplerDesc);
@@ -46,8 +44,12 @@ public:
 	const std::array<uint32, MAX_NUM_ROOT_PARAMETERS>& GetDescriptorTableSizes() const { return m_DescriptorTableSizes; }
 
 	uint32 GetDWordSize() const;
+	uint32 GetBindlessViewIndex() const { return m_BindlessViewsIndex; }
+	uint32 GetBindlessSamplerIndex() const { return m_BindlessSamplersIndex; }
 
 private:
+	void AddDefaultParameters();
+
 	CD3DX12_ROOT_PARAMETER& Get(uint32 index)
 	{
 		check(index < MAX_NUM_ROOT_PARAMETERS);
@@ -58,17 +60,19 @@ private:
 	CD3DX12_DESCRIPTOR_RANGE& GetRange(uint32 rootIndex, uint32 rangeIndex)
 	{
 		check(rootIndex < MAX_NUM_ROOT_PARAMETERS);
-		check(rangeIndex < MAX_NUM_ROOT_PARAMETERS);
+		m_DescriptorTableRanges[rootIndex].resize(Math::Max<uint32>((uint32)m_DescriptorTableRanges[rootIndex].size(), rangeIndex + 1));
 		return m_DescriptorTableRanges[rootIndex][rangeIndex];
 	}
 
 	std::array<CD3DX12_ROOT_PARAMETER, MAX_NUM_ROOT_PARAMETERS> m_RootParameters{};
 	std::array<uint32, MAX_NUM_ROOT_PARAMETERS> m_DescriptorTableSizes{};
 	std::vector<CD3DX12_STATIC_SAMPLER_DESC> m_StaticSamplers;
-	std::array<std::array<CD3DX12_DESCRIPTOR_RANGE, MAX_RANGES_PER_TABLE>, MAX_NUM_ROOT_PARAMETERS> m_DescriptorTableRanges{};
+	std::array<std::vector<CD3DX12_DESCRIPTOR_RANGE>, MAX_NUM_ROOT_PARAMETERS> m_DescriptorTableRanges{};
 	ComPtr<ID3D12RootSignature> m_pRootSignature;
 
 	RootSignatureMask m_DescriptorTableMask;
 	RootSignatureMask m_SamplerMask;
 	uint32 m_NumParameters;
+	uint32 m_BindlessViewsIndex;
+	uint32 m_BindlessSamplersIndex;
 };

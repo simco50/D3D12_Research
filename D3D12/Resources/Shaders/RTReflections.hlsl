@@ -13,10 +13,7 @@ GlobalRootSignature GlobalRootSig =
 	"CBV(b2),"
 	"DescriptorTable(UAV(u0, numDescriptors = 1)),"
 	"DescriptorTable(SRV(t5, numDescriptors = 8)),"
-	GLOBAL_BINDLESS_TABLE ", "
-	"StaticSampler(s0, filter=FILTER_MIN_MAG_LINEAR_MIP_POINT),"
-	"StaticSampler(s1, filter=FILTER_MIN_MAG_MIP_LINEAR, addressU = TEXTURE_ADDRESS_CLAMP, addressV = TEXTURE_ADDRESS_CLAMP), " \
-	"StaticSampler(s2, filter=FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT, comparisonFunc=COMPARISON_GREATER), " \
+	DEFAULT_ROOT_SIG_PARAMS
 };
 
 struct ViewData
@@ -167,7 +164,7 @@ LightResult EvaluateLight(Light light, float3 worldPos, float3 V, float3 N, Brdf
 		if(all(lightPos >= 0) && all(lightPos <= 1))
 		{
 			Texture2D shadowTexture = tTexture2DTable[cShadowData.ShadowMapOffset + shadowIndex];
-			attenuation *= shadowTexture.SampleCmpLevelZero(sShadowMapSampler, lightPos.xy, lightPos.z);
+			attenuation *= shadowTexture.SampleCmpLevelZero(sDepthComparison, lightPos.xy, lightPos.z);
 			castShadowRay = false;
 		}
 	}
@@ -249,9 +246,9 @@ void RayGen()
 	uint2 launchIndex = DispatchRaysIndex().xy;
 	float2 texCoord = (float2)launchIndex * dimInv;
 
-	float depth = tDepth.SampleLevel(sDiffuseSampler, texCoord, 0).r;
-	float4 colorSample = tPreviousSceneColor.SampleLevel(sDiffuseSampler, texCoord, 0);
-	float4 reflectionSample = tSceneNormals.SampleLevel(sDiffuseSampler, texCoord, 0);
+	float depth = tDepth.SampleLevel(sLinearClamp, texCoord, 0).r;
+	float4 colorSample = tPreviousSceneColor.SampleLevel(sLinearClamp, texCoord, 0);
+	float4 reflectionSample = tSceneNormals.SampleLevel(sLinearClamp, texCoord, 0);
 
 	float3 view = ViewFromDepth(texCoord, depth, cViewData.ProjectionInverse);
 	float3 world = mul(float4(view, 1), cViewData.ViewInverse).xyz;

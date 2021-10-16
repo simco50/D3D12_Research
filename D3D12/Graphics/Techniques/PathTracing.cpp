@@ -139,7 +139,6 @@ void PathTracing::Render(RGGraph& graph, const SceneView& sceneData)
 			context.SetComputeDynamicConstantBufferView(1, *sceneData.pShadowData);
 			context.BindResources(2, 0, uavs, ARRAYSIZE(uavs));
 			context.BindResources(3, 0, srvs, ARRAYSIZE(srvs));
-			context.BindResourceTable(4, sceneData.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Compute);
 
 			context.DispatchRays(bindingTable, sceneData.pRenderTarget->GetWidth(), sceneData.pRenderTarget->GetHeight());
 		});

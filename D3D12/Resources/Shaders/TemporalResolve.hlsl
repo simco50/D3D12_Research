@@ -1,3 +1,4 @@
+#include "CommonBindings.hlsli"
 #include "TonemappingCommon.hlsli"
 #include "Color.hlsli"
 
@@ -30,11 +31,9 @@
 #define TAA_LUMINANCE_WEIGHT        0                           // [Lottes]
 #define TAA_DILATE_VELOCITY         1
 
-#define RootSig "CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \
+#define RootSig ROOT_SIG("CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \
                 "DescriptorTable(UAV(u0, numDescriptors = 1), visibility=SHADER_VISIBILITY_ALL), " \
-				"DescriptorTable(SRV(t0, numDescriptors = 4), visibility=SHADER_VISIBILITY_ALL), " \
-				"StaticSampler(s0, filter=FILTER_MIN_MAG_MIP_POINT, visibility = SHADER_VISIBILITY_ALL, addressU = TEXTURE_ADDRESS_CLAMP, addressV = TEXTURE_ADDRESS_CLAMP), " \
-				"StaticSampler(s1, filter=FILTER_MIN_MAG_MIP_LINEAR, visibility = SHADER_VISIBILITY_ALL, addressU = TEXTURE_ADDRESS_CLAMP, addressV = TEXTURE_ADDRESS_CLAMP), " \
+				"DescriptorTable(SRV(t0, numDescriptors = 4), visibility=SHADER_VISIBILITY_ALL)")
 
 struct ShaderParameters
 {
@@ -44,13 +43,10 @@ struct ShaderParameters
 
 ConstantBuffer<ShaderParameters> cParameters : register(b0);
 
-SamplerState sPointSampler : register(s0);
-SamplerState sLinearSampler : register(s1);
-
 Texture2D tVelocity : register(t0);
 Texture2D tPreviousColor : register(t1);
 Texture2D tCurrentColor : register(t2);
-Texture2D tDepth : register(t3);
+Texture2D tSceneDepth : register(t3);
 
 RWTexture2D<float4> uOutColor : register(u0);
 
@@ -218,8 +214,8 @@ void CSMain(
 
     gsColors[gsPrefetchLocation0] = TransformColor(tCurrentColor[prefetchLocation0].rgb);
     gsColors[gsPrefetchLocation1] = TransformColor(tCurrentColor[prefetchLocation1].rgb);
-    gsDepths[gsPrefetchLocation0] = tDepth[prefetchLocation0].r;
-    gsDepths[gsPrefetchLocation1] = tDepth[prefetchLocation1].r;
+    gsDepths[gsPrefetchLocation0] = tSceneDepth[prefetchLocation0].r;
+    gsDepths[gsPrefetchLocation1] = tSceneDepth[prefetchLocation1].r;
 
     GroupMemoryBarrierWithGroupSync();
 
@@ -268,7 +264,7 @@ void CSMain(
     float2 uvReproj = texCoord;
 
 #if TAA_REPROJECT
-    float depth = tDepth.SampleLevel(sPointSampler, uvReproj, 0).r;
+    float depth = tSceneDepth.SampleLevel(sPointClamp, uvReproj, 0).r;
 
 #if TAA_DILATE_VELOCITY
     // [Karis14] - Use closest pixel to move edge along
@@ -292,18 +288,18 @@ void CSMain(
     {
         minOffset = float3(1.0f, 1.0f, crossDepths.w);
     }
-    float2 velocity = tVelocity.SampleLevel(sPointSampler, uvReproj + minOffset.xy * dxdy, 0).xy;
+    float2 velocity = tVelocity.SampleLevel(sPointClamp, uvReproj + minOffset.xy * dxdy, 0).xy;
 #else
-    float2 velocity = tVelocity.SampleLevel(sPointSampler, uvReproj, 0).xy;
+    float2 velocity = tVelocity.SampleLevel(sPointClamp, uvReproj, 0).xy;
 #endif // TAA_DILATE_VELOCITY
     uvReproj = texCoord + velocity;
 #endif // TAA_REPROJECT
 
 #if TAA_RESOLVE_METHOD == HISTORY_RESOLVE_CATMULL_ROM 
     // [Karis14] Cubic filter to avoid blurry result from billinear filter
-    float3 prevColor = SampleTextureCatmullRom(tPreviousColor, sLinearSampler, uvReproj, dimensions).rgb;
+    float3 prevColor = SampleTextureCatmullRom(tPreviousColor, sLinearClamp, uvReproj, dimensions).rgb;
 #elif TAA_RESOLVE_METHOD == HISTORY_RESOLVE_BILINEAR
-    float3 prevColor = SampleColor(tPreviousColor, sLinearSampler, uvReproj);
+    float3 prevColor = SampleColor(tPreviousColor, sLinearClamp, uvReproj);
 #else
     #error No history resolve method specified
     float3 prevColor = 0;

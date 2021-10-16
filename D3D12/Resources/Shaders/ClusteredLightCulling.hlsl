@@ -1,8 +1,8 @@
-#include "Common.hlsli"
+#include "CommonBindings.hlsli"
 
-#define RootSig "CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \
+#define RootSig ROOT_SIG("CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \
 				"DescriptorTable(SRV(t0, numDescriptors = 2)), " \
-				"DescriptorTable(UAV(u0, numDescriptors = 2))"
+				"DescriptorTable(UAV(u0, numDescriptors = 2))")
 
 #define MAX_LIGHTS_PER_TILE 32
 #define THREAD_COUNT 4
@@ -16,7 +16,7 @@ struct ViewData
 
 ConstantBuffer<ViewData> cViewData : register(b0);
 
-StructuredBuffer<Light> tLights : register(t0);
+StructuredBuffer<Light> tSceneLights : register(t0);
 StructuredBuffer<AABB> tClusterAABBs : register(t1);
 
 RWStructuredBuffer<uint> uLightIndexList : register(u0);
@@ -65,7 +65,7 @@ void LightCulling(uint3 dispatchThreadId : SV_DISPATCHTHREADID)
 		[loop]
 		for (uint i = 0; i < cViewData.LightCount; ++i)
 		{
-			Light light = tLights[i];
+			Light light = tSceneLights[i];
 			if(light.IsPoint())
 			{
 				Sphere sphere = (Sphere)0;

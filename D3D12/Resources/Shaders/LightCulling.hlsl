@@ -1,9 +1,9 @@
-#include "Common.hlsli"
+#include "CommonBindings.hlsli"
 #include "Constants.hlsli"
 
-#define RootSig "CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \
+#define RootSig ROOT_SIG("CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \
 				"DescriptorTable(UAV(u0, numDescriptors = 5), visibility=SHADER_VISIBILITY_ALL), " \
-				"DescriptorTable(SRV(t0, numDescriptors = 2), visibility=SHADER_VISIBILITY_ALL), "
+				"DescriptorTable(SRV(t0, numDescriptors = 2), visibility=SHADER_VISIBILITY_ALL)")
 
 #define MAX_LIGHTS_PER_TILE 256
 #define BLOCK_SIZE 16
@@ -18,7 +18,7 @@ cbuffer ShaderParameters : register(b0)
     uint cLightCount;
 }
 
-StructuredBuffer<Light> tLights : register(t1);
+StructuredBuffer<Light> tSceneLights : register(t1);
 Texture2D tDepthTexture : register(t0);
 
 globallycoherent RWStructuredBuffer<uint> uLightIndexCounter : register(u0);
@@ -172,7 +172,7 @@ void CSMain(CS_INPUT input)
     [loop]
     for(uint i = input.GroupIndex; i < cLightCount; i += BLOCK_SIZE * BLOCK_SIZE)
     {
-        Light light = tLights[i];
+        Light light = tSceneLights[i];
 
         if(light.IsPoint())
         {

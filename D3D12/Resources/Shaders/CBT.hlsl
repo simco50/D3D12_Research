@@ -1,4 +1,4 @@
-#include "Common.hlsli"
+#include "CommonBindings.hlsli"
 #include "Random.hlsli"
 #include "CBT.hlsli"
 
@@ -25,16 +25,14 @@
 #define DISTANCE_LOD 1
 #endif
 
-#define RootSig "CBV(b0), " \
+#define RootSig ROOT_SIG("CBV(b0), " \
 				"CBV(b1), " \
 				"DescriptorTable(UAV(u0, numDescriptors = 2)), " \
-				"DescriptorTable(SRV(t0, numDescriptors = 1)), " \
-				"StaticSampler(s0, filter=FILTER_MIN_MAG_MIP_LINEAR)"
+				"DescriptorTable(SRV(t0, numDescriptors = 1))")
 
 RWByteAddressBuffer uCBT : register(u0);
 RWByteAddressBuffer uIndirectArgs : register(u1);
 Texture2D tHeightmap : register(t0);
-SamplerState sSampler : register(s0);
 
 struct CommonArgs
 {
@@ -296,7 +294,7 @@ bool HeightmapFlatness(float3x3 tri)
     float2 center = (tri[0].xz + tri[1].xz + tri[2].xz) / 3.0f;
     float2 dx = tri[0].xz - tri[1].xz;
     float2 dy = tri[0].xz - tri[2].xz;
-    float height = tHeightmap.SampleGrad(sSampler, center, dx, dy).x;
+    float height = tHeightmap.SampleGrad(sLinearClamp, center, dx, dy).x;
     float heightVariance = saturate(height - Square(height));
     return heightVariance >= cUpdateData.HeightmapVarianceBias;
 }
@@ -380,7 +378,7 @@ float3x3 GetVertices(uint heapIndex)
 	float3x3 tri = LEB::TransformAttributes(heapIndex, baseTriangle);
 	for(int i = 0; i < 3; ++i)
 	{
-		tri[i].y += tHeightmap.SampleLevel(sSampler, tri[i].xz, 0).r;
+		tri[i].y += tHeightmap.SampleLevel(sLinearClamp, tri[i].xz, 0).r;
 	}
 	return tri;
 }
@@ -580,14 +578,14 @@ float4 RenderPS(
 	VertexOut vertex, 
 	float3 bary : SV_Barycentrics) : SV_TARGET
 {
-	float tl = tHeightmap.Sample(sSampler, vertex.UV, uint2(-1, -1)).r;
-	float t  = tHeightmap.Sample(sSampler, vertex.UV, uint2( 0, -1)).r;
-	float tr = tHeightmap.Sample(sSampler, vertex.UV, uint2( 1, -1)).r;
-	float l  = tHeightmap.Sample(sSampler, vertex.UV, uint2(-1,  0)).r;
-	float r  = tHeightmap.Sample(sSampler, vertex.UV, uint2( 1,  0)).r;
-	float bl = tHeightmap.Sample(sSampler, vertex.UV, uint2(-1,  1)).r;
-	float b  = tHeightmap.Sample(sSampler, vertex.UV, uint2( 0,  1)).r;
-	float br = tHeightmap.Sample(sSampler, vertex.UV, uint2( 1,  1)).r;
+	float tl = tHeightmap.Sample(sLinearClamp, vertex.UV, uint2(-1, -1)).r;
+	float t  = tHeightmap.Sample(sLinearClamp, vertex.UV, uint2( 0, -1)).r;
+	float tr = tHeightmap.Sample(sLinearClamp, vertex.UV, uint2( 1, -1)).r;
+	float l  = tHeightmap.Sample(sLinearClamp, vertex.UV, uint2(-1,  0)).r;
+	float r  = tHeightmap.Sample(sLinearClamp, vertex.UV, uint2( 1,  0)).r;
+	float bl = tHeightmap.Sample(sLinearClamp, vertex.UV, uint2(-1,  1)).r;
+	float b  = tHeightmap.Sample(sLinearClamp, vertex.UV, uint2( 0,  1)).r;
+	float br = tHeightmap.Sample(sLinearClamp, vertex.UV, uint2( 1,  1)).r;
 
 	float dX = tr + 2 * r + br - tl - 2 * l - bl;
 	float dY = bl + 2 * b + br - tl - 2 * t - tr;

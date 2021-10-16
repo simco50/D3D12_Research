@@ -236,7 +236,6 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& resources)
 				context.SetComputeDynamicConstantBufferView(1, *resources.pShadowData);
 				context.BindResource(2, 0, pDestinationVolume->GetUAV());
 				context.BindResources(3, 0, srvs, ARRAYSIZE(srvs));
-				context.BindResourceTable(4, resources.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Compute);
 
 				constexpr uint32 threadGroupSizeXY = 8;
 				constexpr uint32 threadGroupSizeZ = 4;
@@ -274,7 +273,6 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& resources)
 				context.SetComputeDynamicConstantBufferView(1, *resources.pShadowData);
 				context.BindResource(2, 0, m_pFinalVolumeFog->GetUAV());
 				context.BindResources(3, 0, srvs, ARRAYSIZE(srvs));
-				context.BindResourceTable(4, resources.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Compute);
 
 				constexpr uint32 threadGroupSize = 8;
 
@@ -373,7 +371,6 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& resources)
 
 			context.SetGraphicsDynamicConstantBufferView(1, frameData);
 			context.SetGraphicsDynamicConstantBufferView(2, *resources.pShadowData);
-			context.BindResourceTable(3, resources.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Graphics);
 
 			D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
 				m_pFinalVolumeFog->GetSRV()->GetDescriptor(),
@@ -388,7 +385,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& resources)
 				resources.pMeshBuffer->GetSRV()->GetDescriptor(),
 				resources.pMeshInstanceBuffer->GetSRV()->GetDescriptor(),
 			};
-			context.BindResources(4, 0, srvs, ARRAYSIZE(srvs));
+			context.BindResources(3, 0, srvs, ARRAYSIZE(srvs));
 
 			{
 				GPU_PROFILE_SCOPE("Opaque", &context);

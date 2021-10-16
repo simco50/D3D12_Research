@@ -1,10 +1,8 @@
 #include "Common.hlsli"
 #include "CommonBindings.hlsli"
 
-#define RootSig "RootFlags(ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT), " \
-				"CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \
-				GLOBAL_BINDLESS_TABLE ", " \
-				"StaticSampler(s0, filter=FILTER_MIN_MAG_MIP_LINEAR, visibility = SHADER_VISIBILITY_PIXEL)"
+#define RootSig ROOT_SIG("RootFlags(ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT), " \
+				"CBV(b0, visibility=SHADER_VISIBILITY_ALL)")
 
 #define Texture1D 0
 #define Texture1DArray 1
@@ -51,16 +49,16 @@ float4 SampleTexture(float2 texCoord)
 {
 	if(TextureType == 2)
 	{
-		return tTexture2DTable[TextureID].SampleLevel(sDiffuseSampler, texCoord, 0);
+		return tTexture2DTable[TextureID].SampleLevel(sMaterialSampler, texCoord, 0);
 	}
 	if(TextureType == 4)
 	{
-		float4 c = tTexture3DTable[TextureID].SampleLevel(sDiffuseSampler, float3(texCoord, 0), 0);
+		float4 c = tTexture3DTable[TextureID].SampleLevel(sMaterialSampler, float3(texCoord, 0), 0);
 		return float4(c.xyz, 1.0f);
 	}
 	if(TextureType == 5)
 	{
-		float4 c = tTextureCubeTable[TextureID].SampleLevel(sDiffuseSampler, float3(texCoord, 0), 0);
+		float4 c = tTextureCubeTable[TextureID].SampleLevel(sMaterialSampler, float3(texCoord, 0), 0);
 		return float4(c.xyz, 1.0f);
 	}
 	return float4(1, 0, 1, 1);

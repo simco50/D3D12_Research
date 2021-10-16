@@ -35,15 +35,15 @@ void RootSignature::SetDescriptorTable(uint32 rootIndex, uint32 rangeCount, D3D1
 	Get(rootIndex).InitAsDescriptorTable(rangeCount, m_DescriptorTableRanges[rootIndex].data(), visibility);
 }
 
-void RootSignature::SetDescriptorTableRange(uint32 rootIndex, uint32 rangeIndex, uint32 startRegisterSlot, D3D12_DESCRIPTOR_RANGE_TYPE type, uint32 count, uint32 heapSlotOffset)
+void RootSignature::SetDescriptorTableRange(uint32 rootIndex, uint32 rangeIndex, uint32 startRegisterSlot, uint32 space, D3D12_DESCRIPTOR_RANGE_TYPE type, uint32 count, uint32 offsetFromTableStart)
 {
-	GetRange(rootIndex, rangeIndex).Init(type, count, startRegisterSlot, 0u, heapSlotOffset);
+	GetRange(rootIndex, rangeIndex).Init(type, count, startRegisterSlot, space, offsetFromTableStart);
 }
 
 void RootSignature::SetDescriptorTableSimple(uint32 rootIndex, uint32 startRegisterSlot, D3D12_DESCRIPTOR_RANGE_TYPE type, uint32 count, D3D12_SHADER_VISIBILITY visibility)
 {
 	SetDescriptorTable(rootIndex, 1, visibility);
-	SetDescriptorTableRange(rootIndex, 0, startRegisterSlot, type, count, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND);
+	SetDescriptorTableRange(rootIndex, 0, startRegisterSlot, 0, type, count, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND);
 }
 
 void RootSignature::AddStaticSampler(const D3D12_STATIC_SAMPLER_DESC& samplerDesc)
@@ -53,6 +53,8 @@ void RootSignature::AddStaticSampler(const D3D12_STATIC_SAMPLER_DESC& samplerDes
 
 void RootSignature::Finalize(const char* pName, D3D12_ROOT_SIGNATURE_FLAGS flags)
 {
+	AddDefaultParameters();
+
 	D3D12_ROOT_SIGNATURE_FLAGS visibilityFlags =
 		D3D12_ROOT_SIGNATURE_FLAG_DENY_VERTEX_SHADER_ROOT_ACCESS
 		| D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS
@@ -176,7 +178,7 @@ void RootSignature::FinalizeFromShader(const char* pName, const ShaderBase* pSha
 		const D3D12_ROOT_PARAMETER& rootParameter = rsDesc.pParameters[i];
 		if (rootParameter.ParameterType == D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE)
 		{
-			checkf(rootParameter.DescriptorTable.NumDescriptorRanges <= MAX_RANGES_PER_TABLE, "Descriptor has more ranges (%d) than allowed (%d).", rootParameter.DescriptorTable.NumDescriptorRanges, MAX_RANGES_PER_TABLE);
+			m_DescriptorTableRanges[i].resize(rootParameter.DescriptorTable.NumDescriptorRanges);
 			memcpy(m_DescriptorTableRanges[i].data(), rootParameter.DescriptorTable.pDescriptorRanges, rootParameter.DescriptorTable.NumDescriptorRanges * sizeof(D3D12_DESCRIPTOR_RANGE));
 		}
 	}
@@ -206,4 +208,48 @@ uint32 RootSignature::GetDWordSize() const
 		}
 	}
 	return count;
+}
+
+void RootSignature::AddDefaultParameters()
+{
+#if 0
+	int staticSamplerRegisterSlot = 10;
+	AddStaticSampler(CD3DX12_STATIC_SAMPLER_DESC(staticSamplerRegisterSlot++, D3D12_FILTER_MIN_MAG_MIP_LINEAR, D3D12_TEXTURE_ADDRESS_MODE_WRAP, D3D12_TEXTURE_ADDRESS_MODE_WRAP, D3D12_TEXTURE_ADDRESS_MODE_WRAP));
+	AddStaticSampler(CD3DX12_STATIC_SAMPLER_DESC(staticSamplerRegisterSlot++, D3D12_FILTER_MIN_MAG_MIP_LINEAR, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP));
+	AddStaticSampler(CD3DX12_STATIC_SAMPLER_DESC(staticSamplerRegisterSlot++, D3D12_FILTER_MIN_MAG_MIP_LINEAR, D3D12_TEXTURE_ADDRESS_MODE_BORDER, D3D12_TEXTURE_ADDRESS_MODE_BORDER, D3D12_TEXTURE_ADDRESS_MODE_BORDER));
+
+	AddStaticSampler(CD3DX12_STATIC_SAMPLER_DESC(staticSamplerRegisterSlot++, D3D12_FILTER_MIN_MAG_MIP_POINT, D3D12_TEXTURE_ADDRESS_MODE_WRAP, D3D12_TEXTURE_ADDRESS_MODE_WRAP, D3D12_TEXTURE_ADDRESS_MODE_WRAP));
+	AddStaticSampler(CD3DX12_STATIC_SAMPLER_DESC(staticSamplerRegisterSlot++, D3D12_FILTER_MIN_MAG_MIP_POINT, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP));
+	AddStaticSampler(CD3DX12_STATIC_SAMPLER_DESC(staticSamplerRegisterSlot++, D3D12_FILTER_MIN_MAG_MIP_POINT, D3D12_TEXTURE_ADDRESS_MODE_BORDER, D3D12_TEXTURE_ADDRESS_MODE_BORDER, D3D12_TEXTURE_ADDRESS_MODE_BORDER));
+
+	AddStaticSampler(CD3DX12_STATIC_SAMPLER_DESC(staticSamplerRegisterSlot++, D3D12_FILTER_ANISOTROPIC, D3D12_TEXTURE_ADDRESS_MODE_WRAP, D3D12_TEXTURE_ADDRESS_MODE_WRAP, D3D12_TEXTURE_ADDRESS_MODE_WRAP));
+	AddStaticSampler(CD3DX12_STATIC_SAMPLER_DESC(staticSamplerRegisterSlot++, D3D12_FILTER_ANISOTROPIC, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP));
+	AddStaticSampler(CD3DX12_STATIC_SAMPLER_DESC(staticSamplerRegisterSlot++, D3D12_FILTER_ANISOTROPIC, D3D12_TEXTURE_ADDRESS_MODE_BORDER, D3D12_TEXTURE_ADDRESS_MODE_BORDER, D3D12_TEXTURE_ADDRESS_MODE_BORDER));
+
+	AddStaticSampler(CD3DX12_STATIC_SAMPLER_DESC(staticSamplerRegisterSlot++, D3D12_FILTER_ANISOTROPIC, D3D12_TEXTURE_ADDRESS_MODE_WRAP, D3D12_TEXTURE_ADDRESS_MODE_WRAP, D3D12_TEXTURE_ADDRESS_MODE_WRAP));
+	AddStaticSampler(CD3DX12_STATIC_SAMPLER_DESC(staticSamplerRegisterSlot++, D3D12_FILTER_COMPARISON_MIN_MAG_MIP_POINT, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, 0.0f, 16u, D3D12_COMPARISON_FUNC_GREATER));
+
+	uint32 numSRVRanges = 5;
+	uint32 numUAVRanges = 5;
+	uint32 currentRangeIndex = 0;
+	m_BindlessViewsIndex = m_NumParameters;
+	SetDescriptorTable(m_BindlessViewsIndex, numSRVRanges + numUAVRanges, D3D12_SHADER_VISIBILITY_ALL);
+	for (uint32 i = 0; i < numSRVRanges; ++i)
+	{
+		SetDescriptorTableRange(m_BindlessViewsIndex, currentRangeIndex, 1000, currentRangeIndex + 1, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0xFFFFFFFF, 0);
+		++currentRangeIndex;
+	}
+	for (uint32 i = 0; i < numUAVRanges; ++i)
+	{
+		SetDescriptorTableRange(m_BindlessViewsIndex, currentRangeIndex, 1000, currentRangeIndex + 1, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 0xFFFFFFFF, 0);
+		++currentRangeIndex;
+	}
+
+	m_BindlessSamplersIndex = m_NumParameters;
+	SetDescriptorTable(m_BindlessSamplersIndex, 1, D3D12_SHADER_VISIBILITY_ALL);
+	SetDescriptorTableRange(m_BindlessSamplersIndex, 0, 1000, 1, D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER, 0xFFFFFFFF, 0);
+#endif
+
+	m_BindlessViewsIndex = m_NumParameters - 2;
+	m_BindlessSamplersIndex = m_NumParameters - 1;
 }
