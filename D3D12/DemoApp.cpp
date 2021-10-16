@@ -186,8 +186,6 @@ DemoApp::DemoApp(WindowHandle window, const IntVector2& windowRect, int sampleCo
 	Profiler::Get()->Initialize(m_pDevice.get(), FRAME_COUNT);
 	DebugRenderer::Get()->Initialize(m_pDevice.get());
 
-	m_SceneData.GlobalSRVHeapHandle = m_pDevice->GetViewHeapHandle();
-
 	OnResize(windowRect.x, windowRect.y);
 
 	CommandContext* pContext = m_pDevice->AllocateCommandContext();
