@@ -1,7 +1,6 @@
-#include "Random.hlsli"
-#include "Common.hlsli"
 #include "CommonBindings.hlsli"
 #include "RaytracingCommon.hlsli"
+#include "Random.hlsli"
 
 GlobalRootSignature GlobalRootSig =
 {

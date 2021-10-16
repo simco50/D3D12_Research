@@ -1,4 +1,4 @@
-#include "Common.hlsli"
+#include "CommonBindings.hlsli"
 #include "ShadingModels.hlsli"
 #include "Lighting.hlsli"
 #include "RaytracingCommon.hlsli"

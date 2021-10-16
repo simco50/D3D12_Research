@@ -1,4 +1,4 @@
-#include "Common.hlsli"
+#include "CommonBindings.hlsli"
 #include "Lighting.hlsli"
 
 #define BLOCK_SIZE 16

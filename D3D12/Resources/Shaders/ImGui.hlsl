@@ -1,4 +1,3 @@
-#include "Common.hlsli"
 #include "CommonBindings.hlsli"
 
 #define RootSig ROOT_SIG("RootFlags(ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT), " \

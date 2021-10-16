@@ -1,4 +1,3 @@
-#include "Common.hlsli"
 #include "CommonBindings.hlsli"
 #include "Lighting.hlsli"
 
