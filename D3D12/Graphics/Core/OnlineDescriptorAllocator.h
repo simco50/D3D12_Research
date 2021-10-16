@@ -9,8 +9,8 @@ enum class CommandListContext;
 
 struct DescriptorHeapBlock
 {
-	DescriptorHeapBlock(DescriptorHandle startHandle, uint32 size, uint32 currentOffset)
-		: StartHandle(startHandle), Size(size), CurrentOffset(currentOffset), FenceValue(0)
+	DescriptorHeapBlock(DescriptorHandle startHandle, uint32 size)
+		: StartHandle(startHandle), Size(size), CurrentOffset(0), FenceValue(0)
 	{}
 	DescriptorHandle StartHandle;
 	uint32 Size;
@@ -52,13 +52,13 @@ public:
 	PersistentDescriptorAllocator(GlobalOnlineDescriptorHeap* pGlobalHeap);
 	DescriptorHandle Allocate();
 	void Free(DescriptorHandle& handle);
-	void Free(uint32& heapIndex);
+	void Free(int32& heapIndex);
 
 private:
 	GlobalOnlineDescriptorHeap* m_pHeapAllocator;
 	std::vector<DescriptorHeapBlock*> m_HeapBlocks;
 	std::vector<uint32> m_FreeHandles;
-	uint32 m_NumAllocated = 0;
+	int32 m_NumAllocated = 0;
 	std::mutex m_AllocationLock;
 };
 

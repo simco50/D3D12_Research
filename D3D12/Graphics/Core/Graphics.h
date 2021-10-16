@@ -142,9 +142,6 @@ public:
 	void TickFrame();
 	void IdleGPU();
 
-	int RegisterBindlessResource(ResourceView* pView, ResourceView* pFallback = nullptr);
-	int RegisterBindlessResource(Texture* pTexture, Texture* pFallback = nullptr);
-
 	CommandQueue* GetCommandQueue(D3D12_COMMAND_LIST_TYPE type) const;
 	CommandContext* AllocateCommandContext(D3D12_COMMAND_LIST_TYPE type = D3D12_COMMAND_LIST_TYPE_DIRECT);
 	void FreeCommandList(CommandContext* pCommandList);
@@ -174,7 +171,7 @@ public:
 
 	uint32 StoreViewDescriptor(D3D12_CPU_DESCRIPTOR_HANDLE view);
 
-	void FreeViewDescriptor(uint32& heapIndex);
+	void FreeViewDescriptor(int32& heapIndex);
 
 	std::unique_ptr<Texture> CreateTexture(const TextureDesc& desc, const char* pName);
 	std::unique_ptr<Buffer> CreateBuffer(const BufferDesc& desc, const char* pName);
@@ -227,8 +224,6 @@ private:
 	std::vector<std::unique_ptr<StateObject>> m_StateObjects;
 
 	std::mutex m_ContextAllocationMutex;
-
-	std::map<ResourceView*, int> m_ViewToDescriptorIndex;
 
 	std::unique_ptr<CommandSignature> m_pIndirectDrawSignature;
 	std::unique_ptr<CommandSignature> m_pIndirectDispatchSignature;
