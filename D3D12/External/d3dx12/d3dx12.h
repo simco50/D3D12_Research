@@ -3279,8 +3279,8 @@ inline bool operator==( const D3D12_RENDER_PASS_DEPTH_STENCIL_DESC &a, const D3D
 //
 //================================================================================================
 #include <list>
-#include <vector>
 #include <string>
+#include <vector>
 #include <memory>
 #ifndef D3DX12_USE_ATL
 #include <wrl/client.h>
@@ -4039,7 +4039,12 @@ private:
 
 #endif // #ifndef D3DX12_NO_STATE_OBJECT_HELPERS
 
+
+#ifndef D3DX12_NO_CHECK_FEATURE_SUPPORT_CLASS
+
 //------------------------------------------------------------------------------------------------
+#include <vector>
+
 class CD3DX12FeatureSupport
 {
 public: // Function declaration
@@ -4074,13 +4079,13 @@ public: // Function declaration
     D3D_FEATURE_LEVEL MaxSupportedFeatureLevel() const;
 
     // FORMAT_SUPPORT
-    HRESULT FormatSupport(DXGI_FORMAT Format, D3D12_FORMAT_SUPPORT1& Support1, D3D12_FORMAT_SUPPORT2& Support2);
+    HRESULT FormatSupport(DXGI_FORMAT Format, D3D12_FORMAT_SUPPORT1& Support1, D3D12_FORMAT_SUPPORT2& Support2) const;
 
     // MUTLTISAMPLE_QUALITY_LEVELS
-    HRESULT MultisampleQualityLevels(DXGI_FORMAT Format, UINT SampleCount, D3D12_MULTISAMPLE_QUALITY_LEVEL_FLAGS Flags, UINT& NumQualityLevels);
+    HRESULT MultisampleQualityLevels(DXGI_FORMAT Format, UINT SampleCount, D3D12_MULTISAMPLE_QUALITY_LEVEL_FLAGS Flags, UINT& NumQualityLevels) const;
 
     // FORMAT_INFO
-    HRESULT FormatInfo(DXGI_FORMAT Format, UINT8& PlaneCount);
+    HRESULT FormatInfo(DXGI_FORMAT Format, UINT8& PlaneCount) const;
 
     // GPU_VIRTUAL_ADDRESS_SUPPORT
     UINT MaxGPUVirtualAddressBitsPerProcess() const;
@@ -4157,7 +4162,7 @@ public: // Function declaration
     BOOL BackgroundProcessingSupported() const;
 
     // QUERY_META_COMMAND
-    HRESULT QueryMetaCommand(D3D12_FEATURE_DATA_QUERY_META_COMMAND& dQueryMetaCommand);
+    HRESULT QueryMetaCommand(D3D12_FEATURE_DATA_QUERY_META_COMMAND& dQueryMetaCommand) const;
 
     // D3D12_OPTIONS7
     D3D12_MESH_SHADER_TIER MeshShaderTier() const;
@@ -4542,7 +4547,7 @@ inline D3D_FEATURE_LEVEL CD3DX12FeatureSupport::MaxSupportedFeatureLevel() const
 }
 
 // 3: Feature Format Support
-inline HRESULT CD3DX12FeatureSupport::FormatSupport(DXGI_FORMAT Format, D3D12_FORMAT_SUPPORT1& Support1, D3D12_FORMAT_SUPPORT2& Support2)
+inline HRESULT CD3DX12FeatureSupport::FormatSupport(DXGI_FORMAT Format, D3D12_FORMAT_SUPPORT1& Support1, D3D12_FORMAT_SUPPORT2& Support2) const
 {
     D3D12_FEATURE_DATA_FORMAT_SUPPORT dFormatSupport;
     dFormatSupport.Format = Format;
@@ -4557,7 +4562,7 @@ inline HRESULT CD3DX12FeatureSupport::FormatSupport(DXGI_FORMAT Format, D3D12_FO
 }
 
 // 4: Multisample Quality Levels
-inline HRESULT CD3DX12FeatureSupport::MultisampleQualityLevels(DXGI_FORMAT Format, UINT SampleCount, D3D12_MULTISAMPLE_QUALITY_LEVEL_FLAGS Flags, UINT& NumQualityLevels)
+inline HRESULT CD3DX12FeatureSupport::MultisampleQualityLevels(DXGI_FORMAT Format, UINT SampleCount, D3D12_MULTISAMPLE_QUALITY_LEVEL_FLAGS Flags, UINT& NumQualityLevels) const
 {
     D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS dMultisampleQualityLevels;
     dMultisampleQualityLevels.Format = Format;
@@ -4579,7 +4584,7 @@ inline HRESULT CD3DX12FeatureSupport::MultisampleQualityLevels(DXGI_FORMAT Forma
 }
 
 // 5: Format Info
-inline HRESULT CD3DX12FeatureSupport::FormatInfo(DXGI_FORMAT Format, UINT8& PlaneCount)
+inline HRESULT CD3DX12FeatureSupport::FormatInfo(DXGI_FORMAT Format, UINT8& PlaneCount) const
 {
     D3D12_FEATURE_DATA_FORMAT_INFO dFormatInfo;
     dFormatInfo.Format = Format;
@@ -4694,7 +4699,7 @@ FEATURE_SUPPORT_GET(BOOL, m_dOptions6, BackgroundProcessingSupported);
 
 // 31: Query Meta Command
 // Keep the original call routine
-inline HRESULT CD3DX12FeatureSupport::QueryMetaCommand(D3D12_FEATURE_DATA_QUERY_META_COMMAND& dQueryMetaCommand) 
+inline HRESULT CD3DX12FeatureSupport::QueryMetaCommand(D3D12_FEATURE_DATA_QUERY_META_COMMAND& dQueryMetaCommand) const
 {
     return m_pDevice->CheckFeatureSupport(D3D12_FEATURE_QUERY_META_COMMAND, &dQueryMetaCommand, sizeof(D3D12_FEATURE_DATA_QUERY_META_COMMAND));
 }
@@ -4874,6 +4879,8 @@ inline HRESULT CD3DX12FeatureSupport::QueryProtectedResourceSessionTypes(UINT No
 #undef FEATURE_SUPPORT_GET_NODE_INDEXED_NAME
 
 // end CD3DX12FeatureSupport
+
+#endif // #ifndef D3DX12_NO_CHECK_FEATURE_SUPPORT_CLASS
 
 #undef D3DX12_COM_PTR
 #undef D3DX12_COM_PTR_GET

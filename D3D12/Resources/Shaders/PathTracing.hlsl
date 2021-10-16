@@ -1,4 +1,4 @@
-#include "Common.hlsli"
+#include "CommonBindings.hlsli"
 #include "ShadingModels.hlsli"
 #include "Lighting.hlsli"
 #include "RaytracingCommon.hlsli"
@@ -18,12 +18,9 @@ GlobalRootSignature GlobalRootSig =
 	"CBV(b2),"
 	"DescriptorTable(UAV(u0, numDescriptors = 2)),"
 	"DescriptorTable(SRV(t5, numDescriptors = 8)),"
-	GLOBAL_BINDLESS_TABLE ", "
-	"StaticSampler(s0, filter=FILTER_MIN_MAG_LINEAR_MIP_POINT),"
-	"StaticSampler(s1, filter=FILTER_MIN_MAG_MIP_LINEAR, addressU = TEXTURE_ADDRESS_CLAMP, addressV = TEXTURE_ADDRESS_CLAMP), " \
-	"StaticSampler(s2, filter=FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT, comparisonFunc=COMPARISON_GREATER), " \
-};
+	DEFAULT_ROOT_SIG_PARAMS
 
+};
 struct ViewData
 {
 	float4x4 View;

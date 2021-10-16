@@ -1,5 +1,5 @@
-#ifndef __INCLUDE_SKY__
-#define __INCLUDE_SKY__
+#ifndef __SKY_COMMON_INCLUDE__
+#define __SKY_COMMON_INCLUDE__
 
 float AngleBetween(float3 dir0, float3 dir1)
 {

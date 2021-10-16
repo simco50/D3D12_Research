@@ -1,20 +1,17 @@
-#include "Random.hlsli"
-#include "Common.hlsli"
 #include "CommonBindings.hlsli"
 #include "RaytracingCommon.hlsli"
+#include "Random.hlsli"
 
 GlobalRootSignature GlobalRootSig =
 {
 	"CBV(b0),"
 	"DescriptorTable(UAV(u0, numDescriptors = 1)),"
 	"DescriptorTable(SRV(t0, numDescriptors = 1)),"
-	GLOBAL_BINDLESS_TABLE ", "
-	"StaticSampler(s0, filter=FILTER_MIN_MAG_LINEAR_MIP_POINT),"
+	DEFAULT_ROOT_SIG_PARAMS
 };
 
 RWTexture2D<float> uOutput : register(u0);
 Texture2D tSceneDepth : register(t0);
-SamplerState sSceneSampler : register(s0);
 
 struct Data
 {
@@ -83,8 +80,8 @@ void RayGen()
 	uint launchIndex1d = launchIndex.x + launchIndex.y * launchDim.x;
 	float2 texCoord = (float2)launchIndex * dimInv;
 
-	float3 world = WorldFromDepth(texCoord, tSceneDepth.SampleLevel(sSceneSampler, texCoord, 0).r, cData.ViewProjectionInverse);
-    float3 normal = NormalFromDepth(tSceneDepth, sSceneSampler, texCoord, dimInv, cData.ViewProjectionInverse);
+	float3 world = WorldFromDepth(texCoord, tSceneDepth.SampleLevel(sLinearClamp, texCoord, 0).r, cData.ViewProjectionInverse);
+    float3 normal = NormalFromDepth(tSceneDepth, sLinearClamp, texCoord, dimInv, cData.ViewProjectionInverse);
  	
 	uint randSeed = SeedThread(launchIndex, launchDim, cData.FrameIndex);
 

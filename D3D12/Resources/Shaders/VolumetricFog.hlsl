@@ -1,17 +1,10 @@
-#include "Common.hlsli"
 #include "CommonBindings.hlsli"
 #include "Lighting.hlsli"
 
-#define RootSig \
-		"CBV(b0), " \
+#define RootSig ROOT_SIG("CBV(b0), " \
 		"CBV(b2), " \
 		"DescriptorTable(UAV(u0, numDescriptors = 1)), " \
-		"DescriptorTable(SRV(t2, numDescriptors = 12)), " \
-		GLOBAL_BINDLESS_TABLE ", " \
-		"StaticSampler(s0, filter=FILTER_MIN_MAG_MIP_POINT, addressU = TEXTURE_ADDRESS_WRAP, addressV = TEXTURE_ADDRESS_WRAP), " \
-		"StaticSampler(s1, filter=FILTER_MIN_MAG_MIP_POINT, addressU = TEXTURE_ADDRESS_CLAMP, addressV = TEXTURE_ADDRESS_CLAMP), " \
-		"StaticSampler(s2, filter=FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT, comparisonFunc=COMPARISON_GREATER), " \
-		"StaticSampler(s3, filter=FILTER_MIN_MAG_LINEAR_MIP_POINT, addressU = TEXTURE_ADDRESS_CLAMP, addressV = TEXTURE_ADDRESS_CLAMP, addressW = TEXTURE_ADDRESS_CLAMP)" \
+		"DescriptorTable(SRV(t2, numDescriptors = 12))")
 
 struct ShaderData
 {
@@ -30,7 +23,6 @@ struct ShaderData
 	int3 LightClusterDimensions;
 };
 
-SamplerState sVolumeSampler : register(s3);
 ConstantBuffer<ShaderData> cData : register(b0);
 
 StructuredBuffer<uint> tLightGrid : register(t2);
@@ -97,7 +89,7 @@ void InjectFogLightingCS(uint3 threadId : SV_DISPATCHTHREADID)
 	float3 reprojUV = float3(reprojNDC.x * 0.5f + 0.5f, -reprojNDC.y * 0.5f + 0.5f, reprojNDC.z);
 	reprojUV.z = LinearizeDepth(reprojUV.z, cData.NearZ, cData.FarZ);
 	reprojUV.z = sqrt((reprojUV.z - cData.FarZ) / (cData.NearZ - cData.FarZ));
-	float4 prevScattering = tLightScattering.SampleLevel(sVolumeSampler, reprojUV, 0);
+	float4 prevScattering = tLightScattering.SampleLevel(sLinearClamp, reprojUV, 0);
 
 	float3 inScattering = 0.0f;
 	float3 cellAbsorption = 0.0f;

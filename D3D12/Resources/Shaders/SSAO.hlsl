@@ -1,13 +1,12 @@
-#include "Common.hlsli"
+#include "CommonBindings.hlsli"
 #include "Random.hlsli"
 
 #define SSAO_SAMPLES 64
 #define BLOCK_SIZE 16
 
-#define RootSig "CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \
+#define RootSig ROOT_SIG("CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \
 				"DescriptorTable(UAV(u0, numDescriptors = 1), visibility=SHADER_VISIBILITY_ALL), " \
-				"DescriptorTable(SRV(t0, numDescriptors = 1), visibility=SHADER_VISIBILITY_ALL), " \
-				"StaticSampler(s0, filter=FILTER_MIN_MAG_LINEAR_MIP_POINT, visibility = SHADER_VISIBILITY_ALL), " \
+				"DescriptorTable(SRV(t0, numDescriptors = 1), visibility=SHADER_VISIBILITY_ALL)")
 
 struct ShaderParameters
 {
@@ -27,7 +26,6 @@ struct ShaderParameters
 
 ConstantBuffer<ShaderParameters> cData : register(b0);
 Texture2D tDepthTexture : register(t0);
-SamplerState sSampler : register(s0);
 
 RWTexture2D<float> uAmbientOcclusion : register(u0);
 
@@ -45,8 +43,8 @@ void CSMain(CS_INPUT input)
 {
     float2 dimInv = rcp((float2)cData.Dimensions);
     float2 texCoord = (float2)input.DispatchThreadId.xy * dimInv;
-    float depth = tDepthTexture.SampleLevel(sSampler, texCoord, 0).r;
-    float3 normal = NormalFromDepth(tDepthTexture, sSampler, texCoord, dimInv, cData.ProjectionInverse);
+    float depth = tDepthTexture.SampleLevel(sLinearClamp, texCoord, 0).r;
+    float3 normal = NormalFromDepth(tDepthTexture, sLinearClamp, texCoord, dimInv, cData.ProjectionInverse);
     float3 viewPos = ViewFromDepth(texCoord.xy, depth, cData.ProjectionInverse).xyz;
 
     uint state = SeedThread(input.DispatchThreadId.xy, cData.Dimensions, cData.FrameIndex);
@@ -67,7 +65,7 @@ void CSMain(CS_INPUT input)
         newTexCoord.xy = newTexCoord.xy * float2(0.5f, -0.5f) + float2(0.5f, 0.5f);
         if(newTexCoord.x >= 0 && newTexCoord.x <= 1 && newTexCoord.y >= 0 && newTexCoord.y <= 1)
         {
-            float sampleDepth = tDepthTexture.SampleLevel(sSampler, newTexCoord.xy, 0).r;
+            float sampleDepth = tDepthTexture.SampleLevel(sLinearClamp, newTexCoord.xy, 0).r;
             float depthVpos = LinearizeDepth(sampleDepth, cData.Near, cData.Far);
             float rangeCheck = smoothstep(0.0f, 1.0f, cData.AoRadius / (viewPos.z - depthVpos));
             occlusion += (vpos.z >= depthVpos + cData.AoDepthThreshold) * rangeCheck;

@@ -1,19 +1,25 @@
-#ifndef __INCLUDE_INTEROP_COMMON__
-#define __INCLUDE_INTEROP_COMMON__
-
 #ifdef __cplusplus
+#pragma once
 namespace ShaderInterop
 {
 #endif
+
+#define MAX_SHADOW_CASTERS 32
 
 #ifdef __cplusplus
 	using float2 = Vector2;
 	using float3 = Vector3;
 	using float4 = Vector4;
 	using uint = uint32;
-	using uint2 = IntVector2;
-	using uint3 = IntVector3;
+	using uint2 = TIntVector2<uint32>;
+	using uint3 = TIntVector3<uint32>;
+	using uint4 = TIntVector4<uint32>;
+	using int2 = TIntVector2<int32>;
+	using int3 = TIntVector3<int32>;
+	using int4 = TIntVector4<int32>;
 	using float4x4 = Matrix;
+
+	template<typename T> struct ConstantBuffer { T Data; };
 #endif
 
 	// Per material shader data
@@ -119,7 +125,6 @@ namespace ShaderInterop
 		bool IsSpot() { return (Flags & LF_LightTypeMask) == LF_SpotLight; }
 	};
 
-#define MAX_SHADOW_CASTERS 32
 	struct ShadowData
 	{
 		float4x4 LightViewProjections[MAX_SHADOW_CASTERS];
@@ -130,6 +135,4 @@ namespace ShaderInterop
 
 #ifdef __cplusplus
 }
-#endif
-
 #endif

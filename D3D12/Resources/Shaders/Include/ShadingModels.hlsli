@@ -1,5 +1,5 @@
-#ifndef __INCLUDE_SHADING_MODELS__
-#define __INCLUDE_SHADING_MODELS__
+#ifndef __SHADING_MODELS_INCLUDE__
+#define __SHADING_MODELS_INCLUDE__
 
 #include "Common.hlsli"
 #include "CommonBindings.hlsli"

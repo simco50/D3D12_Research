@@ -1,3 +1,5 @@
+#ifndef __CBT_INCLUDE__
+#define __CBT_INCLUDE__
 
 struct CBT
 {
@@ -370,3 +372,5 @@ namespace LEB
 		return mul(transformMatrix, attributes);
 	}
 }
+
+#endif

@@ -3,7 +3,7 @@
 #include "Graphics/Core/RootSignature.h"
 #include "Graphics/Core/Graphics.h"
 #include "Graphics/Core/PipelineState.h"
-#include "Graphics/Core/GraphicsBuffer.h"
+#include "Graphics/Core/Buffer.h"
 #include "Graphics/RenderGraph/RenderGraph.h"
 #include "Graphics/Core/CommandContext.h"
 #include "Graphics/SceneView.h"

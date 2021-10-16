@@ -102,6 +102,7 @@ public:
 
 private:
 	GraphicsDevice* m_pDevice = nullptr;
+	CD3DX12FeatureSupport m_FeatureSupport;
 };
 
 class DeferredDeleteQueue : public GraphicsObject
@@ -147,8 +148,8 @@ public:
 	CommandContext* AllocateCommandContext(D3D12_COMMAND_LIST_TYPE type = D3D12_COMMAND_LIST_TYPE_DIRECT);
 	void FreeCommandList(CommandContext* pCommandList);
 
-	DescriptorHandle GetViewHeapHandle() const;
 	GlobalOnlineDescriptorHeap* GetGlobalViewHeap() const { return m_pGlobalViewHeap.get(); }
+	GlobalOnlineDescriptorHeap* GetGlobalSamplerHeap() const { return m_pGlobalSamplerHeap.get(); }
 
 	template<typename DESC_TYPE>
 	struct DescriptorSelector {};
@@ -199,7 +200,7 @@ private:
 
 	std::array<std::unique_ptr<CommandQueue>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_CommandQueues;
 	std::array<std::vector<std::unique_ptr<CommandContext>>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_CommandListPool;
-	std::array < std::queue<CommandContext*>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_FreeCommandLists;
+	std::array<std::queue<CommandContext*>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_FreeCommandLists;
 	std::vector<ComPtr<ID3D12CommandList>> m_CommandLists;
 
 	DeferredDeleteQueue m_DeleteQueue;
@@ -211,6 +212,7 @@ private:
 
 	std::unique_ptr<OnlineDescriptorAllocator> m_pPersistentDescriptorHeap;
 	std::unique_ptr<GlobalOnlineDescriptorHeap> m_pGlobalViewHeap;
+	std::unique_ptr<GlobalOnlineDescriptorHeap> m_pGlobalSamplerHeap;
 
 	std::array<std::unique_ptr<OfflineDescriptorAllocator>, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES> m_DescriptorHeaps;
 	std::unique_ptr<DynamicAllocationManager> m_pDynamicAllocationManager;

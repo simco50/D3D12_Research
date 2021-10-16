@@ -2,7 +2,7 @@
 #include "SceneView.h"
 #include "Core/CommandContext.h"
 #include "Scene/Camera.h"
-#include "Core/GraphicsBuffer.h"
+#include "Core/Buffer.h"
 #include "Mesh.h"
 
 void DrawScene(CommandContext& context, const SceneView& scene, Batch::Blending blendModes)

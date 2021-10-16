@@ -1,5 +1,4 @@
 #pragma once
-#include "dxc/dxcapi.h"
 
 #ifndef SHADER_HASH_DEBUG
 #define SHADER_HASH_DEBUG 0
@@ -7,7 +6,7 @@
 
 class FileWatcher;
 
-using ShaderBlob = ComPtr<IDxcBlob>;
+using ShaderBlob = ComPtr<ID3DBlob>;
 
 enum class ShaderType
 {
@@ -25,6 +24,7 @@ enum class ShaderType
 struct ShaderDefine
 {
 	ShaderDefine() = default;
+	ShaderDefine(const std::string& define) : Value(define) { }
 	ShaderDefine(const char* pDefine) : Value(pDefine) { }
 	std::string Value;
 };
@@ -99,7 +99,6 @@ private:
 	ShaderLibrary* LoadShaderLibrary(const char* pShaderPath, const std::vector<ShaderDefine>& defines = {});
 
 	void RecompileFromFileChange(const std::string& filePath);
-	static bool ProcessSource(const std::string& sourcePath, const std::string& filePath, std::stringstream& output, std::vector<ShaderStringHash>& processedIncludes);
 
 	std::unique_ptr<FileWatcher> m_pFileWatcher;
 

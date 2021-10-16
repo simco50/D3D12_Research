@@ -186,8 +186,6 @@ DemoApp::DemoApp(WindowHandle window, const IntVector2& windowRect, int sampleCo
 	Profiler::Get()->Initialize(m_pDevice.get(), FRAME_COUNT);
 	DebugRenderer::Get()->Initialize(m_pDevice.get());
 
-	m_SceneData.GlobalSRVHeapHandle = m_pDevice->GetViewHeapHandle();
-
 	OnResize(windowRect.x, windowRect.y);
 
 	CommandContext* pContext = m_pDevice->AllocateCommandContext();
@@ -247,7 +245,7 @@ void DemoApp::SetupScene(CommandContext& context)
 	m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(Math::PIDIV4, Math::PIDIV4 * 0.5f, 0));
 
 	{
-#if 0
+#if 1
 		m_pCamera->SetPosition(Vector3(-1.3f, 2.4f, -1.5f));
 		m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(Math::PIDIV4, Math::PIDIV4 * 0.5f, 0));
 
@@ -912,7 +910,6 @@ void DemoApp::Update()
 				};
 
 				renderContext.BindResources(2, 0, srvs, ARRAYSIZE(srvs));
-				renderContext.BindResourceTable(3, m_SceneData.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Graphics);
 
 				struct ViewData
 				{
@@ -1108,7 +1105,6 @@ void DemoApp::Update()
 							m_SceneData.pMeshInstanceBuffer->GetSRV()->GetDescriptor(),
 						};
 						context.BindResources(2, 0, srvs, ARRAYSIZE(srvs));
-						context.BindResourceTable(3, m_SceneData.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Graphics);
 
 						VisibilityMask mask;
 						mask.SetAll();

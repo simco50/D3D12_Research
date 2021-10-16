@@ -1,8 +1,9 @@
+#include "CommonBindings.hlsli"
 #include "TonemappingCommon.hlsli"
 
-#define RootSig "CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \
+#define RootSig ROOT_SIG("CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \
 				"DescriptorTable(UAV(u0, numDescriptors = 1))," \
-				"DescriptorTable(SRV(t0, numDescriptors = 2)), "
+				"DescriptorTable(SRV(t0, numDescriptors = 2))")
 
 #define BACKGROUND_COLOR float4(0, 0, 0, 0.6f)
 #define FOREGROUND_COLOR float4(1, 0, 0, 0.8f)

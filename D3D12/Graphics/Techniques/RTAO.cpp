@@ -3,7 +3,7 @@
 #include "Graphics/Core/Shader.h"
 #include "Graphics/Core/PipelineState.h"
 #include "Graphics/Core/RootSignature.h"
-#include "Graphics/Core/GraphicsBuffer.h"
+#include "Graphics/Core/Buffer.h"
 #include "Graphics/Core/Graphics.h"
 #include "Graphics/Core/CommandContext.h"
 #include "Graphics/Core/Texture.h"
@@ -77,7 +77,6 @@ void RTAO::Execute(RGGraph& graph, Texture* pTarget, const SceneView& sceneData)
 			context.SetComputeDynamicConstantBufferView(0, parameters);
 			context.BindResource(1, 0, pTarget->GetUAV());
 			context.BindResource(2, 0, sceneData.pResolvedDepth->GetSRV());
-			context.BindResourceTable(3, sceneData.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Compute);
 
 			context.DispatchRays(bindingTable, pTarget->GetWidth(), pTarget->GetHeight());
 		});

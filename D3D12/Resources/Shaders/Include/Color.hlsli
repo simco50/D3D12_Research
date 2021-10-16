@@ -1,12 +1,12 @@
+#ifndef __COLOR_INCLUDE__
+#define __COLOR_INCLUDE__
+
 /*
 Helper functions to transform between different color spaces.
 Usually, to jump between spaces, you transform to CIE XYZ and from there you can transform into anything
 Super useful page for different transformations: http://www.brucelindbloom.com/index.html?Eqn_xyY_to_XYZ.html
 */
 
-
-#ifndef __INCLUDE_COLORS__
-#define __INCLUDE_COLORS__
 
 float3 sRGB_to_XYZ(float3 rgb)
 {
@@ -80,6 +80,5 @@ float3 YCoCg_to_RGB(float3 c)
 		c.x - c.y - c.z
 	);
 }
-
 
 #endif

@@ -1,12 +1,8 @@
-#include "Common.hlsli"
 #include "CommonBindings.hlsli"
 
-#define RootSig \
-				"RootConstants(num32BitConstants=2, b0), " \
+#define RootSig ROOT_SIG("RootConstants(num32BitConstants=2, b0), " \
 				"CBV(b1, visibility=SHADER_VISIBILITY_VERTEX), " \
-				"DescriptorTable(SRV(t10, numDescriptors = 11)), " \
-				GLOBAL_BINDLESS_TABLE ", " \
-				"StaticSampler(s0, filter=FILTER_MIN_MAG_MIP_LINEAR, visibility = SHADER_VISIBILITY_PIXEL), "
+				"DescriptorTable(SRV(t10, numDescriptors = 11))")
 
 struct PerViewData
 {
@@ -39,7 +35,7 @@ void PSMain(PSInput input)
 {
 	MeshInstance instance = tMeshInstances[cObjectData.Index];
 	MaterialData material = tMaterials[instance.Material];
-	if(tTexture2DTable[material.Diffuse].Sample(sDiffuseSampler, input.texCoord).a < material.AlphaCutoff)
+	if(tTexture2DTable[material.Diffuse].Sample(sMaterialSampler, input.texCoord).a < material.AlphaCutoff)
 	{
 		discard;
 	}

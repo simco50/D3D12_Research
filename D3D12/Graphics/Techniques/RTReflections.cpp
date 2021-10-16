@@ -3,7 +3,7 @@
 #include "Graphics/Core/Shader.h"
 #include "Graphics/Core/PipelineState.h"
 #include "Graphics/Core/RootSignature.h"
-#include "Graphics/Core/GraphicsBuffer.h"
+#include "Graphics/Core/Buffer.h"
 #include "Graphics/Core/Graphics.h"
 #include "Graphics/Core/CommandContext.h"
 #include "Graphics/Core/Texture.h"
@@ -79,7 +79,6 @@ void RTReflections::Execute(RGGraph& graph, const SceneView& sceneData)
 			context.SetComputeDynamicConstantBufferView(1, *sceneData.pShadowData);
 			context.BindResource(2, 0, sceneData.pResolvedTarget->GetUAV());
 			context.BindResources(3, 0, srvs, ARRAYSIZE(srvs));
-			context.BindResourceTable(4, sceneData.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Compute);
 
 			context.DispatchRays(bindingTable, sceneData.pResolvedTarget->GetWidth(), sceneData.pResolvedTarget->GetHeight());
 		});

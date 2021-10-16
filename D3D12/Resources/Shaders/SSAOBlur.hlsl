@@ -1,9 +1,8 @@
-#include "Common.hlsli"
+#include "CommonBindings.hlsli"
 
-#define RootSig "CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \
+#define RootSig ROOT_SIG("CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \
 				"DescriptorTable(UAV(u0, numDescriptors = 1), visibility=SHADER_VISIBILITY_ALL), " \
-				"DescriptorTable(SRV(t0, numDescriptors = 2), visibility=SHADER_VISIBILITY_ALL), " \
-				"StaticSampler(s0, filter=FILTER_MIN_MAG_LINEAR_MIP_POINT, visibility = SHADER_VISIBILITY_ALL, addressU = TEXTURE_ADDRESS_CLAMP, addressV = TEXTURE_ADDRESS_CLAMP), " \
+				"DescriptorTable(SRV(t0, numDescriptors = 2), visibility=SHADER_VISIBILITY_ALL)")
 
 #define THREAD_GROUP_SIZE (256)
 #define KERNEL_LENGTH (4)
@@ -18,9 +17,7 @@ cbuffer ShaderParameters : register(b0)
     float cNear;
 }
 
-SamplerState sSampler : register(s0);
-
-Texture2D tDepth : register(t0);
+Texture2D tSceneDepth : register(t0);
 Texture2D<float> tAmbientOcclusion : register(t1);
 RWTexture2D<float> uAmbientOcclusion : register(u0);
 
@@ -60,22 +57,22 @@ void CSMain(CS_INPUT input)
 	for (i = input.GroupIndex; i < GS_CACHE_SIZE; i += THREAD_GROUP_SIZE)
 	{
 		float2 uv = ((float2)groupBegin + 0.5f + direction * (i - KERNEL_LENGTH)) * cInvDimensions;
-		gAoCache[i] = tAmbientOcclusion.SampleLevel(sSampler, uv, 0).r;
-		gDepthCache[i] = LinearizeDepth01(tDepth.SampleLevel(sSampler, uv, 0).r, cNear, cFar);
+		gAoCache[i] = tAmbientOcclusion.SampleLevel(sLinearClamp, uv, 0).r;
+		gDepthCache[i] = LinearizeDepth01(tSceneDepth.SampleLevel(sLinearClamp, uv, 0).r, cNear, cFar);
 	}
 
 	GroupMemoryBarrierWithGroupSync();
 
     uint center = input.GroupIndex + KERNEL_LENGTH;
     float currentAo = gAoCache[center];
-    float currentDepth = gDepthCache[center];
+    float currentSceneDepth = gDepthCache[center];
 
     float avgOcclusion = 0;
     for(i = 0; i < BLUR_WEIGHTS; ++i)
     {
         uint samplePoint = center + i - KERNEL_LENGTH;
         float depth = gDepthCache[samplePoint];
-        float weight = saturate(abs(depth - currentDepth));
+        float weight = saturate(abs(depth - currentSceneDepth));
         avgOcclusion += lerp(gAoCache[samplePoint], currentAo, weight) * s_BlurWeightsNormalized[i];
     }
 

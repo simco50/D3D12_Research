@@ -123,7 +123,6 @@ workspace (ENGINE_NAME)
 
 		-- DXC
 		links { "dxcompiler" }
-		libdirs	(ROOT .. "Libraries/Dxc/lib/")
 		includedirs (ROOT .. "Libraries/Dxc/include")
 		postbuildcommands { ("{COPY} \"$(SolutionDir)Libraries\\Dxc\\bin\\dxcompiler.dll\" \"$(OutDir)\"") }
 		postbuildcommands { ("{COPY} \"$(SolutionDir)Libraries\\Dxc\\bin\\dxil.dll\" \"$(OutDir)\"") }

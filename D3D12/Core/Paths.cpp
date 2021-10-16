@@ -5,9 +5,7 @@ namespace Paths
 {
 	bool IsSlash(const char c)
 	{
-		if (c == '/')
-			return true;
-		return c == '/';
+		return c == '\\' || c == '/';
 	}
 
 	std::string GetFileName(const std::string& filePath)
@@ -74,11 +72,10 @@ namespace Paths
 	{
 		for (char& c : filePath)
 		{
-			if (c == '/')
+			if (c == '\\')
 			{
 				c = '/';
 			}
-			c = (char)tolower(c);
 		}
 		if (filePath.find("./") == 0)
 		{

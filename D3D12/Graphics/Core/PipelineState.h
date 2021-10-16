@@ -173,7 +173,6 @@ public:
 	ID3D12PipelineState* GetPipelineState() const { return m_pPipelineState.Get(); }
 	void Create(const PipelineStateInitializer& initializer);
 	void ConditionallyReload();
-	PipelineStateType GetType() const { return m_Desc.m_Type; }
 
 private:
 	void OnShaderReloaded(Shader* pOldShader, Shader* pNewShader);

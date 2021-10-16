@@ -1,7 +1,7 @@
 #include "stdafx.h"
 #include "ResourceViews.h"
 #include "Graphics.h"
-#include "GraphicsBuffer.h"
+#include "Buffer.h"
 #include "Texture.h"
 #include "OfflineDescriptorAllocator.h"
 

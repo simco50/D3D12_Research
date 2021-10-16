@@ -1,5 +1,5 @@
-#ifndef __INCLUDE_COMMON__
-#define __INCLUDE_COMMON__
+#ifndef __COMMON_INCLUDE__
+#define __COMMON_INCLUDE__
 
 #include "Constants.hlsli"
 #include "Interop/ShaderCommon.h"

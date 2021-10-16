@@ -1,5 +1,5 @@
-#ifndef __INCLUDE_RNG__
-#define __INCLUDE_RNG__
+#ifndef __RANDOM_INCLUDE__
+#define __RANDOM_INCLUDE__
 
 #include "Constants.hlsli"
 //-----------------------------------------------------------------------------------------

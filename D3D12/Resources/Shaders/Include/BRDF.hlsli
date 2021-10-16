@@ -1,5 +1,5 @@
-#ifndef __INCLUDE_BRDF__
-#define __INCLUDE_BRDF__
+#ifndef __BRDF_INCLUDE__
+#define __BRDF_INCLUDE__
 
 #include "Common.hlsli"
 
