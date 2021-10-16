@@ -102,6 +102,7 @@ public:
 
 private:
 	GraphicsDevice* m_pDevice = nullptr;
+	CD3DX12FeatureSupport m_FeatureSupport;
 };
 
 class DeferredDeleteQueue : public GraphicsObject
@@ -199,7 +200,7 @@ private:
 
 	std::array<std::unique_ptr<CommandQueue>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_CommandQueues;
 	std::array<std::vector<std::unique_ptr<CommandContext>>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_CommandListPool;
-	std::array < std::queue<CommandContext*>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_FreeCommandLists;
+	std::array<std::queue<CommandContext*>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_FreeCommandLists;
 	std::vector<ComPtr<ID3D12CommandList>> m_CommandLists;
 
 	DeferredDeleteQueue m_DeleteQueue;
