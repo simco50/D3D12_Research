@@ -5,7 +5,7 @@
 #include "CommandContext.h"
 
 GlobalOnlineDescriptorHeap::GlobalOnlineDescriptorHeap(GraphicsDevice* pParent, D3D12_DESCRIPTOR_HEAP_TYPE type, uint32 blockSize, uint32 numDescriptors)
-	: GraphicsObject(pParent), m_Type(type), m_NumDescriptors(numDescriptors)
+	: GraphicsObject(pParent), m_Type(type), m_NumDescriptors(numDescriptors), m_BlockSize(blockSize)
 {
 	checkf(numDescriptors % blockSize == 0, "Number of descriptors must be a multiple of blockSize (%d)", blockSize);
 	checkf(type == D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV || type == D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, "Online Descriptor Heap must be either of CBV/SRV/UAV or Sampler type.");
@@ -62,6 +62,55 @@ void GlobalOnlineDescriptorHeap::FreeBlock(uint64 fenceValue, DescriptorHeapBloc
 	pBlock->FenceValue = fenceValue;
 	pBlock->CurrentOffset = 0;
 	m_ReleasedBlocks.push_back(pBlock);
+}
+
+PersistentDescriptorAllocator::PersistentDescriptorAllocator(GlobalOnlineDescriptorHeap* pGlobalHeap)
+	: GraphicsObject(pGlobalHeap->GetParent()), m_pHeapAllocator(pGlobalHeap)
+{
+
+}
+
+DescriptorHandle PersistentDescriptorAllocator::Allocate()
+{
+	std::lock_guard<std::mutex> lock(m_AllocationLock);
+
+	if (m_NumAllocated >= m_FreeHandles.size())
+	{
+		m_HeapBlocks.push_back(m_pHeapAllocator->AllocateBlock());
+		m_FreeHandles.resize(m_FreeHandles.size() + m_HeapBlocks.back()->Size);
+		int i = m_NumAllocated;
+		auto generate = [&i]() { return i++; };
+		std::generate(m_FreeHandles.begin() + m_NumAllocated, m_FreeHandles.end(), generate);
+	}
+
+	uint32 index = m_FreeHandles[m_NumAllocated];
+	++m_NumAllocated;
+	uint32 blockIndex = index / m_pHeapAllocator->GetBlockSize();
+	check(blockIndex < m_HeapBlocks.size());
+	DescriptorHandle handle = m_HeapBlocks[blockIndex]->StartHandle;
+	uint32 elementIndex = index % m_pHeapAllocator->GetBlockSize();
+	check(elementIndex < m_HeapBlocks[blockIndex]->Size);
+	handle.Offset(elementIndex, m_pHeapAllocator->GetDescriptorSize());
+	return handle;
+}
+
+void PersistentDescriptorAllocator::Free(DescriptorHandle& handle)
+{
+	check(!handle.IsNull());
+	Free(handle.HeapIndex);
+	handle.Reset();
+}
+
+void PersistentDescriptorAllocator::Free(uint32& heapIndex)
+{
+	std::lock_guard<std::mutex> lock(m_AllocationLock);
+	check(m_HeapBlocks.size() > 0);
+	uint32 index = heapIndex - m_HeapBlocks[0]->StartHandle.HeapIndex;
+	check(index >= 0);
+	check(index < m_NumAllocated);
+	--m_NumAllocated;
+	m_FreeHandles[m_NumAllocated] = index;
+	heapIndex = ~0u;
 }
 
 OnlineDescriptorAllocator::OnlineDescriptorAllocator(GlobalOnlineDescriptorHeap* pGlobalHeap)

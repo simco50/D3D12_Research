@@ -29,6 +29,7 @@ public:
 	ID3D12DescriptorHeap* GetHeap() const { return m_pHeap.Get(); }
 	D3D12_DESCRIPTOR_HEAP_TYPE GetType() const { return m_Type; }
 	DescriptorHandle GetStartHandle() const { return m_StartHandle; }
+	uint32 GetBlockSize() const { return  m_BlockSize; }
 
 private:
 	std::mutex m_BlockAllocateMutex;
@@ -36,12 +37,29 @@ private:
 	uint32 m_NumDescriptors;
 
 	uint32 m_DescriptorSize = 0;
+	uint32 m_BlockSize = 0;
 	DescriptorHandle m_StartHandle;
 
 	ComPtr<ID3D12DescriptorHeap> m_pHeap;
 	std::vector<std::unique_ptr<DescriptorHeapBlock>> m_HeapBlocks;
 	std::vector<DescriptorHeapBlock*> m_ReleasedBlocks;
 	std::queue<DescriptorHeapBlock*> m_FreeBlocks;
+};
+
+class PersistentDescriptorAllocator : public GraphicsObject
+{
+public:
+	PersistentDescriptorAllocator(GlobalOnlineDescriptorHeap* pGlobalHeap);
+	DescriptorHandle Allocate();
+	void Free(DescriptorHandle& handle);
+	void Free(uint32& heapIndex);
+
+private:
+	GlobalOnlineDescriptorHeap* m_pHeapAllocator;
+	std::vector<DescriptorHeapBlock*> m_HeapBlocks;
+	std::vector<uint32> m_FreeHandles;
+	uint32 m_NumAllocated = 0;
+	std::mutex m_AllocationLock;
 };
 
 class OnlineDescriptorAllocator : public GraphicsObject

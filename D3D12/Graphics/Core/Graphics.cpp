@@ -234,8 +234,9 @@ GraphicsDevice::GraphicsDevice(IDXGIAdapter4* pAdapter)
 	// Allocators
 	m_pDynamicAllocationManager = std::make_unique<DynamicAllocationManager>(this, BufferFlag::Upload);
 	m_pGlobalViewHeap = std::make_unique<GlobalOnlineDescriptorHeap>(this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 2000, 1000000);
-	m_pPersistentDescriptorHeap = std::make_unique<OnlineDescriptorAllocator>(m_pGlobalViewHeap.get());
+	m_pPersistentViewHeap = std::make_unique<PersistentDescriptorAllocator>(m_pGlobalViewHeap.get());
 	m_pGlobalSamplerHeap = std::make_unique<GlobalOnlineDescriptorHeap>(this, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, 64, 2048);
+	m_pPersistentSamplerHeap = std::make_unique<PersistentDescriptorAllocator>(m_pGlobalSamplerHeap.get());
 
 	check(m_DescriptorHeaps.size() == D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES);
 	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV] = std::make_unique<OfflineDescriptorAllocator>(this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 256);
@@ -275,7 +276,7 @@ int GraphicsDevice::RegisterBindlessResource(ResourceView* pResourceView, Resour
 	}
 	if (pResourceView)
 	{
-		DescriptorHandle handle = m_pPersistentDescriptorHeap->Allocate(1);
+		DescriptorHandle handle = m_pPersistentViewHeap->Allocate();
 		GetDevice()->CopyDescriptorsSimple(1, handle.CpuHandle, pResourceView->GetDescriptor(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 		m_ViewToDescriptorIndex[pResourceView] = handle.HeapIndex;
 		return handle.HeapIndex;
@@ -354,6 +355,18 @@ void GraphicsDevice::IdleGPU()
 			pCommandQueue->WaitForIdle();
 		}
 	}
+}
+
+uint32 GraphicsDevice::StoreViewDescriptor(D3D12_CPU_DESCRIPTOR_HANDLE view)
+{
+	DescriptorHandle handle = m_pPersistentViewHeap->Allocate();
+	m_pDevice->CopyDescriptorsSimple(1, handle.CpuHandle, view, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	return handle.HeapIndex;
+}
+
+void GraphicsDevice::FreeViewDescriptor(uint32& heapIndex)
+{
+	m_pPersistentViewHeap->Free(heapIndex);
 }
 
 std::unique_ptr<Texture> GraphicsDevice::CreateTexture(const TextureDesc& desc, const char* pName)
