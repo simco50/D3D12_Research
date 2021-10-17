@@ -344,8 +344,8 @@ void CBTTessellation::SetupPipelines()
 	};
 
 	m_pCBTRS = std::make_unique<RootSignature>(m_pDevice);
-	m_pCBTRS->SetRootConstants<IntVector4>(0, 0);
-	m_pCBTRS->SetConstantBufferView(1, 1);
+	m_pCBTRS->AddRootConstants<IntVector4>(0);
+	m_pCBTRS->AddConstantBufferView(1);
 	m_pCBTRS->AddDefaultTables();
 	m_pCBTRS->Finalize("CBT");
 
