@@ -25,11 +25,6 @@
 #define DISTANCE_LOD 1
 #endif
 
-#define RootSig ROOT_SIG("CBV(b0), " \
-				"CBV(b1), " \
-				"DescriptorTable(UAV(u0, numDescriptors = 2)), " \
-				"DescriptorTable(SRV(t0, numDescriptors = 1))")
-
 RWByteAddressBuffer uCBT : register(u0);
 RWByteAddressBuffer uIndirectArgs : register(u1);
 Texture2D tHeightmap : register(t0);
@@ -137,7 +132,6 @@ static uint SUM_REDUCTION_LUT[] = {
 	1
 };
 
-[RootSignature(RootSig)]
 [numthreads(COMPUTE_THREAD_GROUP_SIZE, 1, 1)]
 void SumReductionCS(uint threadID : SV_DispatchThreadID, uint groupThreadID : SV_GroupThreadID, uint groupIndex : SV_GroupID)
 {
@@ -184,7 +178,6 @@ void SumReductionCS(uint threadID : SV_DispatchThreadID, uint groupThreadID : SV
 
 #else
 
-[RootSignature(RootSig)]
 [numthreads(COMPUTE_THREAD_GROUP_SIZE, 1, 1)]
 void SumReductionCS(uint threadID : SV_DispatchThreadID)
 {
