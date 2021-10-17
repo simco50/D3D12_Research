@@ -1051,22 +1051,18 @@ void DemoApp::Update()
 
 				renderContext.BeginRenderPass(info);
 				renderContext.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-				renderContext.SetPipelineState(m_pSkyboxPSO);
 				renderContext.SetGraphicsRootSignature(m_pSkyboxRS.get());
+				renderContext.SetPipelineState(m_pSkyboxPSO);
 
 				struct Parameters
 				{
 					Matrix View;
 					Matrix Projection;
-					Vector3 Bias;
-					float padding1;
 					Vector3 SunDirection;
-					float padding2;
 				} constBuffer;
 
 				constBuffer.View = m_pCamera->GetView();
 				constBuffer.Projection = m_pCamera->GetProjection();
-				constBuffer.Bias = Vector3::One;
 				constBuffer.SunDirection = -m_Lights[0].Direction;
 				constBuffer.SunDirection.Normalize();
 
@@ -1473,20 +1469,18 @@ void DemoApp::OnResize(int width, int height)
 
 void DemoApp::InitializePipelines()
 {
-	//Input layout
-	//Shadow mapping
-	//Vertex shader-only pass that writes to the depth buffer using the light matrix
+	//Shadow mapping - Vertex shader-only pass that writes to the depth buffer using the light matrix
 	{
 		//Opaque
 		{
 			Shader* pVertexShader = m_pDevice->GetShader("DepthOnly.hlsl", ShaderType::Vertex, "VSMain");
 			Shader* pAlphaClipShader = m_pDevice->GetShader("DepthOnly.hlsl", ShaderType::Pixel, "PSMain");
 
-			//Rootsignature
+
 			m_pShadowsRS = std::make_unique<RootSignature>(m_pDevice.get());
 			m_pShadowsRS->FinalizeFromShader("Shadow Mapping (Opaque)", pVertexShader);
 
-			//Pipeline state
+
 			PipelineStateInitializer psoDesc;
 			psoDesc.SetRootSignature(m_pShadowsRS->GetRootSignature());
 			psoDesc.SetVertexShader(pVertexShader);
@@ -1503,17 +1497,14 @@ void DemoApp::InitializePipelines()
 		}
 	}
 
-	//Depth prepass
-	//Simple vertex shader to fill the depth buffer to optimize later passes
+	//Depth prepass - Simple vertex shader to fill the depth buffer to optimize later passes
 	{
 		Shader* pVertexShader = m_pDevice->GetShader("DepthOnly.hlsl", ShaderType::Vertex, "VSMain");
 		Shader* pPixelShader = m_pDevice->GetShader("DepthOnly.hlsl", ShaderType::Pixel, "PSMain");
 
-		//Rootsignature
 		m_pDepthPrepassRS = std::make_unique<RootSignature>(m_pDevice.get());
 		m_pDepthPrepassRS->FinalizeFromShader("Depth Prepass", pVertexShader);
 
-		//Pipeline state
 		PipelineStateInitializer psoDesc;
 		psoDesc.SetRootSignature(m_pDepthPrepassRS->GetRootSignature());
 		psoDesc.SetVertexShader(pVertexShader);
@@ -1532,11 +1523,9 @@ void DemoApp::InitializePipelines()
 	{
 		Shader* pComputeShader = m_pDevice->GetShader("LuminanceHistogram.hlsl", ShaderType::Compute, "CSMain");
 
-		//Rootsignature
 		m_pLuminanceHistogramRS = std::make_unique<RootSignature>(m_pDevice.get());
 		m_pLuminanceHistogramRS->FinalizeFromShader("Luminance Historgram", pComputeShader);
 
-		//Pipeline state
 		PipelineStateInitializer psoDesc;
 		psoDesc.SetRootSignature(m_pLuminanceHistogramRS->GetRootSignature());
 		psoDesc.SetComputeShader(pComputeShader);
@@ -1564,11 +1553,9 @@ void DemoApp::InitializePipelines()
 	{
 		Shader* pComputeShader = m_pDevice->GetShader("AverageLuminance.hlsl", ShaderType::Compute, "CSMain");
 
-		//Rootsignature
 		m_pAverageLuminanceRS = std::make_unique<RootSignature>(m_pDevice.get());
 		m_pAverageLuminanceRS->FinalizeFromShader("Average Luminance", pComputeShader);
 
-		//Pipeline state
 		PipelineStateInitializer psoDesc;
 		psoDesc.SetRootSignature(m_pAverageLuminanceRS->GetRootSignature());
 		psoDesc.SetComputeShader(pComputeShader);
@@ -1594,11 +1581,9 @@ void DemoApp::InitializePipelines()
 	{
 		Shader* pComputeShader = m_pDevice->GetShader("Tonemapping.hlsl", ShaderType::Compute, "CSMain");
 
-		//Rootsignature
 		m_pToneMapRS = std::make_unique<RootSignature>(m_pDevice.get());
 		m_pToneMapRS->FinalizeFromShader("Tonemapping", pComputeShader);
 
-		//Pipeline state
 		PipelineStateInitializer psoDesc;
 		psoDesc.SetRootSignature(m_pToneMapRS->GetRootSignature());
 		psoDesc.SetComputeShader(pComputeShader);
@@ -1677,11 +1662,11 @@ void DemoApp::InitializePipelines()
 		Shader* pVertexShader = m_pDevice->GetShader("ProceduralSky.hlsl", ShaderType::Vertex, "VSMain");
 		Shader* pPixelShader = m_pDevice->GetShader("ProceduralSky.hlsl", ShaderType::Pixel, "PSMain");
 
-		//Rootsignature
 		m_pSkyboxRS = std::make_unique<RootSignature>(m_pDevice.get());
-		m_pSkyboxRS->FinalizeFromShader("Skybox", pVertexShader);
+		m_pSkyboxRS->AddConstantBufferView(0);
+		m_pSkyboxRS->AddDefaultTables();
+		m_pSkyboxRS->Finalize("Skybox");
 
-		//Pipeline state
 		PipelineStateInitializer psoDesc;
 		psoDesc.SetRootSignature(m_pSkyboxRS->GetRootSignature());
 		psoDesc.SetVertexShader(pVertexShader);
