@@ -19,6 +19,8 @@ class RootSignature : public GraphicsObject
 public:
 	RootSignature(GraphicsDevice* pParent);
 
+	void AddDefaultTables();
+
 	template<typename T>
 	void SetRootConstants(uint32 rootIndex, uint32 shaderRegister, D3D12_SHADER_VISIBILITY visibility)
 	{
@@ -48,7 +50,6 @@ public:
 	uint32 GetBindlessSamplerIndex() const { return m_BindlessSamplersIndex; }
 
 private:
-	void AddDefaultParameters();
 
 	CD3DX12_ROOT_PARAMETER& Get(uint32 index)
 	{

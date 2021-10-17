@@ -53,8 +53,6 @@ void RootSignature::AddStaticSampler(const D3D12_STATIC_SAMPLER_DESC& samplerDes
 
 void RootSignature::Finalize(const char* pName, D3D12_ROOT_SIGNATURE_FLAGS flags)
 {
-	AddDefaultParameters();
-
 	D3D12_ROOT_SIGNATURE_FLAGS visibilityFlags =
 		D3D12_ROOT_SIGNATURE_FLAG_DENY_VERTEX_SHADER_ROOT_ACCESS
 		| D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS
@@ -183,6 +181,9 @@ void RootSignature::FinalizeFromShader(const char* pName, const ShaderBase* pSha
 		}
 	}
 
+	m_BindlessViewsIndex = m_NumParameters - 2;
+	m_BindlessSamplersIndex = m_NumParameters - 1;
+
 	Finalize(pName, rsDesc.Flags);
 }
 
@@ -210,10 +211,8 @@ uint32 RootSignature::GetDWordSize() const
 	return count;
 }
 
-void RootSignature::AddDefaultParameters()
+void RootSignature::AddDefaultTables()
 {
-#define CODE_ROOT_SIG 0
-#if CODE_ROOT_SIG
 	int staticSamplerRegisterSlot = 10;
 	AddStaticSampler(CD3DX12_STATIC_SAMPLER_DESC(staticSamplerRegisterSlot++, D3D12_FILTER_MIN_MAG_MIP_LINEAR, D3D12_TEXTURE_ADDRESS_MODE_WRAP, D3D12_TEXTURE_ADDRESS_MODE_WRAP, D3D12_TEXTURE_ADDRESS_MODE_WRAP));
 	AddStaticSampler(CD3DX12_STATIC_SAMPLER_DESC(staticSamplerRegisterSlot++, D3D12_FILTER_MIN_MAG_MIP_LINEAR, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP));
@@ -249,8 +248,4 @@ void RootSignature::AddDefaultParameters()
 	m_BindlessSamplersIndex = m_NumParameters;
 	SetDescriptorTable(m_BindlessSamplersIndex, 1, D3D12_SHADER_VISIBILITY_ALL);
 	SetDescriptorTableRange(m_BindlessSamplersIndex, 0, 0, 100, D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER, 0xFFFFFFFF, 0);
-#else
-	m_BindlessViewsIndex = m_NumParameters - 2;
-	m_BindlessSamplersIndex = m_NumParameters - 1;
-#endif
 }
