@@ -19,22 +19,24 @@ class RootSignature : public GraphicsObject
 public:
 	RootSignature(GraphicsDevice* pParent);
 
+	void AddDefaultTables();
+
 	template<typename T>
-	void SetRootConstants(uint32 rootIndex, uint32 shaderRegister, D3D12_SHADER_VISIBILITY visibility)
+	uint32 AddRootConstants(uint32 shaderRegister, D3D12_SHADER_VISIBILITY visibility = D3D12_SHADER_VISIBILITY_ALL)
 	{
-		SetRootConstants(rootIndex, shaderRegister, sizeof(T) / sizeof(uint32), visibility);
+		return AddRootConstants(shaderRegister, sizeof(T) / sizeof(uint32), visibility);
 	}
-	void SetRootConstants(uint32 rootIndex, uint32 shaderRegister, uint32 constantCount, D3D12_SHADER_VISIBILITY visibility);
-	void SetConstantBufferView(uint32 rootIndex, uint32 shaderRegister, D3D12_SHADER_VISIBILITY visibility);
-	void SetShaderResourceView(uint32 rootIndex, uint32 shaderRegister, D3D12_SHADER_VISIBILITY visibility);
-	void SetUnorderedAccessView(uint32 rootIndex, uint32 shaderRegister, D3D12_SHADER_VISIBILITY visibility);
-	void SetDescriptorTable(uint32 rootIndex, uint32 rangeCount, D3D12_SHADER_VISIBILITY visibility);
-	void SetDescriptorTableRange(uint32 rootIndex, uint32 rangeIndex, uint32 startRegisterSlot, uint32 space, D3D12_DESCRIPTOR_RANGE_TYPE type, uint32 count, uint32 heapSlotOffset);
-	void SetDescriptorTableSimple(uint32 rootIndex, uint32 startRegisterSlot, D3D12_DESCRIPTOR_RANGE_TYPE type, uint32 count, D3D12_SHADER_VISIBILITY visibility);
+	uint32 AddRootConstants(uint32 shaderRegister, uint32 constantCount, D3D12_SHADER_VISIBILITY visibility = D3D12_SHADER_VISIBILITY_ALL);
+	uint32 AddConstantBufferView(uint32 shaderRegister, D3D12_SHADER_VISIBILITY visibility = D3D12_SHADER_VISIBILITY_ALL);
+	uint32 AddRootSRV(uint32 shaderRegister, D3D12_SHADER_VISIBILITY visibility = D3D12_SHADER_VISIBILITY_ALL);
+	uint32 AddRootUAV(uint32 shaderRegister, D3D12_SHADER_VISIBILITY visibility = D3D12_SHADER_VISIBILITY_ALL);
+	uint32 AddDescriptorTable(uint32 rangeCount, D3D12_SHADER_VISIBILITY visibility = D3D12_SHADER_VISIBILITY_ALL);
+	uint32 AddDescriptorTableSimple(uint32 startRegisterSlot, D3D12_DESCRIPTOR_RANGE_TYPE type, uint32 count, D3D12_SHADER_VISIBILITY visibility = D3D12_SHADER_VISIBILITY_ALL);
+	void AddDescriptorTableRange(uint32 rootIndex, uint32 rangeIndex, uint32 startRegisterSlot, uint32 space, D3D12_DESCRIPTOR_RANGE_TYPE type, uint32 count, uint32 heapSlotOffset);
 
 	void AddStaticSampler(const D3D12_STATIC_SAMPLER_DESC& samplerDesc);
 
-	void Finalize(const char* pName, D3D12_ROOT_SIGNATURE_FLAGS flags);
+	void Finalize(const char* pName, D3D12_ROOT_SIGNATURE_FLAGS flags = D3D12_ROOT_SIGNATURE_FLAG_NONE);
 	void FinalizeFromShader(const char* pName, const ShaderBase* pShader);
 
 	ID3D12RootSignature* GetRootSignature() const { return m_pRootSignature.Get(); }
@@ -48,7 +50,6 @@ public:
 	uint32 GetBindlessSamplerIndex() const { return m_BindlessSamplersIndex; }
 
 private:
-	void AddDefaultParameters();
 
 	CD3DX12_ROOT_PARAMETER& Get(uint32 index)
 	{

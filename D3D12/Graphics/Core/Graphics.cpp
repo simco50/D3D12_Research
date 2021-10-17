@@ -234,8 +234,9 @@ GraphicsDevice::GraphicsDevice(IDXGIAdapter4* pAdapter)
 	// Allocators
 	m_pDynamicAllocationManager = std::make_unique<DynamicAllocationManager>(this, BufferFlag::Upload);
 	m_pGlobalViewHeap = std::make_unique<GlobalOnlineDescriptorHeap>(this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 2000, 1000000);
-	m_pPersistentDescriptorHeap = std::make_unique<OnlineDescriptorAllocator>(m_pGlobalViewHeap.get());
+	m_pPersistentViewHeap = std::make_unique<PersistentDescriptorAllocator>(m_pGlobalViewHeap.get());
 	m_pGlobalSamplerHeap = std::make_unique<GlobalOnlineDescriptorHeap>(this, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, 64, 2048);
+	m_pPersistentSamplerHeap = std::make_unique<PersistentDescriptorAllocator>(m_pGlobalSamplerHeap.get());
 
 	check(m_DescriptorHeaps.size() == D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES);
 	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV] = std::make_unique<OfflineDescriptorAllocator>(this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 256);
@@ -264,28 +265,6 @@ GraphicsDevice::~GraphicsDevice()
 {
 	IdleGPU();
 	check(UnregisterWait(m_DeviceRemovedEvent) != 0);
-}
-
-int GraphicsDevice::RegisterBindlessResource(ResourceView* pResourceView, ResourceView* pFallback)
-{
-	auto it = m_ViewToDescriptorIndex.find(pResourceView);
-	if (it != m_ViewToDescriptorIndex.end())
-	{
-		return it->second;
-	}
-	if (pResourceView)
-	{
-		DescriptorHandle handle = m_pPersistentDescriptorHeap->Allocate(1);
-		GetDevice()->CopyDescriptorsSimple(1, handle.CpuHandle, pResourceView->GetDescriptor(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-		m_ViewToDescriptorIndex[pResourceView] = handle.HeapIndex;
-		return handle.HeapIndex;
-	}
-	return pFallback ? RegisterBindlessResource(pFallback) : -1;
-}
-
-int GraphicsDevice::RegisterBindlessResource(Texture* pTexture, Texture* pFallback /*= nullptr*/)
-{
-	return RegisterBindlessResource(pTexture ? pTexture->GetSRV() : nullptr, pFallback ? pFallback->GetSRV() : nullptr);
 }
 
 CommandQueue* GraphicsDevice::GetCommandQueue(D3D12_COMMAND_LIST_TYPE type) const
@@ -353,6 +332,21 @@ void GraphicsDevice::IdleGPU()
 		{
 			pCommandQueue->WaitForIdle();
 		}
+	}
+}
+
+uint32 GraphicsDevice::StoreViewDescriptor(D3D12_CPU_DESCRIPTOR_HANDLE view)
+{
+	DescriptorHandle handle = m_pPersistentViewHeap->Allocate();
+	m_pDevice->CopyDescriptorsSimple(1, handle.CpuHandle, view, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	return handle.HeapIndex;
+}
+
+void GraphicsDevice::FreeViewDescriptor(int32& heapIndex)
+{
+	if (heapIndex != DescriptorHandle::InvalidHeapIndex)
+	{
+		m_pPersistentViewHeap->Free(heapIndex);
 	}
 }
 

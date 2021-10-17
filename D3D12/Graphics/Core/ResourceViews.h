@@ -1,5 +1,6 @@
 #pragma once
 #include "GraphicsResource.h"
+#include "DescriptorHandle.h"
 
 class Buffer;
 class Texture;
@@ -67,9 +68,11 @@ public:
 	virtual ~ResourceView() = default;
 	GraphicsResource* GetParent() const { return m_pParent; }
 	D3D12_CPU_DESCRIPTOR_HANDLE GetDescriptor() const { return m_Descriptor; }
+	int32 GetHeapIndex() const { return m_HeapIndex; }
 protected:
 	GraphicsResource* m_pParent = nullptr;
 	CD3DX12_CPU_DESCRIPTOR_HANDLE m_Descriptor = {};
+	int32 m_HeapIndex = DescriptorHandle::InvalidHeapIndex;
 };
 
 class ShaderResourceView : public ResourceView

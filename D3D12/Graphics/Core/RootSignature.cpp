@@ -10,40 +10,51 @@ RootSignature::RootSignature(GraphicsDevice* pParent)
 
 }
 
-void RootSignature::SetRootConstants(uint32 rootIndex, uint32 shaderRegister, uint32 constantCount, D3D12_SHADER_VISIBILITY visibility)
+uint32 RootSignature::AddRootConstants(uint32 shaderRegister, uint32 constantCount, D3D12_SHADER_VISIBILITY visibility)
 {
+	uint32 rootIndex = m_NumParameters;
 	Get(rootIndex).InitAsConstants(constantCount, shaderRegister, 0u, visibility);
+	return rootIndex;
 }
 
-void RootSignature::SetConstantBufferView(uint32 rootIndex, uint32 shaderRegister, D3D12_SHADER_VISIBILITY visibility)
+uint32 RootSignature::AddConstantBufferView(uint32 shaderRegister, D3D12_SHADER_VISIBILITY visibility)
 {
+	uint32 rootIndex = m_NumParameters;
 	Get(rootIndex).InitAsConstantBufferView(shaderRegister, 0u, visibility);
+	return rootIndex;
 }
 
-void RootSignature::SetShaderResourceView(uint32 rootIndex, uint32 shaderRegister, D3D12_SHADER_VISIBILITY visibility)
+uint32 RootSignature::AddRootSRV(uint32 shaderRegister, D3D12_SHADER_VISIBILITY visibility)
 {
+	uint32 rootIndex = m_NumParameters;
 	Get(rootIndex).InitAsShaderResourceView(shaderRegister, 0u, visibility);
+	return rootIndex;
 }
 
-void RootSignature::SetUnorderedAccessView(uint32 rootIndex, uint32 shaderRegister, D3D12_SHADER_VISIBILITY visibility)
+uint32 RootSignature::AddRootUAV(uint32 shaderRegister, D3D12_SHADER_VISIBILITY visibility)
 {
+	uint32 rootIndex = m_NumParameters;
 	Get(rootIndex).InitAsUnorderedAccessView(shaderRegister, 0u, visibility);
+	return rootIndex;
 }
 
-void RootSignature::SetDescriptorTable(uint32 rootIndex, uint32 rangeCount, D3D12_SHADER_VISIBILITY visibility)
+uint32 RootSignature::AddDescriptorTable(uint32 rangeCount, D3D12_SHADER_VISIBILITY visibility)
 {
+	uint32 rootIndex = m_NumParameters;
 	Get(rootIndex).InitAsDescriptorTable(rangeCount, m_DescriptorTableRanges[rootIndex].data(), visibility);
+	return rootIndex;
 }
 
-void RootSignature::SetDescriptorTableRange(uint32 rootIndex, uint32 rangeIndex, uint32 startRegisterSlot, uint32 space, D3D12_DESCRIPTOR_RANGE_TYPE type, uint32 count, uint32 offsetFromTableStart)
+uint32 RootSignature::AddDescriptorTableSimple(uint32 startRegisterSlot, D3D12_DESCRIPTOR_RANGE_TYPE type, uint32 count, D3D12_SHADER_VISIBILITY visibility)
+{
+	uint32 rootIndex = AddDescriptorTable(1, visibility);
+	AddDescriptorTableRange(rootIndex, 0, startRegisterSlot, 0, type, count, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND);
+	return rootIndex;
+}
+
+void RootSignature::AddDescriptorTableRange(uint32 rootIndex, uint32 rangeIndex, uint32 startRegisterSlot, uint32 space, D3D12_DESCRIPTOR_RANGE_TYPE type, uint32 count, uint32 offsetFromTableStart)
 {
 	GetRange(rootIndex, rangeIndex).Init(type, count, startRegisterSlot, space, offsetFromTableStart);
-}
-
-void RootSignature::SetDescriptorTableSimple(uint32 rootIndex, uint32 startRegisterSlot, D3D12_DESCRIPTOR_RANGE_TYPE type, uint32 count, D3D12_SHADER_VISIBILITY visibility)
-{
-	SetDescriptorTable(rootIndex, 1, visibility);
-	SetDescriptorTableRange(rootIndex, 0, startRegisterSlot, 0, type, count, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND);
 }
 
 void RootSignature::AddStaticSampler(const D3D12_STATIC_SAMPLER_DESC& samplerDesc)
@@ -53,8 +64,6 @@ void RootSignature::AddStaticSampler(const D3D12_STATIC_SAMPLER_DESC& samplerDes
 
 void RootSignature::Finalize(const char* pName, D3D12_ROOT_SIGNATURE_FLAGS flags)
 {
-	AddDefaultParameters();
-
 	D3D12_ROOT_SIGNATURE_FLAGS visibilityFlags =
 		D3D12_ROOT_SIGNATURE_FLAG_DENY_VERTEX_SHADER_ROOT_ACCESS
 		| D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS
@@ -129,7 +138,7 @@ void RootSignature::Finalize(const char* pName, D3D12_ROOT_SIGNATURE_FLAGS flags
 		}
 	}
 
-	if ((flags & D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE) == 0)
+	if (!EnumHasAnyFlags(flags, D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE))
 	{
 		flags |= visibilityFlags;
 #if 0 // #todo: Bugged! Try again once there is a new Nvidia driver
@@ -183,6 +192,9 @@ void RootSignature::FinalizeFromShader(const char* pName, const ShaderBase* pSha
 		}
 	}
 
+	m_BindlessViewsIndex = m_NumParameters - 2;
+	m_BindlessSamplersIndex = m_NumParameters - 1;
+
 	Finalize(pName, rsDesc.Flags);
 }
 
@@ -210,9 +222,8 @@ uint32 RootSignature::GetDWordSize() const
 	return count;
 }
 
-void RootSignature::AddDefaultParameters()
+void RootSignature::AddDefaultTables()
 {
-#if 0
 	int staticSamplerRegisterSlot = 10;
 	AddStaticSampler(CD3DX12_STATIC_SAMPLER_DESC(staticSamplerRegisterSlot++, D3D12_FILTER_MIN_MAG_MIP_LINEAR, D3D12_TEXTURE_ADDRESS_MODE_WRAP, D3D12_TEXTURE_ADDRESS_MODE_WRAP, D3D12_TEXTURE_ADDRESS_MODE_WRAP));
 	AddStaticSampler(CD3DX12_STATIC_SAMPLER_DESC(staticSamplerRegisterSlot++, D3D12_FILTER_MIN_MAG_MIP_LINEAR, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP));
@@ -229,27 +240,22 @@ void RootSignature::AddDefaultParameters()
 	AddStaticSampler(CD3DX12_STATIC_SAMPLER_DESC(staticSamplerRegisterSlot++, D3D12_FILTER_ANISOTROPIC, D3D12_TEXTURE_ADDRESS_MODE_WRAP, D3D12_TEXTURE_ADDRESS_MODE_WRAP, D3D12_TEXTURE_ADDRESS_MODE_WRAP));
 	AddStaticSampler(CD3DX12_STATIC_SAMPLER_DESC(staticSamplerRegisterSlot++, D3D12_FILTER_COMPARISON_MIN_MAG_MIP_POINT, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, 0.0f, 16u, D3D12_COMPARISON_FUNC_GREATER));
 
-	uint32 numSRVRanges = 5;
-	uint32 numUAVRanges = 5;
+	uint32 numSRVRanges = 10;
+	uint32 numUAVRanges = 10;
 	uint32 currentRangeIndex = 0;
 	m_BindlessViewsIndex = m_NumParameters;
-	SetDescriptorTable(m_BindlessViewsIndex, numSRVRanges + numUAVRanges, D3D12_SHADER_VISIBILITY_ALL);
+	m_BindlessViewsIndex = AddDescriptorTable(numSRVRanges + numUAVRanges, D3D12_SHADER_VISIBILITY_ALL);
 	for (uint32 i = 0; i < numSRVRanges; ++i)
 	{
-		SetDescriptorTableRange(m_BindlessViewsIndex, currentRangeIndex, 1000, currentRangeIndex + 1, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0xFFFFFFFF, 0);
+		AddDescriptorTableRange(m_BindlessViewsIndex, currentRangeIndex, 0, i + 100, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0xFFFFFFFF, 0);
 		++currentRangeIndex;
 	}
 	for (uint32 i = 0; i < numUAVRanges; ++i)
 	{
-		SetDescriptorTableRange(m_BindlessViewsIndex, currentRangeIndex, 1000, currentRangeIndex + 1, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 0xFFFFFFFF, 0);
+		AddDescriptorTableRange(m_BindlessViewsIndex, currentRangeIndex, 0, i + 100, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 0xFFFFFFFF, 0);
 		++currentRangeIndex;
 	}
 
-	m_BindlessSamplersIndex = m_NumParameters;
-	SetDescriptorTable(m_BindlessSamplersIndex, 1, D3D12_SHADER_VISIBILITY_ALL);
-	SetDescriptorTableRange(m_BindlessSamplersIndex, 0, 1000, 1, D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER, 0xFFFFFFFF, 0);
-#endif
-
-	m_BindlessViewsIndex = m_NumParameters - 2;
-	m_BindlessSamplersIndex = m_NumParameters - 1;
+	m_BindlessSamplersIndex = AddDescriptorTable(1, D3D12_SHADER_VISIBILITY_ALL);
+	AddDescriptorTableRange(m_BindlessSamplersIndex, 0, 0, 100, D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER, 0xFFFFFFFF, 0);
 }
