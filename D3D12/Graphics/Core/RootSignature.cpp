@@ -229,19 +229,19 @@ void RootSignature::AddDefaultTables()
 	AddStaticSampler(CD3DX12_STATIC_SAMPLER_DESC(staticSamplerRegisterSlot++, D3D12_FILTER_ANISOTROPIC, D3D12_TEXTURE_ADDRESS_MODE_WRAP, D3D12_TEXTURE_ADDRESS_MODE_WRAP, D3D12_TEXTURE_ADDRESS_MODE_WRAP));
 	AddStaticSampler(CD3DX12_STATIC_SAMPLER_DESC(staticSamplerRegisterSlot++, D3D12_FILTER_COMPARISON_MIN_MAG_MIP_POINT, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, 0.0f, 16u, D3D12_COMPARISON_FUNC_GREATER));
 
-	uint32 numSRVRanges = 5;
-	uint32 numUAVRanges = 5;
+	uint32 numSRVRanges = 10;
+	uint32 numUAVRanges = 10;
 	uint32 currentRangeIndex = 0;
 	m_BindlessViewsIndex = m_NumParameters;
 	SetDescriptorTable(m_BindlessViewsIndex, numSRVRanges + numUAVRanges, D3D12_SHADER_VISIBILITY_ALL);
 	for (uint32 i = 0; i < numSRVRanges; ++i)
 	{
-		SetDescriptorTableRange(m_BindlessViewsIndex, currentRangeIndex, 0, currentRangeIndex + 100, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0xFFFFFFFF, 0);
+		SetDescriptorTableRange(m_BindlessViewsIndex, currentRangeIndex, 0, i + 100, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0xFFFFFFFF, 0);
 		++currentRangeIndex;
 	}
 	for (uint32 i = 0; i < numUAVRanges; ++i)
 	{
-		SetDescriptorTableRange(m_BindlessViewsIndex, currentRangeIndex, 0, currentRangeIndex + 100, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 0xFFFFFFFF, 0);
+		SetDescriptorTableRange(m_BindlessViewsIndex, currentRangeIndex, 0, i + 100, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 0xFFFFFFFF, 0);
 		++currentRangeIndex;
 	}
 

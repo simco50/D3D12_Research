@@ -125,8 +125,14 @@ void CBTTessellation::Execute(RGGraph& graph, Texture* pRenderTarget, Texture* p
 	struct CommonArgs
 	{
 		uint32 NumElements;
+		int32 HeightmapIndex;
+		int32 CBTIndex;
+		int32 IndirectArgsIndex;
 	} commonArgs;
 	commonArgs.NumElements = (uint32)m_pCBTBuffer->GetSize() / sizeof(uint32);
+	commonArgs.HeightmapIndex = m_pHeightmap->GetSRV()->GetHeapIndex();
+	commonArgs.CBTIndex = m_pCBTBuffer->GetUAV()->GetHeapIndex();
+	commonArgs.IndirectArgsIndex = m_pCBTIndirectArgs->GetUAV()->GetHeapIndex();
 
 	struct UpdateData
 	{
@@ -178,9 +184,6 @@ void CBTTessellation::Execute(RGGraph& graph, Texture* pRenderTarget, Texture* p
 				context.SetComputeRootConstants(0, commonArgs);
 				context.SetComputeDynamicConstantBufferView(1, updateData);
 
-				context.BindResource(2, 0, m_pCBTBuffer->GetUAV());
-				context.BindResource(3, 0, m_pHeightmap->GetSRV());
-
 				context.SetPipelineState(m_pCBTUpdatePSO);
 				context.ExecuteIndirect(m_pDevice->GetIndirectDispatchSignature(), 1, m_pCBTIndirectArgs.get(), nullptr, IndirectDispatchArgsOffset);
 				context.InsertUavBarrier(m_pCBTBuffer.get());
@@ -192,9 +195,6 @@ void CBTTessellation::Execute(RGGraph& graph, Texture* pRenderTarget, Texture* p
 		{
 			context.SetComputeRootSignature(m_pCBTRS.get());
 			context.SetComputeRootConstants(0, commonArgs);
-
-			context.BindResource(2, 0, m_pCBTBuffer->GetUAV());
-			context.BindResource(2, 1, m_pCBTIndirectArgs->GetUAV());
 
 			context.InsertResourceBarrier(m_pCBTIndirectArgs.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 			context.SetPipelineState(m_pCBTIndirectArgsPSO);
@@ -212,9 +212,6 @@ void CBTTessellation::Execute(RGGraph& graph, Texture* pRenderTarget, Texture* p
 
 			context.SetGraphicsRootConstants(0, commonArgs);
 			context.SetGraphicsDynamicConstantBufferView(1, updateData);
-
-			context.BindResource(2, 0, m_pCBTBuffer->GetUAV());
-			context.BindResource(3, 0, m_pHeightmap->GetSRV());
 
 			context.BeginRenderPass(RenderPassInfo(pRenderTarget, RenderPassAccess::Load_Store, pDepthTexture, RenderPassAccess::Load_Store, true));
 			if (CBTSettings::MeshShader)
@@ -237,8 +234,6 @@ void CBTTessellation::Execute(RGGraph& graph, Texture* pRenderTarget, Texture* p
 		{
 			context.SetComputeRootSignature(m_pCBTRS.get());
 			context.SetComputeRootConstants(0, commonArgs);
-
-			context.BindResource(2, 0, m_pCBTBuffer->GetUAV());
 
 			struct SumReductionData
 			{
@@ -264,8 +259,6 @@ void CBTTessellation::Execute(RGGraph& graph, Texture* pRenderTarget, Texture* p
 			context.SetComputeRootSignature(m_pCBTRS.get());
 			context.SetComputeRootConstants(0, commonArgs);
 
-			context.BindResource(2, 0, m_pCBTBuffer->GetUAV());
-
 			struct SumReductionData
 			{
 				uint32 Depth;
@@ -284,8 +277,6 @@ void CBTTessellation::Execute(RGGraph& graph, Texture* pRenderTarget, Texture* p
 		{
 			context.SetComputeRootSignature(m_pCBTRS.get());
 			context.SetComputeRootConstants(0, commonArgs);
-
-			context.BindResource(2, 0, m_pCBTBuffer->GetUAV());
 
 			struct SumReductionData
 			{
@@ -323,8 +314,6 @@ void CBTTessellation::Execute(RGGraph& graph, Texture* pRenderTarget, Texture* p
 				context.SetGraphicsRootConstants(0, commonArgs);
 				context.SetGraphicsDynamicConstantBufferView(1, updateData);
 
-				context.BindResource(2, 0, m_pCBTBuffer->GetUAV());
-
 				context.BeginRenderPass(RenderPassInfo(m_pDebugVisualizeTexture.get(), RenderPassAccess::Load_Store, nullptr, RenderPassAccess::NoAccess, false));
 				context.ExecuteIndirect(m_pDevice->GetIndirectDrawSignature(), 1, m_pCBTIndirectArgs.get(), nullptr, IndirectDrawArgsOffset);
 				context.EndRenderPass();
@@ -355,10 +344,8 @@ void CBTTessellation::SetupPipelines()
 	};
 
 	m_pCBTRS = std::make_unique<RootSignature>(m_pDevice);
-	m_pCBTRS->SetRootConstants<uint32>(0, 0);
+	m_pCBTRS->SetRootConstants<IntVector4>(0, 0);
 	m_pCBTRS->SetConstantBufferView(1, 1);
-	m_pCBTRS->SetDescriptorTableSimple(2, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 2);
-	m_pCBTRS->SetDescriptorTableSimple(3, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1);
 	m_pCBTRS->AddDefaultTables();
 	m_pCBTRS->Finalize("CBT");
 

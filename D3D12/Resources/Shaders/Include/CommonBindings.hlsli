@@ -35,7 +35,9 @@ Texture2D tTexture2DTable[] :                               register(t0, space10
 Texture3D tTexture3DTable[] :                               register(t0, space101);
 TextureCube tTextureCubeTable[] :                           register(t0, space102);
 ByteAddressBuffer tBufferTable[] :                          register(t0, space103);
-RaytracingAccelerationStructure tTLASTable[] :              register(t0, space104);
+RaytracingAccelerationStructure tTLASTable[] :              register(t0, space105);
+//Bindless UAVs
+RWByteAddressBuffer uRWBufferTable[] :                      register(u0, space100);
 
 #define ROOT_SIG(elements) elements ", " DEFAULT_ROOT_SIG_PARAMS
 
@@ -46,6 +48,17 @@ RaytracingAccelerationStructure tTLASTable[] :              register(t0, space10
         "SRV(t0, numDescriptors = unbounded, space = 102, offset = 0), " \
         "SRV(t0, numDescriptors = unbounded, space = 103, offset = 0), " \
         "SRV(t0, numDescriptors = unbounded, space = 104, offset = 0), " \
+        "SRV(t0, numDescriptors = unbounded, space = 105, offset = 0), " \
+        "SRV(t0, numDescriptors = unbounded, space = 106, offset = 0), " \
+        "SRV(t0, numDescriptors = unbounded, space = 107, offset = 0), " \
+        "SRV(t0, numDescriptors = unbounded, space = 108, offset = 0), " \
+        "SRV(t0, numDescriptors = unbounded, space = 109, offset = 0), " \
+        \
+        "UAV(u0, numDescriptors = unbounded, space = 100, offset = 0), " \
+        "UAV(u0, numDescriptors = unbounded, space = 101, offset = 0), " \
+        "UAV(u0, numDescriptors = unbounded, space = 102, offset = 0), " \
+        "UAV(u0, numDescriptors = unbounded, space = 103, offset = 0), " \
+        "UAV(u0, numDescriptors = unbounded, space = 104, offset = 0), " \
         "UAV(u0, numDescriptors = unbounded, space = 105, offset = 0), " \
         "UAV(u0, numDescriptors = unbounded, space = 106, offset = 0), " \
         "UAV(u0, numDescriptors = unbounded, space = 107, offset = 0), " \

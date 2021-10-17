@@ -25,13 +25,12 @@
 #define DISTANCE_LOD 1
 #endif
 
-RWByteAddressBuffer uCBT : register(u0);
-RWByteAddressBuffer uIndirectArgs : register(u1);
-Texture2D tHeightmap : register(t0);
-
 struct CommonArgs
 {
 	uint NumElements;
+	int HeightmapIndex;
+	int CBTIndex;
+	int IndirectArgsIndex;
 };
 
 struct SumReductionData
@@ -59,9 +58,11 @@ ConstantBuffer<UpdateData> cUpdateData : register(b1);
 void PrepareDispatchArgsCS(uint threadID : SV_DispatchThreadID)
 {
 	CBT cbt;
-	cbt.Init(uCBT, cCommonArgs.NumElements);
+	cbt.Init(uRWBufferTable[cCommonArgs.CBTIndex], cCommonArgs.NumElements);
 
 	uint offset = 0;
+
+	RWByteAddressBuffer uIndirectArgs = uRWBufferTable[cCommonArgs.IndirectArgsIndex];
 
 	// Dispatch args
 	uint numThreads = ceil((float)cbt.NumNodes() / COMPUTE_THREAD_GROUP_SIZE);
@@ -136,7 +137,7 @@ static uint SUM_REDUCTION_LUT[] = {
 void SumReductionCS(uint threadID : SV_DispatchThreadID, uint groupThreadID : SV_GroupThreadID, uint groupIndex : SV_GroupID)
 {
 	CBT cbt;
-	cbt.Init(uCBT, cCommonArgs.NumElements);
+	cbt.Init(uRWBufferTable[cCommonArgs.CBTIndex], cCommonArgs.NumElements);
 	uint count = 1u << cSumReductionData.Depth;
 	uint index = threadID;
 	if(index < count)
@@ -182,7 +183,7 @@ void SumReductionCS(uint threadID : SV_DispatchThreadID, uint groupThreadID : SV
 void SumReductionCS(uint threadID : SV_DispatchThreadID)
 {
 	CBT cbt;
-	cbt.Init(uCBT, cCommonArgs.NumElements);
+	cbt.Init(uRWBufferTable[cCommonArgs.CBTIndex], cCommonArgs.NumElements);
 	uint count = 1u << cSumReductionData.Depth;
 	uint index = threadID;
 	if(index < count)
@@ -201,7 +202,7 @@ void SumReductionCS(uint threadID : SV_DispatchThreadID)
 void CacheBitfieldCS(uint threadID : SV_DispatchThreadID)
 {
 	CBT cbt;
-	cbt.Init(uCBT, cCommonArgs.NumElements);
+	cbt.Init(uRWBufferTable[cCommonArgs.CBTIndex], cCommonArgs.NumElements);
 	uint depth = cSumReductionData.Depth;
 	uint count = 1u << depth;
 	uint elementCount = count >> 5u;
@@ -220,7 +221,7 @@ void CacheBitfieldCS(uint threadID : SV_DispatchThreadID)
 void SumReductionFirstPassCS(uint threadID : SV_DispatchThreadID)
 {
 	CBT cbt;
-	cbt.Init(uCBT, cCommonArgs.NumElements);
+	cbt.Init(uRWBufferTable[cCommonArgs.CBTIndex], cCommonArgs.NumElements);
 	uint depth = cSumReductionData.Depth;
 	uint count = 1u << depth;
 	uint thread = threadID << 5u;
@@ -287,7 +288,7 @@ bool HeightmapFlatness(float3x3 tri)
     float2 center = (tri[0].xz + tri[1].xz + tri[2].xz) / 3.0f;
     float2 dx = tri[0].xz - tri[1].xz;
     float2 dy = tri[0].xz - tri[2].xz;
-    float height = tHeightmap.SampleGrad(sLinearClamp, center, dx, dy).x;
+    float height = tTexture2DTable[cCommonArgs.HeightmapIndex].SampleGrad(sLinearClamp, center, dx, dy).x;
     float heightVariance = saturate(height - Square(height));
     return heightVariance >= cUpdateData.HeightmapVarianceBias;
 }
@@ -371,7 +372,7 @@ float3x3 GetVertices(uint heapIndex)
 	float3x3 tri = LEB::TransformAttributes(heapIndex, baseTriangle);
 	for(int i = 0; i < 3; ++i)
 	{
-		tri[i].y += tHeightmap.SampleLevel(sLinearClamp, tri[i].xz, 0).r;
+		tri[i].y += tTexture2DTable[cCommonArgs.HeightmapIndex].SampleLevel(sLinearClamp, tri[i].xz, 0).r;
 	}
 	return tri;
 }
@@ -380,7 +381,7 @@ float3x3 GetVertices(uint heapIndex)
 void UpdateCS(uint threadID : SV_DispatchThreadID)
 {
 	CBT cbt;
-	cbt.Init(uCBT, cCommonArgs.NumElements);
+	cbt.Init(uRWBufferTable[cCommonArgs.CBTIndex], cCommonArgs.NumElements);
 	if(threadID < cbt.NumNodes())
 	{
 		uint heapIndex = cbt.LeafToHeapIndex(threadID);
@@ -443,7 +444,7 @@ groupshared ASPayload gsPayload;
 void UpdateAS(uint threadID : SV_DispatchThreadID)
 {
 	CBT cbt;
-	cbt.Init(uCBT, cCommonArgs.NumElements);
+	cbt.Init(uRWBufferTable[cCommonArgs.CBTIndex], cCommonArgs.NumElements);
 	bool isVisible = false;
 	uint heapIndex = 0;
 
@@ -529,7 +530,7 @@ uint RenderVS(uint instanceID : SV_InstanceID) : INSTANCE_ID
 void RenderGS(point uint instanceID[1] : INSTANCE_ID, inout TriangleStream<VertexOut> triStream)
 {
 	CBT cbt;
-	cbt.Init(uCBT, cCommonArgs.NumElements);
+	cbt.Init(uRWBufferTable[cCommonArgs.CBTIndex], cCommonArgs.NumElements);
 	uint heapIndex = cbt.LeafToHeapIndex(instanceID[0]);
 
 	for(uint d = 0; d < GEOMETRY_SHADER_SUB_D; ++d)
@@ -556,7 +557,7 @@ void RenderGS(point uint instanceID[1] : INSTANCE_ID, inout TriangleStream<Verte
 void RenderVS(uint vertexID : SV_VertexID, uint instanceID : SV_InstanceID, out VertexOut vertex)
 {
 	CBT cbt;
-	cbt.Init(uCBT, cCommonArgs.NumElements);
+	cbt.Init(uRWBufferTable[cCommonArgs.CBTIndex], cCommonArgs.NumElements);
 
 	uint heapIndex = cbt.LeafToHeapIndex(instanceID);
 	float3 tri = GetVertices(heapIndex)[vertexID];
@@ -571,14 +572,14 @@ float4 RenderPS(
 	VertexOut vertex, 
 	float3 bary : SV_Barycentrics) : SV_TARGET
 {
-	float tl = tHeightmap.Sample(sLinearClamp, vertex.UV, uint2(-1, -1)).r;
-	float t  = tHeightmap.Sample(sLinearClamp, vertex.UV, uint2( 0, -1)).r;
-	float tr = tHeightmap.Sample(sLinearClamp, vertex.UV, uint2( 1, -1)).r;
-	float l  = tHeightmap.Sample(sLinearClamp, vertex.UV, uint2(-1,  0)).r;
-	float r  = tHeightmap.Sample(sLinearClamp, vertex.UV, uint2( 1,  0)).r;
-	float bl = tHeightmap.Sample(sLinearClamp, vertex.UV, uint2(-1,  1)).r;
-	float b  = tHeightmap.Sample(sLinearClamp, vertex.UV, uint2( 0,  1)).r;
-	float br = tHeightmap.Sample(sLinearClamp, vertex.UV, uint2( 1,  1)).r;
+	float tl = tTexture2DTable[cCommonArgs.HeightmapIndex].Sample(sLinearClamp, vertex.UV, uint2(-1, -1)).r;
+	float t  = tTexture2DTable[cCommonArgs.HeightmapIndex].Sample(sLinearClamp, vertex.UV, uint2( 0, -1)).r;
+	float tr = tTexture2DTable[cCommonArgs.HeightmapIndex].Sample(sLinearClamp, vertex.UV, uint2( 1, -1)).r;
+	float l  = tTexture2DTable[cCommonArgs.HeightmapIndex].Sample(sLinearClamp, vertex.UV, uint2(-1,  0)).r;
+	float r  = tTexture2DTable[cCommonArgs.HeightmapIndex].Sample(sLinearClamp, vertex.UV, uint2( 1,  0)).r;
+	float bl = tTexture2DTable[cCommonArgs.HeightmapIndex].Sample(sLinearClamp, vertex.UV, uint2(-1,  1)).r;
+	float b  = tTexture2DTable[cCommonArgs.HeightmapIndex].Sample(sLinearClamp, vertex.UV, uint2( 0,  1)).r;
+	float br = tTexture2DTable[cCommonArgs.HeightmapIndex].Sample(sLinearClamp, vertex.UV, uint2( 1,  1)).r;
 
 	float dX = tr + 2 * r + br - tl - 2 * l - bl;
 	float dY = bl + 2 * b + br - tl - 2 * t - tr;
@@ -614,7 +615,7 @@ void DebugVisualizeVS(
 	out float4 color : COLOR)
 {
 	CBT cbt;
-	cbt.Init(uCBT, cCommonArgs.NumElements);
+	cbt.Init(uRWBufferTable[cCommonArgs.CBTIndex], cCommonArgs.NumElements);
 
 	uint heapIndex = cbt.LeafToHeapIndex(instanceID);
 
