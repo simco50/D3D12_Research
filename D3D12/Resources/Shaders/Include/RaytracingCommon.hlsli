@@ -31,9 +31,9 @@ VertexAttribute GetVertexAttributes(MeshInstance instance, float2 attribBarycent
     for(int i = 0; i < 3; ++i)
     {
         uint vertexId = indices[i];
-        positions[i] = UnpackHalf3(GetVertexData<uint2>(mesh.PositionStream, vertexId));
-        outData.UV += UnpackHalf2(GetVertexData<uint>(mesh.UVStream, vertexId)) * barycentrics[i];
-        NormalData normalData = GetVertexData<NormalData>(mesh.NormalStream, vertexId);
+        positions[i] = UnpackHalf3(LoadByteAddressData<uint2>(mesh.PositionStream, vertexId));
+        outData.UV += UnpackHalf2(LoadByteAddressData<uint>(mesh.UVStream, vertexId)) * barycentrics[i];
+        NormalData normalData = LoadByteAddressData<NormalData>(mesh.NormalStream, vertexId);
         outData.Normal += normalData.Normal * barycentrics[i];
         outData.Tangent += normalData.Tangent * barycentrics[i];
     }
@@ -67,7 +67,7 @@ MaterialProperties GetMaterialProperties(uint materialIndex, float2 UV, int mipL
     float4 baseColor = material.BaseColorFactor;
     if(material.Diffuse >= 0)
     {
-        baseColor *= tTexture2DTable[material.Diffuse].SampleLevel(sMaterialSampler, UV, mipLevel);
+        baseColor *= SampleLevel2D(material.Diffuse, sMaterialSampler, UV, mipLevel);
     }
     properties.BaseColor = baseColor.rgb;
     properties.Opacity = baseColor.a;
@@ -76,21 +76,21 @@ MaterialProperties GetMaterialProperties(uint materialIndex, float2 UV, int mipL
     properties.Roughness = material.RoughnessFactor;
     if(material.RoughnessMetalness >= 0)
     {
-        float4 roughnessMetalnessSample = tTexture2DTable[material.RoughnessMetalness].SampleLevel(sMaterialSampler, UV, mipLevel);
+        float4 roughnessMetalnessSample = SampleLevel2D(material.RoughnessMetalness, sMaterialSampler, UV, mipLevel);
         properties.Metalness *= roughnessMetalnessSample.b;
         properties.Roughness *= roughnessMetalnessSample.g;
     }
     properties.Emissive = material.EmissiveFactor.rgb;
     if(material.Emissive >= 0)
     {
-        properties.Emissive *= tTexture2DTable[material.Emissive].SampleLevel(sMaterialSampler, UV, mipLevel).rgb;
+        properties.Emissive *= SampleLevel2D(material.Emissive, sMaterialSampler, UV, mipLevel).rgb;
     }
     properties.Specular = 0.5f;
 
     properties.NormalTS = float3(0.5f, 0.5f, 1.0f);
     if(material.Normal >= 0)
     {
-        properties.NormalTS = tTexture2DTable[material.Normal].SampleLevel(sMaterialSampler, UV, mipLevel).rgb;
+        properties.NormalTS = SampleLevel2D(material.Normal, sMaterialSampler, UV, mipLevel).rgb;
     }
     return properties;
 }

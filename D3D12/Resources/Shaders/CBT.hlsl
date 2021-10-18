@@ -288,7 +288,7 @@ bool HeightmapFlatness(float3x3 tri)
     float2 center = (tri[0].xz + tri[1].xz + tri[2].xz) / 3.0f;
     float2 dx = tri[0].xz - tri[1].xz;
     float2 dy = tri[0].xz - tri[2].xz;
-    float height = tTexture2DTable[cCommonArgs.HeightmapIndex].SampleGrad(sLinearClamp, center, dx, dy).x;
+    float height = SampleGrad2D(cCommonArgs.HeightmapIndex, sLinearClamp, center, dx, dy).x;
     float heightVariance = saturate(height - Square(height));
     return heightVariance >= cUpdateData.HeightmapVarianceBias;
 }
@@ -372,7 +372,7 @@ float3x3 GetVertices(uint heapIndex)
 	float3x3 tri = LEB::TransformAttributes(heapIndex, baseTriangle);
 	for(int i = 0; i < 3; ++i)
 	{
-		tri[i].y += tTexture2DTable[cCommonArgs.HeightmapIndex].SampleLevel(sLinearClamp, tri[i].xz, 0).r;
+		tri[i].y += SampleLevel2D(cCommonArgs.HeightmapIndex, sLinearClamp, tri[i].xz, 0).r;
 	}
 	return tri;
 }
@@ -572,14 +572,14 @@ float4 RenderPS(
 	VertexOut vertex, 
 	float3 bary : SV_Barycentrics) : SV_TARGET
 {
-	float tl = tTexture2DTable[cCommonArgs.HeightmapIndex].Sample(sLinearClamp, vertex.UV, uint2(-1, -1)).r;
-	float t  = tTexture2DTable[cCommonArgs.HeightmapIndex].Sample(sLinearClamp, vertex.UV, uint2( 0, -1)).r;
-	float tr = tTexture2DTable[cCommonArgs.HeightmapIndex].Sample(sLinearClamp, vertex.UV, uint2( 1, -1)).r;
-	float l  = tTexture2DTable[cCommonArgs.HeightmapIndex].Sample(sLinearClamp, vertex.UV, uint2(-1,  0)).r;
-	float r  = tTexture2DTable[cCommonArgs.HeightmapIndex].Sample(sLinearClamp, vertex.UV, uint2( 1,  0)).r;
-	float bl = tTexture2DTable[cCommonArgs.HeightmapIndex].Sample(sLinearClamp, vertex.UV, uint2(-1,  1)).r;
-	float b  = tTexture2DTable[cCommonArgs.HeightmapIndex].Sample(sLinearClamp, vertex.UV, uint2( 0,  1)).r;
-	float br = tTexture2DTable[cCommonArgs.HeightmapIndex].Sample(sLinearClamp, vertex.UV, uint2( 1,  1)).r;
+	float tl = Sample2D(cCommonArgs.HeightmapIndex, sLinearClamp, vertex.UV, uint2(-1, -1)).r;
+	float t  = Sample2D(cCommonArgs.HeightmapIndex, sLinearClamp, vertex.UV, uint2( 0, -1)).r;
+	float tr = Sample2D(cCommonArgs.HeightmapIndex, sLinearClamp, vertex.UV, uint2( 1, -1)).r;
+	float l  = Sample2D(cCommonArgs.HeightmapIndex, sLinearClamp, vertex.UV, uint2(-1,  0)).r;
+	float r  = Sample2D(cCommonArgs.HeightmapIndex, sLinearClamp, vertex.UV, uint2( 1,  0)).r;
+	float bl = Sample2D(cCommonArgs.HeightmapIndex, sLinearClamp, vertex.UV, uint2(-1,  1)).r;
+	float b  = Sample2D(cCommonArgs.HeightmapIndex, sLinearClamp, vertex.UV, uint2( 0,  1)).r;
+	float br = Sample2D(cCommonArgs.HeightmapIndex, sLinearClamp, vertex.UV, uint2( 1,  1)).r;
 
 	float dX = tr + 2 * r + br - tl - 2 * l - bl;
 	float dY = bl + 2 * b + br - tl - 2 * t - tr;

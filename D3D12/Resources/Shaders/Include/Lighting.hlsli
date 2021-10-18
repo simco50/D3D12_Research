@@ -53,7 +53,7 @@ float LightTextureMask(Light light, int shadowMapIndex, float3 worldPosition)
 		float4 lightPos = mul(float4(worldPosition, 1), cShadowData.LightViewProjections[shadowMapIndex]);
 		lightPos.xyz /= lightPos.w;
 		lightPos.xy = (lightPos.xy + 1) / 2;
-		mask = tTexture2DTable[light.LightTexture].SampleLevel(sLinearClamp, lightPos.xy, 0).r;
+		mask = SampleLevel2D(light.LightTexture, sLinearClamp, lightPos.xy, 0).r;
 	}
 	return mask;
 }

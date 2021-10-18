@@ -25,9 +25,9 @@ PSInput VSMain(uint vertexId : SV_VertexID)
 	MeshInstance instance = tMeshInstances[cObjectData.Index];
     MeshData mesh = tMeshes[instance.Mesh];
 
-    float3 position = UnpackHalf3(GetVertexData<uint2>(mesh.PositionStream, vertexId));
+    float3 position = UnpackHalf3(LoadByteAddressData<uint2>(mesh.PositionStream, vertexId));
 	result.position = mul(mul(float4(position, 1.0f), instance.World), cViewData.ViewProjection);
-	result.texCoord = UnpackHalf2(GetVertexData<uint>(mesh.UVStream, vertexId));
+	result.texCoord = UnpackHalf2(LoadByteAddressData<uint>(mesh.UVStream, vertexId));
 	return result;
 }
 
@@ -35,7 +35,7 @@ void PSMain(PSInput input)
 {
 	MeshInstance instance = tMeshInstances[cObjectData.Index];
 	MaterialData material = tMaterials[instance.Material];
-	if(tTexture2DTable[material.Diffuse].Sample(sMaterialSampler, input.texCoord).a < material.AlphaCutoff)
+	if(Sample2D(material.Diffuse, sMaterialSampler, input.texCoord).a < material.AlphaCutoff)
 	{
 		discard;
 	}
