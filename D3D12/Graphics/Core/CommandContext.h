@@ -18,7 +18,8 @@ struct BufferView;
 enum class CommandListContext
 {
 	Graphics,
-	Compute
+	Compute,
+	Invalid,
 };
 
 enum class RenderTargetLoadAction : uint8
@@ -74,9 +75,7 @@ struct RenderPassInfo
 		bool Write = true;
 	};
 
-	RenderPassInfo()
-	{
-	}
+	RenderPassInfo() = default;
 
 	RenderPassInfo(Texture* pDepthBuffer, RenderPassAccess access, bool uavWrites = false)
 		: RenderTargetCount(0)
@@ -144,6 +143,8 @@ namespace ComputeUtils
 class CommandContext : public GraphicsObject
 {
 public:
+	friend class CommandQueue;
+
 	CommandContext(GraphicsDevice* pParent, ID3D12GraphicsCommandList* pCommandList, D3D12_COMMAND_LIST_TYPE type, GlobalOnlineDescriptorHeap* pDescriptorHeap, DynamicAllocationManager* pDynamicMemoryManager, ID3D12CommandAllocator* pAllocator);
 	~CommandContext();
 
@@ -166,19 +167,15 @@ public:
 	void Dispatch(uint32 groupCountX, uint32 groupCountY = 1, uint32 groupCountZ = 1);
 	void Dispatch(const IntVector3& groupCounts);
 	void DispatchMesh(uint32 groupCountX, uint32 groupCountY = 1, uint32 groupCountZ = 1);
-
 	void ExecuteIndirect(CommandSignature* pCommandSignature, uint32 maxCount, Buffer* pIndirectArguments, Buffer* pCountBuffer, uint32 argumentsOffset = 0, uint32 countOffset = 0);
 	void Draw(int vertexStart, int vertexCount);
 	void DrawIndexed(int indexCount, int indexStart, int minVertex = 0);
 	void DrawIndexedInstanced(int indexCount, int indexStart, int instanceCount, int minVertex = 0, int instanceStart = 0);
-	
 	void DispatchRays(ShaderBindingTable& table, uint32 width = 1, uint32 height = 1, uint32 depth = 1);
 
 	void ClearColor(D3D12_CPU_DESCRIPTOR_HANDLE rtv, const Color& color = Color(0.0f, 0.0f, 0.0f, 1.0f));
 	void ClearDepth(D3D12_CPU_DESCRIPTOR_HANDLE dsv, D3D12_CLEAR_FLAGS clearFlags = D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, float depth = 1.0f, unsigned char stencil = 0);
 	void ResolveResource(Texture* pSource, uint32 sourceSubResource, Texture* pTarget, uint32 targetSubResource, DXGI_FORMAT format);
-
-	void PrepareDraw(CommandListContext type);
 
 	void BeginRenderPass(const RenderPassInfo& renderPassInfo);
 	void EndRenderPass();
@@ -189,12 +186,6 @@ public:
 	void SetPipelineState(PipelineState* pPipelineState);
 	void SetPipelineState(StateObject* pStateObject);
 
-	void BindResource(int rootIndex, int offset, ResourceView* pView);
-	void BindResources(int rootIndex, int offset, const D3D12_CPU_DESCRIPTOR_HANDLE* handles, int count = 1);
-	void BindResourceTable(int rootIndex, D3D12_GPU_DESCRIPTOR_HANDLE handle, CommandListContext context);
-
-	void SetDynamicVertexBuffer(int slot, int elementCount, int elementSize, const void* pData);
-	void SetDynamicIndexBuffer(int elementCount, const void* pData, bool smallIndices = false);
 	void SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY type);
 	void SetVertexBuffers(const VertexBufferView* pBuffers, int bufferCount);
 	void SetIndexBuffer(const IndexBufferView& indexBuffer);
@@ -204,49 +195,40 @@ public:
 	void SetShadingRate(D3D12_SHADING_RATE shadingRate = D3D12_SHADING_RATE_1X1);
 	void SetShadingRateImage(Texture* pTexture);
 
-	// Compute
-	void SetComputeRootSignature(RootSignature* pRootSignature);
-	void SetComputeRootSRV(int rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address);
-	void SetComputeRootUAV(int rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address);
-	void SetComputeRootConstants(int rootIndex, uint32 count, const void* pConstants);
-	template<typename T>
-	void SetComputeRootConstants(int rootIndex, const T& data)
-	{
-		SetComputeRootConstants(rootIndex, sizeof(T) / sizeof(int32), &data);
-	}
-	void SetComputeDynamicConstantBufferView(int rootIndex, const void* pData, uint32 dataSize);
-	template<typename T>
-	void SetComputeDynamicConstantBufferView(int rootIndex, const T& data)
-	{
-		static_assert(!std::is_pointer<T>::value, "Provided type is a pointer. This is probably unintentional.");
-		SetComputeDynamicConstantBufferView(rootIndex, &data, sizeof(T));
-	}
-
-	// Graphics
 	void SetGraphicsRootSignature(RootSignature* pRootSignature);
-	void SetGraphicsRootSRV(int rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address);
-	void SetGraphicsRootUAV(int rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address);
-	void SetGraphicsRootConstants(int rootIndex, uint32 count, const void* pConstants);
+	void SetComputeRootSignature(RootSignature* pRootSignature);
+	void BindResource(int rootIndex, int offset, ResourceView* pView);
+	void BindResources(int rootIndex, int offset, const D3D12_CPU_DESCRIPTOR_HANDLE* handles, int count = 1);
+	void SetDynamicVertexBuffer(int slot, int elementCount, int elementSize, const void* pData);
+	void SetDynamicIndexBuffer(int elementCount, const void* pData, bool smallIndices = false);
+	void SetRootSRV(int rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address);
+	void SetRootUAV(int rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address);
+	void SetRootConstants(int rootIndex, uint32 count, const void* pConstants);
 	template<typename T>
-	void SetGraphicsRootConstants(int rootIndex, const T& data)
-	{
-		SetGraphicsRootConstants(rootIndex, sizeof(T) / sizeof(int32), &data);
-	}
-	void SetGraphicsDynamicConstantBufferView(int rootIndex, const void* pData, uint32 dataSize);
-	template<typename T>
-	void SetGraphicsDynamicConstantBufferView(int rootIndex, const T& data)
+	void SetRootConstants(int rootIndex, const T& data)
 	{
 		static_assert(!std::is_pointer<T>::value, "Provided type is a pointer. This is probably unintentional.");
-		SetGraphicsDynamicConstantBufferView(rootIndex, &data, sizeof(T));
+		SetRootConstants(rootIndex, sizeof(T) / sizeof(int32), &data);
+	}
+	void SetRootCBV(int rootIndex, const void* pData, uint32 dataSize);
+	template<typename T>
+	void SetRootCBV(int rootIndex, const T& data)
+	{
+		static_assert(!std::is_pointer<T>::value, "Provided type is a pointer. This is probably unintentional.");
+		SetRootCBV(rootIndex, &data, sizeof(T));
 	}
 
-	DynamicAllocation AllocateTransientMemory(uint64 size, uint32 alignment = 256);
+	DynamicAllocation AllocateTransientMemory(uint64 size, uint32 alignment = 256u);
 
 	ID3D12GraphicsCommandList* GetCommandList() const { return m_pCommandList; }
 	ID3D12GraphicsCommandList4* GetRaytracingCommandList() const { return  m_pRaytracingCommandList.Get(); }
-	ID3D12GraphicsCommandList6* GetMeshShadingCommandList() const { return  m_pMeshShadingCommandList.Get(); }
 
 	D3D12_COMMAND_LIST_TYPE GetType() const { return m_Type; }
+
+	static bool IsTransitionAllowed(D3D12_COMMAND_LIST_TYPE commandlistType, D3D12_RESOURCE_STATES state);
+
+private:
+	void PrepareDraw();
 
 	struct PendingBarrier
 	{
@@ -254,9 +236,9 @@ public:
 		ResourceState State;
 		uint32 Subresource;
 	};
-	const std::vector<PendingBarrier>& GetPendingBarriers() const { return m_PendingBarriers; }
+	std::vector<PendingBarrier> m_PendingBarriers;
 
-	D3D12_RESOURCE_STATES GetResourceState(GraphicsResource* pResource, uint32 subResource) const 
+	D3D12_RESOURCE_STATES GetResourceState(GraphicsResource* pResource, uint32 subResource) const
 	{
 		auto it = m_ResourceStates.find(pResource);
 		check(it != m_ResourceStates.end());
@@ -273,9 +255,6 @@ public:
 		return it->second.Get(subResource);
 	}
 
-	static bool IsTransitionAllowed(D3D12_COMMAND_LIST_TYPE commandlistType, D3D12_RESOURCE_STATES state);
-
-private:
 	OnlineDescriptorAllocator m_ShaderResourceDescriptorAllocator;
 
 	ResourceBarrierBatcher m_BarrierBatcher;
@@ -287,8 +266,7 @@ private:
 	ID3D12CommandAllocator* m_pAllocator;
 	D3D12_COMMAND_LIST_TYPE m_Type;
 	std::unordered_map<GraphicsResource*, ResourceState> m_ResourceStates;
-	std::vector<PendingBarrier> m_PendingBarriers;
-
+	CommandListContext m_CurrentCommandContext = CommandListContext::Invalid;
 	std::array<D3D12_RENDER_PASS_ENDING_ACCESS_RESOLVE_SUBRESOURCE_PARAMETERS, D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT> m_ResolveSubResourceParameters{};
 	RenderPassInfo m_CurrentRenderPassInfo;
 	bool m_InRenderPass = false;

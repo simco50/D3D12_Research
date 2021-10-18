@@ -104,7 +104,7 @@ uint64 CommandQueue::ExecuteCommandLists(CommandContext** pCommandContexts, uint
 		check(pNextContext);
 
 		ResourceBarrierBatcher barriers;
-		for (const CommandContext::PendingBarrier& pending : pNextContext->GetPendingBarriers())
+		for (const CommandContext::PendingBarrier& pending : pNextContext->m_PendingBarriers)
 		{
 			uint32 subResource = pending.Subresource;
 			GraphicsResource* pResource = pending.pResource;

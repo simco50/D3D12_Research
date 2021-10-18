@@ -772,16 +772,12 @@ void DemoApp::Update()
 	Data.DepthStencil = setupLights.Write(Data.DepthStencil);
 	setupLights.Bind([=](CommandContext& renderContext, const RGPassResources& /*resources*/)
 		{
-			DynamicAllocation allocation = renderContext.AllocateTransientMemory(m_Lights.size() * sizeof(ShaderInterop::Light));
-			ShaderInterop::Light* pTarget = (ShaderInterop::Light*)allocation.pMappedMemory;
-			for (const Light& light : m_Lights)
+			std::vector<ShaderInterop::Light> lightData(m_Lights.size());
+			for (size_t i = 0; i < m_Lights.size(); ++i)
 			{
-				*pTarget = light.GetData();
-				++pTarget;
+				lightData[i] = m_Lights[i].GetData();
 			}
-			renderContext.InsertResourceBarrier(m_pLightBuffer.get(), D3D12_RESOURCE_STATE_COPY_DEST);
-			renderContext.FlushResourceBarriers();
-			renderContext.CopyBuffer(allocation.pBackingResource, m_pLightBuffer.get(), (uint32)m_pLightBuffer->GetSize(), (uint32)allocation.Offset, 0);
+			renderContext.InitializeBuffer(m_pLightBuffer.get(), lightData.data(), lightData.size() * sizeof(ShaderInterop::Light));
 		});
 
 	if (m_RenderPath != RenderPath::PathTracing)
@@ -817,7 +813,7 @@ void DemoApp::Update()
 					Matrix ViewProjection;
 				} viewData;
 				viewData.ViewProjection = m_pCamera->GetViewProjection();
-				renderContext.SetGraphicsDynamicConstantBufferView(1, viewData);
+				renderContext.SetRootCBV(1, viewData);
 
 				{
 					GPU_PROFILE_SCOPE("Opaque", &renderContext);
@@ -903,7 +899,7 @@ void DemoApp::Update()
 					parameters.ReprojectionMatrix = preMult * m_pCamera->GetViewProjection().Invert() * m_pCamera->GetPreviousViewProjection() * postMult;
 					parameters.InvScreenDimensions = Vector2(1.0f / m_WindowWidth, 1.0f / m_WindowHeight);
 
-					renderContext.SetComputeDynamicConstantBufferView(0, parameters);
+					renderContext.SetRootCBV(0, parameters);
 
 					renderContext.BindResource(1, 0, m_pVelocity->GetUAV());
 					renderContext.BindResource(2, 0, GetResolvedDepthStencil()->GetSRV());
@@ -950,7 +946,7 @@ void DemoApp::Update()
 						parameters.Near = m_pCamera->GetNear();
 						parameters.Far = m_pCamera->GetFar();
 
-						renderContext.SetComputeDynamicConstantBufferView(0, parameters);
+						renderContext.SetRootCBV(0, parameters);
 						renderContext.BindResource(1, 0, m_ReductionTargets[0]->GetUAV());
 						renderContext.BindResource(2, 0, pDepthStencil->GetSRV());
 
@@ -998,7 +994,7 @@ void DemoApp::Update()
 						context.BeginRenderPass(RenderPassInfo(pShadowmap, RenderPassAccess::Clear_Store));
 
 						viewData.ViewProjection = shadowData.LightViewProjections[i];
-						context.SetGraphicsDynamicConstantBufferView(1, viewData);
+						context.SetRootCBV(1, viewData);
 
 						const D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
 							m_SceneData.pMaterialBuffer->GetSRV()->GetDescriptor(),
@@ -1066,7 +1062,7 @@ void DemoApp::Update()
 				constBuffer.SunDirection = -m_Lights[0].Direction;
 				constBuffer.SunDirection.Normalize();
 
-				renderContext.SetGraphicsDynamicConstantBufferView(0, constBuffer);
+				renderContext.SetRootCBV(0, constBuffer);
 
 				renderContext.Draw(0, 36);
 
@@ -1130,7 +1126,7 @@ void DemoApp::Update()
 					parameters.InvScreenDimensions = Vector2(1.0f / m_WindowWidth, 1.0f / m_WindowHeight);
 					parameters.Jitter.x = m_pCamera->GetPreviousJitter().x - m_pCamera->GetJitter().x;
 					parameters.Jitter.y = -(m_pCamera->GetPreviousJitter().y - m_pCamera->GetJitter().y);
-					renderContext.SetComputeDynamicConstantBufferView(0, parameters);
+					renderContext.SetRootCBV(0, parameters);
 
 					renderContext.BindResource(1, 0, m_pHDRRenderTarget->GetUAV());
 					renderContext.BindResource(2, 0, m_pVelocity->GetSRV());
@@ -1176,7 +1172,7 @@ void DemoApp::Update()
 					Parameters.TargetDimensions.y = pToneMapInput->GetHeight();
 					Parameters.TargetDimensionsInv = Vector2(1.0f / pToneMapInput->GetWidth(), 1.0f / pToneMapInput->GetHeight());
 
-					context.SetComputeDynamicConstantBufferView(0, Parameters);
+					context.SetRootCBV(0, Parameters);
 					context.BindResource(1, 0, pToneMapInput->GetUAV());
 					context.BindResource(2, 0, m_pHDRRenderTarget->GetSRV());
 
@@ -1212,7 +1208,7 @@ void DemoApp::Update()
 				Parameters.MinLogLuminance = Tweakables::g_MinLogLuminance.Get();
 				Parameters.OneOverLogLuminanceRange = 1.0f / (Tweakables::g_MaxLogLuminance.Get() - Tweakables::g_MinLogLuminance.Get());
 
-				context.SetComputeDynamicConstantBufferView(0, Parameters);
+				context.SetRootCBV(0, Parameters);
 				context.BindResource(1, 0, m_pLuminanceHistogram->GetUAV());
 				context.BindResource(2, 0, pToneMapInput->GetSRV());
 
@@ -1246,7 +1242,7 @@ void DemoApp::Update()
 				Parameters.TimeDelta = Time::DeltaTime();
 				Parameters.Tau = Tweakables::g_Tau.Get();
 
-				context.SetComputeDynamicConstantBufferView(0, Parameters);
+				context.SetRootCBV(0, Parameters);
 				context.BindResource(1, 0, m_pAverageLuminance->GetUAV());
 				context.BindResource(2, 0, m_pLuminanceHistogram->GetSRV());
 
@@ -1271,7 +1267,7 @@ void DemoApp::Update()
 				context.SetPipelineState(m_pToneMapPSO);
 				context.SetComputeRootSignature(m_pToneMapRS.get());
 
-				context.SetComputeDynamicConstantBufferView(0, constBuffer);
+				context.SetRootCBV(0, constBuffer);
 
 				context.BindResource(1, 0, m_pTonemapTarget->GetUAV());
 				context.BindResource(2, 0, m_pHDRRenderTarget->GetSRV());
@@ -1312,7 +1308,7 @@ void DemoApp::Update()
 					Parameters.InvTextureDimensions.x = 1.0f / m_pDebugHistogramTexture->GetWidth();
 					Parameters.InvTextureDimensions.y = 1.0f / m_pDebugHistogramTexture->GetHeight();
 
-					context.SetComputeDynamicConstantBufferView(0, Parameters);
+					context.SetRootCBV(0, Parameters);
 					context.BindResource(1, 0, m_pDebugHistogramTexture->GetUAV());
 					context.BindResource(2, 0, m_pLuminanceHistogram->GetSRV());
 					context.BindResource(2, 1, m_pAverageLuminance->GetSRV());
