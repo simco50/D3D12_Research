@@ -2,7 +2,7 @@
 #define __COMMON_INCLUDE__
 
 #include "Constants.hlsli"
-#include "Interop/ShaderCommon.h"
+#include "ShaderInterop.h"
 
 struct Plane
 {

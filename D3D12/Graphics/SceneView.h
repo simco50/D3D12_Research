@@ -1,7 +1,7 @@
 #pragma once
 #include "Core/DescriptorHandle.h"
 #include "Core/BitField.h"
-#include "ShaderCommon.h"
+#include "Core/ShaderInterop.h"
 
 class Texture;
 class Buffer;

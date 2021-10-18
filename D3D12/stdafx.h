@@ -22,16 +22,12 @@
 //Misc
 #include <mutex>
 
-#include "Core/CoreTypes.h"
-
 #include "Core/MinWindows.h"
 #include <wrl/client.h>
-template<typename T>
-using ComPtr = Microsoft::WRL::ComPtr<T>;
 
 #define USE_PIX 1
 
-#include <d3d12.h>
+#include "d3d12.h"
 
 #include <dxgi1_6.h>
 
@@ -70,6 +66,7 @@ using ComPtr = Microsoft::WRL::ComPtr<T>;
 
 #define validateOnce(expression) validateOncef(expression, "")
 
+#include "Core/CoreTypes.h"
 #include "Core/CString.h"
 #include "Core/String.h"
 #include "Core/Thread.h"

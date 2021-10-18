@@ -24,6 +24,10 @@ premake.override(premake.vstudio.vc2010, "configurationProperties", function(bas
 	premake.pop('</PropertyGroup>')
 end)
 
+function runtimeDependency(source, destination)
+	postbuildcommands { ("{COPY} \"$(SolutionDir)Libraries/" .. source .. "\" \"$(OutDir)" .. destination .. "/\"") }
+end
+
 workspace (ENGINE_NAME)
 	basedir (ROOT)
 	configurations { "Debug", "Release", "DebugASAN" }
@@ -34,13 +38,17 @@ workspace (ENGINE_NAME)
 	startproject (ENGINE_NAME)
 	symbols "On"
 	architecture "x64"
-	kind "WindowedApp"
 	characterset "MBCS"
 	flags {"MultiProcessorCompile", "ShadowedVariables", "FatalWarnings"}
 	rtti "Off"
 	warnings "Extra"
 	justmycode "Off"
 	editAndContinue "Off"
+	system "windows"
+	conformancemode "On"
+	defines { "PLATFORM_WINDOWS=1" }
+	targetdir (ROOT .. "Build/$(ProjectName)_$(Platform)_$(Configuration)")
+	objdir (ROOT .. "Build/Intermediate/$(ProjectName)_$(Platform)_$(Configuration)")
 
 	--Unreferenced variable
 	disablewarnings {"4100"}
@@ -68,19 +76,12 @@ workspace (ENGINE_NAME)
 
 	project (ENGINE_NAME)
 		location (ROOT .. ENGINE_NAME)
-		targetdir (ROOT .. "Build/$(ProjectName)_$(Platform)_$(Configuration)")
-		objdir (ROOT .. "Build/Intermediate/$(ProjectName)_$(Platform)_$(Configuration)")
-
 		pchheader ("stdafx.h")
 		pchsource (ROOT .. ENGINE_NAME .. "/stdafx.cpp")
 		includedirs { "$(ProjectDir)", "$(ProjectDir)External/" }
-
-		system "windows"
-		conformancemode "On"
-		defines { "PLATFORM_WINDOWS=1" }
 		systemversion (WIN_SDK)
+		kind "WindowedApp"
 
-		---- File setup ----
 		files
 		{ 
 			(SOURCE_DIR .. "**.h"),
@@ -91,17 +92,13 @@ workspace (ENGINE_NAME)
 			(SOURCE_DIR .. "**.natvis"),
 			(SOURCE_DIR .. "**.hlsl*"),
 			(SOURCE_DIR .. "**.editorconfig"),
-			(SOURCE_DIR .. "Resources/Shaders/Interop/**")
 		}
 
 		vpaths
 		{
 			{["Shaders/Include"] = (SOURCE_DIR .. "**.hlsli")},
 			{["Shaders/Source"] = (SOURCE_DIR .. "**.hlsl")},
-			{["Shaders/Interop"] = (SOURCE_DIR .. "**/Interop/**.h")}
 		}
-
-		includedirs ("$(ProjectDir)Resources/Shaders/Interop")
 
 		filter ("files:" .. SOURCE_DIR .. "External/**")
 			flags { "NoPCH" }
@@ -111,27 +108,26 @@ workspace (ENGINE_NAME)
 
 		-- D3D12
 		includedirs (ROOT .. "Libraries/D3D12/include")
-		postbuildcommands { ("{COPY} \"$(SolutionDir)Libraries\\D3D12\\bin\\D3D12Core.dll\" \"$(OutDir)\\D3D12\\\"") }
-		postbuildcommands { ("{COPY} \"$(SolutionDir)Libraries\\D3D12\\bin\\d3d12SDKLayers.dll\" \"$(OutDir)\\D3D12\\\"") }
-		links {	"d3d12.lib", "dxgi", "d3dcompiler", "dxguid" }
+		runtimeDependency("D3D12/bin/D3D12Core.dll", "D3D12")
+		runtimeDependency("D3D12/bin/d3d12SDKLayers.dll", "D3D12")
+		links {	"d3d12.lib", "dxgi" }
 
 		-- Pix
 		includedirs (ROOT .. "Libraries/Pix/include")
 		libdirs (ROOT .. "Libraries/Pix/lib")
-		postbuildcommands { ("{COPY} \"$(SolutionDir)Libraries\\Pix\\bin\\WinPixEventRuntime.dll\" \"$(OutDir)\"") }
+		runtimeDependency("Pix/bin/WinPixEventRuntime.dll", "")
 		links { "WinPixEventRuntime" }
 
 		-- DXC
-		links { "dxcompiler" }
 		includedirs (ROOT .. "Libraries/Dxc/include")
-		postbuildcommands { ("{COPY} \"$(SolutionDir)Libraries\\Dxc\\bin\\dxcompiler.dll\" \"$(OutDir)\"") }
-		postbuildcommands { ("{COPY} \"$(SolutionDir)Libraries\\Dxc\\bin\\dxil.dll\" \"$(OutDir)\"") }
+		runtimeDependency ("Dxc/bin/dxcompiler.dll", "")
+		runtimeDependency ("Dxc/bin/dxil.dll", "")
 
 		-- Optick
 		links { "OptickCore" }
 		libdirs	(ROOT .. "Libraries/Optick/lib/")
 		includedirs (ROOT .. "Libraries/Optick/include")
-		postbuildcommands { ("{COPY} \"$(SolutionDir)Libraries\\Optick\\bin\\OptickCore.dll\" \"$(OutDir)\"") }
+		runtimeDependency ("Optick/bin/OptickCore.dll", "")
 
 
 newaction {
