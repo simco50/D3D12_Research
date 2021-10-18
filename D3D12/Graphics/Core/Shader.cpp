@@ -29,10 +29,7 @@ namespace ShaderCompiler
 	struct CompileResult
 	{
 		std::string ErrorMessage;
-		std::string DebugPath;
-		std::string PreprocessedSource;
 		ShaderBlob pBlob;
-		ShaderBlob pSymbolsBlob;
 		ComPtr<IUnknown> pReflection;
 		std::vector<std::string> Includes;
 
@@ -108,22 +105,18 @@ namespace ShaderCompiler
 		public:
 			void AddArgument(const char* pArgument, const char* pValue = nullptr)
 			{
-				auto it = argumentStrings.insert(MULTIBYTE_TO_UNICODE(pArgument));
-				pArguments.push_back(it.first->c_str());
+				m_Arguments.push_back(MULTIBYTE_TO_UNICODE(pArgument));
 				if (pValue)
 				{
-					it = argumentStrings.insert(MULTIBYTE_TO_UNICODE(pValue));
-					pArguments.push_back(it.first->c_str());
+					m_Arguments.push_back(MULTIBYTE_TO_UNICODE(pValue));
 				}
 			}
 			void AddArgument(const wchar_t* pArgument, const wchar_t* pValue = nullptr)
 			{
-				auto it = argumentStrings.insert(pArgument);
-				pArguments.push_back(it.first->c_str());
+				m_Arguments.push_back(pArgument);
 				if (pValue)
 				{
-					it = argumentStrings.insert(pValue);
-					pArguments.push_back(it.first->c_str());
+					m_Arguments.push_back(pValue);
 				}
 			}
 
@@ -139,11 +132,24 @@ namespace ShaderCompiler
 				}
 			}
 
-			const wchar_t** GetArguments() { return pArguments.data(); }
-			size_t GetNumArguments() const { return pArguments.size(); }
+			const wchar_t** GetArguments()
+			{
+				m_ArgumentArr.reserve(GetNumArguments());
+				for (const auto& arg : m_Arguments)
+				{
+					m_ArgumentArr.push_back(arg.c_str());
+				}
+				return m_ArgumentArr.data();
+			}
+
+			size_t GetNumArguments() const
+			{
+				return m_Arguments.size();
+			}
+
 		private:
-			std::vector<const wchar_t*> pArguments;
-			std::unordered_set<std::wstring> argumentStrings;
+			std::vector<const wchar_t*> m_ArgumentArr;
+			std::vector<std::wstring> m_Arguments;
 		} arguments;
 
 		arguments.AddArgument(Paths::GetFileNameWithoutExtension(compileJob.FilePath).c_str());
@@ -269,28 +275,39 @@ namespace ShaderCompiler
 				return pDefaultIncludeHandler->QueryInterface(riid, ppvObject);
 			}
 
+			void Reset()
+			{
+				IncludedFiles.clear();
+			}
+
 			ULONG STDMETHODCALLTYPE AddRef(void) override {	return 0; }
 			ULONG STDMETHODCALLTYPE Release(void) override { return 0; }
 
 			std::unordered_set<std::string> IncludedFiles;
-		} includeHandler;
+		};
 
-		ComPtr<IDxcResult> pCompileResult;
-		VERIFY_HR(pCompiler3->Compile(&sourceBuffer, arguments.GetArguments(), (uint32)arguments.GetNumArguments(), &includeHandler, IID_PPV_ARGS(pCompileResult.GetAddressOf())));
-#if 0
-		// Preprocessed source
-		ComPtr<IDxcResult> pPreprocessOutput;
-		arguments.AddArgument("-P", ".");
-		if (SUCCEEDED(pCompiler3->Compile(&sourceBuffer, arguments.GetArguments(), (uint32)arguments.GetNumArguments(), &includeHandler, IID_PPV_ARGS(pPreprocessOutput.GetAddressOf()))))
+		if (CommandLine::GetBool("dumpshaders"))
 		{
-			ComPtr<IDxcBlobUtf8> pHLSL;
-			pPreprocessOutput->GetOutput(DXC_OUT_HLSL, IID_PPV_ARGS(pHLSL.GetAddressOf()), nullptr);
-			if (pHLSL && pHLSL->GetStringLength() > 0)
+			// Preprocessed source
+			ComPtr<IDxcResult> pPreprocessOutput;
+			CompileArguments preprocessArgs = arguments;
+			preprocessArgs.AddArgument("-P", ".");
+			CustomIncludeHandler preprocessIncludeHandler;
+			if (SUCCEEDED(pCompiler3->Compile(&sourceBuffer, preprocessArgs.GetArguments(), (uint32)preprocessArgs.GetNumArguments(), &preprocessIncludeHandler, IID_PPV_ARGS(pPreprocessOutput.GetAddressOf()))))
 			{
-				result.ShaderSource = (char*)pHLSL->GetBufferPointer();
+				ComPtr<IDxcBlobUtf8> pHLSL;
+				if(SUCCEEDED(pPreprocessOutput->GetOutput(DXC_OUT_HLSL, IID_PPV_ARGS(pHLSL.GetAddressOf()), nullptr)))
+				{
+					Paths::CreateDirectoryTree(pShaderSymbolsPath);
+					std::ofstream str(Sprintf("%s%s_%s_%s.hlsl", pShaderSymbolsPath, Paths::GetFileNameWithoutExtension(compileJob.FilePath).c_str(), compileJob.EntryPoint.c_str(), compileJob.Target.c_str()));
+					str.write(pHLSL->GetStringPointer(), pHLSL->GetStringLength());
+				}
 			}
 		}
-#endif
+
+		CustomIncludeHandler includeHandler;
+		ComPtr<IDxcResult> pCompileResult;
+		VERIFY_HR(pCompiler3->Compile(&sourceBuffer, arguments.GetArguments(), (uint32)arguments.GetNumArguments(), &includeHandler, IID_PPV_ARGS(pCompileResult.GetAddressOf())));
 
 		ComPtr<IDxcBlobUtf8> pErrors;
 		pCompileResult->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(pErrors.GetAddressOf()), nullptr);
@@ -317,7 +334,7 @@ namespace ShaderCompiler
 				ComPtr<IDxcBlobUtf8> pPrintBlobUtf8;
 				pResult->GetErrorBuffer(pPrintBlob.GetAddressOf());
 				pUtils->GetBlobAsUtf8(pPrintBlob.Get(), pPrintBlobUtf8.GetAddressOf());
-				result.ErrorMessage = (char*)pPrintBlobUtf8->GetBufferPointer();
+				result.ErrorMessage = pPrintBlobUtf8->GetStringPointer();
 				return result;
 			}
 		}
@@ -325,9 +342,16 @@ namespace ShaderCompiler
 		//Symbols
 		{
 			ComPtr<IDxcBlobUtf16> pDebugDataPath;
-			if (SUCCEEDED(pCompileResult->GetOutput(DXC_OUT_PDB, IID_PPV_ARGS(result.pSymbolsBlob.GetAddressOf()), pDebugDataPath.GetAddressOf())))
+			ComPtr<IDxcBlob> pSymbolsBlob;
+			if (SUCCEEDED(pCompileResult->GetOutput(DXC_OUT_PDB, IID_PPV_ARGS(pSymbolsBlob.GetAddressOf()), pDebugDataPath.GetAddressOf())))
 			{
-				result.DebugPath = std::string(pShaderSymbolsPath) + UNICODE_TO_MULTIBYTE((wchar_t*)pDebugDataPath->GetBufferPointer());
+				Paths::CreateDirectoryTree(pShaderSymbolsPath);
+
+				ComPtr<IDxcBlobUtf8> pSymbolsBlobUTF8;
+				pUtils->GetBlobAsUtf8(pSymbolsBlob.Get(), pSymbolsBlobUTF8.GetAddressOf());
+				std::string debugPath = Sprintf("%s%s", pShaderSymbolsPath, pSymbolsBlobUTF8->GetStringPointer());
+				std::ofstream str(debugPath, std::ios::binary);
+				str.write((char*)pSymbolsBlob->GetBufferPointer(), pSymbolsBlob->GetBufferSize());
 			}
 		}
 
