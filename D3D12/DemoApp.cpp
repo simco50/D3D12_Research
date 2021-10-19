@@ -1,7 +1,7 @@
 #include "stdafx.h"
 #include "DemoApp.h"
 #include "Scene/Camera.h"
-#include "ImGuizmo/ImGuizmo.h"
+#include "ImGuizmo.h"
 #include "Content/Image.h"
 #include "Graphics/DebugRenderer.h"
 #include "Graphics/Profiler.h"

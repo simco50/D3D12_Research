@@ -32,8 +32,8 @@
 #include <dxgi1_6.h>
 
 #define D3DX12_NO_STATE_OBJECT_HELPERS
-#include "d3dx12/d3dx12.h"
-#include "Imgui/imgui.h"
+#include "d3dx12.h"
+#include "imgui.h"
 
 #define USE_OPTICK 1
 #define OPTICK_ENABLE_TRACING 1

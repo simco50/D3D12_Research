@@ -11,7 +11,7 @@
 #include "Scene/Camera.h"
 #include "Core/Input.h"
 #include "CBT.h"
-#include "Imgui/imgui_internal.h"
+#include "imgui_internal.h"
 
 constexpr uint32 IndirectDispatchArgsOffset = 0;
 constexpr uint32 IndirectDispatchMeshArgsOffset = IndirectDispatchArgsOffset + sizeof(D3D12_DISPATCH_ARGUMENTS);

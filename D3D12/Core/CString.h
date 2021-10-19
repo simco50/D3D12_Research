@@ -1,5 +1,5 @@
 #pragma once
-#include "Stb/stb_sprintf.h"
+#include "stb_sprintf.h"
 
 inline int FormatString(char* pBuffer, int bufferSize, const char* pFormat, ...)
 {

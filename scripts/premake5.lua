@@ -78,7 +78,15 @@ workspace (ENGINE_NAME)
 		location (ROOT .. ENGINE_NAME)
 		pchheader ("stdafx.h")
 		pchsource (ROOT .. ENGINE_NAME .. "/stdafx.cpp")
-		includedirs { "$(ProjectDir)", "$(ProjectDir)External/" }
+
+		includedirs { "$(ProjectDir)" }
+
+		for i, dir in pairs(os.matchdirs(SOURCE_DIR .. "External/*")) do
+			dirname = string.explode(dir, "/")
+			dir = dirname[#dirname]
+			includedirs ("$(ProjectDir)External/" .. dir)
+		end
+
 		systemversion (WIN_SDK)
 		kind "WindowedApp"
 
@@ -107,26 +115,26 @@ workspace (ENGINE_NAME)
 		filter {}
 
 		-- D3D12
-		includedirs (ROOT .. "Libraries/D3D12/include")
+		includedirs "$(SolutionDir)Libraries/D3D12/include"
 		runtimeDependency("D3D12/bin/D3D12Core.dll", "D3D12")
 		runtimeDependency("D3D12/bin/d3d12SDKLayers.dll", "D3D12")
 		links {	"d3d12.lib", "dxgi" }
 
 		-- Pix
-		includedirs (ROOT .. "Libraries/Pix/include")
-		libdirs (ROOT .. "Libraries/Pix/lib")
+		includedirs "$(SolutionDir)Libraries/Pix/include"
+		libdirs "$(SolutionDir)Libraries/Pix/lib"
 		runtimeDependency("Pix/bin/WinPixEventRuntime.dll", "")
 		links { "WinPixEventRuntime" }
 
 		-- DXC
-		includedirs (ROOT .. "Libraries/Dxc/include")
+		includedirs "$(SolutionDir)Libraries/Dxc/include"
 		runtimeDependency ("Dxc/bin/dxcompiler.dll", "")
 		runtimeDependency ("Dxc/bin/dxil.dll", "")
 
 		-- Optick
 		links { "OptickCore" }
-		libdirs	(ROOT .. "Libraries/Optick/lib/")
-		includedirs (ROOT .. "Libraries/Optick/include")
+		libdirs	"$(SolutionDir)Libraries/Optick/lib/"
+		includedirs "$(SolutionDir)Libraries/Optick/include"
 		runtimeDependency ("Optick/bin/OptickCore.dll", "")
 
 

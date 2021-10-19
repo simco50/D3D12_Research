@@ -9,7 +9,7 @@
 #include "Graphics/SceneView.h"
 #include "RenderGraph/RenderGraph.h"
 #include "Core/Input.h"
-#include "ImGuizmo/ImGuizmo.h"
+#include "ImGuizmo.h"
 #include "Core/Paths.h"
 
 ImGuiRenderer::ImGuiRenderer(GraphicsDevice* pDevice)

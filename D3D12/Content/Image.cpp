@@ -6,8 +6,8 @@
 #define STBI_NO_PIC
 #define STBI_NO_PNM
 
-#include "Stb/stb_image.h"
-#include "Stb/stb_image_write.h"
+#include "stb_image.h"
+#include "stb_image_write.h"
 #include <fstream>
 #include "Core/Paths.h"
 
