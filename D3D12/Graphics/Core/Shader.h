@@ -76,7 +76,7 @@ public:
 	~ShaderManager();
 
 	void ConditionallyReloadShaders();
-	void AddIncludeDir(const std::string& includeDir, bool watch = false);
+	void AddIncludeDir(const std::string& includeDir);
 
 	Shader* GetShader(const char* pShaderPath, ShaderType shaderType, const char* pEntryPoint, const std::vector<ShaderDefine>& defines = {});
 	ShaderLibrary* GetLibrary(const char* pShaderPath, const std::vector<ShaderDefine>& defines = {});

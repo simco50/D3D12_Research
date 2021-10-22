@@ -259,7 +259,7 @@ GraphicsDevice::GraphicsDevice(IDXGIAdapter4* pAdapter)
 	uint8 smMaj, smMin;
 	Capabilities.GetShaderModel(smMaj, smMin);
 	m_pShaderManager = std::make_unique<ShaderManager>(smMaj, smMin);
-	m_pShaderManager->AddIncludeDir("Resources/Shaders/", CommandLine::GetBool("shaderhotreload"));
+	m_pShaderManager->AddIncludeDir("Resources/Shaders/");
 	m_pShaderManager->AddIncludeDir("Graphics/Core/");
 }
 

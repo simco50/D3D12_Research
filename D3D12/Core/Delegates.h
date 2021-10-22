@@ -649,7 +649,7 @@ public:
 	//Ignored when pObject is a nullptr
 	void ClearIfBoundTo(void* pObject)
 	{
-		if (pObject != nullptr && IsBoundTo(pObject))
+		if (IsBoundTo(pObject))
 		{
 			Release();
 		}
