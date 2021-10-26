@@ -20,7 +20,7 @@ struct CBT
 		uint bit = NodeBitIndex(CeilNode(rightChild));
 		BitfieldSet_Single(bit >> 5u, bit & 31u, 1u, 1u);
 	}
-	
+
 	void MergeNode_Single(uint heapIndex)
 	{
 		uint rightSibling = RightSiblingIndex(heapIndex);
@@ -131,11 +131,11 @@ struct CBT
 		}
 		return heapIndex;
 	}
-	
+
 	// Returns the heap index of bitfield node for a heap node
 	uint BitfieldHeapIndex(uint heapIndex)
 	{
-		uint msb = GetNodeDepth(heapIndex);	
+		uint msb = GetNodeDepth(heapIndex);
 		return heapIndex * (1u << (GetMaxDepth() - msb));
 	}
 
@@ -181,12 +181,12 @@ struct CBT
 	{
 		return GetNodeData(1u);
 	}
-	
+
 	uint LeftChildIndex(uint heapIndex)
 	{
 		return heapIndex << 1u;
 	}
-	
+
 	uint RightChildIndex(uint heapIndex)
 	{
 		return (heapIndex << 1u) | 1u;
@@ -226,7 +226,7 @@ namespace LEB
 			b,      0.0f,   c
 		);
 	}
-	
+
 	float3x3 GetSquareMatrix(uint quadBit)
 	{
 		float b = quadBit;
@@ -237,7 +237,7 @@ namespace LEB
 			b,      0.0f,   c
 		);
 	}
-	
+
 	float3x3 GetMatrix(uint heapIndex)
 	{
 		int depth = firstbithigh(heapIndex);
@@ -248,7 +248,7 @@ namespace LEB
 			float3x3 splitMatrix = GetSplitMatrix(GetBitValue(heapIndex, bitID));
 			m = mul(splitMatrix, m);
 		}
-		float3x3 windingMatrix = GetWindingMatrix((depth ^ 1u) & 1u); 
+		float3x3 windingMatrix = GetWindingMatrix((depth ^ 1u) & 1u);
 		return mul(windingMatrix, m);
 	}
 
@@ -365,7 +365,7 @@ namespace LEB
 			}
 		}
 	}
-	
+
 	float3x3 TransformAttributes(uint heapIndex, float3x3 attributes)
 	{
 		float3x3 transformMatrix = GetMatrix(heapIndex);

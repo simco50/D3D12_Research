@@ -11,7 +11,7 @@ struct ViewData
 {
 	float4x4 View;
 	int3 ClusterDimensions;
-	uint LightCount;	
+	uint LightCount;
 };
 
 ConstantBuffer<ViewData> cViewData : register(b0);

@@ -32,7 +32,7 @@ struct RAYPAYLOAD RayPayload
 	float hit RAYQUALIFIER(read(caller) : write(caller, miss));
 };
 
-// Utility function to get a vector perpendicular to an input vector 
+// Utility function to get a vector perpendicular to an input vector
 // From Michael M. Stark - https://blog.selfshadow.com/2011/10/17/perp-vectors/
 float3 GetPerpendicularVector(float3 u)
 {
@@ -65,14 +65,14 @@ float3 GetCosHemisphereSample(inout uint randSeed, float3 hitNorm)
 	return tangent * (r * cos(phi)) + bitangent * (r * sin(phi)) + hitNorm.xyz * sqrt(1 - randVal.x);
 }
 
-[shader("miss")] 
-void Miss(inout RayPayload payload : SV_RayPayload) 
+[shader("miss")]
+void Miss(inout RayPayload payload : SV_RayPayload)
 {
 	payload.hit = 0.0f;
 }
 
-[shader("raygeneration")] 
-void RayGen() 
+[shader("raygeneration")]
+void RayGen()
 {
 	uint2 launchDim = DispatchRaysDimensions().xy;
 	float2 dimInv = rcp((float2)launchDim.xy);
@@ -82,7 +82,7 @@ void RayGen()
 
 	float3 world = WorldFromDepth(texCoord, tSceneDepth.SampleLevel(sLinearClamp, texCoord, 0).r, cData.ViewProjectionInverse);
     float3 normal = NormalFromDepth(tSceneDepth, sLinearClamp, texCoord, dimInv, cData.ViewProjectionInverse);
- 	
+
 	uint randSeed = SeedThread(launchIndex, launchDim, cData.FrameIndex);
 
 	float accumulatedAo = 0.0f;
@@ -91,7 +91,7 @@ void RayGen()
 		RayPayload payload;
 		payload.hit = 1.0f;
 		float3 randomDirection = GetCosHemisphereSample(randSeed, normal.xyz);
-		
+
 		RayDesc ray;
 		ray.Origin = world;
 		ray.Direction = randomDirection;
@@ -101,9 +101,9 @@ void RayGen()
 		TraceRay(
 			tTLASTable[cData.TLASIndex], 									//AccelerationStructure
 										//RayFlags
-				RAY_FLAG_FORCE_OPAQUE | 
-				RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH | 
-				RAY_FLAG_SKIP_CLOSEST_HIT_SHADER, 	
+				RAY_FLAG_FORCE_OPAQUE |
+				RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH |
+				RAY_FLAG_SKIP_CLOSEST_HIT_SHADER,
 			0xFF, 															//InstanceInclusionMask
 			0, 																//RayContributionToHitGroupIndex
 			0, 																//MultiplierForGeometryContributionToHitGroupIndex

@@ -128,7 +128,7 @@ RayCone PropagateRayCone(RayCone cone, float surfaceSpreadAngle, float hitT)
 // Texture Level of Detail Strategies for Real-Time Ray Tracing
 // Ray Tracing Gems - Tomas Akenine-Möller
 float ComputeRayConeMip(RayCone cone, float3 vertexNormal, float2 vertexUVs[3], float2 textureDimensions)
-{   
+{
     // Triangle surface area
     float3 normal = vertexNormal;
     float invWorldArea = rsqrt(dot(normal, normal));

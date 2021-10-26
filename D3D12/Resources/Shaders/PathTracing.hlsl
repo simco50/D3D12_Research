@@ -68,7 +68,7 @@ float CastShadowRay(float3 origin, float3 direction)
 	ray.TMin = RAY_BIAS;
 	ray.TMax = len;
 
-	const int rayFlags = 
+	const int rayFlags =
 		RAY_FLAG_SKIP_CLOSEST_HIT_SHADER |
 		RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH |
 		RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES;
@@ -129,7 +129,7 @@ LightResult EvaluateLight(Light light, float3 worldPos, float3 V, float3 N, floa
 	{
 		return result;
 	}
-	
+
 	float3 L = light.Position - worldPos;
 	if(light.IsDirectional())
 	{
@@ -149,7 +149,7 @@ LightResult EvaluateLight(Light light, float3 worldPos, float3 V, float3 N, floa
 		attenuation *= LightTextureMask(light, shadowIndex, worldPos);
 		float3 rayOrigin = worldPos;
 		//float3 rayOrigin = OffsetRay(worldPos, geometryNormal);
-		attenuation *= CastShadowRay(rayOrigin, L); 
+		attenuation *= CastShadowRay(rayOrigin, L);
 	}
 
 	L = normalize(L);
@@ -160,8 +160,8 @@ LightResult EvaluateLight(Light light, float3 worldPos, float3 V, float3 N, floa
 	return result;
 }
 
-[shader("closesthit")] 
-void PrimaryCHS(inout PrimaryRayPayload payload, BuiltInTriangleIntersectionAttributes attrib) 
+[shader("closesthit")]
+void PrimaryCHS(inout PrimaryRayPayload payload, BuiltInTriangleIntersectionAttributes attrib)
 {
 	MeshInstance instance = tMeshInstances[InstanceID()];
 	VertexAttribute vertex = GetVertexAttributes(instance, attrib.barycentrics, PrimitiveIndex(), ObjectToWorld4x3());
@@ -186,14 +186,14 @@ void PrimaryAHS(inout PrimaryRayPayload payload, BuiltInTriangleIntersectionAttr
 	}
 }
 
-[shader("miss")] 
-void PrimaryMS(inout PrimaryRayPayload payload : SV_RayPayload) 
+[shader("miss")]
+void PrimaryMS(inout PrimaryRayPayload payload : SV_RayPayload)
 {
 	// Nothing to do here! :)
 }
 
-[shader("miss")] 
-void ShadowMS(inout ShadowRayPayload payload : SV_RayPayload) 
+[shader("miss")]
+void ShadowMS(inout ShadowRayPayload payload : SV_RayPayload)
 {
 	payload.Hit = 0;
 }
@@ -255,13 +255,13 @@ bool EvaluateIndirectBRDF(int rayType, float2 u, BrdfData brdfData, float3 N, fl
 
 		// Sample a microfacet normal (H) in local space
 		float3 Hlocal;
-		if (alpha == 0.0f) 
+		if (alpha == 0.0f)
 		{
 			// Fast path for zero roughness (perfect reflection)
 			// also prevents NaNs appearing due to divisions by zeroes
 			Hlocal = float3(0.0f, 0.0f, 1.0f);
-		} 
-		else 
+		}
+		else
 		{
 			// For non-zero roughness, VNDF sampling for GGX distribution
 			Hlocal = SampleGGXVNDF(Vlocal, float2(alpha, alpha), u);
@@ -279,7 +279,7 @@ bool EvaluateIndirectBRDF(int rayType, float2 u, BrdfData brdfData, float3 N, fl
 		float3 F = F_Schlick(brdfData.Specular, HdotL);
 		float G = Smith_G2_Over_G1_Height_Correlated(alpha, alphaSquared, NdotL, NdotV);
 
-		// Calculate weight of the sample specific for selected sampling method 
+		// Calculate weight of the sample specific for selected sampling method
 		// This is microfacet BRDF divided by PDF of sampling method
 		// Due to the clever VNDF sampling method, many of the terms cancel out
 		weight = F * G;
@@ -298,7 +298,7 @@ bool EvaluateIndirectBRDF(int rayType, float2 u, BrdfData brdfData, float3 N, fl
 	{
 		return false;
 	}
-	
+
 	// Rotate the direction back into vector space
 	direction = normalize(RotatePoint(InvertRotation(qRotationToZ), directionLocal));
 
@@ -336,7 +336,7 @@ bool SampleLightRIS(inout uint seed, float3 position, float3 N, out int lightInd
 		{
 			L = -light.Direction;
 		}
-		if(dot(N, L) < 0.0f) 
+		if(dot(N, L) < 0.0f)
 		{
 			continue;
 		}
@@ -358,8 +358,8 @@ bool SampleLightRIS(inout uint seed, float3 position, float3 N, out int lightInd
 	return true;
 }
 
-[shader("raygeneration")] 
-void RayGen() 
+[shader("raygeneration")]
+void RayGen()
 {
 	float2 pixel = float2(DispatchRaysIndex().xy);
 	float2 resolution = float2(DispatchRaysDimensions().xy);
@@ -415,7 +415,7 @@ void RayGen()
 		float3 V = -desc.Direction;
 		float3 geometryNormal = DecodeNormalOctahedron(payload.GeometryNormal);
 		if(dot(geometryNormal, V) < 0.0f)
-		{ 
+		{
 			geometryNormal = -geometryNormal;
 		}
 		if(dot(geometryNormal, N) < 0.0f)

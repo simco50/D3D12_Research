@@ -54,7 +54,7 @@ float EdgeDetection(uint2 index, uint width, uint height)
         uint2(1, 1)
     };
     float sampledValue = 0;
-    for(int j = 0; j < 8; j++) 
+    for(int j = 0; j < 8; j++)
     {
         sampledValue += LinearizeDepth01(tSceneDepth.Load(uint3(index + offsets[j], 0)), cNear, cFar);
     }
@@ -85,12 +85,12 @@ void DebugLightDensityCS(uint3 threadId : SV_DispatchThreadId)
 #if 0
         float fov = cFoV / 2.0;
         float height = 300.0;
-    
+
         int2 pos = threadId.xy;
         pos.y = (720 - pos.y);
         pos -= uint2(1240, 720) / 2.0;
         pos.y += 150.0;
-    
+
         float angle = atan2(pos.x, pos.y);
         if(angle > -fov && angle < fov && pos.y < height)
         {

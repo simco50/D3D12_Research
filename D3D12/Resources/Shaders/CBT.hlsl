@@ -71,7 +71,7 @@ void PrepareDispatchArgsCS(uint threadID : SV_DispatchThreadID)
 	uIndirectArgs.Store(offset + 8, 1);
 
 	offset += sizeof(uint3);
-	
+
 	// Task/mesh shader args
 	uint numMeshThreads = ceil((float)cbt.NumNodes() / MESH_SHADER_THREAD_GROUP_SIZE);
 	uIndirectArgs.Store(offset + 0, numMeshThreads);
@@ -166,7 +166,7 @@ void SumReductionCS(uint threadID : SV_DispatchThreadID, uint groupThreadID : SV
 
 		for(uint i = 0; i < numNodesPerWrite; ++i)
 		{
-			uint value = gsSumCache[nodeOffset + i]; 
+			uint value = gsSumCache[nodeOffset + i];
 			uint bitIndex = baseBitIndex + i * nodeSize;
 			CBT::DataMutateArgs args = cbt.GetDataArgs(bitIndex, nodeSize);
 
@@ -272,9 +272,9 @@ void SumReductionFirstPassCS(uint threadID : SV_DispatchThreadID)
 				((bitField >> 11u) & (31u << 5u));
 		cbt.BinaryHeapSet(cbt.NodeBitIndex(nodeIndex), 10, data);
 
-		// Sum of 5 bit pairs -> 1 * 6 bits	
+		// Sum of 5 bit pairs -> 1 * 6 bits
 		depth -= 1;
-		nodeIndex >>= 1;	
+		nodeIndex >>= 1;
 		bitField = (bitField & 0x0000FFFFu) + ((bitField >> 16u) & 0x0000FFFFu);
 		data = bitField;
 		cbt.BinaryHeapSet(cbt.NodeBitIndex(nodeIndex), 6, data);
@@ -302,7 +302,7 @@ bool BoxPlaneIntersect(AABB aabb, float4 plane)
 
 bool BoxFrustumIntersect(AABB aabb, float4 planes[6])
 {
-    for (int i = 0; i < 6; ++i) 
+    for (int i = 0; i < 6; ++i)
 	{
 		if(!BoxPlaneIntersect(aabb, planes[i]))
 		{
@@ -385,7 +385,7 @@ void UpdateCS(uint threadID : SV_DispatchThreadID)
 	if(threadID < cbt.NumNodes())
 	{
 		uint heapIndex = cbt.LeafToHeapIndex(threadID);
-		
+
 		float3x3 tri = GetVertices(heapIndex);
 		float2 lod = GetLOD(tri);
 
@@ -451,7 +451,7 @@ void UpdateAS(uint threadID : SV_DispatchThreadID)
 	if(threadID < cbt.NumNodes())
 	{
 		heapIndex = cbt.LeafToHeapIndex(threadID);
-		
+
 		float3x3 tri = GetVertices(heapIndex);
 		float2 lod = GetLOD(tri);
 
@@ -512,8 +512,8 @@ void RenderMS(
 		vertices[index].HeapIndex = heapIndex;
 	}
 	triangles[outputIndex] = uint3(
-		outputIndex * 3 + 0, 
-		outputIndex * 3 + 1, 
+		outputIndex * 3 + 0,
+		outputIndex * 3 + 1,
 		outputIndex * 3 + 2);
 }
 
@@ -569,7 +569,7 @@ void RenderVS(uint vertexID : SV_VertexID, uint instanceID : SV_InstanceID, out 
 #endif
 
 float4 RenderPS(
-	VertexOut vertex, 
+	VertexOut vertex,
 	float3 bary : SV_Barycentrics) : SV_TARGET
 {
 	float tl = Sample2D(cCommonArgs.HeightmapIndex, sLinearClamp, vertex.UV, uint2(-1, -1)).r;
@@ -609,9 +609,9 @@ float4 RenderPS(
 /* DEBUG VISUALIZATION TECHNIQUE */
 
 void DebugVisualizeVS(
-	uint vertexID : SV_VertexID, 
+	uint vertexID : SV_VertexID,
 	uint instanceID : SV_InstanceID,
-	out float4 pos : SV_POSITION, 
+	out float4 pos : SV_POSITION,
 	out float4 color : COLOR)
 {
 	CBT cbt;
@@ -628,14 +628,14 @@ void DebugVisualizeVS(
 	float3 tri = LEB::TransformAttributes(heapIndex, baseTriangle)[vertexID];
 	tri.xy = tri.xy * 2 - 1;
 	pos = float4(tri, 1);
-	
+
 	uint state = SeedThread(firstbithigh(heapIndex));
 	color = float4(Random01(state), Random01(state), Random01(state), 1);
 }
 
 float4 DebugVisualizePS(
-	float4 position : SV_POSITION, 
-	float4 color : COLOR, 
+	float4 position : SV_POSITION,
+	float4 color : COLOR,
 	float3 bary : SV_Barycentrics) : SV_TARGET
 {
 	float3 deltas = fwidth(bary);

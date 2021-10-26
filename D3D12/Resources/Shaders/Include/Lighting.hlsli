@@ -69,7 +69,7 @@ float Shadow3x3PCF(float3 wPos, int shadowMapIndex, float invShadowSize)
 	float2 texCoord = lightPos.xy;
 
 	Texture2D shadowTexture = tTexture2DTable[NonUniformResourceIndex(cShadowData.ShadowMapOffset + shadowMapIndex)];
-	
+
 	const float Dilation = 2.0f;
     float d1 = Dilation * invShadowSize * 0.125f;
     float d2 = Dilation * invShadowSize * 0.875f;

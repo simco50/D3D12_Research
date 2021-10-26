@@ -146,9 +146,9 @@ void CSMain(CS_INPUT input)
             minAABB = min(minAABB, viewSpace[i]);
             maxAABB = max(maxAABB, viewSpace[i]);
         }
-        AABBFromMinMax(GroupAABB, minAABB, maxAABB);        
+        AABBFromMinMax(GroupAABB, minAABB, maxAABB);
     }
-    
+
     // Convert depth values to view space.
     float minDepthVS = ScreenToView(float4(0, 0, fMinDepth, 1), cScreenDimensionsInv, cProjectionInverse).z;
     float maxDepthVS = ScreenToView(float4(0, 0, fMaxDepth, 1), cScreenDimensionsInv, cProjectionInverse).z;
@@ -161,7 +161,7 @@ void CSMain(CS_INPUT input)
     InterlockedOr(DepthMask, 1u << cellIndex);
 #endif
 
-    // Clipping plane for minimum depth value 
+    // Clipping plane for minimum depth value
     Plane minPlane;
     minPlane.Normal = float3(0.0f, 0.0f, 1.0f);
     minPlane.DistanceToOrigin = minDepthVS;

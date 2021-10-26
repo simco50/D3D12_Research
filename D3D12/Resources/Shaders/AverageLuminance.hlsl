@@ -39,7 +39,7 @@ void CSMain(CSInput input)
     float countForThisBin = (float)tLuminanceHistogram.Load(input.groupIndex * 4);
     gHistogramShared[input.groupIndex] = countForThisBin * (float)input.groupIndex;
     GroupMemoryBarrierWithGroupSync();
-    
+
     [unroll]
     for(uint histogramSampleIndex = (NUM_HISTOGRAM_BINS >> 1); histogramSampleIndex > 0; histogramSampleIndex >>= 1)
     {
@@ -49,7 +49,7 @@ void CSMain(CSInput input)
         }
         GroupMemoryBarrierWithGroupSync();
     }
-    
+
     if(input.groupIndex == 0)
     {
         float weightedLogAverage = (gHistogramShared[0].x / max((float)cPixelCount - countForThisBin, 1.0)) - 1.0;

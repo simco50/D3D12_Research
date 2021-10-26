@@ -24,7 +24,7 @@ T ReinhardExtended(T x, float MaxWhite)
 }
 
 template<typename T>
-T ACES_Fast(T x) 
+T ACES_Fast(T x)
 {
     // Narkowicz 2015, "ACES Filmic Tone Mapping Curve"
     const float a = 2.51;
@@ -36,7 +36,7 @@ T ACES_Fast(T x)
 }
 
 template<typename T>
-T Unreal3(T x) 
+T Unreal3(T x)
 {
     // Unreal 3, Documentation: "Color Grading"
     // Adapted to be close to Tonemap_ACES, with similar range

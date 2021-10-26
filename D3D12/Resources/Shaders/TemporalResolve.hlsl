@@ -195,8 +195,8 @@ groupshared float gsDepths[GSM_SIZE];
 [RootSignature(RootSig)]
 [numthreads(THREAD_GROUP_ROW_SIZE, THREAD_GROUP_ROW_SIZE, 1)]
 void CSMain(
-    uint3 ThreadId : SV_DISPATCHTHREADID, 
-    uint GroupIndex : SV_GROUPINDEX, 
+    uint3 ThreadId : SV_DISPATCHTHREADID,
+    uint GroupIndex : SV_GROUPINDEX,
     uint3 GroupThreadId : SV_GROUPTHREADID,
     uint3 GroupId : SV_GROUPID)
 {
@@ -237,7 +237,7 @@ void CSMain(
     float3 aabb_min = min(lt, min(ct, min(rt, min(lc, min(cc, min(rc, min(lb, min(cb, rb))))))));
     float3 aabb_max = max(lt, max(ct, max(rt, max(lc, max(cc, max(rc, max(lb, max(cb, rb))))))));
     float3 aabb_avg = (lt + ct + rt + lc + cc + rc + lb + cb + rb) / 9.0f;
-#if TAA_AABB_ROUNDED 
+#if TAA_AABB_ROUNDED
     //[Karis14] - Average 3x3 neighborhoord with 5 sample plus pattern neighborhood to remove 'filtered' look
     float3 aabb_min2 = min(min(min(min(lc, cc), ct), rc), cb);
     float3 aabb_max2 = max(max(max(max(lc, cc), ct), rc), cb);
@@ -270,9 +270,9 @@ void CSMain(
     // [Karis14] - Use closest pixel to move edge along
     const float crossDilation = 2;
     float4 crossDepths = float4(
-        gsDepths[gsLocation - 11], 
-        gsDepths[gsLocation - 9], 
-        gsDepths[gsLocation + 9], 
+        gsDepths[gsLocation - 11],
+        gsDepths[gsLocation - 9],
+        gsDepths[gsLocation + 9],
         gsDepths[gsLocation + 11]
     );
     float3 minOffset = float3(-1.0f, -1.0f, crossDepths.x);
@@ -295,7 +295,7 @@ void CSMain(
     uvReproj = texCoord + velocity;
 #endif // TAA_REPROJECT
 
-#if TAA_RESOLVE_METHOD == HISTORY_RESOLVE_CATMULL_ROM 
+#if TAA_RESOLVE_METHOD == HISTORY_RESOLVE_CATMULL_ROM
     // [Karis14] Cubic filter to avoid blurry result from billinear filter
     float3 prevColor = SampleTextureCatmullRom(tPreviousColor, sLinearClamp, uvReproj, dimensions).rgb;
 #elif TAA_RESOLVE_METHOD == HISTORY_RESOLVE_BILINEAR
@@ -312,7 +312,7 @@ void CSMain(
 
 #if TAA_HISTORY_REJECT_METHOD == HISTORY_REJECT_CLAMP
     prevColor = clamp(prevColor, aabb_min, aabb_max);
-#elif TAA_HISTORY_REJECT_METHOD == HISTORY_REJECT_CLIP 
+#elif TAA_HISTORY_REJECT_METHOD == HISTORY_REJECT_CLIP
     // [Karis2014] - Clip instead of clamp
     prevColor = ClipAABB(aabb_min, aabb_max, float4(aabb_avg, 1), float4(prevColor, 1)).xyz;
 #elif TAA_HISTORY_REJECT_METHOD == HISTORY_REJECT_VARIANCE_CLIP
@@ -322,13 +322,13 @@ void CSMain(
 
     float blendFactor = MIN_BLEND_FACTOR;
 
-#if TAA_VELOCITY_CORRECT 
+#if TAA_VELOCITY_CORRECT
     // [Xu16] Reduce blend factor when the motion is more subpixel
 	float subpixelCorrection = frac(max(abs(velocity.x) * dimensions.x, abs(velocity.y) * dimensions.y)) * 0.5f;
     blendFactor = saturate(lerp(blendFactor, 0.8f, subpixelCorrection));
 #endif // TAA_VELOCITY_CORRECT
 
-#if TAA_LUMINANCE_WEIGHT 
+#if TAA_LUMINANCE_WEIGHT
     // [Lottes] Feedback weight from unbiased luminance diff
 #if TAA_COLOR_SPACE == COLOR_SPACE_RGB
     float lum0 = GetLuminance(currColor);

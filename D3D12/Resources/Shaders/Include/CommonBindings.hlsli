@@ -89,19 +89,19 @@ T LoadByteAddressData(uint bufferIndex, uint elementIndex)
     return tBufferTable[bufferIndex].Load<T>(elementIndex * sizeof(T));
 }
 
-float4 Sample2D(int index, SamplerState s, float2 uv, uint2 offset = 0) 
+float4 Sample2D(int index, SamplerState s, float2 uv, uint2 offset = 0)
 {
-    return tTexture2DTable[index].Sample(s, uv, offset); 
+    return tTexture2DTable[index].Sample(s, uv, offset);
 }
 
-float4 SampleLevel2D(int index, SamplerState s, float2 uv, float level, uint2 offset = 0) 
+float4 SampleLevel2D(int index, SamplerState s, float2 uv, float level, uint2 offset = 0)
 {
-    return tTexture2DTable[index].SampleLevel(s, uv, level, offset); 
+    return tTexture2DTable[index].SampleLevel(s, uv, level, offset);
 }
 
-float4 SampleGrad2D(int index, SamplerState s, float2 uv,  float2 ddx, float2 ddy, uint2 offset = 0) 
+float4 SampleGrad2D(int index, SamplerState s, float2 uv,  float2 ddx, float2 ddy, uint2 offset = 0)
 {
-    return tTexture2DTable[index].SampleGrad(s, uv, ddx, ddy, offset); 
+    return tTexture2DTable[index].SampleGrad(s, uv, ddx, ddy, offset);
 }
 
 #endif

@@ -22,16 +22,16 @@ cbuffer LuminanceHistogramBuffer : register(b0)
 uint HDRToHistogramBin(float3 hdrColor)
 {
     float luminance = GetLuminance(hdrColor);
-    
+
     if(luminance < EPSILON)
     {
         return 0;
     }
-    
+
     float logLuminance = saturate((log2(luminance) - cMinLogLuminance) * cOneOverLogLuminanceRange);
     return (uint)(logLuminance * (NUM_HISTOGRAM_BINS - 1) + 1.0);
 }
-    
+
 groupshared uint HistogramShared[NUM_HISTOGRAM_BINS];
 
 [RootSignature(RootSig)]
@@ -39,17 +39,17 @@ groupshared uint HistogramShared[NUM_HISTOGRAM_BINS];
 void CSMain(uint groupIndex : SV_GroupIndex, uint3 threadId : SV_DispatchThreadID)
 {
     HistogramShared[groupIndex] = 0;
-    
+
     GroupMemoryBarrierWithGroupSync();
-    
+
     if(threadId.x < cWidth && threadId.y < cHeight)
     {
         float3 hdrColor = tHDRTexture.Load(int3(threadId.xy, 0)).rgb;
         uint binIndex = HDRToHistogramBin(hdrColor);
         InterlockedAdd(HistogramShared[binIndex], 1);
     }
-    
+
     GroupMemoryBarrierWithGroupSync();
-    
+
     uLuminanceHistogram.InterlockedAdd(groupIndex * 4, HistogramShared[groupIndex]);
 }

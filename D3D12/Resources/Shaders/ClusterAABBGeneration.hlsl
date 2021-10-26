@@ -35,7 +35,7 @@ struct CS_Input
 [RootSignature(RootSig)]
 [numthreads(1, 1, 32)]
 void GenerateAABBs(CS_Input input)
-{   
+{
     uint3 clusterIndex3D = input.ThreadID;
     if(clusterIndex3D.z >= cClusterDimensions.z)
     {

@@ -50,7 +50,7 @@ float CastShadowRay(float3 origin, float3 direction)
 	ray.TMin = RAY_BIAS;
 	ray.TMax = len;
 
-	const int rayFlags = 
+	const int rayFlags =
 		RAY_FLAG_SKIP_CLOSEST_HIT_SHADER |
 		RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH |
 		RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES;
@@ -141,7 +141,7 @@ LightResult EvaluateLight(Light light, float3 worldPos, float3 V, float3 N, Brdf
 	{
 		return result;
 	}
-	
+
 	float3 L = light.Position - worldPos;
 	if(light.IsDirectional())
 	{
@@ -176,7 +176,7 @@ LightResult EvaluateLight(Light light, float3 worldPos, float3 V, float3 N, Brdf
 		attenuation = 0.0f;
 #endif // SECONDARY_SHADOW_RAY
 	}
-	
+
 	if(attenuation <= 0.0f)
 	{
 		return result;
@@ -189,8 +189,8 @@ LightResult EvaluateLight(Light light, float3 worldPos, float3 V, float3 N, Brdf
 	return result;
 }
 
-[shader("closesthit")] 
-void ReflectionClosestHit(inout ReflectionRayPayload payload, BuiltInTriangleIntersectionAttributes attrib) 
+[shader("closesthit")]
+void ReflectionClosestHit(inout ReflectionRayPayload payload, BuiltInTriangleIntersectionAttributes attrib)
 {
 	payload.rayCone = PropagateRayCone(payload.rayCone, 0, RayTCurrent());
 
@@ -227,20 +227,20 @@ void ReflectionAnyHit(inout ReflectionRayPayload payload, BuiltInTriangleInterse
 	}
 }
 
-[shader("miss")] 
-void ShadowMiss(inout ShadowRayPayload payload : SV_RayPayload) 
+[shader("miss")]
+void ShadowMiss(inout ShadowRayPayload payload : SV_RayPayload)
 {
 	payload.Hit = 0;
 }
 
-[shader("miss")] 
-void ReflectionMiss(inout ReflectionRayPayload payload : SV_RayPayload) 
+[shader("miss")]
+void ReflectionMiss(inout ReflectionRayPayload payload : SV_RayPayload)
 {
 	payload.output = CIESky(WorldRayDirection(), -tLights[0].Direction);
 }
 
-[shader("raygeneration")] 
-void RayGen() 
+[shader("raygeneration")]
+void RayGen()
 {
 	float2 dimInv = rcp(DispatchRaysDimensions().xy);
 	uint2 launchIndex = DispatchRaysIndex().xy;
@@ -252,7 +252,7 @@ void RayGen()
 
 	float3 view = ViewFromDepth(texCoord, depth, cViewData.ProjectionInverse);
 	float3 world = mul(float4(view, 1), cViewData.ViewInverse).xyz;
-	
+
 	float3 N = reflectionSample.rgb;
 	float reflectivity = reflectionSample.a;
 

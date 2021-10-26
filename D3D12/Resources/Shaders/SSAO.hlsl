@@ -54,7 +54,7 @@ void CSMain(CS_INPUT input)
 	float3x3 TBN = float3x3(tangent, bitangent, normal);
 
     float occlusion = 0;
-    
+
     for(int i = 0; i < cData.AoSamples; ++i)
     {
         float2 point2d = HammersleyPoints(i, cData.AoSamples);
