@@ -29,6 +29,16 @@ D3D12_CPU_DESCRIPTOR_HANDLE Texture::GetDSV(bool writeable /*= true*/) const
 	return writeable ? m_Rtv : m_ReadOnlyDsv;
 }
 
+int32 Texture::GetSRVIndex() const
+{
+	return m_pSrv ? m_pSrv->GetHeapIndex() : DescriptorHandle::InvalidHeapIndex;
+}
+
+int32 Texture::GetUAVIndex() const
+{
+	return m_pUav ? m_pUav->GetHeapIndex() : DescriptorHandle::InvalidHeapIndex;
+}
+
 void Texture::CreateUAV(UnorderedAccessView** pView, const TextureUAVDesc& desc)
 {
 	if (*pView == nullptr)

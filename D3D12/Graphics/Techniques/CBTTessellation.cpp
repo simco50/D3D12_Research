@@ -130,9 +130,9 @@ void CBTTessellation::Execute(RGGraph& graph, Texture* pRenderTarget, Texture* p
 		int32 IndirectArgsIndex;
 	} commonArgs;
 	commonArgs.NumElements = (uint32)m_pCBTBuffer->GetSize() / sizeof(uint32);
-	commonArgs.HeightmapIndex = m_pHeightmap->GetSRV()->GetHeapIndex();
-	commonArgs.CBTIndex = m_pCBTBuffer->GetUAV()->GetHeapIndex();
-	commonArgs.IndirectArgsIndex = m_pCBTIndirectArgs->GetUAV()->GetHeapIndex();
+	commonArgs.HeightmapIndex = m_pHeightmap->GetSRVIndex();
+	commonArgs.CBTIndex = m_pCBTBuffer->GetUAVIndex();
+	commonArgs.IndirectArgsIndex = m_pCBTIndirectArgs->GetUAVIndex();
 
 	struct UpdateData
 	{
@@ -167,7 +167,7 @@ void CBTTessellation::Execute(RGGraph& graph, Texture* pRenderTarget, Texture* p
 		RGPassBuilder cbtUpload = graph.AddPass("CBT Upload");
 		cbtUpload.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
 			{
-				m_pCBTBuffer->SetData(&context, m_CBT.GetData(), m_CBT.GetMemoryUse());
+				context.InitializeBuffer(m_pCBTBuffer.get(), m_CBT.GetData(), m_CBT.GetMemoryUse());
 				context.FlushResourceBarriers();
 			});
 		m_IsDirty = false;

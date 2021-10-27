@@ -590,7 +590,7 @@ void DemoApp::Update()
 				light.ShadowMapSize = m_ShadowMaps[light.ShadowIndex]->GetWidth();
 			}
 		}
-		shadowData.ShadowMapOffset = m_ShadowMaps[0]->GetSRV()->GetHeapIndex();
+		shadowData.ShadowMapOffset = m_ShadowMaps[0]->GetSRVIndex();
 	}
 
 	{
@@ -614,7 +614,7 @@ void DemoApp::Update()
 	m_SceneData.pAO = m_pAmbientOcclusion.get();
 	m_SceneData.FrameIndex = m_Frame;
 	m_SceneData.pPreviousColor = m_pPreviousColor.get();
-	m_SceneData.SceneTLAS = m_pTLAS->GetSRV()->GetHeapIndex();
+	m_SceneData.SceneTLAS = m_pTLAS->GetSRVIndex();
 	m_SceneData.pNormals = m_pNormals.get();
 	m_SceneData.pResolvedNormals = m_pResolvedNormals.get();
 	m_SceneData.pResolvedTarget = Tweakables::g_TAA.Get() ? m_pTAASource.get() : m_pHDRRenderTarget.get();
@@ -2001,10 +2001,10 @@ void DemoApp::UploadSceneData(CommandContext& context)
 		for (const Material& material : pMesh->GetMaterials())
 		{
 			ShaderInterop::MaterialData materialData;
-			materialData.Diffuse = material.pDiffuseTexture ? material.pDiffuseTexture->GetSRV()->GetHeapIndex() : -1;
-			materialData.Normal = material.pNormalTexture ? material.pNormalTexture->GetSRV()->GetHeapIndex() : -1;
-			materialData.RoughnessMetalness = material.pRoughnessMetalnessTexture ? material.pRoughnessMetalnessTexture->GetSRV()->GetHeapIndex() : -1;
-			materialData.Emissive = material.pEmissiveTexture ? material.pEmissiveTexture->GetSRV()->GetHeapIndex() : -1;
+			materialData.Diffuse = material.pDiffuseTexture ? material.pDiffuseTexture->GetSRVIndex() : -1;
+			materialData.Normal = material.pNormalTexture ? material.pNormalTexture->GetSRVIndex() : -1;
+			materialData.RoughnessMetalness = material.pRoughnessMetalnessTexture ? material.pRoughnessMetalnessTexture->GetSRVIndex() : -1;
+			materialData.Emissive = material.pEmissiveTexture ? material.pEmissiveTexture->GetSRVIndex() : -1;
 			materialData.BaseColorFactor = material.BaseColorFactor;
 			materialData.MetalnessFactor = material.MetalnessFactor;
 			materialData.RoughnessFactor = material.RoughnessFactor;

@@ -223,7 +223,7 @@ void ImGuiRenderer::Render(RGGraph& graph, const SceneView& sceneData, Texture* 
 						{
 							Texture* pTex = static_cast<Texture*>(pcmd->TextureId);
 							context.InsertResourceBarrier(pTex, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-							drawData.TextureIndex = pTex->GetSRV()->GetHeapIndex();
+							drawData.TextureIndex = pTex->GetSRVIndex();
 							drawData.TextureType = pTex->GetDesc().Dimensions;
 						}
 						context.SetRootCBV(0, drawData);

@@ -244,6 +244,9 @@ public:
 	UnorderedAccessView* GetUAV() const { return m_pUav; }
 	ShaderResourceView* GetSRV() const { return m_pSrv; }
 
+	int32 GetSRVIndex() const;
+	int32 GetUAVIndex() const;
+
 	DXGI_FORMAT GetFormat() const { return m_Desc.Format; }
 	const ClearBinding& GetClearBinding() const { return m_Desc.ClearBindingValue; }
 
@@ -252,10 +255,8 @@ public:
 private:
 	TextureDesc m_Desc;
 
-	//#SimonC: This can hold multiple handles as long as they're sequential in memory. 
-	//Need to adapt allocator to work with this nicely so it doesn't waste memory
-	CD3DX12_CPU_DESCRIPTOR_HANDLE m_Rtv = {};
-	CD3DX12_CPU_DESCRIPTOR_HANDLE m_ReadOnlyDsv = {};
+	D3D12_CPU_DESCRIPTOR_HANDLE m_Rtv = {};
+	D3D12_CPU_DESCRIPTOR_HANDLE m_ReadOnlyDsv = {};
 
 	ShaderResourceView* m_pSrv = nullptr;
 	UnorderedAccessView* m_pUav = nullptr;

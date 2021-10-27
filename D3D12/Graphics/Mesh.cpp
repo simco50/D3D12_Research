@@ -269,7 +269,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 	uint64 dataOffset = 0;
 	auto CopyData = [this, &dataOffset, &pContext](void* pSource, uint64 size)
 	{
-		m_pGeometryData->SetData(pContext, pSource, size, dataOffset);
+		pContext->InitializeBuffer(m_pGeometryData.get(), pSource, size, dataOffset);
 		dataOffset += size;
 		dataOffset = Math::AlignUp<uint64>(dataOffset, sBufferAlignment);
 	};
