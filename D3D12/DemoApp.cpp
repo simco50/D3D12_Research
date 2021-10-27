@@ -193,7 +193,6 @@ DemoApp::DemoApp(WindowHandle window, const IntVector2& windowRect, int sampleCo
 	InitializePipelines();
 	InitializeAssets(*pContext);
 	SetupScene(*pContext);
-	UpdateTLAS(*pContext);
 	pContext->Execute(true);
 
 	Tweakables::g_RaytracedAO = m_pDevice->GetCapabilities().SupportsRaytracing() ? Tweakables::g_RaytracedAO : false;
@@ -299,6 +298,9 @@ void DemoApp::SetupScene(CommandContext& context)
 void DemoApp::Update()
 {
 	PROFILE_BEGIN("Update");
+	m_pImGuiRenderer->NewFrame(m_WindowWidth, m_WindowHeight);
+	m_pDevice->GetShaderManager()->ConditionallyReloadShaders();
+	UpdateImGui();
 
 	CommandContext* pUploadContext = m_pDevice->AllocateCommandContext();
 	{
@@ -306,19 +308,6 @@ void DemoApp::Update()
 		UploadSceneData(*pUploadContext);
 	}
 	pUploadContext->Execute(false);
-
-	m_pImGuiRenderer->NewFrame(m_WindowWidth, m_WindowHeight);
-
-	UpdateImGui();
-
-	PROFILE_BEGIN("Update Game State");
-	m_pDevice->GetShaderManager()->ConditionallyReloadShaders();
-
-	for (Batch& b : m_SceneData.Batches)
-	{
-		b.LocalBounds.Transform(b.Bounds, b.WorldMatrix);
-		b.Radius = Vector3(b.Bounds.Extents).Length();
-	}
 
 #if 0
 	static int selectedBatch = -1;
@@ -618,8 +607,6 @@ void DemoApp::Update()
 	m_SceneData.pNormals = m_pNormals ? m_pNormals.get() : m_pResolvedNormals.get();
 	m_SceneData.pResolvedNormals = m_pResolvedNormals.get();
 	m_SceneData.pResolvedTarget = Tweakables::g_TAA.Get() ? m_pTAASource.get() : m_pHDRRenderTarget.get();
-
-	PROFILE_END();
 
 	////////////////////////////////
 	// LET THE RENDERING BEGIN!
@@ -1995,6 +1982,8 @@ void DemoApp::UploadSceneData(CommandContext& context)
 			batch.pMesh = &parentMesh;
 			batch.BlendMode = meshMaterial.IsTransparent ? Batch::Blending::AlphaMask : Batch::Blending::Opaque;
 			batch.WorldMatrix = node.Transform;
+			batch.LocalBounds.Transform(batch.Bounds, batch.WorldMatrix);
+			batch.Radius = Vector3(batch.Bounds.Extents).Length();
 			sceneBatches.push_back(batch);
 		}
 
