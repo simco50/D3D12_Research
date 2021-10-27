@@ -26,6 +26,7 @@
 #include "Core/Paths.h"
 #include "Core/Input.h"
 #include "Core/ConsoleVariables.h"
+#include "Core/Utils.h"
 
 static const int32 FRAME_COUNT = 3;
 static const DXGI_FORMAT SWAPCHAIN_FORMAT = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -150,7 +151,7 @@ namespace Tweakables
 }
 
 DemoApp::DemoApp(WindowHandle window, const IntVector2& windowRect, int sampleCount /*= 1*/)
-	: m_SampleCount(sampleCount)
+	: m_SampleCount(sampleCount), m_Window(window)
 {
 	// #todo fixup MSAA :(
 	checkf(sampleCount == 1, "I broke MSAA! TODO");
@@ -238,20 +239,15 @@ void DemoApp::InitializeAssets(CommandContext& context)
 
 void DemoApp::SetupScene(CommandContext& context)
 {
-	m_pLightCookie = std::make_unique<Texture>(m_pDevice.get(), "Light Cookie");
-	m_pLightCookie->Create(&context, "Resources/Textures/LightProjector.png", false);
-
 	m_pCamera->SetPosition(Vector3(-1.3f, 2.4f, -1.5f));
 	m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(Math::PIDIV4, Math::PIDIV4 * 0.5f, 0));
 
 	{
-#if 1
+#if 0
 		m_pCamera->SetPosition(Vector3(-1.3f, 2.4f, -1.5f));
 		m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(Math::PIDIV4, Math::PIDIV4 * 0.5f, 0));
 
-		std::unique_ptr<Mesh> pMesh = std::make_unique<Mesh>();
-		pMesh->Load("Resources/Scenes/Sponza/Sponza.gltf", m_pDevice.get(), &context, 1.0f);
-		m_Meshes.push_back(std::move(pMesh));
+		LoadMesh("Resources/Scenes/Sponza/Sponza.gltf", context);
 #elif 0
 		// Hardcode the camera of the scene :-)
 		Matrix m(
@@ -265,80 +261,13 @@ void DemoApp::SetupScene(CommandContext& context)
 		m_pCamera->SetFoV(68.75f * Math::PI / 180.0f);
 		m_pCamera->SetRotation(Quaternion::CreateFromRotationMatrix(m));
 
-		std::unique_ptr<Mesh> pMesh = std::make_unique<Mesh>();
-		pMesh->Load("D:/References/GltfScenes/bathroom_pt/LAZIENKA.gltf", m_pDevice.get(), &context, 1.0f);
-		m_Meshes.push_back(std::move(pMesh));
+		LoadMesh("D:/References/GltfScenes/bathroom_pt/LAZIENKA.gltf", context);
 #elif 0
-		std::unique_ptr<Mesh> pMesh = std::make_unique<Mesh>();
-		pMesh->Load("D:/References/GltfScenes/Sphere/scene.gltf", m_pDevice.get(), &context, 1.0f);
-		m_Meshes.push_back(std::move(pMesh));
+		LoadMesh("D:/References/GltfScenes/Sphere/scene.gltf", context);
 #elif 0
-		std::unique_ptr<Mesh> pMesh = std::make_unique<Mesh>();
-		pMesh->Load("D:/References/GltfScenes/BlenderSplash/MyScene.gltf", m_pDevice.get(), &context, 1.0f);
-		m_Meshes.push_back(std::move(pMesh));
+		LoadMesh("D:/References/GltfScenes/BlenderSplash/MyScene.gltf", context);
 #endif
 	}
-
-	std::vector<ShaderInterop::MaterialData> materials;
-	std::vector<ShaderInterop::MeshData> meshes;
-	std::vector<ShaderInterop::MeshInstance> meshInstances;
-
-	for (const auto& pMesh : m_Meshes)
-	{
-		for (const SubMesh& subMesh : pMesh->GetMeshes())
-		{
-			ShaderInterop::MeshData mesh;
-			mesh.IndexStream = subMesh.pIndexSRV->GetHeapIndex();
-			mesh.PositionStream = subMesh.pPositionsStreamSRV->GetHeapIndex();
-			mesh.NormalStream = subMesh.pNormalsStreamSRV->GetHeapIndex();
-			mesh.UVStream = subMesh.pUVStreamSRV->GetHeapIndex();
-			meshes.push_back(mesh);
-		}
-
-		for (const SubMeshInstance& node : pMesh->GetMeshInstances())
-		{
-			const SubMesh& parentMesh = pMesh->GetMesh(node.MeshIndex);
-			const Material& meshMaterial = pMesh->GetMaterial(parentMesh.MaterialId);
-			ShaderInterop::MeshInstance meshInstance;
-			meshInstance.Mesh = node.MeshIndex;
-			meshInstance.Material = (uint32)materials.size() + parentMesh.MaterialId;
-			meshInstance.World = node.Transform;
-			meshInstances.push_back(meshInstance);
-
-			Batch batch;
-			batch.Index = (int)m_SceneData.Batches.size();
-			batch.LocalBounds = parentMesh.Bounds;
-			batch.pMesh = &parentMesh;
-			batch.BlendMode = meshMaterial.IsTransparent ? Batch::Blending::AlphaMask : Batch::Blending::Opaque;
-			batch.WorldMatrix = node.Transform;
-			batch.Material = (uint32)materials.size() + parentMesh.MaterialId;
-			m_SceneData.Batches.push_back(batch);
-		}
-
-		for (const Material& material : pMesh->GetMaterials())
-		{
-			ShaderInterop::MaterialData materialData;
-			materialData.Diffuse = material.pDiffuseTexture ? material.pDiffuseTexture->GetSRV()->GetHeapIndex() : -1;
-			materialData.Normal = material.pNormalTexture ? material.pNormalTexture->GetSRV()->GetHeapIndex() : -1;
-			materialData.RoughnessMetalness = material.pRoughnessMetalnessTexture ? material.pRoughnessMetalnessTexture->GetSRV()->GetHeapIndex() : -1;
-			materialData.Emissive = material.pEmissiveTexture ? material.pEmissiveTexture->GetSRV()->GetHeapIndex() : -1;
-			materialData.BaseColorFactor = material.BaseColorFactor;
-			materialData.MetalnessFactor = material.MetalnessFactor;
-			materialData.RoughnessFactor = material.RoughnessFactor;
-			materialData.EmissiveFactor = material.EmissiveFactor;
-			materialData.AlphaCutoff = material.AlphaCutoff;
-			materials.push_back(materialData);
-		}
-	}
-
-	m_pMeshBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(Math::Max(1, (int)meshes.size()), sizeof(ShaderInterop::MeshData), BufferFlag::ShaderResource), "Meshes");
-	m_pMeshBuffer->SetData(&context, meshes.data(), meshes.size() * sizeof(ShaderInterop::MeshData));
-
-	m_pMeshInstanceBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(Math::Max(1, (int)meshInstances.size()), sizeof(ShaderInterop::MeshInstance), BufferFlag::ShaderResource), "Meshes");
-	m_pMeshInstanceBuffer->SetData(&context, meshInstances.data(), meshInstances.size() * sizeof(ShaderInterop::MeshInstance));
-
-	m_pMaterialBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(Math::Max(1, (int)materials.size()), sizeof(ShaderInterop::MaterialData), BufferFlag::ShaderResource), "Materials");
-	m_pMaterialBuffer->SetData(&context, materials.data(), materials.size() * sizeof(ShaderInterop::MaterialData));
 
 	{
 		Vector3 Position(-150, 160, -10);
@@ -365,13 +294,19 @@ void DemoApp::SetupScene(CommandContext& context)
 		m_Lights.push_back(spotLight);
 	}
 #endif
-
-	m_pLightBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateStructured((int)m_Lights.size(), sizeof(Light), BufferFlag::ShaderResource), "Lights");
 }
 
 void DemoApp::Update()
 {
 	PROFILE_BEGIN("Update");
+
+	CommandContext* pUploadContext = m_pDevice->AllocateCommandContext();
+	{
+		GPU_PROFILE_SCOPE("UploadGPUScene", pUploadContext);
+		UploadSceneData(*pUploadContext);
+	}
+	pUploadContext->Execute(false);
+
 	m_pImGuiRenderer->NewFrame(m_WindowWidth, m_WindowHeight);
 
 	UpdateImGui();
@@ -761,25 +696,6 @@ void DemoApp::Update()
 
 	uint64 nextFenceValue = 0;
 
-	RGPassBuilder updateTLAS = graph.AddPass("Update TLAS");
-	updateTLAS.Bind([=](CommandContext& renderContext, const RGPassResources& /*resources*/)
-		{
-			UpdateTLAS(renderContext);
-		}
-	);
-
-	RGPassBuilder setupLights = graph.AddPass("Setup Lights");
-	Data.DepthStencil = setupLights.Write(Data.DepthStencil);
-	setupLights.Bind([=](CommandContext& renderContext, const RGPassResources& /*resources*/)
-		{
-			std::vector<ShaderInterop::Light> lightData(m_Lights.size());
-			for (size_t i = 0; i < m_Lights.size(); ++i)
-			{
-				lightData[i] = m_Lights[i].GetData();
-			}
-			renderContext.InitializeBuffer(m_pLightBuffer.get(), lightData.data(), lightData.size() * sizeof(ShaderInterop::Light));
-		});
-
 	if (m_RenderPath != RenderPath::PathTracing)
 	{
 		// PARTICLES GPU SIM
@@ -1132,7 +1048,6 @@ void DemoApp::Update()
 			});
 	}
 
-	//Tonemapping
 	{
 		RG_GRAPH_SCOPE("Tonemapping", graph);
 		bool downscaleTonemapInput = true;
@@ -1688,6 +1603,29 @@ void DemoApp::UpdateImGui()
 			{
 				showImguiDemo = !showImguiDemo;
 			}
+			if (ImGui::MenuItem("Load Mesh", nullptr, nullptr))
+			{
+				OPENFILENAME ofn = { 0 };
+				TCHAR szFile[260] = { 0 };
+				ofn.lStructSize = sizeof(ofn);
+				ofn.hwndOwner = m_Window;
+				ofn.lpstrFile = szFile;
+				ofn.nMaxFile = sizeof(szFile);
+				ofn.lpstrFilter = "GLTF Files (*.gltf)\0*.gltf\0All Files (*.*)\0*.*\0";;
+				ofn.nFilterIndex = 1;
+				ofn.lpstrFileTitle = NULL;
+				ofn.nMaxFileTitle = 0;
+				ofn.lpstrInitialDir = NULL;
+				ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
+
+				if (GetOpenFileNameA(&ofn) == TRUE)
+				{
+					m_Meshes.clear();
+					CommandContext* pContext = m_pDevice->AllocateCommandContext();
+					LoadMesh(ofn.lpstrFile, *pContext);
+					pContext->Execute(true);
+				}
+			}
 			ImGui::EndMenu();
 		}
 		if (ImGui::BeginMenu("Tools"))
@@ -2013,4 +1951,97 @@ void DemoApp::UpdateTLAS(CommandContext& context)
 		pCmd->BuildRaytracingAccelerationStructure(&asDesc, 0, nullptr);
 		context.InsertUavBarrier(m_pTLAS.get());
 	}
+}
+
+void DemoApp::LoadMesh(const std::string& filePath, CommandContext& context)
+{
+	std::unique_ptr<Mesh> pMesh = std::make_unique<Mesh>();
+	pMesh->Load(filePath.c_str(), m_pDevice.get(), &context, 1.0f);
+	m_Meshes.push_back(std::move(pMesh));
+}
+
+void DemoApp::UploadSceneData(CommandContext& context)
+{
+	std::vector<ShaderInterop::MaterialData> materials;
+	std::vector<ShaderInterop::MeshData> meshes;
+	std::vector<ShaderInterop::MeshInstance> meshInstances;
+	std::vector<Batch> sceneBatches;
+
+	for (const auto& pMesh : m_Meshes)
+	{
+		for (const SubMesh& subMesh : pMesh->GetMeshes())
+		{
+			ShaderInterop::MeshData mesh;
+			mesh.IndexStream = subMesh.pIndexSRV->GetHeapIndex();
+			mesh.PositionStream = subMesh.pPositionsStreamSRV->GetHeapIndex();
+			mesh.NormalStream = subMesh.pNormalsStreamSRV->GetHeapIndex();
+			mesh.UVStream = subMesh.pUVStreamSRV->GetHeapIndex();
+			meshes.push_back(mesh);
+		}
+
+		for (const SubMeshInstance& node : pMesh->GetMeshInstances())
+		{
+			const SubMesh& parentMesh = pMesh->GetMesh(node.MeshIndex);
+			const Material& meshMaterial = pMesh->GetMaterial(parentMesh.MaterialId);
+			ShaderInterop::MeshInstance meshInstance;
+			meshInstance.Mesh = node.MeshIndex;
+			meshInstance.Material = (uint32)materials.size() + parentMesh.MaterialId;
+			meshInstance.World = node.Transform;
+			meshInstances.push_back(meshInstance);
+
+			Batch batch;
+			batch.Index = (int)sceneBatches.size();
+			batch.LocalBounds = parentMesh.Bounds;
+			batch.pMesh = &parentMesh;
+			batch.BlendMode = meshMaterial.IsTransparent ? Batch::Blending::AlphaMask : Batch::Blending::Opaque;
+			batch.WorldMatrix = node.Transform;
+			sceneBatches.push_back(batch);
+		}
+
+		for (const Material& material : pMesh->GetMaterials())
+		{
+			ShaderInterop::MaterialData materialData;
+			materialData.Diffuse = material.pDiffuseTexture ? material.pDiffuseTexture->GetSRV()->GetHeapIndex() : -1;
+			materialData.Normal = material.pNormalTexture ? material.pNormalTexture->GetSRV()->GetHeapIndex() : -1;
+			materialData.RoughnessMetalness = material.pRoughnessMetalnessTexture ? material.pRoughnessMetalnessTexture->GetSRV()->GetHeapIndex() : -1;
+			materialData.Emissive = material.pEmissiveTexture ? material.pEmissiveTexture->GetSRV()->GetHeapIndex() : -1;
+			materialData.BaseColorFactor = material.BaseColorFactor;
+			materialData.MetalnessFactor = material.MetalnessFactor;
+			materialData.RoughnessFactor = material.RoughnessFactor;
+			materialData.EmissiveFactor = material.EmissiveFactor;
+			materialData.AlphaCutoff = material.AlphaCutoff;
+			materials.push_back(materialData);
+		}
+	}
+
+	sceneBatches.swap(m_SceneData.Batches);
+
+	if (!m_pMeshBuffer || meshes.size() > m_pMeshBuffer->GetNumElements())
+	{
+		m_pMeshBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(Math::Max(1, (int)meshes.size()), sizeof(ShaderInterop::MeshData), BufferFlag::ShaderResource), "Meshes");
+	}
+	context.InitializeBuffer(m_pMeshBuffer.get(), meshes.data(), meshes.size() * sizeof(ShaderInterop::MeshData));
+
+	if (!m_pMeshInstanceBuffer || meshInstances.size() > m_pMeshInstanceBuffer->GetNumElements())
+	{
+		m_pMeshInstanceBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(Math::Max(1, (int)meshInstances.size()), sizeof(ShaderInterop::MeshInstance), BufferFlag::ShaderResource), "Meshes");
+	}
+	context.InitializeBuffer(m_pMeshInstanceBuffer.get(), meshInstances.data(), meshInstances.size() * sizeof(ShaderInterop::MeshInstance));
+
+	if (!m_pMaterialBuffer || materials.size() > m_pMaterialBuffer->GetNumElements())
+	{
+		m_pMaterialBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(Math::Max(1, (int)materials.size()), sizeof(ShaderInterop::MaterialData), BufferFlag::ShaderResource), "Materials");
+	}
+	context.InitializeBuffer(m_pMaterialBuffer.get(), materials.data(), materials.size() * sizeof(ShaderInterop::MaterialData));
+
+	std::vector<ShaderInterop::Light> lightData;
+	Utils::Transform(m_Lights, lightData, [](const Light& light) { return light.GetData(); });
+
+	if (!m_pLightBuffer || lightData.size() > m_pLightBuffer->GetNumElements())
+	{
+		m_pLightBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(Math::Max(1, (int)lightData.size()), sizeof(ShaderInterop::Light), BufferFlag::ShaderResource), "Lights");
+	}
+	context.InitializeBuffer(m_pLightBuffer.get(), lightData.data(), lightData.size() * sizeof(ShaderInterop::Light));
+
+	UpdateTLAS(context);
 }

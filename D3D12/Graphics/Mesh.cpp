@@ -265,7 +265,6 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 	bufferSize += normalStream.size() * sizeof(VS_Normal);
 	bufferSize += (positionsStream.size() * 3 + indicesStream.size()) * sBufferAlignment;
 	m_pGeometryData = pDevice->CreateBuffer(BufferDesc::CreateBuffer(bufferSize, BufferFlag::ShaderResource | BufferFlag::ByteAddress), "Geometry Buffer");
-	pContext->InsertResourceBarrier(m_pGeometryData.get(), D3D12_RESOURCE_STATE_COPY_DEST);
 
 	uint64 dataOffset = 0;
 	auto CopyData = [this, &dataOffset, &pContext](void* pSource, uint64 size)
@@ -307,9 +306,6 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 		subMesh.pParent = this;
 		m_Meshes.push_back(subMesh);
 	}
-
-	pContext->InsertResourceBarrier(m_pGeometryData.get(), D3D12_RESOURCE_STATE_COMMON);
-	pContext->FlushResourceBarriers();
 
 	return true;
 }

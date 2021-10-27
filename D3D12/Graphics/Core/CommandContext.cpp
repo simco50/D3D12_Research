@@ -40,12 +40,15 @@ void CommandContext::Reset()
 
 	m_CurrentCommandContext = CommandListContext::Invalid;
 
-	ID3D12DescriptorHeap* pHeaps[] =
+	if (m_Type != D3D12_COMMAND_LIST_TYPE_COPY)
 	{
-		GetParent()->GetGlobalViewHeap()->GetHeap(),
-		GetParent()->GetGlobalSamplerHeap()->GetHeap(),
-	};
-	m_pCommandList->SetDescriptorHeaps(ARRAYSIZE(pHeaps), pHeaps);
+		ID3D12DescriptorHeap* pHeaps[] =
+		{
+			GetParent()->GetGlobalViewHeap()->GetHeap(),
+			GetParent()->GetGlobalSamplerHeap()->GetHeap(),
+		};
+		m_pCommandList->SetDescriptorHeaps(ARRAYSIZE(pHeaps), pHeaps);
+	}
 }
 
 uint64 CommandContext::Execute(bool wait)
@@ -184,20 +187,7 @@ void CommandContext::InitializeBuffer(Buffer* pResource, const void* pData, uint
 {
 	DynamicAllocation allocation = m_DynamicAllocator->Allocate(dataSize);
 	memcpy(allocation.pMappedMemory, pData, dataSize);
-
-	bool resetState = false;
-	D3D12_RESOURCE_STATES previousState = GetResourceStateWithFallback(pResource, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES);
-	if (previousState != D3D12_RESOURCE_STATE_COPY_DEST)
-	{
-		resetState = true;
-		InsertResourceBarrier(pResource, D3D12_RESOURCE_STATE_COPY_DEST);
-		FlushResourceBarriers();
-	}
-	m_pCommandList->CopyBufferRegion(pResource->GetResource(), offset, allocation.pBackingResource->GetResource(), allocation.Offset, dataSize);
-	if (resetState)
-	{
-		InsertResourceBarrier(pResource, previousState);
-	}
+	CopyBuffer(allocation.pBackingResource, pResource, dataSize, allocation.Offset, offset);
 }
 
 void CommandContext::InitializeTexture(Texture* pResource, D3D12_SUBRESOURCE_DATA* pSubResourceDatas, int firstSubResource, int subResourceCount)

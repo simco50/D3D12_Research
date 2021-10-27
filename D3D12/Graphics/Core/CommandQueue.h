@@ -42,6 +42,8 @@ public:
 	uint64 ExecuteCommandLists(CommandContext** pCommandContexts, uint32 numContexts);
 	ID3D12CommandQueue* GetCommandQueue() const { return m_pCommandQueue.Get(); }
 
+	void InsertWait(uint64 fenceValue);
+
 	//Block on the CPU side
 	void WaitForFence(uint64 fenceValue);
 	void WaitForIdle();

@@ -24,7 +24,6 @@ struct Batch
 	BoundingBox LocalBounds;
 	BoundingBox Bounds;
 	float Radius;
-	int Material;
 };
 DECLARE_BITMASK_TYPE(Batch::Blending)
 

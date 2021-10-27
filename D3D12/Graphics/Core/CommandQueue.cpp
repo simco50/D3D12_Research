@@ -172,6 +172,11 @@ void CommandQueue::FreeAllocator(uint64 fenceValue, ID3D12CommandAllocator* pAll
 	m_FreeAllocators.push(std::pair<ID3D12CommandAllocator*, uint64>(pAllocator, fenceValue));
 }
 
+void CommandQueue::InsertWait(uint64 fenceValue)
+{
+	m_pFence->GpuWait(this, fenceValue);
+}
+
 void CommandQueue::WaitForFence(uint64 fenceValue)
 {
 	m_pFence->CpuWait(fenceValue);

@@ -25,6 +25,7 @@ Texture::~Texture()
 
 D3D12_CPU_DESCRIPTOR_HANDLE Texture::GetDSV(bool writeable /*= true*/) const
 {
+	check(EnumHasAllFlags(m_Desc.Usage, TextureFlag::DepthStencil));
 	return writeable ? m_Rtv : m_ReadOnlyDsv;
 }
 
@@ -50,6 +51,7 @@ void Texture::CreateSRV(ShaderResourceView** pView, const TextureSRVDesc& desc)
 
 D3D12_CPU_DESCRIPTOR_HANDLE Texture::GetRTV() const
 {
+	check(EnumHasAllFlags(m_Desc.Usage, TextureFlag::RenderTarget));
 	return m_Rtv;
 }
 
