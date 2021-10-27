@@ -615,7 +615,7 @@ void DemoApp::Update()
 	m_SceneData.FrameIndex = m_Frame;
 	m_SceneData.pPreviousColor = m_pPreviousColor.get();
 	m_SceneData.SceneTLAS = m_pTLAS->GetSRVIndex();
-	m_SceneData.pNormals = m_pNormals.get();
+	m_SceneData.pNormals = m_pNormals ? m_pNormals.get() : m_pResolvedNormals.get();
 	m_SceneData.pResolvedNormals = m_pResolvedNormals.get();
 	m_SceneData.pResolvedTarget = Tweakables::g_TAA.Get() ? m_pTAASource.get() : m_pHDRRenderTarget.get();
 
@@ -1328,9 +1328,9 @@ void DemoApp::OnResize(int width, int height)
 	if (m_SampleCount > 1)
 	{
 		m_pMultiSampleRenderTarget = m_pDevice->CreateTexture(TextureDesc::CreateRenderTarget(width, height, GraphicsDevice::RENDER_TARGET_FORMAT, TextureFlag::RenderTarget, m_SampleCount, ClearBinding(Colors::Black)), "MSAA Target");
+		m_pNormals = m_pDevice->CreateTexture(TextureDesc::CreateRenderTarget(width, height, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::RenderTarget, m_SampleCount, ClearBinding(Colors::Black)), "MSAA Normals");
 	}
 
-	m_pNormals = m_pDevice->CreateTexture(TextureDesc::CreateRenderTarget(width, height, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::RenderTarget, m_SampleCount, ClearBinding(Colors::Black)), "MSAA Normals");
 	m_pResolvedNormals = m_pDevice->CreateTexture(TextureDesc::CreateRenderTarget(width, height, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::RenderTarget | TextureFlag::ShaderResource, 1, ClearBinding(Colors::Black)), "Normals");
 	m_pHDRRenderTarget = m_pDevice->CreateTexture(TextureDesc::CreateRenderTarget(width, height, GraphicsDevice::RENDER_TARGET_FORMAT, TextureFlag::ShaderResource | TextureFlag::RenderTarget | TextureFlag::UnorderedAccess), "HDR Target");
 	m_pPreviousColor = m_pDevice->CreateTexture(TextureDesc::Create2D(width, height, GraphicsDevice::RENDER_TARGET_FORMAT, TextureFlag::ShaderResource), "Previous Color");
