@@ -78,7 +78,6 @@ GraphicsInstance::GraphicsInstance(GraphicsInstanceFlags createFlags)
 		}
 	}
 
-#if PLATFORM_WINDOWS
 	if (EnumHasAnyFlags(createFlags, GraphicsInstanceFlags::Pix))
 	{
 		if(PIXLoadLatestWinPixGpuCapturerLibrary())
@@ -86,7 +85,6 @@ GraphicsInstance::GraphicsInstance(GraphicsInstanceFlags createFlags)
 			E_LOG(Warning, "Dynamically loaded PIX");
 		}
 	}
-#endif
 }
 
 std::unique_ptr<SwapChain> GraphicsInstance::CreateSwapchain(GraphicsDevice* pDevice, WindowHandle pNativeWindow, DXGI_FORMAT format, uint32 width, uint32 height, uint32 numFrames, bool vsync)
@@ -443,7 +441,6 @@ void GraphicsCapabilities::Initialize(GraphicsDevice* pDevice)
 	m_pDevice = pDevice;
 
 	check(m_FeatureSupport.Init(pDevice->GetDevice()) == S_OK);
-
 	checkf(m_FeatureSupport.ResourceHeapTier() >= D3D12_RESOURCE_HEAP_TIER_2, "Device does not support Resource Heap Tier 2 or higher. Tier 1 is not supported");
 	checkf(m_FeatureSupport.ResourceBindingTier() >= D3D12_RESOURCE_BINDING_TIER_3, "Device does not support Resource Binding Tier 3 or higher. Tier 2 and under is not supported.");
 
@@ -553,7 +550,6 @@ SwapChain::SwapChain(GraphicsDevice* pDevice, IDXGIFactory6* pFactory, WindowHan
 	CommandQueue* pPresentQueue = pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT);
 	ComPtr<IDXGISwapChain1> swapChain;
 	
-#if PLATFORM_WINDOWS
 	VERIFY_HR(pFactory->CreateSwapChainForHwnd(
 		pPresentQueue->GetCommandQueue(),
 		(HWND)pNativeWindow,
@@ -561,7 +557,7 @@ SwapChain::SwapChain(GraphicsDevice* pDevice, IDXGIFactory6* pFactory, WindowHan
 		&fsDesc,
 		nullptr,
 		swapChain.GetAddressOf()));
-#endif
+
 	m_pSwapchain.Reset();
 	swapChain.As(&m_pSwapchain);
 

@@ -603,7 +603,7 @@ void DemoApp::Update()
 	m_SceneData.pAO = m_pAmbientOcclusion.get();
 	m_SceneData.FrameIndex = m_Frame;
 	m_SceneData.pPreviousColor = m_pPreviousColor.get();
-	m_SceneData.SceneTLAS = m_pTLAS->GetSRVIndex();
+	m_SceneData.SceneTLAS = m_pTLAS ? m_pTLAS->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
 	m_SceneData.pNormals = m_pNormals ? m_pNormals.get() : m_pResolvedNormals.get();
 	m_SceneData.pResolvedNormals = m_pResolvedNormals.get();
 	m_SceneData.pResolvedTarget = Tweakables::g_TAA.Get() ? m_pTAASource.get() : m_pHDRRenderTarget.get();

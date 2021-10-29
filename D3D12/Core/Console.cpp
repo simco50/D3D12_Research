@@ -2,7 +2,6 @@
 #include "Console.h"
 #include "CommandLine.h"
 
-#if PLATFORM_WINDOWS
 namespace Win32Console
 {
 	static HANDLE Open()
@@ -50,7 +49,6 @@ namespace Win32Console
 			CloseHandle(handle);
 	}
 };
-#endif
 
 static HANDLE sConsoleHandle = nullptr;
 static std::mutex sLogMutex;
@@ -60,14 +58,10 @@ static std::deque<Console::LogEntry> sHistory;
 
 void Console::Initialize()
 {
-#if WITH_CONSOLE
 	if (CommandLine::GetBool("noconsole") == false)
 	{
-#if PLATFORM_WINDOWS
 		sConsoleHandle = Win32Console::Open();
-#endif
 	}
-#endif
 	E_LOG(Info, "Startup");
 }
 

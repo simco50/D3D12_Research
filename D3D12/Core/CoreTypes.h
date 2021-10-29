@@ -20,6 +20,7 @@ static_assert(sizeof(uint16) == 2, "uint16 size incorrect.");
 static_assert(sizeof(uint32) == 4, "uint32 size incorrect.");
 static_assert(sizeof(uint64) == 8, "uint64 size incorrect.");
 
+#include <wrl/client.h>
 template<typename T>
 using ComPtr = Microsoft::WRL::ComPtr<T>;
 
