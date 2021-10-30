@@ -24,6 +24,8 @@ enum class ShaderType
 struct ShaderDefine
 {
 	ShaderDefine() = default;
+	ShaderDefine(const char* pDefine, const char* pValue) : Value(Sprintf("%s=%s", pDefine, pValue)) {}
+	ShaderDefine(const char* pDefine, const uint32 value) : Value(Sprintf("%s=%d", pDefine, value)) {}
 	ShaderDefine(const std::string& define) : Value(define) { }
 	ShaderDefine(const char* pDefine) : Value(pDefine) { }
 	std::string Value;

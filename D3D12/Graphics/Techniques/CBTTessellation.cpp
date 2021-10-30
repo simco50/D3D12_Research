@@ -332,15 +332,15 @@ void CBTTessellation::AllocateCBT()
 void CBTTessellation::SetupPipelines()
 {
 	std::vector<ShaderDefine> defines = {
-		ShaderDefine(Sprintf("RENDER_WIREFRAME=%d", CBTSettings::Wireframe ? 1 : 0).c_str()),
-		ShaderDefine(Sprintf("FRUSTUM_CULL=%d", CBTSettings::FrustumCull ? 1 : 0).c_str()),
-		ShaderDefine(Sprintf("DISPLACEMENT_LOD=%d", CBTSettings::DisplacementLOD ? 1 : 0).c_str()),
-		ShaderDefine(Sprintf("DISTANCE_LOD=%d", CBTSettings::DistanceLOD ? 1 : 0).c_str()),
-		ShaderDefine(Sprintf("DEBUG_ALWAYS_SUBDIVIDE=%d", CBTSettings::AlwaysSubdivide ? 1 : 0).c_str()),
-		ShaderDefine(Sprintf("MESH_SHADER_SUBD_LEVEL=%du", Math::Min(CBTSettings::MeshShaderSubD * 2, 6)).c_str()),
-		ShaderDefine(Sprintf("GEOMETRY_SHADER_SUBD_LEVEL=%du", Math::Min(CBTSettings::GeometryShaderSubD * 2, 4)).c_str()),
-		ShaderDefine(Sprintf("AMPLIFICATION_SHADER_SUBD_LEVEL=%du", Math::Max(CBTSettings::MeshShaderSubD * 2 - 6, 0)).c_str()),
-		ShaderDefine(Sprintf("COLOR_LEVELS=%d", CBTSettings::ColorLevels ? 1 : 0).c_str()),
+		ShaderDefine("RENDER_WIREFRAME", CBTSettings::Wireframe ? 1 : 0),
+		ShaderDefine("FRUSTUM_CULL", CBTSettings::FrustumCull ? 1 : 0),
+		ShaderDefine("DISPLACEMENT_LOD", CBTSettings::DisplacementLOD ? 1 : 0),
+		ShaderDefine("DISTANCE_LOD", CBTSettings::DistanceLOD ? 1 : 0),
+		ShaderDefine("DEBUG_ALWAYS_SUBDIVIDE", CBTSettings::AlwaysSubdivide ? 1 : 0),
+		ShaderDefine("MESH_SHADER_SUBD_LEVEL", Math::Min(CBTSettings::MeshShaderSubD * 2, 6)),
+		ShaderDefine("GEOMETRY_SHADER_SUBD_LEVEL", Math::Min(CBTSettings::GeometryShaderSubD * 2, 4)),
+		ShaderDefine("AMPLIFICATION_SHADER_SUBD_LEVEL", Math::Max(CBTSettings::MeshShaderSubD * 2 - 6, 0)),
+		ShaderDefine("COLOR_LEVELS", CBTSettings::ColorLevels ? 1 : 0),
 	};
 
 	m_pCBTRS = std::make_unique<RootSignature>(m_pDevice);

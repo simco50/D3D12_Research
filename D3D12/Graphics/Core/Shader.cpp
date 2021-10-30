@@ -327,11 +327,13 @@ namespace ShaderCompiler
 		VERIFY_HR(pCompiler3->Compile(&sourceBuffer, arguments.GetArguments(), (uint32)arguments.GetNumArguments(), &includeHandler, IID_PPV_ARGS(pCompileResult.GetAddressOf())));
 
 		ComPtr<IDxcBlobUtf8> pErrors;
-		pCompileResult->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(pErrors.GetAddressOf()), nullptr);
-		if (pErrors && pErrors->GetStringLength() > 0)
+		if (SUCCEEDED(pCompileResult->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(pErrors.GetAddressOf()), nullptr)))
 		{
-			result.ErrorMessage = (char*)pErrors->GetBufferPointer();
-			return result;
+			if (pErrors && pErrors->GetStringLength())
+			{
+				result.ErrorMessage = (char*)pErrors->GetStringPointer();
+				return result;
+			}
 		}
 
 		//Shader object
