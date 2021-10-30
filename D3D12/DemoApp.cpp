@@ -1154,19 +1154,11 @@ void DemoApp::Update()
 				context.BindResource(2, 0, m_pHDRRenderTarget->GetSRV());
 				context.BindResource(2, 1, m_pAverageLuminance->GetSRV());
 
-				context.Dispatch(
-					Math::DivideAndRoundUp(m_pHDRRenderTarget->GetWidth(), 16),
-					Math::DivideAndRoundUp(m_pHDRRenderTarget->GetHeight(), 16)
-				);
+				context.Dispatch(ComputeUtils::GetNumThreadGroups(m_pHDRRenderTarget->GetWidth(), 16, m_pHDRRenderTarget->GetHeight(), 16));
 			});
 
 		if (Tweakables::g_EnableUI && Tweakables::g_DrawHistogram.Get())
 		{
-			if (!m_pDebugHistogramTexture)
-			{
-				m_pDebugHistogramTexture = m_pDevice->CreateTexture(TextureDesc::Create2D(m_pLuminanceHistogram->GetNumElements() * 4, m_pLuminanceHistogram->GetNumElements(), DXGI_FORMAT_R8G8B8A8_UNORM, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess), "Debug Histogram");
-			}
-
 			RGPassBuilder drawHistogram = graph.AddPass("Draw Histogram");
 			drawHistogram.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
 				{
@@ -1194,13 +1186,9 @@ void DemoApp::Update()
 					context.BindResource(2, 0, m_pLuminanceHistogram->GetSRV());
 					context.BindResource(2, 1, m_pAverageLuminance->GetSRV());
 					context.ClearUavUInt(m_pDebugHistogramTexture.get(), m_pDebugHistogramTexture->GetUAV());
+
 					context.Dispatch(1, m_pLuminanceHistogram->GetNumElements());
 				});
-			ImGui::Begin("Luminance Histogram");
-			ImVec2 cursor = ImGui::GetCursorPos();
-			ImGui::ImageAutoSize(m_pDebugHistogramTexture.get(), ImVec2((float)m_pDebugHistogramTexture->GetWidth(), (float)m_pDebugHistogramTexture->GetHeight()));
-			ImGui::GetWindowDrawList()->AddText(cursor, IM_COL32(255, 255, 255, 255), Sprintf("%.2f", Tweakables::g_MinLogLuminance.Get()).c_str());
-			ImGui::End();
 		}
 	}
 
@@ -1411,6 +1399,7 @@ void DemoApp::InitializePipelines()
 
 		m_pLuminanceHistogram = m_pDevice->CreateBuffer(BufferDesc::CreateByteAddress(sizeof(uint32) * 256), "Luminance Histogram");
 		m_pAverageLuminance = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(3, sizeof(float), BufferFlag::UnorderedAccess | BufferFlag::ShaderResource), "Average Luminance");
+		m_pDebugHistogramTexture = m_pDevice->CreateTexture(TextureDesc::Create2D(m_pLuminanceHistogram->GetNumElements() * 4, m_pLuminanceHistogram->GetNumElements(), DXGI_FORMAT_R8G8B8A8_UNORM, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess), "Debug Histogram");
 	}
 
 	//Debug Draw Histogram
@@ -1580,6 +1569,10 @@ void DemoApp::UpdateImGui()
 			{
 				showImguiDemo = !showImguiDemo;
 			}
+			if (ImGui::MenuItem("Luminance Histogram", 0, &Tweakables::g_DrawHistogram.Get()))
+			{
+				Tweakables::g_VisualizeShadowCascades.SetValue(!Tweakables::g_DrawHistogram.GetBool());
+			}
 			if (ImGui::MenuItem("Load Mesh", nullptr, nullptr))
 			{
 				OPENFILENAME ofn = { 0 };
@@ -1630,6 +1623,15 @@ void DemoApp::UpdateImGui()
 	if (showImguiDemo)
 	{
 		ImGui::ShowDemoWindow();
+	}
+
+	if (Tweakables::g_DrawHistogram)
+	{
+		ImGui::Begin("Luminance Histogram");
+		ImVec2 cursor = ImGui::GetCursorPos();
+		ImGui::ImageAutoSize(m_pDebugHistogramTexture.get(), ImVec2((float)m_pDebugHistogramTexture->GetWidth(), (float)m_pDebugHistogramTexture->GetHeight()));
+		ImGui::GetWindowDrawList()->AddText(cursor, IM_COL32(255, 255, 255, 255), Sprintf("%.2f", Tweakables::g_MinLogLuminance.Get()).c_str());
+		ImGui::End();
 	}
 
 	if (m_pVisualizeTexture)
