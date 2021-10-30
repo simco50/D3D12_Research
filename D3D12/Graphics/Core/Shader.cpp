@@ -147,6 +147,16 @@ namespace ShaderCompiler
 				return m_Arguments.size();
 			}
 
+			std::string ToString() const
+			{
+				std::stringstream str;
+				for (const std::wstring& arg : m_Arguments)
+				{
+					str << " " << UNICODE_TO_MULTIBYTE(arg.c_str());
+				}
+				return str.str();
+			}
+
 		private:
 			std::vector<const wchar_t*> m_ArgumentArr;
 			std::vector<std::wstring> m_Arguments;
@@ -299,8 +309,15 @@ namespace ShaderCompiler
 				if(SUCCEEDED(pPreprocessOutput->GetOutput(DXC_OUT_HLSL, IID_PPV_ARGS(pHLSL.GetAddressOf()), nullptr)))
 				{
 					Paths::CreateDirectoryTree(pShaderSymbolsPath);
-					std::ofstream str(Sprintf("%s%s_%s_%s.hlsl", pShaderSymbolsPath, Paths::GetFileNameWithoutExtension(compileJob.FilePath).c_str(), compileJob.EntryPoint.c_str(), compileJob.Target.c_str()));
-					str.write(pHLSL->GetStringPointer(), pHLSL->GetStringLength());
+					std::string filePathBase = Sprintf("%s_%s_%s", Paths::GetFileNameWithoutExtension(compileJob.FilePath).c_str(), compileJob.EntryPoint.c_str(), compileJob.Target.c_str());
+					{
+						std::ofstream str(Sprintf("%s%s.hlsl", pShaderSymbolsPath, filePathBase.c_str()));
+						str.write(pHLSL->GetStringPointer(), pHLSL->GetStringLength());
+					}
+					{
+						std::ofstream str(Sprintf("%s%s.bat", pShaderSymbolsPath, filePathBase.c_str()));
+						str << "dxc.exe " << arguments.ToString() << " -Fo " << filePathBase << ".bin " << filePathBase << ".hlsl";
+					}
 				}
 			}
 		}
