@@ -31,9 +31,9 @@
 #define TAA_LUMINANCE_WEIGHT        0                           // [Lottes]
 #define TAA_DILATE_VELOCITY         1
 
-#define RootSig ROOT_SIG("CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \
-                "DescriptorTable(UAV(u0, numDescriptors = 1), visibility=SHADER_VISIBILITY_ALL), " \
-				"DescriptorTable(SRV(t0, numDescriptors = 4), visibility=SHADER_VISIBILITY_ALL)")
+#define RootSig ROOT_SIG("CBV(b0), " \
+                "DescriptorTable(UAV(u0, numDescriptors = 1)), " \
+				"DescriptorTable(SRV(t0, numDescriptors = 4))")
 
 struct ShaderParameters
 {

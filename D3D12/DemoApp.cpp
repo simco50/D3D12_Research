@@ -1037,49 +1037,39 @@ void DemoApp::Update()
 
 	{
 		RG_GRAPH_SCOPE("Tonemapping", graph);
-		bool downscaleTonemapInput = true;
-		Texture* pToneMapInput = downscaleTonemapInput ? m_pDownscaledColor.get() : m_pHDRRenderTarget.get();
-		RGResourceHandle toneMappingInput = graph.ImportTexture("Tonemap Input", pToneMapInput);
+		Texture* pToneMapInput = m_pDownscaledColor.get();
 
-		if (downscaleTonemapInput)
-		{
-			RGPassBuilder colorDownsample = graph.AddPass("Downsample Color");
-			toneMappingInput = colorDownsample.Write(toneMappingInput);
-			colorDownsample.Bind([=](CommandContext& context, const RGPassResources& resources)
+		RGPassBuilder colorDownsample = graph.AddPass("Downsample Color");
+		colorDownsample.Bind([=](CommandContext& context, const RGPassResources& resources)
+			{
+				context.InsertResourceBarrier(pToneMapInput, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+				context.InsertResourceBarrier(m_pHDRRenderTarget.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+
+				context.SetPipelineState(m_pGenerateMipsPSO);
+				context.SetComputeRootSignature(m_pGenerateMipsRS.get());
+
+				struct DownscaleParameters
 				{
-					Texture* pToneMapInput = resources.GetTexture(toneMappingInput);
-					context.InsertResourceBarrier(pToneMapInput, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-					context.InsertResourceBarrier(m_pHDRRenderTarget.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+					IntVector2 TargetDimensions;
+					Vector2 TargetDimensionsInv;
+				} Parameters{};
+				Parameters.TargetDimensions.x = pToneMapInput->GetWidth();
+				Parameters.TargetDimensions.y = pToneMapInput->GetHeight();
+				Parameters.TargetDimensionsInv = Vector2(1.0f / pToneMapInput->GetWidth(), 1.0f / pToneMapInput->GetHeight());
 
-					context.SetPipelineState(m_pGenerateMipsPSO);
-					context.SetComputeRootSignature(m_pGenerateMipsRS.get());
+				context.SetRootCBV(0, Parameters);
+				context.BindResource(1, 0, pToneMapInput->GetUAV());
+				context.BindResource(2, 0, m_pHDRRenderTarget->GetSRV());
 
-					struct DownscaleParameters
-					{
-						IntVector2 TargetDimensions;
-						Vector2 TargetDimensionsInv;
-					} Parameters{};
-					Parameters.TargetDimensions.x = pToneMapInput->GetWidth();
-					Parameters.TargetDimensions.y = pToneMapInput->GetHeight();
-					Parameters.TargetDimensionsInv = Vector2(1.0f / pToneMapInput->GetWidth(), 1.0f / pToneMapInput->GetHeight());
-
-					context.SetRootCBV(0, Parameters);
-					context.BindResource(1, 0, pToneMapInput->GetUAV());
-					context.BindResource(2, 0, m_pHDRRenderTarget->GetSRV());
-
-					context.Dispatch(
-						Math::DivideAndRoundUp(Parameters.TargetDimensions.x, 8),
-						Math::DivideAndRoundUp(Parameters.TargetDimensions.y, 8)
-					);
-				});
-		}
+				context.Dispatch(
+					Math::DivideAndRoundUp(Parameters.TargetDimensions.x, 8),
+					Math::DivideAndRoundUp(Parameters.TargetDimensions.y, 8)
+				);
+			});
 
 		RGPassBuilder histogram = graph.AddPass("Luminance Histogram");
-		toneMappingInput = histogram.Read(toneMappingInput);
 		histogram.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
-				Texture* pToneMapInput = resources.GetTexture(toneMappingInput);
-
 				context.InsertResourceBarrier(m_pLuminanceHistogram.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 				context.InsertResourceBarrier(pToneMapInput, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 				context.ClearUavUInt(m_pLuminanceHistogram.get(), m_pLuminanceHistogram->GetUAV());
@@ -1118,22 +1108,22 @@ void DemoApp::Update()
 				context.SetPipelineState(m_pAverageLuminancePSO);
 				context.SetComputeRootSignature(m_pAverageLuminanceRS.get());
 
-				struct AverageParameters
+				struct Parameters
 				{
 					int32 PixelCount;
 					float MinLogLuminance;
 					float LogLuminanceRange;
 					float TimeDelta;
 					float Tau;
-				} Parameters;
+				} parameters;
 
-				Parameters.PixelCount = pToneMapInput->GetWidth() * pToneMapInput->GetHeight();
-				Parameters.MinLogLuminance = Tweakables::g_MinLogLuminance.Get();
-				Parameters.LogLuminanceRange = Tweakables::g_MaxLogLuminance.Get() - Tweakables::g_MinLogLuminance.Get();
-				Parameters.TimeDelta = Time::DeltaTime();
-				Parameters.Tau = Tweakables::g_Tau.Get();
+				parameters.PixelCount = pToneMapInput->GetWidth() * pToneMapInput->GetHeight();
+				parameters.MinLogLuminance = Tweakables::g_MinLogLuminance.Get();
+				parameters.LogLuminanceRange = Tweakables::g_MaxLogLuminance.Get() - Tweakables::g_MinLogLuminance.Get();
+				parameters.TimeDelta = Time::DeltaTime();
+				parameters.Tau = Tweakables::g_Tau.Get();
 
-				context.SetRootCBV(0, Parameters);
+				context.SetRootCBV(0, parameters);
 				context.BindResource(1, 0, m_pAverageLuminance->GetUAV());
 				context.BindResource(2, 0, m_pLuminanceHistogram->GetSRV());
 

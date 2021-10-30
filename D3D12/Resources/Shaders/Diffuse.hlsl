@@ -4,7 +4,7 @@
 #define BLOCK_SIZE 16
 
 #define RootSig ROOT_SIG("RootConstants(num32BitConstants=2, b0), " \
-	"CBV(b1, visibility=SHADER_VISIBILITY_ALL), " \
+	"CBV(b1), " \
 	"CBV(b2, visibility=SHADER_VISIBILITY_PIXEL), " \
 	"DescriptorTable(SRV(t2, numDescriptors = 11))")
 
