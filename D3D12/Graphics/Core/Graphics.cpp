@@ -179,8 +179,8 @@ GraphicsDevice::GraphicsDevice(IDXGIAdapter4* pAdapter)
 	m_pDeviceRemovalFence->GetFence()->SetEventOnCompletion(UINT64_MAX, m_DeviceRemovedEvent);
 	RegisterWaitForSingleObject(&m_DeviceRemovedEvent, m_DeviceRemovedEvent, OnDeviceRemovedCallback, this, INFINITE, 0);
 
-	ID3D12InfoQueue* pInfoQueue = nullptr;
-	if (SUCCEEDED(m_pDevice->QueryInterface(IID_PPV_ARGS(&pInfoQueue))))
+	ComPtr<ID3D12InfoQueue> pInfoQueue;
+	if (SUCCEEDED(m_pDevice->QueryInterface(IID_PPV_ARGS(pInfoQueue.GetAddressOf()))))
 	{
 		// Suppress whole categories of messages
 		//D3D12_MESSAGE_CATEGORY Categories[] = {};
@@ -214,7 +214,23 @@ GraphicsDevice::GraphicsDevice(IDXGIAdapter4* pAdapter)
 			E_LOG(Warning, "D3D Validation Break on Severity Enabled");
 		}
 		pInfoQueue->PushStorageFilter(&NewFilter);
-		pInfoQueue->Release();
+
+		ComPtr<ID3D12InfoQueue1> pInfoQueue1;
+		if (SUCCEEDED(pInfoQueue.As(&pInfoQueue1)))
+		{
+			auto MessageCallback = [](
+				D3D12_MESSAGE_CATEGORY Category,
+				D3D12_MESSAGE_SEVERITY Severity,
+				D3D12_MESSAGE_ID ID,
+				LPCSTR pDescription,
+				void* pContext)
+			{
+				E_LOG(Warning, "D3D12 Validation Layer: %s", pDescription);
+			};
+
+			DWORD callbackCookie = 0;
+			VERIFY_HR(pInfoQueue1->RegisterMessageCallback(MessageCallback, D3D12_MESSAGE_CALLBACK_FLAG_NONE, this, &callbackCookie));
+		}
 	}
 
 	bool setStablePowerState = CommandLine::GetBool("stablepowerstate");
