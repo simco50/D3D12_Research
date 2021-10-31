@@ -33,7 +33,7 @@ void DrawScene(CommandContext& context, const SceneView& scene, const Visibility
 	for (const Batch* b : meshes)
 	{
 		objectData.Index = b->Index;
-		context.SetGraphicsRootConstants(0, objectData);
+		context.SetRootConstants(0, objectData);
 		context.SetIndexBuffer(b->pMesh->IndicesLocation);
 		context.DrawIndexed(b->pMesh->IndicesLocation.Elements, 0, 0);
 	}

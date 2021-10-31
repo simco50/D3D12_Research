@@ -1,7 +1,7 @@
 #include "stdafx.h"
 #include "Camera.h"
 #include "Core/Input.h"
-#include "ImGuizmo/ImGuizmo.h"
+#include "ImGuizmo.h"
 
 void Camera::SetPosition(const Vector3& position)
 {

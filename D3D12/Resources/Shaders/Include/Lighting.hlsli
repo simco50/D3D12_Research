@@ -53,7 +53,7 @@ float LightTextureMask(Light light, int shadowMapIndex, float3 worldPosition)
 		float4 lightPos = mul(float4(worldPosition, 1), cShadowData.LightViewProjections[shadowMapIndex]);
 		lightPos.xyz /= lightPos.w;
 		lightPos.xy = (lightPos.xy + 1) / 2;
-		mask = tTexture2DTable[light.LightTexture].SampleLevel(sLinearClamp, lightPos.xy, 0).r;
+		mask = SampleLevel2D(light.LightTexture, sLinearClamp, lightPos.xy, 0).r;
 	}
 	return mask;
 }
@@ -69,7 +69,7 @@ float Shadow3x3PCF(float3 wPos, int shadowMapIndex, float invShadowSize)
 	float2 texCoord = lightPos.xy;
 
 	Texture2D shadowTexture = tTexture2DTable[NonUniformResourceIndex(cShadowData.ShadowMapOffset + shadowMapIndex)];
-	
+
 	const float Dilation = 2.0f;
     float d1 = Dilation * invShadowSize * 0.125f;
     float d2 = Dilation * invShadowSize * 0.875f;

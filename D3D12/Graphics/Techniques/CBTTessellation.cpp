@@ -11,7 +11,7 @@
 #include "Scene/Camera.h"
 #include "Core/Input.h"
 #include "CBT.h"
-#include "Imgui/imgui_internal.h"
+#include "imgui_internal.h"
 
 constexpr uint32 IndirectDispatchArgsOffset = 0;
 constexpr uint32 IndirectDispatchMeshArgsOffset = IndirectDispatchArgsOffset + sizeof(D3D12_DISPATCH_ARGUMENTS);
@@ -55,7 +55,7 @@ CBTTessellation::CBTTessellation(GraphicsDevice* pDevice)
 void CBTTessellation::Execute(RGGraph& graph, Texture* pRenderTarget, Texture* pDepthTexture, const SceneView& resources)
 {
 	float scale = 100;
-	Matrix terrainTransform = Matrix::CreateScale(scale, scale * CBTSettings::HeightScale, scale) * Matrix::CreateTranslation(-scale * 0.5f, -10, -scale * 0.5f);
+	Matrix terrainTransform = Matrix::CreateScale(scale, scale * CBTSettings::HeightScale, scale) * Matrix::CreateTranslation(-scale * 0.5f, -1.5f, -scale * 0.5f);
 
 	if (ImGui::Begin("Parameters"))
 	{
@@ -130,9 +130,9 @@ void CBTTessellation::Execute(RGGraph& graph, Texture* pRenderTarget, Texture* p
 		int32 IndirectArgsIndex;
 	} commonArgs;
 	commonArgs.NumElements = (uint32)m_pCBTBuffer->GetSize() / sizeof(uint32);
-	commonArgs.HeightmapIndex = m_pHeightmap->GetSRV()->GetHeapIndex();
-	commonArgs.CBTIndex = m_pCBTBuffer->GetUAV()->GetHeapIndex();
-	commonArgs.IndirectArgsIndex = m_pCBTIndirectArgs->GetUAV()->GetHeapIndex();
+	commonArgs.HeightmapIndex = m_pHeightmap->GetSRVIndex();
+	commonArgs.CBTIndex = m_pCBTBuffer->GetUAVIndex();
+	commonArgs.IndirectArgsIndex = m_pCBTIndirectArgs->GetUAVIndex();
 
 	struct UpdateData
 	{
@@ -167,7 +167,7 @@ void CBTTessellation::Execute(RGGraph& graph, Texture* pRenderTarget, Texture* p
 		RGPassBuilder cbtUpload = graph.AddPass("CBT Upload");
 		cbtUpload.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
 			{
-				m_pCBTBuffer->SetData(&context, m_CBT.GetData(), m_CBT.GetMemoryUse());
+				context.InitializeBuffer(m_pCBTBuffer.get(), m_CBT.GetData(), m_CBT.GetMemoryUse());
 				context.FlushResourceBarriers();
 			});
 		m_IsDirty = false;
@@ -181,8 +181,8 @@ void CBTTessellation::Execute(RGGraph& graph, Texture* pRenderTarget, Texture* p
 				context.InsertResourceBarrier(m_pCBTIndirectArgs.get(), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
 				context.SetComputeRootSignature(m_pCBTRS.get());
 
-				context.SetComputeRootConstants(0, commonArgs);
-				context.SetComputeDynamicConstantBufferView(1, updateData);
+				context.SetRootConstants(0, commonArgs);
+				context.SetRootCBV(1, updateData);
 
 				context.SetPipelineState(m_pCBTUpdatePSO);
 				context.ExecuteIndirect(m_pDevice->GetIndirectDispatchSignature(), 1, m_pCBTIndirectArgs.get(), nullptr, IndirectDispatchArgsOffset);
@@ -194,7 +194,7 @@ void CBTTessellation::Execute(RGGraph& graph, Texture* pRenderTarget, Texture* p
 	cbtIndirectArgs.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
 		{
 			context.SetComputeRootSignature(m_pCBTRS.get());
-			context.SetComputeRootConstants(0, commonArgs);
+			context.SetRootConstants(0, commonArgs);
 
 			context.InsertResourceBarrier(m_pCBTIndirectArgs.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 			context.SetPipelineState(m_pCBTIndirectArgsPSO);
@@ -210,8 +210,8 @@ void CBTTessellation::Execute(RGGraph& graph, Texture* pRenderTarget, Texture* p
 			context.SetGraphicsRootSignature(m_pCBTRS.get());
 			context.SetPipelineState(CBTSettings::MeshShader ? m_pCBTRenderMeshShaderPSO : m_pCBTRenderPSO);
 
-			context.SetGraphicsRootConstants(0, commonArgs);
-			context.SetGraphicsDynamicConstantBufferView(1, updateData);
+			context.SetRootConstants(0, commonArgs);
+			context.SetRootCBV(1, updateData);
 
 			context.BeginRenderPass(RenderPassInfo(pRenderTarget, RenderPassAccess::Load_Store, pDepthTexture, RenderPassAccess::Load_Store, true));
 			if (CBTSettings::MeshShader)
@@ -257,7 +257,7 @@ void CBTTessellation::Execute(RGGraph& graph, Texture* pRenderTarget, Texture* p
 	cbtSumReductionPrepass.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
 		{
 			context.SetComputeRootSignature(m_pCBTRS.get());
-			context.SetComputeRootConstants(0, commonArgs);
+			context.SetRootConstants(0, commonArgs);
 
 			struct SumReductionData
 			{
@@ -266,7 +266,7 @@ void CBTTessellation::Execute(RGGraph& graph, Texture* pRenderTarget, Texture* p
 			int32 currentDepth = CBTSettings::CBTDepth;
 
 			reductionArgs.Depth = currentDepth;
-			context.SetComputeDynamicConstantBufferView(1, reductionArgs);
+			context.SetRootCBV(1, reductionArgs);
 
 			context.SetPipelineState(m_pCBTCacheBitfieldPSO);
 			context.Dispatch(ComputeUtils::GetNumThreadGroups(1u << currentDepth, 256 * 32));
@@ -276,7 +276,7 @@ void CBTTessellation::Execute(RGGraph& graph, Texture* pRenderTarget, Texture* p
 	cbtSumReduction.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
 		{
 			context.SetComputeRootSignature(m_pCBTRS.get());
-			context.SetComputeRootConstants(0, commonArgs);
+			context.SetRootConstants(0, commonArgs);
 
 			struct SumReductionData
 			{
@@ -287,7 +287,7 @@ void CBTTessellation::Execute(RGGraph& graph, Texture* pRenderTarget, Texture* p
 			for (currentDepth = currentDepth - 1; currentDepth >= 0; --currentDepth)
 			{
 				reductionArgs.Depth = currentDepth;
-				context.SetComputeDynamicConstantBufferView(1, reductionArgs);
+				context.SetRootCBV(1, reductionArgs);
 
 				context.SetPipelineState(m_pCBTSumReductionPSO);
 				context.Dispatch(ComputeUtils::GetNumThreadGroups(1 << currentDepth, 256));
@@ -311,8 +311,8 @@ void CBTTessellation::Execute(RGGraph& graph, Texture* pRenderTarget, Texture* p
 				context.SetPipelineState(m_pCBTDebugVisualizePSO);
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-				context.SetGraphicsRootConstants(0, commonArgs);
-				context.SetGraphicsDynamicConstantBufferView(1, updateData);
+				context.SetRootConstants(0, commonArgs);
+				context.SetRootCBV(1, updateData);
 
 				context.BeginRenderPass(RenderPassInfo(m_pDebugVisualizeTexture.get(), RenderPassAccess::Load_Store, nullptr, RenderPassAccess::NoAccess, false));
 				context.ExecuteIndirect(m_pDevice->GetIndirectDrawSignature(), 1, m_pCBTIndirectArgs.get(), nullptr, IndirectDrawArgsOffset);
@@ -332,15 +332,15 @@ void CBTTessellation::AllocateCBT()
 void CBTTessellation::SetupPipelines()
 {
 	std::vector<ShaderDefine> defines = {
-		ShaderDefine(Sprintf("RENDER_WIREFRAME=%d", CBTSettings::Wireframe ? 1 : 0).c_str()),
-		ShaderDefine(Sprintf("FRUSTUM_CULL=%d", CBTSettings::FrustumCull ? 1 : 0).c_str()),
-		ShaderDefine(Sprintf("DISPLACEMENT_LOD=%d", CBTSettings::DisplacementLOD ? 1 : 0).c_str()),
-		ShaderDefine(Sprintf("DISTANCE_LOD=%d", CBTSettings::DistanceLOD ? 1 : 0).c_str()),
-		ShaderDefine(Sprintf("DEBUG_ALWAYS_SUBDIVIDE=%d", CBTSettings::AlwaysSubdivide ? 1 : 0).c_str()),
-		ShaderDefine(Sprintf("MESH_SHADER_SUBD_LEVEL=%du", Math::Min(CBTSettings::MeshShaderSubD * 2, 6)).c_str()),
-		ShaderDefine(Sprintf("GEOMETRY_SHADER_SUBD_LEVEL=%du", Math::Min(CBTSettings::GeometryShaderSubD * 2, 4)).c_str()),
-		ShaderDefine(Sprintf("AMPLIFICATION_SHADER_SUBD_LEVEL=%du", Math::Max(CBTSettings::MeshShaderSubD * 2 - 6, 0)).c_str()),
-		ShaderDefine(Sprintf("COLOR_LEVELS=%d", CBTSettings::ColorLevels ? 1 : 0).c_str()),
+		ShaderDefine("RENDER_WIREFRAME", CBTSettings::Wireframe ? 1 : 0),
+		ShaderDefine("FRUSTUM_CULL", CBTSettings::FrustumCull ? 1 : 0),
+		ShaderDefine("DISPLACEMENT_LOD", CBTSettings::DisplacementLOD ? 1 : 0),
+		ShaderDefine("DISTANCE_LOD", CBTSettings::DistanceLOD ? 1 : 0),
+		ShaderDefine("DEBUG_ALWAYS_SUBDIVIDE", CBTSettings::AlwaysSubdivide ? 1 : 0),
+		ShaderDefine("MESH_SHADER_SUBD_LEVEL", Math::Min(CBTSettings::MeshShaderSubD * 2, 6)),
+		ShaderDefine("GEOMETRY_SHADER_SUBD_LEVEL", Math::Min(CBTSettings::GeometryShaderSubD * 2, 4)),
+		ShaderDefine("AMPLIFICATION_SHADER_SUBD_LEVEL", Math::Max(CBTSettings::MeshShaderSubD * 2 - 6, 0)),
+		ShaderDefine("COLOR_LEVELS", CBTSettings::ColorLevels ? 1 : 0),
 	};
 
 	m_pCBTRS = std::make_unique<RootSignature>(m_pDevice);

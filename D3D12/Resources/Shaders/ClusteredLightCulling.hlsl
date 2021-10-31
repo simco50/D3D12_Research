@@ -1,6 +1,6 @@
 #include "CommonBindings.hlsli"
 
-#define RootSig ROOT_SIG("CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \
+#define RootSig ROOT_SIG("CBV(b0), " \
 				"DescriptorTable(SRV(t0, numDescriptors = 2)), " \
 				"DescriptorTable(UAV(u0, numDescriptors = 2))")
 
@@ -11,7 +11,7 @@ struct ViewData
 {
 	float4x4 View;
 	int3 ClusterDimensions;
-	uint LightCount;	
+	uint LightCount;
 };
 
 ConstantBuffer<ViewData> cViewData : register(b0);

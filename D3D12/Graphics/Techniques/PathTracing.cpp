@@ -135,8 +135,8 @@ void PathTracing::Render(RGGraph& graph, const SceneView& sceneData)
 				m_pAccumulationTexture->GetUAV()->GetDescriptor(),
 			};
 
-			context.SetComputeDynamicConstantBufferView(0, parameters);
-			context.SetComputeDynamicConstantBufferView(1, *sceneData.pShadowData);
+			context.SetRootCBV(0, parameters);
+			context.SetRootCBV(1, *sceneData.pShadowData);
 			context.BindResources(2, 0, uavs, ARRAYSIZE(uavs));
 			context.BindResources(3, 0, srvs, ARRAYSIZE(srvs));
 

@@ -1,5 +1,5 @@
 #pragma once
-#include "ShaderCommon.h"
+#include "Graphics/Core/ShaderInterop.h"
 
 enum class LightType
 {

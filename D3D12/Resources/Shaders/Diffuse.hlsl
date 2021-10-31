@@ -4,7 +4,7 @@
 #define BLOCK_SIZE 16
 
 #define RootSig ROOT_SIG("RootConstants(num32BitConstants=2, b0), " \
-	"CBV(b1, visibility=SHADER_VISIBILITY_ALL), " \
+	"CBV(b1), " \
 	"CBV(b2, visibility=SHADER_VISIBILITY_PIXEL), " \
 	"DescriptorTable(SRV(t2, numDescriptors = 11))")
 
@@ -24,8 +24,8 @@ struct PerViewData
 	int LightCount;
 	int padd;
 #if CLUSTERED_FORWARD
-    int4 ClusterDimensions;
-    int2 ClusterSize;
+	int4 ClusterDimensions;
+	int2 ClusterSize;
 	float2 LightGridParams;
 #endif
 	int3 VolumeFogDimensions;
@@ -51,7 +51,7 @@ StructuredBuffer<uint> tLightIndexList : register(t4);
 StructuredBuffer<uint> tLightGrid : register(t3);
 uint GetSliceFromDepth(float depth)
 {
-    return floor(log(depth) * cViewData.LightGridParams.x - cViewData.LightGridParams.y);
+	return floor(log(depth) * cViewData.LightGridParams.x - cViewData.LightGridParams.y);
 }
 #elif TILED_FORWARD
 Texture2D<uint2> tLightGrid : register(t3);
@@ -102,7 +102,7 @@ LightResult DoLight(float4 pos, float3 worldPos, float3 N, float3 V, float3 diff
 	uint2 tileIndex = uint2(floor(pos.xy / BLOCK_SIZE));
 #elif CLUSTERED_FORWARD
 	uint3 clusterIndex3D = uint3(floor(pos.xy / cViewData.ClusterSize), GetSliceFromDepth(pos.w));
-    uint tileIndex = clusterIndex3D.x + (cViewData.ClusterDimensions.x * (clusterIndex3D.y + cViewData.ClusterDimensions.y * clusterIndex3D.z));
+	uint tileIndex = clusterIndex3D.x + (cViewData.ClusterDimensions.x * (clusterIndex3D.y + cViewData.ClusterDimensions.y * clusterIndex3D.z));
 #endif
 
 #if TILED_FORWARD
@@ -155,17 +155,17 @@ PSInput VSMain(uint vertexId : SV_VertexID)
 {
 	PSInput result;
 	MeshInstance instance = tMeshInstances[cObjectData.Index];
-    MeshData mesh = tMeshes[instance.Mesh];
+	MeshData mesh = tMeshes[instance.Mesh];
 
-    float3 position = UnpackHalf3(GetVertexData<uint2>(mesh.PositionStream, vertexId));
+	float3 position = UnpackHalf3(LoadByteAddressData<uint2>(mesh.PositionStream, vertexId));
 	result.positionWS = mul(float4(position, 1.0f), instance.World).xyz;
 	result.positionVS = mul(float4(result.positionWS, 1.0f), cViewData.View).xyz;
 	result.position = mul(float4(result.positionWS, 1.0f), cViewData.ViewProjection);
-    
-    uint texCoordPacked = tBufferTable[mesh.UVStream].Load<uint>(vertexId * sizeof(uint));
-	result.texCoord = UnpackHalf2(GetVertexData<uint>(mesh.UVStream, vertexId));
-    
-    NormalData normalData = GetVertexData<NormalData>(mesh.NormalStream, vertexId);
+
+	uint texCoordPacked = tBufferTable[mesh.UVStream].Load<uint>(vertexId * sizeof(uint));
+	result.texCoord = UnpackHalf2(LoadByteAddressData<uint>(mesh.UVStream, vertexId));
+
+	NormalData normalData = LoadByteAddressData<NormalData>(mesh.NormalStream, vertexId);
 	result.normal = normalize(mul(normalData.Normal, (float3x3)instance.World));
 	result.tangent = float4(normalize(mul(normalData.Tangent.xyz, (float3x3)instance.World)), normalData.Tangent.w);
 
@@ -267,20 +267,20 @@ void PSMain(PSInput input,
 	float4 baseColor = material.BaseColorFactor;
 	if(material.Diffuse >= 0)
 	{
-		baseColor *= tTexture2DTable[material.Diffuse].Sample(sMaterialSampler, input.texCoord);
+		baseColor *= Sample2D(material.Diffuse, sMaterialSampler, input.texCoord);
 	}
 	float roughness = material.RoughnessFactor;
 	float metalness = material.MetalnessFactor;
 	if(material.RoughnessMetalness >= 0)
 	{
-		float4 roughnessMetalness = tTexture2DTable[material.RoughnessMetalness].Sample(sMaterialSampler, input.texCoord);
+		float4 roughnessMetalness = Sample2D(material.RoughnessMetalness, sMaterialSampler, input.texCoord);
 		metalness *= roughnessMetalness.b;
 		roughness *= roughnessMetalness.g;
 	}
 	float4 emissive = material.EmissiveFactor;
 	if(material.Emissive >= 0)
 	{
-		emissive *= tTexture2DTable[material.Emissive].Sample(sMaterialSampler, input.texCoord);
+		emissive *= Sample2D(material.Emissive, sMaterialSampler, input.texCoord);
 	}
 	float3 specular = 0.5f;
 
@@ -290,7 +290,7 @@ void PSMain(PSInput input,
 		float3 T = normalize(input.tangent.xyz);
 		float3 B = cross(N, T) * input.tangent.w;
 		float3x3 TBN = float3x3(T, B, N);
-		float3 tangentNormal = tTexture2DTable[material.Normal].Sample(sMaterialSampler, input.texCoord).xyz;
+		float3 tangentNormal = Sample2D(material.Normal, sMaterialSampler, input.texCoord).xyz;
 		N = TangentSpaceNormalMapping(tangentNormal, TBN);
 	}
 // Surface Shader END
@@ -299,7 +299,7 @@ void PSMain(PSInput input,
 	float3 specularColor = ComputeF0(specular.r, baseColor.rgb, metalness);
 	float3 V = normalize(cViewData.ViewPosition.xyz - input.positionWS);
 
-	float ssrWeight = 0;	
+	float ssrWeight = 0;
 	float3 ssr = ScreenSpaceReflections(input.position, input.positionVS, N, V, roughness, ssrWeight);
 
 	LightResult lighting = DoLight(input.position, input.positionWS, N, V, diffuseColor, specularColor, roughness);
@@ -320,7 +320,7 @@ void PSMain(PSInput input,
 #endif
 
 	outColor = float4(outRadiance, baseColor.a);
-    float reflectivity = saturate(scatteringTransmittance.w * ambientOcclusion * Square(1 - roughness));
+	float reflectivity = saturate(scatteringTransmittance.w * ambientOcclusion * Square(1 - roughness));
 	outNormalRoughness = float4(N, saturate(reflectivity - ssrWeight));
 	//outNormalRoughness = float4(input.normal, 1);
 }

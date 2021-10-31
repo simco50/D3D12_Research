@@ -1,7 +1,7 @@
 #pragma once
 #include "Core/DescriptorHandle.h"
 #include "Core/BitField.h"
-#include "ShaderCommon.h"
+#include "Core/ShaderInterop.h"
 
 class Texture;
 class Buffer;
@@ -24,7 +24,6 @@ struct Batch
 	BoundingBox LocalBounds;
 	BoundingBox Bounds;
 	float Radius;
-	int Material;
 };
 DECLARE_BITMASK_TYPE(Batch::Blending)
 

@@ -1,7 +1,5 @@
 #include "stdafx.h"
 
-#if PLATFORM_WINDOWS
-
 #include "Graphics/Core/Graphics.h"
 #include "Core/Input.h"
 #include "Core/Console.h"
@@ -290,6 +288,15 @@ int WINAPI WinMain(_In_ HINSTANCE /*hInstance*/, _In_opt_ HINSTANCE /*hPrevInsta
 
 	Thread::SetMainThread();
 	CommandLine::Parse(GetCommandLineA());
+
+	if (CommandLine::GetBool("debuggerwait"))
+	{
+		while (!::IsDebuggerPresent())
+		{
+			::Sleep(100);
+		}
+	}
+
 	Console::Initialize();
 	CVarManager::Initialize();
 	TaskQueue::Initialize(std::thread::hardware_concurrency());
@@ -323,4 +330,3 @@ int WINAPI WinMain(_In_ HINSTANCE /*hInstance*/, _In_opt_ HINSTANCE /*hPrevInsta
 
 	return 0;
 }
-#endif

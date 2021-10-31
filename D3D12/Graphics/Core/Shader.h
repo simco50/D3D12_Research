@@ -24,6 +24,8 @@ enum class ShaderType
 struct ShaderDefine
 {
 	ShaderDefine() = default;
+	ShaderDefine(const char* pDefine, const char* pValue) : Value(Sprintf("%s=%s", pDefine, pValue)) {}
+	ShaderDefine(const char* pDefine, const uint32 value) : Value(Sprintf("%s=%d", pDefine, value)) {}
 	ShaderDefine(const std::string& define) : Value(define) { }
 	ShaderDefine(const char* pDefine) : Value(pDefine) { }
 	std::string Value;
@@ -69,14 +71,14 @@ public:
 	{}
 };
 
-
 class ShaderManager
 {
 public:
-	ShaderManager(const char* pShaderSourcePath, uint8 shaderModelMaj, uint8 shaderModelMin);
+	ShaderManager(uint8 shaderModelMaj, uint8 shaderModelMin);
 	~ShaderManager();
 
 	void ConditionallyReloadShaders();
+	void AddIncludeDir(const std::string& includeDir);
 
 	Shader* GetShader(const char* pShaderPath, ShaderType shaderType, const char* pEntryPoint, const std::vector<ShaderDefine>& defines = {});
 	ShaderLibrary* GetLibrary(const char* pShaderPath, const std::vector<ShaderDefine>& defines = {});
@@ -100,6 +102,8 @@ private:
 
 	void RecompileFromFileChange(const std::string& filePath);
 
+	std::vector<std::string> m_IncludeDirs;
+
 	std::unique_ptr<FileWatcher> m_pFileWatcher;
 
 	using ShaderPtr = std::unique_ptr<Shader>;
@@ -116,8 +120,7 @@ private:
 		std::unordered_map<StringHash, ShaderLibrary*> Libraries;
 	};
 	std::unordered_map<ShaderStringHash, ShadersInFileMap> m_FilepathToObjectMap;
-	
-	const char* m_pShaderSourcePath;
+
 	uint8 m_ShaderModelMajor;
 	uint8 m_ShaderModelMinor;
 

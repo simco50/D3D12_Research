@@ -1,7 +1,7 @@
 #include "stdafx.h"
 #include "DemoApp.h"
 #include "Scene/Camera.h"
-#include "ImGuizmo/ImGuizmo.h"
+#include "ImGuizmo.h"
 #include "Content/Image.h"
 #include "Graphics/DebugRenderer.h"
 #include "Graphics/Profiler.h"
@@ -26,6 +26,7 @@
 #include "Core/Paths.h"
 #include "Core/Input.h"
 #include "Core/ConsoleVariables.h"
+#include "Core/Utils.h"
 
 static const int32 FRAME_COUNT = 3;
 static const DXGI_FORMAT SWAPCHAIN_FORMAT = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -150,7 +151,7 @@ namespace Tweakables
 }
 
 DemoApp::DemoApp(WindowHandle window, const IntVector2& windowRect, int sampleCount /*= 1*/)
-	: m_SampleCount(sampleCount)
+	: m_SampleCount(sampleCount), m_Window(window)
 {
 	// #todo fixup MSAA :(
 	checkf(sampleCount == 1, "I broke MSAA! TODO");
@@ -192,7 +193,6 @@ DemoApp::DemoApp(WindowHandle window, const IntVector2& windowRect, int sampleCo
 	InitializePipelines();
 	InitializeAssets(*pContext);
 	SetupScene(*pContext);
-	UpdateTLAS(*pContext);
 	pContext->Execute(true);
 
 	Tweakables::g_RaytracedAO = m_pDevice->GetCapabilities().SupportsRaytracing() ? Tweakables::g_RaytracedAO : false;
@@ -238,20 +238,15 @@ void DemoApp::InitializeAssets(CommandContext& context)
 
 void DemoApp::SetupScene(CommandContext& context)
 {
-	m_pLightCookie = std::make_unique<Texture>(m_pDevice.get(), "Light Cookie");
-	m_pLightCookie->Create(&context, "Resources/Textures/LightProjector.png", false);
-
 	m_pCamera->SetPosition(Vector3(-1.3f, 2.4f, -1.5f));
 	m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(Math::PIDIV4, Math::PIDIV4 * 0.5f, 0));
 
 	{
-#if 1
+#if 0
 		m_pCamera->SetPosition(Vector3(-1.3f, 2.4f, -1.5f));
 		m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(Math::PIDIV4, Math::PIDIV4 * 0.5f, 0));
 
-		std::unique_ptr<Mesh> pMesh = std::make_unique<Mesh>();
-		pMesh->Load("Resources/Scenes/Sponza/Sponza.gltf", m_pDevice.get(), &context, 1.0f);
-		m_Meshes.push_back(std::move(pMesh));
+		LoadMesh("Resources/Scenes/Sponza/Sponza.gltf", context);
 #elif 0
 		// Hardcode the camera of the scene :-)
 		Matrix m(
@@ -265,80 +260,13 @@ void DemoApp::SetupScene(CommandContext& context)
 		m_pCamera->SetFoV(68.75f * Math::PI / 180.0f);
 		m_pCamera->SetRotation(Quaternion::CreateFromRotationMatrix(m));
 
-		std::unique_ptr<Mesh> pMesh = std::make_unique<Mesh>();
-		pMesh->Load("D:/References/GltfScenes/bathroom_pt/LAZIENKA.gltf", m_pDevice.get(), &context, 1.0f);
-		m_Meshes.push_back(std::move(pMesh));
+		LoadMesh("D:/References/GltfScenes/bathroom_pt/LAZIENKA.gltf", context);
 #elif 0
-		std::unique_ptr<Mesh> pMesh = std::make_unique<Mesh>();
-		pMesh->Load("D:/References/GltfScenes/Sphere/scene.gltf", m_pDevice.get(), &context, 1.0f);
-		m_Meshes.push_back(std::move(pMesh));
+		LoadMesh("D:/References/GltfScenes/Sphere/scene.gltf", context);
 #elif 0
-		std::unique_ptr<Mesh> pMesh = std::make_unique<Mesh>();
-		pMesh->Load("D:/References/GltfScenes/BlenderSplash/MyScene.gltf", m_pDevice.get(), &context, 1.0f);
-		m_Meshes.push_back(std::move(pMesh));
+		LoadMesh("D:/References/GltfScenes/BlenderSplash/MyScene.gltf", context);
 #endif
 	}
-
-	std::vector<ShaderInterop::MaterialData> materials;
-	std::vector<ShaderInterop::MeshData> meshes;
-	std::vector<ShaderInterop::MeshInstance> meshInstances;
-
-	for (const auto& pMesh : m_Meshes)
-	{
-		for (const SubMesh& subMesh : pMesh->GetMeshes())
-		{
-			ShaderInterop::MeshData mesh;
-			mesh.IndexStream = subMesh.pIndexSRV->GetHeapIndex();
-			mesh.PositionStream = subMesh.pPositionsStreamSRV->GetHeapIndex();
-			mesh.NormalStream = subMesh.pNormalsStreamSRV->GetHeapIndex();
-			mesh.UVStream = subMesh.pUVStreamSRV->GetHeapIndex();
-			meshes.push_back(mesh);
-		}
-
-		for (const SubMeshInstance& node : pMesh->GetMeshInstances())
-		{
-			const SubMesh& parentMesh = pMesh->GetMesh(node.MeshIndex);
-			const Material& meshMaterial = pMesh->GetMaterial(parentMesh.MaterialId);
-			ShaderInterop::MeshInstance meshInstance;
-			meshInstance.Mesh = node.MeshIndex;
-			meshInstance.Material = (uint32)materials.size() + parentMesh.MaterialId;
-			meshInstance.World = node.Transform;
-			meshInstances.push_back(meshInstance);
-
-			Batch batch;
-			batch.Index = (int)m_SceneData.Batches.size();
-			batch.LocalBounds = parentMesh.Bounds;
-			batch.pMesh = &parentMesh;
-			batch.BlendMode = meshMaterial.IsTransparent ? Batch::Blending::AlphaMask : Batch::Blending::Opaque;
-			batch.WorldMatrix = node.Transform;
-			batch.Material = (uint32)materials.size() + parentMesh.MaterialId;
-			m_SceneData.Batches.push_back(batch);
-		}
-
-		for (const Material& material : pMesh->GetMaterials())
-		{
-			ShaderInterop::MaterialData materialData;
-			materialData.Diffuse = material.pDiffuseTexture ? material.pDiffuseTexture->GetSRV()->GetHeapIndex() : -1;
-			materialData.Normal = material.pNormalTexture ? material.pNormalTexture->GetSRV()->GetHeapIndex() : -1;
-			materialData.RoughnessMetalness = material.pRoughnessMetalnessTexture ? material.pRoughnessMetalnessTexture->GetSRV()->GetHeapIndex() : -1;
-			materialData.Emissive = material.pEmissiveTexture ? material.pEmissiveTexture->GetSRV()->GetHeapIndex() : -1;
-			materialData.BaseColorFactor = material.BaseColorFactor;
-			materialData.MetalnessFactor = material.MetalnessFactor;
-			materialData.RoughnessFactor = material.RoughnessFactor;
-			materialData.EmissiveFactor = material.EmissiveFactor;
-			materialData.AlphaCutoff = material.AlphaCutoff;
-			materials.push_back(materialData);
-		}
-	}
-
-	m_pMeshBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(Math::Max(1, (int)meshes.size()), sizeof(ShaderInterop::MeshData), BufferFlag::ShaderResource), "Meshes");
-	m_pMeshBuffer->SetData(&context, meshes.data(), meshes.size() * sizeof(ShaderInterop::MeshData));
-
-	m_pMeshInstanceBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(Math::Max(1, (int)meshInstances.size()), sizeof(ShaderInterop::MeshInstance), BufferFlag::ShaderResource), "Meshes");
-	m_pMeshInstanceBuffer->SetData(&context, meshInstances.data(), meshInstances.size() * sizeof(ShaderInterop::MeshInstance));
-
-	m_pMaterialBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(Math::Max(1, (int)materials.size()), sizeof(ShaderInterop::MaterialData), BufferFlag::ShaderResource), "Materials");
-	m_pMaterialBuffer->SetData(&context, materials.data(), materials.size() * sizeof(ShaderInterop::MaterialData));
 
 	{
 		Vector3 Position(-150, 160, -10);
@@ -365,25 +293,21 @@ void DemoApp::SetupScene(CommandContext& context)
 		m_Lights.push_back(spotLight);
 	}
 #endif
-
-	m_pLightBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateStructured((int)m_Lights.size(), sizeof(Light), BufferFlag::ShaderResource), "Lights");
 }
 
 void DemoApp::Update()
 {
 	PROFILE_BEGIN("Update");
 	m_pImGuiRenderer->NewFrame(m_WindowWidth, m_WindowHeight);
-
+	m_pDevice->GetShaderManager()->ConditionallyReloadShaders();
 	UpdateImGui();
 
-	PROFILE_BEGIN("Update Game State");
-	m_pDevice->GetShaderManager()->ConditionallyReloadShaders();
-
-	for (Batch& b : m_SceneData.Batches)
+	CommandContext* pUploadContext = m_pDevice->AllocateCommandContext();
 	{
-		b.LocalBounds.Transform(b.Bounds, b.WorldMatrix);
-		b.Radius = Vector3(b.Bounds.Extents).Length();
+		GPU_PROFILE_SCOPE("UploadGPUScene", pUploadContext);
+		UploadSceneData(*pUploadContext);
 	}
+	pUploadContext->Execute(false);
 
 #if 0
 	static int selectedBatch = -1;
@@ -655,7 +579,7 @@ void DemoApp::Update()
 				light.ShadowMapSize = m_ShadowMaps[light.ShadowIndex]->GetWidth();
 			}
 		}
-		shadowData.ShadowMapOffset = m_ShadowMaps[0]->GetSRV()->GetHeapIndex();
+		shadowData.ShadowMapOffset = m_ShadowMaps[0]->GetSRVIndex();
 	}
 
 	{
@@ -679,12 +603,10 @@ void DemoApp::Update()
 	m_SceneData.pAO = m_pAmbientOcclusion.get();
 	m_SceneData.FrameIndex = m_Frame;
 	m_SceneData.pPreviousColor = m_pPreviousColor.get();
-	m_SceneData.SceneTLAS = m_pTLAS->GetSRV()->GetHeapIndex();
-	m_SceneData.pNormals = m_pNormals.get();
+	m_SceneData.SceneTLAS = m_pTLAS ? m_pTLAS->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
+	m_SceneData.pNormals = m_pNormals ? m_pNormals.get() : m_pResolvedNormals.get();
 	m_SceneData.pResolvedNormals = m_pResolvedNormals.get();
 	m_SceneData.pResolvedTarget = Tweakables::g_TAA.Get() ? m_pTAASource.get() : m_pHDRRenderTarget.get();
-
-	PROFILE_END();
 
 	////////////////////////////////
 	// LET THE RENDERING BEGIN!
@@ -761,129 +683,150 @@ void DemoApp::Update()
 
 	uint64 nextFenceValue = 0;
 
-	RGPassBuilder updateTLAS = graph.AddPass("Update TLAS");
-	updateTLAS.Bind([=](CommandContext& renderContext, const RGPassResources& /*resources*/)
-		{
-			UpdateTLAS(renderContext);
-		}
-	);
-
-	RGPassBuilder setupLights = graph.AddPass("Setup Lights");
-	Data.DepthStencil = setupLights.Write(Data.DepthStencil);
-	setupLights.Bind([=](CommandContext& renderContext, const RGPassResources& /*resources*/)
-		{
-			DynamicAllocation allocation = renderContext.AllocateTransientMemory(m_Lights.size() * sizeof(ShaderInterop::Light));
-			ShaderInterop::Light* pTarget = (ShaderInterop::Light*)allocation.pMappedMemory;
-			for (const Light& light : m_Lights)
-			{
-				*pTarget = light.GetData();
-				++pTarget;
-			}
-			renderContext.InsertResourceBarrier(m_pLightBuffer.get(), D3D12_RESOURCE_STATE_COPY_DEST);
-			renderContext.FlushResourceBarriers();
-			renderContext.CopyBuffer(allocation.pBackingResource, m_pLightBuffer.get(), (uint32)m_pLightBuffer->GetSize(), (uint32)allocation.Offset, 0);
-		});
-
 	if (m_RenderPath == RenderPath::Visibility)
 	{
-		RGPassBuilder visibility = graph.AddPass("Visibility Buffer");
-		Data.DepthStencil = visibility.Write(Data.DepthStencil);
-		visibility.Bind([=](CommandContext& renderContext, const RGPassResources& resources)
-			{
-				Texture* pDepthStencil = resources.GetTexture(Data.DepthStencil);
-				renderContext.InsertResourceBarrier(pDepthStencil, D3D12_RESOURCE_STATE_DEPTH_WRITE);
-				renderContext.InsertResourceBarrier(m_pVisibilityTexture.get(), D3D12_RESOURCE_STATE_RENDER_TARGET);
-				renderContext.InsertResourceBarrier(m_pBarycentricsTexture.get(), D3D12_RESOURCE_STATE_RENDER_TARGET);
-
-				RenderPassInfo rp(pDepthStencil, RenderPassAccess::Clear_Store);
-				rp.RenderTargetCount = 2;
-				rp.RenderTargets[0].Target = m_pVisibilityTexture.get();
-				rp.RenderTargets[0].Access = RenderPassAccess::DontCare_Store;
-				rp.RenderTargets[1].Target = m_pBarycentricsTexture.get();
-				rp.RenderTargets[1].Access = RenderPassAccess::DontCare_Store;
-
-				renderContext.BeginRenderPass(rp);
-				renderContext.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-				renderContext.SetGraphicsRootSignature(m_pVisibilityRenderingRS.get());
-
-				const D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
-					m_SceneData.pMaterialBuffer->GetSRV()->GetDescriptor(),
-					m_SceneData.pMeshBuffer->GetSRV()->GetDescriptor(),
-					m_SceneData.pMeshInstanceBuffer->GetSRV()->GetDescriptor(),
-				};
-
-				renderContext.BindResources(2, 0, srvs, ARRAYSIZE(srvs));
-				renderContext.BindResourceTable(3, m_SceneData.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Graphics);
-
-				struct ViewData
+		if (m_RenderPath == RenderPath::Visibility)
+		{
+			RGPassBuilder visibility = graph.AddPass("Visibility Buffer");
+			Data.DepthStencil = visibility.Write(Data.DepthStencil);
+			visibility.Bind([=](CommandContext& renderContext, const RGPassResources& resources)
 				{
-					Matrix ViewProjection;
-				} viewData;
-				viewData.ViewProjection = m_pCamera->GetViewProjection();
-				renderContext.SetGraphicsDynamicConstantBufferView(1, viewData);
+					Texture* pDepthStencil = resources.GetTexture(Data.DepthStencil);
+					renderContext.InsertResourceBarrier(pDepthStencil, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+					renderContext.InsertResourceBarrier(m_pVisibilityTexture.get(), D3D12_RESOURCE_STATE_RENDER_TARGET);
+					renderContext.InsertResourceBarrier(m_pBarycentricsTexture.get(), D3D12_RESOURCE_STATE_RENDER_TARGET);
 
+					RenderPassInfo rp(pDepthStencil, RenderPassAccess::Clear_Store);
+					rp.RenderTargetCount = 2;
+					rp.RenderTargets[0].Target = m_pVisibilityTexture.get();
+					rp.RenderTargets[0].Access = RenderPassAccess::DontCare_Store;
+					rp.RenderTargets[1].Target = m_pBarycentricsTexture.get();
+					rp.RenderTargets[1].Access = RenderPassAccess::DontCare_Store;
+
+					renderContext.BeginRenderPass(rp);
+					renderContext.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+					renderContext.SetGraphicsRootSignature(m_pVisibilityRenderingRS.get());
+
+					const D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
+						m_SceneData.pMaterialBuffer->GetSRV()->GetDescriptor(),
+						m_SceneData.pMeshBuffer->GetSRV()->GetDescriptor(),
+						m_SceneData.pMeshInstanceBuffer->GetSRV()->GetDescriptor(),
+					};
+
+					renderContext.BindResources(2, 0, srvs, ARRAYSIZE(srvs));
+
+					struct ViewData
+					{
+						Matrix ViewProjection;
+					} viewData;
+					viewData.ViewProjection = m_pCamera->GetViewProjection();
+					renderContext.SetRootCBV(1, viewData);
+
+					{
+						GPU_PROFILE_SCOPE("Opaque", &renderContext);
+						renderContext.SetPipelineState(m_pVisibilityRenderingPSO);
+						DrawScene(renderContext, m_SceneData, Batch::Blending::Opaque);
+					}
+					renderContext.EndRenderPass();
+
+				});
+
+			RGPassBuilder visibilityShading = graph.AddPass("Visibility Shading");
+			visibilityShading.Bind([=](CommandContext& renderContext, const RGPassResources& resources)
 				{
-					GPU_PROFILE_SCOPE("Opaque", &renderContext);
-					renderContext.SetPipelineState(m_pVisibilityRenderingPSO);
-					DrawScene(renderContext, m_SceneData, Batch::Blending::Opaque);
-				}
+					renderContext.InsertResourceBarrier(m_pVisibilityTexture.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+					renderContext.InsertResourceBarrier(m_pBarycentricsTexture.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+					renderContext.InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-				renderContext.EndRenderPass();
+					renderContext.SetComputeRootSignature(m_pVisibilityShadingRS.get());
+					renderContext.SetPipelineState(m_pVisibilityShadingPSO);
 
-			});
+					struct ViewData
+					{
+						Matrix ViewProjection;
+						Matrix ViewInverse;
+						IntVector2 ScreenDimensions;
+					} viewData;
 
-		RGPassBuilder visibilityShading = graph.AddPass("Visibility Shading");
-		visibilityShading.Bind([=](CommandContext& renderContext, const RGPassResources& resources)
-			{
-				renderContext.InsertResourceBarrier(m_pVisibilityTexture.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-				renderContext.InsertResourceBarrier(m_pBarycentricsTexture.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-				renderContext.InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+					viewData.ViewProjection = m_pCamera->GetViewProjection();
+					viewData.ViewInverse = m_pCamera->GetViewInverse();
+					viewData.ScreenDimensions = IntVector2(GetCurrentRenderTarget()->GetWidth(), GetCurrentRenderTarget()->GetHeight());
+					renderContext.SetRootCBV(0, viewData);
 
-				renderContext.SetComputeRootSignature(m_pVisibilityShadingRS.get());
-				renderContext.SetPipelineState(m_pVisibilityShadingPSO);
+					const D3D12_CPU_DESCRIPTOR_HANDLE srvs[] =
+					{
+						m_SceneData.pLightBuffer->GetSRV()->GetDescriptor(),
+						m_SceneData.pMaterialBuffer->GetSRV()->GetDescriptor(),
+						m_SceneData.pMaterialBuffer->GetSRV()->GetDescriptor(),
+						m_SceneData.pMaterialBuffer->GetSRV()->GetDescriptor(),
+						m_SceneData.pMaterialBuffer->GetSRV()->GetDescriptor(),
+						m_SceneData.pMaterialBuffer->GetSRV()->GetDescriptor(),
+						m_SceneData.pMeshBuffer->GetSRV()->GetDescriptor(),
+						m_SceneData.pMeshInstanceBuffer->GetSRV()->GetDescriptor(),
+						m_pVisibilityTexture->GetSRV()->GetDescriptor(),
+						m_pBarycentricsTexture->GetSRV()->GetDescriptor(),
+					};
 
-				struct ViewData
-				{
-					Matrix ViewProjection;
-					Matrix ViewInverse;
-					IntVector2 ScreenDimensions;
-				} viewData;
+					renderContext.BindResources(1, 0, srvs, ARRAYSIZE(srvs));
+					renderContext.BindResource(2, 0, GetCurrentRenderTarget()->GetUAV());
+					renderContext.Dispatch(ComputeUtils::GetNumThreadGroups(GetCurrentRenderTarget()->GetWidth(), 16, GetCurrentRenderTarget()->GetHeight(), 16));
+				});
 
-				viewData.ViewProjection = m_pCamera->GetViewProjection();
-				viewData.ViewInverse = m_pCamera->GetViewInverse();
-				viewData.ScreenDimensions = IntVector2(GetCurrentRenderTarget()->GetWidth(), GetCurrentRenderTarget()->GetHeight());
-				renderContext.SetComputeDynamicConstantBufferView(0, viewData);
-
-				const D3D12_CPU_DESCRIPTOR_HANDLE srvs[] =
-				{
-					m_SceneData.pLightBuffer->GetSRV()->GetDescriptor(),
-					m_SceneData.pMaterialBuffer->GetSRV()->GetDescriptor(),
-					m_SceneData.pMaterialBuffer->GetSRV()->GetDescriptor(),
-					m_SceneData.pMaterialBuffer->GetSRV()->GetDescriptor(),
-					m_SceneData.pMaterialBuffer->GetSRV()->GetDescriptor(),
-					m_SceneData.pMaterialBuffer->GetSRV()->GetDescriptor(),
-					m_SceneData.pMeshBuffer->GetSRV()->GetDescriptor(),
-					m_SceneData.pMeshInstanceBuffer->GetSRV()->GetDescriptor(),
-					m_pVisibilityTexture->GetSRV()->GetDescriptor(),
-					m_pBarycentricsTexture->GetSRV()->GetDescriptor(),
-				};
-
-				renderContext.BindResources(1, 0, srvs, ARRAYSIZE(srvs));
-
-				renderContext.BindResource(2, 0, GetCurrentRenderTarget()->GetUAV());
-
-				renderContext.BindResourceTable(3, m_SceneData.GlobalSRVHeapHandle.GpuHandle, CommandListContext::Compute);
-
-				renderContext.Dispatch(ComputeUtils::GetNumThreadGroups(GetCurrentRenderTarget()->GetWidth(), 16, GetCurrentRenderTarget()->GetHeight(), 16));
-			});
-
-
-		m_pVisualizeTexture = m_pVisibilityTexture.get();
+			m_pVisualizeTexture = m_pVisibilityTexture.get();
+		}
 	}
 
 	if (m_RenderPath == RenderPath::Clustered || m_RenderPath == RenderPath::Tiled)
 	{
+		// PARTICLES GPU SIM
+		m_pParticles->Simulate(graph, GetResolvedDepthStencil(), *m_pCamera);
+
+		// SHADOWS
+		RGPassBuilder shadows = graph.AddPass("Shadow Mapping");
+		shadows.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
+			{
+				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+				context.SetGraphicsRootSignature(m_pShadowsRS.get());
+
+				struct ViewData
+				{
+					Matrix ViewProjection;
+				} viewData;
+
+				for (int i = 0; i < shadowIndex; ++i)
+				{
+					GPU_PROFILE_SCOPE("Light View", &context);
+					Texture* pShadowmap = m_ShadowMaps[i].get();
+					context.InsertResourceBarrier(pShadowmap, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+					context.BeginRenderPass(RenderPassInfo(pShadowmap, RenderPassAccess::Clear_Store));
+
+					viewData.ViewProjection = shadowData.LightViewProjections[i];
+					context.SetRootCBV(1, viewData);
+
+					const D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
+						m_SceneData.pMaterialBuffer->GetSRV()->GetDescriptor(),
+						m_SceneData.pMeshBuffer->GetSRV()->GetDescriptor(),
+						m_SceneData.pMeshInstanceBuffer->GetSRV()->GetDescriptor(),
+					};
+					context.BindResources(2, 0, srvs, ARRAYSIZE(srvs));
+
+					VisibilityMask mask;
+					mask.SetAll();
+					{
+						GPU_PROFILE_SCOPE("Opaque", &context);
+						context.SetPipelineState(m_pShadowsOpaquePSO);
+						DrawScene(context, m_SceneData, mask, Batch::Blending::Opaque);
+					}
+					{
+						GPU_PROFILE_SCOPE("Masked", &context);
+						context.SetPipelineState(m_pShadowsAlphaMaskPSO);
+						DrawScene(context, m_SceneData, mask, Batch::Blending::AlphaMask);
+					}
+					context.EndRenderPass();
+				}
+			});
+
 		//DEPTH PREPASS
 		// - Depth only pass that renders the entire scene
 		// - Optimization that prevents wasteful lighting calculations during the base pass
@@ -915,7 +858,7 @@ void DemoApp::Update()
 					Matrix ViewProjection;
 				} viewData;
 				viewData.ViewProjection = m_pCamera->GetViewProjection();
-				renderContext.SetGraphicsDynamicConstantBufferView(1, viewData);
+				renderContext.SetRootCBV(1, viewData);
 
 				{
 					GPU_PROFILE_SCOPE("Opaque", &renderContext);
@@ -967,52 +910,46 @@ void DemoApp::Update()
 				});
 		}
 
-		// Camera velocity
-		if (Tweakables::g_TAA.Get())
-		{
-			RGPassBuilder cameraMotion = graph.AddPass("Camera Motion");
-			cameraMotion.Bind([=](CommandContext& renderContext, const RGPassResources& /*resources*/)
+		RGPassBuilder cameraMotion = graph.AddPass("Camera Motion");
+		cameraMotion.Bind([=](CommandContext& renderContext, const RGPassResources& /*resources*/)
+			{
+				renderContext.InsertResourceBarrier(GetResolvedDepthStencil(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+				renderContext.InsertResourceBarrier(m_pVelocity.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+				renderContext.SetComputeRootSignature(m_pCameraMotionRS.get());
+				renderContext.SetPipelineState(m_pCameraMotionPSO);
+
+				struct Parameters
 				{
-					renderContext.InsertResourceBarrier(GetResolvedDepthStencil(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-					renderContext.InsertResourceBarrier(m_pVelocity.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+					Matrix ReprojectionMatrix;
+					Vector2 InvScreenDimensions;
+				} parameters;
 
-					renderContext.SetComputeRootSignature(m_pCameraMotionRS.get());
-					renderContext.SetPipelineState(m_pCameraMotionPSO);
+				Matrix preMult = Matrix(
+					Vector4(2.0f, 0.0f, 0.0f, 0.0f),
+					Vector4(0.0f, -2.0f, 0.0f, 0.0f),
+					Vector4(0.0f, 0.0f, 1.0f, 0.0f),
+					Vector4(-1.0f, 1.0f, 0.0f, 1.0f)
+				);
 
-					struct Parameters
-					{
-						Matrix ReprojectionMatrix;
-						Vector2 InvScreenDimensions;
-					} parameters;
+				Matrix postMult = Matrix(
+					Vector4(1.0f / 2.0f, 0.0f, 0.0f, 0.0f),
+					Vector4(0.0f, -1.0f / 2.0f, 0.0f, 0.0f),
+					Vector4(0.0f, 0.0f, 1.0f, 0.0f),
+					Vector4(1.0f / 2.0f, 1.0f / 2.0f, 0.0f, 1.0f));
 
-					Matrix preMult = Matrix(
-						Vector4(2.0f, 0.0f, 0.0f, 0.0f),
-						Vector4(0.0f, -2.0f, 0.0f, 0.0f),
-						Vector4(0.0f, 0.0f, 1.0f, 0.0f),
-						Vector4(-1.0f, 1.0f, 0.0f, 1.0f)
-					);
+				parameters.ReprojectionMatrix = preMult * m_pCamera->GetViewProjection().Invert() * m_pCamera->GetPreviousViewProjection() * postMult;
+				parameters.InvScreenDimensions = Vector2(1.0f / m_WindowWidth, 1.0f / m_WindowHeight);
 
-					Matrix postMult = Matrix(
-						Vector4(1.0f / 2.0f, 0.0f, 0.0f, 0.0f),
-						Vector4(0.0f, -1.0f / 2.0f, 0.0f, 0.0f),
-						Vector4(0.0f, 0.0f, 1.0f, 0.0f),
-						Vector4(1.0f / 2.0f, 1.0f / 2.0f, 0.0f, 1.0f));
+				renderContext.SetRootCBV(0, parameters);
 
-					parameters.ReprojectionMatrix = preMult * m_pCamera->GetViewProjection().Invert() * m_pCamera->GetPreviousViewProjection() * postMult;
-					parameters.InvScreenDimensions = Vector2(1.0f / m_WindowWidth, 1.0f / m_WindowHeight);
+				renderContext.BindResource(1, 0, m_pVelocity->GetUAV());
+				renderContext.BindResource(2, 0, GetResolvedDepthStencil()->GetSRV());
 
-					renderContext.SetComputeDynamicConstantBufferView(0, parameters);
-
-					renderContext.BindResource(1, 0, m_pVelocity->GetUAV());
-					renderContext.BindResource(2, 0, GetResolvedDepthStencil()->GetSRV());
-
-					int dispatchGroupsX = Math::DivideAndRoundUp(m_WindowWidth, 8);
-					int dispatchGroupsY = Math::DivideAndRoundUp(m_WindowHeight, 8);
-					renderContext.Dispatch(dispatchGroupsX, dispatchGroupsY);
-				});
-		}
-
-		m_pParticles->Simulate(graph, GetResolvedDepthStencil(), *m_pCamera);
+				int dispatchGroupsX = Math::DivideAndRoundUp(m_WindowWidth, 8);
+				int dispatchGroupsY = Math::DivideAndRoundUp(m_WindowHeight, 8);
+				renderContext.Dispatch(dispatchGroupsX, dispatchGroupsY);
+			});
 
 		if (Tweakables::g_RaytracedAO)
 		{
@@ -1021,105 +958,6 @@ void DemoApp::Update()
 		else
 		{
 			m_pSSAO->Execute(graph, m_pAmbientOcclusion.get(), m_SceneData);
-		}
-
-		//SHADOW MAPPING
-		// - Renders the scene depth onto a separate depth buffer from the light's view
-		if (shadowIndex > 0)
-		{
-			if (Tweakables::g_SDSM)
-			{
-				RGPassBuilder depthReduce = graph.AddPass("Depth Reduce");
-				Data.DepthStencil = depthReduce.Write(Data.DepthStencil);
-				depthReduce.Bind([=](CommandContext& renderContext, const RGPassResources& resources)
-					{
-						Texture* pDepthStencil = resources.GetTexture(Data.DepthStencil);
-						renderContext.InsertResourceBarrier(pDepthStencil, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-						renderContext.InsertResourceBarrier(m_ReductionTargets[0].get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-
-						renderContext.SetComputeRootSignature(m_pReduceDepthRS.get());
-						renderContext.SetPipelineState(pDepthStencil->GetDesc().SampleCount > 1 ? m_pPrepareReduceDepthMsaaPSO : m_pPrepareReduceDepthPSO);
-
-						struct ShaderParameters
-						{
-							float Near;
-							float Far;
-						} parameters;
-						parameters.Near = m_pCamera->GetNear();
-						parameters.Far = m_pCamera->GetFar();
-
-						renderContext.SetComputeDynamicConstantBufferView(0, parameters);
-						renderContext.BindResource(1, 0, m_ReductionTargets[0]->GetUAV());
-						renderContext.BindResource(2, 0, pDepthStencil->GetSRV());
-
-						renderContext.Dispatch(m_ReductionTargets[0]->GetWidth(), m_ReductionTargets[0]->GetHeight());
-
-						renderContext.SetPipelineState(m_pReduceDepthPSO);
-						for (size_t i = 1; i < m_ReductionTargets.size(); ++i)
-						{
-							renderContext.InsertResourceBarrier(m_ReductionTargets[i - 1].get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-							renderContext.InsertResourceBarrier(m_ReductionTargets[i].get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-
-							renderContext.BindResource(1, 0, m_ReductionTargets[i]->GetUAV());
-							renderContext.BindResource(2, 0, m_ReductionTargets[i - 1]->GetSRV());
-
-							renderContext.Dispatch(m_ReductionTargets[i]->GetWidth(), m_ReductionTargets[i]->GetHeight());
-						}
-
-						renderContext.InsertResourceBarrier(m_ReductionTargets.back().get(), D3D12_RESOURCE_STATE_COPY_SOURCE);
-						renderContext.FlushResourceBarriers();
-
-						renderContext.CopyTexture(m_ReductionTargets.back().get(), m_ReductionReadbackTargets[m_Frame % FRAME_COUNT].get(), CD3DX12_BOX(0, 1));
-					});
-			}
-
-			RGPassBuilder shadows = graph.AddPass("Shadow Mapping");
-			shadows.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
-				{
-					for (auto& pShadowmap : m_ShadowMaps)
-					{
-						context.InsertResourceBarrier(pShadowmap.get(), D3D12_RESOURCE_STATE_DEPTH_WRITE);
-					}
-
-					context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-					context.SetGraphicsRootSignature(m_pShadowsRS.get());
-
-					struct ViewData
-					{
-						Matrix ViewProjection;
-					} viewData;
-
-					for (int i = 0; i < shadowIndex; ++i)
-					{
-						GPU_PROFILE_SCOPE("Light View", &context);
-						Texture* pShadowmap = m_ShadowMaps[i].get();
-						context.BeginRenderPass(RenderPassInfo(pShadowmap, RenderPassAccess::Clear_Store));
-
-						viewData.ViewProjection = shadowData.LightViewProjections[i];
-						context.SetGraphicsDynamicConstantBufferView(1, viewData);
-
-						const D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
-							m_SceneData.pMaterialBuffer->GetSRV()->GetDescriptor(),
-							m_SceneData.pMeshBuffer->GetSRV()->GetDescriptor(),
-							m_SceneData.pMeshInstanceBuffer->GetSRV()->GetDescriptor(),
-						};
-						context.BindResources(2, 0, srvs, ARRAYSIZE(srvs));
-
-						VisibilityMask mask;
-						mask.SetAll();
-						{
-							GPU_PROFILE_SCOPE("Opaque", &context);
-							context.SetPipelineState(m_pShadowsOpaquePSO);
-							DrawScene(context, m_SceneData, mask, Batch::Blending::Opaque);
-						}
-						{
-							GPU_PROFILE_SCOPE("Masked", &context);
-							context.SetPipelineState(m_pShadowsAlphaMaskPSO);
-							DrawScene(context, m_SceneData, mask, Batch::Blending::AlphaMask);
-						}
-						context.EndRenderPass();
-					}
-				});
 		}
 
 		if (m_RenderPath == RenderPath::Tiled)
@@ -1149,26 +987,22 @@ void DemoApp::Update()
 
 				renderContext.BeginRenderPass(info);
 				renderContext.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-				renderContext.SetPipelineState(m_pSkyboxPSO);
 				renderContext.SetGraphicsRootSignature(m_pSkyboxRS.get());
+				renderContext.SetPipelineState(m_pSkyboxPSO);
 
 				struct Parameters
 				{
 					Matrix View;
 					Matrix Projection;
-					Vector3 Bias;
-					float padding1;
 					Vector3 SunDirection;
-					float padding2;
 				} constBuffer;
 
 				constBuffer.View = m_pCamera->GetView();
 				constBuffer.Projection = m_pCamera->GetProjection();
-				constBuffer.Bias = Vector3::One;
 				constBuffer.SunDirection = -m_Lights[0].Direction;
 				constBuffer.SunDirection.Normalize();
 
-				renderContext.SetGraphicsDynamicConstantBufferView(0, constBuffer);
+				renderContext.SetRootCBV(0, constBuffer);
 
 				renderContext.Draw(0, 36);
 
@@ -1203,7 +1037,7 @@ void DemoApp::Update()
 			}
 		});
 
-	if (m_RenderPath == RenderPath::Clustered || m_RenderPath == RenderPath::Tiled)
+	if (m_RenderPath != RenderPath::PathTracing)
 	{
 		if (Tweakables::g_RaytracedReflections)
 		{
@@ -1232,7 +1066,7 @@ void DemoApp::Update()
 					parameters.InvScreenDimensions = Vector2(1.0f / m_WindowWidth, 1.0f / m_WindowHeight);
 					parameters.Jitter.x = m_pCamera->GetPreviousJitter().x - m_pCamera->GetJitter().x;
 					parameters.Jitter.y = -(m_pCamera->GetPreviousJitter().y - m_pCamera->GetJitter().y);
-					renderContext.SetComputeDynamicConstantBufferView(0, parameters);
+					renderContext.SetRootCBV(0, parameters);
 
 					renderContext.BindResource(1, 0, m_pHDRRenderTarget->GetUAV());
 					renderContext.BindResource(2, 0, m_pVelocity->GetSRV());
@@ -1249,52 +1083,87 @@ void DemoApp::Update()
 		}
 	}
 
-	//Tonemapping
+	if (Tweakables::g_SDSM)
+	{
+		RGPassBuilder depthReduce = graph.AddPass("Depth Reduce");
+		Data.DepthStencil = depthReduce.Write(Data.DepthStencil);
+		depthReduce.Bind([=](CommandContext& renderContext, const RGPassResources& resources)
+			{
+				Texture* pDepthStencil = resources.GetTexture(Data.DepthStencil);
+				renderContext.InsertResourceBarrier(pDepthStencil, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+				renderContext.InsertResourceBarrier(m_ReductionTargets[0].get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+				renderContext.SetComputeRootSignature(m_pReduceDepthRS.get());
+				renderContext.SetPipelineState(pDepthStencil->GetDesc().SampleCount > 1 ? m_pPrepareReduceDepthMsaaPSO : m_pPrepareReduceDepthPSO);
+
+				struct ShaderParameters
+				{
+					float Near;
+					float Far;
+				} parameters;
+				parameters.Near = m_pCamera->GetNear();
+				parameters.Far = m_pCamera->GetFar();
+
+				renderContext.SetRootCBV(0, parameters);
+				renderContext.BindResource(1, 0, m_ReductionTargets[0]->GetUAV());
+				renderContext.BindResource(2, 0, pDepthStencil->GetSRV());
+
+				renderContext.Dispatch(m_ReductionTargets[0]->GetWidth(), m_ReductionTargets[0]->GetHeight());
+
+				renderContext.SetPipelineState(m_pReduceDepthPSO);
+				for (size_t i = 1; i < m_ReductionTargets.size(); ++i)
+				{
+					renderContext.InsertResourceBarrier(m_ReductionTargets[i - 1].get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+					renderContext.InsertResourceBarrier(m_ReductionTargets[i].get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+					renderContext.BindResource(1, 0, m_ReductionTargets[i]->GetUAV());
+					renderContext.BindResource(2, 0, m_ReductionTargets[i - 1]->GetSRV());
+
+					renderContext.Dispatch(m_ReductionTargets[i]->GetWidth(), m_ReductionTargets[i]->GetHeight());
+				}
+
+				renderContext.InsertResourceBarrier(m_ReductionTargets.back().get(), D3D12_RESOURCE_STATE_COPY_SOURCE);
+				renderContext.FlushResourceBarriers();
+
+				renderContext.CopyTexture(m_ReductionTargets.back().get(), m_ReductionReadbackTargets[m_Frame % FRAME_COUNT].get(), CD3DX12_BOX(0, 1));
+			});
+	}
+
 	{
 		RG_GRAPH_SCOPE("Tonemapping", graph);
-		bool downscaleTonemapInput = true;
-		Texture* pToneMapInput = downscaleTonemapInput ? m_pDownscaledColor.get() : m_pHDRRenderTarget.get();
-		RGResourceHandle toneMappingInput = graph.ImportTexture("Tonemap Input", pToneMapInput);
+		Texture* pToneMapInput = m_pDownscaledColor.get();
 
-		if (downscaleTonemapInput)
-		{
-			RGPassBuilder colorDownsample = graph.AddPass("Downsample Color");
-			toneMappingInput = colorDownsample.Write(toneMappingInput);
-			colorDownsample.Bind([=](CommandContext& context, const RGPassResources& resources)
+		RGPassBuilder colorDownsample = graph.AddPass("Downsample Color");
+		colorDownsample.Bind([=](CommandContext& context, const RGPassResources& resources)
+			{
+				context.InsertResourceBarrier(pToneMapInput, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+				context.InsertResourceBarrier(m_pHDRRenderTarget.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+
+				context.SetPipelineState(m_pGenerateMipsPSO);
+				context.SetComputeRootSignature(m_pGenerateMipsRS.get());
+
+				struct DownscaleParameters
 				{
-					Texture* pToneMapInput = resources.GetTexture(toneMappingInput);
-					context.InsertResourceBarrier(pToneMapInput, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-					context.InsertResourceBarrier(m_pHDRRenderTarget.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+					IntVector2 TargetDimensions;
+					Vector2 TargetDimensionsInv;
+				} Parameters{};
+				Parameters.TargetDimensions.x = pToneMapInput->GetWidth();
+				Parameters.TargetDimensions.y = pToneMapInput->GetHeight();
+				Parameters.TargetDimensionsInv = Vector2(1.0f / pToneMapInput->GetWidth(), 1.0f / pToneMapInput->GetHeight());
 
-					context.SetPipelineState(m_pGenerateMipsPSO);
-					context.SetComputeRootSignature(m_pGenerateMipsRS.get());
+				context.SetRootCBV(0, Parameters);
+				context.BindResource(1, 0, pToneMapInput->GetUAV());
+				context.BindResource(2, 0, m_pHDRRenderTarget->GetSRV());
 
-					struct DownscaleParameters
-					{
-						IntVector2 TargetDimensions;
-						Vector2 TargetDimensionsInv;
-					} Parameters{};
-					Parameters.TargetDimensions.x = pToneMapInput->GetWidth();
-					Parameters.TargetDimensions.y = pToneMapInput->GetHeight();
-					Parameters.TargetDimensionsInv = Vector2(1.0f / pToneMapInput->GetWidth(), 1.0f / pToneMapInput->GetHeight());
-
-					context.SetComputeDynamicConstantBufferView(0, Parameters);
-					context.BindResource(1, 0, pToneMapInput->GetUAV());
-					context.BindResource(2, 0, m_pHDRRenderTarget->GetSRV());
-
-					context.Dispatch(
-						Math::DivideAndRoundUp(Parameters.TargetDimensions.x, 8),
-						Math::DivideAndRoundUp(Parameters.TargetDimensions.y, 8)
-					);
-				});
-		}
+				context.Dispatch(
+					Math::DivideAndRoundUp(Parameters.TargetDimensions.x, 8),
+					Math::DivideAndRoundUp(Parameters.TargetDimensions.y, 8)
+				);
+			});
 
 		RGPassBuilder histogram = graph.AddPass("Luminance Histogram");
-		toneMappingInput = histogram.Read(toneMappingInput);
 		histogram.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
-				Texture* pToneMapInput = resources.GetTexture(toneMappingInput);
-
 				context.InsertResourceBarrier(m_pLuminanceHistogram.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 				context.InsertResourceBarrier(pToneMapInput, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 				context.ClearUavUInt(m_pLuminanceHistogram.get(), m_pLuminanceHistogram->GetUAV());
@@ -1314,7 +1183,7 @@ void DemoApp::Update()
 				Parameters.MinLogLuminance = Tweakables::g_MinLogLuminance.Get();
 				Parameters.OneOverLogLuminanceRange = 1.0f / (Tweakables::g_MaxLogLuminance.Get() - Tweakables::g_MinLogLuminance.Get());
 
-				context.SetComputeDynamicConstantBufferView(0, Parameters);
+				context.SetRootCBV(0, Parameters);
 				context.BindResource(1, 0, m_pLuminanceHistogram->GetUAV());
 				context.BindResource(2, 0, pToneMapInput->GetSRV());
 
@@ -1333,22 +1202,22 @@ void DemoApp::Update()
 				context.SetPipelineState(m_pAverageLuminancePSO);
 				context.SetComputeRootSignature(m_pAverageLuminanceRS.get());
 
-				struct AverageParameters
+				struct Parameters
 				{
 					int32 PixelCount;
 					float MinLogLuminance;
 					float LogLuminanceRange;
 					float TimeDelta;
 					float Tau;
-				} Parameters;
+				} parameters;
 
-				Parameters.PixelCount = pToneMapInput->GetWidth() * pToneMapInput->GetHeight();
-				Parameters.MinLogLuminance = Tweakables::g_MinLogLuminance.Get();
-				Parameters.LogLuminanceRange = Tweakables::g_MaxLogLuminance.Get() - Tweakables::g_MinLogLuminance.Get();
-				Parameters.TimeDelta = Time::DeltaTime();
-				Parameters.Tau = Tweakables::g_Tau.Get();
+				parameters.PixelCount = pToneMapInput->GetWidth() * pToneMapInput->GetHeight();
+				parameters.MinLogLuminance = Tweakables::g_MinLogLuminance.Get();
+				parameters.LogLuminanceRange = Tweakables::g_MaxLogLuminance.Get() - Tweakables::g_MinLogLuminance.Get();
+				parameters.TimeDelta = Time::DeltaTime();
+				parameters.Tau = Tweakables::g_Tau.Get();
 
-				context.SetComputeDynamicConstantBufferView(0, Parameters);
+				context.SetRootCBV(0, parameters);
 				context.BindResource(1, 0, m_pAverageLuminance->GetUAV());
 				context.BindResource(2, 0, m_pLuminanceHistogram->GetSRV());
 
@@ -1373,25 +1242,17 @@ void DemoApp::Update()
 				context.SetPipelineState(m_pToneMapPSO);
 				context.SetComputeRootSignature(m_pToneMapRS.get());
 
-				context.SetComputeDynamicConstantBufferView(0, constBuffer);
+				context.SetRootCBV(0, constBuffer);
 
 				context.BindResource(1, 0, m_pTonemapTarget->GetUAV());
 				context.BindResource(2, 0, m_pHDRRenderTarget->GetSRV());
 				context.BindResource(2, 1, m_pAverageLuminance->GetSRV());
 
-				context.Dispatch(
-					Math::DivideAndRoundUp(m_pHDRRenderTarget->GetWidth(), 16),
-					Math::DivideAndRoundUp(m_pHDRRenderTarget->GetHeight(), 16)
-				);
+				context.Dispatch(ComputeUtils::GetNumThreadGroups(m_pHDRRenderTarget->GetWidth(), 16, m_pHDRRenderTarget->GetHeight(), 16));
 			});
 
 		if (Tweakables::g_EnableUI && Tweakables::g_DrawHistogram.Get())
 		{
-			if (!m_pDebugHistogramTexture)
-			{
-				m_pDebugHistogramTexture = m_pDevice->CreateTexture(TextureDesc::Create2D(m_pLuminanceHistogram->GetNumElements() * 4, m_pLuminanceHistogram->GetNumElements(), DXGI_FORMAT_R8G8B8A8_UNORM, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess), "Debug Histogram");
-			}
-
 			RGPassBuilder drawHistogram = graph.AddPass("Draw Histogram");
 			drawHistogram.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
 				{
@@ -1414,18 +1275,14 @@ void DemoApp::Update()
 					Parameters.InvTextureDimensions.x = 1.0f / m_pDebugHistogramTexture->GetWidth();
 					Parameters.InvTextureDimensions.y = 1.0f / m_pDebugHistogramTexture->GetHeight();
 
-					context.SetComputeDynamicConstantBufferView(0, Parameters);
+					context.SetRootCBV(0, Parameters);
 					context.BindResource(1, 0, m_pDebugHistogramTexture->GetUAV());
 					context.BindResource(2, 0, m_pLuminanceHistogram->GetSRV());
 					context.BindResource(2, 1, m_pAverageLuminance->GetSRV());
 					context.ClearUavUInt(m_pDebugHistogramTexture.get(), m_pDebugHistogramTexture->GetUAV());
+
 					context.Dispatch(1, m_pLuminanceHistogram->GetNumElements());
 				});
-			ImGui::Begin("Luminance Histogram");
-			ImVec2 cursor = ImGui::GetCursorPos();
-			ImGui::ImageAutoSize(m_pDebugHistogramTexture.get(), ImVec2((float)m_pDebugHistogramTexture->GetWidth(), (float)m_pDebugHistogramTexture->GetHeight()));
-			ImGui::GetWindowDrawList()->AddText(cursor, IM_COL32(255, 255, 255, 255), Sprintf("%.2f", Tweakables::g_MinLogLuminance.Get()).c_str());
-			ImGui::End();
 		}
 	}
 
@@ -1530,9 +1387,9 @@ void DemoApp::OnResize(int width, int height)
 	if (m_SampleCount > 1)
 	{
 		m_pMultiSampleRenderTarget = m_pDevice->CreateTexture(TextureDesc::CreateRenderTarget(width, height, GraphicsDevice::RENDER_TARGET_FORMAT, TextureFlag::RenderTarget, m_SampleCount, ClearBinding(Colors::Black)), "MSAA Target");
+		m_pNormals = m_pDevice->CreateTexture(TextureDesc::CreateRenderTarget(width, height, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::RenderTarget, m_SampleCount, ClearBinding(Colors::Black)), "MSAA Normals");
 	}
 
-	m_pNormals = m_pDevice->CreateTexture(TextureDesc::CreateRenderTarget(width, height, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::RenderTarget, m_SampleCount, ClearBinding(Colors::Black)), "MSAA Normals");
 	m_pResolvedNormals = m_pDevice->CreateTexture(TextureDesc::CreateRenderTarget(width, height, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::RenderTarget | TextureFlag::ShaderResource, 1, ClearBinding(Colors::Black)), "Normals");
 	m_pHDRRenderTarget = m_pDevice->CreateTexture(TextureDesc::CreateRenderTarget(width, height, GraphicsDevice::RENDER_TARGET_FORMAT, TextureFlag::ShaderResource | TextureFlag::RenderTarget | TextureFlag::UnorderedAccess), "HDR Target");
 	m_pPreviousColor = m_pDevice->CreateTexture(TextureDesc::Create2D(width, height, GraphicsDevice::RENDER_TARGET_FORMAT, TextureFlag::ShaderResource), "Previous Color");
@@ -1541,6 +1398,7 @@ void DemoApp::OnResize(int width, int height)
 	m_pAmbientOcclusion = m_pDevice->CreateTexture(TextureDesc::Create2D(Math::DivideAndRoundUp(width, 2), Math::DivideAndRoundUp(height, 2), DXGI_FORMAT_R8_UNORM, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource), "SSAO");
 	m_pVelocity = m_pDevice->CreateTexture(TextureDesc::Create2D(width, height, DXGI_FORMAT_R16G16_FLOAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess), "Velocity");
 	m_pTAASource = m_pDevice->CreateTexture(TextureDesc::CreateRenderTarget(width, height, GraphicsDevice::RENDER_TARGET_FORMAT, TextureFlag::ShaderResource | TextureFlag::RenderTarget | TextureFlag::UnorderedAccess), "TAA Target");
+
 	m_pVisibilityTexture = m_pDevice->CreateTexture(TextureDesc::CreateRenderTarget(width, height, DXGI_FORMAT_R32_UINT, TextureFlag::RenderTarget | TextureFlag::ShaderResource), "Visibility Buffer");
 	m_pBarycentricsTexture = m_pDevice->CreateTexture(TextureDesc::CreateRenderTarget(width, height, DXGI_FORMAT_R32G32_FLOAT, TextureFlag::RenderTarget | TextureFlag::ShaderResource), "Barycentrics Buffer");
 
@@ -1573,20 +1431,18 @@ void DemoApp::OnResize(int width, int height)
 
 void DemoApp::InitializePipelines()
 {
-	//Input layout
-	//Shadow mapping
-	//Vertex shader-only pass that writes to the depth buffer using the light matrix
+	//Shadow mapping - Vertex shader-only pass that writes to the depth buffer using the light matrix
 	{
 		//Opaque
 		{
 			Shader* pVertexShader = m_pDevice->GetShader("DepthOnly.hlsl", ShaderType::Vertex, "VSMain");
 			Shader* pAlphaClipShader = m_pDevice->GetShader("DepthOnly.hlsl", ShaderType::Pixel, "PSMain");
 
-			//Rootsignature
+
 			m_pShadowsRS = std::make_unique<RootSignature>(m_pDevice.get());
 			m_pShadowsRS->FinalizeFromShader("Shadow Mapping (Opaque)", pVertexShader);
 
-			//Pipeline state
+
 			PipelineStateInitializer psoDesc;
 			psoDesc.SetRootSignature(m_pShadowsRS->GetRootSignature());
 			psoDesc.SetVertexShader(pVertexShader);
@@ -1603,17 +1459,14 @@ void DemoApp::InitializePipelines()
 		}
 	}
 
-	//Depth prepass
-	//Simple vertex shader to fill the depth buffer to optimize later passes
+	//Depth prepass - Simple vertex shader to fill the depth buffer to optimize later passes
 	{
 		Shader* pVertexShader = m_pDevice->GetShader("DepthOnly.hlsl", ShaderType::Vertex, "VSMain");
 		Shader* pPixelShader = m_pDevice->GetShader("DepthOnly.hlsl", ShaderType::Pixel, "PSMain");
 
-		//Rootsignature
 		m_pDepthPrepassRS = std::make_unique<RootSignature>(m_pDevice.get());
 		m_pDepthPrepassRS->FinalizeFromShader("Depth Prepass", pVertexShader);
 
-		//Pipeline state
 		PipelineStateInitializer psoDesc;
 		psoDesc.SetRootSignature(m_pDepthPrepassRS->GetRootSignature());
 		psoDesc.SetVertexShader(pVertexShader);
@@ -1632,11 +1485,9 @@ void DemoApp::InitializePipelines()
 	{
 		Shader* pComputeShader = m_pDevice->GetShader("LuminanceHistogram.hlsl", ShaderType::Compute, "CSMain");
 
-		//Rootsignature
 		m_pLuminanceHistogramRS = std::make_unique<RootSignature>(m_pDevice.get());
 		m_pLuminanceHistogramRS->FinalizeFromShader("Luminance Historgram", pComputeShader);
 
-		//Pipeline state
 		PipelineStateInitializer psoDesc;
 		psoDesc.SetRootSignature(m_pLuminanceHistogramRS->GetRootSignature());
 		psoDesc.SetComputeShader(pComputeShader);
@@ -1645,6 +1496,7 @@ void DemoApp::InitializePipelines()
 
 		m_pLuminanceHistogram = m_pDevice->CreateBuffer(BufferDesc::CreateByteAddress(sizeof(uint32) * 256), "Luminance Histogram");
 		m_pAverageLuminance = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(3, sizeof(float), BufferFlag::UnorderedAccess | BufferFlag::ShaderResource), "Average Luminance");
+		m_pDebugHistogramTexture = m_pDevice->CreateTexture(TextureDesc::Create2D(m_pLuminanceHistogram->GetNumElements() * 4, m_pLuminanceHistogram->GetNumElements(), DXGI_FORMAT_R8G8B8A8_UNORM, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess), "Debug Histogram");
 	}
 
 	//Debug Draw Histogram
@@ -1664,11 +1516,9 @@ void DemoApp::InitializePipelines()
 	{
 		Shader* pComputeShader = m_pDevice->GetShader("AverageLuminance.hlsl", ShaderType::Compute, "CSMain");
 
-		//Rootsignature
 		m_pAverageLuminanceRS = std::make_unique<RootSignature>(m_pDevice.get());
 		m_pAverageLuminanceRS->FinalizeFromShader("Average Luminance", pComputeShader);
 
-		//Pipeline state
 		PipelineStateInitializer psoDesc;
 		psoDesc.SetRootSignature(m_pAverageLuminanceRS->GetRootSignature());
 		psoDesc.SetComputeShader(pComputeShader);
@@ -1694,11 +1544,9 @@ void DemoApp::InitializePipelines()
 	{
 		Shader* pComputeShader = m_pDevice->GetShader("Tonemapping.hlsl", ShaderType::Compute, "CSMain");
 
-		//Rootsignature
 		m_pToneMapRS = std::make_unique<RootSignature>(m_pDevice.get());
 		m_pToneMapRS->FinalizeFromShader("Tonemapping", pComputeShader);
 
-		//Pipeline state
 		PipelineStateInitializer psoDesc;
 		psoDesc.SetRootSignature(m_pToneMapRS->GetRootSignature());
 		psoDesc.SetComputeShader(pComputeShader);
@@ -1777,11 +1625,11 @@ void DemoApp::InitializePipelines()
 		Shader* pVertexShader = m_pDevice->GetShader("ProceduralSky.hlsl", ShaderType::Vertex, "VSMain");
 		Shader* pPixelShader = m_pDevice->GetShader("ProceduralSky.hlsl", ShaderType::Pixel, "PSMain");
 
-		//Rootsignature
 		m_pSkyboxRS = std::make_unique<RootSignature>(m_pDevice.get());
-		m_pSkyboxRS->FinalizeFromShader("Skybox", pVertexShader);
+		m_pSkyboxRS->AddConstantBufferView(0);
+		m_pSkyboxRS->AddDefaultTables();
+		m_pSkyboxRS->Finalize("Skybox");
 
-		//Pipeline state
 		PipelineStateInitializer psoDesc;
 		psoDesc.SetRootSignature(m_pSkyboxRS->GetRootSignature());
 		psoDesc.SetVertexShader(pVertexShader);
@@ -1858,6 +1706,33 @@ void DemoApp::UpdateImGui()
 			{
 				showImguiDemo = !showImguiDemo;
 			}
+			if (ImGui::MenuItem("Luminance Histogram", 0, &Tweakables::g_DrawHistogram.Get()))
+			{
+				Tweakables::g_VisualizeShadowCascades.SetValue(!Tweakables::g_DrawHistogram.GetBool());
+			}
+			if (ImGui::MenuItem("Load Mesh", nullptr, nullptr))
+			{
+				OPENFILENAME ofn = { 0 };
+				TCHAR szFile[260] = { 0 };
+				ofn.lStructSize = sizeof(ofn);
+				ofn.hwndOwner = m_Window;
+				ofn.lpstrFile = szFile;
+				ofn.nMaxFile = sizeof(szFile);
+				ofn.lpstrFilter = "GLTF Files (*.gltf)\0*.gltf\0All Files (*.*)\0*.*\0";;
+				ofn.nFilterIndex = 1;
+				ofn.lpstrFileTitle = NULL;
+				ofn.nMaxFileTitle = 0;
+				ofn.lpstrInitialDir = NULL;
+				ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
+
+				if (GetOpenFileNameA(&ofn) == TRUE)
+				{
+					m_Meshes.clear();
+					CommandContext* pContext = m_pDevice->AllocateCommandContext();
+					LoadMesh(ofn.lpstrFile, *pContext);
+					pContext->Execute(true);
+				}
+			}
 			ImGui::EndMenu();
 		}
 		if (ImGui::BeginMenu("Tools"))
@@ -1884,15 +1759,24 @@ void DemoApp::UpdateImGui()
 
 	if (showImguiDemo)
 	{
-	ImGui::ShowDemoWindow();
+		ImGui::ShowDemoWindow();
+	}
+
+	if (Tweakables::g_DrawHistogram)
+	{
+		ImGui::Begin("Luminance Histogram");
+		ImVec2 cursor = ImGui::GetCursorPos();
+		ImGui::ImageAutoSize(m_pDebugHistogramTexture.get(), ImVec2((float)m_pDebugHistogramTexture->GetWidth(), (float)m_pDebugHistogramTexture->GetHeight()));
+		ImGui::GetWindowDrawList()->AddText(cursor, IM_COL32(255, 255, 255, 255), Sprintf("%.2f", Tweakables::g_MinLogLuminance.Get()).c_str());
+		ImGui::End();
 	}
 
 	if (m_pVisualizeTexture)
 	{
 		if (ImGui::Begin("Visualize Texture"))
 		{
-		ImGui::Text("Resolution: %dx%d", m_pVisualizeTexture->GetWidth(), m_pVisualizeTexture->GetHeight());
-		ImGui::ImageAutoSize(m_pVisualizeTexture, ImVec2((float)m_pVisualizeTexture->GetWidth(), (float)m_pVisualizeTexture->GetHeight()));
+			ImGui::Text("Resolution: %dx%d", m_pVisualizeTexture->GetWidth(), m_pVisualizeTexture->GetHeight());
+			ImGui::ImageAutoSize(m_pVisualizeTexture, ImVec2((float)m_pVisualizeTexture->GetWidth(), (float)m_pVisualizeTexture->GetHeight()));
 		}
 		ImGui::End();
 	}
@@ -1906,11 +1790,11 @@ void DemoApp::UpdateImGui()
 			ImGui::SetNextWindowPos(ImVec2(m_WindowWidth - imageSize, 0));
 			if (ImGui::Begin("Shadow Cascades", 0, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoScrollbar))
 			{
-			const Light& sunLight = m_Lights[0];
+				const Light& sunLight = m_Lights[0];
 				for (int i = 0; i < Tweakables::g_ShadowCascades; ++i)
-			{
-				ImGui::Image(m_ShadowMaps[sunLight.ShadowIndex + i].get(), ImVec2(imageSize, imageSize));
-			}
+				{
+					ImGui::Image(m_ShadowMaps[sunLight.ShadowIndex + i].get(), ImVec2(imageSize, imageSize));
+				}
 			}
 			ImGui::End();
 		}
@@ -1920,128 +1804,128 @@ void DemoApp::UpdateImGui()
 	{
 		if (ImGui::Begin("Profiler", &showProfiler))
 		{
-	ImGui::Text("MS: %4.2f | FPS: %4.2f | %d x %d", Time::DeltaTime() * 1000.0f, 1.0f / Time::DeltaTime(), m_WindowWidth, m_WindowHeight);
-	ImGui::PlotLines("", m_FrameTimes.data(), (int)m_FrameTimes.size(), m_Frame % m_FrameTimes.size(), 0, 0.0f, 0.03f, ImVec2(ImGui::GetContentRegionAvail().x, 100));
+			ImGui::Text("MS: %4.2f | FPS: %4.2f | %d x %d", Time::DeltaTime() * 1000.0f, 1.0f / Time::DeltaTime(), m_WindowWidth, m_WindowHeight);
+			ImGui::PlotLines("", m_FrameTimes.data(), (int)m_FrameTimes.size(), m_Frame % m_FrameTimes.size(), 0, 0.0f, 0.03f, ImVec2(ImGui::GetContentRegionAvail().x, 100));
 
-	if (ImGui::TreeNodeEx("Profiler", ImGuiTreeNodeFlags_DefaultOpen))
-	{
-		ProfileNode* pRootNode = Profiler::Get()->GetRootNode();
-		pRootNode->RenderImGui(m_Frame);
-		ImGui::TreePop();
-	}
-	}
-	ImGui::End();
+			if (ImGui::TreeNodeEx("Profiler", ImGuiTreeNodeFlags_DefaultOpen))
+			{
+				ProfileNode* pRootNode = Profiler::Get()->GetRootNode();
+				pRootNode->RenderImGui(m_Frame);
+				ImGui::TreePop();
+			}
+		}
+		ImGui::End();
 	}
 
 	if (ImGui::Begin("Parameters"))
 	{
-	if (ImGui::CollapsingHeader("Global"))
-	{
-		ImGui::Combo("Render Path", (int*)&m_RenderPath, [](void* /*data*/, int index, const char** outText)
-			{
-				RenderPath p = (RenderPath)index;
-				switch (p)
-				{
-				case RenderPath::Tiled:
-					*outText = "Tiled";
-					break;
-				case RenderPath::Clustered:
-					*outText = "Clustered";
-					break;
-				case RenderPath::PathTracing:
-					*outText = "Path Tracing";
-					break;
-				case RenderPath::Visibility:
-					*outText = "Visibility";
-					break;
-				default:
-					noEntry();
-					break;
-				}
-				return true;
-			}, nullptr, (int)RenderPath::MAX);
-
-		ImGui::Text("Camera");
-			ImGui::Text("Location: [%.2f, %.2f, %.2f]", m_pCamera->GetPosition().x, m_pCamera->GetPosition().y, m_pCamera->GetPosition().z);
-		float fov = m_pCamera->GetFoV();
-		if (ImGui::SliderAngle("Field of View", &fov, 10, 120))
+		if (ImGui::CollapsingHeader("Global"))
 		{
-			m_pCamera->SetFoV(fov);
-		}
-		Vector2 farNear(m_pCamera->GetFar(), m_pCamera->GetNear());
-		if (ImGui::DragFloatRange2("Near/Far", &farNear.x, &farNear.y, 1, 0.1f, 100))
-		{
-			m_pCamera->SetFarPlane(farNear.x);
-			m_pCamera->SetNearPlane(farNear.y);
-		}
-	}
-
-	if (ImGui::CollapsingHeader("Sky"))
-	{
-		ImGui::SliderFloat("Sun Orientation", &Tweakables::g_SunOrientation, -Math::PI, Math::PI);
-		ImGui::SliderFloat("Sun Inclination", &Tweakables::g_SunInclination, 0, 1);
-		ImGui::SliderFloat("Sun Temperature", &Tweakables::g_SunTemperature, 1000, 15000);
-		ImGui::SliderFloat("Sun Intensity", &Tweakables::g_SunIntensity, 0, 30);
-	}
-
-	if (ImGui::CollapsingHeader("Shadows"))
-	{
-		ImGui::SliderInt("Shadow Cascades", &Tweakables::g_ShadowCascades.Get(), 1, 4);
-		ImGui::Checkbox("SDSM", &Tweakables::g_SDSM.Get());
-		ImGui::Checkbox("Stabilize Cascades", &Tweakables::g_StabilizeCascades.Get());
-		ImGui::SliderFloat("PSSM Factor", &Tweakables::g_PSSMFactor.Get(), 0, 1);
-		ImGui::Checkbox("Visualize Cascades", &Tweakables::g_VisualizeShadowCascades.Get());
-	}
-
-	if (ImGui::CollapsingHeader("Expose/Tonemapping"))
-	{
-
-		ImGui::DragFloatRange2("Log Luminance", &Tweakables::g_MinLogLuminance.Get(), &Tweakables::g_MaxLogLuminance.Get(), 1.0f, -100, 50);
-		ImGui::Checkbox("Draw Exposure Histogram", &Tweakables::g_DrawHistogram.Get());
-		ImGui::SliderFloat("White Point", &Tweakables::g_WhitePoint.Get(), 0, 20);
-		ImGui::SliderFloat("Tau", &Tweakables::g_Tau.Get(), 0, 5);
-
-		ImGui::Combo("Tonemapper", (int*)&Tweakables::g_ToneMapper.Get(), [](void* /*data*/, int index, const char** outText)
-			{
-				constexpr static const char* tonemappers[] = {
-					"Reinhard",
-					"Reinhard Extended",
-					"ACES Fast",
-					"Unreal 3",
-					"Uncharted 2",
-				};
-
-				if (index < (int)ARRAYSIZE(tonemappers))
+			ImGui::Combo("Render Path", (int*)&m_RenderPath, [](void* /*data*/, int index, const char** outText)
 				{
-					*outText = tonemappers[index];
+					RenderPath p = (RenderPath)index;
+					switch (p)
+					{
+					case RenderPath::Tiled:
+						*outText = "Tiled";
+						break;
+					case RenderPath::Clustered:
+						*outText = "Clustered";
+						break;
+					case RenderPath::PathTracing:
+						*outText = "Path Tracing";
+						break;
+					case RenderPath::Visibility:
+						*outText = "Visibility";
+						break;
+					default:
+						noEntry();
+						break;
+					}
 					return true;
-				}
-				noEntry();
-				return false;
-			}, nullptr, 5);
-	}
+				}, nullptr, (int)RenderPath::MAX);
 
-	if (ImGui::CollapsingHeader("Misc"))
-	{
-		ImGui::Checkbox("TAA", &Tweakables::g_TAA.Get());
-		ImGui::Checkbox("Debug Render Lights", &Tweakables::g_VisualizeLights.Get());
-		ImGui::Checkbox("Visualize Light Density", &Tweakables::g_VisualizeLightDensity.Get());
-		extern bool g_VisualizeClusters;
-		ImGui::Checkbox("Visualize Clusters", &g_VisualizeClusters);
-		ImGui::SliderInt("SSR Samples", &Tweakables::g_SsrSamples.Get(), 0, 32);
-		ImGui::Checkbox("Object Bounds", &Tweakables::g_RenderObjectBounds.Get());
-		ImGui::Checkbox("Render Terrain", &Tweakables::g_RenderTerrain.Get());
-	}
-
-	if (ImGui::CollapsingHeader("Raytracing"))
-	{
-		if (m_pDevice->GetCapabilities().SupportsRaytracing())
-		{
-			ImGui::Checkbox("Raytraced AO", &Tweakables::g_RaytracedAO.Get());
-			ImGui::Checkbox("Raytraced Reflections", &Tweakables::g_RaytracedReflections.Get());
-			ImGui::SliderAngle("TLAS Bounds Threshold", &Tweakables::g_TLASBoundsThreshold.Get(), 0, 40);
+			ImGui::Text("Camera");
+			ImGui::Text("Location: [%.2f, %.2f, %.2f]", m_pCamera->GetPosition().x, m_pCamera->GetPosition().y, m_pCamera->GetPosition().z);
+			float fov = m_pCamera->GetFoV();
+			if (ImGui::SliderAngle("Field of View", &fov, 10, 120))
+			{
+				m_pCamera->SetFoV(fov);
+			}
+			Vector2 farNear(m_pCamera->GetFar(), m_pCamera->GetNear());
+			if (ImGui::DragFloatRange2("Near/Far", &farNear.x, &farNear.y, 1, 0.1f, 100))
+			{
+				m_pCamera->SetFarPlane(farNear.x);
+				m_pCamera->SetNearPlane(farNear.y);
+			}
 		}
-	}
+
+		if (ImGui::CollapsingHeader("Sky"))
+		{
+			ImGui::SliderFloat("Sun Orientation", &Tweakables::g_SunOrientation, -Math::PI, Math::PI);
+			ImGui::SliderFloat("Sun Inclination", &Tweakables::g_SunInclination, 0, 1);
+			ImGui::SliderFloat("Sun Temperature", &Tweakables::g_SunTemperature, 1000, 15000);
+			ImGui::SliderFloat("Sun Intensity", &Tweakables::g_SunIntensity, 0, 30);
+		}
+
+		if (ImGui::CollapsingHeader("Shadows"))
+		{
+			ImGui::SliderInt("Shadow Cascades", &Tweakables::g_ShadowCascades.Get(), 1, 4);
+			ImGui::Checkbox("SDSM", &Tweakables::g_SDSM.Get());
+			ImGui::Checkbox("Stabilize Cascades", &Tweakables::g_StabilizeCascades.Get());
+			ImGui::SliderFloat("PSSM Factor", &Tweakables::g_PSSMFactor.Get(), 0, 1);
+			ImGui::Checkbox("Visualize Cascades", &Tweakables::g_VisualizeShadowCascades.Get());
+		}
+
+		if (ImGui::CollapsingHeader("Expose/Tonemapping"))
+		{
+
+			ImGui::DragFloatRange2("Log Luminance", &Tweakables::g_MinLogLuminance.Get(), &Tweakables::g_MaxLogLuminance.Get(), 1.0f, -100, 50);
+			ImGui::Checkbox("Draw Exposure Histogram", &Tweakables::g_DrawHistogram.Get());
+			ImGui::SliderFloat("White Point", &Tweakables::g_WhitePoint.Get(), 0, 20);
+			ImGui::SliderFloat("Tau", &Tweakables::g_Tau.Get(), 0, 5);
+
+			ImGui::Combo("Tonemapper", (int*)&Tweakables::g_ToneMapper.Get(), [](void* /*data*/, int index, const char** outText)
+				{
+					constexpr static const char* tonemappers[] = {
+						"Reinhard",
+						"Reinhard Extended",
+						"ACES Fast",
+						"Unreal 3",
+						"Uncharted 2",
+					};
+
+					if (index < (int)ARRAYSIZE(tonemappers))
+					{
+						*outText = tonemappers[index];
+						return true;
+					}
+					noEntry();
+					return false;
+				}, nullptr, 5);
+		}
+
+		if (ImGui::CollapsingHeader("Misc"))
+		{
+			ImGui::Checkbox("TAA", &Tweakables::g_TAA.Get());
+			ImGui::Checkbox("Debug Render Lights", &Tweakables::g_VisualizeLights.Get());
+			ImGui::Checkbox("Visualize Light Density", &Tweakables::g_VisualizeLightDensity.Get());
+			extern bool g_VisualizeClusters;
+			ImGui::Checkbox("Visualize Clusters", &g_VisualizeClusters);
+			ImGui::SliderInt("SSR Samples", &Tweakables::g_SsrSamples.Get(), 0, 32);
+			ImGui::Checkbox("Object Bounds", &Tweakables::g_RenderObjectBounds.Get());
+			ImGui::Checkbox("Render Terrain", &Tweakables::g_RenderTerrain.Get());
+		}
+
+		if (ImGui::CollapsingHeader("Raytracing"))
+		{
+			if (m_pDevice->GetCapabilities().SupportsRaytracing())
+			{
+				ImGui::Checkbox("Raytraced AO", &Tweakables::g_RaytracedAO.Get());
+				ImGui::Checkbox("Raytraced Reflections", &Tweakables::g_RaytracedReflections.Get());
+				ImGui::SliderAngle("TLAS Bounds Threshold", &Tweakables::g_TLASBoundsThreshold.Get(), 0, 40);
+			}
+		}
 	}
 	ImGui::End();
 }
@@ -2186,4 +2070,99 @@ void DemoApp::UpdateTLAS(CommandContext& context)
 		pCmd->BuildRaytracingAccelerationStructure(&asDesc, 0, nullptr);
 		context.InsertUavBarrier(m_pTLAS.get());
 	}
+}
+
+void DemoApp::LoadMesh(const std::string& filePath, CommandContext& context)
+{
+	std::unique_ptr<Mesh> pMesh = std::make_unique<Mesh>();
+	pMesh->Load(filePath.c_str(), m_pDevice.get(), &context, 1.0f);
+	m_Meshes.push_back(std::move(pMesh));
+}
+
+void DemoApp::UploadSceneData(CommandContext& context)
+{
+	std::vector<ShaderInterop::MaterialData> materials;
+	std::vector<ShaderInterop::MeshData> meshes;
+	std::vector<ShaderInterop::MeshInstance> meshInstances;
+	std::vector<Batch> sceneBatches;
+
+	for (const auto& pMesh : m_Meshes)
+	{
+		for (const SubMesh& subMesh : pMesh->GetMeshes())
+		{
+			ShaderInterop::MeshData mesh;
+			mesh.IndexStream = subMesh.pIndexSRV->GetHeapIndex();
+			mesh.PositionStream = subMesh.pPositionsStreamSRV->GetHeapIndex();
+			mesh.NormalStream = subMesh.pNormalsStreamSRV->GetHeapIndex();
+			mesh.UVStream = subMesh.pUVStreamSRV->GetHeapIndex();
+			meshes.push_back(mesh);
+		}
+
+		for (const SubMeshInstance& node : pMesh->GetMeshInstances())
+		{
+			const SubMesh& parentMesh = pMesh->GetMesh(node.MeshIndex);
+			const Material& meshMaterial = pMesh->GetMaterial(parentMesh.MaterialId);
+			ShaderInterop::MeshInstance meshInstance;
+			meshInstance.Mesh = node.MeshIndex;
+			meshInstance.Material = (uint32)materials.size() + parentMesh.MaterialId;
+			meshInstance.World = node.Transform;
+			meshInstances.push_back(meshInstance);
+
+			Batch batch;
+			batch.Index = (int)sceneBatches.size();
+			batch.LocalBounds = parentMesh.Bounds;
+			batch.pMesh = &parentMesh;
+			batch.BlendMode = meshMaterial.IsTransparent ? Batch::Blending::AlphaMask : Batch::Blending::Opaque;
+			batch.WorldMatrix = node.Transform;
+			batch.LocalBounds.Transform(batch.Bounds, batch.WorldMatrix);
+			batch.Radius = Vector3(batch.Bounds.Extents).Length();
+			sceneBatches.push_back(batch);
+		}
+
+		for (const Material& material : pMesh->GetMaterials())
+		{
+			ShaderInterop::MaterialData materialData;
+			materialData.Diffuse = material.pDiffuseTexture ? material.pDiffuseTexture->GetSRVIndex() : -1;
+			materialData.Normal = material.pNormalTexture ? material.pNormalTexture->GetSRVIndex() : -1;
+			materialData.RoughnessMetalness = material.pRoughnessMetalnessTexture ? material.pRoughnessMetalnessTexture->GetSRVIndex() : -1;
+			materialData.Emissive = material.pEmissiveTexture ? material.pEmissiveTexture->GetSRVIndex() : -1;
+			materialData.BaseColorFactor = material.BaseColorFactor;
+			materialData.MetalnessFactor = material.MetalnessFactor;
+			materialData.RoughnessFactor = material.RoughnessFactor;
+			materialData.EmissiveFactor = material.EmissiveFactor;
+			materialData.AlphaCutoff = material.AlphaCutoff;
+			materials.push_back(materialData);
+		}
+	}
+
+	sceneBatches.swap(m_SceneData.Batches);
+
+	if (!m_pMeshBuffer || meshes.size() > m_pMeshBuffer->GetNumElements())
+	{
+		m_pMeshBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(Math::Max(1, (int)meshes.size()), sizeof(ShaderInterop::MeshData), BufferFlag::ShaderResource), "Meshes");
+	}
+	context.InitializeBuffer(m_pMeshBuffer.get(), meshes.data(), meshes.size() * sizeof(ShaderInterop::MeshData));
+
+	if (!m_pMeshInstanceBuffer || meshInstances.size() > m_pMeshInstanceBuffer->GetNumElements())
+	{
+		m_pMeshInstanceBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(Math::Max(1, (int)meshInstances.size()), sizeof(ShaderInterop::MeshInstance), BufferFlag::ShaderResource), "Meshes");
+	}
+	context.InitializeBuffer(m_pMeshInstanceBuffer.get(), meshInstances.data(), meshInstances.size() * sizeof(ShaderInterop::MeshInstance));
+
+	if (!m_pMaterialBuffer || materials.size() > m_pMaterialBuffer->GetNumElements())
+	{
+		m_pMaterialBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(Math::Max(1, (int)materials.size()), sizeof(ShaderInterop::MaterialData), BufferFlag::ShaderResource), "Materials");
+	}
+	context.InitializeBuffer(m_pMaterialBuffer.get(), materials.data(), materials.size() * sizeof(ShaderInterop::MaterialData));
+
+	std::vector<ShaderInterop::Light> lightData;
+	Utils::Transform(m_Lights, lightData, [](const Light& light) { return light.GetData(); });
+
+	if (!m_pLightBuffer || lightData.size() > m_pLightBuffer->GetNumElements())
+	{
+		m_pLightBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(Math::Max(1, (int)lightData.size()), sizeof(ShaderInterop::Light), BufferFlag::ShaderResource), "Lights");
+	}
+	context.InitializeBuffer(m_pLightBuffer.get(), lightData.data(), lightData.size() * sizeof(ShaderInterop::Light));
+
+	UpdateTLAS(context);
 }

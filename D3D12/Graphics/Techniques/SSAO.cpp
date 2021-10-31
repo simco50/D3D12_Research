@@ -81,7 +81,7 @@ void SSAO::Execute(RGGraph& graph, Texture* pTarget, const SceneView& sceneData)
 			shaderParameters.Samples = g_AoSamples;
 			shaderParameters.FrameIndex = sceneData.FrameIndex;
 
-			renderContext.SetComputeDynamicConstantBufferView(0, shaderParameters);
+			renderContext.SetRootCBV(0, shaderParameters);
 			renderContext.BindResource(1, 0, pTarget->GetUAV());
 			renderContext.BindResource(2, 0, sceneData.pResolvedDepth->GetSRV());
 
@@ -112,7 +112,7 @@ void SSAO::Execute(RGGraph& graph, Texture* pTarget, const SceneView& sceneData)
 			shaderParameters.Far = sceneData.pCamera->GetFar();
 			shaderParameters.Near = sceneData.pCamera->GetNear();
 
-			renderContext.SetComputeDynamicConstantBufferView(0, shaderParameters);
+			renderContext.SetRootCBV(0, shaderParameters);
 			renderContext.BindResource(1, 0, m_pAmbientOcclusionIntermediate->GetUAV());
 			renderContext.BindResource(2, 0, sceneData.pResolvedDepth->GetSRV());
 			renderContext.BindResource(2, 1, pTarget->GetSRV());
@@ -127,7 +127,7 @@ void SSAO::Execute(RGGraph& graph, Texture* pTarget, const SceneView& sceneData)
 			renderContext.BindResource(2, 1, m_pAmbientOcclusionIntermediate->GetSRV());
 
 			shaderParameters.Horizontal = 0;
-			renderContext.SetComputeDynamicConstantBufferView(0, shaderParameters);
+			renderContext.SetRootCBV(0, shaderParameters);
 			renderContext.Dispatch(m_pAmbientOcclusionIntermediate->GetWidth(), Math::DivideAndRoundUp(m_pAmbientOcclusionIntermediate->GetHeight(), 256));
 		});
 }

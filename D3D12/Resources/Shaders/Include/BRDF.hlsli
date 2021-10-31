@@ -42,14 +42,14 @@ float3 Diffuse_Lambert(float3 diffuseColor)
 /* SMITH G TERM */
 
 // Smith G1 term (masking function) optimized for the GGX distribution by substituting the GGX lambda function
-float Smith_G1_GGX(float alpha, float NdotS, float alphaSquared, float NdotSSquared) 
+float Smith_G1_GGX(float alpha, float NdotS, float alphaSquared, float NdotSSquared)
 {
 	return 2.0f / (sqrt(((alphaSquared * (1.0f - NdotSSquared)) + NdotSSquared) / NdotSSquared) + 1.0f);
 }
 
 // A fraction G2/G1 where G2 is height correlated can be expressed using only G1 terms
 // ["Implementing a Simple Anisotropic Rough Diffuse Material with Stochastic Evaluation", Appendix A by Heitz & Dupuy]
-float Smith_G2_Over_G1_Height_Correlated(float alpha, float alphaSquared, float NdotL, float NdotV) 
+float Smith_G2_Over_G1_Height_Correlated(float alpha, float alphaSquared, float NdotL, float NdotV)
 {
 	float G1V = Smith_G1_GGX(alpha, NdotV, alphaSquared, NdotV * NdotV);
 	float G1L = Smith_G1_GGX(alpha, NdotL, alphaSquared, NdotL * NdotL);
@@ -99,7 +99,7 @@ float3 F_Schlick(float3 f0, float3 f90, float VdotH)
 // [https://hal.inria.fr/hal-00996995v1/document and http://jcgt.org/published/0007/04/01/]
 // Random variables 'u' must be in <0;1) interval
 // PDF is 'G1(NdotV) * D'
-float3 SampleGGXVNDF(float3 V, float2 alpha2D, float2 u) 
+float3 SampleGGXVNDF(float3 V, float2 alpha2D, float2 u)
 {
 	// Section 3.2: transforming the view direction to the hemisphere configuration
 	float3 Vh = normalize(float3(alpha2D.x * V.x, alpha2D.y * V.y, V.z));
@@ -130,7 +130,7 @@ float3 EnvDFGPolynomial(float3 specularColor, float gloss, float ndotv)
 {
     float x = gloss;
     float y = ndotv;
- 
+
     float b1 = -0.1688;
     float b2 = 1.895;
     float b3 = 0.9903;
@@ -138,7 +138,7 @@ float3 EnvDFGPolynomial(float3 specularColor, float gloss, float ndotv)
     float b5 = 8.404;
     float b6 = -5.069;
     float bias = saturate( min( b1 * x + b2 * x * x, b3 + b4 * y + b5 * y * y + b6 * y * y * y ) );
- 
+
     float d0 = 0.6045;
     float d1 = 1.699;
     float d2 = -0.5228;
@@ -148,7 +148,7 @@ float3 EnvDFGPolynomial(float3 specularColor, float gloss, float ndotv)
     float d6 = 2.661;
     float delta = saturate( d0 + d1 * x + d2 * y + d3 * x * x + d4 * x * y + d5 * y * y + d6 * x * x * x );
     float scale = delta - bias;
- 
+
     bias *= saturate( 50.0 * specularColor.y );
     return specularColor * scale + bias;
 }

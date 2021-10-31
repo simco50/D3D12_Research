@@ -34,10 +34,13 @@ SamplerState sSamplerTable[] :                              register(s0, space10
 Texture2D tTexture2DTable[] :                               register(t0, space100);
 Texture3D tTexture3DTable[] :                               register(t0, space101);
 TextureCube tTextureCubeTable[] :                           register(t0, space102);
-ByteAddressBuffer tBufferTable[] :                          register(t0, space103);
+Texture2DArray tTexture2DArrayTable[] :                     register(t0, space103);
+ByteAddressBuffer tBufferTable[] :                          register(t0, space104);
 RaytracingAccelerationStructure tTLASTable[] :              register(t0, space105);
 //Bindless UAVs
 RWByteAddressBuffer uRWBufferTable[] :                      register(u0, space100);
+RWTexture2D<float4> URWTexture2DTable[] :                   register(u0, space101);
+RWTexture3D<float4> URWTexture3DTable[] :                   register(u0, space102);
 
 #define ROOT_SIG(elements) elements ", " DEFAULT_ROOT_SIG_PARAMS
 
@@ -81,9 +84,24 @@ RWByteAddressBuffer uRWBufferTable[] :                      register(u0, space10
     "StaticSampler(s20, filter=FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT, comparisonFunc=COMPARISON_GREATER)" \
 
 template<typename T>
-T GetVertexData(uint bufferIndex, uint vertexId)
+T LoadByteAddressData(uint bufferIndex, uint elementIndex)
 {
-    return tBufferTable[bufferIndex].Load<T>(vertexId * sizeof(T));
+    return tBufferTable[bufferIndex].Load<T>(elementIndex * sizeof(T));
+}
+
+float4 Sample2D(int index, SamplerState s, float2 uv, uint2 offset = 0)
+{
+    return tTexture2DTable[index].Sample(s, uv, offset);
+}
+
+float4 SampleLevel2D(int index, SamplerState s, float2 uv, float level, uint2 offset = 0)
+{
+    return tTexture2DTable[index].SampleLevel(s, uv, level, offset);
+}
+
+float4 SampleGrad2D(int index, SamplerState s, float2 uv,  float2 ddx, float2 ddy, uint2 offset = 0)
+{
+    return tTexture2DTable[index].SampleGrad(s, uv, ddx, ddy, offset);
 }
 
 #endif

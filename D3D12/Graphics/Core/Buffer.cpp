@@ -124,12 +124,6 @@ void Buffer::Create(const BufferDesc& bufferDesc)
 	}
 }
 
-void Buffer::SetData(CommandContext* pContext, const void* pData, uint64 dataSize, uint64 offset)
-{
-	check(dataSize + offset <= GetSize());
-	pContext->InitializeBuffer(this, pData, dataSize, offset);
-}
-
 void Buffer::CreateUAV(UnorderedAccessView** pView, const BufferUAVDesc& desc)
 {
 	if (*pView == nullptr)
@@ -148,4 +142,14 @@ void Buffer::CreateSRV(ShaderResourceView** pView, const BufferSRVDesc& desc)
 		*pView = static_cast<ShaderResourceView*>(m_Descriptors.back().get());
 	}
 	(*pView)->Create(this, desc);
+}
+
+int32 Buffer::GetSRVIndex() const
+{
+	return m_pSrv ? m_pSrv->GetHeapIndex() : DescriptorHandle::InvalidHeapIndex;
+}
+
+int32 Buffer::GetUAVIndex() const
+{
+	return m_pUav ? m_pUav->GetHeapIndex() : DescriptorHandle::InvalidHeapIndex;
 }

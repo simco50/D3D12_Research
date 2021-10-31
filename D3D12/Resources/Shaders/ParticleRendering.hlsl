@@ -49,7 +49,7 @@ PS_Input VSMain(uint vertexId : SV_VertexID)
     uint particleIndex = tAliveList[instanceID];
     ParticleData particle = tParticleData[particleIndex];
     float3 q = particle.Size * BILLBOARD[vertexID];
-    
+
     output.position = float4(mul(q, (float3x3)cViewInverse), 1);
     output.position.xyz += particle.Position;
     output.position = mul(output.position, cView);

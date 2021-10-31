@@ -2,7 +2,7 @@
 #define __COMMON_INCLUDE__
 
 #include "Constants.hlsli"
-#include "Interop/ShaderCommon.h"
+#include "ShaderInterop.h"
 
 struct Plane
 {
@@ -99,7 +99,7 @@ bool ConeInFrustum(Cone cone, Frustum frustum, float zNear, float zFar)
     nearPlane.DistanceToOrigin = zNear;
     farPlane.Normal = float3(0, 0, -1);
     farPlane.DistanceToOrigin = -zFar;
- 
+
     bool inside = !(ConeBehindPlane(cone, nearPlane) || ConeBehindPlane(cone, farPlane));
     for(int i = 0; i < 4 && inside; ++i)
     {
@@ -122,7 +122,7 @@ Plane CalculatePlane(float3 a, float3 b, float3 c)
 {
     float3 v0 = b - a;
     float3 v1 = c - a;
-    
+
     Plane plane;
     plane.Normal = normalize(cross(v1, v0));
     plane.DistanceToOrigin = dot(plane.Normal, a);
@@ -181,7 +181,7 @@ float3 NormalFromDepth(Texture2D depthTexture, SamplerState depthSampler, float2
     float3 vposr = ViewFromDepth(uv + float2(1, 0) * invDimensions, depthTexture.SampleLevel(depthSampler, uv + float2(1, 0) * invDimensions, 0).x, inverseProjection);
     float3 vposd = ViewFromDepth(uv + float2(0, -1) * invDimensions, depthTexture.SampleLevel(depthSampler, uv + float2(0, -1) * invDimensions, 0).x, inverseProjection);
     float3 vposu = ViewFromDepth(uv + float2(0, 1) * invDimensions, depthTexture.SampleLevel(depthSampler, uv + float2(0, 1) * invDimensions, 0).x, inverseProjection);
-    
+
     float3 l = vposc - vposl;
     float3 r = vposr - vposc;
     float3 d = vposc - vposd;
@@ -194,7 +194,7 @@ float3 NormalFromDepth(Texture2D depthTexture, SamplerState depthSampler, float2
     return viewNormal;
 }
 #elif 0
-// Yuwen Wu - Accurate Normal Reconstruction 
+// Yuwen Wu - Accurate Normal Reconstruction
 // https://atyuwen.github.io/posts/normal-reconstruction/
 float3 NormalFromDepth(Texture2D depthTexture, SamplerState depthSampler, float2 uv, float2 invDimensions, float4x4 inverseProjection)
 {
@@ -205,7 +205,7 @@ float3 NormalFromDepth(Texture2D depthTexture, SamplerState depthSampler, float2
     float3 vposr = ViewFromDepth(uv + float2(1, 0) * invDimensions, depthTexture.SampleLevel(depthSampler, uv + float2(1, 0) * invDimensions, 0).x, inverseProjection);
     float3 vposd = ViewFromDepth(uv + float2(0, -1) * invDimensions, depthTexture.SampleLevel(depthSampler, uv + float2(0, -1) * invDimensions, 0).x, inverseProjection);
     float3 vposu = ViewFromDepth(uv + float2(0, 1) * invDimensions, depthTexture.SampleLevel(depthSampler, uv + float2(0, 1) * invDimensions, 0).x, inverseProjection);
-    
+
     float3 l = vposc - vposl;
     float3 r = vposr - vposc;
     float3 d = vposc - vposd;
@@ -398,7 +398,7 @@ void SwizzleThreadID(uint2 dispatchDimensions, uint2 numThreads, int2 groupId, i
     uint Local_CTA_ID_x_within_current_tile;
     if(Total_CTAs_in_all_perfect_tiles < vThreadGroupIDFlattened)
     {
-        //Path taken only if the last tile has imperfect dimensions and CTAs from the last tile are launched. 
+        //Path taken only if the last tile has imperfect dimensions and CTAs from the last tile are launched.
         uint X_dimension_of_last_tile = (Dispatch_Grid_Dim.x)%Number_of_CTAs_to_launch_in_x_dim;
         Local_CTA_ID_y_within_current_tile = (Local_CTA_ID_within_current_tile) / X_dimension_of_last_tile;
         Local_CTA_ID_x_within_current_tile = (Local_CTA_ID_within_current_tile) % X_dimension_of_last_tile;
@@ -411,7 +411,7 @@ void SwizzleThreadID(uint2 dispatchDimensions, uint2 numThreads, int2 groupId, i
     uint Swizzled_vThreadGroupIDFlattened = Tile_ID_of_current_CTA * Number_of_CTAs_to_launch_in_x_dim + Local_CTA_ID_y_within_current_tile * Dispatch_Grid_Dim.x + Local_CTA_ID_x_within_current_tile;
     swizzledvThreadGroupID.y = Swizzled_vThreadGroupIDFlattened / Dispatch_Grid_Dim.x;
     swizzledvThreadGroupID.x = Swizzled_vThreadGroupIDFlattened % Dispatch_Grid_Dim.x;
-    swizzledvThreadID.x = (CTA_Dim.x)*swizzledvThreadGroupID.x + groupThreadIndex.x; 
+    swizzledvThreadID.x = (CTA_Dim.x)*swizzledvThreadGroupID.x + groupThreadIndex.x;
     swizzledvThreadID.y = (CTA_Dim.y)*swizzledvThreadGroupID.y + groupThreadIndex.y;
 }
 
@@ -445,7 +445,7 @@ float3 DecodeNormalOctahedron(float2 p)
 
 // Calculates rotation quaternion from input vector to the vector (0, 0, 1)
 // Input vector must be normalized!
-float4 GetRotationToZAxis(float3 input) 
+float4 GetRotationToZAxis(float3 input)
 {
     // Handle special case when input is exact or near opposite of (0, 0, 1)
     if (input.z < -0.99999f)
@@ -463,7 +463,7 @@ float4 InvertRotation(float4 q)
 
 // Optimized point rotation using quaternion
 // Source: https://gamedev.stackexchange.com/questions/28395/rotating-vector3-by-a-quaternion
-float3 RotatePoint(float4 q, float3 v) 
+float3 RotatePoint(float4 q, float3 v)
 {
     float3 qAxis = float3(q.x, q.y, q.z);
     return 2.0f * dot(qAxis, v) * qAxis + (q.w * q.w - dot(qAxis, qAxis)) * v + 2.0f * q.w * cross(qAxis, v);

@@ -2,12 +2,9 @@
 #include "CommonBindings.hlsli"
 #include "Random.hlsli"
 
-#define RootSig \
-                "RootConstants(num32BitConstants=2, b0), " \
-                "CBV(b1, visibility=SHADER_VISIBILITY_ALL), " \
-                "DescriptorTable(SRV(t10, numDescriptors = 11)), " \
-                GLOBAL_BINDLESS_TABLE ", " \
-                "StaticSampler(s0, filter=FILTER_MIN_MAG_MIP_LINEAR, visibility = SHADER_VISIBILITY_PIXEL), "
+#define RootSig ROOT_SIG("RootConstants(num32BitConstants=2, b0), " \
+                "CBV(b1), " \
+                "DescriptorTable(SRV(t10, numDescriptors = 11))")
 
 struct PerViewData
 {
@@ -31,7 +28,7 @@ float4 VSMain(uint vertexId : SV_VertexID) : SV_POSITION
     MeshInstance instance = tMeshInstances[cObjectData.Index];
     MeshData mesh = tMeshes[instance.Mesh];
 
-    float3 position = UnpackHalf3(GetVertexData<uint2>(mesh.PositionStream, vertexId));
+    float3 position = UnpackHalf3(LoadByteAddressData<uint2>(mesh.PositionStream, vertexId));
     return mul(mul(float4(position, 1.0f), instance.World), cViewData.ViewProjection);
 }
 

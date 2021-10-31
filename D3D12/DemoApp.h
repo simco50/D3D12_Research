@@ -3,7 +3,7 @@
 #include "Graphics/Core/DescriptorHandle.h"
 #include "Graphics/Core/Graphics.h"
 #include "Graphics/SceneView.h"
-#include "ShaderCommon.h"
+#include "Graphics/Core/ShaderInterop.h"
 
 class ImGuiRenderer;
 class Mesh;
@@ -59,6 +59,10 @@ private:
 	void UpdateImGui();
 	void UpdateTLAS(CommandContext& context);
 
+	void LoadMesh(const std::string& filePath, CommandContext& context);
+
+	void UploadSceneData(CommandContext& context);
+
 	Texture* GetDefaultTexture(DefaultTexture type) const { return m_DefaultTextures[(int)type].get(); }
 	Texture* GetDepthStencil() const { return m_pDepthStencil.get(); }
 	Texture* GetResolvedDepthStencil() const { return m_pResolvedDepthStencil.get(); }
@@ -95,9 +99,9 @@ private:
 	std::unique_ptr<PathTracing> m_pPathTracing;
 	std::unique_ptr<CBTTessellation> m_pCBTTessellation;
 
-	std::unique_ptr<Texture> m_pLightCookie;
 	std::array<std::unique_ptr<Texture>, (int)DefaultTexture::MAX> m_DefaultTextures;
 
+	WindowHandle m_Window = nullptr;
 	uint32 m_SampleCount = 1;
 	std::unique_ptr<Camera> m_pCamera;
 

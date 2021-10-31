@@ -1,7 +1,7 @@
 #include "CommonBindings.hlsli"
 
-#define RootSig ROOT_SIG("CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \
-				"DescriptorTable(UAV(u0, numDescriptors = 1), visibility = SHADER_VISIBILITY_ALL)")
+#define RootSig ROOT_SIG("CBV(b0), " \
+				"DescriptorTable(UAV(u0, numDescriptors = 1))")
 
 cbuffer Parameters : register(b0)
 {
@@ -35,7 +35,7 @@ struct CS_Input
 [RootSignature(RootSig)]
 [numthreads(1, 1, 32)]
 void GenerateAABBs(CS_Input input)
-{   
+{
     uint3 clusterIndex3D = input.ThreadID;
     if(clusterIndex3D.z >= cClusterDimensions.z)
     {

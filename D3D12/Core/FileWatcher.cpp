@@ -3,70 +3,83 @@
 
 FileWatcher::FileWatcher()
 {
-
 }
 
 FileWatcher::~FileWatcher()
 {
-	StopWatching();
+	m_Exiting = true;
+	m_Watches.clear();
+	if (m_IOCP)
+	{
+		PostQueuedCompletionStatus(m_IOCP, 0, (ULONG_PTR)this, 0);
+		CloseHandle(m_IOCP);
+	}
 }
 
-bool FileWatcher::StartWatching(const char* pDirectory, const bool recursiveWatch /*= true*/)
+bool FileWatcher::StartWatching(const char* pPath, const bool recursiveWatch /*= true*/)
 {
-#if PLATFORM_WINDOWS
-	if (m_Exiting)
+	QueryPerformanceFrequency(&m_TimeFrequency);
+
+	if (!Paths::DirectoryExists(pPath))
 	{
-		QueryPerformanceFrequency(&m_TimeFrequency);
-		m_FileHandle = CreateFileA(pDirectory,
-			FILE_LIST_DIRECTORY,
-			FILE_SHARE_WRITE | FILE_SHARE_READ | FILE_SHARE_DELETE,
-			nullptr,
-			OPEN_EXISTING,
-			FILE_FLAG_BACKUP_SEMANTICS,
-			nullptr);
-		if (m_FileHandle != INVALID_HANDLE_VALUE)
-		{
-			m_RecursiveWatch = recursiveWatch;
-			m_Exiting = false;
-			m_Thread.RunThread([](void* pArgs) 
-				{ 
-					FileWatcher* pWatcher = (FileWatcher*)pArgs;
-					return (DWORD)pWatcher->ThreadFunction();
-				}, this);
-		}
+		E_LOG(Warning, "FileWatch failed: Directory '%s' does not exist", pPath);
 		return false;
 	}
-#endif
-	return false;
-}
 
-void FileWatcher::StopWatching()
-{
-	if (!m_Exiting)
+	std::string directoryPath = Paths::GetDirectoryPath(pPath);
+
+	HANDLE fileHandle = CreateFileA(pPath,
+		FILE_LIST_DIRECTORY,
+		FILE_SHARE_WRITE | FILE_SHARE_READ | FILE_SHARE_DELETE,
+		nullptr,
+		OPEN_EXISTING,
+		FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OVERLAPPED,
+		nullptr);
+
+	if (!fileHandle)
 	{
-		m_Exiting = true;
-		CancelIoEx(m_FileHandle, nullptr);
-		CloseHandle(m_FileHandle);
+		return false;
 	}
+
+	std::unique_ptr<DirectoryWatch> pWatch = std::make_unique<DirectoryWatch>();
+	pWatch->Recursive = recursiveWatch;
+	pWatch->FileHandle = fileHandle;
+	m_IOCP = CreateIoCompletionPort(fileHandle, m_IOCP, (ULONG_PTR)pWatch.get(), 0);
+	check(m_IOCP);
+	m_Watches.push_back(std::move(pWatch));
+	
+	if (!m_Thread.IsRunning())
+	{
+		m_Thread.RunThread([](void* pArgs)
+			{
+				FileWatcher* pWatcher = (FileWatcher*)pArgs;
+				return (DWORD)pWatcher->ThreadFunction();
+			}, this);
+	}
+
+	check(PostQueuedCompletionStatus(m_IOCP, 0, (ULONG_PTR)this, 0) == TRUE);
+	return true;
 }
 
 bool FileWatcher::GetNextChange(FileEvent& fileEvent)
 {
 	std::scoped_lock<std::mutex> lock(m_Mutex);
-	if (m_Changes.size() == 0)
+	for (auto& pWatch : m_Watches)
 	{
-		return false;
+		if (pWatch->Changes.size() > 0)
+		{
+			fileEvent = pWatch->Changes[0];
+			LARGE_INTEGER currentTime;
+			QueryPerformanceCounter(&currentTime);
+			float timeDiff = ((float)currentTime.QuadPart - fileEvent.Time.QuadPart) / m_TimeFrequency.QuadPart;
+			if (timeDiff > 0.02f)
+			{
+				pWatch->Changes.pop_front();
+				return true;
+			}
+		}
 	}
-	fileEvent = m_Changes[0];
-	LARGE_INTEGER currentTime;
-	QueryPerformanceCounter(&currentTime);
-	float timeDiff = ((float)currentTime.QuadPart - fileEvent.Time.QuadPart) / m_TimeFrequency.QuadPart;
-	if (timeDiff < 0.02f)
-	{
-		return false;
-	}
-	m_Changes.pop_front();
-	return true;
+	return false;
 }
 
 int FileWatcher::ThreadFunction()
@@ -77,28 +90,53 @@ int FileWatcher::ThreadFunction()
 		FILE_NOTIFY_CHANGE_CREATION |
 		FILE_NOTIFY_CHANGE_FILE_NAME;
 
-	while (!m_Exiting)
+	while(!m_Exiting)
 	{
-		uint8 buffer[1 << 12];
-		DWORD bytesFilled = 0;
-		if (ReadDirectoryChangesW(
-			m_FileHandle,
-			buffer,
-			sizeof(buffer),
-			m_RecursiveWatch,
-			fileNotifyFlags,
-			&bytesFilled,
-			nullptr,
-			nullptr))
 		{
+			std::scoped_lock<std::mutex> lock(m_Mutex);
+
+			for (auto& pWatch : m_Watches)
+			{
+				if (pWatch && !pWatch->IsWatching)
+				{
+					DWORD bytesFilled = 0;
+					ReadDirectoryChangesW(
+						pWatch->FileHandle,
+						pWatch->Buffer.data(),
+						(DWORD)pWatch->Buffer.size(),
+						pWatch->Recursive,
+						fileNotifyFlags,
+						&bytesFilled,
+						&pWatch->Overlapped,
+						nullptr);
+					pWatch->IsWatching = true;
+				}
+			}
+		}
+
+		DWORD numBytes;
+		OVERLAPPED* ov;
+		ULONG_PTR key;
+		while (GetQueuedCompletionStatus(m_IOCP, &numBytes, &key, &ov, INFINITE))
+		{
+			if ((void*)key == this && numBytes == 0)
+			{
+				break;
+			}
+
+			if (numBytes == 0)
+			{
+				continue;
+			}
 
 			std::scoped_lock<std::mutex> lock(m_Mutex);
+			DirectoryWatch* pWatch = (DirectoryWatch*)key;
 
 			unsigned offset = 0;
 			char outString[MAX_PATH];
-			while (offset < bytesFilled)
+			while (offset < numBytes)
 			{
-				FILE_NOTIFY_INFORMATION* pRecord = (FILE_NOTIFY_INFORMATION*)&buffer[offset];
+				FILE_NOTIFY_INFORMATION* pRecord = (FILE_NOTIFY_INFORMATION*)&pWatch->Buffer[offset];
 
 				int length = WideCharToMultiByte(
 					CP_ACP,
@@ -130,16 +168,16 @@ int FileWatcher::ThreadFunction()
 				bool add = true;
 
 				//Some events are duplicates
-				if (m_Changes.size() > 0)
+				if (pWatch->Changes.size() > 0)
 				{
-					const FileEvent& prevEvent = m_Changes.front();
+					const FileEvent& prevEvent = pWatch->Changes.front();
 					add = prevEvent.Path != newEvent.Path ||
 						prevEvent.EventType != newEvent.EventType;
 				}
 
 				if (add)
 				{
-					m_Changes.push_back(newEvent);
+					pWatch->Changes.push_back(newEvent);
 				}
 
 				if (!pRecord->NextEntryOffset)
@@ -151,7 +189,29 @@ int FileWatcher::ThreadFunction()
 					offset += pRecord->NextEntryOffset;
 				}
 			}
+
+			DWORD bytesFilled = 0;
+			ReadDirectoryChangesW(
+				pWatch->FileHandle,
+				pWatch->Buffer.data(),
+				(DWORD)pWatch->Buffer.size(),
+				pWatch->Recursive,
+				fileNotifyFlags,
+				&bytesFilled,
+				&pWatch->Overlapped,
+				nullptr);
 		}
 	}
+
 	return 0;
+}
+
+FileWatcher::DirectoryWatch::~DirectoryWatch()
+{
+	if (FileHandle)
+	{
+		CancelIo(FileHandle);
+		CloseHandle(FileHandle);
+		FileHandle = nullptr;
+	}
 }

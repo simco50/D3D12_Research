@@ -4,9 +4,9 @@
 #define SSAO_SAMPLES 64
 #define BLOCK_SIZE 16
 
-#define RootSig ROOT_SIG("CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \
-				"DescriptorTable(UAV(u0, numDescriptors = 1), visibility=SHADER_VISIBILITY_ALL), " \
-				"DescriptorTable(SRV(t0, numDescriptors = 1), visibility=SHADER_VISIBILITY_ALL)")
+#define RootSig ROOT_SIG("CBV(b0), " \
+				"DescriptorTable(UAV(u0, numDescriptors = 1)), " \
+				"DescriptorTable(SRV(t0, numDescriptors = 1))")
 
 struct ShaderParameters
 {
@@ -54,7 +54,7 @@ void CSMain(CS_INPUT input)
 	float3x3 TBN = float3x3(tangent, bitangent, normal);
 
     float occlusion = 0;
-    
+
     for(int i = 0; i < cData.AoSamples; ++i)
     {
         float2 point2d = HammersleyPoints(i, cData.AoSamples);

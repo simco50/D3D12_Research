@@ -9,7 +9,7 @@
 #include "Graphics/SceneView.h"
 #include "RenderGraph/RenderGraph.h"
 #include "Core/Input.h"
-#include "ImGuizmo/ImGuizmo.h"
+#include "ImGuizmo.h"
 #include "Core/Paths.h"
 
 ImGuiRenderer::ImGuiRenderer(GraphicsDevice* pDevice)
@@ -148,7 +148,9 @@ void ImGuiRenderer::CreatePipeline(GraphicsDevice* pDevice)
 
 	//Root signature
 	m_pRootSignature = std::make_unique<RootSignature>(pDevice);
-	m_pRootSignature->FinalizeFromShader("ImGui", pVertexShader);
+	m_pRootSignature->AddConstantBufferView(0);
+	m_pRootSignature->AddDefaultTables();
+	m_pRootSignature->Finalize("ImGui", D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
 	VertexElementLayout inputLayout;
 	inputLayout.AddVertexElement("POSITION", DXGI_FORMAT_R32G32_FLOAT);
@@ -223,10 +225,10 @@ void ImGuiRenderer::Render(RGGraph& graph, const SceneView& sceneData, Texture* 
 						{
 							Texture* pTex = static_cast<Texture*>(pcmd->TextureId);
 							context.InsertResourceBarrier(pTex, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-							drawData.TextureIndex = pTex->GetSRV()->GetHeapIndex();
+							drawData.TextureIndex = pTex->GetSRVIndex();
 							drawData.TextureType = pTex->GetDesc().Dimensions;
 						}
-						context.SetGraphicsDynamicConstantBufferView(0, drawData);
+						context.SetRootCBV(0, drawData);
 						context.DrawIndexed(pcmd->ElemCount, indexOffset, 0);
 					}
 					indexOffset += pcmd->ElemCount;

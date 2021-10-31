@@ -38,12 +38,17 @@ void CommandContext::Reset()
 	m_PendingBarriers.clear();
 	m_ResourceStates.clear();
 
-	ID3D12DescriptorHeap* pHeaps[] =
+	m_CurrentCommandContext = CommandListContext::Invalid;
+
+	if (m_Type != D3D12_COMMAND_LIST_TYPE_COPY)
 	{
-		GetParent()->GetGlobalViewHeap()->GetHeap(),
-		GetParent()->GetGlobalSamplerHeap()->GetHeap(),
-	};
-	m_pCommandList->SetDescriptorHeaps(ARRAYSIZE(pHeaps), pHeaps);
+		ID3D12DescriptorHeap* pHeaps[] =
+		{
+			GetParent()->GetGlobalViewHeap()->GetHeap(),
+			GetParent()->GetGlobalSamplerHeap()->GetHeap(),
+		};
+		m_pCommandList->SetDescriptorHeaps(ARRAYSIZE(pHeaps), pHeaps);
+	}
 }
 
 uint64 CommandContext::Execute(bool wait)
@@ -182,20 +187,7 @@ void CommandContext::InitializeBuffer(Buffer* pResource, const void* pData, uint
 {
 	DynamicAllocation allocation = m_DynamicAllocator->Allocate(dataSize);
 	memcpy(allocation.pMappedMemory, pData, dataSize);
-
-	bool resetState = false;
-	D3D12_RESOURCE_STATES previousState = GetResourceStateWithFallback(pResource, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES);
-	if (previousState != D3D12_RESOURCE_STATE_COPY_DEST)
-	{
-		resetState = true;
-		InsertResourceBarrier(pResource, D3D12_RESOURCE_STATE_COPY_DEST);
-		FlushResourceBarriers();
-	}
-	m_pCommandList->CopyBufferRegion(pResource->GetResource(), offset, allocation.pBackingResource->GetResource(), allocation.Offset, dataSize);
-	if (resetState)
-	{
-		InsertResourceBarrier(pResource, previousState);
-	}
+	CopyBuffer(allocation.pBackingResource, pResource, dataSize, allocation.Offset, offset);
 }
 
 void CommandContext::InitializeTexture(Texture* pResource, D3D12_SUBRESOURCE_DATA* pSubResourceDatas, int firstSubResource, int subResourceCount)
@@ -220,12 +212,13 @@ void CommandContext::InitializeTexture(Texture* pResource, D3D12_SUBRESOURCE_DAT
 
 void CommandContext::Dispatch(uint32 groupCountX, uint32 groupCountY, uint32 groupCountZ)
 {
+	check(m_CurrentCommandContext == CommandListContext::Compute);
 	checkf(
 		groupCountX <= D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION &&
 		groupCountY <= D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION &&
 		groupCountZ <= D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION,
 		"Dispatch group size (%d x %d x %d) can not exceed %d", groupCountX, groupCountY, groupCountZ, D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION);
-	PrepareDraw(CommandListContext::Compute);
+	PrepareDraw();
 	m_pCommandList->Dispatch(groupCountX, groupCountY, groupCountZ);
 }
 
@@ -236,14 +229,15 @@ void CommandContext::Dispatch(const IntVector3& groupCounts)
 
 void CommandContext::DispatchMesh(uint32 groupCountX, uint32 groupCountY /*= 1*/, uint32 groupCountZ /*= 1*/)
 {
+	check(m_CurrentCommandContext == CommandListContext::Graphics);
 	check(m_pMeshShadingCommandList);
-	PrepareDraw(CommandListContext::Graphics);
+	PrepareDraw();
 	m_pMeshShadingCommandList->DispatchMesh(groupCountX, groupCountY, groupCountZ);
 }
 
 void CommandContext::ExecuteIndirect(CommandSignature* pCommandSignature, uint32 maxCount, Buffer* pIndirectArguments, Buffer* pCountBuffer, uint32 argumentsOffset /*= 0*/, uint32 countOffset /*= 0*/)
 {
-	PrepareDraw(pCommandSignature->IsCompute() ? CommandListContext::Compute : CommandListContext::Graphics);
+	PrepareDraw();
 	m_pCommandList->ExecuteIndirect(pCommandSignature->GetCommandSignature(), maxCount, pIndirectArguments->GetResource(), argumentsOffset, pCountBuffer ? pCountBuffer->GetResource() : nullptr, countOffset);
 }
 
@@ -269,31 +263,75 @@ void CommandContext::SetComputeRootSignature(RootSignature* pRootSignature)
 {
 	m_pCommandList->SetComputeRootSignature(pRootSignature->GetRootSignature());
 	m_ShaderResourceDescriptorAllocator.ParseRootSignature(pRootSignature);
+	m_CurrentCommandContext = CommandListContext::Compute;
 
-	BindResourceTable(pRootSignature->GetBindlessViewIndex(), GetParent()->GetGlobalViewHeap()->GetStartHandle().GpuHandle, CommandListContext::Compute);
-	BindResourceTable(pRootSignature->GetBindlessSamplerIndex(), GetParent()->GetGlobalSamplerHeap()->GetStartHandle().GpuHandle, CommandListContext::Compute);
+	m_pCommandList->SetComputeRootDescriptorTable(pRootSignature->GetBindlessViewIndex(), GetParent()->GetGlobalViewHeap()->GetStartHandle().GpuHandle);
+	m_pCommandList->SetComputeRootDescriptorTable(pRootSignature->GetBindlessSamplerIndex(), GetParent()->GetGlobalSamplerHeap()->GetStartHandle().GpuHandle);
 }
 
-void CommandContext::SetComputeRootSRV(int rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address)
+void CommandContext::SetGraphicsRootSignature(RootSignature* pRootSignature)
 {
-	m_pCommandList->SetComputeRootShaderResourceView(rootIndex, address);
+	m_pCommandList->SetGraphicsRootSignature(pRootSignature->GetRootSignature());
+	m_ShaderResourceDescriptorAllocator.ParseRootSignature(pRootSignature);
+	m_CurrentCommandContext = CommandListContext::Graphics;
+
+	m_pCommandList->SetGraphicsRootDescriptorTable(pRootSignature->GetBindlessViewIndex(), GetParent()->GetGlobalViewHeap()->GetStartHandle().GpuHandle);
+	m_pCommandList->SetGraphicsRootDescriptorTable(pRootSignature->GetBindlessSamplerIndex(), GetParent()->GetGlobalSamplerHeap()->GetStartHandle().GpuHandle);
 }
 
-void CommandContext::SetComputeRootUAV(int rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address)
+void CommandContext::SetRootSRV(int rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address)
 {
-	m_pCommandList->SetComputeRootUnorderedAccessView(rootIndex, address);
+	check(m_CurrentCommandContext != CommandListContext::Invalid);
+	if (m_CurrentCommandContext == CommandListContext::Graphics)
+	{
+		m_pCommandList->SetGraphicsRootShaderResourceView(rootIndex, address);
+	}
+	else
+	{
+		m_pCommandList->SetComputeRootShaderResourceView(rootIndex, address);
+	}
 }
 
-void CommandContext::SetComputeRootConstants(int rootIndex, uint32 count, const void* pConstants)
+void CommandContext::SetRootUAV(int rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address)
 {
-	m_pCommandList->SetComputeRoot32BitConstants(rootIndex, count, pConstants, 0);
+	check(m_CurrentCommandContext != CommandListContext::Invalid);
+	if (m_CurrentCommandContext == CommandListContext::Graphics)
+	{
+		m_pCommandList->SetGraphicsRootUnorderedAccessView(rootIndex, address);
+	}
+	else
+	{
+		m_pCommandList->SetComputeRootUnorderedAccessView(rootIndex, address);
+	}
 }
 
-void CommandContext::SetComputeDynamicConstantBufferView(int rootIndex, const void* pData, uint32 dataSize)
+void CommandContext::SetRootConstants(int rootIndex, uint32 count, const void* pConstants)
 {
+	check(m_CurrentCommandContext != CommandListContext::Invalid);
+	if (m_CurrentCommandContext == CommandListContext::Graphics)
+	{
+		m_pCommandList->SetGraphicsRoot32BitConstants(rootIndex, count, pConstants, 0);
+	}
+	else
+	{
+		m_pCommandList->SetComputeRoot32BitConstants(rootIndex, count, pConstants, 0);
+	}
+}
+
+void CommandContext::SetRootCBV(int rootIndex, const void* pData, uint32 dataSize)
+{
+	check(m_CurrentCommandContext != CommandListContext::Invalid);
 	DynamicAllocation allocation = m_DynamicAllocator->Allocate(dataSize);
 	memcpy(allocation.pMappedMemory, pData, dataSize);
-	m_pCommandList->SetComputeRootConstantBufferView(rootIndex, allocation.GpuHandle);
+
+	if (m_CurrentCommandContext == CommandListContext::Graphics)
+	{
+		m_pCommandList->SetGraphicsRootConstantBufferView(rootIndex, allocation.GpuHandle);
+	}
+	else
+	{
+		m_pCommandList->SetComputeRootConstantBufferView(rootIndex, allocation.GpuHandle);
+	}
 }
 
 void CommandContext::BindResource(int rootIndex, int offset, ResourceView* pView)
@@ -305,18 +343,6 @@ void CommandContext::BindResource(int rootIndex, int offset, ResourceView* pView
 void CommandContext::BindResources(int rootIndex, int offset, const D3D12_CPU_DESCRIPTOR_HANDLE* handles, int count)
 {
 	m_ShaderResourceDescriptorAllocator.SetDescriptors(rootIndex, offset, count, handles);
-}
-
-void CommandContext::BindResourceTable(int rootIndex, D3D12_GPU_DESCRIPTOR_HANDLE handle, CommandListContext context)
-{
-	if (context == CommandListContext::Graphics)
-	{
-		m_pCommandList->SetGraphicsRootDescriptorTable(rootIndex, handle);
-	}
-	else
-	{
-		m_pCommandList->SetComputeRootDescriptorTable(rootIndex, handle);
-	}
 }
 
 void CommandContext::SetShadingRate(D3D12_SHADING_RATE shadingRate /*= D3D12_SHADING_RATE_1X1*/)
@@ -394,135 +420,93 @@ void CommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 		return D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_NO_ACCESS;
 	};
 
-#if D3D12_USE_RENDERPASSES
-	if (GetParent()->GetCapabilities().SupportsRaytracing() && m_pRaytracingCommandList)
+	D3D12_RENDER_PASS_DEPTH_STENCIL_DESC renderPassDepthStencilDesc{};
+	renderPassDepthStencilDesc.DepthBeginningAccess.Type = ExtractBeginAccess(renderPassInfo.DepthStencilTarget.Access);
+	if (renderPassDepthStencilDesc.DepthBeginningAccess.Type == D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_CLEAR)
 	{
-		D3D12_RENDER_PASS_DEPTH_STENCIL_DESC renderPassDepthStencilDesc{};
-		renderPassDepthStencilDesc.DepthBeginningAccess.Type = ExtractBeginAccess(renderPassInfo.DepthStencilTarget.Access);
-		if (renderPassDepthStencilDesc.DepthBeginningAccess.Type == D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_CLEAR)
-		{
-			check(renderPassInfo.DepthStencilTarget.Target);
-			check(renderPassInfo.DepthStencilTarget.Target->GetClearBinding().BindingValue == ClearBinding::ClearBindingValue::DepthStencil);
-			renderPassDepthStencilDesc.DepthBeginningAccess.Clear.ClearValue.DepthStencil.Depth = renderPassInfo.DepthStencilTarget.Target->GetClearBinding().DepthStencil.Depth;
-			renderPassDepthStencilDesc.DepthBeginningAccess.Clear.ClearValue.Format = renderPassInfo.DepthStencilTarget.Target->GetFormat();
-		}
-		renderPassDepthStencilDesc.DepthEndingAccess.Type = ExtractEndingAccess(renderPassInfo.DepthStencilTarget.Access);
-		if (renderPassDepthStencilDesc.DepthEndingAccess.Type == D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_DISCARD)
-		{
-			check(renderPassInfo.DepthStencilTarget.Write == false);
-		}
-		renderPassDepthStencilDesc.StencilBeginningAccess.Type = ExtractBeginAccess(renderPassInfo.DepthStencilTarget.StencilAccess);
-		if (renderPassDepthStencilDesc.StencilBeginningAccess.Type == D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_CLEAR)
-		{
-			check(renderPassInfo.DepthStencilTarget.Target);
-			check(renderPassInfo.DepthStencilTarget.Target->GetClearBinding().BindingValue == ClearBinding::ClearBindingValue::DepthStencil);
-			renderPassDepthStencilDesc.StencilBeginningAccess.Clear.ClearValue.DepthStencil.Stencil = renderPassInfo.DepthStencilTarget.Target->GetClearBinding().DepthStencil.Stencil;
-			renderPassDepthStencilDesc.StencilBeginningAccess.Clear.ClearValue.Format = renderPassInfo.DepthStencilTarget.Target->GetFormat();
-		}
-		renderPassDepthStencilDesc.StencilEndingAccess.Type = ExtractEndingAccess(renderPassInfo.DepthStencilTarget.StencilAccess);
-		if (renderPassInfo.DepthStencilTarget.Target)
-		{
-			renderPassDepthStencilDesc.cpuDescriptor = renderPassInfo.DepthStencilTarget.Target->GetDSV(renderPassInfo.DepthStencilTarget.Write);
-		}
-
-		std::array<D3D12_RENDER_PASS_RENDER_TARGET_DESC, 4> renderTargetDescs{};
-		m_ResolveSubResourceParameters = {};
-		for (uint32 i = 0; i < renderPassInfo.RenderTargetCount; ++i)
-		{
-			const RenderPassInfo::RenderTargetInfo& data = renderPassInfo.RenderTargets[i];
-
-			renderTargetDescs[i].BeginningAccess.Type = ExtractBeginAccess(data.Access);
-
-			if (renderTargetDescs[i].BeginningAccess.Type == D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_CLEAR)
-			{
-				check(data.Target->GetClearBinding().BindingValue == ClearBinding::ClearBindingValue::Color);
-				const Color& clearColor = data.Target->GetClearBinding().Color;
-				D3D12_CLEAR_VALUE& clearValue = renderTargetDescs[i].BeginningAccess.Clear.ClearValue;
-				clearValue.Color[0] = clearColor.x;
-				clearValue.Color[1] = clearColor.y;
-				clearValue.Color[2] = clearColor.z;
-				clearValue.Color[3] = clearColor.w;
-				clearValue.Format = data.Target->GetFormat();
-			}
-
-			D3D12_RENDER_PASS_ENDING_ACCESS_TYPE endingAccess = ExtractEndingAccess(data.Access);
-			if (data.Target->GetDesc().SampleCount <= 1 && endingAccess == D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_RESOLVE)
-			{
-				validateOncef(data.Target == data.ResolveTarget, "RenderTarget %d is set to resolve but has a sample count of 1. This will just do a CopyTexture instead which is wasteful.", i);
-				endingAccess = D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_PRESERVE;
-			}
-			renderTargetDescs[i].EndingAccess.Type = endingAccess;
-
-			uint32 subResource = D3D12CalcSubresource(data.MipLevel, data.ArrayIndex, 0, data.Target->GetMipLevels(), data.Target->GetArraySize());
-
-			if (renderTargetDescs[i].EndingAccess.Type == D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_RESOLVE)
-			{
-				checkf(data.ResolveTarget, "Expected ResolveTarget because ending access is 'Resolve'");
-				InsertResourceBarrier(data.ResolveTarget, D3D12_RESOURCE_STATE_RESOLVE_DEST);
-				renderTargetDescs[i].EndingAccess.Resolve.Format = data.Target->GetFormat();
-				renderTargetDescs[i].EndingAccess.Resolve.pDstResource = data.ResolveTarget->GetResource();
-				renderTargetDescs[i].EndingAccess.Resolve.pSrcResource = data.Target->GetResource();
-				renderTargetDescs[i].EndingAccess.Resolve.PreserveResolveSource = false;
-				renderTargetDescs[i].EndingAccess.Resolve.ResolveMode = D3D12_RESOLVE_MODE_AVERAGE;
-				renderTargetDescs[i].EndingAccess.Resolve.SubresourceCount = 1;
-				m_ResolveSubResourceParameters[i].DstSubresource = 0;
-				m_ResolveSubResourceParameters[i].SrcSubresource = subResource;
-				m_ResolveSubResourceParameters[i].DstX = 0;
-				m_ResolveSubResourceParameters[i].DstY = 0;
-				renderTargetDescs[i].EndingAccess.Resolve.pSubresourceParameters = m_ResolveSubResourceParameters.data();
-			}
-
-			renderTargetDescs[i].cpuDescriptor = data.Target->GetRTV();
-		}
-
-		D3D12_RENDER_PASS_FLAGS renderPassFlags = D3D12_RENDER_PASS_FLAG_NONE;
-		if (renderPassInfo.WriteUAVs)
-		{
-			renderPassFlags |= D3D12_RENDER_PASS_FLAG_ALLOW_UAV_WRITES;
-		}
-
-		FlushResourceBarriers();
-		m_pRaytracingCommandList->BeginRenderPass(renderPassInfo.RenderTargetCount, renderTargetDescs.data(), renderPassInfo.DepthStencilTarget.Target ? &renderPassDepthStencilDesc : nullptr, renderPassFlags);
+		check(renderPassInfo.DepthStencilTarget.Target);
+		check(renderPassInfo.DepthStencilTarget.Target->GetClearBinding().BindingValue == ClearBinding::ClearBindingValue::DepthStencil);
+		renderPassDepthStencilDesc.DepthBeginningAccess.Clear.ClearValue.DepthStencil.Depth = renderPassInfo.DepthStencilTarget.Target->GetClearBinding().DepthStencil.Depth;
+		renderPassDepthStencilDesc.DepthBeginningAccess.Clear.ClearValue.Format = renderPassInfo.DepthStencilTarget.Target->GetFormat();
 	}
-	else
-#endif
+	renderPassDepthStencilDesc.DepthEndingAccess.Type = ExtractEndingAccess(renderPassInfo.DepthStencilTarget.Access);
+	if (renderPassDepthStencilDesc.DepthEndingAccess.Type == D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_DISCARD)
 	{
-		FlushResourceBarriers();
-		if (ExtractEndingAccess(renderPassInfo.DepthStencilTarget.Access) == D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_DISCARD)
+		check(renderPassInfo.DepthStencilTarget.Write == false);
+	}
+	renderPassDepthStencilDesc.StencilBeginningAccess.Type = ExtractBeginAccess(renderPassInfo.DepthStencilTarget.StencilAccess);
+	if (renderPassDepthStencilDesc.StencilBeginningAccess.Type == D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_CLEAR)
+	{
+		check(renderPassInfo.DepthStencilTarget.Target);
+		check(renderPassInfo.DepthStencilTarget.Target->GetClearBinding().BindingValue == ClearBinding::ClearBindingValue::DepthStencil);
+		renderPassDepthStencilDesc.StencilBeginningAccess.Clear.ClearValue.DepthStencil.Stencil = renderPassInfo.DepthStencilTarget.Target->GetClearBinding().DepthStencil.Stencil;
+		renderPassDepthStencilDesc.StencilBeginningAccess.Clear.ClearValue.Format = renderPassInfo.DepthStencilTarget.Target->GetFormat();
+	}
+	renderPassDepthStencilDesc.StencilEndingAccess.Type = ExtractEndingAccess(renderPassInfo.DepthStencilTarget.StencilAccess);
+	if (renderPassInfo.DepthStencilTarget.Target)
+	{
+		renderPassDepthStencilDesc.cpuDescriptor = renderPassInfo.DepthStencilTarget.Target->GetDSV(renderPassInfo.DepthStencilTarget.Write);
+	}
+
+	std::array<D3D12_RENDER_PASS_RENDER_TARGET_DESC, 4> renderTargetDescs{};
+	m_ResolveSubResourceParameters = {};
+	for (uint32 i = 0; i < renderPassInfo.RenderTargetCount; ++i)
+	{
+		const RenderPassInfo::RenderTargetInfo& data = renderPassInfo.RenderTargets[i];
+
+		renderTargetDescs[i].BeginningAccess.Type = ExtractBeginAccess(data.Access);
+
+		if (renderTargetDescs[i].BeginningAccess.Type == D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_CLEAR)
 		{
-			check(renderPassInfo.DepthStencilTarget.Write == false);
-		}
-		D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = renderPassInfo.DepthStencilTarget.Target ? renderPassInfo.DepthStencilTarget.Target->GetDSV(renderPassInfo.DepthStencilTarget.Write) : D3D12_CPU_DESCRIPTOR_HANDLE{};
-		D3D12_CLEAR_FLAGS clearFlags = (D3D12_CLEAR_FLAGS)0;
-		if (ExtractBeginAccess(renderPassInfo.DepthStencilTarget.Access) == D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_CLEAR)
-		{
-			clearFlags |= D3D12_CLEAR_FLAGS::D3D12_CLEAR_FLAG_DEPTH;
-		}
-		if (ExtractBeginAccess(renderPassInfo.DepthStencilTarget.StencilAccess) == D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_CLEAR)
-		{
-			clearFlags |= D3D12_CLEAR_FLAGS::D3D12_CLEAR_FLAG_STENCIL;
-		}
-		if (clearFlags != (D3D12_CLEAR_FLAGS)0)
-		{
-			const ClearBinding& clearBinding = renderPassInfo.DepthStencilTarget.Target->GetClearBinding();
-			check(clearBinding.BindingValue == ClearBinding::ClearBindingValue::DepthStencil);
-			m_pCommandList->ClearDepthStencilView(dsvHandle, clearFlags, clearBinding.DepthStencil.Depth, clearBinding.DepthStencil.Stencil, 0, nullptr);
+			check(data.Target->GetClearBinding().BindingValue == ClearBinding::ClearBindingValue::Color);
+			const Color& clearColor = data.Target->GetClearBinding().Color;
+			D3D12_CLEAR_VALUE& clearValue = renderTargetDescs[i].BeginningAccess.Clear.ClearValue;
+			clearValue.Color[0] = clearColor.x;
+			clearValue.Color[1] = clearColor.y;
+			clearValue.Color[2] = clearColor.z;
+			clearValue.Color[3] = clearColor.w;
+			clearValue.Format = data.Target->GetFormat();
 		}
 
-		std::array<D3D12_CPU_DESCRIPTOR_HANDLE, 4> rtvs;
-		for (uint32 i = 0; i < renderPassInfo.RenderTargetCount; ++i)
+		D3D12_RENDER_PASS_ENDING_ACCESS_TYPE endingAccess = ExtractEndingAccess(data.Access);
+		if (data.Target->GetDesc().SampleCount <= 1 && endingAccess == D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_RESOLVE)
 		{
-			const RenderPassInfo::RenderTargetInfo& data = renderPassInfo.RenderTargets[i];
-			rtvs[i] = data.Target->GetRTV();
-			
-			if (ExtractBeginAccess(data.Access) == D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_CLEAR)
-			{
-				check(data.Target->GetClearBinding().BindingValue == ClearBinding::ClearBindingValue::Color);
-				m_pCommandList->ClearRenderTargetView(data.Target->GetRTV(), &data.Target->GetClearBinding().Color.x, 0, nullptr);
-			}
+			validateOncef(data.Target == data.ResolveTarget, "RenderTarget %d is set to resolve but has a sample count of 1. This will just do a CopyTexture instead which is wasteful.", i);
+			endingAccess = D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_PRESERVE;
 		}
-		m_pCommandList->OMSetRenderTargets(renderPassInfo.RenderTargetCount, rtvs.data(), false, dsvHandle.ptr != 0 ? &dsvHandle : nullptr);
+		renderTargetDescs[i].EndingAccess.Type = endingAccess;
+
+		uint32 subResource = D3D12CalcSubresource(data.MipLevel, data.ArrayIndex, 0, data.Target->GetMipLevels(), data.Target->GetArraySize());
+
+		if (renderTargetDescs[i].EndingAccess.Type == D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_RESOLVE)
+		{
+			checkf(data.ResolveTarget, "Expected ResolveTarget because ending access is 'Resolve'");
+			InsertResourceBarrier(data.ResolveTarget, D3D12_RESOURCE_STATE_RESOLVE_DEST);
+			renderTargetDescs[i].EndingAccess.Resolve.Format = data.Target->GetFormat();
+			renderTargetDescs[i].EndingAccess.Resolve.pDstResource = data.ResolveTarget->GetResource();
+			renderTargetDescs[i].EndingAccess.Resolve.pSrcResource = data.Target->GetResource();
+			renderTargetDescs[i].EndingAccess.Resolve.PreserveResolveSource = false;
+			renderTargetDescs[i].EndingAccess.Resolve.ResolveMode = D3D12_RESOLVE_MODE_AVERAGE;
+			renderTargetDescs[i].EndingAccess.Resolve.SubresourceCount = 1;
+			m_ResolveSubResourceParameters[i].DstSubresource = 0;
+			m_ResolveSubResourceParameters[i].SrcSubresource = subResource;
+			m_ResolveSubResourceParameters[i].DstX = 0;
+			m_ResolveSubResourceParameters[i].DstY = 0;
+			renderTargetDescs[i].EndingAccess.Resolve.pSubresourceParameters = m_ResolveSubResourceParameters.data();
+		}
+
+		renderTargetDescs[i].cpuDescriptor = data.Target->GetRTV();
 	}
+
+	D3D12_RENDER_PASS_FLAGS renderPassFlags = D3D12_RENDER_PASS_FLAG_NONE;
+	if (renderPassInfo.WriteUAVs)
+	{
+		renderPassFlags |= D3D12_RENDER_PASS_FLAG_ALLOW_UAV_WRITES;
+	}
+
+	FlushResourceBarriers();
+	m_pRaytracingCommandList->BeginRenderPass(renderPassInfo.RenderTargetCount, renderTargetDescs.data(), renderPassInfo.DepthStencilTarget.Target ? &renderPassDepthStencilDesc : nullptr, renderPassFlags);
+
 	m_InRenderPass = true;
 	m_CurrentRenderPassInfo = renderPassInfo;
 
@@ -547,78 +531,52 @@ void CommandContext::EndRenderPass()
 		return D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_NO_ACCESS;
 	};
 
-#if D3D12_USE_RENDERPASSES
-	if (GetParent()->GetCapabilities().SupportsRaytracing() && m_pRaytracingCommandList)
-	{
-		m_pRaytracingCommandList->EndRenderPass();
+	m_pRaytracingCommandList->EndRenderPass();
 
-		for (uint32 i = 0; i < m_CurrentRenderPassInfo.RenderTargetCount; ++i)
-		{
-			const RenderPassInfo::RenderTargetInfo& data = m_CurrentRenderPassInfo.RenderTargets[i];
-			if (ExtractEndingAccess(data.Access) == D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_RESOLVE && data.Target->GetDesc().SampleCount <= 1 && data.Target != data.ResolveTarget)
-			{
-				FlushResourceBarriers();
-				CopyTexture(data.Target, data.ResolveTarget);
-			}
-		}
-	}
-	else
-#endif
+	for (uint32 i = 0; i < m_CurrentRenderPassInfo.RenderTargetCount; ++i)
 	{
-		for (uint32 i = 0; i < m_CurrentRenderPassInfo.RenderTargetCount; ++i)
+		const RenderPassInfo::RenderTargetInfo& data = m_CurrentRenderPassInfo.RenderTargets[i];
+		if (ExtractEndingAccess(data.Access) == D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_RESOLVE && data.Target->GetDesc().SampleCount <= 1 && data.Target != data.ResolveTarget)
 		{
-			const RenderPassInfo::RenderTargetInfo& data = m_CurrentRenderPassInfo.RenderTargets[i];
-			if (ExtractEndingAccess(data.Access) == D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_RESOLVE)
-			{
-				if (data.Target->GetDesc().SampleCount > 1)
-				{
-					InsertResourceBarrier(data.Target, D3D12_RESOURCE_STATE_RESOLVE_SOURCE);
-					InsertResourceBarrier(data.ResolveTarget, D3D12_RESOURCE_STATE_RESOLVE_DEST);
-					uint32 subResource = D3D12CalcSubresource(data.MipLevel, data.ArrayIndex, 0, data.Target->GetMipLevels(), data.Target->GetArraySize());
-					ResolveResource(data.Target, subResource, data.ResolveTarget, 0, data.Target->GetFormat());
-				}
-				else
-				{
-					if (data.Target != data.ResolveTarget)
-					{
-						validateOncef(false, "RenderTarget %u is set to resolve but has a sample count of 1. This will just do a CopyTexture instead which is wasteful.", i);
-						FlushResourceBarriers();
-						CopyTexture(data.Target, data.ResolveTarget);
-					}
-				}
-			}
+			FlushResourceBarriers();
+			CopyTexture(data.Target, data.ResolveTarget);
 		}
 	}
+
 	m_InRenderPass = false;
 }
 
 void CommandContext::Draw(int vertexStart, int vertexCount)
 {
-	PrepareDraw(CommandListContext::Graphics);
+	check(m_CurrentCommandContext == CommandListContext::Graphics);
+	PrepareDraw();
 	m_pCommandList->DrawInstanced(vertexCount, 1, vertexStart, 0);
 }
 
 void CommandContext::DrawIndexed(int indexCount, int indexStart, int minVertex /*= 0*/)
 {
-	PrepareDraw(CommandListContext::Graphics);
+	check(m_CurrentCommandContext == CommandListContext::Graphics);
+	PrepareDraw();
 	m_pCommandList->DrawIndexedInstanced(indexCount, 1, indexStart, minVertex, 0);
 }
 
 void CommandContext::DrawIndexedInstanced(int indexCount, int indexStart, int instanceCount, int minVertex /*= 0*/, int instanceStart /*= 0*/)
 {
-	PrepareDraw(CommandListContext::Graphics);
+	check(m_CurrentCommandContext == CommandListContext::Graphics);
+	PrepareDraw();
 	m_pCommandList->DrawIndexedInstanced(indexCount, instanceCount, indexStart, minVertex, instanceStart);
 }
 
 void CommandContext::DispatchRays(ShaderBindingTable& table, uint32 width /*= 1*/, uint32 height /*= 1*/, uint32 depth /*= 1*/)
 {
+	check(m_CurrentCommandContext == CommandListContext::Compute);
 	check(m_pRaytracingCommandList);
 	D3D12_DISPATCH_RAYS_DESC desc{};
 	table.Commit(*this, desc);
 	desc.Width = width;
 	desc.Height = height;
 	desc.Depth = depth;
-	PrepareDraw(CommandListContext::Compute);
+	PrepareDraw();
 	m_pRaytracingCommandList->DispatchRays(&desc);
 }
 
@@ -638,10 +596,11 @@ void CommandContext::ResolveResource(Texture* pSource, uint32 sourceSubResource,
 	m_pCommandList->ResolveSubresource(pTarget->GetResource(), targetSubResource, pSource->GetResource(), sourceSubResource, format);
 }
 
-void CommandContext::PrepareDraw(CommandListContext type)
+void CommandContext::PrepareDraw()
 {
+	check(m_CurrentCommandContext != CommandListContext::Invalid);
 	FlushResourceBarriers();
-	m_ShaderResourceDescriptorAllocator.BindStagedDescriptors(m_pCommandList, type);
+	m_ShaderResourceDescriptorAllocator.BindStagedDescriptors(m_pCommandList, m_CurrentCommandContext);
 }
 
 void CommandContext::SetPipelineState(PipelineState* pPipelineState)
@@ -655,37 +614,6 @@ void CommandContext::SetPipelineState(StateObject* pStateObject)
 	check(m_pRaytracingCommandList);
 	pStateObject->ConditionallyReload();
 	m_pRaytracingCommandList->SetPipelineState1(pStateObject->GetStateObject());
-}
-
-void CommandContext::SetGraphicsRootSignature(RootSignature* pRootSignature)
-{
-	m_pCommandList->SetGraphicsRootSignature(pRootSignature->GetRootSignature());
-	m_ShaderResourceDescriptorAllocator.ParseRootSignature(pRootSignature);
-
-	BindResourceTable(pRootSignature->GetBindlessViewIndex(), GetParent()->GetGlobalViewHeap()->GetStartHandle().GpuHandle, CommandListContext::Graphics);
-	BindResourceTable(pRootSignature->GetBindlessSamplerIndex(), GetParent()->GetGlobalSamplerHeap()->GetStartHandle().GpuHandle, CommandListContext::Graphics);
-}
-
-void CommandContext::SetGraphicsRootSRV(int rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address)
-{
-	m_pCommandList->SetGraphicsRootShaderResourceView(rootIndex, address);
-}
-
-void CommandContext::SetGraphicsRootUAV(int rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address)
-{
-	m_pCommandList->SetGraphicsRootUnorderedAccessView(rootIndex, address);
-}
-
-void CommandContext::SetGraphicsRootConstants(int rootIndex, uint32 count, const void* pConstants)
-{
-	m_pCommandList->SetGraphicsRoot32BitConstants(rootIndex, count, pConstants, 0);
-}
-
-void CommandContext::SetGraphicsDynamicConstantBufferView(int rootIndex, const void* pData, uint32 dataSize)
-{
-	DynamicAllocation allocation = m_DynamicAllocator->Allocate(dataSize);
-	memcpy(allocation.pMappedMemory, pData, dataSize);
-	m_pCommandList->SetGraphicsRootConstantBufferView(rootIndex, allocation.GpuHandle);
 }
 
 void CommandContext::SetDynamicVertexBuffer(int rootIndex, int elementCount, int elementSize, const void* pData)

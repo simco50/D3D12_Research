@@ -119,7 +119,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& resources)
 				constantBuffer.ClusterSize = IntVector2(gLightClusterTexelSize, gLightClusterTexelSize);
 				constantBuffer.ClusterDimensions = IntVector3(m_ClusterCountX, m_ClusterCountY, gLightClustersNumZ);
 
-				context.SetComputeDynamicConstantBufferView(0, constantBuffer);
+				context.SetRootCBV(0, constantBuffer);
 				context.BindResource(1, 0, m_pAABBs->GetUAV());
 
 				//Cluster count in z is 32 so fits nicely in a wavefront on Nvidia so make groupsize in shader 32
@@ -159,7 +159,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& resources)
 			constantBuffer.ClusterDimensions = IntVector3(m_ClusterCountX, m_ClusterCountY, gLightClustersNumZ);
 			constantBuffer.LightCount = resources.pLightBuffer->GetNumElements();
 
-			context.SetComputeDynamicConstantBufferView(0, constantBuffer);
+			context.SetRootCBV(0, constantBuffer);
 
 			context.BindResource(1, 0, resources.pLightBuffer->GetSRV());
 			context.BindResource(1, 1, m_pAABBs->GetSRV());
@@ -232,8 +232,8 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& resources)
 					resources.pResolvedDepth->GetSRV()->GetDescriptor(),
 				};
 
-				context.SetComputeDynamicConstantBufferView(0, constantBuffer);
-				context.SetComputeDynamicConstantBufferView(1, *resources.pShadowData);
+				context.SetRootCBV(0, constantBuffer);
+				context.SetRootCBV(1, *resources.pShadowData);
 				context.BindResource(2, 0, pDestinationVolume->GetUAV());
 				context.BindResources(3, 0, srvs, ARRAYSIZE(srvs));
 
@@ -269,8 +269,8 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& resources)
 					resources.pResolvedDepth->GetSRV()->GetDescriptor(),
 				};
 
-				context.SetComputeDynamicConstantBufferView(0, constantBuffer);
-				context.SetComputeDynamicConstantBufferView(1, *resources.pShadowData);
+				context.SetRootCBV(0, constantBuffer);
+				context.SetRootCBV(1, *resources.pShadowData);
 				context.BindResource(2, 0, m_pFinalVolumeFog->GetUAV());
 				context.BindResources(3, 0, srvs, ARRAYSIZE(srvs));
 
@@ -361,7 +361,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& resources)
 			renderPass.RenderTargetCount = 2;
 			renderPass.RenderTargets[0].Access = RenderPassAccess::DontCare_Store;
 			renderPass.RenderTargets[0].Target = resources.pRenderTarget;
-			renderPass.RenderTargets[1].Access = RenderPassAccess::Clear_Resolve;
+			renderPass.RenderTargets[1].Access = resources.pNormals->GetDesc().SampleCount > 1 ? RenderPassAccess::Clear_Resolve : RenderPassAccess::Clear_Store;
 			renderPass.RenderTargets[1].Target = resources.pNormals;
 			renderPass.RenderTargets[1].ResolveTarget = resources.pResolvedNormals;
 			context.BeginRenderPass(renderPass);
@@ -369,8 +369,8 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& resources)
 			context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 			context.SetGraphicsRootSignature(m_pDiffuseRS.get());
 
-			context.SetGraphicsDynamicConstantBufferView(1, frameData);
-			context.SetGraphicsDynamicConstantBufferView(2, *resources.pShadowData);
+			context.SetRootCBV(1, frameData);
+			context.SetRootCBV(2, *resources.pShadowData);
 
 			D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
 				m_pFinalVolumeFog->GetSRV()->GetDescriptor(),
@@ -431,7 +431,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& resources)
 					Matrix View;
 				} constantBuffer;
 				constantBuffer.View = m_DebugClustersViewMatrix * resources.pCamera->GetViewProjection();
-				context.SetGraphicsDynamicConstantBufferView(0, constantBuffer);
+				context.SetRootCBV(0, constantBuffer);
 
 				D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
 					m_pAABBs->GetSRV()->GetDescriptor(),
@@ -494,7 +494,7 @@ void ClusteredForward::VisualizeLightDensity(RGGraph& graph, Camera& camera, Tex
 			context.InsertResourceBarrier(m_pLightGrid.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(m_pVisualizationIntermediateTexture.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-			context.SetComputeDynamicConstantBufferView(0, constantBuffer);
+			context.SetRootCBV(0, constantBuffer);
 
 			context.BindResource(1, 0, pTarget->GetSRV());
 			context.BindResource(1, 1, pDepth->GetSRV());

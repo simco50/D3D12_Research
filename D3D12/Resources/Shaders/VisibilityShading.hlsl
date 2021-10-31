@@ -3,12 +3,9 @@
 #include "Random.hlsli"
 #include "ShadingModels.hlsli"
 
-#define RootSig \
-				"CBV(b1, visibility=SHADER_VISIBILITY_ALL), " \
+#define RootSig ROOT_SIG("CBV(b1), " \
 				"DescriptorTable(SRV(t5, numDescriptors = 13)), " \
-				"DescriptorTable(UAV(u0, numDescriptors = 1)), " \
-				GLOBAL_BINDLESS_TABLE ", " \
-				"StaticSampler(s0, filter=FILTER_MIN_MAG_MIP_LINEAR), "
+				"DescriptorTable(UAV(u0, numDescriptors = 1))")
 
 Texture2D<uint> tVisibilityTexture : register(t13);
 Texture2D<float2> tBarycentricsTexture : register(t14);
@@ -41,64 +38,64 @@ struct VertexAttribute
 
 struct MaterialProperties
 {
-    float3 BaseColor;
-    float3 NormalTS;
-    float Metalness;
-    float3 Emissive;
-    float Roughness;
-    float Opacity;
-    float Specular;
+	float3 BaseColor;
+	float3 NormalTS;
+	float Metalness;
+	float3 Emissive;
+	float Roughness;
+	float Opacity;
+	float Specular;
 };
 
 MaterialProperties GetMaterialProperties(uint materialIndex, float2 UV, int mipLevel)
 {
-    MaterialData material = tMaterials[materialIndex];
-    MaterialProperties properties;
-    float4 baseColor = material.BaseColorFactor;
-    if(material.Diffuse >= 0)
-    {
-        baseColor *= tTexture2DTable[material.Diffuse].SampleLevel(sDiffuseSampler, UV, mipLevel);
-    }
-    properties.BaseColor = baseColor.rgb;
-    properties.Opacity = baseColor.a;
+	MaterialData material = tMaterials[materialIndex];
+	MaterialProperties properties;
+	float4 baseColor = material.BaseColorFactor;
+	if(material.Diffuse >= 0)
+	{
+		baseColor *= tTexture2DTable[material.Diffuse].SampleLevel(sMaterialSampler, UV, mipLevel);
+	}
+	properties.BaseColor = baseColor.rgb;
+	properties.Opacity = baseColor.a;
 
-    properties.Metalness = material.MetalnessFactor;
-    properties.Roughness = material.RoughnessFactor;
-    if(material.RoughnessMetalness >= 0)
-    {
-        float4 roughnessMetalnessSample = tTexture2DTable[material.RoughnessMetalness].SampleLevel(sDiffuseSampler, UV, mipLevel);
-        properties.Metalness *= roughnessMetalnessSample.b;
-        properties.Roughness *= roughnessMetalnessSample.g;
-    }
-    properties.Emissive = material.EmissiveFactor.rgb;
-    if(material.Emissive >= 0)
-    {
-        properties.Emissive *= tTexture2DTable[material.Emissive].SampleLevel(sDiffuseSampler, UV, mipLevel).rgb;
-    }
-    properties.Specular = 0.5f;
+	properties.Metalness = material.MetalnessFactor;
+	properties.Roughness = material.RoughnessFactor;
+	if(material.RoughnessMetalness >= 0)
+	{
+		float4 roughnessMetalnessSample = tTexture2DTable[material.RoughnessMetalness].SampleLevel(sMaterialSampler, UV, mipLevel);
+		properties.Metalness *= roughnessMetalnessSample.b;
+		properties.Roughness *= roughnessMetalnessSample.g;
+	}
+	properties.Emissive = material.EmissiveFactor.rgb;
+	if(material.Emissive >= 0)
+	{
+		properties.Emissive *= tTexture2DTable[material.Emissive].SampleLevel(sMaterialSampler, UV, mipLevel).rgb;
+	}
+	properties.Specular = 0.5f;
 
-    properties.NormalTS = float3(0, 0, 1);
-    if(material.Normal >= 0)
-    {
-        properties.NormalTS = tTexture2DTable[material.Normal].SampleLevel(sDiffuseSampler, UV, mipLevel).rgb;
-    }
-    return properties;
+	properties.NormalTS = float3(0, 0, 1);
+	if(material.Normal >= 0)
+	{
+		properties.NormalTS = tTexture2DTable[material.Normal].SampleLevel(sMaterialSampler, UV, mipLevel).rgb;
+	}
+	return properties;
 }
 
 struct BrdfData
 {
-    float3 Diffuse;
-    float3 Specular;
-    float Roughness;
+	float3 Diffuse;
+	float3 Specular;
+	float Roughness;
 };
 
 BrdfData GetBrdfData(MaterialProperties material)
 {
-    BrdfData data;
-    data.Diffuse = ComputeDiffuseColor(material.BaseColor, material.Metalness);
-    data.Specular = ComputeF0(material.Specular, material.BaseColor, material.Metalness);
-    data.Roughness = material.Roughness;
-    return data;
+	BrdfData data;
+	data.Diffuse = ComputeDiffuseColor(material.BaseColor, material.Metalness);
+	data.Specular = ComputeF0(material.Specular, material.BaseColor, material.Metalness);
+	data.Roughness = material.Roughness;
+	return data;
 }
 
 [numthreads(16, 16, 1)]
@@ -125,11 +122,12 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 	vertex.UV = 0;
 	vertex.Normal = 0;
 	for(uint i = 0; i < 3; ++i)
+
 	{
 		uint vertexId = indices[i];
-        vertex.Position += UnpackHalf3(GetVertexData<uint2>(mesh.PositionStream, vertexId)) * barycentrics[i];
-        vertex.UV += UnpackHalf2(GetVertexData<uint>(mesh.UVStream, vertexId)) * barycentrics[i];
-        NormalData normalData = GetVertexData<NormalData>(mesh.NormalStream, vertexId);
+        vertex.Position += UnpackHalf3(LoadByteAddressData<uint2>(mesh.PositionStream, vertexId)) * barycentrics[i];
+        vertex.UV += UnpackHalf2(LoadByteAddressData<uint>(mesh.UVStream, vertexId)) * barycentrics[i];
+        NormalData normalData = LoadByteAddressData<NormalData>(mesh.NormalStream, vertexId);
         vertex.Normal += normalData.Normal * barycentrics[i];
         vertex.Tangent += normalData.Tangent * barycentrics[i];
 	}
@@ -138,7 +136,7 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 	BrdfData brdfData = GetBrdfData(properties);
 
 	float3 V = normalize(vertex.Position - cViewData.ViewInverse[3].xyz);
-	
+
 	Light light = tLights[0];
 	float3 L = -light.Direction;
 

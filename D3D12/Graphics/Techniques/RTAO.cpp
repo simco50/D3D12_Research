@@ -74,7 +74,7 @@ void RTAO::Execute(RGGraph& graph, Texture* pTarget, const SceneView& sceneData)
 			bindingTable.BindRayGenShader("RayGen");
 			bindingTable.BindMissShader("Miss", {});
 
-			context.SetComputeDynamicConstantBufferView(0, parameters);
+			context.SetRootCBV(0, parameters);
 			context.BindResource(1, 0, pTarget->GetUAV());
 			context.BindResource(2, 0, sceneData.pResolvedDepth->GetSRV());
 

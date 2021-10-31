@@ -104,7 +104,7 @@ uint64 CommandQueue::ExecuteCommandLists(CommandContext** pCommandContexts, uint
 		check(pNextContext);
 
 		ResourceBarrierBatcher barriers;
-		for (const CommandContext::PendingBarrier& pending : pNextContext->GetPendingBarriers())
+		for (const CommandContext::PendingBarrier& pending : pNextContext->m_PendingBarriers)
 		{
 			uint32 subResource = pending.Subresource;
 			GraphicsResource* pResource = pending.pResource;
@@ -170,6 +170,11 @@ void CommandQueue::FreeAllocator(uint64 fenceValue, ID3D12CommandAllocator* pAll
 {
 	std::scoped_lock<std::mutex> lock(m_AllocationMutex);
 	m_FreeAllocators.push(std::pair<ID3D12CommandAllocator*, uint64>(pAllocator, fenceValue));
+}
+
+void CommandQueue::InsertWait(uint64 fenceValue)
+{
+	m_pFence->GpuWait(this, fenceValue);
 }
 
 void CommandQueue::WaitForFence(uint64 fenceValue)

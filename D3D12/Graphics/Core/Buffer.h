@@ -11,13 +11,13 @@ struct BufferUAVDesc;
 enum class BufferFlag
 {
 	None = 0,
-	UnorderedAccess = 1 << 0,
-	ShaderResource = 1 << 1,
-	Upload = 1 << 2,
-	Readback = 1 << 3,
-	Structured = 1 << 4,
-	ByteAddress = 1 << 5,
-	IndirectArguments = 1 << 6,
+	UnorderedAccess =		1 << 0,
+	ShaderResource =		1 << 1,
+	Upload =				1 << 2,
+	Readback =				1 << 3,
+	Structured =			1 << 4,
+	ByteAddress =			1 << 5,
+	IndirectArguments =		1 << 6,
 	AccelerationStructure = 1 << 7,
 };
 DECLARE_BITMASK_TYPE(BufferFlag)
@@ -133,7 +133,6 @@ public:
 	Buffer(GraphicsDevice* pParent, ID3D12Resource * pResource, D3D12_RESOURCE_STATES state);
 	~Buffer();
 	void Create(const BufferDesc& desc);
-	void SetData(CommandContext* pContext, const void* pData, uint64 dataSize, uint64 offset = 0);
 
 	inline uint64 GetSize() const { return m_Desc.Size; }
 	inline uint32 GetNumElements() const { return m_Desc.NumElements(); }
@@ -142,12 +141,13 @@ public:
 	void CreateUAV(UnorderedAccessView** pView, const BufferUAVDesc& desc);
 	void CreateSRV(ShaderResourceView** pView, const BufferSRVDesc& desc);
 
-	//#todo: Temp code. Pull out views from buffer
 	ShaderResourceView* GetSRV() const { return m_pSrv; };
 	UnorderedAccessView* GetUAV() const { return m_pUav; };
 
+	int32 GetSRVIndex() const;
+	int32 GetUAVIndex() const;
+
 protected:
-	//#todo: Temp code. Pull out views from buffer
 	UnorderedAccessView* m_pUav = nullptr;
 	ShaderResourceView* m_pSrv = nullptr;
 

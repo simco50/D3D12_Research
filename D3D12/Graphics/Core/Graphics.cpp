@@ -78,7 +78,6 @@ GraphicsInstance::GraphicsInstance(GraphicsInstanceFlags createFlags)
 		}
 	}
 
-#if PLATFORM_WINDOWS
 	if (EnumHasAnyFlags(createFlags, GraphicsInstanceFlags::Pix))
 	{
 		if(PIXLoadLatestWinPixGpuCapturerLibrary())
@@ -86,7 +85,6 @@ GraphicsInstance::GraphicsInstance(GraphicsInstanceFlags createFlags)
 			E_LOG(Warning, "Dynamically loaded PIX");
 		}
 	}
-#endif
 }
 
 std::unique_ptr<SwapChain> GraphicsInstance::CreateSwapchain(GraphicsDevice* pDevice, WindowHandle pNativeWindow, DXGI_FORMAT format, uint32 width, uint32 height, uint32 numFrames, bool vsync)
@@ -181,8 +179,8 @@ GraphicsDevice::GraphicsDevice(IDXGIAdapter4* pAdapter)
 	m_pDeviceRemovalFence->GetFence()->SetEventOnCompletion(UINT64_MAX, m_DeviceRemovedEvent);
 	RegisterWaitForSingleObject(&m_DeviceRemovedEvent, m_DeviceRemovedEvent, OnDeviceRemovedCallback, this, INFINITE, 0);
 
-	ID3D12InfoQueue* pInfoQueue = nullptr;
-	if (SUCCEEDED(m_pDevice->QueryInterface(IID_PPV_ARGS(&pInfoQueue))))
+	ComPtr<ID3D12InfoQueue> pInfoQueue;
+	if (SUCCEEDED(m_pDevice->QueryInterface(IID_PPV_ARGS(pInfoQueue.GetAddressOf()))))
 	{
 		// Suppress whole categories of messages
 		//D3D12_MESSAGE_CATEGORY Categories[] = {};
@@ -216,7 +214,23 @@ GraphicsDevice::GraphicsDevice(IDXGIAdapter4* pAdapter)
 			E_LOG(Warning, "D3D Validation Break on Severity Enabled");
 		}
 		pInfoQueue->PushStorageFilter(&NewFilter);
-		pInfoQueue->Release();
+
+		ComPtr<ID3D12InfoQueue1> pInfoQueue1;
+		if (SUCCEEDED(pInfoQueue.As(&pInfoQueue1)))
+		{
+			auto MessageCallback = [](
+				D3D12_MESSAGE_CATEGORY Category,
+				D3D12_MESSAGE_SEVERITY Severity,
+				D3D12_MESSAGE_ID ID,
+				LPCSTR pDescription,
+				void* pContext)
+			{
+				E_LOG(Warning, "D3D12 Validation Layer: %s", pDescription);
+			};
+
+			DWORD callbackCookie = 0;
+			VERIFY_HR(pInfoQueue1->RegisterMessageCallback(MessageCallback, D3D12_MESSAGE_CALLBACK_FLAG_NONE, this, &callbackCookie));
+		}
 	}
 
 	bool setStablePowerState = CommandLine::GetBool("stablepowerstate");
@@ -258,7 +272,9 @@ GraphicsDevice::GraphicsDevice(IDXGIAdapter4* pAdapter)
 
 	uint8 smMaj, smMin;
 	Capabilities.GetShaderModel(smMaj, smMin);
-	m_pShaderManager = std::make_unique<ShaderManager>("Resources/Shaders/", smMaj, smMin);
+	m_pShaderManager = std::make_unique<ShaderManager>(smMaj, smMin);
+	m_pShaderManager->AddIncludeDir("Resources/Shaders/");
+	m_pShaderManager->AddIncludeDir("Graphics/Core/");
 }
 
 GraphicsDevice::~GraphicsDevice()
@@ -441,7 +457,6 @@ void GraphicsCapabilities::Initialize(GraphicsDevice* pDevice)
 	m_pDevice = pDevice;
 
 	check(m_FeatureSupport.Init(pDevice->GetDevice()) == S_OK);
-
 	checkf(m_FeatureSupport.ResourceHeapTier() >= D3D12_RESOURCE_HEAP_TIER_2, "Device does not support Resource Heap Tier 2 or higher. Tier 1 is not supported");
 	checkf(m_FeatureSupport.ResourceBindingTier() >= D3D12_RESOURCE_BINDING_TIER_3, "Device does not support Resource Binding Tier 3 or higher. Tier 2 and under is not supported.");
 
@@ -551,7 +566,6 @@ SwapChain::SwapChain(GraphicsDevice* pDevice, IDXGIFactory6* pFactory, WindowHan
 	CommandQueue* pPresentQueue = pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT);
 	ComPtr<IDXGISwapChain1> swapChain;
 	
-#if PLATFORM_WINDOWS
 	VERIFY_HR(pFactory->CreateSwapChainForHwnd(
 		pPresentQueue->GetCommandQueue(),
 		(HWND)pNativeWindow,
@@ -559,7 +573,7 @@ SwapChain::SwapChain(GraphicsDevice* pDevice, IDXGIFactory6* pFactory, WindowHan
 		&fsDesc,
 		nullptr,
 		swapChain.GetAddressOf()));
-#endif
+
 	m_pSwapchain.Reset();
 	swapChain.As(&m_pSwapchain);
 

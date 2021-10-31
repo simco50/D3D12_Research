@@ -55,7 +55,7 @@ uint Random(inout uint rng_state, uint minimum, uint maximum)
 
 //Van Der Corpus Sequence
 //source: http://holger.dammertz.org/stuff/notes_HammersleyOnHemisphere.html
-float VanDerCorpusSequence(uint bits) 
+float VanDerCorpusSequence(uint bits)
 {
 	bits = (bits << 16u) | (bits >> 16u);
 	bits = ((bits & 0x55555555u) << 1u) | ((bits & 0xAAAAAAAAu) >> 1u);
@@ -73,7 +73,7 @@ float2 HammersleyPoints(uint i, uint N)
 }
 
 //hemisphereSample_uniform. Uniform distribution on the sphere
-float3 HemisphereSampleUniform(float u, float v) 
+float3 HemisphereSampleUniform(float u, float v)
 {
 	float phi = v * 2.0 * PI;
 	float cosTheta = 1.0 - u;
@@ -81,9 +81,9 @@ float3 HemisphereSampleUniform(float u, float v)
 	return float3(cos(phi) * sinTheta, sin(phi) * sinTheta, cosTheta);
 }
 
-// Samples a direction within a hemisphere oriented along +Z axis with a cosine-weighted distribution 
+// Samples a direction within a hemisphere oriented along +Z axis with a cosine-weighted distribution
 // Source: "Sampling Transformations Zoo" in Ray Tracing Gems by Shirley et al.
-float3 HemisphereSampleCosineWeight(float2 u, out float pdf) 
+float3 HemisphereSampleCosineWeight(float2 u, out float pdf)
 {
 	float a = sqrt(u.x);
 	float b = 2.0f * PI * u.y;
