@@ -36,9 +36,7 @@ void PSMain(
     float4 position : SV_POSITION,
     uint primitiveIndex : SV_PrimitiveID,
     float3 barycentrics : SV_Barycentrics,
-    out uint outPrimitiveMask : SV_TARGET0,
-    out float2 ouBarycentrics : SV_TARGET1)
+    out uint outPrimitiveMask : SV_TARGET0)
 {
     outPrimitiveMask = (cObjectData.Index << 16) | (primitiveIndex & 0xFFFF);
-    ouBarycentrics = barycentrics.xy;
 }

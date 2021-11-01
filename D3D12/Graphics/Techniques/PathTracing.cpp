@@ -160,5 +160,6 @@ void PathTracing::Reset()
 
 bool PathTracing::IsSupported()
 {
-	return m_pDevice->GetCapabilities().SupportsRaytracing();
+	return false;
+	//return m_pDevice->GetCapabilities().SupportsRaytracing();
 }

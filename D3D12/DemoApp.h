@@ -114,7 +114,7 @@ private:
 		Buffer* pBuffer;
 	};
 	std::queue<ScreenshotRequest> m_ScreenshotBuffers;
-	RenderPath m_RenderPath = RenderPath::Clustered;
+	RenderPath m_RenderPath = RenderPath::Visibility;
 
 	std::vector<std::unique_ptr<Mesh>> m_Meshes;
 	std::unique_ptr<Buffer> m_pTLAS;
@@ -189,7 +189,6 @@ private:
 	std::unique_ptr<RootSignature> m_pVisibilityRenderingRS;
 	PipelineState* m_pVisibilityRenderingPSO = nullptr;
 	std::unique_ptr<Texture> m_pVisibilityTexture;
-	std::unique_ptr<Texture> m_pBarycentricsTexture;
 	std::unique_ptr<RootSignature> m_pVisibilityShadingRS;
 	PipelineState* m_pVisibilityShadingPSO = nullptr;
 

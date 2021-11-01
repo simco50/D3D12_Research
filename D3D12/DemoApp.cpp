@@ -241,6 +241,8 @@ void DemoApp::SetupScene(CommandContext& context)
 	m_pCamera->SetPosition(Vector3(-1.3f, 2.4f, -1.5f));
 	m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(Math::PIDIV4, Math::PIDIV4 * 0.5f, 0));
 
+	LoadMesh("Resources/Scenes/Sponza/Sponza.gltf", context);
+
 	{
 #if 0
 		m_pCamera->SetPosition(Vector3(-1.3f, 2.4f, -1.5f));
@@ -688,22 +690,13 @@ void DemoApp::Update()
 		if (m_RenderPath == RenderPath::Visibility)
 		{
 			RGPassBuilder visibility = graph.AddPass("Visibility Buffer");
-			Data.DepthStencil = visibility.Write(Data.DepthStencil);
 			visibility.Bind([=](CommandContext& renderContext, const RGPassResources& resources)
 				{
-					Texture* pDepthStencil = resources.GetTexture(Data.DepthStencil);
+					Texture* pDepthStencil = GetDepthStencil();
 					renderContext.InsertResourceBarrier(pDepthStencil, D3D12_RESOURCE_STATE_DEPTH_WRITE);
 					renderContext.InsertResourceBarrier(m_pVisibilityTexture.get(), D3D12_RESOURCE_STATE_RENDER_TARGET);
-					renderContext.InsertResourceBarrier(m_pBarycentricsTexture.get(), D3D12_RESOURCE_STATE_RENDER_TARGET);
 
-					RenderPassInfo rp(pDepthStencil, RenderPassAccess::Clear_Store);
-					rp.RenderTargetCount = 2;
-					rp.RenderTargets[0].Target = m_pVisibilityTexture.get();
-					rp.RenderTargets[0].Access = RenderPassAccess::DontCare_Store;
-					rp.RenderTargets[1].Target = m_pBarycentricsTexture.get();
-					rp.RenderTargets[1].Access = RenderPassAccess::DontCare_Store;
-
-					renderContext.BeginRenderPass(rp);
+					renderContext.BeginRenderPass(RenderPassInfo(m_pVisibilityTexture.get(), RenderPassAccess::DontCare_Store, pDepthStencil, RenderPassAccess::Clear_Store, true));
 					renderContext.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
 					renderContext.SetGraphicsRootSignature(m_pVisibilityRenderingRS.get());
@@ -736,7 +729,6 @@ void DemoApp::Update()
 			visibilityShading.Bind([=](CommandContext& renderContext, const RGPassResources& resources)
 				{
 					renderContext.InsertResourceBarrier(m_pVisibilityTexture.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-					renderContext.InsertResourceBarrier(m_pBarycentricsTexture.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 					renderContext.InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
 					renderContext.SetComputeRootSignature(m_pVisibilityShadingRS.get());
@@ -764,16 +756,14 @@ void DemoApp::Update()
 						m_SceneData.pMaterialBuffer->GetSRV()->GetDescriptor(),
 						m_SceneData.pMeshBuffer->GetSRV()->GetDescriptor(),
 						m_SceneData.pMeshInstanceBuffer->GetSRV()->GetDescriptor(),
-						m_pVisibilityTexture->GetSRV()->GetDescriptor(),
-						m_pBarycentricsTexture->GetSRV()->GetDescriptor(),
+						m_pVisibilityTexture->GetSRV()->GetDescriptor()
 					};
 
 					renderContext.BindResources(1, 0, srvs, ARRAYSIZE(srvs));
 					renderContext.BindResource(2, 0, GetCurrentRenderTarget()->GetUAV());
 					renderContext.Dispatch(ComputeUtils::GetNumThreadGroups(GetCurrentRenderTarget()->GetWidth(), 16, GetCurrentRenderTarget()->GetHeight(), 16));
+					renderContext.InsertUavBarrier();
 				});
-
-			m_pVisualizeTexture = m_pVisibilityTexture.get();
 		}
 	}
 
@@ -1400,7 +1390,6 @@ void DemoApp::OnResize(int width, int height)
 	m_pTAASource = m_pDevice->CreateTexture(TextureDesc::CreateRenderTarget(width, height, GraphicsDevice::RENDER_TARGET_FORMAT, TextureFlag::ShaderResource | TextureFlag::RenderTarget | TextureFlag::UnorderedAccess), "TAA Target");
 
 	m_pVisibilityTexture = m_pDevice->CreateTexture(TextureDesc::CreateRenderTarget(width, height, DXGI_FORMAT_R32_UINT, TextureFlag::RenderTarget | TextureFlag::ShaderResource), "Visibility Buffer");
-	m_pBarycentricsTexture = m_pDevice->CreateTexture(TextureDesc::CreateRenderTarget(width, height, DXGI_FORMAT_R32G32_FLOAT, TextureFlag::RenderTarget | TextureFlag::ShaderResource), "Barycentrics Buffer");
 
 	m_pClusteredForward->OnResize(width, height);
 	m_pTiledForward->OnResize(width, height);
@@ -1655,11 +1644,7 @@ void DemoApp::InitializePipelines()
 		psoDesc.SetVertexShader(pVertexShader);
 		psoDesc.SetPixelShader(pPixelShader);
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
-		DXGI_FORMAT rtFormats[] = {
-			DXGI_FORMAT_R32_UINT,
-			DXGI_FORMAT_R32G32_FLOAT,
-		};
-		psoDesc.SetRenderTargetFormats(rtFormats, ARRAYSIZE(rtFormats), GraphicsDevice::DEPTH_STENCIL_FORMAT, m_SampleCount);
+		psoDesc.SetRenderTargetFormat(DXGI_FORMAT_R32_UINT, GraphicsDevice::DEPTH_STENCIL_FORMAT, 1);
 		psoDesc.SetName("Visibility Rendering");
 		m_pVisibilityRenderingPSO = m_pDevice->CreatePipeline(psoDesc);
 	}
@@ -1723,7 +1708,7 @@ void DemoApp::UpdateImGui()
 				ofn.lpstrFileTitle = NULL;
 				ofn.nMaxFileTitle = 0;
 				ofn.lpstrInitialDir = NULL;
-				ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
+				ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_NOCHANGEDIR;
 
 				if (GetOpenFileNameA(&ofn) == TRUE)
 				{
