@@ -52,7 +52,7 @@ MaterialProperties GetMaterialProperties(uint materialIndex, float2 UV, float2 d
 	float4 baseColor = material.BaseColorFactor;
 	if(material.Diffuse >= 0)
 	{
-		baseColor *= tTexture2DTable[material.Diffuse].SampleLevel(sMaterialSampler, UV, 0);
+		baseColor *= tTexture2DTable[material.Diffuse].SampleGrad(sMaterialSampler, UV, dx, dy);
 	}
 	properties.BaseColor = baseColor.rgb;
 	properties.Opacity = baseColor.a;
@@ -61,21 +61,21 @@ MaterialProperties GetMaterialProperties(uint materialIndex, float2 UV, float2 d
 	properties.Roughness = material.RoughnessFactor;
 	if(material.RoughnessMetalness >= 0)
 	{
-		float4 roughnessMetalnessSample = tTexture2DTable[material.RoughnessMetalness].SampleLevel(sMaterialSampler, UV, 0);
+		float4 roughnessMetalnessSample = tTexture2DTable[material.RoughnessMetalness].SampleGrad(sMaterialSampler, UV, dx, dy);
 		properties.Metalness *= roughnessMetalnessSample.b;
 		properties.Roughness *= roughnessMetalnessSample.g;
 	}
 	properties.Emissive = material.EmissiveFactor.rgb;
 	if(material.Emissive >= 0)
 	{
-		properties.Emissive *= tTexture2DTable[material.Emissive].SampleLevel(sMaterialSampler, UV, 0).rgb;
+		properties.Emissive *= tTexture2DTable[material.Emissive].SampleGrad(sMaterialSampler, UV, dx, dy).rgb;
 	}
 	properties.Specular = 0.5f;
 
 	properties.NormalTS = float3(0, 0, 1);
 	if(material.Normal >= 0)
 	{
-		properties.NormalTS = tTexture2DTable[material.Normal].SampleLevel(sMaterialSampler, UV, 0).rgb;
+		properties.NormalTS = tTexture2DTable[material.Normal].SampleGrad(sMaterialSampler, UV, dx, dy).rgb;
 	}
 	return properties;
 }
@@ -147,6 +147,13 @@ float2 InterpolateWithDeriv(BaryDerivatives deriv, float2 v0, float2 v1, float2 
 	return mul(deriv.Lambda, float3x2(v0, v1, v2));
 }
 
+float2 InterpolateWithDeriv(BaryDerivatives deriv, float2 v0, float2 v1, float2 v2, out float2 outDX, out float2 outDY)
+{
+	outDX = mul(deriv.DDX, float3x2(v0, v1, v2));
+	outDY = mul(deriv.DDY, float3x2(v0, v1, v2));
+	return InterpolateWithDeriv(deriv, v0, v1, v2);
+}
+
 float3 InterpolateWithDeriv(BaryDerivatives deriv, float3 v0, float3 v1, float3 v2)
 {
 	return mul(deriv.Lambda, float3x3(v0, v1, v2));
@@ -195,14 +202,15 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 
 	BaryDerivatives derivs = InitBaryDerivatives(clipPos0, clipPos1, clipPos2, ndc, rcp(cViewData.ScreenDimensions));
 
-	float2 UV = InterpolateWithDeriv(derivs, vertices[0].UV, vertices[1].UV, vertices[2].UV);
+	float2 dx, dy;
+	float2 UV = InterpolateWithDeriv(derivs, vertices[0].UV, vertices[1].UV, vertices[2].UV, dx, dy);
 	float3 N = normalize(mul(InterpolateWithDeriv(derivs, vertices[0].Normal, vertices[1].Normal, vertices[2].Normal), (float3x3)instance.World));
 	float3 T = normalize(mul(InterpolateWithDeriv(derivs, vertices[0].Tangent.xyz, vertices[1].Tangent.xyz, vertices[2].Tangent.xyz), (float3x3)instance.World));
 	float3 B = cross(N, T) * vertices[0].Tangent.w;
 	float3 P = InterpolateWithDeriv(derivs, vertices[0].Position, vertices[1].Position, vertices[2].Position);
 	P = mul(float4(P, 1), instance.World).xyz;
 
-	MaterialProperties properties = GetMaterialProperties(instance.Material, UV, float2(0, 0), float2(0, 0));
+	MaterialProperties properties = GetMaterialProperties(instance.Material, UV, dx, dy);
 	float3x3 TBN = float3x3(T, B, N);
 	N = TangentSpaceNormalMapping(properties.NormalTS, TBN);
 
