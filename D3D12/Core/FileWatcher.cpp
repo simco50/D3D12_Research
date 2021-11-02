@@ -41,6 +41,7 @@ bool FileWatcher::StartWatching(const char* pPath, const bool recursiveWatch /*=
 		return false;
 	}
 
+	std::scoped_lock<std::mutex> lock(m_Mutex);
 	std::unique_ptr<DirectoryWatch> pWatch = std::make_unique<DirectoryWatch>();
 	pWatch->Recursive = recursiveWatch;
 	pWatch->FileHandle = fileHandle;

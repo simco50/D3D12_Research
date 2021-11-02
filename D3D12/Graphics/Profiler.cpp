@@ -260,10 +260,12 @@ int32 Profiler::GetNextTimerIndex()
 void ProfileNode::RenderImGui(int frameIndex)
 {
 	ImGui::Spacing();
-	if (ImGui::BeginTable("Profiling", 3, ImGuiTableFlags_SizingStretchProp))
+	if (ImGui::BeginTable("Profiling", 5, ImGuiTableFlags_SizingStretchProp))
 	{
 		ImGui::TableSetupColumn("Event", ImGuiTableColumnFlags_None, 3);
+		ImGui::TableSetupColumn("CPU", ImGuiTableColumnFlags_None, 6);
 		ImGui::TableSetupColumn("CPU (ms)", ImGuiTableColumnFlags_None, 1);
+		ImGui::TableSetupColumn("GPU", ImGuiTableColumnFlags_None, 6);
 		ImGui::TableSetupColumn("GPU (ms)", ImGuiTableColumnFlags_None, 1);
 		ImGui::TableHeadersRow();
 
@@ -281,6 +283,8 @@ void ProfileNode::RenderNodeImgui(int frameIndex)
 {
 	if (frameIndex - m_LastProcessedFrame < 60)
 	{
+		static const ImColor CpuColor = ImColor(0, 125, 200);
+		static const ImColor GpuColor = ImColor(120, 183, 0);
 
 		ImGui::TableNextRow();
 		ImGui::TableNextColumn();
@@ -296,20 +300,68 @@ void ProfileNode::RenderNodeImgui(int frameIndex)
 			ImGui::Bullet();
 			ImGui::Selectable(m_Name);
 		}
-		ImGui::TableNextColumn();
-		float time = m_CpuTimeHistory.GetAverage();
-		ImGui::Text("%4.2f ms", time);
-		ImGui::TableNextColumn();
 
-		time = m_GpuTimeHistory.GetAverage();
-		if (time > 0)
+		ImGui::PushStyleColor(ImGuiCol_PlotLines, ImU32(CpuColor));
+		ImGui::PushStyleColor(ImGuiCol_Text, ImU32(CpuColor));
+		float cpuTime = m_CpuTimeHistory.GetAverage();
+
+		// 0
 		{
-			ImGui::Text("%4.2f ms", time);
+			ImGui::TableNextColumn();
+
+			if (cpuTime > 0)
+			{
+				const float* pData;
+				uint32 offset, count;
+				m_CpuTimeHistory.GetHistory(&pData, &count, &offset);
+
+				ImGui::PlotLines("", pData, count, offset, 0, 0.0f, 0.03f, ImVec2(ImGui::GetColumnWidth(), 0));
+			}
 		}
-		else
+		// 1
 		{
-			ImGui::Text("N/A");
+
+			ImGui::TableNextColumn();
+
+			ImGui::Text("%4.2f ms", cpuTime);
 		}
+
+
+		ImGui::PopStyleColor(2);
+
+		ImGui::PushStyleColor(ImGuiCol_PlotLines, ImU32(GpuColor));
+		ImGui::PushStyleColor(ImGuiCol_Text, ImU32(GpuColor));
+
+		float gpuTime = m_GpuTimeHistory.GetAverage();
+		// 2
+		{
+			ImGui::TableNextColumn();
+
+			if (gpuTime > 0)
+			{
+				const float* pData;
+				uint32 offset, count;
+				m_GpuTimeHistory.GetHistory(&pData, &count, &offset);
+
+				ImGui::PlotLines("", pData, count, offset, 0, 0.0f, 0.03f, ImVec2(ImGui::GetColumnWidth(), 0));
+			}
+		}
+
+		// 3
+		{
+			ImGui::TableNextColumn();
+
+			if (gpuTime > 0)
+			{
+				ImGui::Text("%4.2f ms", time);
+			}
+			else
+			{
+				ImGui::Text("N/A");
+			}
+		}
+
+		ImGui::PopStyleColor(2);
 
 		if (expand)
 		{
