@@ -78,6 +78,8 @@ workspace (ENGINE_NAME)
 		location (ROOT .. ENGINE_NAME)
 		pchheader ("stdafx.h")
 		pchsource (ROOT .. ENGINE_NAME .. "/stdafx.cpp")
+		systemversion (WIN_SDK)
+		kind "WindowedApp"
 
 		includedirs { "$(ProjectDir)" }
 
@@ -87,9 +89,6 @@ workspace (ENGINE_NAME)
 			includedirs ("$(ProjectDir)External/" .. dir)
 		end
 
-		systemversion (WIN_SDK)
-		kind "WindowedApp"
-
 		files
 		{ 
 			(SOURCE_DIR .. "**.h"),
@@ -98,14 +97,7 @@ workspace (ENGINE_NAME)
 			(SOURCE_DIR .. "**.inl"),
 			(SOURCE_DIR .. "**.c"),
 			(SOURCE_DIR .. "**.natvis"),
-			(SOURCE_DIR .. "**.hlsl*"),
 			(SOURCE_DIR .. "**.editorconfig"),
-		}
-
-		vpaths
-		{
-			{["Shaders/Include"] = (SOURCE_DIR .. "**.hlsli")},
-			{["Shaders/Source"] = (SOURCE_DIR .. "**.hlsl")},
 		}
 
 		filter ("files:" .. SOURCE_DIR .. "External/**")

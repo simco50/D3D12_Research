@@ -47,12 +47,12 @@ struct MaterialProperties
 
 MaterialProperties GetMaterialProperties(uint materialIndex, float2 UV, float2 dx, float2 dy)
 {
-	MaterialData material = tMaterials[materialIndex];
+	MaterialData material = tMaterials[NonUniformResourceIndex(materialIndex)];
 	MaterialProperties properties;
 	float4 baseColor = material.BaseColorFactor;
 	if(material.Diffuse >= 0)
 	{
-		baseColor *= tTexture2DTable[material.Diffuse].SampleGrad(sMaterialSampler, UV, dx, dy);
+		baseColor *= tTexture2DTable[NonUniformResourceIndex(material.Diffuse)].SampleGrad(sMaterialSampler, UV, dx, dy);
 	}
 	properties.BaseColor = baseColor.rgb;
 	properties.Opacity = baseColor.a;
@@ -61,21 +61,21 @@ MaterialProperties GetMaterialProperties(uint materialIndex, float2 UV, float2 d
 	properties.Roughness = material.RoughnessFactor;
 	if(material.RoughnessMetalness >= 0)
 	{
-		float4 roughnessMetalnessSample = tTexture2DTable[material.RoughnessMetalness].SampleGrad(sMaterialSampler, UV, dx, dy);
+		float4 roughnessMetalnessSample = tTexture2DTable[NonUniformResourceIndex(material.RoughnessMetalness)].SampleGrad(sMaterialSampler, UV, dx, dy);
 		properties.Metalness *= roughnessMetalnessSample.b;
 		properties.Roughness *= roughnessMetalnessSample.g;
 	}
 	properties.Emissive = material.EmissiveFactor.rgb;
 	if(material.Emissive >= 0)
 	{
-		properties.Emissive *= tTexture2DTable[material.Emissive].SampleGrad(sMaterialSampler, UV, dx, dy).rgb;
+		properties.Emissive *= tTexture2DTable[NonUniformResourceIndex(material.Emissive)].SampleGrad(sMaterialSampler, UV, dx, dy).rgb;
 	}
 	properties.Specular = 0.5f;
 
 	properties.NormalTS = float3(0, 0, 1);
 	if(material.Normal >= 0)
 	{
-		properties.NormalTS = tTexture2DTable[material.Normal].SampleGrad(sMaterialSampler, UV, dx, dy).rgb;
+		properties.NormalTS = tTexture2DTable[NonUniformResourceIndex(material.Normal)].SampleGrad(sMaterialSampler, UV, dx, dy).rgb;
 	}
 	return properties;
 }
@@ -178,17 +178,17 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 	uint meshIndex = visibilityMask >> 16;
 	uint triangleIndex = visibilityMask & 0xFFFF;
 
-    MeshInstance instance = tMeshInstances[meshIndex];
-	MeshData mesh = tMeshes[instance.Mesh];
-	uint3 indices = tBufferTable[mesh.IndexStream].Load<uint3>(triangleIndex * sizeof(uint3));
+    MeshInstance instance = tMeshInstances[NonUniformResourceIndex(meshIndex)];
+	MeshData mesh = tMeshes[NonUniformResourceIndex(instance.Mesh)];
+	uint3 indices = tBufferTable[NonUniformResourceIndex(mesh.IndexStream)].Load<uint3>(triangleIndex * sizeof(uint3));
 
 	VertexAttribute vertices[3];
 	for(uint i = 0; i < 3; ++i)
 	{
 		uint vertexId = indices[i];
-        vertices[i].Position = UnpackHalf3(LoadByteAddressData<uint2>(mesh.PositionStream, vertexId));
-        vertices[i].UV = UnpackHalf2(LoadByteAddressData<uint>(mesh.UVStream, vertexId));
-        NormalData normalData = LoadByteAddressData<NormalData>(mesh.NormalStream, vertexId);
+        vertices[i].Position = UnpackHalf3(LoadByteAddressData<uint2>(NonUniformResourceIndex(mesh.PositionStream), vertexId));
+        vertices[i].UV = UnpackHalf2(LoadByteAddressData<uint>(NonUniformResourceIndex(mesh.UVStream), vertexId));
+        NormalData normalData = LoadByteAddressData<NormalData>(NonUniformResourceIndex(mesh.NormalStream), vertexId);
         vertices[i].Normal = normalData.Normal;
         vertices[i].Tangent = normalData.Tangent;
 	}

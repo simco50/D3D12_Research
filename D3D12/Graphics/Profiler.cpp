@@ -353,7 +353,7 @@ void ProfileNode::RenderNodeImgui(int frameIndex)
 
 			if (gpuTime > 0)
 			{
-				ImGui::Text("%4.2f ms", time);
+				ImGui::Text("%4.2f ms", gpuTime);
 			}
 			else
 			{
