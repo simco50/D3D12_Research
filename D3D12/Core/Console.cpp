@@ -136,7 +136,23 @@ void Console::Log(const char* message, LogType type)
 
 	if (type == LogType::Error)
 	{
-		__debugbreak();
+			if (IsDebuggerPresent())
+			{
+				LPCSTR msg = &message[0];
+				int res = MessageBoxA(NULL, msg, "Assert failed", MB_YESNOCANCEL | MB_ICONERROR);
+				if (res == IDYES)
+				{
+#if _MSC_VER >= 1400
+					__debugbreak();
+#else
+					_asm int 0x03;
+#endif
+				}
+				else if (res == IDCANCEL)
+				{
+					abort();
+				}
+			}
 	}
 	else if (type == LogType::FatalError)
 	{
