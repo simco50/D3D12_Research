@@ -160,5 +160,7 @@ void PathTracing::Reset()
 
 bool PathTracing::IsSupported()
 {
-	return m_pDevice->GetCapabilities().SupportsRaytracing();
+	// #todo: Path tracing RTPSO is broken on latest Nvidia driver
+	return false;
+	//return m_pDevice->GetCapabilities().SupportsRaytracing();
 }
