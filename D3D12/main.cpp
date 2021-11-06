@@ -40,7 +40,9 @@ int WINAPI WinMain(_In_ HINSTANCE /*hInstance*/, _In_opt_ HINSTANCE /*hPrevInsta
 	CVarManager::Initialize();
 	TaskQueue::Initialize(std::thread::hardware_concurrency());
 
-	Window app("D3D12", 1920, 1080);
+	Window app(1920, 1080);
+	app.SetTitle("D3D12");
+
 	DemoApp graphics(app.GetNativeWindow(), app.GetRect(), 1);
 
 	app.OnKeyInput += [](uint32 character, bool isDown) {

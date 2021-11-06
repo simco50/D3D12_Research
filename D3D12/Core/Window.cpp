@@ -1,7 +1,7 @@
 #include "stdafx.h"
 #include "Window.h"
 
-Window::Window(const char* pTitle, uint32 width, uint32 height)
+Window::Window(uint32 width, uint32 height)
 {
 	::SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_SYSTEM_AWARE);
 
@@ -28,7 +28,7 @@ Window::Window(const char* pTitle, uint32 width, uint32 height)
 	m_Window = CreateWindowExA(
 		0,
 		WINDOW_CLASS_NAME,
-		pTitle,
+		"",
 		windowStyle,
 		x,
 		y,
@@ -74,7 +74,7 @@ bool Window::PollMessages()
 	return true;
 }
 
-void Window::SetWindowTitle(const char* pTitle)
+void Window::SetTitle(const char* pTitle)
 {
 	SetWindowTextA(m_Window, pTitle);
 }

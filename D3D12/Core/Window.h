@@ -5,13 +5,13 @@ class Window
 public:
 	static constexpr const char* WINDOW_CLASS_NAME = "WndClass";
 
-	Window(const char* pTitle, uint32 width, uint32 height);
+	Window(uint32 width, uint32 height);
 
 	~Window();
 
 	bool PollMessages();
 
-	void SetWindowTitle(const char* pTitle);
+	void SetTitle(const char* pTitle);
 
 	HWND GetNativeWindow() const { return m_Window; }
 	IntVector2 GetRect() const { return IntVector2(m_DisplayWidth, m_DisplayHeight); }
