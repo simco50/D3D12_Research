@@ -116,12 +116,15 @@ ComPtr<IDXGIAdapter4> GraphicsInstance::EnumerateAdapter(bool useWarp)
 				DXGI_OUTPUT_DESC1 outputDesc;
 				pOutput1->GetDesc1(&outputDesc);
 
-				E_LOG(Info, "\t\tMonitor %d - %dx%d - HDR: %s - %d BPP",
+				E_LOG(Info, "\t\tMonitor %d - %dx%d - HDR: %s - %d BPP - Min Lum %f - Max Lum %f - MaxFFL %f",
 					outputIndex,
 					outputDesc.DesktopCoordinates.right - outputDesc.DesktopCoordinates.left,
 					outputDesc.DesktopCoordinates.bottom - outputDesc.DesktopCoordinates.top,
 					outputDesc.ColorSpace == DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020 ? "Yes" : "No",
-					outputDesc.BitsPerColor);
+					outputDesc.BitsPerColor,
+					outputDesc.MinLuminance,
+					outputDesc.MaxLuminance,
+					outputDesc.MaxFullFrameLuminance);
 			}
 		}
 		m_pFactory->EnumAdapterByGpuPreference(0, gpuPreference, IID_PPV_ARGS(pAdapter.GetAddressOf()));
