@@ -45,14 +45,10 @@ int WINAPI WinMain(_In_ HINSTANCE /*hInstance*/, _In_opt_ HINSTANCE /*hPrevInsta
 
 	DemoApp graphics(app.GetNativeWindow(), app.GetRect(), 1);
 
-	app.OnKeyInput += [](uint32 character, bool isDown) {
-		Input::Instance().UpdateKey(character, isDown);
-		ImGui::GetIO().KeysDown[character] = isDown;
-	};
+	app.OnKeyInput += [](uint32 character, bool isDown) { Input::Instance().UpdateKey(character, isDown); };
 	app.OnMouseInput += [](uint32 mouse, bool isDown) { Input::Instance().UpdateMouseKey(mouse, isDown); };
 	app.OnMouseMove += [](uint32 x, uint32 y) { Input::Instance().UpdateMousePosition((float)x, (float)y); };
 	app.OnResize += [&graphics](uint32 width, uint32 height) { graphics.OnResize(width, height); };
-	app.OnCharInput += [](uint32 character) { ImGui::GetIO().AddInputCharacter(character); };
 	app.OnMouseScroll += [](float wheel) { Input::Instance().UpdateMouseWheel(wheel); };
 
 	Time::Reset();

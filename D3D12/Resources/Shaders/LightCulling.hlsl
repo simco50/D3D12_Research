@@ -236,11 +236,11 @@ void CSMain(CS_INPUT input)
     GroupMemoryBarrierWithGroupSync();
 
     //Distribute populating the light index light amonst threads in the thread group
-    for (i = input.GroupIndex; i < OpaqueLightCount; i += BLOCK_SIZE * BLOCK_SIZE)
+    for (uint i = input.GroupIndex; i < OpaqueLightCount; i += BLOCK_SIZE * BLOCK_SIZE)
     {
         uOpaqueLightIndexList[OpaqueLightIndexStartOffset + i] = OpaqueLightList[i];
     }
-    for (i = input.GroupIndex; i < TransparantLightCount; i += BLOCK_SIZE * BLOCK_SIZE)
+    for (uint i = input.GroupIndex; i < TransparantLightCount; i += BLOCK_SIZE * BLOCK_SIZE)
     {
         uTransparantLightIndexList[TransparantLightIndexStartOffset + i] = TransparantLightList[i];
     }

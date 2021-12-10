@@ -354,18 +354,18 @@ void GraphicsDevice::IdleGPU()
 	}
 }
 
-uint32 GraphicsDevice::StoreViewDescriptor(D3D12_CPU_DESCRIPTOR_HANDLE view)
+DescriptorHandle GraphicsDevice::StoreViewDescriptor(D3D12_CPU_DESCRIPTOR_HANDLE view)
 {
 	DescriptorHandle handle = m_pPersistentViewHeap->Allocate();
 	m_pDevice->CopyDescriptorsSimple(1, handle.CpuHandle, view, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-	return handle.HeapIndex;
+	return handle;
 }
 
-void GraphicsDevice::FreeViewDescriptor(int32& heapIndex)
+void GraphicsDevice::FreeViewDescriptor(DescriptorHandle& handle)
 {
-	if (heapIndex != DescriptorHandle::InvalidHeapIndex)
+	if (handle.HeapIndex != DescriptorHandle::InvalidHeapIndex)
 	{
-		m_pPersistentViewHeap->Free(heapIndex);
+		m_pPersistentViewHeap->Free(handle.HeapIndex);
 	}
 }
 

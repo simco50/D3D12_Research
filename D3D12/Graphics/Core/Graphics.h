@@ -169,9 +169,8 @@ public:
 		m_DescriptorHeaps[DescriptorSelector<DESC_TYPE>::Type()]->FreeDescriptor(descriptor);
 	}
 
-	uint32 StoreViewDescriptor(D3D12_CPU_DESCRIPTOR_HANDLE view);
-
-	void FreeViewDescriptor(int32& heapIndex);
+	DescriptorHandle StoreViewDescriptor(D3D12_CPU_DESCRIPTOR_HANDLE view);
+	void FreeViewDescriptor(DescriptorHandle& heapIndex);
 
 	std::unique_ptr<Texture> CreateTexture(const TextureDesc& desc, const char* pName);
 	std::unique_ptr<Buffer> CreateBuffer(const BufferDesc& desc, const char* pName);

@@ -27,6 +27,7 @@
 #include "Core/Input.h"
 #include "Core/ConsoleVariables.h"
 #include "Core/Utils.h"
+#include "imgui_internal.h"
 
 static const int32 FRAME_COUNT = 3;
 static const DXGI_FORMAT SWAPCHAIN_FORMAT = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -141,7 +142,6 @@ namespace Tweakables
 	DelegateConsoleCommand<> gDumpRenderGraph("DumpRenderGraph", []() { g_DumpRenderGraph = true; });
 	bool g_Screenshot = false;
 	DelegateConsoleCommand<> gScreenshot("Screenshot", []() { g_Screenshot = true; });
-	bool g_EnableUI = true;
 
 	// Lighting
 	float g_SunInclination = 0.579f;
@@ -173,7 +173,7 @@ DemoApp::DemoApp(WindowHandle window, const IntVector2& windowRect, int sampleCo
 	m_pDevice = instance->CreateDevice(pAdapter.Get());
 	m_pSwapchain = instance->CreateSwapchain(m_pDevice.get(), window, SWAPCHAIN_FORMAT, windowRect.x, windowRect.y, FRAME_COUNT, true);
 
-	m_pImGuiRenderer = std::make_unique<ImGuiRenderer>(m_pDevice.get());
+	m_pImGuiRenderer = std::make_unique<ImGuiRenderer>(m_pDevice.get(), window, FRAME_COUNT);
 
 	m_pClusteredForward = std::make_unique<ClusteredForward>(m_pDevice.get());
 	m_pTiledForward = std::make_unique<TiledForward>(m_pDevice.get());
@@ -188,6 +188,7 @@ DemoApp::DemoApp(WindowHandle window, const IntVector2& windowRect, int sampleCo
 	DebugRenderer::Get()->Initialize(m_pDevice.get());
 
 	OnResize(windowRect.x, windowRect.y);
+	OnResizeViewport(windowRect.x, windowRect.y);
 
 	CommandContext* pContext = m_pDevice->AllocateCommandContext();
 	InitializePipelines();
@@ -355,11 +356,6 @@ void DemoApp::Update()
 	if (Input::Instance().IsKeyPressed('H'))
 	{
 		m_RenderPath = m_RenderPath == RenderPath::PathTracing ? RenderPath::Clustered : RenderPath::PathTracing;
-	}
-
-	if (Input::Instance().IsKeyPressed('U'))
-	{
-		Tweakables::g_EnableUI = !Tweakables::g_EnableUI;
 	}
 
 	if (Tweakables::g_RenderObjectBounds)
@@ -789,21 +785,21 @@ void DemoApp::Update()
 			Data.DepthStencilResolved = depthResolve.Write(Data.DepthStencilResolved);
 			depthResolve.Bind([=](CommandContext& renderContext, const RGPassResources& resources)
 				{
-					renderContext.InsertResourceBarrier(resources.GetTexture(Data.DepthStencil), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-					renderContext.InsertResourceBarrier(resources.GetTexture(Data.DepthStencilResolved), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+					Texture* pDepthTexture = resources.GetTexture(Data.DepthStencil);
+					Texture* pResolvedDepthTexture = resources.GetTexture(Data.DepthStencilResolved);
+					renderContext.InsertResourceBarrier(pDepthTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+					renderContext.InsertResourceBarrier(pResolvedDepthTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
 					renderContext.SetComputeRootSignature(m_pResolveDepthRS.get());
 					renderContext.SetPipelineState(m_pResolveDepthPSO);
 
-					renderContext.BindResource(0, 0, resources.GetTexture(Data.DepthStencilResolved)->GetUAV());
+					renderContext.BindResource(0, 0, pDepthTexture->GetUAV());
 					renderContext.BindResource(1, 0, resources.GetTexture(Data.DepthStencil)->GetSRV());
 
-					int dispatchGroupsX = Math::DivideAndRoundUp(m_WindowWidth, 16);
-					int dispatchGroupsY = Math::DivideAndRoundUp(m_WindowHeight, 16);
-					renderContext.Dispatch(dispatchGroupsX, dispatchGroupsY);
+					renderContext.Dispatch(ComputeUtils::GetNumThreadGroups(pDepthTexture->GetWidth(), 16, pDepthTexture->GetHeight(), 16));
 
-					renderContext.InsertResourceBarrier(resources.GetTexture(Data.DepthStencilResolved), D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
-					renderContext.InsertResourceBarrier(resources.GetTexture(Data.DepthStencil), D3D12_RESOURCE_STATE_DEPTH_READ);
+					renderContext.InsertResourceBarrier(pResolvedDepthTexture, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
+					renderContext.InsertResourceBarrier(pDepthTexture, D3D12_RESOURCE_STATE_DEPTH_READ);
 					renderContext.FlushResourceBarriers();
 				});
 		}
@@ -845,16 +841,14 @@ void DemoApp::Update()
 					Vector4(1.0f / 2.0f, 1.0f / 2.0f, 0.0f, 1.0f));
 
 				parameters.ReprojectionMatrix = preMult * m_pCamera->GetViewProjection().Invert() * m_pCamera->GetPreviousViewProjection() * postMult;
-				parameters.InvScreenDimensions = Vector2(1.0f / m_WindowWidth, 1.0f / m_WindowHeight);
+				parameters.InvScreenDimensions = Vector2(1.0f / GetResolvedDepthStencil()->GetWidth(), 1.0f / GetResolvedDepthStencil()->GetHeight());
 
 				renderContext.SetRootCBV(0, parameters);
 
 				renderContext.BindResource(1, 0, m_pVelocity->GetUAV());
 				renderContext.BindResource(2, 0, GetResolvedDepthStencil()->GetSRV());
 
-				int dispatchGroupsX = Math::DivideAndRoundUp(m_WindowWidth, 8);
-				int dispatchGroupsY = Math::DivideAndRoundUp(m_WindowHeight, 8);
-				renderContext.Dispatch(dispatchGroupsX, dispatchGroupsY);
+				renderContext.Dispatch(ComputeUtils::GetNumThreadGroups(m_pVelocity->GetWidth(), 8, m_pVelocity->GetHeight(), 8));
 			});
 
 		if (Tweakables::g_RaytracedAO)
@@ -969,7 +963,7 @@ void DemoApp::Update()
 						Vector2 Jitter;
 					} parameters;
 
-					parameters.InvScreenDimensions = Vector2(1.0f / m_WindowWidth, 1.0f / m_WindowHeight);
+					parameters.InvScreenDimensions = Vector2(1.0f / m_pHDRRenderTarget->GetWidth(), 1.0f / m_pHDRRenderTarget->GetHeight());
 					parameters.Jitter.x = m_pCamera->GetPreviousJitter().x - m_pCamera->GetJitter().x;
 					parameters.Jitter.y = -(m_pCamera->GetPreviousJitter().y - m_pCamera->GetJitter().y);
 					renderContext.SetRootCBV(0, parameters);
@@ -980,9 +974,7 @@ void DemoApp::Update()
 					renderContext.BindResource(2, 2, m_pTAASource->GetSRV());
 					renderContext.BindResource(2, 3, GetResolvedDepthStencil()->GetSRV());
 
-					int dispatchGroupsX = Math::DivideAndRoundUp(m_WindowWidth, 8);
-					int dispatchGroupsY = Math::DivideAndRoundUp(m_WindowHeight, 8);
-					renderContext.Dispatch(dispatchGroupsX, dispatchGroupsY);
+					renderContext.Dispatch(ComputeUtils::GetNumThreadGroups(m_pHDRRenderTarget->GetWidth(), 8, m_pHDRRenderTarget->GetHeight(), 8));
 
 					renderContext.CopyTexture(m_pHDRRenderTarget.get(), m_pPreviousColor.get());
 				});
@@ -1157,7 +1149,7 @@ void DemoApp::Update()
 				context.Dispatch(ComputeUtils::GetNumThreadGroups(m_pHDRRenderTarget->GetWidth(), 16, m_pHDRRenderTarget->GetHeight(), 16));
 			});
 
-		if (Tweakables::g_EnableUI && Tweakables::g_DrawHistogram.Get())
+		if (Tweakables::g_DrawHistogram.Get())
 		{
 			RGPassBuilder drawHistogram = graph.AddPass("Draw Histogram");
 			drawHistogram.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
@@ -1202,55 +1194,16 @@ void DemoApp::Update()
 		{
 			m_pTiledForward->VisualizeLightDensity(graph, m_pDevice.get(), *m_pCamera, m_pTonemapTarget.get(), GetResolvedDepthStencil());
 		}
-
-		//Render Color Legend
-		ImGui::SetNextWindowSize(ImVec2(60, 255));
-		ImGui::SetNextWindowPos(ImVec2((float)m_WindowWidth - 65, (float)m_WindowHeight - 280));
-		ImGui::Begin("Visualize Light Density", 0, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar);
-		ImGui::SetWindowFontScale(1.2f);
-		ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(0, 0, 0, 255));
-		static uint32 DEBUG_COLORS[] = {
-			IM_COL32(0,4,141, 255),
-			IM_COL32(5,10,255, 255),
-			IM_COL32(0,164,255, 255),
-			IM_COL32(0,255,189, 255),
-			IM_COL32(0,255,41, 255),
-			IM_COL32(117,254,1, 255),
-			IM_COL32(255,239,0, 255),
-			IM_COL32(255,86,0, 255),
-			IM_COL32(204,3,0, 255),
-			IM_COL32(65,0,1, 255),
-		};
-
-		for (uint32 i = 0; i < ARRAYSIZE(DEBUG_COLORS); ++i)
-		{
-			char number[16];
-			FormatString(number, ARRAYSIZE(number), "%d", i);
-			ImGui::PushStyleColor(ImGuiCol_Button, DEBUG_COLORS[i]);
-			ImGui::Button(number, ImVec2(40, 20));
-			ImGui::PopStyleColor();
-		}
-		ImGui::PopStyleColor();
-		ImGui::End();
 	}
 
 	//UI
-	// - ImGui render, pretty straight forward
-	if (Tweakables::g_EnableUI)
-	{
-		m_pImGuiRenderer->Render(graph, m_SceneData, m_pTonemapTarget.get());
-	}
-	else
-	{
-		ImGui::Render();
-	}
+	Texture* pBackbuffer = m_pSwapchain->GetBackBuffer();
+	m_pImGuiRenderer->Render(graph, m_SceneData, pBackbuffer);
 
-	RGPassBuilder temp = graph.AddPass("Temp Barriers");
+	RGPassBuilder temp = graph.AddPass("Present Barrier");
 	temp.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
 		{
-			context.CopyTexture(m_pTonemapTarget.get(), GetCurrentBackbuffer());
-			context.InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RENDER_TARGET);
-			context.InsertResourceBarrier(GetCurrentBackbuffer(), D3D12_RESOURCE_STATE_PRESENT);
+			context.InsertResourceBarrier(pBackbuffer, D3D12_RESOURCE_STATE_PRESENT);
 		});
 
 	graph.Compile();
@@ -1280,12 +1233,17 @@ void DemoApp::Update()
 
 void DemoApp::OnResize(int width, int height)
 {
-	E_LOG(Info, "Viewport resized: %dx%d", width, height);
+	E_LOG(Info, "Window resized: %dx%d", width, height);
 	m_WindowWidth = width;
 	m_WindowHeight = height;
 
 	m_pDevice->IdleGPU();
 	m_pSwapchain->OnResize(width, height);
+}
+
+void DemoApp::OnResizeViewport(int width, int height)
+{
+	E_LOG(Info, "Viewport resized: %dx%d", width, height);
 
 	m_pDepthStencil = m_pDevice->CreateTexture(TextureDesc::CreateDepth(width, height, GraphicsDevice::DEPTH_STENCIL_FORMAT, TextureFlag::DepthStencil | TextureFlag::ShaderResource, m_SampleCount, ClearBinding(0.0f, 0)), "Depth Stencil");
 	m_pResolvedDepthStencil = m_pDevice->CreateTexture(TextureDesc::Create2D(width, height, DXGI_FORMAT_R32_FLOAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess), "Resolved Depth Stencil");
@@ -1552,27 +1510,12 @@ void DemoApp::UpdateImGui()
 	static bool showProfiler = false;
 	static bool showImguiDemo = false;
 
+	ImGui::DockSpaceOverViewport(ImGui::GetMainViewport());
+
 	if (ImGui::BeginMainMenuBar())
 	{
-		if (ImGui::BeginMenu("Windows"))
+		if (ImGui::BeginMenu("File"))
 		{
-			if (ImGui::MenuItem("Profiler", 0, showProfiler))
-			{
-				showProfiler = !showProfiler;
-			}
-			bool& showConsole = console.IsVisible();
-			if (ImGui::MenuItem("Output Log", 0, showConsole))
-			{
-				showConsole = !showConsole;
-			}
-			if (ImGui::MenuItem("ImGui Demo", 0, showImguiDemo))
-			{
-				showImguiDemo = !showImguiDemo;
-			}
-			if (ImGui::MenuItem("Luminance Histogram", 0, &Tweakables::g_DrawHistogram.Get()))
-			{
-				Tweakables::g_VisualizeShadowCascades.SetValue(!Tweakables::g_DrawHistogram.GetBool());
-			}
 			if (ImGui::MenuItem("Load Mesh", nullptr, nullptr))
 			{
 				OPENFILENAME ofn = { 0 };
@@ -1598,6 +1541,24 @@ void DemoApp::UpdateImGui()
 			}
 			ImGui::EndMenu();
 		}
+		if (ImGui::BeginMenu("Windows"))
+		{
+			if (ImGui::MenuItem("Profiler", 0, showProfiler))
+			{
+				showProfiler = !showProfiler;
+			}
+			bool& showConsole = console.IsVisible();
+			if (ImGui::MenuItem("Output Log", 0, showConsole))
+			{
+				showConsole = !showConsole;
+			}
+			if (ImGui::MenuItem("Luminance Histogram", 0, &Tweakables::g_DrawHistogram.Get()))
+			{
+				Tweakables::g_VisualizeShadowCascades.SetValue(!Tweakables::g_DrawHistogram.GetBool());
+			}
+
+			ImGui::EndMenu();
+		}
 		if (ImGui::BeginMenu("Tools"))
 		{
 			if (ImGui::MenuItem("Dump RenderGraph"))
@@ -1614,8 +1575,61 @@ void DemoApp::UpdateImGui()
 			}
 			ImGui::EndMenu();
 		}
-
+		if (ImGui::BeginMenu("Help"))
+		{
+			if (ImGui::MenuItem("ImGui Demo", 0, showImguiDemo))
+			{
+				showImguiDemo = !showImguiDemo;
+			}
+			ImGui::EndMenu();
+		}
 		ImGui::EndMainMenuBar();
+	}
+
+	ImGui::Begin("Viewport", 0, ImGuiWindowFlags_NoScrollbar);
+	float widthDelta = ImGui::GetWindowContentRegionMax().x - ImGui::GetWindowContentRegionMin().x;
+	float heightDelta = ImGui::GetWindowContentRegionMax().y - ImGui::GetWindowContentRegionMin().y;
+	uint32 width = (uint32)Math::Max(4.0f, widthDelta);
+	uint32 height = (uint32)Math::Max(4.0f, heightDelta);
+
+	if (width != m_pTonemapTarget->GetWidth() || height != m_pTonemapTarget->GetHeight())
+	{
+		OnResizeViewport(width, height);
+	}
+	ImGui::Image(m_pTonemapTarget.get(), ImVec2((float)width, (float)height));
+	ImGui::End();
+
+	if (Tweakables::g_VisualizeLightDensity)
+	{
+		//Render Color Legend
+		ImGui::SetNextWindowSize(ImVec2(60, 255));
+		ImGui::SetNextWindowPos(ImVec2((float)m_WindowWidth - 65, (float)m_WindowHeight - 280));
+		ImGui::Begin("Visualize Light Density", 0, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar);
+		ImGui::SetWindowFontScale(1.2f);
+		ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(0, 0, 0, 255));
+		static uint32 DEBUG_COLORS[] = {
+			IM_COL32(0,4,141, 255),
+			IM_COL32(5,10,255, 255),
+			IM_COL32(0,164,255, 255),
+			IM_COL32(0,255,189, 255),
+			IM_COL32(0,255,41, 255),
+			IM_COL32(117,254,1, 255),
+			IM_COL32(255,239,0, 255),
+			IM_COL32(255,86,0, 255),
+			IM_COL32(204,3,0, 255),
+			IM_COL32(65,0,1, 255),
+		};
+
+		for (uint32 i = 0; i < ARRAYSIZE(DEBUG_COLORS); ++i)
+		{
+			char number[16];
+			FormatString(number, ARRAYSIZE(number), "%d", i);
+			ImGui::PushStyleColor(ImGuiCol_Button, DEBUG_COLORS[i]);
+			ImGui::Button(number, ImVec2(40, 20));
+			ImGui::PopStyleColor();
+		}
+		ImGui::PopStyleColor();
+		ImGui::End();
 	}
 
 	console.Update(ImVec2(300, (float)m_WindowHeight), ImVec2((float)m_WindowWidth - 300 * 2, 250));
@@ -1649,14 +1663,13 @@ void DemoApp::UpdateImGui()
 		if (m_ShadowMaps.size() >= 4)
 		{
 			float imageSize = 230;
-			ImGui::SetNextWindowSize(ImVec2(imageSize, 1024));
-			ImGui::SetNextWindowPos(ImVec2(m_WindowWidth - imageSize, 0));
-			if (ImGui::Begin("Shadow Cascades", 0, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoScrollbar))
+			if (ImGui::Begin("Shadow Cascades"))
 			{
 				const Light& sunLight = m_Lights[0];
 				for (int i = 0; i < Tweakables::g_ShadowCascades; ++i)
 				{
 					ImGui::Image(m_ShadowMaps[sunLight.ShadowIndex + i].get(), ImVec2(imageSize, imageSize));
+					ImGui::SameLine();
 				}
 			}
 			ImGui::End();

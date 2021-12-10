@@ -1,9 +1,10 @@
 #include "stdafx.h"
 #include "Window.h"
+#include "imgui_impl_win32.h"
 
 Window::Window(uint32 width, uint32 height)
 {
-	::SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_SYSTEM_AWARE);
+	ImGui_ImplWin32_EnableDpiAwareness();
 
 	WNDCLASSEX wc{};
 	wc.cbSize = sizeof(WNDCLASSEX);
@@ -95,8 +96,15 @@ LRESULT Window::WndProcStatic(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
 	return DefWindowProcA(hWnd, message, wParam, lParam);
 }
 
+extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+
 LRESULT Window::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
+	if (ImGui_ImplWin32_WndProcHandler(hWnd, message, wParam, lParam))
+	{
+		return true;
+	}
+
 	switch (message)
 	{
 	case WM_DESTROY:

@@ -51,6 +51,8 @@ public:
 	void OnResize(int width, int height);
 
 private:
+	void OnResizeViewport(int width, int height);
+
 	void InitializePipelines();
 	void InitializeAssets(CommandContext& context);
 	void SetupScene(CommandContext& context);
@@ -66,7 +68,6 @@ private:
 	Texture* GetDepthStencil() const { return m_pDepthStencil.get(); }
 	Texture* GetResolvedDepthStencil() const { return m_pResolvedDepthStencil.get(); }
 	Texture* GetCurrentRenderTarget() const { return m_SampleCount > 1 ? m_pMultiSampleRenderTarget.get() : m_pHDRRenderTarget.get(); }
-	Texture* GetCurrentBackbuffer() const { return m_pSwapchain->GetBackBuffer(); }
 
 	std::unique_ptr<GraphicsDevice> m_pDevice;
 	std::unique_ptr<SwapChain> m_pSwapchain;
