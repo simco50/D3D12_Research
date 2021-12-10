@@ -4,6 +4,7 @@
 #include "Core/CommandLine.h"
 #include "Core/FileWatcher.h"
 #include "dxc/dxcapi.h"
+#include "dxc/d3d12shader.h"
 
 namespace ShaderCompiler
 {
@@ -219,7 +220,6 @@ namespace ShaderCompiler
 		{
 			arguments.AddDefine(define.Value.c_str());
 		}
-
 
 		DxcBuffer sourceBuffer;
 		sourceBuffer.Ptr = pSource->GetBufferPointer();

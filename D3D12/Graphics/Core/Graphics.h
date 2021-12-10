@@ -45,7 +45,7 @@ class GraphicsInstance
 {
 public:
 	GraphicsInstance(GraphicsInstanceFlags createFlags);
-	std::unique_ptr<SwapChain> CreateSwapchain(GraphicsDevice* pDevice, WindowHandle pNativeWindow, DXGI_FORMAT format, uint32 width, uint32 height, uint32 numFrames, bool vsync);
+	std::unique_ptr<SwapChain> CreateSwapchain(GraphicsDevice* pDevice, WindowHandle pNativeWindow, uint32 width, uint32 height, uint32 numFrames, bool vsync);
 	ComPtr<IDXGIAdapter4> EnumerateAdapter(bool useWarp);
 	std::unique_ptr<GraphicsDevice> CreateDevice(ComPtr<IDXGIAdapter4> pAdapter);
 
@@ -61,7 +61,7 @@ private:
 class SwapChain
 {
 public:
-	SwapChain(GraphicsDevice* pDevice, IDXGIFactory6* pFactory, WindowHandle pNativeWindow, DXGI_FORMAT format, uint32 width, uint32 height, uint32 numFrames, bool vsync);
+	SwapChain(GraphicsDevice* pDevice, IDXGIFactory6* pFactory, WindowHandle pNativeWindow, uint32 width, uint32 height, uint32 numFrames, bool vsync);
 	~SwapChain();
 	void OnResize(uint32 width, uint32 height);
 	void Present();
@@ -131,9 +131,6 @@ private:
 class GraphicsDevice
 {
 public:
-	static const DXGI_FORMAT DEPTH_STENCIL_FORMAT;
-	static const DXGI_FORMAT RENDER_TARGET_FORMAT;
-
 	GraphicsDevice(IDXGIAdapter4* pAdapter);
 	~GraphicsDevice();
 

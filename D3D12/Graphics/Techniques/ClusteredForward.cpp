@@ -556,7 +556,7 @@ void ClusteredForward::SetupPipelines()
 		m_pDiffuseRS->FinalizeFromShader("Diffuse", pVertexShader);
 
 		DXGI_FORMAT formats[] = {
-			GraphicsDevice::RENDER_TARGET_FORMAT,
+			DXGI_FORMAT_R16G16B16A16_FLOAT,
 			DXGI_FORMAT_R16G16B16A16_FLOAT,
 		};
 
@@ -568,7 +568,7 @@ void ClusteredForward::SetupPipelines()
 		psoDesc.SetPixelShader(pPixelShader);
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_EQUAL);
 		psoDesc.SetDepthWrite(false);
-		psoDesc.SetRenderTargetFormats(formats, ARRAYSIZE(formats), GraphicsDevice::DEPTH_STENCIL_FORMAT, /* m_pDevice->GetMultiSampleCount() */ 1);
+		psoDesc.SetRenderTargetFormats(formats, ARRAYSIZE(formats), DXGI_FORMAT_D32_FLOAT, /* m_pDevice->GetMultiSampleCount() */ 1);
 		psoDesc.SetName("Diffuse (Opaque)");
 		m_pDiffusePSO = m_pDevice->CreatePipeline(psoDesc);
 
@@ -596,7 +596,7 @@ void ClusteredForward::SetupPipelines()
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
 		psoDesc.SetDepthWrite(false);
 		psoDesc.SetPixelShader(pPixelShader);
-		psoDesc.SetRenderTargetFormat(GraphicsDevice::RENDER_TARGET_FORMAT, GraphicsDevice::DEPTH_STENCIL_FORMAT, /* m_pDevice->GetMultiSampleCount() */ 1);
+		psoDesc.SetRenderTargetFormat(DXGI_FORMAT_R16G16B16A16_FLOAT, DXGI_FORMAT_D32_FLOAT, /* m_pDevice->GetMultiSampleCount() */ 1);
 		psoDesc.SetBlendMode(BlendMode::Additive, false);
 
 		m_pVisualizeLightClustersRS->FinalizeFromShader("Visualize Light Clusters", pVertexShader);

@@ -107,7 +107,7 @@ GpuParticles::GpuParticles(GraphicsDevice* pDevice)
 		psoDesc.SetBlendMode(BlendMode::Alpha, false);
 		psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
-		psoDesc.SetRenderTargetFormat(GraphicsDevice::RENDER_TARGET_FORMAT, GraphicsDevice::DEPTH_STENCIL_FORMAT, /* pDevice->GetMultiSampleCount() */ 1);
+		psoDesc.SetRenderTargetFormat(DXGI_FORMAT_R16G16B16A16_FLOAT, DXGI_FORMAT_D32_FLOAT, /* pDevice->GetMultiSampleCount() */ 1);
 		psoDesc.SetName("Particle Rendering PS");
 		m_pRenderParticlesPS = pDevice->CreatePipeline(psoDesc);
 	}

@@ -311,7 +311,7 @@ void TiledForward::SetupPipelines()
 
 		{
 			DXGI_FORMAT formats[] = {
-				GraphicsDevice::RENDER_TARGET_FORMAT,
+				DXGI_FORMAT_R16G16B16A16_FLOAT,
 				DXGI_FORMAT_R16G16B16A16_FLOAT,
 			};
 
@@ -320,7 +320,7 @@ void TiledForward::SetupPipelines()
 			psoDesc.SetRootSignature(m_pDiffuseRS->GetRootSignature());
 			psoDesc.SetVertexShader(pVertexShader);
 			psoDesc.SetPixelShader(pPixelShader);
-			psoDesc.SetRenderTargetFormats(formats, ARRAYSIZE(formats), GraphicsDevice::DEPTH_STENCIL_FORMAT, /* m_pDevice->GetMultiSampleCount() */ 1);
+			psoDesc.SetRenderTargetFormats(formats, ARRAYSIZE(formats), DXGI_FORMAT_D32_FLOAT, /* m_pDevice->GetMultiSampleCount() */ 1);
 			psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_EQUAL);
 			psoDesc.SetDepthWrite(false);
 			psoDesc.SetName("Diffuse");
