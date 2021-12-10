@@ -357,6 +357,10 @@ void DemoApp::Update()
 	{
 		m_RenderPath = m_RenderPath == RenderPath::PathTracing ? RenderPath::Clustered : RenderPath::PathTracing;
 	}
+	if (m_RenderPath == RenderPath::PathTracing && !m_pPathTracing->IsSupported())
+	{
+		m_RenderPath = RenderPath::Clustered;
+	}
 
 	if (Tweakables::g_RenderObjectBounds)
 	{
