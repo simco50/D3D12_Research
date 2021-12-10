@@ -1492,7 +1492,6 @@ void DemoApp::InitializePipelines()
 
 		m_pSkyboxRS = std::make_unique<RootSignature>(m_pDevice.get());
 		m_pSkyboxRS->AddConstantBufferView(0);
-		m_pSkyboxRS->AddDefaultTables();
 		m_pSkyboxRS->Finalize("Skybox");
 
 		PipelineStateInitializer psoDesc;

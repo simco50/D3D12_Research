@@ -25,7 +25,6 @@ PathTracing::PathTracing(GraphicsDevice* pDevice)
 	m_pRS->AddConstantBufferView(2);
 	m_pRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 2);
 	m_pRS->AddDescriptorTableSimple(5, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 8);
-	m_pRS->AddDefaultTables();
 	m_pRS->Finalize("Global");
 
 	StateObjectInitializer desc{};
