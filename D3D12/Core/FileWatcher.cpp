@@ -46,6 +46,9 @@ bool FileWatcher::StartWatching(const char* pPath, const bool recursiveWatch /*=
 	pWatch->FileHandle = fileHandle;
 	m_IOCP = CreateIoCompletionPort(fileHandle, m_IOCP, (ULONG_PTR)pWatch.get(), 0);
 	check(m_IOCP);
+
+	std::scoped_lock<std::mutex> lock(m_Mutex);
+
 	m_Watches.push_back(std::move(pWatch));
 	
 	if (!m_Thread.IsRunning())
