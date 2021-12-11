@@ -45,10 +45,11 @@ namespace ShaderInterop
 
 	struct MeshData
 	{
-		uint PositionStream;
-		uint UVStream;
-		uint NormalStream;
-		uint IndexStream;
+		uint BufferIndex;
+		uint PositionsOffset;
+		uint UVsOffset;
+		uint NormalsOffset;
+		uint IndicesOffset;
 	};
 
 	struct MeshInstance

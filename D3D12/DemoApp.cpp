@@ -1966,10 +1966,11 @@ void DemoApp::UploadSceneData(CommandContext& context)
 		for (const SubMesh& subMesh : pMesh->GetMeshes())
 		{
 			ShaderInterop::MeshData mesh;
-			mesh.IndexStream = subMesh.pIndexSRV->GetHeapIndex();
-			mesh.PositionStream = subMesh.pPositionsStreamSRV->GetHeapIndex();
-			mesh.NormalStream = subMesh.pNormalsStreamSRV->GetHeapIndex();
-			mesh.UVStream = subMesh.pUVStreamSRV->GetHeapIndex();
+			mesh.BufferIndex = pMesh->GetData()->GetSRVIndex();
+			mesh.IndicesOffset = (uint32)subMesh.IndicesLocation.OffsetFromStart;
+			mesh.PositionsOffset = (uint32)subMesh.PositionStreamLocation.OffsetFromStart;
+			mesh.NormalsOffset = (uint32)subMesh.NormalStreamLocation.OffsetFromStart;
+			mesh.UVsOffset = (uint32)subMesh.UVStreamLocation.OffsetFromStart;
 			meshes.push_back(mesh);
 		}
 

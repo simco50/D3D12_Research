@@ -24,10 +24,11 @@ PSInput VSMain(uint vertexId : SV_VertexID)
 	PSInput result = (PSInput)0;
 	MeshInstance instance = tMeshInstances[cObjectData.Index];
     MeshData mesh = tMeshes[instance.Mesh];
+    ByteAddressBuffer meshBuffer = tBufferTable[mesh.BufferIndex];
 
-    float3 position = UnpackHalf3(LoadByteAddressData<uint2>(mesh.PositionStream, vertexId));
+    float3 position = UnpackHalf3(meshBuffer.Load<uint2>(mesh.PositionsOffset + vertexId * sizeof(uint2)));
 	result.position = mul(mul(float4(position, 1.0f), instance.World), cViewData.ViewProjection);
-	result.texCoord = UnpackHalf2(LoadByteAddressData<uint>(mesh.UVStream, vertexId));
+	result.texCoord = UnpackHalf2(meshBuffer.Load<uint>(mesh.UVsOffset + vertexId * sizeof(uint)));
 	return result;
 }
 

@@ -134,6 +134,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 
 	std::vector<uint32> indicesStream;
 	std::vector<VS_Position> positionsStream;
+	std::vector<Vector3> positionsStreamFull;
 	std::vector<VS_UV> uvStream;
 	std::vector<VS_Normal> normalStream;
 
@@ -186,6 +187,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 				if (meshData.NumVertices == 0)
 				{
 					positionsStream.resize(positionsStream.size() + attribute.data->count);
+					positionsStreamFull.resize(positionsStreamFull.size() + attribute.data->count);
 					uvStream.resize(uvStream.size() + attribute.data->count);
 					normalStream.resize(normalStream.size() + attribute.data->count);
 					meshData.NumVertices = (uint32)attribute.data->count;
@@ -199,6 +201,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 						Vector3 position;
 						check(cgltf_accessor_read_float(attribute.data, i, &position.x, 3));
 						positionsStream[i + vertexOffset].Position = PackedVector3(position.x, position.y, position.z, 0);
+						positionsStreamFull[i + vertexOffset] = Vector3(position.x, position.y, position.z);
 						positions.push_back(position);
 					}
 					meshData.Bounds.CreateFromPoints(meshData.Bounds, positions.size(), (DirectX::XMFLOAT3*)positions.data(), sizeof(Vector3));
@@ -282,25 +285,17 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 		subMesh.PositionsFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
 		subMesh.PositionsStride = sizeof(VS_Position);
 
-		subMesh.PositionStreamLocation = VertexBufferView(m_pGeometryData->GetGpuHandle() + dataOffset, meshData.NumVertices, sizeof(VS_Position));
-		subMesh.pPositionsStreamSRV = new ShaderResourceView();
-		subMesh.pPositionsStreamSRV->Create(m_pGeometryData.get(), BufferSRVDesc(DXGI_FORMAT_UNKNOWN, true, (uint32)dataOffset, meshData.NumVertices * sizeof(VS_Position)));
+		subMesh.PositionStreamLocation = VertexBufferView(m_pGeometryData->GetGpuHandle() + dataOffset, meshData.NumVertices, sizeof(VS_Position), dataOffset);
 		CopyData(&positionsStream[meshData.VertexOffset], sizeof(VS_Position) * meshData.NumVertices);
 
-		subMesh.NormalStreamLocation = VertexBufferView(m_pGeometryData->GetGpuHandle() + dataOffset, meshData.NumVertices, sizeof(VS_Normal));
-		subMesh.pNormalsStreamSRV = new ShaderResourceView();
-		subMesh.pNormalsStreamSRV->Create(m_pGeometryData.get(), BufferSRVDesc(DXGI_FORMAT_UNKNOWN, true, (uint32)dataOffset, meshData.NumVertices * sizeof(VS_Normal)));
+		subMesh.NormalStreamLocation = VertexBufferView(m_pGeometryData->GetGpuHandle() + dataOffset, meshData.NumVertices, sizeof(VS_Normal), dataOffset);
 		CopyData(&normalStream[meshData.VertexOffset], sizeof(VS_Normal)* meshData.NumVertices);
 
-		subMesh.UVStreamLocation = VertexBufferView(m_pGeometryData->GetGpuHandle() + dataOffset, meshData.NumVertices, sizeof(VS_UV));
-		subMesh.pUVStreamSRV = new ShaderResourceView();
-		subMesh.pUVStreamSRV->Create(m_pGeometryData.get(), BufferSRVDesc(DXGI_FORMAT_UNKNOWN, true, (uint32)dataOffset, meshData.NumVertices * sizeof(VS_UV)));
+		subMesh.UVStreamLocation = VertexBufferView(m_pGeometryData->GetGpuHandle() + dataOffset, meshData.NumVertices, sizeof(VS_UV), dataOffset);
 		CopyData(&uvStream[meshData.VertexOffset], sizeof(VS_UV)* meshData.NumVertices);
 
-		IndexBufferView ibv(m_pGeometryData->GetGpuHandle() + dataOffset, meshData.NumIndices, DXGI_FORMAT_R32_UINT);
+		IndexBufferView ibv(m_pGeometryData->GetGpuHandle() + dataOffset, meshData.NumIndices, DXGI_FORMAT_R32_UINT, dataOffset);
 		subMesh.IndicesLocation = ibv;
-		subMesh.pIndexSRV = new ShaderResourceView();
-		subMesh.pIndexSRV->Create(m_pGeometryData.get(), BufferSRVDesc(DXGI_FORMAT_UNKNOWN, true, (uint32)dataOffset, meshData.NumIndices * sizeof(uint32)));
 		CopyData(&indicesStream[meshData.IndexOffset], sizeof(uint32) * meshData.NumIndices);
 
 		subMesh.pParent = this;
@@ -312,11 +307,6 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 
 void SubMesh::Destroy()
 {
-	delete pIndexSRV;
-	delete pPositionsStreamSRV;
-	delete pUVStreamSRV;
-	delete pNormalsStreamSRV;
-
 	delete pBLAS;
 	delete pBLASScratch;
 }

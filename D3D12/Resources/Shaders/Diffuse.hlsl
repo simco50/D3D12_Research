@@ -156,16 +156,16 @@ PSInput VSMain(uint vertexId : SV_VertexID)
 	PSInput result;
 	MeshInstance instance = tMeshInstances[cObjectData.Index];
 	MeshData mesh = tMeshes[instance.Mesh];
+    ByteAddressBuffer meshBuffer = tBufferTable[mesh.BufferIndex];
 
-	float3 position = UnpackHalf3(LoadByteAddressData<uint2>(mesh.PositionStream, vertexId));
+	float3 position = UnpackHalf3(meshBuffer.Load<uint2>(mesh.PositionsOffset + vertexId * sizeof(uint2)));
 	result.positionWS = mul(float4(position, 1.0f), instance.World).xyz;
 	result.positionVS = mul(float4(result.positionWS, 1.0f), cViewData.View).xyz;
 	result.position = mul(float4(result.positionWS, 1.0f), cViewData.ViewProjection);
 
-	uint texCoordPacked = tBufferTable[mesh.UVStream].Load<uint>(vertexId * sizeof(uint));
-	result.texCoord = UnpackHalf2(LoadByteAddressData<uint>(mesh.UVStream, vertexId));
+	result.texCoord = UnpackHalf2(meshBuffer.Load<uint>(mesh.UVsOffset + vertexId * sizeof(uint)));
 
-	NormalData normalData = LoadByteAddressData<NormalData>(mesh.NormalStream, vertexId);
+	NormalData normalData = meshBuffer.Load<NormalData>(mesh.NormalsOffset + vertexId * sizeof(NormalData));
 	result.normal = normalize(mul(normalData.Normal, (float3x3)instance.World));
 	result.tangent = float4(normalize(mul(normalData.Tangent.xyz, (float3x3)instance.World)), normalData.Tangent.w);
 
