@@ -13,6 +13,8 @@
 #include "External/cgltf/cgltf.h"
 #pragma warning(pop)
 
+#include "meshoptimizer.h"
+
 Mesh::~Mesh()
 {
 	for (SubMesh& subMesh : m_Meshes)
@@ -259,6 +261,28 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 	}
 
 	cgltf_free(pGltfData);
+
+	// Meshlet generation
+	const size_t max_vertices = 64;
+	const size_t max_triangles = 124;
+	const float cone_weight = 0.0f;
+
+	size_t max_meshlets = meshopt_buildMeshletsBound(indicesStream.size(), max_vertices, max_triangles);
+	std::vector<meshopt_Meshlet> meshlets(max_meshlets);
+	std::vector<unsigned int> meshlet_vertices(max_meshlets * max_vertices);
+	std::vector<unsigned char> meshlet_triangles(max_meshlets * max_triangles * 3);
+
+	size_t meshlet_count = meshopt_buildMeshlets(meshlets.data(), meshlet_vertices.data(), meshlet_triangles.data(), indicesStream.data(),
+		indicesStream.size(), &positionsStreamFull[0].x, positionsStreamFull.size(), sizeof(Vector3), max_vertices, max_triangles, cone_weight);
+
+	std::vector<meshopt_Bounds> meshlet_bounds;
+	meshlet_bounds.reserve(meshlet_count);
+	for (const meshopt_Meshlet& m : meshlets)
+	{
+		meshopt_Bounds bounds = meshopt_computeMeshletBounds(&meshlet_vertices[m.vertex_offset], &meshlet_triangles[m.triangle_offset],
+			m.triangle_count, &positionsStreamFull[0].x, positionsStreamFull.size(), sizeof(Vector3));
+		meshlet_bounds.push_back(bounds);
+	}
 
 	// Load in the data
 	static constexpr uint64 sBufferAlignment = 16;
