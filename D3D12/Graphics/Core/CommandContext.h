@@ -225,6 +225,7 @@ public:
 	ID3D12GraphicsCommandList4* GetRaytracingCommandList() const { return  m_pRaytracingCommandList.Get(); }
 
 	D3D12_COMMAND_LIST_TYPE GetType() const { return m_Type; }
+	const PipelineState* GetCurrentPSO() const { return m_pCurrentPSO; }
 
 	static bool IsTransitionAllowed(D3D12_COMMAND_LIST_TYPE commandlistType, D3D12_RESOURCE_STATES state);
 
@@ -271,6 +272,9 @@ private:
 	std::array<D3D12_RENDER_PASS_ENDING_ACCESS_RESOLVE_SUBRESOURCE_PARAMETERS, D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT> m_ResolveSubResourceParameters{};
 	RenderPassInfo m_CurrentRenderPassInfo;
 	bool m_InRenderPass = false;
+
+	PipelineState* m_pCurrentPSO = nullptr;
+	StateObject* m_pCurrentSO = nullptr;
 };
 
 class CommandSignature : public GraphicsObject

@@ -40,6 +40,9 @@ void CommandContext::Reset()
 
 	m_CurrentCommandContext = CommandListContext::Invalid;
 
+	m_pCurrentPSO = nullptr;
+	m_pCurrentSO = nullptr;
+
 	if (m_Type != D3D12_COMMAND_LIST_TYPE_COPY)
 	{
 		ID3D12DescriptorHeap* pHeaps[] =
@@ -212,6 +215,7 @@ void CommandContext::InitializeTexture(Texture* pResource, D3D12_SUBRESOURCE_DAT
 
 void CommandContext::Dispatch(uint32 groupCountX, uint32 groupCountY, uint32 groupCountZ)
 {
+	check(m_pCurrentPSO && m_pCurrentPSO->GetType() == PipelineStateType::Compute);
 	check(m_CurrentCommandContext == CommandListContext::Compute);
 	checkf(
 		groupCountX <= D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION &&
@@ -229,6 +233,7 @@ void CommandContext::Dispatch(const IntVector3& groupCounts)
 
 void CommandContext::DispatchMesh(uint32 groupCountX, uint32 groupCountY /*= 1*/, uint32 groupCountZ /*= 1*/)
 {
+	check(m_pCurrentPSO && m_pCurrentPSO->GetType() == PipelineStateType::Mesh);
 	check(m_CurrentCommandContext == CommandListContext::Graphics);
 	check(m_pMeshShadingCommandList);
 	PrepareDraw();
@@ -243,6 +248,7 @@ void CommandContext::DispatchMesh(const IntVector3& groupCounts)
 void CommandContext::ExecuteIndirect(CommandSignature* pCommandSignature, uint32 maxCount, Buffer* pIndirectArguments, Buffer* pCountBuffer, uint32 argumentsOffset /*= 0*/, uint32 countOffset /*= 0*/)
 {
 	PrepareDraw();
+	check(m_pCurrentPSO);
 	m_pCommandList->ExecuteIndirect(pCommandSignature->GetCommandSignature(), maxCount, pIndirectArguments->GetResource(), argumentsOffset, pCountBuffer ? pCountBuffer->GetResource() : nullptr, countOffset);
 }
 
@@ -553,6 +559,7 @@ void CommandContext::EndRenderPass()
 
 void CommandContext::Draw(int vertexStart, int vertexCount)
 {
+	check(m_pCurrentPSO && m_pCurrentPSO->GetType() == PipelineStateType::Graphics);
 	check(m_CurrentCommandContext == CommandListContext::Graphics);
 	PrepareDraw();
 	m_pCommandList->DrawInstanced(vertexCount, 1, vertexStart, 0);
@@ -560,6 +567,7 @@ void CommandContext::Draw(int vertexStart, int vertexCount)
 
 void CommandContext::DrawIndexed(int indexCount, int indexStart, int minVertex /*= 0*/)
 {
+	check(m_pCurrentPSO && m_pCurrentPSO->GetType() == PipelineStateType::Graphics);
 	check(m_CurrentCommandContext == CommandListContext::Graphics);
 	PrepareDraw();
 	m_pCommandList->DrawIndexedInstanced(indexCount, 1, indexStart, minVertex, 0);
@@ -567,6 +575,7 @@ void CommandContext::DrawIndexed(int indexCount, int indexStart, int minVertex /
 
 void CommandContext::DrawIndexedInstanced(int indexCount, int indexStart, int instanceCount, int minVertex /*= 0*/, int instanceStart /*= 0*/)
 {
+	check(m_pCurrentPSO && m_pCurrentPSO->GetType() == PipelineStateType::Graphics);
 	check(m_CurrentCommandContext == CommandListContext::Graphics);
 	PrepareDraw();
 	m_pCommandList->DrawIndexedInstanced(indexCount, instanceCount, indexStart, minVertex, instanceStart);
@@ -574,6 +583,7 @@ void CommandContext::DrawIndexedInstanced(int indexCount, int indexStart, int in
 
 void CommandContext::DispatchRays(ShaderBindingTable& table, uint32 width /*= 1*/, uint32 height /*= 1*/, uint32 depth /*= 1*/)
 {
+	check(m_pCurrentSO);
 	check(m_CurrentCommandContext == CommandListContext::Compute);
 	check(m_pRaytracingCommandList);
 	D3D12_DISPATCH_RAYS_DESC desc{};
@@ -612,6 +622,7 @@ void CommandContext::SetPipelineState(PipelineState* pPipelineState)
 {
 	pPipelineState->ConditionallyReload();
 	m_pCommandList->SetPipelineState(pPipelineState->GetPipelineState());
+	m_pCurrentPSO = pPipelineState;
 }
 
 void CommandContext::SetPipelineState(StateObject* pStateObject)
@@ -619,6 +630,7 @@ void CommandContext::SetPipelineState(StateObject* pStateObject)
 	check(m_pRaytracingCommandList);
 	pStateObject->ConditionallyReload();
 	m_pRaytracingCommandList->SetPipelineState1(pStateObject->GetStateObject());
+	m_pCurrentSO = pStateObject;
 }
 
 void CommandContext::SetDynamicVertexBuffer(int rootIndex, int elementCount, int elementSize, const void* pData)
