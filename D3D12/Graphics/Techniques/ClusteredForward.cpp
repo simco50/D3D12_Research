@@ -87,6 +87,11 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& resources)
 {
 	RG_GRAPH_SCOPE("Clustered Lighting", graph);
 
+	static bool useMeshShader = true;
+	ImGui::Begin("Parameters");
+	ImGui::Checkbox("Mesh Shader", &useMeshShader);
+	ImGui::End();
+
 	Vector2 screenDimensions((float)resources.pRenderTarget->GetWidth(), (float)resources.pRenderTarget->GetHeight());
 	float nearZ = resources.pCamera->GetNear();
 	float farZ = resources.pCamera->GetFar();
@@ -359,7 +364,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& resources)
 			renderPass.DepthStencilTarget.Target = resources.pDepthBuffer;
 			renderPass.DepthStencilTarget.Write = false;
 			renderPass.RenderTargetCount = 2;
-			renderPass.RenderTargets[0].Access = RenderPassAccess::DontCare_Store;
+			renderPass.RenderTargets[0].Access = RenderPassAccess::Clear_Store;
 			renderPass.RenderTargets[0].Target = resources.pRenderTarget;
 			renderPass.RenderTargets[1].Access = resources.pNormals->GetDesc().SampleCount > 1 ? RenderPassAccess::Clear_Resolve : RenderPassAccess::Clear_Store;
 			renderPass.RenderTargets[1].Target = resources.pNormals;
@@ -389,19 +394,19 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& resources)
 
 			{
 				GPU_PROFILE_SCOPE("Opaque", &context);
-				context.SetPipelineState(m_pDiffusePSO);
-				DrawScene(context, resources, Batch::Blending::Opaque);
+				context.SetPipelineState(useMeshShader ? m_pMeshShaderDiffusePSO : m_pDiffusePSO);
+				DrawScene(context, resources, Batch::Blending::Opaque, useMeshShader);
 			}
 			{
 				GPU_PROFILE_SCOPE("Opaque - Masked", &context);
-				context.SetPipelineState(m_pDiffuseMaskedPSO);
-				DrawScene(context, resources, Batch::Blending::AlphaMask);
+				context.SetPipelineState(useMeshShader ? m_pMeshShaderDiffuseMaskedPSO : m_pDiffuseMaskedPSO);
+				DrawScene(context, resources, Batch::Blending::AlphaMask, useMeshShader);
 				
 			}
 			{
 				GPU_PROFILE_SCOPE("Transparant", &context);
-				context.SetPipelineState(m_pDiffuseTransparancyPSO);
-				DrawScene(context, resources, Batch::Blending::AlphaBlend);
+				context.SetPipelineState(useMeshShader ? m_pMeshShaderDiffuseTransparancyPSO : m_pDiffuseTransparancyPSO);
+				DrawScene(context, resources, Batch::Blending::AlphaBlend, useMeshShader);
 			}
 
 			context.EndRenderPass();
@@ -550,6 +555,7 @@ void ClusteredForward::SetupPipelines()
 	//Diffuse
 	{
 		Shader* pVertexShader = m_pDevice->GetShader("Diffuse.hlsl", ShaderType::Vertex, "VSMain", { "CLUSTERED_FORWARD" });
+		Shader* pMeshShader = m_pDevice->GetShader("Diffuse.hlsl", ShaderType::Mesh, "MSMain", { "CLUSTERED_FORWARD" });
 		Shader* pPixelShader = m_pDevice->GetShader("Diffuse.hlsl", ShaderType::Pixel, "PSMain", { "CLUSTERED_FORWARD" });
 
 		m_pDiffuseRS = std::make_unique<RootSignature>(m_pDevice);
@@ -560,28 +566,55 @@ void ClusteredForward::SetupPipelines()
 			DXGI_FORMAT_R16G16B16A16_FLOAT,
 		};
 
-		//Opaque
-		PipelineStateInitializer psoDesc;
-		psoDesc.SetRootSignature(m_pDiffuseRS->GetRootSignature());
-		psoDesc.SetBlendMode(BlendMode::Replace, false);
-		psoDesc.SetVertexShader(pVertexShader);
-		psoDesc.SetPixelShader(pPixelShader);
-		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_EQUAL);
-		psoDesc.SetDepthWrite(false);
-		psoDesc.SetRenderTargetFormats(formats, ARRAYSIZE(formats), DXGI_FORMAT_D32_FLOAT, /* m_pDevice->GetMultiSampleCount() */ 1);
-		psoDesc.SetName("Diffuse (Opaque)");
-		m_pDiffusePSO = m_pDevice->CreatePipeline(psoDesc);
+		{
+			//Opaque
+			PipelineStateInitializer psoDesc;
+			psoDesc.SetRootSignature(m_pDiffuseRS->GetRootSignature());
+			psoDesc.SetBlendMode(BlendMode::Replace, false);
+			psoDesc.SetVertexShader(pVertexShader);
+			psoDesc.SetPixelShader(pPixelShader);
+			psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_EQUAL);
+			psoDesc.SetDepthWrite(false);
+			psoDesc.SetRenderTargetFormats(formats, ARRAYSIZE(formats), DXGI_FORMAT_D32_FLOAT, /* m_pDevice->GetMultiSampleCount() */ 1);
+			psoDesc.SetName("Diffuse (Opaque)");
+			m_pDiffusePSO = m_pDevice->CreatePipeline(psoDesc);
 
-		//Opaque Masked
-		psoDesc.SetName("Diffuse Masked (Opaque)");
-		psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
-		m_pDiffuseMaskedPSO = m_pDevice->CreatePipeline(psoDesc);
+			//Opaque Masked
+			psoDesc.SetName("Diffuse Masked (Opaque)");
+			psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
+			m_pDiffuseMaskedPSO = m_pDevice->CreatePipeline(psoDesc);
 
-		//Transparant
-		psoDesc.SetName("Diffuse (Transparant)");
-		psoDesc.SetBlendMode(BlendMode::Alpha, false);
-		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
-		m_pDiffuseTransparancyPSO = m_pDevice->CreatePipeline(psoDesc);
+			//Transparant
+			psoDesc.SetName("Diffuse (Transparant)");
+			psoDesc.SetBlendMode(BlendMode::Alpha, false);
+			psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
+			m_pDiffuseTransparancyPSO = m_pDevice->CreatePipeline(psoDesc);
+		}
+
+		{
+			//Opaque
+			PipelineStateInitializer psoDesc;
+			psoDesc.SetRootSignature(m_pDiffuseRS->GetRootSignature());
+			psoDesc.SetBlendMode(BlendMode::Replace, false);
+			psoDesc.SetMeshShader(pMeshShader);
+			psoDesc.SetPixelShader(pPixelShader);
+			psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_EQUAL);
+			psoDesc.SetDepthWrite(false);
+			psoDesc.SetRenderTargetFormats(formats, ARRAYSIZE(formats), DXGI_FORMAT_D32_FLOAT, /* m_pDevice->GetMultiSampleCount() */ 1);
+			psoDesc.SetName("Diffuse (Opaque)");
+			m_pMeshShaderDiffusePSO = m_pDevice->CreatePipeline(psoDesc);
+
+			//Opaque Masked
+			psoDesc.SetName("Diffuse Masked (Opaque)");
+			psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
+			m_pMeshShaderDiffuseMaskedPSO = m_pDevice->CreatePipeline(psoDesc);
+
+			//Transparant
+			psoDesc.SetName("Diffuse (Transparant)");
+			psoDesc.SetBlendMode(BlendMode::Alpha, false);
+			psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
+			m_pMeshShaderDiffuseTransparancyPSO = m_pDevice->CreatePipeline(psoDesc);
+		}
 	}
 
 	//Cluster debug rendering

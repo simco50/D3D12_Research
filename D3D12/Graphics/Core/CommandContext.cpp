@@ -235,6 +235,11 @@ void CommandContext::DispatchMesh(uint32 groupCountX, uint32 groupCountY /*= 1*/
 	m_pMeshShadingCommandList->DispatchMesh(groupCountX, groupCountY, groupCountZ);
 }
 
+void CommandContext::DispatchMesh(const IntVector3& groupCounts)
+{
+	DispatchMesh(groupCounts.x, groupCounts.y, groupCounts.z);
+}
+
 void CommandContext::ExecuteIndirect(CommandSignature* pCommandSignature, uint32 maxCount, Buffer* pIndirectArguments, Buffer* pCountBuffer, uint32 argumentsOffset /*= 0*/, uint32 countOffset /*= 0*/)
 {
 	PrepareDraw();

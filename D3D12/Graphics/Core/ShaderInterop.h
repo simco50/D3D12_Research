@@ -50,6 +50,29 @@ namespace ShaderInterop
 		uint UVsOffset;
 		uint NormalsOffset;
 		uint IndicesOffset;
+
+		uint MeshletOffset;
+		uint MeshletVertexOffset;
+		uint MeshletTriangleOffset;
+		uint MeshletBoundsOffset;
+	};
+
+	struct Meshlet
+	{
+		uint VertexOffset;
+		uint TriangleOffset;
+		uint VertexCount;
+		uint TriangleCount;
+	};
+
+	struct MeshletBounds
+	{
+		float3 Center;
+		float Radius;
+		float3 ConeApex;
+		float3 ConeAxis;
+		float ConeCutoff;
+		uint4 ConeS8;
 	};
 
 	struct MeshInstance

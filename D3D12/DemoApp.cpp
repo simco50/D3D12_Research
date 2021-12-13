@@ -1971,6 +1971,10 @@ void DemoApp::UploadSceneData(CommandContext& context)
 			mesh.PositionsOffset = (uint32)subMesh.PositionStreamLocation.OffsetFromStart;
 			mesh.NormalsOffset = (uint32)subMesh.NormalStreamLocation.OffsetFromStart;
 			mesh.UVsOffset = (uint32)subMesh.UVStreamLocation.OffsetFromStart;
+			mesh.MeshletOffset = subMesh.MeshletsLocation;
+			mesh.MeshletVertexOffset = subMesh.MeshletVerticesLocation;
+			mesh.MeshletTriangleOffset = subMesh.MeshletTrianglesLocation;
+			mesh.MeshletBoundsOffset = subMesh.MeshletBoundsLocation;
 			meshes.push_back(mesh);
 		}
 

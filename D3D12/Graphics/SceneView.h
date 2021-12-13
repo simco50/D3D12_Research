@@ -51,5 +51,5 @@ struct SceneView
 	VisibilityMask VisibilityMask;
 };
 
-void DrawScene(CommandContext& context, const SceneView& scene, const VisibilityMask& visibility, Batch::Blending blendModes);
-void DrawScene(CommandContext& context, const SceneView& scene, Batch::Blending blendModes);
+void DrawScene(CommandContext& context, const SceneView& scene, const VisibilityMask& visibility, Batch::Blending blendModes, bool meshShader = false);
+void DrawScene(CommandContext& context, const SceneView& scene, Batch::Blending blendModes, bool meshShader = false);

@@ -1,5 +1,6 @@
 #include "CommonBindings.hlsli"
 #include "Lighting.hlsli"
+#include "Random.hlsli"
 
 #define BLOCK_SIZE 16
 
@@ -150,25 +151,65 @@ LightResult DoLight(float4 pos, float3 worldPos, float3 N, float3 V, float3 diff
 	return totalResult;
 }
 
-[RootSignature(RootSig)]
-PSInput VSMain(uint vertexId : SV_VertexID)
+template<typename T>
+T BufferLoad(uint bufferIndex, uint elementIndex, uint byteOffset = 0)
+{
+	ByteAddressBuffer buffer = tBufferTable[bufferIndex];
+	return buffer.Load<T>(elementIndex * sizeof(T) + byteOffset);
+}
+
+PSInput FetchVertexAttributes(MeshInstance instance, MeshData mesh, uint vertexId)
 {
 	PSInput result;
-	MeshInstance instance = tMeshInstances[cObjectData.Index];
-	MeshData mesh = tMeshes[instance.Mesh];
-    ByteAddressBuffer meshBuffer = tBufferTable[mesh.BufferIndex];
-
-	float3 position = UnpackHalf3(meshBuffer.Load<uint2>(mesh.PositionsOffset + vertexId * sizeof(uint2)));
+	float3 position = UnpackHalf3(BufferLoad<uint2>(mesh.BufferIndex, vertexId, mesh.PositionsOffset));
 	result.positionWS = mul(float4(position, 1.0f), instance.World).xyz;
 	result.positionVS = mul(float4(result.positionWS, 1.0f), cViewData.View).xyz;
 	result.position = mul(float4(result.positionWS, 1.0f), cViewData.ViewProjection);
 
-	result.texCoord = UnpackHalf2(meshBuffer.Load<uint>(mesh.UVsOffset + vertexId * sizeof(uint)));
+	result.texCoord = UnpackHalf2(BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.UVsOffset));
 
-	NormalData normalData = meshBuffer.Load<NormalData>(mesh.NormalsOffset + vertexId * sizeof(NormalData));
+	NormalData normalData = BufferLoad<NormalData>(mesh.BufferIndex, vertexId, mesh.NormalsOffset);
 	result.normal = normalize(mul(normalData.Normal, (float3x3)instance.World));
 	result.tangent = float4(normalize(mul(normalData.Tangent.xyz, (float3x3)instance.World)), normalData.Tangent.w);
 
+	return result;
+}
+
+[RootSignature(RootSig)]
+[outputtopology("triangle")]
+[numthreads(128, 1, 1)]
+void MSMain(
+	in uint groupThreadID : SV_GroupIndex,
+	in uint groupID : SV_GroupID,
+	out vertices PSInput verts[64],
+	out indices uint3 triangles[124])
+{
+	MeshInstance instance = tMeshInstances[cObjectData.Index];
+	MeshData mesh = tMeshes[instance.Mesh];
+	Meshlet meshlet = BufferLoad<Meshlet>(mesh.BufferIndex, groupID, mesh.MeshletOffset);
+
+	SetMeshOutputCounts(meshlet.VertexCount, meshlet.TriangleCount);
+
+	if (groupThreadID < meshlet.VertexCount)
+	{
+		uint vertexId = BufferLoad<uint>(mesh.BufferIndex, groupThreadID + meshlet.VertexOffset, mesh.MeshletVertexOffset);
+		PSInput result = FetchVertexAttributes(instance, mesh, vertexId);
+		verts[groupThreadID] = result;
+	}
+
+	if (groupThreadID < meshlet.TriangleCount)
+	{
+		uint3 tri = BufferLoad<uint3>(mesh.BufferIndex, groupThreadID + meshlet.TriangleOffset/3, mesh.MeshletTriangleOffset);
+		triangles[groupThreadID] = tri;
+	}
+}
+
+[RootSignature(RootSig)]
+PSInput VSMain(uint vertexId : SV_VertexID)
+{
+	MeshInstance instance = tMeshInstances[cObjectData.Index];
+	MeshData mesh = tMeshes[instance.Mesh];
+	PSInput result = FetchVertexAttributes(instance, mesh, vertexId);
 	return result;
 }
 

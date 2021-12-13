@@ -5,12 +5,12 @@
 #include "Core/Buffer.h"
 #include "Mesh.h"
 
-void DrawScene(CommandContext& context, const SceneView& scene, Batch::Blending blendModes)
+void DrawScene(CommandContext& context, const SceneView& scene, Batch::Blending blendModes, bool meshShader)
 {
-	DrawScene(context, scene, scene.VisibilityMask, blendModes);
+	DrawScene(context, scene, scene.VisibilityMask, blendModes, meshShader);
 }
 
-void DrawScene(CommandContext& context, const SceneView& scene, const VisibilityMask& visibility, Batch::Blending blendModes)
+void DrawScene(CommandContext& context, const SceneView& scene, const VisibilityMask& visibility, Batch::Blending blendModes, bool meshShader)
 {
 	std::vector<const Batch*> meshes;
 	for (const Batch& b : scene.Batches)
@@ -34,7 +34,14 @@ void DrawScene(CommandContext& context, const SceneView& scene, const Visibility
 	{
 		objectData.Index = b->Index;
 		context.SetRootConstants(0, objectData);
-		context.SetIndexBuffer(b->pMesh->IndicesLocation);
-		context.DrawIndexed(b->pMesh->IndicesLocation.Elements, 0, 0);
+		if(meshShader)
+		{
+			context.DispatchMesh(b->pMesh->NumMeshlets);
+		}
+		else
+		{
+			context.SetIndexBuffer(b->pMesh->IndicesLocation);
+			context.DrawIndexed(b->pMesh->IndicesLocation.Elements, 0, 0);
+		}
 	}
 }

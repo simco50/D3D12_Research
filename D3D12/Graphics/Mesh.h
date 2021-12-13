@@ -19,6 +19,11 @@ struct SubMesh
 	VertexBufferView UVStreamLocation;
 	VertexBufferView NormalStreamLocation;
 	IndexBufferView IndicesLocation;
+	uint32 MeshletsLocation;
+	uint32 MeshletVerticesLocation;
+	uint32 MeshletTrianglesLocation;
+	uint32 MeshletBoundsLocation;
+	uint32 NumMeshlets;
 
 	BoundingBox Bounds;
 	Mesh* pParent = nullptr;

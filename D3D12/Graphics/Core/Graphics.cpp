@@ -247,7 +247,7 @@ GraphicsDevice::GraphicsDevice(IDXGIAdapter4* pAdapter)
 
 	// Allocators
 	m_pDynamicAllocationManager = std::make_unique<DynamicAllocationManager>(this, BufferFlag::Upload);
-	m_pGlobalViewHeap = std::make_unique<GlobalOnlineDescriptorHeap>(this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 2000, 1000000);
+	m_pGlobalViewHeap = std::make_unique<GlobalOnlineDescriptorHeap>(this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 2000, 10000);
 	m_pPersistentViewHeap = std::make_unique<PersistentDescriptorAllocator>(m_pGlobalViewHeap.get());
 	m_pGlobalSamplerHeap = std::make_unique<GlobalOnlineDescriptorHeap>(this, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, 64, 2048);
 	m_pPersistentSamplerHeap = std::make_unique<PersistentDescriptorAllocator>(m_pGlobalSamplerHeap.get());
