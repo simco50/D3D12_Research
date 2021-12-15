@@ -1,5 +1,4 @@
-#ifndef __TONEMAPPING_COMMON_INCLUDE__
-#define __TONEMAPPING_COMMON_INCLUDE__
+#pragma once
 
 #include "Common.hlsli"
 
@@ -75,5 +74,3 @@ float GetLuminance(float3 color)
 {
     return dot(color, float3(0.2126729, 0.7151522, 0.0721750));
 }
-
-#endif

@@ -6,6 +6,7 @@
 #include "Graphics/Core/Buffer.h"
 #include "Core/Paths.h"
 #include "Content/Image.h"
+#include "Core/ShaderInterop.h"
 
 #pragma warning(push)
 #pragma warning(disable: 4996) //_CRT_SECURE_NO_WARNINGS
@@ -149,10 +150,10 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 		uint32 VertexOffset = 0;
 		uint32 MaterialIndex = 0;
 
-		std::vector<meshopt_Meshlet> meshlets;
-		std::vector<uint32> meshlet_vertices;
-		std::vector<uint32> meshlet_triangles;
-		std::vector<meshopt_Bounds> meshlet_bounds;
+		std::vector<ShaderInterop::Meshlet> Meshlets;
+		std::vector<uint32> MeshletVertices;
+		std::vector<ShaderInterop::MeshletTriangle> MeshletTriangles;
+		std::vector<ShaderInterop::MeshletBounds> MeshletBounds;
 	};
 
 	std::vector<MeshData> meshDatas;
@@ -272,45 +273,80 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 
 	for (MeshData& meshData : meshDatas)
 	{
+		meshopt_optimizeVertexCache(&indicesStream[meshData.IndexOffset], &indicesStream[meshData.IndexOffset], meshData.NumIndices, meshData.NumVertices);
+
+		meshopt_optimizeOverdraw(&indicesStream[meshData.IndexOffset], &indicesStream[meshData.IndexOffset], meshData.NumIndices, &positionsStreamFull[meshData.VertexOffset].x, meshData.NumVertices, sizeof(Vector3), 1.05f);
+
+		std::vector<uint32> remap(meshData.NumVertices);
+		meshopt_optimizeVertexFetchRemap(&remap[0], &indicesStream[meshData.IndexOffset], meshData.NumIndices, meshData.NumVertices);
+		meshopt_remapIndexBuffer(&indicesStream[meshData.IndexOffset], &indicesStream[meshData.IndexOffset], meshData.NumIndices, &remap[0]);
+		meshopt_remapVertexBuffer(&positionsStream[meshData.VertexOffset], &positionsStream[meshData.VertexOffset], meshData.NumVertices, sizeof(VS_Position), &remap[0]);
+		meshopt_remapVertexBuffer(&normalStream[meshData.VertexOffset], &normalStream[meshData.VertexOffset], meshData.NumVertices, sizeof(VS_Normal), &remap[0]);
+		meshopt_remapVertexBuffer(&uvStream[meshData.VertexOffset], &uvStream[meshData.VertexOffset], meshData.NumVertices, sizeof(VS_UV), &remap[0]);
+		meshopt_remapVertexBuffer(&positionsStreamFull[meshData.VertexOffset], &positionsStreamFull[meshData.VertexOffset], meshData.NumVertices, sizeof(Vector3), &remap[0]);
+
 		// Meshlet generation
 		const size_t max_vertices = 64;
 		const size_t max_triangles = 124;
-		const float cone_weight = 0.0f;
+		const float cone_weight = 0.5f;
 
 		size_t max_meshlets = meshopt_buildMeshletsBound(meshData.NumIndices, max_vertices, max_triangles);
 
-		meshData.meshlets.resize(max_meshlets);
-		meshData.meshlet_vertices.resize(max_meshlets * max_vertices);
+		meshData.Meshlets.resize(max_meshlets);
+		meshData.MeshletVertices.resize(max_meshlets * max_vertices);
 
-		std::vector<unsigned char> meshlet_triangles(max_meshlets * max_triangles * 3);
+		std::vector<unsigned char> meshlet_triangles(max_meshlets* max_triangles * 3);
+		std::vector<meshopt_Meshlet> meshlets(max_meshlets);
 
-		size_t meshlet_count = meshopt_buildMeshlets(meshData.meshlets.data(), meshData.meshlet_vertices.data(), meshlet_triangles.data(),
+		size_t meshlet_count = meshopt_buildMeshlets(meshlets.data(), meshData.MeshletVertices.data(), meshlet_triangles.data(),
 			&indicesStream[meshData.IndexOffset], meshData.NumIndices, &positionsStreamFull[meshData.VertexOffset].x, meshData.NumVertices, sizeof(Vector3), max_vertices, max_triangles, cone_weight);
 
 		// Trimming
-		const meshopt_Meshlet& last = meshData.meshlets[meshlet_count - 1];
-		meshData.meshlet_vertices.resize(last.vertex_offset + last.vertex_count);
+		const meshopt_Meshlet& last = meshlets[meshlet_count - 1];
 		meshlet_triangles.resize(last.triangle_offset + ((last.triangle_count * 3 + 3) & ~3));
-		meshData.meshlets.resize(meshlet_count);
+		meshlets.resize(meshlet_count);
 
-		meshData.meshlet_bounds.reserve(meshlet_count);
-		for (const meshopt_Meshlet& m : meshData.meshlets)
+		meshData.MeshletVertices.resize(last.vertex_offset + last.vertex_count);
+		meshData.Meshlets.resize(meshlet_count);
+		meshData.MeshletBounds.resize(meshlet_count);
+		meshData.MeshletTriangles.resize(meshlet_triangles.size());
+
+		uint32 triangleOffset = 0;
+		for (size_t i = 0; i < meshlet_count; ++i)
 		{
-			meshopt_Bounds bounds = meshopt_computeMeshletBounds(&meshData.meshlet_vertices[m.vertex_offset], &meshlet_triangles[m.triangle_offset],
-				m.triangle_count, &positionsStreamFull[meshData.VertexOffset].x, meshData.NumVertices, sizeof(Vector3));
-			meshData.meshlet_bounds.push_back(bounds);
-		}
+			const meshopt_Meshlet& meshlet = meshlets[i];
+			const meshopt_Bounds bounds = meshopt_computeMeshletBounds(&meshData.MeshletVertices[meshlet.vertex_offset], &meshlet_triangles[meshlet.triangle_offset],
+				meshlet.triangle_count, &positionsStreamFull[meshData.VertexOffset].x, meshData.NumVertices, sizeof(Vector3));
 
-		meshData.meshlet_triangles.resize(meshlet_triangles.size());
-		for (size_t i = 0; i < meshlet_triangles.size(); ++i)
-		{
-			meshData.meshlet_triangles[i] = meshlet_triangles[i];
-		}
+			ShaderInterop::MeshletBounds& outBounds = meshData.MeshletBounds[i];
+			outBounds.Center = Vector3(bounds.center);
+			outBounds.ConeApex = Vector3(bounds.cone_apex);
+			outBounds.ConeAxis = Vector3(bounds.cone_axis);
+			outBounds.Radius = bounds.radius;
+			outBounds.ConeCutoff = bounds.cone_cutoff;
+			memcpy(&outBounds.ConeS8, &bounds.cone_axis_s8, sizeof(uint32));
 
-		bufferSize += meshData.meshlets.size() * sizeof(meshopt_Meshlet);
-		bufferSize += meshData.meshlet_vertices.size() * sizeof(uint32);
-		bufferSize += meshData.meshlet_triangles.size() * sizeof(uint32);
-		bufferSize += meshData.meshlet_bounds.size() * sizeof(meshopt_Bounds);
+			// Encode triangles and get rid of 4 byte padding
+			for (uint32 triIdx = 0; triIdx < meshlet.triangle_count; ++triIdx)
+			{
+				meshData.MeshletTriangles[triIdx + triangleOffset].V0 = meshlet_triangles[triIdx * 3 + 0 + meshlet.triangle_offset];
+				meshData.MeshletTriangles[triIdx + triangleOffset].V1 = meshlet_triangles[triIdx * 3 + 1 + meshlet.triangle_offset];
+				meshData.MeshletTriangles[triIdx + triangleOffset].V2 = meshlet_triangles[triIdx * 3 + 2 + meshlet.triangle_offset];
+			}
+
+			ShaderInterop::Meshlet& outMeshlet = meshData.Meshlets[i];
+			outMeshlet.TriangleCount = meshlet.triangle_count;
+			outMeshlet.TriangleOffset = triangleOffset;
+			outMeshlet.VertexCount = meshlet.vertex_count;
+			outMeshlet.VertexOffset = meshlet.vertex_offset;
+			triangleOffset += meshlet.triangle_count * 3;
+		}
+		meshData.MeshletTriangles.resize(triangleOffset);
+
+		bufferSize += meshData.Meshlets.size() * sizeof(ShaderInterop::Meshlet);
+		bufferSize += meshData.MeshletVertices.size() * sizeof(uint32);
+		bufferSize += meshData.MeshletTriangles.size() * sizeof(ShaderInterop::MeshletTriangle);
+		bufferSize += meshData.MeshletBounds.size() * sizeof(ShaderInterop::MeshletBounds);
 	}
 
 	// Load in the data
@@ -323,6 +359,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 	uint64 dataOffset = 0;
 	auto CopyData = [this, &dataOffset, &pContext](const void* pSource, uint64 size)
 	{
+		checkf(dataOffset < std::numeric_limits<uint32>::max(), "Offset stored in 32-bit int");
 		pContext->InitializeBuffer(m_pGeometryData.get(), pSource, size, dataOffset);
 		dataOffset += size;
 	};
@@ -348,18 +385,18 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 		CopyData(&indicesStream[meshData.IndexOffset], sizeof(uint32) * meshData.NumIndices);
 
 		subMesh.MeshletsLocation = (uint32)dataOffset;
-		CopyData(meshData.meshlets.data(), sizeof(meshopt_Meshlet) * meshData.meshlets.size());
+		CopyData(meshData.Meshlets.data(), sizeof(ShaderInterop::Meshlet) * meshData.Meshlets.size());
 
 		subMesh.MeshletVerticesLocation = (uint32)dataOffset;
-		CopyData(meshData.meshlet_vertices.data(), sizeof(unsigned int) * meshData.meshlet_vertices.size());
+		CopyData(meshData.MeshletVertices.data(), sizeof(uint32) * meshData.MeshletVertices.size());
 
 		subMesh.MeshletTrianglesLocation = (uint32)dataOffset;
-		CopyData(meshData.meshlet_triangles.data(), sizeof(uint32) * meshData.meshlet_triangles.size());
+		CopyData(meshData.MeshletTriangles.data(), sizeof(ShaderInterop::MeshletTriangle) * meshData.MeshletTriangles.size());
 
 		subMesh.MeshletBoundsLocation = (uint32)dataOffset;
-		CopyData(meshData.meshlet_bounds.data(), sizeof(meshopt_Bounds) * meshData.meshlet_bounds.size());
+		CopyData(meshData.MeshletBounds.data(), sizeof(ShaderInterop::MeshletBounds) * meshData.MeshletBounds.size());
 
-		subMesh.NumMeshlets = (uint32)meshData.meshlets.size();
+		subMesh.NumMeshlets = (uint32)meshData.Meshlets.size();
 
 		subMesh.pParent = this;
 		m_Meshes.push_back(subMesh);

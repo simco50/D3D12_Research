@@ -17,6 +17,7 @@ struct PerViewData
 	float4x4 ViewProjection;
 	float4x4 ReprojectionMatrix;
 	float4 ViewPosition;
+	float4 FrustumPlanes[6];
 	float2 InvScreenDimensions;
 	float NearZ;
 	float FarZ;
@@ -43,6 +44,7 @@ struct PSInput
 	float2 texCoord : TEXCOORD;
 	float3 normal : NORMAL;
 	float4 tangent : TANGENT;
+	uint seed : SEED;
 };
 
 Texture3D<float4> tLightScattering : register(t2);
@@ -172,35 +174,111 @@ PSInput FetchVertexAttributes(MeshInstance instance, MeshData mesh, uint vertexI
 	result.normal = normalize(mul(normalData.Normal, (float3x3)instance.World));
 	result.tangent = float4(normalize(mul(normalData.Tangent.xyz, (float3x3)instance.World)), normalData.Tangent.w);
 
+	result.seed = vertexId;
+
 	return result;
 }
 
+struct PayloadData
+{
+	uint Indices[32];
+};
+
+groupshared PayloadData gsPayload;
+
+bool IsVisible(MeshInstance instance, MeshData mesh, uint meshlet)
+{
+	MeshletBounds cullData = BufferLoad<MeshletBounds>(mesh.BufferIndex, meshlet, mesh.MeshletBoundsOffset);
+
+	float4 center = mul(float4(cullData.Center, 1), instance.World);
+
+#define FRUSTUM_CULL 1
+#define CONE_CULL 0
+
+#if FRUSTUM_CULL
+	for(int i = 0; i < 6; ++i)
+	{
+		if(dot(center, cViewData.FrustumPlanes[i]) > cullData.Radius)
+		{
+			return false;
+		}
+	}
+#endif
+
+#if CONE_CULL
+	float3 viewLocation = cViewData.ViewPosition.xyz;
+	float3 coneApex = mul(float4(cullData.ConeApex, 1), instance.World).xyz;
+	float3 coneAxis = mul(cullData.ConeAxis, (float3x3)instance.World);
+	float3 view = normalize(viewLocation - coneApex);
+	if (dot(view, coneAxis) >= cullData.ConeCutoff)
+	{
+		return false;
+	}
+#endif
+
+	return true;
+}
+
+[numthreads(32, 1, 1)]
+void ASMain(uint threadID : SV_DispatchThreadID)
+{
+    bool visible = false;
+
+	MeshInstance instance = tMeshInstances[cObjectData.Index];
+	MeshData mesh = tMeshes[instance.Mesh];
+    if (threadID < mesh.MeshletCount)
+    {
+        visible = IsVisible(instance, mesh, threadID);
+    }
+
+    if (visible)
+    {
+        uint index = WavePrefixCountBits(visible);
+        gsPayload.Indices[index] = threadID;
+    }
+
+    // Dispatch the required number of MS threadgroups to render the visible meshlets
+    uint visibleCount = WaveActiveCountBits(visible);
+    DispatchMesh(visibleCount, 1, 1, gsPayload);
+}
+
+#define NUM_MESHLET_THREADS 32
+
 [RootSignature(RootSig)]
 [outputtopology("triangle")]
-[numthreads(128, 1, 1)]
+[numthreads(NUM_MESHLET_THREADS, 1, 1)]
 void MSMain(
 	in uint groupThreadID : SV_GroupIndex,
+	in payload PayloadData payload,
 	in uint groupID : SV_GroupID,
 	out vertices PSInput verts[64],
 	out indices uint3 triangles[124])
 {
 	MeshInstance instance = tMeshInstances[cObjectData.Index];
 	MeshData mesh = tMeshes[instance.Mesh];
-	Meshlet meshlet = BufferLoad<Meshlet>(mesh.BufferIndex, groupID, mesh.MeshletOffset);
+
+	uint meshletIndex = payload.Indices[groupID];
+	if(meshletIndex >= mesh.MeshletCount)
+	{
+		return;
+	}
+
+	Meshlet meshlet = BufferLoad<Meshlet>(mesh.BufferIndex, meshletIndex, mesh.MeshletOffset);
 
 	SetMeshOutputCounts(meshlet.VertexCount, meshlet.TriangleCount);
 
-	if (groupThreadID < meshlet.VertexCount)
+	for(uint i = groupThreadID; i < meshlet.VertexCount; i += NUM_MESHLET_THREADS)
 	{
-		uint vertexId = BufferLoad<uint>(mesh.BufferIndex, groupThreadID + meshlet.VertexOffset, mesh.MeshletVertexOffset);
+		uint vertexId = BufferLoad<uint>(mesh.BufferIndex, i + meshlet.VertexOffset, mesh.MeshletVertexOffset);
 		PSInput result = FetchVertexAttributes(instance, mesh, vertexId);
-		verts[groupThreadID] = result;
+		result.seed = meshletIndex;
+		verts[i] = result;
 	}
 
-	if (groupThreadID < meshlet.TriangleCount)
+	for(uint i = groupThreadID; i < meshlet.TriangleCount; i += NUM_MESHLET_THREADS)
 	{
-		uint3 tri = BufferLoad<uint3>(mesh.BufferIndex, groupThreadID + meshlet.TriangleOffset/3, mesh.MeshletTriangleOffset);
-		triangles[groupThreadID] = tri;
+		MeshletTriangle tri = BufferLoad<MeshletTriangle>(mesh.BufferIndex, i + meshlet.TriangleOffset, mesh.MeshletTriangleOffset);
+		triangles[i] = uint3(tri.V0, tri.V1, tri.V2);
 	}
 }
 
@@ -295,6 +373,7 @@ float3 ScreenSpaceReflections(float4 position, float3 positionVS, float3 N, floa
 }
 
 void PSMain(PSInput input,
+			float3 bary : SV_Barycentrics,
 			out float4 outColor : SV_TARGET0,
 			out float4 outNormalRoughness : SV_TARGET1)
 {
@@ -364,4 +443,17 @@ void PSMain(PSInput input,
 	float reflectivity = saturate(scatteringTransmittance.w * ambientOcclusion * Square(1 - roughness));
 	outNormalRoughness = float4(N, saturate(reflectivity - ssrWeight));
 	//outNormalRoughness = float4(input.normal, 1);
+
+	outNormalRoughness = float4(input.normal, 0);
+
+	return;
+	uint seed = SeedThread(input.seed);
+	outColor = float4(Random01(seed), Random01(seed), Random01(seed), 1);
+
+	float3 deltas = fwidth(bary);
+	float3 smoothing = deltas * 1;
+	float3 thickness = deltas * 0.2;
+	bary = smoothstep(thickness, thickness + smoothing, bary);
+	float minBary = min(bary.x, min(bary.y, bary.z));
+	outColor = float4(outColor.xyz * saturate(minBary + 0.6), 1);
 }

@@ -1,5 +1,4 @@
-#ifndef __COLOR_INCLUDE__
-#define __COLOR_INCLUDE__
+#pragma once
 
 /*
 Helper functions to transform between different color spaces.
@@ -80,5 +79,3 @@ float3 YCoCg_to_RGB(float3 c)
 		c.x - c.y - c.z
 	);
 }
-
-#endif

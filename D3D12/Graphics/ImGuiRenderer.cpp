@@ -52,6 +52,11 @@ ImGuiRenderer::ImGuiRenderer(GraphicsDevice* pDevice, WindowHandle window, uint3
 	fontConfig.OversampleV = 2;
 	io.Fonts->AddFontFromFileTTF("Resources/Fonts/NotoSans-Regular.ttf", 20.0f, &fontConfig);
 
+	fontConfig.MergeMode = true;
+	fontConfig.GlyphMinAdvanceX = 15.0f; // Use if you want to make the icon monospaced
+	static const ImWchar icon_ranges[] = { ICON_MIN_FA, ICON_MAX_FA, 0 };
+	io.Fonts->AddFontFromFileTTF("Resources/Fonts/" FONT_ICON_FILE_NAME_FA, 15.0f, &fontConfig, icon_ranges);
+
 	ImGuiStyle& style = ImGui::GetStyle();
 
 	style.FrameRounding = 0.0f;

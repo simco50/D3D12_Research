@@ -1,5 +1,4 @@
-#ifndef __COMMON_INCLUDE__
-#define __COMMON_INCLUDE__
+#pragma once
 
 #include "Constants.hlsli"
 #include "ShaderInterop.h"
@@ -469,4 +468,3 @@ float3 RotatePoint(float4 q, float3 v)
     return 2.0f * dot(qAxis, v) * qAxis + (q.w * q.w - dot(qAxis, qAxis)) * v + 2.0f * q.w * cross(qAxis, v);
 }
 
-#endif

@@ -58,6 +58,14 @@ namespace ShaderInterop
 		uint MeshletCount;
 	};
 
+	struct MeshletTriangle
+	{
+		uint V0 : 10;
+		uint V1 : 10;
+		uint V2 : 10;
+		uint padding : 2;
+	};
+
 	struct Meshlet
 	{
 		uint VertexOffset;
@@ -71,9 +79,9 @@ namespace ShaderInterop
 		float3 Center;
 		float Radius;
 		float3 ConeApex;
-		float3 ConeAxis;
 		float ConeCutoff;
-		uint4 ConeS8;
+		float3 ConeAxis;
+		uint ConeS8;
 	};
 
 	struct MeshInstance
@@ -103,7 +111,6 @@ namespace ShaderInterop
 		LF_DirectionalLight = LF_None,
 	};
 
-	//todo: SM6.6 replace with unpack_u8u32
 	inline float4 UIntToColor(uint c)
 	{
 		return float4(
