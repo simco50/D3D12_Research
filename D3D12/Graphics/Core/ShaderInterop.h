@@ -22,6 +22,9 @@ namespace ShaderInterop
 	template<typename T> struct ConstantBuffer { T Data; };
 #endif
 
+	static const int MESHLET_MAX_TRIANGLES = 124;
+	static const int MESHLET_MAX_VERTICES = 64;
+
 	// Per material shader data
 	struct MaterialData
 	{

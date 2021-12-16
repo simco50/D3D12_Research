@@ -251,8 +251,8 @@ void MSMain(
 	in uint groupThreadID : SV_GroupIndex,
 	in payload PayloadData payload,
 	in uint groupID : SV_GroupID,
-	out vertices PSInput verts[64],
-	out indices uint3 triangles[124])
+	out vertices PSInput verts[MESHLET_MAX_VERTICES],
+	out indices uint3 triangles[MESHLET_MAX_TRIANGLES])
 {
 	MeshInstance instance = tMeshInstances[cObjectData.Index];
 	MeshData mesh = tMeshes[instance.Mesh];
@@ -444,9 +444,10 @@ void PSMain(PSInput input,
 	outNormalRoughness = float4(N, saturate(reflectivity - ssrWeight));
 	//outNormalRoughness = float4(input.normal, 1);
 
+	return;
+
 	outNormalRoughness = float4(input.normal, 0);
 
-	return;
 	uint seed = SeedThread(input.seed);
 	outColor = float4(Random01(seed), Random01(seed), Random01(seed), 1);
 
