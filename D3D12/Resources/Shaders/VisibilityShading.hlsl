@@ -35,17 +35,6 @@ struct VertexAttribute
 	float4 Tangent;
 };
 
-struct MaterialProperties
-{
-	float3 BaseColor;
-	float3 NormalTS;
-	float Metalness;
-	float3 Emissive;
-	float Roughness;
-	float Opacity;
-	float Specular;
-};
-
 MaterialProperties GetMaterialProperties(uint materialIndex, float2 UV, float2 dx, float2 dy)
 {
 	MaterialData material = tMaterials[NonUniformResourceIndex(materialIndex)];
@@ -79,22 +68,6 @@ MaterialProperties GetMaterialProperties(uint materialIndex, float2 UV, float2 d
 		properties.NormalTS = tTexture2DTable[NonUniformResourceIndex(material.Normal)].SampleGrad(sMaterialSampler, UV, dx, dy).rgb;
 	}
 	return properties;
-}
-
-struct BrdfData
-{
-	float3 Diffuse;
-	float3 Specular;
-	float Roughness;
-};
-
-BrdfData GetBrdfData(MaterialProperties material)
-{
-	BrdfData data;
-	data.Diffuse = ComputeDiffuseColor(material.BaseColor, material.Metalness);
-	data.Specular = ComputeF0(material.Specular, material.BaseColor, material.Metalness);
-	data.Roughness = material.Roughness;
-	return data;
 }
 
 struct BaryDerivatives
@@ -180,15 +153,17 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 
     MeshInstance instance = tMeshInstances[NonUniformResourceIndex(meshIndex)];
 	MeshData mesh = tMeshes[NonUniformResourceIndex(instance.Mesh)];
-	uint3 indices = tBufferTable[NonUniformResourceIndex(mesh.IndexStream)].Load<uint3>(triangleIndex * sizeof(uint3));
+	ByteAddressBuffer meshBuffer = tBufferTable[mesh.BufferIndex];
+
+	uint3 indices = meshBuffer.Load<uint3>(mesh.IndicesOffset + triangleIndex * sizeof(uint3));
 
 	VertexAttribute vertices[3];
 	for(uint i = 0; i < 3; ++i)
 	{
 		uint vertexId = indices[i];
-        vertices[i].Position = UnpackHalf3(LoadByteAddressData<uint2>(NonUniformResourceIndex(mesh.PositionStream), vertexId));
-        vertices[i].UV = UnpackHalf2(LoadByteAddressData<uint>(NonUniformResourceIndex(mesh.UVStream), vertexId));
-        NormalData normalData = LoadByteAddressData<NormalData>(NonUniformResourceIndex(mesh.NormalStream), vertexId);
+        vertices[i].Position = UnpackHalf3(meshBuffer.Load<uint2>(mesh.PositionsOffset + vertexId * sizeof(uint2)));
+        vertices[i].UV = UnpackHalf2(meshBuffer.Load<uint>(mesh.UVsOffset + vertexId * sizeof(uint)));
+        NormalData normalData = meshBuffer.Load<NormalData>(mesh.NormalsOffset + vertexId * sizeof(NormalData));
         vertices[i].Normal = normalData.Normal;
         vertices[i].Tangent = normalData.Tangent;
 	}

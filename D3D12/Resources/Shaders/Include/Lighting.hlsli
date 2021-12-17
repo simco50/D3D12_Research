@@ -1,10 +1,25 @@
-#ifndef __LIGHTING_INCLUDE__
-#define __LIGHTING_INCLUDE__
+#pragma once
 
 #include "Common.hlsli"
 #include "ShadingModels.hlsli"
 
 #define SUPPORT_BC5 1
+
+struct BrdfData
+{
+	float3 Diffuse;
+	float3 Specular;
+	float Roughness;
+};
+
+BrdfData GetBrdfData(MaterialProperties material)
+{
+	BrdfData data;
+	data.Diffuse = ComputeDiffuseColor(material.BaseColor, material.Metalness);
+	data.Specular = ComputeF0(material.Specular, material.BaseColor, material.Metalness);
+	data.Roughness = material.Roughness;
+	return data;
+}
 
 // Angle >= Umbra -> 0
 // Angle < Penumbra -> 1
@@ -30,7 +45,7 @@ float RadialAttenuation(float3 L, float range)
 // Unpacks a 2 channel BC5 normal to xyz
 float3 UnpackBC5Normal(float2 packedNormal)
 {
-    return float3(packedNormal, sqrt(1 - saturate(dot(packedNormal.xy, packedNormal.xy))));
+	return float3(packedNormal, sqrt(1 - saturate(dot(packedNormal.xy, packedNormal.xy))));
 }
 
 float3 TangentSpaceNormalMapping(float3 sampledNormal, float3x3 TBN)
@@ -66,27 +81,27 @@ float Shadow3x3PCF(float3 wPos, int shadowMapIndex, float invShadowSize)
 	lightPos.x = lightPos.x / 2.0f + 0.5f;
 	lightPos.y = lightPos.y / -2.0f + 0.5f;
 
-	float2 texCoord = lightPos.xy;
+	float2 uv = lightPos.xy;
 
 	Texture2D shadowTexture = tTexture2DTable[NonUniformResourceIndex(cShadowData.ShadowMapOffset + shadowMapIndex)];
 
 	const float Dilation = 2.0f;
-    float d1 = Dilation * invShadowSize * 0.125f;
-    float d2 = Dilation * invShadowSize * 0.875f;
-    float d3 = Dilation * invShadowSize * 0.625f;
-    float d4 = Dilation * invShadowSize * 0.375f;
-    float result = (
-        2.0f * shadowTexture.SampleCmpLevelZero(sDepthComparison, texCoord, lightPos.z) +
-        shadowTexture.SampleCmpLevelZero(sDepthComparison, texCoord + float2(-d2,  d1), lightPos.z) +
-        shadowTexture.SampleCmpLevelZero(sDepthComparison, texCoord + float2(-d1, -d2), lightPos.z) +
-        shadowTexture.SampleCmpLevelZero(sDepthComparison, texCoord + float2( d2, -d1), lightPos.z) +
-        shadowTexture.SampleCmpLevelZero(sDepthComparison, texCoord + float2( d1,  d2), lightPos.z) +
-        shadowTexture.SampleCmpLevelZero(sDepthComparison, texCoord + float2(-d4,  d3), lightPos.z) +
-        shadowTexture.SampleCmpLevelZero(sDepthComparison, texCoord + float2(-d3, -d4), lightPos.z) +
-        shadowTexture.SampleCmpLevelZero(sDepthComparison, texCoord + float2( d4, -d3), lightPos.z) +
-        shadowTexture.SampleCmpLevelZero(sDepthComparison, texCoord + float2( d3,  d4), lightPos.z)
-        ) / 10.0f;
-    return result * result;
+	float d1 = Dilation * invShadowSize * 0.125f;
+	float d2 = Dilation * invShadowSize * 0.875f;
+	float d3 = Dilation * invShadowSize * 0.625f;
+	float d4 = Dilation * invShadowSize * 0.375f;
+	float result = (
+		2.0f * shadowTexture.SampleCmpLevelZero(sDepthComparison, uv, lightPos.z) +
+		shadowTexture.SampleCmpLevelZero(sDepthComparison, uv + float2(-d2,  d1), lightPos.z) +
+		shadowTexture.SampleCmpLevelZero(sDepthComparison, uv + float2(-d1, -d2), lightPos.z) +
+		shadowTexture.SampleCmpLevelZero(sDepthComparison, uv + float2( d2, -d1), lightPos.z) +
+		shadowTexture.SampleCmpLevelZero(sDepthComparison, uv + float2( d1,  d2), lightPos.z) +
+		shadowTexture.SampleCmpLevelZero(sDepthComparison, uv + float2(-d4,  d3), lightPos.z) +
+		shadowTexture.SampleCmpLevelZero(sDepthComparison, uv + float2(-d3, -d4), lightPos.z) +
+		shadowTexture.SampleCmpLevelZero(sDepthComparison, uv + float2( d4, -d3), lightPos.z) +
+		shadowTexture.SampleCmpLevelZero(sDepthComparison, uv + float2( d3,  d4), lightPos.z)
+		) / 10.0f;
+	return result * result;
 }
 
 float ShadowNoPCF(float3 wPos, int shadowMapIndex, float invShadowSize)
@@ -96,9 +111,9 @@ float ShadowNoPCF(float3 wPos, int shadowMapIndex, float invShadowSize)
 	lightPos.xyz /= lightPos.w;
 	lightPos.x = lightPos.x / 2.0f + 0.5f;
 	lightPos.y = lightPos.y / -2.0f + 0.5f;
-	float2 texCoord = lightPos.xy;
+	float2 uv = lightPos.xy;
 	Texture2D shadowTexture = tTexture2DTable[NonUniformResourceIndex(cShadowData.ShadowMapOffset + shadowMapIndex)];
-    return shadowTexture.SampleCmpLevelZero(sDepthComparison, texCoord, lightPos.z);
+	return shadowTexture.SampleCmpLevelZero(sDepthComparison, uv, lightPos.z);
 }
 
 float GetAttenuation(Light light, float3 wPos)
@@ -120,7 +135,7 @@ float GetAttenuation(Light light, float3 wPos)
 
 float3 ApplyAmbientLight(float3 diffuse, float ao, float3 lightColor)
 {
-    return ao * diffuse * lightColor;
+	return ao * diffuse * lightColor;
 }
 
 uint GetShadowIndex(Light light, float4 pos, float3 wPos)
@@ -205,5 +220,3 @@ LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, floa
 
 	return result;
 }
-
-#endif

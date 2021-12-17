@@ -22,6 +22,9 @@ namespace ShaderInterop
 	template<typename T> struct ConstantBuffer { T Data; };
 #endif
 
+	static const int MESHLET_MAX_TRIANGLES = 124;
+	static const int MESHLET_MAX_VERTICES = 64;
+
 	// Per material shader data
 	struct MaterialData
 	{
@@ -45,10 +48,43 @@ namespace ShaderInterop
 
 	struct MeshData
 	{
-		uint PositionStream;
-		uint UVStream;
-		uint NormalStream;
-		uint IndexStream;
+		uint BufferIndex;
+		uint PositionsOffset;
+		uint UVsOffset;
+		uint NormalsOffset;
+		uint IndicesOffset;
+
+		uint MeshletOffset;
+		uint MeshletVertexOffset;
+		uint MeshletTriangleOffset;
+		uint MeshletBoundsOffset;
+		uint MeshletCount;
+	};
+
+	struct MeshletTriangle
+	{
+		uint V0 : 10;
+		uint V1 : 10;
+		uint V2 : 10;
+		uint padding : 2;
+	};
+
+	struct Meshlet
+	{
+		uint VertexOffset;
+		uint TriangleOffset;
+		uint VertexCount;
+		uint TriangleCount;
+	};
+
+	struct MeshletBounds
+	{
+		float3 Center;
+		float Radius;
+		float3 ConeApex;
+		float ConeCutoff;
+		float3 ConeAxis;
+		uint ConeS8;
 	};
 
 	struct MeshInstance
@@ -78,7 +114,6 @@ namespace ShaderInterop
 		LF_DirectionalLight = LF_None,
 	};
 
-	//todo: SM6.6 replace with unpack_u8u32
 	inline float4 UIntToColor(uint c)
 	{
 		return float4(

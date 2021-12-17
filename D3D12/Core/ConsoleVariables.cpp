@@ -97,10 +97,8 @@ void ImGuiConsole::Update(const ImVec2& position, const ImVec2& size)
 	if (m_ShowConsole)
 	{
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0);
-		ImGui::SetNextWindowPos(position, 0, ImVec2(0, 1));
-		ImGui::SetNextWindowSize(size);
 
-		if (ImGui::Begin("Output Log", &m_ShowConsole, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus))
+		if (ImGui::Begin("Output Log", &m_ShowConsole))
 		{
 			for (const Console::LogEntry& entry : Console::GetHistory())
 			{

@@ -46,7 +46,7 @@ workspace (ENGINE_NAME)
 	editAndContinue "Off"
 	system "windows"
 	conformancemode "On"
-	defines { "PLATFORM_WINDOWS=1" }
+	defines { "PLATFORM_WINDOWS=1", "WIN32" }
 	targetdir (ROOT .. "Build/$(ProjectName)_$(Platform)_$(Configuration)")
 	objdir (ROOT .. "Build/Intermediate/$(ProjectName)_$(Platform)_$(Configuration)")
 
@@ -128,6 +128,9 @@ workspace (ENGINE_NAME)
 		libdirs	"$(SolutionDir)Libraries/Optick/lib/"
 		includedirs "$(SolutionDir)Libraries/Optick/include"
 		runtimeDependency ("Optick/bin/OptickCore.dll", "")
+
+		-- DirectXMath
+		includedirs "$(SolutionDir)Libraries/DirectXMath/include"
 
 
 newaction {

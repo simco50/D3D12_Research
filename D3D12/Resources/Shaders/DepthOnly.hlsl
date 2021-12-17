@@ -12,30 +12,31 @@ struct PerViewData
 ConstantBuffer<PerObjectData> cObjectData : register(b0);
 ConstantBuffer<PerViewData> cViewData : register(b1);
 
-struct PSInput
+struct InterpolantsVSToPS
 {
-	float4 position : SV_POSITION;
-	float2 texCoord : TEXCOORD;
+	float4 Position : SV_Position;
+	float2 UV : TEXCOORD;
 };
 
 [RootSignature(RootSig)]
-PSInput VSMain(uint vertexId : SV_VertexID)
+InterpolantsVSToPS VSMain(uint vertexId : SV_VertexID)
 {
-	PSInput result = (PSInput)0;
+	InterpolantsVSToPS result = (InterpolantsVSToPS)0;
 	MeshInstance instance = tMeshInstances[cObjectData.Index];
-    MeshData mesh = tMeshes[instance.Mesh];
+	MeshData mesh = tMeshes[instance.Mesh];
+	ByteAddressBuffer meshBuffer = tBufferTable[mesh.BufferIndex];
 
-    float3 position = UnpackHalf3(LoadByteAddressData<uint2>(mesh.PositionStream, vertexId));
-	result.position = mul(mul(float4(position, 1.0f), instance.World), cViewData.ViewProjection);
-	result.texCoord = UnpackHalf2(LoadByteAddressData<uint>(mesh.UVStream, vertexId));
+	float3 position = UnpackHalf3(meshBuffer.Load<uint2>(mesh.PositionsOffset + vertexId * sizeof(uint2)));
+	result.Position = mul(mul(float4(position, 1.0f), instance.World), cViewData.ViewProjection);
+	result.UV = UnpackHalf2(meshBuffer.Load<uint>(mesh.UVsOffset + vertexId * sizeof(uint)));
 	return result;
 }
 
-void PSMain(PSInput input)
+void PSMain(InterpolantsVSToPS input)
 {
 	MeshInstance instance = tMeshInstances[cObjectData.Index];
 	MaterialData material = tMaterials[instance.Material];
-	if(Sample2D(material.Diffuse, sMaterialSampler, input.texCoord).a < material.AlphaCutoff)
+	if(Sample2D(material.Diffuse, sMaterialSampler, input.UV).a < material.AlphaCutoff)
 	{
 		discard;
 	}

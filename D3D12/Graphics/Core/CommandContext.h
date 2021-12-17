@@ -167,6 +167,7 @@ public:
 	void Dispatch(uint32 groupCountX, uint32 groupCountY = 1, uint32 groupCountZ = 1);
 	void Dispatch(const IntVector3& groupCounts);
 	void DispatchMesh(uint32 groupCountX, uint32 groupCountY = 1, uint32 groupCountZ = 1);
+	void DispatchMesh(const IntVector3& groupCounts);
 	void ExecuteIndirect(CommandSignature* pCommandSignature, uint32 maxCount, Buffer* pIndirectArguments, Buffer* pCountBuffer, uint32 argumentsOffset = 0, uint32 countOffset = 0);
 	void Draw(int vertexStart, int vertexCount);
 	void DrawIndexed(int indexCount, int indexStart, int minVertex = 0);
@@ -224,6 +225,7 @@ public:
 	ID3D12GraphicsCommandList4* GetRaytracingCommandList() const { return  m_pRaytracingCommandList.Get(); }
 
 	D3D12_COMMAND_LIST_TYPE GetType() const { return m_Type; }
+	const PipelineState* GetCurrentPSO() const { return m_pCurrentPSO; }
 
 	static bool IsTransitionAllowed(D3D12_COMMAND_LIST_TYPE commandlistType, D3D12_RESOURCE_STATES state);
 
@@ -270,6 +272,9 @@ private:
 	std::array<D3D12_RENDER_PASS_ENDING_ACCESS_RESOLVE_SUBRESOURCE_PARAMETERS, D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT> m_ResolveSubResourceParameters{};
 	RenderPassInfo m_CurrentRenderPassInfo;
 	bool m_InRenderPass = false;
+
+	PipelineState* m_pCurrentPSO = nullptr;
+	StateObject* m_pCurrentSO = nullptr;
 };
 
 class CommandSignature : public GraphicsObject

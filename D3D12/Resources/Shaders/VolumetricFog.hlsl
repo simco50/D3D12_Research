@@ -54,7 +54,7 @@ float3 GetWorldPosition(uint3 index, float offset)
 
 uint GetLightClusterSliceFromDepth(float depth)
 {
-    return floor(log(depth) * cData.LightGridParams.x - cData.LightGridParams.y);
+	return floor(log(depth) * cData.LightGridParams.x - cData.LightGridParams.y);
 }
 
 uint GetLightCluster(uint2 fogCellIndex, float depth)
@@ -75,7 +75,7 @@ struct FogVolume
 
 [RootSignature(RootSig)]
 [numthreads(8, 8, 4)]
-void InjectFogLightingCS(uint3 threadId : SV_DISPATCHTHREADID)
+void InjectFogLightingCS(uint3 threadId : SV_DispatchThreadID)
 {
 	uint3 cellIndex = threadId;
 
@@ -192,7 +192,7 @@ void InjectFogLightingCS(uint3 threadId : SV_DISPATCHTHREADID)
 
 [RootSignature(RootSig)]
 [numthreads(8, 8, 1)]
-void AccumulateFogCS(uint3 threadId : SV_DISPATCHTHREADID, uint groupIndex : SV_GROUPINDEX)
+void AccumulateFogCS(uint3 threadId : SV_DispatchThreadID, uint groupIndex : SV_GroupIndex)
 {
 	float3 accumulatedLight = 0;
 	float accumulatedTransmittance = 1;

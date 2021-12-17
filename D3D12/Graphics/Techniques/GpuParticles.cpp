@@ -107,7 +107,7 @@ GpuParticles::GpuParticles(GraphicsDevice* pDevice)
 		psoDesc.SetBlendMode(BlendMode::Alpha, false);
 		psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
-		psoDesc.SetRenderTargetFormat(GraphicsDevice::RENDER_TARGET_FORMAT, GraphicsDevice::DEPTH_STENCIL_FORMAT, /* pDevice->GetMultiSampleCount() */ 1);
+		psoDesc.SetRenderTargetFormat(DXGI_FORMAT_R16G16B16A16_FLOAT, DXGI_FORMAT_D32_FLOAT, /* pDevice->GetMultiSampleCount() */ 1);
 		psoDesc.SetName("Particle Rendering PS");
 		m_pRenderParticlesPS = pDevice->CreatePipeline(psoDesc);
 	}
@@ -115,11 +115,6 @@ GpuParticles::GpuParticles(GraphicsDevice* pDevice)
 
 void GpuParticles::Simulate(RGGraph& graph, Texture* pResolvedDepth, const Camera& camera)
 {
-	if (!g_Simulate || !g_Enabled)
-	{
-		return;
-	}
-
 	if (ImGui::Begin("Parameters"))
 	{
 		if (ImGui::CollapsingHeader("Particles"))
@@ -131,6 +126,11 @@ void GpuParticles::Simulate(RGGraph& graph, Texture* pResolvedDepth, const Camer
 		}
 	}
 	ImGui::End();
+
+	if (!g_Simulate || !g_Enabled)
+	{
+		return;
+	}
 
 	D3D12_CPU_DESCRIPTOR_HANDLE uavs[] = {
 		m_pCountersBuffer->GetUAV()->GetDescriptor(),

@@ -4,6 +4,7 @@
 #include "Scene/Camera.h"
 #include "Core/Buffer.h"
 #include "Mesh.h"
+#include "Core/PipelineState.h"
 
 void DrawScene(CommandContext& context, const SceneView& scene, Batch::Blending blendModes)
 {
@@ -34,7 +35,14 @@ void DrawScene(CommandContext& context, const SceneView& scene, const Visibility
 	{
 		objectData.Index = b->Index;
 		context.SetRootConstants(0, objectData);
-		context.SetIndexBuffer(b->pMesh->IndicesLocation);
-		context.DrawIndexed(b->pMesh->IndicesLocation.Elements, 0, 0);
+		if(context.GetCurrentPSO()->GetType() == PipelineStateType::Mesh)
+		{
+			context.DispatchMesh(ComputeUtils::GetNumThreadGroups(b->pMesh->NumMeshlets, 32));
+		}
+		else
+		{
+			context.SetIndexBuffer(b->pMesh->IndicesLocation);
+			context.DrawIndexed(b->pMesh->IndicesLocation.Elements, 0, 0);
+		}
 	}
 }

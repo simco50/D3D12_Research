@@ -23,9 +23,6 @@
 extern "C" { _declspec(dllexport) extern const UINT D3D12SDKVersion = D3D12_SDK_VERSION; }
 extern "C" { _declspec(dllexport) extern const char* D3D12SDKPath = ".\\D3D12\\"; }
 
-const DXGI_FORMAT GraphicsDevice::DEPTH_STENCIL_FORMAT = DXGI_FORMAT_D32_FLOAT;
-const DXGI_FORMAT GraphicsDevice::RENDER_TARGET_FORMAT = DXGI_FORMAT_R11G11B10_FLOAT;
-
 std::unique_ptr<GraphicsInstance> GraphicsInstance::CreateInstance(GraphicsInstanceFlags createFlags /*= GraphicsFlags::None*/)
 {
 	return std::make_unique<GraphicsInstance>(createFlags);
@@ -87,9 +84,9 @@ GraphicsInstance::GraphicsInstance(GraphicsInstanceFlags createFlags)
 	}
 }
 
-std::unique_ptr<SwapChain> GraphicsInstance::CreateSwapchain(GraphicsDevice* pDevice, WindowHandle pNativeWindow, DXGI_FORMAT format, uint32 width, uint32 height, uint32 numFrames, bool vsync)
+std::unique_ptr<SwapChain> GraphicsInstance::CreateSwapchain(GraphicsDevice* pDevice, WindowHandle pNativeWindow, uint32 width, uint32 height, uint32 numFrames, bool vsync)
 {
-	return std::make_unique<SwapChain>(pDevice, m_pFactory.Get(), pNativeWindow, format, width, height, numFrames, vsync);
+	return std::make_unique<SwapChain>(pDevice, m_pFactory.Get(), pNativeWindow, width, height, numFrames, vsync);
 }
 
 ComPtr<IDXGIAdapter4> GraphicsInstance::EnumerateAdapter(bool useWarp)
@@ -116,12 +113,15 @@ ComPtr<IDXGIAdapter4> GraphicsInstance::EnumerateAdapter(bool useWarp)
 				DXGI_OUTPUT_DESC1 outputDesc;
 				pOutput1->GetDesc1(&outputDesc);
 
-				E_LOG(Info, "\t\tMonitor %d - %dx%d - HDR: %s - %d BPP",
+				E_LOG(Info, "\t\tMonitor %d - %dx%d - HDR: %s - %d BPP - Min Lum %f - Max Lum %f - MaxFFL %f",
 					outputIndex,
 					outputDesc.DesktopCoordinates.right - outputDesc.DesktopCoordinates.left,
 					outputDesc.DesktopCoordinates.bottom - outputDesc.DesktopCoordinates.top,
 					outputDesc.ColorSpace == DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020 ? "Yes" : "No",
-					outputDesc.BitsPerColor);
+					outputDesc.BitsPerColor,
+					outputDesc.MinLuminance,
+					outputDesc.MaxLuminance,
+					outputDesc.MaxFullFrameLuminance);
 			}
 		}
 		m_pFactory->EnumAdapterByGpuPreference(0, gpuPreference, IID_PPV_ARGS(pAdapter.GetAddressOf()));
@@ -247,7 +247,7 @@ GraphicsDevice::GraphicsDevice(IDXGIAdapter4* pAdapter)
 
 	// Allocators
 	m_pDynamicAllocationManager = std::make_unique<DynamicAllocationManager>(this, BufferFlag::Upload);
-	m_pGlobalViewHeap = std::make_unique<GlobalOnlineDescriptorHeap>(this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 2000, 100000);
+	m_pGlobalViewHeap = std::make_unique<GlobalOnlineDescriptorHeap>(this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 1000, 10000);
 	m_pPersistentViewHeap = std::make_unique<PersistentDescriptorAllocator>(m_pGlobalViewHeap.get());
 	m_pGlobalSamplerHeap = std::make_unique<GlobalOnlineDescriptorHeap>(this, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, 64, 2048);
 	m_pPersistentSamplerHeap = std::make_unique<PersistentDescriptorAllocator>(m_pGlobalSamplerHeap.get());
@@ -351,18 +351,18 @@ void GraphicsDevice::IdleGPU()
 	}
 }
 
-uint32 GraphicsDevice::StoreViewDescriptor(D3D12_CPU_DESCRIPTOR_HANDLE view)
+DescriptorHandle GraphicsDevice::StoreViewDescriptor(D3D12_CPU_DESCRIPTOR_HANDLE view)
 {
 	DescriptorHandle handle = m_pPersistentViewHeap->Allocate();
 	m_pDevice->CopyDescriptorsSimple(1, handle.CpuHandle, view, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-	return handle.HeapIndex;
+	return handle;
 }
 
-void GraphicsDevice::FreeViewDescriptor(int32& heapIndex)
+void GraphicsDevice::FreeViewDescriptor(DescriptorHandle& handle)
 {
-	if (heapIndex != DescriptorHandle::InvalidHeapIndex)
+	if (handle.HeapIndex != DescriptorHandle::InvalidHeapIndex)
 	{
-		m_pPersistentViewHeap->Free(heapIndex);
+		m_pPersistentViewHeap->Free(handle.HeapIndex);
 	}
 }
 
@@ -539,15 +539,15 @@ bool GraphicsCapabilities::CheckUAVSupport(DXGI_FORMAT format) const
 	}
 }
 
-SwapChain::SwapChain(GraphicsDevice* pDevice, IDXGIFactory6* pFactory, WindowHandle pNativeWindow, DXGI_FORMAT format, uint32 width, uint32 height, uint32 numFrames, bool vsync)
-	: m_Format(format), m_CurrentImage(0), m_Vsync(vsync)
+SwapChain::SwapChain(GraphicsDevice* pDevice, IDXGIFactory6* pFactory, WindowHandle pNativeWindow, uint32 width, uint32 height, uint32 numFrames, bool vsync)
+	: m_Format(DXGI_FORMAT_R8G8B8A8_UNORM), m_CurrentImage(0), m_Vsync(vsync)
 {
 	DXGI_SWAP_CHAIN_DESC1 desc{};
 	desc.AlphaMode = DXGI_ALPHA_MODE_IGNORE;
 	desc.BufferCount = numFrames;
 	desc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
 	desc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
-	desc.Format = format;
+	desc.Format = m_Format;
 	desc.Width = width;
 	desc.Height = height;
 	desc.Scaling = DXGI_SCALING_NONE;

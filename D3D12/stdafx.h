@@ -27,6 +27,7 @@
 #define D3DX12_NO_STATE_OBJECT_HELPERS
 #include "d3dx12.h"
 
+#include "IconsFontAwesome4.h"
 #include "imgui.h"
 
 #define USE_OPTICK 1

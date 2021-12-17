@@ -1,7 +1,7 @@
 //-------------------------------------------------------------------------------------
 // SimpleMath.cpp -- Simplified C++ Math wrapper for DirectXMath
 //
-// Copyright (c) Microsoft Corporation. All rights reserved.
+// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 //
 // http://go.microsoft.com/fwlink/?LinkId=248929
@@ -80,9 +80,10 @@ static_assert(offsetof(DirectX::SimpleMath::Viewport, minDepth) == offsetof(D3D1
 static_assert(offsetof(DirectX::SimpleMath::Viewport, maxDepth) == offsetof(D3D12_VIEWPORT, MaxDepth), "Layout mismatch");
 #endif
 
+#if defined(__dxgi1_2_h__) || defined(__d3d11_x_h__) || defined(__d3d12_x_h__) || defined(__XBOX_D3D12_X__)
 RECT DirectX::SimpleMath::Viewport::ComputeDisplayArea(DXGI_SCALING scaling, UINT backBufferWidth, UINT backBufferHeight, int outputWidth, int outputHeight) noexcept
 {
-    RECT rct;
+    RECT rct = {};
 
     switch (int(scaling))
     {
@@ -104,7 +105,7 @@ RECT DirectX::SimpleMath::Viewport::ComputeDisplayArea(DXGI_SCALING scaling, UIN
             // Horizontal fill
             float scaledWidth = float(outputWidth);
             float scaledHeight = float(outputWidth) / aspectRatio;
-            if (scaledHeight >= outputHeight)
+            if (scaledHeight >= float(outputHeight))
             {
                 // Do vertical fill
                 scaledWidth = float(outputHeight) * aspectRatio;
@@ -139,6 +140,7 @@ RECT DirectX::SimpleMath::Viewport::ComputeDisplayArea(DXGI_SCALING scaling, UIN
 
     return rct;
 }
+#endif
 
 RECT DirectX::SimpleMath::Viewport::ComputeTitleSafeArea(UINT backBufferWidth, UINT backBufferHeight) noexcept
 {

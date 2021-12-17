@@ -50,24 +50,24 @@ struct Constants
 
 ConstantBuffer<Constants> cConstants : register(b0);
 
-struct VSOutput
+struct InterpolantsVSToPS
 {
-    float4 PositionCS : SV_POSITION;
-	float3 TexCoord : TEXCOORD;
+	float4 PositionCS : SV_Position;
+	float3 UV : TEXCOORD;
 };
 
-VSOutput VSMain(uint vertexId : SV_VertexID)
+InterpolantsVSToPS VSMain(uint vertexId : SV_VertexID)
 {
-	VSOutput output;
-    float3 positionVS = mul(CUBE[vertexId].xyz, (float3x3)cConstants.View);
-    output.PositionCS = mul(float4(positionVS, 1.0f), cConstants.Projection);
+	InterpolantsVSToPS output;
+	float3 positionVS = mul(CUBE[vertexId].xyz, (float3x3)cConstants.View);
+	output.PositionCS = mul(float4(positionVS, 1.0f), cConstants.Projection);
 	output.PositionCS.z = 0.0001f;
-	output.TexCoord = CUBE[vertexId].xyz;
+	output.UV = CUBE[vertexId].xyz;
 	return output;
 }
 
-float4 PSMain(in VSOutput input) : SV_Target
+float4 PSMain(in InterpolantsVSToPS input) : SV_Target
 {
-	float3 dir = normalize(input.TexCoord);
+	float3 dir = normalize(input.UV);
 	return float4(CIESky(dir, cConstants.SunDirection), 1.0f);
 }

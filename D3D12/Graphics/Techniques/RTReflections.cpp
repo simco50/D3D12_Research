@@ -86,7 +86,7 @@ void RTReflections::Execute(RGGraph& graph, const SceneView& sceneData)
 
 void RTReflections::OnResize(uint32 width, uint32 height)
 {
-	m_pSceneColor = m_pDevice->CreateTexture(TextureDesc::Create2D(width, height, GraphicsDevice::RENDER_TARGET_FORMAT, TextureFlag::ShaderResource, 1, 1), "SceneColor Copy");
+	m_pSceneColor = m_pDevice->CreateTexture(TextureDesc::Create2D(width, height, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::ShaderResource, 1, 1), "SceneColor Copy");
 }
 
 void RTReflections::SetupPipelines(GraphicsDevice* pDevice)

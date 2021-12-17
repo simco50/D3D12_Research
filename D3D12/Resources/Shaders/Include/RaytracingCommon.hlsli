@@ -1,5 +1,4 @@
-#ifndef __RAYTRACING_COMMON_INCLUDE__
-#define __RAYTRACING_COMMON_INCLUDE__
+#pragma once
 
 #include "SkyCommon.hlsli"
 #include "ShadingModels.hlsli"
@@ -9,135 +8,110 @@
 
 struct VertexAttribute
 {
-    float2 UV;
-    float3 Normal;
-    float4 Tangent;
-    float3 GeometryNormal;
+	float2 UV;
+	float3 Normal;
+	float4 Tangent;
+	float3 GeometryNormal;
 };
 
 VertexAttribute GetVertexAttributes(MeshInstance instance, float2 attribBarycentrics, uint primitiveIndex, float4x3 worldMatrix)
 {
-    float3 barycentrics = float3((1.0f - attribBarycentrics.x - attribBarycentrics.y), attribBarycentrics.x, attribBarycentrics.y);
+	float3 barycentrics = float3((1.0f - attribBarycentrics.x - attribBarycentrics.y), attribBarycentrics.x, attribBarycentrics.y);
 
-    MeshData mesh = tMeshes[instance.Mesh];
-    uint3 indices = tBufferTable[mesh.IndexStream].Load<uint3>(primitiveIndex * sizeof(uint3));
-    VertexAttribute outData;
+	MeshData mesh = tMeshes[instance.Mesh];
+	ByteAddressBuffer meshBuffer = tBufferTable[mesh.BufferIndex];
 
-    outData.UV = 0;
-    outData.Normal = 0;
+	uint3 indices = meshBuffer.Load<uint3>(mesh.IndicesOffset + primitiveIndex * sizeof(uint3));
+	VertexAttribute outData;
 
-    float3 positions[3];
+	outData.UV = 0;
+	outData.Normal = 0;
 
-    for(int i = 0; i < 3; ++i)
-    {
-        uint vertexId = indices[i];
-        positions[i] = UnpackHalf3(LoadByteAddressData<uint2>(mesh.PositionStream, vertexId));
-        outData.UV += UnpackHalf2(LoadByteAddressData<uint>(mesh.UVStream, vertexId)) * barycentrics[i];
-        NormalData normalData = LoadByteAddressData<NormalData>(mesh.NormalStream, vertexId);
-        outData.Normal += normalData.Normal * barycentrics[i];
-        outData.Tangent += normalData.Tangent * barycentrics[i];
-    }
-    outData.Normal = normalize(mul(outData.Normal, (float3x3)worldMatrix));
-    outData.Tangent.xyz = normalize(mul(outData.Tangent.xyz, (float3x3)worldMatrix));
+	float3 positions[3];
 
-    // Calculate geometry normal from triangle vertices positions
-    float3 edge20 = positions[2] - positions[0];
-    float3 edge21 = positions[2] - positions[1];
-    float3 edge10 = positions[1] - positions[0];
-    outData.GeometryNormal = mul(normalize(cross(edge20, edge10)), (float3x3)worldMatrix);
+	for(int i = 0; i < 3; ++i)
+	{
+		uint vertexId = indices[i];
+		positions[i] = UnpackHalf3(meshBuffer.Load<uint2>(mesh.PositionsOffset + vertexId * sizeof(uint2)));
+		outData.UV += UnpackHalf2(meshBuffer.Load<uint>(mesh.UVsOffset + vertexId * sizeof(uint))) * barycentrics[i];
+		NormalData normalData = meshBuffer.Load<NormalData>(mesh.NormalsOffset + vertexId * sizeof(NormalData));
+		outData.Normal += normalData.Normal * barycentrics[i];
+		outData.Tangent += normalData.Tangent * barycentrics[i];
+	}
+	outData.Normal = normalize(mul(outData.Normal, (float3x3)worldMatrix));
+	outData.Tangent.xyz = normalize(mul(outData.Tangent.xyz, (float3x3)worldMatrix));
 
-    return outData;
+	// Calculate geometry normal from triangle vertices positions
+	float3 edge20 = positions[2] - positions[0];
+	float3 edge21 = positions[2] - positions[1];
+	float3 edge10 = positions[1] - positions[0];
+	outData.GeometryNormal = mul(normalize(cross(edge20, edge10)), (float3x3)worldMatrix);
+
+	return outData;
 }
-
-struct MaterialProperties
-{
-    float3 BaseColor;
-    float3 NormalTS;
-    float Metalness;
-    float3 Emissive;
-    float Roughness;
-    float Opacity;
-    float Specular;
-};
 
 MaterialProperties GetMaterialProperties(uint materialIndex, float2 UV, int mipLevel)
 {
-    MaterialData material = tMaterials[materialIndex];
-    MaterialProperties properties;
-    float4 baseColor = material.BaseColorFactor;
-    if(material.Diffuse >= 0)
-    {
-        baseColor *= SampleLevel2D(material.Diffuse, sMaterialSampler, UV, mipLevel);
-    }
-    properties.BaseColor = baseColor.rgb;
-    properties.Opacity = baseColor.a;
+	MaterialData material = tMaterials[materialIndex];
+	MaterialProperties properties;
+	float4 baseColor = material.BaseColorFactor;
+	if(material.Diffuse >= 0)
+	{
+		baseColor *= SampleLevel2D(material.Diffuse, sMaterialSampler, UV, mipLevel);
+	}
+	properties.BaseColor = baseColor.rgb;
+	properties.Opacity = baseColor.a;
 
-    properties.Metalness = material.MetalnessFactor;
-    properties.Roughness = material.RoughnessFactor;
-    if(material.RoughnessMetalness >= 0)
-    {
-        float4 roughnessMetalnessSample = SampleLevel2D(material.RoughnessMetalness, sMaterialSampler, UV, mipLevel);
-        properties.Metalness *= roughnessMetalnessSample.b;
-        properties.Roughness *= roughnessMetalnessSample.g;
-    }
-    properties.Emissive = material.EmissiveFactor.rgb;
-    if(material.Emissive >= 0)
-    {
-        properties.Emissive *= SampleLevel2D(material.Emissive, sMaterialSampler, UV, mipLevel).rgb;
-    }
-    properties.Specular = 0.5f;
+	properties.Metalness = material.MetalnessFactor;
+	properties.Roughness = material.RoughnessFactor;
+	if(material.RoughnessMetalness >= 0)
+	{
+		float4 roughnessMetalnessSample = SampleLevel2D(material.RoughnessMetalness, sMaterialSampler, UV, mipLevel);
+		properties.Metalness *= roughnessMetalnessSample.b;
+		properties.Roughness *= roughnessMetalnessSample.g;
+	}
+	properties.Emissive = material.EmissiveFactor.rgb;
+	if(material.Emissive >= 0)
+	{
+		properties.Emissive *= SampleLevel2D(material.Emissive, sMaterialSampler, UV, mipLevel).rgb;
+	}
+	properties.Specular = 0.5f;
 
-    properties.NormalTS = float3(0.5f, 0.5f, 1.0f);
-    if(material.Normal >= 0)
-    {
-        properties.NormalTS = SampleLevel2D(material.Normal, sMaterialSampler, UV, mipLevel).rgb;
-    }
-    return properties;
-}
-
-struct BrdfData
-{
-    float3 Diffuse;
-    float3 Specular;
-    float Roughness;
-};
-
-BrdfData GetBrdfData(MaterialProperties material)
-{
-    BrdfData data;
-    data.Diffuse = ComputeDiffuseColor(material.BaseColor, material.Metalness);
-    data.Specular = ComputeF0(material.Specular, material.BaseColor, material.Metalness);
-    data.Roughness = material.Roughness;
-    return data;
+	properties.NormalTS = float3(0.5f, 0.5f, 1.0f);
+	if(material.Normal >= 0)
+	{
+		properties.NormalTS = SampleLevel2D(material.Normal, sMaterialSampler, UV, mipLevel).rgb;
+	}
+	return properties;
 }
 
 struct RayCone
 {
-    float Width;
-    float SpreadAngle;
+	float Width;
+	float SpreadAngle;
 };
 
 RayCone PropagateRayCone(RayCone cone, float surfaceSpreadAngle, float hitT)
 {
-    RayCone newCone;
-    newCone.Width = cone.SpreadAngle * hitT + cone.Width;
-    newCone.SpreadAngle = cone.SpreadAngle + surfaceSpreadAngle;
-    return newCone;
+	RayCone newCone;
+	newCone.Width = cone.SpreadAngle * hitT + cone.Width;
+	newCone.SpreadAngle = cone.SpreadAngle + surfaceSpreadAngle;
+	return newCone;
 }
 
 // Texture Level of Detail Strategies for Real-Time Ray Tracing
 // Ray Tracing Gems - Tomas Akenine-Möller
 float ComputeRayConeMip(RayCone cone, float3 vertexNormal, float2 vertexUVs[3], float2 textureDimensions)
 {
-    // Triangle surface area
-    float3 normal = vertexNormal;
-    float invWorldArea = rsqrt(dot(normal, normal));
-    float3 triangleNormal = abs(normal * invWorldArea);
+	// Triangle surface area
+	float3 normal = vertexNormal;
+	float invWorldArea = rsqrt(dot(normal, normal));
+	float3 triangleNormal = abs(normal * invWorldArea);
 
-    // UV area
-    float2 duv0 = vertexUVs[2] - vertexUVs[0];
-    float2 duv1 = vertexUVs[1] - vertexUVs[0];
-    float uvArea = 0.5f * length(cross(float3(duv0, 0), float3(duv1, 0)));
+	// UV area
+	float2 duv0 = vertexUVs[2] - vertexUVs[0];
+	float2 duv1 = vertexUVs[1] - vertexUVs[0];
+	float uvArea = 0.5f * length(cross(float3(duv0, 0), float3(duv1, 0)));
 
 	float triangleLODConstant = 0.5f * log2(uvArea * invWorldArea);
 
@@ -150,20 +124,20 @@ float ComputeRayConeMip(RayCone cone, float3 vertexNormal, float2 vertexUVs[3], 
 
 Ray GeneratePinholeCameraRay(float2 pixel, float4x4 viewInverse, float4x4 projection)
 {
-    // Set up the ray.
-    Ray ray;
-    ray.Origin = viewInverse[3].xyz;
-    // Extract the aspect ratio and fov from the projection matrix.
-    float aspect = projection[1][1] / projection[0][0];
-    float tanHalfFovY = 1.f / projection[1][1];
+	// Set up the ray.
+	Ray ray;
+	ray.Origin = viewInverse[3].xyz;
+	// Extract the aspect ratio and fov from the projection matrix.
+	float aspect = projection[1][1] / projection[0][0];
+	float tanHalfFovY = 1.f / projection[1][1];
 
-    // Compute the ray direction.
-    ray.Direction = normalize(
-        (pixel.x * viewInverse[0].xyz * tanHalfFovY * aspect) -
-        (pixel.y * viewInverse[1].xyz * tanHalfFovY) +
-        viewInverse[2].xyz);
+	// Compute the ray direction.
+	ray.Direction = normalize(
+		(pixel.x * viewInverse[0].xyz * tanHalfFovY * aspect) -
+		(pixel.y * viewInverse[1].xyz * tanHalfFovY) +
+		viewInverse[2].xyz);
 
-    return ray;
+	return ray;
 }
 
 // Ray Tracing Gems: A Fast and Robust Method for Avoiding Self-Intersection
@@ -171,20 +145,19 @@ Ray GeneratePinholeCameraRay(float2 pixel, float4x4 viewInverse, float4x4 projec
 // Offset ray so that it never self-intersects
 float3 OffsetRay(float3 position, float3 geometryNormal)
 {
-    static const float origin = 1.0f / 32.0f;
-    static const float float_scale = 1.0f / 65536.0f;
-    static const float int_scale = 256.0f;
+	static const float origin = 1.0f / 32.0f;
+	static const float float_scale = 1.0f / 65536.0f;
+	static const float int_scale = 256.0f;
 
-    int3 of_i = int3(int_scale * geometryNormal.x, int_scale * geometryNormal.y, int_scale * geometryNormal.z);
+	int3 of_i = int3(int_scale * geometryNormal.x, int_scale * geometryNormal.y, int_scale * geometryNormal.z);
 
-    float3 p_i = float3(
-        asfloat(asint(position.x) + ((position.x < 0) ? -of_i.x : of_i.x)),
-        asfloat(asint(position.y) + ((position.y < 0) ? -of_i.y : of_i.y)),
-        asfloat(asint(position.z) + ((position.z < 0) ? -of_i.z : of_i.z)));
+	float3 p_i = float3(
+		asfloat(asint(position.x) + ((position.x < 0) ? -of_i.x : of_i.x)),
+		asfloat(asint(position.y) + ((position.y < 0) ? -of_i.y : of_i.y)),
+		asfloat(asint(position.z) + ((position.z < 0) ? -of_i.z : of_i.z)));
 
-    return float3(abs(position.x) < origin ? position.x + float_scale * geometryNormal.x : p_i.x,
-        abs(position.y) < origin ? position.y + float_scale * geometryNormal.y : p_i.y,
-        abs(position.z) < origin ? position.z + float_scale * geometryNormal.z : p_i.z);
+	return float3(abs(position.x) < origin ? position.x + float_scale * geometryNormal.x : p_i.x,
+		abs(position.y) < origin ? position.y + float_scale * geometryNormal.y : p_i.y,
+		abs(position.z) < origin ? position.z + float_scale * geometryNormal.z : p_i.z);
 }
 
-#endif

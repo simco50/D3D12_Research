@@ -1,5 +1,6 @@
 #pragma once
 #include "Core/Buffer.h"
+
 class Buffer;
 class CommandContext;
 class Texture;
@@ -14,14 +15,17 @@ struct SubMesh
 	int PositionsStride = 0;
 	int MaterialId = 0;
 	DXGI_FORMAT PositionsFormat = DXGI_FORMAT_R32G32B32_FLOAT;
-	ShaderResourceView* pPositionsStreamSRV = nullptr;
-	ShaderResourceView* pUVStreamSRV = nullptr;
-	ShaderResourceView* pNormalsStreamSRV = nullptr;
-	ShaderResourceView* pIndexSRV = nullptr;
+
 	VertexBufferView PositionStreamLocation;
 	VertexBufferView UVStreamLocation;
 	VertexBufferView NormalStreamLocation;
 	IndexBufferView IndicesLocation;
+	uint32 MeshletsLocation;
+	uint32 MeshletVerticesLocation;
+	uint32 MeshletTrianglesLocation;
+	uint32 MeshletBoundsLocation;
+	uint32 NumMeshlets;
+
 	BoundingBox Bounds;
 	Mesh* pParent = nullptr;
 
@@ -60,6 +64,7 @@ public:
 	const std::vector<SubMeshInstance>& GetMeshInstances() const { return m_MeshInstances; }
 	const std::vector<SubMesh>& GetMeshes() const { return m_Meshes; }
 	const std::vector<Material>& GetMaterials() const { return m_Materials; }
+	Buffer* GetData() const { return m_pGeometryData.get(); }
 
 private:
 	std::vector<Material> m_Materials;

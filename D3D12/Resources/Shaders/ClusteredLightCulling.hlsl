@@ -52,7 +52,7 @@ void AddLight(uint clusterIndex, uint lightIndex)
 
 [RootSignature(RootSig)]
 [numthreads(THREAD_COUNT, THREAD_COUNT, THREAD_COUNT)]
-void LightCulling(uint3 dispatchThreadId : SV_DISPATCHTHREADID)
+void LightCulling(uint3 dispatchThreadId : SV_DispatchThreadID)
 {
 	uint3 clusterIndex3D = dispatchThreadId;
 

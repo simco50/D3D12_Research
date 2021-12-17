@@ -160,7 +160,7 @@ void SumReductionCS(uint threadID : SV_DispatchThreadID, uint groupThreadID : SV
 	if(groupThreadID < numThreads)
 	{
 		uint nodeOffset = groupThreadID * numNodesPerWrite;
-        uint groupOffset = groupIndex * numNodesPerGroup;
+		uint groupOffset = groupIndex * numNodesPerGroup;
 		uint baseNode = groupOffset + nodeOffset + count;
 		uint baseBitIndex = cbt.NodeBitIndex(baseNode);
 
@@ -285,12 +285,12 @@ void SumReductionFirstPassCS(uint threadID : SV_DispatchThreadID)
 
 bool HeightmapFlatness(float3x3 tri)
 {
-    float2 center = (tri[0].xz + tri[1].xz + tri[2].xz) / 3.0f;
-    float2 dx = tri[0].xz - tri[1].xz;
-    float2 dy = tri[0].xz - tri[2].xz;
-    float height = SampleGrad2D(cCommonArgs.HeightmapIndex, sLinearClamp, center, dx, dy).x;
-    float heightVariance = saturate(height - Square(height));
-    return heightVariance >= cUpdateData.HeightmapVarianceBias;
+	float2 center = (tri[0].xz + tri[1].xz + tri[2].xz) / 3.0f;
+	float2 dx = tri[0].xz - tri[1].xz;
+	float2 dy = tri[0].xz - tri[2].xz;
+	float height = SampleGrad2D(cCommonArgs.HeightmapIndex, sLinearClamp, center, dx, dy).x;
+	float heightVariance = saturate(height - Square(height));
+	return heightVariance >= cUpdateData.HeightmapVarianceBias;
 }
 
 bool BoxPlaneIntersect(AABB aabb, float4 plane)
@@ -302,36 +302,36 @@ bool BoxPlaneIntersect(AABB aabb, float4 plane)
 
 bool BoxFrustumIntersect(AABB aabb, float4 planes[6])
 {
-    for (int i = 0; i < 6; ++i)
+	for (int i = 0; i < 6; ++i)
 	{
 		if(!BoxPlaneIntersect(aabb, planes[i]))
 		{
 			return false;
 		}
-    }
+	}
 	return true;
 }
 
 bool TriangleFrustumIntersect(float3x3 tri)
 {
-    float3 bmin = mul(float4(min(min(tri[0], tri[1]), tri[2]), 1), cUpdateData.World).xyz;
-    float3 bmax = mul(float4(max(max(tri[0], tri[1]), tri[2]), 1), cUpdateData.World).xyz;
+	float3 bmin = mul(float4(min(min(tri[0], tri[1]), tri[2]), 1), cUpdateData.World).xyz;
+	float3 bmax = mul(float4(max(max(tri[0], tri[1]), tri[2]), 1), cUpdateData.World).xyz;
 	AABB aabb;
 	AABBFromMinMax(aabb, bmin, bmax);
-    return BoxFrustumIntersect(aabb, cUpdateData.FrustumPlanes);
+	return BoxFrustumIntersect(aabb, cUpdateData.FrustumPlanes);
 }
 
 float2 TriangleLOD(float3x3 tri)
 {
-    float3 p0 = mul(float4(tri[0], 1), cUpdateData.WorldView).xyz;
-    float3 p2 = mul(float4(tri[2], 1), cUpdateData.WorldView).xyz;
+	float3 p0 = mul(float4(tri[0], 1), cUpdateData.WorldView).xyz;
+	float3 p2 = mul(float4(tri[2], 1), cUpdateData.WorldView).xyz;
 
-    float3 c = (p0 + p2) * 0.5f;
-    float3 v = (p2 - p0);
-    float distSq = dot(c, c);
-    float lenSq = dot(v, v);
+	float3 c = (p0 + p2) * 0.5f;
+	float3 v = (p2 - p0);
+	float distSq = dot(c, c);
+	float lenSq = dot(v, v);
 
-    return float2(cUpdateData.ScreenSizeBias + log2(lenSq / distSq), 1.0f);
+	return float2(cUpdateData.ScreenSizeBias + log2(lenSq / distSq), 1.0f);
 }
 
 float2 GetLOD(float3x3 tri)
@@ -414,7 +414,7 @@ void UpdateCS(uint threadID : SV_DispatchThreadID)
 
 struct VertexOut
 {
-	float4 Position : SV_POSITION;
+	float4 Position : SV_Position;
 	float2 UV : TEXCOORD;
 	uint HeapIndex : HEAP_INDEX;
 };
@@ -570,7 +570,7 @@ void RenderVS(uint vertexID : SV_VertexID, uint instanceID : SV_InstanceID, out 
 
 float4 RenderPS(
 	VertexOut vertex,
-	float3 bary : SV_Barycentrics) : SV_TARGET
+	float3 bary : SV_Barycentrics) : SV_Target
 {
 	float tl = Sample2D(cCommonArgs.HeightmapIndex, sLinearClamp, vertex.UV, uint2(-1, -1)).r;
 	float t  = Sample2D(cCommonArgs.HeightmapIndex, sLinearClamp, vertex.UV, uint2( 0, -1)).r;
@@ -611,7 +611,7 @@ float4 RenderPS(
 void DebugVisualizeVS(
 	uint vertexID : SV_VertexID,
 	uint instanceID : SV_InstanceID,
-	out float4 pos : SV_POSITION,
+	out float4 pos : SV_Position,
 	out float4 color : COLOR)
 {
 	CBT cbt;
@@ -634,9 +634,9 @@ void DebugVisualizeVS(
 }
 
 float4 DebugVisualizePS(
-	float4 position : SV_POSITION,
+	float4 position : SV_Position,
 	float4 color : COLOR,
-	float3 bary : SV_Barycentrics) : SV_TARGET
+	float3 bary : SV_Barycentrics) : SV_Target
 {
 	float3 deltas = fwidth(bary);
 	float3 smoothing = deltas * 1;

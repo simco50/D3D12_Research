@@ -27,8 +27,9 @@ float4 VSMain(uint vertexId : SV_VertexID) : SV_POSITION
 {
     MeshInstance instance = tMeshInstances[cObjectData.Index];
     MeshData mesh = tMeshes[instance.Mesh];
+	ByteAddressBuffer meshBuffer = tBufferTable[mesh.BufferIndex];
 
-    float3 position = UnpackHalf3(LoadByteAddressData<uint2>(mesh.PositionStream, vertexId));
+    float3 position = UnpackHalf3(meshBuffer.Load<uint2>(mesh.PositionsOffset + vertexId * sizeof(uint2)));
     return mul(mul(float4(position, 1.0f), instance.World), cViewData.ViewProjection);
 }
 

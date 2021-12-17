@@ -1,5 +1,4 @@
-#ifndef __CBT_INCLUDE__
-#define __CBT_INCLUDE__
+#pragma once
 
 struct CBT
 {
@@ -210,9 +209,9 @@ namespace LEB
 		float b = bit;
 		float c = 1.0f - bit;
 		return float3x3(
-			c,      b,      0.0f,
+			c,	  b,	  0.0f,
 			0.5f,   0.0f,   0.5f,
-			0.0f,   c,      b
+			0.0f,   c,	  b
 		);
 	}
 
@@ -221,9 +220,9 @@ namespace LEB
 		float b = 1.0f - bit;
 		float c = bit;
 		return float3x3(
-			c,      0,      b,
+			c,	  0,	  b,
 			0.0f,   1.0f,   0.0f,
-			b,      0.0f,   c
+			b,	  0.0f,   c
 		);
 	}
 
@@ -232,9 +231,9 @@ namespace LEB
 		float b = quadBit;
 		float c = 1.0f - quadBit;
 		return float3x3(
-			c,      0,      b,
-			b,      c,      b,
-			b,      0.0f,   c
+			c,	  0,	  b,
+			b,	  c,	  b,
+			b,	  0.0f,   c
 		);
 	}
 
@@ -372,5 +371,3 @@ namespace LEB
 		return mul(transformMatrix, attributes);
 	}
 }
-
-#endif

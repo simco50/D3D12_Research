@@ -12,15 +12,6 @@
 #define RAY_DIFFUSE 0
 #define RAY_SPECULAR 1
 
-GlobalRootSignature GlobalRootSig =
-{
-	"CBV(b0),"
-	"CBV(b2),"
-	"DescriptorTable(UAV(u0, numDescriptors = 2)),"
-	"DescriptorTable(SRV(t5, numDescriptors = 8)),"
-	DEFAULT_ROOT_SIG_PARAMS
-
-};
 struct ViewData
 {
 	float4x4 View;
@@ -49,8 +40,8 @@ struct RAYPAYLOAD PrimaryRayPayload
 	float2 Normal;
 	float2 Tangent;
 	int TangentSign;
-	float2 GeometryNormal;
 	float3 Position;
+	float2 GeometryNormal;
 	uint Material;
 
 	bool IsHit()
@@ -407,7 +398,6 @@ void RayGen()
 		// Decode the hit payload to retrieve all the shading information
 		MaterialProperties surface = GetMaterialProperties(payload.Material, payload.UV, 0);
 		BrdfData brdfData = GetBrdfData(surface);
-
 
 		// Flip the normal towards the incoming ray
 		float3 N = DecodeNormalOctahedron(payload.Normal);

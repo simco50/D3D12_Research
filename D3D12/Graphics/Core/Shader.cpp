@@ -4,6 +4,7 @@
 #include "Core/CommandLine.h"
 #include "Core/FileWatcher.h"
 #include "dxc/dxcapi.h"
+#include "dxc/d3d12shader.h"
 
 namespace ShaderCompiler
 {
@@ -165,10 +166,11 @@ namespace ShaderCompiler
 		arguments.AddArgument(Paths::GetFileNameWithoutExtension(compileJob.FilePath).c_str());
 		arguments.AddArgument("-E", compileJob.EntryPoint.c_str());
 		arguments.AddArgument("-T", target.c_str());
-		arguments.AddArgument("-enable-templates");
 		arguments.AddArgument(DXC_ARG_ALL_RESOURCES_BOUND);
 		arguments.AddArgument(DXC_ARG_WARNINGS_ARE_ERRORS);
 		arguments.AddArgument(DXC_ARG_PACK_MATRIX_ROW_MAJOR);
+
+		arguments.AddArgument("-HV", "2021");
 
 #if 0
 		if (majVersion >= 6 && minVersion >= 6)

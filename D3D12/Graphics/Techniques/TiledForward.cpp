@@ -100,6 +100,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& resources)
 				Matrix ViewProjection;
 				Matrix ReprojectionMatrix;
 				Vector4 ViewPosition;
+				Vector4 FrustumPlanes[6];
 				Vector2 InvScreenDimensions;
 				float NearZ;
 				float FarZ;
@@ -110,6 +111,14 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& resources)
 			} frameData;
 
 			//Camera constants
+			DirectX::XMVECTOR nearPlane, farPlane, left, right, top, bottom;
+			resources.pCamera->GetFrustum().GetPlanes(&nearPlane, &farPlane, &right, &left, &top, &bottom);
+			frameData.FrustumPlanes[0] = Vector4(nearPlane);
+			frameData.FrustumPlanes[1] = Vector4(farPlane);
+			frameData.FrustumPlanes[2] = Vector4(left);
+			frameData.FrustumPlanes[3] = Vector4(right);
+			frameData.FrustumPlanes[4] = Vector4(top);
+			frameData.FrustumPlanes[5] = Vector4(bottom);
 			frameData.View = resources.pCamera->GetView();
 			frameData.Projection = resources.pCamera->GetProjection();
 			frameData.ProjectionInverse = resources.pCamera->GetProjectionInverse();
@@ -169,32 +178,52 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& resources)
 
 			context.SetRootCBV(1, frameData);
 			context.SetRootCBV(2, *resources.pShadowData);
-
-			D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
-				resources.pLightBuffer->GetSRV()->GetDescriptor(),
-				resources.pAO->GetSRV()->GetDescriptor(),
-				resources.pResolvedDepth->GetSRV()->GetDescriptor(),
-				resources.pPreviousColor->GetSRV()->GetDescriptor(),
-				resources.pMaterialBuffer->GetSRV()->GetDescriptor(),
-				resources.pMaterialBuffer->GetSRV()->GetDescriptor(),
-				resources.pMeshBuffer->GetSRV()->GetDescriptor(),
-				resources.pMeshInstanceBuffer->GetSRV()->GetDescriptor(),
-			};
-			context.BindResources(3, 3, srvs, ARRAYSIZE(srvs));
+			
 
 			{
 				GPU_PROFILE_SCOPE("Opaque", &context);
+
+				D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
+					resources.pLightBuffer->GetSRV()->GetDescriptor(), // dummy
+					m_pLightGridOpaque->GetSRV()->GetDescriptor(),
+					m_pLightIndexListBufferOpaque->GetSRV()->GetDescriptor(),
+					resources.pLightBuffer->GetSRV()->GetDescriptor(),
+					resources.pAO->GetSRV()->GetDescriptor(),
+					resources.pResolvedDepth->GetSRV()->GetDescriptor(),
+					resources.pPreviousColor->GetSRV()->GetDescriptor(),
+					resources.pMaterialBuffer->GetSRV()->GetDescriptor(),
+					resources.pMaterialBuffer->GetSRV()->GetDescriptor(),
+					resources.pMeshBuffer->GetSRV()->GetDescriptor(),
+					resources.pMeshInstanceBuffer->GetSRV()->GetDescriptor(),
+				};
+				context.BindResources(3, 0, srvs, ARRAYSIZE(srvs));
+
 				context.SetPipelineState(m_pDiffusePSO);
-				context.BindResource(4, 1, m_pLightGridOpaque->GetSRV());
-				context.BindResource(4, 2, m_pLightIndexListBufferOpaque->GetSRV());
-				DrawScene(context, resources, Batch::Blending::Opaque | Batch::Blending::AlphaMask);
+				DrawScene(context, resources, Batch::Blending::Opaque);
+
+				context.SetPipelineState(m_pDiffuseMaskedPSO);
+				DrawScene(context, resources, Batch::Blending::AlphaMask);
 			}
 
 			{
 				GPU_PROFILE_SCOPE("Transparant", &context);
+
+				D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
+					resources.pLightBuffer->GetSRV()->GetDescriptor(), // dummy
+					m_pLightGridTransparant->GetSRV()->GetDescriptor(),
+					m_pLightIndexListBufferTransparant->GetSRV()->GetDescriptor(),
+					resources.pLightBuffer->GetSRV()->GetDescriptor(),
+					resources.pAO->GetSRV()->GetDescriptor(),
+					resources.pResolvedDepth->GetSRV()->GetDescriptor(),
+					resources.pPreviousColor->GetSRV()->GetDescriptor(),
+					resources.pMaterialBuffer->GetSRV()->GetDescriptor(),
+					resources.pMaterialBuffer->GetSRV()->GetDescriptor(),
+					resources.pMeshBuffer->GetSRV()->GetDescriptor(),
+					resources.pMeshInstanceBuffer->GetSRV()->GetDescriptor(),
+				};
+				context.BindResources(3, 0, srvs, ARRAYSIZE(srvs));
+
 				context.SetPipelineState(m_pDiffuseAlphaPSO);
-				context.BindResource(4, 1, m_pLightGridTransparant->GetSRV());
-				context.BindResource(4, 2, m_pLightIndexListBufferTransparant->GetSRV());
 				DrawScene(context, resources, Batch::Blending::AlphaBlend);
 			}
 			context.EndRenderPass();
@@ -291,7 +320,7 @@ void TiledForward::SetupPipelines()
 
 		{
 			DXGI_FORMAT formats[] = {
-				GraphicsDevice::RENDER_TARGET_FORMAT,
+				DXGI_FORMAT_R16G16B16A16_FLOAT,
 				DXGI_FORMAT_R16G16B16A16_FLOAT,
 			};
 
@@ -300,16 +329,21 @@ void TiledForward::SetupPipelines()
 			psoDesc.SetRootSignature(m_pDiffuseRS->GetRootSignature());
 			psoDesc.SetVertexShader(pVertexShader);
 			psoDesc.SetPixelShader(pPixelShader);
-			psoDesc.SetRenderTargetFormats(formats, ARRAYSIZE(formats), GraphicsDevice::DEPTH_STENCIL_FORMAT, /* m_pDevice->GetMultiSampleCount() */ 1);
+			psoDesc.SetRenderTargetFormats(formats, ARRAYSIZE(formats), DXGI_FORMAT_D32_FLOAT, /* m_pDevice->GetMultiSampleCount() */ 1);
 			psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_EQUAL);
 			psoDesc.SetDepthWrite(false);
-			psoDesc.SetName("Diffuse PBR Pipeline");
+			psoDesc.SetName("Diffuse");
 			m_pDiffusePSO = m_pDevice->CreatePipeline(psoDesc);
+
+			//Alpha Mask
+			psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
+			psoDesc.SetName("Diffuse Masked");
+			m_pDiffuseMaskedPSO = m_pDevice->CreatePipeline(psoDesc);
 
 			//Transparant
 			psoDesc.SetBlendMode(BlendMode::Alpha, false);
 			psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
-			psoDesc.SetName("Diffuse PBR (Alpha) Pipeline");
+			psoDesc.SetName("Diffuse (Alpha)");
 			m_pDiffuseAlphaPSO = m_pDevice->CreatePipeline(psoDesc);
 		}
 	}

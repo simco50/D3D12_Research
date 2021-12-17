@@ -244,13 +244,13 @@ void RayGen()
 {
 	float2 dimInv = rcp(DispatchRaysDimensions().xy);
 	uint2 launchIndex = DispatchRaysIndex().xy;
-	float2 texCoord = (float2)launchIndex * dimInv;
+	float2 uv = (float2)launchIndex * dimInv;
 
-	float depth = tDepth.SampleLevel(sLinearClamp, texCoord, 0).r;
-	float4 colorSample = tPreviousSceneColor.SampleLevel(sLinearClamp, texCoord, 0);
-	float4 reflectionSample = tSceneNormals.SampleLevel(sLinearClamp, texCoord, 0);
+	float depth = tDepth.SampleLevel(sLinearClamp, uv, 0).r;
+	float4 colorSample = tPreviousSceneColor.SampleLevel(sLinearClamp, uv, 0);
+	float4 reflectionSample = tSceneNormals.SampleLevel(sLinearClamp, uv, 0);
 
-	float3 view = ViewFromDepth(texCoord, depth, cViewData.ProjectionInverse);
+	float3 view = ViewFromDepth(uv, depth, cViewData.ProjectionInverse);
 	float3 world = mul(float4(view, 1), cViewData.ViewInverse).xyz;
 
 	float3 N = reflectionSample.rgb;

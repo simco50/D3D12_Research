@@ -38,6 +38,7 @@ private:
 	//Diffuse
 	std::unique_ptr<RootSignature> m_pDiffuseRS;
 	PipelineState* m_pDiffusePSO = nullptr;
+	PipelineState* m_pDiffuseMaskedPSO = nullptr;
 	PipelineState* m_pDiffuseAlphaPSO = nullptr;
 
 	//Visualize Light Count

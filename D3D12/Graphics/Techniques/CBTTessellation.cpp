@@ -2,6 +2,7 @@
 #include "CBTTessellation.h"
 #include "Graphics/Core/RootSignature.h"
 #include "Graphics/Core/Graphics.h"
+#include "Graphics/ImGuiRenderer.h"
 #include "Graphics/Core/PipelineState.h"
 #include "Graphics/Core/Buffer.h"
 #include "Graphics/RenderGraph/RenderGraph.h"
@@ -346,7 +347,6 @@ void CBTTessellation::SetupPipelines()
 	m_pCBTRS = std::make_unique<RootSignature>(m_pDevice);
 	m_pCBTRS->AddRootConstants<IntVector4>(0);
 	m_pCBTRS->AddConstantBufferView(1);
-	m_pCBTRS->AddDefaultTables();
 	m_pCBTRS->Finalize("CBT");
 
 	{
@@ -387,7 +387,7 @@ void CBTTessellation::SetupPipelines()
 			psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
 		}
 		psoDesc.SetPixelShader(m_pDevice->GetShader("CBT.hlsl", ShaderType::Pixel, "RenderPS", defines));
-		psoDesc.SetRenderTargetFormat(GraphicsDevice::RENDER_TARGET_FORMAT, GraphicsDevice::DEPTH_STENCIL_FORMAT, 1);
+		psoDesc.SetRenderTargetFormat(DXGI_FORMAT_R16G16B16A16_FLOAT, DXGI_FORMAT_D32_FLOAT, 1);
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
 		psoDesc.SetName("Draw CBT");
 		m_pCBTRenderPSO = m_pDevice->CreatePipeline(psoDesc);
@@ -400,7 +400,7 @@ void CBTTessellation::SetupPipelines()
 		psoDesc.SetAmplificationShader(m_pDevice->GetShader("CBT.hlsl", ShaderType::Amplification, "UpdateAS", defines));
 		psoDesc.SetMeshShader(m_pDevice->GetShader("CBT.hlsl", ShaderType::Mesh, "RenderMS", defines));
 		psoDesc.SetPixelShader(m_pDevice->GetShader("CBT.hlsl", ShaderType::Pixel, "RenderPS", defines));
-		psoDesc.SetRenderTargetFormat(GraphicsDevice::RENDER_TARGET_FORMAT, GraphicsDevice::DEPTH_STENCIL_FORMAT, 1);
+		psoDesc.SetRenderTargetFormat(DXGI_FORMAT_R16G16B16A16_FLOAT, DXGI_FORMAT_D32_FLOAT, 1);
 		psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
 		psoDesc.SetName("Draw CBT");
