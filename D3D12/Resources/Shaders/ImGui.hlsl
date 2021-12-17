@@ -9,23 +9,23 @@ struct ConstantsData
 
 ConstantBuffer<ConstantsData> cConstants : register(b0);
 
-struct VS_INPUT
+struct VertexInput
 {
 	float2 Position : POSITION;
 	float2 UV : TEXCOORD0;
 	float4 Color : COLOR0;
 };
 
-struct PS_INPUT
+struct InterpolantsVSToPS
 {
-	float4 Position : SV_POSITION;
+	float4 Position : SV_Position;
 	float2 UV : TEXCOORD0;
 	float4 Color : COLOR0;
 };
 
-PS_INPUT VSMain(VS_INPUT input)
+InterpolantsVSToPS VSMain(VertexInput input)
 {
-	PS_INPUT output = (PS_INPUT)0;
+	InterpolantsVSToPS output = (InterpolantsVSToPS)0;
 
 	output.Position = mul(float4(input.Position.xy, 0.5f, 1.f), cConstants.ViewProj);
 	output.Color = input.Color;
@@ -34,7 +34,7 @@ PS_INPUT VSMain(VS_INPUT input)
 	return output;
 }
 
-float4 PSMain(PS_INPUT input) : SV_TARGET
+float4 PSMain(InterpolantsVSToPS input) : SV_Target
 {
 	float4 texSample = tTexture2DTable[cConstants.TextureID].SampleLevel(sMaterialSampler, input.UV, 0);
 	return input.Color * texSample;

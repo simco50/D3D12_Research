@@ -11,13 +11,13 @@
 uint SeedThread(uint seed)
 {
 #if 0
-    //Wang hash to initialize the seed
-    seed = (seed ^ 61) ^ (seed >> 16);
-    seed *= 9;
-    seed = seed ^ (seed >> 4);
-    seed *= 0x27d4eb2d;
-    seed = seed ^ (seed >> 15);
-    return seed;
+	//Wang hash to initialize the seed
+	seed = (seed ^ 61) ^ (seed >> 16);
+	seed *= 9;
+	seed = seed ^ (seed >> 4);
+	seed *= 0x27d4eb2d;
+	seed = seed ^ (seed >> 15);
+	return seed;
 #else
   	uint state = seed * 747796405u + 2891336453u;
   	uint word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
@@ -27,27 +27,27 @@ uint SeedThread(uint seed)
 
 uint SeedThread(uint2 pixel, uint2 resolution, uint frameIndex)
 {
-    uint rngState = dot(pixel, uint2(1, resolution.x)) ^ SeedThread(frameIndex);
-    return SeedThread(rngState);
+	uint rngState = dot(pixel, uint2(1, resolution.x)) ^ SeedThread(frameIndex);
+	return SeedThread(rngState);
 }
 
 uint XORShift(inout uint rng_state)
 {
-    // Xorshift algorithm from George Marsaglia's paper.
-    rng_state ^= (rng_state << 13);
-    rng_state ^= (rng_state >> 17);
-    rng_state ^= (rng_state << 5);
-    return rng_state;
+	// Xorshift algorithm from George Marsaglia's paper.
+	rng_state ^= (rng_state << 13);
+	rng_state ^= (rng_state >> 17);
+	rng_state ^= (rng_state << 5);
+	return rng_state;
 }
 
 float Random01(inout uint rng_state)
 {
-    return asfloat(0x3f800000 | XORShift(rng_state) >> 9) - 1.0;
+	return asfloat(0x3f800000 | XORShift(rng_state) >> 9) - 1.0;
 }
 
 uint Random(inout uint rng_state, uint minimum, uint maximum)
 {
-    return minimum + uint(float(maximum - minimum + 1) * Random01(rng_state));
+	return minimum + uint(float(maximum - minimum + 1) * Random01(rng_state));
 }
 
 //-----------------------------------------------------------------------------------------
@@ -68,7 +68,7 @@ float VanDerCorpusSequence(uint bits)
 //source: http://holger.dammertz.org/stuff/notes_HammersleyOnHemisphere.html
 float2 HammersleyPoints(uint i, uint N)
 {
-    return float2(float(i) / float(N), VanDerCorpusSequence(i));
+	return float2(float(i) / float(N), VanDerCorpusSequence(i));
 }
 
 //hemisphereSample_uniform. Uniform distribution on the sphere

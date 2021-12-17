@@ -10,26 +10,24 @@
 #define TEXTURE_INPUT_TYPE Texture2D<TEXTURE_STORAGE>
 #define TEXTURE_OUTPUT_TYPE RWTexture2D<TEXTURE_STORAGE>
 
+struct PassParameters
+{
+	uint2 TargetDimensions;
+	float2 TargetDimensionsInv;
+};
+
+ConstantBuffer<PassParameters> cPassData : register(b0);
+
 TEXTURE_OUTPUT_TYPE uOutput : register(u0);
 TEXTURE_INPUT_TYPE tInput : register(t0);
 
-cbuffer ShaderParameters : register(b0)
-{
-    uint2 cTargetDimensions;
-    float2 cTargetDimensionsInv;
-}
-
-struct CS_INPUT
-{
-    uint3 DispatchThreadId : SV_DISPATCHTHREADID;
-};
 
 [RootSignature(RootSig)]
 [numthreads(BLOCK_SIZE, BLOCK_SIZE, 1)]
-void CSMain(CS_INPUT input)
+void CSMain(uint3 threadID : SV_DispatchThreadID)
 {
-    if(input.DispatchThreadId.x < cTargetDimensions.x && input.DispatchThreadId.y < cTargetDimensions.y)
-    {
-        uOutput[input.DispatchThreadId.xy] = tInput.SampleLevel(sLinearClamp, ((float2)input.DispatchThreadId.xy + 0.5f) * cTargetDimensionsInv, 0);
-    }
+	if(threadID.x < cPassData.TargetDimensions.x && threadID.y < cPassData.TargetDimensions.y)
+	{
+		uOutput[threadID.xy] = tInput.SampleLevel(sLinearClamp, ((float2)threadID.xy + 0.5f) * cPassData.TargetDimensionsInv, 0);
+	}
 }

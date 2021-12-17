@@ -6,27 +6,28 @@
 
 struct ParticleData
 {
-    float3 Position;
-    float LifeTime;
-    float3 Velocity;
-    float Size;
+	float3 Position;
+	float LifeTime;
+	float3 Velocity;
+	float Size;
 };
 
-cbuffer FrameData : register(b0)
+struct PassData
 {
-    float4x4 cViewInverse;
-    float4x4 cView;
-    float4x4 cProjection;
-}
+	float4x4 ViewInverse;
+	float4x4 View;
+	float4x4 Projection;
+};
 
+ConstantBuffer<PassData> cPassData : register(b0);
 StructuredBuffer<ParticleData> tParticleData : register(t0);
 StructuredBuffer<uint> tAliveList : register(t1);
 
-struct PS_Input
+struct InterpolantsVSToPS
 {
-    float4 position : SV_POSITION;
-    float2 texCoord : TEXCOORD;
-    float4 color : COLOR;
+	float4 Position : SV_Position;
+	float2 UV : TEXCOORD;
+	float4 Color : COLOR;
 };
 
 static const float3 BILLBOARD[] = {
@@ -39,29 +40,29 @@ static const float3 BILLBOARD[] = {
 };
 
 [RootSignature(RootSig)]
-PS_Input VSMain(uint vertexId : SV_VertexID)
+InterpolantsVSToPS VSMain(uint vertexId : SV_VertexID)
 {
-    PS_Input output;
+	InterpolantsVSToPS output;
 
-    uint vertexID = vertexId % 6;
+	uint vertexID = vertexId % 6;
 	uint instanceID = vertexId / 6;
 
-    uint particleIndex = tAliveList[instanceID];
-    ParticleData particle = tParticleData[particleIndex];
-    float3 q = particle.Size * BILLBOARD[vertexID];
+	uint particleIndex = tAliveList[instanceID];
+	ParticleData particle = tParticleData[particleIndex];
+	float3 q = particle.Size * BILLBOARD[vertexID];
 
-    output.position = float4(mul(q, (float3x3)cViewInverse), 1);
-    output.position.xyz += particle.Position;
-    output.position = mul(output.position, cView);
-    output.position = mul(output.position, cProjection);
-    output.color = float4(10000, 0, 1, 1);
-    output.texCoord = (BILLBOARD[vertexID].xy + 1) / 2.0f;
+	output.Position = float4(mul(q, (float3x3)cPassData.ViewInverse), 1);
+	output.Position.xyz += particle.Position;
+	output.Position = mul(output.Position, cPassData.View);
+	output.Position = mul(output.Position, cPassData.Projection);
+	output.Color = float4(10000, 0, 1, 1);
+	output.UV = (BILLBOARD[vertexID].xy + 1) / 2.0f;
 
-    return output;
+	return output;
 }
 
-float4 PSMain(PS_Input input) : SV_TARGET
+float4 PSMain(InterpolantsVSToPS input) : SV_Target
 {
-    float alpha = 1 - saturate(2 * length(input.texCoord.xy - 0.5f));
-    return float4(1, 1, 1, alpha);
+	float alpha = 1 - saturate(2 * length(input.UV.xy - 0.5f));
+	return float4(1, 1, 1, alpha);
 }

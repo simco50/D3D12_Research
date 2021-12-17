@@ -9,14 +9,16 @@
 #define BLOCK_SIZE 16
 #define SPLITZ_CULLING 1
 
-cbuffer ShaderParameters : register(b0)
+struct ShaderParameters
 {
-    float4x4 cView;
-    float4x4 cProjectionInverse;
-    uint4 cNumThreadGroups;
-    float2 cScreenDimensionsInv;
-    uint cLightCount;
-}
+	float4x4 View;
+	float4x4 ProjectionInverse;
+	uint4 NumThreadGroups;
+	float2 ScreenDimensionsInv;
+	uint LightCount;
+};
+
+ConstantBuffer<ShaderParameters> cPassData : register(b0);
 
 StructuredBuffer<Light> tSceneLights : register(t1);
 Texture2D tDepthTexture : register(t0);
@@ -47,201 +49,193 @@ groupshared uint DepthMask;
 
 void AddLightForOpaque(uint lightIndex)
 {
-    uint index;
-    InterlockedAdd(OpaqueLightCount, 1, index);
-    if (index < MAX_LIGHTS_PER_TILE)
-    {
-        OpaqueLightList[index] = lightIndex;
-    }
+	uint index;
+	InterlockedAdd(OpaqueLightCount, 1, index);
+	if (index < MAX_LIGHTS_PER_TILE)
+	{
+		OpaqueLightList[index] = lightIndex;
+	}
 }
 
 void AddLightForTransparant(uint lightIndex)
 {
-    uint index;
-    InterlockedAdd(TransparantLightCount, 1, index);
-    if (index < MAX_LIGHTS_PER_TILE)
-    {
-        TransparantLightList[index] = lightIndex;
-    }
+	uint index;
+	InterlockedAdd(TransparantLightCount, 1, index);
+	if (index < MAX_LIGHTS_PER_TILE)
+	{
+		TransparantLightList[index] = lightIndex;
+	}
 }
-
-struct CS_INPUT
-{
-    uint3 GroupId : SV_GROUPID;
-    uint3 GroupThreadId : SV_GROUPTHREADID;
-    uint3 DispatchThreadId : SV_DISPATCHTHREADID;
-    uint GroupIndex : SV_GROUPINDEX;
-};
 
 uint CreateLightMask(float depthRangeMin, float depthRange, Sphere sphere)
 {
-    float fMin = sphere.Position.z - sphere.Radius;
-    float fMax = sphere.Position.z + sphere.Radius;
-    uint maskIndexStart = max(0, min(31, floor((fMin - depthRangeMin) * depthRange)));
-    uint maskIndexEnd = max(0, min(31, floor((fMax - depthRangeMin) * depthRange)));
+	float fMin = sphere.Position.z - sphere.Radius;
+	float fMax = sphere.Position.z + sphere.Radius;
+	uint maskIndexStart = max(0, min(31, floor((fMin - depthRangeMin) * depthRange)));
+	uint maskIndexEnd = max(0, min(31, floor((fMax - depthRangeMin) * depthRange)));
 
-    uint mask = 0xFFFFFFFF;
-    mask >>= 31 - (maskIndexEnd - maskIndexStart);
-    mask <<= maskIndexStart;
-    return mask;
+	uint mask = 0xFFFFFFFF;
+	mask >>= 31 - (maskIndexEnd - maskIndexStart);
+	mask <<= maskIndexStart;
+	return mask;
 }
 
 [RootSignature(RootSig)]
 [numthreads(BLOCK_SIZE, BLOCK_SIZE, 1)]
-void CSMain(CS_INPUT input)
+void CSMain(uint3 groupId : SV_GroupID, uint3 threadID : SV_DispatchThreadID, uint groupIndex : SV_GroupIndex)
 {
-    int2 texCoord = input.DispatchThreadId.xy;
-    float fDepth = tDepthTexture[texCoord].r;
+	int2 uv = threadID.xy;
+	float fDepth = tDepthTexture[uv].r;
 
-    //Convert to uint because you can't used interlocked functions on floats
-    uint depth = asuint(fDepth);
+	//Convert to uint because you can't used interlocked functions on floats
+	uint depth = asuint(fDepth);
 
-    //Initialize the groupshared data only on the first thread of the group
-    if (input.GroupIndex == 0)
-    {
-        MinDepth = 0xffffffff;
-        MaxDepth = 0;
-        OpaqueLightCount = 0;
-        TransparantLightCount = 0;
+	//Initialize the groupshared data only on the first thread of the group
+	if (groupIndex == 0)
+	{
+		MinDepth = 0xffffffff;
+		MaxDepth = 0;
+		OpaqueLightCount = 0;
+		TransparantLightCount = 0;
 #if SPLITZ_CULLING
-        DepthMask = 0;
+		DepthMask = 0;
 #endif
-    }
+	}
 
-    //Wait for thread 0 to finish with initializing the groupshared data
-    GroupMemoryBarrierWithGroupSync();
+	//Wait for thread 0 to finish with initializing the groupshared data
+	GroupMemoryBarrierWithGroupSync();
 
-    //Find the min and max depth values in the threadgroup
-    InterlockedMin(MinDepth, depth);
-    InterlockedMax(MaxDepth, depth);
+	//Find the min and max depth values in the threadgroup
+	InterlockedMin(MinDepth, depth);
+	InterlockedMax(MaxDepth, depth);
 
-    //Wait for all the threads to finish
-    GroupMemoryBarrierWithGroupSync();
+	//Wait for all the threads to finish
+	GroupMemoryBarrierWithGroupSync();
 
-    float fMinDepth = asfloat(MaxDepth);
-    float fMaxDepth = asfloat(MinDepth);
+	float fMinDepth = asfloat(MaxDepth);
+	float fMaxDepth = asfloat(MinDepth);
 
-    if(input.GroupIndex == 0)
-    {
-        float3 viewSpace[8];
-		viewSpace[0] = ScreenToView(float4(input.GroupId.xy * BLOCK_SIZE, fMinDepth, 1.0f), cScreenDimensionsInv, cProjectionInverse).xyz;
-		viewSpace[1] = ScreenToView(float4(float2(input.GroupId.x + 1, input.GroupId.y) * BLOCK_SIZE, fMinDepth, 1.0f), cScreenDimensionsInv, cProjectionInverse).xyz;
-		viewSpace[2] = ScreenToView(float4(float2(input.GroupId.x, input.GroupId.y + 1) * BLOCK_SIZE, fMinDepth, 1.0f), cScreenDimensionsInv, cProjectionInverse).xyz;
-		viewSpace[3] = ScreenToView(float4(float2(input.GroupId.x + 1, input.GroupId.y + 1) * BLOCK_SIZE, fMinDepth, 1.0f), cScreenDimensionsInv, cProjectionInverse).xyz;
-		viewSpace[4] = ScreenToView(float4(input.GroupId.xy * BLOCK_SIZE, fMaxDepth, 1.0f), cScreenDimensionsInv, cProjectionInverse).xyz;
-		viewSpace[5] = ScreenToView(float4(float2(input.GroupId.x + 1, input.GroupId.y) * BLOCK_SIZE, fMaxDepth, 1.0f), cScreenDimensionsInv, cProjectionInverse).xyz;
-		viewSpace[6] = ScreenToView(float4(float2(input.GroupId.x, input.GroupId.y + 1) * BLOCK_SIZE, fMaxDepth, 1.0f), cScreenDimensionsInv, cProjectionInverse).xyz;
-		viewSpace[7] = ScreenToView(float4(float2(input.GroupId.x + 1, input.GroupId.y + 1) * BLOCK_SIZE, fMaxDepth, 1.0f), cScreenDimensionsInv, cProjectionInverse).xyz;
+	if(groupIndex == 0)
+	{
+		float3 viewSpace[8];
+		viewSpace[0] = ScreenToView(float4(groupId.xy * BLOCK_SIZE, fMinDepth, 1.0f), cPassData.ScreenDimensionsInv, cPassData.ProjectionInverse).xyz;
+		viewSpace[1] = ScreenToView(float4(float2(groupId.x + 1, groupId.y) * BLOCK_SIZE, fMinDepth, 1.0f), cPassData.ScreenDimensionsInv, cPassData.ProjectionInverse).xyz;
+		viewSpace[2] = ScreenToView(float4(float2(groupId.x, groupId.y + 1) * BLOCK_SIZE, fMinDepth, 1.0f), cPassData.ScreenDimensionsInv, cPassData.ProjectionInverse).xyz;
+		viewSpace[3] = ScreenToView(float4(float2(groupId.x + 1, groupId.y + 1) * BLOCK_SIZE, fMinDepth, 1.0f), cPassData.ScreenDimensionsInv, cPassData.ProjectionInverse).xyz;
+		viewSpace[4] = ScreenToView(float4(groupId.xy * BLOCK_SIZE, fMaxDepth, 1.0f), cPassData.ScreenDimensionsInv, cPassData.ProjectionInverse).xyz;
+		viewSpace[5] = ScreenToView(float4(float2(groupId.x + 1, groupId.y) * BLOCK_SIZE, fMaxDepth, 1.0f), cPassData.ScreenDimensionsInv, cPassData.ProjectionInverse).xyz;
+		viewSpace[6] = ScreenToView(float4(float2(groupId.x, groupId.y + 1) * BLOCK_SIZE, fMaxDepth, 1.0f), cPassData.ScreenDimensionsInv, cPassData.ProjectionInverse).xyz;
+		viewSpace[7] = ScreenToView(float4(float2(groupId.x + 1, groupId.y + 1) * BLOCK_SIZE, fMaxDepth, 1.0f), cPassData.ScreenDimensionsInv, cPassData.ProjectionInverse).xyz;
 
-        GroupFrustum.Planes[0] = CalculatePlane(float3(0, 0, 0), viewSpace[6], viewSpace[4]);
-        GroupFrustum.Planes[1] = CalculatePlane(float3(0, 0, 0), viewSpace[5], viewSpace[7]);
-        GroupFrustum.Planes[2] = CalculatePlane(float3(0, 0, 0), viewSpace[4], viewSpace[5]);
-        GroupFrustum.Planes[3] = CalculatePlane(float3(0, 0, 0), viewSpace[7], viewSpace[6]);
+		GroupFrustum.Planes[0] = CalculatePlane(float3(0, 0, 0), viewSpace[6], viewSpace[4]);
+		GroupFrustum.Planes[1] = CalculatePlane(float3(0, 0, 0), viewSpace[5], viewSpace[7]);
+		GroupFrustum.Planes[2] = CalculatePlane(float3(0, 0, 0), viewSpace[4], viewSpace[5]);
+		GroupFrustum.Planes[3] = CalculatePlane(float3(0, 0, 0), viewSpace[7], viewSpace[6]);
 
-        float3 minAABB = 1000000;
-        float3 maxAABB = -1000000;
-        [unroll]
-        for(uint i = 0; i < 8; ++i)
-        {
-            minAABB = min(minAABB, viewSpace[i]);
-            maxAABB = max(maxAABB, viewSpace[i]);
-        }
-        AABBFromMinMax(GroupAABB, minAABB, maxAABB);
-    }
+		float3 minAABB = 1000000;
+		float3 maxAABB = -1000000;
+		[unroll]
+		for(uint i = 0; i < 8; ++i)
+		{
+			minAABB = min(minAABB, viewSpace[i]);
+			maxAABB = max(maxAABB, viewSpace[i]);
+		}
+		AABBFromMinMax(GroupAABB, minAABB, maxAABB);
+	}
 
-    // Convert depth values to view space.
-    float minDepthVS = ScreenToView(float4(0, 0, fMinDepth, 1), cScreenDimensionsInv, cProjectionInverse).z;
-    float maxDepthVS = ScreenToView(float4(0, 0, fMaxDepth, 1), cScreenDimensionsInv, cProjectionInverse).z;
-    float nearClipVS = ScreenToView(float4(0, 0, 1, 1), cScreenDimensionsInv, cProjectionInverse).z;
+	// Convert depth values to view space.
+	float minDepthVS = ScreenToView(float4(0, 0, fMinDepth, 1), cPassData.ScreenDimensionsInv, cPassData.ProjectionInverse).z;
+	float maxDepthVS = ScreenToView(float4(0, 0, fMaxDepth, 1), cPassData.ScreenDimensionsInv, cPassData.ProjectionInverse).z;
+	float nearClipVS = ScreenToView(float4(0, 0, 1, 1), cPassData.ScreenDimensionsInv, cPassData.ProjectionInverse).z;
 
 #if SPLITZ_CULLING
-    float depthVS = ScreenToView(float4(0, 0, fDepth, 1), cScreenDimensionsInv, cProjectionInverse).z;
-    float depthRange = 31.0f / (maxDepthVS - minDepthVS);
-    uint cellIndex = max(0, min(31, floor((depthVS - minDepthVS) * depthRange)));
-    InterlockedOr(DepthMask, 1u << cellIndex);
+	float depthVS = ScreenToView(float4(0, 0, fDepth, 1), cPassData.ScreenDimensionsInv, cPassData.ProjectionInverse).z;
+	float depthRange = 31.0f / (maxDepthVS - minDepthVS);
+	uint cellIndex = max(0, min(31, floor((depthVS - minDepthVS) * depthRange)));
+	InterlockedOr(DepthMask, 1u << cellIndex);
 #endif
 
-    // Clipping plane for minimum depth value
-    Plane minPlane;
-    minPlane.Normal = float3(0.0f, 0.0f, 1.0f);
-    minPlane.DistanceToOrigin = minDepthVS;
+	// Clipping plane for minimum depth value
+	Plane minPlane;
+	minPlane.Normal = float3(0.0f, 0.0f, 1.0f);
+	minPlane.DistanceToOrigin = minDepthVS;
 
-    GroupMemoryBarrierWithGroupSync();
+	GroupMemoryBarrierWithGroupSync();
 
-    //Perform the light culling
-    [loop]
-    for(uint i = input.GroupIndex; i < cLightCount; i += BLOCK_SIZE * BLOCK_SIZE)
-    {
-        Light light = tSceneLights[i];
+	//Perform the light culling
+	[loop]
+	for(uint i = groupIndex; i < cPassData.LightCount; i += BLOCK_SIZE * BLOCK_SIZE)
+	{
+		Light light = tSceneLights[i];
 
-        if(light.IsPoint())
-        {
-            Sphere sphere = (Sphere)0;
-            sphere.Radius = light.Range;
-            sphere.Position = mul(float4(light.Position, 1.0f), cView).xyz;
-            if (SphereInFrustum(sphere, GroupFrustum, nearClipVS, maxDepthVS))
-            {
-                AddLightForTransparant(i);
+		if(light.IsPoint())
+		{
+			Sphere sphere = (Sphere)0;
+			sphere.Radius = light.Range;
+			sphere.Position = mul(float4(light.Position, 1.0f), cPassData.View).xyz;
+			if (SphereInFrustum(sphere, GroupFrustum, nearClipVS, maxDepthVS))
+			{
+				AddLightForTransparant(i);
 
-                if(SphereInAABB(sphere, GroupAABB))
-                {
+				if(SphereInAABB(sphere, GroupAABB))
+				{
 #if SPLITZ_CULLING
-                    if(DepthMask & CreateLightMask(minDepthVS, depthRange, sphere))
+					if(DepthMask & CreateLightMask(minDepthVS, depthRange, sphere))
 #endif
-                    {
-                        AddLightForOpaque(i);
-                    }
-                }
-            }
-        }
-        else if(light.IsSpot())
-        {
-            Sphere sphere;
-            sphere.Radius = light.Range * 0.5f / pow(light.SpotlightAngles.y, 2);
-            sphere.Position = mul(float4(light.Position, 1), cView).xyz + mul(light.Direction, (float3x3)cView) * sphere.Radius;
-            if (SphereInFrustum(sphere, GroupFrustum, nearClipVS, maxDepthVS))
-            {
-                AddLightForTransparant(i);
+					{
+						AddLightForOpaque(i);
+					}
+				}
+			}
+		}
+		else if(light.IsSpot())
+		{
+			Sphere sphere;
+			sphere.Radius = light.Range * 0.5f / pow(light.SpotlightAngles.y, 2);
+			sphere.Position = mul(float4(light.Position, 1), cPassData.View).xyz + mul(light.Direction, (float3x3)cPassData.View) * sphere.Radius;
+			if (SphereInFrustum(sphere, GroupFrustum, nearClipVS, maxDepthVS))
+			{
+				AddLightForTransparant(i);
 
-                if(SphereInAABB(sphere, GroupAABB))
-                {
+				if(SphereInAABB(sphere, GroupAABB))
+				{
 #if SPLITZ_CULLING
-                    if(DepthMask & CreateLightMask(minDepthVS, depthRange, sphere))
+					if(DepthMask & CreateLightMask(minDepthVS, depthRange, sphere))
 #endif
-                    {
-                        AddLightForOpaque(i);
-                    }
-                }
-            }
-        }
-        else
-        {
-            AddLightForTransparant(i);
-            AddLightForOpaque(i);
-        }
-    }
+					{
+						AddLightForOpaque(i);
+					}
+				}
+			}
+		}
+		else
+		{
+			AddLightForTransparant(i);
+			AddLightForOpaque(i);
+		}
+	}
 
-    GroupMemoryBarrierWithGroupSync();
+	GroupMemoryBarrierWithGroupSync();
 
-    //Populate the light grid only on the first thread in the group
-    if (input.GroupIndex == 0)
-    {
-        InterlockedAdd(uLightIndexCounter[0], OpaqueLightCount, OpaqueLightIndexStartOffset);
-        uOpaqueOutLightGrid[input.GroupId.xy] = uint2(OpaqueLightIndexStartOffset, OpaqueLightCount);
+	//Populate the light grid only on the first thread in the group
+	if (groupIndex == 0)
+	{
+		InterlockedAdd(uLightIndexCounter[0], OpaqueLightCount, OpaqueLightIndexStartOffset);
+		uOpaqueOutLightGrid[groupId.xy] = uint2(OpaqueLightIndexStartOffset, OpaqueLightCount);
 
-        InterlockedAdd(uLightIndexCounter[1], TransparantLightCount, TransparantLightIndexStartOffset);
-        uTransparantOutLightGrid[input.GroupId.xy] = uint2(TransparantLightIndexStartOffset, TransparantLightCount);
-    }
+		InterlockedAdd(uLightIndexCounter[1], TransparantLightCount, TransparantLightIndexStartOffset);
+		uTransparantOutLightGrid[groupId.xy] = uint2(TransparantLightIndexStartOffset, TransparantLightCount);
+	}
 
-    GroupMemoryBarrierWithGroupSync();
+	GroupMemoryBarrierWithGroupSync();
 
-    //Distribute populating the light index light amonst threads in the thread group
-    for (uint i = input.GroupIndex; i < OpaqueLightCount; i += BLOCK_SIZE * BLOCK_SIZE)
-    {
-        uOpaqueLightIndexList[OpaqueLightIndexStartOffset + i] = OpaqueLightList[i];
-    }
-    for (uint i = input.GroupIndex; i < TransparantLightCount; i += BLOCK_SIZE * BLOCK_SIZE)
-    {
-        uTransparantLightIndexList[TransparantLightIndexStartOffset + i] = TransparantLightList[i];
-    }
+	//Distribute populating the light index light amonst threads in the thread group
+	for (uint i = groupIndex; i < OpaqueLightCount; i += BLOCK_SIZE * BLOCK_SIZE)
+	{
+		uOpaqueLightIndexList[OpaqueLightIndexStartOffset + i] = OpaqueLightList[i];
+	}
+	for (uint i = groupIndex; i < TransparantLightCount; i += BLOCK_SIZE * BLOCK_SIZE)
+	{
+		uTransparantLightIndexList[TransparantLightIndexStartOffset + i] = TransparantLightList[i];
+	}
 }

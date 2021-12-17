@@ -20,13 +20,13 @@ RWTexture2D<float> uOutputTexture : register(u0);
 
 [RootSignature(RootSig)]
 [numthreads(16, 16, 1)]
-void CSMain(uint3 threadId : SV_DISPATCHTHREADID)
+void CSMain(uint3 threadId : SV_DispatchThreadID)
 {
 	uint2 dimensions;
 	uint sampleCount;
 	tInputTexture.GetDimensions(dimensions.x, dimensions.y, sampleCount);
 	if(threadId.x < dimensions.x && threadId.y < dimensions.y)
-    {
+	{
 		float result = 1;
 		for(uint i = 0; i < sampleCount; ++i)
 		{
