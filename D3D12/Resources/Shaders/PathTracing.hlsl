@@ -399,7 +399,6 @@ void RayGen()
 		MaterialProperties surface = GetMaterialProperties(payload.Material, payload.UV, 0);
 		BrdfData brdfData = GetBrdfData(surface);
 
-
 		// Flip the normal towards the incoming ray
 		float3 N = DecodeNormalOctahedron(payload.Normal);
 		float3 T = DecodeNormalOctahedron(payload.Tangent);

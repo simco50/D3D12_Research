@@ -40,6 +40,17 @@ struct Ray
     float3 Direction;
 };
 
+struct MaterialProperties
+{
+    float3 BaseColor;
+    float3 NormalTS;
+    float Metalness;
+    float3 Emissive;
+    float Roughness;
+    float Opacity;
+    float Specular;
+};
+
 float2 UnpackHalf2(in uint value)
 {
 	float2 retVal;
@@ -468,3 +479,10 @@ float3 RotatePoint(float4 q, float3 v)
     return 2.0f * dot(qAxis, v) * qAxis + (q.w * q.w - dot(qAxis, qAxis)) * v + 2.0f * q.w * cross(qAxis, v);
 }
 
+float3x3 CreateTangentToWorld(float3 normal, float4 tangent)
+{
+	float3 T = tangent.xyz;
+	float3 B = cross(normal, T) * tangent.w;
+	float3x3 TBN = float3x3(T, B, normal);
+	return TBN;
+}

@@ -115,11 +115,6 @@ GpuParticles::GpuParticles(GraphicsDevice* pDevice)
 
 void GpuParticles::Simulate(RGGraph& graph, Texture* pResolvedDepth, const Camera& camera)
 {
-	if (!g_Simulate || !g_Enabled)
-	{
-		return;
-	}
-
 	if (ImGui::Begin("Parameters"))
 	{
 		if (ImGui::CollapsingHeader("Particles"))
@@ -131,6 +126,11 @@ void GpuParticles::Simulate(RGGraph& graph, Texture* pResolvedDepth, const Camer
 		}
 	}
 	ImGui::End();
+
+	if (!g_Simulate || !g_Enabled)
+	{
+		return;
+	}
 
 	D3D12_CPU_DESCRIPTOR_HANDLE uavs[] = {
 		m_pCountersBuffer->GetUAV()->GetDescriptor(),

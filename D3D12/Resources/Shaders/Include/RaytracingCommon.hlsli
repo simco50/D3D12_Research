@@ -50,17 +50,6 @@ VertexAttribute GetVertexAttributes(MeshInstance instance, float2 attribBarycent
     return outData;
 }
 
-struct MaterialProperties
-{
-    float3 BaseColor;
-    float3 NormalTS;
-    float Metalness;
-    float3 Emissive;
-    float Roughness;
-    float Opacity;
-    float Specular;
-};
-
 MaterialProperties GetMaterialProperties(uint materialIndex, float2 UV, int mipLevel)
 {
     MaterialData material = tMaterials[materialIndex];
@@ -94,22 +83,6 @@ MaterialProperties GetMaterialProperties(uint materialIndex, float2 UV, int mipL
         properties.NormalTS = SampleLevel2D(material.Normal, sMaterialSampler, UV, mipLevel).rgb;
     }
     return properties;
-}
-
-struct BrdfData
-{
-    float3 Diffuse;
-    float3 Specular;
-    float Roughness;
-};
-
-BrdfData GetBrdfData(MaterialProperties material)
-{
-    BrdfData data;
-    data.Diffuse = ComputeDiffuseColor(material.BaseColor, material.Metalness);
-    data.Specular = ComputeF0(material.Specular, material.BaseColor, material.Metalness);
-    data.Roughness = material.Roughness;
-    return data;
 }
 
 struct RayCone

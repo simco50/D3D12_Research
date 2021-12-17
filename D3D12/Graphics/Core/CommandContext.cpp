@@ -248,7 +248,7 @@ void CommandContext::DispatchMesh(const IntVector3& groupCounts)
 void CommandContext::ExecuteIndirect(CommandSignature* pCommandSignature, uint32 maxCount, Buffer* pIndirectArguments, Buffer* pCountBuffer, uint32 argumentsOffset /*= 0*/, uint32 countOffset /*= 0*/)
 {
 	PrepareDraw();
-	check(m_pCurrentPSO);
+	check(m_pCurrentPSO || m_pCurrentSO);
 	m_pCommandList->ExecuteIndirect(pCommandSignature->GetCommandSignature(), maxCount, pIndirectArguments->GetResource(), argumentsOffset, pCountBuffer ? pCountBuffer->GetResource() : nullptr, countOffset);
 }
 

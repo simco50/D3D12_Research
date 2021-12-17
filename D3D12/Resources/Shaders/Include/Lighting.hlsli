@@ -5,6 +5,22 @@
 
 #define SUPPORT_BC5 1
 
+struct BrdfData
+{
+    float3 Diffuse;
+    float3 Specular;
+    float Roughness;
+};
+
+BrdfData GetBrdfData(MaterialProperties material)
+{
+    BrdfData data;
+    data.Diffuse = ComputeDiffuseColor(material.BaseColor, material.Metalness);
+    data.Specular = ComputeF0(material.Specular, material.BaseColor, material.Metalness);
+    data.Roughness = material.Roughness;
+    return data;
+}
+
 // Angle >= Umbra -> 0
 // Angle < Penumbra -> 1
 //Gradient between Umbra and Penumbra
