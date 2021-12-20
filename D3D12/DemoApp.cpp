@@ -1967,6 +1967,7 @@ void DemoApp::UploadSceneData(CommandContext& context)
 		{
 			ShaderInterop::MeshData mesh;
 			mesh.BufferIndex = pMesh->GetData()->GetSRVIndex();
+			mesh.IndexByteSize = subMesh.IndicesLocation.Stride();
 			mesh.IndicesOffset = (uint32)subMesh.IndicesLocation.OffsetFromStart;
 			mesh.PositionsOffset = (uint32)subMesh.PositionStreamLocation.OffsetFromStart;
 			mesh.NormalsOffset = (uint32)subMesh.NormalStreamLocation.OffsetFromStart;

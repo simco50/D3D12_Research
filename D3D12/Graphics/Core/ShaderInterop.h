@@ -53,6 +53,7 @@ namespace ShaderInterop
 		uint UVsOffset;
 		uint NormalsOffset;
 		uint IndicesOffset;
+		uint IndexByteSize;
 
 		uint MeshletOffset;
 		uint MeshletVertexOffset;
