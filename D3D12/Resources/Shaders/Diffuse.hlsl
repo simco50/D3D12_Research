@@ -153,13 +153,6 @@ LightResult DoLight(float4 pos, float3 worldPos, float3 N, float3 V, float3 diff
 	return totalResult;
 }
 
-template<typename T>
-T BufferLoad(uint bufferIndex, uint elementIndex, uint byteOffset = 0)
-{
-	ByteAddressBuffer buffer = tBufferTable[bufferIndex];
-	return buffer.Load<T>(elementIndex * sizeof(T) + byteOffset);
-}
-
 InterpolantsVSToPS FetchVertexAttributes(MeshInstance instance, MeshData mesh, uint vertexId)
 {
 	InterpolantsVSToPS result;

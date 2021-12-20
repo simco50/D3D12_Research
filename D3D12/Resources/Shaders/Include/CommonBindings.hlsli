@@ -82,6 +82,13 @@ RWTexture3D<float4> URWTexture3DTable[] :				   register(u0, space102);
 	"StaticSampler(s19, filter=FILTER_ANISOTROPIC, maxAnisotropy = 4, addressU=TEXTURE_ADDRESS_WRAP, addressV=TEXTURE_ADDRESS_WRAP, addressW=TEXTURE_ADDRESS_WRAP), " \
 	"StaticSampler(s20, filter=FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT, comparisonFunc=COMPARISON_GREATER)" \
 
+template<typename T>
+T BufferLoad(uint bufferIndex, uint elementIndex, uint byteOffset = 0)
+{
+	ByteAddressBuffer buffer = tBufferTable[bufferIndex];
+	return buffer.Load<T>(elementIndex * sizeof(T) + byteOffset);
+}
+
 float4 Sample2D(int index, SamplerState s, float2 uv, uint2 offset = 0)
 {
 	return tTexture2DTable[index].Sample(s, uv, offset);
@@ -95,4 +102,33 @@ float4 SampleLevel2D(int index, SamplerState s, float2 uv, float level, uint2 of
 float4 SampleGrad2D(int index, SamplerState s, float2 uv,  float2 ddx, float2 ddy, uint2 offset = 0)
 {
 	return tTexture2DTable[index].SampleGrad(s, uv, ddx, ddy, offset);
+}
+
+uint3 GetPrimitive(MeshData mesh, uint primitiveIndex)
+{
+	uint3 indices;
+	if(mesh.IndexByteSize == 4)
+	{
+		indices = BufferLoad<uint3>(mesh.BufferIndex, primitiveIndex, mesh.IndicesOffset);
+	}
+	else
+	{
+		uint byteOffset = primitiveIndex * 3 * 2;
+		uint alignedByteOffset = byteOffset & ~3;
+		uint2 four16BitIndices = BufferLoad<uint2>(mesh.BufferIndex, 0, mesh.IndicesOffset + alignedByteOffset);
+
+		if (byteOffset == alignedByteOffset)
+		{
+			indices.x = four16BitIndices.x & 0xffff;
+			indices.y = four16BitIndices.x >> 16;
+			indices.z = four16BitIndices.y & 0xffff;
+		}
+		else
+		{
+			indices.x = four16BitIndices.x >> 16;
+			indices.y = four16BitIndices.y & 0xffff;
+			indices.z = four16BitIndices.y >> 16;
+		}
+	}
+	return indices;
 }

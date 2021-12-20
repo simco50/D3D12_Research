@@ -19,9 +19,7 @@ VertexAttribute GetVertexAttributes(MeshInstance instance, float2 attribBarycent
 	float3 barycentrics = float3((1.0f - attribBarycentrics.x - attribBarycentrics.y), attribBarycentrics.x, attribBarycentrics.y);
 
 	MeshData mesh = tMeshes[instance.Mesh];
-	ByteAddressBuffer meshBuffer = tBufferTable[mesh.BufferIndex];
-
-	uint3 indices = meshBuffer.Load<uint3>(mesh.IndicesOffset + primitiveIndex * sizeof(uint3));
+	uint3 indices = GetPrimitive(mesh, primitiveIndex);
 	VertexAttribute outData;
 
 	outData.UV = 0;
@@ -32,9 +30,9 @@ VertexAttribute GetVertexAttributes(MeshInstance instance, float2 attribBarycent
 	for(int i = 0; i < 3; ++i)
 	{
 		uint vertexId = indices[i];
-		positions[i] = UnpackHalf3(meshBuffer.Load<uint2>(mesh.PositionsOffset + vertexId * sizeof(uint2)));
-		outData.UV += UnpackHalf2(meshBuffer.Load<uint>(mesh.UVsOffset + vertexId * sizeof(uint))) * barycentrics[i];
-		NormalData normalData = meshBuffer.Load<NormalData>(mesh.NormalsOffset + vertexId * sizeof(NormalData));
+		positions[i] = UnpackHalf3(BufferLoad<uint2>(mesh.BufferIndex, vertexId, mesh.PositionsOffset));
+		outData.UV += UnpackHalf2(BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.UVsOffset)) * barycentrics[i];
+		NormalData normalData = BufferLoad<NormalData>(mesh.BufferIndex, vertexId, mesh.NormalsOffset);
 		outData.Normal += normalData.Normal * barycentrics[i];
 		outData.Tangent += normalData.Tangent * barycentrics[i];
 	}
