@@ -155,7 +155,7 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 	MeshData mesh = tMeshes[NonUniformResourceIndex(instance.Mesh)];
 	ByteAddressBuffer meshBuffer = tBufferTable[mesh.BufferIndex];
 
-	uint3 indices = meshBuffer.Load<uint3>(mesh.IndicesOffset + triangleIndex * sizeof(uint3));
+	uint3 indices = GetPrimitive(mesh, triangleIndex);
 
 	VertexAttribute vertices[3];
 	for(uint i = 0; i < 3; ++i)

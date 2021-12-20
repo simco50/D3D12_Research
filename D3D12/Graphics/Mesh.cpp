@@ -364,7 +364,6 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 		Utils::Transform(meshData.UVsStream, uvStream, [](const Vector2& value) -> VS_UV { return { PackedVector2(value.x, value.y) }; });
 		CopyData(uvStream.data(), sizeof(VS_UV)* uvStream.size());
 
-#if 0
 		if (meshData.PositionsStream.size() < std::numeric_limits<uint16>::max())
 		{
 			subMesh.IndicesLocation = IndexBufferView(m_pGeometryData->GetGpuHandle() + dataOffset, (uint32)meshData.Indices.size(), DXGI_FORMAT_R16_UINT, dataOffset);
@@ -374,7 +373,6 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 			CopyData(indicesStream.data(), sizeof(uint16) * indicesStream.size());
 		}
 		else
-#endif
 		{
 			subMesh.IndicesLocation = IndexBufferView(m_pGeometryData->GetGpuHandle() + dataOffset, (uint32)meshData.Indices.size(), DXGI_FORMAT_R32_UINT, dataOffset);
 			CopyData(meshData.Indices.data(), sizeof(uint32) * meshData.Indices.size());
