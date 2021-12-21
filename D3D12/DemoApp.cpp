@@ -429,6 +429,8 @@ void DemoApp::Update()
 			cascadeSplits[i] = d - nearPlane;
 		}
 
+		Matrix vpInverse = m_pCamera->GetProjectionInverse() * m_pCamera->GetViewInverse();
+
 		for (size_t lightIndex = 0; lightIndex < m_Lights.size(); ++lightIndex)
 		{
 			Light& light = m_Lights[lightIndex];
@@ -461,8 +463,7 @@ void DemoApp::Update()
 					//Retrieve frustum corners in world space
 					for (Vector3& corner : frustumCorners)
 					{
-						corner = Vector3::Transform(corner, m_pCamera->GetProjectionInverse());
-						corner = Vector3::Transform(corner, m_pCamera->GetViewInverse());
+						corner = Vector3::Transform(corner, vpInverse);
 					}
 
 					//Adjust frustum corners based on cascade splits
@@ -509,9 +510,10 @@ void DemoApp::Update()
 						}
 					}
 
-					Matrix shadowView = Math::CreateLookToMatrix(center + light.Direction * -400, light.Direction, Vector3::Up);
+					Matrix shadowView = Math::CreateLookToMatrix(center + light.Direction * -100, light.Direction, Vector3::Up);
 
-					Matrix projectionMatrix = Math::CreateOrthographicOffCenterMatrix(minExtents.x, maxExtents.x, minExtents.y, maxExtents.y, maxExtents.z + 400, 0);
+					Matrix projectionMatrix = Math::CreateOrthographicOffCenterMatrix(minExtents.x, maxExtents.x, minExtents.y, maxExtents.y, maxExtents.z + 200, 0);
+
 					Matrix lightViewProjection = shadowView * projectionMatrix;
 
 					//Snap projection to shadowmap texels to avoid flickering edges
@@ -1869,8 +1871,6 @@ void DemoApp::UpdateTLAS(CommandContext& context)
 			}
 		}
 
-		bool isUpdate = m_pTLAS != nullptr;
-
 		D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAGS buildFlags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
 
 		std::vector<D3D12_RAYTRACING_INSTANCE_DESC> instanceDescs;
@@ -1914,17 +1914,17 @@ void DemoApp::UpdateTLAS(CommandContext& context)
 			instanceDescs.push_back(instanceDesc);
 		}
 
-		if (!isUpdate)
+		D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS prebuildInfo{};
+		prebuildInfo.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
+		prebuildInfo.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
+		prebuildInfo.Flags = buildFlags;
+		prebuildInfo.NumDescs = (uint32)instanceDescs.size();
+
+		D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO info{};
+		m_pDevice->GetRaytracingDevice()->GetRaytracingAccelerationStructurePrebuildInfo(&prebuildInfo, &info);
+
+		if (!m_pTLAS || m_pTLAS->GetSize() < info.ScratchDataSizeInBytes)
 		{
-			D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS prebuildInfo{};
-			prebuildInfo.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
-			prebuildInfo.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
-			prebuildInfo.Flags = buildFlags;
-			prebuildInfo.NumDescs = (uint32)instanceDescs.size();
-
-			D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO info{};
-			m_pDevice->GetRaytracingDevice()->GetRaytracingAccelerationStructurePrebuildInfo(&prebuildInfo, &info);
-
 			m_pTLASScratch = m_pDevice->CreateBuffer(BufferDesc::CreateByteAddress(Math::AlignUp<uint64>(info.ScratchDataSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT), BufferFlag::None), "TLAS Scratch");
 			m_pTLAS = m_pDevice->CreateBuffer(BufferDesc::CreateAccelerationStructure(Math::AlignUp<uint64>(info.ResultDataMaxSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT)), "TLAS");
 		}
