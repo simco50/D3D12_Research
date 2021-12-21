@@ -133,7 +133,7 @@ LightResult DoLight(float4 pos, float3 worldPos, float3 N, float3 V, float3 diff
 #define SCREEN_SPACE_SHADOWS 0
 #if SCREEN_SPACE_SHADOWS
 		float3 L = normalize(worldPos - light.Position);
-		if(light.IsDirectional())
+		if(light.IsDirectional)
 		{
 			L = light.Direction;
 		}

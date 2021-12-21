@@ -141,7 +141,7 @@ float3 ApplyAmbientLight(float3 diffuse, float ao, float3 lightColor)
 uint GetShadowIndex(Light light, float4 pos, float3 wPos)
 {
 	int shadowIndex = light.ShadowIndex;
-	if(light.IsDirectional())
+	if(light.IsDirectional)
 	{
 		float4 splits = pos.w > cShadowData.CascadeDepths;
 		float4 cascades = cShadowData.CascadeDepths > 0;
@@ -162,7 +162,7 @@ uint GetShadowIndex(Light light, float4 pos, float3 wPos)
 		}
 		shadowIndex += cascadeIndex;
 	}
-	else if(light.IsPoint())
+	else if(light.IsPoint)
 	{
 		shadowIndex += GetCubeFaceIndex(wPos - light.Position);
 	}
@@ -185,7 +185,7 @@ LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, floa
 
 #define VISUALIZE_CASCADES 0
 #if VISUALIZE_CASCADES
-		if(light.IsDirectional())
+		if(light.IsDirectional)
 		{
 			static float4 COLORS[4] = {
 				float4(1,0,0,1),
@@ -208,7 +208,7 @@ LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, floa
 	}
 
 	float3 L = normalize(light.Position - wPos);
-	if(light.IsDirectional())
+	if(light.IsDirectional)
 	{
 		L = -light.Direction;
 	}

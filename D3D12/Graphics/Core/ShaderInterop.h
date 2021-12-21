@@ -100,21 +100,6 @@ namespace ShaderInterop
 		uint Index;
 	};
 
-	enum LightFlags : uint
-	{
-		LF_None = 0,
-		LF_Enabled = 1 << 0,
-		LF_CastShadow = 1 << 1,
-		LF_Volumetrics = 1 << 2,
-		LF_PointAttenuation = 1 << 3,
-		LF_DirectionalAttenuation = 1 << 4,
-
-		LF_LightTypeMask = LF_PointAttenuation | LF_DirectionalAttenuation,
-		LF_PointLight = LF_PointAttenuation,
-		LF_SpotLight = LF_PointAttenuation | LF_DirectionalAttenuation,
-		LF_DirectionalLight = LF_None,
-	};
-
 	inline float4 UIntToColor(uint c)
 	{
 		return float4(
@@ -138,27 +123,27 @@ namespace ShaderInterop
 	struct Light
 	{
 		float3 Position;
-		uint Flags;
-		float3 Direction;
 		uint Color;
-		float2 SpotlightAngles;
+		float3 Direction;
 		float Intensity;
+		float2 SpotlightAngles;
 		float Range;
 		int ShadowIndex;
 		float InvShadowSize;
 		int LightTexture;
 
+		// flags
+		uint IsEnabled : 1;
+		uint IsSpot : 1;
+		uint IsPoint: 1;
+		uint IsDirectional : 1;
+		uint IsVolumetric : 1;
+		uint CastShadows : 1;
+
 		float4 GetColor() { return UIntToColor(Color); }
 
-		bool IsEnabled() { return EnumHasAllFlags(Flags, LF_Enabled); }
-		bool CastShadows() { return EnumHasAllFlags(Flags, LF_CastShadow); }
-		bool IsVolumetric() { return EnumHasAllFlags(Flags, LF_Volumetrics); }
-		bool PointAttenuation() { return EnumHasAllFlags(Flags, LF_PointAttenuation); }
-		bool DirectionalAttenuation() { return EnumHasAllFlags(Flags, LF_DirectionalAttenuation); }
-
-		bool IsDirectional() { return (Flags & LF_LightTypeMask) == LF_DirectionalLight; }
-		bool IsPoint() { return (Flags & LF_LightTypeMask) == LF_PointLight; }
-		bool IsSpot() { return (Flags & LF_LightTypeMask) == LF_SpotLight; }
+		bool PointAttenuation() { return IsPoint || IsSpot; }
+		bool DirectionalAttenuation() { return IsSpot; }
 	};
 
 	struct ShadowData

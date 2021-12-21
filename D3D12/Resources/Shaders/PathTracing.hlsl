@@ -122,7 +122,7 @@ LightResult EvaluateLight(Light light, float3 worldPos, float3 V, float3 N, floa
 	}
 
 	float3 L = light.Position - worldPos;
-	if(light.IsDirectional())
+	if(light.IsDirectional)
 	{
 		L = RAY_MAX_T * -light.Direction;
 	}
@@ -323,7 +323,7 @@ bool SampleLightRIS(inout uint seed, float3 position, float3 N, out int lightInd
 		int candidate = Random(seed, 0, cViewData.NumLights);
 		Light light = tLights[candidate];
 		float3 L = normalize(light.Position - position);
-		if(light.IsDirectional())
+		if(light.IsDirectional)
 		{
 			L = -light.Direction;
 		}

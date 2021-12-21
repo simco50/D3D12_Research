@@ -143,7 +143,7 @@ LightResult EvaluateLight(Light light, float3 worldPos, float3 V, float3 N, Brdf
 	}
 
 	float3 L = light.Position - worldPos;
-	if(light.IsDirectional())
+	if(light.IsDirectional)
 	{
 		L = RAY_MAX_T * -light.Direction;
 	}

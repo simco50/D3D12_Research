@@ -168,7 +168,7 @@ void CSMain(uint3 groupId : SV_GroupID, uint3 threadID : SV_DispatchThreadID, ui
 	{
 		Light light = tSceneLights[i];
 
-		if(light.IsPoint())
+		if(light.IsPoint)
 		{
 			Sphere sphere = (Sphere)0;
 			sphere.Radius = light.Range;
@@ -188,7 +188,7 @@ void CSMain(uint3 groupId : SV_GroupID, uint3 threadID : SV_DispatchThreadID, ui
 				}
 			}
 		}
-		else if(light.IsSpot())
+		else if(light.IsSpot)
 		{
 			Sphere sphere;
 			sphere.Radius = light.Range * 0.5f / pow(light.SpotlightAngles.y, 2);
