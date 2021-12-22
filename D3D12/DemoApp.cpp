@@ -302,12 +302,15 @@ void DemoApp::Update()
 	m_pDevice->GetShaderManager()->ConditionallyReloadShaders();
 	UpdateImGui();
 
-	CommandContext* pUploadContext = m_pDevice->AllocateCommandContext();
-	{
-		GPU_PROFILE_SCOPE("UploadGPUScene", pUploadContext);
-		UploadSceneData(*pUploadContext);
-	}
-	pUploadContext->Execute(false);
+	RGGraph renderGraph(m_pDevice.get());
+	RGPassBuilder updateScenePass = renderGraph.AddPass("Update GPU Scene");
+	updateScenePass.Bind([=](CommandContext& context, const RGPassResources& resources)
+		{
+			UploadSceneData(context);
+
+		});
+	renderGraph.Compile();
+	renderGraph.Execute();
 
 #if 0
 	static int selectedBatch = -1;
@@ -1860,16 +1863,13 @@ void DemoApp::UpdateTLAS(CommandContext& context)
 
 					pCmd->BuildRaytracingAccelerationStructure(&asDesc, 0, nullptr);
 					context.InsertUavBarrier(subMesh.pBLAS);
-					context.FlushResourceBarriers();
 
 					subMesh.pBLAS = pBLAS.release();
-					if (0) //#todo: Can delete scratch buffer if no upload is required
-					{
-						subMesh.pBLASScratch = pBLASScratch.release();
-					}
 				}
 			}
 		}
+
+		context.FlushResourceBarriers();
 
 		D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAGS buildFlags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
 
