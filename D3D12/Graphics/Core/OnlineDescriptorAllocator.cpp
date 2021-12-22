@@ -3,6 +3,7 @@
 #include "Graphics.h"
 #include "RootSignature.h"
 #include "CommandContext.h"
+#include "CommandQueue.h"
 
 GlobalOnlineDescriptorHeap::GlobalOnlineDescriptorHeap(GraphicsDevice* pParent, D3D12_DESCRIPTOR_HEAP_TYPE type, uint32 blockSize, uint32 numDescriptors)
 	: GraphicsObject(pParent), m_Type(type), m_NumDescriptors(numDescriptors), m_BlockSize(blockSize)
@@ -108,8 +109,23 @@ void PersistentDescriptorAllocator::Free(int32& heapIndex)
 	check(m_HeapBlocks.size() > 0);
 	uint32 index = heapIndex - m_HeapBlocks[0]->StartHandle.HeapIndex;
 	check(index >= 0);
-	--m_NumAllocated;
-	m_FreeHandles[m_NumAllocated] = index;
+
+	while (m_DeletionQueue.size())
+	{
+		const auto& f = m_DeletionQueue.front();
+		if (GetParent()->GetFrameFence()->IsComplete(f.second))
+		{
+			--m_NumAllocated;
+			m_FreeHandles[m_NumAllocated] = f.first;
+			m_DeletionQueue.pop();
+		}
+		else
+		{
+			break;
+		}
+	}
+
+	m_DeletionQueue.emplace(index, GetParent()->GetFrameFence()->GetCurrentValue());
 	heapIndex = DescriptorHandle::InvalidHeapIndex;
 }
 
