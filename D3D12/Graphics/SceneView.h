@@ -2,6 +2,7 @@
 #include "Core/DescriptorHandle.h"
 #include "Core/BitField.h"
 #include "Core/ShaderInterop.h"
+#include "Light.h"
 
 class Texture;
 class Buffer;
@@ -45,7 +46,7 @@ struct SceneView
 	Buffer* pMeshBuffer = nullptr;
 	Buffer* pMeshInstanceBuffer = nullptr;
 	Camera* pCamera = nullptr;
-	ShaderInterop::ShadowData* pShadowData = nullptr;
+	ShaderInterop::ShadowData ShadowData;
 	int SceneTLAS = 0;
 	int FrameIndex = 0;
 	VisibilityMask VisibilityMask;

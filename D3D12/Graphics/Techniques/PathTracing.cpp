@@ -140,7 +140,7 @@ void PathTracing::Render(RGGraph& graph, const SceneView& sceneData)
 			};
 
 			context.SetRootCBV(0, parameters);
-			context.SetRootCBV(1, *sceneData.pShadowData);
+			context.SetRootCBV(1, sceneData.ShadowData);
 			context.BindResources(2, 0, uavs, ARRAYSIZE(uavs));
 			context.BindResources(3, 0, srvs, ARRAYSIZE(srvs));
 

@@ -177,9 +177,8 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& resources)
 			context.SetGraphicsRootSignature(m_pDiffuseRS.get());
 
 			context.SetRootCBV(1, frameData);
-			context.SetRootCBV(2, *resources.pShadowData);
+			context.SetRootCBV(2, resources.ShadowData);
 			
-
 			{
 				GPU_PROFILE_SCOPE("Opaque", &context);
 

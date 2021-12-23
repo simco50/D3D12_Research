@@ -246,7 +246,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& resources)
 				};
 
 				context.SetRootCBV(0, constantBuffer);
-				context.SetRootCBV(1, *resources.pShadowData);
+				context.SetRootCBV(1, resources.ShadowData);
 				context.BindResource(2, 0, pDestinationVolume->GetUAV());
 				context.BindResources(3, 0, srvs, ARRAYSIZE(srvs));
 
@@ -283,7 +283,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& resources)
 				};
 
 				context.SetRootCBV(0, constantBuffer);
-				context.SetRootCBV(1, *resources.pShadowData);
+				context.SetRootCBV(1, resources.ShadowData);
 				context.BindResource(2, 0, m_pFinalVolumeFog->GetUAV());
 				context.BindResources(3, 0, srvs, ARRAYSIZE(srvs));
 
@@ -392,7 +392,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& resources)
 			context.SetGraphicsRootSignature(m_pDiffuseRS.get());
 
 			context.SetRootCBV(1, frameData);
-			context.SetRootCBV(2, *resources.pShadowData);
+			context.SetRootCBV(2, resources.ShadowData);
 
 			D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
 				m_pFinalVolumeFog->GetSRV()->GetDescriptor(),

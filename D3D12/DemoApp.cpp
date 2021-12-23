@@ -603,7 +603,7 @@ void DemoApp::Update()
 	m_SceneData.pMeshBuffer = m_pMeshBuffer.get();
 	m_SceneData.pMeshInstanceBuffer = m_pMeshInstanceBuffer.get();
 	m_SceneData.pCamera = m_pCamera.get();
-	m_SceneData.pShadowData = &shadowData;
+	m_SceneData.ShadowData = shadowData;
 	m_SceneData.pAO = m_pAmbientOcclusion.get();
 	m_SceneData.FrameIndex = m_Frame;
 	m_SceneData.pPreviousColor = m_pPreviousColor.get();
