@@ -152,7 +152,7 @@ private:
 		return pObj->ObjectData;
 	}
 
-	const char* m_pName;
+	std::string m_Name;
 	VertexElementLayout m_InputLayout;
 	PipelineStateType m_Type = PipelineStateType::MAX;
 	std::array<Shader*, (int)ShaderType::MAX> m_Shaders{};
