@@ -345,7 +345,7 @@ MaterialProperties GetMaterialProperties(uint materialIndex, float2 UV)
 	MaterialData material = GetMaterial(materialIndex);
 	MaterialProperties properties;
 	float4 baseColor = material.BaseColorFactor;
-	if(material.Diffuse >= 0)
+	if(material.Diffuse != INVALID_HANDLE)
 	{
 		baseColor *= Sample2D(material.Diffuse, sMaterialSampler, UV);
 	}
@@ -354,21 +354,21 @@ MaterialProperties GetMaterialProperties(uint materialIndex, float2 UV)
 
 	properties.Metalness = material.MetalnessFactor;
 	properties.Roughness = material.RoughnessFactor;
-	if(material.RoughnessMetalness >= 0)
+	if(material.RoughnessMetalness != INVALID_HANDLE)
 	{
 		float4 roughnessMetalnessSample = Sample2D(material.RoughnessMetalness, sMaterialSampler, UV);
 		properties.Metalness *= roughnessMetalnessSample.b;
 		properties.Roughness *= roughnessMetalnessSample.g;
 	}
 	properties.Emissive = material.EmissiveFactor.rgb;
-	if(material.Emissive >= 0)
+	if(material.Emissive != INVALID_HANDLE)
 	{
 		properties.Emissive *= Sample2D(material.Emissive, sMaterialSampler, UV).rgb;
 	}
 	properties.Specular = 0.5f;
 
 	properties.NormalTS = float3(0.5f, 0.5f, 1.0f);
-	if(material.Normal >= 0)
+	if(material.Normal != INVALID_HANDLE)
 	{
 		properties.NormalTS = Sample2D(material.Normal, sMaterialSampler, UV).rgb;
 	}

@@ -144,12 +144,12 @@ void Buffer::CreateSRV(ShaderResourceView** pView, const BufferSRVDesc& desc)
 	(*pView)->Create(this, desc);
 }
 
-int32 Buffer::GetSRVIndex() const
+uint32 Buffer::GetSRVIndex() const
 {
 	return m_pSrv ? m_pSrv->GetHeapIndex() : DescriptorHandle::InvalidHeapIndex;
 }
 
-int32 Buffer::GetUAVIndex() const
+uint32 Buffer::GetUAVIndex() const
 {
 	return m_pUav ? m_pUav->GetHeapIndex() : DescriptorHandle::InvalidHeapIndex;
 }

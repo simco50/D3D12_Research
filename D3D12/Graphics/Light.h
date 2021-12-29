@@ -1,5 +1,6 @@
 #pragma once
 #include "Graphics/Core/ShaderInterop.h"
+#include "Graphics/Core/DescriptorHandle.h"
 
 enum class LightType
 {
@@ -20,7 +21,7 @@ struct Light
 	float Intensity = 1;
 	float Range = 1;
 	bool VolumetricLighting = false;
-	int LightTexture = -1;
+	uint32 LightTexture = DescriptorHandle::InvalidHeapIndex;
 	int ShadowIndex = -1;
 	int ShadowMapSize = 512;
 	bool CastShadows = false;

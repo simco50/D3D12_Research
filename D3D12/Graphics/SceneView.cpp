@@ -71,7 +71,7 @@ ShaderInterop::ViewUniforms GetViewUniforms(const SceneView& sceneView)
 	parameters.NumCascades = sceneView.ShadowData.NumCascades;
 	parameters.ShadowMapOffset = sceneView.ShadowData.ShadowMapOffset;
 
-	parameters.TLASIndex = sceneView.SceneTLAS;
+	parameters.TLASIndex = sceneView.pSceneTLAS ? sceneView.pSceneTLAS->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
 	parameters.MeshesIndex = sceneView.pMeshBuffer->GetSRVIndex();
 	parameters.MaterialsIndex = sceneView.pMaterialBuffer->GetSRVIndex();
 	parameters.MeshInstancesIndex = sceneView.pMeshInstanceBuffer->GetSRVIndex();

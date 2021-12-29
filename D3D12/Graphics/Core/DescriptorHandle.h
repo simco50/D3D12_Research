@@ -11,7 +11,7 @@ public:
 
 	DescriptorHandle(
 		D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle,
-		int32 heapIndex,
+		uint32 heapIndex,
 		D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle = InvalidGPUHandle)
 		: CpuHandle(cpuHandle), GpuHandle(gpuHandle), HeapIndex(heapIndex)
 	{
@@ -52,9 +52,9 @@ public:
 
 	constexpr static D3D12_CPU_DESCRIPTOR_HANDLE InvalidCPUHandle = { ~0u };
 	constexpr static D3D12_GPU_DESCRIPTOR_HANDLE InvalidGPUHandle = { ~0u };
-	constexpr static int32 InvalidHeapIndex = -1;
+	constexpr static uint32 InvalidHeapIndex = 0xFFFFFFFF;
 
 	CD3DX12_CPU_DESCRIPTOR_HANDLE CpuHandle;
 	CD3DX12_GPU_DESCRIPTOR_HANDLE GpuHandle;
-	int32 HeapIndex;
+	uint32 HeapIndex;
 };

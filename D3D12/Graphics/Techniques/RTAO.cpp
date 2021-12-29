@@ -50,33 +50,23 @@ void RTAO::Execute(RGGraph& graph, Texture* pTarget, const SceneView& sceneData)
 
 			struct Parameters
 			{
-				Matrix ViewInverse;
-				Matrix ProjectionInverse;
-				Matrix ViewProjectionInverse;
 				float Power;
 				float Radius;
 				uint32 Samples;
-				uint32 TLASIndex;
-				uint32 FrameIndex;
 			} parameters{};
 
-
-			parameters.ViewInverse = sceneData.pCamera->GetViewInverse();
-			parameters.ProjectionInverse = sceneData.pCamera->GetProjectionInverse();
-			parameters.ViewProjectionInverse = sceneData.pCamera->GetViewProjectionInverse();
 			parameters.Power = g_AoPower;
 			parameters.Radius = g_AoRadius;
 			parameters.Samples = g_AoSamples;
-			parameters.TLASIndex = sceneData.SceneTLAS;
-			parameters.FrameIndex = sceneData.FrameIndex;
 
 			ShaderBindingTable bindingTable(m_pRtSO);
 			bindingTable.BindRayGenShader("RayGen");
 			bindingTable.BindMissShader("Miss", {});
 
 			context.SetRootCBV(0, parameters);
-			context.BindResource(1, 0, pTarget->GetUAV());
-			context.BindResource(2, 0, sceneData.pResolvedDepth->GetSRV());
+			context.SetRootCBV(1, GetViewUniforms(sceneData));
+			context.BindResource(2, 0, pTarget->GetUAV());
+			context.BindResource(3, 0, sceneData.pResolvedDepth->GetSRV());
 
 			context.DispatchRays(bindingTable, pTarget->GetWidth(), pTarget->GetHeight());
 		});

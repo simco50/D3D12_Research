@@ -63,7 +63,7 @@ float3 TangentSpaceNormalMapping(float3 sampledNormal, float3x3 TBN)
 float LightTextureMask(Light light, int shadowMapIndex, float3 worldPosition)
 {
 	float mask = 1.0f;
-	if(light.LightTexture >= 0)
+	if(light.LightTexture != INVALID_HANDLE)
 	{
 		float4 lightPos = mul(float4(worldPosition, 1), cView.LightViewProjections[shadowMapIndex]);
 		lightPos.xyz /= lightPos.w;

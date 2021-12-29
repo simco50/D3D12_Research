@@ -102,7 +102,7 @@ void PersistentDescriptorAllocator::Free(DescriptorHandle& handle)
 	handle.Reset();
 }
 
-void PersistentDescriptorAllocator::Free(int32& heapIndex)
+void PersistentDescriptorAllocator::Free(uint32& heapIndex)
 {
 	assert(heapIndex >= 0);
 	std::lock_guard<std::mutex> lock(m_AllocationLock);
