@@ -230,7 +230,7 @@ void ShadowMiss(inout ShadowRayPayload payload : SV_RayPayload)
 [shader("miss")]
 void ReflectionMiss(inout ReflectionRayPayload payload : SV_RayPayload)
 {
-	payload.output = CIESky(WorldRayDirection(), -tLights[0].Direction);
+	payload.output = CIESky(WorldRayDirection());
 }
 
 [shader("raygeneration")]

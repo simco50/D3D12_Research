@@ -1,5 +1,7 @@
 #pragma once
 
+#include "CommonBindings.hlsli"
+
 float AngleBetween(float3 dir0, float3 dir1)
 {
 	return acos(dot(dir0, dir1));
@@ -9,8 +11,10 @@ float AngleBetween(float3 dir0, float3 dir1)
 //A. J. Preetham, Peter Shirley, Brian Smits
 //https://dl.acm.org/doi/pdf/10.1145/311535.311545
 
-float3 CIESky(float3 dir, float3 sunDir, bool withSun = true)
+float3 CIESky(float3 dir, bool withSun = true)
 {
+	float3 sunDir = -GetLight(0).Direction;
+
 	float3 skyDir = float3(dir.x, saturate(dir.y), dir.z);
 	float gamma = AngleBetween(skyDir, sunDir);
 	float S = AngleBetween(sunDir, float3(0, 1, 0));

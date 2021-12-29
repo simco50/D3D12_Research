@@ -898,26 +898,14 @@ void DemoApp::Update()
 				renderContext.SetGraphicsRootSignature(m_pSkyboxRS.get());
 				renderContext.SetPipelineState(m_pSkyboxPSO);
 
-				struct Parameters
-				{
-					Matrix View;
-					Matrix Projection;
-					Vector3 SunDirection;
-				} constBuffer;
-
-				constBuffer.View = m_pCamera->GetView();
-				constBuffer.Projection = m_pCamera->GetProjection();
-				constBuffer.SunDirection = -m_Lights[0].Direction;
-				constBuffer.SunDirection.Normalize();
-
-				renderContext.SetRootCBV(0, constBuffer);
+				BindViewParameters(0, renderContext, m_SceneData);
 
 				renderContext.Draw(0, 36);
 
 				renderContext.EndRenderPass();
 			});
 
-		DebugRenderer::Get()->Render(graph, m_pCamera->GetViewProjection(), GetCurrentRenderTarget(), GetDepthStencil());
+		DebugRenderer::Get()->Render(graph, m_SceneData, GetCurrentRenderTarget(), GetDepthStencil());
 	}
 	else
 	{
@@ -1486,7 +1474,7 @@ void DemoApp::InitializePipelines()
 		Shader* pPixelShader = m_pDevice->GetShader("ProceduralSky.hlsl", ShaderType::Pixel, "PSMain");
 
 		m_pSkyboxRS = std::make_unique<RootSignature>(m_pDevice.get());
-		m_pSkyboxRS->AddConstantBufferView(0);
+		m_pSkyboxRS->AddConstantBufferView(100);
 		m_pSkyboxRS->Finalize("Skybox");
 
 		PipelineStateInitializer psoDesc;

@@ -1,7 +1,7 @@
 #include "CommonBindings.hlsli"
 
 #define RootSig ROOT_SIG("RootConstants(num32BitConstants=2, b0), " \
-				"CBV(b1, visibility=SHADER_VISIBILITY_VERTEX), " \
+				"CBV(b1), " \
 				"DescriptorTable(SRV(t10, numDescriptors = 11))")
 
 struct PerViewData
