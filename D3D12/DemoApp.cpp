@@ -898,7 +898,7 @@ void DemoApp::Update()
 				context.SetGraphicsRootSignature(m_pSkyboxRS.get());
 				context.SetPipelineState(m_pSkyboxPSO);
 
-				BindViewParameters(0, context, m_SceneData);
+				context.SetRootCBV(0, GetViewUniforms(m_SceneData));
 
 				context.Draw(0, 36);
 
@@ -953,7 +953,7 @@ void DemoApp::Update()
 					context.SetComputeRootSignature(m_pTemporalResolveRS.get());
 					context.SetPipelineState(m_pTemporalResolvePSO);
 
-					BindViewParameters(0, context, m_SceneData);
+					context.SetRootCBV(0, GetViewUniforms(m_SceneData));
 
 					context.BindResource(1, 0, m_pHDRRenderTarget->GetUAV());
 					context.BindResource(2, 0, m_pVelocity->GetSRV());
@@ -981,7 +981,7 @@ void DemoApp::Update()
 				context.SetComputeRootSignature(m_pReduceDepthRS.get());
 				context.SetPipelineState(pDepthStencil->GetDesc().SampleCount > 1 ? m_pPrepareReduceDepthMsaaPSO : m_pPrepareReduceDepthPSO);
 
-				BindViewParameters(0, context, m_SceneData);
+				context.SetRootCBV(0, GetViewUniforms(m_SceneData));
 
 				context.BindResource(1, 0, m_ReductionTargets[0]->GetUAV());
 				context.BindResource(2, 0, pDepthStencil->GetSRV());

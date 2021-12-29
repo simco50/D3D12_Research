@@ -126,7 +126,7 @@ void PathTracing::Render(RGGraph& graph, const SceneView& sceneData)
 			};
 
 			context.SetRootCBV(0, parameters);
-			BindViewParameters(1, context, sceneData);
+			context.SetRootCBV(1, GetViewUniforms(sceneData));
 			context.BindResources(2, 0, uavs, ARRAYSIZE(uavs));
 			context.BindResources(3, 0, srvs, ARRAYSIZE(srvs));
 

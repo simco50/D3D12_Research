@@ -62,4 +62,4 @@ struct SceneView
 
 void DrawScene(CommandContext& context, const SceneView& scene, const VisibilityMask& visibility, Batch::Blending blendModes);
 void DrawScene(CommandContext& context, const SceneView& scene, Batch::Blending blendModes);
-void BindViewParameters(uint32 rootIndex, CommandContext& context, const SceneView& scene);
+ShaderInterop::ViewUniforms GetViewUniforms(const SceneView& sceneView);

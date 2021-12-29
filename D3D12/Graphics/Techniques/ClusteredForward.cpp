@@ -125,7 +125,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& resources)
 				constantBuffer.ClusterDimensions = IntVector3(m_ClusterCountX, m_ClusterCountY, gLightClustersNumZ);
 
 				context.SetRootCBV(0, constantBuffer);
-				BindViewParameters(1, context, resources);
+				context.SetRootCBV(1, GetViewUniforms(resources));
 				context.BindResource(2, 0, m_pAABBs->GetUAV());
 
 				//Cluster count in z is 32 so fits nicely in a wavefront on Nvidia so make groupsize in shader 32
@@ -163,7 +163,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& resources)
 
 			context.SetRootCBV(0, constantBuffer);
 
-			BindViewParameters(1, context, resources);
+			context.SetRootCBV(1, GetViewUniforms(resources));
 
 			context.BindResource(2, 0, resources.pLightBuffer->GetSRV());
 			context.BindResource(2, 1, m_pAABBs->GetSRV());
@@ -223,7 +223,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& resources)
 				};
 
 				context.SetRootCBV(0, constantBuffer);
-				BindViewParameters(1, context, resources);
+				context.SetRootCBV(1, GetViewUniforms(resources));
 				context.BindResource(2, 0, pDestinationVolume->GetUAV());
 				context.BindResources(3, 0, srvs, ARRAYSIZE(srvs));
 
@@ -260,7 +260,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& resources)
 				};
 
 				context.SetRootCBV(0, constantBuffer);
-				BindViewParameters(1, context, resources);
+				context.SetRootCBV(1, GetViewUniforms(resources));
 				context.BindResource(2, 0, m_pFinalVolumeFog->GetUAV());
 				context.BindResources(3, 0, srvs, ARRAYSIZE(srvs));
 
@@ -316,7 +316,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& resources)
 
 			context.SetRootCBV(1, frameData);
 
-			BindViewParameters(2, context, resources);
+			context.SetRootCBV(2, GetViewUniforms(resources));
 
 			D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
 				m_pFinalVolumeFog->GetSRV()->GetDescriptor(),
@@ -338,7 +338,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& resources)
 				GPU_PROFILE_SCOPE("Opaque - Masked", &context);
 				context.SetPipelineState(useMeshShader ? m_pMeshShaderDiffuseMaskedPSO : m_pDiffuseMaskedPSO);
 				DrawScene(context, resources, Batch::Blending::AlphaMask);
-				
+
 			}
 			{
 				GPU_PROFILE_SCOPE("Transparant", &context);
@@ -368,7 +368,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& resources)
 				context.SetGraphicsRootSignature(m_pVisualizeLightClustersRS.get());
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_POINTLIST);
 
-				BindViewParameters(0, context, resources);
+				context.SetRootCBV(0, GetViewUniforms(resources));
 
 				D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
 					m_pAABBs->GetSRV()->GetDescriptor(),
@@ -423,7 +423,7 @@ void ClusteredForward::VisualizeLightDensity(RGGraph& graph, const SceneView& re
 			context.InsertResourceBarrier(m_pVisualizationIntermediateTexture.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
 			context.SetRootCBV(0, constantBuffer);
-			BindViewParameters(1, context, resources);
+			context.SetRootCBV(1, GetViewUniforms(resources));
 
 			context.BindResource(2, 0, pTarget->GetSRV());
 			context.BindResource(2, 1, pDepth->GetSRV());

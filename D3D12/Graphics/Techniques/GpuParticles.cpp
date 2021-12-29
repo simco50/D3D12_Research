@@ -175,7 +175,7 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView& resources, Texture*
 			m_ParticlesToSpawn -= parameters.EmitCount;
 
 			context.SetRootCBV(0, parameters);
-			BindViewParameters(1, context, resources);
+			context.SetRootCBV(1, GetViewUniforms(resources));
 
 			context.BindResources(2, 0, uavs, ARRAYSIZE(uavs));
 			context.BindResources(3, 0, srvs, ARRAYSIZE(srvs));
@@ -206,11 +206,11 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView& resources, Texture*
 					r.z = Math::Lerp(0.6f, 0.8f, (float)abs(r.z));
 					r.Normalize();
 					return r;
-				}); 
+				});
 			parameters.Origin = Vector3(150, 3, 0);
 
 			context.SetRootCBV(0, parameters);
-			BindViewParameters(1, context, resources);
+			context.SetRootCBV(1, GetViewUniforms(resources));
 
 			context.BindResources(2, 0, uavs, ARRAYSIZE(uavs));
 			context.BindResources(3, 0, srvs, ARRAYSIZE(srvs));
@@ -234,7 +234,7 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView& resources, Texture*
 			parameters.ParticleLifeTime = g_LifeTime;
 
 			context.SetRootCBV(0, parameters);
-			BindViewParameters(1, context, resources);
+			context.SetRootCBV(1, GetViewUniforms(resources));
 
 			context.BindResources(2, 0, uavs, ARRAYSIZE(uavs));
 			context.BindResources(3, 0, srvs, ARRAYSIZE(srvs));
@@ -250,7 +250,7 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView& resources, Texture*
 
 			context.SetComputeRootSignature(m_pSimulateRS.get());
 
-			BindViewParameters(1, context, resources);
+			context.SetRootCBV(1, GetViewUniforms(resources));
 
 			context.BindResources(2, 0, uavs, ARRAYSIZE(uavs));
 			context.BindResources(3, 0, srvs, ARRAYSIZE(srvs));
@@ -284,7 +284,7 @@ void GpuParticles::Render(RGGraph& graph, const SceneView& resources, Texture* p
 			context.SetGraphicsRootSignature(m_pRenderParticlesRS.get());
 
 			context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-			BindViewParameters(0, context, resources);
+			context.SetRootCBV(0, GetViewUniforms(resources));
 
 			D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
 				m_pParticleBuffer->GetSRV()->GetDescriptor(),

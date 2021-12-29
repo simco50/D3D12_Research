@@ -97,7 +97,7 @@ void DebugRenderer::Render(RGGraph& graph, const SceneView& view, Texture* pTarg
 			context.BeginRenderPass(RenderPassInfo(pTarget, RenderPassAccess::Load_Store, pDepth, RenderPassAccess::Load_Store, false));
 			context.SetGraphicsRootSignature(m_pRS.get());
 
-			BindViewParameters(0, context, view);
+			context.SetRootCBV(0, GetViewUniforms(view));
 
 			if (linePrimitives != 0)
 			{
