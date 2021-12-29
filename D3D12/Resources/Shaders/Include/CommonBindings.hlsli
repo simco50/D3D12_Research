@@ -5,12 +5,6 @@
 //CBVs
 ConstantBuffer<ViewUniforms> cView : 						register(b100);
 
-//SRVs
-Texture2D tAO :											 	register(t6);
-Texture2D tDepth :										  	register(t7);
-Texture2D tPreviousSceneColor :							 	register(t8);
-Texture2D tSceneNormals :								   	register(t9);
-
 //Static samplers
 SamplerState sLinearWrap :								  	register(s10);
 SamplerState sLinearClamp :								 	register(s11);

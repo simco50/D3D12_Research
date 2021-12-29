@@ -7,7 +7,7 @@
 #define RootSig ROOT_SIG("RootConstants(num32BitConstants=2, b0), " \
 	"CBV(b1), " \
 	"CBV(b100), " \
-	"DescriptorTable(SRV(t2, numDescriptors = 8))")
+	"DescriptorTable(SRV(t0, numDescriptors = 6))")
 
 struct PerViewData
 {
@@ -30,18 +30,21 @@ struct InterpolantsVSToPS
 	uint Seed : SEED;
 };
 
-Texture3D<float4> tLightScattering : register(t2);
-StructuredBuffer<uint> tLightIndexList : register(t4);
+Texture2D tAO :	register(t0);
+Texture2D tDepth : register(t1);
+Texture2D tPreviousSceneColor :	register(t2);
+Texture3D<float4> tLightScattering : register(t3);
 
 #if CLUSTERED_FORWARD
-StructuredBuffer<uint> tLightGrid : register(t3);
+StructuredBuffer<uint> tLightGrid : register(t4);
 uint GetSliceFromDepth(float depth)
 {
 	return floor(log(depth) * cPass.LightGridParams.x - cPass.LightGridParams.y);
 }
 #elif TILED_FORWARD
-Texture2D<uint2> tLightGrid : register(t3);
+Texture2D<uint2> tLightGrid : register(t4);
 #endif
+StructuredBuffer<uint> tLightIndexList : register(t5);
 
 float ScreenSpaceShadows(float3 worldPos, float3 lightDirection, int stepCount, float rayLength, float ditherOffset)
 {

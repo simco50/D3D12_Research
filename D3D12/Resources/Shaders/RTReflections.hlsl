@@ -12,7 +12,7 @@ GlobalRootSignature GlobalRootSig =
 	"CBV(b0),"
 	"CBV(b100),"
 	"DescriptorTable(UAV(u0, numDescriptors = 1)),"
-	"DescriptorTable(SRV(t7, numDescriptors = 6)),"
+	"DescriptorTable(SRV(t0, numDescriptors = 3)),"
 	DEFAULT_ROOT_SIG_PARAMS
 };
 
@@ -20,6 +20,10 @@ struct PassParameters
 {
 	float ViewPixelSpreadAngle;
 };
+
+Texture2D tDepth : register(t0);
+Texture2D tPreviousSceneColor :	register(t1);
+Texture2D tSceneNormals : register(t2);
 
 RWTexture2D<float4> uOutput : register(u0);
 ConstantBuffer<PassParameters> cPass : register(b0);

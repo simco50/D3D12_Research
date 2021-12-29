@@ -118,13 +118,12 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& resources)
 				GPU_PROFILE_SCOPE("Opaque", &context);
 
 				D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
-					resources.pLightBuffer->GetSRV()->GetDescriptor(), // dummy
-					m_pLightGridOpaque->GetSRV()->GetDescriptor(),
-					m_pLightIndexListBufferOpaque->GetSRV()->GetDescriptor(),
-					resources.pLightBuffer->GetSRV()->GetDescriptor(),
 					resources.pAO->GetSRV()->GetDescriptor(),
 					resources.pResolvedDepth->GetSRV()->GetDescriptor(),
 					resources.pPreviousColor->GetSRV()->GetDescriptor(),
+					resources.pPreviousColor->GetSRV()->GetDescriptor(), // fog
+					m_pLightGridOpaque->GetSRV()->GetDescriptor(),
+					m_pLightIndexListBufferOpaque->GetSRV()->GetDescriptor(),
 				};
 				context.BindResources(3, 0, srvs, ARRAYSIZE(srvs));
 
@@ -139,13 +138,12 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& resources)
 				GPU_PROFILE_SCOPE("Transparant", &context);
 
 				D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
-					resources.pLightBuffer->GetSRV()->GetDescriptor(), // dummy
-					m_pLightGridTransparant->GetSRV()->GetDescriptor(),
-					m_pLightIndexListBufferTransparant->GetSRV()->GetDescriptor(),
-					resources.pLightBuffer->GetSRV()->GetDescriptor(),
 					resources.pAO->GetSRV()->GetDescriptor(),
 					resources.pResolvedDepth->GetSRV()->GetDescriptor(),
 					resources.pPreviousColor->GetSRV()->GetDescriptor(),
+					resources.pPreviousColor->GetSRV()->GetDescriptor(), // fog
+					m_pLightGridTransparant->GetSRV()->GetDescriptor(),
+					m_pLightIndexListBufferTransparant->GetSRV()->GetDescriptor(),
 				};
 				context.BindResources(3, 0, srvs, ARRAYSIZE(srvs));
 

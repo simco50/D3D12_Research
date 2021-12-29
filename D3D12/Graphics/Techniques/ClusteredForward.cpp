@@ -215,9 +215,6 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& resources)
 					m_pLightGrid->GetSRV()->GetDescriptor(),
 					m_pLightIndexGrid->GetSRV()->GetDescriptor(),
 					pSourceVolume->GetSRV()->GetDescriptor(),
-					resources.pLightBuffer->GetSRV()->GetDescriptor(),
-					resources.pAO->GetSRV()->GetDescriptor(),
-					resources.pResolvedDepth->GetSRV()->GetDescriptor(),
 				};
 
 				context.SetRootCBV(0, constantBuffer);
@@ -252,9 +249,6 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& resources)
 					m_pLightGrid->GetSRV()->GetDescriptor(),
 					m_pLightIndexGrid->GetSRV()->GetDescriptor(),
 					pDestinationVolume->GetSRV()->GetDescriptor(),
-					resources.pLightBuffer->GetSRV()->GetDescriptor(),
-					resources.pAO->GetSRV()->GetDescriptor(),
-					resources.pResolvedDepth->GetSRV()->GetDescriptor(),
 				};
 
 				context.SetRootCBV(0, constantBuffer);
@@ -317,13 +311,12 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& resources)
 			context.SetRootCBV(2, GetViewUniforms(resources));
 
 			D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
-				m_pFinalVolumeFog->GetSRV()->GetDescriptor(),
-				m_pLightGrid->GetSRV()->GetDescriptor(),
-				m_pLightIndexGrid->GetSRV()->GetDescriptor(),
-				resources.pLightBuffer->GetSRV()->GetDescriptor(),
 				resources.pAO->GetSRV()->GetDescriptor(),
 				resources.pResolvedDepth->GetSRV()->GetDescriptor(),
 				resources.pPreviousColor->GetSRV()->GetDescriptor(),
+				m_pFinalVolumeFog->GetSRV()->GetDescriptor(),
+				m_pLightGrid->GetSRV()->GetDescriptor(),
+				m_pLightIndexGrid->GetSRV()->GetDescriptor(),
 			};
 			context.BindResources(3, 0, srvs, ARRAYSIZE(srvs));
 

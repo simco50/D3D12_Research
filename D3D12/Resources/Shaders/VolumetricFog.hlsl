@@ -4,7 +4,7 @@
 #define RootSig ROOT_SIG("CBV(b0), " \
 		"CBV(b100), " \
 		"DescriptorTable(UAV(u0, numDescriptors = 1)), " \
-		"DescriptorTable(SRV(t2, numDescriptors = 12))")
+		"DescriptorTable(SRV(t0, numDescriptors = 3))")
 
 struct PassData
 {
@@ -18,9 +18,9 @@ struct PassData
 
 ConstantBuffer<PassData> cPass : register(b0);
 
-StructuredBuffer<uint> tLightGrid : register(t2);
-StructuredBuffer<uint> tLightIndexList : register(t3);
-Texture3D<float4> tLightScattering : register(t4);
+StructuredBuffer<uint> tLightGrid : register(t0);
+StructuredBuffer<uint> tLightIndexList : register(t1);
+Texture3D<float4> tLightScattering : register(t2);
 RWTexture3D<float4> uOutLightScattering : register(u0);
 
 float HenyeyGreenstreinPhase(float LoV, float G)
