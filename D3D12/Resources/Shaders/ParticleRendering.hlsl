@@ -1,7 +1,7 @@
 #include "CommonBindings.hlsli"
 
 #define RootSig ROOT_SIG("RootFlags(ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT), " \
-				"CBV(b0, visibility=SHADER_VISIBILITY_VERTEX), " \
+				"CBV(b100, visibility=SHADER_VISIBILITY_VERTEX), " \
 				"DescriptorTable(SRV(t0, numDescriptors = 2), visibility=SHADER_VISIBILITY_VERTEX)")
 
 struct ParticleData
@@ -12,14 +12,6 @@ struct ParticleData
 	float Size;
 };
 
-struct PassData
-{
-	float4x4 ViewInverse;
-	float4x4 View;
-	float4x4 Projection;
-};
-
-ConstantBuffer<PassData> cPassData : register(b0);
 StructuredBuffer<ParticleData> tParticleData : register(t0);
 StructuredBuffer<uint> tAliveList : register(t1);
 
@@ -51,10 +43,10 @@ InterpolantsVSToPS VSMain(uint vertexId : SV_VertexID)
 	ParticleData particle = tParticleData[particleIndex];
 	float3 q = particle.Size * BILLBOARD[vertexID];
 
-	output.Position = float4(mul(q, (float3x3)cPassData.ViewInverse), 1);
+	output.Position = float4(mul(q, (float3x3)cView.ViewInverse), 1);
 	output.Position.xyz += particle.Position;
-	output.Position = mul(output.Position, cPassData.View);
-	output.Position = mul(output.Position, cPassData.Projection);
+	output.Position = mul(output.Position, cView.View);
+	output.Position = mul(output.Position, cView.Projection);
 	output.Color = float4(10000, 0, 1, 1);
 	output.UV = (BILLBOARD[vertexID].xy + 1) / 2.0f;
 

@@ -146,12 +146,40 @@ namespace ShaderInterop
 		bool DirectionalAttenuation() { return IsSpot; }
 	};
 
-	struct ShadowData
+	struct ViewUniforms
 	{
 		float4x4 LightViewProjections[MAX_SHADOW_CASTERS];
 		float4 CascadeDepths;
 		uint NumCascades;
 		uint ShadowMapOffset;
+		uint2 padd;
+
+		float4x4 View;
+		float4x4 ViewInverse;
+		float4x4 Projection;
+		float4x4 ProjectionInverse;
+		float4x4 ViewProjection;
+		float4x4 ViewProjectionInverse;
+		float4x4 PreviousViewProjection;
+		float4x4 ReprojectionMatrix;
+		float4 ViewPosition;
+		float4 FrustumPlanes[6];
+		float2 ScreenDimensions;
+		float2 ScreenDimensionsInv;
+		float2 ViewJitter;
+		float NearZ;
+		float FarZ;
+		float FoV;
+
+		uint FrameIndex;
+		uint SsrSamples;
+		uint LightCount;
+
+		uint TLASIndex;
+		uint MeshesIndex;
+		uint MaterialsIndex;
+		uint MeshInstancesIndex;
+		uint LightsIndex;
 	};
 
 #ifdef __cplusplus

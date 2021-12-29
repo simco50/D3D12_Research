@@ -41,22 +41,10 @@ void RTReflections::Execute(RGGraph& graph, const SceneView& sceneData)
 
 			struct Parameters
 			{
-				Matrix View;
-				Matrix ViewInverse;
-				Matrix ProjectionInverse;
-				uint32 NumLights;
 				float ViewPixelSpreadAngle;
-				uint32 TLASIndex;
-				uint32 FrameIndex;
 			} parameters{};
 
-			parameters.View = sceneData.pCamera->GetView();
-			parameters.ViewInverse = sceneData.pCamera->GetViewInverse();
-			parameters.ProjectionInverse = sceneData.pCamera->GetProjectionInverse();
-			parameters.NumLights = sceneData.pLightBuffer->GetNumElements();
 			parameters.ViewPixelSpreadAngle = atanf(2.0f * tanf(sceneData.pCamera->GetFoV() / 2) / (float)m_pSceneColor->GetHeight());
-			parameters.TLASIndex = sceneData.SceneTLAS;
-			parameters.FrameIndex = sceneData.FrameIndex;
 
 			ShaderBindingTable bindingTable(m_pRtSO);
 			bindingTable.BindRayGenShader("RayGen");
@@ -76,7 +64,7 @@ void RTReflections::Execute(RGGraph& graph, const SceneView& sceneData)
 			};
 
 			context.SetRootCBV(0, parameters);
-			context.SetRootCBV(1, sceneData.ShadowData);
+			BindViewParameters(1, context, sceneData);
 			context.BindResource(2, 0, sceneData.pResolvedTarget->GetUAV());
 			context.BindResources(3, 0, srvs, ARRAYSIZE(srvs));
 

@@ -22,7 +22,7 @@ PathTracing::PathTracing(GraphicsDevice* pDevice)
 
 	m_pRS = std::make_unique<RootSignature>(pDevice);
 	m_pRS->AddConstantBufferView(0);
-	m_pRS->AddConstantBufferView(2);
+	m_pRS->AddConstantBufferView(100);
 	m_pRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 2);
 	m_pRS->AddDescriptorTableSimple(5, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 8);
 	m_pRS->Finalize("Global");
@@ -96,24 +96,10 @@ void PathTracing::Render(RGGraph& graph, const SceneView& sceneData)
 
 			struct Parameters
 			{
-				Matrix View;
-				Matrix ViewInverse;
-				Matrix ProjectionInverse;
-				Matrix Projection;
-				uint32 NumLights;
-				uint32 TLASIndex;
-				uint32 FrameIndex;
 				uint32 NumBounces;
 				uint32 AccumulatedFrames;
 			} parameters{};
 
-			parameters.View = sceneData.pCamera->GetView();
-			parameters.ViewInverse = sceneData.pCamera->GetViewInverse();
-			parameters.ProjectionInverse = sceneData.pCamera->GetProjectionInverse();
-			parameters.Projection = sceneData.pCamera->GetProjection();
-			parameters.NumLights = sceneData.pLightBuffer->GetNumElements();
-			parameters.TLASIndex = sceneData.SceneTLAS;
-			parameters.FrameIndex = sceneData.FrameIndex;
 			parameters.NumBounces = numBounces;
 			parameters.AccumulatedFrames = m_NumAccumulatedFrames;
 
@@ -140,7 +126,7 @@ void PathTracing::Render(RGGraph& graph, const SceneView& sceneData)
 			};
 
 			context.SetRootCBV(0, parameters);
-			context.SetRootCBV(1, sceneData.ShadowData);
+			BindViewParameters(1, context, sceneData);
 			context.BindResources(2, 0, uavs, ARRAYSIZE(uavs));
 			context.BindResources(3, 0, srvs, ARRAYSIZE(srvs));
 

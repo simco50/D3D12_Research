@@ -2,6 +2,7 @@
 #include "CommonBindings.hlsli"
 
 #define RootSig ROOT_SIG("CBV(b0), " \
+				"CBV(b100), " \
 				"DescriptorTable(UAV(u0, numDescriptors = 8)), " \
 				"DescriptorTable(SRV(t0, numDescriptors = 2))")
 
@@ -31,13 +32,8 @@ struct EmitParameters
 
 struct SimulateParameters
 {
-	float4x4 ViewProjection;
-	float4x4 ViewProjectionInv;
-	float2 ViewDimensionsInv;
 	float DeltaTime;
 	float ParticleLifeTime;
-	float Near;
-	float Far;
 };
 
 ConstantBuffer<IndirectArgsParameters> cIndirectArgsParams : register(b0);
@@ -120,18 +116,18 @@ void Simulate(uint threadID : SV_DispatchThreadID)
 
 		if(p.LifeTime < cSimulateParams.ParticleLifeTime)
 		{
-			float4 screenPos = mul(float4(p.Position, 1), cSimulateParams.ViewProjection);
+			float4 screenPos = mul(float4(p.Position, 1), cView.ViewProjection);
 			screenPos.xyz /= screenPos.w;
 			if(screenPos.x > -1 && screenPos.y < 1 && screenPos.y > -1 && screenPos.y < 1)
 			{
 				float2 uv = screenPos.xy * float2(0.5f, -0.5f) + 0.5f;
 				float depth = tSceneDepth.SampleLevel(sLinearClamp, uv, 0).r;
-				float linearDepth = LinearizeDepth(depth, cSimulateParams.Near, cSimulateParams.Far);
+				float linearDepth = LinearizeDepth(depth, cView.NearZ, cView.FarZ);
 				const float thickness = 1;
 
 				if(screenPos.w + p.Size > linearDepth && screenPos.w - p.Size - thickness < linearDepth)
 				{
-					float3 normal = NormalFromDepth(tSceneDepth, sLinearClamp, uv, cSimulateParams.ViewDimensionsInv, cSimulateParams.ViewProjectionInv);
+					float3 normal = NormalFromDepth(tSceneDepth, sLinearClamp, uv, cView.ScreenDimensionsInv, cView.ViewProjectionInverse);
 					if(dot(normal, p.Velocity) < 0)
 					{
 						p.Velocity = reflect(p.Velocity, normal) * 0.85f;

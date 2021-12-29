@@ -3,7 +3,7 @@
 #include "Common.hlsli"
 
 //CBVs
-ConstantBuffer<ShadowData> cShadowData : register(b2);
+ConstantBuffer<ViewUniforms> cView : register(b100);
 
 //SRVs
 StructuredBuffer<Light> tLights :						   register(t5);
@@ -131,4 +131,28 @@ uint3 GetPrimitive(MeshData mesh, uint primitiveIndex)
 		}
 	}
 	return indices;
+}
+
+MeshInstance GetMeshInstance(uint index)
+{
+	StructuredBuffer<MeshInstance> meshes = ResourceDescriptorHeap[cView.MeshInstancesIndex];
+	return meshes[index];
+}
+
+MeshData GetMesh(uint index)
+{
+	StructuredBuffer<MeshData> meshes = ResourceDescriptorHeap[cView.MeshesIndex];
+	return meshes[index];
+}
+
+MaterialData GetMaterial(uint index)
+{
+	StructuredBuffer<MaterialData> materials = ResourceDescriptorHeap[cView.MaterialsIndex];
+	return materials[index];
+}
+
+Light GetLight(uint index)
+{
+	StructuredBuffer<Light> lights = ResourceDescriptorHeap[cView.LightsIndex];
+	return lights[index];
 }

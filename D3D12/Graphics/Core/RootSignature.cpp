@@ -179,7 +179,7 @@ void RootSignature::Finalize(const char* pName, D3D12_ROOT_SIGNATURE_FLAGS flags
 	if (!EnumHasAnyFlags(flags, D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE))
 	{
 		flags |= visibilityFlags;
-#if 0 // #todo: Bugged! Try again once there is a new Nvidia driver
+#if 1 // #todo: Bugged! Try again once there is a new Nvidia driver
 		flags |= D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED;
 		flags |= D3D12_ROOT_SIGNATURE_FLAG_SAMPLER_HEAP_DIRECTLY_INDEXED;
 #endif

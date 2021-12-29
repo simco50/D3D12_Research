@@ -392,7 +392,7 @@ void DemoApp::Update()
 	// SHADOW MAP PARTITIONING
 	/////////////////////////////////////////
 
-	ShaderInterop::ShadowData shadowData;
+	ShadowData shadowData;
 	int shadowIndex = 0;
 
 	{
@@ -690,7 +690,7 @@ void DemoApp::Update()
 	if (m_RenderPath != RenderPath::PathTracing)
 	{
 		// PARTICLES GPU SIM
-		m_pParticles->Simulate(graph, GetResolvedDepthStencil(), *m_pCamera);
+		m_pParticles->Simulate(graph, m_SceneData, GetResolvedDepthStencil());
 
 		// SHADOWS
 		RGPassBuilder shadows = graph.AddPass("Shadow Mapping");
@@ -877,7 +877,7 @@ void DemoApp::Update()
 			m_pClusteredForward->Execute(graph, m_SceneData);
 		}
 
-		m_pParticles->Render(graph, GetCurrentRenderTarget(), GetDepthStencil(), *m_pCamera);
+		m_pParticles->Render(graph, m_SceneData, GetCurrentRenderTarget(), GetDepthStencil());
 
 		if (Tweakables::g_RenderTerrain.GetBool())
 		{
@@ -965,16 +965,7 @@ void DemoApp::Update()
 					renderContext.SetComputeRootSignature(m_pTemporalResolveRS.get());
 					renderContext.SetPipelineState(m_pTemporalResolvePSO);
 
-					struct Parameters
-					{
-						Vector2 InvScreenDimensions;
-						Vector2 Jitter;
-					} parameters;
-
-					parameters.InvScreenDimensions = Vector2(1.0f / m_pHDRRenderTarget->GetWidth(), 1.0f / m_pHDRRenderTarget->GetHeight());
-					parameters.Jitter.x = m_pCamera->GetPreviousJitter().x - m_pCamera->GetJitter().x;
-					parameters.Jitter.y = -(m_pCamera->GetPreviousJitter().y - m_pCamera->GetJitter().y);
-					renderContext.SetRootCBV(0, parameters);
+					BindViewParameters(0, renderContext, m_SceneData);
 
 					renderContext.BindResource(1, 0, m_pHDRRenderTarget->GetUAV());
 					renderContext.BindResource(2, 0, m_pVelocity->GetSRV());
@@ -1196,11 +1187,11 @@ void DemoApp::Update()
 	{
 		if (m_RenderPath == RenderPath::Clustered)
 		{
-			m_pClusteredForward->VisualizeLightDensity(graph, *m_pCamera, m_pTonemapTarget.get(), GetResolvedDepthStencil());
+			m_pClusteredForward->VisualizeLightDensity(graph, m_SceneData, m_pTonemapTarget.get(), GetResolvedDepthStencil());
 		}
 		else
 		{
-			m_pTiledForward->VisualizeLightDensity(graph, m_pDevice.get(), *m_pCamera, m_pTonemapTarget.get(), GetResolvedDepthStencil());
+			m_pTiledForward->VisualizeLightDensity(graph, m_pDevice.get(), m_SceneData, m_pTonemapTarget.get(), GetResolvedDepthStencil());
 		}
 	}
 

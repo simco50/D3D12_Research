@@ -57,34 +57,27 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& resources)
 			context.SetPipelineState(m_pComputeLightCullPSO);
 			context.SetComputeRootSignature(m_pComputeLightCullRS.get());
 
-			struct ShaderParameters
-			{
-				Matrix CameraView;
-				Matrix ProjectionInverse;
-				IntVector3 NumThreadGroups;
-				int padding0;
-				Vector2 ScreenDimensionsInv;
-				uint32 LightCount;
-			} Data{};
+			BindViewParameters(0, context, resources);
 
-			Data.CameraView = resources.pCamera->GetView();
-			Data.NumThreadGroups.x = Math::DivideAndRoundUp(resources.pResolvedDepth->GetWidth(), FORWARD_PLUS_BLOCK_SIZE);
-			Data.NumThreadGroups.y = Math::DivideAndRoundUp(resources.pResolvedDepth->GetHeight(), FORWARD_PLUS_BLOCK_SIZE);
-			Data.NumThreadGroups.z = 1;
-			Data.ScreenDimensionsInv = Vector2(1.0f / resources.pResolvedDepth->GetWidth(), 1.0f / resources.pResolvedDepth->GetHeight());
-			Data.LightCount = resources.pLightBuffer->GetNumElements();
-			Data.ProjectionInverse = resources.pCamera->GetProjectionInverse();
+			D3D12_CPU_DESCRIPTOR_HANDLE uavs[] = {
+				m_pLightIndexCounter->GetUAV()->GetDescriptor(),
+				m_pLightIndexListBufferOpaque->GetUAV()->GetDescriptor(),
+				m_pLightGridOpaque->GetUAV()->GetDescriptor(),
+				m_pLightIndexListBufferTransparant->GetUAV()->GetDescriptor(),
+				m_pLightGridTransparant->GetUAV()->GetDescriptor(),
+			};
+			D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
+				resources.pResolvedDepth->GetSRV()->GetDescriptor(),
+				resources.pLightBuffer->GetSRV()->GetDescriptor(),
+			};
 
-			context.SetRootCBV(0, Data);
-			context.BindResource(1, 0, m_pLightIndexCounter->GetUAV());
-			context.BindResource(1, 1, m_pLightIndexListBufferOpaque->GetUAV());
-			context.BindResource(1, 2, m_pLightGridOpaque->GetUAV());
-			context.BindResource(1, 3, m_pLightIndexListBufferTransparant->GetUAV());
-			context.BindResource(1, 4, m_pLightGridTransparant->GetUAV());
-			context.BindResource(2, 0, resources.pResolvedDepth->GetSRV());
-			context.BindResource(2, 1, resources.pLightBuffer->GetSRV());
+			context.BindResources(1, 0, uavs, ARRAYSIZE(uavs));
+			context.BindResources(2, 0, srvs, ARRAYSIZE(srvs));
 
-			context.Dispatch(Data.NumThreadGroups);
+			context.Dispatch(ComputeUtils::GetNumThreadGroups(
+				resources.pResolvedDepth->GetWidth(), FORWARD_PLUS_BLOCK_SIZE,
+				resources.pResolvedDepth->GetHeight(), FORWARD_PLUS_BLOCK_SIZE
+			));
 		});
 
 	//5. BASE PASS
@@ -92,62 +85,6 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& resources)
 	RGPassBuilder basePass = graph.AddPass("Base Pass");
 	basePass.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
 		{
-			struct PerFrameData
-			{
-				Matrix View;
-				Matrix Projection;
-				Matrix ProjectionInverse;
-				Matrix ViewProjection;
-				Matrix ReprojectionMatrix;
-				Vector4 ViewPosition;
-				Vector4 FrustumPlanes[6];
-				Vector2 InvScreenDimensions;
-				float NearZ;
-				float FarZ;
-				int FrameIndex;
-				int SsrSamples;
-				int LightCount;
-				int padd;
-			} frameData;
-
-			//Camera constants
-			DirectX::XMVECTOR nearPlane, farPlane, left, right, top, bottom;
-			resources.pCamera->GetFrustum().GetPlanes(&nearPlane, &farPlane, &right, &left, &top, &bottom);
-			frameData.FrustumPlanes[0] = Vector4(nearPlane);
-			frameData.FrustumPlanes[1] = Vector4(farPlane);
-			frameData.FrustumPlanes[2] = Vector4(left);
-			frameData.FrustumPlanes[3] = Vector4(right);
-			frameData.FrustumPlanes[4] = Vector4(top);
-			frameData.FrustumPlanes[5] = Vector4(bottom);
-			frameData.View = resources.pCamera->GetView();
-			frameData.Projection = resources.pCamera->GetProjection();
-			frameData.ProjectionInverse = resources.pCamera->GetProjectionInverse();
-			frameData.InvScreenDimensions = Vector2(1.0f / resources.pRenderTarget->GetWidth(), 1.0f / resources.pRenderTarget->GetHeight());
-			frameData.NearZ = resources.pCamera->GetNear();
-			frameData.FarZ = resources.pCamera->GetFar();
-			frameData.FrameIndex = resources.FrameIndex;
-			frameData.SsrSamples = Tweakables::g_SsrSamples;
-			frameData.LightCount = resources.pLightBuffer->GetNumElements();
-			frameData.ViewProjection = resources.pCamera->GetViewProjection();
-			frameData.ViewPosition = Vector4(resources.pCamera->GetPosition());
-
-			Matrix reprojectionMatrix = resources.pCamera->GetViewProjection().Invert() * resources.pCamera->GetPreviousViewProjection();
-			// Transform from uv to clip space: texcoord * 2 - 1
-			Matrix premult = {
-				2.0f, 0, 0, 0,
-				0, -2.0f, 0, 0,
-				0, 0, 1, 0,
-				-1, 1, 0, 1
-			};
-			// Transform from clip to uv space: texcoord * 0.5 + 0.5
-			Matrix postmult = {
-				0.5f, 0, 0, 0,
-				0, -0.5f, 0, 0,
-				0, 0, 1, 0,
-				0.5f, 0.5f, 0, 1
-			};
-			frameData.ReprojectionMatrix = premult * reprojectionMatrix * postmult;
-
 			context.InsertResourceBarrier(m_pLightGridOpaque.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(m_pLightGridTransparant.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(m_pLightIndexListBufferOpaque.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
@@ -176,9 +113,8 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& resources)
 			context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 			context.SetGraphicsRootSignature(m_pDiffuseRS.get());
 
-			context.SetRootCBV(1, frameData);
-			context.SetRootCBV(2, resources.ShadowData);
-			
+			BindViewParameters(2, context, resources);
+
 			{
 				GPU_PROFILE_SCOPE("Opaque", &context);
 
@@ -190,10 +126,6 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& resources)
 					resources.pAO->GetSRV()->GetDescriptor(),
 					resources.pResolvedDepth->GetSRV()->GetDescriptor(),
 					resources.pPreviousColor->GetSRV()->GetDescriptor(),
-					resources.pMaterialBuffer->GetSRV()->GetDescriptor(),
-					resources.pMaterialBuffer->GetSRV()->GetDescriptor(),
-					resources.pMeshBuffer->GetSRV()->GetDescriptor(),
-					resources.pMeshInstanceBuffer->GetSRV()->GetDescriptor(),
 				};
 				context.BindResources(3, 0, srvs, ARRAYSIZE(srvs));
 
@@ -215,10 +147,6 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& resources)
 					resources.pAO->GetSRV()->GetDescriptor(),
 					resources.pResolvedDepth->GetSRV()->GetDescriptor(),
 					resources.pPreviousColor->GetSRV()->GetDescriptor(),
-					resources.pMaterialBuffer->GetSRV()->GetDescriptor(),
-					resources.pMaterialBuffer->GetSRV()->GetDescriptor(),
-					resources.pMeshBuffer->GetSRV()->GetDescriptor(),
-					resources.pMeshInstanceBuffer->GetSRV()->GetDescriptor(),
 				};
 				context.BindResources(3, 0, srvs, ARRAYSIZE(srvs));
 
@@ -229,16 +157,13 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& resources)
 		});
 }
 
-void TiledForward::VisualizeLightDensity(RGGraph& graph, GraphicsDevice* pDevice, Camera& camera, Texture* pTarget, Texture* pDepth)
+void TiledForward::VisualizeLightDensity(RGGraph& graph, GraphicsDevice* pDevice, const SceneView& resources, Texture* pTarget, Texture* pDepth)
 {
 	if (!m_pVisualizationIntermediateTexture || m_pVisualizationIntermediateTexture->GetDesc() != pTarget->GetDesc())
 	{
 		m_pVisualizationIntermediateTexture = m_pDevice->CreateTexture(pTarget->GetDesc(), "LightDensity Debug Texture");
 	}
 
-	Vector2 screenDimensions((float)pTarget->GetWidth(), (float)pTarget->GetHeight());
-	float nearZ = camera.GetNear();
-	float farZ = camera.GetFar();
 	float sliceMagicA = 0;
 	float sliceMagicB = 0;
 
@@ -247,23 +172,14 @@ void TiledForward::VisualizeLightDensity(RGGraph& graph, GraphicsDevice* pDevice
 		{
 			struct Data
 			{
-				Matrix ProjectionInverse;
-				IntVector3 ClusterDimensions;
-				float padding;
+				IntVector2 ClusterDimensions;
 				IntVector2 ClusterSize;
 				float SliceMagicA;
 				float SliceMagicB;
-				float Near;
-				float Far;
-				float FoV;
 			} constantData{};
 
-			constantData.ProjectionInverse = camera.GetProjectionInverse();
 			constantData.SliceMagicA = sliceMagicA;
 			constantData.SliceMagicB = sliceMagicB;
-			constantData.Near = nearZ;
-			constantData.Far = farZ;
-			constantData.FoV = camera.GetFoV();
 
 			context.SetPipelineState(m_pVisualizeLightsPSO);
 			context.SetComputeRootSignature(m_pVisualizeLightsRS.get());
@@ -275,13 +191,18 @@ void TiledForward::VisualizeLightDensity(RGGraph& graph, GraphicsDevice* pDevice
 
 			context.SetRootCBV(0, constantData);
 
-			context.BindResource(1, 0, pTarget->GetSRV());
-			context.BindResource(1, 1, pDepth->GetSRV());
-			context.BindResource(1, 2, m_pLightGridOpaque->GetSRV());
+			BindViewParameters(1, context, resources);
 
-			context.BindResource(2, 0, m_pVisualizationIntermediateTexture->GetUAV());
+			context.BindResource(2, 0, pTarget->GetSRV());
+			context.BindResource(2, 1, pDepth->GetSRV());
+			context.BindResource(2, 2, m_pLightGridOpaque->GetSRV());
 
-			context.Dispatch(Math::DivideAndRoundUp(pTarget->GetWidth(), 16), Math::DivideAndRoundUp(pTarget->GetHeight(), 16));
+			context.BindResource(3, 0, m_pVisualizationIntermediateTexture->GetUAV());
+
+			context.Dispatch(ComputeUtils::GetNumThreadGroups(
+				pTarget->GetWidth(), 16,
+				pTarget->GetHeight(), 16));
+
 			context.InsertUavBarrier();
 
 			context.CopyTexture(m_pVisualizationIntermediateTexture.get(), pTarget);

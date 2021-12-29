@@ -21,7 +21,7 @@ public:
 	void OnResize(int windowWidth, int windowHeight);
 
 	void Execute(RGGraph& graph, const SceneView& resources);
-	void VisualizeLightDensity(RGGraph& graph, Camera& camera, Texture* pTarget, Texture* pDepth);
+	void VisualizeLightDensity(RGGraph& graph, const SceneView& resources, Texture* pTarget, Texture* pDepth);
 
 private:
 	void SetupPipelines();

@@ -10,25 +10,19 @@
 GlobalRootSignature GlobalRootSig =
 {
 	"CBV(b0),"
-	"CBV(b2),"
+	"CBV(b100),"
 	"DescriptorTable(UAV(u0, numDescriptors = 1)),"
 	"DescriptorTable(SRV(t5, numDescriptors = 8)),"
 	DEFAULT_ROOT_SIG_PARAMS
 };
 
-struct ViewData
+struct PassParameters
 {
-	float4x4 View;
-	float4x4 ViewInverse;
-	float4x4 ProjectionInverse;
-	uint NumLights;
 	float ViewPixelSpreadAngle;
-	uint TLASIndex;
-	uint FrameIndex;
 };
 
 RWTexture2D<float4> uOutput : register(u0);
-ConstantBuffer<ViewData> cViewData : register(b0);
+ConstantBuffer<PassParameters> cPass : register(b0);
 
 struct RAYPAYLOAD ReflectionRayPayload
 {
@@ -55,7 +49,7 @@ float CastShadowRay(float3 origin, float3 direction)
 		RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH |
 		RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES;
 
-	RaytracingAccelerationStructure TLAS = tTLASTable[cViewData.TLASIndex];
+	RaytracingAccelerationStructure TLAS = tTLASTable[cView.TLASIndex];
 
 // Inline RT for the shadow rays has better performance. Use it when available.
 #if _INLINE_RT
@@ -107,7 +101,7 @@ ReflectionRayPayload CastReflectionRay(float3 origin, float3 direction, float T)
 {
 	RayCone cone;
 	cone.Width = 0;
-	cone.SpreadAngle = cViewData.ViewPixelSpreadAngle;
+	cone.SpreadAngle = cPass.ViewPixelSpreadAngle;
 
 	ReflectionRayPayload payload;
 	payload.rayCone = PropagateRayCone(cone, 0.0f, T);
@@ -120,7 +114,7 @@ ReflectionRayPayload CastReflectionRay(float3 origin, float3 direction, float T)
 	ray.TMax = RAY_MAX_T;
 
 	TraceRay(
-		tTLASTable[cViewData.TLASIndex],		 			//AccelerationStructure
+		tTLASTable[cView.TLASIndex],		 				//AccelerationStructure
 		0,									 				//RayFlags
 		0xFF, 												//InstanceInclusionMask
 		0,													//RayContributionToHitGroupIndex
@@ -148,13 +142,13 @@ LightResult EvaluateLight(Light light, float3 worldPos, float3 V, float3 N, Brdf
 		L = RAY_MAX_T * -light.Direction;
 	}
 
-	float3 viewPosition = mul(float4(worldPos, 1), cViewData.View).xyz;
+	float3 viewPosition = mul(float4(worldPos, 1), cView.View).xyz;
 	float4 pos = float4(0, 0, 0, viewPosition.z);
 	int shadowIndex = GetShadowIndex(light, pos, worldPos);
 	bool castShadowRay = true;
 	if(shadowIndex >= 0)
 	{
-		float4x4 lightViewProjection = cShadowData.LightViewProjections[shadowIndex];
+		float4x4 lightViewProjection = cView.LightViewProjections[shadowIndex];
 		float4 lightPos = mul(float4(worldPos, 1), lightViewProjection);
 		lightPos.xyz /= lightPos.w;
 		lightPos.x = lightPos.x / 2.0f + 0.5f;
@@ -163,7 +157,7 @@ LightResult EvaluateLight(Light light, float3 worldPos, float3 V, float3 N, Brdf
 
 		if(all(lightPos >= 0) && all(lightPos <= 1))
 		{
-			Texture2D shadowTexture = tTexture2DTable[cShadowData.ShadowMapOffset + shadowIndex];
+			Texture2D shadowTexture = tTexture2DTable[cView.ShadowMapOffset + shadowIndex];
 			attenuation *= shadowTexture.SampleCmpLevelZero(sDepthComparison, lightPos.xy, lightPos.z);
 			castShadowRay = false;
 		}
@@ -205,7 +199,7 @@ void ReflectionClosestHit(inout ReflectionRayPayload payload, BuiltInTriangleInt
 	float3 N = v.Normal;
 
 	LightResult totalResult = (LightResult)0;
-	for(int i = 0; i < cViewData.NumLights; ++i)
+	for(int i = 0; i < cView.LightCount; ++i)
 	{
 		Light light = tLights[i];
 		LightResult result = EvaluateLight(light, hitLocation, V, N, brdfData);
@@ -250,15 +244,15 @@ void RayGen()
 	float4 colorSample = tPreviousSceneColor.SampleLevel(sLinearClamp, uv, 0);
 	float4 reflectionSample = tSceneNormals.SampleLevel(sLinearClamp, uv, 0);
 
-	float3 view = ViewFromDepth(uv, depth, cViewData.ProjectionInverse);
-	float3 world = mul(float4(view, 1), cViewData.ViewInverse).xyz;
+	float3 view = ViewFromDepth(uv, depth, cView.ProjectionInverse);
+	float3 world = mul(float4(view, 1), cView.ViewInverse).xyz;
 
 	float3 N = reflectionSample.rgb;
 	float reflectivity = reflectionSample.a;
 
 	if(depth > 0 && reflectivity > 0.0f)
 	{
-		float3 V = normalize(world - cViewData.ViewInverse[3].xyz);
+		float3 V = normalize(world - cView.ViewInverse[3].xyz);
 		float3 R = reflect(V, N);
 		ReflectionRayPayload payload = CastReflectionRay(world, R, depth);
 		colorSample += reflectivity * float4(payload.output, 0);
