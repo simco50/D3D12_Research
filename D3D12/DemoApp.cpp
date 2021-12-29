@@ -981,15 +981,8 @@ void DemoApp::Update()
 				context.SetComputeRootSignature(m_pReduceDepthRS.get());
 				context.SetPipelineState(pDepthStencil->GetDesc().SampleCount > 1 ? m_pPrepareReduceDepthMsaaPSO : m_pPrepareReduceDepthPSO);
 
-				struct ShaderParameters
-				{
-					float Near;
-					float Far;
-				} parameters;
-				parameters.Near = m_pCamera->GetNear();
-				parameters.Far = m_pCamera->GetFar();
+				BindViewParameters(0, context, m_SceneData);
 
-				context.SetRootCBV(0, parameters);
 				context.BindResource(1, 0, m_ReductionTargets[0]->GetUAV());
 				context.BindResource(2, 0, pDepthStencil->GetSRV());
 
