@@ -41,18 +41,9 @@ static const float4 CUBE[]=
 	float4(-1.0,1.0,-1.0,1.0),
 };
 
-struct Constants
-{
-	float4x4 View;
-	float4x4 Projection;
-	float3 SunDirection;
-};
-
-ConstantBuffer<Constants> cConstants : register(b0);
-
 struct InterpolantsVSToPS
 {
-	float4 PositionCS : SV_Position;
+	float4 Position : SV_Position;
 	float3 UV : TEXCOORD;
 };
 
@@ -60,8 +51,8 @@ InterpolantsVSToPS VSMain(uint vertexId : SV_VertexID)
 {
 	InterpolantsVSToPS output;
 	float3 positionVS = mul(CUBE[vertexId].xyz, (float3x3)cView.View);
-	output.PositionCS = mul(float4(positionVS, 1.0f), cView.Projection);
-	output.PositionCS.z = 0.0001f;
+	output.Position = mul(float4(positionVS, 1.0f), cView.Projection);
+	output.Position.z = 0.0001f;
 	output.UV = CUBE[vertexId].xyz;
 	return output;
 }
