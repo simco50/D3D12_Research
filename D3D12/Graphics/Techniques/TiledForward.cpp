@@ -68,7 +68,6 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& resources)
 			};
 			D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
 				resources.pResolvedDepth->GetSRV()->GetDescriptor(),
-				resources.pLightBuffer->GetSRV()->GetDescriptor(),
 			};
 
 			context.BindResources(1, 0, uavs, ARRAYSIZE(uavs));

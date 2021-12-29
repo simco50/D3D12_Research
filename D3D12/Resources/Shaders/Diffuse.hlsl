@@ -398,7 +398,7 @@ void PSMain(InterpolantsVSToPS input,
 
 	float3 outRadiance = 0;
 	outRadiance += lighting.Diffuse + lighting.Specular;
-	outRadiance += ApplyAmbientLight(brdf.Diffuse, ambientOcclusion, tLights[0].GetColor().rgb * 0.1f);
+	outRadiance += ApplyAmbientLight(brdf.Diffuse, ambientOcclusion, GetLight(0).GetColor().rgb * 0.1f);
 	outRadiance += ssr * ambientOcclusion;
 	outRadiance += material.Emissive;
 

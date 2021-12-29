@@ -149,7 +149,6 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& resources)
 			context.InsertResourceBarrier(m_pAABBs.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(m_pLightGrid.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 			context.InsertResourceBarrier(m_pLightIndexGrid.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-			context.InsertResourceBarrier(resources.pLightBuffer, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 
 			// Clear the light grid because we're accumulating the light count in the shader
 			context.ClearUavUInt(m_pLightGrid.get(), m_pLightGridRawUAV);
@@ -165,8 +164,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& resources)
 
 			context.SetRootCBV(1, GetViewUniforms(resources));
 
-			context.BindResource(2, 0, resources.pLightBuffer->GetSRV());
-			context.BindResource(2, 1, m_pAABBs->GetSRV());
+			context.BindResource(2, 0, m_pAABBs->GetSRV());
 
 			context.BindResource(3, 0, m_pLightIndexGrid->GetUAV());
 			context.BindResource(3, 1, m_pLightGrid->GetUAV());

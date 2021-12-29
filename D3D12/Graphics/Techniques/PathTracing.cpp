@@ -24,7 +24,7 @@ PathTracing::PathTracing(GraphicsDevice* pDevice)
 	m_pRS->AddConstantBufferView(0);
 	m_pRS->AddConstantBufferView(100);
 	m_pRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 2);
-	m_pRS->AddDescriptorTableSimple(5, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 8);
+	m_pRS->AddDescriptorTableSimple(7, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 6);
 	m_pRS->Finalize("Global");
 
 	StateObjectInitializer desc{};
@@ -110,8 +110,6 @@ void PathTracing::Render(RGGraph& graph, const SceneView& sceneData)
 			bindingTable.BindHitGroup("PrimaryHG", 0);
 
 			const D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
-				sceneData.pLightBuffer->GetSRV()->GetDescriptor(),
-				sceneData.pLightBuffer->GetSRV()->GetDescriptor() /*dummy*/,
 				sceneData.pResolvedDepth->GetSRV()->GetDescriptor(),
 				sceneData.pPreviousColor->GetSRV()->GetDescriptor(),
 				sceneData.pResolvedNormals->GetSRV()->GetDescriptor(),

@@ -2,7 +2,7 @@
 
 #define RootSig ROOT_SIG("CBV(b0), " \
 				"CBV(b100), " \
-				"DescriptorTable(SRV(t0, numDescriptors = 2)), " \
+				"DescriptorTable(SRV(t0, numDescriptors = 1)), " \
 				"DescriptorTable(UAV(u0, numDescriptors = 2))")
 
 #define MAX_LIGHTS_PER_TILE 32
@@ -15,8 +15,7 @@ struct PassData
 
 ConstantBuffer<PassData> cPass : register(b0);
 
-StructuredBuffer<Light> tSceneLights : register(t0);
-StructuredBuffer<AABB> tClusterAABBs : register(t1);
+StructuredBuffer<AABB> tClusterAABBs : register(t0);
 
 RWStructuredBuffer<uint> uLightIndexList : register(u0);
 RWStructuredBuffer<uint> uOutLightGrid : register(u1);
@@ -64,7 +63,7 @@ void LightCulling(uint3 dispatchThreadId : SV_DispatchThreadID)
 		[loop]
 		for (uint i = 0; i < cView.LightCount; ++i)
 		{
-			Light light = tSceneLights[i];
+			Light light = GetLight(i);
 			if(light.IsPoint)
 			{
 				Sphere sphere = (Sphere)0;

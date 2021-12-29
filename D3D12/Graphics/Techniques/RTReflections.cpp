@@ -53,8 +53,6 @@ void RTReflections::Execute(RGGraph& graph, const SceneView& sceneData)
 			bindingTable.BindHitGroup("ReflectionHitGroup", 0);
 
 			const D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
-				sceneData.pLightBuffer->GetSRV()->GetDescriptor(),
-				sceneData.pLightBuffer->GetSRV()->GetDescriptor() /*dummy*/,
 				sceneData.pResolvedDepth->GetSRV()->GetDescriptor(),
 				m_pSceneColor->GetSRV()->GetDescriptor(),
 				sceneData.pResolvedNormals->GetSRV()->GetDescriptor(),

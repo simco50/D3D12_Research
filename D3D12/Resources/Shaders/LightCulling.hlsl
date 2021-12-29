@@ -3,13 +3,12 @@
 
 #define RootSig ROOT_SIG("CBV(b100), " \
 				"DescriptorTable(UAV(u0, numDescriptors = 5)), " \
-				"DescriptorTable(SRV(t0, numDescriptors = 2))")
+				"DescriptorTable(SRV(t0, numDescriptors = 1))")
 
 #define MAX_LIGHTS_PER_TILE 256
 #define BLOCK_SIZE 16
 #define SPLITZ_CULLING 1
 
-StructuredBuffer<Light> tSceneLights : register(t1);
 Texture2D tDepthTexture : register(t0);
 
 globallycoherent RWStructuredBuffer<uint> uLightIndexCounter : register(u0);
@@ -155,7 +154,7 @@ void CSMain(uint3 groupId : SV_GroupID, uint3 threadID : SV_DispatchThreadID, ui
 	[loop]
 	for(uint i = groupIndex; i < cView.LightCount; i += BLOCK_SIZE * BLOCK_SIZE)
 	{
-		Light light = tSceneLights[i];
+		Light light = GetLight(i);
 
 		if(light.IsPoint)
 		{

@@ -137,7 +137,7 @@ void InjectFogLightingCS(uint3 threadId : SV_DispatchThreadID)
 		for(i = 0; i < lightCount; ++i)
 		{
 			int lightIndex = tLightIndexList[lightOffset + i];
-			Light light = tLights[lightIndex];
+			Light light = GetLight(lightIndex);
 			if(light.IsEnabled && light.IsVolumetric)
 			{
 				float attenuation = GetAttenuation(light, worldPosition);
@@ -166,7 +166,7 @@ void InjectFogLightingCS(uint3 threadId : SV_DispatchThreadID)
 		}
 	}
 
-	totalLighting += ApplyAmbientLight(1, 1, tLights[0].GetColor().rgb * 0.05f).x;
+	totalLighting += ApplyAmbientLight(1, 1, GetLight(0).GetColor().rgb * 0.05f).x;
 
 	float blendFactor = 0.05f;
 	if(any(reprojUV < 0.05f) || any(reprojUV > 0.95f))
