@@ -18,7 +18,7 @@ VertexAttribute GetVertexAttributes(MeshInstance instance, float2 attribBarycent
 {
 	float3 barycentrics = float3((1.0f - attribBarycentrics.x - attribBarycentrics.y), attribBarycentrics.x, attribBarycentrics.y);
 
-	MeshData mesh = tMeshes[instance.Mesh];
+	MeshData mesh = GetMesh(instance.Mesh);
 	uint3 indices = GetPrimitive(mesh, primitiveIndex);
 	VertexAttribute outData;
 
@@ -50,7 +50,7 @@ VertexAttribute GetVertexAttributes(MeshInstance instance, float2 attribBarycent
 
 MaterialProperties GetMaterialProperties(uint materialIndex, float2 UV, int mipLevel)
 {
-	MaterialData material = tMaterials[materialIndex];
+	MaterialData material = GetMaterial(materialIndex);
 	MaterialProperties properties;
 	float4 baseColor = material.BaseColorFactor;
 	if(material.Diffuse >= 0)

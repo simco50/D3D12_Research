@@ -714,12 +714,7 @@ void DemoApp::Update()
 					viewData.ViewProjection = shadowData.LightViewProjections[i];
 					context.SetRootCBV(1, viewData);
 
-					const D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
-						m_SceneData.pMaterialBuffer->GetSRV()->GetDescriptor(),
-						m_SceneData.pMeshBuffer->GetSRV()->GetDescriptor(),
-						m_SceneData.pMeshInstanceBuffer->GetSRV()->GetDescriptor(),
-					};
-					context.BindResources(2, 0, srvs, ARRAYSIZE(srvs));
+					context.SetRootCBV(2, GetViewUniforms(m_SceneData));
 
 					VisibilityMask mask;
 					mask.SetAll();
@@ -755,13 +750,7 @@ void DemoApp::Update()
 
 				context.SetGraphicsRootSignature(m_pDepthPrepassRS.get());
 
-				const D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
-					m_SceneData.pMaterialBuffer->GetSRV()->GetDescriptor(),
-					m_SceneData.pMeshBuffer->GetSRV()->GetDescriptor(),
-					m_SceneData.pMeshInstanceBuffer->GetSRV()->GetDescriptor(),
-				};
-
-				context.BindResources(2, 0, srvs, ARRAYSIZE(srvs));
+				context.SetRootCBV(2, GetViewUniforms(m_SceneData));
 
 				struct ViewData
 				{
@@ -1279,10 +1268,8 @@ void DemoApp::InitializePipelines()
 			Shader* pVertexShader = m_pDevice->GetShader("DepthOnly.hlsl", ShaderType::Vertex, "VSMain");
 			Shader* pAlphaClipShader = m_pDevice->GetShader("DepthOnly.hlsl", ShaderType::Pixel, "PSMain");
 
-
 			m_pShadowsRS = std::make_unique<RootSignature>(m_pDevice.get());
 			m_pShadowsRS->FinalizeFromShader("Shadow Mapping (Opaque)", pVertexShader);
-
 
 			PipelineStateInitializer psoDesc;
 			psoDesc.SetRootSignature(m_pShadowsRS->GetRootSignature());

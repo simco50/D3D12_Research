@@ -76,7 +76,7 @@ float CastShadowRay(float3 origin, float3 direction)
 		{
 			case CANDIDATE_NON_OPAQUE_TRIANGLE:
 			{
-				MeshInstance instance = tMeshInstances[q.CandidateInstanceID()];
+				MeshInstance instance = GetMeshInstance(q.CandidateInstanceID());
 				VertexAttribute vertex = GetVertexAttributes(instance, q.CandidateTriangleBarycentrics(), q.CandidatePrimitiveIndex(), q.CandidateObjectToWorld4x3());
 				MaterialProperties surface = GetMaterialProperties(instance.Material, vertex.UV, 0);
 				if(surface.Opacity > 0.5f)
@@ -147,7 +147,7 @@ LightResult EvaluateLight(Light light, float3 worldPos, float3 V, float3 N, floa
 [shader("closesthit")]
 void PrimaryCHS(inout PrimaryRayPayload payload, BuiltInTriangleIntersectionAttributes attrib)
 {
-	MeshInstance instance = tMeshInstances[InstanceID()];
+	MeshInstance instance = GetMeshInstance(InstanceID());
 	VertexAttribute vertex = GetVertexAttributes(instance, attrib.barycentrics, PrimitiveIndex(), ObjectToWorld4x3());
 	payload.Material = instance.Material;
 	payload.UV = vertex.UV;
@@ -161,7 +161,7 @@ void PrimaryCHS(inout PrimaryRayPayload payload, BuiltInTriangleIntersectionAttr
 [shader("anyhit")]
 void PrimaryAHS(inout PrimaryRayPayload payload, BuiltInTriangleIntersectionAttributes attrib)
 {
-	MeshInstance instance = tMeshInstances[InstanceID()];
+	MeshInstance instance = GetMeshInstance(InstanceID());
 	VertexAttribute vertex = GetVertexAttributes(instance, attrib.barycentrics, PrimitiveIndex(), ObjectToWorld4x3());
 	MaterialProperties surface = GetMaterialProperties(instance.Material, vertex.UV, 0);
 	if(surface.Opacity < 0.5)
