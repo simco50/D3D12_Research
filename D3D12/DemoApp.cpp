@@ -807,29 +807,7 @@ void DemoApp::Update()
 				context.SetComputeRootSignature(m_pCameraMotionRS.get());
 				context.SetPipelineState(m_pCameraMotionPSO);
 
-				struct Parameters
-				{
-					Matrix ReprojectionMatrix;
-					Vector2 InvScreenDimensions;
-				} parameters;
-
-				Matrix preMult = Matrix(
-					Vector4(2.0f, 0.0f, 0.0f, 0.0f),
-					Vector4(0.0f, -2.0f, 0.0f, 0.0f),
-					Vector4(0.0f, 0.0f, 1.0f, 0.0f),
-					Vector4(-1.0f, 1.0f, 0.0f, 1.0f)
-				);
-
-				Matrix postMult = Matrix(
-					Vector4(1.0f / 2.0f, 0.0f, 0.0f, 0.0f),
-					Vector4(0.0f, -1.0f / 2.0f, 0.0f, 0.0f),
-					Vector4(0.0f, 0.0f, 1.0f, 0.0f),
-					Vector4(1.0f / 2.0f, 1.0f / 2.0f, 0.0f, 1.0f));
-
-				parameters.ReprojectionMatrix = preMult * m_pCamera->GetViewProjection().Invert() * m_pCamera->GetPreviousViewProjection() * postMult;
-				parameters.InvScreenDimensions = Vector2(1.0f / GetResolvedDepthStencil()->GetWidth(), 1.0f / GetResolvedDepthStencil()->GetHeight());
-
-				context.SetRootCBV(0, parameters);
+				context.SetRootCBV(0, GetViewUniforms(m_SceneData));
 
 				context.BindResource(1, 0, m_pVelocity->GetUAV());
 				context.BindResource(2, 0, GetResolvedDepthStencil()->GetSRV());
@@ -953,35 +931,41 @@ void DemoApp::Update()
 		depthReduce.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
 				Texture* pDepthStencil = resources.GetTexture(Data.DepthStencil);
-				context.InsertResourceBarrier(pDepthStencil, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-				context.InsertResourceBarrier(m_ReductionTargets[0].get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+				Texture* pSource = pDepthStencil;
+				Texture* pTarget = m_ReductionTargets[0].get();
+
+				context.InsertResourceBarrier(pSource, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+				context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
 				context.SetComputeRootSignature(m_pReduceDepthRS.get());
-				context.SetPipelineState(pDepthStencil->GetDesc().SampleCount > 1 ? m_pPrepareReduceDepthMsaaPSO : m_pPrepareReduceDepthPSO);
+				context.SetPipelineState(pSource->GetDesc().SampleCount > 1 ? m_pPrepareReduceDepthMsaaPSO : m_pPrepareReduceDepthPSO);
 
 				context.SetRootCBV(0, GetViewUniforms(m_SceneData));
 
-				context.BindResource(1, 0, m_ReductionTargets[0]->GetUAV());
-				context.BindResource(2, 0, pDepthStencil->GetSRV());
+				context.BindResource(1, 0, pTarget->GetUAV());
+				context.BindResource(2, 0, pSource->GetSRV());
 
-				context.Dispatch(m_ReductionTargets[0]->GetWidth(), m_ReductionTargets[0]->GetHeight());
+				context.Dispatch(pTarget->GetWidth(), pTarget->GetHeight());
 
 				context.SetPipelineState(m_pReduceDepthPSO);
 				for (size_t i = 1; i < m_ReductionTargets.size(); ++i)
 				{
-					context.InsertResourceBarrier(m_ReductionTargets[i - 1].get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-					context.InsertResourceBarrier(m_ReductionTargets[i].get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+					pSource = pTarget;
+					pTarget = m_ReductionTargets[i].get();
 
-					context.BindResource(1, 0, m_ReductionTargets[i]->GetUAV());
-					context.BindResource(2, 0, m_ReductionTargets[i - 1]->GetSRV());
+					context.InsertResourceBarrier(pSource, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+					context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-					context.Dispatch(m_ReductionTargets[i]->GetWidth(), m_ReductionTargets[i]->GetHeight());
+					context.BindResource(1, 0, pTarget->GetUAV());
+					context.BindResource(2, 0, pSource->GetSRV());
+
+					context.Dispatch(pTarget->GetWidth(), pTarget->GetHeight());
 				}
 
-				context.InsertResourceBarrier(m_ReductionTargets.back().get(), D3D12_RESOURCE_STATE_COPY_SOURCE);
+				context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_COPY_SOURCE);
 				context.FlushResourceBarriers();
 
-				context.CopyTexture(m_ReductionTargets.back().get(), m_ReductionReadbackTargets[m_Frame % FRAME_COUNT].get(), CD3DX12_BOX(0, 1));
+				context.CopyTexture(pTarget, m_ReductionReadbackTargets[m_Frame % FRAME_COUNT].get(), CD3DX12_BOX(0, 1));
 			});
 	}
 

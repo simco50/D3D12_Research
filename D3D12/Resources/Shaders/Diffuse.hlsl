@@ -389,7 +389,7 @@ void PSMain(InterpolantsVSToPS input,
 
 	MeshInstance instance = GetMeshInstance(cObjectData.Index);
 	MaterialProperties material = GetMaterialProperties(instance.Material, input.UV);
-	float3x3 TBN = CreateTangentToWorld(normalize(input.Normal), float4(normalize(input.Tangent.xyz), 1));
+	float3x3 TBN = CreateTangentToWorld(normalize(input.Normal), float4(normalize(input.Tangent.xyz), input.Tangent.w));
 	float3 N = TangentSpaceNormalMapping(material.NormalTS, TBN);
 
 	BrdfData brdf = GetBrdfData(material);
