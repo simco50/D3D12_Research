@@ -141,6 +141,12 @@ MaterialData GetMaterial(uint index)
 	return materials[index];
 }
 
+float4x4 GetTransform(uint index)
+{
+	StructuredBuffer<float4x4> transforms = ResourceDescriptorHeap[cView.TransformsIndex];
+	return transforms[index];
+}
+
 Light GetLight(uint index)
 {
 	StructuredBuffer<Light> lights = ResourceDescriptorHeap[cView.LightsIndex];

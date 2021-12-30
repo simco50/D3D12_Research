@@ -193,19 +193,10 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView& resources, Texture*
 
 			struct Parameters
 			{
-				std::array<Vector4, 64> RandomDirections;
 				Vector3 Origin;
 			};
 			Parameters parameters{};
 
-			std::generate(parameters.RandomDirections.begin(), parameters.RandomDirections.end(), []()
-				{
-					Vector4 r = Vector4(Math::RandVector());
-					r.y = Math::Lerp(0.6f, 0.8f, (float)abs(r.y));
-					r.z = Math::Lerp(0.6f, 0.8f, (float)abs(r.z));
-					r.Normalize();
-					return r;
-				});
 			parameters.Origin = Vector3(150, 3, 0);
 
 			context.SetRootCBV(0, parameters);

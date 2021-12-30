@@ -40,7 +40,7 @@ struct Batch
 		AlphaMask = 2,
 		AlphaBlend = 4,
 	};
-	int Index = 0;
+	ShaderInterop::InstanceData InstanceData;
 	Blending BlendMode = Blending::Opaque;
 	const SubMesh* pMesh = nullptr;
 	Matrix WorldMatrix;
@@ -68,6 +68,7 @@ struct SceneView
 	Buffer* pMeshBuffer = nullptr;
 	Buffer* pMeshInstanceBuffer = nullptr;
 	Buffer* pSceneTLAS = nullptr;
+	Buffer* pTransformsBuffer = nullptr;
 	int FrameIndex = 0;
 	VisibilityMask VisibilityMask;
 	ShadowData ShadowData;

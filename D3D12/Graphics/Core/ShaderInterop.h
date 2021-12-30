@@ -92,13 +92,10 @@ namespace ShaderInterop
 	{
 		uint Material;
 		uint Mesh;
-		float4x4 World;
+		uint World;
 	};
 
-	struct PerObjectData
-	{
-		uint Index;
-	};
+	typedef MeshInstance InstanceData;
 
 	inline float4 UIntToColor(uint c)
 	{
@@ -179,6 +176,7 @@ namespace ShaderInterop
 		uint MeshesIndex;
 		uint MaterialsIndex;
 		uint MeshInstancesIndex;
+		uint TransformsIndex;
 		uint LightsIndex;
 	};
 

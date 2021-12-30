@@ -26,7 +26,6 @@ struct IndirectArgsParameters
 
 struct EmitParameters
 {
-	float4 RandomDirections[64];
 	float4 Origin;
 };
 

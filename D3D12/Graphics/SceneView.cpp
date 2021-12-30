@@ -76,6 +76,7 @@ ShaderInterop::ViewUniforms GetViewUniforms(const SceneView& sceneView, Texture*
 	parameters.MeshesIndex = sceneView.pMeshBuffer->GetSRVIndex();
 	parameters.MaterialsIndex = sceneView.pMaterialBuffer->GetSRVIndex();
 	parameters.MeshInstancesIndex = sceneView.pMeshInstanceBuffer->GetSRVIndex();
+	parameters.TransformsIndex = sceneView.pTransformsBuffer->GetSRVIndex();
 	parameters.LightsIndex = sceneView.pLightBuffer->GetSRVIndex();
 	return parameters;
 }
@@ -85,7 +86,7 @@ void DrawScene(CommandContext& context, const SceneView& scene, const Visibility
 	std::vector<const Batch*> meshes;
 	for (const Batch& b : scene.Batches)
 	{
-		if (EnumHasAnyFlags(b.BlendMode, blendModes) && visibility.GetBit(b.Index))
+		if (EnumHasAnyFlags(b.BlendMode, blendModes) && visibility.GetBit(b.InstanceData.World))
 		{
 			meshes.push_back(&b);
 		}
@@ -99,11 +100,9 @@ void DrawScene(CommandContext& context, const SceneView& scene, const Visibility
 	};
 	std::sort(meshes.begin(), meshes.end(), CompareSort);
 
-	ShaderInterop::PerObjectData objectData;
 	for (const Batch* b : meshes)
 	{
-		objectData.Index = b->Index;
-		context.SetRootConstants(0, objectData);
+		context.SetRootConstants(0, b->InstanceData);
 		if(context.GetCurrentPSO()->GetType() == PipelineStateType::Mesh)
 		{
 			context.DispatchMesh(ComputeUtils::GetNumThreadGroups(b->pMesh->NumMeshlets, 32));

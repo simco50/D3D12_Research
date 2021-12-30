@@ -591,7 +591,7 @@ void DemoApp::Update()
 		BoundingFrustum frustum = m_pCamera->GetFrustum();
 		for (const Batch& b : m_SceneData.Batches)
 		{
-			m_SceneData.VisibilityMask.AssignBit(b.Index, frustum.Contains(b.Bounds));
+			m_SceneData.VisibilityMask.AssignBit(b.InstanceData.World, frustum.Contains(b.Bounds));
 		}
 	}
 
@@ -1834,7 +1834,7 @@ void DemoApp::UpdateTLAS(CommandContext& context)
 			instanceDesc.AccelerationStructure = subMesh.pBLAS->GetGpuHandle();
 			instanceDesc.Flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE;
 			instanceDesc.InstanceContributionToHitGroupIndex = 0;
-			instanceDesc.InstanceID = batch.Index;
+			instanceDesc.InstanceID = batch.InstanceData.World;
 			instanceDesc.InstanceMask = 0xFF;
 
 			//The layout of Transform is a transpose of how affine matrices are typically stored in memory. Instead of four 3-vectors, Transform is laid out as three 4-vectors.
@@ -1894,6 +1894,7 @@ void DemoApp::UploadSceneData(CommandContext& context)
 	std::vector<ShaderInterop::MeshData> meshes;
 	std::vector<ShaderInterop::MeshInstance> meshInstances;
 	std::vector<Batch> sceneBatches;
+	std::vector<Matrix> transforms;
 
 	for (const auto& pMesh : m_Meshes)
 	{
@@ -1921,11 +1922,13 @@ void DemoApp::UploadSceneData(CommandContext& context)
 			ShaderInterop::MeshInstance meshInstance;
 			meshInstance.Mesh = node.MeshIndex;
 			meshInstance.Material = (uint32)materials.size() + parentMesh.MaterialId;
-			meshInstance.World = node.Transform;
+			meshInstance.World = (uint32)transforms.size();
 			meshInstances.push_back(meshInstance);
 
+			transforms.push_back(node.Transform);
+
 			Batch batch;
-			batch.Index = (int)sceneBatches.size();
+			batch.InstanceData = meshInstance;
 			batch.LocalBounds = parentMesh.Bounds;
 			batch.pMesh = &parentMesh;
 			batch.BlendMode = meshMaterial.IsTransparent ? Batch::Blending::AlphaMask : Batch::Blending::Opaque;
@@ -1971,6 +1974,12 @@ void DemoApp::UploadSceneData(CommandContext& context)
 	}
 	context.InitializeBuffer(m_pMaterialBuffer.get(), materials.data(), materials.size() * sizeof(ShaderInterop::MaterialData));
 
+	if (!m_pTransformsBuffer || transforms.size() > m_pTransformsBuffer->GetNumElements())
+	{
+		m_pTransformsBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(Math::Max(1, (int)transforms.size()), sizeof(Matrix), BufferFlag::ShaderResource), "Transforms");
+	}
+	context.InitializeBuffer(m_pTransformsBuffer.get(), transforms.data(), transforms.size() * sizeof(Matrix));
+
 	std::vector<ShaderInterop::Light> lightData;
 	Utils::Transform(m_Lights, lightData, [](const Light& light) { return light.GetData(); });
 
@@ -1985,6 +1994,7 @@ void DemoApp::UploadSceneData(CommandContext& context)
 	m_SceneData.pLightBuffer = m_pLightBuffer.get();
 	m_SceneData.pMaterialBuffer = m_pMaterialBuffer.get();
 	m_SceneData.pMeshBuffer = m_pMeshBuffer.get();
+	m_SceneData.pTransformsBuffer = m_pTransformsBuffer.get();
 	m_SceneData.pMeshInstanceBuffer = m_pMeshInstanceBuffer.get();
 	m_SceneData.pSceneTLAS = m_pTLAS.get();
 }

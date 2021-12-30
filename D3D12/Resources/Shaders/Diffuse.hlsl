@@ -4,7 +4,7 @@
 
 #define BLOCK_SIZE 16
 
-#define RootSig ROOT_SIG("RootConstants(num32BitConstants=2, b0), " \
+#define RootSig ROOT_SIG("RootConstants(num32BitConstants=3, b0), " \
 	"CBV(b1), " \
 	"CBV(b100), " \
 	"DescriptorTable(SRV(t0, numDescriptors = 6))")
@@ -16,7 +16,7 @@ struct PerViewData
 	float2 LightGridParams;
 };
 
-ConstantBuffer<PerObjectData> cObjectData : register(b0);
+ConstantBuffer<InstanceData> cObject : register(b0);
 ConstantBuffer<PerViewData> cPass : register(b1);
 
 struct InterpolantsVSToPS
@@ -139,19 +139,19 @@ LightResult DoLight(float4 pos, float3 worldPos, float3 N, float3 V, float3 diff
 	return totalResult;
 }
 
-InterpolantsVSToPS FetchVertexAttributes(MeshInstance instance, MeshData mesh, uint vertexId)
+InterpolantsVSToPS FetchVertexAttributes(MeshData mesh, float4x4 world, uint vertexId)
 {
 	InterpolantsVSToPS result;
 	float3 Position = UnpackHalf3(BufferLoad<uint2>(mesh.BufferIndex, vertexId, mesh.PositionsOffset));
-	result.PositionWS = mul(float4(Position, 1.0f), instance.World).xyz;
+	result.PositionWS = mul(float4(Position, 1.0f), world).xyz;
 	result.PositionVS = mul(float4(result.PositionWS, 1.0f), cView.View).xyz;
 	result.Position = mul(float4(result.PositionWS, 1.0f), cView.ViewProjection);
 
 	result.UV = UnpackHalf2(BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.UVsOffset));
 
 	NormalData normalData = BufferLoad<NormalData>(mesh.BufferIndex, vertexId, mesh.NormalsOffset);
-	result.Normal = normalize(mul(normalData.Normal, (float3x3)instance.World));
-	result.Tangent = float4(normalize(mul(normalData.Tangent.xyz, (float3x3)instance.World)), normalData.Tangent.w);
+	result.Normal = normalize(mul(normalData.Normal, (float3x3)world));
+	result.Tangent = float4(normalize(mul(normalData.Tangent.xyz, (float3x3)world)), normalData.Tangent.w);
 
 	result.Seed = mesh.PositionsOffset;
 
@@ -165,11 +165,11 @@ struct PayloadData
 
 groupshared PayloadData gsPayload;
 
-bool IsVisible(MeshInstance instance, MeshData mesh, uint meshlet)
+bool IsVisible(MeshData mesh, float4x4 world, uint meshlet)
 {
 	MeshletBounds cullData = BufferLoad<MeshletBounds>(mesh.BufferIndex, meshlet, mesh.MeshletBoundsOffset);
 
-	float4 center = mul(float4(cullData.Center, 1), instance.World);
+	float4 center = mul(float4(cullData.Center, 1), world);
 
 	for(int i = 0; i < 6; ++i)
 	{
@@ -180,8 +180,8 @@ bool IsVisible(MeshInstance instance, MeshData mesh, uint meshlet)
 	}
 
 	float3 viewLocation = cView.ViewPosition.xyz;
-	float3 coneApex = mul(float4(cullData.ConeApex, 1), instance.World).xyz;
-	float3 coneAxis = mul(cullData.ConeAxis, (float3x3)instance.World);
+	float3 coneApex = mul(float4(cullData.ConeApex, 1), world).xyz;
+	float3 coneAxis = mul(cullData.ConeAxis, (float3x3)world);
 	float3 view = normalize(viewLocation - coneApex);
 	if (dot(view, coneAxis) >= cullData.ConeCutoff)
 	{
@@ -195,11 +195,11 @@ void ASMain(uint threadID : SV_DispatchThreadID)
 {
 	bool visible = false;
 
-	MeshInstance instance = GetMeshInstance(cObjectData.Index);
-	MeshData mesh = GetMesh(instance.Mesh);
+	MeshData mesh = GetMesh(cObject.Mesh);
+	float4x4 world = GetTransform(cObject.World);
 	if (threadID < mesh.MeshletCount)
 	{
-		visible = IsVisible(instance, mesh, threadID);
+		visible = IsVisible(mesh, world, threadID);
 	}
 
 	if (visible)
@@ -225,8 +225,7 @@ void MSMain(
 	out vertices InterpolantsVSToPS verts[MESHLET_MAX_VERTICES],
 	out indices uint3 triangles[MESHLET_MAX_TRIANGLES])
 {
-	MeshInstance instance = GetMeshInstance(cObjectData.Index);
-	MeshData mesh = GetMesh(instance.Mesh);
+	MeshData mesh = GetMesh(cObject.Mesh);
 
 	uint meshletIndex = payload.Indices[groupID];
 	if(meshletIndex >= mesh.MeshletCount)
@@ -238,10 +237,11 @@ void MSMain(
 
 	SetMeshOutputCounts(meshlet.VertexCount, meshlet.TriangleCount);
 
+	float4x4 world = GetTransform(cObject.World);
 	for(uint i = groupThreadID; i < meshlet.VertexCount; i += NUM_MESHLET_THREADS)
 	{
 		uint vertexId = BufferLoad<uint>(mesh.BufferIndex, i + meshlet.VertexOffset, mesh.MeshletVertexOffset);
-		InterpolantsVSToPS result = FetchVertexAttributes(instance, mesh, vertexId);
+		InterpolantsVSToPS result = FetchVertexAttributes(mesh, world, vertexId);
 		result.Seed = meshletIndex;
 		verts[i] = result;
 	}
@@ -256,9 +256,9 @@ void MSMain(
 [RootSignature(RootSig)]
 InterpolantsVSToPS VSMain(uint vertexId : SV_VertexID)
 {
-	MeshInstance instance = GetMeshInstance(cObjectData.Index);
-	MeshData mesh = GetMesh(instance.Mesh);
-	InterpolantsVSToPS result = FetchVertexAttributes(instance, mesh, vertexId);
+	MeshData mesh = GetMesh(cObject.Mesh);
+	float4x4 world = GetTransform(cObject.World);
+	InterpolantsVSToPS result = FetchVertexAttributes(mesh, world, vertexId);
 	return result;
 }
 
@@ -387,8 +387,7 @@ void PSMain(InterpolantsVSToPS input,
 	float ambientOcclusion = tAO.SampleLevel(sLinearClamp, screenUV, 0).r;
 	float3 V = normalize(cView.ViewPosition.xyz - input.PositionWS);
 
-	MeshInstance instance = GetMeshInstance(cObjectData.Index);
-	MaterialProperties material = GetMaterialProperties(instance.Material, input.UV);
+	MaterialProperties material = GetMaterialProperties(cObject.Material, input.UV);
 	float3x3 TBN = CreateTangentToWorld(normalize(input.Normal), float4(normalize(input.Tangent.xyz), input.Tangent.w));
 	float3 N = TangentSpaceNormalMapping(material.NormalTS, TBN);
 
