@@ -11,7 +11,6 @@
 #include "Graphics/Core/StateObject.h"
 #include "Graphics/RenderGraph/RenderGraph.h"
 #include "Graphics/Mesh.h"
-#include "Scene/Camera.h"
 #include "Graphics/SceneView.h"
 
 RTAO::RTAO(GraphicsDevice* pDevice)
@@ -22,7 +21,7 @@ RTAO::RTAO(GraphicsDevice* pDevice)
 	}
 }
 
-void RTAO::Execute(RGGraph& graph, Texture* pTarget, const SceneView& sceneData)
+void RTAO::Execute(RGGraph& graph, const SceneView& sceneData, Texture* pTarget, Texture* pDepth)
 {
 	static float g_AoPower = 3;
 	static float g_AoRadius = 0.5f;
@@ -42,7 +41,7 @@ void RTAO::Execute(RGGraph& graph, Texture* pTarget, const SceneView& sceneData)
 	RGPassBuilder rt = graph.AddPass("RTAO");
 	rt.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
 		{
-			context.InsertResourceBarrier(sceneData.pResolvedDepth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+			context.InsertResourceBarrier(pDepth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
 			context.SetComputeRootSignature(m_pGlobalRS.get());
@@ -50,33 +49,23 @@ void RTAO::Execute(RGGraph& graph, Texture* pTarget, const SceneView& sceneData)
 
 			struct Parameters
 			{
-				Matrix ViewInverse;
-				Matrix ProjectionInverse;
-				Matrix ViewProjectionInverse;
 				float Power;
 				float Radius;
 				uint32 Samples;
-				uint32 TLASIndex;
-				uint32 FrameIndex;
 			} parameters{};
 
-
-			parameters.ViewInverse = sceneData.pCamera->GetViewInverse();
-			parameters.ProjectionInverse = sceneData.pCamera->GetProjectionInverse();
-			parameters.ViewProjectionInverse = sceneData.pCamera->GetViewProjectionInverse();
 			parameters.Power = g_AoPower;
 			parameters.Radius = g_AoRadius;
 			parameters.Samples = g_AoSamples;
-			parameters.TLASIndex = sceneData.SceneTLAS;
-			parameters.FrameIndex = sceneData.FrameIndex;
 
 			ShaderBindingTable bindingTable(m_pRtSO);
 			bindingTable.BindRayGenShader("RayGen");
 			bindingTable.BindMissShader("Miss", {});
 
 			context.SetRootCBV(0, parameters);
-			context.BindResource(1, 0, pTarget->GetUAV());
-			context.BindResource(2, 0, sceneData.pResolvedDepth->GetSRV());
+			context.SetRootCBV(1, GetViewUniforms(sceneData, pTarget));
+			context.BindResource(2, 0, pTarget->GetUAV());
+			context.BindResource(3, 0, pDepth->GetSRV());
 
 			context.DispatchRays(bindingTable, pTarget->GetWidth(), pTarget->GetHeight());
 		});

@@ -1,14 +1,7 @@
 #include "CommonBindings.hlsli"
 
 #define RootSig ROOT_SIG("RootFlags(ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT), " \
-				"CBV(b0, visibility=SHADER_VISIBILITY_VERTEX)")
-
-struct PassParameters
-{
-	float4x4 ViewProj;
-};
-
-ConstantBuffer<PassParameters> cPassParameters : register(b0);
+				"CBV(b100)")
 
 struct VertexInput
 {
@@ -27,7 +20,7 @@ InterpolantsVSToPS VSMain(VertexInput input)
 {
 	InterpolantsVSToPS output = (InterpolantsVSToPS)0;
 
-	output.Position = mul(float4(input.Position, 1.0f), cPassParameters.ViewProj);
+	output.Position = mul(float4(input.Position, 1.0f), cView.ViewProjection);
 	output.Color = UIntToColor(input.Color);
 
 	return output;

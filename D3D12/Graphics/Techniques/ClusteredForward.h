@@ -5,12 +5,23 @@ class GraphicsDevice;
 class PipelineState;
 class RootSignature;
 class Texture;
-class Camera;
 class CommandSignature;
 class Buffer;
 class UnorderedAccessView;
 class RGGraph;
 struct SceneView;
+
+struct ClusteredForwardParameters
+{
+	Texture* pColorTarget;
+	Texture* pResolvedColorTarget;
+	Texture* pNormalsTarget;
+	Texture* pResolvedNormalsTarget;
+	Texture* pDepth;
+	Texture* pResolvedDepth;
+	Texture* pAmbientOcclusion;
+	Texture* pPreviousColorTarget;
+};
 
 class ClusteredForward
 {
@@ -20,8 +31,8 @@ public:
 
 	void OnResize(int windowWidth, int windowHeight);
 
-	void Execute(RGGraph& graph, const SceneView& resources);
-	void VisualizeLightDensity(RGGraph& graph, Camera& camera, Texture* pTarget, Texture* pDepth);
+	void Execute(RGGraph& graph, const SceneView& resources, const ClusteredForwardParameters& parameters);
+	void VisualizeLightDensity(RGGraph& graph, const SceneView& resources, Texture* pTarget, Texture* pDepth);
 
 private:
 	void SetupPipelines();

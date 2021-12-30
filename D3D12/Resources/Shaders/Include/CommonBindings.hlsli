@@ -3,43 +3,33 @@
 #include "Common.hlsli"
 
 //CBVs
-ConstantBuffer<ShadowData> cShadowData : register(b2);
-
-//SRVs
-StructuredBuffer<Light> tLights :						   register(t5);
-Texture2D tAO :											 register(t6);
-Texture2D tDepth :										  register(t7);
-Texture2D tPreviousSceneColor :							 register(t8);
-Texture2D tSceneNormals :								   register(t9);
-StructuredBuffer<MaterialData> tMaterials :				 register(t10);
-StructuredBuffer<MeshData> tMeshes :						register(t11);
-StructuredBuffer<MeshInstance> tMeshInstances :			 register(t12);
+ConstantBuffer<ViewUniforms> cView : 						register(b100);
 
 //Static samplers
-SamplerState sLinearWrap :								  register(s10);
-SamplerState sLinearClamp :								 register(s11);
+SamplerState sLinearWrap :								  	register(s10);
+SamplerState sLinearClamp :								 	register(s11);
 SamplerState sLinearBorder :								register(s12);
-SamplerState sPointWrap :								   register(s13);
-SamplerState sPointClamp :								  register(s14);
-SamplerState sPointBorder :								 register(s15);
-SamplerState sAnisoWrap :								   register(s16);
-SamplerState sAnisoClamp :								  register(s17);
-SamplerState sAnisoBorder :								 register(s18);
-SamplerState sMaterialSampler :							 register(s19);
-SamplerComparisonState sDepthComparison :				   register(s20);
+SamplerState sPointWrap :								   	register(s13);
+SamplerState sPointClamp :								  	register(s14);
+SamplerState sPointBorder :								 	register(s15);
+SamplerState sAnisoWrap :								   	register(s16);
+SamplerState sAnisoClamp :								  	register(s17);
+SamplerState sAnisoBorder :									register(s18);
+SamplerState sMaterialSampler :							 	register(s19);
+SamplerComparisonState sDepthComparison :				   	register(s20);
 //Bindless samples
-SamplerState sSamplerTable[] :							  register(s0, space100);
+SamplerState sSamplerTable[] :							  	register(s0, space100);
 //Bindless SRVs
-Texture2D tTexture2DTable[] :							   register(t0, space100);
-Texture3D tTexture3DTable[] :							   register(t0, space101);
-TextureCube tTextureCubeTable[] :						   register(t0, space102);
-Texture2DArray tTexture2DArrayTable[] :					 register(t0, space103);
-ByteAddressBuffer tBufferTable[] :						  register(t0, space104);
-RaytracingAccelerationStructure tTLASTable[] :			  register(t0, space105);
+Texture2D tTexture2DTable[] :							   	register(t0, space100);
+Texture3D tTexture3DTable[] :							   	register(t0, space101);
+TextureCube tTextureCubeTable[] :						   	register(t0, space102);
+Texture2DArray tTexture2DArrayTable[] :					 	register(t0, space103);
+ByteAddressBuffer tBufferTable[] :						  	register(t0, space104);
+RaytracingAccelerationStructure tTLASTable[] :			  	register(t0, space105);
 //Bindless UAVs
-RWByteAddressBuffer uRWBufferTable[] :					  register(u0, space100);
-RWTexture2D<float4> URWTexture2DTable[] :				   register(u0, space101);
-RWTexture3D<float4> URWTexture3DTable[] :				   register(u0, space102);
+RWByteAddressBuffer uRWBufferTable[] :					  	register(u0, space100);
+RWTexture2D<float4> URWTexture2DTable[] :				   	register(u0, space101);
+RWTexture3D<float4> URWTexture3DTable[] :				   	register(u0, space102);
 
 #define ROOT_SIG(elements) elements ", " DEFAULT_ROOT_SIG_PARAMS
 
@@ -131,4 +121,34 @@ uint3 GetPrimitive(MeshData mesh, uint primitiveIndex)
 		}
 	}
 	return indices;
+}
+
+MeshInstance GetMeshInstance(uint index)
+{
+	StructuredBuffer<MeshInstance> meshes = ResourceDescriptorHeap[cView.MeshInstancesIndex];
+	return meshes[index];
+}
+
+MeshData GetMesh(uint index)
+{
+	StructuredBuffer<MeshData> meshes = ResourceDescriptorHeap[cView.MeshesIndex];
+	return meshes[index];
+}
+
+MaterialData GetMaterial(uint index)
+{
+	StructuredBuffer<MaterialData> materials = ResourceDescriptorHeap[cView.MaterialsIndex];
+	return materials[index];
+}
+
+float4x4 GetTransform(uint index)
+{
+	StructuredBuffer<float4x4> transforms = ResourceDescriptorHeap[cView.TransformsIndex];
+	return transforms[index];
+}
+
+Light GetLight(uint index)
+{
+	StructuredBuffer<Light> lights = ResourceDescriptorHeap[cView.LightsIndex];
+	return lights[index];
 }

@@ -7,6 +7,7 @@
 #include "Graphics/Core/CommandContext.h"
 #include "Light.h"
 #include "RenderGraph/RenderGraph.h"
+#include "Graphics/SceneView.h"
 
 struct DebugSphere
 {
@@ -75,7 +76,7 @@ void DebugRenderer::Shutdown()
 	m_pRS.reset();
 }
 
-void DebugRenderer::Render(RGGraph& graph, const Matrix& viewProjection, Texture* pTarget, Texture* pDepth)
+void DebugRenderer::Render(RGGraph& graph, const SceneView& view, Texture* pTarget, Texture* pDepth)
 {
 	int linePrimitives = (int)m_Lines.size() * 2;
 	int trianglePrimitives = (int)m_Triangles.size() * 3;
@@ -96,7 +97,7 @@ void DebugRenderer::Render(RGGraph& graph, const Matrix& viewProjection, Texture
 			context.BeginRenderPass(RenderPassInfo(pTarget, RenderPassAccess::Load_Store, pDepth, RenderPassAccess::Load_Store, false));
 			context.SetGraphicsRootSignature(m_pRS.get());
 
-			context.SetRootCBV(0, viewProjection);
+			context.SetRootCBV(0, GetViewUniforms(view, pTarget));
 
 			if (linePrimitives != 0)
 			{

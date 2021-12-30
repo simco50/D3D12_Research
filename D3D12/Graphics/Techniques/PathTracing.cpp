@@ -8,7 +8,6 @@
 #include "Graphics/Core/CommandContext.h"
 #include "Graphics/Core/ShaderBindingTable.h"
 #include "Graphics/SceneView.h"
-#include "Scene/Camera.h"
 
 PathTracing::PathTracing(GraphicsDevice* pDevice)
 	: m_pDevice(pDevice)
@@ -22,9 +21,8 @@ PathTracing::PathTracing(GraphicsDevice* pDevice)
 
 	m_pRS = std::make_unique<RootSignature>(pDevice);
 	m_pRS->AddConstantBufferView(0);
-	m_pRS->AddConstantBufferView(2);
+	m_pRS->AddConstantBufferView(100);
 	m_pRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 2);
-	m_pRS->AddDescriptorTableSimple(5, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 8);
 	m_pRS->Finalize("Global");
 
 	StateObjectInitializer desc{};
@@ -54,7 +52,7 @@ PathTracing::~PathTracing()
 	}
 }
 
-void PathTracing::Render(RGGraph& graph, const SceneView& sceneData)
+void PathTracing::Render(RGGraph& graph, const SceneView& sceneData, Texture* pTarget)
 {
 	if (!IsSupported())
 	{
@@ -79,7 +77,7 @@ void PathTracing::Render(RGGraph& graph, const SceneView& sceneData)
 	}
 	ImGui::End();
 
-	if (sceneData.pCamera->GetPreviousViewProjection() != sceneData.pCamera->GetViewProjection())
+	if (sceneData.View.PreviousViewProjection != sceneData.View.ViewProjection)
 	{
 		Reset();
 	}
@@ -89,31 +87,17 @@ void PathTracing::Render(RGGraph& graph, const SceneView& sceneData)
 	RGPassBuilder rt = graph.AddPass("Path Tracing");
 	rt.Bind([=](CommandContext& context, const RGPassResources& /* passResources */)
 		{
-			context.InsertResourceBarrier(sceneData.pRenderTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+			context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
 			context.SetComputeRootSignature(m_pRS.get());
 			context.SetPipelineState(m_pSO);
 
 			struct Parameters
 			{
-				Matrix View;
-				Matrix ViewInverse;
-				Matrix ProjectionInverse;
-				Matrix Projection;
-				uint32 NumLights;
-				uint32 TLASIndex;
-				uint32 FrameIndex;
 				uint32 NumBounces;
 				uint32 AccumulatedFrames;
 			} parameters{};
 
-			parameters.View = sceneData.pCamera->GetView();
-			parameters.ViewInverse = sceneData.pCamera->GetViewInverse();
-			parameters.ProjectionInverse = sceneData.pCamera->GetProjectionInverse();
-			parameters.Projection = sceneData.pCamera->GetProjection();
-			parameters.NumLights = sceneData.pLightBuffer->GetNumElements();
-			parameters.TLASIndex = sceneData.SceneTLAS;
-			parameters.FrameIndex = sceneData.FrameIndex;
 			parameters.NumBounces = numBounces;
 			parameters.AccumulatedFrames = m_NumAccumulatedFrames;
 
@@ -123,28 +107,16 @@ void PathTracing::Render(RGGraph& graph, const SceneView& sceneData)
 			bindingTable.BindMissShader("ShadowMS", 1);
 			bindingTable.BindHitGroup("PrimaryHG", 0);
 
-			const D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
-				sceneData.pLightBuffer->GetSRV()->GetDescriptor(),
-				sceneData.pLightBuffer->GetSRV()->GetDescriptor() /*dummy*/,
-				sceneData.pResolvedDepth->GetSRV()->GetDescriptor(),
-				sceneData.pPreviousColor->GetSRV()->GetDescriptor(),
-				sceneData.pResolvedNormals->GetSRV()->GetDescriptor(),
-				sceneData.pMaterialBuffer->GetSRV()->GetDescriptor(),
-				sceneData.pMeshBuffer->GetSRV()->GetDescriptor(),
-				sceneData.pMeshInstanceBuffer->GetSRV()->GetDescriptor(),
-			};
-
 			const D3D12_CPU_DESCRIPTOR_HANDLE uavs[] = {
-				sceneData.pRenderTarget->GetUAV()->GetDescriptor(),
+				pTarget->GetUAV()->GetDescriptor(),
 				m_pAccumulationTexture->GetUAV()->GetDescriptor(),
 			};
 
 			context.SetRootCBV(0, parameters);
-			context.SetRootCBV(1, sceneData.ShadowData);
+			context.SetRootCBV(1, GetViewUniforms(sceneData, pTarget));
 			context.BindResources(2, 0, uavs, ARRAYSIZE(uavs));
-			context.BindResources(3, 0, srvs, ARRAYSIZE(srvs));
 
-			context.DispatchRays(bindingTable, sceneData.pRenderTarget->GetWidth(), sceneData.pRenderTarget->GetHeight());
+			context.DispatchRays(bindingTable, pTarget->GetWidth(), pTarget->GetHeight());
 		});
 }
 

@@ -21,46 +21,39 @@ struct DescriptorHeapBlock
 class GlobalOnlineDescriptorHeap : public GraphicsObject
 {
 public:
-	GlobalOnlineDescriptorHeap(GraphicsDevice* pParent, D3D12_DESCRIPTOR_HEAP_TYPE type, uint32 blockSize, uint32 numDescriptors);
+	GlobalOnlineDescriptorHeap(GraphicsDevice* pParent, D3D12_DESCRIPTOR_HEAP_TYPE type, uint32 dynamicBlockSize, uint32 numDescriptors);
+
+	DescriptorHandle AllocatePersistent();
+	void FreePersistent(DescriptorHandle& handle);
+	void FreePersistent(uint32& heapIndex);
 
 	DescriptorHeapBlock* AllocateBlock();
 	void FreeBlock(uint64 fenceValue, DescriptorHeapBlock* pBlock);
+	uint32 GetBlockSize() const { return m_DynamicBlockSize; }
+
 	uint32 GetDescriptorSize() const { return m_DescriptorSize; }
 	ID3D12DescriptorHeap* GetHeap() const { return m_pHeap.Get(); }
 	D3D12_DESCRIPTOR_HEAP_TYPE GetType() const { return m_Type; }
 	DescriptorHandle GetStartHandle() const { return m_StartHandle; }
-	uint32 GetBlockSize() const { return  m_BlockSize; }
 
 private:
-	std::mutex m_BlockAllocateMutex;
+	ComPtr<ID3D12DescriptorHeap> m_pHeap;
 	D3D12_DESCRIPTOR_HEAP_TYPE m_Type;
-	uint32 m_NumDescriptors;
-
 	uint32 m_DescriptorSize = 0;
-	uint32 m_BlockSize = 0;
 	DescriptorHandle m_StartHandle;
 
-	ComPtr<ID3D12DescriptorHeap> m_pHeap;
-	std::vector<std::unique_ptr<DescriptorHeapBlock>> m_HeapBlocks;
-	std::vector<DescriptorHeapBlock*> m_ReleasedBlocks;
-	std::queue<DescriptorHeapBlock*> m_FreeBlocks;
-};
+	std::mutex m_DynamicBlockAllocateMutex;
+	uint32 m_DynamicBlockSize = 0;
+	uint32 m_NumDynamicDescriptors;
+	std::vector<std::unique_ptr<DescriptorHeapBlock>> m_DynamicBlocks;
+	std::vector<DescriptorHeapBlock*> m_ReleasedDynamicBlocks;
+	std::queue<DescriptorHeapBlock*> m_FreeDynamicBlocks;
 
-class PersistentDescriptorAllocator : public GraphicsObject
-{
-public:
-	PersistentDescriptorAllocator(GlobalOnlineDescriptorHeap* pGlobalHeap);
-	DescriptorHandle Allocate();
-	void Free(DescriptorHandle& handle);
-	void Free(int32& heapIndex);
-
-private:
-	GlobalOnlineDescriptorHeap* m_pHeapAllocator;
-	std::vector<DescriptorHeapBlock*> m_HeapBlocks;
-	std::vector<uint32> m_FreeHandles;
-	int32 m_NumAllocated = 0;
+	std::vector<uint32> m_FreePersistentHandles;
+	uint32 m_NumPersistentAllocated = 0;
+	uint32 m_NumPersistentDescriptors;
 	std::mutex m_AllocationLock;
-	std::queue<std::pair<uint32, uint64>> m_DeletionQueue;
+	std::queue<std::pair<uint32, uint64>> m_PersistentDeletionQueue;
 };
 
 class OnlineDescriptorAllocator : public GraphicsObject
@@ -72,7 +65,7 @@ public:
 	DescriptorHandle Allocate(uint32 count);
 
 	void SetDescriptors(uint32 rootIndex, uint32 offset, uint32 numHandles, const D3D12_CPU_DESCRIPTOR_HANDLE* pHandles);
-	void BindStagedDescriptors(ID3D12GraphicsCommandList* pCmdList, CommandListContext descriptorTableType);
+	void BindStagedDescriptors(CommandContext& context, CommandListContext descriptorTableType);
 
 	void ParseRootSignature(RootSignature* pRootSignature);
 	void ReleaseUsedHeaps(uint64 fenceValue);

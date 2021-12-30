@@ -11,8 +11,8 @@
 #include "Graphics/Core/ResourceViews.h"
 #include "Graphics/Profiler.h"
 #include "Graphics/ImGuiRenderer.h"
-#include "Scene/Camera.h"
-#include "../RenderGraph/RenderGraph.h"
+#include "Graphics/RenderGraph/RenderGraph.h"
+#include "Graphics/SceneView.h"
 
 static bool g_Enabled = true;
 static int32 g_EmitCount = 30;
@@ -113,7 +113,7 @@ GpuParticles::GpuParticles(GraphicsDevice* pDevice)
 	}
 }
 
-void GpuParticles::Simulate(RGGraph& graph, Texture* pResolvedDepth, const Camera& camera)
+void GpuParticles::Simulate(RGGraph& graph, const SceneView& resources, Texture* pResolvedDepth)
 {
 	if (ImGui::Begin("Parameters"))
 	{
@@ -164,8 +164,6 @@ void GpuParticles::Simulate(RGGraph& graph, Texture* pResolvedDepth, const Camer
 			context.InsertResourceBarrier(m_pParticleBuffer.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
 			context.SetComputeRootSignature(m_pSimulateRS.get());
-			context.BindResources(1, 0, uavs, ARRAYSIZE(uavs));
-			context.BindResources(2, 0, srvs, ARRAYSIZE(srvs));
 
 			context.SetPipelineState(m_pPrepareArgumentsPS);
 			struct Parameters
@@ -176,6 +174,10 @@ void GpuParticles::Simulate(RGGraph& graph, Texture* pResolvedDepth, const Camer
 			m_ParticlesToSpawn -= parameters.EmitCount;
 
 			context.SetRootCBV(0, parameters);
+			context.SetRootCBV(1, GetViewUniforms(resources));
+
+			context.BindResources(2, 0, uavs, ARRAYSIZE(uavs));
+			context.BindResources(3, 0, srvs, ARRAYSIZE(srvs));
 
 			context.Dispatch(1);
 			context.InsertUavBarrier();
@@ -187,29 +189,22 @@ void GpuParticles::Simulate(RGGraph& graph, Texture* pResolvedDepth, const Camer
 	emit.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
 		{
 			context.SetComputeRootSignature(m_pSimulateRS.get());
-			context.BindResources(1, 0, uavs, ARRAYSIZE(uavs));
-			context.BindResources(2, 0, srvs, ARRAYSIZE(srvs));
-
 			context.SetPipelineState(m_pEmitPS);
 
 			struct Parameters
 			{
-				std::array<Vector4, 64> RandomDirections;
 				Vector3 Origin;
 			};
 			Parameters parameters{};
 
-			std::generate(parameters.RandomDirections.begin(), parameters.RandomDirections.end(), []()
-				{
-					Vector4 r = Vector4(Math::RandVector());
-					r.y = Math::Lerp(0.6f, 0.8f, (float)abs(r.y));
-					r.z = Math::Lerp(0.6f, 0.8f, (float)abs(r.z));
-					r.Normalize();
-					return r;
-				}); 
 			parameters.Origin = Vector3(150, 3, 0);
 
 			context.SetRootCBV(0, parameters);
+			context.SetRootCBV(1, GetViewUniforms(resources));
+
+			context.BindResources(2, 0, uavs, ARRAYSIZE(uavs));
+			context.BindResources(3, 0, srvs, ARRAYSIZE(srvs));
+
 			context.ExecuteIndirect(m_pDevice->GetIndirectDispatchSignature(), 1, m_pEmitArguments.get(), m_pEmitArguments.get());
 			context.InsertUavBarrier();
 		});
@@ -218,31 +213,22 @@ void GpuParticles::Simulate(RGGraph& graph, Texture* pResolvedDepth, const Camer
 	simulate.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
 		{
 			context.SetComputeRootSignature(m_pSimulateRS.get());
-			context.BindResources(1, 0, uavs, ARRAYSIZE(uavs));
-			context.BindResources(2, 0, srvs, ARRAYSIZE(srvs));
-
 			context.SetPipelineState(m_pSimulatePS);
 
 			struct Parameters
 			{
-				Matrix ViewProjection;
-				Matrix ViewProjectionInv;
-				Vector2 DimensionsInv;
 				float DeltaTime;
 				float ParticleLifeTime;
-				float Near;
-				float Far;
 			} parameters;
-			parameters.DimensionsInv.x = 1.0f / pResolvedDepth->GetWidth();
-			parameters.DimensionsInv.y = 1.0f / pResolvedDepth->GetHeight();
-			parameters.ViewProjectionInv = camera.GetViewProjectionInverse();
 			parameters.DeltaTime = Time::DeltaTime();
 			parameters.ParticleLifeTime = g_LifeTime;
-			parameters.ViewProjection = camera.GetViewProjection();
-			parameters.Near = camera.GetNear();
-			parameters.Far = camera.GetFar();
 
 			context.SetRootCBV(0, parameters);
+			context.SetRootCBV(1, GetViewUniforms(resources));
+
+			context.BindResources(2, 0, uavs, ARRAYSIZE(uavs));
+			context.BindResources(3, 0, srvs, ARRAYSIZE(srvs));
+
 			context.ExecuteIndirect(m_pDevice->GetIndirectDispatchSignature(), 1, m_pSimulateArguments.get(), nullptr);
 			context.InsertUavBarrier();
 		});
@@ -253,8 +239,11 @@ void GpuParticles::Simulate(RGGraph& graph, Texture* pResolvedDepth, const Camer
 			context.InsertResourceBarrier(m_pCountersBuffer.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
 			context.SetComputeRootSignature(m_pSimulateRS.get());
-			context.BindResources(1, 0, uavs, ARRAYSIZE(uavs));
-			context.BindResources(2, 0, srvs, ARRAYSIZE(srvs));
+
+			context.SetRootCBV(1, GetViewUniforms(resources));
+
+			context.BindResources(2, 0, uavs, ARRAYSIZE(uavs));
+			context.BindResources(3, 0, srvs, ARRAYSIZE(srvs));
 
 			context.SetPipelineState(m_pSimulateEndPS);
 			context.Dispatch(1);
@@ -264,7 +253,7 @@ void GpuParticles::Simulate(RGGraph& graph, Texture* pResolvedDepth, const Camer
 	std::swap(m_pAliveList1, m_pAliveList2);
 }
 
-void GpuParticles::Render(RGGraph& graph, Texture* pTarget, Texture* pDepth, const Camera& camera)
+void GpuParticles::Render(RGGraph& graph, const SceneView& resources, Texture* pTarget, Texture* pDepth)
 {
 	if (!g_Enabled)
 	{
@@ -284,18 +273,8 @@ void GpuParticles::Render(RGGraph& graph, Texture* pTarget, Texture* pDepth, con
 			context.SetPipelineState(m_pRenderParticlesPS);
 			context.SetGraphicsRootSignature(m_pRenderParticlesRS.get());
 
-			struct FrameData
-			{
-				Matrix ViewInverse;
-				Matrix View;
-				Matrix Projection;
-			} frameData;
-			frameData.ViewInverse = camera.GetViewInverse();
-			frameData.View = camera.GetView();
-			frameData.Projection = camera.GetProjection();
-
 			context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-			context.SetRootCBV(0, frameData);
+			context.SetRootCBV(0, GetViewUniforms(resources, pTarget));
 
 			D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
 				m_pParticleBuffer->GetSRV()->GetDescriptor(),

@@ -12,22 +12,15 @@
 #define RAY_DIFFUSE 0
 #define RAY_SPECULAR 1
 
-struct ViewData
+struct PassParameters
 {
-	float4x4 View;
-	float4x4 ViewInverse;
-	float4x4 ProjectionInverse;
-	float4x4 Projection;
-	uint NumLights;
-	uint TLASIndex;
-	uint FrameIndex;
 	uint NumBounces;
 	uint AccumulatedFrames;
 };
 
 RWTexture2D<float4> uOutput : register(u0);
 RWTexture2D<float4> uAccumulation : register(u1);
-ConstantBuffer<ViewData> cViewData : register(b0);
+ConstantBuffer<PassParameters> cPass : register(b0);
 
 struct RAYPAYLOAD ShadowRayPayload
 {
@@ -64,7 +57,7 @@ float CastShadowRay(float3 origin, float3 direction)
 		RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH |
 		RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES;
 
-	RaytracingAccelerationStructure TLAS = tTLASTable[cViewData.TLASIndex];
+	RaytracingAccelerationStructure TLAS = tTLASTable[cView.TLASIndex];
 
 // Inline RT for the shadow rays has better performance. Use it when available.
 #if _INLINE_RT
@@ -83,7 +76,7 @@ float CastShadowRay(float3 origin, float3 direction)
 		{
 			case CANDIDATE_NON_OPAQUE_TRIANGLE:
 			{
-				MeshInstance instance = tMeshInstances[q.CandidateInstanceID()];
+				MeshInstance instance = GetMeshInstance(q.CandidateInstanceID());
 				VertexAttribute vertex = GetVertexAttributes(instance, q.CandidateTriangleBarycentrics(), q.CandidatePrimitiveIndex(), q.CandidateObjectToWorld4x3());
 				MaterialProperties surface = GetMaterialProperties(instance.Material, vertex.UV, 0);
 				if(surface.Opacity > 0.5f)
@@ -132,7 +125,7 @@ LightResult EvaluateLight(Light light, float3 worldPos, float3 V, float3 N, floa
 		return result;
 	}
 
-	float3 viewPosition = mul(float4(worldPos, 1), cViewData.View).xyz;
+	float3 viewPosition = mul(float4(worldPos, 1), cView.View).xyz;
 	float4 pos = float4(0, 0, 0, viewPosition.z);
 	int shadowIndex = GetShadowIndex(light, pos, worldPos);
 	if(shadowIndex >= 0)
@@ -154,7 +147,7 @@ LightResult EvaluateLight(Light light, float3 worldPos, float3 V, float3 N, floa
 [shader("closesthit")]
 void PrimaryCHS(inout PrimaryRayPayload payload, BuiltInTriangleIntersectionAttributes attrib)
 {
-	MeshInstance instance = tMeshInstances[InstanceID()];
+	MeshInstance instance = GetMeshInstance(InstanceID());
 	VertexAttribute vertex = GetVertexAttributes(instance, attrib.barycentrics, PrimitiveIndex(), ObjectToWorld4x3());
 	payload.Material = instance.Material;
 	payload.UV = vertex.UV;
@@ -168,7 +161,7 @@ void PrimaryCHS(inout PrimaryRayPayload payload, BuiltInTriangleIntersectionAttr
 [shader("anyhit")]
 void PrimaryAHS(inout PrimaryRayPayload payload, BuiltInTriangleIntersectionAttributes attrib)
 {
-	MeshInstance instance = tMeshInstances[InstanceID()];
+	MeshInstance instance = GetMeshInstance(InstanceID());
 	VertexAttribute vertex = GetVertexAttributes(instance, attrib.barycentrics, PrimitiveIndex(), ObjectToWorld4x3());
 	MaterialProperties surface = GetMaterialProperties(instance.Material, vertex.UV, 0);
 	if(surface.Opacity < 0.5)
@@ -310,7 +303,7 @@ bool SampleLightRIS(inout uint seed, float3 position, float3 N, out int lightInd
 	// If the light's weight is above a random threshold, pick it
 	// Weight the selected light based on the total weight and light count
 
-	if(cViewData.NumLights <= 0)
+	if(cView.LightCount <= 0)
 	{
 		return false;
 	}
@@ -319,9 +312,9 @@ bool SampleLightRIS(inout uint seed, float3 position, float3 N, out int lightInd
 	float samplePdfG = 0;
 	for(int i = 0; i < RIS_CANDIDATES_LIGHTS; ++i)
 	{
-		float candidateWeight = (float)cViewData.NumLights;
-		int candidate = Random(seed, 0, cViewData.NumLights);
-		Light light = tLights[candidate];
+		float candidateWeight = (float)cView.LightCount;
+		int candidate = Random(seed, 0, cView.LightCount);
+		Light light = GetLight(candidate);
 		float3 L = normalize(light.Position - position);
 		if(light.IsDirectional)
 		{
@@ -345,7 +338,7 @@ bool SampleLightRIS(inout uint seed, float3 position, float3 N, out int lightInd
 	{
 		return false;
 	}
-	sampleWeight = (totalWeights / (float)cViewData.NumLights) / samplePdfG;
+	sampleWeight = (totalWeights / (float)cView.LightCount) / samplePdfG;
 	return true;
 }
 
@@ -354,18 +347,18 @@ void RayGen()
 {
 	float2 pixel = float2(DispatchRaysIndex().xy);
 	float2 resolution = float2(DispatchRaysDimensions().xy);
-	uint seed = SeedThread(DispatchRaysIndex().xy, DispatchRaysDimensions().xy, cViewData.FrameIndex);
+	uint seed = SeedThread(DispatchRaysIndex().xy, DispatchRaysDimensions().xy, cView.FrameIndex);
 
 	// Jitter to achieve anti-aliasing
 	float2 offset = float2(Random01(seed), Random01(seed));
 	pixel += lerp(-0.5f.xx, 0.5f.xx, offset);
 
 	pixel = (((pixel + 0.5f) / resolution) * 2.0f - 1.0f);
-	Ray ray = GeneratePinholeCameraRay(pixel, cViewData.ViewInverse, cViewData.Projection);
+	Ray ray = GeneratePinholeCameraRay(pixel, cView.ViewInverse, cView.Projection);
 
 	float3 radiance = 0;
 	float3 throughput = 1;
-	for(int i = 0; i < cViewData.NumBounces; ++i)
+	for(int i = 0; i < cPass.NumBounces; ++i)
 	{
 		PrimaryRayPayload payload = (PrimaryRayPayload)0;
 		payload.Material = -1;
@@ -377,7 +370,7 @@ void RayGen()
 		desc.TMax = RAY_MAX_T;
 
 		TraceRay(
-			tTLASTable[cViewData.TLASIndex],	//AccelerationStructure
+			tTLASTable[cView.TLASIndex],	//AccelerationStructure
 			0, 									//RayFlags
 			0xFF, 								//InstanceInclusionMask
 			0,									//RayContributionToHitGroupIndex
@@ -390,7 +383,7 @@ void RayGen()
 		// If the ray didn't hit anything, accumulate the sky and break the loop
 		if(!payload.IsHit())
 		{
-			const float3 SkyColor = 1;//CIESky(desc.Direction, -tLights[0].Direction, false);
+			const float3 SkyColor = 1;//CIESky(desc.Direction, false);
 			radiance += throughput * SkyColor;
 			break;
 		}
@@ -425,12 +418,12 @@ void RayGen()
 		float lightWeight = 0.0f;
 		if(SampleLightRIS(seed, payload.Position, N, lightIndex, lightWeight))
 		{
-			LightResult result = EvaluateLight(tLights[lightIndex], payload.Position, V, N, geometryNormal, brdfData);
+			LightResult result = EvaluateLight(GetLight(lightIndex), payload.Position, V, N, geometryNormal, brdfData);
 			radiance += throughput * (result.Diffuse + result.Specular) * lightWeight;
 		}
 
 		// If we're at the last bounce, no point in computing the next ray
-		if(i == cViewData.NumBounces - 1)
+		if(i == cPass.NumBounces - 1)
 		{
 			break;
 		}
@@ -479,11 +472,11 @@ void RayGen()
 	}
 
 	// Accumulation and output
-	if(cViewData.AccumulatedFrames > 1)
+	if(cPass.AccumulatedFrames > 1)
 	{
 		float3 previousColor = uAccumulation[DispatchRaysIndex().xy].rgb;
 		radiance += previousColor;
 	}
 	uAccumulation[DispatchRaysIndex().xy] = float4(radiance, 1);
-	uOutput[DispatchRaysIndex().xy] = float4(radiance, 1.0f) / cViewData.AccumulatedFrames;
+	uOutput[DispatchRaysIndex().xy] = float4(radiance, 1.0f) / cPass.AccumulatedFrames;
 }

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Graphics/SceneView.h"
+
 class Camera
 {
 public:
@@ -25,19 +27,21 @@ public:
 
 	void SetJitterWeight(float weight);
 
-	float GetNear() const { return m_NearPlane; }
-	float GetFar() const { return m_FarPlane; }
-	float GetFoV() const { return m_FoV; }
+	const ViewTransform& GetViewTransform() const { return m_Transform; }
 
-	const Vector2& GetJitter() const { return m_Jitter; }
-	const Vector2& GetPreviousJitter() const { return m_PreviousJitter; }
+	float GetNear() const { return m_Transform.NearPlane; }
+	float GetFar() const { return m_Transform.FarPlane; }
+	float GetFoV() const { return m_Transform.FoV; }
+
+	const Vector2& GetJitter() const { return m_Transform.Jitter; }
+	const Vector2& GetPreviousJitter() const { return m_Transform.PreviousJitter; }
 	const Matrix& GetView() const;
 	const Matrix& GetProjection() const;
 	const Matrix& GetViewProjection() const;
 	const Matrix GetViewProjectionInverse() const;
 	const Matrix& GetViewInverse() const;
 	const Matrix& GetProjectionInverse() const;
-	const Matrix& GetPreviousViewProjection() const { return m_PreviousViewProjection; }
+	const Matrix& GetPreviousViewProjection() const { return m_Transform.PreviousViewProjection; }
 	const BoundingFrustum& GetFrustum() const;
 	Ray GetMouseRay(uint32 windowWidth, uint32 windowHeight) const;
 
@@ -49,25 +53,7 @@ protected:
 private:
 	void UpdateMatrices() const;
 
-	FloatRect m_Viewport;
-	float m_FoV = 60.0f * Math::PI / 180;
-	float m_NearPlane = 1.0f;
-	float m_FarPlane = 500.0f;
-	float m_OrthographicSize = 1;
-	int m_JitterIndex = 0;
-	float m_JitterWeight = 1.0f;
-	mutable Vector2 m_Jitter;
-	Vector2 m_PreviousJitter;
-
-	mutable Matrix m_Projection;
-	mutable Matrix m_View;
-	mutable Matrix m_ViewProjection;
-	mutable Matrix m_ViewInverse;
-	mutable Matrix m_ProjectionInverse;
-	mutable Matrix m_PreviousViewProjection;
-	mutable BoundingFrustum m_Frustum;
-
-	bool m_Perspective = true;
+	mutable ViewTransform m_Transform;
 	mutable bool m_Dirty = true;
 };
 

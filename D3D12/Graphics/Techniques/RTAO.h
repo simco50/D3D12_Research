@@ -3,7 +3,6 @@ class Mesh;
 class GraphicsDevice;
 class RootSignature;
 class Texture;
-class Camera;
 class CommandContext;
 class RGGraph;
 class Buffer;
@@ -15,7 +14,7 @@ class RTAO
 public:
 	RTAO(GraphicsDevice* pDevice);
 
-	void Execute(RGGraph& graph, Texture* pTarget, const SceneView& sceneData);
+	void Execute(RGGraph& graph, const SceneView& sceneData, Texture* pTarget, Texture* pDepth);
 
 private:
 	void SetupPipelines(GraphicsDevice* pDevice);

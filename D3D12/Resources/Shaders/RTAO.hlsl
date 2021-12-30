@@ -5,6 +5,7 @@
 GlobalRootSignature GlobalRootSig =
 {
 	"CBV(b0),"
+	"CBV(b100),"
 	"DescriptorTable(UAV(u0, numDescriptors = 1)),"
 	"DescriptorTable(SRV(t0, numDescriptors = 1)),"
 	DEFAULT_ROOT_SIG_PARAMS
@@ -13,19 +14,14 @@ GlobalRootSignature GlobalRootSig =
 RWTexture2D<float> uOutput : register(u0);
 Texture2D tSceneDepth : register(t0);
 
-struct Data
+struct PassData
 {
-	float4x4 ViewInverse;
-	float4x4 ProjectionInverse;
-	float4x4 ViewProjectionInverse;
 	float Power;
 	float Radius;
 	uint Samples;
-	uint TLASIndex;
-	uint FrameIndex;
 };
 
-ConstantBuffer<Data> cData : register(b0);
+ConstantBuffer<PassData> cPass : register(b0);
 
 struct RAYPAYLOAD RayPayload
 {
@@ -80,13 +76,13 @@ void RayGen()
 	uint launchIndex1d = launchIndex.x + launchIndex.y * launchDim.x;
 	float2 uv = (float2)launchIndex * dimInv;
 
-	float3 world = WorldFromDepth(uv, tSceneDepth.SampleLevel(sLinearClamp, uv, 0).r, cData.ViewProjectionInverse);
-	float3 normal = NormalFromDepth(tSceneDepth, sLinearClamp, uv, dimInv, cData.ViewProjectionInverse);
+	float3 world = WorldFromDepth(uv, tSceneDepth.SampleLevel(sLinearClamp, uv, 0).r, cView.ViewProjectionInverse);
+	float3 normal = NormalFromDepth(tSceneDepth, sLinearClamp, uv, dimInv, cView.ViewProjectionInverse);
 
-	uint randSeed = SeedThread(launchIndex, launchDim, cData.FrameIndex);
+	uint randSeed = SeedThread(launchIndex, launchDim, cView.FrameIndex);
 
 	float accumulatedAo = 0.0f;
-	for(int i = 0; i < cData.Samples; ++i)
+	for(int i = 0; i < cPass.Samples; ++i)
 	{
 		RayPayload payload;
 		payload.hit = 1.0f;
@@ -96,10 +92,10 @@ void RayGen()
 		ray.Origin = world;
 		ray.Direction = randomDirection;
 		ray.TMin = RAY_BIAS;
-		ray.TMax = cData.Radius;
+		ray.TMax = cPass.Radius;
 
 		TraceRay(
-			tTLASTable[cData.TLASIndex], 									//AccelerationStructure
+			tTLASTable[cView.TLASIndex], 									//AccelerationStructure
 										//RayFlags
 				RAY_FLAG_FORCE_OPAQUE |
 				RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH |
@@ -114,6 +110,6 @@ void RayGen()
 		float hit = payload.hit;
 		accumulatedAo += hit;
 	}
-	accumulatedAo /= cData.Samples;
-	uOutput[launchIndex] = pow(saturate(1 - accumulatedAo), cData.Power);
+	accumulatedAo /= cPass.Samples;
+	uOutput[launchIndex] = pow(saturate(1 - accumulatedAo), cPass.Power);
 }
