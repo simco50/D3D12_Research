@@ -57,6 +57,9 @@ ShaderInterop::ViewUniforms GetViewUniforms(const SceneView& sceneView, Texture*
 		parameters.ScreenDimensions = Vector2((float)pTarget->GetWidth(), (float)pTarget->GetHeight());
 		parameters.ScreenDimensionsInv = Vector2(1.0f / pTarget->GetWidth(), 1.0f / pTarget->GetHeight());
 	}
+	parameters.ViewportDimensions = Vector2(view.Viewport.GetWidth(), view.Viewport.GetHeight());
+	parameters.ViewportDimensionsInv = Vector2(1.0f / view.Viewport.GetWidth(), 1.0f / view.Viewport.GetHeight());
+
 	parameters.ViewJitter.x = view.PreviousJitter.x - view.Jitter.x;
 	parameters.ViewJitter.y = -(view.PreviousJitter.y - view.Jitter.y);
 	parameters.NearZ = view.NearPlane;
@@ -94,8 +97,8 @@ void DrawScene(CommandContext& context, const SceneView& scene, const Visibility
 
 	auto CompareSort = [&scene, blendModes](const Batch* a, const Batch* b)
 	{
-		float aDist = Vector3::DistanceSquared(a->pMesh->Bounds.Center, scene.View.Position);
-		float bDist = Vector3::DistanceSquared(b->pMesh->Bounds.Center, scene.View.Position);
+		float aDist = Vector3::DistanceSquared(a->Bounds.Center, scene.View.Position);
+		float bDist = Vector3::DistanceSquared(b->Bounds.Center, scene.View.Position);
 		return EnumHasAnyFlags(blendModes, Batch::Blending::AlphaBlend) ? bDist < aDist : aDist < bDist;
 	};
 	std::sort(meshes.begin(), meshes.end(), CompareSort);

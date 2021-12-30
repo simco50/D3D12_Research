@@ -19,7 +19,6 @@ class StateObject;
 class StateObjectInitializer;
 class GlobalOnlineDescriptorHeap;
 class ResourceView;
-class PersistentDescriptorAllocator;
 class SwapChain;
 class OnlineDescriptorAllocator;
 class Fence;
@@ -213,9 +212,7 @@ private:
 	std::unique_ptr<ShaderManager> m_pShaderManager;
 
 	std::unique_ptr<GlobalOnlineDescriptorHeap> m_pGlobalViewHeap;
-	std::unique_ptr<PersistentDescriptorAllocator> m_pPersistentViewHeap;
 	std::unique_ptr<GlobalOnlineDescriptorHeap> m_pGlobalSamplerHeap;
-	std::unique_ptr<PersistentDescriptorAllocator> m_pPersistentSamplerHeap;
 
 	std::array<std::unique_ptr<OfflineDescriptorAllocator>, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES> m_DescriptorHeaps;
 	std::unique_ptr<DynamicAllocationManager> m_pDynamicAllocationManager;

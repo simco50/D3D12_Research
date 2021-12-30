@@ -615,7 +615,7 @@ void CommandContext::PrepareDraw()
 {
 	check(m_CurrentCommandContext != CommandListContext::Invalid);
 	FlushResourceBarriers();
-	m_ShaderResourceDescriptorAllocator.BindStagedDescriptors(m_pCommandList, m_CurrentCommandContext);
+	m_ShaderResourceDescriptorAllocator.BindStagedDescriptors(*this, m_CurrentCommandContext);
 }
 
 void CommandContext::SetPipelineState(PipelineState* pPipelineState)

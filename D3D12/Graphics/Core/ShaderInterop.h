@@ -163,6 +163,8 @@ namespace ShaderInterop
 		float4 FrustumPlanes[6];
 		float2 ScreenDimensions;
 		float2 ScreenDimensionsInv;
+		float2 ViewportDimensions;
+		float2 ViewportDimensionsInv;
 		float2 ViewJitter;
 		float NearZ;
 		float FarZ;

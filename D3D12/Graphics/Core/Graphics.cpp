@@ -249,10 +249,8 @@ GraphicsDevice::GraphicsDevice(IDXGIAdapter4* pAdapter)
 
 	// Allocators
 	m_pDynamicAllocationManager = std::make_unique<DynamicAllocationManager>(this, BufferFlag::Upload);
-	m_pGlobalViewHeap = std::make_unique<GlobalOnlineDescriptorHeap>(this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 1000, 10000);
-	m_pPersistentViewHeap = std::make_unique<PersistentDescriptorAllocator>(m_pGlobalViewHeap.get());
-	m_pGlobalSamplerHeap = std::make_unique<GlobalOnlineDescriptorHeap>(this, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, 64, 2048);
-	m_pPersistentSamplerHeap = std::make_unique<PersistentDescriptorAllocator>(m_pGlobalSamplerHeap.get());
+	m_pGlobalViewHeap = std::make_unique<GlobalOnlineDescriptorHeap>(this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 256, 8192);
+	m_pGlobalSamplerHeap = std::make_unique<GlobalOnlineDescriptorHeap>(this, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, 32, 2048);
 
 	check(m_DescriptorHeaps.size() == D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES);
 	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV] = std::make_unique<OfflineDescriptorAllocator>(this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 256);
@@ -358,7 +356,7 @@ void GraphicsDevice::IdleGPU()
 
 DescriptorHandle GraphicsDevice::StoreViewDescriptor(D3D12_CPU_DESCRIPTOR_HANDLE view)
 {
-	DescriptorHandle handle = m_pPersistentViewHeap->Allocate();
+	DescriptorHandle handle = m_pGlobalViewHeap->AllocatePersistent();
 	m_pDevice->CopyDescriptorsSimple(1, handle.CpuHandle, view, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 	return handle;
 }
@@ -367,7 +365,7 @@ void GraphicsDevice::FreeViewDescriptor(DescriptorHandle& handle)
 {
 	if (handle.HeapIndex != DescriptorHandle::InvalidHeapIndex)
 	{
-		m_pPersistentViewHeap->Free(handle.HeapIndex);
+		m_pGlobalViewHeap->FreePersistent(handle.HeapIndex);
 	}
 }
 
