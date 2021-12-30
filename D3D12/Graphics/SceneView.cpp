@@ -11,11 +11,10 @@ void DrawScene(CommandContext& context, const SceneView& scene, Batch::Blending 
 	DrawScene(context, scene, scene.VisibilityMask, blendModes);
 }
 
-ShaderInterop::ViewUniforms GetViewUniforms(const SceneView& sceneView)
+ShaderInterop::ViewUniforms GetViewUniforms(const SceneView& sceneView, Texture* pTarget)
 {
 	ShaderInterop::ViewUniforms parameters;
 	const ViewTransform& view = sceneView.View;
-	Texture* pMainTexture = sceneView.pRenderTarget;
 
 	parameters.View = view.View;
 	parameters.ViewInverse = view.ViewInverse;
@@ -53,10 +52,10 @@ ShaderInterop::ViewUniforms GetViewUniforms(const SceneView& sceneView)
 	parameters.FrustumPlanes[4] = Vector4(top);
 	parameters.FrustumPlanes[5] = Vector4(bottom);
 
-	if (pMainTexture)
+	if (pTarget)
 	{
-		parameters.ScreenDimensions = Vector2((float)pMainTexture->GetWidth(), (float)pMainTexture->GetHeight());
-		parameters.ScreenDimensionsInv = Vector2(1.0f / pMainTexture->GetWidth(), 1.0f / pMainTexture->GetHeight());
+		parameters.ScreenDimensions = Vector2((float)pTarget->GetWidth(), (float)pTarget->GetHeight());
+		parameters.ScreenDimensionsInv = Vector2(1.0f / pTarget->GetWidth(), 1.0f / pTarget->GetHeight());
 	}
 	parameters.ViewJitter.x = view.PreviousJitter.x - view.Jitter.x;
 	parameters.ViewJitter.y = -(view.PreviousJitter.y - view.Jitter.y);

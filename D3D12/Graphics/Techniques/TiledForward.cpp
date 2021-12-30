@@ -111,7 +111,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& resources, const Til
 			context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 			context.SetGraphicsRootSignature(m_pDiffuseRS.get());
 
-			context.SetRootCBV(2, GetViewUniforms(resources));
+			context.SetRootCBV(2, GetViewUniforms(resources, parameters.pColorTarget));
 
 			{
 				GPU_PROFILE_SCOPE("Opaque", &context);
@@ -187,7 +187,7 @@ void TiledForward::VisualizeLightDensity(RGGraph& graph, GraphicsDevice* pDevice
 
 			context.SetRootCBV(0, constantData);
 
-			context.SetRootCBV(1, GetViewUniforms(resources));
+			context.SetRootCBV(1, GetViewUniforms(resources, pTarget));
 
 			context.BindResource(2, 0, pTarget->GetSRV());
 			context.BindResource(2, 1, pDepth->GetSRV());

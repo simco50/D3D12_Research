@@ -60,7 +60,7 @@ void RTReflections::Execute(RGGraph& graph, const SceneView& sceneData, Texture*
 			};
 
 			context.SetRootCBV(0, parameters);
-			context.SetRootCBV(1, GetViewUniforms(sceneData));
+			context.SetRootCBV(1, GetViewUniforms(sceneData, pColorTarget));
 			context.BindResource(2, 0, pColorTarget->GetUAV());
 			context.BindResources(3, 0, srvs, ARRAYSIZE(srvs));
 

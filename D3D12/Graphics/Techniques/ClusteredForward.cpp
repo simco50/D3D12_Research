@@ -307,7 +307,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& resources, const
 
 			context.SetRootCBV(1, frameData);
 
-			context.SetRootCBV(2, GetViewUniforms(resources));
+			context.SetRootCBV(2, GetViewUniforms(resources, parameters.pColorTarget));
 
 			D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
 				parameters.pAmbientOcclusion->GetSRV()->GetDescriptor(),
@@ -358,7 +358,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& resources, const
 				context.SetGraphicsRootSignature(m_pVisualizeLightClustersRS.get());
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_POINTLIST);
 
-				context.SetRootCBV(0, GetViewUniforms(resources));
+				context.SetRootCBV(0, GetViewUniforms(resources, parameters.pColorTarget));
 
 				D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
 					m_pAABBs->GetSRV()->GetDescriptor(),
@@ -413,7 +413,7 @@ void ClusteredForward::VisualizeLightDensity(RGGraph& graph, const SceneView& re
 			context.InsertResourceBarrier(m_pVisualizationIntermediateTexture.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
 			context.SetRootCBV(0, constantBuffer);
-			context.SetRootCBV(1, GetViewUniforms(resources));
+			context.SetRootCBV(1, GetViewUniforms(resources, pTarget));
 
 			context.BindResource(2, 0, pTarget->GetSRV());
 			context.BindResource(2, 1, pDepth->GetSRV());

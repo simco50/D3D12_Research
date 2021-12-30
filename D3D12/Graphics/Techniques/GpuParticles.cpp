@@ -283,7 +283,7 @@ void GpuParticles::Render(RGGraph& graph, const SceneView& resources, Texture* p
 			context.SetGraphicsRootSignature(m_pRenderParticlesRS.get());
 
 			context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-			context.SetRootCBV(0, GetViewUniforms(resources));
+			context.SetRootCBV(0, GetViewUniforms(resources, pTarget));
 
 			D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
 				m_pParticleBuffer->GetSRV()->GetDescriptor(),

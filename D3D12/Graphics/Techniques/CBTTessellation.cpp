@@ -201,7 +201,7 @@ void CBTTessellation::Execute(RGGraph& graph, Texture* pRenderTarget, Texture* p
 
 			context.SetRootConstants(0, commonArgs);
 			context.SetRootCBV(1, updateData);
-			context.SetRootCBV(2, GetViewUniforms(resources));
+			context.SetRootCBV(2, GetViewUniforms(resources, pRenderTarget));
 
 			context.BeginRenderPass(RenderPassInfo(pRenderTarget, RenderPassAccess::Load_Store, pDepthTexture, RenderPassAccess::Load_Store, true));
 			if (CBTSettings::MeshShader)
@@ -305,7 +305,7 @@ void CBTTessellation::Execute(RGGraph& graph, Texture* pRenderTarget, Texture* p
 
 				context.SetRootConstants(0, commonArgs);
 				context.SetRootCBV(1, updateData);
-				context.SetRootCBV(2, GetViewUniforms(resources));
+				context.SetRootCBV(2, GetViewUniforms(resources, m_pDebugVisualizeTexture.get()));
 
 				context.BeginRenderPass(RenderPassInfo(m_pDebugVisualizeTexture.get(), RenderPassAccess::Load_Store, nullptr, RenderPassAccess::NoAccess, false));
 				context.ExecuteIndirect(m_pDevice->GetIndirectDrawSignature(), 1, m_pCBTIndirectArgs.get(), nullptr, IndirectDrawArgsOffset);

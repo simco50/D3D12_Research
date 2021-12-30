@@ -62,7 +62,6 @@ struct ShadowData
 
 struct SceneView
 {
-	Texture* pRenderTarget = nullptr;
 	std::vector<Batch> Batches;
 	Buffer* pLightBuffer = nullptr;
 	Buffer* pMaterialBuffer = nullptr;
@@ -77,4 +76,4 @@ struct SceneView
 
 void DrawScene(CommandContext& context, const SceneView& scene, const VisibilityMask& visibility, Batch::Blending blendModes);
 void DrawScene(CommandContext& context, const SceneView& scene, Batch::Blending blendModes);
-ShaderInterop::ViewUniforms GetViewUniforms(const SceneView& sceneView);
+ShaderInterop::ViewUniforms GetViewUniforms(const SceneView& sceneView, Texture* pTarget = nullptr);

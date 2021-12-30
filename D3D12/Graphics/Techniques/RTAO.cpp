@@ -63,7 +63,7 @@ void RTAO::Execute(RGGraph& graph, const SceneView& sceneData, Texture* pTarget,
 			bindingTable.BindMissShader("Miss", {});
 
 			context.SetRootCBV(0, parameters);
-			context.SetRootCBV(1, GetViewUniforms(sceneData));
+			context.SetRootCBV(1, GetViewUniforms(sceneData, pTarget));
 			context.BindResource(2, 0, pTarget->GetUAV());
 			context.BindResource(3, 0, pDepth->GetSRV());
 
