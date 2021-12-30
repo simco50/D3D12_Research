@@ -5,7 +5,6 @@ class GraphicsDevice;
 class PipelineState;
 class RootSignature;
 class Texture;
-class Camera;
 class CommandSignature;
 class Buffer;
 class UnorderedAccessView;

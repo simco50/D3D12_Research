@@ -11,7 +11,6 @@
 #include "Graphics/Core/ResourceViews.h"
 #include "Graphics/Profiler.h"
 #include "Graphics/ImGuiRenderer.h"
-#include "Scene/Camera.h"
 #include "Graphics/RenderGraph/RenderGraph.h"
 #include "Graphics/SceneView.h"
 

@@ -11,7 +11,6 @@
 #include "Graphics/RenderGraph/RenderGraph.h"
 #include "Graphics/Mesh.h"
 #include "Graphics/Profiler.h"
-#include "Scene/Camera.h"
 #include "Graphics/SceneView.h"
 #include "Core/ConsoleVariables.h"
 

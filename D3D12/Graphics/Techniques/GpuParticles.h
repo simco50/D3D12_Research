@@ -6,7 +6,6 @@ class PipelineState;
 class RootSignature;
 class CommandContext;
 class Texture;
-class Camera;
 class RGGraph;
 struct SceneView;
 

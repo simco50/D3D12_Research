@@ -6,9 +6,31 @@
 
 class Texture;
 class Buffer;
-class Camera;
 class CommandContext;
 struct SubMesh;
+
+struct ViewTransform
+{
+	Matrix Projection;
+	Matrix View;
+	Matrix ViewProjection;
+	Matrix ViewInverse;
+	Matrix ProjectionInverse;
+	Matrix PreviousViewProjection;
+	bool Perspective = true;
+	Vector3 Position;
+
+	FloatRect Viewport;
+	float FoV = 60.0f * Math::PI / 180;
+	float NearPlane = 1.0f;
+	float FarPlane = 500.0f;
+	float OrthographicSize = 1;
+	int JitterIndex = 0;
+	float JitterWeight = 1.0f;
+	Vector2 Jitter;
+	Vector2 PreviousJitter;
+	BoundingFrustum Frustum;
+};
 
 struct Batch
 {
@@ -53,11 +75,11 @@ struct SceneView
 	Buffer* pMaterialBuffer = nullptr;
 	Buffer* pMeshBuffer = nullptr;
 	Buffer* pMeshInstanceBuffer = nullptr;
-	Camera* pCamera = nullptr;
 	Buffer* pSceneTLAS = nullptr;
 	int FrameIndex = 0;
 	VisibilityMask VisibilityMask;
 	ShadowData ShadowData;
+	ViewTransform View;
 };
 
 void DrawScene(CommandContext& context, const SceneView& scene, const VisibilityMask& visibility, Batch::Blending blendModes);

@@ -12,7 +12,6 @@
 #include "Graphics/Mesh.h"
 #include "Graphics/Profiler.h"
 #include "Graphics/SceneView.h"
-#include "Scene/Camera.h"
 #include "Core/ConsoleVariables.h"
 
 static constexpr int gLightClusterTexelSize = 64;
@@ -101,8 +100,8 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& resources)
 	ImGui::End();
 
 	Vector2 screenDimensions((float)resources.pRenderTarget->GetWidth(), (float)resources.pRenderTarget->GetHeight());
-	float nearZ = resources.pCamera->GetNear();
-	float farZ = resources.pCamera->GetFar();
+	float nearZ = resources.View.NearPlane;
+	float farZ = resources.View.FarPlane;
 	Vector2 lightGridParams = ComputeVolumeGridParams(nearZ, farZ, gLightClustersNumZ);
 
 	if (m_ViewportDirty)
@@ -348,7 +347,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& resources)
 				if (m_DidCopyDebugClusterData == false)
 				{
 					context.CopyTexture(m_pLightGrid.get(), m_pDebugLightGrid.get());
-					m_DebugClustersViewMatrix = resources.pCamera->GetView();
+					m_DebugClustersViewMatrix = resources.View.View;
 					m_DebugClustersViewMatrix.Invert(m_DebugClustersViewMatrix);
 					m_DidCopyDebugClusterData = true;
 				}
@@ -387,8 +386,8 @@ void ClusteredForward::VisualizeLightDensity(RGGraph& graph, const SceneView& re
 	}
 
 	Vector2 screenDimensions((float)pTarget->GetWidth(), (float)pTarget->GetHeight());
-	float nearZ = resources.pCamera->GetNear();
-	float farZ = resources.pCamera->GetFar();
+	float nearZ = resources.View.NearPlane;
+	float farZ = resources.View.FarPlane;
 	Vector2 lightGridParams = ComputeVolumeGridParams(nearZ, farZ, gLightClustersNumZ);
 
 	RGPassBuilder basePass = graph.AddPass("Visualize Light Density");

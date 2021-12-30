@@ -1,6 +1,7 @@
 #include "CommonBindings.hlsli"
 
 #define RootSig ROOT_SIG("CBV(b0), " \
+				"CBV(b100), " \
 				"DescriptorTable(UAV(u0, numDescriptors = 1)), " \
 				"DescriptorTable(SRV(t0, numDescriptors = 2))")
 
@@ -9,15 +10,13 @@
 #define BLUR_WEIGHTS (2 * KERNEL_LENGTH + 1)
 #define GS_CACHE_SIZE (KERNEL_LENGTH + THREAD_GROUP_SIZE + KERNEL_LENGTH)
 
-struct PassParameters
+struct PassData
 {
 	float2 InvDimensions;
 	int Horizontal;
-	float Far;
-	float Near;
 };
 
-ConstantBuffer<PassParameters> cPassData : register(b0);
+ConstantBuffer<PassData> cPass : register(b0);
 Texture2D tSceneDepth : register(t0);
 Texture2D<float> tAmbientOcclusion : register(t1);
 RWTexture2D<float> uAmbientOcclusion : register(u0);
@@ -42,16 +41,16 @@ groupshared float gDepthCache[GS_CACHE_SIZE];
 [numthreads(THREAD_GROUP_SIZE, 1, 1)]
 void CSMain(uint3 groupId : SV_GroupID, uint groupIndex : SV_GroupIndex)
 {
-	float2 direction = float2(cPassData.Horizontal, 1 - cPassData.Horizontal);
+	float2 direction = float2(cPass.Horizontal, 1 - cPass.Horizontal);
 	uint2 multiplier = direction * THREAD_GROUP_SIZE + 1 * (1 - direction);
 	uint2 groupBegin = groupId.xy * multiplier;
 
 	int i;
 	for (i = groupIndex; i < GS_CACHE_SIZE; i += THREAD_GROUP_SIZE)
 	{
-		float2 uv = ((float2)groupBegin + 0.5f + direction * (i - KERNEL_LENGTH)) * cPassData.InvDimensions;
+		float2 uv = ((float2)groupBegin + 0.5f + direction * (i - KERNEL_LENGTH)) * cPass.InvDimensions;
 		gAoCache[i] = tAmbientOcclusion.SampleLevel(sLinearClamp, uv, 0).r;
-		gDepthCache[i] = LinearizeDepth01(tSceneDepth.SampleLevel(sLinearClamp, uv, 0).r, cPassData.Near, cPassData.Far);
+		gDepthCache[i] = LinearizeDepth01(tSceneDepth.SampleLevel(sLinearClamp, uv, 0).r, cView.NearZ, cView.FarZ);
 	}
 
 	GroupMemoryBarrierWithGroupSync();

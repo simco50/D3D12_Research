@@ -4,7 +4,6 @@ class RootSignature;
 class GraphicsDevice;
 class PipelineState;
 class Texture;
-class Camera;
 class Buffer;
 class UnorderedAccessView;
 class RGGraph;

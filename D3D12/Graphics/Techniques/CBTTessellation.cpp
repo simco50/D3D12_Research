@@ -9,7 +9,6 @@
 #include "Graphics/Core/CommandContext.h"
 #include "Graphics/SceneView.h"
 #include "Graphics/Profiler.h"
-#include "Scene/Camera.h"
 #include "Core/Input.h"
 #include "CBT.h"
 #include "imgui_internal.h"
@@ -119,8 +118,8 @@ void CBTTessellation::Execute(RGGraph& graph, Texture* pRenderTarget, Texture* p
 
 	if (!CBTSettings::FreezeCamera)
 	{
-		m_CachedFrustum = resources.pCamera->GetFrustum();
-		m_CachedViewMatrix = resources.pCamera->GetView();
+		m_CachedFrustum = resources.View.Frustum;
+		m_CachedViewMatrix = resources.View.View;
 	}
 
 	struct CommonArgs

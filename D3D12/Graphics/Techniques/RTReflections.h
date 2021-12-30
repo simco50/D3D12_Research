@@ -3,7 +3,6 @@ class Mesh;
 class GraphicsDevice;
 class RootSignature;
 class Texture;
-class Camera;
 class CommandContext;
 class RGGraph;
 class Buffer;

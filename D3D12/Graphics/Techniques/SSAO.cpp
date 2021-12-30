@@ -7,7 +7,6 @@
 #include "Graphics/Core/CommandContext.h"
 #include "Graphics/Core/Texture.h"
 #include "Graphics/RenderGraph/RenderGraph.h"
-#include "Scene/Camera.h"
 #include "Graphics/SceneView.h"
 
 SSAO::SSAO(GraphicsDevice* pDevice)
@@ -53,37 +52,24 @@ void SSAO::Execute(RGGraph& graph, Texture* pTarget, const SceneView& sceneData)
 
 			struct ShaderParameters
 			{
-				Matrix ProjectionInverse;
-				Matrix ViewInverse;
-				Matrix Projection;
-				Matrix View;
 				IntVector2 Dimensions;
-				float Near;
-				float Far;
 				float Power;
 				float Radius;
 				float Threshold;
 				int Samples;
-				int FrameIndex;
 			} shaderParameters{};
 
-			shaderParameters.ProjectionInverse = sceneData.pCamera->GetProjectionInverse();
-			shaderParameters.ViewInverse = sceneData.pCamera->GetViewInverse();
-			shaderParameters.Projection = sceneData.pCamera->GetProjection();
-			shaderParameters.View = sceneData.pCamera->GetView();
 			shaderParameters.Dimensions.x = pTarget->GetWidth();
 			shaderParameters.Dimensions.y = pTarget->GetHeight();
-			shaderParameters.Near = sceneData.pCamera->GetNear();
-			shaderParameters.Far = sceneData.pCamera->GetFar();
 			shaderParameters.Power = g_AoPower;
 			shaderParameters.Radius = g_AoRadius;
 			shaderParameters.Threshold = g_AoThreshold;
 			shaderParameters.Samples = g_AoSamples;
-			shaderParameters.FrameIndex = sceneData.FrameIndex;
 
 			context.SetRootCBV(0, shaderParameters);
-			context.BindResource(1, 0, pTarget->GetUAV());
-			context.BindResource(2, 0, sceneData.pResolvedDepth->GetSRV());
+			context.SetRootCBV(1, GetViewUniforms(sceneData));
+			context.BindResource(2, 0, pTarget->GetUAV());
+			context.BindResource(3, 0, sceneData.pResolvedDepth->GetSRV());
 
 			int dispatchGroupsX = Math::DivideAndRoundUp(pTarget->GetWidth(), 16);
 			int dispatchGroupsY = Math::DivideAndRoundUp(pTarget->GetHeight(), 16);
@@ -103,28 +89,25 @@ void SSAO::Execute(RGGraph& graph, Texture* pTarget, const SceneView& sceneData)
 			{
 				Vector2 DimensionsInv;
 				uint32 Horizontal;
-				float Far;
-				float Near;
 			} shaderParameters;
 
 			shaderParameters.Horizontal = 1;
 			shaderParameters.DimensionsInv = Vector2(1.0f / pTarget->GetWidth(), 1.0f / pTarget->GetHeight());
-			shaderParameters.Far = sceneData.pCamera->GetFar();
-			shaderParameters.Near = sceneData.pCamera->GetNear();
 
 			context.SetRootCBV(0, shaderParameters);
-			context.BindResource(1, 0, m_pAmbientOcclusionIntermediate->GetUAV());
-			context.BindResource(2, 0, sceneData.pResolvedDepth->GetSRV());
-			context.BindResource(2, 1, pTarget->GetSRV());
+			context.SetRootCBV(1, GetViewUniforms(sceneData));
+			context.BindResource(2, 0, m_pAmbientOcclusionIntermediate->GetUAV());
+			context.BindResource(3, 0, sceneData.pResolvedDepth->GetSRV());
+			context.BindResource(3, 1, pTarget->GetSRV());
 
 			context.Dispatch(Math::DivideAndRoundUp(m_pAmbientOcclusionIntermediate->GetWidth(), 256), m_pAmbientOcclusionIntermediate->GetHeight());
 
 			context.InsertResourceBarrier(m_pAmbientOcclusionIntermediate.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-			context.BindResource(1, 0, pTarget->GetUAV());
-			context.BindResource(2, 0, sceneData.pResolvedDepth->GetSRV());
-			context.BindResource(2, 1, m_pAmbientOcclusionIntermediate->GetSRV());
+			context.BindResource(2, 0, pTarget->GetUAV());
+			context.BindResource(3, 0, sceneData.pResolvedDepth->GetSRV());
+			context.BindResource(3, 1, m_pAmbientOcclusionIntermediate->GetSRV());
 
 			shaderParameters.Horizontal = 0;
 			context.SetRootCBV(0, shaderParameters);

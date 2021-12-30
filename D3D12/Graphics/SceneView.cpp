@@ -1,7 +1,6 @@
 #include "stdafx.h"
 #include "SceneView.h"
 #include "Core/CommandContext.h"
-#include "Scene/Camera.h"
 #include "Core/Buffer.h"
 #include "Mesh.h"
 #include "Core/PipelineState.h"
@@ -15,17 +14,17 @@ void DrawScene(CommandContext& context, const SceneView& scene, Batch::Blending 
 ShaderInterop::ViewUniforms GetViewUniforms(const SceneView& sceneView)
 {
 	ShaderInterop::ViewUniforms parameters;
-	const Camera& camera = *sceneView.pCamera;
+	const ViewTransform& view = sceneView.View;
 	Texture* pMainTexture = sceneView.pRenderTarget;
 
-	parameters.View = camera.GetView();
-	parameters.ViewInverse = camera.GetViewInverse();
-	parameters.Projection = camera.GetProjection();
-	parameters.ProjectionInverse = camera.GetProjectionInverse();
-	parameters.ViewProjection = camera.GetViewProjection();
-	parameters.ViewProjectionInverse = camera.GetProjectionInverse() * camera.GetViewInverse();
+	parameters.View = view.View;
+	parameters.ViewInverse = view.ViewInverse;
+	parameters.Projection = view.Projection;
+	parameters.ProjectionInverse = view.ProjectionInverse;
+	parameters.ViewProjection = view.ViewProjection;
+	parameters.ViewProjectionInverse = view.ProjectionInverse * view.ViewInverse;
 
-	Matrix reprojectionMatrix = camera.GetViewProjection().Invert() * camera.GetPreviousViewProjection();
+	Matrix reprojectionMatrix = view.ViewProjection.Invert() * view.PreviousViewProjection;
 	// Transform from uv to clip space: texcoord * 2 - 1
 	Matrix premult = {
 		2.0f, 0, 0, 0,
@@ -41,12 +40,12 @@ ShaderInterop::ViewUniforms GetViewUniforms(const SceneView& sceneView)
 		0.5f, 0.5f, 0, 1
 	};
 
-	parameters.PreviousViewProjection = camera.GetPreviousViewProjection();
+	parameters.PreviousViewProjection = view.PreviousViewProjection;
 	parameters.ReprojectionMatrix = premult * reprojectionMatrix * postmult;
-	parameters.ViewPosition = Vector4(camera.GetPosition());
+	parameters.ViewPosition = Vector4(view.Position);
 
 	DirectX::XMVECTOR nearPlane, farPlane, left, right, top, bottom;
-	camera.GetFrustum().GetPlanes(&nearPlane, &farPlane, &right, &left, &top, &bottom);
+	view.Frustum.GetPlanes(&nearPlane, &farPlane, &right, &left, &top, &bottom);
 	parameters.FrustumPlanes[0] = Vector4(nearPlane);
 	parameters.FrustumPlanes[1] = Vector4(farPlane);
 	parameters.FrustumPlanes[2] = Vector4(left);
@@ -54,13 +53,16 @@ ShaderInterop::ViewUniforms GetViewUniforms(const SceneView& sceneView)
 	parameters.FrustumPlanes[4] = Vector4(top);
 	parameters.FrustumPlanes[5] = Vector4(bottom);
 
-	parameters.ScreenDimensions = Vector2((float)pMainTexture->GetWidth(), (float)pMainTexture->GetHeight());
-	parameters.ScreenDimensionsInv = Vector2(1.0f / pMainTexture->GetWidth(), 1.0f / pMainTexture->GetHeight());
-	parameters.ViewJitter.x = camera.GetPreviousJitter().x - camera.GetJitter().x;
-	parameters.ViewJitter.y = -(camera.GetPreviousJitter().y - camera.GetJitter().y);
-	parameters.NearZ = camera.GetNear();
-	parameters.FarZ = camera.GetFar();
-	parameters.FoV = camera.GetFoV();
+	if (pMainTexture)
+	{
+		parameters.ScreenDimensions = Vector2((float)pMainTexture->GetWidth(), (float)pMainTexture->GetHeight());
+		parameters.ScreenDimensionsInv = Vector2(1.0f / pMainTexture->GetWidth(), 1.0f / pMainTexture->GetHeight());
+	}
+	parameters.ViewJitter.x = view.PreviousJitter.x - view.Jitter.x;
+	parameters.ViewJitter.y = -(view.PreviousJitter.y - view.Jitter.y);
+	parameters.NearZ = view.NearPlane;
+	parameters.FarZ = view.FarPlane;
+	parameters.FoV = view.FoV;
 
 	parameters.FrameIndex = sceneView.FrameIndex;
 	parameters.SsrSamples = 1;
@@ -92,8 +94,8 @@ void DrawScene(CommandContext& context, const SceneView& scene, const Visibility
 
 	auto CompareSort = [&scene, blendModes](const Batch* a, const Batch* b)
 	{
-		float aDist = Vector3::DistanceSquared(a->pMesh->Bounds.Center, scene.pCamera->GetPosition());
-		float bDist = Vector3::DistanceSquared(b->pMesh->Bounds.Center, scene.pCamera->GetPosition());
+		float aDist = Vector3::DistanceSquared(a->pMesh->Bounds.Center, scene.View.Position);
+		float bDist = Vector3::DistanceSquared(b->pMesh->Bounds.Center, scene.View.Position);
 		return EnumHasAnyFlags(blendModes, Batch::Blending::AlphaBlend) ? bDist < aDist : aDist < bDist;
 	};
 	std::sort(meshes.begin(), meshes.end(), CompareSort);

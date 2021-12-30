@@ -17,67 +17,67 @@ void Camera::SetRotation(const Quaternion& rotation)
 
 void Camera::SetViewport(const FloatRect& rect)
 {
-	m_Viewport = rect;
+	m_Transform.Viewport = rect;
 	OnDirty();
 }
 
 void Camera::SetFoV(float fov)
 {
-	m_FoV = fov;
+	m_Transform.FoV = fov;
 	OnDirty();
 }
 
 void Camera::SetClippingPlanes(float nearPlane, float farPlane)
 {
-	m_NearPlane = nearPlane;
-	m_FarPlane = farPlane;
+	m_Transform.NearPlane = nearPlane;
+	m_Transform.FarPlane = farPlane;
 	OnDirty();
 }
 
 void Camera::SetOrthographic(bool orthographic, float size)
 {
-	m_Perspective = !orthographic;
+	m_Transform.Perspective = !orthographic;
 	if (orthographic)
 	{
-		m_OrthographicSize = size;
+		m_Transform.OrthographicSize = size;
 	}
 	OnDirty();
 }
 
 void Camera::SetNearPlane(float nearPlane)
 {
-	m_NearPlane = nearPlane;
+	m_Transform.NearPlane = nearPlane;
 	OnDirty();
 }
 
 void Camera::SetFarPlane(float farPlane)
 {
-	m_FarPlane = farPlane;
+	m_Transform.FarPlane = farPlane;
 	OnDirty();
 }
 
 void Camera::SetJitterWeight(float weight)
 {
-	m_JitterWeight = weight;
+	m_Transform.JitterWeight = weight;
 	OnDirty();
 }
 
 const Matrix& Camera::GetView() const
 {
 	UpdateMatrices();
-	return m_View;
+	return m_Transform.View;
 }
 
 const Matrix& Camera::GetProjection() const
 {
 	UpdateMatrices();
-	return m_Projection;
+	return m_Transform.Projection;
 }
 
 const Matrix& Camera::GetViewProjection() const
 {
 	UpdateMatrices();
-	return m_ViewProjection;
+	return m_Transform.ViewProjection;
 }
 
 const Matrix Camera::GetViewProjectionInverse() const
@@ -88,19 +88,19 @@ const Matrix Camera::GetViewProjectionInverse() const
 const Matrix& Camera::GetViewInverse() const
 {
 	UpdateMatrices();
-	return m_ViewInverse;
+	return m_Transform.ViewInverse;
 }
 
 const Matrix& Camera::GetProjectionInverse() const
 {
 	UpdateMatrices();
-	return m_ProjectionInverse;
+	return m_Transform.ProjectionInverse;
 }
 
 const BoundingFrustum& Camera::GetFrustum() const
 {
 	UpdateMatrices();
-	return m_Frustum;
+	return m_Transform.Frustum;
 }
 
 void Camera::OnDirty()
@@ -112,16 +112,16 @@ void Camera::UpdateMatrices() const
 {
 	if (m_Dirty)
 	{
-		m_ViewInverse = Matrix::CreateFromQuaternion(m_Rotation) * Matrix::CreateTranslation(m_Position);
-		m_ViewInverse.Invert(m_View);
-		float aspect = m_Viewport.GetWidth() / m_Viewport.GetHeight();
-		if (m_Perspective)
+		m_Transform.ViewInverse = Matrix::CreateFromQuaternion(m_Rotation) * Matrix::CreateTranslation(m_Position);
+		m_Transform.ViewInverse.Invert(m_Transform.View);
+		float aspect = m_Transform.Viewport.GetWidth() / m_Transform.Viewport.GetHeight();
+		if (m_Transform.Perspective)
 		{
-			m_Projection = Math::CreatePerspectiveMatrix(m_FoV, aspect, m_NearPlane, m_FarPlane);
+			m_Transform.Projection = Math::CreatePerspectiveMatrix(m_Transform.FoV, aspect, m_Transform.NearPlane, m_Transform.FarPlane);
 		}
 		else
 		{
-			m_Projection = Math::CreateOrthographicMatrix(m_OrthographicSize * aspect, m_OrthographicSize, m_NearPlane, m_FarPlane);
+			m_Transform.Projection = Math::CreateOrthographicMatrix(m_Transform.OrthographicSize * aspect, m_Transform.OrthographicSize, m_Transform.NearPlane, m_Transform.FarPlane);
 		}
 
 #if 0
@@ -134,25 +134,26 @@ void Camera::UpdateMatrices() const
 		m_Projection.m[3][1] += (m_Jitter.y * 2.0f - 1.0f) / m_Viewport.GetHeight();
 #endif
 
-		m_Projection.Invert(m_ProjectionInverse);
-		m_ViewProjection = m_View * m_Projection;
+		m_Transform.Projection.Invert(m_Transform.ProjectionInverse);
+		m_Transform.ViewProjection = m_Transform.View * m_Transform.Projection;
 		m_Dirty = false;
 
-		Matrix p = m_Projection;
-		if (m_FarPlane < m_NearPlane)
+		Matrix p = m_Transform.Projection;
+		if (m_Transform.FarPlane < m_Transform.NearPlane)
 		{
 			Math::ReverseZProjection(p);
 		}
-		BoundingFrustum::CreateFromMatrix(m_Frustum, p);
-		m_Frustum.Transform(m_Frustum, m_ViewInverse);
+		BoundingFrustum::CreateFromMatrix(m_Transform.Frustum, p);
+		m_Transform.Frustum.Transform(m_Transform.Frustum, m_Transform.ViewInverse);
+		m_Transform.Position = m_Position;
 	}
 }
 
 void Camera::Update()
 {
-	m_PreviousViewProjection = GetViewProjection();
-	m_PreviousJitter = m_Jitter;
-	++m_JitterIndex;
+	m_Transform.PreviousViewProjection = GetViewProjection();
+	m_Transform.PreviousJitter = m_Transform.Jitter;
+	++m_Transform.JitterIndex;
 }
 
 void FreeCamera::Update()
@@ -196,7 +197,7 @@ Ray Camera::GetMouseRay(uint32 windowWidth, uint32 windowHeight) const
 
 	Vector3 nearPoint, farPoint;
 	Matrix viewProjInverse;
-	m_ViewProjection.Invert(viewProjInverse);
+	m_Transform.ViewProjection.Invert(viewProjInverse);
 	nearPoint = Vector3::Transform(Vector3(ndc.x, ndc.y, 1), viewProjInverse);
 	farPoint = Vector3::Transform(Vector3(ndc.x, ndc.y, 0), viewProjInverse);
 	ray.position = Vector3(nearPoint.x, nearPoint.y, nearPoint.z);

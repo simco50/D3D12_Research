@@ -8,7 +8,6 @@
 #include "Graphics/Core/CommandContext.h"
 #include "Graphics/Core/ShaderBindingTable.h"
 #include "Graphics/SceneView.h"
-#include "Scene/Camera.h"
 
 PathTracing::PathTracing(GraphicsDevice* pDevice)
 	: m_pDevice(pDevice)
@@ -79,7 +78,7 @@ void PathTracing::Render(RGGraph& graph, const SceneView& sceneData)
 	}
 	ImGui::End();
 
-	if (sceneData.pCamera->GetPreviousViewProjection() != sceneData.pCamera->GetViewProjection())
+	if (sceneData.View.PreviousViewProjection != sceneData.View.ViewProjection)
 	{
 		Reset();
 	}

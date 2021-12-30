@@ -12,7 +12,6 @@
 #include "Graphics/Core/StateObject.h"
 #include "Graphics/RenderGraph/RenderGraph.h"
 #include "Graphics/Mesh.h"
-#include "Scene/Camera.h"
 #include "Graphics/SceneView.h"
 
 RTReflections::RTReflections(GraphicsDevice* pDevice)
@@ -44,7 +43,7 @@ void RTReflections::Execute(RGGraph& graph, const SceneView& sceneData)
 				float ViewPixelSpreadAngle;
 			} parameters{};
 
-			parameters.ViewPixelSpreadAngle = atanf(2.0f * tanf(sceneData.pCamera->GetFoV() / 2) / (float)m_pSceneColor->GetHeight());
+			parameters.ViewPixelSpreadAngle = atanf(2.0f * tanf(sceneData.View.FoV / 2) / (float)m_pSceneColor->GetHeight());
 
 			ShaderBindingTable bindingTable(m_pRtSO);
 			bindingTable.BindRayGenShader("RayGen");

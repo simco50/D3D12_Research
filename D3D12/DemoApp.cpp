@@ -602,7 +602,7 @@ void DemoApp::Update()
 	m_SceneData.pMaterialBuffer = m_pMaterialBuffer.get();
 	m_SceneData.pMeshBuffer = m_pMeshBuffer.get();
 	m_SceneData.pMeshInstanceBuffer = m_pMeshInstanceBuffer.get();
-	m_SceneData.pCamera = m_pCamera.get();
+	m_SceneData.View = m_pCamera->GetViewTransform();
 	m_SceneData.ShadowData = shadowData;
 	m_SceneData.pAO = m_pAmbientOcclusion.get();
 	m_SceneData.FrameIndex = m_Frame;
@@ -699,10 +699,8 @@ void DemoApp::Update()
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 				context.SetGraphicsRootSignature(m_pShadowsRS.get());
 
-				struct ViewData
-				{
-					Matrix ViewProjection;
-				} viewData;
+				// hack - copy the main viewport and then just modify the viewproj
+				SceneView view = m_SceneData;
 
 				for (int i = 0; i < shadowIndex; ++i)
 				{
@@ -711,10 +709,8 @@ void DemoApp::Update()
 					context.InsertResourceBarrier(pShadowmap, D3D12_RESOURCE_STATE_DEPTH_WRITE);
 					context.BeginRenderPass(RenderPassInfo(pShadowmap, RenderPassAccess::Clear_Store));
 
-					viewData.ViewProjection = shadowData.LightViewProjections[i];
-					context.SetRootCBV(1, viewData);
-
-					context.SetRootCBV(2, GetViewUniforms(m_SceneData));
+					view.View.ViewProjection = shadowData.LightViewProjections[i];
+					context.SetRootCBV(1, GetViewUniforms(view));
 
 					VisibilityMask mask;
 					mask.SetAll();
@@ -750,14 +746,7 @@ void DemoApp::Update()
 
 				context.SetGraphicsRootSignature(m_pDepthPrepassRS.get());
 
-				context.SetRootCBV(2, GetViewUniforms(m_SceneData));
-
-				struct ViewData
-				{
-					Matrix ViewProjection;
-				} viewData;
-				viewData.ViewProjection = m_pCamera->GetViewProjection();
-				context.SetRootCBV(1, viewData);
+				context.SetRootCBV(1, GetViewUniforms(m_SceneData));
 
 				{
 					GPU_PROFILE_SCOPE("Opaque", &context);

@@ -2,7 +2,6 @@
 class GraphicsDevice;
 class RootSignature;
 class Texture;
-class Camera;
 class RGGraph;
 class PipelineState;
 struct SceneView;
