@@ -9,6 +9,18 @@ class UnorderedAccessView;
 class RGGraph;
 struct SceneView;
 
+struct TiledForwardParameters
+{
+	Texture* pColorTarget;
+	Texture* pResolvedColorTarget;
+	Texture* pNormalsTarget;
+	Texture* pResolvedNormalsTarget;
+	Texture* pDepth;
+	Texture* pResolvedDepth;
+	Texture* pAmbientOcclusion;
+	Texture* pPreviousColorTarget;
+};
+
 class TiledForward
 {
 public:
@@ -16,7 +28,7 @@ public:
 
 	void OnResize(int windowWidth, int windowHeight);
 
-	void Execute(RGGraph& graph, const SceneView& resources);
+	void Execute(RGGraph& graph, const SceneView& resources, const TiledForwardParameters& parameters);
 	void VisualizeLightDensity(RGGraph& graph, GraphicsDevice* pDevice, const SceneView& resources, Texture* pTarget, Texture* pDepth);
 
 private:

@@ -11,6 +11,18 @@ class UnorderedAccessView;
 class RGGraph;
 struct SceneView;
 
+struct ClusteredForwardParameters
+{
+	Texture* pColorTarget;
+	Texture* pResolvedColorTarget;
+	Texture* pNormalsTarget;
+	Texture* pResolvedNormalsTarget;
+	Texture* pDepth;
+	Texture* pResolvedDepth;
+	Texture* pAmbientOcclusion;
+	Texture* pPreviousColorTarget;
+};
+
 class ClusteredForward
 {
 public:
@@ -19,7 +31,7 @@ public:
 
 	void OnResize(int windowWidth, int windowHeight);
 
-	void Execute(RGGraph& graph, const SceneView& resources);
+	void Execute(RGGraph& graph, const SceneView& resources, const ClusteredForwardParameters& parameters);
 	void VisualizeLightDensity(RGGraph& graph, const SceneView& resources, Texture* pTarget, Texture* pDepth);
 
 private:

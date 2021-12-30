@@ -36,14 +36,14 @@ void TiledForward::OnResize(int windowWidth, int windowHeight)
 	m_pLightGridTransparant = m_pDevice->CreateTexture(TextureDesc::Create2D(frustumCountX, frustumCountY, DXGI_FORMAT_R32G32_UINT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess), "Light Grid - Transparent");
 }
 
-void TiledForward::Execute(RGGraph& graph, const SceneView& resources)
+void TiledForward::Execute(RGGraph& graph, const SceneView& resources, const TiledForwardParameters& parameters)
 {
 	RG_GRAPH_SCOPE("Tiled Lighting", graph);
 
 	RGPassBuilder culling = graph.AddPass("Tiled Light Culling");
 	culling.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
 		{
-			context.InsertResourceBarrier(resources.pResolvedDepth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+			context.InsertResourceBarrier(parameters.pResolvedDepth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(m_pLightIndexCounter.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
 			context.InsertResourceBarrier(m_pLightGridOpaque.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
@@ -66,15 +66,15 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& resources)
 				m_pLightGridTransparant->GetUAV()->GetDescriptor(),
 			};
 			D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
-				resources.pResolvedDepth->GetSRV()->GetDescriptor(),
+				parameters.pResolvedDepth->GetSRV()->GetDescriptor(),
 			};
 
 			context.BindResources(1, 0, uavs, ARRAYSIZE(uavs));
 			context.BindResources(2, 0, srvs, ARRAYSIZE(srvs));
 
 			context.Dispatch(ComputeUtils::GetNumThreadGroups(
-				resources.pResolvedDepth->GetWidth(), FORWARD_PLUS_BLOCK_SIZE,
-				resources.pResolvedDepth->GetHeight(), FORWARD_PLUS_BLOCK_SIZE
+				parameters.pResolvedDepth->GetWidth(), FORWARD_PLUS_BLOCK_SIZE,
+				parameters.pResolvedDepth->GetHeight(), FORWARD_PLUS_BLOCK_SIZE
 			));
 		});
 
@@ -87,25 +87,25 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& resources)
 			context.InsertResourceBarrier(m_pLightGridTransparant.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(m_pLightIndexListBufferOpaque.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(m_pLightIndexListBufferTransparant.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-			context.InsertResourceBarrier(resources.pAO, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-			context.InsertResourceBarrier(resources.pPreviousColor, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-			context.InsertResourceBarrier(resources.pResolvedDepth, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+			context.InsertResourceBarrier(parameters.pAmbientOcclusion, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+			context.InsertResourceBarrier(parameters.pPreviousColorTarget, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+			context.InsertResourceBarrier(parameters.pResolvedDepth, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
-			context.InsertResourceBarrier(resources.pDepthBuffer, D3D12_RESOURCE_STATE_DEPTH_READ);
-			context.InsertResourceBarrier(resources.pRenderTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
-			context.InsertResourceBarrier(resources.pNormals, D3D12_RESOURCE_STATE_RENDER_TARGET);
+			context.InsertResourceBarrier(parameters.pDepth, D3D12_RESOURCE_STATE_DEPTH_READ);
+			context.InsertResourceBarrier(parameters.pResolvedNormalsTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
+			context.InsertResourceBarrier(parameters.pNormalsTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
 			RenderPassInfo renderPass;
 			renderPass.DepthStencilTarget.Access = RenderPassAccess::Load_Store;
 			renderPass.DepthStencilTarget.StencilAccess = RenderPassAccess::DontCare_DontCare;
-			renderPass.DepthStencilTarget.Target = resources.pDepthBuffer;
+			renderPass.DepthStencilTarget.Target = parameters.pDepth;
 			renderPass.DepthStencilTarget.Write = false;
 			renderPass.RenderTargetCount = 2;
 			renderPass.RenderTargets[0].Access = RenderPassAccess::DontCare_Store;
-			renderPass.RenderTargets[0].Target = resources.pRenderTarget;
+			renderPass.RenderTargets[0].Target = parameters.pColorTarget;
 			renderPass.RenderTargets[1].Access = RenderPassAccess::Clear_Resolve;
-			renderPass.RenderTargets[1].Target = resources.pNormals;
-			renderPass.RenderTargets[1].ResolveTarget = resources.pResolvedNormals;
+			renderPass.RenderTargets[1].Target = parameters.pNormalsTarget;
+			renderPass.RenderTargets[1].ResolveTarget = parameters.pResolvedNormalsTarget;
 			context.BeginRenderPass(renderPass);
 
 			context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -117,10 +117,10 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& resources)
 				GPU_PROFILE_SCOPE("Opaque", &context);
 
 				D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
-					resources.pAO->GetSRV()->GetDescriptor(),
-					resources.pResolvedDepth->GetSRV()->GetDescriptor(),
-					resources.pPreviousColor->GetSRV()->GetDescriptor(),
-					resources.pPreviousColor->GetSRV()->GetDescriptor(), // fog
+					parameters.pAmbientOcclusion->GetSRV()->GetDescriptor(),
+					parameters.pResolvedDepth->GetSRV()->GetDescriptor(),
+					parameters.pPreviousColorTarget->GetSRV()->GetDescriptor(),
+					parameters.pPreviousColorTarget->GetSRV()->GetDescriptor(), // fog
 					m_pLightGridOpaque->GetSRV()->GetDescriptor(),
 					m_pLightIndexListBufferOpaque->GetSRV()->GetDescriptor(),
 				};
@@ -137,10 +137,10 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& resources)
 				GPU_PROFILE_SCOPE("Transparant", &context);
 
 				D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
-					resources.pAO->GetSRV()->GetDescriptor(),
-					resources.pResolvedDepth->GetSRV()->GetDescriptor(),
-					resources.pPreviousColor->GetSRV()->GetDescriptor(),
-					resources.pPreviousColor->GetSRV()->GetDescriptor(), // fog
+					parameters.pAmbientOcclusion->GetSRV()->GetDescriptor(),
+					parameters.pResolvedDepth->GetSRV()->GetDescriptor(),
+					parameters.pPreviousColorTarget->GetSRV()->GetDescriptor(),
+					parameters.pPreviousColorTarget->GetSRV()->GetDescriptor(), // fog
 					m_pLightGridTransparant->GetSRV()->GetDescriptor(),
 					m_pLightIndexListBufferTransparant->GetSRV()->GetDescriptor(),
 				};

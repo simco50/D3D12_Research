@@ -14,7 +14,7 @@ class RTReflections
 public:
 	RTReflections(GraphicsDevice* pDevice);
 
-	void Execute(RGGraph& graph, const SceneView& sceneData);
+	void Execute(RGGraph& graph, const SceneView& sceneData, Texture* pColorTarget, Texture* pNormals, Texture* pDepth);
 	void OnResize(uint32 width, uint32 height);
 
 private:

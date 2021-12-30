@@ -20,7 +20,7 @@ void SSAO::OnResize(int windowWidth, int windowHeight)
 	m_pAmbientOcclusionIntermediate = m_pDevice->CreateTexture(TextureDesc::Create2D(Math::DivideAndRoundUp(windowWidth, 2), Math::DivideAndRoundUp(windowHeight, 2), DXGI_FORMAT_R8_UNORM, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource), "Intermediate AO");
 }
 
-void SSAO::Execute(RGGraph& graph, Texture* pTarget, const SceneView& sceneData)
+void SSAO::Execute(RGGraph& graph, const SceneView& sceneData, Texture* pTarget, Texture* pDepth)
 {
 	static float g_AoPower = 1;
 	static float g_AoThreshold = 0.0025f;
@@ -44,7 +44,7 @@ void SSAO::Execute(RGGraph& graph, Texture* pTarget, const SceneView& sceneData)
 	RGPassBuilder ssao = graph.AddPass("SSAO");
 	ssao.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
 		{
-			context.InsertResourceBarrier(sceneData.pResolvedDepth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+			context.InsertResourceBarrier(pDepth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
 			context.SetComputeRootSignature(m_pSSAORS.get());
@@ -69,7 +69,7 @@ void SSAO::Execute(RGGraph& graph, Texture* pTarget, const SceneView& sceneData)
 			context.SetRootCBV(0, shaderParameters);
 			context.SetRootCBV(1, GetViewUniforms(sceneData));
 			context.BindResource(2, 0, pTarget->GetUAV());
-			context.BindResource(3, 0, sceneData.pResolvedDepth->GetSRV());
+			context.BindResource(3, 0, pDepth->GetSRV());
 
 			int dispatchGroupsX = Math::DivideAndRoundUp(pTarget->GetWidth(), 16);
 			int dispatchGroupsY = Math::DivideAndRoundUp(pTarget->GetHeight(), 16);
@@ -97,7 +97,7 @@ void SSAO::Execute(RGGraph& graph, Texture* pTarget, const SceneView& sceneData)
 			context.SetRootCBV(0, shaderParameters);
 			context.SetRootCBV(1, GetViewUniforms(sceneData));
 			context.BindResource(2, 0, m_pAmbientOcclusionIntermediate->GetUAV());
-			context.BindResource(3, 0, sceneData.pResolvedDepth->GetSRV());
+			context.BindResource(3, 0, pDepth->GetSRV());
 			context.BindResource(3, 1, pTarget->GetSRV());
 
 			context.Dispatch(Math::DivideAndRoundUp(m_pAmbientOcclusionIntermediate->GetWidth(), 256), m_pAmbientOcclusionIntermediate->GetHeight());
@@ -106,7 +106,7 @@ void SSAO::Execute(RGGraph& graph, Texture* pTarget, const SceneView& sceneData)
 			context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
 			context.BindResource(2, 0, pTarget->GetUAV());
-			context.BindResource(3, 0, sceneData.pResolvedDepth->GetSRV());
+			context.BindResource(3, 0, pDepth->GetSRV());
 			context.BindResource(3, 1, m_pAmbientOcclusionIntermediate->GetSRV());
 
 			shaderParameters.Horizontal = 0;

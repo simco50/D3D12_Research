@@ -82,7 +82,7 @@ Vector2 ComputeVolumeGridParams(float nearZ, float farZ, int numSlices)
 	return lightGridParams;
 }
 
-void ClusteredForward::Execute(RGGraph& graph, const SceneView& resources)
+void ClusteredForward::Execute(RGGraph& graph, const SceneView& resources, const ClusteredForwardParameters& parameters)
 {
 	RG_GRAPH_SCOPE("Clustered Lighting", graph);
 
@@ -99,7 +99,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& resources)
 	}
 	ImGui::End();
 
-	Vector2 screenDimensions((float)resources.pRenderTarget->GetWidth(), (float)resources.pRenderTarget->GetHeight());
+	Vector2 screenDimensions((float)parameters.pColorTarget->GetWidth(), (float)parameters.pColorTarget->GetHeight());
 	float nearZ = resources.View.NearPlane;
 	float farZ = resources.View.FarPlane;
 	Vector2 lightGridParams = ComputeVolumeGridParams(nearZ, farZ, gLightClustersNumZ);
@@ -280,26 +280,26 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& resources)
 
 			context.InsertResourceBarrier(m_pLightGrid.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(m_pLightIndexGrid.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-			context.InsertResourceBarrier(resources.pAO, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-			context.InsertResourceBarrier(resources.pPreviousColor, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-			context.InsertResourceBarrier(resources.pResolvedDepth, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+			context.InsertResourceBarrier(parameters.pAmbientOcclusion, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+			context.InsertResourceBarrier(parameters.pPreviousColorTarget, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+			context.InsertResourceBarrier(parameters.pResolvedDepth, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(m_pFinalVolumeFog.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
-			context.InsertResourceBarrier(resources.pDepthBuffer, D3D12_RESOURCE_STATE_DEPTH_READ);
-			context.InsertResourceBarrier(resources.pRenderTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
-			context.InsertResourceBarrier(resources.pNormals, D3D12_RESOURCE_STATE_RENDER_TARGET);
+			context.InsertResourceBarrier(parameters.pDepth, D3D12_RESOURCE_STATE_DEPTH_READ);
+			context.InsertResourceBarrier(parameters.pColorTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
+			context.InsertResourceBarrier(parameters.pNormalsTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
 			RenderPassInfo renderPass;
 			renderPass.DepthStencilTarget.Access = RenderPassAccess::Load_Store;
 			renderPass.DepthStencilTarget.StencilAccess = RenderPassAccess::DontCare_DontCare;
-			renderPass.DepthStencilTarget.Target = resources.pDepthBuffer;
+			renderPass.DepthStencilTarget.Target = parameters.pDepth;
 			renderPass.DepthStencilTarget.Write = false;
 			renderPass.RenderTargetCount = 2;
 			renderPass.RenderTargets[0].Access = RenderPassAccess::Clear_Store;
-			renderPass.RenderTargets[0].Target = resources.pRenderTarget;
-			renderPass.RenderTargets[1].Access = resources.pNormals->GetDesc().SampleCount > 1 ? RenderPassAccess::Clear_Resolve : RenderPassAccess::Clear_Store;
-			renderPass.RenderTargets[1].Target = resources.pNormals;
-			renderPass.RenderTargets[1].ResolveTarget = resources.pResolvedNormals;
+			renderPass.RenderTargets[0].Target = parameters.pColorTarget;
+			renderPass.RenderTargets[1].Access = parameters.pNormalsTarget->GetDesc().SampleCount > 1 ? RenderPassAccess::Clear_Resolve : RenderPassAccess::Clear_Store;
+			renderPass.RenderTargets[1].Target = parameters.pNormalsTarget;
+			renderPass.RenderTargets[1].ResolveTarget = parameters.pResolvedNormalsTarget;
 			context.BeginRenderPass(renderPass);
 
 			context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -310,9 +310,9 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& resources)
 			context.SetRootCBV(2, GetViewUniforms(resources));
 
 			D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
-				resources.pAO->GetSRV()->GetDescriptor(),
-				resources.pResolvedDepth->GetSRV()->GetDescriptor(),
-				resources.pPreviousColor->GetSRV()->GetDescriptor(),
+				parameters.pAmbientOcclusion->GetSRV()->GetDescriptor(),
+				parameters.pResolvedDepth->GetSRV()->GetDescriptor(),
+				parameters.pPreviousColorTarget->GetSRV()->GetDescriptor(),
 				m_pFinalVolumeFog->GetSRV()->GetDescriptor(),
 				m_pLightGrid->GetSRV()->GetDescriptor(),
 				m_pLightIndexGrid->GetSRV()->GetDescriptor(),
@@ -352,7 +352,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& resources)
 					m_DidCopyDebugClusterData = true;
 				}
 
-				context.BeginRenderPass(RenderPassInfo(resources.pRenderTarget, RenderPassAccess::Load_Store, resources.pDepthBuffer, RenderPassAccess::Load_Store, false));
+				context.BeginRenderPass(RenderPassInfo(parameters.pColorTarget, RenderPassAccess::Load_Store, parameters.pDepth, RenderPassAccess::Load_Store, false));
 
 				context.SetPipelineState(m_pVisualizeLightClustersPSO);
 				context.SetGraphicsRootSignature(m_pVisualizeLightClustersRS.get());

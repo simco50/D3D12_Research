@@ -12,7 +12,7 @@ class PathTracing
 public:
 	PathTracing(GraphicsDevice* pDevice);
 	~PathTracing();
-	void Render(RGGraph& graph, const SceneView& scene);
+	void Render(RGGraph& graph, const SceneView& scene, Texture* pTarget);
 	void OnResize(uint32 width, uint32 height);
 	void Reset();
 	bool IsSupported();

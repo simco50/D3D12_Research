@@ -23,7 +23,6 @@ PathTracing::PathTracing(GraphicsDevice* pDevice)
 	m_pRS->AddConstantBufferView(0);
 	m_pRS->AddConstantBufferView(100);
 	m_pRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 2);
-	m_pRS->AddDescriptorTableSimple(7, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 6);
 	m_pRS->Finalize("Global");
 
 	StateObjectInitializer desc{};
@@ -53,7 +52,7 @@ PathTracing::~PathTracing()
 	}
 }
 
-void PathTracing::Render(RGGraph& graph, const SceneView& sceneData)
+void PathTracing::Render(RGGraph& graph, const SceneView& sceneData, Texture* pTarget)
 {
 	if (!IsSupported())
 	{
@@ -88,7 +87,7 @@ void PathTracing::Render(RGGraph& graph, const SceneView& sceneData)
 	RGPassBuilder rt = graph.AddPass("Path Tracing");
 	rt.Bind([=](CommandContext& context, const RGPassResources& /* passResources */)
 		{
-			context.InsertResourceBarrier(sceneData.pRenderTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+			context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
 			context.SetComputeRootSignature(m_pRS.get());
 			context.SetPipelineState(m_pSO);
@@ -108,23 +107,16 @@ void PathTracing::Render(RGGraph& graph, const SceneView& sceneData)
 			bindingTable.BindMissShader("ShadowMS", 1);
 			bindingTable.BindHitGroup("PrimaryHG", 0);
 
-			const D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
-				sceneData.pResolvedDepth->GetSRV()->GetDescriptor(),
-				sceneData.pPreviousColor->GetSRV()->GetDescriptor(),
-				sceneData.pResolvedNormals->GetSRV()->GetDescriptor(),
-			};
-
 			const D3D12_CPU_DESCRIPTOR_HANDLE uavs[] = {
-				sceneData.pRenderTarget->GetUAV()->GetDescriptor(),
+				pTarget->GetUAV()->GetDescriptor(),
 				m_pAccumulationTexture->GetUAV()->GetDescriptor(),
 			};
 
 			context.SetRootCBV(0, parameters);
 			context.SetRootCBV(1, GetViewUniforms(sceneData));
 			context.BindResources(2, 0, uavs, ARRAYSIZE(uavs));
-			context.BindResources(3, 0, srvs, ARRAYSIZE(srvs));
 
-			context.DispatchRays(bindingTable, sceneData.pRenderTarget->GetWidth(), sceneData.pRenderTarget->GetHeight());
+			context.DispatchRays(bindingTable, pTarget->GetWidth(), pTarget->GetHeight());
 		});
 }
 

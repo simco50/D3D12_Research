@@ -21,7 +21,7 @@ RTAO::RTAO(GraphicsDevice* pDevice)
 	}
 }
 
-void RTAO::Execute(RGGraph& graph, Texture* pTarget, const SceneView& sceneData)
+void RTAO::Execute(RGGraph& graph, const SceneView& sceneData, Texture* pTarget, Texture* pDepth)
 {
 	static float g_AoPower = 3;
 	static float g_AoRadius = 0.5f;
@@ -41,7 +41,7 @@ void RTAO::Execute(RGGraph& graph, Texture* pTarget, const SceneView& sceneData)
 	RGPassBuilder rt = graph.AddPass("RTAO");
 	rt.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
 		{
-			context.InsertResourceBarrier(sceneData.pResolvedDepth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+			context.InsertResourceBarrier(pDepth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
 			context.SetComputeRootSignature(m_pGlobalRS.get());
@@ -65,7 +65,7 @@ void RTAO::Execute(RGGraph& graph, Texture* pTarget, const SceneView& sceneData)
 			context.SetRootCBV(0, parameters);
 			context.SetRootCBV(1, GetViewUniforms(sceneData));
 			context.BindResource(2, 0, pTarget->GetUAV());
-			context.BindResource(3, 0, sceneData.pResolvedDepth->GetSRV());
+			context.BindResource(3, 0, pDepth->GetSRV());
 
 			context.DispatchRays(bindingTable, pTarget->GetWidth(), pTarget->GetHeight());
 		});

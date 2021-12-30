@@ -595,22 +595,15 @@ void DemoApp::Update()
 		}
 	}
 
-	m_SceneData.pDepthBuffer = GetDepthStencil();
-	m_SceneData.pResolvedDepth = GetResolvedDepthStencil();
-	m_SceneData.pRenderTarget = GetCurrentRenderTarget();
 	m_SceneData.pLightBuffer = m_pLightBuffer.get();
 	m_SceneData.pMaterialBuffer = m_pMaterialBuffer.get();
 	m_SceneData.pMeshBuffer = m_pMeshBuffer.get();
 	m_SceneData.pMeshInstanceBuffer = m_pMeshInstanceBuffer.get();
 	m_SceneData.View = m_pCamera->GetViewTransform();
 	m_SceneData.ShadowData = shadowData;
-	m_SceneData.pAO = m_pAmbientOcclusion.get();
 	m_SceneData.FrameIndex = m_Frame;
-	m_SceneData.pPreviousColor = m_pPreviousColor.get();
 	m_SceneData.pSceneTLAS = m_pTLAS.get();
-	m_SceneData.pNormals = m_pNormals ? m_pNormals.get() : m_pResolvedNormals.get();
-	m_SceneData.pResolvedNormals = m_pResolvedNormals.get();
-	m_SceneData.pResolvedTarget = Tweakables::g_TAA.Get() ? m_pTAASource.get() : m_pHDRRenderTarget.get();
+	m_SceneData.pRenderTarget = GetCurrentRenderTarget();
 
 	////////////////////////////////
 	// LET THE RENDERING BEGIN!
@@ -817,20 +810,36 @@ void DemoApp::Update()
 
 		if (Tweakables::g_RaytracedAO)
 		{
-			m_pRTAO->Execute(graph, m_pAmbientOcclusion.get(), m_SceneData);
+			m_pRTAO->Execute(graph, m_SceneData, m_pAmbientOcclusion.get(), GetResolvedDepthStencil());
 		}
 		else
 		{
-			m_pSSAO->Execute(graph, m_pAmbientOcclusion.get(), m_SceneData);
+			m_pSSAO->Execute(graph, m_SceneData, m_pAmbientOcclusion.get(), GetResolvedDepthStencil());
 		}
 
 		if (m_RenderPath == RenderPath::Tiled)
 		{
-			m_pTiledForward->Execute(graph, m_SceneData);
+			TiledForwardParameters params;
+			params.pAmbientOcclusion = m_pAmbientOcclusion.get();
+			params.pColorTarget = GetCurrentRenderTarget();
+			params.pDepth = GetDepthStencil();
+			params.pResolvedDepth = GetResolvedDepthStencil();
+			params.pNormalsTarget = m_pNormals ? m_pNormals.get() : m_pResolvedNormals.get();
+			params.pResolvedNormalsTarget = m_pResolvedNormals.get();
+			params.pPreviousColorTarget = m_pPreviousColor.get();
+			m_pTiledForward->Execute(graph, m_SceneData, params);
 		}
 		else if (m_RenderPath == RenderPath::Clustered)
 		{
-			m_pClusteredForward->Execute(graph, m_SceneData);
+			ClusteredForwardParameters params;
+			params.pAmbientOcclusion = m_pAmbientOcclusion.get();
+			params.pColorTarget = GetCurrentRenderTarget();
+			params.pDepth = GetDepthStencil();
+			params.pResolvedDepth = GetResolvedDepthStencil();
+			params.pNormalsTarget = m_pNormals ? m_pNormals.get() : m_pResolvedNormals.get();
+			params.pResolvedNormalsTarget = m_pResolvedNormals.get();
+			params.pPreviousColorTarget = m_pPreviousColor.get();
+			m_pClusteredForward->Execute(graph, m_SceneData, params);
 		}
 
 		m_pParticles->Render(graph, m_SceneData, GetCurrentRenderTarget(), GetDepthStencil());
@@ -865,7 +874,7 @@ void DemoApp::Update()
 	}
 	else
 	{
-		m_pPathTracing->Render(graph, m_SceneData);
+		m_pPathTracing->Render(graph, m_SceneData, GetCurrentRenderTarget());
 	}
 
 	RGPassBuilder resolve = graph.AddPass("Resolve");
@@ -893,7 +902,8 @@ void DemoApp::Update()
 	{
 		if (Tweakables::g_RaytracedReflections)
 		{
-			m_pRTReflections->Execute(graph, m_SceneData);
+			Texture* pTarget = Tweakables::g_TAA.Get() ? m_pTAASource.get() : m_pHDRRenderTarget.get();
+			m_pRTReflections->Execute(graph, m_SceneData, pTarget, m_pResolvedNormals.get(), GetResolvedDepthStencil());
 		}
 
 		if (Tweakables::g_TAA.Get())

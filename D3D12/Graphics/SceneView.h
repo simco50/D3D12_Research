@@ -62,14 +62,7 @@ struct ShadowData
 
 struct SceneView
 {
-	Texture* pResolvedDepth = nullptr;
-	Texture* pDepthBuffer = nullptr;
 	Texture* pRenderTarget = nullptr;
-	Texture* pResolvedTarget = nullptr;
-	Texture* pPreviousColor = nullptr;
-	Texture* pNormals = nullptr;
-	Texture* pResolvedNormals = nullptr;
-	Texture* pAO = nullptr;
 	std::vector<Batch> Batches;
 	Buffer* pLightBuffer = nullptr;
 	Buffer* pMaterialBuffer = nullptr;
