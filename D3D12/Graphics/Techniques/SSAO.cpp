@@ -7,7 +7,6 @@
 #include "Graphics/Core/CommandContext.h"
 #include "Graphics/Core/Texture.h"
 #include "Graphics/RenderGraph/RenderGraph.h"
-#include "Scene/Camera.h"
 #include "Graphics/SceneView.h"
 
 SSAO::SSAO(GraphicsDevice* pDevice)
@@ -21,11 +20,11 @@ void SSAO::OnResize(int windowWidth, int windowHeight)
 	m_pAmbientOcclusionIntermediate = m_pDevice->CreateTexture(TextureDesc::Create2D(Math::DivideAndRoundUp(windowWidth, 2), Math::DivideAndRoundUp(windowHeight, 2), DXGI_FORMAT_R8_UNORM, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource), "Intermediate AO");
 }
 
-void SSAO::Execute(RGGraph& graph, Texture* pTarget, const SceneView& sceneData)
+void SSAO::Execute(RGGraph& graph, const SceneView& sceneData, Texture* pTarget, Texture* pDepth)
 {
-	static float g_AoPower = 3;
+	static float g_AoPower = 1;
 	static float g_AoThreshold = 0.0025f;
-	static float g_AoRadius = 0.5f;
+	static float g_AoRadius = 0.05f;
 	static int g_AoSamples = 16;
 
 	if (ImGui::Begin("Parameters"))
@@ -43,92 +42,76 @@ void SSAO::Execute(RGGraph& graph, Texture* pTarget, const SceneView& sceneData)
 	RG_GRAPH_SCOPE("Ambient Occlusion", graph);
 
 	RGPassBuilder ssao = graph.AddPass("SSAO");
-	ssao.Bind([=](CommandContext& renderContext, const RGPassResources& /*passResources*/)
+	ssao.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
 		{
-			renderContext.InsertResourceBarrier(sceneData.pResolvedDepth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-			renderContext.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+			context.InsertResourceBarrier(pDepth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+			context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-			renderContext.SetComputeRootSignature(m_pSSAORS.get());
-			renderContext.SetPipelineState(m_pSSAOPSO);
+			context.SetComputeRootSignature(m_pSSAORS.get());
+			context.SetPipelineState(m_pSSAOPSO);
 
 			struct ShaderParameters
 			{
-				Matrix ProjectionInverse;
-				Matrix ViewInverse;
-				Matrix Projection;
-				Matrix View;
 				IntVector2 Dimensions;
-				float Near;
-				float Far;
 				float Power;
 				float Radius;
 				float Threshold;
 				int Samples;
-				int FrameIndex;
 			} shaderParameters{};
 
-			shaderParameters.ProjectionInverse = sceneData.pCamera->GetProjectionInverse();
-			shaderParameters.ViewInverse = sceneData.pCamera->GetViewInverse();
-			shaderParameters.Projection = sceneData.pCamera->GetProjection();
-			shaderParameters.View = sceneData.pCamera->GetView();
 			shaderParameters.Dimensions.x = pTarget->GetWidth();
 			shaderParameters.Dimensions.y = pTarget->GetHeight();
-			shaderParameters.Near = sceneData.pCamera->GetNear();
-			shaderParameters.Far = sceneData.pCamera->GetFar();
 			shaderParameters.Power = g_AoPower;
 			shaderParameters.Radius = g_AoRadius;
 			shaderParameters.Threshold = g_AoThreshold;
 			shaderParameters.Samples = g_AoSamples;
-			shaderParameters.FrameIndex = sceneData.FrameIndex;
 
-			renderContext.SetRootCBV(0, shaderParameters);
-			renderContext.BindResource(1, 0, pTarget->GetUAV());
-			renderContext.BindResource(2, 0, sceneData.pResolvedDepth->GetSRV());
+			context.SetRootCBV(0, shaderParameters);
+			context.SetRootCBV(1, GetViewUniforms(sceneData, pTarget));
+			context.BindResource(2, 0, pTarget->GetUAV());
+			context.BindResource(3, 0, pDepth->GetSRV());
 
 			int dispatchGroupsX = Math::DivideAndRoundUp(pTarget->GetWidth(), 16);
 			int dispatchGroupsY = Math::DivideAndRoundUp(pTarget->GetHeight(), 16);
-			renderContext.Dispatch(dispatchGroupsX, dispatchGroupsY);
+			context.Dispatch(dispatchGroupsX, dispatchGroupsY);
 		});
 
 	RGPassBuilder blur = graph.AddPass("Blur SSAO");
-	blur.Bind([=](CommandContext& renderContext, const RGPassResources& /*passResources*/)
+	blur.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
 		{
-			renderContext.InsertResourceBarrier(m_pAmbientOcclusionIntermediate.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-			renderContext.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
+			context.InsertResourceBarrier(m_pAmbientOcclusionIntermediate.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+			context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 
-			renderContext.SetComputeRootSignature(m_pSSAOBlurRS.get());
-			renderContext.SetPipelineState(m_pSSAOBlurPSO);
+			context.SetComputeRootSignature(m_pSSAOBlurRS.get());
+			context.SetPipelineState(m_pSSAOBlurPSO);
 
 			struct ShaderParameters
 			{
 				Vector2 DimensionsInv;
 				uint32 Horizontal;
-				float Far;
-				float Near;
 			} shaderParameters;
 
 			shaderParameters.Horizontal = 1;
 			shaderParameters.DimensionsInv = Vector2(1.0f / pTarget->GetWidth(), 1.0f / pTarget->GetHeight());
-			shaderParameters.Far = sceneData.pCamera->GetFar();
-			shaderParameters.Near = sceneData.pCamera->GetNear();
 
-			renderContext.SetRootCBV(0, shaderParameters);
-			renderContext.BindResource(1, 0, m_pAmbientOcclusionIntermediate->GetUAV());
-			renderContext.BindResource(2, 0, sceneData.pResolvedDepth->GetSRV());
-			renderContext.BindResource(2, 1, pTarget->GetSRV());
+			context.SetRootCBV(0, shaderParameters);
+			context.SetRootCBV(1, GetViewUniforms(sceneData, pTarget));
+			context.BindResource(2, 0, m_pAmbientOcclusionIntermediate->GetUAV());
+			context.BindResource(3, 0, pDepth->GetSRV());
+			context.BindResource(3, 1, pTarget->GetSRV());
 
-			renderContext.Dispatch(Math::DivideAndRoundUp(m_pAmbientOcclusionIntermediate->GetWidth(), 256), m_pAmbientOcclusionIntermediate->GetHeight());
+			context.Dispatch(Math::DivideAndRoundUp(m_pAmbientOcclusionIntermediate->GetWidth(), 256), m_pAmbientOcclusionIntermediate->GetHeight());
 
-			renderContext.InsertResourceBarrier(m_pAmbientOcclusionIntermediate.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-			renderContext.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+			context.InsertResourceBarrier(m_pAmbientOcclusionIntermediate.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+			context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-			renderContext.BindResource(1, 0, pTarget->GetUAV());
-			renderContext.BindResource(2, 0, sceneData.pResolvedDepth->GetSRV());
-			renderContext.BindResource(2, 1, m_pAmbientOcclusionIntermediate->GetSRV());
+			context.BindResource(2, 0, pTarget->GetUAV());
+			context.BindResource(3, 0, pDepth->GetSRV());
+			context.BindResource(3, 1, m_pAmbientOcclusionIntermediate->GetSRV());
 
 			shaderParameters.Horizontal = 0;
-			renderContext.SetRootCBV(0, shaderParameters);
-			renderContext.Dispatch(m_pAmbientOcclusionIntermediate->GetWidth(), Math::DivideAndRoundUp(m_pAmbientOcclusionIntermediate->GetHeight(), 256));
+			context.SetRootCBV(0, shaderParameters);
+			context.Dispatch(m_pAmbientOcclusionIntermediate->GetWidth(), Math::DivideAndRoundUp(m_pAmbientOcclusionIntermediate->GetHeight(), 256));
 		});
 }
 

@@ -11,7 +11,6 @@
 #include "Graphics/RenderGraph/RenderGraph.h"
 #include "Graphics/Mesh.h"
 #include "Graphics/Profiler.h"
-#include "Scene/Camera.h"
 #include "Graphics/SceneView.h"
 #include "Core/ConsoleVariables.h"
 
@@ -37,14 +36,14 @@ void TiledForward::OnResize(int windowWidth, int windowHeight)
 	m_pLightGridTransparant = m_pDevice->CreateTexture(TextureDesc::Create2D(frustumCountX, frustumCountY, DXGI_FORMAT_R32G32_UINT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess), "Light Grid - Transparent");
 }
 
-void TiledForward::Execute(RGGraph& graph, const SceneView& resources)
+void TiledForward::Execute(RGGraph& graph, const SceneView& resources, const TiledForwardParameters& parameters)
 {
 	RG_GRAPH_SCOPE("Tiled Lighting", graph);
 
 	RGPassBuilder culling = graph.AddPass("Tiled Light Culling");
 	culling.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
 		{
-			context.InsertResourceBarrier(resources.pResolvedDepth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+			context.InsertResourceBarrier(parameters.pResolvedDepth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(m_pLightIndexCounter.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
 			context.InsertResourceBarrier(m_pLightGridOpaque.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
@@ -57,34 +56,26 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& resources)
 			context.SetPipelineState(m_pComputeLightCullPSO);
 			context.SetComputeRootSignature(m_pComputeLightCullRS.get());
 
-			struct ShaderParameters
-			{
-				Matrix CameraView;
-				Matrix ProjectionInverse;
-				IntVector3 NumThreadGroups;
-				int padding0;
-				Vector2 ScreenDimensionsInv;
-				uint32 LightCount;
-			} Data{};
+			context.SetRootCBV(0, GetViewUniforms(resources));
 
-			Data.CameraView = resources.pCamera->GetView();
-			Data.NumThreadGroups.x = Math::DivideAndRoundUp(resources.pResolvedDepth->GetWidth(), FORWARD_PLUS_BLOCK_SIZE);
-			Data.NumThreadGroups.y = Math::DivideAndRoundUp(resources.pResolvedDepth->GetHeight(), FORWARD_PLUS_BLOCK_SIZE);
-			Data.NumThreadGroups.z = 1;
-			Data.ScreenDimensionsInv = Vector2(1.0f / resources.pResolvedDepth->GetWidth(), 1.0f / resources.pResolvedDepth->GetHeight());
-			Data.LightCount = resources.pLightBuffer->GetNumElements();
-			Data.ProjectionInverse = resources.pCamera->GetProjectionInverse();
+			D3D12_CPU_DESCRIPTOR_HANDLE uavs[] = {
+				m_pLightIndexCounter->GetUAV()->GetDescriptor(),
+				m_pLightIndexListBufferOpaque->GetUAV()->GetDescriptor(),
+				m_pLightGridOpaque->GetUAV()->GetDescriptor(),
+				m_pLightIndexListBufferTransparant->GetUAV()->GetDescriptor(),
+				m_pLightGridTransparant->GetUAV()->GetDescriptor(),
+			};
+			D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
+				parameters.pResolvedDepth->GetSRV()->GetDescriptor(),
+			};
 
-			context.SetRootCBV(0, Data);
-			context.BindResource(1, 0, m_pLightIndexCounter->GetUAV());
-			context.BindResource(1, 1, m_pLightIndexListBufferOpaque->GetUAV());
-			context.BindResource(1, 2, m_pLightGridOpaque->GetUAV());
-			context.BindResource(1, 3, m_pLightIndexListBufferTransparant->GetUAV());
-			context.BindResource(1, 4, m_pLightGridTransparant->GetUAV());
-			context.BindResource(2, 0, resources.pResolvedDepth->GetSRV());
-			context.BindResource(2, 1, resources.pLightBuffer->GetSRV());
+			context.BindResources(1, 0, uavs, ARRAYSIZE(uavs));
+			context.BindResources(2, 0, srvs, ARRAYSIZE(srvs));
 
-			context.Dispatch(Data.NumThreadGroups);
+			context.Dispatch(ComputeUtils::GetNumThreadGroups(
+				parameters.pResolvedDepth->GetWidth(), FORWARD_PLUS_BLOCK_SIZE,
+				parameters.pResolvedDepth->GetHeight(), FORWARD_PLUS_BLOCK_SIZE
+			));
 		});
 
 	//5. BASE PASS
@@ -92,109 +83,46 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& resources)
 	RGPassBuilder basePass = graph.AddPass("Base Pass");
 	basePass.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
 		{
-			struct PerFrameData
-			{
-				Matrix View;
-				Matrix Projection;
-				Matrix ProjectionInverse;
-				Matrix ViewProjection;
-				Matrix ReprojectionMatrix;
-				Vector4 ViewPosition;
-				Vector4 FrustumPlanes[6];
-				Vector2 InvScreenDimensions;
-				float NearZ;
-				float FarZ;
-				int FrameIndex;
-				int SsrSamples;
-				int LightCount;
-				int padd;
-			} frameData;
-
-			//Camera constants
-			DirectX::XMVECTOR nearPlane, farPlane, left, right, top, bottom;
-			resources.pCamera->GetFrustum().GetPlanes(&nearPlane, &farPlane, &right, &left, &top, &bottom);
-			frameData.FrustumPlanes[0] = Vector4(nearPlane);
-			frameData.FrustumPlanes[1] = Vector4(farPlane);
-			frameData.FrustumPlanes[2] = Vector4(left);
-			frameData.FrustumPlanes[3] = Vector4(right);
-			frameData.FrustumPlanes[4] = Vector4(top);
-			frameData.FrustumPlanes[5] = Vector4(bottom);
-			frameData.View = resources.pCamera->GetView();
-			frameData.Projection = resources.pCamera->GetProjection();
-			frameData.ProjectionInverse = resources.pCamera->GetProjectionInverse();
-			frameData.InvScreenDimensions = Vector2(1.0f / resources.pRenderTarget->GetWidth(), 1.0f / resources.pRenderTarget->GetHeight());
-			frameData.NearZ = resources.pCamera->GetNear();
-			frameData.FarZ = resources.pCamera->GetFar();
-			frameData.FrameIndex = resources.FrameIndex;
-			frameData.SsrSamples = Tweakables::g_SsrSamples;
-			frameData.LightCount = resources.pLightBuffer->GetNumElements();
-			frameData.ViewProjection = resources.pCamera->GetViewProjection();
-			frameData.ViewPosition = Vector4(resources.pCamera->GetPosition());
-
-			Matrix reprojectionMatrix = resources.pCamera->GetViewProjection().Invert() * resources.pCamera->GetPreviousViewProjection();
-			// Transform from uv to clip space: texcoord * 2 - 1
-			Matrix premult = {
-				2.0f, 0, 0, 0,
-				0, -2.0f, 0, 0,
-				0, 0, 1, 0,
-				-1, 1, 0, 1
-			};
-			// Transform from clip to uv space: texcoord * 0.5 + 0.5
-			Matrix postmult = {
-				0.5f, 0, 0, 0,
-				0, -0.5f, 0, 0,
-				0, 0, 1, 0,
-				0.5f, 0.5f, 0, 1
-			};
-			frameData.ReprojectionMatrix = premult * reprojectionMatrix * postmult;
-
 			context.InsertResourceBarrier(m_pLightGridOpaque.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(m_pLightGridTransparant.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(m_pLightIndexListBufferOpaque.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(m_pLightIndexListBufferTransparant.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-			context.InsertResourceBarrier(resources.pAO, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-			context.InsertResourceBarrier(resources.pPreviousColor, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-			context.InsertResourceBarrier(resources.pResolvedDepth, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+			context.InsertResourceBarrier(parameters.pAmbientOcclusion, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+			context.InsertResourceBarrier(parameters.pPreviousColorTarget, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+			context.InsertResourceBarrier(parameters.pResolvedDepth, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
-			context.InsertResourceBarrier(resources.pDepthBuffer, D3D12_RESOURCE_STATE_DEPTH_READ);
-			context.InsertResourceBarrier(resources.pRenderTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
-			context.InsertResourceBarrier(resources.pNormals, D3D12_RESOURCE_STATE_RENDER_TARGET);
+			context.InsertResourceBarrier(parameters.pDepth, D3D12_RESOURCE_STATE_DEPTH_READ);
+			context.InsertResourceBarrier(parameters.pResolvedNormalsTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
+			context.InsertResourceBarrier(parameters.pNormalsTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
 			RenderPassInfo renderPass;
 			renderPass.DepthStencilTarget.Access = RenderPassAccess::Load_Store;
 			renderPass.DepthStencilTarget.StencilAccess = RenderPassAccess::DontCare_DontCare;
-			renderPass.DepthStencilTarget.Target = resources.pDepthBuffer;
+			renderPass.DepthStencilTarget.Target = parameters.pDepth;
 			renderPass.DepthStencilTarget.Write = false;
 			renderPass.RenderTargetCount = 2;
 			renderPass.RenderTargets[0].Access = RenderPassAccess::DontCare_Store;
-			renderPass.RenderTargets[0].Target = resources.pRenderTarget;
+			renderPass.RenderTargets[0].Target = parameters.pColorTarget;
 			renderPass.RenderTargets[1].Access = RenderPassAccess::Clear_Resolve;
-			renderPass.RenderTargets[1].Target = resources.pNormals;
-			renderPass.RenderTargets[1].ResolveTarget = resources.pResolvedNormals;
+			renderPass.RenderTargets[1].Target = parameters.pNormalsTarget;
+			renderPass.RenderTargets[1].ResolveTarget = parameters.pResolvedNormalsTarget;
 			context.BeginRenderPass(renderPass);
 
 			context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 			context.SetGraphicsRootSignature(m_pDiffuseRS.get());
 
-			context.SetRootCBV(1, frameData);
-			context.SetRootCBV(2, *resources.pShadowData);
-			
+			context.SetRootCBV(2, GetViewUniforms(resources, parameters.pColorTarget));
 
 			{
 				GPU_PROFILE_SCOPE("Opaque", &context);
 
 				D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
-					resources.pLightBuffer->GetSRV()->GetDescriptor(), // dummy
+					parameters.pAmbientOcclusion->GetSRV()->GetDescriptor(),
+					parameters.pResolvedDepth->GetSRV()->GetDescriptor(),
+					parameters.pPreviousColorTarget->GetSRV()->GetDescriptor(),
+					parameters.pPreviousColorTarget->GetSRV()->GetDescriptor(), // fog
 					m_pLightGridOpaque->GetSRV()->GetDescriptor(),
 					m_pLightIndexListBufferOpaque->GetSRV()->GetDescriptor(),
-					resources.pLightBuffer->GetSRV()->GetDescriptor(),
-					resources.pAO->GetSRV()->GetDescriptor(),
-					resources.pResolvedDepth->GetSRV()->GetDescriptor(),
-					resources.pPreviousColor->GetSRV()->GetDescriptor(),
-					resources.pMaterialBuffer->GetSRV()->GetDescriptor(),
-					resources.pMaterialBuffer->GetSRV()->GetDescriptor(),
-					resources.pMeshBuffer->GetSRV()->GetDescriptor(),
-					resources.pMeshInstanceBuffer->GetSRV()->GetDescriptor(),
 				};
 				context.BindResources(3, 0, srvs, ARRAYSIZE(srvs));
 
@@ -209,17 +137,12 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& resources)
 				GPU_PROFILE_SCOPE("Transparant", &context);
 
 				D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
-					resources.pLightBuffer->GetSRV()->GetDescriptor(), // dummy
+					parameters.pAmbientOcclusion->GetSRV()->GetDescriptor(),
+					parameters.pResolvedDepth->GetSRV()->GetDescriptor(),
+					parameters.pPreviousColorTarget->GetSRV()->GetDescriptor(),
+					parameters.pPreviousColorTarget->GetSRV()->GetDescriptor(), // fog
 					m_pLightGridTransparant->GetSRV()->GetDescriptor(),
 					m_pLightIndexListBufferTransparant->GetSRV()->GetDescriptor(),
-					resources.pLightBuffer->GetSRV()->GetDescriptor(),
-					resources.pAO->GetSRV()->GetDescriptor(),
-					resources.pResolvedDepth->GetSRV()->GetDescriptor(),
-					resources.pPreviousColor->GetSRV()->GetDescriptor(),
-					resources.pMaterialBuffer->GetSRV()->GetDescriptor(),
-					resources.pMaterialBuffer->GetSRV()->GetDescriptor(),
-					resources.pMeshBuffer->GetSRV()->GetDescriptor(),
-					resources.pMeshInstanceBuffer->GetSRV()->GetDescriptor(),
 				};
 				context.BindResources(3, 0, srvs, ARRAYSIZE(srvs));
 
@@ -230,16 +153,13 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& resources)
 		});
 }
 
-void TiledForward::VisualizeLightDensity(RGGraph& graph, GraphicsDevice* pDevice, Camera& camera, Texture* pTarget, Texture* pDepth)
+void TiledForward::VisualizeLightDensity(RGGraph& graph, GraphicsDevice* pDevice, const SceneView& resources, Texture* pTarget, Texture* pDepth)
 {
 	if (!m_pVisualizationIntermediateTexture || m_pVisualizationIntermediateTexture->GetDesc() != pTarget->GetDesc())
 	{
 		m_pVisualizationIntermediateTexture = m_pDevice->CreateTexture(pTarget->GetDesc(), "LightDensity Debug Texture");
 	}
 
-	Vector2 screenDimensions((float)pTarget->GetWidth(), (float)pTarget->GetHeight());
-	float nearZ = camera.GetNear();
-	float farZ = camera.GetFar();
 	float sliceMagicA = 0;
 	float sliceMagicB = 0;
 
@@ -248,23 +168,14 @@ void TiledForward::VisualizeLightDensity(RGGraph& graph, GraphicsDevice* pDevice
 		{
 			struct Data
 			{
-				Matrix ProjectionInverse;
-				IntVector3 ClusterDimensions;
-				float padding;
+				IntVector2 ClusterDimensions;
 				IntVector2 ClusterSize;
 				float SliceMagicA;
 				float SliceMagicB;
-				float Near;
-				float Far;
-				float FoV;
 			} constantData{};
 
-			constantData.ProjectionInverse = camera.GetProjectionInverse();
 			constantData.SliceMagicA = sliceMagicA;
 			constantData.SliceMagicB = sliceMagicB;
-			constantData.Near = nearZ;
-			constantData.Far = farZ;
-			constantData.FoV = camera.GetFoV();
 
 			context.SetPipelineState(m_pVisualizeLightsPSO);
 			context.SetComputeRootSignature(m_pVisualizeLightsRS.get());
@@ -276,13 +187,18 @@ void TiledForward::VisualizeLightDensity(RGGraph& graph, GraphicsDevice* pDevice
 
 			context.SetRootCBV(0, constantData);
 
-			context.BindResource(1, 0, pTarget->GetSRV());
-			context.BindResource(1, 1, pDepth->GetSRV());
-			context.BindResource(1, 2, m_pLightGridOpaque->GetSRV());
+			context.SetRootCBV(1, GetViewUniforms(resources, pTarget));
 
-			context.BindResource(2, 0, m_pVisualizationIntermediateTexture->GetUAV());
+			context.BindResource(2, 0, pTarget->GetSRV());
+			context.BindResource(2, 1, pDepth->GetSRV());
+			context.BindResource(2, 2, m_pLightGridOpaque->GetSRV());
 
-			context.Dispatch(Math::DivideAndRoundUp(pTarget->GetWidth(), 16), Math::DivideAndRoundUp(pTarget->GetHeight(), 16));
+			context.BindResource(3, 0, m_pVisualizationIntermediateTexture->GetUAV());
+
+			context.Dispatch(ComputeUtils::GetNumThreadGroups(
+				pTarget->GetWidth(), 16,
+				pTarget->GetHeight(), 16));
+
 			context.InsertUavBarrier();
 
 			context.CopyTexture(m_pVisualizationIntermediateTexture.get(), pTarget);

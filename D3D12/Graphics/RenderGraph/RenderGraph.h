@@ -97,10 +97,10 @@ public:
 		: m_Name(pName), m_RenderGraph(graph), m_Id(id)
 	{}
 
-	void Execute(CommandContext& renderContext, const RGPassResources& resources)
+	void Execute(CommandContext& context, const RGPassResources& resources)
 	{
 		check(m_ExecuteCallback.IsBound());
-		m_ExecuteCallback.Execute(renderContext, resources);
+		m_ExecuteCallback.Execute(context, resources);
 	}
 
 	template<typename ExecuteCallback>
@@ -124,7 +124,7 @@ public:
 	const char* GetName() const { return m_Name; }
 
 private:
-	DECLARE_DELEGATE(ExecutePassDelegate, CommandContext& /*renderContext*/, const RGPassResources& /*resources*/);
+	DECLARE_DELEGATE(ExecutePassDelegate, CommandContext& /*context*/, const RGPassResources& /*resources*/);
 	const char* m_Name;
 	ExecutePassDelegate m_ExecuteCallback;
 	std::vector<RGResourceHandle> m_Reads;

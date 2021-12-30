@@ -2,32 +2,25 @@
 #include "Lighting.hlsli"
 
 #define RootSig ROOT_SIG("CBV(b0), " \
-		"CBV(b2), " \
+		"CBV(b100), " \
 		"DescriptorTable(UAV(u0, numDescriptors = 1)), " \
-		"DescriptorTable(SRV(t2, numDescriptors = 12))")
+		"DescriptorTable(SRV(t0, numDescriptors = 3))")
 
-struct ShaderData
+struct PassData
 {
-	float4x4 ViewProjectionInv;
-	float4x4 Projection;
-	float4x4 PrevViewProjection;
 	int3 ClusterDimensions;
-	int NumLights;
-	float3 InvClusterDimensions;
-	float NearZ;
-	float3 ViewLocation;
-	float FarZ;
 	float Jitter;
+	float3 InvClusterDimensions;
 	float LightClusterSizeFactor;
 	float2 LightGridParams;
-	int3 LightClusterDimensions;
+	int2 LightClusterDimensions;
 };
 
-ConstantBuffer<ShaderData> cData : register(b0);
+ConstantBuffer<PassData> cPass : register(b0);
 
-StructuredBuffer<uint> tLightGrid : register(t2);
-StructuredBuffer<uint> tLightIndexList : register(t3);
-Texture3D<float4> tLightScattering : register(t4);
+StructuredBuffer<uint> tLightGrid : register(t0);
+StructuredBuffer<uint> tLightIndexList : register(t1);
+Texture3D<float4> tLightScattering : register(t2);
 RWTexture3D<float4> uOutLightScattering : register(u0);
 
 float HenyeyGreenstreinPhase(float LoV, float G)
@@ -39,11 +32,11 @@ float HenyeyGreenstreinPhase(float LoV, float G)
 
 float3 GetWorldPosition(uint3 index, float offset, out float linearDepth)
 {
-	float2 texelUV = ((float2)index.xy + 0.5f) * cData.InvClusterDimensions.xy;
-	float z = (float)(index.z + offset) * cData.InvClusterDimensions.z;
-	linearDepth = cData.FarZ + Square(saturate(z)) * (cData.NearZ - cData.FarZ);
-	float ndcZ = LinearDepthToNDC(linearDepth, cData.Projection);
-	return WorldFromDepth(texelUV, ndcZ, cData.ViewProjectionInv);
+	float2 texelUV = ((float2)index.xy + 0.5f) * cPass.InvClusterDimensions.xy;
+	float z = (float)(index.z + offset) * cPass.InvClusterDimensions.z;
+	linearDepth = cView.FarZ + Square(saturate(z)) * (cView.NearZ - cView.FarZ);
+	float ndcZ = LinearDepthToNDC(linearDepth, cView.Projection);
+	return WorldFromDepth(texelUV, ndcZ, cView.ViewProjectionInverse);
 }
 
 float3 GetWorldPosition(uint3 index, float offset)
@@ -54,14 +47,14 @@ float3 GetWorldPosition(uint3 index, float offset)
 
 uint GetLightClusterSliceFromDepth(float depth)
 {
-	return floor(log(depth) * cData.LightGridParams.x - cData.LightGridParams.y);
+	return floor(log(depth) * cPass.LightGridParams.x - cPass.LightGridParams.y);
 }
 
 uint GetLightCluster(uint2 fogCellIndex, float depth)
 {
 	uint slice = GetLightClusterSliceFromDepth(depth);
-	uint3 clusterIndex3D = uint3(floor(fogCellIndex * cData.LightClusterSizeFactor), slice);
-	return clusterIndex3D.x + (cData.LightClusterDimensions.x * (clusterIndex3D.y + cData.LightClusterDimensions.y * clusterIndex3D.z));
+	uint3 clusterIndex3D = uint3(floor(fogCellIndex * cPass.LightClusterSizeFactor), slice);
+	return clusterIndex3D.x + (cPass.LightClusterDimensions.x * (clusterIndex3D.y + cPass.LightClusterDimensions.y * clusterIndex3D.z));
 }
 
 struct FogVolume
@@ -80,15 +73,15 @@ void InjectFogLightingCS(uint3 threadId : SV_DispatchThreadID)
 	uint3 cellIndex = threadId;
 
 	float z;
-	float3 worldPosition = GetWorldPosition(cellIndex, cData.Jitter, z);
+	float3 worldPosition = GetWorldPosition(cellIndex, cPass.Jitter, z);
 
 	// Compute reprojected UVW
 	float3 voxelCenterWS = GetWorldPosition(cellIndex, 0.5f);
-	float4 reprojNDC = mul(float4(voxelCenterWS, 1), cData.PrevViewProjection);
+	float4 reprojNDC = mul(float4(voxelCenterWS, 1), cView.PreviousViewProjection);
 	reprojNDC.xyz /= reprojNDC.w;
 	float3 reprojUV = float3(reprojNDC.x * 0.5f + 0.5f, -reprojNDC.y * 0.5f + 0.5f, reprojNDC.z);
-	reprojUV.z = LinearizeDepth(reprojUV.z, cData.NearZ, cData.FarZ);
-	reprojUV.z = sqrt((reprojUV.z - cData.FarZ) / (cData.NearZ - cData.FarZ));
+	reprojUV.z = LinearizeDepth(reprojUV.z, cView.NearZ, cView.FarZ);
+	reprojUV.z = sqrt((reprojUV.z - cView.FarZ) / (cView.NearZ - cView.FarZ));
 	float4 prevScattering = tLightScattering.SampleLevel(sLinearClamp, reprojUV, 0);
 
 	float3 inScattering = 0.0f;
@@ -133,7 +126,7 @@ void InjectFogLightingCS(uint3 threadId : SV_DispatchThreadID)
 
 	if(dot(inScattering, float3(1, 1, 1)) > 0.0f)
 	{
-		float3 V = normalize(cData.ViewLocation.xyz - worldPosition);
+		float3 V = normalize(cView.ViewPosition.xyz - worldPosition);
 		float4 pos = float4(threadId.xy, 0, z);
 
 		// Iterate over all the lights and light the froxel
@@ -144,8 +137,8 @@ void InjectFogLightingCS(uint3 threadId : SV_DispatchThreadID)
 		for(i = 0; i < lightCount; ++i)
 		{
 			int lightIndex = tLightIndexList[lightOffset + i];
-			Light light = tLights[lightIndex];
-			if(light.IsEnabled() && light.IsVolumetric())
+			Light light = GetLight(lightIndex);
+			if(light.IsEnabled && light.IsVolumetric)
 			{
 				float attenuation = GetAttenuation(light, worldPosition);
 				if(attenuation <= 0.0f)
@@ -153,7 +146,7 @@ void InjectFogLightingCS(uint3 threadId : SV_DispatchThreadID)
 					continue;
 				}
 
-				if(light.CastShadows())
+				if(light.CastShadows)
 				{
 					int shadowIndex = GetShadowIndex(light, pos, worldPosition);
 					attenuation *= ShadowNoPCF(worldPosition, shadowIndex, light.InvShadowSize);
@@ -161,7 +154,7 @@ void InjectFogLightingCS(uint3 threadId : SV_DispatchThreadID)
 				}
 
 				float3 L = normalize(light.Position - worldPosition);
-				if(light.IsDirectional())
+				if(light.IsDirectional)
 				{
 					L = normalize(light.Direction);
 				}
@@ -173,7 +166,7 @@ void InjectFogLightingCS(uint3 threadId : SV_DispatchThreadID)
 		}
 	}
 
-	totalLighting += ApplyAmbientLight(1, 1, tLights[0].GetColor().rgb * 0.05f).x;
+	totalLighting += ApplyAmbientLight(1, 1, GetLight(0).GetColor().rgb * 0.05f).x;
 
 	float blendFactor = 0.05f;
 	if(any(reprojUV < 0.05f) || any(reprojUV > 0.95f))
@@ -196,9 +189,9 @@ void AccumulateFogCS(uint3 threadId : SV_DispatchThreadID, uint groupIndex : SV_
 {
 	float3 accumulatedLight = 0;
 	float accumulatedTransmittance = 1;
-	float3 previousPosition = cData.ViewLocation;
+	float3 previousPosition = cView.ViewPosition.xyz;
 
-	for(int sliceIndex = 0; sliceIndex < cData.ClusterDimensions.z; ++sliceIndex)
+	for(int sliceIndex = 0; sliceIndex < cPass.ClusterDimensions.z; ++sliceIndex)
 	{
 		float3 worldPosition = GetWorldPosition(int3(threadId.xy, sliceIndex), 0.5f);
 		float froxelLength = length(worldPosition - previousPosition);

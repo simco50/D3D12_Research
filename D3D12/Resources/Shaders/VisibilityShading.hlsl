@@ -2,22 +2,13 @@
 #include "Random.hlsli"
 #include "Lighting.hlsli"
 
-#define RootSig ROOT_SIG("CBV(b1), " \
-				"DescriptorTable(SRV(t5, numDescriptors = 13)), " \
+#define RootSig ROOT_SIG("CBV(b100), " \
+				"DescriptorTable(SRV(t0, numDescriptors = 1)), " \
 				"DescriptorTable(UAV(u0, numDescriptors = 2))")
 
-Texture2D<uint> tVisibilityTexture : register(t13);
+Texture2D<uint> tVisibilityTexture : register(t0);
 RWTexture2D<float4> uTarget : register(u0);
 RWTexture2D<float4> uNormalsTarget : register(u1);
-
-struct PerViewData
-{
-	float4x4 ViewProjection;
-	float4x4 ViewInverse;
-	uint2 ScreenDimensions;
-};
-
-ConstantBuffer<PerViewData> cViewData : register(b1);
 
 struct VertexInput
 {
@@ -37,10 +28,10 @@ struct VertexAttribute
 
 MaterialProperties GetMaterialProperties(uint materialIndex, float2 UV, float2 dx, float2 dy)
 {
-	MaterialData material = tMaterials[NonUniformResourceIndex(materialIndex)];
+	MaterialData material = GetMaterial(NonUniformResourceIndex(materialIndex));
 	MaterialProperties properties;
 	float4 baseColor = material.BaseColorFactor;
-	if(material.Diffuse >= 0)
+	if(material.Diffuse != INVALID_HANDLE)
 	{
 		baseColor *= tTexture2DTable[NonUniformResourceIndex(material.Diffuse)].SampleGrad(sMaterialSampler, UV, dx, dy);
 	}
@@ -49,21 +40,21 @@ MaterialProperties GetMaterialProperties(uint materialIndex, float2 UV, float2 d
 
 	properties.Metalness = material.MetalnessFactor;
 	properties.Roughness = material.RoughnessFactor;
-	if(material.RoughnessMetalness >= 0)
+	if(material.RoughnessMetalness != INVALID_HANDLE)
 	{
 		float4 roughnessMetalnessSample = tTexture2DTable[NonUniformResourceIndex(material.RoughnessMetalness)].SampleGrad(sMaterialSampler, UV, dx, dy);
 		properties.Metalness *= roughnessMetalnessSample.b;
 		properties.Roughness *= roughnessMetalnessSample.g;
 	}
 	properties.Emissive = material.EmissiveFactor.rgb;
-	if(material.Emissive >= 0)
+	if(material.Emissive != INVALID_HANDLE)
 	{
 		properties.Emissive *= tTexture2DTable[NonUniformResourceIndex(material.Emissive)].SampleGrad(sMaterialSampler, UV, dx, dy).rgb;
 	}
 	properties.Specular = 0.5f;
 
 	properties.NormalTS = float3(0, 0, 1);
-	if(material.Normal >= 0)
+	if(material.Normal != INVALID_HANDLE)
 	{
 		properties.NormalTS = tTexture2DTable[NonUniformResourceIndex(material.Normal)].SampleGrad(sMaterialSampler, UV, dx, dy).rgb;
 	}
@@ -137,8 +128,8 @@ float3 InterpolateWithDeriv(BaryDerivatives deriv, float3 v0, float3 v1, float3 
 [RootSignature(RootSig)]
 void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 {
-	if(dispatchThreadId.x >= cViewData.ScreenDimensions.x ||
-		dispatchThreadId.y >= cViewData.ScreenDimensions.y)
+	if(dispatchThreadId.x >= cView.ScreenDimensions.x ||
+		dispatchThreadId.y >= cView.ScreenDimensions.y)
 	{
 		return;
 	}
@@ -151,8 +142,8 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 	uint meshIndex = visibilityMask >> 16;
 	uint triangleIndex = visibilityMask & 0xFFFF;
 
-    MeshInstance instance = tMeshInstances[NonUniformResourceIndex(meshIndex)];
-	MeshData mesh = tMeshes[NonUniformResourceIndex(instance.Mesh)];
+    MeshInstance instance = GetMeshInstance(meshIndex);
+	MeshData mesh = GetMesh(instance.Mesh);
 	ByteAddressBuffer meshBuffer = tBufferTable[mesh.BufferIndex];
 
 	uint3 indices = GetPrimitive(mesh, triangleIndex);
@@ -168,14 +159,14 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
         vertices[i].Tangent = normalData.Tangent;
 	}
 
-	float2 ndc = (float2)dispatchThreadId.xy * rcp(cViewData.ScreenDimensions) * 2 - 1;
+	float2 ndc = (float2)dispatchThreadId.xy * cView.ScreenDimensionsInv * 2 - 1;
 	ndc.y *= -1;
 
-	float4 clipPos0 = mul(mul(float4(vertices[0].Position, 1), instance.World), cViewData.ViewProjection);
-	float4 clipPos1 = mul(mul(float4(vertices[1].Position, 1), instance.World), cViewData.ViewProjection);
-	float4 clipPos2 = mul(mul(float4(vertices[2].Position, 1), instance.World), cViewData.ViewProjection);
+	float4 clipPos0 = mul(mul(float4(vertices[0].Position, 1), instance.World), cView.ViewProjection);
+	float4 clipPos1 = mul(mul(float4(vertices[1].Position, 1), instance.World), cView.ViewProjection);
+	float4 clipPos2 = mul(mul(float4(vertices[2].Position, 1), instance.World), cView.ViewProjection);
 
-	BaryDerivatives derivs = InitBaryDerivatives(clipPos0, clipPos1, clipPos2, ndc, rcp(cViewData.ScreenDimensions));
+	BaryDerivatives derivs = InitBaryDerivatives(clipPos0, clipPos1, clipPos2, ndc, cView.ScreenDimensionsInv);
 
 	float2 dx, dy;
 	float2 UV = InterpolateWithDeriv(derivs, vertices[0].UV, vertices[1].UV, vertices[2].UV, dx, dy);
@@ -190,8 +181,8 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 	N = TangentSpaceNormalMapping(properties.NormalTS, TBN);
 
 	BrdfData brdfData = GetBrdfData(properties);
-	float3 V = normalize(P - cViewData.ViewInverse[3].xyz);
-	Light light = tLights[0];
+	float3 V = normalize(P - cView.ViewInverse[3].xyz);
+	Light light = GetLight(0);
 	float3 L = -light.Direction;
 	float4 color = light.GetColor();
 	LightResult result = DefaultLitBxDF(brdfData.Specular, brdfData.Roughness, brdfData.Diffuse, N, V, L, 1);

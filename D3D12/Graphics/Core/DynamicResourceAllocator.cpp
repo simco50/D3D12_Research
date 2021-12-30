@@ -69,7 +69,7 @@ DynamicAllocationManager::~DynamicAllocationManager()
 
 }
 
-Buffer* DynamicAllocationManager::AllocatePage(size_t size)
+Buffer* DynamicAllocationManager::AllocatePage(uint64 size)
 {
 	std::lock_guard<std::mutex> lockGuard(m_PageMutex);
 
@@ -89,7 +89,8 @@ Buffer* DynamicAllocationManager::AllocatePage(size_t size)
 
 Buffer* DynamicAllocationManager::CreateNewPage(uint64 size)
 {
-	std::unique_ptr<Buffer> pNewPage = GetParent()->CreateBuffer(BufferDesc::CreateBuffer((uint32)size, m_BufferFlags), "Dynamic Allocation Buffer");
+	std::string name = Sprintf("Dynamic Allocation Buffer (%f KB)", Math::BytesToKiloBytes * size);
+	std::unique_ptr<Buffer> pNewPage = GetParent()->CreateBuffer(BufferDesc::CreateBuffer((uint32)size, m_BufferFlags), name.c_str());
 	pNewPage->Map();
 	return pNewPage.release();
 }
@@ -116,13 +117,4 @@ void DynamicAllocationManager::FreeLargePages(uint64 fenceValue, const std::vect
 	{
 		m_DeleteQueue.emplace(fenceValue, pPage);
 	}
-}
-
-void DynamicAllocationManager::CollectGarbage()
-{
-	std::lock_guard<std::mutex> lockGuard(m_PageMutex);
-	GetParent()->IdleGPU();
-	m_Pages.clear();
-	m_FreedPages = {};
-	m_DeleteQueue = {};
 }

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Common.hlsli"
+#include "CommonBindings.hlsli"
 #include "ShadingModels.hlsli"
 
 #define SUPPORT_BC5 1
@@ -63,9 +63,9 @@ float3 TangentSpaceNormalMapping(float3 sampledNormal, float3x3 TBN)
 float LightTextureMask(Light light, int shadowMapIndex, float3 worldPosition)
 {
 	float mask = 1.0f;
-	if(light.LightTexture >= 0)
+	if(light.LightTexture != INVALID_HANDLE)
 	{
-		float4 lightPos = mul(float4(worldPosition, 1), cShadowData.LightViewProjections[shadowMapIndex]);
+		float4 lightPos = mul(float4(worldPosition, 1), cView.LightViewProjections[shadowMapIndex]);
 		lightPos.xyz /= lightPos.w;
 		lightPos.xy = (lightPos.xy + 1) / 2;
 		mask = SampleLevel2D(light.LightTexture, sLinearClamp, lightPos.xy, 0).r;
@@ -75,7 +75,7 @@ float LightTextureMask(Light light, int shadowMapIndex, float3 worldPosition)
 
 float Shadow3x3PCF(float3 wPos, int shadowMapIndex, float invShadowSize)
 {
-	float4x4 lightViewProjection = cShadowData.LightViewProjections[shadowMapIndex];
+	float4x4 lightViewProjection = cView.LightViewProjections[shadowMapIndex];
 	float4 lightPos = mul(float4(wPos, 1), lightViewProjection);
 	lightPos.xyz /= lightPos.w;
 	lightPos.x = lightPos.x / 2.0f + 0.5f;
@@ -83,7 +83,7 @@ float Shadow3x3PCF(float3 wPos, int shadowMapIndex, float invShadowSize)
 
 	float2 uv = lightPos.xy;
 
-	Texture2D shadowTexture = tTexture2DTable[NonUniformResourceIndex(cShadowData.ShadowMapOffset + shadowMapIndex)];
+	Texture2D shadowTexture = tTexture2DTable[NonUniformResourceIndex(cView.ShadowMapOffset + shadowMapIndex)];
 
 	const float Dilation = 2.0f;
 	float d1 = Dilation * invShadowSize * 0.125f;
@@ -106,13 +106,13 @@ float Shadow3x3PCF(float3 wPos, int shadowMapIndex, float invShadowSize)
 
 float ShadowNoPCF(float3 wPos, int shadowMapIndex, float invShadowSize)
 {
-	float4x4 lightViewProjection = cShadowData.LightViewProjections[shadowMapIndex];
+	float4x4 lightViewProjection = cView.LightViewProjections[shadowMapIndex];
 	float4 lightPos = mul(float4(wPos, 1), lightViewProjection);
 	lightPos.xyz /= lightPos.w;
 	lightPos.x = lightPos.x / 2.0f + 0.5f;
 	lightPos.y = lightPos.y / -2.0f + 0.5f;
 	float2 uv = lightPos.xy;
-	Texture2D shadowTexture = tTexture2DTable[NonUniformResourceIndex(cShadowData.ShadowMapOffset + shadowMapIndex)];
+	Texture2D shadowTexture = tTexture2DTable[NonUniformResourceIndex(cView.ShadowMapOffset + shadowMapIndex)];
 	return shadowTexture.SampleCmpLevelZero(sDepthComparison, uv, lightPos.z);
 }
 
@@ -141,17 +141,17 @@ float3 ApplyAmbientLight(float3 diffuse, float ao, float3 lightColor)
 uint GetShadowIndex(Light light, float4 pos, float3 wPos)
 {
 	int shadowIndex = light.ShadowIndex;
-	if(light.IsDirectional())
+	if(light.IsDirectional)
 	{
-		float4 splits = pos.w > cShadowData.CascadeDepths;
-		float4 cascades = cShadowData.CascadeDepths > 0;
+		float4 splits = pos.w > cView.CascadeDepths;
+		float4 cascades = cView.CascadeDepths > 0;
 		int cascadeIndex = dot(splits, cascades);
 
 		const float cascadeFadeTheshold = 0.1f;
-		float nextSplit = cShadowData.CascadeDepths[cascadeIndex];
-		float splitRange = cascadeIndex == 0 ? nextSplit : nextSplit - cShadowData.CascadeDepths[cascadeIndex - 1];
+		float nextSplit = cView.CascadeDepths[cascadeIndex];
+		float splitRange = cascadeIndex == 0 ? nextSplit : nextSplit - cView.CascadeDepths[cascadeIndex - 1];
 		float fadeFactor = (nextSplit - pos.w) / splitRange;
-		if(fadeFactor <= cascadeFadeTheshold && cascadeIndex != cShadowData.NumCascades - 1)
+		if(fadeFactor <= cascadeFadeTheshold && cascadeIndex != cView.NumCascades - 1)
 		{
 			float lerpAmount = smoothstep(0.0f, cascadeFadeTheshold, fadeFactor);
 			float dither = InterleavedGradientNoise(pos.xy);
@@ -162,7 +162,7 @@ uint GetShadowIndex(Light light, float4 pos, float3 wPos)
 		}
 		shadowIndex += cascadeIndex;
 	}
-	else if(light.IsPoint())
+	else if(light.IsPoint)
 	{
 		shadowIndex += GetCubeFaceIndex(wPos - light.Position);
 	}
@@ -185,7 +185,7 @@ LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, floa
 
 #define VISUALIZE_CASCADES 0
 #if VISUALIZE_CASCADES
-		if(light.IsDirectional())
+		if(light.IsDirectional)
 		{
 			static float4 COLORS[4] = {
 				float4(1,0,0,1),
@@ -208,7 +208,7 @@ LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, floa
 	}
 
 	float3 L = normalize(light.Position - wPos);
-	if(light.IsDirectional())
+	if(light.IsDirectional)
 	{
 		L = -light.Direction;
 	}

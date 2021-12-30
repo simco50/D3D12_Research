@@ -144,8 +144,8 @@ public:
 	ShaderResourceView* GetSRV() const { return m_pSrv; };
 	UnorderedAccessView* GetUAV() const { return m_pUav; };
 
-	int32 GetSRVIndex() const;
-	int32 GetUAVIndex() const;
+	uint32 GetSRVIndex() const;
+	uint32 GetUAVIndex() const;
 
 protected:
 	UnorderedAccessView* m_pUav = nullptr;

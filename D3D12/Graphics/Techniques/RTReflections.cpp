@@ -12,7 +12,6 @@
 #include "Graphics/Core/StateObject.h"
 #include "Graphics/RenderGraph/RenderGraph.h"
 #include "Graphics/Mesh.h"
-#include "Scene/Camera.h"
 #include "Graphics/SceneView.h"
 
 RTReflections::RTReflections(GraphicsDevice* pDevice)
@@ -24,39 +23,29 @@ RTReflections::RTReflections(GraphicsDevice* pDevice)
 	}
 }
 
-void RTReflections::Execute(RGGraph& graph, const SceneView& sceneData)
+void RTReflections::Execute(RGGraph& graph, const SceneView& sceneData, Texture* pColorTarget, Texture* pNormals, Texture* pDepth)
 {
 	RGPassBuilder rt = graph.AddPass("RT Reflections");
 	rt.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
 		{
-			context.CopyTexture(sceneData.pResolvedTarget, m_pSceneColor.get());
+			Texture* pTarget = m_pSceneColor.get();
 
-			context.InsertResourceBarrier(sceneData.pResolvedDepth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-			context.InsertResourceBarrier(sceneData.pResolvedNormals, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+			context.CopyTexture(pColorTarget, pTarget);
+
+			context.InsertResourceBarrier(pDepth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+			context.InsertResourceBarrier(pNormals, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(m_pSceneColor.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-			context.InsertResourceBarrier(sceneData.pResolvedTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+			context.InsertResourceBarrier(pColorTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
 			context.SetComputeRootSignature(m_pGlobalRS.get());
 			context.SetPipelineState(m_pRtSO);
 
 			struct Parameters
 			{
-				Matrix View;
-				Matrix ViewInverse;
-				Matrix ProjectionInverse;
-				uint32 NumLights;
 				float ViewPixelSpreadAngle;
-				uint32 TLASIndex;
-				uint32 FrameIndex;
 			} parameters{};
 
-			parameters.View = sceneData.pCamera->GetView();
-			parameters.ViewInverse = sceneData.pCamera->GetViewInverse();
-			parameters.ProjectionInverse = sceneData.pCamera->GetProjectionInverse();
-			parameters.NumLights = sceneData.pLightBuffer->GetNumElements();
-			parameters.ViewPixelSpreadAngle = atanf(2.0f * tanf(sceneData.pCamera->GetFoV() / 2) / (float)m_pSceneColor->GetHeight());
-			parameters.TLASIndex = sceneData.SceneTLAS;
-			parameters.FrameIndex = sceneData.FrameIndex;
+			parameters.ViewPixelSpreadAngle = atanf(2.0f * tanf(sceneData.View.FoV / 2) / (float)pTarget->GetHeight());
 
 			ShaderBindingTable bindingTable(m_pRtSO);
 			bindingTable.BindRayGenShader("RayGen");
@@ -65,22 +54,17 @@ void RTReflections::Execute(RGGraph& graph, const SceneView& sceneData)
 			bindingTable.BindHitGroup("ReflectionHitGroup", 0);
 
 			const D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
-				sceneData.pLightBuffer->GetSRV()->GetDescriptor(),
-				sceneData.pLightBuffer->GetSRV()->GetDescriptor() /*dummy*/,
-				sceneData.pResolvedDepth->GetSRV()->GetDescriptor(),
-				m_pSceneColor->GetSRV()->GetDescriptor(),
-				sceneData.pResolvedNormals->GetSRV()->GetDescriptor(),
-				sceneData.pMaterialBuffer->GetSRV()->GetDescriptor(),
-				sceneData.pMeshBuffer->GetSRV()->GetDescriptor(),
-				sceneData.pMeshInstanceBuffer->GetSRV()->GetDescriptor(),
+				pDepth->GetSRV()->GetDescriptor(),
+				pTarget->GetSRV()->GetDescriptor(),
+				pNormals->GetSRV()->GetDescriptor(),
 			};
 
 			context.SetRootCBV(0, parameters);
-			context.SetRootCBV(1, *sceneData.pShadowData);
-			context.BindResource(2, 0, sceneData.pResolvedTarget->GetUAV());
+			context.SetRootCBV(1, GetViewUniforms(sceneData, pColorTarget));
+			context.BindResource(2, 0, pColorTarget->GetUAV());
 			context.BindResources(3, 0, srvs, ARRAYSIZE(srvs));
 
-			context.DispatchRays(bindingTable, sceneData.pResolvedTarget->GetWidth(), sceneData.pResolvedTarget->GetHeight());
+			context.DispatchRays(bindingTable, pColorTarget->GetWidth(), pColorTarget->GetHeight());
 		});
 }
 

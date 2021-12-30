@@ -1,16 +1,10 @@
 #include "CommonBindings.hlsli"
 
-#define RootSigVS ROOT_SIG("CBV(b0, visibility=SHADER_VISIBILITY_GEOMETRY), " \
-				"DescriptorTable(SRV(t0, numDescriptors = 3), visibility=SHADER_VISIBILITY_VERTEX)")
+#define RootSigVS ROOT_SIG("CBV(b100), " \
+				"DescriptorTable(SRV(t0, numDescriptors = 3))")
 
 #define MAX_LIGHTS_PER_BUCKET 10
 
-struct PassParameters
-{
-	float4x4 Projection;
-};
-
-ConstantBuffer<PassParameters> cPassData : register(b0);
 StructuredBuffer<AABB> tAABBs : register(t0);
 StructuredBuffer<uint2> tLightGrid : register(t1);
 Texture2D tHeatmapTexture : register(t2);
@@ -84,7 +78,7 @@ void GSMain(point InterpolantsGSToPS input[1], inout TriangleStream<Interpolants
 		else
 		{
 			InterpolantsVSToPS output;
-			output.position = mul(positions[indices[i]], cPassData.Projection);
+			output.position = mul(positions[indices[i]], cView.Projection);
 			output.color = input[0].color;
 			outputStream.Append(output);
 		}

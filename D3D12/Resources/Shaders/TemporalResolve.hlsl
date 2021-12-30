@@ -31,17 +31,9 @@
 #define TAA_LUMINANCE_WEIGHT		0						   // [Lottes]
 #define TAA_DILATE_VELOCITY		 1
 
-#define RootSig ROOT_SIG("CBV(b0), " \
+#define RootSig ROOT_SIG("CBV(b100), " \
 				"DescriptorTable(UAV(u0, numDescriptors = 1)), " \
 				"DescriptorTable(SRV(t0, numDescriptors = 4))")
-
-struct ShaderParameters
-{
-	float2 InvScreenDimensions;
-	float2 Jitter;
-};
-
-ConstantBuffer<ShaderParameters> cParameters : register(b0);
 
 Texture2D tVelocity : register(t0);
 Texture2D tPreviousColor : register(t1);
@@ -118,11 +110,11 @@ float3 FilterHistory(Texture2D tex, SamplerState textureSampler, float2 uv, floa
 	float2 w3 =		 c  * f3 -				c * f2;
 
 	float2 w12 = w1 + w2;
-	float2 tc12 = cParameters.InvScreenDimensions * (centerPosition + w2 / w12);
+	float2 tc12 = cView.ScreenDimensionsInv * (centerPosition + w2 / w12);
 	float3 centerColor = SampleColor(tex, textureSampler, float2(tc12.x, tc12.y));
 
-	float2 tc0 = cParameters.InvScreenDimensions * (centerPosition - 1.0);
-	float2 tc3 = cParameters.InvScreenDimensions * (centerPosition + 2.0);
+	float2 tc0 = cView.ScreenDimensionsInv * (centerPosition - 1.0);
+	float2 tc3 = cView.ScreenDimensionsInv * (centerPosition + 2.0);
 	float3 color = SampleColor(tex, textureSampler, float2(tc12.x, tc0.y )) * (w12.x * w0.y ) +
 				   SampleColor(tex, textureSampler, float2(tc0.x,  tc12.y)) * (w0.x  * w12.y) +
 				   centerColor											  * (w12.x * w12.y) +
@@ -200,7 +192,7 @@ void CSMain(
 	uint3 GroupThreadId : SV_GroupThreadID,
 	uint3 GroupId : SV_GroupID)
 {
-	const float2 dxdy = cParameters.InvScreenDimensions;
+	const float2 dxdy = cView.ScreenDimensionsInv;
 	uint2 pixelIndex = ThreadId.xy;
 	float2 uv = dxdy * ((float2)pixelIndex + 0.5f);
 	float2 dimensions;

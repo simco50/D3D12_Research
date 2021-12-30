@@ -69,7 +69,7 @@ PipelineStateInitializer::PipelineStateInitializer()
 
 void PipelineStateInitializer::SetName(const char* pName)
 {
-	m_pName = pName;
+	m_Name = pName;
 }
 
 void PipelineStateInitializer::SetDepthOnlyTarget(DXGI_FORMAT dsvFormat, uint32 msaa)
@@ -333,12 +333,17 @@ D3D12_PIPELINE_STATE_STREAM_DESC PipelineStateInitializer::GetDesc()
 		if (pShader)
 		{
 			GetByteCode((ShaderType)i) = D3D12_SHADER_BYTECODE{ pShader->GetByteCode(), pShader->GetByteCodeSize() };
+			if (m_Name.empty())
+			{
+				m_Name = Sprintf("%s (Unnamed)", pShader->GetEntryPoint());
+			}
 		}
 	}
 
 	D3D12_PIPELINE_STATE_STREAM_DESC streamDesc;
 	streamDesc.pPipelineStateSubobjectStream = m_pSubobjectData.data();
 	streamDesc.SizeInBytes = m_Size;
+
 	return streamDesc;
 }
 
@@ -505,7 +510,7 @@ void PipelineState::Create(const PipelineStateInitializer& initializer)
 
 	D3D12_PIPELINE_STATE_STREAM_DESC streamDesc = m_Desc.GetDesc();
 	VERIFY_HR_EX(pDevice2->CreatePipelineState(&streamDesc, IID_PPV_ARGS(m_pPipelineState.ReleaseAndGetAddressOf())), GetParent()->GetDevice());
-	D3D::SetObjectName(m_pPipelineState.Get(), m_Desc.m_pName);
+	D3D::SetObjectName(m_pPipelineState.Get(), m_Desc.m_Name.c_str());
 }
 
 void PipelineState::ConditionallyReload()
@@ -514,7 +519,7 @@ void PipelineState::ConditionallyReload()
 	{
 		Create(m_Desc);
 		m_NeedsReload = false;
-		E_LOG(Info, "Reloaded Pipeline: %s", m_Desc.m_pName);
+		E_LOG(Info, "Reloaded Pipeline: %s", m_Desc.m_Name.c_str());
 	}
 }
 

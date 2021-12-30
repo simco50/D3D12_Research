@@ -39,7 +39,7 @@
 #define CONCAT_IMPL( x, y ) x##y
 #define MACRO_CONCAT( x, y ) CONCAT_IMPL( x, y )
 
-#define checkf(expression, msg, ...) if((expression)){} else Console::LogFormat(LogType::Error, msg, ##__VA_ARGS__)
+#define checkf(expression, msg, ...) if((expression)){} else {__debugbreak(); Console::LogFormat(LogType::FatalError, msg, ##__VA_ARGS__);}
 #define check(expression) checkf(expression, "")
 #define noEntry() checkf(false, "Should not have reached this point!")
 #define validateOncef(expression, msg, ...) if(!(expression)) { \

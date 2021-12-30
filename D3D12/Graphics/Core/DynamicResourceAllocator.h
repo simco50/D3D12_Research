@@ -25,7 +25,6 @@ public:
 
 	void FreePages(uint64 fenceValue, const std::vector<Buffer*> pPages);
 	void FreeLargePages(uint64 fenceValue, const std::vector<Buffer*> pLargePages);
-	void CollectGarbage();
 
 private:
 	BufferFlag m_BufferFlags;

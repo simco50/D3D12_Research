@@ -2,17 +2,11 @@
 #include "CommonBindings.hlsli"
 #include "Random.hlsli"
 
-#define RootSig ROOT_SIG("RootConstants(num32BitConstants=2, b0), " \
-                "CBV(b1), " \
+#define RootSig ROOT_SIG("RootConstants(num32BitConstants=3, b0), " \
+                "CBV(b100), " \
                 "DescriptorTable(SRV(t10, numDescriptors = 11))")
 
-struct PerViewData
-{
-    float4x4 ViewProjection;
-};
-
-ConstantBuffer<PerObjectData> cObjectData : register(b0);
-ConstantBuffer<PerViewData> cViewData : register(b1);
+ConstantBuffer<InstanceData> cObject : register(b0);
 
 struct Vertex
 {
@@ -25,12 +19,12 @@ struct Vertex
 [RootSignature(RootSig)]
 float4 VSMain(uint vertexId : SV_VertexID) : SV_POSITION
 {
-    MeshInstance instance = tMeshInstances[cObjectData.Index];
-    MeshData mesh = tMeshes[instance.Mesh];
+    MeshData mesh = GetMesh(cObject.Mesh);
+	float4x4 world = GetTransform(cObject.World);
 	ByteAddressBuffer meshBuffer = tBufferTable[mesh.BufferIndex];
 
     float3 position = UnpackHalf3(meshBuffer.Load<uint2>(mesh.PositionsOffset + vertexId * sizeof(uint2)));
-    return mul(mul(float4(position, 1.0f), instance.World), cViewData.ViewProjection);
+    return mul(mul(float4(position, 1.0f), world), cView.ViewProjection);
 }
 
 void PSMain(
@@ -39,5 +33,5 @@ void PSMain(
     float3 barycentrics : SV_Barycentrics,
     out uint outPrimitiveMask : SV_TARGET0)
 {
-    outPrimitiveMask = (cObjectData.Index << 16) | (primitiveIndex & 0xFFFF);
+    outPrimitiveMask = (cObject.World << 16) | (primitiveIndex & 0xFFFF);
 }

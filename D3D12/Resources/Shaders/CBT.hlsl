@@ -41,9 +41,6 @@ struct SumReductionData
 struct UpdateData
 {
 	float4x4 World;
-	float4x4 WorldView;
-	float4x4 WorldViewProjection;
-	float4 FrustumPlanes[6];
 	float HeightmapSizeInv;
 	float ScreenSizeBias;
 	float HeightmapVarianceBias;
@@ -318,13 +315,13 @@ bool TriangleFrustumIntersect(float3x3 tri)
 	float3 bmax = mul(float4(max(max(tri[0], tri[1]), tri[2]), 1), cUpdateData.World).xyz;
 	AABB aabb;
 	AABBFromMinMax(aabb, bmin, bmax);
-	return BoxFrustumIntersect(aabb, cUpdateData.FrustumPlanes);
+	return BoxFrustumIntersect(aabb, cView.FrustumPlanes);
 }
 
 float2 TriangleLOD(float3x3 tri)
 {
-	float3 p0 = mul(float4(tri[0], 1), cUpdateData.WorldView).xyz;
-	float3 p2 = mul(float4(tri[2], 1), cUpdateData.WorldView).xyz;
+	float3 p0 = mul(mul(float4(tri[0], 1), cUpdateData.World), cView.View).xyz;
+	float3 p2 = mul(mul(float4(tri[2], 1), cUpdateData.World), cView.View).xyz;
 
 	float3 c = (p0 + p2) * 0.5f;
 	float3 v = (p2 - p0);
@@ -507,7 +504,7 @@ void RenderMS(
 	for(uint i = 0; i < 3; ++i)
 	{
 		uint index = outputIndex * 3 + i;
-		vertices[index].Position = mul(float4(tri[i], 1), cUpdateData.WorldViewProjection);
+		vertices[index].Position = mul(mul(float4(tri[i], 1), cUpdateData.World), cView.ViewProjection);
 		vertices[index].UV = tri[i].xz;
 		vertices[index].HeapIndex = heapIndex;
 	}
@@ -545,7 +542,7 @@ void RenderGS(point uint instanceID[1] : INSTANCE_ID, inout TriangleStream<Verte
 			{
 				VertexOut v;
 				v.UV = tri[i].xz;
-				v.Position = mul(float4(tri[i], 1), cUpdateData.WorldViewProjection);
+				v.Position = mul(mul(float4(tri[i], 1), cUpdateData.World), cView.ViewProjection);
 				v.HeapIndex = heapIndex;
 				triStream.Append(v);
 			}
@@ -563,7 +560,7 @@ void RenderVS(uint vertexID : SV_VertexID, uint instanceID : SV_InstanceID, out 
 	float3 tri = GetVertices(heapIndex)[vertexID];
 
 	vertex.UV = tri.xz;
-	vertex.Position = mul(float4(tri, 1), cUpdateData.WorldViewProjection);
+	vertex.Position = mul(mul(float4(tri, 1), cUpdateData.World), cView.ViewProjection);
 	vertex.HeapIndex = heapIndex;
 }
 #endif

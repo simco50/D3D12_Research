@@ -1,26 +1,14 @@
 #include "CommonBindings.hlsli"
 #include "Constants.hlsli"
 
-#define RootSig ROOT_SIG("CBV(b0), " \
+#define RootSig ROOT_SIG("CBV(b100), " \
 				"DescriptorTable(UAV(u0, numDescriptors = 5)), " \
-				"DescriptorTable(SRV(t0, numDescriptors = 2))")
+				"DescriptorTable(SRV(t0, numDescriptors = 1))")
 
 #define MAX_LIGHTS_PER_TILE 256
 #define BLOCK_SIZE 16
 #define SPLITZ_CULLING 1
 
-struct ShaderParameters
-{
-	float4x4 View;
-	float4x4 ProjectionInverse;
-	uint4 NumThreadGroups;
-	float2 ScreenDimensionsInv;
-	uint LightCount;
-};
-
-ConstantBuffer<ShaderParameters> cPassData : register(b0);
-
-StructuredBuffer<Light> tSceneLights : register(t1);
 Texture2D tDepthTexture : register(t0);
 
 globallycoherent RWStructuredBuffer<uint> uLightIndexCounter : register(u0);
@@ -118,14 +106,14 @@ void CSMain(uint3 groupId : SV_GroupID, uint3 threadID : SV_DispatchThreadID, ui
 	if(groupIndex == 0)
 	{
 		float3 viewSpace[8];
-		viewSpace[0] = ScreenToView(float4(groupId.xy * BLOCK_SIZE, fMinDepth, 1.0f), cPassData.ScreenDimensionsInv, cPassData.ProjectionInverse).xyz;
-		viewSpace[1] = ScreenToView(float4(float2(groupId.x + 1, groupId.y) * BLOCK_SIZE, fMinDepth, 1.0f), cPassData.ScreenDimensionsInv, cPassData.ProjectionInverse).xyz;
-		viewSpace[2] = ScreenToView(float4(float2(groupId.x, groupId.y + 1) * BLOCK_SIZE, fMinDepth, 1.0f), cPassData.ScreenDimensionsInv, cPassData.ProjectionInverse).xyz;
-		viewSpace[3] = ScreenToView(float4(float2(groupId.x + 1, groupId.y + 1) * BLOCK_SIZE, fMinDepth, 1.0f), cPassData.ScreenDimensionsInv, cPassData.ProjectionInverse).xyz;
-		viewSpace[4] = ScreenToView(float4(groupId.xy * BLOCK_SIZE, fMaxDepth, 1.0f), cPassData.ScreenDimensionsInv, cPassData.ProjectionInverse).xyz;
-		viewSpace[5] = ScreenToView(float4(float2(groupId.x + 1, groupId.y) * BLOCK_SIZE, fMaxDepth, 1.0f), cPassData.ScreenDimensionsInv, cPassData.ProjectionInverse).xyz;
-		viewSpace[6] = ScreenToView(float4(float2(groupId.x, groupId.y + 1) * BLOCK_SIZE, fMaxDepth, 1.0f), cPassData.ScreenDimensionsInv, cPassData.ProjectionInverse).xyz;
-		viewSpace[7] = ScreenToView(float4(float2(groupId.x + 1, groupId.y + 1) * BLOCK_SIZE, fMaxDepth, 1.0f), cPassData.ScreenDimensionsInv, cPassData.ProjectionInverse).xyz;
+		viewSpace[0] = ScreenToView(float4(groupId.xy * BLOCK_SIZE, fMinDepth, 1.0f), cView.ScreenDimensionsInv, cView.ProjectionInverse).xyz;
+		viewSpace[1] = ScreenToView(float4(float2(groupId.x + 1, groupId.y) * BLOCK_SIZE, fMinDepth, 1.0f), cView.ScreenDimensionsInv, cView.ProjectionInverse).xyz;
+		viewSpace[2] = ScreenToView(float4(float2(groupId.x, groupId.y + 1) * BLOCK_SIZE, fMinDepth, 1.0f), cView.ScreenDimensionsInv, cView.ProjectionInverse).xyz;
+		viewSpace[3] = ScreenToView(float4(float2(groupId.x + 1, groupId.y + 1) * BLOCK_SIZE, fMinDepth, 1.0f), cView.ScreenDimensionsInv, cView.ProjectionInverse).xyz;
+		viewSpace[4] = ScreenToView(float4(groupId.xy * BLOCK_SIZE, fMaxDepth, 1.0f), cView.ScreenDimensionsInv, cView.ProjectionInverse).xyz;
+		viewSpace[5] = ScreenToView(float4(float2(groupId.x + 1, groupId.y) * BLOCK_SIZE, fMaxDepth, 1.0f), cView.ScreenDimensionsInv, cView.ProjectionInverse).xyz;
+		viewSpace[6] = ScreenToView(float4(float2(groupId.x, groupId.y + 1) * BLOCK_SIZE, fMaxDepth, 1.0f), cView.ScreenDimensionsInv, cView.ProjectionInverse).xyz;
+		viewSpace[7] = ScreenToView(float4(float2(groupId.x + 1, groupId.y + 1) * BLOCK_SIZE, fMaxDepth, 1.0f), cView.ScreenDimensionsInv, cView.ProjectionInverse).xyz;
 
 		GroupFrustum.Planes[0] = CalculatePlane(float3(0, 0, 0), viewSpace[6], viewSpace[4]);
 		GroupFrustum.Planes[1] = CalculatePlane(float3(0, 0, 0), viewSpace[5], viewSpace[7]);
@@ -144,12 +132,12 @@ void CSMain(uint3 groupId : SV_GroupID, uint3 threadID : SV_DispatchThreadID, ui
 	}
 
 	// Convert depth values to view space.
-	float minDepthVS = ScreenToView(float4(0, 0, fMinDepth, 1), cPassData.ScreenDimensionsInv, cPassData.ProjectionInverse).z;
-	float maxDepthVS = ScreenToView(float4(0, 0, fMaxDepth, 1), cPassData.ScreenDimensionsInv, cPassData.ProjectionInverse).z;
-	float nearClipVS = ScreenToView(float4(0, 0, 1, 1), cPassData.ScreenDimensionsInv, cPassData.ProjectionInverse).z;
+	float minDepthVS = ScreenToView(float4(0, 0, fMinDepth, 1), cView.ScreenDimensionsInv, cView.ProjectionInverse).z;
+	float maxDepthVS = ScreenToView(float4(0, 0, fMaxDepth, 1), cView.ScreenDimensionsInv, cView.ProjectionInverse).z;
+	float nearClipVS = ScreenToView(float4(0, 0, 1, 1), cView.ScreenDimensionsInv, cView.ProjectionInverse).z;
 
 #if SPLITZ_CULLING
-	float depthVS = ScreenToView(float4(0, 0, fDepth, 1), cPassData.ScreenDimensionsInv, cPassData.ProjectionInverse).z;
+	float depthVS = ScreenToView(float4(0, 0, fDepth, 1), cView.ScreenDimensionsInv, cView.ProjectionInverse).z;
 	float depthRange = 31.0f / (maxDepthVS - minDepthVS);
 	uint cellIndex = max(0, min(31, floor((depthVS - minDepthVS) * depthRange)));
 	InterlockedOr(DepthMask, 1u << cellIndex);
@@ -164,15 +152,15 @@ void CSMain(uint3 groupId : SV_GroupID, uint3 threadID : SV_DispatchThreadID, ui
 
 	//Perform the light culling
 	[loop]
-	for(uint i = groupIndex; i < cPassData.LightCount; i += BLOCK_SIZE * BLOCK_SIZE)
+	for(uint i = groupIndex; i < cView.LightCount; i += BLOCK_SIZE * BLOCK_SIZE)
 	{
-		Light light = tSceneLights[i];
+		Light light = GetLight(i);
 
-		if(light.IsPoint())
+		if(light.IsPoint)
 		{
 			Sphere sphere = (Sphere)0;
 			sphere.Radius = light.Range;
-			sphere.Position = mul(float4(light.Position, 1.0f), cPassData.View).xyz;
+			sphere.Position = mul(float4(light.Position, 1.0f), cView.View).xyz;
 			if (SphereInFrustum(sphere, GroupFrustum, nearClipVS, maxDepthVS))
 			{
 				AddLightForTransparant(i);
@@ -188,11 +176,11 @@ void CSMain(uint3 groupId : SV_GroupID, uint3 threadID : SV_DispatchThreadID, ui
 				}
 			}
 		}
-		else if(light.IsSpot())
+		else if(light.IsSpot)
 		{
 			Sphere sphere;
 			sphere.Radius = light.Range * 0.5f / pow(light.SpotlightAngles.y, 2);
-			sphere.Position = mul(float4(light.Position, 1), cPassData.View).xyz + mul(light.Direction, (float3x3)cPassData.View) * sphere.Radius;
+			sphere.Position = mul(float4(light.Position, 1), cView.View).xyz + mul(light.Direction, (float3x3)cView.View) * sphere.Radius;
 			if (SphereInFrustum(sphere, GroupFrustum, nearClipVS, maxDepthVS))
 			{
 				AddLightForTransparant(i);

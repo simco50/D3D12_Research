@@ -2,7 +2,6 @@
 class GraphicsDevice;
 class RootSignature;
 class Texture;
-class Camera;
 class RGGraph;
 class PipelineState;
 struct SceneView;
@@ -13,7 +12,7 @@ public:
 	SSAO(GraphicsDevice* pDevice);
 
 	void OnResize(int windowWidth, int windowHeight);
-	void Execute(RGGraph& graph, Texture* pTarget, const SceneView& sceneData);
+	void Execute(RGGraph& graph, const SceneView& sceneData, Texture* pTarget, Texture* pDepth);
 
 private:
 	void SetupPipelines();

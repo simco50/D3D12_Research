@@ -1,5 +1,6 @@
 #pragma once
 #include "Graphics/Core/ShaderInterop.h"
+#include "Graphics/Core/DescriptorHandle.h"
 
 enum class LightType
 {
@@ -20,7 +21,7 @@ struct Light
 	float Intensity = 1;
 	float Range = 1;
 	bool VolumetricLighting = false;
-	int LightTexture = -1;
+	uint32 LightTexture = DescriptorHandle::InvalidHeapIndex;
 	int ShadowIndex = -1;
 	int ShadowMapSize = 512;
 	bool CastShadows = false;
@@ -38,31 +39,12 @@ struct Light
 		data.ShadowIndex = CastShadows ? ShadowIndex : -1;
 		data.InvShadowSize = 1.0f / ShadowMapSize;
 		data.LightTexture = LightTexture;
-		data.Flags = 0;
-		if (VolumetricLighting)
-		{
-			data.Flags |= ShaderInterop::LF_Volumetrics;
-		}
-		if (Intensity > 0)
-		{
-			data.Flags |= ShaderInterop::LF_Enabled;
-		}
-		if (CastShadows)
-		{
-			data.Flags |= ShaderInterop::LF_CastShadow;
-		}
-		if (Type == LightType::Point)
-		{
-			data.Flags |= ShaderInterop::LF_PointLight;
-		}
-		else if (Type == LightType::Spot)
-		{
-			data.Flags |= ShaderInterop::LF_SpotLight;
-		}
-		else if (Type == LightType::Directional)
-		{
-			data.Flags |= ShaderInterop::LF_DirectionalLight;
-		}
+		data.IsEnabled = Intensity > 0 ? 1 : 0;
+		data.IsVolumetric = VolumetricLighting;
+		data.CastShadows = CastShadows;
+		data.IsPoint = Type == LightType::Point;
+		data.IsSpot = Type == LightType::Spot;
+		data.IsDirectional = Type == LightType::Directional;
 		return data;
 	}
 

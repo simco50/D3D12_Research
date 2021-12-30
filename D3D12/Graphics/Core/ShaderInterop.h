@@ -92,28 +92,10 @@ namespace ShaderInterop
 	{
 		uint Material;
 		uint Mesh;
-		float4x4 World;
+		uint World;
 	};
 
-	struct PerObjectData
-	{
-		uint Index;
-	};
-
-	enum LightFlags : uint
-	{
-		LF_None = 0,
-		LF_Enabled = 1 << 0,
-		LF_CastShadow = 1 << 1,
-		LF_Volumetrics = 1 << 2,
-		LF_PointAttenuation = 1 << 3,
-		LF_DirectionalAttenuation = 1 << 4,
-
-		LF_LightTypeMask = LF_PointAttenuation | LF_DirectionalAttenuation,
-		LF_PointLight = LF_PointAttenuation,
-		LF_SpotLight = LF_PointAttenuation | LF_DirectionalAttenuation,
-		LF_DirectionalLight = LF_None,
-	};
+	typedef MeshInstance InstanceData;
 
 	inline float4 UIntToColor(uint c)
 	{
@@ -138,35 +120,66 @@ namespace ShaderInterop
 	struct Light
 	{
 		float3 Position;
-		uint Flags;
-		float3 Direction;
 		uint Color;
-		float2 SpotlightAngles;
+		float3 Direction;
 		float Intensity;
+		float2 SpotlightAngles;
 		float Range;
 		int ShadowIndex;
 		float InvShadowSize;
-		int LightTexture;
+		uint LightTexture;
+
+		// flags
+		uint IsEnabled : 1;
+		uint IsSpot : 1;
+		uint IsPoint: 1;
+		uint IsDirectional : 1;
+		uint IsVolumetric : 1;
+		uint CastShadows : 1;
 
 		float4 GetColor() { return UIntToColor(Color); }
 
-		bool IsEnabled() { return EnumHasAllFlags(Flags, LF_Enabled); }
-		bool CastShadows() { return EnumHasAllFlags(Flags, LF_CastShadow); }
-		bool IsVolumetric() { return EnumHasAllFlags(Flags, LF_Volumetrics); }
-		bool PointAttenuation() { return EnumHasAllFlags(Flags, LF_PointAttenuation); }
-		bool DirectionalAttenuation() { return EnumHasAllFlags(Flags, LF_DirectionalAttenuation); }
-
-		bool IsDirectional() { return (Flags & LF_LightTypeMask) == LF_DirectionalLight; }
-		bool IsPoint() { return (Flags & LF_LightTypeMask) == LF_PointLight; }
-		bool IsSpot() { return (Flags & LF_LightTypeMask) == LF_SpotLight; }
+		bool PointAttenuation() { return IsPoint || IsSpot; }
+		bool DirectionalAttenuation() { return IsSpot; }
 	};
 
-	struct ShadowData
+	struct ViewUniforms
 	{
 		float4x4 LightViewProjections[MAX_SHADOW_CASTERS];
 		float4 CascadeDepths;
 		uint NumCascades;
 		uint ShadowMapOffset;
+		uint2 padd;
+
+		float4x4 View;
+		float4x4 ViewInverse;
+		float4x4 Projection;
+		float4x4 ProjectionInverse;
+		float4x4 ViewProjection;
+		float4x4 ViewProjectionInverse;
+		float4x4 PreviousViewProjection;
+		float4x4 ReprojectionMatrix;
+		float4 ViewPosition;
+		float4 FrustumPlanes[6];
+		float2 ScreenDimensions;
+		float2 ScreenDimensionsInv;
+		float2 ViewportDimensions;
+		float2 ViewportDimensionsInv;
+		float2 ViewJitter;
+		float NearZ;
+		float FarZ;
+		float FoV;
+
+		uint FrameIndex;
+		uint SsrSamples;
+		uint LightCount;
+
+		uint TLASIndex;
+		uint MeshesIndex;
+		uint MaterialsIndex;
+		uint MeshInstancesIndex;
+		uint TransformsIndex;
+		uint LightsIndex;
 	};
 
 #ifdef __cplusplus

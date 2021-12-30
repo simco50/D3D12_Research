@@ -245,12 +245,12 @@ GraphicsDevice::GraphicsDevice(IDXGIAdapter4* pAdapter)
 	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_COMPUTE] = std::make_unique<CommandQueue>(this, D3D12_COMMAND_LIST_TYPE_COMPUTE);
 	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_COPY] = std::make_unique<CommandQueue>(this, D3D12_COMMAND_LIST_TYPE_COPY);
 
+	m_pFrameFence = std::make_unique<Fence>(this, 1, "Frame Fence");
+
 	// Allocators
 	m_pDynamicAllocationManager = std::make_unique<DynamicAllocationManager>(this, BufferFlag::Upload);
-	m_pGlobalViewHeap = std::make_unique<GlobalOnlineDescriptorHeap>(this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 1000, 10000);
-	m_pPersistentViewHeap = std::make_unique<PersistentDescriptorAllocator>(m_pGlobalViewHeap.get());
-	m_pGlobalSamplerHeap = std::make_unique<GlobalOnlineDescriptorHeap>(this, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, 64, 2048);
-	m_pPersistentSamplerHeap = std::make_unique<PersistentDescriptorAllocator>(m_pGlobalSamplerHeap.get());
+	m_pGlobalViewHeap = std::make_unique<GlobalOnlineDescriptorHeap>(this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 256, 8192);
+	m_pGlobalSamplerHeap = std::make_unique<GlobalOnlineDescriptorHeap>(this, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, 32, 2048);
 
 	check(m_DescriptorHeaps.size() == D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES);
 	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV] = std::make_unique<OfflineDescriptorAllocator>(this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 256);
@@ -338,10 +338,13 @@ void GraphicsDevice::WaitForFence(uint64 fenceValue)
 void GraphicsDevice::TickFrame()
 {
 	m_DeleteQueue.Clean();
+	m_pFrameFence->Signal(GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT));
 }
 
 void GraphicsDevice::IdleGPU()
 {
+	TickFrame();
+	m_pFrameFence->CpuWait(m_pFrameFence->GetLastSignaledValue());
 	for (auto& pCommandQueue : m_CommandQueues)
 	{
 		if (pCommandQueue)
@@ -353,7 +356,7 @@ void GraphicsDevice::IdleGPU()
 
 DescriptorHandle GraphicsDevice::StoreViewDescriptor(D3D12_CPU_DESCRIPTOR_HANDLE view)
 {
-	DescriptorHandle handle = m_pPersistentViewHeap->Allocate();
+	DescriptorHandle handle = m_pGlobalViewHeap->AllocatePersistent();
 	m_pDevice->CopyDescriptorsSimple(1, handle.CpuHandle, view, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 	return handle;
 }
@@ -362,7 +365,7 @@ void GraphicsDevice::FreeViewDescriptor(DescriptorHandle& handle)
 {
 	if (handle.HeapIndex != DescriptorHandle::InvalidHeapIndex)
 	{
-		m_pPersistentViewHeap->Free(handle.HeapIndex);
+		m_pGlobalViewHeap->FreePersistent(handle.HeapIndex);
 	}
 }
 
@@ -386,7 +389,7 @@ ID3D12Resource* GraphicsDevice::CreateResource(const D3D12_RESOURCE_DESC& desc, 
 
 void GraphicsDevice::ReleaseResource(ID3D12Resource* pResource)
 {
-	m_DeleteQueue.EnqueueResource(pResource, GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT)->GetFence());
+	m_DeleteQueue.EnqueueResource(pResource, GetFrameFence());
 }
 
 PipelineState* GraphicsDevice::CreatePipeline(const PipelineStateInitializer& psoDesc)
@@ -459,6 +462,7 @@ void GraphicsCapabilities::Initialize(GraphicsDevice* pDevice)
 	check(m_FeatureSupport.Init(pDevice->GetDevice()) == S_OK);
 	checkf(m_FeatureSupport.ResourceHeapTier() >= D3D12_RESOURCE_HEAP_TIER_2, "Device does not support Resource Heap Tier 2 or higher. Tier 1 is not supported");
 	checkf(m_FeatureSupport.ResourceBindingTier() >= D3D12_RESOURCE_BINDING_TIER_3, "Device does not support Resource Binding Tier 3 or higher. Tier 2 and under is not supported.");
+	checkf(m_FeatureSupport.HighestShaderModel() >= D3D_SHADER_MODEL_6_6, "Device does not support SM 6.6 which is required for dynamic indexing");
 
 	RenderPassTier = m_FeatureSupport.RenderPassesTier();
 	RayTracingTier = m_FeatureSupport.RaytracingTier();

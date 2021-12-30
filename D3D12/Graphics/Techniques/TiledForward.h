@@ -4,11 +4,22 @@ class RootSignature;
 class GraphicsDevice;
 class PipelineState;
 class Texture;
-class Camera;
 class Buffer;
 class UnorderedAccessView;
 class RGGraph;
 struct SceneView;
+
+struct TiledForwardParameters
+{
+	Texture* pColorTarget;
+	Texture* pResolvedColorTarget;
+	Texture* pNormalsTarget;
+	Texture* pResolvedNormalsTarget;
+	Texture* pDepth;
+	Texture* pResolvedDepth;
+	Texture* pAmbientOcclusion;
+	Texture* pPreviousColorTarget;
+};
 
 class TiledForward
 {
@@ -17,8 +28,8 @@ public:
 
 	void OnResize(int windowWidth, int windowHeight);
 
-	void Execute(RGGraph& graph, const SceneView& resources);
-	void VisualizeLightDensity(RGGraph& graph, GraphicsDevice* pDevice, Camera& camera, Texture* pTarget, Texture* pDepth);
+	void Execute(RGGraph& graph, const SceneView& resources, const TiledForwardParameters& parameters);
+	void VisualizeLightDensity(RGGraph& graph, GraphicsDevice* pDevice, const SceneView& resources, Texture* pTarget, Texture* pDepth);
 
 private:
 	void SetupPipelines();
