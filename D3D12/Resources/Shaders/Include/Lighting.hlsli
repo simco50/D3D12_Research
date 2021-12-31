@@ -135,7 +135,7 @@ float GetAttenuation(Light light, float3 wPos)
 
 float3 ApplyAmbientLight(float3 diffuse, float ao, float3 lightColor)
 {
-	return ao * diffuse * lightColor;
+	return ao * diffuse * lightColor * 0.1f;
 }
 
 uint GetShadowIndex(Light light, float4 pos, float3 wPos)

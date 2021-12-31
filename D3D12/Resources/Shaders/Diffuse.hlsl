@@ -400,18 +400,13 @@ void PSMain(InterpolantsVSToPS input,
 
 	float3 outRadiance = 0;
 	outRadiance += lighting.Diffuse + lighting.Specular;
-	outRadiance += ApplyAmbientLight(brdf.Diffuse, ambientOcclusion, GetLight(0).GetColor().rgb * 0.1f);
+	outRadiance += ApplyAmbientLight(brdf.Diffuse, ambientOcclusion, GetLight(0).GetColor().rgb);
 	outRadiance += ssr * ambientOcclusion;
 	outRadiance += material.Emissive;
 
-// Hack: volfog only working in clustered path right now...
-#if CLUSTERED_FORWARD
 	float fogSlice = sqrt((input.PositionVS.z - cView.FarZ) / (cView.NearZ - cView.FarZ));
 	float4 scatteringTransmittance = tLightScattering.SampleLevel(sLinearClamp, float3(screenUV, fogSlice), 0);
 	outRadiance = outRadiance * scatteringTransmittance.w + scatteringTransmittance.rgb;
-#else
-	float4 scatteringTransmittance = 1;
-#endif
 
 	outColor = float4(outRadiance, material.Opacity);
 	float reflectivity = saturate(scatteringTransmittance.w * ambientOcclusion * Square(1 - brdf.Roughness));
