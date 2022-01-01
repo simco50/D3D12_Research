@@ -265,7 +265,7 @@ InterpolantsVSToPS VSMain(uint vertexId : SV_VertexID)
 float3 ScreenSpaceReflections(float4 Position, float3 PositionVS, float3 N, float3 V, float R, inout float ssrWeight)
 {
 	float3 ssr = 0;
-	const float roughnessThreshold = 0.6f;
+	const float roughnessThreshold = 0.7f;
 	bool ssrEnabled = R < roughnessThreshold;
 	if(ssrEnabled)
 	{
@@ -273,9 +273,8 @@ float3 ScreenSpaceReflections(float4 Position, float3 PositionVS, float3 N, floa
 		float3 reflectionWs = normalize(reflect(-V, N));
 		if (dot(V, reflectionWs) <= reflectionThreshold)
 		{
-			uint frameIndex = cView.FrameIndex;
-			float jitter = InterleavedGradientNoise(Position.xy, frameIndex) - 1.0f;
-			uint maxSteps = cView.SsrSamples.x;
+			float jitter = InterleavedGradientNoise(Position.xy, cView.FrameIndex) - 1.0f;
+			uint maxSteps = cView.SsrSamples;
 
 			float3 rayStartVS = PositionVS;
 			float linearDepth = rayStartVS.z;
