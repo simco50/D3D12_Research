@@ -210,7 +210,7 @@ void ReflectionClosestHit(inout ReflectionRayPayload payload, BuiltInTriangleInt
 		totalResult.Diffuse += result.Diffuse;
 		totalResult.Specular += result.Specular;
 	}
-	payload.output += material.Emissive + totalResult.Diffuse + totalResult.Specular + ApplyAmbientLight(brdfData.Diffuse, 1.0f, 0.1f);
+	payload.output += material.Emissive + totalResult.Diffuse + totalResult.Specular + ApplyAmbientLight(brdfData.Diffuse, 1.0f, GetLight(0).GetColor().rgb);
 }
 
 [shader("anyhit")]

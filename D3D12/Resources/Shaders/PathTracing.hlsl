@@ -383,7 +383,7 @@ void RayGen()
 		// If the ray didn't hit anything, accumulate the sky and break the loop
 		if(!payload.IsHit())
 		{
-			const float3 SkyColor = 1;//CIESky(desc.Direction, false);
+			const float3 SkyColor = CIESky(desc.Direction, false);
 			radiance += throughput * SkyColor;
 			break;
 		}

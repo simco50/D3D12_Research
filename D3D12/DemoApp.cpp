@@ -828,7 +828,7 @@ void DemoApp::Update()
 					context.SetComputeRootSignature(m_pResolveDepthRS.get());
 					context.SetPipelineState(m_pResolveDepthPSO);
 
-					context.BindResource(0, 0, pDepthTexture->GetUAV());
+					context.BindResource(0, 0, pResolvedDepthTexture->GetUAV());
 					context.BindResource(1, 0, resources.GetTexture(Data.DepthStencil)->GetSRV());
 
 					context.Dispatch(ComputeUtils::GetNumThreadGroups(pDepthTexture->GetWidth(), 16, pDepthTexture->GetHeight(), 16));
