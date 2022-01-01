@@ -124,6 +124,25 @@ float3 InterpolateWithDeriv(BaryDerivatives deriv, float3 v0, float3 v1, float3 
 	return mul(deriv.Lambda, float3x3(v0, v1, v2));
 }
 
+LightResult DoLight(float4 pos, float3 worldPos, float3 N, float3 V, float3 diffuseColor, float3 specularColor, float roughness)
+{
+	uint lightCount = cView.LightCount;
+
+	LightResult totalResult = (LightResult)0;
+
+	for(uint i = 0; i < lightCount; ++i)
+	{
+		uint lightIndex = i;
+		Light light = GetLight(lightIndex);
+		LightResult result = DoLight(light, specularColor, diffuseColor, roughness, pos, worldPos, N, V);
+
+		totalResult.Diffuse += result.Diffuse;
+		totalResult.Specular += result.Specular;
+	}
+
+	return totalResult;
+}
+
 [numthreads(16, 16, 1)]
 [RootSignature(RootSig)]
 void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
@@ -144,6 +163,7 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 
     MeshInstance instance = GetMeshInstance(meshIndex);
 	MeshData mesh = GetMesh(instance.Mesh);
+	float4x4 world = GetTransform(instance.World);
 	ByteAddressBuffer meshBuffer = tBufferTable[mesh.BufferIndex];
 
 	uint3 indices = GetPrimitive(mesh, triangleIndex);
@@ -152,9 +172,9 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 	for(uint i = 0; i < 3; ++i)
 	{
 		uint vertexId = indices[i];
-        vertices[i].Position = UnpackHalf3(meshBuffer.Load<uint2>(mesh.PositionsOffset + vertexId * sizeof(uint2)));
-        vertices[i].UV = UnpackHalf2(meshBuffer.Load<uint>(mesh.UVsOffset + vertexId * sizeof(uint)));
-        NormalData normalData = meshBuffer.Load<NormalData>(mesh.NormalsOffset + vertexId * sizeof(NormalData));
+        vertices[i].Position = UnpackHalf3(BufferLoad<uint2>(mesh.BufferIndex, vertexId, mesh.PositionsOffset));
+        vertices[i].UV = UnpackHalf2(BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.UVsOffset));
+        NormalData normalData = BufferLoad<NormalData>(mesh.BufferIndex, vertexId, mesh.NormalsOffset);
         vertices[i].Normal = normalData.Normal;
         vertices[i].Tangent = normalData.Tangent;
 	}
@@ -162,32 +182,33 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 	float2 ndc = (float2)dispatchThreadId.xy * cView.ScreenDimensionsInv * 2 - 1;
 	ndc.y *= -1;
 
-	float4 clipPos0 = mul(mul(float4(vertices[0].Position, 1), instance.World), cView.ViewProjection);
-	float4 clipPos1 = mul(mul(float4(vertices[1].Position, 1), instance.World), cView.ViewProjection);
-	float4 clipPos2 = mul(mul(float4(vertices[2].Position, 1), instance.World), cView.ViewProjection);
+	float4 clipPos0 = mul(mul(float4(vertices[0].Position, 1), world), cView.ViewProjection);
+	float4 clipPos1 = mul(mul(float4(vertices[1].Position, 1), world), cView.ViewProjection);
+	float4 clipPos2 = mul(mul(float4(vertices[2].Position, 1), world), cView.ViewProjection);
 
 	BaryDerivatives derivs = InitBaryDerivatives(clipPos0, clipPos1, clipPos2, ndc, cView.ScreenDimensionsInv);
 
 	float2 dx, dy;
 	float2 UV = InterpolateWithDeriv(derivs, vertices[0].UV, vertices[1].UV, vertices[2].UV, dx, dy);
-	float3 N = normalize(mul(InterpolateWithDeriv(derivs, vertices[0].Normal, vertices[1].Normal, vertices[2].Normal), (float3x3)instance.World));
-	float3 T = normalize(mul(InterpolateWithDeriv(derivs, vertices[0].Tangent.xyz, vertices[1].Tangent.xyz, vertices[2].Tangent.xyz), (float3x3)instance.World));
+	float3 N = normalize(mul(InterpolateWithDeriv(derivs, vertices[0].Normal, vertices[1].Normal, vertices[2].Normal), (float3x3)world));
+	float3 T = normalize(mul(InterpolateWithDeriv(derivs, vertices[0].Tangent.xyz, vertices[1].Tangent.xyz, vertices[2].Tangent.xyz), (float3x3)world));
 	float3 B = cross(N, T) * vertices[0].Tangent.w;
 	float3 P = InterpolateWithDeriv(derivs, vertices[0].Position, vertices[1].Position, vertices[2].Position);
-	P = mul(float4(P, 1), instance.World).xyz;
+	float3 worldPos = mul(float4(P, 1), world).xyz;
 
 	MaterialProperties properties = GetMaterialProperties(instance.Material, UV, dx, dy);
 	float3x3 TBN = float3x3(T, B, N);
 	N = TangentSpaceNormalMapping(properties.NormalTS, TBN);
 
 	BrdfData brdfData = GetBrdfData(properties);
-	float3 V = normalize(P - cView.ViewInverse[3].xyz);
-	Light light = GetLight(0);
-	float3 L = -light.Direction;
-	float4 color = light.GetColor();
-	LightResult result = DefaultLitBxDF(brdfData.Specular, brdfData.Roughness, brdfData.Diffuse, N, V, L, 1);
-	float3 output = (result.Diffuse + result.Specular) * color.rgb * light.Intensity;
+
+	float3 V = normalize(P - cView.ViewPosition.xyz);
+	LightResult result = DoLight(float4(P, length(cView.ViewPosition.xyz - worldPos)), worldPos, N, V, brdfData.Diffuse, brdfData.Specular, brdfData.Roughness);
+	float3 output = result.Diffuse + result.Specular;
+	output += ApplyAmbientLight(brdfData.Diffuse, 1, GetLight(0).GetColor().rgb);
+
+	float reflectivity = saturate(Square(1 - brdfData.Roughness));
 
 	uTarget[dispatchThreadId.xy] = float4(output, 1);
-	uNormalsTarget[dispatchThreadId.xy] = float4(N, 0.1);
+	uNormalsTarget[dispatchThreadId.xy] = float4(N, reflectivity);
 }

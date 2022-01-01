@@ -190,6 +190,7 @@ private:
 	// Visibility buffer
 	std::unique_ptr<RootSignature> m_pVisibilityRenderingRS;
 	PipelineState* m_pVisibilityRenderingPSO = nullptr;
+	PipelineState* m_pVisibilityRenderingMaskedPSO = nullptr;
 	std::unique_ptr<Texture> m_pVisibilityTexture;
 	std::unique_ptr<RootSignature> m_pVisibilityShadingRS;
 	PipelineState* m_pVisibilityShadingPSO = nullptr;

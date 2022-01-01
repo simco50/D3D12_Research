@@ -8,30 +8,44 @@
 
 ConstantBuffer<InstanceData> cObject : register(b0);
 
-struct Vertex
+struct InterpolantsVSToPS
 {
-    uint2 Position;
-    uint UV;
-    float3 Normal;
-    float4 Tangent;
+	float4 Position : SV_Position;
+	float2 UV : TEXCOORD;
 };
 
 [RootSignature(RootSig)]
-float4 VSMain(uint vertexId : SV_VertexID) : SV_POSITION
+InterpolantsVSToPS VSMain(uint vertexId : SV_VertexID)
 {
+	InterpolantsVSToPS output;
+
     MeshData mesh = GetMesh(cObject.Mesh);
 	float4x4 world = GetTransform(cObject.World);
 	ByteAddressBuffer meshBuffer = tBufferTable[mesh.BufferIndex];
 
-    float3 position = UnpackHalf3(meshBuffer.Load<uint2>(mesh.PositionsOffset + vertexId * sizeof(uint2)));
-    return mul(mul(float4(position, 1.0f), world), cView.ViewProjection);
+    float3 position = UnpackHalf3(BufferLoad<uint2>(mesh.BufferIndex, vertexId, mesh.PositionsOffset));
+    output.Position = mul(mul(float4(position, 1.0f), world), cView.ViewProjection);
+    output.UV = UnpackHalf2(BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.UVsOffset));
+	return output;
 }
 
 void PSMain(
-    float4 position : SV_POSITION,
+    InterpolantsVSToPS input,
     uint primitiveIndex : SV_PrimitiveID,
-    float3 barycentrics : SV_Barycentrics,
     out uint outPrimitiveMask : SV_TARGET0)
 {
+#ifdef ALPHA_TEST
+	MaterialData material = GetMaterial(cObject.Material);
+	float opacity = material.BaseColorFactor.a;
+	if(material.Diffuse != INVALID_HANDLE)
+	{
+		opacity *= Sample2D(material.Diffuse, sMaterialSampler, input.UV).a;
+	}
+	if(opacity < 0.5f)
+	{
+		discard;
+	}
+#endif
+
     outPrimitiveMask = (cObject.World << 16) | (primitiveIndex & 0xFFFF);
 }
