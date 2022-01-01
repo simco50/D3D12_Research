@@ -718,69 +718,6 @@ void DemoApp::Update()
 			});
 	}
 
-	if (m_RenderPath == RenderPath::Visibility)
-	{
-		if (m_RenderPath == RenderPath::Visibility)
-		{
-			RGPassBuilder visibility = graph.AddPass("Visibility Buffer");
-			visibility.Bind([=](CommandContext& renderContext, const RGPassResources& resources)
-				{
-					Texture* pDepthStencil = GetDepthStencil();
-					renderContext.InsertResourceBarrier(pDepthStencil, D3D12_RESOURCE_STATE_DEPTH_WRITE);
-					renderContext.InsertResourceBarrier(m_pVisibilityTexture.get(), D3D12_RESOURCE_STATE_RENDER_TARGET);
-
-					renderContext.BeginRenderPass(RenderPassInfo(m_pVisibilityTexture.get(), RenderPassAccess::DontCare_Store, pDepthStencil, RenderPassAccess::Clear_Store, true));
-					renderContext.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-					renderContext.SetGraphicsRootSignature(m_pVisibilityRenderingRS.get());
-
-					renderContext.SetRootCBV(1, GetViewUniforms(m_SceneData, GetCurrentRenderTarget()));
-
-					{
-						GPU_PROFILE_SCOPE("Opaque", &renderContext);
-						renderContext.SetPipelineState(m_pVisibilityRenderingPSO);
-						DrawScene(renderContext, m_SceneData, Batch::Blending::Opaque);
-					}
-
-					{
-						GPU_PROFILE_SCOPE("Opaque Masked", &renderContext);
-						renderContext.SetPipelineState(m_pVisibilityRenderingMaskedPSO);
-						DrawScene(renderContext, m_SceneData, Batch::Blending::AlphaMask);
-					}
-
-					renderContext.EndRenderPass();
-
-				});
-
-			RGPassBuilder visibilityShading = graph.AddPass("Visibility Shading");
-			visibilityShading.Bind([=](CommandContext& renderContext, const RGPassResources& resources)
-				{
-					Texture* pNormalsTarget = m_pNormals ? m_pNormals.get() : m_pResolvedNormals.get();
-
-					renderContext.InsertResourceBarrier(m_pVisibilityTexture.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-					renderContext.InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-					renderContext.InsertResourceBarrier(pNormalsTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-
-					renderContext.SetComputeRootSignature(m_pVisibilityShadingRS.get());
-					renderContext.SetPipelineState(m_pVisibilityShadingPSO);
-
-					renderContext.SetRootCBV(0, GetViewUniforms(m_SceneData, GetCurrentRenderTarget()));
-
-					renderContext.BindResource(1, 0, m_pVisibilityTexture->GetSRV());
-
-					const D3D12_CPU_DESCRIPTOR_HANDLE uavs[] =
-					{
-						GetCurrentRenderTarget()->GetUAV()->GetDescriptor(),
-						pNormalsTarget->GetUAV()->GetDescriptor(),
-					};
-
-					renderContext.BindResources(2, 0, uavs, ARRAYSIZE(uavs));
-					renderContext.Dispatch(ComputeUtils::GetNumThreadGroups(GetCurrentRenderTarget()->GetWidth(), 16, GetCurrentRenderTarget()->GetHeight(), 16));
-					renderContext.InsertUavBarrier();
-				});
-		}
-	}
-
 	if (m_RenderPath == RenderPath::Clustered || m_RenderPath == RenderPath::Tiled)
 	{
 		//DEPTH PREPASS
@@ -813,6 +750,38 @@ void DemoApp::Update()
 				}
 
 				context.EndRenderPass();
+			});
+	}
+	else
+	{
+		RGPassBuilder visibility = graph.AddPass("Visibility Buffer");
+		visibility.Bind([=](CommandContext& renderContext, const RGPassResources& resources)
+			{
+				Texture* pDepthStencil = GetDepthStencil();
+				renderContext.InsertResourceBarrier(pDepthStencil, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+				renderContext.InsertResourceBarrier(m_pVisibilityTexture.get(), D3D12_RESOURCE_STATE_RENDER_TARGET);
+
+				renderContext.BeginRenderPass(RenderPassInfo(m_pVisibilityTexture.get(), RenderPassAccess::DontCare_Store, pDepthStencil, RenderPassAccess::Clear_Store, true));
+				renderContext.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+				renderContext.SetGraphicsRootSignature(m_pVisibilityRenderingRS.get());
+
+				renderContext.SetRootCBV(1, GetViewUniforms(m_SceneData, GetCurrentRenderTarget()));
+
+				{
+					GPU_PROFILE_SCOPE("Opaque", &renderContext);
+					renderContext.SetPipelineState(m_pVisibilityRenderingPSO);
+					DrawScene(renderContext, m_SceneData, Batch::Blending::Opaque);
+				}
+
+				{
+					GPU_PROFILE_SCOPE("Opaque Masked", &renderContext);
+					renderContext.SetPipelineState(m_pVisibilityRenderingMaskedPSO);
+					DrawScene(renderContext, m_SceneData, Batch::Blending::AlphaMask);
+				}
+
+				renderContext.EndRenderPass();
+
 			});
 	}
 
@@ -903,6 +872,40 @@ void DemoApp::Update()
 			params.pResolvedNormalsTarget = m_pResolvedNormals.get();
 			params.pPreviousColorTarget = m_pPreviousColor.get();
 			m_pClusteredForward->Execute(graph, m_SceneData, params);
+		}
+		else if (m_RenderPath == RenderPath::Visibility)
+		{
+			RGPassBuilder visibilityShading = graph.AddPass("Visibility Shading");
+			visibilityShading.Bind([=](CommandContext& renderContext, const RGPassResources& resources)
+				{
+					Texture* pNormalsTarget = m_pNormals ? m_pNormals.get() : m_pResolvedNormals.get();
+
+					renderContext.InsertResourceBarrier(m_pVisibilityTexture.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+					renderContext.InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+					renderContext.InsertResourceBarrier(pNormalsTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+					renderContext.SetComputeRootSignature(m_pVisibilityShadingRS.get());
+					renderContext.SetPipelineState(m_pVisibilityShadingPSO);
+
+					renderContext.SetRootCBV(0, GetViewUniforms(m_SceneData, GetCurrentRenderTarget()));
+
+					const D3D12_CPU_DESCRIPTOR_HANDLE srvs[] =
+					{
+						m_pVisibilityTexture->GetSRV()->GetDescriptor(),
+					};
+
+					renderContext.BindResources(1, 0, srvs, ARRAYSIZE(srvs));
+
+					const D3D12_CPU_DESCRIPTOR_HANDLE uavs[] =
+					{
+						GetCurrentRenderTarget()->GetUAV()->GetDescriptor(),
+						pNormalsTarget->GetUAV()->GetDescriptor(),
+					};
+
+					renderContext.BindResources(2, 0, uavs, ARRAYSIZE(uavs));
+					renderContext.Dispatch(ComputeUtils::GetNumThreadGroups(GetCurrentRenderTarget()->GetWidth(), 16, GetCurrentRenderTarget()->GetHeight(), 16));
+					renderContext.InsertUavBarrier();
+				});
 		}
 
 		m_pParticles->Render(graph, m_SceneData, GetCurrentRenderTarget(), GetDepthStencil());
