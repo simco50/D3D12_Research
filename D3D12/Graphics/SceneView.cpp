@@ -67,7 +67,7 @@ ShaderInterop::ViewUniforms GetViewUniforms(const SceneView& sceneView, Texture*
 	parameters.FoV = view.FoV;
 
 	parameters.FrameIndex = sceneView.FrameIndex;
-	parameters.SsrSamples = 1;
+	parameters.SsrSamples = 8;
 	parameters.LightCount = sceneView.pLightBuffer->GetNumElements();
 
 	memcpy(&parameters.LightViewProjections, &sceneView.ShadowData.LightViewProjections, ARRAYSIZE(parameters.LightViewProjections) * MAX_SHADOW_CASTERS);
