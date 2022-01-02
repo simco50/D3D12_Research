@@ -41,7 +41,7 @@ void PSMain(
 	{
 		opacity *= Sample2D(material.Diffuse, sMaterialSampler, input.UV).a;
 	}
-	if(opacity < 0.5f)
+	if(opacity < material.AlphaCutoff)
 	{
 		discard;
 	}
