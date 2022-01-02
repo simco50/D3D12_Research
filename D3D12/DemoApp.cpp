@@ -1069,7 +1069,7 @@ void DemoApp::Update()
 		RGPassBuilder bloomSeparate = graph.AddPass("Separate Bloom");
 		bloomSeparate.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
 			{
-				Texture* pTarget = m_pBloomTexture.get();
+				Texture* pTarget = m_pBloomTextures[0].get();
 
 				context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 				context.InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
@@ -1108,7 +1108,7 @@ void DemoApp::Update()
 		RGPassBuilder bloomMipChain = graph.AddPass("Bloom Mip Chain");
 		bloomMipChain.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
 			{
-				Texture* pTarget = m_pBloomTexture.get();
+				Texture* pTarget = m_pBloomTextures[0].get();
 
 				context.SetComputeRootSignature(m_pBloomRS.get());
 				context.SetPipelineState(m_pBloomMipChainPSO);
@@ -1120,39 +1120,78 @@ void DemoApp::Update()
 
 				context.InsertUavBarrier();
 
-				for (uint32 i = 1; i < m_pBloomTexture->GetMipLevels(); ++i)
+				Texture* pSource = GetCurrentRenderTarget();
+				pTarget = m_pBloomTextures[1].get();
+
+				for (uint32 i = 1; i < m_pBloomTextures[0]->GetMipLevels(); ++i)
 				{
-					context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, 0);
-					context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, 1);
+
 
 					struct Parameters
 					{
 						uint32 SourceMip;
 						Vector2 TargetDimensionsInv;
+						uint32 Horizontal;
 					} parameters;
 
 					parameters.SourceMip = i - 1;
 					parameters.TargetDimensionsInv = Vector2(1.0f / width, 1.0f / height);
 
-					context.SetRootCBV(0, parameters);
+					{
+						context.InsertResourceBarrier(pSource, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+						context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-					D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
-						pTarget->GetSRV()->GetDescriptor(),
-					};
+						parameters.Horizontal = 0;
 
-					D3D12_CPU_DESCRIPTOR_HANDLE uavs[] = {
-						m_pBloomUAVs[i]->GetDescriptor()
-					};
+						context.SetRootCBV(0, parameters);
 
-					context.BindResources(2, 0, uavs, ARRAYSIZE(uavs));
-					context.BindResources(3, 0, srvs, ARRAYSIZE(srvs));
+						D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
+							pSource->GetSRV()->GetDescriptor(),
+						};
 
-					context.Dispatch(ComputeUtils::GetNumThreadGroups(width, 8, height, 8));
+						D3D12_CPU_DESCRIPTOR_HANDLE uavs[] = {
+							m_pBloomUAVs[i % 2][i]->GetDescriptor()
+						};
 
+						context.BindResources(2, 0, uavs, ARRAYSIZE(uavs));
+						context.BindResources(3, 0, srvs, ARRAYSIZE(srvs));
+
+						context.Dispatch(ComputeUtils::GetNumThreadGroups(width, 1, height, 128));
+
+						pTarget = m_pBloomTextures[i % 2].get();
+						pSource = m_pBloomTextures[(i + 1) % 2].get();
+					}
+
+					{
+						context.InsertResourceBarrier(pSource, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+						context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+						D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
+							pSource->GetSRV()->GetDescriptor(),
+						};
+
+						D3D12_CPU_DESCRIPTOR_HANDLE uavs[] = {
+							m_pBloomUAVs[(i + 1) % 2][i]->GetDescriptor()
+						};
+
+						context.BindResources(2, 0, uavs, ARRAYSIZE(uavs));
+						context.BindResources(3, 0, srvs, ARRAYSIZE(srvs));
+
+						parameters.SourceMip = i;
+						parameters.Horizontal = 1;
+
+						context.SetRootCBV(0, parameters);
+						context.Dispatch(ComputeUtils::GetNumThreadGroups(width, 128, height, 1));
+
+						pSource = m_pBloomTextures[i % 2].get();
+						pTarget = m_pBloomTextures[(i + 1) % 2].get();
+					}
+
+					std::swap(pSource, pTarget);
+					
 					width /= 2;
 					height /= 2;
 				}
-				context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, 0);
 			});
 
 		RGPassBuilder tonemap = graph.AddPass("Tonemap");
@@ -1321,12 +1360,15 @@ void DemoApp::OnResizeViewport(int width, int height)
 	}
 
 	uint32 mips = Math::Min(5u, (uint32)log2f((float)Math::Max(width, height)));
-	m_pBloomTexture = m_pDevice->CreateTexture(TextureDesc::Create2D(width, height, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess, 1, mips), "Bloom Target");
-	m_pBloomUAVs.resize(mips);
-	for (uint32 i = 0; i < mips; ++i)
+	for (uint32 i = 0; i < ARRAYSIZE(m_pBloomTextures); ++i)
 	{
-		m_pBloomUAVs[i] = nullptr;
-		m_pBloomTexture->CreateUAV(&m_pBloomUAVs[i], TextureUAVDesc((uint8)i));
+		m_pBloomTextures[i] = m_pDevice->CreateTexture(TextureDesc::Create2D(width, height, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess, 1, mips), Sprintf("Bloom Target %d", i).c_str());
+		m_pBloomUAVs[i].resize(mips);
+		for (uint32 j = 0; j < mips; ++j)
+		{
+			m_pBloomUAVs[i][j] = nullptr;
+			m_pBloomTextures[i]->CreateUAV(&m_pBloomUAVs[i][j], TextureUAVDesc((uint8)j));
+		}
 	}
 
 	m_pCamera->SetViewport(FloatRect(0, 0, (float)width, (float)height));
@@ -1708,7 +1750,7 @@ void DemoApp::UpdateImGui()
 		ImGui::End();
 	}
 
-	m_pVisualizeTexture = m_pBloomTexture.get();
+	m_pVisualizeTexture = m_pBloomTextures[0].get();
 	if (m_pVisualizeTexture)
 	{
 		if (ImGui::Begin("Visualize Texture"))
