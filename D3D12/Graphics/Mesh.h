@@ -39,6 +39,13 @@ struct SubMeshInstance
 	Matrix Transform;
 };
 
+enum class MaterialAlphaMode
+{
+	Opaque,
+	Masked,
+	Blend,
+};
+
 struct Material
 {
 	Color BaseColorFactor = Color(1, 1, 1, 1);
@@ -50,7 +57,7 @@ struct Material
 	Texture* pNormalTexture = nullptr;
 	Texture* pRoughnessMetalnessTexture = nullptr;
 	Texture* pEmissiveTexture = nullptr;
-	bool IsTransparent;
+	MaterialAlphaMode AlphaMode;
 };
 
 class Mesh

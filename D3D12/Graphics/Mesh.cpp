@@ -47,11 +47,17 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 
 	auto MaterialIndex = [&](const cgltf_material* pMat) -> int
 	{
-		check(pMat);
-		return (int)(pMat - pGltfData->materials);
+		if (!pMat)
+		{
+			return 0;
+		}
+		return (int)(pMat - pGltfData->materials) + 1;
 	};
 
-	m_Materials.reserve(pGltfData->materials_count);
+	Material defaultMaterial;
+	m_Materials.push_back(defaultMaterial);
+
+	m_Materials.reserve(pGltfData->materials_count + 1);
 	for (size_t i = 0; i < pGltfData->materials_count; ++i)
 	{
 		const cgltf_material& gltfMaterial = pGltfData->materials[i];
@@ -100,6 +106,16 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 			return nullptr;
 		};
 
+		auto GetAlphaMode = [](cgltf_alpha_mode mode) {
+			switch (mode)
+			{
+			case cgltf_alpha_mode_blend: return MaterialAlphaMode::Blend;
+			case cgltf_alpha_mode_opaque: return MaterialAlphaMode::Opaque;
+			case cgltf_alpha_mode_mask: return MaterialAlphaMode::Masked;
+			}
+			return MaterialAlphaMode::Opaque;
+		};
+
 		if (gltfMaterial.has_pbr_metallic_roughness)
 		{
 			material.pDiffuseTexture = RetrieveTexture(gltfMaterial.pbr_metallic_roughness.base_color_texture, true);
@@ -112,7 +128,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 			material.RoughnessFactor = gltfMaterial.pbr_metallic_roughness.roughness_factor;
 		}
 		material.AlphaCutoff = gltfMaterial.alpha_cutoff;
-		material.IsTransparent = gltfMaterial.alpha_mode != cgltf_alpha_mode_opaque;
+		material.AlphaMode = GetAlphaMode(gltfMaterial.alpha_mode);
 		material.pEmissiveTexture = RetrieveTexture(gltfMaterial.emissive_texture, true);
 		material.EmissiveFactor.x = gltfMaterial.emissive_factor[0];
 		material.EmissiveFactor.y = gltfMaterial.emissive_factor[1];

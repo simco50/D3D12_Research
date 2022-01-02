@@ -1761,7 +1761,7 @@ void DemoApp::UpdateTLAS(CommandContext& context)
 					D3D12_RAYTRACING_GEOMETRY_DESC geometryDesc{};
 					geometryDesc.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
 					geometryDesc.Flags = D3D12_RAYTRACING_GEOMETRY_FLAG_NONE;
-					if (material.IsTransparent == false)
+					if (material.AlphaMode != MaterialAlphaMode::Opaque)
 					{
 						geometryDesc.Flags |= D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
 					}
@@ -1927,11 +1927,21 @@ void DemoApp::UploadSceneData(CommandContext& context)
 
 			transforms.push_back(node.Transform);
 
+			auto GetBlendMode = [](MaterialAlphaMode mode) {
+				switch (mode)
+				{
+				case MaterialAlphaMode::Blend: return Batch::Blending::AlphaBlend;
+				case MaterialAlphaMode::Opaque: return Batch::Blending::Opaque;
+				case MaterialAlphaMode::Masked: return Batch::Blending::AlphaMask;
+				}
+				return Batch::Blending::Opaque;
+			};
+
 			Batch batch;
 			batch.InstanceData = meshInstance;
 			batch.LocalBounds = parentMesh.Bounds;
 			batch.pMesh = &parentMesh;
-			batch.BlendMode = meshMaterial.IsTransparent ? Batch::Blending::AlphaMask : Batch::Blending::Opaque;
+			batch.BlendMode = GetBlendMode(meshMaterial.AlphaMode);
 			batch.WorldMatrix = node.Transform;
 			batch.LocalBounds.Transform(batch.Bounds, batch.WorldMatrix);
 			batch.Radius = Vector3(batch.Bounds.Extents).Length();
