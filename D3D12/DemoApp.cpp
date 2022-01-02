@@ -1041,8 +1041,8 @@ void DemoApp::Update()
 				context.InsertResourceBarrier(m_pLuminanceHistogram.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 				context.InsertResourceBarrier(m_pAverageLuminance.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-				context.SetPipelineState(m_pAverageLuminancePSO);
 				context.SetComputeRootSignature(m_pAverageLuminanceRS.get());
+				context.SetPipelineState(m_pAverageLuminancePSO);
 
 				struct Parameters
 				{
@@ -1064,6 +1064,95 @@ void DemoApp::Update()
 				context.BindResource(2, 0, m_pLuminanceHistogram->GetSRV());
 
 				context.Dispatch(1);
+			});
+
+		RGPassBuilder bloomSeparate = graph.AddPass("Separate Bloom");
+		bloomSeparate.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
+			{
+				Texture* pTarget = m_pBloomTexture.get();
+
+				context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+				context.InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+				context.InsertResourceBarrier(m_pAverageLuminance.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+
+				context.SetComputeRootSignature(m_pBloomRS.get());
+				context.SetPipelineState(m_pBloomSeparatePSO);
+
+				struct Parameters
+				{
+					float Threshold;
+					float BrightnessClamp;
+				} parameters;
+
+				parameters.Threshold = 1.0f;
+				parameters.BrightnessClamp = 10.0f;
+
+				context.SetRootCBV(0, parameters);
+				context.SetRootCBV(1, GetViewUniforms(m_SceneData));
+
+				D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
+					GetCurrentRenderTarget()->GetSRV()->GetDescriptor(),
+					m_pAverageLuminance->GetSRV()->GetDescriptor(),
+				};
+
+				D3D12_CPU_DESCRIPTOR_HANDLE uavs[] = {
+					pTarget->GetUAV()->GetDescriptor()
+				};
+
+				context.BindResources(2, 0, uavs, ARRAYSIZE(uavs));
+				context.BindResources(3, 0, srvs, ARRAYSIZE(srvs));
+
+				context.Dispatch(ComputeUtils::GetNumThreadGroups(pTarget->GetWidth(), 8, pTarget->GetHeight(), 8));
+			});
+
+		RGPassBuilder bloomMipChain = graph.AddPass("Bloom Mip Chain");
+		bloomMipChain.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
+			{
+				Texture* pTarget = m_pBloomTexture.get();
+
+				context.SetComputeRootSignature(m_pBloomRS.get());
+				context.SetPipelineState(m_pBloomMipChainPSO);
+
+				context.SetRootCBV(1, GetViewUniforms(m_SceneData));
+
+				uint32 width = pTarget->GetWidth() / 2;
+				uint32 height = pTarget->GetHeight() / 2;
+
+				context.InsertUavBarrier();
+
+				for (uint32 i = 1; i < m_pBloomTexture->GetMipLevels(); ++i)
+				{
+					context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, 0);
+					context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, 1);
+
+					struct Parameters
+					{
+						uint32 SourceMip;
+						Vector2 TargetDimensionsInv;
+					} parameters;
+
+					parameters.SourceMip = i - 1;
+					parameters.TargetDimensionsInv = Vector2(1.0f / width, 1.0f / height);
+
+					context.SetRootCBV(0, parameters);
+
+					D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
+						pTarget->GetSRV()->GetDescriptor(),
+					};
+
+					D3D12_CPU_DESCRIPTOR_HANDLE uavs[] = {
+						m_pBloomUAVs[i]->GetDescriptor()
+					};
+
+					context.BindResources(2, 0, uavs, ARRAYSIZE(uavs));
+					context.BindResources(3, 0, srvs, ARRAYSIZE(srvs));
+
+					context.Dispatch(ComputeUtils::GetNumThreadGroups(width, 8, height, 8));
+
+					width /= 2;
+					height /= 2;
+				}
+				context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, 0);
 			});
 
 		RGPassBuilder tonemap = graph.AddPass("Tonemap");
@@ -1229,6 +1318,15 @@ void DemoApp::OnResizeViewport(int width, int height)
 		std::unique_ptr<Buffer> pBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateTyped(1, DXGI_FORMAT_R32G32_FLOAT, BufferFlag::Readback), "SDSM Reduction Readback Target");
 		pBuffer->Map();
 		m_ReductionReadbackTargets.push_back(std::move(pBuffer));
+	}
+
+	uint32 mips = Math::Min(5u, (uint32)log2f((float)Math::Max(width, height)));
+	m_pBloomTexture = m_pDevice->CreateTexture(TextureDesc::Create2D(width, height, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess, 1, mips), "Bloom Target");
+	m_pBloomUAVs.resize(mips);
+	for (uint32 i = 0; i < mips; ++i)
+	{
+		m_pBloomUAVs[i] = nullptr;
+		m_pBloomTexture->CreateUAV(&m_pBloomUAVs[i], TextureUAVDesc((uint8)i));
 	}
 
 	m_pCamera->SetViewport(FloatRect(0, 0, (float)width, (float)height));
@@ -1441,6 +1539,27 @@ void DemoApp::InitializePipelines()
 		psoDesc.SetName("Skybox");
 		m_pSkyboxPSO = m_pDevice->CreatePipeline(psoDesc);
 	}
+
+	//Bloom
+	{
+		m_pBloomRS = std::make_unique<RootSignature>(m_pDevice.get());
+		m_pBloomRS->AddConstantBufferView(0);
+		m_pBloomRS->AddConstantBufferView(100);
+		m_pBloomRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1);
+		m_pBloomRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2);
+		m_pBloomRS->Finalize("Generate Mips");
+
+		PipelineStateInitializer psoDesc;
+		psoDesc.SetComputeShader(m_pDevice->GetShader("Bloom.hlsl", ShaderType::Compute, "SeparateBloomCS"));
+		psoDesc.SetRootSignature(m_pBloomRS->GetRootSignature());
+		psoDesc.SetName("Separate Bloom");
+		m_pBloomSeparatePSO = m_pDevice->CreatePipeline(psoDesc);
+
+		psoDesc.SetComputeShader(m_pDevice->GetShader("Bloom.hlsl", ShaderType::Compute, "BloomMipChainCS"));
+		psoDesc.SetRootSignature(m_pBloomRS->GetRootSignature());
+		psoDesc.SetName("Bloom Mips");
+		m_pBloomMipChainPSO = m_pDevice->CreatePipeline(psoDesc);
+	}
 }
 
 void DemoApp::UpdateImGui()
@@ -1589,6 +1708,7 @@ void DemoApp::UpdateImGui()
 		ImGui::End();
 	}
 
+	m_pVisualizeTexture = m_pBloomTexture.get();
 	if (m_pVisualizeTexture)
 	{
 		if (ImGui::Begin("Visualize Texture"))

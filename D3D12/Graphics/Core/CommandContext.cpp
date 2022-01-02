@@ -125,12 +125,13 @@ void CommandContext::InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESO
 	D3D12_RESOURCE_STATES beforeState = resourceState.Get(subResource);
 	if (beforeState == D3D12_RESOURCE_STATE_UNKNOWN)
 	{
+		resourceState.Set(state, subResource);
+
 		PendingBarrier barrier;
 		barrier.pResource = pBuffer;
-		barrier.State = state;
+		barrier.State = resourceState;
 		barrier.Subresource = subResource;
 		m_PendingBarriers.push_back(barrier);
-		resourceState.Set(state, subResource);
 	}
 	else
 	{

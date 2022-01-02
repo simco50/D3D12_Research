@@ -16,6 +16,7 @@ class SSAO;
 class GpuParticles;
 class PathTracing;
 class CBTTessellation;
+class UnorderedAccessView;
 struct SubMesh;
 struct Material;
 
@@ -185,6 +186,13 @@ private:
 	std::unique_ptr<Buffer> m_pTransformsBuffer;
 	std::vector<Light> m_Lights;
 	std::unique_ptr<Buffer> m_pLightBuffer;
+
+	//Bloom
+	PipelineState* m_pBloomSeparatePSO = nullptr;
+	PipelineState* m_pBloomMipChainPSO = nullptr;
+	std::unique_ptr<RootSignature> m_pBloomRS;
+	std::unique_ptr<Texture> m_pBloomTexture;
+	std::vector<UnorderedAccessView*> m_pBloomUAVs;
 
 	Texture* m_pVisualizeTexture = nullptr;
 	SceneView m_SceneData;

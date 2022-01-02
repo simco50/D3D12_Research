@@ -38,6 +38,23 @@ public:
 				m_AllSameState = false;
 			}
 			m_ResourceStates[subResource] = state;
+
+			if (!m_AllSameState)
+			{
+				bool sameState = true;
+				for (D3D12_RESOURCE_STATES& s : m_ResourceStates)
+				{
+					if (s != state)
+					{
+						sameState = false;
+						break;
+					}
+				}
+				if (sameState)
+				{
+					m_AllSameState = true;
+				}
+			}
 		}
 		else
 		{
