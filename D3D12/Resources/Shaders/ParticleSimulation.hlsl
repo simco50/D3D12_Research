@@ -126,7 +126,7 @@ void Simulate(uint threadID : SV_DispatchThreadID)
 
 				if(screenPos.w + p.Size > linearDepth && screenPos.w - p.Size - thickness < linearDepth)
 				{
-					float3 normal = NormalFromDepth(tSceneDepth, sLinearClamp, uv, cView.ScreenDimensionsInv, cView.ViewProjectionInverse);
+					float3 normal = NormalFromDepth(tSceneDepth, sLinearClamp, uv, cView.ViewportDimensionsInv, cView.ViewProjectionInverse);
 					if(dot(normal, p.Velocity) < 0)
 					{
 						p.Velocity = reflect(p.Velocity, normal) * 0.85f;

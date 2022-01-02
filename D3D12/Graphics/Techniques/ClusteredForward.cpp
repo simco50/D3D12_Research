@@ -116,15 +116,15 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& resources, const
 
 				struct ConstantBuffer
 				{
+					IntVector4 ClusterDimensions;
 					IntVector2 ClusterSize;
-					IntVector3 ClusterDimensions;
 				} constantBuffer;
 
 				constantBuffer.ClusterSize = IntVector2(gLightClusterTexelSize, gLightClusterTexelSize);
-				constantBuffer.ClusterDimensions = IntVector3(m_ClusterCountX, m_ClusterCountY, gLightClustersNumZ);
+				constantBuffer.ClusterDimensions = IntVector4(m_ClusterCountX, m_ClusterCountY, gLightClustersNumZ, 0);
 
 				context.SetRootCBV(0, constantBuffer);
-				context.SetRootCBV(1, GetViewUniforms(resources));
+				context.SetRootCBV(1, GetViewUniforms(resources, parameters.pDepth));
 				context.BindResource(2, 0, m_pAABBs->GetUAV());
 
 				//Cluster count in z is 32 so fits nicely in a wavefront on Nvidia so make groupsize in shader 32
@@ -358,7 +358,9 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& resources, const
 				context.SetGraphicsRootSignature(m_pVisualizeLightClustersRS.get());
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_POINTLIST);
 
-				context.SetRootCBV(0, GetViewUniforms(resources, parameters.pColorTarget));
+				ShaderInterop::ViewUniforms view = GetViewUniforms(resources, parameters.pColorTarget);
+				view.Projection = m_DebugClustersViewMatrix * resources.View.ViewProjection;
+				context.SetRootCBV(0, view);
 
 				D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
 					m_pAABBs->GetSRV()->GetDescriptor(),

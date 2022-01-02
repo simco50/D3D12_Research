@@ -26,7 +26,7 @@ struct ViewTransform
 	float FarPlane = 500.0f;
 	float OrthographicSize = 1;
 	int JitterIndex = 0;
-	float JitterWeight = 1.0f;
+	float JitterWeight = 0.5f;
 	Vector2 Jitter;
 	Vector2 PreviousJitter;
 	BoundingFrustum Frustum;

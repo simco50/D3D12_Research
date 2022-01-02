@@ -5,6 +5,12 @@
 #include "Mesh.h"
 #include "Core/PipelineState.h"
 #include "Core/Texture.h"
+#include "Core/ConsoleVariables.h"
+
+namespace Tweakables
+{
+	extern ConsoleVariable<int> g_SsrSamples;
+}
 
 void DrawScene(CommandContext& context, const SceneView& scene, Batch::Blending blendModes)
 {
@@ -67,7 +73,7 @@ ShaderInterop::ViewUniforms GetViewUniforms(const SceneView& sceneView, Texture*
 	parameters.FoV = view.FoV;
 
 	parameters.FrameIndex = sceneView.FrameIndex;
-	parameters.SsrSamples = 8;
+	parameters.SsrSamples = Tweakables::g_SsrSamples.Get();
 	parameters.LightCount = sceneView.pLightBuffer->GetNumElements();
 
 	memcpy(&parameters.LightViewProjections, &sceneView.ShadowData.LightViewProjections, ARRAYSIZE(parameters.LightViewProjections) * MAX_SHADOW_CASTERS);

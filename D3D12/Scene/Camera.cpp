@@ -125,13 +125,13 @@ void Camera::UpdateMatrices() const
 		}
 
 #if 0
-		constexpr Math::HaltonSequence<8, 2> x;
-		constexpr Math::HaltonSequence<8, 3> y;
+		constexpr Math::HaltonSequence<16, 2> x;
+		constexpr Math::HaltonSequence<16, 3> y;
 
-		m_Jitter.x = m_JitterWeight * x[m_JitterIndex];
-		m_Jitter.y = m_JitterWeight * y[m_JitterIndex];
-		m_Projection.m[3][0] += (m_Jitter.x * 2.0f - 1.0f) / m_Viewport.GetWidth();
-		m_Projection.m[3][1] += (m_Jitter.y * 2.0f - 1.0f) / m_Viewport.GetHeight();
+		m_Transform.Jitter.x = m_Transform.JitterWeight * x[m_Transform.JitterIndex];
+		m_Transform.Jitter.y = m_Transform.JitterWeight * y[m_Transform.JitterIndex];
+		m_Transform.Projection.m[2][0] += (m_Transform.Jitter.x * 2.0f - 1.0f) / m_Transform.Viewport.GetWidth();
+		m_Transform.Projection.m[2][1] += (m_Transform.Jitter.y * 2.0f - 1.0f) / m_Transform.Viewport.GetHeight();
 #endif
 
 		m_Transform.Projection.Invert(m_Transform.ProjectionInverse);
