@@ -158,7 +158,7 @@ private:
 	std::array<Shader*, (int)ShaderType::MAX> m_Shaders{};
 
 	std::array<int, D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_MAX_VALID> m_pSubobjectLocations{};
-	std::array<char, sizeof(CD3DX12_PIPELINE_STATE_STREAM2)> m_pSubobjectData{};
+	std::vector<char> m_pSubobjectData{};
 	uint32 m_Subobjects = 0;
 	uint32 m_Size = 0;
 };

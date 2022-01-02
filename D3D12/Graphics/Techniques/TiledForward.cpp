@@ -62,7 +62,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& resources, const Til
 			context.SetPipelineState(m_pComputeLightCullPSO);
 			context.SetComputeRootSignature(m_pComputeLightCullRS.get());
 
-			context.SetRootCBV(0, GetViewUniforms(resources));
+			context.SetRootCBV(0, GetViewUniforms(resources, parameters.pDepth));
 
 			D3D12_CPU_DESCRIPTOR_HANDLE uavs[] = {
 				m_pLightIndexCounter->GetUAV()->GetDescriptor(),

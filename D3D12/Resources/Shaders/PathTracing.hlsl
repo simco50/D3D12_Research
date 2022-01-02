@@ -31,9 +31,9 @@ struct RAYPAYLOAD PrimaryRayPayload
 {
 	float2 UV;
 	float2 Normal;
-	float2 Tangent;
-	int TangentSign;
 	float3 Position;
+	int TangentSign;
+	float2 Tangent;
 	float2 GeometryNormal;
 	uint Material;
 

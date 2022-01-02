@@ -6,8 +6,8 @@
 
 struct PassParameters
 {
+	int4 ClusterDimensions;
 	int2 ClusterSize;
-	int3 ClusterDimensions;
 };
 
 RWStructuredBuffer<AABB> uOutAABBs : register(u0);
@@ -15,7 +15,7 @@ ConstantBuffer<PassParameters> cPass : register(b0);
 
 float GetDepthFromSlice(uint slice)
 {
-	return cView.NearZ * pow(cView.FarZ / cView.NearZ, (float)slice / cPass.ClusterDimensions.z);
+	return cView.FarZ * pow(cView.NearZ / cView.FarZ, (float)slice / cPass.ClusterDimensions.z);
 }
 
 float3 LineFromOriginZIntersection(float3 lineFromOrigin, float depth)
@@ -27,7 +27,7 @@ float3 LineFromOriginZIntersection(float3 lineFromOrigin, float depth)
 
 [RootSignature(RootSig)]
 [numthreads(1, 1, 32)]
-void GenerateAABBs(uint threadID : SV_DispatchThreadID)
+void GenerateAABBs(uint3 threadID : SV_DispatchThreadID)
 {
 	uint3 clusterIndex3D = threadID;
 	if(clusterIndex3D.z >= cPass.ClusterDimensions.z)

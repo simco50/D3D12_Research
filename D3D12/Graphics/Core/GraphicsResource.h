@@ -64,8 +64,15 @@ public:
 	}
 	D3D12_RESOURCE_STATES Get(uint32 subResource) const
 	{
-		assert(m_AllSameState || subResource < (uint32)m_ResourceStates.size());
-		return m_AllSameState ? m_CommonState : m_ResourceStates[subResource];
+		if (m_AllSameState)
+		{
+			return m_CommonState;
+		}
+		else
+		{
+			assert(subResource < (uint32)m_ResourceStates.size());
+			return m_ResourceStates[subResource];
+		}
 	}
 private:
 	constexpr static uint32 MAX_SUBRESOURCES = 12;
