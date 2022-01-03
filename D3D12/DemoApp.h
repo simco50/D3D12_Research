@@ -192,7 +192,6 @@ private:
 	PipelineState* m_pBloomMipChainPSO = nullptr;
 	std::unique_ptr<RootSignature> m_pBloomRS;
 	std::unique_ptr<Texture> m_pBloomTextures[2];
-	std::vector<UnorderedAccessView*> m_pBloomUAVs[2];
 
 	Texture* m_pVisualizeTexture = nullptr;
 	SceneView m_SceneData;

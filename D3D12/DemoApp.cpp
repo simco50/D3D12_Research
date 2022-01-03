@@ -278,6 +278,15 @@ void DemoApp::SetupScene(CommandContext& context)
 		m_Lights.push_back(sunLight);
 	}
 
+	{
+		Vector3 Position(-1, 1, 0);
+		Vector3 Direction;
+		Position.Normalize(Direction);
+		Light sunLight = Light::Point(Position, 2, 30);
+		sunLight.VolumetricLighting = true;
+		m_Lights.push_back(sunLight);
+	}
+
 #if 0
 	for (int i = 0; i < 50; ++i)
 	{
@@ -1118,15 +1127,14 @@ void DemoApp::Update()
 				uint32 width = pTarget->GetWidth() / 2;
 				uint32 height = pTarget->GetHeight() / 2;
 
-				context.InsertUavBarrier();
-
 				Texture* pSource = GetCurrentRenderTarget();
 				pTarget = m_pBloomTextures[1].get();
 
-				for (uint32 i = 1; i < m_pBloomTextures[0]->GetMipLevels(); ++i)
+				const uint32 numMips = pTarget->GetMipLevels();
+				constexpr uint32 ThreadGroupSize = 128;
+
+				for (uint32 i = 1; i < numMips; ++i)
 				{
-
-
 					struct Parameters
 					{
 						uint32 SourceMip;
@@ -1134,29 +1142,24 @@ void DemoApp::Update()
 						uint32 Horizontal;
 					} parameters;
 
-					parameters.SourceMip = i - 1;
 					parameters.TargetDimensionsInv = Vector2(1.0f / width, 1.0f / height);
 
 					{
 						context.InsertResourceBarrier(pSource, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 						context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
+						UnorderedAccessView uav;
+						uav.Create(pTarget, TextureUAVDesc((uint8)i));
+
+						parameters.SourceMip = i - 1;
 						parameters.Horizontal = 0;
 
 						context.SetRootCBV(0, parameters);
 
-						D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
-							pSource->GetSRV()->GetDescriptor(),
-						};
+						context.BindResource(2, 0, &uav);
+						context.BindResource(3, 0, pSource->GetSRV());
 
-						D3D12_CPU_DESCRIPTOR_HANDLE uavs[] = {
-							m_pBloomUAVs[i % 2][i]->GetDescriptor()
-						};
-
-						context.BindResources(2, 0, uavs, ARRAYSIZE(uavs));
-						context.BindResources(3, 0, srvs, ARRAYSIZE(srvs));
-
-						context.Dispatch(ComputeUtils::GetNumThreadGroups(width, 1, height, 128));
+						context.Dispatch(ComputeUtils::GetNumThreadGroups(width, 1, height, ThreadGroupSize));
 
 						pTarget = m_pBloomTextures[i % 2].get();
 						pSource = m_pBloomTextures[(i + 1) % 2].get();
@@ -1166,25 +1169,17 @@ void DemoApp::Update()
 						context.InsertResourceBarrier(pSource, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 						context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-						D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
-							pSource->GetSRV()->GetDescriptor(),
-						};
+						UnorderedAccessView uav;
+						uav.Create(pTarget, TextureUAVDesc((uint8)i));
 
-						D3D12_CPU_DESCRIPTOR_HANDLE uavs[] = {
-							m_pBloomUAVs[(i + 1) % 2][i]->GetDescriptor()
-						};
-
-						context.BindResources(2, 0, uavs, ARRAYSIZE(uavs));
-						context.BindResources(3, 0, srvs, ARRAYSIZE(srvs));
+						context.BindResource(2, 0, &uav);
+						context.BindResource(3, 0, pSource->GetSRV());
 
 						parameters.SourceMip = i;
 						parameters.Horizontal = 1;
 
 						context.SetRootCBV(0, parameters);
-						context.Dispatch(ComputeUtils::GetNumThreadGroups(width, 128, height, 1));
-
-						pSource = m_pBloomTextures[i % 2].get();
-						pTarget = m_pBloomTextures[(i + 1) % 2].get();
+						context.Dispatch(ComputeUtils::GetNumThreadGroups(width, ThreadGroupSize, height, 1));
 					}
 
 					std::swap(pSource, pTarget);
@@ -1363,12 +1358,6 @@ void DemoApp::OnResizeViewport(int width, int height)
 	for (uint32 i = 0; i < ARRAYSIZE(m_pBloomTextures); ++i)
 	{
 		m_pBloomTextures[i] = m_pDevice->CreateTexture(TextureDesc::Create2D(width, height, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess, 1, mips), Sprintf("Bloom Target %d", i).c_str());
-		m_pBloomUAVs[i].resize(mips);
-		for (uint32 j = 0; j < mips; ++j)
-		{
-			m_pBloomUAVs[i][j] = nullptr;
-			m_pBloomTextures[i]->CreateUAV(&m_pBloomUAVs[i][j], TextureUAVDesc((uint8)j));
-		}
 	}
 
 	m_pCamera->SetViewport(FloatRect(0, 0, (float)width, (float)height));
