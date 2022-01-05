@@ -32,32 +32,55 @@ void SeparateBloomCS(uint3 threadId : SV_DispatchThreadID)
 	color *= 0.25f;
 
 	float exposure = tAverageLuminance[2];
-	//color *= exposure;
+	color *= exposure;
 
 	color = min(color, cSeparateData.BrightnessClamp);
-	color = max(color - 0.5*cSeparateData.Threshold, 0);
+	color = max(color - cSeparateData.Threshold, 0);
 
 	uTarget[threadId.xy] = float4(color.rgb, 1);
 }
 
 #define THREAD_GROUP_SIZE (128)
-#define KERNEL_LENGTH (4)
+#define KERNEL_LENGTH (16)
 #define BLUR_WEIGHTS (2 * KERNEL_LENGTH + 1)
 #define GS_CACHE_SIZE (KERNEL_LENGTH + THREAD_GROUP_SIZE + KERNEL_LENGTH)
 
-static const float s_BlurWeights[KERNEL_LENGTH + 1] = { 1.0f, 0.9f, 0.6f, 0.15f, 0.1f };
-static const float s_NormalizationFactor = 1.0f / (s_BlurWeights[0] + 2.0f * (s_BlurWeights[1] + s_BlurWeights[2] + s_BlurWeights[3] + s_BlurWeights[4]));
-static const float s_BlurWeightsNormalized[BLUR_WEIGHTS] = {
-	s_BlurWeights[4] * s_NormalizationFactor,
-	s_BlurWeights[3] * s_NormalizationFactor,
-	s_BlurWeights[2] * s_NormalizationFactor,
-	s_BlurWeights[1] * s_NormalizationFactor,
-	s_BlurWeights[0] * s_NormalizationFactor,
-	s_BlurWeights[1] * s_NormalizationFactor,
-	s_BlurWeights[2] * s_NormalizationFactor,
-	s_BlurWeights[3] * s_NormalizationFactor,
-	s_BlurWeights[4] * s_NormalizationFactor,
+static const float s_BlurWeights[BLUR_WEIGHTS] = {
+	0.004013,
+	0.005554,
+	0.007527,
+	0.00999,
+	0.012984,
+	0.016524,
+	0.020594,
+	0.025133,
+	0.030036,
+	0.035151,
+	0.040283,
+	0.045207,
+	0.049681,
+	0.053463,
+	0.056341,
+	0.058141,
+	0.058754,
+	0.058141,
+	0.056341,
+	0.053463,
+	0.049681,
+	0.045207,
+	0.040283,
+	0.035151,
+	0.030036,
+	0.025133,
+	0.020594,
+	0.016524,
+	0.012984,
+	0.00999,
+	0.007527,
+	0.005554,
+	0.004013
 };
+
 groupshared float4 gsSampleCache[GS_CACHE_SIZE];
 
 [numthreads(THREAD_GROUP_SIZE, 1, 1)]
@@ -83,7 +106,7 @@ void BloomMipChainCS(uint3 groupId : SV_GroupID, uint groupIndex : SV_GroupIndex
 	for(i = 0; i < BLUR_WEIGHTS; ++i)
 	{
 		uint samplePoint = center + i - KERNEL_LENGTH;
-		value += gsSampleCache[samplePoint] * s_BlurWeightsNormalized[i];
+		value += gsSampleCache[samplePoint] * s_BlurWeights[i];
 	}
 
 	int2 pixel = groupBegin + groupIndex * direction;

@@ -125,6 +125,11 @@ namespace Tweakables
 	ConsoleVariable g_ShadowCascades("r.Shadows.CascadeCount", 4);
 	ConsoleVariable g_PSSMFactor("r.Shadow.PSSMFactor", 1.0f);
 
+	// Bloom
+	ConsoleVariable g_Bloom("r.Bloom", true);
+	ConsoleVariable g_BloomThreshold("r.Bloom.Threshold", 1.0f);
+	ConsoleVariable g_BloomMaxBrightness("r.Bloom.MaxBrightness", 10.0f);
+
 	// Misc Lighting
 	ConsoleVariable g_RaytracedAO("r.Raytracing.AO", false);
 	ConsoleVariable g_VisualizeLights("vis.Lights", false);
@@ -1075,119 +1080,119 @@ void DemoApp::Update()
 				context.Dispatch(1);
 			});
 
-		RGPassBuilder bloomSeparate = graph.AddPass("Separate Bloom");
-		bloomSeparate.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
-			{
-				Texture* pTarget = m_pBloomTextures[0].get();
-
-				context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-				context.InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-				context.InsertResourceBarrier(m_pAverageLuminance.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-
-				context.SetComputeRootSignature(m_pBloomRS.get());
-				context.SetPipelineState(m_pBloomSeparatePSO);
-
-				struct Parameters
+		if (Tweakables::g_Bloom.Get())
+		{
+			RGPassBuilder bloomSeparate = graph.AddPass("Separate Bloom");
+			bloomSeparate.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
 				{
-					float Threshold;
-					float BrightnessClamp;
-				} parameters;
+					Texture* pTarget = m_pBloomTextures[0].get();
 
-				parameters.Threshold = 1.0f;
-				parameters.BrightnessClamp = 10.0f;
+					context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+					context.InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+					context.InsertResourceBarrier(m_pAverageLuminance.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
-				context.SetRootCBV(0, parameters);
-				context.SetRootCBV(1, GetViewUniforms(m_SceneData));
+					context.SetComputeRootSignature(m_pBloomRS.get());
+					context.SetPipelineState(m_pBloomSeparatePSO);
 
-				D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
-					GetCurrentRenderTarget()->GetSRV()->GetDescriptor(),
-					m_pAverageLuminance->GetSRV()->GetDescriptor(),
-				};
-
-				D3D12_CPU_DESCRIPTOR_HANDLE uavs[] = {
-					pTarget->GetUAV()->GetDescriptor()
-				};
-
-				context.BindResources(2, 0, uavs, ARRAYSIZE(uavs));
-				context.BindResources(3, 0, srvs, ARRAYSIZE(srvs));
-
-				context.Dispatch(ComputeUtils::GetNumThreadGroups(pTarget->GetWidth(), 8, pTarget->GetHeight(), 8));
-			});
-
-		RGPassBuilder bloomMipChain = graph.AddPass("Bloom Mip Chain");
-		bloomMipChain.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
-			{
-				Texture* pTarget = m_pBloomTextures[0].get();
-
-				context.SetComputeRootSignature(m_pBloomRS.get());
-				context.SetPipelineState(m_pBloomMipChainPSO);
-
-				context.SetRootCBV(1, GetViewUniforms(m_SceneData));
-
-				uint32 width = pTarget->GetWidth() / 2;
-				uint32 height = pTarget->GetHeight() / 2;
-
-				Texture* pSource = GetCurrentRenderTarget();
-				pTarget = m_pBloomTextures[1].get();
-
-				const uint32 numMips = pTarget->GetMipLevels();
-				constexpr uint32 ThreadGroupSize = 128;
-
-				for (uint32 i = 1; i < numMips; ++i)
-				{
 					struct Parameters
 					{
-						uint32 SourceMip;
-						Vector2 TargetDimensionsInv;
-						uint32 Horizontal;
+						float Threshold;
+						float BrightnessClamp;
 					} parameters;
 
-					parameters.TargetDimensionsInv = Vector2(1.0f / width, 1.0f / height);
+					parameters.Threshold = Tweakables::g_BloomThreshold;
+					parameters.BrightnessClamp = Tweakables::g_BloomMaxBrightness;
 
+					context.SetRootCBV(0, parameters);
+					context.SetRootCBV(1, GetViewUniforms(m_SceneData));
+
+					D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
+						GetCurrentRenderTarget()->GetSRV()->GetDescriptor(),
+						m_pAverageLuminance->GetSRV()->GetDescriptor(),
+					};
+
+					D3D12_CPU_DESCRIPTOR_HANDLE uavs[] = {
+						pTarget->GetUAV()->GetDescriptor()
+					};
+
+					context.BindResources(2, 0, uavs, ARRAYSIZE(uavs));
+					context.BindResources(3, 0, srvs, ARRAYSIZE(srvs));
+
+					context.Dispatch(ComputeUtils::GetNumThreadGroups(pTarget->GetWidth(), 8, pTarget->GetHeight(), 8));
+				});
+
+			RGPassBuilder bloomMipChain = graph.AddPass("Bloom Mip Chain");
+			bloomMipChain.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
+				{
+					Texture* pSource = m_pBloomTextures[0].get();
+					Texture* pTarget = m_pBloomTextures[1].get();
+
+					context.SetComputeRootSignature(m_pBloomRS.get());
+					context.SetPipelineState(m_pBloomMipChainPSO);
+
+					context.SetRootCBV(1, GetViewUniforms(m_SceneData));
+
+					uint32 width = pTarget->GetWidth() / 2;
+					uint32 height = pTarget->GetHeight() / 2;
+
+					const uint32 numMips = pTarget->GetMipLevels();
+					constexpr uint32 ThreadGroupSize = 128;
+
+					for (uint32 i = 1; i < numMips; ++i)
 					{
-						context.InsertResourceBarrier(pSource, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-						context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+						struct Parameters
+						{
+							uint32 SourceMip;
+							Vector2 TargetDimensionsInv;
+							uint32 Horizontal;
+						} parameters;
 
-						UnorderedAccessView uav;
-						uav.Create(pTarget, TextureUAVDesc((uint8)i));
+						parameters.TargetDimensionsInv = Vector2(1.0f / width, 1.0f / height);
 
-						parameters.SourceMip = i - 1;
-						parameters.Horizontal = 0;
+						{
+							context.InsertResourceBarrier(pSource, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+							context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-						context.SetRootCBV(0, parameters);
+							UnorderedAccessView uav;
+							uav.Create(pTarget, TextureUAVDesc((uint8)i));
 
-						context.BindResource(2, 0, &uav);
-						context.BindResource(3, 0, pSource->GetSRV());
+							parameters.SourceMip = i - 1;
+							parameters.Horizontal = 0;
 
-						context.Dispatch(ComputeUtils::GetNumThreadGroups(width, 1, height, ThreadGroupSize));
+							context.SetRootCBV(0, parameters);
 
-						pTarget = m_pBloomTextures[i % 2].get();
-						pSource = m_pBloomTextures[(i + 1) % 2].get();
+							context.BindResource(2, 0, &uav);
+							context.BindResource(3, 0, pSource->GetSRV());
+
+							context.Dispatch(ComputeUtils::GetNumThreadGroups(width, 1, height, ThreadGroupSize));
+						}
+
+						std::swap(pSource, pTarget);
+
+						{
+							context.InsertResourceBarrier(pSource, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+							context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+							UnorderedAccessView uav;
+							uav.Create(pTarget, TextureUAVDesc((uint8)i));
+
+							context.BindResource(2, 0, &uav);
+							context.BindResource(3, 0, pSource->GetSRV());
+
+							parameters.SourceMip = i;
+							parameters.Horizontal = 1;
+
+							context.SetRootCBV(0, parameters);
+							context.Dispatch(ComputeUtils::GetNumThreadGroups(width, ThreadGroupSize, height, 1));
+						}
+
+						std::swap(pSource, pTarget);
+
+						width /= 2;
+						height /= 2;
 					}
-
-					{
-						context.InsertResourceBarrier(pSource, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-						context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-
-						UnorderedAccessView uav;
-						uav.Create(pTarget, TextureUAVDesc((uint8)i));
-
-						context.BindResource(2, 0, &uav);
-						context.BindResource(3, 0, pSource->GetSRV());
-
-						parameters.SourceMip = i;
-						parameters.Horizontal = 1;
-
-						context.SetRootCBV(0, parameters);
-						context.Dispatch(ComputeUtils::GetNumThreadGroups(width, ThreadGroupSize, height, 1));
-					}
-
-					std::swap(pSource, pTarget);
-					
-					width /= 2;
-					height /= 2;
-				}
-			});
+				});
+		}
 
 		RGPassBuilder tonemap = graph.AddPass("Tonemap");
 		tonemap.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
@@ -1203,15 +1208,18 @@ void DemoApp::Update()
 				context.InsertResourceBarrier(m_pTonemapTarget.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 				context.InsertResourceBarrier(m_pAverageLuminance.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 				context.InsertResourceBarrier(m_pHDRRenderTarget.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+				context.InsertResourceBarrier(m_pBloomTextures[0].get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
 				context.SetPipelineState(m_pToneMapPSO);
 				context.SetComputeRootSignature(m_pToneMapRS.get());
 
 				context.SetRootCBV(0, constBuffer);
+				context.SetRootCBV(1, GetViewUniforms(m_SceneData, m_pTonemapTarget.get()));
 
-				context.BindResource(1, 0, m_pTonemapTarget->GetUAV());
-				context.BindResource(2, 0, m_pHDRRenderTarget->GetSRV());
-				context.BindResource(2, 1, m_pAverageLuminance->GetSRV());
+				context.BindResource(2, 0, m_pTonemapTarget->GetUAV());
+				context.BindResource(3, 0, m_pHDRRenderTarget->GetSRV());
+				context.BindResource(3, 1, m_pAverageLuminance->GetSRV());
+				context.BindResource(3, 2, Tweakables::g_Bloom.Get() ? m_pBloomTextures[0]->GetSRV() : GetDefaultTexture(DefaultTexture::Black2D)->GetSRV());
 
 				context.Dispatch(ComputeUtils::GetNumThreadGroups(m_pHDRRenderTarget->GetWidth(), 16, m_pHDRRenderTarget->GetHeight(), 16));
 			});
@@ -1841,10 +1849,14 @@ void DemoApp::UpdateImGui()
 			ImGui::SliderFloat("PSSM Factor", &Tweakables::g_PSSMFactor.Get(), 0, 1);
 			ImGui::Checkbox("Visualize Cascades", &Tweakables::g_VisualizeShadowCascades.Get());
 		}
-
-		if (ImGui::CollapsingHeader("Expose/Tonemapping"))
+		if (ImGui::CollapsingHeader("Bloom"))
 		{
-
+			ImGui::Checkbox("Enabled", &Tweakables::g_Bloom.Get());
+			ImGui::SliderFloat("Brightness Threshold", &Tweakables::g_BloomThreshold.Get(), 0, 5);
+			ImGui::SliderFloat("Max Brightness", &Tweakables::g_BloomMaxBrightness.Get(), 1, 100);
+		}
+		if (ImGui::CollapsingHeader("Exposure/Tonemapping"))
+		{
 			ImGui::DragFloatRange2("Log Luminance", &Tweakables::g_MinLogLuminance.Get(), &Tweakables::g_MaxLogLuminance.Get(), 1.0f, -100, 50);
 			ImGui::Checkbox("Draw Exposure Histogram", &Tweakables::g_DrawHistogram.Get());
 			ImGui::SliderFloat("White Point", &Tweakables::g_WhitePoint.Get(), 0, 20);
