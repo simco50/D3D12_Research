@@ -1085,7 +1085,7 @@ void DemoApp::Update()
 			RGPassBuilder bloomSeparate = graph.AddPass("Separate Bloom");
 			bloomSeparate.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
 				{
-					Texture* pTarget = m_pBloomTextures[0].get();
+					Texture* pTarget = m_pBloomTexture.get();
 
 					context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 					context.InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
@@ -1124,8 +1124,8 @@ void DemoApp::Update()
 			RGPassBuilder bloomMipChain = graph.AddPass("Bloom Mip Chain");
 			bloomMipChain.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
 				{
-					Texture* pSource = m_pBloomTextures[0].get();
-					Texture* pTarget = m_pBloomTextures[1].get();
+					Texture* pSource = m_pBloomTexture.get();
+					Texture* pTarget = m_pBloomIntermediateTexture.get();
 
 					context.SetComputeRootSignature(m_pBloomRS.get());
 					context.SetPipelineState(m_pBloomMipChainPSO);
@@ -1208,7 +1208,7 @@ void DemoApp::Update()
 				context.InsertResourceBarrier(m_pTonemapTarget.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 				context.InsertResourceBarrier(m_pAverageLuminance.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 				context.InsertResourceBarrier(m_pHDRRenderTarget.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-				context.InsertResourceBarrier(m_pBloomTextures[0].get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+				context.InsertResourceBarrier(m_pBloomTexture.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
 				context.SetPipelineState(m_pToneMapPSO);
 				context.SetComputeRootSignature(m_pToneMapRS.get());
@@ -1219,7 +1219,7 @@ void DemoApp::Update()
 				context.BindResource(2, 0, m_pTonemapTarget->GetUAV());
 				context.BindResource(3, 0, m_pHDRRenderTarget->GetSRV());
 				context.BindResource(3, 1, m_pAverageLuminance->GetSRV());
-				context.BindResource(3, 2, Tweakables::g_Bloom.Get() ? m_pBloomTextures[0]->GetSRV() : GetDefaultTexture(DefaultTexture::Black2D)->GetSRV());
+				context.BindResource(3, 2, Tweakables::g_Bloom.Get() ? m_pBloomTexture->GetSRV() : GetDefaultTexture(DefaultTexture::Black2D)->GetSRV());
 
 				context.Dispatch(ComputeUtils::GetNumThreadGroups(m_pHDRRenderTarget->GetWidth(), 16, m_pHDRRenderTarget->GetHeight(), 16));
 			});
@@ -1363,10 +1363,9 @@ void DemoApp::OnResizeViewport(int width, int height)
 	}
 
 	uint32 mips = Math::Min(5u, (uint32)log2f((float)Math::Max(width, height)));
-	for (uint32 i = 0; i < ARRAYSIZE(m_pBloomTextures); ++i)
-	{
-		m_pBloomTextures[i] = m_pDevice->CreateTexture(TextureDesc::Create2D(width, height, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess, 1, mips), Sprintf("Bloom Target %d", i).c_str());
-	}
+	TextureDesc bloomDesc = TextureDesc::Create2D(width, height, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess, 1, mips);
+	m_pBloomTexture = m_pDevice->CreateTexture(bloomDesc, "Bloom");
+	m_pBloomIntermediateTexture = m_pDevice->CreateTexture(bloomDesc, "Bloom Intermediate");
 
 	m_pCamera->SetViewport(FloatRect(0, 0, (float)width, (float)height));
 }
@@ -1595,7 +1594,6 @@ void DemoApp::InitializePipelines()
 		m_pBloomSeparatePSO = m_pDevice->CreatePipeline(psoDesc);
 
 		psoDesc.SetComputeShader(m_pDevice->GetShader("Bloom.hlsl", ShaderType::Compute, "BloomMipChainCS"));
-		psoDesc.SetRootSignature(m_pBloomRS->GetRootSignature());
 		psoDesc.SetName("Bloom Mips");
 		m_pBloomMipChainPSO = m_pDevice->CreatePipeline(psoDesc);
 	}
@@ -1747,7 +1745,6 @@ void DemoApp::UpdateImGui()
 		ImGui::End();
 	}
 
-	m_pVisualizeTexture = m_pBloomTextures[0].get();
 	if (m_pVisualizeTexture)
 	{
 		if (ImGui::Begin("Visualize Texture"))

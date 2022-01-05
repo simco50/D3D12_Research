@@ -50,11 +50,11 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 	float exposure = tAverageLuminance[2];
 	value = value * (exposure + 1);
 
-	float3 bloom = tBloom.SampleLevel(sLinearClamp, uv, 1.5f).rgb;
-	bloom += tBloom.SampleLevel(sLinearClamp, uv, 3.5f).rgb;
-	bloom += tBloom.SampleLevel(sLinearClamp, uv, 4.5f).rgb;
-	bloom *= 0.333f;
-	value += bloom;
+	float3 bloom =
+		tBloom.SampleLevel(sLinearClamp, uv, 1.5f).rgb +
+		tBloom.SampleLevel(sLinearClamp, uv, 3.5f).rgb +
+		tBloom.SampleLevel(sLinearClamp, uv, 4.5f).rgb;
+	value += bloom / 3;
 
 	switch(cPassData.Tonemapper)
 	{

@@ -191,7 +191,8 @@ private:
 	PipelineState* m_pBloomSeparatePSO = nullptr;
 	PipelineState* m_pBloomMipChainPSO = nullptr;
 	std::unique_ptr<RootSignature> m_pBloomRS;
-	std::unique_ptr<Texture> m_pBloomTextures[2];
+	std::unique_ptr<Texture> m_pBloomTexture;
+	std::unique_ptr<Texture> m_pBloomIntermediateTexture;
 
 	Texture* m_pVisualizeTexture = nullptr;
 	SceneView m_SceneData;
