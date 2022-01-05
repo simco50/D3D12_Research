@@ -11,8 +11,9 @@
 #define BLOCK_SIZE 16
 
 #define RootSig ROOT_SIG("CBV(b0), " \
+				"CBV(b100), " \
 				"DescriptorTable(UAV(u0, numDescriptors = 1)), " \
-				"DescriptorTable(SRV(t0, numDescriptors = 2))")
+				"DescriptorTable(SRV(t0, numDescriptors = 3))")
 
 struct PassParameters
 {
@@ -24,17 +25,18 @@ ConstantBuffer<PassParameters> cPassData : register(b0);
 RWTexture2D<float4> uOutColor : register(u0);
 Texture2D tColor : register(t0);
 StructuredBuffer<float> tAverageLuminance : register(t1);
+Texture2D tBloom : register(t2);
 
 [RootSignature(RootSig)]
 [numthreads(BLOCK_SIZE, BLOCK_SIZE, 1)]
 void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 {
-	uint2 dimensions;
-	tColor.GetDimensions(dimensions.x, dimensions.y);
-	if(dispatchThreadId.x >= dimensions.x || dispatchThreadId.y >= dimensions.y)
+	if(dispatchThreadId.x >= cView.ScreenDimensions.x || dispatchThreadId.y >= cView.ScreenDimensions.y)
 	{
 		return;
 	}
+
+	float2 uv = (0.5f + dispatchThreadId.xy) * cView.ScreenDimensionsInv;
 
 	float3 rgb = tColor.Load(uint3(dispatchThreadId.xy, 0)).rgb;
 
@@ -47,6 +49,12 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 
 	float exposure = tAverageLuminance[2];
 	value = value * (exposure + 1);
+
+	float3 bloom =
+		tBloom.SampleLevel(sLinearClamp, uv, 1.5f).rgb +
+		tBloom.SampleLevel(sLinearClamp, uv, 3.5f).rgb +
+		tBloom.SampleLevel(sLinearClamp, uv, 4.5f).rgb;
+	value += bloom / 3;
 
 	switch(cPassData.Tonemapper)
 	{

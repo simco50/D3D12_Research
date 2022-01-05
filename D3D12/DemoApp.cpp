@@ -125,6 +125,11 @@ namespace Tweakables
 	ConsoleVariable g_ShadowCascades("r.Shadows.CascadeCount", 4);
 	ConsoleVariable g_PSSMFactor("r.Shadow.PSSMFactor", 1.0f);
 
+	// Bloom
+	ConsoleVariable g_Bloom("r.Bloom", true);
+	ConsoleVariable g_BloomThreshold("r.Bloom.Threshold", 1.0f);
+	ConsoleVariable g_BloomMaxBrightness("r.Bloom.MaxBrightness", 10.0f);
+
 	// Misc Lighting
 	ConsoleVariable g_RaytracedAO("r.Raytracing.AO", false);
 	ConsoleVariable g_VisualizeLights("vis.Lights", false);
@@ -274,6 +279,15 @@ void DemoApp::SetupScene(CommandContext& context)
 		Position.Normalize(Direction);
 		Light sunLight = Light::Directional(Position, -Direction, 10);
 		sunLight.CastShadows = true;
+		sunLight.VolumetricLighting = true;
+		m_Lights.push_back(sunLight);
+	}
+
+	{
+		Vector3 Position(-1, 1, 0);
+		Vector3 Direction;
+		Position.Normalize(Direction);
+		Light sunLight = Light::Point(Position, 2, 30);
 		sunLight.VolumetricLighting = true;
 		m_Lights.push_back(sunLight);
 	}
@@ -1041,8 +1055,8 @@ void DemoApp::Update()
 				context.InsertResourceBarrier(m_pLuminanceHistogram.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 				context.InsertResourceBarrier(m_pAverageLuminance.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-				context.SetPipelineState(m_pAverageLuminancePSO);
 				context.SetComputeRootSignature(m_pAverageLuminanceRS.get());
+				context.SetPipelineState(m_pAverageLuminancePSO);
 
 				struct Parameters
 				{
@@ -1066,6 +1080,120 @@ void DemoApp::Update()
 				context.Dispatch(1);
 			});
 
+		if (Tweakables::g_Bloom.Get())
+		{
+			RGPassBuilder bloomSeparate = graph.AddPass("Separate Bloom");
+			bloomSeparate.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
+				{
+					Texture* pTarget = m_pBloomTexture.get();
+
+					context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+					context.InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+					context.InsertResourceBarrier(m_pAverageLuminance.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+
+					context.SetComputeRootSignature(m_pBloomRS.get());
+					context.SetPipelineState(m_pBloomSeparatePSO);
+
+					struct Parameters
+					{
+						float Threshold;
+						float BrightnessClamp;
+					} parameters;
+
+					parameters.Threshold = Tweakables::g_BloomThreshold;
+					parameters.BrightnessClamp = Tweakables::g_BloomMaxBrightness;
+
+					context.SetRootCBV(0, parameters);
+					context.SetRootCBV(1, GetViewUniforms(m_SceneData));
+
+					D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
+						GetCurrentRenderTarget()->GetSRV()->GetDescriptor(),
+						m_pAverageLuminance->GetSRV()->GetDescriptor(),
+					};
+
+					D3D12_CPU_DESCRIPTOR_HANDLE uavs[] = {
+						pTarget->GetUAV()->GetDescriptor()
+					};
+
+					context.BindResources(2, 0, uavs, ARRAYSIZE(uavs));
+					context.BindResources(3, 0, srvs, ARRAYSIZE(srvs));
+
+					context.Dispatch(ComputeUtils::GetNumThreadGroups(pTarget->GetWidth(), 8, pTarget->GetHeight(), 8));
+				});
+
+			RGPassBuilder bloomMipChain = graph.AddPass("Bloom Mip Chain");
+			bloomMipChain.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
+				{
+					Texture* pSource = m_pBloomTexture.get();
+					Texture* pTarget = m_pBloomIntermediateTexture.get();
+
+					context.SetComputeRootSignature(m_pBloomRS.get());
+					context.SetPipelineState(m_pBloomMipChainPSO);
+
+					context.SetRootCBV(1, GetViewUniforms(m_SceneData));
+
+					uint32 width = pTarget->GetWidth() / 2;
+					uint32 height = pTarget->GetHeight() / 2;
+
+					const uint32 numMips = pTarget->GetMipLevels();
+					constexpr uint32 ThreadGroupSize = 128;
+
+					for (uint32 i = 1; i < numMips; ++i)
+					{
+						struct Parameters
+						{
+							uint32 SourceMip;
+							Vector2 TargetDimensionsInv;
+							uint32 Horizontal;
+						} parameters;
+
+						parameters.TargetDimensionsInv = Vector2(1.0f / width, 1.0f / height);
+
+						{
+							context.InsertResourceBarrier(pSource, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+							context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+							UnorderedAccessView uav;
+							uav.Create(pTarget, TextureUAVDesc((uint8)i));
+
+							parameters.SourceMip = i - 1;
+							parameters.Horizontal = 0;
+
+							context.SetRootCBV(0, parameters);
+
+							context.BindResource(2, 0, &uav);
+							context.BindResource(3, 0, pSource->GetSRV());
+
+							context.Dispatch(ComputeUtils::GetNumThreadGroups(width, 1, height, ThreadGroupSize));
+						}
+
+						std::swap(pSource, pTarget);
+
+						{
+							context.InsertResourceBarrier(pSource, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+							context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+							UnorderedAccessView uav;
+							uav.Create(pTarget, TextureUAVDesc((uint8)i));
+
+							context.BindResource(2, 0, &uav);
+							context.BindResource(3, 0, pSource->GetSRV());
+
+							parameters.SourceMip = i;
+							parameters.Horizontal = 1;
+
+							context.SetRootCBV(0, parameters);
+							context.Dispatch(ComputeUtils::GetNumThreadGroups(width, ThreadGroupSize, height, 1));
+						}
+
+						std::swap(pSource, pTarget);
+
+						width /= 2;
+						height /= 2;
+					}
+				});
+		}
+
 		RGPassBuilder tonemap = graph.AddPass("Tonemap");
 		tonemap.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
 			{
@@ -1080,15 +1208,18 @@ void DemoApp::Update()
 				context.InsertResourceBarrier(m_pTonemapTarget.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 				context.InsertResourceBarrier(m_pAverageLuminance.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 				context.InsertResourceBarrier(m_pHDRRenderTarget.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+				context.InsertResourceBarrier(m_pBloomTexture.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
 				context.SetPipelineState(m_pToneMapPSO);
 				context.SetComputeRootSignature(m_pToneMapRS.get());
 
 				context.SetRootCBV(0, constBuffer);
+				context.SetRootCBV(1, GetViewUniforms(m_SceneData, m_pTonemapTarget.get()));
 
-				context.BindResource(1, 0, m_pTonemapTarget->GetUAV());
-				context.BindResource(2, 0, m_pHDRRenderTarget->GetSRV());
-				context.BindResource(2, 1, m_pAverageLuminance->GetSRV());
+				context.BindResource(2, 0, m_pTonemapTarget->GetUAV());
+				context.BindResource(3, 0, m_pHDRRenderTarget->GetSRV());
+				context.BindResource(3, 1, m_pAverageLuminance->GetSRV());
+				context.BindResource(3, 2, Tweakables::g_Bloom.Get() ? m_pBloomTexture->GetSRV() : GetDefaultTexture(DefaultTexture::Black2D)->GetSRV());
 
 				context.Dispatch(ComputeUtils::GetNumThreadGroups(m_pHDRRenderTarget->GetWidth(), 16, m_pHDRRenderTarget->GetHeight(), 16));
 			});
@@ -1230,6 +1361,11 @@ void DemoApp::OnResizeViewport(int width, int height)
 		pBuffer->Map();
 		m_ReductionReadbackTargets.push_back(std::move(pBuffer));
 	}
+
+	uint32 mips = Math::Min(5u, (uint32)log2f((float)Math::Max(width, height)));
+	TextureDesc bloomDesc = TextureDesc::Create2D(width, height, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess, 1, mips);
+	m_pBloomTexture = m_pDevice->CreateTexture(bloomDesc, "Bloom");
+	m_pBloomIntermediateTexture = m_pDevice->CreateTexture(bloomDesc, "Bloom Intermediate");
 
 	m_pCamera->SetViewport(FloatRect(0, 0, (float)width, (float)height));
 }
@@ -1440,6 +1576,26 @@ void DemoApp::InitializePipelines()
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
 		psoDesc.SetName("Skybox");
 		m_pSkyboxPSO = m_pDevice->CreatePipeline(psoDesc);
+	}
+
+	//Bloom
+	{
+		m_pBloomRS = std::make_unique<RootSignature>(m_pDevice.get());
+		m_pBloomRS->AddConstantBufferView(0);
+		m_pBloomRS->AddConstantBufferView(100);
+		m_pBloomRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1);
+		m_pBloomRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2);
+		m_pBloomRS->Finalize("Generate Mips");
+
+		PipelineStateInitializer psoDesc;
+		psoDesc.SetComputeShader(m_pDevice->GetShader("Bloom.hlsl", ShaderType::Compute, "SeparateBloomCS"));
+		psoDesc.SetRootSignature(m_pBloomRS->GetRootSignature());
+		psoDesc.SetName("Separate Bloom");
+		m_pBloomSeparatePSO = m_pDevice->CreatePipeline(psoDesc);
+
+		psoDesc.SetComputeShader(m_pDevice->GetShader("Bloom.hlsl", ShaderType::Compute, "BloomMipChainCS"));
+		psoDesc.SetName("Bloom Mips");
+		m_pBloomMipChainPSO = m_pDevice->CreatePipeline(psoDesc);
 	}
 }
 
@@ -1690,10 +1846,14 @@ void DemoApp::UpdateImGui()
 			ImGui::SliderFloat("PSSM Factor", &Tweakables::g_PSSMFactor.Get(), 0, 1);
 			ImGui::Checkbox("Visualize Cascades", &Tweakables::g_VisualizeShadowCascades.Get());
 		}
-
-		if (ImGui::CollapsingHeader("Expose/Tonemapping"))
+		if (ImGui::CollapsingHeader("Bloom"))
 		{
-
+			ImGui::Checkbox("Enabled", &Tweakables::g_Bloom.Get());
+			ImGui::SliderFloat("Brightness Threshold", &Tweakables::g_BloomThreshold.Get(), 0, 5);
+			ImGui::SliderFloat("Max Brightness", &Tweakables::g_BloomMaxBrightness.Get(), 1, 100);
+		}
+		if (ImGui::CollapsingHeader("Exposure/Tonemapping"))
+		{
 			ImGui::DragFloatRange2("Log Luminance", &Tweakables::g_MinLogLuminance.Get(), &Tweakables::g_MaxLogLuminance.Get(), 1.0f, -100, 50);
 			ImGui::Checkbox("Draw Exposure Histogram", &Tweakables::g_DrawHistogram.Get());
 			ImGui::SliderFloat("White Point", &Tweakables::g_WhitePoint.Get(), 0, 20);
