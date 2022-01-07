@@ -196,7 +196,6 @@ DemoApp::DemoApp(WindowHandle window, const IntVector2& windowRect, int sampleCo
 
 	CommandContext* pContext = m_pDevice->AllocateCommandContext();
 	InitializePipelines();
-	InitializeAssets(*pContext);
 	SetupScene(*pContext);
 	pContext->Execute(true);
 
@@ -209,36 +208,6 @@ DemoApp::~DemoApp()
 	m_pDevice->IdleGPU();
 	DebugRenderer::Get()->Shutdown();
 	Profiler::Get()->Shutdown();
-}
-
-void DemoApp::InitializeAssets(CommandContext& context)
-{
-	auto RegisterDefaultTexture = [this, &context](DefaultTexture type, const char* pName, const TextureDesc& desc, uint32* pData)
-	{
-		m_DefaultTextures[(int)type] = std::make_unique<Texture>(m_pDevice.get(), pName);
-		m_DefaultTextures[(int)type]->Create(&context, desc, pData);
-	};
-
-	uint32 BLACK = 0xFF000000;
-	RegisterDefaultTexture(DefaultTexture::Black2D, "Default Black", TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &BLACK);
-	uint32 WHITE = 0xFFFFFFFF;
-	RegisterDefaultTexture(DefaultTexture::White2D, "Default White", TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &WHITE);
-	uint32 MAGENTA = 0xFFFF00FF;
-	RegisterDefaultTexture(DefaultTexture::Magenta2D, "Default Magenta", TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &MAGENTA);
-	uint32 GRAY = 0xFF808080;
-	RegisterDefaultTexture(DefaultTexture::Gray2D, "Default Gray", TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &GRAY);
-	uint32 DEFAULT_NORMAL = 0xFFFF8080;
-	RegisterDefaultTexture(DefaultTexture::Normal2D, "Default Normal", TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &DEFAULT_NORMAL);
-	uint32 DEFAULT_ROUGHNESS_METALNESS = 0xFFFF80FF;
-	RegisterDefaultTexture(DefaultTexture::RoughnessMetalness, "Default Roughness/Metalness", TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &DEFAULT_ROUGHNESS_METALNESS);
-
-	uint32 BLACK_CUBE[6] = {};
-	RegisterDefaultTexture(DefaultTexture::BlackCube, "Default Black Cube", TextureDesc::CreateCube(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), BLACK_CUBE);
-
-	m_DefaultTextures[(int)DefaultTexture::ColorNoise256] = std::make_unique<Texture>(m_pDevice.get(), "Color Noise 256px");
-	m_DefaultTextures[(int)DefaultTexture::ColorNoise256]->Create(&context, "Resources/Textures/Noise.png", false);
-	m_DefaultTextures[(int)DefaultTexture::BlueNoise512] = std::make_unique<Texture>(m_pDevice.get(), "Blue Noise 512px");
-	m_DefaultTextures[(int)DefaultTexture::BlueNoise512]->Create(&context, "Resources/Textures/BlueNoise.dds", false);
 }
 
 void DemoApp::SetupScene(CommandContext& context)
@@ -1204,7 +1173,7 @@ void DemoApp::Update()
 			context.BindResource(2, 0, m_pTonemapTarget->GetUAV());
 			context.BindResource(3, 0, m_pHDRRenderTarget->GetSRV());
 			context.BindResource(3, 1, m_pAverageLuminance->GetSRV());
-			context.BindResource(3, 2, Tweakables::g_Bloom.Get() ? m_pBloomTexture->GetSRV() : GetDefaultTexture(DefaultTexture::Black2D)->GetSRV());
+			context.BindResource(3, 2, Tweakables::g_Bloom.Get() ? m_pBloomTexture->GetSRV() : GraphicsCommon::GetDefaultTexture(DefaultTexture::Black2D)->GetSRV());
 
 			context.Dispatch(ComputeUtils::GetNumThreadGroups(m_pHDRRenderTarget->GetWidth(), 16, m_pHDRRenderTarget->GetHeight(), 16));
 		});

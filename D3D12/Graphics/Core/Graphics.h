@@ -40,6 +40,30 @@ enum class GraphicsInstanceFlags
 };
 DECLARE_BITMASK_TYPE(GraphicsInstanceFlags);
 
+enum class DefaultTexture
+{
+	White2D,
+	Black2D,
+	Magenta2D,
+	Gray2D,
+	Normal2D,
+	RoughnessMetalness,
+	BlackCube,
+	Black3D,
+	ColorNoise256,
+	BlueNoise512,
+	MAX,
+};
+
+namespace GraphicsCommon
+{
+	Texture* GetDefaultTexture(DefaultTexture type);
+
+	extern CommandSignature* pIndirectDrawSignature;
+	extern CommandSignature* pIndirectDispatchSignature;
+	extern CommandSignature* pIndirectDispatchMeshSignature;
+}
+
 class GraphicsInstance
 {
 public:
@@ -174,10 +198,8 @@ public:
 	ID3D12Resource* CreateResource(const D3D12_RESOURCE_DESC& desc, D3D12_RESOURCE_STATES initialState, D3D12_HEAP_TYPE heapType, D3D12_CLEAR_VALUE* pClearValue = nullptr);
 	void ReleaseResource(ID3D12Resource* pResource);
 	PipelineState* CreatePipeline(const PipelineStateInitializer& psoDesc);
+	PipelineState* CreatePipeline(Shader* pShader, RootSignature* pRootSignature);
 	StateObject* CreateStateObject(const StateObjectInitializer& stateDesc);
-	CommandSignature* GetIndirectDrawSignature() const { return m_pIndirectDrawSignature.get(); }
-	CommandSignature* GetIndirectDispatchSignature() const { return m_pIndirectDispatchSignature.get(); }
-	CommandSignature* GetIndirectDispatchMeshSignature() const { return m_pIndirectDispatchMeshSignature.get(); }
 
 	Shader* GetShader(const char* pShaderPath, ShaderType shaderType, const char* entryPoint = "", const std::vector<ShaderDefine>& defines = {});
 	ShaderLibrary* GetLibrary(const char* pShaderPath, const std::vector<ShaderDefine>& defines = {});
@@ -221,8 +243,4 @@ private:
 	std::vector<std::unique_ptr<StateObject>> m_StateObjects;
 
 	std::mutex m_ContextAllocationMutex;
-
-	std::unique_ptr<CommandSignature> m_pIndirectDrawSignature;
-	std::unique_ptr<CommandSignature> m_pIndirectDispatchSignature;
-	std::unique_ptr<CommandSignature> m_pIndirectDispatchMeshSignature;
 };

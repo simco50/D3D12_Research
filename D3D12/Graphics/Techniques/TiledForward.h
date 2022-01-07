@@ -56,6 +56,4 @@ private:
 	std::unique_ptr<RootSignature> m_pVisualizeLightsRS;
 	PipelineState* m_pVisualizeLightsPSO = nullptr;
 	std::unique_ptr<Texture> m_pVisualizationIntermediateTexture;
-
-	std::unique_ptr<Texture> m_pVolumeFog;
 };

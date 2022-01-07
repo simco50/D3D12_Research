@@ -23,6 +23,80 @@
 extern "C" { _declspec(dllexport) extern const UINT D3D12SDKVersion = D3D12_SDK_VERSION; }
 extern "C" { _declspec(dllexport) extern const char* D3D12SDKPath = ".\\D3D12\\"; }
 
+namespace GraphicsCommon
+{
+	static std::array<std::unique_ptr<Texture>, (uint32)DefaultTexture::MAX> DefaultTextures;
+
+	CommandSignature* pIndirectDrawSignature = nullptr;
+	CommandSignature* pIndirectDispatchSignature = nullptr;
+	CommandSignature* pIndirectDispatchMeshSignature = nullptr;
+
+	void Create(GraphicsDevice* pDevice)
+	{
+		CommandContext& context = *pDevice->AllocateCommandContext();
+
+		auto RegisterDefaultTexture = [pDevice, &context](DefaultTexture type, const char* pName, const TextureDesc& desc, uint32* pData)
+		{
+			DefaultTextures[(int)type] = std::make_unique<Texture>(pDevice, pName);
+			DefaultTextures[(int)type]->Create(&context, desc, pData);
+		};
+
+		uint32 BLACK = 0xFF000000;
+		RegisterDefaultTexture(DefaultTexture::Black2D, "Default Black", TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &BLACK);
+		uint32 WHITE = 0xFFFFFFFF;
+		RegisterDefaultTexture(DefaultTexture::White2D, "Default White", TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &WHITE);
+		uint32 MAGENTA = 0xFFFF00FF;
+		RegisterDefaultTexture(DefaultTexture::Magenta2D, "Default Magenta", TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &MAGENTA);
+		uint32 GRAY = 0xFF808080;
+		RegisterDefaultTexture(DefaultTexture::Gray2D, "Default Gray", TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &GRAY);
+		uint32 DEFAULT_NORMAL = 0xFFFF8080;
+		RegisterDefaultTexture(DefaultTexture::Normal2D, "Default Normal", TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &DEFAULT_NORMAL);
+		uint32 DEFAULT_ROUGHNESS_METALNESS = 0xFFFF80FF;
+		RegisterDefaultTexture(DefaultTexture::RoughnessMetalness, "Default Roughness/Metalness", TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &DEFAULT_ROUGHNESS_METALNESS);
+
+		uint32 BLACK_CUBE[6] = {};
+		RegisterDefaultTexture(DefaultTexture::BlackCube, "Default Black Cube", TextureDesc::CreateCube(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), BLACK_CUBE);
+
+		RegisterDefaultTexture(DefaultTexture::Black3D, "Default Black 3D", TextureDesc::Create3D(1, 1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &BLACK);
+
+		DefaultTextures[(int)DefaultTexture::ColorNoise256] = std::make_unique<Texture>(pDevice, "Color Noise 256px");
+		DefaultTextures[(int)DefaultTexture::ColorNoise256]->Create(&context, "Resources/Textures/Noise.png", false);
+		DefaultTextures[(int)DefaultTexture::BlueNoise512] = std::make_unique<Texture>(pDevice, "Blue Noise 512px");
+		DefaultTextures[(int)DefaultTexture::BlueNoise512]->Create(&context, "Resources/Textures/BlueNoise.dds", false);
+
+		context.Execute(true);
+
+		pIndirectDispatchSignature = new CommandSignature(pDevice);
+		pIndirectDispatchSignature->AddDispatch();
+		pIndirectDispatchSignature->Finalize("Default Indirect Dispatch");
+
+		pIndirectDrawSignature = new CommandSignature(pDevice);
+		pIndirectDrawSignature->AddDraw();
+		pIndirectDrawSignature->Finalize("Default Indirect Draw");
+
+		pIndirectDispatchMeshSignature = new CommandSignature(pDevice);
+		pIndirectDispatchMeshSignature->AddDispatchMesh();
+		pIndirectDispatchMeshSignature->Finalize("Default Indirect Dispatch Mesh");
+	}
+
+	void Destroy()
+	{
+		for (auto& pTexture : DefaultTextures)
+		{
+			pTexture.reset();
+		}
+
+		delete pIndirectDispatchSignature;
+		delete pIndirectDrawSignature;
+		delete pIndirectDispatchMeshSignature;
+	}
+
+	Texture* GetDefaultTexture(DefaultTexture type)
+	{
+		return DefaultTextures[(int)type].get();
+	}
+}
+
 std::unique_ptr<GraphicsInstance> GraphicsInstance::CreateInstance(GraphicsInstanceFlags createFlags /*= GraphicsFlags::None*/)
 {
 	return std::make_unique<GraphicsInstance>(createFlags);
@@ -258,27 +332,19 @@ GraphicsDevice::GraphicsDevice(IDXGIAdapter4* pAdapter)
 	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_RTV] = std::make_unique<OfflineDescriptorAllocator>(this, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, 128);
 	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_DSV] = std::make_unique<OfflineDescriptorAllocator>(this, D3D12_DESCRIPTOR_HEAP_TYPE_DSV, 64);
 
-	m_pIndirectDispatchSignature = std::make_unique<CommandSignature>(this);
-	m_pIndirectDispatchSignature->AddDispatch();
-	m_pIndirectDispatchSignature->Finalize("Default Indirect Dispatch");
-
-	m_pIndirectDrawSignature = std::make_unique<CommandSignature>(this);
-	m_pIndirectDrawSignature->AddDraw();
-	m_pIndirectDrawSignature->Finalize("Default Indirect Draw");
-
-	m_pIndirectDispatchMeshSignature = std::make_unique<CommandSignature>(this);
-	m_pIndirectDispatchMeshSignature->AddDispatchMesh();
-	m_pIndirectDispatchMeshSignature->Finalize("Default Indirect Dispatch Mesh");
-
 	uint8 smMaj, smMin;
 	Capabilities.GetShaderModel(smMaj, smMin);
 	m_pShaderManager = std::make_unique<ShaderManager>(smMaj, smMin);
 	m_pShaderManager->AddIncludeDir("Resources/Shaders/");
 	m_pShaderManager->AddIncludeDir("Graphics/Core/");
+
+	GraphicsCommon::Create(this);
 }
 
 GraphicsDevice::~GraphicsDevice()
 {
+	GraphicsCommon::Destroy();
+
 	IdleGPU();
 	check(UnregisterWait(m_DeviceRemovedEvent) != 0);
 }
@@ -390,6 +456,16 @@ ID3D12Resource* GraphicsDevice::CreateResource(const D3D12_RESOURCE_DESC& desc, 
 void GraphicsDevice::ReleaseResource(ID3D12Resource* pResource)
 {
 	m_DeleteQueue.EnqueueResource(pResource, GetFrameFence());
+}
+
+PipelineState* GraphicsDevice::CreatePipeline(Shader* pComputeShader, RootSignature* pRootSignature)
+{
+	checkf(pComputeShader && pComputeShader->GetType() == ShaderType::Compute, "Shader must be a Compute shader");
+	PipelineStateInitializer desc;
+	desc.SetRootSignature(pRootSignature->GetRootSignature());
+	desc.SetComputeShader(pComputeShader);
+	desc.SetName(pComputeShader->GetEntryPoint());
+	return CreatePipeline(desc);
 }
 
 PipelineState* GraphicsDevice::CreatePipeline(const PipelineStateInitializer& psoDesc)
