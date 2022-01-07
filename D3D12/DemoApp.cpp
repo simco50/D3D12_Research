@@ -1057,6 +1057,8 @@ void DemoApp::Update()
 				{
 					Texture* pTarget = m_pBloomTexture.get();
 
+					UnorderedAccessView** pTargetUAVs = m_pBloomUAVs.data();
+
 					context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 					context.InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 					context.InsertResourceBarrier(m_pAverageLuminance.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
@@ -1082,7 +1084,7 @@ void DemoApp::Update()
 					};
 
 					D3D12_CPU_DESCRIPTOR_HANDLE uavs[] = {
-						pTarget->GetUAV()->GetDescriptor()
+						pTargetUAVs[0]->GetDescriptor()
 					};
 
 					context.BindResources(2, 0, uavs, ARRAYSIZE(uavs));
@@ -1096,6 +1098,9 @@ void DemoApp::Update()
 				{
 					Texture* pSource = m_pBloomTexture.get();
 					Texture* pTarget = m_pBloomIntermediateTexture.get();
+
+					UnorderedAccessView** pSourceUAVs = m_pBloomUAVs.data();
+					UnorderedAccessView** pTargetUAVs = m_pBloomIntermediateUAVs.data();
 
 					context.SetComputeRootSignature(m_pBloomRS.get());
 					context.SetPipelineState(m_pBloomMipChainPSO);
@@ -1124,14 +1129,11 @@ void DemoApp::Update()
 							context.InsertResourceBarrier(pSource, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 							context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-							UnorderedAccessView uav;
-							uav.Create(pTarget, TextureUAVDesc((uint8)i));
-
 							parameters.SourceMip = direction == 0 ? i - 1 : i;
 							parameters.Horizontal = direction;
 
 							context.SetRootCBV(0, parameters);
-							context.BindResource(2, 0, &uav);
+							context.BindResource(2, 0, pTargetUAVs[i]);
 							context.BindResource(3, 0, pSource->GetSRV());
 
 							IntVector3 numThreadGroups = direction == 0 ?
@@ -1140,6 +1142,7 @@ void DemoApp::Update()
 							context.Dispatch(numThreadGroups);
 
 							std::swap(pSource, pTarget);
+							std::swap(pSourceUAVs, pTargetUAVs);
 						}
 
 						width /= 2;
@@ -1324,6 +1327,16 @@ void DemoApp::OnResizeViewport(int width, int height)
 	TextureDesc bloomDesc = TextureDesc::Create2D(width, height, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess, 1, mips);
 	m_pBloomTexture = m_pDevice->CreateTexture(bloomDesc, "Bloom");
 	m_pBloomIntermediateTexture = m_pDevice->CreateTexture(bloomDesc, "Bloom Intermediate");
+
+	m_pBloomUAVs.resize(mips);
+	m_pBloomIntermediateUAVs.resize(mips);
+	for (uint32 i = 0; i < mips; ++i)
+	{
+		m_pBloomUAVs[i] = nullptr;
+		m_pBloomTexture->CreateUAV(&m_pBloomUAVs[i], TextureUAVDesc((uint8)i));
+		m_pBloomIntermediateUAVs[i] = nullptr;
+		m_pBloomIntermediateTexture->CreateUAV(&m_pBloomIntermediateUAVs[i], TextureUAVDesc((uint8)i));
+	}
 
 	m_pCamera->SetViewport(FloatRect(0, 0, (float)width, (float)height));
 }

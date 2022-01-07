@@ -176,6 +176,8 @@ private:
 	std::unique_ptr<RootSignature> m_pBloomRS;
 	std::unique_ptr<Texture> m_pBloomTexture;
 	std::unique_ptr<Texture> m_pBloomIntermediateTexture;
+	std::vector<UnorderedAccessView*> m_pBloomUAVs;
+	std::vector<UnorderedAccessView*> m_pBloomIntermediateUAVs;
 
 	Texture* m_pVisualizeTexture = nullptr;
 	SceneView m_SceneData;
