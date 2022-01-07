@@ -290,7 +290,7 @@ namespace D3D
 					{
 						uint32 alloc_type_index = Node->AllocationType - D3D12_DRED_ALLOCATION_TYPE_COMMAND_QUEUE;
 						const TCHAR* AllocTypeName = (alloc_type_index < ARRAYSIZE(AllocTypesNames)) ? AllocTypesNames[alloc_type_index] : TEXT("Unknown Alloc");
-						E_LOG(Warning, "\tName: %s (Type: %s)", Node->ObjectNameW, AllocTypeName);
+						E_LOG(Warning, "\tName: %s (Type: %s)", Node->ObjectNameA, AllocTypeName);
 						Node = Node->pNext;
 					}
 				}
@@ -303,7 +303,7 @@ namespace D3D
 					{
 						uint32 alloc_type_index = Node->AllocationType - D3D12_DRED_ALLOCATION_TYPE_COMMAND_QUEUE;
 						const TCHAR* AllocTypeName = (alloc_type_index < ARRAYSIZE(AllocTypesNames)) ? AllocTypesNames[alloc_type_index] : TEXT("Unknown Alloc");
-						E_LOG(Warning, "\tName: %s (Type: %s)", Node->ObjectNameW, AllocTypeName);
+						E_LOG(Warning, "\tName: %s (Type: %s)", Node->ObjectNameA, AllocTypeName);
 						Node = Node->pNext;
 					}
 				}
@@ -374,9 +374,11 @@ namespace D3D
 		if (pObject)
 		{
 			uint32 size = 0;
-			VERIFY_HR_EX(pObject->GetPrivateData(WKPDID_D3DDebugObjectName, &size, nullptr), nullptr);
-			out.resize(size);
-			VERIFY_HR_EX(pObject->GetPrivateData(WKPDID_D3DDebugObjectName, &size, &out[0]), nullptr);
+			if (SUCCEEDED(pObject->GetPrivateData(WKPDID_D3DDebugObjectName, &size, nullptr)))
+			{
+				out.resize(size);
+				VERIFY_HR(pObject->GetPrivateData(WKPDID_D3DDebugObjectName, &size, &out[0]));
+			}
 		}
 		return out;
 	}
