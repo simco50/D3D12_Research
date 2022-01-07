@@ -1279,12 +1279,6 @@ void DemoApp::Present()
 	pContext->InsertResourceBarrier(m_pSwapchain->GetBackBuffer(), D3D12_RESOURCE_STATE_PRESENT);
 	pContext->Execute(false);
 
-	if (m_CapturePix)
-	{
-		D3D::EnqueuePIXCapture();
-		m_CapturePix = false;
-	}
-
 	//PRESENT
 	//	- Set fence for the currently queued frame
 	//	- Present the frame buffer
@@ -1293,6 +1287,12 @@ void DemoApp::Present()
 	m_pDevice->TickFrame();
 	m_pSwapchain->Present();
 	++m_Frame;
+
+	if (m_CapturePix)
+	{
+		D3D::EnqueuePIXCapture();
+		m_CapturePix = false;
+	}
 }
 
 void DemoApp::OnResize(int width, int height)
