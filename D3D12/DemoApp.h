@@ -53,6 +53,7 @@ public:
 
 private:
 	void OnResizeViewport(int width, int height);
+	void Present();
 
 	void InitializePipelines();
 	void InitializeAssets(CommandContext& context);

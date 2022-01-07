@@ -686,8 +686,6 @@ void DemoApp::Update()
 	Data.DepthStencil = graph.ImportTexture("Depth Stencil", GetDepthStencil());
 	Data.DepthStencilResolved = graph.ImportTexture("Resolved Depth Stencil", GetResolvedDepthStencil());
 
-	uint64 nextFenceValue = 0;
-
 	if (m_RenderPath != RenderPath::PathTracing)
 	{
 		// PARTICLES GPU SIM
@@ -986,7 +984,7 @@ void DemoApp::Update()
 	}
 
 	{
-		RG_GRAPH_SCOPE("Tonemapping", graph);
+		RG_GRAPH_SCOPE("Eye Adaptation", graph);
 		Texture* pToneMapInput = m_pDownscaledColor.get();
 
 		RGPassBuilder colorDownsample = graph.AddPass("Downsample Color");
@@ -1079,9 +1077,12 @@ void DemoApp::Update()
 
 				context.Dispatch(1);
 			});
-
+	}
+	{
 		if (Tweakables::g_Bloom.Get())
 		{
+			RG_GRAPH_SCOPE("Bloom", graph);
+
 			RGPassBuilder bloomSeparate = graph.AddPass("Separate Bloom");
 			bloomSeparate.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
 				{
@@ -1149,6 +1150,7 @@ void DemoApp::Update()
 
 						parameters.TargetDimensionsInv = Vector2(1.0f / width, 1.0f / height);
 
+						for (uint32 direction = 0; direction < 2; ++direction)
 						{
 							context.InsertResourceBarrier(pSource, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 							context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
@@ -1156,107 +1158,90 @@ void DemoApp::Update()
 							UnorderedAccessView uav;
 							uav.Create(pTarget, TextureUAVDesc((uint8)i));
 
-							parameters.SourceMip = i - 1;
-							parameters.Horizontal = 0;
+							parameters.SourceMip = direction == 0 ? i - 1 : i;
+							parameters.Horizontal = direction;
 
 							context.SetRootCBV(0, parameters);
-
 							context.BindResource(2, 0, &uav);
 							context.BindResource(3, 0, pSource->GetSRV());
 
-							context.Dispatch(ComputeUtils::GetNumThreadGroups(width, 1, height, ThreadGroupSize));
+							IntVector3 numThreadGroups = direction == 0 ?
+								ComputeUtils::GetNumThreadGroups(width, 1, height, ThreadGroupSize) :
+								ComputeUtils::GetNumThreadGroups(width, ThreadGroupSize, height, 1);
+							context.Dispatch(numThreadGroups);
+
+							std::swap(pSource, pTarget);
 						}
-
-						std::swap(pSource, pTarget);
-
-						{
-							context.InsertResourceBarrier(pSource, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-							context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-
-							UnorderedAccessView uav;
-							uav.Create(pTarget, TextureUAVDesc((uint8)i));
-
-							context.BindResource(2, 0, &uav);
-							context.BindResource(3, 0, pSource->GetSRV());
-
-							parameters.SourceMip = i;
-							parameters.Horizontal = 1;
-
-							context.SetRootCBV(0, parameters);
-							context.Dispatch(ComputeUtils::GetNumThreadGroups(width, ThreadGroupSize, height, 1));
-						}
-
-						std::swap(pSource, pTarget);
 
 						width /= 2;
 						height /= 2;
 					}
 				});
 		}
+	}
 
-		RGPassBuilder tonemap = graph.AddPass("Tonemap");
-		tonemap.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
-			{
-				struct Parameters
-				{
-					float WhitePoint;
-					uint32 Tonemapper;
-				} constBuffer;
-				constBuffer.WhitePoint = Tweakables::g_WhitePoint.Get();
-				constBuffer.Tonemapper = Tweakables::g_ToneMapper.Get();
-
-				context.InsertResourceBarrier(m_pTonemapTarget.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-				context.InsertResourceBarrier(m_pAverageLuminance.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-				context.InsertResourceBarrier(m_pHDRRenderTarget.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-				context.InsertResourceBarrier(m_pBloomTexture.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-
-				context.SetPipelineState(m_pToneMapPSO);
-				context.SetComputeRootSignature(m_pToneMapRS.get());
-
-				context.SetRootCBV(0, constBuffer);
-				context.SetRootCBV(1, GetViewUniforms(m_SceneData, m_pTonemapTarget.get()));
-
-				context.BindResource(2, 0, m_pTonemapTarget->GetUAV());
-				context.BindResource(3, 0, m_pHDRRenderTarget->GetSRV());
-				context.BindResource(3, 1, m_pAverageLuminance->GetSRV());
-				context.BindResource(3, 2, Tweakables::g_Bloom.Get() ? m_pBloomTexture->GetSRV() : GetDefaultTexture(DefaultTexture::Black2D)->GetSRV());
-
-				context.Dispatch(ComputeUtils::GetNumThreadGroups(m_pHDRRenderTarget->GetWidth(), 16, m_pHDRRenderTarget->GetHeight(), 16));
-			});
-
-		if (Tweakables::g_DrawHistogram.Get())
+	RGPassBuilder tonemap = graph.AddPass("Tonemap");
+	tonemap.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
 		{
-			RGPassBuilder drawHistogram = graph.AddPass("Draw Histogram");
-			drawHistogram.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
+			struct Parameters
+			{
+				float WhitePoint;
+				uint32 Tonemapper;
+			} constBuffer;
+			constBuffer.WhitePoint = Tweakables::g_WhitePoint.Get();
+			constBuffer.Tonemapper = Tweakables::g_ToneMapper.Get();
+
+			context.InsertResourceBarrier(m_pTonemapTarget.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+			context.InsertResourceBarrier(m_pAverageLuminance.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+			context.InsertResourceBarrier(m_pHDRRenderTarget.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+			context.InsertResourceBarrier(m_pBloomTexture.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+
+			context.SetPipelineState(m_pToneMapPSO);
+			context.SetComputeRootSignature(m_pToneMapRS.get());
+
+			context.SetRootCBV(0, constBuffer);
+			context.SetRootCBV(1, GetViewUniforms(m_SceneData, m_pTonemapTarget.get()));
+			context.BindResource(2, 0, m_pTonemapTarget->GetUAV());
+			context.BindResource(3, 0, m_pHDRRenderTarget->GetSRV());
+			context.BindResource(3, 1, m_pAverageLuminance->GetSRV());
+			context.BindResource(3, 2, Tweakables::g_Bloom.Get() ? m_pBloomTexture->GetSRV() : GetDefaultTexture(DefaultTexture::Black2D)->GetSRV());
+
+			context.Dispatch(ComputeUtils::GetNumThreadGroups(m_pHDRRenderTarget->GetWidth(), 16, m_pHDRRenderTarget->GetHeight(), 16));
+		});
+
+	if (Tweakables::g_DrawHistogram.Get())
+	{
+		RGPassBuilder drawHistogram = graph.AddPass("Draw Histogram");
+		drawHistogram.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
+			{
+				context.InsertResourceBarrier(m_pLuminanceHistogram.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+				context.InsertResourceBarrier(m_pAverageLuminance.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+				context.InsertResourceBarrier(m_pDebugHistogramTexture.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+				context.SetPipelineState(m_pDrawHistogramPSO);
+				context.SetComputeRootSignature(m_pDrawHistogramRS.get());
+
+				struct AverageParameters
 				{
-					context.InsertResourceBarrier(m_pLuminanceHistogram.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-					context.InsertResourceBarrier(m_pAverageLuminance.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-					context.InsertResourceBarrier(m_pDebugHistogramTexture.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+					float MinLogLuminance;
+					float InverseLogLuminanceRange;
+					Vector2 InvTextureDimensions;
+				} Parameters;
 
-					context.SetPipelineState(m_pDrawHistogramPSO);
-					context.SetComputeRootSignature(m_pDrawHistogramRS.get());
+				Parameters.MinLogLuminance = Tweakables::g_MinLogLuminance.Get();
+				Parameters.InverseLogLuminanceRange = 1.0f / (Tweakables::g_MaxLogLuminance.Get() - Tweakables::g_MinLogLuminance.Get());
+				Parameters.InvTextureDimensions.x = 1.0f / m_pDebugHistogramTexture->GetWidth();
+				Parameters.InvTextureDimensions.y = 1.0f / m_pDebugHistogramTexture->GetHeight();
 
-					struct AverageParameters
-					{
-						float MinLogLuminance;
-						float InverseLogLuminanceRange;
-						Vector2 InvTextureDimensions;
-					} Parameters;
+				context.SetRootCBV(0, Parameters);
+				context.BindResource(1, 0, m_pDebugHistogramTexture->GetUAV());
+				context.BindResource(2, 0, m_pLuminanceHistogram->GetSRV());
+				context.BindResource(2, 1, m_pAverageLuminance->GetSRV());
 
-					Parameters.MinLogLuminance = Tweakables::g_MinLogLuminance.Get();
-					Parameters.InverseLogLuminanceRange = 1.0f / (Tweakables::g_MaxLogLuminance.Get() - Tweakables::g_MinLogLuminance.Get());
-					Parameters.InvTextureDimensions.x = 1.0f / m_pDebugHistogramTexture->GetWidth();
-					Parameters.InvTextureDimensions.y = 1.0f / m_pDebugHistogramTexture->GetHeight();
+				context.ClearUavUInt(m_pDebugHistogramTexture.get(), m_pDebugHistogramTexture->GetUAV());
 
-					context.SetRootCBV(0, Parameters);
-					context.BindResource(1, 0, m_pDebugHistogramTexture->GetUAV());
-					context.BindResource(2, 0, m_pLuminanceHistogram->GetSRV());
-					context.BindResource(2, 1, m_pAverageLuminance->GetSRV());
-					context.ClearUavUInt(m_pDebugHistogramTexture.get(), m_pDebugHistogramTexture->GetUAV());
-
-					context.Dispatch(1, m_pLuminanceHistogram->GetNumElements());
-				});
-		}
+				context.Dispatch(1, m_pLuminanceHistogram->GetNumElements());
+			});
 	}
 
 	if (Tweakables::g_VisualizeLightDensity)
@@ -1275,20 +1260,24 @@ void DemoApp::Update()
 	Texture* pBackbuffer = m_pSwapchain->GetBackBuffer();
 	m_pImGuiRenderer->Render(graph, m_SceneData, pBackbuffer);
 
-	RGPassBuilder temp = graph.AddPass("Present Barrier");
-	temp.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
-		{
-			context.InsertResourceBarrier(pBackbuffer, D3D12_RESOURCE_STATE_PRESENT);
-		});
-
 	graph.Compile();
 	if (Tweakables::g_DumpRenderGraph)
 	{
 		graph.DumpGraphMermaid("graph.html");
 		Tweakables::g_DumpRenderGraph = false;
 	}
-	nextFenceValue = graph.Execute();
+	graph.Execute();
+
 	PROFILE_END();
+
+	Present();
+}
+
+void DemoApp::Present()
+{
+	CommandContext* pContext = m_pDevice->AllocateCommandContext();
+	pContext->InsertResourceBarrier(m_pSwapchain->GetBackBuffer(), D3D12_RESOURCE_STATE_PRESENT);
+	pContext->Execute(false);
 
 	if (m_CapturePix)
 	{
