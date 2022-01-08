@@ -1,5 +1,6 @@
 #include "CommonBindings.hlsli"
 #include "SkyCommon.hlsli"
+#include "Atmosphere.hlsli"
 
 static const float4 CUBE[]=
 {
@@ -60,5 +61,5 @@ InterpolantsVSToPS VSMain(uint vertexId : SV_VertexID)
 float4 PSMain(in InterpolantsVSToPS input) : SV_Target
 {
 	float3 dir = normalize(input.UV);
-	return float4(CIESky(dir), 1.0f);
+	return float4(GetSky(dir), 1.0f);
 }

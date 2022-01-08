@@ -234,7 +234,7 @@ void ShadowMiss(inout ShadowRayPayload payload : SV_RayPayload)
 [shader("miss")]
 void ReflectionMiss(inout ReflectionRayPayload payload : SV_RayPayload)
 {
-	payload.output = CIESky(WorldRayDirection());
+	payload.output = GetSky(WorldRayDirection());
 }
 
 [shader("raygeneration")]
