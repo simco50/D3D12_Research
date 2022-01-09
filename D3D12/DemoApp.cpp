@@ -131,6 +131,7 @@ namespace Tweakables
 	ConsoleVariable g_BloomMaxBrightness("r.Bloom.MaxBrightness", 10.0f);
 
 	// Misc Lighting
+	ConsoleVariable g_VolumetricFog("r.VolumetricFog", true);
 	ConsoleVariable g_RaytracedAO("r.Raytracing.AO", false);
 	ConsoleVariable g_VisualizeLights("vis.Lights", false);
 	ConsoleVariable g_VisualizeLightDensity("vis.LightDensity", false);
@@ -1807,6 +1808,7 @@ void DemoApp::UpdateImGui()
 			ImGui::SliderFloat("Sun Inclination", &Tweakables::g_SunInclination, 0, 1);
 			ImGui::SliderFloat("Sun Temperature", &Tweakables::g_SunTemperature, 1000, 15000);
 			ImGui::SliderFloat("Sun Intensity", &Tweakables::g_SunIntensity, 0, 30);
+			ImGui::Checkbox("Volumetric Fog", &Tweakables::g_VolumetricFog.Get());
 		}
 
 		if (ImGui::CollapsingHeader("Shadows"))
@@ -1930,6 +1932,7 @@ void DemoApp::UpdateTLAS(CommandContext& context)
 					context.InsertUavBarrier(subMesh.pBLAS);
 
 					subMesh.pBLAS = pBLAS.release();
+					subMesh.pBLASScratch = pBLASScratch.release();
 				}
 			}
 		}
