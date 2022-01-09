@@ -1887,7 +1887,7 @@ void DemoApp::UpdateTLAS(CommandContext& context)
 					D3D12_RAYTRACING_GEOMETRY_DESC geometryDesc{};
 					geometryDesc.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
 					geometryDesc.Flags = D3D12_RAYTRACING_GEOMETRY_FLAG_NONE;
-					if (material.AlphaMode != MaterialAlphaMode::Opaque)
+					if (material.AlphaMode == MaterialAlphaMode::Opaque)
 					{
 						geometryDesc.Flags |= D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
 					}

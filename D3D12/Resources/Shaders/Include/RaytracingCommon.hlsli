@@ -48,9 +48,8 @@ VertexAttribute GetVertexAttributes(MeshInstance instance, float2 attribBarycent
 	return outData;
 }
 
-MaterialProperties GetMaterialProperties(uint materialIndex, float2 UV, int mipLevel)
+MaterialProperties GetMaterialProperties(MaterialData material, float2 UV, int mipLevel)
 {
-	MaterialData material = GetMaterial(materialIndex);
 	MaterialProperties properties;
 	float4 baseColor = material.BaseColorFactor;
 	if(material.Diffuse != INVALID_HANDLE)

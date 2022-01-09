@@ -78,8 +78,9 @@ float CastShadowRay(float3 origin, float3 direction)
 			{
 				MeshInstance instance = GetMeshInstance(q.CandidateInstanceID());
 				VertexAttribute vertex = GetVertexAttributes(instance, q.CandidateTriangleBarycentrics(), q.CandidatePrimitiveIndex(), q.CandidateObjectToWorld4x3());
-				MaterialProperties surface = GetMaterialProperties(instance.Material, vertex.UV, 0);
-				if(surface.Opacity > 0.5f)
+				MaterialData material = GetMaterial(instance.Material);
+				MaterialProperties surface = GetMaterialProperties(material, vertex.UV, 0);
+				if(surface.Opacity > material.AlphaCutoff)
 				{
 					q.CommitNonOpaqueTriangleHit();
 				}
@@ -163,8 +164,9 @@ void PrimaryAHS(inout PrimaryRayPayload payload, BuiltInTriangleIntersectionAttr
 {
 	MeshInstance instance = GetMeshInstance(InstanceID());
 	VertexAttribute vertex = GetVertexAttributes(instance, attrib.barycentrics, PrimitiveIndex(), ObjectToWorld4x3());
-	MaterialProperties surface = GetMaterialProperties(instance.Material, vertex.UV, 0);
-	if(surface.Opacity < 0.5)
+	MaterialData material = GetMaterial(instance.Material);
+	MaterialProperties surface = GetMaterialProperties(material, vertex.UV, 0);
+	if(surface.Opacity < material.AlphaCutoff)
 	{
 		IgnoreHit();
 	}
@@ -389,7 +391,8 @@ void RayGen()
 		}
 
 		// Decode the hit payload to retrieve all the shading information
-		MaterialProperties surface = GetMaterialProperties(payload.Material, payload.UV, 0);
+		MaterialData material = GetMaterial(payload.Material);
+		MaterialProperties surface = GetMaterialProperties(material, payload.UV, 0);
 		BrdfData brdfData = GetBrdfData(surface);
 
 		// Flip the normal towards the incoming ray
