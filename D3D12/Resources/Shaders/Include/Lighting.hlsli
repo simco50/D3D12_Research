@@ -160,7 +160,7 @@ uint GetShadowIndex(Light light, float4 pos, float3 wPos)
 				cascadeIndex++;
 			}
 		}
-		shadowIndex += cascadeIndex;
+		shadowIndex += min(cView.NumCascades - 1, cascadeIndex);
 	}
 	else if(light.IsPoint)
 	{
