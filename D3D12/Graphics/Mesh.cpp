@@ -134,6 +134,8 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 		material.EmissiveFactor.y = gltfMaterial.emissive_factor[1];
 		material.EmissiveFactor.z = gltfMaterial.emissive_factor[2];
 		material.pNormalTexture = RetrieveTexture(gltfMaterial.normal_texture, false);
+		if(gltfMaterial.name)
+			material.Name = gltfMaterial.name;
 	}
 
 	struct VS_Position

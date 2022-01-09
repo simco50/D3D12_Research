@@ -22,9 +22,9 @@ void SSAO::OnResize(int windowWidth, int windowHeight)
 
 void SSAO::Execute(RGGraph& graph, const SceneView& sceneData, Texture* pTarget, Texture* pDepth)
 {
-	static float g_AoPower = 1;
+	static float g_AoPower = 7;
 	static float g_AoThreshold = 0.0025f;
-	static float g_AoRadius = 0.05f;
+	static float g_AoRadius = 0.03f;
 	static int g_AoSamples = 16;
 
 	if (ImGui::Begin("Parameters"))

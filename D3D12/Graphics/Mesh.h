@@ -48,6 +48,7 @@ enum class MaterialAlphaMode
 
 struct Material
 {
+	std::string Name = "Unnamed Material";
 	Color BaseColorFactor = Color(1, 1, 1, 1);
 	Color EmissiveFactor = Color(0, 0, 0, 1);
 	float MetalnessFactor = 1.0f;
@@ -70,7 +71,7 @@ public:
 	const Material& GetMaterial(int materialId) const { return m_Materials[materialId]; }
 	const std::vector<SubMeshInstance>& GetMeshInstances() const { return m_MeshInstances; }
 	const std::vector<SubMesh>& GetMeshes() const { return m_Meshes; }
-	const std::vector<Material>& GetMaterials() const { return m_Materials; }
+	std::vector<Material>& GetMaterials() { return m_Materials; }
 	Buffer* GetData() const { return m_pGeometryData.get(); }
 
 private:
