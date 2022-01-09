@@ -63,7 +63,7 @@ public:
 	void AddFrustrum(const BoundingFrustum& frustum, const IntColor& color);
 	void AddAxisSystem(const Matrix& transform, float lineLength = 1.0f);
 	void AddWireCylinder(const Vector3& position, const Vector3& direction, float height, float radius, int segments, const IntColor& color);
-	void AddWireCone(const Vector3& position, const Vector3& direction, float height, float angle, int segments, const IntColor& color);
+	void AddCone(const Vector3& position, const Vector3& direction, float height, float angle, int segments, const IntColor& color, bool solid = false);
 	void AddBone(const Matrix& matrix, float length, const IntColor& color);
 	void AddLight(const Light& light, const IntColor& color = Colors::Yellow);
 
