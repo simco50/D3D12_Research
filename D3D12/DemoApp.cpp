@@ -285,16 +285,7 @@ void DemoApp::Update()
 	m_pImGuiRenderer->NewFrame(m_WindowWidth, m_WindowHeight);
 	m_pDevice->GetShaderManager()->ConditionallyReloadShaders();
 	UpdateImGui();
-
-	RGGraph renderGraph(m_pDevice.get());
-	RGPassBuilder updateScenePass = renderGraph.AddPass("Update GPU Scene");
-	updateScenePass.Bind([=](CommandContext& context, const RGPassResources& resources)
-		{
-			UploadSceneData(context);
-
-		});
-	renderGraph.Compile();
-	renderGraph.Execute();
+	m_pCamera->Update();
 
 #if 0
 	static int selectedBatch = -1;
@@ -329,15 +320,6 @@ void DemoApp::Update()
 		DebugRenderer::Get()->AddBoundingBox(b.Bounds, Color(1, 0, 1, 1));
 	}
 #endif
-
-#if 0
-	Vector3 pos = m_pCamera->GetPosition();
-	pos.x = 48;
-	pos.y = sin(5 * Time::TotalTime()) * 4 + 84;
-	pos.z = -2.6f;
-	m_pCamera->SetPosition(pos);
-#endif
-	m_pCamera->Update();
 
 	if (Input::Instance().IsKeyPressed('H'))
 	{
@@ -644,6 +626,17 @@ void DemoApp::Update()
 				}, taskContext);
 			m_ScreenshotBuffers.pop();
 		}
+	}
+
+	{
+		RGGraph graph(m_pDevice.get());
+		RGPassBuilder updateScenePass = graph.AddPass("Update GPU Scene");
+		updateScenePass.Bind([=](CommandContext& context, const RGPassResources& resources)
+			{
+				UploadSceneData(context);
+			});
+		graph.Compile();
+		graph.Execute();
 	}
 
 	RGGraph graph(m_pDevice.get());
