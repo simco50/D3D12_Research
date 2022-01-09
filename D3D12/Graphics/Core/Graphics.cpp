@@ -245,7 +245,9 @@ GraphicsDevice::GraphicsDevice(IDXGIAdapter4* pAdapter)
 	auto OnDeviceRemovedCallback = [](void* pContext, BOOLEAN) {
 		GraphicsDevice* pDevice = (GraphicsDevice*)pContext;
 		std::string error = D3D::GetErrorString(DXGI_ERROR_DEVICE_REMOVED, pDevice->m_pDevice.Get());
+		D3D::DREDHandler(pDevice->GetDevice());
 		E_LOG(Error, "%s", error.c_str());
+		abort();
 	};
 
 	m_pDeviceRemovalFence = std::make_unique<Fence>(this, UINT64_MAX, "Device Removed Fence");

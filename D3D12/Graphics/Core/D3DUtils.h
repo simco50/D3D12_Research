@@ -160,87 +160,92 @@ namespace D3D
 	inline void DREDHandler(ID3D12Device* pDevice)
 	{
 		//D3D12_AUTO_BREADCRUMB_OP
-		constexpr const TCHAR* OpNames[] =
+		constexpr const char* OpNames[] =
 		{
-			TEXT("SetMarker"),
-			TEXT("BeginEvent"),
-			TEXT("Endevent"),
-			TEXT("DrawInstanced"),
-			TEXT("DrawIndexedInstanced"),
-			TEXT("ExecuteIndirect"),
-			TEXT("Dispatch"),
-			TEXT("CopyBufferRegion"),
-			TEXT("CopyTextureRegion"),
-			TEXT("CopyResource"),
-			TEXT("CopyTiles"),
-			TEXT("ResolveSubresource"),
-			TEXT("ClearRenderTargetView"),
-			TEXT("ClearUnorderedAccessView"),
-			TEXT("ClearDepthStencilView"),
-			TEXT("ResourceBarrier"),
-			TEXT("ExecuteBundle"),
-			TEXT("Present"),
-			TEXT("ResolveQueryData"),
-			TEXT("BeginSubmission"),
-			TEXT("EndSubmission"),
-			TEXT("DecodeFrame"),
-			TEXT("ProcessFrames"),
-			TEXT("AtomicCopyBufferUint"),
-			TEXT("AtomicCopyBufferUint64"),
-			TEXT("ResolveSubresourceRegion"),
-			TEXT("WriteBufferImmediate"),
-			TEXT("DecodeFrame1"),
-			TEXT("SetProtectedResourceSession"),
-			TEXT("DecodeFrame2"),
-			TEXT("ProcessFrames1"),
-			TEXT("BuildRaytracingAccelerationStructure"),
-			TEXT("EmitRaytracingAccelerationStructurePostBuildInfo"),
-			TEXT("CopyRaytracingAccelerationStructure"),
-			TEXT("DispatchRays"),
-			TEXT("InitializeMetaCommand"),
-			TEXT("ExecuteMetaCommand"),
-			TEXT("EstimateMotion"),
-			TEXT("ResolveMotionVectorHeap"),
-			TEXT("SetPipelineState1"),
-			TEXT("InitializeExtensionCommand"),
-			TEXT("ExecuteExtensionCommand"),
+			"SetMarker",
+			"BeginEvent",
+			"EndEvent",
+			"DrawInstanced",
+			"DrawIndexedInstanced",
+			"ExecuteIndirect",
+			"Dispatch",
+			"CopyBufferRegion",
+			"CopyTextureRegion",
+			"CopyResource",
+			"CopyTiles",
+			"ResolveSubresource",
+			"ClearRenderTargetView",
+			"ClearUnorderedAccessView",
+			"ClearDepthStencilView",
+			"ResourceBarrier",
+			"ExecuteBundle",
+			"Present",
+			"ResolveQueryData",
+			"BeginSubmission",
+			"EndSubmission",
+			"DecodeFrame",
+			"ProcessFrames",
+			"AtomicCopyBufferUint",
+			"AtomicCopyBufferUint64",
+			"ResolveSubresourceRegion",
+			"WriteBufferImmediate",
+			"DecodeFrame1",
+			"SetProtectedResourceSession",
+			"DecodeFrame2",
+			"ProcessFrames1",
+			"BuildRaytracingAccelerationStructure",
+			"EmitRaytracingAccelerationStructurePostBuildInfo",
+			"CopyRaytracingAccelerationStructure",
+			"DispatchRays",
+			"InitializeMetaCommand",
+			"ExecuteMetaCommand",
+			"EstimateMotion",
+			"ResolveMotionVectorHeap",
+			"SetPipelineState1",
+			"InitializeExtensionCommand",
+			"ExecuteExtensionCommand",
+			"DispatchMesh",
+			"EncodeFrame",
+			"ResolveEncoderOutputMetadata",
 		};
-		static_assert(ARRAYSIZE(OpNames) == D3D12_AUTO_BREADCRUMB_OP_EXECUTEEXTENSIONCOMMAND + 1, "OpNames array length mismatch");
+		static_assert(ARRAYSIZE(OpNames) == D3D12_AUTO_BREADCRUMB_OP_RESOLVEENCODEROUTPUTMETADATA + 1, "OpNames array length mismatch");
 
 		//D3D12_DRED_ALLOCATION_TYPE
-		constexpr const TCHAR* AllocTypesNames[] =
+		constexpr const char* AllocTypesNames[] =
 		{
-			TEXT("CommandQueue"),
-			TEXT("CommandAllocator"),
-			TEXT("PipelineState"),
-			TEXT("CommandList"),
-			TEXT("Fence"),
-			TEXT("DescriptorHeap"),
-			TEXT("Heap"),
-			TEXT("Unknown"),
-			TEXT("QueryHeap"),
-			TEXT("CommandSignature"),
-			TEXT("PipelineLibrary"),
-			TEXT("VideoDecoder"),
-			TEXT("Unknown"),
-			TEXT("VideoProcessor"),
-			TEXT("Unknown"),
-			TEXT("Resource"),
-			TEXT("Pass"),
-			TEXT("CryptoSession"),
-			TEXT("CryptoSessionPolicy"),
-			TEXT("ProtectedResourceSession"),
-			TEXT("VideoDecoderHeap"),
-			TEXT("CommandPool"),
-			TEXT("CommandRecorder"),
-			TEXT("StateObjectr"),
-			TEXT("MetaCommand"),
-			TEXT("SchedulingGroup"),
-			TEXT("VideoMotionEstimator"),
-			TEXT("VideoMotionVectorHeap"),
-			TEXT("VideoExtensionCommand"),
+			"CommandQueue",
+			"CommandAllocator",
+			"PipelineState",
+			"CommandList",
+			"Fence",
+			"DescriptorHeap",
+			"Heap",
+			"Unknown",
+			"QueryHeap",
+			"CommandSignature",
+			"PipelineLibrary",
+			"VideoDecoder",
+			"Unknown",
+			"VideoProcessor",
+			"Unknown",
+			"Resource",
+			"Pass",
+			"CryptoSession",
+			"CryptoSessionPolicy",
+			"ProtectedResourceSession",
+			"VideoDecoderHeap",
+			"CommandPool",
+			"CommandRecorder",
+			"StateObjectr",
+			"MetaCommand",
+			"SchedulingGroup",
+			"VideoMotionEstimator",
+			"VideoMotionVectorHeap",
+			"VideoExtensionCommand",
+			"VideoEncoder",
+			"VideoEncoderHeap",
 		};
-		static_assert(ARRAYSIZE(AllocTypesNames) == D3D12_DRED_ALLOCATION_TYPE_VIDEO_EXTENSION_COMMAND - D3D12_DRED_ALLOCATION_TYPE_COMMAND_QUEUE + 1, "AllocTypes array length mismatch");
+		static_assert(ARRAYSIZE(AllocTypesNames) == D3D12_DRED_ALLOCATION_TYPE_VIDEO_ENCODER_HEAP - D3D12_DRED_ALLOCATION_TYPE_COMMAND_QUEUE + 1, "AllocTypes array length mismatch");
 
 		ID3D12DeviceRemovedExtendedData2* pDred = nullptr;
 		if (SUCCEEDED(pDevice->QueryInterface(IID_PPV_ARGS(&pDred))))
@@ -250,61 +255,74 @@ namespace D3D
 			{
 				E_LOG(Warning, "[DRED] Last tracked GPU operations:");
 
+				std::map<int32, const wchar_t*> contextStrings;
+
 				const D3D12_AUTO_BREADCRUMB_NODE1* pNode = pDredAutoBreadcrumbsOutput.pHeadAutoBreadcrumbNode;
-				while (pNode)
+				while (pNode && pNode->pLastBreadcrumbValue)
 				{
-					int32 LastCompletedOp = *pNode->pLastBreadcrumbValue;
+					int32 lastCompletedOp = *pNode->pLastBreadcrumbValue;
 
-					E_LOG(Warning, "[DRED] Commandlist \"%s\" on CommandQueue \"%s\", %d completed of %d", pNode->pCommandListDebugNameW, pNode->pCommandQueueDebugNameW, LastCompletedOp, pNode->BreadcrumbCount);
-
-					int32 FirstOp = Math::Max(LastCompletedOp - 5, 0);
-					int32 LastOp = Math::Min(LastCompletedOp + 5, int32(pNode->BreadcrumbCount) - 1);
-
-					for (uint32 breadcrumbContext = FirstOp; breadcrumbContext < pNode->BreadcrumbContextsCount; ++breadcrumbContext)
+					if (lastCompletedOp != (int)pNode->BreadcrumbCount && lastCompletedOp != 0)
 					{
-						const D3D12_DRED_BREADCRUMB_CONTEXT& context = pNode->pBreadcrumbContexts[breadcrumbContext];
-						E_LOG(Warning, "\tBreadcrumb %d: %s", context.BreadcrumbIndex, UNICODE_TO_MULTIBYTE(context.pContextString));
-					}
+						E_LOG(Warning, "[DRED] Commandlist \"%s\" on CommandQueue \"%s\", %d completed of %d", pNode->pCommandListDebugNameA, pNode->pCommandQueueDebugNameA, lastCompletedOp, pNode->BreadcrumbCount);
 
-					for (int32 Op = FirstOp; Op <= LastOp; ++Op)
-					{
-						//uint32 LastOpIndex = (*Node->pLastBreadcrumbValue - 1) % 65536;
-						D3D12_AUTO_BREADCRUMB_OP BreadcrumbOp = pNode->pCommandHistory[Op];
-						const TCHAR* OpName = (BreadcrumbOp < ARRAYSIZE(OpNames)) ? OpNames[BreadcrumbOp] : TEXT("Unknown Op");
-						E_LOG(Warning, "\tOp: %d, %s%s", Op, OpName, (Op + 1 == LastCompletedOp) ? TEXT(" - Last completed") : TEXT(""));
+						int32 firstOp = Math::Max(lastCompletedOp - 100, 0);
+						int32 lastOp = Math::Min(lastCompletedOp + 20, int32(pNode->BreadcrumbCount) - 1);
+
+						contextStrings.clear();
+						for (uint32 breadcrumbContext = firstOp; breadcrumbContext < pNode->BreadcrumbContextsCount; ++breadcrumbContext)
+						{
+							const D3D12_DRED_BREADCRUMB_CONTEXT& context = pNode->pBreadcrumbContexts[breadcrumbContext];
+							contextStrings[context.BreadcrumbIndex] = context.pContextString;
+						}
+
+						for (int32 op = firstOp; op <= lastOp; ++op)
+						{
+							D3D12_AUTO_BREADCRUMB_OP breadcrumbOp = pNode->pCommandHistory[op];
+
+							std::string contextString;
+							auto it = contextStrings.find(op);
+							if (it != contextStrings.end())
+							{
+								contextString = Sprintf(" [%s]", UNICODE_TO_MULTIBYTE(it->second));
+							}
+
+							const char* opName = (breadcrumbOp < ARRAYSIZE(OpNames)) ? OpNames[breadcrumbOp] : "Unknown Op";
+							E_LOG(Warning, "\tOp: %d, %s%s%s", op, opName, contextString.c_str(), (op + 1 == lastCompletedOp) ? " - Last completed" : "");
+						}
 					}
 					pNode = pNode->pNext;
 				}
 			}
 
-			D3D12_DRED_PAGE_FAULT_OUTPUT DredPageFaultOutput;
-			if (SUCCEEDED(pDred->GetPageFaultAllocationOutput(&DredPageFaultOutput)) && DredPageFaultOutput.PageFaultVA != 0)
+			D3D12_DRED_PAGE_FAULT_OUTPUT2 DredPageFaultOutput;
+			if (SUCCEEDED(pDred->GetPageFaultAllocationOutput2(&DredPageFaultOutput)) && DredPageFaultOutput.PageFaultVA != 0)
 			{
 				E_LOG(Warning, "[DRED] PageFault at VA GPUAddress \"0x%x\"", DredPageFaultOutput.PageFaultVA);
 
-				const D3D12_DRED_ALLOCATION_NODE* Node = DredPageFaultOutput.pHeadExistingAllocationNode;
-				if (Node)
+				const D3D12_DRED_ALLOCATION_NODE1* pNode = DredPageFaultOutput.pHeadExistingAllocationNode;
+				if (pNode)
 				{
 					E_LOG(Warning, "[DRED] Active objects with VA ranges that match the faulting VA:");
-					while (Node)
+					while (pNode)
 					{
-						uint32 alloc_type_index = Node->AllocationType - D3D12_DRED_ALLOCATION_TYPE_COMMAND_QUEUE;
-						const TCHAR* AllocTypeName = (alloc_type_index < ARRAYSIZE(AllocTypesNames)) ? AllocTypesNames[alloc_type_index] : TEXT("Unknown Alloc");
-						E_LOG(Warning, "\tName: %s (Type: %s)", Node->ObjectNameA, AllocTypeName);
-						Node = Node->pNext;
+						uint32 alloc_type_index = pNode->AllocationType - D3D12_DRED_ALLOCATION_TYPE_COMMAND_QUEUE;
+						const TCHAR* AllocTypeName = (alloc_type_index < ARRAYSIZE(AllocTypesNames)) ? AllocTypesNames[alloc_type_index] : "Unknown Alloc";
+						E_LOG(Warning, "\tName: %s (Type: %s)", pNode->ObjectNameA, AllocTypeName);
+						pNode = pNode->pNext;
 					}
 				}
 
-				Node = DredPageFaultOutput.pHeadRecentFreedAllocationNode;
-				if (Node)
+				pNode = DredPageFaultOutput.pHeadRecentFreedAllocationNode;
+				if (pNode)
 				{
 					E_LOG(Warning, "[DRED] Recent freed objects with VA ranges that match the faulting VA:");
-					while (Node)
+					while (pNode)
 					{
-						uint32 alloc_type_index = Node->AllocationType - D3D12_DRED_ALLOCATION_TYPE_COMMAND_QUEUE;
-						const TCHAR* AllocTypeName = (alloc_type_index < ARRAYSIZE(AllocTypesNames)) ? AllocTypesNames[alloc_type_index] : TEXT("Unknown Alloc");
-						E_LOG(Warning, "\tName: %s (Type: %s)", Node->ObjectNameA, AllocTypeName);
-						Node = Node->pNext;
+						uint32 allocTypeIndex = pNode->AllocationType - D3D12_DRED_ALLOCATION_TYPE_COMMAND_QUEUE;
+						const TCHAR* AllocTypeName = (allocTypeIndex < ARRAYSIZE(AllocTypesNames)) ? AllocTypesNames[allocTypeIndex] : "Unknown Alloc";
+						E_LOG(Warning, "\tName: %s (Type: %s)", pNode->ObjectNameA, AllocTypeName);
+						pNode = pNode->pNext;
 					}
 				}
 			}
@@ -344,7 +362,6 @@ namespace D3D
 
 			HRESULT removedReason = pDevice->GetDeviceRemovedReason();
 			str += "\nDRED: " + GetErrorString(removedReason, nullptr);
-			DREDHandler(pDevice);
 		}
 		return str;
 	}
