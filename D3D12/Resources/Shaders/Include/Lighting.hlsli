@@ -145,13 +145,13 @@ uint GetShadowIndex(Light light, float4 pos, float3 wPos)
 	{
 		float4 splits = pos.w > cView.CascadeDepths;
 		float4 cascades = cView.CascadeDepths > 0;
-		int cascadeIndex = dot(splits, cascades);
+		int cascadeIndex = min(dot(splits, cascades), cView.NumCascades - 1);
 
 		const float cascadeFadeTheshold = 0.1f;
 		float nextSplit = cView.CascadeDepths[cascadeIndex];
 		float splitRange = cascadeIndex == 0 ? nextSplit : nextSplit - cView.CascadeDepths[cascadeIndex - 1];
 		float fadeFactor = (nextSplit - pos.w) / splitRange;
-		if(fadeFactor <= cascadeFadeTheshold && cascadeIndex != cView.NumCascades - 1)
+		if(fadeFactor <= cascadeFadeTheshold && cascadeIndex < cView.NumCascades - 1)
 		{
 			float lerpAmount = smoothstep(0.0f, cascadeFadeTheshold, fadeFactor);
 			float dither = InterleavedGradientNoise(pos.xy);
@@ -160,7 +160,7 @@ uint GetShadowIndex(Light light, float4 pos, float3 wPos)
 				cascadeIndex++;
 			}
 		}
-		shadowIndex += min(cView.NumCascades - 1, cascadeIndex);
+		shadowIndex += cascadeIndex;
 	}
 	else if(light.IsPoint)
 	{
