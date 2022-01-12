@@ -11,6 +11,7 @@
 #include "RenderGraph/RenderGraph.h"
 #include "Core/Input.h"
 #include "ImGuizmo.h"
+#include "imnodes.h"
 #include "Core/Paths.h"
 
 #include "imgui_impl_dx12.h"
@@ -38,6 +39,7 @@ ImGuiRenderer::ImGuiRenderer(GraphicsDevice* pDevice, WindowHandle window, uint3
 {
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
+	ImNodes::CreateContext();
 
 	ImGuiIO& io = ImGui::GetIO();
 	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
@@ -135,6 +137,7 @@ ImGuiRenderer::~ImGuiRenderer()
 {
 	ImGui_ImplDX12_Shutdown();
 	ImGui_ImplWin32_Shutdown();
+	ImNodes::DestroyContext();
 	ImGui::DestroyContext();
 }
 

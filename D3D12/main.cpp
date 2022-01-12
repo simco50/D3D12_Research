@@ -16,6 +16,11 @@
 
 #define BREAK_ON_ALLOC 0
 
+#include "Graphics/MaterialGraph/MaterialGraph.h"
+
+#include "Graphics/Core/Shader.h"
+
+
 int WINAPI WinMain(_In_ HINSTANCE /*hInstance*/, _In_opt_ HINSTANCE /*hPrevInstance*/, _In_ LPSTR /*lpCmdLine*/, _In_ int /*nShowCmd*/)
 {
 #ifdef _DEBUG
@@ -24,6 +29,74 @@ int WINAPI WinMain(_In_ HINSTANCE /*hInstance*/, _In_opt_ HINSTANCE /*hPrevInsta
 	_CrtSetBreakAlloc(BREAK_ON_ALLOC);
 #endif
 #endif
+
+	using namespace ShaderGraph;
+
+	Compiler compiler;
+
+	GraphTexture tex;
+	tex.pName = "tFoo";
+
+	std::vector<Node*> nodes;
+
+	VertexAttributeNode attributeNode;
+	attributeNode.pAttribute = "UV";
+
+	TextureNode textureNode;
+	textureNode.pTexture = &tex;
+
+	Sample2DNode sampleNode;
+	sampleNode.TextureInput.Connect(&textureNode);
+	sampleNode.UVInput.Connect(&attributeNode);
+
+	ConstantFloatNode nodeB;
+	nodeB.Value = 7;
+
+	SwizzleNode swizzle;
+	swizzle.Input.Connect(&sampleNode);
+	swizzle.SwizzleString = "x";
+
+	AddNode add;
+	add.InputA.Connect(&swizzle);
+	add.InputB.Connect(&nodeB);
+	
+	PowerNode pow;
+	pow.InputA.Connect(&add);
+	pow.InputB.Connect(&swizzle);
+
+	if (pow.Compile(compiler, 0) < 0)
+	{
+		std::string pError = compiler.GetError();
+		OutputDebugString(pError.c_str());
+		__debugbreak();
+	}
+	else
+	{
+		const char* pResult = compiler.GetSource();
+		OutputDebugString(pResult);
+
+		std::ifstream fs("Resources/ShaderTemplate.hlsl", std::ios::ate);
+		std::vector<char> source(fs.tellg());
+		fs.seekg(0);
+		fs.read(source.data(), source.size());
+		std::string s = source.data();
+
+		auto it = s.find("%code%");
+		s = s.replace(s.begin() + it, s.begin() + it + strlen("%code%"), pResult);
+
+		using namespace ShaderCompiler;
+		CompileJob job;
+		job.pSource = s.c_str();
+		job.EntryPoint = "PSMain";
+		job.MajVersion = 6;
+		job.MinVersion = 6;
+		job.Target = "ps";
+		CompileResult result = ShaderCompiler::Compile(job);
+
+		__debugbreak();
+	}
+
+
 
 	Thread::SetMainThread();
 	CommandLine::Parse(GetCommandLineA());

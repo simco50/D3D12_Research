@@ -16,27 +16,6 @@ namespace ShaderCompiler
 	static ComPtr<IDxcValidator> pValidator;
 	static ComPtr<IDxcIncludeHandler> pDefaultIncludeHandler;
 
-	struct CompileJob
-	{
-		std::string FilePath;
-		std::string EntryPoint;
-		std::string Target;
-		std::vector<ShaderDefine> Defines;
-		std::vector<std::string> IncludeDirs;
-		uint8 MajVersion;
-		uint8 MinVersion;
-	};
-
-	struct CompileResult
-	{
-		std::string ErrorMessage;
-		ShaderBlob pBlob;
-		ComPtr<IUnknown> pReflection;
-		std::vector<std::string> Includes;
-
-		bool Success() const { return pBlob.Get() && ErrorMessage.length() == 0; }
-	};
-
 	constexpr const char* GetShaderTarget(ShaderType type)
 	{
 		switch (type)
@@ -57,14 +36,17 @@ namespace ShaderCompiler
 	{
 		FN_PROC(DxcCreateInstance);
 
-		HMODULE lib = LoadLibraryA(pCompilerPath);
-		DxcCreateInstanceFn.Load(lib);
+		if (!DxcCreateInstanceFn.pFunction)
+		{
+			HMODULE lib = LoadLibraryA(pCompilerPath);
+			DxcCreateInstanceFn.Load(lib);
 
-		VERIFY_HR(DxcCreateInstanceFn(CLSID_DxcUtils, IID_PPV_ARGS(pUtils.GetAddressOf())));
-		VERIFY_HR(DxcCreateInstanceFn(CLSID_DxcCompiler, IID_PPV_ARGS(pCompiler3.GetAddressOf())));
-		VERIFY_HR(DxcCreateInstanceFn(CLSID_DxcValidator, IID_PPV_ARGS(pValidator.GetAddressOf())));
-		VERIFY_HR(pUtils->CreateDefaultIncludeHandler(pDefaultIncludeHandler.GetAddressOf()));
-		E_LOG(Info, "Loaded %s", pCompilerPath);
+			VERIFY_HR(DxcCreateInstanceFn(CLSID_DxcUtils, IID_PPV_ARGS(pUtils.GetAddressOf())));
+			VERIFY_HR(DxcCreateInstanceFn(CLSID_DxcCompiler, IID_PPV_ARGS(pCompiler3.GetAddressOf())));
+			VERIFY_HR(DxcCreateInstanceFn(CLSID_DxcValidator, IID_PPV_ARGS(pValidator.GetAddressOf())));
+			VERIFY_HR(pUtils->CreateDefaultIncludeHandler(pDefaultIncludeHandler.GetAddressOf()));
+			E_LOG(Info, "Loaded %s", pCompilerPath);
+		}
 	}
 
 	bool TryLoadFile(const char* pFilePath, const std::vector<std::string>& includeDirs, ComPtr<IDxcBlobEncoding>* pFile, std::string* pFullPath)
@@ -86,14 +68,27 @@ namespace ShaderCompiler
 
 	CompileResult Compile(const CompileJob& compileJob)
 	{
+		LoadDXC();
+
 		CompileResult result;
 
-		ComPtr<IDxcBlobEncoding> pSource;
 		std::string fullPath;
-		if (!TryLoadFile(compileJob.FilePath.c_str(), compileJob.IncludeDirs, &pSource, &fullPath))
+		ComPtr<IDxcBlobEncoding> pSource;
+		if (compileJob.pSource)
 		{
-			result.ErrorMessage = Sprintf("Failed to open file '%s'", compileJob.FilePath.c_str());
-			return result;
+			if (!SUCCEEDED(pUtils->CreateBlob(compileJob.pSource, (uint32)strlen(compileJob.pSource), CP_UTF8, pSource.GetAddressOf())))
+			{
+				result.ErrorMessage = "Failed to parse input source";
+				return result;
+			}
+		}
+		else
+		{
+			if (!TryLoadFile(compileJob.FilePath.c_str(), compileJob.IncludeDirs, &pSource, &fullPath))
+			{
+				result.ErrorMessage = Sprintf("Failed to open file '%s'", compileJob.FilePath.c_str());
+				return result;
+			}
 		}
 
 		bool debugShaders = CommandLine::GetBool("debugshaders");

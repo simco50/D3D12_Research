@@ -28,6 +28,8 @@
 #include "Core/ConsoleVariables.h"
 #include "Core/Utils.h"
 #include "imgui_internal.h"
+#include "Graphics/MaterialGraph/MaterialGraph.h"
+# include "imnodes.h"
 
 static const int32 FRAME_COUNT = 3;
 static const DXGI_FORMAT DEPTH_STENCIL_SHADOW_FORMAT = DXGI_FORMAT_D32_FLOAT;
@@ -1566,6 +1568,97 @@ void DemoApp::InitializePipelines()
 
 void DemoApp::UpdateImGui()
 {
+#if 0
+	using namespace ShaderGraph;
+
+	static bool initOnce = false;
+	static std::vector<Node*> nodes;
+	if (!initOnce)
+	{
+		static GraphTexture tex;
+		tex.pName = "tFoo";
+
+		static VertexAttributeNode attributeNode;
+		attributeNode.pAttribute = "UV";
+
+		static TextureNode textureNode;
+		textureNode.pTexture = &tex;
+
+		static Sample2DNode sampleNode;
+		sampleNode.TextureInput.Connect(&textureNode);
+		sampleNode.UVInput.Connect(&attributeNode);
+
+		static ConstantFloatNode nodeB;
+		nodeB.Value = 7;
+
+		static SwizzleNode swizzle;
+		swizzle.Input.Connect(&sampleNode);
+		swizzle.SwizzleString = "x";
+
+		static AddNode add;
+		add.InputA.Connect(&swizzle);
+		add.InputB.Connect(&nodeB);
+
+		static PowerNode pow;
+		pow.InputA.Connect(&add);
+		pow.InputB.Connect(&swizzle);
+
+
+		initOnce = true;
+
+		nodes.push_back(&attributeNode);
+		nodes.push_back(&textureNode);
+		nodes.push_back(&sampleNode);
+		nodes.push_back(&nodeB);
+		nodes.push_back(&swizzle);
+		nodes.push_back(&add);
+		nodes.push_back(&pow);
+	}
+
+	{
+		int links = 0;
+
+		ImNodes::BeginNodeEditor();
+
+		for (Node* node : nodes)
+		{
+			ImNodes::BeginNode(node->ID);
+
+			ImNodes::BeginNodeTitleBar();
+			ImGui::TextUnformatted("Node");
+			ImNodes::EndNodeTitleBar();
+
+			for (const NodeInput* input : node->GetInputs())
+			{
+				ImNodes::BeginInputAttribute(input->ID);
+				ImGui::Text(input->InputName.c_str());
+				ImNodes::EndInputAttribute();
+			}
+			for (const NodeOutput& output : node->GetOutputs())
+			{
+				ImNodes::BeginOutputAttribute(output.ID);
+				ImGui::Text(output.Name.c_str());
+				ImNodes::EndOutputAttribute();
+			}
+			ImNodes::EndNode();
+		}
+
+		for (Node* node : nodes)
+		{
+			for (const NodeInput* input : node->GetInputs())
+			{
+				if (input->IsConnected())
+				{
+					ImNodes::Link(links++, input->pNode->GetOutputs()[0].ID, input->ID);
+				}
+			}
+		}
+
+
+		ImNodes::EndNodeEditor();
+	}
+#endif
+
 	m_FrameTimes[m_Frame % m_FrameTimes.size()] = Time::DeltaTime();
 
 	static ImGuiConsole console;
@@ -2075,7 +2168,29 @@ void DemoApp::UploadSceneData(CommandContext& context)
 			sceneBatches.push_back(batch);
 		}
 
-		for (const Material& material : pMesh->GetMaterials())
+		ImGui::Begin("Materials");
+		static int selectedMaterial = 0;
+		ImGui::ListBox("Materials", &selectedMaterial, [](void* pData, int index, const char** pOutText)
+			{
+				Material* pMat = (Material*)pData;
+				*pOutText = pMat[index].Name.c_str();
+				return true;
+			}, pMesh->GetMaterials().data(), (int)pMesh->GetMaterials().size());
+		if (selectedMaterial >= 0 && selectedMaterial < pMesh->GetMaterials().size())
+		{
+			Material& material = pMesh->GetMaterials()[selectedMaterial];
+			ImGui::ColorEdit3("Base Color", &material.BaseColorFactor.x);
+			ImGui::ColorEdit3("Emissive", &material.EmissiveFactor.x, ImGuiColorEditFlags_Float | ImGuiColorEditFlags_HDR);
+			ImGui::SliderFloat("Metalness", &material.MetalnessFactor, 0, 1);
+			ImGui::SliderFloat("Roughness", &material.RoughnessFactor, 0, 1);
+			if (ImGui::Button("Base Color Texture"))
+			{
+				material.pDiffuseTexture = GraphicsCommon::GetDefaultTexture(DefaultTexture::ColorNoise256);
+			}
+		}
+		ImGui::End();
+
+		for (Material& material : pMesh->GetMaterials())
 		{
 			ShaderInterop::MaterialData materialData;
 			materialData.Diffuse = material.pDiffuseTexture ? material.pDiffuseTexture->GetSRVIndex() : -1;

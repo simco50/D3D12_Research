@@ -4,9 +4,47 @@
 #define SHADER_HASH_DEBUG 0
 #endif
 
-class FileWatcher;
+struct ShaderDefine
+{
+	ShaderDefine() = default;
+	ShaderDefine(const char* pDefine, const char* pValue) : Value(Sprintf("%s=%s", pDefine, pValue)) {}
+	ShaderDefine(const char* pDefine, const uint32 value) : Value(Sprintf("%s=%d", pDefine, value)) {}
+	ShaderDefine(const std::string& define) : Value(define) { }
+	ShaderDefine(const char* pDefine) : Value(pDefine) { }
+	std::string Value;
+};
 
 using ShaderBlob = ComPtr<ID3DBlob>;
+
+namespace ShaderCompiler
+{
+	struct CompileJob
+	{
+		const char* pSource = nullptr;
+		std::string FilePath;
+		std::string EntryPoint;
+		std::string Target;
+		std::vector<ShaderDefine> Defines;
+		std::vector<std::string> IncludeDirs;
+		uint8 MajVersion;
+		uint8 MinVersion;
+	};
+
+	struct CompileResult
+	{
+		std::string ErrorMessage;
+		ShaderBlob pBlob;
+		ComPtr<IUnknown> pReflection;
+		std::vector<std::string> Includes;
+
+		bool Success() const { return pBlob.Get() && ErrorMessage.length() == 0; }
+	};
+
+	CompileResult Compile(const CompileJob& compileJob);
+}
+
+class FileWatcher;
+
 
 enum class ShaderType
 {
@@ -19,16 +57,6 @@ enum class ShaderType
 	Amplification,
 	Compute,
 	MAX,
-};
-
-struct ShaderDefine
-{
-	ShaderDefine() = default;
-	ShaderDefine(const char* pDefine, const char* pValue) : Value(Sprintf("%s=%s", pDefine, pValue)) {}
-	ShaderDefine(const char* pDefine, const uint32 value) : Value(Sprintf("%s=%d", pDefine, value)) {}
-	ShaderDefine(const std::string& define) : Value(define) { }
-	ShaderDefine(const char* pDefine) : Value(pDefine) { }
-	std::string Value;
 };
 
 class ShaderBase
