@@ -49,7 +49,7 @@ namespace ShaderGraph
 
 	struct ExpressionOutput
 	{
-		ExpressionOutput(const char* pName)
+		ExpressionOutput(const char* pName = "")
 			: Name(pName), ID(gExpressionID++)
 		{}
 		std::string Name;
@@ -681,26 +681,42 @@ namespace ShaderGraph
 	{
 		virtual int Compile(Compiler& compiler, int outputIndex) const override
 		{
-			return compiler.VertexAttribute(VertexAttributes[VertexAttributeIndex].pName);
+			const Uniform& uniform = VertexAttributes[VertexAttributeIndices[outputIndex]];
+			return compiler.VertexAttribute(uniform.pName);
 		}
 
-		virtual void RenderInputs() override
+		virtual void RenderOutputs() override
 		{
-			ImGui::Combo("", &VertexAttributeIndex, [](void* pData, int index, const char** pOut)
-				{
-					Uniform* pAttr = (Uniform*)pData;
-					*pOut = pAttr[index].pName;
-					return true;
-				}, (void*)VertexAttributes, ARRAYSIZE(VertexAttributes));
+			for (size_t i = 0; i < VertexAttributeIndices.size(); ++i)
+			{
+				ImNodes::BeginOutputAttribute(Outputs[i].ID);
+				int* index = &VertexAttributeIndices[i];
+				ImGui::Combo("", index, [](void* pData, int index, const char** pOut)
+					{
+						Uniform* pAttr = (Uniform*)pData;
+						*pOut = pAttr[index].pName;
+						return true;
+					}, (void*)VertexAttributes, ARRAYSIZE(VertexAttributes));
+				ImGui::SameLine();
+
+				ImNodes::EndOutputAttribute();
+			}
+
+			if (ImGui::Button("+"))
+			{
+				AddVertexAttribute("UV");
+			}
 		}
 
-		void SetVertexAttribute(const char* pVertexAttribute)
+		void AddVertexAttribute(const char* pVertexAttribute)
 		{
 			for (int i = 0; i < ARRAYSIZE(VertexAttributes); ++i)
 			{
 				if (strcmp(VertexAttributes[i].pName, pVertexAttribute) == 0)
 				{
-					VertexAttributeIndex = i;
+					VertexAttributeIndices.push_back(i);
+					Outputs.resize(VertexAttributeIndices.size());
+					Outputs[VertexAttributeIndices.size() - 1].Name = pVertexAttribute;
 					return;
 				}
 			}
@@ -708,7 +724,7 @@ namespace ShaderGraph
 
 		virtual const char* GetName() const override { return "Vertex Attribute"; }
 
-		int VertexAttributeIndex = 0;
+		std::vector<int> VertexAttributeIndices;
 	};
 
 	struct ViewUniformExpression : public Expression

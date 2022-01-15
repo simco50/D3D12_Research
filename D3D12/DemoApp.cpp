@@ -1626,7 +1626,7 @@ void DemoApp::UpdateImGui()
 		tex.pName = "tFoo";
 
 		VertexAttributeExpression* attributeExpression = NewExpression<VertexAttributeExpression>();
-		attributeExpression->SetVertexAttribute("UV");
+		attributeExpression->AddVertexAttribute("UV");
 
 		TextureExpression* textureExpression = NewExpression<TextureExpression>();
 		textureExpression->pTexture = &tex;
@@ -1794,14 +1794,14 @@ void DemoApp::UpdateImGui()
 				static std::vector<int> selected_links;
 				selected_links.resize(static_cast<size_t>(num_selected));
 				ImNodes::GetSelectedLinks(selected_links.data());
-				for (const int edge_id : selected_links)
+				for(size_t i = 0; i < selected_links.size(); ++i)
 				{
+					int edge_id = selected_links[i];
 					ExpressionInput* pInput = findInput(links[edge_id].second);
 					pInput->pConnectedExpression = nullptr;
-
-					std::swap(links[edge_id], links.back());
-					links.resize(links.size() - 1);
+					std::swap(links[edge_id], links[links.size() - 1 - i]);
 				}
+				links.resize(links.size() - num_selected);
 			}
 		}	
 

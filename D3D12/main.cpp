@@ -39,7 +39,7 @@ int WINAPI WinMain(_In_ HINSTANCE /*hInstance*/, _In_opt_ HINSTANCE /*hPrevInsta
 	std::vector<Expression*> nodes;
 
 	VertexAttributeExpression attributeExpression;
-	attributeExpression.SetVertexAttribute("UV");
+	attributeExpression.AddVertexAttribute("UV");
 
 	TextureExpression textureExpression;
 	textureExpression.pTexture = &tex;
