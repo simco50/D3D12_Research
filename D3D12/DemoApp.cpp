@@ -29,7 +29,6 @@
 #include "Core/Utils.h"
 #include "imgui_internal.h"
 #include "Graphics/MaterialGraph/MaterialGraph.h"
-# include "imnodes.h"
 
 static const int32 FRAME_COUNT = 3;
 static const DXGI_FORMAT DEPTH_STENCIL_SHADOW_FORMAT = DXGI_FORMAT_D32_FLOAT;
@@ -1566,98 +1565,248 @@ void DemoApp::InitializePipelines()
 	}
 }
 
+std::vector<std::unique_ptr<ShaderGraph::Expression>> nodes;
+ShaderGraph::Expression* pTargetExpression;
+
+template<typename T>
+T* NewExpression()
+{
+	nodes.push_back(std::make_unique<T>());
+	return (T*)nodes.back().get();
+}
+
 void DemoApp::UpdateImGui()
 {
-#if 0
 	using namespace ShaderGraph;
 
+	ImNodesStyle& style = ImNodes::GetStyle();
+	style.Flags = ImNodesStyleFlags_None;
+	//style.NodeCornerRounding = 0;
+
+	style.Colors[ImNodesCol_NodeBackground] = IM_COL32(50, 50, 50, 255);
+	style.Colors[ImNodesCol_NodeBackgroundHovered] = IM_COL32(65, 65, 65, 255);
+	style.Colors[ImNodesCol_NodeBackgroundSelected] = IM_COL32(65, 65, 65, 255);
+	style.Colors[ImNodesCol_NodeOutline] = IM_COL32(20, 20, 20, 255);
+	style.Colors[ImNodesCol_TitleBar] = IM_COL32(65, 65, 65, 255);
+	style.Colors[ImNodesCol_TitleBarHovered] = IM_COL32(80, 80, 80, 255);
+	style.Colors[ImNodesCol_TitleBarSelected] = IM_COL32(80, 80, 80, 255);
+	style.Colors[ImNodesCol_Link] = IM_COL32(170, 175, 110, 200);
+	style.Colors[ImNodesCol_LinkHovered] = IM_COL32(190, 195, 130, 255);
+	style.Colors[ImNodesCol_LinkSelected] = IM_COL32(150, 155, 900, 255);
+	style.Colors[ImNodesCol_Pin] = IM_COL32(53, 150, 250, 180);
+	style.Colors[ImNodesCol_PinHovered] = IM_COL32(53, 150, 250, 255);
+
+	style.Colors[ImNodesCol_BoxSelector] = IM_COL32(61, 133, 224, 30);
+	style.Colors[ImNodesCol_BoxSelectorOutline] = IM_COL32(61, 133, 224, 150);
+
+	style.Colors[ImNodesCol_GridBackground] = IM_COL32(15, 15, 15, 255);
+	style.Colors[ImNodesCol_GridLine] = IM_COL32(200, 200, 200, 40);
+
+	style.Colors[ImNodesCol_MiniMapBackground] = IM_COL32(25, 25, 25, 150);
+	style.Colors[ImNodesCol_MiniMapBackgroundHovered] = IM_COL32(25, 25, 25, 200);
+	style.Colors[ImNodesCol_MiniMapOutline] = IM_COL32(150, 150, 150, 100);
+	style.Colors[ImNodesCol_MiniMapOutlineHovered] = IM_COL32(150, 150, 150, 200);
+	style.Colors[ImNodesCol_MiniMapNodeBackground] = IM_COL32(200, 200, 200, 100);
+	style.Colors[ImNodesCol_MiniMapNodeBackgroundHovered] = IM_COL32(200, 200, 200, 255);
+	style.Colors[ImNodesCol_MiniMapNodeBackgroundSelected] =
+		style.Colors[ImNodesCol_MiniMapNodeBackgroundHovered];
+	style.Colors[ImNodesCol_MiniMapNodeOutline] = IM_COL32(200, 200, 200, 100);
+	style.Colors[ImNodesCol_MiniMapLink] = style.Colors[ImNodesCol_Link];
+	style.Colors[ImNodesCol_MiniMapLinkSelected] =
+		style.Colors[ImNodesCol_LinkSelected];
+	style.Colors[ImNodesCol_MiniMapCanvas] = IM_COL32(200, 200, 200, 25);
+	style.Colors[ImNodesCol_MiniMapCanvasOutline] = IM_COL32(200, 200, 200, 200);
+
 	static bool initOnce = false;
-	static std::vector<Node*> nodes;
+	static std::vector<std::pair<int, int>> links;
 	if (!initOnce)
 	{
+		ImNodes::LoadCurrentEditorStateFromIniFile("save_load.ini");
 		static GraphTexture tex;
 		tex.pName = "tFoo";
 
-		static VertexAttributeNode attributeNode;
-		attributeNode.pAttribute = "UV";
+		VertexAttributeExpression* attributeExpression = NewExpression<VertexAttributeExpression>();
+		attributeExpression->SetVertexAttribute("UV");
 
-		static TextureNode textureNode;
-		textureNode.pTexture = &tex;
+		TextureExpression* textureExpression = NewExpression<TextureExpression>();
+		textureExpression->pTexture = &tex;
 
-		static Sample2DNode sampleNode;
-		sampleNode.TextureInput.Connect(&textureNode);
-		sampleNode.UVInput.Connect(&attributeNode);
+		Sample2DExpression* sampleExpression = NewExpression<Sample2DExpression>();
+		sampleExpression->TextureInput.Connect(textureExpression);
+		sampleExpression->UVInput.Connect(attributeExpression);
 
-		static ConstantFloatNode nodeB;
-		nodeB.Value = 7;
+		ConstantFloatExpression* nodeB = NewExpression<ConstantFloatExpression>();
+		nodeB->Value = 7;
 
-		static SwizzleNode swizzle;
-		swizzle.Input.Connect(&sampleNode);
-		swizzle.SwizzleString = "x";
+		SwizzleExpression* swizzle = NewExpression<SwizzleExpression>();
+		swizzle->Input.Connect(sampleExpression);
+		swizzle->SetSwizzle("x");
 
-		static AddNode add;
-		add.InputA.Connect(&swizzle);
-		add.InputB.Connect(&nodeB);
+		AddExpression* add = NewExpression<AddExpression>();
+		add->InputA.Connect(swizzle);
+		add->InputB.Connect(nodeB);
 
-		static PowerNode pow;
-		pow.InputA.Connect(&add);
-		pow.InputB.Connect(&swizzle);
+		PowerExpression* pow = NewExpression<PowerExpression>();
+		pow->InputA.Connect(add);
+		pow->InputB.Connect(swizzle);
 
+		pTargetExpression = pow;
 
 		initOnce = true;
 
-		nodes.push_back(&attributeNode);
-		nodes.push_back(&textureNode);
-		nodes.push_back(&sampleNode);
-		nodes.push_back(&nodeB);
-		nodes.push_back(&swizzle);
-		nodes.push_back(&add);
-		nodes.push_back(&pow);
-	}
-
-	{
-		int links = 0;
-
-		ImNodes::BeginNodeEditor();
-
-		for (Node* node : nodes)
+		for (auto& node : nodes)
 		{
-			ImNodes::BeginNode(node->ID);
-
-			ImNodes::BeginNodeTitleBar();
-			ImGui::TextUnformatted("Node");
-			ImNodes::EndNodeTitleBar();
-
-			for (const NodeInput* input : node->GetInputs())
-			{
-				ImNodes::BeginInputAttribute(input->ID);
-				ImGui::Text(input->InputName.c_str());
-				ImNodes::EndInputAttribute();
-			}
-			for (const NodeOutput& output : node->GetOutputs())
-			{
-				ImNodes::BeginOutputAttribute(output.ID);
-				ImGui::Text(output.Name.c_str());
-				ImNodes::EndOutputAttribute();
-			}
-			ImNodes::EndNode();
-		}
-
-		for (Node* node : nodes)
-		{
-			for (const NodeInput* input : node->GetInputs())
+			for (const ExpressionInput* input : node->GetInputs())
 			{
 				if (input->IsConnected())
 				{
-					ImNodes::Link(links++, input->pNode->GetOutputs()[0].ID, input->ID);
+					links.emplace_back(input->pConnectedExpression->GetOutputs()[0].ID, input->ID);
+				}
+			}
+		}
+		
+	}
+
+	Compiler c;
+	std::string msg;
+	if (pTargetExpression->Compile(c, 0) == INVALID_INDEX)
+	{
+		msg = c.GetError();
+	}
+	else
+	{
+		msg = c.GetSource();
+	}
+
+	ImGui::Begin("Compile Result");
+	ImGui::InputTextMultiline("Output", &msg[0], msg.length());
+	ImGui::End();
+	
+
+	{
+		ImNodes::BeginNodeEditor();
+
+		const bool openPopup = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) &&
+			ImNodes::IsEditorHovered() &&
+			ImGui::IsMouseReleased(1);
+
+		if (!ImGui::IsAnyItemHovered() && openPopup)
+		{
+			ImGui::OpenPopup("add node");
+		}
+
+		if (ImGui::BeginPopup("add node"))
+		{
+			const ImVec2 click_pos = ImGui::GetMousePosOnOpeningCurrentPopup();
+
+			if (ImGui::MenuItem("Add"))
+			{
+				ImNodes::SetNodeScreenSpacePos(NewExpression<AddExpression>()->ID, click_pos);
+			}
+			else if (ImGui::MenuItem("Pow"))
+			{
+				ImNodes::SetNodeScreenSpacePos(NewExpression<PowerExpression>()->ID, click_pos);
+			}
+			else if (ImGui::MenuItem("Constant"))
+			{
+				ImNodes::SetNodeScreenSpacePos(NewExpression<ConstantFloatExpression>()->ID, click_pos);
+			}
+			ImGui::EndPopup();
+		}
+
+		for (auto& node : nodes)
+		{
+			if(node.get() == pTargetExpression)
+				ImNodes::PushColorStyle(ImNodesCol_TitleBar, ImColor(112, 64, 35, 255));
+			node->Render();
+			if (node.get() == pTargetExpression)
+				ImNodes::PopColorStyle();
+		}
+
+		for (int i = 0; i < links.size(); ++i)
+		{
+			const std::pair<int, int> p = links[i];
+			ImNodes::Link(i, p.first, p.second);
+		}
+
+
+		ImNodes::MiniMap(0.2f);
+		ImNodes::EndNodeEditor();
+
+		int hovered;
+		if (ImGui::IsKeyReleased('M') && ImNodes::IsNodeHovered(&hovered))
+		{
+			for (auto& node : nodes)
+			{
+				if (node->ID == hovered)
+				{
+					pTargetExpression = node.get();
 				}
 			}
 		}
 
+		auto findInput = [&](int id) -> ExpressionInput* {
+			for (auto& node : nodes)
+			{
+				for (ExpressionInput* input : node->GetInputs())
+				{
+					if (input->ID == id)
+						return input;
+				}
+			}
+			return nullptr;
+		};
 
-		ImNodes::EndNodeEditor();
+		auto findOutput = [&](int id, Expression** pExpression, int* outputIndex) {
+			for (auto& node : nodes)
+			{
+				const auto& outputs = node->GetOutputs();
+				for (size_t i = 0; i < outputs.size(); ++i)
+				{
+					if (outputs[i].ID == id)
+					{
+						*pExpression = node.get();
+						*outputIndex = (int)i;
+						return;
+					}
+				}
+			}
+		};
+
+		int start_attr, end_attr;
+		if (ImNodes::IsLinkCreated(&start_attr, &end_attr))
+		{
+			links.push_back(std::make_pair(start_attr, end_attr));
+
+			ExpressionInput* pInput = findInput(end_attr);
+
+			int outputIndex = 0;
+			Expression* pOutputExpression;
+			findOutput(start_attr, &pOutputExpression, &outputIndex);
+
+			pInput->Connect(pOutputExpression, outputIndex);
+		}
+
+		{
+			const int num_selected = ImNodes::NumSelectedLinks();
+			if (num_selected > 0 && ImGui::IsKeyReleased(VK_DELETE))
+			{
+				static std::vector<int> selected_links;
+				selected_links.resize(static_cast<size_t>(num_selected));
+				ImNodes::GetSelectedLinks(selected_links.data());
+				for (const int edge_id : selected_links)
+				{
+					ExpressionInput* pInput = findInput(links[edge_id].second);
+					pInput->pConnectedExpression = nullptr;
+
+					std::swap(links[edge_id], links.back());
+					links.resize(links.size() - 1);
+				}
+			}
+		}	
+
+		ImNodes::SaveCurrentEditorStateToIniFile("save_load.ini");
 	}
-#endif
 
 	m_FrameTimes[m_Frame % m_FrameTimes.size()] = Time::DeltaTime();
 

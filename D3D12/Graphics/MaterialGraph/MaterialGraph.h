@@ -1,6 +1,5 @@
 #pragma once
-
-#include <unordered_set>
+# include "imnodes.h"
 
 struct GraphTexture
 {
@@ -9,25 +8,81 @@ struct GraphTexture
 
 namespace ShaderGraph
 {
+	class Compiler;
+	struct Expression;
+
+	extern int gExpressionID;
 	constexpr static int INVALID_INDEX = -1;
 	using Texture = GraphTexture;
+
+	enum ValueType
+	{
+		Invalid = 0,
+
+		Float1 = 1 << 0,
+		Float2 = 1 << 1,
+		Float3 = 1 << 2,
+		Float4 = 1 << 3,
+		Texture2D = 1 << 4,
+
+		Float = Float1 | Float2 | Float3 | Float4,
+	};
+
+	struct Uniform
+	{
+		const char* pName;
+		ValueType Type;
+	};
+
+	constexpr Uniform VertexAttributes[] =
+	{
+		{ "UV", ValueType::Float2 },
+		{ "Normal", ValueType::Float3 },
+		{ "WorldPosition", ValueType::Float3 },
+		{ "VertexID", ValueType::Float1 },
+	};
+
+	constexpr Uniform ViewUniforms[] =
+	{
+		{ "Time", ValueType::Float },
+	};
+
+	struct ExpressionOutput
+	{
+		ExpressionOutput(const char* pName)
+			: Name(pName), ID(gExpressionID++)
+		{}
+		std::string Name;
+		int ID;
+	};
+
+	struct ExpressionInput
+	{
+		ExpressionInput(const char* pName = "In")
+			: Name(pName), ID(gExpressionID++)
+		{}
+
+		int Compile(Compiler& compiler) const;
+
+		void Connect(Expression* pConnectExpression, int outputIndex = 0)
+		{
+			pConnectedExpression = pConnectExpression;
+			ConnectedExpressionOutputIndex = outputIndex;
+		}
+
+		bool IsConnected() const { return GetConnectedOutput() != nullptr; }
+
+		const ExpressionOutput* GetConnectedOutput() const;
+
+		Expression* pConnectedExpression = nullptr;
+		int ConnectedExpressionOutputIndex = 0;
+		std::string Name = "";
+		int ID;
+	};
 
 	class Compiler
 	{
 		constexpr static bool CAN_INLINE = true;
-
-		enum ValueType
-		{
-			Invalid = 0,
-
-			Float1 = 1 << 0,
-			Float2 = 1 << 1,
-			Float3 = 1 << 2,
-			Float4 = 1 << 3,
-			Texture2D = 1 << 4,
-
-			Float = Float1 | Float2 | Float3 | Float4,
-		};
 
 		struct ShaderChunk
 		{
@@ -36,20 +91,6 @@ namespace ShaderGraph
 			std::string Code;
 			std::string SymbolName;
 			bool IsInline;
-		};
-
-		struct VertAttribute
-		{
-			const char* pName;
-			ValueType Type;
-		};
-
-		std::vector<VertAttribute> VertexAttributes =
-		{
-			{ "UV", ValueType::Float2 },
-			{ "Normal", ValueType::Float3 },
-			{ "WorldPosition", ValueType::Float3 },
-			{ "VertexID", ValueType::Float1 },
 		};
 
 	public:
@@ -75,7 +116,7 @@ namespace ShaderGraph
 
 		int Texture(Texture* pTexture)
 		{
-			return AddCodeChunkInline(ValueType::Texture2D, "%s", pTexture->pName);
+			return pTexture ? AddCodeChunkInline(ValueType::Texture2D, "%s", pTexture->pName) : INVALID_INDEX;
 		}
 
 		int Add(int indexA, int indexB)
@@ -104,22 +145,36 @@ namespace ShaderGraph
 
 		int VertexAttribute(const char* pAttributeName)
 		{
-			const VertAttribute* pAttribute = nullptr;
-			for (const VertAttribute& attrib : VertexAttributes)
+			const Uniform* pAttribute = nullptr;
+			for (const Uniform& attrib : VertexAttributes)
 			{
 				if (strcmp(pAttributeName, attrib.pName) == 0)
 				{
 					pAttribute = &attrib;
 				}
 			}
-
 			if (!pAttribute)
 			{
-				Error("Attribute '%s' is unknown", pAttributeName);
-				return INVALID_INDEX;
+				return Error("Attribute '%s' is unknown", pAttributeName);
 			}
-
 			return AddCodeChunkInline(pAttribute->Type, "interpolants.%s", pAttribute->pName);
+		}
+
+		int ViewUniform(const char* pUniformName)
+		{
+			const Uniform* pUniform = nullptr;
+			for (const Uniform& uniform : ViewUniforms)
+			{
+				if (strcmp(pUniformName, uniform.pName) == 0)
+				{
+					pUniform = &uniform;
+				}
+			}
+			if (!pUniform)
+			{
+				return Error("Attribute '%s' is unknown", pUniformName);
+			}
+			return AddCodeChunkInline(pUniform->Type, "cView.%s", pUniform->pName);
 		}
 
 		int Swizzle(int indexA, const char* pSwizzleString)
@@ -144,8 +199,7 @@ namespace ShaderGraph
 			uint32 swizzleLength = (uint32)strlen(pSwizzleString);
 			if (swizzleLength <= 0 || swizzleLength > 4)
 			{
-				Error("Invalid swizzle '%s'", pSwizzleString);
-				return INVALID_INDEX;
+				return Error("Invalid swizzle '%s'", pSwizzleString);
 			}
 
 			const char* pCurr = pSwizzleString;
@@ -153,8 +207,7 @@ namespace ShaderGraph
 			{
 				if (!IsValidChar(numComponents, *pCurr))
 				{
-					Error("Invalid swizzle '%s' for type %s", pSwizzleString, ValueTypeToString(valueType));
-					return INVALID_INDEX;
+					return Error("Invalid swizzle '%s' for type %s", pSwizzleString, ValueTypeToString(valueType));
 				}
 				++pCurr;
 			}
@@ -169,8 +222,7 @@ namespace ShaderGraph
 
 			if (GetChunk(textureIndex).Type != ValueType::Texture2D)
 			{
-				Error("Invalid Texture input");
-				return INVALID_INDEX;
+				return Error("Invalid Texture input");
 			}
 
 			int uvIndexCast = TryCast(uvIndex, ValueType::Float2);
@@ -180,6 +232,13 @@ namespace ShaderGraph
 				return INVALID_INDEX;
 			}
 			return AddCodeChunk(ValueType::Float4, "%s.Sample(sLinearClamp, %s)", GetParameterCode(textureIndex), GetParameterCode(uvIndexCast));
+		}
+
+		template<typename ...Args>
+		int Error(const char* pFormat, Args... args)
+		{
+			m_Errors.push_back(Sprintf(pFormat, std::forward<Args>(args)...));
+			return INVALID_INDEX;
 		}
 
 		const char* GetSource() const
@@ -345,8 +404,6 @@ namespace ShaderGraph
 			return AddCodeChunkPrivate(type, code.c_str(), false);
 		}
 
-	private:
-
 		template<typename ...Args>
 		int AddCodeChunkInline(ValueType type, const char* pCode, Args... args)
 		{
@@ -358,13 +415,14 @@ namespace ShaderGraph
 		{
 			StringHash hash(pCode);
 
+			ShaderChunk chunk;
+			chunk.Type = type;
+			chunk.Hash = hash;
+			chunk.Code = pCode;
+			chunk.IsInline = isInline;
+
 			if (isInline)
 			{
-				ShaderChunk chunk;
-				chunk.Type = type;
-				chunk.Hash = hash;
-				chunk.Code = pCode;
-				chunk.IsInline = true;
 				m_Chunks.push_back(chunk);
 			}
 			else
@@ -377,86 +435,95 @@ namespace ShaderGraph
 					}
 				}
 
-				ShaderChunk chunk;
-				chunk.Type = type;
-				chunk.Hash = hash;
-				chunk.Code = pCode;
-				chunk.IsInline = false;
-				std::string symbolName = GetSymbolName("_local").c_str();
-				m_Source += Sprintf("%s %s = %s;\n", ValueTypeToString(type), symbolName.c_str(), pCode);
-				chunk.SymbolName = symbolName;
+				chunk.SymbolName = GetSymbolName("_local").c_str();
 				m_Chunks.push_back(chunk);
+				m_Source += Sprintf("%s %s = %s;\n", ValueTypeToString(type), chunk.SymbolName.c_str(), pCode);
 			}
 
 			return (int)m_Chunks.size() - 1;
 		}
 
-		template<typename ...Args>
-		void Error(const char* pFormat, Args... args)
-		{
-			m_Errors.insert(Sprintf(pFormat, std::forward<Args>(args)...));
-		}
-
 		int m_Index = 0;
 		std::string m_Source;
-		std::unordered_set<std::string> m_Errors;
+		std::vector<std::string> m_Errors;
 		std::vector<ShaderChunk> m_Chunks;
 	};
 
-	struct NodeOutput
+	struct Expression
 	{
-		std::string Name;
-	};
-
-	struct Node
-	{
-		Node()
+		Expression()
+			: ID(gExpressionID++)
 		{
-			m_Outputs.push_back({ });
+			Outputs.push_back(ExpressionOutput(""));
 		}
+
+		void Render()
+		{
+			ImNodes::BeginNode(ID);
+
+			ImNodes::BeginNodeTitleBar();
+			ImGui::TextUnformatted(GetName());
+			ImNodes::EndNodeTitleBar();
+			ImGui::PushItemWidth(80);
+
+			ImGui::BeginGroup();
+			RenderInputs();
+			ImGui::EndGroup();
+
+			ImGui::SameLine();
+
+			ImGui::BeginGroup();
+			RenderOutputs();
+			ImGui::EndGroup();
+
+			ImGui::PopItemWidth();
+			ImNodes::EndNode();
+		}
+
+		virtual void RenderInputs()
+		{
+			for (const ExpressionInput* input : GetInputs())
+			{
+				ImNodes::BeginInputAttribute(input->ID);
+				ImGui::Text(input->Name.c_str());
+				ImNodes::EndInputAttribute();
+			}
+		}
+
+		virtual void RenderOutputs()
+		{
+			for (const ExpressionOutput& output : GetOutputs())
+			{
+				ImNodes::BeginOutputAttribute(output.ID);
+				ImGui::Text(output.Name.c_str());
+				ImNodes::EndOutputAttribute();
+			}
+		}
+
+		virtual ~Expression() {}
+
+		std::vector<ExpressionOutput> Outputs;
+		int ID;
 
 		virtual int Compile(Compiler& compiler, int outputIndex) const = 0;
-		virtual std::vector<struct NodeInput*> GetInputs() { return {}; }
-		virtual const std::vector<NodeOutput>& GetOutputs() { return m_Outputs; }
+		virtual std::vector<struct ExpressionInput*> GetInputs() { return {}; }
+		virtual const std::vector<ExpressionOutput>& GetOutputs() { return Outputs; }
 		virtual const char* GetName() const = 0;
-
-		std::vector<NodeOutput> m_Outputs;
-	};
-
-	struct NodeInput
-	{
-		NodeInput(const char* pName = "")
-			: InputName(pName)
-		{}
-
-		int32 Compile(Compiler& compiler) const
-		{
-			if (pNode)
-			{
-				return pNode->Compile(compiler, OutputIndex);
-			}
-			return INVALID_INDEX;
-		}
-
-		void Connect(Node* pConnectNode, int outputIndex = 0)
-		{
-			pNode = pConnectNode;
-			OutputIndex = outputIndex;
-		}
-
-		bool IsConnected() const { return pNode != nullptr; }
-
-		Node* pNode = nullptr;
-		int OutputIndex = 0;
-		std::string InputName = "";
 	};
 
 	template<typename T>
-	struct ConstantTFloatNode : public Node
+	struct ConstantTFloatExpression : public Expression
 	{
 		virtual int Compile(Compiler& compiler, int outputIndex) const override
 		{
 			return compiler.Constant(Value);
+		}
+
+		virtual void RenderInputs() override
+		{
+			ImNodes::BeginOutputAttribute(Outputs[0].ID);
+			ImGui::InputFloat("", &Value);
+			ImNodes::EndOutputAttribute();
 		}
 
 		virtual const char* GetName() const override { return "Constant"; }
@@ -464,12 +531,12 @@ namespace ShaderGraph
 		T Value{};
 	};
 
-	using ConstantFloatNode = ConstantTFloatNode<float>;
-	using ConstantFloat2Node = ConstantTFloatNode<Vector2>;
-	using ConstantFloat3Node = ConstantTFloatNode<Vector3>;
-	using ConstantFloat4Node = ConstantTFloatNode<Vector4>;
+	using ConstantFloatExpression = ConstantTFloatExpression<float>;
+	using ConstantFloat2Expression = ConstantTFloatExpression<Vector2>;
+	using ConstantFloat3Expression = ConstantTFloatExpression<Vector3>;
+	using ConstantFloat4Expression = ConstantTFloatExpression<Vector4>;
 
-	struct AddNode : public Node
+	struct AddExpression : public Expression
 	{
 		virtual int Compile(Compiler& compiler, int outputIndex) const override
 		{
@@ -479,16 +546,37 @@ namespace ShaderGraph
 			);
 		}
 
-		virtual std::vector<struct NodeInput*> GetInputs() { return { &InputA, &InputB }; }
+		virtual void RenderInputs() override
+		{
+			ImNodes::BeginInputAttribute(InputA.ID);
+			ImGui::Text(InputA.Name.c_str());
+			if (!InputA.IsConnected())
+			{
+				ImGui::SameLine();
+				ImGui::InputFloat("", &ConstantA);
+			}
+			ImNodes::EndInputAttribute();
+
+			ImNodes::BeginInputAttribute(InputB.ID);
+			ImGui::Text(InputB.Name.c_str());
+			if (!InputB.IsConnected())
+			{
+				ImGui::SameLine();
+				ImGui::InputFloat("", &ConstantB);
+			}
+			ImNodes::EndInputAttribute();
+		}
+
+		virtual std::vector<struct ExpressionInput*> GetInputs() { return { &InputA, &InputB }; }
 		virtual const char* GetName() const override { return "Add"; }
 
-		NodeInput InputA;
+		ExpressionInput InputA = "A";
 		float ConstantA = 0;
-		NodeInput InputB;
+		ExpressionInput InputB = "B";
 		float ConstantB = 0;
 	};
 
-	struct PowerNode : public Node
+	struct PowerExpression : public Expression
 	{
 		virtual int Compile(Compiler& compiler, int outputIndex) const override
 		{
@@ -498,19 +586,44 @@ namespace ShaderGraph
 			);
 		}
 
-		virtual std::vector<struct NodeInput*> GetInputs() { return { &InputA, &InputB }; }
+		virtual void RenderInputs() override
+		{
+			ImNodes::BeginInputAttribute(InputA.ID);
+			ImGui::Text(InputA.Name.c_str());
+			if (!InputA.IsConnected())
+			{
+				ImGui::SameLine();
+				ImGui::InputFloat("", &ConstantA);
+			}
+			ImNodes::EndInputAttribute();
+
+			ImNodes::BeginInputAttribute(InputB.ID);
+			ImGui::Text(InputB.Name.c_str());
+			if (!InputB.IsConnected())
+			{
+				ImGui::SameLine();
+				ImGui::InputFloat("", &ConstantB);
+			}
+			ImNodes::EndInputAttribute();
+		}
+
+		virtual std::vector<struct ExpressionInput*> GetInputs() { return { &InputA, &InputB }; }
 		virtual const char* GetName() const override { return "Power"; }
 
-		NodeInput InputA;
+		ExpressionInput InputA = "A";
 		float ConstantA = 0;
-		NodeInput InputB;
+		ExpressionInput InputB = "B";
 		float ConstantB = 0;
 	};
 
-	struct TextureNode : public Node
+	struct TextureExpression : public Expression
 	{
 		virtual int Compile(Compiler& compiler, int outputIndex) const override
 		{
+			if (!pTexture)
+			{
+				return compiler.Error("Texture not assigned.");
+			}
 			return compiler.Texture(pTexture);
 		}
 
@@ -519,164 +632,94 @@ namespace ShaderGraph
 		Texture* pTexture = nullptr;
 	};
 
-	struct Sample2DNode : public Node
+	struct Sample2DExpression : public Expression
 	{
 		virtual int Compile(Compiler& compiler, int outputIndex) const override
 		{
+			if (!TextureInput.IsConnected() && !pTexture)
+			{
+				return compiler.Error("Texture not assigned.");
+			}
 			return compiler.Sample2D(TextureInput.IsConnected() ? TextureInput.Compile(compiler) : compiler.Texture(pTexture), UVInput.Compile(compiler));
 		}
 
-		virtual std::vector<struct NodeInput*> GetInputs() { return { &TextureInput, &UVInput }; }
+		virtual std::vector<struct ExpressionInput*> GetInputs() { return { &TextureInput, &UVInput }; }
 		virtual const char* GetName() const override { return "Sample2D"; }
 
-		NodeInput TextureInput;
+		ExpressionInput TextureInput = "Texture";
 		Texture* pTexture = nullptr;
-		NodeInput UVInput;
+		ExpressionInput UVInput = "UV";
 	};
 
-	struct SwizzleNode : public Node
+	struct SwizzleExpression : public Expression
 	{
 		virtual int Compile(Compiler& compiler, int outputIndex) const override
 		{
-			return compiler.Swizzle(Input.Compile(compiler), SwizzleString.c_str());
+			return compiler.Swizzle(Input.Compile(compiler), SwizzleString.data());
 		}
 
-		virtual std::vector<struct NodeInput*> GetInputs() { return { &Input }; }
+		virtual void RenderInputs() override
+		{
+			ImNodes::BeginInputAttribute(Input.ID);
+			ImGui::InputText("Swizzle", SwizzleString.data(), SwizzleString.size());
+			ImNodes::EndInputAttribute();
+		}
+
+		void SetSwizzle(const char* pSwizzle)
+		{
+			strcpy_s(SwizzleString.data(), SwizzleString.size(), pSwizzle);
+		}
+
+		virtual std::vector<struct ExpressionInput*> GetInputs() { return { &Input }; }
 		virtual const char* GetName() const override { return "Swizzle"; }
 
-		NodeInput Input;
-		std::string SwizzleString;
+		ExpressionInput Input;
+		std::array<char, 5> SwizzleString{};
 	};
 
-	struct VertexAttributeNode : public Node
+	struct VertexAttributeExpression : public Expression
 	{
 		virtual int Compile(Compiler& compiler, int outputIndex) const override
 		{
-			return compiler.VertexAttribute(pAttribute);
+			return compiler.VertexAttribute(VertexAttributes[VertexAttributeIndex].pName);
 		}
 
-		virtual const char* GetName() const override { return pAttribute; }
-
-		const char* pAttribute;
-	};
-
-#if 0
-	struct DataDrivenNode : public Node
-	{
-		DataDrivenNode(const char* pName)
+		virtual void RenderInputs() override
 		{
-			ReturnType = Compiler::ValueType::Float;
-			Definition = "%A:Float% + %B:Float%";
-
-			std::stringstream token;
-			const char* pCurr = Definition.c_str();
-
-			enum Stage
-			{
-				Code,
-				InputName,
-				InputType,
-			};
-
-			Stage stage = Code;
-
-			NodeInput currentInput;
-			while (*pCurr)
-			{
-				if (*pCurr == '%')
+			ImGui::Combo("", &VertexAttributeIndex, [](void* pData, int index, const char** pOut)
 				{
-					if (stage == Stage::Code)
-					{
-						stage = Stage::InputName;
-					}
-					else if (stage == Stage::InputType)
-					{
-						token = std::stringstream();
-						stage = Stage::Code;
-						Inputs.push_back(currentInput);
-					}
-					++pCurr;
-					continue;
-				}
-				else if (*pCurr == ':')
+					Uniform* pAttr = (Uniform*)pData;
+					*pOut = pAttr[index].pName;
+					return true;
+				}, (void*)VertexAttributes, ARRAYSIZE(VertexAttributes));
+		}
+
+		void SetVertexAttribute(const char* pVertexAttribute)
+		{
+			for (int i = 0; i < ARRAYSIZE(VertexAttributes); ++i)
+			{
+				if (strcmp(VertexAttributes[i].pName, pVertexAttribute) == 0)
 				{
-					if (stage == Stage::InputName)
-					{
-						stage = Stage::InputType;
-						currentInput.InputName = token.str();
-						token = std::stringstream();
-						++pCurr;
-						continue;
-					}
+					VertexAttributeIndex = i;
+					return;
 				}
-				if(stage != Stage::Code)
-					token << *pCurr;
-				++pCurr;
 			}
 		}
 
+		virtual const char* GetName() const override { return "Vertex Attribute"; }
+
+		int VertexAttributeIndex = 0;
+	};
+
+	struct ViewUniformExpression : public Expression
+	{
 		virtual int Compile(Compiler& compiler, int outputIndex) const override
 		{
-			std::stringstream code;
-			std::stringstream token;
-			const char* pCurr = Definition.c_str();
-
-			enum Stage
-			{
-				Code,
-				InputName,
-				InputType,
-			};
-
-			Stage stage = Code;
-
-			const NodeInput* pCurrentInput = nullptr;
-			while (*pCurr)
-			{
-				if (*pCurr == '%')
-				{
-					if (stage == Stage::Code)
-					{
-						stage = Stage::InputName;
-					}
-					else if (stage == Stage::InputType)
-					{
-						code << compiler.GetParameterCode(pCurrentInput->Compile(compiler));
-						token = std::stringstream();
-						stage = Stage::Code;
-					}
-					++pCurr;
-					continue;
-				}
-				else if (*pCurr == ':')
-				{
-					if (stage == Stage::InputName)
-					{
-						stage = Stage::InputType;
-						pCurrentInput = &*std::find_if(Inputs.begin(), Inputs.end(), [&token](const NodeInput& input) { return input.InputName == token.str(); });
-						token = std::stringstream();
-						++pCurr;
-						continue;
-					}
-				}
-				if (stage != Stage::Code)
-					token << *pCurr;
-				else
-					code << *pCurr;
-				++pCurr;
-			}
-
-			return compiler.AddCodeChunk(ReturnType, code.str().c_str());
+			return compiler.ViewUniform(pUniform);
 		}
 
-		const char* pAttribute;
-		std::vector<NodeInput> Inputs;
+		virtual const char* GetName() const override { return pUniform; }
 
-	protected:
-		Compiler::ValueType ReturnType;
-		std::string Definition;
-
-		virtual const char* GetName() const override { return pAttribute; }
+		const char* pUniform;
 	};
-#endif
 }

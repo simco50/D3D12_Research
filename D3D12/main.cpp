@@ -20,7 +20,6 @@
 
 #include "Graphics/Core/Shader.h"
 
-
 int WINAPI WinMain(_In_ HINSTANCE /*hInstance*/, _In_opt_ HINSTANCE /*hPrevInstance*/, _In_ LPSTR /*lpCmdLine*/, _In_ int /*nShowCmd*/)
 {
 #ifdef _DEBUG
@@ -37,30 +36,30 @@ int WINAPI WinMain(_In_ HINSTANCE /*hInstance*/, _In_opt_ HINSTANCE /*hPrevInsta
 	GraphTexture tex;
 	tex.pName = "tFoo";
 
-	std::vector<Node*> nodes;
+	std::vector<Expression*> nodes;
 
-	VertexAttributeNode attributeNode;
-	attributeNode.pAttribute = "UV";
+	VertexAttributeExpression attributeExpression;
+	attributeExpression.SetVertexAttribute("UV");
 
-	TextureNode textureNode;
-	textureNode.pTexture = &tex;
+	TextureExpression textureExpression;
+	textureExpression.pTexture = &tex;
 
-	Sample2DNode sampleNode;
-	sampleNode.TextureInput.Connect(&textureNode);
-	sampleNode.UVInput.Connect(&attributeNode);
+	Sample2DExpression sampleExpression;
+	sampleExpression.TextureInput.Connect(&textureExpression);
+	sampleExpression.UVInput.Connect(&attributeExpression);
 
-	ConstantFloatNode nodeB;
+	ConstantFloatExpression nodeB;
 	nodeB.Value = 7;
 
-	SwizzleNode swizzle;
-	swizzle.Input.Connect(&sampleNode);
-	swizzle.SwizzleString = "x";
+	SwizzleExpression swizzle;
+	swizzle.Input.Connect(&sampleExpression);
+	swizzle.SetSwizzle("x");
 
-	AddNode add;
+	AddExpression add;
 	add.InputA.Connect(&swizzle);
 	add.InputB.Connect(&nodeB);
 	
-	PowerNode pow;
+	PowerExpression pow;
 	pow.InputA.Connect(&add);
 	pow.InputB.Connect(&swizzle);
 
@@ -74,24 +73,6 @@ int WINAPI WinMain(_In_ HINSTANCE /*hInstance*/, _In_opt_ HINSTANCE /*hPrevInsta
 	{
 		const char* pResult = compiler.GetSource();
 		OutputDebugString(pResult);
-
-		std::ifstream fs("Resources/ShaderTemplate.hlsl", std::ios::ate);
-		std::vector<char> source(fs.tellg());
-		fs.seekg(0);
-		fs.read(source.data(), source.size());
-		std::string s = source.data();
-
-		auto it = s.find("%code%");
-		s = s.replace(s.begin() + it, s.begin() + it + strlen("%code%"), pResult);
-
-		using namespace ShaderCompiler;
-		CompileJob job;
-		job.pSource = s.c_str();
-		job.EntryPoint = "PSMain";
-		job.MajVersion = 6;
-		job.MinVersion = 6;
-		job.Target = "ps";
-		CompileResult result = ShaderCompiler::Compile(job);
 
 		__debugbreak();
 	}

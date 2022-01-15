@@ -112,6 +112,7 @@ workspace (ENGINE_NAME)
 			flags { "NoPCH" }
 			removeflags "FatalWarnings"
 			warnings "Default"
+			disablewarnings {"4996"}
 		filter {}
 
 		-- D3D12
