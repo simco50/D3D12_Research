@@ -65,8 +65,8 @@ int WINAPI WinMain(_In_ HINSTANCE /*hInstance*/, _In_opt_ HINSTANCE /*hPrevInsta
 
 	if (pow.Compile(compiler, 0) < 0)
 	{
-		std::string pError = compiler.GetError();
-		OutputDebugString(pError.c_str());
+		//std::string pError = compiler.GetError();
+		//OutputDebugString(pError.c_str());
 		__debugbreak();
 	}
 	else
@@ -74,7 +74,7 @@ int WINAPI WinMain(_In_ HINSTANCE /*hInstance*/, _In_opt_ HINSTANCE /*hPrevInsta
 		const char* pResult = compiler.GetSource();
 		OutputDebugString(pResult);
 
-		__debugbreak();
+		//__debugbreak();
 	}
 
 

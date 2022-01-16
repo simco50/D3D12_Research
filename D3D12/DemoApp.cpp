@@ -1577,6 +1577,8 @@ T* NewExpression()
 
 void DemoApp::UpdateImGui()
 {
+	ImGui::DockSpaceOverViewport(ImGui::GetMainViewport());
+
 	using namespace ShaderGraph;
 
 	ImNodesStyle& style = ImNodes::GetStyle();
@@ -1669,20 +1671,37 @@ void DemoApp::UpdateImGui()
 
 	Compiler c;
 	std::string msg;
+
+	std::vector<Compiler::CompileError> errors;
 	if (pTargetExpression->Compile(c, 0) == INVALID_INDEX)
 	{
-		msg = c.GetError();
+		errors = c.GetErrors();
+		for (const Compiler::CompileError& error : errors)
+		{
+			msg += Sprintf("%s\n", error.Message.c_str());
+		}
 	}
 	else
 	{
 		msg = c.GetSource();
 	}
 
+	auto GetNodeError = [&](Expression* pExpression) {
+		for (const Compiler::CompileError& error : errors)
+		{
+			if (error.Expression.pExpression == pExpression)
+			{
+				return error.Message.c_str();
+			}
+		}
+		return (const char*)nullptr;
+	};
+
 	ImGui::Begin("Compile Result");
 	ImGui::InputTextMultiline("Output", &msg[0], msg.length());
 	ImGui::End();
-	
 
+	ImGui::Begin("Node Editor");
 	{
 		ImNodes::BeginNodeEditor();
 
@@ -1692,35 +1711,54 @@ void DemoApp::UpdateImGui()
 
 		if (!ImGui::IsAnyItemHovered() && openPopup)
 		{
-			ImGui::OpenPopup("add node");
+			ImGui::OpenPopup("AddNode");
 		}
 
-		if (ImGui::BeginPopup("add node"))
+		if (ImGui::BeginPopup("AddNode"))
 		{
 			const ImVec2 click_pos = ImGui::GetMousePosOnOpeningCurrentPopup();
 
-			if (ImGui::MenuItem("Add"))
+			struct NodeFactory
 			{
-				ImNodes::SetNodeScreenSpacePos(NewExpression<AddExpression>()->ID, click_pos);
-			}
-			else if (ImGui::MenuItem("Pow"))
+				using CreateFn = Expression*(*)();
+				CreateFn Create;
+				const char* pName;
+			};
+
+			NodeFactory factories[] = {
+				{ []() { return (Expression*)NewExpression<AddExpression>(); }, "Add"},
+				{ []() { return (Expression*)NewExpression<PowerExpression>(); }, "Power"},
+				{ []() { return (Expression*)NewExpression<ConstantFloatExpression>(); }, "Constant"},
+				{ []() { return (Expression*)NewExpression<Sample2DExpression>(); }, "Sample2D"},
+				{ []() { return (Expression*)NewExpression<TextureExpression>(); }, "Texture"},
+				{ []() { return (Expression*)NewExpression<SwizzleExpression>(); }, "Swizzle"},
+				{ []() { return (Expression*)NewExpression<ViewUniformExpression>(); }, "View Uniform"},
+				{ []() { return (Expression*)NewExpression<VertexAttributeExpression>(); }, "Vertex Attribute"},
+			};
+
+			for (int i = 0; i < ARRAYSIZE(factories); ++i)
 			{
-				ImNodes::SetNodeScreenSpacePos(NewExpression<PowerExpression>()->ID, click_pos);
-			}
-			else if (ImGui::MenuItem("Constant"))
-			{
-				ImNodes::SetNodeScreenSpacePos(NewExpression<ConstantFloatExpression>()->ID, click_pos);
+				if (ImGui::MenuItem(factories[i].pName))
+				{
+					ImNodes::SetNodeScreenSpacePos(factories[i].Create()->ID, click_pos);
+				}
 			}
 			ImGui::EndPopup();
 		}
 
 		for (auto& node : nodes)
 		{
-			if(node.get() == pTargetExpression)
+			const char* pError = GetNodeError(node.get());
+			if (pError)
+				ImNodes::PushColorStyle(ImNodesCol_TitleBar, ImColor(150, 20, 20, 255));
+			else if(node.get() == pTargetExpression)
 				ImNodes::PushColorStyle(ImNodesCol_TitleBar, ImColor(112, 64, 35, 255));
+			else
+				ImNodes::PushColorStyle(ImNodesCol_TitleBar, ImColor(65, 65, 65, 255));
+
 			node->Render();
-			if (node.get() == pTargetExpression)
-				ImNodes::PopColorStyle();
+
+			ImNodes::PopColorStyle();
 		}
 
 		for (int i = 0; i < links.size(); ++i)
@@ -1807,14 +1845,13 @@ void DemoApp::UpdateImGui()
 
 		ImNodes::SaveCurrentEditorStateToIniFile("save_load.ini");
 	}
+	ImGui::End();
 
 	m_FrameTimes[m_Frame % m_FrameTimes.size()] = Time::DeltaTime();
 
 	static ImGuiConsole console;
 	static bool showProfiler = false;
 	static bool showImguiDemo = false;
-
-	ImGui::DockSpaceOverViewport(ImGui::GetMainViewport());
 
 	if (ImGui::BeginMainMenuBar())
 	{

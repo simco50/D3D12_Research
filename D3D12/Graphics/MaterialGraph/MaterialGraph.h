@@ -56,6 +56,7 @@ namespace ShaderGraph
 		int ID;
 	};
 
+	// Represents an input expression that can be connected to an output expression
 	struct ExpressionInput
 	{
 		ExpressionInput(const char* pName = "In")
@@ -80,6 +81,21 @@ namespace ShaderGraph
 		int ID;
 	};
 
+	// Used to identify an expression that can be compiled
+	struct ExpressionKey
+	{
+		ExpressionKey(Expression* pConnectExpression = nullptr, int outputIndex = 0)
+			: pExpression(pConnectExpression), OutputIndex(outputIndex)
+		{}
+		bool operator==(const ExpressionKey& other) const
+		{
+			return pExpression == other.pExpression &&
+				OutputIndex == other.OutputIndex;
+		}
+		Expression* pExpression;
+		int OutputIndex;
+	};
+
 	class Compiler
 	{
 		constexpr static bool CAN_INLINE = true;
@@ -94,6 +110,16 @@ namespace ShaderGraph
 		};
 
 	public:
+		struct CompileError
+		{
+			CompileError(const char* pMessage, ExpressionKey key = ExpressionKey())
+				: Message(pMessage), Expression(key)
+			{
+			}
+			std::string Message;
+			ExpressionKey Expression;
+		};
+
 		int Constant(float value)
 		{
 			return AddCodeChunkInline(ValueType::Float1, "%ff", value);
@@ -237,26 +263,24 @@ namespace ShaderGraph
 		template<typename ...Args>
 		int Error(const char* pFormat, Args... args)
 		{
-			m_Errors.push_back(Sprintf(pFormat, std::forward<Args>(args)...));
-			return INVALID_INDEX;
+			return ErrorInner(Sprintf(pFormat, std::forward<Args>(args)...));
 		}
+
+		int CompileExpression(const ExpressionKey& input);
 
 		const char* GetSource() const
 		{
 			return m_Source.c_str();
 		}
 
-		std::string GetError() const
+		const std::vector<CompileError>& GetErrors() const
 		{
-			std::string msg;
-			for (const std::string& err : m_Errors)
-			{
-				msg += err + std::string("\n");
-			}
-			return msg;
+			return m_Errors;
 		}
 
 	private:
+		int ErrorInner(const std::string& msg);
+
 		int TryCast(int index, ValueType destinationType)
 		{
 			const ShaderChunk& chunk = m_Chunks[index];
@@ -381,8 +405,8 @@ namespace ShaderGraph
 
 		std::string GetSymbolName(const char* pSymbolNameHint)
 		{
-			std::string name = Sprintf("%s_%d", pSymbolNameHint, m_Index);
-			m_Index++;
+			std::string name = Sprintf("%s_%d", pSymbolNameHint, m_SymbolIndex);
+			m_SymbolIndex++;
 			return name;
 		}
 
@@ -443,10 +467,12 @@ namespace ShaderGraph
 			return (int)m_Chunks.size() - 1;
 		}
 
-		int m_Index = 0;
+		int m_SymbolIndex = 0;
 		std::string m_Source;
-		std::vector<std::string> m_Errors;
+		std::vector<CompileError> m_Errors;
 		std::vector<ShaderChunk> m_Chunks;
+		std::vector<std::pair<ExpressionKey, int>> m_ExpressionCache;
+		std::vector<ExpressionKey> m_ExpressionStack;
 	};
 
 	struct Expression
