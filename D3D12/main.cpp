@@ -16,8 +16,6 @@
 
 #define BREAK_ON_ALLOC 0
 
-#include "Graphics/MaterialGraph/MaterialGraph.h"
-
 #include "Graphics/Core/Shader.h"
 
 int WINAPI WinMain(_In_ HINSTANCE /*hInstance*/, _In_opt_ HINSTANCE /*hPrevInstance*/, _In_ LPSTR /*lpCmdLine*/, _In_ int /*nShowCmd*/)
@@ -28,56 +26,6 @@ int WINAPI WinMain(_In_ HINSTANCE /*hInstance*/, _In_opt_ HINSTANCE /*hPrevInsta
 	_CrtSetBreakAlloc(BREAK_ON_ALLOC);
 #endif
 #endif
-
-	using namespace ShaderGraph;
-
-	Compiler compiler;
-
-	GraphTexture tex;
-	tex.pName = "tFoo";
-
-	std::vector<Expression*> nodes;
-
-	VertexAttributeExpression attributeExpression;
-	attributeExpression.AddVertexAttribute("UV");
-
-	TextureExpression textureExpression;
-	textureExpression.pTexture = &tex;
-
-	Sample2DExpression sampleExpression;
-	sampleExpression.TextureInput.Connect(&textureExpression);
-	sampleExpression.UVInput.Connect(&attributeExpression);
-
-	ConstantFloatExpression nodeB;
-	nodeB.Value = 7;
-
-	SwizzleExpression swizzle;
-	swizzle.Input.Connect(&sampleExpression);
-	swizzle.SetSwizzle("x");
-
-	AddExpression add;
-	add.InputA.Connect(&swizzle);
-	add.InputB.Connect(&nodeB);
-	
-	PowerExpression pow;
-	pow.InputA.Connect(&add);
-	pow.InputB.Connect(&swizzle);
-
-	if (pow.Compile(compiler, 0) < 0)
-	{
-		//std::string pError = compiler.GetError();
-		//OutputDebugString(pError.c_str());
-		__debugbreak();
-	}
-	else
-	{
-		const char* pResult = compiler.GetSource();
-		OutputDebugString(pResult);
-
-		//__debugbreak();
-	}
-
-
 
 	Thread::SetMainThread();
 	CommandLine::Parse(GetCommandLineA());

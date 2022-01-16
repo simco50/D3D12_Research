@@ -1,9 +1,12 @@
 #include "stdafx.h"
 #include "MaterialGraph.h"
+#include "Expressions.h"
 
 namespace ShaderGraph
 {
 	int gExpressionID = 0;
+
+	std::map<const char*, ExpressionFactory> gFactories ={};
 
 	int ExpressionInput::Compile(Compiler& compiler) const
 	{

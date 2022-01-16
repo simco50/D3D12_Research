@@ -29,6 +29,7 @@
 #include "Core/Utils.h"
 #include "imgui_internal.h"
 #include "Graphics/MaterialGraph/MaterialGraph.h"
+#include "Graphics/MaterialGraph/Expressions.h"
 
 static const int32 FRAME_COUNT = 3;
 static const DXGI_FORMAT DEPTH_STENCIL_SHADOW_FORMAT = DXGI_FORMAT_D32_FLOAT;
@@ -1623,6 +1624,15 @@ void DemoApp::UpdateImGui()
 	static std::vector<std::pair<int, int>> links;
 	if (!initOnce)
 	{
+		ShaderGraph::RegisterExpression<ConstantFloatExpression>("Constant Float");
+		ShaderGraph::RegisterExpression<AddExpression>("Add");
+		ShaderGraph::RegisterExpression<PowerExpression>("Power");
+		ShaderGraph::RegisterExpression<TextureExpression>("Texture");
+		ShaderGraph::RegisterExpression<Sample2DExpression>("Sample2D");
+		ShaderGraph::RegisterExpression<SwizzleExpression>("Swizzle");
+		ShaderGraph::RegisterExpression<VertexAttributeExpression>("Vertex Attribute");
+		ShaderGraph::RegisterExpression<ViewUniformExpression>("View Uniform");
+
 		ImNodes::LoadCurrentEditorStateFromIniFile("save_load.ini");
 		static GraphTexture tex;
 		tex.pName = "tFoo";
@@ -1718,29 +1728,12 @@ void DemoApp::UpdateImGui()
 		{
 			const ImVec2 click_pos = ImGui::GetMousePosOnOpeningCurrentPopup();
 
-			struct NodeFactory
+			for (auto& factory : gFactories)
 			{
-				using CreateFn = Expression*(*)();
-				CreateFn Create;
-				const char* pName;
-			};
-
-			NodeFactory factories[] = {
-				{ []() { return (Expression*)NewExpression<AddExpression>(); }, "Add"},
-				{ []() { return (Expression*)NewExpression<PowerExpression>(); }, "Power"},
-				{ []() { return (Expression*)NewExpression<ConstantFloatExpression>(); }, "Constant"},
-				{ []() { return (Expression*)NewExpression<Sample2DExpression>(); }, "Sample2D"},
-				{ []() { return (Expression*)NewExpression<TextureExpression>(); }, "Texture"},
-				{ []() { return (Expression*)NewExpression<SwizzleExpression>(); }, "Swizzle"},
-				{ []() { return (Expression*)NewExpression<ViewUniformExpression>(); }, "View Uniform"},
-				{ []() { return (Expression*)NewExpression<VertexAttributeExpression>(); }, "Vertex Attribute"},
-			};
-
-			for (int i = 0; i < ARRAYSIZE(factories); ++i)
-			{
-				if (ImGui::MenuItem(factories[i].pName))
+				if (ImGui::MenuItem(factory.first))
 				{
-					ImNodes::SetNodeScreenSpacePos(factories[i].Create()->ID, click_pos);
+					nodes.push_back(std::unique_ptr<Expression>(factory.second.Callback()));
+					ImNodes::SetNodeScreenSpacePos(nodes.back()->ID, click_pos);
 				}
 			}
 			ImGui::EndPopup();
@@ -1846,6 +1839,7 @@ void DemoApp::UpdateImGui()
 		ImNodes::SaveCurrentEditorStateToIniFile("save_load.ini");
 	}
 	ImGui::End();
+
 
 	m_FrameTimes[m_Frame % m_FrameTimes.size()] = Time::DeltaTime();
 

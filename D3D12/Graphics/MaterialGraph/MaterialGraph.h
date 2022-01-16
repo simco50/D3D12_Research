@@ -125,21 +125,6 @@ namespace ShaderGraph
 			return AddCodeChunkInline(ValueType::Float1, "%ff", value);
 		}
 
-		int Constant(const Vector2& value)
-		{
-			return AddCodeChunkInline(ValueType::Float2, "float2(%ff, %ff)", value.x, value.y);
-		}
-
-		int Constant(const Vector3& value)
-		{
-			return AddCodeChunkInline(ValueType::Float3, "float3(%ff, %ff, %ff)", value.x, value.y, value.z);
-		}
-
-		int Constant(const Vector4& value)
-		{
-			return AddCodeChunkInline(ValueType::Float4, "float4(%ff, %ff, %ff, %ff)", value.x, value.y, value.z, value.w);
-		}
-
 		int Texture(Texture* pTexture)
 		{
 			return pTexture ? AddCodeChunkInline(ValueType::Texture2D, "%s", pTexture->pName) : INVALID_INDEX;
@@ -220,7 +205,7 @@ namespace ShaderGraph
 				return false;
 			};
 
-			ValueType valueType = GetChunk(indexA).Type;
+			ValueType valueType = GetType(indexA);
 			uint32 numComponents = GetNumComponents(valueType);
 			uint32 swizzleLength = (uint32)strlen(pSwizzleString);
 			if (swizzleLength <= 0 || swizzleLength > 4)
@@ -246,7 +231,7 @@ namespace ShaderGraph
 			if (uvIndex == INVALID_INDEX || textureIndex == INVALID_INDEX)
 				return INVALID_INDEX;
 
-			if (GetChunk(textureIndex).Type != ValueType::Texture2D)
+			if (GetType(textureIndex)!= ValueType::Texture2D)
 			{
 				return Error("Invalid Texture input");
 			}
@@ -362,18 +347,19 @@ namespace ShaderGraph
 
 		const ShaderChunk& GetChunk(int index) const
 		{
+			check(index != INVALID_INDEX && index < m_Chunks.size());
 			return m_Chunks[index];
 		}
 
-		ShaderChunk& GetChunk(int index)
+		ValueType GetType(int index)
 		{
-			return m_Chunks[index];
+			return index != INVALID_INDEX ? GetChunk(index).Type : ValueType::Invalid;
 		}
 
 		ValueType GetCombinedType(int indexA, int indexB)
 		{
-			ValueType a = GetChunk(indexA).Type;
-			ValueType b = GetChunk(indexB).Type;
+			ValueType a = GetType(indexA);
+			ValueType b = GetType(indexB);
 			if (a == b)
 			{
 				return a;
@@ -473,295 +459,5 @@ namespace ShaderGraph
 		std::vector<ShaderChunk> m_Chunks;
 		std::vector<std::pair<ExpressionKey, int>> m_ExpressionCache;
 		std::vector<ExpressionKey> m_ExpressionStack;
-	};
-
-	struct Expression
-	{
-		Expression()
-			: ID(gExpressionID++)
-		{
-			Outputs.push_back(ExpressionOutput(""));
-		}
-
-		void Render()
-		{
-			ImNodes::BeginNode(ID);
-
-			ImNodes::BeginNodeTitleBar();
-			ImGui::TextUnformatted(GetName());
-			ImNodes::EndNodeTitleBar();
-			ImGui::PushItemWidth(80);
-
-			ImGui::BeginGroup();
-			RenderInputs();
-			ImGui::EndGroup();
-
-			ImGui::SameLine();
-
-			ImGui::BeginGroup();
-			RenderOutputs();
-			ImGui::EndGroup();
-
-			ImGui::PopItemWidth();
-			ImNodes::EndNode();
-		}
-
-		virtual void RenderInputs()
-		{
-			for (const ExpressionInput* input : GetInputs())
-			{
-				ImNodes::BeginInputAttribute(input->ID);
-				ImGui::Text(input->Name.c_str());
-				ImNodes::EndInputAttribute();
-			}
-		}
-
-		virtual void RenderOutputs()
-		{
-			for (const ExpressionOutput& output : GetOutputs())
-			{
-				ImNodes::BeginOutputAttribute(output.ID);
-				ImGui::Text(output.Name.c_str());
-				ImNodes::EndOutputAttribute();
-			}
-		}
-
-		virtual ~Expression() {}
-
-		std::vector<ExpressionOutput> Outputs;
-		int ID;
-
-		virtual int Compile(Compiler& compiler, int outputIndex) const = 0;
-		virtual std::vector<struct ExpressionInput*> GetInputs() { return {}; }
-		virtual const std::vector<ExpressionOutput>& GetOutputs() { return Outputs; }
-		virtual const char* GetName() const = 0;
-	};
-
-	template<typename T>
-	struct ConstantTFloatExpression : public Expression
-	{
-		virtual int Compile(Compiler& compiler, int outputIndex) const override
-		{
-			return compiler.Constant(Value);
-		}
-
-		virtual void RenderInputs() override
-		{
-			ImNodes::BeginOutputAttribute(Outputs[0].ID);
-			ImGui::InputFloat("", &Value);
-			ImNodes::EndOutputAttribute();
-		}
-
-		virtual const char* GetName() const override { return "Constant"; }
-
-		T Value{};
-	};
-
-	using ConstantFloatExpression = ConstantTFloatExpression<float>;
-	using ConstantFloat2Expression = ConstantTFloatExpression<Vector2>;
-	using ConstantFloat3Expression = ConstantTFloatExpression<Vector3>;
-	using ConstantFloat4Expression = ConstantTFloatExpression<Vector4>;
-
-	struct AddExpression : public Expression
-	{
-		virtual int Compile(Compiler& compiler, int outputIndex) const override
-		{
-			return compiler.Add(
-				InputA.IsConnected() ? InputA.Compile(compiler) : compiler.Constant(ConstantA),
-				InputB.IsConnected() ? InputB.Compile(compiler) : compiler.Constant(ConstantB)
-			);
-		}
-
-		virtual void RenderInputs() override
-		{
-			ImNodes::BeginInputAttribute(InputA.ID);
-			ImGui::Text(InputA.Name.c_str());
-			if (!InputA.IsConnected())
-			{
-				ImGui::SameLine();
-				ImGui::InputFloat("", &ConstantA);
-			}
-			ImNodes::EndInputAttribute();
-
-			ImNodes::BeginInputAttribute(InputB.ID);
-			ImGui::Text(InputB.Name.c_str());
-			if (!InputB.IsConnected())
-			{
-				ImGui::SameLine();
-				ImGui::InputFloat("", &ConstantB);
-			}
-			ImNodes::EndInputAttribute();
-		}
-
-		virtual std::vector<struct ExpressionInput*> GetInputs() { return { &InputA, &InputB }; }
-		virtual const char* GetName() const override { return "Add"; }
-
-		ExpressionInput InputA = "A";
-		float ConstantA = 0;
-		ExpressionInput InputB = "B";
-		float ConstantB = 0;
-	};
-
-	struct PowerExpression : public Expression
-	{
-		virtual int Compile(Compiler& compiler, int outputIndex) const override
-		{
-			return compiler.Power(
-				InputA.IsConnected() ? InputA.Compile(compiler) : compiler.Constant(ConstantA),
-				InputB.IsConnected() ? InputB.Compile(compiler) : compiler.Constant(ConstantB)
-			);
-		}
-
-		virtual void RenderInputs() override
-		{
-			ImNodes::BeginInputAttribute(InputA.ID);
-			ImGui::Text(InputA.Name.c_str());
-			if (!InputA.IsConnected())
-			{
-				ImGui::SameLine();
-				ImGui::InputFloat("", &ConstantA);
-			}
-			ImNodes::EndInputAttribute();
-
-			ImNodes::BeginInputAttribute(InputB.ID);
-			ImGui::Text(InputB.Name.c_str());
-			if (!InputB.IsConnected())
-			{
-				ImGui::SameLine();
-				ImGui::InputFloat("", &ConstantB);
-			}
-			ImNodes::EndInputAttribute();
-		}
-
-		virtual std::vector<struct ExpressionInput*> GetInputs() { return { &InputA, &InputB }; }
-		virtual const char* GetName() const override { return "Power"; }
-
-		ExpressionInput InputA = "A";
-		float ConstantA = 0;
-		ExpressionInput InputB = "B";
-		float ConstantB = 0;
-	};
-
-	struct TextureExpression : public Expression
-	{
-		virtual int Compile(Compiler& compiler, int outputIndex) const override
-		{
-			if (!pTexture)
-			{
-				return compiler.Error("Texture not assigned.");
-			}
-			return compiler.Texture(pTexture);
-		}
-
-		virtual const char* GetName() const override { return "Texture2D"; }
-
-		Texture* pTexture = nullptr;
-	};
-
-	struct Sample2DExpression : public Expression
-	{
-		virtual int Compile(Compiler& compiler, int outputIndex) const override
-		{
-			if (!TextureInput.IsConnected() && !pTexture)
-			{
-				return compiler.Error("Texture not assigned.");
-			}
-			return compiler.Sample2D(TextureInput.IsConnected() ? TextureInput.Compile(compiler) : compiler.Texture(pTexture), UVInput.Compile(compiler));
-		}
-
-		virtual std::vector<struct ExpressionInput*> GetInputs() { return { &TextureInput, &UVInput }; }
-		virtual const char* GetName() const override { return "Sample2D"; }
-
-		ExpressionInput TextureInput = "Texture";
-		Texture* pTexture = nullptr;
-		ExpressionInput UVInput = "UV";
-	};
-
-	struct SwizzleExpression : public Expression
-	{
-		virtual int Compile(Compiler& compiler, int outputIndex) const override
-		{
-			return compiler.Swizzle(Input.Compile(compiler), SwizzleString.data());
-		}
-
-		virtual void RenderInputs() override
-		{
-			ImNodes::BeginInputAttribute(Input.ID);
-			ImGui::InputText("Swizzle", SwizzleString.data(), SwizzleString.size());
-			ImNodes::EndInputAttribute();
-		}
-
-		void SetSwizzle(const char* pSwizzle)
-		{
-			strcpy_s(SwizzleString.data(), SwizzleString.size(), pSwizzle);
-		}
-
-		virtual std::vector<struct ExpressionInput*> GetInputs() { return { &Input }; }
-		virtual const char* GetName() const override { return "Swizzle"; }
-
-		ExpressionInput Input;
-		std::array<char, 5> SwizzleString{};
-	};
-
-	struct VertexAttributeExpression : public Expression
-	{
-		virtual int Compile(Compiler& compiler, int outputIndex) const override
-		{
-			const Uniform& uniform = VertexAttributes[VertexAttributeIndices[outputIndex]];
-			return compiler.VertexAttribute(uniform.pName);
-		}
-
-		virtual void RenderOutputs() override
-		{
-			for (size_t i = 0; i < VertexAttributeIndices.size(); ++i)
-			{
-				ImNodes::BeginOutputAttribute(Outputs[i].ID);
-				int* index = &VertexAttributeIndices[i];
-				ImGui::Combo("", index, [](void* pData, int index, const char** pOut)
-					{
-						Uniform* pAttr = (Uniform*)pData;
-						*pOut = pAttr[index].pName;
-						return true;
-					}, (void*)VertexAttributes, ARRAYSIZE(VertexAttributes));
-				ImGui::SameLine();
-
-				ImNodes::EndOutputAttribute();
-			}
-
-			if (ImGui::Button("+"))
-			{
-				AddVertexAttribute("UV");
-			}
-		}
-
-		void AddVertexAttribute(const char* pVertexAttribute)
-		{
-			for (int i = 0; i < ARRAYSIZE(VertexAttributes); ++i)
-			{
-				if (strcmp(VertexAttributes[i].pName, pVertexAttribute) == 0)
-				{
-					VertexAttributeIndices.push_back(i);
-					Outputs.resize(VertexAttributeIndices.size());
-					Outputs[VertexAttributeIndices.size() - 1].Name = pVertexAttribute;
-					return;
-				}
-			}
-		}
-
-		virtual const char* GetName() const override { return "Vertex Attribute"; }
-
-		std::vector<int> VertexAttributeIndices;
-	};
-
-	struct ViewUniformExpression : public Expression
-	{
-		virtual int Compile(Compiler& compiler, int outputIndex) const override
-		{
-			return compiler.ViewUniform(pUniform);
-		}
-
-		virtual const char* GetName() const override { return pUniform; }
-
-		const char* pUniform;
 	};
 }
