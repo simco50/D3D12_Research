@@ -37,6 +37,12 @@ namespace ShaderGraph
 		{
 			return it->second;
 		}
+
+		if (std::find(m_ExpressionStack.begin(), m_ExpressionStack.end(), key) != m_ExpressionStack.end())
+		{
+			return Error("Circular loop found.");
+		}
+
 		m_ExpressionStack.push_back(key);
 		int result = key.pExpression->Compile(*this, key.OutputIndex);
 		m_ExpressionCache.emplace_back(key, result);
@@ -49,7 +55,7 @@ namespace ShaderGraph
 		if (m_ExpressionStack.size() > 0)
 		{
 			const ExpressionKey& key = m_ExpressionStack.back();
-			m_Errors.push_back(CompileError(Sprintf("Expression %s - %s", key.pExpression->GetName(), msg.c_str()).c_str(), key));
+			m_Errors.push_back(CompileError(Sprintf("[%s] - %s.", key.pExpression->GetName(), msg.c_str()).c_str(), key));
 		}
 		else
 		{

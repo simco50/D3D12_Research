@@ -1,10 +1,4 @@
 #pragma once
-# include "imnodes.h"
-
-struct GraphTexture
-{
-	const char* pName;
-};
 
 namespace ShaderGraph
 {
@@ -13,9 +7,8 @@ namespace ShaderGraph
 
 	extern int gExpressionID;
 	constexpr static int INVALID_INDEX = -1;
-	using Texture = GraphTexture;
 
-	enum ValueType
+	enum class ValueType
 	{
 		Invalid = 0,
 
@@ -25,7 +18,44 @@ namespace ShaderGraph
 		Float4 = 1 << 3,
 		Texture2D = 1 << 4,
 
+		UInt1 = 1 << 5,
+		UInt2 = 1 << 6,
+		UInt3 = 1 << 7,
+		UInt4 = 1 << 8,
+
+		UInt = UInt1 | UInt2 | UInt3 | UInt4,
 		Float = Float1 | Float2 | Float3 | Float4,
+	};
+
+	DECLARE_BITMASK_TYPE(ValueType)
+
+	enum class ShaderType
+	{
+		Invalid = 0,
+		Vertex = 1 << 0,
+		Pixel = 1 << 1,
+		Compute = 1 << 2,
+	};
+
+	DECLARE_BITMASK_TYPE(ShaderType)
+
+	enum class SystemValue
+	{
+		ThreadID,
+	};
+
+	struct SystemValueData
+	{
+		ValueType ValueType;
+		const char* pSymbolName;
+		const char* pSemantic;
+		ShaderType ShaderType;
+	};
+
+	constexpr SystemValueData SystemValues[] =
+	{
+		{ ValueType::UInt3, "ThreadID", "SV_ThreadID", ShaderType::Compute },
+		{ ValueType::UInt1, "PrimitiveID", "SV_PrimitiveID", ShaderType::Pixel }
 	};
 
 	struct Uniform
@@ -98,11 +128,18 @@ namespace ShaderGraph
 
 	class Compiler
 	{
+	public:
+		Compiler(ShaderType context)
+			: m_ShaderContext(context)
+		{}
+
+	private:
+
 		constexpr static bool CAN_INLINE = true;
 
 		struct ShaderChunk
 		{
-			ValueType Type = Invalid;
+			ValueType Type = ValueType::Invalid;
 			StringHash Hash;
 			std::string Code;
 			std::string SymbolName;
@@ -125,9 +162,9 @@ namespace ShaderGraph
 			return AddCodeChunkInline(ValueType::Float1, "%ff", value);
 		}
 
-		int Texture(Texture* pTexture)
+		int Texture(const char* pTextureName)
 		{
-			return pTexture ? AddCodeChunkInline(ValueType::Texture2D, "%s", pTexture->pName) : INVALID_INDEX;
+			return pTextureName ? AddCodeChunkInline(ValueType::Texture2D, "%s", pTextureName) : INVALID_INDEX;
 		}
 
 		int Add(int indexA, int indexB)
@@ -162,12 +199,12 @@ namespace ShaderGraph
 				if (strcmp(pAttributeName, attrib.pName) == 0)
 				{
 					pAttribute = &attrib;
+					break;
 				}
 			}
 			if (!pAttribute)
-			{
 				return Error("Attribute '%s' is unknown", pAttributeName);
-			}
+
 			return AddCodeChunkInline(pAttribute->Type, "interpolants.%s", pAttribute->pName);
 		}
 
@@ -177,14 +214,11 @@ namespace ShaderGraph
 			for (const Uniform& uniform : ViewUniforms)
 			{
 				if (strcmp(pUniformName, uniform.pName) == 0)
-				{
 					pUniform = &uniform;
-				}
 			}
 			if (!pUniform)
-			{
 				return Error("Attribute '%s' is unknown", pUniformName);
-			}
+
 			return AddCodeChunkInline(pUniform->Type, "cView.%s", pUniform->pName);
 		}
 
@@ -198,9 +232,7 @@ namespace ShaderGraph
 				for (uint32 i = 0; i < numComponents * 2; ++i)
 				{
 					if (swizzleChar == pValidChars[i])
-					{
 						return true;
-					}
 				}
 				return false;
 			};
@@ -209,21 +241,17 @@ namespace ShaderGraph
 			uint32 numComponents = GetNumComponents(valueType);
 			uint32 swizzleLength = (uint32)strlen(pSwizzleString);
 			if (swizzleLength <= 0 || swizzleLength > 4)
-			{
 				return Error("Invalid swizzle '%s'", pSwizzleString);
-			}
 
 			const char* pCurr = pSwizzleString;
 			while (*pCurr)
 			{
 				if (!IsValidChar(numComponents, *pCurr))
-				{
 					return Error("Invalid swizzle '%s' for type %s", pSwizzleString, ValueTypeToString(valueType));
-				}
 				++pCurr;
 			}
 
-			return AddCodeChunkInline(NumComponentsToType(swizzleLength), "%s.%s", GetParameterCode(indexA), pSwizzleString);
+			return AddCodeChunkInline(NumComponentsToType(swizzleLength, EnumHasAnyFlags(valueType, ValueType::Float)), "%s.%s", GetParameterCode(indexA), pSwizzleString);
 		}
 
 		int Sample2D(int textureIndex, int uvIndex)
@@ -232,48 +260,34 @@ namespace ShaderGraph
 				return INVALID_INDEX;
 
 			if (GetType(textureIndex)!= ValueType::Texture2D)
-			{
 				return Error("Invalid Texture input");
-			}
 
 			int uvIndexCast = TryCast(uvIndex, ValueType::Float2);
 
 			if (uvIndexCast == INVALID_INDEX)
-			{
 				return INVALID_INDEX;
-			}
+
 			return AddCodeChunk(ValueType::Float4, "%s.Sample(sLinearClamp, %s)", GetParameterCode(textureIndex), GetParameterCode(uvIndexCast));
 		}
 
-		template<typename ...Args>
-		int Error(const char* pFormat, Args... args)
+		int SystemValue(SystemValue systemValue)
 		{
-			return ErrorInner(Sprintf(pFormat, std::forward<Args>(args)...));
+			const SystemValueData& data = SystemValues[(int)systemValue];
+
+			if (!EnumHasAnyFlags(data.ShaderType, m_ShaderContext))
+				return Error("%s is invalid to use in current shader context", data.pSemantic);
+
+			return AddCodeChunkInline(data.ValueType, "%s", data.pSymbolName);
 		}
-
-		int CompileExpression(const ExpressionKey& input);
-
-		const char* GetSource() const
-		{
-			return m_Source.c_str();
-		}
-
-		const std::vector<CompileError>& GetErrors() const
-		{
-			return m_Errors;
-		}
-
-	private:
-		int ErrorInner(const std::string& msg);
 
 		int TryCast(int index, ValueType destinationType)
 		{
 			const ShaderChunk& chunk = m_Chunks[index];
+
 			if (chunk.Type == destinationType)
-			{
 				return index;
-			}
-			if ((chunk.Type & ValueType::Float) && (destinationType & ValueType::Float))
+
+			if (EnumHasAnyFlags(chunk.Type, ValueType::Float) && EnumHasAnyFlags(destinationType, ValueType::Float))
 			{
 				int numSourceComponents = GetNumComponents(chunk.Type);
 				int numDestComponents = GetNumComponents(destinationType);
@@ -285,8 +299,10 @@ namespace ShaderGraph
 					case 3: return AddCodeChunkInline(destinationType, "%s.xxx", chunk.Code.c_str());
 					case 4: return AddCodeChunkInline(destinationType, "%s.xxxx", chunk.Code.c_str());
 					}
-					
+
 				}
+#if 0
+
 				else if (numSourceComponents > numDestComponents)
 				{
 					switch (numDestComponents)
@@ -296,6 +312,12 @@ namespace ShaderGraph
 					case 3: return AddCodeChunkInline(destinationType, "%s.xyz", chunk.Code.c_str());
 					}
 				}
+#else
+				else if (numSourceComponents > numDestComponents)
+				{
+					return Error("Failed to cast '%s' to '%s'", ValueTypeToString(chunk.Type), ValueTypeToString(destinationType));
+				}
+#endif
 				else if (numSourceComponents < numDestComponents)
 				{
 					if (numSourceComponents == 1)
@@ -317,8 +339,16 @@ namespace ShaderGraph
 					return index;
 				}
 			}
-			Error("Failed to cast '%s' to '%s' (%s)", ValueTypeToString(chunk.Type), ValueTypeToString(destinationType), GetParameterCode(index));
-			return INVALID_INDEX;
+			else if (EnumHasAnyFlags(chunk.Type, ValueType::UInt) && EnumHasAnyFlags(destinationType, ValueType::Float))
+			{
+				return index;
+			}
+			return Error("Failed to cast '%s' to '%s", ValueTypeToString(chunk.Type), ValueTypeToString(destinationType));
+		}
+
+		ValueType GetType(int index)
+		{
+			return index != INVALID_INDEX ? GetChunk(index).Type : ValueType::Invalid;
 		}
 
 		int GetNumComponents(ValueType type) const
@@ -329,18 +359,48 @@ namespace ShaderGraph
 			case ValueType::Float2: return 2;
 			case ValueType::Float3: return 3;
 			case ValueType::Float4: return 4;
+			case ValueType::UInt1: return 1;
+			case ValueType::UInt2: return 2;
+			case ValueType::UInt3: return 3;
+			case ValueType::UInt4: return 4;
 			default:				return INVALID_INDEX;
 			}
 		}
 
-		ValueType NumComponentsToType(int components) const
+		template<typename ...Args>
+		int Error(const char* pFormat, Args... args)
+		{
+			return ErrorInner(Sprintf(pFormat, std::forward<Args>(args)...));
+		}
+
+		int CompileExpression(const ExpressionKey& input);
+
+		const char* GetSource() const
+		{
+			return m_Source.c_str();
+		}
+
+		const std::vector<CompileError>& GetErrors() const
+		{
+			return m_Errors;
+		}
+
+		ShaderType GetContext() const
+		{
+			return m_ShaderContext;
+		}
+
+	private:
+		int ErrorInner(const std::string& msg);
+
+		ValueType NumComponentsToType(int components, bool isFloat) const
 		{
 			switch (components)
 			{
-			case 1:		return ValueType::Float1;
-			case 2:		return ValueType::Float2;
-			case 3:		return ValueType::Float3;
-			case 4:		return ValueType::Float4;
+			case 1:		return isFloat ? ValueType::Float1 : ValueType::UInt1;
+			case 2:		return isFloat ? ValueType::Float2 : ValueType::UInt2;
+			case 3:		return isFloat ? ValueType::Float3 : ValueType::UInt3;
+			case 4:		return isFloat ? ValueType::Float4 : ValueType::UInt4;
 			}
 			return ValueType::Invalid;
 		}
@@ -351,11 +411,6 @@ namespace ShaderGraph
 			return m_Chunks[index];
 		}
 
-		ValueType GetType(int index)
-		{
-			return index != INVALID_INDEX ? GetChunk(index).Type : ValueType::Invalid;
-		}
-
 		ValueType GetCombinedType(int indexA, int indexB)
 		{
 			ValueType a = GetType(indexA);
@@ -364,14 +419,20 @@ namespace ShaderGraph
 			{
 				return a;
 			}
-			if (a == ValueType::Float1)
+
+			bool anyFloat = EnumHasAnyFlags(a, ValueType::Float) || EnumHasAnyFlags(b, ValueType::Float);
+			int numComponentsA = GetNumComponents(a);
+			int numComponentsB = GetNumComponents(b);
+			if (numComponentsA == numComponentsB)
 			{
-				return b;
+				return NumComponentsToType(numComponentsA, anyFloat);
 			}
-			if (b == ValueType::Float1)
+
+			if (numComponentsA == 1 || numComponentsB == 1)
 			{
-				return a;
+				return NumComponentsToType(numComponentsA == 1 ? numComponentsB : numComponentsB, anyFloat);
 			}
+
 			Error("Failed to combine types '%s' and '%s' (%s & %s)", ValueTypeToString(a), ValueTypeToString(b), GetParameterCode(indexA), GetParameterCode(indexB));
 			return ValueType::Invalid;
 		}
@@ -384,6 +445,10 @@ namespace ShaderGraph
 			case ValueType::Float2: return "float2";
 			case ValueType::Float3: return "float3";
 			case ValueType::Float4: return "float4";
+			case ValueType::UInt1: return "uint1";
+			case ValueType::UInt2: return "uint2";
+			case ValueType::UInt3: return "uint3";
+			case ValueType::UInt4: return "uint4";
 			case ValueType::Texture2D: return "Texture2D";
 			}
 			return "float";
@@ -405,7 +470,6 @@ namespace ShaderGraph
 			}
 			return chunk.SymbolName.c_str();
 		}
-
 
 		template<typename ...Args>
 		int AddCodeChunk(ValueType type, const char* pCode, Args... args)
@@ -459,5 +523,6 @@ namespace ShaderGraph
 		std::vector<ShaderChunk> m_Chunks;
 		std::vector<std::pair<ExpressionKey, int>> m_ExpressionCache;
 		std::vector<ExpressionKey> m_ExpressionStack;
+		ShaderType m_ShaderContext;
 	};
 }

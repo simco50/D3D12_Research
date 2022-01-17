@@ -1,6 +1,7 @@
 #pragma once
 
 #include "MaterialGraph.h"
+#include "imnodes.h"
 
 namespace ShaderGraph
 {
@@ -201,7 +202,7 @@ namespace ShaderGraph
 
 		virtual const char* GetName() const override { return "Texture2D"; }
 
-		Texture* pTexture = nullptr;
+		const char* pTexture = nullptr;
 	};
 
 	struct Sample2DExpression : public Expression
@@ -219,7 +220,7 @@ namespace ShaderGraph
 		virtual const char* GetName() const override { return "Sample2D"; }
 
 		ExpressionInput TextureInput = "Texture";
-		Texture* pTexture = nullptr;
+		const char* pTexture = nullptr;
 		ExpressionInput UVInput = "UV";
 	};
 
@@ -311,4 +312,78 @@ namespace ShaderGraph
 		const char* pUniform;
 	};
 
+	struct OutputExpression : public Expression
+	{
+		OutputExpression()
+		{
+			Outputs.clear();
+		}
+
+		virtual int Compile(Compiler& compiler, int outputIndex) const override
+		{
+			const Input& input = m_Inputs[outputIndex];
+			int result = input.Expression.IsConnected() ? input.Expression.Compile(compiler) : compiler.Constant(0);
+			if (result == INVALID_INDEX)
+				return INVALID_INDEX;
+			if (compiler.GetType(result) != input.Type)
+			{
+				result = compiler.TryCast(result, input.Type);
+				if (result == INVALID_INDEX)
+					return INVALID_INDEX;
+			}
+			return result;
+		}
+
+		ExpressionInput& AddInput(const char* pName, ValueType type)
+		{
+			m_Inputs.push_back(Input(pName, type));
+			return m_Inputs.back().Expression;
+		}
+
+		virtual std::vector<ExpressionInput*> GetInputs() override
+		{
+			std::vector<ExpressionInput*> inputs;
+			for (Input& input : m_Inputs)
+			{
+				inputs.push_back(&input.Expression);
+			}
+			return inputs;
+		}
+
+		virtual const char* GetName() const override { return "Output"; }
+
+		struct Input
+		{
+			Input(const char* pName, ValueType type)
+				: Expression(pName), Type(type)
+			{}
+			ExpressionInput Expression;
+			ValueType Type;
+		};
+		std::vector<Input> m_Inputs;
+	};
+
+	struct SystemValueExpression : public Expression
+	{
+		virtual int Compile(Compiler& compiler, int outputIndex) const override
+		{
+			return compiler.SystemValue((SystemValue)m_Index);
+		}
+
+		virtual void RenderOutputs() override
+		{
+			ImNodes::BeginOutputAttribute(Outputs[0].ID);
+			ImGui::Combo("", &m_Index, [](void* pData, int index, const char** pOut)
+				{
+					SystemValueData* pSystemValue = (SystemValueData*)pData;
+					*pOut = pSystemValue[index].pSymbolName;
+					return true;
+				}, (void*)SystemValues, ARRAYSIZE(SystemValues));
+			ImNodes::EndOutputAttribute();
+		}
+
+		virtual const char* GetName() const override { return "System Value"; }
+
+		int m_Index;
+	};
 }

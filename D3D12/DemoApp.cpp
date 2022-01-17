@@ -1565,16 +1565,40 @@ void DemoApp::InitializePipelines()
 		m_pBloomMipChainPSO = m_pDevice->CreatePipeline(psoDesc);
 	}
 }
-
-std::vector<std::unique_ptr<ShaderGraph::Expression>> nodes;
-ShaderGraph::Expression* pTargetExpression;
+static ImVector<ShaderGraph::Expression*> nodes;
 
 template<typename T>
 T* NewExpression()
 {
-	nodes.push_back(std::make_unique<T>());
-	return (T*)nodes.back().get();
+	nodes.push_back(new T());
+	return (T*)nodes.back();
 }
+
+template<typename T>
+void RemoveIndices(ImVector<T>& arr, int* pIndices, int numIndices)
+{
+	auto shouldRemove = [=](int index) {
+		for (int i = 0; i < numIndices; ++i)
+		{
+			if (index == pIndices[i])
+				return true;
+		}
+		return false;
+	};
+
+	int removed = 0;
+	for (int i = arr.size() - 1; i >= 0; --i)
+	{
+		if (shouldRemove(i))
+		{
+			std::swap(arr[i], arr[arr.size() - removed - 1]);
+			removed++;
+		}
+	}
+	arr.resize(arr.size() - removed);
+}
+
+#include <stack>
 
 void DemoApp::UpdateImGui()
 {
@@ -1621,7 +1645,8 @@ void DemoApp::UpdateImGui()
 	style.Colors[ImNodesCol_MiniMapCanvasOutline] = IM_COL32(200, 200, 200, 200);
 
 	static bool initOnce = false;
-	static std::vector<std::pair<int, int>> links;
+	static ImVector<std::pair<int, int>> links;
+	static ShaderGraph::Expression* pTargetExpression;
 	if (!initOnce)
 	{
 		ShaderGraph::RegisterExpression<ConstantFloatExpression>("Constant Float");
@@ -1632,16 +1657,16 @@ void DemoApp::UpdateImGui()
 		ShaderGraph::RegisterExpression<SwizzleExpression>("Swizzle");
 		ShaderGraph::RegisterExpression<VertexAttributeExpression>("Vertex Attribute");
 		ShaderGraph::RegisterExpression<ViewUniformExpression>("View Uniform");
+		ShaderGraph::RegisterExpression<OutputExpression>("Output");
+		ShaderGraph::RegisterExpression<SystemValueExpression>("System Value");
 
 		ImNodes::LoadCurrentEditorStateFromIniFile("save_load.ini");
-		static GraphTexture tex;
-		tex.pName = "tFoo";
 
 		VertexAttributeExpression* attributeExpression = NewExpression<VertexAttributeExpression>();
 		attributeExpression->AddVertexAttribute("UV");
 
 		TextureExpression* textureExpression = NewExpression<TextureExpression>();
-		textureExpression->pTexture = &tex;
+		textureExpression->pTexture = "tFoo";
 
 		Sample2DExpression* sampleExpression = NewExpression<Sample2DExpression>();
 		sampleExpression->TextureInput.Connect(textureExpression);
@@ -1662,7 +1687,14 @@ void DemoApp::UpdateImGui()
 		pow->InputA.Connect(add);
 		pow->InputB.Connect(swizzle);
 
-		pTargetExpression = pow;
+		OutputExpression* output = NewExpression<OutputExpression>();
+		output->AddInput("Base Color", ValueType::Float3).Connect(pow);
+		output->AddInput("Opacity", ValueType::Float1);
+		output->AddInput("Normal", ValueType::Float3);
+		output->AddInput("Roughness", ValueType::Float1);
+		output->AddInput("Metalness", ValueType::Float1);
+		output->AddInput("Emissive", ValueType::Float3);
+		pTargetExpression = output;
 
 		initOnce = true;
 
@@ -1672,29 +1704,35 @@ void DemoApp::UpdateImGui()
 			{
 				if (input->IsConnected())
 				{
-					links.emplace_back(input->pConnectedExpression->GetOutputs()[0].ID, input->ID);
+					links.push_back({ input->pConnectedExpression->GetOutputs()[0].ID, input->ID });
 				}
 			}
 		}
 		
 	}
 
-	Compiler c;
+	Compiler c(ShaderGraph::ShaderType::Pixel);
 	std::string msg;
 
 	std::vector<Compiler::CompileError> errors;
-	if (pTargetExpression->Compile(c, 0) == INVALID_INDEX)
+
+	std::vector<ExpressionInput*> inputs = pTargetExpression->GetInputs();
+	for (ExpressionInput* pInput : inputs)
 	{
-		errors = c.GetErrors();
-		for (const Compiler::CompileError& error : errors)
+		if (pInput->IsConnected() && pInput->Compile(c) == INVALID_INDEX)
 		{
-			msg += Sprintf("%s\n", error.Message.c_str());
+			errors = c.GetErrors();
+			for (const Compiler::CompileError& error : errors)
+			{
+				msg += Sprintf("%s\n", error.Message.c_str());
+			}
+			break;
 		}
 	}
-	else
-	{
+
+	if(msg.length() == 0)
 		msg = c.GetSource();
-	}
+
 
 	auto GetNodeError = [&](Expression* pExpression) {
 		for (const Compiler::CompileError& error : errors)
@@ -1732,19 +1770,34 @@ void DemoApp::UpdateImGui()
 			{
 				if (ImGui::MenuItem(factory.first))
 				{
-					nodes.push_back(std::unique_ptr<Expression>(factory.second.Callback()));
+					nodes.push_back(factory.second.Callback());
 					ImNodes::SetNodeScreenSpacePos(nodes.back()->ID, click_pos);
 				}
 			}
 			ImGui::EndPopup();
 		}
 
+		for (Compiler::CompileError& error : errors)
+		{
+			if (error.Expression.pExpression)
+			{
+				ImVec2 nodePos = ImNodes::GetNodeScreenSpacePos(error.Expression.pExpression->ID);
+				ImGui::SetNextWindowPos(nodePos + ImVec2(-15, -30));
+				ImGui::PushStyleColor(ImGuiCol_WindowBg, (ImVec4)ImColor(150, 20, 20, 255));
+				ImGuiWindowFlags flags = ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoFocusOnAppearing;
+				ImGui::Begin(error.Message.c_str(), NULL, flags);
+				ImGui::Text(error.Message.c_str());
+				ImGui::End();
+				ImGui::PopStyleColor();
+			}
+		}
+
 		for (auto& node : nodes)
 		{
-			const char* pError = GetNodeError(node.get());
+			const char* pError = GetNodeError(node);
 			if (pError)
 				ImNodes::PushColorStyle(ImNodesCol_TitleBar, ImColor(150, 20, 20, 255));
-			else if(node.get() == pTargetExpression)
+			else if(node == pTargetExpression)
 				ImNodes::PushColorStyle(ImNodesCol_TitleBar, ImColor(112, 64, 35, 255));
 			else
 				ImNodes::PushColorStyle(ImNodesCol_TitleBar, ImColor(65, 65, 65, 255));
@@ -1760,7 +1813,6 @@ void DemoApp::UpdateImGui()
 			ImNodes::Link(i, p.first, p.second);
 		}
 
-
 		ImNodes::MiniMap(0.2f);
 		ImNodes::EndNodeEditor();
 
@@ -1771,7 +1823,7 @@ void DemoApp::UpdateImGui()
 			{
 				if (node->ID == hovered)
 				{
-					pTargetExpression = node.get();
+					pTargetExpression = node;
 				}
 			}
 		}
@@ -1796,7 +1848,7 @@ void DemoApp::UpdateImGui()
 				{
 					if (outputs[i].ID == id)
 					{
-						*pExpression = node.get();
+						*pExpression = node;
 						*outputIndex = (int)i;
 						return;
 					}
@@ -1804,42 +1856,115 @@ void DemoApp::UpdateImGui()
 			}
 		};
 
-		int start_attr, end_attr;
-		if (ImNodes::IsLinkCreated(&start_attr, &end_attr))
+		auto findNode = [&](int id) -> Expression* {
+			for (auto& node : nodes)
+			{
+				if (node->ID == id)
+				{
+					return node;
+				}
+			}
+			return nullptr;
+		};
+
 		{
-			links.push_back(std::make_pair(start_attr, end_attr));
+			int start_attr, end_attr;
+			if (ImNodes::IsLinkCreated(&start_attr, &end_attr))
+			{
+				links.push_back(std::make_pair(start_attr, end_attr));
 
-			ExpressionInput* pInput = findInput(end_attr);
+				ExpressionInput* pInput = findInput(end_attr);
 
-			int outputIndex = 0;
-			Expression* pOutputExpression;
-			findOutput(start_attr, &pOutputExpression, &outputIndex);
+				if (const ExpressionOutput* pOutput = pInput->GetConnectedOutput())
+				{
+					std::pair<int, int> existingLink(pOutput->ID, pInput->ID);
+					links.find_erase(existingLink);
+				}
 
-			pInput->Connect(pOutputExpression, outputIndex);
+				int outputIndex = 0;
+				Expression* pOutputExpression;
+				findOutput(start_attr, &pOutputExpression, &outputIndex);
+
+				pInput->Connect(pOutputExpression, outputIndex);
+			}
+		}
+		{
+			int destroyedLink;
+			if (ImNodes::IsLinkDestroyed(&destroyedLink))
+			{
+				RemoveIndices(links, &destroyedLink, 1);
+			}
 		}
 
 		{
 			const int num_selected = ImNodes::NumSelectedLinks();
 			if (num_selected > 0 && ImGui::IsKeyReleased(VK_DELETE))
 			{
-				static std::vector<int> selected_links;
-				selected_links.resize(static_cast<size_t>(num_selected));
-				ImNodes::GetSelectedLinks(selected_links.data());
-				for(size_t i = 0; i < selected_links.size(); ++i)
+				ImVector<int> selected_links;
+				selected_links.resize(num_selected);
+				ImNodes::GetSelectedLinks(&selected_links[0]);
+
+				for(int link : selected_links)
 				{
-					int edge_id = selected_links[i];
-					ExpressionInput* pInput = findInput(links[edge_id].second);
+					ExpressionInput* pInput = findInput(links[link].second);
 					pInput->pConnectedExpression = nullptr;
-					std::swap(links[edge_id], links[links.size() - 1 - i]);
 				}
-				links.resize(links.size() - num_selected);
+				RemoveIndices(links, &selected_links[0], selected_links.size());
 			}
-		}	
+		}
+
+		{
+			const int num_selected = ImNodes::NumSelectedNodes();
+			if (num_selected > 0 && ImGui::IsKeyReleased(VK_DELETE))
+			{
+				ImVector<int> selected_nodes;
+				selected_nodes.resize(num_selected);
+				ImNodes::GetSelectedNodes(&selected_nodes[0]);
+				for (int i = 0; i < selected_nodes.size(); ++i)
+				{
+					int node_id = selected_nodes[i];
+					Expression* pExpression = findNode(node_id);
+					for (ExpressionInput* pInput : pExpression->GetInputs())
+					{
+						for (int j = 0; j < links.size(); ++j)
+						{
+							if (links[j].second == pInput->ID)
+							{
+								links.find_erase_unsorted(links[j]);
+								break;
+							}
+						}
+					}
+
+					for (const auto& output : pExpression->GetOutputs())
+					{
+						for (int j = 0; j < links.size(); ++j)
+						{
+							if (links[j].first == output.ID)
+							{
+								ExpressionInput* pInput = findInput(links[j].second);
+								pInput->pConnectedExpression = nullptr;
+								links.find_erase_unsorted(links[j]);
+								--j;
+							}
+						}
+					}
+
+					for (int j = 0; j < nodes.size(); ++j)
+					{
+						if (nodes[j]->ID == node_id)
+						{
+							nodes.find_erase_unsorted(nodes[j]);
+							break;
+						}
+					}
+				}
+			}
+		}
 
 		ImNodes::SaveCurrentEditorStateToIniFile("save_load.ini");
 	}
 	ImGui::End();
-
 
 	m_FrameTimes[m_Frame % m_FrameTimes.size()] = Time::DeltaTime();
 
