@@ -14,6 +14,10 @@ namespace ShaderGraph
 		{
 			return compiler.CompileExpression(ExpressionKey(pConnectedExpression, ConnectedExpressionOutputIndex));
 		}
+		else if (HasDefaultValue)
+		{
+			return compiler.Constant(DefaultValue);
+		}
 		return compiler.Error("Expression input '%s' not connected", Name.c_str());
 	}
 
@@ -21,7 +25,7 @@ namespace ShaderGraph
 	{
 		if (!pConnectedExpression)
 			return nullptr;
-		const std::vector<ExpressionOutput>& outputs = pConnectedExpression->GetOutputs();
+		const std::vector<ExpressionOutput>& outputs = pConnectedExpression->Outputs;
 		check(ConnectedExpressionOutputIndex < outputs.size());
 		return &outputs[ConnectedExpressionOutputIndex];
 	}
@@ -52,15 +56,7 @@ namespace ShaderGraph
 
 	int Compiler::ErrorInner(const std::string& msg)
 	{
-		if (m_ExpressionStack.size() > 0)
-		{
-			const ExpressionKey& key = m_ExpressionStack.back();
-			m_Errors.push_back(CompileError(Sprintf("[%s] - %s.", key.pExpression->GetName(), msg.c_str()).c_str(), key));
-		}
-		else
-		{
-			m_Errors.push_back(CompileError(msg.c_str()));
-		}
+		m_Errors.push_back(CompileError(msg.c_str(), m_ExpressionStack.size() ? m_ExpressionStack.back() : ExpressionKey()));
 		return INVALID_INDEX;
 	}
 }

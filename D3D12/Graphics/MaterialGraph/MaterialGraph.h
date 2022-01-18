@@ -25,6 +25,9 @@ namespace ShaderGraph
 
 		UInt = UInt1 | UInt2 | UInt3 | UInt4,
 		Float = Float1 | Float2 | Float3 | Float4,
+		Numeric = UInt | Float,
+		Texture = Texture2D,
+		All = Numeric | Texture,
 	};
 
 	DECLARE_BITMASK_TYPE(ValueType)
@@ -89,8 +92,12 @@ namespace ShaderGraph
 	// Represents an input expression that can be connected to an output expression
 	struct ExpressionInput
 	{
+		ExpressionInput(const char* pName, float defaultValue)
+			: Name(pName), ID(gExpressionID++), DefaultValue(defaultValue), HasDefaultValue(true)
+		{}
+
 		ExpressionInput(const char* pName = "In")
-			: Name(pName), ID(gExpressionID++)
+			: Name(pName), ID(gExpressionID++), DefaultValue(0), HasDefaultValue(false)
 		{}
 
 		int Compile(Compiler& compiler) const;
@@ -105,6 +112,8 @@ namespace ShaderGraph
 
 		const ExpressionOutput* GetConnectedOutput() const;
 
+		bool HasDefaultValue;
+		float DefaultValue;
 		Expression* pConnectedExpression = nullptr;
 		int ConnectedExpressionOutputIndex = 0;
 		std::string Name = "";

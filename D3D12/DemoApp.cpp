@@ -1608,6 +1608,7 @@ void DemoApp::UpdateImGui()
 
 	ImNodesStyle& style = ImNodes::GetStyle();
 	style.Flags = ImNodesStyleFlags_None;
+	style.PinCircleRadius = 5;
 	//style.NodeCornerRounding = 0;
 
 	style.Colors[ImNodesCol_NodeBackground] = IM_COL32(50, 50, 50, 255);
@@ -1620,8 +1621,8 @@ void DemoApp::UpdateImGui()
 	style.Colors[ImNodesCol_Link] = IM_COL32(170, 175, 110, 200);
 	style.Colors[ImNodesCol_LinkHovered] = IM_COL32(190, 195, 130, 255);
 	style.Colors[ImNodesCol_LinkSelected] = IM_COL32(150, 155, 900, 255);
-	style.Colors[ImNodesCol_Pin] = IM_COL32(53, 150, 250, 180);
-	style.Colors[ImNodesCol_PinHovered] = IM_COL32(53, 150, 250, 255);
+	style.Colors[ImNodesCol_Pin] = IM_COL32(150, 150, 150, 180);
+	style.Colors[ImNodesCol_PinHovered] = IM_COL32(160, 160, 160, 255);
 
 	style.Colors[ImNodesCol_BoxSelector] = IM_COL32(61, 133, 224, 30);
 	style.Colors[ImNodesCol_BoxSelectorOutline] = IM_COL32(61, 133, 224, 150);
@@ -1669,23 +1670,23 @@ void DemoApp::UpdateImGui()
 		textureExpression->pTexture = "tFoo";
 
 		Sample2DExpression* sampleExpression = NewExpression<Sample2DExpression>();
-		sampleExpression->TextureInput.Connect(textureExpression);
-		sampleExpression->UVInput.Connect(attributeExpression);
+		sampleExpression->Inputs[0].Connect(textureExpression);
+		sampleExpression->Inputs[1].Connect(attributeExpression);
 
 		ConstantFloatExpression* nodeB = NewExpression<ConstantFloatExpression>();
 		nodeB->Value = 7;
 
 		SwizzleExpression* swizzle = NewExpression<SwizzleExpression>();
-		swizzle->Input.Connect(sampleExpression);
+		swizzle->Inputs[0].Connect(sampleExpression);
 		swizzle->SetSwizzle("x");
 
 		AddExpression* add = NewExpression<AddExpression>();
-		add->InputA.Connect(swizzle);
-		add->InputB.Connect(nodeB);
+		add->Inputs[0].Connect(swizzle);
+		add->Inputs[1].Connect(nodeB);
 
 		PowerExpression* pow = NewExpression<PowerExpression>();
-		pow->InputA.Connect(add);
-		pow->InputB.Connect(swizzle);
+		pow->Inputs[0].Connect(add);
+		pow->Inputs[1].Connect(swizzle);
 
 		OutputExpression* output = NewExpression<OutputExpression>();
 		output->AddInput("Base Color", ValueType::Float3).Connect(pow);
@@ -1700,11 +1701,11 @@ void DemoApp::UpdateImGui()
 
 		for (auto& node : nodes)
 		{
-			for (const ExpressionInput* input : node->GetInputs())
+			for (const ExpressionInput& input : node->Inputs)
 			{
-				if (input->IsConnected())
+				if (input.IsConnected())
 				{
-					links.push_back({ input->pConnectedExpression->GetOutputs()[0].ID, input->ID });
+					links.push_back({ input.pConnectedExpression->Outputs[0].ID, input.ID });
 				}
 			}
 		}
@@ -1716,10 +1717,10 @@ void DemoApp::UpdateImGui()
 
 	std::vector<Compiler::CompileError> errors;
 
-	std::vector<ExpressionInput*> inputs = pTargetExpression->GetInputs();
-	for (ExpressionInput* pInput : inputs)
+	std::vector<ExpressionInput>& inputs = pTargetExpression->Inputs;
+	for (ExpressionInput& input : inputs)
 	{
-		if (pInput->IsConnected() && pInput->Compile(c) == INVALID_INDEX)
+		if (input.IsConnected() && input.Compile(c) == INVALID_INDEX)
 		{
 			errors = c.GetErrors();
 			for (const Compiler::CompileError& error : errors)
@@ -1831,10 +1832,10 @@ void DemoApp::UpdateImGui()
 		auto findInput = [&](int id) -> ExpressionInput* {
 			for (auto& node : nodes)
 			{
-				for (ExpressionInput* input : node->GetInputs())
+				for (ExpressionInput& input : node->Inputs)
 				{
-					if (input->ID == id)
-						return input;
+					if (input.ID == id)
+						return &input;
 				}
 			}
 			return nullptr;
@@ -1843,7 +1844,7 @@ void DemoApp::UpdateImGui()
 		auto findOutput = [&](int id, Expression** pExpression, int* outputIndex) {
 			for (auto& node : nodes)
 			{
-				const auto& outputs = node->GetOutputs();
+				const std::vector<ExpressionOutput>& outputs = node->Outputs;
 				for (size_t i = 0; i < outputs.size(); ++i)
 				{
 					if (outputs[i].ID == id)
@@ -1924,11 +1925,11 @@ void DemoApp::UpdateImGui()
 				{
 					int node_id = selected_nodes[i];
 					Expression* pExpression = findNode(node_id);
-					for (ExpressionInput* pInput : pExpression->GetInputs())
+					for (ExpressionInput& input : pExpression->Inputs)
 					{
 						for (int j = 0; j < links.size(); ++j)
 						{
-							if (links[j].second == pInput->ID)
+							if (links[j].second == input.ID)
 							{
 								links.find_erase_unsorted(links[j]);
 								break;
@@ -1936,7 +1937,7 @@ void DemoApp::UpdateImGui()
 						}
 					}
 
-					for (const auto& output : pExpression->GetOutputs())
+					for (ExpressionOutput& output : pExpression->Outputs)
 					{
 						for (int j = 0; j < links.size(); ++j)
 						{

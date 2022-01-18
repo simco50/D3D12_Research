@@ -36,15 +36,20 @@ namespace ShaderGraph
 			Outputs.push_back(ExpressionOutput(""));
 		}
 
+		virtual ~Expression() {}
+
+		virtual int Compile(Compiler& compiler, int outputIndex) const = 0;
+		virtual std::string GetName() const { return "Unnamed"; }
+
 		void Render()
 		{
 			ImNodes::BeginNode(ID);
 
+			ImGui::PushItemWidth(100);
 			ImNodes::BeginNodeTitleBar();
-			ImGui::TextUnformatted(GetName());
+			ImGui::TextUnformatted(GetName().c_str());
 			ImNodes::EndNodeTitleBar();
 
-			ImGui::PushItemWidth(100);
 			ImGui::BeginGroup();
 			RenderInputs();
 			ImGui::EndGroup();
@@ -61,17 +66,22 @@ namespace ShaderGraph
 
 		virtual void RenderInputs()
 		{
-			for (const ExpressionInput* input : GetInputs())
+			for (ExpressionInput& input : Inputs)
 			{
-				ImNodes::BeginInputAttribute(input->ID);
-				ImGui::Text(input->Name.c_str());
+				ImNodes::BeginInputAttribute(input.ID);
+				ImGui::Text(input.Name.c_str());
+				if (!input.IsConnected() && input.HasDefaultValue)
+				{
+					ImGui::SameLine();
+					ImGui::InputFloat("", &input.DefaultValue);
+				}
 				ImNodes::EndInputAttribute();
 			}
 		}
 
 		virtual void RenderOutputs()
 		{
-			for (const ExpressionOutput& output : GetOutputs())
+			for (ExpressionOutput& output : Outputs)
 			{
 				ImNodes::BeginOutputAttribute(output.ID);
 				ImGui::Text(output.Name.c_str());
@@ -79,15 +89,9 @@ namespace ShaderGraph
 			}
 		}
 
-		virtual ~Expression() {}
-
 		std::vector<ExpressionOutput> Outputs;
+		std::vector<ExpressionInput> Inputs;
 		int ID;
-
-		virtual int Compile(Compiler& compiler, int outputIndex) const = 0;
-		virtual std::vector<struct ExpressionInput*> GetInputs() { return {}; }
-		virtual const std::vector<ExpressionOutput>& GetOutputs() { return Outputs; }
-		virtual const char* GetName() const = 0;
 	};
 
 	struct ConstantFloatExpression : public Expression
@@ -104,89 +108,41 @@ namespace ShaderGraph
 			ImNodes::EndOutputAttribute();
 		}
 
-		virtual const char* GetName() const override { return "Constant"; }
+		virtual std::string GetName() const override { return "Constant"; }
 
 		float Value = 0;
 	};
 
 	struct AddExpression : public Expression
 	{
+		AddExpression()
+		{
+			Inputs.push_back({ "A", 0 });
+			Inputs.push_back({ "B", 0 });
+		}
+
 		virtual int Compile(Compiler& compiler, int outputIndex) const override
 		{
-			return compiler.Add(
-				InputA.IsConnected() ? InputA.Compile(compiler) : compiler.Constant(ConstantA),
-				InputB.IsConnected() ? InputB.Compile(compiler) : compiler.Constant(ConstantB)
-			);
+			return compiler.Add(Inputs[0].Compile(compiler), Inputs[1].Compile(compiler));
 		}
 
-		virtual void RenderInputs() override
-		{
-			ImNodes::BeginInputAttribute(InputA.ID);
-			ImGui::Text(InputA.Name.c_str());
-			if (!InputA.IsConnected())
-			{
-				ImGui::SameLine();
-				ImGui::InputFloat("", &ConstantA);
-			}
-			ImNodes::EndInputAttribute();
-
-			ImNodes::BeginInputAttribute(InputB.ID);
-			ImGui::Text(InputB.Name.c_str());
-			if (!InputB.IsConnected())
-			{
-				ImGui::SameLine();
-				ImGui::InputFloat("", &ConstantB);
-			}
-			ImNodes::EndInputAttribute();
-		}
-
-		virtual std::vector<struct ExpressionInput*> GetInputs() { return { &InputA, &InputB }; }
-		virtual const char* GetName() const override { return "Add"; }
-
-		ExpressionInput InputA = "A";
-		float ConstantA = 0;
-		ExpressionInput InputB = "B";
-		float ConstantB = 0;
+		virtual std::string GetName() const override { return "Add"; }
 	};
 
 	struct PowerExpression : public Expression
 	{
+		PowerExpression()
+		{
+			Inputs.push_back({ "A", 0 });
+			Inputs.push_back({ "B", 0 });
+		}
+
 		virtual int Compile(Compiler& compiler, int outputIndex) const override
 		{
-			return compiler.Power(
-				InputA.IsConnected() ? InputA.Compile(compiler) : compiler.Constant(ConstantA),
-				InputB.IsConnected() ? InputB.Compile(compiler) : compiler.Constant(ConstantB)
-			);
+			return compiler.Power(Inputs[0].Compile(compiler), Inputs[1].Compile(compiler));
 		}
 
-		virtual void RenderInputs() override
-		{
-			ImNodes::BeginInputAttribute(InputA.ID);
-			ImGui::Text(InputA.Name.c_str());
-			if (!InputA.IsConnected())
-			{
-				ImGui::SameLine();
-				ImGui::InputFloat("", &ConstantA);
-			}
-			ImNodes::EndInputAttribute();
-
-			ImNodes::BeginInputAttribute(InputB.ID);
-			ImGui::Text(InputB.Name.c_str());
-			if (!InputB.IsConnected())
-			{
-				ImGui::SameLine();
-				ImGui::InputFloat("", &ConstantB);
-			}
-			ImNodes::EndInputAttribute();
-		}
-
-		virtual std::vector<struct ExpressionInput*> GetInputs() { return { &InputA, &InputB }; }
-		virtual const char* GetName() const override { return "Power"; }
-
-		ExpressionInput InputA = "A";
-		float ConstantA = 0;
-		ExpressionInput InputB = "B";
-		float ConstantB = 0;
+		virtual std::string GetName() const override { return "Power"; }
 	};
 
 	struct TextureExpression : public Expression
@@ -200,42 +156,63 @@ namespace ShaderGraph
 			return compiler.Texture(pTexture);
 		}
 
-		virtual const char* GetName() const override { return "Texture2D"; }
+		virtual std::string GetName() const override { return "Texture2D"; }
 
 		const char* pTexture = nullptr;
 	};
 
 	struct Sample2DExpression : public Expression
 	{
+		Sample2DExpression()
+		{
+			Inputs.push_back({ "Texture" });
+			Inputs.push_back({ "UV" });
+
+			Outputs.clear();
+			Outputs.push_back({ "RGBA" });
+			Outputs.push_back({ "R" });
+			Outputs.push_back({ "G" });
+			Outputs.push_back({ "B" });
+			Outputs.push_back({ "A" });
+		}
+
 		virtual int Compile(Compiler& compiler, int outputIndex) const override
 		{
-			if (!TextureInput.IsConnected() && !pTexture)
+			if (!Inputs[0].IsConnected())
 			{
 				return compiler.Error("Texture not assigned.");
 			}
-			return compiler.Sample2D(TextureInput.IsConnected() ? TextureInput.Compile(compiler) : compiler.Texture(pTexture), UVInput.Compile(compiler));
+			int result = compiler.Sample2D(Inputs[0].Compile(compiler), Inputs[1].Compile(compiler));
+			if (result == INVALID_INDEX)
+				return INVALID_INDEX;
+
+			if (outputIndex == 0)
+				return result;
+
+			const char* swizzles[] = { "r", "g", "b", "a" };
+			return compiler.Swizzle(result, swizzles[outputIndex - 1]);
 		}
 
-		virtual std::vector<struct ExpressionInput*> GetInputs() { return { &TextureInput, &UVInput }; }
-		virtual const char* GetName() const override { return "Sample2D"; }
-
-		ExpressionInput TextureInput = "Texture";
-		const char* pTexture = nullptr;
-		ExpressionInput UVInput = "UV";
+		virtual std::string GetName() const override { return "Sample2D"; }
 	};
 
 	struct SwizzleExpression : public Expression
 	{
-		virtual int Compile(Compiler& compiler, int outputIndex) const override
+		SwizzleExpression()
 		{
-			return compiler.Swizzle(Input.Compile(compiler), SwizzleString.data());
+			Inputs.push_back({ "" });
 		}
 
-		virtual void RenderInputs() override
+		virtual int Compile(Compiler& compiler, int outputIndex) const override
 		{
-			ImNodes::BeginInputAttribute(Input.ID);
+			return compiler.Swizzle(Inputs[0].Compile(compiler), SwizzleString.data());
+		}
+
+		virtual void RenderOutputs() override
+		{
+			ImNodes::BeginOutputAttribute(Outputs[0].ID);
 			ImGui::InputText("Swizzle", SwizzleString.data(), SwizzleString.size());
-			ImNodes::EndInputAttribute();
+			ImNodes::EndOutputAttribute();
 		}
 
 		void SetSwizzle(const char* pSwizzle)
@@ -243,10 +220,8 @@ namespace ShaderGraph
 			strcpy_s(SwizzleString.data(), SwizzleString.size(), pSwizzle);
 		}
 
-		virtual std::vector<struct ExpressionInput*> GetInputs() { return { &Input }; }
-		virtual const char* GetName() const override { return "Swizzle"; }
+		virtual std::string GetName() const override { return "Swizzle"; }
 
-		ExpressionInput Input;
 		std::array<char, 5> SwizzleString{};
 	};
 
@@ -295,7 +270,7 @@ namespace ShaderGraph
 			}
 		}
 
-		virtual const char* GetName() const override { return "Vertex Attribute"; }
+		virtual std::string GetName() const override { return "Vertex Attribute"; }
 
 		std::vector<int> VertexAttributeIndices;
 	};
@@ -307,7 +282,7 @@ namespace ShaderGraph
 			return compiler.ViewUniform(pUniform);
 		}
 
-		virtual const char* GetName() const override { return pUniform; }
+		virtual std::string GetName() const override { return pUniform; }
 
 		const char* pUniform;
 	};
@@ -321,13 +296,14 @@ namespace ShaderGraph
 
 		virtual int Compile(Compiler& compiler, int outputIndex) const override
 		{
-			const Input& input = m_Inputs[outputIndex];
-			int result = input.Expression.IsConnected() ? input.Expression.Compile(compiler) : compiler.Constant(0);
+			int result = Inputs[outputIndex].IsConnected() ? Inputs[outputIndex].Compile(compiler) : compiler.Constant(0);
 			if (result == INVALID_INDEX)
 				return INVALID_INDEX;
-			if (compiler.GetType(result) != input.Type)
+
+			ValueType type = m_InputTypes[outputIndex];
+			if (compiler.GetType(result) != type)
 			{
-				result = compiler.TryCast(result, input.Type);
+				result = compiler.TryCast(result, type);
 				if (result == INVALID_INDEX)
 					return INVALID_INDEX;
 			}
@@ -336,31 +312,13 @@ namespace ShaderGraph
 
 		ExpressionInput& AddInput(const char* pName, ValueType type)
 		{
-			m_Inputs.push_back(Input(pName, type));
-			return m_Inputs.back().Expression;
+			Inputs.push_back(pName);
+			return Inputs.back();
 		}
 
-		virtual std::vector<ExpressionInput*> GetInputs() override
-		{
-			std::vector<ExpressionInput*> inputs;
-			for (Input& input : m_Inputs)
-			{
-				inputs.push_back(&input.Expression);
-			}
-			return inputs;
-		}
+		virtual std::string GetName() const override { return "Output"; }
 
-		virtual const char* GetName() const override { return "Output"; }
-
-		struct Input
-		{
-			Input(const char* pName, ValueType type)
-				: Expression(pName), Type(type)
-			{}
-			ExpressionInput Expression;
-			ValueType Type;
-		};
-		std::vector<Input> m_Inputs;
+		std::vector<ValueType> m_InputTypes;
 	};
 
 	struct SystemValueExpression : public Expression
@@ -382,7 +340,7 @@ namespace ShaderGraph
 			ImNodes::EndOutputAttribute();
 		}
 
-		virtual const char* GetName() const override { return "System Value"; }
+		virtual std::string GetName() const override { return "System Value"; }
 
 		int m_Index;
 	};
