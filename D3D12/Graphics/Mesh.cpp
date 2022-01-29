@@ -17,6 +17,8 @@
 
 #include "meshoptimizer.h"
 
+#include "LDraw.h"
+
 Mesh::~Mesh()
 {
 	for (SubMesh& subMesh : m_Meshes)
@@ -27,117 +29,6 @@ Mesh::~Mesh()
 
 bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* pContext, float uniformScale /*= 1.0f*/)
 {
-	cgltf_options options{};
-	cgltf_data* pGltfData = nullptr;
-	cgltf_result result = cgltf_parse_file(&options, pFilePath, &pGltfData);
-	if (result != cgltf_result_success)
-	{
-		E_LOG(Warning, "GLTF - Failed to load '%s'", pFilePath);
-		return false;
-	}
-	result = cgltf_load_buffers(&options, pGltfData, pFilePath);
-	if (result != cgltf_result_success)
-	{
-		E_LOG(Warning, "GLTF - Failed to load buffers '%s'", pFilePath);
-		return false;
-	}
-
-	// Load unique textures;
-	std::map<const cgltf_image*, Texture*> textureMap;
-
-	auto MaterialIndex = [&](const cgltf_material* pMat) -> int
-	{
-		if (!pMat)
-		{
-			return 0;
-		}
-		return (int)(pMat - pGltfData->materials) + 1;
-	};
-
-	Material defaultMaterial;
-	m_Materials.push_back(defaultMaterial);
-
-	m_Materials.reserve(pGltfData->materials_count + 1);
-	for (size_t i = 0; i < pGltfData->materials_count; ++i)
-	{
-		const cgltf_material& gltfMaterial = pGltfData->materials[i];
-
-		m_Materials.push_back(Material());
-		Material& material = m_Materials.back();
-
-		auto RetrieveTexture = [this, &textureMap, pDevice, pContext, pFilePath](const cgltf_texture_view texture, bool srgb) -> Texture*
-		{
-			if (texture.texture)
-			{
-				const cgltf_image* pImage = texture.texture->image;
-				auto it = textureMap.find(pImage);
-				std::unique_ptr<Texture> pTex = std::make_unique<Texture>(pDevice, pImage->uri ? pImage->uri : "Material Texture");
-				if (it == textureMap.end())
-				{
-					bool success = false;
-					if (pImage->buffer_view)
-					{
-						Image newImg;
-						if (newImg.Load((char*)pImage->buffer_view->buffer->data + pImage->buffer_view->offset, pImage->buffer_view->size, pImage->mime_type))
-						{
-							success = pTex->Create(pContext, newImg, srgb);
-						}
-					}
-					else
-					{
-						success = pTex->Create(pContext, Paths::Combine(Paths::GetDirectoryPath(pFilePath), pImage->uri).c_str(), srgb);
-					}
-					if (success)
-					{
-						m_Textures.push_back(std::move(pTex));
-						textureMap[pImage] = m_Textures.back().get();
-						return m_Textures.back().get();
-					}
-					else
-					{
-						E_LOG(Warning, "GLTF - Failed to load texture '%s' for '%s'", pImage->uri, pFilePath);
-					}
-				}
-				else
-				{
-					return it->second;
-				}
-			}
-			return nullptr;
-		};
-
-		auto GetAlphaMode = [](cgltf_alpha_mode mode) {
-			switch (mode)
-			{
-			case cgltf_alpha_mode_blend: return MaterialAlphaMode::Blend;
-			case cgltf_alpha_mode_opaque: return MaterialAlphaMode::Opaque;
-			case cgltf_alpha_mode_mask: return MaterialAlphaMode::Masked;
-			}
-			return MaterialAlphaMode::Opaque;
-		};
-
-		if (gltfMaterial.has_pbr_metallic_roughness)
-		{
-			material.pDiffuseTexture = RetrieveTexture(gltfMaterial.pbr_metallic_roughness.base_color_texture, true);
-			material.pRoughnessMetalnessTexture = RetrieveTexture(gltfMaterial.pbr_metallic_roughness.metallic_roughness_texture, false);
-			material.BaseColorFactor.x = gltfMaterial.pbr_metallic_roughness.base_color_factor[0];
-			material.BaseColorFactor.y = gltfMaterial.pbr_metallic_roughness.base_color_factor[1];
-			material.BaseColorFactor.z = gltfMaterial.pbr_metallic_roughness.base_color_factor[2];
-			material.BaseColorFactor.w = gltfMaterial.pbr_metallic_roughness.base_color_factor[3];
-			material.MetalnessFactor = gltfMaterial.pbr_metallic_roughness.metallic_factor;
-			material.RoughnessFactor = gltfMaterial.pbr_metallic_roughness.roughness_factor;
-		}
-		material.AlphaCutoff = gltfMaterial.alpha_cutoff;
-		material.AlphaMode = GetAlphaMode(gltfMaterial.alpha_mode);
-		material.pEmissiveTexture = RetrieveTexture(gltfMaterial.emissive_texture, true);
-		material.EmissiveFactor.x = gltfMaterial.emissive_factor[0];
-		material.EmissiveFactor.y = gltfMaterial.emissive_factor[1];
-		material.EmissiveFactor.z = gltfMaterial.emissive_factor[2];
-		material.pNormalTexture = RetrieveTexture(gltfMaterial.normal_texture, false);
-		if(gltfMaterial.name)
-			material.Name = gltfMaterial.name;
-	}
-
 	struct VS_Position
 	{
 		PackedVector3 Position = PackedVector3(0.0f, 0.0f, 0.0f, 0.0f);
@@ -170,97 +61,292 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 	};
 
 	std::vector<MeshData> meshDatas;
-	std::map<const cgltf_mesh*, std::vector<int>> meshToPrimitives;
-	int primitiveIndex = 0;
 
-	for (size_t meshIdx = 0; meshIdx < pGltfData->meshes_count; ++meshIdx)
+	if (Paths::GetFileExtenstion(pFilePath) == "dat" || Paths::GetFileExtenstion(pFilePath) == "ldr")
 	{
-		const cgltf_mesh& mesh = pGltfData->meshes[meshIdx];
-		std::vector<int> primitives;
-		for (size_t primIdx = 0; primIdx < mesh.primitives_count; ++primIdx)
+		LDraw::Context context;
+		context.Init();
+		LDraw::Part part = context.LoadFile(pFilePath);
+
+		std::map<int, int> colorToMeshData;
+
+		for (int i = 0; i < (int)part.Vertices.size(); i += 3)
 		{
-			const cgltf_primitive& primitive = mesh.primitives[primIdx];
-			primitives.push_back(primitiveIndex++);
-			MeshData meshData;
-
-			meshData.MaterialIndex = MaterialIndex(primitive.material);
-			meshData.Indices.resize(primitive.indices->count);
-
-			constexpr int indexMap[] = { 0, 2, 1 };
-			for (size_t i = 0; i < primitive.indices->count; i += 3)
+			int color = part.Colors[i / 3];
+			auto it = colorToMeshData.find(color);
+			if (it == colorToMeshData.end())
 			{
-				meshData.Indices[i + 0] = (int)cgltf_accessor_read_index(primitive.indices, i + indexMap[0]);
-				meshData.Indices[i + 1] = (int)cgltf_accessor_read_index(primitive.indices, i + indexMap[1]);
-				meshData.Indices[i + 2] = (int)cgltf_accessor_read_index(primitive.indices, i + indexMap[2]);
+				const LDraw::Material& lmat = context.GetMaterial(color);
+				m_Materials.push_back({});
+				Material& mat = m_Materials.back();
+
+				auto DecodeRGBA = [](uint32 color)
+				{
+					Color output;
+					constexpr float rcp_255 = 1.0f / 255.0f;
+					//unsigned int layout: RRRR GGGG BBBB AAAA
+					output.x = (float)((color >> 16) & 0xFF) * rcp_255;
+					output.y = (float)((color >> 8) & 0xFF) * rcp_255;
+					output.z = (float)((color >> 0) & 0xFF) * rcp_255;
+					output.w = (float)((color >> 24) & 0xFF) * rcp_255;
+					return output;
+				};
+
+				mat.BaseColorFactor = DecodeRGBA(lmat.Color);
+				mat.RoughnessFactor = 0.1f;
+				mat.MetalnessFactor = 0.0f;
+
+				if (lmat.Type == LDraw::MaterialType::Metal)
+				{
+					mat.MetalnessFactor = 1.0f;
+					mat.RoughnessFactor = 0.1f;
+				}
+				else if (lmat.Type == LDraw::MaterialType::Chrome)
+				{
+					mat.MetalnessFactor = 1.0f;
+					mat.RoughnessFactor = 0.0f;
+				}
+
+				colorToMeshData[color] = (int)meshDatas.size();
+				MeshData m;
+				m.MaterialIndex = (int)meshDatas.size();
+				meshDatas.push_back(m);
 			}
 
-			for (size_t attrIdx = 0; attrIdx < primitive.attributes_count; ++attrIdx)
-			{
-				const cgltf_attribute& attribute = primitive.attributes[attrIdx];
-				const char* pName = attribute.name;
+			MeshData& m = meshDatas[colorToMeshData[color]];
 
-				if (strcmp(pName, "POSITION") == 0)
-				{
-					meshData.PositionsStream.resize(attribute.data->count);
-					for (size_t i = 0; i < attribute.data->count; ++i)
-					{
-						check(cgltf_accessor_read_float(attribute.data, i, &meshData.PositionsStream[i].x, 3));
-					}
-				}
-				else if (strcmp(pName, "NORMAL") == 0)
-				{
-					meshData.NormalsStream.resize(attribute.data->count);
-					for (size_t i = 0; i < attribute.data->count; ++i)
-					{
-						check(cgltf_accessor_read_float(attribute.data, i, &meshData.NormalsStream[i].Normal.x, 3));
-					}
-				}
-				else if (strcmp(pName, "TANGENT") == 0)
-				{
-					meshData.NormalsStream.resize(attribute.data->count);
-					for (size_t i = 0; i < attribute.data->count; ++i)
-					{
-						check(cgltf_accessor_read_float(attribute.data, i, &meshData.NormalsStream[i].Tangent.x, 4));
-					}
-				}
-				else if (strcmp(pName, "TEXCOORD_0") == 0)
-				{
-					meshData.UVsStream.resize(attribute.data->count);
-					for (size_t i = 0; i < attribute.data->count; ++i)
-					{
-						check(cgltf_accessor_read_float(attribute.data, i, &meshData.UVsStream[i].x, 2));
-					}
-				}
-				else
-				{
-					validateOncef(false, "GLTF - Attribute '%s' is unsupported", pName);
-				}
-			}
-			meshDatas.push_back(meshData);
+			m.PositionsStream.push_back(part.Vertices[i + 0]);
+			m.PositionsStream.push_back(part.Vertices[i + 1]);
+			m.PositionsStream.push_back(part.Vertices[i + 2]);
+
+			Vector3 n0 = part.Vertices[i + 1] - part.Vertices[i + 0];
+			Vector3 n1 = part.Vertices[i + 2] - part.Vertices[i + 0];
+			VS_Normal normal;
+			normal.Normal = n0.Cross(n1);
+			normal.Normal.Normalize();
+			m.NormalsStream.push_back(normal);
+			m.NormalsStream.push_back(normal);
+			m.NormalsStream.push_back(normal);
+
+			m.Indices.push_back((int)m.Indices.size());
+			m.Indices.push_back((int)m.Indices.size());
+			m.Indices.push_back((int)m.Indices.size());
 		}
-		meshToPrimitives[&mesh] = primitives;
-	}
 
-	for (size_t i = 0; i < pGltfData->nodes_count; i++)
-	{
-		const cgltf_node& node = pGltfData->nodes[i];
-
-		cgltf_float matrix[16];
-		cgltf_node_transform_world(&node, matrix);
-
-		if (node.mesh)
+		for (int i = 0; i < meshDatas.size(); ++i)
 		{
 			SubMeshInstance newNode;
-			newNode.Transform = Matrix(matrix) * Matrix::CreateScale(uniformScale, uniformScale, -uniformScale);
-			for (int primitive : meshToPrimitives[node.mesh])
-			{
-				newNode.MeshIndex = primitive;
-				m_MeshInstances.push_back(newNode);
-			}
+			newNode.Transform = Matrix::CreateScale(0.02f);
+			newNode.MeshIndex = (int)i;
+			m_MeshInstances.push_back(newNode);
 		}
 	}
+	else
+	{
+		cgltf_options options{};
+		cgltf_data* pGltfData = nullptr;
+		cgltf_result result = cgltf_parse_file(&options, pFilePath, &pGltfData);
+		if (result != cgltf_result_success)
+		{
+			E_LOG(Warning, "GLTF - Failed to load '%s'", pFilePath);
+			return false;
+		}
+		result = cgltf_load_buffers(&options, pGltfData, pFilePath);
+		if (result != cgltf_result_success)
+		{
+			E_LOG(Warning, "GLTF - Failed to load buffers '%s'", pFilePath);
+			return false;
+		}
 
-	cgltf_free(pGltfData);
+		// Load unique textures;
+		std::map<const cgltf_image*, Texture*> textureMap;
+
+		auto MaterialIndex = [&](const cgltf_material* pMat) -> int
+		{
+			if (!pMat)
+			{
+				return 0;
+			}
+			return (int)(pMat - pGltfData->materials) + 1;
+		};
+
+		Material defaultMaterial;
+		m_Materials.push_back(defaultMaterial);
+
+		m_Materials.reserve(pGltfData->materials_count + 1);
+		for (size_t i = 0; i < pGltfData->materials_count; ++i)
+		{
+			const cgltf_material& gltfMaterial = pGltfData->materials[i];
+
+			m_Materials.push_back(Material());
+			Material& material = m_Materials.back();
+
+			auto RetrieveTexture = [this, &textureMap, pDevice, pContext, pFilePath](const cgltf_texture_view texture, bool srgb) -> Texture*
+			{
+				if (texture.texture)
+				{
+					const cgltf_image* pImage = texture.texture->image;
+					auto it = textureMap.find(pImage);
+					std::unique_ptr<Texture> pTex = std::make_unique<Texture>(pDevice, pImage->uri ? pImage->uri : "Material Texture");
+					if (it == textureMap.end())
+					{
+						bool success = false;
+						if (pImage->buffer_view)
+						{
+							Image newImg;
+							if (newImg.Load((char*)pImage->buffer_view->buffer->data + pImage->buffer_view->offset, pImage->buffer_view->size, pImage->mime_type))
+							{
+								success = pTex->Create(pContext, newImg, srgb);
+							}
+						}
+						else
+						{
+							success = pTex->Create(pContext, Paths::Combine(Paths::GetDirectoryPath(pFilePath), pImage->uri).c_str(), srgb);
+						}
+						if (success)
+						{
+							m_Textures.push_back(std::move(pTex));
+							textureMap[pImage] = m_Textures.back().get();
+							return m_Textures.back().get();
+						}
+						else
+						{
+							E_LOG(Warning, "GLTF - Failed to load texture '%s' for '%s'", pImage->uri, pFilePath);
+						}
+					}
+					else
+					{
+						return it->second;
+					}
+				}
+				return nullptr;
+			};
+
+			auto GetAlphaMode = [](cgltf_alpha_mode mode) {
+				switch (mode)
+				{
+				case cgltf_alpha_mode_blend: return MaterialAlphaMode::Blend;
+				case cgltf_alpha_mode_opaque: return MaterialAlphaMode::Opaque;
+				case cgltf_alpha_mode_mask: return MaterialAlphaMode::Masked;
+				}
+				return MaterialAlphaMode::Opaque;
+			};
+
+			if (gltfMaterial.has_pbr_metallic_roughness)
+			{
+				material.pDiffuseTexture = RetrieveTexture(gltfMaterial.pbr_metallic_roughness.base_color_texture, true);
+				material.pRoughnessMetalnessTexture = RetrieveTexture(gltfMaterial.pbr_metallic_roughness.metallic_roughness_texture, false);
+				material.BaseColorFactor.x = gltfMaterial.pbr_metallic_roughness.base_color_factor[0];
+				material.BaseColorFactor.y = gltfMaterial.pbr_metallic_roughness.base_color_factor[1];
+				material.BaseColorFactor.z = gltfMaterial.pbr_metallic_roughness.base_color_factor[2];
+				material.BaseColorFactor.w = gltfMaterial.pbr_metallic_roughness.base_color_factor[3];
+				material.MetalnessFactor = gltfMaterial.pbr_metallic_roughness.metallic_factor;
+				material.RoughnessFactor = gltfMaterial.pbr_metallic_roughness.roughness_factor;
+			}
+			material.AlphaCutoff = gltfMaterial.alpha_cutoff;
+			material.AlphaMode = GetAlphaMode(gltfMaterial.alpha_mode);
+			material.pEmissiveTexture = RetrieveTexture(gltfMaterial.emissive_texture, true);
+			material.EmissiveFactor.x = gltfMaterial.emissive_factor[0];
+			material.EmissiveFactor.y = gltfMaterial.emissive_factor[1];
+			material.EmissiveFactor.z = gltfMaterial.emissive_factor[2];
+			material.pNormalTexture = RetrieveTexture(gltfMaterial.normal_texture, false);
+			if (gltfMaterial.name)
+				material.Name = gltfMaterial.name;
+		}
+
+		std::map<const cgltf_mesh*, std::vector<int>> meshToPrimitives;
+		int primitiveIndex = 0;
+
+		for (size_t meshIdx = 0; meshIdx < pGltfData->meshes_count; ++meshIdx)
+		{
+			const cgltf_mesh& mesh = pGltfData->meshes[meshIdx];
+			std::vector<int> primitives;
+			for (size_t primIdx = 0; primIdx < mesh.primitives_count; ++primIdx)
+			{
+				const cgltf_primitive& primitive = mesh.primitives[primIdx];
+				primitives.push_back(primitiveIndex++);
+				MeshData meshData;
+
+				meshData.MaterialIndex = MaterialIndex(primitive.material);
+				meshData.Indices.resize(primitive.indices->count);
+
+				constexpr int indexMap[] = { 0, 2, 1 };
+				for (size_t i = 0; i < primitive.indices->count; i += 3)
+				{
+					meshData.Indices[i + 0] = (int)cgltf_accessor_read_index(primitive.indices, i + indexMap[0]);
+					meshData.Indices[i + 1] = (int)cgltf_accessor_read_index(primitive.indices, i + indexMap[1]);
+					meshData.Indices[i + 2] = (int)cgltf_accessor_read_index(primitive.indices, i + indexMap[2]);
+				}
+
+				for (size_t attrIdx = 0; attrIdx < primitive.attributes_count; ++attrIdx)
+				{
+					const cgltf_attribute& attribute = primitive.attributes[attrIdx];
+					const char* pName = attribute.name;
+
+					if (strcmp(pName, "POSITION") == 0)
+					{
+						meshData.PositionsStream.resize(attribute.data->count);
+						for (size_t i = 0; i < attribute.data->count; ++i)
+						{
+							check(cgltf_accessor_read_float(attribute.data, i, &meshData.PositionsStream[i].x, 3));
+						}
+					}
+					else if (strcmp(pName, "NORMAL") == 0)
+					{
+						meshData.NormalsStream.resize(attribute.data->count);
+						for (size_t i = 0; i < attribute.data->count; ++i)
+						{
+							check(cgltf_accessor_read_float(attribute.data, i, &meshData.NormalsStream[i].Normal.x, 3));
+						}
+					}
+					else if (strcmp(pName, "TANGENT") == 0)
+					{
+						meshData.NormalsStream.resize(attribute.data->count);
+						for (size_t i = 0; i < attribute.data->count; ++i)
+						{
+							check(cgltf_accessor_read_float(attribute.data, i, &meshData.NormalsStream[i].Tangent.x, 4));
+						}
+					}
+					else if (strcmp(pName, "TEXCOORD_0") == 0)
+					{
+						meshData.UVsStream.resize(attribute.data->count);
+						for (size_t i = 0; i < attribute.data->count; ++i)
+						{
+							check(cgltf_accessor_read_float(attribute.data, i, &meshData.UVsStream[i].x, 2));
+						}
+					}
+					else
+					{
+						validateOncef(false, "GLTF - Attribute '%s' is unsupported", pName);
+					}
+				}
+				meshDatas.push_back(meshData);
+			}
+			meshToPrimitives[&mesh] = primitives;
+		}
+
+		for (size_t i = 0; i < pGltfData->nodes_count; i++)
+		{
+			const cgltf_node& node = pGltfData->nodes[i];
+
+			cgltf_float matrix[16];
+			cgltf_node_transform_world(&node, matrix);
+
+			if (node.mesh)
+			{
+				SubMeshInstance newNode;
+				newNode.Transform = Matrix(matrix) * Matrix::CreateScale(uniformScale, uniformScale, -uniformScale);
+				for (int primitive : meshToPrimitives[node.mesh])
+				{
+					newNode.MeshIndex = primitive;
+					m_MeshInstances.push_back(newNode);
+				}
+			}
+		}
+
+		cgltf_free(pGltfData);
+
+	}
 
 	uint64 bufferSize = 0;
 

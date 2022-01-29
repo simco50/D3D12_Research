@@ -149,10 +149,10 @@ namespace Tweakables
 	DelegateConsoleCommand<> gScreenshot("Screenshot", []() { g_Screenshot = true; });
 
 	// Lighting
-	float g_SunInclination = 0.579f;
-	float g_SunOrientation = -3.055f;
+	float g_SunInclination = 0.67f;
+	float g_SunOrientation = 1.45f;
 	float g_SunTemperature = 5900.0f;
-	float g_SunIntensity = 3.0f;
+	float g_SunIntensity = 0.5f;
 }
 
 DemoApp::DemoApp(WindowHandle window, const IntVector2& windowRect, int sampleCount /*= 1*/)
@@ -221,7 +221,7 @@ void DemoApp::SetupScene(CommandContext& context)
 		m_pCamera->SetPosition(Vector3(-1.3f, 2.4f, -1.5f));
 		m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(Math::PIDIV4, Math::PIDIV4 * 0.5f, 0));
 
-		LoadMesh("Resources/Scenes/Sponza/Sponza.gltf", context);
+		LoadMesh("D:/3001.dat", context);
 #elif 0
 		// Hardcode the camera of the scene :-)
 		Matrix m(
@@ -253,14 +253,7 @@ void DemoApp::SetupScene(CommandContext& context)
 		m_Lights.push_back(sunLight);
 	}
 
-	{
-		Vector3 Position(-1, 1, 0);
-		Vector3 Direction;
-		Position.Normalize(Direction);
-		Light sunLight = Light::Point(Position, 2, 30);
-		sunLight.VolumetricLighting = true;
-		m_Lights.push_back(sunLight);
-	}
+
 
 #if 0
 	for (int i = 0; i < 50; ++i)
@@ -1586,7 +1579,7 @@ void DemoApp::UpdateImGui()
 				ofn.hwndOwner = m_Window;
 				ofn.lpstrFile = szFile;
 				ofn.nMaxFile = sizeof(szFile);
-				ofn.lpstrFilter = "GLTF Files (*.gltf)\0*.gltf\0All Files (*.*)\0*.*\0";;
+				ofn.lpstrFilter = "DAT Files (*.dat;*.ldr;*.mpd)\0*.dat;*.ldr;*.mpd\0GLTF Files (*.gltf)\0*.gltf\0All Files (*.*)\0*.*\0";;
 				ofn.nFilterIndex = 1;
 				ofn.lpstrFileTitle = NULL;
 				ofn.nMaxFileTitle = 0;
