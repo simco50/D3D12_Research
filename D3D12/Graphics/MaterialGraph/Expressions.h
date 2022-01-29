@@ -7,7 +7,7 @@ namespace ShaderGraph
 {
 	struct ExpressionFactory
 	{
-		using CreateFn = struct Expression*(*)();
+		using CreateFn = struct Expression* (*)();
 
 		CreateFn Callback;
 		const char* pName;
@@ -43,33 +43,18 @@ namespace ShaderGraph
 
 		void Render()
 		{
+			ImGui::PushItemWidth(100);
 			ImNodes::BeginNode(ID);
 
-			ImGui::PushItemWidth(100);
 			ImNodes::BeginNodeTitleBar();
 			ImGui::TextUnformatted(GetName().c_str());
 			ImNodes::EndNodeTitleBar();
 
 			ImGui::BeginGroup();
-			RenderInputs();
-			ImGui::EndGroup();
-
-			ImGui::SameLine();
-
-			ImGui::BeginGroup();
-			RenderOutputs();
-			ImGui::EndGroup();
-
-			ImGui::PopItemWidth();
-			ImNodes::EndNode();
-		}
-
-		virtual void RenderInputs()
-		{
 			for (ExpressionInput& input : Inputs)
 			{
 				ImNodes::BeginInputAttribute(input.ID);
-				ImGui::Text(input.Name.c_str());
+				ImGui::Text("%s", input.Name.c_str());
 				if (!input.IsConnected() && input.HasDefaultValue)
 				{
 					ImGui::SameLine();
@@ -77,17 +62,30 @@ namespace ShaderGraph
 				}
 				ImNodes::EndInputAttribute();
 			}
-		}
+			ImGui::EndGroup();
 
-		virtual void RenderOutputs()
-		{
+			ImGui::SameLine();
+
+			ImGui::BeginGroup();
+			RenderBody();
+			ImGui::EndGroup();
+
+			ImGui::SameLine();
+
+			ImGui::BeginGroup();
 			for (ExpressionOutput& output : Outputs)
 			{
 				ImNodes::BeginOutputAttribute(output.ID);
-				ImGui::Text(output.Name.c_str());
+				ImGui::Text("%s", output.Name.c_str());
 				ImNodes::EndOutputAttribute();
 			}
+			ImGui::EndGroup();
+
+			ImNodes::EndNode();
+			ImGui::PopItemWidth();
 		}
+
+		virtual void RenderBody() {}
 
 		std::vector<ExpressionOutput> Outputs;
 		std::vector<ExpressionInput> Inputs;
@@ -101,11 +99,9 @@ namespace ShaderGraph
 			return compiler.Constant(Value);
 		}
 
-		virtual void RenderInputs() override
+		virtual void RenderBody() override
 		{
-			ImNodes::BeginOutputAttribute(Outputs[0].ID);
 			ImGui::InputFloat("", &Value);
-			ImNodes::EndOutputAttribute();
 		}
 
 		virtual std::string GetName() const override { return "Constant"; }
@@ -193,6 +189,8 @@ namespace ShaderGraph
 			return compiler.Swizzle(result, swizzles[outputIndex - 1]);
 		}
 
+		const char* pTexture = nullptr;
+
 		virtual std::string GetName() const override { return "Sample2D"; }
 	};
 
@@ -208,11 +206,9 @@ namespace ShaderGraph
 			return compiler.Swizzle(Inputs[0].Compile(compiler), SwizzleString.data());
 		}
 
-		virtual void RenderOutputs() override
+		virtual void RenderBody() override
 		{
-			ImNodes::BeginOutputAttribute(Outputs[0].ID);
 			ImGui::InputText("Swizzle", SwizzleString.data(), SwizzleString.size());
-			ImNodes::EndOutputAttribute();
 		}
 
 		void SetSwizzle(const char* pSwizzle)
@@ -227,47 +223,43 @@ namespace ShaderGraph
 
 	struct VertexAttributeExpression : public Expression
 	{
+		VertexAttributeExpression()
+		{
+			Outputs.clear();
+		}
+
 		virtual int Compile(Compiler& compiler, int outputIndex) const override
 		{
 			const Uniform& uniform = VertexAttributes[VertexAttributeIndices[outputIndex]];
 			return compiler.VertexAttribute(uniform.pName);
 		}
 
-		virtual void RenderOutputs() override
+		virtual void RenderBody() override
 		{
 			for (size_t i = 0; i < VertexAttributeIndices.size(); ++i)
 			{
-				ImNodes::BeginOutputAttribute(Outputs[i].ID);
 				int* index = &VertexAttributeIndices[i];
+				ImGui::PushID(ID + (int)i);
 				ImGui::Combo("", index, [](void* pData, int index, const char** pOut)
 					{
 						Uniform* pAttr = (Uniform*)pData;
 						*pOut = pAttr[index].pName;
 						return true;
 					}, (void*)VertexAttributes, ARRAYSIZE(VertexAttributes));
-				ImGui::SameLine();
-
-				ImNodes::EndOutputAttribute();
+				Outputs[i].Name = VertexAttributes[*index].pName;
+				ImGui::PopID();
 			}
 
 			if (ImGui::Button("+"))
 			{
-				AddVertexAttribute("UV");
+				AddVertexAttribute();
 			}
 		}
 
-		void AddVertexAttribute(const char* pVertexAttribute)
+		void AddVertexAttribute()
 		{
-			for (int i = 0; i < ARRAYSIZE(VertexAttributes); ++i)
-			{
-				if (strcmp(VertexAttributes[i].pName, pVertexAttribute) == 0)
-				{
-					VertexAttributeIndices.push_back(i);
-					Outputs.resize(VertexAttributeIndices.size());
-					Outputs[VertexAttributeIndices.size() - 1].Name = pVertexAttribute;
-					return;
-				}
-			}
+			Outputs.push_back(ExpressionOutput(""));
+			VertexAttributeIndices.push_back(0);
 		}
 
 		virtual std::string GetName() const override { return "Vertex Attribute"; }
@@ -328,20 +320,176 @@ namespace ShaderGraph
 			return compiler.SystemValue((SystemValue)m_Index);
 		}
 
-		virtual void RenderOutputs() override
+		virtual void RenderBody() override
 		{
-			ImNodes::BeginOutputAttribute(Outputs[0].ID);
 			ImGui::Combo("", &m_Index, [](void* pData, int index, const char** pOut)
 				{
 					SystemValueData* pSystemValue = (SystemValueData*)pData;
 					*pOut = pSystemValue[index].pSymbolName;
 					return true;
 				}, (void*)SystemValues, ARRAYSIZE(SystemValues));
-			ImNodes::EndOutputAttribute();
 		}
 
 		virtual std::string GetName() const override { return "System Value"; }
 
 		int m_Index;
 	};
+
+	namespace Separate
+	{
+		struct Slot
+		{
+			int Value;
+		};
+
+		enum class Type
+		{
+			Add,
+			Constant,
+			Output,
+		};
+
+		struct Node
+		{
+			int ID;
+			std::vector<Slot> Inputs;
+			std::vector<Slot> Outputs;
+			Type Type;
+		};
+
+		struct Graph
+		{
+			int ID = 0;
+			std::vector<std::unique_ptr<Node>> Nodes;
+			Node* pMasterNode;
+			std::map<int, Node*> NodeMap;
+
+			struct LinkData
+			{
+				int SourceNode;
+				int TargetNode;
+				int SourcePin;
+				int TargetPin;
+			};
+
+			ImVector<LinkData> Links;
+
+			Node& AddNode(Type t)
+			{
+				Nodes.push_back(std::make_unique<Node>());
+				Node* pExp = Nodes.back().get();
+				pExp->ID = ID++;
+				pExp->Type = t;
+				NodeMap[pExp->ID] = pExp;
+				return *pExp;
+			}
+
+			int Link(int sourceNode, int sourcePin, int targetNode, int targetPin)
+			{
+				LinkData link{ sourceNode, targetNode, sourcePin, targetPin };
+				for (LinkData& l : Links)
+				{
+					if (l.TargetNode == targetNode && l.TargetPin == targetPin)
+					{
+						Links.erase_unsorted(&l);
+						break;
+					}
+				}
+				Links.push_back(link);
+				return Links.size() - 1;
+			}
+
+			bool Unlink(int sourceNode, int sourcePin, int targetNode, int targetPin)
+			{
+				LinkData link{ sourceNode, targetNode, sourcePin, targetPin };
+				for (LinkData& l : Links)
+				{
+					if (l.TargetNode == targetNode && l.TargetPin == targetPin && l.SourceNode == sourceNode && l.SourcePin == sourcePin)
+					{
+						Links.erase_unsorted(&l);
+						return true;
+					}
+				}
+				return false;
+			}
+
+			const LinkData* FindLink(int expression, int pinIndex)
+			{
+				for (const LinkData& link : Links)
+				{
+					if (link.TargetNode == expression && link.TargetPin == pinIndex)
+					{
+						return &link;
+					}
+				}
+				return nullptr;
+			}
+
+			void Resolve()
+			{
+				struct ResolveTarget
+				{
+					Node* pNode;
+					int InputSlot;
+				};
+
+				std::vector<ResolveTarget> data;
+
+				std::vector<ResolveTarget> stack;
+				stack.push_back({ pMasterNode, 0 });
+				while (!stack.empty())
+				{
+					ResolveTarget target = stack.back();
+					stack.pop_back();
+
+					const LinkData* pLink = FindLink(target.pNode->ID, target.InputSlot);
+					if (pLink)
+					{
+						Node* pNode = NodeMap[pLink->SourceNode];
+						data.push_back({ pNode, pLink->SourcePin });
+						for (int i = 0; i < pNode->Inputs.size(); ++i)
+						{
+							stack.push_back({ pNode, i });
+						}
+					}
+				}
+
+				std::reverse(data.begin(), data.end());
+
+				std::string code;
+				int id = 0;
+
+				std::vector<std::string> codestack;
+				for (const ResolveTarget& target : data)
+				{
+					switch (target.pNode->Type)
+					{
+					case Type::Add:
+					{
+						std::string a = codestack.back();
+						codestack.pop_back();
+						std::string b = codestack.back();
+						codestack.pop_back();
+						code = Sprintf("%s\nfloat l_%d = %s + %s;", code.c_str(), id++, a.c_str(), b.c_str());
+						codestack.push_back(Sprintf("l_%d", id));
+						break;
+					}
+					case Type::Constant:
+					{
+						code = Sprintf("%s\nfloat l_%d = %d;", code.c_str(), id++, target.pNode->Outputs[0].Value);
+						codestack.push_back(Sprintf("l_%d", id));
+						break;
+					}
+					case Type::Output:
+					{
+						std::string a = codestack.back();
+						codestack.pop_back();
+						code = Sprintf("%s\nfloat l_%d = %s;", code.c_str(), id++, a.c_str());
+						break;
+					}
+					}
+				}
+			}
+		};
+	}
 }

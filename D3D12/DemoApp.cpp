@@ -1664,7 +1664,7 @@ void DemoApp::UpdateImGui()
 		ImNodes::LoadCurrentEditorStateFromIniFile("save_load.ini");
 
 		VertexAttributeExpression* attributeExpression = NewExpression<VertexAttributeExpression>();
-		attributeExpression->AddVertexAttribute("UV");
+		attributeExpression->AddVertexAttribute();
 
 		TextureExpression* textureExpression = NewExpression<TextureExpression>();
 		textureExpression->pTexture = "tFoo";
