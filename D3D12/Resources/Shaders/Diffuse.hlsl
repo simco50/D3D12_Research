@@ -142,7 +142,7 @@ LightResult DoLight(float4 pos, float3 worldPos, float3 N, float3 V, float3 diff
 InterpolantsVSToPS FetchVertexAttributes(MeshData mesh, float4x4 world, uint vertexId)
 {
 	InterpolantsVSToPS result;
-	float3 Position = UnpackHalf3(BufferLoad<uint2>(mesh.BufferIndex, vertexId, mesh.PositionsOffset));
+	float3 Position = BufferLoad<float3>(mesh.BufferIndex, vertexId, mesh.PositionsOffset);
 	result.PositionWS = mul(float4(Position, 1.0f), world).xyz;
 	result.PositionVS = mul(float4(result.PositionWS, 1.0f), cView.View).xyz;
 	result.Position = mul(float4(result.PositionWS, 1.0f), cView.ViewProjection);

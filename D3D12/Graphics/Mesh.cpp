@@ -31,7 +31,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 {
 	struct VS_Position
 	{
-		PackedVector3 Position = PackedVector3(0.0f, 0.0f, 0.0f, 0.0f);
+		Vector3 Position = Vector3(0.0f, 0.0f, 0.0f);
 	};
 
 	struct VS_UV
@@ -62,7 +62,8 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 
 	std::vector<MeshData> meshDatas;
 
-	if (Paths::GetFileExtenstion(pFilePath) == "dat" || Paths::GetFileExtenstion(pFilePath) == "ldr")
+	std::string extension = Paths::GetFileExtenstion(pFilePath);
+	if (extension == "dat" || extension == "ldr" || extension == "mpd")
 	{
 		LDraw::Context context;
 		context.Init();
@@ -89,6 +90,10 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 					output.y = (float)((color >> 8) & 0xFF) * rcp_255;
 					output.z = (float)((color >> 0) & 0xFF) * rcp_255;
 					output.w = (float)((color >> 24) & 0xFF) * rcp_255;
+					output.x = powf(output.x, 2.2f);
+					output.y = powf(output.y, 2.2f);
+					output.z = powf(output.z, 2.2f);
+					output.w = powf(output.w, 2.2f);
 					return output;
 				};
 
@@ -450,13 +455,13 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 		SubMesh subMesh;
 		subMesh.Bounds = bounds;
 		subMesh.MaterialId = meshData.MaterialIndex;
-		subMesh.PositionsFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
+		subMesh.PositionsFormat = DXGI_FORMAT_R32G32B32_FLOAT;
 		subMesh.PositionsStride = sizeof(VS_Position);
 
 		subMesh.PositionStreamLocation = VertexBufferView(m_pGeometryData->GetGpuHandle() + dataOffset, (uint32)meshData.PositionsStream.size(), sizeof(VS_Position), dataOffset);
 		std::vector<VS_Position> positionStream;
 		positionStream.reserve(meshData.PositionsStream.size());
-		Utils::Transform(meshData.PositionsStream, positionStream, [](const Vector3& value) -> VS_Position { return { PackedVector3(value.x, value.y, value.z, 0) }; });
+		Utils::Transform(meshData.PositionsStream, positionStream, [](const Vector3& value) -> VS_Position { return { Vector3(value.x, value.y, value.z) }; });
 		CopyData(positionStream.data(), sizeof(VS_Position)* meshData.PositionsStream.size());
 
 		subMesh.NormalStreamLocation = VertexBufferView(m_pGeometryData->GetGpuHandle() + dataOffset, (uint32)meshData.NormalsStream.size(), sizeof(VS_Normal), dataOffset);
