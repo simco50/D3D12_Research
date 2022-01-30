@@ -166,7 +166,9 @@ void PrimaryAHS(inout PrimaryRayPayload payload, BuiltInTriangleIntersectionAttr
 	VertexAttribute vertex = GetVertexAttributes(instance, attrib.barycentrics, PrimitiveIndex(), ObjectToWorld4x3());
 	MaterialData material = GetMaterial(instance.Material);
 	MaterialProperties surface = GetMaterialProperties(material, vertex.UV, 0);
-	if(surface.Opacity < material.AlphaCutoff)
+	uint seed = SeedThread(DispatchRaysIndex().xy, DispatchRaysDimensions().xy, cView.FrameIndex);
+	float r = Random01(seed);
+	if(surface.Opacity < r)
 	{
 		IgnoreHit();
 	}

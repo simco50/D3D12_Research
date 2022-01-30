@@ -81,7 +81,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 				m_Materials.push_back({});
 				Material& mat = m_Materials.back();
 
-				auto DecodeRGBA = [](uint32 color)
+				auto DecodeColor = [](uint32 color, uint32 alpha)
 				{
 					Color output;
 					constexpr float rcp_255 = 1.0f / 255.0f;
@@ -89,17 +89,18 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 					output.x = (float)((color >> 16) & 0xFF) * rcp_255;
 					output.y = (float)((color >> 8) & 0xFF) * rcp_255;
 					output.z = (float)((color >> 0) & 0xFF) * rcp_255;
-					output.w = (float)((color >> 24) & 0xFF) * rcp_255;
 					output.x = powf(output.x, 2.2f);
 					output.y = powf(output.y, 2.2f);
 					output.z = powf(output.z, 2.2f);
-					output.w = powf(output.w, 2.2f);
+					output.w = (float)alpha / 255.0f;
 					return output;
 				};
 
-				mat.BaseColorFactor = DecodeRGBA(lmat.Color);
+				mat.Name = lmat.Name;
+				mat.BaseColorFactor = DecodeColor(lmat.Color, lmat.Alpha);
 				mat.RoughnessFactor = 0.1f;
 				mat.MetalnessFactor = 0.0f;
+				mat.AlphaMode = lmat.Alpha == 255 ? MaterialAlphaMode::Opaque : MaterialAlphaMode::Blend;
 
 				if (lmat.Type == LDraw::MaterialType::Metal)
 				{

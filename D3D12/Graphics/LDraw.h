@@ -21,13 +21,13 @@ namespace LDraw
 	struct Material
 	{
 		char Name[128];
-		uint32 Code;
-		uint32 Color;
-		uint32 EdgeColor;
-		uint32 Emissive;
-		uint32 Alpha;
-		uint32 Luminance;
-		MaterialType Type;
+		uint32 Code = 0;
+		uint32 Color = 0;
+		uint32 EdgeColor = 0;
+		uint32 Emissive = 0;
+		uint8 Alpha = 0xFF;
+		uint8 Luminance = 0;
+		MaterialType Type = MaterialType::None;
 
 		union
 		{
@@ -155,12 +155,16 @@ namespace LDraw
 					pSearch = strstr(pLine, "ALPHA");
 					if (pSearch)
 					{
-						sscanf_s(pSearch, "ALPHA %d", &material.Alpha);
+						int alpha = 0;
+						sscanf_s(pSearch, "ALPHA %d", &alpha);
+						material.Alpha = (uint8)alpha;
 					}
 					pSearch = strstr(pLine, "LUMINANCE");
 					if (pSearch)
 					{
-						sscanf_s(pSearch, "LUMINANCE %d", &material.Luminance);
+						int luminance = 0;
+						sscanf_s(pSearch, "LUMINANCE %d", &luminance);
+						material.Luminance = (uint8)luminance;
 					}
 
 					if (strstr(pLine, "CHROME"))
