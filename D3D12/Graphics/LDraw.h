@@ -96,7 +96,7 @@ namespace LDraw
 
 	struct Context
 	{
-		const char* pDatabasePath = "C:/Program Files/Studio 2.0/ldraw/";
+		const char* pDatabasePath = "D:/References/ldraw/ldraw/";
 		std::vector<std::unique_ptr<Part>> Parts;
 		std::map<StringHash, int> PartMap;
 		std::vector<Material> Materials;
@@ -104,13 +104,11 @@ namespace LDraw
 		Material DefaultMaterial;
 
 		std::vector<DatabaseLocation> DatabaseLocations = {
-			{ "parts/", Part::Type::Part, false },
-			{ "parts/s/", Part::Type::Subpart, false },
 			{ "p/", Part::Type::Primitive, false },
-			{ "p/48/", Part::Type::Primitive, false },
-			{ "UnOfficial/p/", Part::Type::Primitive, false },
-			{ "UnOfficial/parts/", Part::Type::Part, false },
-			{ "UnOfficial/parts/s", Part::Type::Subpart, false },
+			{ "parts/", Part::Type::Part, false },
+			{ "models/", Part::Type::Primitive, false },
+			//{ "UnOfficial/p/", Part::Type::Primitive, false },
+			//{ "UnOfficial/parts/", Part::Type::Part, false },
 		};
 
 		const Material& GetMaterial(int code) const
@@ -246,6 +244,7 @@ namespace LDraw
 
 			if (!str.is_open())
 			{
+				E_LOG(Warning, "Could not find part '%s'", pPartName);
 				return false;
 			}
 
@@ -445,7 +444,6 @@ namespace LDraw
 			for (const Subfile& subfile : pPart->Subfiles)
 			{
 				Part* pSubpart = GetPart(/*strcmp(subfile.Name, "stud.dat") == 0 ? "stud-logo3.dat" :*/ subfile.Name);
-				assert(pSubpart);
 				if (!pSubpart)
 				{
 					continue;
