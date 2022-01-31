@@ -1,7 +1,5 @@
 #pragma once
 
-#include <filesystem>
-
 namespace LDraw
 {
 	constexpr int MATERIAL_CODE_INHERIT = 16;
@@ -130,11 +128,6 @@ namespace LDraw
 
 			char strBuffer[256];
 			FormatString(strBuffer, ARRAYSIZE(strBuffer), "%sLDConfig.ldr", pDatabasePath);
-			if (!Paths::FileExists(strBuffer))
-			{
-				return false;
-			}
-
 			std::ifstream fs(strBuffer);
 			if (!fs.is_open())
 			{
@@ -212,15 +205,13 @@ namespace LDraw
 			outParts.clear();
 			Part::Type partType = Part::Type::LocalModel;
 
-			std::string dir = Paths::GetDirectoryPath(pPartName);
 			std::string partName = Paths::GetFileName(pPartName);
 
-			std::ifstream str;
+			std::ifstream str(pPartName);
 
 			// Try absolute path
-			if (Paths::FileExists(pPartName))
+			if (str.is_open())
 			{
-				str.open(pPartName);
 				partType = Part::Type::LocalModel;
 			}
 
@@ -229,17 +220,10 @@ namespace LDraw
 			{
 				for (const DatabaseLocation& location : DatabaseLocations)
 				{
-					std::string path = Sprintf("%s%s%s", location.IsAbsolute ? "" : pDatabasePath, location.pLocation, partName.c_str());
-					if (Paths::FileExists(path.c_str()))
+					std::string path = Sprintf("%s%s%s", location.IsAbsolute ? "" : pDatabasePath, location.pLocation, pPartName);
+					str.open(path);
+					if (str.is_open())
 					{
-						str.open(path);
-						partType = location.Type;
-						break;
-					}
-					path = Sprintf("%s%s%s", location.IsAbsolute ? "" : pDatabasePath, location.pLocation, pPartName);
-					if (Paths::FileExists(path.c_str()))
-					{
-						str.open(path);
 						partType = location.Type;
 						break;
 					}
@@ -442,7 +426,7 @@ namespace LDraw
 
 			for (int i = 0; i < pPart->Colors.size(); ++i)
 			{
-				mainPart.Colors.push_back(pPart->Colors[i] == 16 ? color : pPart->Colors[i]);
+				mainPart.Colors.push_back(pPart->Colors[i] == MATERIAL_CODE_INHERIT ? color : pPart->Colors[i]);
 			}
 
 			for (const Subfile& subfile : pPart->Subfiles)
@@ -457,7 +441,7 @@ namespace LDraw
 				float det = subfile.Transform.Determinant();
 				inv ^= (det < 0);
 
-				FlattenPart(pSubpart, mainPart, subfile.Transform * currentMatrix, inv, subfile.Color == 16 ? color : subfile.Color, depth + 1);
+				FlattenPart(pSubpart, mainPart, subfile.Transform * currentMatrix, inv, subfile.Color == MATERIAL_CODE_INHERIT ? color : subfile.Color, depth + 1);
 			}
 		}
 
