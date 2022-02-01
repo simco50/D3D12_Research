@@ -139,6 +139,35 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 			m.Indices.push_back((int)m.Indices.size());
 		}
 
+		// Vertex normal smoothing
+		for (MeshData& m : meshDatas)
+		{
+			std::map<Vector3, std::vector<int>> vertexMap;
+			for (size_t i = 0; i < m.PositionsStream.size(); ++i)
+			{
+				vertexMap[m.PositionsStream[i]].push_back((int)i);
+			}
+
+			std::vector<VS_Normal> newNormals(m.NormalsStream.size());
+			for (size_t i = 0; i < m.PositionsStream.size(); ++i)
+			{
+				const std::vector<int>& identicalVertices = vertexMap[m.PositionsStream[i]];
+				Vector3 vertexNormal = m.NormalsStream[i].Normal;
+				Vector3 smoothNormal;
+				for (int vertexIndex : identicalVertices)
+				{
+					const Vector3& otherNormal = m.NormalsStream[vertexIndex].Normal;
+					if (vertexNormal.Dot(otherNormal) > cos(Math::PIDIV4))
+					{
+						smoothNormal += otherNormal;
+					}
+				}
+				smoothNormal.Normalize();
+				newNormals[i].Normal = smoothNormal;
+			}
+			newNormals.swap(m.NormalsStream);
+		}
+
 		for (int i = 0; i < meshDatas.size(); ++i)
 		{
 			SubMeshInstance newNode;
