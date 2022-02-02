@@ -85,13 +85,6 @@ namespace LDraw
 		}
 	};
 
-	struct DatabaseLocation
-	{
-		const char* pLocation;
-		Part::Type Type;
-		bool IsAbsolute;
-	};
-
 	struct Context
 	{
 		const char* pDatabasePath = "D:/References/ldraw/ldraw/";
@@ -101,13 +94,13 @@ namespace LDraw
 		std::map<int, int> MaterialMap;
 		Material DefaultMaterial;
 
-		std::vector<DatabaseLocation> DatabaseLocations = {
-			{ "p/", Part::Type::Primitive, false },
-			{ "parts/", Part::Type::Part, false },
-			{ "models/", Part::Type::Primitive, false },
-			//{ "UnOfficial/p/", Part::Type::Primitive, false },
-			//{ "UnOfficial/parts/", Part::Type::Part, false },
+		struct DatabaseLocation
+		{
+			const char* pLocation;
+			Part::Type Type;
 		};
+
+		std::vector<DatabaseLocation> DatabaseLocations;
 
 		const Material& GetMaterial(int code) const
 		{
@@ -121,14 +114,27 @@ namespace LDraw
 
 		bool Init()
 		{
+			MaterialMap.clear();
+			Materials.clear();
+			PartMap.clear();
+			Parts.clear();
+
+			DatabaseLocations = {
+				{ "p/", Part::Type::Primitive },				// Official Primitives
+				{ "parts/", Part::Type::Part },				// Official Parts
+				{ "models/", Part::Type::Primitive },		// Demo models
+				{ "UnOfficial/p/", Part::Type::Primitive },	// Unofficial Primitives
+				{ "UnOfficial/parts/", Part::Type::Part },	// Unofficial Parts
+			};
+
 			memset(&DefaultMaterial, 0, sizeof(Material));
 			strcpy_s(DefaultMaterial.Name, "DefaultMaterial");
 			DefaultMaterial.Color = 0x00FF00FF;
 			DefaultMaterial.EdgeColor = 0x00FF00FF;
 
-			char strBuffer[256];
-			FormatString(strBuffer, ARRAYSIZE(strBuffer), "%sLDConfig.ldr", pDatabasePath);
-			std::ifstream fs(strBuffer);
+			char configPath[256];
+			FormatString(configPath, ARRAYSIZE(configPath), "%sLDConfig.ldr", pDatabasePath);
+			std::ifstream fs(configPath);
 			if (!fs.is_open())
 			{
 				return false;
@@ -207,20 +213,18 @@ namespace LDraw
 
 			std::string partName = Paths::GetFileName(pPartName);
 
-			std::ifstream str(pPartName);
-
 			// Try absolute path
+			std::ifstream str(pPartName);
 			if (str.is_open())
 			{
 				partType = Part::Type::LocalModel;
 			}
-
-			// Try database path
-			if (!str.is_open())
+			else // Try database path
 			{
 				for (const DatabaseLocation& location : DatabaseLocations)
 				{
-					std::string path = Sprintf("%s%s%s", location.IsAbsolute ? "" : pDatabasePath, location.pLocation, pPartName);
+					char path[256];
+					FormatString(path, ARRAYSIZE(path), "%s%s%s", pDatabasePath, location.pLocation, pPartName);
 					str.open(path);
 					if (str.is_open())
 					{
@@ -341,18 +345,10 @@ namespace LDraw
 						&triangle[2].x, &triangle[2].y, &triangle[2].z
 					);
 
-					if (ccw)
-					{
-						currentPart.Vertices.push_back(triangle[2]);
-						currentPart.Vertices.push_back(triangle[1]);
-						currentPart.Vertices.push_back(triangle[0]);
-					}
-					else
-					{
-						currentPart.Vertices.push_back(triangle[0]);
-						currentPart.Vertices.push_back(triangle[1]);
-						currentPart.Vertices.push_back(triangle[2]);
-					}
+					currentPart.Vertices.push_back(triangle[ccw ? 2 : 0]);
+					currentPart.Vertices.push_back(triangle[ccw ? 1 : 1]);
+					currentPart.Vertices.push_back(triangle[ccw ? 0 : 2]);
+
 					currentPart.Colors.push_back(color);
 				}
 				else if (command == Command::Quad)
@@ -368,24 +364,13 @@ namespace LDraw
 						&quad[3].x, &quad[3].y, &quad[3].z
 					);
 
-					if (ccw)
-					{
-						currentPart.Vertices.push_back(quad[0]);
-						currentPart.Vertices.push_back(quad[3]);
-						currentPart.Vertices.push_back(quad[2]);
-						currentPart.Vertices.push_back(quad[2]);
-						currentPart.Vertices.push_back(quad[1]);
-						currentPart.Vertices.push_back(quad[0]);
-					}
-					else
-					{
-						currentPart.Vertices.push_back(quad[0]);
-						currentPart.Vertices.push_back(quad[1]);
-						currentPart.Vertices.push_back(quad[2]);
-						currentPart.Vertices.push_back(quad[2]);
-						currentPart.Vertices.push_back(quad[3]);
-						currentPart.Vertices.push_back(quad[0]);
-					}
+					currentPart.Vertices.push_back(quad[ccw ? 0 : 0]);
+					currentPart.Vertices.push_back(quad[ccw ? 3 : 1]);
+					currentPart.Vertices.push_back(quad[ccw ? 2 : 2]);
+					currentPart.Vertices.push_back(quad[ccw ? 2 : 2]);
+					currentPart.Vertices.push_back(quad[ccw ? 1 : 3]);
+					currentPart.Vertices.push_back(quad[ccw ? 0 : 0]);
+
 					currentPart.Colors.push_back(color);
 					currentPart.Colors.push_back(color);
 				}

@@ -87,7 +87,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& resources, const
 {
 	RG_GRAPH_SCOPE("Clustered Lighting", graph);
 
-	static bool useMeshShader = true;
+	static bool useMeshShader = false;
 	if (ImGui::Begin("Parameters"))
 	{
 		if (ImGui::CollapsingHeader("Base Pass"))

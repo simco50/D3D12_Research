@@ -387,6 +387,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 
 	for (MeshData& meshData : meshDatas)
 	{
+#if 0
 		meshopt_optimizeVertexCache(meshData.Indices.data(), meshData.Indices.data(), meshData.Indices.size(), meshData.PositionsStream.size());
 
 		meshopt_optimizeOverdraw(meshData.Indices.data(), meshData.Indices.data(), meshData.Indices.size(), &meshData.PositionsStream[0].x, meshData.PositionsStream.size(), sizeof(Vector3), 1.05f);
@@ -455,6 +456,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 			triangleOffset += meshlet.triangle_count * 3;
 		}
 		meshData.MeshletTriangles.resize(triangleOffset);
+#endif
 
 		bufferSize += Math::AlignUp<uint64>(meshData.Meshlets.size() * sizeof(ShaderInterop::Meshlet), 16);
 		bufferSize += Math::AlignUp<uint64>(meshData.MeshletVertices.size() * sizeof(uint32), 16);
