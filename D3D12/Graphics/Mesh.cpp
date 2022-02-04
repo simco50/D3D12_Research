@@ -74,8 +74,6 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 		Material defaultMaterial;
 		m_Materials.push_back(defaultMaterial);
 
-		std::map<int, int> colorToMeshData;
-
 		for (LDraw::Part* pPart : mdl.Parts)
 		{
 			MeshData mesh;
@@ -87,14 +85,9 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 				mesh.PositionsStream.push_back(pPart->Vertices[i + 1]);
 				mesh.PositionsStream.push_back(pPart->Vertices[i + 2]);
 
-				Vector3 n0 = pPart->Vertices[i + 1] - pPart->Vertices[i + 0];
-				Vector3 n1 = pPart->Vertices[i + 2] - pPart->Vertices[i + 0];
-				VS_Normal normal;
-				normal.Normal = n0.Cross(n1);
-				normal.Normal.Normalize();
-				mesh.NormalsStream.push_back(normal);
-				mesh.NormalsStream.push_back(normal);
-				mesh.NormalsStream.push_back(normal);
+				mesh.NormalsStream.push_back({ pPart->Normals[i + 0], Vector4(1, 0, 0, 1) });
+				mesh.NormalsStream.push_back({ pPart->Normals[i + 1], Vector4(1, 0, 0, 1) });
+				mesh.NormalsStream.push_back({ pPart->Normals[i + 2], Vector4(1, 0, 0, 1) });
 
 				mesh.Indices.push_back((int)mesh.Indices.size());
 				mesh.Indices.push_back((int)mesh.Indices.size());
@@ -102,35 +95,6 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 			}
 
 			meshDatas.push_back(mesh);
-		}
-
-		// Vertex normal smoothing
-		for (MeshData& m : meshDatas)
-		{
-			std::map<Vector3, std::vector<int>> vertexMap;
-			for (size_t i = 0; i < m.PositionsStream.size(); ++i)
-			{
-				vertexMap[m.PositionsStream[i]].push_back((int)i);
-			}
-
-			std::vector<VS_Normal> newNormals(m.NormalsStream.size());
-			for (size_t i = 0; i < m.PositionsStream.size(); ++i)
-			{
-				const std::vector<int>& identicalVertices = vertexMap[m.PositionsStream[i]];
-				Vector3 vertexNormal = m.NormalsStream[i].Normal;
-				Vector3 smoothNormal;
-				for (int vertexIndex : identicalVertices)
-				{
-					const Vector3& otherNormal = m.NormalsStream[vertexIndex].Normal;
-					if (vertexNormal.Dot(otherNormal) > cos(Math::PIDIV4))
-					{
-						smoothNormal += otherNormal;
-					}
-				}
-				smoothNormal.Normalize();
-				newNormals[i].Normal = smoothNormal;
-			}
-			newNormals.swap(m.NormalsStream);
 		}
 
 		for (const LDraw::Model::Instance& partInstance : mdl.Instances)

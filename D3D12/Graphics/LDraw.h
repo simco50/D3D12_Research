@@ -67,6 +67,7 @@ namespace LDraw
 		char Name[128];
 		std::vector<uint32> Colors;
 		std::vector<Vector3> Vertices;
+		std::vector<Vector3> Normals;
 		std::vector<Subfile> Subfiles;
 		Type PartType;
 
@@ -479,6 +480,48 @@ namespace LDraw
 			//pPart->Subfiles.clear();
 		}
 
+		void ComputePartNormals(Part* pPart)
+		{
+			if (pPart->Normals.empty())
+			{
+				for (size_t i = 0; i < pPart->Vertices.size(); i += 3)
+				{
+					Vector3 n0 = pPart->Vertices[i + 1] - pPart->Vertices[i + 0];
+					Vector3 n1 = pPart->Vertices[i + 2] - pPart->Vertices[i + 0];
+					Vector3 normal = n0.Cross(n1);
+					normal.Normalize();
+					pPart->Normals.push_back(normal);
+					pPart->Normals.push_back(normal);
+					pPart->Normals.push_back(normal);
+				}
+
+				std::map<Vector3, std::vector<int>> vertexMap;
+				for (size_t i = 0; i < pPart->Vertices.size(); ++i)
+				{
+					vertexMap[pPart->Vertices[i]].push_back((int)i);
+				}
+
+				std::vector<Vector3> newNormals(pPart->Normals.size());
+				for (size_t i = 0; i < pPart->Vertices.size(); ++i)
+				{
+					const std::vector<int>& identicalVertices = vertexMap[pPart->Vertices[i]];
+					Vector3 vertexNormal = pPart->Normals[i];
+					Vector3 smoothNormal;
+					for (int vertexIndex : identicalVertices)
+					{
+						const Vector3& otherNormal = pPart->Normals[vertexIndex];
+						if (vertexNormal.Dot(otherNormal) > cos(Math::PIDIV4))
+						{
+							smoothNormal += otherNormal;
+						}
+					}
+					smoothNormal.Normalize();
+					newNormals[i] = smoothNormal;
+				}
+				pPart->Normals.swap(newNormals);
+			}
+		}
+
 		bool LoadModel(const char* pFile, Model& outModel)
 		{
 			LDraw::Part* pMainPart = GetPart(pFile);
@@ -492,6 +535,7 @@ namespace LDraw
 			for (Part* pPart : outModel.Parts)
 			{
 				FlattenPart(pPart, pPart);
+				ComputePartNormals(pPart);
 			}
 
 			return true;
