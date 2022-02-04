@@ -76,6 +76,19 @@ namespace LDraw
 		}
 	};
 
+	struct Model
+	{
+		struct Instance
+		{
+			int Index;
+			int Color;
+			Matrix Transform;
+		};
+
+		std::vector<Part*> Parts;
+		std::vector<Instance> Instances;
+	};
+
 	inline void ToLower(char* pStr)
 	{
 		while(*pStr)
@@ -397,24 +410,60 @@ namespace LDraw
 			return nullptr;
 		}
 
-		void FlattenPart(Part* pPart, Part& mainPart, Matrix currentMatrix, bool invert = 0, int color = 0, int depth = 0)
+		void ResolveModelParts(Part* pPart, Model& outModel, const Matrix& transform = Matrix::Identity, int color = 0)
 		{
-			for (int i = 0; i < pPart->Vertices.size(); i += 3)
+			if (pPart->PartType == Part::Type::Part)
 			{
-				IntVector3 winding = invert ? IntVector3(2, 1, 0) : IntVector3(0, 1, 2);
-				mainPart.Vertices.push_back(Vector3::Transform(pPart->Vertices[i + winding.x], currentMatrix));
-				mainPart.Vertices.push_back(Vector3::Transform(pPart->Vertices[i + winding.y], currentMatrix));
-				mainPart.Vertices.push_back(Vector3::Transform(pPart->Vertices[i + winding.z], currentMatrix));
+				Model::Instance instance;
+				instance.Transform = transform;
+				instance.Color = color;
+				auto it = std::find(outModel.Parts.begin(), outModel.Parts.end(), pPart);
+				if (it != outModel.Parts.end())
+				{
+					instance.Index = (int)(it - outModel.Parts.begin());
+				}
+				else
+				{
+					instance.Index = (int)outModel.Parts.size();
+					outModel.Parts.push_back(pPart);
+				}
+				outModel.Instances.push_back(instance);
 			}
-
-			for (int i = 0; i < pPart->Colors.size(); ++i)
+			else
 			{
-				mainPart.Colors.push_back(pPart->Colors[i] == MATERIAL_CODE_INHERIT ? color : pPart->Colors[i]);
+				for (Subfile& subfile : pPart->Subfiles)
+				{
+					Part* pSubpart = GetPart(subfile.Name);
+					if (pSubpart)
+					{
+						Matrix scale = subfile.Invert ? Matrix::CreateScale(-1) : Matrix::CreateScale(1);
+						ResolveModelParts(pSubpart, outModel, subfile.Transform * transform * scale, subfile.Color == MATERIAL_CODE_INHERIT ? color : subfile.Color);
+					}
+				}
+			}
+		}
+
+		void FlattenPart(Part* pRootPart, Part* pPart, Matrix currentMatrix = Matrix::Identity, bool invert = 0, int color = 0)
+		{
+			if (pRootPart != pPart)
+			{
+				for (int i = 0; i < pPart->Vertices.size(); i += 3)
+				{
+					IntVector3 winding = invert ? IntVector3(2, 1, 0) : IntVector3(0, 1, 2);
+					pRootPart->Vertices.push_back(Vector3::Transform(pPart->Vertices[i + winding.x], currentMatrix));
+					pRootPart->Vertices.push_back(Vector3::Transform(pPart->Vertices[i + winding.y], currentMatrix));
+					pRootPart->Vertices.push_back(Vector3::Transform(pPart->Vertices[i + winding.z], currentMatrix));
+				}
+
+				for (int i = 0; i < pPart->Colors.size(); ++i)
+				{
+					pRootPart->Colors.push_back(pPart->Colors[i] == MATERIAL_CODE_INHERIT ? color : pPart->Colors[i]);
+				}
 			}
 
 			for (const Subfile& subfile : pPart->Subfiles)
 			{
-				Part* pSubpart = GetPart(/*strcmp(subfile.Name, "stud.dat") == 0 ? "stud-logo3.dat" :*/ subfile.Name);
+				Part* pSubpart = GetPart(subfile.Name);
 				if (!pSubpart)
 				{
 					continue;
@@ -424,20 +473,28 @@ namespace LDraw
 				float det = subfile.Transform.Determinant();
 				inv ^= (det < 0);
 
-				FlattenPart(pSubpart, mainPart, subfile.Transform * currentMatrix, inv, subfile.Color == MATERIAL_CODE_INHERIT ? color : subfile.Color, depth + 1);
+				FlattenPart(pRootPart, pSubpart, subfile.Transform * currentMatrix, inv, subfile.Color == MATERIAL_CODE_INHERIT ? color : subfile.Color);
 			}
+			//#todo: It would be better to propagate the geometry one level at a time and then clear the subfiles
+			//pPart->Subfiles.clear();
 		}
 
-		Part LoadFile(const char* pFile)
+		bool LoadModel(const char* pFile, Model& outModel)
 		{
-			Part* pMainPart = GetPart(pFile);
-
-			Part outPart;
-			if (pMainPart)
+			LDraw::Part* pMainPart = GetPart(pFile);
+			if (!pMainPart)
 			{
-				FlattenPart(pMainPart, outPart, Matrix::CreateScale(1, -1, 1), false);
+				return false;
 			}
-			return outPart;
+
+			ResolveModelParts(pMainPart, outModel, Matrix::CreateScale(1, -1, 1));
+
+			for (Part* pPart : outModel.Parts)
+			{
+				FlattenPart(pPart, pPart);
+			}
+
+			return true;
 		}
 	};
 }

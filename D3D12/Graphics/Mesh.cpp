@@ -67,76 +67,41 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 	{
 		LDraw::Context context;
 		context.Init();
-		LDraw::Part part = context.LoadFile(pFilePath);
+
+		LDraw::Model mdl;
+		context.LoadModel(pFilePath, mdl);
+
+		Material defaultMaterial;
+		m_Materials.push_back(defaultMaterial);
 
 		std::map<int, int> colorToMeshData;
 
-		for (int i = 0; i < (int)part.Vertices.size(); i += 3)
+		for (LDraw::Part* pPart : mdl.Parts)
 		{
-			int color = part.Colors[i / 3];
-			auto it = colorToMeshData.find(color);
-			if (it == colorToMeshData.end())
+			MeshData mesh;
+			mesh.MaterialIndex = 0;
+
+			for (int i = 0; i < (int)pPart->Vertices.size(); i += 3)
 			{
-				const LDraw::Material& lmat = context.GetMaterial(color);
-				m_Materials.push_back({});
-				Material& mat = m_Materials.back();
+				mesh.PositionsStream.push_back(pPart->Vertices[i + 0]);
+				mesh.PositionsStream.push_back(pPart->Vertices[i + 1]);
+				mesh.PositionsStream.push_back(pPart->Vertices[i + 2]);
 
-				auto DecodeColor = [](uint32 color, uint32 alpha)
-				{
-					Color output;
-					constexpr float rcp_255 = 1.0f / 255.0f;
-					//unsigned int layout: RRRR GGGG BBBB AAAA
-					output.x = (float)((color >> 16) & 0xFF) * rcp_255;
-					output.y = (float)((color >> 8) & 0xFF) * rcp_255;
-					output.z = (float)((color >> 0) & 0xFF) * rcp_255;
-					output.x = powf(output.x, 2.2f);
-					output.y = powf(output.y, 2.2f);
-					output.z = powf(output.z, 2.2f);
-					output.w = (float)alpha / 255.0f;
-					return output;
-				};
+				Vector3 n0 = pPart->Vertices[i + 1] - pPart->Vertices[i + 0];
+				Vector3 n1 = pPart->Vertices[i + 2] - pPart->Vertices[i + 0];
+				VS_Normal normal;
+				normal.Normal = n0.Cross(n1);
+				normal.Normal.Normalize();
+				mesh.NormalsStream.push_back(normal);
+				mesh.NormalsStream.push_back(normal);
+				mesh.NormalsStream.push_back(normal);
 
-				mat.Name = lmat.Name;
-				mat.BaseColorFactor = DecodeColor(lmat.Color, lmat.Alpha);
-				mat.RoughnessFactor = 0.1f;
-				mat.MetalnessFactor = 0.0f;
-				mat.AlphaMode = lmat.Alpha == 255 ? MaterialAlphaMode::Opaque : MaterialAlphaMode::Blend;
-
-				if (lmat.Type == LDraw::MaterialType::Metal)
-				{
-					mat.MetalnessFactor = 1.0f;
-					mat.RoughnessFactor = 0.1f;
-				}
-				else if (lmat.Type == LDraw::MaterialType::Chrome)
-				{
-					mat.MetalnessFactor = 1.0f;
-					mat.RoughnessFactor = 0.0f;
-				}
-
-				colorToMeshData[color] = (int)meshDatas.size();
-				MeshData m;
-				m.MaterialIndex = (int)meshDatas.size();
-				meshDatas.push_back(m);
+				mesh.Indices.push_back((int)mesh.Indices.size());
+				mesh.Indices.push_back((int)mesh.Indices.size());
+				mesh.Indices.push_back((int)mesh.Indices.size());
 			}
 
-			MeshData& m = meshDatas[colorToMeshData[color]];
-
-			m.PositionsStream.push_back(part.Vertices[i + 0]);
-			m.PositionsStream.push_back(part.Vertices[i + 1]);
-			m.PositionsStream.push_back(part.Vertices[i + 2]);
-
-			Vector3 n0 = part.Vertices[i + 1] - part.Vertices[i + 0];
-			Vector3 n1 = part.Vertices[i + 2] - part.Vertices[i + 0];
-			VS_Normal normal;
-			normal.Normal = n0.Cross(n1);
-			normal.Normal.Normalize();
-			m.NormalsStream.push_back(normal);
-			m.NormalsStream.push_back(normal);
-			m.NormalsStream.push_back(normal);
-
-			m.Indices.push_back((int)m.Indices.size());
-			m.Indices.push_back((int)m.Indices.size());
-			m.Indices.push_back((int)m.Indices.size());
+			meshDatas.push_back(mesh);
 		}
 
 		// Vertex normal smoothing
@@ -168,12 +133,12 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 			newNormals.swap(m.NormalsStream);
 		}
 
-		for (int i = 0; i < meshDatas.size(); ++i)
+		for (const LDraw::Model::Instance& partInstance : mdl.Instances)
 		{
-			SubMeshInstance newNode;
-			newNode.Transform = Matrix::CreateScale(0.02f);
-			newNode.MeshIndex = (int)i;
-			m_MeshInstances.push_back(newNode);
+			SubMeshInstance instance;
+			instance.MeshIndex = partInstance.Index;
+			instance.Transform = partInstance.Transform * Matrix::CreateScale(0.01f);
+			m_MeshInstances.push_back(instance);
 		}
 	}
 	else
@@ -482,7 +447,8 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 	for (const MeshData& meshData : meshDatas)
 	{
 		BoundingBox bounds;
-		bounds.CreateFromPoints(bounds, meshData.PositionsStream.size(), (DirectX::XMFLOAT3*)meshData.PositionsStream.data(), sizeof(Vector3));
+		if(meshData.PositionsStream.size() > 0)
+			bounds.CreateFromPoints(bounds, meshData.PositionsStream.size(), (DirectX::XMFLOAT3*)meshData.PositionsStream.data(), sizeof(Vector3));
 
 		SubMesh subMesh;
 		subMesh.Bounds = bounds;
