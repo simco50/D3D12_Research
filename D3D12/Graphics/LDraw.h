@@ -120,7 +120,7 @@ namespace LDraw
 			Parts.clear();
 
 			DatabaseLocations = {
-				{ "p/", Part::Type::Primitive },				// Official Primitives
+				{ "p/", Part::Type::Primitive },			// Official Primitives
 				{ "parts/", Part::Type::Part },				// Official Parts
 				{ "models/", Part::Type::Primitive },		// Demo models
 				{ "UnOfficial/p/", Part::Type::Primitive },	// Unofficial Primitives
@@ -211,8 +211,6 @@ namespace LDraw
 			outParts.clear();
 			Part::Type partType = Part::Type::LocalModel;
 
-			std::string partName = Paths::GetFileName(pPartName);
-
 			// Try absolute path
 			std::ifstream str(pPartName);
 			if (str.is_open())
@@ -242,7 +240,7 @@ namespace LDraw
 
 			std::unique_ptr<Part> part = std::make_unique<Part>();
 			part->PartType = partType;
-			strcpy_s(part->Name, partName.c_str());
+			strcpy_s(part->Name, pPartName);
 			outParts.push_back(std::move(part));
 
 			std::string line;
