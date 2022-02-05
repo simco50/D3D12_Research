@@ -73,9 +73,8 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 		LdrLoadModel(pFilePath, &context, mdl);
 
 		auto CreateMaterialFromLDraw = [&](int color) {
+			Material mat;
 			const LdrMaterial& lmat = LdrGetMaterial(color, &context);
-			m_Materials.push_back({});
-			Material& mat = m_Materials.back();
 
 			auto DecodeColor = [](uint32 color, uint32 alpha)
 			{
