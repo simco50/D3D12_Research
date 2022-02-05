@@ -68,6 +68,7 @@ namespace LDraw
 		std::vector<uint32> Colors;
 		std::vector<Vector3> Vertices;
 		std::vector<Vector3> Normals;
+		std::vector<uint32> Indices;
 		std::vector<Subfile> Subfiles;
 		Type PartType;
 
@@ -520,7 +521,113 @@ namespace LDraw
 
 		void ComputePartIndices(Part* pPart)
 		{
-			
+			// Inspired by MeshOptimized by zeux
+
+			struct HashedVertex
+			{
+				HashedVertex(const Part* pPart, int vertex)
+					: pPart(pPart), Vertex(vertex)
+				{}
+				const Part* pPart;
+				int Vertex;
+
+				static void MurmurHash(uint32& h, const void* pData, size_t len)
+				{
+					assert(len % 4 == 0); // Assume 4 byte alignment as we're leaving off the last part of the algorithm
+					const unsigned int m = 0x5bd1e995;
+					const int r = 24;
+					const char* pKey = (char*)pData;
+					while (len >= 4)
+					{
+						unsigned int k = *(unsigned int*)(pData);
+
+						k *= m;
+						k ^= k >> r;
+						k *= m;
+
+						h *= m;
+						h ^= k;
+
+						pKey += 4;
+						len -= 4;
+					}
+				}
+
+				struct Hasher
+				{
+					size_t operator()(const HashedVertex& v) const
+					{
+						uint32 h = 0;
+						MurmurHash(h, v.pPart->Vertices.data() + v.Vertex, sizeof(Vector3));
+						MurmurHash(h, v.pPart->Normals.data() + v.Vertex, sizeof(Vector3));
+						MurmurHash(h, v.pPart->Colors.data() + v.Vertex / 3, sizeof(uint32));
+						return h;
+					}
+				};
+
+				bool operator==(const HashedVertex& rhs) const
+				{
+					return
+						pPart->Colors[Vertex / 3] == rhs.pPart->Colors[rhs.Vertex / 3] &&
+						pPart->Normals[Vertex] == rhs.pPart->Normals[rhs.Vertex] &&
+						pPart->Vertices[Vertex] == rhs.pPart->Vertices[rhs.Vertex];
+				}
+			};
+
+			std::unordered_map<HashedVertex, uint32, HashedVertex::Hasher> buckets;
+			std::vector<uint32> remap(pPart->Vertices.size(), ~0u);
+
+			uint32 indexCount = 0;
+			for (size_t i = 0; i < pPart->Vertices.size(); ++i)
+			{
+				if (remap[i] == ~0u)
+				{
+					HashedVertex v(pPart, (uint32)i);
+					auto it = buckets.find(v);
+					if (it == buckets.end())
+					{
+						buckets[v] = (uint32)i;
+						remap[i] = indexCount++;
+					}
+					else
+					{
+						remap[i] = remap[it->second];
+					}
+				}
+			}
+
+			auto remapBuffer = [](void* pData, uint32* remap, uint32 numElements, uint32 elementSize)
+			{
+				// Make a copy
+				std::vector<char> copy(numElements * elementSize);
+				memcpy(copy.data(), pData, copy.size());
+
+				for (uint32 i = 0; i < numElements; ++i)
+				{
+					memcpy((char*)pData + remap[i] * elementSize, copy.data() + i * elementSize, elementSize);
+				}
+			};
+
+			auto remapColorBuffer = [](void* pData, uint32* remap, uint32 numElements, uint32 elementSize)
+			{
+				// Make a copy
+				std::vector<char> copy(numElements * elementSize);
+				memcpy(copy.data(), pData, copy.size());
+
+				for (uint32 i = 0; i < numElements; ++i)
+				{
+					memcpy((char*)pData + (remap[i * 3] / 3) * elementSize, copy.data() + i * elementSize, elementSize);
+				}
+			};
+
+			remapBuffer(pPart->Vertices.data(), remap.data(), (uint32)pPart->Vertices.size(), sizeof(Vector3));
+			remapBuffer(pPart->Normals.data(), remap.data(), (uint32)pPart->Normals.size(), sizeof(Vector3));
+			remapColorBuffer(pPart->Colors.data(), remap.data(), (uint32)pPart->Colors.size(), sizeof(uint32));
+
+			pPart->Vertices.resize(indexCount);
+			pPart->Normals.resize(indexCount);
+			pPart->Colors.resize(indexCount / 3);
+			pPart->Indices.swap(remap);
 		}
 
 		bool LoadModel(const char* pFile, Model& outModel)
@@ -539,7 +646,7 @@ namespace LDraw
 			{
 				FlattenPart(pPart);
 				ComputePartNormals(pPart);
-				//ComputePartIndices(pPart);
+				ComputePartIndices(pPart);
 			}
 
 			return true;

@@ -79,19 +79,15 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 			MeshData mesh;
 			mesh.MaterialIndex = 0;
 
-			for (int i = 0; i < (int)pPart->Vertices.size(); i += 3)
+			for (int i = 0; i < (int)pPart->Indices.size(); ++i)
 			{
-				mesh.PositionsStream.push_back(pPart->Vertices[i + 0]);
-				mesh.PositionsStream.push_back(pPart->Vertices[i + 1]);
-				mesh.PositionsStream.push_back(pPart->Vertices[i + 2]);
+				mesh.Indices.push_back(pPart->Indices[i]);
+			}
 
-				mesh.NormalsStream.push_back({ pPart->Normals[i + 0], Vector4(1, 0, 0, 1) });
-				mesh.NormalsStream.push_back({ pPart->Normals[i + 1], Vector4(1, 0, 0, 1) });
-				mesh.NormalsStream.push_back({ pPart->Normals[i + 2], Vector4(1, 0, 0, 1) });
-
-				mesh.Indices.push_back((int)mesh.Indices.size());
-				mesh.Indices.push_back((int)mesh.Indices.size());
-				mesh.Indices.push_back((int)mesh.Indices.size());
+			for (int i = 0; i < (int)pPart->Vertices.size(); ++i)
+			{
+				mesh.PositionsStream.push_back(pPart->Vertices[i]);
+				mesh.NormalsStream.push_back({ pPart->Normals[i], Vector4(1, 0, 0, 1) });
 			}
 
 			meshDatas.push_back(mesh);
