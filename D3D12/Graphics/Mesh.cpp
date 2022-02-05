@@ -71,34 +71,101 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 		LDraw::Model mdl;
 		context.LoadModel(pFilePath, mdl);
 
-		Material defaultMaterial;
-		m_Materials.push_back(defaultMaterial);
+		auto CreateMaterialFromLDraw = [&](int color) {
+			const LDraw::Material& lmat = context.GetMaterial(color);
+			m_Materials.push_back({});
+			Material& mat = m_Materials.back();
 
-		for (LDraw::Part* pPart : mdl.Parts)
-		{
-			MeshData mesh;
-			mesh.MaterialIndex = 0;
-
-			for (int i = 0; i < (int)pPart->Indices.size(); ++i)
+			auto DecodeColor = [](uint32 color, uint32 alpha)
 			{
-				mesh.Indices.push_back(pPart->Indices[i]);
+				Color output;
+				constexpr float rcp_255 = 1.0f / 255.0f;
+				//unsigned int layout: RRRR GGGG BBBB AAAA
+				output.x = (float)((color >> 16) & 0xFF) * rcp_255;
+				output.y = (float)((color >> 8) & 0xFF) * rcp_255;
+				output.z = (float)((color >> 0) & 0xFF) * rcp_255;
+				output.x = powf(output.x, 2.2f);
+				output.y = powf(output.y, 2.2f);
+				output.z = powf(output.z, 2.2f);
+				output.w = (float)alpha / 255.0f;
+				return output;
+			};
+
+			mat.Name = lmat.Name;
+			mat.BaseColorFactor = DecodeColor(lmat.Color, lmat.Alpha);
+			mat.RoughnessFactor = 0.1f;
+			mat.MetalnessFactor = 0.0f;
+			mat.AlphaMode = lmat.Alpha == 255 ? MaterialAlphaMode::Opaque : MaterialAlphaMode::Blend;
+
+			if (lmat.Type == LDraw::MaterialType::Metal)
+			{
+				mat.MetalnessFactor = 1.0f;
+				mat.RoughnessFactor = 0.1f;
+			}
+			else if (lmat.Type == LDraw::MaterialType::Chrome)
+			{
+				mat.MetalnessFactor = 1.0f;
+				mat.RoughnessFactor = 0.0f;
+			}
+			return mat;
+		};
+
+		struct MaterialPartCombination
+		{
+			LDraw::Part* pPart;
+			int Color;
+			int Index;
+		};
+
+		// Materials are part of the mesh so instances of the same mesh but different material have to be duplicated :(
+		std::vector<MaterialPartCombination> map;
+
+		for (int i = 0; i < (int)mdl.Instances.size(); ++i)
+		{
+			const LDraw::Model::Instance& instance = mdl.Instances[i];
+			LDraw::Part* pPart = mdl.Parts[instance.Index];
+
+			SubMeshInstance inst;
+
+			auto it = std::find_if(map.begin(), map.end(), [&](const MaterialPartCombination& cm)
+				{
+					return cm.Color == instance.Color && cm.pPart == pPart;
+				});
+
+			if (it != map.end())
+			{
+				inst.MeshIndex = it->Index;
+			}
+			else
+			{
+				MeshData mesh;
+				mesh.MaterialIndex = (int)m_Materials.size();
+				mesh.Indices.resize(pPart->Indices.size());
+				for (int j = 0; j < (int)pPart->Indices.size(); ++j)
+				{
+					mesh.Indices[j] = pPart->Indices[j];
+				}
+				mesh.PositionsStream.resize(pPart->Vertices.size());
+				mesh.NormalsStream.resize(pPart->Vertices.size());
+				for (int j = 0; j < (int)pPart->Vertices.size(); ++j)
+				{
+					mesh.PositionsStream[j] = pPart->Vertices[j];
+					mesh.NormalsStream[j] = {pPart->Normals[j], Vector4(1, 0, 0, 1)};
+				}
+
+				MaterialPartCombination combination;
+				combination.pPart = pPart;
+				combination.Color = instance.Color;
+				combination.Index = (int)meshDatas.size();
+				map.push_back(combination);
+				inst.MeshIndex = combination.Index;
+
+				meshDatas.push_back(mesh);
+				m_Materials.push_back(CreateMaterialFromLDraw(instance.Color));
 			}
 
-			for (int i = 0; i < (int)pPart->Vertices.size(); ++i)
-			{
-				mesh.PositionsStream.push_back(pPart->Vertices[i]);
-				mesh.NormalsStream.push_back({ pPart->Normals[i], Vector4(1, 0, 0, 1) });
-			}
-
-			meshDatas.push_back(mesh);
-		}
-
-		for (const LDraw::Model::Instance& partInstance : mdl.Instances)
-		{
-			SubMeshInstance instance;
-			instance.MeshIndex = partInstance.Index;
-			instance.Transform = partInstance.Transform;
-			m_MeshInstances.push_back(instance);
+			inst.Transform = instance.Transform;
+			m_MeshInstances.push_back(inst);
 		}
 	}
 	else

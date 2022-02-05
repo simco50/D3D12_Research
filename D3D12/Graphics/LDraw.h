@@ -646,6 +646,11 @@ namespace LDraw
 			{
 				FlattenPart(pPart);
 				ComputePartNormals(pPart);
+			}
+
+			// Generate indices in a separate loop because part flattening needs unindexed vertices and inner parts may be re-used
+			for (Part* pPart : outModel.Parts)
+			{
 				ComputePartIndices(pPart);
 			}
 
