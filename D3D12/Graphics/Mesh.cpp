@@ -65,14 +65,14 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 	std::string extension = Paths::GetFileExtenstion(pFilePath);
 	if (extension == "dat" || extension == "ldr" || extension == "mpd")
 	{
-		LDraw::Context context;
-		context.Init();
+		LdrData context;
+		LdrInit(&context);
 
-		LDraw::Model mdl;
-		context.LoadModel(pFilePath, mdl);
+		LdrModel mdl;
+		LdrLoadModel(pFilePath, &context, mdl);
 
 		auto CreateMaterialFromLDraw = [&](int color) {
-			const LDraw::Material& lmat = context.GetMaterial(color);
+			const LdrMaterial& lmat = LdrGetMaterial(color, &context);
 			m_Materials.push_back({});
 			Material& mat = m_Materials.back();
 
@@ -97,12 +97,12 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 			mat.MetalnessFactor = 0.0f;
 			mat.AlphaMode = lmat.Alpha == 255 ? MaterialAlphaMode::Opaque : MaterialAlphaMode::Blend;
 
-			if (lmat.Type == LDraw::MaterialType::Metal)
+			if (lmat.Type == LdrMaterialType::Metal)
 			{
 				mat.MetalnessFactor = 1.0f;
 				mat.RoughnessFactor = 0.1f;
 			}
-			else if (lmat.Type == LDraw::MaterialType::Chrome)
+			else if (lmat.Type == LdrMaterialType::Chrome)
 			{
 				mat.MetalnessFactor = 1.0f;
 				mat.RoughnessFactor = 0.0f;
@@ -112,7 +112,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 
 		struct MaterialPartCombination
 		{
-			LDraw::Part* pPart;
+			LdrPart* pPart;
 			int Color;
 			int Index;
 		};
@@ -122,8 +122,8 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 
 		for (int i = 0; i < (int)mdl.Instances.size(); ++i)
 		{
-			const LDraw::Model::Instance& instance = mdl.Instances[i];
-			LDraw::Part* pPart = mdl.Parts[instance.Index];
+			const LdrModel::Instance& instance = mdl.Instances[i];
+			LdrPart* pPart = mdl.Parts[instance.Index];
 
 			SubMeshInstance inst;
 
