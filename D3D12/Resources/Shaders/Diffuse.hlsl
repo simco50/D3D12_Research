@@ -153,7 +153,7 @@ InterpolantsVSToPS FetchVertexAttributes(MeshData mesh, float4x4 world, uint ver
 	result.Normal = normalize(mul(normalData.Normal, (float3x3)world));
 	result.Tangent = float4(normalize(mul(normalData.Tangent.xyz, (float3x3)world)), normalData.Tangent.w);
 
-	result.Seed = mesh.PositionsOffset;
+	result.Seed = cObject.World;
 
 	return result;
 }

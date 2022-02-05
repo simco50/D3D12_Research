@@ -33,13 +33,16 @@ bool LdrInit(LdrData* pData)
 	pData->PartMap.clear();
 	pData->Parts.clear();
 
-	pData->DatabaseLocations = {
-		{ "p/", LdrPart::Type::Primitive },				// Official Primitives
-		{ "parts/", LdrPart::Type::Part },				// Official Parts
-		{ "models/", LdrPart::Type::Primitive },		// Demo models
-		{ "UnOfficial/p/", LdrPart::Type::Primitive },	// Unofficial Primitives
-		{ "UnOfficial/parts/", LdrPart::Type::Part },	// Unofficial Parts
-	};
+	if (pData->Quality == LdrQuality::High)
+		pData->DatabaseLocations.push_back({ "p/48/" , LdrPart::Type::Primitive });
+	else if(pData->Quality == LdrQuality::Low)
+		pData->DatabaseLocations.push_back({ "p/4/" , LdrPart::Type::Primitive });
+
+	pData->DatabaseLocations.push_back({ "p/", LdrPart::Type::Primitive });				// Official Primitives
+	pData->DatabaseLocations.push_back({ "parts/", LdrPart::Type::Part });				// Official Parts
+	pData->DatabaseLocations.push_back({ "models/", LdrPart::Type::Primitive });		// Demo models
+	pData->DatabaseLocations.push_back({ "UnOfficial/p/", LdrPart::Type::Primitive });	// Unofficial Primitives
+	pData->DatabaseLocations.push_back({ "UnOfficial/parts/", LdrPart::Type::Part });	// Unofficial Parts
 
 	LdrMaterial& defaultMaterial = pData->DefaultMaterial;
 	memset(&defaultMaterial, 0, sizeof(LdrMaterial));

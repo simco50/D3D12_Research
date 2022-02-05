@@ -86,10 +86,18 @@ struct LdrModel
 	std::vector<Instance> Instances;
 };
 
+enum LdrQuality
+{
+	Normal,
+	Low,
+	High,
+};
+
 struct LdrData
 {
 	const char* pDatabasePath = "D:/References/ldraw/ldraw/";
 	std::vector<std::unique_ptr<LdrPart>> Parts;
+	LdrQuality Quality = LdrQuality::Normal;
 	std::map<StringHash, int> PartMap;
 	std::vector<LdrMaterial> Materials;
 	std::map<int, int> MaterialMap;

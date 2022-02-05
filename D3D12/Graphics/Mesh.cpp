@@ -66,6 +66,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 	if (extension == "dat" || extension == "ldr" || extension == "mpd")
 	{
 		LdrData context;
+		context.Quality = LdrQuality::Low;
 		LdrInit(&context);
 
 		LdrModel mdl;
@@ -474,8 +475,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 	for (const MeshData& meshData : meshDatas)
 	{
 		BoundingBox bounds;
-		if(meshData.PositionsStream.size() > 0)
-			bounds.CreateFromPoints(bounds, meshData.PositionsStream.size(), (DirectX::XMFLOAT3*)meshData.PositionsStream.data(), sizeof(Vector3));
+		bounds.CreateFromPoints(bounds, meshData.PositionsStream.size(), (DirectX::XMFLOAT3*)meshData.PositionsStream.data(), sizeof(Vector3));
 
 		SubMesh subMesh;
 		subMesh.Bounds = bounds;
