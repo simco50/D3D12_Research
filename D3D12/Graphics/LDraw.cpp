@@ -4,14 +4,17 @@
 constexpr int MATERIAL_CODE_INHERIT = 16;
 constexpr int MATERIAL_CODE_COMPLEMENT = 24;
 
-inline void ToLower(char* pStr)
+namespace Util
 {
-	while (*pStr)
+	inline void ToLower(char* pStr)
 	{
-		*pStr = (char)tolower(*pStr);
-		++pStr;
-	}
-};
+		while (*pStr)
+		{
+			*pStr = (char)tolower(*pStr);
+			++pStr;
+		}
+	};
+}
 
 const LdrMaterial& LdrGetMaterial(int code, LdrData* pData)
 {
@@ -31,7 +34,7 @@ bool LdrInit(LdrData* pData)
 	pData->Parts.clear();
 
 	pData->DatabaseLocations = {
-		{ "p/", LdrPart::Type::Primitive },			// Official Primitives
+		{ "p/", LdrPart::Type::Primitive },				// Official Primitives
 		{ "parts/", LdrPart::Type::Part },				// Official Parts
 		{ "models/", LdrPart::Type::Primitive },		// Demo models
 		{ "UnOfficial/p/", LdrPart::Type::Primitive },	// Unofficial Primitives
@@ -40,12 +43,12 @@ bool LdrInit(LdrData* pData)
 
 	LdrMaterial& defaultMaterial = pData->DefaultMaterial;
 	memset(&defaultMaterial, 0, sizeof(LdrMaterial));
-	strcpy_s(defaultMaterial.Name, "defaultMaterial");
+	strcpy_s(defaultMaterial.Name, "INVALID");
 	defaultMaterial.Color = 0x00FF00FF;
 	defaultMaterial.EdgeColor = 0x00FF00FF;
 
 	char configPath[256];
-	FormatString(configPath, ARRAYSIZE(configPath), "%sLDConfig.ldr", pData->pDatabasePath);
+	sprintf_s(configPath, ARRAYSIZE(configPath), "%sLDConfig.ldr", pData->pDatabasePath);
 	std::ifstream fs(configPath);
 	if (!fs.is_open())
 	{
@@ -134,7 +137,7 @@ bool ParseLDraw(const char* pPartName, LdrData* pData, std::vector<std::unique_p
 		for (const LdrData::DatabaseLocation& location : pData->DatabaseLocations)
 		{
 			char path[256];
-			FormatString(path, ARRAYSIZE(path), "%s%s%s", pData->pDatabasePath, location.pLocation, pPartName);
+			sprintf_s(path, ARRAYSIZE(path), "%s%s%s", pData->pDatabasePath, location.pLocation, pPartName);
 			str.open(path);
 			if (str.is_open())
 			{
@@ -213,7 +216,7 @@ bool ParseLDraw(const char* pPartName, LdrData* pData, std::vector<std::unique_p
 					std::unique_ptr<LdrPart> newPart = std::make_unique<LdrPart>();
 					newPart->PartType = partType;
 					strcpy_s(newPart->Name, pSearch + sizeof("0 FILE"));
-					ToLower(newPart->Name);
+					Util::ToLower(newPart->Name);
 					outParts.push_back(std::move(newPart));
 				}
 			}
@@ -233,7 +236,7 @@ bool ParseLDraw(const char* pPartName, LdrData* pData, std::vector<std::unique_p
 				&curr
 			);
 			strcpy_s(subfile.Name, pLine + curr);
-			ToLower(subfile.Name);
+			Util::ToLower(subfile.Name);
 
 			subfile.Invert = invert;
 			invert = false;
@@ -464,8 +467,7 @@ void ComputePartIndices(LdrPart* pPart)
 
 		bool operator==(const HashedVertex& rhs) const
 		{
-			return
-				pPart->Colors[Vertex / 3] == rhs.pPart->Colors[rhs.Vertex / 3] &&
+			return pPart->Colors[Vertex / 3] == rhs.pPart->Colors[rhs.Vertex / 3] &&
 				pPart->Normals[Vertex] == rhs.pPart->Normals[rhs.Vertex] &&
 				pPart->Vertices[Vertex] == rhs.pPart->Vertices[rhs.Vertex];
 		}
