@@ -2018,29 +2018,12 @@ void DemoApp::UploadSceneData(CommandContext& context)
 
 	for (const auto& pMesh : m_Meshes)
 	{
-		for (const SubMesh& subMesh : pMesh->GetMeshes())
-		{
-			ShaderInterop::MeshData mesh;
-			mesh.BufferIndex = pMesh->GetData()->GetSRVIndex();
-			mesh.IndexByteSize = subMesh.IndicesLocation.Stride();
-			mesh.IndicesOffset = (uint32)subMesh.IndicesLocation.OffsetFromStart;
-			mesh.PositionsOffset = (uint32)subMesh.PositionStreamLocation.OffsetFromStart;
-			mesh.NormalsOffset = (uint32)subMesh.NormalStreamLocation.OffsetFromStart;
-			mesh.UVsOffset = (uint32)subMesh.UVStreamLocation.OffsetFromStart;
-			mesh.MeshletOffset = subMesh.MeshletsLocation;
-			mesh.MeshletVertexOffset = subMesh.MeshletVerticesLocation;
-			mesh.MeshletTriangleOffset = subMesh.MeshletTrianglesLocation;
-			mesh.MeshletBoundsOffset = subMesh.MeshletBoundsLocation;
-			mesh.MeshletCount = subMesh.NumMeshlets;
-			meshes.push_back(mesh);
-		}
-
 		for (const SubMeshInstance& node : pMesh->GetMeshInstances())
 		{
 			const SubMesh& parentMesh = pMesh->GetMesh(node.MeshIndex);
 			const Material& meshMaterial = pMesh->GetMaterial(parentMesh.MaterialId);
 			ShaderInterop::MeshInstance meshInstance;
-			meshInstance.Mesh = node.MeshIndex;
+			meshInstance.Mesh = (uint32)meshes.size() + node.MeshIndex;
 			meshInstance.Material = (uint32)materials.size() + parentMesh.MaterialId;
 			meshInstance.World = (uint32)transforms.size();
 			meshInstances.push_back(meshInstance);
@@ -2066,6 +2049,23 @@ void DemoApp::UploadSceneData(CommandContext& context)
 			batch.LocalBounds.Transform(batch.Bounds, batch.WorldMatrix);
 			batch.Radius = Vector3(batch.Bounds.Extents).Length();
 			sceneBatches.push_back(batch);
+		}
+
+		for (const SubMesh& subMesh : pMesh->GetMeshes())
+		{
+			ShaderInterop::MeshData mesh;
+			mesh.BufferIndex = pMesh->GetData()->GetSRVIndex();
+			mesh.IndexByteSize = subMesh.IndicesLocation.Stride();
+			mesh.IndicesOffset = (uint32)subMesh.IndicesLocation.OffsetFromStart;
+			mesh.PositionsOffset = (uint32)subMesh.PositionStreamLocation.OffsetFromStart;
+			mesh.NormalsOffset = (uint32)subMesh.NormalStreamLocation.OffsetFromStart;
+			mesh.UVsOffset = (uint32)subMesh.UVStreamLocation.OffsetFromStart;
+			mesh.MeshletOffset = subMesh.MeshletsLocation;
+			mesh.MeshletVertexOffset = subMesh.MeshletVerticesLocation;
+			mesh.MeshletTriangleOffset = subMesh.MeshletTrianglesLocation;
+			mesh.MeshletBoundsOffset = subMesh.MeshletBoundsLocation;
+			mesh.MeshletCount = subMesh.NumMeshlets;
+			meshes.push_back(mesh);
 		}
 
 		for (const Material& material : pMesh->GetMaterials())
