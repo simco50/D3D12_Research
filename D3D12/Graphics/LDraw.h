@@ -48,8 +48,8 @@ namespace LDraw
 
 	struct Subfile
 	{
-		Matrix Transform;
 		char Name[128];
+		Matrix Transform;
 		uint32 Color;
 		bool Invert;
 	};
@@ -444,40 +444,36 @@ namespace LDraw
 			}
 		}
 
-		void FlattenPart(Part* pRootPart, Part* pPart, Matrix currentMatrix = Matrix::Identity, bool invert = 0, int color = 0)
+		inline uint32 ResolveTriangleColor(uint32 triangleColor, uint32 parentColor)
 		{
-			if (pRootPart != pPart)
-			{
-				for (int i = 0; i < pPart->Vertices.size(); i += 3)
-				{
-					IntVector3 winding = invert ? IntVector3(2, 1, 0) : IntVector3(0, 1, 2);
-					pRootPart->Vertices.push_back(Vector3::Transform(pPart->Vertices[i + winding.x], currentMatrix));
-					pRootPart->Vertices.push_back(Vector3::Transform(pPart->Vertices[i + winding.y], currentMatrix));
-					pRootPart->Vertices.push_back(Vector3::Transform(pPart->Vertices[i + winding.z], currentMatrix));
-				}
+			return triangleColor == MATERIAL_CODE_INHERIT ? parentColor : triangleColor;
+		}
 
-				for (int i = 0; i < pPart->Colors.size(); ++i)
-				{
-					pRootPart->Colors.push_back(pPart->Colors[i] == MATERIAL_CODE_INHERIT ? color : pPart->Colors[i]);
-				}
-			}
-
+		void FlattenPart(Part* pPart, const Matrix& currentMatrix = Matrix::Identity, bool invert = 0, int color = 0)
+		{
 			for (const Subfile& subfile : pPart->Subfiles)
 			{
 				Part* pSubpart = GetPart(subfile.Name);
 				if (!pSubpart)
-				{
 					continue;
-				}
 
-				bool inv = invert ^ subfile.Invert;
+				bool inv = subfile.Invert;
 				float det = subfile.Transform.Determinant();
 				inv ^= (det < 0);
 
-				FlattenPart(pRootPart, pSubpart, subfile.Transform * currentMatrix, inv, subfile.Color == MATERIAL_CODE_INHERIT ? color : subfile.Color);
+				FlattenPart(pSubpart, subfile.Transform * currentMatrix, invert ^ inv, ResolveTriangleColor(subfile.Color, color));
+
+				for (int i = 0; i < pSubpart->Vertices.size(); i += 3)
+				{
+					IntVector3 winding = inv ? IntVector3(2, 1, 0) : IntVector3(0, 1, 2);
+					pPart->Vertices.push_back(Vector3::Transform(pSubpart->Vertices[i + winding.x], subfile.Transform));
+					pPart->Vertices.push_back(Vector3::Transform(pSubpart->Vertices[i + winding.y], subfile.Transform));
+					pPart->Vertices.push_back(Vector3::Transform(pSubpart->Vertices[i + winding.z], subfile.Transform));
+
+					pPart->Colors.push_back(ResolveTriangleColor(pSubpart->Colors[i / 3], color));
+				}
 			}
-			//#todo: It would be better to propagate the geometry one level at a time and then clear the subfiles
-			//pPart->Subfiles.clear();
+			pPart->Subfiles.clear();
 		}
 
 		void ComputePartNormals(Part* pPart)
@@ -522,6 +518,11 @@ namespace LDraw
 			}
 		}
 
+		void ComputePartIndices(Part* pPart)
+		{
+			
+		}
+
 		bool LoadModel(const char* pFile, Model& outModel)
 		{
 			LDraw::Part* pMainPart = GetPart(pFile);
@@ -530,12 +531,15 @@ namespace LDraw
 				return false;
 			}
 
-			ResolveModelParts(pMainPart, outModel, Matrix::CreateScale(1, -1, 1));
+			float lduScale = 0.004f;
+
+			ResolveModelParts(pMainPart, outModel, Matrix::CreateScale(lduScale, -lduScale, lduScale));
 
 			for (Part* pPart : outModel.Parts)
 			{
-				FlattenPart(pPart, pPart);
+				FlattenPart(pPart);
 				ComputePartNormals(pPart);
+				//ComputePartIndices(pPart);
 			}
 
 			return true;

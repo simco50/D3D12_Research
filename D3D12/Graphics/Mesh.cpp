@@ -101,7 +101,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 		{
 			SubMeshInstance instance;
 			instance.MeshIndex = partInstance.Index;
-			instance.Transform = partInstance.Transform * Matrix::CreateScale(0.01f);
+			instance.Transform = partInstance.Transform;
 			m_MeshInstances.push_back(instance);
 		}
 	}
