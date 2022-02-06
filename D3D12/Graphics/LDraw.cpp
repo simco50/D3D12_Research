@@ -570,25 +570,25 @@ void ComputePartIndices(LdrPart* pPart)
 	auto remapBuffer = [](void* pData, uint32* remap, uint32 numElements, uint32 elementSize)
 	{
 		// Make a copy
-		std::vector<char> copy(numElements * elementSize);
-		memcpy(copy.data(), pData, copy.size());
-
+		char* pCopy = new char[numElements * elementSize];
+		memcpy(pCopy, pData, numElements* elementSize);
 		for (uint32 i = 0; i < numElements; ++i)
 		{
-			memcpy((char*)pData + remap[i] * elementSize, copy.data() + i * elementSize, elementSize);
+			memcpy((char*)pData + remap[i] * elementSize, pCopy + i * elementSize, elementSize);
 		}
+		delete[] pCopy;
 	};
 
 	auto remapColorBuffer = [](void* pData, uint32* remap, uint32 numElements, uint32 elementSize)
 	{
 		// Make a copy
-		std::vector<char> copy(numElements * elementSize);
-		memcpy(copy.data(), pData, copy.size());
-
+		char* pCopy = new char[numElements * elementSize];
+		memcpy(pCopy, pData, numElements * elementSize);
 		for (uint32 i = 0; i < numElements; ++i)
 		{
-			memcpy((char*)pData + (remap[i * 3] / 3) * elementSize, copy.data() + i * elementSize, elementSize);
+			memcpy((char*)pData + (remap[i * 3] / 3) * elementSize, pCopy + i * elementSize, elementSize);
 		}
+		delete[] pCopy;
 	};
 
 	remapBuffer(pPart->Vertices.data(), remap.data(), (uint32)pPart->Vertices.size(), sizeof(Vector3));
