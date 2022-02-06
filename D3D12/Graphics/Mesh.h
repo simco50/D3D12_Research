@@ -19,6 +19,7 @@ struct SubMesh
 	VertexBufferView PositionStreamLocation;
 	VertexBufferView UVStreamLocation;
 	VertexBufferView NormalStreamLocation;
+	VertexBufferView ColorsStreamLocation;
 	IndexBufferView IndicesLocation;
 	uint32 MeshletsLocation;
 	uint32 MeshletVerticesLocation;

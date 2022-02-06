@@ -12,6 +12,7 @@ struct VertexAttribute
 	float3 Normal;
 	float4 Tangent;
 	float3 GeometryNormal;
+	uint Color;
 };
 
 VertexAttribute GetVertexAttributes(MeshInstance instance, float2 attribBarycentrics, uint primitiveIndex, float4x3 worldMatrix)
@@ -35,6 +36,10 @@ VertexAttribute GetVertexAttributes(MeshInstance instance, float2 attribBarycent
 		NormalData normalData = BufferLoad<NormalData>(mesh.BufferIndex, vertexId, mesh.NormalsOffset);
 		outData.Normal += normalData.Normal * barycentrics[i];
 		outData.Tangent += normalData.Tangent * barycentrics[i];
+		if(mesh.ColorsOffset != ~0u)
+			outData.Color = BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.ColorsOffset);
+		else
+			outData.Color = 0xFFFFFFFF;
 	}
 	outData.Normal = normalize(mul(outData.Normal, (float3x3)worldMatrix));
 	outData.Tangent.xyz = normalize(mul(outData.Tangent.xyz, (float3x3)worldMatrix));

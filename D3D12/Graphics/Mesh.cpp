@@ -53,6 +53,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 		std::vector<VS_Normal> NormalsStream;
 		std::vector<Vector2> UVsStream;
 		std::vector<uint32> Indices;
+		std::vector<uint32> ColorsStream;
 
 		std::vector<ShaderInterop::Meshlet> Meshlets;
 		std::vector<uint32> MeshletVertices;
@@ -75,6 +76,17 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 		// No studs
 		//config.ReplacementMap.push_back({ "stud.dat", nullptr });
 
+		auto DecodeARGB = [](uint32 color)
+		{
+			Color c;
+			float inv = 1.0f / 255.0f;
+			c.x = inv * ((color >> 16) & 0xFF);
+			c.y = inv * ((color >> 8) & 0xFF);
+			c.z = inv * ((color >> 0) & 0xFF);
+			c.w = inv * ((color >> 24) & 0xFF);
+			return c;
+		};
+
 		LdrState context;
 		LdrInit(&config, &context);
 
@@ -84,27 +96,11 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 		auto CreateMaterialFromLDraw = [&](int color) {
 			Material mat;
 			const LdrMaterial& lmat = LdrGetMaterial(color, &context);
-
-			auto DecodeColor = [](uint32 color, uint32 alpha)
-			{
-				Color output;
-				constexpr float rcp_255 = 1.0f / 255.0f;
-				//unsigned int layout: RRRR GGGG BBBB AAAA
-				output.x = (float)((color >> 16) & 0xFF) * rcp_255;
-				output.y = (float)((color >> 8) & 0xFF) * rcp_255;
-				output.z = (float)((color >> 0) & 0xFF) * rcp_255;
-				output.x = powf(output.x, 2.2f);
-				output.y = powf(output.y, 2.2f);
-				output.z = powf(output.z, 2.2f);
-				output.w = (float)alpha / 255.0f;
-				return output;
-			};
-
 			mat.Name = lmat.Name;
-			mat.BaseColorFactor = DecodeColor(lmat.Color, lmat.Alpha);
+			mat.BaseColorFactor = DecodeARGB(lmat.Color);
 			mat.RoughnessFactor = 0.1f;
 			mat.MetalnessFactor = 0.0f;
-			mat.AlphaMode = lmat.Alpha == 255 ? MaterialAlphaMode::Opaque : MaterialAlphaMode::Blend;
+			mat.AlphaMode = mat.BaseColorFactor.w >= 1 ? MaterialAlphaMode::Opaque : MaterialAlphaMode::Blend;
 
 			if (lmat.Type == LdrMaterialType::Metal)
 			{
@@ -147,6 +143,8 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 			}
 			else
 			{
+				Material material = CreateMaterialFromLDraw(instance.Color);
+
 				MeshData mesh;
 				mesh.MaterialIndex = (int)m_Materials.size();
 				mesh.Indices.resize(pPart->Indices.size());
@@ -156,10 +154,13 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 				}
 				mesh.PositionsStream.resize(pPart->Vertices.size());
 				mesh.NormalsStream.resize(pPart->Vertices.size());
+				mesh.ColorsStream.resize(pPart->Colors.size() * 3);
 				for (int j = 0; j < (int)pPart->Vertices.size(); ++j)
 				{
 					mesh.PositionsStream[j] = pPart->Vertices[j];
 					mesh.NormalsStream[j] = {pPart->Normals[j], Vector4(1, 0, 0, 1)};
+					Color c = DecodeARGB(LdrResolveVertexColor(instance.Color, pPart->Colors[j], &context));
+					mesh.ColorsStream[j] = Math::EncodeRGBA(c);
 				}
 
 				MaterialPartCombination combination;
@@ -170,7 +171,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 				inst.MeshIndex = combination.Index;
 
 				meshDatas.push_back(mesh);
-				m_Materials.push_back(CreateMaterialFromLDraw(instance.Color));
+				m_Materials.push_back(material);
 			}
 
 			inst.Transform = instance.Transform;
@@ -467,6 +468,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 		bufferSize += Math::AlignUp<uint64>(meshData.PositionsStream.size() * sizeof(VS_Position), 16);
 		bufferSize += Math::AlignUp<uint64>(meshData.UVsStream.size() * sizeof(VS_UV), 16);
 		bufferSize += Math::AlignUp<uint64>(meshData.NormalsStream.size() * sizeof(VS_Normal), 16);
+		bufferSize += Math::AlignUp<uint64>(meshData.ColorsStream.size() * sizeof(uint32), 16);
 	}
 
 	m_pGeometryData = pDevice->CreateBuffer(BufferDesc::CreateBuffer(bufferSize, BufferFlag::ShaderResource | BufferFlag::ByteAddress), "Geometry Buffer");
@@ -499,6 +501,12 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 
 		subMesh.NormalStreamLocation = VertexBufferView(m_pGeometryData->GetGpuHandle() + dataOffset, (uint32)meshData.NormalsStream.size(), sizeof(VS_Normal), dataOffset);
 		CopyData(meshData.NormalsStream.data(), sizeof(VS_Normal) * meshData.NormalsStream.size());
+
+		if (meshData.ColorsStream.size() > 0)
+		{
+			subMesh.ColorsStreamLocation = VertexBufferView(m_pGeometryData->GetGpuHandle() + dataOffset, (uint32)meshData.ColorsStream.size(), sizeof(uint32), dataOffset);
+			CopyData(meshData.ColorsStream.data(), sizeof(uint32) * meshData.ColorsStream.size());
+		}
 
 		subMesh.UVStreamLocation = VertexBufferView(m_pGeometryData->GetGpuHandle() + dataOffset, (uint32)meshData.UVsStream.size(), sizeof(VS_UV), dataOffset);
 		std::vector<VS_UV> uvStream;

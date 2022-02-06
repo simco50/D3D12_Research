@@ -18,7 +18,6 @@ struct LdrMaterial
 	uint32 Color = 0;
 	uint32 EdgeColor = 0;
 	uint32 Emissive = 0;
-	uint8 Alpha = 0xFF;
 	uint8 Luminance = 0;
 	LdrMaterialType Type = LdrMaterialType::None;
 
@@ -122,4 +121,6 @@ bool LdrInit(const LdrConfig* pConfig, LdrState* pData);
 	
 bool LdrLoadModel(const char* pFile, LdrState* pData, LdrModel& outModel);
 
-const LdrMaterial& LdrGetMaterial(uint32 code, LdrState* pData);
+const LdrMaterial& LdrGetMaterial(uint32 code, const LdrState* pData);
+
+uint32 LdrResolveVertexColor(uint32 partColor, uint32 vertexColor, const LdrState* pData);

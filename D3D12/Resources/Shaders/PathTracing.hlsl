@@ -32,6 +32,7 @@ struct RAYPAYLOAD PrimaryRayPayload
 	float2 UV;
 	float2 Normal;
 	float3 Position;
+	uint Color;
 	int TangentSign;
 	float2 Tangent;
 	float2 GeometryNormal;
@@ -157,6 +158,7 @@ void PrimaryCHS(inout PrimaryRayPayload payload, BuiltInTriangleIntersectionAttr
 	payload.TangentSign = vertex.Tangent.w;
 	payload.GeometryNormal = EncodeNormalOctahedron(vertex.GeometryNormal);
 	payload.Position = WorldRayOrigin() + WorldRayDirection() * RayTCurrent();
+	payload.Color = vertex.Color;
 }
 
 [shader("anyhit")]
@@ -399,6 +401,7 @@ void RayGen()
 
 		// Decode the hit payload to retrieve all the shading information
 		MaterialData material = GetMaterial(payload.Material);
+		material.BaseColorFactor = UIntToColor(payload.Color);
 		MaterialProperties surface = GetMaterialProperties(material, payload.UV, 0);
 		BrdfData brdfData = GetBrdfData(surface);
 

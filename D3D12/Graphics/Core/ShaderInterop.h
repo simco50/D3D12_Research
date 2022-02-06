@@ -52,6 +52,7 @@ namespace ShaderInterop
 		uint PositionsOffset;
 		uint UVsOffset;
 		uint NormalsOffset;
+		uint ColorsOffset;
 		uint IndicesOffset;
 		uint IndexByteSize;
 

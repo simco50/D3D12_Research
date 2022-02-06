@@ -69,16 +69,6 @@ namespace Util
 	};
 }
 
-const LdrMaterial& LdrGetMaterial(uint32 code, LdrState* pData)
-{
-	auto it = pData->MaterialMap.find(code);
-	if (it != pData->MaterialMap.end())
-	{
-		return pData->Materials[it->second];
-	}
-	return pData->DefaultMaterial;
-}
-
 bool LdrInit(const LdrConfig* pConfig, LdrState* pData)
 {
 	pData->Config = *pConfig;
@@ -121,13 +111,19 @@ bool LdrInit(const LdrConfig* pConfig, LdrState* pData)
 		const uint32 numRequiredValues = 4;
 		if (sscanf_s(pLine, "0 !COLOUR %128s CODE %d VALUE #%x EDGE #%x", material.Name, (uint32)ARRAYSIZE(material.Name), &material.Code, &material.Color, &material.EdgeColor) == numRequiredValues)
 		{
+			material.EdgeColor |= 0xFF000000;
+
 			const char* pSearch = nullptr;
 			pSearch = strstr(pLine, "ALPHA");
 			if (pSearch)
 			{
 				int alpha = 0;
 				sscanf_s(pSearch, "ALPHA %d", &alpha);
-				material.Alpha = (uint8)alpha;
+				material.Color |= (alpha << 24);
+			}
+			else
+			{
+				material.Color |= 0xFF000000;
 			}
 			pSearch = strstr(pLine, "LUMINANCE");
 			if (pSearch)
@@ -304,17 +300,28 @@ bool ParseLDraw(const char* pPartName, LdrState* pData, std::vector<std::unique_
 			uint32 color;
 			Vector3 triangle[3];
 
-			sscanf_s(pLine, "%d %d %f %f %f %f %f %f %f %f %f",
-				&dummy, &color,
-				&triangle[0].x, &triangle[0].y, &triangle[0].z,
-				&triangle[1].x, &triangle[1].y, &triangle[1].z,
-				&triangle[2].x, &triangle[2].y, &triangle[2].z
-			);
+			auto ParseTriangle = [&](const char* pFormat) {
+				return sscanf_s(pLine, pFormat,
+					&dummy, &color,
+					&triangle[0].x, &triangle[0].y, &triangle[0].z,
+					&triangle[1].x, &triangle[1].y, &triangle[1].z,
+					&triangle[2].x, &triangle[2].y, &triangle[2].z
+				) == 11;
+			};
+
+			if (!ParseTriangle("%d %d %f %f %f %f %f %f %f %f %f"))
+			{
+				// Direct colors are always considered opaque. Set alpha to 255 to indicate this is a direct color.
+				ParseTriangle("%d 0x2%x %f %f %f %f %f %f %f %f %f");
+				color |= 0xFF000000;
+			}
 
 			currentPart.Vertices.push_back(triangle[ccw ? 2 : 0]);
 			currentPart.Vertices.push_back(triangle[ccw ? 1 : 1]);
 			currentPart.Vertices.push_back(triangle[ccw ? 0 : 2]);
 
+			currentPart.Colors.push_back(color);
+			currentPart.Colors.push_back(color);
 			currentPart.Colors.push_back(color);
 		}
 		else if (command == Command::Quad)
@@ -322,13 +329,22 @@ bool ParseLDraw(const char* pPartName, LdrState* pData, std::vector<std::unique_
 			uint32 color;
 			Vector3 quad[4];
 
-			sscanf_s(pLine, "%d %d %f %f %f %f %f %f %f %f %f %f %f %f",
-				&dummy, &color,
-				&quad[0].x, &quad[0].y, &quad[0].z,
-				&quad[1].x, &quad[1].y, &quad[1].z,
-				&quad[2].x, &quad[2].y, &quad[2].z,
-				&quad[3].x, &quad[3].y, &quad[3].z
-			);
+			auto ParseQuad = [&](const char* pFormat) {
+				return sscanf_s(pLine, pFormat,
+					&dummy, &color,
+					&quad[0].x, &quad[0].y, &quad[0].z,
+					&quad[1].x, &quad[1].y, &quad[1].z,
+					&quad[2].x, &quad[2].y, &quad[2].z,
+					&quad[3].x, &quad[3].y, &quad[3].z
+				) == 14;
+			};
+
+			if (!ParseQuad("%d %d %f %f %f %f %f %f %f %f %f %f %f %f"))
+			{
+				// Direct colors are always considered opaque. Set alpha to 255 to indicate this is a direct color.
+				ParseQuad("%d 0x2%x %f %f %f %f %f %f %f %f %f %f %f %f");
+				color |= 0xFF000000;
+			}
 
 			currentPart.Vertices.push_back(quad[ccw ? 0 : 0]);
 			currentPart.Vertices.push_back(quad[ccw ? 3 : 1]);
@@ -337,6 +353,10 @@ bool ParseLDraw(const char* pPartName, LdrState* pData, std::vector<std::unique_
 			currentPart.Vertices.push_back(quad[ccw ? 1 : 3]);
 			currentPart.Vertices.push_back(quad[ccw ? 0 : 0]);
 
+			currentPart.Colors.push_back(color);
+			currentPart.Colors.push_back(color);
+			currentPart.Colors.push_back(color);
+			currentPart.Colors.push_back(color);
 			currentPart.Colors.push_back(color);
 			currentPart.Colors.push_back(color);
 		}
@@ -383,7 +403,7 @@ LdrPart* GetPart(const char* pName, LdrState* pData)
 
 void ResolveModelParts(LdrPart* pPart, LdrState* pData, LdrModel& outModel, const Matrix& transform = Matrix::Identity, uint32 color = 0)
 {
-	if (pPart->PartType == LdrPart::Type::Part)
+	if (pPart->PartType == LdrPart::Type::Part || pPart->Vertices.size() != 0)
 	{
 		LdrModel::Instance instance;
 		instance.Transform = transform;
@@ -419,7 +439,7 @@ uint32 ResolveTriangleColor(uint32 triangleColor, uint32 parentColor)
 	return triangleColor == MATERIAL_CODE_INHERIT ? parentColor : triangleColor;
 }
 
-void FlattenPart(LdrPart* pPart, LdrState* pData, const Matrix& currentMatrix = Matrix::Identity, bool invert = false, uint32 color = 0)
+void FlattenPart(LdrPart* pPart, LdrState* pData, const Matrix& currentMatrix = Matrix::Identity, bool invert = false, uint32 color = MATERIAL_CODE_INHERIT)
 {
 	for (const LdrSubfile& subfile : pPart->Subfiles)
 	{
@@ -440,7 +460,9 @@ void FlattenPart(LdrPart* pPart, LdrState* pData, const Matrix& currentMatrix = 
 			pPart->Vertices.push_back(Vector3::Transform(pSubpart->Vertices[i + winding.y], subfile.Transform));
 			pPart->Vertices.push_back(Vector3::Transform(pSubpart->Vertices[i + winding.z], subfile.Transform));
 
-			pPart->Colors.push_back(ResolveTriangleColor(pSubpart->Colors[i / 3], color));
+			pPart->Colors.push_back(ResolveTriangleColor(pSubpart->Colors[i + winding.x], subfile.Color));
+			pPart->Colors.push_back(ResolveTriangleColor(pSubpart->Colors[i + winding.y], subfile.Color));
+			pPart->Colors.push_back(ResolveTriangleColor(pSubpart->Colors[i + winding.z], subfile.Color));
 		}
 	}
 	pPart->Subfiles.clear();
@@ -532,14 +554,14 @@ void ComputePartIndices(LdrPart* pPart)
 				uint32 h = 0;
 				MurmurHash(h, v.pPart->Vertices.data() + v.Vertex, sizeof(Vector3));
 				MurmurHash(h, v.pPart->Normals.data() + v.Vertex, sizeof(Vector3));
-				MurmurHash(h, v.pPart->Colors.data() + v.Vertex / 3, sizeof(uint32));
+				MurmurHash(h, v.pPart->Colors.data() + v.Vertex, sizeof(uint32));
 				return h;
 			}
 		};
 
 		bool operator==(const HashedVertex& rhs) const
 		{
-			return pPart->Colors[Vertex / 3] == rhs.pPart->Colors[rhs.Vertex / 3] &&
+			return pPart->Colors[Vertex] == rhs.pPart->Colors[rhs.Vertex] &&
 				pPart->Normals[Vertex] == rhs.pPart->Normals[rhs.Vertex] &&
 				pPart->Vertices[Vertex] == rhs.pPart->Vertices[rhs.Vertex];
 		}
@@ -579,25 +601,13 @@ void ComputePartIndices(LdrPart* pPart)
 		delete[] pCopy;
 	};
 
-	auto remapColorBuffer = [](void* pData, uint32* remap, uint32 numElements, uint32 elementSize)
-	{
-		// Make a copy
-		char* pCopy = new char[numElements * elementSize];
-		memcpy(pCopy, pData, numElements * elementSize);
-		for (uint32 i = 0; i < numElements; ++i)
-		{
-			memcpy((char*)pData + (remap[i * 3] / 3) * elementSize, pCopy + i * elementSize, elementSize);
-		}
-		delete[] pCopy;
-	};
-
 	remapBuffer(pPart->Vertices.data(), remap.data(), (uint32)pPart->Vertices.size(), sizeof(Vector3));
 	remapBuffer(pPart->Normals.data(), remap.data(), (uint32)pPart->Normals.size(), sizeof(Vector3));
-	remapColorBuffer(pPart->Colors.data(), remap.data(), (uint32)pPart->Colors.size(), sizeof(uint32));
+	remapBuffer(pPart->Colors.data(), remap.data(), (uint32)pPart->Colors.size(), sizeof(uint32));
 
 	pPart->Vertices.resize(indexCount);
 	pPart->Normals.resize(indexCount);
-	pPart->Colors.resize(indexCount / 3);
+	pPart->Colors.resize(indexCount);
 	pPart->Indices.swap(remap);
 }
 
@@ -634,4 +644,25 @@ bool LdrLoadModel(const char* pFile, LdrState* pData, LdrModel& outModel)
 	}
 
 	return true;
+}
+
+const LdrMaterial& LdrGetMaterial(uint32 code, const LdrState* pData)
+{
+	auto it = pData->MaterialMap.find(code);
+	if (it != pData->MaterialMap.end())
+	{
+		return pData->Materials[it->second];
+	}
+	return pData->DefaultMaterial;
+}
+
+uint32 LdrResolveVertexColor(uint32 partColor, uint32 vertexColor, const LdrState* pData)
+{
+	uint32 color = vertexColor == MATERIAL_CODE_INHERIT ? partColor : vertexColor;
+	// A color with a value higher than 24-bit max is considered a direct color.
+	if (color & 0xFF000000)
+	{
+		return color;
+	}
+	return LdrGetMaterial(color, pData).Color;
 }
