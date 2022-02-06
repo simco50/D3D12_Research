@@ -70,7 +70,7 @@ namespace Util
 	};
 }
 
-const LdrMaterial& LdrGetMaterial(int code, LdrState* pData)
+const LdrMaterial& LdrGetMaterial(uint32 code, LdrState* pData)
 {
 	auto it = pData->MaterialMap.find(code);
 	if (it != pData->MaterialMap.end())
@@ -119,7 +119,7 @@ bool LdrInit(const LdrConfig* pConfig, LdrState* pData)
 		LdrMaterial material;
 		material.Type = LdrMaterialType::None;
 
-		const int numRequiredValues = 4;
+		const uint32 numRequiredValues = 4;
 		if (sscanf_s(pLine, "0 !COLOUR %128s CODE %d VALUE #%x EDGE #%x", material.Name, (uint32)ARRAYSIZE(material.Name), &material.Code, &material.Color, &material.EdgeColor) == numRequiredValues)
 		{
 			const char* pSearch = nullptr;
@@ -171,7 +171,7 @@ bool LdrInit(const LdrConfig* pConfig, LdrState* pData)
 				}
 			}
 
-			pData->MaterialMap[material.Code] = (int)pData->Materials.size();
+			pData->MaterialMap[material.Code] = (uint32)pData->Materials.size();
 			pData->Materials.push_back(material);
 		}
 	}
@@ -302,7 +302,7 @@ bool ParseLDraw(const char* pPartName, LdrState* pData, std::vector<std::unique_
 		}
 		else if (command == Command::Triangle)
 		{
-			int color;
+			uint32 color;
 			Vector3 triangle[3];
 
 			sscanf_s(pLine, "%d %d %f %f %f %f %f %f %f %f %f",
@@ -320,7 +320,7 @@ bool ParseLDraw(const char* pPartName, LdrState* pData, std::vector<std::unique_
 		}
 		else if (command == Command::Quad)
 		{
-			int color;
+			uint32 color;
 			Vector3 quad[4];
 
 			sscanf_s(pLine, "%d %d %f %f %f %f %f %f %f %f %f %f %f %f",
@@ -382,7 +382,7 @@ LdrPart* GetPart(const char* pName, LdrState* pData)
 	return nullptr;
 }
 
-void ResolveModelParts(LdrPart* pPart, LdrState* pData, LdrModel& outModel, const Matrix& transform = Matrix::Identity, int color = 0)
+void ResolveModelParts(LdrPart* pPart, LdrState* pData, LdrModel& outModel, const Matrix& transform = Matrix::Identity, uint32 color = 0)
 {
 	if (pPart->PartType == LdrPart::Type::Part)
 	{
@@ -392,11 +392,11 @@ void ResolveModelParts(LdrPart* pPart, LdrState* pData, LdrModel& outModel, cons
 		auto it = std::find(outModel.Parts.begin(), outModel.Parts.end(), pPart);
 		if (it != outModel.Parts.end())
 		{
-			instance.Index = (int)(it - outModel.Parts.begin());
+			instance.Index = (uint32)(it - outModel.Parts.begin());
 		}
 		else
 		{
-			instance.Index = (int)outModel.Parts.size();
+			instance.Index = (uint32)outModel.Parts.size();
 			outModel.Parts.push_back(pPart);
 		}
 		outModel.Instances.push_back(instance);
@@ -420,7 +420,7 @@ uint32 ResolveTriangleColor(uint32 triangleColor, uint32 parentColor)
 	return triangleColor == MATERIAL_CODE_INHERIT ? parentColor : triangleColor;
 }
 
-void FlattenPart(LdrPart* pPart, LdrState* pData, const Matrix& currentMatrix = Matrix::Identity, bool invert = 0, int color = 0)
+void FlattenPart(LdrPart* pPart, LdrState* pData, const Matrix& currentMatrix = Matrix::Identity, bool invert = false, uint32 color = 0)
 {
 	for (const LdrSubfile& subfile : pPart->Subfiles)
 	{
@@ -498,21 +498,21 @@ void ComputePartIndices(LdrPart* pPart)
 
 	struct HashedVertex
 	{
-		HashedVertex(const LdrPart* pPart, int vertex)
+		HashedVertex(const LdrPart* pPart, uint32 vertex)
 			: pPart(pPart), Vertex(vertex)
 		{}
 		const LdrPart* pPart;
-		int Vertex;
+		uint32 Vertex;
 
 		static void MurmurHash(uint32& h, const void* pData, size_t len)
 		{
 			assert(len % 4 == 0); // Assume 4 byte alignment as we're leaving off the last part of the algorithm
-			const unsigned int m = 0x5bd1e995;
+			const uint32 m = 0x5bd1e995;
 			const int r = 24;
 			const char* pKey = (char*)pData;
 			while (len >= 4)
 			{
-				unsigned int k = *(unsigned int*)(pData);
+				uint32 k = *(uint32*)(pData);
 
 				k *= m;
 				k ^= k >> r;
@@ -618,7 +618,7 @@ bool LdrLoadModel(const char* pFile, LdrState* pData, LdrModel& outModel)
 		return false;
 	}
 
-	float lduScale = 0.004f;
+	constexpr float lduScale = 0.004f;
 
 	ResolveModelParts(pMainPart, pData, outModel, Matrix::CreateScale(lduScale, -lduScale, lduScale));
 

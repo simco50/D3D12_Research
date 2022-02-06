@@ -77,8 +77,8 @@ struct LdrModel
 {
 	struct Instance
 	{
-		int Index;
-		int Color;
+		uint32 Index;
+		uint32 Color;
 		Matrix Transform;
 	};
 
@@ -104,9 +104,9 @@ struct LdrState
 {
 	LdrConfig Config;
 	std::vector<std::unique_ptr<LdrPart>> Parts;
-	std::map<StringHash, int> PartMap;
+	std::map<StringHash, uint32> PartMap;
 	std::vector<LdrMaterial> Materials;
-	std::map<int, int> MaterialMap;
+	std::map<uint32, uint32> MaterialMap;
 	LdrMaterial DefaultMaterial;
 
 	struct DatabaseLocation
@@ -122,4 +122,4 @@ bool LdrInit(const LdrConfig* pConfig, LdrState* pData);
 	
 bool LdrLoadModel(const char* pFile, LdrState* pData, LdrModel& outModel);
 
-const LdrMaterial& LdrGetMaterial(int code, LdrState* pData);
+const LdrMaterial& LdrGetMaterial(uint32 code, LdrState* pData);

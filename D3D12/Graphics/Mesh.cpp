@@ -122,8 +122,8 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 		struct MaterialPartCombination
 		{
 			LdrPart* pPart;
-			int Color;
-			int Index;
+			uint32 Color;
+			uint32 Index;
 		};
 
 		// Materials are part of the mesh so instances of the same mesh but different material have to be duplicated :(
