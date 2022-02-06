@@ -453,16 +453,15 @@ void FlattenPart(LdrPart* pPart, LdrState* pData, const Matrix& currentMatrix = 
 
 		FlattenPart(pSubpart, pData, subfile.Transform * currentMatrix, invert ^ inv, ResolveTriangleColor(subfile.Color, color));
 
-		for (int i = 0; i < pSubpart->Vertices.size(); i += 3)
+		for (uint32 i = 0; i < pSubpart->Vertices.size(); i += 3)
 		{
-			IntVector3 winding = inv ? IntVector3(2, 1, 0) : IntVector3(0, 1, 2);
-			pPart->Vertices.push_back(Vector3::Transform(pSubpart->Vertices[i + winding.x], subfile.Transform));
-			pPart->Vertices.push_back(Vector3::Transform(pSubpart->Vertices[i + winding.y], subfile.Transform));
-			pPart->Vertices.push_back(Vector3::Transform(pSubpart->Vertices[i + winding.z], subfile.Transform));
+			pPart->Vertices.push_back(Vector3::Transform(pSubpart->Vertices[i + (inv ? 2 : 0)], subfile.Transform));
+			pPart->Vertices.push_back(Vector3::Transform(pSubpart->Vertices[i + (inv ? 1 : 1)], subfile.Transform));
+			pPart->Vertices.push_back(Vector3::Transform(pSubpart->Vertices[i + (inv ? 0 : 2)], subfile.Transform));
 
-			pPart->Colors.push_back(ResolveTriangleColor(pSubpart->Colors[i + winding.x], subfile.Color));
-			pPart->Colors.push_back(ResolveTriangleColor(pSubpart->Colors[i + winding.y], subfile.Color));
-			pPart->Colors.push_back(ResolveTriangleColor(pSubpart->Colors[i + winding.z], subfile.Color));
+			pPart->Colors.push_back(ResolveTriangleColor(pSubpart->Colors[i + (inv ? 2 : 0)], subfile.Color));
+			pPart->Colors.push_back(ResolveTriangleColor(pSubpart->Colors[i + (inv ? 1 : 1)], subfile.Color));
+			pPart->Colors.push_back(ResolveTriangleColor(pSubpart->Colors[i + (inv ? 0 : 2)], subfile.Color));
 		}
 	}
 	pPart->Subfiles.clear();
@@ -490,7 +489,7 @@ void ComputePartNormals(LdrPart* pPart)
 			vertexMap[pPart->Vertices[i]].push_back((int)i);
 		}
 
-		const float minAngleCos = cos(Math::PIDIV4);
+		const float minAngleCos = cos(3.141592f / 4.0f);
 
 		std::vector<Vector3> newNormals(pPart->Normals.size());
 		for (size_t i = 0; i < pPart->Vertices.size(); ++i)
@@ -665,4 +664,13 @@ uint32 LdrResolveVertexColor(uint32 partColor, uint32 vertexColor, const LdrStat
 		return color;
 	}
 	return LdrGetMaterial(color, pData).Color;
+}
+
+void LdrDecodeARGB(uint32 color, float* pColor)
+{
+	float normalizeFactor = 1.0f / 255.0f;
+	pColor[0] = normalizeFactor * ((color >> 16) & 0xFF);
+	pColor[1] = normalizeFactor * ((color >> 8) & 0xFF);
+	pColor[2] = normalizeFactor * ((color >> 0) & 0xFF);
+	pColor[3] = normalizeFactor * ((color >> 24) & 0xFF);
 }

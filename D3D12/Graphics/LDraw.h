@@ -124,3 +124,5 @@ bool LdrLoadModel(const char* pFile, LdrState* pData, LdrModel& outModel);
 const LdrMaterial& LdrGetMaterial(uint32 code, const LdrState* pData);
 
 uint32 LdrResolveVertexColor(uint32 partColor, uint32 vertexColor, const LdrState* pData);
+
+void LdrDecodeARGB(uint32 color, float* pColor);

@@ -68,24 +68,13 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 	{
 		LdrConfig config;
 		config.pDatabasePath = "D:/References/ldraw/ldraw/";
-		config.Quality = LdrQuality::Normal;
+		//config.Quality = LdrQuality::High;
 
 		// Logo studs
-		//config.ReplacementMap.push_back({ "stud.dat", "stud-logo4.dat" });
+		config.ReplacementMap.push_back({ "stud.dat", "stud-logo4.dat" });
 
 		// No studs
 		//config.ReplacementMap.push_back({ "stud.dat", nullptr });
-
-		auto DecodeARGB = [](uint32 color)
-		{
-			Color c;
-			float inv = 1.0f / 255.0f;
-			c.x = inv * ((color >> 16) & 0xFF);
-			c.y = inv * ((color >> 8) & 0xFF);
-			c.z = inv * ((color >> 0) & 0xFF);
-			c.w = inv * ((color >> 24) & 0xFF);
-			return c;
-		};
 
 		LdrState context;
 		LdrInit(&config, &context);
@@ -97,7 +86,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 			Material mat;
 			const LdrMaterial& lmat = LdrGetMaterial(color, &context);
 			mat.Name = lmat.Name;
-			mat.BaseColorFactor = DecodeARGB(lmat.Color);
+			LdrDecodeARGB(lmat.Color, &mat.BaseColorFactor.x);
 			mat.RoughnessFactor = 0.1f;
 			mat.MetalnessFactor = 0.0f;
 			mat.AlphaMode = mat.BaseColorFactor.w >= 1 ? MaterialAlphaMode::Opaque : MaterialAlphaMode::Blend;
@@ -159,8 +148,10 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 				{
 					mesh.PositionsStream[j] = pPart->Vertices[j];
 					mesh.NormalsStream[j] = {pPart->Normals[j], Vector4(1, 0, 0, 1)};
-					Color c = DecodeARGB(LdrResolveVertexColor(instance.Color, pPart->Colors[j], &context));
-					mesh.ColorsStream[j] = Math::EncodeRGBA(c);
+					uint32 vertexColor = LdrResolveVertexColor(instance.Color, pPart->Colors[j], &context);
+					Color verColor;
+					LdrDecodeARGB(vertexColor, &verColor.x);
+					mesh.ColorsStream[j] = Math::EncodeRGBA(verColor);
 				}
 
 				MaterialPartCombination combination;
