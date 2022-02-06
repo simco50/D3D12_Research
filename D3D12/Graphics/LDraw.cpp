@@ -46,17 +46,17 @@ namespace Util
 
 		bool GetLine(const char** pOutLine)
 		{
+			if (!pCurrentLine)
+				return false;
+
 			char* pLine = pCurrentLine;
-			pNextLine = strchr(pLine, '\n');
+			char* pNextLine = strchr(pLine, '\n');
 			if (pNextLine)
-			{
 				*pNextLine = '\0';
-				*pOutLine = pCurrentLine;
-				pCurrentLine = pNextLine + 1;
-				return true;
-			}
-			*pOutLine = nullptr;
-			return false;
+
+			*pOutLine = pCurrentLine;
+			pCurrentLine = pNextLine ? pNextLine + 1 : nullptr;
+			return true;
 		}
 
 		bool IsOpen() const
@@ -65,7 +65,6 @@ namespace Util
 		}
 
 		char* pCurrentLine = nullptr;
-		char* pNextLine = nullptr;
 		char* pData = nullptr;
 	};
 }
