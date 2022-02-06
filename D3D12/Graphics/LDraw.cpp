@@ -14,6 +14,60 @@ namespace Util
 			++pStr;
 		}
 	};
+
+	struct FileReader
+	{
+		bool Open(const char* pPath)
+		{
+			if (pData)
+			{
+				delete[] pData;
+				pData = nullptr;
+			}
+			FILE* pFile = nullptr;
+			fopen_s(&pFile, pPath, "r");
+			if (!pFile)
+				return false;
+			fseek(pFile, 0, SEEK_END);
+			size_t size = ftell(pFile);
+			pData = new char[size];
+			pCurrentLine = pData;
+			fseek(pFile, 0, SEEK_SET);
+			size_t read = fread(pData, sizeof(char), size, pFile);
+			pData[read] = '\0';
+			fclose(pFile);
+			return true;
+		}
+
+		~FileReader()
+		{
+			delete[] pData;
+		}
+
+		bool GetLine(const char** pOutLine)
+		{
+			char* pLine = pCurrentLine;
+			pNextLine = strchr(pLine, '\n');
+			if (pNextLine)
+			{
+				*pNextLine = '\0';
+				*pOutLine = pCurrentLine;
+				pCurrentLine = pNextLine + 1;
+				return true;
+			}
+			*pOutLine = nullptr;
+			return false;
+		}
+
+		bool IsOpen() const
+		{
+			return pData;
+		}
+
+		char* pCurrentLine = nullptr;
+		char* pNextLine = nullptr;
+		char* pData = nullptr;
+	};
 }
 
 const LdrMaterial& LdrGetMaterial(int code, LdrState* pData)
@@ -53,19 +107,18 @@ bool LdrInit(const LdrConfig* pConfig, LdrState* pData)
 
 	char configPath[256];
 	sprintf_s(configPath, ARRAYSIZE(configPath), "%sLDConfig.ldr", pConfig->pDatabasePath);
-	std::ifstream fs(configPath);
-	if (!fs.is_open())
+	Util::FileReader reader;
+	if (!reader.Open(configPath))
 	{
 		return false;
 	}
 
-	std::string line;
-	while (getline(fs, line))
+	const char* pLine = nullptr;
+	while (reader.GetLine(&pLine))
 	{
 		LdrMaterial material;
 		material.Type = LdrMaterialType::None;
 
-		const char* pLine = line.c_str();
 		const int numRequiredValues = 4;
 		if (sscanf_s(pLine, "0 !COLOUR %128s CODE %d VALUE #%x EDGE #%x", material.Name, (uint32)ARRAYSIZE(material.Name), &material.Code, &material.Color, &material.EdgeColor) == numRequiredValues)
 		{
@@ -131,8 +184,8 @@ bool ParseLDraw(const char* pPartName, LdrState* pData, std::vector<std::unique_
 	LdrPart::Type partType = LdrPart::Type::LocalModel;
 
 	// Try absolute path
-	std::ifstream str(pPartName);
-	if (str.is_open())
+	Util::FileReader reader;
+	if (reader.Open(pPartName))
 	{
 		partType = LdrPart::Type::LocalModel;
 	}
@@ -142,8 +195,7 @@ bool ParseLDraw(const char* pPartName, LdrState* pData, std::vector<std::unique_
 		{
 			char path[256];
 			sprintf_s(path, ARRAYSIZE(path), "%s%s%s", pData->Config.pDatabasePath, location.pLocation, pPartName);
-			str.open(path);
-			if (str.is_open())
+			if (reader.Open(path))
 			{
 				partType = location.Type;
 				break;
@@ -151,7 +203,7 @@ bool ParseLDraw(const char* pPartName, LdrState* pData, std::vector<std::unique_
 		}
 	}
 
-	if (!str.is_open())
+	if (!reader.IsOpen())
 	{
 		E_LOG(Warning, "Could not find part '%s'", pPartName);
 		return false;
@@ -162,7 +214,6 @@ bool ParseLDraw(const char* pPartName, LdrState* pData, std::vector<std::unique_
 	strcpy_s(part->Name, pPartName);
 	outParts.push_back(std::move(part));
 
-	std::string line;
 	bool invert = false;
 	bool ccw = false;
 	int dummy;
@@ -178,14 +229,13 @@ bool ParseLDraw(const char* pPartName, LdrState* pData, std::vector<std::unique_
 		MAX
 	};
 
-	while (getline(str, line))
+	const char* pLine = nullptr;
+	while (reader.GetLine(&pLine))
 	{
 		LdrPart& currentPart = *outParts.back();
 
-		if (line.length() <= 1)
+		if (strlen(pLine) <= 1)
 			continue;
-
-		const char* pLine = line.c_str();
 
 		int cmd;
 		if (sscanf_s(pLine, "%d", &cmd) < 1)
@@ -419,6 +469,8 @@ void ComputePartNormals(LdrPart* pPart)
 			vertexMap[pPart->Vertices[i]].push_back((int)i);
 		}
 
+		const float minAngleCos = cos(Math::PIDIV4);
+
 		std::vector<Vector3> newNormals(pPart->Normals.size());
 		for (size_t i = 0; i < pPart->Vertices.size(); ++i)
 		{
@@ -428,7 +480,7 @@ void ComputePartNormals(LdrPart* pPart)
 			for (int vertexIndex : identicalVertices)
 			{
 				const Vector3& otherNormal = pPart->Normals[vertexIndex];
-				if (vertexNormal.Dot(otherNormal) > cos(Math::PIDIV4))
+				if (vertexNormal.Dot(otherNormal) > minAngleCos)
 				{
 					smoothNormal += otherNormal;
 				}
