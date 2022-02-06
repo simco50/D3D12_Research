@@ -27,6 +27,7 @@ struct InterpolantsVSToPS
 	float2 UV : TEXCOORD;
 	float3 Normal : NORMAL;
 	float4 Tangent : TANGENT;
+	uint Color : TEXCOORD1;
 	uint Seed : SEED;
 };
 
@@ -153,7 +154,11 @@ InterpolantsVSToPS FetchVertexAttributes(MeshData mesh, float4x4 world, uint ver
 	result.Normal = normalize(mul(normalData.Normal, (float3x3)world));
 	result.Tangent = float4(normalize(mul(normalData.Tangent.xyz, (float3x3)world)), normalData.Tangent.w);
 
-	result.Seed = cObject.World;
+	result.Color = 0xFFFFFFFF;
+	if(mesh.ColorsOffset != ~0u)
+		result.Color = BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.ColorsOffset);
+
+	result.Seed = cObject.Mesh;
 
 	return result;
 }
@@ -342,9 +347,8 @@ float3 ScreenSpaceReflections(float4 Position, float3 PositionVS, float3 N, floa
 	return ssr;
 }
 
-MaterialProperties GetMaterialProperties(uint materialIndex, float2 UV)
+MaterialProperties GetMaterialProperties(MaterialData material, float2 UV)
 {
-	MaterialData material = GetMaterial(materialIndex);
 	MaterialProperties properties;
 	float4 baseColor = material.BaseColorFactor;
 	if(material.Diffuse != INVALID_HANDLE)
@@ -386,11 +390,13 @@ void PSMain(InterpolantsVSToPS input,
 	float ambientOcclusion = tAO.SampleLevel(sLinearClamp, screenUV, 0).r;
 	float3 V = normalize(cView.ViewPosition.xyz - input.PositionWS);
 
-	MaterialProperties material = GetMaterialProperties(cObject.Material, input.UV);
+	MaterialData material = GetMaterial(cObject.Material);
+	material.BaseColorFactor *= UIntToColor(input.Color);
+	MaterialProperties surface = GetMaterialProperties(material, input.UV);
 	float3x3 TBN = CreateTangentToWorld(normalize(input.Normal), float4(normalize(input.Tangent.xyz), input.Tangent.w));
-	float3 N = TangentSpaceNormalMapping(material.NormalTS, TBN);
+	float3 N = TangentSpaceNormalMapping(surface.NormalTS, TBN);
 
-	BrdfData brdf = GetBrdfData(material);
+	BrdfData brdf = GetBrdfData(surface);
 
 	float ssrWeight = 0;
 	float3 ssr = ScreenSpaceReflections(input.Position, input.PositionVS, N, V, brdf.Roughness, ssrWeight);
@@ -401,13 +407,13 @@ void PSMain(InterpolantsVSToPS input,
 	outRadiance += lighting.Diffuse + lighting.Specular;
 	outRadiance += ApplyAmbientLight(brdf.Diffuse, ambientOcclusion, GetLight(0).GetColor().rgb);
 	outRadiance += ssr * ambientOcclusion;
-	outRadiance += material.Emissive;
+	outRadiance += surface.Emissive;
 
 	float fogSlice = sqrt((input.PositionVS.z - cView.FarZ) / (cView.NearZ - cView.FarZ));
 	float4 scatteringTransmittance = tLightScattering.SampleLevel(sLinearClamp, float3(screenUV, fogSlice), 0);
 	outRadiance = outRadiance * scatteringTransmittance.w + scatteringTransmittance.rgb;
 
-	outColor = float4(outRadiance, material.Opacity);
+	outColor = float4(outRadiance, surface.Opacity);
 	float reflectivity = saturate(scatteringTransmittance.w * ambientOcclusion * Square(1 - brdf.Roughness));
 	outNormalRoughness = float4(N, saturate(reflectivity - ssrWeight));
 

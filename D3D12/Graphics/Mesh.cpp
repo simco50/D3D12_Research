@@ -133,6 +133,8 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 			else
 			{
 				Material material = CreateMaterialFromLDraw(instance.Color);
+				if (pPart->IsMultiMaterial)
+					material.BaseColorFactor = Color(1, 1, 1, 1);
 
 				MeshData mesh;
 				mesh.MaterialIndex = (int)m_Materials.size();
@@ -143,15 +145,19 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 				}
 				mesh.PositionsStream.resize(pPart->Vertices.size());
 				mesh.NormalsStream.resize(pPart->Vertices.size());
-				mesh.ColorsStream.resize(pPart->Colors.size() * 3);
+				if(pPart->IsMultiMaterial)
+					mesh.ColorsStream.resize(pPart->Colors.size() * 3);
 				for (int j = 0; j < (int)pPart->Vertices.size(); ++j)
 				{
 					mesh.PositionsStream[j] = pPart->Vertices[j];
 					mesh.NormalsStream[j] = {pPart->Normals[j], Vector4(1, 0, 0, 1)};
-					uint32 vertexColor = LdrResolveVertexColor(instance.Color, pPart->Colors[j], &context);
-					Color verColor;
-					LdrDecodeARGB(vertexColor, &verColor.x);
-					mesh.ColorsStream[j] = Math::EncodeRGBA(verColor);
+					if (pPart->IsMultiMaterial)
+					{
+						uint32 vertexColor = LdrResolveVertexColor(instance.Color, pPart->Colors[j], &context);
+						Color verColor;
+						LdrDecodeARGB(vertexColor, &verColor.x);
+						mesh.ColorsStream[j] = Math::EncodeRGBA(verColor);
+					}
 				}
 
 				MaterialPartCombination combination;

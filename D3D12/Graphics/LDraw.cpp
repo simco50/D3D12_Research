@@ -323,6 +323,9 @@ bool ParseLDraw(const char* pPartName, LdrState* pData, std::vector<std::unique_
 			currentPart.Colors.push_back(color);
 			currentPart.Colors.push_back(color);
 			currentPart.Colors.push_back(color);
+
+			if (color != MATERIAL_CODE_INHERIT)
+				currentPart.IsMultiMaterial = true;
 		}
 		else if (command == Command::Quad)
 		{
@@ -359,6 +362,9 @@ bool ParseLDraw(const char* pPartName, LdrState* pData, std::vector<std::unique_
 			currentPart.Colors.push_back(color);
 			currentPart.Colors.push_back(color);
 			currentPart.Colors.push_back(color);
+
+			if (color != MATERIAL_CODE_INHERIT)
+				currentPart.IsMultiMaterial = true;
 		}
 	}
 	return true;
@@ -453,6 +459,8 @@ void FlattenPart(LdrPart* pPart, LdrState* pData, const Matrix& currentMatrix = 
 
 		FlattenPart(pSubpart, pData, subfile.Transform * currentMatrix, invert ^ inv, ResolveTriangleColor(subfile.Color, color));
 
+		pPart->IsMultiMaterial |= pSubpart->IsMultiMaterial;
+
 		for (uint32 i = 0; i < pSubpart->Vertices.size(); i += 3)
 		{
 			pPart->Vertices.push_back(Vector3::Transform(pSubpart->Vertices[i + (inv ? 2 : 0)], subfile.Transform));
@@ -476,7 +484,7 @@ void ComputePartNormals(LdrPart* pPart)
 		{
 			Vector3 n0 = pPart->Vertices[i + 1] - pPart->Vertices[i + 0];
 			Vector3 n1 = pPart->Vertices[i + 2] - pPart->Vertices[i + 0];
-			Vector3 normal = n0.Cross(n1);
+			Vector3 normal = n1.Cross(n0);
 			normal.Normalize();
 			pPart->Normals[i + 0] = normal;
 			pPart->Normals[i + 1] = normal;

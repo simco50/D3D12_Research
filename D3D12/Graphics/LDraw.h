@@ -59,12 +59,13 @@ struct LdrPart
 	};
 
 	char Name[128];
+	Type PartType;
+	bool IsMultiMaterial = false;
 	std::vector<uint32> Colors;
 	std::vector<Vector3> Vertices;
 	std::vector<Vector3> Normals;
 	std::vector<uint32> Indices;
 	std::vector<LdrSubfile> Subfiles;
-	Type PartType;
 
 	bool HasData() const
 	{

@@ -167,6 +167,7 @@ void PrimaryAHS(inout PrimaryRayPayload payload, BuiltInTriangleIntersectionAttr
 	MeshInstance instance = GetMeshInstance(InstanceID());
 	VertexAttribute vertex = GetVertexAttributes(instance, attrib.barycentrics, PrimitiveIndex(), ObjectToWorld4x3());
 	MaterialData material = GetMaterial(instance.Material);
+	material.BaseColorFactor *= UIntToColor(vertex.Color);
 	MaterialProperties surface = GetMaterialProperties(material, vertex.UV, 0);
 	uint seed = SeedThread(DispatchRaysIndex().xy, DispatchRaysDimensions().xy, cView.FrameIndex);
 	float r = Random01(seed);
@@ -401,7 +402,7 @@ void RayGen()
 
 		// Decode the hit payload to retrieve all the shading information
 		MaterialData material = GetMaterial(payload.Material);
-		material.BaseColorFactor = UIntToColor(payload.Color);
+		material.BaseColorFactor *= UIntToColor(payload.Color);
 		MaterialProperties surface = GetMaterialProperties(material, payload.UV, 0);
 		BrdfData brdfData = GetBrdfData(surface);
 
