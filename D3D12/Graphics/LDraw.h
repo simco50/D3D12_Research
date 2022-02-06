@@ -86,18 +86,24 @@ struct LdrModel
 	std::vector<Instance> Instances;
 };
 
-enum LdrQuality
+enum class LdrQuality
 {
 	Normal,
 	Low,
 	High,
 };
 
-struct LdrData
+struct LdrConfig
 {
-	const char* pDatabasePath = "D:/References/ldraw/ldraw/";
-	std::vector<std::unique_ptr<LdrPart>> Parts;
+	const char* pDatabasePath;
 	LdrQuality Quality = LdrQuality::Normal;
+	std::vector<std::pair<const char*, const char*>> ReplacementMap;
+};
+
+struct LdrState
+{
+	LdrConfig Config;
+	std::vector<std::unique_ptr<LdrPart>> Parts;
 	std::map<StringHash, int> PartMap;
 	std::vector<LdrMaterial> Materials;
 	std::map<int, int> MaterialMap;
@@ -112,8 +118,8 @@ struct LdrData
 	std::vector<DatabaseLocation> DatabaseLocations;
 };
 
-bool LdrInit(LdrData* pData);
+bool LdrInit(const LdrConfig* pConfig, LdrState* pData);
 	
-bool LdrLoadModel(const char* pFile, LdrData* pData, LdrModel& outModel);
+bool LdrLoadModel(const char* pFile, LdrState* pData, LdrModel& outModel);
 
-const LdrMaterial& LdrGetMaterial(int code, LdrData* pData);
+const LdrMaterial& LdrGetMaterial(int code, LdrState* pData);

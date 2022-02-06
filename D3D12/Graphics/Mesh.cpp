@@ -65,9 +65,18 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 	std::string extension = Paths::GetFileExtenstion(pFilePath);
 	if (extension == "dat" || extension == "ldr" || extension == "mpd")
 	{
-		LdrData context;
-		context.Quality = LdrQuality::Low;
-		LdrInit(&context);
+		LdrConfig config;
+		config.pDatabasePath = "D:/References/ldraw/ldraw/";
+		config.Quality = LdrQuality::Normal;
+
+		// Logo studs
+		//config.ReplacementMap.push_back({ "stud.dat", "stud-logo4.dat" });
+
+		// No studs
+		//config.ReplacementMap.push_back({ "stud.dat", nullptr });
+
+		LdrState context;
+		LdrInit(&config, &context);
 
 		LdrModel mdl;
 		LdrLoadModel(pFilePath, &context, mdl);

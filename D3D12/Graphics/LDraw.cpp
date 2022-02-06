@@ -16,7 +16,7 @@ namespace Util
 	};
 }
 
-const LdrMaterial& LdrGetMaterial(int code, LdrData* pData)
+const LdrMaterial& LdrGetMaterial(int code, LdrState* pData)
 {
 	auto it = pData->MaterialMap.find(code);
 	if (it != pData->MaterialMap.end())
@@ -26,17 +26,18 @@ const LdrMaterial& LdrGetMaterial(int code, LdrData* pData)
 	return pData->DefaultMaterial;
 }
 
-bool LdrInit(LdrData* pData)
+bool LdrInit(const LdrConfig* pConfig, LdrState* pData)
 {
+	pData->Config = *pConfig;
 	pData->MaterialMap.clear();
 	pData->Materials.clear();
 	pData->PartMap.clear();
 	pData->Parts.clear();
 
-	if (pData->Quality == LdrQuality::High)
+	if (pConfig->Quality == LdrQuality::High)
 		pData->DatabaseLocations.push_back({ "p/48/" , LdrPart::Type::Primitive });
-	else if(pData->Quality == LdrQuality::Low)
-		pData->DatabaseLocations.push_back({ "p/4/" , LdrPart::Type::Primitive });
+	else if(pConfig->Quality == LdrQuality::Low)
+		pData->DatabaseLocations.push_back({ "p/8/" , LdrPart::Type::Primitive });
 
 	pData->DatabaseLocations.push_back({ "p/", LdrPart::Type::Primitive });				// Official Primitives
 	pData->DatabaseLocations.push_back({ "parts/", LdrPart::Type::Part });				// Official Parts
@@ -51,7 +52,7 @@ bool LdrInit(LdrData* pData)
 	defaultMaterial.EdgeColor = 0x00FF00FF;
 
 	char configPath[256];
-	sprintf_s(configPath, ARRAYSIZE(configPath), "%sLDConfig.ldr", pData->pDatabasePath);
+	sprintf_s(configPath, ARRAYSIZE(configPath), "%sLDConfig.ldr", pConfig->pDatabasePath);
 	std::ifstream fs(configPath);
 	if (!fs.is_open())
 	{
@@ -124,7 +125,7 @@ bool LdrInit(LdrData* pData)
 	return true;
 }
 
-bool ParseLDraw(const char* pPartName, LdrData* pData, std::vector<std::unique_ptr<LdrPart>>& outParts)
+bool ParseLDraw(const char* pPartName, LdrState* pData, std::vector<std::unique_ptr<LdrPart>>& outParts)
 {
 	outParts.clear();
 	LdrPart::Type partType = LdrPart::Type::LocalModel;
@@ -137,10 +138,10 @@ bool ParseLDraw(const char* pPartName, LdrData* pData, std::vector<std::unique_p
 	}
 	else // Try database path
 	{
-		for (const LdrData::DatabaseLocation& location : pData->DatabaseLocations)
+		for (const LdrState::DatabaseLocation& location : pData->DatabaseLocations)
 		{
 			char path[256];
-			sprintf_s(path, ARRAYSIZE(path), "%s%s%s", pData->pDatabasePath, location.pLocation, pPartName);
+			sprintf_s(path, ARRAYSIZE(path), "%s%s%s", pData->Config.pDatabasePath, location.pLocation, pPartName);
 			str.open(path);
 			if (str.is_open())
 			{
@@ -294,8 +295,24 @@ bool ParseLDraw(const char* pPartName, LdrData* pData, std::vector<std::unique_p
 	return true;
 }
 
-LdrPart* GetPart(const char* pName, LdrData* pData)
+LdrPart* GetPart(const char* pName, LdrState* pData)
 {
+	for (const std::pair<const char*, const char*>& replacement : pData->Config.ReplacementMap)
+	{
+		if (strcmp(pName, replacement.first) == 0)
+		{
+			if (replacement.second)
+			{
+				pName = replacement.second;
+				break;
+			}
+			else
+			{
+				return nullptr;
+			}
+		}
+	}
+
 	auto it = pData->PartMap.find(pName);
 	if (it != pData->PartMap.end())
 	{
@@ -315,7 +332,7 @@ LdrPart* GetPart(const char* pName, LdrData* pData)
 	return nullptr;
 }
 
-void ResolveModelParts(LdrPart* pPart, LdrData* pData, LdrModel& outModel, const Matrix& transform = Matrix::Identity, int color = 0)
+void ResolveModelParts(LdrPart* pPart, LdrState* pData, LdrModel& outModel, const Matrix& transform = Matrix::Identity, int color = 0)
 {
 	if (pPart->PartType == LdrPart::Type::Part)
 	{
@@ -353,7 +370,7 @@ uint32 ResolveTriangleColor(uint32 triangleColor, uint32 parentColor)
 	return triangleColor == MATERIAL_CODE_INHERIT ? parentColor : triangleColor;
 }
 
-void FlattenPart(LdrPart* pPart, LdrData* pData, const Matrix& currentMatrix = Matrix::Identity, bool invert = 0, int color = 0)
+void FlattenPart(LdrPart* pPart, LdrState* pData, const Matrix& currentMatrix = Matrix::Identity, bool invert = 0, int color = 0)
 {
 	for (const LdrSubfile& subfile : pPart->Subfiles)
 	{
@@ -384,15 +401,16 @@ void ComputePartNormals(LdrPart* pPart)
 {
 	if (pPart->Normals.empty())
 	{
+		pPart->Normals.resize(pPart->Vertices.size());
 		for (size_t i = 0; i < pPart->Vertices.size(); i += 3)
 		{
 			Vector3 n0 = pPart->Vertices[i + 1] - pPart->Vertices[i + 0];
 			Vector3 n1 = pPart->Vertices[i + 2] - pPart->Vertices[i + 0];
 			Vector3 normal = n0.Cross(n1);
 			normal.Normalize();
-			pPart->Normals.push_back(normal);
-			pPart->Normals.push_back(normal);
-			pPart->Normals.push_back(normal);
+			pPart->Normals[i + 0] = normal;
+			pPart->Normals[i + 1] = normal;
+			pPart->Normals[i + 2] = normal;
 		}
 
 		std::map<Vector3, std::vector<int>> vertexMap;
@@ -540,7 +558,7 @@ void ComputePartIndices(LdrPart* pPart)
 	4. Generate index buffer to deduplicate verticee.
 */
 
-bool LdrLoadModel(const char* pFile, LdrData* pData, LdrModel& outModel)
+bool LdrLoadModel(const char* pFile, LdrState* pData, LdrModel& outModel)
 {
 	LdrPart* pMainPart = GetPart(pFile, pData);
 	if (!pMainPart)
