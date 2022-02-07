@@ -82,11 +82,19 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 		LdrModel mdl;
 		LdrLoadModel(pFilePath, &context, mdl);
 
+		auto FixBaseColor = [](Color& c)
+		{
+			c.x = powf(c.x, 2.2f);
+			c.y = powf(c.y, 2.2f);
+			c.z = powf(c.z, 2.2f);
+		};
+
 		auto CreateMaterialFromLDraw = [&](int color) {
 			Material mat;
 			const LdrMaterial& lmat = LdrGetMaterial(color, &context);
-			mat.Name = lmat.Name;
+			mat.Name = lmat.Name.c_str();
 			LdrDecodeARGB(lmat.Color, &mat.BaseColorFactor.x);
+			FixBaseColor(mat.BaseColorFactor);
 			mat.RoughnessFactor = 0.1f;
 			mat.MetalnessFactor = 0.0f;
 			mat.AlphaMode = mat.BaseColorFactor.w >= 1 ? MaterialAlphaMode::Opaque : MaterialAlphaMode::Blend;
@@ -149,13 +157,14 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 					mesh.ColorsStream.resize(pPart->Colors.size() * 3);
 				for (int j = 0; j < (int)pPart->Vertices.size(); ++j)
 				{
-					mesh.PositionsStream[j] = pPart->Vertices[j];
-					mesh.NormalsStream[j] = {pPart->Normals[j], Vector4(1, 0, 0, 1)};
+					mesh.PositionsStream[j] = Vector3(pPart->Vertices[j].x, pPart->Vertices[j].y, pPart->Vertices[j].z);
+					mesh.NormalsStream[j] = {Vector3(pPart->Normals[j].x, pPart->Normals[j].y, pPart->Normals[j].z), Vector4(1, 0, 0, 1)};
 					if (pPart->IsMultiMaterial)
 					{
 						uint32 vertexColor = LdrResolveVertexColor(instance.Color, pPart->Colors[j], &context);
 						Color verColor;
 						LdrDecodeARGB(vertexColor, &verColor.x);
+						FixBaseColor(verColor);
 						mesh.ColorsStream[j] = Math::EncodeRGBA(verColor);
 					}
 				}
@@ -171,7 +180,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 				m_Materials.push_back(material);
 			}
 
-			inst.Transform = instance.Transform;
+			inst.Transform = Matrix(&instance.Transform.m[0][0]);
 			m_MeshInstances.push_back(inst);
 		}
 	}

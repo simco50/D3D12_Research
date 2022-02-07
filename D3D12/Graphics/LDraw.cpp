@@ -1,19 +1,52 @@
 #include "stdafx.h"
+
 #include "LDraw.h"
 
-constexpr int MATERIAL_CODE_INHERIT = 16;
-constexpr int MATERIAL_CODE_COMPLEMENT = 24;
+#include <assert.h>
+
+constexpr uint32 MATERIAL_CODE_INHERIT = 16;
+constexpr uint32 MATERIAL_CODE_COMPLEMENT = 24;
 
 namespace Util
 {
-	inline void ToLower(char* pStr)
+	constexpr char ToLower(char c)
+	{
+		return c >= 'A' && c <= 'Z' ? c - 'A' + 'a' : c;
+	}
+
+	constexpr void ToLower(char* pStr)
 	{
 		while (*pStr)
 		{
-			*pStr = (char)tolower(*pStr);
+			*pStr = ToLower(*pStr);
 			++pStr;
 		}
 	};
+
+	template<typename T, size_t N>
+	constexpr size_t SizeOf(T(&arr)[N]) { return N; }
+
+	static void MurmurHash(uint32& h, const void* pData, size_t len)
+	{
+		assert(len % 4 == 0); // Assume 4 byte alignment as we're leaving off the last part of the algorithm
+		const uint32 m = 0x5bd1e995;
+		const uint32 r = 24;
+		const char* pKey = (char*)pData;
+		while (len >= 4)
+		{
+			uint32 k = *(uint32*)(pData);
+
+			k *= m;
+			k ^= k >> r;
+			k *= m;
+
+			h *= m;
+			h ^= k;
+
+			pKey += 4;
+			len -= 4;
+		}
+	}
 
 	struct FileReader
 	{
@@ -90,12 +123,12 @@ bool LdrInit(const LdrConfig* pConfig, LdrState* pData)
 
 	LdrMaterial& defaultMaterial = pData->DefaultMaterial;
 	memset(&defaultMaterial, 0, sizeof(LdrMaterial));
-	strcpy_s(defaultMaterial.Name, "INVALID");
+	defaultMaterial.Name = "INVALID";
 	defaultMaterial.Color = 0x00FF00FF;
 	defaultMaterial.EdgeColor = 0x00FF00FF;
 
 	char configPath[256];
-	sprintf_s(configPath, ARRAYSIZE(configPath), "%sLDConfig.ldr", pConfig->pDatabasePath);
+	sprintf_s(configPath, Util::SizeOf(configPath), "%sLDConfig.ldr", pConfig->pDatabasePath);
 	Util::FileReader reader;
 	if (!reader.Open(configPath))
 	{
@@ -109,7 +142,7 @@ bool LdrInit(const LdrConfig* pConfig, LdrState* pData)
 		material.Type = LdrMaterialType::None;
 
 		const uint32 numRequiredValues = 4;
-		if (sscanf_s(pLine, "0 !COLOUR %128s CODE %d VALUE #%x EDGE #%x", material.Name, (uint32)ARRAYSIZE(material.Name), &material.Code, &material.Color, &material.EdgeColor) == numRequiredValues)
+		if (sscanf_s(pLine, "0 !COLOUR %128s CODE %d VALUE #%x EDGE #%x", material.Name.Data, LdrName::SIZE, &material.Code, &material.Color, &material.EdgeColor) == numRequiredValues)
 		{
 			material.EdgeColor |= 0xFF000000;
 
@@ -189,7 +222,7 @@ bool ParseLDraw(const char* pPartName, LdrState* pData, std::vector<std::unique_
 		for (const LdrState::DatabaseLocation& location : pData->DatabaseLocations)
 		{
 			char path[256];
-			sprintf_s(path, ARRAYSIZE(path), "%s%s%s", pData->Config.pDatabasePath, location.pLocation, pPartName);
+			sprintf_s(path, Util::SizeOf(path), "%s%s%s", pData->Config.pDatabasePath, location.pLocation, pPartName);
 			if (reader.Open(path))
 			{
 				partType = location.Type;
@@ -200,13 +233,12 @@ bool ParseLDraw(const char* pPartName, LdrState* pData, std::vector<std::unique_
 
 	if (!reader.IsOpen())
 	{
-		E_LOG(Warning, "Could not find part '%s'", pPartName);
 		return false;
 	}
 
 	std::unique_ptr<LdrPart> part = std::make_unique<LdrPart>();
 	part->PartType = partType;
-	strcpy_s(part->Name, pPartName);
+	part->Name = pPartName;
 	outParts.push_back(std::move(part));
 
 	bool invert = false;
@@ -264,8 +296,8 @@ bool ParseLDraw(const char* pPartName, LdrState* pData, std::vector<std::unique_
 				{
 					std::unique_ptr<LdrPart> newPart = std::make_unique<LdrPart>();
 					newPart->PartType = partType;
-					strcpy_s(newPart->Name, pSearch + sizeof("0 FILE"));
-					Util::ToLower(newPart->Name);
+					newPart->Name = pSearch + sizeof("0 FILE");
+					Util::ToLower(newPart->Name.Data);
 					outParts.push_back(std::move(newPart));
 				}
 			}
@@ -274,7 +306,7 @@ bool ParseLDraw(const char* pPartName, LdrState* pData, std::vector<std::unique_
 		{
 			LdrSubfile subfile;
 			int curr = 0;
-			Matrix& transform = subfile.Transform;
+			LdrMatrix& transform = subfile.Transform;
 
 			sscanf_s(pLine, "%d %d %f %f %f %f %f %f %f %f %f %f %f %f %n",
 				&dummy, &subfile.Color,
@@ -284,8 +316,8 @@ bool ParseLDraw(const char* pPartName, LdrState* pData, std::vector<std::unique_
 				&transform.m[0][2], &transform.m[1][2], &transform.m[2][2],
 				&curr
 			);
-			strcpy_s(subfile.Name, pLine + curr);
-			Util::ToLower(subfile.Name);
+			subfile.Name =  pLine + curr;
+			Util::ToLower(subfile.Name.Data);
 
 			subfile.Invert = invert;
 			invert = false;
@@ -298,7 +330,7 @@ bool ParseLDraw(const char* pPartName, LdrState* pData, std::vector<std::unique_
 		else if (command == Command::Triangle)
 		{
 			uint32 color;
-			Vector3 triangle[3];
+			LdrVector triangle[3];
 
 			auto ParseTriangle = [&](const char* pFormat) {
 				return sscanf_s(pLine, pFormat,
@@ -330,7 +362,7 @@ bool ParseLDraw(const char* pPartName, LdrState* pData, std::vector<std::unique_
 		else if (command == Command::Quad)
 		{
 			uint32 color;
-			Vector3 quad[4];
+			LdrVector quad[4];
 
 			auto ParseQuad = [&](const char* pFormat) {
 				return sscanf_s(pLine, pFormat,
@@ -399,7 +431,7 @@ LdrPart* GetPart(const char* pName, LdrState* pData)
 	{
 		for (std::unique_ptr<LdrPart>& newPart : parts)
 		{
-			pData->PartMap[newPart->Name] = (int)pData->Parts.size();
+			pData->PartMap[newPart->Name] = (uint32)pData->Parts.size();
 			pData->Parts.push_back(std::move(newPart));
 		}
 		return pData->Parts[pData->Parts.size() - parts.size()].get();
@@ -407,7 +439,7 @@ LdrPart* GetPart(const char* pName, LdrState* pData)
 	return nullptr;
 }
 
-void ResolveModelParts(LdrPart* pPart, LdrState* pData, LdrModel& outModel, const Matrix& transform = Matrix::Identity, uint32 color = 0)
+void ResolveModelParts(LdrPart* pPart, LdrState* pData, LdrModel& outModel, const LdrMatrix& transform = LdrMatrix(), uint32 color = 0)
 {
 	if (pPart->PartType == LdrPart::Type::Part || pPart->Vertices.size() != 0)
 	{
@@ -430,10 +462,10 @@ void ResolveModelParts(LdrPart* pPart, LdrState* pData, LdrModel& outModel, cons
 	{
 		for (LdrSubfile& subfile : pPart->Subfiles)
 		{
-			LdrPart* pSubpart = GetPart(subfile.Name, pData);
+			LdrPart* pSubpart = GetPart(subfile.Name.c_str(), pData);
 			if (pSubpart)
 			{
-				Matrix scale = subfile.Invert ? Matrix::CreateScale(-1) : Matrix::CreateScale(1);
+				LdrMatrix scale = subfile.Invert ? LdrMatrix::CreateScale(-1, -1, -1) : LdrMatrix::CreateScale(1, 1, 1);
 				ResolveModelParts(pSubpart, pData, outModel, subfile.Transform * transform * scale, subfile.Color == MATERIAL_CODE_INHERIT ? color : subfile.Color);
 			}
 		}
@@ -445,31 +477,31 @@ uint32 ResolveTriangleColor(uint32 triangleColor, uint32 parentColor)
 	return triangleColor == MATERIAL_CODE_INHERIT ? parentColor : triangleColor;
 }
 
-void FlattenPart(LdrPart* pPart, LdrState* pData, const Matrix& currentMatrix = Matrix::Identity, bool invert = false, uint32 color = MATERIAL_CODE_INHERIT)
+void FlattenPart(LdrPart* pPart, LdrState* pData, const LdrMatrix& currentLdrMatrix = LdrMatrix(), bool invert = false, uint32 color = MATERIAL_CODE_INHERIT)
 {
 	for (const LdrSubfile& subfile : pPart->Subfiles)
 	{
-		LdrPart* pSubpart = GetPart(subfile.Name, pData);
+		LdrPart* pSubpart = GetPart(subfile.Name.c_str(), pData);
 		if (!pSubpart)
 			continue;
 
 		bool inv = subfile.Invert;
-		float det = subfile.Transform.Determinant();
+		float det = subfile.Transform.Determinant3x3();
 		inv ^= (det < 0);
 
-		FlattenPart(pSubpart, pData, subfile.Transform * currentMatrix, invert ^ inv, ResolveTriangleColor(subfile.Color, color));
+		FlattenPart(pSubpart, pData, subfile.Transform * currentLdrMatrix, invert ^ inv, ResolveTriangleColor(subfile.Color, color));
 
 		pPart->IsMultiMaterial |= pSubpart->IsMultiMaterial;
 
 		for (uint32 i = 0; i < pSubpart->Vertices.size(); i += 3)
 		{
-			pPart->Vertices.push_back(Vector3::Transform(pSubpart->Vertices[i + (inv ? 2 : 0)], subfile.Transform));
-			pPart->Vertices.push_back(Vector3::Transform(pSubpart->Vertices[i + (inv ? 1 : 1)], subfile.Transform));
-			pPart->Vertices.push_back(Vector3::Transform(pSubpart->Vertices[i + (inv ? 0 : 2)], subfile.Transform));
+			pPart->Vertices.push_back(pSubpart->Vertices[i + (inv ? 2u : 0u)].Transform(subfile.Transform));
+			pPart->Vertices.push_back(pSubpart->Vertices[i + (inv ? 1u : 1u)].Transform(subfile.Transform));
+			pPart->Vertices.push_back(pSubpart->Vertices[i + (inv ? 0u : 2u)].Transform(subfile.Transform));
 
-			pPart->Colors.push_back(ResolveTriangleColor(pSubpart->Colors[i + (inv ? 2 : 0)], subfile.Color));
-			pPart->Colors.push_back(ResolveTriangleColor(pSubpart->Colors[i + (inv ? 1 : 1)], subfile.Color));
-			pPart->Colors.push_back(ResolveTriangleColor(pSubpart->Colors[i + (inv ? 0 : 2)], subfile.Color));
+			pPart->Colors.push_back(ResolveTriangleColor(pSubpart->Colors[i + (inv ? 2u : 0u)], subfile.Color));
+			pPart->Colors.push_back(ResolveTriangleColor(pSubpart->Colors[i + (inv ? 1u : 1u)], subfile.Color));
+			pPart->Colors.push_back(ResolveTriangleColor(pSubpart->Colors[i + (inv ? 0u : 2u)], subfile.Color));
 		}
 	}
 	pPart->Subfiles.clear();
@@ -482,35 +514,44 @@ void ComputePartNormals(LdrPart* pPart)
 		pPart->Normals.resize(pPart->Vertices.size());
 		for (size_t i = 0; i < pPart->Vertices.size(); i += 3)
 		{
-			Vector3 n0 = pPart->Vertices[i + 1] - pPart->Vertices[i + 0];
-			Vector3 n1 = pPart->Vertices[i + 2] - pPart->Vertices[i + 0];
-			Vector3 normal = n1.Cross(n0);
-			normal.Normalize();
+			LdrVector n0 = pPart->Vertices[i + 1] - pPart->Vertices[i + 0];
+			LdrVector n1 = pPart->Vertices[i + 2] - pPart->Vertices[i + 0];
+			LdrVector normal = n1.Cross(n0).Normalize();
 			pPart->Normals[i + 0] = normal;
 			pPart->Normals[i + 1] = normal;
 			pPart->Normals[i + 2] = normal;
 		}
 
-		std::map<Vector3, std::vector<int>> vertexMap;
+		struct VectorHasher
+		{
+			size_t operator()(const LdrVector& v) const
+			{
+				uint32 h = 0;
+				Util::MurmurHash(h, &v, sizeof(LdrVector));
+				return h;
+			}
+		};
+
+		std::unordered_map<LdrVector, std::vector<uint32>, VectorHasher> vertexMap;
 		for (size_t i = 0; i < pPart->Vertices.size(); ++i)
 		{
-			vertexMap[pPart->Vertices[i]].push_back((int)i);
+			vertexMap[pPart->Vertices[i]].push_back((uint32)i);
 		}
 
 		const float minAngleCos = cos(3.141592f / 4.0f);
 
-		std::vector<Vector3> newNormals(pPart->Normals.size());
+		std::vector<LdrVector> newNormals(pPart->Normals.size());
 		for (size_t i = 0; i < pPart->Vertices.size(); ++i)
 		{
-			const std::vector<int>& identicalVertices = vertexMap[pPart->Vertices[i]];
-			Vector3 vertexNormal = pPart->Normals[i];
-			Vector3 smoothNormal;
-			for (int vertexIndex : identicalVertices)
+			const std::vector<uint32>& identicalVertices = vertexMap[pPart->Vertices[i]];
+			LdrVector vertexNormal = pPart->Normals[i];
+			LdrVector smoothNormal;
+			for (uint32 vertexIndex : identicalVertices)
 			{
-				const Vector3& otherNormal = pPart->Normals[vertexIndex];
+				const LdrVector& otherNormal = pPart->Normals[vertexIndex];
 				if (vertexNormal.Dot(otherNormal) > minAngleCos)
 				{
-					smoothNormal += otherNormal;
+					smoothNormal = smoothNormal + otherNormal;
 				}
 			}
 			smoothNormal.Normalize();
@@ -532,36 +573,14 @@ void ComputePartIndices(LdrPart* pPart)
 		const LdrPart* pPart;
 		uint32 Vertex;
 
-		static void MurmurHash(uint32& h, const void* pData, size_t len)
-		{
-			assert(len % 4 == 0); // Assume 4 byte alignment as we're leaving off the last part of the algorithm
-			const uint32 m = 0x5bd1e995;
-			const int r = 24;
-			const char* pKey = (char*)pData;
-			while (len >= 4)
-			{
-				uint32 k = *(uint32*)(pData);
-
-				k *= m;
-				k ^= k >> r;
-				k *= m;
-
-				h *= m;
-				h ^= k;
-
-				pKey += 4;
-				len -= 4;
-			}
-		}
-
 		struct Hasher
 		{
 			size_t operator()(const HashedVertex& v) const
 			{
 				uint32 h = 0;
-				MurmurHash(h, v.pPart->Vertices.data() + v.Vertex, sizeof(Vector3));
-				MurmurHash(h, v.pPart->Normals.data() + v.Vertex, sizeof(Vector3));
-				MurmurHash(h, v.pPart->Colors.data() + v.Vertex, sizeof(uint32));
+				Util::MurmurHash(h, v.pPart->Vertices.data() + v.Vertex, sizeof(LdrVector));
+				Util::MurmurHash(h, v.pPart->Normals.data() + v.Vertex, sizeof(LdrVector));
+				Util::MurmurHash(h, v.pPart->Colors.data() + v.Vertex, sizeof(uint32));
 				return h;
 			}
 		};
@@ -600,7 +619,7 @@ void ComputePartIndices(LdrPart* pPart)
 	{
 		// Make a copy
 		char* pCopy = new char[numElements * elementSize];
-		memcpy(pCopy, pData, numElements* elementSize);
+		memcpy(pCopy, pData, numElements * elementSize);
 		for (uint32 i = 0; i < numElements; ++i)
 		{
 			memcpy((char*)pData + remap[i] * elementSize, pCopy + i * elementSize, elementSize);
@@ -608,8 +627,8 @@ void ComputePartIndices(LdrPart* pPart)
 		delete[] pCopy;
 	};
 
-	remapBuffer(pPart->Vertices.data(), remap.data(), (uint32)pPart->Vertices.size(), sizeof(Vector3));
-	remapBuffer(pPart->Normals.data(), remap.data(), (uint32)pPart->Normals.size(), sizeof(Vector3));
+	remapBuffer(pPart->Vertices.data(), remap.data(), (uint32)pPart->Vertices.size(), sizeof(LdrVector));
+	remapBuffer(pPart->Normals.data(), remap.data(), (uint32)pPart->Normals.size(), sizeof(LdrVector));
 	remapBuffer(pPart->Colors.data(), remap.data(), (uint32)pPart->Colors.size(), sizeof(uint32));
 
 	pPart->Vertices.resize(indexCount);
@@ -636,7 +655,7 @@ bool LdrLoadModel(const char* pFile, LdrState* pData, LdrModel& outModel)
 
 	constexpr float lduScale = 0.004f;
 
-	ResolveModelParts(pMainPart, pData, outModel, Matrix::CreateScale(lduScale, -lduScale, lduScale));
+	ResolveModelParts(pMainPart, pData, outModel, LdrMatrix::CreateScale(lduScale, -lduScale, lduScale));
 
 	for (LdrPart* pPart : outModel.Parts)
 	{
