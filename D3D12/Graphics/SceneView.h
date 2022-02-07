@@ -50,7 +50,7 @@ struct Batch
 };
 DECLARE_BITMASK_TYPE(Batch::Blending)
 
-using VisibilityMask = BitField<2048>;
+using VisibilityMask = BitField<8192>;
 
 struct ShadowData
 {
