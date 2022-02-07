@@ -21,10 +21,7 @@ VertexAttribute GetVertexAttributes(MeshInstance instance, float2 attribBarycent
 
 	MeshData mesh = GetMesh(instance.Mesh);
 	uint3 indices = GetPrimitive(mesh, primitiveIndex);
-	VertexAttribute outData;
-
-	outData.UV = 0;
-	outData.Normal = 0;
+	VertexAttribute outData = (VertexAttribute)0;
 
 	float3 positions[3];
 
