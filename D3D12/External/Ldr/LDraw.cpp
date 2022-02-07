@@ -1,5 +1,3 @@
-#include "stdafx.h"
-
 #include "LDraw.h"
 
 #include <assert.h>
