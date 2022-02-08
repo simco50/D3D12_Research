@@ -133,15 +133,15 @@ namespace Paths
 		return output;
 	}
 
-	bool FileExists(const std::string& filePath)
+	bool FileExists(const char* pFilePath)
 	{
-		DWORD attributes = GetFileAttributesA(filePath.c_str());
+		DWORD attributes = GetFileAttributesA(pFilePath);
 		return (attributes != INVALID_FILE_ATTRIBUTES && !(attributes & FILE_ATTRIBUTE_DIRECTORY));
 	}
 
-	bool DirectoryExists(const std::string& filePath)
+	bool DirectoryExists(const char* pFilePath)
 	{
-		DWORD attributes = GetFileAttributesA(filePath.c_str());
+		DWORD attributes = GetFileAttributesA(pFilePath);
 		return (attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY));
 	}
 

@@ -72,7 +72,7 @@ namespace ShaderCompiler
 		for (const std::string& includeDir : includeDirs)
 		{
 			std::string path = Paths::Combine(includeDir, pFilePath);
-			if (Paths::FileExists(path))
+			if (Paths::FileExists(path.c_str()))
 			{
 				if (SUCCEEDED(pUtils->LoadFile(MULTIBYTE_TO_UNICODE(path.c_str()), nullptr, pFile->GetAddressOf())))
 				{
@@ -234,7 +234,7 @@ namespace ShaderCompiler
 				ComPtr<IDxcBlobEncoding> pEncoding;
 				std::string path = Paths::Normalize(UNICODE_TO_MULTIBYTE(pFilename));
 
-				if (!Paths::FileExists(path))
+				if (!Paths::FileExists(path.c_str()))
 				{
 					*ppIncludeSource = nullptr;
 					return E_FAIL;

@@ -157,7 +157,7 @@ protected:
 struct VertexBufferView
 {
 	VertexBufferView()
-		: Location(~0ull), Elements(0), Stride(0), OffsetFromStart(0)
+		: Location(~0ull), Elements(0), Stride(0), OffsetFromStart(~0u)
 	{}
 
 	VertexBufferView(D3D12_GPU_VIRTUAL_ADDRESS location, uint32 elements, uint32 stride, uint64 offsetFromStart)

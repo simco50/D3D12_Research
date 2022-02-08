@@ -28,10 +28,10 @@ namespace ShaderInterop
 	// Per material shader data
 	struct MaterialData
 	{
-		int Diffuse;
-		int Normal;
-		int RoughnessMetalness;
-		int Emissive;
+		uint Diffuse;
+		uint Normal;
+		uint RoughnessMetalness;
+		uint Emissive;
 		float4 BaseColorFactor;
 		float4 EmissiveFactor;
 		float MetalnessFactor;
@@ -52,6 +52,7 @@ namespace ShaderInterop
 		uint PositionsOffset;
 		uint UVsOffset;
 		uint NormalsOffset;
+		uint ColorsOffset;
 		uint IndicesOffset;
 		uint IndexByteSize;
 

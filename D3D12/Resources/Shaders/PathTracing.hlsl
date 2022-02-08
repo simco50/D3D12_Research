@@ -32,6 +32,7 @@ struct RAYPAYLOAD PrimaryRayPayload
 	float2 UV;
 	float2 Normal;
 	float3 Position;
+	uint Color;
 	int TangentSign;
 	float2 Tangent;
 	float2 GeometryNormal;
@@ -157,6 +158,7 @@ void PrimaryCHS(inout PrimaryRayPayload payload, BuiltInTriangleIntersectionAttr
 	payload.TangentSign = vertex.Tangent.w;
 	payload.GeometryNormal = EncodeNormalOctahedron(vertex.GeometryNormal);
 	payload.Position = WorldRayOrigin() + WorldRayDirection() * RayTCurrent();
+	payload.Color = vertex.Color;
 }
 
 [shader("anyhit")]
@@ -165,8 +167,11 @@ void PrimaryAHS(inout PrimaryRayPayload payload, BuiltInTriangleIntersectionAttr
 	MeshInstance instance = GetMeshInstance(InstanceID());
 	VertexAttribute vertex = GetVertexAttributes(instance, attrib.barycentrics, PrimitiveIndex(), ObjectToWorld4x3());
 	MaterialData material = GetMaterial(instance.Material);
+	material.BaseColorFactor *= UIntToColor(vertex.Color);
 	MaterialProperties surface = GetMaterialProperties(material, vertex.UV, 0);
-	if(surface.Opacity < material.AlphaCutoff)
+	uint seed = SeedThread(DispatchRaysIndex().xy, DispatchRaysDimensions().xy, cView.FrameIndex);
+	float r = Random01(seed);
+	if(surface.Opacity < r)
 	{
 		IgnoreHit();
 	}
@@ -385,13 +390,19 @@ void RayGen()
 		// If the ray didn't hit anything, accumulate the sky and break the loop
 		if(!payload.IsHit())
 		{
-			const float3 SkyColor = GetSky(desc.Direction);
+			if(i == 0)
+			{
+				radiance = 0;
+				break;
+			}
+			const float3 SkyColor = 0.3f;//GetSky(desc.Direction);
 			radiance += throughput * SkyColor;
 			break;
 		}
 
 		// Decode the hit payload to retrieve all the shading information
 		MaterialData material = GetMaterial(payload.Material);
+		material.BaseColorFactor *= UIntToColor(payload.Color);
 		MaterialProperties surface = GetMaterialProperties(material, payload.UV, 0);
 		BrdfData brdfData = GetBrdfData(surface);
 
