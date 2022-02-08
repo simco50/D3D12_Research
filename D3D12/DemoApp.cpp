@@ -221,7 +221,7 @@ void DemoApp::SetupScene(CommandContext& context)
 		m_pCamera->SetPosition(Vector3(-1.3f, 2.4f, -1.5f));
 		m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(Math::PIDIV4, Math::PIDIV4 * 0.5f, 0));
 
-		LoadMesh("car.ldr", context);
+		LoadMesh("Resources/Scenes/Sponza/Sponza.gltf", context);
 #elif 0
 		// Hardcode the camera of the scene :-)
 		Matrix m(
