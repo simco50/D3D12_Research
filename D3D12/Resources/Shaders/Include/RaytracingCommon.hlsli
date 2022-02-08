@@ -12,6 +12,7 @@ struct VertexAttribute
 	float3 Normal;
 	float4 Tangent;
 	float3 GeometryNormal;
+	uint Color;
 };
 
 VertexAttribute GetVertexAttributes(MeshInstance instance, float2 attribBarycentrics, uint primitiveIndex, float4x3 worldMatrix)
@@ -20,21 +21,22 @@ VertexAttribute GetVertexAttributes(MeshInstance instance, float2 attribBarycent
 
 	MeshData mesh = GetMesh(instance.Mesh);
 	uint3 indices = GetPrimitive(mesh, primitiveIndex);
-	VertexAttribute outData;
-
-	outData.UV = 0;
-	outData.Normal = 0;
+	VertexAttribute outData = (VertexAttribute)0;
 
 	float3 positions[3];
 
 	for(int i = 0; i < 3; ++i)
 	{
 		uint vertexId = indices[i];
-		positions[i] = UnpackHalf3(BufferLoad<uint2>(mesh.BufferIndex, vertexId, mesh.PositionsOffset));
+		positions[i] = BufferLoad<float3>(mesh.BufferIndex, vertexId, mesh.PositionsOffset);
 		outData.UV += UnpackHalf2(BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.UVsOffset)) * barycentrics[i];
 		NormalData normalData = BufferLoad<NormalData>(mesh.BufferIndex, vertexId, mesh.NormalsOffset);
 		outData.Normal += normalData.Normal * barycentrics[i];
 		outData.Tangent += normalData.Tangent * barycentrics[i];
+		if(mesh.ColorsOffset != ~0u)
+			outData.Color = BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.ColorsOffset);
+		else
+			outData.Color = 0xFFFFFFFF;
 	}
 	outData.Normal = normalize(mul(outData.Normal, (float3x3)worldMatrix));
 	outData.Tangent.xyz = normalize(mul(outData.Tangent.xyz, (float3x3)worldMatrix));
@@ -48,9 +50,8 @@ VertexAttribute GetVertexAttributes(MeshInstance instance, float2 attribBarycent
 	return outData;
 }
 
-MaterialProperties GetMaterialProperties(uint materialIndex, float2 UV, int mipLevel)
+MaterialProperties GetMaterialProperties(MaterialData material, float2 UV, int mipLevel)
 {
-	MaterialData material = GetMaterial(materialIndex);
 	MaterialProperties properties;
 	float4 baseColor = material.BaseColorFactor;
 	if(material.Diffuse != INVALID_HANDLE)

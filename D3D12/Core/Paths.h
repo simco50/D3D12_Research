@@ -19,8 +19,8 @@ namespace Paths
 	std::string Combine(const std::string& a, const std::string& b);
 	void Combine(const std::vector<std::string>& elements, std::string& output);
 
-	bool FileExists(const std::string& filePath);
-	bool DirectoryExists(const std::string& filePath);
+	bool FileExists(const char* pFilePath);
+	bool DirectoryExists(const char* pFilePath);
 
 	std::string GameDir();
 

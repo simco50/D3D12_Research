@@ -19,6 +19,7 @@ struct SubMesh
 	VertexBufferView PositionStreamLocation;
 	VertexBufferView UVStreamLocation;
 	VertexBufferView NormalStreamLocation;
+	VertexBufferView ColorsStreamLocation;
 	IndexBufferView IndicesLocation;
 	uint32 MeshletsLocation;
 	uint32 MeshletVerticesLocation;
@@ -39,8 +40,16 @@ struct SubMeshInstance
 	Matrix Transform;
 };
 
+enum class MaterialAlphaMode
+{
+	Opaque,
+	Masked,
+	Blend,
+};
+
 struct Material
 {
+	std::string Name = "Unnamed Material";
 	Color BaseColorFactor = Color(1, 1, 1, 1);
 	Color EmissiveFactor = Color(0, 0, 0, 1);
 	float MetalnessFactor = 1.0f;
@@ -50,7 +59,7 @@ struct Material
 	Texture* pNormalTexture = nullptr;
 	Texture* pRoughnessMetalnessTexture = nullptr;
 	Texture* pEmissiveTexture = nullptr;
-	bool IsTransparent;
+	MaterialAlphaMode AlphaMode;
 };
 
 class Mesh
@@ -63,7 +72,7 @@ public:
 	const Material& GetMaterial(int materialId) const { return m_Materials[materialId]; }
 	const std::vector<SubMeshInstance>& GetMeshInstances() const { return m_MeshInstances; }
 	const std::vector<SubMesh>& GetMeshes() const { return m_Meshes; }
-	const std::vector<Material>& GetMaterials() const { return m_Materials; }
+	std::vector<Material>& GetMaterials() { return m_Materials; }
 	Buffer* GetData() const { return m_pGeometryData.get(); }
 
 private:

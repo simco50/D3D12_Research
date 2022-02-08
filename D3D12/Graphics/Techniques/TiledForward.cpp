@@ -26,12 +26,6 @@ TiledForward::TiledForward(GraphicsDevice* pDevice)
 	: m_pDevice(pDevice)
 {
 	SetupPipelines();
-
-	CommandContext* pContext = pDevice->AllocateCommandContext();
-	m_pVolumeFog = pDevice->CreateTexture(TextureDesc::Create3D(1, 1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), "Volume Fog");
-	uint32 defaultValue = 0xFF000000;
-	m_pVolumeFog->SetData(pContext, &defaultValue);
-	pContext->Execute(true);
 }
 
 void TiledForward::OnResize(int windowWidth, int windowHeight)
@@ -62,7 +56,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& resources, const Til
 			context.SetPipelineState(m_pComputeLightCullPSO);
 			context.SetComputeRootSignature(m_pComputeLightCullRS.get());
 
-			context.SetRootCBV(0, GetViewUniforms(resources));
+			context.SetRootCBV(0, GetViewUniforms(resources, parameters.pDepth));
 
 			D3D12_CPU_DESCRIPTOR_HANDLE uavs[] = {
 				m_pLightIndexCounter->GetUAV()->GetDescriptor(),
@@ -126,7 +120,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& resources, const Til
 					parameters.pAmbientOcclusion->GetSRV()->GetDescriptor(),
 					parameters.pResolvedDepth->GetSRV()->GetDescriptor(),
 					parameters.pPreviousColorTarget->GetSRV()->GetDescriptor(),
-					m_pVolumeFog->GetSRV()->GetDescriptor(),
+					GraphicsCommon::GetDefaultTexture(DefaultTexture::Black3D)->GetSRV()->GetDescriptor(),
 					m_pLightGridOpaque->GetSRV()->GetDescriptor(),
 					m_pLightIndexListBufferOpaque->GetSRV()->GetDescriptor(),
 				};
@@ -146,7 +140,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& resources, const Til
 					parameters.pAmbientOcclusion->GetSRV()->GetDescriptor(),
 					parameters.pResolvedDepth->GetSRV()->GetDescriptor(),
 					parameters.pPreviousColorTarget->GetSRV()->GetDescriptor(),
-					m_pVolumeFog->GetSRV()->GetDescriptor(),
+					GraphicsCommon::GetDefaultTexture(DefaultTexture::Black3D)->GetSRV()->GetDescriptor(),
 					m_pLightGridTransparant->GetSRV()->GetDescriptor(),
 					m_pLightIndexListBufferTransparant->GetSRV()->GetDescriptor(),
 				};

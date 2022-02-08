@@ -310,37 +310,57 @@ void DebugRenderer::AddAxisSystem(const Matrix& transform, float lineLength)
 
 void DebugRenderer::AddWireCylinder(const Vector3& position, const Vector3& direction, float height, float radius, int segments, const IntColor& color)
 {
-	Vector3 d;
-	direction.Normalize(d);
+	Vector3 forward;
+	direction.Normalize(forward);
+	Vector3 up = Vector3::Up;
+	Vector3 right = forward.Cross(up);
+	right.Normalize();
+	up = right.Cross(direction);
 
-	DebugSphere sphere(position, radius);
+	Matrix rotationMatrix = Matrix(
+		Vector4(right),
+		Vector4(up),
+		Vector4(forward),
+		Vector4(0, 0, 0, 1)
+	);
+
+	Matrix world = rotationMatrix * Matrix::CreateTranslation(position);
 	float t = Math::PI * 2 / (segments + 1);
 
-	Matrix world = Matrix::CreateFromQuaternion(Math::LookRotation(d)) * Matrix::CreateTranslation(position - d * (height / 2));
 	for (int i = 0; i < segments + 1; ++i)
 	{
-		Vector3 a = Vector3::Transform(sphere.GetLocalPoint(Math::PIDIV2, i * t), world);
-		Vector3 b = Vector3::Transform(sphere.GetLocalPoint(Math::PIDIV2, (i + 1) * t), world);
+		Vector3 a = Vector3::Transform(Vector3(radius * cos(t * i), radius * sin(t * i), 0) + Vector3::Forward * height, world);
+		Vector3 b = Vector3::Transform(Vector3(radius * cos(t * (i + 1)), radius * sin(t * (i + 1)), 0) + Vector3::Forward * height, world);
 		AddLine(a, b, color);
-		AddLine(a + d * height, b + d * height, color);
-		AddLine(a, a + d * height, color);
+		AddLine(a + forward * height, b + forward * height, color);
+		AddLine(a, a + forward * height, color);
 	}
 }
 
-void DebugRenderer::AddWireCone(const Vector3& position, const Vector3& direction, float height, float angle, int segments, const IntColor& color)
+void DebugRenderer::AddCone(const Vector3& position, const Vector3& direction, float height, float angle, int segments, const IntColor& color, bool solid)
 {
-	Vector3 d;
-	direction.Normalize(d);
+	Vector3 forward;
+	direction.Normalize(forward);
+	Vector3 up = Vector3::Up;
+	Vector3 right = forward.Cross(up);
+	right.Normalize();
+	up = right.Cross(direction);
+
+	Matrix rotationMatrix = Matrix(
+		Vector4(right),
+		Vector4(up),
+		Vector4(forward),
+		Vector4(0, 0, 0, 1)
+	);
+
+	Matrix world = rotationMatrix * Matrix::CreateTranslation(position);
 
 	float radius = tanf(0.5f * angle * Math::DegreesToRadians) * height;
-	DebugSphere sphere(position, radius);
 	float t = Math::PI * 2 / (segments + 1);
-
-	Matrix world = Matrix::CreateFromQuaternion(Math::LookRotation(d)) * Matrix::CreateTranslation(position);
 	for (int i = 0; i < segments + 1; ++i)
 	{
-		Vector3 a = Vector3::Transform(sphere.GetLocalPoint(Math::PIDIV2, i * t), world) + direction * height;
-		Vector3 b = Vector3::Transform(sphere.GetLocalPoint(Math::PIDIV2, (i + 1) * t), world) + direction * height;
+		Vector3 a = Vector3::Transform(Vector3(radius * cos(t * i), radius * sin(t * i), 0) + Vector3::Forward * height, world);
+		Vector3 b = Vector3::Transform(Vector3(radius * cos(t * (i + 1)), radius * sin(t * (i + 1)), 0) + Vector3::Forward * height, world);
 		AddLine(a, b, color);
 		AddLine(a, position, color);
 	}
@@ -378,7 +398,7 @@ void DebugRenderer::AddLight(const Light& light, const IntColor& color /*= Color
 		AddSphere(light.Position, light.Range, 8, 8, color, false);
 		break;
 	case LightType::Spot:
-		AddWireCone(light.Position, light.Direction, light.Range, light.UmbraAngleDegrees, 10, color);
+		AddCone(light.Position, light.Direction, light.Range, light.UmbraAngleDegrees, 10, color);
 		break;
 	default:
 		break;

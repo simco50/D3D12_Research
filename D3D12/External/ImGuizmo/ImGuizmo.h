@@ -1,20 +1,20 @@
 // https://github.com/CedricGuillemet/ImGuizmo
-// v 1.61 WIP
+// v 1.84 WIP
 //
 // The MIT License(MIT)
-// 
-// Copyright(c) 2016 Cedric Guillemet
-// 
+//
+// Copyright(c) 2021 Cedric Guillemet
+//
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files(the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
 // to use, copy, modify, merge, publish, distribute, sublicense, and / or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions :
-// 
+//
 // The above copyright notice and this permission notice shall be included in all
 // copies or substantial portions of the Software.
-// 
+//
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.IN NO EVENT SHALL THE
@@ -111,7 +111,11 @@ void EditTransform(const Camera& camera, matrix_t& matrix)
 #define IMGUI_API
 #endif
 
-namespace ImGuizmo
+#ifndef IMGUIZMO_NAMESPACE
+#define IMGUIZMO_NAMESPACE ImGuizmo
+#endif
+
+namespace IMGUIZMO_NAMESPACE
 {
    // call inside your own window and before Manipulate() in order to draw gizmo to that window.
    // Or pass a specific ImDrawList to draw to (e.g. ImGui::GetForegroundDrawList()).
@@ -176,9 +180,15 @@ namespace ImGuizmo
       SCALE_Y          = (1u << 8),
       SCALE_Z          = (1u << 9),
       BOUNDS           = (1u << 10),
+      SCALE_XU         = (1u << 11),
+      SCALE_YU         = (1u << 12),
+      SCALE_ZU         = (1u << 13),
+
       TRANSLATE = TRANSLATE_X | TRANSLATE_Y | TRANSLATE_Z,
       ROTATE = ROTATE_X | ROTATE_Y | ROTATE_Z | ROTATE_SCREEN,
-      SCALE = SCALE_X | SCALE_Y | SCALE_Z
+      SCALE = SCALE_X | SCALE_Y | SCALE_Z,
+      SCALEU = SCALE_XU | SCALE_YU | SCALE_ZU, // universal
+      UNIVERSAL = TRANSLATE | ROTATE | SCALEU
    };
 
    inline OPERATION operator|(OPERATION lhs, OPERATION rhs)

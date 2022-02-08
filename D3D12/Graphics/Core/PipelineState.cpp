@@ -56,6 +56,7 @@ void VertexElementLayout::FixupStrings()
 
 PipelineStateInitializer::PipelineStateInitializer()
 {
+	m_pSubobjectData.resize(sizeof(CD3DX12_PIPELINE_STATE_STREAM2));
 	m_pSubobjectLocations.fill(-1);
 
 	GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_BLEND>() = CD3DX12_BLEND_DESC(D3D12_DEFAULT);

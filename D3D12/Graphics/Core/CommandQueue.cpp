@@ -78,7 +78,7 @@ CommandQueue::CommandQueue(GraphicsDevice* pParent, D3D12_COMMAND_LIST_TYPE type
 	m_pFence = std::make_unique<Fence>(pParent, (uint64)type << 56, "CommandQueue Fence");
 
 	VERIFY_HR_EX(pParent->GetDevice()->CreateCommandQueue(&desc, IID_PPV_ARGS(m_pCommandQueue.GetAddressOf())), pParent->GetDevice());
-	D3D::SetObjectName(m_pCommandQueue.Get(), "Main CommandQueue");
+	D3D::SetObjectName(m_pCommandQueue.Get(), Sprintf("%s CommandQueue", D3D::CommandlistTypeToString(type)).c_str());
 }
 
 uint64 CommandQueue::ExecuteCommandLists(CommandContext** pCommandContexts, uint32 numContexts)

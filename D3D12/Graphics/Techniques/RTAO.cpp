@@ -23,9 +23,9 @@ RTAO::RTAO(GraphicsDevice* pDevice)
 
 void RTAO::Execute(RGGraph& graph, const SceneView& sceneData, Texture* pTarget, Texture* pDepth)
 {
-	static float g_AoPower = 3;
-	static float g_AoRadius = 0.5f;
-	static int32 g_AoSamples = 1;
+	static float g_AoPower = 0.7f;
+	static float g_AoRadius = 0.7f;
+	static int32 g_AoSamples = 8;
 
 	if (ImGui::Begin("Parameters"))
 	{

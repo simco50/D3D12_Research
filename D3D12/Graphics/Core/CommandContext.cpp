@@ -125,12 +125,13 @@ void CommandContext::InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESO
 	D3D12_RESOURCE_STATES beforeState = resourceState.Get(subResource);
 	if (beforeState == D3D12_RESOURCE_STATE_UNKNOWN)
 	{
+		resourceState.Set(state, subResource);
+
 		PendingBarrier barrier;
 		barrier.pResource = pBuffer;
-		barrier.State = state;
+		barrier.State = resourceState;
 		barrier.Subresource = subResource;
 		m_PendingBarriers.push_back(barrier);
-		resourceState.Set(state, subResource);
 	}
 	else
 	{
@@ -163,20 +164,20 @@ void CommandContext::CopyTexture(GraphicsResource* pSource, GraphicsResource* pT
 	m_pCommandList->CopyResource(pTarget->GetResource(), pSource->GetResource());
 }
 
-void CommandContext::CopyTexture(Texture* pSource, Buffer* pDestination, const D3D12_BOX& sourceRegion, int sourceSubregion /*= 0*/, int destinationOffset /*= 0*/)
+void CommandContext::CopyTexture(Texture* pSource, Buffer* pDestination, const D3D12_BOX& sourceRegion, uint32 sourceSubresource /*= 0*/, uint32 destinationOffset /*= 0*/)
 {
 	D3D12_PLACED_SUBRESOURCE_FOOTPRINT textureFootprint = {};
 	D3D12_RESOURCE_DESC resourceDesc = pSource->GetResource()->GetDesc();
 	GetParent()->GetDevice()->GetCopyableFootprints(&resourceDesc, 0, 1, 0, &textureFootprint, nullptr, nullptr, nullptr);
 
-	CD3DX12_TEXTURE_COPY_LOCATION srcLocation(pSource->GetResource(), sourceSubregion);
+	CD3DX12_TEXTURE_COPY_LOCATION srcLocation(pSource->GetResource(), sourceSubresource);
 	CD3DX12_TEXTURE_COPY_LOCATION dstLocation(pDestination->GetResource(), textureFootprint);
 	m_pCommandList->CopyTextureRegion(&dstLocation, destinationOffset, 0, 0, &srcLocation, &sourceRegion);
 }
 
-void CommandContext::CopyTexture(Texture* pSource, Texture* pDestination, const D3D12_BOX& sourceRegion, const D3D12_BOX& destinationRegion, int sourceSubregion /*= 0*/, int destinationSubregion /*= 0*/)
+void CommandContext::CopyTexture(Texture* pSource, Texture* pDestination, const D3D12_BOX& sourceRegion, const D3D12_BOX& destinationRegion, uint32 sourceSubresource /*= 0*/, uint32 destinationSubregion /*= 0*/)
 {
-	CD3DX12_TEXTURE_COPY_LOCATION srcLocation(pSource->GetResource(), sourceSubregion);
+	CD3DX12_TEXTURE_COPY_LOCATION srcLocation(pSource->GetResource(), sourceSubresource);
 	CD3DX12_TEXTURE_COPY_LOCATION dstLocation(pDestination->GetResource(), destinationSubregion);
 	m_pCommandList->CopyTextureRegion(&dstLocation, destinationRegion.left, destinationRegion.top, destinationRegion.front, &srcLocation, &sourceRegion);
 }
@@ -193,7 +194,7 @@ void CommandContext::InitializeBuffer(Buffer* pResource, const void* pData, uint
 	CopyBuffer(allocation.pBackingResource, pResource, dataSize, allocation.Offset, offset);
 }
 
-void CommandContext::InitializeTexture(Texture* pResource, D3D12_SUBRESOURCE_DATA* pSubResourceDatas, int firstSubResource, int subResourceCount)
+void CommandContext::InitializeTexture(Texture* pResource, D3D12_SUBRESOURCE_DATA* pSubResourceDatas, uint32 firstSubResource, uint32 subResourceCount)
 {
 	uint64 requiredSize = GetRequiredIntermediateSize(pResource->GetResource(), firstSubResource, subResourceCount);
 	DynamicAllocation allocation = m_DynamicAllocator->Allocate(requiredSize, D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT);
@@ -290,7 +291,7 @@ void CommandContext::SetGraphicsRootSignature(RootSignature* pRootSignature)
 	m_pCommandList->SetGraphicsRootDescriptorTable(pRootSignature->GetBindlessSamplerIndex(), GetParent()->GetGlobalSamplerHeap()->GetStartHandle().GpuHandle);
 }
 
-void CommandContext::SetRootSRV(int rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address)
+void CommandContext::SetRootSRV(uint32 rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address)
 {
 	check(m_CurrentCommandContext != CommandListContext::Invalid);
 	if (m_CurrentCommandContext == CommandListContext::Graphics)
@@ -303,7 +304,7 @@ void CommandContext::SetRootSRV(int rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address
 	}
 }
 
-void CommandContext::SetRootUAV(int rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address)
+void CommandContext::SetRootUAV(uint32 rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address)
 {
 	check(m_CurrentCommandContext != CommandListContext::Invalid);
 	if (m_CurrentCommandContext == CommandListContext::Graphics)
@@ -316,7 +317,7 @@ void CommandContext::SetRootUAV(int rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address
 	}
 }
 
-void CommandContext::SetRootConstants(int rootIndex, uint32 count, const void* pConstants)
+void CommandContext::SetRootConstants(uint32 rootIndex, uint32 count, const void* pConstants)
 {
 	check(m_CurrentCommandContext != CommandListContext::Invalid);
 	if (m_CurrentCommandContext == CommandListContext::Graphics)
@@ -329,7 +330,7 @@ void CommandContext::SetRootConstants(int rootIndex, uint32 count, const void* p
 	}
 }
 
-void CommandContext::SetRootCBV(int rootIndex, const void* pData, uint32 dataSize)
+void CommandContext::SetRootCBV(uint32 rootIndex, const void* pData, uint32 dataSize)
 {
 	check(m_CurrentCommandContext != CommandListContext::Invalid);
 	DynamicAllocation allocation = m_DynamicAllocator->Allocate(dataSize);
@@ -345,13 +346,13 @@ void CommandContext::SetRootCBV(int rootIndex, const void* pData, uint32 dataSiz
 	}
 }
 
-void CommandContext::BindResource(int rootIndex, int offset, ResourceView* pView)
+void CommandContext::BindResource(uint32 rootIndex, uint32 offset, ResourceView* pView)
 {
 	D3D12_CPU_DESCRIPTOR_HANDLE handle = pView->GetDescriptor();
 	m_ShaderResourceDescriptorAllocator.SetDescriptors(rootIndex, offset, 1, &handle);
 }
 
-void CommandContext::BindResources(int rootIndex, int offset, const D3D12_CPU_DESCRIPTOR_HANDLE* handles, int count)
+void CommandContext::BindResources(uint32 rootIndex, uint32 offset, const D3D12_CPU_DESCRIPTOR_HANDLE* handles, uint32 count)
 {
 	m_ShaderResourceDescriptorAllocator.SetDescriptors(rootIndex, offset, count, handles);
 }
@@ -557,7 +558,7 @@ void CommandContext::EndRenderPass()
 	m_InRenderPass = false;
 }
 
-void CommandContext::Draw(int vertexStart, int vertexCount)
+void CommandContext::Draw(uint32 vertexStart, uint32 vertexCount)
 {
 	check(m_pCurrentPSO && m_pCurrentPSO->GetType() == PipelineStateType::Graphics);
 	check(m_CurrentCommandContext == CommandListContext::Graphics);
@@ -565,7 +566,7 @@ void CommandContext::Draw(int vertexStart, int vertexCount)
 	m_pCommandList->DrawInstanced(vertexCount, 1, vertexStart, 0);
 }
 
-void CommandContext::DrawIndexed(int indexCount, int indexStart, int minVertex /*= 0*/)
+void CommandContext::DrawIndexed(uint32 indexCount, uint32 indexStart, uint32 minVertex /*= 0*/)
 {
 	check(m_pCurrentPSO && m_pCurrentPSO->GetType() == PipelineStateType::Graphics);
 	check(m_CurrentCommandContext == CommandListContext::Graphics);
@@ -573,7 +574,7 @@ void CommandContext::DrawIndexed(int indexCount, int indexStart, int minVertex /
 	m_pCommandList->DrawIndexedInstanced(indexCount, 1, indexStart, minVertex, 0);
 }
 
-void CommandContext::DrawIndexedInstanced(int indexCount, int indexStart, int instanceCount, int minVertex /*= 0*/, int instanceStart /*= 0*/)
+void CommandContext::DrawIndexedInstanced(uint32 indexCount, uint32 indexStart, uint32 instanceCount, uint32 minVertex /*= 0*/, uint32 instanceStart /*= 0*/)
 {
 	check(m_pCurrentPSO && m_pCurrentPSO->GetType() == PipelineStateType::Graphics);
 	check(m_CurrentCommandContext == CommandListContext::Graphics);
@@ -633,9 +634,9 @@ void CommandContext::SetPipelineState(StateObject* pStateObject)
 	m_pCurrentSO = pStateObject;
 }
 
-void CommandContext::SetDynamicVertexBuffer(int rootIndex, int elementCount, int elementSize, const void* pData)
+void CommandContext::SetDynamicVertexBuffer(uint32 rootIndex, uint32 elementCount, uint32 elementSize, const void* pData)
 {
-	int bufferSize = elementCount * elementSize;
+	uint32 bufferSize = elementCount * elementSize;
 	DynamicAllocation allocation = m_DynamicAllocator->Allocate(bufferSize);
 	memcpy(allocation.pMappedMemory, pData, bufferSize);
 	D3D12_VERTEX_BUFFER_VIEW view = {};
@@ -645,10 +646,10 @@ void CommandContext::SetDynamicVertexBuffer(int rootIndex, int elementCount, int
 	m_pCommandList->IASetVertexBuffers(rootIndex, 1, &view);
 }
 
-void CommandContext::SetDynamicIndexBuffer(int elementCount, const void* pData, bool smallIndices /*= false*/)
+void CommandContext::SetDynamicIndexBuffer(uint32 elementCount, const void* pData, bool smallIndices /*= false*/)
 {
-	int stride = smallIndices ? sizeof(uint16) : sizeof(uint32);
-	int bufferSize = elementCount * stride;
+	uint32 stride = smallIndices ? sizeof(uint16) : sizeof(uint32);
+	uint32 bufferSize = elementCount * stride;
 	DynamicAllocation allocation = m_DynamicAllocator->Allocate(bufferSize);
 	memcpy(allocation.pMappedMemory, pData, bufferSize);
 	D3D12_INDEX_BUFFER_VIEW view = {};
@@ -663,12 +664,12 @@ void CommandContext::SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY type)
 	m_pCommandList->IASetPrimitiveTopology(type);
 }
 
-void CommandContext::SetVertexBuffers(const VertexBufferView* pVertexBuffers, int bufferCount)
+void CommandContext::SetVertexBuffers(const VertexBufferView* pVertexBuffers, uint32 bufferCount)
 {
-	constexpr int MAX_VERTEX_BUFFERS = 4;
+	constexpr uint32 MAX_VERTEX_BUFFERS = 4;
 	checkf(bufferCount < MAX_VERTEX_BUFFERS, "VertexBuffer count (%d) exceeds the maximum (%d)", bufferCount, MAX_VERTEX_BUFFERS);
 	std::array<D3D12_VERTEX_BUFFER_VIEW, MAX_VERTEX_BUFFERS> views = {};
-	for (int i = 0; i < bufferCount; ++i)
+	for (uint32 i = 0; i < bufferCount; ++i)
 	{
 		views[i].BufferLocation = pVertexBuffers[i].Location;
 		views[i].SizeInBytes = pVertexBuffers[i].Elements * pVertexBuffers[i].Stride;
@@ -709,7 +710,7 @@ void CommandContext::SetScissorRect(const FloatRect& rect)
 	m_pCommandList->RSSetScissorRects(1, &r);
 }
 
-void ResourceBarrierBatcher::AddTransition(ID3D12Resource* pResource, D3D12_RESOURCE_STATES beforeState, D3D12_RESOURCE_STATES afterState, int subResource)
+void ResourceBarrierBatcher::AddTransition(ID3D12Resource* pResource, D3D12_RESOURCE_STATES beforeState, D3D12_RESOURCE_STATES afterState, uint32 subResource)
 {
 	if (beforeState == afterState)
 	{

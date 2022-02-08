@@ -16,22 +16,9 @@ class SSAO;
 class GpuParticles;
 class PathTracing;
 class CBTTessellation;
+class UnorderedAccessView;
 struct SubMesh;
 struct Material;
-
-enum class DefaultTexture
-{
-	White2D,
-	Black2D,
-	Magenta2D,
-	Gray2D,
-	Normal2D,
-	RoughnessMetalness,
-	BlackCube,
-	ColorNoise256,
-	BlueNoise512,
-	MAX,
-};
 
 enum class RenderPath
 {
@@ -53,9 +40,9 @@ public:
 
 private:
 	void OnResizeViewport(int width, int height);
+	void Present();
 
 	void InitializePipelines();
-	void InitializeAssets(CommandContext& context);
 	void SetupScene(CommandContext& context);
 
 	void UpdateImGui();
@@ -65,7 +52,6 @@ private:
 
 	void UploadSceneData(CommandContext& context);
 
-	Texture* GetDefaultTexture(DefaultTexture type) const { return m_DefaultTextures[(int)type].get(); }
 	Texture* GetDepthStencil() const { return m_pDepthStencil.get(); }
 	Texture* GetResolvedDepthStencil() const { return m_pResolvedDepthStencil.get(); }
 	Texture* GetCurrentRenderTarget() const { return m_SampleCount > 1 ? m_pMultiSampleRenderTarget.get() : m_pHDRRenderTarget.get(); }
@@ -99,8 +85,6 @@ private:
 	std::unique_ptr<SSAO> m_pSSAO;
 	std::unique_ptr<PathTracing> m_pPathTracing;
 	std::unique_ptr<CBTTessellation> m_pCBTTessellation;
-
-	std::array<std::unique_ptr<Texture>, (int)DefaultTexture::MAX> m_DefaultTextures;
 
 	WindowHandle m_Window = nullptr;
 	uint32 m_SampleCount = 1;
@@ -186,6 +170,15 @@ private:
 	std::unique_ptr<Buffer> m_pTransformsBuffer;
 	std::vector<Light> m_Lights;
 	std::unique_ptr<Buffer> m_pLightBuffer;
+
+	//Bloom
+	PipelineState* m_pBloomSeparatePSO = nullptr;
+	PipelineState* m_pBloomMipChainPSO = nullptr;
+	std::unique_ptr<RootSignature> m_pBloomRS;
+	std::unique_ptr<Texture> m_pBloomTexture;
+	std::unique_ptr<Texture> m_pBloomIntermediateTexture;
+	std::vector<UnorderedAccessView*> m_pBloomUAVs;
+	std::vector<UnorderedAccessView*> m_pBloomIntermediateUAVs;
 
 	// Visibility buffer
 	std::unique_ptr<RootSignature> m_pVisibilityRenderingRS;

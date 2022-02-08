@@ -24,6 +24,7 @@ static constexpr int gVolumetricNumZSlices = 128;
 namespace Tweakables
 {
 	extern ConsoleVariable<int> g_SsrSamples;
+	extern ConsoleVariable<bool> g_VolumetricFog;
 }
 bool g_VisualizeClusters = false;
 
@@ -86,7 +87,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& resources, const
 {
 	RG_GRAPH_SCOPE("Clustered Lighting", graph);
 
-	static bool useMeshShader = true;
+	static bool useMeshShader = false;
 	if (ImGui::Begin("Parameters"))
 	{
 		if (ImGui::CollapsingHeader("Base Pass"))
@@ -116,15 +117,15 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& resources, const
 
 				struct ConstantBuffer
 				{
+					IntVector4 ClusterDimensions;
 					IntVector2 ClusterSize;
-					IntVector3 ClusterDimensions;
 				} constantBuffer;
 
 				constantBuffer.ClusterSize = IntVector2(gLightClusterTexelSize, gLightClusterTexelSize);
-				constantBuffer.ClusterDimensions = IntVector3(m_ClusterCountX, m_ClusterCountY, gLightClustersNumZ);
+				constantBuffer.ClusterDimensions = IntVector4(m_ClusterCountX, m_ClusterCountY, gLightClustersNumZ, 0);
 
 				context.SetRootCBV(0, constantBuffer);
-				context.SetRootCBV(1, GetViewUniforms(resources));
+				context.SetRootCBV(1, GetViewUniforms(resources, parameters.pDepth));
 				context.BindResource(2, 0, m_pAABBs->GetUAV());
 
 				//Cluster count in z is 32 so fits nicely in a wavefront on Nvidia so make groupsize in shader 32
@@ -177,8 +178,13 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& resources, const
 			);
 		});
 
+	Texture* pFogVolume = GraphicsCommon::GetDefaultTexture(DefaultTexture::Black3D);
+
+	if(Tweakables::g_VolumetricFog)
 	{
 		RG_GRAPH_SCOPE("Volumetric Lighting", graph);
+
+		pFogVolume = m_pFinalVolumeFog.get();
 
 		Texture* pSourceVolume = m_pLightScatteringVolume[resources.FrameIndex % 2].get();
 		Texture* pDestinationVolume = m_pLightScatteringVolume[(resources.FrameIndex + 1) % 2].get();
@@ -283,7 +289,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& resources, const
 			context.InsertResourceBarrier(parameters.pAmbientOcclusion, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(parameters.pPreviousColorTarget, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(parameters.pResolvedDepth, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-			context.InsertResourceBarrier(m_pFinalVolumeFog.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+			context.InsertResourceBarrier(pFogVolume, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
 			context.InsertResourceBarrier(parameters.pDepth, D3D12_RESOURCE_STATE_DEPTH_READ);
 			context.InsertResourceBarrier(parameters.pColorTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
@@ -313,7 +319,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& resources, const
 				parameters.pAmbientOcclusion->GetSRV()->GetDescriptor(),
 				parameters.pResolvedDepth->GetSRV()->GetDescriptor(),
 				parameters.pPreviousColorTarget->GetSRV()->GetDescriptor(),
-				m_pFinalVolumeFog->GetSRV()->GetDescriptor(),
+				pFogVolume->GetSRV()->GetDescriptor(),
 				m_pLightGrid->GetSRV()->GetDescriptor(),
 				m_pLightIndexGrid->GetSRV()->GetDescriptor(),
 			};
@@ -358,7 +364,9 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& resources, const
 				context.SetGraphicsRootSignature(m_pVisualizeLightClustersRS.get());
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_POINTLIST);
 
-				context.SetRootCBV(0, GetViewUniforms(resources, parameters.pColorTarget));
+				ShaderInterop::ViewUniforms view = GetViewUniforms(resources, parameters.pColorTarget);
+				view.Projection = m_DebugClustersViewMatrix * resources.View.ViewProjection;
+				context.SetRootCBV(0, view);
 
 				D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
 					m_pAABBs->GetSRV()->GetDescriptor(),

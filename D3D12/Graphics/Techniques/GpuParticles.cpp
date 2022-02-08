@@ -54,42 +54,14 @@ GpuParticles::GpuParticles(GraphicsDevice* pDevice)
 	pContext->Execute(true);
 
 	{
-		Shader* pComputeShader = pDevice->GetShader("ParticleSimulation.hlsl", ShaderType::Compute, "UpdateSimulationParameters");
 		m_pSimulateRS = std::make_unique<RootSignature>(pDevice);
-		m_pSimulateRS->FinalizeFromShader("Particle Simulation", pComputeShader);
-	}
-
-	{
-		Shader* pComputeShader = pDevice->GetShader("ParticleSimulation.hlsl", ShaderType::Compute, "UpdateSimulationParameters");
-		PipelineStateInitializer psoDesc;
-		psoDesc.SetComputeShader(pComputeShader);
-		psoDesc.SetRootSignature(m_pSimulateRS->GetRootSignature());
-		psoDesc.SetName("Prepare Particle Arguments");
-		m_pPrepareArgumentsPS = pDevice->CreatePipeline(psoDesc);
+		m_pSimulateRS->FinalizeFromShader("Particle Simulation", pDevice->GetShader("ParticleSimulation.hlsl", ShaderType::Compute, "UpdateSimulationParameters"));
 	}
 	{
-		Shader* pComputeShader = pDevice->GetShader("ParticleSimulation.hlsl", ShaderType::Compute, "Emit");
-		PipelineStateInitializer psoDesc;
-		psoDesc.SetComputeShader(pComputeShader);
-		psoDesc.SetRootSignature(m_pSimulateRS->GetRootSignature());
-		psoDesc.SetName("Particle Emitter");
-		m_pEmitPS = pDevice->CreatePipeline(psoDesc);
-	}
-	{
-		Shader* pComputeShader = pDevice->GetShader("ParticleSimulation.hlsl", ShaderType::Compute, "Simulate");
-		PipelineStateInitializer psoDesc;
-		psoDesc.SetComputeShader(pComputeShader);
-		psoDesc.SetRootSignature(m_pSimulateRS->GetRootSignature());
-		psoDesc.SetName("Particle Simulation");
-		m_pSimulatePS = pDevice->CreatePipeline(psoDesc);
-	}
-	{
-		Shader* pComputeShader = pDevice->GetShader("ParticleSimulation.hlsl", ShaderType::Compute, "SimulateEnd");
-		PipelineStateInitializer psoDesc;
-		psoDesc.SetComputeShader(pComputeShader);
-		psoDesc.SetRootSignature(m_pSimulateRS->GetRootSignature());
-		psoDesc.SetName("Particle Simulation End");
-		m_pSimulateEndPS = pDevice->CreatePipeline(psoDesc);
+		m_pPrepareArgumentsPS = pDevice->CreatePipeline(pDevice->GetShader("ParticleSimulation.hlsl", ShaderType::Compute, "UpdateSimulationParameters"), m_pSimulateRS.get());
+		m_pEmitPS = pDevice->CreatePipeline(pDevice->GetShader("ParticleSimulation.hlsl", ShaderType::Compute, "Emit"), m_pSimulateRS.get());
+		m_pSimulatePS = pDevice->CreatePipeline(pDevice->GetShader("ParticleSimulation.hlsl", ShaderType::Compute, "Simulate"), m_pSimulateRS.get());
+		m_pSimulateEndPS = pDevice->CreatePipeline(pDevice->GetShader("ParticleSimulation.hlsl", ShaderType::Compute, "SimulateEnd"), m_pSimulateRS.get());
 	}
 	{
 		Shader* pVertexShader = pDevice->GetShader("ParticleRendering.hlsl", ShaderType::Vertex, "VSMain");
@@ -205,7 +177,7 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView& resources, Texture*
 			context.BindResources(2, 0, uavs, ARRAYSIZE(uavs));
 			context.BindResources(3, 0, srvs, ARRAYSIZE(srvs));
 
-			context.ExecuteIndirect(m_pDevice->GetIndirectDispatchSignature(), 1, m_pEmitArguments.get(), m_pEmitArguments.get());
+			context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchSignature, 1, m_pEmitArguments.get(), m_pEmitArguments.get());
 			context.InsertUavBarrier();
 		});
 
@@ -229,7 +201,7 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView& resources, Texture*
 			context.BindResources(2, 0, uavs, ARRAYSIZE(uavs));
 			context.BindResources(3, 0, srvs, ARRAYSIZE(srvs));
 
-			context.ExecuteIndirect(m_pDevice->GetIndirectDispatchSignature(), 1, m_pSimulateArguments.get(), nullptr);
+			context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchSignature, 1, m_pSimulateArguments.get(), nullptr);
 			context.InsertUavBarrier();
 		});
 
@@ -282,7 +254,7 @@ void GpuParticles::Render(RGGraph& graph, const SceneView& resources, Texture* p
 				m_pAliveList1->GetSRV()->GetDescriptor()
 			};
 			context.BindResources(1, 0, srvs, 2);
-			context.ExecuteIndirect(m_pDevice->GetIndirectDrawSignature(), 1, m_pDrawArguments.get(), nullptr);
+			context.ExecuteIndirect(GraphicsCommon::pIndirectDrawSignature, 1, m_pDrawArguments.get(), nullptr);
 			context.EndRenderPass();
 		});
 }

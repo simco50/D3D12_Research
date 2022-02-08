@@ -177,7 +177,7 @@ void InjectFogLightingCS(uint3 threadId : SV_DispatchThreadID)
 	float4 newScattering = float4(inScattering * totalLighting, cellDensity);
 	if(blendFactor < 1.0f)
 	{
-	newScattering = lerp(prevScattering, newScattering, blendFactor);
+		newScattering = lerp(prevScattering, newScattering, blendFactor);
 	}
 
 	uOutLightScattering[threadId] = newScattering;

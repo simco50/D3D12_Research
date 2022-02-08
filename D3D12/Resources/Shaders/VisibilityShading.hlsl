@@ -172,7 +172,7 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 	for(uint i = 0; i < 3; ++i)
 	{
 		uint vertexId = indices[i];
-        vertices[i].Position = UnpackHalf3(BufferLoad<uint2>(mesh.BufferIndex, vertexId, mesh.PositionsOffset));
+        vertices[i].Position = BufferLoad<float3>(mesh.BufferIndex, vertexId, mesh.PositionsOffset);
         vertices[i].UV = UnpackHalf2(BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.UVsOffset));
         NormalData normalData = BufferLoad<NormalData>(mesh.BufferIndex, vertexId, mesh.NormalsOffset);
         vertices[i].Normal = normalData.Normal;
