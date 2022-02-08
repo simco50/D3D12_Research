@@ -24,11 +24,11 @@ struct VertexAttribute
 	float2 UV;
 	float3 Normal;
 	float4 Tangent;
+	uint Color;
 };
 
-MaterialProperties GetMaterialProperties(uint materialIndex, float2 UV, float2 dx, float2 dy)
+MaterialProperties GetMaterialProperties(MaterialData material, float2 UV, float2 dx, float2 dy)
 {
-	MaterialData material = GetMaterial(NonUniformResourceIndex(materialIndex));
 	MaterialProperties properties;
 	float4 baseColor = material.BaseColorFactor;
 	if(material.Diffuse != INVALID_HANDLE)
@@ -177,6 +177,10 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
         NormalData normalData = BufferLoad<NormalData>(mesh.BufferIndex, vertexId, mesh.NormalsOffset);
         vertices[i].Normal = normalData.Normal;
         vertices[i].Tangent = normalData.Tangent;
+		if(mesh.ColorsOffset != ~0u)
+			vertices[i].Color = BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.ColorsOffset);
+		else
+			vertices[i].Color = 0xFFFFFFFF;
 	}
 
 	float2 ndc = (float2)dispatchThreadId.xy * cView.ScreenDimensionsInv * 2 - 1;
@@ -196,7 +200,9 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 	float3 P = InterpolateWithDeriv(derivs, vertices[0].Position, vertices[1].Position, vertices[2].Position);
 	float3 worldPos = mul(float4(P, 1), world).xyz;
 
-	MaterialProperties properties = GetMaterialProperties(instance.Material, UV, dx, dy);
+	MaterialData material = GetMaterial(NonUniformResourceIndex(instance.Material));
+	material.BaseColorFactor *= UIntToColor(vertices[0].Color);
+	MaterialProperties properties = GetMaterialProperties(material, UV, dx, dy);
 	float3x3 TBN = float3x3(T, B, N);
 	N = TangentSpaceNormalMapping(properties.NormalTS, TBN);
 
