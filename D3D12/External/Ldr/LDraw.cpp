@@ -286,10 +286,10 @@ LdrResult ParseLDraw(const char* pPartName, LdrState* pData, std::vector<std::un
 			{
 				if (strstr(pSearch, "INVERTNEXT"))
 					invert = true;
-				else if (strstr(pSearch, "CW"))
-					ccw = false;
 				else if (strstr(pSearch, "CCW"))
 					ccw = true;
+				else if (strstr(pSearch, "CW"))
+					ccw = false;
 			}
 
 			pSearch = strstr(pLine, "0 FILE");
@@ -496,23 +496,15 @@ void FlattenPart(LdrPart* pPart, LdrState* pData, const LdrMatrix& currentLdrMat
 
 		pPart->IsMultiMaterial |= pSubpart->IsMultiMaterial;
 
-		// Some parts may already be indexed, we need non-indexed data.
-		// Account for inverted subparts by reversing winding order.
-		auto GetIndex = [&](uint32 index) {
-			if (!inv)
-				return index;
-			uint32 faceIdx = index % 3;
-			index = index / 3 * 3;
-			index += 2 - faceIdx;
-			return pSubpart->Indices.empty() ? index : pSubpart->Indices[index];
-		};
-
-		uint32 numVertices = pSubpart->Indices.empty() ? (uint32)pSubpart->Vertices.size() : (uint32)pSubpart->Indices.size();
-		for (uint32 i = 0; i < numVertices; ++i)
+		for (uint32 i = 0; i < pSubpart->Vertices.size(); i += 3)
 		{
-			uint32 index = GetIndex(i);
-			pPart->Vertices.push_back(pSubpart->Vertices[index].Transform(subfile.Transform));
-			pPart->Colors.push_back(ResolveTriangleColor(pSubpart->Colors[index], subfile.Color));
+			pPart->Vertices.push_back(pSubpart->Vertices[i + (inv ? 2u : 0u)].Transform(subfile.Transform));
+			pPart->Vertices.push_back(pSubpart->Vertices[i + (inv ? 1u : 1u)].Transform(subfile.Transform));
+			pPart->Vertices.push_back(pSubpart->Vertices[i + (inv ? 0u : 2u)].Transform(subfile.Transform));
+
+			pPart->Colors.push_back(ResolveTriangleColor(pSubpart->Colors[i + (inv ? 2u : 0u)], subfile.Color));
+			pPart->Colors.push_back(ResolveTriangleColor(pSubpart->Colors[i + (inv ? 1u : 1u)], subfile.Color));
+			pPart->Colors.push_back(ResolveTriangleColor(pSubpart->Colors[i + (inv ? 0u : 2u)], subfile.Color));
 		}
 	}
 	pPart->Subfiles.clear();
