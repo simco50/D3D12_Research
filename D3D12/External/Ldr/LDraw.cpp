@@ -105,7 +105,7 @@ namespace Util
 	};
 }
 
-bool LdrInit(const LdrConfig* pConfig, LdrState* pData)
+LdrResult LdrInit(const LdrConfig* pConfig, LdrState* pData)
 {
 	pData->Config = *pConfig;
 	pData->MaterialMap.clear();
@@ -135,14 +135,14 @@ bool LdrInit(const LdrConfig* pConfig, LdrState* pData)
 	Util::FileReader reader;
 	if (!reader.Open(configPath))
 	{
-		return false;
+		return LdrResult::Error_FileNotFound;
 	}
 
 	const char* pLine = nullptr;
 	while (reader.GetLine(&pLine))
 	{
 		LdrMaterial material;
-		material.Type = LdrMaterialType::None;
+		material.Type = LdrMaterialFinish::None;
 
 		const uint32 numRequiredValues = 4;
 		if (sscanf_s(pLine, "0 !COLOUR %128s CODE %d VALUE #%x EDGE #%x", material.Name.Data, LdrName::SIZE, &material.Code, &material.Color, &material.EdgeColor) == numRequiredValues)
@@ -171,19 +171,23 @@ bool LdrInit(const LdrConfig* pConfig, LdrState* pData)
 
 			if (strstr(pLine, "CHROME"))
 			{
-				material.Type = LdrMaterialType::Chrome;
+				material.Type = LdrMaterialFinish::Chrome;
 			}
 			else if (strstr(pLine, "PEARLESCENT"))
 			{
-				material.Type = LdrMaterialType::Pearlescent;
+				material.Type = LdrMaterialFinish::Pearlescent;
+			}
+			else if (strstr(pLine, "MATTE_METALLIC"))
+			{
+				material.Type = LdrMaterialFinish::MatteMetallic;
 			}
 			else if (strstr(pLine, "METAL"))
 			{
-				material.Type = LdrMaterialType::Metal;
+				material.Type = LdrMaterialFinish::Metallic;
 			}
 			else if (strstr(pLine, "RUBBER"))
 			{
-				material.Type = LdrMaterialType::Rubber;
+				material.Type = LdrMaterialFinish::Rubber;
 			}
 			else if (strstr(pLine, "MATERIAL"))
 			{
@@ -191,14 +195,14 @@ bool LdrInit(const LdrConfig* pConfig, LdrState* pData)
 				if (pSearch)
 				{
 					sscanf_s(pSearch, "GLITTER VALUE #%x FRACTION %f VFRACTION %f SIZE %f", &material.Glitter.Color, &material.Glitter.Fraction, &material.Glitter.VFraction, &material.Glitter.Size);
-					material.Type = LdrMaterialType::Glitter;
+					material.Type = LdrMaterialFinish::Glitter;
 				}
 
 				pSearch = strstr(pLine, "SPECKLE");
 				if (pSearch)
 				{
 					sscanf_s(pSearch, "SPECKLE VALUE #%x FRACTION %f MINSIZE %f MAXSIZE %f", &material.Speckle.Color, &material.Speckle.Fraction, &material.Speckle.MinSize, &material.Speckle.MaxSize);
-					material.Type = LdrMaterialType::Speckle;
+					material.Type = LdrMaterialFinish::Speckle;
 				}
 			}
 
@@ -206,10 +210,10 @@ bool LdrInit(const LdrConfig* pConfig, LdrState* pData)
 			pData->Materials.push_back(material);
 		}
 	}
-	return true;
+	return LdrResult::Success;
 }
 
-bool ParseLDraw(const char* pPartName, LdrState* pData, std::vector<std::unique_ptr<LdrPart>>& outParts)
+LdrResult ParseLDraw(const char* pPartName, LdrState* pData, std::vector<std::unique_ptr<LdrPart>>& outParts)
 {
 	outParts.clear();
 	LdrPart::Type partType = LdrPart::Type::LocalModel;
@@ -236,7 +240,7 @@ bool ParseLDraw(const char* pPartName, LdrState* pData, std::vector<std::unique_
 
 	if (!reader.IsOpen())
 	{
-		return false;
+		return LdrResult::Warning_PartNotFound;
 	}
 
 	std::unique_ptr<LdrPart> part = std::make_unique<LdrPart>();
@@ -271,7 +275,9 @@ bool ParseLDraw(const char* pPartName, LdrState* pData, std::vector<std::unique_
 		if (sscanf_s(pLine, "%d", &cmd) < 1)
 			continue;
 		Command command = (Command)cmd;
-		assert((int)command < (int)Command::MAX);
+
+		if ((uint32)command >= (int)Command::MAX)
+			return LdrResult::Error_FileParseError;
 
 		if (command == Command::Meta)
 		{
@@ -279,17 +285,11 @@ bool ParseLDraw(const char* pPartName, LdrState* pData, std::vector<std::unique_
 			if (pSearch)
 			{
 				if (strstr(pSearch, "INVERTNEXT"))
-				{
 					invert = true;
-				}
-				if (strstr(pSearch, "CW"))
-				{
+				else if (strstr(pSearch, "CW"))
 					ccw = false;
-				}
-				if (strstr(pSearch, "CCW"))
-				{
+				else if (strstr(pSearch, "CCW"))
 					ccw = true;
-				}
 			}
 
 			pSearch = strstr(pLine, "0 FILE");
@@ -402,7 +402,7 @@ bool ParseLDraw(const char* pPartName, LdrState* pData, std::vector<std::unique_
 				currentPart.IsMultiMaterial = true;
 		}
 	}
-	return true;
+	return LdrResult::Success;
 }
 
 LdrPart* GetPart(const char* pName, LdrState* pData)
@@ -430,7 +430,7 @@ LdrPart* GetPart(const char* pName, LdrState* pData)
 	}
 
 	std::vector<std::unique_ptr<LdrPart>> parts;
-	if (ParseLDraw(pName, pData, parts))
+	if (ParseLDraw(pName, pData, parts) == LdrResult::Success)
 	{
 		for (std::unique_ptr<LdrPart>& newPart : parts)
 		{
@@ -496,15 +496,23 @@ void FlattenPart(LdrPart* pPart, LdrState* pData, const LdrMatrix& currentLdrMat
 
 		pPart->IsMultiMaterial |= pSubpart->IsMultiMaterial;
 
-		for (uint32 i = 0; i < pSubpart->Vertices.size(); i += 3)
-		{
-			pPart->Vertices.push_back(pSubpart->Vertices[i + (inv ? 2u : 0u)].Transform(subfile.Transform));
-			pPart->Vertices.push_back(pSubpart->Vertices[i + (inv ? 1u : 1u)].Transform(subfile.Transform));
-			pPart->Vertices.push_back(pSubpart->Vertices[i + (inv ? 0u : 2u)].Transform(subfile.Transform));
+		// Some parts may already be indexed, we need non-indexed data.
+		// Account for inverted subparts by reversing winding order.
+		auto GetIndex = [&](uint32 index) {
+			if (!inv)
+				return index;
+			uint32 faceIdx = index % 3;
+			index = index / 3 * 3;
+			index += 2 - faceIdx;
+			return pSubpart->Indices.empty() ? index : pSubpart->Indices[index];
+		};
 
-			pPart->Colors.push_back(ResolveTriangleColor(pSubpart->Colors[i + (inv ? 2u : 0u)], subfile.Color));
-			pPart->Colors.push_back(ResolveTriangleColor(pSubpart->Colors[i + (inv ? 1u : 1u)], subfile.Color));
-			pPart->Colors.push_back(ResolveTriangleColor(pSubpart->Colors[i + (inv ? 0u : 2u)], subfile.Color));
+		uint32 numVertices = pSubpart->Indices.empty() ? (uint32)pSubpart->Vertices.size() : (uint32)pSubpart->Indices.size();
+		for (uint32 i = 0; i < numVertices; ++i)
+		{
+			uint32 index = GetIndex(i);
+			pPart->Vertices.push_back(pSubpart->Vertices[index].Transform(subfile.Transform));
+			pPart->Colors.push_back(ResolveTriangleColor(pSubpart->Colors[index], subfile.Color));
 		}
 	}
 	pPart->Subfiles.clear();
@@ -568,76 +576,79 @@ void ComputePartIndices(LdrPart* pPart)
 {
 	// Inspired by MeshOptimized by zeux
 
-	struct HashedVertex
+	if (pPart->Indices.empty())
 	{
-		HashedVertex(const LdrPart* pPart, uint32 vertex)
-			: pPart(pPart), Vertex(vertex)
-		{}
-		const LdrPart* pPart;
-		uint32 Vertex;
-
-		struct Hasher
+		struct HashedVertex
 		{
-			size_t operator()(const HashedVertex& v) const
+			HashedVertex(const LdrPart* pPart, uint32 vertex)
+				: pPart(pPart), Vertex(vertex)
+			{}
+			const LdrPart* pPart;
+			uint32 Vertex;
+
+			struct Hasher
 			{
-				uint32 h = 0;
-				Util::MurmurHash(h, v.pPart->Vertices.data() + v.Vertex, sizeof(LdrVector));
-				Util::MurmurHash(h, v.pPart->Normals.data() + v.Vertex, sizeof(LdrVector));
-				Util::MurmurHash(h, v.pPart->Colors.data() + v.Vertex, sizeof(uint32));
-				return h;
+				size_t operator()(const HashedVertex& v) const
+				{
+					uint32 h = 0;
+					Util::MurmurHash(h, v.pPart->Vertices.data() + v.Vertex, sizeof(LdrVector));
+					Util::MurmurHash(h, v.pPart->Normals.data() + v.Vertex, sizeof(LdrVector));
+					Util::MurmurHash(h, v.pPart->Colors.data() + v.Vertex, sizeof(uint32));
+					return h;
+				}
+			};
+
+			bool operator==(const HashedVertex& rhs) const
+			{
+				return pPart->Colors[Vertex] == rhs.pPart->Colors[rhs.Vertex] &&
+					pPart->Normals[Vertex] == rhs.pPart->Normals[rhs.Vertex] &&
+					pPart->Vertices[Vertex] == rhs.pPart->Vertices[rhs.Vertex];
 			}
 		};
 
-		bool operator==(const HashedVertex& rhs) const
-		{
-			return pPart->Colors[Vertex] == rhs.pPart->Colors[rhs.Vertex] &&
-				pPart->Normals[Vertex] == rhs.pPart->Normals[rhs.Vertex] &&
-				pPart->Vertices[Vertex] == rhs.pPart->Vertices[rhs.Vertex];
-		}
-	};
+		std::unordered_map<HashedVertex, uint32, HashedVertex::Hasher> buckets;
+		std::vector<uint32> remap(pPart->Vertices.size(), ~0u);
 
-	std::unordered_map<HashedVertex, uint32, HashedVertex::Hasher> buckets;
-	std::vector<uint32> remap(pPart->Vertices.size(), ~0u);
-
-	uint32 indexCount = 0;
-	for (size_t i = 0; i < pPart->Vertices.size(); ++i)
-	{
-		if (remap[i] == ~0u)
+		uint32 indexCount = 0;
+		for (size_t i = 0; i < pPart->Vertices.size(); ++i)
 		{
-			HashedVertex v(pPart, (uint32)i);
-			auto it = buckets.find(v);
-			if (it == buckets.end())
+			if (remap[i] == ~0u)
 			{
-				buckets[v] = (uint32)i;
-				remap[i] = indexCount++;
-			}
-			else
-			{
-				remap[i] = remap[it->second];
+				HashedVertex v(pPart, (uint32)i);
+				auto it = buckets.find(v);
+				if (it == buckets.end())
+				{
+					buckets[v] = (uint32)i;
+					remap[i] = indexCount++;
+				}
+				else
+				{
+					remap[i] = remap[it->second];
+				}
 			}
 		}
+
+		auto remapBuffer = [](void* pData, uint32* remap, uint32 numElements, uint32 elementSize)
+		{
+			// Make a copy
+			char* pCopy = new char[numElements * elementSize];
+			memcpy(pCopy, pData, numElements * elementSize);
+			for (uint32 i = 0; i < numElements; ++i)
+			{
+				memcpy((char*)pData + remap[i] * elementSize, pCopy + i * elementSize, elementSize);
+			}
+			delete[] pCopy;
+		};
+
+		remapBuffer(pPart->Vertices.data(), remap.data(), (uint32)pPart->Vertices.size(), sizeof(LdrVector));
+		remapBuffer(pPart->Normals.data(), remap.data(), (uint32)pPart->Normals.size(), sizeof(LdrVector));
+		remapBuffer(pPart->Colors.data(), remap.data(), (uint32)pPart->Colors.size(), sizeof(uint32));
+
+		pPart->Vertices.resize(indexCount);
+		pPart->Normals.resize(indexCount);
+		pPart->Colors.resize(indexCount);
+		pPart->Indices.swap(remap);
 	}
-
-	auto remapBuffer = [](void* pData, uint32* remap, uint32 numElements, uint32 elementSize)
-	{
-		// Make a copy
-		char* pCopy = new char[numElements * elementSize];
-		memcpy(pCopy, pData, numElements * elementSize);
-		for (uint32 i = 0; i < numElements; ++i)
-		{
-			memcpy((char*)pData + remap[i] * elementSize, pCopy + i * elementSize, elementSize);
-		}
-		delete[] pCopy;
-	};
-
-	remapBuffer(pPart->Vertices.data(), remap.data(), (uint32)pPart->Vertices.size(), sizeof(LdrVector));
-	remapBuffer(pPart->Normals.data(), remap.data(), (uint32)pPart->Normals.size(), sizeof(LdrVector));
-	remapBuffer(pPart->Colors.data(), remap.data(), (uint32)pPart->Colors.size(), sizeof(uint32));
-
-	pPart->Vertices.resize(indexCount);
-	pPart->Normals.resize(indexCount);
-	pPart->Colors.resize(indexCount);
-	pPart->Indices.swap(remap);
 }
 
 /*
@@ -648,12 +659,15 @@ void ComputePartIndices(LdrPart* pPart)
 	4. Generate index buffer to deduplicate verticee.
 */
 
-bool LdrLoadModel(const char* pFile, LdrState* pData, LdrModel& outModel)
+LdrResult LdrLoadModel(const char* pFile, LdrState* pData, LdrModel& outModel)
 {
+	outModel.Instances.clear();
+	outModel.Parts.clear();
+
 	LdrPart* pMainPart = GetPart(pFile, pData);
 	if (!pMainPart)
 	{
-		return false;
+		return LdrResult::Error_FileNotFound;
 	}
 
 	constexpr float lduScale = 0.004f;
@@ -672,7 +686,7 @@ bool LdrLoadModel(const char* pFile, LdrState* pData, LdrModel& outModel)
 		ComputePartIndices(pPart);
 	}
 
-	return true;
+	return LdrResult::Success;
 }
 
 const LdrMaterial& LdrGetMaterial(uint32 code, const LdrState* pData)

@@ -77,10 +77,12 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 		//config.ReplacementMap.push_back({ "stud.dat", nullptr });
 
 		LdrState context;
-		LdrInit(&config, &context);
+		if (LdrInit(&config, &context) != LdrResult::Success)
+			return false;
 
 		LdrModel mdl;
-		LdrLoadModel(pFilePath, &context, mdl);
+		if (LdrLoadModel(pFilePath, &context, mdl) != LdrResult::Success)
+			return false;
 
 		auto FixBaseColor = [](Color& c)
 		{
@@ -99,12 +101,17 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 			mat.MetalnessFactor = 0.0f;
 			mat.AlphaMode = mat.BaseColorFactor.w >= 1 ? MaterialAlphaMode::Opaque : MaterialAlphaMode::Blend;
 
-			if (lmat.Type == LdrMaterialType::Metal)
+			if (lmat.Type == LdrMaterialFinish::Metallic)
 			{
 				mat.MetalnessFactor = 1.0f;
 				mat.RoughnessFactor = 0.1f;
 			}
-			else if (lmat.Type == LdrMaterialType::Chrome)
+			else if (lmat.Type == LdrMaterialFinish::MatteMetallic)
+			{
+				mat.MetalnessFactor = 1.0f;
+				mat.RoughnessFactor = 0.5f;
+			}
+			else if (lmat.Type == LdrMaterialFinish::Chrome)
 			{
 				mat.MetalnessFactor = 1.0f;
 				mat.RoughnessFactor = 0.0f;

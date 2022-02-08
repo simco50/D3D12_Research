@@ -7,6 +7,14 @@
 using uint32 = unsigned int;
 using uint8 = unsigned char;
 
+enum class LdrResult
+{
+	Error_FileParseError = -2,
+	Error_FileNotFound = -1,
+	Success = 0,
+	Warning_PartNotFound,
+};
+
 struct LdrName
 {
 	static constexpr uint32 SIZE = 128;
@@ -146,14 +154,15 @@ struct LdrVector
 	float x, y, z;
 };
 
-enum class LdrMaterialType
+enum class LdrMaterialFinish
 {
 	None,
 	Chrome,
-	Speckle,
 	Pearlescent,
 	Rubber,
-	Metal,
+	Metallic,
+	MatteMetallic,
+	Speckle,
 	Glitter,
 };
 
@@ -163,9 +172,8 @@ struct LdrMaterial
 	uint32 Code = 0;
 	uint32 Color = 0;
 	uint32 EdgeColor = 0;
-	uint32 Emissive = 0;
 	uint8 Luminance = 0;
-	LdrMaterialType Type = LdrMaterialType::None;
+	LdrMaterialFinish Type = LdrMaterialFinish::None;
 
 	union
 	{
@@ -264,9 +272,9 @@ struct LdrState
 	std::vector<DatabaseLocation> DatabaseLocations;
 };
 
-bool LdrInit(const LdrConfig* pConfig, LdrState* pData);
+LdrResult LdrInit(const LdrConfig* pConfig, LdrState* pData);
 	
-bool LdrLoadModel(const char* pFile, LdrState* pData, LdrModel& outModel);
+LdrResult LdrLoadModel(const char* pFile, LdrState* pData, LdrModel& outModel);
 
 const LdrMaterial& LdrGetMaterial(uint32 code, const LdrState* pData);
 
