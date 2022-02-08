@@ -56,16 +56,16 @@ namespace Util
 				pData = nullptr;
 			}
 			FILE* pFile = nullptr;
-			fopen_s(&pFile, pPath, "r");
+			fopen_s(&pFile, pPath, "rb");
 			if (!pFile)
 				return false;
 			fseek(pFile, 0, SEEK_END);
 			size_t size = ftell(pFile);
-			pData = new char[size];
-			pCurrentLine = pData;
+			pData = new char[size + 1];
+			pCurrentLine = (char*)pData;
 			fseek(pFile, 0, SEEK_SET);
 			size_t read = fread(pData, sizeof(char), size, pFile);
-			pData[read] = '\0';
+			static_cast<char*>(pData)[size] = '\0';
 			fclose(pFile);
 			return true;
 		}
@@ -83,9 +83,14 @@ namespace Util
 			char* pLine = pCurrentLine;
 			char* pNextLine = strchr(pLine, '\n');
 			if (pNextLine)
-				*pNextLine = '\0';
+				*pNextLine = 0;
+
+			char* pReturn = strchr(pCurrentLine, '\r');
+			if (pReturn)
+				*pReturn = 0;
 
 			*pOutLine = pCurrentLine;
+
 			pCurrentLine = pNextLine ? pNextLine + 1 : nullptr;
 			return true;
 		}
@@ -96,7 +101,7 @@ namespace Util
 		}
 
 		char* pCurrentLine = nullptr;
-		char* pData = nullptr;
+		void* pData = nullptr;
 	};
 }
 
