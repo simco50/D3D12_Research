@@ -161,7 +161,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 				mesh.PositionsStream.resize(pPart->Vertices.size());
 				mesh.NormalsStream.resize(pPart->Vertices.size());
 				if(pPart->IsMultiMaterial)
-					mesh.ColorsStream.resize(pPart->Colors.size() * 3);
+					mesh.ColorsStream.resize(pPart->Colors.size());
 				for (int j = 0; j < (int)pPart->Vertices.size(); ++j)
 				{
 					mesh.PositionsStream[j] = Vector3(pPart->Vertices[j].x, pPart->Vertices[j].y, pPart->Vertices[j].z);
@@ -402,7 +402,6 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 
 	for (MeshData& meshData : meshDatas)
 	{
-#if 0
 		meshopt_optimizeVertexCache(meshData.Indices.data(), meshData.Indices.data(), meshData.Indices.size(), meshData.PositionsStream.size());
 
 		meshopt_optimizeOverdraw(meshData.Indices.data(), meshData.Indices.data(), meshData.Indices.size(), &meshData.PositionsStream[0].x, meshData.PositionsStream.size(), sizeof(Vector3), 1.05f);
@@ -413,6 +412,8 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 		meshopt_remapVertexBuffer(meshData.PositionsStream.data(), meshData.PositionsStream.data(), meshData.PositionsStream.size(), sizeof(Vector3), &remap[0]);
 		meshopt_remapVertexBuffer(meshData.NormalsStream.data(), meshData.NormalsStream.data(), meshData.NormalsStream.size(), sizeof(VS_Normal), &remap[0]);
 		meshopt_remapVertexBuffer(meshData.UVsStream.data(), meshData.UVsStream.data(), meshData.UVsStream.size(), sizeof(Vector2), &remap[0]);
+		if(!meshData.ColorsStream.empty())
+			meshopt_remapVertexBuffer(meshData.ColorsStream.data(), meshData.ColorsStream.data(), meshData.ColorsStream.size(), sizeof(uint32), &remap[0]);
 
 		// Meshlet generation
 		const size_t max_vertices = ShaderInterop::MESHLET_MAX_VERTICES;
@@ -471,7 +472,6 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 			triangleOffset += meshlet.triangle_count * 3;
 		}
 		meshData.MeshletTriangles.resize(triangleOffset);
-#endif
 
 		bufferSize += Math::AlignUp<uint64>(meshData.Meshlets.size() * sizeof(ShaderInterop::Meshlet), 16);
 		bufferSize += Math::AlignUp<uint64>(meshData.MeshletVertices.size() * sizeof(uint32), 16);
