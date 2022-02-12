@@ -23,12 +23,10 @@ struct InterpolantsVSToPS
 {
 	float4 Position : SV_Position;
 	float3 PositionWS : POSITION_WS;
-	float3 PositionVS : POSITION_VS;
 	float2 UV : TEXCOORD;
 	float3 Normal : NORMAL;
 	float4 Tangent : TANGENT;
 	uint Color : TEXCOORD1;
-	uint Seed : SEED;
 };
 
 Texture2D tAO :	register(t0);
@@ -145,7 +143,6 @@ InterpolantsVSToPS FetchVertexAttributes(MeshData mesh, float4x4 world, uint ver
 	InterpolantsVSToPS result;
 	float3 Position = BufferLoad<float3>(mesh.BufferIndex, vertexId, mesh.PositionsOffset);
 	result.PositionWS = mul(float4(Position, 1.0f), world).xyz;
-	result.PositionVS = mul(float4(result.PositionWS, 1.0f), cView.View).xyz;
 	result.Position = mul(float4(result.PositionWS, 1.0f), cView.ViewProjection);
 
 	result.UV = UnpackHalf2(BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.UVsOffset));
@@ -157,8 +154,6 @@ InterpolantsVSToPS FetchVertexAttributes(MeshData mesh, float4x4 world, uint ver
 	result.Color = 0xFFFFFFFF;
 	if(mesh.ColorsOffset != ~0u)
 		result.Color = BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.ColorsOffset);
-
-	result.Seed = cObject.Mesh;
 
 	return result;
 }
@@ -247,7 +242,6 @@ void MSMain(
 	{
 		uint vertexId = BufferLoad<uint>(mesh.BufferIndex, i + meshlet.VertexOffset, mesh.MeshletVertexOffset);
 		InterpolantsVSToPS result = FetchVertexAttributes(mesh, world, vertexId);
-		result.Seed = meshletIndex;
 		verts[i] = result;
 	}
 
@@ -399,7 +393,8 @@ void PSMain(InterpolantsVSToPS input,
 	BrdfData brdf = GetBrdfData(surface);
 
 	float ssrWeight = 0;
-	float3 ssr = ScreenSpaceReflections(input.Position, input.PositionVS, N, V, brdf.Roughness, ssrWeight);
+	float3 positionVS = mul(float4(input.PositionWS, 1), cView.ViewInverse).xyz;
+	float3 ssr = ScreenSpaceReflections(input.Position, positionVS, N, V, brdf.Roughness, ssrWeight);
 
 	LightResult lighting = DoLight(input.Position, input.PositionWS, N, V, brdf.Diffuse, brdf.Specular, brdf.Roughness);
 
@@ -409,7 +404,7 @@ void PSMain(InterpolantsVSToPS input,
 	outRadiance += ssr * ambientOcclusion;
 	outRadiance += surface.Emissive;
 
-	float fogSlice = sqrt((input.PositionVS.z - cView.FarZ) / (cView.NearZ - cView.FarZ));
+	float fogSlice = sqrt((positionVS.z - cView.FarZ) / (cView.NearZ - cView.FarZ));
 	float4 scatteringTransmittance = tLightScattering.SampleLevel(sLinearClamp, float3(screenUV, fogSlice), 0);
 	outRadiance = outRadiance * scatteringTransmittance.w + scatteringTransmittance.rgb;
 

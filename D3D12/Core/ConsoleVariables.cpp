@@ -138,7 +138,7 @@ void ImGuiConsole::Update(const ImVec2& position, const ImVec2& size)
 			};
 
 			ImGui::PushItemWidth(size.x);
-			if (ImGui::InputText("", m_Input.data(), (int)m_Input.size(), inputFlags, inputCallback, this))
+			if (ImGui::InputText("##ConsoleInput", m_Input.data(), (int)m_Input.size(), inputFlags, inputCallback, this))
 			{
 				if (m_Input[0] != '\0')
 				{
