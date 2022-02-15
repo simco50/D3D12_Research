@@ -1,10 +1,7 @@
 #include "Common.hlsli"
 #include "CommonBindings.hlsli"
 #include "Random.hlsli"
-
-#define RootSig ROOT_SIG("RootConstants(num32BitConstants=3, b0), " \
-                "CBV(b100), " \
-                "DescriptorTable(SRV(t10, numDescriptors = 11))")
+#include "VisibilityBuffer.hlsli"
 
 ConstantBuffer<InstanceData> cObject : register(b0);
 
@@ -14,7 +11,6 @@ struct InterpolantsVSToPS
 	float2 UV : TEXCOORD;
 };
 
-[RootSignature(RootSig)]
 InterpolantsVSToPS VSMain(uint vertexId : SV_VertexID)
 {
 	InterpolantsVSToPS output;
@@ -29,10 +25,9 @@ InterpolantsVSToPS VSMain(uint vertexId : SV_VertexID)
 	return output;
 }
 
-void PSMain(
+VisBufferData PSMain(
     InterpolantsVSToPS input,
-    uint primitiveIndex : SV_PrimitiveID,
-    out uint outPrimitiveMask : SV_TARGET0)
+    uint primitiveIndex : SV_PrimitiveID) : SV_TARGET0
 {
 #ifdef ALPHA_TEST
 	MaterialData material = GetMaterial(cObject.Material);
@@ -47,5 +42,8 @@ void PSMain(
 	}
 #endif
 
-    outPrimitiveMask = (cObject.World << 16) | (primitiveIndex & 0xFFFF);
+	VisBufferData Data;
+	Data.ObjectID = cObject.World;
+	Data.PrimitiveID = primitiveIndex;
+	return Data;
 }

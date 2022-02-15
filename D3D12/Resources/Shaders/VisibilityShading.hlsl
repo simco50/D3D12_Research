@@ -1,31 +1,64 @@
 #include "CommonBindings.hlsli"
 #include "Random.hlsli"
 #include "Lighting.hlsli"
-
-#define RootSig ROOT_SIG("CBV(b100), " \
-				"DescriptorTable(SRV(t0, numDescriptors = 1)), " \
-				"DescriptorTable(UAV(u0, numDescriptors = 2))")
+#include "VisibilityBuffer.hlsli"
 
 Texture2D<uint> tVisibilityTexture : register(t0);
 RWTexture2D<float4> uTarget : register(u0);
 RWTexture2D<float4> uNormalsTarget : register(u1);
 
-struct VertexInput
-{
-	uint2 Position;
-	uint UV;
-	float3 Normal;
-	float4 Tangent;
-};
-
 struct VertexAttribute
 {
 	float3 Position;
+	float3 PositionWS;
 	float2 UV;
 	float3 Normal;
 	float4 Tangent;
 	uint Color;
 };
+
+VertexAttribute GetVertexAttributes(uint2 texel, uint meshIndex, uint triangleIndex, out float2 dx, out float2 dy)
+{
+    MeshInstance instance = GetMeshInstance(meshIndex);
+	MeshData mesh = GetMesh(instance.Mesh);
+	float4x4 world = GetTransform(instance.World);
+
+	uint3 indices = GetPrimitive(mesh, triangleIndex);
+
+	VertexAttribute vertices[3];
+	for(uint i = 0; i < 3; ++i)
+	{
+		uint vertexId = indices[i];
+        vertices[i].Position = BufferLoad<float3>(mesh.BufferIndex, vertexId, mesh.PositionsOffset);
+        vertices[i].UV = UnpackHalf2(BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.UVsOffset));
+        NormalData normalData = BufferLoad<NormalData>(mesh.BufferIndex, vertexId, mesh.NormalsOffset);
+        vertices[i].Normal = normalData.Normal;
+        vertices[i].Tangent = normalData.Tangent;
+		if(mesh.ColorsOffset != ~0u)
+			vertices[i].Color = BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.ColorsOffset);
+		else
+			vertices[i].Color = 0xFFFFFFFF;
+	}
+
+	float2 ndc = (float2)texel * cView.ScreenDimensionsInv * 2 - 1;
+	ndc.y *= -1;
+
+	float4 clipPos0 = mul(mul(float4(vertices[0].Position, 1), world), cView.ViewProjection);
+	float4 clipPos1 = mul(mul(float4(vertices[1].Position, 1), world), cView.ViewProjection);
+	float4 clipPos2 = mul(mul(float4(vertices[2].Position, 1), world), cView.ViewProjection);
+
+	BaryDerivatives derivs = InitBaryDerivatives(clipPos0, clipPos1, clipPos2, ndc, cView.ScreenDimensionsInv);
+
+	VertexAttribute outVertex;
+	outVertex.UV = InterpolateWithDeriv(derivs, vertices[0].UV, vertices[1].UV, vertices[2].UV, dx, dy);
+	outVertex.Normal = normalize(mul(InterpolateWithDeriv(derivs, vertices[0].Normal, vertices[1].Normal, vertices[2].Normal), (float3x3)world));
+	outVertex.Tangent = float4(normalize(mul(InterpolateWithDeriv(derivs, vertices[0].Tangent.xyz, vertices[1].Tangent.xyz, vertices[2].Tangent.xyz), (float3x3)world)), vertices[0].Tangent.w);
+	outVertex.Position = InterpolateWithDeriv(derivs, vertices[0].Position, vertices[1].Position, vertices[2].Position);
+	outVertex.Color = vertices[0].Color;
+	outVertex.PositionWS = mul(float4(outVertex.Position, 1), world).xyz;
+
+	return outVertex;
+}
 
 MaterialProperties GetMaterialProperties(MaterialData material, float2 UV, float2 dx, float2 dy)
 {
@@ -61,69 +94,6 @@ MaterialProperties GetMaterialProperties(MaterialData material, float2 UV, float
 	return properties;
 }
 
-struct BaryDerivatives
-{
-	float3 Lambda;
-	float3 DDX;
-	float3 DDY;
-};
-
-BaryDerivatives InitBaryDerivatives(float4 clipPos0, float4 clipPos1, float4 clipPos2, float2 pixelNdc, float2 invWinSize)
-{
-	BaryDerivatives bary = (BaryDerivatives)0;
-
-	float3 invW = rcp(float3(clipPos0.w, clipPos1.w, clipPos2.w));
-
-	float2 ndc0 = clipPos0.xy * invW.x;
-	float2 ndc1 = clipPos1.xy * invW.y;
-	float2 ndc2 = clipPos2.xy * invW.z;
-
-	float invDet = rcp(determinant(float2x2(ndc2 - ndc1, ndc0 - ndc1)));
-	bary.DDX = float3(ndc1.y - ndc2.y, ndc2.y - ndc0.y, ndc0.y - ndc1.y) * invDet;
-	bary.DDY = float3(ndc2.x - ndc1.x, ndc0.x - ndc2.x, ndc1.x - ndc0.x) * invDet;
-
-	float2 deltaVec = pixelNdc - ndc0;
-	float interpInvW = (invW.x + deltaVec.x * dot(invW, bary.DDX) + deltaVec.y * dot(invW, bary.DDY));
-	float interpW = rcp(interpInvW);
-
-	bary.Lambda.x = interpW * (invW[0] + deltaVec.x * bary.DDX.x * invW[0] + deltaVec.y * bary.DDY.x * invW[0]);
-	bary.Lambda.y = interpW * (0.0f + deltaVec.x * bary.DDX.y * invW[1] + deltaVec.y * bary.DDY.y * invW[1]);
-	bary.Lambda.z = interpW * (0.0f + deltaVec.x * bary.DDX.z * invW[2] + deltaVec.y * bary.DDY.z * invW[2]);
-
-	bary.DDX *= 2.0f * invWinSize.x;
-	bary.DDY *= 2.0f * invWinSize.y;
-
-	bary.DDY *= -1.0f;
-
-	return bary;
-}
-
-float3 InterpolateWithDeriv(BaryDerivatives deriv, float v0, float v1, float v2)
-{
-	float3 ret = 0;
-	ret.x = dot(deriv.Lambda, float3(v0, v1, v2));
-	ret.y = dot(deriv.DDX * float3(v0, v1, v2), float3(1, 1, 1));
-	ret.z = dot(deriv.DDY * float3(v0, v1, v2), float3(1, 1, 1));
-	return ret;
-}
-
-float2 InterpolateWithDeriv(BaryDerivatives deriv, float2 v0, float2 v1, float2 v2)
-{
-	return mul(deriv.Lambda, float3x2(v0, v1, v2));
-}
-
-float2 InterpolateWithDeriv(BaryDerivatives deriv, float2 v0, float2 v1, float2 v2, out float2 outDX, out float2 outDY)
-{
-	outDX = mul(deriv.DDX, float3x2(v0, v1, v2));
-	outDY = mul(deriv.DDY, float3x2(v0, v1, v2));
-	return InterpolateWithDeriv(deriv, v0, v1, v2);
-}
-
-float3 InterpolateWithDeriv(BaryDerivatives deriv, float3 v0, float3 v1, float3 v2)
-{
-	return mul(deriv.Lambda, float3x3(v0, v1, v2));
-}
-
 LightResult DoLight(float4 pos, float3 worldPos, float3 N, float3 V, float3 diffuseColor, float3 specularColor, float roughness)
 {
 	uint lightCount = cView.LightCount;
@@ -144,7 +114,6 @@ LightResult DoLight(float4 pos, float3 worldPos, float3 N, float3 V, float3 diff
 }
 
 [numthreads(16, 16, 1)]
-[RootSignature(RootSig)]
 void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 {
 	if(dispatchThreadId.x >= cView.ScreenDimensions.x ||
@@ -153,63 +122,24 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 		return;
 	}
 
-	uint visibilityMask = tVisibilityTexture.Load(uint3(dispatchThreadId.xy, 0));
-	if(visibilityMask == 0)
-	{
-		return;
-	}
-	uint meshIndex = visibilityMask >> 16;
-	uint triangleIndex = visibilityMask & 0xFFFF;
-
-    MeshInstance instance = GetMeshInstance(meshIndex);
-	MeshData mesh = GetMesh(instance.Mesh);
-	float4x4 world = GetTransform(instance.World);
-	ByteAddressBuffer meshBuffer = tBufferTable[mesh.BufferIndex];
-
-	uint3 indices = GetPrimitive(mesh, triangleIndex);
-
-	VertexAttribute vertices[3];
-	for(uint i = 0; i < 3; ++i)
-	{
-		uint vertexId = indices[i];
-        vertices[i].Position = BufferLoad<float3>(mesh.BufferIndex, vertexId, mesh.PositionsOffset);
-        vertices[i].UV = UnpackHalf2(BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.UVsOffset));
-        NormalData normalData = BufferLoad<NormalData>(mesh.BufferIndex, vertexId, mesh.NormalsOffset);
-        vertices[i].Normal = normalData.Normal;
-        vertices[i].Tangent = normalData.Tangent;
-		if(mesh.ColorsOffset != ~0u)
-			vertices[i].Color = BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.ColorsOffset);
-		else
-			vertices[i].Color = 0xFFFFFFFF;
-	}
-
-	float2 ndc = (float2)dispatchThreadId.xy * cView.ScreenDimensionsInv * 2 - 1;
-	ndc.y *= -1;
-
-	float4 clipPos0 = mul(mul(float4(vertices[0].Position, 1), world), cView.ViewProjection);
-	float4 clipPos1 = mul(mul(float4(vertices[1].Position, 1), world), cView.ViewProjection);
-	float4 clipPos2 = mul(mul(float4(vertices[2].Position, 1), world), cView.ViewProjection);
-
-	BaryDerivatives derivs = InitBaryDerivatives(clipPos0, clipPos1, clipPos2, ndc, cView.ScreenDimensionsInv);
+	VisBufferData visibilityMask = (VisBufferData)tVisibilityTexture.Load(uint3(dispatchThreadId.xy, 0));
+	uint meshIndex = visibilityMask.ObjectID;
+	uint triangleIndex = visibilityMask.PrimitiveID;
 
 	float2 dx, dy;
-	float2 UV = InterpolateWithDeriv(derivs, vertices[0].UV, vertices[1].UV, vertices[2].UV, dx, dy);
-	float3 N = normalize(mul(InterpolateWithDeriv(derivs, vertices[0].Normal, vertices[1].Normal, vertices[2].Normal), (float3x3)world));
-	float3 T = normalize(mul(InterpolateWithDeriv(derivs, vertices[0].Tangent.xyz, vertices[1].Tangent.xyz, vertices[2].Tangent.xyz), (float3x3)world));
-	float3 B = cross(N, T) * vertices[0].Tangent.w;
-	float3 P = InterpolateWithDeriv(derivs, vertices[0].Position, vertices[1].Position, vertices[2].Position);
-	float3 worldPos = mul(float4(P, 1), world).xyz;
+	VertexAttribute vertex = GetVertexAttributes(dispatchThreadId.xy, meshIndex, triangleIndex, dx, dy);
 
+    MeshInstance instance = GetMeshInstance(meshIndex);
 	MaterialData material = GetMaterial(NonUniformResourceIndex(instance.Material));
-	material.BaseColorFactor *= UIntToColor(vertices[0].Color);
-	MaterialProperties properties = GetMaterialProperties(material, UV, dx, dy);
-	float3x3 TBN = float3x3(T, B, N);
-	N = TangentSpaceNormalMapping(properties.NormalTS, TBN);
+	material.BaseColorFactor *= UIntToColor(vertex.Color);
+	MaterialProperties properties = GetMaterialProperties(material, vertex.UV, dx, dy);
+	float3x3 TBN = CreateTangentToWorld(normalize(vertex.Normal), float4(normalize(vertex.Tangent.xyz), vertex.Tangent.w));
+	float3 N = TangentSpaceNormalMapping(properties.NormalTS, TBN);
 
 	BrdfData brdfData = GetBrdfData(properties);
 
-	float3 V = normalize(P - cView.ViewPosition.xyz);
-	LightResult result = DoLight(float4(P, length(cView.ViewPosition.xyz - worldPos)), worldPos, N, V, brdfData.Diffuse, brdfData.Specular, brdfData.Roughness);
+	float3 V = normalize(vertex.PositionWS - cView.ViewPosition.xyz);
+	LightResult result = DoLight(float4(vertex.PositionWS, length(cView.ViewPosition.xyz - vertex.PositionWS)), vertex.PositionWS, N, V, brdfData.Diffuse, brdfData.Specular, brdfData.Roughness);
 	float3 output = result.Diffuse + result.Specular;
 	output += ApplyAmbientLight(brdfData.Diffuse, 1, GetLight(0).GetColor().rgb);
 
