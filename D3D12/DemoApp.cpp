@@ -1643,6 +1643,8 @@ void DemoApp::InitializePipelines()
 		//Pipeline state
 		PipelineStateInitializer psoDesc;
 		psoDesc.SetRootSignature(m_pVisibilityRenderingRS->GetRootSignature());
+		//psoDesc.SetAmplificationShader(m_pDevice->GetShader("VisibilityRendering.hlsl", ShaderType::Amplification, "ASMain"));
+		//psoDesc.SetMeshShader(m_pDevice->GetShader("VisibilityRendering.hlsl", ShaderType::Mesh, "MSMain"));
 		psoDesc.SetVertexShader(m_pDevice->GetShader("VisibilityRendering.hlsl", ShaderType::Vertex, "VSMain"));
 		psoDesc.SetPixelShader(m_pDevice->GetShader("VisibilityRendering.hlsl", ShaderType::Pixel, "PSMain"));
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
@@ -1650,6 +1652,7 @@ void DemoApp::InitializePipelines()
 		psoDesc.SetName("Visibility Rendering");
 		m_pVisibilityRenderingPSO = m_pDevice->CreatePipeline(psoDesc);
 
+		psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
 		psoDesc.SetPixelShader(m_pDevice->GetShader("VisibilityRendering.hlsl", ShaderType::Pixel, "PSMain", { "ALPHA_TEST" }));
 		psoDesc.SetName("Visibility Rendering Masked");
 		m_pVisibilityRenderingMaskedPSO = m_pDevice->CreatePipeline(psoDesc);
