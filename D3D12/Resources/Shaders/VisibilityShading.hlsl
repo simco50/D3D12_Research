@@ -17,49 +17,7 @@ struct VertexAttribute
 	uint Color;
 };
 
-bool RayPlaneIntersection(out float hitT, float3 rayOrigin, float3 rayDirection, float3 planeSurfacePoint, float3 planeNormal)
-{
-    float denominator = dot(rayDirection, planeNormal);
-	if(denominator > 0.000001f)
-	{
-	    float numerator = dot(planeSurfacePoint - rayOrigin, planeNormal);
-		hitT = numerator / denominator;
-		return hitT >= 0;
-	}
-	hitT = 0;
-	return false;
-}
-
-// https://gamedev.stackexchange.com/questions/23743/whats-the-most-efficient-way-to-find-barycentric-coordinates
-float3 GetBarycentricsFromPlanePoint(float3 pt, float3 v0, float3 v1, float3 v2)
-{
-    float3 e0 = v1 - v0;
-    float3 e1 = v2 - v0;
-    float3 e2 = pt - v0;
-    float d00 = dot(e0, e0);
-    float d01 = dot(e0, e1);
-    float d11 = dot(e1, e1);
-    float d20 = dot(e2, e0);
-    float d21 = dot(e2, e1);
-    float denom = 1.0 / (d00 * d11 - d01 * d01);
-    float v = (d11 * d20 - d01 * d21) * denom;
-    float w = (d00 * d21 - d01 * d20) * denom;
-    float u = 1.0 - v - w;
-    return float3(u, v, w);
-}
-
-float3 CreateCameraRay(float2 pixel)
-{
-	float aspect = cView.Projection[1][1] / cView.Projection[0][0];
-	float tanHalfFovY = 1.f / cView.Projection[1][1];
-
-	return normalize(
-		(pixel.x * cView.ViewInverse[0].xyz * tanHalfFovY * aspect) -
-		(pixel.y * cView.ViewInverse[1].xyz * tanHalfFovY) +
-		cView.ViewInverse[2].xyz);
-}
-
-VertexAttribute GetVertexAttributes(float2 pixelLocation, VisBufferData visibility, out float2 dx, out float2 dy, out float3 barycentrics)
+VertexAttribute GetVertexAttributes(float2 pixelLocation, VisBufferData visibility, out float2 dx, out float2 dy)
 {
 	float2 ndc = (pixelLocation * cView.ScreenDimensionsInv) * 2 - 1;
 	float3 rayDir = CreateCameraRay(ndc);
@@ -100,8 +58,8 @@ VertexAttribute GetVertexAttributes(float2 pixelLocation, VisBufferData visibili
     float hitT;
     RayPlaneIntersection(hitT, cView.ViewPosition.xyz, rayDir, worldPos0.xyz, triNormal);
     float3 hitPoint = cView.ViewPosition.xyz + rayDir * hitT;
-    float3 baryCentrics = GetBarycentricsFromPlanePoint(hitPoint, worldPos0.xyz, worldPos1.xyz, worldPos2.xyz);
-    float2 uvs = baryCentrics.x * vertices[0].UV.xy + baryCentrics.y * vertices[1].UV.xy + baryCentrics.z * vertices[2].UV.xy;
+    float3 barycentrics = GetBarycentricsFromPlanePoint(hitPoint, worldPos0.xyz, worldPos1.xyz, worldPos2.xyz);
+    float2 uvs = barycentrics.x * vertices[0].UV.xy + barycentrics.y * vertices[1].UV.xy + barycentrics.z * vertices[2].UV.xy;
 
     if (WaveActiveAllEqual((uint)visibility) && WaveActiveCountBits(true) == WaveGetLaneCount())
     {
@@ -119,11 +77,11 @@ VertexAttribute GetVertexAttributes(float2 pixelLocation, VisBufferData visibili
         float3 hitPointX = cView.ViewPosition.xyz + neighborRayDirX * hitTX;
         float3 hitPointY = cView.ViewPosition.xyz + neighborRayDirY * hitTY;
 
-        float3 baryCentricsX = GetBarycentricsFromPlanePoint(hitPointX, worldPos0.xyz, worldPos1.xyz, worldPos2.xyz);
-        float3 baryCentricsY = GetBarycentricsFromPlanePoint(hitPointY, worldPos0.xyz, worldPos1.xyz, worldPos2.xyz);
+        float3 barycentricsX = GetBarycentricsFromPlanePoint(hitPointX, worldPos0.xyz, worldPos1.xyz, worldPos2.xyz);
+        float3 barycentricsY = GetBarycentricsFromPlanePoint(hitPointY, worldPos0.xyz, worldPos1.xyz, worldPos2.xyz);
 
-        float2 uvsX = baryCentricsX.x * vertices[0].UV.xy + baryCentricsX.y * vertices[1].UV.xy + baryCentricsX.z * vertices[2].UV.xy;
-        float2 uvsY = baryCentricsY.x * vertices[0].UV.xy + baryCentricsY.y * vertices[1].UV.xy + baryCentricsY.z * vertices[2].UV.xy;
+        float2 uvsX = barycentricsX.x * vertices[0].UV.xy + barycentricsX.y * vertices[1].UV.xy + barycentricsX.z * vertices[2].UV.xy;
+        float2 uvsY = barycentricsY.x * vertices[0].UV.xy + barycentricsY.y * vertices[1].UV.xy + barycentricsY.z * vertices[2].UV.xy;
 
         dx = uvsX - uvs;
         dy = uvsY - uvs;
@@ -131,17 +89,12 @@ VertexAttribute GetVertexAttributes(float2 pixelLocation, VisBufferData visibili
 
 	VertexAttribute outVertex;
 	outVertex.UV = uvs;
-    outVertex.Position = baryCentrics.x * vertices[0].Position + baryCentrics.y * vertices[1].Position + baryCentrics.z * vertices[2].Position;
-    outVertex.Normal = baryCentrics.x * vertices[0].Normal + baryCentrics.y * vertices[1].Normal + baryCentrics.z * vertices[2].Normal;
-    outVertex.Tangent = baryCentrics.x * vertices[0].Tangent + baryCentrics.y * vertices[1].Tangent + baryCentrics.z * vertices[2].Tangent;
-	outVertex.PositionWS = mul(float4(outVertex.Position, 1), world).xyz;
+    outVertex.Position = BaryInterpolate(vertices[0].Position, vertices[1].Position, vertices[2].Position, barycentrics);
+    outVertex.Normal = mul(BaryInterpolate(vertices[0].Normal, vertices[1].Normal, vertices[2].Normal, barycentrics), (float3x3)world);
+	float4 tangent = BaryInterpolate(vertices[0].Tangent, vertices[1].Tangent, vertices[2].Tangent, barycentrics);
+    outVertex.Tangent = float4(mul(tangent.xyz, (float3x3)world), tangent.w);
 	outVertex.Color = vertices[0].Color;
-
-	outVertex.Normal = mul(outVertex.Normal, (float3x3)world);
-	outVertex.Tangent.xyz = mul(outVertex.Tangent.xyz, (float3x3)world);
-
-	barycentrics = baryCentrics;
-
+	outVertex.PositionWS = mul(float4(outVertex.Position, 1), world).xyz;
 	return outVertex;
 }
 
@@ -201,19 +154,15 @@ LightResult DoLight(float4 pos, float3 worldPos, float3 N, float3 V, float3 diff
 [numthreads(16, 16, 1)]
 void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 {
-	if(dispatchThreadId.x >= cView.ScreenDimensions.x ||
-		dispatchThreadId.y >= cView.ScreenDimensions.y)
+	if(dispatchThreadId.x >= cView.ScreenDimensions.x || dispatchThreadId.y >= cView.ScreenDimensions.y)
 	{
 		return;
 	}
 
 	VisBufferData visibility = (VisBufferData)tVisibilityTexture.Load(uint3(dispatchThreadId.xy, 0));
 
-	float2 pixelLocation = (float2)dispatchThreadId.xy + 0.5f;
-
 	float2 dx, dy;
-	float3 barycentrics;
-	VertexAttribute vertex = GetVertexAttributes(pixelLocation, visibility, dx, dy, barycentrics);
+	VertexAttribute vertex = GetVertexAttributes((float2)dispatchThreadId.xy + 0.5f, visibility, dx, dy);
 
     MeshInstance instance = GetMeshInstance(visibility.ObjectID);
 	MaterialData material = GetMaterial(NonUniformResourceIndex(instance.Material));
