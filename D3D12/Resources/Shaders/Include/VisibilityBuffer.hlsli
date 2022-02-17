@@ -2,7 +2,8 @@
 
 struct VisBufferData
 {
-	uint PrimitiveID : 20;
+	uint PrimitiveID : 8;
+	uint MeshletID : 12;
 	uint ObjectID : 12;
 };
 
@@ -51,5 +52,5 @@ float3 CreateCameraRay(float2 pixel)
 template<typename T>
 T BaryInterpolate(T a, T b, T c, float3 barycentrics)
 {
-	return a * barycentrics.x + b * barycentrics.y + c * barycentrics.z;	
+	return a * barycentrics.x + b * barycentrics.y + c * barycentrics.z;
 }

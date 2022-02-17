@@ -17,7 +17,7 @@ struct VertexAttribute
 	uint Color;
 };
 
-VertexAttribute GetVertexAttributes(float2 pixelLocation, VisBufferData visibility, out float2 dx, out float2 dy)
+VertexAttribute GetVertexAttributes(float2 pixelLocation, VisBufferData visibility, out float2 dx, out float2 dy, out float3 barycentrics)
 {
 	float2 ndc = (pixelLocation * cView.ScreenDimensionsInv) * 2 - 1;
 	float3 rayDir = CreateCameraRay(ndc);
@@ -29,7 +29,16 @@ VertexAttribute GetVertexAttributes(float2 pixelLocation, VisBufferData visibili
 	MeshData mesh = GetMesh(instance.Mesh);
 	float4x4 world = GetTransform(instance.World);
 
-	uint3 indices = GetPrimitive(mesh, visibility.PrimitiveID);
+	uint primitiveID = visibility.PrimitiveID;
+	uint meshletIndex = visibility.MeshletID;
+	Meshlet meshlet = BufferLoad<Meshlet>(mesh.BufferIndex, meshletIndex, mesh.MeshletOffset);
+	MeshletTriangle tri = BufferLoad<MeshletTriangle>(mesh.BufferIndex, primitiveID + meshlet.TriangleOffset, mesh.MeshletTriangleOffset);
+
+	uint3 indices = uint3(
+		BufferLoad<uint>(mesh.BufferIndex, tri.V0 + meshlet.VertexOffset, mesh.MeshletVertexOffset),
+		BufferLoad<uint>(mesh.BufferIndex, tri.V1 + meshlet.VertexOffset, mesh.MeshletVertexOffset),
+		BufferLoad<uint>(mesh.BufferIndex, tri.V2 + meshlet.VertexOffset, mesh.MeshletVertexOffset)
+	);
 
 	VertexAttribute vertices[3];
 	for(uint i = 0; i < 3; ++i)
@@ -58,7 +67,7 @@ VertexAttribute GetVertexAttributes(float2 pixelLocation, VisBufferData visibili
     float hitT;
     RayPlaneIntersection(hitT, cView.ViewPosition.xyz, rayDir, worldPos0.xyz, triNormal);
     float3 hitPoint = cView.ViewPosition.xyz + rayDir * hitT;
-    float3 barycentrics = GetBarycentricsFromPlanePoint(hitPoint, worldPos0.xyz, worldPos1.xyz, worldPos2.xyz);
+    barycentrics = GetBarycentricsFromPlanePoint(hitPoint, worldPos0.xyz, worldPos1.xyz, worldPos2.xyz);
     float2 uvs = barycentrics.x * vertices[0].UV.xy + barycentrics.y * vertices[1].UV.xy + barycentrics.z * vertices[2].UV.xy;
 
     if (WaveActiveAllEqual((uint)visibility) && WaveActiveCountBits(true) == WaveGetLaneCount())
@@ -162,7 +171,8 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 	VisBufferData visibility = (VisBufferData)tVisibilityTexture.Load(uint3(dispatchThreadId.xy, 0));
 
 	float2 dx, dy;
-	VertexAttribute vertex = GetVertexAttributes((float2)dispatchThreadId.xy + 0.5f, visibility, dx, dy);
+	float3 barycentrics;
+	VertexAttribute vertex = GetVertexAttributes((float2)dispatchThreadId.xy + 0.5f, visibility, dx, dy, barycentrics);
 
     MeshInstance instance = GetMeshInstance(visibility.ObjectID);
 	MaterialData material = GetMaterial(NonUniformResourceIndex(instance.Material));
@@ -176,11 +186,29 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 	float3 positionWS = vertex.PositionWS;
 	float3 V = normalize(positionWS - cView.ViewPosition.xyz);
 	LightResult result = DoLight(float4(positionWS, length(cView.ViewPosition.xyz - positionWS)), positionWS, N, V, brdfData.Diffuse, brdfData.Specular, brdfData.Roughness);
-	float3 output = result.Diffuse + result.Specular;
-	output += ApplyAmbientLight(brdfData.Diffuse, 1, GetLight(0).GetColor().rgb);
+	float3 outRadiance = result.Diffuse + result.Specular;
+	outRadiance += ApplyAmbientLight(brdfData.Diffuse, 1, GetLight(0).GetColor().rgb);
 
 	float reflectivity = saturate(Square(1 - brdfData.Roughness));
 
-	uTarget[dispatchThreadId.xy] = float4(output, 1);
-	uNormalsTarget[dispatchThreadId.xy] = float4(N, reflectivity);
+	float4 outColor = float4(outRadiance, 1);
+	float4 outNormalRoughness = float4(N, reflectivity);
+
+#define DEBUG_MESHLETS 0
+#if DEBUG_MESHLETS
+	outNormalRoughness = float4(vertex.Normal, 0);
+
+	uint Seed = SeedThread(visibility.MeshletID);
+	outColor = float4(Random01(Seed), Random01(Seed), Random01(Seed), 1);
+
+	float3 deltas = fwidth(barycentrics);
+	float3 smoothing = deltas * 1;
+	float3 thickness = deltas * 0.2;
+	barycentrics = smoothstep(thickness, thickness + smoothing, barycentrics);
+	float minBary = min(barycentrics.x, min(barycentrics.y, barycentrics.z));
+	outColor = float4(outColor.xyz * saturate(minBary + 0.6), 1);
+#endif
+
+	uTarget[dispatchThreadId.xy] = outColor;
+	uNormalsTarget[dispatchThreadId.xy] = outNormalRoughness;
 }

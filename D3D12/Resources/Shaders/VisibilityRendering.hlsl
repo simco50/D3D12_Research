@@ -5,22 +5,6 @@
 
 ConstantBuffer<InstanceData> cObject : register(b0);
 
-struct InterpolantsVSToPS
-{
-	float4 Position : SV_Position;
-	float2 UV : TEXCOORD;
-};
-
-InterpolantsVSToPS FetchVertexAttributes(MeshData mesh, float4x4 world, uint vertexId)
-{
-	InterpolantsVSToPS result;
-	float3 Position = BufferLoad<float3>(mesh.BufferIndex, vertexId, mesh.PositionsOffset);
-	float3 positionWS = mul(float4(Position, 1.0f), world).xyz;
-	result.Position = mul(float4(positionWS, 1.0f), cView.ViewProjection);
-	result.UV = UnpackHalf2(BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.UVsOffset));
-	return result;
-}
-
 bool IsVisible(MeshData mesh, float4x4 world, uint meshlet)
 {
 	MeshletBounds cullData = BufferLoad<MeshletBounds>(mesh.BufferIndex, meshlet, mesh.MeshletBoundsOffset);
@@ -78,10 +62,27 @@ void ASMain(uint threadID : SV_DispatchThreadID)
 
 #define NUM_MESHLET_THREADS 32
 
-struct PrimitiveData
+struct PrimitiveAttribute
 {
 	uint PrimitiveID : SV_PrimitiveID;
+	uint MeshletID : MESHLET_ID;
 };
+
+struct VertexAttribute
+{
+	float4 Position : SV_Position;
+	float2 UV : TEXCOORD;
+};
+
+VertexAttribute FetchVertexAttributes(MeshData mesh, float4x4 world, uint vertexId)
+{
+	VertexAttribute result;
+	float3 Position = BufferLoad<float3>(mesh.BufferIndex, vertexId, mesh.PositionsOffset);
+	float3 positionWS = mul(float4(Position, 1.0f), world).xyz;
+	result.Position = mul(float4(positionWS, 1.0f), cView.ViewProjection);
+	result.UV = UnpackHalf2(BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.UVsOffset));
+	return result;
+}
 
 [outputtopology("triangle")]
 [numthreads(NUM_MESHLET_THREADS, 1, 1)]
@@ -89,9 +90,9 @@ void MSMain(
 	in uint groupThreadID : SV_GroupIndex,
 	in payload PayloadData payload,
 	in uint groupID : SV_GroupID,
-	out vertices InterpolantsVSToPS verts[MESHLET_MAX_VERTICES],
+	out vertices VertexAttribute verts[MESHLET_MAX_VERTICES],
 	out indices uint3 triangles[MESHLET_MAX_TRIANGLES],
-	out primitives PrimitiveData primitives[MESHLET_MAX_TRIANGLES])
+	out primitives PrimitiveAttribute primitives[MESHLET_MAX_TRIANGLES])
 {
 	MeshData mesh = GetMesh(cObject.Mesh);
 
@@ -109,7 +110,7 @@ void MSMain(
 	for(uint i = groupThreadID; i < meshlet.VertexCount; i += NUM_MESHLET_THREADS)
 	{
 		uint vertexId = BufferLoad<uint>(mesh.BufferIndex, i + meshlet.VertexOffset, mesh.MeshletVertexOffset);
-		InterpolantsVSToPS result = FetchVertexAttributes(mesh, world, vertexId);
+		VertexAttribute result = FetchVertexAttributes(mesh, world, vertexId);
 		verts[i] = result;
 	}
 
@@ -118,32 +119,23 @@ void MSMain(
 		MeshletTriangle tri = BufferLoad<MeshletTriangle>(mesh.BufferIndex, i + meshlet.TriangleOffset, mesh.MeshletTriangleOffset);
 		triangles[i] = uint3(tri.V0, tri.V1, tri.V2);
 
-		PrimitiveData pri;
-		// The primitiveID here is not the same as SV_PrimitiveID because the order of a regular index buffer is different.
-		// So this doesn't work :( Problem for another day.
-		pri.PrimitiveID = i + meshlet.TriangleOffset;
+		PrimitiveAttribute pri;
+		pri.PrimitiveID = i;
+		pri.MeshletID = meshletIndex;
 		primitives[i] = pri;
 	}
 }
 
-InterpolantsVSToPS VSMain(uint vertexId : SV_VertexID)
-{
-	MeshData mesh = GetMesh(cObject.Mesh);
-	float4x4 world = GetTransform(cObject.World);
-	InterpolantsVSToPS result = FetchVertexAttributes(mesh, world, vertexId);
-	return result;
-}
-
 VisBufferData PSMain(
-    InterpolantsVSToPS input,
-    uint primitiveID : SV_PrimitiveID) : SV_TARGET0
+    VertexAttribute vertexData,
+    PrimitiveAttribute primitiveData) : SV_TARGET0
 {
 #ifdef ALPHA_TEST
 	MaterialData material = GetMaterial(cObject.Material);
 	float opacity = material.BaseColorFactor.a;
 	if(material.Diffuse != INVALID_HANDLE)
 	{
-		opacity *= Sample2D(material.Diffuse, sMaterialSampler, input.UV).a;
+		opacity *= Sample2D(material.Diffuse, sMaterialSampler, vertexData.UV).a;
 	}
 	if(opacity < material.AlphaCutoff)
 	{
@@ -153,6 +145,7 @@ VisBufferData PSMain(
 
 	VisBufferData Data;
 	Data.ObjectID = cObject.World;
-	Data.PrimitiveID = primitiveID;
+	Data.PrimitiveID = primitiveData.PrimitiveID;
+	Data.MeshletID = primitiveData.MeshletID;
 	return Data;
 }

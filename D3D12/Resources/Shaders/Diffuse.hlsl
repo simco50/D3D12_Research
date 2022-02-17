@@ -27,6 +27,7 @@ struct InterpolantsVSToPS
 	float3 Normal : NORMAL;
 	float4 Tangent : TANGENT;
 	uint Color : TEXCOORD1;
+	uint ID : ID;
 };
 
 Texture2D tAO :	register(t0);
@@ -154,6 +155,7 @@ InterpolantsVSToPS FetchVertexAttributes(MeshData mesh, float4x4 world, uint ver
 	result.Color = 0xFFFFFFFF;
 	if(mesh.ColorsOffset != ~0u)
 		result.Color = BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.ColorsOffset);
+	result.ID = vertexId;
 
 	return result;
 }
@@ -242,6 +244,7 @@ void MSMain(
 	{
 		uint vertexId = BufferLoad<uint>(mesh.BufferIndex, i + meshlet.VertexOffset, mesh.MeshletVertexOffset);
 		InterpolantsVSToPS result = FetchVertexAttributes(mesh, world, vertexId);
+		result.ID = meshletIndex;
 		verts[i] = result;
 	}
 
@@ -416,7 +419,7 @@ void PSMain(InterpolantsVSToPS input,
 #if DEBUG_MESHLETS
 	outNormalRoughness = float4(input.Normal, 0);
 
-	uint Seed = SeedThread(input.Seed);
+	uint Seed = SeedThread(input.ID);
 	outColor = float4(Random01(Seed), Random01(Seed), Random01(Seed), 1);
 
 	float3 deltas = fwidth(bary);
