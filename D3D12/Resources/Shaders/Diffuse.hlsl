@@ -393,7 +393,7 @@ void PSMain(InterpolantsVSToPS input,
 	BrdfData brdf = GetBrdfData(surface);
 
 	float ssrWeight = 0;
-	float3 positionVS = mul(float4(input.PositionWS, 1), cView.ViewInverse).xyz;
+	float3 positionVS = mul(float4(input.PositionWS, 1), cView.View).xyz;
 	float3 ssr = ScreenSpaceReflections(input.Position, positionVS, N, V, brdf.Roughness, ssrWeight);
 
 	LightResult lighting = DoLight(input.Position, input.PositionWS, N, V, brdf.Diffuse, brdf.Specular, brdf.Roughness);
