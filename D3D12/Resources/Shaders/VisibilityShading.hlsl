@@ -173,9 +173,11 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 	float2 dx, dy;
 	float3 barycentrics;
 	VertexAttribute vertex = GetVertexAttributes((float2)dispatchThreadId.xy + 0.5f, visibility, dx, dy, barycentrics);
+	float3 positionWS = vertex.PositionWS;
+	float3 V = normalize(cView.ViewPosition.xyz - positionWS);
 
     MeshInstance instance = GetMeshInstance(visibility.ObjectID);
-	MaterialData material = GetMaterial(NonUniformResourceIndex(instance.Material));
+	MaterialData material = GetMaterial(instance.Material);
 	material.BaseColorFactor *= UIntToColor(vertex.Color);
 	MaterialProperties surface = GetMaterialProperties(material, vertex.UV, dx, dy);
 	float3 N = vertex.Normal;
@@ -184,10 +186,10 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 
 	BrdfData brdfData = GetBrdfData(surface);
 
-	float3 positionWS = vertex.PositionWS;
-	float3 V = normalize(cView.ViewPosition.xyz - positionWS);
 	LightResult result = DoLight(float4(positionWS, length(cView.ViewPosition.xyz - positionWS)), positionWS, N, V, brdfData.Diffuse, brdfData.Specular, brdfData.Roughness);
-	float3 outRadiance = result.Diffuse + result.Specular;
+	
+	float3 outRadiance = 0;
+	outRadiance += result.Diffuse + result.Specular;
 	outRadiance += ApplyAmbientLight(brdfData.Diffuse, 1, GetLight(0).GetColor().rgb);
 	outRadiance += surface.Emissive;
 

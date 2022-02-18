@@ -541,6 +541,7 @@ void GraphicsCapabilities::Initialize(GraphicsDevice* pDevice)
 	checkf(m_FeatureSupport.ResourceHeapTier() >= D3D12_RESOURCE_HEAP_TIER_2, "Device does not support Resource Heap Tier 2 or higher. Tier 1 is not supported");
 	checkf(m_FeatureSupport.ResourceBindingTier() >= D3D12_RESOURCE_BINDING_TIER_3, "Device does not support Resource Binding Tier 3 or higher. Tier 2 and under is not supported.");
 	checkf(m_FeatureSupport.HighestShaderModel() >= D3D_SHADER_MODEL_6_6, "Device does not support SM 6.6 which is required for dynamic indexing");
+	checkf(m_FeatureSupport.WaveOps(), "Device does not support wave ops which is required.");
 
 	RenderPassTier = m_FeatureSupport.RenderPassesTier();
 	RayTracingTier = m_FeatureSupport.RaytracingTier();

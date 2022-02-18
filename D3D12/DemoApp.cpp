@@ -316,13 +316,21 @@ void DemoApp::Update()
 	}
 #endif
 
-	if (Input::Instance().IsKeyPressed('H'))
-	{
-		m_RenderPath = m_RenderPath == RenderPath::PathTracing ? RenderPath::Clustered : RenderPath::PathTracing;
-	}
-	if (m_RenderPath == RenderPath::PathTracing && !m_pPathTracing->IsSupported())
+	if (Input::Instance().IsKeyPressed('1'))
 	{
 		m_RenderPath = RenderPath::Clustered;
+	}
+	else if (Input::Instance().IsKeyPressed('2'))
+	{
+		m_RenderPath = RenderPath::Tiled;
+	}
+	else if (Input::Instance().IsKeyPressed('3'))
+	{
+		m_RenderPath = RenderPath::Visibility;
+	}
+	else if (Input::Instance().IsKeyPressed('4') && m_pPathTracing->IsSupported())
+	{
+		m_RenderPath = RenderPath::PathTracing;
 	}
 
 	if (Tweakables::g_RenderObjectBounds)
@@ -745,7 +753,7 @@ void DemoApp::Update()
 				{
 					GPU_PROFILE_SCOPE("Opaque Masked", &renderContext);
 					renderContext.SetPipelineState(m_pVisibilityRenderingMaskedPSO);
-					DrawScene(renderContext, m_SceneData, Batch::Blending::AlphaMask);
+					DrawScene(renderContext, m_SceneData, Batch::Blending::AlphaMask | Batch::Blending::AlphaBlend);
 				}
 
 				renderContext.EndRenderPass();
