@@ -9,6 +9,8 @@ public:
 
 	~Window();
 
+	static IntVector2 GetDisplaySize();
+
 	bool PollMessages();
 
 	void SetTitle(const char* pTitle);

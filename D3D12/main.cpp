@@ -40,7 +40,9 @@ int WINAPI WinMain(_In_ HINSTANCE /*hInstance*/, _In_opt_ HINSTANCE /*hPrevInsta
 	CVarManager::Initialize();
 	TaskQueue::Initialize(std::thread::hardware_concurrency());
 
-	Window app(1920, 1080);
+	IntVector2 displayDimensions = Window::GetDisplaySize();
+
+	Window app((int)(displayDimensions.x * 0.7f), (int)(displayDimensions.y * 0.7f));
 	app.SetTitle("D3D12");
 
 	DemoApp graphics(app.GetNativeWindow(), app.GetRect(), 1);

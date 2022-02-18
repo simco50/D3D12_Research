@@ -16,15 +16,14 @@ Window::Window(uint32 width, uint32 height)
 	wc.hCursor = LoadCursorA(nullptr, IDC_ARROW);
 	check(RegisterClassExA(&wc));
 
-	int displayWidth = GetSystemMetrics(SM_CXSCREEN);
-	int displayHeight = GetSystemMetrics(SM_CYSCREEN);
+	IntVector2 displayDimensions = GetDisplaySize();
 
 	DWORD windowStyle = WS_OVERLAPPEDWINDOW;
 	RECT windowRect = { 0, 0, (LONG)width, (LONG)height };
 	AdjustWindowRect(&windowRect, windowStyle, false);
 
-	int x = (displayWidth - width) / 2;
-	int y = (displayHeight - height) / 2;
+	int x = (displayDimensions.x - width) / 2;
+	int y = (displayDimensions.y - height) / 2;
 
 	m_Window = CreateWindowExA(
 		0,
@@ -50,6 +49,13 @@ Window::~Window()
 {
 	CloseWindow(m_Window);
 	UnregisterClassA(WINDOW_CLASS_NAME, GetModuleHandleA(nullptr));
+}
+
+IntVector2 Window::GetDisplaySize()
+{
+	int displayWidth = GetSystemMetrics(SM_CXSCREEN);
+	int displayHeight = GetSystemMetrics(SM_CYSCREEN);
+	return IntVector2(displayWidth, displayHeight);
 }
 
 bool Window::PollMessages()
