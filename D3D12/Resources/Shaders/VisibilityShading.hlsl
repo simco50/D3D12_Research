@@ -99,9 +99,9 @@ VertexAttribute GetVertexAttributes(float2 pixelLocation, VisBufferData visibili
 	VertexAttribute outVertex;
 	outVertex.UV = uvs;
     outVertex.Position = BaryInterpolate(vertices[0].Position, vertices[1].Position, vertices[2].Position, barycentrics);
-    outVertex.Normal = mul(BaryInterpolate(vertices[0].Normal, vertices[1].Normal, vertices[2].Normal, barycentrics), (float3x3)world);
+    outVertex.Normal = normalize(mul(BaryInterpolate(vertices[0].Normal, vertices[1].Normal, vertices[2].Normal, barycentrics), (float3x3)world));
 	float4 tangent = BaryInterpolate(vertices[0].Tangent, vertices[1].Tangent, vertices[2].Tangent, barycentrics);
-    outVertex.Tangent = float4(mul(tangent.xyz, (float3x3)world), tangent.w);
+    outVertex.Tangent = float4(normalize(mul(tangent.xyz, (float3x3)world)), tangent.w);
 	outVertex.Color = vertices[0].Color;
 	outVertex.PositionWS = mul(float4(outVertex.Position, 1), world).xyz;
 	return outVertex;
@@ -133,7 +133,7 @@ MaterialProperties GetMaterialProperties(MaterialData material, float2 UV, float
 	}
 	properties.Specular = 0.5f;
 
-	properties.NormalTS = float3(0, 0, 1);
+	properties.NormalTS = float3(0.5f, 0.5f, 1.0f);
 	if(material.Normal != INVALID_HANDLE)
 	{
 		properties.NormalTS = tTexture2DTable[NonUniformResourceIndex(material.Normal)].SampleGrad(sMaterialSampler, UV, dx, dy).rgb;
@@ -178,8 +178,9 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 	MaterialData material = GetMaterial(NonUniformResourceIndex(instance.Material));
 	material.BaseColorFactor *= UIntToColor(vertex.Color);
 	MaterialProperties surface = GetMaterialProperties(material, vertex.UV, dx, dy);
-	float3x3 TBN = CreateTangentToWorld(normalize(vertex.Normal), float4(normalize(vertex.Tangent.xyz), vertex.Tangent.w));
-	float3 N = N = TangentSpaceNormalMapping(surface.NormalTS, TBN);
+	float3 N = vertex.Normal;
+	float3x3 TBN = CreateTangentToWorld(N, float4(normalize(vertex.Tangent.xyz), vertex.Tangent.w));
+	N = TangentSpaceNormalMapping(surface.NormalTS, TBN);
 
 	BrdfData brdfData = GetBrdfData(surface);
 

@@ -293,6 +293,15 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 				material.MetalnessFactor = gltfMaterial.pbr_metallic_roughness.metallic_factor;
 				material.RoughnessFactor = gltfMaterial.pbr_metallic_roughness.roughness_factor;
 			}
+			else if (gltfMaterial.has_pbr_specular_glossiness)
+			{
+				material.pDiffuseTexture = RetrieveTexture(gltfMaterial.pbr_specular_glossiness.diffuse_texture, true);
+				material.RoughnessFactor = 1.0f - gltfMaterial.pbr_specular_glossiness.glossiness_factor;
+				material.BaseColorFactor.x = gltfMaterial.pbr_specular_glossiness.diffuse_factor[0];
+				material.BaseColorFactor.y = gltfMaterial.pbr_specular_glossiness.diffuse_factor[1];
+				material.BaseColorFactor.z = gltfMaterial.pbr_specular_glossiness.diffuse_factor[2];
+				material.BaseColorFactor.w = gltfMaterial.pbr_specular_glossiness.diffuse_factor[3];
+			}
 			material.AlphaCutoff = gltfMaterial.alpha_cutoff;
 			material.AlphaMode = GetAlphaMode(gltfMaterial.alpha_mode);
 			material.pEmissiveTexture = RetrieveTexture(gltfMaterial.emissive_texture, true);
@@ -363,6 +372,16 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 						for (size_t i = 0; i < attribute.data->count; ++i)
 						{
 							check(cgltf_accessor_read_float(attribute.data, i, &meshData.UVsStream[i].x, 2));
+						}
+					}
+					else if (strcmp(pName, "COLOR_0") == 0)
+					{
+						meshData.ColorsStream.resize(attribute.data->count);
+						for (size_t i = 0; i < attribute.data->count; ++i)
+						{
+							Color color;
+							check(cgltf_accessor_read_float(attribute.data, i, &color.x, 4));
+							meshData.ColorsStream[i] = Math::EncodeRGBA(color);
 						}
 					}
 					else

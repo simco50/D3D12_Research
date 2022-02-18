@@ -390,8 +390,9 @@ void PSMain(InterpolantsVSToPS input,
 	MaterialData material = GetMaterial(cObject.Material);
 	material.BaseColorFactor *= UIntToColor(input.Color);
 	MaterialProperties surface = GetMaterialProperties(material, input.UV);
-	float3x3 TBN = CreateTangentToWorld(normalize(input.Normal), float4(normalize(input.Tangent.xyz), input.Tangent.w));
-	float3 N = TangentSpaceNormalMapping(surface.NormalTS, TBN);
+	float3 N = normalize(input.Normal);
+	float3x3 TBN = CreateTangentToWorld(N, float4(normalize(input.Tangent.xyz), input.Tangent.w));
+	N = TangentSpaceNormalMapping(surface.NormalTS, TBN);
 
 	BrdfData brdf = GetBrdfData(surface);
 

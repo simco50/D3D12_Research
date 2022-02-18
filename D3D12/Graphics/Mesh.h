@@ -52,7 +52,7 @@ struct Material
 	std::string Name = "Unnamed Material";
 	Color BaseColorFactor = Color(1, 1, 1, 1);
 	Color EmissiveFactor = Color(0, 0, 0, 1);
-	float MetalnessFactor = 1.0f;
+	float MetalnessFactor = 0.0f;
 	float RoughnessFactor = 1.0f;
 	float AlphaCutoff = 0.5f;
 	Texture* pDiffuseTexture = nullptr;
