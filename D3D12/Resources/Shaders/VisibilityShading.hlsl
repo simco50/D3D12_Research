@@ -177,17 +177,18 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
     MeshInstance instance = GetMeshInstance(visibility.ObjectID);
 	MaterialData material = GetMaterial(NonUniformResourceIndex(instance.Material));
 	material.BaseColorFactor *= UIntToColor(vertex.Color);
-	MaterialProperties properties = GetMaterialProperties(material, vertex.UV, dx, dy);
+	MaterialProperties surface = GetMaterialProperties(material, vertex.UV, dx, dy);
 	float3x3 TBN = CreateTangentToWorld(normalize(vertex.Normal), float4(normalize(vertex.Tangent.xyz), vertex.Tangent.w));
-	float3 N = TangentSpaceNormalMapping(properties.NormalTS, TBN);
+	float3 N = N = TangentSpaceNormalMapping(surface.NormalTS, TBN);
 
-	BrdfData brdfData = GetBrdfData(properties);
+	BrdfData brdfData = GetBrdfData(surface);
 
 	float3 positionWS = vertex.PositionWS;
-	float3 V = normalize(positionWS - cView.ViewPosition.xyz);
+	float3 V = normalize(cView.ViewPosition.xyz - positionWS);
 	LightResult result = DoLight(float4(positionWS, length(cView.ViewPosition.xyz - positionWS)), positionWS, N, V, brdfData.Diffuse, brdfData.Specular, brdfData.Roughness);
 	float3 outRadiance = result.Diffuse + result.Specular;
 	outRadiance += ApplyAmbientLight(brdfData.Diffuse, 1, GetLight(0).GetColor().rgb);
+	outRadiance += surface.Emissive;
 
 	float reflectivity = saturate(Square(1 - brdfData.Roughness));
 
