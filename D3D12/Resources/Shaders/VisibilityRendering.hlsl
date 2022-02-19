@@ -23,7 +23,7 @@ bool IsVisible(MeshData mesh, float4x4 world, uint meshlet)
 	}
 
 	float3 viewLocation = cView.ViewPosition.xyz;
-	if(dot(viewLocation - center.xyz, -coneAxis) >= cullData.ConeCutoff * length(center.xyz - viewLocation) + radius)
+	if(dot(viewLocation - center.xyz, coneAxis) >= cullData.ConeCutoff * length(center.xyz - viewLocation) + radius)
 	{
 		return false;
 	}

@@ -1718,7 +1718,7 @@ void DemoApp::UpdateImGui()
 				ofn.hwndOwner = m_Window;
 				ofn.lpstrFile = szFile;
 				ofn.nMaxFile = sizeof(szFile);
-				ofn.lpstrFilter = "DAT Files (*.dat;*.ldr;*.mpd)\0*.dat;*.ldr;*.mpd\0GLTF Files (*.gltf)\0*.gltf\0All Files (*.*)\0*.*\0";;
+				ofn.lpstrFilter = "Supported files (*.gltf;*.dat;*.ldr;*.mpd)\0*.gltf;*.dat;*.ldr;*.mpd\0All Files (*.*)\0*.*\0";;
 				ofn.nFilterIndex = 1;
 				ofn.lpstrFileTitle = NULL;
 				ofn.nMaxFileTitle = 0;

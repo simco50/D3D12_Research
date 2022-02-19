@@ -329,7 +329,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 				meshData.MaterialIndex = MaterialIndex(primitive.material);
 				meshData.Indices.resize(primitive.indices->count);
 
-				constexpr int indexMap[] = { 0, 1, 2 };
+				constexpr int indexMap[] = { 0, 2, 1 };
 				for (size_t i = 0; i < primitive.indices->count; i += 3)
 				{
 					meshData.Indices[i + 0] = (int)cgltf_accessor_read_index(primitive.indices, i + indexMap[0]);
@@ -404,7 +404,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 			if (node.mesh)
 			{
 				SubMeshInstance newNode;
-				newNode.Transform = Matrix(matrix) * Matrix::CreateScale(uniformScale, uniformScale, uniformScale);
+				newNode.Transform = Matrix(matrix) * Matrix::CreateScale(uniformScale, uniformScale, -uniformScale);
 				for (int primitive : meshToPrimitives[node.mesh])
 				{
 					newNode.MeshIndex = primitive;
