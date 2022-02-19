@@ -99,8 +99,6 @@ void EditTransform(const Camera& camera, Matrix& matrix)
 		break;
 	}
 
-	ImGuiIO& io = ImGui::GetIO();
-	ImGuizmo::SetRect(0, 0, io.DisplaySize.x, io.DisplaySize.y);
 	Matrix view = camera.GetView();
 	Matrix projection = camera.GetProjection();
 	Math::ReverseZProjection(projection);
@@ -1792,6 +1790,7 @@ void DemoApp::UpdateImGui()
 	{
 		OnResizeViewport(width, height);
 	}
+	ImGuizmo::SetRect(ImGui::GetWindowPos().x, ImGui::GetWindowPos().y, (float)width, (float)height);
 	ImGui::Image(m_pTonemapTarget.get(), ImVec2((float)width, (float)height));
 	ImGui::End();
 
