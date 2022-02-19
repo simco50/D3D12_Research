@@ -17,9 +17,9 @@ struct VertexAttribute
 	uint Color;
 };
 
-VertexAttribute GetVertexAttributes(float2 pixelLocation, VisBufferData visibility, out float2 dx, out float2 dy, out float3 barycentrics)
+VertexAttribute GetVertexAttributes(float2 screenUV, VisBufferData visibility, out float2 dx, out float2 dy, out float3 barycentrics)
 {
-	float2 ndc = (pixelLocation * cView.ScreenDimensionsInv) * 2 - 1;
+	float2 ndc = screenUV * 2 - 1;
 	float3 rayDir = CreateCameraRay(ndc);
 
 	float3 neighborRayDirX = QuadReadAcrossX(rayDir);
@@ -167,12 +167,12 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 	{
 		return;
 	}
-
 	VisBufferData visibility = (VisBufferData)tVisibilityTexture.Load(uint3(dispatchThreadId.xy, 0));
 
 	float2 dx, dy;
 	float3 barycentrics;
-	VertexAttribute vertex = GetVertexAttributes((float2)dispatchThreadId.xy + 0.5f, visibility, dx, dy, barycentrics);
+	float2 screenUV = ((float2)dispatchThreadId.xy + 0.5f) * cView.ScreenDimensionsInv;
+	VertexAttribute vertex = GetVertexAttributes(screenUV, visibility, dx, dy, barycentrics);
 	float3 positionWS = vertex.PositionWS;
 	float3 V = normalize(cView.ViewPosition.xyz - positionWS);
 
@@ -186,8 +186,10 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 
 	BrdfData brdfData = GetBrdfData(surface);
 
-	LightResult result = DoLight(float4(positionWS, length(cView.ViewPosition.xyz - positionWS)), positionWS, N, V, brdfData.Diffuse, brdfData.Specular, brdfData.Roughness);
-	
+	float3 positionVS = mul(float4(vertex.PositionWS, 1), cView.View).xyz;
+	float4 pos = float4((float2)(dispatchThreadId.xy + 0.5f), 0, positionVS.z);
+	LightResult result = DoLight(pos, positionWS, N, V, brdfData.Diffuse, brdfData.Specular, brdfData.Roughness);
+
 	float3 outRadiance = 0;
 	outRadiance += result.Diffuse + result.Specular;
 	outRadiance += ApplyAmbientLight(brdfData.Diffuse, 1, GetLight(0).GetColor().rgb);
