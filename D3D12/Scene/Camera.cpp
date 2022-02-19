@@ -185,13 +185,13 @@ void FreeCamera::Update()
 	OnDirty();
 }
 
-Ray Camera::GetMouseRay(uint32 windowWidth, uint32 windowHeight) const
+Ray Camera::GetMouseRay() const
 {
 	Ray ray;
 	Vector2 mousePos = Input::Instance().GetMousePosition();
 	Vector2 ndc;
-	float hw = (float)windowWidth / 2.0f;
-	float hh = (float)windowHeight / 2.0f;
+	float hw = (float)m_Transform.Viewport.GetWidth() / 2.0f;
+	float hh = (float)m_Transform.Viewport.GetHeight() / 2.0f;
 	ndc.x = (mousePos.x - hw) / hw;
 	ndc.y = (hh - mousePos.y) / hh;
 

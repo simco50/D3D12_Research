@@ -19,7 +19,7 @@ public:
 	ImGuiRenderer(GraphicsDevice* pParent, WindowHandle window, uint32 numBufferedFrames);
 	~ImGuiRenderer();
 
-	void NewFrame(uint32 width, uint32 height);
+	void NewFrame();
 	void Render(RGGraph& graph, const SceneView& sceneData, Texture* pRenderTarget);
 };
 

@@ -138,7 +138,7 @@ ImGuiRenderer::~ImGuiRenderer()
 	ImGui::DestroyContext();
 }
 
-void ImGuiRenderer::NewFrame(uint32 width, uint32 height)
+void ImGuiRenderer::NewFrame()
 {
 	ImGui_ImplDX12_NewFrame();
 	ImGui_ImplWin32_NewFrame();

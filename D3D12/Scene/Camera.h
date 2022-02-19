@@ -43,7 +43,7 @@ public:
 	const Matrix& GetProjectionInverse() const;
 	const Matrix& GetPreviousViewProjection() const { return m_Transform.PreviousViewProjection; }
 	const BoundingFrustum& GetFrustum() const;
-	Ray GetMouseRay(uint32 windowWidth, uint32 windowHeight) const;
+	Ray GetMouseRay() const;
 
 protected:
 	void OnDirty();

@@ -10,34 +10,36 @@ bool IsVisible(MeshData mesh, float4x4 world, uint meshlet)
 	MeshletBounds cullData = BufferLoad<MeshletBounds>(mesh.BufferIndex, meshlet, mesh.MeshletBoundsOffset);
 
 	float4 center = mul(float4(cullData.Center, 1), world);
+	float3 radius3 = mul(cullData.Radius.xxx, (float3x3)world);
+	float radius = max(radius3.x, max(radius3.y, radius3.z));
+	float3 coneAxis = normalize(mul(cullData.ConeAxis, (float3x3)world));
 
 	for(int i = 0; i < 6; ++i)
 	{
-		if(dot(center, cView.FrustumPlanes[i]) > cullData.Radius)
+		if(dot(center, cView.FrustumPlanes[i]) > radius)
 		{
 			return false;
 		}
 	}
 
 	float3 viewLocation = cView.ViewPosition.xyz;
-	float3 coneApex = mul(float4(cullData.ConeApex, 1), world).xyz;
-	float3 coneAxis = mul(cullData.ConeAxis, (float3x3)world);
-	float3 view = normalize(viewLocation - coneApex);
-	if (dot(view, coneAxis) >= cullData.ConeCutoff)
+	if(dot(viewLocation - center.xyz, -coneAxis) >= cullData.ConeCutoff * length(center.xyz - viewLocation) + radius)
 	{
 		return false;
 	}
 	return true;
 }
 
+#define NUM_AS_THREADS 32
+
 struct PayloadData
 {
-	uint Indices[32];
+	uint Indices[NUM_AS_THREADS];
 };
 
 groupshared PayloadData gsPayload;
 
-[numthreads(32, 1, 1)]
+[numthreads(NUM_AS_THREADS, 1, 1)]
 void ASMain(uint threadID : SV_DispatchThreadID)
 {
 	bool visible = false;
@@ -60,8 +62,6 @@ void ASMain(uint threadID : SV_DispatchThreadID)
 	DispatchMesh(visibleCount, 1, 1, gsPayload);
 }
 
-#define NUM_MESHLET_THREADS 32
-
 struct PrimitiveAttribute
 {
 	uint PrimitiveID : SV_PrimitiveID;
@@ -83,6 +83,8 @@ VertexAttribute FetchVertexAttributes(MeshData mesh, float4x4 world, uint vertex
 	result.UV = UnpackHalf2(BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.UVsOffset));
 	return result;
 }
+
+#define NUM_MESHLET_THREADS 32
 
 [outputtopology("triangle")]
 [numthreads(NUM_MESHLET_THREADS, 1, 1)]

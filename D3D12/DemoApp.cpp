@@ -216,8 +216,6 @@ void DemoApp::SetupScene(CommandContext& context)
 	m_pCamera->SetPosition(Vector3(-1.3f, 2.4f, -1.5f));
 	m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(Math::PIDIV4, Math::PIDIV4 * 0.5f, 0));
 
-	LoadMesh("Resources/Scenes/Sponza/Sponza.gltf", context);
-
 	{
 #if 1
 		m_pCamera->SetPosition(Vector3(-1.3f, 2.4f, -1.5f));
@@ -238,7 +236,7 @@ void DemoApp::SetupScene(CommandContext& context)
 		m_pCamera->SetRotation(Quaternion::CreateFromRotationMatrix(m));
 
 		LoadMesh("D:/References/GltfScenes/bathroom_pt/LAZIENKA.gltf", context);
-#elif 0
+#elif 1
 		LoadMesh("D:/References/GltfScenes/Sphere/scene.gltf", context);
 #elif 0
 		LoadMesh("D:/References/GltfScenes/BlenderSplash/MyScene.gltf", context);
@@ -277,30 +275,31 @@ void DemoApp::SetupScene(CommandContext& context)
 void DemoApp::Update()
 {
 	PROFILE_BEGIN("Update");
-	m_pImGuiRenderer->NewFrame(m_WindowWidth, m_WindowHeight);
+	m_pImGuiRenderer->NewFrame();
 	m_pDevice->GetShaderManager()->ConditionallyReloadShaders();
 	UpdateImGui();
 	m_pCamera->Update();
 
 #if 0
 	static int selectedBatch = -1;
-	Ray camRay = m_pCamera->GetMouseRay(m_WindowWidth, m_WindowHeight);
+	Ray camRay = m_pCamera->GetMouseRay();
 	float minDist = FLT_MAX;
 
-	if (Input::Instance().IsMousePressed(0))
+	if (Input::Instance().IsMousePressed(VK_LBUTTON) && !ImGui::IsAnyItemHovered())
 	{
 		if (!ImGuizmo::IsOver() && !ImGuizmo::IsUsing())
 		{
 			selectedBatch = -1;
-			for (Batch& b : m_SceneData.Batches)
+			for (size_t i = 0; i < m_SceneData.Batches.size(); ++i)
 			{
+				const Batch& b = m_SceneData.Batches[i];
 				float distance = 0;
 				if (!b.Bounds.Contains(camRay.position) && camRay.Intersects(b.Bounds, distance))
 				{
 					distance = Vector3::Distance(camRay.position + distance * camRay.direction, b.Bounds.Center);
 					if (distance < minDist)
 					{
-						selectedBatch = b.Index;
+						selectedBatch = (int)i;
 						minDist = distance;
 					}
 				}
@@ -308,11 +307,25 @@ void DemoApp::Update()
 		}
 	}
 
+	selectedBatch = Math::Clamp(selectedBatch, selectedBatch, (int)m_SceneData.Batches.size() - 1);
 	if (selectedBatch >= 0)
 	{
 		Batch& b = m_SceneData.Batches[selectedBatch];
 		EditTransform(*m_pCamera, b.WorldMatrix);
 		DebugRenderer::Get()->AddBoundingBox(b.Bounds, Color(1, 0, 1, 1));
+
+		for (size_t i =0; i < b.pMesh->Meshlets.size(); ++i)
+		{
+			//const ShaderInterop::Meshlet& meshlet = b.pMesh->Meshlets[i];
+			const ShaderInterop::MeshletBounds& bounds = b.pMesh->MeshletBounds[i];
+			const Matrix& transform = b.WorldMatrix;
+
+			Vector3 center = Vector3::Transform(bounds.Center, transform);
+			Vector3 radius3 = Vector3::TransformNormal(Vector3(bounds.Radius), transform);
+			float radius = Math::Max(radius3.x, Math::Max(radius3.y, radius3.z));
+
+			DebugRenderer::Get()->AddSphere(center, radius, 12, 12, Color(1, 0, 1, 1), false);
+		}
 	}
 #endif
 
