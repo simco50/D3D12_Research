@@ -25,9 +25,9 @@ VertexAttribute GetVertexAttributes(float2 screenUV, VisBufferData visibility, o
 	float3 neighborRayDirX = QuadReadAcrossX(rayDir);
     float3 neighborRayDirY = QuadReadAcrossY(rayDir);
 
-	MeshInstance instance = GetMeshInstance(visibility.ObjectID);
-	MeshData mesh = GetMesh(instance.Mesh);
-	float4x4 world = GetTransform(instance.World);
+	MeshInstance instance = GetMeshInstance(NonUniformResourceIndex(visibility.ObjectID));
+	MeshData mesh = GetMesh(NonUniformResourceIndex(instance.Mesh));
+	float4x4 world = GetTransform(NonUniformResourceIndex(instance.World));
 
 	uint primitiveID = visibility.PrimitiveID;
 	uint meshletIndex = visibility.MeshletID;
@@ -150,7 +150,7 @@ LightResult DoLight(float4 pos, float3 worldPos, float3 N, float3 V, float3 diff
 	for(uint i = 0; i < lightCount; ++i)
 	{
 		uint lightIndex = i;
-		Light light = GetLight(lightIndex);
+		Light light = GetLight(NonUniformResourceIndex(lightIndex));
 		LightResult result = DoLight(light, specularColor, diffuseColor, roughness, pos, worldPos, N, V);
 
 		totalResult.Diffuse += result.Diffuse;
@@ -176,8 +176,8 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 	float3 positionWS = vertex.PositionWS;
 	float3 V = normalize(cView.ViewPosition.xyz - positionWS);
 
-    MeshInstance instance = GetMeshInstance(visibility.ObjectID);
-	MaterialData material = GetMaterial(instance.Material);
+    MeshInstance instance = GetMeshInstance(NonUniformResourceIndex(visibility.ObjectID));
+	MaterialData material = GetMaterial(NonUniformResourceIndex(instance.Material));
 	material.BaseColorFactor *= UIntToColor(vertex.Color);
 	MaterialProperties surface = GetMaterialProperties(material, vertex.UV, dx, dy);
 	float3 N = vertex.Normal;
