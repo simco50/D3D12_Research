@@ -140,6 +140,8 @@ namespace Tweakables
 	ConsoleVariable g_SsrSamples("r.SSRSamples", 8);
 	ConsoleVariable g_RenderTerrain("r.Terrain", false);
 
+	ConsoleVariable g_FreezeClusterCulling("r.FreezeClusterCulling", false);
+
 	// Misc
 	bool g_DumpRenderGraph = false;
 	DelegateConsoleCommand<> gDumpRenderGraph("DumpRenderGraph", []() { g_DumpRenderGraph = true; });
@@ -752,7 +754,23 @@ void DemoApp::Update()
 
 				renderContext.SetGraphicsRootSignature(m_pVisibilityRenderingRS.get());
 
-				renderContext.SetRootCBV(1, GetViewUniforms(m_SceneData, GetCurrentRenderTarget()));
+				static Vector4 cachedFrustumPlanes[6];
+				static Vector4 cachedViewLocation;
+
+				ShaderInterop::ViewUniforms view = GetViewUniforms(m_SceneData, GetCurrentRenderTarget());
+
+				if (!Tweakables::g_FreezeClusterCulling.Get())
+				{
+					for (int i = 0; i < 6; ++i)
+						cachedFrustumPlanes[i] = view.FrustumPlanes[i];
+					cachedViewLocation = view.ViewPosition;
+				}
+
+				for (int i = 0; i < 6; ++i)
+					view.FrustumPlanes[i] = cachedFrustumPlanes[i];
+				view.ViewPosition = cachedViewLocation;
+
+				renderContext.SetRootCBV(1, view);
 
 				{
 					GPU_PROFILE_SCOPE("Opaque", &renderContext);
@@ -1990,6 +2008,7 @@ void DemoApp::UpdateImGui()
 			ImGui::SliderInt("SSR Samples", &Tweakables::g_SsrSamples.Get(), 0, 32);
 			ImGui::Checkbox("Object Bounds", &Tweakables::g_RenderObjectBounds.Get());
 			ImGui::Checkbox("Render Terrain", &Tweakables::g_RenderTerrain.Get());
+			ImGui::Checkbox("Freeze Cluster Culling", &Tweakables::g_FreezeClusterCulling.Get());
 		}
 
 		if (ImGui::CollapsingHeader("Raytracing"))
