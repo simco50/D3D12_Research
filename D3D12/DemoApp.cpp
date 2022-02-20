@@ -292,9 +292,9 @@ void DemoApp::Update()
 			{
 				const Batch& b = m_SceneData.Batches[i];
 				float distance = 0;
-				if (!b.Bounds.Contains(camRay.position) && camRay.Intersects(b.Bounds, distance))
+				if (camRay.Intersects(b.Bounds, distance))
 				{
-					distance = Vector3::Distance(camRay.position + distance * camRay.direction, b.Bounds.Center);
+					distance = Vector3::Distance(camRay.position, b.Bounds.Center);
 					if (distance < minDist)
 					{
 						selectedBatch = (int)i;
@@ -312,15 +312,14 @@ void DemoApp::Update()
 		EditTransform(*m_pCamera, b.WorldMatrix);
 		DebugRenderer::Get()->AddBoundingBox(b.Bounds, Color(1, 0, 1, 1));
 
-		for (size_t i =0; i < b.pMesh->Meshlets.size(); ++i)
+		for (size_t i =0; i < b.pMesh->MeshletBounds.size(); ++i)
 		{
-			//const ShaderInterop::Meshlet& meshlet = b.pMesh->Meshlets[i];
 			const ShaderInterop::MeshletBounds& bounds = b.pMesh->MeshletBounds[i];
 			const Matrix& transform = b.WorldMatrix;
 
 			Vector3 center = Vector3::Transform(bounds.Center, transform);
 			Vector3 radius3 = Vector3::TransformNormal(Vector3(bounds.Radius), transform);
-			float radius = Math::Max(radius3.x, Math::Max(radius3.y, radius3.z));
+			float radius = Math::Max(abs(radius3.x), Math::Max(abs(radius3.y), abs(radius3.z)));
 
 			DebugRenderer::Get()->AddSphere(center, radius, 12, 12, Color(1, 0, 1, 1), false);
 		}

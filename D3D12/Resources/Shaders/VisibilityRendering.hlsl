@@ -10,7 +10,7 @@ bool IsVisible(MeshData mesh, float4x4 world, uint meshlet)
 	MeshletBounds cullData = BufferLoad<MeshletBounds>(mesh.BufferIndex, meshlet, mesh.MeshletBoundsOffset);
 
 	float4 center = mul(float4(cullData.Center, 1), world);
-	float3 radius3 = mul(cullData.Radius.xxx, (float3x3)world);
+	float3 radius3 = abs(mul(cullData.Radius.xxx, (float3x3)world));
 	float radius = max(radius3.x, max(radius3.y, radius3.z));
 	float3 coneAxis = normalize(mul(cullData.ConeAxis, (float3x3)world));
 
