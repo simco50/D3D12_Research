@@ -2,9 +2,9 @@
 
 struct VisBufferData
 {
-	uint PrimitiveID : 8;
-	uint MeshletID : 12;
-	uint ObjectID : 12;
+	uint PrimitiveID : 7;
+	uint MeshletID : 11;
+	uint ObjectID : 14;
 };
 
 bool RayPlaneIntersection(out float hitT, float3 rayOrigin, float3 rayDirection, float3 planeSurfacePoint, float3 planeNormal)
