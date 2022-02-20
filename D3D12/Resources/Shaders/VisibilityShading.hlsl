@@ -210,8 +210,8 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 	float3 deltas = fwidth(barycentrics);
 	float3 smoothing = deltas * 1;
 	float3 thickness = deltas * 0.2;
-	barycentrics = smoothstep(thickness, thickness + smoothing, barycentrics);
-	float minBary = min(barycentrics.x, min(barycentrics.y, barycentrics.z));
+	float3 bary = smoothstep(thickness, thickness + smoothing, barycentrics);
+	float minBary = min(bary.x, min(bary.y, bary.z));
 	outColor = float4(outColor.xyz * saturate(minBary + 0.6), 1);
 #endif
 

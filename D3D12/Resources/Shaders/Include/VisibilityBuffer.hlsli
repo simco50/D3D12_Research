@@ -10,7 +10,7 @@ struct VisBufferData
 bool RayPlaneIntersection(out float hitT, float3 rayOrigin, float3 rayDirection, float3 planeSurfacePoint, float3 planeNormal)
 {
     float denominator = dot(rayDirection, planeNormal);
-	if(abs(denominator) > 0.000001f)
+	if(abs(denominator) > 0.000000001f)
 	{
 	    float numerator = dot(planeSurfacePoint - rayOrigin, planeNormal);
 		hitT = numerator / denominator;
