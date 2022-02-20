@@ -94,8 +94,10 @@ void RayGen()
 		ray.TMin = RAY_BIAS;
 		ray.TMax = cPass.Radius;
 
+		RaytracingAccelerationStructure tlas = ResourceDescriptorHeap[cView.TLASIndex];
+
 		TraceRay(
-			tTLASTable[cView.TLASIndex], 									//AccelerationStructure
+			tlas, 															//AccelerationStructure
 										//RayFlags
 				RAY_FLAG_FORCE_OPAQUE |
 				RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH |

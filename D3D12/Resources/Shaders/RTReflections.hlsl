@@ -53,7 +53,7 @@ float CastShadowRay(float3 origin, float3 direction)
 		RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH |
 		RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES;
 
-	RaytracingAccelerationStructure TLAS = tTLASTable[cView.TLASIndex];
+	RaytracingAccelerationStructure TLAS = ResourceDescriptorHeap[cView.TLASIndex];
 
 // Inline RT for the shadow rays has better performance. Use it when available.
 #if _INLINE_RT
@@ -118,8 +118,10 @@ ReflectionRayPayload CastReflectionRay(float3 origin, float3 direction, float T)
 	ray.TMin = RAY_BIAS;
 	ray.TMax = RAY_MAX_T;
 
+	RaytracingAccelerationStructure tlas = ResourceDescriptorHeap[cView.TLASIndex];
+
 	TraceRay(
-		tTLASTable[cView.TLASIndex],		 				//AccelerationStructure
+		tlas,		 										//AccelerationStructure
 		0,									 				//RayFlags
 		0xFF, 												//InstanceInclusionMask
 		0,													//RayContributionToHitGroupIndex
@@ -162,7 +164,7 @@ LightResult EvaluateLight(Light light, float3 worldPos, float3 V, float3 N, Brdf
 
 		if(all(lightPos >= 0) && all(lightPos <= 1))
 		{
-			Texture2D shadowTexture = tTexture2DTable[cView.ShadowMapOffset + shadowIndex];
+			Texture2D shadowTexture = ResourceDescriptorHeap[cView.ShadowMapOffset + shadowIndex];
 			attenuation *= shadowTexture.SampleCmpLevelZero(sDepthComparison, lightPos.xy, lightPos.z);
 			castShadowRay = false;
 		}

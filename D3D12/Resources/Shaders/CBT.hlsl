@@ -55,11 +55,12 @@ ConstantBuffer<UpdateData> cUpdateData : register(b1);
 void PrepareDispatchArgsCS(uint threadID : SV_DispatchThreadID)
 {
 	CBT cbt;
-	cbt.Init(uRWBufferTable[cCommonArgs.CBTIndex], cCommonArgs.NumElements);
+	RWByteAddressBuffer cbtBuffer = ResourceDescriptorHeap[cCommonArgs.CBTIndex];
+	cbt.Init(cbtBuffer, cCommonArgs.NumElements);
 
 	uint offset = 0;
 
-	RWByteAddressBuffer uIndirectArgs = uRWBufferTable[cCommonArgs.IndirectArgsIndex];
+	RWByteAddressBuffer uIndirectArgs = ResourceDescriptorHeap[cCommonArgs.IndirectArgsIndex];
 
 	// Dispatch args
 	uint numThreads = ceil((float)cbt.NumNodes() / COMPUTE_THREAD_GROUP_SIZE);
@@ -134,7 +135,8 @@ static uint SUM_REDUCTION_LUT[] = {
 void SumReductionCS(uint threadID : SV_DispatchThreadID, uint groupThreadID : SV_GroupThreadID, uint groupIndex : SV_GroupID)
 {
 	CBT cbt;
-	cbt.Init(uRWBufferTable[cCommonArgs.CBTIndex], cCommonArgs.NumElements);
+	RWByteAddressBuffer cbtBuffer = ResourceDescriptorHeap[cCommonArgs.CBTIndex];
+	cbt.Init(cbtBuffer, cCommonArgs.NumElements);
 	uint count = 1u << cSumReductionData.Depth;
 	uint index = threadID;
 	if(index < count)
@@ -180,7 +182,8 @@ void SumReductionCS(uint threadID : SV_DispatchThreadID, uint groupThreadID : SV
 void SumReductionCS(uint threadID : SV_DispatchThreadID)
 {
 	CBT cbt;
-	cbt.Init(uRWBufferTable[cCommonArgs.CBTIndex], cCommonArgs.NumElements);
+	RWByteAddressBuffer cbtBuffer = ResourceDescriptorHeap[cCommonArgs.CBTIndex];
+	cbt.Init(cbtBuffer, cCommonArgs.NumElements);
 	uint count = 1u << cSumReductionData.Depth;
 	uint index = threadID;
 	if(index < count)
@@ -199,7 +202,8 @@ void SumReductionCS(uint threadID : SV_DispatchThreadID)
 void CacheBitfieldCS(uint threadID : SV_DispatchThreadID)
 {
 	CBT cbt;
-	cbt.Init(uRWBufferTable[cCommonArgs.CBTIndex], cCommonArgs.NumElements);
+	RWByteAddressBuffer cbtBuffer = ResourceDescriptorHeap[cCommonArgs.CBTIndex];
+	cbt.Init(cbtBuffer, cCommonArgs.NumElements);
 	uint depth = cSumReductionData.Depth;
 	uint count = 1u << depth;
 	uint elementCount = count >> 5u;
@@ -218,7 +222,8 @@ void CacheBitfieldCS(uint threadID : SV_DispatchThreadID)
 void SumReductionFirstPassCS(uint threadID : SV_DispatchThreadID)
 {
 	CBT cbt;
-	cbt.Init(uRWBufferTable[cCommonArgs.CBTIndex], cCommonArgs.NumElements);
+	RWByteAddressBuffer cbtBuffer = ResourceDescriptorHeap[cCommonArgs.CBTIndex];
+	cbt.Init(cbtBuffer, cCommonArgs.NumElements);
 	uint depth = cSumReductionData.Depth;
 	uint count = 1u << depth;
 	uint thread = threadID << 5u;
@@ -378,7 +383,8 @@ float3x3 GetVertices(uint heapIndex)
 void UpdateCS(uint threadID : SV_DispatchThreadID)
 {
 	CBT cbt;
-	cbt.Init(uRWBufferTable[cCommonArgs.CBTIndex], cCommonArgs.NumElements);
+	RWByteAddressBuffer cbtBuffer = ResourceDescriptorHeap[cCommonArgs.CBTIndex];
+	cbt.Init(cbtBuffer, cCommonArgs.NumElements);
 	if(threadID < cbt.NumNodes())
 	{
 		uint heapIndex = cbt.LeafToHeapIndex(threadID);
@@ -441,7 +447,8 @@ groupshared ASPayload gsPayload;
 void UpdateAS(uint threadID : SV_DispatchThreadID)
 {
 	CBT cbt;
-	cbt.Init(uRWBufferTable[cCommonArgs.CBTIndex], cCommonArgs.NumElements);
+	RWByteAddressBuffer cbtBuffer = ResourceDescriptorHeap[cCommonArgs.CBTIndex];
+	cbt.Init(cbtBuffer, cCommonArgs.NumElements);
 	bool isVisible = false;
 	uint heapIndex = 0;
 
@@ -527,7 +534,8 @@ uint RenderVS(uint instanceID : SV_InstanceID) : INSTANCE_ID
 void RenderGS(point uint instanceID[1] : INSTANCE_ID, inout TriangleStream<VertexOut> triStream)
 {
 	CBT cbt;
-	cbt.Init(uRWBufferTable[cCommonArgs.CBTIndex], cCommonArgs.NumElements);
+	RWByteAddressBuffer cbtBuffer = ResourceDescriptorHeap[cCommonArgs.CBTIndex];
+	cbt.Init(cbtBuffer, cCommonArgs.NumElements);
 	uint heapIndex = cbt.LeafToHeapIndex(instanceID[0]);
 
 	for(uint d = 0; d < GEOMETRY_SHADER_SUB_D; ++d)
@@ -554,7 +562,8 @@ void RenderGS(point uint instanceID[1] : INSTANCE_ID, inout TriangleStream<Verte
 void RenderVS(uint vertexID : SV_VertexID, uint instanceID : SV_InstanceID, out VertexOut vertex)
 {
 	CBT cbt;
-	cbt.Init(uRWBufferTable[cCommonArgs.CBTIndex], cCommonArgs.NumElements);
+	RWByteAddressBuffer cbtBuffer = ResourceDescriptorHeap[cCommonArgs.CBTIndex];
+	cbt.Init(cbtBuffer, cCommonArgs.NumElements);
 
 	uint heapIndex = cbt.LeafToHeapIndex(instanceID);
 	float3 tri = GetVertices(heapIndex)[vertexID];
@@ -612,7 +621,8 @@ void DebugVisualizeVS(
 	out float4 color : COLOR)
 {
 	CBT cbt;
-	cbt.Init(uRWBufferTable[cCommonArgs.CBTIndex], cCommonArgs.NumElements);
+	RWByteAddressBuffer cbtBuffer = ResourceDescriptorHeap[cCommonArgs.CBTIndex];
+	cbt.Init(cbtBuffer, cCommonArgs.NumElements);
 
 	uint heapIndex = cbt.LeafToHeapIndex(instanceID);
 

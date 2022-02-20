@@ -62,7 +62,7 @@ void RootSignature::AddStaticSampler(const D3D12_STATIC_SAMPLER_DESC& samplerDes
 	m_StaticSamplers.push_back(CD3DX12_STATIC_SAMPLER_DESC(samplerDesc));
 }
 
-void RootSignature::Finalize(const char* pName, D3D12_ROOT_SIGNATURE_FLAGS flags, bool addDefaultTables)
+void RootSignature::Finalize(const char* pName, D3D12_ROOT_SIGNATURE_FLAGS flags, bool addDefaultStaticSamplers)
 {
 	D3D12_ROOT_SIGNATURE_FLAGS visibilityFlags =
 		D3D12_ROOT_SIGNATURE_FLAG_DENY_VERTEX_SHADER_ROOT_ACCESS
@@ -78,7 +78,7 @@ void RootSignature::Finalize(const char* pName, D3D12_ROOT_SIGNATURE_FLAGS flags
 			| D3D12_ROOT_SIGNATURE_FLAG_DENY_AMPLIFICATION_SHADER_ROOT_ACCESS;
 	}
 
-	if (addDefaultTables)
+	if (addDefaultStaticSamplers)
 	{
 		int staticSamplerRegisterSlot = 10;
 		AddStaticSampler(CD3DX12_STATIC_SAMPLER_DESC(staticSamplerRegisterSlot++, D3D12_FILTER_MIN_MAG_MIP_LINEAR, D3D12_TEXTURE_ADDRESS_MODE_WRAP, D3D12_TEXTURE_ADDRESS_MODE_WRAP, D3D12_TEXTURE_ADDRESS_MODE_WRAP));
@@ -95,25 +95,6 @@ void RootSignature::Finalize(const char* pName, D3D12_ROOT_SIGNATURE_FLAGS flags
 
 		AddStaticSampler(CD3DX12_STATIC_SAMPLER_DESC(staticSamplerRegisterSlot++, D3D12_FILTER_ANISOTROPIC, D3D12_TEXTURE_ADDRESS_MODE_WRAP, D3D12_TEXTURE_ADDRESS_MODE_WRAP, D3D12_TEXTURE_ADDRESS_MODE_WRAP));
 		AddStaticSampler(CD3DX12_STATIC_SAMPLER_DESC(staticSamplerRegisterSlot++, D3D12_FILTER_COMPARISON_MIN_MAG_MIP_POINT, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, 0.0f, 16u, D3D12_COMPARISON_FUNC_GREATER));
-
-		uint32 numSRVRanges = 10;
-		uint32 numUAVRanges = 10;
-		uint32 currentRangeIndex = 0;
-		m_BindlessViewsIndex = m_NumParameters;
-		m_BindlessViewsIndex = AddDescriptorTable(numSRVRanges + numUAVRanges, D3D12_SHADER_VISIBILITY_ALL);
-		for (uint32 i = 0; i < numSRVRanges; ++i)
-		{
-			AddDescriptorTableRange(m_BindlessViewsIndex, currentRangeIndex, 0, i + 100, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0xFFFFFFFF, 0);
-			++currentRangeIndex;
-		}
-		for (uint32 i = 0; i < numUAVRanges; ++i)
-		{
-			AddDescriptorTableRange(m_BindlessViewsIndex, currentRangeIndex, 0, i + 100, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 0xFFFFFFFF, 0);
-			++currentRangeIndex;
-		}
-
-		m_BindlessSamplersIndex = AddDescriptorTable(1, D3D12_SHADER_VISIBILITY_ALL);
-		AddDescriptorTableRange(m_BindlessSamplersIndex, 0, 0, 100, D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER, 0xFFFFFFFF, 0);
 	}
 
 	for (size_t i = 0; i < m_NumParameters; ++i)

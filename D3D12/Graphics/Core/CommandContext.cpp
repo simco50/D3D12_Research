@@ -276,9 +276,6 @@ void CommandContext::SetComputeRootSignature(RootSignature* pRootSignature)
 	m_pCommandList->SetComputeRootSignature(pRootSignature->GetRootSignature());
 	m_ShaderResourceDescriptorAllocator.ParseRootSignature(pRootSignature);
 	m_CurrentCommandContext = CommandListContext::Compute;
-
-	m_pCommandList->SetComputeRootDescriptorTable(pRootSignature->GetBindlessViewIndex(), GetParent()->GetGlobalViewHeap()->GetStartHandle().GpuHandle);
-	m_pCommandList->SetComputeRootDescriptorTable(pRootSignature->GetBindlessSamplerIndex(), GetParent()->GetGlobalSamplerHeap()->GetStartHandle().GpuHandle);
 }
 
 void CommandContext::SetGraphicsRootSignature(RootSignature* pRootSignature)
@@ -286,9 +283,6 @@ void CommandContext::SetGraphicsRootSignature(RootSignature* pRootSignature)
 	m_pCommandList->SetGraphicsRootSignature(pRootSignature->GetRootSignature());
 	m_ShaderResourceDescriptorAllocator.ParseRootSignature(pRootSignature);
 	m_CurrentCommandContext = CommandListContext::Graphics;
-
-	m_pCommandList->SetGraphicsRootDescriptorTable(pRootSignature->GetBindlessViewIndex(), GetParent()->GetGlobalViewHeap()->GetStartHandle().GpuHandle);
-	m_pCommandList->SetGraphicsRootDescriptorTable(pRootSignature->GetBindlessSamplerIndex(), GetParent()->GetGlobalSamplerHeap()->GetStartHandle().GpuHandle);
 }
 
 void CommandContext::SetRootSRV(uint32 rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address)

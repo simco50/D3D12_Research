@@ -17,7 +17,6 @@ InterpolantsVSToPS VSMain(uint vertexId : SV_VertexID)
 	InterpolantsVSToPS result = (InterpolantsVSToPS)0;
 	MeshData mesh = GetMesh(cObject.Mesh);
 	float4x4 world = GetTransform(cObject.World);
-	ByteAddressBuffer meshBuffer = tBufferTable[mesh.BufferIndex];
 
 	float3 position = BufferLoad<float3>(mesh.BufferIndex, vertexId, mesh.PositionsOffset);
 	result.Position = mul(mul(float4(position, 1.0f), world), cView.ViewProjection);

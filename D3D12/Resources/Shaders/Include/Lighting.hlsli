@@ -83,7 +83,7 @@ float Shadow3x3PCF(float3 wPos, int shadowMapIndex, float invShadowSize)
 
 	float2 uv = lightPos.xy;
 
-	Texture2D shadowTexture = tTexture2DTable[NonUniformResourceIndex(cView.ShadowMapOffset + shadowMapIndex)];
+	Texture2D shadowTexture = ResourceDescriptorHeap[NonUniformResourceIndex(cView.ShadowMapOffset + shadowMapIndex)];
 
 	const float Dilation = 2.0f;
 	float d1 = Dilation * invShadowSize * 0.125f;
@@ -112,7 +112,7 @@ float ShadowNoPCF(float3 wPos, int shadowMapIndex, float invShadowSize)
 	lightPos.x = lightPos.x / 2.0f + 0.5f;
 	lightPos.y = lightPos.y / -2.0f + 0.5f;
 	float2 uv = lightPos.xy;
-	Texture2D shadowTexture = tTexture2DTable[NonUniformResourceIndex(cView.ShadowMapOffset + shadowMapIndex)];
+	Texture2D shadowTexture = ResourceDescriptorHeap[NonUniformResourceIndex(cView.ShadowMapOffset + shadowMapIndex)];
 	return shadowTexture.SampleCmpLevelZero(sDepthComparison, uv, lightPos.z);
 }
 

@@ -58,7 +58,7 @@ float CastShadowRay(float3 origin, float3 direction)
 		RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH |
 		RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES;
 
-	RaytracingAccelerationStructure TLAS = tTLASTable[cView.TLASIndex];
+	RaytracingAccelerationStructure TLAS = ResourceDescriptorHeap[cView.TLASIndex];
 
 // Inline RT for the shadow rays has better performance. Use it when available.
 #if _INLINE_RT
@@ -376,8 +376,10 @@ void RayGen()
 		desc.TMin = RAY_BIAS;
 		desc.TMax = RAY_MAX_T;
 
+		RaytracingAccelerationStructure tlas = ResourceDescriptorHeap[cView.TLASIndex];
+
 		TraceRay(
-			tTLASTable[cView.TLASIndex],	//AccelerationStructure
+			tlas,		//AccelerationStructure
 			0, 									//RayFlags
 			0xFF, 								//InstanceInclusionMask
 			0,									//RayContributionToHitGroupIndex

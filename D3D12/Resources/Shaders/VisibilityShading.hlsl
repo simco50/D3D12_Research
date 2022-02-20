@@ -113,7 +113,7 @@ MaterialProperties GetMaterialProperties(MaterialData material, float2 UV, float
 	float4 baseColor = material.BaseColorFactor;
 	if(material.Diffuse != INVALID_HANDLE)
 	{
-		baseColor *= tTexture2DTable[NonUniformResourceIndex(material.Diffuse)].SampleGrad(sMaterialSampler, UV, dx, dy);
+		baseColor *= SampleGrad2D(NonUniformResourceIndex(material.Diffuse), sMaterialSampler, UV, dx, dy);
 	}
 	properties.BaseColor = baseColor.rgb;
 	properties.Opacity = baseColor.a;
@@ -122,21 +122,21 @@ MaterialProperties GetMaterialProperties(MaterialData material, float2 UV, float
 	properties.Roughness = material.RoughnessFactor;
 	if(material.RoughnessMetalness != INVALID_HANDLE)
 	{
-		float4 roughnessMetalnessSample = tTexture2DTable[NonUniformResourceIndex(material.RoughnessMetalness)].SampleGrad(sMaterialSampler, UV, dx, dy);
+		float4 roughnessMetalnessSample = SampleGrad2D(NonUniformResourceIndex(material.RoughnessMetalness), sMaterialSampler, UV, dx, dy);
 		properties.Metalness *= roughnessMetalnessSample.b;
 		properties.Roughness *= roughnessMetalnessSample.g;
 	}
 	properties.Emissive = material.EmissiveFactor.rgb;
 	if(material.Emissive != INVALID_HANDLE)
 	{
-		properties.Emissive *= tTexture2DTable[NonUniformResourceIndex(material.Emissive)].SampleGrad(sMaterialSampler, UV, dx, dy).rgb;
+		properties.Emissive *= SampleGrad2D(NonUniformResourceIndex(material.Emissive), sMaterialSampler, UV, dx, dy).rgb;
 	}
 	properties.Specular = 0.5f;
 
 	properties.NormalTS = float3(0.5f, 0.5f, 1.0f);
 	if(material.Normal != INVALID_HANDLE)
 	{
-		properties.NormalTS = tTexture2DTable[NonUniformResourceIndex(material.Normal)].SampleGrad(sMaterialSampler, UV, dx, dy).rgb;
+		properties.NormalTS = SampleGrad2D(NonUniformResourceIndex(material.Normal), sMaterialSampler, UV, dx, dy).rgb;
 	}
 	return properties;
 }
