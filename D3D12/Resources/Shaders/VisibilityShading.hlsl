@@ -17,14 +17,55 @@ struct VertexAttribute
 	uint Color;
 };
 
-VertexAttribute GetVertexAttributes(float2 screenUV, VisBufferData visibility, out float2 dx, out float2 dy, out float3 barycentrics)
+struct BaryDerivs
 {
-	float2 ndc = screenUV * 2 - 1;
-	float3 rayDir = CreateCameraRay(ndc);
+	float3 Barycentrics;
+	float3 DDX_Barycentrics;
+	float3 DDY_Barycentrics;
+};
+
+BaryDerivs ComputeBarycentrics(float2 pixelClip, VisBufferData visibility, float3 worldPos0, float3 worldPos1, float3 worldPos2)
+{
+	BaryDerivs bary;
+
+	float3 rayDir = CreateCameraRay(pixelClip);
 
 	float3 neighborRayDirX = QuadReadAcrossX(rayDir);
     float3 neighborRayDirY = QuadReadAcrossY(rayDir);
 
+	float3 edge1 = worldPos1 - worldPos0;
+	float3 edge2 = worldPos2 - worldPos0;
+	float3 triNormal = cross(edge2.xyz, edge1.xyz);
+
+    float hitT;
+    RayPlaneIntersection(hitT, cView.ViewPosition.xyz, rayDir, worldPos0.xyz, triNormal);
+    float3 hitPoint = cView.ViewPosition.xyz + rayDir * hitT;
+   	bary.Barycentrics = GetBarycentricsFromPlanePoint(hitPoint, worldPos0.xyz, worldPos1.xyz, worldPos2.xyz);
+
+    if (WaveActiveAllEqual((uint)visibility) && WaveActiveCountBits(true) == WaveGetLaneCount())
+    {
+        bary.DDX_Barycentrics = ddx(bary.Barycentrics);
+        bary.DDY_Barycentrics = ddy(bary.Barycentrics);
+    }
+    else
+    {
+        float hitTX;
+        RayPlaneIntersection(hitTX, cView.ViewPosition.xyz, neighborRayDirX, worldPos0.xyz, triNormal);
+
+        float hitTY;
+        RayPlaneIntersection(hitTY, cView.ViewPosition.xyz, neighborRayDirY, worldPos0.xyz, triNormal);
+
+        float3 hitPointX = cView.ViewPosition.xyz + neighborRayDirX * hitTX;
+        float3 hitPointY = cView.ViewPosition.xyz + neighborRayDirY * hitTY;
+
+        bary.DDX_Barycentrics = bary.Barycentrics - GetBarycentricsFromPlanePoint(hitPointX, worldPos0.xyz, worldPos1.xyz, worldPos2.xyz);
+        bary.DDY_Barycentrics = bary.Barycentrics - GetBarycentricsFromPlanePoint(hitPointY, worldPos0.xyz, worldPos1.xyz, worldPos2.xyz);
+    }
+	return bary;
+}
+
+VertexAttribute GetVertexAttributes(float2 screenUV, VisBufferData visibility, out float2 dx, out float2 dy, out float3 barycentrics)
+{
 	MeshInstance instance = GetMeshInstance(NonUniformResourceIndex(visibility.ObjectID));
 	MeshData mesh = GetMesh(NonUniformResourceIndex(instance.Mesh));
 	float4x4 world = GetTransform(NonUniformResourceIndex(instance.World));
@@ -55,55 +96,25 @@ VertexAttribute GetVertexAttributes(float2 screenUV, VisBufferData visibility, o
 			vertices[i].Color = 0xFFFFFFFF;
 	}
 
-	float4 worldPos0 = mul(float4(vertices[0].Position, 1), world);
-	float4 worldPos1 = mul(float4(vertices[1].Position, 1), world);
-	float4 worldPos2 = mul(float4(vertices[2].Position, 1), world);
-
-	float4 edge1 = worldPos1 - worldPos0;
-	float4 edge2 = worldPos2 - worldPos0;
-
-	float3 triNormal = cross(edge2.xyz, edge1.xyz);
-
-    float hitT;
-    RayPlaneIntersection(hitT, cView.ViewPosition.xyz, rayDir, worldPos0.xyz, triNormal);
-    float3 hitPoint = cView.ViewPosition.xyz + rayDir * hitT;
-    barycentrics = GetBarycentricsFromPlanePoint(hitPoint, worldPos0.xyz, worldPos1.xyz, worldPos2.xyz);
-    float2 uvs = barycentrics.x * vertices[0].UV.xy + barycentrics.y * vertices[1].UV.xy + barycentrics.z * vertices[2].UV.xy;
-
-    if (WaveActiveAllEqual((uint)visibility) && WaveActiveCountBits(true) == WaveGetLaneCount())
-    {
-        dx = ddx(uvs);
-        dy = ddy(uvs);
-    }
-    else
-    {
-        float hitTX;
-        RayPlaneIntersection(hitTX, cView.ViewPosition.xyz, neighborRayDirX, worldPos0.xyz, triNormal);
-
-        float hitTY;
-        RayPlaneIntersection(hitTY, cView.ViewPosition.xyz, neighborRayDirY, worldPos0.xyz, triNormal);
-
-        float3 hitPointX = cView.ViewPosition.xyz + neighborRayDirX * hitTX;
-        float3 hitPointY = cView.ViewPosition.xyz + neighborRayDirY * hitTY;
-
-        float3 barycentricsX = GetBarycentricsFromPlanePoint(hitPointX, worldPos0.xyz, worldPos1.xyz, worldPos2.xyz);
-        float3 barycentricsY = GetBarycentricsFromPlanePoint(hitPointY, worldPos0.xyz, worldPos1.xyz, worldPos2.xyz);
-
-        float2 uvsX = barycentricsX.x * vertices[0].UV.xy + barycentricsX.y * vertices[1].UV.xy + barycentricsX.z * vertices[2].UV.xy;
-        float2 uvsY = barycentricsY.x * vertices[0].UV.xy + barycentricsY.y * vertices[1].UV.xy + barycentricsY.z * vertices[2].UV.xy;
-
-        dx = uvsX - uvs;
-        dy = uvsY - uvs;
-    }
+	float3 worldPos0 = mul(float4(vertices[0].Position, 1), world).xyz;
+	float3 worldPos1 = mul(float4(vertices[1].Position, 1), world).xyz;
+	float3 worldPos2 = mul(float4(vertices[2].Position, 1), world).xyz;
+	float2 pixelClip = screenUV * 2 - 1;
+	BaryDerivs bary = ComputeBarycentrics(pixelClip, visibility, worldPos0, worldPos1, worldPos2);
 
 	VertexAttribute outVertex;
-	outVertex.UV = uvs;
-    outVertex.Position = BaryInterpolate(vertices[0].Position, vertices[1].Position, vertices[2].Position, barycentrics);
-    outVertex.Normal = normalize(mul(BaryInterpolate(vertices[0].Normal, vertices[1].Normal, vertices[2].Normal, barycentrics), (float3x3)world));
-	float4 tangent = BaryInterpolate(vertices[0].Tangent, vertices[1].Tangent, vertices[2].Tangent, barycentrics);
+	outVertex.UV = BaryInterpolate(vertices[0].UV, vertices[1].UV, vertices[2].UV, bary.Barycentrics);
+    outVertex.Position = BaryInterpolate(vertices[0].Position, vertices[1].Position, vertices[2].Position, bary.Barycentrics);
+    outVertex.Normal = normalize(mul(BaryInterpolate(vertices[0].Normal, vertices[1].Normal, vertices[2].Normal, bary.Barycentrics), (float3x3)world));
+	float4 tangent = BaryInterpolate(vertices[0].Tangent, vertices[1].Tangent, vertices[2].Tangent, bary.Barycentrics);
     outVertex.Tangent = float4(normalize(mul(tangent.xyz, (float3x3)world)), tangent.w);
 	outVertex.Color = vertices[0].Color;
 	outVertex.PositionWS = mul(float4(outVertex.Position, 1), world).xyz;
+
+	dx = BaryInterpolate(vertices[0].UV, vertices[1].UV, vertices[2].UV, bary.DDX_Barycentrics);
+	dy = BaryInterpolate(vertices[0].UV, vertices[1].UV, vertices[2].UV, bary.DDY_Barycentrics);
+	barycentrics = bary.Barycentrics;
+
 	return outVertex;
 }
 
