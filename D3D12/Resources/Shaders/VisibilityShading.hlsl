@@ -203,7 +203,7 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 
 	float3 outRadiance = 0;
 	outRadiance += result.Diffuse + result.Specular;
-	outRadiance += ApplyAmbientLight(brdfData.Diffuse, 1, GetLight(0).GetColor().rgb);
+	outRadiance += ApplyAmbientLight(brdfData.Diffuse, 1);
 	outRadiance += surface.Emissive;
 
 	float reflectivity = saturate(Square(1 - brdfData.Roughness));

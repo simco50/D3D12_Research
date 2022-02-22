@@ -46,74 +46,41 @@ Texture2D<uint2> tLightGrid : register(t4);
 #endif
 StructuredBuffer<uint> tLightIndexList : register(t5);
 
-float ScreenSpaceShadows(float3 worldPos, float3 lightDirection, int stepCount, float rayLength, float ditherOffset)
+void GetLightCount(float4 screenPos, out uint lightCount, out uint startOffset)
 {
-	float4 rayStartPS = mul(float4(worldPos, 1), cView.ViewProjection);
-	float4 rayDirPS = mul(float4(-lightDirection * rayLength, 0), cView.ViewProjection);
-	float4 rayEndPS = rayStartPS + rayDirPS;
-	rayStartPS.xyz /= rayStartPS.w;
-	rayEndPS.xyz /= rayEndPS.w;
-	float3 rayStep = rayEndPS.xyz - rayStartPS.xyz;
-	float stepSize = 1.0f / stepCount;
+#if TILED_FORWARD
+	uint2 tileIndex = uint2(floor(screenPos.xy / BLOCK_SIZE));
+	startOffset = tLightGrid[tileIndex].x;
+	lightCount = tLightGrid[tileIndex].y;
+#elif CLUSTERED_FORWARD
+	uint3 clusterIndex3D = uint3(floor(screenPos.xy / cPass.ClusterSize), GetSliceFromDepth(screenPos.w));
+	uint tileIndex = clusterIndex3D.x + (cPass.ClusterDimensions.x * (clusterIndex3D.y + cPass.ClusterDimensions.y * clusterIndex3D.z));
+	startOffset = tLightGrid[tileIndex * 2];
+	lightCount = tLightGrid[tileIndex * 2 + 1];
+#else
+	startOffset = 0;
+	lightCount = cView.LightCount;
+#endif
+}
 
-	float4 rayDepthClip = rayStartPS + mul(float4(0, 0, rayLength, 0), cView.Projection);
-	rayDepthClip.xyz /= rayDepthClip.w;
-	float tolerance = abs(rayDepthClip.z - rayStartPS.z) * stepSize * 2;
-
-	float occlusion = 0.0f;
-	float hitStep = -1.0f;
-
-	float n = stepSize * ditherOffset + stepSize;
-
-	[unroll]
-	for(uint i = 0; i < stepCount; ++i)
-	{
-		float3 rayPos = rayStartPS.xyz + n * rayStep;
-		float depth = tDepth.SampleLevel(sLinearClamp, rayPos.xy * float2(0.5f, -0.5f) + float2(0.5f, 0.5f), 0).r;
-		float diff = rayPos.z - depth;
-
-		bool hit = abs(diff + tolerance) < tolerance;
-		hitStep = hit && hitStep < 0.0f ? n : hitStep;
-		n += stepSize;
-	}
-	if(hitStep > 0.0f)
-	{
-		float2 hitUV = rayStartPS.xy + n * rayStep.xy;
-		hitUV = hitUV * float2(0.5f, -0.5f) + float2(0.5f, 0.5f);
-		occlusion = ScreenFade(hitUV);
-	}
-	return 1.0f - occlusion;
+Light GetLight(uint lightIndex, uint lightOffset)
+{
+#if TILED_FORWARD || CLUSTERED_FORWARD
+	lightIndex = tLightIndexList[lightOffset + lightIndex];
+#endif
+	return GetLight(lightIndex);
 }
 
 LightResult DoLight(float4 pos, float3 worldPos, float3 N, float3 V, float3 diffuseColor, float3 specularColor, float roughness)
 {
-#if TILED_FORWARD
-	uint2 tileIndex = uint2(floor(pos.xy / BLOCK_SIZE));
-#elif CLUSTERED_FORWARD
-	uint3 clusterIndex3D = uint3(floor(pos.xy / cPass.ClusterSize), GetSliceFromDepth(pos.w));
-	uint tileIndex = clusterIndex3D.x + (cPass.ClusterDimensions.x * (clusterIndex3D.y + cPass.ClusterDimensions.y * clusterIndex3D.z));
-#endif
-
-#if TILED_FORWARD
-	uint startOffset = tLightGrid[tileIndex].x;
-	uint lightCount = tLightGrid[tileIndex].y;
-#elif CLUSTERED_FORWARD
-	uint startOffset = tLightGrid[tileIndex * 2];
-	uint lightCount = tLightGrid[tileIndex * 2 + 1];
-#else
-	uint lightCount = cView.LightCount;
-#endif
-
 	LightResult totalResult = (LightResult)0;
+
+	uint lightCount, lightOffset;
+	GetLightCount(pos, lightCount, lightOffset);
 
 	for(uint i = 0; i < lightCount; ++i)
 	{
-#if TILED_FORWARD || CLUSTERED_FORWARD
-		uint lightIndex = tLightIndexList[startOffset + i];
-#else
-		uint lightIndex = i;
-#endif
-		Light light = GetLight(lightIndex);
+		Light light = GetLight(i, lightOffset);
 		LightResult result = DoLight(light, specularColor, diffuseColor, roughness, pos, worldPos, N, V);
 
 #define SCREEN_SPACE_SHADOWS 0
@@ -126,7 +93,7 @@ LightResult DoLight(float4 pos, float3 worldPos, float3 N, float3 V, float3 diff
 
 		float ditherValue = InterleavedGradientNoise(pos.xy, cView.FrameIndex);
 		float length = 0.1f * pos.w * cView.ProjectionInverse[1][1];
-		float occlusion = ScreenSpaceShadows(worldPos, L, 8, length, ditherValue);
+		float occlusion = ScreenSpaceShadows(worldPos, L, tDepth, 8, length, ditherValue);
 
 		result.Diffuse *= occlusion;
 		result.Specular *= occlusion;
@@ -264,86 +231,6 @@ InterpolantsVSToPS VSMain(uint vertexId : SV_VertexID)
 	return result;
 }
 
-float3 ScreenSpaceReflections(float4 Position, float3 PositionVS, float3 N, float3 V, float R, inout float ssrWeight)
-{
-	float3 ssr = 0;
-	const float roughnessThreshold = 0.7f;
-	bool ssrEnabled = R < roughnessThreshold;
-	if(ssrEnabled)
-	{
-		float reflectionThreshold = 0.0f;
-		float3 reflectionWs = normalize(reflect(-V, N));
-		if (dot(V, reflectionWs) <= reflectionThreshold)
-		{
-			float jitter = InterleavedGradientNoise(Position.xy, cView.FrameIndex) - 1.0f;
-			uint maxSteps = cView.SsrSamples;
-
-			float3 rayStartVS = PositionVS;
-			float linearDepth = rayStartVS.z;
-			float3 reflectionVs = mul(reflectionWs, (float3x3)cView.View);
-			float3 rayEndVS = rayStartVS + (reflectionVs * linearDepth);
-
-			float3 rayStart = ViewToWindow(rayStartVS, cView.Projection);
-			float3 rayEnd = ViewToWindow(rayEndVS, cView.Projection);
-
-			float3 rayStep = ((rayEnd - rayStart) / float(maxSteps));
-			rayStep = rayStep / length(rayEnd.xy - rayStart.xy);
-			float3 rayPos = rayStart + (rayStep * jitter);
-			float zThickness = abs(rayStep.z);
-
-			uint hitIndex = 0;
-			float3 bestHit = rayPos;
-			float prevSceneZ = rayStart.z;
-			for (uint currStep = 0; currStep < maxSteps; currStep += 4)
-			{
-				uint4 step = float4(1, 2, 3, 4) + currStep;
-				float4 sceneZ = float4(
-					tDepth.SampleLevel(sLinearClamp, rayPos.xy + rayStep.xy * step.x, 0).x,
-					tDepth.SampleLevel(sLinearClamp, rayPos.xy + rayStep.xy * step.y, 0).x,
-					tDepth.SampleLevel(sLinearClamp, rayPos.xy + rayStep.xy * step.z, 0).x,
-					tDepth.SampleLevel(sLinearClamp, rayPos.xy + rayStep.xy * step.w, 0).x
-				);
-				float4 currentPosition = rayPos.z + rayStep.z * step;
-				uint4 zTest = abs(sceneZ - currentPosition - zThickness) < zThickness;
-				uint zMask = (((zTest.x << 0) | (zTest.y << 1)) | (zTest.z << 2)) | (zTest.w << 3);
-				if(zMask > 0)
-				{
-					uint firstHit = firstbitlow(zMask);
-					if(firstHit > 0)
-					{
-						prevSceneZ = sceneZ[firstHit - 1];
-					}
-					bestHit = rayPos + (rayStep * float(currStep + firstHit + 1));
-					float zAfter = sceneZ[firstHit] - bestHit.z;
-					float zBefore = (prevSceneZ - bestHit.z) + rayStep.z;
-					float weight = saturate(zAfter / (zAfter - zBefore));
-					float3 prevRayPos = bestHit - rayStep;
-					bestHit = (prevRayPos * weight) + (bestHit * (1.0f - weight));
-					hitIndex = currStep + firstHit;
-					break;
-				}
-				prevSceneZ = sceneZ.w;
-			}
-
-			float4 hitColor = 0;
-			if (hitIndex > 0)
-			{
-				float4 UV = float4(bestHit.xy, 0, 1);
-				UV = mul(UV, cView.ReprojectionMatrix);
-				float2 distanceFromCenter = (float2(UV.x, UV.y) * 2.0f) - float2(1.0f, 1.0f);
-				float edgeAttenuation = saturate((1.0 - ((float)hitIndex / maxSteps)) * 4.0f);
-				edgeAttenuation *= smoothstep(0.0f, 0.5f, saturate(1.0 - dot(distanceFromCenter, distanceFromCenter)));
-				float3 reflectionResult = tPreviousSceneColor.SampleLevel(sLinearClamp, UV.xy, 0).xyz;
-				hitColor = float4(reflectionResult, edgeAttenuation);
-			}
-			float roughnessMask = saturate(1.0f - (R / roughnessThreshold));
-			ssrWeight = (hitColor.w * roughnessMask);
-			ssr = saturate(hitColor.xyz * ssrWeight);
-		}
-	}
-	return ssr;
-}
-
 MaterialProperties GetMaterialProperties(MaterialData material, float2 UV)
 {
 	MaterialProperties properties;
@@ -398,13 +285,13 @@ void PSMain(InterpolantsVSToPS input,
 
 	float ssrWeight = 0;
 	float3 positionVS = mul(float4(input.PositionWS, 1), cView.View).xyz;
-	float3 ssr = ScreenSpaceReflections(input.Position, positionVS, N, V, brdf.Roughness, ssrWeight);
+	float3 ssr = ScreenSpaceReflections(input.Position, positionVS, N, V, brdf.Roughness, tDepth, tPreviousSceneColor, ssrWeight);
 
 	LightResult lighting = DoLight(input.Position, input.PositionWS, N, V, brdf.Diffuse, brdf.Specular, brdf.Roughness);
 
 	float3 outRadiance = 0;
 	outRadiance += lighting.Diffuse + lighting.Specular;
-	outRadiance += ApplyAmbientLight(brdf.Diffuse, ambientOcclusion, GetLight(0).GetColor().rgb);
+	outRadiance += ApplyAmbientLight(brdf.Diffuse, ambientOcclusion);
 	outRadiance += ssr * ambientOcclusion;
 	outRadiance += surface.Emissive;
 

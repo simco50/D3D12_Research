@@ -166,7 +166,7 @@ void InjectFogLightingCS(uint3 threadId : SV_DispatchThreadID)
 		}
 	}
 
-	totalLighting += ApplyAmbientLight(1, 1, GetLight(0).GetColor().rgb).x;
+	totalLighting += ApplyAmbientLight(1, 1).x;
 
 	float blendFactor = 0.05f;
 	if(any(reprojUV < 0.05f) || any(reprojUV > 0.95f))
