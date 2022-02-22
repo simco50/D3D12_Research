@@ -14,9 +14,7 @@ struct TiledForwardParameters
 	Texture* pColorTarget;
 	Texture* pResolvedColorTarget;
 	Texture* pNormalsTarget;
-	Texture* pResolvedNormalsTarget;
 	Texture* pDepth;
-	Texture* pResolvedDepth;
 	Texture* pAmbientOcclusion;
 	Texture* pPreviousColorTarget;
 };

@@ -32,7 +32,7 @@ enum class RenderPath
 class DemoApp
 {
 public:
-	DemoApp(WindowHandle window, const IntVector2& windowRect, int sampleCount = 1);
+	DemoApp(WindowHandle window, const IntVector2& windowRect);
 	~DemoApp();
 
 	void Update();
@@ -53,8 +53,7 @@ private:
 	void UploadSceneData(CommandContext& context);
 
 	Texture* GetDepthStencil() const { return m_pDepthStencil.get(); }
-	Texture* GetResolvedDepthStencil() const { return m_pResolvedDepthStencil.get(); }
-	Texture* GetCurrentRenderTarget() const { return m_SampleCount > 1 ? m_pMultiSampleRenderTarget.get() : m_pHDRRenderTarget.get(); }
+	Texture* GetCurrentRenderTarget() const { return m_pHDRRenderTarget.get(); }
 
 	std::unique_ptr<GraphicsDevice> m_pDevice;
 	std::unique_ptr<SwapChain> m_pSwapchain;
@@ -65,16 +64,13 @@ private:
 	uint32 m_Frame = 0;
 	std::array<float, 180> m_FrameTimes{};
 
-	std::unique_ptr<Texture> m_pMultiSampleRenderTarget;
 	std::unique_ptr<Texture> m_pHDRRenderTarget;
 	std::unique_ptr<Texture> m_pPreviousColor;
 	std::unique_ptr<Texture> m_pTonemapTarget;
 	std::unique_ptr<Texture> m_pDepthStencil;
-	std::unique_ptr<Texture> m_pResolvedDepthStencil;
 	std::unique_ptr<Texture> m_pTAASource;
 	std::unique_ptr<Texture> m_pVelocity;
 	std::unique_ptr<Texture> m_pNormals;
-	std::unique_ptr<Texture> m_pResolvedNormals;
 	std::vector<std::unique_ptr<Texture>> m_ShadowMaps;
 
 	std::unique_ptr<ImGuiRenderer> m_pImGuiRenderer;
@@ -87,7 +83,6 @@ private:
 	std::unique_ptr<CBTTessellation> m_pCBTTessellation;
 
 	WindowHandle m_Window = nullptr;
-	uint32 m_SampleCount = 1;
 	std::unique_ptr<Camera> m_pCamera;
 
 	struct ScreenshotRequest

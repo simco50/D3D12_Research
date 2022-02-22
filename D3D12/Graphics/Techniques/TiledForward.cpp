@@ -43,7 +43,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& resources, const Til
 	RGPassBuilder culling = graph.AddPass("Tiled Light Culling");
 	culling.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
 		{
-			context.InsertResourceBarrier(parameters.pResolvedDepth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+			context.InsertResourceBarrier(parameters.pDepth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(m_pLightIndexCounter.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
 			context.InsertResourceBarrier(m_pLightGridOpaque.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
@@ -66,15 +66,15 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& resources, const Til
 				m_pLightGridTransparant->GetUAV()->GetDescriptor(),
 			};
 			D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
-				parameters.pResolvedDepth->GetSRV()->GetDescriptor(),
+				parameters.pDepth->GetSRV()->GetDescriptor(),
 			};
 
 			context.BindResources(1, 0, uavs, ARRAYSIZE(uavs));
 			context.BindResources(2, 0, srvs, ARRAYSIZE(srvs));
 
 			context.Dispatch(ComputeUtils::GetNumThreadGroups(
-				parameters.pResolvedDepth->GetWidth(), FORWARD_PLUS_BLOCK_SIZE,
-				parameters.pResolvedDepth->GetHeight(), FORWARD_PLUS_BLOCK_SIZE
+				parameters.pDepth->GetWidth(), FORWARD_PLUS_BLOCK_SIZE,
+				parameters.pDepth->GetHeight(), FORWARD_PLUS_BLOCK_SIZE
 			));
 		});
 
@@ -89,10 +89,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& resources, const Til
 			context.InsertResourceBarrier(m_pLightIndexListBufferTransparant.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(parameters.pAmbientOcclusion, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(parameters.pPreviousColorTarget, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-			context.InsertResourceBarrier(parameters.pResolvedDepth, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-
-			context.InsertResourceBarrier(parameters.pDepth, D3D12_RESOURCE_STATE_DEPTH_READ);
-			context.InsertResourceBarrier(parameters.pResolvedNormalsTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
+			context.InsertResourceBarrier(parameters.pDepth, D3D12_RESOURCE_STATE_DEPTH_READ | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(parameters.pNormalsTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
 			RenderPassInfo renderPass;
@@ -103,9 +100,8 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& resources, const Til
 			renderPass.RenderTargetCount = 2;
 			renderPass.RenderTargets[0].Access = RenderPassAccess::DontCare_Store;
 			renderPass.RenderTargets[0].Target = parameters.pColorTarget;
-			renderPass.RenderTargets[1].Access = RenderPassAccess::Clear_Resolve;
+			renderPass.RenderTargets[1].Access = RenderPassAccess::DontCare_Store;
 			renderPass.RenderTargets[1].Target = parameters.pNormalsTarget;
-			renderPass.RenderTargets[1].ResolveTarget = parameters.pResolvedNormalsTarget;
 			context.BeginRenderPass(renderPass);
 
 			context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -118,7 +114,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& resources, const Til
 
 				D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
 					parameters.pAmbientOcclusion->GetSRV()->GetDescriptor(),
-					parameters.pResolvedDepth->GetSRV()->GetDescriptor(),
+					parameters.pDepth->GetSRV()->GetDescriptor(),
 					parameters.pPreviousColorTarget->GetSRV()->GetDescriptor(),
 					GraphicsCommon::GetDefaultTexture(DefaultTexture::Black3D)->GetSRV()->GetDescriptor(),
 					m_pLightGridOpaque->GetSRV()->GetDescriptor(),
@@ -138,7 +134,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& resources, const Til
 
 				D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
 					parameters.pAmbientOcclusion->GetSRV()->GetDescriptor(),
-					parameters.pResolvedDepth->GetSRV()->GetDescriptor(),
+					parameters.pDepth->GetSRV()->GetDescriptor(),
 					parameters.pPreviousColorTarget->GetSRV()->GetDescriptor(),
 					GraphicsCommon::GetDefaultTexture(DefaultTexture::Black3D)->GetSRV()->GetDescriptor(),
 					m_pLightGridTransparant->GetSRV()->GetDescriptor(),
@@ -245,7 +241,7 @@ void TiledForward::SetupPipelines()
 			psoDesc.SetRootSignature(m_pDiffuseRS->GetRootSignature());
 			psoDesc.SetVertexShader(pVertexShader);
 			psoDesc.SetPixelShader(pPixelShader);
-			psoDesc.SetRenderTargetFormats(formats, ARRAYSIZE(formats), DXGI_FORMAT_D32_FLOAT, /* m_pDevice->GetMultiSampleCount() */ 1);
+			psoDesc.SetRenderTargetFormats(formats, ARRAYSIZE(formats), DXGI_FORMAT_D32_FLOAT, 1);
 			psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_EQUAL);
 			psoDesc.SetDepthWrite(false);
 			psoDesc.SetName("Diffuse");

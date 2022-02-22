@@ -45,7 +45,7 @@ int WINAPI WinMain(_In_ HINSTANCE /*hInstance*/, _In_opt_ HINSTANCE /*hPrevInsta
 	Window app((int)(displayDimensions.x * 0.7f), (int)(displayDimensions.y * 0.7f));
 	app.SetTitle("D3D12");
 
-	DemoApp graphics(app.GetNativeWindow(), app.GetRect(), 1);
+	DemoApp graphics(app.GetNativeWindow(), app.GetRect());
 
 	app.OnKeyInput += [](uint32 character, bool isDown) { Input::Instance().UpdateKey(character, isDown); };
 	app.OnMouseInput += [](uint32 mouse, bool isDown) { Input::Instance().UpdateMouseKey(mouse, isDown); };

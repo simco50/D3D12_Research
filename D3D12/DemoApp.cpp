@@ -155,12 +155,9 @@ namespace Tweakables
 	float g_SunIntensity = 0.5f;
 }
 
-DemoApp::DemoApp(WindowHandle window, const IntVector2& windowRect, int sampleCount /*= 1*/)
-	: m_SampleCount(sampleCount), m_Window(window)
+DemoApp::DemoApp(WindowHandle window, const IntVector2& windowRect)
+	: m_Window(window)
 {
-	// #todo fixup MSAA :(
-	checkf(sampleCount == 1, "I broke MSAA! TODO");
-
 	m_pCamera = std::make_unique<FreeCamera>();
 	m_pCamera->SetNearPlane(80.0f);
 	m_pCamera->SetFarPlane(0.1f);
@@ -658,16 +655,14 @@ void DemoApp::Update()
 	struct MainData
 	{
 		RGResourceHandle DepthStencil;
-		RGResourceHandle DepthStencilResolved;
 	};
 	MainData Data;
 	Data.DepthStencil = graph.ImportTexture("Depth Stencil", GetDepthStencil());
-	Data.DepthStencilResolved = graph.ImportTexture("Resolved Depth Stencil", GetResolvedDepthStencil());
 
 	if (m_RenderPath == RenderPath::Clustered || m_RenderPath == RenderPath::Tiled || m_RenderPath == RenderPath::Visibility)
 	{
 		// PARTICLES GPU SIM
-		m_pParticles->Simulate(graph, m_SceneData, GetResolvedDepthStencil());
+		m_pParticles->Simulate(graph, m_SceneData, GetDepthStencil());
 
 		// SHADOWS
 		RGPassBuilder shadows = graph.AddPass("Shadow Mapping");
@@ -793,6 +788,7 @@ void DemoApp::Update()
 	{
 		//[WITH MSAA] DEPTH RESOLVE
 		// - If MSAA is enabled, run a compute shader to resolve the depth buffer
+#if 0
 		if (m_SampleCount > 1)
 		{
 			RGPassBuilder depthResolve = graph.AddPass("Depth Resolve");
@@ -826,11 +822,12 @@ void DemoApp::Update()
 					context.CopyTexture(GetDepthStencil(), GetResolvedDepthStencil());
 				});
 		}
+#endif
 
 		RGPassBuilder cameraMotion = graph.AddPass("Camera Motion");
 		cameraMotion.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
 			{
-				context.InsertResourceBarrier(GetResolvedDepthStencil(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+				context.InsertResourceBarrier(GetDepthStencil(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 				context.InsertResourceBarrier(m_pVelocity.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
 				context.SetComputeRootSignature(m_pCameraMotionRS.get());
@@ -839,18 +836,18 @@ void DemoApp::Update()
 				context.SetRootCBV(0, GetViewUniforms(m_SceneData, m_pVelocity.get()));
 
 				context.BindResource(1, 0, m_pVelocity->GetUAV());
-				context.BindResource(2, 0, GetResolvedDepthStencil()->GetSRV());
+				context.BindResource(2, 0, GetDepthStencil()->GetSRV());
 
 				context.Dispatch(ComputeUtils::GetNumThreadGroups(m_pVelocity->GetWidth(), 8, m_pVelocity->GetHeight(), 8));
 			});
 
 		if (Tweakables::g_RaytracedAO)
 		{
-			m_pRTAO->Execute(graph, m_SceneData, m_pAmbientOcclusion.get(), GetResolvedDepthStencil());
+			m_pRTAO->Execute(graph, m_SceneData, m_pAmbientOcclusion.get(), GetDepthStencil());
 		}
 		else
 		{
-			m_pSSAO->Execute(graph, m_SceneData, m_pAmbientOcclusion.get(), GetResolvedDepthStencil());
+			m_pSSAO->Execute(graph, m_SceneData, m_pAmbientOcclusion.get(), GetDepthStencil());
 		}
 
 		if (m_RenderPath == RenderPath::Tiled)
@@ -859,9 +856,7 @@ void DemoApp::Update()
 			params.pAmbientOcclusion = m_pAmbientOcclusion.get();
 			params.pColorTarget = GetCurrentRenderTarget();
 			params.pDepth = GetDepthStencil();
-			params.pResolvedDepth = GetResolvedDepthStencil();
-			params.pNormalsTarget = m_pNormals ? m_pNormals.get() : m_pResolvedNormals.get();
-			params.pResolvedNormalsTarget = m_pResolvedNormals.get();
+			params.pNormalsTarget = m_pNormals.get();
 			params.pPreviousColorTarget = m_pPreviousColor.get();
 			m_pTiledForward->Execute(graph, m_SceneData, params);
 		}
@@ -871,9 +866,7 @@ void DemoApp::Update()
 			params.pAmbientOcclusion = m_pAmbientOcclusion.get();
 			params.pColorTarget = GetCurrentRenderTarget();
 			params.pDepth = GetDepthStencil();
-			params.pResolvedDepth = GetResolvedDepthStencil();
-			params.pNormalsTarget = m_pNormals ? m_pNormals.get() : m_pResolvedNormals.get();
-			params.pResolvedNormalsTarget = m_pResolvedNormals.get();
+			params.pNormalsTarget = m_pNormals.get();
 			params.pPreviousColorTarget = m_pPreviousColor.get();
 			m_pClusteredForward->Execute(graph, m_SceneData, params);
 		}
@@ -882,7 +875,7 @@ void DemoApp::Update()
 			RGPassBuilder visibilityShading = graph.AddPass("Visibility Shading");
 			visibilityShading.Bind([=](CommandContext& renderContext, const RGPassResources& resources)
 				{
-					Texture* pNormalsTarget = m_pNormals ? m_pNormals.get() : m_pResolvedNormals.get();
+					Texture* pNormalsTarget = m_pNormals.get();
 
 					renderContext.InsertResourceBarrier(m_pVisibilityTexture.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 					renderContext.InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
@@ -950,6 +943,7 @@ void DemoApp::Update()
 	RGPassBuilder resolve = graph.AddPass("Resolve");
 	resolve.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
 		{
+#if 0
 			if (m_SampleCount > 1)
 			{
 				context.InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RESOLVE_SOURCE);
@@ -957,6 +951,7 @@ void DemoApp::Update()
 				context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_RESOLVE_DEST);
 				context.ResolveResource(GetCurrentRenderTarget(), 0, pTarget, 0, pTarget->GetFormat());
 			}
+#endif
 
 			if (!Tweakables::g_TAA.Get())
 			{
@@ -973,7 +968,7 @@ void DemoApp::Update()
 		if (Tweakables::g_RaytracedReflections)
 		{
 			Texture* pTarget = Tweakables::g_TAA.Get() ? m_pTAASource.get() : m_pHDRRenderTarget.get();
-			m_pRTReflections->Execute(graph, m_SceneData, pTarget, m_pResolvedNormals.get(), GetResolvedDepthStencil());
+			m_pRTReflections->Execute(graph, m_SceneData, pTarget, m_pNormals.get(), GetDepthStencil());
 		}
 
 		if (Tweakables::g_TAA.Get())
@@ -995,7 +990,7 @@ void DemoApp::Update()
 					context.BindResource(2, 0, m_pVelocity->GetSRV());
 					context.BindResource(2, 1, m_pPreviousColor->GetSRV());
 					context.BindResource(2, 2, m_pTAASource->GetSRV());
-					context.BindResource(2, 3, GetResolvedDepthStencil()->GetSRV());
+					context.BindResource(2, 3, GetDepthStencil()->GetSRV());
 
 					context.Dispatch(ComputeUtils::GetNumThreadGroups(m_pHDRRenderTarget->GetWidth(), 8, m_pHDRRenderTarget->GetHeight(), 8));
 
@@ -1317,11 +1312,11 @@ void DemoApp::Update()
 	{
 		if (m_RenderPath == RenderPath::Clustered)
 		{
-			m_pClusteredForward->VisualizeLightDensity(graph, m_SceneData, m_pTonemapTarget.get(), GetResolvedDepthStencil());
+			m_pClusteredForward->VisualizeLightDensity(graph, m_SceneData, m_pTonemapTarget.get(), GetDepthStencil());
 		}
 		else
 		{
-			m_pTiledForward->VisualizeLightDensity(graph, m_pDevice.get(), m_SceneData, m_pTonemapTarget.get(), GetResolvedDepthStencil());
+			m_pTiledForward->VisualizeLightDensity(graph, m_pDevice.get(), m_SceneData, m_pTonemapTarget.get(), GetDepthStencil());
 		}
 	}
 
@@ -1378,16 +1373,8 @@ void DemoApp::OnResizeViewport(int width, int height)
 {
 	E_LOG(Info, "Viewport resized: %dx%d", width, height);
 
-	m_pDepthStencil = m_pDevice->CreateTexture(TextureDesc::CreateDepth(width, height, DXGI_FORMAT_D32_FLOAT, TextureFlag::DepthStencil | TextureFlag::ShaderResource, m_SampleCount, ClearBinding(0.0f, 0)), "Depth Stencil");
-	m_pResolvedDepthStencil = m_pDevice->CreateTexture(TextureDesc::Create2D(width, height, DXGI_FORMAT_R32_FLOAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess), "Resolved Depth Stencil");
-
-	if (m_SampleCount > 1)
-	{
-		m_pMultiSampleRenderTarget = m_pDevice->CreateTexture(TextureDesc::CreateRenderTarget(width, height, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::RenderTarget, m_SampleCount, ClearBinding(Colors::Black)), "MSAA Target");
-		m_pNormals = m_pDevice->CreateTexture(TextureDesc::CreateRenderTarget(width, height, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::RenderTarget, m_SampleCount, ClearBinding(Colors::Black)), "MSAA Normals");
-	}
-
-	m_pResolvedNormals = m_pDevice->CreateTexture(TextureDesc::CreateRenderTarget(width, height, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::RenderTarget | TextureFlag::ShaderResource | TextureFlag::UnorderedAccess, 1, ClearBinding(Colors::Black)), "Normals");
+	m_pDepthStencil = m_pDevice->CreateTexture(TextureDesc::CreateDepth(width, height, DXGI_FORMAT_D32_FLOAT, TextureFlag::DepthStencil | TextureFlag::ShaderResource, 1, ClearBinding(0.0f, 0)), "Depth Stencil");
+	m_pNormals = m_pDevice->CreateTexture(TextureDesc::CreateRenderTarget(width, height, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::ShaderResource | TextureFlag::RenderTarget | TextureFlag::UnorderedAccess, 1, ClearBinding(Colors::Black)), "MSAA Normals");
 	m_pHDRRenderTarget = m_pDevice->CreateTexture(TextureDesc::CreateRenderTarget(width, height, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::ShaderResource | TextureFlag::RenderTarget | TextureFlag::UnorderedAccess), "HDR Target");
 	m_pPreviousColor = m_pDevice->CreateTexture(TextureDesc::Create2D(width, height, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::ShaderResource), "Previous Color");
 	m_pTonemapTarget = m_pDevice->CreateTexture(TextureDesc::CreateRenderTarget(width, height, m_pSwapchain->GetFormat(), TextureFlag::ShaderResource | TextureFlag::RenderTarget | TextureFlag::UnorderedAccess), "Tonemap Target");
@@ -1395,7 +1382,6 @@ void DemoApp::OnResizeViewport(int width, int height)
 	m_pAmbientOcclusion = m_pDevice->CreateTexture(TextureDesc::Create2D(Math::DivideAndRoundUp(width, 2), Math::DivideAndRoundUp(height, 2), DXGI_FORMAT_R8_UNORM, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource), "SSAO");
 	m_pVelocity = m_pDevice->CreateTexture(TextureDesc::Create2D(width, height, DXGI_FORMAT_R16G16_FLOAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess), "Velocity");
 	m_pTAASource = m_pDevice->CreateTexture(TextureDesc::CreateRenderTarget(width, height, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::ShaderResource | TextureFlag::RenderTarget | TextureFlag::UnorderedAccess), "TAA Target");
-
 	m_pVisibilityTexture = m_pDevice->CreateTexture(TextureDesc::CreateRenderTarget(width, height, DXGI_FORMAT_R32_UINT, TextureFlag::RenderTarget | TextureFlag::ShaderResource), "Visibility Buffer");
 
 	m_pClusteredForward->OnResize(width, height);
@@ -1480,7 +1466,7 @@ void DemoApp::InitializePipelines()
 		psoDesc.SetRootSignature(m_pDepthPrepassRS->GetRootSignature());
 		psoDesc.SetVertexShader(pVertexShader);
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
-		psoDesc.SetRenderTargetFormats(nullptr, 0, DXGI_FORMAT_D32_FLOAT, m_SampleCount);
+		psoDesc.SetRenderTargetFormats(nullptr, 0, DXGI_FORMAT_D32_FLOAT, 1);
 		psoDesc.SetName("Depth Prepass Opaque");
 		m_pDepthPrepassOpaquePSO = m_pDevice->CreatePipeline(psoDesc);
 
@@ -1642,7 +1628,7 @@ void DemoApp::InitializePipelines()
 		psoDesc.SetRootSignature(m_pSkyboxRS->GetRootSignature());
 		psoDesc.SetVertexShader(pVertexShader);
 		psoDesc.SetPixelShader(pPixelShader);
-		psoDesc.SetRenderTargetFormat(DXGI_FORMAT_R16G16B16A16_FLOAT, DXGI_FORMAT_D32_FLOAT, m_SampleCount);
+		psoDesc.SetRenderTargetFormat(DXGI_FORMAT_R16G16B16A16_FLOAT, DXGI_FORMAT_D32_FLOAT, 1);
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
 		psoDesc.SetName("Skybox");
 		m_pSkyboxPSO = m_pDevice->CreatePipeline(psoDesc);

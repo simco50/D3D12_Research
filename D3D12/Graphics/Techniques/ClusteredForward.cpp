@@ -288,10 +288,9 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& resources, const
 			context.InsertResourceBarrier(m_pLightIndexGrid.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(parameters.pAmbientOcclusion, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(parameters.pPreviousColorTarget, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-			context.InsertResourceBarrier(parameters.pResolvedDepth, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(pFogVolume, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
-			context.InsertResourceBarrier(parameters.pDepth, D3D12_RESOURCE_STATE_DEPTH_READ);
+			context.InsertResourceBarrier(parameters.pDepth, D3D12_RESOURCE_STATE_DEPTH_READ | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(parameters.pColorTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
 			context.InsertResourceBarrier(parameters.pNormalsTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
@@ -303,9 +302,8 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& resources, const
 			renderPass.RenderTargetCount = 2;
 			renderPass.RenderTargets[0].Access = RenderPassAccess::Clear_Store;
 			renderPass.RenderTargets[0].Target = parameters.pColorTarget;
-			renderPass.RenderTargets[1].Access = parameters.pNormalsTarget->GetDesc().SampleCount > 1 ? RenderPassAccess::Clear_Resolve : RenderPassAccess::Clear_Store;
+			renderPass.RenderTargets[1].Access = RenderPassAccess::Clear_Store;
 			renderPass.RenderTargets[1].Target = parameters.pNormalsTarget;
-			renderPass.RenderTargets[1].ResolveTarget = parameters.pResolvedNormalsTarget;
 			context.BeginRenderPass(renderPass);
 
 			context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -317,7 +315,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& resources, const
 
 			D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
 				parameters.pAmbientOcclusion->GetSRV()->GetDescriptor(),
-				parameters.pResolvedDepth->GetSRV()->GetDescriptor(),
+				parameters.pDepth->GetSRV()->GetDescriptor(),
 				parameters.pPreviousColorTarget->GetSRV()->GetDescriptor(),
 				pFogVolume->GetSRV()->GetDescriptor(),
 				m_pLightGrid->GetSRV()->GetDescriptor(),
@@ -499,7 +497,7 @@ void ClusteredForward::SetupPipelines()
 			psoDesc.SetPixelShader(pPixelShader);
 			psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_EQUAL);
 			psoDesc.SetDepthWrite(false);
-			psoDesc.SetRenderTargetFormats(formats, ARRAYSIZE(formats), DXGI_FORMAT_D32_FLOAT, /* m_pDevice->GetMultiSampleCount() */ 1);
+			psoDesc.SetRenderTargetFormats(formats, ARRAYSIZE(formats), DXGI_FORMAT_D32_FLOAT, 1);
 			psoDesc.SetName("Diffuse (Opaque)");
 			m_pDiffusePSO = m_pDevice->CreatePipeline(psoDesc);
 
@@ -526,7 +524,7 @@ void ClusteredForward::SetupPipelines()
 			psoDesc.SetPixelShader(pPixelShader);
 			psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_EQUAL);
 			psoDesc.SetDepthWrite(false);
-			psoDesc.SetRenderTargetFormats(formats, ARRAYSIZE(formats), DXGI_FORMAT_D32_FLOAT, /* m_pDevice->GetMultiSampleCount() */ 1);
+			psoDesc.SetRenderTargetFormats(formats, ARRAYSIZE(formats), DXGI_FORMAT_D32_FLOAT, 1);
 			psoDesc.SetName("Diffuse (Opaque)");
 			m_pMeshShaderDiffusePSO = m_pDevice->CreatePipeline(psoDesc);
 
@@ -555,7 +553,7 @@ void ClusteredForward::SetupPipelines()
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
 		psoDesc.SetDepthWrite(false);
 		psoDesc.SetPixelShader(pPixelShader);
-		psoDesc.SetRenderTargetFormat(DXGI_FORMAT_R16G16B16A16_FLOAT, DXGI_FORMAT_D32_FLOAT, /* m_pDevice->GetMultiSampleCount() */ 1);
+		psoDesc.SetRenderTargetFormat(DXGI_FORMAT_R16G16B16A16_FLOAT, DXGI_FORMAT_D32_FLOAT, 1);
 		psoDesc.SetBlendMode(BlendMode::Additive, false);
 
 		m_pVisualizeLightClustersRS->FinalizeFromShader("Visualize Light Clusters", pVertexShader);

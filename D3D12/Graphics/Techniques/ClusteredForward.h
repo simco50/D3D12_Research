@@ -14,11 +14,8 @@ struct SceneView;
 struct ClusteredForwardParameters
 {
 	Texture* pColorTarget;
-	Texture* pResolvedColorTarget;
 	Texture* pNormalsTarget;
-	Texture* pResolvedNormalsTarget;
 	Texture* pDepth;
-	Texture* pResolvedDepth;
 	Texture* pAmbientOcclusion;
 	Texture* pPreviousColorTarget;
 };
