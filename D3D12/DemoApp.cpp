@@ -333,7 +333,7 @@ void DemoApp::Update()
 	{
 		m_RenderPath = RenderPath::Tiled;
 	}
-	else if (Input::Instance().IsKeyPressed('3'))
+	else if (Input::Instance().IsKeyPressed('3') && m_pVisibilityRenderingPSO)
 	{
 		m_RenderPath = RenderPath::Visibility;
 	}
@@ -1656,46 +1656,49 @@ void DemoApp::InitializePipelines()
 
 	//Visibility Rendering
 
+	if (m_pDevice->GetCapabilities().SupportsMeshShading())
 	{
-		//Rootsignature
-		m_pVisibilityRenderingRS = std::make_unique<RootSignature>(m_pDevice.get());
-		m_pVisibilityRenderingRS->AddRootConstants(0, 3);
-		m_pVisibilityRenderingRS->AddConstantBufferView(100);
-		m_pVisibilityRenderingRS->Finalize("Visibility Rendering");
+		{
+			//Rootsignature
+			m_pVisibilityRenderingRS = std::make_unique<RootSignature>(m_pDevice.get());
+			m_pVisibilityRenderingRS->AddRootConstants(0, 3);
+			m_pVisibilityRenderingRS->AddConstantBufferView(100);
+			m_pVisibilityRenderingRS->Finalize("Visibility Rendering");
 
-		//Pipeline state
-		PipelineStateInitializer psoDesc;
-		psoDesc.SetRootSignature(m_pVisibilityRenderingRS->GetRootSignature());
+			//Pipeline state
+			PipelineStateInitializer psoDesc;
+			psoDesc.SetRootSignature(m_pVisibilityRenderingRS->GetRootSignature());
 
-		psoDesc.SetAmplificationShader(m_pDevice->GetShader("VisibilityRendering.hlsl", ShaderType::Amplification, "ASMain"));
-		psoDesc.SetMeshShader(m_pDevice->GetShader("VisibilityRendering.hlsl", ShaderType::Mesh, "MSMain"));
-		psoDesc.SetPixelShader(m_pDevice->GetShader("VisibilityRendering.hlsl", ShaderType::Pixel, "PSMain"));
-		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
-		psoDesc.SetRenderTargetFormat(DXGI_FORMAT_R32_UINT, DXGI_FORMAT_D32_FLOAT, 1);
-		psoDesc.SetName("Visibility Rendering");
-		m_pVisibilityRenderingPSO = m_pDevice->CreatePipeline(psoDesc);
+			psoDesc.SetAmplificationShader(m_pDevice->GetShader("VisibilityRendering.hlsl", ShaderType::Amplification, "ASMain"));
+			psoDesc.SetMeshShader(m_pDevice->GetShader("VisibilityRendering.hlsl", ShaderType::Mesh, "MSMain"));
+			psoDesc.SetPixelShader(m_pDevice->GetShader("VisibilityRendering.hlsl", ShaderType::Pixel, "PSMain"));
+			psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
+			psoDesc.SetRenderTargetFormat(DXGI_FORMAT_R32_UINT, DXGI_FORMAT_D32_FLOAT, 1);
+			psoDesc.SetName("Visibility Rendering");
+			m_pVisibilityRenderingPSO = m_pDevice->CreatePipeline(psoDesc);
 
-		psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
-		psoDesc.SetPixelShader(m_pDevice->GetShader("VisibilityRendering.hlsl", ShaderType::Pixel, "PSMain", { "ALPHA_TEST"}));
-		psoDesc.SetName("Visibility Rendering Masked");
-		m_pVisibilityRenderingMaskedPSO = m_pDevice->CreatePipeline(psoDesc);
-	}
+			psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
+			psoDesc.SetPixelShader(m_pDevice->GetShader("VisibilityRendering.hlsl", ShaderType::Pixel, "PSMain", { "ALPHA_TEST" }));
+			psoDesc.SetName("Visibility Rendering Masked");
+			m_pVisibilityRenderingMaskedPSO = m_pDevice->CreatePipeline(psoDesc);
+		}
 
-	//Visibility Shading
-	{
-		//Rootsignature
-		m_pVisibilityShadingRS = std::make_unique<RootSignature>(m_pDevice.get());
-		m_pVisibilityShadingRS->AddConstantBufferView(100);
-		m_pVisibilityShadingRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1);
-		m_pVisibilityShadingRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 2);
-		m_pVisibilityShadingRS->Finalize("Visibility Shading");
+		//Visibility Shading
+		{
+			//Rootsignature
+			m_pVisibilityShadingRS = std::make_unique<RootSignature>(m_pDevice.get());
+			m_pVisibilityShadingRS->AddConstantBufferView(100);
+			m_pVisibilityShadingRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1);
+			m_pVisibilityShadingRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 2);
+			m_pVisibilityShadingRS->Finalize("Visibility Shading");
 
-		//Pipeline state
-		PipelineStateInitializer psoDesc;
-		psoDesc.SetRootSignature(m_pVisibilityShadingRS->GetRootSignature());
-		psoDesc.SetComputeShader(m_pDevice->GetShader("VisibilityShading.hlsl", ShaderType::Compute, "CSMain"));
-		psoDesc.SetName("Visibility Shading");
-		m_pVisibilityShadingPSO = m_pDevice->CreatePipeline(psoDesc);
+			//Pipeline state
+			PipelineStateInitializer psoDesc;
+			psoDesc.SetRootSignature(m_pVisibilityShadingRS->GetRootSignature());
+			psoDesc.SetComputeShader(m_pDevice->GetShader("VisibilityShading.hlsl", ShaderType::Compute, "CSMain"));
+			psoDesc.SetName("Visibility Shading");
+			m_pVisibilityShadingPSO = m_pDevice->CreatePipeline(psoDesc);
+		}
 	}
 }
 
