@@ -878,6 +878,9 @@ void DemoApp::Update()
 					Texture* pNormalsTarget = m_pNormals.get();
 
 					renderContext.InsertResourceBarrier(m_pVisibilityTexture.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+					renderContext.InsertResourceBarrier(m_pAmbientOcclusion.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+					renderContext.InsertResourceBarrier(GetDepthStencil(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+					renderContext.InsertResourceBarrier(m_pPreviousColor.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 					renderContext.InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 					renderContext.InsertResourceBarrier(pNormalsTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
@@ -889,6 +892,9 @@ void DemoApp::Update()
 					const D3D12_CPU_DESCRIPTOR_HANDLE srvs[] =
 					{
 						m_pVisibilityTexture->GetSRV()->GetDescriptor(),
+						m_pAmbientOcclusion->GetSRV()->GetDescriptor(),
+						GetDepthStencil()->GetSRV()->GetDescriptor(),
+						m_pPreviousColor->GetSRV()->GetDescriptor(),
 					};
 
 					renderContext.BindResources(1, 0, srvs, ARRAYSIZE(srvs));
@@ -1688,7 +1694,7 @@ void DemoApp::InitializePipelines()
 			//Rootsignature
 			m_pVisibilityShadingRS = std::make_unique<RootSignature>(m_pDevice.get());
 			m_pVisibilityShadingRS->AddConstantBufferView(100);
-			m_pVisibilityShadingRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1);
+			m_pVisibilityShadingRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 4);
 			m_pVisibilityShadingRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 2);
 			m_pVisibilityShadingRS->Finalize("Visibility Shading");
 

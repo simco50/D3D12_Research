@@ -4,6 +4,10 @@
 #include "VisibilityBuffer.hlsli"
 
 Texture2D<uint> tVisibilityTexture : register(t0);
+Texture2D tAO :	register(t1);
+Texture2D tDepth : register(t2);
+Texture2D tPreviousSceneColor :	register(t3);
+
 RWTexture2D<float4> uTarget : register(u0);
 RWTexture2D<float4> uNormalsTarget : register(u1);
 
@@ -187,6 +191,8 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 	float3 positionWS = vertex.PositionWS;
 	float3 V = normalize(cView.ViewPosition.xyz - positionWS);
 
+	float ambientOcclusion = tAO.SampleLevel(sLinearClamp, screenUV, 0).r;
+
     MeshInstance instance = GetMeshInstance(NonUniformResourceIndex(visibility.ObjectID));
 	MaterialData material = GetMaterial(NonUniformResourceIndex(instance.Material));
 	material.BaseColorFactor *= UIntToColor(vertex.Color);
@@ -196,15 +202,19 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 	N = TangentSpaceNormalMapping(surface.NormalTS, TBN);
 
 	BrdfData brdfData = GetBrdfData(surface);
-
 	float3 positionVS = mul(float4(vertex.PositionWS, 1), cView.View).xyz;
 	float4 pos = float4((float2)(dispatchThreadId.xy + 0.5f), 0, positionVS.z);
+
+	float ssrWeight = 0;
+	float3 ssr = ScreenSpaceReflections(pos, positionVS, N, V, brdfData.Roughness, tDepth, tPreviousSceneColor, ssrWeight);
+
 	LightResult result = DoLight(pos, positionWS, N, V, brdfData.Diffuse, brdfData.Specular, brdfData.Roughness);
 
 	float3 outRadiance = 0;
 	outRadiance += result.Diffuse + result.Specular;
-	outRadiance += ApplyAmbientLight(brdfData.Diffuse, 1);
+	outRadiance += ApplyAmbientLight(brdfData.Diffuse, ambientOcclusion);
 	outRadiance += surface.Emissive;
+	outRadiance += ssr;
 
 	float reflectivity = saturate(Square(1 - brdfData.Roughness));
 
