@@ -469,11 +469,11 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 
 			ShaderInterop::MeshletBounds& outBounds = meshData.MeshletBounds[i];
 			outBounds.Center = Vector3(bounds.center);
-			outBounds.ConeApex = Vector3(bounds.cone_apex);
+			//outBounds.ConeApex = Vector3(bounds.cone_apex);
 			outBounds.ConeAxis = Vector3(bounds.cone_axis);
 			outBounds.Radius = bounds.radius;
 			outBounds.ConeCutoff = bounds.cone_cutoff;
-			memcpy(&outBounds.ConeS8, &bounds.cone_axis_s8, sizeof(uint32));
+			//memcpy(&outBounds.ConeS8, &bounds.cone_axis_s8, sizeof(uint32));
 
 			// Encode triangles and get rid of 4 byte padding
 			for (uint32 triIdx = 0; triIdx < meshlet.triangle_count; ++triIdx)

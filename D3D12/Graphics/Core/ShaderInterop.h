@@ -83,10 +83,10 @@ namespace ShaderInterop
 	{
 		float3 Center;
 		float Radius;
-		float3 ConeApex;
-		float ConeCutoff;
+		//float3 ConeApex;
 		float3 ConeAxis;
-		uint ConeS8;
+		float ConeCutoff;
+		//uint ConeS8;
 	};
 
 	struct MeshInstance

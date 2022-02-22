@@ -139,20 +139,20 @@ bool IsVisible(MeshData mesh, float4x4 world, uint meshlet)
 	MeshletBounds cullData = BufferLoad<MeshletBounds>(mesh.BufferIndex, meshlet, mesh.MeshletBoundsOffset);
 
 	float4 center = mul(float4(cullData.Center, 1), world);
+	float3 radius3 = abs(mul(cullData.Radius.xxx, (float3x3)world));
+	float radius = max(radius3.x, max(radius3.y, radius3.z));
+	float3 coneAxis = normalize(mul(cullData.ConeAxis, (float3x3)world));
 
 	for(int i = 0; i < 6; ++i)
 	{
-		if(dot(center, cView.FrustumPlanes[i]) > cullData.Radius)
+		if(dot(center, cView.FrustumPlanes[i]) > radius)
 		{
 			return false;
 		}
 	}
 
 	float3 viewLocation = cView.ViewPosition.xyz;
-	float3 coneApex = mul(float4(cullData.ConeApex, 1), world).xyz;
-	float3 coneAxis = mul(cullData.ConeAxis, (float3x3)world);
-	float3 view = normalize(viewLocation - coneApex);
-	if (dot(view, coneAxis) >= cullData.ConeCutoff)
+	if(dot(viewLocation - center.xyz, coneAxis) >= cullData.ConeCutoff * length(center.xyz - viewLocation) + radius)
 	{
 		return false;
 	}
