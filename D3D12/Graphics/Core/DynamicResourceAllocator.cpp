@@ -19,7 +19,7 @@ DynamicAllocation DynamicResourceAllocator::Allocate(uint64 size, int alignment)
 
 	if (bufferSize > PAGE_SIZE)
 	{
-		Buffer* pPage = m_pPageManager->CreateNewPage(bufferSize);
+		RefCountPtr<Buffer> pPage = m_pPageManager->CreateNewPage(bufferSize);
 		m_UsedLargePages.push_back(pPage);
 		allocation.Offset = 0;
 		allocation.GpuHandle = pPage->GetGpuHandle();
@@ -69,11 +69,11 @@ DynamicAllocationManager::~DynamicAllocationManager()
 
 }
 
-Buffer* DynamicAllocationManager::AllocatePage(uint64 size)
+RefCountPtr<Buffer> DynamicAllocationManager::AllocatePage(uint64 size)
 {
 	std::lock_guard<std::mutex> lockGuard(m_PageMutex);
 
-	Buffer* pPage = nullptr;
+	RefCountPtr<Buffer> pPage;
 	if (m_FreedPages.size() > 0 && GetParent()->IsFenceComplete(m_FreedPages.front().first))
 	{
 		pPage = m_FreedPages.front().second;
@@ -82,17 +82,17 @@ Buffer* DynamicAllocationManager::AllocatePage(uint64 size)
 	else
 	{
 		pPage = CreateNewPage(size);
-		m_Pages.emplace_back(pPage);
+		m_Pages.push_back(pPage);
 	}
 	return pPage;
 }
 
-Buffer* DynamicAllocationManager::CreateNewPage(uint64 size)
+RefCountPtr<Buffer> DynamicAllocationManager::CreateNewPage(uint64 size)
 {
 	std::string name = Sprintf("Dynamic Allocation Buffer (%f KB)", Math::BytesToKiloBytes * size);
-	std::unique_ptr<Buffer> pNewPage = GetParent()->CreateBuffer(BufferDesc::CreateBuffer((uint32)size, m_BufferFlags), name.c_str());
+	RefCountPtr<Buffer> pNewPage = GetParent()->CreateBuffer(BufferDesc::CreateBuffer((uint32)size, m_BufferFlags), name.c_str());
 	pNewPage->Map();
-	return pNewPage.release();
+	return pNewPage;
 }
 
 void DynamicAllocationManager::FreePages(uint64 fenceValue, const std::vector<Buffer*> pPages)
@@ -104,7 +104,7 @@ void DynamicAllocationManager::FreePages(uint64 fenceValue, const std::vector<Bu
 	}
 }
 
-void DynamicAllocationManager::FreeLargePages(uint64 fenceValue, const std::vector<Buffer*> pLargePages)
+void DynamicAllocationManager::FreeLargePages(uint64 fenceValue, const std::vector<RefCountPtr<Buffer>> pLargePages)
 {
 	std::lock_guard<std::mutex> lockGuard(m_PageMutex);
 

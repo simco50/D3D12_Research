@@ -1,4 +1,5 @@
 #pragma once
+#include "Graphics/Core/StateObject.h"
 
 class RootSignature;
 class StateObject;
@@ -19,10 +20,10 @@ public:
 
 private:
 	GraphicsDevice* m_pDevice;
-	std::unique_ptr<RootSignature> m_pRS;
-	StateObject* m_pSO = nullptr;
+	RefCountPtr<RootSignature> m_pRS;
+	RefCountPtr<StateObject> m_pSO;
 
-	std::unique_ptr<Texture> m_pAccumulationTexture;
+	RefCountPtr<Texture> m_pAccumulationTexture;
 	DelegateHandle m_OnShaderCompiledHandle;
 	int m_NumAccumulatedFrames = 1;
 };

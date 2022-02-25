@@ -28,16 +28,16 @@ void RTReflections::Execute(RGGraph& graph, const SceneView& sceneData, Texture*
 	RGPassBuilder rt = graph.AddPass("RT Reflections");
 	rt.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
 		{
-			Texture* pTarget = m_pSceneColor.get();
+			Texture* pTarget = m_pSceneColor;
 
 			context.CopyTexture(pColorTarget, pTarget);
 
 			context.InsertResourceBarrier(pDepth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(pNormals, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-			context.InsertResourceBarrier(m_pSceneColor.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+			context.InsertResourceBarrier(m_pSceneColor, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(pColorTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-			context.SetComputeRootSignature(m_pGlobalRS.get());
+			context.SetComputeRootSignature(m_pGlobalRS);
 			context.SetPipelineState(m_pRtSO);
 
 			struct Parameters
@@ -77,7 +77,7 @@ void RTReflections::SetupPipelines(GraphicsDevice* pDevice)
 {
 	ShaderLibrary* pShaderLibrary = pDevice->GetLibrary("RTReflections.hlsl");
 
-	m_pGlobalRS = std::make_unique<RootSignature>(pDevice);
+	m_pGlobalRS = new RootSignature(pDevice);
 	m_pGlobalRS->FinalizeFromShader("Global", pShaderLibrary);
 
 	StateObjectInitializer stateDesc;
@@ -90,6 +90,6 @@ void RTReflections::SetupPipelines(GraphicsDevice* pDevice)
 	stateDesc.MaxPayloadSize = 5 * sizeof(float);
 	stateDesc.MaxAttributeSize = 2 * sizeof(float);
 	stateDesc.MaxRecursion = 2;
-	stateDesc.pGlobalRootSignature = m_pGlobalRS.get();
+	stateDesc.pGlobalRootSignature = m_pGlobalRS;
 	m_pRtSO = pDevice->CreateStateObject(stateDesc);
 }

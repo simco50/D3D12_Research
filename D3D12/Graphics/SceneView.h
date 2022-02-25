@@ -63,16 +63,25 @@ struct ShadowData
 struct SceneView
 {
 	std::vector<Batch> Batches;
-	Buffer* pLightBuffer = nullptr;
-	Buffer* pMaterialBuffer = nullptr;
-	Buffer* pMeshBuffer = nullptr;
-	Buffer* pMeshInstanceBuffer = nullptr;
-	Buffer* pSceneTLAS = nullptr;
-	Buffer* pTransformsBuffer = nullptr;
+	RefCountPtr<Buffer> pLightBuffer;
+	RefCountPtr<Buffer> pMaterialBuffer;
+	RefCountPtr<Buffer> pMeshBuffer;
+	RefCountPtr<Buffer> pMeshInstanceBuffer;
+	RefCountPtr<Buffer> pSceneTLAS;
+	RefCountPtr<Buffer> pTransformsBuffer;
 	int FrameIndex = 0;
 	VisibilityMask VisibilityMask;
 	ShadowData ShadowData;
 	ViewTransform View;
+};
+
+struct SceneTextures
+{
+	RefCountPtr<Texture> pColorTarget;
+	RefCountPtr<Texture> pNormalsTarget;
+	RefCountPtr<Texture> pDepth;
+	RefCountPtr<Texture> pAmbientOcclusion;
+	RefCountPtr<Texture> pPreviousColorTarget;
 };
 
 void DrawScene(CommandContext& context, const SceneView& scene, const VisibilityMask& visibility, Batch::Blending blendModes);

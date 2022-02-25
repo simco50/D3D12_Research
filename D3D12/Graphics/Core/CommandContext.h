@@ -261,10 +261,10 @@ private:
 
 	ResourceBarrierBatcher m_BarrierBatcher;
 
-	std::unique_ptr<DynamicResourceAllocator> m_DynamicAllocator;
+	std::unique_ptr<DynamicResourceAllocator> m_pDynamicAllocator;
 	ID3D12GraphicsCommandList* m_pCommandList;
-	ComPtr<ID3D12GraphicsCommandList4> m_pRaytracingCommandList;
-	ComPtr<ID3D12GraphicsCommandList6> m_pMeshShadingCommandList;
+	RefCountPtr<ID3D12GraphicsCommandList4> m_pRaytracingCommandList;
+	RefCountPtr<ID3D12GraphicsCommandList6> m_pMeshShadingCommandList;
 	ID3D12CommandAllocator* m_pAllocator;
 	D3D12_COMMAND_LIST_TYPE m_Type;
 	std::unordered_map<GraphicsResource*, ResourceState> m_ResourceStates;
@@ -273,8 +273,8 @@ private:
 	RenderPassInfo m_CurrentRenderPassInfo;
 	bool m_InRenderPass = false;
 
-	PipelineState* m_pCurrentPSO = nullptr;
-	StateObject* m_pCurrentSO = nullptr;
+	RefCountPtr<PipelineState> m_pCurrentPSO;
+	RefCountPtr<StateObject> m_pCurrentSO;
 };
 
 class CommandSignature : public GraphicsObject
@@ -299,7 +299,7 @@ public:
 	bool IsCompute() const { return m_IsCompute; }
 
 private:
-	ComPtr<ID3D12CommandSignature> m_pCommandSignature;
+	RefCountPtr<ID3D12CommandSignature> m_pCommandSignature;
 	ID3D12RootSignature* m_pRootSignature = nullptr;
 	uint32 m_Stride = 0;
 	std::vector<D3D12_INDIRECT_ARGUMENT_DESC> m_ArgumentDesc;

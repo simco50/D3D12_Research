@@ -19,10 +19,10 @@ private:
 
 	GraphicsDevice* m_pDevice;
 
-	std::unique_ptr<Texture> m_pAmbientOcclusionIntermediate;
-	std::unique_ptr<RootSignature> m_pSSAORS;
-	PipelineState* m_pSSAOPSO = nullptr;
-	std::unique_ptr<RootSignature> m_pSSAOBlurRS;
-	PipelineState* m_pSSAOBlurPSO = nullptr;
+	RefCountPtr<Texture> m_pAmbientOcclusionIntermediate;
+	RefCountPtr<RootSignature> m_pSSAORS;
+	RefCountPtr<PipelineState> m_pSSAOPSO;
+	RefCountPtr<RootSignature> m_pSSAOBlurRS;
+	RefCountPtr<PipelineState> m_pSSAOBlurPSO;
 };
 

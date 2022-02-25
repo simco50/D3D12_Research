@@ -9,10 +9,29 @@ public:
 	GraphicsObject(GraphicsDevice* pParent = nullptr)
 		: m_pParent(pParent)
 	{}
+	virtual ~GraphicsObject()
+	{
+		//check(m_RefCount == 0);
+	}
+
+	uint32 AddRef()
+	{
+		return ++m_RefCount;
+	}
+
+	uint32 Release()
+	{
+		uint32 result = --m_RefCount;
+		if (result == 0) {
+			delete this;
+		}
+		return result;
+	}
 
 	inline GraphicsDevice* GetParent() const { return m_pParent; }
 
 private:
+	std::atomic<uint32> m_RefCount = 0;
 	GraphicsDevice* m_pParent;
 };
 
@@ -71,14 +90,14 @@ class GraphicsResource : public GraphicsObject
 public:
 	GraphicsResource(GraphicsDevice* pParent);
 	GraphicsResource(GraphicsDevice* pParent, ID3D12Resource* pResource, D3D12_RESOURCE_STATES state);
-	virtual ~GraphicsResource();
+	~GraphicsResource();
 
 	void* Map(uint32 subResource = 0, uint64 readFrom = 0, uint64 readTo = 0);
 	void Unmap(uint32 subResource = 0, uint64 writtenFrom = 0, uint64 writtenTo = 0);
 	void* GetMappedData() const { return m_pMappedData; }
 	void SetImmediateDelete(bool immediate) { m_ImmediateDelete = immediate; }
 
-	void Release();
+	void Destroy();
 	void SetName(const char* pName);
 	const std::string& GetName() { return m_Name; }
 

@@ -237,7 +237,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 				{
 					const cgltf_image* pImage = texture.texture->image;
 					auto it = textureMap.find(pImage);
-					std::unique_ptr<Texture> pTex = std::make_unique<Texture>(pDevice, pImage->uri ? pImage->uri : "Material Texture");
+					RefCountPtr<Texture> pTex = new Texture(pDevice, pImage->uri ? pImage->uri : "Material Texture");
 					if (it == textureMap.end())
 					{
 						bool success = false;
@@ -256,8 +256,8 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 						if (success)
 						{
 							m_Textures.push_back(std::move(pTex));
-							textureMap[pImage] = m_Textures.back().get();
-							return m_Textures.back().get();
+							textureMap[pImage] = m_Textures.back();
+							return m_Textures.back();
 						}
 						else
 						{
@@ -578,7 +578,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 		m_Meshes.push_back(subMesh);
 	}
 
-	pContext->CopyBuffer(allocation.pBackingResource, m_pGeometryData.get(), bufferSize, allocation.Offset, 0);
+	pContext->CopyBuffer(allocation.pBackingResource, m_pGeometryData, bufferSize, allocation.Offset, 0);
 
 	return true;
 }

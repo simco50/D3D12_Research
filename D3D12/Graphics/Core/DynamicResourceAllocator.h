@@ -20,18 +20,18 @@ public:
 	DynamicAllocationManager(GraphicsDevice* pParent, BufferFlag bufferFlags);
 	~DynamicAllocationManager();
 
-	Buffer* AllocatePage(uint64 size);
-	Buffer* CreateNewPage(uint64 size);
+	RefCountPtr<Buffer> AllocatePage(uint64 size);
+	RefCountPtr<Buffer> CreateNewPage(uint64 size);
 
 	void FreePages(uint64 fenceValue, const std::vector<Buffer*> pPages);
-	void FreeLargePages(uint64 fenceValue, const std::vector<Buffer*> pLargePages);
+	void FreeLargePages(uint64 fenceValue, const std::vector<RefCountPtr<Buffer>> pLargePages);
 
 private:
 	BufferFlag m_BufferFlags;
 	std::mutex m_PageMutex;
-	std::vector<std::unique_ptr<Buffer>> m_Pages;
+	std::vector<RefCountPtr<Buffer>> m_Pages;
 	std::queue<std::pair<uint64, Buffer*>> m_FreedPages;
-	std::queue<std::pair<uint64, std::unique_ptr<Buffer>>> m_DeleteQueue;
+	std::queue<std::pair<uint64, RefCountPtr<Buffer>>> m_DeleteQueue;
 };
 
 class DynamicResourceAllocator
@@ -47,5 +47,5 @@ private:
 	Buffer* m_pCurrentPage = nullptr;
 	uint64 m_CurrentOffset = 0;
 	std::vector<Buffer*> m_UsedPages;
-	std::vector<Buffer*> m_UsedLargePages;
+	std::vector<RefCountPtr<Buffer>> m_UsedLargePages;
 };

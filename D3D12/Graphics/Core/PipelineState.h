@@ -177,7 +177,7 @@ public:
 
 private:
 	void OnShaderReloaded(Shader* pOldShader, Shader* pNewShader);
-	ComPtr<ID3D12PipelineState> m_pPipelineState;
+	RefCountPtr<ID3D12PipelineState> m_pPipelineState;
 
 	PipelineStateInitializer m_Desc;
 	DelegateHandle m_ReloadHandle;
