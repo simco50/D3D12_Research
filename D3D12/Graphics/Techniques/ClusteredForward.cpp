@@ -34,8 +34,7 @@ ClusteredForward::ClusteredForward(GraphicsDevice* pDevice)
 	SetupPipelines();
 
 	CommandContext* pContext = pDevice->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
-	m_pHeatMapTexture = new Texture(pDevice, "Heatmap Texture");
-	m_pHeatMapTexture->Create(pContext, "Resources/Textures/Heatmap.png");
+	m_pHeatMapTexture = pDevice->CreateTextureFromFile(*pContext, "Resources/Textures/Heatmap.png", true);
 	pContext->Execute(true);
 }
 

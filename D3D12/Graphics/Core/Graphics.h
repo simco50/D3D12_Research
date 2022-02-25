@@ -24,6 +24,7 @@ class OnlineDescriptorAllocator;
 class Fence;
 class GraphicsDevice;
 class CommandSignature;
+class Image;
 struct TextureDesc;
 struct BufferDesc;
 
@@ -193,6 +194,9 @@ public:
 	void FreeViewDescriptor(DescriptorHandle& heapIndex);
 
 	RefCountPtr<Texture> CreateTexture(const TextureDesc& desc, const char* pName);
+	RefCountPtr<Texture> CreateTextureForSwapchain(ID3D12Resource* pSwapchainResource);
+	RefCountPtr<Texture> CreateTextureFromImage(CommandContext& context, Image& image, bool sRGB, const char* pName = nullptr);
+	RefCountPtr<Texture> CreateTextureFromFile(CommandContext& context, const char* pFilePath, bool sRGB, const char* pName = nullptr);
 	RefCountPtr<Buffer> CreateBuffer(const BufferDesc& desc, const char* pName);
 
 	ID3D12Resource* CreateResource(const D3D12_RESOURCE_DESC& desc, D3D12_RESOURCE_STATES initialState, D3D12_HEAP_TYPE heapType, D3D12_CLEAR_VALUE* pClearValue = nullptr);

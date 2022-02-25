@@ -416,8 +416,7 @@ void CBTTessellation::SetupPipelines()
 void CBTTessellation::CreateResources()
 {
 	CommandContext* pContext = m_pDevice->AllocateCommandContext();
-	m_pHeightmap = new Texture(m_pDevice);
-	m_pHeightmap->Create(pContext, "Resources/Terrain.dds");
+	m_pHeightmap = m_pDevice->CreateTextureFromFile(*pContext, "Resources/Terrain.dds", false, "Terrain Heightmap");
 	pContext->Execute(true);
 
 	m_pDebugVisualizeTexture = m_pDevice->CreateTexture(TextureDesc::CreateRenderTarget(1024, 1024, DXGI_FORMAT_R8G8B8A8_UNORM, TextureFlag::ShaderResource), "CBT Visualize Texture");

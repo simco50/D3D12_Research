@@ -237,25 +237,25 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 				{
 					const cgltf_image* pImage = texture.texture->image;
 					auto it = textureMap.find(pImage);
-					RefCountPtr<Texture> pTex = new Texture(pDevice, pImage->uri ? pImage->uri : "Material Texture");
+					const char* pName = pImage->uri ? pImage->uri : "Material Texture";
+					RefCountPtr<Texture> pTex;
 					if (it == textureMap.end())
 					{
-						bool success = false;
 						if (pImage->buffer_view)
 						{
 							Image newImg;
 							if (newImg.Load((char*)pImage->buffer_view->buffer->data + pImage->buffer_view->offset, pImage->buffer_view->size, pImage->mime_type))
 							{
-								success = pTex->Create(pContext, newImg, srgb);
+								pTex = pDevice->CreateTextureFromImage(*pContext, newImg, srgb, pName);
 							}
 						}
 						else
 						{
-							success = pTex->Create(pContext, Paths::Combine(Paths::GetDirectoryPath(pFilePath), pImage->uri).c_str(), srgb);
+							pTex = pDevice->CreateTextureFromFile(*pContext, Paths::Combine(Paths::GetDirectoryPath(pFilePath), pImage->uri).c_str(), srgb, pName);
 						}
-						if (success)
+						if (pTex.Get())
 						{
-							m_Textures.push_back(std::move(pTex));
+							m_Textures.push_back(pTex);
 							textureMap[pImage] = m_Textures.back();
 							return m_Textures.back();
 						}

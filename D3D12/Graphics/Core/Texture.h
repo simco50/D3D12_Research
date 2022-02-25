@@ -218,16 +218,9 @@ struct TextureDesc
 class Texture : public GraphicsResource
 {
 public:
-	Texture(GraphicsDevice* pParent, const TextureDesc& desc, const char* pName = "");
-	Texture(GraphicsDevice* pParent, const char* pName = "");
-	~Texture();
+	friend class GraphicsDevice;
 
-	void Create(const TextureDesc& desc);
-	void CreateForSwapchain(ID3D12Resource* pTexture);
-	bool Create(CommandContext* pContext, const char* pFilePath, bool srgb = false);
-	void Create(CommandContext* pContext, const TextureDesc& desc, const void* pInitData);
-	bool Create(CommandContext* pContext, const Image& img, bool srgb = false);
-	void SetData(CommandContext* pContext, const void* pData);
+	Texture(GraphicsDevice* pParent, const char* pName = "");
 
 	uint32 GetWidth() const { return m_Desc.Width; }
 	uint32 GetHeight() const { return m_Desc.Height; }
