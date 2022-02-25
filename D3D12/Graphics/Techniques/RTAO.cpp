@@ -44,7 +44,7 @@ void RTAO::Execute(RGGraph& graph, const SceneView& sceneData, Texture* pTarget,
 			context.InsertResourceBarrier(pDepth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-			context.SetComputeRootSignature(m_pGlobalRS.get());
+			context.SetComputeRootSignature(m_pGlobalRS);
 			context.SetPipelineState(m_pRtSO);
 
 			struct Parameters
@@ -74,7 +74,7 @@ void RTAO::Execute(RGGraph& graph, const SceneView& sceneData, Texture* pTarget,
 void RTAO::SetupPipelines(GraphicsDevice* pDevice)
 {
 	ShaderLibrary* pShaderLibrary = pDevice->GetLibrary("RTAO.hlsl");
-	m_pGlobalRS = std::make_unique<RootSignature>(pDevice);
+	m_pGlobalRS = new RootSignature(pDevice);
 	m_pGlobalRS->FinalizeFromShader("Global", pShaderLibrary);
 
 	StateObjectInitializer stateDesc;
@@ -82,7 +82,7 @@ void RTAO::SetupPipelines(GraphicsDevice* pDevice)
 	stateDesc.Name = "RT AO";
 	stateDesc.MaxPayloadSize = sizeof(float);
 	stateDesc.MaxAttributeSize = 2 * sizeof(float);
-	stateDesc.pGlobalRootSignature = m_pGlobalRS.get();
+	stateDesc.pGlobalRootSignature = m_pGlobalRS;
 	stateDesc.RayGenShader = "RayGen";
 	stateDesc.AddMissShader("Miss");
 	m_pRtSO = pDevice->CreateStateObject(stateDesc);

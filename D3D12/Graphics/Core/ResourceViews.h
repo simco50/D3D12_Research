@@ -93,10 +93,10 @@ public:
 	void Create(Texture* pTexture, const TextureUAVDesc& desc);
 	void Release();
 
-	Buffer* GetCounter() const { return m_pCounter.get(); }
+	Buffer* GetCounter() const { return m_pCounter; }
 	UnorderedAccessView* GetCounterUAV() const;
 	ShaderResourceView* GetCounterSRV() const;
 
 private:
-	std::unique_ptr<Buffer> m_pCounter;
+	RefCountPtr<Buffer> m_pCounter;
 };

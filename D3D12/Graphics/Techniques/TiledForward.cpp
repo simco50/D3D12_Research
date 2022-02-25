@@ -36,7 +36,7 @@ void TiledForward::OnResize(int windowWidth, int windowHeight)
 	m_pLightGridTransparant = m_pDevice->CreateTexture(TextureDesc::Create2D(frustumCountX, frustumCountY, DXGI_FORMAT_R32G32_UINT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess), "Light Grid - Transparent");
 }
 
-void TiledForward::Execute(RGGraph& graph, const SceneView& resources, const TiledForwardParameters& parameters)
+void TiledForward::Execute(RGGraph& graph, const SceneView& resources, const SceneTextures& parameters)
 {
 	RG_GRAPH_SCOPE("Tiled Lighting", graph);
 
@@ -44,17 +44,17 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& resources, const Til
 	culling.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
 		{
 			context.InsertResourceBarrier(parameters.pDepth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-			context.InsertResourceBarrier(m_pLightIndexCounter.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+			context.InsertResourceBarrier(m_pLightIndexCounter, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-			context.InsertResourceBarrier(m_pLightGridOpaque.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-			context.InsertResourceBarrier(m_pLightGridTransparant.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-			context.InsertResourceBarrier(m_pLightIndexListBufferOpaque.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-			context.InsertResourceBarrier(m_pLightIndexListBufferTransparant.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+			context.InsertResourceBarrier(m_pLightGridOpaque, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+			context.InsertResourceBarrier(m_pLightGridTransparant, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+			context.InsertResourceBarrier(m_pLightIndexListBufferOpaque, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+			context.InsertResourceBarrier(m_pLightIndexListBufferTransparant, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-			context.ClearUavUInt(m_pLightIndexCounter.get(), m_pLightIndexCounterRawUAV);
+			context.ClearUavUInt(m_pLightIndexCounter, m_pLightIndexCounterRawUAV);
 
 			context.SetPipelineState(m_pComputeLightCullPSO);
-			context.SetComputeRootSignature(m_pComputeLightCullRS.get());
+			context.SetComputeRootSignature(m_pComputeLightCullRS);
 
 			context.SetRootCBV(0, GetViewUniforms(resources, parameters.pDepth));
 
@@ -83,10 +83,10 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& resources, const Til
 	RGPassBuilder basePass = graph.AddPass("Base Pass");
 	basePass.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
 		{
-			context.InsertResourceBarrier(m_pLightGridOpaque.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-			context.InsertResourceBarrier(m_pLightGridTransparant.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-			context.InsertResourceBarrier(m_pLightIndexListBufferOpaque.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-			context.InsertResourceBarrier(m_pLightIndexListBufferTransparant.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+			context.InsertResourceBarrier(m_pLightGridOpaque, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+			context.InsertResourceBarrier(m_pLightGridTransparant, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+			context.InsertResourceBarrier(m_pLightIndexListBufferOpaque, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+			context.InsertResourceBarrier(m_pLightIndexListBufferTransparant, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(parameters.pAmbientOcclusion, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(parameters.pPreviousColorTarget, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(parameters.pDepth, D3D12_RESOURCE_STATE_DEPTH_READ | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
@@ -105,7 +105,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& resources, const Til
 			context.BeginRenderPass(renderPass);
 
 			context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-			context.SetGraphicsRootSignature(m_pDiffuseRS.get());
+			context.SetGraphicsRootSignature(m_pDiffuseRS);
 
 			context.SetRootCBV(2, GetViewUniforms(resources, parameters.pColorTarget));
 
@@ -174,12 +174,12 @@ void TiledForward::VisualizeLightDensity(RGGraph& graph, GraphicsDevice* pDevice
 			constantData.SliceMagicB = sliceMagicB;
 
 			context.SetPipelineState(m_pVisualizeLightsPSO);
-			context.SetComputeRootSignature(m_pVisualizeLightsRS.get());
+			context.SetComputeRootSignature(m_pVisualizeLightsRS);
 
 			context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(pDepth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-			context.InsertResourceBarrier(m_pLightGridOpaque.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-			context.InsertResourceBarrier(m_pVisualizationIntermediateTexture.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+			context.InsertResourceBarrier(m_pLightGridOpaque, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+			context.InsertResourceBarrier(m_pVisualizationIntermediateTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
 			context.SetRootCBV(0, constantData);
 
@@ -197,7 +197,7 @@ void TiledForward::VisualizeLightDensity(RGGraph& graph, GraphicsDevice* pDevice
 
 			context.InsertUavBarrier();
 
-			context.CopyTexture(m_pVisualizationIntermediateTexture.get(), pTarget);
+			context.CopyTexture(m_pVisualizationIntermediateTexture, pTarget);
 		});
 }
 
@@ -207,7 +207,7 @@ void TiledForward::SetupPipelines()
 	{
 		Shader* pComputeShader = m_pDevice->GetShader("LightCulling.hlsl", ShaderType::Compute, "CSMain");
 
-		m_pComputeLightCullRS = std::make_unique<RootSignature>(m_pDevice);
+		m_pComputeLightCullRS = new RootSignature(m_pDevice);
 		m_pComputeLightCullRS->FinalizeFromShader("Tiled Light Culling", pComputeShader);
 
 		PipelineStateInitializer psoDesc;
@@ -227,7 +227,7 @@ void TiledForward::SetupPipelines()
 		Shader* pVertexShader = m_pDevice->GetShader("Diffuse.hlsl", ShaderType::Vertex, "VSMain", { "TILED_FORWARD" });
 		Shader* pPixelShader = m_pDevice->GetShader("Diffuse.hlsl", ShaderType::Pixel, "PSMain", { "TILED_FORWARD" });
 
-		m_pDiffuseRS = std::make_unique<RootSignature>(m_pDevice);
+		m_pDiffuseRS = new RootSignature(m_pDevice);
 		m_pDiffuseRS->FinalizeFromShader("Diffuse", pVertexShader);
 
 		{
@@ -264,7 +264,7 @@ void TiledForward::SetupPipelines()
 	{
 		Shader* pComputeShader = m_pDevice->GetShader("VisualizeLightCount.hlsl", ShaderType::Compute, "DebugLightDensityCS", { "TILED_FORWARD" });
 
-		m_pVisualizeLightsRS = std::make_unique<RootSignature>(m_pDevice);
+		m_pVisualizeLightsRS = new RootSignature(m_pDevice);
 		m_pVisualizeLightsRS->FinalizeFromShader("Light Density Visualization", pComputeShader);
 
 		PipelineStateInitializer psoDesc;

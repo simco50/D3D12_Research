@@ -118,7 +118,7 @@ void Texture::Create(const TextureDesc& textureDesc)
 	TextureFlag depthAndRt = TextureFlag::RenderTarget | TextureFlag::DepthStencil;
 	check(EnumHasAllFlags(textureDesc.Usage, depthAndRt) == false);
 
-	Release();
+	Destroy();
 
 	SetResourceState(D3D12_RESOURCE_STATE_COMMON);
 
@@ -354,7 +354,7 @@ void Texture::SetData(CommandContext* pContext, const void* pData)
 
 void Texture::CreateForSwapchain(ID3D12Resource* pTexture)
 {
-	Release();
+	Destroy();
 	SetImmediateDelete(true);
 	D3D::SetObjectName(pTexture, "Backbuffer");
 	m_pResource = pTexture;

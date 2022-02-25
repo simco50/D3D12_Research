@@ -15,7 +15,7 @@
 CommandContext::CommandContext(GraphicsDevice* pParent, ID3D12GraphicsCommandList* pCommandList, D3D12_COMMAND_LIST_TYPE type, GlobalOnlineDescriptorHeap* pDescriptorHeap, DynamicAllocationManager* pDynamicMemoryManager, ID3D12CommandAllocator* pAllocator)
 	: GraphicsObject(pParent), m_ShaderResourceDescriptorAllocator(pDescriptorHeap), m_pCommandList(pCommandList), m_pAllocator(pAllocator), m_Type(type)
 {
-	m_DynamicAllocator = std::make_unique<DynamicResourceAllocator>(pDynamicMemoryManager);
+	m_pDynamicAllocator = std::make_unique<DynamicResourceAllocator>(pDynamicMemoryManager);
 	pCommandList->QueryInterface(IID_PPV_ARGS(m_pRaytracingCommandList.GetAddressOf()));
 	pCommandList->QueryInterface(IID_PPV_ARGS(m_pMeshShadingCommandList.GetAddressOf()));
 }
@@ -85,7 +85,7 @@ uint64 CommandContext::Execute(CommandContext** pContexts, uint32 numContexts, b
 
 void CommandContext::Free(uint64 fenceValue)
 {
-	m_DynamicAllocator->Free(fenceValue);
+	m_pDynamicAllocator->Free(fenceValue);
 	GetParent()->GetCommandQueue(m_Type)->FreeAllocator(fenceValue, m_pAllocator);
 	m_pAllocator = nullptr;
 	GetParent()->FreeCommandList(this);
@@ -189,7 +189,7 @@ void CommandContext::CopyBuffer(Buffer* pSource, Buffer* pDestination, uint64 si
 
 void CommandContext::InitializeBuffer(Buffer* pResource, const void* pData, uint64 dataSize, uint64 offset)
 {
-	DynamicAllocation allocation = m_DynamicAllocator->Allocate(dataSize);
+	DynamicAllocation allocation = m_pDynamicAllocator->Allocate(dataSize);
 	memcpy(allocation.pMappedMemory, pData, dataSize);
 	CopyBuffer(allocation.pBackingResource, pResource, dataSize, allocation.Offset, offset);
 }
@@ -197,8 +197,8 @@ void CommandContext::InitializeBuffer(Buffer* pResource, const void* pData, uint
 void CommandContext::InitializeTexture(Texture* pResource, D3D12_SUBRESOURCE_DATA* pSubResourceDatas, uint32 firstSubResource, uint32 subResourceCount)
 {
 	uint64 requiredSize = GetRequiredIntermediateSize(pResource->GetResource(), firstSubResource, subResourceCount);
-	DynamicAllocation allocation = m_DynamicAllocator->Allocate(requiredSize, D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT);
-	
+	DynamicAllocation allocation = m_pDynamicAllocator->Allocate(requiredSize, D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT);
+
 	bool resetState = false;
 	D3D12_RESOURCE_STATES previousState = GetResourceStateWithFallback(pResource, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES);
 	if (previousState != D3D12_RESOURCE_STATE_COPY_DEST)
@@ -327,7 +327,7 @@ void CommandContext::SetRootConstants(uint32 rootIndex, uint32 count, const void
 void CommandContext::SetRootCBV(uint32 rootIndex, const void* pData, uint32 dataSize)
 {
 	check(m_CurrentCommandContext != CommandListContext::Invalid);
-	DynamicAllocation allocation = m_DynamicAllocator->Allocate(dataSize);
+	DynamicAllocation allocation = m_pDynamicAllocator->Allocate(dataSize);
 	memcpy(allocation.pMappedMemory, pData, dataSize);
 
 	if (m_CurrentCommandContext == CommandListContext::Graphics)
@@ -365,7 +365,7 @@ void CommandContext::SetShadingRateImage(Texture* pTexture)
 
 DynamicAllocation CommandContext::AllocateTransientMemory(uint64 size, uint32 alignment /*= 256*/)
 {
-	return m_DynamicAllocator->Allocate(size, alignment);
+	return m_pDynamicAllocator->Allocate(size, alignment);
 }
 
 bool CommandContext::IsTransitionAllowed(D3D12_COMMAND_LIST_TYPE commandlistType, D3D12_RESOURCE_STATES state)
@@ -397,9 +397,9 @@ bool CommandContext::IsTransitionAllowed(D3D12_COMMAND_LIST_TYPE commandlistType
 void CommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 {
 	checkf(!m_InRenderPass, "Already in RenderPass");
-	checkf(renderPassInfo.DepthStencilTarget.Target 
+	checkf(renderPassInfo.DepthStencilTarget.Target
 		|| (renderPassInfo.DepthStencilTarget.Access == RenderPassAccess::NoAccess && renderPassInfo.DepthStencilTarget.StencilAccess == RenderPassAccess::NoAccess),
-	"Either a depth texture must be assigned or the access should be 'NoAccess'");
+		"Either a depth texture must be assigned or the access should be 'NoAccess'");
 	auto ExtractBeginAccess = [](RenderPassAccess access)
 	{
 		switch (RenderPassInfo::GetBeginAccess(access))
@@ -631,7 +631,7 @@ void CommandContext::SetPipelineState(StateObject* pStateObject)
 void CommandContext::SetDynamicVertexBuffer(uint32 rootIndex, uint32 elementCount, uint32 elementSize, const void* pData)
 {
 	uint32 bufferSize = elementCount * elementSize;
-	DynamicAllocation allocation = m_DynamicAllocator->Allocate(bufferSize);
+	DynamicAllocation allocation = m_pDynamicAllocator->Allocate(bufferSize);
 	memcpy(allocation.pMappedMemory, pData, bufferSize);
 	D3D12_VERTEX_BUFFER_VIEW view = {};
 	view.BufferLocation = allocation.GpuHandle;
@@ -644,7 +644,7 @@ void CommandContext::SetDynamicIndexBuffer(uint32 elementCount, const void* pDat
 {
 	uint32 stride = smallIndices ? sizeof(uint16) : sizeof(uint32);
 	uint32 bufferSize = elementCount * stride;
-	DynamicAllocation allocation = m_DynamicAllocator->Allocate(bufferSize);
+	DynamicAllocation allocation = m_pDynamicAllocator->Allocate(bufferSize);
 	memcpy(allocation.pMappedMemory, pData, bufferSize);
 	D3D12_INDEX_BUFFER_VIEW view = {};
 	view.BufferLocation = allocation.GpuHandle;

@@ -164,7 +164,7 @@ void Profiler::Initialize(GraphicsDevice* pParent, uint32 numBackbuffers)
 
 void Profiler::Shutdown()
 {
-	m_pReadBackBuffer->Release();
+	m_pReadBackBuffer.Reset();
 	m_pQueryHeap.Reset();
 }
 

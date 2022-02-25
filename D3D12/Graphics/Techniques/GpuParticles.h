@@ -21,26 +21,26 @@ private:
 
 	GraphicsDevice* m_pDevice;
 
-	std::unique_ptr<Buffer> m_pAliveList1;
-	std::unique_ptr<Buffer> m_pAliveList2;
-	std::unique_ptr<Buffer> m_pDeadList;
-	std::unique_ptr<Buffer> m_pParticleBuffer;
-	std::unique_ptr<Buffer> m_pCountersBuffer;
+	RefCountPtr<Buffer> m_pAliveList1;
+	RefCountPtr<Buffer> m_pAliveList2;
+	RefCountPtr<Buffer> m_pDeadList;
+	RefCountPtr<Buffer> m_pParticleBuffer;
+	RefCountPtr<Buffer> m_pCountersBuffer;
 
-	PipelineState* m_pPrepareArgumentsPS = nullptr;
+	RefCountPtr<PipelineState> m_pPrepareArgumentsPS;
 
-	PipelineState* m_pEmitPS = nullptr;
-	std::unique_ptr<Buffer> m_pEmitArguments;
+	RefCountPtr<PipelineState> m_pEmitPS;
+	RefCountPtr<Buffer> m_pEmitArguments;
 
-	std::unique_ptr<RootSignature> m_pSimulateRS;
-	PipelineState* m_pSimulatePS = nullptr;
-	std::unique_ptr<Buffer> m_pSimulateArguments;
+	RefCountPtr<RootSignature> m_pSimulateRS;
+	RefCountPtr<PipelineState> m_pSimulatePS;
+	RefCountPtr<Buffer> m_pSimulateArguments;
 
-	PipelineState* m_pSimulateEndPS = nullptr;
-	std::unique_ptr<Buffer> m_pDrawArguments;
+	RefCountPtr<PipelineState> m_pSimulateEndPS;
+	RefCountPtr<Buffer> m_pDrawArguments;
 
-	std::unique_ptr<RootSignature> m_pRenderParticlesRS;
-	PipelineState* m_pRenderParticlesPS = nullptr;
+	RefCountPtr<RootSignature> m_pRenderParticlesRS;
+	RefCountPtr<PipelineState> m_pRenderParticlesPS;
 
 	float m_ParticlesToSpawn = 0;
 };

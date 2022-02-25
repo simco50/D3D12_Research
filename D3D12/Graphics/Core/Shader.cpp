@@ -11,10 +11,10 @@ namespace ShaderCompiler
 	constexpr const char* pCompilerPath = "dxcompiler.dll";
 	constexpr const char* pShaderSymbolsPath = "Saved/ShaderSymbols/";
 
-	static ComPtr<IDxcUtils> pUtils;
-	static ComPtr<IDxcCompiler3> pCompiler3;
-	static ComPtr<IDxcValidator> pValidator;
-	static ComPtr<IDxcIncludeHandler> pDefaultIncludeHandler;
+	static RefCountPtr<IDxcUtils> pUtils;
+	static RefCountPtr<IDxcCompiler3> pCompiler3;
+	static RefCountPtr<IDxcValidator> pValidator;
+	static RefCountPtr<IDxcIncludeHandler> pDefaultIncludeHandler;
 
 	struct CompileJob
 	{
@@ -31,7 +31,7 @@ namespace ShaderCompiler
 	{
 		std::string ErrorMessage;
 		ShaderBlob pBlob;
-		ComPtr<IUnknown> pReflection;
+		RefCountPtr<IUnknown> pReflection;
 		std::vector<std::string> Includes;
 
 		bool Success() const { return pBlob.Get() && ErrorMessage.length() == 0; }
@@ -67,30 +67,30 @@ namespace ShaderCompiler
 		E_LOG(Info, "Loaded %s", pCompilerPath);
 	}
 
-	bool TryLoadFile(const char* pFilePath, const std::vector<std::string>& includeDirs, ComPtr<IDxcBlobEncoding>* pFile, std::string* pFullPath)
+	bool TryLoadFile(const char* pFilePath, const std::vector<std::string>& includeDirs, RefCountPtr<IDxcBlobEncoding>& file, std::string* pFullPath)
 	{
 		for (const std::string& includeDir : includeDirs)
 		{
 			std::string path = Paths::Combine(includeDir, pFilePath);
 			if (Paths::FileExists(path.c_str()))
 			{
-				if (SUCCEEDED(pUtils->LoadFile(MULTIBYTE_TO_UNICODE(path.c_str()), nullptr, pFile->GetAddressOf())))
+				if (SUCCEEDED(pUtils->LoadFile(MULTIBYTE_TO_UNICODE(path.c_str()), nullptr, file.GetAddressOf())))
 				{
 					*pFullPath = path;
 					break;
 				}
 			}
 		}
-		return *pFile;
+		return file.Get();
 	};
 
 	CompileResult Compile(const CompileJob& compileJob)
 	{
 		CompileResult result;
 
-		ComPtr<IDxcBlobEncoding> pSource;
+		RefCountPtr<IDxcBlobEncoding> pSource;
 		std::string fullPath;
-		if (!TryLoadFile(compileJob.FilePath.c_str(), compileJob.IncludeDirs, &pSource, &fullPath))
+		if (!TryLoadFile(compileJob.FilePath.c_str(), compileJob.IncludeDirs, pSource, &fullPath))
 		{
 			result.ErrorMessage = Sprintf("Failed to open file '%s'", compileJob.FilePath.c_str());
 			return result;
@@ -231,7 +231,7 @@ namespace ShaderCompiler
 		public:
 			HRESULT STDMETHODCALLTYPE LoadSource(_In_ LPCWSTR pFilename, _COM_Outptr_result_maybenull_ IDxcBlob** ppIncludeSource) override
 			{
-				ComPtr<IDxcBlobEncoding> pEncoding;
+				RefCountPtr<IDxcBlobEncoding> pEncoding;
 				std::string path = Paths::Normalize(UNICODE_TO_MULTIBYTE(pFilename));
 
 				if (!Paths::FileExists(path.c_str()))
@@ -301,13 +301,13 @@ namespace ShaderCompiler
 		if (CommandLine::GetBool("dumpshaders"))
 		{
 			// Preprocessed source
-			ComPtr<IDxcResult> pPreprocessOutput;
+			RefCountPtr<IDxcResult> pPreprocessOutput;
 			CompileArguments preprocessArgs = arguments;
 			preprocessArgs.AddArgument("-P", ".");
 			CustomIncludeHandler preprocessIncludeHandler;
 			if (SUCCEEDED(pCompiler3->Compile(&sourceBuffer, preprocessArgs.GetArguments(), (uint32)preprocessArgs.GetNumArguments(), &preprocessIncludeHandler, IID_PPV_ARGS(pPreprocessOutput.GetAddressOf()))))
 			{
-				ComPtr<IDxcBlobUtf8> pHLSL;
+				RefCountPtr<IDxcBlobUtf8> pHLSL;
 				if(SUCCEEDED(pPreprocessOutput->GetOutput(DXC_OUT_HLSL, IID_PPV_ARGS(pHLSL.GetAddressOf()), nullptr)))
 				{
 					Paths::CreateDirectoryTree(pShaderSymbolsPath);
@@ -325,10 +325,10 @@ namespace ShaderCompiler
 		}
 
 		CustomIncludeHandler includeHandler;
-		ComPtr<IDxcResult> pCompileResult;
+		RefCountPtr<IDxcResult> pCompileResult;
 		VERIFY_HR(pCompiler3->Compile(&sourceBuffer, arguments.GetArguments(), (uint32)arguments.GetNumArguments(), &includeHandler, IID_PPV_ARGS(pCompileResult.GetAddressOf())));
 
-		ComPtr<IDxcBlobUtf8> pErrors;
+		RefCountPtr<IDxcBlobUtf8> pErrors;
 		if (SUCCEEDED(pCompileResult->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(pErrors.GetAddressOf()), nullptr)))
 		{
 			if (pErrors && pErrors->GetStringLength())
@@ -345,14 +345,14 @@ namespace ShaderCompiler
 
 		//Validation
 		{
-			ComPtr<IDxcOperationResult> pResult;
+			RefCountPtr<IDxcOperationResult> pResult;
 			VERIFY_HR(pValidator->Validate((IDxcBlob*)result.pBlob.Get(), DxcValidatorFlags_InPlaceEdit, pResult.GetAddressOf()));
 			HRESULT validationResult;
 			pResult->GetStatus(&validationResult);
 			if (validationResult != S_OK)
 			{
-				ComPtr<IDxcBlobEncoding> pPrintBlob;
-				ComPtr<IDxcBlobUtf8> pPrintBlobUtf8;
+				RefCountPtr<IDxcBlobEncoding> pPrintBlob;
+				RefCountPtr<IDxcBlobUtf8> pPrintBlobUtf8;
 				pResult->GetErrorBuffer(pPrintBlob.GetAddressOf());
 				pUtils->GetBlobAsUtf8(pPrintBlob.Get(), pPrintBlobUtf8.GetAddressOf());
 				result.ErrorMessage = pPrintBlobUtf8->GetStringPointer();
@@ -362,13 +362,13 @@ namespace ShaderCompiler
 
 		//Symbols
 		{
-			ComPtr<IDxcBlobUtf16> pDebugDataPath;
-			ComPtr<IDxcBlob> pSymbolsBlob;
+			RefCountPtr<IDxcBlobUtf16> pDebugDataPath;
+			RefCountPtr<IDxcBlob> pSymbolsBlob;
 			if (SUCCEEDED(pCompileResult->GetOutput(DXC_OUT_PDB, IID_PPV_ARGS(pSymbolsBlob.GetAddressOf()), pDebugDataPath.GetAddressOf())))
 			{
 				Paths::CreateDirectoryTree(pShaderSymbolsPath);
 
-				ComPtr<IDxcBlobUtf8> pSymbolsBlobUTF8;
+				RefCountPtr<IDxcBlobUtf8> pSymbolsBlobUTF8;
 				pUtils->GetBlobAsUtf8(pSymbolsBlob.Get(), pSymbolsBlobUTF8.GetAddressOf());
 				std::string debugPath = Sprintf("%s%s", pShaderSymbolsPath, pSymbolsBlobUTF8->GetStringPointer());
 				std::ofstream str(debugPath, std::ios::binary);
@@ -378,7 +378,7 @@ namespace ShaderCompiler
 
 		//Reflection
 		{
-			ComPtr<IDxcBlob> pReflectionData;
+			RefCountPtr<IDxcBlob> pReflectionData;
 			if (SUCCEEDED(pCompileResult->GetOutput(DXC_OUT_REFLECTION, IID_PPV_ARGS(pReflectionData.GetAddressOf()), nullptr)))
 			{
 				DxcBuffer reflectionBuffer;
