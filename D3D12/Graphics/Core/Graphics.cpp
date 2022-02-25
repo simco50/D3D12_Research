@@ -25,7 +25,7 @@ extern "C" { _declspec(dllexport) extern const char* D3D12SDKPath = ".\\D3D12\\"
 
 namespace GraphicsCommon
 {
-	static std::array<RefCountPtr<Texture>, (uint32)DefaultTexture::MAX> DefaultTextures;
+	static std::array<std::unique_ptr<Texture>, (uint32)DefaultTexture::MAX> DefaultTextures;
 
 	CommandSignature* pIndirectDrawSignature = nullptr;
 	CommandSignature* pIndirectDispatchSignature = nullptr;
@@ -37,7 +37,7 @@ namespace GraphicsCommon
 
 		auto RegisterDefaultTexture = [pDevice, &context](DefaultTexture type, const char* pName, const TextureDesc& desc, uint32* pData)
 		{
-			DefaultTextures[(int)type] = new Texture(pDevice, pName);
+			DefaultTextures[(int)type] = std::make_unique<Texture>(pDevice, pName);
 			DefaultTextures[(int)type]->Create(&context, desc, pData);
 		};
 
@@ -59,9 +59,9 @@ namespace GraphicsCommon
 
 		RegisterDefaultTexture(DefaultTexture::Black3D, "Default Black 3D", TextureDesc::Create3D(1, 1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &BLACK);
 
-		DefaultTextures[(int)DefaultTexture::ColorNoise256] = new Texture(pDevice, "Color Noise 256px");
+		DefaultTextures[(int)DefaultTexture::ColorNoise256] = std::make_unique<Texture>(pDevice, "Color Noise 256px");
 		DefaultTextures[(int)DefaultTexture::ColorNoise256]->Create(&context, "Resources/Textures/Noise.png", false);
-		DefaultTextures[(int)DefaultTexture::BlueNoise512] = new Texture(pDevice, "Blue Noise 512px");
+		DefaultTextures[(int)DefaultTexture::BlueNoise512] = std::make_unique<Texture>(pDevice, "Blue Noise 512px");
 		DefaultTextures[(int)DefaultTexture::BlueNoise512]->Create(&context, "Resources/Textures/BlueNoise.dds", false);
 
 		context.Execute(true);
@@ -83,7 +83,7 @@ namespace GraphicsCommon
 	{
 		for (auto& pTexture : DefaultTextures)
 		{
-			pTexture.Reset();
+			pTexture.reset();
 		}
 
 		delete pIndirectDispatchSignature;
@@ -93,13 +93,13 @@ namespace GraphicsCommon
 
 	Texture* GetDefaultTexture(DefaultTexture type)
 	{
-		return DefaultTextures[(int)type];
+		return DefaultTextures[(int)type].get();
 	}
 }
 
-GraphicsInstance GraphicsInstance::CreateInstance(GraphicsInstanceFlags createFlags /*= GraphicsFlags::None*/)
+std::unique_ptr<GraphicsInstance> GraphicsInstance::CreateInstance(GraphicsInstanceFlags createFlags /*= GraphicsFlags::None*/)
 {
-	return GraphicsInstance(createFlags);
+	return std::make_unique<GraphicsInstance>(createFlags);
 }
 
 GraphicsInstance::GraphicsInstance(GraphicsInstanceFlags createFlags)
@@ -118,7 +118,7 @@ GraphicsInstance::GraphicsInstance(GraphicsInstanceFlags createFlags)
 
 	if (EnumHasAnyFlags(createFlags, GraphicsInstanceFlags::DebugDevice))
 	{
-		RefCountPtr<ID3D12Debug> pDebugController;
+		ComPtr<ID3D12Debug> pDebugController;
 		if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&pDebugController))))
 		{
 			pDebugController->EnableDebugLayer();
@@ -128,7 +128,7 @@ GraphicsInstance::GraphicsInstance(GraphicsInstanceFlags createFlags)
 
 	if (EnumHasAnyFlags(createFlags, GraphicsInstanceFlags::DRED))
 	{
-		RefCountPtr<ID3D12DeviceRemovedExtendedDataSettings1> pDredSettings;
+		ComPtr<ID3D12DeviceRemovedExtendedDataSettings1> pDredSettings;
 		if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&pDredSettings))))
 		{
 			// Turn on auto-breadcrumbs and page fault reporting.
@@ -141,7 +141,7 @@ GraphicsInstance::GraphicsInstance(GraphicsInstanceFlags createFlags)
 
 	if (EnumHasAnyFlags(createFlags, GraphicsInstanceFlags::GpuValidation))
 	{
-		RefCountPtr<ID3D12Debug1> pDebugController;
+		ComPtr<ID3D12Debug1> pDebugController;
 		if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&pDebugController))))
 		{
 			pDebugController->SetEnableGPUBasedValidation(true);
@@ -158,15 +158,15 @@ GraphicsInstance::GraphicsInstance(GraphicsInstanceFlags createFlags)
 	}
 }
 
-RefCountPtr<SwapChain> GraphicsInstance::CreateSwapchain(GraphicsDevice* pDevice, WindowHandle pNativeWindow, uint32 width, uint32 height, uint32 numFrames, bool vsync)
+std::unique_ptr<SwapChain> GraphicsInstance::CreateSwapchain(GraphicsDevice* pDevice, WindowHandle pNativeWindow, uint32 width, uint32 height, uint32 numFrames, bool vsync)
 {
-	return new SwapChain(pDevice, m_pFactory.Get(), pNativeWindow, width, height, numFrames, vsync);
+	return std::make_unique<SwapChain>(pDevice, m_pFactory.Get(), pNativeWindow, width, height, numFrames, vsync);
 }
 
-RefCountPtr<IDXGIAdapter4> GraphicsInstance::EnumerateAdapter(bool useWarp)
+ComPtr<IDXGIAdapter4> GraphicsInstance::EnumerateAdapter(bool useWarp)
 {
-	RefCountPtr<IDXGIAdapter4> pAdapter;
-	RefCountPtr<ID3D12Device> pDevice;
+	ComPtr<IDXGIAdapter4> pAdapter;
+	ComPtr<ID3D12Device> pDevice;
 	if (!useWarp)
 	{
 		uint32 adapterIndex = 0;
@@ -179,11 +179,11 @@ RefCountPtr<IDXGIAdapter4> GraphicsInstance::EnumerateAdapter(bool useWarp)
 			E_LOG(Info, "\t%s - %f GB", UNICODE_TO_MULTIBYTE(desc.Description), (float)desc.DedicatedVideoMemory * Math::BytesToGigaBytes);
 
 			uint32 outputIndex = 0;
-			RefCountPtr<IDXGIOutput> pOutput;
+			ComPtr<IDXGIOutput> pOutput;
 			while (pAdapter->EnumOutputs(outputIndex++, pOutput.ReleaseAndGetAddressOf()) == S_OK)
 			{
-				RefCountPtr<IDXGIOutput6> pOutput1;
-				pOutput->QueryInterface(&pOutput1);
+				ComPtr<IDXGIOutput6> pOutput1;
+				pOutput.As(&pOutput1);
 				DXGI_OUTPUT_DESC1 outputDesc;
 				pOutput1->GetDesc1(&outputDesc);
 
@@ -228,16 +228,16 @@ RefCountPtr<IDXGIAdapter4> GraphicsInstance::EnumerateAdapter(bool useWarp)
 	return pAdapter;
 }
 
-RefCountPtr<GraphicsDevice> GraphicsInstance::CreateDevice(RefCountPtr<IDXGIAdapter4> pAdapter)
+std::unique_ptr<GraphicsDevice> GraphicsInstance::CreateDevice(ComPtr<IDXGIAdapter4> pAdapter)
 {
-	return new GraphicsDevice(pAdapter.Get());
+	return std::make_unique<GraphicsDevice>(pAdapter.Get());
 }
 
 GraphicsDevice::GraphicsDevice(IDXGIAdapter4* pAdapter)
-	: GraphicsObject(this), m_DeleteQueue(this)
+	: m_DeleteQueue(this)
 {
 	VERIFY_HR(D3D12CreateDevice(pAdapter, D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(m_pDevice.ReleaseAndGetAddressOf())));
-	m_pDevice->QueryInterface(&m_pRaytracingDevice);
+	m_pDevice.As(&m_pRaytracingDevice);
 	D3D::SetObjectName(m_pDevice.Get(), "Main Device");
 
 	Capabilities.Initialize(this);
@@ -250,12 +250,12 @@ GraphicsDevice::GraphicsDevice(IDXGIAdapter4* pAdapter)
 		abort();
 	};
 
-	m_pDeviceRemovalFence = new Fence(this, UINT64_MAX, "Device Removed Fence");
+	m_pDeviceRemovalFence = std::make_unique<Fence>(this, UINT64_MAX, "Device Removed Fence");
 	m_DeviceRemovedEvent = CreateEventA(nullptr, false, false, nullptr);
 	m_pDeviceRemovalFence->GetFence()->SetEventOnCompletion(UINT64_MAX, m_DeviceRemovedEvent);
 	RegisterWaitForSingleObject(&m_DeviceRemovedEvent, m_DeviceRemovedEvent, OnDeviceRemovedCallback, this, INFINITE, 0);
 
-	RefCountPtr<ID3D12InfoQueue> pInfoQueue;
+	ComPtr<ID3D12InfoQueue> pInfoQueue;
 	if (SUCCEEDED(m_pDevice->QueryInterface(IID_PPV_ARGS(pInfoQueue.GetAddressOf()))))
 	{
 		// Suppress whole categories of messages
@@ -291,8 +291,8 @@ GraphicsDevice::GraphicsDevice(IDXGIAdapter4* pAdapter)
 		}
 		pInfoQueue->PushStorageFilter(&NewFilter);
 
-		RefCountPtr<ID3D12InfoQueue1> pInfoQueue1;
-		if (SUCCEEDED(pInfoQueue->QueryInterface(&pInfoQueue1)))
+		ComPtr<ID3D12InfoQueue1> pInfoQueue1;
+		if (SUCCEEDED(pInfoQueue.As(&pInfoQueue1)))
 		{
 			auto MessageCallback = [](
 				D3D12_MESSAGE_CATEGORY Category,
@@ -317,22 +317,22 @@ GraphicsDevice::GraphicsDevice(IDXGIAdapter4* pAdapter)
 	}
 
 	//Create all the required command queues
-	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_DIRECT] = new CommandQueue(this, D3D12_COMMAND_LIST_TYPE_DIRECT);
-	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_COMPUTE] = new CommandQueue(this, D3D12_COMMAND_LIST_TYPE_COMPUTE);
-	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_COPY] = new CommandQueue(this, D3D12_COMMAND_LIST_TYPE_COPY);
+	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_DIRECT] = std::make_unique<CommandQueue>(this, D3D12_COMMAND_LIST_TYPE_DIRECT);
+	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_COMPUTE] = std::make_unique<CommandQueue>(this, D3D12_COMMAND_LIST_TYPE_COMPUTE);
+	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_COPY] = std::make_unique<CommandQueue>(this, D3D12_COMMAND_LIST_TYPE_COPY);
 
-	m_pFrameFence = new Fence(this, 1, "Frame Fence");
+	m_pFrameFence = std::make_unique<Fence>(this, 1, "Frame Fence");
 
 	// Allocators
-	m_pDynamicAllocationManager = new DynamicAllocationManager(this, BufferFlag::Upload);
-	m_pGlobalViewHeap = new GlobalOnlineDescriptorHeap(this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 256, 8192);
-	m_pGlobalSamplerHeap = new GlobalOnlineDescriptorHeap(this, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, 32, 2048);
+	m_pDynamicAllocationManager = std::make_unique<DynamicAllocationManager>(this, BufferFlag::Upload);
+	m_pGlobalViewHeap = std::make_unique<GlobalOnlineDescriptorHeap>(this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 256, 8192);
+	m_pGlobalSamplerHeap = std::make_unique<GlobalOnlineDescriptorHeap>(this, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, 32, 2048);
 
 	check(m_DescriptorHeaps.size() == D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES);
-	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV] = new OfflineDescriptorAllocator(this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 256);
-	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER] = new OfflineDescriptorAllocator(this, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, 128);
-	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_RTV] = new OfflineDescriptorAllocator(this, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, 128);
-	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_DSV] = new OfflineDescriptorAllocator(this, D3D12_DESCRIPTOR_HEAP_TYPE_DSV, 64);
+	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV] = std::make_unique<OfflineDescriptorAllocator>(this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 256);
+	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER] = std::make_unique<OfflineDescriptorAllocator>(this, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, 128);
+	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_RTV] = std::make_unique<OfflineDescriptorAllocator>(this, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, 128);
+	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_DSV] = std::make_unique<OfflineDescriptorAllocator>(this, D3D12_DESCRIPTOR_HEAP_TYPE_DSV, 64);
 
 	uint8 smMaj, smMin;
 	Capabilities.GetShaderModel(smMaj, smMin);
@@ -353,7 +353,7 @@ GraphicsDevice::~GraphicsDevice()
 
 CommandQueue* GraphicsDevice::GetCommandQueue(D3D12_COMMAND_LIST_TYPE type) const
 {
-	return m_CommandQueues.at(type);
+	return m_CommandQueues.at(type).get();
 }
 
 CommandContext* GraphicsDevice::AllocateCommandContext(D3D12_COMMAND_LIST_TYPE type)
@@ -371,13 +371,13 @@ CommandContext* GraphicsDevice::AllocateCommandContext(D3D12_COMMAND_LIST_TYPE t
 		}
 		else
 		{
-			RefCountPtr<ID3D12CommandList> pCommandList;
+			ComPtr<ID3D12CommandList> pCommandList;
 			ID3D12CommandAllocator* pAllocator = m_CommandQueues[type]->RequestAllocator();
 			VERIFY_HR(GetDevice()->CreateCommandList(0, type, pAllocator, nullptr, IID_PPV_ARGS(pCommandList.GetAddressOf())));
 			D3D::SetObjectName(pCommandList.Get(), Sprintf("Pooled Commandlist %d", m_CommandLists.size()).c_str());
 			m_CommandLists.push_back(std::move(pCommandList));
-			m_CommandListPool[typeIndex].emplace_back(new CommandContext(this, static_cast<ID3D12GraphicsCommandList*>(m_CommandLists.back().Get()), type, m_pGlobalViewHeap, m_pDynamicAllocationManager, pAllocator));
-			pContext = m_CommandListPool[typeIndex].back();
+			m_CommandListPool[typeIndex].emplace_back(std::make_unique<CommandContext>(this, static_cast<ID3D12GraphicsCommandList*>(m_CommandLists.back().Get()), type, m_pGlobalViewHeap.get(), m_pDynamicAllocationManager.get(), pAllocator));
+			pContext = m_CommandListPool[typeIndex].back().get();
 		}
 	}
 	return pContext;
@@ -437,14 +437,14 @@ void GraphicsDevice::FreeViewDescriptor(DescriptorHandle& handle)
 	}
 }
 
-RefCountPtr<Texture> GraphicsDevice::CreateTexture(const TextureDesc& desc, const char* pName)
+std::unique_ptr<Texture> GraphicsDevice::CreateTexture(const TextureDesc& desc, const char* pName)
 {
-	return new Texture(this, desc, pName);
+	return std::make_unique<Texture>(this, desc, pName);
 }
 
-RefCountPtr<Buffer> GraphicsDevice::CreateBuffer(const BufferDesc& desc, const char* pName)
+std::unique_ptr<Buffer> GraphicsDevice::CreateBuffer(const BufferDesc& desc, const char* pName)
 {
-	return new Buffer(this, desc, pName);
+	return std::make_unique<Buffer>(this, desc, pName);
 }
 
 ID3D12Resource* GraphicsDevice::CreateResource(const D3D12_RESOURCE_DESC& desc, D3D12_RESOURCE_STATES initialState, D3D12_HEAP_TYPE heapType, D3D12_CLEAR_VALUE* pClearValue /*= nullptr*/)
@@ -460,7 +460,7 @@ void GraphicsDevice::ReleaseResource(ID3D12Resource* pResource)
 	m_DeleteQueue.EnqueueResource(pResource, GetFrameFence());
 }
 
-RefCountPtr<PipelineState> GraphicsDevice::CreatePipeline(Shader* pComputeShader, RootSignature* pRootSignature)
+PipelineState* GraphicsDevice::CreatePipeline(Shader* pComputeShader, RootSignature* pRootSignature)
 {
 	checkf(pComputeShader && pComputeShader->GetType() == ShaderType::Compute, "Shader must be a Compute shader");
 	PipelineStateInitializer desc;
@@ -470,18 +470,20 @@ RefCountPtr<PipelineState> GraphicsDevice::CreatePipeline(Shader* pComputeShader
 	return CreatePipeline(desc);
 }
 
-RefCountPtr<PipelineState> GraphicsDevice::CreatePipeline(const PipelineStateInitializer& psoDesc)
+PipelineState* GraphicsDevice::CreatePipeline(const PipelineStateInitializer& psoDesc)
 {
-	PipelineState* pPipeline = new PipelineState(this);
+	std::unique_ptr<PipelineState> pPipeline = std::make_unique<PipelineState>(this);
 	pPipeline->Create(psoDesc);
-	return pPipeline;
+	m_Pipelines.push_back(std::move(pPipeline));
+	return m_Pipelines.back().get();
 }
 
-RefCountPtr<StateObject> GraphicsDevice::CreateStateObject(const StateObjectInitializer& stateDesc)
+StateObject* GraphicsDevice::CreateStateObject(const StateObjectInitializer& stateDesc)
 {
-	StateObject* pStateObject = new StateObject(this);
+	std::unique_ptr<StateObject> pStateObject = std::make_unique<StateObject>(this);
 	pStateObject->Create(stateDesc);
-	return pStateObject;
+	m_StateObjects.push_back(std::move(pStateObject));
+	return m_StateObjects.back().get();
 }
 
 Shader* GraphicsDevice::GetShader(const char* pShaderPath, ShaderType shaderType, const char* pEntryPoint, const std::vector<ShaderDefine>& defines /*= {}*/)
@@ -621,7 +623,7 @@ bool GraphicsCapabilities::CheckUAVSupport(DXGI_FORMAT format) const
 }
 
 SwapChain::SwapChain(GraphicsDevice* pDevice, IDXGIFactory6* pFactory, WindowHandle pNativeWindow, uint32 width, uint32 height, uint32 numFrames, bool vsync)
-	: GraphicsObject(pDevice), m_Format(DXGI_FORMAT_R8G8B8A8_UNORM), m_CurrentImage(0), m_Vsync(vsync)
+	: m_Format(DXGI_FORMAT_R8G8B8A8_UNORM), m_CurrentImage(0), m_Vsync(vsync)
 {
 	DXGI_SWAP_CHAIN_DESC1 desc{};
 	desc.AlphaMode = DXGI_ALPHA_MODE_IGNORE;
@@ -645,7 +647,7 @@ SwapChain::SwapChain(GraphicsDevice* pDevice, IDXGIFactory6* pFactory, WindowHan
 	fsDesc.Windowed = true;
 
 	CommandQueue* pPresentQueue = pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT);
-	RefCountPtr<IDXGISwapChain1> swapChain;
+	ComPtr<IDXGISwapChain1> swapChain;
 	
 	VERIFY_HR(pFactory->CreateSwapChainForHwnd(
 		pPresentQueue->GetCommandQueue(),
@@ -656,12 +658,12 @@ SwapChain::SwapChain(GraphicsDevice* pDevice, IDXGIFactory6* pFactory, WindowHan
 		swapChain.GetAddressOf()));
 
 	m_pSwapchain.Reset();
-	swapChain->QueryInterface(&m_pSwapchain);
+	swapChain.As(&m_pSwapchain);
 
 	m_Backbuffers.resize(numFrames);
 	for (uint32 i = 0; i < numFrames; ++i)
 	{
-		m_Backbuffers[i] = new Texture(pDevice, "Render Target");
+		m_Backbuffers[i] = std::make_unique<Texture>(pDevice, "Render Target");
 	}
 }
 
@@ -674,7 +676,7 @@ void SwapChain::OnResize(uint32 width, uint32 height)
 {
 	for (size_t i = 0; i < m_Backbuffers.size(); ++i)
 	{
-		m_Backbuffers[i]->Destroy();
+		m_Backbuffers[i]->Release();
 	}
 
 	//Resize the buffers

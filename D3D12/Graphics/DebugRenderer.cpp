@@ -50,7 +50,7 @@ void DebugRenderer::Initialize(GraphicsDevice* pDevice)
 	Shader* pPixelShader = pDevice->GetShader("DebugRenderer.hlsl", ShaderType::Pixel, "PSMain");
 
 	//Rootsignature
-	m_pRS = new RootSignature(pDevice);
+	m_pRS = std::make_unique<RootSignature>(pDevice);
 	m_pRS->FinalizeFromShader("Diffuse", pVertexShader);
 
 	//Opaque
@@ -73,7 +73,7 @@ void DebugRenderer::Initialize(GraphicsDevice* pDevice)
 
 void DebugRenderer::Shutdown()
 {
-	m_pRS.Reset();
+	m_pRS.reset();
 }
 
 void DebugRenderer::Render(RGGraph& graph, const SceneView& view, Texture* pTarget, Texture* pDepth)
@@ -95,7 +95,7 @@ void DebugRenderer::Render(RGGraph& graph, const SceneView& view, Texture* pTarg
 			context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
 			context.BeginRenderPass(RenderPassInfo(pTarget, RenderPassAccess::Load_Store, pDepth, RenderPassAccess::Load_Store, false));
-			context.SetGraphicsRootSignature(m_pRS);
+			context.SetGraphicsRootSignature(m_pRS.get());
 
 			context.SetRootCBV(0, GetViewUniforms(view, pTarget));
 

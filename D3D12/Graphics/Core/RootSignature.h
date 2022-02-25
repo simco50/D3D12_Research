@@ -67,7 +67,7 @@ private:
 	std::array<uint32, MAX_NUM_ROOT_PARAMETERS> m_DescriptorTableSizes{};
 	std::vector<CD3DX12_STATIC_SAMPLER_DESC> m_StaticSamplers;
 	std::array<std::vector<CD3DX12_DESCRIPTOR_RANGE>, MAX_NUM_ROOT_PARAMETERS> m_DescriptorTableRanges{};
-	RefCountPtr<ID3D12RootSignature> m_pRootSignature;
+	ComPtr<ID3D12RootSignature> m_pRootSignature;
 
 	RootSignatureMask m_DescriptorTableMask;
 	RootSignatureMask m_SamplerMask;

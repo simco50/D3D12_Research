@@ -22,8 +22,8 @@ private:
 
 	GraphicsDevice* m_pDevice;
 
-	RefCountPtr<StateObject> m_pRtSO;
-	RefCountPtr<RootSignature> m_pGlobalRS;
-	RefCountPtr<Texture> m_pSceneColor;
+	StateObject* m_pRtSO = nullptr;
+	std::unique_ptr<RootSignature> m_pGlobalRS;
+	std::unique_ptr<Texture> m_pSceneColor;
 };
 

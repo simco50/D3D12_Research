@@ -499,7 +499,7 @@ PipelineState::~PipelineState()
 void PipelineState::Create(const PipelineStateInitializer& initializer)
 {
 	check(initializer.m_Type != PipelineStateType::MAX);
-	RefCountPtr<ID3D12Device2> pDevice2;
+	ComPtr<ID3D12Device2> pDevice2;
 	VERIFY_HR_EX(GetParent()->GetDevice()->QueryInterface(IID_PPV_ARGS(pDevice2.GetAddressOf())), GetParent()->GetDevice());
 
 	m_Desc = initializer;

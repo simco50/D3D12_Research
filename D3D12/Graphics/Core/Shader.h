@@ -6,7 +6,7 @@
 
 class FileWatcher;
 
-using ShaderBlob = RefCountPtr<ID3DBlob>;
+using ShaderBlob = ComPtr<ID3DBlob>;
 
 enum class ShaderType
 {

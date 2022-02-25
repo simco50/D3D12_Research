@@ -19,6 +19,6 @@ public:
 private:
 	void SetupPipelines(GraphicsDevice* pDevice);
 
-	RefCountPtr<StateObject> m_pRtSO;
-	RefCountPtr<RootSignature> m_pGlobalRS;
+	StateObject* m_pRtSO = nullptr;
+	std::unique_ptr<RootSignature> m_pGlobalRS;
 };

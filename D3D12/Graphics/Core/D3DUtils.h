@@ -343,7 +343,7 @@ namespace D3D
 		}
 		if (errorCode == DXGI_ERROR_DEVICE_REMOVED && pDevice)
 		{
-			RefCountPtr<ID3D12InfoQueue> pInfo;
+			ComPtr<ID3D12InfoQueue> pInfo;
 			pDevice->QueryInterface(pInfo.GetAddressOf());
 			if (pInfo)
 			{

@@ -179,8 +179,8 @@ private:
 	float m_SecondsPerCpuTick = 0.0f;
 	int m_CurrentTimer = 0;
 	int m_CurrentReadbackFrame = 0;
-	RefCountPtr<ID3D12QueryHeap> m_pQueryHeap;
-	RefCountPtr<Buffer> m_pReadBackBuffer;
+	ComPtr<ID3D12QueryHeap> m_pQueryHeap;
+	std::unique_ptr<Buffer> m_pReadBackBuffer;
 
 	std::unique_ptr<ProfileNode> m_pRootBlock;
 	ProfileNode* m_pPreviousBlock = nullptr;

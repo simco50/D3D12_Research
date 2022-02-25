@@ -75,7 +75,7 @@ CommandQueue::CommandQueue(GraphicsDevice* pParent, D3D12_COMMAND_LIST_TYPE type
 	desc.Priority = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL;
 	desc.Type = type;
 
-	m_pFence = new Fence(pParent, (uint64)type << 56, "CommandQueue Fence");
+	m_pFence = std::make_unique<Fence>(pParent, (uint64)type << 56, "CommandQueue Fence");
 
 	VERIFY_HR_EX(pParent->GetDevice()->CreateCommandQueue(&desc, IID_PPV_ARGS(m_pCommandQueue.GetAddressOf())), pParent->GetDevice());
 	D3D::SetObjectName(m_pCommandQueue.Get(), Sprintf("%s CommandQueue", D3D::CommandlistTypeToString(type)).c_str());
@@ -159,10 +159,10 @@ ID3D12CommandAllocator* CommandQueue::RequestAllocator()
 		}
 	}
 
-	RefCountPtr<ID3D12CommandAllocator> pAllocator;
+	ComPtr<ID3D12CommandAllocator> pAllocator;
 	GetParent()->GetDevice()->CreateCommandAllocator(m_Type, IID_PPV_ARGS(pAllocator.GetAddressOf()));
 	D3D::SetObjectName(pAllocator.Get(), Sprintf("Pooled Allocator %d - %s", (int)m_CommandAllocators.size(), D3D::CommandlistTypeToString(m_Type)).c_str());
-	m_CommandAllocators.push_back(pAllocator);
+	m_CommandAllocators.push_back(std::move(pAllocator));
 	return m_CommandAllocators.back().Get();
 }
 

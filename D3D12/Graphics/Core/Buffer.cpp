@@ -50,7 +50,7 @@ D3D12_RESOURCE_DESC GetResourceDesc(const BufferDesc& bufferDesc)
 
 void Buffer::Create(const BufferDesc& bufferDesc)
 {
-	Destroy();
+	Release();
 	m_Desc = bufferDesc;
 
 	D3D12_RESOURCE_DESC desc = GetResourceDesc(bufferDesc);

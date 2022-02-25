@@ -173,7 +173,7 @@ void RootSignature::Finalize(const char* pName, D3D12_ROOT_SIGNATURE_FLAGS flags
 
 	CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC desc = {};
 	desc.Init_1_0(m_NumParameters, m_RootParameters.data(), (uint32)m_StaticSamplers.size(), m_StaticSamplers.data(), flags);
-	RefCountPtr<ID3DBlob> pDataBlob, pErrorBlob;
+	ComPtr<ID3DBlob> pDataBlob, pErrorBlob;
 	D3D12SerializeVersionedRootSignature(&desc, pDataBlob.GetAddressOf(), pErrorBlob.GetAddressOf());
 	if (pErrorBlob)
 	{
@@ -187,7 +187,7 @@ void RootSignature::Finalize(const char* pName, D3D12_ROOT_SIGNATURE_FLAGS flags
 
 void RootSignature::FinalizeFromShader(const char* pName, const ShaderBase* pShader)
 {
-	RefCountPtr<ID3D12VersionedRootSignatureDeserializer> pDeserializer;
+	ComPtr<ID3D12VersionedRootSignatureDeserializer> pDeserializer;
 	VERIFY_HR_EX(D3D12CreateVersionedRootSignatureDeserializer(pShader->GetByteCode(), pShader->GetByteCodeSize(), IID_PPV_ARGS(pDeserializer.GetAddressOf())), GetParent()->GetDevice());
 	const D3D12_VERSIONED_ROOT_SIGNATURE_DESC* pDesc;
 	pDeserializer->GetRootSignatureDescAtVersion(D3D_ROOT_SIGNATURE_VERSION_1_0, &pDesc);

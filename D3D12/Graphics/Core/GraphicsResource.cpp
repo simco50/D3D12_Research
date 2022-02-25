@@ -15,7 +15,7 @@ GraphicsResource::GraphicsResource(GraphicsDevice* pParent, ID3D12Resource* pRes
 
 GraphicsResource::~GraphicsResource()
 {
-	Destroy();
+	Release();
 }
 
 void* GraphicsResource::Map(uint32 subResource /*= 0*/, uint64 readFrom /*= 0*/, uint64 readTo /*= 0*/)
@@ -35,7 +35,7 @@ void GraphicsResource::Unmap(uint32 subResource /*= 0*/, uint64 writtenFrom /*= 
 	m_pMappedData = nullptr;
 }
 
-void GraphicsResource::Destroy()
+void GraphicsResource::Release()
 {
 	if (m_pResource)
 	{

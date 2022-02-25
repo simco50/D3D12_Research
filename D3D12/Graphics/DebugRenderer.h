@@ -71,8 +71,8 @@ private:
 	std::vector<DebugLine> m_Lines;
 	std::vector<DebugTriangle> m_Triangles;
 
-	RefCountPtr<PipelineState> m_pTrianglesPSO;
-	RefCountPtr<PipelineState> m_pLinesPSO;
-	RefCountPtr<RootSignature> m_pRS;
+	PipelineState* m_pTrianglesPSO = nullptr;
+	PipelineState* m_pLinesPSO = nullptr;
+	std::unique_ptr<RootSignature> m_pRS;
 	DebugRenderer() = default;
 };

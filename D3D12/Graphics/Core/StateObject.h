@@ -72,8 +72,8 @@ private:
 	void OnLibraryReloaded(ShaderLibrary* pOldShaderLibrary, ShaderLibrary* pNewShaderLibrary);
 
 	bool m_NeedsReload = false;
-	RefCountPtr<ID3D12StateObject> m_pStateObject;
-	RefCountPtr<ID3D12StateObjectProperties> m_pStateObjectProperties;
+	ComPtr<ID3D12StateObject> m_pStateObject;
+	ComPtr<ID3D12StateObjectProperties> m_pStateObjectProperties;
 	StateObjectInitializer m_Desc;
 	DelegateHandle m_ReloadHandle;
 };

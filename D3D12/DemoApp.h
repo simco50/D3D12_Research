@@ -52,11 +52,11 @@ private:
 
 	void UploadSceneData(CommandContext& context);
 
-	Texture* GetDepthStencil() const { return m_pDepthStencil; }
-	Texture* GetCurrentRenderTarget() const { return m_pHDRRenderTarget; }
+	Texture* GetDepthStencil() const { return m_pDepthStencil.get(); }
+	Texture* GetCurrentRenderTarget() const { return m_pHDRRenderTarget.get(); }
 
-	RefCountPtr<GraphicsDevice> m_pDevice;
-	RefCountPtr<SwapChain> m_pSwapchain;
+	std::unique_ptr<GraphicsDevice> m_pDevice;
+	std::unique_ptr<SwapChain> m_pSwapchain;
 
 	uint32 m_WindowWidth;
 	uint32 m_WindowHeight;
@@ -64,14 +64,14 @@ private:
 	uint32 m_Frame = 0;
 	std::array<float, 180> m_FrameTimes{};
 
-	RefCountPtr<Texture> m_pHDRRenderTarget;
-	RefCountPtr<Texture> m_pPreviousColor;
-	RefCountPtr<Texture> m_pTonemapTarget;
-	RefCountPtr<Texture> m_pDepthStencil;
-	RefCountPtr<Texture> m_pTAASource;
-	RefCountPtr<Texture> m_pVelocity;
-	RefCountPtr<Texture> m_pNormals;
-	std::vector<RefCountPtr<Texture>> m_ShadowMaps;
+	std::unique_ptr<Texture> m_pHDRRenderTarget;
+	std::unique_ptr<Texture> m_pPreviousColor;
+	std::unique_ptr<Texture> m_pTonemapTarget;
+	std::unique_ptr<Texture> m_pDepthStencil;
+	std::unique_ptr<Texture> m_pTAASource;
+	std::unique_ptr<Texture> m_pVelocity;
+	std::unique_ptr<Texture> m_pNormals;
+	std::vector<std::unique_ptr<Texture>> m_ShadowMaps;
 
 	std::unique_ptr<ImGuiRenderer> m_pImGuiRenderer;
 	std::unique_ptr<ClusteredForward> m_pClusteredForward;
@@ -91,97 +91,97 @@ private:
 		uint32 Width;
 		uint32 Height;
 		uint32 RowPitch;
-		RefCountPtr<Buffer> pBuffer;
+		Buffer* pBuffer;
 	};
 	std::queue<ScreenshotRequest> m_ScreenshotBuffers;
 	RenderPath m_RenderPath = RenderPath::Visibility;
 
 	std::vector<std::unique_ptr<Mesh>> m_Meshes;
-	RefCountPtr<Buffer> m_pTLAS;
-	RefCountPtr<Buffer> m_pTLASScratch;
+	std::unique_ptr<Buffer> m_pTLAS;
+	std::unique_ptr<Buffer> m_pTLASScratch;
 
 	//Shadow mapping
-	RefCountPtr<RootSignature> m_pShadowsRS;
-	RefCountPtr<PipelineState> m_pShadowsOpaquePSO = nullptr;
-	RefCountPtr<PipelineState> m_pShadowsAlphaMaskPSO = nullptr;
+	std::unique_ptr<RootSignature> m_pShadowsRS;
+	PipelineState* m_pShadowsOpaquePSO = nullptr;
+	PipelineState* m_pShadowsAlphaMaskPSO = nullptr;
 
 	//Depth Prepass
-	RefCountPtr<RootSignature> m_pDepthPrepassRS;
-	RefCountPtr<PipelineState> m_pDepthPrepassOpaquePSO = nullptr;
-	RefCountPtr<PipelineState> m_pDepthPrepassAlphaMaskPSO = nullptr;
+	std::unique_ptr<RootSignature> m_pDepthPrepassRS;
+	PipelineState* m_pDepthPrepassOpaquePSO = nullptr;
+	PipelineState* m_pDepthPrepassAlphaMaskPSO = nullptr;
 
 	//MSAA Depth resolve
-	RefCountPtr<RootSignature> m_pResolveDepthRS;
-	RefCountPtr<PipelineState> m_pResolveDepthPSO = nullptr;
+	std::unique_ptr<RootSignature> m_pResolveDepthRS;
+	PipelineState* m_pResolveDepthPSO = nullptr;
 
 	//Tonemapping
-	RefCountPtr<Texture> m_pDownscaledColor;
-	RefCountPtr<RootSignature> m_pLuminanceHistogramRS;
-	RefCountPtr<PipelineState> m_pLuminanceHistogramPSO = nullptr;
-	RefCountPtr<RootSignature> m_pAverageLuminanceRS;
-	RefCountPtr<PipelineState> m_pAverageLuminancePSO = nullptr;
-	RefCountPtr<RootSignature> m_pToneMapRS;
-	RefCountPtr<PipelineState> m_pToneMapPSO = nullptr;
-	RefCountPtr<PipelineState> m_pDrawHistogramPSO = nullptr;
-	RefCountPtr<RootSignature> m_pDrawHistogramRS;
-	RefCountPtr<Buffer> m_pLuminanceHistogram;
-	RefCountPtr<Buffer> m_pAverageLuminance;
-	RefCountPtr<Texture> m_pDebugHistogramTexture;
+	std::unique_ptr<Texture> m_pDownscaledColor;
+	std::unique_ptr<RootSignature> m_pLuminanceHistogramRS;
+	PipelineState* m_pLuminanceHistogramPSO = nullptr;
+	std::unique_ptr<RootSignature> m_pAverageLuminanceRS;
+	PipelineState* m_pAverageLuminancePSO = nullptr;
+	std::unique_ptr<RootSignature> m_pToneMapRS;
+	PipelineState* m_pToneMapPSO = nullptr;
+	PipelineState* m_pDrawHistogramPSO = nullptr;
+	std::unique_ptr<RootSignature> m_pDrawHistogramRS;
+	std::unique_ptr<Buffer> m_pLuminanceHistogram;
+	std::unique_ptr<Buffer> m_pAverageLuminance;
+	std::unique_ptr<Texture> m_pDebugHistogramTexture;
 
 	//SSAO
-	RefCountPtr<Texture> m_pAmbientOcclusion;
+	std::unique_ptr<Texture> m_pAmbientOcclusion;
 
 	//Mip generation
-	RefCountPtr<PipelineState> m_pGenerateMipsPSO = nullptr;
-	RefCountPtr<RootSignature> m_pGenerateMipsRS;
+	PipelineState* m_pGenerateMipsPSO = nullptr;
+	std::unique_ptr<RootSignature> m_pGenerateMipsRS;
 
 	//Depth Reduction
-	RefCountPtr<PipelineState> m_pPrepareReduceDepthPSO = nullptr;
-	RefCountPtr<PipelineState> m_pPrepareReduceDepthMsaaPSO = nullptr;
-	RefCountPtr<PipelineState> m_pReduceDepthPSO = nullptr;
-	RefCountPtr<RootSignature> m_pReduceDepthRS;
-	std::vector<RefCountPtr<Texture>> m_ReductionTargets;
-	std::vector<RefCountPtr<Buffer>> m_ReductionReadbackTargets;
+	PipelineState* m_pPrepareReduceDepthPSO = nullptr;
+	PipelineState* m_pPrepareReduceDepthMsaaPSO = nullptr;
+	PipelineState* m_pReduceDepthPSO = nullptr;
+	std::unique_ptr<RootSignature> m_pReduceDepthRS;
+	std::vector<std::unique_ptr<Texture>> m_ReductionTargets;
+	std::vector<std::unique_ptr<Buffer>> m_ReductionReadbackTargets;
 
 	//Camera motion
-	RefCountPtr<PipelineState> m_pCameraMotionPSO = nullptr;
-	RefCountPtr<RootSignature> m_pCameraMotionRS;
+	PipelineState* m_pCameraMotionPSO = nullptr;
+	std::unique_ptr<RootSignature> m_pCameraMotionRS;
 
 	//TAA
-	RefCountPtr<PipelineState> m_pTemporalResolvePSO = nullptr;
-	RefCountPtr<RootSignature> m_pTemporalResolveRS;
+	PipelineState* m_pTemporalResolvePSO = nullptr;
+	std::unique_ptr<RootSignature> m_pTemporalResolveRS;
 
 	//Sky
-	RefCountPtr<RootSignature> m_pSkyboxRS;
-	RefCountPtr<PipelineState> m_pSkyboxPSO = nullptr;
+	std::unique_ptr<RootSignature> m_pSkyboxRS;
+	PipelineState* m_pSkyboxPSO = nullptr;
 
 	//Particles
 	std::unique_ptr<GpuParticles> m_pParticles;
 
 	//Light data
-	RefCountPtr<Buffer> m_pMaterialBuffer;
-	RefCountPtr<Buffer> m_pMeshBuffer;
-	RefCountPtr<Buffer> m_pMeshInstanceBuffer;
-	RefCountPtr<Buffer> m_pTransformsBuffer;
+	std::unique_ptr<Buffer> m_pMaterialBuffer;
+	std::unique_ptr<Buffer> m_pMeshBuffer;
+	std::unique_ptr<Buffer> m_pMeshInstanceBuffer;
+	std::unique_ptr<Buffer> m_pTransformsBuffer;
 	std::vector<Light> m_Lights;
-	RefCountPtr<Buffer> m_pLightBuffer;
+	std::unique_ptr<Buffer> m_pLightBuffer;
 
 	//Bloom
-	RefCountPtr<PipelineState> m_pBloomSeparatePSO = nullptr;
-	RefCountPtr<PipelineState> m_pBloomMipChainPSO = nullptr;
-	RefCountPtr<RootSignature> m_pBloomRS;
-	RefCountPtr<Texture> m_pBloomTexture;
-	RefCountPtr<Texture> m_pBloomIntermediateTexture;
+	PipelineState* m_pBloomSeparatePSO = nullptr;
+	PipelineState* m_pBloomMipChainPSO = nullptr;
+	std::unique_ptr<RootSignature> m_pBloomRS;
+	std::unique_ptr<Texture> m_pBloomTexture;
+	std::unique_ptr<Texture> m_pBloomIntermediateTexture;
 	std::vector<UnorderedAccessView*> m_pBloomUAVs;
 	std::vector<UnorderedAccessView*> m_pBloomIntermediateUAVs;
 
 	// Visibility buffer
-	RefCountPtr<RootSignature> m_pVisibilityRenderingRS;
-	RefCountPtr<PipelineState> m_pVisibilityRenderingPSO = nullptr;
-	RefCountPtr<PipelineState> m_pVisibilityRenderingMaskedPSO = nullptr;
-	RefCountPtr<Texture> m_pVisibilityTexture;
-	RefCountPtr<RootSignature> m_pVisibilityShadingRS;
-	RefCountPtr<PipelineState> m_pVisibilityShadingPSO = nullptr;
+	std::unique_ptr<RootSignature> m_pVisibilityRenderingRS;
+	PipelineState* m_pVisibilityRenderingPSO = nullptr;
+	PipelineState* m_pVisibilityRenderingMaskedPSO = nullptr;
+	std::unique_ptr<Texture> m_pVisibilityTexture;
+	std::unique_ptr<RootSignature> m_pVisibilityShadingRS;
+	PipelineState* m_pVisibilityShadingPSO = nullptr;
 
 	Texture* m_pVisualizeTexture = nullptr;
 	SceneView m_SceneData;

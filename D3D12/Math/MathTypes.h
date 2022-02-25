@@ -60,9 +60,6 @@ struct TIntVector4
 	TIntVector4(const Vector4& v)
 		: x((T)v.x), y((T)v.y), z((T)v.z), w((T)v.w)
 	{}
-	TIntVector4(const TIntVector3<T>& rhs, T w = {})
-		: x(rhs.x), y(rhs.y), z(rhs.z), w(w)
-	{}
 	T x, y, z, w;
 };
 

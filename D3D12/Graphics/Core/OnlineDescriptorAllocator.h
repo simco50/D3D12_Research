@@ -37,7 +37,7 @@ public:
 	DescriptorHandle GetStartHandle() const { return m_StartHandle; }
 
 private:
-	RefCountPtr<ID3D12DescriptorHeap> m_pHeap;
+	ComPtr<ID3D12DescriptorHeap> m_pHeap;
 	D3D12_DESCRIPTOR_HEAP_TYPE m_Type;
 	uint32 m_DescriptorSize = 0;
 	DescriptorHandle m_StartHandle;
