@@ -652,12 +652,6 @@ void DemoApp::Update()
 	}
 
 	RGGraph graph(m_pDevice);
-	struct MainData
-	{
-		RGResourceHandle DepthStencil;
-	};
-	MainData Data;
-	Data.DepthStencil = graph.ImportTexture("Depth Stencil", GetDepthStencil());
 
 	if (m_RenderPath == RenderPath::Clustered || m_RenderPath == RenderPath::Tiled || m_RenderPath == RenderPath::Visibility)
 	{
@@ -708,10 +702,9 @@ void DemoApp::Update()
 		// - Optimization that prevents wasteful lighting calculations during the base pass
 		// - Required for light culling
 		RGPassBuilder prepass = graph.AddPass("Depth Prepass");
-		Data.DepthStencil = prepass.Write(Data.DepthStencil);
 		prepass.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
-				Texture* pDepthStencil = resources.GetTexture(Data.DepthStencil);
+				Texture* pDepthStencil = GetDepthStencil();
 				context.InsertResourceBarrier(pDepthStencil, D3D12_RESOURCE_STATE_DEPTH_WRITE);
 
 				context.BeginRenderPass(RenderPassInfo(pDepthStencil, RenderPassAccess::Clear_Store));
@@ -987,11 +980,9 @@ void DemoApp::Update()
 	if (Tweakables::g_SDSM)
 	{
 		RGPassBuilder depthReduce = graph.AddPass("Depth Reduce");
-		Data.DepthStencil = depthReduce.Write(Data.DepthStencil);
 		depthReduce.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
-				Texture* pDepthStencil = resources.GetTexture(Data.DepthStencil);
-				Texture* pSource = pDepthStencil;
+				Texture* pSource = GetDepthStencil();
 				Texture* pTarget = m_ReductionTargets[0];
 
 				context.InsertResourceBarrier(pSource, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
