@@ -788,41 +788,27 @@ void DemoApp::Update()
 	{
 		//[WITH MSAA] DEPTH RESOLVE
 		// - If MSAA is enabled, run a compute shader to resolve the depth buffer
-#if 0
-		if (m_SampleCount > 1)
+		if (m_pDepthStencil->GetDesc().SampleCount > 1)
 		{
 			RGPassBuilder depthResolve = graph.AddPass("Depth Resolve");
-			Data.DepthStencil = depthResolve.Read(Data.DepthStencil);
-			Data.DepthStencilResolved = depthResolve.Write(Data.DepthStencilResolved);
 			depthResolve.Bind([=](CommandContext& context, const RGPassResources& resources)
 				{
-					Texture* pDepthTexture = resources.GetTexture(Data.DepthStencil);
-					Texture* pResolvedDepthTexture = resources.GetTexture(Data.DepthStencilResolved);
-					context.InsertResourceBarrier(pDepthTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-					context.InsertResourceBarrier(pResolvedDepthTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+					context.InsertResourceBarrier(m_pDepthStencil, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+					context.InsertResourceBarrier(m_pResolvedDepthStencil, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
 					context.SetComputeRootSignature(m_pResolveDepthRS);
 					context.SetPipelineState(m_pResolveDepthPSO);
 
-					context.BindResource(0, 0, pResolvedDepthTexture->GetUAV());
-					context.BindResource(1, 0, resources.GetTexture(Data.DepthStencil)->GetSRV());
+					context.BindResource(0, 0, m_pResolvedDepthStencil->GetUAV());
+					context.BindResource(1, 0, m_pDepthStencil->GetSRV());
 
-					context.Dispatch(ComputeUtils::GetNumThreadGroups(pDepthTexture->GetWidth(), 16, pDepthTexture->GetHeight(), 16));
+					context.Dispatch(ComputeUtils::GetNumThreadGroups(m_pDepthStencil->GetWidth(), 16, m_pDepthStencil->GetHeight(), 16));
 
-					context.InsertResourceBarrier(pResolvedDepthTexture, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
-					context.InsertResourceBarrier(pDepthTexture, D3D12_RESOURCE_STATE_DEPTH_READ);
+					context.InsertResourceBarrier(m_pResolvedDepthStencil, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
+					context.InsertResourceBarrier(m_pDepthStencil, D3D12_RESOURCE_STATE_DEPTH_READ);
 					context.FlushResourceBarriers();
 				});
 		}
-		else
-		{
-			RGPassBuilder depthResolve = graph.AddPass("Depth Resolve");
-			depthResolve.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
-				{
-					context.CopyTexture(GetDepthStencil(), GetResolvedDepthStencil());
-				});
-		}
-#endif
 
 		RGPassBuilder cameraMotion = graph.AddPass("Camera Motion");
 		cameraMotion.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
@@ -941,18 +927,16 @@ void DemoApp::Update()
 		m_pPathTracing->Render(graph, m_SceneData, GetCurrentRenderTarget());
 	}
 
-	RGPassBuilder resolve = graph.AddPass("Resolve");
+	RGPassBuilder resolve = graph.AddPass("Color Resolve");
 	resolve.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
 		{
-#if 0
-			if (m_SampleCount > 1)
+			if (m_pHDRRenderTarget->GetDesc().SampleCount > 1)
 			{
 				context.InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RESOLVE_SOURCE);
 				Texture* pTarget = Tweakables::g_TAA.Get() ? m_pTAASource : m_pHDRRenderTarget;
 				context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_RESOLVE_DEST);
 				context.ResolveResource(GetCurrentRenderTarget(), 0, pTarget, 0, pTarget->GetFormat());
 			}
-#endif
 
 			if (!Tweakables::g_TAA.Get())
 			{
@@ -1150,7 +1134,7 @@ void DemoApp::Update()
 				{
 					Texture* pTarget = m_pBloomTexture;
 
-					UnorderedAccessView** pTargetUAVs = m_pBloomUAVs.data();
+					RefCountPtr<UnorderedAccessView>* pTargetUAVs = m_pBloomUAVs.data();
 
 					context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 					context.InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
@@ -1192,8 +1176,8 @@ void DemoApp::Update()
 					Texture* pSource = m_pBloomTexture;
 					Texture* pTarget = m_pBloomIntermediateTexture;
 
-					UnorderedAccessView** pSourceUAVs = m_pBloomUAVs.data();
-					UnorderedAccessView** pTargetUAVs = m_pBloomIntermediateUAVs.data();
+					RefCountPtr<UnorderedAccessView>* pSourceUAVs = m_pBloomUAVs.data();
+					RefCountPtr<UnorderedAccessView>* pTargetUAVs = m_pBloomIntermediateUAVs.data();
 
 					context.SetComputeRootSignature(m_pBloomRS);
 					context.SetPipelineState(m_pBloomMipChainPSO);
@@ -1418,10 +1402,8 @@ void DemoApp::OnResizeViewport(int width, int height)
 	m_pBloomIntermediateUAVs.resize(mips);
 	for (uint32 i = 0; i < mips; ++i)
 	{
-		m_pBloomUAVs[i] = nullptr;
-		m_pBloomTexture->CreateUAV(&m_pBloomUAVs[i], TextureUAVDesc((uint8)i));
-		m_pBloomIntermediateUAVs[i] = nullptr;
-		m_pBloomIntermediateTexture->CreateUAV(&m_pBloomIntermediateUAVs[i], TextureUAVDesc((uint8)i));
+		m_pBloomUAVs[i] = m_pDevice->CreateUAV(m_pBloomTexture, TextureUAVDesc((uint8)i));
+		m_pBloomIntermediateUAVs[i] = m_pDevice->CreateUAV(m_pBloomIntermediateTexture, TextureUAVDesc((uint8)i));
 	}
 
 	m_pCamera->SetViewport(FloatRect(0, 0, (float)width, (float)height));

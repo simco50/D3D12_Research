@@ -137,9 +137,6 @@ public:
 	inline uint32 GetNumElements() const { return m_Desc.NumElements(); }
 	inline const BufferDesc& GetDesc() const { return m_Desc; }
 
-	void CreateUAV(UnorderedAccessView** pView, const BufferUAVDesc& desc);
-	void CreateSRV(ShaderResourceView** pView, const BufferSRVDesc& desc);
-
 	ShaderResourceView* GetSRV() const { return m_pSrv; };
 	UnorderedAccessView* GetUAV() const { return m_pUav; };
 
@@ -147,8 +144,8 @@ public:
 	uint32 GetUAVIndex() const;
 
 protected:
-	UnorderedAccessView* m_pUav = nullptr;
-	ShaderResourceView* m_pSrv = nullptr;
+	RefCountPtr<UnorderedAccessView> m_pUav;
+	RefCountPtr<ShaderResourceView> m_pSrv;
 
 	BufferDesc m_Desc;
 };

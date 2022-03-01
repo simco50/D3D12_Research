@@ -29,7 +29,7 @@ private:
 	RefCountPtr<RootSignature> m_pComputeLightCullRS;
 	RefCountPtr<PipelineState> m_pComputeLightCullPSO;
 	RefCountPtr<Buffer> m_pLightIndexCounter;
-	UnorderedAccessView* m_pLightIndexCounterRawUAV = nullptr;
+	RefCountPtr<UnorderedAccessView> m_pLightIndexCounterRawUAV;
 	RefCountPtr<Buffer> m_pLightIndexListBufferOpaque;
 	RefCountPtr<Texture> m_pLightGridOpaque;
 	RefCountPtr<Buffer> m_pLightIndexListBufferTransparant;

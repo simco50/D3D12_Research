@@ -54,8 +54,7 @@ void ClusteredForward::OnResize(int windowWidth, int windowHeight)
 	// LightGrid.x : Offset
 	// LightGrid.y : Count
 	m_pLightGrid = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(2 * totalClusterCount, sizeof(uint32)), "Light Grid");
-	m_pLightGridRawUAV = nullptr;
-	m_pLightGrid->CreateUAV(&m_pLightGridRawUAV, BufferUAVDesc::CreateRaw());
+	m_pLightGridRawUAV = m_pDevice->CreateUAV(m_pLightGrid, BufferUAVDesc::CreateRaw());
 	m_pDebugLightGrid = m_pDevice->CreateBuffer(m_pLightGrid->GetDesc(), "Debug Light Grid");
 
 	TextureDesc volumeDesc = TextureDesc::Create3D(

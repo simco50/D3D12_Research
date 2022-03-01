@@ -112,6 +112,5 @@ protected:
 	bool m_ImmediateDelete = false;
 	ID3D12Resource* m_pResource = nullptr;
 	void* m_pMappedData = nullptr;
-	std::vector<std::unique_ptr<ResourceView>> m_Descriptors;
 	ResourceState m_ResourceState;
 };

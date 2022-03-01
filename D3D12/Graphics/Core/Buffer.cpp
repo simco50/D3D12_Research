@@ -16,26 +16,6 @@ Buffer::Buffer(GraphicsDevice* pParent, ID3D12Resource* pResource, D3D12_RESOURC
 
 }
 
-void Buffer::CreateUAV(UnorderedAccessView** pView, const BufferUAVDesc& desc)
-{
-	if (*pView == nullptr)
-	{
-		m_Descriptors.push_back(std::make_unique<UnorderedAccessView>());
-		*pView = static_cast<UnorderedAccessView*>(m_Descriptors.back().get());
-	}
-	(*pView)->Create(this, desc);
-}
-
-void Buffer::CreateSRV(ShaderResourceView** pView, const BufferSRVDesc& desc)
-{
-	if (*pView == nullptr)
-	{
-		m_Descriptors.push_back(std::make_unique<ShaderResourceView>());
-		*pView = static_cast<ShaderResourceView*>(m_Descriptors.back().get());
-	}
-	(*pView)->Create(this, desc);
-}
-
 uint32 Buffer::GetSRVIndex() const
 {
 	return m_pSrv ? m_pSrv->GetHeapIndex() : DescriptorHandle::InvalidHeapIndex;

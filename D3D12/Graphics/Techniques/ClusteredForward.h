@@ -18,7 +18,7 @@ struct ClusteredLightCullData
 	RefCountPtr<Buffer> pAABBs;
 	RefCountPtr<Buffer> pLightIndexGrid;
 	RefCountPtr<Buffer> pLightGrid;
-	UnorderedAccessView* pLightGridRawUAV = nullptr;
+	RefCountPtr<UnorderedAccessView> pLightGridRawUAV;
 	Vector2 LightGridParams;
 };
 
@@ -64,7 +64,7 @@ private:
 	RefCountPtr<CommandSignature> m_pLightCullingCommandSignature;
 	RefCountPtr<Buffer> m_pLightIndexGrid;
 	RefCountPtr<Buffer> m_pLightGrid;
-	UnorderedAccessView* m_pLightGridRawUAV = nullptr;
+	RefCountPtr<UnorderedAccessView> m_pLightGridRawUAV;
 
 	// Lighting
 	RefCountPtr<RootSignature> m_pDiffuseRS;

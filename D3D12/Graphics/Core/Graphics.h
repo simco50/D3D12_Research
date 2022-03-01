@@ -3,6 +3,7 @@
 #include "Shader.h"
 #include "DescriptorHandle.h"
 #include "GraphicsResource.h"
+#include "ResourceViews.h"
 
 class CommandQueue;
 class CommandContext;
@@ -204,6 +205,10 @@ public:
 	RefCountPtr<PipelineState> CreatePipeline(const PipelineStateInitializer& psoDesc);
 	RefCountPtr<PipelineState> CreatePipeline(Shader* pShader, RootSignature* pRootSignature);
 	RefCountPtr<StateObject> CreateStateObject(const StateObjectInitializer& stateDesc);
+	RefCountPtr<ShaderResourceView> CreateSRV(Buffer* pBuffer, const BufferSRVDesc& desc);
+	RefCountPtr<UnorderedAccessView> CreateUAV(Buffer* pBuffer, const BufferUAVDesc& desc);
+	RefCountPtr<ShaderResourceView> CreateSRV(Texture* pTexture, const TextureSRVDesc& desc);
+	RefCountPtr<UnorderedAccessView> CreateUAV(Texture* pTexture, const TextureUAVDesc& desc);
 
 	Shader* GetShader(const char* pShaderPath, ShaderType shaderType, const char* entryPoint = "", const std::vector<ShaderDefine>& defines = {});
 	ShaderLibrary* GetLibrary(const char* pShaderPath, const std::vector<ShaderDefine>& defines = {});

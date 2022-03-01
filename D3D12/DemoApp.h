@@ -68,6 +68,7 @@ private:
 	RefCountPtr<Texture> m_pPreviousColor;
 	RefCountPtr<Texture> m_pTonemapTarget;
 	RefCountPtr<Texture> m_pDepthStencil;
+	RefCountPtr<Texture> m_pResolvedDepthStencil;
 	RefCountPtr<Texture> m_pTAASource;
 	RefCountPtr<Texture> m_pVelocity;
 	RefCountPtr<Texture> m_pNormals;
@@ -172,8 +173,8 @@ private:
 	RefCountPtr<RootSignature> m_pBloomRS;
 	RefCountPtr<Texture> m_pBloomTexture;
 	RefCountPtr<Texture> m_pBloomIntermediateTexture;
-	std::vector<UnorderedAccessView*> m_pBloomUAVs;
-	std::vector<UnorderedAccessView*> m_pBloomIntermediateUAVs;
+	std::vector<RefCountPtr<UnorderedAccessView>> m_pBloomUAVs;
+	std::vector<RefCountPtr<UnorderedAccessView>> m_pBloomIntermediateUAVs;
 
 	// Visibility buffer
 	RefCountPtr<RootSignature> m_pVisibilityRenderingRS;

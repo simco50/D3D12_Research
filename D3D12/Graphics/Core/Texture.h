@@ -229,9 +229,6 @@ public:
 	uint32 GetMipLevels() const { return m_Desc.Mips; }
 	const TextureDesc& GetDesc() const { return m_Desc; }
 
-	void CreateUAV(UnorderedAccessView** pView, const TextureUAVDesc& desc);
-	void CreateSRV(ShaderResourceView** pView, const TextureSRVDesc& desc);
-
 	D3D12_CPU_DESCRIPTOR_HANDLE GetRTV() const;
 	D3D12_CPU_DESCRIPTOR_HANDLE GetDSV(bool writeable = true) const;
 	UnorderedAccessView* GetUAV() const { return m_pUav; }
@@ -243,14 +240,12 @@ public:
 	DXGI_FORMAT GetFormat() const { return m_Desc.Format; }
 	const ClearBinding& GetClearBinding() const { return m_Desc.ClearBindingValue; }
 
-	static DXGI_FORMAT GetSrvFormat(DXGI_FORMAT format);
-
 private:
 	TextureDesc m_Desc;
 
 	D3D12_CPU_DESCRIPTOR_HANDLE m_Rtv = {};
 	D3D12_CPU_DESCRIPTOR_HANDLE m_ReadOnlyDsv = {};
 
-	ShaderResourceView* m_pSrv = nullptr;
-	UnorderedAccessView* m_pUav = nullptr;
+	RefCountPtr<ShaderResourceView> m_pSrv;
+	RefCountPtr<UnorderedAccessView> m_pUav;
 };

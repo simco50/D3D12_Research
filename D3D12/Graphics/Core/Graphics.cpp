@@ -525,12 +525,12 @@ RefCountPtr<Texture> GraphicsDevice::CreateTexture(const TextureDesc& desc, cons
 
 	if (EnumHasAnyFlags(desc.Usage, TextureFlag::ShaderResource))
 	{
-		pTexture->CreateSRV(&pTexture->m_pSrv, TextureSRVDesc(0));
+		pTexture->m_pSrv = CreateSRV(pTexture, TextureSRVDesc(0));
 	}
 	if (EnumHasAnyFlags(desc.Usage, TextureFlag::UnorderedAccess))
 	{
 		TextureUAVDesc uavDesc(0);
-		pTexture->CreateUAV(&pTexture->m_pUav, uavDesc);
+		pTexture->m_pUav = CreateUAV(pTexture, uavDesc);
 	}
 	if (EnumHasAnyFlags(desc.Usage, TextureFlag::RenderTarget))
 	{
@@ -644,7 +644,7 @@ RefCountPtr<Texture> GraphicsDevice::CreateTextureForSwapchain(ID3D12Resource* p
 
 	pTexture->m_Rtv = GetParent()->AllocateDescriptor<D3D12_RENDER_TARGET_VIEW_DESC>();
 	GetParent()->GetDevice()->CreateRenderTargetView(pSwapchainResource, nullptr, pTexture->m_Rtv);
-	pTexture->CreateSRV(&pTexture->m_pSrv, TextureSRVDesc(0));
+	pTexture->m_pSrv = CreateSRV(pTexture, TextureSRVDesc(0));
 	return pTexture;
 }
 
@@ -759,17 +759,17 @@ RefCountPtr<Buffer> GraphicsDevice::CreateBuffer(const BufferDesc& desc, const c
 		if (EnumHasAnyFlags(desc.Usage, BufferFlag::Structured))
 		{
 			//Structured Buffer
-			pBuffer->CreateUAV(&pBuffer->m_pUav, BufferUAVDesc(DXGI_FORMAT_UNKNOWN, false, true));
+			pBuffer->m_pUav = CreateUAV(pBuffer, BufferUAVDesc(DXGI_FORMAT_UNKNOWN, false, true));
 		}
 		else if (EnumHasAnyFlags(desc.Usage, BufferFlag::ByteAddress))
 		{
 			//ByteAddress Buffer
-			pBuffer->CreateUAV(&pBuffer->m_pUav, BufferUAVDesc(DXGI_FORMAT_UNKNOWN, true, false));
+			pBuffer->m_pUav = CreateUAV(pBuffer, BufferUAVDesc(DXGI_FORMAT_UNKNOWN, true, false));
 		}
 		else
 		{
 			//Typed buffer
-			pBuffer->CreateUAV(&pBuffer->m_pUav, BufferUAVDesc(desc.Format, false, false));
+			pBuffer->m_pUav = CreateUAV(pBuffer, BufferUAVDesc(desc.Format, false, false));
 		}
 	}
 	if (EnumHasAnyFlags(desc.Usage, BufferFlag::ShaderResource | BufferFlag::AccelerationStructure))
@@ -777,17 +777,17 @@ RefCountPtr<Buffer> GraphicsDevice::CreateBuffer(const BufferDesc& desc, const c
 		if (EnumHasAnyFlags(desc.Usage, BufferFlag::Structured))
 		{
 			//Structured Buffer
-			pBuffer->CreateSRV(&pBuffer->m_pSrv, BufferSRVDesc(DXGI_FORMAT_UNKNOWN, false));
+			pBuffer->m_pSrv = CreateSRV(pBuffer, BufferSRVDesc(DXGI_FORMAT_UNKNOWN, false));
 		}
 		else if (EnumHasAnyFlags(desc.Usage, BufferFlag::ByteAddress))
 		{
 			//ByteAddress Buffer
-			pBuffer->CreateSRV(&pBuffer->m_pSrv, BufferSRVDesc(DXGI_FORMAT_UNKNOWN, true));
+			pBuffer->m_pSrv = CreateSRV(pBuffer, BufferSRVDesc(DXGI_FORMAT_UNKNOWN, true));
 		}
 		else
 		{
 			//Typed buffer
-			pBuffer->CreateSRV(&pBuffer->m_pSrv, BufferSRVDesc(desc.Format));
+			pBuffer->m_pSrv = CreateSRV(pBuffer, BufferSRVDesc(desc.Format));
 		}
 	}
 
@@ -829,6 +829,210 @@ RefCountPtr<StateObject> GraphicsDevice::CreateStateObject(const StateObjectInit
 	StateObject* pStateObject = new StateObject(this);
 	pStateObject->Create(stateDesc);
 	return pStateObject;
+}
+
+RefCountPtr<ShaderResourceView> GraphicsDevice::CreateSRV(Buffer* pBuffer, const BufferSRVDesc& desc)
+{
+	check(pBuffer);
+	const BufferDesc& bufferDesc = pBuffer->GetDesc();
+
+	D3D12_CPU_DESCRIPTOR_HANDLE descriptor = AllocateDescriptor<D3D12_SHADER_RESOURCE_VIEW_DESC>();
+
+	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+
+	if (EnumHasAnyFlags(bufferDesc.Usage, BufferFlag::AccelerationStructure))
+	{
+		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_RAYTRACING_ACCELERATION_STRUCTURE;
+		srvDesc.Format = DXGI_FORMAT_UNKNOWN;
+		srvDesc.RaytracingAccelerationStructure.Location = pBuffer->GetGpuHandle();
+
+		m_pDevice->CreateShaderResourceView(nullptr, &srvDesc, descriptor);
+	}
+	else
+	{
+		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+		if (desc.Raw)
+		{
+			srvDesc.Format = DXGI_FORMAT_R32_TYPELESS;
+			srvDesc.Buffer.StructureByteStride = 0;
+			srvDesc.Buffer.FirstElement = desc.ElementOffset / 4;
+			srvDesc.Buffer.NumElements = desc.NumElements > 0 ? desc.NumElements / 4 : (uint32)(bufferDesc.Size / 4);
+			srvDesc.Buffer.Flags |= D3D12_BUFFER_SRV_FLAG_RAW;
+		}
+		else
+		{
+			srvDesc.Format = desc.Format;
+			srvDesc.Buffer.StructureByteStride = bufferDesc.ElementSize;
+			srvDesc.Buffer.FirstElement = desc.ElementOffset;
+			srvDesc.Buffer.NumElements = desc.NumElements > 0 ? desc.NumElements : bufferDesc.NumElements();
+		}
+
+		m_pDevice->CreateShaderResourceView(pBuffer->GetResource(), &srvDesc, descriptor);
+	}
+
+	DescriptorHandle gpuDescriptor = StoreViewDescriptor(descriptor);
+	return new ShaderResourceView(pBuffer, descriptor, gpuDescriptor);
+}
+
+RefCountPtr<UnorderedAccessView> GraphicsDevice::CreateUAV(Buffer* pBuffer, const BufferUAVDesc& desc)
+{
+	check(pBuffer);
+	const BufferDesc& bufferDesc = pBuffer->GetDesc();
+
+	D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
+	uavDesc.Format = desc.Format;
+	uavDesc.Buffer.CounterOffsetInBytes = 0;
+	uavDesc.Buffer.FirstElement = 0;
+	uavDesc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_NONE;
+	uavDesc.Buffer.NumElements = bufferDesc.NumElements();
+	uavDesc.Buffer.StructureByteStride = 0;
+	uavDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
+
+	if (desc.Raw)
+	{
+		uavDesc.Buffer.Flags |= D3D12_BUFFER_UAV_FLAG_RAW;
+		uavDesc.Format = DXGI_FORMAT_R32_TYPELESS;
+		uavDesc.Buffer.NumElements *= bufferDesc.ElementSize / 4;
+	}
+	else
+	{
+		uavDesc.Buffer.StructureByteStride = bufferDesc.ElementSize;
+	}
+
+	RefCountPtr<Buffer> pCounter;
+	if (desc.Counter)
+	{
+		std::string name = pBuffer->GetName() + " - Counter";
+		pCounter = GetParent()->GetParent()->CreateBuffer(BufferDesc::CreateByteAddress(4), name.c_str());
+	}
+
+	D3D12_CPU_DESCRIPTOR_HANDLE descriptor = AllocateDescriptor<D3D12_UNORDERED_ACCESS_VIEW_DESC>();
+	m_pDevice->CreateUnorderedAccessView(pBuffer->GetResource(), pCounter ? pCounter->GetResource() : nullptr, &uavDesc, descriptor);
+	DescriptorHandle gpuDescriptor = StoreViewDescriptor(descriptor);
+	return new UnorderedAccessView(pBuffer, descriptor, gpuDescriptor, pCounter);
+}
+
+RefCountPtr<ShaderResourceView> GraphicsDevice::CreateSRV(Texture* pTexture, const TextureSRVDesc& desc)
+{
+	check(pTexture);
+	const TextureDesc& textureDesc = pTexture->GetDesc();
+
+	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+	srvDesc.Format = D3D::GetSrvFormatFromDepth(textureDesc.Format);
+
+	switch (textureDesc.Dimensions)
+	{
+	case TextureDimension::Texture1D:
+		srvDesc.Texture1D.MipLevels = textureDesc.Mips;
+		srvDesc.Texture1D.MostDetailedMip = 0;
+		srvDesc.Texture1D.ResourceMinLODClamp = 0;
+		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE1D;
+		break;
+	case TextureDimension::Texture1DArray:
+		srvDesc.Texture1DArray.ArraySize = textureDesc.DepthOrArraySize;
+		srvDesc.Texture1DArray.FirstArraySlice = 0;
+		srvDesc.Texture1DArray.MipLevels = textureDesc.Mips;
+		srvDesc.Texture1DArray.MostDetailedMip = 0;
+		srvDesc.Texture1DArray.ResourceMinLODClamp = 0;
+		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE1DARRAY;
+		break;
+	case TextureDimension::Texture2D:
+		srvDesc.Texture2D.MipLevels = textureDesc.Mips;
+		srvDesc.Texture2D.MostDetailedMip = 0;
+		srvDesc.Texture2D.PlaneSlice = 0;
+		srvDesc.Texture2D.ResourceMinLODClamp = 0;
+		srvDesc.ViewDimension = textureDesc.SampleCount > 1 ? D3D12_SRV_DIMENSION_TEXTURE2DMS : D3D12_SRV_DIMENSION_TEXTURE2D;
+		break;
+	case TextureDimension::Texture2DArray:
+		srvDesc.Texture2DArray.MipLevels = textureDesc.Mips;
+		srvDesc.Texture2DArray.MostDetailedMip = 0;
+		srvDesc.Texture2DArray.PlaneSlice = 0;
+		srvDesc.Texture2DArray.ResourceMinLODClamp = 0;
+		srvDesc.Texture2DArray.ArraySize = textureDesc.DepthOrArraySize;
+		srvDesc.Texture2DArray.FirstArraySlice = 0;
+		srvDesc.ViewDimension = textureDesc.SampleCount > 1 ? D3D12_SRV_DIMENSION_TEXTURE2DMSARRAY : D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
+		break;
+	case TextureDimension::Texture3D:
+		srvDesc.Texture3D.MipLevels = textureDesc.Mips;
+		srvDesc.Texture3D.MostDetailedMip = 0;
+		srvDesc.Texture3D.ResourceMinLODClamp = 0;
+		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE3D;
+		break;
+	case TextureDimension::TextureCube:
+		srvDesc.TextureCube.MipLevels = textureDesc.Mips;
+		srvDesc.TextureCube.MostDetailedMip = 0;
+		srvDesc.TextureCube.ResourceMinLODClamp = 0;
+		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
+		break;
+	case TextureDimension::TextureCubeArray:
+		srvDesc.TextureCubeArray.MipLevels = textureDesc.Mips;
+		srvDesc.TextureCubeArray.MostDetailedMip = 0;
+		srvDesc.TextureCubeArray.ResourceMinLODClamp = 0;
+		srvDesc.TextureCubeArray.First2DArrayFace = 0;
+		srvDesc.TextureCubeArray.NumCubes = textureDesc.DepthOrArraySize;
+		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBEARRAY;
+		break;
+	default:
+		break;
+	}
+
+	D3D12_CPU_DESCRIPTOR_HANDLE descriptor = AllocateDescriptor<D3D12_SHADER_RESOURCE_VIEW_DESC>();
+	m_pDevice->CreateShaderResourceView(pTexture->GetResource(), &srvDesc, descriptor);
+	DescriptorHandle gpuDescriptor = StoreViewDescriptor(descriptor);
+	return new ShaderResourceView(pTexture, descriptor, gpuDescriptor);
+}
+
+RefCountPtr<UnorderedAccessView> GraphicsDevice::CreateUAV(Texture* pTexture, const TextureUAVDesc& desc)
+{
+	check(pTexture);
+	const TextureDesc& textureDesc = pTexture->GetDesc();
+
+	D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
+	switch (textureDesc.Dimensions)
+	{
+	case TextureDimension::Texture1D:
+		uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE1D;
+		break;
+	case TextureDimension::Texture1DArray:
+		uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE1DARRAY;
+		break;
+	case TextureDimension::Texture2D:
+		uavDesc.Texture2D.PlaneSlice = 0;
+		uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+		break;
+	case TextureDimension::Texture2DArray:
+		uavDesc.Texture2DArray.ArraySize = textureDesc.DepthOrArraySize;
+		uavDesc.Texture2DArray.FirstArraySlice = 0;
+		uavDesc.Texture2DArray.PlaneSlice = 0;
+		uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2DARRAY;
+		break;
+	case TextureDimension::Texture3D:
+		uavDesc.Texture3D.FirstWSlice = 0;
+		uavDesc.Texture3D.WSize = textureDesc.DepthOrArraySize;
+		uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE3D;
+		break;
+	case TextureDimension::TextureCube:
+	case TextureDimension::TextureCubeArray:
+		uavDesc.Texture2DArray.ArraySize = textureDesc.DepthOrArraySize * 6;
+		uavDesc.Texture2DArray.FirstArraySlice = 0;
+		uavDesc.Texture2DArray.PlaneSlice = 0;
+		uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2DARRAY;
+		break;
+	default:
+		break;
+	}
+	uavDesc.Texture1D.MipSlice = desc.MipLevel;
+	uavDesc.Texture1DArray.MipSlice = desc.MipLevel;
+	uavDesc.Texture2D.MipSlice = desc.MipLevel;
+	uavDesc.Texture2DArray.MipSlice = desc.MipLevel;
+	uavDesc.Texture3D.MipSlice = desc.MipLevel;
+
+	D3D12_CPU_DESCRIPTOR_HANDLE descriptor = pTexture->GetParent()->AllocateDescriptor<D3D12_UNORDERED_ACCESS_VIEW_DESC>();
+	m_pDevice->CreateUnorderedAccessView(pTexture->GetResource(), nullptr, &uavDesc, descriptor);
+	DescriptorHandle gpuDescriptor = StoreViewDescriptor(descriptor);
+	return new UnorderedAccessView(pTexture, descriptor, gpuDescriptor);
 }
 
 Shader* GraphicsDevice::GetShader(const char* pShaderPath, ShaderType shaderType, const char* pEntryPoint, const std::vector<ShaderDefine>& defines /*= {}*/)
