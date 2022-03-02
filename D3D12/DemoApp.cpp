@@ -1404,15 +1404,12 @@ void DemoApp::InitializePipelines()
 	{
 		//Opaque
 		{
-			Shader* pVertexShader = m_pDevice->GetShader("DepthOnly.hlsl", ShaderType::Vertex, "VSMain");
-			Shader* pAlphaClipShader = m_pDevice->GetShader("DepthOnly.hlsl", ShaderType::Pixel, "PSMain");
-
 			m_pShadowsRS = new RootSignature(m_pDevice);
-			m_pShadowsRS->FinalizeFromShader("Shadow Mapping (Opaque)", pVertexShader);
+			m_pShadowsRS->FinalizeFromShader("Shadow Mapping (Opaque)", m_pDevice->GetShader("DepthOnly.hlsl", ShaderType::Vertex, "VSMain"));
 
 			PipelineStateInitializer psoDesc;
-			psoDesc.SetRootSignature(m_pShadowsRS->GetRootSignature());
-			psoDesc.SetVertexShader(pVertexShader);
+			psoDesc.SetRootSignature(m_pShadowsRS);
+			psoDesc.SetVertexShader("DepthOnly.hlsl", "VSMain");
 			psoDesc.SetRenderTargetFormats(nullptr, 0, DEPTH_STENCIL_SHADOW_FORMAT, 1);
 			psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
 			psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
@@ -1420,7 +1417,7 @@ void DemoApp::InitializePipelines()
 			psoDesc.SetName("Shadow Mapping Opaque");
 			m_pShadowsOpaquePSO = m_pDevice->CreatePipeline(psoDesc);
 
-			psoDesc.SetPixelShader(pAlphaClipShader);
+			psoDesc.SetPixelShader("DepthOnly.hlsl", "PSMain");
 			psoDesc.SetName("Shadow Mapping Alpha Mask");
 			m_pShadowsAlphaMaskPSO = m_pDevice->CreatePipeline(psoDesc);
 		}
@@ -1428,21 +1425,18 @@ void DemoApp::InitializePipelines()
 
 	//Depth prepass - Simple vertex shader to fill the depth buffer to optimize later passes
 	{
-		Shader* pVertexShader = m_pDevice->GetShader("DepthOnly.hlsl", ShaderType::Vertex, "VSMain");
-		Shader* pPixelShader = m_pDevice->GetShader("DepthOnly.hlsl", ShaderType::Pixel, "PSMain");
-
 		m_pDepthPrepassRS = new RootSignature(m_pDevice);
-		m_pDepthPrepassRS->FinalizeFromShader("Depth Prepass", pVertexShader);
+		m_pDepthPrepassRS->FinalizeFromShader("Depth Prepass", m_pDevice->GetShader("DepthOnly.hlsl", ShaderType::Vertex, "VSMain"));
 
 		PipelineStateInitializer psoDesc;
-		psoDesc.SetRootSignature(m_pDepthPrepassRS->GetRootSignature());
-		psoDesc.SetVertexShader(pVertexShader);
+		psoDesc.SetRootSignature(m_pDepthPrepassRS);
+		psoDesc.SetVertexShader("DepthOnly.hlsl", "VSMain");
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
 		psoDesc.SetRenderTargetFormats(nullptr, 0, DXGI_FORMAT_D32_FLOAT, 1);
 		psoDesc.SetName("Depth Prepass Opaque");
 		m_pDepthPrepassOpaquePSO = m_pDevice->CreatePipeline(psoDesc);
 
-		psoDesc.SetPixelShader(pPixelShader);
+		psoDesc.SetPixelShader("DepthOnly.hlsl", "PSMain");
 		psoDesc.SetName("Depth Prepass Alpha Mask");
 		psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
 		m_pDepthPrepassAlphaMaskPSO = m_pDevice->CreatePipeline(psoDesc);
@@ -1450,14 +1444,12 @@ void DemoApp::InitializePipelines()
 
 	//Luminance Historgram
 	{
-		Shader* pComputeShader = m_pDevice->GetShader("LuminanceHistogram.hlsl", ShaderType::Compute, "CSMain");
-
 		m_pLuminanceHistogramRS = new RootSignature(m_pDevice);
-		m_pLuminanceHistogramRS->FinalizeFromShader("Luminance Historgram", pComputeShader);
+		m_pLuminanceHistogramRS->FinalizeFromShader("Luminance Historgram", m_pDevice->GetShader("LuminanceHistogram.hlsl", ShaderType::Compute, "CSMain"));
 
 		PipelineStateInitializer psoDesc;
-		psoDesc.SetRootSignature(m_pLuminanceHistogramRS->GetRootSignature());
-		psoDesc.SetComputeShader(pComputeShader);
+		psoDesc.SetRootSignature(m_pLuminanceHistogramRS);
+		psoDesc.SetComputeShader("LuminanceHistogram.hlsl", "CSMain");
 		psoDesc.SetName("Luminance Historgram");
 		m_pLuminanceHistogramPSO = m_pDevice->CreatePipeline(psoDesc);
 
@@ -1468,55 +1460,43 @@ void DemoApp::InitializePipelines()
 
 	//Debug Draw Histogram
 	{
-		Shader* pComputeShader = m_pDevice->GetShader("DrawLuminanceHistogram.hlsl", ShaderType::Compute, "DrawLuminanceHistogram");
 		m_pDrawHistogramRS = new RootSignature(m_pDevice);
-		m_pDrawHistogramRS->FinalizeFromShader("Draw Luminance Historgram", pComputeShader);
+		m_pDrawHistogramRS->FinalizeFromShader("Draw Luminance Historgram", m_pDevice->GetShader("DrawLuminanceHistogram.hlsl", ShaderType::Compute, "DrawLuminanceHistogram"));
 
 		PipelineStateInitializer psoDesc;
-		psoDesc.SetRootSignature(m_pDrawHistogramRS->GetRootSignature());
-		psoDesc.SetComputeShader(pComputeShader);
+		psoDesc.SetRootSignature(m_pDrawHistogramRS);
+		psoDesc.SetComputeShader("DrawLuminanceHistogram.hlsl", "DrawLuminanceHistogram");
 		psoDesc.SetName("Draw Luminance Historgram");
 		m_pDrawHistogramPSO = m_pDevice->CreatePipeline(psoDesc);
 	}
 
 	//Average Luminance
 	{
-		Shader* pComputeShader = m_pDevice->GetShader("AverageLuminance.hlsl", ShaderType::Compute, "CSMain");
-
 		m_pAverageLuminanceRS = new RootSignature(m_pDevice);
-		m_pAverageLuminanceRS->FinalizeFromShader("Average Luminance", pComputeShader);
-
-		PipelineStateInitializer psoDesc;
-		psoDesc.SetRootSignature(m_pAverageLuminanceRS->GetRootSignature());
-		psoDesc.SetComputeShader(pComputeShader);
-		psoDesc.SetName("Average Luminance");
-		m_pAverageLuminancePSO = m_pDevice->CreatePipeline(psoDesc);
+		m_pAverageLuminanceRS->FinalizeFromShader("Average Luminance", m_pDevice->GetShader("AverageLuminance.hlsl", ShaderType::Compute, "CSMain"));
+		m_pAverageLuminancePSO = m_pDevice->CreatePipeline(m_pAverageLuminanceRS, "AverageLuminance.hlsl", "CSMain");
 	}
 
 	//Camera motion
 	{
-		Shader* pComputeShader = m_pDevice->GetShader("CameraMotionVectors.hlsl", ShaderType::Compute, "CSMain");
-
 		m_pCameraMotionRS = new RootSignature(m_pDevice);
-		m_pCameraMotionRS->FinalizeFromShader("Camera Motion", pComputeShader);
+		m_pCameraMotionRS->FinalizeFromShader("Camera Motion", m_pDevice->GetShader("CameraMotionVectors.hlsl", ShaderType::Compute, "CSMain"));
 
 		PipelineStateInitializer psoDesc;
-		psoDesc.SetComputeShader(pComputeShader);
-		psoDesc.SetRootSignature(m_pCameraMotionRS->GetRootSignature());
+		psoDesc.SetComputeShader("CameraMotionVectors.hlsl", "CSMain");
+		psoDesc.SetRootSignature(m_pCameraMotionRS);
 		psoDesc.SetName("Camera Motion");
 		m_pCameraMotionPSO = m_pDevice->CreatePipeline(psoDesc);
 	}
 
 	//Tonemapping
 	{
-		Shader* pComputeShader = m_pDevice->GetShader("Tonemapping.hlsl", ShaderType::Compute, "CSMain");
-
 		m_pToneMapRS = new RootSignature(m_pDevice);
-		m_pToneMapRS->FinalizeFromShader("Tonemapping", pComputeShader);
+		m_pToneMapRS->FinalizeFromShader("Tonemapping", m_pDevice->GetShader("Tonemapping.hlsl", ShaderType::Compute, "CSMain"));
 
 		PipelineStateInitializer psoDesc;
-		psoDesc.SetRootSignature(m_pToneMapRS->GetRootSignature());
-		psoDesc.SetComputeShader(pComputeShader);
+		psoDesc.SetRootSignature(m_pToneMapRS);
+		psoDesc.SetComputeShader("Tonemapping.hlsl", "CSMain");
 		psoDesc.SetName("Tone mapping Pipeline");
 		m_pToneMapPSO = m_pDevice->CreatePipeline(psoDesc);
 	}
@@ -1525,81 +1505,70 @@ void DemoApp::InitializePipelines()
 	//Resolves a multisampled depth buffer to a normal depth buffer
 	//Only required when the sample count > 1
 	{
-		Shader* pComputeShader = m_pDevice->GetShader("ResolveDepth.hlsl", ShaderType::Compute, "CSMain", { "DEPTH_RESOLVE_MIN" });
-
 		m_pResolveDepthRS = new RootSignature(m_pDevice);
-		m_pResolveDepthRS->FinalizeFromShader("Depth Resolve", pComputeShader);
+		m_pResolveDepthRS->FinalizeFromShader("Depth Resolve", m_pDevice->GetShader("ResolveDepth.hlsl", ShaderType::Compute, "CSMain", { "DEPTH_RESOLVE_MIN" }));
 
 		PipelineStateInitializer psoDesc;
-		psoDesc.SetComputeShader(pComputeShader);
-		psoDesc.SetRootSignature(m_pResolveDepthRS->GetRootSignature());
+		psoDesc.SetComputeShader("ResolveDepth.hlsl", "CSMain", { "DEPTH_RESOLVE_MIN" });
+		psoDesc.SetRootSignature(m_pResolveDepthRS);
 		psoDesc.SetName("Resolve Depth Pipeline");
 		m_pResolveDepthPSO = m_pDevice->CreatePipeline(psoDesc);
 	}
 
 	//Depth reduce
 	{
-		Shader* pPrepareReduceShader = m_pDevice->GetShader("ReduceDepth.hlsl", ShaderType::Compute, "PrepareReduceDepth", { });
-		Shader* pPrepareReduceShaderMSAA = m_pDevice->GetShader("ReduceDepth.hlsl", ShaderType::Compute, "PrepareReduceDepth", { "WITH_MSAA" });
-		Shader* pReduceShader = m_pDevice->GetShader("ReduceDepth.hlsl", ShaderType::Compute, "ReduceDepth", { });
-
 		m_pReduceDepthRS = new RootSignature(m_pDevice);
-		m_pReduceDepthRS->FinalizeFromShader("Depth Reduce", pPrepareReduceShader);
+		m_pReduceDepthRS->FinalizeFromShader("Depth Reduce", m_pDevice->GetShader("ReduceDepth.hlsl", ShaderType::Compute, "PrepareReduceDepth", { }));
 
 		PipelineStateInitializer psoDesc;
-		psoDesc.SetComputeShader(pPrepareReduceShader);
-		psoDesc.SetRootSignature(m_pReduceDepthRS->GetRootSignature());
+		psoDesc.SetComputeShader("ReduceDepth.hlsl", "PrepareReduceDepth");
+		psoDesc.SetRootSignature(m_pReduceDepthRS);
 		psoDesc.SetName("Prepare Reduce Depth Pipeline");
 		m_pPrepareReduceDepthPSO = m_pDevice->CreatePipeline(psoDesc);
-		psoDesc.SetComputeShader(pPrepareReduceShaderMSAA);
+
+		psoDesc.SetComputeShader("ReduceDepth.hlsl", "PrepareReduceDepth", { "WITH_MSAA" });
 		psoDesc.SetName("Prepare Reduce Depth Pipeline MSAA");
 		m_pPrepareReduceDepthMsaaPSO = m_pDevice->CreatePipeline(psoDesc);
 
-		psoDesc.SetComputeShader(pReduceShader);
+		psoDesc.SetComputeShader("ReduceDepth.hlsl", "ReduceDepth");
 		psoDesc.SetName("Reduce Depth Pipeline");
 		m_pReduceDepthPSO = m_pDevice->CreatePipeline(psoDesc);
 	}
 
 	//TAA
 	{
-		Shader* pComputeShader = m_pDevice->GetShader("TemporalResolve.hlsl", ShaderType::Compute, "CSMain");
 		m_pTemporalResolveRS = new RootSignature(m_pDevice);
-		m_pTemporalResolveRS->FinalizeFromShader("Temporal Resolve", pComputeShader);
+		m_pTemporalResolveRS->FinalizeFromShader("Temporal Resolve", m_pDevice->GetShader("TemporalResolve.hlsl", ShaderType::Compute, "CSMain"));
 
 		PipelineStateInitializer psoDesc;
-		psoDesc.SetComputeShader(pComputeShader);
-		psoDesc.SetRootSignature(m_pTemporalResolveRS->GetRootSignature());
+		psoDesc.SetComputeShader("TemporalResolve.hlsl", "CSMain");
+		psoDesc.SetRootSignature(m_pTemporalResolveRS);
 		psoDesc.SetName("Temporal Resolve");
 		m_pTemporalResolvePSO = m_pDevice->CreatePipeline(psoDesc);
 	}
 
 	//Mip generation
 	{
-		Shader* pComputeShader = m_pDevice->GetShader("GenerateMips.hlsl", ShaderType::Compute, "CSMain");
-
 		m_pGenerateMipsRS = new RootSignature(m_pDevice);
-		m_pGenerateMipsRS->FinalizeFromShader("Generate Mips", pComputeShader);
+		m_pGenerateMipsRS->FinalizeFromShader("Generate Mips", m_pDevice->GetShader("GenerateMips.hlsl", ShaderType::Compute, "CSMain"));
 
 		PipelineStateInitializer psoDesc;
-		psoDesc.SetComputeShader(pComputeShader);
-		psoDesc.SetRootSignature(m_pGenerateMipsRS->GetRootSignature());
+		psoDesc.SetComputeShader("GenerateMips.hlsl", "CSMain");
+		psoDesc.SetRootSignature(m_pGenerateMipsRS);
 		psoDesc.SetName("Generate Mips");
 		m_pGenerateMipsPSO = m_pDevice->CreatePipeline(psoDesc);
 	}
 
 	//Sky
 	{
-		Shader* pVertexShader = m_pDevice->GetShader("ProceduralSky.hlsl", ShaderType::Vertex, "VSMain");
-		Shader* pPixelShader = m_pDevice->GetShader("ProceduralSky.hlsl", ShaderType::Pixel, "PSMain");
-
 		m_pSkyboxRS = new RootSignature(m_pDevice);
 		m_pSkyboxRS->AddConstantBufferView(100);
 		m_pSkyboxRS->Finalize("Skybox");
 
 		PipelineStateInitializer psoDesc;
-		psoDesc.SetRootSignature(m_pSkyboxRS->GetRootSignature());
-		psoDesc.SetVertexShader(pVertexShader);
-		psoDesc.SetPixelShader(pPixelShader);
+		psoDesc.SetRootSignature(m_pSkyboxRS);
+		psoDesc.SetVertexShader("ProceduralSky.hlsl", "VSMain");
+		psoDesc.SetPixelShader("ProceduralSky.hlsl", "PSMain");
 		psoDesc.SetRenderTargetFormat(DXGI_FORMAT_R16G16B16A16_FLOAT, DXGI_FORMAT_D32_FLOAT, 1);
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
 		psoDesc.SetName("Skybox");
@@ -1616,12 +1585,12 @@ void DemoApp::InitializePipelines()
 		m_pBloomRS->Finalize("Generate Mips");
 
 		PipelineStateInitializer psoDesc;
-		psoDesc.SetComputeShader(m_pDevice->GetShader("Bloom.hlsl", ShaderType::Compute, "SeparateBloomCS"));
-		psoDesc.SetRootSignature(m_pBloomRS->GetRootSignature());
+		psoDesc.SetComputeShader("Bloom.hlsl", "SeparateBloomCS");
+		psoDesc.SetRootSignature(m_pBloomRS);
 		psoDesc.SetName("Separate Bloom");
 		m_pBloomSeparatePSO = m_pDevice->CreatePipeline(psoDesc);
 
-		psoDesc.SetComputeShader(m_pDevice->GetShader("Bloom.hlsl", ShaderType::Compute, "BloomMipChainCS"));
+		psoDesc.SetComputeShader("Bloom.hlsl", "BloomMipChainCS");
 		psoDesc.SetName("Bloom Mips");
 		m_pBloomMipChainPSO = m_pDevice->CreatePipeline(psoDesc);
 	}
@@ -1639,18 +1608,18 @@ void DemoApp::InitializePipelines()
 
 			//Pipeline state
 			PipelineStateInitializer psoDesc;
-			psoDesc.SetRootSignature(m_pVisibilityRenderingRS->GetRootSignature());
+			psoDesc.SetRootSignature(m_pVisibilityRenderingRS);
 
-			psoDesc.SetAmplificationShader(m_pDevice->GetShader("VisibilityRendering.hlsl", ShaderType::Amplification, "ASMain"));
-			psoDesc.SetMeshShader(m_pDevice->GetShader("VisibilityRendering.hlsl", ShaderType::Mesh, "MSMain"));
-			psoDesc.SetPixelShader(m_pDevice->GetShader("VisibilityRendering.hlsl", ShaderType::Pixel, "PSMain"));
+			psoDesc.SetAmplificationShader("VisibilityRendering.hlsl", "ASMain");
+			psoDesc.SetMeshShader("VisibilityRendering.hlsl", "MSMain");
+			psoDesc.SetPixelShader("VisibilityRendering.hlsl", "PSMain");
 			psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
 			psoDesc.SetRenderTargetFormat(DXGI_FORMAT_R32_UINT, DXGI_FORMAT_D32_FLOAT, 1);
 			psoDesc.SetName("Visibility Rendering");
 			m_pVisibilityRenderingPSO = m_pDevice->CreatePipeline(psoDesc);
 
 			psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
-			psoDesc.SetPixelShader(m_pDevice->GetShader("VisibilityRendering.hlsl", ShaderType::Pixel, "PSMain", { "ALPHA_TEST" }));
+			psoDesc.SetPixelShader("VisibilityRendering.hlsl", "PSMain", { "ALPHA_TEST" });
 			psoDesc.SetName("Visibility Rendering Masked");
 			m_pVisibilityRenderingMaskedPSO = m_pDevice->CreatePipeline(psoDesc);
 		}
@@ -1666,8 +1635,8 @@ void DemoApp::InitializePipelines()
 
 			//Pipeline state
 			PipelineStateInitializer psoDesc;
-			psoDesc.SetRootSignature(m_pVisibilityShadingRS->GetRootSignature());
-			psoDesc.SetComputeShader(m_pDevice->GetShader("VisibilityShading.hlsl", ShaderType::Compute, "CSMain"));
+			psoDesc.SetRootSignature(m_pVisibilityShadingRS);
+			psoDesc.SetComputeShader("VisibilityShading.hlsl", "CSMain");
 			psoDesc.SetName("Visibility Shading");
 			m_pVisibilityShadingPSO = m_pDevice->CreatePipeline(psoDesc);
 		}

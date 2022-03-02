@@ -45,20 +45,16 @@ void DebugRenderer::Initialize(GraphicsDevice* pDevice)
 	inputLayout.AddVertexElement("POSITION", DXGI_FORMAT_R32G32B32_FLOAT);
 	inputLayout.AddVertexElement("COLOR", DXGI_FORMAT_R32_UINT);
 
-	//Shaders
-	Shader* pVertexShader = pDevice->GetShader("DebugRenderer.hlsl", ShaderType::Vertex, "VSMain");
-	Shader* pPixelShader = pDevice->GetShader("DebugRenderer.hlsl", ShaderType::Pixel, "PSMain");
-
 	//Rootsignature
 	m_pRS = new RootSignature(pDevice);
-	m_pRS->FinalizeFromShader("Diffuse", pVertexShader);
+	m_pRS->FinalizeFromShader("Diffuse", pDevice->GetShader("DebugRenderer.hlsl", ShaderType::Vertex, "VSMain"));
 
 	//Opaque
 	PipelineStateInitializer psoDesc;
 	psoDesc.SetInputLayout(inputLayout);
-	psoDesc.SetRootSignature(m_pRS->GetRootSignature());
-	psoDesc.SetVertexShader(pVertexShader);
-	psoDesc.SetPixelShader(pPixelShader);
+	psoDesc.SetRootSignature(m_pRS);
+	psoDesc.SetVertexShader("DebugRenderer.hlsl", "VSMain");
+	psoDesc.SetPixelShader("DebugRenderer.hlsl", "PSMain");
 	psoDesc.SetRenderTargetFormat(DXGI_FORMAT_R16G16B16A16_FLOAT, DXGI_FORMAT_D32_FLOAT, 1);
 	psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
 	psoDesc.SetDepthWrite(true);

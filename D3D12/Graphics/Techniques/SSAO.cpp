@@ -119,28 +119,24 @@ void SSAO::SetupPipelines()
 {
 	//SSAO
 	{
-		Shader* pComputeShader = m_pDevice->GetShader("SSAO.hlsl", ShaderType::Compute, "CSMain");
-
 		m_pSSAORS = new RootSignature(m_pDevice);
-		m_pSSAORS->FinalizeFromShader("SSAO", pComputeShader);
+		m_pSSAORS->FinalizeFromShader("SSAO", m_pDevice->GetShader("SSAO.hlsl", ShaderType::Compute, "CSMain"));
 
 		PipelineStateInitializer psoDesc;
-		psoDesc.SetComputeShader(pComputeShader);
-		psoDesc.SetRootSignature(m_pSSAORS->GetRootSignature());
+		psoDesc.SetComputeShader("SSAO.hlsl", "CSMain");
+		psoDesc.SetRootSignature(m_pSSAORS);
 		psoDesc.SetName("SSAO");
 		m_pSSAOPSO = m_pDevice->CreatePipeline(psoDesc);
 	}
 
 	//SSAO Blur
 	{
-		Shader* pComputeShader = m_pDevice->GetShader("SSAOBlur.hlsl", ShaderType::Compute, "CSMain");
-
 		m_pSSAOBlurRS = new RootSignature(m_pDevice);
-		m_pSSAOBlurRS->FinalizeFromShader("SSAO Blur", pComputeShader);
+		m_pSSAOBlurRS->FinalizeFromShader("SSAO Blur", m_pDevice->GetShader("SSAOBlur.hlsl", ShaderType::Compute, "CSMain"));
 
 		PipelineStateInitializer psoDesc;
-		psoDesc.SetComputeShader(pComputeShader);
-		psoDesc.SetRootSignature(m_pSSAOBlurRS->GetRootSignature());
+		psoDesc.SetComputeShader("SSAOBlur.hlsl", "CSMain");
+		psoDesc.SetRootSignature(m_pSSAOBlurRS);
 		psoDesc.SetName("SSAO Blur");
 		m_pSSAOBlurPSO = m_pDevice->CreatePipeline(psoDesc);
 	}

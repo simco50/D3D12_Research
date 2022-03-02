@@ -45,8 +45,6 @@ namespace ShaderCompiler
 		case ShaderType::Pixel:			return "ps";
 		case ShaderType::Geometry:		return "gs";
 		case ShaderType::Compute:		return "cs";
-		case ShaderType::Hull:			return "hs";
-		case ShaderType::Domain:		return "ds";
 		case ShaderType::Mesh:			return "ms";
 		case ShaderType::Amplification: return "as";
 		default: noEntry();				return "";

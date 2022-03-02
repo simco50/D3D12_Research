@@ -2,6 +2,7 @@
 #include "PipelineState.h"
 #include "Shader.h"
 #include "Graphics.h"
+#include "RootSignature.h"
 
 VertexElementLayout::VertexElementLayout(const VertexElementLayout& rhs)
 	: m_ElementDesc(rhs.m_ElementDesc), m_SemanticNames(rhs.m_SemanticNames), m_NumElements(rhs.m_NumElements)
@@ -255,59 +256,47 @@ void PipelineStateInitializer::SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYP
 	GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_PRIMITIVE_TOPOLOGY>() = topology;
 }
 
-void PipelineStateInitializer::SetRootSignature(ID3D12RootSignature* pRootSignature)
+void PipelineStateInitializer::SetRootSignature(RootSignature* pRootSignature)
 {
-	GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_ROOT_SIGNATURE>() = pRootSignature;
+	GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_ROOT_SIGNATURE>() = pRootSignature->GetRootSignature();
 }
 
-void PipelineStateInitializer::SetVertexShader(Shader* pShader)
-{
-	m_Type = PipelineStateType::Graphics;
-	m_Shaders[(int)ShaderType::Vertex] = pShader;
-}
-
-void PipelineStateInitializer::SetPixelShader(Shader* pShader)
-{
-	m_Shaders[(int)ShaderType::Pixel] = pShader;
-}
-
-void PipelineStateInitializer::SetHullShader(Shader* pShader)
+void PipelineStateInitializer::SetVertexShader(const char* pShaderPath, const char* entryPoint, const std::vector<ShaderDefine>& defines)
 {
 	m_Type = PipelineStateType::Graphics;
-	m_Shaders[(int)ShaderType::Hull] = pShader;
+	m_ShaderDescs[(int)ShaderType::Vertex] = { pShaderPath, entryPoint, defines };
 }
 
-void PipelineStateInitializer::SetDomainShader(Shader* pShader)
+void PipelineStateInitializer::SetPixelShader(const char* pShaderPath, const char* entryPoint, const std::vector<ShaderDefine>& defines)
+{
+	m_ShaderDescs[(int)ShaderType::Pixel] = { pShaderPath, entryPoint, defines };
+}
+
+void PipelineStateInitializer::SetGeometryShader(const char* pShaderPath, const char* entryPoint, const std::vector<ShaderDefine>& defines)
 {
 	m_Type = PipelineStateType::Graphics;
-	m_Shaders[(int)ShaderType::Domain] = pShader;
+	m_ShaderDescs[(int)ShaderType::Geometry] = { pShaderPath, entryPoint, defines };
 }
 
-void PipelineStateInitializer::SetGeometryShader(Shader* pShader)
-{
-	m_Type = PipelineStateType::Graphics;
-	m_Shaders[(int)ShaderType::Geometry] = pShader;
-}
-
-void PipelineStateInitializer::SetComputeShader(Shader* pShader)
+void PipelineStateInitializer::SetComputeShader(const char* pShaderPath, const char* entryPoint, const std::vector<ShaderDefine>& defines)
 {
 	m_Type = PipelineStateType::Compute;
-	m_Shaders[(int)ShaderType::Compute] = pShader;
+	m_ShaderDescs[(int)ShaderType::Compute] = { pShaderPath, entryPoint, defines };
 }
 
-void PipelineStateInitializer::SetMeshShader(Shader* pShader)
+void PipelineStateInitializer::SetMeshShader(const char* pShaderPath, const char* entryPoint, const std::vector<ShaderDefine>& defines)
 {
 	m_Type = PipelineStateType::Mesh;
-	m_Shaders[(int)ShaderType::Mesh] = pShader;
+	m_ShaderDescs[(int)ShaderType::Mesh] = { pShaderPath, entryPoint, defines };
 }
 
-void PipelineStateInitializer::SetAmplificationShader(Shader* pShader)
+void PipelineStateInitializer::SetAmplificationShader(const char* pShaderPath, const char* entryPoint, const std::vector<ShaderDefine>& defines)
 {
 	m_Type = PipelineStateType::Mesh;
-	m_Shaders[(int)ShaderType::Amplification] = pShader;
+	m_ShaderDescs[(int)ShaderType::Amplification] = { pShaderPath, entryPoint, defines };
 }
 
-D3D12_PIPELINE_STATE_STREAM_DESC PipelineStateInitializer::GetDesc()
+D3D12_PIPELINE_STATE_STREAM_DESC PipelineStateInitializer::GetDesc(GraphicsDevice* pDevice)
 {
 	auto GetByteCode = [this](ShaderType type) -> D3D12_SHADER_BYTECODE& {
 		switch (type)
@@ -315,8 +304,6 @@ D3D12_PIPELINE_STATE_STREAM_DESC PipelineStateInitializer::GetDesc()
 		case ShaderType::Vertex: return GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_VS>();
 		case ShaderType::Pixel: return GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_PS>();
 		case ShaderType::Geometry: return GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_GS>();
-		case ShaderType::Hull: return GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_HS>();
-		case ShaderType::Domain: return GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DS>();
 		case ShaderType::Mesh: return GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_MS>();
 		case ShaderType::Amplification: return GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_AS>();
 		case ShaderType::Compute: return GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_CS>();
@@ -330,7 +317,15 @@ D3D12_PIPELINE_STATE_STREAM_DESC PipelineStateInitializer::GetDesc()
 
 	for (uint32 i = 0; i < (int)ShaderType::MAX; ++i)
 	{
-		Shader* pShader = m_Shaders[i];
+		Shader* pShader = nullptr;
+		const ShaderDesc& desc = m_ShaderDescs[i];
+		if (desc.Path.length() > 0)
+		{
+			pShader = pDevice->GetShaderManager()->GetShader(desc.Path.c_str(), (ShaderType)i, desc.EntryPoint.c_str(), desc.Defines);
+			m_Shaders[i] = pShader;
+		}
+
+		pShader = m_Shaders[i];
 		if (pShader)
 		{
 			GetByteCode((ShaderType)i) = D3D12_SHADER_BYTECODE{ pShader->GetByteCode(), pShader->GetByteCodeSize() };
@@ -355,7 +350,7 @@ std::string PipelineStateInitializer::DebugPrint()
 	str << "| D3D12 Pipeline State Stream |\n";
 
 	// Fix up the assigned shaders
-	GetDesc();
+	//GetDesc();
 
 	for (uint32 i = 0; i < D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_MAX_VALID; ++i)
 	{
@@ -509,7 +504,7 @@ void PipelineState::Create(const PipelineStateInitializer& initializer)
 		ilDesc.pInputElementDescs = m_Desc.m_InputLayout.GetElements();
 	}
 
-	D3D12_PIPELINE_STATE_STREAM_DESC streamDesc = m_Desc.GetDesc();
+	D3D12_PIPELINE_STATE_STREAM_DESC streamDesc = m_Desc.GetDesc(GetParent());
 	VERIFY_HR_EX(pDevice2->CreatePipelineState(&streamDesc, IID_PPV_ARGS(m_pPipelineState.ReleaseAndGetAddressOf())), GetParent()->GetDevice());
 	D3D::SetObjectName(m_pPipelineState.Get(), m_Desc.m_Name.c_str());
 }

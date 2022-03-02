@@ -464,28 +464,24 @@ void ClusteredForward::SetupPipelines()
 {
 	//AABB
 	{
-		Shader* pComputeShader = m_pDevice->GetShader("ClusterAABBGeneration.hlsl", ShaderType::Compute, "GenerateAABBs");
-
 		m_pCreateAabbRS = new RootSignature(m_pDevice);
-		m_pCreateAabbRS->FinalizeFromShader("Create AABB", pComputeShader);
+		m_pCreateAabbRS->FinalizeFromShader("Create AABB", m_pDevice->GetShader("ClusterAABBGeneration.hlsl", ShaderType::Compute, "GenerateAABBs"));
 
 		PipelineStateInitializer psoDesc;
-		psoDesc.SetComputeShader(pComputeShader);
-		psoDesc.SetRootSignature(m_pCreateAabbRS->GetRootSignature());
+		psoDesc.SetComputeShader("ClusterAABBGeneration.hlsl", "GenerateAABBs");
+		psoDesc.SetRootSignature(m_pCreateAabbRS);
 		psoDesc.SetName("Create AABB");
 		m_pCreateAabbPSO = m_pDevice->CreatePipeline(psoDesc);
 	}
 
 	//Light Culling
 	{
-		Shader* pComputeShader = m_pDevice->GetShader("ClusteredLightCulling.hlsl", ShaderType::Compute, "LightCulling");
-
 		m_pLightCullingRS = new RootSignature(m_pDevice);
-		m_pLightCullingRS->FinalizeFromShader("Light Culling", pComputeShader);
+		m_pLightCullingRS->FinalizeFromShader("Light Culling", m_pDevice->GetShader("ClusteredLightCulling.hlsl", ShaderType::Compute, "LightCulling"));
 
 		PipelineStateInitializer psoDesc;
-		psoDesc.SetComputeShader(pComputeShader);
-		psoDesc.SetRootSignature(m_pLightCullingRS->GetRootSignature());
+		psoDesc.SetComputeShader("ClusteredLightCulling.hlsl", "LightCulling");
+		psoDesc.SetRootSignature(m_pLightCullingRS);
 		psoDesc.SetName("Light Culling");
 		m_pLightCullingPSO = m_pDevice->CreatePipeline(psoDesc);
 
@@ -496,14 +492,8 @@ void ClusteredForward::SetupPipelines()
 
 	//Diffuse
 	{
-		Shader* pVertexShader = m_pDevice->GetShader("Diffuse.hlsl", ShaderType::Vertex, "VSMain", { "CLUSTERED_FORWARD" });
-		Shader* pPixelShader = m_pDevice->GetShader("Diffuse.hlsl", ShaderType::Pixel, "PSMain", { "CLUSTERED_FORWARD" });
-
-		Shader* pMeshShader = m_pDevice->GetShader("Diffuse.hlsl", ShaderType::Mesh, "MSMain", { "CLUSTERED_FORWARD" });
-		Shader* pAmplificationShader = m_pDevice->GetShader("Diffuse.hlsl", ShaderType::Amplification, "ASMain", { "CLUSTERED_FORWARD" });
-
 		m_pDiffuseRS = new RootSignature(m_pDevice);
-		m_pDiffuseRS->FinalizeFromShader("Diffuse", pVertexShader);
+		m_pDiffuseRS->FinalizeFromShader("Diffuse", m_pDevice->GetShader("Diffuse.hlsl", ShaderType::Vertex, "VSMain", { "CLUSTERED_FORWARD" }));
 
 		DXGI_FORMAT formats[] = {
 			DXGI_FORMAT_R16G16B16A16_FLOAT,
@@ -513,10 +503,10 @@ void ClusteredForward::SetupPipelines()
 		{
 			//Opaque
 			PipelineStateInitializer psoDesc;
-			psoDesc.SetRootSignature(m_pDiffuseRS->GetRootSignature());
+			psoDesc.SetRootSignature(m_pDiffuseRS);
 			psoDesc.SetBlendMode(BlendMode::Replace, false);
-			psoDesc.SetVertexShader(pVertexShader);
-			psoDesc.SetPixelShader(pPixelShader);
+			psoDesc.SetVertexShader("Diffuse.hlsl", "VSMain", { "CLUSTERED_FORWARD" });
+			psoDesc.SetPixelShader("Diffuse.hlsl", "PSMain", { "CLUSTERED_FORWARD" });
 			psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_EQUAL);
 			psoDesc.SetDepthWrite(false);
 			psoDesc.SetRenderTargetFormats(formats, ARRAYSIZE(formats), DXGI_FORMAT_D32_FLOAT, 1);
@@ -539,11 +529,11 @@ void ClusteredForward::SetupPipelines()
 		{
 			//Opaque
 			PipelineStateInitializer psoDesc;
-			psoDesc.SetRootSignature(m_pDiffuseRS->GetRootSignature());
+			psoDesc.SetRootSignature(m_pDiffuseRS);
 			psoDesc.SetBlendMode(BlendMode::Replace, false);
-			psoDesc.SetMeshShader(pMeshShader);
-			psoDesc.SetAmplificationShader(pAmplificationShader);
-			psoDesc.SetPixelShader(pPixelShader);
+			psoDesc.SetMeshShader("Diffuse.hlsl", "MSMain", { "CLUSTERED_FORWARD" });
+			psoDesc.SetAmplificationShader("Diffuse.hlsl", "ASMain", { "CLUSTERED_FORWARD" });
+			psoDesc.SetPixelShader("Diffuse.hlsl", "PSMain", { "CLUSTERED_FORWARD" });
 			psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_EQUAL);
 			psoDesc.SetDepthWrite(false);
 			psoDesc.SetRenderTargetFormats(formats, ARRAYSIZE(formats), DXGI_FORMAT_D32_FLOAT, 1);
@@ -565,62 +555,50 @@ void ClusteredForward::SetupPipelines()
 
 	//Cluster debug rendering
 	{
-		Shader* pVertexShader = m_pDevice->GetShader("VisualizeLightClusters.hlsl", ShaderType::Vertex, "VSMain");
-		Shader* pGeometryShader = m_pDevice->GetShader("VisualizeLightClusters.hlsl", ShaderType::Geometry, "GSMain");
-		Shader* pPixelShader = m_pDevice->GetShader("VisualizeLightClusters.hlsl", ShaderType::Pixel, "PSMain");
-
 		m_pVisualizeLightClustersRS = new RootSignature(m_pDevice);
+		m_pVisualizeLightClustersRS->FinalizeFromShader("Visualize Light Clusters", m_pDevice->GetShader("VisualizeLightClusters.hlsl", ShaderType::Vertex, "VSMain"));
 
 		PipelineStateInitializer psoDesc;
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
 		psoDesc.SetDepthWrite(false);
-		psoDesc.SetPixelShader(pPixelShader);
+		psoDesc.SetPixelShader("VisualizeLightClusters.hlsl", "PSMain");
 		psoDesc.SetRenderTargetFormat(DXGI_FORMAT_R16G16B16A16_FLOAT, DXGI_FORMAT_D32_FLOAT, 1);
 		psoDesc.SetBlendMode(BlendMode::Additive, false);
-
-		m_pVisualizeLightClustersRS->FinalizeFromShader("Visualize Light Clusters", pVertexShader);
-
 		psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT);
-		psoDesc.SetRootSignature(m_pVisualizeLightClustersRS->GetRootSignature());
-		psoDesc.SetVertexShader(pVertexShader);
-		psoDesc.SetGeometryShader(pGeometryShader);
+		psoDesc.SetRootSignature(m_pVisualizeLightClustersRS);
+		psoDesc.SetVertexShader("VisualizeLightClusters.hlsl", "VSMain");
+		psoDesc.SetGeometryShader("VisualizeLightClusters.hlsl", "GSMain");
 		psoDesc.SetName("Visualize Light Clusters");
 		m_pVisualizeLightClustersPSO = m_pDevice->CreatePipeline(psoDesc);
 	}
 
 	{
-		Shader* pComputeShader = m_pDevice->GetShader("VisualizeLightCount.hlsl", ShaderType::Compute, "DebugLightDensityCS", { "CLUSTERED_FORWARD" });
-
 		m_pVisualizeLightsRS = new RootSignature(m_pDevice);
-		m_pVisualizeLightsRS->FinalizeFromShader("Light Density Visualization", pComputeShader);
+		m_pVisualizeLightsRS->FinalizeFromShader("Light Density Visualization", m_pDevice->GetShader("VisualizeLightCount.hlsl", ShaderType::Compute, "DebugLightDensityCS", { "CLUSTERED_FORWARD" }));
 
 		PipelineStateInitializer psoDesc;
-		psoDesc.SetComputeShader(pComputeShader);
-		psoDesc.SetRootSignature(m_pVisualizeLightsRS->GetRootSignature());
+		psoDesc.SetComputeShader("VisualizeLightCount.hlsl", "DebugLightDensityCS", { "CLUSTERED_FORWARD" });
+		psoDesc.SetRootSignature(m_pVisualizeLightsRS);
 		psoDesc.SetName("Light Density Visualization");
 		m_pVisualizeLightsPSO = m_pDevice->CreatePipeline(psoDesc);
 	}
 
 	{
-		Shader* pComputeShader = m_pDevice->GetShader("VolumetricFog.hlsl", ShaderType::Compute, "InjectFogLightingCS", { });
-
 		m_pVolumetricLightingRS = new RootSignature(m_pDevice);
-		m_pVolumetricLightingRS->FinalizeFromShader("Inject Fog Lighting", pComputeShader);
+		m_pVolumetricLightingRS->FinalizeFromShader("Inject Fog Lighting", m_pDevice->GetShader("VolumetricFog.hlsl", ShaderType::Compute, "InjectFogLightingCS", { }));
 
 		{
 			PipelineStateInitializer psoDesc;
-			psoDesc.SetComputeShader(pComputeShader);
-			psoDesc.SetRootSignature(m_pVolumetricLightingRS->GetRootSignature());
+			psoDesc.SetComputeShader("VolumetricFog.hlsl", "InjectFogLightingCS", { });
+			psoDesc.SetRootSignature(m_pVolumetricLightingRS);
 			psoDesc.SetName("Inject Fog Lighting");
 			m_pInjectVolumeLightPSO = m_pDevice->CreatePipeline(psoDesc);
 		}
 
 		{
-			Shader* pAccumulateComputeShader = m_pDevice->GetShader("VolumetricFog.hlsl", ShaderType::Compute, "AccumulateFogCS", { });
-
 			PipelineStateInitializer psoDesc;
-			psoDesc.SetComputeShader(pAccumulateComputeShader);
-			psoDesc.SetRootSignature(m_pVolumetricLightingRS->GetRootSignature());
+			psoDesc.SetComputeShader("VolumetricFog.hlsl", "AccumulateFogCS", { });
+			psoDesc.SetRootSignature(m_pVolumetricLightingRS);
 			psoDesc.SetName("Accumulate Fog Lighting");
 			m_pAccumulateVolumeLightPSO = m_pDevice->CreatePipeline(psoDesc);
 		}

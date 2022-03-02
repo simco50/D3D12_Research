@@ -205,14 +205,12 @@ void TiledForward::SetupPipelines()
 {
 	// Light culling
 	{
-		Shader* pComputeShader = m_pDevice->GetShader("LightCulling.hlsl", ShaderType::Compute, "CSMain");
-
 		m_pComputeLightCullRS = new RootSignature(m_pDevice);
-		m_pComputeLightCullRS->FinalizeFromShader("Tiled Light Culling", pComputeShader);
+		m_pComputeLightCullRS->FinalizeFromShader("Tiled Light Culling", m_pDevice->GetShader("LightCulling.hlsl", ShaderType::Compute, "CSMain"));
 
 		PipelineStateInitializer psoDesc;
-		psoDesc.SetComputeShader(pComputeShader);
-		psoDesc.SetRootSignature(m_pComputeLightCullRS->GetRootSignature());
+		psoDesc.SetComputeShader("LightCulling.hlsl", "CSMain");
+		psoDesc.SetRootSignature(m_pComputeLightCullRS);
 		psoDesc.SetName("Tiled Light Culling");
 		m_pComputeLightCullPSO = m_pDevice->CreatePipeline(psoDesc);
 
@@ -224,11 +222,8 @@ void TiledForward::SetupPipelines()
 
 	// Shading pipelines
 	{
-		Shader* pVertexShader = m_pDevice->GetShader("Diffuse.hlsl", ShaderType::Vertex, "VSMain", { "TILED_FORWARD" });
-		Shader* pPixelShader = m_pDevice->GetShader("Diffuse.hlsl", ShaderType::Pixel, "PSMain", { "TILED_FORWARD" });
-
 		m_pDiffuseRS = new RootSignature(m_pDevice);
-		m_pDiffuseRS->FinalizeFromShader("Diffuse", pVertexShader);
+		m_pDiffuseRS->FinalizeFromShader("Diffuse", m_pDevice->GetShader("Diffuse.hlsl", ShaderType::Vertex, "VSMain", { "TILED_FORWARD" }));
 
 		{
 			DXGI_FORMAT formats[] = {
@@ -238,9 +233,9 @@ void TiledForward::SetupPipelines()
 
 			//Opaque
 			PipelineStateInitializer psoDesc;
-			psoDesc.SetRootSignature(m_pDiffuseRS->GetRootSignature());
-			psoDesc.SetVertexShader(pVertexShader);
-			psoDesc.SetPixelShader(pPixelShader);
+			psoDesc.SetRootSignature(m_pDiffuseRS);
+			psoDesc.SetVertexShader("Diffuse.hlsl", "VSMain", { "TILED_FORWARD" });
+			psoDesc.SetPixelShader("Diffuse.hlsl", "PSMain", { "TILED_FORWARD" });
 			psoDesc.SetRenderTargetFormats(formats, ARRAYSIZE(formats), DXGI_FORMAT_D32_FLOAT, 1);
 			psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_EQUAL);
 			psoDesc.SetDepthWrite(false);
@@ -262,14 +257,12 @@ void TiledForward::SetupPipelines()
 
 	// Light count visualization
 	{
-		Shader* pComputeShader = m_pDevice->GetShader("VisualizeLightCount.hlsl", ShaderType::Compute, "DebugLightDensityCS", { "TILED_FORWARD" });
-
 		m_pVisualizeLightsRS = new RootSignature(m_pDevice);
-		m_pVisualizeLightsRS->FinalizeFromShader("Light Density Visualization", pComputeShader);
+		m_pVisualizeLightsRS->FinalizeFromShader("Light Density Visualization", m_pDevice->GetShader("VisualizeLightCount.hlsl", ShaderType::Compute, "DebugLightDensityCS", { "TILED_FORWARD" }));
 
 		PipelineStateInitializer psoDesc;
-		psoDesc.SetComputeShader(pComputeShader);
-		psoDesc.SetRootSignature(m_pVisualizeLightsRS->GetRootSignature());
+		psoDesc.SetComputeShader("VisualizeLightCount.hlsl", "DebugLightDensityCS", { "TILED_FORWARD" });
+		psoDesc.SetRootSignature(m_pVisualizeLightsRS);
 		psoDesc.SetName("Light Density Visualization");
 		m_pVisualizeLightsPSO = m_pDevice->CreatePipeline(psoDesc);
 	}

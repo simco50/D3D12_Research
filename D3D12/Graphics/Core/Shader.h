@@ -13,8 +13,6 @@ enum class ShaderType
 	Vertex,
 	Pixel,
 	Geometry,
-	Hull,
-	Domain,
 	Mesh,
 	Amplification,
 	Compute,

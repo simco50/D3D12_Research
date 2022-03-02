@@ -199,11 +199,10 @@ public:
 	RefCountPtr<Texture> CreateTextureFromImage(CommandContext& context, Image& image, bool sRGB, const char* pName = nullptr);
 	RefCountPtr<Texture> CreateTextureFromFile(CommandContext& context, const char* pFilePath, bool sRGB, const char* pName = nullptr);
 	RefCountPtr<Buffer> CreateBuffer(const BufferDesc& desc, const char* pName);
+	void ReleaseResource(ID3D12Object* pResource);
 
-	ID3D12Resource* CreateResource(const D3D12_RESOURCE_DESC& desc, D3D12_RESOURCE_STATES initialState, D3D12_HEAP_TYPE heapType, D3D12_CLEAR_VALUE* pClearValue = nullptr);
-	void ReleaseResource(ID3D12Resource* pResource);
 	RefCountPtr<PipelineState> CreatePipeline(const PipelineStateInitializer& psoDesc);
-	RefCountPtr<PipelineState> CreatePipeline(Shader* pShader, RootSignature* pRootSignature);
+	RefCountPtr<PipelineState> CreatePipeline(RootSignature* pRootSignature, const char* pShaderPath, const char* entryPoint = "", const std::vector<ShaderDefine>& defines = {});
 	RefCountPtr<StateObject> CreateStateObject(const StateObjectInitializer& stateDesc);
 	RefCountPtr<ShaderResourceView> CreateSRV(Buffer* pBuffer, const BufferSRVDesc& desc);
 	RefCountPtr<UnorderedAccessView> CreateUAV(Buffer* pBuffer, const BufferUAVDesc& desc);

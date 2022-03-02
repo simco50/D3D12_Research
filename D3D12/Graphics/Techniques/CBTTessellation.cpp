@@ -343,43 +343,27 @@ void CBTTessellation::SetupPipelines()
 	m_pCBTRS->Finalize("CBT");
 
 	{
-		PipelineStateInitializer psoDesc;
-		psoDesc.SetRootSignature(m_pCBTRS->GetRootSignature());
-		psoDesc.SetComputeShader(m_pDevice->GetShader("CBT.hlsl", ShaderType::Compute, "PrepareDispatchArgsCS", defines));
-		psoDesc.SetName("CBT Indirect Args");
-		m_pCBTIndirectArgsPSO = m_pDevice->CreatePipeline(psoDesc);
-
-		psoDesc.SetComputeShader(m_pDevice->GetShader("CBT.hlsl", ShaderType::Compute, "SumReductionFirstPassCS", defines));
-		psoDesc.SetName("CBT Sum Reduction First Pass");
-		m_pCBTSumReductionFirstPassPSO = m_pDevice->CreatePipeline(psoDesc);
-
-		psoDesc.SetComputeShader(m_pDevice->GetShader("CBT.hlsl", ShaderType::Compute, "SumReductionCS", defines));
-		psoDesc.SetName("CBT Sum Reduction");
-		m_pCBTSumReductionPSO = m_pDevice->CreatePipeline(psoDesc);
-
-		psoDesc.SetComputeShader(m_pDevice->GetShader("CBT.hlsl", ShaderType::Compute, "CacheBitfieldCS", defines));
-		psoDesc.SetName("CBT Cache Bitfield");
-		m_pCBTCacheBitfieldPSO = m_pDevice->CreatePipeline(psoDesc);
-
-		psoDesc.SetComputeShader(m_pDevice->GetShader("CBT.hlsl", ShaderType::Compute, "UpdateCS", defines));
-		psoDesc.SetName("CBT Update");
-		m_pCBTUpdatePSO = m_pDevice->CreatePipeline(psoDesc);
+		m_pCBTIndirectArgsPSO = m_pDevice->CreatePipeline(m_pCBTRS, "CBT.hlsl", "PrepareDispatchArgsCS", defines);
+		m_pCBTSumReductionFirstPassPSO = m_pDevice->CreatePipeline(m_pCBTRS, "CBT.hlsl", "SumReductionFirstPassCS", defines);
+		m_pCBTSumReductionPSO = m_pDevice->CreatePipeline(m_pCBTRS, "CBT.hlsl", "SumReductionCS", defines);
+		m_pCBTCacheBitfieldPSO = m_pDevice->CreatePipeline(m_pCBTRS, "CBT.hlsl", "CacheBitfieldCS", defines);
+		m_pCBTUpdatePSO = m_pDevice->CreatePipeline(m_pCBTRS, "CBT.hlsl", "UpdateCS", defines);
 	}
 
 	{
 		PipelineStateInitializer psoDesc;
-		psoDesc.SetRootSignature(m_pCBTRS->GetRootSignature());
-		psoDesc.SetVertexShader(m_pDevice->GetShader("CBT.hlsl", ShaderType::Vertex, "RenderVS", defines));
+		psoDesc.SetRootSignature(m_pCBTRS);
+		psoDesc.SetVertexShader("CBT.hlsl", "RenderVS", defines);
 		if (CBTSettings::GeometryShaderSubD > 0)
 		{
-			psoDesc.SetGeometryShader(m_pDevice->GetShader("CBT.hlsl", ShaderType::Geometry, "RenderGS", defines));
+			psoDesc.SetGeometryShader("CBT.hlsl", "RenderGS", defines);
 			psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT);
 		}
 		else
 		{
 			psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
 		}
-		psoDesc.SetPixelShader(m_pDevice->GetShader("CBT.hlsl", ShaderType::Pixel, "RenderPS", defines));
+		psoDesc.SetPixelShader("CBT.hlsl", "RenderPS", defines);
 		psoDesc.SetRenderTargetFormat(DXGI_FORMAT_R16G16B16A16_FLOAT, DXGI_FORMAT_D32_FLOAT, 1);
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
 		psoDesc.SetName("Draw CBT");
@@ -389,10 +373,10 @@ void CBTTessellation::SetupPipelines()
 	if (m_pDevice->GetCapabilities().SupportsMeshShading())
 	{
 		PipelineStateInitializer psoDesc;
-		psoDesc.SetRootSignature(m_pCBTRS->GetRootSignature());
-		psoDesc.SetAmplificationShader(m_pDevice->GetShader("CBT.hlsl", ShaderType::Amplification, "UpdateAS", defines));
-		psoDesc.SetMeshShader(m_pDevice->GetShader("CBT.hlsl", ShaderType::Mesh, "RenderMS", defines));
-		psoDesc.SetPixelShader(m_pDevice->GetShader("CBT.hlsl", ShaderType::Pixel, "RenderPS", defines));
+		psoDesc.SetRootSignature(m_pCBTRS);
+		psoDesc.SetAmplificationShader("CBT.hlsl", "UpdateAS", defines);
+		psoDesc.SetMeshShader("CBT.hlsl", "RenderMS", defines);
+		psoDesc.SetPixelShader("CBT.hlsl", "RenderPS", defines);
 		psoDesc.SetRenderTargetFormat(DXGI_FORMAT_R16G16B16A16_FLOAT, DXGI_FORMAT_D32_FLOAT, 1);
 		psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
@@ -402,9 +386,9 @@ void CBTTessellation::SetupPipelines()
 
 	{
 		PipelineStateInitializer psoDesc;
-		psoDesc.SetRootSignature(m_pCBTRS->GetRootSignature());
-		psoDesc.SetPixelShader(m_pDevice->GetShader("CBT.hlsl", ShaderType::Pixel, "DebugVisualizePS", defines));
-		psoDesc.SetVertexShader(m_pDevice->GetShader("CBT.hlsl", ShaderType::Vertex, "DebugVisualizeVS", defines));
+		psoDesc.SetRootSignature(m_pCBTRS);
+		psoDesc.SetPixelShader("CBT.hlsl", "DebugVisualizePS", defines);
+		psoDesc.SetVertexShader("CBT.hlsl", "DebugVisualizeVS", defines);
 		psoDesc.SetRenderTargetFormat(DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_UNKNOWN, 1);
 		psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
 		psoDesc.SetDepthEnabled(false);

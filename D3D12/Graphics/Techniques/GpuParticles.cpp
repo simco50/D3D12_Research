@@ -58,22 +58,19 @@ GpuParticles::GpuParticles(GraphicsDevice* pDevice)
 		m_pSimulateRS->FinalizeFromShader("Particle Simulation", pDevice->GetShader("ParticleSimulation.hlsl", ShaderType::Compute, "UpdateSimulationParameters"));
 	}
 	{
-		m_pPrepareArgumentsPS = pDevice->CreatePipeline(pDevice->GetShader("ParticleSimulation.hlsl", ShaderType::Compute, "UpdateSimulationParameters"), m_pSimulateRS);
-		m_pEmitPS = pDevice->CreatePipeline(pDevice->GetShader("ParticleSimulation.hlsl", ShaderType::Compute, "Emit"), m_pSimulateRS);
-		m_pSimulatePS = pDevice->CreatePipeline(pDevice->GetShader("ParticleSimulation.hlsl", ShaderType::Compute, "Simulate"), m_pSimulateRS);
-		m_pSimulateEndPS = pDevice->CreatePipeline(pDevice->GetShader("ParticleSimulation.hlsl", ShaderType::Compute, "SimulateEnd"), m_pSimulateRS);
+		m_pPrepareArgumentsPS = pDevice->CreatePipeline(m_pSimulateRS, "ParticleSimulation.hlsl", "UpdateSimulationParameters");
+		m_pEmitPS = pDevice->CreatePipeline(m_pSimulateRS, "ParticleSimulation.hlsl", "Emit");
+		m_pSimulatePS = pDevice->CreatePipeline(m_pSimulateRS, "ParticleSimulation.hlsl", "Simulate");
+		m_pSimulateEndPS = pDevice->CreatePipeline(m_pSimulateRS, "ParticleSimulation.hlsl", "SimulateEnd");
 	}
 	{
-		Shader* pVertexShader = pDevice->GetShader("ParticleRendering.hlsl", ShaderType::Vertex, "VSMain");
-		Shader* pPixelShader = pDevice->GetShader("ParticleRendering.hlsl", ShaderType::Pixel, "PSMain");
-
 		m_pRenderParticlesRS = new RootSignature(pDevice);
-		m_pRenderParticlesRS->FinalizeFromShader("Particle Rendering", pVertexShader);
+		m_pRenderParticlesRS->FinalizeFromShader("Particle Rendering", pDevice->GetShader("ParticleRendering.hlsl", ShaderType::Vertex, "VSMain"));
 
 		PipelineStateInitializer psoDesc;
-		psoDesc.SetVertexShader(pVertexShader);
-		psoDesc.SetPixelShader(pPixelShader);
-		psoDesc.SetRootSignature(m_pRenderParticlesRS->GetRootSignature());
+		psoDesc.SetVertexShader("ParticleRendering.hlsl", "VSMain");
+		psoDesc.SetPixelShader("ParticleRendering.hlsl", "PSMain");
+		psoDesc.SetRootSignature(m_pRenderParticlesRS);
 		psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
 		psoDesc.SetDepthWrite(false);
 		psoDesc.SetBlendMode(BlendMode::Alpha, false);

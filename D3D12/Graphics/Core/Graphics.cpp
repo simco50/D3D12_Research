@@ -515,7 +515,10 @@ RefCountPtr<Texture> GraphicsDevice::CreateTexture(const TextureDesc& desc, cons
 	}
 
 	D3D12_RESOURCE_DESC resourceDesc = GetResourceDesc(desc);
-	ID3D12Resource* pResource = GetParent()->CreateResource(resourceDesc, resourceState, D3D12_HEAP_TYPE_DEFAULT, pClearValue);
+
+	ID3D12Resource* pResource;
+	D3D12_HEAP_PROPERTIES properties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
+	VERIFY_HR_EX(m_pDevice->CreateCommittedResource(&properties, D3D12_HEAP_FLAG_NONE, &resourceDesc, resourceState, pClearValue, IID_PPV_ARGS(&pResource)), m_pDevice);
 
 	Texture* pTexture = new Texture(this, pName);
 	pTexture->m_pResource = pResource;
@@ -745,7 +748,9 @@ RefCountPtr<Buffer> GraphicsDevice::CreateBuffer(const BufferDesc& desc, const c
 		initialState = D3D12_RESOURCE_STATE_COMMON;
 	}
 
-	ID3D12Resource* pResource = GetParent()->CreateResource(resourceDesc, initialState, heapType);
+	ID3D12Resource* pResource;
+	D3D12_HEAP_PROPERTIES properties = CD3DX12_HEAP_PROPERTIES(heapType);
+	VERIFY_HR_EX(m_pDevice->CreateCommittedResource(&properties, D3D12_HEAP_FLAG_NONE, &resourceDesc, initialState, nullptr, IID_PPV_ARGS(&pResource)), m_pDevice);
 
 	Buffer* pBuffer = new Buffer(this, pName);
 	pBuffer->m_pResource = pResource;
@@ -794,26 +799,17 @@ RefCountPtr<Buffer> GraphicsDevice::CreateBuffer(const BufferDesc& desc, const c
 	return pBuffer;
 }
 
-ID3D12Resource* GraphicsDevice::CreateResource(const D3D12_RESOURCE_DESC& desc, D3D12_RESOURCE_STATES initialState, D3D12_HEAP_TYPE heapType, D3D12_CLEAR_VALUE* pClearValue /*= nullptr*/)
-{
-	ID3D12Resource* pResource;
-	D3D12_HEAP_PROPERTIES properties = CD3DX12_HEAP_PROPERTIES(heapType);
-	VERIFY_HR_EX(GetDevice()->CreateCommittedResource(&properties, D3D12_HEAP_FLAG_NONE, &desc, initialState, pClearValue, IID_PPV_ARGS(&pResource)), GetDevice());
-	return pResource;
-}
-
-void GraphicsDevice::ReleaseResource(ID3D12Resource* pResource)
+void GraphicsDevice::ReleaseResource(ID3D12Object* pResource)
 {
 	m_DeleteQueue.EnqueueResource(pResource, GetFrameFence());
 }
 
-RefCountPtr<PipelineState> GraphicsDevice::CreatePipeline(Shader* pComputeShader, RootSignature* pRootSignature)
+RefCountPtr<PipelineState> GraphicsDevice::CreatePipeline(RootSignature* pRootSignature, const char* pShaderPath, const char* entryPoint, const std::vector<ShaderDefine>& defines)
 {
-	checkf(pComputeShader && pComputeShader->GetType() == ShaderType::Compute, "Shader must be a Compute shader");
 	PipelineStateInitializer desc;
-	desc.SetRootSignature(pRootSignature->GetRootSignature());
-	desc.SetComputeShader(pComputeShader);
-	desc.SetName(pComputeShader->GetEntryPoint());
+	desc.SetRootSignature(pRootSignature);
+	desc.SetComputeShader(pShaderPath, entryPoint, defines);
+	desc.SetName(Sprintf("%s:%s", pShaderPath, entryPoint).c_str());
 	return CreatePipeline(desc);
 }
 
