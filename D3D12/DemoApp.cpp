@@ -1338,8 +1338,6 @@ void DemoApp::Present()
 void DemoApp::OnResize(int width, int height)
 {
 	E_LOG(Info, "Window resized: %dx%d", width, height);
-	m_WindowWidth = width;
-	m_WindowHeight = height;
 
 	m_pDevice->IdleGPU();
 	m_pSwapchain->OnResize(width, height);
@@ -1684,7 +1682,8 @@ void DemoApp::UpdateImGui()
 	static bool showProfiler = false;
 	static bool showImguiDemo = false;
 
-	ImGui::DockSpaceOverViewport(ImGui::GetMainViewport());
+	ImGuiViewport* pViewport = ImGui::GetMainViewport();
+	ImGui::DockSpaceOverViewport(pViewport);
 
 	if (ImGui::BeginMainMenuBar())
 	{
@@ -1778,7 +1777,7 @@ void DemoApp::UpdateImGui()
 	{
 		//Render Color Legend
 		ImGui::SetNextWindowSize(ImVec2(60, 255));
-		ImGui::SetNextWindowPos(ImVec2((float)m_WindowWidth - 65, (float)m_WindowHeight - 280));
+		ImGui::SetNextWindowPos(ImVec2((float)pViewport->Size.x - 65, (float)pViewport->Size.x - 280));
 		ImGui::Begin("Visualize Light Density", 0, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar);
 		ImGui::SetWindowFontScale(1.2f);
 		ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(0, 0, 0, 255));
@@ -1807,7 +1806,7 @@ void DemoApp::UpdateImGui()
 		ImGui::End();
 	}
 
-	console.Update(ImVec2(300, (float)m_WindowHeight), ImVec2((float)m_WindowWidth - 300 * 2, 250));
+	console.Update(ImVec2(300, (float)pViewport->Size.x), ImVec2((float)pViewport->Size.x - 300 * 2, 250));
 
 	if (showImguiDemo)
 	{
@@ -1855,7 +1854,7 @@ void DemoApp::UpdateImGui()
 	{
 		if (ImGui::Begin("Profiler", &showProfiler))
 		{
-			ImGui::Text("MS: %4.2f | FPS: %4.2f | %d x %d", Time::DeltaTime() * 1000.0f, 1.0f / Time::DeltaTime(), m_WindowWidth, m_WindowHeight);
+			ImGui::Text("MS: %4.2f | FPS: %4.2f | %d x %d", Time::DeltaTime() * 1000.0f, 1.0f / Time::DeltaTime(), m_pHDRRenderTarget->GetWidth(), m_pHDRRenderTarget->GetHeight());
 			ImGui::PlotLines("", m_FrameTimes.data(), (int)m_FrameTimes.size(), m_Frame % m_FrameTimes.size(), 0, 0.0f, 0.03f, ImVec2(ImGui::GetContentRegionAvail().x, 100));
 
 			if (ImGui::TreeNodeEx("Profiler", ImGuiTreeNodeFlags_DefaultOpen))

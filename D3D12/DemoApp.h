@@ -58,9 +58,6 @@ private:
 	RefCountPtr<GraphicsDevice> m_pDevice;
 	RefCountPtr<SwapChain> m_pSwapchain;
 
-	uint32 m_WindowWidth;
-	uint32 m_WindowHeight;
-
 	uint32 m_Frame = 0;
 	std::array<float, 180> m_FrameTimes{};
 
