@@ -175,9 +175,8 @@ private:
 	RefCountPtr<RootSignature> m_pVisibilityRenderingRS;
 	RefCountPtr<PipelineState> m_pVisibilityRenderingPSO;
 	RefCountPtr<PipelineState> m_pVisibilityRenderingMaskedPSO;
-	RefCountPtr<Texture> m_pVisibilityTexture;
-	RefCountPtr<RootSignature> m_pVisibilityShadingRS;
 	RefCountPtr<PipelineState> m_pVisibilityShadingPSO;
+	RefCountPtr<Texture> m_pVisibilityTexture;
 
 	Texture* m_pVisualizeTexture = nullptr;
 	SceneView m_SceneData;

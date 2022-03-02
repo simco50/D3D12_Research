@@ -858,10 +858,10 @@ void DemoApp::Update()
 					renderContext.InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 					renderContext.InsertResourceBarrier(pNormalsTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-					renderContext.SetComputeRootSignature(m_pVisibilityShadingRS);
+					renderContext.SetComputeRootSignature(m_pVisibilityRenderingRS);
 					renderContext.SetPipelineState(m_pVisibilityShadingPSO);
 
-					renderContext.SetRootCBV(0, GetViewUniforms(m_SceneData, GetCurrentRenderTarget()));
+					renderContext.SetRootCBV(1, GetViewUniforms(m_SceneData, GetCurrentRenderTarget()));
 
 					const D3D12_CPU_DESCRIPTOR_HANDLE srvs[] =
 					{
@@ -871,7 +871,7 @@ void DemoApp::Update()
 						m_pPreviousColor->GetSRV()->GetDescriptor(),
 					};
 
-					renderContext.BindResources(1, 0, srvs, ARRAYSIZE(srvs));
+					renderContext.BindResources(2, 0, srvs, ARRAYSIZE(srvs));
 
 					const D3D12_CPU_DESCRIPTOR_HANDLE uavs[] =
 					{
@@ -879,7 +879,7 @@ void DemoApp::Update()
 						pNormalsTarget->GetUAV()->GetDescriptor(),
 					};
 
-					renderContext.BindResources(2, 0, uavs, ARRAYSIZE(uavs));
+					renderContext.BindResources(3, 0, uavs, ARRAYSIZE(uavs));
 					renderContext.Dispatch(ComputeUtils::GetNumThreadGroups(GetCurrentRenderTarget()->GetWidth(), 16, GetCurrentRenderTarget()->GetHeight(), 16));
 					renderContext.InsertUavBarrier();
 				});
@@ -1546,12 +1546,14 @@ void DemoApp::InitializePipelines()
 
 	if (m_pDevice->GetCapabilities().SupportsMeshShading())
 	{
+		//Rootsignature
+		m_pVisibilityRenderingRS = new RootSignature(m_pDevice);
+		m_pVisibilityRenderingRS->AddRootConstants(0, 3);
+		m_pVisibilityRenderingRS->AddConstantBufferView(100);
+		m_pVisibilityRenderingRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 8);
+		m_pVisibilityRenderingRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 8);
+		m_pVisibilityRenderingRS->Finalize("Visibility Rendering");
 		{
-			//Rootsignature
-			m_pVisibilityRenderingRS = new RootSignature(m_pDevice);
-			m_pVisibilityRenderingRS->AddRootConstants(0, 3);
-			m_pVisibilityRenderingRS->AddConstantBufferView(100);
-			m_pVisibilityRenderingRS->Finalize("Visibility Rendering");
 
 			//Pipeline state
 			PipelineStateInitializer psoDesc;
@@ -1573,13 +1575,7 @@ void DemoApp::InitializePipelines()
 
 		//Visibility Shading
 		{
-			//Rootsignature
-			m_pVisibilityShadingRS = new RootSignature(m_pDevice);
-			m_pVisibilityShadingRS->AddConstantBufferView(100);
-			m_pVisibilityShadingRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 4);
-			m_pVisibilityShadingRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 2);
-			m_pVisibilityShadingRS->Finalize("Visibility Shading");
-			m_pVisibilityShadingPSO = m_pDevice->CreateComputePipeline(m_pVisibilityShadingRS, "VisibilityShading.hlsl", "CSMain");
+			m_pVisibilityShadingPSO = m_pDevice->CreateComputePipeline(m_pVisibilityRenderingRS, "VisibilityShading.hlsl", "CSMain");
 		}
 	}
 }
