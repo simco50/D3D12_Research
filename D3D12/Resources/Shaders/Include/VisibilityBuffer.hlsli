@@ -54,3 +54,50 @@ T BaryInterpolate(T a, T b, T c, float3 barycentrics)
 {
 	return a * barycentrics.x + b * barycentrics.y + c * barycentrics.z;
 }
+
+struct BaryDerivs
+{
+	float3 Barycentrics;
+	float3 DDX_Barycentrics;
+	float3 DDY_Barycentrics;
+};
+
+BaryDerivs ComputeBarycentrics(float2 pixelClip, VisBufferData visibility, float3 worldPos0, float3 worldPos1, float3 worldPos2)
+{
+	BaryDerivs bary;
+
+	float3 rayDir = CreateCameraRay(pixelClip);
+
+	float3 neighborRayDirX = QuadReadAcrossX(rayDir);
+    float3 neighborRayDirY = QuadReadAcrossY(rayDir);
+
+	float3 edge1 = worldPos1 - worldPos0;
+	float3 edge2 = worldPos2 - worldPos0;
+	float3 triNormal = cross(edge2.xyz, edge1.xyz);
+
+    float hitT;
+    RayPlaneIntersection(hitT, cView.ViewPosition.xyz, rayDir, worldPos0.xyz, triNormal);
+    float3 hitPoint = cView.ViewPosition.xyz + rayDir * hitT;
+   	bary.Barycentrics = GetBarycentricsFromPlanePoint(hitPoint, worldPos0.xyz, worldPos1.xyz, worldPos2.xyz);
+
+    if (WaveActiveAllEqual((uint)visibility) && WaveActiveCountBits(true) == WaveGetLaneCount())
+    {
+        bary.DDX_Barycentrics = ddx(bary.Barycentrics);
+        bary.DDY_Barycentrics = ddy(bary.Barycentrics);
+    }
+    else
+    {
+        float hitTX;
+        RayPlaneIntersection(hitTX, cView.ViewPosition.xyz, neighborRayDirX, worldPos0.xyz, triNormal);
+
+        float hitTY;
+        RayPlaneIntersection(hitTY, cView.ViewPosition.xyz, neighborRayDirY, worldPos0.xyz, triNormal);
+
+        float3 hitPointX = cView.ViewPosition.xyz + neighborRayDirX * hitTX;
+        float3 hitPointY = cView.ViewPosition.xyz + neighborRayDirY * hitTY;
+
+        bary.DDX_Barycentrics = bary.Barycentrics - GetBarycentricsFromPlanePoint(hitPointX, worldPos0.xyz, worldPos1.xyz, worldPos2.xyz);
+        bary.DDY_Barycentrics = bary.Barycentrics - GetBarycentricsFromPlanePoint(hitPointY, worldPos0.xyz, worldPos1.xyz, worldPos2.xyz);
+    }
+	return bary;
+}
