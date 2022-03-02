@@ -82,7 +82,7 @@ void SSAO::Execute(RGGraph& graph, const SceneView& sceneData, Texture* pTarget,
 			context.InsertResourceBarrier(m_pAmbientOcclusionIntermediate, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 			context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 
-			context.SetComputeRootSignature(m_pSSAOBlurRS);
+			context.SetComputeRootSignature(m_pSSAORS);
 			context.SetPipelineState(m_pSSAOBlurPSO);
 
 			struct ShaderParameters
@@ -117,27 +117,13 @@ void SSAO::Execute(RGGraph& graph, const SceneView& sceneData, Texture* pTarget,
 
 void SSAO::SetupPipelines()
 {
-	//SSAO
-	{
-		m_pSSAORS = new RootSignature(m_pDevice);
-		m_pSSAORS->FinalizeFromShader("SSAO", m_pDevice->GetShader("SSAO.hlsl", ShaderType::Compute, "CSMain"));
+	m_pSSAORS = new RootSignature(m_pDevice);
+	m_pSSAORS->AddConstantBufferView(0);
+	m_pSSAORS->AddConstantBufferView(100);
+	m_pSSAORS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 2);
+	m_pSSAORS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2);
+	m_pSSAORS->Finalize("SSAO");
 
-		PipelineStateInitializer psoDesc;
-		psoDesc.SetComputeShader("SSAO.hlsl", "CSMain");
-		psoDesc.SetRootSignature(m_pSSAORS);
-		psoDesc.SetName("SSAO");
-		m_pSSAOPSO = m_pDevice->CreatePipeline(psoDesc);
-	}
-
-	//SSAO Blur
-	{
-		m_pSSAOBlurRS = new RootSignature(m_pDevice);
-		m_pSSAOBlurRS->FinalizeFromShader("SSAO Blur", m_pDevice->GetShader("SSAOBlur.hlsl", ShaderType::Compute, "CSMain"));
-
-		PipelineStateInitializer psoDesc;
-		psoDesc.SetComputeShader("SSAOBlur.hlsl", "CSMain");
-		psoDesc.SetRootSignature(m_pSSAOBlurRS);
-		psoDesc.SetName("SSAO Blur");
-		m_pSSAOBlurPSO = m_pDevice->CreatePipeline(psoDesc);
-	}
+	m_pSSAOPSO = m_pDevice->CreateComputePipeline(m_pSSAORS, "SSAO.hlsl", "CSMain");
+	m_pSSAOBlurPSO = m_pDevice->CreateComputePipeline(m_pSSAORS, "SSAOBlur.hlsl", "CSMain");
 }

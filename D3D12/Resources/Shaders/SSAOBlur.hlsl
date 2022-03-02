@@ -1,10 +1,5 @@
 #include "CommonBindings.hlsli"
 
-#define RootSig ROOT_SIG("CBV(b0), " \
-				"CBV(b100), " \
-				"DescriptorTable(UAV(u0, numDescriptors = 1)), " \
-				"DescriptorTable(SRV(t0, numDescriptors = 2))")
-
 #define THREAD_GROUP_SIZE (256)
 #define KERNEL_LENGTH (4)
 #define BLUR_WEIGHTS (2 * KERNEL_LENGTH + 1)
@@ -37,7 +32,6 @@ static const float s_BlurWeightsNormalized[BLUR_WEIGHTS] = {
 groupshared float gAoCache[GS_CACHE_SIZE];
 groupshared float gDepthCache[GS_CACHE_SIZE];
 
-[RootSignature(RootSig)]
 [numthreads(THREAD_GROUP_SIZE, 1, 1)]
 void CSMain(uint3 groupId : SV_GroupID, uint groupIndex : SV_GroupIndex)
 {

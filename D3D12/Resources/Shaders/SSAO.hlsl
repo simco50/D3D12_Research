@@ -4,11 +4,6 @@
 #define SSAO_SAMPLES 64
 #define BLOCK_SIZE 16
 
-#define RootSig ROOT_SIG("CBV(b0), " \
-				"CBV(b100), " \
-				"DescriptorTable(UAV(u0, numDescriptors = 1)), " \
-				"DescriptorTable(SRV(t0, numDescriptors = 1))")
-
 struct PassData
 {
 	uint2 Dimensions;
@@ -31,7 +26,6 @@ struct CS_INPUT
 	uint GroupIndex : SV_GroupIndex;
 };
 
-[RootSignature(RootSig)]
 [numthreads(BLOCK_SIZE, BLOCK_SIZE, 1)]
 void CSMain(CS_INPUT input)
 {

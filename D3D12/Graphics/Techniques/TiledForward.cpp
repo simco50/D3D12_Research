@@ -207,12 +207,7 @@ void TiledForward::SetupPipelines()
 	{
 		m_pComputeLightCullRS = new RootSignature(m_pDevice);
 		m_pComputeLightCullRS->FinalizeFromShader("Tiled Light Culling", m_pDevice->GetShader("LightCulling.hlsl", ShaderType::Compute, "CSMain"));
-
-		PipelineStateInitializer psoDesc;
-		psoDesc.SetComputeShader("LightCulling.hlsl", "CSMain");
-		psoDesc.SetRootSignature(m_pComputeLightCullRS);
-		psoDesc.SetName("Tiled Light Culling");
-		m_pComputeLightCullPSO = m_pDevice->CreatePipeline(psoDesc);
+		m_pComputeLightCullPSO = m_pDevice->CreateComputePipeline(m_pComputeLightCullRS, "LightCulling.hlsl", "CSMain");
 
 		m_pLightIndexCounter = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(2, sizeof(uint32)), "Light Index Counter");
 		m_pLightIndexCounterRawUAV = m_pDevice->CreateUAV(m_pLightIndexCounter, BufferUAVDesc::CreateRaw());
@@ -259,11 +254,6 @@ void TiledForward::SetupPipelines()
 	{
 		m_pVisualizeLightsRS = new RootSignature(m_pDevice);
 		m_pVisualizeLightsRS->FinalizeFromShader("Light Density Visualization", m_pDevice->GetShader("VisualizeLightCount.hlsl", ShaderType::Compute, "DebugLightDensityCS", { "TILED_FORWARD" }));
-
-		PipelineStateInitializer psoDesc;
-		psoDesc.SetComputeShader("VisualizeLightCount.hlsl", "DebugLightDensityCS", { "TILED_FORWARD" });
-		psoDesc.SetRootSignature(m_pVisualizeLightsRS);
-		psoDesc.SetName("Light Density Visualization");
-		m_pVisualizeLightsPSO = m_pDevice->CreatePipeline(psoDesc);
+		m_pVisualizeLightsPSO = m_pDevice->CreateComputePipeline(m_pVisualizeLightsRS, "VisualizeLightCount.hlsl", "DebugLightDensityCS", { "TILED_FORWARD" });
 	}
 }

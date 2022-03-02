@@ -22,7 +22,6 @@ private:
 	RefCountPtr<Texture> m_pAmbientOcclusionIntermediate;
 	RefCountPtr<RootSignature> m_pSSAORS;
 	RefCountPtr<PipelineState> m_pSSAOPSO;
-	RefCountPtr<RootSignature> m_pSSAOBlurRS;
 	RefCountPtr<PipelineState> m_pSSAOBlurPSO;
 };
 

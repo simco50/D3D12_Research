@@ -804,7 +804,7 @@ void GraphicsDevice::ReleaseResource(ID3D12Object* pResource)
 	m_DeleteQueue.EnqueueResource(pResource, GetFrameFence());
 }
 
-RefCountPtr<PipelineState> GraphicsDevice::CreatePipeline(RootSignature* pRootSignature, const char* pShaderPath, const char* entryPoint, const std::vector<ShaderDefine>& defines)
+RefCountPtr<PipelineState> GraphicsDevice::CreateComputePipeline(RefCountPtr<RootSignature>& pRootSignature, const char* pShaderPath, const char* entryPoint, const std::vector<ShaderDefine>& defines)
 {
 	PipelineStateInitializer desc;
 	desc.SetRootSignature(pRootSignature);

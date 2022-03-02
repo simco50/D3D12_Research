@@ -343,11 +343,11 @@ void CBTTessellation::SetupPipelines()
 	m_pCBTRS->Finalize("CBT");
 
 	{
-		m_pCBTIndirectArgsPSO = m_pDevice->CreatePipeline(m_pCBTRS, "CBT.hlsl", "PrepareDispatchArgsCS", defines);
-		m_pCBTSumReductionFirstPassPSO = m_pDevice->CreatePipeline(m_pCBTRS, "CBT.hlsl", "SumReductionFirstPassCS", defines);
-		m_pCBTSumReductionPSO = m_pDevice->CreatePipeline(m_pCBTRS, "CBT.hlsl", "SumReductionCS", defines);
-		m_pCBTCacheBitfieldPSO = m_pDevice->CreatePipeline(m_pCBTRS, "CBT.hlsl", "CacheBitfieldCS", defines);
-		m_pCBTUpdatePSO = m_pDevice->CreatePipeline(m_pCBTRS, "CBT.hlsl", "UpdateCS", defines);
+		m_pCBTIndirectArgsPSO = m_pDevice->CreateComputePipeline(m_pCBTRS, "CBT.hlsl", "PrepareDispatchArgsCS", defines);
+		m_pCBTSumReductionFirstPassPSO = m_pDevice->CreateComputePipeline(m_pCBTRS, "CBT.hlsl", "SumReductionFirstPassCS", defines);
+		m_pCBTSumReductionPSO = m_pDevice->CreateComputePipeline(m_pCBTRS, "CBT.hlsl", "SumReductionCS", defines);
+		m_pCBTCacheBitfieldPSO = m_pDevice->CreateComputePipeline(m_pCBTRS, "CBT.hlsl", "CacheBitfieldCS", defines);
+		m_pCBTUpdatePSO = m_pDevice->CreateComputePipeline(m_pCBTRS, "CBT.hlsl", "UpdateCS", defines);
 	}
 
 	{

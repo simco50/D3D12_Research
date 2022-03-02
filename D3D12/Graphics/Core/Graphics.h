@@ -202,7 +202,7 @@ public:
 	void ReleaseResource(ID3D12Object* pResource);
 
 	RefCountPtr<PipelineState> CreatePipeline(const PipelineStateInitializer& psoDesc);
-	RefCountPtr<PipelineState> CreatePipeline(RootSignature* pRootSignature, const char* pShaderPath, const char* entryPoint = "", const std::vector<ShaderDefine>& defines = {});
+	RefCountPtr<PipelineState> CreateComputePipeline(RefCountPtr<RootSignature>& pRootSignature, const char* pShaderPath, const char* entryPoint = "", const std::vector<ShaderDefine>& defines = {});
 	RefCountPtr<StateObject> CreateStateObject(const StateObjectInitializer& stateDesc);
 	RefCountPtr<ShaderResourceView> CreateSRV(Buffer* pBuffer, const BufferSRVDesc& desc);
 	RefCountPtr<UnorderedAccessView> CreateUAV(Buffer* pBuffer, const BufferUAVDesc& desc);

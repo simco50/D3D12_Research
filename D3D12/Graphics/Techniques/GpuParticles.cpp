@@ -58,10 +58,10 @@ GpuParticles::GpuParticles(GraphicsDevice* pDevice)
 		m_pSimulateRS->FinalizeFromShader("Particle Simulation", pDevice->GetShader("ParticleSimulation.hlsl", ShaderType::Compute, "UpdateSimulationParameters"));
 	}
 	{
-		m_pPrepareArgumentsPS = pDevice->CreatePipeline(m_pSimulateRS, "ParticleSimulation.hlsl", "UpdateSimulationParameters");
-		m_pEmitPS = pDevice->CreatePipeline(m_pSimulateRS, "ParticleSimulation.hlsl", "Emit");
-		m_pSimulatePS = pDevice->CreatePipeline(m_pSimulateRS, "ParticleSimulation.hlsl", "Simulate");
-		m_pSimulateEndPS = pDevice->CreatePipeline(m_pSimulateRS, "ParticleSimulation.hlsl", "SimulateEnd");
+		m_pPrepareArgumentsPS = pDevice->CreateComputePipeline(m_pSimulateRS, "ParticleSimulation.hlsl", "UpdateSimulationParameters");
+		m_pEmitPS = pDevice->CreateComputePipeline(m_pSimulateRS, "ParticleSimulation.hlsl", "Emit");
+		m_pSimulatePS = pDevice->CreateComputePipeline(m_pSimulateRS, "ParticleSimulation.hlsl", "Simulate");
+		m_pSimulateEndPS = pDevice->CreateComputePipeline(m_pSimulateRS, "ParticleSimulation.hlsl", "SimulateEnd");
 	}
 	{
 		m_pRenderParticlesRS = new RootSignature(pDevice);

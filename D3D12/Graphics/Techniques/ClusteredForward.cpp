@@ -466,24 +466,14 @@ void ClusteredForward::SetupPipelines()
 	{
 		m_pCreateAabbRS = new RootSignature(m_pDevice);
 		m_pCreateAabbRS->FinalizeFromShader("Create AABB", m_pDevice->GetShader("ClusterAABBGeneration.hlsl", ShaderType::Compute, "GenerateAABBs"));
-
-		PipelineStateInitializer psoDesc;
-		psoDesc.SetComputeShader("ClusterAABBGeneration.hlsl", "GenerateAABBs");
-		psoDesc.SetRootSignature(m_pCreateAabbRS);
-		psoDesc.SetName("Create AABB");
-		m_pCreateAabbPSO = m_pDevice->CreatePipeline(psoDesc);
+		m_pCreateAabbPSO = m_pDevice->CreateComputePipeline(m_pCreateAabbRS, "ClusterAABBGeneration.hlsl", "GenerateAABBs");
 	}
 
 	//Light Culling
 	{
 		m_pLightCullingRS = new RootSignature(m_pDevice);
 		m_pLightCullingRS->FinalizeFromShader("Light Culling", m_pDevice->GetShader("ClusteredLightCulling.hlsl", ShaderType::Compute, "LightCulling"));
-
-		PipelineStateInitializer psoDesc;
-		psoDesc.SetComputeShader("ClusteredLightCulling.hlsl", "LightCulling");
-		psoDesc.SetRootSignature(m_pLightCullingRS);
-		psoDesc.SetName("Light Culling");
-		m_pLightCullingPSO = m_pDevice->CreatePipeline(psoDesc);
+		m_pLightCullingPSO = m_pDevice->CreateComputePipeline(m_pLightCullingRS, "ClusteredLightCulling.hlsl", "LightCulling");
 
 		m_pLightCullingCommandSignature = new CommandSignature(m_pDevice);
 		m_pLightCullingCommandSignature->AddDispatch();
@@ -575,33 +565,13 @@ void ClusteredForward::SetupPipelines()
 	{
 		m_pVisualizeLightsRS = new RootSignature(m_pDevice);
 		m_pVisualizeLightsRS->FinalizeFromShader("Light Density Visualization", m_pDevice->GetShader("VisualizeLightCount.hlsl", ShaderType::Compute, "DebugLightDensityCS", { "CLUSTERED_FORWARD" }));
-
-		PipelineStateInitializer psoDesc;
-		psoDesc.SetComputeShader("VisualizeLightCount.hlsl", "DebugLightDensityCS", { "CLUSTERED_FORWARD" });
-		psoDesc.SetRootSignature(m_pVisualizeLightsRS);
-		psoDesc.SetName("Light Density Visualization");
-		m_pVisualizeLightsPSO = m_pDevice->CreatePipeline(psoDesc);
+		m_pVisualizeLightsPSO = m_pDevice->CreateComputePipeline(m_pVisualizeLightsRS, "VisualizeLightCount.hlsl", "DebugLightDensityCS", { "CLUSTERED_FORWARD" });
 	}
 
 	{
 		m_pVolumetricLightingRS = new RootSignature(m_pDevice);
 		m_pVolumetricLightingRS->FinalizeFromShader("Inject Fog Lighting", m_pDevice->GetShader("VolumetricFog.hlsl", ShaderType::Compute, "InjectFogLightingCS", { }));
-
-		{
-			PipelineStateInitializer psoDesc;
-			psoDesc.SetComputeShader("VolumetricFog.hlsl", "InjectFogLightingCS", { });
-			psoDesc.SetRootSignature(m_pVolumetricLightingRS);
-			psoDesc.SetName("Inject Fog Lighting");
-			m_pInjectVolumeLightPSO = m_pDevice->CreatePipeline(psoDesc);
-		}
-
-		{
-			PipelineStateInitializer psoDesc;
-			psoDesc.SetComputeShader("VolumetricFog.hlsl", "AccumulateFogCS", { });
-			psoDesc.SetRootSignature(m_pVolumetricLightingRS);
-			psoDesc.SetName("Accumulate Fog Lighting");
-			m_pAccumulateVolumeLightPSO = m_pDevice->CreatePipeline(psoDesc);
-		}
-
+		m_pInjectVolumeLightPSO = m_pDevice->CreateComputePipeline(m_pVolumetricLightingRS, "VolumetricFog.hlsl", "InjectFogLightingCS");
+		m_pAccumulateVolumeLightPSO = m_pDevice->CreateComputePipeline(m_pVolumetricLightingRS, "VolumetricFog.hlsl", "AccumulateFogCS");
 	}
 }
