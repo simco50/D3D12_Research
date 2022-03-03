@@ -5,17 +5,14 @@ class DescriptorHandle
 public:
 	DescriptorHandle()
 		: CpuHandle(InvalidCPUHandle), GpuHandle(InvalidGPUHandle), HeapIndex(InvalidHeapIndex)
-	{
-
-	}
+	{}
 
 	DescriptorHandle(
 		D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle,
 		uint32 heapIndex,
 		D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle = InvalidGPUHandle)
 		: CpuHandle(cpuHandle), GpuHandle(gpuHandle), HeapIndex(heapIndex)
-	{
-	}
+	{}
 
 	void OffsetInline(uint32 numDescriptors, uint32 descriptorSize)
 	{

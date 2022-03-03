@@ -1,7 +1,9 @@
 #pragma once
 
 class GraphicsDevice;
-class ResourceView;
+class UnorderedAccessView;
+class ShaderResourceView;
+class CommandContext;
 
 class GraphicsObject
 {
@@ -27,6 +29,8 @@ public:
 		}
 		return result;
 	}
+
+	uint32 GetNumRefs() const { return m_RefCount; }
 
 	inline GraphicsDevice* GetParent() const { return m_pParent; }
 
@@ -86,10 +90,10 @@ private:
 class GraphicsResource : public GraphicsObject
 {
 	friend class CommandContext;
+	friend class GraphicsDevice;
 
 public:
-	GraphicsResource(GraphicsDevice* pParent);
-	GraphicsResource(GraphicsDevice* pParent, ID3D12Resource* pResource, D3D12_RESOURCE_STATES state);
+	GraphicsResource(GraphicsDevice* pParent, ID3D12Resource* pResource);
 	~GraphicsResource();
 
 	void* Map(uint32 subResource = 0, uint64 readFrom = 0, uint64 readTo = 0);
@@ -100,6 +104,12 @@ public:
 	void Destroy();
 	void SetName(const char* pName);
 	const std::string& GetName() { return m_Name; }
+
+	UnorderedAccessView* GetUAV() const { return m_pUav; }
+	ShaderResourceView* GetSRV() const { return m_pSrv; }
+
+	int32 GetSRVIndex() const;
+	int32 GetUAVIndex() const;
 
 	inline ID3D12Resource* GetResource() const { return m_pResource; }
 	inline D3D12_GPU_VIRTUAL_ADDRESS GetGpuHandle() const { return m_pResource->GetGPUVirtualAddress(); }
@@ -113,4 +123,6 @@ protected:
 	ID3D12Resource* m_pResource = nullptr;
 	void* m_pMappedData = nullptr;
 	ResourceState m_ResourceState;
+	RefCountPtr<ShaderResourceView> m_pSrv;
+	RefCountPtr<UnorderedAccessView> m_pUav;
 };

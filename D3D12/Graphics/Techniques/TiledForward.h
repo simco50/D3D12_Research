@@ -1,5 +1,4 @@
 #pragma once
-#include "Graphics/RenderGraph/RenderGraphDefinitions.h"
 class RootSignature;
 class GraphicsDevice;
 class PipelineState;

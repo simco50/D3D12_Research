@@ -520,9 +520,7 @@ RefCountPtr<Texture> GraphicsDevice::CreateTexture(const TextureDesc& desc, cons
 	D3D12_HEAP_PROPERTIES properties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
 	VERIFY_HR_EX(m_pDevice->CreateCommittedResource(&properties, D3D12_HEAP_FLAG_NONE, &resourceDesc, resourceState, pClearValue, IID_PPV_ARGS(&pResource)), m_pDevice);
 
-	Texture* pTexture = new Texture(this, pName);
-	pTexture->m_pResource = pResource;
-	pTexture->m_Desc = desc;
+	Texture* pTexture = new Texture(this, desc, pResource);
 	pTexture->SetResourceState(resourceState);
 	pTexture->SetName(pName);
 
@@ -638,11 +636,9 @@ RefCountPtr<Texture> GraphicsDevice::CreateTextureForSwapchain(ID3D12Resource* p
 	desc.SampleCount = resourceDesc.SampleDesc.Count;
 	desc.Usage = TextureFlag::RenderTarget;
 
-	Texture* pTexture = new Texture(this, "Swapchain Texture");
+	Texture* pTexture = new Texture(this, desc, pSwapchainResource);
 	pTexture->SetImmediateDelete(true);
-	D3D::SetObjectName(pSwapchainResource, "Backbuffer");
-	pTexture->m_pResource = pSwapchainResource;
-	pTexture->m_Desc = desc;
+	pTexture->SetName("Backbuffer");
 	pTexture->SetResourceState(D3D12_RESOURCE_STATE_PRESENT);
 
 	pTexture->m_Rtv = GetParent()->AllocateDescriptor<D3D12_RENDER_TARGET_VIEW_DESC>();
@@ -752,9 +748,7 @@ RefCountPtr<Buffer> GraphicsDevice::CreateBuffer(const BufferDesc& desc, const c
 	D3D12_HEAP_PROPERTIES properties = CD3DX12_HEAP_PROPERTIES(heapType);
 	VERIFY_HR_EX(m_pDevice->CreateCommittedResource(&properties, D3D12_HEAP_FLAG_NONE, &resourceDesc, initialState, nullptr, IID_PPV_ARGS(&pResource)), m_pDevice);
 
-	Buffer* pBuffer = new Buffer(this, pName);
-	pBuffer->m_pResource = pResource;
-	pBuffer->m_Desc = desc;
+	Buffer* pBuffer = new Buffer(this, desc, pResource);
 	pBuffer->SetResourceState(initialState);
 	pBuffer->SetName(pName);
 
@@ -1204,12 +1198,7 @@ SwapChain::SwapChain(GraphicsDevice* pDevice, IDXGIFactory6* pFactory, WindowHan
 
 	m_pSwapchain.Reset();
 	swapChain->QueryInterface(&m_pSwapchain);
-
 	m_Backbuffers.resize(numFrames);
-	for (uint32 i = 0; i < numFrames; ++i)
-	{
-		m_Backbuffers[i] = new Texture(pDevice, "Render Target");
-	}
 }
 
 SwapChain::~SwapChain()
@@ -1221,7 +1210,7 @@ void SwapChain::OnResize(uint32 width, uint32 height)
 {
 	for (size_t i = 0; i < m_Backbuffers.size(); ++i)
 	{
-		m_Backbuffers[i]->Destroy();
+		m_Backbuffers[i].Reset();
 	}
 
 	//Resize the buffers

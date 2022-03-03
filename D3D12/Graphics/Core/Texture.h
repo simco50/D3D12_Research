@@ -1,14 +1,6 @@
 #pragma once
 #include "GraphicsResource.h"
 
-class CommandContext;
-class UnorderedAccessView;
-class ShaderResourceView;
-class ResourceView;
-class Image;
-struct TextureUAVDesc;
-struct TextureSRVDesc;
-
 enum class TextureFlag
 {
 	None = 0,
@@ -220,32 +212,23 @@ class Texture : public GraphicsResource
 public:
 	friend class GraphicsDevice;
 
-	Texture(GraphicsDevice* pParent, const char* pName = "");
+	Texture(GraphicsDevice* pParent, const TextureDesc& desc, ID3D12Resource* pResource);
 
 	uint32 GetWidth() const { return m_Desc.Width; }
 	uint32 GetHeight() const { return m_Desc.Height; }
 	uint32 GetDepth() const { return m_Desc.DepthOrArraySize; }
 	uint32 GetArraySize() const { return m_Desc.DepthOrArraySize; }
 	uint32 GetMipLevels() const { return m_Desc.Mips; }
+	DXGI_FORMAT GetFormat() const { return m_Desc.Format; }
+	const ClearBinding& GetClearBinding() const { return m_Desc.ClearBindingValue; }
 	const TextureDesc& GetDesc() const { return m_Desc; }
 
 	D3D12_CPU_DESCRIPTOR_HANDLE GetRTV() const;
 	D3D12_CPU_DESCRIPTOR_HANDLE GetDSV(bool writeable = true) const;
-	UnorderedAccessView* GetUAV() const { return m_pUav; }
-	ShaderResourceView* GetSRV() const { return m_pSrv; }
-
-	int32 GetSRVIndex() const;
-	int32 GetUAVIndex() const;
-
-	DXGI_FORMAT GetFormat() const { return m_Desc.Format; }
-	const ClearBinding& GetClearBinding() const { return m_Desc.ClearBindingValue; }
 
 private:
 	TextureDesc m_Desc;
 
 	D3D12_CPU_DESCRIPTOR_HANDLE m_Rtv = {};
 	D3D12_CPU_DESCRIPTOR_HANDLE m_ReadOnlyDsv = {};
-
-	RefCountPtr<ShaderResourceView> m_pSrv;
-	RefCountPtr<UnorderedAccessView> m_pUav;
 };

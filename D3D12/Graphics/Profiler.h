@@ -1,8 +1,8 @@
 #pragma once
-#include "Graphics/Core/Graphics.h"
 class Buffer;
 class CommandContext;
 class SwapChain;
+class GraphicsDevice;
 
 #define GPU_PROFILE_BEGIN(name, cmdlist) Profiler::Get()->Begin(name, cmdlist);
 #define GPU_PROFILE_END(cmdlist) Profiler::Get()->End(cmdlist);

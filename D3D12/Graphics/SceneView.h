@@ -2,7 +2,6 @@
 #include "Core/DescriptorHandle.h"
 #include "Core/BitField.h"
 #include "Core/ShaderInterop.h"
-#include "Light.h"
 
 class Texture;
 class Buffer;

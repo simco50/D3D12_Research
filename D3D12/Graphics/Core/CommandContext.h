@@ -273,8 +273,8 @@ private:
 	RenderPassInfo m_CurrentRenderPassInfo;
 	bool m_InRenderPass = false;
 
-	RefCountPtr<PipelineState> m_pCurrentPSO;
-	RefCountPtr<StateObject> m_pCurrentSO;
+	PipelineState* m_pCurrentPSO = nullptr;
+	StateObject* m_pCurrentSO = nullptr;
 };
 
 class CommandSignature : public GraphicsObject

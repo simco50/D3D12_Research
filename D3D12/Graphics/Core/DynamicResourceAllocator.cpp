@@ -8,7 +8,6 @@ constexpr static uint64 PAGE_SIZE = Math::MegaBytesToBytes * 2;
 DynamicResourceAllocator::DynamicResourceAllocator(DynamicAllocationManager* pPageManager)
 	: m_pPageManager(pPageManager)
 {
-
 }
 
 DynamicAllocation DynamicResourceAllocator::Allocate(uint64 size, int alignment)

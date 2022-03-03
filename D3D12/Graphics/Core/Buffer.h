@@ -1,12 +1,5 @@
 #pragma once
 #include "GraphicsResource.h"
-class CommandContext;
-class Buffer;
-class ShaderResourceView;
-class UnorderedAccessView;
-class ResourceView;
-struct BufferSRVDesc;
-struct BufferUAVDesc;
 
 enum class BufferFlag
 {
@@ -128,26 +121,14 @@ struct BufferDesc
 class Buffer : public GraphicsResource
 {
 public:
-	friend class GraphicsDevice;
-
-	Buffer(GraphicsDevice* pParent, const char* pName = "");
-	Buffer(GraphicsDevice* pParent, ID3D12Resource* pResource, D3D12_RESOURCE_STATES state);
+	Buffer(GraphicsDevice* pParent, const BufferDesc& desc, ID3D12Resource* pResource);
 
 	inline uint64 GetSize() const { return m_Desc.Size; }
 	inline uint32 GetNumElements() const { return m_Desc.NumElements(); }
 	inline const BufferDesc& GetDesc() const { return m_Desc; }
 
-	ShaderResourceView* GetSRV() const { return m_pSrv; };
-	UnorderedAccessView* GetUAV() const { return m_pUav; };
-
-	uint32 GetSRVIndex() const;
-	uint32 GetUAVIndex() const;
-
-protected:
-	RefCountPtr<UnorderedAccessView> m_pUav;
-	RefCountPtr<ShaderResourceView> m_pSrv;
-
-	BufferDesc m_Desc;
+private:
+	const BufferDesc m_Desc;
 };
 
 struct VertexBufferView

@@ -1402,25 +1402,22 @@ void DemoApp::InitializePipelines()
 {
 	//Shadow mapping - Vertex shader-only pass that writes to the depth buffer using the light matrix
 	{
-		//Opaque
-		{
-			m_pShadowsRS = new RootSignature(m_pDevice);
-			m_pShadowsRS->FinalizeFromShader("Shadow Mapping (Opaque)", m_pDevice->GetShader("DepthOnly.hlsl", ShaderType::Vertex, "VSMain"));
+		m_pShadowsRS = new RootSignature(m_pDevice);
+		m_pShadowsRS->FinalizeFromShader("Shadow Mapping (Opaque)", m_pDevice->GetShader("DepthOnly.hlsl", ShaderType::Vertex, "VSMain"));
 
-			PipelineStateInitializer psoDesc;
-			psoDesc.SetRootSignature(m_pShadowsRS);
-			psoDesc.SetVertexShader("DepthOnly.hlsl", "VSMain");
-			psoDesc.SetRenderTargetFormats(nullptr, 0, DEPTH_STENCIL_SHADOW_FORMAT, 1);
-			psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
-			psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
-			psoDesc.SetDepthBias(-1, -5.0f, -4.0f);
-			psoDesc.SetName("Shadow Mapping Opaque");
-			m_pShadowsOpaquePSO = m_pDevice->CreatePipeline(psoDesc);
+		PipelineStateInitializer psoDesc;
+		psoDesc.SetRootSignature(m_pShadowsRS);
+		psoDesc.SetVertexShader("DepthOnly.hlsl", "VSMain");
+		psoDesc.SetRenderTargetFormats(nullptr, 0, DEPTH_STENCIL_SHADOW_FORMAT, 1);
+		psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
+		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
+		psoDesc.SetDepthBias(-1, -5.0f, -4.0f);
+		psoDesc.SetName("Shadow Mapping Opaque");
+		m_pShadowsOpaquePSO = m_pDevice->CreatePipeline(psoDesc);
 
-			psoDesc.SetPixelShader("DepthOnly.hlsl", "PSMain");
-			psoDesc.SetName("Shadow Mapping Alpha Mask");
-			m_pShadowsAlphaMaskPSO = m_pDevice->CreatePipeline(psoDesc);
-		}
+		psoDesc.SetPixelShader("DepthOnly.hlsl", "PSMain");
+		psoDesc.SetName("Shadow Mapping Alpha Mask");
+		m_pShadowsAlphaMaskPSO = m_pDevice->CreatePipeline(psoDesc);
 	}
 
 	//Depth prepass - Simple vertex shader to fill the depth buffer to optimize later passes
