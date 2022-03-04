@@ -777,6 +777,19 @@ void DemoApp::Update()
 			});
 	}
 
+	RGPassBuilder computeSky = graph.AddPass("Compute Sky");
+	computeSky.Bind([=](CommandContext& context, const RGPassResources& resources)
+		{
+			context.InsertResourceBarrier(m_pSkyTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+			context.SetComputeRootSignature(m_pSkyboxRS);
+			context.SetPipelineState(m_pRenderSkyPSO);
+
+			context.SetRootCBV(0, GetViewUniforms(m_SceneData, m_pSkyTexture));
+			context.BindResource(1, 0, m_pSkyTexture->GetUAV());
+
+			context.Dispatch(ComputeUtils::GetNumThreadGroups(m_pSkyTexture->GetWidth(), 16, m_pSkyTexture->GetHeight(), 16));
+		});
+
 	if (m_RenderPath == RenderPath::Clustered || m_RenderPath == RenderPath::Tiled || m_RenderPath == RenderPath::Visibility)
 	{
 		//[WITH MSAA] DEPTH RESOLVE
@@ -892,12 +905,13 @@ void DemoApp::Update()
 			m_pCBTTessellation->Execute(graph, GetCurrentRenderTarget(), GetDepthStencil(), m_SceneData);
 		}
 
-		RGPassBuilder sky = graph.AddPass("Sky");
-		sky.Bind([=](CommandContext& context, const RGPassResources& resources)
+		RGPassBuilder renderSky = graph.AddPass("Render Sky");
+		renderSky.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
 				Texture* pDepthStencil = GetDepthStencil();
 				context.InsertResourceBarrier(pDepthStencil, D3D12_RESOURCE_STATE_DEPTH_WRITE);
 				context.InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RENDER_TARGET);
+				context.InsertResourceBarrier(m_pSkyTexture, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
 				RenderPassInfo info = RenderPassInfo(GetCurrentRenderTarget(), RenderPassAccess::Load_Store, pDepthStencil, RenderPassAccess::Load_Store, false);
 
@@ -912,6 +926,8 @@ void DemoApp::Update()
 
 				context.EndRenderPass();
 			});
+
+		m_pVisualizeTexture = m_pSkyTexture;
 
 		DebugRenderer::Get()->Render(graph, m_SceneData, GetCurrentRenderTarget(), GetDepthStencil());
 	}
@@ -1514,6 +1530,7 @@ void DemoApp::InitializePipelines()
 	{
 		m_pSkyboxRS = new RootSignature(m_pDevice);
 		m_pSkyboxRS->AddConstantBufferView(100);
+		m_pSkyboxRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1);
 		m_pSkyboxRS->Finalize("Skybox");
 
 		PipelineStateInitializer psoDesc;
@@ -1524,6 +1541,9 @@ void DemoApp::InitializePipelines()
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
 		psoDesc.SetName("Skybox");
 		m_pSkyboxPSO = m_pDevice->CreatePipeline(psoDesc);
+
+		m_pRenderSkyPSO = m_pDevice->CreateComputePipeline(m_pSkyboxRS, "ProceduralSky.hlsl", "ComputeSkyCS");
+		m_pSkyTexture = m_pDevice->CreateTexture(TextureDesc::Create2D(64, 128, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess), "Sky");
 	}
 
 	//Bloom
@@ -2154,4 +2174,5 @@ void DemoApp::UploadSceneData(CommandContext& context)
 	m_SceneData.pTransformsBuffer = m_pTransformsBuffer;
 	m_SceneData.pMeshInstanceBuffer = m_pMeshInstanceBuffer;
 	m_SceneData.pSceneTLAS = m_pTLAS;
+	m_SceneData.pSky = m_pSkyTexture;
 }

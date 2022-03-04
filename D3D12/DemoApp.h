@@ -153,6 +153,8 @@ private:
 	//Sky
 	RefCountPtr<RootSignature> m_pSkyboxRS;
 	RefCountPtr<PipelineState> m_pSkyboxPSO;
+	RefCountPtr<PipelineState> m_pRenderSkyPSO;
+	RefCountPtr<Texture> m_pSkyTexture;
 
 	//Light data
 	RefCountPtr<Buffer> m_pMaterialBuffer;

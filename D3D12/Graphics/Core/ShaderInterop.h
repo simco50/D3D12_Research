@@ -181,6 +181,7 @@ namespace ShaderInterop
 		uint MeshInstancesIndex;
 		uint TransformsIndex;
 		uint LightsIndex;
+		uint SkyIndex;
 	};
 
 #ifdef __cplusplus

@@ -87,6 +87,7 @@ ShaderInterop::ViewUniforms GetViewUniforms(const SceneView& sceneView, Texture*
 	parameters.MeshInstancesIndex = sceneView.pMeshInstanceBuffer->GetSRVIndex();
 	parameters.TransformsIndex = sceneView.pTransformsBuffer->GetSRVIndex();
 	parameters.LightsIndex = sceneView.pLightBuffer->GetSRVIndex();
+	parameters.SkyIndex = sceneView.pSky->GetSRVIndex();
 	return parameters;
 }
 
