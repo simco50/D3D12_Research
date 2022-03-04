@@ -366,9 +366,9 @@ namespace ShaderCompiler
 			{
 				Paths::CreateDirectoryTree(pShaderSymbolsPath);
 
-				RefCountPtr<IDxcBlobUtf8> pSymbolsBlobUTF8;
-				pUtils->GetBlobAsUtf8(pSymbolsBlob.Get(), pSymbolsBlobUTF8.GetAddressOf());
-				std::string debugPath = Sprintf("%s%s", pShaderSymbolsPath, pSymbolsBlobUTF8->GetStringPointer());
+				RefCountPtr<IDxcBlobUtf8> pDebugDataPathUTF8;
+				pUtils->GetBlobAsUtf8(pDebugDataPath.Get(), pDebugDataPathUTF8.GetAddressOf());
+				std::string debugPath = Sprintf("%s%s", pShaderSymbolsPath, pDebugDataPathUTF8->GetStringPointer());
 				std::ofstream str(debugPath, std::ios::binary);
 				str.write((char*)pSymbolsBlob->GetBufferPointer(), pSymbolsBlob->GetBufferSize());
 			}
