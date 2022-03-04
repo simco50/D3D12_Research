@@ -90,7 +90,6 @@ RefCountPtr<Buffer> DynamicAllocationManager::CreateNewPage(uint64 size)
 {
 	std::string name = Sprintf("Dynamic Allocation Buffer (%f KB)", Math::BytesToKiloBytes * size);
 	RefCountPtr<Buffer> pNewPage = GetParent()->CreateBuffer(BufferDesc::CreateBuffer((uint32)size, m_BufferFlags), name.c_str());
-	pNewPage->Map();
 	return pNewPage;
 }
 

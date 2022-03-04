@@ -592,7 +592,6 @@ void DemoApp::Update()
 		D3D12_RESOURCE_DESC resourceDesc = m_pTonemapTarget->GetResource()->GetDesc();
 		m_pDevice->GetDevice()->GetCopyableFootprints(&resourceDesc, 0, 1, 0, &textureFootprint, nullptr, nullptr, nullptr);
 		RefCountPtr<Buffer> pScreenshotBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateReadback(textureFootprint.Footprint.RowPitch * textureFootprint.Footprint.Height), "Screenshot Texture");
-		pScreenshotBuffer->Map();
 		pContext->InsertResourceBarrier(m_pTonemapTarget, D3D12_RESOURCE_STATE_COPY_SOURCE);
 		pContext->InsertResourceBarrier(pScreenshotBuffer, D3D12_RESOURCE_STATE_COPY_DEST);
 		pContext->CopyTexture(m_pTonemapTarget, pScreenshotBuffer, CD3DX12_BOX(0, 0, m_pTonemapTarget->GetWidth(), m_pTonemapTarget->GetHeight()));
@@ -1395,7 +1394,6 @@ void DemoApp::OnResizeViewport(int width, int height)
 	for (int i = 0; i < FRAME_COUNT; ++i)
 	{
 		RefCountPtr<Buffer> pBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateTyped(1, DXGI_FORMAT_R32G32_FLOAT, BufferFlag::Readback), "SDSM Reduction Readback Target");
-		pBuffer->Map();
 		m_ReductionReadbackTargets.push_back(std::move(pBuffer));
 	}
 

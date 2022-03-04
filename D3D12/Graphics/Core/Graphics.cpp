@@ -748,6 +748,11 @@ RefCountPtr<Buffer> GraphicsDevice::CreateBuffer(const BufferDesc& desc, const c
 	pBuffer->SetResourceState(initialState);
 	pBuffer->SetName(pName);
 
+	if (EnumHasAnyFlags(desc.Usage, BufferFlag::Upload | BufferFlag::Readback))
+	{
+		VERIFY_HR(pResource->Map(0, nullptr, &pBuffer->m_pMappedData));
+	}
+
 	//#todo: Temp code. Pull out views from buffer
 	if (EnumHasAnyFlags(desc.Usage, BufferFlag::UnorderedAccess))
 	{

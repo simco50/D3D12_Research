@@ -139,7 +139,6 @@ void Profiler::Initialize(GraphicsDevice* pParent, uint32 numBackbuffers)
 
 	m_FenceValues.resize(numBackbuffers);
 	m_pReadBackBuffer = pParent->CreateBuffer(BufferDesc::CreateReadback(sizeof(uint64) * numBackbuffers * HEAP_SIZE), "Profiling Readback Buffer");
-	m_pReadBackBuffer->Map();
 
 	{
 		//GPU Frequency

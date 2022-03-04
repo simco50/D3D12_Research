@@ -96,8 +96,6 @@ public:
 	GraphicsResource(GraphicsDevice* pParent, ID3D12Resource* pResource);
 	~GraphicsResource();
 
-	void* Map(uint32 subResource = 0, uint64 readFrom = 0, uint64 readTo = 0);
-	void Unmap(uint32 subResource = 0, uint64 writtenFrom = 0, uint64 writtenTo = 0);
 	void* GetMappedData() const { return m_pMappedData; }
 	void SetImmediateDelete(bool immediate) { m_ImmediateDelete = immediate; }
 
