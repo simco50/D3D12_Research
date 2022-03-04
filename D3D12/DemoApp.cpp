@@ -9,6 +9,7 @@
 #include "Graphics/Core/Graphics.h"
 #include "Graphics/Core/Texture.h"
 #include "Graphics/Core/CommandContext.h"
+#include "Graphics/Core/DynamicResourceAllocator.h"
 #include "Graphics/Core/Shader.h"
 #include "Graphics/Core/PipelineState.h"
 #include "Graphics/RenderGraph/RenderGraph.h"

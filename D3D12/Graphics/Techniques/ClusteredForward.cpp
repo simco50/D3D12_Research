@@ -9,7 +9,6 @@
 #include "Graphics/Core/Texture.h"
 #include "Graphics/Core/ResourceViews.h"
 #include "Graphics/RenderGraph/RenderGraph.h"
-#include "Graphics/Mesh.h"
 #include "Graphics/Profiler.h"
 #include "Graphics/SceneView.h"
 #include "Core/ConsoleVariables.h"
@@ -110,7 +109,6 @@ Vector2 ComputeVolumeGridParams(float nearZ, float farZ, int numSlices)
 
 void ClusteredForward::ComputeLightCulling(RGGraph& graph, const SceneView& scene, ClusteredLightCullData& resources)
 {
-	Vector2 screenDimensions(scene.View.Viewport.GetWidth(), scene.View.Viewport.GetHeight());
 	float nearZ = scene.View.NearPlane;
 	float farZ = scene.View.FarPlane;
 	resources.LightGridParams = ComputeVolumeGridParams(nearZ, farZ, gLightClustersNumZ);
@@ -413,7 +411,6 @@ void ClusteredForward::VisualizeLightDensity(RGGraph& graph, const SceneView& re
 		m_pVisualizationIntermediateTexture = m_pDevice->CreateTexture(pTarget->GetDesc(), "Light Density Debug Texture");
 	}
 
-	Vector2 screenDimensions((float)pTarget->GetWidth(), (float)pTarget->GetHeight());
 	float nearZ = resources.View.NearPlane;
 	float farZ = resources.View.FarPlane;
 	Vector2 lightGridParams = ComputeVolumeGridParams(nearZ, farZ, gLightClustersNumZ);

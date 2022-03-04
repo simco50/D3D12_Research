@@ -9,8 +9,6 @@
 #include "Graphics/Core/GraphicsResource.h"
 #include "Graphics/Core/Texture.h"
 #include "Graphics/Core/ResourceViews.h"
-#include "Graphics/Profiler.h"
-#include "Graphics/ImGuiRenderer.h"
 #include "Graphics/RenderGraph/RenderGraph.h"
 #include "Graphics/SceneView.h"
 

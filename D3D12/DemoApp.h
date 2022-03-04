@@ -1,9 +1,7 @@
+#pragma once
 #include "Graphics/Light.h"
-#include "Core/BitField.h"
-#include "Graphics/Core/DescriptorHandle.h"
 #include "Graphics/Core/Graphics.h"
 #include "Graphics/SceneView.h"
-#include "Graphics/Core/ShaderInterop.h"
 
 class ImGuiRenderer;
 class Mesh;

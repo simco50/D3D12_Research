@@ -9,7 +9,6 @@
 #include "Graphics/Core/Texture.h"
 #include "Graphics/Core/ResourceViews.h"
 #include "Graphics/RenderGraph/RenderGraph.h"
-#include "Graphics/Mesh.h"
 #include "Graphics/Profiler.h"
 #include "Graphics/SceneView.h"
 #include "Core/ConsoleVariables.h"

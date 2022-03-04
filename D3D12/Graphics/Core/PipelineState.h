@@ -102,7 +102,7 @@ public:
 	//DepthStencilState
 	void SetDepthEnabled(bool enabled);
 	void SetDepthWrite(bool enabled);
-	void SetDepthTest(const D3D12_COMPARISON_FUNC func);
+	void SetDepthTest(D3D12_COMPARISON_FUNC func);
 	void SetStencilTest(bool stencilEnabled, D3D12_COMPARISON_FUNC mode, D3D12_STENCIL_OP pass, D3D12_STENCIL_OP fail, D3D12_STENCIL_OP zFail, unsigned int stencilRef, unsigned char compareMask, unsigned char writeMask);
 
 	//RasterizerState

@@ -80,7 +80,7 @@ const Matrix& Camera::GetViewProjection() const
 	return m_Transform.ViewProjection;
 }
 
-const Matrix Camera::GetViewProjectionInverse() const
+Matrix Camera::GetViewProjectionInverse() const
 {
 	return GetProjectionInverse() * GetViewInverse();
 }

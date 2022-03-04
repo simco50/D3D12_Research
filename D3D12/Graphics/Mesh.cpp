@@ -4,6 +4,7 @@
 #include "Graphics/Core/Graphics.h"
 #include "Graphics/Core/Texture.h"
 #include "Graphics/Core/Buffer.h"
+#include "Graphics/Core/DynamicResourceAllocator.h"
 #include "Core/Paths.h"
 #include "Content/Image.h"
 #include "Core/Utils.h"

@@ -1,8 +1,7 @@
 #pragma once
-#include "DynamicResourceAllocator.h"
 #include "GraphicsResource.h"
 #include "OnlineDescriptorAllocator.h"
-#include "ResourceViews.h"
+
 class GraphicsResource;
 class Texture;
 class OnlineDescriptorAllocator;
@@ -10,10 +9,15 @@ class RootSignature;
 class PipelineState;
 class StateObject;
 class DynamicResourceAllocator;
+class DynamicAllocationManager;
 class Buffer;
 class CommandSignature;
 class ShaderBindingTable;
+class ResourceView;
+struct VertexBufferView;
+struct IndexBufferView;
 struct BufferView;
+struct DynamicAllocation;
 
 enum class CommandListContext
 {

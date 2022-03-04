@@ -1,16 +1,13 @@
 #include "stdafx.h"
 #include "RTAO.h"
 #include "Graphics/Core/Shader.h"
-#include "Graphics/Core/PipelineState.h"
 #include "Graphics/Core/RootSignature.h"
-#include "Graphics/Core/Buffer.h"
 #include "Graphics/Core/Graphics.h"
 #include "Graphics/Core/CommandContext.h"
 #include "Graphics/Core/Texture.h"
 #include "Graphics/Core/ShaderBindingTable.h"
 #include "Graphics/Core/StateObject.h"
 #include "Graphics/RenderGraph/RenderGraph.h"
-#include "Graphics/Mesh.h"
 #include "Graphics/SceneView.h"
 
 RTAO::RTAO(GraphicsDevice* pDevice)
