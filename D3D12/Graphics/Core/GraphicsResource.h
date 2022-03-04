@@ -89,7 +89,6 @@ private:
 
 class GraphicsResource : public GraphicsObject
 {
-	friend class CommandContext;
 	friend class GraphicsDevice;
 
 public:

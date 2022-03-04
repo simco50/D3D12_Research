@@ -147,7 +147,6 @@ namespace ComputeUtils
 class CommandContext : public GraphicsObject
 {
 public:
-	friend class CommandQueue;
 
 	CommandContext(GraphicsDevice* pParent, ID3D12GraphicsCommandList* pCommandList, D3D12_COMMAND_LIST_TYPE type, GlobalOnlineDescriptorHeap* pDescriptorHeap, DynamicAllocationManager* pDynamicMemoryManager, ID3D12CommandAllocator* pAllocator);
 	~CommandContext();
@@ -233,16 +232,14 @@ public:
 
 	static bool IsTransitionAllowed(D3D12_COMMAND_LIST_TYPE commandlistType, D3D12_RESOURCE_STATES state);
 
-private:
-	void PrepareDraw();
-
 	struct PendingBarrier
 	{
 		GraphicsResource* pResource;
 		ResourceState State;
 		uint32 Subresource;
 	};
-	std::vector<PendingBarrier> m_PendingBarriers;
+
+	const std::vector<PendingBarrier>& GetPendingBarriers() const { return m_PendingBarriers; }
 
 	D3D12_RESOURCE_STATES GetResourceState(GraphicsResource* pResource, uint32 subResource) const
 	{
@@ -250,6 +247,11 @@ private:
 		check(it != m_ResourceStates.end());
 		return it->second.Get(subResource);
 	}
+
+private:
+	void PrepareDraw();
+
+	std::vector<PendingBarrier> m_PendingBarriers;
 
 	D3D12_RESOURCE_STATES GetResourceStateWithFallback(GraphicsResource* pResource, uint32 subResource) const
 	{
