@@ -78,6 +78,7 @@ struct SceneTextures
 {
 	RefCountPtr<Texture> pColorTarget;
 	RefCountPtr<Texture> pNormalsTarget;
+	RefCountPtr<Texture> pRoughnessTarget;
 	RefCountPtr<Texture> pDepth;
 	RefCountPtr<Texture> pAmbientOcclusion;
 	RefCountPtr<Texture> pPreviousColorTarget;

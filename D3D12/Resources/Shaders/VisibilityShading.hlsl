@@ -8,8 +8,9 @@ Texture2D tAO :	register(t1);
 Texture2D tDepth : register(t2);
 Texture2D tPreviousSceneColor :	register(t3);
 
-RWTexture2D<float4> uTarget : register(u0);
-RWTexture2D<float4> uNormalsTarget : register(u1);
+RWTexture2D<float4> uColorTarget : register(u0);
+RWTexture2D<float2> uNormalsTarget : register(u1);
+RWTexture2D<float> uRoughnessTarget : register(u2);
 
 struct VertexAttribute
 {
@@ -53,11 +54,12 @@ VertexAttribute GetVertexAttributes(float2 screenUV, VisBufferData visibility, o
 			vertices[i].Color = 0xFFFFFFFF;
 	}
 
-	float3 worldPos0 = mul(float4(vertices[0].Position, 1), world).xyz;
-	float3 worldPos1 = mul(float4(vertices[1].Position, 1), world).xyz;
-	float3 worldPos2 = mul(float4(vertices[2].Position, 1), world).xyz;
+	float4 clipPos0 = mul(mul(float4(vertices[0].Position, 1), world), cView.ViewProjection);
+	float4 clipPos1 = mul(mul(float4(vertices[1].Position, 1), world), cView.ViewProjection);
+	float4 clipPos2 = mul(mul(float4(vertices[2].Position, 1), world), cView.ViewProjection);
 	float2 pixelClip = screenUV * 2 - 1;
-	BaryDerivs bary = ComputeBarycentrics(pixelClip, visibility, worldPos0, worldPos1, worldPos2);
+	pixelClip.y *= -1;
+	BaryDerivs bary = ComputeBarycentrics(pixelClip, clipPos0, clipPos1, clipPos2);
 
 	VertexAttribute outVertex;
 	outVertex.UV = BaryInterpolate(vertices[0].UV, vertices[1].UV, vertices[2].UV, bary.Barycentrics);
@@ -171,24 +173,25 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 
 	float reflectivity = saturate(Square(1 - brdfData.Roughness));
 
-	float4 outColor = float4(outRadiance, 1);
-	float4 outNormalRoughness = float4(N, reflectivity);
+	float3 outColor = outRadiance;
 
 #define DEBUG_MESHLETS 0
 #if DEBUG_MESHLETS
-	outNormalRoughness = float4(vertex.Normal, 0);
+	N = vertex.Normal;
 
 	uint Seed = SeedThread(visibility.MeshletID);
-	outColor = float4(Random01(Seed), Random01(Seed), Random01(Seed), 1);
+	outColor = float3(Random01(Seed), Random01(Seed), Random01(Seed));
 
 	float3 deltas = fwidth(barycentrics);
 	float3 smoothing = deltas * 1;
 	float3 thickness = deltas * 0.2;
 	float3 bary = smoothstep(thickness, thickness + smoothing, barycentrics);
 	float minBary = min(bary.x, min(bary.y, bary.z));
-	outColor = float4(outColor.xyz * saturate(minBary + 0.6), 1);
+	outColor = outColor.xyz * saturate(minBary + 0.6);
 #endif
 
-	uTarget[dispatchThreadId.xy] = outColor;
-	uNormalsTarget[dispatchThreadId.xy] = outNormalRoughness;
+	uint2 pixelIndex = dispatchThreadId.xy;
+	uColorTarget[pixelIndex] = float4(outColor, surface.Opacity);
+	uNormalsTarget[pixelIndex] = EncodeNormalOctahedron(N);
+	uRoughnessTarget[pixelIndex] = reflectivity;
 }

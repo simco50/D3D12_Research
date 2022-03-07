@@ -94,7 +94,7 @@ public:
 	void SetName(const char* pName);
 	void SetDepthOnlyTarget(DXGI_FORMAT dsvFormat, uint32 msaa);
 	void SetRenderTargetFormat(DXGI_FORMAT rtvFormat, DXGI_FORMAT dsvFormat, uint32 msaa);
-	void SetRenderTargetFormats(DXGI_FORMAT* rtvFormats, uint32 numRenderTargets, DXGI_FORMAT dsvFormat, uint32 msaa);
+	void SetRenderTargetFormats(const DXGI_FORMAT* rtvFormats, uint32 numRenderTargets, DXGI_FORMAT dsvFormat, uint32 msaa);
 
 	//BlendState
 	void SetBlendMode(const BlendMode& blendMode, bool alphaToCoverage);

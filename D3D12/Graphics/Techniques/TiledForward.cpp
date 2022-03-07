@@ -90,17 +90,20 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& resources, const Sce
 			context.InsertResourceBarrier(parameters.pPreviousColorTarget, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(parameters.pDepth, D3D12_RESOURCE_STATE_DEPTH_READ | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(parameters.pNormalsTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
+			context.InsertResourceBarrier(parameters.pRoughnessTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
 			RenderPassInfo renderPass;
 			renderPass.DepthStencilTarget.Access = RenderPassAccess::Load_Store;
 			renderPass.DepthStencilTarget.StencilAccess = RenderPassAccess::DontCare_DontCare;
 			renderPass.DepthStencilTarget.Target = parameters.pDepth;
 			renderPass.DepthStencilTarget.Write = false;
-			renderPass.RenderTargetCount = 2;
+			renderPass.RenderTargetCount = 3;
 			renderPass.RenderTargets[0].Access = RenderPassAccess::DontCare_Store;
 			renderPass.RenderTargets[0].Target = parameters.pColorTarget;
 			renderPass.RenderTargets[1].Access = RenderPassAccess::DontCare_Store;
 			renderPass.RenderTargets[1].Target = parameters.pNormalsTarget;
+			renderPass.RenderTargets[2].Access = RenderPassAccess::DontCare_Store;
+			renderPass.RenderTargets[2].Target = parameters.pRoughnessTarget;
 			context.BeginRenderPass(renderPass);
 
 			context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -223,9 +226,10 @@ void TiledForward::SetupPipelines()
 		m_pDiffuseRS->FinalizeFromShader("Diffuse", m_pDevice->GetShader("Diffuse.hlsl", ShaderType::Vertex, "VSMain", { "TILED_FORWARD" }));
 
 		{
-			DXGI_FORMAT formats[] = {
+			constexpr DXGI_FORMAT formats[] = {
 				DXGI_FORMAT_R16G16B16A16_FLOAT,
-				DXGI_FORMAT_R16G16B16A16_FLOAT,
+				DXGI_FORMAT_R16G16_FLOAT,
+				DXGI_FORMAT_R8_UNORM,
 			};
 
 			//Opaque

@@ -90,7 +90,7 @@ void PipelineStateInitializer::SetRenderTargetFormat(DXGI_FORMAT rtvFormat, DXGI
 	SetRenderTargetFormats(&rtvFormat, 1, dsvFormat, msaa);
 }
 
-void PipelineStateInitializer::SetRenderTargetFormats(DXGI_FORMAT* rtvFormats, uint32 numRenderTargets, DXGI_FORMAT dsvFormat, uint32 msaa)
+void PipelineStateInitializer::SetRenderTargetFormats(const DXGI_FORMAT* rtvFormats, uint32 numRenderTargets, DXGI_FORMAT dsvFormat, uint32 msaa)
 {
 	D3D12_RT_FORMAT_ARRAY& formatArray = GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_RENDER_TARGET_FORMATS>();
 	for (uint32 i = 0; i < numRenderTargets; ++i)

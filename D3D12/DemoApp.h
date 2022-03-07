@@ -67,6 +67,7 @@ private:
 	RefCountPtr<Texture> m_pTAASource;
 	RefCountPtr<Texture> m_pVelocity;
 	RefCountPtr<Texture> m_pNormals;
+	RefCountPtr<Texture> m_pRoughness;
 	std::vector<RefCountPtr<Texture>> m_ShadowMaps;
 
 	std::unique_ptr<ImGuiRenderer> m_pImGuiRenderer;

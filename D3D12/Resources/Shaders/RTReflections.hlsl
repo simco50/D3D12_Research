@@ -14,7 +14,8 @@ struct PassParameters
 
 Texture2D tDepth : register(t0);
 Texture2D tPreviousSceneColor :	register(t1);
-Texture2D tSceneNormals : register(t2);
+Texture2D<float2> tSceneNormals : register(t2);
+Texture2D<float> tSceneRoughness : register(t3);
 
 RWTexture2D<float4> uOutput : register(u0);
 ConstantBuffer<PassParameters> cPass : register(b0);
@@ -241,13 +242,13 @@ void RayGen()
 
 	float depth = tDepth.SampleLevel(sLinearClamp, uv, 0).r;
 	float4 colorSample = tPreviousSceneColor.SampleLevel(sLinearClamp, uv, 0);
-	float4 reflectionSample = tSceneNormals.SampleLevel(sLinearClamp, uv, 0);
+	float3 N = DecodeNormalOctahedron(tSceneNormals.SampleLevel(sLinearClamp, uv, 0));
+	float R = tSceneRoughness.SampleLevel(sLinearClamp, uv, 0);
 
 	float3 view = ViewFromDepth(uv, depth, cView.ProjectionInverse);
 	float3 world = mul(float4(view, 1), cView.ViewInverse).xyz;
 
-	float3 N = reflectionSample.rgb;
-	float reflectivity = reflectionSample.a;
+	float reflectivity = R;
 
 	if(depth > 0 && reflectivity > 0.0f)
 	{

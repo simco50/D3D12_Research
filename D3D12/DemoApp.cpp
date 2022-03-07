@@ -847,6 +847,7 @@ void DemoApp::Update()
 		params.pColorTarget = GetCurrentRenderTarget();
 		params.pDepth = GetDepthStencil();
 		params.pNormalsTarget = m_pNormals;
+		params.pRoughnessTarget = m_pRoughness;
 		params.pPreviousColorTarget = m_pPreviousColor;
 
 		if (m_RenderPath == RenderPath::Tiled)
@@ -862,14 +863,13 @@ void DemoApp::Update()
 			RGPassBuilder visibilityShading = graph.AddPass("Visibility Shading");
 			visibilityShading.Bind([=](CommandContext& renderContext, const RGPassResources& resources)
 				{
-					Texture* pNormalsTarget = m_pNormals;
-
 					renderContext.InsertResourceBarrier(m_pVisibilityTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 					renderContext.InsertResourceBarrier(m_pAmbientOcclusion, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 					renderContext.InsertResourceBarrier(GetDepthStencil(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 					renderContext.InsertResourceBarrier(m_pPreviousColor, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 					renderContext.InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-					renderContext.InsertResourceBarrier(pNormalsTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+					renderContext.InsertResourceBarrier(m_pNormals, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+					renderContext.InsertResourceBarrier(m_pRoughness, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
 					renderContext.SetComputeRootSignature(m_pVisibilityRenderingRS);
 					renderContext.SetPipelineState(m_pVisibilityShadingPSO);
@@ -889,7 +889,8 @@ void DemoApp::Update()
 					const D3D12_CPU_DESCRIPTOR_HANDLE uavs[] =
 					{
 						GetCurrentRenderTarget()->GetUAV()->GetDescriptor(),
-						pNormalsTarget->GetUAV()->GetDescriptor(),
+						m_pNormals->GetUAV()->GetDescriptor(),
+						m_pRoughness->GetUAV()->GetDescriptor(),
 					};
 
 					renderContext.BindResources(3, 0, uavs, ARRAYSIZE(uavs));
@@ -927,8 +928,6 @@ void DemoApp::Update()
 				context.EndRenderPass();
 			});
 
-		m_pVisualizeTexture = m_pSkyTexture;
-
 		DebugRenderer::Get()->Render(graph, m_SceneData, GetCurrentRenderTarget(), GetDepthStencil());
 	}
 	else if(m_RenderPath == RenderPath::PathTracing)
@@ -961,8 +960,15 @@ void DemoApp::Update()
 	{
 		if (Tweakables::g_RaytracedReflections)
 		{
-			RefCountPtr<Texture> pTarget = Tweakables::g_TAA.Get() ? m_pTAASource : m_pHDRRenderTarget;
-			m_pRTReflections->Execute(graph, m_SceneData, pTarget, m_pNormals, GetDepthStencil());
+			SceneTextures params;
+			params.pAmbientOcclusion = m_pAmbientOcclusion;
+			params.pColorTarget = Tweakables::g_TAA.Get() ? m_pTAASource : m_pHDRRenderTarget;
+			params.pDepth = GetDepthStencil();
+			params.pNormalsTarget = m_pNormals;
+			params.pRoughnessTarget = m_pRoughness;
+			params.pPreviousColorTarget = m_pPreviousColor;
+
+			m_pRTReflections->Execute(graph, m_SceneData, params);
 		}
 
 		if (Tweakables::g_TAA.Get())
@@ -1364,7 +1370,8 @@ void DemoApp::OnResizeViewport(int width, int height)
 	E_LOG(Info, "Viewport resized: %dx%d", width, height);
 
 	m_pDepthStencil = m_pDevice->CreateTexture(TextureDesc::CreateDepth(width, height, DXGI_FORMAT_D32_FLOAT, TextureFlag::DepthStencil | TextureFlag::ShaderResource, 1, ClearBinding(0.0f, 0)), "Depth Stencil");
-	m_pNormals = m_pDevice->CreateTexture(TextureDesc::CreateRenderTarget(width, height, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::ShaderResource | TextureFlag::RenderTarget | TextureFlag::UnorderedAccess, 1, ClearBinding(Colors::Black)), "MSAA Normals");
+	m_pNormals = m_pDevice->CreateTexture(TextureDesc::CreateRenderTarget(width, height, DXGI_FORMAT_R16G16_FLOAT, TextureFlag::ShaderResource | TextureFlag::RenderTarget | TextureFlag::UnorderedAccess, 1, ClearBinding(Colors::Black)), "Normals");
+	m_pRoughness = m_pDevice->CreateTexture(TextureDesc::CreateRenderTarget(width, height, DXGI_FORMAT_R8_UNORM, TextureFlag::ShaderResource | TextureFlag::RenderTarget | TextureFlag::UnorderedAccess, 1, ClearBinding(Colors::Black)), "Roughness");
 	m_pHDRRenderTarget = m_pDevice->CreateTexture(TextureDesc::CreateRenderTarget(width, height, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::ShaderResource | TextureFlag::RenderTarget | TextureFlag::UnorderedAccess), "HDR Target");
 	m_pPreviousColor = m_pDevice->CreateTexture(TextureDesc::Create2D(width, height, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::ShaderResource), "Previous Color");
 	m_pTonemapTarget = m_pDevice->CreateTexture(TextureDesc::CreateRenderTarget(width, height, m_pSwapchain->GetFormat(), TextureFlag::ShaderResource | TextureFlag::RenderTarget | TextureFlag::UnorderedAccess), "Tonemap Target");

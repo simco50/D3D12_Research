@@ -265,10 +265,16 @@ MaterialProperties GetMaterialProperties(MaterialData material, float2 UV)
 	return properties;
 }
 
+struct PSOut
+{
+ 	float4 Color : SV_Target0;
+	float2 Normal : SV_Target1;
+	float Roughness : SV_Target2;
+};
+
 void PSMain(InterpolantsVSToPS input,
 			float3 bary : SV_Barycentrics,
-			out float4 outColor : SV_Target0,
-			out float4 outNormalRoughness : SV_Target1)
+			out PSOut output)
 {
 	float2 screenUV = (float2)input.Position.xy * cView.ScreenDimensionsInv;
 	float ambientOcclusion = tAO.SampleLevel(sLinearClamp, screenUV, 0).r;
@@ -299,22 +305,25 @@ void PSMain(InterpolantsVSToPS input,
 	float4 scatteringTransmittance = tLightScattering.SampleLevel(sLinearClamp, float3(screenUV, fogSlice), 0);
 	outRadiance = outRadiance * scatteringTransmittance.w + scatteringTransmittance.rgb;
 
-	outColor = float4(outRadiance, surface.Opacity);
+	float3 outColor = outRadiance;
 	float reflectivity = saturate(scatteringTransmittance.w * ambientOcclusion * Square(1 - brdf.Roughness));
-	outNormalRoughness = float4(N, saturate(reflectivity - ssrWeight));
 
 #define DEBUG_MESHLETS 0
 #if DEBUG_MESHLETS
-	outNormalRoughness = float4(input.Normal, 0);
+	N = input.Normal;
 
 	uint Seed = SeedThread(input.ID);
-	outColor = float4(Random01(Seed), Random01(Seed), Random01(Seed), 1);
+	outColor = float3(Random01(Seed), Random01(Seed), Random01(Seed));
 
 	float3 deltas = fwidth(bary);
 	float3 smoothing = deltas * 1;
 	float3 thickness = deltas * 0.2;
 	bary = smoothstep(thickness, thickness + smoothing, bary);
 	float minBary = min(bary.x, min(bary.y, bary.z));
-	outColor = float4(outColor.xyz * saturate(minBary + 0.6), 1);
+	outColor = outColor * saturate(minBary + 0.6);
 #endif
+
+	output.Color = float4(outColor, surface.Opacity);
+	output.Normal = EncodeNormalOctahedron(N);
+	output.Roughness = saturate(reflectivity - ssrWeight);
 }
