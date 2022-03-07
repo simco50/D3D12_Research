@@ -966,7 +966,7 @@ void DemoApp::Update()
 			params.pDepth = GetDepthStencil();
 			params.pNormalsTarget = m_pNormals;
 			params.pRoughnessTarget = m_pRoughness;
-			params.pPreviousColorTarget = m_pPreviousColor;
+			params.pPreviousColorTarget = m_pHDRRenderTarget;
 
 			m_pRTReflections->Execute(graph, m_SceneData, params);
 		}

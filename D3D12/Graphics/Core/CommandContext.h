@@ -64,18 +64,18 @@ struct RenderPassInfo
 {
 	struct RenderTargetInfo
 	{
-		RenderPassAccess Access = RenderPassAccess::DontCare_DontCare;
 		Texture* Target = nullptr;
 		Texture* ResolveTarget = nullptr;
+		RenderPassAccess Access = RenderPassAccess::DontCare_DontCare;
 		int MipLevel = 0;
 		int ArrayIndex = 0;
 	};
 
 	struct DepthTargetInfo
 	{
+		Texture* Target = nullptr;
 		RenderPassAccess Access = RenderPassAccess::DontCare_DontCare;
 		RenderPassAccess StencilAccess = RenderPassAccess::DontCare_DontCare;
-		Texture* Target = nullptr;
 		bool Write = true;
 	};
 
