@@ -60,7 +60,6 @@ class OnlineDescriptorAllocator : public GraphicsObject
 {
 public:
 	OnlineDescriptorAllocator(GlobalOnlineDescriptorHeap* pGlobalHeap);
-	~OnlineDescriptorAllocator();
 
 	DescriptorHandle Allocate(uint32 count);
 

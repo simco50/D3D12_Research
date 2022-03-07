@@ -705,11 +705,6 @@ RefCountPtr<Buffer> GraphicsDevice::CreateBuffer(const BufferDesc& desc, const c
 		{
 			desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 		}
-		//PIX: This will improve the shaders' performance on some hardware.
-		if (EnumHasAnyFlags(bufferDesc.Usage, BufferFlag::Structured))
-		{
-			desc.Width = Math::Max(desc.Width, 16ull);
-		}
 		return desc;
 	};
 
@@ -753,42 +748,16 @@ RefCountPtr<Buffer> GraphicsDevice::CreateBuffer(const BufferDesc& desc, const c
 		VERIFY_HR(pResource->Map(0, nullptr, &pBuffer->m_pMappedData));
 	}
 
+	bool isRaw = EnumHasAnyFlags(desc.Usage, BufferFlag::ByteAddress);
+
 	//#todo: Temp code. Pull out views from buffer
 	if (EnumHasAnyFlags(desc.Usage, BufferFlag::UnorderedAccess))
 	{
-		if (EnumHasAnyFlags(desc.Usage, BufferFlag::Structured))
-		{
-			//Structured Buffer
-			pBuffer->m_pUav = CreateUAV(pBuffer, BufferUAVDesc(DXGI_FORMAT_UNKNOWN, false, true));
-		}
-		else if (EnumHasAnyFlags(desc.Usage, BufferFlag::ByteAddress))
-		{
-			//ByteAddress Buffer
-			pBuffer->m_pUav = CreateUAV(pBuffer, BufferUAVDesc(DXGI_FORMAT_UNKNOWN, true, false));
-		}
-		else
-		{
-			//Typed buffer
-			pBuffer->m_pUav = CreateUAV(pBuffer, BufferUAVDesc(desc.Format, false, false));
-		}
+		pBuffer->m_pUav = CreateUAV(pBuffer, BufferUAVDesc(desc.Format, isRaw, !isRaw));
 	}
 	if (EnumHasAnyFlags(desc.Usage, BufferFlag::ShaderResource | BufferFlag::AccelerationStructure))
 	{
-		if (EnumHasAnyFlags(desc.Usage, BufferFlag::Structured))
-		{
-			//Structured Buffer
-			pBuffer->m_pSrv = CreateSRV(pBuffer, BufferSRVDesc(DXGI_FORMAT_UNKNOWN, false));
-		}
-		else if (EnumHasAnyFlags(desc.Usage, BufferFlag::ByteAddress))
-		{
-			//ByteAddress Buffer
-			pBuffer->m_pSrv = CreateSRV(pBuffer, BufferSRVDesc(DXGI_FORMAT_UNKNOWN, true));
-		}
-		else
-		{
-			//Typed buffer
-			pBuffer->m_pSrv = CreateSRV(pBuffer, BufferSRVDesc(desc.Format));
-		}
+		pBuffer->m_pSrv = CreateSRV(pBuffer, BufferSRVDesc(desc.Format, isRaw));
 	}
 
 	return pBuffer;

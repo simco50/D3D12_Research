@@ -116,11 +116,6 @@ OnlineDescriptorAllocator::OnlineDescriptorAllocator(GlobalOnlineDescriptorHeap*
 {
 }
 
-OnlineDescriptorAllocator::~OnlineDescriptorAllocator()
-{
-
-}
-
 void OnlineDescriptorAllocator::SetDescriptors(uint32 rootIndex, uint32 offset, uint32 numHandles, const D3D12_CPU_DESCRIPTOR_HANDLE* pHandles)
 {
 	RootDescriptorEntry& entry = m_RootDescriptorTable[rootIndex];

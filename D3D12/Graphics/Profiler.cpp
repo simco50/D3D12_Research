@@ -4,7 +4,7 @@
 #include "Graphics/Core/CommandContext.h"
 #include "Graphics/Core/CommandQueue.h"
 #include "Graphics/Core/Buffer.h"
-#include <pix3.h>
+#include "pix3.h"
 
 void CpuTimer::Begin()
 {

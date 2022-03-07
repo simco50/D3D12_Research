@@ -69,6 +69,8 @@ void DebugRenderer::Initialize(GraphicsDevice* pDevice)
 
 void DebugRenderer::Shutdown()
 {
+	m_pTrianglesPSO.Reset();
+	m_pLinesPSO.Reset();
 	m_pRS.Reset();
 }
 

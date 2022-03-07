@@ -8,10 +8,6 @@ OfflineDescriptorAllocator::OfflineDescriptorAllocator(GraphicsDevice* pParent, 
 	m_DescriptorSize = pParent->GetDevice()->GetDescriptorHandleIncrementSize(type);
 }
 
-OfflineDescriptorAllocator::~OfflineDescriptorAllocator()
-{
-}
-
 CD3DX12_CPU_DESCRIPTOR_HANDLE OfflineDescriptorAllocator::AllocateDescriptor()
 {
 	if (m_FreeHeaps.size() == 0)

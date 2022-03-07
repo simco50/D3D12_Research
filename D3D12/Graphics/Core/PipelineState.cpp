@@ -488,6 +488,7 @@ PipelineState::PipelineState(GraphicsDevice* pParent)
 
 PipelineState::~PipelineState()
 {
+	GetParent()->GetShaderManager()->OnShaderRecompiledEvent().Remove(m_ReloadHandle);
 }
 
 void PipelineState::Create(const PipelineStateInitializer& initializer)

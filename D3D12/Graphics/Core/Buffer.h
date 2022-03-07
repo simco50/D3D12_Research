@@ -8,10 +8,8 @@ enum class BufferFlag
 	ShaderResource =		1 << 1,
 	Upload =				1 << 2,
 	Readback =				1 << 3,
-	Structured =			1 << 4,
-	ByteAddress =			1 << 5,
-	IndirectArguments =		1 << 6,
-	AccelerationStructure = 1 << 7,
+	ByteAddress =			1 << 4,
+	AccelerationStructure = 1 << 5,
 };
 DECLARE_BITMASK_TYPE(BufferFlag)
 
@@ -71,7 +69,7 @@ struct BufferDesc
 		BufferDesc desc;
 		desc.ElementSize = elementSize;
 		desc.Size = (uint64)elementCount * desc.ElementSize;
-		desc.Usage = usage | BufferFlag::Structured;
+		desc.Usage = usage;
 		return desc;
 	}
 
@@ -92,7 +90,7 @@ struct BufferDesc
 		BufferDesc desc;
 		desc.ElementSize = sizeof(IndirectParameters);
 		desc.Size = (uint64)elements * desc.ElementSize;
-		desc.Usage = usage | BufferFlag::IndirectArguments | BufferFlag::UnorderedAccess;
+		desc.Usage = usage | BufferFlag::UnorderedAccess;
 		return desc;
 	}
 
