@@ -7,15 +7,6 @@
 #define RAY_CONE_TEXTURE_LOD 1
 #define SECONDARY_SHADOW_RAY 1
 
-GlobalRootSignature GlobalRootSig =
-{
-	"CBV(b0),"
-	"CBV(b100),"
-	"DescriptorTable(UAV(u0, numDescriptors = 1)),"
-	"DescriptorTable(SRV(t0, numDescriptors = 3)),"
-	DEFAULT_ROOT_SIG_PARAMS
-};
-
 struct PassParameters
 {
 	float ViewPixelSpreadAngle;

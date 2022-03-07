@@ -322,17 +322,16 @@ D3D12_PIPELINE_STATE_STREAM_DESC PipelineStateInitializer::GetDesc(GraphicsDevic
 		if (desc.Path.length() > 0)
 		{
 			pShader = pDevice->GetShaderManager()->GetShader(desc.Path.c_str(), (ShaderType)i, desc.EntryPoint.c_str(), desc.Defines);
-			m_Shaders[i] = pShader;
-		}
-
-		pShader = m_Shaders[i];
-		if (pShader)
-		{
-			GetByteCode((ShaderType)i) = D3D12_SHADER_BYTECODE{ pShader->GetByteCode(), pShader->GetByteCodeSize() };
-			if (m_Name.empty())
+			if (pShader)
 			{
-				m_Name = Sprintf("%s (Unnamed)", pShader->GetEntryPoint());
+				GetByteCode((ShaderType)i) = D3D12_SHADER_BYTECODE{ pShader->GetByteCode(), pShader->GetByteCodeSize() };
+				if (m_Name.empty())
+				{
+					m_Name = Sprintf("%s (Unnamed)", pShader->GetEntryPoint());
+				}
 			}
+
+			m_Shaders[i] = pShader;
 		}
 	}
 

@@ -72,15 +72,17 @@ void RTReflections::OnResize(uint32 width, uint32 height)
 
 void RTReflections::SetupPipelines(GraphicsDevice* pDevice)
 {
-	ShaderLibrary* pShaderLibrary = pDevice->GetLibrary("RTReflections.hlsl");
-
 	m_pGlobalRS = new RootSignature(pDevice);
-	m_pGlobalRS->FinalizeFromShader("Global", pShaderLibrary);
+	m_pGlobalRS->AddConstantBufferView(0);
+	m_pGlobalRS->AddConstantBufferView(100);
+	m_pGlobalRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 8);
+	m_pGlobalRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 8);
+	m_pGlobalRS->Finalize("Global");
 
 	StateObjectInitializer stateDesc;
 	stateDesc.Name = "RT Reflections";
 	stateDesc.RayGenShader = "RayGen";
-	stateDesc.AddLibrary(pShaderLibrary, { "RayGen", "ReflectionClosestHit", "ReflectionMiss", "ShadowMiss", "ReflectionAnyHit" });
+	stateDesc.AddLibrary(pDevice->GetLibrary("RTReflections.hlsl"), { "RayGen", "ReflectionClosestHit", "ReflectionMiss", "ShadowMiss", "ReflectionAnyHit" });
 	stateDesc.AddHitGroup("ReflectionHitGroup", "ReflectionClosestHit", "ReflectionAnyHit");
 	stateDesc.AddMissShader("ReflectionMiss");
 	stateDesc.AddMissShader("ShadowMiss");

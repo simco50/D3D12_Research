@@ -205,7 +205,10 @@ void TiledForward::SetupPipelines()
 	// Light culling
 	{
 		m_pComputeLightCullRS = new RootSignature(m_pDevice);
-		m_pComputeLightCullRS->FinalizeFromShader("Tiled Light Culling", m_pDevice->GetShader("LightCulling.hlsl", ShaderType::Compute, "CSMain"));
+		m_pComputeLightCullRS->AddConstantBufferView(100);
+		m_pComputeLightCullRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 8);
+		m_pComputeLightCullRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 8);
+		m_pComputeLightCullRS->Finalize("Tiled Light Culling");
 		m_pComputeLightCullPSO = m_pDevice->CreateComputePipeline(m_pComputeLightCullRS, "LightCulling.hlsl", "CSMain");
 
 		m_pLightIndexCounter = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(2, sizeof(uint32)), "Light Index Counter");
