@@ -30,7 +30,6 @@ struct TextureDesc;
 struct BufferDesc;
 
 using WindowHandle = HWND;
-using WindowHandlePtr = HWND;
 
 enum class GraphicsInstanceFlags
 {
@@ -216,13 +215,13 @@ public:
 	ID3D12Device5* GetRaytracingDevice() const { return m_pRaytracingDevice.Get(); }
 	ShaderManager* GetShaderManager() const { return m_pShaderManager.get(); }
 
-	const GraphicsCapabilities& GetCapabilities() const { return Capabilities; }
+	const GraphicsCapabilities& GetCapabilities() const { return m_Capabilities; }
 
 	Fence* GetFrameFence() const { return m_pFrameFence; }
 
 private:
 	bool m_IsTearingDown = false;
-	GraphicsCapabilities Capabilities;
+	GraphicsCapabilities m_Capabilities;
 
 	RefCountPtr<ID3D12Device> m_pDevice;
 	RefCountPtr<ID3D12Device5> m_pRaytracingDevice;

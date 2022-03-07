@@ -8,13 +8,10 @@ class CommandContext;
 class GraphicsObject
 {
 public:
-	GraphicsObject(GraphicsDevice* pParent = nullptr)
+	GraphicsObject(GraphicsDevice* pParent)
 		: m_pParent(pParent)
 	{}
-	virtual ~GraphicsObject()
-	{
-		//check(m_RefCount == 0);
-	}
+	virtual ~GraphicsObject() = default;
 
 	uint32 AddRef()
 	{
@@ -31,8 +28,7 @@ public:
 	}
 
 	uint32 GetNumRefs() const { return m_RefCount; }
-
-	inline GraphicsDevice* GetParent() const { return m_pParent; }
+	GraphicsDevice* GetParent() const { return m_pParent; }
 
 private:
 	std::atomic<uint32> m_RefCount = 0;
@@ -47,6 +43,7 @@ public:
 	ResourceState(D3D12_RESOURCE_STATES initialState = D3D12_RESOURCE_STATE_UNKNOWN)
 		: m_CommonState(initialState), m_AllSameState(true)
 	{}
+
 	void Set(D3D12_RESOURCE_STATES state, uint32 subResource)
 	{
 		if (subResource != D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES)
@@ -81,8 +78,7 @@ public:
 		}
 	}
 private:
-	constexpr static uint32 MAX_SUBRESOURCES = 12;
-	std::array<D3D12_RESOURCE_STATES, MAX_SUBRESOURCES> m_ResourceStates{};
+	std::array<D3D12_RESOURCE_STATES, D3D12_REQ_MIP_LEVELS> m_ResourceStates{};
 	D3D12_RESOURCE_STATES m_CommonState;
 	bool m_AllSameState;
 };
@@ -98,7 +94,6 @@ public:
 	void* GetMappedData() const { return m_pMappedData; }
 	void SetImmediateDelete(bool immediate) { m_ImmediateDelete = immediate; }
 
-	void Destroy();
 	void SetName(const char* pName);
 	const std::string& GetName() { return m_Name; }
 

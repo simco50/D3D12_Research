@@ -33,7 +33,7 @@ ClusteredForward::ClusteredForward(GraphicsDevice* pDevice)
 	SetupPipelines();
 
 	CommandContext* pContext = pDevice->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
-	m_pHeatMapTexture = pDevice->CreateTextureFromFile(*pContext, "Resources/Textures/Heatmap.png", true);
+	m_pHeatMapTexture = pDevice->CreateTextureFromFile(*pContext, "Resources/Textures/Heatmap.png", true, "Color Heatmap");
 	pContext->Execute(true);
 }
 
@@ -482,9 +482,10 @@ void ClusteredForward::SetupPipelines()
 		m_pDiffuseRS = new RootSignature(m_pDevice);
 		m_pDiffuseRS->FinalizeFromShader("Diffuse", m_pDevice->GetShader("Diffuse.hlsl", ShaderType::Vertex, "VSMain", { "CLUSTERED_FORWARD" }));
 
-		DXGI_FORMAT formats[] = {
+		constexpr DXGI_FORMAT formats[] = {
 			DXGI_FORMAT_R16G16B16A16_FLOAT,
-			DXGI_FORMAT_R16G16B16A16_FLOAT,
+			DXGI_FORMAT_R16G16_FLOAT,
+			DXGI_FORMAT_R8_UNORM,
 		};
 
 		{

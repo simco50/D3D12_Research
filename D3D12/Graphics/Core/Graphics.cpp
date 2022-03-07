@@ -61,8 +61,8 @@ namespace GraphicsCommon
 
 		RegisterDefaultTexture(DefaultTexture::Black3D, "Default Black 3D", TextureDesc::Create3D(1, 1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &BLACK);
 
-		DefaultTextures[(int)DefaultTexture::ColorNoise256] = pDevice->CreateTextureFromFile(context, "Resources/Textures/Noise.png", false);
-		DefaultTextures[(int)DefaultTexture::BlueNoise512] = pDevice->CreateTextureFromFile(context, "Resources/Textures/BlueNoise.dds", false);
+		DefaultTextures[(int)DefaultTexture::ColorNoise256] = pDevice->CreateTextureFromFile(context, "Resources/Textures/Noise.png", false, "Noise");
+		DefaultTextures[(int)DefaultTexture::BlueNoise512] = pDevice->CreateTextureFromFile(context, "Resources/Textures/BlueNoise.dds", false, "Blue Noise");
 
 		context.Execute(true);
 
@@ -240,7 +240,7 @@ GraphicsDevice::GraphicsDevice(IDXGIAdapter4* pAdapter)
 	m_pDevice->QueryInterface(&m_pRaytracingDevice);
 	D3D::SetObjectName(m_pDevice.Get(), "Main Device");
 
-	Capabilities.Initialize(this);
+	m_Capabilities.Initialize(this);
 
 	auto OnDeviceRemovedCallback = [](void* pContext, BOOLEAN) {
 		GraphicsDevice* pDevice = (GraphicsDevice*)pContext;
@@ -287,6 +287,7 @@ GraphicsDevice::GraphicsDevice(IDXGIAdapter4* pAdapter)
 		if (CommandLine::GetBool("d3dbreakvalidation"))
 		{
 			VERIFY_HR_EX(pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, true), GetDevice());
+			VERIFY_HR_EX(pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_WARNING, true), GetDevice());
 			E_LOG(Warning, "D3D Validation Break on Severity Enabled");
 		}
 		pInfoQueue->PushStorageFilter(&NewFilter);
@@ -335,7 +336,7 @@ GraphicsDevice::GraphicsDevice(IDXGIAdapter4* pAdapter)
 	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_DSV] = new OfflineDescriptorAllocator(this, D3D12_DESCRIPTOR_HEAP_TYPE_DSV, 64);
 
 	uint8 smMaj, smMin;
-	Capabilities.GetShaderModel(smMaj, smMin);
+	m_Capabilities.GetShaderModel(smMaj, smMin);
 	m_pShaderManager = std::make_unique<ShaderManager>(smMaj, smMin);
 	m_pShaderManager->AddIncludeDir("Resources/Shaders/");
 	m_pShaderManager->AddIncludeDir("Graphics/Core/");

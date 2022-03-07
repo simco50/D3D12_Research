@@ -10,11 +10,6 @@ GraphicsResource::GraphicsResource(GraphicsDevice* pParent, ID3D12Resource* pRes
 
 GraphicsResource::~GraphicsResource()
 {
-	Destroy();
-}
-
-void GraphicsResource::Destroy()
-{
 	if (m_pResource)
 	{
 		if (m_ImmediateDelete)

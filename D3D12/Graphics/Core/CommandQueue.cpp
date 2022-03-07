@@ -5,7 +5,7 @@
 #include "CommandContext.h"
 
 Fence::Fence(GraphicsDevice* pParent, uint64 fenceValue, const char* pName)
-	: m_CurrentValue(fenceValue), m_LastSignaled(0), m_LastCompleted(0)
+	: GraphicsObject(pParent), m_CurrentValue(fenceValue), m_LastSignaled(0), m_LastCompleted(0)
 {
 	VERIFY_HR_EX(pParent->GetDevice()->CreateFence(m_LastCompleted, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(m_pFence.GetAddressOf())), pParent->GetDevice());
 	D3D::SetObjectName(m_pFence.Get(), pName);
