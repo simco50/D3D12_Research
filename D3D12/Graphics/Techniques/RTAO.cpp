@@ -44,7 +44,7 @@ void RTAO::Execute(RGGraph& graph, const SceneView& sceneData, Texture* pTarget,
 			context.SetComputeRootSignature(m_pGlobalRS);
 			context.SetPipelineState(m_pRtSO);
 
-			struct Parameters
+			struct
 			{
 				float Power;
 				float Radius;

@@ -876,24 +876,20 @@ void DemoApp::Update()
 
 					renderContext.SetRootCBV(1, GetViewUniforms(m_SceneData, GetCurrentRenderTarget()));
 
-					const D3D12_CPU_DESCRIPTOR_HANDLE srvs[] =
-					{
-						m_pVisibilityTexture->GetSRV()->GetDescriptor(),
-						m_pAmbientOcclusion->GetSRV()->GetDescriptor(),
-						GetDepthStencil()->GetSRV()->GetDescriptor(),
-						m_pPreviousColor->GetSRV()->GetDescriptor(),
-					};
+					renderContext.BindResources(2,
+						{
+							m_pVisibilityTexture->GetSRV(),
+							m_pAmbientOcclusion->GetSRV(),
+							GetDepthStencil()->GetSRV(),
+							m_pPreviousColor->GetSRV(),
+						});
 
-					renderContext.BindResources(2, 0, srvs, ARRAYSIZE(srvs));
-
-					const D3D12_CPU_DESCRIPTOR_HANDLE uavs[] =
-					{
-						GetCurrentRenderTarget()->GetUAV()->GetDescriptor(),
-						m_pNormals->GetUAV()->GetDescriptor(),
-						m_pRoughness->GetUAV()->GetDescriptor(),
-					};
-
-					renderContext.BindResources(3, 0, uavs, ARRAYSIZE(uavs));
+					renderContext.BindResources(3,
+						{
+							GetCurrentRenderTarget()->GetUAV(),
+							m_pNormals->GetUAV(),
+							m_pRoughness->GetUAV(),
+						});
 					renderContext.Dispatch(ComputeUtils::GetNumThreadGroups(GetCurrentRenderTarget()->GetWidth(), 16, GetCurrentRenderTarget()->GetHeight(), 16));
 					renderContext.InsertUavBarrier();
 				});
@@ -987,10 +983,13 @@ void DemoApp::Update()
 					context.SetRootCBV(0, GetViewUniforms(m_SceneData, m_pHDRRenderTarget));
 
 					context.BindResource(1, 0, m_pHDRRenderTarget->GetUAV());
-					context.BindResource(2, 0, m_pVelocity->GetSRV());
-					context.BindResource(2, 1, m_pPreviousColor->GetSRV());
-					context.BindResource(2, 2, m_pTAASource->GetSRV());
-					context.BindResource(2, 3, GetDepthStencil()->GetSRV());
+					context.BindResources(2,
+						{
+							m_pVelocity->GetSRV(),
+							m_pPreviousColor->GetSRV(),
+							m_pTAASource->GetSRV(),
+							GetDepthStencil()->GetSRV(),
+						});
 
 					context.Dispatch(ComputeUtils::GetNumThreadGroups(m_pHDRRenderTarget->GetWidth(), 8, m_pHDRRenderTarget->GetHeight(), 8));
 
@@ -1055,22 +1054,22 @@ void DemoApp::Update()
 				context.SetPipelineState(m_pGenerateMipsPSO);
 				context.SetComputeRootSignature(m_pGenerateMipsRS);
 
-				struct DownscaleParameters
+				struct
 				{
 					IntVector2 TargetDimensions;
 					Vector2 TargetDimensionsInv;
-				} Parameters{};
-				Parameters.TargetDimensions.x = pToneMapInput->GetWidth();
-				Parameters.TargetDimensions.y = pToneMapInput->GetHeight();
-				Parameters.TargetDimensionsInv = Vector2(1.0f / pToneMapInput->GetWidth(), 1.0f / pToneMapInput->GetHeight());
+				} parameters;
+				parameters.TargetDimensions.x = pToneMapInput->GetWidth();
+				parameters.TargetDimensions.y = pToneMapInput->GetHeight();
+				parameters.TargetDimensionsInv = Vector2(1.0f / pToneMapInput->GetWidth(), 1.0f / pToneMapInput->GetHeight());
 
-				context.SetRootCBV(0, Parameters);
+				context.SetRootCBV(0, parameters);
 				context.BindResource(1, 0, pToneMapInput->GetUAV());
 				context.BindResource(2, 0, m_pHDRRenderTarget->GetSRV());
 
 				context.Dispatch(
-					Math::DivideAndRoundUp(Parameters.TargetDimensions.x, 8),
-					Math::DivideAndRoundUp(Parameters.TargetDimensions.y, 8)
+					Math::DivideAndRoundUp(parameters.TargetDimensions.x, 8),
+					Math::DivideAndRoundUp(parameters.TargetDimensions.y, 8)
 				);
 			});
 
@@ -1084,19 +1083,19 @@ void DemoApp::Update()
 				context.SetComputeRootSignature(m_pEyeAdaptationRS);
 				context.SetPipelineState(m_pLuminanceHistogramPSO);
 
-				struct HistogramParameters
+				struct
 				{
 					uint32 Width;
 					uint32 Height;
 					float MinLogLuminance;
 					float OneOverLogLuminanceRange;
-				} Parameters;
-				Parameters.Width = pToneMapInput->GetWidth();
-				Parameters.Height = pToneMapInput->GetHeight();
-				Parameters.MinLogLuminance = Tweakables::g_MinLogLuminance.Get();
-				Parameters.OneOverLogLuminanceRange = 1.0f / (Tweakables::g_MaxLogLuminance.Get() - Tweakables::g_MinLogLuminance.Get());
+				} parameters;
+				parameters.Width = pToneMapInput->GetWidth();
+				parameters.Height = pToneMapInput->GetHeight();
+				parameters.MinLogLuminance = Tweakables::g_MinLogLuminance.Get();
+				parameters.OneOverLogLuminanceRange = 1.0f / (Tweakables::g_MaxLogLuminance.Get() - Tweakables::g_MinLogLuminance.Get());
 
-				context.SetRootCBV(0, Parameters);
+				context.SetRootCBV(0, parameters);
 				context.BindResource(1, 0, m_pLuminanceHistogram->GetUAV());
 				context.BindResource(2, 0, pToneMapInput->GetSRV());
 
@@ -1115,7 +1114,7 @@ void DemoApp::Update()
 				context.SetComputeRootSignature(m_pEyeAdaptationRS);
 				context.SetPipelineState(m_pAverageLuminancePSO);
 
-				struct Parameters
+				struct
 				{
 					int32 PixelCount;
 					float MinLogLuminance;
@@ -1156,7 +1155,7 @@ void DemoApp::Update()
 					context.SetComputeRootSignature(m_pBloomRS);
 					context.SetPipelineState(m_pBloomSeparatePSO);
 
-					struct Parameters
+					struct
 					{
 						float Threshold;
 						float BrightnessClamp;
@@ -1168,17 +1167,15 @@ void DemoApp::Update()
 					context.SetRootCBV(0, parameters);
 					context.SetRootCBV(1, GetViewUniforms(m_SceneData));
 
-					D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
-						GetCurrentRenderTarget()->GetSRV()->GetDescriptor(),
-						m_pAverageLuminance->GetSRV()->GetDescriptor(),
-					};
-
-					D3D12_CPU_DESCRIPTOR_HANDLE uavs[] = {
-						pTargetUAVs[0]->GetDescriptor()
-					};
-
-					context.BindResources(2, 0, uavs, ARRAYSIZE(uavs));
-					context.BindResources(3, 0, srvs, ARRAYSIZE(srvs));
+					context.BindResources(2,
+						{
+							pTargetUAVs[0]
+						});
+					context.BindResources(3,
+						{
+							GetCurrentRenderTarget()->GetSRV(),
+							m_pAverageLuminance->GetSRV(),
+						});
 
 					context.Dispatch(ComputeUtils::GetNumThreadGroups(pTarget->GetWidth(), 8, pTarget->GetHeight(), 8));
 				});
@@ -1205,7 +1202,7 @@ void DemoApp::Update()
 
 					for (uint32 i = 1; i < numMips; ++i)
 					{
-						struct Parameters
+						struct
 						{
 							uint32 SourceMip;
 							Vector2 TargetDimensionsInv;
@@ -1245,7 +1242,7 @@ void DemoApp::Update()
 	RGPassBuilder tonemap = graph.AddPass("Tonemap");
 	tonemap.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
 		{
-			struct Parameters
+			struct
 			{
 				float WhitePoint;
 				uint32 Tonemapper;
@@ -1283,19 +1280,19 @@ void DemoApp::Update()
 				context.SetPipelineState(m_pDrawHistogramPSO);
 				context.SetComputeRootSignature(m_pEyeAdaptationRS);
 
-				struct AverageParameters
+				struct
 				{
 					float MinLogLuminance;
 					float InverseLogLuminanceRange;
 					Vector2 InvTextureDimensions;
-				} Parameters;
+				} parameters;
 
-				Parameters.MinLogLuminance = Tweakables::g_MinLogLuminance.Get();
-				Parameters.InverseLogLuminanceRange = 1.0f / (Tweakables::g_MaxLogLuminance.Get() - Tweakables::g_MinLogLuminance.Get());
-				Parameters.InvTextureDimensions.x = 1.0f / m_pDebugHistogramTexture->GetWidth();
-				Parameters.InvTextureDimensions.y = 1.0f / m_pDebugHistogramTexture->GetHeight();
+				parameters.MinLogLuminance = Tweakables::g_MinLogLuminance.Get();
+				parameters.InverseLogLuminanceRange = 1.0f / (Tweakables::g_MaxLogLuminance.Get() - Tweakables::g_MinLogLuminance.Get());
+				parameters.InvTextureDimensions.x = 1.0f / m_pDebugHistogramTexture->GetWidth();
+				parameters.InvTextureDimensions.y = 1.0f / m_pDebugHistogramTexture->GetHeight();
 
-				context.SetRootCBV(0, Parameters);
+				context.SetRootCBV(0, parameters);
 				context.BindResource(1, 0, m_pDebugHistogramTexture->GetUAV());
 				context.BindResource(2, 0, m_pLuminanceHistogram->GetSRV());
 				context.BindResource(2, 1, m_pAverageLuminance->GetSRV());

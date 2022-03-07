@@ -99,20 +99,20 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView& resources, Texture*
 		return;
 	}
 
-	D3D12_CPU_DESCRIPTOR_HANDLE uavs[] = {
-		m_pCountersBuffer->GetUAV()->GetDescriptor(),
-		m_pEmitArguments->GetUAV()->GetDescriptor(),
-		m_pSimulateArguments->GetUAV()->GetDescriptor(),
-		m_pDrawArguments->GetUAV()->GetDescriptor(),
-		m_pDeadList->GetUAV()->GetDescriptor(),
-		m_pAliveList1->GetUAV()->GetDescriptor(),
-		m_pAliveList2->GetUAV()->GetDescriptor(),
-		m_pParticleBuffer->GetUAV()->GetDescriptor(),
+	const ResourceView* uavs[] = {
+		m_pCountersBuffer->GetUAV(),
+		m_pEmitArguments->GetUAV(),
+		m_pSimulateArguments->GetUAV(),
+		m_pDrawArguments->GetUAV(),
+		m_pDeadList->GetUAV(),
+		m_pAliveList1->GetUAV(),
+		m_pAliveList2->GetUAV(),
+		m_pParticleBuffer->GetUAV(),
 	};
 
-	D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
-		m_pCountersBuffer->GetSRV()->GetDescriptor(),
-		pResolvedDepth->GetSRV()->GetDescriptor(),
+	const ResourceView* srvs[] = {
+		m_pCountersBuffer->GetSRV(),
+		pResolvedDepth->GetSRV(),
 	};
 
 	RG_GRAPH_SCOPE("Particle Simulation", graph);
@@ -133,7 +133,7 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView& resources, Texture*
 			context.SetComputeRootSignature(m_pSimulateRS);
 
 			context.SetPipelineState(m_pPrepareArgumentsPS);
-			struct Parameters
+			struct
 			{
 				int32 EmitCount;
 			} parameters;
@@ -158,11 +158,10 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView& resources, Texture*
 			context.SetComputeRootSignature(m_pSimulateRS);
 			context.SetPipelineState(m_pEmitPS);
 
-			struct Parameters
+			struct
 			{
 				Vector3 Origin;
-			};
-			Parameters parameters{};
+			} parameters;
 
 			parameters.Origin = Vector3(150, 3, 0);
 
@@ -182,7 +181,7 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView& resources, Texture*
 			context.SetComputeRootSignature(m_pSimulateRS);
 			context.SetPipelineState(m_pSimulatePS);
 
-			struct Parameters
+			struct
 			{
 				float DeltaTime;
 				float ParticleLifeTime;
@@ -244,11 +243,10 @@ void GpuParticles::Render(RGGraph& graph, const SceneView& resources, Texture* p
 			context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 			context.SetRootCBV(0, GetViewUniforms(resources, pTarget));
 
-			D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
-				m_pParticleBuffer->GetSRV()->GetDescriptor(),
-				m_pAliveList1->GetSRV()->GetDescriptor()
-			};
-			context.BindResources(1, 0, srvs, 2);
+			context.BindResources(1, {
+				m_pParticleBuffer->GetSRV(),
+				m_pAliveList1->GetSRV()
+				});
 			context.ExecuteIndirect(GraphicsCommon::pIndirectDrawSignature, 1, m_pDrawArguments, nullptr);
 			context.EndRenderPass();
 		});

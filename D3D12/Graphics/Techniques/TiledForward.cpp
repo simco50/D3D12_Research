@@ -57,19 +57,16 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& resources, const Sce
 
 			context.SetRootCBV(0, GetViewUniforms(resources, parameters.pDepth));
 
-			D3D12_CPU_DESCRIPTOR_HANDLE uavs[] = {
-				m_pLightIndexCounter->GetUAV()->GetDescriptor(),
-				m_pLightIndexListBufferOpaque->GetUAV()->GetDescriptor(),
-				m_pLightGridOpaque->GetUAV()->GetDescriptor(),
-				m_pLightIndexListBufferTransparant->GetUAV()->GetDescriptor(),
-				m_pLightGridTransparant->GetUAV()->GetDescriptor(),
-			};
-			D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
-				parameters.pDepth->GetSRV()->GetDescriptor(),
-			};
-
-			context.BindResources(1, 0, uavs, ARRAYSIZE(uavs));
-			context.BindResources(2, 0, srvs, ARRAYSIZE(srvs));
+			context.BindResources(1, {
+				m_pLightIndexCounter->GetUAV(),
+				m_pLightIndexListBufferOpaque->GetUAV(),
+				m_pLightGridOpaque->GetUAV(),
+				m_pLightIndexListBufferTransparant->GetUAV(),
+				m_pLightGridTransparant->GetUAV(),
+				});
+			context.BindResources(2, {
+				parameters.pDepth->GetSRV(),
+				});
 
 			context.Dispatch(ComputeUtils::GetNumThreadGroups(
 				parameters.pDepth->GetWidth(), FORWARD_PLUS_BLOCK_SIZE,
@@ -114,15 +111,14 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& resources, const Sce
 			{
 				GPU_PROFILE_SCOPE("Opaque", &context);
 
-				D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
-					parameters.pAmbientOcclusion->GetSRV()->GetDescriptor(),
-					parameters.pDepth->GetSRV()->GetDescriptor(),
-					parameters.pPreviousColorTarget->GetSRV()->GetDescriptor(),
-					GraphicsCommon::GetDefaultTexture(DefaultTexture::Black3D)->GetSRV()->GetDescriptor(),
-					m_pLightGridOpaque->GetSRV()->GetDescriptor(),
-					m_pLightIndexListBufferOpaque->GetSRV()->GetDescriptor(),
-				};
-				context.BindResources(3, 0, srvs, ARRAYSIZE(srvs));
+				context.BindResources(3, {
+					parameters.pAmbientOcclusion->GetSRV(),
+					parameters.pDepth->GetSRV(),
+					parameters.pPreviousColorTarget->GetSRV(),
+					GraphicsCommon::GetDefaultTexture(DefaultTexture::Black3D)->GetSRV(),
+					m_pLightGridOpaque->GetSRV(),
+					m_pLightIndexListBufferOpaque->GetSRV(),
+					});
 
 				context.SetPipelineState(m_pDiffusePSO);
 				DrawScene(context, resources, Batch::Blending::Opaque);
@@ -134,15 +130,14 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& resources, const Sce
 			{
 				GPU_PROFILE_SCOPE("Transparant", &context);
 
-				D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
-					parameters.pAmbientOcclusion->GetSRV()->GetDescriptor(),
-					parameters.pDepth->GetSRV()->GetDescriptor(),
-					parameters.pPreviousColorTarget->GetSRV()->GetDescriptor(),
-					GraphicsCommon::GetDefaultTexture(DefaultTexture::Black3D)->GetSRV()->GetDescriptor(),
-					m_pLightGridTransparant->GetSRV()->GetDescriptor(),
-					m_pLightIndexListBufferTransparant->GetSRV()->GetDescriptor(),
-				};
-				context.BindResources(3, 0, srvs, ARRAYSIZE(srvs));
+				context.BindResources(3, {
+					parameters.pAmbientOcclusion->GetSRV(),
+					parameters.pDepth->GetSRV(),
+					parameters.pPreviousColorTarget->GetSRV(),
+					GraphicsCommon::GetDefaultTexture(DefaultTexture::Black3D)->GetSRV(),
+					m_pLightGridTransparant->GetSRV(),
+					m_pLightIndexListBufferTransparant->GetSRV(),
+					});
 
 				context.SetPipelineState(m_pDiffuseAlphaPSO);
 				DrawScene(context, resources, Batch::Blending::AlphaBlend);
@@ -164,13 +159,13 @@ void TiledForward::VisualizeLightDensity(RGGraph& graph, GraphicsDevice* pDevice
 	RGPassBuilder basePass = graph.AddPass("Visualize Light Density");
 	basePass.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
 		{
-			struct Data
+			struct
 			{
 				IntVector2 ClusterDimensions;
 				IntVector2 ClusterSize;
 				float SliceMagicA;
 				float SliceMagicB;
-			} constantData{};
+			} constantData;
 
 			constantData.SliceMagicA = sliceMagicA;
 			constantData.SliceMagicB = sliceMagicB;

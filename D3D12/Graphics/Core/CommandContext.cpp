@@ -346,6 +346,16 @@ void CommandContext::BindResource(uint32 rootIndex, uint32 offset, ResourceView*
 	m_ShaderResourceDescriptorAllocator.SetDescriptors(rootIndex, offset, 1, &handle);
 }
 
+void CommandContext::BindResources(uint32 rootIndex, uint32 offset, const ResourceView*const* pViews, uint32 count)
+{
+	static D3D12_CPU_DESCRIPTOR_HANDLE descriptors[16];
+	for (uint32 i = 0; i < count; ++i)
+	{
+		descriptors[i] = pViews[i]->GetDescriptor();
+	}
+	BindResources(rootIndex, offset, descriptors, count);
+}
+
 void CommandContext::BindResources(uint32 rootIndex, uint32 offset, const D3D12_CPU_DESCRIPTOR_HANDLE* handles, uint32 count)
 {
 	m_ShaderResourceDescriptorAllocator.SetDescriptors(rootIndex, offset, count, handles);

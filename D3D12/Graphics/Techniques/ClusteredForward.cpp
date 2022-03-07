@@ -123,7 +123,7 @@ void ClusteredForward::ComputeLightCulling(RGGraph& graph, const SceneView& scen
 				context.SetPipelineState(m_pCreateAabbPSO);
 				context.SetComputeRootSignature(m_pLightCullingRS);
 
-				struct ConstantBuffer
+				struct
 				{
 					IntVector4 ClusterDimensions;
 					IntVector2 ClusterSize;
@@ -161,10 +161,10 @@ void ClusteredForward::ComputeLightCulling(RGGraph& graph, const SceneView& scen
 			// Clear the light grid because we're accumulating the light count in the shader
 			context.ClearUavUInt(resources.pLightGrid, resources.pLightGridRawUAV);
 
-			struct ConstantBuffer
+			struct
 			{
 				IntVector3 ClusterDimensions;
-			} constantBuffer{};
+			} constantBuffer;
 
 			constantBuffer.ClusterDimensions = resources.ClusterCount;
 
@@ -192,7 +192,7 @@ void ClusteredForward::RenderVolumetricFog(RGGraph& graph, const SceneView& scen
 	Texture* pSourceVolume = fogData.pLightScatteringVolume[scene.FrameIndex % 2];
 	Texture* pDestinationVolume = fogData.pLightScatteringVolume[(scene.FrameIndex + 1) % 2];
 
-	struct ConstantBuffer
+	struct
 	{
 		IntVector3 ClusterDimensions;
 		float Jitter;
@@ -200,7 +200,7 @@ void ClusteredForward::RenderVolumetricFog(RGGraph& graph, const SceneView& scen
 		float LightClusterSizeFactor;
 		Vector2 LightGridParams;
 		IntVector2 LightClusterDimensions;
-	} constantBuffer{};
+	} constantBuffer;
 
 	constantBuffer.ClusterDimensions = IntVector3(pDestinationVolume->GetWidth(), pDestinationVolume->GetHeight(), pDestinationVolume->GetDepth());
 	constantBuffer.InvClusterDimensions = Vector3(1.0f / pDestinationVolume->GetWidth(), 1.0f / pDestinationVolume->GetHeight(), 1.0f / pDestinationVolume->GetDepth());
@@ -219,16 +219,14 @@ void ClusteredForward::RenderVolumetricFog(RGGraph& graph, const SceneView& scen
 			context.SetComputeRootSignature(m_pVolumetricLightingRS);
 			context.SetPipelineState(m_pInjectVolumeLightPSO);
 
-			D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
-				lightCullData.pLightGrid->GetSRV()->GetDescriptor(),
-				lightCullData.pLightIndexGrid->GetSRV()->GetDescriptor(),
-				pSourceVolume->GetSRV()->GetDescriptor(),
-			};
-
 			context.SetRootCBV(0, constantBuffer);
 			context.SetRootCBV(1, GetViewUniforms(scene));
 			context.BindResource(2, 0, pDestinationVolume->GetUAV());
-			context.BindResources(3, 0, srvs, ARRAYSIZE(srvs));
+			context.BindResources(3, {
+				lightCullData.pLightGrid->GetSRV(),
+				lightCullData.pLightIndexGrid->GetSRV(),
+				pSourceVolume->GetSRV(),
+				});
 
 			constexpr uint32 threadGroupSizeXY = 8;
 			constexpr uint32 threadGroupSizeZ = 4;
@@ -253,16 +251,14 @@ void ClusteredForward::RenderVolumetricFog(RGGraph& graph, const SceneView& scen
 			//float values[] = { 0,0,0,0 };
 			//context.ClearUavFloat(m_pFinalVolumeFog, m_pFinalVolumeFog->GetUAV(), values);
 
-			D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
-				lightCullData.pLightGrid->GetSRV()->GetDescriptor(),
-				lightCullData.pLightIndexGrid->GetSRV()->GetDescriptor(),
-				pDestinationVolume->GetSRV()->GetDescriptor(),
-			};
-
 			context.SetRootCBV(0, constantBuffer);
 			context.SetRootCBV(1, GetViewUniforms(scene));
 			context.BindResource(2, 0, fogData.pFinalVolumeFog->GetUAV());
-			context.BindResources(3, 0, srvs, ARRAYSIZE(srvs));
+			context.BindResources(3, {
+				lightCullData.pLightGrid->GetSRV(),
+				lightCullData.pLightIndexGrid->GetSRV(),
+				pDestinationVolume->GetSRV(),
+				});
 
 			constexpr uint32 threadGroupSize = 8;
 
@@ -291,17 +287,6 @@ void ClusteredForward::RenderBasePass(RGGraph& graph, const SceneView& resources
 	RGPassBuilder basePass = graph.AddPass("Base Pass");
 	basePass.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
 		{
-			struct PerFrameData
-			{
-				IntVector4 ClusterDimensions;
-				IntVector2 ClusterSize;
-				Vector2 LightGridParams;
-			} frameData{};
-
-			frameData.ClusterDimensions = lightCullData.ClusterCount;
-			frameData.ClusterSize = IntVector2(gLightClusterTexelSize, gLightClusterTexelSize);
-			frameData.LightGridParams = lightCullData.LightGridParams;
-
 			context.InsertResourceBarrier(lightCullData.pLightGrid, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(lightCullData.pLightIndexGrid, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(parameters.pAmbientOcclusion, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
@@ -312,6 +297,17 @@ void ClusteredForward::RenderBasePass(RGGraph& graph, const SceneView& resources
 			context.InsertResourceBarrier(parameters.pColorTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
 			context.InsertResourceBarrier(parameters.pNormalsTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
 			context.InsertResourceBarrier(parameters.pRoughnessTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
+
+			struct
+			{
+				IntVector4 ClusterDimensions;
+				IntVector2 ClusterSize;
+				Vector2 LightGridParams;
+			} frameData;
+
+			frameData.ClusterDimensions = lightCullData.ClusterCount;
+			frameData.ClusterSize = IntVector2(gLightClusterTexelSize, gLightClusterTexelSize);
+			frameData.LightGridParams = lightCullData.LightGridParams;
 
 			RenderPassInfo renderPass;
 			renderPass.DepthStencilTarget.Access = RenderPassAccess::Load_Store;
@@ -334,15 +330,14 @@ void ClusteredForward::RenderBasePass(RGGraph& graph, const SceneView& resources
 
 			context.SetRootCBV(2, GetViewUniforms(resources, parameters.pColorTarget));
 
-			D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
-				parameters.pAmbientOcclusion->GetSRV()->GetDescriptor(),
-				parameters.pDepth->GetSRV()->GetDescriptor(),
-				parameters.pPreviousColorTarget->GetSRV()->GetDescriptor(),
-				pFogTexture->GetSRV()->GetDescriptor(),
-				lightCullData.pLightGrid->GetSRV()->GetDescriptor(),
-				lightCullData.pLightIndexGrid->GetSRV()->GetDescriptor(),
-			};
-			context.BindResources(3, 0, srvs, ARRAYSIZE(srvs));
+			context.BindResources(3, {
+				parameters.pAmbientOcclusion->GetSRV(),
+				parameters.pDepth->GetSRV(),
+				parameters.pPreviousColorTarget->GetSRV(),
+				pFogTexture->GetSRV(),
+				lightCullData.pLightGrid->GetSRV(),
+				lightCullData.pLightIndexGrid->GetSRV(),
+				});
 
 			{
 				GPU_PROFILE_SCOPE("Opaque", &context);
@@ -386,14 +381,11 @@ void ClusteredForward::RenderBasePass(RGGraph& graph, const SceneView& resources
 				ShaderInterop::ViewUniforms view = GetViewUniforms(resources, parameters.pColorTarget);
 				view.Projection = m_DebugClustersViewMatrix * resources.View.ViewProjection;
 				context.SetRootCBV(0, view);
-
-				D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
-					lightCullData.pAABBs->GetSRV()->GetDescriptor(),
-					m_pDebugLightGrid->GetSRV()->GetDescriptor(),
-					m_pHeatMapTexture->GetSRV()->GetDescriptor(),
-				};
-				context.BindResources(1, 0, srvs, ARRAYSIZE(srvs));
-
+				context.BindResources(1, {
+					lightCullData.pAABBs->GetSRV(),
+					m_pDebugLightGrid->GetSRV(),
+					m_pHeatMapTexture->GetSRV(),
+					});
 				context.Draw(0, lightCullData.ClusterCount.x * lightCullData.ClusterCount.y * lightCullData.ClusterCount.z);
 
 				context.EndRenderPass();
@@ -419,7 +411,12 @@ void ClusteredForward::VisualizeLightDensity(RGGraph& graph, const SceneView& re
 	RGPassBuilder basePass = graph.AddPass("Visualize Light Density");
 	basePass.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
 		{
-			struct ConstantBuffer
+			context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+			context.InsertResourceBarrier(pDepth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+			context.InsertResourceBarrier(m_pLightGrid, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+			context.InsertResourceBarrier(m_pVisualizationIntermediateTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+			struct
 			{
 				IntVector2 ClusterDimensions;
 				IntVector2 ClusterSize;
@@ -432,26 +429,17 @@ void ClusteredForward::VisualizeLightDensity(RGGraph& graph, const SceneView& re
 
 			context.SetPipelineState(m_pVisualizeLightsPSO);
 			context.SetComputeRootSignature(m_pVisualizeLightsRS);
-
-			context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-			context.InsertResourceBarrier(pDepth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-			context.InsertResourceBarrier(m_pLightGrid, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-			context.InsertResourceBarrier(m_pVisualizationIntermediateTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-
 			context.SetRootCBV(0, constantBuffer);
 			context.SetRootCBV(1, GetViewUniforms(resources, pTarget));
 
-			context.BindResource(2, 0, pTarget->GetSRV());
-			context.BindResource(2, 1, pDepth->GetSRV());
-			context.BindResource(2, 2, m_pLightGrid->GetSRV());
-
+			context.BindResources(2, {
+				pTarget->GetSRV(),
+				pDepth->GetSRV(),
+				m_pLightGrid->GetSRV(),
+				});
 			context.BindResource(3, 0, m_pVisualizationIntermediateTexture->GetUAV());
 
-			context.Dispatch(
-				ComputeUtils::GetNumThreadGroups(
-					pTarget->GetWidth(), 16,
-					pTarget->GetHeight(), 16)
-			);
+			context.Dispatch(ComputeUtils::GetNumThreadGroups(pTarget->GetWidth(), 16, pTarget->GetHeight(), 16));
 			context.InsertUavBarrier();
 
 			context.CopyTexture(m_pVisualizationIntermediateTexture, pTarget);

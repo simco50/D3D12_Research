@@ -92,11 +92,11 @@ void PathTracing::Render(RGGraph& graph, const SceneView& sceneData, Texture* pT
 			context.SetComputeRootSignature(m_pRS);
 			context.SetPipelineState(m_pSO);
 
-			struct Parameters
+			struct
 			{
 				uint32 NumBounces;
 				uint32 AccumulatedFrames;
-			} parameters{};
+			} parameters;
 
 			parameters.NumBounces = numBounces;
 			parameters.AccumulatedFrames = m_NumAccumulatedFrames;
@@ -107,14 +107,12 @@ void PathTracing::Render(RGGraph& graph, const SceneView& sceneData, Texture* pT
 			bindingTable.BindMissShader("ShadowMS", 1);
 			bindingTable.BindHitGroup("PrimaryHG", 0);
 
-			const D3D12_CPU_DESCRIPTOR_HANDLE uavs[] = {
-				pTarget->GetUAV()->GetDescriptor(),
-				m_pAccumulationTexture->GetUAV()->GetDescriptor(),
-			};
-
 			context.SetRootCBV(0, parameters);
 			context.SetRootCBV(1, GetViewUniforms(sceneData, pTarget));
-			context.BindResources(2, 0, uavs, ARRAYSIZE(uavs));
+			context.BindResources(2, {
+				pTarget->GetUAV(),
+				m_pAccumulationTexture->GetUAV(),
+				});
 
 			context.DispatchRays(bindingTable, pTarget->GetWidth(), pTarget->GetHeight());
 		});

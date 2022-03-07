@@ -38,10 +38,10 @@ void RTReflections::Execute(RGGraph& graph, const SceneView& sceneData, const Sc
 			context.SetComputeRootSignature(m_pGlobalRS);
 			context.SetPipelineState(m_pRtSO);
 
-			struct Parameters
+			struct
 			{
 				float ViewPixelSpreadAngle;
-			} parameters{};
+			} parameters;
 
 			parameters.ViewPixelSpreadAngle = atanf(2.0f * tanf(sceneData.View.FoV / 2) / (float)pTarget->GetHeight());
 
@@ -51,17 +51,15 @@ void RTReflections::Execute(RGGraph& graph, const SceneView& sceneData, const Sc
 			bindingTable.BindMissShader("ShadowMiss", 1);
 			bindingTable.BindHitGroup("ReflectionHitGroup", 0);
 
-			const D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
-				sceneTextures.pDepth->GetSRV()->GetDescriptor(),
-				pTarget->GetSRV()->GetDescriptor(),
-				sceneTextures.pNormalsTarget->GetSRV()->GetDescriptor(),
-				sceneTextures.pRoughnessTarget->GetSRV()->GetDescriptor(),
-			};
-
 			context.SetRootConstants(0, parameters);
 			context.SetRootCBV(1, GetViewUniforms(sceneData, sceneTextures.pColorTarget));
 			context.BindResource(2, 0, sceneTextures.pColorTarget->GetUAV());
-			context.BindResources(3, 0, srvs, ARRAYSIZE(srvs));
+			context.BindResources(3, {
+				sceneTextures.pDepth->GetSRV(),
+				pTarget->GetSRV(),
+				sceneTextures.pNormalsTarget->GetSRV(),
+				sceneTextures.pRoughnessTarget->GetSRV(),
+				});
 
 			context.DispatchRays(bindingTable, sceneTextures.pColorTarget->GetWidth(), sceneTextures.pColorTarget->GetHeight());
 		});

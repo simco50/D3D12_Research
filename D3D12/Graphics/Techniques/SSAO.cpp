@@ -49,7 +49,7 @@ void SSAO::Execute(RGGraph& graph, const SceneView& sceneData, Texture* pTarget,
 			context.SetComputeRootSignature(m_pSSAORS);
 			context.SetPipelineState(m_pSSAOPSO);
 
-			struct ShaderParameters
+			struct
 			{
 				IntVector2 Dimensions;
 				float Power;
@@ -84,7 +84,7 @@ void SSAO::Execute(RGGraph& graph, const SceneView& sceneData, Texture* pTarget,
 			context.SetComputeRootSignature(m_pSSAORS);
 			context.SetPipelineState(m_pSSAOBlurPSO);
 
-			struct ShaderParameters
+			struct
 			{
 				Vector2 DimensionsInv;
 				uint32 Horizontal;
