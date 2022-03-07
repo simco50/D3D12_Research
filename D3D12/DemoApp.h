@@ -113,18 +113,18 @@ private:
 	RefCountPtr<PipelineState> m_pResolveDepthPSO;
 
 	//Tonemapping
-	RefCountPtr<Texture> m_pDownscaledColor;
-	RefCountPtr<RootSignature> m_pLuminanceHistogramRS;
-	RefCountPtr<PipelineState> m_pLuminanceHistogramPSO;
-	RefCountPtr<RootSignature> m_pAverageLuminanceRS;
-	RefCountPtr<PipelineState> m_pAverageLuminancePSO;
 	RefCountPtr<RootSignature> m_pToneMapRS;
 	RefCountPtr<PipelineState> m_pToneMapPSO;
-	RefCountPtr<PipelineState> m_pDrawHistogramPSO;
-	RefCountPtr<RootSignature> m_pDrawHistogramRS;
+
+	// Eye adaptation
+	RefCountPtr<Texture> m_pDownscaledColor;
 	RefCountPtr<Buffer> m_pLuminanceHistogram;
 	RefCountPtr<Buffer> m_pAverageLuminance;
 	RefCountPtr<Texture> m_pDebugHistogramTexture;
+	RefCountPtr<RootSignature> m_pEyeAdaptationRS;
+	RefCountPtr<PipelineState> m_pLuminanceHistogramPSO;
+	RefCountPtr<PipelineState> m_pAverageLuminancePSO;
+	RefCountPtr<PipelineState> m_pDrawHistogramPSO;
 
 	//SSAO
 	RefCountPtr<Texture> m_pAmbientOcclusion;

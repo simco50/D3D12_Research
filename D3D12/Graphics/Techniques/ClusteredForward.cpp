@@ -121,7 +121,7 @@ void ClusteredForward::ComputeLightCulling(RGGraph& graph, const SceneView& scen
 				context.InsertResourceBarrier(resources.pAABBs, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
 				context.SetPipelineState(m_pCreateAabbPSO);
-				context.SetComputeRootSignature(m_pCreateAabbRS);
+				context.SetComputeRootSignature(m_pLightCullingRS);
 
 				struct ConstantBuffer
 				{
@@ -171,11 +171,9 @@ void ClusteredForward::ComputeLightCulling(RGGraph& graph, const SceneView& scen
 			context.SetRootCBV(0, constantBuffer);
 
 			context.SetRootCBV(1, GetViewUniforms(scene));
-
-			context.BindResource(2, 0, resources.pAABBs->GetSRV());
-
-			context.BindResource(3, 0, resources.pLightIndexGrid->GetUAV());
-			context.BindResource(3, 1, resources.pLightGrid->GetUAV());
+			context.BindResource(2, 0, resources.pLightIndexGrid->GetUAV());
+			context.BindResource(2, 1, resources.pLightGrid->GetUAV());
+			context.BindResource(3, 0, resources.pAABBs->GetSRV());
 
 			constexpr uint32 threadGroupSize = 4;
 			context.Dispatch(
@@ -462,17 +460,16 @@ void ClusteredForward::VisualizeLightDensity(RGGraph& graph, const SceneView& re
 
 void ClusteredForward::SetupPipelines()
 {
-	//AABB
-	{
-		m_pCreateAabbRS = new RootSignature(m_pDevice);
-		m_pCreateAabbRS->FinalizeFromShader("Create AABB", m_pDevice->GetShader("ClusterAABBGeneration.hlsl", ShaderType::Compute, "GenerateAABBs"));
-		m_pCreateAabbPSO = m_pDevice->CreateComputePipeline(m_pCreateAabbRS, "ClusterAABBGeneration.hlsl", "GenerateAABBs");
-	}
-
 	//Light Culling
 	{
 		m_pLightCullingRS = new RootSignature(m_pDevice);
-		m_pLightCullingRS->FinalizeFromShader("Light Culling", m_pDevice->GetShader("ClusteredLightCulling.hlsl", ShaderType::Compute, "LightCulling"));
+		m_pLightCullingRS->AddConstantBufferView(0);
+		m_pLightCullingRS->AddConstantBufferView(100);
+		m_pLightCullingRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 8);
+		m_pLightCullingRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 8);
+		m_pLightCullingRS->Finalize("Light Culling");
+
+		m_pCreateAabbPSO = m_pDevice->CreateComputePipeline(m_pLightCullingRS, "ClusterAABBGeneration.hlsl", "GenerateAABBs");
 		m_pLightCullingPSO = m_pDevice->CreateComputePipeline(m_pLightCullingRS, "ClusteredLightCulling.hlsl", "LightCulling");
 
 		m_pLightCullingCommandSignature = new CommandSignature(m_pDevice);

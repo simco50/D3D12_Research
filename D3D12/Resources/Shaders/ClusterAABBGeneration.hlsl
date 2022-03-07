@@ -1,9 +1,5 @@
 #include "CommonBindings.hlsli"
 
-#define RootSig ROOT_SIG("CBV(b0), " \
-				"CBV(b100)," \
-				"DescriptorTable(UAV(u0, numDescriptors = 1))")
-
 struct PassParameters
 {
 	int4 ClusterDimensions;
@@ -25,7 +21,6 @@ float3 LineFromOriginZIntersection(float3 lineFromOrigin, float depth)
 	return t * lineFromOrigin;
 }
 
-[RootSignature(RootSig)]
 [numthreads(1, 1, 32)]
 void GenerateAABBs(uint3 threadID : SV_DispatchThreadID)
 {

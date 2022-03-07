@@ -1081,8 +1081,8 @@ void DemoApp::Update()
 				context.InsertResourceBarrier(pToneMapInput, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 				context.ClearUavUInt(m_pLuminanceHistogram, m_pLuminanceHistogram->GetUAV());
 
+				context.SetComputeRootSignature(m_pEyeAdaptationRS);
 				context.SetPipelineState(m_pLuminanceHistogramPSO);
-				context.SetComputeRootSignature(m_pLuminanceHistogramRS);
 
 				struct HistogramParameters
 				{
@@ -1112,7 +1112,7 @@ void DemoApp::Update()
 				context.InsertResourceBarrier(m_pLuminanceHistogram, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 				context.InsertResourceBarrier(m_pAverageLuminance, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-				context.SetComputeRootSignature(m_pAverageLuminanceRS);
+				context.SetComputeRootSignature(m_pEyeAdaptationRS);
 				context.SetPipelineState(m_pAverageLuminancePSO);
 
 				struct Parameters
@@ -1281,7 +1281,7 @@ void DemoApp::Update()
 				context.InsertResourceBarrier(m_pDebugHistogramTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
 				context.SetPipelineState(m_pDrawHistogramPSO);
-				context.SetComputeRootSignature(m_pDrawHistogramRS);
+				context.SetComputeRootSignature(m_pEyeAdaptationRS);
 
 				struct AverageParameters
 				{
@@ -1425,7 +1425,9 @@ void DemoApp::InitializePipelines()
 	//Shadow mapping - Vertex shader-only pass that writes to the depth buffer using the light matrix
 	{
 		m_pShadowsRS = new RootSignature(m_pDevice);
-		m_pShadowsRS->FinalizeFromShader("Shadow Mapping (Opaque)", m_pDevice->GetShader("DepthOnly.hlsl", ShaderType::Vertex, "VSMain"));
+		m_pShadowsRS->AddRootConstants(0, 3);
+		m_pShadowsRS->AddConstantBufferView(100);
+		m_pShadowsRS->Finalize("Shadow Mapping (Opaque)");
 
 		PipelineStateInitializer psoDesc;
 		psoDesc.SetRootSignature(m_pShadowsRS);
@@ -1445,7 +1447,9 @@ void DemoApp::InitializePipelines()
 	//Depth prepass - Simple vertex shader to fill the depth buffer to optimize later passes
 	{
 		m_pDepthPrepassRS = new RootSignature(m_pDevice);
-		m_pDepthPrepassRS->FinalizeFromShader("Depth Prepass", m_pDevice->GetShader("DepthOnly.hlsl", ShaderType::Vertex, "VSMain"));
+		m_pDepthPrepassRS->AddRootConstants(0, 3);
+		m_pDepthPrepassRS->AddConstantBufferView(100);
+		m_pDepthPrepassRS->Finalize("Depth Prepass");
 
 		PipelineStateInitializer psoDesc;
 		psoDesc.SetRootSignature(m_pDepthPrepassRS);
@@ -1461,29 +1465,24 @@ void DemoApp::InitializePipelines()
 		m_pDepthPrepassAlphaMaskPSO = m_pDevice->CreatePipeline(psoDesc);
 	}
 
-	//Luminance Historgram
 	{
-		m_pLuminanceHistogramRS = new RootSignature(m_pDevice);
-		m_pLuminanceHistogramRS->FinalizeFromShader("Luminance Historgram", m_pDevice->GetShader("LuminanceHistogram.hlsl", ShaderType::Compute, "CSMain"));
-		m_pLuminanceHistogramPSO = m_pDevice->CreateComputePipeline(m_pLuminanceHistogramRS, "LuminanceHistogram.hlsl", "CSMain");
+		m_pEyeAdaptationRS = new RootSignature(m_pDevice);
+		m_pEyeAdaptationRS->AddConstantBufferView(0);
+		m_pEyeAdaptationRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 8);
+		m_pEyeAdaptationRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 8);
+		m_pEyeAdaptationRS->Finalize("Eye Adaptation");
 
+		//Luminance Historgram
+		m_pLuminanceHistogramPSO = m_pDevice->CreateComputePipeline(m_pEyeAdaptationRS, "LuminanceHistogram.hlsl", "CSMain");
 		m_pLuminanceHistogram = m_pDevice->CreateBuffer(BufferDesc::CreateByteAddress(sizeof(uint32) * 256), "Luminance Histogram");
 		m_pAverageLuminance = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(3, sizeof(float), BufferFlag::UnorderedAccess | BufferFlag::ShaderResource), "Average Luminance");
 		m_pDebugHistogramTexture = m_pDevice->CreateTexture(TextureDesc::Create2D(m_pLuminanceHistogram->GetNumElements() * 4, m_pLuminanceHistogram->GetNumElements(), DXGI_FORMAT_R8G8B8A8_UNORM, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess), "Debug Histogram");
-	}
 
-	//Debug Draw Histogram
-	{
-		m_pDrawHistogramRS = new RootSignature(m_pDevice);
-		m_pDrawHistogramRS->FinalizeFromShader("Draw Luminance Historgram", m_pDevice->GetShader("DrawLuminanceHistogram.hlsl", ShaderType::Compute, "DrawLuminanceHistogram"));
-		m_pDrawHistogramPSO = m_pDevice->CreateComputePipeline(m_pDrawHistogramRS, "DrawLuminanceHistogram.hlsl", "DrawLuminanceHistogram");
-	}
+		//Debug Draw Histogram
+		m_pDrawHistogramPSO = m_pDevice->CreateComputePipeline(m_pEyeAdaptationRS, "DrawLuminanceHistogram.hlsl", "DrawLuminanceHistogram");
 
-	//Average Luminance
-	{
-		m_pAverageLuminanceRS = new RootSignature(m_pDevice);
-		m_pAverageLuminanceRS->FinalizeFromShader("Average Luminance", m_pDevice->GetShader("AverageLuminance.hlsl", ShaderType::Compute, "CSMain"));
-		m_pAverageLuminancePSO = m_pDevice->CreateComputePipeline(m_pAverageLuminanceRS, "AverageLuminance.hlsl", "CSMain");
+		//Average Luminance
+		m_pAverageLuminancePSO = m_pDevice->CreateComputePipeline(m_pEyeAdaptationRS, "AverageLuminance.hlsl", "CSMain");
 	}
 
 	//Camera motion

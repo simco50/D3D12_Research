@@ -52,7 +52,6 @@ private:
 	RefCountPtr<Texture> m_pHeatMapTexture;
 
 	// AABB
-	RefCountPtr<RootSignature> m_pCreateAabbRS;
 	RefCountPtr<PipelineState> m_pCreateAabbPSO;
 	RefCountPtr<Buffer> m_pAABBs;
 

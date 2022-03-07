@@ -1,10 +1,6 @@
 #include "CommonBindings.hlsli"
 #include "TonemappingCommon.hlsli"
 
-#define RootSig ROOT_SIG("CBV(b0), " \
-				"DescriptorTable(UAV(u0, numDescriptors = 1))," \
-				"DescriptorTable(SRV(t0, numDescriptors = 1))")
-
 #define HISTOGRAM_AVERAGE_THREADS_PER_DIMENSION 16
 
 struct PassParameters
@@ -28,7 +24,6 @@ float Adaption(float current, float target, float dt, float speed)
 	return current + (target - current) * factor;
 }
 
-[RootSignature(RootSig)]
 [numthreads(HISTOGRAM_AVERAGE_THREADS_PER_DIMENSION, HISTOGRAM_AVERAGE_THREADS_PER_DIMENSION, 1)]
 void CSMain(uint groupIndex : SV_GroupIndex)
 {

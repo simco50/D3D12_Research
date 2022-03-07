@@ -1,10 +1,5 @@
 #include "CommonBindings.hlsli"
 
-#define RootSig ROOT_SIG("CBV(b0), " \
-				"CBV(b100), " \
-				"DescriptorTable(SRV(t0, numDescriptors = 1)), " \
-				"DescriptorTable(UAV(u0, numDescriptors = 2))")
-
 #define MAX_LIGHTS_PER_TILE 32
 #define THREAD_COUNT 4
 
@@ -48,7 +43,6 @@ void AddLight(uint clusterIndex, uint lightIndex)
 	}
 }
 
-[RootSignature(RootSig)]
 [numthreads(THREAD_COUNT, THREAD_COUNT, THREAD_COUNT)]
 void LightCulling(uint3 dispatchThreadId : SV_DispatchThreadID)
 {
