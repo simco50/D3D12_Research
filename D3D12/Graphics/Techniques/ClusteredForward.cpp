@@ -175,12 +175,11 @@ void ClusteredForward::ComputeLightCulling(RGGraph& graph, const SceneView& scen
 			context.BindResource(2, 1, resources.pLightGrid->GetUAV());
 			context.BindResource(3, 0, resources.pAABBs->GetSRV());
 
-			constexpr uint32 threadGroupSize = 4;
 			context.Dispatch(
 				ComputeUtils::GetNumThreadGroups(
-					resources.ClusterCount.x, threadGroupSize,
-					resources.ClusterCount.y, threadGroupSize,
-					resources.ClusterCount.z, threadGroupSize)
+					resources.ClusterCount.x, 4,
+					resources.ClusterCount.y, 4,
+					resources.ClusterCount.z, 4)
 			);
 		});
 }
@@ -228,14 +227,11 @@ void ClusteredForward::RenderVolumetricFog(RGGraph& graph, const SceneView& scen
 				pSourceVolume->GetSRV(),
 				});
 
-			constexpr uint32 threadGroupSizeXY = 8;
-			constexpr uint32 threadGroupSizeZ = 4;
-
 			context.Dispatch(
 				ComputeUtils::GetNumThreadGroups(
-					pDestinationVolume->GetWidth(), threadGroupSizeXY,
-					pDestinationVolume->GetHeight(), threadGroupSizeXY,
-					pDestinationVolume->GetDepth(), threadGroupSizeZ)
+					pDestinationVolume->GetWidth(), 8,
+					pDestinationVolume->GetHeight(), 8,
+					pDestinationVolume->GetDepth(), 4)
 			);
 		});
 
@@ -248,9 +244,6 @@ void ClusteredForward::RenderVolumetricFog(RGGraph& graph, const SceneView& scen
 			context.SetComputeRootSignature(m_pVolumetricLightingRS);
 			context.SetPipelineState(m_pAccumulateVolumeLightPSO);
 
-			//float values[] = { 0,0,0,0 };
-			//context.ClearUavFloat(m_pFinalVolumeFog, m_pFinalVolumeFog->GetUAV(), values);
-
 			context.SetRootCBV(0, constantBuffer);
 			context.SetRootCBV(1, GetViewUniforms(scene));
 			context.BindResource(2, 0, fogData.pFinalVolumeFog->GetUAV());
@@ -260,12 +253,10 @@ void ClusteredForward::RenderVolumetricFog(RGGraph& graph, const SceneView& scen
 				pDestinationVolume->GetSRV(),
 				});
 
-			constexpr uint32 threadGroupSize = 8;
-
 			context.Dispatch(
 				ComputeUtils::GetNumThreadGroups(
-					pDestinationVolume->GetWidth(), threadGroupSize,
-					pDestinationVolume->GetHeight(), threadGroupSize));
+					pDestinationVolume->GetWidth(), 8,
+					pDestinationVolume->GetHeight(), 8));
 		});
 }
 
@@ -404,9 +395,7 @@ void ClusteredForward::VisualizeLightDensity(RGGraph& graph, const SceneView& re
 		m_pVisualizationIntermediateTexture = m_pDevice->CreateTexture(pTarget->GetDesc(), "Light Density Debug Texture");
 	}
 
-	float nearZ = resources.View.NearPlane;
-	float farZ = resources.View.FarPlane;
-	Vector2 lightGridParams = ComputeVolumeGridParams(nearZ, farZ, gLightClustersNumZ);
+	Vector2 lightGridParams = ComputeVolumeGridParams(resources.View.NearPlane, resources.View.FarPlane, gLightClustersNumZ);
 
 	RGPassBuilder basePass = graph.AddPass("Visualize Light Density");
 	basePass.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
@@ -453,8 +442,8 @@ void ClusteredForward::SetupPipelines()
 		m_pLightCullingRS = new RootSignature(m_pDevice);
 		m_pLightCullingRS->AddConstantBufferView(0);
 		m_pLightCullingRS->AddConstantBufferView(100);
-		m_pLightCullingRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 8);
-		m_pLightCullingRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 8);
+		m_pLightCullingRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 2);
+		m_pLightCullingRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2);
 		m_pLightCullingRS->Finalize("Light Culling");
 
 		m_pCreateAabbPSO = m_pDevice->CreateComputePipeline(m_pLightCullingRS, "ClusterAABBGeneration.hlsl", "GenerateAABBs");
@@ -505,7 +494,7 @@ void ClusteredForward::SetupPipelines()
 			m_pDiffuseTransparancyPSO = m_pDevice->CreatePipeline(psoDesc);
 		}
 
-		if(m_pDevice->GetCapabilities().MeshShaderSupport >= D3D12_MESH_SHADER_TIER_1)
+		if(m_pDevice->GetCapabilities().SupportsMeshShading())
 		{
 			//Opaque
 			PipelineStateInitializer psoDesc;
@@ -569,8 +558,8 @@ void ClusteredForward::SetupPipelines()
 		m_pVolumetricLightingRS = new RootSignature(m_pDevice);
 		m_pVolumetricLightingRS->AddConstantBufferView(0);
 		m_pVolumetricLightingRS->AddConstantBufferView(100);
-		m_pVolumetricLightingRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 8);
-		m_pVolumetricLightingRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 8);
+		m_pVolumetricLightingRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 3);
+		m_pVolumetricLightingRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3);
 		m_pVolumetricLightingRS->Finalize("Inject Fog Lighting");
 
 		m_pInjectVolumeLightPSO = m_pDevice->CreateComputePipeline(m_pVolumetricLightingRS, "VolumetricFog.hlsl", "InjectFogLightingCS");
