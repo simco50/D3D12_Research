@@ -4,11 +4,6 @@
 
 #define BLOCK_SIZE 16
 
-#define RootSig ROOT_SIG("RootConstants(num32BitConstants=3, b0), " \
-	"CBV(b1), " \
-	"CBV(b100), " \
-	"DescriptorTable(SRV(t0, numDescriptors = 6))")
-
 struct PerViewData
 {
 	uint4 ClusterDimensions;
@@ -184,7 +179,6 @@ void ASMain(uint threadID : SV_DispatchThreadID)
 
 #define NUM_MESHLET_THREADS 32
 
-[RootSignature(RootSig)]
 [outputtopology("triangle")]
 [numthreads(NUM_MESHLET_THREADS, 1, 1)]
 void MSMain(
@@ -222,7 +216,6 @@ void MSMain(
 	}
 }
 
-[RootSignature(RootSig)]
 InterpolantsVSToPS VSMain(uint vertexId : SV_VertexID)
 {
 	MeshData mesh = GetMesh(cObject.Mesh);

@@ -53,7 +53,11 @@ GpuParticles::GpuParticles(GraphicsDevice* pDevice)
 
 	{
 		m_pSimulateRS = new RootSignature(pDevice);
-		m_pSimulateRS->FinalizeFromShader("Particle Simulation", pDevice->GetShader("ParticleSimulation.hlsl", ShaderType::Compute, "UpdateSimulationParameters"));
+		m_pSimulateRS->AddRootConstants(0, 4);
+		m_pSimulateRS->AddConstantBufferView(100);
+		m_pSimulateRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 8);
+		m_pSimulateRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 8);
+		m_pSimulateRS->Finalize("Particle Simulation");
 	}
 	{
 		m_pPrepareArgumentsPS = pDevice->CreateComputePipeline(m_pSimulateRS, "ParticleSimulation.hlsl", "UpdateSimulationParameters");
@@ -63,7 +67,9 @@ GpuParticles::GpuParticles(GraphicsDevice* pDevice)
 	}
 	{
 		m_pRenderParticlesRS = new RootSignature(pDevice);
-		m_pRenderParticlesRS->FinalizeFromShader("Particle Rendering", pDevice->GetShader("ParticleRendering.hlsl", ShaderType::Vertex, "VSMain"));
+		m_pRenderParticlesRS->AddConstantBufferView(100);
+		m_pRenderParticlesRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 8);
+		m_pRenderParticlesRS->Finalize("Particle Rendering");
 
 		PipelineStateInitializer psoDesc;
 		psoDesc.SetVertexShader("ParticleRendering.hlsl", "VSMain");
@@ -140,7 +146,7 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView& resources, Texture*
 			parameters.EmitCount = (uint32)floor(m_ParticlesToSpawn);
 			m_ParticlesToSpawn -= parameters.EmitCount;
 
-			context.SetRootCBV(0, parameters);
+			context.SetRootConstants(0, parameters);
 			context.SetRootCBV(1, GetViewUniforms(resources));
 
 			context.BindResources(2, 0, uavs, ARRAYSIZE(uavs));
@@ -165,7 +171,7 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView& resources, Texture*
 
 			parameters.Origin = Vector3(150, 3, 0);
 
-			context.SetRootCBV(0, parameters);
+			context.SetRootConstants(0, parameters);
 			context.SetRootCBV(1, GetViewUniforms(resources));
 
 			context.BindResources(2, 0, uavs, ARRAYSIZE(uavs));
@@ -189,7 +195,7 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView& resources, Texture*
 			parameters.DeltaTime = Time::DeltaTime();
 			parameters.ParticleLifeTime = g_LifeTime;
 
-			context.SetRootCBV(0, parameters);
+			context.SetRootConstants(0, parameters);
 			context.SetRootCBV(1, GetViewUniforms(resources));
 
 			context.BindResources(2, 0, uavs, ARRAYSIZE(uavs));

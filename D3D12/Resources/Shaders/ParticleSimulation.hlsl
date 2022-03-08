@@ -1,11 +1,6 @@
 #include "Random.hlsli"
 #include "CommonBindings.hlsli"
 
-#define RootSig ROOT_SIG("CBV(b0), " \
-				"CBV(b100), " \
-				"DescriptorTable(UAV(u0, numDescriptors = 8)), " \
-				"DescriptorTable(SRV(t0, numDescriptors = 2))")
-
 struct ParticleData
 {
 	float3 Position;
@@ -51,7 +46,6 @@ RWStructuredBuffer<ParticleData> uParticleData  : register(u7);
 ByteAddressBuffer tCounters : register(t0);
 Texture2D tSceneDepth : register(t1);
 
-[RootSignature(RootSig)]
 [numthreads(1, 1, 1)]
 void UpdateSimulationParameters()
 {

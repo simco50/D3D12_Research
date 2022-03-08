@@ -1,10 +1,5 @@
 #include "CommonBindings.hlsli"
 
-#define RootSig ROOT_SIG("CBV(b0), " \
-				"CBV(b100), " \
-				"DescriptorTable(SRV(t0, numDescriptors = 3)), " \
-				"DescriptorTable(UAV(u0, numDescriptors = 1))")
-
 #define BLOCK_SIZE 16
 
 struct PassParameters
@@ -65,7 +60,6 @@ float InverseLerp(float value, float minValue, float maxValue)
 	return (value - minValue) / (maxValue - minValue);
 }
 
-[RootSignature(RootSig)]
 [numthreads(16, 16, 1)]
 void DebugLightDensityCS(uint3 threadId : SV_DispatchThreadID)
 {

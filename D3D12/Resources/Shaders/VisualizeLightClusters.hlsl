@@ -1,8 +1,5 @@
 #include "CommonBindings.hlsli"
 
-#define RootSigVS ROOT_SIG("CBV(b100), " \
-				"DescriptorTable(SRV(t0, numDescriptors = 3))")
-
 #define MAX_LIGHTS_PER_BUCKET 10
 
 StructuredBuffer<AABB> tAABBs : register(t0);
@@ -23,7 +20,6 @@ struct InterpolantsVSToPS
 	float4 color : COLOR;
 };
 
-[RootSignature(RootSigVS)]
 InterpolantsGSToPS VSMain(uint vertexId : SV_VertexID)
 {
 	InterpolantsGSToPS result;

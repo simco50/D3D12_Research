@@ -34,8 +34,7 @@ public:
 
 	void AddStaticSampler(const D3D12_STATIC_SAMPLER_DESC& samplerDesc);
 
-	void Finalize(const char* pName, D3D12_ROOT_SIGNATURE_FLAGS flags = D3D12_ROOT_SIGNATURE_FLAG_NONE, bool addDefaultStaticSamplers = true);
-	void FinalizeFromShader(const char* pName, const ShaderBase* pShader);
+	void Finalize(const char* pName, D3D12_ROOT_SIGNATURE_FLAGS flags = D3D12_ROOT_SIGNATURE_FLAG_NONE);
 
 	ID3D12RootSignature* GetRootSignature() const { return m_pRootSignature.Get(); }
 

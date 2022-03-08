@@ -468,7 +468,11 @@ void ClusteredForward::SetupPipelines()
 	//Diffuse
 	{
 		m_pDiffuseRS = new RootSignature(m_pDevice);
-		m_pDiffuseRS->FinalizeFromShader("Diffuse", m_pDevice->GetShader("Diffuse.hlsl", ShaderType::Vertex, "VSMain", { "CLUSTERED_FORWARD" }));
+		m_pDiffuseRS->AddRootConstants(0, 3);
+		m_pDiffuseRS->AddConstantBufferView(1);
+		m_pDiffuseRS->AddConstantBufferView(100);
+		m_pDiffuseRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 8);
+		m_pDiffuseRS->Finalize("Diffuse");
 
 		constexpr DXGI_FORMAT formats[] = {
 			DXGI_FORMAT_R16G16B16A16_FLOAT,
@@ -532,7 +536,9 @@ void ClusteredForward::SetupPipelines()
 	//Cluster debug rendering
 	{
 		m_pVisualizeLightClustersRS = new RootSignature(m_pDevice);
-		m_pVisualizeLightClustersRS->FinalizeFromShader("Visualize Light Clusters", m_pDevice->GetShader("VisualizeLightClusters.hlsl", ShaderType::Vertex, "VSMain"));
+		m_pVisualizeLightClustersRS->AddConstantBufferView(100);
+		m_pVisualizeLightClustersRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3);
+		m_pVisualizeLightClustersRS->Finalize("Visualize Light Clusters");
 
 		PipelineStateInitializer psoDesc;
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
@@ -550,13 +556,23 @@ void ClusteredForward::SetupPipelines()
 
 	{
 		m_pVisualizeLightsRS = new RootSignature(m_pDevice);
-		m_pVisualizeLightsRS->FinalizeFromShader("Light Density Visualization", m_pDevice->GetShader("VisualizeLightCount.hlsl", ShaderType::Compute, "DebugLightDensityCS", { "CLUSTERED_FORWARD" }));
+		m_pVisualizeLightsRS->AddConstantBufferView(0);
+		m_pVisualizeLightsRS->AddConstantBufferView(100);
+		m_pVisualizeLightsRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3);
+		m_pVisualizeLightsRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 3);
+		m_pVisualizeLightsRS->Finalize("Light Density Visualization");
+
 		m_pVisualizeLightsPSO = m_pDevice->CreateComputePipeline(m_pVisualizeLightsRS, "VisualizeLightCount.hlsl", "DebugLightDensityCS", { "CLUSTERED_FORWARD" });
 	}
 
 	{
 		m_pVolumetricLightingRS = new RootSignature(m_pDevice);
-		m_pVolumetricLightingRS->FinalizeFromShader("Inject Fog Lighting", m_pDevice->GetShader("VolumetricFog.hlsl", ShaderType::Compute, "InjectFogLightingCS", { }));
+		m_pVolumetricLightingRS->AddConstantBufferView(0);
+		m_pVolumetricLightingRS->AddConstantBufferView(100);
+		m_pVolumetricLightingRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 8);
+		m_pVolumetricLightingRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 8);
+		m_pVolumetricLightingRS->Finalize("Inject Fog Lighting");
+
 		m_pInjectVolumeLightPSO = m_pDevice->CreateComputePipeline(m_pVolumetricLightingRS, "VolumetricFog.hlsl", "InjectFogLightingCS");
 		m_pAccumulateVolumeLightPSO = m_pDevice->CreateComputePipeline(m_pVolumetricLightingRS, "VolumetricFog.hlsl", "AccumulateFogCS");
 	}

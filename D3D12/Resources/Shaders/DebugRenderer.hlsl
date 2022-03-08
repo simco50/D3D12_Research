@@ -1,8 +1,5 @@
 #include "CommonBindings.hlsli"
 
-#define RootSig ROOT_SIG("RootFlags(ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT), " \
-				"CBV(b100)")
-
 struct VertexInput
 {
 	float3 Position : POSITION;
@@ -15,7 +12,6 @@ struct InterpolantsVSToPS
 	float4 Color : COLOR;
 };
 
-[RootSignature(RootSig)]
 InterpolantsVSToPS VSMain(VertexInput input)
 {
 	InterpolantsVSToPS output = (InterpolantsVSToPS)0;

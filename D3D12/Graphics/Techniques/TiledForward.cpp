@@ -218,7 +218,11 @@ void TiledForward::SetupPipelines()
 	// Shading pipelines
 	{
 		m_pDiffuseRS = new RootSignature(m_pDevice);
-		m_pDiffuseRS->FinalizeFromShader("Diffuse", m_pDevice->GetShader("Diffuse.hlsl", ShaderType::Vertex, "VSMain", { "TILED_FORWARD" }));
+		m_pDiffuseRS->AddRootConstants(0, 3);
+		m_pDiffuseRS->AddConstantBufferView(1);
+		m_pDiffuseRS->AddConstantBufferView(100);
+		m_pDiffuseRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 8);
+		m_pDiffuseRS->Finalize("Diffuse");
 
 		{
 			constexpr DXGI_FORMAT formats[] = {
@@ -254,7 +258,12 @@ void TiledForward::SetupPipelines()
 	// Light count visualization
 	{
 		m_pVisualizeLightsRS = new RootSignature(m_pDevice);
-		m_pVisualizeLightsRS->FinalizeFromShader("Light Density Visualization", m_pDevice->GetShader("VisualizeLightCount.hlsl", ShaderType::Compute, "DebugLightDensityCS", { "TILED_FORWARD" }));
+		m_pVisualizeLightsRS->AddConstantBufferView(0);
+		m_pVisualizeLightsRS->AddConstantBufferView(100);
+		m_pVisualizeLightsRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3);
+		m_pVisualizeLightsRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 3);
+		m_pVisualizeLightsRS->Finalize("Light Density Visualization");
+
 		m_pVisualizeLightsPSO = m_pDevice->CreateComputePipeline(m_pVisualizeLightsRS, "VisualizeLightCount.hlsl", "DebugLightDensityCS", { "TILED_FORWARD" });
 	}
 }

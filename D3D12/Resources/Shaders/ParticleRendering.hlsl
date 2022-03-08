@@ -1,9 +1,5 @@
 #include "CommonBindings.hlsli"
 
-#define RootSig ROOT_SIG("RootFlags(ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT), " \
-				"CBV(b100, visibility=SHADER_VISIBILITY_VERTEX), " \
-				"DescriptorTable(SRV(t0, numDescriptors = 2), visibility=SHADER_VISIBILITY_VERTEX)")
-
 struct ParticleData
 {
 	float3 Position;
@@ -31,7 +27,6 @@ static const float3 BILLBOARD[] = {
 	float3(1, 1, 0),	// 5
 };
 
-[RootSignature(RootSig)]
 InterpolantsVSToPS VSMain(uint vertexId : SV_VertexID)
 {
 	InterpolantsVSToPS output;

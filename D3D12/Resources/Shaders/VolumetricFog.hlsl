@@ -1,11 +1,6 @@
 #include "CommonBindings.hlsli"
 #include "Lighting.hlsli"
 
-#define RootSig ROOT_SIG("CBV(b0), " \
-		"CBV(b100), " \
-		"DescriptorTable(UAV(u0, numDescriptors = 1)), " \
-		"DescriptorTable(SRV(t0, numDescriptors = 3))")
-
 struct PassData
 {
 	int3 ClusterDimensions;
@@ -66,7 +61,6 @@ struct FogVolume
 	float DensityBase;
 };
 
-[RootSignature(RootSig)]
 [numthreads(8, 8, 4)]
 void InjectFogLightingCS(uint3 threadId : SV_DispatchThreadID)
 {
@@ -183,7 +177,6 @@ void InjectFogLightingCS(uint3 threadId : SV_DispatchThreadID)
 	uOutLightScattering[threadId] = newScattering;
 }
 
-[RootSignature(RootSig)]
 [numthreads(8, 8, 1)]
 void AccumulateFogCS(uint3 threadId : SV_DispatchThreadID, uint groupIndex : SV_GroupIndex)
 {

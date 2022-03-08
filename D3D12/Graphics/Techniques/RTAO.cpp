@@ -72,7 +72,11 @@ void RTAO::SetupPipelines(GraphicsDevice* pDevice)
 {
 	ShaderLibrary* pShaderLibrary = pDevice->GetLibrary("RTAO.hlsl");
 	m_pGlobalRS = new RootSignature(pDevice);
-	m_pGlobalRS->FinalizeFromShader("Global", pShaderLibrary);
+	m_pGlobalRS->AddConstantBufferView(0);
+	m_pGlobalRS->AddConstantBufferView(100);
+	m_pGlobalRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1);
+	m_pGlobalRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1);
+	m_pGlobalRS->Finalize("Global");
 
 	StateObjectInitializer stateDesc;
 	stateDesc.AddLibrary(pShaderLibrary, { "RayGen", "Miss" });

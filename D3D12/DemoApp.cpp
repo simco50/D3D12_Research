@@ -1063,7 +1063,7 @@ void DemoApp::Update()
 				parameters.TargetDimensions.y = pToneMapInput->GetHeight();
 				parameters.TargetDimensionsInv = Vector2(1.0f / pToneMapInput->GetWidth(), 1.0f / pToneMapInput->GetHeight());
 
-				context.SetRootCBV(0, parameters);
+				context.SetRootConstants(0, parameters);
 				context.BindResource(1, 0, pToneMapInput->GetUAV());
 				context.BindResource(2, 0, m_pHDRRenderTarget->GetSRV());
 
@@ -1485,14 +1485,23 @@ void DemoApp::InitializePipelines()
 	//Camera motion
 	{
 		m_pCameraMotionRS = new RootSignature(m_pDevice);
-		m_pCameraMotionRS->FinalizeFromShader("Camera Motion", m_pDevice->GetShader("CameraMotionVectors.hlsl", ShaderType::Compute, "CSMain"));
+		m_pCameraMotionRS->AddConstantBufferView(100);
+		m_pCameraMotionRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 8);
+		m_pCameraMotionRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 8);
+		m_pCameraMotionRS->Finalize("Camera Motion");
+
 		m_pCameraMotionPSO = m_pDevice->CreateComputePipeline(m_pCameraMotionRS, "CameraMotionVectors.hlsl", "CSMain");
 	}
 
 	//Tonemapping
 	{
 		m_pToneMapRS = new RootSignature(m_pDevice);
-		m_pToneMapRS->FinalizeFromShader("Tonemapping", m_pDevice->GetShader("Tonemapping.hlsl", ShaderType::Compute, "CSMain"));
+		m_pToneMapRS->AddConstantBufferView(0);
+		m_pToneMapRS->AddConstantBufferView(100);
+		m_pToneMapRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1);
+		m_pToneMapRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3);
+		m_pToneMapRS->Finalize("Tonemapping");
+
 		m_pToneMapPSO = m_pDevice->CreateComputePipeline(m_pToneMapRS, "Tonemapping.hlsl", "CSMain");
 	}
 
@@ -1501,14 +1510,21 @@ void DemoApp::InitializePipelines()
 	//Only required when the sample count > 1
 	{
 		m_pResolveDepthRS = new RootSignature(m_pDevice);
-		m_pResolveDepthRS->FinalizeFromShader("Depth Resolve", m_pDevice->GetShader("ResolveDepth.hlsl", ShaderType::Compute, "CSMain", { "DEPTH_RESOLVE_MIN" }));
+		m_pResolveDepthRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1);
+		m_pResolveDepthRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1);
+		m_pResolveDepthRS->Finalize("Depth Resolve");
+
 		m_pResolveDepthPSO = m_pDevice->CreateComputePipeline(m_pResolveDepthRS, "ResolveDepth.hlsl", "CSMain", { "DEPTH_RESOLVE_MIN" });
 	}
 
 	//Depth reduce
 	{
 		m_pReduceDepthRS = new RootSignature(m_pDevice);
-		m_pReduceDepthRS->FinalizeFromShader("Depth Reduce", m_pDevice->GetShader("ReduceDepth.hlsl", ShaderType::Compute, "PrepareReduceDepth", { }));
+		m_pReduceDepthRS->AddConstantBufferView(100);
+		m_pReduceDepthRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1);
+		m_pReduceDepthRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1);
+		m_pReduceDepthRS->Finalize("Depth Reduce");
+
 		m_pPrepareReduceDepthPSO = m_pDevice->CreateComputePipeline(m_pReduceDepthRS, "ReduceDepth.hlsl", "PrepareReduceDepth");
 		m_pPrepareReduceDepthMsaaPSO = m_pDevice->CreateComputePipeline(m_pReduceDepthRS, "ReduceDepth.hlsl", "PrepareReduceDepth", { "WITH_MSAA" });
 		m_pReduceDepthPSO = m_pDevice->CreateComputePipeline(m_pReduceDepthRS, "ReduceDepth.hlsl", "ReduceDepth");
@@ -1517,14 +1533,22 @@ void DemoApp::InitializePipelines()
 	//TAA
 	{
 		m_pTemporalResolveRS = new RootSignature(m_pDevice);
-		m_pTemporalResolveRS->FinalizeFromShader("Temporal Resolve", m_pDevice->GetShader("TemporalResolve.hlsl", ShaderType::Compute, "CSMain"));
+		m_pTemporalResolveRS->AddConstantBufferView(100);
+		m_pTemporalResolveRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1);
+		m_pTemporalResolveRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 4);
+		m_pTemporalResolveRS->Finalize("Temporal Resolve");
+
 		m_pTemporalResolvePSO = m_pDevice->CreateComputePipeline(m_pTemporalResolveRS, "TemporalResolve.hlsl", "CSMain");
 	}
 
 	//Mip generation
 	{
 		m_pGenerateMipsRS = new RootSignature(m_pDevice);
-		m_pGenerateMipsRS->FinalizeFromShader("Generate Mips", m_pDevice->GetShader("GenerateMips.hlsl", ShaderType::Compute, "CSMain"));
+		m_pGenerateMipsRS->AddRootConstants(0, 2);
+		m_pGenerateMipsRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1);
+		m_pGenerateMipsRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1);
+		m_pGenerateMipsRS->Finalize("Generate Mips");
+
 		m_pGenerateMipsPSO = m_pDevice->CreateComputePipeline(m_pGenerateMipsRS, "GenerateMips.hlsl", "CSMain");
 	}
 

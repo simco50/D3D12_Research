@@ -47,7 +47,8 @@ void DebugRenderer::Initialize(GraphicsDevice* pDevice)
 
 	//Rootsignature
 	m_pRS = new RootSignature(pDevice);
-	m_pRS->FinalizeFromShader("Diffuse", pDevice->GetShader("DebugRenderer.hlsl", ShaderType::Vertex, "VSMain"));
+	m_pRS->AddConstantBufferView(100);
+	m_pRS->Finalize("Diffuse", D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
 	//Opaque
 	PipelineStateInitializer psoDesc;
