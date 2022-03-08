@@ -663,7 +663,7 @@ void DemoApp::Update()
 		shadows.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
 			{
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-				context.SetGraphicsRootSignature(m_pShadowsRS);
+				context.SetGraphicsRootSignature(m_pGraphicsRS);
 
 				// hack - copy the main viewport and then just modify the viewproj
 				SceneView view = m_SceneData;
@@ -710,7 +710,7 @@ void DemoApp::Update()
 				context.BeginRenderPass(RenderPassInfo(pDepthStencil, RenderPassAccess::Clear_Store));
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-				context.SetGraphicsRootSignature(m_pDepthPrepassRS);
+				context.SetGraphicsRootSignature(m_pGraphicsRS);
 
 				context.SetRootCBV(1, GetViewUniforms(m_SceneData, pDepthStencil));
 
@@ -740,7 +740,7 @@ void DemoApp::Update()
 				renderContext.BeginRenderPass(RenderPassInfo(m_pVisibilityTexture, RenderPassAccess::DontCare_Store, pDepthStencil, RenderPassAccess::Clear_Store, true));
 				renderContext.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-				renderContext.SetGraphicsRootSignature(m_pVisibilityRenderingRS);
+				renderContext.SetGraphicsRootSignature(m_pGraphicsRS);
 
 				static Vector4 cachedFrustumPlanes[6];
 				static Vector4 cachedViewLocation;
@@ -781,11 +781,11 @@ void DemoApp::Update()
 	computeSky.Bind([=](CommandContext& context, const RGPassResources& resources)
 		{
 			context.InsertResourceBarrier(m_pSkyTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-			context.SetComputeRootSignature(m_pSkyboxRS);
+			context.SetComputeRootSignature(m_pPostProcessRS);
 			context.SetPipelineState(m_pRenderSkyPSO);
 
-			context.SetRootCBV(0, GetViewUniforms(m_SceneData, m_pSkyTexture));
-			context.BindResource(1, 0, m_pSkyTexture->GetUAV());
+			context.SetRootCBV(1, GetViewUniforms(m_SceneData, m_pSkyTexture));
+			context.BindResource(2, 0, m_pSkyTexture->GetUAV());
 
 			context.Dispatch(ComputeUtils::GetNumThreadGroups(m_pSkyTexture->GetWidth(), 16, m_pSkyTexture->GetHeight(), 16));
 		});
@@ -802,11 +802,11 @@ void DemoApp::Update()
 					context.InsertResourceBarrier(m_pDepthStencil, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 					context.InsertResourceBarrier(m_pResolvedDepthStencil, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-					context.SetComputeRootSignature(m_pResolveDepthRS);
+					context.SetComputeRootSignature(m_pPostProcessRS);
 					context.SetPipelineState(m_pResolveDepthPSO);
 
-					context.BindResource(0, 0, m_pResolvedDepthStencil->GetUAV());
-					context.BindResource(1, 0, m_pDepthStencil->GetSRV());
+					context.BindResource(2, 0, m_pResolvedDepthStencil->GetUAV());
+					context.BindResource(3, 0, m_pDepthStencil->GetSRV());
 
 					context.Dispatch(ComputeUtils::GetNumThreadGroups(m_pDepthStencil->GetWidth(), 16, m_pDepthStencil->GetHeight(), 16));
 
@@ -822,13 +822,13 @@ void DemoApp::Update()
 				context.InsertResourceBarrier(GetDepthStencil(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 				context.InsertResourceBarrier(m_pVelocity, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-				context.SetComputeRootSignature(m_pCameraMotionRS);
+				context.SetComputeRootSignature(m_pPostProcessRS);
 				context.SetPipelineState(m_pCameraMotionPSO);
 
-				context.SetRootCBV(0, GetViewUniforms(m_SceneData, m_pVelocity));
+				context.SetRootCBV(1, GetViewUniforms(m_SceneData, m_pVelocity));
 
-				context.BindResource(1, 0, m_pVelocity->GetUAV());
-				context.BindResource(2, 0, GetDepthStencil()->GetSRV());
+				context.BindResource(2, 0, m_pVelocity->GetUAV());
+				context.BindResource(3, 0, GetDepthStencil()->GetSRV());
 
 				context.Dispatch(ComputeUtils::GetNumThreadGroups(m_pVelocity->GetWidth(), 8, m_pVelocity->GetHeight(), 8));
 			});
@@ -871,7 +871,7 @@ void DemoApp::Update()
 					renderContext.InsertResourceBarrier(m_pNormals, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 					renderContext.InsertResourceBarrier(m_pRoughness, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-					renderContext.SetComputeRootSignature(m_pVisibilityRenderingRS);
+					renderContext.SetComputeRootSignature(m_pGraphicsRS);
 					renderContext.SetPipelineState(m_pVisibilityShadingPSO);
 
 					renderContext.SetRootCBV(1, GetViewUniforms(m_SceneData, GetCurrentRenderTarget()));
@@ -914,10 +914,10 @@ void DemoApp::Update()
 
 				context.BeginRenderPass(info);
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-				context.SetGraphicsRootSignature(m_pSkyboxRS);
+				context.SetGraphicsRootSignature(m_pGraphicsRS);
 				context.SetPipelineState(m_pSkyboxPSO);
 
-				context.SetRootCBV(0, GetViewUniforms(m_SceneData, GetCurrentRenderTarget()));
+				context.SetRootCBV(1, GetViewUniforms(m_SceneData, GetCurrentRenderTarget()));
 
 				context.Draw(0, 36);
 
@@ -977,13 +977,13 @@ void DemoApp::Update()
 					context.InsertResourceBarrier(m_pVelocity, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 					context.InsertResourceBarrier(m_pPreviousColor, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 
-					context.SetComputeRootSignature(m_pTemporalResolveRS);
+					context.SetComputeRootSignature(m_pPostProcessRS);
 					context.SetPipelineState(m_pTemporalResolvePSO);
 
-					context.SetRootCBV(0, GetViewUniforms(m_SceneData, m_pHDRRenderTarget));
+					context.SetRootCBV(1, GetViewUniforms(m_SceneData, m_pHDRRenderTarget));
 
-					context.BindResource(1, 0, m_pHDRRenderTarget->GetUAV());
-					context.BindResources(2,
+					context.BindResource(2, 0, m_pHDRRenderTarget->GetUAV());
+					context.BindResources(3,
 						{
 							m_pVelocity->GetSRV(),
 							m_pPreviousColor->GetSRV(),
@@ -1009,13 +1009,13 @@ void DemoApp::Update()
 				context.InsertResourceBarrier(pSource, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 				context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-				context.SetComputeRootSignature(m_pReduceDepthRS);
+				context.SetComputeRootSignature(m_pPostProcessRS);
 				context.SetPipelineState(pSource->GetDesc().SampleCount > 1 ? m_pPrepareReduceDepthMsaaPSO : m_pPrepareReduceDepthPSO);
 
-				context.SetRootCBV(0, GetViewUniforms(m_SceneData, pTarget));
+				context.SetRootCBV(1, GetViewUniforms(m_SceneData, pTarget));
 
-				context.BindResource(1, 0, pTarget->GetUAV());
-				context.BindResource(2, 0, pSource->GetSRV());
+				context.BindResource(2, 0, pTarget->GetUAV());
+				context.BindResource(3, 0, pSource->GetSRV());
 
 				context.Dispatch(pTarget->GetWidth(), pTarget->GetHeight());
 
@@ -1028,8 +1028,8 @@ void DemoApp::Update()
 					context.InsertResourceBarrier(pSource, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 					context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-					context.BindResource(1, 0, pTarget->GetUAV());
-					context.BindResource(2, 0, pSource->GetSRV());
+					context.BindResource(2, 0, pTarget->GetUAV());
+					context.BindResource(3, 0, pSource->GetSRV());
 
 					context.Dispatch(pTarget->GetWidth(), pTarget->GetHeight());
 				}
@@ -1051,8 +1051,8 @@ void DemoApp::Update()
 				context.InsertResourceBarrier(pToneMapInput, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 				context.InsertResourceBarrier(m_pHDRRenderTarget, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
+				context.SetComputeRootSignature(m_pPostProcessRS);
 				context.SetPipelineState(m_pGenerateMipsPSO);
-				context.SetComputeRootSignature(m_pGenerateMipsRS);
 
 				struct
 				{
@@ -1063,9 +1063,9 @@ void DemoApp::Update()
 				parameters.TargetDimensions.y = pToneMapInput->GetHeight();
 				parameters.TargetDimensionsInv = Vector2(1.0f / pToneMapInput->GetWidth(), 1.0f / pToneMapInput->GetHeight());
 
-				context.SetRootConstants(0, parameters);
-				context.BindResource(1, 0, pToneMapInput->GetUAV());
-				context.BindResource(2, 0, m_pHDRRenderTarget->GetSRV());
+				context.SetRootCBV(0, parameters);
+				context.BindResource(2, 0, pToneMapInput->GetUAV());
+				context.BindResource(3, 0, m_pHDRRenderTarget->GetSRV());
 
 				context.Dispatch(
 					Math::DivideAndRoundUp(parameters.TargetDimensions.x, 8),
@@ -1080,7 +1080,7 @@ void DemoApp::Update()
 				context.InsertResourceBarrier(pToneMapInput, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 				context.ClearUavUInt(m_pLuminanceHistogram, m_pLuminanceHistogram->GetUAV());
 
-				context.SetComputeRootSignature(m_pEyeAdaptationRS);
+				context.SetComputeRootSignature(m_pPostProcessRS);
 				context.SetPipelineState(m_pLuminanceHistogramPSO);
 
 				struct
@@ -1096,8 +1096,8 @@ void DemoApp::Update()
 				parameters.OneOverLogLuminanceRange = 1.0f / (Tweakables::g_MaxLogLuminance.Get() - Tweakables::g_MinLogLuminance.Get());
 
 				context.SetRootCBV(0, parameters);
-				context.BindResource(1, 0, m_pLuminanceHistogram->GetUAV());
-				context.BindResource(2, 0, pToneMapInput->GetSRV());
+				context.BindResource(2, 0, m_pLuminanceHistogram->GetUAV());
+				context.BindResource(3, 0, pToneMapInput->GetSRV());
 
 				context.Dispatch(
 					Math::DivideAndRoundUp(pToneMapInput->GetWidth(), 16),
@@ -1111,7 +1111,7 @@ void DemoApp::Update()
 				context.InsertResourceBarrier(m_pLuminanceHistogram, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 				context.InsertResourceBarrier(m_pAverageLuminance, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-				context.SetComputeRootSignature(m_pEyeAdaptationRS);
+				context.SetComputeRootSignature(m_pPostProcessRS);
 				context.SetPipelineState(m_pAverageLuminancePSO);
 
 				struct
@@ -1130,8 +1130,8 @@ void DemoApp::Update()
 				parameters.Tau = Tweakables::g_Tau.Get();
 
 				context.SetRootCBV(0, parameters);
-				context.BindResource(1, 0, m_pAverageLuminance->GetUAV());
-				context.BindResource(2, 0, m_pLuminanceHistogram->GetSRV());
+				context.BindResource(2, 0, m_pAverageLuminance->GetUAV());
+				context.BindResource(3, 0, m_pLuminanceHistogram->GetSRV());
 
 				context.Dispatch(1);
 			});
@@ -1152,7 +1152,7 @@ void DemoApp::Update()
 					context.InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 					context.InsertResourceBarrier(m_pAverageLuminance, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
-					context.SetComputeRootSignature(m_pBloomRS);
+					context.SetComputeRootSignature(m_pPostProcessRS);
 					context.SetPipelineState(m_pBloomSeparatePSO);
 
 					struct
@@ -1189,7 +1189,7 @@ void DemoApp::Update()
 					RefCountPtr<UnorderedAccessView>* pSourceUAVs = m_pBloomUAVs.data();
 					RefCountPtr<UnorderedAccessView>* pTargetUAVs = m_pBloomIntermediateUAVs.data();
 
-					context.SetComputeRootSignature(m_pBloomRS);
+					context.SetComputeRootSignature(m_pPostProcessRS);
 					context.SetPipelineState(m_pBloomMipChainPSO);
 
 					context.SetRootCBV(1, GetViewUniforms(m_SceneData));
@@ -1256,7 +1256,7 @@ void DemoApp::Update()
 			context.InsertResourceBarrier(m_pBloomTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
 			context.SetPipelineState(m_pToneMapPSO);
-			context.SetComputeRootSignature(m_pToneMapRS);
+			context.SetComputeRootSignature(m_pPostProcessRS);
 
 			context.SetRootCBV(0, constBuffer);
 			context.SetRootCBV(1, GetViewUniforms(m_SceneData, m_pTonemapTarget));
@@ -1278,7 +1278,7 @@ void DemoApp::Update()
 				context.InsertResourceBarrier(m_pDebugHistogramTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
 				context.SetPipelineState(m_pDrawHistogramPSO);
-				context.SetComputeRootSignature(m_pEyeAdaptationRS);
+				context.SetComputeRootSignature(m_pPostProcessRS);
 
 				struct
 				{
@@ -1293,9 +1293,9 @@ void DemoApp::Update()
 				parameters.InvTextureDimensions.y = 1.0f / m_pDebugHistogramTexture->GetHeight();
 
 				context.SetRootCBV(0, parameters);
-				context.BindResource(1, 0, m_pDebugHistogramTexture->GetUAV());
-				context.BindResource(2, 0, m_pLuminanceHistogram->GetSRV());
-				context.BindResource(2, 1, m_pAverageLuminance->GetSRV());
+				context.BindResource(2, 0, m_pDebugHistogramTexture->GetUAV());
+				context.BindResource(3, 0, m_pLuminanceHistogram->GetSRV());
+				context.BindResource(3, 1, m_pAverageLuminance->GetSRV());
 
 				context.ClearUavUInt(m_pDebugHistogramTexture, m_pDebugHistogramTexture->GetUAV());
 
@@ -1419,15 +1419,25 @@ void DemoApp::OnResizeViewport(int width, int height)
 
 void DemoApp::InitializePipelines()
 {
+	// Common Root Signatures
+	m_pPostProcessRS = new RootSignature(m_pDevice);
+	m_pPostProcessRS->AddConstantBufferView(0);
+	m_pPostProcessRS->AddConstantBufferView(100);
+	m_pPostProcessRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 4);
+	m_pPostProcessRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 4);
+	m_pPostProcessRS->Finalize("Post Process");
+
+	m_pGraphicsRS = new RootSignature(m_pDevice);
+	m_pGraphicsRS->AddRootConstants(0, 3);
+	m_pGraphicsRS->AddConstantBufferView(100);
+	m_pGraphicsRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 4);
+	m_pGraphicsRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 4);
+	m_pGraphicsRS->Finalize("Graphics");
+
 	//Shadow mapping - Vertex shader-only pass that writes to the depth buffer using the light matrix
 	{
-		m_pShadowsRS = new RootSignature(m_pDevice);
-		m_pShadowsRS->AddRootConstants(0, 3);
-		m_pShadowsRS->AddConstantBufferView(100);
-		m_pShadowsRS->Finalize("Shadow Mapping (Opaque)");
-
 		PipelineStateInitializer psoDesc;
-		psoDesc.SetRootSignature(m_pShadowsRS);
+		psoDesc.SetRootSignature(m_pGraphicsRS);
 		psoDesc.SetVertexShader("DepthOnly.hlsl", "VSMain");
 		psoDesc.SetRenderTargetFormats(nullptr, 0, DEPTH_STENCIL_SHADOW_FORMAT, 1);
 		psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
@@ -1443,13 +1453,8 @@ void DemoApp::InitializePipelines()
 
 	//Depth prepass - Simple vertex shader to fill the depth buffer to optimize later passes
 	{
-		m_pDepthPrepassRS = new RootSignature(m_pDevice);
-		m_pDepthPrepassRS->AddRootConstants(0, 3);
-		m_pDepthPrepassRS->AddConstantBufferView(100);
-		m_pDepthPrepassRS->Finalize("Depth Prepass");
-
 		PipelineStateInitializer psoDesc;
-		psoDesc.SetRootSignature(m_pDepthPrepassRS);
+		psoDesc.SetRootSignature(m_pGraphicsRS);
 		psoDesc.SetVertexShader("DepthOnly.hlsl", "VSMain");
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
 		psoDesc.SetRenderTargetFormats(nullptr, 0, DXGI_FORMAT_D32_FLOAT, 1);
@@ -1462,105 +1467,30 @@ void DemoApp::InitializePipelines()
 		m_pDepthPrepassAlphaMaskPSO = m_pDevice->CreatePipeline(psoDesc);
 	}
 
-	{
-		m_pEyeAdaptationRS = new RootSignature(m_pDevice);
-		m_pEyeAdaptationRS->AddConstantBufferView(0);
-		m_pEyeAdaptationRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 8);
-		m_pEyeAdaptationRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 8);
-		m_pEyeAdaptationRS->Finalize("Eye Adaptation");
+	m_pLuminanceHistogramPSO = m_pDevice->CreateComputePipeline(m_pPostProcessRS, "LuminanceHistogram.hlsl", "CSMain");
+	m_pLuminanceHistogram = m_pDevice->CreateBuffer(BufferDesc::CreateByteAddress(sizeof(uint32) * 256), "Luminance Histogram");
+	m_pAverageLuminance = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(3, sizeof(float), BufferFlag::UnorderedAccess | BufferFlag::ShaderResource), "Average Luminance");
+	m_pDebugHistogramTexture = m_pDevice->CreateTexture(TextureDesc::Create2D(m_pLuminanceHistogram->GetNumElements() * 4, m_pLuminanceHistogram->GetNumElements(), DXGI_FORMAT_R8G8B8A8_UNORM, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess), "Debug Histogram");
 
-		//Luminance Historgram
-		m_pLuminanceHistogramPSO = m_pDevice->CreateComputePipeline(m_pEyeAdaptationRS, "LuminanceHistogram.hlsl", "CSMain");
-		m_pLuminanceHistogram = m_pDevice->CreateBuffer(BufferDesc::CreateByteAddress(sizeof(uint32) * 256), "Luminance Histogram");
-		m_pAverageLuminance = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(3, sizeof(float), BufferFlag::UnorderedAccess | BufferFlag::ShaderResource), "Average Luminance");
-		m_pDebugHistogramTexture = m_pDevice->CreateTexture(TextureDesc::Create2D(m_pLuminanceHistogram->GetNumElements() * 4, m_pLuminanceHistogram->GetNumElements(), DXGI_FORMAT_R8G8B8A8_UNORM, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess), "Debug Histogram");
-
-		//Debug Draw Histogram
-		m_pDrawHistogramPSO = m_pDevice->CreateComputePipeline(m_pEyeAdaptationRS, "DrawLuminanceHistogram.hlsl", "DrawLuminanceHistogram");
-
-		//Average Luminance
-		m_pAverageLuminancePSO = m_pDevice->CreateComputePipeline(m_pEyeAdaptationRS, "AverageLuminance.hlsl", "CSMain");
-	}
-
-	//Camera motion
-	{
-		m_pCameraMotionRS = new RootSignature(m_pDevice);
-		m_pCameraMotionRS->AddConstantBufferView(100);
-		m_pCameraMotionRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 8);
-		m_pCameraMotionRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 8);
-		m_pCameraMotionRS->Finalize("Camera Motion");
-
-		m_pCameraMotionPSO = m_pDevice->CreateComputePipeline(m_pCameraMotionRS, "CameraMotionVectors.hlsl", "CSMain");
-	}
-
-	//Tonemapping
-	{
-		m_pToneMapRS = new RootSignature(m_pDevice);
-		m_pToneMapRS->AddConstantBufferView(0);
-		m_pToneMapRS->AddConstantBufferView(100);
-		m_pToneMapRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1);
-		m_pToneMapRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3);
-		m_pToneMapRS->Finalize("Tonemapping");
-
-		m_pToneMapPSO = m_pDevice->CreateComputePipeline(m_pToneMapRS, "Tonemapping.hlsl", "CSMain");
-	}
+	m_pDrawHistogramPSO = m_pDevice->CreateComputePipeline(m_pPostProcessRS, "DrawLuminanceHistogram.hlsl", "DrawLuminanceHistogram");
+	m_pAverageLuminancePSO = m_pDevice->CreateComputePipeline(m_pPostProcessRS, "AverageLuminance.hlsl", "CSMain");
 
 	//Depth resolve
-	//Resolves a multisampled depth buffer to a normal depth buffer
-	//Only required when the sample count > 1
-	{
-		m_pResolveDepthRS = new RootSignature(m_pDevice);
-		m_pResolveDepthRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1);
-		m_pResolveDepthRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1);
-		m_pResolveDepthRS->Finalize("Depth Resolve");
+	m_pResolveDepthPSO = m_pDevice->CreateComputePipeline(m_pPostProcessRS, "ResolveDepth.hlsl", "CSMain", { "DEPTH_RESOLVE_MIN" });
+	m_pPrepareReduceDepthPSO = m_pDevice->CreateComputePipeline(m_pPostProcessRS, "ReduceDepth.hlsl", "PrepareReduceDepth");
+	m_pPrepareReduceDepthMsaaPSO = m_pDevice->CreateComputePipeline(m_pPostProcessRS, "ReduceDepth.hlsl", "PrepareReduceDepth", { "WITH_MSAA" });
+	m_pReduceDepthPSO = m_pDevice->CreateComputePipeline(m_pPostProcessRS, "ReduceDepth.hlsl", "ReduceDepth");
 
-		m_pResolveDepthPSO = m_pDevice->CreateComputePipeline(m_pResolveDepthRS, "ResolveDepth.hlsl", "CSMain", { "DEPTH_RESOLVE_MIN" });
-	}
+	m_pToneMapPSO = m_pDevice->CreateComputePipeline(m_pPostProcessRS, "Tonemapping.hlsl", "CSMain");
+	m_pCameraMotionPSO = m_pDevice->CreateComputePipeline(m_pPostProcessRS, "CameraMotionVectors.hlsl", "CSMain");
+	m_pTemporalResolvePSO = m_pDevice->CreateComputePipeline(m_pPostProcessRS, "TemporalResolve.hlsl", "CSMain");
 
-	//Depth reduce
-	{
-		m_pReduceDepthRS = new RootSignature(m_pDevice);
-		m_pReduceDepthRS->AddConstantBufferView(100);
-		m_pReduceDepthRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1);
-		m_pReduceDepthRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1);
-		m_pReduceDepthRS->Finalize("Depth Reduce");
-
-		m_pPrepareReduceDepthPSO = m_pDevice->CreateComputePipeline(m_pReduceDepthRS, "ReduceDepth.hlsl", "PrepareReduceDepth");
-		m_pPrepareReduceDepthMsaaPSO = m_pDevice->CreateComputePipeline(m_pReduceDepthRS, "ReduceDepth.hlsl", "PrepareReduceDepth", { "WITH_MSAA" });
-		m_pReduceDepthPSO = m_pDevice->CreateComputePipeline(m_pReduceDepthRS, "ReduceDepth.hlsl", "ReduceDepth");
-	}
-
-	//TAA
-	{
-		m_pTemporalResolveRS = new RootSignature(m_pDevice);
-		m_pTemporalResolveRS->AddConstantBufferView(100);
-		m_pTemporalResolveRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1);
-		m_pTemporalResolveRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 4);
-		m_pTemporalResolveRS->Finalize("Temporal Resolve");
-
-		m_pTemporalResolvePSO = m_pDevice->CreateComputePipeline(m_pTemporalResolveRS, "TemporalResolve.hlsl", "CSMain");
-	}
-
-	//Mip generation
-	{
-		m_pGenerateMipsRS = new RootSignature(m_pDevice);
-		m_pGenerateMipsRS->AddRootConstants(0, 2);
-		m_pGenerateMipsRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1);
-		m_pGenerateMipsRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1);
-		m_pGenerateMipsRS->Finalize("Generate Mips");
-
-		m_pGenerateMipsPSO = m_pDevice->CreateComputePipeline(m_pGenerateMipsRS, "GenerateMips.hlsl", "CSMain");
-	}
+	m_pGenerateMipsPSO = m_pDevice->CreateComputePipeline(m_pPostProcessRS, "GenerateMips.hlsl", "CSMain");
 
 	//Sky
 	{
-		m_pSkyboxRS = new RootSignature(m_pDevice);
-		m_pSkyboxRS->AddConstantBufferView(100);
-		m_pSkyboxRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1);
-		m_pSkyboxRS->Finalize("Skybox");
-
 		PipelineStateInitializer psoDesc;
-		psoDesc.SetRootSignature(m_pSkyboxRS);
+		psoDesc.SetRootSignature(m_pGraphicsRS);
 		psoDesc.SetVertexShader("ProceduralSky.hlsl", "VSMain");
 		psoDesc.SetPixelShader("ProceduralSky.hlsl", "PSMain");
 		psoDesc.SetRenderTargetFormat(DXGI_FORMAT_R16G16B16A16_FLOAT, DXGI_FORMAT_D32_FLOAT, 1);
@@ -1568,58 +1498,35 @@ void DemoApp::InitializePipelines()
 		psoDesc.SetName("Skybox");
 		m_pSkyboxPSO = m_pDevice->CreatePipeline(psoDesc);
 
-		m_pRenderSkyPSO = m_pDevice->CreateComputePipeline(m_pSkyboxRS, "ProceduralSky.hlsl", "ComputeSkyCS");
+		m_pRenderSkyPSO = m_pDevice->CreateComputePipeline(m_pPostProcessRS, "ProceduralSky.hlsl", "ComputeSkyCS");
 		m_pSkyTexture = m_pDevice->CreateTexture(TextureDesc::Create2D(64, 128, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess), "Sky");
 	}
 
 	//Bloom
-	{
-		m_pBloomRS = new RootSignature(m_pDevice);
-		m_pBloomRS->AddConstantBufferView(0);
-		m_pBloomRS->AddConstantBufferView(100);
-		m_pBloomRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1);
-		m_pBloomRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2);
-		m_pBloomRS->Finalize("Generate Mips");
-
-		m_pBloomSeparatePSO = m_pDevice->CreateComputePipeline(m_pBloomRS, "Bloom.hlsl", "SeparateBloomCS");
-		m_pBloomMipChainPSO = m_pDevice->CreateComputePipeline(m_pBloomRS, "Bloom.hlsl", "BloomMipChainCS");
-	}
+	m_pBloomSeparatePSO = m_pDevice->CreateComputePipeline(m_pPostProcessRS, "Bloom.hlsl", "SeparateBloomCS");
+	m_pBloomMipChainPSO = m_pDevice->CreateComputePipeline(m_pPostProcessRS, "Bloom.hlsl", "BloomMipChainCS");
 
 	//Visibility Rendering
-
 	if (m_pDevice->GetCapabilities().SupportsMeshShading())
 	{
-		//Rootsignature
-		m_pVisibilityRenderingRS = new RootSignature(m_pDevice);
-		m_pVisibilityRenderingRS->AddRootConstants(0, 3);
-		m_pVisibilityRenderingRS->AddConstantBufferView(100);
-		m_pVisibilityRenderingRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 8);
-		m_pVisibilityRenderingRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 8);
-		m_pVisibilityRenderingRS->Finalize("Visibility Rendering");
-		{
+		//Pipeline state
+		PipelineStateInitializer psoDesc;
+		psoDesc.SetRootSignature(m_pGraphicsRS);
+		psoDesc.SetAmplificationShader("VisibilityRendering.hlsl", "ASMain");
+		psoDesc.SetMeshShader("VisibilityRendering.hlsl", "MSMain");
+		psoDesc.SetPixelShader("VisibilityRendering.hlsl", "PSMain");
+		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
+		psoDesc.SetRenderTargetFormat(DXGI_FORMAT_R32_UINT, DXGI_FORMAT_D32_FLOAT, 1);
+		psoDesc.SetName("Visibility Rendering");
+		m_pVisibilityRenderingPSO = m_pDevice->CreatePipeline(psoDesc);
 
-			//Pipeline state
-			PipelineStateInitializer psoDesc;
-			psoDesc.SetRootSignature(m_pVisibilityRenderingRS);
-
-			psoDesc.SetAmplificationShader("VisibilityRendering.hlsl", "ASMain");
-			psoDesc.SetMeshShader("VisibilityRendering.hlsl", "MSMain");
-			psoDesc.SetPixelShader("VisibilityRendering.hlsl", "PSMain");
-			psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
-			psoDesc.SetRenderTargetFormat(DXGI_FORMAT_R32_UINT, DXGI_FORMAT_D32_FLOAT, 1);
-			psoDesc.SetName("Visibility Rendering");
-			m_pVisibilityRenderingPSO = m_pDevice->CreatePipeline(psoDesc);
-
-			psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
-			psoDesc.SetPixelShader("VisibilityRendering.hlsl", "PSMain", { "ALPHA_TEST" });
-			psoDesc.SetName("Visibility Rendering Masked");
-			m_pVisibilityRenderingMaskedPSO = m_pDevice->CreatePipeline(psoDesc);
-		}
+		psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
+		psoDesc.SetPixelShader("VisibilityRendering.hlsl", "PSMain", { "ALPHA_TEST" });
+		psoDesc.SetName("Visibility Rendering Masked");
+		m_pVisibilityRenderingMaskedPSO = m_pDevice->CreatePipeline(psoDesc);
 
 		//Visibility Shading
-		{
-			m_pVisibilityShadingPSO = m_pDevice->CreateComputePipeline(m_pVisibilityRenderingRS, "VisibilityShading.hlsl", "CSMain");
-		}
+		m_pVisibilityShadingPSO = m_pDevice->CreateComputePipeline(m_pGraphicsRS, "VisibilityShading.hlsl", "CSMain");
 	}
 }
 

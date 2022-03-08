@@ -98,22 +98,21 @@ private:
 	RefCountPtr<Buffer> m_pTLAS;
 	RefCountPtr<Buffer> m_pTLASScratch;
 
+	RefCountPtr<RootSignature> m_pPostProcessRS;
+	RefCountPtr<RootSignature> m_pGraphicsRS;
+
 	//Shadow mapping
-	RefCountPtr<RootSignature> m_pShadowsRS;
 	RefCountPtr<PipelineState> m_pShadowsOpaquePSO;
 	RefCountPtr<PipelineState> m_pShadowsAlphaMaskPSO;
 
 	//Depth Prepass
-	RefCountPtr<RootSignature> m_pDepthPrepassRS;
 	RefCountPtr<PipelineState> m_pDepthPrepassOpaquePSO;
 	RefCountPtr<PipelineState> m_pDepthPrepassAlphaMaskPSO;
 
 	//MSAA Depth resolve
-	RefCountPtr<RootSignature> m_pResolveDepthRS;
 	RefCountPtr<PipelineState> m_pResolveDepthPSO;
 
 	//Tonemapping
-	RefCountPtr<RootSignature> m_pToneMapRS;
 	RefCountPtr<PipelineState> m_pToneMapPSO;
 
 	// Eye adaptation
@@ -121,7 +120,6 @@ private:
 	RefCountPtr<Buffer> m_pLuminanceHistogram;
 	RefCountPtr<Buffer> m_pAverageLuminance;
 	RefCountPtr<Texture> m_pDebugHistogramTexture;
-	RefCountPtr<RootSignature> m_pEyeAdaptationRS;
 	RefCountPtr<PipelineState> m_pLuminanceHistogramPSO;
 	RefCountPtr<PipelineState> m_pAverageLuminancePSO;
 	RefCountPtr<PipelineState> m_pDrawHistogramPSO;
@@ -131,26 +129,20 @@ private:
 
 	//Mip generation
 	RefCountPtr<PipelineState> m_pGenerateMipsPSO;
-	RefCountPtr<RootSignature> m_pGenerateMipsRS;
 
 	//Depth Reduction
 	RefCountPtr<PipelineState> m_pPrepareReduceDepthPSO;
 	RefCountPtr<PipelineState> m_pPrepareReduceDepthMsaaPSO;
 	RefCountPtr<PipelineState> m_pReduceDepthPSO;
-	RefCountPtr<RootSignature> m_pReduceDepthRS;
 	std::vector<RefCountPtr<Texture>> m_ReductionTargets;
 	std::vector<RefCountPtr<Buffer>> m_ReductionReadbackTargets;
 
 	//Camera motion
 	RefCountPtr<PipelineState> m_pCameraMotionPSO;
-	RefCountPtr<RootSignature> m_pCameraMotionRS;
 
-	//TAA
 	RefCountPtr<PipelineState> m_pTemporalResolvePSO;
-	RefCountPtr<RootSignature> m_pTemporalResolveRS;
 
 	//Sky
-	RefCountPtr<RootSignature> m_pSkyboxRS;
 	RefCountPtr<PipelineState> m_pSkyboxPSO;
 	RefCountPtr<PipelineState> m_pRenderSkyPSO;
 	RefCountPtr<Texture> m_pSkyTexture;
@@ -166,14 +158,12 @@ private:
 	//Bloom
 	RefCountPtr<PipelineState> m_pBloomSeparatePSO;
 	RefCountPtr<PipelineState> m_pBloomMipChainPSO;
-	RefCountPtr<RootSignature> m_pBloomRS;
 	RefCountPtr<Texture> m_pBloomTexture;
 	RefCountPtr<Texture> m_pBloomIntermediateTexture;
 	std::vector<RefCountPtr<UnorderedAccessView>> m_pBloomUAVs;
 	std::vector<RefCountPtr<UnorderedAccessView>> m_pBloomIntermediateUAVs;
 
 	// Visibility buffer
-	RefCountPtr<RootSignature> m_pVisibilityRenderingRS;
 	RefCountPtr<PipelineState> m_pVisibilityRenderingPSO;
 	RefCountPtr<PipelineState> m_pVisibilityRenderingMaskedPSO;
 	RefCountPtr<PipelineState> m_pVisibilityShadingPSO;
