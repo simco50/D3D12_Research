@@ -1,10 +1,7 @@
 #pragma once
 
 template<typename CharSource, typename CharDest>
-inline size_t StringConvert(const CharSource* pSource, CharDest* pDestination, int destinationSize)
-{
-	static_assert(0, "Not implemented");
-}
+inline size_t StringConvert(const CharSource* pSource, CharDest* pDestination, int destinationSize);
 
 template<>
 inline size_t StringConvert(const wchar_t* pSource, char* pDestination, int destinationSize)

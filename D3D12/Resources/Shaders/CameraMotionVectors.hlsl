@@ -1,4 +1,4 @@
-#include "CommonBindings.hlsli"
+#include "Common.hlsli"
 
 Texture2D tDepthTexture : register(t0);
 RWTexture2D<float2> uVelocity  : register(u0);

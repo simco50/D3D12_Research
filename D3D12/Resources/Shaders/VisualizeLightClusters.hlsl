@@ -1,4 +1,4 @@
-#include "CommonBindings.hlsli"
+#include "Common.hlsli"
 
 #define MAX_LIGHTS_PER_BUCKET 10
 

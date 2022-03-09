@@ -1,7 +1,5 @@
 #pragma once
 
-#include "Common.hlsli"
-#include "CommonBindings.hlsli"
 #include "BRDF.hlsli"
 
 // 0.08 is a max F0 we define for dielectrics which matches with Crystalware and gems (0.05 - 0.08)

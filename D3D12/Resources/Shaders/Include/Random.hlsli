@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Constants.hlsli"
+#include "Common.hlsli"
 //-----------------------------------------------------------------------------------------
 
 // Quick And Easy GPU Random Numbers In D3D11 - Nathan Reed - 2013
@@ -27,7 +28,7 @@ uint SeedThread(uint seed)
 
 uint SeedThread(uint2 pixel, uint2 resolution, uint frameIndex)
 {
-	uint rngState = dot(pixel, uint2(1, resolution.x)) ^ SeedThread(frameIndex);
+	uint rngState = Flatten2D(pixel, resolution) ^ SeedThread(frameIndex);
 	return SeedThread(rngState);
 }
 

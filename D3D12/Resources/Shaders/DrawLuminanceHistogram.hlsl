@@ -1,4 +1,4 @@
-#include "CommonBindings.hlsli"
+#include "Common.hlsli"
 #include "TonemappingCommon.hlsli"
 
 #define BACKGROUND_COLOR float4(0, 0, 0, 0.6f)

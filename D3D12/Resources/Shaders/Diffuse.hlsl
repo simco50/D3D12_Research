@@ -1,4 +1,4 @@
-#include "CommonBindings.hlsli"
+#include "Common.hlsli"
 #include "Lighting.hlsli"
 #include "Random.hlsli"
 
@@ -49,7 +49,7 @@ void GetLightCount(float4 screenPos, out uint lightCount, out uint startOffset)
 	lightCount = tLightGrid[tileIndex].y;
 #elif CLUSTERED_FORWARD
 	uint3 clusterIndex3D = uint3(floor(screenPos.xy / cPass.ClusterSize), GetSliceFromDepth(screenPos.w));
-	uint tileIndex = clusterIndex3D.x + (cPass.ClusterDimensions.x * (clusterIndex3D.y + cPass.ClusterDimensions.y * clusterIndex3D.z));
+	uint tileIndex = Flatten3D(clusterIndex3D, cPass.ClusterDimensions.xyz);
 	startOffset = tLightGrid[tileIndex * 2];
 	lightCount = tLightGrid[tileIndex * 2 + 1];
 #else

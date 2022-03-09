@@ -1,5 +1,5 @@
 #include "Random.hlsli"
-#include "CommonBindings.hlsli"
+#include "Common.hlsli"
 
 struct ParticleData
 {
@@ -115,7 +115,7 @@ void Simulate(uint threadID : SV_DispatchThreadID)
 			{
 				float2 uv = screenPos.xy * float2(0.5f, -0.5f) + 0.5f;
 				float depth = tSceneDepth.SampleLevel(sLinearClamp, uv, 0).r;
-				float linearDepth = LinearizeDepth(depth, cView.NearZ, cView.FarZ);
+				float linearDepth = LinearizeDepth(depth);
 				const float thickness = 1;
 
 				if(screenPos.w + p.Size > linearDepth && screenPos.w - p.Size - thickness < linearDepth)

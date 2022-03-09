@@ -1,4 +1,4 @@
-#include "CommonBindings.hlsli"
+#include "Common.hlsli"
 
 struct PassParameters
 {
@@ -29,7 +29,7 @@ void GenerateAABBs(uint3 threadID : SV_DispatchThreadID)
 	{
 		return;
 	}
-	uint clusterIndex1D = clusterIndex3D.x + (clusterIndex3D.y * cPass.ClusterDimensions.x) + (clusterIndex3D.z * (cPass.ClusterDimensions.x * cPass.ClusterDimensions.y));
+	uint clusterIndex1D = Flatten3D(clusterIndex3D, cPass.ClusterDimensions.xyz);
 
 	float2 minPoint_SS = float2(clusterIndex3D.x * cPass.ClusterSize.x, clusterIndex3D.y * cPass.ClusterSize.y);
 	float2 maxPoint_SS = float2((clusterIndex3D.x + 1) * cPass.ClusterSize.x, (clusterIndex3D.y + 1) * cPass.ClusterSize.y);

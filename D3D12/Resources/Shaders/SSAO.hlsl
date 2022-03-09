@@ -1,4 +1,4 @@
-#include "CommonBindings.hlsli"
+#include "Common.hlsli"
 #include "Random.hlsli"
 
 #define SSAO_SAMPLES 64
@@ -54,7 +54,7 @@ void CSMain(CS_INPUT input)
 		if(newTexCoord.x >= 0 && newTexCoord.x <= 1 && newTexCoord.y >= 0 && newTexCoord.y <= 1)
 		{
 			float sampleDepth = tDepthTexture.SampleLevel(sLinearClamp, newTexCoord.xy, 0).r;
-			float depthVpos = LinearizeDepth(sampleDepth, cView.NearZ, cView.FarZ);
+			float depthVpos = LinearizeDepth(sampleDepth);
 			float rangeCheck = smoothstep(0.0f, 1.0f, cPass.AoRadius / (viewPos.z - depthVpos));
 			occlusion += (vpos.z >= depthVpos + cPass.AoDepthThreshold) * rangeCheck;
 		}

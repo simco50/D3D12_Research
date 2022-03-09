@@ -1,4 +1,4 @@
-#include "CommonBindings.hlsli"
+#include "Common.hlsli"
 
 #ifndef DEPTH_RESOLVE_MIN
 #define DEPTH_RESOLVE_MIN 1

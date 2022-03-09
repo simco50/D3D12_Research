@@ -1,4 +1,4 @@
-#include "CommonBindings.hlsli"
+#include "Common.hlsli"
 
 #define BLOCK_SIZE 16
 #define THREAD_COUNT (BLOCK_SIZE * BLOCK_SIZE)
@@ -32,7 +32,7 @@ void PrepareReduceDepth(uint groupIndex : SV_GroupIndex, uint3 groupId : SV_Grou
 		float depth = tDepthMap.Load(samplePos, sampleIdx);
 		if(depth > 0.0f)
 		{
-			depth = LinearizeDepth01(depth, cView.NearZ, cView.FarZ);
+			depth = LinearizeDepth01(depth);
 			depthMin = min(depthMin, depth);
 			depthMax = max(depthMax, depth);
 		}
@@ -45,7 +45,7 @@ void PrepareReduceDepth(uint groupIndex : SV_GroupIndex, uint3 groupId : SV_Grou
 	float depth = tDepthMap[samplePos];
 	if(depth > 0.0f)
 	{
-		depth = LinearizeDepth01(depth, cView.NearZ, cView.FarZ);
+		depth = LinearizeDepth01(depth);
 	}
 	gsDepthSamples[groupIndex] = float2(depth, depth);
 

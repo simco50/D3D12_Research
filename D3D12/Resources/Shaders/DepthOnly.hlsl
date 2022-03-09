@@ -1,4 +1,4 @@
-#include "CommonBindings.hlsli"
+#include "Common.hlsli"
 
 ConstantBuffer<InstanceData> cObject : register(b0);
 

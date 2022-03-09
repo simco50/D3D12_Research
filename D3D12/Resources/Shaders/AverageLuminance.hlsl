@@ -1,4 +1,4 @@
-#include "CommonBindings.hlsli"
+#include "Common.hlsli"
 #include "TonemappingCommon.hlsli"
 
 #define HISTOGRAM_AVERAGE_THREADS_PER_DIMENSION 16

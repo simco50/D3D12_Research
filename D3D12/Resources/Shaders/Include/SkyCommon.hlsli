@@ -1,6 +1,6 @@
 #pragma once
 
-#include "CommonBindings.hlsli"
+#include "Common.hlsli"
 
 float3 GetSky(float3 rayDir)
 {

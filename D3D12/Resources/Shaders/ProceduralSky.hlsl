@@ -1,4 +1,4 @@
-#include "CommonBindings.hlsli"
+#include "Common.hlsli"
 #include "SkyCommon.hlsli"
 #include "Atmosphere.hlsli"
 

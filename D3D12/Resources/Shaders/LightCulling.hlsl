@@ -1,4 +1,4 @@
-#include "CommonBindings.hlsli"
+#include "Common.hlsli"
 #include "Constants.hlsli"
 
 #define MAX_LIGHTS_PER_TILE 256
