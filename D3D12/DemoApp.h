@@ -98,8 +98,7 @@ private:
 	RefCountPtr<Buffer> m_pTLAS;
 	RefCountPtr<Buffer> m_pTLASScratch;
 
-	RefCountPtr<RootSignature> m_pPostProcessRS;
-	RefCountPtr<RootSignature> m_pGraphicsRS;
+	RefCountPtr<RootSignature> m_pCommonRS;
 
 	//Shadow mapping
 	RefCountPtr<PipelineState> m_pShadowsOpaquePSO;
