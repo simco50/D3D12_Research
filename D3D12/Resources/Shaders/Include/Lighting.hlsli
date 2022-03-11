@@ -2,6 +2,7 @@
 
 #include "Common.hlsli"
 #include "ShadingModels.hlsli"
+#include "SkyCommon.hlsli"
 
 #define SUPPORT_BC5 1
 
@@ -135,7 +136,7 @@ float GetAttenuation(Light light, float3 wPos)
 
 float3 ApplyAmbientLight(float3 diffuse, float ao)
 {
-	return ao * diffuse * GetLight(0).GetColor().rgb * 0.1f;
+	return ao * diffuse * GetSky(float3(0, 1, 0)).rgb * 0.1f;
 }
 
 uint GetShadowIndex(Light light, float4 pos, float3 wPos)
