@@ -168,6 +168,14 @@ private:
 	RefCountPtr<PipelineState> m_pVisibilityShadingPSO;
 	RefCountPtr<Texture> m_pVisibilityTexture;
 
+	// DDGI
+	RefCountPtr<Buffer> m_pDDGIRayBuffer;
+	RefCountPtr<Texture> m_pDDGIRayBufferVisualizeTexture;
+	std::array<RefCountPtr<Texture>, 2> m_DDGIIrradianceMaps;
+	RefCountPtr<PipelineState> m_pDDGITraceRaysPSO;
+	RefCountPtr<PipelineState> m_pDDGIUpdateIrradianceColorPSO;
+	RefCountPtr<PipelineState> m_pDDGIVisualizeRayBufferPSO;
+
 	Texture* m_pVisualizeTexture = nullptr;
 	SceneView m_SceneData;
 	bool m_CapturePix = false;

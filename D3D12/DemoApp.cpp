@@ -695,6 +695,67 @@ void DemoApp::Update()
 			});
 	}
 
+	RGPassBuilder ddgiRays = graph.AddPass("DDGI Rays");
+	ddgiRays.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
+		{
+			context.InsertResourceBarrier(m_pDDGIRayBuffer, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+			context.SetComputeRootSignature(m_pCommonRS);
+			context.SetPipelineState(m_pDDGITraceRaysPSO);
+
+			struct
+			{
+				uint32 RaysPerProbe;
+			} parameters;
+			parameters.RaysPerProbe = 32;
+
+			context.SetRootConstants(0, parameters);
+			context.SetRootCBV(1, GetViewUniforms(m_SceneData));
+			context.BindResource(2, 0, m_pDDGIRayBuffer->GetUAV());
+
+			context.Dispatch(ComputeUtils::GetNumThreadGroups(32, 16));
+		});
+
+	RGPassBuilder ddgiUpdateIrradiance = graph.AddPass("DDGI Update Irradiance");
+	ddgiUpdateIrradiance.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
+		{
+			context.InsertResourceBarrier(m_pDDGIRayBuffer, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+			context.InsertResourceBarrier(m_DDGIIrradianceMaps[0], D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+			context.InsertResourceBarrier(m_DDGIIrradianceMaps[1], D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+			context.SetComputeRootSignature(m_pCommonRS);
+			context.SetPipelineState(m_pDDGIUpdateIrradianceColorPSO);
+
+			context.SetRootCBV(1, GetViewUniforms(m_SceneData));
+			context.BindResource(2, 0, m_DDGIIrradianceMaps[1]->GetUAV());
+			context.BindResources(3, {
+				m_DDGIIrradianceMaps[0]->GetSRV(),
+				m_pDDGIRayBuffer->GetSRV()
+				});
+
+			context.Dispatch(ComputeUtils::GetNumThreadGroups(1, 16, 1, 16));
+		});
+
+	std::swap(m_DDGIIrradianceMaps[0], m_DDGIIrradianceMaps[1]);
+
+	RGPassBuilder ddgiVisualizeRays = graph.AddPass("DDGI Visualize Ray");
+	ddgiVisualizeRays.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
+		{
+			context.InsertResourceBarrier(m_pDDGIRayBuffer, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+			context.InsertResourceBarrier(m_pDDGIRayBufferVisualizeTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+			context.SetComputeRootSignature(m_pCommonRS);
+			context.SetPipelineState(m_pDDGIVisualizeRayBufferPSO);
+
+			//context.SetRootConstants(0, parameters);
+			context.SetRootCBV(1, GetViewUniforms(m_SceneData));
+			context.BindResource(2, 0, m_pDDGIRayBufferVisualizeTexture->GetUAV());
+			context.BindResource(3, 0, m_pDDGIRayBuffer->GetSRV());
+
+			context.Dispatch(ComputeUtils::GetNumThreadGroups(
+				m_pDDGIRayBufferVisualizeTexture->GetWidth(), 16,
+				m_pDDGIRayBufferVisualizeTexture->GetHeight(), 16));
+		});
+
+	m_pVisualizeTexture = m_pDDGIRayBufferVisualizeTexture;
+
 	if (m_RenderPath == RenderPath::Clustered || m_RenderPath == RenderPath::Tiled)
 	{
 		//DEPTH PREPASS
@@ -1500,6 +1561,14 @@ void DemoApp::InitializePipelines()
 		m_pVisibilityShadingPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "VisibilityShading.hlsl", "CSMain");
 	}
 
+	m_pDDGITraceRaysPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "DDGI.hlsl", "TraceRaysCS");
+	m_pDDGIUpdateIrradianceColorPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "DDGI.hlsl", "UpdateIrradianceCS");
+	m_pDDGIRayBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(1024, 2 * sizeof(Vector4), BufferFlag::UnorderedAccess | BufferFlag::ShaderResource), "DDGI Ray Buffer");
+	m_pDDGIVisualizeRayBufferPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "DDGI.hlsl", "VisualizeRayBufferCS");
+	m_pDDGIRayBufferVisualizeTexture = m_pDevice->CreateTexture(TextureDesc::Create2D(512, 512, DXGI_FORMAT_R8G8B8A8_UNORM, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess), "DDGI Rays Visualize");
+	TextureDesc ddgiIrradianceDesc = TextureDesc::Create2D(512, 512, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource);
+	m_DDGIIrradianceMaps[0] = m_pDevice->CreateTexture(ddgiIrradianceDesc, "DDGI Irradiance 0");
+	m_DDGIIrradianceMaps[1] = m_pDevice->CreateTexture(ddgiIrradianceDesc, "DDGI Irradiance 1");
 }
 
 void DemoApp::UpdateImGui()
