@@ -1,7 +1,4 @@
-#include "CommonBindings.hlsli"
-
-#define RootSig ROOT_SIG("RootConstants(num32BitConstants=3, b0), " \
-				"CBV(b100)")
+#include "Common.hlsli"
 
 ConstantBuffer<InstanceData> cObject : register(b0);
 
@@ -11,7 +8,6 @@ struct InterpolantsVSToPS
 	float2 UV : TEXCOORD;
 };
 
-[RootSignature(RootSig)]
 InterpolantsVSToPS VSMain(uint vertexId : SV_VertexID)
 {
 	InterpolantsVSToPS result = (InterpolantsVSToPS)0;

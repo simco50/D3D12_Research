@@ -1,6 +1,4 @@
 #pragma once
-#include "Graphics/RenderGraph/RenderGraphDefinitions.h"
-
 class GraphicsDevice;
 class PipelineState;
 class RootSignature;
@@ -10,14 +8,22 @@ class Buffer;
 class UnorderedAccessView;
 class RGGraph;
 struct SceneView;
+struct SceneTextures;
 
-struct ClusteredForwardParameters
+struct ClusteredLightCullData
 {
-	Texture* pColorTarget;
-	Texture* pNormalsTarget;
-	Texture* pDepth;
-	Texture* pAmbientOcclusion;
-	Texture* pPreviousColorTarget;
+	IntVector3 ClusterCount;
+	RefCountPtr<Buffer> pAABBs;
+	RefCountPtr<Buffer> pLightIndexGrid;
+	RefCountPtr<Buffer> pLightGrid;
+	RefCountPtr<UnorderedAccessView> pLightGridRawUAV;
+	Vector2 LightGridParams;
+};
+
+struct VolumetricFogData
+{
+	RefCountPtr<Texture> pLightScatteringVolume[2];
+	RefCountPtr<Texture> pFinalVolumeFog;
 };
 
 class ClusteredForward
@@ -28,7 +34,11 @@ public:
 
 	void OnResize(int windowWidth, int windowHeight);
 
-	void Execute(RGGraph& graph, const SceneView& resources, const ClusteredForwardParameters& parameters);
+	void ComputeLightCulling(RGGraph& graph, const SceneView& scene, ClusteredLightCullData& resources);
+	void RenderVolumetricFog(RGGraph& graph, const SceneView& scene, const ClusteredLightCullData& cullData, VolumetricFogData& fogData);
+	void RenderBasePass(RGGraph& graph, const SceneView& resources, const SceneTextures& parameters, const ClusteredLightCullData& lightCullData, Texture* pFogTexture);
+
+	void Execute(RGGraph& graph, const SceneView& resources, const SceneTextures& parameters);
 	void VisualizeLightDensity(RGGraph& graph, const SceneView& resources, Texture* pTarget, Texture* pDepth);
 
 private:
@@ -39,49 +49,48 @@ private:
 	uint32 m_ClusterCountX = 0;
 	uint32 m_ClusterCountY = 0;
 
-	std::unique_ptr<Texture> m_pHeatMapTexture;
+	RefCountPtr<Texture> m_pHeatMapTexture;
 
 	// AABB
-	std::unique_ptr<RootSignature> m_pCreateAabbRS;
-	PipelineState* m_pCreateAabbPSO = nullptr;
-	std::unique_ptr<Buffer> m_pAABBs;
+	RefCountPtr<PipelineState> m_pCreateAabbPSO;
+	RefCountPtr<Buffer> m_pAABBs;
 
 	// Light Culling
-	std::unique_ptr<RootSignature> m_pLightCullingRS;
-	PipelineState* m_pLightCullingPSO = nullptr;
-	std::unique_ptr<CommandSignature> m_pLightCullingCommandSignature;
-	std::unique_ptr<Buffer> m_pLightIndexGrid;
-	std::unique_ptr<Buffer> m_pLightGrid;
-	UnorderedAccessView* m_pLightGridRawUAV = nullptr;
+	RefCountPtr<RootSignature> m_pLightCullingRS;
+	RefCountPtr<PipelineState> m_pLightCullingPSO;
+	RefCountPtr<CommandSignature> m_pLightCullingCommandSignature;
+	RefCountPtr<Buffer> m_pLightIndexGrid;
+	RefCountPtr<Buffer> m_pLightGrid;
+	RefCountPtr<UnorderedAccessView> m_pLightGridRawUAV;
 
 	// Lighting
-	std::unique_ptr<RootSignature> m_pDiffuseRS;
-	PipelineState* m_pDiffusePSO = nullptr;
-	PipelineState* m_pDiffuseMaskedPSO = nullptr;
-	PipelineState* m_pDiffuseTransparancyPSO = nullptr;
+	RefCountPtr<RootSignature> m_pDiffuseRS;
+	RefCountPtr<PipelineState> m_pDiffusePSO;
+	RefCountPtr<PipelineState> m_pDiffuseMaskedPSO;
+	RefCountPtr<PipelineState> m_pDiffuseTransparancyPSO;
 
-	PipelineState* m_pMeshShaderDiffusePSO = nullptr;
-	PipelineState* m_pMeshShaderDiffuseMaskedPSO = nullptr;
-	PipelineState* m_pMeshShaderDiffuseTransparancyPSO = nullptr;
+	RefCountPtr<PipelineState> m_pMeshShaderDiffusePSO;
+	RefCountPtr<PipelineState> m_pMeshShaderDiffuseMaskedPSO;
+	RefCountPtr<PipelineState> m_pMeshShaderDiffuseTransparancyPSO;
 
 	//Cluster debug rendering
-	std::unique_ptr<RootSignature> m_pVisualizeLightClustersRS;
-	PipelineState* m_pVisualizeLightClustersPSO = nullptr;
-	std::unique_ptr<Buffer> m_pDebugLightGrid;
+	RefCountPtr<RootSignature> m_pVisualizeLightClustersRS;
+	RefCountPtr<PipelineState> m_pVisualizeLightClustersPSO;
+	RefCountPtr<Buffer> m_pDebugLightGrid;
 	Matrix m_DebugClustersViewMatrix;
 	bool m_DidCopyDebugClusterData = false;
 
 	//Visualize Light Count
-	std::unique_ptr<RootSignature> m_pVisualizeLightsRS;
-	PipelineState* m_pVisualizeLightsPSO = nullptr;
-	std::unique_ptr<Texture> m_pVisualizationIntermediateTexture;
+	RefCountPtr<RootSignature> m_pVisualizeLightsRS;
+	RefCountPtr<PipelineState> m_pVisualizeLightsPSO;
+	RefCountPtr<Texture> m_pVisualizationIntermediateTexture;
 
 	//Volumetric Fog
-	std::unique_ptr<Texture> m_pLightScatteringVolume[2];
-	std::unique_ptr<Texture> m_pFinalVolumeFog;
-	std::unique_ptr<RootSignature> m_pVolumetricLightingRS;
-	PipelineState* m_pInjectVolumeLightPSO = nullptr;
-	PipelineState* m_pAccumulateVolumeLightPSO = nullptr;
+	RefCountPtr<Texture> m_pLightScatteringVolume[2];
+	RefCountPtr<Texture> m_pFinalVolumeFog;
+	RefCountPtr<RootSignature> m_pVolumetricLightingRS;
+	RefCountPtr<PipelineState> m_pInjectVolumeLightPSO;
+	RefCountPtr<PipelineState> m_pAccumulateVolumeLightPSO;
 
 	bool m_ViewportDirty = true;
 };

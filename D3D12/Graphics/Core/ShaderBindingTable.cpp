@@ -2,6 +2,7 @@
 #include "ShaderBindingTable.h"
 #include "CommandContext.h"
 #include "StateObject.h"
+#include "DynamicResourceAllocator.h"
 
 uint32 ComputeRecordSize(uint32 size)
 {

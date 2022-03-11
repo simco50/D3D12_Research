@@ -1,9 +1,5 @@
-#include "CommonBindings.hlsli"
+#include "Common.hlsli"
 #include "TonemappingCommon.hlsli"
-
-#define RootSig ROOT_SIG("CBV(b0), " \
-				"DescriptorTable(UAV(u0, numDescriptors = 1))," \
-				"DescriptorTable(SRV(t0, numDescriptors = 2))")
 
 #define BACKGROUND_COLOR float4(0, 0, 0, 0.6f)
 #define FOREGROUND_COLOR float4(1, 0, 0, 0.8f)
@@ -28,7 +24,6 @@ void BlendPixel(uint2 location, uint2 offset, float4 color)
 	uOutTexture[location + offset] = uOutTexture[location + offset] * (1 - color.a) + color * color.a;
 }
 
-[RootSignature(RootSig)]
 [numthreads(NUM_HISTOGRAM_BINS, 1, 1)]
 void DrawLuminanceHistogram(uint groupIndex : SV_GroupIndex, uint3 threadId : SV_DispatchThreadID)
 {

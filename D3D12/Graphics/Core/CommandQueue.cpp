@@ -5,7 +5,7 @@
 #include "CommandContext.h"
 
 Fence::Fence(GraphicsDevice* pParent, uint64 fenceValue, const char* pName)
-	: m_CurrentValue(fenceValue), m_LastSignaled(0), m_LastCompleted(0)
+	: GraphicsObject(pParent), m_CurrentValue(fenceValue), m_LastSignaled(0), m_LastCompleted(0)
 {
 	VERIFY_HR_EX(pParent->GetDevice()->CreateFence(m_LastCompleted, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(m_pFence.GetAddressOf())), pParent->GetDevice());
 	D3D::SetObjectName(m_pFence.Get(), pName);
@@ -75,7 +75,7 @@ CommandQueue::CommandQueue(GraphicsDevice* pParent, D3D12_COMMAND_LIST_TYPE type
 	desc.Priority = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL;
 	desc.Type = type;
 
-	m_pFence = std::make_unique<Fence>(pParent, (uint64)type << 56, "CommandQueue Fence");
+	m_pFence = new Fence(pParent, (uint64)type << 56, "CommandQueue Fence");
 
 	VERIFY_HR_EX(pParent->GetDevice()->CreateCommandQueue(&desc, IID_PPV_ARGS(m_pCommandQueue.GetAddressOf())), pParent->GetDevice());
 	D3D::SetObjectName(m_pCommandQueue.Get(), Sprintf("%s CommandQueue", D3D::CommandlistTypeToString(type)).c_str());
@@ -104,7 +104,7 @@ uint64 CommandQueue::ExecuteCommandLists(CommandContext** pCommandContexts, uint
 		check(pNextContext);
 
 		ResourceBarrierBatcher barriers;
-		for (const CommandContext::PendingBarrier& pending : pNextContext->m_PendingBarriers)
+		for (const CommandContext::PendingBarrier& pending : pNextContext->GetPendingBarriers())
 		{
 			uint32 subResource = pending.Subresource;
 			GraphicsResource* pResource = pending.pResource;
@@ -159,10 +159,10 @@ ID3D12CommandAllocator* CommandQueue::RequestAllocator()
 		}
 	}
 
-	ComPtr<ID3D12CommandAllocator> pAllocator;
+	RefCountPtr<ID3D12CommandAllocator> pAllocator;
 	GetParent()->GetDevice()->CreateCommandAllocator(m_Type, IID_PPV_ARGS(pAllocator.GetAddressOf()));
 	D3D::SetObjectName(pAllocator.Get(), Sprintf("Pooled Allocator %d - %s", (int)m_CommandAllocators.size(), D3D::CommandlistTypeToString(m_Type)).c_str());
-	m_CommandAllocators.push_back(std::move(pAllocator));
+	m_CommandAllocators.push_back(pAllocator);
 	return m_CommandAllocators.back().Get();
 }
 

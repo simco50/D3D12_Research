@@ -1,9 +1,5 @@
-#include "CommonBindings.hlsli"
+#include "Common.hlsli"
 #include "Constants.hlsli"
-
-#define RootSig ROOT_SIG("CBV(b100), " \
-				"DescriptorTable(UAV(u0, numDescriptors = 5)), " \
-				"DescriptorTable(SRV(t0, numDescriptors = 1))")
 
 #define MAX_LIGHTS_PER_TILE 256
 #define BLOCK_SIZE 16
@@ -68,7 +64,6 @@ uint CreateLightMask(float depthRangeMin, float depthRange, Sphere sphere)
 	return mask;
 }
 
-[RootSignature(RootSig)]
 [numthreads(BLOCK_SIZE, BLOCK_SIZE, 1)]
 void CSMain(uint3 groupId : SV_GroupID, uint3 threadID : SV_DispatchThreadID, uint groupIndex : SV_GroupIndex)
 {

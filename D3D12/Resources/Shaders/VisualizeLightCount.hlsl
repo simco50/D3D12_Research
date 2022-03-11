@@ -1,9 +1,4 @@
-#include "CommonBindings.hlsli"
-
-#define RootSig ROOT_SIG("CBV(b0), " \
-				"CBV(b100), " \
-				"DescriptorTable(SRV(t0, numDescriptors = 3)), " \
-				"DescriptorTable(UAV(u0, numDescriptors = 1))")
+#include "Common.hlsli"
 
 #define BLOCK_SIZE 16
 
@@ -40,7 +35,7 @@ static float4 DEBUG_COLORS[] = {
 
 float EdgeDetection(uint2 index, uint width, uint height)
 {
-	float reference = LinearizeDepth01(tSceneDepth.Load(uint3(index, 0)), cView.NearZ, cView.FarZ);
+	float reference = LinearizeDepth(tSceneDepth.Load(uint3(index, 0)));
 	uint2 offsets[8] = {
 		uint2(-1, -1),
 		uint2(-1, 0),
@@ -54,10 +49,10 @@ float EdgeDetection(uint2 index, uint width, uint height)
 	float sampledValue = 0;
 	for(int j = 0; j < 8; j++)
 	{
-		sampledValue += LinearizeDepth01(tSceneDepth.Load(uint3(index + offsets[j], 0)), cView.NearZ, cView.FarZ);
+		sampledValue += LinearizeDepth(tSceneDepth.Load(uint3(index + offsets[j], 0)));
 	}
 	sampledValue /= 8;
-	return lerp(1, 0, step(0.0002f, length(reference - sampledValue)));
+	return lerp(1, 0, step(0.05f, length(reference - sampledValue)));
 }
 
 float InverseLerp(float value, float minValue, float maxValue)
@@ -65,7 +60,6 @@ float InverseLerp(float value, float minValue, float maxValue)
 	return (value - minValue) / (maxValue - minValue);
 }
 
-[RootSignature(RootSig)]
 [numthreads(16, 16, 1)]
 void DebugLightDensityCS(uint3 threadId : SV_DispatchThreadID)
 {

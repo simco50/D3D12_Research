@@ -1,9 +1,7 @@
 #include "stdafx.h"
 #include "RTReflections.h"
 #include "Graphics/Core/Shader.h"
-#include "Graphics/Core/PipelineState.h"
 #include "Graphics/Core/RootSignature.h"
-#include "Graphics/Core/Buffer.h"
 #include "Graphics/Core/Graphics.h"
 #include "Graphics/Core/CommandContext.h"
 #include "Graphics/Core/Texture.h"
@@ -11,7 +9,6 @@
 #include "Graphics/Core/ResourceViews.h"
 #include "Graphics/Core/StateObject.h"
 #include "Graphics/RenderGraph/RenderGraph.h"
-#include "Graphics/Mesh.h"
 #include "Graphics/SceneView.h"
 
 RTReflections::RTReflections(GraphicsDevice* pDevice)
@@ -23,27 +20,28 @@ RTReflections::RTReflections(GraphicsDevice* pDevice)
 	}
 }
 
-void RTReflections::Execute(RGGraph& graph, const SceneView& sceneData, Texture* pColorTarget, Texture* pNormals, Texture* pDepth)
+void RTReflections::Execute(RGGraph& graph, const SceneView& sceneData, const SceneTextures& sceneTextures)
 {
 	RGPassBuilder rt = graph.AddPass("RT Reflections");
 	rt.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
 		{
-			Texture* pTarget = m_pSceneColor.get();
+			Texture* pTarget = m_pSceneColor;
 
-			context.CopyTexture(pColorTarget, pTarget);
+			context.CopyTexture(sceneTextures.pColorTarget, pTarget);
 
-			context.InsertResourceBarrier(pDepth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-			context.InsertResourceBarrier(pNormals, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-			context.InsertResourceBarrier(m_pSceneColor.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-			context.InsertResourceBarrier(pColorTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+			context.InsertResourceBarrier(sceneTextures.pDepth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+			context.InsertResourceBarrier(sceneTextures.pNormalsTarget, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+			context.InsertResourceBarrier(sceneTextures.pRoughnessTarget, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+			context.InsertResourceBarrier(sceneTextures.pColorTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+			context.InsertResourceBarrier(m_pSceneColor, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
-			context.SetComputeRootSignature(m_pGlobalRS.get());
+			context.SetComputeRootSignature(m_pGlobalRS);
 			context.SetPipelineState(m_pRtSO);
 
-			struct Parameters
+			struct
 			{
 				float ViewPixelSpreadAngle;
-			} parameters{};
+			} parameters;
 
 			parameters.ViewPixelSpreadAngle = atanf(2.0f * tanf(sceneData.View.FoV / 2) / (float)pTarget->GetHeight());
 
@@ -53,18 +51,17 @@ void RTReflections::Execute(RGGraph& graph, const SceneView& sceneData, Texture*
 			bindingTable.BindMissShader("ShadowMiss", 1);
 			bindingTable.BindHitGroup("ReflectionHitGroup", 0);
 
-			const D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
-				pDepth->GetSRV()->GetDescriptor(),
-				pTarget->GetSRV()->GetDescriptor(),
-				pNormals->GetSRV()->GetDescriptor(),
-			};
+			context.SetRootConstants(0, parameters);
+			context.SetRootCBV(1, GetViewUniforms(sceneData, sceneTextures.pColorTarget));
+			context.BindResource(2, 0, sceneTextures.pColorTarget->GetUAV());
+			context.BindResources(3, {
+				sceneTextures.pDepth->GetSRV(),
+				pTarget->GetSRV(),
+				sceneTextures.pNormalsTarget->GetSRV(),
+				sceneTextures.pRoughnessTarget->GetSRV(),
+				});
 
-			context.SetRootCBV(0, parameters);
-			context.SetRootCBV(1, GetViewUniforms(sceneData, pColorTarget));
-			context.BindResource(2, 0, pColorTarget->GetUAV());
-			context.BindResources(3, 0, srvs, ARRAYSIZE(srvs));
-
-			context.DispatchRays(bindingTable, pColorTarget->GetWidth(), pColorTarget->GetHeight());
+			context.DispatchRays(bindingTable, sceneTextures.pColorTarget->GetWidth(), sceneTextures.pColorTarget->GetHeight());
 		});
 }
 
@@ -75,21 +72,23 @@ void RTReflections::OnResize(uint32 width, uint32 height)
 
 void RTReflections::SetupPipelines(GraphicsDevice* pDevice)
 {
-	ShaderLibrary* pShaderLibrary = pDevice->GetLibrary("RTReflections.hlsl");
-
-	m_pGlobalRS = std::make_unique<RootSignature>(pDevice);
-	m_pGlobalRS->FinalizeFromShader("Global", pShaderLibrary);
+	m_pGlobalRS = new RootSignature(pDevice);
+	m_pGlobalRS->AddRootConstants(0, 1);
+	m_pGlobalRS->AddConstantBufferView(100);
+	m_pGlobalRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 8);
+	m_pGlobalRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 8);
+	m_pGlobalRS->Finalize("Global");
 
 	StateObjectInitializer stateDesc;
 	stateDesc.Name = "RT Reflections";
 	stateDesc.RayGenShader = "RayGen";
-	stateDesc.AddLibrary(pShaderLibrary, { "RayGen", "ReflectionClosestHit", "ReflectionMiss", "ShadowMiss", "ReflectionAnyHit" });
+	stateDesc.AddLibrary(pDevice->GetLibrary("RTReflections.hlsl"));
 	stateDesc.AddHitGroup("ReflectionHitGroup", "ReflectionClosestHit", "ReflectionAnyHit");
 	stateDesc.AddMissShader("ReflectionMiss");
 	stateDesc.AddMissShader("ShadowMiss");
 	stateDesc.MaxPayloadSize = 5 * sizeof(float);
 	stateDesc.MaxAttributeSize = 2 * sizeof(float);
 	stateDesc.MaxRecursion = 2;
-	stateDesc.pGlobalRootSignature = m_pGlobalRS.get();
+	stateDesc.pGlobalRootSignature = m_pGlobalRS;
 	m_pRtSO = pDevice->CreateStateObject(stateDesc);
 }

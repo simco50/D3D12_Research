@@ -3,6 +3,7 @@
 #include "Shader.h"
 #include "DescriptorHandle.h"
 #include "GraphicsResource.h"
+#include "ResourceViews.h"
 
 class CommandQueue;
 class CommandContext;
@@ -24,11 +25,11 @@ class OnlineDescriptorAllocator;
 class Fence;
 class GraphicsDevice;
 class CommandSignature;
+class Image;
 struct TextureDesc;
 struct BufferDesc;
 
 using WindowHandle = HWND;
-using WindowHandlePtr = HWND;
 
 enum class GraphicsInstanceFlags
 {
@@ -68,20 +69,20 @@ class GraphicsInstance
 {
 public:
 	GraphicsInstance(GraphicsInstanceFlags createFlags);
-	std::unique_ptr<SwapChain> CreateSwapchain(GraphicsDevice* pDevice, WindowHandle pNativeWindow, uint32 width, uint32 height, uint32 numFrames, bool vsync);
-	ComPtr<IDXGIAdapter4> EnumerateAdapter(bool useWarp);
-	std::unique_ptr<GraphicsDevice> CreateDevice(ComPtr<IDXGIAdapter4> pAdapter);
+	RefCountPtr<SwapChain> CreateSwapchain(GraphicsDevice* pDevice, WindowHandle pNativeWindow, uint32 width, uint32 height, uint32 numFrames, bool vsync);
+	RefCountPtr<IDXGIAdapter4> EnumerateAdapter(bool useWarp);
+	RefCountPtr<GraphicsDevice> CreateDevice(RefCountPtr<IDXGIAdapter4> pAdapter);
 
-	static std::unique_ptr<GraphicsInstance> CreateInstance(GraphicsInstanceFlags createFlags = GraphicsInstanceFlags::None);
+	static GraphicsInstance CreateInstance(GraphicsInstanceFlags createFlags = GraphicsInstanceFlags::None);
 
 	bool AllowTearing() const { return m_AllowTearing; }
 
 private:
-	ComPtr<IDXGIFactory6> m_pFactory;
+	RefCountPtr<IDXGIFactory6> m_pFactory;
 	bool m_AllowTearing = false;
 };
 
-class SwapChain
+class SwapChain : public GraphicsObject
 {
 public:
 	SwapChain(GraphicsDevice* pDevice, IDXGIFactory6* pFactory, WindowHandle pNativeWindow, uint32 width, uint32 height, uint32 numFrames, bool vsync);
@@ -91,14 +92,14 @@ public:
 
 	void SetVsync(bool enabled) { m_Vsync = enabled; }
 	IDXGISwapChain4* GetSwapChain() const { return m_pSwapchain.Get(); }
-	Texture* GetBackBuffer() const { return m_Backbuffers[m_CurrentImage].get(); }
-	Texture* GetBackBuffer(uint32 index) const { return m_Backbuffers[index].get(); }
+	Texture* GetBackBuffer() const { return m_Backbuffers[m_CurrentImage]; }
+	Texture* GetBackBuffer(uint32 index) const { return m_Backbuffers[index]; }
 	uint32 GetBackbufferIndex() const { return m_CurrentImage; }
 	DXGI_FORMAT GetFormat() const { return m_Format; }
 
 private:
-	std::vector<std::unique_ptr<Texture>> m_Backbuffers;
-	ComPtr<IDXGISwapChain4> m_pSwapchain;
+	std::vector<RefCountPtr<Texture>> m_Backbuffers;
+	RefCountPtr<IDXGISwapChain4> m_pSwapchain;
 	DXGI_FORMAT m_Format;
 	uint32 m_CurrentImage;
 	bool m_Vsync;
@@ -151,7 +152,7 @@ private:
 	std::queue<FencedObject> m_DeletionQueue;
 };
 
-class GraphicsDevice
+class GraphicsDevice : public GraphicsObject
 {
 public:
 	GraphicsDevice(IDXGIAdapter4* pAdapter);
@@ -166,8 +167,8 @@ public:
 	CommandContext* AllocateCommandContext(D3D12_COMMAND_LIST_TYPE type = D3D12_COMMAND_LIST_TYPE_DIRECT);
 	void FreeCommandList(CommandContext* pCommandList);
 
-	GlobalOnlineDescriptorHeap* GetGlobalViewHeap() const { return m_pGlobalViewHeap.get(); }
-	GlobalOnlineDescriptorHeap* GetGlobalSamplerHeap() const { return m_pGlobalSamplerHeap.get(); }
+	GlobalOnlineDescriptorHeap* GetGlobalViewHeap() const { return m_pGlobalViewHeap; }
+	GlobalOnlineDescriptorHeap* GetGlobalSamplerHeap() const { return m_pGlobalSamplerHeap; }
 
 	template<typename DESC_TYPE>
 	struct DescriptorSelector {};
@@ -192,14 +193,20 @@ public:
 	DescriptorHandle StoreViewDescriptor(D3D12_CPU_DESCRIPTOR_HANDLE view);
 	void FreeViewDescriptor(DescriptorHandle& heapIndex);
 
-	std::unique_ptr<Texture> CreateTexture(const TextureDesc& desc, const char* pName);
-	std::unique_ptr<Buffer> CreateBuffer(const BufferDesc& desc, const char* pName);
+	RefCountPtr<Texture> CreateTexture(const TextureDesc& desc, const char* pName);
+	RefCountPtr<Texture> CreateTextureForSwapchain(ID3D12Resource* pSwapchainResource);
+	RefCountPtr<Texture> CreateTextureFromImage(CommandContext& context, Image& image, bool sRGB, const char* pName = nullptr);
+	RefCountPtr<Texture> CreateTextureFromFile(CommandContext& context, const char* pFilePath, bool sRGB, const char* pName = nullptr);
+	RefCountPtr<Buffer> CreateBuffer(const BufferDesc& desc, const char* pName);
+	void ReleaseResource(ID3D12Object* pResource);
 
-	ID3D12Resource* CreateResource(const D3D12_RESOURCE_DESC& desc, D3D12_RESOURCE_STATES initialState, D3D12_HEAP_TYPE heapType, D3D12_CLEAR_VALUE* pClearValue = nullptr);
-	void ReleaseResource(ID3D12Resource* pResource);
-	PipelineState* CreatePipeline(const PipelineStateInitializer& psoDesc);
-	PipelineState* CreatePipeline(Shader* pShader, RootSignature* pRootSignature);
-	StateObject* CreateStateObject(const StateObjectInitializer& stateDesc);
+	RefCountPtr<PipelineState> CreatePipeline(const PipelineStateInitializer& psoDesc);
+	RefCountPtr<PipelineState> CreateComputePipeline(RefCountPtr<RootSignature>& pRootSignature, const char* pShaderPath, const char* entryPoint = "", const std::vector<ShaderDefine>& defines = {});
+	RefCountPtr<StateObject> CreateStateObject(const StateObjectInitializer& stateDesc);
+	RefCountPtr<ShaderResourceView> CreateSRV(Buffer* pBuffer, const BufferSRVDesc& desc);
+	RefCountPtr<UnorderedAccessView> CreateUAV(Buffer* pBuffer, const BufferUAVDesc& desc);
+	RefCountPtr<ShaderResourceView> CreateSRV(Texture* pTexture, const TextureSRVDesc& desc);
+	RefCountPtr<UnorderedAccessView> CreateUAV(Texture* pTexture, const TextureUAVDesc& desc);
 
 	Shader* GetShader(const char* pShaderPath, ShaderType shaderType, const char* entryPoint = "", const std::vector<ShaderDefine>& defines = {});
 	ShaderLibrary* GetLibrary(const char* pShaderPath, const std::vector<ShaderDefine>& defines = {});
@@ -208,39 +215,36 @@ public:
 	ID3D12Device5* GetRaytracingDevice() const { return m_pRaytracingDevice.Get(); }
 	ShaderManager* GetShaderManager() const { return m_pShaderManager.get(); }
 
-	const GraphicsCapabilities& GetCapabilities() const { return Capabilities; }
+	const GraphicsCapabilities& GetCapabilities() const { return m_Capabilities; }
 
-	Fence* GetFrameFence() const { return m_pFrameFence.get(); }
+	Fence* GetFrameFence() const { return m_pFrameFence; }
 
 private:
 	bool m_IsTearingDown = false;
-	GraphicsCapabilities Capabilities;
+	GraphicsCapabilities m_Capabilities;
 
-	ComPtr<ID3D12Device> m_pDevice;
-	ComPtr<ID3D12Device5> m_pRaytracingDevice;
+	RefCountPtr<ID3D12Device> m_pDevice;
+	RefCountPtr<ID3D12Device5> m_pRaytracingDevice;
 
-	std::unique_ptr<Fence> m_pFrameFence;
+	RefCountPtr<Fence> m_pFrameFence;
 
-	std::array<std::unique_ptr<CommandQueue>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_CommandQueues;
-	std::array<std::vector<std::unique_ptr<CommandContext>>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_CommandListPool;
+	std::array<RefCountPtr<CommandQueue>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_CommandQueues;
+	std::array<std::vector<RefCountPtr<CommandContext>>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_CommandListPool;
 	std::array<std::queue<CommandContext*>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_FreeCommandLists;
-	std::vector<ComPtr<ID3D12CommandList>> m_CommandLists;
+	std::vector<RefCountPtr<ID3D12CommandList>> m_CommandLists;
 
 	DeferredDeleteQueue m_DeleteQueue;
 
 	HANDLE m_DeviceRemovedEvent = 0;
-	std::unique_ptr<Fence> m_pDeviceRemovalFence;
+	RefCountPtr<Fence> m_pDeviceRemovalFence;
 
 	std::unique_ptr<ShaderManager> m_pShaderManager;
 
-	std::unique_ptr<GlobalOnlineDescriptorHeap> m_pGlobalViewHeap;
-	std::unique_ptr<GlobalOnlineDescriptorHeap> m_pGlobalSamplerHeap;
+	RefCountPtr<GlobalOnlineDescriptorHeap> m_pGlobalViewHeap;
+	RefCountPtr<GlobalOnlineDescriptorHeap> m_pGlobalSamplerHeap;
 
-	std::array<std::unique_ptr<OfflineDescriptorAllocator>, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES> m_DescriptorHeaps;
-	std::unique_ptr<DynamicAllocationManager> m_pDynamicAllocationManager;
-
-	std::vector<std::unique_ptr<PipelineState>> m_Pipelines;
-	std::vector<std::unique_ptr<StateObject>> m_StateObjects;
+	std::array<RefCountPtr<OfflineDescriptorAllocator>, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES> m_DescriptorHeaps;
+	RefCountPtr<DynamicAllocationManager> m_pDynamicAllocationManager;
 
 	std::mutex m_ContextAllocationMutex;
 };

@@ -41,7 +41,7 @@ GlobalOnlineDescriptorHeap::GlobalOnlineDescriptorHeap(GraphicsDevice* pParent, 
 
 DescriptorHandle GlobalOnlineDescriptorHeap::AllocatePersistent()
 {
-	std::lock_guard<std::mutex> lock(m_AllocationLock);
+	std::lock_guard lock(m_AllocationLock);
 
 	while (m_PersistentDeletionQueue.size())
 	{
@@ -74,15 +74,14 @@ void GlobalOnlineDescriptorHeap::FreePersistent(DescriptorHandle& handle)
 
 void GlobalOnlineDescriptorHeap::FreePersistent(uint32& heapIndex)
 {
-	std::lock_guard<std::mutex> lock(m_AllocationLock);
-	check(heapIndex >= 0);
+	std::lock_guard lock(m_AllocationLock);
 	m_PersistentDeletionQueue.emplace(heapIndex, GetParent()->GetFrameFence()->GetCurrentValue());
 	heapIndex = DescriptorHandle::InvalidHeapIndex;
 }
 
 DescriptorHeapBlock* GlobalOnlineDescriptorHeap::AllocateBlock()
 {
-	std::lock_guard<std::mutex> lock(m_DynamicBlockAllocateMutex);
+	std::lock_guard lock(m_DynamicBlockAllocateMutex);
 
 	// Check if we can free so finished blocks
 	for (uint32 i = 0; i < (uint32)m_ReleasedDynamicBlocks.size(); ++i)
@@ -106,7 +105,7 @@ DescriptorHeapBlock* GlobalOnlineDescriptorHeap::AllocateBlock()
 
 void GlobalOnlineDescriptorHeap::FreeBlock(uint64 fenceValue, DescriptorHeapBlock* pBlock)
 {
-	std::lock_guard<std::mutex> lock(m_DynamicBlockAllocateMutex);
+	std::lock_guard lock(m_DynamicBlockAllocateMutex);
 	pBlock->FenceValue = fenceValue;
 	pBlock->CurrentOffset = 0;
 	m_ReleasedDynamicBlocks.push_back(pBlock);
@@ -115,11 +114,6 @@ void GlobalOnlineDescriptorHeap::FreeBlock(uint64 fenceValue, DescriptorHeapBloc
 OnlineDescriptorAllocator::OnlineDescriptorAllocator(GlobalOnlineDescriptorHeap* pGlobalHeap)
 	: GraphicsObject(pGlobalHeap->GetParent()), m_Type(pGlobalHeap->GetType()), m_pHeapAllocator(pGlobalHeap)
 {
-}
-
-OnlineDescriptorAllocator::~OnlineDescriptorAllocator()
-{
-
 }
 
 void OnlineDescriptorAllocator::SetDescriptors(uint32 rootIndex, uint32 offset, uint32 numHandles, const D3D12_CPU_DESCRIPTOR_HANDLE* pHandles)

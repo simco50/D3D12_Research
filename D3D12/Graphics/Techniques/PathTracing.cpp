@@ -19,7 +19,7 @@ PathTracing::PathTracing(GraphicsDevice* pDevice)
 
 	ShaderLibrary* pLibrary = pDevice->GetLibrary("PathTracing.hlsl");
 
-	m_pRS = std::make_unique<RootSignature>(pDevice);
+	m_pRS = new RootSignature(pDevice);
 	m_pRS->AddConstantBufferView(0);
 	m_pRS->AddConstantBufferView(100);
 	m_pRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 2);
@@ -35,7 +35,7 @@ PathTracing::PathTracing(GraphicsDevice* pDevice)
 	desc.AddHitGroup("PrimaryHG", "PrimaryCHS", "PrimaryAHS");
 	desc.AddMissShader("PrimaryMS");
 	desc.AddMissShader("ShadowMS");
-	desc.pGlobalRootSignature = m_pRS.get();
+	desc.pGlobalRootSignature = m_pRS;
 	m_pSO = pDevice->CreateStateObject(desc);
 
 	m_OnShaderCompiledHandle = pDevice->GetShaderManager()->OnLibraryRecompiledEvent().AddLambda([this](ShaderLibrary*, ShaderLibrary*)
@@ -89,14 +89,14 @@ void PathTracing::Render(RGGraph& graph, const SceneView& sceneData, Texture* pT
 		{
 			context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-			context.SetComputeRootSignature(m_pRS.get());
+			context.SetComputeRootSignature(m_pRS);
 			context.SetPipelineState(m_pSO);
 
-			struct Parameters
+			struct
 			{
 				uint32 NumBounces;
 				uint32 AccumulatedFrames;
-			} parameters{};
+			} parameters;
 
 			parameters.NumBounces = numBounces;
 			parameters.AccumulatedFrames = m_NumAccumulatedFrames;
@@ -107,14 +107,12 @@ void PathTracing::Render(RGGraph& graph, const SceneView& sceneData, Texture* pT
 			bindingTable.BindMissShader("ShadowMS", 1);
 			bindingTable.BindHitGroup("PrimaryHG", 0);
 
-			const D3D12_CPU_DESCRIPTOR_HANDLE uavs[] = {
-				pTarget->GetUAV()->GetDescriptor(),
-				m_pAccumulationTexture->GetUAV()->GetDescriptor(),
-			};
-
 			context.SetRootCBV(0, parameters);
 			context.SetRootCBV(1, GetViewUniforms(sceneData, pTarget));
-			context.BindResources(2, 0, uavs, ARRAYSIZE(uavs));
+			context.BindResources(2, {
+				pTarget->GetUAV(),
+				m_pAccumulationTexture->GetUAV(),
+				});
 
 			context.DispatchRays(bindingTable, pTarget->GetWidth(), pTarget->GetHeight());
 		});

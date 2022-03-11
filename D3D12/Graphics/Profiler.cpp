@@ -4,7 +4,7 @@
 #include "Graphics/Core/CommandContext.h"
 #include "Graphics/Core/CommandQueue.h"
 #include "Graphics/Core/Buffer.h"
-#include <pix3.h>
+#include "pix3.h"
 
 void CpuTimer::Begin()
 {
@@ -139,7 +139,6 @@ void Profiler::Initialize(GraphicsDevice* pParent, uint32 numBackbuffers)
 
 	m_FenceValues.resize(numBackbuffers);
 	m_pReadBackBuffer = pParent->CreateBuffer(BufferDesc::CreateReadback(sizeof(uint64) * numBackbuffers * HEAP_SIZE), "Profiling Readback Buffer");
-	m_pReadBackBuffer->Map();
 
 	{
 		//GPU Frequency
@@ -164,7 +163,7 @@ void Profiler::Initialize(GraphicsDevice* pParent, uint32 numBackbuffers)
 
 void Profiler::Shutdown()
 {
-	m_pReadBackBuffer->Release();
+	m_pReadBackBuffer.Reset();
 	m_pQueryHeap.Reset();
 }
 

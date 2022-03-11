@@ -1,12 +1,5 @@
 #pragma once
 #include "GraphicsResource.h"
-class CommandContext;
-class Buffer;
-class ShaderResourceView;
-class UnorderedAccessView;
-class ResourceView;
-struct BufferSRVDesc;
-struct BufferUAVDesc;
 
 enum class BufferFlag
 {
@@ -15,10 +8,8 @@ enum class BufferFlag
 	ShaderResource =		1 << 1,
 	Upload =				1 << 2,
 	Readback =				1 << 3,
-	Structured =			1 << 4,
-	ByteAddress =			1 << 5,
-	IndirectArguments =		1 << 6,
-	AccelerationStructure = 1 << 7,
+	ByteAddress =			1 << 4,
+	AccelerationStructure = 1 << 5,
 };
 DECLARE_BITMASK_TYPE(BufferFlag)
 
@@ -78,7 +69,7 @@ struct BufferDesc
 		BufferDesc desc;
 		desc.ElementSize = elementSize;
 		desc.Size = (uint64)elementCount * desc.ElementSize;
-		desc.Usage = usage | BufferFlag::Structured;
+		desc.Usage = usage;
 		return desc;
 	}
 
@@ -99,7 +90,7 @@ struct BufferDesc
 		BufferDesc desc;
 		desc.ElementSize = sizeof(IndirectParameters);
 		desc.Size = (uint64)elements * desc.ElementSize;
-		desc.Usage = usage | BufferFlag::IndirectArguments | BufferFlag::UnorderedAccess;
+		desc.Usage = usage | BufferFlag::UnorderedAccess;
 		return desc;
 	}
 
@@ -128,30 +119,14 @@ struct BufferDesc
 class Buffer : public GraphicsResource
 {
 public:
-	Buffer(GraphicsDevice* pParent, const char* pName = "");
-	Buffer(GraphicsDevice* pParent, const BufferDesc& desc, const char* pName = "");
-	Buffer(GraphicsDevice* pParent, ID3D12Resource * pResource, D3D12_RESOURCE_STATES state);
-	~Buffer();
-	void Create(const BufferDesc& desc);
+	Buffer(GraphicsDevice* pParent, const BufferDesc& desc, ID3D12Resource* pResource);
 
 	inline uint64 GetSize() const { return m_Desc.Size; }
 	inline uint32 GetNumElements() const { return m_Desc.NumElements(); }
 	inline const BufferDesc& GetDesc() const { return m_Desc; }
 
-	void CreateUAV(UnorderedAccessView** pView, const BufferUAVDesc& desc);
-	void CreateSRV(ShaderResourceView** pView, const BufferSRVDesc& desc);
-
-	ShaderResourceView* GetSRV() const { return m_pSrv; };
-	UnorderedAccessView* GetUAV() const { return m_pUav; };
-
-	uint32 GetSRVIndex() const;
-	uint32 GetUAVIndex() const;
-
-protected:
-	UnorderedAccessView* m_pUav = nullptr;
-	ShaderResourceView* m_pSrv = nullptr;
-
-	BufferDesc m_Desc;
+private:
+	const BufferDesc m_Desc;
 };
 
 struct VertexBufferView

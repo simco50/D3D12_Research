@@ -1,10 +1,5 @@
 #include "Random.hlsli"
-#include "CommonBindings.hlsli"
-
-#define RootSig ROOT_SIG("CBV(b0), " \
-				"CBV(b100), " \
-				"DescriptorTable(UAV(u0, numDescriptors = 8)), " \
-				"DescriptorTable(SRV(t0, numDescriptors = 2))")
+#include "Common.hlsli"
 
 struct ParticleData
 {
@@ -51,7 +46,6 @@ RWStructuredBuffer<ParticleData> uParticleData  : register(u7);
 ByteAddressBuffer tCounters : register(t0);
 Texture2D tSceneDepth : register(t1);
 
-[RootSignature(RootSig)]
 [numthreads(1, 1, 1)]
 void UpdateSimulationParameters()
 {
@@ -121,7 +115,7 @@ void Simulate(uint threadID : SV_DispatchThreadID)
 			{
 				float2 uv = screenPos.xy * float2(0.5f, -0.5f) + 0.5f;
 				float depth = tSceneDepth.SampleLevel(sLinearClamp, uv, 0).r;
-				float linearDepth = LinearizeDepth(depth, cView.NearZ, cView.FarZ);
+				float linearDepth = LinearizeDepth(depth);
 				const float thickness = 1;
 
 				if(screenPos.w + p.Size > linearDepth && screenPos.w - p.Size - thickness < linearDepth)

@@ -1,8 +1,4 @@
-#include "CommonBindings.hlsli"
-
-#define RootSig ROOT_SIG("CBV(b100), " \
-				"DescriptorTable(UAV(u0, numDescriptors = 1)), " \
-				"DescriptorTable(SRV(t0, numDescriptors = 1))")
+#include "Common.hlsli"
 
 #define BLOCK_SIZE 16
 #define THREAD_COUNT (BLOCK_SIZE * BLOCK_SIZE)
@@ -18,7 +14,6 @@ RWTexture2D<float2> uOutputMap : register(u0);
 
 groupshared float2 gsDepthSamples[BLOCK_SIZE * BLOCK_SIZE];
 
-[RootSignature(RootSig)]
 [numthreads(BLOCK_SIZE, BLOCK_SIZE, 1)]
 void PrepareReduceDepth(uint groupIndex : SV_GroupIndex, uint3 groupId : SV_GroupID, uint3 groupThreadId : SV_GroupThreadID)
 {
@@ -37,7 +32,7 @@ void PrepareReduceDepth(uint groupIndex : SV_GroupIndex, uint3 groupId : SV_Grou
 		float depth = tDepthMap.Load(samplePos, sampleIdx);
 		if(depth > 0.0f)
 		{
-			depth = LinearizeDepth01(depth, cView.NearZ, cView.FarZ);
+			depth = LinearizeDepth01(depth);
 			depthMin = min(depthMin, depth);
 			depthMax = max(depthMax, depth);
 		}
@@ -50,7 +45,7 @@ void PrepareReduceDepth(uint groupIndex : SV_GroupIndex, uint3 groupId : SV_Grou
 	float depth = tDepthMap[samplePos];
 	if(depth > 0.0f)
 	{
-		depth = LinearizeDepth01(depth, cView.NearZ, cView.FarZ);
+		depth = LinearizeDepth01(depth);
 	}
 	gsDepthSamples[groupIndex] = float2(depth, depth);
 
@@ -74,7 +69,6 @@ void PrepareReduceDepth(uint groupIndex : SV_GroupIndex, uint3 groupId : SV_Grou
 	}
 }
 
-[RootSignature(RootSig)]
 [numthreads(BLOCK_SIZE, BLOCK_SIZE, 1)]
 void ReduceDepth(uint groupIndex : SV_GroupIndex, uint3 groupId : SV_GroupID, uint3 groupThreadId : SV_GroupThreadID)
 {

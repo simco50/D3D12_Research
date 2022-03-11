@@ -73,12 +73,12 @@ public:
 	const std::vector<SubMeshInstance>& GetMeshInstances() const { return m_MeshInstances; }
 	const std::vector<SubMesh>& GetMeshes() const { return m_Meshes; }
 	std::vector<Material>& GetMaterials() { return m_Materials; }
-	Buffer* GetData() const { return m_pGeometryData.get(); }
+	Buffer* GetData() const { return m_pGeometryData; }
 
 private:
 	std::vector<Material> m_Materials;
-	std::unique_ptr<Buffer> m_pGeometryData;
+	RefCountPtr<Buffer> m_pGeometryData;
 	std::vector<SubMesh> m_Meshes;
 	std::vector<SubMeshInstance> m_MeshInstances;
-	std::vector<std::unique_ptr<Texture>> m_Textures;
+	std::vector<RefCountPtr<Texture>> m_Textures;
 };

@@ -62,41 +62,36 @@ struct TextureUAVDesc
 	}
 };
 
-class ResourceView
+class ResourceView : public GraphicsObject
 {
 public:
-	virtual ~ResourceView() = default;
-	GraphicsResource* GetParent() const { return m_pParent; }
+	ResourceView(GraphicsResource* pParent, D3D12_CPU_DESCRIPTOR_HANDLE cpuDescriptor, DescriptorHandle gpuDescriptor);
+	virtual ~ResourceView();
+	GraphicsResource* GetResource() const { return m_pResource; }
 	D3D12_CPU_DESCRIPTOR_HANDLE GetDescriptor() const { return m_Descriptor; }
 	uint32 GetHeapIndex() const { return m_GpuDescriptor.HeapIndex; }
 	uint64 GetGPUView() const { return m_GpuDescriptor.GpuHandle.ptr; }
 protected:
-	GraphicsResource* m_pParent = nullptr;
-	CD3DX12_CPU_DESCRIPTOR_HANDLE m_Descriptor = {};
+	GraphicsResource* m_pResource = nullptr;
+	D3D12_CPU_DESCRIPTOR_HANDLE m_Descriptor = {};
 	DescriptorHandle m_GpuDescriptor;
 };
 
 class ShaderResourceView : public ResourceView
 {
 public:
-	~ShaderResourceView();
-	void Create(Buffer* pBuffer, const BufferSRVDesc& desc);
-	void Create(Texture* pTexture, const TextureSRVDesc& desc);
-	void Release();
+	ShaderResourceView(GraphicsResource* pParent, D3D12_CPU_DESCRIPTOR_HANDLE cpuDescriptor, DescriptorHandle gpuDescriptor);
 };
 
 class UnorderedAccessView : public ResourceView
 {
 public:
-	~UnorderedAccessView();
-	void Create(Buffer* pBuffer, const BufferUAVDesc& desc);
-	void Create(Texture* pTexture, const TextureUAVDesc& desc);
-	void Release();
+	UnorderedAccessView(GraphicsResource* pParent, D3D12_CPU_DESCRIPTOR_HANDLE cpuDescriptor, DescriptorHandle gpuDescriptor, Buffer* pCounter = nullptr);
 
-	Buffer* GetCounter() const { return m_pCounter.get(); }
+	Buffer* GetCounter() const { return m_pCounter; }
 	UnorderedAccessView* GetCounterUAV() const;
 	ShaderResourceView* GetCounterSRV() const;
 
 private:
-	std::unique_ptr<Buffer> m_pCounter;
+	RefCountPtr<Buffer> m_pCounter;
 };

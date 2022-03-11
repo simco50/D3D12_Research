@@ -1,9 +1,4 @@
-#include "CommonBindings.hlsli"
-
-#define RootSig ROOT_SIG("CBV(b0), " \
-				"CBV(b100), " \
-				"DescriptorTable(UAV(u0, numDescriptors = 1)), " \
-				"DescriptorTable(SRV(t0, numDescriptors = 2))")
+#include "Common.hlsli"
 
 #define THREAD_GROUP_SIZE (256)
 #define KERNEL_LENGTH (4)
@@ -37,7 +32,6 @@ static const float s_BlurWeightsNormalized[BLUR_WEIGHTS] = {
 groupshared float gAoCache[GS_CACHE_SIZE];
 groupshared float gDepthCache[GS_CACHE_SIZE];
 
-[RootSignature(RootSig)]
 [numthreads(THREAD_GROUP_SIZE, 1, 1)]
 void CSMain(uint3 groupId : SV_GroupID, uint groupIndex : SV_GroupIndex)
 {
@@ -50,7 +44,7 @@ void CSMain(uint3 groupId : SV_GroupID, uint groupIndex : SV_GroupIndex)
 	{
 		float2 uv = ((float2)groupBegin + 0.5f + direction * (i - KERNEL_LENGTH)) * cPass.InvDimensions;
 		gAoCache[i] = tAmbientOcclusion.SampleLevel(sLinearClamp, uv, 0).r;
-		gDepthCache[i] = LinearizeDepth01(tSceneDepth.SampleLevel(sLinearClamp, uv, 0).r, cView.NearZ, cView.FarZ);
+		gDepthCache[i] = LinearizeDepth01(tSceneDepth.SampleLevel(sLinearClamp, uv, 0).r);
 	}
 
 	GroupMemoryBarrierWithGroupSync();

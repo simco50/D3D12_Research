@@ -1,13 +1,8 @@
-#include "CommonBindings.hlsli"
+#include "Common.hlsli"
 #include "Lighting.hlsli"
 #include "Random.hlsli"
 
 #define BLOCK_SIZE 16
-
-#define RootSig ROOT_SIG("RootConstants(num32BitConstants=3, b0), " \
-	"CBV(b1), " \
-	"CBV(b100), " \
-	"DescriptorTable(SRV(t0, numDescriptors = 6))")
 
 struct PerViewData
 {
@@ -54,7 +49,7 @@ void GetLightCount(float4 screenPos, out uint lightCount, out uint startOffset)
 	lightCount = tLightGrid[tileIndex].y;
 #elif CLUSTERED_FORWARD
 	uint3 clusterIndex3D = uint3(floor(screenPos.xy / cPass.ClusterSize), GetSliceFromDepth(screenPos.w));
-	uint tileIndex = clusterIndex3D.x + (cPass.ClusterDimensions.x * (clusterIndex3D.y + cPass.ClusterDimensions.y * clusterIndex3D.z));
+	uint tileIndex = Flatten3D(clusterIndex3D, cPass.ClusterDimensions.xyz);
 	startOffset = tLightGrid[tileIndex * 2];
 	lightCount = tLightGrid[tileIndex * 2 + 1];
 #else
@@ -139,20 +134,20 @@ bool IsVisible(MeshData mesh, float4x4 world, uint meshlet)
 	MeshletBounds cullData = BufferLoad<MeshletBounds>(mesh.BufferIndex, meshlet, mesh.MeshletBoundsOffset);
 
 	float4 center = mul(float4(cullData.Center, 1), world);
+	float3 radius3 = abs(mul(cullData.Radius.xxx, (float3x3)world));
+	float radius = max(radius3.x, max(radius3.y, radius3.z));
+	float3 coneAxis = normalize(mul(cullData.ConeAxis, (float3x3)world));
 
 	for(int i = 0; i < 6; ++i)
 	{
-		if(dot(center, cView.FrustumPlanes[i]) > cullData.Radius)
+		if(dot(center, cView.FrustumPlanes[i]) > radius)
 		{
 			return false;
 		}
 	}
 
 	float3 viewLocation = cView.ViewPosition.xyz;
-	float3 coneApex = mul(float4(cullData.ConeApex, 1), world).xyz;
-	float3 coneAxis = mul(cullData.ConeAxis, (float3x3)world);
-	float3 view = normalize(viewLocation - coneApex);
-	if (dot(view, coneAxis) >= cullData.ConeCutoff)
+	if(dot(viewLocation - center.xyz, coneAxis) >= cullData.ConeCutoff * length(center.xyz - viewLocation) + radius)
 	{
 		return false;
 	}
@@ -184,7 +179,6 @@ void ASMain(uint threadID : SV_DispatchThreadID)
 
 #define NUM_MESHLET_THREADS 32
 
-[RootSignature(RootSig)]
 [outputtopology("triangle")]
 [numthreads(NUM_MESHLET_THREADS, 1, 1)]
 void MSMain(
@@ -222,7 +216,6 @@ void MSMain(
 	}
 }
 
-[RootSignature(RootSig)]
 InterpolantsVSToPS VSMain(uint vertexId : SV_VertexID)
 {
 	MeshData mesh = GetMesh(cObject.Mesh);
@@ -265,10 +258,16 @@ MaterialProperties GetMaterialProperties(MaterialData material, float2 UV)
 	return properties;
 }
 
+struct PSOut
+{
+ 	float4 Color : SV_Target0;
+	float2 Normal : SV_Target1;
+	float Roughness : SV_Target2;
+};
+
 void PSMain(InterpolantsVSToPS input,
 			float3 bary : SV_Barycentrics,
-			out float4 outColor : SV_Target0,
-			out float4 outNormalRoughness : SV_Target1)
+			out PSOut output)
 {
 	float2 screenUV = (float2)input.Position.xy * cView.ScreenDimensionsInv;
 	float ambientOcclusion = tAO.SampleLevel(sLinearClamp, screenUV, 0).r;
@@ -299,22 +298,25 @@ void PSMain(InterpolantsVSToPS input,
 	float4 scatteringTransmittance = tLightScattering.SampleLevel(sLinearClamp, float3(screenUV, fogSlice), 0);
 	outRadiance = outRadiance * scatteringTransmittance.w + scatteringTransmittance.rgb;
 
-	outColor = float4(outRadiance, surface.Opacity);
+	float3 outColor = outRadiance;
 	float reflectivity = saturate(scatteringTransmittance.w * ambientOcclusion * Square(1 - brdf.Roughness));
-	outNormalRoughness = float4(N, saturate(reflectivity - ssrWeight));
 
 #define DEBUG_MESHLETS 0
 #if DEBUG_MESHLETS
-	outNormalRoughness = float4(input.Normal, 0);
+	N = input.Normal;
 
 	uint Seed = SeedThread(input.ID);
-	outColor = float4(Random01(Seed), Random01(Seed), Random01(Seed), 1);
+	outColor = float3(Random01(Seed), Random01(Seed), Random01(Seed));
 
 	float3 deltas = fwidth(bary);
 	float3 smoothing = deltas * 1;
 	float3 thickness = deltas * 0.2;
 	bary = smoothstep(thickness, thickness + smoothing, bary);
 	float minBary = min(bary.x, min(bary.y, bary.z));
-	outColor = float4(outColor.xyz * saturate(minBary + 0.6), 1);
+	outColor = outColor * saturate(minBary + 0.6);
 #endif
+
+	output.Color = float4(outColor, surface.Opacity);
+	output.Normal = EncodeNormalOctahedron(N);
+	output.Roughness = saturate(reflectivity - ssrWeight);
 }

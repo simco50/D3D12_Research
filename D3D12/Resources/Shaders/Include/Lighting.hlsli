@@ -1,6 +1,6 @@
 #pragma once
 
-#include "CommonBindings.hlsli"
+#include "Common.hlsli"
 #include "ShadingModels.hlsli"
 
 #define SUPPORT_BC5 1

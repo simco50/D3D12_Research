@@ -1,15 +1,6 @@
-#include "CommonBindings.hlsli"
+#include "Common.hlsli"
 #include "RaytracingCommon.hlsli"
 #include "Random.hlsli"
-
-GlobalRootSignature GlobalRootSig =
-{
-	"CBV(b0),"
-	"CBV(b100),"
-	"DescriptorTable(UAV(u0, numDescriptors = 1)),"
-	"DescriptorTable(SRV(t0, numDescriptors = 1)),"
-	DEFAULT_ROOT_SIG_PARAMS
-};
 
 RWTexture2D<float> uOutput : register(u0);
 Texture2D tSceneDepth : register(t0);

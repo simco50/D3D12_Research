@@ -1,19 +1,14 @@
-#include "CommonBindings.hlsli"
+#include "Common.hlsli"
 #include "Lighting.hlsli"
-
-#define RootSig ROOT_SIG("CBV(b0), " \
-		"CBV(b100), " \
-		"DescriptorTable(UAV(u0, numDescriptors = 1)), " \
-		"DescriptorTable(SRV(t0, numDescriptors = 3))")
 
 struct PassData
 {
-	int3 ClusterDimensions;
+	uint3 ClusterDimensions;
 	float Jitter;
 	float3 InvClusterDimensions;
 	float LightClusterSizeFactor;
 	float2 LightGridParams;
-	int2 LightClusterDimensions;
+	uint2 LightClusterDimensions;
 };
 
 ConstantBuffer<PassData> cPass : register(b0);
@@ -54,7 +49,7 @@ uint GetLightCluster(uint2 fogCellIndex, float depth)
 {
 	uint slice = GetLightClusterSliceFromDepth(depth);
 	uint3 clusterIndex3D = uint3(floor(fogCellIndex * cPass.LightClusterSizeFactor), slice);
-	return clusterIndex3D.x + (cPass.LightClusterDimensions.x * (clusterIndex3D.y + cPass.LightClusterDimensions.y * clusterIndex3D.z));
+	return Flatten3D(clusterIndex3D, uint3(cPass.LightClusterDimensions, 0));
 }
 
 struct FogVolume
@@ -66,7 +61,6 @@ struct FogVolume
 	float DensityBase;
 };
 
-[RootSignature(RootSig)]
 [numthreads(8, 8, 4)]
 void InjectFogLightingCS(uint3 threadId : SV_DispatchThreadID)
 {
@@ -80,7 +74,7 @@ void InjectFogLightingCS(uint3 threadId : SV_DispatchThreadID)
 	float4 reprojNDC = mul(float4(voxelCenterWS, 1), cView.PreviousViewProjection);
 	reprojNDC.xyz /= reprojNDC.w;
 	float3 reprojUV = float3(reprojNDC.x * 0.5f + 0.5f, -reprojNDC.y * 0.5f + 0.5f, reprojNDC.z);
-	reprojUV.z = LinearizeDepth(reprojUV.z, cView.NearZ, cView.FarZ);
+	reprojUV.z = LinearizeDepth(reprojUV.z);
 	reprojUV.z = sqrt((reprojUV.z - cView.FarZ) / (cView.NearZ - cView.FarZ));
 	float4 prevScattering = tLightScattering.SampleLevel(sLinearClamp, reprojUV, 0);
 
@@ -183,7 +177,6 @@ void InjectFogLightingCS(uint3 threadId : SV_DispatchThreadID)
 	uOutLightScattering[threadId] = newScattering;
 }
 
-[RootSignature(RootSig)]
 [numthreads(8, 8, 1)]
 void AccumulateFogCS(uint3 threadId : SV_DispatchThreadID, uint groupIndex : SV_GroupIndex)
 {

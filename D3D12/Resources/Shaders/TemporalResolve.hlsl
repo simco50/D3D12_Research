@@ -1,4 +1,4 @@
-#include "CommonBindings.hlsli"
+#include "Common.hlsli"
 #include "TonemappingCommon.hlsli"
 #include "Color.hlsli"
 
@@ -30,10 +30,6 @@
 #define TAA_DEBUG_RED_HISTORY	   0
 #define TAA_LUMINANCE_WEIGHT		0						   // [Lottes]
 #define TAA_DILATE_VELOCITY		 1
-
-#define RootSig ROOT_SIG("CBV(b100), " \
-				"DescriptorTable(UAV(u0, numDescriptors = 1)), " \
-				"DescriptorTable(SRV(t0, numDescriptors = 4))")
 
 Texture2D tVelocity : register(t0);
 Texture2D tPreviousColor : register(t1);
@@ -184,7 +180,6 @@ float4 SampleTextureCatmullRom(in Texture2D<float4> tex, in SamplerState texture
 groupshared float3 gsColors[GSM_SIZE];
 groupshared float gsDepths[GSM_SIZE];
 
-[RootSignature(RootSig)]
 [numthreads(THREAD_GROUP_ROW_SIZE, THREAD_GROUP_ROW_SIZE, 1)]
 void CSMain(
 	uint3 ThreadId : SV_DispatchThreadID,

@@ -26,7 +26,7 @@ public:
 
 
 private:
-	ComPtr<ID3D12Fence> m_pFence;
+	RefCountPtr<ID3D12Fence> m_pFence;
 	std::mutex m_FenceWaitCS;
 	HANDLE m_CompleteEvent;
 	uint64 m_CurrentValue;
@@ -48,22 +48,22 @@ public:
 	void WaitForFence(uint64 fenceValue);
 	void WaitForIdle();
 
-	Fence* GetFence() const { return m_pFence.get(); }
+	Fence* GetFence() const { return m_pFence; }
 	D3D12_COMMAND_LIST_TYPE GetType() const { return m_Type; }
 
 	ID3D12CommandAllocator* RequestAllocator();
 	void FreeAllocator(uint64 fenceValue, ID3D12CommandAllocator* pAllocator);
 
 private:
-	ComPtr<ID3D12GraphicsCommandList> m_pTransitionCommandlist;
+	RefCountPtr<ID3D12GraphicsCommandList> m_pTransitionCommandlist;
 
-	std::vector<ComPtr<ID3D12CommandAllocator>> m_CommandAllocators;
+	std::vector<RefCountPtr<ID3D12CommandAllocator>> m_CommandAllocators;
 	std::queue<std::pair<ID3D12CommandAllocator*, uint64>> m_FreeAllocators;
 	std::mutex m_AllocationMutex;
 
-    ComPtr<ID3D12CommandQueue> m_pCommandQueue;
+	RefCountPtr<ID3D12CommandQueue> m_pCommandQueue;
     std::mutex m_FenceMutex;
-	std::unique_ptr<Fence> m_pFence;
+	RefCountPtr<Fence> m_pFence;
 
 	D3D12_COMMAND_LIST_TYPE m_Type;
 };

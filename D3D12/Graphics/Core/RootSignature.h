@@ -34,8 +34,7 @@ public:
 
 	void AddStaticSampler(const D3D12_STATIC_SAMPLER_DESC& samplerDesc);
 
-	void Finalize(const char* pName, D3D12_ROOT_SIGNATURE_FLAGS flags = D3D12_ROOT_SIGNATURE_FLAG_NONE, bool addDefaultStaticSamplers = true);
-	void FinalizeFromShader(const char* pName, const ShaderBase* pShader);
+	void Finalize(const char* pName, D3D12_ROOT_SIGNATURE_FLAGS flags = D3D12_ROOT_SIGNATURE_FLAG_NONE);
 
 	ID3D12RootSignature* GetRootSignature() const { return m_pRootSignature.Get(); }
 
@@ -67,7 +66,7 @@ private:
 	std::array<uint32, MAX_NUM_ROOT_PARAMETERS> m_DescriptorTableSizes{};
 	std::vector<CD3DX12_STATIC_SAMPLER_DESC> m_StaticSamplers;
 	std::array<std::vector<CD3DX12_DESCRIPTOR_RANGE>, MAX_NUM_ROOT_PARAMETERS> m_DescriptorTableRanges{};
-	ComPtr<ID3D12RootSignature> m_pRootSignature;
+	RefCountPtr<ID3D12RootSignature> m_pRootSignature;
 
 	RootSignatureMask m_DescriptorTableMask;
 	RootSignatureMask m_SamplerMask;

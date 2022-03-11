@@ -1,18 +1,37 @@
 #pragma once
 
 class GraphicsDevice;
-class ResourceView;
+class UnorderedAccessView;
+class ShaderResourceView;
+class CommandContext;
 
 class GraphicsObject
 {
 public:
-	GraphicsObject(GraphicsDevice* pParent = nullptr)
+	GraphicsObject(GraphicsDevice* pParent)
 		: m_pParent(pParent)
 	{}
+	virtual ~GraphicsObject() = default;
 
-	inline GraphicsDevice* GetParent() const { return m_pParent; }
+	uint32 AddRef()
+	{
+		return ++m_RefCount;
+	}
+
+	uint32 Release()
+	{
+		uint32 result = --m_RefCount;
+		if (result == 0) {
+			delete this;
+		}
+		return result;
+	}
+
+	uint32 GetNumRefs() const { return m_RefCount; }
+	GraphicsDevice* GetParent() const { return m_pParent; }
 
 private:
+	std::atomic<uint32> m_RefCount = 0;
 	GraphicsDevice* m_pParent;
 };
 
@@ -24,6 +43,7 @@ public:
 	ResourceState(D3D12_RESOURCE_STATES initialState = D3D12_RESOURCE_STATE_UNKNOWN)
 		: m_CommonState(initialState), m_AllSameState(true)
 	{}
+
 	void Set(D3D12_RESOURCE_STATES state, uint32 subResource)
 	{
 		if (subResource != D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES)
@@ -58,29 +78,30 @@ public:
 		}
 	}
 private:
-	constexpr static uint32 MAX_SUBRESOURCES = 12;
-	std::array<D3D12_RESOURCE_STATES, MAX_SUBRESOURCES> m_ResourceStates{};
+	std::array<D3D12_RESOURCE_STATES, D3D12_REQ_MIP_LEVELS> m_ResourceStates{};
 	D3D12_RESOURCE_STATES m_CommonState;
 	bool m_AllSameState;
 };
 
 class GraphicsResource : public GraphicsObject
 {
-	friend class CommandContext;
+	friend class GraphicsDevice;
 
 public:
-	GraphicsResource(GraphicsDevice* pParent);
-	GraphicsResource(GraphicsDevice* pParent, ID3D12Resource* pResource, D3D12_RESOURCE_STATES state);
-	virtual ~GraphicsResource();
+	GraphicsResource(GraphicsDevice* pParent, ID3D12Resource* pResource);
+	~GraphicsResource();
 
-	void* Map(uint32 subResource = 0, uint64 readFrom = 0, uint64 readTo = 0);
-	void Unmap(uint32 subResource = 0, uint64 writtenFrom = 0, uint64 writtenTo = 0);
 	void* GetMappedData() const { return m_pMappedData; }
 	void SetImmediateDelete(bool immediate) { m_ImmediateDelete = immediate; }
 
-	void Release();
 	void SetName(const char* pName);
 	const std::string& GetName() { return m_Name; }
+
+	UnorderedAccessView* GetUAV() const { return m_pUav; }
+	ShaderResourceView* GetSRV() const { return m_pSrv; }
+
+	int32 GetSRVIndex() const;
+	int32 GetUAVIndex() const;
 
 	inline ID3D12Resource* GetResource() const { return m_pResource; }
 	inline D3D12_GPU_VIRTUAL_ADDRESS GetGpuHandle() const { return m_pResource->GetGPUVirtualAddress(); }
@@ -93,6 +114,7 @@ protected:
 	bool m_ImmediateDelete = false;
 	ID3D12Resource* m_pResource = nullptr;
 	void* m_pMappedData = nullptr;
-	std::vector<std::unique_ptr<ResourceView>> m_Descriptors;
 	ResourceState m_ResourceState;
+	RefCountPtr<ShaderResourceView> m_pSrv;
+	RefCountPtr<UnorderedAccessView> m_pUav;
 };

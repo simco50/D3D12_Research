@@ -1,8 +1,7 @@
 #pragma once
-#include "DynamicResourceAllocator.h"
 #include "GraphicsResource.h"
 #include "OnlineDescriptorAllocator.h"
-#include "ResourceViews.h"
+
 class GraphicsResource;
 class Texture;
 class OnlineDescriptorAllocator;
@@ -10,10 +9,15 @@ class RootSignature;
 class PipelineState;
 class StateObject;
 class DynamicResourceAllocator;
+class DynamicAllocationManager;
 class Buffer;
 class CommandSignature;
 class ShaderBindingTable;
+class ResourceView;
+struct VertexBufferView;
+struct IndexBufferView;
 struct BufferView;
+struct DynamicAllocation;
 
 enum class CommandListContext
 {
@@ -60,18 +64,18 @@ struct RenderPassInfo
 {
 	struct RenderTargetInfo
 	{
-		RenderPassAccess Access = RenderPassAccess::DontCare_DontCare;
 		Texture* Target = nullptr;
 		Texture* ResolveTarget = nullptr;
+		RenderPassAccess Access = RenderPassAccess::DontCare_DontCare;
 		int MipLevel = 0;
 		int ArrayIndex = 0;
 	};
 
 	struct DepthTargetInfo
 	{
+		Texture* Target = nullptr;
 		RenderPassAccess Access = RenderPassAccess::DontCare_DontCare;
 		RenderPassAccess StencilAccess = RenderPassAccess::DontCare_DontCare;
-		Texture* Target = nullptr;
 		bool Write = true;
 	};
 
@@ -143,7 +147,6 @@ namespace ComputeUtils
 class CommandContext : public GraphicsObject
 {
 public:
-	friend class CommandQueue;
 
 	CommandContext(GraphicsDevice* pParent, ID3D12GraphicsCommandList* pCommandList, D3D12_COMMAND_LIST_TYPE type, GlobalOnlineDescriptorHeap* pDescriptorHeap, DynamicAllocationManager* pDynamicMemoryManager, ID3D12CommandAllocator* pAllocator);
 	~CommandContext();
@@ -199,7 +202,17 @@ public:
 	void SetGraphicsRootSignature(RootSignature* pRootSignature);
 	void SetComputeRootSignature(RootSignature* pRootSignature);
 	void BindResource(uint32 rootIndex, uint32 offset, ResourceView* pView);
+	void BindResources(uint32 rootIndex, uint32 offset, const ResourceView*const* pViews, uint32 count = 1);
+	void BindResources(uint32 rootIndex, std::initializer_list<const ResourceView*> pViews, uint32 offset = 0)
+	{
+		BindResources(rootIndex, offset, pViews.begin(), (uint32)pViews.size());
+	}
 	void BindResources(uint32 rootIndex, uint32 offset, const D3D12_CPU_DESCRIPTOR_HANDLE* handles, uint32 count = 1);
+	template<size_t N>
+	void BindResources(uint32 rootIndex, const D3D12_CPU_DESCRIPTOR_HANDLE(&handles)[N], uint32 offset = 0)
+	{
+		BindResources(rootIndex, offset, handles, N);
+	}
 	void SetDynamicVertexBuffer(uint32 slot, uint32 elementCount, uint32 elementSize, const void* pData);
 	void SetDynamicIndexBuffer(uint32 elementCount, const void* pData, bool smallIndices = false);
 	void SetRootSRV(uint32 rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address);
@@ -229,16 +242,14 @@ public:
 
 	static bool IsTransitionAllowed(D3D12_COMMAND_LIST_TYPE commandlistType, D3D12_RESOURCE_STATES state);
 
-private:
-	void PrepareDraw();
-
 	struct PendingBarrier
 	{
 		GraphicsResource* pResource;
 		ResourceState State;
 		uint32 Subresource;
 	};
-	std::vector<PendingBarrier> m_PendingBarriers;
+
+	const std::vector<PendingBarrier>& GetPendingBarriers() const { return m_PendingBarriers; }
 
 	D3D12_RESOURCE_STATES GetResourceState(GraphicsResource* pResource, uint32 subResource) const
 	{
@@ -246,6 +257,11 @@ private:
 		check(it != m_ResourceStates.end());
 		return it->second.Get(subResource);
 	}
+
+private:
+	void PrepareDraw();
+
+	std::vector<PendingBarrier> m_PendingBarriers;
 
 	D3D12_RESOURCE_STATES GetResourceStateWithFallback(GraphicsResource* pResource, uint32 subResource) const
 	{
@@ -261,10 +277,10 @@ private:
 
 	ResourceBarrierBatcher m_BarrierBatcher;
 
-	std::unique_ptr<DynamicResourceAllocator> m_DynamicAllocator;
+	std::unique_ptr<DynamicResourceAllocator> m_pDynamicAllocator;
 	ID3D12GraphicsCommandList* m_pCommandList;
-	ComPtr<ID3D12GraphicsCommandList4> m_pRaytracingCommandList;
-	ComPtr<ID3D12GraphicsCommandList6> m_pMeshShadingCommandList;
+	RefCountPtr<ID3D12GraphicsCommandList4> m_pRaytracingCommandList;
+	RefCountPtr<ID3D12GraphicsCommandList6> m_pMeshShadingCommandList;
 	ID3D12CommandAllocator* m_pAllocator;
 	D3D12_COMMAND_LIST_TYPE m_Type;
 	std::unordered_map<GraphicsResource*, ResourceState> m_ResourceStates;
@@ -299,7 +315,7 @@ public:
 	bool IsCompute() const { return m_IsCompute; }
 
 private:
-	ComPtr<ID3D12CommandSignature> m_pCommandSignature;
+	RefCountPtr<ID3D12CommandSignature> m_pCommandSignature;
 	ID3D12RootSignature* m_pRootSignature = nullptr;
 	uint32 m_Stride = 0;
 	std::vector<D3D12_INDIRECT_ARGUMENT_DESC> m_ArgumentDesc;

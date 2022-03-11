@@ -3,6 +3,7 @@
 #include "Shader.h"
 
 class ShaderManager;
+class RootSignature;
 
 enum class BlendMode
 {
@@ -93,7 +94,7 @@ public:
 	void SetName(const char* pName);
 	void SetDepthOnlyTarget(DXGI_FORMAT dsvFormat, uint32 msaa);
 	void SetRenderTargetFormat(DXGI_FORMAT rtvFormat, DXGI_FORMAT dsvFormat, uint32 msaa);
-	void SetRenderTargetFormats(DXGI_FORMAT* rtvFormats, uint32 numRenderTargets, DXGI_FORMAT dsvFormat, uint32 msaa);
+	void SetRenderTargetFormats(const DXGI_FORMAT* rtvFormats, uint32 numRenderTargets, DXGI_FORMAT dsvFormat, uint32 msaa);
 
 	//BlendState
 	void SetBlendMode(const BlendMode& blendMode, bool alphaToCoverage);
@@ -101,7 +102,7 @@ public:
 	//DepthStencilState
 	void SetDepthEnabled(bool enabled);
 	void SetDepthWrite(bool enabled);
-	void SetDepthTest(const D3D12_COMPARISON_FUNC func);
+	void SetDepthTest(D3D12_COMPARISON_FUNC func);
 	void SetStencilTest(bool stencilEnabled, D3D12_COMPARISON_FUNC mode, D3D12_STENCIL_OP pass, D3D12_STENCIL_OP fail, D3D12_STENCIL_OP zFail, unsigned int stencilRef, unsigned char compareMask, unsigned char writeMask);
 
 	//RasterizerState
@@ -113,19 +114,24 @@ public:
 	void SetInputLayout(const VertexElementLayout& layout);
 	void SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE topology);
 
-	void SetRootSignature(ID3D12RootSignature* pRootSignature);
+	void SetRootSignature(RootSignature* pRootSignature);
+
+	struct ShaderDesc
+	{
+		std::string Path;
+		std::string EntryPoint;
+		std::vector<ShaderDefine> Defines;
+	};
 
 	//Shaders
-	void SetVertexShader(Shader* pShader);
-	void SetPixelShader(Shader* pShader);
-	void SetHullShader(Shader* pShader);
-	void SetDomainShader(Shader* pShader);
-	void SetGeometryShader(Shader* pShader);
-	void SetComputeShader(Shader* pShader);
-	void SetMeshShader(Shader* pShader);
-	void SetAmplificationShader(Shader* pShader);
+	void SetVertexShader(const char* pShaderPath, const char* entryPoint = "", const std::vector<ShaderDefine>& defines = {});
+	void SetPixelShader(const char* pShaderPath, const char* entryPoint = "", const std::vector<ShaderDefine>& defines = {});
+	void SetGeometryShader(const char* pShaderPath, const char* entryPoint = "", const std::vector<ShaderDefine>& defines = {});
+	void SetComputeShader(const char* pShaderPath, const char* entryPoint = "", const std::vector<ShaderDefine>& defines = {});
+	void SetMeshShader(const char* pShaderPath, const char* entryPoint = "", const std::vector<ShaderDefine>& defines = {});
+	void SetAmplificationShader(const char* pShaderPath, const char* entryPoint = "", const std::vector<ShaderDefine>& defines = {});
 
-	D3D12_PIPELINE_STATE_STREAM_DESC GetDesc();
+	D3D12_PIPELINE_STATE_STREAM_DESC GetDesc(GraphicsDevice* pDevice);
 	std::string DebugPrint();
 
 private:
@@ -156,6 +162,7 @@ private:
 	VertexElementLayout m_InputLayout;
 	PipelineStateType m_Type = PipelineStateType::MAX;
 	std::array<Shader*, (int)ShaderType::MAX> m_Shaders{};
+	std::array<ShaderDesc, (int)ShaderType::MAX> m_ShaderDescs{};
 
 	std::array<int, D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_MAX_VALID> m_pSubobjectLocations{};
 	std::vector<char> m_pSubobjectData{};
@@ -177,7 +184,7 @@ public:
 
 private:
 	void OnShaderReloaded(Shader* pOldShader, Shader* pNewShader);
-	ComPtr<ID3D12PipelineState> m_pPipelineState;
+	RefCountPtr<ID3D12PipelineState> m_pPipelineState;
 
 	PipelineStateInitializer m_Desc;
 	DelegateHandle m_ReloadHandle;

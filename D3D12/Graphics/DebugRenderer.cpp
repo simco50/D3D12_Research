@@ -45,20 +45,17 @@ void DebugRenderer::Initialize(GraphicsDevice* pDevice)
 	inputLayout.AddVertexElement("POSITION", DXGI_FORMAT_R32G32B32_FLOAT);
 	inputLayout.AddVertexElement("COLOR", DXGI_FORMAT_R32_UINT);
 
-	//Shaders
-	Shader* pVertexShader = pDevice->GetShader("DebugRenderer.hlsl", ShaderType::Vertex, "VSMain");
-	Shader* pPixelShader = pDevice->GetShader("DebugRenderer.hlsl", ShaderType::Pixel, "PSMain");
-
 	//Rootsignature
-	m_pRS = std::make_unique<RootSignature>(pDevice);
-	m_pRS->FinalizeFromShader("Diffuse", pVertexShader);
+	m_pRS = new RootSignature(pDevice);
+	m_pRS->AddConstantBufferView(100);
+	m_pRS->Finalize("Diffuse", D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
 	//Opaque
 	PipelineStateInitializer psoDesc;
 	psoDesc.SetInputLayout(inputLayout);
-	psoDesc.SetRootSignature(m_pRS->GetRootSignature());
-	psoDesc.SetVertexShader(pVertexShader);
-	psoDesc.SetPixelShader(pPixelShader);
+	psoDesc.SetRootSignature(m_pRS);
+	psoDesc.SetVertexShader("DebugRenderer.hlsl", "VSMain");
+	psoDesc.SetPixelShader("DebugRenderer.hlsl", "PSMain");
 	psoDesc.SetRenderTargetFormat(DXGI_FORMAT_R16G16B16A16_FLOAT, DXGI_FORMAT_D32_FLOAT, 1);
 	psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
 	psoDesc.SetDepthWrite(true);
@@ -73,7 +70,9 @@ void DebugRenderer::Initialize(GraphicsDevice* pDevice)
 
 void DebugRenderer::Shutdown()
 {
-	m_pRS.reset();
+	m_pTrianglesPSO.Reset();
+	m_pLinesPSO.Reset();
+	m_pRS.Reset();
 }
 
 void DebugRenderer::Render(RGGraph& graph, const SceneView& view, Texture* pTarget, Texture* pDepth)
@@ -95,7 +94,7 @@ void DebugRenderer::Render(RGGraph& graph, const SceneView& view, Texture* pTarg
 			context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
 			context.BeginRenderPass(RenderPassInfo(pTarget, RenderPassAccess::Load_Store, pDepth, RenderPassAccess::Load_Store, false));
-			context.SetGraphicsRootSignature(m_pRS.get());
+			context.SetGraphicsRootSignature(m_pRS);
 
 			context.SetRootCBV(0, GetViewUniforms(view, pTarget));
 

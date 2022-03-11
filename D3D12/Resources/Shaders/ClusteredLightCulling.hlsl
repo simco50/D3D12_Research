@@ -1,9 +1,4 @@
-#include "CommonBindings.hlsli"
-
-#define RootSig ROOT_SIG("CBV(b0), " \
-				"CBV(b100), " \
-				"DescriptorTable(SRV(t0, numDescriptors = 1)), " \
-				"DescriptorTable(UAV(u0, numDescriptors = 2))")
+#include "Common.hlsli"
 
 #define MAX_LIGHTS_PER_TILE 32
 #define THREAD_COUNT 4
@@ -32,11 +27,6 @@ bool ConeInSphere(float3 conePosition, float3 coneDirection, float coneRange, fl
 	return !(angleCull || frontCull || backCull);
 }
 
-uint GetClusterIndex1D(uint3 clusterIndex)
-{
-	return clusterIndex.x + (clusterIndex.y + clusterIndex.z * cPass.ClusterDimensions.y) * cPass.ClusterDimensions.x;
-}
-
 void AddLight(uint clusterIndex, uint lightIndex)
 {
 	uint culledLightIndex;
@@ -48,7 +38,6 @@ void AddLight(uint clusterIndex, uint lightIndex)
 	}
 }
 
-[RootSignature(RootSig)]
 [numthreads(THREAD_COUNT, THREAD_COUNT, THREAD_COUNT)]
 void LightCulling(uint3 dispatchThreadId : SV_DispatchThreadID)
 {
@@ -56,7 +45,7 @@ void LightCulling(uint3 dispatchThreadId : SV_DispatchThreadID)
 
 	if(all(clusterIndex3D < cPass.ClusterDimensions))
 	{
-		uint clusterIndex = GetClusterIndex1D(dispatchThreadId);
+		uint clusterIndex = Flatten3D(dispatchThreadId, cPass.ClusterDimensions);
 		AABB clusterAABB = tClusterAABBs[clusterIndex];
 
 		//Perform the light culling

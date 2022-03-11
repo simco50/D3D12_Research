@@ -1,13 +1,8 @@
-#include "CommonBindings.hlsli"
-
-#define RootSig ROOT_SIG("CBV(b100), " \
-				"DescriptorTable(UAV(u0, numDescriptors = 1)), " \
-				"DescriptorTable(SRV(t0, numDescriptors = 1))")
+#include "Common.hlsli"
 
 Texture2D tDepthTexture : register(t0);
 RWTexture2D<float2> uVelocity  : register(u0);
 
-[RootSignature(RootSig)]
 [numthreads(8, 8, 1)]
 void CSMain(uint3 threadID : SV_DispatchThreadID)
 {

@@ -1,13 +1,8 @@
-#include "CommonBindings.hlsli"
+#include "Common.hlsli"
 #include "Random.hlsli"
 
 #define SSAO_SAMPLES 64
 #define BLOCK_SIZE 16
-
-#define RootSig ROOT_SIG("CBV(b0), " \
-				"CBV(b100), " \
-				"DescriptorTable(UAV(u0, numDescriptors = 1)), " \
-				"DescriptorTable(SRV(t0, numDescriptors = 1))")
 
 struct PassData
 {
@@ -31,7 +26,6 @@ struct CS_INPUT
 	uint GroupIndex : SV_GroupIndex;
 };
 
-[RootSignature(RootSig)]
 [numthreads(BLOCK_SIZE, BLOCK_SIZE, 1)]
 void CSMain(CS_INPUT input)
 {
@@ -60,7 +54,7 @@ void CSMain(CS_INPUT input)
 		if(newTexCoord.x >= 0 && newTexCoord.x <= 1 && newTexCoord.y >= 0 && newTexCoord.y <= 1)
 		{
 			float sampleDepth = tDepthTexture.SampleLevel(sLinearClamp, newTexCoord.xy, 0).r;
-			float depthVpos = LinearizeDepth(sampleDepth, cView.NearZ, cView.FarZ);
+			float depthVpos = LinearizeDepth(sampleDepth);
 			float rangeCheck = smoothstep(0.0f, 1.0f, cPass.AoRadius / (viewPos.z - depthVpos));
 			occlusion += (vpos.z >= depthVpos + cPass.AoDepthThreshold) * rangeCheck;
 		}

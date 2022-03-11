@@ -1,8 +1,8 @@
 #pragma once
-#include "Graphics/Core/Graphics.h"
 class Buffer;
 class CommandContext;
 class SwapChain;
+class GraphicsDevice;
 
 #define GPU_PROFILE_BEGIN(name, cmdlist) Profiler::Get()->Begin(name, cmdlist);
 #define GPU_PROFILE_END(cmdlist) Profiler::Get()->End(cmdlist);
@@ -179,8 +179,8 @@ private:
 	float m_SecondsPerCpuTick = 0.0f;
 	int m_CurrentTimer = 0;
 	int m_CurrentReadbackFrame = 0;
-	ComPtr<ID3D12QueryHeap> m_pQueryHeap;
-	std::unique_ptr<Buffer> m_pReadBackBuffer;
+	RefCountPtr<ID3D12QueryHeap> m_pQueryHeap;
+	RefCountPtr<Buffer> m_pReadBackBuffer;
 
 	std::unique_ptr<ProfileNode> m_pRootBlock;
 	ProfileNode* m_pPreviousBlock = nullptr;

@@ -1,4 +1,4 @@
-#include "CommonBindings.hlsli"
+#include "Common.hlsli"
 #include "ShadingModels.hlsli"
 #include "Lighting.hlsli"
 #include "RaytracingCommon.hlsli"
@@ -7,15 +7,6 @@
 #define RAY_CONE_TEXTURE_LOD 1
 #define SECONDARY_SHADOW_RAY 1
 
-GlobalRootSignature GlobalRootSig =
-{
-	"CBV(b0),"
-	"CBV(b100),"
-	"DescriptorTable(UAV(u0, numDescriptors = 1)),"
-	"DescriptorTable(SRV(t0, numDescriptors = 3)),"
-	DEFAULT_ROOT_SIG_PARAMS
-};
-
 struct PassParameters
 {
 	float ViewPixelSpreadAngle;
@@ -23,7 +14,8 @@ struct PassParameters
 
 Texture2D tDepth : register(t0);
 Texture2D tPreviousSceneColor :	register(t1);
-Texture2D tSceneNormals : register(t2);
+Texture2D<float2> tSceneNormals : register(t2);
+Texture2D<float> tSceneRoughness : register(t3);
 
 RWTexture2D<float4> uOutput : register(u0);
 ConstantBuffer<PassParameters> cPass : register(b0);
@@ -246,17 +238,17 @@ void RayGen()
 {
 	float2 dimInv = rcp(DispatchRaysDimensions().xy);
 	uint2 launchIndex = DispatchRaysIndex().xy;
-	float2 uv = (float2)launchIndex * dimInv;
+	float2 uv = (float2)(launchIndex + 0.5f) * dimInv;
 
 	float depth = tDepth.SampleLevel(sLinearClamp, uv, 0).r;
 	float4 colorSample = tPreviousSceneColor.SampleLevel(sLinearClamp, uv, 0);
-	float4 reflectionSample = tSceneNormals.SampleLevel(sLinearClamp, uv, 0);
+	float3 N = DecodeNormalOctahedron(tSceneNormals.SampleLevel(sLinearClamp, uv, 0));
+	float R = tSceneRoughness.SampleLevel(sLinearClamp, uv, 0);
 
 	float3 view = ViewFromDepth(uv, depth, cView.ProjectionInverse);
 	float3 world = mul(float4(view, 1), cView.ViewInverse).xyz;
 
-	float3 N = reflectionSample.rgb;
-	float reflectivity = reflectionSample.a;
+	float reflectivity = R;
 
 	if(depth > 0 && reflectivity > 0.0f)
 	{

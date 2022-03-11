@@ -1,16 +1,13 @@
 #include "stdafx.h"
 #include "RTAO.h"
 #include "Graphics/Core/Shader.h"
-#include "Graphics/Core/PipelineState.h"
 #include "Graphics/Core/RootSignature.h"
-#include "Graphics/Core/Buffer.h"
 #include "Graphics/Core/Graphics.h"
 #include "Graphics/Core/CommandContext.h"
 #include "Graphics/Core/Texture.h"
 #include "Graphics/Core/ShaderBindingTable.h"
 #include "Graphics/Core/StateObject.h"
 #include "Graphics/RenderGraph/RenderGraph.h"
-#include "Graphics/Mesh.h"
 #include "Graphics/SceneView.h"
 
 RTAO::RTAO(GraphicsDevice* pDevice)
@@ -44,10 +41,10 @@ void RTAO::Execute(RGGraph& graph, const SceneView& sceneData, Texture* pTarget,
 			context.InsertResourceBarrier(pDepth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-			context.SetComputeRootSignature(m_pGlobalRS.get());
+			context.SetComputeRootSignature(m_pGlobalRS);
 			context.SetPipelineState(m_pRtSO);
 
-			struct Parameters
+			struct
 			{
 				float Power;
 				float Radius;
@@ -74,15 +71,19 @@ void RTAO::Execute(RGGraph& graph, const SceneView& sceneData, Texture* pTarget,
 void RTAO::SetupPipelines(GraphicsDevice* pDevice)
 {
 	ShaderLibrary* pShaderLibrary = pDevice->GetLibrary("RTAO.hlsl");
-	m_pGlobalRS = std::make_unique<RootSignature>(pDevice);
-	m_pGlobalRS->FinalizeFromShader("Global", pShaderLibrary);
+	m_pGlobalRS = new RootSignature(pDevice);
+	m_pGlobalRS->AddConstantBufferView(0);
+	m_pGlobalRS->AddConstantBufferView(100);
+	m_pGlobalRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1);
+	m_pGlobalRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1);
+	m_pGlobalRS->Finalize("Global");
 
 	StateObjectInitializer stateDesc;
 	stateDesc.AddLibrary(pShaderLibrary, { "RayGen", "Miss" });
 	stateDesc.Name = "RT AO";
 	stateDesc.MaxPayloadSize = sizeof(float);
 	stateDesc.MaxAttributeSize = 2 * sizeof(float);
-	stateDesc.pGlobalRootSignature = m_pGlobalRS.get();
+	stateDesc.pGlobalRootSignature = m_pGlobalRS;
 	stateDesc.RayGenShader = "RayGen";
 	stateDesc.AddMissShader("Miss");
 	m_pRtSO = pDevice->CreateStateObject(stateDesc);

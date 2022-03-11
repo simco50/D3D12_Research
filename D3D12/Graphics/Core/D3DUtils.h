@@ -1,9 +1,7 @@
 #pragma once
 
-#include <DXProgrammableCapture.h>
 #include "pix3.h"
 #include "Core/Paths.h"
-#include <winuser.h>
 
 #define VERIFY_HR(hr) D3D::LogHRESULT(hr, nullptr, #hr, __FILE__, __LINE__)
 #define VERIFY_HR_EX(hr, device) D3D::LogHRESULT(hr, device, #hr, __FILE__, __LINE__)
@@ -343,7 +341,7 @@ namespace D3D
 		}
 		if (errorCode == DXGI_ERROR_DEVICE_REMOVED && pDevice)
 		{
-			ComPtr<ID3D12InfoQueue> pInfo;
+			RefCountPtr<ID3D12InfoQueue> pInfo;
 			pDevice->QueryInterface(pInfo.GetAddressOf());
 			if (pInfo)
 			{

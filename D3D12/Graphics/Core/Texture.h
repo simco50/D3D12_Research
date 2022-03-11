@@ -1,14 +1,6 @@
 #pragma once
 #include "GraphicsResource.h"
 
-class CommandContext;
-class UnorderedAccessView;
-class ShaderResourceView;
-class ResourceView;
-class Image;
-struct TextureUAVDesc;
-struct TextureSRVDesc;
-
 enum class TextureFlag
 {
 	None = 0,
@@ -218,46 +210,25 @@ struct TextureDesc
 class Texture : public GraphicsResource
 {
 public:
-	Texture(GraphicsDevice* pParent, const TextureDesc& desc, const char* pName = "");
-	Texture(GraphicsDevice* pParent, const char* pName = "");
-	~Texture();
+	friend class GraphicsDevice;
 
-	void Create(const TextureDesc& desc);
-	void CreateForSwapchain(ID3D12Resource* pTexture);
-	bool Create(CommandContext* pContext, const char* pFilePath, bool srgb = false);
-	void Create(CommandContext* pContext, const TextureDesc& desc, const void* pInitData);
-	bool Create(CommandContext* pContext, const Image& img, bool srgb = false);
-	void SetData(CommandContext* pContext, const void* pData);
+	Texture(GraphicsDevice* pParent, const TextureDesc& desc, ID3D12Resource* pResource);
 
 	uint32 GetWidth() const { return m_Desc.Width; }
 	uint32 GetHeight() const { return m_Desc.Height; }
 	uint32 GetDepth() const { return m_Desc.DepthOrArraySize; }
 	uint32 GetArraySize() const { return m_Desc.DepthOrArraySize; }
 	uint32 GetMipLevels() const { return m_Desc.Mips; }
+	DXGI_FORMAT GetFormat() const { return m_Desc.Format; }
+	const ClearBinding& GetClearBinding() const { return m_Desc.ClearBindingValue; }
 	const TextureDesc& GetDesc() const { return m_Desc; }
-
-	void CreateUAV(UnorderedAccessView** pView, const TextureUAVDesc& desc);
-	void CreateSRV(ShaderResourceView** pView, const TextureSRVDesc& desc);
 
 	D3D12_CPU_DESCRIPTOR_HANDLE GetRTV() const;
 	D3D12_CPU_DESCRIPTOR_HANDLE GetDSV(bool writeable = true) const;
-	UnorderedAccessView* GetUAV() const { return m_pUav; }
-	ShaderResourceView* GetSRV() const { return m_pSrv; }
-
-	int32 GetSRVIndex() const;
-	int32 GetUAVIndex() const;
-
-	DXGI_FORMAT GetFormat() const { return m_Desc.Format; }
-	const ClearBinding& GetClearBinding() const { return m_Desc.ClearBindingValue; }
-
-	static DXGI_FORMAT GetSrvFormat(DXGI_FORMAT format);
 
 private:
 	TextureDesc m_Desc;
 
 	D3D12_CPU_DESCRIPTOR_HANDLE m_Rtv = {};
 	D3D12_CPU_DESCRIPTOR_HANDLE m_ReadOnlyDsv = {};
-
-	ShaderResourceView* m_pSrv = nullptr;
-	UnorderedAccessView* m_pUav = nullptr;
 };

@@ -101,7 +101,7 @@ namespace Util
 		}
 
 		char* pCurrentLine = nullptr;
-		void* pData = nullptr;
+		char* pData = nullptr;
 	};
 }
 

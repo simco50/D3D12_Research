@@ -4,6 +4,7 @@
 #include "Graphics/Core/Graphics.h"
 #include "Graphics/Core/Texture.h"
 #include "Graphics/Core/Buffer.h"
+#include "Graphics/Core/DynamicResourceAllocator.h"
 #include "Core/Paths.h"
 #include "Content/Image.h"
 #include "Core/Utils.h"
@@ -237,27 +238,27 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 				{
 					const cgltf_image* pImage = texture.texture->image;
 					auto it = textureMap.find(pImage);
-					std::unique_ptr<Texture> pTex = std::make_unique<Texture>(pDevice, pImage->uri ? pImage->uri : "Material Texture");
+					const char* pName = pImage->uri ? pImage->uri : "Material Texture";
+					RefCountPtr<Texture> pTex;
 					if (it == textureMap.end())
 					{
-						bool success = false;
 						if (pImage->buffer_view)
 						{
 							Image newImg;
 							if (newImg.Load((char*)pImage->buffer_view->buffer->data + pImage->buffer_view->offset, pImage->buffer_view->size, pImage->mime_type))
 							{
-								success = pTex->Create(pContext, newImg, srgb);
+								pTex = pDevice->CreateTextureFromImage(*pContext, newImg, srgb, pName);
 							}
 						}
 						else
 						{
-							success = pTex->Create(pContext, Paths::Combine(Paths::GetDirectoryPath(pFilePath), pImage->uri).c_str(), srgb);
+							pTex = pDevice->CreateTextureFromFile(*pContext, Paths::Combine(Paths::GetDirectoryPath(pFilePath), pImage->uri).c_str(), srgb, pName);
 						}
-						if (success)
+						if (pTex.Get())
 						{
-							m_Textures.push_back(std::move(pTex));
-							textureMap[pImage] = m_Textures.back().get();
-							return m_Textures.back().get();
+							m_Textures.push_back(pTex);
+							textureMap[pImage] = m_Textures.back();
+							return m_Textures.back();
 						}
 						else
 						{
@@ -469,11 +470,11 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 
 			ShaderInterop::MeshletBounds& outBounds = meshData.MeshletBounds[i];
 			outBounds.Center = Vector3(bounds.center);
-			outBounds.ConeApex = Vector3(bounds.cone_apex);
+			//outBounds.ConeApex = Vector3(bounds.cone_apex);
 			outBounds.ConeAxis = Vector3(bounds.cone_axis);
 			outBounds.Radius = bounds.radius;
 			outBounds.ConeCutoff = bounds.cone_cutoff;
-			memcpy(&outBounds.ConeS8, &bounds.cone_axis_s8, sizeof(uint32));
+			//memcpy(&outBounds.ConeS8, &bounds.cone_axis_s8, sizeof(uint32));
 
 			// Encode triangles and get rid of 4 byte padding
 			for (uint32 triIdx = 0; triIdx < meshlet.triangle_count; ++triIdx)
@@ -578,7 +579,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 		m_Meshes.push_back(subMesh);
 	}
 
-	pContext->CopyBuffer(allocation.pBackingResource, m_pGeometryData.get(), bufferSize, allocation.Offset, 0);
+	pContext->CopyBuffer(allocation.pBackingResource, m_pGeometryData, bufferSize, allocation.Offset, 0);
 
 	return true;
 }
