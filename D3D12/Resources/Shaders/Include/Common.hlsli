@@ -427,6 +427,6 @@ uint3 UnFlatten3D(uint index, uint3 dimensions)
 	outIndex.z = index / (dimensions.x * dimensions.y);
 	index -= (outIndex.z * dimensions.x * dimensions.y);
 	outIndex.y = index / dimensions.x;
-	outIndex.z = index % dimensions.x;
+	outIndex.x = index % dimensions.x;
 	return outIndex;
 }
