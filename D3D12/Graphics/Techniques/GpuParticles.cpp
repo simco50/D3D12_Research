@@ -149,8 +149,8 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView& resources, Texture*
 			context.SetRootConstants(0, parameters);
 			context.SetRootCBV(1, GetViewUniforms(resources));
 
-			context.BindResources(2, 0, uavs, ARRAYSIZE(uavs));
-			context.BindResources(3, 0, srvs, ARRAYSIZE(srvs));
+			context.BindResources(2, uavs);
+			context.BindResources(3, srvs);
 
 			context.Dispatch(1);
 			context.InsertUavBarrier();
@@ -174,8 +174,8 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView& resources, Texture*
 			context.SetRootConstants(0, parameters);
 			context.SetRootCBV(1, GetViewUniforms(resources));
 
-			context.BindResources(2, 0, uavs, ARRAYSIZE(uavs));
-			context.BindResources(3, 0, srvs, ARRAYSIZE(srvs));
+			context.BindResources(2, uavs);
+			context.BindResources(3, srvs);
 
 			context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchSignature, 1, m_pEmitArguments, m_pEmitArguments);
 			context.InsertUavBarrier();
@@ -198,8 +198,8 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView& resources, Texture*
 			context.SetRootConstants(0, parameters);
 			context.SetRootCBV(1, GetViewUniforms(resources));
 
-			context.BindResources(2, 0, uavs, ARRAYSIZE(uavs));
-			context.BindResources(3, 0, srvs, ARRAYSIZE(srvs));
+			context.BindResources(2, uavs);
+			context.BindResources(3, srvs);
 
 			context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchSignature, 1, m_pSimulateArguments, nullptr);
 			context.InsertUavBarrier();
@@ -214,8 +214,8 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView& resources, Texture*
 
 			context.SetRootCBV(1, GetViewUniforms(resources));
 
-			context.BindResources(2, 0, uavs, ARRAYSIZE(uavs));
-			context.BindResources(3, 0, srvs, ARRAYSIZE(srvs));
+			context.BindResources(2, uavs);
+			context.BindResources(3, srvs);
 
 			context.SetPipelineState(m_pSimulateEndPS);
 			context.Dispatch(1);

@@ -346,19 +346,19 @@ void CommandContext::BindResource(uint32 rootIndex, uint32 offset, ResourceView*
 	m_ShaderResourceDescriptorAllocator.SetDescriptors(rootIndex, offset, 1, &handle);
 }
 
-void CommandContext::BindResources(uint32 rootIndex, uint32 offset, const ResourceView*const* pViews, uint32 count)
+void CommandContext::BindResources(uint32 rootIndex, const Span<const ResourceView*>& pViews, uint32 offset)
 {
 	static D3D12_CPU_DESCRIPTOR_HANDLE descriptors[16];
-	for (uint32 i = 0; i < count; ++i)
+	for (uint32 i = 0; i < pViews.GetSize(); ++i)
 	{
 		descriptors[i] = pViews[i]->GetDescriptor();
 	}
-	BindResources(rootIndex, offset, descriptors, count);
+	BindResources(rootIndex, Span< D3D12_CPU_DESCRIPTOR_HANDLE>(descriptors, pViews.GetSize()), offset);
 }
 
-void CommandContext::BindResources(uint32 rootIndex, uint32 offset, const D3D12_CPU_DESCRIPTOR_HANDLE* handles, uint32 count)
+void CommandContext::BindResources(uint32 rootIndex, const Span<D3D12_CPU_DESCRIPTOR_HANDLE>& handles, uint32 offset)
 {
-	m_ShaderResourceDescriptorAllocator.SetDescriptors(rootIndex, offset, count, handles);
+	m_ShaderResourceDescriptorAllocator.SetDescriptors(rootIndex, offset, handles.GetSize(), handles.GetData());
 }
 
 void CommandContext::SetShadingRate(D3D12_SHADING_RATE shadingRate /*= D3D12_SHADING_RATE_1X1*/)
