@@ -562,12 +562,12 @@ void CommandContext::EndRenderPass()
 	m_InRenderPass = false;
 }
 
-void CommandContext::Draw(uint32 vertexStart, uint32 vertexCount)
+void CommandContext::Draw(uint32 vertexStart, uint32 vertexCount, uint32 instances, uint32 instanceStart)
 {
 	check(m_pCurrentPSO && m_pCurrentPSO->GetType() == PipelineStateType::Graphics);
 	check(m_CurrentCommandContext == CommandListContext::Graphics);
 	PrepareDraw();
-	m_pCommandList->DrawInstanced(vertexCount, 1, vertexStart, 0);
+	m_pCommandList->DrawInstanced(vertexCount, instances, vertexStart, instanceStart);
 }
 
 void CommandContext::DrawIndexed(uint32 indexCount, uint32 indexStart, uint32 minVertex /*= 0*/)

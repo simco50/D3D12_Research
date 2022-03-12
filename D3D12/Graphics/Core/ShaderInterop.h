@@ -150,7 +150,7 @@ namespace ShaderInterop
 		float4 CascadeDepths;
 		uint NumCascades;
 		uint ShadowMapOffset;
-		uint2 padd;
+		uint2 padd0;
 
 		float4x4 View;
 		float4x4 ViewInverse;
@@ -169,6 +169,11 @@ namespace ShaderInterop
 		float2 ViewJitter;
 		float NearZ;
 		float FarZ;
+		float3 SceneBoundsMin;
+		float padd1;
+		float3 SceneBoundsMax;
+		float padd2;
+		uint3 ProbeVolumeDimensions;
 		float FoV;
 
 		uint FrameIndex;

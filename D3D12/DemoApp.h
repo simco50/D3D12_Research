@@ -170,11 +170,11 @@ private:
 
 	// DDGI
 	RefCountPtr<Buffer> m_pDDGIRayBuffer;
-	RefCountPtr<Texture> m_pDDGIRayBufferVisualizeTexture;
+	IntVector3 m_ProbeVolumeDimensions;
 	std::array<RefCountPtr<Texture>, 2> m_DDGIIrradianceMaps;
 	RefCountPtr<PipelineState> m_pDDGITraceRaysPSO;
 	RefCountPtr<PipelineState> m_pDDGIUpdateIrradianceColorPSO;
-	RefCountPtr<PipelineState> m_pDDGIVisualizeRayBufferPSO;
+	RefCountPtr<PipelineState> m_pDDGIVisualizePSO;
 
 	Texture* m_pVisualizeTexture = nullptr;
 	SceneView m_SceneData;

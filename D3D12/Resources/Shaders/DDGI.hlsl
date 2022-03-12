@@ -1,8 +1,9 @@
 #include "Common.hlsli"
 #include "RayTracingCommon.hlsli"
 #include "Lighting.hlsli"
+#include "Primitives.hlsli"
 
-#define MAX_RAYS_PER_PROBE 128
+#define MAX_RAYS_PER_PROBE 32
 #define THREAD_GROUP_SIZE 32
 
 struct RayHitInfo
@@ -23,6 +24,15 @@ RWTexture2D<float4> uIrracianceMap : register(u0);
 
 StructuredBuffer<RayHitInfo> tRayHitInfo : register(t0);
 RWTexture2D<float4> uVisualizeTexture : register(u0);
+
+float3 GetProbePosition(uint index)
+{
+	uint3 probeCoordinates = UnFlatten3D(index, cView.ProbeVolumeDimensions);
+	float3 volumeExtents = cView.SceneBoundsMax - cView.SceneBoundsMin;
+	float3 probeSpacing = volumeExtents / (cView.ProbeVolumeDimensions - 1);
+	float3 probePosition = cView.SceneBoundsMin + probeCoordinates * probeSpacing;
+	return probePosition;
+}
 
 LightResult EvaluateLight(Light light, float3 worldPos, float3 V, float3 N, BrdfData brdfData)
 {
@@ -60,15 +70,16 @@ void TraceRaysCS(
 	uint numRays = 32;
 
 	uint probeIdx = groupIndex;
+	float3 probePosition = GetProbePosition(probeIdx);
+
 	uint rayIndex = groupThreadId;
 	while(rayIndex < numRays)
 	{
 		float angle = (float)rayIndex / numRays * 2 * PI;
 		float3 direction = normalize(float3(cos(angle), 0, -sin(angle)));
-		float3 origin = float3(groupIndex, 1, 0);
 
 		RayDesc ray;
-		ray.Origin = origin;
+		ray.Origin = probePosition;
 		ray.Direction = direction;
 		ray.TMin = 0;
 		ray.TMax = RAY_MAX_T;
@@ -157,9 +168,29 @@ void UpdateIrradianceCS(uint threadId : SV_DispatchThreadID)
 
 }
 
-[numthreads(16, 16, 1)]
-void VisualizeRayBufferCS(uint3 threadId : SV_DispatchThreadID)
+struct InterpolantsVSToPS
 {
-	RayHitInfo hit = tRayHitInfo[threadId.x];
-	uVisualizeTexture[threadId.xy] = float4(hit.Direction, 1);
+	float4 Position : SV_Position;
+	float3 Normal : NORMAL;
+};
+
+InterpolantsVSToPS VisualizeIrradianceVS(
+	uint vertexId : SV_VertexID,
+	uint instanceId : SV_InstanceID)
+{
+	uint probeIdx = instanceId;
+	float3 probePosition = GetProbePosition(probeIdx);
+
+	float3 pos = SPHERE[vertexId].xyz;
+	float3 worldPos = 0.1f * pos + probePosition;
+
+	InterpolantsVSToPS output;
+	output.Position = mul(float4(worldPos, 1), cView.ViewProjection);
+	output.Normal = pos;
+	return output;
+}
+
+float4 VisualizeIrradiancePS(InterpolantsVSToPS input) : SV_Target0
+{
+	return float4(input.Normal, 1);
 }

@@ -72,6 +72,10 @@ ShaderInterop::ViewUniforms GetViewUniforms(const SceneView& sceneView, Texture*
 	parameters.FarZ = view.FarPlane;
 	parameters.FoV = view.FoV;
 
+	parameters.SceneBoundsMin = Vector3(sceneView.SceneAABB.Center) - sceneView.SceneAABB.Extents;
+	parameters.SceneBoundsMax = Vector3(sceneView.SceneAABB.Center) + sceneView.SceneAABB.Extents;
+	parameters.ProbeVolumeDimensions = TIntVector3<uint32>(sceneView.ProbeVolumeDimensions.x, sceneView.ProbeVolumeDimensions.y, sceneView.ProbeVolumeDimensions.z);
+
 	parameters.FrameIndex = sceneView.FrameIndex;
 	parameters.SsrSamples = Tweakables::g_SsrSamples.Get();
 	parameters.LightCount = sceneView.pLightBuffer->GetNumElements();

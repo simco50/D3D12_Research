@@ -72,6 +72,8 @@ struct SceneView
 	VisibilityMask VisibilityMask;
 	ShadowData ShadowData;
 	ViewTransform View;
+	BoundingBox SceneAABB;
+	IntVector3 ProbeVolumeDimensions;
 };
 
 struct SceneTextures

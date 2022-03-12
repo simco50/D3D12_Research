@@ -172,7 +172,7 @@ public:
 	void DispatchMesh(uint32 groupCountX, uint32 groupCountY = 1, uint32 groupCountZ = 1);
 	void DispatchMesh(const IntVector3& groupCounts);
 	void ExecuteIndirect(CommandSignature* pCommandSignature, uint32 maxCount, Buffer* pIndirectArguments, Buffer* pCountBuffer, uint32 argumentsOffset = 0, uint32 countOffset = 0);
-	void Draw(uint32 vertexStart, uint32 vertexCount);
+	void Draw(uint32 vertexStart, uint32 vertexCount, uint32 instances = 0, uint32 instanceStart = 0);
 	void DrawIndexed(uint32 indexCount, uint32 indexStart, uint32 minVertex = 0);
 	void DrawIndexedInstanced(uint32 indexCount, uint32 indexStart, uint32 instanceCount, uint32 minVertex = 0, uint32 instanceStart = 0);
 	void DispatchRays(ShaderBindingTable& table, uint32 width = 1, uint32 height = 1, uint32 depth = 1);
