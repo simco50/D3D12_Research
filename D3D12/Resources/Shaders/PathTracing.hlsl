@@ -320,7 +320,7 @@ bool SampleLightRIS(inout uint seed, float3 position, float3 N, out int lightInd
 	for(int i = 0; i < RIS_CANDIDATES_LIGHTS; ++i)
 	{
 		float candidateWeight = (float)cView.LightCount;
-		int candidate = Random(seed, 0, cView.LightCount);
+		int candidate = Random(seed, 0, cView.LightCount - 1);
 		Light light = GetLight(candidate);
 		float3 L = normalize(light.Position - position);
 		if(light.IsDirectional)
@@ -345,7 +345,7 @@ bool SampleLightRIS(inout uint seed, float3 position, float3 N, out int lightInd
 	{
 		return false;
 	}
-	sampleWeight = (totalWeights / (float)cView.LightCount) / samplePdfG;
+	sampleWeight = totalWeights / RIS_CANDIDATES_LIGHTS / samplePdfG;
 	return true;
 }
 
