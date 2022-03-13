@@ -73,12 +73,14 @@ ShaderInterop::ViewUniforms GetViewUniforms(const SceneView& sceneView, Texture*
 	parameters.FoV = view.FoV;
 
 	parameters.SceneBoundsMin = Vector3(sceneView.SceneAABB.Center) - sceneView.SceneAABB.Extents;
-	parameters.ProbeSize = 2 * Vector3(sceneView.SceneAABB.Extents) / (Vector3((float)sceneView.ProbeVolumeDimensions.x, (float)sceneView.ProbeVolumeDimensions.y, (float)sceneView.ProbeVolumeDimensions.z) - Vector3::One);
-	parameters.ProbeVolumeDimensions = TIntVector3<uint32>(sceneView.ProbeVolumeDimensions.x, sceneView.ProbeVolumeDimensions.y, sceneView.ProbeVolumeDimensions.z);
 
 	parameters.FrameIndex = sceneView.FrameIndex;
 	parameters.SsrSamples = Tweakables::g_SsrSamples.Get();
 	parameters.LightCount = sceneView.pLightBuffer->GetNumElements();
+
+	parameters.DDGIProbeSize = 2 * Vector3(sceneView.SceneAABB.Extents) / (Vector3((float)sceneView.ProbeVolumeDimensions.x, (float)sceneView.ProbeVolumeDimensions.y, (float)sceneView.ProbeVolumeDimensions.z) - Vector3::One);
+	parameters.DDGIProbeVolumeDimensions = TIntVector3<uint32>(sceneView.ProbeVolumeDimensions.x, sceneView.ProbeVolumeDimensions.y, sceneView.ProbeVolumeDimensions.z);
+	parameters.DDGIIrradianceIndex = sceneView.pIrradiance ? sceneView.pIrradiance->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
 
 	memcpy(&parameters.LightViewProjections, &sceneView.ShadowData.LightViewProjections, ARRAYSIZE(parameters.LightViewProjections) * MAX_SHADOW_CASTERS);
 	parameters.CascadeDepths = sceneView.ShadowData.CascadeDepths;

@@ -68,6 +68,7 @@ struct SceneView
 	RefCountPtr<Buffer> pSceneTLAS;
 	RefCountPtr<Buffer> pTransformsBuffer;
 	RefCountPtr<Texture> pSky;
+	RefCountPtr<Texture> pIrradiance;
 	int FrameIndex = 0;
 	VisibilityMask VisibilityMask;
 	ShadowData ShadowData;

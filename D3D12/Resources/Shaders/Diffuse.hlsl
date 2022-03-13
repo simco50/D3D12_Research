@@ -1,6 +1,7 @@
 #include "Common.hlsli"
 #include "Lighting.hlsli"
 #include "Random.hlsli"
+#include "DDGICommon.hlsli"
 
 #define BLOCK_SIZE 16
 
@@ -289,8 +290,8 @@ void PSMain(InterpolantsVSToPS input,
 	LightResult lighting = DoLight(input.Position, input.PositionWS, N, V, brdf.Diffuse, brdf.Specular, brdf.Roughness);
 
 	float3 outRadiance = 0;
+	outRadiance += ambientOcclusion * brdf.Diffuse * SampleIrradiance(input.PositionWS, N);
 	outRadiance += lighting.Diffuse + lighting.Specular;
-	outRadiance += ApplyAmbientLight(brdf.Diffuse, ambientOcclusion);
 	outRadiance += ssr * ambientOcclusion;
 	outRadiance += surface.Emissive;
 

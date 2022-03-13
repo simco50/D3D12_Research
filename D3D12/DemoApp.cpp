@@ -135,7 +135,7 @@ namespace Tweakables
 	ConsoleVariable g_VisualizeLights("vis.Lights", false);
 	ConsoleVariable g_VisualizeLightDensity("vis.LightDensity", false);
 	ConsoleVariable g_EnableDDGI("r.DDGI", true);
-	ConsoleVariable g_VisualizeDDGI("vis.DDGI", true);
+	ConsoleVariable g_VisualizeDDGI("vis.DDGI", false);
 	ConsoleVariable g_RenderObjectBounds("r.vis.ObjectBounds", false);
 
 	ConsoleVariable g_RaytracedReflections("r.Raytracing.Reflections", true);
@@ -780,10 +780,7 @@ void DemoApp::Update()
 			Matrix RandomTransform;
 			uint32 RaysPerProbe;
 		} parameters;
-
-		float angle = Math::RandomRange(0.0f, 1.0f) * Math::PI * 2;
-		Vector3 axis = Math::RandVector();
-		parameters.RandomTransform = Matrix::CreateFromAxisAngle(axis, angle);
+		parameters.RandomTransform = Matrix::CreateFromAxisAngle(Math::RandVector(), Math::RandomRange(0.0f, Math::PI * 2));
 		parameters.RaysPerProbe = 128;
 
 		RGPassBuilder ddgiRays = graph.AddPass("DDGI Rays");
@@ -820,12 +817,16 @@ void DemoApp::Update()
 
 				uint32 numProbes = m_SceneData.ProbeVolumeDimensions.x * m_SceneData.ProbeVolumeDimensions.y * m_SceneData.ProbeVolumeDimensions.z;
 				context.Dispatch(numProbes);
+
+				context.InsertResourceBarrier(m_DDGIIrradianceMaps[1], D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 			});
 
 		std::swap(m_DDGIIrradianceMaps[0], m_DDGIIrradianceMaps[1]);
 
 		m_pVisualizeTexture = m_DDGIIrradianceMaps[0];
 	}
+
+	m_SceneData.pIrradiance = Tweakables::g_EnableDDGI ? m_DDGIIrradianceMaps[0] : RefCountPtr<Texture>(GraphicsCommon::GetDefaultTexture(DefaultTexture::Black2D));
 
 	RGPassBuilder computeSky = graph.AddPass("Compute Sky");
 	computeSky.Bind([=](CommandContext& context, const RGPassResources& resources)
@@ -936,7 +937,6 @@ void DemoApp::Update()
 						m_pAmbientOcclusion->GetSRV(),
 						GetDepthStencil()->GetSRV(),
 						m_pPreviousColor->GetSRV(),
-						Tweakables::g_EnableDDGI ? m_DDGIIrradianceMaps[0]->GetSRV() : GraphicsCommon::GetDefaultTexture(DefaultTexture::Black2D)->GetSRV(),
 						});
 					renderContext.Dispatch(ComputeUtils::GetNumThreadGroups(GetCurrentRenderTarget()->GetWidth(), 16, GetCurrentRenderTarget()->GetHeight(), 16));
 					renderContext.InsertUavBarrier();

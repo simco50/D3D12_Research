@@ -88,7 +88,7 @@ void InjectFogLightingCS(uint3 threadId : SV_DispatchThreadID)
 	fogVolumes[0].Extents = float3(100, 100, 100);
 	fogVolumes[0].Color = float3(1, 1, 1);
 	fogVolumes[0].DensityBase = 0;
-	fogVolumes[0].DensityChange = 0.1f;
+	fogVolumes[0].DensityChange = 0.03f;
 
 	uint i;
 	for(i = 0; i < numFogVolumes; ++i)
@@ -160,7 +160,7 @@ void InjectFogLightingCS(uint3 threadId : SV_DispatchThreadID)
 		}
 	}
 
-	totalLighting += ApplyAmbientLight(1, 1).x;
+	totalLighting += ApplyAmbientLight(.1, .1).x;
 
 	float blendFactor = 0.05f;
 	if(any(reprojUV < 0.05f) || any(reprojUV > 0.95f))

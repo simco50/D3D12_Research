@@ -171,14 +171,15 @@ namespace ShaderInterop
 		float FarZ;
 		float3 SceneBoundsMin;
 		float padd1;
-		float3 ProbeSize;
-		float padd2;
-		uint3 ProbeVolumeDimensions;
 		float FoV;
 
 		uint FrameIndex;
 		uint SsrSamples;
 		uint LightCount;
+
+		float3 DDGIProbeSize;
+		uint DDGIIrradianceIndex;
+		uint3 DDGIProbeVolumeDimensions;
 
 		uint TLASIndex;
 		uint MeshesIndex;
