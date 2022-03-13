@@ -126,8 +126,8 @@ namespace Tweakables
 
 	// Bloom
 	ConsoleVariable g_Bloom("r.Bloom", true);
-	ConsoleVariable g_BloomThreshold("r.Bloom.Threshold", 5.0f);
-	ConsoleVariable g_BloomMaxBrightness("r.Bloom.MaxBrightness", 4.0f);
+	ConsoleVariable g_BloomThreshold("r.Bloom.Threshold", 4.0f);
+	ConsoleVariable g_BloomMaxBrightness("r.Bloom.MaxBrightness", 8.0f);
 
 	// Misc Lighting
 	ConsoleVariable g_VolumetricFog("r.VolumetricFog", true);
@@ -155,7 +155,7 @@ namespace Tweakables
 	float g_SunInclination = 0.79f;
 	float g_SunOrientation = -1.503f;
 	float g_SunTemperature = 5900.0f;
-	float g_SunIntensity = 16.0f;
+	float g_SunIntensity = 11.0f;
 }
 
 DemoApp::DemoApp(WindowHandle window, const IntVector2& windowRect)

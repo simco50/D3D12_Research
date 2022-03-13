@@ -167,7 +167,7 @@ RayHitInfo CastPrimaryRay(float3 origin, float3 direction)
 		radiance = totalResult.Diffuse;
 
 		// Multi-bounce with hacky arbitrary multiplier
-		radiance += 0.5f * SampleIrradiance(hitLocation, N, tIrradianceMap);
+		radiance += 0.6f * SampleIrradiance(hitLocation, N, tIrradianceMap);
 
 		distance = q.CommittedRayT();
 	}
