@@ -171,7 +171,7 @@ namespace ShaderInterop
 		float FarZ;
 		float3 SceneBoundsMin;
 		float padd1;
-		float3 SceneBoundsMax;
+		float3 ProbeSize;
 		float padd2;
 		uint3 ProbeVolumeDimensions;
 		float FoV;
