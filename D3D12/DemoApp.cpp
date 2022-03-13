@@ -1611,7 +1611,7 @@ void DemoApp::InitializePipelines()
 		};
 		constexpr uint32 raySize = sizeof(RayHitInfo);
 
-		m_ProbeVolumeDimensions = IntVector3(16, 16, 16);
+		m_ProbeVolumeDimensions = IntVector3(24, 16, 16);
 		uint32 numProbes = m_ProbeVolumeDimensions.x * m_ProbeVolumeDimensions.y * m_ProbeVolumeDimensions.z;
 
 		m_pDDGITraceRaysPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "DDGI.hlsl", "TraceRaysCS");

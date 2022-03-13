@@ -16,13 +16,13 @@ float3 GetProbePosition(uint3 index3D)
 
 uint2 GetProbeTexel(uint3 probeIndex3D)
 {
-	return probeIndex3D.xz * PROBE_TEXEL_RESOLUTION_FULL + uint2(probeIndex3D.y * cView.DDGIProbeVolumeDimensions.x * PROBE_TEXEL_RESOLUTION_FULL, 0) + 1;
+	return probeIndex3D.xy * PROBE_TEXEL_RESOLUTION_FULL + uint2(probeIndex3D.z * cView.DDGIProbeVolumeDimensions.x * PROBE_TEXEL_RESOLUTION_FULL, 0) + 1;
 }
 
 float2 GetProbeUV(uint3 probeIndex3D, float3 direction)
 {
-	uint textureWidth = PROBE_TEXEL_RESOLUTION_FULL * cView.DDGIProbeVolumeDimensions.x * cView.DDGIProbeVolumeDimensions.y;
-	uint textureHeight = PROBE_TEXEL_RESOLUTION_FULL * cView.DDGIProbeVolumeDimensions.z;
+	uint textureWidth = PROBE_TEXEL_RESOLUTION_FULL * cView.DDGIProbeVolumeDimensions.x * cView.DDGIProbeVolumeDimensions.z;
+	uint textureHeight = PROBE_TEXEL_RESOLUTION_FULL * cView.DDGIProbeVolumeDimensions.y;
 
 	float2 pixel = GetProbeTexel(probeIndex3D);
 	pixel += (EncodeNormalOctahedron(normalize(direction)) * 0.5f + 0.5f) * PROBE_TEXEL_RESOLUTION;
