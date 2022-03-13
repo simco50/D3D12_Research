@@ -3,6 +3,7 @@
 #include "Lighting.hlsli"
 #include "Primitives.hlsli"
 #include "DDGICommon.hlsli"
+#include "Random.hlsli"
 
 struct RayHitInfo
 {
@@ -14,7 +15,6 @@ struct RayHitInfo
 
 struct PassParameters
 {
-	float4x4 RandomTransform;
 	uint RaysPerProbe;
 };
 
@@ -203,6 +203,24 @@ float3 SphericalFibonacci(float i, float n)
 */
 #define THREAD_GROUP_SIZE 32
 
+// From keijiro: 3x3 Rotation matrix with an angle and an arbitrary vector
+float3x3 AngleAxis3x3(float angle, float3 axis)
+{
+    float c, s;
+    sincos(angle, s, c);
+
+    float t = 1 - c;
+    float x = axis.x;
+    float y = axis.y;
+    float z = axis.z;
+
+    return float3x3(
+        t * x * x + c,      t * x * y - s * z,  t * x * z + s * y,
+        t * x * y + s * z,  t * y * y + c,      t * y * z - s * x,
+        t * x * z - s * y,  t * y * z + s * x,  t * z * z + c
+    );
+}
+
 [numthreads(THREAD_GROUP_SIZE, 1, 1)]
 void TraceRaysCS(
 	uint threadId : SV_DispatchThreadID,
@@ -213,9 +231,13 @@ void TraceRaysCS(
 	uint3 probeIdx3D = GetProbeIndex3D(probeIdx);
 	float3 probePosition = GetProbePosition(probeIdx3D);
 	uint rayIndex = groupThreadId;
+
+	uint seed = SeedThread(cView.FrameIndex);
+	float3x3 randomRotation = AngleAxis3x3(Random01(seed) * 2 * PI, normalize(float3(Random01(seed), Random01(seed), Random01(seed))));
+
 	while(rayIndex < cPass.RaysPerProbe)
 	{
-		float3 direction = mul(SphericalFibonacci(rayIndex, cPass.RaysPerProbe), (float3x3)cPass.RandomTransform);
+		float3 direction = mul(SphericalFibonacci(rayIndex, cPass.RaysPerProbe), randomRotation);
 		RayHitInfo hit = CastPrimaryRay(probePosition, direction);
 		uRayHitInfo[probeIdx * MAX_RAYS_PER_PROBE + rayIndex] = hit;
 		rayIndex += THREAD_GROUP_SIZE;

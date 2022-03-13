@@ -135,6 +135,7 @@ namespace Tweakables
 	ConsoleVariable g_VisualizeLights("vis.Lights", false);
 	ConsoleVariable g_VisualizeLightDensity("vis.LightDensity", false);
 	ConsoleVariable g_EnableDDGI("r.DDGI", true);
+	ConsoleVariable g_DDGIRayCount("r.DDGI.RayCount", 128);
 	ConsoleVariable g_VisualizeDDGI("vis.DDGI", false);
 	ConsoleVariable g_RenderObjectBounds("r.vis.ObjectBounds", false);
 
@@ -777,11 +778,9 @@ void DemoApp::Update()
 	{
 		struct
 		{
-			Matrix RandomTransform;
 			uint32 RaysPerProbe;
 		} parameters;
-		parameters.RandomTransform = Matrix::CreateFromAxisAngle(Math::RandVector(), Math::RandomRange(0.0f, Math::PI * 2));
-		parameters.RaysPerProbe = 128;
+		parameters.RaysPerProbe = Tweakables::g_DDGIRayCount;
 
 		RGPassBuilder ddgiRays = graph.AddPass("DDGI Rays");
 		ddgiRays.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
@@ -793,12 +792,8 @@ void DemoApp::Update()
 
 				context.SetRootConstants(0, parameters);
 				context.SetRootCBV(1, GetViewUniforms(m_SceneData));
-				context.BindResources(2, {
-					m_pDDGIRayBuffer->GetUAV(),
-					});
-				context.BindResources(3, {
-					m_DDGIIrradianceMaps[0]->GetSRV(),
-					}, 1);
+				context.BindResource(2, 0, m_pDDGIRayBuffer->GetUAV());
+				context.BindResource(3, 1, m_DDGIIrradianceMaps[0]->GetSRV());
 
 				uint32 numProbes = m_SceneData.DDGIProbeVolumeDimensions.x * m_SceneData.DDGIProbeVolumeDimensions.y * m_SceneData.DDGIProbeVolumeDimensions.z;
 				context.Dispatch(numProbes);
@@ -1500,7 +1495,7 @@ void DemoApp::InitializePipelines()
 {
 	// Common Root Signature - Make it 12 DWORDs as is often recommended by IHVs
 	m_pCommonRS = new RootSignature(m_pDevice);
-	m_pCommonRS->AddRootConstants(0, 18);
+	m_pCommonRS->AddRootConstants(0, 8);
 	m_pCommonRS->AddConstantBufferView(100);
 	m_pCommonRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 6);
 	m_pCommonRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 6);
@@ -1947,6 +1942,7 @@ void DemoApp::UpdateImGui()
 				ImGui::Checkbox("Raytraced AO", &Tweakables::g_RaytracedAO.Get());
 				ImGui::Checkbox("Raytraced Reflections", &Tweakables::g_RaytracedReflections.Get());
 				ImGui::Checkbox("DDGI", &Tweakables::g_EnableDDGI.Get());
+				ImGui::SliderInt("DDGI RayCount", &Tweakables::g_DDGIRayCount.Get(), 1, 128);
 				ImGui::Checkbox("Visualize DDGI", &Tweakables::g_VisualizeDDGI.Get());
 				ImGui::SliderAngle("TLAS Bounds Threshold", &Tweakables::g_TLASBoundsThreshold.Get(), 0, 40);
 			}
