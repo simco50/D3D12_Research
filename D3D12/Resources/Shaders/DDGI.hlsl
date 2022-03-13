@@ -166,8 +166,8 @@ RayHitInfo CastPrimaryRay(float3 origin, float3 direction)
 
 		radiance = totalResult.Diffuse;
 
-		// #todo: Multi bounce - Borked
-		//radiance += SampleIrradiance(hitLocation, N, tIrradianceMap);
+		// Multi-bounce with hacky arbitrary multiplier
+		radiance += 0.5f * SampleIrradiance(hitLocation, N, tIrradianceMap);
 
 		distance = q.CommittedRayT();
 	}

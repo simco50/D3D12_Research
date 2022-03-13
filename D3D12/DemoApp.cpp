@@ -786,13 +786,19 @@ void DemoApp::Update()
 		RGPassBuilder ddgiRays = graph.AddPass("DDGI Rays");
 		ddgiRays.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
 			{
+				context.InsertResourceBarrier(m_DDGIIrradianceMaps[0], D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 				context.InsertResourceBarrier(m_pDDGIRayBuffer, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 				context.SetComputeRootSignature(m_pCommonRS);
 				context.SetPipelineState(m_pDDGITraceRaysPSO);
 
 				context.SetRootConstants(0, parameters);
 				context.SetRootCBV(1, GetViewUniforms(m_SceneData));
-				context.BindResource(2, 0, m_pDDGIRayBuffer->GetUAV());
+				context.BindResources(2, {
+					m_pDDGIRayBuffer->GetUAV(),
+					});
+				context.BindResources(3, {
+					m_DDGIIrradianceMaps[0]->GetSRV(),
+					}, 1);
 
 				uint32 numProbes = m_SceneData.DDGIProbeVolumeDimensions.x * m_SceneData.DDGIProbeVolumeDimensions.y * m_SceneData.DDGIProbeVolumeDimensions.z;
 				context.Dispatch(numProbes);
@@ -802,7 +808,6 @@ void DemoApp::Update()
 		ddgiUpdateIrradiance.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
 			{
 				context.InsertResourceBarrier(m_pDDGIRayBuffer, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-				context.InsertResourceBarrier(m_DDGIIrradianceMaps[0], D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 				context.InsertResourceBarrier(m_DDGIIrradianceMaps[1], D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 				context.SetComputeRootSignature(m_pCommonRS);
 				context.SetPipelineState(m_pDDGIUpdateIrradianceColorPSO);
