@@ -586,7 +586,7 @@ void DemoApp::Update()
 		}
 	}
 
-	m_SceneData.ProbeVolumeDimensions = m_ProbeVolumeDimensions;
+	m_SceneData.DDGIProbeVolumeDimensions = m_ProbeVolumeDimensions;
 
 	m_SceneData.View = m_pCamera->GetViewTransform();
 	m_SceneData.ShadowData = shadowData;
@@ -794,7 +794,7 @@ void DemoApp::Update()
 				context.SetRootCBV(1, GetViewUniforms(m_SceneData));
 				context.BindResource(2, 0, m_pDDGIRayBuffer->GetUAV());
 
-				uint32 numProbes = m_SceneData.ProbeVolumeDimensions.x * m_SceneData.ProbeVolumeDimensions.y * m_SceneData.ProbeVolumeDimensions.z;
+				uint32 numProbes = m_SceneData.DDGIProbeVolumeDimensions.x * m_SceneData.DDGIProbeVolumeDimensions.y * m_SceneData.DDGIProbeVolumeDimensions.z;
 				context.Dispatch(numProbes);
 			});
 
@@ -815,7 +815,7 @@ void DemoApp::Update()
 					m_DDGIIrradianceMaps[0]->GetSRV(),
 					});
 
-				uint32 numProbes = m_SceneData.ProbeVolumeDimensions.x * m_SceneData.ProbeVolumeDimensions.y * m_SceneData.ProbeVolumeDimensions.z;
+				uint32 numProbes = m_SceneData.DDGIProbeVolumeDimensions.x * m_SceneData.DDGIProbeVolumeDimensions.y * m_SceneData.DDGIProbeVolumeDimensions.z;
 				context.Dispatch(numProbes);
 
 				context.InsertResourceBarrier(m_DDGIIrradianceMaps[1], D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
@@ -826,7 +826,7 @@ void DemoApp::Update()
 		m_pVisualizeTexture = m_DDGIIrradianceMaps[0];
 	}
 
-	m_SceneData.pIrradiance = Tweakables::g_EnableDDGI ? m_DDGIIrradianceMaps[0] : RefCountPtr<Texture>(GraphicsCommon::GetDefaultTexture(DefaultTexture::Black2D));
+	m_SceneData.pDDGIIrradiance = Tweakables::g_EnableDDGI ? m_DDGIIrradianceMaps[0] : RefCountPtr<Texture>(GraphicsCommon::GetDefaultTexture(DefaultTexture::Black2D));
 
 	RGPassBuilder computeSky = graph.AddPass("Compute Sky");
 	computeSky.Bind([=](CommandContext& context, const RGPassResources& resources)
@@ -1383,7 +1383,7 @@ void DemoApp::Update()
 					m_DDGIIrradianceMaps[0]->GetSRV(),
 					});
 
-				context.Draw(0, 2880, m_SceneData.ProbeVolumeDimensions.x * m_SceneData.ProbeVolumeDimensions.y * m_SceneData.ProbeVolumeDimensions.z);
+				context.Draw(0, 2880, m_SceneData.DDGIProbeVolumeDimensions.x * m_SceneData.DDGIProbeVolumeDimensions.y * m_SceneData.DDGIProbeVolumeDimensions.z);
 
 				context.EndRenderPass();
 			});

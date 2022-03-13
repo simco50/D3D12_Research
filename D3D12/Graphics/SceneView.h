@@ -68,13 +68,13 @@ struct SceneView
 	RefCountPtr<Buffer> pSceneTLAS;
 	RefCountPtr<Buffer> pTransformsBuffer;
 	RefCountPtr<Texture> pSky;
-	RefCountPtr<Texture> pIrradiance;
 	int FrameIndex = 0;
 	VisibilityMask VisibilityMask;
 	ShadowData ShadowData;
 	ViewTransform View;
 	BoundingBox SceneAABB;
-	IntVector3 ProbeVolumeDimensions;
+	IntVector3 DDGIProbeVolumeDimensions;
+	RefCountPtr<Texture> pDDGIIrradiance;
 };
 
 struct SceneTextures
