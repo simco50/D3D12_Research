@@ -171,9 +171,7 @@ RayHitInfo CastPrimaryRay(float3 origin, float3 direction)
 
 		radiance += totalResult.Diffuse;
 		radiance += surface.Emissive;
-
-		// Multi-bounce with hacky arbitrary multiplier
-		radiance += 0.6f * SampleIrradiance(hitLocation, N, tIrradianceMap, tDepthMap);
+		radiance += brdfData.Diffuse * SampleIrradiance(hitLocation, N, tIrradianceMap, tDepthMap);
 
 		depth = clamp(q.CommittedRayT(), 0, maxDepth);
 	}
