@@ -351,6 +351,7 @@ void CommandContext::BindResources(uint32 rootIndex, const Span<const ResourceVi
 	static D3D12_CPU_DESCRIPTOR_HANDLE descriptors[16];
 	for (uint32 i = 0; i < pViews.GetSize(); ++i)
 	{
+		checkf(pViews[i], "ResourceView bound to root index %d with offset %d is null", rootIndex, offset);
 		descriptors[i] = pViews[i]->GetDescriptor();
 	}
 	BindResources(rootIndex, Span< D3D12_CPU_DESCRIPTOR_HANDLE>(descriptors, pViews.GetSize()), offset);

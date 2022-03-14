@@ -781,9 +781,13 @@ void DemoApp::Update()
 		{
 			uint32 RaysPerProbe;
 			uint32 MaxRaysPerProbe;
+			float HistoryBlendWeight;
 		} parameters;
 		parameters.RaysPerProbe = Tweakables::g_DDGIRayCount;
 		parameters.MaxRaysPerProbe = 128; // Must match with ray buffer
+		parameters.HistoryBlendWeight = 0.97f;
+
+		const uint32 numProbes = m_SceneData.DDGIProbeVolumeDimensions.x * m_SceneData.DDGIProbeVolumeDimensions.y * m_SceneData.DDGIProbeVolumeDimensions.z;
 
 		RGPassBuilder ddgiRays = graph.AddPass("DDGI Rays");
 		ddgiRays.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
@@ -798,7 +802,6 @@ void DemoApp::Update()
 				context.BindResource(2, 0, m_pDDGIRayBuffer->GetUAV());
 				context.BindResource(3, 1, m_DDGIIrradianceMaps[0]->GetSRV());
 
-				uint32 numProbes = m_SceneData.DDGIProbeVolumeDimensions.x * m_SceneData.DDGIProbeVolumeDimensions.y * m_SceneData.DDGIProbeVolumeDimensions.z;
 				context.Dispatch(numProbes);
 			});
 
@@ -818,18 +821,39 @@ void DemoApp::Update()
 					m_DDGIIrradianceMaps[0]->GetSRV(),
 					});
 
-				uint32 numProbes = m_SceneData.DDGIProbeVolumeDimensions.x * m_SceneData.DDGIProbeVolumeDimensions.y * m_SceneData.DDGIProbeVolumeDimensions.z;
 				context.Dispatch(numProbes);
-
 				context.InsertResourceBarrier(m_DDGIIrradianceMaps[1], D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 			});
 
-		std::swap(m_DDGIIrradianceMaps[0], m_DDGIIrradianceMaps[1]);
+		RGPassBuilder ddgiUpdateDepth = graph.AddPass("DDGI Update Depth");
+		ddgiUpdateDepth.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
+			{
+				context.InsertResourceBarrier(m_pDDGIRayBuffer, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+				context.InsertResourceBarrier(m_DDGIDepthMaps[1], D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+				context.SetComputeRootSignature(m_pCommonRS);
+				context.SetPipelineState(m_pDDGIUpdateIrradianceDepthPSO);
 
-		m_pVisualizeTexture = m_DDGIIrradianceMaps[0];
+				context.SetRootConstants(0, parameters);
+				context.SetRootCBV(1, GetViewUniforms(m_SceneData));
+				context.BindResource(2, 0, m_DDGIDepthMaps[1]->GetUAV());
+				context.BindResources(3, {
+					m_pDDGIRayBuffer->GetSRV(),
+					m_DDGIDepthMaps[0]->GetSRV(),
+					});
+
+				context.Dispatch(numProbes);
+				context.InsertResourceBarrier(m_DDGIDepthMaps[1], D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
+			});
+
+
+		std::swap(m_DDGIIrradianceMaps[0], m_DDGIIrradianceMaps[1]);
+		std::swap(m_DDGIDepthMaps[0], m_DDGIDepthMaps[1]);
+
+		m_pVisualizeTexture = m_DDGIDepthMaps[0];
 	}
 
-	m_SceneData.pDDGIIrradiance = Tweakables::g_EnableDDGI ? m_DDGIIrradianceMaps[0] : RefCountPtr<Texture>(GraphicsCommon::GetDefaultTexture(DefaultTexture::Black2D));
+	m_SceneData.pDDGIIrradiance = Tweakables::g_EnableDDGI ? m_DDGIIrradianceMaps[0] : nullptr;
+	m_SceneData.pDDGIDepth = Tweakables::g_EnableDDGI ? m_DDGIDepthMaps[0] : nullptr;
 
 	RGPassBuilder computeSky = graph.AddPass("Compute Sky");
 	computeSky.Bind([=](CommandContext& context, const RGPassResources& resources)
@@ -1604,8 +1628,8 @@ void DemoApp::InitializePipelines()
 	{
 		// Must match with shader! (DDGICommon.hlsli)
 		constexpr uint32 maxNumRays = 128;
-		constexpr uint32 probeTexelResolution = 8;
-		constexpr uint32 probeTexelResolutionFull = probeTexelResolution + 2;
+		constexpr uint32 probeIrradianceTexels = 8;
+		constexpr uint32 probeDepthTexel = 16;
 		struct RayHitInfo
 		{
 			Vector3 Direction;
@@ -1615,18 +1639,31 @@ void DemoApp::InitializePipelines()
 		};
 		constexpr uint32 raySize = sizeof(RayHitInfo);
 
+		constexpr DXGI_FORMAT colorFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
+		constexpr DXGI_FORMAT depthFormat = DXGI_FORMAT_R16G16_FLOAT;
+
 		m_ProbeVolumeDimensions = IntVector3(24, 16, 16);
 		uint32 numProbes = m_ProbeVolumeDimensions.x * m_ProbeVolumeDimensions.y * m_ProbeVolumeDimensions.z;
 
 		m_pDDGITraceRaysPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "DDGI.hlsl", "TraceRaysCS");
 		m_pDDGIUpdateIrradianceColorPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "DDGI.hlsl", "UpdateIrradianceCS");
+		m_pDDGIUpdateIrradianceDepthPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "DDGI.hlsl", "UpdateDepthCS");
 		m_pDDGIRayBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(numProbes * maxNumRays, raySize, BufferFlag::UnorderedAccess | BufferFlag::ShaderResource), "DDGI Ray Buffer");
 
-		uint32 width = probeTexelResolutionFull * m_ProbeVolumeDimensions.z * m_ProbeVolumeDimensions.x;
-		uint32 height = probeTexelResolutionFull * m_ProbeVolumeDimensions.y;
-		TextureDesc ddgiIrradianceDesc = TextureDesc::Create2D(width, height, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource);
-		m_DDGIIrradianceMaps[0] = m_pDevice->CreateTexture(ddgiIrradianceDesc, "DDGI Irradiance 0");
-		m_DDGIIrradianceMaps[1] = m_pDevice->CreateTexture(ddgiIrradianceDesc, "DDGI Irradiance 1");
+		{
+			uint32 width = (1 + probeIrradianceTexels + 1) * m_ProbeVolumeDimensions.z * m_ProbeVolumeDimensions.x;
+			uint32 height = (1 + probeIrradianceTexels + 1)* m_ProbeVolumeDimensions.y;
+			TextureDesc ddgiIrradianceDesc = TextureDesc::Create2D(width, height, colorFormat, TextureFlag::UnorderedAccess);
+			m_DDGIIrradianceMaps[0] = m_pDevice->CreateTexture(ddgiIrradianceDesc, "DDGI Irradiance 0");
+			m_DDGIIrradianceMaps[1] = m_pDevice->CreateTexture(ddgiIrradianceDesc, "DDGI Irradiance 1");
+		}
+		{
+			uint32 width = (1 + probeDepthTexel + 1) * m_ProbeVolumeDimensions.z * m_ProbeVolumeDimensions.x;
+			uint32 height = (1 + probeDepthTexel + 1) * m_ProbeVolumeDimensions.y;
+			TextureDesc ddgiDepthDesc = TextureDesc::Create2D(width, height, depthFormat, TextureFlag::UnorderedAccess);
+			m_DDGIDepthMaps[0] = m_pDevice->CreateTexture(ddgiDepthDesc, "DDGI Depth 0");
+			m_DDGIDepthMaps[1] = m_pDevice->CreateTexture(ddgiDepthDesc, "DDGI Depth 1");
+		}
 
 		PipelineStateInitializer psoDesc;
 		psoDesc.SetRootSignature(m_pCommonRS);

@@ -75,6 +75,7 @@ struct SceneView
 	BoundingBox SceneAABB;
 	IntVector3 DDGIProbeVolumeDimensions;
 	RefCountPtr<Texture> pDDGIIrradiance;
+	RefCountPtr<Texture> pDDGIDepth;
 };
 
 struct SceneTextures

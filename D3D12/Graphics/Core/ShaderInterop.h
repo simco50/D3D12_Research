@@ -180,6 +180,7 @@ namespace ShaderInterop
 		float3 DDGIProbeSize;
 		uint DDGIIrradianceIndex;
 		uint3 DDGIProbeVolumeDimensions;
+		uint DDGIDepthIndex;
 
 		uint TLASIndex;
 		uint MeshesIndex;

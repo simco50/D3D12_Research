@@ -103,7 +103,7 @@ struct TextureDesc
 	TextureDimension Dimensions;
 
 
-	static TextureDesc CreateCube(uint32 width, uint32 height, DXGI_FORMAT format, TextureFlag flags = TextureFlag::ShaderResource, uint32 sampleCount = 1, uint32 mips = 1)
+	static TextureDesc CreateCube(uint32 width, uint32 height, DXGI_FORMAT format, TextureFlag flags = TextureFlag::None, uint32 sampleCount = 1, uint32 mips = 1)
 	{
 		check(width);
 		check(height);
@@ -114,13 +114,13 @@ struct TextureDesc
 		desc.Mips = mips;
 		desc.SampleCount = sampleCount;
 		desc.Format = format;
-		desc.Usage = flags;
+		desc.Usage = flags | TextureFlag::ShaderResource;
 		desc.ClearBindingValue = ClearBinding();
 		desc.Dimensions = TextureDimension::TextureCube;
 		return desc;
 	}
 
-	static TextureDesc Create2D(uint32 width, uint32 height, DXGI_FORMAT format, TextureFlag flags = TextureFlag::ShaderResource, uint32 sampleCount = 1, uint32 mips = 1)
+	static TextureDesc Create2D(uint32 width, uint32 height, DXGI_FORMAT format, TextureFlag flags = TextureFlag::None, uint32 sampleCount = 1, uint32 mips = 1)
 	{
 		check(width);
 		check(height);
@@ -131,13 +131,13 @@ struct TextureDesc
 		desc.Mips = mips;
 		desc.SampleCount = sampleCount;
 		desc.Format = format;
-		desc.Usage = flags;
+		desc.Usage = flags | TextureFlag::ShaderResource;
 		desc.ClearBindingValue = ClearBinding();
 		desc.Dimensions = TextureDimension::Texture2D;
 		return desc;
 	}
 
-	static TextureDesc Create3D(uint32 width, uint32 height, uint32 depth, DXGI_FORMAT format, TextureFlag flags = TextureFlag::ShaderResource, uint32 sampleCount = 1, uint32 mips = 1)
+	static TextureDesc Create3D(uint32 width, uint32 height, uint32 depth, DXGI_FORMAT format, TextureFlag flags = TextureFlag::None, uint32 sampleCount = 1, uint32 mips = 1)
 	{
 		check(width);
 		check(height);
@@ -148,7 +148,7 @@ struct TextureDesc
 		desc.Mips = mips;
 		desc.SampleCount = sampleCount;
 		desc.Format = format;
-		desc.Usage = flags;
+		desc.Usage = flags | TextureFlag::ShaderResource;
 		desc.ClearBindingValue = ClearBinding();
 		desc.Dimensions = TextureDimension::Texture3D;
 		return desc;

@@ -8,7 +8,7 @@
 struct RayHitInfo
 {
 	float3 Direction;
-	float Distance;
+	float Depth;
 	float3 Radiance;
 	float padd;
 };
@@ -17,15 +17,18 @@ struct PassParameters
 {
 	uint RaysPerProbe;
 	uint MaxRaysPerProbe;
+	float HistoryBlendWeight;
 };
 
 ConstantBuffer<PassParameters> cPass : register(b0);
 RWStructuredBuffer<RayHitInfo> uRayHitInfo : register(u0);
 RWTexture2D<float4> uIrradianceMap : register(u0);
+RWTexture2D<float2> uDepthMap : register(u0);
 RWTexture2D<float4> uVisualizeTexture : register(u0);
 
 StructuredBuffer<RayHitInfo> tRayHitInfo : register(t0);
 Texture2D<float4> tIrradianceMap : register(t1);
+Texture2D<float2> tDepthMap : register(t1);
 
 float CastShadowRay(float3 origin, float3 direction)
 {
@@ -142,7 +145,7 @@ RayHitInfo CastPrimaryRay(float3 origin, float3 direction)
 	}
 
 	float3 radiance = 0;
-	float distance = 0;
+	float depth = 0;
 
 	if(q.CommittedStatus() == COMMITTED_TRIANGLE_HIT)
 	{
@@ -171,17 +174,17 @@ RayHitInfo CastPrimaryRay(float3 origin, float3 direction)
 		// Multi-bounce with hacky arbitrary multiplier
 		radiance += 0.6f * SampleIrradiance(hitLocation, N, tIrradianceMap);
 
-		distance = q.CommittedRayT();
+		depth = q.CommittedRayT();
 	}
 	else
 	{
 		radiance = GetSky(ray.Direction);
-		distance = -1;
+		depth = -1;
 	}
 
 	RayHitInfo hit = (RayHitInfo)0;
 	hit.Direction = ray.Direction;
-	hit.Distance = distance;
+	hit.Depth = depth;
 	hit.Radiance = radiance;
 	return hit;
 }
@@ -297,11 +300,9 @@ void UpdateIrradianceCS(
 		radiance /= weightSum;
 	}
 
-	if(cView.FrameIndex > 2)
-	{
-		const float historyBlendWeight = 0.02;
-		radiance = lerp(prevRadiance, radiance, historyBlendWeight);
-	}
+	const float historyBlendWeight = saturate(1 - cPass.HistoryBlendWeight);
+	radiance = lerp(prevRadiance, radiance, historyBlendWeight);
+
 	uIrradianceMap[texelLocation] = float4(radiance, 1);
 
 	DeviceMemoryBarrierWithGroupSync();
@@ -312,6 +313,68 @@ void UpdateIrradianceCS(
 		uint2 sourceIndex = cornerTexelLocation + DDGI_COLOR_BORDER_OFFSETS[index].xy;
 		uint2 targetIndex = cornerTexelLocation + DDGI_COLOR_BORDER_OFFSETS[index].zw;
 		uIrradianceMap[targetIndex] = uIrradianceMap[sourceIndex];
+	}
+}
+
+static const uint4 DDGI_DEPTH_BORDER_OFFSETS[68] = { 
+	uint4(16, 1, 1, 0), 	uint4(15, 1, 2, 0), 	uint4(14, 1, 3, 0), 	uint4(13, 1, 4, 0), 	uint4(12, 1, 5, 0), 
+	uint4(11, 1, 6, 0), 	uint4(10, 1, 7, 0), 	uint4(9, 1, 8, 0), 		uint4(8, 1, 9, 0), 		uint4(7, 1, 10, 0), 	
+	uint4(6, 1, 11, 0), 	uint4(5, 1, 12, 0), 	uint4(4, 1, 13, 0), 	uint4(3, 1, 14, 0), 	uint4(2, 1, 15, 0),
+	uint4(1, 1, 16, 0), 	uint4(16, 16, 1, 17), 	uint4(15, 16, 2, 17), 	uint4(14, 16, 3, 17), 	uint4(13, 16, 4, 17), 	
+	uint4(12, 16, 5, 17), 	uint4(11, 16, 6, 17), 	uint4(10, 16, 7, 17), 	uint4(9, 16, 8, 17), 	uint4(8, 16, 9, 17),
+	uint4(7, 16, 10, 17), 	uint4(6, 16, 11, 17), 	uint4(5, 16, 12, 17), 	uint4(4, 16, 13, 17), 	uint4(3, 16, 14, 17),
+	uint4(2, 16, 15, 17), 	uint4(1, 16, 16, 17), 	uint4(1, 16, 0, 1), 	uint4(1, 15, 0, 2), 	uint4(1, 14, 0, 3), 	
+	uint4(1, 13, 0, 4), 	uint4(1, 12, 0, 5), 	uint4(1, 11, 0, 6), 	uint4(1, 10, 0, 7),		uint4(1, 9, 0, 8), 		
+	uint4(1, 8, 0, 9), 		uint4(1, 7, 0, 10), 	uint4(1, 6, 0, 11), 	uint4(1, 5, 0, 12), 	uint4(1, 4, 0, 13), 
+	uint4(1, 3, 0, 14), 	uint4(1, 2, 0, 15), 	uint4(1, 1, 0, 16), 	uint4(16, 16, 17, 1), 	uint4(16, 15, 17, 2), 
+	uint4(16, 14, 17, 3),	uint4(16, 13, 17, 4), 	uint4(16, 12, 17, 5), 	uint4(16, 11, 17, 6), 	uint4(16, 10, 17, 7), 	
+	uint4(16, 9, 17, 8), 	uint4(16, 8, 17, 9), 	uint4(16, 7, 17, 10), 	uint4(16, 6, 17, 11),	uint4(16, 5, 17, 12), 	
+	uint4(16, 4, 17, 13), 	uint4(16, 3, 17, 14), 	uint4(16, 2, 17, 15), 	uint4(16, 1, 17, 16), 	uint4(16, 16, 0, 0), 	
+	uint4(1, 16, 17, 0), 	uint4(16, 1, 0, 17), 	uint4(1, 1, 17, 17)
+};
+
+[numthreads(DDGI_PROBE_DEPTH_TEXELS, DDGI_PROBE_DEPTH_TEXELS, 1)]
+void UpdateDepthCS(
+	uint3 groupThreadId : SV_GroupThreadID,
+	uint groupId : SV_GroupID,
+	uint groupIndex : SV_GroupIndex)
+{
+	uint probeIdx = groupId;
+	uint3 probeCoordinates = GetProbeIndex3D(probeIdx);
+	uint2 texelLocation = GetProbeTexel(probeCoordinates, DDGI_PROBE_DEPTH_TEXELS);
+	uint2 cornerTexelLocation = texelLocation - 1u;
+	texelLocation += groupThreadId.xy;
+	float2 prevDepth = tDepthMap[texelLocation];
+
+	float3 probeDirection = DecodeNormalOctahedron(((groupThreadId.xy + 0.5f) / (float)DDGI_PROBE_DEPTH_TEXELS) * 2 - 1);
+
+	float weightSum = 0;
+	float2 sum = 0;
+
+	for(uint i = 0; i < cPass.RaysPerProbe; ++i)
+	{
+		RayHitInfo rayData = tRayHitInfo[probeIdx * cPass.MaxRaysPerProbe + i];
+		float weight = saturate(dot(probeDirection, rayData.Direction));
+		if(weight > 0.0001)
+		{
+			// #todo
+			weightSum += 0;
+		}
+	}
+
+	const float historyBlendWeight = saturate(1 - cPass.HistoryBlendWeight);
+	sum = lerp(prevDepth, sum, historyBlendWeight);
+
+	uDepthMap[texelLocation] = sum;
+
+	DeviceMemoryBarrierWithGroupSync();
+
+	// Extend the borders of the probes to fix sampling issues at the edges
+	for (uint index = groupIndex; index < 68; index += DDGI_PROBE_DEPTH_TEXELS * DDGI_PROBE_DEPTH_TEXELS)
+	{
+		uint2 sourceIndex = cornerTexelLocation + DDGI_DEPTH_BORDER_OFFSETS[index].xy;
+		uint2 targetIndex = cornerTexelLocation + DDGI_DEPTH_BORDER_OFFSETS[index].zw;
+		uDepthMap[targetIndex] = uDepthMap[sourceIndex];
 	}
 }
 

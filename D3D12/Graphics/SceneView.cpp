@@ -81,6 +81,7 @@ ShaderInterop::ViewUniforms GetViewUniforms(const SceneView& sceneView, Texture*
 	parameters.DDGIProbeSize = 2 * Vector3(sceneView.SceneAABB.Extents) / (Vector3((float)sceneView.DDGIProbeVolumeDimensions.x, (float)sceneView.DDGIProbeVolumeDimensions.y, (float)sceneView.DDGIProbeVolumeDimensions.z) - Vector3::One);
 	parameters.DDGIProbeVolumeDimensions = TIntVector3<uint32>(sceneView.DDGIProbeVolumeDimensions.x, sceneView.DDGIProbeVolumeDimensions.y, sceneView.DDGIProbeVolumeDimensions.z);
 	parameters.DDGIIrradianceIndex = sceneView.pDDGIIrradiance ? sceneView.pDDGIIrradiance->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
+	parameters.DDGIDepthIndex = sceneView.pDDGIDepth ? sceneView.pDDGIDepth->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
 
 	memcpy(&parameters.LightViewProjections, &sceneView.ShadowData.LightViewProjections, ARRAYSIZE(parameters.LightViewProjections) * MAX_SHADOW_CASTERS);
 	parameters.CascadeDepths = sceneView.ShadowData.CascadeDepths;

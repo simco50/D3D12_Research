@@ -2,6 +2,7 @@
 
 // Must match with texture size!
 #define DDGI_PROBE_IRRADIANCE_TEXELS 8
+#define DDGI_PROBE_DEPTH_TEXELS 16
 
 float3 GetProbeIndex3D(uint index)
 {
@@ -61,6 +62,10 @@ float3 SampleIrradiance(float3 position, float3 direction, Texture2D<float4> irr
 
 float3 SampleIrradiance(float3 position, float3 direction)
 {
-	Texture2D<float4> tex = ResourceDescriptorHeap[cView.DDGIIrradianceIndex];
-	return SampleIrradiance(position, direction, tex);
+	if(cView.DDGIIrradianceIndex != INVALID_HANDLE)
+	{
+		Texture2D<float4> tex = ResourceDescriptorHeap[cView.DDGIIrradianceIndex];
+		return SampleIrradiance(position, direction, tex);
+	}
+	return 0;
 }
