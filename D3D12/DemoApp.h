@@ -170,6 +170,7 @@ private:
 
 	// DDGI
 	RefCountPtr<Buffer> m_pDDGIRayBuffer;
+	RefCountPtr<Buffer> m_pDDGIProbeOffsetBuffer;
 	IntVector3 m_ProbeVolumeDimensions;
 	std::array<RefCountPtr<Texture>, 2> m_DDGIIrradianceMaps;
 	std::array<RefCountPtr<Texture>, 2> m_DDGIDepthMaps;

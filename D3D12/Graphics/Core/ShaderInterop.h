@@ -181,6 +181,7 @@ namespace ShaderInterop
 		uint DDGIIrradianceIndex;
 		uint3 DDGIProbeVolumeDimensions;
 		uint DDGIDepthIndex;
+		uint DDGIProbeOffsetIndex;
 
 		uint TLASIndex;
 		uint MeshesIndex;

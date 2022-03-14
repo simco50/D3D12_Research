@@ -3,6 +3,7 @@
 // Must match with texture size!
 #define DDGI_PROBE_IRRADIANCE_TEXELS 8
 #define DDGI_PROBE_DEPTH_TEXELS 16
+#define DDGI_DYNAMIC_PROBE_OFFSET 1
 
 float3 GetProbeIndex3D(uint index)
 {
@@ -11,7 +12,16 @@ float3 GetProbeIndex3D(uint index)
 
 float3 GetProbePosition(uint3 index3D)
 {
-	return cView.SceneBoundsMin + index3D * cView.DDGIProbeSize;
+	float3 position = cView.SceneBoundsMin + index3D * cView.DDGIProbeSize;
+#if DDGI_DYNAMIC_PROBE_OFFSET
+	if(cView.DDGIProbeOffsetIndex != INVALID_HANDLE)
+	{
+		StructuredBuffer<float4> offsetBuffer = ResourceDescriptorHeap[cView.DDGIProbeOffsetIndex];
+		uint index1D = Flatten3D(index3D, cView.DDGIProbeVolumeDimensions);
+		position += offsetBuffer[index1D].xyz;
+	}
+#endif
+	return position;
 }
 
 uint2 GetProbeTexel(uint3 probeIndex3D, uint numProbeInteriorTexels)

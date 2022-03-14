@@ -76,6 +76,7 @@ struct SceneView
 	IntVector3 DDGIProbeVolumeDimensions;
 	RefCountPtr<Texture> pDDGIIrradiance;
 	RefCountPtr<Texture> pDDGIDepth;
+	RefCountPtr<Buffer> pDDGIProbeOffset;
 };
 
 struct SceneTextures

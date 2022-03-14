@@ -25,10 +25,12 @@ RWStructuredBuffer<RayHitInfo> uRayHitInfo : register(u0);
 RWTexture2D<float4> uIrradianceMap : register(u0);
 RWTexture2D<float2> uDepthMap : register(u0);
 RWTexture2D<float4> uVisualizeTexture : register(u0);
+RWStructuredBuffer<float4> uProbeOffsets : register(u1);
 
 StructuredBuffer<RayHitInfo> tRayHitInfo : register(t0);
 Texture2D<float4> tIrradianceMap : register(t1);
 Texture2D<float2> tDepthMap : register(t2);
+StructuredBuffer<float4> tProbeOffsets : register(t3);
 
 float CastShadowRay(float3 origin, float3 direction)
 {
@@ -344,6 +346,13 @@ void UpdateDepthCS(
 	float2 prevDepth = tDepthMap[texelLocation];
 	float3 probeDirection = DecodeNormalOctahedron(((groupThreadId.xy + 0.5f) / (float)DDGI_PROBE_DEPTH_TEXELS) * 2 - 1);
 
+#if DDGI_DYNAMIC_PROBE_OFFSET
+	float3 prevProbeOffset = uProbeOffsets[probeIdx].xyz;
+	float3 probeOffset = 0;
+	const float probeOffsetDistance = max(cView.DDGIProbeSize.x, max(cView.DDGIProbeSize.y, cView.DDGIProbeSize.z)) * 0.3f;
+#endif
+
+
 	float weightSum = 0;
 	float2 sum = 0;
 	for(uint i = 0; i < cPass.RaysPerProbe; ++i)
@@ -357,6 +366,10 @@ void UpdateDepthCS(
 			weightSum += weight;
 			sum += float2(depth, Square(depth)) * weight;
 		}
+
+#if DDGI_DYNAMIC_PROBE_OFFSET
+		probeOffset -= rayData.Direction * saturate(probeOffsetDistance - depth);
+#endif
 	}
 	if(weightSum > MIN_WEIGHT_THRESHOLD)
 	{
@@ -369,6 +382,13 @@ void UpdateDepthCS(
 	uDepthMap[texelLocation] = sum;
 
 	DeviceMemoryBarrierWithGroupSync();
+
+#if DDGI_DYNAMIC_PROBE_OFFSET
+	if(groupIndex == 0)
+	{
+		uProbeOffsets[probeIdx] = float4(lerp(prevProbeOffset, probeOffset, 0.005f), 0);
+	}
+#endif
 
 	// Extend the borders of the probes to fix sampling issues at the edges
 	for (uint index = groupIndex; index < 68; index += DDGI_PROBE_DEPTH_TEXELS * DDGI_PROBE_DEPTH_TEXELS)

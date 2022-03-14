@@ -803,7 +803,8 @@ void DemoApp::Update()
 				context.BindResources(3, {
 					m_pDDGIRayBuffer->GetSRV(),
 					m_DDGIIrradianceMaps[0]->GetSRV(),
-					m_DDGIDepthMaps[0]->GetSRV()
+					m_DDGIDepthMaps[0]->GetSRV(),
+					m_pDDGIProbeOffsetBuffer->GetSRV(),
 					});
 
 				context.Dispatch(numProbes);
@@ -824,6 +825,7 @@ void DemoApp::Update()
 					m_pDDGIRayBuffer->GetSRV(),
 					m_DDGIIrradianceMaps[0]->GetSRV(),
 					m_DDGIDepthMaps[0]->GetSRV(),
+					m_pDDGIProbeOffsetBuffer->GetSRV(),
 					});
 
 				context.Dispatch(numProbes);
@@ -835,20 +837,26 @@ void DemoApp::Update()
 			{
 				context.InsertResourceBarrier(m_pDDGIRayBuffer, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 				context.InsertResourceBarrier(m_DDGIDepthMaps[1], D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+				context.InsertResourceBarrier(m_pDDGIProbeOffsetBuffer, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 				context.SetComputeRootSignature(m_pCommonRS);
 				context.SetPipelineState(m_pDDGIUpdateIrradianceDepthPSO);
 
 				context.SetRootConstants(0, parameters);
 				context.SetRootCBV(1, GetViewUniforms(m_SceneData));
-				context.BindResource(2, 0, m_DDGIDepthMaps[1]->GetUAV());
+				context.BindResources(2, {
+					m_DDGIDepthMaps[1]->GetUAV(),
+					m_pDDGIProbeOffsetBuffer->GetUAV(),
+					});
 				context.BindResources(3, {
 					m_pDDGIRayBuffer->GetSRV(),
 					m_DDGIIrradianceMaps[0]->GetSRV(),
 					m_DDGIDepthMaps[0]->GetSRV(),
+					m_pDDGIProbeOffsetBuffer->GetSRV(),
 					});
 
 				context.Dispatch(numProbes);
 				context.InsertResourceBarrier(m_DDGIDepthMaps[1], D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
+				context.InsertResourceBarrier(m_pDDGIProbeOffsetBuffer, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 			});
 
 
@@ -860,6 +868,7 @@ void DemoApp::Update()
 
 	m_SceneData.pDDGIIrradiance = Tweakables::g_EnableDDGI ? m_DDGIIrradianceMaps[0] : nullptr;
 	m_SceneData.pDDGIDepth = Tweakables::g_EnableDDGI ? m_DDGIDepthMaps[0] : nullptr;
+	m_SceneData.pDDGIProbeOffset = Tweakables::g_EnableDDGI ? m_pDDGIProbeOffsetBuffer : nullptr;
 
 	RGPassBuilder computeSky = graph.AddPass("Compute Sky");
 	computeSky.Bind([=](CommandContext& context, const RGPassResources& resources)
@@ -1415,6 +1424,7 @@ void DemoApp::Update()
 					m_pDDGIRayBuffer->GetSRV(),
 					m_DDGIIrradianceMaps[0]->GetSRV(),
 					m_DDGIDepthMaps[0]->GetSRV(),
+					m_pDDGIProbeOffsetBuffer->GetSRV(),
 					});
 
 				context.Draw(0, 2880, m_SceneData.DDGIProbeVolumeDimensions.x * m_SceneData.DDGIProbeVolumeDimensions.y * m_SceneData.DDGIProbeVolumeDimensions.z);
@@ -1656,6 +1666,7 @@ void DemoApp::InitializePipelines()
 		m_pDDGIUpdateIrradianceColorPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "DDGI.hlsl", "UpdateIrradianceCS");
 		m_pDDGIUpdateIrradianceDepthPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "DDGI.hlsl", "UpdateDepthCS");
 		m_pDDGIRayBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(numProbes * maxNumRays, raySize, BufferFlag::UnorderedAccess | BufferFlag::ShaderResource), "DDGI Ray Buffer");
+		m_pDDGIProbeOffsetBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(numProbes, sizeof(Vector4), BufferFlag::UnorderedAccess | BufferFlag::ShaderResource), "DDGI Probe Offset Buffer");
 
 		{
 			uint32 width = (1 + probeIrradianceTexels + 1) * m_ProbeVolumeDimensions.z * m_ProbeVolumeDimensions.x;
