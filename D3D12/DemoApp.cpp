@@ -775,12 +775,15 @@ void DemoApp::Update()
 			});
 	}
 
+	if(Tweakables::g_EnableDDGI && m_pDevice->GetCapabilities().SupportsRaytracing())
 	{
 		struct
 		{
 			uint32 RaysPerProbe;
+			uint32 MaxRaysPerProbe;
 		} parameters;
 		parameters.RaysPerProbe = Tweakables::g_DDGIRayCount;
+		parameters.MaxRaysPerProbe = 128; // Must match with ray buffer
 
 		RGPassBuilder ddgiRays = graph.AddPass("DDGI Rays");
 		ddgiRays.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
@@ -1597,6 +1600,7 @@ void DemoApp::InitializePipelines()
 	}
 
 	// DDGI
+	if(m_pDevice->GetCapabilities().SupportsRaytracing())
 	{
 		// Must match with shader! (DDGICommon.hlsli)
 		constexpr uint32 maxNumRays = 128;

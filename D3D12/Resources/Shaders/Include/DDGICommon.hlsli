@@ -1,8 +1,7 @@
 #include "Common.hlsli"
 
-#define MAX_RAYS_PER_PROBE 128
-#define PROBE_TEXEL_RESOLUTION 8
-#define PROBE_TEXEL_RESOLUTION_FULL (PROBE_TEXEL_RESOLUTION + 2)
+// Must match with texture size!
+#define DDGI_PROBE_IRRADIANCE_TEXELS 8
 
 float3 GetProbeIndex3D(uint index)
 {
@@ -14,18 +13,20 @@ float3 GetProbePosition(uint3 index3D)
 	return cView.SceneBoundsMin + index3D * cView.DDGIProbeSize;
 }
 
-uint2 GetProbeTexel(uint3 probeIndex3D)
+uint2 GetProbeTexel(uint3 probeIndex3D, uint numProbeInteriorTexels)
 {
-	return probeIndex3D.xy * PROBE_TEXEL_RESOLUTION_FULL + uint2(probeIndex3D.z * cView.DDGIProbeVolumeDimensions.x * PROBE_TEXEL_RESOLUTION_FULL, 0) + 1;
+	uint numProbeTexels = 1 + numProbeInteriorTexels + 1;
+	return probeIndex3D.xy * numProbeTexels + uint2(probeIndex3D.z * cView.DDGIProbeVolumeDimensions.x * numProbeTexels, 0) + 1;
 }
 
-float2 GetProbeUV(uint3 probeIndex3D, float3 direction)
+float2 GetProbeUV(uint3 probeIndex3D, float3 direction, uint numProbeInteriorTexels)
 {
-	uint textureWidth = PROBE_TEXEL_RESOLUTION_FULL * cView.DDGIProbeVolumeDimensions.x * cView.DDGIProbeVolumeDimensions.z;
-	uint textureHeight = PROBE_TEXEL_RESOLUTION_FULL * cView.DDGIProbeVolumeDimensions.y;
+	uint numProbeTexels = 1 + numProbeInteriorTexels + 1;
+	uint textureWidth = numProbeTexels * cView.DDGIProbeVolumeDimensions.x * cView.DDGIProbeVolumeDimensions.z;
+	uint textureHeight = numProbeTexels * cView.DDGIProbeVolumeDimensions.y;
 
-	float2 pixel = GetProbeTexel(probeIndex3D);
-	pixel += (EncodeNormalOctahedron(normalize(direction)) * 0.5f + 0.5f) * PROBE_TEXEL_RESOLUTION;
+	float2 pixel = GetProbeTexel(probeIndex3D, numProbeInteriorTexels);
+	pixel += (EncodeNormalOctahedron(normalize(direction)) * 0.5f + 0.5f) * numProbeInteriorTexels;
 	return pixel / float2(textureWidth, textureHeight);
 }
 
@@ -47,7 +48,7 @@ float3 SampleIrradiance(float3 position, float3 direction, Texture2D<float4> irr
 
 		float3 interp = lerp(1.0f - t, t, indexOffset);
 
-		float2 uv = GetProbeUV(probeCoordinates, direction);
+		float2 uv = GetProbeUV(probeCoordinates, direction, DDGI_PROBE_IRRADIANCE_TEXELS);
 		float3 irradiance = irradianceTexture.SampleLevel(sLinearClamp, uv, 0).rgb;
 		float weight = interp.x * interp.y * interp.z;
 

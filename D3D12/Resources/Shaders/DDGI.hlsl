@@ -16,6 +16,7 @@ struct RayHitInfo
 struct PassParameters
 {
 	uint RaysPerProbe;
+	uint MaxRaysPerProbe;
 };
 
 ConstantBuffer<PassParameters> cPass : register(b0);
@@ -240,7 +241,7 @@ void TraceRaysCS(
 	{
 		float3 direction = mul(SphericalFibonacci(rayIndex, cPass.RaysPerProbe), randomRotation);
 		RayHitInfo hit = CastPrimaryRay(probePosition, direction);
-		uRayHitInfo[probeIdx * MAX_RAYS_PER_PROBE + rayIndex] = hit;
+		uRayHitInfo[probeIdx * cPass.MaxRaysPerProbe + rayIndex] = hit;
 		rayIndex += THREAD_GROUP_SIZE;
 	}
 }
@@ -250,46 +251,17 @@ void TraceRaysCS(
 	Store Irradiance data in texture atlas
 */
 
-static const uint4 DDGI_COLOR_BORDER_OFFSETS[36] = {
-	uint4(8, 1, 1, 0),
-	uint4(7, 1, 2, 0),
-	uint4(6, 1, 3, 0),
-	uint4(5, 1, 4, 0),
-	uint4(4, 1, 5, 0),
-	uint4(3, 1, 6, 0),
-	uint4(2, 1, 7, 0),
-	uint4(1, 1, 8, 0),
-	uint4(8, 8, 1, 9),
-	uint4(7, 8, 2, 9),
-	uint4(6, 8, 3, 9),
-	uint4(5, 8, 4, 9),
-	uint4(4, 8, 5, 9),
-	uint4(3, 8, 6, 9),
-	uint4(2, 8, 7, 9),
-	uint4(1, 8, 8, 9),
-	uint4(1, 8, 0, 1),
-	uint4(1, 7, 0, 2),
-	uint4(1, 6, 0, 3),
-	uint4(1, 5, 0, 4),
-	uint4(1, 4, 0, 5),
-	uint4(1, 3, 0, 6),
-	uint4(1, 2, 0, 7),
-	uint4(1, 1, 0, 8),
-	uint4(8, 8, 9, 1),
-	uint4(8, 7, 9, 2),
-	uint4(8, 6, 9, 3),
-	uint4(8, 5, 9, 4),
-	uint4(8, 4, 9, 5),
-	uint4(8, 3, 9, 6),
-	uint4(8, 2, 9, 7),
-	uint4(8, 1, 9, 8),
-	uint4(8, 8, 0, 0),
-	uint4(1, 8, 9, 0),
-	uint4(8, 1, 0, 9),
-	uint4(1, 1, 9, 9)
+// From Dihara Wijetunga - hybrid-rendering
+static const uint4 DDGI_COLOR_BORDER_OFFSETS[36] = { 
+	uint4(8, 1, 1, 0), uint4(7, 1, 2, 0), uint4(6, 1, 3, 0), uint4(5, 1, 4, 0), uint4(4, 1, 5, 0), uint4(3, 1, 6, 0), 
+	uint4(2, 1, 7, 0), uint4(1, 1, 8, 0), uint4(8, 8, 1, 9), uint4(7, 8, 2, 9), uint4(6, 8, 3, 9), uint4(5, 8, 4, 9), 
+	uint4(4, 8, 5, 9), uint4(3, 8, 6, 9), uint4(2, 8, 7, 9), uint4(1, 8, 8, 9), uint4(1, 8, 0, 1), uint4(1, 7, 0, 2), 
+	uint4(1, 6, 0, 3), uint4(1, 5, 0, 4), uint4(1, 4, 0, 5), uint4(1, 3, 0, 6), uint4(1, 2, 0, 7), uint4(1, 1, 0, 8), 
+	uint4(8, 8, 9, 1), uint4(8, 7, 9, 2), uint4(8, 6, 9, 3), uint4(8, 5, 9, 4), uint4(8, 4, 9, 5), uint4(8, 3, 9, 6), 
+	uint4(8, 2, 9, 7), uint4(8, 1, 9, 8), uint4(8, 8, 0, 0), uint4(1, 8, 9, 0), uint4(8, 1, 0, 9), uint4(1, 1, 9, 9)
 };
 
-[numthreads(PROBE_TEXEL_RESOLUTION, PROBE_TEXEL_RESOLUTION, 1)]
+[numthreads(DDGI_PROBE_IRRADIANCE_TEXELS, DDGI_PROBE_IRRADIANCE_TEXELS, 1)]
 void UpdateIrradianceCS(
 	uint3 groupThreadId : SV_GroupThreadID,
 	uint groupId : SV_GroupID,
@@ -297,19 +269,19 @@ void UpdateIrradianceCS(
 {
 	uint probeIdx = groupId;
 	uint3 probeCoordinates = GetProbeIndex3D(probeIdx);
-	uint2 texelLocation = GetProbeTexel(probeCoordinates);
+	uint2 texelLocation = GetProbeTexel(probeCoordinates, DDGI_PROBE_IRRADIANCE_TEXELS);
 	uint2 cornerTexelLocation = texelLocation - 1u;
 	texelLocation += groupThreadId.xy;
 	float3 prevRadiance = tIrradianceMap[texelLocation].rgb;
 
-	float3 probeDirection = DecodeNormalOctahedron(((groupThreadId.xy + 0.5f) / (float)PROBE_TEXEL_RESOLUTION) * 2 - 1);
+	float3 probeDirection = DecodeNormalOctahedron(((groupThreadId.xy + 0.5f) / (float)DDGI_PROBE_IRRADIANCE_TEXELS) * 2 - 1);
 
 	float weightSum = 0;
 	float3 radianceSum = 0;
 
 	for(uint i = 0; i < cPass.RaysPerProbe; ++i)
 	{
-		RayHitInfo rayData = tRayHitInfo[probeIdx * MAX_RAYS_PER_PROBE + i];
+		RayHitInfo rayData = tRayHitInfo[probeIdx * cPass.MaxRaysPerProbe + i];
 		float weight = saturate(dot(probeDirection, rayData.Direction));
 		if(weight > 0.0001)
 		{
@@ -335,7 +307,7 @@ void UpdateIrradianceCS(
 	DeviceMemoryBarrierWithGroupSync();
 
 	// Extend the borders of the probes to fix sampling issues at the edges
-	for (uint index = groupIndex; index < 36; index += PROBE_TEXEL_RESOLUTION * PROBE_TEXEL_RESOLUTION)
+	for (uint index = groupIndex; index < 36; index += DDGI_PROBE_IRRADIANCE_TEXELS * DDGI_PROBE_IRRADIANCE_TEXELS)
 	{
 		uint2 sourceIndex = cornerTexelLocation + DDGI_COLOR_BORDER_OFFSETS[index].xy;
 		uint2 targetIndex = cornerTexelLocation + DDGI_COLOR_BORDER_OFFSETS[index].zw;
@@ -378,7 +350,7 @@ float4 VisualizeIrradiancePS(InterpolantsVSToPS input) : SV_Target0
 {
 	uint3 probeIdx3D = GetProbeIndex3D(input.ProbeIndex);
 	float3 probePosition = GetProbePosition(probeIdx3D);
-	float2 uv = GetProbeUV(probeIdx3D, input.Normal);
+	float2 uv = GetProbeUV(probeIdx3D, input.Normal, DDGI_PROBE_IRRADIANCE_TEXELS);
 	float3 radiance = tIrradianceMap.SampleLevel(sLinearClamp, uv, 0).rgb;
 	return float4(radiance, 1);
 }
