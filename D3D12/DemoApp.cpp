@@ -800,7 +800,11 @@ void DemoApp::Update()
 				context.SetRootConstants(0, parameters);
 				context.SetRootCBV(1, GetViewUniforms(m_SceneData));
 				context.BindResource(2, 0, m_pDDGIRayBuffer->GetUAV());
-				context.BindResource(3, 1, m_DDGIIrradianceMaps[0]->GetSRV());
+				context.BindResources(3, {
+					m_pDDGIRayBuffer->GetSRV(),
+					m_DDGIIrradianceMaps[0]->GetSRV(),
+					m_DDGIDepthMaps[0]->GetSRV()
+					});
 
 				context.Dispatch(numProbes);
 			});
@@ -819,6 +823,7 @@ void DemoApp::Update()
 				context.BindResources(3, {
 					m_pDDGIRayBuffer->GetSRV(),
 					m_DDGIIrradianceMaps[0]->GetSRV(),
+					m_DDGIDepthMaps[0]->GetSRV(),
 					});
 
 				context.Dispatch(numProbes);
@@ -838,6 +843,7 @@ void DemoApp::Update()
 				context.BindResource(2, 0, m_DDGIDepthMaps[1]->GetUAV());
 				context.BindResources(3, {
 					m_pDDGIRayBuffer->GetSRV(),
+					m_DDGIIrradianceMaps[0]->GetSRV(),
 					m_DDGIDepthMaps[0]->GetSRV(),
 					});
 
@@ -1408,6 +1414,7 @@ void DemoApp::Update()
 				context.BindResources(3, {
 					m_pDDGIRayBuffer->GetSRV(),
 					m_DDGIIrradianceMaps[0]->GetSRV(),
+					m_DDGIDepthMaps[0]->GetSRV(),
 					});
 
 				context.Draw(0, 2880, m_SceneData.DDGIProbeVolumeDimensions.x * m_SceneData.DDGIProbeVolumeDimensions.y * m_SceneData.DDGIProbeVolumeDimensions.z);
