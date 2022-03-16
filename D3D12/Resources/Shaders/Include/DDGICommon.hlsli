@@ -57,10 +57,24 @@ float4 SampleDDGIIrradiance(DDGIVolume volume, float3 position, float3 direction
 	Texture2D<float4> irradianceTexture = ResourceDescriptorHeap[volume.IrradianceIndex];
 	Texture2D<float2> depthTexture = ResourceDescriptorHeap[volume.DepthIndex];
 
-	float volumeWeight = 1;
+	float volumeWeight = 1.0f;
 
-	uint3 baseProbeCoordinates = floor((position - volume.BoundsMin) / volume.ProbeSize);
+	// Compute smooth weights of the volume
+	float3 relativeCoordindates = (position - volume.BoundsMin) / volume.ProbeSize;
+	for(uint i = 0; i < 3; ++i)
+	{
+		volumeWeight *= lerp(0, 1, saturate(relativeCoordindates[i]));
+		if(relativeCoordindates[i] > volume.ProbeVolumeDimensions[i] - 2)
+		{
+			float x = saturate(relativeCoordindates[i] - volume.ProbeVolumeDimensions[i] + 2);
+			volumeWeight *= lerp(1, 0, x);
+		}
+	}
 
+	if(volumeWeight <= 0.0f)
+		return 0.0f;
+
+	uint3 baseProbeCoordinates = floor(relativeCoordindates);
 	float3 baseProbePosition = GetDDGIProbePosition(volume, baseProbeCoordinates);
 	float3 t = saturate((position - baseProbePosition) / volume.ProbeSize);
 
@@ -118,11 +132,11 @@ float4 SampleDDGIIrradiance(DDGIVolume volume, float3 position, float3 direction
 
 float3 SampleDDGIIrradiance(float3 position, float3 direction)
 {
-	if(cView.NumDDGIVolumes > 0)
+	float4 result = 0;
+	for(uint i = 0; i < cView.NumDDGIVolumes && result.a < 0.5f; ++i)
 	{
-		float4 volumeSample = SampleDDGIIrradiance(GetDDGIVolume(0), position, direction);
-		float3 irradiance = volumeSample.rgb;
-		return irradiance;
+		float4 volSample = SampleDDGIIrradiance(GetDDGIVolume(i), position, direction);
+		result.xyz += volSample.rgb * volSample.a;
 	}
-	return 0;
+	return result.rgb;
 }
