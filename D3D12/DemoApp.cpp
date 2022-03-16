@@ -784,8 +784,8 @@ void DemoApp::Update()
 			float HistoryBlendWeight;
 		} parameters;
 		parameters.RaysPerProbe = Tweakables::g_DDGIRayCount;
-		parameters.MaxRaysPerProbe = 128; // Must match with ray buffer
-		parameters.HistoryBlendWeight = 0.97f;
+		parameters.MaxRaysPerProbe = 512; // Must match with ray buffer
+		parameters.HistoryBlendWeight = 0.98f;
 
 		const uint32 numProbes = m_SceneData.DDGIProbeVolumeDimensions.x * m_SceneData.DDGIProbeVolumeDimensions.y * m_SceneData.DDGIProbeVolumeDimensions.z;
 
@@ -1644,7 +1644,7 @@ void DemoApp::InitializePipelines()
 	if(m_pDevice->GetCapabilities().SupportsRaytracing())
 	{
 		// Must match with shader! (DDGICommon.hlsli)
-		constexpr uint32 maxNumRays = 128;
+		constexpr uint32 maxNumRays = 512;
 		constexpr uint32 probeIrradianceTexels = 8;
 		constexpr uint32 probeDepthTexel = 16;
 		struct RayHitInfo
@@ -2001,7 +2001,7 @@ void DemoApp::UpdateImGui()
 				ImGui::Checkbox("Raytraced AO", &Tweakables::g_RaytracedAO.Get());
 				ImGui::Checkbox("Raytraced Reflections", &Tweakables::g_RaytracedReflections.Get());
 				ImGui::Checkbox("DDGI", &Tweakables::g_EnableDDGI.Get());
-				ImGui::SliderInt("DDGI RayCount", &Tweakables::g_DDGIRayCount.Get(), 1, 128);
+				ImGui::SliderInt("DDGI RayCount", &Tweakables::g_DDGIRayCount.Get(), 1, 512);
 				ImGui::Checkbox("Visualize DDGI", &Tweakables::g_VisualizeDDGI.Get());
 				ImGui::SliderAngle("TLAS Bounds Threshold", &Tweakables::g_TLASBoundsThreshold.Get(), 0, 40);
 			}
@@ -2103,6 +2103,12 @@ void DemoApp::UpdateTLAS(CommandContext& context)
 			instanceDesc.InstanceContributionToHitGroupIndex = 0;
 			instanceDesc.InstanceID = batch.InstanceData.World;
 			instanceDesc.InstanceMask = 0xFF;
+
+			// Hack
+			if (batch.WorldMatrix.Determinant() < 0)
+			{
+				instanceDesc.Flags |= D3D12_RAYTRACING_INSTANCE_FLAG_TRIANGLE_FRONT_COUNTERCLOCKWISE;
+			}
 
 			//The layout of Transform is a transpose of how affine matrices are typically stored in memory. Instead of four 3-vectors, Transform is laid out as three 4-vectors.
 			auto ApplyTransform = [](const Matrix& m, D3D12_RAYTRACING_INSTANCE_DESC& desc)
