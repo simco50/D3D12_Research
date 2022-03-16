@@ -290,7 +290,7 @@ void PSMain(InterpolantsVSToPS input,
 	LightResult lighting = DoLight(input.Position, input.PositionWS, N, V, brdf.Diffuse, brdf.Specular, brdf.Roughness);
 
 	float3 outRadiance = 0;
-	outRadiance += ambientOcclusion * brdf.Diffuse * SampleIrradiance(input.PositionWS, N);
+	outRadiance += ambientOcclusion * brdf.Diffuse * SampleDDGIIrradiance(input.PositionWS, N);
 	outRadiance += lighting.Diffuse + lighting.Specular;
 	outRadiance += ssr * ambientOcclusion;
 	outRadiance += surface.Emissive;

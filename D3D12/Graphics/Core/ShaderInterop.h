@@ -144,6 +144,16 @@ namespace ShaderInterop
 		bool DirectionalAttenuation() { return IsSpot; }
 	};
 
+	struct DDGIVolume
+	{
+		float3 BoundsMin;
+		uint DepthIndex;
+		float3 ProbeSize;
+		uint IrradianceIndex;
+		uint3 ProbeVolumeDimensions;
+		uint ProbeOffsetIndex;
+	};
+
 	struct ViewUniforms
 	{
 		float4x4 LightViewProjections[MAX_SHADOW_CASTERS];
@@ -169,19 +179,12 @@ namespace ShaderInterop
 		float2 ViewJitter;
 		float NearZ;
 		float FarZ;
-		float3 SceneBoundsMin;
-		float padd1;
 		float FoV;
 
 		uint FrameIndex;
 		uint SsrSamples;
 		uint LightCount;
-
-		float3 DDGIProbeSize;
-		uint DDGIIrradianceIndex;
-		uint3 DDGIProbeVolumeDimensions;
-		uint DDGIDepthIndex;
-		uint DDGIProbeOffsetIndex;
+		uint NumDDGIVolumes;
 
 		uint TLASIndex;
 		uint MeshesIndex;
@@ -190,6 +193,7 @@ namespace ShaderInterop
 		uint TransformsIndex;
 		uint LightsIndex;
 		uint SkyIndex;
+		uint DDGIVolumesIndex;
 	};
 
 #ifdef __cplusplus

@@ -67,16 +67,13 @@ struct SceneView
 	RefCountPtr<Buffer> pMeshInstanceBuffer;
 	RefCountPtr<Buffer> pSceneTLAS;
 	RefCountPtr<Buffer> pTransformsBuffer;
+	RefCountPtr<Buffer> pDDGIVolumesBuffer;
 	RefCountPtr<Texture> pSky;
 	int FrameIndex = 0;
 	VisibilityMask VisibilityMask;
 	ShadowData ShadowData;
 	ViewTransform View;
 	BoundingBox SceneAABB;
-	IntVector3 DDGIProbeVolumeDimensions;
-	RefCountPtr<Texture> pDDGIIrradiance;
-	RefCountPtr<Texture> pDDGIDepth;
-	RefCountPtr<Buffer> pDDGIProbeOffset;
 };
 
 struct SceneTextures

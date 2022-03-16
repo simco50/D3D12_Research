@@ -169,11 +169,19 @@ private:
 	RefCountPtr<Texture> m_pVisibilityTexture;
 
 	// DDGI
-	RefCountPtr<Buffer> m_pDDGIRayBuffer;
-	RefCountPtr<Buffer> m_pDDGIProbeOffsetBuffer;
-	IntVector3 m_ProbeVolumeDimensions;
-	std::array<RefCountPtr<Texture>, 2> m_DDGIIrradianceMaps;
-	std::array<RefCountPtr<Texture>, 2> m_DDGIDepthMaps;
+	struct DDGIVolume
+	{
+		Vector3 Origin;
+		Vector3 Extents;
+		IntVector3 NumProbes;
+		std::array<RefCountPtr<Texture>, 2> pIrradiance;
+		std::array<RefCountPtr<Texture>, 2> pDepth;
+		RefCountPtr<Buffer> pProbeOffset;
+		RefCountPtr<Buffer> pRayBuffer;
+	};
+	std::vector<DDGIVolume> m_DDGIVolumes;
+	RefCountPtr<Buffer> m_pDDGIVolumesBuffer;
+
 	RefCountPtr<PipelineState> m_pDDGITraceRaysPSO;
 	RefCountPtr<PipelineState> m_pDDGIUpdateIrradianceColorPSO;
 	RefCountPtr<PipelineState> m_pDDGIUpdateIrradianceDepthPSO;

@@ -18,6 +18,7 @@ struct PassParameters
 	uint RaysPerProbe;
 	uint MaxRaysPerProbe;
 	float HistoryBlendWeight;
+	uint VolumeIndex;
 };
 
 ConstantBuffer<PassParameters> cPass : register(b0);
@@ -28,9 +29,6 @@ RWTexture2D<float4> uVisualizeTexture : register(u0);
 RWStructuredBuffer<float4> uProbeOffsets : register(u1);
 
 StructuredBuffer<RayHitInfo> tRayHitInfo : register(t0);
-Texture2D<float4> tIrradianceMap : register(t1);
-Texture2D<float2> tDepthMap : register(t2);
-StructuredBuffer<float4> tProbeOffsets : register(t3);
 
 float CastShadowRay(float3 origin, float3 direction)
 {
@@ -106,7 +104,7 @@ LightResult EvaluateLight(Light light, float3 worldPos, float3 V, float3 N, Brdf
 	return result;
 }
 
-RayHitInfo CastPrimaryRay(float3 origin, float3 direction)
+RayHitInfo CastPrimaryRay(float3 origin, float3 direction, float maxDepth)
 {
 	RayDesc ray;
 	ray.Origin = origin;
@@ -127,6 +125,8 @@ RayHitInfo CastPrimaryRay(float3 origin, float3 direction)
 		ray		// Ray
 	);
 
+	const uint textureMipLevel = 5;
+
 	while(q.Proceed())
 	{
 		switch(q.CandidateType())
@@ -136,7 +136,7 @@ RayHitInfo CastPrimaryRay(float3 origin, float3 direction)
 				MeshInstance instance = GetMeshInstance(q.CandidateInstanceID());
 				VertexAttribute vertex = GetVertexAttributes(instance, q.CandidateTriangleBarycentrics(), q.CandidatePrimitiveIndex(), q.CandidateObjectToWorld4x3());
 				MaterialData material = GetMaterial(instance.Material);
-				MaterialProperties surface = GetMaterialProperties(material, vertex.UV, 0);
+				MaterialProperties surface = GetMaterialProperties(material, vertex.UV, textureMipLevel);
 				if(surface.Opacity > material.AlphaCutoff)
 				{
 					q.CommitNonOpaqueTriangleHit();
@@ -147,7 +147,6 @@ RayHitInfo CastPrimaryRay(float3 origin, float3 direction)
 	}
 
 	float3 radiance = 0;
-	const float maxDepth = max(cView.DDGIProbeSize.x, max(cView.DDGIProbeSize.y, cView.DDGIProbeSize.z)) * 2;
 	float depth = maxDepth;
 
 	if(q.CommittedStatus() == COMMITTED_TRIANGLE_HIT)
@@ -155,7 +154,7 @@ RayHitInfo CastPrimaryRay(float3 origin, float3 direction)
 		MeshInstance instance = GetMeshInstance(q.CommittedInstanceID());
 		VertexAttribute vertex = GetVertexAttributes(instance, q.CommittedTriangleBarycentrics(), q.CommittedPrimitiveIndex(), q.CommittedObjectToWorld4x3());
 		MaterialData material = GetMaterial(instance.Material);
-		MaterialProperties surface = GetMaterialProperties(material, vertex.UV, 2);
+		MaterialProperties surface = GetMaterialProperties(material, vertex.UV, textureMipLevel);
 		BrdfData brdfData = GetBrdfData(surface);
 
 		float3 hitLocation = q.WorldRayOrigin() + q.WorldRayDirection() * q.CommittedRayT();
@@ -173,7 +172,7 @@ RayHitInfo CastPrimaryRay(float3 origin, float3 direction)
 
 		radiance += totalResult.Diffuse;
 		radiance += surface.Emissive;
-		radiance += brdfData.Diffuse * SampleIrradiance(hitLocation, N, tIrradianceMap, tDepthMap);
+		radiance += brdfData.Diffuse * SampleDDGIIrradiance(hitLocation, N);
 
 		depth = clamp(q.CommittedRayT(), 0, maxDepth);
 	}
@@ -232,18 +231,21 @@ void TraceRaysCS(
 	uint groupIndex : SV_GroupID,
 	uint groupThreadId : SV_GroupThreadID)
 {
+	DDGIVolume volume = GetDDGIVolume(cPass.VolumeIndex);
+
 	uint probeIdx = groupIndex;
-	uint3 probeIdx3D = GetProbeIndex3D(probeIdx);
-	float3 probePosition = GetProbePosition(probeIdx3D);
+	uint3 probeIdx3D = GetDDGIProbeIndex3D(volume, probeIdx);
+	float3 probePosition = GetDDGIProbePosition(volume, probeIdx3D);
 	uint rayIndex = groupThreadId;
 
 	uint seed = SeedThread(cView.FrameIndex);
 	float3x3 randomRotation = AngleAxis3x3(Random01(seed) * 2 * PI, normalize(float3(Random01(seed), Random01(seed), Random01(seed))));
+	const float maxDepth = max(volume.ProbeSize.x, max(volume.ProbeSize.y, volume.ProbeSize.z)) * 2;
 
 	while(rayIndex < cPass.RaysPerProbe)
 	{
 		float3 direction = mul(SphericalFibonacci(rayIndex, cPass.RaysPerProbe), randomRotation);
-		RayHitInfo hit = CastPrimaryRay(probePosition, direction);
+		RayHitInfo hit = CastPrimaryRay(probePosition, direction, maxDepth);
 		uRayHitInfo[probeIdx * cPass.MaxRaysPerProbe + rayIndex] = hit;
 		rayIndex += THREAD_GROUP_SIZE;
 	}
@@ -272,11 +274,13 @@ void UpdateIrradianceCS(
 	uint groupId : SV_GroupID,
 	uint groupIndex : SV_GroupIndex)
 {
+	DDGIVolume volume = GetDDGIVolume(cPass.VolumeIndex);
 	uint probeIdx = groupId;
-	uint3 probeCoordinates = GetProbeIndex3D(probeIdx);
-	uint2 texelLocation = GetProbeTexel(probeCoordinates, DDGI_PROBE_IRRADIANCE_TEXELS);
+	uint3 probeCoordinates = GetDDGIProbeIndex3D(volume, probeIdx);
+	uint2 texelLocation = GetDDGIProbeTexel(volume, probeCoordinates, DDGI_PROBE_IRRADIANCE_TEXELS);
 	uint2 cornerTexelLocation = texelLocation - 1u;
 	texelLocation += groupThreadId.xy;
+	Texture2D<float4> tIrradianceMap = ResourceDescriptorHeap[volume.IrradianceIndex];
 	float3 prevRadiance = tIrradianceMap[texelLocation].rgb;
 	float3 probeDirection = DecodeNormalOctahedron(((groupThreadId.xy + 0.5f) / (float)DDGI_PROBE_IRRADIANCE_TEXELS) * 2 - 1);
 
@@ -338,20 +342,21 @@ void UpdateDepthCS(
 	uint groupId : SV_GroupID,
 	uint groupIndex : SV_GroupIndex)
 {
+	DDGIVolume volume = GetDDGIVolume(cPass.VolumeIndex);
 	uint probeIdx = groupId;
-	uint3 probeCoordinates = GetProbeIndex3D(probeIdx);
-	uint2 texelLocation = GetProbeTexel(probeCoordinates, DDGI_PROBE_DEPTH_TEXELS);
+	uint3 probeCoordinates = GetDDGIProbeIndex3D(volume, probeIdx);
+	uint2 texelLocation = GetDDGIProbeTexel(volume, probeCoordinates, DDGI_PROBE_DEPTH_TEXELS);
 	uint2 cornerTexelLocation = texelLocation - 1u;
 	texelLocation += groupThreadId.xy;
+	Texture2D<float2> tDepthMap = ResourceDescriptorHeap[volume.DepthIndex];
 	float2 prevDepth = tDepthMap[texelLocation];
 	float3 probeDirection = DecodeNormalOctahedron(((groupThreadId.xy + 0.5f) / (float)DDGI_PROBE_DEPTH_TEXELS) * 2 - 1);
 
 #if DDGI_DYNAMIC_PROBE_OFFSET
 	float3 prevProbeOffset = uProbeOffsets[probeIdx].xyz;
 	float3 probeOffset = 0;
-	const float probeOffsetDistance = max(cView.DDGIProbeSize.x, max(cView.DDGIProbeSize.y, cView.DDGIProbeSize.z)) * 0.3f;
+	const float probeOffsetDistance = max(volume.ProbeSize.x, max(volume.ProbeSize.y, volume.ProbeSize.z)) * 0.3f;
 #endif
-
 
 	float weightSum = 0;
 	float2 sum = 0;
@@ -404,6 +409,13 @@ void UpdateDepthCS(
 	Visualization Shader rendering spheres in the scene.
 */
 
+struct VisualizeParameters
+{
+	uint VolumeIndex;
+};
+
+ConstantBuffer<VisualizeParameters> cVisualize : register(b0);
+
 struct InterpolantsVSToPS
 {
 	float4 Position : SV_Position;
@@ -415,11 +427,12 @@ InterpolantsVSToPS VisualizeIrradianceVS(
 	uint vertexId : SV_VertexID,
 	uint instanceId : SV_InstanceID)
 {
+	DDGIVolume volume = GetDDGIVolume(cVisualize.VolumeIndex);
 	const float scale = 0.1f;
 
 	uint probeIdx = instanceId;
-	uint3 probeIdx3D = GetProbeIndex3D(probeIdx);
-	float3 probePosition = GetProbePosition(probeIdx3D);
+	uint3 probeIdx3D = GetDDGIProbeIndex3D(volume, probeIdx);
+	float3 probePosition = GetDDGIProbePosition(volume, probeIdx3D);
 	float3 pos = SPHERE[vertexId].xyz;
 	float3 worldPos = scale * pos + probePosition;
 
@@ -432,9 +445,11 @@ InterpolantsVSToPS VisualizeIrradianceVS(
 
 float4 VisualizeIrradiancePS(InterpolantsVSToPS input) : SV_Target0
 {
-	uint3 probeIdx3D = GetProbeIndex3D(input.ProbeIndex);
-	float3 probePosition = GetProbePosition(probeIdx3D);
-	float2 uv = GetProbeUV(probeIdx3D, input.Normal, DDGI_PROBE_IRRADIANCE_TEXELS);
+	DDGIVolume volume = GetDDGIVolume(cVisualize.VolumeIndex);
+	uint3 probeIdx3D = GetDDGIProbeIndex3D(volume, input.ProbeIndex);
+	float3 probePosition = GetDDGIProbePosition(volume, probeIdx3D);
+	float2 uv = GetDDGIProbeUV(volume, probeIdx3D, input.Normal, DDGI_PROBE_IRRADIANCE_TEXELS);
+	Texture2D<float4> tIrradianceMap = ResourceDescriptorHeap[volume.IrradianceIndex];
 	float3 radiance = tIrradianceMap.SampleLevel(sLinearClamp, uv, 0).rgb;
 	return float4(radiance, 1);
 }
