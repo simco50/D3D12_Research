@@ -268,6 +268,9 @@ static const uint4 DDGI_COLOR_BORDER_OFFSETS[36] = {
 	uint4(8, 2, 9, 7), uint4(8, 1, 9, 8), uint4(8, 8, 0, 0), uint4(1, 8, 9, 0), uint4(8, 1, 0, 9), uint4(1, 1, 9, 9)
 };
 
+#define IRRADIANCE_RAY_HIT_GS_SIZE DDGI_PROBE_IRRADIANCE_TEXELS * DDGI_PROBE_IRRADIANCE_TEXELS
+groupshared RayHitInfo gsIrradianceRayHitCache[IRRADIANCE_RAY_HIT_GS_SIZE];
+
 [numthreads(DDGI_PROBE_IRRADIANCE_TEXELS, DDGI_PROBE_IRRADIANCE_TEXELS, 1)]
 void UpdateIrradianceCS(
 	uint3 groupThreadId : SV_GroupThreadID,
@@ -287,16 +290,30 @@ void UpdateIrradianceCS(
 	float weightSum = 0;
 	float3 sum = 0;
 
-	for(uint i = 0; i < cPass.RaysPerProbe; ++i)
+	uint remainingRays = cPass.RaysPerProbe;
+	while(remainingRays > 0)
 	{
-		RayHitInfo rayData = tRayHitInfo[probeIdx * cPass.MaxRaysPerProbe + i];
-		float weight = saturate(dot(probeDirection, rayData.Direction));
-		if(weight > MIN_WEIGHT_THRESHOLD)
+		uint rayCount = min(remainingRays, IRRADIANCE_RAY_HIT_GS_SIZE);
+		remainingRays -= rayCount;
+
+		if(groupIndex < rayCount)
 		{
-			sum += weight * rayData.Radiance;
-			weightSum += weight;
+			gsIrradianceRayHitCache[groupIndex] = tRayHitInfo[probeIdx * cPass.MaxRaysPerProbe + remainingRays + groupIndex];
+		}
+		GroupMemoryBarrierWithGroupSync();
+
+		for(uint i = 0; i < rayCount; ++i)
+		{
+			RayHitInfo rayData = gsIrradianceRayHitCache[i];
+			float weight = saturate(dot(probeDirection, rayData.Direction));
+			if(weight > MIN_WEIGHT_THRESHOLD)
+			{
+				sum += weight * rayData.Radiance;
+				weightSum += weight;
+			}
 		}
 	}
+
 	if(weightSum > MIN_WEIGHT_THRESHOLD)
 	{
 		sum /= weightSum;
@@ -336,6 +353,9 @@ static const uint4 DDGI_DEPTH_BORDER_OFFSETS[68] = {
 	uint4(1, 16, 17, 0), 	uint4(16, 1, 0, 17), 	uint4(1, 1, 17, 17)
 };
 
+#define DEPTH_RAY_HIT_GS_SIZE DDGI_PROBE_DEPTH_TEXELS * DDGI_PROBE_DEPTH_TEXELS
+groupshared RayHitInfo gsDepthRayHitCache[DEPTH_RAY_HIT_GS_SIZE];
+
 [numthreads(DDGI_PROBE_DEPTH_TEXELS, DDGI_PROBE_DEPTH_TEXELS, 1)]
 void UpdateDepthCS(
 	uint3 groupThreadId : SV_GroupThreadID,
@@ -360,22 +380,37 @@ void UpdateDepthCS(
 
 	float weightSum = 0;
 	float2 sum = 0;
-	for(uint i = 0; i < cPass.RaysPerProbe; ++i)
-	{
-		RayHitInfo rayData = tRayHitInfo[probeIdx * cPass.MaxRaysPerProbe + i];
-		float weight = saturate(dot(probeDirection, rayData.Direction));
-		weight = pow(weight, 64);
-		float depth = rayData.Depth;
-		if(weight > MIN_WEIGHT_THRESHOLD)
-		{
-			weightSum += weight;
-			sum += float2(depth, Square(depth)) * weight;
-		}
 
-#if DDGI_DYNAMIC_PROBE_OFFSET
-		probeOffset -= rayData.Direction * saturate(probeOffsetDistance - depth);
-#endif
+	uint remainingRays = cPass.RaysPerProbe;
+	while(remainingRays > 0)
+	{
+		uint rayCount = min(remainingRays, DEPTH_RAY_HIT_GS_SIZE);
+		remainingRays -= rayCount;
+
+		if(groupIndex < rayCount)
+		{
+			gsDepthRayHitCache[groupIndex] = tRayHitInfo[probeIdx * cPass.MaxRaysPerProbe + remainingRays + groupIndex];
+		}
+		GroupMemoryBarrierWithGroupSync();
+
+		for(uint i = 0; i < rayCount; ++i)
+		{
+			RayHitInfo rayData = gsDepthRayHitCache[i];
+			float weight = saturate(dot(probeDirection, rayData.Direction));
+			weight = pow(weight, 64);
+			float depth = rayData.Depth;
+			if(weight > MIN_WEIGHT_THRESHOLD)
+			{
+				weightSum += weight;
+				sum += float2(depth, Square(depth)) * weight;
+			}
+
+	#if DDGI_DYNAMIC_PROBE_OFFSET
+			probeOffset -= rayData.Direction * saturate(probeOffsetDistance - depth);
+	#endif
+		}
 	}
+
 	if(weightSum > MIN_WEIGHT_THRESHOLD)
 	{
 		sum /= weightSum;
