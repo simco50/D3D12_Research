@@ -1640,8 +1640,8 @@ void DemoApp::InitializePipelines()
 	if(m_pDevice->GetCapabilities().SupportsRaytracing())
 	{
 		// Must match with shader!
-		constexpr uint32 probeIrradianceTexels = 8;
-		constexpr uint32 probeDepthTexel = 16;
+		constexpr uint32 probeIrradianceTexels = 6;
+		constexpr uint32 probeDepthTexel = 14;
 		struct RayHitInfo
 		{
 			Vector3 Direction;

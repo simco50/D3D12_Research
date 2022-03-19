@@ -114,7 +114,7 @@ float3 SphericalFibonacci(float i, float n)
 	float phi = 2.0 * PI * madfrac(i, PHI - 1);
 	float cos_theta = 1.0 - (2.0 * i + 1.0) * (1.0 / n);
 	float sin_theta = sqrt(saturate(1.0 - cos_theta * cos_theta));
-	return float3(cos(phi) * sin_theta, cos_theta, sin(phi) * sin_theta);
+	return float3(cos(phi) * sin_theta, sin(phi) * sin_theta, cos_theta);
 	#undef madfrac
 }
 
@@ -231,14 +231,17 @@ void TraceRaysCS(
 
 #define MIN_WEIGHT_THRESHOLD 0.0001f
 
-// From Dihara Wijetunga - hybrid-rendering
-static const uint4 DDGI_COLOR_BORDER_OFFSETS[36] = {
-	uint4(8, 1, 1, 0), uint4(7, 1, 2, 0), uint4(6, 1, 3, 0), uint4(5, 1, 4, 0), uint4(4, 1, 5, 0), uint4(3, 1, 6, 0),
-	uint4(2, 1, 7, 0), uint4(1, 1, 8, 0), uint4(8, 8, 1, 9), uint4(7, 8, 2, 9), uint4(6, 8, 3, 9), uint4(5, 8, 4, 9),
-	uint4(4, 8, 5, 9), uint4(3, 8, 6, 9), uint4(2, 8, 7, 9), uint4(1, 8, 8, 9), uint4(1, 8, 0, 1), uint4(1, 7, 0, 2),
-	uint4(1, 6, 0, 3), uint4(1, 5, 0, 4), uint4(1, 4, 0, 5), uint4(1, 3, 0, 6), uint4(1, 2, 0, 7), uint4(1, 1, 0, 8),
-	uint4(8, 8, 9, 1), uint4(8, 7, 9, 2), uint4(8, 6, 9, 3), uint4(8, 5, 9, 4), uint4(8, 4, 9, 5), uint4(8, 3, 9, 6),
-	uint4(8, 2, 9, 7), uint4(8, 1, 9, 8), uint4(8, 8, 0, 0), uint4(1, 8, 9, 0), uint4(8, 1, 0, 9), uint4(1, 1, 9, 9)
+// Precompute border texel copy source/destination for 6x6 probe size
+static const uint NUM_COLOR_BORDER_TEXELS = DDGI_PROBE_IRRADIANCE_TEXELS * 4 + 4;
+static const uint4 DDGI_COLOR_BORDER_OFFSETS[NUM_COLOR_BORDER_TEXELS] = {
+	uint4(6, 6, 0, 0), // TL Corner
+	uint4(6, 1, 1, 0),	uint4(5, 1, 2, 0),	uint4(4, 1, 3, 0),	uint4(3, 1, 4, 0),	uint4(2, 1, 5, 0),	uint4(1, 1, 6, 0), // Top border
+	uint4(1, 6, 7, 0), // TR Corner
+	uint4(1, 6, 0, 1),	uint4(1, 5, 0, 2),	uint4(1, 4, 0, 3),	uint4(1, 3, 0, 4),	uint4(1, 2, 0, 5),	uint4(1, 1, 0, 6), // Right border
+	uint4(6, 1, 0, 7), // BL Corner
+	uint4(6, 6, 7, 1),	uint4(6, 5, 7, 2),	uint4(6, 4, 7, 3),	uint4(6, 3, 7, 4),	uint4(6, 2, 7, 5),	uint4(6, 1, 7, 6), // Left border
+	uint4(1, 1, 7, 7), // BR Corner
+	uint4(6, 6, 1, 7),	uint4(5, 6, 2, 7),	uint4(4, 6, 3, 7),	uint4(3, 6, 4, 7),	uint4(2, 6, 5, 7),	uint4(1, 6, 6, 7) // Bottom border
 };
 
 #define IRRADIANCE_RAY_HIT_GS_SIZE DDGI_PROBE_IRRADIANCE_TEXELS * DDGI_PROBE_IRRADIANCE_TEXELS
@@ -300,7 +303,7 @@ void UpdateIrradianceCS(
 	DeviceMemoryBarrierWithGroupSync();
 
 	// Extend the borders of the probes to fix sampling issues at the edges
-	for (uint index = groupIndex; index < 36; index += DDGI_PROBE_IRRADIANCE_TEXELS * DDGI_PROBE_IRRADIANCE_TEXELS)
+	for (uint index = groupIndex; index < NUM_COLOR_BORDER_TEXELS; index += DDGI_PROBE_IRRADIANCE_TEXELS * DDGI_PROBE_IRRADIANCE_TEXELS)
 	{
 		uint2 sourceIndex = cornerTexelLocation + DDGI_COLOR_BORDER_OFFSETS[index].xy;
 		uint2 targetIndex = cornerTexelLocation + DDGI_COLOR_BORDER_OFFSETS[index].zw;
@@ -308,22 +311,23 @@ void UpdateIrradianceCS(
 	}
 }
 
-// From Dihara Wijetunga - hybrid-rendering
-static const uint4 DDGI_DEPTH_BORDER_OFFSETS[68] = {
-	uint4(16, 1, 1, 0), 	uint4(15, 1, 2, 0), 	uint4(14, 1, 3, 0), 	uint4(13, 1, 4, 0), 	uint4(12, 1, 5, 0),
-	uint4(11, 1, 6, 0), 	uint4(10, 1, 7, 0), 	uint4(9, 1, 8, 0), 		uint4(8, 1, 9, 0), 		uint4(7, 1, 10, 0),
-	uint4(6, 1, 11, 0), 	uint4(5, 1, 12, 0), 	uint4(4, 1, 13, 0), 	uint4(3, 1, 14, 0), 	uint4(2, 1, 15, 0),
-	uint4(1, 1, 16, 0), 	uint4(16, 16, 1, 17), 	uint4(15, 16, 2, 17), 	uint4(14, 16, 3, 17), 	uint4(13, 16, 4, 17),
-	uint4(12, 16, 5, 17), 	uint4(11, 16, 6, 17), 	uint4(10, 16, 7, 17), 	uint4(9, 16, 8, 17), 	uint4(8, 16, 9, 17),
-	uint4(7, 16, 10, 17), 	uint4(6, 16, 11, 17), 	uint4(5, 16, 12, 17), 	uint4(4, 16, 13, 17), 	uint4(3, 16, 14, 17),
-	uint4(2, 16, 15, 17), 	uint4(1, 16, 16, 17), 	uint4(1, 16, 0, 1), 	uint4(1, 15, 0, 2), 	uint4(1, 14, 0, 3),
-	uint4(1, 13, 0, 4), 	uint4(1, 12, 0, 5), 	uint4(1, 11, 0, 6), 	uint4(1, 10, 0, 7),		uint4(1, 9, 0, 8),
-	uint4(1, 8, 0, 9), 		uint4(1, 7, 0, 10), 	uint4(1, 6, 0, 11), 	uint4(1, 5, 0, 12), 	uint4(1, 4, 0, 13),
-	uint4(1, 3, 0, 14), 	uint4(1, 2, 0, 15), 	uint4(1, 1, 0, 16), 	uint4(16, 16, 17, 1), 	uint4(16, 15, 17, 2),
-	uint4(16, 14, 17, 3),	uint4(16, 13, 17, 4), 	uint4(16, 12, 17, 5), 	uint4(16, 11, 17, 6), 	uint4(16, 10, 17, 7),
-	uint4(16, 9, 17, 8), 	uint4(16, 8, 17, 9), 	uint4(16, 7, 17, 10), 	uint4(16, 6, 17, 11),	uint4(16, 5, 17, 12),
-	uint4(16, 4, 17, 13), 	uint4(16, 3, 17, 14), 	uint4(16, 2, 17, 15), 	uint4(16, 1, 17, 16), 	uint4(16, 16, 0, 0),
-	uint4(1, 16, 17, 0), 	uint4(16, 1, 0, 17), 	uint4(1, 1, 17, 17)
+// Precompute border texel copy source/destination for 14x14 probe size
+static const uint NUM_DEPTH_BORDER_TEXELS = DDGI_PROBE_DEPTH_TEXELS * 4 + 4;
+static const uint4 DDGI_DEPTH_BORDER_OFFSETS[NUM_DEPTH_BORDER_TEXELS] = {
+	uint4(14, 14, 0, 0), // TL Corner
+	uint4(14, 1, 1, 0),	uint4(13, 1, 2, 0),	uint4(12, 1, 3, 0),	uint4(11, 1, 4, 0),	uint4(10, 1, 5, 0),	uint4(9, 1, 6, 0), uint4(8, 1, 7, 0), // Top border
+	uint4(7, 1, 8, 0),	uint4(6, 1, 9, 0),	uint4(5, 1, 10, 0),	uint4(4, 1, 11, 0),	uint4(3, 1, 12, 0),	uint4(2, 1, 13, 0),	uint4(1, 1, 14, 0),
+	uint4(1, 14, 15, 0), // TR Corner
+	uint4(1, 14, 0, 1),	uint4(1, 13, 0, 2),	uint4(1, 12, 0, 3),	uint4(1, 11, 0, 4),	uint4(1, 10, 0, 5),	uint4(1, 9, 0, 6),	uint4(1, 8, 0, 7), // Right border
+	uint4(1, 7, 0, 8),	uint4(1, 6, 0, 9),	uint4(1, 5, 0, 10),	uint4(1, 4, 0, 11),	uint4(1, 3, 0, 12),	uint4(1, 2, 0, 13),	uint4(1, 1, 0, 14),
+
+	uint4(14, 1, 0, 15), // BL Corner
+	uint4(14, 14, 15, 1), uint4(14, 13, 15, 2), uint4(14, 12, 15, 3), uint4(14, 11, 15, 4), uint4(14, 10, 15, 5), uint4(14, 9, 15, 6), uint4(14, 8, 15, 7), // Left border
+	uint4(14, 7, 15, 8), uint4(14, 6, 15, 9), uint4(14, 5, 15, 10), uint4(14, 4, 15, 11), uint4(14, 3, 15, 12), uint4(14, 2, 15, 13), uint4(14, 1, 15, 14),
+
+	uint4(1, 1, 15, 15), // BR Corner
+	uint4(14, 14, 1, 15), uint4(13, 14, 2, 15), uint4(12, 14, 3, 15), uint4(11, 14, 4, 15), uint4(10, 14, 5, 15), uint4(9, 14, 6, 15), uint4(8, 14, 7, 15), // Bottom border
+	uint4(7, 14, 8, 15), uint4(6, 14, 9, 15), uint4(5, 14, 10, 15), uint4(4, 14, 11, 15), uint4(3, 14, 12, 15), uint4(2, 14, 13, 15), uint4(1, 14, 14, 15),
 };
 
 #define DEPTH_RAY_HIT_GS_SIZE DDGI_PROBE_DEPTH_TEXELS * DDGI_PROBE_DEPTH_TEXELS
@@ -404,7 +408,7 @@ void UpdateDepthCS(
 #endif
 
 	// Extend the borders of the probes to fix sampling issues at the edges
-	for (uint index = groupIndex; index < 68; index += DDGI_PROBE_DEPTH_TEXELS * DDGI_PROBE_DEPTH_TEXELS)
+	for (uint index = groupIndex; index < NUM_DEPTH_BORDER_TEXELS; index += DDGI_PROBE_DEPTH_TEXELS * DDGI_PROBE_DEPTH_TEXELS)
 	{
 		uint2 sourceIndex = cornerTexelLocation + DDGI_DEPTH_BORDER_OFFSETS[index].xy;
 		uint2 targetIndex = cornerTexelLocation + DDGI_DEPTH_BORDER_OFFSETS[index].zw;

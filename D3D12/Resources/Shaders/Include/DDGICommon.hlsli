@@ -1,8 +1,8 @@
 #include "Common.hlsli"
 
 // Must match with texture size!
-#define DDGI_PROBE_IRRADIANCE_TEXELS 8
-#define DDGI_PROBE_DEPTH_TEXELS 16
+#define DDGI_PROBE_IRRADIANCE_TEXELS 6
+#define DDGI_PROBE_DEPTH_TEXELS 14
 #define DDGI_DYNAMIC_PROBE_OFFSET 0
 
 DDGIVolume GetDDGIVolume(uint index)
