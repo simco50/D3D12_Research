@@ -779,19 +779,21 @@ void DemoApp::Update()
 
 	if(Tweakables::g_EnableDDGI && m_DDGIVolumes.size() > 0 && m_pDevice->GetCapabilities().SupportsRaytracing())
 	{
+		RG_GRAPH_SCOPE("DDGI", graph);
+
 		uint32 randomIndex = Math::RandomRange(0, (int)m_DDGIVolumes.size() - 1);
 		DDGIVolume& ddgi = m_DDGIVolumes[randomIndex];
 
 		struct
 		{
-			uint32 RaysPerProbe;
-			uint32 MaxRaysPerProbe;
+			Vector3 RandomVector;
+			float RandomAngle;
 			float HistoryBlendWeight;
 			uint32 VolumeIndex;
 		} parameters;
 
-		parameters.RaysPerProbe = Tweakables::g_DDGIRayCount;
-		parameters.MaxRaysPerProbe = 512; // Must match with ray buffer
+		parameters.RandomVector = Math::RandVector();
+		parameters.RandomAngle = Math::RandomRange(0.0f, 2.0f * Math::PI);
 		parameters.HistoryBlendWeight = 0.98f;
 		parameters.VolumeIndex = randomIndex;
 
@@ -815,7 +817,6 @@ void DemoApp::Update()
 		RGPassBuilder ddgiUpdateIrradiance = graph.AddPass("DDGI Update Irradiance");
 		ddgiUpdateIrradiance.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
 			{
-				context.InsertResourceBarrier(ddgi.pRayBuffer, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 				context.InsertResourceBarrier(ddgi.pIrradiance[1], D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 				context.SetComputeRootSignature(m_pCommonRS);
 				context.SetPipelineState(m_pDDGIUpdateIrradianceColorPSO);
@@ -1638,8 +1639,7 @@ void DemoApp::InitializePipelines()
 	// DDGI
 	if(m_pDevice->GetCapabilities().SupportsRaytracing())
 	{
-		// Must match with shader! (DDGICommon.hlsli)
-		constexpr uint32 maxNumRays = 512;
+		// Must match with shader!
 		constexpr uint32 probeIrradianceTexels = 8;
 		constexpr uint32 probeDepthTexel = 16;
 		struct RayHitInfo
@@ -1672,14 +1672,14 @@ void DemoApp::InitializePipelines()
 		volume.Origin = Vector3(-0.484151840f, 5.21196413f, 0.309524536f);
 		volume.Extents = Vector3(14.8834171f, 6.22350454f, 9.15293312f);
 		volume.NumProbes = IntVector3(24, 16, 16);
+		volume.MaxNumRays = 512; // Must match with shader!
 		m_DDGIVolumes.push_back(volume);
 		
 		for (DDGIVolume& ddgi : m_DDGIVolumes)
 		{
 			uint32 numProbes = ddgi.NumProbes.x * ddgi.NumProbes.y * ddgi.NumProbes.z;
-			ddgi.pRayBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(numProbes * maxNumRays, raySize, BufferFlag::UnorderedAccess | BufferFlag::ShaderResource), "DDGI Ray Buffer");
+			ddgi.pRayBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(numProbes * ddgi.MaxNumRays, raySize, BufferFlag::UnorderedAccess | BufferFlag::ShaderResource), "DDGI Ray Buffer");
 			ddgi.pProbeOffset = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(numProbes, sizeof(Vector4), BufferFlag::UnorderedAccess | BufferFlag::ShaderResource), "DDGI Probe Offset Buffer");
-
 			{
 				uint32 width = (1 + probeIrradianceTexels + 1) * ddgi.NumProbes.z * ddgi.NumProbes.x;
 				uint32 height = (1 + probeIrradianceTexels + 1) * ddgi.NumProbes.y;
@@ -2251,6 +2251,8 @@ void DemoApp::UploadSceneData(CommandContext& context)
 		ddgi.IrradianceIndex = ddgiVolume.pIrradiance[0] ? ddgiVolume.pIrradiance[0]->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
 		ddgi.DepthIndex = ddgiVolume.pDepth[0] ? ddgiVolume.pDepth[0]->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
 		ddgi.ProbeOffsetIndex = ddgiVolume.pProbeOffset ? ddgiVolume.pProbeOffset->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
+		ddgi.NumRaysPerProbe = Tweakables::g_DDGIRayCount;
+		ddgi.MaxRaysPerProbe = ddgiVolume.MaxNumRays;
 		ddgiVolumes.push_back(ddgi);
 	}
 

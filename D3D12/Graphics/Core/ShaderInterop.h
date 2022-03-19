@@ -152,6 +152,8 @@ namespace ShaderInterop
 		uint IrradianceIndex;
 		uint3 ProbeVolumeDimensions;
 		uint ProbeOffsetIndex;
+		uint NumRaysPerProbe;
+		uint MaxRaysPerProbe;
 	};
 
 	struct ViewUniforms

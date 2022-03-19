@@ -15,13 +15,14 @@ struct RayHitInfo
 
 struct PassParameters
 {
-	uint RaysPerProbe;
-	uint MaxRaysPerProbe;
+	float3 RandomVector;
+	float RandomAngle;
 	float HistoryBlendWeight;
 	uint VolumeIndex;
 };
 
 ConstantBuffer<PassParameters> cPass : register(b0);
+
 RWStructuredBuffer<RayHitInfo> uRayHitInfo : register(u0);
 RWTexture2D<float4> uIrradianceMap : register(u0);
 RWTexture2D<float2> uDepthMap : register(u0);
@@ -104,90 +105,6 @@ LightResult EvaluateLight(Light light, float3 worldPos, float3 V, float3 N, Brdf
 	return result;
 }
 
-RayHitInfo CastPrimaryRay(float3 origin, float3 direction, float maxDepth)
-{
-	RayDesc ray;
-	ray.Origin = origin;
-	ray.Direction = direction;
-	ray.TMin = 0;
-	ray.TMax = RAY_MAX_T;
-
-	const int rayFlags = RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES;
-
-	RaytracingAccelerationStructure TLAS = ResourceDescriptorHeap[cView.TLASIndex];
-
-	RayQuery<rayFlags> q;
-
-	q.TraceRayInline(
-		TLAS, 	// AccelerationStructure
-		0,		// RayFlags
-		0xFF, 	// InstanceMask
-		ray		// Ray
-	);
-
-	const uint textureMipLevel = 5;
-
-	while(q.Proceed())
-	{
-		switch(q.CandidateType())
-		{
-			case CANDIDATE_NON_OPAQUE_TRIANGLE:
-			{
-				MeshInstance instance = GetMeshInstance(q.CandidateInstanceID());
-				VertexAttribute vertex = GetVertexAttributes(instance, q.CandidateTriangleBarycentrics(), q.CandidatePrimitiveIndex(), q.CandidateObjectToWorld4x3());
-				MaterialData material = GetMaterial(instance.Material);
-				MaterialProperties surface = GetMaterialProperties(material, vertex.UV, textureMipLevel);
-				if(surface.Opacity > material.AlphaCutoff)
-				{
-					q.CommitNonOpaqueTriangleHit();
-				}
-			}
-			break;
-		}
-	}
-
-	float3 radiance = 0;
-	float depth = maxDepth;
-
-	if(q.CommittedStatus() == COMMITTED_TRIANGLE_HIT)
-	{
-		MeshInstance instance = GetMeshInstance(q.CommittedInstanceID());
-		VertexAttribute vertex = GetVertexAttributes(instance, q.CommittedTriangleBarycentrics(), q.CommittedPrimitiveIndex(), q.CommittedObjectToWorld4x3());
-		MaterialData material = GetMaterial(instance.Material);
-		MaterialProperties surface = GetMaterialProperties(material, vertex.UV, textureMipLevel);
-		BrdfData brdfData = GetBrdfData(surface);
-
-		float3 hitLocation = q.WorldRayOrigin() + q.WorldRayDirection() * q.CommittedRayT();
-		float3 V = normalize(-q.WorldRayDirection());
-		float3 N = vertex.Normal;
-
-		LightResult totalResult = (LightResult)0;
-		for(int i = 0; i < cView.LightCount; ++i)
-		{
-			Light light = GetLight(i);
-			LightResult result = EvaluateLight(light, hitLocation, V, N, brdfData);
-			totalResult.Diffuse += result.Diffuse;
-			totalResult.Specular += result.Specular;
-		}
-
-		radiance += totalResult.Diffuse;
-		radiance += surface.Emissive;
-		radiance += brdfData.Diffuse * SampleDDGIIrradiance(hitLocation, N);
-
-		depth = clamp(q.CommittedRayT(), 0, maxDepth);
-	}
-	else
-	{
-		radiance = GetSky(ray.Direction);
-	}
-
-	RayHitInfo hit = (RayHitInfo)0;
-	hit.Direction = ray.Direction;
-	hit.Depth = depth;
-	hit.Radiance = radiance;
-	return hit;
-}
-
 // From G3DMath
 // Generates a nearly uniform point distribution on the unit sphere of size N
 static const float PHI = sqrt(5) * 0.5 + 0.5;
@@ -238,15 +155,71 @@ void TraceRaysCS(
 	float3 probePosition = GetDDGIProbePosition(volume, probeIdx3D);
 	uint rayIndex = groupThreadId;
 
-	uint seed = SeedThread(cView.FrameIndex);
-	float3x3 randomRotation = AngleAxis3x3(Random01(seed) * 2 * PI, normalize(float3(Random01(seed), Random01(seed), Random01(seed))));
+	float3x3 randomRotation = AngleAxis3x3(cPass.RandomAngle, cPass.RandomVector);
 	const float maxDepth = max(volume.ProbeSize.x, max(volume.ProbeSize.y, volume.ProbeSize.z)) * 2;
 
-	while(rayIndex < cPass.RaysPerProbe)
+	RaytracingAccelerationStructure TLAS = ResourceDescriptorHeap[cView.TLASIndex];
+
+	uint numRays = volume.NumRaysPerProbe;
+	while(rayIndex < numRays)
 	{
-		float3 direction = mul(SphericalFibonacci(rayIndex, cPass.RaysPerProbe), randomRotation);
-		RayHitInfo hit = CastPrimaryRay(probePosition, direction, maxDepth);
-		uRayHitInfo[probeIdx * cPass.MaxRaysPerProbe + rayIndex] = hit;
+		float3 direction = mul(SphericalFibonacci(rayIndex, numRays), randomRotation);
+
+		RayDesc ray;
+		ray.Origin = probePosition;
+		ray.Direction = direction;
+		ray.TMin = 0;
+		ray.TMax = RAY_MAX_T;
+
+		RayQuery<RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> q;
+		q.TraceRayInline(
+			TLAS, 	// AccelerationStructure
+			0,		// RayFlags
+			0xFF, 	// InstanceMask
+			ray		// Ray
+		);
+		q.Proceed();
+
+		float3 radiance = 0;
+		float depth = maxDepth;
+
+		if(q.CommittedStatus() == COMMITTED_TRIANGLE_HIT)
+		{
+			MeshInstance instance = GetMeshInstance(q.CommittedInstanceID());
+			VertexAttribute vertex = GetVertexAttributes(instance, q.CommittedTriangleBarycentrics(), q.CommittedPrimitiveIndex(), q.CommittedObjectToWorld4x3());
+			MaterialData material = GetMaterial(instance.Material);
+			const uint textureMipLevel = 5;
+			MaterialProperties surface = GetMaterialProperties(material, vertex.UV, textureMipLevel);
+			BrdfData brdfData = GetBrdfData(surface);
+
+			float3 hitLocation = q.WorldRayOrigin() + q.WorldRayDirection() * q.CommittedRayT();
+			float3 V = normalize(-q.WorldRayDirection());
+			float3 N = vertex.Normal;
+
+			LightResult totalResult = (LightResult)0;
+			for(int i = 0; i < cView.LightCount; ++i)
+			{
+				Light light = GetLight(i);
+				LightResult result = EvaluateLight(light, hitLocation, V, N, brdfData);
+				totalResult.Diffuse += result.Diffuse;
+				totalResult.Specular += result.Specular;
+			}
+
+			radiance += totalResult.Diffuse;
+			radiance += surface.Emissive;
+			radiance += brdfData.Diffuse * SampleDDGIIrradiance(hitLocation, N);
+			depth = min(q.CommittedRayT(), depth);
+		}
+		else
+		{
+			radiance = GetSky(ray.Direction);
+		}
+
+		RayHitInfo hit = (RayHitInfo)0;
+		hit.Direction = ray.Direction;
+		hit.Depth = depth;
+		hit.Radiance = radiance;
+		uRayHitInfo[probeIdx * volume.MaxRaysPerProbe + rayIndex] = hit;
 		rayIndex += THREAD_GROUP_SIZE;
 	}
 }
@@ -290,7 +263,7 @@ void UpdateIrradianceCS(
 	float weightSum = 0;
 	float3 sum = 0;
 
-	uint remainingRays = cPass.RaysPerProbe;
+	uint remainingRays = volume.NumRaysPerProbe;
 	while(remainingRays > 0)
 	{
 		uint rayCount = min(remainingRays, IRRADIANCE_RAY_HIT_GS_SIZE);
@@ -298,7 +271,7 @@ void UpdateIrradianceCS(
 
 		if(groupIndex < rayCount)
 		{
-			gsIrradianceRayHitCache[groupIndex] = tRayHitInfo[probeIdx * cPass.MaxRaysPerProbe + remainingRays + groupIndex];
+			gsIrradianceRayHitCache[groupIndex] = tRayHitInfo[probeIdx * volume.MaxRaysPerProbe + remainingRays + groupIndex];
 		}
 		GroupMemoryBarrierWithGroupSync();
 
@@ -381,7 +354,7 @@ void UpdateDepthCS(
 	float weightSum = 0;
 	float2 sum = 0;
 
-	uint remainingRays = cPass.RaysPerProbe;
+	uint remainingRays = volume.NumRaysPerProbe;
 	while(remainingRays > 0)
 	{
 		uint rayCount = min(remainingRays, DEPTH_RAY_HIT_GS_SIZE);
@@ -389,7 +362,7 @@ void UpdateDepthCS(
 
 		if(groupIndex < rayCount)
 		{
-			gsDepthRayHitCache[groupIndex] = tRayHitInfo[probeIdx * cPass.MaxRaysPerProbe + remainingRays + groupIndex];
+			gsDepthRayHitCache[groupIndex] = tRayHitInfo[probeIdx * volume.MaxRaysPerProbe + remainingRays + groupIndex];
 		}
 		GroupMemoryBarrierWithGroupSync();
 

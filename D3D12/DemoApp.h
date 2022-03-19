@@ -174,6 +174,7 @@ private:
 		Vector3 Origin;
 		Vector3 Extents;
 		IntVector3 NumProbes;
+		uint32 MaxNumRays;
 		std::array<RefCountPtr<Texture>, 2> pIrradiance;
 		std::array<RefCountPtr<Texture>, 2> pDepth;
 		RefCountPtr<Buffer> pProbeOffset;
