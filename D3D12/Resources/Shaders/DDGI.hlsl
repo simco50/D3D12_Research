@@ -465,5 +465,7 @@ float4 VisualizeIrradiancePS(InterpolantsVSToPS input) : SV_Target0
 	float2 uv = GetDDGIProbeUV(volume, probeIdx3D, input.Normal, DDGI_PROBE_IRRADIANCE_TEXELS);
 	Texture2D<float4> tIrradianceMap = ResourceDescriptorHeap[volume.IrradianceIndex];
 	float3 radiance = tIrradianceMap.SampleLevel(sLinearClamp, uv, 0).rgb;
+	radiance = pow(radiance, PROBE_GAMMA * 0.5);
+	radiance = 2 * Square(radiance);
 	return float4(radiance, 1);
 }
