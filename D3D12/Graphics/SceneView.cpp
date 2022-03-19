@@ -90,7 +90,7 @@ ShaderInterop::ViewUniforms GetViewUniforms(const SceneView& sceneView, Texture*
 	parameters.LightsIndex = sceneView.pLightBuffer->GetSRVIndex();
 	parameters.SkyIndex = sceneView.pSky->GetSRVIndex();
 	parameters.DDGIVolumesIndex = sceneView.pDDGIVolumesBuffer->GetSRVIndex();
-	parameters.NumDDGIVolumes = sceneView.pDDGIVolumesBuffer->GetNumElements();
+	parameters.NumDDGIVolumes = sceneView.NumDDGIVolumes;
 	return parameters;
 }
 

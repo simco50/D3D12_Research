@@ -2242,19 +2242,23 @@ void DemoApp::UploadSceneData(CommandContext& context)
 	}
 
 	std::vector<ShaderInterop::DDGIVolume> ddgiVolumes;
-	for (DDGIVolume& ddgiVolume : m_DDGIVolumes)
+	if (Tweakables::g_EnableDDGI)
 	{
-		ShaderInterop::DDGIVolume ddgi{};
-		ddgi.BoundsMin = ddgiVolume.Origin - ddgiVolume.Extents;
-		ddgi.ProbeSize = 2 * ddgiVolume.Extents / (Vector3((float)ddgiVolume.NumProbes.x, (float)ddgiVolume.NumProbes.y, (float)ddgiVolume.NumProbes.z) - Vector3::One);
-		ddgi.ProbeVolumeDimensions = TIntVector3<uint32>(ddgiVolume.NumProbes.x, ddgiVolume.NumProbes.y, ddgiVolume.NumProbes.z);
-		ddgi.IrradianceIndex = ddgiVolume.pIrradiance[0] ? ddgiVolume.pIrradiance[0]->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
-		ddgi.DepthIndex = ddgiVolume.pDepth[0] ? ddgiVolume.pDepth[0]->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
-		ddgi.ProbeOffsetIndex = ddgiVolume.pProbeOffset ? ddgiVolume.pProbeOffset->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
-		ddgi.NumRaysPerProbe = Tweakables::g_DDGIRayCount;
-		ddgi.MaxRaysPerProbe = ddgiVolume.MaxNumRays;
-		ddgiVolumes.push_back(ddgi);
+		for (DDGIVolume& ddgiVolume : m_DDGIVolumes)
+		{
+			ShaderInterop::DDGIVolume ddgi{};
+			ddgi.BoundsMin = ddgiVolume.Origin - ddgiVolume.Extents;
+			ddgi.ProbeSize = 2 * ddgiVolume.Extents / (Vector3((float)ddgiVolume.NumProbes.x, (float)ddgiVolume.NumProbes.y, (float)ddgiVolume.NumProbes.z) - Vector3::One);
+			ddgi.ProbeVolumeDimensions = TIntVector3<uint32>(ddgiVolume.NumProbes.x, ddgiVolume.NumProbes.y, ddgiVolume.NumProbes.z);
+			ddgi.IrradianceIndex = ddgiVolume.pIrradiance[0] ? ddgiVolume.pIrradiance[0]->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
+			ddgi.DepthIndex = ddgiVolume.pDepth[0] ? ddgiVolume.pDepth[0]->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
+			ddgi.ProbeOffsetIndex = ddgiVolume.pProbeOffset ? ddgiVolume.pProbeOffset->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
+			ddgi.NumRaysPerProbe = Tweakables::g_DDGIRayCount;
+			ddgi.MaxRaysPerProbe = ddgiVolume.MaxNumRays;
+			ddgiVolumes.push_back(ddgi);
+		}
 	}
+	m_SceneData.NumDDGIVolumes = (uint32)ddgiVolumes.size();
 
 	sceneBatches.swap(m_SceneData.Batches);
 
