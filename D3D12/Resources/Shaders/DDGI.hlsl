@@ -218,7 +218,7 @@ void TraceRaysCS(
 		RayHitInfo hit = (RayHitInfo)0;
 		hit.Direction = ray.Direction;
 		hit.Depth = depth;
-		hit.Radiance = radiance;
+		hit.Radiance = radiance / PI;
 		uRayHitInfo[probeIdx * volume.MaxRaysPerProbe + rayIndex] = hit;
 		rayIndex += THREAD_GROUP_SIZE;
 	}
@@ -295,6 +295,8 @@ void UpdateIrradianceCS(
 		sum /= weightSum;
 	}
 
+	// Apply tone curve for better encoding
+	sum = pow(sum, rcp(PROBE_GAMMA));
 	const float historyBlendWeight = saturate(1.0f - cPass.HistoryBlendWeight);
 	sum = lerp(prevRadiance, sum, historyBlendWeight);
 

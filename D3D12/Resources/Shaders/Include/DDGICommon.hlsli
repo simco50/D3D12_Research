@@ -4,6 +4,7 @@
 #define DDGI_PROBE_IRRADIANCE_TEXELS 6
 #define DDGI_PROBE_DEPTH_TEXELS 14
 #define DDGI_DYNAMIC_PROBE_OFFSET 0
+#define PROBE_GAMMA 5.0f
 
 DDGIVolume GetDDGIVolume(uint index)
 {
@@ -113,11 +114,12 @@ float4 SampleDDGIIrradiance(DDGIVolume volume, float3 position, float3 direction
 		weight *= max(p, probeDistance <= moments.x);
 
 		float2 uv = GetDDGIProbeUV(volume, probeCoordinates, direction, DDGI_PROBE_IRRADIANCE_TEXELS);
-		float3 irradiance = irradianceTexture.SampleLevel(sLinearClamp, uv, 0).rgb;
+		// Remove tone curve and blend in sRGB
+		float3 irradiance = pow(irradianceTexture.SampleLevel(sLinearClamp, uv, 0).rgb, PROBE_GAMMA * 0.5f);
 
-		const float crush_threshold = 0.2f;
-		if (weight < crush_threshold)
-			weight *= weight * weight * (1.0f / Square(crush_threshold));
+		const float crushThreshold = 0.2f;
+		if (weight < crushThreshold)
+			weight *= weight * weight * (1.0f / Square(crushThreshold));
 
 		weight *= interp.x * interp.y * interp.z;
 
@@ -125,9 +127,16 @@ float4 SampleDDGIIrradiance(DDGIVolume volume, float3 position, float3 direction
 		sumWeight += weight;
 	}
 
-	if(sumWeight > 0)
-		return float4(sumIrradiance / sumWeight, volumeWeight);
-	return 0;
+	if(sumWeight == 0)
+	{
+		return float4(0, 0, 0, volumeWeight);
+	}
+
+	sumIrradiance *= (1.0f / sumWeight);
+	// Transform back into linear (see note above)
+	sumIrradiance *= sumIrradiance;
+	sumIrradiance *= 2 * PI;
+	return float4(sumIrradiance, volumeWeight);
 }
 
 float3 SampleDDGIIrradiance(float3 position, float3 direction)
