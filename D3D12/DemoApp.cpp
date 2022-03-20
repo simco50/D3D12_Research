@@ -135,7 +135,6 @@ namespace Tweakables
 	ConsoleVariable g_VisualizeLights("vis.Lights", false);
 	ConsoleVariable g_VisualizeLightDensity("vis.LightDensity", false);
 	ConsoleVariable g_EnableDDGI("r.DDGI", true);
-	ConsoleVariable g_DDGIRayCount("r.DDGI.RayCount", 128);
 	ConsoleVariable g_VisualizeDDGI("vis.DDGI", false);
 	ConsoleVariable g_RenderObjectBounds("r.vis.ObjectBounds", false);
 
@@ -1670,7 +1669,8 @@ void DemoApp::InitializePipelines()
 		volume.Origin = Vector3(-0.484151840f, 5.21196413f, 0.309524536f);
 		volume.Extents = Vector3(14.8834171f, 6.22350454f, 9.15293312f);
 		volume.NumProbes = IntVector3(24, 16, 16);
-		volume.MaxNumRays = 512; // Must match with shader!
+		volume.NumRays = 128;
+		volume.MaxNumRays = 512;
 		m_DDGIVolumes.push_back(volume);
 		
 		for (DDGIVolume& ddgi : m_DDGIVolumes)
@@ -2002,7 +2002,8 @@ void DemoApp::UpdateImGui()
 				ImGui::Checkbox("Raytraced AO", &Tweakables::g_RaytracedAO.Get());
 				ImGui::Checkbox("Raytraced Reflections", &Tweakables::g_RaytracedReflections.Get());
 				ImGui::Checkbox("DDGI", &Tweakables::g_EnableDDGI.Get());
-				ImGui::SliderInt("DDGI RayCount", &Tweakables::g_DDGIRayCount.Get(), 1, 512);
+				if(m_DDGIVolumes.size() > 0)
+					ImGui::SliderInt("DDGI RayCount", &m_DDGIVolumes.front().NumRays, 1, m_DDGIVolumes.front().MaxNumRays);
 				ImGui::Checkbox("Visualize DDGI", &Tweakables::g_VisualizeDDGI.Get());
 				ImGui::SliderAngle("TLAS Bounds Threshold", &Tweakables::g_TLASBoundsThreshold.Get(), 0, 40);
 			}
@@ -2251,7 +2252,7 @@ void DemoApp::UploadSceneData(CommandContext& context)
 			ddgi.IrradianceIndex = ddgiVolume.pIrradiance[0] ? ddgiVolume.pIrradiance[0]->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
 			ddgi.DepthIndex = ddgiVolume.pDepth[0] ? ddgiVolume.pDepth[0]->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
 			ddgi.ProbeOffsetIndex = ddgiVolume.pProbeOffset ? ddgiVolume.pProbeOffset->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
-			ddgi.NumRaysPerProbe = Tweakables::g_DDGIRayCount;
+			ddgi.NumRaysPerProbe = ddgiVolume.NumRays;
 			ddgi.MaxRaysPerProbe = ddgiVolume.MaxNumRays;
 			ddgiVolumes.push_back(ddgi);
 		}
