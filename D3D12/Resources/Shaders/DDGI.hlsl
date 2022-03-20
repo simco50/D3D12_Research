@@ -178,7 +178,24 @@ void TraceRaysCS(
 			0xFF, 	// InstanceMask
 			ray		// Ray
 		);
-		q.Proceed();
+		while(q.Proceed())
+		{
+			switch(q.CandidateType())
+			{
+				case CANDIDATE_NON_OPAQUE_TRIANGLE:
+				{
+					MeshInstance instance = GetMeshInstance(q.CandidateInstanceID());
+					VertexAttribute vertex = GetVertexAttributes(instance, q.CandidateTriangleBarycentrics(), q.CandidatePrimitiveIndex(), q.CandidateObjectToWorld4x3());
+					MaterialData material = GetMaterial(instance.Material);
+					MaterialProperties surface = GetMaterialProperties(material, vertex.UV, 0);
+					if(surface.Opacity > material.AlphaCutoff)
+					{
+						q.CommitNonOpaqueTriangleHit();
+					}
+				}
+				break;
+			}
+		}
 
 		float3 radiance = 0;
 		float depth = maxDepth;
