@@ -190,6 +190,12 @@ void TraceRaysCS(
 			radiance += surface.Emissive;
 			radiance += Diffuse_Lambert(min(brdfData.Diffuse, 0.9f)) * SampleDDGIIrradiance(hitLocation, N);
 			depth = min(q.CommittedRayT(), depth);
+
+			// If backfacing, make negative so probes get pushed through the backface when offset.
+			if(!q.CommittedTriangleFrontFace())
+			{
+				depth *= -0.2f;
+			}
 		}
 		else
 		{
@@ -330,7 +336,7 @@ void UpdateDepthCS(
 #if DDGI_DYNAMIC_PROBE_OFFSET
 	float3 prevProbeOffset = uProbeOffsets[probeIdx].xyz;
 	float3 probeOffset = 0;
-	const float probeOffsetDistance = max(volume.ProbeSize.x, max(volume.ProbeSize.y, volume.ProbeSize.z)) * 0.3f;
+	const float probeOffsetDistance = max(volume.ProbeSize.x, max(volume.ProbeSize.y, volume.ProbeSize.z)) * 0.5f;
 #endif
 
 	float weightSum = 0;
@@ -357,7 +363,7 @@ void UpdateDepthCS(
 			if(weight > MIN_WEIGHT_THRESHOLD)
 			{
 				weightSum += weight;
-				sum += float2(depth, Square(depth)) * weight;
+				sum += float2(abs(depth), Square(depth)) * weight;
 			}
 
 	#if DDGI_DYNAMIC_PROBE_OFFSET
@@ -381,7 +387,9 @@ void UpdateDepthCS(
 #if DDGI_DYNAMIC_PROBE_OFFSET
 	if(groupIndex == 0)
 	{
-		uProbeOffsets[probeIdx] = float4(lerp(prevProbeOffset, probeOffset, 0.005f), 0);
+		const float maxOffset = probeOffsetDistance * 0.25f;
+		probeOffset = clamp(probeOffset, -maxDist, maxDist);
+		uProbeOffsets[probeIdx] = float4(lerp(prevProbeOffset, probeOffset, 0.01f), 0);
 	}
 #endif
 

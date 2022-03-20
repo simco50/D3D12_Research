@@ -3,7 +3,7 @@
 // Must match with texture size!
 #define DDGI_PROBE_IRRADIANCE_TEXELS 6
 #define DDGI_PROBE_DEPTH_TEXELS 14
-#define DDGI_DYNAMIC_PROBE_OFFSET 0
+#define DDGI_DYNAMIC_PROBE_OFFSET 1
 #define PROBE_GAMMA 5.0f
 
 DDGIVolume GetDDGIVolume(uint index)
