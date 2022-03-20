@@ -309,6 +309,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 			material.EmissiveFactor.x = gltfMaterial.emissive_factor[0];
 			material.EmissiveFactor.y = gltfMaterial.emissive_factor[1];
 			material.EmissiveFactor.z = gltfMaterial.emissive_factor[2];
+			material.EmissiveFactor *= gltfMaterial.emissive_strength.emissive_strength;
 			material.pNormalTexture = RetrieveTexture(gltfMaterial.normal_texture, false);
 			if (gltfMaterial.name)
 				material.Name = gltfMaterial.name;

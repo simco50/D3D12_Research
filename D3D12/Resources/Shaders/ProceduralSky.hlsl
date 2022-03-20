@@ -24,10 +24,7 @@ InterpolantsVSToPS VSMain(uint vertexId : SV_VertexID)
 float4 PSMain(in InterpolantsVSToPS input) : SV_Target
 {
 	float3 uv = normalize(input.UV);
-	float uvy = acos(uv.y) / PI;
-	float uvx = atan2(uv.x, uv.z)/ (2 * PI);
-	float4 color = SampleLevel2D(cView.SkyIndex, sLinearWrap, float2(uvx, uvy), 0);
-	return color;
+	return float4(GetSky(uv), 1);
 }
 
 [numthreads(16, 16, 1)]
