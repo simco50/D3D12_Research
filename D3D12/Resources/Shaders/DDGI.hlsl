@@ -388,7 +388,7 @@ void UpdateDepthCS(
 	if(groupIndex == 0)
 	{
 		const float maxOffset = probeOffsetDistance * 0.25f;
-		probeOffset = clamp(probeOffset, -maxDist, maxDist);
+		probeOffset = clamp(probeOffset, -maxOffset, maxOffset);
 		uProbeOffsets[probeIdx] = float4(lerp(prevProbeOffset, probeOffset, 0.01f), 0);
 	}
 #endif
