@@ -156,7 +156,7 @@ namespace Tweakables
 	float g_SunInclination = 0.79f;
 	float g_SunOrientation = -1.503f;
 	float g_SunTemperature = 5900.0f;
-	float g_SunIntensity = 11.0f;
+	float g_SunIntensity = 5.0f;
 }
 
 DemoApp::DemoApp(WindowHandle window, const IntVector2& windowRect)
@@ -253,8 +253,6 @@ void DemoApp::SetupScene(CommandContext& context)
 		sunLight.VolumetricLighting = true;
 		m_Lights.push_back(sunLight);
 	}
-
-
 
 #if 0
 	for (int i = 0; i < 50; ++i)
@@ -365,7 +363,7 @@ void DemoApp::Update()
 
 	DDGIVolume& volume = m_DDGIVolumes[0];
 	volume.Origin = m_SceneData.SceneAABB.Center;
-	volume.Extents = m_SceneData.SceneAABB.Extents;
+	volume.Extents = 1.1f * Vector3(m_SceneData.SceneAABB.Extents);
 
 	if (Tweakables::g_VisualizeLights)
 	{

@@ -77,34 +77,6 @@ float CastShadowRay(float3 origin, float3 direction)
 	return q.CommittedStatus() != COMMITTED_TRIANGLE_HIT;
 }
 
-LightResult EvaluateLight(Light light, float3 worldPos, float3 V, float3 N, BrdfData brdfData)
-{
-	LightResult result = (LightResult)0;
-	float attenuation = GetAttenuation(light, worldPos);
-	if(attenuation <= 0.0f)
-	{
-		return result;
-	}
-
-	float3 L = light.Position - worldPos;
-	if(light.IsDirectional)
-	{
-		L = RAY_MAX_T * -light.Direction;
-	}
-
-	attenuation *= CastShadowRay(worldPos, L);
-	if(attenuation <= 0.0f)
-	{
-		return result;
-	}
-
-	result = DefaultLitBxDF(brdfData.Specular, brdfData.Roughness, brdfData.Diffuse, N, V, normalize(L), attenuation);
-	float4 color = light.GetColor();
-	result.Diffuse *= color.rgb * light.Intensity;
-	result.Specular *= color.rgb * light.Intensity;
-	return result;
-}
-
 // From G3DMath
 // Generates a nearly uniform point distribution on the unit sphere of size N
 static const float PHI = sqrt(5) * 0.5 + 0.5;
@@ -210,21 +182,30 @@ void TraceRaysCS(
 			BrdfData brdfData = GetBrdfData(surface);
 
 			float3 hitLocation = q.WorldRayOrigin() + q.WorldRayDirection() * q.CommittedRayT();
-			float3 V = normalize(-q.WorldRayDirection());
 			float3 N = vertex.Normal;
 
-			LightResult totalResult = (LightResult)0;
 			for(int i = 0; i < cView.LightCount; ++i)
 			{
 				Light light = GetLight(i);
-				LightResult result = EvaluateLight(light, hitLocation, V, N, brdfData);
-				totalResult.Diffuse += result.Diffuse;
-				totalResult.Specular += result.Specular;
+				float attenuation = GetAttenuation(light, hitLocation);
+				if(attenuation <= 0.0f)
+					continue;
+
+				float3 L = light.Position - hitLocation;
+				if(light.IsDirectional)
+				{
+					L = RAY_MAX_T * -light.Direction;
+				}
+				attenuation *= CastShadowRay(hitLocation, L);
+				if(attenuation <= 0.0f)
+					continue;
+
+				float3 diffuse = (attenuation * saturate(dot(N, L))) * Diffuse_Lambert(brdfData.Diffuse);
+				radiance += diffuse * light.GetColor().rgb * light.Intensity;
 			}
 
-			radiance += totalResult.Diffuse;
 			radiance += surface.Emissive;
-			radiance += brdfData.Diffuse * SampleDDGIIrradiance(hitLocation, N);
+			radiance += Diffuse_Lambert(min(brdfData.Diffuse, 0.9f)) * SampleDDGIIrradiance(hitLocation, N);
 			depth = min(q.CommittedRayT(), depth);
 		}
 		else
@@ -235,7 +216,7 @@ void TraceRaysCS(
 		RayHitInfo hit = (RayHitInfo)0;
 		hit.Direction = ray.Direction;
 		hit.Depth = depth;
-		hit.Radiance = radiance / PI;
+		hit.Radiance = radiance;
 		uRayHitInfo[probeIdx * volume.MaxRaysPerProbe + rayIndex] = hit;
 		rayIndex += THREAD_GROUP_SIZE;
 	}
@@ -299,18 +280,13 @@ void UpdateIrradianceCS(
 		{
 			RayHitInfo rayData = gsIrradianceRayHitCache[i];
 			float weight = saturate(dot(probeDirection, rayData.Direction));
-			if(weight > MIN_WEIGHT_THRESHOLD)
-			{
-				sum += weight * rayData.Radiance;
-				weightSum += weight;
-			}
+			sum += weight * rayData.Radiance;
+			weightSum += weight;
 		}
 	}
 
-	if(weightSum > MIN_WEIGHT_THRESHOLD)
-	{
-		sum /= weightSum;
-	}
+    const float epsilon = 1e-9f * float(volume.NumRaysPerProbe);
+	sum *= 1.0f / max(2.0f * weightSum, epsilon);
 
 	// Apply tone curve for better encoding
 	sum = pow(sum, rcp(PROBE_GAMMA));
