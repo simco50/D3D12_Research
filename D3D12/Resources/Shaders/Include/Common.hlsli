@@ -398,6 +398,24 @@ float3 RotatePoint(float4 q, float3 v)
 	return 2.0f * dot(qAxis, v) * qAxis + (q.w * q.w - dot(qAxis, qAxis)) * v + 2.0f * q.w * cross(qAxis, v);
 }
 
+// From keijiro: 3x3 Rotation matrix with an angle and an arbitrary vector
+float3x3 AngleAxis3x3(float angle, float3 axis)
+{
+    float c, s;
+    sincos(angle, s, c);
+
+    float t = 1 - c;
+    float x = axis.x;
+    float y = axis.y;
+    float z = axis.z;
+
+    return float3x3(
+        t * x * x + c,      t * x * y - s * z,  t * x * z + s * y,
+        t * x * y + s * z,  t * y * y + c,      t * y * z - s * x,
+        t * x * z - s * y,  t * y * z + s * x,  t * z * z + c
+    );
+}
+
 float3x3 CreateTangentToWorld(float3 normal, float4 tangent)
 {
 	float3 T = tangent.xyz;

@@ -4,6 +4,7 @@
 #include "Primitives.hlsli"
 #include "DDGICommon.hlsli"
 #include "Random.hlsli"
+#include "TonemappingCommon.hlsli"
 
 struct RayHitInfo
 {
@@ -94,27 +95,9 @@ float3 SphericalFibonacci(float i, float n)
 	- TraceRays -
 	Cast N uniformly distributed rays from each probe.
 */
-#define THREAD_GROUP_SIZE 32
+#define RAY_TRACE_GROUP_SIZE 32
 
-// From keijiro: 3x3 Rotation matrix with an angle and an arbitrary vector
-float3x3 AngleAxis3x3(float angle, float3 axis)
-{
-    float c, s;
-    sincos(angle, s, c);
-
-    float t = 1 - c;
-    float x = axis.x;
-    float y = axis.y;
-    float z = axis.z;
-
-    return float3x3(
-        t * x * x + c,      t * x * y - s * z,  t * x * z + s * y,
-        t * x * y + s * z,  t * y * y + c,      t * y * z - s * x,
-        t * x * z - s * y,  t * y * z + s * x,  t * z * z + c
-    );
-}
-
-[numthreads(THREAD_GROUP_SIZE, 1, 1)]
+[numthreads(RAY_TRACE_GROUP_SIZE, 1, 1)]
 void TraceRaysCS(
 	uint threadId : SV_DispatchThreadID,
 	uint groupIndex : SV_GroupID,
@@ -184,9 +167,9 @@ void TraceRaysCS(
 			float3 hitLocation = q.WorldRayOrigin() + q.WorldRayDirection() * q.CommittedRayT();
 			float3 N = vertex.Normal;
 
-			for(int i = 0; i < cView.LightCount; ++i)
+			for(uint lightIndex = 0; lightIndex < cView.LightCount; ++lightIndex)
 			{
-				Light light = GetLight(i);
+				Light light = GetLight(lightIndex);
 				float attenuation = GetAttenuation(light, hitLocation);
 				if(attenuation <= 0.0f)
 					continue;
@@ -218,7 +201,7 @@ void TraceRaysCS(
 		hit.Depth = depth;
 		hit.Radiance = radiance;
 		uRayHitInfo[probeIdx * volume.MaxRaysPerProbe + rayIndex] = hit;
-		rayIndex += THREAD_GROUP_SIZE;
+		rayIndex += RAY_TRACE_GROUP_SIZE;
 	}
 }
 
@@ -233,13 +216,13 @@ void TraceRaysCS(
 static const uint NUM_COLOR_BORDER_TEXELS = DDGI_PROBE_IRRADIANCE_TEXELS * 4 + 4;
 static const uint4 DDGI_COLOR_BORDER_OFFSETS[NUM_COLOR_BORDER_TEXELS] = {
 	uint4(6, 6, 0, 0), // TL Corner
-	uint4(6, 1, 1, 0),	uint4(5, 1, 2, 0),	uint4(4, 1, 3, 0),	uint4(3, 1, 4, 0),	uint4(2, 1, 5, 0),	uint4(1, 1, 6, 0), // Top border
+	uint4(6, 1, 1, 0), uint4(5, 1, 2, 0), uint4(4, 1, 3, 0), uint4(3, 1, 4, 0), uint4(2, 1, 5, 0), uint4(1, 1, 6, 0), // Top border
 	uint4(1, 6, 7, 0), // TR Corner
-	uint4(1, 6, 0, 1),	uint4(1, 5, 0, 2),	uint4(1, 4, 0, 3),	uint4(1, 3, 0, 4),	uint4(1, 2, 0, 5),	uint4(1, 1, 0, 6), // Right border
+	uint4(1, 6, 0, 1), uint4(1, 5, 0, 2), uint4(1, 4, 0, 3), uint4(1, 3, 0, 4), uint4(1, 2, 0, 5), uint4(1, 1, 0, 6), // Right border
 	uint4(6, 1, 0, 7), // BL Corner
-	uint4(6, 6, 7, 1),	uint4(6, 5, 7, 2),	uint4(6, 4, 7, 3),	uint4(6, 3, 7, 4),	uint4(6, 2, 7, 5),	uint4(6, 1, 7, 6), // Left border
+	uint4(6, 6, 7, 1), uint4(6, 5, 7, 2), uint4(6, 4, 7, 3), uint4(6, 3, 7, 4), uint4(6, 2, 7, 5), uint4(6, 1, 7, 6), // Left border
 	uint4(1, 1, 7, 7), // BR Corner
-	uint4(6, 6, 1, 7),	uint4(5, 6, 2, 7),	uint4(4, 6, 3, 7),	uint4(3, 6, 4, 7),	uint4(2, 6, 5, 7),	uint4(1, 6, 6, 7) // Bottom border
+	uint4(6, 6, 1, 7), uint4(5, 6, 2, 7), uint4(4, 6, 3, 7), uint4(3, 6, 4, 7), uint4(2, 6, 5, 7), uint4(1, 6, 6, 7) // Bottom border
 };
 
 #define IRRADIANCE_RAY_HIT_GS_SIZE DDGI_PROBE_IRRADIANCE_TEXELS * DDGI_PROBE_IRRADIANCE_TEXELS
@@ -310,11 +293,11 @@ void UpdateIrradianceCS(
 static const uint NUM_DEPTH_BORDER_TEXELS = DDGI_PROBE_DEPTH_TEXELS * 4 + 4;
 static const uint4 DDGI_DEPTH_BORDER_OFFSETS[NUM_DEPTH_BORDER_TEXELS] = {
 	uint4(14, 14, 0, 0), // TL Corner
-	uint4(14, 1, 1, 0),	uint4(13, 1, 2, 0),	uint4(12, 1, 3, 0),	uint4(11, 1, 4, 0),	uint4(10, 1, 5, 0),	uint4(9, 1, 6, 0), uint4(8, 1, 7, 0), // Top border
-	uint4(7, 1, 8, 0),	uint4(6, 1, 9, 0),	uint4(5, 1, 10, 0),	uint4(4, 1, 11, 0),	uint4(3, 1, 12, 0),	uint4(2, 1, 13, 0),	uint4(1, 1, 14, 0),
+	uint4(14, 1, 1, 0), uint4(13, 1, 2, 0), uint4(12, 1, 3, 0), uint4(11, 1, 4, 0), uint4(10, 1, 5, 0), uint4(9, 1, 6, 0), uint4(8, 1, 7, 0), // Top border
+	uint4(7, 1, 8, 0), uint4(6, 1, 9, 0), uint4(5, 1, 10, 0), uint4(4, 1, 11, 0), uint4(3, 1, 12, 0), uint4(2, 1, 13, 0), uint4(1, 1, 14, 0),
 	uint4(1, 14, 15, 0), // TR Corner
-	uint4(1, 14, 0, 1),	uint4(1, 13, 0, 2),	uint4(1, 12, 0, 3),	uint4(1, 11, 0, 4),	uint4(1, 10, 0, 5),	uint4(1, 9, 0, 6),	uint4(1, 8, 0, 7), // Right border
-	uint4(1, 7, 0, 8),	uint4(1, 6, 0, 9),	uint4(1, 5, 0, 10),	uint4(1, 4, 0, 11),	uint4(1, 3, 0, 12),	uint4(1, 2, 0, 13),	uint4(1, 1, 0, 14),
+	uint4(1, 14, 0, 1), uint4(1, 13, 0, 2), uint4(1, 12, 0, 3), uint4(1, 11, 0, 4), uint4(1, 10, 0, 5), uint4(1, 9, 0, 6), uint4(1, 8, 0, 7), // Right border
+	uint4(1, 7, 0, 8), uint4(1, 6, 0, 9), uint4(1, 5, 0, 10), uint4(1, 4, 0, 11), uint4(1, 3, 0, 12), uint4(1, 2, 0, 13), uint4(1, 1, 0, 14),
 
 	uint4(14, 1, 0, 15), // BL Corner
 	uint4(14, 14, 15, 1), uint4(14, 13, 15, 2), uint4(14, 12, 15, 3), uint4(14, 11, 15, 4), uint4(14, 10, 15, 5), uint4(14, 9, 15, 6), uint4(14, 8, 15, 7), // Left border

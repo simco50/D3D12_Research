@@ -254,15 +254,15 @@ void DemoApp::SetupScene(CommandContext& context)
 		m_Lights.push_back(sunLight);
 	}
 
-#if 0
-	for (int i = 0; i < 50; ++i)
+#if 1
+	for (int i = 0; i < 5; ++i)
 	{
 		Vector3 loc(
 			Math::RandomRange(-10.0f, 10.0f),
 			Math::RandomRange(-4.0f, 5.0f),
 			Math::RandomRange(-10.0f, 10.0f)
 		);
-		Light spotLight = Light::Spot(loc, 100, Vector3(0, 1, 0), 65, 50, 1000, Color(1.0f, 0.7f, 0.3f, 1.0f));
+		Light spotLight = Light::Spot(loc, 100, Vector3(0, 1, 0), 65, 50, 1000, Color(Math::RandomRange(0.0f, 1.0f), Math::RandomRange(0.0f, 1.0f), Math::RandomRange(0.0f, 1.0f), 1.0f));
 		//spotLight.CastShadows = true;
 		//spotLight.LightTexture = m_pDevice->RegisterBindlessResource(m_pLightCookie.get(), GetDefaultTexture(DefaultTexture::White2D));
 		spotLight.VolumetricLighting = true;
