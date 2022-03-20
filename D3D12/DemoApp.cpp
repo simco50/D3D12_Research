@@ -705,7 +705,7 @@ void DemoApp::Update()
 					{
 						GPU_PROFILE_SCOPE("Masked", &context);
 						context.SetPipelineState(m_pShadowsAlphaMaskPSO);
-						DrawScene(context, m_SceneData, mask, Batch::Blending::AlphaMask);
+						DrawScene(context, m_SceneData, mask, Batch::Blending::AlphaMask | Batch::Blending::AlphaBlend);
 					}
 					context.EndRenderPass();
 				}
