@@ -157,7 +157,7 @@ LightResult EvaluateLight(Light light, float3 worldPos, float3 V, float3 N, Brdf
 		if(all(lightPos >= 0) && all(lightPos <= 1))
 		{
 			Texture2D shadowTexture = ResourceDescriptorHeap[cView.ShadowMapOffset + shadowIndex];
-			attenuation *= shadowTexture.SampleCmpLevelZero(sDepthComparison, lightPos.xy, lightPos.z);
+			attenuation *= shadowTexture.SampleCmpLevelZero(sLinearClampComparisonGreater, lightPos.xy, lightPos.z);
 			castShadowRay = false;
 		}
 	}

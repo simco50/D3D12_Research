@@ -92,15 +92,15 @@ float Shadow3x3PCF(float3 wPos, int shadowMapIndex, float invShadowSize)
 	float d3 = Dilation * invShadowSize * 0.625f;
 	float d4 = Dilation * invShadowSize * 0.375f;
 	float result = (
-		2.0f * shadowTexture.SampleCmpLevelZero(sDepthComparison, uv, lightPos.z) +
-		shadowTexture.SampleCmpLevelZero(sDepthComparison, uv + float2(-d2,  d1), lightPos.z) +
-		shadowTexture.SampleCmpLevelZero(sDepthComparison, uv + float2(-d1, -d2), lightPos.z) +
-		shadowTexture.SampleCmpLevelZero(sDepthComparison, uv + float2( d2, -d1), lightPos.z) +
-		shadowTexture.SampleCmpLevelZero(sDepthComparison, uv + float2( d1,  d2), lightPos.z) +
-		shadowTexture.SampleCmpLevelZero(sDepthComparison, uv + float2(-d4,  d3), lightPos.z) +
-		shadowTexture.SampleCmpLevelZero(sDepthComparison, uv + float2(-d3, -d4), lightPos.z) +
-		shadowTexture.SampleCmpLevelZero(sDepthComparison, uv + float2( d4, -d3), lightPos.z) +
-		shadowTexture.SampleCmpLevelZero(sDepthComparison, uv + float2( d3,  d4), lightPos.z)
+		2.0f * shadowTexture.SampleCmpLevelZero(sLinearClampComparisonGreater, uv, lightPos.z) +
+		shadowTexture.SampleCmpLevelZero(sLinearClampComparisonGreater, uv + float2(-d2,  d1), lightPos.z) +
+		shadowTexture.SampleCmpLevelZero(sLinearClampComparisonGreater, uv + float2(-d1, -d2), lightPos.z) +
+		shadowTexture.SampleCmpLevelZero(sLinearClampComparisonGreater, uv + float2( d2, -d1), lightPos.z) +
+		shadowTexture.SampleCmpLevelZero(sLinearClampComparisonGreater, uv + float2( d1,  d2), lightPos.z) +
+		shadowTexture.SampleCmpLevelZero(sLinearClampComparisonGreater, uv + float2(-d4,  d3), lightPos.z) +
+		shadowTexture.SampleCmpLevelZero(sLinearClampComparisonGreater, uv + float2(-d3, -d4), lightPos.z) +
+		shadowTexture.SampleCmpLevelZero(sLinearClampComparisonGreater, uv + float2( d4, -d3), lightPos.z) +
+		shadowTexture.SampleCmpLevelZero(sLinearClampComparisonGreater, uv + float2( d3,  d4), lightPos.z)
 		) / 10.0f;
 	return result * result;
 }
@@ -114,7 +114,7 @@ float ShadowNoPCF(float3 wPos, int shadowMapIndex, float invShadowSize)
 	lightPos.y = lightPos.y / -2.0f + 0.5f;
 	float2 uv = lightPos.xy;
 	Texture2D shadowTexture = ResourceDescriptorHeap[NonUniformResourceIndex(cView.ShadowMapOffset + shadowMapIndex)];
-	return shadowTexture.SampleCmpLevelZero(sDepthComparison, uv, lightPos.z);
+	return shadowTexture.SampleCmpLevelZero(sLinearClampComparisonGreater, uv, lightPos.z);
 }
 
 float GetAttenuation(Light light, float3 wPos)
