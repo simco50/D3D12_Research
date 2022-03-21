@@ -1,5 +1,6 @@
 #pragma once
 #include "GraphicsResource.h"
+#include "Shader.h"
 
 class RootSignature;
 class ShaderLibrary;
@@ -12,11 +13,11 @@ public:
 	friend class StateObject;
 
 	void AddHitGroup(const std::string& name, const std::string& closestHit = "", const std::string& anyHit = "", const std::string& intersection = "", RootSignature* pRootSignature = nullptr);
-	void AddLibrary(ShaderLibrary* pLibrary, const std::vector<std::string>& exports = {});
+	void AddLibrary(const char* pShaderPath, const std::vector<std::string>& exports = {}, const std::vector<ShaderDefine>& defines = {});
 	void AddCollection(StateObject* pOtherObject);
 	void AddMissShader(const std::string& exportName, RootSignature* pRootSignature = nullptr);
 
-	void CreateStateObjectStream(class StateObjectStream& stateObjectStream);
+	void CreateStateObjectStream(class StateObjectStream& stateObjectStream, GraphicsDevice* pDevice);
 	void SetMaxPipelineStackSize(StateObject* pStateObject);
 
 	std::string Name;
@@ -45,9 +46,11 @@ private:
 	};
 	struct LibraryExports
 	{
-		ShaderLibrary* pLibrary;
+		std::string Path;
+		std::vector<ShaderDefine> Defines;
 		std::vector<std::string> Exports;
 	};
+	std::vector<ShaderLibrary*> m_Shaders;
 	std::vector<LibraryExports> m_Libraries;
 	std::vector<HitGroupDefinition> m_HitGroups;
 	std::vector<LibraryShaderExport> m_MissShaders;

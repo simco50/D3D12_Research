@@ -82,7 +82,7 @@ void RTReflections::SetupPipelines(GraphicsDevice* pDevice)
 	StateObjectInitializer stateDesc;
 	stateDesc.Name = "RT Reflections";
 	stateDesc.RayGenShader = "RayGen";
-	stateDesc.AddLibrary(pDevice->GetLibrary("RTReflections.hlsl"));
+	stateDesc.AddLibrary("RTReflections.hlsl");
 	stateDesc.AddHitGroup("ReflectionHitGroup", "ReflectionClosestHit", "ReflectionAnyHit");
 	stateDesc.AddMissShader("ReflectionMiss");
 	stateDesc.AddMissShader("ShadowMiss");

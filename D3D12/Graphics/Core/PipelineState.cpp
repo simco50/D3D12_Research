@@ -93,9 +93,9 @@ void PipelineStateInitializer::SetRenderTargetFormat(DXGI_FORMAT rtvFormat, DXGI
 void PipelineStateInitializer::SetRenderTargetFormats(const Span<DXGI_FORMAT>& rtvFormats, DXGI_FORMAT dsvFormat, uint32 msaa)
 {
 	D3D12_RT_FORMAT_ARRAY& formatArray = GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_RENDER_TARGET_FORMATS>();
-	for (uint32 i = 0; i < rtvFormats.GetSize(); ++i)
+	for (DXGI_FORMAT format : rtvFormats)
 	{
-		formatArray.RTFormats[i] = rtvFormats[i];
+		formatArray.RTFormats[formatArray.NumRenderTargets++] = format;
 	}
 	formatArray.NumRenderTargets = rtvFormats.GetSize();
 	DXGI_SAMPLE_DESC& sampleDesc = GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_SAMPLE_DESC>();

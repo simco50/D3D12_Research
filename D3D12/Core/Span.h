@@ -50,6 +50,14 @@ public:
 		return m_pValue[idx];
 	}
 
+	const T* begin() const { return m_pValue; }
+	const T* end() const { return m_pValue + m_Count; }
+
+	uint32 IndexOf(const T* pValue) const
+	{
+		check(pValue >= m_pValue && pValue < m_pValue + m_Count);
+		return uint32(pValue - m_pValue);
+	}
 	const T* GetData() const { return m_pValue; }
 	uint32 GetSize() const { return m_Count; }
 

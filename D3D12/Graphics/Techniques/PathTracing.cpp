@@ -17,8 +17,6 @@ PathTracing::PathTracing(GraphicsDevice* pDevice)
 		return;
 	}
 
-	ShaderLibrary* pLibrary = pDevice->GetLibrary("PathTracing.hlsl");
-
 	m_pRS = new RootSignature(pDevice);
 	m_pRS->AddConstantBufferView(0);
 	m_pRS->AddConstantBufferView(100);
@@ -31,7 +29,7 @@ PathTracing::PathTracing(GraphicsDevice* pDevice)
 	desc.MaxPayloadSize = 14 * sizeof(float);
 	desc.MaxAttributeSize = 2 * sizeof(float);
 	desc.Type = D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE;
-	desc.AddLibrary(pLibrary);
+	desc.AddLibrary("PathTracing.hlsl");
 	desc.AddHitGroup("PrimaryHG", "PrimaryCHS", "PrimaryAHS");
 	desc.AddMissShader("PrimaryMS");
 	desc.AddMissShader("ShadowMS");

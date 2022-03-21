@@ -70,7 +70,6 @@ void RTAO::Execute(RGGraph& graph, const SceneView& sceneData, Texture* pTarget,
 
 void RTAO::SetupPipelines(GraphicsDevice* pDevice)
 {
-	ShaderLibrary* pShaderLibrary = pDevice->GetLibrary("RTAO.hlsl");
 	m_pGlobalRS = new RootSignature(pDevice);
 	m_pGlobalRS->AddConstantBufferView(0);
 	m_pGlobalRS->AddConstantBufferView(100);
@@ -79,7 +78,7 @@ void RTAO::SetupPipelines(GraphicsDevice* pDevice)
 	m_pGlobalRS->Finalize("Global");
 
 	StateObjectInitializer stateDesc;
-	stateDesc.AddLibrary(pShaderLibrary, { "RayGen", "Miss" });
+	stateDesc.AddLibrary("RTAO.hlsl", { "RayGen", "Miss" });
 	stateDesc.Name = "RT AO";
 	stateDesc.MaxPayloadSize = sizeof(float);
 	stateDesc.MaxAttributeSize = 2 * sizeof(float);
