@@ -80,15 +80,13 @@ float CastShadowRay(float3 origin, float3 direction)
 
 // From G3DMath
 // Generates a nearly uniform point distribution on the unit sphere of size N
-static const float PHI = sqrt(5) * 0.5 + 0.5;
 float3 SphericalFibonacci(float i, float n)
 {
-	#define madfrac(A, B) ((A) * (B)-floor((A) * (B)))
-	float phi = 2.0 * PI * madfrac(i, PHI - 1);
+	const float PHI = sqrt(5) * 0.5 + 0.5;
+	float phi = 2.0 * PI * frac(i * (PHI - 1));
 	float cos_theta = 1.0 - (2.0 * i + 1.0) * (1.0 / n);
 	float sin_theta = sqrt(saturate(1.0 - cos_theta * cos_theta));
 	return float3(cos(phi) * sin_theta, sin(phi) * sin_theta, cos_theta);
-	#undef madfrac
 }
 
 /**
@@ -111,7 +109,7 @@ void TraceRaysCS(
 	uint rayIndex = groupThreadId;
 
 	float3x3 randomRotation = AngleAxis3x3(cPass.RandomAngle, cPass.RandomVector);
-	const float maxDepth = max(volume.ProbeSize.x, max(volume.ProbeSize.y, volume.ProbeSize.z)) * 2;
+	const float maxDepth = Max3(volume.ProbeSize) * 2;
 
 	RaytracingAccelerationStructure TLAS = ResourceDescriptorHeap[cView.TLASIndex];
 
@@ -157,43 +155,45 @@ void TraceRaysCS(
 
 		if(q.CommittedStatus() == COMMITTED_TRIANGLE_HIT)
 		{
-			MeshInstance instance = GetMeshInstance(q.CommittedInstanceID());
-			VertexAttribute vertex = GetVertexAttributes(instance, q.CommittedTriangleBarycentrics(), q.CommittedPrimitiveIndex(), q.CommittedObjectToWorld4x3());
-			MaterialData material = GetMaterial(instance.Material);
-			const uint textureMipLevel = 5;
-			MaterialProperties surface = GetMaterialProperties(material, vertex.UV, textureMipLevel);
-			BrdfData brdfData = GetBrdfData(surface);
-
-			float3 hitLocation = q.WorldRayOrigin() + q.WorldRayDirection() * q.CommittedRayT();
-			float3 N = vertex.Normal;
-
-			for(uint lightIndex = 0; lightIndex < cView.LightCount; ++lightIndex)
-			{
-				Light light = GetLight(lightIndex);
-				float attenuation = GetAttenuation(light, hitLocation);
-				if(attenuation <= 0.0f)
-					continue;
-
-				float3 L = light.Position - hitLocation;
-				if(light.IsDirectional)
-				{
-					L = RAY_MAX_T * -light.Direction;
-				}
-				attenuation *= CastShadowRay(hitLocation, L);
-				if(attenuation <= 0.0f)
-					continue;
-
-				float3 diffuse = (attenuation * saturate(dot(N, L))) * Diffuse_Lambert(brdfData.Diffuse);
-				radiance += diffuse * light.GetColor().rgb * light.Intensity;
-			}
-
-			radiance += surface.Emissive;
-			radiance += Diffuse_Lambert(min(brdfData.Diffuse, 0.9f)) * SampleDDGIIrradiance(hitLocation, N, ray.Direction);
 			depth = min(q.CommittedRayT(), depth);
-
-			// If backfacing, make negative so probes get pushed through the backface when offset.
-			if(!q.CommittedTriangleFrontFace())
+			if(q.CommittedTriangleFrontFace())
 			{
+				MeshInstance instance = GetMeshInstance(q.CommittedInstanceID());
+				VertexAttribute vertex = GetVertexAttributes(instance, q.CommittedTriangleBarycentrics(), q.CommittedPrimitiveIndex(), q.CommittedObjectToWorld4x3());
+				MaterialData material = GetMaterial(instance.Material);
+				const uint textureMipLevel = 5;
+				MaterialProperties surface = GetMaterialProperties(material, vertex.UV, textureMipLevel);
+				BrdfData brdfData = GetBrdfData(surface);
+
+				float3 hitLocation = q.WorldRayOrigin() + q.WorldRayDirection() * q.CommittedRayT();
+				float3 N = vertex.Normal;
+
+				for(uint lightIndex = 0; lightIndex < cView.LightCount; ++lightIndex)
+				{
+					Light light = GetLight(lightIndex);
+					float attenuation = GetAttenuation(light, hitLocation);
+					if(attenuation <= 0.0f)
+						continue;
+
+					float3 L = light.Position - hitLocation;
+					if(light.IsDirectional)
+					{
+						L = RAY_MAX_T * -light.Direction;
+					}
+					attenuation *= CastShadowRay(hitLocation, L);
+					if(attenuation <= 0.0f)
+						continue;
+
+					float3 diffuse = (attenuation * saturate(dot(N, L))) * Diffuse_Lambert(brdfData.Diffuse);
+					radiance += diffuse * light.GetColor().rgb * light.Intensity;
+				}
+
+				radiance += surface.Emissive;
+				radiance += Diffuse_Lambert(min(brdfData.Diffuse, 0.9f)) * SampleDDGIIrradiance(hitLocation, N, ray.Direction);
+			}
+			else
+			{
+				// If backfacing, make negative so probes get pushed through the backface when offset.
 				depth *= -0.2f;
 			}
 		}
@@ -336,7 +336,7 @@ void UpdateDepthCS(
 #if DDGI_DYNAMIC_PROBE_OFFSET
 	float3 prevProbeOffset = uProbeOffsets[probeIdx].xyz;
 	float3 probeOffset = 0;
-	const float probeOffsetDistance = max(volume.ProbeSize.x, max(volume.ProbeSize.y, volume.ProbeSize.z)) * 0.5f;
+	const float probeOffsetDistance = Max3(volume.ProbeSize) * 0.5f;
 #endif
 
 	float weightSum = 0;

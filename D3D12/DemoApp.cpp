@@ -1668,7 +1668,7 @@ void DemoApp::InitializePipelines()
 		DDGIVolume volume;
 		volume.Origin = Vector3(-0.484151840f, 5.21196413f, 0.309524536f);
 		volume.Extents = Vector3(14.8834171f, 6.22350454f, 9.15293312f);
-		volume.NumProbes = IntVector3(24, 16, 16);
+		volume.NumProbes = IntVector3(16, 12, 14);
 		volume.NumRays = 128;
 		volume.MaxNumRays = 512;
 		m_DDGIVolumes.push_back(volume);

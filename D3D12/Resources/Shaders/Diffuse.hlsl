@@ -136,7 +136,7 @@ bool IsVisible(MeshData mesh, float4x4 world, uint meshlet)
 
 	float4 center = mul(float4(cullData.Center, 1), world);
 	float3 radius3 = abs(mul(cullData.Radius.xxx, (float3x3)world));
-	float radius = max(radius3.x, max(radius3.y, radius3.z));
+	float radius = Max3(radius3);
 	float3 coneAxis = normalize(mul(cullData.ConeAxis, (float3x3)world));
 
 	for(int i = 0; i < 6; ++i)

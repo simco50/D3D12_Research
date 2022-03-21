@@ -448,3 +448,8 @@ uint3 UnFlatten3D(uint index, uint3 dimensions)
 	outIndex.x = index % dimensions.x;
 	return outIndex;
 }
+
+float Max3(float3 v)
+{
+	return max(v.x, max(v.y, v.z));
+}
