@@ -1,5 +1,6 @@
 #include "Common.hlsli"
 #include "Lighting.hlsli"
+#include "DDGICommon.hlsli"
 
 struct PassData
 {
@@ -118,9 +119,9 @@ void InjectFogLightingCS(uint3 threadId : SV_DispatchThreadID)
 
 	float3 totalLighting = 0;
 
+	float3 V = normalize(cView.ViewPosition.xyz - worldPosition);
 	if(dot(inScattering, float3(1, 1, 1)) > 0.0f)
 	{
-		float3 V = normalize(cView.ViewPosition.xyz - worldPosition);
 		float4 pos = float4(threadId.xy, 0, z);
 
 		// Iterate over all the lights and light the froxel
@@ -160,7 +161,7 @@ void InjectFogLightingCS(uint3 threadId : SV_DispatchThreadID)
 		}
 	}
 
-	totalLighting += ApplyAmbientLight(.1, .1).x;
+	totalLighting += (SampleDDGIIrradiance(worldPosition, -V, -V) / PI);
 
 	float blendFactor = 0.05f;
 	if(any(reprojUV < 0.05f) || any(reprojUV > 0.95f))

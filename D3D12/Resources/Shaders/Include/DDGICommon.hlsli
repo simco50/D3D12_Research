@@ -48,7 +48,7 @@ float2 GetDDGIProbeUV(DDGIVolume volume, uint3 probeIndex3D, float3 direction, u
 	return pixel / float2(textureWidth, textureHeight);
 }
 
-float4 SampleDDGIIrradiance(DDGIVolume volume, float3 position, float3 direction)
+float4 SampleDDGIIrradiance(DDGIVolume volume, float3 position, float3 direction, float3 cameraDirection)
 {
 	if(volume.IrradianceIndex == INVALID_HANDLE || volume.DepthIndex == INVALID_HANDLE)
 	{
@@ -75,9 +75,14 @@ float4 SampleDDGIIrradiance(DDGIVolume volume, float3 position, float3 direction
 	if(volumeWeight <= 0.0f)
 		return 0.0f;
 
+	const float normalBias = 0.01f;
+	const float viewBias = 0.04f;
+	float3 surfaceBias = direction * normalBias + (-cameraDirection * viewBias);
+	position = position + surfaceBias;
+
 	uint3 baseProbeCoordinates = floor(relativeCoordindates);
 	float3 baseProbePosition = GetDDGIProbePosition(volume, baseProbeCoordinates);
-	float3 t = saturate((position - baseProbePosition) / volume.ProbeSize);
+	float3 alpha = saturate((position - baseProbePosition) / volume.ProbeSize);
 
 	float3 sumIrradiance = 0;
 	float sumWeight = 0;
@@ -89,10 +94,11 @@ float4 SampleDDGIIrradiance(DDGIVolume volume, float3 position, float3 direction
 		uint3 probeCoordinates = clamp(baseProbeCoordinates + indexOffset, 0, volume.ProbeVolumeDimensions - 1);
 		float3 probePosition = GetDDGIProbePosition(volume, probeCoordinates);
 
-		float3 relativeProbePosition = position - probePosition + direction * 0.001;
+		float3 relativeProbePosition = position - probePosition;
 		float3 probeDirection = -normalize(relativeProbePosition);
 
-		float3 interp = lerp(1.0f - t, t, indexOffset);
+		float3 trilinear = lerp(1.0f - alpha, alpha, indexOffset);
+        float trilinearWeight = (trilinear.x * trilinear.y * trilinear.z);
 
 		float weight = 1;
 
@@ -121,7 +127,7 @@ float4 SampleDDGIIrradiance(DDGIVolume volume, float3 position, float3 direction
 		if (weight < crushThreshold)
 			weight *= weight * weight * (1.0f / Square(crushThreshold));
 
-		weight *= interp.x * interp.y * interp.z;
+		weight *= trilinearWeight;
 
 		sumIrradiance += irradiance * weight;
 		sumWeight += weight;
@@ -139,12 +145,12 @@ float4 SampleDDGIIrradiance(DDGIVolume volume, float3 position, float3 direction
 	return float4(sumIrradiance, volumeWeight);
 }
 
-float3 SampleDDGIIrradiance(float3 position, float3 direction)
+float3 SampleDDGIIrradiance(float3 position, float3 direction, float3 cameraDirection)
 {
 	float4 result = 0;
 	for(uint i = 0; i < cView.NumDDGIVolumes && result.a < 0.5f; ++i)
 	{
-		float4 volSample = SampleDDGIIrradiance(GetDDGIVolume(i), position, direction);
+		float4 volSample = SampleDDGIIrradiance(GetDDGIVolume(i), position, direction, cameraDirection);
 		result.xyz += volSample.rgb * volSample.a;
 	}
 	return result.rgb;

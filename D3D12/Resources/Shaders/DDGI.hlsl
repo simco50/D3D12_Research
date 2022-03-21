@@ -188,7 +188,7 @@ void TraceRaysCS(
 			}
 
 			radiance += surface.Emissive;
-			radiance += Diffuse_Lambert(min(brdfData.Diffuse, 0.9f)) * SampleDDGIIrradiance(hitLocation, N);
+			radiance += Diffuse_Lambert(min(brdfData.Diffuse, 0.9f)) * SampleDDGIIrradiance(hitLocation, N, ray.Direction);
 			depth = min(q.CommittedRayT(), depth);
 
 			// If backfacing, make negative so probes get pushed through the backface when offset.

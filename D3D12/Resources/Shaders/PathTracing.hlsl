@@ -133,10 +133,16 @@ LightResult EvaluateLight(Light light, float3 worldPos, float3 V, float3 N, floa
 	if(shadowIndex >= 0)
 	{
 		attenuation *= LightTextureMask(light, shadowIndex, worldPos);
-		float3 rayOrigin = worldPos;
-		//float3 rayOrigin = OffsetRay(worldPos, geometryNormal);
-		attenuation *= CastShadowRay(rayOrigin, L);
 	}
+
+	if(attenuation <= 0.0f)
+	{
+		return result;
+	}
+
+	float3 rayOrigin = worldPos;
+	//float3 rayOrigin = OffsetRay(worldPos, geometryNormal);
+	attenuation *= CastShadowRay(rayOrigin, L);
 
 	L = normalize(L);
 	result = DefaultLitBxDF(brdfData.Specular, brdfData.Roughness, brdfData.Diffuse, N, V, L, attenuation);
