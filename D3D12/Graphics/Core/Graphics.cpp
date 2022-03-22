@@ -750,15 +750,16 @@ RefCountPtr<Buffer> GraphicsDevice::CreateBuffer(const BufferDesc& desc, const c
 	}
 
 	bool isRaw = EnumHasAnyFlags(desc.Usage, BufferFlag::ByteAddress);
+	bool withCounter = !isRaw && desc.Format == DXGI_FORMAT_UNKNOWN;
 
 	//#todo: Temp code. Pull out views from buffer
-	if (EnumHasAnyFlags(desc.Usage, BufferFlag::UnorderedAccess))
-	{
-		pBuffer->m_pUav = CreateUAV(pBuffer, BufferUAVDesc(desc.Format, isRaw, !isRaw));
-	}
 	if (EnumHasAnyFlags(desc.Usage, BufferFlag::ShaderResource | BufferFlag::AccelerationStructure))
 	{
 		pBuffer->m_pSrv = CreateSRV(pBuffer, BufferSRVDesc(desc.Format, isRaw));
+	}
+	if (EnumHasAnyFlags(desc.Usage, BufferFlag::UnorderedAccess))
+	{
+		pBuffer->m_pUav = CreateUAV(pBuffer, BufferUAVDesc(desc.Format, isRaw, withCounter));
 	}
 
 	return pBuffer;
@@ -824,7 +825,7 @@ RefCountPtr<ShaderResourceView> GraphicsDevice::CreateSRV(Buffer* pBuffer, const
 		else
 		{
 			srvDesc.Format = desc.Format;
-			srvDesc.Buffer.StructureByteStride = bufferDesc.ElementSize;
+			srvDesc.Buffer.StructureByteStride = desc.Format == DXGI_FORMAT_UNKNOWN ? bufferDesc.ElementSize : 0;
 			srvDesc.Buffer.FirstElement = desc.ElementOffset;
 			srvDesc.Buffer.NumElements = desc.NumElements > 0 ? desc.NumElements : bufferDesc.NumElements();
 		}
@@ -858,7 +859,7 @@ RefCountPtr<UnorderedAccessView> GraphicsDevice::CreateUAV(Buffer* pBuffer, cons
 	}
 	else
 	{
-		uavDesc.Buffer.StructureByteStride = bufferDesc.ElementSize;
+		uavDesc.Buffer.StructureByteStride = uavDesc.Format == DXGI_FORMAT_UNKNOWN ? bufferDesc.ElementSize : 0;
 	}
 
 	RefCountPtr<Buffer> pCounter;

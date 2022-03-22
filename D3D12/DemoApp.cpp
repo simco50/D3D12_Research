@@ -253,7 +253,7 @@ void DemoApp::SetupScene(CommandContext& context)
 		m_Lights.push_back(sunLight);
 	}
 
-#if 1
+#if 0
 	for (int i = 0; i < 5; ++i)
 	{
 		Vector3 loc(
@@ -262,7 +262,7 @@ void DemoApp::SetupScene(CommandContext& context)
 			Math::RandomRange(-10.0f, 10.0f)
 		);
 		Light spotLight = Light::Spot(loc, 100, Vector3(0, 1, 0), 65, 50, 1000, Color(Math::RandomRange(0.0f, 1.0f), Math::RandomRange(0.0f, 1.0f), Math::RandomRange(0.0f, 1.0f), 1.0f));
-		//spotLight.CastShadows = true;
+		spotLight.CastShadows = true;
 		//spotLight.LightTexture = m_pDevice->RegisterBindlessResource(m_pLightCookie.get(), GetDefaultTexture(DefaultTexture::White2D));
 		spotLight.VolumetricLighting = true;
 		m_Lights.push_back(spotLight);
@@ -1639,17 +1639,7 @@ void DemoApp::InitializePipelines()
 		// Must match with shader!
 		constexpr uint32 probeIrradianceTexels = 6;
 		constexpr uint32 probeDepthTexel = 14;
-		struct RayHitInfo
-		{
-			Vector3 Direction;
-			float Distance;
-			Vector3 Radiance;
-			float padd;
-		};
-		constexpr uint32 raySize = sizeof(RayHitInfo);
 
-		constexpr DXGI_FORMAT colorFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
-		constexpr DXGI_FORMAT depthFormat = DXGI_FORMAT_R16G16_FLOAT;
 
 		m_pDDGITraceRaysPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "DDGI.hlsl", "TraceRaysCS");
 		m_pDDGIUpdateIrradianceColorPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "DDGI.hlsl", "UpdateIrradianceCS");
@@ -1676,19 +1666,19 @@ void DemoApp::InitializePipelines()
 		for (DDGIVolume& ddgi : m_DDGIVolumes)
 		{
 			uint32 numProbes = ddgi.NumProbes.x * ddgi.NumProbes.y * ddgi.NumProbes.z;
-			ddgi.pRayBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(numProbes * ddgi.MaxNumRays, raySize, BufferFlag::UnorderedAccess | BufferFlag::ShaderResource), "DDGI Ray Buffer");
-			ddgi.pProbeOffset = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(numProbes, sizeof(Vector4), BufferFlag::UnorderedAccess | BufferFlag::ShaderResource), "DDGI Probe Offset Buffer");
+			ddgi.pRayBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateTyped(numProbes * ddgi.MaxNumRays, DXGI_FORMAT_R16G16B16A16_FLOAT, BufferFlag::UnorderedAccess | BufferFlag::ShaderResource), "DDGI Ray Buffer");
+			ddgi.pProbeOffset = m_pDevice->CreateBuffer(BufferDesc::CreateTyped(numProbes, DXGI_FORMAT_R16G16B16A16_FLOAT, BufferFlag::UnorderedAccess | BufferFlag::ShaderResource), "DDGI Probe Offset Buffer");
 			{
 				uint32 width = (1 + probeIrradianceTexels + 1) * ddgi.NumProbes.z * ddgi.NumProbes.x;
 				uint32 height = (1 + probeIrradianceTexels + 1) * ddgi.NumProbes.y;
-				TextureDesc ddgiIrradianceDesc = TextureDesc::Create2D(width, height, colorFormat, TextureFlag::UnorderedAccess);
+				TextureDesc ddgiIrradianceDesc = TextureDesc::Create2D(width, height, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::UnorderedAccess);
 				ddgi.pIrradiance[0] = m_pDevice->CreateTexture(ddgiIrradianceDesc, "DDGI Irradiance 0");
 				ddgi.pIrradiance[1] = m_pDevice->CreateTexture(ddgiIrradianceDesc, "DDGI Irradiance 1");
 			}
 			{
 				uint32 width = (1 + probeDepthTexel + 1) * ddgi.NumProbes.z * ddgi.NumProbes.x;
 				uint32 height = (1 + probeDepthTexel + 1) * ddgi.NumProbes.y;
-				TextureDesc ddgiDepthDesc = TextureDesc::Create2D(width, height, depthFormat, TextureFlag::UnorderedAccess);
+				TextureDesc ddgiDepthDesc = TextureDesc::Create2D(width, height, DXGI_FORMAT_R16G16_FLOAT, TextureFlag::UnorderedAccess);
 				ddgi.pDepth[0] = m_pDevice->CreateTexture(ddgiDepthDesc, "DDGI Depth 0");
 				ddgi.pDepth[1] = m_pDevice->CreateTexture(ddgiDepthDesc, "DDGI Depth 1");
 			}

@@ -6,14 +6,6 @@
 #include "Random.hlsli"
 #include "TonemappingCommon.hlsli"
 
-struct RayHitInfo
-{
-	float3 Direction;
-	float Depth;
-	float3 Radiance;
-	float padd;
-};
-
 struct PassParameters
 {
 	float3 RandomVector;
@@ -24,13 +16,13 @@ struct PassParameters
 
 ConstantBuffer<PassParameters> cPass : register(b0);
 
-RWStructuredBuffer<RayHitInfo> uRayHitInfo : register(u0);
+RWBuffer<float4> uRayHitInfo : register(u0);
 RWTexture2D<float4> uIrradianceMap : register(u0);
 RWTexture2D<float2> uDepthMap : register(u0);
 RWTexture2D<float4> uVisualizeTexture : register(u0);
-RWStructuredBuffer<float4> uProbeOffsets : register(u1);
+RWBuffer<float4> uProbeOffsets : register(u1);
 
-StructuredBuffer<RayHitInfo> tRayHitInfo : register(t0);
+Buffer<float4> tRayHitInfo : register(t0);
 
 float CastShadowRay(float3 origin, float3 direction)
 {
@@ -107,16 +99,15 @@ void TraceRaysCS(
 	uint3 probeIdx3D = GetDDGIProbeIndex3D(volume, probeIdx);
 	float3 probePosition = GetDDGIProbePosition(volume, probeIdx3D);
 	uint rayIndex = groupThreadId;
-
-	float3x3 randomRotation = AngleAxis3x3(cPass.RandomAngle, cPass.RandomVector);
 	const float maxDepth = Max3(volume.ProbeSize) * 2;
+	float3x3 randomRotation = AngleAxis3x3(cPass.RandomAngle, cPass.RandomVector);
 
 	RaytracingAccelerationStructure TLAS = ResourceDescriptorHeap[cView.TLASIndex];
 
 	uint numRays = volume.NumRaysPerProbe;
 	while(rayIndex < numRays)
 	{
-		float3 direction = mul(SphericalFibonacci(rayIndex, numRays), randomRotation);
+		float3 direction = direction = mul(SphericalFibonacci(rayIndex, numRays), randomRotation);
 
 		RayDesc ray;
 		ray.Origin = probePosition;
@@ -202,11 +193,7 @@ void TraceRaysCS(
 			radiance = GetSky(ray.Direction);
 		}
 
-		RayHitInfo hit = (RayHitInfo)0;
-		hit.Direction = ray.Direction;
-		hit.Depth = depth;
-		hit.Radiance = radiance;
-		uRayHitInfo[probeIdx * volume.MaxRaysPerProbe + rayIndex] = hit;
+		uRayHitInfo[probeIdx * volume.MaxRaysPerProbe + rayIndex] = float4(radiance, depth);
 		rayIndex += RAY_TRACE_GROUP_SIZE;
 	}
 }
@@ -232,7 +219,8 @@ static const uint4 DDGI_COLOR_BORDER_OFFSETS[NUM_COLOR_BORDER_TEXELS] = {
 };
 
 #define IRRADIANCE_RAY_HIT_GS_SIZE DDGI_PROBE_IRRADIANCE_TEXELS * DDGI_PROBE_IRRADIANCE_TEXELS
-groupshared RayHitInfo gsIrradianceRayHitCache[IRRADIANCE_RAY_HIT_GS_SIZE];
+groupshared float3 gsRadianceCache_Irradiance[IRRADIANCE_RAY_HIT_GS_SIZE];
+groupshared float3 gsDirectionCache_Irradiance[IRRADIANCE_RAY_HIT_GS_SIZE];
 
 [numthreads(DDGI_PROBE_IRRADIANCE_TEXELS, DDGI_PROBE_IRRADIANCE_TEXELS, 1)]
 void UpdateIrradianceCS(
@@ -249,6 +237,7 @@ void UpdateIrradianceCS(
 	Texture2D<float4> tIrradianceMap = ResourceDescriptorHeap[volume.IrradianceIndex];
 	float3 prevRadiance = tIrradianceMap[texelLocation].rgb;
 	float3 probeDirection = DecodeNormalOctahedron(((groupThreadId.xy + 0.5f) / (float)DDGI_PROBE_IRRADIANCE_TEXELS) * 2 - 1);
+	float3x3 randomRotation = AngleAxis3x3(cPass.RandomAngle, cPass.RandomVector);
 
 	float weightSum = 0;
 	float3 sum = 0;
@@ -261,15 +250,17 @@ void UpdateIrradianceCS(
 
 		if(groupIndex < rayCount)
 		{
-			gsIrradianceRayHitCache[groupIndex] = tRayHitInfo[probeIdx * volume.MaxRaysPerProbe + remainingRays + groupIndex];
+			gsRadianceCache_Irradiance[groupIndex] = tRayHitInfo[probeIdx * volume.MaxRaysPerProbe + remainingRays + groupIndex].rgb;
+			gsDirectionCache_Irradiance[groupIndex] = mul(SphericalFibonacci(remainingRays + groupIndex, volume.NumRaysPerProbe), randomRotation);
 		}
 		GroupMemoryBarrierWithGroupSync();
 
 		for(uint i = 0; i < rayCount; ++i)
 		{
-			RayHitInfo rayData = gsIrradianceRayHitCache[i];
-			float weight = saturate(dot(probeDirection, rayData.Direction));
-			sum += weight * rayData.Radiance;
+			float3 radiance = gsRadianceCache_Irradiance[i];
+			float3 direction = gsDirectionCache_Irradiance[i];
+			float weight = saturate(dot(probeDirection, direction));
+			sum += weight * radiance;
 			weightSum += weight;
 		}
 	}
@@ -315,7 +306,8 @@ static const uint4 DDGI_DEPTH_BORDER_OFFSETS[NUM_DEPTH_BORDER_TEXELS] = {
 };
 
 #define DEPTH_RAY_HIT_GS_SIZE DDGI_PROBE_DEPTH_TEXELS * DDGI_PROBE_DEPTH_TEXELS
-groupshared RayHitInfo gsDepthRayHitCache[DEPTH_RAY_HIT_GS_SIZE];
+groupshared float gsDepthCache_Depth[DEPTH_RAY_HIT_GS_SIZE];
+groupshared float3 gsDirectionCache_Depth[DEPTH_RAY_HIT_GS_SIZE];
 
 [numthreads(DDGI_PROBE_DEPTH_TEXELS, DDGI_PROBE_DEPTH_TEXELS, 1)]
 void UpdateDepthCS(
@@ -332,6 +324,7 @@ void UpdateDepthCS(
 	Texture2D<float2> tDepthMap = ResourceDescriptorHeap[volume.DepthIndex];
 	float2 prevDepth = tDepthMap[texelLocation];
 	float3 probeDirection = DecodeNormalOctahedron(((groupThreadId.xy + 0.5f) / (float)DDGI_PROBE_DEPTH_TEXELS) * 2 - 1);
+	float3x3 randomRotation = AngleAxis3x3(cPass.RandomAngle, cPass.RandomVector);
 
 #if DDGI_DYNAMIC_PROBE_OFFSET
 	float3 prevProbeOffset = uProbeOffsets[probeIdx].xyz;
@@ -350,16 +343,17 @@ void UpdateDepthCS(
 
 		if(groupIndex < rayCount)
 		{
-			gsDepthRayHitCache[groupIndex] = tRayHitInfo[probeIdx * volume.MaxRaysPerProbe + remainingRays + groupIndex];
+			gsDepthCache_Depth[groupIndex] = tRayHitInfo[probeIdx * volume.MaxRaysPerProbe + remainingRays + groupIndex].a;
+			gsDirectionCache_Depth[groupIndex] = mul(SphericalFibonacci(remainingRays + groupIndex, volume.NumRaysPerProbe), randomRotation);
 		}
 		GroupMemoryBarrierWithGroupSync();
 
 		for(uint i = 0; i < rayCount; ++i)
 		{
-			RayHitInfo rayData = gsDepthRayHitCache[i];
-			float weight = saturate(dot(probeDirection, rayData.Direction));
+			float depth = gsDepthCache_Depth[i];
+			float3 direction = gsDirectionCache_Depth[i];
+			float weight = saturate(dot(probeDirection, direction));
 			weight = pow(weight, 64);
-			float depth = rayData.Depth;
 			if(weight > MIN_WEIGHT_THRESHOLD)
 			{
 				weightSum += weight;
@@ -367,7 +361,7 @@ void UpdateDepthCS(
 			}
 
 	#if DDGI_DYNAMIC_PROBE_OFFSET
-			probeOffset -= rayData.Direction * saturate(probeOffsetDistance - depth);
+			probeOffset -= direction * saturate(probeOffsetDistance - depth);
 	#endif
 		}
 	}

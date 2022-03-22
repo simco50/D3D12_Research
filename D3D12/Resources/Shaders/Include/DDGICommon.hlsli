@@ -23,7 +23,7 @@ float3 GetDDGIProbePosition(DDGIVolume volume, uint3 index3D)
 #if DDGI_DYNAMIC_PROBE_OFFSET
 	if(volume.ProbeOffsetIndex != INVALID_HANDLE)
 	{
-		StructuredBuffer<float4> offsetBuffer = ResourceDescriptorHeap[volume.ProbeOffsetIndex];
+		Buffer<float4> offsetBuffer = ResourceDescriptorHeap[volume.ProbeOffsetIndex];
 		uint index1D = Flatten3D(index3D, volume.ProbeVolumeDimensions);
 		position += offsetBuffer[index1D].xyz;
 	}
