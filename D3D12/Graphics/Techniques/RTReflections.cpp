@@ -47,8 +47,8 @@ void RTReflections::Execute(RGGraph& graph, const SceneView& sceneData, const Sc
 
 			ShaderBindingTable bindingTable(m_pRtSO);
 			bindingTable.BindRayGenShader("RayGen");
-			bindingTable.BindMissShader("ReflectionMiss", 0);
-			bindingTable.BindMissShader("OcclusionMiss", 1);
+			bindingTable.BindMissShader("MaterialMS", 0);
+			bindingTable.BindMissShader("OcclusionMS", 1);
 			bindingTable.BindHitGroup("ReflectionHitGroup", 0);
 
 			context.SetRootConstants(0, parameters);
@@ -75,19 +75,19 @@ void RTReflections::SetupPipelines(GraphicsDevice* pDevice)
 	m_pGlobalRS = new RootSignature(pDevice);
 	m_pGlobalRS->AddRootConstants(0, 1);
 	m_pGlobalRS->AddConstantBufferView(100);
-	m_pGlobalRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 8);
-	m_pGlobalRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 8);
+	m_pGlobalRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 4);
+	m_pGlobalRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 4);
 	m_pGlobalRS->Finalize("Global");
 
 	StateObjectInitializer stateDesc;
 	stateDesc.Name = "RT Reflections";
 	stateDesc.RayGenShader = "RayGen";
 	stateDesc.AddLibrary("RTReflections.hlsl");
-	stateDesc.AddLibrary("CommonRaytracingLib.hlsl");
-	stateDesc.AddHitGroup("ReflectionHitGroup", "ReflectionClosestHit", "ReflectionAnyHit");
-	stateDesc.AddMissShader("ReflectionMiss");
+	stateDesc.AddLibrary("SharedRaytracingLib.hlsl", { "OcclusionMS", "MaterialCHS", "MaterialAHS", "MaterialMS" });
+	stateDesc.AddHitGroup("ReflectionHitGroup", "MaterialCHS", "MaterialAHS");
+	stateDesc.AddMissShader("MaterialMS");
 	stateDesc.AddMissShader("OcclusionMiss");
-	stateDesc.MaxPayloadSize = 5 * sizeof(float);
+	stateDesc.MaxPayloadSize = 6 * sizeof(float);
 	stateDesc.MaxAttributeSize = 2 * sizeof(float);
 	stateDesc.MaxRecursion = 2;
 	stateDesc.pGlobalRootSignature = m_pGlobalRS;

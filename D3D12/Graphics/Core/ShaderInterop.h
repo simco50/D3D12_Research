@@ -138,7 +138,9 @@ namespace ShaderInterop
 		uint IsVolumetric : 1;
 		uint CastShadows : 1;
 
-		float4 GetColor() { return UIntToColor(Color); }
+#ifndef __cplusplus
+		float3 GetColor() { return UIntToColor(Color).rgb; }
+#endif
 
 		bool PointAttenuation() { return IsPoint || IsSpot; }
 		bool DirectionalAttenuation() { return IsSpot; }

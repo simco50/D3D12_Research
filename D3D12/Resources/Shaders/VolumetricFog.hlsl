@@ -154,9 +154,9 @@ void InjectFogLightingCS(uint3 threadId : SV_DispatchThreadID)
 					L = normalize(light.Direction);
 				}
 				float VdotL = dot(V, L);
-				float4 lightColor = light.GetColor() * light.Intensity;
+				float3 lightColor = light.GetColor() * light.Intensity;
 
-				totalLighting += attenuation * lightColor.xyz * saturate(HenyeyGreenstreinPhase(VdotL, 0.3f));
+				totalLighting += attenuation * lightColor * saturate(HenyeyGreenstreinPhase(VdotL, 0.3f));
 			}
 		}
 	}

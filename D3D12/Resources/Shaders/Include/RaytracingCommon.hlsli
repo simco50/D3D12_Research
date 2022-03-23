@@ -2,6 +2,7 @@
 
 #include "SkyCommon.hlsli"
 #include "ShadingModels.hlsli"
+#include "Random.hlsli"
 
 #define RAY_BIAS 1.0e-2f
 #define RAY_MAX_T 1.0e10f
@@ -227,4 +228,83 @@ float TraceOcclusionRay(float3 origin, float3 direction, float length)
 	);
 	return !payload.IsMiss();
 #endif
+}
+
+struct RAYPAYLOAD MaterialRayPayload
+{
+	float HitT;
+	uint PrimitiveID;
+	uint InstanceID;
+	float2 Barycentrics;
+	uint FrontFace;
+
+	bool IsHit() { return HitT >= 0; }
+	bool IsFrontFace() { return FrontFace > 0; }
+};
+
+MaterialRayPayload TraceMaterialRay(float3 origin, float3 direction, float tMax = RAY_MAX_T)
+{
+	MaterialRayPayload payload;
+	payload.HitT = -1.0f;
+
+	RayDesc desc;
+	desc.Origin = origin;
+	desc.Direction = direction;
+	desc.TMin = RAY_BIAS;
+	desc.TMax = tMax;
+
+	RaytracingAccelerationStructure tlas = ResourceDescriptorHeap[cView.TLASIndex];
+
+#if __SHADER_STAGE_PIXEL || __SHADER_STAGE_COMPUTE
+
+	RayQuery<0> q;
+	q.TraceRayInline(
+		tlas, 	// AccelerationStructure
+		0,		// RayFlags
+		0xFF, 	// InstanceMask
+		desc	// Ray
+	);
+	while(q.Proceed())
+	{
+		switch(q.CandidateType())
+		{
+			case CANDIDATE_NON_OPAQUE_TRIANGLE:
+			{
+				MeshInstance instance = GetMeshInstance(q.CandidateInstanceID());
+				VertexAttribute vertex = GetVertexAttributes(instance, q.CandidateTriangleBarycentrics(), q.CandidatePrimitiveIndex(), q.CandidateObjectToWorld4x3());
+				MaterialData material = GetMaterial(instance.Material);
+				MaterialProperties surface = GetMaterialProperties(material, vertex.UV, 0);
+				if(surface.Opacity > material.AlphaCutoff)
+				{
+					q.CommitNonOpaqueTriangleHit();
+				}
+			}
+			break;
+		}
+	}
+	if(q.CommittedStatus() == COMMITTED_TRIANGLE_HIT)
+	{
+		payload.HitT = q.CommittedRayT();
+		payload.PrimitiveID = q.CommittedPrimitiveIndex();
+		payload.InstanceID = q.CommittedInstanceID();
+		payload.Barycentrics = q.CommittedTriangleBarycentrics();
+		payload.FrontFace = q.CommittedTriangleFrontFace();
+	}
+
+#else
+
+	TraceRay(
+		tlas,		//AccelerationStructure
+		0, 			//RayFlags
+		0xFF, 		//InstanceInclusionMask
+		0,			//RayContributionToHitGroupIndex
+		0, 			//MultiplierForGeometryContributionToHitGroupIndex
+		0, 			//MissShaderIndex
+		desc, 		//Ray
+		payload 	//Payload
+	);
+
+#endif
+
+	return payload;
 }

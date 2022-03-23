@@ -47,7 +47,7 @@ void ComputeSkyCS(uint3 threadId : SV_DispatchThreadID)
 	}
 	Light sun = GetLight(0);
 	float3 lightDir = -sun.Direction;
-	float3 lightColor = sun.GetColor().rgb;
+	float3 lightColor = sun.GetColor();
 
 	float3 transmittance;
 	float3 sky = IntegrateScattering(rayStart, dir, rayLength, lightDir, lightColor, transmittance);

@@ -334,9 +334,9 @@ LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, floa
 	}
 	result = DefaultLitBxDF(specularColor, roughness, diffuseColor, N, V, L, attenuation);
 
-	float4 color = light.GetColor();
-	result.Diffuse *= color.rgb * light.Intensity;
-	result.Specular *= color.rgb * light.Intensity;
+	float3 color = light.GetColor();
+	result.Diffuse *= color * light.Intensity;
+	result.Specular *= color * light.Intensity;
 
 	return result;
 }

@@ -63,54 +63,26 @@ void TraceRaysCS(
 	{
 		float3 direction = direction = mul(SphericalFibonacci(rayIndex, numRays), randomRotation);
 
-		RayDesc ray;
-		ray.Origin = probePosition;
-		ray.Direction = direction;
-		ray.TMin = 0;
-		ray.TMax = RAY_MAX_T;
-
-		RayQuery<RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> q;
-		q.TraceRayInline(
-			TLAS, 	// AccelerationStructure
-			0,		// RayFlags
-			0xFF, 	// InstanceMask
-			ray		// Ray
-		);
-		while(q.Proceed())
-		{
-			switch(q.CandidateType())
-			{
-				case CANDIDATE_NON_OPAQUE_TRIANGLE:
-				{
-					MeshInstance instance = GetMeshInstance(q.CandidateInstanceID());
-					VertexAttribute vertex = GetVertexAttributes(instance, q.CandidateTriangleBarycentrics(), q.CandidatePrimitiveIndex(), q.CandidateObjectToWorld4x3());
-					MaterialData material = GetMaterial(instance.Material);
-					MaterialProperties surface = GetMaterialProperties(material, vertex.UV, 0);
-					if(surface.Opacity > material.AlphaCutoff)
-					{
-						q.CommitNonOpaqueTriangleHit();
-					}
-				}
-				break;
-			}
-		}
+		MaterialRayPayload payload = TraceMaterialRay(probePosition, direction);
 
 		float3 radiance = 0;
 		float depth = maxDepth;
 
-		if(q.CommittedStatus() == COMMITTED_TRIANGLE_HIT)
+		if(payload.IsHit())
 		{
-			depth = min(q.CommittedRayT(), depth);
-			if(q.CommittedTriangleFrontFace())
+			depth = min(payload.HitT, depth);
+			
+			if(payload.IsFrontFace())
 			{
-				MeshInstance instance = GetMeshInstance(q.CommittedInstanceID());
-				VertexAttribute vertex = GetVertexAttributes(instance, q.CommittedTriangleBarycentrics(), q.CommittedPrimitiveIndex(), q.CommittedObjectToWorld4x3());
+				MeshInstance instance = GetMeshInstance(payload.InstanceID);
+				float4x4 world = GetTransform(NonUniformResourceIndex(instance.World));
+				VertexAttribute vertex = GetVertexAttributes(instance, payload.Barycentrics, payload.PrimitiveID, (float4x3)world);
 				MaterialData material = GetMaterial(instance.Material);
 				const uint textureMipLevel = 5;
 				MaterialProperties surface = GetMaterialProperties(material, vertex.UV, textureMipLevel);
 				BrdfData brdfData = GetBrdfData(surface);
 
-				float3 hitLocation = q.WorldRayOrigin() + q.WorldRayDirection() * q.CommittedRayT();
+				float3 hitLocation = probePosition + direction * payload.HitT;
 				float3 N = vertex.Normal;
 
 				for(uint lightIndex = 0; lightIndex < cView.LightCount; ++lightIndex)
@@ -130,11 +102,11 @@ void TraceRaysCS(
 						continue;
 
 					float3 diffuse = (attenuation * saturate(dot(N, L))) * Diffuse_Lambert(brdfData.Diffuse);
-					radiance += diffuse * light.GetColor().rgb * light.Intensity;
+					radiance += diffuse * light.GetColor() * light.Intensity;
 				}
 
 				radiance += surface.Emissive;
-				radiance += Diffuse_Lambert(min(brdfData.Diffuse, 0.9f)) * SampleDDGIIrradiance(hitLocation, N, ray.Direction);
+				radiance += Diffuse_Lambert(min(brdfData.Diffuse, 0.9f)) * SampleDDGIIrradiance(hitLocation, N, direction);
 			}
 			else
 			{
@@ -144,7 +116,7 @@ void TraceRaysCS(
 		}
 		else
 		{
-			radiance = GetSky(ray.Direction);
+			radiance = GetSky(direction);
 		}
 
 		uRayHitInfo[probeIdx * volume.MaxRaysPerProbe + rayIndex] = float4(radiance, depth);
