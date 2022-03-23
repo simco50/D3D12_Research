@@ -403,10 +403,10 @@ ShaderBase::~ShaderBase()
 
 ShaderManager::ShaderStringHash ShaderManager::GetEntryPointHash(const char* pEntryPoint, const std::vector<ShaderDefine>& defines)
 {
-	StringHash hash(pEntryPoint);
+	ShaderStringHash hash(pEntryPoint);
 	for (const ShaderDefine& define : defines)
 	{
-		hash.Combine(StringHash(define.Value));
+		hash.Combine(ShaderStringHash(define.Value));
 	}
 	return hash;
 }
@@ -440,7 +440,7 @@ Shader* ShaderManager::LoadShader(const char* pShaderPath, ShaderType shaderType
 	}
 	m_IncludeDependencyMap[ShaderStringHash(pShaderPath)].insert(pShaderPath);
 
-	StringHash hash = GetEntryPointHash(pEntryPoint, defines);
+	ShaderStringHash hash = GetEntryPointHash(pEntryPoint, defines);
 	m_FilepathToObjectMap[ShaderStringHash(pShaderPath)].Shaders[hash] = pShader;
 
 	return pShader;
@@ -474,7 +474,7 @@ ShaderLibrary* ShaderManager::LoadShaderLibrary(const char* pShaderPath, const s
 	}
 	m_IncludeDependencyMap[ShaderStringHash(pShaderPath)].insert(pShaderPath);
 
-	StringHash hash = GetEntryPointHash("", defines);
+	ShaderStringHash hash = GetEntryPointHash("", defines);
 	m_FilepathToObjectMap[ShaderStringHash(pShaderPath)].Libraries[hash] = pLibrary;
 
 	return pLibrary;
@@ -587,7 +587,7 @@ void ShaderManager::AddIncludeDir(const std::string& includeDir)
 Shader* ShaderManager::GetShader(const char* pShaderPath, ShaderType shaderType, const char* pEntryPoint, const std::vector<ShaderDefine>& defines /*= {}*/)
 {
 	auto& shaderMap = m_FilepathToObjectMap[ShaderStringHash(pShaderPath)].Shaders;
-	StringHash hash = GetEntryPointHash(pEntryPoint, defines);
+	ShaderStringHash hash = GetEntryPointHash(pEntryPoint, defines);
 	auto it = shaderMap.find(hash);
 	if (it != shaderMap.end())
 	{
@@ -600,7 +600,7 @@ Shader* ShaderManager::GetShader(const char* pShaderPath, ShaderType shaderType,
 ShaderLibrary* ShaderManager::GetLibrary(const char* pShaderPath, const std::vector<ShaderDefine>& defines /*= {}*/)
 {
 	auto& libraryMap = m_FilepathToObjectMap[ShaderStringHash(pShaderPath)].Libraries;
-	StringHash hash = GetEntryPointHash("", defines);
+	ShaderStringHash hash = GetEntryPointHash("", defines);
 	auto it = libraryMap.find(hash);
 	if (it != libraryMap.end())
 	{

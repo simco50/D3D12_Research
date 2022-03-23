@@ -42,23 +42,34 @@ namespace CString
 
 	bool StrCmp(const char* pStrA, const char* pStrB, bool caseSensitive);
 
-	inline void ToUpper(const char* pStr, char* pOut)
+	constexpr inline char ToLower(char c)
+	{
+		return c >= 'A' && c <= 'Z' ? c - ('Z' - 'z') : c;
+	}
+
+	constexpr inline char ToUpper(char c)
+	{
+		return c >= 'a' && c <= 'z' ? c + ('Z' - 'z') : c;
+	}
+
+	constexpr inline void ToUpper(const char* pStr, char* pOut)
 	{
 		while (*pStr)
 		{
-			*pOut++ = (char)toupper(*pStr++);
+			*pOut++ = (char)ToUpper(*pStr++);
 		}
 		*pOut = '\0';
 	}
 
-	inline void ToLower(const char* pStr, char* pOut)
+	constexpr inline void ToLower(const char* pStr, char* pOut)
 	{
 		while (*pStr)
 		{
-			*pOut++ = (char)tolower(*pStr++);
+			*pOut++ = (char)ToLower(*pStr++);
 		}
 		*pOut = '\0';
 	}
+
 
 	template<int I>
 	int SplitString(const char* pStr, char(&buffer)[I], const char** pOut, int maxArgs, bool considerQuotes, char delimiter)

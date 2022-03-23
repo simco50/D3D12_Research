@@ -45,7 +45,7 @@ void TraceRaysRGS()
 	if(payload.IsHit())
 	{
 		depth = min(payload.HitT, depth);
-		
+
 		if(payload.IsFrontFace())
 		{
 			MeshInstance instance = GetMeshInstance(payload.InstanceID);

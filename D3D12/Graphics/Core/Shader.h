@@ -1,9 +1,5 @@
 #pragma once
 
-#ifndef SHADER_HASH_DEBUG
-#define SHADER_HASH_DEBUG 0
-#endif
-
 class FileWatcher;
 
 using ShaderBlob = RefCountPtr<ID3DBlob>;
@@ -87,12 +83,7 @@ public:
 	OnLibraryRecompiled& OnLibraryRecompiledEvent() { return m_OnLibraryRecompiledEvent; }
 
 private:
-
-#if SHADER_HASH_DEBUG
-	using ShaderStringHash = std::string;
-#else
-	using ShaderStringHash = StringHash;
-#endif
+	using ShaderStringHash = TStringHash<false>;
 
 	ShaderStringHash GetEntryPointHash(const char* pEntryPoint, const std::vector<ShaderDefine>& defines);
 	Shader* LoadShader(const char* pShaderPath, ShaderType shaderType, const char* pEntryPoint, const std::vector<ShaderDefine>& defines = {});
@@ -114,8 +105,8 @@ private:
 
 	struct ShadersInFileMap
 	{
-		std::unordered_map<StringHash, Shader*> Shaders;
-		std::unordered_map<StringHash, ShaderLibrary*> Libraries;
+		std::unordered_map<ShaderStringHash, Shader*> Shaders;
+		std::unordered_map<ShaderStringHash, ShaderLibrary*> Libraries;
 	};
 	std::unordered_map<ShaderStringHash, ShadersInFileMap> m_FilepathToObjectMap;
 
