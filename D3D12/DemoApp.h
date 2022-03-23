@@ -190,7 +190,7 @@ private:
 	RefCountPtr<PipelineState> m_pDDGIUpdateIrradianceDepthPSO;
 	RefCountPtr<PipelineState> m_pDDGIVisualizePSO;
 
-	Texture* m_pVisualizeTexture = nullptr;
+	RefCountPtr<Texture> m_pVisualizeTexture;
 	SceneView m_SceneData;
 	bool m_CapturePix = false;
 };

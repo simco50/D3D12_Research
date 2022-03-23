@@ -6,7 +6,6 @@
 
 struct PassData
 {
-	uint2 Dimensions;
 	float AoPower;
 	float AoRadius;
 	float AoDepthThreshold;
@@ -29,13 +28,12 @@ struct CS_INPUT
 [numthreads(BLOCK_SIZE, BLOCK_SIZE, 1)]
 void CSMain(CS_INPUT input)
 {
-	float2 dimInv = rcp((float2)cPass.Dimensions);
-	float2 uv = (float2)input.DispatchThreadId.xy * dimInv;
+	float2 uv = ((float2)input.DispatchThreadId.xy + 0.5f) * cView.ScreenDimensionsInv;
 	float depth = tDepthTexture.SampleLevel(sLinearClamp, uv, 0).r;
-	float3 normal = NormalFromDepth(tDepthTexture, sLinearClamp, uv, dimInv, cView.ProjectionInverse);
+	float3 normal = NormalFromDepth(tDepthTexture, sLinearClamp, uv, cView.ScreenDimensionsInv, cView.ProjectionInverse);
 	float3 viewPos = ViewFromDepth(uv.xy, depth, cView.ProjectionInverse).xyz;
 
-	uint state = SeedThread(input.DispatchThreadId.xy, cPass.Dimensions, cView.FrameIndex);
+	uint state = SeedThread(input.DispatchThreadId.xy, cView.ScreenDimensions, cView.FrameIndex);
 	float3 randomVec = float3(Random01(state), Random01(state), Random01(state)) * 2.0f - 1.0f;
 	float3 tangent = normalize(randomVec - normal * dot(randomVec, normal));
 	float3 bitangent = cross(tangent, normal);
