@@ -24,52 +24,6 @@ RWBuffer<float4> uProbeOffsets : register(u1);
 
 Buffer<float4> tRayHitInfo : register(t0);
 
-float CastShadowRay(float3 origin, float3 direction)
-{
-	float len = length(direction);
-	RayDesc ray;
-	ray.Origin = origin;
-	ray.Direction = direction / len;
-	ray.TMin = RAY_BIAS;
-	ray.TMax = len;
-
-	const int rayFlags =
-		RAY_FLAG_SKIP_CLOSEST_HIT_SHADER |
-		RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH |
-		RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES;
-
-	RaytracingAccelerationStructure TLAS = ResourceDescriptorHeap[cView.TLASIndex];
-
-	RayQuery<rayFlags> q;
-
-	q.TraceRayInline(
-		TLAS, 	// AccelerationStructure
-		0,		// RayFlags
-		0xFF, 	// InstanceMask
-		ray		// Ray
-	);
-
-	while(q.Proceed())
-	{
-		switch(q.CandidateType())
-		{
-			case CANDIDATE_NON_OPAQUE_TRIANGLE:
-			{
-				MeshInstance instance = GetMeshInstance(q.CandidateInstanceID());
-				VertexAttribute vertex = GetVertexAttributes(instance, q.CandidateTriangleBarycentrics(), q.CandidatePrimitiveIndex(), q.CandidateObjectToWorld4x3());
-				MaterialData material = GetMaterial(instance.Material);
-				MaterialProperties surface = GetMaterialProperties(material, vertex.UV, 0);
-				if(surface.Opacity > material.AlphaCutoff)
-				{
-					q.CommitNonOpaqueTriangleHit();
-				}
-			}
-			break;
-		}
-	}
-	return q.CommittedStatus() != COMMITTED_TRIANGLE_HIT;
-}
-
 // From G3DMath
 // Generates a nearly uniform point distribution on the unit sphere of size N
 float3 SphericalFibonacci(float i, float n)
@@ -171,7 +125,7 @@ void TraceRaysCS(
 					{
 						L = RAY_MAX_T * -light.Direction;
 					}
-					attenuation *= CastShadowRay(hitLocation, L);
+					attenuation *= TraceOcclusionRay(hitLocation, normalize(L), length(L));
 					if(attenuation <= 0.0f)
 						continue;
 

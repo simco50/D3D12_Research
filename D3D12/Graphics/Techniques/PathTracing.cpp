@@ -30,9 +30,10 @@ PathTracing::PathTracing(GraphicsDevice* pDevice)
 	desc.MaxAttributeSize = 2 * sizeof(float);
 	desc.Type = D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE;
 	desc.AddLibrary("PathTracing.hlsl");
+	desc.AddLibrary("CommonRaytracingLib.hlsl");
 	desc.AddHitGroup("PrimaryHG", "PrimaryCHS", "PrimaryAHS");
 	desc.AddMissShader("PrimaryMS");
-	desc.AddMissShader("ShadowMS");
+	desc.AddMissShader("OcclusionMiss");
 	desc.pGlobalRootSignature = m_pRS;
 	m_pSO = pDevice->CreateStateObject(desc);
 
@@ -102,7 +103,7 @@ void PathTracing::Render(RGGraph& graph, const SceneView& sceneData, Texture* pT
 			ShaderBindingTable bindingTable(m_pSO);
 			bindingTable.BindRayGenShader("RayGen");
 			bindingTable.BindMissShader("PrimaryMS", 0);
-			bindingTable.BindMissShader("ShadowMS", 1);
+			bindingTable.BindMissShader("OcclusionMiss", 1);
 			bindingTable.BindHitGroup("PrimaryHG", 0);
 
 			context.SetRootCBV(0, parameters);

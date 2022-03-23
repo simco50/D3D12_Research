@@ -26,74 +26,6 @@ struct RAYPAYLOAD ReflectionRayPayload
 	RayCone rayCone 	RAYQUALIFIER(read(caller, closesthit) : write(caller, closesthit));
 };
 
-struct RAYPAYLOAD ShadowRayPayload
-{
-	uint Hit RAYQUALIFIER(read(caller) : write(caller, miss));
-};
-
-float CastShadowRay(float3 origin, float3 direction)
-{
-	float len = length(direction);
-	RayDesc ray;
-	ray.Origin = origin;
-	ray.Direction = direction / len;
-	ray.TMin = RAY_BIAS;
-	ray.TMax = len;
-
-	const int rayFlags =
-		RAY_FLAG_SKIP_CLOSEST_HIT_SHADER |
-		RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH |
-		RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES;
-
-	RaytracingAccelerationStructure TLAS = ResourceDescriptorHeap[cView.TLASIndex];
-
-// Inline RT for the shadow rays has better performance. Use it when available.
-#if _INLINE_RT
-	RayQuery<rayFlags> q;
-
-	q.TraceRayInline(
-		TLAS, 	// AccelerationStructure
-		0,		// RayFlags
-		0xFF, 	// InstanceMask
-		ray		// Ray
-	);
-
-	while(q.Proceed())
-	{
-		switch(q.CandidateType())
-		{
-			case CANDIDATE_NON_OPAQUE_TRIANGLE:
-			{
-				MeshInstance instance = GetMeshInstance(q.CandidateInstanceID());
-				VertexAttribute vertex = GetVertexAttributes(instance, q.CandidateTriangleBarycentrics(), q.CandidatePrimitiveIndex(), q.CandidateObjectToWorld4x3());
-				MaterialData material = GetMaterial(instance.Material);
-				MaterialProperties surface = GetMaterialProperties(material, vertex.UV, 0);
-				if(surface.Opacity > material.AlphaCutoff)
-				{
-					q.CommitNonOpaqueTriangleHit();
-				}
-			}
-			break;
-		}
-	}
-	return q.CommittedStatus() != COMMITTED_TRIANGLE_HIT;
-#else
-	ShadowRayPayload payload;
-	payload.Hit = 1;
-	TraceRay(
-		TLAS,		//AccelerationStructure
-		rayFlags, 	//RayFlags
-		0xFF, 		//InstanceInclusionMask
-		0,			//RayContributionToHitGroupIndex
-		0, 			//MultiplierForGeometryContributionToHitGroupIndex
-		1, 			//MissShaderIndex
-		ray, 		//Ray
-		payload 	//Payload
-	);
-	return !payload.Hit;
-#endif
-}
-
 ReflectionRayPayload CastReflectionRay(float3 origin, float3 direction, float T)
 {
 	RayCone cone;
@@ -164,7 +96,7 @@ LightResult EvaluateLight(Light light, float3 worldPos, float3 V, float3 N, Brdf
 #if SECONDARY_SHADOW_RAY
 	if(castShadowRay)
 	{
-		attenuation *= CastShadowRay(worldPos, L);
+		attenuation *= TraceOcclusionRay(worldPos, normalize(L), length(L));
 #else
 		attenuation = 0.0f;
 #endif // SECONDARY_SHADOW_RAY
@@ -219,12 +151,6 @@ void ReflectionAnyHit(inout ReflectionRayPayload payload, BuiltInTriangleInterse
 	{
 		IgnoreHit();
 	}
-}
-
-[shader("miss")]
-void ShadowMiss(inout ShadowRayPayload payload : SV_RayPayload)
-{
-	payload.Hit = 0;
 }
 
 [shader("miss")]

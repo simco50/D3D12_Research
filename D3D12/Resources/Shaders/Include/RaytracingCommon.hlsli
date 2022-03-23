@@ -160,3 +160,71 @@ float3 OffsetRay(float3 position, float3 geometryNormal)
 		abs(position.z) < origin ? position.z + float_scale * geometryNormal.z : p_i.z);
 }
 
+struct RAYPAYLOAD OcclusionPayload
+{
+	float HitT RAYQUALIFIER(read(caller) : write(caller, miss));
+
+	bool IsHit() { return HitT >= 0; }
+	void SetMiss() { HitT = -1.0f; }
+};
+
+float TraceOcclusionRay(float3 origin, float3 direction, float length)
+{
+	RayDesc ray;
+	ray.Origin = origin;
+	ray.Direction = direction;
+	ray.TMin = RAY_BIAS;
+	ray.TMax = length;
+
+	const int rayFlags =
+		RAY_FLAG_SKIP_CLOSEST_HIT_SHADER |
+		RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH |
+		RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES;
+
+	RaytracingAccelerationStructure TLAS = ResourceDescriptorHeap[cView.TLASIndex];
+
+// Inline RT for the shadow rays has better performance. Use it when available.
+#if _INLINE_RT || __SHADER_STAGE_PIXEL || __SHADER_STAGE_COMPUTE
+	RayQuery<rayFlags> q;
+
+	q.TraceRayInline(
+		TLAS, 	// AccelerationStructure
+		0,		// RayFlags
+		0xFF, 	// InstanceMask
+		ray		// Ray
+	);
+
+	while(q.Proceed())
+	{
+		switch(q.CandidateType())
+		{
+			case CANDIDATE_NON_OPAQUE_TRIANGLE:
+			{
+				MeshInstance instance = GetMeshInstance(q.CandidateInstanceID());
+				VertexAttribute vertex = GetVertexAttributes(instance, q.CandidateTriangleBarycentrics(), q.CandidatePrimitiveIndex(), q.CandidateObjectToWorld4x3());
+				MaterialData material = GetMaterial(instance.Material);
+				MaterialProperties surface = GetMaterialProperties(material, vertex.UV, 0);
+				if(surface.Opacity > material.AlphaCutoff)
+				{
+					q.CommitNonOpaqueTriangleHit();
+				}
+			}
+			break;
+		}
+	}
+	return q.CommittedStatus() != COMMITTED_TRIANGLE_HIT;
+#else
+	OcclusionPayload payload = (OcclusionPayload)0;
+	TraceRay(
+		TLAS,		//AccelerationStructure
+		rayFlags, 	//RayFlags
+		0xFF, 		//InstanceInclusionMask
+		0,			//RayContributionToHitGroupIndex
+		0, 			//MultiplierForGeometryContributionToHitGroupIndex
+		1, 			//MissShaderIndex
+		ray, 		//Ray
+		payload 	//Payload
+	);
+	return !payload.IsMiss();
+#endif
+}

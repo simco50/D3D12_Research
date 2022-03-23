@@ -48,7 +48,7 @@ void RTReflections::Execute(RGGraph& graph, const SceneView& sceneData, const Sc
 			ShaderBindingTable bindingTable(m_pRtSO);
 			bindingTable.BindRayGenShader("RayGen");
 			bindingTable.BindMissShader("ReflectionMiss", 0);
-			bindingTable.BindMissShader("ShadowMiss", 1);
+			bindingTable.BindMissShader("OcclusionMiss", 1);
 			bindingTable.BindHitGroup("ReflectionHitGroup", 0);
 
 			context.SetRootConstants(0, parameters);
@@ -83,9 +83,10 @@ void RTReflections::SetupPipelines(GraphicsDevice* pDevice)
 	stateDesc.Name = "RT Reflections";
 	stateDesc.RayGenShader = "RayGen";
 	stateDesc.AddLibrary("RTReflections.hlsl");
+	stateDesc.AddLibrary("CommonRaytracingLib.hlsl");
 	stateDesc.AddHitGroup("ReflectionHitGroup", "ReflectionClosestHit", "ReflectionAnyHit");
 	stateDesc.AddMissShader("ReflectionMiss");
-	stateDesc.AddMissShader("ShadowMiss");
+	stateDesc.AddMissShader("OcclusionMiss");
 	stateDesc.MaxPayloadSize = 5 * sizeof(float);
 	stateDesc.MaxAttributeSize = 2 * sizeof(float);
 	stateDesc.MaxRecursion = 2;
