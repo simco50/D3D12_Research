@@ -12,6 +12,7 @@
 #include "Graphics/Core/DynamicResourceAllocator.h"
 #include "Graphics/Core/Shader.h"
 #include "Graphics/Core/PipelineState.h"
+#include "Graphics/Core/ShaderBindingTable.h"
 #include "Graphics/RenderGraph/RenderGraph.h"
 #include "Graphics/Techniques/GpuParticles.h"
 #include "Graphics/Techniques/RTAO.h"
@@ -796,19 +797,25 @@ void DemoApp::Update()
 
 		const uint32 numProbes = ddgi.NumProbes.x * ddgi.NumProbes.y * ddgi.NumProbes.z;
 
-		RGPassBuilder ddgiRays = graph.AddPass("DDGI Rays");
+		RGPassBuilder ddgiRays = graph.AddPass("DDGI Raytrace");
 		ddgiRays.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
 			{
 				context.InsertResourceBarrier(ddgi.pIrradiance[0], D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 				context.InsertResourceBarrier(ddgi.pRayBuffer, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 				context.SetComputeRootSignature(m_pCommonRS);
-				context.SetPipelineState(m_pDDGITraceRaysPSO);
+				context.SetPipelineState(m_pDDGITraceRaysSO);
 
 				context.SetRootConstants(0, parameters);
 				context.SetRootCBV(1, GetViewUniforms(m_SceneData));
 				context.BindResource(2, 0, ddgi.pRayBuffer->GetUAV());
 
-				context.Dispatch(numProbes);
+				ShaderBindingTable bindingTable(m_pDDGITraceRaysSO);
+				bindingTable.BindRayGenShader("TraceRaysRGS");
+				bindingTable.BindMissShader("MaterialMS", 0);
+				bindingTable.BindMissShader("OcclusionMS", 1);
+				bindingTable.BindHitGroup("MaterialHG", 0);
+
+				context.DispatchRays(bindingTable, volume.NumRays, numProbes);
 			});
 
 		RGPassBuilder ddgiUpdateIrradiance = graph.AddPass("DDGI Update Irradiance");
@@ -1640,10 +1647,22 @@ void DemoApp::InitializePipelines()
 		constexpr uint32 probeIrradianceTexels = 6;
 		constexpr uint32 probeDepthTexel = 14;
 
-
-		m_pDDGITraceRaysPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "DDGI.hlsl", "TraceRaysCS");
 		m_pDDGIUpdateIrradianceColorPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "DDGI.hlsl", "UpdateIrradianceCS");
 		m_pDDGIUpdateIrradianceDepthPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "DDGI.hlsl", "UpdateDepthCS");
+
+		StateObjectInitializer soDesc{};
+		soDesc.Name = "DDGI Trace Rays";
+		soDesc.MaxRecursion = 1;
+		soDesc.MaxPayloadSize = 6 * sizeof(float);
+		soDesc.MaxAttributeSize = 2 * sizeof(float);
+		soDesc.Type = D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE;
+		soDesc.AddLibrary("DDGIRayTrace.hlsl", { "TraceRaysRGS" });
+		soDesc.AddLibrary("SharedRaytracingLib.hlsl", { "OcclusionMS", "MaterialCHS", "MaterialAHS", "MaterialMS" });
+		soDesc.AddHitGroup("MaterialHG", "MaterialCHS", "MaterialAHS");
+		soDesc.AddMissShader("MaterialMS");
+		soDesc.AddMissShader("OcclusionMiss");
+		soDesc.pGlobalRootSignature = m_pCommonRS;
+		m_pDDGITraceRaysSO = m_pDevice->CreateStateObject(soDesc);
 
 		PipelineStateInitializer psoDesc;
 		psoDesc.SetRootSignature(m_pCommonRS);

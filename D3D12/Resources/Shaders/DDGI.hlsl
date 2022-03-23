@@ -16,113 +16,12 @@ struct PassParameters
 
 ConstantBuffer<PassParameters> cPass : register(b0);
 
-RWBuffer<float4> uRayHitInfo : register(u0);
 RWTexture2D<float4> uIrradianceMap : register(u0);
 RWTexture2D<float2> uDepthMap : register(u0);
 RWTexture2D<float4> uVisualizeTexture : register(u0);
 RWBuffer<float4> uProbeOffsets : register(u1);
 
 Buffer<float4> tRayHitInfo : register(t0);
-
-// From G3DMath
-// Generates a nearly uniform point distribution on the unit sphere of size N
-float3 SphericalFibonacci(float i, float n)
-{
-	const float PHI = sqrt(5) * 0.5 + 0.5;
-	float phi = 2.0 * PI * frac(i * (PHI - 1));
-	float cos_theta = 1.0 - (2.0 * i + 1.0) * (1.0 / n);
-	float sin_theta = sqrt(saturate(1.0 - cos_theta * cos_theta));
-	return float3(cos(phi) * sin_theta, sin(phi) * sin_theta, cos_theta);
-}
-
-/**
-	- TraceRays -
-	Cast N uniformly distributed rays from each probe.
-*/
-#define RAY_TRACE_GROUP_SIZE 32
-
-[numthreads(RAY_TRACE_GROUP_SIZE, 1, 1)]
-void TraceRaysCS(
-	uint threadId : SV_DispatchThreadID,
-	uint groupIndex : SV_GroupID,
-	uint groupThreadId : SV_GroupThreadID)
-{
-	DDGIVolume volume = GetDDGIVolume(cPass.VolumeIndex);
-
-	uint probeIdx = groupIndex;
-	uint3 probeIdx3D = GetDDGIProbeIndex3D(volume, probeIdx);
-	float3 probePosition = GetDDGIProbePosition(volume, probeIdx3D);
-	uint rayIndex = groupThreadId;
-	const float maxDepth = Max3(volume.ProbeSize) * 2;
-	float3x3 randomRotation = AngleAxis3x3(cPass.RandomAngle, cPass.RandomVector);
-
-	RaytracingAccelerationStructure TLAS = ResourceDescriptorHeap[cView.TLASIndex];
-
-	uint numRays = volume.NumRaysPerProbe;
-	while(rayIndex < numRays)
-	{
-		float3 direction = direction = mul(SphericalFibonacci(rayIndex, numRays), randomRotation);
-
-		MaterialRayPayload payload = TraceMaterialRay(probePosition, direction);
-
-		float3 radiance = 0;
-		float depth = maxDepth;
-
-		if(payload.IsHit())
-		{
-			depth = min(payload.HitT, depth);
-			
-			if(payload.IsFrontFace())
-			{
-				MeshInstance instance = GetMeshInstance(payload.InstanceID);
-				float4x4 world = GetTransform(NonUniformResourceIndex(instance.World));
-				VertexAttribute vertex = GetVertexAttributes(instance, payload.Barycentrics, payload.PrimitiveID, (float4x3)world);
-				MaterialData material = GetMaterial(instance.Material);
-				const uint textureMipLevel = 5;
-				MaterialProperties surface = GetMaterialProperties(material, vertex.UV, textureMipLevel);
-				BrdfData brdfData = GetBrdfData(surface);
-
-				float3 hitLocation = probePosition + direction * payload.HitT;
-				float3 N = vertex.Normal;
-
-				for(uint lightIndex = 0; lightIndex < cView.LightCount; ++lightIndex)
-				{
-					Light light = GetLight(lightIndex);
-					float attenuation = GetAttenuation(light, hitLocation);
-					if(attenuation <= 0.0f)
-						continue;
-
-					float3 L = light.Position - hitLocation;
-					if(light.IsDirectional)
-					{
-						L = RAY_MAX_T * -light.Direction;
-					}
-					attenuation *= TraceOcclusionRay(hitLocation, normalize(L), length(L));
-					if(attenuation <= 0.0f)
-						continue;
-
-					float3 diffuse = (attenuation * saturate(dot(N, L))) * Diffuse_Lambert(brdfData.Diffuse);
-					radiance += diffuse * light.GetColor() * light.Intensity;
-				}
-
-				radiance += surface.Emissive;
-				radiance += Diffuse_Lambert(min(brdfData.Diffuse, 0.9f)) * SampleDDGIIrradiance(hitLocation, N, direction);
-			}
-			else
-			{
-				// If backfacing, make negative so probes get pushed through the backface when offset.
-				depth *= -0.2f;
-			}
-		}
-		else
-		{
-			radiance = GetSky(direction);
-		}
-
-		uRayHitInfo[probeIdx * volume.MaxRaysPerProbe + rayIndex] = float4(radiance, depth);
-		rayIndex += RAY_TRACE_GROUP_SIZE;
-	}
-}
 
 /**
 	- UpdateIrradiance -

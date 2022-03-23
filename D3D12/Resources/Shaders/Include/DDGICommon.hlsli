@@ -155,3 +155,14 @@ float3 SampleDDGIIrradiance(float3 position, float3 direction, float3 cameraDire
 	}
 	return result.rgb;
 }
+
+// From G3DMath
+// Generates a nearly uniform point distribution on the unit sphere of size N
+float3 SphericalFibonacci(float i, float n)
+{
+	const float PHI = sqrt(5) * 0.5 + 0.5;
+	float phi = 2.0 * PI * frac(i * (PHI - 1));
+	float cos_theta = 1.0 - (2.0 * i + 1.0) * (1.0 / n);
+	float sin_theta = sqrt(saturate(1.0 - cos_theta * cos_theta));
+	return float3(cos(phi) * sin_theta, sin(phi) * sin_theta, cos_theta);
+}

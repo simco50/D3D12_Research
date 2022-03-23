@@ -15,6 +15,7 @@ class GpuParticles;
 class PathTracing;
 class CBTTessellation;
 class UnorderedAccessView;
+class StateObject;
 struct SubMesh;
 struct Material;
 
@@ -184,7 +185,7 @@ private:
 	std::vector<DDGIVolume> m_DDGIVolumes;
 	RefCountPtr<Buffer> m_pDDGIVolumesBuffer;
 
-	RefCountPtr<PipelineState> m_pDDGITraceRaysPSO;
+	RefCountPtr<StateObject> m_pDDGITraceRaysSO;
 	RefCountPtr<PipelineState> m_pDDGIUpdateIrradianceColorPSO;
 	RefCountPtr<PipelineState> m_pDDGIUpdateIrradianceDepthPSO;
 	RefCountPtr<PipelineState> m_pDDGIVisualizePSO;
