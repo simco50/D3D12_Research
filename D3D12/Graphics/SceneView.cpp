@@ -72,6 +72,7 @@ ShaderInterop::ViewUniforms GetViewUniforms(const SceneView& sceneView, Texture*
 	parameters.FarZ = view.FarPlane;
 	parameters.FoV = view.FoV;
 
+
 	parameters.FrameIndex = sceneView.FrameIndex;
 	parameters.SsrSamples = Tweakables::g_SsrSamples.Get();
 	parameters.LightCount = sceneView.pLightBuffer->GetNumElements();
@@ -88,6 +89,8 @@ ShaderInterop::ViewUniforms GetViewUniforms(const SceneView& sceneView, Texture*
 	parameters.TransformsIndex = sceneView.pTransformsBuffer->GetSRVIndex();
 	parameters.LightsIndex = sceneView.pLightBuffer->GetSRVIndex();
 	parameters.SkyIndex = sceneView.pSky->GetSRVIndex();
+	parameters.DDGIVolumesIndex = sceneView.pDDGIVolumesBuffer->GetSRVIndex();
+	parameters.NumDDGIVolumes = sceneView.NumDDGIVolumes;
 	return parameters;
 }
 

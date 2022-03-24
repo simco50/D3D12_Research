@@ -2,6 +2,7 @@
 #include "Random.hlsli"
 #include "Lighting.hlsli"
 #include "VisibilityBuffer.hlsli"
+#include "DDGICommon.hlsli"
 
 Texture2D<uint> tVisibilityTexture : register(t0);
 Texture2D tAO :	register(t1);
@@ -130,7 +131,7 @@ LightResult DoLight(float4 pos, float3 worldPos, float3 N, float3 V, float3 diff
 	return totalResult;
 }
 
-[numthreads(16, 16, 1)]
+[numthreads(8, 8, 1)]
 void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 {
 	if(dispatchThreadId.x >= cView.ScreenDimensions.x || dispatchThreadId.y >= cView.ScreenDimensions.y)
@@ -166,8 +167,8 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 	LightResult result = DoLight(pos, positionWS, N, V, brdfData.Diffuse, brdfData.Specular, brdfData.Roughness);
 
 	float3 outRadiance = 0;
+	outRadiance += Diffuse_Lambert(brdfData.Diffuse) * SampleDDGIIrradiance(positionWS, N, -V);
 	outRadiance += result.Diffuse + result.Specular;
-	outRadiance += ApplyAmbientLight(brdfData.Diffuse, ambientOcclusion);
 	outRadiance += surface.Emissive;
 	outRadiance += ssr;
 

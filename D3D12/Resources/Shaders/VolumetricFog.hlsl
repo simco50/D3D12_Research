@@ -1,5 +1,6 @@
 #include "Common.hlsli"
 #include "Lighting.hlsli"
+#include "DDGICommon.hlsli"
 
 struct PassData
 {
@@ -88,7 +89,7 @@ void InjectFogLightingCS(uint3 threadId : SV_DispatchThreadID)
 	fogVolumes[0].Extents = float3(100, 100, 100);
 	fogVolumes[0].Color = float3(1, 1, 1);
 	fogVolumes[0].DensityBase = 0;
-	fogVolumes[0].DensityChange = 0.1f;
+	fogVolumes[0].DensityChange = 0.03f;
 
 	uint i;
 	for(i = 0; i < numFogVolumes; ++i)
@@ -118,9 +119,9 @@ void InjectFogLightingCS(uint3 threadId : SV_DispatchThreadID)
 
 	float3 totalLighting = 0;
 
+	float3 V = normalize(cView.ViewPosition.xyz - worldPosition);
 	if(dot(inScattering, float3(1, 1, 1)) > 0.0f)
 	{
-		float3 V = normalize(cView.ViewPosition.xyz - worldPosition);
 		float4 pos = float4(threadId.xy, 0, z);
 
 		// Iterate over all the lights and light the froxel
@@ -153,14 +154,14 @@ void InjectFogLightingCS(uint3 threadId : SV_DispatchThreadID)
 					L = normalize(light.Direction);
 				}
 				float VdotL = dot(V, L);
-				float4 lightColor = light.GetColor() * light.Intensity;
+				float3 lightColor = light.GetColor() * light.Intensity;
 
-				totalLighting += attenuation * lightColor.xyz * saturate(HenyeyGreenstreinPhase(VdotL, 0.3f));
+				totalLighting += attenuation * lightColor * saturate(HenyeyGreenstreinPhase(VdotL, 0.3f));
 			}
 		}
 	}
 
-	totalLighting += ApplyAmbientLight(1, 1).x;
+	totalLighting += (SampleDDGIIrradiance(worldPosition, -V, -V) / PI);
 
 	float blendFactor = 0.05f;
 	if(any(reprojUV < 0.05f) || any(reprojUV > 0.95f))

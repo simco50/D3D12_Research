@@ -50,7 +50,7 @@ void StateObject::Create(const StateObjectInitializer& initializer)
 {
 	m_Desc = initializer;
 	StateObjectStream stateObjectStream;
-	m_Desc.CreateStateObjectStream(stateObjectStream);
+	m_Desc.CreateStateObjectStream(stateObjectStream, GetParent());
 	VERIFY_HR(GetParent()->GetRaytracingDevice()->CreateStateObject(&stateObjectStream.Desc, IID_PPV_ARGS(m_pStateObject.ReleaseAndGetAddressOf())));
 	D3D::SetObjectName(m_pStateObject.Get(), m_Desc.Name.c_str());
 	m_pStateObject->QueryInterface(&m_pStateObjectProperties);
@@ -69,11 +69,11 @@ void StateObject::ConditionallyReload()
 
 void StateObject::OnLibraryReloaded(ShaderLibrary* pOldShaderLibrary, ShaderLibrary* pNewShaderLibrary)
 {
-	for (StateObjectInitializer::LibraryExports& library : m_Desc.m_Libraries)
+	for (ShaderLibrary*& pLibrary : m_Desc.m_Shaders)
 	{
-		if (library.pLibrary == pOldShaderLibrary)
+		if (pLibrary == pOldShaderLibrary)
 		{
-			library.pLibrary = pNewShaderLibrary;
+			pLibrary = pNewShaderLibrary;
 			m_NeedsReload = true;
 		}
 	}
@@ -90,10 +90,11 @@ void StateObjectInitializer::AddHitGroup(const std::string& name, const std::str
 	m_HitGroups.push_back(definition);
 }
 
-void StateObjectInitializer::AddLibrary(ShaderLibrary* pLibrary, const std::vector<std::string>& exports /*= {}*/)
+void StateObjectInitializer::AddLibrary(const char* pShaderPath, const std::vector<std::string>& exports, const std::vector<ShaderDefine>& defines)
 {
 	LibraryExports library;
-	library.pLibrary = pLibrary;
+	library.Path = pShaderPath;
+	library.Defines = defines;
 	library.Exports = exports;
 	m_Libraries.push_back(library);
 }
@@ -112,7 +113,7 @@ void StateObjectInitializer::AddMissShader(const std::string& exportName, RootSi
 }
 
 
-void StateObjectInitializer::CreateStateObjectStream(StateObjectStream& stateObjectStream)
+void StateObjectInitializer::CreateStateObjectStream(StateObjectStream& stateObjectStream, GraphicsDevice* pDevice)
 {
 	uint32 numObjects = 0;
 	auto AddStateObject = [&stateObjectStream, &numObjects](void* pDesc, D3D12_STATE_SUBOBJECT_TYPE type)
@@ -124,10 +125,14 @@ void StateObjectInitializer::CreateStateObjectStream(StateObjectStream& stateObj
 		return pState;
 	};
 
+	m_Shaders.clear();
+
 	for (const LibraryExports& library : m_Libraries)
 	{
 		D3D12_DXIL_LIBRARY_DESC* pDesc = stateObjectStream.ContentData.Allocate<D3D12_DXIL_LIBRARY_DESC>();
-		pDesc->DXILLibrary = CD3DX12_SHADER_BYTECODE(library.pLibrary->GetByteCode(), library.pLibrary->GetByteCodeSize());
+		ShaderLibrary* pLibrary = pDevice->GetLibrary(library.Path.c_str(), library.Defines);
+		m_Shaders.push_back(pLibrary);
+		pDesc->DXILLibrary = CD3DX12_SHADER_BYTECODE(pLibrary->GetByteCode(), pLibrary->GetByteCodeSize());
 		if (library.Exports.size())
 		{
 			D3D12_EXPORT_DESC* pExports = stateObjectStream.ContentData.Allocate<D3D12_EXPORT_DESC>((int)library.Exports.size());

@@ -2,9 +2,9 @@
 
 #include "SkyCommon.hlsli"
 #include "ShadingModels.hlsli"
+#include "Random.hlsli"
 
 #define RAY_BIAS 1.0e-2f
-#define RAY_MAX_T 1.0e10f
 
 struct VertexAttribute
 {
@@ -142,7 +142,7 @@ Ray GeneratePinholeCameraRay(float2 pixel, float4x4 viewInverse, float4x4 projec
 // Ray Tracing Gems: A Fast and Robust Method for Avoiding Self-Intersection
 // Wächter and Binder
 // Offset ray so that it never self-intersects
-float3 OffsetRay(float3 position, float3 geometryNormal)
+void OffsetRay(inout RayDesc ray, float3 geometryNormal)
 {
 	static const float origin = 1.0f / 32.0f;
 	static const float float_scale = 1.0f / 65536.0f;
@@ -151,12 +151,148 @@ float3 OffsetRay(float3 position, float3 geometryNormal)
 	int3 of_i = int3(int_scale * geometryNormal.x, int_scale * geometryNormal.y, int_scale * geometryNormal.z);
 
 	float3 p_i = float3(
-		asfloat(asint(position.x) + ((position.x < 0) ? -of_i.x : of_i.x)),
-		asfloat(asint(position.y) + ((position.y < 0) ? -of_i.y : of_i.y)),
-		asfloat(asint(position.z) + ((position.z < 0) ? -of_i.z : of_i.z)));
+		asfloat(asint(ray.Origin.x) + ((ray.Origin.x < 0) ? -of_i.x : of_i.x)),
+		asfloat(asint(ray.Origin.y) + ((ray.Origin.y < 0) ? -of_i.y : of_i.y)),
+		asfloat(asint(ray.Origin.z) + ((ray.Origin.z < 0) ? -of_i.z : of_i.z)));
 
-	return float3(abs(position.x) < origin ? position.x + float_scale * geometryNormal.x : p_i.x,
-		abs(position.y) < origin ? position.y + float_scale * geometryNormal.y : p_i.y,
-		abs(position.z) < origin ? position.z + float_scale * geometryNormal.z : p_i.z);
+	ray.Origin = float3(
+		abs(ray.Origin.x) < origin ? ray.Origin.x + float_scale * geometryNormal.x : p_i.x,
+		abs(ray.Origin.y) < origin ? ray.Origin.y + float_scale * geometryNormal.y : p_i.y,
+		abs(ray.Origin.z) < origin ? ray.Origin.z + float_scale * geometryNormal.z : p_i.z);
 }
 
+struct RAYPAYLOAD OcclusionPayload
+{
+	float HitT RAYQUALIFIER(read(caller) : write(caller, miss));
+
+	bool IsHit() { return HitT >= 0; }
+	void SetMiss() { HitT = -1.0f; }
+};
+
+float TraceOcclusionRay(
+	RayDesc ray,
+	RaytracingAccelerationStructure tlas,
+	uint rayFlags = RAY_FLAG_NONE,
+	uint instanceMask = 0xFF)
+{
+	const uint commonRayFlags =
+		RAY_FLAG_SKIP_CLOSEST_HIT_SHADER |
+		RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH |
+		RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES;
+
+// Inline RT for the shadow rays has better performance. Use it when available.
+#if _INLINE_RT || __SHADER_STAGE_PIXEL || __SHADER_STAGE_COMPUTE
+	RayQuery<commonRayFlags> q;
+
+	q.TraceRayInline(
+		tlas, 			// AccelerationStructure
+		rayFlags,		// RayFlags
+		instanceMask, 	// InstanceMask
+		ray				// Ray
+	);
+
+	while(q.Proceed())
+	{
+		switch(q.CandidateType())
+		{
+			case CANDIDATE_NON_OPAQUE_TRIANGLE:
+			{
+				MeshInstance instance = GetMeshInstance(q.CandidateInstanceID());
+				VertexAttribute vertex = GetVertexAttributes(instance, q.CandidateTriangleBarycentrics(), q.CandidatePrimitiveIndex(), q.CandidateObjectToWorld4x3());
+				MaterialData material = GetMaterial(instance.Material);
+				MaterialProperties surface = GetMaterialProperties(material, vertex.UV, 0);
+				if(surface.Opacity > material.AlphaCutoff)
+				{
+					q.CommitNonOpaqueTriangleHit();
+				}
+			}
+			break;
+		}
+	}
+	return q.CommittedStatus() != COMMITTED_TRIANGLE_HIT;
+#else
+	OcclusionPayload payload = (OcclusionPayload)0;
+	TraceRay(
+		tlas,							//AccelerationStructure
+		commonRayFlags | rayFlags, 		//RayFlags
+		instanceMask, 					//InstanceInclusionMask
+		0,								//RayContributionToHitGroupIndex
+		0, 								//MultiplierForGeometryContributionToHitGroupIndex
+		1, 								//MissShaderIndex
+		ray, 							//Ray
+		payload 						//Payload
+	);
+	return !payload.IsMiss();
+#endif
+}
+
+struct RAYPAYLOAD MaterialRayPayload
+{
+	float HitT;
+	uint PrimitiveID;
+	uint InstanceID;
+	float2 Barycentrics;
+	uint FrontFace;
+
+	bool IsHit() { return HitT >= 0; }
+	bool IsFrontFace() { return FrontFace > 0; }
+};
+
+MaterialRayPayload TraceMaterialRay(
+	RayDesc ray,
+	RaytracingAccelerationStructure tlas,
+	uint rayFlags = RAY_FLAG_NONE,
+	uint instanceMask = 0xFF)
+{
+	MaterialRayPayload payload;
+	payload.HitT = -1.0f;
+
+#if __SHADER_STAGE_PIXEL || __SHADER_STAGE_COMPUTE
+	RayQuery<0> q;
+	q.TraceRayInline(
+		tlas, 			// AccelerationStructure
+		rayFlags,		// RayFlags
+		instanceMask, 	// InstanceMask
+		ray				// Ray
+	);
+	while(q.Proceed())
+	{
+		switch(q.CandidateType())
+		{
+			case CANDIDATE_NON_OPAQUE_TRIANGLE:
+			{
+				MeshInstance instance = GetMeshInstance(q.CandidateInstanceID());
+				VertexAttribute vertex = GetVertexAttributes(instance, q.CandidateTriangleBarycentrics(), q.CandidatePrimitiveIndex(), q.CandidateObjectToWorld4x3());
+				MaterialData material = GetMaterial(instance.Material);
+				MaterialProperties surface = GetMaterialProperties(material, vertex.UV, 0);
+				if(surface.Opacity > material.AlphaCutoff)
+				{
+					q.CommitNonOpaqueTriangleHit();
+				}
+			}
+			break;
+		}
+	}
+	if(q.CommittedStatus() == COMMITTED_TRIANGLE_HIT)
+	{
+		payload.HitT = q.CommittedRayT();
+		payload.PrimitiveID = q.CommittedPrimitiveIndex();
+		payload.InstanceID = q.CommittedInstanceID();
+		payload.Barycentrics = q.CommittedTriangleBarycentrics();
+		payload.FrontFace = q.CommittedTriangleFrontFace();
+	}
+#else
+	TraceRay(
+		tlas,			//AccelerationStructure
+		rayFlags, 		//RayFlags
+		instanceMask, 	//InstanceInclusionMask
+		0,				//RayContributionToHitGroupIndex
+		0, 				//MultiplierForGeometryContributionToHitGroupIndex
+		0, 				//MissShaderIndex
+		ray, 			//Ray
+		payload 		//Payload
+	);
+#endif
+
+	return payload;
+}

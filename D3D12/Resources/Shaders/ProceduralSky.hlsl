@@ -1,48 +1,9 @@
 #include "Common.hlsli"
 #include "SkyCommon.hlsli"
 #include "Atmosphere.hlsli"
+#include "Primitives.hlsli"
 
 RWTexture2D<float4> uSky : register(u0);
-
-static const float4 CUBE[]=
-{
-	float4(-1.0,1.0,1.0,1.0),
-	float4(-1.0,-1.0,1.0,1.0),
-	float4(-1.0,-1.0,-1.0,1.0),
-	float4(1.0,1.0,1.0,1.0),
-	float4(1.0,-1.0,1.0,1.0),
-	float4(-1.0,-1.0,1.0,1.0),
-	float4(1.0,1.0,-1.0,1.0),
-	float4(1.0,-1.0,-1.0,1.0),
-	float4(1.0,-1.0,1.0,1.0),
-	float4(-1.0,1.0,-1.0,1.0),
-	float4(-1.0,-1.0,-1.0,1.0),
-	float4(1.0,-1.0,-1.0,1.0),
-	float4(-1.0,-1.0,1.0,1.0),
-	float4(1.0,-1.0,1.0,1.0),
-	float4(1.0,-1.0,-1.0,1.0),
-	float4(1.0,1.0,1.0,1.0),
-	float4(-1.0,1.0,1.0,1.0),
-	float4(-1.0,1.0,-1.0,1.0),
-	float4(-1.0,1.0,-1.0,1.0),
-	float4(-1.0,1.0,1.0,1.0),
-	float4(-1.0,-1.0,-1.0,1.0),
-	float4(-1.0,1.0,1.0,1.0),
-	float4(1.0,1.0,1.0,1.0),
-	float4(-1.0,-1.0,1.0,1.0),
-	float4(1.0,1.0,1.0,1.0),
-	float4(1.0,1.0,-1.0,1.0),
-	float4(1.0,-1.0,1.0,1.0),
-	float4(1.0,1.0,-1.0,1.0),
-	float4(-1.0,1.0,-1.0,1.0),
-	float4(1.0,-1.0,-1.0,1.0),
-	float4(-1.0,-1.0,-1.0,1.0),
-	float4(-1.0,-1.0,1.0,1.0),
-	float4(1.0,-1.0,-1.0,1.0),
-	float4(1.0,1.0,-1.0,1.0),
-	float4(1.0,1.0,1.0,1.0),
-	float4(-1.0,1.0,-1.0,1.0),
-};
 
 struct InterpolantsVSToPS
 {
@@ -63,10 +24,7 @@ InterpolantsVSToPS VSMain(uint vertexId : SV_VertexID)
 float4 PSMain(in InterpolantsVSToPS input) : SV_Target
 {
 	float3 uv = normalize(input.UV);
-	float uvy = acos(uv.y) / PI;
-	float uvx = atan2(uv.x, uv.z)/ (2 * PI);
-	float4 color = SampleLevel2D(cView.SkyIndex, sLinearWrap, float2(uvx, uvy), 0);
-	return color;
+	return float4(GetSky(uv), 1);
 }
 
 [numthreads(16, 16, 1)]
@@ -89,7 +47,7 @@ void ComputeSkyCS(uint3 threadId : SV_DispatchThreadID)
 	}
 	Light sun = GetLight(0);
 	float3 lightDir = -sun.Direction;
-	float3 lightColor = sun.GetColor().rgb;
+	float3 lightColor = sun.GetColor();
 
 	float3 transmittance;
 	float3 sky = IntegrateScattering(rayStart, dir, rayLength, lightDir, lightColor, transmittance);

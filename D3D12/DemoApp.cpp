@@ -12,6 +12,7 @@
 #include "Graphics/Core/DynamicResourceAllocator.h"
 #include "Graphics/Core/Shader.h"
 #include "Graphics/Core/PipelineState.h"
+#include "Graphics/Core/ShaderBindingTable.h"
 #include "Graphics/RenderGraph/RenderGraph.h"
 #include "Graphics/Techniques/GpuParticles.h"
 #include "Graphics/Techniques/RTAO.h"
@@ -126,14 +127,16 @@ namespace Tweakables
 
 	// Bloom
 	ConsoleVariable g_Bloom("r.Bloom", true);
-	ConsoleVariable g_BloomThreshold("r.Bloom.Threshold", 1.0f);
-	ConsoleVariable g_BloomMaxBrightness("r.Bloom.MaxBrightness", 10.0f);
+	ConsoleVariable g_BloomThreshold("r.Bloom.Threshold", 4.0f);
+	ConsoleVariable g_BloomMaxBrightness("r.Bloom.MaxBrightness", 8.0f);
 
 	// Misc Lighting
 	ConsoleVariable g_VolumetricFog("r.VolumetricFog", true);
 	ConsoleVariable g_RaytracedAO("r.Raytracing.AO", false);
 	ConsoleVariable g_VisualizeLights("vis.Lights", false);
 	ConsoleVariable g_VisualizeLightDensity("vis.LightDensity", false);
+	ConsoleVariable g_EnableDDGI("r.DDGI", true);
+	ConsoleVariable g_VisualizeDDGI("vis.DDGI", false);
 	ConsoleVariable g_RenderObjectBounds("r.vis.ObjectBounds", false);
 
 	ConsoleVariable g_RaytracedReflections("r.Raytracing.Reflections", true);
@@ -150,10 +153,10 @@ namespace Tweakables
 	DelegateConsoleCommand<> gScreenshot("Screenshot", []() { g_Screenshot = true; });
 
 	// Lighting
-	float g_SunInclination = 0.67f;
-	float g_SunOrientation = 1.45f;
+	float g_SunInclination = 0.79f;
+	float g_SunOrientation = -1.503f;
 	float g_SunTemperature = 5900.0f;
-	float g_SunIntensity = 0.5f;
+	float g_SunIntensity = 5.0f;
 }
 
 DemoApp::DemoApp(WindowHandle window, const IntVector2& windowRect)
@@ -251,18 +254,16 @@ void DemoApp::SetupScene(CommandContext& context)
 		m_Lights.push_back(sunLight);
 	}
 
-
-
 #if 0
-	for (int i = 0; i < 50; ++i)
+	for (int i = 0; i < 5; ++i)
 	{
 		Vector3 loc(
 			Math::RandomRange(-10.0f, 10.0f),
 			Math::RandomRange(-4.0f, 5.0f),
 			Math::RandomRange(-10.0f, 10.0f)
 		);
-		Light spotLight = Light::Spot(loc, 100, Vector3(0, 1, 0), 65, 50, 1000, Color(1.0f, 0.7f, 0.3f, 1.0f));
-		//spotLight.CastShadows = true;
+		Light spotLight = Light::Spot(loc, 100, Vector3(0, 1, 0), 65, 50, 1000, Color(Math::RandomRange(0.0f, 1.0f), Math::RandomRange(0.0f, 1.0f), Math::RandomRange(0.0f, 1.0f), 1.0f));
+		spotLight.CastShadows = true;
 		//spotLight.LightTexture = m_pDevice->RegisterBindlessResource(m_pLightCookie.get(), GetDefaultTexture(DefaultTexture::White2D));
 		spotLight.VolumetricLighting = true;
 		m_Lights.push_back(spotLight);
@@ -359,6 +360,10 @@ void DemoApp::Update()
 	m_Lights[0].Direction = -Vector3(costheta * cosphi, sinphi, sintheta * cosphi);
 	m_Lights[0].Colour = Math::MakeFromColorTemperature(Tweakables::g_SunTemperature);
 	m_Lights[0].Intensity = Tweakables::g_SunIntensity;
+
+	DDGIVolume& volume = m_DDGIVolumes[0];
+	volume.Origin = m_SceneData.SceneAABB.Center;
+	volume.Extents = 1.1f * Vector3(m_SceneData.SceneAABB.Extents);
 
 	if (Tweakables::g_VisualizeLights)
 	{
@@ -567,10 +572,20 @@ void DemoApp::Update()
 
 	{
 		PROFILE_SCOPE("Frustum Culling");
+		bool boundsSet = false;
 		BoundingFrustum frustum = m_pCamera->GetFrustum();
 		for (const Batch& b : m_SceneData.Batches)
 		{
 			m_SceneData.VisibilityMask.AssignBit(b.InstanceData.World, frustum.Contains(b.Bounds));
+			if (boundsSet)
+			{
+				BoundingBox::CreateMerged(m_SceneData.SceneAABB, m_SceneData.SceneAABB, b.Bounds);
+			}
+			else
+			{
+				m_SceneData.SceneAABB = b.Bounds;
+				boundsSet = true;
+			}
 		}
 	}
 
@@ -688,7 +703,7 @@ void DemoApp::Update()
 					{
 						GPU_PROFILE_SCOPE("Masked", &context);
 						context.SetPipelineState(m_pShadowsAlphaMaskPSO);
-						DrawScene(context, m_SceneData, mask, Batch::Blending::AlphaMask);
+						DrawScene(context, m_SceneData, mask, Batch::Blending::AlphaMask | Batch::Blending::AlphaBlend);
 					}
 					context.EndRenderPass();
 				}
@@ -758,6 +773,95 @@ void DemoApp::Update()
 				renderContext.EndRenderPass();
 
 			});
+	}
+
+	if(Tweakables::g_EnableDDGI && m_DDGIVolumes.size() > 0 && m_pDevice->GetCapabilities().SupportsRaytracing())
+	{
+		RG_GRAPH_SCOPE("DDGI", graph);
+
+		uint32 randomIndex = Math::RandomRange(0, (int)m_DDGIVolumes.size() - 1);
+		DDGIVolume& ddgi = m_DDGIVolumes[randomIndex];
+
+		struct
+		{
+			Vector3 RandomVector;
+			float RandomAngle;
+			float HistoryBlendWeight;
+			uint32 VolumeIndex;
+		} parameters;
+
+		parameters.RandomVector = Math::RandVector();
+		parameters.RandomAngle = Math::RandomRange(0.0f, 2.0f * Math::PI);
+		parameters.HistoryBlendWeight = 0.98f;
+		parameters.VolumeIndex = randomIndex;
+
+		const uint32 numProbes = ddgi.NumProbes.x * ddgi.NumProbes.y * ddgi.NumProbes.z;
+
+		RGPassBuilder ddgiRays = graph.AddPass("DDGI Raytrace");
+		ddgiRays.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
+			{
+				context.InsertResourceBarrier(ddgi.pIrradiance[0], D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+				context.InsertResourceBarrier(ddgi.pRayBuffer, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+				context.SetComputeRootSignature(m_pCommonRS);
+				context.SetPipelineState(m_pDDGITraceRaysSO);
+
+				context.SetRootConstants(0, parameters);
+				context.SetRootCBV(1, GetViewUniforms(m_SceneData));
+				context.BindResource(2, 0, ddgi.pRayBuffer->GetUAV());
+
+				ShaderBindingTable bindingTable(m_pDDGITraceRaysSO);
+				bindingTable.BindRayGenShader("TraceRaysRGS");
+				bindingTable.BindMissShader("MaterialMS", 0);
+				bindingTable.BindMissShader("OcclusionMS", 1);
+				bindingTable.BindHitGroup("MaterialHG", 0);
+
+				context.DispatchRays(bindingTable, volume.NumRays, numProbes);
+			});
+
+		RGPassBuilder ddgiUpdateIrradiance = graph.AddPass("DDGI Update Irradiance");
+		ddgiUpdateIrradiance.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
+			{
+				context.InsertResourceBarrier(ddgi.pIrradiance[1], D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+				context.SetComputeRootSignature(m_pCommonRS);
+				context.SetPipelineState(m_pDDGIUpdateIrradianceColorPSO);
+
+				context.SetRootConstants(0, parameters);
+				context.SetRootCBV(1, GetViewUniforms(m_SceneData));
+				context.BindResource(2, 0, ddgi.pIrradiance[1]->GetUAV());
+				context.BindResources(3, {
+					ddgi.pRayBuffer->GetSRV(),
+					});
+
+				context.Dispatch(numProbes);
+				context.InsertResourceBarrier(ddgi.pIrradiance[1], D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
+			});
+
+		RGPassBuilder ddgiUpdateDepth = graph.AddPass("DDGI Update Depth");
+		ddgiUpdateDepth.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
+			{
+				context.InsertResourceBarrier(ddgi.pRayBuffer, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+				context.InsertResourceBarrier(ddgi.pDepth[1], D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+				context.InsertResourceBarrier(ddgi.pProbeOffset, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+				context.SetComputeRootSignature(m_pCommonRS);
+				context.SetPipelineState(m_pDDGIUpdateIrradianceDepthPSO);
+
+				context.SetRootConstants(0, parameters);
+				context.SetRootCBV(1, GetViewUniforms(m_SceneData));
+				context.BindResources(2, {
+					ddgi.pDepth[1]->GetUAV(),
+					ddgi.pProbeOffset->GetUAV(),
+					});
+				context.BindResources(3, {
+					ddgi.pRayBuffer->GetSRV(),
+					});
+
+				context.Dispatch(numProbes);
+				context.InsertResourceBarrier(ddgi.pDepth[1], D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
+				context.InsertResourceBarrier(ddgi.pProbeOffset, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
+			});
+
+		std::swap(ddgi.pIrradiance[0], ddgi.pIrradiance[1]);
+		std::swap(ddgi.pDepth[0], ddgi.pDepth[1]);
 	}
 
 	RGPassBuilder computeSky = graph.AddPass("Compute Sky");
@@ -869,7 +973,7 @@ void DemoApp::Update()
 						GetDepthStencil()->GetSRV(),
 						m_pPreviousColor->GetSRV(),
 						});
-					renderContext.Dispatch(ComputeUtils::GetNumThreadGroups(GetCurrentRenderTarget()->GetWidth(), 16, GetCurrentRenderTarget()->GetHeight(), 16));
+					renderContext.Dispatch(ComputeUtils::GetNumThreadGroups(GetCurrentRenderTarget()->GetWidth(), 8, GetCurrentRenderTarget()->GetHeight(), 8));
 					renderContext.InsertUavBarrier();
 				});
 		}
@@ -1293,6 +1397,42 @@ void DemoApp::Update()
 		}
 	}
 
+	if (Tweakables::g_VisualizeDDGI)
+	{
+		for (uint32 i = 0; i < m_DDGIVolumes.size(); ++i)
+		{
+			const DDGIVolume& ddgi = m_DDGIVolumes[i];
+			RGPassBuilder ddgiVisualizeRays = graph.AddPass("DDGI Visualize");
+			ddgiVisualizeRays.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
+				{
+					context.InsertResourceBarrier(ddgi.pRayBuffer, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
+					context.InsertResourceBarrier(ddgi.pIrradiance[0], D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
+					context.InsertResourceBarrier(m_pTonemapTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
+					context.InsertResourceBarrier(GetDepthStencil(), D3D12_RESOURCE_STATE_DEPTH_WRITE);
+					context.SetGraphicsRootSignature(m_pCommonRS);
+					context.SetPipelineState(m_pDDGIVisualizePSO);
+
+					context.BeginRenderPass(RenderPassInfo(m_pTonemapTarget, RenderPassAccess::Load_Store, GetDepthStencil(), RenderPassAccess::Load_Store, true));
+
+					struct
+					{
+						uint32 VolumeIndex;
+					} parameters;
+					parameters.VolumeIndex = i;
+
+					context.SetRootConstants(0, parameters);
+					context.SetRootCBV(1, GetViewUniforms(m_SceneData));
+					context.BindResources(3, {
+						ddgi.pRayBuffer->GetSRV(),
+						});
+
+					context.Draw(0, 2880, ddgi.NumProbes.x * ddgi.NumProbes.y * ddgi.NumProbes.z);
+
+					context.EndRenderPass();
+				});
+		}
+	}
+
 	//UI
 	Texture* pBackbuffer = m_pSwapchain->GetBackBuffer();
 	m_pImGuiRenderer->Render(graph, m_SceneData, pBackbuffer);
@@ -1401,8 +1541,8 @@ void DemoApp::InitializePipelines()
 	m_pCommonRS = new RootSignature(m_pDevice);
 	m_pCommonRS->AddRootConstants(0, 8);
 	m_pCommonRS->AddConstantBufferView(100);
-	m_pCommonRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 4);
-	m_pCommonRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 4);
+	m_pCommonRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 6);
+	m_pCommonRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 6);
 	m_pCommonRS->Finalize("Common");
 
 	//Shadow mapping - Vertex shader-only pass that writes to the depth buffer using the light matrix
@@ -1410,7 +1550,7 @@ void DemoApp::InitializePipelines()
 		PipelineStateInitializer psoDesc;
 		psoDesc.SetRootSignature(m_pCommonRS);
 		psoDesc.SetVertexShader("DepthOnly.hlsl", "VSMain");
-		psoDesc.SetRenderTargetFormats(nullptr, 0, DEPTH_STENCIL_SHADOW_FORMAT, 1);
+		psoDesc.SetRenderTargetFormats({}, DEPTH_STENCIL_SHADOW_FORMAT, 1);
 		psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
 		psoDesc.SetDepthBias(-1, -5.0f, -4.0f);
@@ -1428,7 +1568,7 @@ void DemoApp::InitializePipelines()
 		psoDesc.SetRootSignature(m_pCommonRS);
 		psoDesc.SetVertexShader("DepthOnly.hlsl", "VSMain");
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
-		psoDesc.SetRenderTargetFormats(nullptr, 0, DXGI_FORMAT_D32_FLOAT, 1);
+		psoDesc.SetRenderTargetFormats({}, DXGI_FORMAT_D32_FLOAT, 1);
 		psoDesc.SetName("Depth Prepass Opaque");
 		m_pDepthPrepassOpaquePSO = m_pDevice->CreatePipeline(psoDesc);
 
@@ -1500,6 +1640,69 @@ void DemoApp::InitializePipelines()
 		m_pVisibilityShadingPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "VisibilityShading.hlsl", "CSMain");
 	}
 
+	// DDGI
+	if(m_pDevice->GetCapabilities().SupportsRaytracing())
+	{
+		// Must match with shader!
+		constexpr uint32 probeIrradianceTexels = 6;
+		constexpr uint32 probeDepthTexel = 14;
+
+		m_pDDGIUpdateIrradianceColorPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "DDGI.hlsl", "UpdateIrradianceCS");
+		m_pDDGIUpdateIrradianceDepthPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "DDGI.hlsl", "UpdateDepthCS");
+
+		StateObjectInitializer soDesc{};
+		soDesc.Name = "DDGI Trace Rays";
+		soDesc.MaxRecursion = 1;
+		soDesc.MaxPayloadSize = 6 * sizeof(float);
+		soDesc.MaxAttributeSize = 2 * sizeof(float);
+		soDesc.Type = D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE;
+		soDesc.AddLibrary("DDGIRayTrace.hlsl", { "TraceRaysRGS" });
+		soDesc.AddLibrary("SharedRaytracingLib.hlsl", { "OcclusionMS", "MaterialCHS", "MaterialAHS", "MaterialMS" });
+		soDesc.AddHitGroup("MaterialHG", "MaterialCHS", "MaterialAHS");
+		soDesc.AddMissShader("MaterialMS");
+		soDesc.AddMissShader("OcclusionMiss");
+		soDesc.pGlobalRootSignature = m_pCommonRS;
+		m_pDDGITraceRaysSO = m_pDevice->CreateStateObject(soDesc);
+
+		PipelineStateInitializer psoDesc;
+		psoDesc.SetRootSignature(m_pCommonRS);
+		psoDesc.SetVertexShader("DDGI.hlsl", "VisualizeIrradianceVS");
+		psoDesc.SetPixelShader("DDGI.hlsl", "VisualizeIrradiancePS");
+		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
+		psoDesc.SetRenderTargetFormat(DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_D32_FLOAT, 1);
+		psoDesc.SetName("Visualize Irradiance");
+		psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
+		m_pDDGIVisualizePSO = m_pDevice->CreatePipeline(psoDesc);
+
+		DDGIVolume volume;
+		volume.Origin = Vector3(-0.484151840f, 5.21196413f, 0.309524536f);
+		volume.Extents = Vector3(14.8834171f, 6.22350454f, 9.15293312f);
+		volume.NumProbes = IntVector3(16, 12, 14);
+		volume.NumRays = 128;
+		volume.MaxNumRays = 512;
+		m_DDGIVolumes.push_back(volume);
+		
+		for (DDGIVolume& ddgi : m_DDGIVolumes)
+		{
+			uint32 numProbes = ddgi.NumProbes.x * ddgi.NumProbes.y * ddgi.NumProbes.z;
+			ddgi.pRayBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateTyped(numProbes * ddgi.MaxNumRays, DXGI_FORMAT_R16G16B16A16_FLOAT, BufferFlag::UnorderedAccess | BufferFlag::ShaderResource), "DDGI Ray Buffer");
+			ddgi.pProbeOffset = m_pDevice->CreateBuffer(BufferDesc::CreateTyped(numProbes, DXGI_FORMAT_R16G16B16A16_FLOAT, BufferFlag::UnorderedAccess | BufferFlag::ShaderResource), "DDGI Probe Offset Buffer");
+			{
+				uint32 width = (1 + probeIrradianceTexels + 1) * ddgi.NumProbes.z * ddgi.NumProbes.x;
+				uint32 height = (1 + probeIrradianceTexels + 1) * ddgi.NumProbes.y;
+				TextureDesc ddgiIrradianceDesc = TextureDesc::Create2D(width, height, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::UnorderedAccess);
+				ddgi.pIrradiance[0] = m_pDevice->CreateTexture(ddgiIrradianceDesc, "DDGI Irradiance 0");
+				ddgi.pIrradiance[1] = m_pDevice->CreateTexture(ddgiIrradianceDesc, "DDGI Irradiance 1");
+			}
+			{
+				uint32 width = (1 + probeDepthTexel + 1) * ddgi.NumProbes.z * ddgi.NumProbes.x;
+				uint32 height = (1 + probeDepthTexel + 1) * ddgi.NumProbes.y;
+				TextureDesc ddgiDepthDesc = TextureDesc::Create2D(width, height, DXGI_FORMAT_R16G16_FLOAT, TextureFlag::UnorderedAccess);
+				ddgi.pDepth[0] = m_pDevice->CreateTexture(ddgiDepthDesc, "DDGI Depth 0");
+				ddgi.pDepth[1] = m_pDevice->CreateTexture(ddgiDepthDesc, "DDGI Depth 1");
+			}
+		}
+	}
 }
 
 void DemoApp::UpdateImGui()
@@ -1807,6 +2010,10 @@ void DemoApp::UpdateImGui()
 			{
 				ImGui::Checkbox("Raytraced AO", &Tweakables::g_RaytracedAO.Get());
 				ImGui::Checkbox("Raytraced Reflections", &Tweakables::g_RaytracedReflections.Get());
+				ImGui::Checkbox("DDGI", &Tweakables::g_EnableDDGI.Get());
+				if(m_DDGIVolumes.size() > 0)
+					ImGui::SliderInt("DDGI RayCount", &m_DDGIVolumes.front().NumRays, 1, m_DDGIVolumes.front().MaxNumRays);
+				ImGui::Checkbox("Visualize DDGI", &Tweakables::g_VisualizeDDGI.Get());
 				ImGui::SliderAngle("TLAS Bounds Threshold", &Tweakables::g_TLASBoundsThreshold.Get(), 0, 40);
 			}
 		}
@@ -1907,6 +2114,12 @@ void DemoApp::UpdateTLAS(CommandContext& context)
 			instanceDesc.InstanceContributionToHitGroupIndex = 0;
 			instanceDesc.InstanceID = batch.InstanceData.World;
 			instanceDesc.InstanceMask = 0xFF;
+
+			// Hack
+			if (batch.WorldMatrix.Determinant() < 0)
+			{
+				instanceDesc.Flags |= D3D12_RAYTRACING_INSTANCE_FLAG_TRIANGLE_FRONT_COUNTERCLOCKWISE;
+			}
 
 			//The layout of Transform is a transpose of how affine matrices are typically stored in memory. Instead of four 3-vectors, Transform is laid out as three 4-vectors.
 			auto ApplyTransform = [](const Matrix& m, D3D12_RAYTRACING_INSTANCE_DESC& desc)
@@ -2036,7 +2249,32 @@ void DemoApp::UploadSceneData(CommandContext& context)
 		}
 	}
 
+	std::vector<ShaderInterop::DDGIVolume> ddgiVolumes;
+	if (Tweakables::g_EnableDDGI)
+	{
+		for (DDGIVolume& ddgiVolume : m_DDGIVolumes)
+		{
+			ShaderInterop::DDGIVolume ddgi{};
+			ddgi.BoundsMin = ddgiVolume.Origin - ddgiVolume.Extents;
+			ddgi.ProbeSize = 2 * ddgiVolume.Extents / (Vector3((float)ddgiVolume.NumProbes.x, (float)ddgiVolume.NumProbes.y, (float)ddgiVolume.NumProbes.z) - Vector3::One);
+			ddgi.ProbeVolumeDimensions = TIntVector3<uint32>(ddgiVolume.NumProbes.x, ddgiVolume.NumProbes.y, ddgiVolume.NumProbes.z);
+			ddgi.IrradianceIndex = ddgiVolume.pIrradiance[0] ? ddgiVolume.pIrradiance[0]->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
+			ddgi.DepthIndex = ddgiVolume.pDepth[0] ? ddgiVolume.pDepth[0]->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
+			ddgi.ProbeOffsetIndex = ddgiVolume.pProbeOffset ? ddgiVolume.pProbeOffset->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
+			ddgi.NumRaysPerProbe = ddgiVolume.NumRays;
+			ddgi.MaxRaysPerProbe = ddgiVolume.MaxNumRays;
+			ddgiVolumes.push_back(ddgi);
+		}
+	}
+	m_SceneData.NumDDGIVolumes = (uint32)ddgiVolumes.size();
+
 	sceneBatches.swap(m_SceneData.Batches);
+
+	if (!m_pDDGIVolumesBuffer || ddgiVolumes.size() > m_DDGIVolumes.size())
+	{
+		m_pDDGIVolumesBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(Math::Max(1, (int)ddgiVolumes.size()), sizeof(ShaderInterop::DDGIVolume), BufferFlag::ShaderResource), "DDGI Volumes");
+	}
+	context.InitializeBuffer(m_pDDGIVolumesBuffer, ddgiVolumes.data(), ddgiVolumes.size() * sizeof(ShaderInterop::DDGIVolume));
 
 	if (!m_pMeshBuffer || meshes.size() > m_pMeshBuffer->GetNumElements())
 	{
@@ -2080,4 +2318,5 @@ void DemoApp::UploadSceneData(CommandContext& context)
 	m_SceneData.pMeshInstanceBuffer = m_pMeshInstanceBuffer;
 	m_SceneData.pSceneTLAS = m_pTLAS;
 	m_SceneData.pSky = m_pSkyTexture;
+	m_SceneData.pDDGIVolumesBuffer = m_pDDGIVolumesBuffer;
 }

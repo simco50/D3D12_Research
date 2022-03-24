@@ -51,15 +51,12 @@ void SSAO::Execute(RGGraph& graph, const SceneView& sceneData, Texture* pTarget,
 
 			struct
 			{
-				IntVector2 Dimensions;
 				float Power;
 				float Radius;
 				float Threshold;
 				int Samples;
 			} shaderParameters{};
 
-			shaderParameters.Dimensions.x = pTarget->GetWidth();
-			shaderParameters.Dimensions.y = pTarget->GetHeight();
 			shaderParameters.Power = g_AoPower;
 			shaderParameters.Radius = g_AoRadius;
 			shaderParameters.Threshold = g_AoThreshold;

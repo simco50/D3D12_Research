@@ -64,4 +64,5 @@
 #include "Core/StringHash.h"
 #include "Core/Delegates.h"
 #include "Core/RefCountPtr.h"
+#include "Core/Span.h"
 #include "Graphics/Core/D3DUtils.h"

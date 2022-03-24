@@ -17,7 +17,8 @@ SamplerState sAnisoWrap :								   	register(s16);
 SamplerState sAnisoClamp :								  	register(s17);
 SamplerState sAnisoBorder :									register(s18);
 SamplerState sMaterialSampler :							 	register(s19);
-SamplerComparisonState sDepthComparison :				   	register(s20);
+SamplerComparisonState sLinearClampComparisonGreater :		register(s20);
+SamplerComparisonState sLinearWrapComparisonGreater :		register(s21);
 
 template<typename T>
 T BufferLoad(uint bufferIndex, uint elementIndex, uint byteOffset = 0)

@@ -478,7 +478,7 @@ void ClusteredForward::SetupPipelines()
 			psoDesc.SetPixelShader("Diffuse.hlsl", "PSMain", { "CLUSTERED_FORWARD" });
 			psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_EQUAL);
 			psoDesc.SetDepthWrite(false);
-			psoDesc.SetRenderTargetFormats(formats, ARRAYSIZE(formats), DXGI_FORMAT_D32_FLOAT, 1);
+			psoDesc.SetRenderTargetFormats(formats, DXGI_FORMAT_D32_FLOAT, 1);
 			psoDesc.SetName("Diffuse (Opaque)");
 			m_pDiffusePSO = m_pDevice->CreatePipeline(psoDesc);
 
@@ -505,7 +505,7 @@ void ClusteredForward::SetupPipelines()
 			psoDesc.SetPixelShader("Diffuse.hlsl", "PSMain", { "CLUSTERED_FORWARD" });
 			psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_EQUAL);
 			psoDesc.SetDepthWrite(false);
-			psoDesc.SetRenderTargetFormats(formats, ARRAYSIZE(formats), DXGI_FORMAT_D32_FLOAT, 1);
+			psoDesc.SetRenderTargetFormats(formats, DXGI_FORMAT_D32_FLOAT, 1);
 			psoDesc.SetName("Diffuse (Opaque)");
 			m_pMeshShaderDiffusePSO = m_pDevice->CreatePipeline(psoDesc);
 

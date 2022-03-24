@@ -15,6 +15,7 @@ class GpuParticles;
 class PathTracing;
 class CBTTessellation;
 class UnorderedAccessView;
+class StateObject;
 struct SubMesh;
 struct Material;
 
@@ -168,7 +169,28 @@ private:
 	RefCountPtr<PipelineState> m_pVisibilityShadingPSO;
 	RefCountPtr<Texture> m_pVisibilityTexture;
 
-	Texture* m_pVisualizeTexture = nullptr;
+	// DDGI
+	struct DDGIVolume
+	{
+		Vector3 Origin;
+		Vector3 Extents;
+		IntVector3 NumProbes;
+		int32 MaxNumRays;
+		int32 NumRays;
+		std::array<RefCountPtr<Texture>, 2> pIrradiance;
+		std::array<RefCountPtr<Texture>, 2> pDepth;
+		RefCountPtr<Buffer> pProbeOffset;
+		RefCountPtr<Buffer> pRayBuffer;
+	};
+	std::vector<DDGIVolume> m_DDGIVolumes;
+	RefCountPtr<Buffer> m_pDDGIVolumesBuffer;
+
+	RefCountPtr<StateObject> m_pDDGITraceRaysSO;
+	RefCountPtr<PipelineState> m_pDDGIUpdateIrradianceColorPSO;
+	RefCountPtr<PipelineState> m_pDDGIUpdateIrradianceDepthPSO;
+	RefCountPtr<PipelineState> m_pDDGIVisualizePSO;
+
+	RefCountPtr<Texture> m_pVisualizeTexture;
 	SceneView m_SceneData;
 	bool m_CapturePix = false;
 };

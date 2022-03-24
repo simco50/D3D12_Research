@@ -57,7 +57,7 @@ void RTAO::Execute(RGGraph& graph, const SceneView& sceneData, Texture* pTarget,
 
 			ShaderBindingTable bindingTable(m_pRtSO);
 			bindingTable.BindRayGenShader("RayGen");
-			bindingTable.BindMissShader("Miss", {});
+			bindingTable.BindMissShader("OcclusionMS", {});
 
 			context.SetRootCBV(0, parameters);
 			context.SetRootCBV(1, GetViewUniforms(sceneData, pTarget));
@@ -70,7 +70,6 @@ void RTAO::Execute(RGGraph& graph, const SceneView& sceneData, Texture* pTarget,
 
 void RTAO::SetupPipelines(GraphicsDevice* pDevice)
 {
-	ShaderLibrary* pShaderLibrary = pDevice->GetLibrary("RTAO.hlsl");
 	m_pGlobalRS = new RootSignature(pDevice);
 	m_pGlobalRS->AddConstantBufferView(0);
 	m_pGlobalRS->AddConstantBufferView(100);
@@ -79,12 +78,13 @@ void RTAO::SetupPipelines(GraphicsDevice* pDevice)
 	m_pGlobalRS->Finalize("Global");
 
 	StateObjectInitializer stateDesc;
-	stateDesc.AddLibrary(pShaderLibrary, { "RayGen", "Miss" });
+	stateDesc.AddLibrary("RTAO.hlsl");
+	stateDesc.AddLibrary("SharedRaytracingLib.hlsl", { "OcclusionMS" });
 	stateDesc.Name = "RT AO";
 	stateDesc.MaxPayloadSize = sizeof(float);
 	stateDesc.MaxAttributeSize = 2 * sizeof(float);
 	stateDesc.pGlobalRootSignature = m_pGlobalRS;
 	stateDesc.RayGenShader = "RayGen";
-	stateDesc.AddMissShader("Miss");
+	stateDesc.AddMissShader("OcclusionMS");
 	m_pRtSO = pDevice->CreateStateObject(stateDesc);
 }

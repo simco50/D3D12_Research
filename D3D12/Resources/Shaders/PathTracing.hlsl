@@ -22,91 +22,6 @@ RWTexture2D<float4> uOutput : register(u0);
 RWTexture2D<float4> uAccumulation : register(u1);
 ConstantBuffer<PassParameters> cPass : register(b0);
 
-struct RAYPAYLOAD ShadowRayPayload
-{
-	uint Hit RAYQUALIFIER(read(caller) : write(caller, miss));
-};
-
-struct RAYPAYLOAD PrimaryRayPayload
-{
-	float2 UV;
-	float2 Normal;
-	float3 Position;
-	uint Color;
-	int TangentSign;
-	float2 Tangent;
-	float2 GeometryNormal;
-	uint Material;
-
-	bool IsHit()
-	{
-		return Material != -1;
-	}
-};
-
-float CastShadowRay(float3 origin, float3 direction)
-{
-	float len = length(direction);
-	RayDesc ray;
-	ray.Origin = origin;
-	ray.Direction = direction / len;
-	ray.TMin = RAY_BIAS;
-	ray.TMax = len;
-
-	const int rayFlags =
-		RAY_FLAG_SKIP_CLOSEST_HIT_SHADER |
-		RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH |
-		RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES;
-
-	RaytracingAccelerationStructure TLAS = ResourceDescriptorHeap[cView.TLASIndex];
-
-// Inline RT for the shadow rays has better performance. Use it when available.
-#if _INLINE_RT
-	RayQuery<rayFlags> q;
-
-	q.TraceRayInline(
-		TLAS, 	// AccelerationStructure
-		0,		// RayFlags
-		0xFF, 	// InstanceMask
-		ray		// Ray
-	);
-
-	while(q.Proceed())
-	{
-		switch(q.CandidateType())
-		{
-			case CANDIDATE_NON_OPAQUE_TRIANGLE:
-			{
-				MeshInstance instance = GetMeshInstance(q.CandidateInstanceID());
-				VertexAttribute vertex = GetVertexAttributes(instance, q.CandidateTriangleBarycentrics(), q.CandidatePrimitiveIndex(), q.CandidateObjectToWorld4x3());
-				MaterialData material = GetMaterial(instance.Material);
-				MaterialProperties surface = GetMaterialProperties(material, vertex.UV, 0);
-				if(surface.Opacity > material.AlphaCutoff)
-				{
-					q.CommitNonOpaqueTriangleHit();
-				}
-			}
-			break;
-		}
-	}
-	return q.CommittedStatus() != COMMITTED_TRIANGLE_HIT;
-#else
-	ShadowRayPayload payload;
-	payload.Hit = 1;
-	TraceRay(
-		TLAS,		//AccelerationStructure
-		rayFlags, 	//RayFlags
-		0xFF, 		//InstanceInclusionMask
-		0,			//RayContributionToHitGroupIndex
-		0, 			//MultiplierForGeometryContributionToHitGroupIndex
-		1, 			//MissShaderIndex
-		ray, 		//Ray
-		payload 	//Payload
-	);
-	return !payload.Hit;
-#endif
-}
-
 LightResult EvaluateLight(Light light, float3 worldPos, float3 V, float3 N, float3 geometryNormal, BrdfData brdfData)
 {
 	LightResult result = (LightResult)0;
@@ -119,7 +34,7 @@ LightResult EvaluateLight(Light light, float3 worldPos, float3 V, float3 N, floa
 	float3 L = light.Position - worldPos;
 	if(light.IsDirectional)
 	{
-		L = RAY_MAX_T * -light.Direction;
+		L = 100000.0f * -light.Direction;
 	}
 
 	if(attenuation <= 0.0f)
@@ -133,60 +48,26 @@ LightResult EvaluateLight(Light light, float3 worldPos, float3 V, float3 N, floa
 	if(shadowIndex >= 0)
 	{
 		attenuation *= LightTextureMask(light, shadowIndex, worldPos);
-		float3 rayOrigin = worldPos;
-		//float3 rayOrigin = OffsetRay(worldPos, geometryNormal);
-		attenuation *= CastShadowRay(rayOrigin, L);
 	}
+
+	if(attenuation <= 0.0f)
+	{
+		return result;
+	}
+
+	RayDesc rayDesc;
+	rayDesc.Origin = worldPos;
+	rayDesc.Direction = normalize(L);
+	rayDesc.TMin = RAY_BIAS;
+	rayDesc.TMax = length(L);
+	RaytracingAccelerationStructure tlas = ResourceDescriptorHeap[cView.TLASIndex];
+	attenuation *= TraceOcclusionRay(rayDesc, tlas);
 
 	L = normalize(L);
 	result = DefaultLitBxDF(brdfData.Specular, brdfData.Roughness, brdfData.Diffuse, N, V, L, attenuation);
-	float4 color = light.GetColor();
-	result.Diffuse *= color.rgb * light.Intensity;
-	result.Specular *= color.rgb * light.Intensity;
+	result.Diffuse *= light.GetColor() * light.Intensity;
+	result.Specular *= light.GetColor() * light.Intensity;
 	return result;
-}
-
-[shader("closesthit")]
-void PrimaryCHS(inout PrimaryRayPayload payload, BuiltInTriangleIntersectionAttributes attrib)
-{
-	MeshInstance instance = GetMeshInstance(InstanceID());
-	VertexAttribute vertex = GetVertexAttributes(instance, attrib.barycentrics, PrimitiveIndex(), ObjectToWorld4x3());
-	payload.Material = instance.Material;
-	payload.UV = vertex.UV;
-	payload.Normal = EncodeNormalOctahedron(vertex.Normal);
-	payload.Tangent = EncodeNormalOctahedron(vertex.Tangent.xyz);
-	payload.TangentSign = vertex.Tangent.w;
-	payload.GeometryNormal = EncodeNormalOctahedron(vertex.GeometryNormal);
-	payload.Position = WorldRayOrigin() + WorldRayDirection() * RayTCurrent();
-	payload.Color = vertex.Color;
-}
-
-[shader("anyhit")]
-void PrimaryAHS(inout PrimaryRayPayload payload, BuiltInTriangleIntersectionAttributes attrib)
-{
-	MeshInstance instance = GetMeshInstance(InstanceID());
-	VertexAttribute vertex = GetVertexAttributes(instance, attrib.barycentrics, PrimitiveIndex(), ObjectToWorld4x3());
-	MaterialData material = GetMaterial(instance.Material);
-	material.BaseColorFactor *= UIntToColor(vertex.Color);
-	MaterialProperties surface = GetMaterialProperties(material, vertex.UV, 0);
-	uint seed = SeedThread(DispatchRaysIndex().xy, DispatchRaysDimensions().xy, cView.FrameIndex);
-	float r = Random01(seed);
-	if(surface.Opacity < r)
-	{
-		IgnoreHit();
-	}
-}
-
-[shader("miss")]
-void PrimaryMS(inout PrimaryRayPayload payload : SV_RayPayload)
-{
-	// Nothing to do here! :)
-}
-
-[shader("miss")]
-void ShadowMS(inout ShadowRayPayload payload : SV_RayPayload)
-{
-	payload.Hit = 0;
 }
 
 // Compute the probability of a specular ray depending on Fresnel term
@@ -301,6 +182,22 @@ bool EvaluateIndirectBRDF(int rayType, float2 u, BrdfData brdfData, float3 N, fl
 	return true;
 }
 
+
+void SampleSourceLight(inout uint seed, out uint lightIndex, out float sourcePdf)
+{
+	lightIndex = Random(seed, 0, cView.LightCount - 1);
+	sourcePdf = 1.0f / cView.LightCount;
+}
+
+// From RT Gems 2
+struct Reservoir
+{
+	uint LightSample;
+	uint M;
+	float TotalWeight;
+	float SampleTargetPdf;
+};
+
 // Sample a random light by using Resampled Importance Sampling (RIS)
 bool SampleLightRIS(inout uint seed, float3 position, float3 N, out int lightIndex, out float sampleWeight)
 {
@@ -311,16 +208,18 @@ bool SampleLightRIS(inout uint seed, float3 position, float3 N, out int lightInd
 	// Weight the selected light based on the total weight and light count
 
 	if(cView.LightCount <= 0)
-	{
 		return false;
-	}
-	lightIndex = 0;
-	float totalWeights = 0;
-	float samplePdfG = 0;
-	for(int i = 0; i < RIS_CANDIDATES_LIGHTS; ++i)
+
+	Reservoir reservoir;
+	reservoir.TotalWeight = 0.0f;
+	reservoir.M = RIS_CANDIDATES_LIGHTS;
+
+	for(int i = 0; i < reservoir.M; ++i)
 	{
-		float candidateWeight = (float)cView.LightCount;
-		int candidate = Random(seed, 0, cView.LightCount);
+		uint candidate = 0;
+		float sourcePdf = 1.0f;
+		SampleSourceLight(seed, candidate, sourcePdf);
+
 		Light light = GetLight(candidate);
 		float3 L = normalize(light.Position - position);
 		if(light.IsDirectional)
@@ -331,21 +230,22 @@ bool SampleLightRIS(inout uint seed, float3 position, float3 N, out int lightInd
 		{
 			continue;
 		}
-		float candidatePdfG = GetLuminance(GetAttenuation(light, position) * light.GetColor().xyz);
-		float candidateRISWeight = candidatePdfG * candidateWeight;
-		totalWeights += candidateRISWeight;
-		if(Random01(seed) < (candidateRISWeight / totalWeights))
+		float targetPdf = GetLuminance(GetAttenuation(light, position) * light.GetColor());
+		float risWeight = targetPdf / sourcePdf;
+		reservoir.TotalWeight += risWeight;
+
+		if(Random01(seed) < (risWeight / reservoir.TotalWeight))
 		{
-			lightIndex = candidate;
-			samplePdfG = candidatePdfG;
+			reservoir.LightSample = candidate;
+			reservoir.SampleTargetPdf = targetPdf;
 		}
 	}
 
-	if(totalWeights == 0.0f)
-	{
+	if(reservoir.TotalWeight == 0.0f)
 		return false;
-	}
-	sampleWeight = (totalWeights / (float)cView.LightCount) / samplePdfG;
+
+	lightIndex = reservoir.LightSample;
+	sampleWeight = (reservoir.TotalWeight / reservoir.M) / reservoir.SampleTargetPdf;
 	return true;
 }
 
@@ -361,53 +261,43 @@ void RayGen()
 	pixel += lerp(-0.5f.xx, 0.5f.xx, offset);
 
 	pixel = (((pixel + 0.5f) / resolution) * 2.0f - 1.0f);
-	Ray ray = GeneratePinholeCameraRay(pixel, cView.ViewInverse, cView.Projection);
+	Ray cameraRay = GeneratePinholeCameraRay(pixel, cView.ViewInverse, cView.Projection);
+
+	RayDesc ray;
+	ray.Origin = cameraRay.Origin;
+	ray.Direction = cameraRay.Direction;
+	ray.TMin = 0;
+	ray.TMax = FLT_MAX;
 
 	float3 radiance = 0;
 	float3 throughput = 1;
 	for(int i = 0; i < cPass.NumBounces; ++i)
 	{
-		PrimaryRayPayload payload = (PrimaryRayPayload)0;
-		payload.Material = -1;
-
-		RayDesc desc;
-		desc.Origin = ray.Origin;
-		desc.Direction = ray.Direction;
-		desc.TMin = RAY_BIAS;
-		desc.TMax = RAY_MAX_T;
-
 		RaytracingAccelerationStructure tlas = ResourceDescriptorHeap[cView.TLASIndex];
-
-		TraceRay(
-			tlas,		//AccelerationStructure
-			0, 									//RayFlags
-			0xFF, 								//InstanceInclusionMask
-			0,									//RayContributionToHitGroupIndex
-			0, 									//MultiplierForGeometryContributionToHitGroupIndex
-			0, 									//MissShaderIndex
-			desc, 								//Ray
-			payload 							//Payload
-		);
+		MaterialRayPayload payload = TraceMaterialRay(ray, tlas);
 
 		// If the ray didn't hit anything, accumulate the sky and break the loop
 		if(!payload.IsHit())
 		{
-			const float3 SkyColor = GetSky(desc.Direction);
+			const float3 SkyColor = GetSky(ray.Direction);
 			radiance += throughput * SkyColor;
 			break;
 		}
 
 		// Decode the hit payload to retrieve all the shading information
-		MaterialData material = GetMaterial(payload.Material);
-		material.BaseColorFactor *= UIntToColor(payload.Color);
-		MaterialProperties surface = GetMaterialProperties(material, payload.UV, 0);
+		MeshInstance instance = GetMeshInstance(payload.InstanceID);
+		float4x4 world = GetTransform(NonUniformResourceIndex(instance.World));
+		VertexAttribute vertex = GetVertexAttributes(instance, payload.Barycentrics, payload.PrimitiveID, (float4x3)world);
+		MaterialData material = GetMaterial(instance.Material);
+		MaterialProperties surface = GetMaterialProperties(material, vertex.UV, 0);
 		BrdfData brdfData = GetBrdfData(surface);
 
-		// Flip the normal towards the incoming ray
-		float3 N = DecodeNormalOctahedron(payload.Normal);
-		float3 T = DecodeNormalOctahedron(payload.Tangent);
-		float3 V = -desc.Direction;
-		float3 geometryNormal = DecodeNormalOctahedron(payload.GeometryNormal);
+		float3 V = -ray.Direction;
+		float3 hitLocation = ray.Origin + ray.Direction * payload.HitT;
+		float3 geometryNormal = normalize(vertex.GeometryNormal);
+		float3 N = normalize(vertex.Normal);
+		float4 T = vertex.Tangent;
+
 		if(dot(geometryNormal, V) < 0.0f)
 		{
 			geometryNormal = -geometryNormal;
@@ -415,10 +305,10 @@ void RayGen()
 		if(dot(geometryNormal, N) < 0.0f)
 		{
 			N = -N;
-			T = -T;
+			T.xyz = -T.xyz;
 		}
 
-		float3x3 TBN = { T, cross(N, T) * payload.TangentSign, N };
+		float3x3 TBN = CreateTangentToWorld(N, T);
 		N = TangentSpaceNormalMapping(surface.NormalTS, TBN);
 
 		// The Emissive properties is like a light source and directly applied on top
@@ -427,9 +317,9 @@ void RayGen()
 		// Direct light evaluation
 		int lightIndex = 0;
 		float lightWeight = 0.0f;
-		if(SampleLightRIS(seed, payload.Position, N, lightIndex, lightWeight))
+		if(SampleLightRIS(seed, hitLocation, N, lightIndex, lightWeight))
 		{
-			LightResult result = EvaluateLight(GetLight(lightIndex), payload.Position, V, N, geometryNormal, brdfData);
+			LightResult result = EvaluateLight(GetLight(lightIndex), hitLocation, V, N, geometryNormal, brdfData);
 			radiance += throughput * (result.Diffuse + result.Specular) * lightWeight;
 		}
 
@@ -478,8 +368,8 @@ void RayGen()
 
 		// Propagate the weight and define the new ray origin
 		throughput *= weight;
-		//ray.Origin = OffsetRay(payload.Position, geometryNormal);
-		ray.Origin = payload.Position;
+		ray.Origin = hitLocation;
+		OffsetRay(ray, geometryNormal);
 	}
 
 	// Accumulation and output

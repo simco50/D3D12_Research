@@ -172,7 +172,7 @@ public:
 	void DispatchMesh(uint32 groupCountX, uint32 groupCountY = 1, uint32 groupCountZ = 1);
 	void DispatchMesh(const IntVector3& groupCounts);
 	void ExecuteIndirect(CommandSignature* pCommandSignature, uint32 maxCount, Buffer* pIndirectArguments, Buffer* pCountBuffer, uint32 argumentsOffset = 0, uint32 countOffset = 0);
-	void Draw(uint32 vertexStart, uint32 vertexCount);
+	void Draw(uint32 vertexStart, uint32 vertexCount, uint32 instances = 1, uint32 instanceStart = 0);
 	void DrawIndexed(uint32 indexCount, uint32 indexStart, uint32 minVertex = 0);
 	void DrawIndexedInstanced(uint32 indexCount, uint32 indexStart, uint32 instanceCount, uint32 minVertex = 0, uint32 instanceStart = 0);
 	void DispatchRays(ShaderBindingTable& table, uint32 width = 1, uint32 height = 1, uint32 depth = 1);
@@ -202,17 +202,8 @@ public:
 	void SetGraphicsRootSignature(RootSignature* pRootSignature);
 	void SetComputeRootSignature(RootSignature* pRootSignature);
 	void BindResource(uint32 rootIndex, uint32 offset, ResourceView* pView);
-	void BindResources(uint32 rootIndex, uint32 offset, const ResourceView*const* pViews, uint32 count = 1);
-	void BindResources(uint32 rootIndex, std::initializer_list<const ResourceView*> pViews, uint32 offset = 0)
-	{
-		BindResources(rootIndex, offset, pViews.begin(), (uint32)pViews.size());
-	}
-	void BindResources(uint32 rootIndex, uint32 offset, const D3D12_CPU_DESCRIPTOR_HANDLE* handles, uint32 count = 1);
-	template<size_t N>
-	void BindResources(uint32 rootIndex, const D3D12_CPU_DESCRIPTOR_HANDLE(&handles)[N], uint32 offset = 0)
-	{
-		BindResources(rootIndex, offset, handles, N);
-	}
+	void BindResources(uint32 rootIndex, const Span<const ResourceView*>& pViews, uint32 offset = 0);
+	void BindResources(uint32 rootIndex, const Span<D3D12_CPU_DESCRIPTOR_HANDLE>& handles, uint32 offset = 0);
 	void SetDynamicVertexBuffer(uint32 slot, uint32 elementCount, uint32 elementSize, const void* pData);
 	void SetDynamicIndexBuffer(uint32 elementCount, const void* pData, bool smallIndices = false);
 	void SetRootSRV(uint32 rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address);

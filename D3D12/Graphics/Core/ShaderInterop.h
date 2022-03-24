@@ -138,10 +138,24 @@ namespace ShaderInterop
 		uint IsVolumetric : 1;
 		uint CastShadows : 1;
 
-		float4 GetColor() { return UIntToColor(Color); }
+#ifndef __cplusplus
+		float3 GetColor() { return UIntToColor(Color).rgb; }
+#endif
 
 		bool PointAttenuation() { return IsPoint || IsSpot; }
 		bool DirectionalAttenuation() { return IsSpot; }
+	};
+
+	struct DDGIVolume
+	{
+		float3 BoundsMin;
+		uint DepthIndex;
+		float3 ProbeSize;
+		uint IrradianceIndex;
+		uint3 ProbeVolumeDimensions;
+		uint ProbeOffsetIndex;
+		uint NumRaysPerProbe;
+		uint MaxRaysPerProbe;
 	};
 
 	struct ViewUniforms
@@ -150,7 +164,7 @@ namespace ShaderInterop
 		float4 CascadeDepths;
 		uint NumCascades;
 		uint ShadowMapOffset;
-		uint2 padd;
+		uint2 padd0;
 
 		float4x4 View;
 		float4x4 ViewInverse;
@@ -174,6 +188,7 @@ namespace ShaderInterop
 		uint FrameIndex;
 		uint SsrSamples;
 		uint LightCount;
+		uint NumDDGIVolumes;
 
 		uint TLASIndex;
 		uint MeshesIndex;
@@ -182,6 +197,7 @@ namespace ShaderInterop
 		uint TransformsIndex;
 		uint LightsIndex;
 		uint SkyIndex;
+		uint DDGIVolumesIndex;
 	};
 
 #ifdef __cplusplus
