@@ -182,6 +182,22 @@ bool EvaluateIndirectBRDF(int rayType, float2 u, BrdfData brdfData, float3 N, fl
 	return true;
 }
 
+
+void SampleSourceLight(inout uint seed, out uint lightIndex, out float sourcePdf)
+{
+	lightIndex = Random(seed, 0, cView.LightCount - 1);
+	sourcePdf = 1.0f / cView.LightCount;
+}
+
+// From RT Gems 2
+struct Reservoir
+{
+	uint LightSample;
+	uint M;
+	float TotalWeight;
+	float SampleTargetPdf;
+};
+
 // Sample a random light by using Resampled Importance Sampling (RIS)
 bool SampleLightRIS(inout uint seed, float3 position, float3 N, out int lightIndex, out float sampleWeight)
 {
@@ -192,16 +208,18 @@ bool SampleLightRIS(inout uint seed, float3 position, float3 N, out int lightInd
 	// Weight the selected light based on the total weight and light count
 
 	if(cView.LightCount <= 0)
-	{
 		return false;
-	}
-	lightIndex = 0;
-	float totalWeights = 0;
-	float samplePdfG = 0;
-	for(int i = 0; i < RIS_CANDIDATES_LIGHTS; ++i)
+
+	Reservoir reservoir;
+	reservoir.TotalWeight = 0.0f;
+	reservoir.M = RIS_CANDIDATES_LIGHTS;
+
+	for(int i = 0; i < reservoir.M; ++i)
 	{
-		float candidateWeight = (float)cView.LightCount;
-		int candidate = Random(seed, 0, cView.LightCount - 1);
+		uint candidate = 0;
+		float sourcePdf = 1.0f;
+		SampleSourceLight(seed, candidate, sourcePdf);
+
 		Light light = GetLight(candidate);
 		float3 L = normalize(light.Position - position);
 		if(light.IsDirectional)
@@ -212,21 +230,22 @@ bool SampleLightRIS(inout uint seed, float3 position, float3 N, out int lightInd
 		{
 			continue;
 		}
-		float candidatePdfG = GetLuminance(GetAttenuation(light, position) * light.GetColor());
-		float candidateRISWeight = candidatePdfG * candidateWeight;
-		totalWeights += candidateRISWeight;
-		if(Random01(seed) < (candidateRISWeight / totalWeights))
+		float targetPdf = GetLuminance(GetAttenuation(light, position) * light.GetColor());
+		float risWeight = targetPdf / sourcePdf;
+		reservoir.TotalWeight += risWeight;
+
+		if(Random01(seed) < (risWeight / reservoir.TotalWeight))
 		{
-			lightIndex = candidate;
-			samplePdfG = candidatePdfG;
+			reservoir.LightSample = candidate;
+			reservoir.SampleTargetPdf = targetPdf;
 		}
 	}
 
-	if(totalWeights == 0.0f)
-	{
+	if(reservoir.TotalWeight == 0.0f)
 		return false;
-	}
-	sampleWeight = totalWeights / RIS_CANDIDATES_LIGHTS / samplePdfG;
+
+	lightIndex = reservoir.LightSample;
+	sampleWeight = (reservoir.TotalWeight / reservoir.M) / reservoir.SampleTargetPdf;
 	return true;
 }
 
@@ -271,7 +290,7 @@ void RayGen()
 		MaterialData material = GetMaterial(instance.Material);
 		MaterialProperties surface = GetMaterialProperties(material, vertex.UV, 0);
 		BrdfData brdfData = GetBrdfData(surface);
-		
+
 		float3 V = -ray.Direction;
 		float3 hitLocation = ray.Origin + ray.Direction * payload.HitT;
 		float3 geometryNormal = normalize(vertex.Normal);
