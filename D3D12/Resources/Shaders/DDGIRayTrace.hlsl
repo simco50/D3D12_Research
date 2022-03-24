@@ -37,7 +37,13 @@ void TraceRaysRGS()
 	uint numRays = volume.NumRaysPerProbe;
 	float3 direction = direction = mul(SphericalFibonacci(rayIndex, numRays), randomRotation);
 
-	MaterialRayPayload payload = TraceMaterialRay(probePosition, direction);
+	RayDesc ray;
+	ray.Origin = probePosition;
+	ray.Direction = direction;
+	ray.TMin = RAY_BIAS;
+	ray.TMax = RAY_MAX_T;
+	RaytracingAccelerationStructure tlas = ResourceDescriptorHeap[cView.TLASIndex];
+	MaterialRayPayload payload = TraceMaterialRay(ray, tlas);
 
 	float3 radiance = 0;
 	float depth = maxDepth;
@@ -52,7 +58,7 @@ void TraceRaysRGS()
 			float4x4 world = GetTransform(NonUniformResourceIndex(instance.World));
 			VertexAttribute vertex = GetVertexAttributes(instance, payload.Barycentrics, payload.PrimitiveID, (float4x3)world);
 			MaterialData material = GetMaterial(instance.Material);
-			const uint textureMipLevel = 5;
+			const uint textureMipLevel = 6;
 			MaterialProperties surface = GetMaterialProperties(material, vertex.UV, textureMipLevel);
 			BrdfData brdfData = GetBrdfData(surface);
 
@@ -71,7 +77,15 @@ void TraceRaysRGS()
 				{
 					L = RAY_MAX_T * -light.Direction;
 				}
-				attenuation *= TraceOcclusionRay(hitLocation, normalize(L), length(L));
+
+				RayDesc ray;
+				ray.Origin = hitLocation;
+				ray.Direction = normalize(L);
+				ray.TMin = RAY_BIAS;
+				ray.TMax = length(L);
+				RaytracingAccelerationStructure tlas = ResourceDescriptorHeap[cView.TLASIndex];
+				attenuation *= TraceOcclusionRay(ray, tlas);
+
 				if(attenuation <= 0.0f)
 					continue;
 

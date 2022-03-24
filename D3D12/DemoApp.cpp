@@ -973,7 +973,7 @@ void DemoApp::Update()
 						GetDepthStencil()->GetSRV(),
 						m_pPreviousColor->GetSRV(),
 						});
-					renderContext.Dispatch(ComputeUtils::GetNumThreadGroups(GetCurrentRenderTarget()->GetWidth(), 16, GetCurrentRenderTarget()->GetHeight(), 16));
+					renderContext.Dispatch(ComputeUtils::GetNumThreadGroups(GetCurrentRenderTarget()->GetWidth(), 8, GetCurrentRenderTarget()->GetHeight(), 8));
 					renderContext.InsertUavBarrier();
 				});
 		}

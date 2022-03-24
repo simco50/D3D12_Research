@@ -43,7 +43,14 @@ void RayGen()
 
 		float3 radiance = 0;
 		
-		MaterialRayPayload payload = TraceMaterialRay(worldPosition, R);
+		RayDesc ray;
+		ray.Origin = worldPosition;
+		ray.Direction = R;
+		ray.TMin = RAY_BIAS;
+		ray.TMax = RAY_MAX_T;
+		RaytracingAccelerationStructure tlas = ResourceDescriptorHeap[cView.TLASIndex];
+		MaterialRayPayload payload = TraceMaterialRay(ray, tlas);
+
 		if(payload.IsHit())
 		{
 			MeshInstance instance = GetMeshInstance(payload.InstanceID);
@@ -95,7 +102,13 @@ void RayGen()
 				if(castShadowRay)
 				{
 #if SECONDARY_SHADOW_RAY
-					attenuation *= TraceOcclusionRay(hitLocation, normalize(L), length(L));
+					RayDesc rayDesc;
+					rayDesc.Origin = hitLocation;
+					rayDesc.Direction = normalize(L);
+					rayDesc.TMin = RAY_BIAS;
+					rayDesc.TMax = length(L);
+					RaytracingAccelerationStructure tlas = ResourceDescriptorHeap[cView.TLASIndex];
+					attenuation *= TraceOcclusionRay(rayDesc, tlas);
 #else
 					attenuation = 0.0f;
 #endif // SECONDARY_SHADOW_RAY

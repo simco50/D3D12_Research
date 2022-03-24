@@ -52,7 +52,15 @@ void RayGen()
 	for(int i = 0; i < cPass.Samples; ++i)
 	{
 		float3 randomDirection = RandomCosineWeightedRay(normal.xyz, randSeed);
-		float hit = !TraceOcclusionRay(world, randomDirection, cPass.Radius);
+		
+		RayDesc ray;
+		ray.Origin = world;
+		ray.Direction = randomDirection;
+		ray.TMin = RAY_BIAS;
+		ray.TMax = cPass.Radius;
+		RaytracingAccelerationStructure tlas = ResourceDescriptorHeap[cView.TLASIndex];
+		float hit = !TraceOcclusionRay(ray, tlas);
+
 		accumulatedAo += hit;
 	}
 	accumulatedAo /= cPass.Samples;

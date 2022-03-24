@@ -55,8 +55,13 @@ LightResult EvaluateLight(Light light, float3 worldPos, float3 V, float3 N, floa
 		return result;
 	}
 
-	float3 rayOrigin = worldPos;
-	attenuation *= TraceOcclusionRay(rayOrigin, normalize(L), length(L));
+	RayDesc rayDesc;
+	rayDesc.Origin = worldPos;
+	rayDesc.Direction = normalize(L);
+	rayDesc.TMin = RAY_BIAS;
+	rayDesc.TMax = length(L);
+	RaytracingAccelerationStructure tlas = ResourceDescriptorHeap[cView.TLASIndex];
+	attenuation *= TraceOcclusionRay(rayDesc, tlas);
 
 	L = normalize(L);
 	result = DefaultLitBxDF(brdfData.Specular, brdfData.Roughness, brdfData.Diffuse, N, V, L, attenuation);
@@ -243,7 +248,13 @@ void RayGen()
 	float3 throughput = 1;
 	for(int i = 0; i < cPass.NumBounces; ++i)
 	{
-		MaterialRayPayload payload = TraceMaterialRay(ray.Origin, ray.Direction);
+		RayDesc rayDesc;
+		rayDesc.Origin = ray.Origin;
+		rayDesc.Direction = ray.Direction;
+		rayDesc.TMin = RAY_BIAS;
+		rayDesc.TMax = RAY_MAX_T;
+		RaytracingAccelerationStructure tlas = ResourceDescriptorHeap[cView.TLASIndex];
+		MaterialRayPayload payload = TraceMaterialRay(rayDesc, tlas);
 
 		// If the ray didn't hit anything, accumulate the sky and break the loop
 		if(!payload.IsHit())

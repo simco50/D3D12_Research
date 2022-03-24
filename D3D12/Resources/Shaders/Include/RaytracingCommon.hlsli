@@ -169,30 +169,26 @@ struct RAYPAYLOAD OcclusionPayload
 	void SetMiss() { HitT = -1.0f; }
 };
 
-float TraceOcclusionRay(float3 origin, float3 direction, float length)
+float TraceOcclusionRay(
+	RayDesc ray,
+	RaytracingAccelerationStructure tlas,
+	uint rayFlags = RAY_FLAG_NONE,
+	uint instanceMask = 0xFF)
 {
-	RayDesc ray;
-	ray.Origin = origin;
-	ray.Direction = direction;
-	ray.TMin = RAY_BIAS;
-	ray.TMax = length;
-
-	const int rayFlags =
+	const uint commonRayFlags =
 		RAY_FLAG_SKIP_CLOSEST_HIT_SHADER |
 		RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH |
 		RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES;
 
-	RaytracingAccelerationStructure TLAS = ResourceDescriptorHeap[cView.TLASIndex];
-
 // Inline RT for the shadow rays has better performance. Use it when available.
 #if _INLINE_RT || __SHADER_STAGE_PIXEL || __SHADER_STAGE_COMPUTE
-	RayQuery<rayFlags> q;
+	RayQuery<commonRayFlags> q;
 
 	q.TraceRayInline(
-		TLAS, 	// AccelerationStructure
-		0,		// RayFlags
-		0xFF, 	// InstanceMask
-		ray		// Ray
+		tlas, 			// AccelerationStructure
+		rayFlags,		// RayFlags
+		instanceMask, 	// InstanceMask
+		ray				// Ray
 	);
 
 	while(q.Proceed())
@@ -217,14 +213,14 @@ float TraceOcclusionRay(float3 origin, float3 direction, float length)
 #else
 	OcclusionPayload payload = (OcclusionPayload)0;
 	TraceRay(
-		TLAS,		//AccelerationStructure
-		rayFlags, 	//RayFlags
-		0xFF, 		//InstanceInclusionMask
-		0,			//RayContributionToHitGroupIndex
-		0, 			//MultiplierForGeometryContributionToHitGroupIndex
-		1, 			//MissShaderIndex
-		ray, 		//Ray
-		payload 	//Payload
+		tlas,							//AccelerationStructure
+		commonRayFlags | rayFlags, 		//RayFlags
+		instanceMask, 					//InstanceInclusionMask
+		0,								//RayContributionToHitGroupIndex
+		0, 								//MultiplierForGeometryContributionToHitGroupIndex
+		1, 								//MissShaderIndex
+		ray, 							//Ray
+		payload 						//Payload
 	);
 	return !payload.IsMiss();
 #endif
@@ -242,27 +238,22 @@ struct RAYPAYLOAD MaterialRayPayload
 	bool IsFrontFace() { return FrontFace > 0; }
 };
 
-MaterialRayPayload TraceMaterialRay(float3 origin, float3 direction, float tMax = RAY_MAX_T)
+MaterialRayPayload TraceMaterialRay(
+	RayDesc ray,
+	RaytracingAccelerationStructure tlas,
+	uint rayFlags = RAY_FLAG_NONE,
+	uint instanceMask = 0xFF)
 {
 	MaterialRayPayload payload;
 	payload.HitT = -1.0f;
 
-	RayDesc desc;
-	desc.Origin = origin;
-	desc.Direction = direction;
-	desc.TMin = RAY_BIAS;
-	desc.TMax = tMax;
-
-	RaytracingAccelerationStructure tlas = ResourceDescriptorHeap[cView.TLASIndex];
-
 #if __SHADER_STAGE_PIXEL || __SHADER_STAGE_COMPUTE
-
 	RayQuery<0> q;
 	q.TraceRayInline(
-		tlas, 	// AccelerationStructure
-		0,		// RayFlags
-		0xFF, 	// InstanceMask
-		desc	// Ray
+		tlas, 			// AccelerationStructure
+		rayFlags,		// RayFlags
+		instanceMask, 	// InstanceMask
+		ray				// Ray
 	);
 	while(q.Proceed())
 	{
@@ -290,20 +281,17 @@ MaterialRayPayload TraceMaterialRay(float3 origin, float3 direction, float tMax 
 		payload.Barycentrics = q.CommittedTriangleBarycentrics();
 		payload.FrontFace = q.CommittedTriangleFrontFace();
 	}
-
 #else
-
 	TraceRay(
-		tlas,		//AccelerationStructure
-		0, 			//RayFlags
-		0xFF, 		//InstanceInclusionMask
-		0,			//RayContributionToHitGroupIndex
-		0, 			//MultiplierForGeometryContributionToHitGroupIndex
-		0, 			//MissShaderIndex
-		desc, 		//Ray
-		payload 	//Payload
+		tlas,			//AccelerationStructure
+		rayFlags, 		//RayFlags
+		instanceMask, 	//InstanceInclusionMask
+		0,				//RayContributionToHitGroupIndex
+		0, 				//MultiplierForGeometryContributionToHitGroupIndex
+		0, 				//MissShaderIndex
+		ray, 			//Ray
+		payload 		//Payload
 	);
-
 #endif
 
 	return payload;

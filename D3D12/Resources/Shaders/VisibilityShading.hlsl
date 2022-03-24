@@ -131,7 +131,7 @@ LightResult DoLight(float4 pos, float3 worldPos, float3 N, float3 V, float3 diff
 	return totalResult;
 }
 
-[numthreads(16, 16, 1)]
+[numthreads(8, 8, 1)]
 void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 {
 	if(dispatchThreadId.x >= cView.ScreenDimensions.x || dispatchThreadId.y >= cView.ScreenDimensions.y)
