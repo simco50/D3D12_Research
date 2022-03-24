@@ -41,7 +41,7 @@ void TraceRaysRGS()
 	ray.Origin = probePosition;
 	ray.Direction = direction;
 	ray.TMin = RAY_BIAS;
-	ray.TMax = RAY_MAX_T;
+	ray.TMax = FLT_MAX;
 	RaytracingAccelerationStructure tlas = ResourceDescriptorHeap[cView.TLASIndex];
 	MaterialRayPayload payload = TraceMaterialRay(ray, tlas);
 
@@ -75,7 +75,7 @@ void TraceRaysRGS()
 				float3 L = light.Position - hitLocation;
 				if(light.IsDirectional)
 				{
-					L = RAY_MAX_T * -light.Direction;
+					L = 100000.0f * -light.Direction;
 				}
 
 				RayDesc ray;

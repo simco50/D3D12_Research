@@ -5,7 +5,6 @@
 #include "Random.hlsli"
 
 #define RAY_BIAS 1.0e-2f
-#define RAY_MAX_T 1.0e10f
 
 struct VertexAttribute
 {
@@ -143,7 +142,7 @@ Ray GeneratePinholeCameraRay(float2 pixel, float4x4 viewInverse, float4x4 projec
 // Ray Tracing Gems: A Fast and Robust Method for Avoiding Self-Intersection
 // Wächter and Binder
 // Offset ray so that it never self-intersects
-float3 OffsetRay(float3 position, float3 geometryNormal)
+void OffsetRay(inout RayDesc ray, float3 geometryNormal)
 {
 	static const float origin = 1.0f / 32.0f;
 	static const float float_scale = 1.0f / 65536.0f;
@@ -152,13 +151,14 @@ float3 OffsetRay(float3 position, float3 geometryNormal)
 	int3 of_i = int3(int_scale * geometryNormal.x, int_scale * geometryNormal.y, int_scale * geometryNormal.z);
 
 	float3 p_i = float3(
-		asfloat(asint(position.x) + ((position.x < 0) ? -of_i.x : of_i.x)),
-		asfloat(asint(position.y) + ((position.y < 0) ? -of_i.y : of_i.y)),
-		asfloat(asint(position.z) + ((position.z < 0) ? -of_i.z : of_i.z)));
+		asfloat(asint(ray.Origin.x) + ((ray.Origin.x < 0) ? -of_i.x : of_i.x)),
+		asfloat(asint(ray.Origin.y) + ((ray.Origin.y < 0) ? -of_i.y : of_i.y)),
+		asfloat(asint(ray.Origin.z) + ((ray.Origin.z < 0) ? -of_i.z : of_i.z)));
 
-	return float3(abs(position.x) < origin ? position.x + float_scale * geometryNormal.x : p_i.x,
-		abs(position.y) < origin ? position.y + float_scale * geometryNormal.y : p_i.y,
-		abs(position.z) < origin ? position.z + float_scale * geometryNormal.z : p_i.z);
+	ray.Origin = float3(
+		abs(ray.Origin.x) < origin ? ray.Origin.x + float_scale * geometryNormal.x : p_i.x,
+		abs(ray.Origin.y) < origin ? ray.Origin.y + float_scale * geometryNormal.y : p_i.y,
+		abs(ray.Origin.z) < origin ? ray.Origin.z + float_scale * geometryNormal.z : p_i.z);
 }
 
 struct RAYPAYLOAD OcclusionPayload

@@ -34,7 +34,7 @@ LightResult EvaluateLight(Light light, float3 worldPos, float3 V, float3 N, floa
 	float3 L = light.Position - worldPos;
 	if(light.IsDirectional)
 	{
-		L = RAY_MAX_T * -light.Direction;
+		L = 100000.0f * -light.Direction;
 	}
 
 	if(attenuation <= 0.0f)
@@ -261,19 +261,20 @@ void RayGen()
 	pixel += lerp(-0.5f.xx, 0.5f.xx, offset);
 
 	pixel = (((pixel + 0.5f) / resolution) * 2.0f - 1.0f);
-	Ray ray = GeneratePinholeCameraRay(pixel, cView.ViewInverse, cView.Projection);
+	Ray cameraRay = GeneratePinholeCameraRay(pixel, cView.ViewInverse, cView.Projection);
+
+	RayDesc ray;
+	ray.Origin = cameraRay.Origin;
+	ray.Direction = cameraRay.Direction;
+	ray.TMin = 0;
+	ray.TMax = FLT_MAX;
 
 	float3 radiance = 0;
 	float3 throughput = 1;
 	for(int i = 0; i < cPass.NumBounces; ++i)
 	{
-		RayDesc rayDesc;
-		rayDesc.Origin = ray.Origin;
-		rayDesc.Direction = ray.Direction;
-		rayDesc.TMin = RAY_BIAS;
-		rayDesc.TMax = RAY_MAX_T;
 		RaytracingAccelerationStructure tlas = ResourceDescriptorHeap[cView.TLASIndex];
-		MaterialRayPayload payload = TraceMaterialRay(rayDesc, tlas);
+		MaterialRayPayload payload = TraceMaterialRay(ray, tlas);
 
 		// If the ray didn't hit anything, accumulate the sky and break the loop
 		if(!payload.IsHit())
@@ -293,8 +294,8 @@ void RayGen()
 
 		float3 V = -ray.Direction;
 		float3 hitLocation = ray.Origin + ray.Direction * payload.HitT;
-		float3 geometryNormal = normalize(vertex.Normal);
-		float3 N = geometryNormal;
+		float3 geometryNormal = normalize(vertex.GeometryNormal);
+		float3 N = normalize(vertex.Normal);
 		float4 T = vertex.Tangent;
 
 		if(dot(geometryNormal, V) < 0.0f)
@@ -367,8 +368,8 @@ void RayGen()
 
 		// Propagate the weight and define the new ray origin
 		throughput *= weight;
-		//ray.Origin = OffsetRay(hitLocation, geometryNormal);
 		ray.Origin = hitLocation;
+		OffsetRay(ray, geometryNormal);
 	}
 
 	// Accumulation and output
