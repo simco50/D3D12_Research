@@ -335,6 +335,9 @@ void CSMain(
 	prevColor = Reinhard(prevColor);
 #endif
 
+	if(any(uvReproj < 0) || any(uvReproj > 1))
+		blendFactor = 1;
+
 	currColor = lerp(prevColor, currColor, blendFactor);
 
 #if TAA_TONEMAP

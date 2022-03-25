@@ -255,6 +255,8 @@ void RayGen()
 	float2 pixel = float2(DispatchRaysIndex().xy);
 	float2 resolution = float2(DispatchRaysDimensions().xy);
 	uint seed = SeedThread(DispatchRaysIndex().xy, DispatchRaysDimensions().xy, cView.FrameIndex);
+	
+	float3 previousColor = uAccumulation[DispatchRaysIndex().xy].rgb;
 
 	// Jitter to achieve anti-aliasing
 	float2 offset = float2(Random01(seed), Random01(seed));
@@ -375,7 +377,6 @@ void RayGen()
 	// Accumulation and output
 	if(cPass.AccumulatedFrames > 1)
 	{
-		float3 previousColor = uAccumulation[DispatchRaysIndex().xy].rgb;
 		radiance += previousColor;
 	}
 	uAccumulation[DispatchRaysIndex().xy] = float4(radiance, 1);

@@ -743,7 +743,7 @@ void DemoApp::Update()
 				context.EndRenderPass();
 			});
 	}
-	else
+	else if (m_RenderPath == RenderPath::Visibility)
 	{
 		RGPassBuilder visibility = graph.AddPass("Visibility Buffer");
 		visibility.Bind([=](CommandContext& renderContext, const RGPassResources& resources)
@@ -774,8 +774,7 @@ void DemoApp::Update()
 
 			});
 	}
-
-	if(Tweakables::g_EnableDDGI && m_DDGIVolumes.size() > 0 && m_pDevice->GetCapabilities().SupportsRaytracing())
+	if((m_RenderPath == RenderPath::Clustered || m_RenderPath == RenderPath::Tiled || m_RenderPath == RenderPath::Visibility) && Tweakables::g_EnableDDGI && m_DDGIVolumes.size() > 0 && m_pDevice->GetCapabilities().SupportsRaytracing())
 	{
 		RG_GRAPH_SCOPE("DDGI", graph);
 
