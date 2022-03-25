@@ -11,6 +11,7 @@ namespace Paths
 
 	std::string Normalize(const std::string& filePath);
 	void NormalizeInline(std::string& filePath);
+	bool ResolveRelativePaths(std::string& path);
 
 	std::string ChangeExtension(const std::string& filePath, const std::string& newExtension);
 

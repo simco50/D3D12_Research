@@ -231,6 +231,7 @@ namespace ShaderCompiler
 			{
 				RefCountPtr<IDxcBlobEncoding> pEncoding;
 				std::string path = Paths::Normalize(UNICODE_TO_MULTIBYTE(pFilename));
+				check(Paths::ResolveRelativePaths(path));
 
 				if (!Paths::FileExists(path.c_str()))
 				{
@@ -387,9 +388,11 @@ namespace ShaderCompiler
 			}
 		}
 
+		result.Includes.push_back(fullPath);
 		for (const std::string& includePath : includeHandler.IncludedFiles)
 		{
-			result.Includes.push_back(includePath);
+			std::string include = Paths::Combine(Paths::GetDirectoryPath(compileJob.FilePath), includePath);
+			result.Includes.push_back(include);
 		}
 
 		return result;
@@ -436,9 +439,8 @@ Shader* ShaderManager::LoadShader(const char* pShaderPath, ShaderType shaderType
 
 	for (const std::string& include : result.Includes)
 	{
-		m_IncludeDependencyMap[ShaderStringHash(Paths::GetFileName(include))].insert(pShaderPath);
+		m_IncludeDependencyMap[ShaderStringHash(include)].insert(pShaderPath);
 	}
-	m_IncludeDependencyMap[ShaderStringHash(pShaderPath)].insert(pShaderPath);
 
 	ShaderStringHash hash = GetEntryPointHash(pEntryPoint, defines);
 	m_FilepathToObjectMap[ShaderStringHash(pShaderPath)].Shaders[hash] = pShader;
@@ -470,9 +472,8 @@ ShaderLibrary* ShaderManager::LoadShaderLibrary(const char* pShaderPath, const s
 
 	for (const std::string& include : result.Includes)
 	{
-		m_IncludeDependencyMap[ShaderStringHash(Paths::GetFileName(include))].insert(pShaderPath);
+		m_IncludeDependencyMap[ShaderStringHash(include)].insert(pShaderPath);
 	}
-	m_IncludeDependencyMap[ShaderStringHash(pShaderPath)].insert(pShaderPath);
 
 	ShaderStringHash hash = GetEntryPointHash("", defines);
 	m_FilepathToObjectMap[ShaderStringHash(pShaderPath)].Libraries[hash] = pLibrary;
@@ -482,8 +483,7 @@ ShaderLibrary* ShaderManager::LoadShaderLibrary(const char* pShaderPath, const s
 
 void ShaderManager::RecompileFromFileChange(const std::string& filePath)
 {
-	std::string fileName = Paths::GetFileName(filePath);
-	auto it = m_IncludeDependencyMap.find(ShaderStringHash(fileName));
+	auto it = m_IncludeDependencyMap.find(ShaderStringHash(filePath));
 	if (it != m_IncludeDependencyMap.end())
 	{
 		E_LOG(Info, "Modified \"%s\". Recompiling dependencies...", filePath.c_str());

@@ -33,7 +33,7 @@ private:
 		OVERLAPPED Overlapped{};
 		std::deque<FileEvent> Changes;
 		std::array<char, 1 << 16> Buffer{};
-		std::string SpecificFilePath;
+		std::string DirectoryPath;
 	};
 
 	int ThreadFunction();

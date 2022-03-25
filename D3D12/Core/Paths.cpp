@@ -45,20 +45,8 @@ namespace Paths
 
 	std::string GetDirectoryPath(const std::string& filePath)
 	{
-		auto it = std::find_if(filePath.rbegin(), filePath.rend(), [](const char c)
-			{
-				return IsSlash(c);
-			});
-		if (it == filePath.rend())
-		{
-			if (filePath.rfind('.') == std::string::npos)
-			{
-				return "/";
-			}
-			return filePath;
-		}
-
-		return filePath.substr(0, it.base() - filePath.begin());
+		std::string fileName = GetFileName(filePath);
+		return filePath.substr(0, filePath.length() - fileName.length());
 	}
 
 	std::string Normalize(const std::string& filePath)
@@ -81,6 +69,23 @@ namespace Paths
 		{
 			filePath = std::string(filePath.begin() + 2, filePath.end());
 		}
+	}
+
+	bool ResolveRelativePaths(std::string& path)
+	{
+		for (;;)
+		{
+			size_t index = path.rfind("../");
+			if (index == std::string::npos)
+				break;
+			size_t idx0 = path.rfind('/', index);
+			if (idx0 == std::string::npos)
+				return false;
+			idx0 = path.rfind('/', idx0 - 1);
+			if (idx0 != std::string::npos)
+				path = path.substr(0, idx0 + 1) + path.substr(index + 3);
+		}
+		return true;
 	}
 
 	std::string ChangeExtension(const std::string& filePath, const std::string& newExtension)
@@ -118,10 +123,13 @@ namespace Paths
 		output.reserve(elements.size() * 20);
 		for (size_t i = 0; i < elements.size(); i++)
 		{
-			output += elements[i];
-			if (elements[i].back() != '/' && i != elements.size() - 1)
+			if (elements[i].length() > 0)
 			{
-				output += "/";
+				output += elements[i];
+				if (elements[i].back() != '/' && i != elements.size() - 1)
+				{
+					output += "/";
+				}
 			}
 		}
 	}
