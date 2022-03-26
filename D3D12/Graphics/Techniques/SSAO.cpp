@@ -62,7 +62,7 @@ void SSAO::Execute(RGGraph& graph, const SceneView& sceneData, Texture* pTarget,
 			shaderParameters.Threshold = g_AoThreshold;
 			shaderParameters.Samples = g_AoSamples;
 
-			context.SetRootCBV(0, shaderParameters);
+			context.SetRootConstants(0, shaderParameters);
 			context.SetRootCBV(1, GetViewUniforms(sceneData, pTarget));
 			context.BindResource(2, 0, pTarget->GetUAV());
 			context.BindResource(3, 0, pDepth->GetSRV());
@@ -90,11 +90,13 @@ void SSAO::Execute(RGGraph& graph, const SceneView& sceneData, Texture* pTarget,
 			shaderParameters.Horizontal = 1;
 			shaderParameters.DimensionsInv = Vector2(1.0f / pTarget->GetWidth(), 1.0f / pTarget->GetHeight());
 
-			context.SetRootCBV(0, shaderParameters);
+			context.SetRootConstants(0, shaderParameters);
 			context.SetRootCBV(1, GetViewUniforms(sceneData, pTarget));
 			context.BindResource(2, 0, m_pAmbientOcclusionIntermediate->GetUAV());
-			context.BindResource(3, 0, pDepth->GetSRV());
-			context.BindResource(3, 1, pTarget->GetSRV());
+			context.BindResources(3, {
+				pDepth->GetSRV(),
+				pTarget->GetSRV(),
+			});
 
 			context.Dispatch(Math::DivideAndRoundUp(m_pAmbientOcclusionIntermediate->GetWidth(), 256), m_pAmbientOcclusionIntermediate->GetHeight());
 
@@ -102,11 +104,13 @@ void SSAO::Execute(RGGraph& graph, const SceneView& sceneData, Texture* pTarget,
 			context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
 			context.BindResource(2, 0, pTarget->GetUAV());
-			context.BindResource(3, 0, pDepth->GetSRV());
-			context.BindResource(3, 1, m_pAmbientOcclusionIntermediate->GetSRV());
+			context.BindResources(3, {
+				pDepth->GetSRV(),
+				m_pAmbientOcclusionIntermediate->GetSRV(),
+			});
 
 			shaderParameters.Horizontal = 0;
-			context.SetRootCBV(0, shaderParameters);
+			context.SetRootConstants(0, shaderParameters);
 			context.Dispatch(m_pAmbientOcclusionIntermediate->GetWidth(), Math::DivideAndRoundUp(m_pAmbientOcclusionIntermediate->GetHeight(), 256));
 		});
 }
@@ -114,7 +118,7 @@ void SSAO::Execute(RGGraph& graph, const SceneView& sceneData, Texture* pTarget,
 void SSAO::SetupPipelines()
 {
 	m_pSSAORS = new RootSignature(m_pDevice);
-	m_pSSAORS->AddConstantBufferView(0);
+	m_pSSAORS->AddRootConstants(0, 4);
 	m_pSSAORS->AddConstantBufferView(100);
 	m_pSSAORS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 2);
 	m_pSSAORS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2);

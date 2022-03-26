@@ -74,7 +74,7 @@ void RTAO::Execute(RGGraph& graph, const SceneView& sceneData, SceneTextures& sc
 			bindingTable.BindRayGenShader("RayGen");
 			bindingTable.BindMissShader("OcclusionMS", {});
 
-			context.SetRootCBV(0, parameters);
+			context.SetRootConstants(0, parameters);
 			context.SetRootCBV(1, GetViewUniforms(sceneData, pRayTraceTarget));
 			context.BindResource(2, 0, pRayTraceTarget->GetUAV());
 			context.BindResources(3, {
@@ -132,7 +132,7 @@ void RTAO::Execute(RGGraph& graph, const SceneView& sceneData, SceneTextures& sc
 			shaderParameters.Horizontal = 1;
 			shaderParameters.DimensionsInv = Vector2(1.0f / pTarget->GetWidth(), 1.0f / pTarget->GetHeight());
 
-			context.SetRootCBV(0, shaderParameters);
+			context.SetRootConstants(0, shaderParameters);
 			context.SetRootCBV(1, GetViewUniforms(sceneData, pTarget));
 			context.BindResource(2, 0, pTarget->GetUAV());
 			context.BindResource(3, 0, sceneTextures.pDepth->GetSRV());
@@ -151,7 +151,7 @@ void RTAO::Execute(RGGraph& graph, const SceneView& sceneData, SceneTextures& sc
 			context.BindResource(3, 1, pSource->GetSRV());
 
 			shaderParameters.Horizontal = 0;
-			context.SetRootCBV(0, shaderParameters);
+			context.SetRootConstants(0, shaderParameters);
 			context.Dispatch(pTarget->GetWidth(), Math::DivideAndRoundUp(pTarget->GetHeight(), 256));
 		});
 }
@@ -159,7 +159,7 @@ void RTAO::Execute(RGGraph& graph, const SceneView& sceneData, SceneTextures& sc
 void RTAO::SetupPipelines(GraphicsDevice* pDevice)
 {
 	m_pCommonRS = new RootSignature(pDevice);
-	m_pCommonRS->AddConstantBufferView(0);
+	m_pCommonRS->AddRootConstants(0, 4);
 	m_pCommonRS->AddConstantBufferView(100);
 	m_pCommonRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1);
 	m_pCommonRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 4);
