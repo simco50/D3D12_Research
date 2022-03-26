@@ -239,7 +239,11 @@ namespace ShaderCompiler
 					return E_FAIL;
 				}
 
-				if (IncludedFiles.find(path) != IncludedFiles.end())
+				auto existingInclude = std::find_if(IncludedFiles.begin(), IncludedFiles.end(), [&path](const std::string& include) {
+					return CString::StrCmp(include.c_str(), path.c_str(), false);
+				});
+
+				if (existingInclude != IncludedFiles.end())
 				{
 					static const char nullStr[] = " ";
 					pUtils->CreateBlob(nullStr, ARRAYSIZE(nullStr), CP_UTF8, pEncoding.GetAddressOf());
@@ -256,7 +260,7 @@ namespace ShaderCompiler
 				HRESULT hr = pUtils->LoadFile(pFilename, nullptr, pEncoding.GetAddressOf());
 				if (SUCCEEDED(hr))
 				{
-					IncludedFiles.insert(path);
+					IncludedFiles.push_back(path);
 					*ppIncludeSource = pEncoding.Detach();
 				}
 				else
@@ -294,7 +298,7 @@ namespace ShaderCompiler
 			ULONG STDMETHODCALLTYPE AddRef(void) override {	return 0; }
 			ULONG STDMETHODCALLTYPE Release(void) override { return 0; }
 
-			std::unordered_set<std::string> IncludedFiles;
+			std::vector<std::string> IncludedFiles;
 		};
 
 		if (CommandLine::GetBool("dumpshaders"))

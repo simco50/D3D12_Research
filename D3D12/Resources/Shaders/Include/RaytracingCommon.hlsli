@@ -1,7 +1,6 @@
 #pragma once
 
-#include "SkyCommon.hlsli"
-#include "ShadingModels.hlsli"
+#include "Common.hlsli"
 #include "Random.hlsli"
 
 #define RAY_BIAS 1.0e-2f
