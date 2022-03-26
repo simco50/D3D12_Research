@@ -37,8 +37,6 @@ void TiledForward::OnResize(int windowWidth, int windowHeight)
 
 void TiledForward::Execute(RGGraph& graph, const SceneView& resources, const SceneTextures& parameters)
 {
-	RG_GRAPH_SCOPE("Tiled Lighting", graph);
-
 	RGPassBuilder culling = graph.AddPass("Tiled Light Culling");
 	culling.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
 		{

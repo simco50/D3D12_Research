@@ -72,8 +72,6 @@ void ClusteredForward::OnResize(int windowWidth, int windowHeight)
 
 void ClusteredForward::Execute(RGGraph& graph, const SceneView& resources, const SceneTextures& parameters)
 {
-	RG_GRAPH_SCOPE("Clustered Lighting", graph);
-
 	ClusteredLightCullData lightCullData;
 	lightCullData.ClusterCount = IntVector3(m_ClusterCountX, m_ClusterCountY, gLightClustersNumZ);
 	lightCullData.pAABBs = m_pAABBs;

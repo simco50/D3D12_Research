@@ -29,7 +29,7 @@ ShaderInterop::ViewUniforms GetViewUniforms(const SceneView& sceneView, Texture*
 	parameters.ViewProjection = view.ViewProjection;
 	parameters.ViewProjectionInverse = view.ProjectionInverse * view.ViewInverse;
 
-	Matrix reprojectionMatrix = view.ViewProjection.Invert() * view.PreviousViewProjection;
+	Matrix reprojectionMatrix = parameters.ViewProjectionInverse * view.PreviousViewProjection;
 	// Transform from uv to clip space: texcoord * 2 - 1
 	Matrix premult = {
 		2.0f, 0, 0, 0,

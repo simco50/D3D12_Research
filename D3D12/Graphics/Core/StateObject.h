@@ -24,7 +24,7 @@ public:
 	uint32 MaxRecursion = 1;
 	RootSignature* pGlobalRootSignature = nullptr;
 	uint32 MaxPayloadSize = 0;
-	uint32 MaxAttributeSize = 0;
+	uint32 MaxAttributeSize = sizeof(float) * 2; // Default size for barycentrics
 	std::string RayGenShader;
 	D3D12_STATE_OBJECT_TYPE Type = D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE;
 	D3D12_RAYTRACING_PIPELINE_FLAGS Flags = D3D12_RAYTRACING_PIPELINE_FLAG_NONE;

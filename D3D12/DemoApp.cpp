@@ -919,14 +919,6 @@ void DemoApp::Update()
 				context.Dispatch(ComputeUtils::GetNumThreadGroups(m_pVelocity->GetWidth(), 8, m_pVelocity->GetHeight(), 8));
 			});
 
-		if (Tweakables::g_RaytracedAO)
-		{
-			m_pRTAO->Execute(graph, m_SceneData, m_pAmbientOcclusion, GetDepthStencil());
-		}
-		else
-		{
-			m_pSSAO->Execute(graph, m_SceneData, m_pAmbientOcclusion, GetDepthStencil());
-		}
 
 		SceneTextures params;
 		params.pAmbientOcclusion = m_pAmbientOcclusion;
@@ -935,6 +927,18 @@ void DemoApp::Update()
 		params.pNormalsTarget = m_pNormals;
 		params.pRoughnessTarget = m_pRoughness;
 		params.pPreviousColorTarget = m_pPreviousColor;
+		params.pVelocity = m_pVelocity;
+
+		if (Tweakables::g_RaytracedAO)
+		{
+			m_pRTAO->Execute(graph, m_SceneData, params);
+		}
+		else
+		{
+			m_pSSAO->Execute(graph, m_SceneData, m_pAmbientOcclusion, GetDepthStencil());
+		}
+
+		m_pVisualizeTexture = m_pAmbientOcclusion;
 
 		if (m_RenderPath == RenderPath::Tiled)
 		{
