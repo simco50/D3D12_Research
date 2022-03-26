@@ -920,33 +920,31 @@ void DemoApp::Update()
 			});
 
 
-		SceneTextures params;
-		params.pAmbientOcclusion = m_pAmbientOcclusion;
-		params.pColorTarget = GetCurrentRenderTarget();
-		params.pDepth = GetDepthStencil();
-		params.pNormalsTarget = m_pNormals;
-		params.pRoughnessTarget = m_pRoughness;
-		params.pPreviousColorTarget = m_pPreviousColor;
-		params.pVelocity = m_pVelocity;
+		SceneTextures sceneTextures;
+		sceneTextures.pAmbientOcclusion = m_pAmbientOcclusion;
+		sceneTextures.pColorTarget = GetCurrentRenderTarget();
+		sceneTextures.pDepth = GetDepthStencil();
+		sceneTextures.pNormalsTarget = m_pNormals;
+		sceneTextures.pRoughnessTarget = m_pRoughness;
+		sceneTextures.pPreviousColorTarget = m_pPreviousColor;
+		sceneTextures.pVelocity = m_pVelocity;
 
 		if (Tweakables::g_RaytracedAO)
 		{
-			m_pRTAO->Execute(graph, m_SceneData, params);
+			m_pRTAO->Execute(graph, m_SceneData, sceneTextures);
 		}
 		else
 		{
 			m_pSSAO->Execute(graph, m_SceneData, m_pAmbientOcclusion, GetDepthStencil());
 		}
 
-		m_pVisualizeTexture = m_pAmbientOcclusion;
-
 		if (m_RenderPath == RenderPath::Tiled)
 		{
-			m_pTiledForward->Execute(graph, m_SceneData, params);
+			m_pTiledForward->Execute(graph, m_SceneData, sceneTextures);
 		}
 		else if (m_RenderPath == RenderPath::Clustered)
 		{
-			m_pClusteredForward->Execute(graph, m_SceneData, params);
+			m_pClusteredForward->Execute(graph, m_SceneData, sceneTextures);
 		}
 		else if (m_RenderPath == RenderPath::Visibility)
 		{
@@ -954,29 +952,29 @@ void DemoApp::Update()
 			visibilityShading.Bind([=](CommandContext& renderContext, const RGPassResources& resources)
 				{
 					renderContext.InsertResourceBarrier(m_pVisibilityTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-					renderContext.InsertResourceBarrier(m_pAmbientOcclusion, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-					renderContext.InsertResourceBarrier(GetDepthStencil(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-					renderContext.InsertResourceBarrier(m_pPreviousColor, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-					renderContext.InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-					renderContext.InsertResourceBarrier(m_pNormals, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-					renderContext.InsertResourceBarrier(m_pRoughness, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+					renderContext.InsertResourceBarrier(sceneTextures.pAmbientOcclusion, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+					renderContext.InsertResourceBarrier(sceneTextures.pDepth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+					renderContext.InsertResourceBarrier(sceneTextures.pPreviousColorTarget, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+					renderContext.InsertResourceBarrier(sceneTextures.pColorTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+					renderContext.InsertResourceBarrier(sceneTextures.pNormalsTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+					renderContext.InsertResourceBarrier(sceneTextures.pRoughnessTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
 					renderContext.SetComputeRootSignature(m_pCommonRS);
 					renderContext.SetPipelineState(m_pVisibilityShadingPSO);
 
 					renderContext.SetRootCBV(1, GetViewUniforms(m_SceneData, GetCurrentRenderTarget()));
 					renderContext.BindResources(2, {
-						GetCurrentRenderTarget()->GetUAV(),
-						m_pNormals->GetUAV(),
-						m_pRoughness->GetUAV(),
+						sceneTextures.pColorTarget->GetUAV(),
+						sceneTextures.pNormalsTarget->GetUAV(),
+						sceneTextures.pRoughnessTarget->GetUAV(),
 						});
 					renderContext.BindResources(3, {
 						m_pVisibilityTexture->GetSRV(),
-						m_pAmbientOcclusion->GetSRV(),
-						GetDepthStencil()->GetSRV(),
-						m_pPreviousColor->GetSRV(),
+						sceneTextures.pAmbientOcclusion->GetSRV(),
+						sceneTextures.pDepth->GetSRV(),
+						sceneTextures.pPreviousColorTarget->GetSRV(),
 						});
-					renderContext.Dispatch(ComputeUtils::GetNumThreadGroups(GetCurrentRenderTarget()->GetWidth(), 8, GetCurrentRenderTarget()->GetHeight(), 8));
+					renderContext.Dispatch(ComputeUtils::GetNumThreadGroups(sceneTextures.pColorTarget->GetWidth(), 8, sceneTextures.pColorTarget->GetHeight(), 8));
 					renderContext.InsertUavBarrier();
 				});
 		}

@@ -167,7 +167,7 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 	LightResult result = DoLight(pos, positionWS, N, V, brdfData.Diffuse, brdfData.Specular, brdfData.Roughness);
 
 	float3 outRadiance = 0;
-	outRadiance += Diffuse_Lambert(brdfData.Diffuse) * SampleDDGIIrradiance(positionWS, N, -V);
+	outRadiance += ambientOcclusion * Diffuse_Lambert(brdfData.Diffuse) * SampleDDGIIrradiance(positionWS, N, -V);
 	outRadiance += result.Diffuse + result.Specular;
 	outRadiance += surface.Emissive;
 	outRadiance += ssr;
