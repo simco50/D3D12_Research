@@ -204,7 +204,7 @@ namespace ShaderCompiler
 		}
 
 
-		arguments.AddArgument("-I", Sprintf("%sInclude/", Paths::GetDirectoryPath(fullPath).c_str()).c_str());
+		arguments.AddArgument("-I", Paths::GetDirectoryPath(fullPath).c_str());
 		for (const std::string& includeDir : compileJob.IncludeDirs)
 		{
 			arguments.AddArgument("-I", includeDir.c_str());
@@ -395,8 +395,7 @@ namespace ShaderCompiler
 		result.Includes.push_back(fullPath);
 		for (const std::string& includePath : includeHandler.IncludedFiles)
 		{
-			std::string include = Paths::Combine(Paths::GetDirectoryPath(compileJob.FilePath), includePath);
-			result.Includes.push_back(include);
+			result.Includes.push_back(includePath);
 		}
 
 		return result;

@@ -1,7 +1,7 @@
 #include "Common.hlsli"
 #include "SkyCommon.hlsli"
-#include "Atmosphere.hlsli"
 #include "Primitives.hlsli"
+#include "External/Atmosphere.hlsli"
 
 RWTexture2D<float4> uSky : register(u0);
 

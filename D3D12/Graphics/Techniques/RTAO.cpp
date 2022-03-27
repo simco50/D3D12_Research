@@ -166,8 +166,8 @@ void RTAO::SetupPipelines(GraphicsDevice* pDevice)
 	m_pCommonRS->Finalize("Global");
 
 	StateObjectInitializer stateDesc;
-	stateDesc.AddLibrary("RTAOTraceRays.hlsl");
-	stateDesc.AddLibrary("SharedRaytracingLib.hlsl", { "OcclusionMS" });
+	stateDesc.AddLibrary("RayTracing/RTAOTraceRays.hlsl");
+	stateDesc.AddLibrary("RayTracing/SharedRaytracingLib.hlsl", { "OcclusionMS" });
 	stateDesc.Name = "RT AO";
 	stateDesc.MaxPayloadSize = sizeof(float);
 	stateDesc.pGlobalRootSignature = m_pCommonRS;
@@ -175,6 +175,6 @@ void RTAO::SetupPipelines(GraphicsDevice* pDevice)
 	stateDesc.AddMissShader("OcclusionMS");
 	m_pTraceRaysSO = pDevice->CreateStateObject(stateDesc);
 
-	m_pDenoisePSO = pDevice->CreateComputePipeline(m_pCommonRS, "RTAODenoise.hlsl", "DenoiseCS");
+	m_pDenoisePSO = pDevice->CreateComputePipeline(m_pCommonRS, "RayTracing/RTAODenoise.hlsl", "DenoiseCS");
 	m_pBilateralBlurPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "SSAOBlur.hlsl", "CSMain");
 }

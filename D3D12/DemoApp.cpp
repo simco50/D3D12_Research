@@ -1648,8 +1648,8 @@ void DemoApp::InitializePipelines()
 		constexpr uint32 probeIrradianceTexels = 6;
 		constexpr uint32 probeDepthTexel = 14;
 
-		m_pDDGIUpdateIrradianceColorPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "DDGI.hlsl", "UpdateIrradianceCS");
-		m_pDDGIUpdateIrradianceDepthPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "DDGI.hlsl", "UpdateDepthCS");
+		m_pDDGIUpdateIrradianceColorPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "RayTracing/DDGI.hlsl", "UpdateIrradianceCS");
+		m_pDDGIUpdateIrradianceDepthPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "RayTracing/DDGI.hlsl", "UpdateDepthCS");
 
 		StateObjectInitializer soDesc{};
 		soDesc.Name = "DDGI Trace Rays";
@@ -1657,8 +1657,8 @@ void DemoApp::InitializePipelines()
 		soDesc.MaxPayloadSize = 6 * sizeof(float);
 		soDesc.MaxAttributeSize = 2 * sizeof(float);
 		soDesc.Type = D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE;
-		soDesc.AddLibrary("DDGIRayTrace.hlsl", { "TraceRaysRGS" });
-		soDesc.AddLibrary("SharedRaytracingLib.hlsl", { "OcclusionMS", "MaterialCHS", "MaterialAHS", "MaterialMS" });
+		soDesc.AddLibrary("RayTracing/DDGIRayTrace.hlsl", { "TraceRaysRGS" });
+		soDesc.AddLibrary("RayTracing/SharedRaytracingLib.hlsl", { "OcclusionMS", "MaterialCHS", "MaterialAHS", "MaterialMS" });
 		soDesc.AddHitGroup("MaterialHG", "MaterialCHS", "MaterialAHS");
 		soDesc.AddMissShader("MaterialMS");
 		soDesc.AddMissShader("OcclusionMiss");
@@ -1667,8 +1667,8 @@ void DemoApp::InitializePipelines()
 
 		PipelineStateInitializer psoDesc;
 		psoDesc.SetRootSignature(m_pCommonRS);
-		psoDesc.SetVertexShader("DDGI.hlsl", "VisualizeIrradianceVS");
-		psoDesc.SetPixelShader("DDGI.hlsl", "VisualizeIrradiancePS");
+		psoDesc.SetVertexShader("RayTracing/DDGI.hlsl", "VisualizeIrradianceVS");
+		psoDesc.SetPixelShader("RayTracing/DDGI.hlsl", "VisualizeIrradiancePS");
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
 		psoDesc.SetRenderTargetFormat(DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_D32_FLOAT, 1);
 		psoDesc.SetName("Visualize Irradiance");

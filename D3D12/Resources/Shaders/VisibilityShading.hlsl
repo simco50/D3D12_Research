@@ -2,7 +2,7 @@
 #include "Random.hlsli"
 #include "Lighting.hlsli"
 #include "VisibilityBuffer.hlsli"
-#include "DDGICommon.hlsli"
+#include "RayTracing/DDGICommon.hlsli"
 
 Texture2D<uint> tVisibilityTexture : register(t0);
 Texture2D tAO :	register(t1);
