@@ -21,7 +21,7 @@ namespace ShaderCompiler
 		std::string FilePath;
 		std::string EntryPoint;
 		std::string Target;
-		std::vector<ShaderDefine> Defines;
+		Span<ShaderDefine> Defines;
 		std::vector<std::string> IncludeDirs;
 		uint8 MajVersion;
 		uint8 MinVersion;
@@ -407,7 +407,7 @@ ShaderBase::~ShaderBase()
 
 }
 
-ShaderManager::ShaderStringHash ShaderManager::GetEntryPointHash(const char* pEntryPoint, const std::vector<ShaderDefine>& defines)
+ShaderManager::ShaderStringHash ShaderManager::GetEntryPointHash(const char* pEntryPoint, const Span<ShaderDefine>& defines)
 {
 	ShaderStringHash hash(pEntryPoint);
 	for (const ShaderDefine& define : defines)
@@ -417,7 +417,7 @@ ShaderManager::ShaderStringHash ShaderManager::GetEntryPointHash(const char* pEn
 	return hash;
 }
 
-Shader* ShaderManager::LoadShader(const char* pShaderPath, ShaderType shaderType, const char* pEntryPoint, const std::vector<ShaderDefine>& defines /*= {}*/)
+Shader* ShaderManager::LoadShader(const char* pShaderPath, ShaderType shaderType, const char* pEntryPoint, const Span<ShaderDefine>& defines /*= {}*/)
 {
 	ShaderCompiler::CompileJob job;
 	job.Defines = defines;
@@ -451,7 +451,7 @@ Shader* ShaderManager::LoadShader(const char* pShaderPath, ShaderType shaderType
 	return pShader;
 }
 
-ShaderLibrary* ShaderManager::LoadShaderLibrary(const char* pShaderPath, const std::vector<ShaderDefine>& defines /*= {}*/)
+ShaderLibrary* ShaderManager::LoadShaderLibrary(const char* pShaderPath, const Span<ShaderDefine>& defines /*= {}*/)
 {
 	ShaderCompiler::CompileJob job;
 	job.Defines = defines;
@@ -587,7 +587,7 @@ void ShaderManager::AddIncludeDir(const std::string& includeDir)
 	}
 }
 
-Shader* ShaderManager::GetShader(const char* pShaderPath, ShaderType shaderType, const char* pEntryPoint, const std::vector<ShaderDefine>& defines /*= {}*/)
+Shader* ShaderManager::GetShader(const char* pShaderPath, ShaderType shaderType, const char* pEntryPoint, const Span<ShaderDefine>& defines /*= {}*/)
 {
 	auto& shaderMap = m_FilepathToObjectMap[ShaderStringHash(pShaderPath)].Shaders;
 	ShaderStringHash hash = GetEntryPointHash(pEntryPoint, defines);
@@ -600,7 +600,7 @@ Shader* ShaderManager::GetShader(const char* pShaderPath, ShaderType shaderType,
 	return LoadShader(pShaderPath, shaderType, pEntryPoint, defines);
 }
 
-ShaderLibrary* ShaderManager::GetLibrary(const char* pShaderPath, const std::vector<ShaderDefine>& defines /*= {}*/)
+ShaderLibrary* ShaderManager::GetLibrary(const char* pShaderPath, const Span<ShaderDefine>& defines /*= {}*/)
 {
 	auto& libraryMap = m_FilepathToObjectMap[ShaderStringHash(pShaderPath)].Libraries;
 	ShaderStringHash hash = GetEntryPointHash("", defines);

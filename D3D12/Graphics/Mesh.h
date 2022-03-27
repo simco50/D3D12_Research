@@ -70,9 +70,9 @@ public:
 	int GetMeshCount() const { return (int)m_Meshes.size(); }
 	SubMesh& GetMesh(const int index) { return m_Meshes[index]; }
 	const Material& GetMaterial(int materialId) const { return m_Materials[materialId]; }
-	const std::vector<SubMeshInstance>& GetMeshInstances() const { return m_MeshInstances; }
-	const std::vector<SubMesh>& GetMeshes() const { return m_Meshes; }
-	std::vector<Material>& GetMaterials() { return m_Materials; }
+	Span<SubMeshInstance> GetMeshInstances() const { return m_MeshInstances; }
+	Span<SubMesh> GetMeshes() const { return m_Meshes; }
+	Span<Material> GetMaterials() { return m_Materials; }
 	Buffer* GetData() const { return m_pGeometryData; }
 
 private:

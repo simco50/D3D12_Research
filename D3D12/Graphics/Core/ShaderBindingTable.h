@@ -14,9 +14,9 @@ private:
 	};
 public:
 	ShaderBindingTable(StateObject* pStateObject);
-	void BindRayGenShader(const char* pName, const std::vector<uint64>& data = {});
-	void BindMissShader(const char* pName, uint32 rayIndex, const std::vector<uint64>& data = {});
-	void BindHitGroup(const char* pName, uint32 index, const std::vector<uint64>& data = {});
+	void BindRayGenShader(const char* pName, const Span<uint64>& data = {});
+	void BindMissShader(const char* pName, uint32 rayIndex, const Span<uint64>& data = {});
+	void BindHitGroup(const char* pName, uint32 index, const Span<uint64>& data = {});
 	void BindHitGroup(const char* pName, uint32 index, const void* pData, uint32 dataSize);
 	template<typename T>
 	void BindHitGroup(const char* pName, uint32 index, const T& data)

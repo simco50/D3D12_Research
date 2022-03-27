@@ -4,6 +4,10 @@ template<typename T>
 class Span
 {
 public:
+	Span() :
+		m_pValue(nullptr), m_Count(0)
+	{}
+
 	Span(const std::initializer_list<T>& list) :
 		m_pValue(list.begin()), m_Count((uint32)list.size())
 	{}
@@ -36,6 +40,16 @@ public:
 		check(from < m_Count);
 		check(from + count < m_Count);
 		return Span(m_pValue + from, count);
+	}
+
+	std::vector<T> Copy() const
+	{
+		std::vector<T> result(GetSize());
+		for (uint32 i = 0; i < GetSize(); ++i)
+		{
+			result[i] = m_pValue[i];
+		}
+		return result;
 	}
 
 	const T& operator[](uint32 idx) const

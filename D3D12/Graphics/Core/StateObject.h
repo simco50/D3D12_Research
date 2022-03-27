@@ -13,7 +13,7 @@ public:
 	friend class StateObject;
 
 	void AddHitGroup(const std::string& name, const std::string& closestHit = "", const std::string& anyHit = "", const std::string& intersection = "", RootSignature* pRootSignature = nullptr);
-	void AddLibrary(const char* pShaderPath, const std::vector<std::string>& exports = {}, const std::vector<ShaderDefine>& defines = {});
+	void AddLibrary(const char* pShaderPath, const std::vector<std::string>& exports = {}, const Span<ShaderDefine>& defines = {});
 	void AddCollection(StateObject* pOtherObject);
 	void AddMissShader(const std::string& exportName, RootSignature* pRootSignature = nullptr);
 

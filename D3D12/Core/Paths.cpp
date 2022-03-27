@@ -117,28 +117,25 @@ namespace Paths
 		return filePath.substr(matchLength);
 	}
 
-	void Combine(const std::vector<std::string>& elements, std::string& output)
+	void CombineInner(const char** pElements, uint32 numElements, std::string& output)
 	{
-		// Reserve some conservative amount
-		output.reserve(elements.size() * 20);
-		for (size_t i = 0; i < elements.size(); i++)
+		size_t stringLength = 0;
+		for (size_t i = 0; i < numElements; i++)
 		{
-			if (elements[i].length() > 0)
+			stringLength += strlen(pElements[i]);
+		}
+		output.reserve(stringLength);
+		for (size_t i = 0; i < numElements; i++)
+		{
+			if (strlen(pElements[i]) > 0)
 			{
-				output += elements[i];
-				if (elements[i].back() != '/' && i != elements.size() - 1)
+				output += pElements[i];
+				if (output.back() != '/' && i != numElements - 1)
 				{
 					output += "/";
 				}
 			}
 		}
-	}
-
-	std::string Combine(const std::string& a, const std::string& b)
-	{
-		std::string output;
-		Combine({ a, b }, output);
-		return output;
 	}
 
 	bool FileExists(const char* pFilePath)

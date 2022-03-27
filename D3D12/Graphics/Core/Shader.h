@@ -28,14 +28,14 @@ struct ShaderDefine
 class ShaderBase
 {
 public:
-	ShaderBase(const ShaderBlob& shaderBlob, const std::vector<ShaderDefine>& defines)
-		: m_pByteCode(shaderBlob), m_Defines(defines)
+	ShaderBase(const ShaderBlob& shaderBlob, const Span<ShaderDefine>& defines)
+		: m_pByteCode(shaderBlob), m_Defines(defines.Copy())
 	{}
 
 	void* GetByteCode() const;
 	virtual ~ShaderBase();
 	uint32 GetByteCodeSize() const;
-	const std::vector<ShaderDefine>& GetDefines() const { return m_Defines; }
+	Span<ShaderDefine> GetDefines() const { return m_Defines; }
 
 protected:
 	ShaderBlob m_pByteCode;
@@ -45,7 +45,7 @@ protected:
 class Shader : public ShaderBase
 {
 public:
-	Shader(const ShaderBlob& shaderBlob, ShaderType shaderType, const char* pEntryPoint, const std::vector<ShaderDefine>& defines)
+	Shader(const ShaderBlob& shaderBlob, ShaderType shaderType, const char* pEntryPoint, const Span<ShaderDefine>& defines)
 		: ShaderBase(shaderBlob, defines), m_Type(shaderType), m_pEntryPoint(pEntryPoint)
 	{
 	}
@@ -60,7 +60,7 @@ private:
 class ShaderLibrary : public ShaderBase
 {
 public:
-	ShaderLibrary(const ShaderBlob& shaderBlob, const std::vector<ShaderDefine>& defines)
+	ShaderLibrary(const ShaderBlob& shaderBlob, const Span<ShaderDefine>& defines)
 		: ShaderBase(shaderBlob, defines)
 	{}
 };
@@ -74,8 +74,8 @@ public:
 	void ConditionallyReloadShaders();
 	void AddIncludeDir(const std::string& includeDir);
 
-	Shader* GetShader(const char* pShaderPath, ShaderType shaderType, const char* pEntryPoint, const std::vector<ShaderDefine>& defines = {});
-	ShaderLibrary* GetLibrary(const char* pShaderPath, const std::vector<ShaderDefine>& defines = {});
+	Shader* GetShader(const char* pShaderPath, ShaderType shaderType, const char* pEntryPoint, const Span<ShaderDefine>& defines = {});
+	ShaderLibrary* GetLibrary(const char* pShaderPath, const Span<ShaderDefine>& defines = {});
 
 	DECLARE_MULTICAST_DELEGATE(OnShaderRecompiled, Shader* /*pOldShader*/, Shader* /*pRecompiledShader*/);
 	OnShaderRecompiled& OnShaderRecompiledEvent() { return m_OnShaderRecompiledEvent; }
@@ -85,9 +85,9 @@ public:
 private:
 	using ShaderStringHash = TStringHash<false>;
 
-	ShaderStringHash GetEntryPointHash(const char* pEntryPoint, const std::vector<ShaderDefine>& defines);
-	Shader* LoadShader(const char* pShaderPath, ShaderType shaderType, const char* pEntryPoint, const std::vector<ShaderDefine>& defines = {});
-	ShaderLibrary* LoadShaderLibrary(const char* pShaderPath, const std::vector<ShaderDefine>& defines = {});
+	ShaderStringHash GetEntryPointHash(const char* pEntryPoint, const Span<ShaderDefine>& defines);
+	Shader* LoadShader(const char* pShaderPath, ShaderType shaderType, const char* pEntryPoint, const Span<ShaderDefine>& defines = {});
+	ShaderLibrary* LoadShaderLibrary(const char* pShaderPath, const Span<ShaderDefine>& defines = {});
 
 	void RecompileFromFileChange(const std::string& filePath);
 

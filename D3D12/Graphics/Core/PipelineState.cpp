@@ -261,39 +261,39 @@ void PipelineStateInitializer::SetRootSignature(RootSignature* pRootSignature)
 	GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_ROOT_SIGNATURE>() = pRootSignature->GetRootSignature();
 }
 
-void PipelineStateInitializer::SetVertexShader(const char* pShaderPath, const char* entryPoint, const std::vector<ShaderDefine>& defines)
+void PipelineStateInitializer::SetVertexShader(const char* pShaderPath, const char* entryPoint, const Span<ShaderDefine>& defines)
 {
 	m_Type = PipelineStateType::Graphics;
-	m_ShaderDescs[(int)ShaderType::Vertex] = { pShaderPath, entryPoint, defines };
+	m_ShaderDescs[(int)ShaderType::Vertex] = { pShaderPath, entryPoint, defines.Copy() };
 }
 
-void PipelineStateInitializer::SetPixelShader(const char* pShaderPath, const char* entryPoint, const std::vector<ShaderDefine>& defines)
+void PipelineStateInitializer::SetPixelShader(const char* pShaderPath, const char* entryPoint, const Span<ShaderDefine>& defines)
 {
-	m_ShaderDescs[(int)ShaderType::Pixel] = { pShaderPath, entryPoint, defines };
+	m_ShaderDescs[(int)ShaderType::Pixel] = { pShaderPath, entryPoint, defines.Copy() };
 }
 
-void PipelineStateInitializer::SetGeometryShader(const char* pShaderPath, const char* entryPoint, const std::vector<ShaderDefine>& defines)
+void PipelineStateInitializer::SetGeometryShader(const char* pShaderPath, const char* entryPoint, const Span<ShaderDefine>& defines)
 {
 	m_Type = PipelineStateType::Graphics;
-	m_ShaderDescs[(int)ShaderType::Geometry] = { pShaderPath, entryPoint, defines };
+	m_ShaderDescs[(int)ShaderType::Geometry] = { pShaderPath, entryPoint, defines.Copy() };
 }
 
-void PipelineStateInitializer::SetComputeShader(const char* pShaderPath, const char* entryPoint, const std::vector<ShaderDefine>& defines)
+void PipelineStateInitializer::SetComputeShader(const char* pShaderPath, const char* entryPoint, const Span<ShaderDefine>& defines)
 {
 	m_Type = PipelineStateType::Compute;
-	m_ShaderDescs[(int)ShaderType::Compute] = { pShaderPath, entryPoint, defines };
+	m_ShaderDescs[(int)ShaderType::Compute] = { pShaderPath, entryPoint, defines.Copy() };
 }
 
-void PipelineStateInitializer::SetMeshShader(const char* pShaderPath, const char* entryPoint, const std::vector<ShaderDefine>& defines)
+void PipelineStateInitializer::SetMeshShader(const char* pShaderPath, const char* entryPoint, const Span<ShaderDefine>& defines)
 {
 	m_Type = PipelineStateType::Mesh;
-	m_ShaderDescs[(int)ShaderType::Mesh] = { pShaderPath, entryPoint, defines };
+	m_ShaderDescs[(int)ShaderType::Mesh] = { pShaderPath, entryPoint, defines.Copy() };
 }
 
-void PipelineStateInitializer::SetAmplificationShader(const char* pShaderPath, const char* entryPoint, const std::vector<ShaderDefine>& defines)
+void PipelineStateInitializer::SetAmplificationShader(const char* pShaderPath, const char* entryPoint, const Span<ShaderDefine>& defines)
 {
 	m_Type = PipelineStateType::Mesh;
-	m_ShaderDescs[(int)ShaderType::Amplification] = { pShaderPath, entryPoint, defines };
+	m_ShaderDescs[(int)ShaderType::Amplification] = { pShaderPath, entryPoint, defines.Copy() };
 }
 
 D3D12_PIPELINE_STATE_STREAM_DESC PipelineStateInitializer::GetDesc(GraphicsDevice* pDevice)
