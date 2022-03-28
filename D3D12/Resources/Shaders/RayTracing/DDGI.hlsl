@@ -44,7 +44,7 @@ static const uint4 DDGI_COLOR_BORDER_OFFSETS[NUM_COLOR_BORDER_TEXELS] = {
 };
 
 #define IRRADIANCE_RAY_HIT_GS_SIZE DDGI_PROBE_IRRADIANCE_TEXELS * DDGI_PROBE_IRRADIANCE_TEXELS
-groupshared float3 gsRadianceCache_Irradiance[IRRADIANCE_RAY_HIT_GS_SIZE];
+groupshared float4 gsRadianceCache_Irradiance[IRRADIANCE_RAY_HIT_GS_SIZE];
 groupshared float3 gsDirectionCache_Irradiance[IRRADIANCE_RAY_HIT_GS_SIZE];
 
 [numthreads(DDGI_PROBE_IRRADIANCE_TEXELS, DDGI_PROBE_IRRADIANCE_TEXELS, 1)]
@@ -64,10 +64,12 @@ void UpdateIrradianceCS(
 	float3 probeDirection = DecodeNormalOctahedron(((groupThreadId.xy + 0.5f) / (float)DDGI_PROBE_IRRADIANCE_TEXELS) * 2 - 1);
 	float3x3 randomRotation = AngleAxis3x3(cPass.RandomAngle, cPass.RandomVector);
 
+	uint remainingRays = volume.NumRaysPerProbe;
 	float weightSum = 0;
 	float3 sum = 0;
+	uint numBackfaceHits = 0;
+	uint maxNumBackfaceHits = remainingRays * 0.1f;
 
-	uint remainingRays = volume.NumRaysPerProbe;
 	while(remainingRays > 0)
 	{
 		uint rayCount = min(remainingRays, IRRADIANCE_RAY_HIT_GS_SIZE);
@@ -75,14 +77,27 @@ void UpdateIrradianceCS(
 
 		if(groupIndex < rayCount)
 		{
-			gsRadianceCache_Irradiance[groupIndex] = tRayHitInfo[probeIdx * volume.MaxRaysPerProbe + remainingRays + groupIndex].rgb;
+			gsRadianceCache_Irradiance[groupIndex] = tRayHitInfo[probeIdx * volume.MaxRaysPerProbe + remainingRays + groupIndex];
 			gsDirectionCache_Irradiance[groupIndex] = mul(SphericalFibonacci(remainingRays + groupIndex, volume.NumRaysPerProbe), randomRotation);
 		}
 		GroupMemoryBarrierWithGroupSync();
 
 		for(uint i = 0; i < rayCount; ++i)
 		{
-			float3 radiance = gsRadianceCache_Irradiance[i];
+			float depth = gsRadianceCache_Irradiance[i].w;
+			// Backface hits have negative value
+			if(depth < 0.0f)
+			{
+				// Don't accumulate probe if it have over X% backface hits
+				numBackfaceHits++;
+				if(numBackfaceHits > maxNumBackfaceHits)
+				{
+					sum = 0.0f;
+					break;
+				}
+			}
+
+			float3 radiance = gsRadianceCache_Irradiance[i].rgb;
 			float3 direction = gsDirectionCache_Irradiance[i];
 			float weight = saturate(dot(probeDirection, direction));
 			sum += weight * radiance;
@@ -260,15 +275,28 @@ InterpolantsVSToPS VisualizeIrradianceVS(
 	return output;
 }
 
+#define VISUALIZE_MODE_IRRADIANCE 0
+#define VISUALIZE_MODE_DEPTH 1
+
+#define VISUALIZE_MODE VISUALIZE_MODE_IRRADIANCE
+
 float4 VisualizeIrradiancePS(InterpolantsVSToPS input) : SV_Target0
 {
 	DDGIVolume volume = GetDDGIVolume(cVisualize.VolumeIndex);
 	uint3 probeIdx3D = GetDDGIProbeIndex3D(volume, input.ProbeIndex);
 	float3 probePosition = GetDDGIProbePosition(volume, probeIdx3D);
+#if VISUALIZE_MODE == VISUALIZE_MODE_IRRADIANCE
 	float2 uv = GetDDGIProbeUV(volume, probeIdx3D, input.Normal, DDGI_PROBE_IRRADIANCE_TEXELS);
 	Texture2D<float4> tIrradianceMap = ResourceDescriptorHeap[volume.IrradianceIndex];
 	float3 radiance = tIrradianceMap.SampleLevel(sLinearClamp, uv, 0).rgb;
 	radiance = pow(radiance, PROBE_GAMMA * 0.5);
-	radiance = 2 * Square(radiance);
-	return float4(radiance, 1);
+	radiance = 4 * Square(radiance);
+	float3 color = radiance;
+#elif VISUALIZE_MODE == VISUALIZE_MODE_DEPTH
+	float2 uv = GetDDGIProbeUV(volume, probeIdx3D, input.Normal, DDGI_PROBE_DEPTH_TEXELS);
+	Texture2D<float> tDepthMap = ResourceDescriptorHeap[volume.DepthIndex];
+	float depth = tDepthMap.SampleLevel(sLinearClamp, uv, 0);
+	float3 color = depth.xxx / (Max3(volume.ProbeSize) * 3);
+#endif
+	return float4(color, 1);
 }

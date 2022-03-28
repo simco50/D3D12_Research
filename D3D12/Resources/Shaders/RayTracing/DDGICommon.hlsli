@@ -112,12 +112,15 @@ float4 SampleDDGIIrradiance(DDGIVolume volume, float3 position, float3 direction
 		// https://developer.download.nvidia.com/SDK/10/direct3d/Source/VarianceShadowMapping/Doc/VarianceShadowMapping.pdf
 		float2 moments = depthTexture.SampleLevel(sLinearClamp, depthUV, 0).xy;
 		float variance = abs(Square(moments.x) - moments.y);
-		float mD = moments.x - probeDistance;
-		float mD2 = max(Square(mD), 0);
-		float p = variance / (variance + mD2);
-		// Sharpen the factor
-		p = max(pow(p, 3), 0.0);
-		weight *= max(p, probeDistance <= moments.x);
+		float chebyshev = 1.0f;
+		if(probeDistance > moments.x)
+		{
+			float mD = moments.x - probeDistance;
+			chebyshev = variance / (variance + Square(mD));
+			// Sharpen the factor
+			chebyshev = max(pow(chebyshev, 3), 0.0);
+		}
+		weight *= max(chebyshev, 0.05f);
 
 		float2 uv = GetDDGIProbeUV(volume, probeCoordinates, direction, DDGI_PROBE_IRRADIANCE_TEXELS);
 		// Remove tone curve and blend in sRGB
