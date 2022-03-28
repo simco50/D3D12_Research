@@ -833,7 +833,9 @@ RefCountPtr<ShaderResourceView> GraphicsDevice::CreateSRV(Buffer* pBuffer, const
 		m_pDevice->CreateShaderResourceView(pBuffer->GetResource(), &srvDesc, descriptor);
 	}
 
-	DescriptorHandle gpuDescriptor = StoreViewDescriptor(descriptor);
+	DescriptorHandle gpuDescriptor;
+	if(!EnumHasAnyFlags(bufferDesc.Usage, BufferFlag::NoBindless))
+		gpuDescriptor = StoreViewDescriptor(descriptor);
 	return new ShaderResourceView(pBuffer, descriptor, gpuDescriptor);
 }
 
@@ -871,7 +873,9 @@ RefCountPtr<UnorderedAccessView> GraphicsDevice::CreateUAV(Buffer* pBuffer, cons
 
 	D3D12_CPU_DESCRIPTOR_HANDLE descriptor = AllocateDescriptor<D3D12_UNORDERED_ACCESS_VIEW_DESC>();
 	m_pDevice->CreateUnorderedAccessView(pBuffer->GetResource(), pCounter ? pCounter->GetResource() : nullptr, &uavDesc, descriptor);
-	DescriptorHandle gpuDescriptor = StoreViewDescriptor(descriptor);
+	DescriptorHandle gpuDescriptor;
+	if (!EnumHasAnyFlags(bufferDesc.Usage, BufferFlag::NoBindless))
+		gpuDescriptor = StoreViewDescriptor(descriptor);
 	return new UnorderedAccessView(pBuffer, descriptor, gpuDescriptor, pCounter);
 }
 
