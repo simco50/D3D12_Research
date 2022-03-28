@@ -156,13 +156,13 @@ float3 SampleDDGIIrradiance(float3 position, float3 direction, float3 cameraDire
 	return result.rgb;
 }
 
-// From G3DMath
-// Generates a nearly uniform point distribution on the unit sphere of size N
+// Ray Tracing Gems 2: Essential Ray Generation Shaders
 float3 SphericalFibonacci(float i, float n)
 {
-	const float PHI = sqrt(5) * 0.5 + 0.5;
-	float phi = 2.0 * PI * frac(i * (PHI - 1));
-	float cos_theta = 1.0 - (2.0 * i + 1.0) * (1.0 / n);
-	float sin_theta = sqrt(saturate(1.0 - cos_theta * cos_theta));
-	return float3(cos(phi) * sin_theta, sin(phi) * sin_theta, cos_theta);
+	const float PHI = sqrt(5) * 0.5f + 0.5f;
+	float fraction = (i * (PHI - 1)) - floor(i * (PHI - 1));
+	float phi = 2.0f * PI * fraction;
+	float cosTheta = 1.0f - (2.0f * i + 1.0f) * (1.0f / n);
+	float sinTheta = sqrt(saturate(1.0 - cosTheta * cosTheta));
+	return float3(cos(phi) * sinTheta, sin(phi) * sinTheta, cosTheta);
 }

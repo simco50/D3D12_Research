@@ -1,6 +1,5 @@
 #include "stdafx.h"
 #include "RTReflections.h"
-#include "Graphics/Core/Shader.h"
 #include "Graphics/Core/RootSignature.h"
 #include "Graphics/Core/Graphics.h"
 #include "Graphics/Core/CommandContext.h"

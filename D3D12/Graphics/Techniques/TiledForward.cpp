@@ -1,6 +1,5 @@
 #include "stdafx.h"
 #include "TiledForward.h"
-#include "Graphics/Core/Shader.h"
 #include "Graphics/Core/PipelineState.h"
 #include "Graphics/Core/RootSignature.h"
 #include "Graphics/Core/Buffer.h"

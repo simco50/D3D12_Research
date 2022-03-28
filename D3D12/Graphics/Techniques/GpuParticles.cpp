@@ -2,7 +2,6 @@
 #include "GpuParticles.h"
 #include "Graphics/Core/Buffer.h"
 #include "Graphics/Core/Graphics.h"
-#include "Graphics/Core/Shader.h"
 #include "Graphics/Core/PipelineState.h"
 #include "Graphics/Core/RootSignature.h"
 #include "Graphics/Core/CommandContext.h"

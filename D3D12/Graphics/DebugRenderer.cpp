@@ -1,7 +1,6 @@
 #include "stdafx.h"
 #include "DebugRenderer.h"
 #include "Graphics/Core/Graphics.h"
-#include "Graphics/Core/Shader.h"
 #include "Graphics/Core/PipelineState.h"
 #include "Graphics/Core/RootSignature.h"
 #include "Graphics/Core/CommandContext.h"

@@ -148,12 +148,12 @@ namespace ShaderCompiler
 
 			std::string ToString() const
 			{
-				std::stringstream str;
+				std::string str;
 				for (const std::wstring& arg : m_Arguments)
 				{
-					str << " " << UNICODE_TO_MULTIBYTE(arg.c_str());
+					str += Sprintf(" %s", UNICODE_TO_MULTIBYTE(arg.c_str()));
 				}
-				return str.str();
+				return str;
 			}
 
 		private:
