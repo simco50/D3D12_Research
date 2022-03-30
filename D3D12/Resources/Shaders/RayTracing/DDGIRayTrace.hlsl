@@ -24,18 +24,22 @@ void TraceRaysRGS()
 {
 	uint probeIdx = DispatchRaysIndex().y;
 	uint rayIndex = DispatchRaysIndex().x;
-
 	DDGIVolume volume = GetDDGIVolume(cPass.VolumeIndex);
-
 	uint3 probeIdx3D = GetDDGIProbeIndex3D(volume, probeIdx);
+
+	// If the probe is inactive, just trace the stable rays to determine if we have to re-activate the probe
+	if(!DDGIIsProbeActive(volume, probeIdx3D) && rayIndex >= DDGI_NUM_STABLE_RAYS)
+	{
+		return;
+	}
+
 	float3 probePosition = GetDDGIProbePosition(volume, probeIdx3D);
 	const float maxDepth = Max3(volume.ProbeSize) * 2;
 	float3x3 randomRotation = AngleAxis3x3(cPass.RandomAngle, cPass.RandomVector);
 
 	RaytracingAccelerationStructure TLAS = ResourceDescriptorHeap[cView.TLASIndex];
 
-	uint numRays = volume.NumRaysPerProbe;
-	float3 direction = direction = mul(SphericalFibonacci(rayIndex, numRays), randomRotation);
+	float3 direction = DDGIGetRayDirection(rayIndex, volume.NumRaysPerProbe, randomRotation);
 
 	RayDesc ray;
 	ray.Origin = probePosition;
@@ -99,7 +103,7 @@ void TraceRaysRGS()
 		else
 		{
 			// If backfacing, make negative so probes get pushed through the backface when offset.
-			depth *= -0.2f;
+			depth *= DDGI_BACKFACE_DEPTH_MULTIPLIER;
 		}
 	}
 	else

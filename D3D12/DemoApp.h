@@ -181,6 +181,7 @@ private:
 		std::array<RefCountPtr<Texture>, 2> pDepth;
 		RefCountPtr<Buffer> pProbeOffset;
 		RefCountPtr<Buffer> pRayBuffer;
+		RefCountPtr<Buffer> pProbeStates;
 	};
 	std::vector<DDGIVolume> m_DDGIVolumes;
 	RefCountPtr<Buffer> m_pDDGIVolumesBuffer;
@@ -188,6 +189,7 @@ private:
 	RefCountPtr<StateObject> m_pDDGITraceRaysSO;
 	RefCountPtr<PipelineState> m_pDDGIUpdateIrradianceColorPSO;
 	RefCountPtr<PipelineState> m_pDDGIUpdateIrradianceDepthPSO;
+	RefCountPtr<PipelineState> m_pDDGIUpdateProbeStatesPSO;
 	RefCountPtr<PipelineState> m_pDDGIVisualizePSO;
 
 	RefCountPtr<Texture> m_pVisualizeTexture;

@@ -3,13 +3,50 @@
 // Must match with texture size!
 #define DDGI_PROBE_IRRADIANCE_TEXELS 6
 #define DDGI_PROBE_DEPTH_TEXELS 14
+
 #define DDGI_DYNAMIC_PROBE_OFFSET 1
-#define PROBE_GAMMA 5.0f
+#define DDGI_USE_PROBE_STATES 1
+// Maximum amount of rays to cast per probe that are temporally stable used to determine probe state.
+#define DDGI_NUM_STABLE_RAYS 32
+
+#define DDGI_PROBE_GAMMA 5.0f
+#define DDGI_BACKFACE_DEPTH_MULTIPLIER -0.2f
+
+// Ray Tracing Gems 2: Essential Ray Generation Shaders
+float3 SphericalFibonacci(float i, float n)
+{
+	const float PHI = sqrt(5) * 0.5f + 0.5f;
+	float fraction = (i * (PHI - 1)) - floor(i * (PHI - 1));
+	float phi = 2.0f * PI * fraction;
+	float cosTheta = 1.0f - (2.0f * i + 1.0f) * (1.0f / n);
+	float sinTheta = sqrt(saturate(1.0 - cosTheta * cosTheta));
+	return float3(cos(phi) * sinTheta, sin(phi) * sinTheta, cosTheta);
+}
 
 DDGIVolume GetDDGIVolume(uint index)
 {
 	StructuredBuffer<DDGIVolume> volumeBuffer = ResourceDescriptorHeap[cView.DDGIVolumesIndex];
 	return volumeBuffer[index];
+}
+
+bool DDGIIsProbeActive(DDGIVolume volume, uint3 index3D)
+{
+#if DDGI_USE_PROBE_STATES
+	uint index1D = Flatten3D(index3D, volume.ProbeVolumeDimensions);
+	Buffer<uint> stateBuffer = ResourceDescriptorHeap[volume.ProbeStatesIndex];
+	return stateBuffer[index1D] == 0;
+#else
+	return true;
+#endif
+}
+
+float3 DDGIGetRayDirection(uint rayIndex, uint numRays, float3x3 randomRotation = IDENTITY_MATRIX_3)
+{
+	if(rayIndex < DDGI_NUM_STABLE_RAYS)
+	{
+		return SphericalFibonacci(rayIndex, min(DDGI_NUM_STABLE_RAYS, numRays));
+	}
+	return mul(SphericalFibonacci(rayIndex - DDGI_NUM_STABLE_RAYS, numRays - DDGI_NUM_STABLE_RAYS), randomRotation);
 }
 
 float3 GetDDGIProbeIndex3D(DDGIVolume volume, uint index)
@@ -91,7 +128,13 @@ float4 SampleDDGIIrradiance(DDGIVolume volume, float3 position, float3 direction
 	for(uint i = 0; i < 8; ++i)
 	{
 		uint3 indexOffset = uint3(i, i >> 1u, i >> 2u) & 1u;
+
 		uint3 probeCoordinates = clamp(baseProbeCoordinates + indexOffset, 0, volume.ProbeVolumeDimensions - 1);
+		if(!DDGIIsProbeActive(volume, probeCoordinates))
+		{
+			continue;
+		}
+
 		float3 probePosition = GetDDGIProbePosition(volume, probeCoordinates);
 
 		float3 relativeProbePosition = position - probePosition;
@@ -124,7 +167,7 @@ float4 SampleDDGIIrradiance(DDGIVolume volume, float3 position, float3 direction
 
 		float2 uv = GetDDGIProbeUV(volume, probeCoordinates, direction, DDGI_PROBE_IRRADIANCE_TEXELS);
 		// Remove tone curve and blend in sRGB
-		float3 irradiance = pow(irradianceTexture.SampleLevel(sLinearClamp, uv, 0).rgb, PROBE_GAMMA * 0.5f);
+		float3 irradiance = pow(irradianceTexture.SampleLevel(sLinearClamp, uv, 0).rgb, DDGI_PROBE_GAMMA * 0.5f);
 
 		const float crushThreshold = 0.2f;
 		if (weight < crushThreshold)
@@ -157,15 +200,4 @@ float3 SampleDDGIIrradiance(float3 position, float3 direction, float3 cameraDire
 		result.xyz += volSample.rgb * volSample.a;
 	}
 	return result.rgb;
-}
-
-// Ray Tracing Gems 2: Essential Ray Generation Shaders
-float3 SphericalFibonacci(float i, float n)
-{
-	const float PHI = sqrt(5) * 0.5f + 0.5f;
-	float fraction = (i * (PHI - 1)) - floor(i * (PHI - 1));
-	float phi = 2.0f * PI * fraction;
-	float cosTheta = 1.0f - (2.0f * i + 1.0f) * (1.0f / n);
-	float sinTheta = sqrt(saturate(1.0 - cosTheta * cosTheta));
-	return float3(cos(phi) * sinTheta, sin(phi) * sinTheta, cosTheta);
 }
