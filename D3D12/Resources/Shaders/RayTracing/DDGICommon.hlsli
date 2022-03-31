@@ -140,7 +140,7 @@ float4 SampleDDGIIrradiance(DDGIVolume volume, float3 position, float3 direction
 		float3 relativeProbePosition = position - probePosition;
 		float3 probeDirection = -normalize(relativeProbePosition);
 
-		float3 trilinear = lerp(1.0f - alpha, alpha, indexOffset);
+		float3 trilinear = max(0.001f, lerp(1.0f - alpha, alpha, indexOffset));
         float trilinearWeight = (trilinear.x * trilinear.y * trilinear.z);
 
 		float weight = 1;

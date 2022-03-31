@@ -227,37 +227,95 @@ void UpdateProbeStatesCS(uint threadID : SV_DispatchThreadID)
 	DDGIVolume volume = GetDDGIVolume(cPass.VolumeIndex);
 	uint probeIdx = threadID.x;
 
+	float3 prevOffset = uProbeOffsets[probeIdx].xyz;
+
 	// Use the stable rays to determine if the probe should be (re)activated.
 	// The rays are temporally stable so that they don't make the probe states flicker.
 	uint numStableRays = min(volume.NumRaysPerProbe, DDGI_NUM_STABLE_RAYS);
-	
-	uint numBackfaces = 0;
+
 	uint maxNumBackfaces = numStableRays * 0.25f;
+	uint numBackfaces = 0;
 
-	const float3 maxProbeDepth = volume.ProbeSize * 3.0f;
-	float smallestDepth = FLT_MAX;
+	// Find 3 kinds of rays: The nearest and farthest frontface hit, and the nearest backface hit.
+	int nearestBackfaceIndex = -1;
+	float nearestBackfaceHitDistance = FLT_MAX;
+	int nearestFrontfaceIndex = -1;
+	float nearestFrontfaceHitDistance = FLT_MAX;
+	int farthestFrontFaceIndex = -1;
+	float farthestFrontfaceHitDistance = 0;
 
-	for(uint i = 0; i < numStableRays; ++i)
+	for(uint rayIndex = 0; rayIndex < numStableRays; ++rayIndex)
 	{
-		float depth = tRayHitInfo[probeIdx * volume.MaxRaysPerProbe + i].a;
+		float depth = tRayHitInfo[probeIdx * volume.MaxRaysPerProbe + rayIndex].a;
 		if(depth < 0)
 		{
 			numBackfaces++;
-			if(numBackfaces >= maxNumBackfaces)
+			depth /= DDGI_BACKFACE_DEPTH_MULTIPLIER;
+			if(depth < nearestBackfaceHitDistance)
 			{
-				break;
+				nearestBackfaceHitDistance = depth;
+				nearestBackfaceIndex = rayIndex;
 			}
 		}
 		else
 		{
-			smallestDepth = min(smallestDepth, depth);
+			if(depth < nearestFrontfaceHitDistance)
+			{
+				nearestFrontfaceHitDistance = depth;
+				nearestFrontfaceIndex = rayIndex;
+			}
+			else if(depth > farthestFrontfaceHitDistance)
+			{
+				farthestFrontfaceHitDistance = depth;
+				farthestFrontFaceIndex = rayIndex;
+			}
 		}
-
 	}
-	bool isActive = numBackfaces < maxNumBackfaces && any(smallestDepth <= maxProbeDepth);
+
+	float3 newOffset = FLT_MAX;
+	const float minFrontFaceDistanceThreshold = 0.2f;
+	const float minNumBackfacesThreshold = 0.25f;
+	const float offsetScale = 0.5f;
+
+	// The idea is to move through a backface surface where possible.
+	// Otherwise move away from close front faces and always attempt to return to the base position
+
+	if (nearestBackfaceIndex != -1 && (float)numBackfaces / numStableRays > minNumBackfacesThreshold)
+    {
+        float3 nearestBackfaceDirection = nearestBackfaceHitDistance * DDGIGetRayDirection(nearestBackfaceIndex, numStableRays);
+        newOffset = prevOffset + nearestBackfaceDirection * (offsetScale + 1.f);
+    }
+    else if (nearestFrontfaceHitDistance < minFrontFaceDistanceThreshold)
+    {
+        float3 nearestFrontfaceDirection = DDGIGetRayDirection(nearestFrontfaceIndex, numStableRays);
+        float3 farthestFrontfaceDirection = DDGIGetRayDirection(farthestFrontFaceIndex, numStableRays);
+
+        // We don't want to offset closer to the farthest front face if that also means coming closer to the nearest front face.
+        if (dot(nearestFrontfaceDirection, farthestFrontfaceDirection) <= 0.f)
+        {
+            newOffset = prevOffset + farthestFrontfaceDirection * min(farthestFrontfaceHitDistance, 1.f) * offsetScale;
+        }
+    }
+    else if (nearestFrontfaceHitDistance > minFrontFaceDistanceThreshold + offsetScale)
+    {
+        float pushBackAmount = min(nearestFrontfaceHitDistance - minFrontFaceDistanceThreshold, length(prevOffset));
+        newOffset = prevOffset - pushBackAmount * normalize(prevOffset);
+    }
+
+	// Apply offset when valid
+    float3 offsetNormalized = newOffset / volume.ProbeSize;
+    if (dot(offsetNormalized, offsetNormalized) < Square(0.5f))
+    {
+        prevOffset = newOffset;
+    }
+
+	uProbeOffsets[probeIdx] = float4(prevOffset, 0);
+
+	// Add some extra margin to max depth for when probes move around
+	const float3 maxProbeDepth = volume.ProbeSize * 3.0f;
+	bool isActive = numBackfaces < maxNumBackfaces && any(nearestFrontfaceHitDistance <= maxProbeDepth);
 	uProbeStates[probeIdx] = isActive ? 0 : 1;
 }
-
 
 /**
 	- VisualizeIrradiance -
@@ -300,6 +358,7 @@ InterpolantsVSToPS VisualizeIrradianceVS(
 
 #define VISUALIZE_MODE_IRRADIANCE 0
 #define VISUALIZE_MODE_DEPTH 1
+#define VISUALIZE_MODE_UNIQUE_COLOR 2
 
 #define VISUALIZE_MODE VISUALIZE_MODE_IRRADIANCE
 
@@ -320,6 +379,9 @@ float4 VisualizeIrradiancePS(InterpolantsVSToPS input) : SV_Target0
 	Texture2D<float> tDepthMap = ResourceDescriptorHeap[volume.DepthIndex];
 	float depth = tDepthMap.SampleLevel(sLinearClamp, uv, 0);
 	float3 color = depth.xxx / (Max3(volume.ProbeSize) * 3);
+#elif VISUALIZE_MODE == VISUALIZE_MODE_UNIQUE_COLOR
+	uint seed = SeedThread(input.ProbeIndex);
+	float3 color = float3(Random01(seed), Random01(seed), Random01(seed));
 #endif
 
 	float3 probeDirection = normalize(cView.ViewPosition.xyz - probePosition);
