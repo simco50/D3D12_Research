@@ -85,6 +85,15 @@ float2 GetDDGIProbeUV(DDGIVolume volume, uint3 probeIndex3D, float3 direction, u
 	return pixel / float2(textureWidth, textureHeight);
 }
 
+float3 DDGIComputeBias(DDGIVolume volume, float3 normal, float3 viewDirection, float b = 0.2f)
+{
+	const float normalBiasMultiplier = 0.2f;
+	const float viewBiasMultiplier = 0.8f;
+	const float axialDistanceMultiplier = 0.75f;
+	return (normal * normalBiasMultiplier + viewDirection * viewBiasMultiplier) *
+		axialDistanceMultiplier * Min3(volume.ProbeSize) * b;
+}
+
 float4 SampleDDGIIrradiance(DDGIVolume volume, float3 position, float3 direction, float3 cameraDirection)
 {
 	if(volume.IrradianceIndex == INVALID_HANDLE || volume.DepthIndex == INVALID_HANDLE)
@@ -112,10 +121,7 @@ float4 SampleDDGIIrradiance(DDGIVolume volume, float3 position, float3 direction
 	if(volumeWeight <= 0.0f)
 		return 0.0f;
 
-	const float normalBias = 0.01f;
-	const float viewBias = 0.04f;
-	float3 surfaceBias = direction * normalBias + (-cameraDirection * viewBias);
-	position = position + surfaceBias;
+	position += DDGIComputeBias(volume, direction, -cameraDirection, 0.2f);
 
 	uint3 baseProbeCoordinates = floor(relativeCoordindates);
 	float3 baseProbePosition = GetDDGIProbePosition(volume, baseProbeCoordinates);
