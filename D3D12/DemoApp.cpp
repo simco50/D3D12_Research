@@ -1713,15 +1713,15 @@ void DemoApp::InitializePipelines()
 			ddgi.pRayBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateTyped(numProbes * ddgi.MaxNumRays, DXGI_FORMAT_R16G16B16A16_FLOAT, BufferFlag::UnorderedAccess | BufferFlag::ShaderResource), "DDGI Ray Buffer");
 			ddgi.pProbeOffset = m_pDevice->CreateBuffer(BufferDesc::CreateTyped(numProbes, DXGI_FORMAT_R16G16B16A16_FLOAT, BufferFlag::UnorderedAccess | BufferFlag::ShaderResource), "DDGI Probe Offset Buffer");
 			{
-				uint32 width = (1 + probeIrradianceTexels + 1) * ddgi.NumProbes.z * ddgi.NumProbes.x;
-				uint32 height = (1 + probeIrradianceTexels + 1) * ddgi.NumProbes.y;
+				uint32 width = (1 + probeIrradianceTexels + 1) * ddgi.NumProbes.y * ddgi.NumProbes.x;
+				uint32 height = (1 + probeIrradianceTexels + 1) * ddgi.NumProbes.z;
 				TextureDesc ddgiIrradianceDesc = TextureDesc::Create2D(width, height, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::UnorderedAccess);
 				ddgi.pIrradiance[0] = m_pDevice->CreateTexture(ddgiIrradianceDesc, "DDGI Irradiance 0");
 				ddgi.pIrradiance[1] = m_pDevice->CreateTexture(ddgiIrradianceDesc, "DDGI Irradiance 1");
 			}
 			{
-				uint32 width = (1 + probeDepthTexel + 1) * ddgi.NumProbes.z * ddgi.NumProbes.x;
-				uint32 height = (1 + probeDepthTexel + 1) * ddgi.NumProbes.y;
+				uint32 width = (1 + probeDepthTexel + 1) * ddgi.NumProbes.y * ddgi.NumProbes.x;
+				uint32 height = (1 + probeDepthTexel + 1) * ddgi.NumProbes.z;
 				TextureDesc ddgiDepthDesc = TextureDesc::Create2D(width, height, DXGI_FORMAT_R16G16_FLOAT, TextureFlag::UnorderedAccess);
 				ddgi.pDepth[0] = m_pDevice->CreateTexture(ddgiDepthDesc, "DDGI Depth 0");
 				ddgi.pDepth[1] = m_pDevice->CreateTexture(ddgiDepthDesc, "DDGI Depth 1");

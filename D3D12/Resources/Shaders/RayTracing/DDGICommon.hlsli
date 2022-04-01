@@ -71,14 +71,14 @@ float3 GetDDGIProbePosition(DDGIVolume volume, uint3 index3D)
 uint2 GetDDGIProbeTexel(DDGIVolume volume, uint3 probeIndex3D, uint numProbeInteriorTexels)
 {
 	uint numProbeTexels = 1 + numProbeInteriorTexels + 1;
-	return probeIndex3D.xy * numProbeTexels + uint2(probeIndex3D.z * volume.ProbeVolumeDimensions.x * numProbeTexels, 0) + 1;
+	return uint2(probeIndex3D.x + probeIndex3D.y * volume.ProbeVolumeDimensions.x, probeIndex3D.z) * numProbeTexels + 1;
 }
 
 float2 GetDDGIProbeUV(DDGIVolume volume, uint3 probeIndex3D, float3 direction, uint numProbeInteriorTexels)
 {
 	uint numProbeTexels = 1 + numProbeInteriorTexels + 1;
-	uint textureWidth = numProbeTexels * volume.ProbeVolumeDimensions.x * volume.ProbeVolumeDimensions.z;
-	uint textureHeight = numProbeTexels * volume.ProbeVolumeDimensions.y;
+	uint textureWidth = numProbeTexels * volume.ProbeVolumeDimensions.x * volume.ProbeVolumeDimensions.y;
+	uint textureHeight = numProbeTexels * volume.ProbeVolumeDimensions.z;
 
 	float2 pixel = GetDDGIProbeTexel(volume, probeIndex3D, numProbeInteriorTexels);
 	pixel += (EncodeNormalOctahedron(normalize(direction)) * 0.5f + 0.5f) * numProbeInteriorTexels;
