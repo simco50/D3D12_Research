@@ -26,8 +26,6 @@ bool FileWatcher::StartWatching(const char* pPath, const bool recursiveWatch /*=
 		return false;
 	}
 
-	std::string directoryPath = Paths::GetDirectoryPath(pPath);
-
 	HANDLE fileHandle = CreateFileA(pPath,
 		FILE_LIST_DIRECTORY,
 		FILE_SHARE_WRITE | FILE_SHARE_READ | FILE_SHARE_DELETE,
@@ -45,6 +43,7 @@ bool FileWatcher::StartWatching(const char* pPath, const bool recursiveWatch /*=
 	std::unique_ptr<DirectoryWatch> pWatch = std::make_unique<DirectoryWatch>();
 	pWatch->Recursive = recursiveWatch;
 	pWatch->FileHandle = fileHandle;
+	pWatch->DirectoryPath = pPath;
 	m_IOCP = CreateIoCompletionPort(fileHandle, m_IOCP, (ULONG_PTR)pWatch.get(), 0);
 	check(m_IOCP);
 
@@ -154,7 +153,8 @@ int FileWatcher::ThreadFunction()
 				outString[length] = '\0';
 
 				FileEvent newEvent;
-				newEvent.Path = outString;
+				newEvent.Path = Paths::Combine(pWatch->DirectoryPath, outString);
+				Paths::NormalizeInline(newEvent.Path);
 
 				switch (pRecord->Action)
 				{

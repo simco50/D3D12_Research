@@ -1,6 +1,6 @@
 #include "Common.hlsli"
 #include "Lighting.hlsli"
-#include "DDGICommon.hlsli"
+#include "RayTracing/DDGICommon.hlsli"
 
 struct PassData
 {

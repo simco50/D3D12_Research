@@ -19,3 +19,6 @@
 #define RAYPAYLOAD
 #define RAYQUALIFIER(qualifiers)
 #endif
+
+#define IDENTITY_MATRIX_3 float3x3(1, 0, 0, 0, 1, 0, 0, 0, 1)
+#define IDENTITY_MATRIX_4 float4x4(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1)

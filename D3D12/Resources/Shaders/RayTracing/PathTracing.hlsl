@@ -256,18 +256,14 @@ void RayGen()
 	float2 resolution = float2(DispatchRaysDimensions().xy);
 	uint seed = SeedThread(DispatchRaysIndex().xy, DispatchRaysDimensions().xy, cView.FrameIndex);
 
+	float3 previousColor = uAccumulation[DispatchRaysIndex().xy].rgb;
+
 	// Jitter to achieve anti-aliasing
 	float2 offset = float2(Random01(seed), Random01(seed));
 	pixel += lerp(-0.5f.xx, 0.5f.xx, offset);
 
 	pixel = (((pixel + 0.5f) / resolution) * 2.0f - 1.0f);
-	Ray cameraRay = GeneratePinholeCameraRay(pixel, cView.ViewInverse, cView.Projection);
-
-	RayDesc ray;
-	ray.Origin = cameraRay.Origin;
-	ray.Direction = cameraRay.Direction;
-	ray.TMin = 0;
-	ray.TMax = FLT_MAX;
+	RayDesc ray = GeneratePinholeCameraRay(pixel, cView.ViewInverse, cView.Projection);
 
 	float3 radiance = 0;
 	float3 throughput = 1;
@@ -375,7 +371,6 @@ void RayGen()
 	// Accumulation and output
 	if(cPass.AccumulatedFrames > 1)
 	{
-		float3 previousColor = uAccumulation[DispatchRaysIndex().xy].rgb;
 		radiance += previousColor;
 	}
 	uAccumulation[DispatchRaysIndex().xy] = float4(radiance, 1);

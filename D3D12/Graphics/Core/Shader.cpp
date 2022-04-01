@@ -21,7 +21,7 @@ namespace ShaderCompiler
 		std::string FilePath;
 		std::string EntryPoint;
 		std::string Target;
-		std::vector<ShaderDefine> Defines;
+		Span<ShaderDefine> Defines;
 		std::vector<std::string> IncludeDirs;
 		uint8 MajVersion;
 		uint8 MinVersion;
@@ -148,12 +148,12 @@ namespace ShaderCompiler
 
 			std::string ToString() const
 			{
-				std::stringstream str;
+				std::string str;
 				for (const std::wstring& arg : m_Arguments)
 				{
-					str << " " << UNICODE_TO_MULTIBYTE(arg.c_str());
+					str += Sprintf(" %s", UNICODE_TO_MULTIBYTE(arg.c_str()));
 				}
-				return str.str();
+				return str;
 			}
 
 		private:
@@ -204,7 +204,7 @@ namespace ShaderCompiler
 		}
 
 
-		arguments.AddArgument("-I", Sprintf("%sInclude/", Paths::GetDirectoryPath(fullPath).c_str()).c_str());
+		arguments.AddArgument("-I", Paths::GetDirectoryPath(fullPath).c_str());
 		for (const std::string& includeDir : compileJob.IncludeDirs)
 		{
 			arguments.AddArgument("-I", includeDir.c_str());
@@ -231,6 +231,7 @@ namespace ShaderCompiler
 			{
 				RefCountPtr<IDxcBlobEncoding> pEncoding;
 				std::string path = Paths::Normalize(UNICODE_TO_MULTIBYTE(pFilename));
+				check(Paths::ResolveRelativePaths(path));
 
 				if (!Paths::FileExists(path.c_str()))
 				{
@@ -238,7 +239,11 @@ namespace ShaderCompiler
 					return E_FAIL;
 				}
 
-				if (IncludedFiles.find(path) != IncludedFiles.end())
+				auto existingInclude = std::find_if(IncludedFiles.begin(), IncludedFiles.end(), [&path](const std::string& include) {
+					return CString::StrCmp(include.c_str(), path.c_str(), false);
+				});
+
+				if (existingInclude != IncludedFiles.end())
 				{
 					static const char nullStr[] = " ";
 					pUtils->CreateBlob(nullStr, ARRAYSIZE(nullStr), CP_UTF8, pEncoding.GetAddressOf());
@@ -255,7 +260,7 @@ namespace ShaderCompiler
 				HRESULT hr = pUtils->LoadFile(pFilename, nullptr, pEncoding.GetAddressOf());
 				if (SUCCEEDED(hr))
 				{
-					IncludedFiles.insert(path);
+					IncludedFiles.push_back(path);
 					*ppIncludeSource = pEncoding.Detach();
 				}
 				else
@@ -293,7 +298,7 @@ namespace ShaderCompiler
 			ULONG STDMETHODCALLTYPE AddRef(void) override {	return 0; }
 			ULONG STDMETHODCALLTYPE Release(void) override { return 0; }
 
-			std::unordered_set<std::string> IncludedFiles;
+			std::vector<std::string> IncludedFiles;
 		};
 
 		if (CommandLine::GetBool("dumpshaders"))
@@ -387,6 +392,7 @@ namespace ShaderCompiler
 			}
 		}
 
+		result.Includes.push_back(fullPath);
 		for (const std::string& includePath : includeHandler.IncludedFiles)
 		{
 			result.Includes.push_back(includePath);
@@ -401,7 +407,7 @@ ShaderBase::~ShaderBase()
 
 }
 
-ShaderManager::ShaderStringHash ShaderManager::GetEntryPointHash(const char* pEntryPoint, const std::vector<ShaderDefine>& defines)
+ShaderManager::ShaderStringHash ShaderManager::GetEntryPointHash(const char* pEntryPoint, const Span<ShaderDefine>& defines)
 {
 	ShaderStringHash hash(pEntryPoint);
 	for (const ShaderDefine& define : defines)
@@ -411,7 +417,7 @@ ShaderManager::ShaderStringHash ShaderManager::GetEntryPointHash(const char* pEn
 	return hash;
 }
 
-Shader* ShaderManager::LoadShader(const char* pShaderPath, ShaderType shaderType, const char* pEntryPoint, const std::vector<ShaderDefine>& defines /*= {}*/)
+Shader* ShaderManager::LoadShader(const char* pShaderPath, ShaderType shaderType, const char* pEntryPoint, const Span<ShaderDefine>& defines /*= {}*/)
 {
 	ShaderCompiler::CompileJob job;
 	job.Defines = defines;
@@ -436,9 +442,8 @@ Shader* ShaderManager::LoadShader(const char* pShaderPath, ShaderType shaderType
 
 	for (const std::string& include : result.Includes)
 	{
-		m_IncludeDependencyMap[ShaderStringHash(Paths::GetFileName(include))].insert(pShaderPath);
+		m_IncludeDependencyMap[ShaderStringHash(include)].insert(pShaderPath);
 	}
-	m_IncludeDependencyMap[ShaderStringHash(pShaderPath)].insert(pShaderPath);
 
 	ShaderStringHash hash = GetEntryPointHash(pEntryPoint, defines);
 	m_FilepathToObjectMap[ShaderStringHash(pShaderPath)].Shaders[hash] = pShader;
@@ -446,7 +451,7 @@ Shader* ShaderManager::LoadShader(const char* pShaderPath, ShaderType shaderType
 	return pShader;
 }
 
-ShaderLibrary* ShaderManager::LoadShaderLibrary(const char* pShaderPath, const std::vector<ShaderDefine>& defines /*= {}*/)
+ShaderLibrary* ShaderManager::LoadShaderLibrary(const char* pShaderPath, const Span<ShaderDefine>& defines /*= {}*/)
 {
 	ShaderCompiler::CompileJob job;
 	job.Defines = defines;
@@ -470,9 +475,8 @@ ShaderLibrary* ShaderManager::LoadShaderLibrary(const char* pShaderPath, const s
 
 	for (const std::string& include : result.Includes)
 	{
-		m_IncludeDependencyMap[ShaderStringHash(Paths::GetFileName(include))].insert(pShaderPath);
+		m_IncludeDependencyMap[ShaderStringHash(include)].insert(pShaderPath);
 	}
-	m_IncludeDependencyMap[ShaderStringHash(pShaderPath)].insert(pShaderPath);
 
 	ShaderStringHash hash = GetEntryPointHash("", defines);
 	m_FilepathToObjectMap[ShaderStringHash(pShaderPath)].Libraries[hash] = pLibrary;
@@ -482,8 +486,7 @@ ShaderLibrary* ShaderManager::LoadShaderLibrary(const char* pShaderPath, const s
 
 void ShaderManager::RecompileFromFileChange(const std::string& filePath)
 {
-	std::string fileName = Paths::GetFileName(filePath);
-	auto it = m_IncludeDependencyMap.find(ShaderStringHash(fileName));
+	auto it = m_IncludeDependencyMap.find(ShaderStringHash(filePath));
 	if (it != m_IncludeDependencyMap.end())
 	{
 		E_LOG(Info, "Modified \"%s\". Recompiling dependencies...", filePath.c_str());
@@ -584,7 +587,7 @@ void ShaderManager::AddIncludeDir(const std::string& includeDir)
 	}
 }
 
-Shader* ShaderManager::GetShader(const char* pShaderPath, ShaderType shaderType, const char* pEntryPoint, const std::vector<ShaderDefine>& defines /*= {}*/)
+Shader* ShaderManager::GetShader(const char* pShaderPath, ShaderType shaderType, const char* pEntryPoint, const Span<ShaderDefine>& defines /*= {}*/)
 {
 	auto& shaderMap = m_FilepathToObjectMap[ShaderStringHash(pShaderPath)].Shaders;
 	ShaderStringHash hash = GetEntryPointHash(pEntryPoint, defines);
@@ -597,7 +600,7 @@ Shader* ShaderManager::GetShader(const char* pShaderPath, ShaderType shaderType,
 	return LoadShader(pShaderPath, shaderType, pEntryPoint, defines);
 }
 
-ShaderLibrary* ShaderManager::GetLibrary(const char* pShaderPath, const std::vector<ShaderDefine>& defines /*= {}*/)
+ShaderLibrary* ShaderManager::GetLibrary(const char* pShaderPath, const Span<ShaderDefine>& defines /*= {}*/)
 {
 	auto& libraryMap = m_FilepathToObjectMap[ShaderStringHash(pShaderPath)].Libraries;
 	ShaderStringHash hash = GetEntryPointHash("", defines);

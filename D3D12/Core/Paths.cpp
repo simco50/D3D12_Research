@@ -45,20 +45,8 @@ namespace Paths
 
 	std::string GetDirectoryPath(const std::string& filePath)
 	{
-		auto it = std::find_if(filePath.rbegin(), filePath.rend(), [](const char c)
-			{
-				return IsSlash(c);
-			});
-		if (it == filePath.rend())
-		{
-			if (filePath.rfind('.') == std::string::npos)
-			{
-				return "/";
-			}
-			return filePath;
-		}
-
-		return filePath.substr(0, it.base() - filePath.begin());
+		std::string fileName = GetFileName(filePath);
+		return filePath.substr(0, filePath.length() - fileName.length());
 	}
 
 	std::string Normalize(const std::string& filePath)
@@ -81,6 +69,23 @@ namespace Paths
 		{
 			filePath = std::string(filePath.begin() + 2, filePath.end());
 		}
+	}
+
+	bool ResolveRelativePaths(std::string& path)
+	{
+		for (;;)
+		{
+			size_t index = path.rfind("../");
+			if (index == std::string::npos)
+				break;
+			size_t idx0 = path.rfind('/', index);
+			if (idx0 == std::string::npos)
+				return false;
+			idx0 = path.rfind('/', idx0 - 1);
+			if (idx0 != std::string::npos)
+				path = path.substr(0, idx0 + 1) + path.substr(index + 3);
+		}
+		return true;
 	}
 
 	std::string ChangeExtension(const std::string& filePath, const std::string& newExtension)
@@ -112,25 +117,25 @@ namespace Paths
 		return filePath.substr(matchLength);
 	}
 
-	void Combine(const std::vector<std::string>& elements, std::string& output)
+	void CombineInner(const char** pElements, uint32 numElements, std::string& output)
 	{
-		// Reserve some conservative amount
-		output.reserve(elements.size() * 20);
-		for (size_t i = 0; i < elements.size(); i++)
+		size_t stringLength = 0;
+		for (size_t i = 0; i < numElements; i++)
 		{
-			output += elements[i];
-			if (elements[i].back() != '/' && i != elements.size() - 1)
+			stringLength += strlen(pElements[i]);
+		}
+		output.reserve(stringLength);
+		for (size_t i = 0; i < numElements; i++)
+		{
+			if (strlen(pElements[i]) > 0)
 			{
-				output += "/";
+				output += pElements[i];
+				if (output.back() != '/' && i != numElements - 1)
+				{
+					output += "/";
+				}
 			}
 		}
-	}
-
-	std::string Combine(const std::string& a, const std::string& b)
-	{
-		std::string output;
-		Combine({ a, b }, output);
-		return output;
 	}
 
 	bool FileExists(const char* pFilePath)

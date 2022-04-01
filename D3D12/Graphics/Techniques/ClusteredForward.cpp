@@ -1,6 +1,5 @@
 #include "stdafx.h"
 #include "ClusteredForward.h"
-#include "Graphics/Core/Shader.h"
 #include "Graphics/Core/PipelineState.h"
 #include "Graphics/Core/RootSignature.h"
 #include "Graphics/Core/Buffer.h"
@@ -72,8 +71,6 @@ void ClusteredForward::OnResize(int windowWidth, int windowHeight)
 
 void ClusteredForward::Execute(RGGraph& graph, const SceneView& resources, const SceneTextures& parameters)
 {
-	RG_GRAPH_SCOPE("Clustered Lighting", graph);
-
 	ClusteredLightCullData lightCullData;
 	lightCullData.ClusterCount = IntVector3(m_ClusterCountX, m_ClusterCountY, gLightClustersNumZ);
 	lightCullData.pAABBs = m_pAABBs;

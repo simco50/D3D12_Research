@@ -1,7 +1,6 @@
 #pragma once
 
-#include "SkyCommon.hlsli"
-#include "ShadingModels.hlsli"
+#include "Common.hlsli"
 #include "Random.hlsli"
 
 #define RAY_BIAS 1.0e-2f
@@ -121,10 +120,10 @@ float ComputeRayConeMip(RayCone cone, float3 vertexNormal, float2 vertexUVs[3], 
 	return lambda;
 }
 
-Ray GeneratePinholeCameraRay(float2 pixel, float4x4 viewInverse, float4x4 projection)
+RayDesc GeneratePinholeCameraRay(float2 pixel, float4x4 viewInverse, float4x4 projection)
 {
 	// Set up the ray.
-	Ray ray;
+	RayDesc ray;
 	ray.Origin = viewInverse[3].xyz;
 	// Extract the aspect ratio and fov from the projection matrix.
 	float aspect = projection[1][1] / projection[0][0];
@@ -135,6 +134,9 @@ Ray GeneratePinholeCameraRay(float2 pixel, float4x4 viewInverse, float4x4 projec
 		(pixel.x * viewInverse[0].xyz * tanHalfFovY * aspect) -
 		(pixel.y * viewInverse[1].xyz * tanHalfFovY) +
 		viewInverse[2].xyz);
+
+	ray.TMin = 0.0f;
+	ray.TMax = FLT_MAX;
 
 	return ray;
 }

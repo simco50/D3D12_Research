@@ -29,8 +29,8 @@ PathTracing::PathTracing(GraphicsDevice* pDevice)
 	desc.MaxPayloadSize = 6 * sizeof(float);
 	desc.MaxAttributeSize = 2 * sizeof(float);
 	desc.Type = D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE;
-	desc.AddLibrary("PathTracing.hlsl");
-	desc.AddLibrary("SharedRaytracingLib.hlsl", {"OcclusionMS", "MaterialCHS", "MaterialAHS", "MaterialMS"});
+	desc.AddLibrary("RayTracing/PathTracing.hlsl");
+	desc.AddLibrary("RayTracing/SharedRaytracingLib.hlsl", {"OcclusionMS", "MaterialCHS", "MaterialAHS", "MaterialMS"});
 	desc.AddHitGroup("MaterialHG", "MaterialCHS", "MaterialAHS");
 	desc.AddMissShader("MaterialMS");
 	desc.AddMissShader("OcclusionMiss");

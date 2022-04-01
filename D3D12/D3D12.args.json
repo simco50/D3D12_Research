@@ -23,6 +23,10 @@
           "Command": "-gpuvalidation"
         },
         {
+          "Id": "af4a1a39-1845-4f6c-b427-a6aa1b6e44ca",
+          "Command": "-dumpshaders"
+        },
+        {
           "Id": "105b6371-3768-4e96-a67d-ff8d99170742",
           "Command": "-debugshaders"
         },

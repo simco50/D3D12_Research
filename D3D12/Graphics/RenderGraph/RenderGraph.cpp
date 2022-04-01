@@ -142,8 +142,7 @@ void RGGraph::Compile()
 			--pWriter->m_References;
 			if (pWriter->m_References == 0)
 			{
-				std::vector<RGResourceHandle>& reads = pWriter->m_Reads;
-				for (RGResourceHandle resource : reads)
+				for (RGResourceHandle resource : pWriter->m_Reads)
 				{
 					RGNode& node = m_ResourceNodes[resource.Index];
 					--node.Reads;

@@ -201,15 +201,15 @@ public:
 	void ReleaseResource(ID3D12Object* pResource);
 
 	RefCountPtr<PipelineState> CreatePipeline(const PipelineStateInitializer& psoDesc);
-	RefCountPtr<PipelineState> CreateComputePipeline(RefCountPtr<RootSignature>& pRootSignature, const char* pShaderPath, const char* entryPoint = "", const std::vector<ShaderDefine>& defines = {});
+	RefCountPtr<PipelineState> CreateComputePipeline(RefCountPtr<RootSignature>& pRootSignature, const char* pShaderPath, const char* entryPoint = "", const Span<ShaderDefine>& defines = {});
 	RefCountPtr<StateObject> CreateStateObject(const StateObjectInitializer& stateDesc);
 	RefCountPtr<ShaderResourceView> CreateSRV(Buffer* pBuffer, const BufferSRVDesc& desc);
 	RefCountPtr<UnorderedAccessView> CreateUAV(Buffer* pBuffer, const BufferUAVDesc& desc);
 	RefCountPtr<ShaderResourceView> CreateSRV(Texture* pTexture, const TextureSRVDesc& desc);
 	RefCountPtr<UnorderedAccessView> CreateUAV(Texture* pTexture, const TextureUAVDesc& desc);
 
-	Shader* GetShader(const char* pShaderPath, ShaderType shaderType, const char* entryPoint = "", const std::vector<ShaderDefine>& defines = {});
-	ShaderLibrary* GetLibrary(const char* pShaderPath, const std::vector<ShaderDefine>& defines = {});
+	Shader* GetShader(const char* pShaderPath, ShaderType shaderType, const char* entryPoint = "", const Span<ShaderDefine>& defines = {});
+	ShaderLibrary* GetLibrary(const char* pShaderPath, const Span<ShaderDefine>& defines = {});
 
 	ID3D12Device* GetDevice() const { return m_pDevice.Get(); }
 	ID3D12Device5* GetRaytracingDevice() const { return m_pRaytracingDevice.Get(); }

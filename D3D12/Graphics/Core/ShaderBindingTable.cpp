@@ -15,28 +15,28 @@ ShaderBindingTable::ShaderBindingTable(StateObject* pStateObject)
 
 }
 
-void ShaderBindingTable::BindRayGenShader(const char* pName, const std::vector<uint64>& data /*= {}*/)
+void ShaderBindingTable::BindRayGenShader(const char* pName, const Span<uint64>& data /*= {}*/)
 {
-	uint32 dataSize = (uint32)data.size() * sizeof(uint64);
-	m_RayGenRecord = CreateRecord(pName, data.data(), dataSize);
+	uint32 dataSize = (uint32)data.GetSize() * sizeof(uint64);
+	m_RayGenRecord = CreateRecord(pName, data.GetData(), dataSize);
 	m_RayGenRecordSize = ComputeRecordSize(dataSize);
 }
 
-void ShaderBindingTable::BindMissShader(const char* pName, uint32 rayIndex, const std::vector<uint64>& data /*= {}*/)
+void ShaderBindingTable::BindMissShader(const char* pName, uint32 rayIndex, const Span<uint64>& data /*= {}*/)
 {
 	if (rayIndex >= (uint32)m_MissShaderRecords.size())
 	{
 		m_MissShaderRecords.resize(rayIndex + 1);
 	}
 
-	uint32 dataSize = (uint32)data.size() * sizeof(uint64);
-	m_MissShaderRecords[rayIndex] = CreateRecord(pName, data.data(), dataSize);
+	uint32 dataSize = (uint32)data.GetSize() * sizeof(uint64);
+	m_MissShaderRecords[rayIndex] = CreateRecord(pName, data.GetData(), dataSize);
 	m_MissRecordSize = Math::Max<int>(m_MissRecordSize, ComputeRecordSize(dataSize));
 }
 
-void ShaderBindingTable::BindHitGroup(const char* pName, uint32 index, const std::vector<uint64>& data /*= {}*/)
+void ShaderBindingTable::BindHitGroup(const char* pName, uint32 index, const Span<uint64>& data /*= {}*/)
 {
-	BindHitGroup(pName, index, data.data(), (uint32)data.size() * sizeof(uint64));
+	BindHitGroup(pName, index, data.GetData(), (uint32)data.GetSize() * sizeof(uint64));
 }
 
 void ShaderBindingTable::BindHitGroup(const char* pName, uint32 index, const void* pData, uint32 dataSize)

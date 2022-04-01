@@ -1,6 +1,5 @@
 #include "stdafx.h"
 #include "TiledForward.h"
-#include "Graphics/Core/Shader.h"
 #include "Graphics/Core/PipelineState.h"
 #include "Graphics/Core/RootSignature.h"
 #include "Graphics/Core/Buffer.h"
@@ -37,8 +36,6 @@ void TiledForward::OnResize(int windowWidth, int windowHeight)
 
 void TiledForward::Execute(RGGraph& graph, const SceneView& resources, const SceneTextures& parameters)
 {
-	RG_GRAPH_SCOPE("Tiled Lighting", graph);
-
 	RGPassBuilder culling = graph.AddPass("Tiled Light Culling");
 	culling.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
 		{
@@ -86,6 +83,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& resources, const Sce
 			context.InsertResourceBarrier(parameters.pAmbientOcclusion, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(parameters.pPreviousColorTarget, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(parameters.pDepth, D3D12_RESOURCE_STATE_DEPTH_READ | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+			context.InsertResourceBarrier(parameters.pColorTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
 			context.InsertResourceBarrier(parameters.pNormalsTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
 			context.InsertResourceBarrier(parameters.pRoughnessTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
 

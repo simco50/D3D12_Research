@@ -221,6 +221,14 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 			return (int)(pMat - pGltfData->materials) + 1;
 		};
 
+		using Hash = TStringHash<false>;
+		std::vector<Hash> usedExtensions;
+		for (uint32 i = 0; i < pGltfData->extensions_used_count; ++i)
+		{
+			usedExtensions.push_back(pGltfData->extensions_used[i]);
+		}
+		bool useEmissiveStrength = std::find_if(usedExtensions.begin(), usedExtensions.end(), [](const Hash& rhs) { return rhs == "KHR_materials_emissive_strength"; }) != usedExtensions.end();
+
 		Material defaultMaterial;
 		m_Materials.push_back(defaultMaterial);
 
@@ -309,7 +317,8 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 			material.EmissiveFactor.x = gltfMaterial.emissive_factor[0];
 			material.EmissiveFactor.y = gltfMaterial.emissive_factor[1];
 			material.EmissiveFactor.z = gltfMaterial.emissive_factor[2];
-			material.EmissiveFactor *= gltfMaterial.emissive_strength.emissive_strength;
+			if(useEmissiveStrength)
+				material.EmissiveFactor *= gltfMaterial.emissive_strength.emissive_strength;
 			material.pNormalTexture = RetrieveTexture(gltfMaterial.normal_texture, false);
 			if (gltfMaterial.name)
 				material.Name = gltfMaterial.name;

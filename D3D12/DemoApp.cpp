@@ -140,7 +140,7 @@ namespace Tweakables
 	ConsoleVariable g_RenderObjectBounds("r.vis.ObjectBounds", false);
 
 	ConsoleVariable g_RaytracedReflections("r.Raytracing.Reflections", true);
-	ConsoleVariable g_TLASBoundsThreshold("r.Raytracing.TLASBoundsThreshold", 5.0f * Math::DegreesToRadians);
+	ConsoleVariable g_TLASBoundsThreshold("r.Raytracing.TLASBoundsThreshold", 1.0f * Math::DegreesToRadians);
 	ConsoleVariable g_SsrSamples("r.SSRSamples", 8);
 	ConsoleVariable g_RenderTerrain("r.Terrain", false);
 
@@ -743,7 +743,7 @@ void DemoApp::Update()
 				context.EndRenderPass();
 			});
 	}
-	else
+	else if (m_RenderPath == RenderPath::Visibility)
 	{
 		RGPassBuilder visibility = graph.AddPass("Visibility Buffer");
 		visibility.Bind([=](CommandContext& renderContext, const RGPassResources& resources)
@@ -774,8 +774,7 @@ void DemoApp::Update()
 
 			});
 	}
-
-	if(Tweakables::g_EnableDDGI && m_DDGIVolumes.size() > 0 && m_pDevice->GetCapabilities().SupportsRaytracing())
+	if((m_RenderPath == RenderPath::Clustered || m_RenderPath == RenderPath::Tiled || m_RenderPath == RenderPath::Visibility) && Tweakables::g_EnableDDGI && m_DDGIVolumes.size() > 0 && m_pDevice->GetCapabilities().SupportsRaytracing())
 	{
 		RG_GRAPH_SCOPE("DDGI", graph);
 
@@ -800,6 +799,7 @@ void DemoApp::Update()
 		RGPassBuilder ddgiRays = graph.AddPass("DDGI Raytrace");
 		ddgiRays.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
 			{
+				context.InsertResourceBarrier(ddgi.pProbeStates, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 				context.InsertResourceBarrier(ddgi.pIrradiance[0], D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 				context.InsertResourceBarrier(ddgi.pRayBuffer, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 				context.SetComputeRootSignature(m_pCommonRS);
@@ -839,9 +839,7 @@ void DemoApp::Update()
 		RGPassBuilder ddgiUpdateDepth = graph.AddPass("DDGI Update Depth");
 		ddgiUpdateDepth.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
 			{
-				context.InsertResourceBarrier(ddgi.pRayBuffer, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 				context.InsertResourceBarrier(ddgi.pDepth[1], D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-				context.InsertResourceBarrier(ddgi.pProbeOffset, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 				context.SetComputeRootSignature(m_pCommonRS);
 				context.SetPipelineState(m_pDDGIUpdateIrradianceDepthPSO);
 
@@ -849,7 +847,6 @@ void DemoApp::Update()
 				context.SetRootCBV(1, GetViewUniforms(m_SceneData));
 				context.BindResources(2, {
 					ddgi.pDepth[1]->GetUAV(),
-					ddgi.pProbeOffset->GetUAV(),
 					});
 				context.BindResources(3, {
 					ddgi.pRayBuffer->GetSRV(),
@@ -857,7 +854,30 @@ void DemoApp::Update()
 
 				context.Dispatch(numProbes);
 				context.InsertResourceBarrier(ddgi.pDepth[1], D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
+			});
+
+		RGPassBuilder ddgiUpdateStates = graph.AddPass("DDGI Update Probe States");
+		ddgiUpdateStates.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
+			{
+				context.InsertResourceBarrier(ddgi.pProbeStates, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+				context.InsertResourceBarrier(ddgi.pProbeOffset, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+				context.SetComputeRootSignature(m_pCommonRS);
+				context.SetPipelineState(m_pDDGIUpdateProbeStatesPSO);
+
+				context.SetRootConstants(0, parameters);
+				context.SetRootCBV(1, GetViewUniforms(m_SceneData));
+				context.BindResources(2, {
+					ddgi.pProbeStates->GetUAV(),
+					ddgi.pProbeOffset->GetUAV(),
+					});
+				context.BindResources(3, {
+					ddgi.pRayBuffer->GetSRV(),
+					});
+
+				context.Dispatch(ComputeUtils::GetNumThreadGroups(numProbes, 32));
+
 				context.InsertResourceBarrier(ddgi.pProbeOffset, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
+				context.InsertResourceBarrier(ddgi.pProbeStates, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 			});
 
 		std::swap(ddgi.pIrradiance[0], ddgi.pIrradiance[1]);
@@ -920,30 +940,32 @@ void DemoApp::Update()
 				context.Dispatch(ComputeUtils::GetNumThreadGroups(m_pVelocity->GetWidth(), 8, m_pVelocity->GetHeight(), 8));
 			});
 
+
+		SceneTextures sceneTextures;
+		sceneTextures.pAmbientOcclusion = m_pAmbientOcclusion;
+		sceneTextures.pColorTarget = GetCurrentRenderTarget();
+		sceneTextures.pDepth = GetDepthStencil();
+		sceneTextures.pNormalsTarget = m_pNormals;
+		sceneTextures.pRoughnessTarget = m_pRoughness;
+		sceneTextures.pPreviousColorTarget = m_pPreviousColor;
+		sceneTextures.pVelocity = m_pVelocity;
+
 		if (Tweakables::g_RaytracedAO)
 		{
-			m_pRTAO->Execute(graph, m_SceneData, m_pAmbientOcclusion, GetDepthStencil());
+			m_pRTAO->Execute(graph, m_SceneData, sceneTextures);
 		}
 		else
 		{
 			m_pSSAO->Execute(graph, m_SceneData, m_pAmbientOcclusion, GetDepthStencil());
 		}
 
-		SceneTextures params;
-		params.pAmbientOcclusion = m_pAmbientOcclusion;
-		params.pColorTarget = GetCurrentRenderTarget();
-		params.pDepth = GetDepthStencil();
-		params.pNormalsTarget = m_pNormals;
-		params.pRoughnessTarget = m_pRoughness;
-		params.pPreviousColorTarget = m_pPreviousColor;
-
 		if (m_RenderPath == RenderPath::Tiled)
 		{
-			m_pTiledForward->Execute(graph, m_SceneData, params);
+			m_pTiledForward->Execute(graph, m_SceneData, sceneTextures);
 		}
 		else if (m_RenderPath == RenderPath::Clustered)
 		{
-			m_pClusteredForward->Execute(graph, m_SceneData, params);
+			m_pClusteredForward->Execute(graph, m_SceneData, sceneTextures);
 		}
 		else if (m_RenderPath == RenderPath::Visibility)
 		{
@@ -951,29 +973,29 @@ void DemoApp::Update()
 			visibilityShading.Bind([=](CommandContext& renderContext, const RGPassResources& resources)
 				{
 					renderContext.InsertResourceBarrier(m_pVisibilityTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-					renderContext.InsertResourceBarrier(m_pAmbientOcclusion, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-					renderContext.InsertResourceBarrier(GetDepthStencil(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-					renderContext.InsertResourceBarrier(m_pPreviousColor, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-					renderContext.InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-					renderContext.InsertResourceBarrier(m_pNormals, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-					renderContext.InsertResourceBarrier(m_pRoughness, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+					renderContext.InsertResourceBarrier(sceneTextures.pAmbientOcclusion, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+					renderContext.InsertResourceBarrier(sceneTextures.pDepth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+					renderContext.InsertResourceBarrier(sceneTextures.pPreviousColorTarget, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+					renderContext.InsertResourceBarrier(sceneTextures.pColorTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+					renderContext.InsertResourceBarrier(sceneTextures.pNormalsTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+					renderContext.InsertResourceBarrier(sceneTextures.pRoughnessTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
 					renderContext.SetComputeRootSignature(m_pCommonRS);
 					renderContext.SetPipelineState(m_pVisibilityShadingPSO);
 
 					renderContext.SetRootCBV(1, GetViewUniforms(m_SceneData, GetCurrentRenderTarget()));
 					renderContext.BindResources(2, {
-						GetCurrentRenderTarget()->GetUAV(),
-						m_pNormals->GetUAV(),
-						m_pRoughness->GetUAV(),
+						sceneTextures.pColorTarget->GetUAV(),
+						sceneTextures.pNormalsTarget->GetUAV(),
+						sceneTextures.pRoughnessTarget->GetUAV(),
 						});
 					renderContext.BindResources(3, {
 						m_pVisibilityTexture->GetSRV(),
-						m_pAmbientOcclusion->GetSRV(),
-						GetDepthStencil()->GetSRV(),
-						m_pPreviousColor->GetSRV(),
+						sceneTextures.pAmbientOcclusion->GetSRV(),
+						sceneTextures.pDepth->GetSRV(),
+						sceneTextures.pPreviousColorTarget->GetSRV(),
 						});
-					renderContext.Dispatch(ComputeUtils::GetNumThreadGroups(GetCurrentRenderTarget()->GetWidth(), 8, GetCurrentRenderTarget()->GetHeight(), 8));
+					renderContext.Dispatch(ComputeUtils::GetNumThreadGroups(sceneTextures.pColorTarget->GetWidth(), 8, sceneTextures.pColorTarget->GetHeight(), 8));
 					renderContext.InsertUavBarrier();
 				});
 		}
@@ -1411,6 +1433,7 @@ void DemoApp::Update()
 					context.InsertResourceBarrier(GetDepthStencil(), D3D12_RESOURCE_STATE_DEPTH_WRITE);
 					context.SetGraphicsRootSignature(m_pCommonRS);
 					context.SetPipelineState(m_pDDGIVisualizePSO);
+					context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
 					context.BeginRenderPass(RenderPassInfo(m_pTonemapTarget, RenderPassAccess::Load_Store, GetDepthStencil(), RenderPassAccess::Load_Store, true));
 
@@ -1641,14 +1664,15 @@ void DemoApp::InitializePipelines()
 	}
 
 	// DDGI
-	if(m_pDevice->GetCapabilities().SupportsRaytracing())
+	if (m_pDevice->GetCapabilities().SupportsRaytracing())
 	{
 		// Must match with shader!
 		constexpr uint32 probeIrradianceTexels = 6;
 		constexpr uint32 probeDepthTexel = 14;
 
-		m_pDDGIUpdateIrradianceColorPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "DDGI.hlsl", "UpdateIrradianceCS");
-		m_pDDGIUpdateIrradianceDepthPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "DDGI.hlsl", "UpdateDepthCS");
+		m_pDDGIUpdateIrradianceColorPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "RayTracing/DDGI.hlsl", "UpdateIrradianceCS");
+		m_pDDGIUpdateIrradianceDepthPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "RayTracing/DDGI.hlsl", "UpdateDepthCS");
+		m_pDDGIUpdateProbeStatesPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "RayTracing/DDGI.hlsl", "UpdateProbeStatesCS");
 
 		StateObjectInitializer soDesc{};
 		soDesc.Name = "DDGI Trace Rays";
@@ -1656,8 +1680,8 @@ void DemoApp::InitializePipelines()
 		soDesc.MaxPayloadSize = 6 * sizeof(float);
 		soDesc.MaxAttributeSize = 2 * sizeof(float);
 		soDesc.Type = D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE;
-		soDesc.AddLibrary("DDGIRayTrace.hlsl", { "TraceRaysRGS" });
-		soDesc.AddLibrary("SharedRaytracingLib.hlsl", { "OcclusionMS", "MaterialCHS", "MaterialAHS", "MaterialMS" });
+		soDesc.AddLibrary("RayTracing/DDGIRayTrace.hlsl", { "TraceRaysRGS" });
+		soDesc.AddLibrary("RayTracing/SharedRaytracingLib.hlsl", { "OcclusionMS", "MaterialCHS", "MaterialAHS", "MaterialMS" });
 		soDesc.AddHitGroup("MaterialHG", "MaterialCHS", "MaterialAHS");
 		soDesc.AddMissShader("MaterialMS");
 		soDesc.AddMissShader("OcclusionMiss");
@@ -1666,8 +1690,8 @@ void DemoApp::InitializePipelines()
 
 		PipelineStateInitializer psoDesc;
 		psoDesc.SetRootSignature(m_pCommonRS);
-		psoDesc.SetVertexShader("DDGI.hlsl", "VisualizeIrradianceVS");
-		psoDesc.SetPixelShader("DDGI.hlsl", "VisualizeIrradiancePS");
+		psoDesc.SetVertexShader("RayTracing/DDGI.hlsl", "VisualizeIrradianceVS");
+		psoDesc.SetPixelShader("RayTracing/DDGI.hlsl", "VisualizeIrradiancePS");
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
 		psoDesc.SetRenderTargetFormat(DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_D32_FLOAT, 1);
 		psoDesc.SetName("Visualize Irradiance");
@@ -1681,22 +1705,23 @@ void DemoApp::InitializePipelines()
 		volume.NumRays = 128;
 		volume.MaxNumRays = 512;
 		m_DDGIVolumes.push_back(volume);
-		
+
 		for (DDGIVolume& ddgi : m_DDGIVolumes)
 		{
 			uint32 numProbes = ddgi.NumProbes.x * ddgi.NumProbes.y * ddgi.NumProbes.z;
+			ddgi.pProbeStates = m_pDevice->CreateBuffer(BufferDesc::CreateTyped(numProbes, DXGI_FORMAT_R8_UINT, BufferFlag::UnorderedAccess | BufferFlag::ShaderResource), "DDGI States Buffer");
 			ddgi.pRayBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateTyped(numProbes * ddgi.MaxNumRays, DXGI_FORMAT_R16G16B16A16_FLOAT, BufferFlag::UnorderedAccess | BufferFlag::ShaderResource), "DDGI Ray Buffer");
 			ddgi.pProbeOffset = m_pDevice->CreateBuffer(BufferDesc::CreateTyped(numProbes, DXGI_FORMAT_R16G16B16A16_FLOAT, BufferFlag::UnorderedAccess | BufferFlag::ShaderResource), "DDGI Probe Offset Buffer");
 			{
-				uint32 width = (1 + probeIrradianceTexels + 1) * ddgi.NumProbes.z * ddgi.NumProbes.x;
-				uint32 height = (1 + probeIrradianceTexels + 1) * ddgi.NumProbes.y;
+				uint32 width = (1 + probeIrradianceTexels + 1) * ddgi.NumProbes.y * ddgi.NumProbes.x;
+				uint32 height = (1 + probeIrradianceTexels + 1) * ddgi.NumProbes.z;
 				TextureDesc ddgiIrradianceDesc = TextureDesc::Create2D(width, height, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::UnorderedAccess);
 				ddgi.pIrradiance[0] = m_pDevice->CreateTexture(ddgiIrradianceDesc, "DDGI Irradiance 0");
 				ddgi.pIrradiance[1] = m_pDevice->CreateTexture(ddgiIrradianceDesc, "DDGI Irradiance 1");
 			}
 			{
-				uint32 width = (1 + probeDepthTexel + 1) * ddgi.NumProbes.z * ddgi.NumProbes.x;
-				uint32 height = (1 + probeDepthTexel + 1) * ddgi.NumProbes.y;
+				uint32 width = (1 + probeDepthTexel + 1) * ddgi.NumProbes.y * ddgi.NumProbes.x;
+				uint32 height = (1 + probeDepthTexel + 1) * ddgi.NumProbes.z;
 				TextureDesc ddgiDepthDesc = TextureDesc::Create2D(width, height, DXGI_FORMAT_R16G16_FLOAT, TextureFlag::UnorderedAccess);
 				ddgi.pDepth[0] = m_pDevice->CreateTexture(ddgiDepthDesc, "DDGI Depth 0");
 				ddgi.pDepth[1] = m_pDevice->CreateTexture(ddgiDepthDesc, "DDGI Depth 1");
@@ -2063,8 +2088,8 @@ void DemoApp::UpdateTLAS(CommandContext& context)
 					D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO info{};
 					m_pDevice->GetRaytracingDevice()->GetRaytracingAccelerationStructurePrebuildInfo(&prebuildInfo, &info);
 
-					RefCountPtr<Buffer> pBLASScratch = m_pDevice->CreateBuffer(BufferDesc::CreateByteAddress(Math::AlignUp<uint64>(info.ScratchDataSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT), BufferFlag::UnorderedAccess), "BLAS Scratch Buffer");
-					RefCountPtr<Buffer> pBLAS = m_pDevice->CreateBuffer(BufferDesc::CreateByteAddress(Math::AlignUp<uint64>(info.ResultDataMaxSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT), BufferFlag::UnorderedAccess | BufferFlag::AccelerationStructure), "BLAS Buffer");
+					RefCountPtr<Buffer> pBLASScratch = m_pDevice->CreateBuffer(BufferDesc::CreateByteAddress(Math::AlignUp<uint64>(info.ScratchDataSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT), BufferFlag::UnorderedAccess | BufferFlag::NoBindless), "BLAS Scratch Buffer");
+					RefCountPtr<Buffer> pBLAS = m_pDevice->CreateBuffer(BufferDesc::CreateByteAddress(Math::AlignUp<uint64>(info.ResultDataMaxSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT), BufferFlag::UnorderedAccess | BufferFlag::AccelerationStructure | BufferFlag::NoBindless), "BLAS Buffer");
 
 					D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC asDesc{};
 					asDesc.Inputs = prebuildInfo;
@@ -2143,7 +2168,7 @@ void DemoApp::UpdateTLAS(CommandContext& context)
 
 		if (!m_pTLAS || m_pTLAS->GetSize() < info.ResultDataMaxSizeInBytes)
 		{
-			m_pTLASScratch = m_pDevice->CreateBuffer(BufferDesc::CreateByteAddress(Math::AlignUp<uint64>(info.ScratchDataSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT), BufferFlag::None), "TLAS Scratch");
+			m_pTLASScratch = m_pDevice->CreateBuffer(BufferDesc::CreateByteAddress(Math::AlignUp<uint64>(info.ScratchDataSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT)), "TLAS Scratch");
 			m_pTLAS = m_pDevice->CreateBuffer(BufferDesc::CreateAccelerationStructure(Math::AlignUp<uint64>(info.ResultDataMaxSizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT)), "TLAS");
 		}
 
@@ -2261,6 +2286,7 @@ void DemoApp::UploadSceneData(CommandContext& context)
 			ddgi.IrradianceIndex = ddgiVolume.pIrradiance[0] ? ddgiVolume.pIrradiance[0]->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
 			ddgi.DepthIndex = ddgiVolume.pDepth[0] ? ddgiVolume.pDepth[0]->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
 			ddgi.ProbeOffsetIndex = ddgiVolume.pProbeOffset ? ddgiVolume.pProbeOffset->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
+			ddgi.ProbeStatesIndex = ddgiVolume.pProbeStates ? ddgiVolume.pProbeStates->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
 			ddgi.NumRaysPerProbe = ddgiVolume.NumRays;
 			ddgi.MaxRaysPerProbe = ddgiVolume.MaxNumRays;
 			ddgiVolumes.push_back(ddgi);

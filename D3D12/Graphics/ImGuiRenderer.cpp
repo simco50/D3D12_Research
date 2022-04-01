@@ -14,8 +14,11 @@
 #include "imgui_impl_dx12.h"
 #include "imgui_impl_win32.h"
 
+static std::vector<RefCountPtr<Texture>> TextureStack;
+
 void ImGui::Image(Texture* pTexture, const ImVec2& size, const ImVec2& uv0, const ImVec2& uv1, const ImVec4& tint_col, const ImVec4& border_col)
 {
+	TextureStack.push_back(pTexture);
 	ImGui::Image((void*)pTexture->GetSRV()->GetGPUView(), size, uv0, uv1, tint_col, border_col);
 }
 
@@ -151,6 +154,11 @@ void ImGuiRenderer::Render(RGGraph& graph, const SceneView& sceneData, Texture* 
 	RGPassBuilder renderIU = graph.AddPass("Render UI");
 	renderIU.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
 		{
+			for (RefCountPtr<Texture>& pTex : TextureStack)
+			{
+				context.InsertResourceBarrier(pTex, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+			}
+
 			context.InsertResourceBarrier(pRenderTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
 			context.BeginRenderPass(RenderPassInfo(pRenderTarget, RenderPassAccess::Load_Store, nullptr, RenderPassAccess::NoAccess, false));
 			ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), context.GetCommandList());
@@ -166,7 +174,7 @@ void ImGuiRenderer::Render(RGGraph& graph, const SceneView& sceneData, Texture* 
 			{
 				ImGui::UpdatePlatformWindows();
 				ImGui::RenderPlatformWindowsDefault(NULL, (void*)context.GetCommandList());
-
 			});
 	}
+	TextureStack.clear();
 }

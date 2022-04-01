@@ -1,6 +1,5 @@
 #include "stdafx.h"
 #include "RTReflections.h"
-#include "Graphics/Core/Shader.h"
 #include "Graphics/Core/RootSignature.h"
 #include "Graphics/Core/Graphics.h"
 #include "Graphics/Core/CommandContext.h"
@@ -82,8 +81,8 @@ void RTReflections::SetupPipelines(GraphicsDevice* pDevice)
 	StateObjectInitializer stateDesc;
 	stateDesc.Name = "RT Reflections";
 	stateDesc.RayGenShader = "RayGen";
-	stateDesc.AddLibrary("RTReflections.hlsl");
-	stateDesc.AddLibrary("SharedRaytracingLib.hlsl", { "OcclusionMS", "MaterialCHS", "MaterialAHS", "MaterialMS" });
+	stateDesc.AddLibrary("RayTracing/RTReflections.hlsl");
+	stateDesc.AddLibrary("RayTracing/SharedRaytracingLib.hlsl", { "OcclusionMS", "MaterialCHS", "MaterialAHS", "MaterialMS" });
 	stateDesc.AddHitGroup("ReflectionHitGroup", "MaterialCHS", "MaterialAHS");
 	stateDesc.AddMissShader("MaterialMS");
 	stateDesc.AddMissShader("OcclusionMiss");

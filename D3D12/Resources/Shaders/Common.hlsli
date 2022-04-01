@@ -453,3 +453,8 @@ float Max3(float3 v)
 {
 	return max(v.x, max(v.y, v.z));
 }
+
+float Min3(float3 v)
+{
+	return min(v.x, min(v.y, v.z));
+}

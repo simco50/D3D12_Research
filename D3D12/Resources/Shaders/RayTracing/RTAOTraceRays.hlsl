@@ -48,11 +48,12 @@ void RayGen()
 
 	uint randSeed = SeedThread(launchIndex, launchDim, cView.FrameIndex);
 
+	uint numSamples = cPass.Samples;
 	float accumulatedAo = 0.0f;
-	for(int i = 0; i < cPass.Samples; ++i)
+	for(int i = 0; i < numSamples; ++i)
 	{
 		float3 randomDirection = RandomCosineWeightedRay(normal.xyz, randSeed);
-		
+
 		RayDesc ray;
 		ray.Origin = world;
 		ray.Direction = randomDirection;
@@ -63,6 +64,6 @@ void RayGen()
 
 		accumulatedAo += hit;
 	}
-	accumulatedAo /= cPass.Samples;
-	uOutput[launchIndex] = pow(saturate(1 - accumulatedAo), cPass.Power);
+	accumulatedAo /= numSamples;
+	uOutput[launchIndex] = 1 - accumulatedAo * cPass.Power;
 }

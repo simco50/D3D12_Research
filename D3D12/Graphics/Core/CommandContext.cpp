@@ -626,17 +626,23 @@ void CommandContext::PrepareDraw()
 
 void CommandContext::SetPipelineState(PipelineState* pPipelineState)
 {
-	pPipelineState->ConditionallyReload();
-	m_pCommandList->SetPipelineState(pPipelineState->GetPipelineState());
-	m_pCurrentPSO = pPipelineState;
+	if (m_pCurrentPSO != pPipelineState)
+	{
+		pPipelineState->ConditionallyReload();
+		m_pCommandList->SetPipelineState(pPipelineState->GetPipelineState());
+		m_pCurrentPSO = pPipelineState;
+	}
 }
 
 void CommandContext::SetPipelineState(StateObject* pStateObject)
 {
 	check(m_pRaytracingCommandList);
-	pStateObject->ConditionallyReload();
-	m_pRaytracingCommandList->SetPipelineState1(pStateObject->GetStateObject());
-	m_pCurrentSO = pStateObject;
+	if (m_pCurrentSO != pStateObject)
+	{
+		pStateObject->ConditionallyReload();
+		m_pRaytracingCommandList->SetPipelineState1(pStateObject->GetStateObject());
+		m_pCurrentSO = pStateObject;
+	}
 }
 
 void CommandContext::SetDynamicVertexBuffer(uint32 rootIndex, uint32 elementCount, uint32 elementSize, const void* pData)

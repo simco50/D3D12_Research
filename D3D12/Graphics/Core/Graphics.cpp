@@ -770,11 +770,11 @@ void GraphicsDevice::ReleaseResource(ID3D12Object* pResource)
 	m_DeleteQueue.EnqueueResource(pResource, GetFrameFence());
 }
 
-RefCountPtr<PipelineState> GraphicsDevice::CreateComputePipeline(RefCountPtr<RootSignature>& pRootSignature, const char* pShaderPath, const char* entryPoint, const std::vector<ShaderDefine>& defines)
+RefCountPtr<PipelineState> GraphicsDevice::CreateComputePipeline(RefCountPtr<RootSignature>& pRootSignature, const char* pShaderPath, const char* entryPoint, const Span<ShaderDefine>& defines)
 {
 	PipelineStateInitializer desc;
 	desc.SetRootSignature(pRootSignature);
-	desc.SetComputeShader(pShaderPath, entryPoint, defines);
+	desc.SetComputeShader(pShaderPath, entryPoint, defines.Copy());
 	desc.SetName(Sprintf("%s:%s", pShaderPath, entryPoint).c_str());
 	return CreatePipeline(desc);
 }
@@ -833,7 +833,9 @@ RefCountPtr<ShaderResourceView> GraphicsDevice::CreateSRV(Buffer* pBuffer, const
 		m_pDevice->CreateShaderResourceView(pBuffer->GetResource(), &srvDesc, descriptor);
 	}
 
-	DescriptorHandle gpuDescriptor = StoreViewDescriptor(descriptor);
+	DescriptorHandle gpuDescriptor;
+	if(!EnumHasAnyFlags(bufferDesc.Usage, BufferFlag::NoBindless))
+		gpuDescriptor = StoreViewDescriptor(descriptor);
 	return new ShaderResourceView(pBuffer, descriptor, gpuDescriptor);
 }
 
@@ -871,7 +873,9 @@ RefCountPtr<UnorderedAccessView> GraphicsDevice::CreateUAV(Buffer* pBuffer, cons
 
 	D3D12_CPU_DESCRIPTOR_HANDLE descriptor = AllocateDescriptor<D3D12_UNORDERED_ACCESS_VIEW_DESC>();
 	m_pDevice->CreateUnorderedAccessView(pBuffer->GetResource(), pCounter ? pCounter->GetResource() : nullptr, &uavDesc, descriptor);
-	DescriptorHandle gpuDescriptor = StoreViewDescriptor(descriptor);
+	DescriptorHandle gpuDescriptor;
+	if (!EnumHasAnyFlags(bufferDesc.Usage, BufferFlag::NoBindless))
+		gpuDescriptor = StoreViewDescriptor(descriptor);
 	return new UnorderedAccessView(pBuffer, descriptor, gpuDescriptor, pCounter);
 }
 
@@ -997,12 +1001,12 @@ RefCountPtr<UnorderedAccessView> GraphicsDevice::CreateUAV(Texture* pTexture, co
 	return new UnorderedAccessView(pTexture, descriptor, gpuDescriptor);
 }
 
-Shader* GraphicsDevice::GetShader(const char* pShaderPath, ShaderType shaderType, const char* pEntryPoint, const std::vector<ShaderDefine>& defines /*= {}*/)
+Shader* GraphicsDevice::GetShader(const char* pShaderPath, ShaderType shaderType, const char* pEntryPoint, const Span<ShaderDefine>& defines /*= {}*/)
 {
 	return m_pShaderManager->GetShader(pShaderPath, shaderType, pEntryPoint, defines);
 }
 
-ShaderLibrary* GraphicsDevice::GetLibrary(const char* pShaderPath, const std::vector<ShaderDefine>& defines /*= {}*/)
+ShaderLibrary* GraphicsDevice::GetLibrary(const char* pShaderPath, const Span<ShaderDefine>& defines /*= {}*/)
 {
 	return m_pShaderManager->GetLibrary(pShaderPath, defines);
 }

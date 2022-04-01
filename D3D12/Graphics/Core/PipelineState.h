@@ -124,12 +124,12 @@ public:
 	};
 
 	//Shaders
-	void SetVertexShader(const char* pShaderPath, const char* entryPoint = "", const std::vector<ShaderDefine>& defines = {});
-	void SetPixelShader(const char* pShaderPath, const char* entryPoint = "", const std::vector<ShaderDefine>& defines = {});
-	void SetGeometryShader(const char* pShaderPath, const char* entryPoint = "", const std::vector<ShaderDefine>& defines = {});
-	void SetComputeShader(const char* pShaderPath, const char* entryPoint = "", const std::vector<ShaderDefine>& defines = {});
-	void SetMeshShader(const char* pShaderPath, const char* entryPoint = "", const std::vector<ShaderDefine>& defines = {});
-	void SetAmplificationShader(const char* pShaderPath, const char* entryPoint = "", const std::vector<ShaderDefine>& defines = {});
+	void SetVertexShader(const char* pShaderPath, const char* entryPoint = "", const Span<ShaderDefine>& defines = {});
+	void SetPixelShader(const char* pShaderPath, const char* entryPoint = "", const Span<ShaderDefine>& defines = {});
+	void SetGeometryShader(const char* pShaderPath, const char* entryPoint = "", const Span<ShaderDefine>& defines = {});
+	void SetComputeShader(const char* pShaderPath, const char* entryPoint = "", const Span<ShaderDefine>& defines = {});
+	void SetMeshShader(const char* pShaderPath, const char* entryPoint = "", const Span<ShaderDefine>& defines = {});
+	void SetAmplificationShader(const char* pShaderPath, const char* entryPoint = "", const Span<ShaderDefine>& defines = {});
 
 	D3D12_PIPELINE_STATE_STREAM_DESC GetDesc(GraphicsDevice* pDevice);
 	std::string DebugPrint();

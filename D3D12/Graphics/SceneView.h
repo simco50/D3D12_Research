@@ -85,6 +85,7 @@ struct SceneTextures
 	RefCountPtr<Texture> pDepth;
 	RefCountPtr<Texture> pAmbientOcclusion;
 	RefCountPtr<Texture> pPreviousColorTarget;
+	RefCountPtr<Texture> pVelocity;
 };
 
 void DrawScene(CommandContext& context, const SceneView& scene, const VisibilityMask& visibility, Batch::Blending blendModes);

@@ -240,7 +240,7 @@ public:
 		uint32 Subresource;
 	};
 
-	const std::vector<PendingBarrier>& GetPendingBarriers() const { return m_PendingBarriers; }
+	Span<PendingBarrier> GetPendingBarriers() const { return m_PendingBarriers; }
 
 	D3D12_RESOURCE_STATES GetResourceState(GraphicsResource* pResource, uint32 subResource) const
 	{
