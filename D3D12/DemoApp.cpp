@@ -111,7 +111,7 @@ namespace Tweakables
 {
 	// Post processing
 	ConsoleVariable g_WhitePoint("r.Exposure.WhitePoint", 1.0f);
-	ConsoleVariable g_MinLogLuminance("r.Exposure.MinLogLuminance", -10.0f);
+	ConsoleVariable g_MinLogLuminance("r.Exposure.MinLogLuminance", -4.0f);
 	ConsoleVariable g_MaxLogLuminance("r.Exposure.MaxLogLuminance", 20.0f);
 	ConsoleVariable g_Tau("r.Exposure.Tau", 2.0f);
 	ConsoleVariable g_DrawHistogram("vis.Histogram", false);

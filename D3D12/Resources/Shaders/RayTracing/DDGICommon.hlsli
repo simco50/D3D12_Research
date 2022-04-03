@@ -171,6 +171,8 @@ float4 SampleDDGIIrradiance(DDGIVolume volume, float3 position, float3 direction
 		}
 		weight *= max(chebyshev, 0.05f);
 
+		weight = max(0.000001f, weight);
+
 		float2 uv = GetDDGIProbeUV(volume, probeCoordinates, direction, DDGI_PROBE_IRRADIANCE_TEXELS);
 		// Remove tone curve and blend in sRGB
 		float3 irradiance = pow(irradianceTexture.SampleLevel(sLinearClamp, uv, 0).rgb, DDGI_PROBE_GAMMA * 0.5f);
