@@ -54,8 +54,7 @@ void RayGen()
 		if(payload.IsHit())
 		{
 			MeshInstance instance = GetMeshInstance(payload.InstanceID);
-			float4x4 world = GetTransform(NonUniformResourceIndex(instance.World));
-			VertexAttribute vertex = GetVertexAttributes(instance, payload.Barycentrics, payload.PrimitiveID, (float4x3)world);
+			VertexAttribute vertex = GetVertexAttributes(instance, payload.Barycentrics, payload.PrimitiveID);
 			MaterialData material = GetMaterial(instance.Material);
 			const uint textureMipLevel = 2;
 			MaterialProperties surface = GetMaterialProperties(material, vertex.UV, textureMipLevel);
