@@ -1747,7 +1747,7 @@ void DemoApp::UpdateImGui()
 	static bool showImguiDemo = false;
 
 	ImGuiViewport* pViewport = ImGui::GetMainViewport();
-	ImGui::DockSpaceOverViewport(pViewport);
+	ImGuiID dockspace = ImGui::DockSpaceOverViewport(pViewport);
 
 	if (ImGui::BeginMainMenuBar())
 	{
@@ -1823,11 +1823,12 @@ void DemoApp::UpdateImGui()
 		ImGui::EndMainMenuBar();
 	}
 
+	ImGui::SetNextWindowDockID(dockspace, ImGuiCond_FirstUseEver);
 	ImGui::Begin("Viewport", 0, ImGuiWindowFlags_NoScrollbar);
 	float widthDelta = ImGui::GetWindowContentRegionMax().x - ImGui::GetWindowContentRegionMin().x;
 	float heightDelta = ImGui::GetWindowContentRegionMax().y - ImGui::GetWindowContentRegionMin().y;
-	uint32 width = (uint32)Math::Max(4.0f, widthDelta);
-	uint32 height = (uint32)Math::Max(4.0f, heightDelta);
+	uint32 width = (uint32)Math::Max(16.0f, widthDelta);
+	uint32 height = (uint32)Math::Max(16.0f, heightDelta);
 
 	if (width != m_pTonemapTarget->GetWidth() || height != m_pTonemapTarget->GetHeight())
 	{

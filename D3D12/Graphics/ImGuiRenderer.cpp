@@ -163,6 +163,7 @@ void ImGuiRenderer::Render(RGGraph& graph, const SceneView& sceneData, Texture* 
 			context.BeginRenderPass(RenderPassInfo(pRenderTarget, RenderPassAccess::Load_Store, nullptr, RenderPassAccess::NoAccess, false));
 			ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), context.GetCommandList());
 			context.EndRenderPass();
+			TextureStack.clear();
 		});
 
 	// Update and Render additional Platform Windows
@@ -176,5 +177,4 @@ void ImGuiRenderer::Render(RGGraph& graph, const SceneView& sceneData, Texture* 
 				ImGui::RenderPlatformWindowsDefault(NULL, (void*)context.GetCommandList());
 			});
 	}
-	TextureStack.clear();
 }
