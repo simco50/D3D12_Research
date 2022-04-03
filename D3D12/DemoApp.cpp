@@ -203,6 +203,11 @@ DemoApp::DemoApp(WindowHandle window, const IntVector2& windowRect)
 
 	Tweakables::g_RaytracedAO = m_pDevice->GetCapabilities().SupportsRaytracing() ? Tweakables::g_RaytracedAO : false;
 	Tweakables::g_RaytracedReflections = m_pDevice->GetCapabilities().SupportsRaytracing() ? Tweakables::g_RaytracedReflections : false;
+
+	if (m_RenderPath == RenderPath::Visibility && !m_pDevice->GetCapabilities().SupportsMeshShading())
+		m_RenderPath = RenderPath::Clustered;
+	else if(m_RenderPath == RenderPath::PathTracing && !m_pDevice->GetCapabilities().SupportsRaytracing())
+		m_RenderPath = RenderPath::Clustered;
 }
 
 DemoApp::~DemoApp()
@@ -361,9 +366,12 @@ void DemoApp::Update()
 	m_Lights[0].Colour = Math::MakeFromColorTemperature(Tweakables::g_SunTemperature);
 	m_Lights[0].Intensity = Tweakables::g_SunIntensity;
 
-	DDGIVolume& volume = m_DDGIVolumes[0];
-	volume.Origin = m_SceneData.SceneAABB.Center;
-	volume.Extents = 1.1f * Vector3(m_SceneData.SceneAABB.Extents);
+	if (m_DDGIVolumes.size() > 0)
+	{
+		DDGIVolume& volume = m_DDGIVolumes[0];
+		volume.Origin = m_SceneData.SceneAABB.Center;
+		volume.Extents = 1.1f * Vector3(m_SceneData.SceneAABB.Extents);
+	}
 
 	if (Tweakables::g_VisualizeLights)
 	{
@@ -815,7 +823,7 @@ void DemoApp::Update()
 				bindingTable.BindMissShader("OcclusionMS", 1);
 				bindingTable.BindHitGroup("MaterialHG", 0);
 
-				context.DispatchRays(bindingTable, volume.NumRays, numProbes);
+				context.DispatchRays(bindingTable, ddgi.NumRays, numProbes);
 			});
 
 		RGPassBuilder ddgiUpdateIrradiance = graph.AddPass("DDGI Update Irradiance");
