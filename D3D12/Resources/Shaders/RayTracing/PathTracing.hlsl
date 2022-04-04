@@ -282,8 +282,7 @@ void RayGen()
 
 		// Decode the hit payload to retrieve all the shading information
 		MeshInstance instance = GetMeshInstance(payload.InstanceID);
-		float4x4 world = GetTransform(NonUniformResourceIndex(instance.World));
-		VertexAttribute vertex = GetVertexAttributes(instance, payload.Barycentrics, payload.PrimitiveID, (float4x3)world);
+		VertexAttribute vertex = GetVertexAttributes(instance, payload.Barycentrics, payload.PrimitiveID);
 		MaterialData material = GetMaterial(instance.Material);
 		MaterialProperties surface = GetMaterialProperties(material, vertex.UV, 0);
 		BrdfData brdfData = GetBrdfData(surface);

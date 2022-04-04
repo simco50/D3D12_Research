@@ -226,6 +226,9 @@ void UpdateProbeStatesCS(uint threadID : SV_DispatchThreadID)
 {
 	DDGIVolume volume = GetDDGIVolume(cPass.VolumeIndex);
 	uint probeIdx = threadID.x;
+	uint numProbes = volume.ProbeVolumeDimensions.x * volume.ProbeVolumeDimensions.y * volume.ProbeVolumeDimensions.z;
+	if(probeIdx >= numProbes)
+		return;
 
 	float3 prevOffset = uProbeOffsets[probeIdx].xyz;
 
@@ -372,7 +375,7 @@ float4 VisualizeIrradiancePS(InterpolantsVSToPS input) : SV_Target0
 	Texture2D<float4> tIrradianceMap = ResourceDescriptorHeap[volume.IrradianceIndex];
 	float3 radiance = tIrradianceMap.SampleLevel(sLinearClamp, uv, 0).rgb;
 	radiance = pow(radiance, DDGI_PROBE_GAMMA * 0.5);
-	radiance = 4 * Square(radiance);
+	radiance = Square(radiance);
 	float3 color = radiance;
 #elif VISUALIZE_MODE == VISUALIZE_MODE_DEPTH
 	float2 uv = GetDDGIProbeUV(volume, probeIdx3D, input.Normal, DDGI_PROBE_DEPTH_TEXELS);

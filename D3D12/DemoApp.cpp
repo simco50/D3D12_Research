@@ -111,7 +111,7 @@ namespace Tweakables
 {
 	// Post processing
 	ConsoleVariable g_WhitePoint("r.Exposure.WhitePoint", 1.0f);
-	ConsoleVariable g_MinLogLuminance("r.Exposure.MinLogLuminance", -10.0f);
+	ConsoleVariable g_MinLogLuminance("r.Exposure.MinLogLuminance", -4.0f);
 	ConsoleVariable g_MaxLogLuminance("r.Exposure.MaxLogLuminance", 20.0f);
 	ConsoleVariable g_Tau("r.Exposure.Tau", 2.0f);
 	ConsoleVariable g_DrawHistogram("vis.Histogram", false);
@@ -203,6 +203,11 @@ DemoApp::DemoApp(WindowHandle window, const IntVector2& windowRect)
 
 	Tweakables::g_RaytracedAO = m_pDevice->GetCapabilities().SupportsRaytracing() ? Tweakables::g_RaytracedAO : false;
 	Tweakables::g_RaytracedReflections = m_pDevice->GetCapabilities().SupportsRaytracing() ? Tweakables::g_RaytracedReflections : false;
+
+	if (m_RenderPath == RenderPath::Visibility && !m_pDevice->GetCapabilities().SupportsMeshShading())
+		m_RenderPath = RenderPath::Clustered;
+	else if(m_RenderPath == RenderPath::PathTracing && !m_pDevice->GetCapabilities().SupportsRaytracing())
+		m_RenderPath = RenderPath::Clustered;
 }
 
 DemoApp::~DemoApp()
@@ -361,9 +366,12 @@ void DemoApp::Update()
 	m_Lights[0].Colour = Math::MakeFromColorTemperature(Tweakables::g_SunTemperature);
 	m_Lights[0].Intensity = Tweakables::g_SunIntensity;
 
-	DDGIVolume& volume = m_DDGIVolumes[0];
-	volume.Origin = m_SceneData.SceneAABB.Center;
-	volume.Extents = 1.1f * Vector3(m_SceneData.SceneAABB.Extents);
+	if (m_DDGIVolumes.size() > 0)
+	{
+		DDGIVolume& volume = m_DDGIVolumes[0];
+		volume.Origin = m_SceneData.SceneAABB.Center;
+		volume.Extents = 1.1f * Vector3(m_SceneData.SceneAABB.Extents);
+	}
 
 	if (Tweakables::g_VisualizeLights)
 	{
@@ -815,7 +823,7 @@ void DemoApp::Update()
 				bindingTable.BindMissShader("OcclusionMS", 1);
 				bindingTable.BindHitGroup("MaterialHG", 0);
 
-				context.DispatchRays(bindingTable, volume.NumRays, numProbes);
+				context.DispatchRays(bindingTable, ddgi.NumRays, numProbes);
 			});
 
 		RGPassBuilder ddgiUpdateIrradiance = graph.AddPass("DDGI Update Irradiance");
@@ -1739,7 +1747,7 @@ void DemoApp::UpdateImGui()
 	static bool showImguiDemo = false;
 
 	ImGuiViewport* pViewport = ImGui::GetMainViewport();
-	ImGui::DockSpaceOverViewport(pViewport);
+	ImGuiID dockspace = ImGui::DockSpaceOverViewport(pViewport);
 
 	if (ImGui::BeginMainMenuBar())
 	{
@@ -1815,11 +1823,12 @@ void DemoApp::UpdateImGui()
 		ImGui::EndMainMenuBar();
 	}
 
+	ImGui::SetNextWindowDockID(dockspace, ImGuiCond_FirstUseEver);
 	ImGui::Begin("Viewport", 0, ImGuiWindowFlags_NoScrollbar);
 	float widthDelta = ImGui::GetWindowContentRegionMax().x - ImGui::GetWindowContentRegionMin().x;
 	float heightDelta = ImGui::GetWindowContentRegionMax().y - ImGui::GetWindowContentRegionMin().y;
-	uint32 width = (uint32)Math::Max(4.0f, widthDelta);
-	uint32 height = (uint32)Math::Max(4.0f, heightDelta);
+	uint32 width = (uint32)Math::Max(16.0f, widthDelta);
+	uint32 height = (uint32)Math::Max(16.0f, heightDelta);
 
 	if (width != m_pTonemapTarget->GetWidth() || height != m_pTonemapTarget->GetHeight())
 	{

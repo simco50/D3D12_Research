@@ -27,7 +27,7 @@ void MaterialAHS(inout MaterialRayPayload payload, BuiltInTriangleIntersectionAt
 	payload.FrontFace = HitKind() == HIT_KIND_TRIANGLE_FRONT_FACE;
 	
 	MeshInstance instance = GetMeshInstance(InstanceID());
-	VertexAttribute vertex = GetVertexAttributes(instance, attrib.barycentrics, PrimitiveIndex(), ObjectToWorld4x3());
+	VertexAttribute vertex = GetVertexAttributes(instance, attrib.barycentrics, PrimitiveIndex());
 	MaterialData material = GetMaterial(instance.Material);
 	MaterialProperties surface = GetMaterialProperties(material, vertex.UV, 0);
 
