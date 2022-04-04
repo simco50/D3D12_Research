@@ -175,7 +175,8 @@ namespace ShaderInterop
 		float4x4 ViewProjectionInverse;
 		float4x4 PreviousViewProjection;
 		float4x4 ReprojectionMatrix;
-		float4 ViewPosition;
+		float3 ViewPosition;
+		float padd1;
 		float4 FrustumPlanes[6];
 		float2 ScreenDimensions;
 		float2 ScreenDimensionsInv;

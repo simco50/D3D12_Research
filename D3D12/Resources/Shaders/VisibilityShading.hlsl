@@ -145,7 +145,7 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 	float2 screenUV = ((float2)dispatchThreadId.xy + 0.5f) * cView.ScreenDimensionsInv;
 	VertexAttribute vertex = GetVertexAttributes(screenUV, visibility, dx, dy, barycentrics);
 	float3 positionWS = vertex.PositionWS;
-	float3 V = normalize(cView.ViewPosition.xyz - positionWS);
+	float3 V = normalize(cView.ViewPosition - positionWS);
 
 	float ambientOcclusion = tAO.SampleLevel(sLinearClamp, screenUV, 0).r;
 

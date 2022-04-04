@@ -47,7 +47,7 @@ ShaderInterop::ViewUniforms GetViewUniforms(const SceneView& sceneView, Texture*
 
 	parameters.PreviousViewProjection = view.PreviousViewProjection;
 	parameters.ReprojectionMatrix = premult * reprojectionMatrix * postmult;
-	parameters.ViewPosition = Vector4(view.Position);
+	parameters.ViewPosition = view.Position;
 
 	DirectX::XMVECTOR nearPlane, farPlane, left, right, top, bottom;
 	view.Frustum.GetPlanes(&nearPlane, &farPlane, &right, &left, &top, &bottom);
