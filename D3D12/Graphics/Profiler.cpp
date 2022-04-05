@@ -1,9 +1,9 @@
 #include "stdafx.h"
 #include "Profiler.h"
-#include "Graphics/Core/Graphics.h"
-#include "Graphics/Core/CommandContext.h"
-#include "Graphics/Core/CommandQueue.h"
-#include "Graphics/Core/Buffer.h"
+#include "RHI/Graphics.h"
+#include "RHI/CommandContext.h"
+#include "RHI/CommandQueue.h"
+#include "RHI/Buffer.h"
 #include "pix3.h"
 
 void CpuTimer::Begin()

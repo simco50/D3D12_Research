@@ -21,9 +21,8 @@ public:
 	uint32 Release()
 	{
 		uint32 result = --m_RefCount;
-		if (result == 0) {
+		if (result == 0)
 			delete this;
-		}
 		return result;
 	}
 
@@ -102,8 +101,6 @@ public:
 
 	int32 GetSRVIndex() const;
 	int32 GetUAVIndex() const;
-
-	uint64 GetMemoryFootprint() const;
 
 	inline ID3D12Resource* GetResource() const { return m_pResource; }
 	inline D3D12_GPU_VIRTUAL_ADDRESS GetGpuHandle() const { return m_pResource->GetGPUVirtualAddress(); }

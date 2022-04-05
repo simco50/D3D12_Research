@@ -94,67 +94,6 @@ namespace D3D
 		}
 	}
 
-	inline void BeginCapture(const char* pFileName)
-	{
-		PIXCaptureParameters parameters;
-		parameters.GpuCaptureParameters.FileName = MULTIBYTE_TO_UNICODE(pFileName);
-		if (SUCCEEDED(::PIXBeginCapture(PIX_CAPTURE_GPU, &parameters)))
-		{
-			E_LOG(Info, "Started PIX capture to file %s", pFileName);
-		}
-		else
-		{
-			E_LOG(Info, "Failed to start PIX capture");
-		}
-	}
-
-	inline void EndCapture()
-	{
-		if (SUCCEEDED(::PIXEndCapture(false)))
-		{
-			E_LOG(Info, "Finished PIX capture");
-		}
-		else
-		{
-			E_LOG(Info, "Failed to finish PIX capture");
-		}
-	}
-
-	template<size_t hash>
-	class PixCaptureScope
-	{
-	public:
-		PixCaptureScope()
-		{
-			if (!sCaptured)
-			{
-				SYSTEMTIME time;
-				GetSystemTime(&time);
-				Paths::CreateDirectoryTree(Paths::SavedDir());
-				char filePath[128];
-				FormatString(filePath, ARRAYSIZE(filePath), "%sGPU_Capture_%d_%02d_%02d__%02d_%02d_%02d_%d.wpix",
-					Paths::SavedDir().c_str(),
-					time.wYear, time.wMonth, time.wDay,
-					time.wHour, time.wMinute, time.wSecond, time.wMilliseconds);
-
-				BeginCapture(filePath);
-			}
-		}
-
-		~PixCaptureScope()
-		{
-			if (!sCaptured)
-			{
-				EndCapture();
-				sCaptured = 1;
-			}
-		}
-
-		inline static int sCaptured = 0;
-	};
-
-#define PIX_CAPTURE_ONCE() D3D::PixCaptureScope<__COUNTER__> MACRO_CONCAT(pix_capture,__COUNTER__)
-
 	inline void DREDHandler(ID3D12Device* pDevice)
 	{
 		//D3D12_AUTO_BREADCRUMB_OP

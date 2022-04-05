@@ -1,6 +1,6 @@
 #pragma once
+#include "Graphics/RHI/Graphics.h"
 #include "Graphics/Light.h"
-#include "Graphics/Core/Graphics.h"
 #include "Graphics/SceneView.h"
 
 class ImGuiRenderer;

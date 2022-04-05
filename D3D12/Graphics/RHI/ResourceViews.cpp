@@ -15,7 +15,7 @@ ResourceView::~ResourceView()
 	if (m_Descriptor.ptr != 0)
 	{
 		check(m_pResource);
-		GetParent()->FreeDescriptor<D3D12_SHADER_RESOURCE_VIEW_DESC>(m_Descriptor);
+		GetParent()->FreeDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, m_Descriptor);
 		m_Descriptor.ptr = 0;
 		GetParent()->FreeViewDescriptor(m_GpuDescriptor);
 	}

@@ -1,12 +1,12 @@
 #include "stdafx.h"
 #include "CBTTessellation.h"
-#include "Graphics/Core/RootSignature.h"
-#include "Graphics/Core/Graphics.h"
-#include "Graphics/ImGuiRenderer.h"
-#include "Graphics/Core/PipelineState.h"
-#include "Graphics/Core/Buffer.h"
+#include "Graphics/RHI/RootSignature.h"
+#include "Graphics/RHI/Graphics.h"
+#include "Graphics/RHI/PipelineState.h"
+#include "Graphics/RHI/Buffer.h"
+#include "Graphics/RHI/CommandContext.h"
 #include "Graphics/RenderGraph/RenderGraph.h"
-#include "Graphics/Core/CommandContext.h"
+#include "Graphics/ImGuiRenderer.h"
 #include "Graphics/SceneView.h"
 #include "Graphics/Profiler.h"
 #include "Core/Input.h"
@@ -154,7 +154,7 @@ void CBTTessellation::Execute(RGGraph& graph, Texture* pRenderTarget, Texture* p
 		RGPassBuilder cbtUpload = graph.AddPass("CBT Upload");
 		cbtUpload.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
 			{
-				context.InitializeBuffer(m_pCBTBuffer, m_CBT.GetData(), m_CBT.GetMemoryUse());
+				context.WriteBuffer(m_pCBTBuffer, m_CBT.GetData(), m_CBT.GetMemoryUse());
 				context.FlushResourceBarriers();
 			});
 		m_IsDirty = false;

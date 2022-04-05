@@ -10,6 +10,7 @@
 #include "stb_image_write.h"
 #include <fstream>
 #include "Core/Paths.h"
+#include "Graphics/RHI/D3DUtils.h"
 
 Image::Image(int width, int height, ImageFormat format, void* pInitialData /*= nullptr*/)
 {

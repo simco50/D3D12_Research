@@ -1,5 +1,5 @@
 #pragma once
-#include "Core/Buffer.h"
+#include "RHI/Buffer.h"
 
 class Buffer;
 class CommandContext;

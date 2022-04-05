@@ -1,5 +1,6 @@
 #pragma once
 #include "GraphicsResource.h"
+#include "D3DUtils.h"
 
 enum class BufferFlag
 {

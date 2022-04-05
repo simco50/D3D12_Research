@@ -201,7 +201,7 @@ struct TextureDesc
 			&& Dimensions == other.Dimensions;
 	}
 
-	bool operator !=(const TextureDesc& other) const
+	bool operator!=(const TextureDesc& other) const
 	{
 		return !operator==(other);
 	}
@@ -227,6 +227,7 @@ public:
 	D3D12_CPU_DESCRIPTOR_HANDLE GetDSV(bool writeable = true) const;
 
 private:
+
 	TextureDesc m_Desc;
 
 	D3D12_CPU_DESCRIPTOR_HANDLE m_Rtv = {};
