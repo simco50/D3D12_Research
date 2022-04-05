@@ -16,16 +16,14 @@
 //Misc
 #include <mutex>
 
-#include "Core/MinWindows.h"
-
 #define USE_PIX 1
 
+#include "Core/MinWindows.h"
 #include "d3d12.h"
 #include <dxgi1_6.h>
 #define D3DX12_NO_STATE_OBJECT_HELPERS
 #include "d3dx12.h"
 
-#include "IconsFontAwesome4.h"
 #include "imgui.h"
 
 #define USE_OPTICK 1
@@ -34,33 +32,15 @@
 #define OPTICK_ENABLE_GPU_VULKAN 0
 #include "optick.h"
 
-#define CONCAT_IMPL( x, y ) x##y
-#define MACRO_CONCAT( x, y ) CONCAT_IMPL( x, y )
-
-#define checkf(expression, msg, ...) if((expression)){} else {__debugbreak(); Console::LogFormat(LogType::FatalError, msg, ##__VA_ARGS__);}
-#define check(expression) checkf(expression, "")
-#define noEntry() checkf(false, "Should not have reached this point!")
-#define validateOncef(expression, msg, ...) if(!(expression)) { \
-	static bool hasExecuted = false; \
-	if(!hasExecuted) \
-	{ \
-		Console::LogFormat(LogType::Warning, "Validate failed: '" #expression "'. " msg, ##__VA_ARGS__); \
-		hasExecuted = true; \
-	} \
-} \
-
-#define validateOnce(expression) validateOncef(expression, "")
-
+#include "Core/Defines.h"
 #include "Core/CoreTypes.h"
 #include "Core/CString.h"
-#include "Core/String.h"
 #include "Core/Thread.h"
-#include "Math/MathTypes.h"
 #include "Core/Time.h"
-#include "Math/Math.h"
 #include "Core/Console.h"
 #include "Core/StringHash.h"
 #include "Core/Delegates.h"
 #include "Core/RefCountPtr.h"
 #include "Core/Span.h"
-#include "Graphics/Core/D3DUtils.h"
+#include "Math/MathTypes.h"
+#include "Math/Math.h"

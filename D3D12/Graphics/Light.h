@@ -1,6 +1,6 @@
 #pragma once
-#include "Graphics/Core/ShaderInterop.h"
-#include "Graphics/Core/DescriptorHandle.h"
+#include "ShaderInterop.h"
+#include "RHI/DescriptorHandle.h"
 
 enum class LightType
 {

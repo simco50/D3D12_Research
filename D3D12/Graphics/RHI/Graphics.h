@@ -4,6 +4,7 @@
 #include "DescriptorHandle.h"
 #include "GraphicsResource.h"
 #include "ResourceViews.h"
+#include "D3DUtils.h"
 
 class CommandQueue;
 class CommandContext;
@@ -167,29 +168,8 @@ public:
 	CommandContext* AllocateCommandContext(D3D12_COMMAND_LIST_TYPE type = D3D12_COMMAND_LIST_TYPE_DIRECT);
 	void FreeCommandList(CommandContext* pCommandList);
 
-	GlobalOnlineDescriptorHeap* GetGlobalViewHeap() const { return m_pGlobalViewHeap; }
-	GlobalOnlineDescriptorHeap* GetGlobalSamplerHeap() const { return m_pGlobalSamplerHeap; }
-
-	template<typename DESC_TYPE>
-	struct DescriptorSelector {};
-	template<> struct DescriptorSelector<D3D12_SHADER_RESOURCE_VIEW_DESC> { static constexpr D3D12_DESCRIPTOR_HEAP_TYPE Type() { return D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV; } };
-	template<> struct DescriptorSelector<D3D12_UNORDERED_ACCESS_VIEW_DESC> { static constexpr D3D12_DESCRIPTOR_HEAP_TYPE Type() { return D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV; } };
-	template<> struct DescriptorSelector<D3D12_CONSTANT_BUFFER_VIEW_DESC> { static constexpr D3D12_DESCRIPTOR_HEAP_TYPE Type() { return D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV; } };
-	template<> struct DescriptorSelector<D3D12_RENDER_TARGET_VIEW_DESC> { static constexpr D3D12_DESCRIPTOR_HEAP_TYPE Type() { return D3D12_DESCRIPTOR_HEAP_TYPE_RTV; } };
-	template<> struct DescriptorSelector<D3D12_DEPTH_STENCIL_VIEW_DESC> { static constexpr D3D12_DESCRIPTOR_HEAP_TYPE Type() { return D3D12_DESCRIPTOR_HEAP_TYPE_DSV; } };
-
-	template<typename DESC_TYPE>
-	D3D12_CPU_DESCRIPTOR_HANDLE AllocateDescriptor()
-	{
-		return m_DescriptorHeaps[DescriptorSelector<DESC_TYPE>::Type()]->AllocateDescriptor();
-	}
-
-	template<typename DESC_TYPE>
-	void FreeDescriptor(D3D12_CPU_DESCRIPTOR_HANDLE descriptor)
-	{
-		m_DescriptorHeaps[DescriptorSelector<DESC_TYPE>::Type()]->FreeDescriptor(descriptor);
-	}
-
+	D3D12_CPU_DESCRIPTOR_HANDLE AllocateDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE type);
+	void FreeDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE type, D3D12_CPU_DESCRIPTOR_HANDLE descriptor);
 	DescriptorHandle StoreViewDescriptor(D3D12_CPU_DESCRIPTOR_HANDLE view);
 	void FreeViewDescriptor(DescriptorHandle& heapIndex);
 
@@ -211,12 +191,12 @@ public:
 	Shader* GetShader(const char* pShaderPath, ShaderType shaderType, const char* entryPoint = "", const Span<ShaderDefine>& defines = {});
 	ShaderLibrary* GetLibrary(const char* pShaderPath, const Span<ShaderDefine>& defines = {});
 
+	GlobalOnlineDescriptorHeap* GetGlobalViewHeap() const { return m_pGlobalViewHeap; }
+	GlobalOnlineDescriptorHeap* GetGlobalSamplerHeap() const { return m_pGlobalSamplerHeap; }
 	ID3D12Device* GetDevice() const { return m_pDevice.Get(); }
 	ID3D12Device5* GetRaytracingDevice() const { return m_pRaytracingDevice.Get(); }
 	ShaderManager* GetShaderManager() const { return m_pShaderManager.get(); }
-
 	const GraphicsCapabilities& GetCapabilities() const { return m_Capabilities; }
-
 	Fence* GetFrameFence() const { return m_pFrameFence; }
 
 private:
@@ -225,21 +205,17 @@ private:
 
 	RefCountPtr<ID3D12Device> m_pDevice;
 	RefCountPtr<ID3D12Device5> m_pRaytracingDevice;
-
 	RefCountPtr<Fence> m_pFrameFence;
-
 	std::array<RefCountPtr<CommandQueue>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_CommandQueues;
 	std::array<std::vector<RefCountPtr<CommandContext>>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_CommandListPool;
 	std::array<std::queue<CommandContext*>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_FreeCommandLists;
 	std::vector<RefCountPtr<ID3D12CommandList>> m_CommandLists;
-
 	DeferredDeleteQueue m_DeleteQueue;
 
 	HANDLE m_DeviceRemovedEvent = 0;
 	RefCountPtr<Fence> m_pDeviceRemovalFence;
 
 	std::unique_ptr<ShaderManager> m_pShaderManager;
-
 	RefCountPtr<GlobalOnlineDescriptorHeap> m_pGlobalViewHeap;
 	RefCountPtr<GlobalOnlineDescriptorHeap> m_pGlobalSamplerHeap;
 

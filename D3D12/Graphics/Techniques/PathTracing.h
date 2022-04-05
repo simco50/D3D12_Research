@@ -1,5 +1,5 @@
 #pragma once
-#include "Graphics/Core/StateObject.h"
+#include "Graphics/RHI/StateObject.h"
 
 class RootSignature;
 class StateObject;

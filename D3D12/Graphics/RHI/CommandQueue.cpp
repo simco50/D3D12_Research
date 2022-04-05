@@ -1,8 +1,8 @@
 #include "stdafx.h"
 #include "CommandQueue.h"
 #include "Graphics.h"
-#include "pix3.h"
 #include "CommandContext.h"
+#include "D3DUtils.h"
 
 Fence::Fence(GraphicsDevice* pParent, uint64 fenceValue, const char* pName)
 	: GraphicsObject(pParent), m_CurrentValue(fenceValue), m_LastSignaled(0), m_LastCompleted(0)

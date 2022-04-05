@@ -1,10 +1,10 @@
 #include "stdafx.h"
 #include "SceneView.h"
-#include "Core/CommandContext.h"
-#include "Core/Buffer.h"
+#include "RHI/CommandContext.h"
+#include "RHI/Buffer.h"
+#include "RHI/PipelineState.h"
+#include "RHI/Texture.h"
 #include "Mesh.h"
-#include "Core/PipelineState.h"
-#include "Core/Texture.h"
 #include "Core/ConsoleVariables.h"
 
 namespace Tweakables

@@ -1,6 +1,6 @@
 #pragma once
 #include "Core/BitField.h"
-#include "Core/ShaderInterop.h"
+#include "ShaderInterop.h"
 
 class Texture;
 class Buffer;

@@ -1,7 +1,7 @@
 #pragma once
 #include "RenderGraphDefinitions.h"
-#include "Graphics/Core/Texture.h"
-#include "Graphics/Core/Buffer.h"
+#include "Graphics/RHI/Texture.h"
+#include "Graphics/RHI/Buffer.h"
 
 #define RG_GRAPH_SCOPE(name, graph) RGGraphScope MACRO_CONCAT(rgScope_,__COUNTER__)(name, graph)
 
