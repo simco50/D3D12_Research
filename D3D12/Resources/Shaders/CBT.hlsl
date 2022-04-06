@@ -574,9 +574,18 @@ void RenderVS(uint vertexID : SV_VertexID, uint instanceID : SV_InstanceID, out 
 }
 #endif
 
-float4 RenderPS(
+struct PSOut
+{
+ 	float4 Color : SV_Target0;
+	float2 Normal : SV_Target1;
+	float Roughness : SV_Target2;
+};
+
+
+void RenderPS(
 	VertexOut vertex,
-	float3 bary : SV_Barycentrics) : SV_Target
+	float3 bary : SV_Barycentrics,
+	out PSOut output)
 {
 	float tl = Sample2D(cCommonArgs.HeightmapIndex, sLinearClamp, vertex.UV, uint2(-1, -1)).r;
 	float t  = Sample2D(cCommonArgs.HeightmapIndex, sLinearClamp, vertex.UV, uint2( 0, -1)).r;
@@ -599,7 +608,7 @@ float4 RenderPS(
 #endif
 
 	float3 dir = normalize(float3(1, 1, 1));
-	float4 output = float4(color * saturate(dot(dir, normalize(normal))), 1);
+	float3 radiance = color * saturate(dot(dir, normalize(normal)));
 
 #if RENDER_WIREFRAME
 	float3 deltas = fwidth(bary);
@@ -607,9 +616,12 @@ float4 RenderPS(
 	float3 thickness = deltas * 0.2;
 	bary = smoothstep(thickness, thickness + smoothing, bary);
 	float minBary = min(bary.x, min(bary.y, bary.z));
-	output.xyz *= saturate(minBary + 0.5f);
+	radiance *= saturate(minBary + 0.5f);
 #endif
-	return output;
+
+	output.Color = float4(radiance, 1);
+	output.Normal = EncodeNormalOctahedron(normal);
+	output.Roughness = 0.0f;
 }
 
 /* DEBUG VISUALIZATION TECHNIQUE */

@@ -9,13 +9,14 @@ class GraphicsDevice;
 class RGGraph;
 class CommandSignature;
 struct SceneView;
+struct SceneTextures;
 
 class CBTTessellation
 {
 public:
 	CBTTessellation(GraphicsDevice* pDevice);
 
-	void Execute(RGGraph& graph, Texture* pRenderTarget, Texture* pDepthTexture, const SceneView& resources);
+	void Execute(RGGraph& graph, const SceneView& resources, const SceneTextures& sceneTextures);
 
 private:
 	void AllocateCBT();
