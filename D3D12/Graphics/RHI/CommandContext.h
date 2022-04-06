@@ -44,20 +44,23 @@ enum class RenderTargetStoreAction : uint8
 };
 DEFINE_ENUM_FLAG_OPERATORS(RenderTargetStoreAction)
 
+constexpr uint8 CombineRenderTargetAction(RenderTargetLoadAction loadAction, RenderTargetStoreAction storeAction)
+{
+	return (uint8)loadAction << 4 | (uint8)storeAction;
+}
+
 enum class RenderPassAccess : uint8
 {
-#define COMBINE_ACTIONS(load, store) (uint8)RenderTargetLoadAction::load << 4 | (uint8)RenderTargetStoreAction::store
-	DontCare_DontCare = COMBINE_ACTIONS(DontCare, DontCare),
-	DontCare_Store = COMBINE_ACTIONS(DontCare, Store),
-	Clear_Store = COMBINE_ACTIONS(Clear, Store),
-	Load_Store = COMBINE_ACTIONS(Load, Store),
-	Clear_DontCare = COMBINE_ACTIONS(Clear, DontCare),
-	Load_DontCare = COMBINE_ACTIONS(Load, DontCare),
-	Clear_Resolve = COMBINE_ACTIONS(Clear, Resolve),
-	Load_Resolve = COMBINE_ACTIONS(Load, Resolve),
-	DontCare_Resolve = COMBINE_ACTIONS(DontCare, Resolve),
-	NoAccess = COMBINE_ACTIONS(NoAccess, NoAccess),
-#undef COMBINE_ACTIONS
+	DontCare_DontCare =	CombineRenderTargetAction(RenderTargetLoadAction::DontCare,	RenderTargetStoreAction::DontCare),
+	DontCare_Store =	CombineRenderTargetAction(RenderTargetLoadAction::DontCare,	RenderTargetStoreAction::Store),
+	Clear_Store =		CombineRenderTargetAction(RenderTargetLoadAction::Clear,	RenderTargetStoreAction::Store),
+	Load_Store =		CombineRenderTargetAction(RenderTargetLoadAction::Load,		RenderTargetStoreAction::Store),
+	Clear_DontCare =	CombineRenderTargetAction(RenderTargetLoadAction::Clear,	RenderTargetStoreAction::DontCare),
+	Load_DontCare =		CombineRenderTargetAction(RenderTargetLoadAction::Load,		RenderTargetStoreAction::DontCare),
+	Clear_Resolve =		CombineRenderTargetAction(RenderTargetLoadAction::Clear,	RenderTargetStoreAction::Resolve),
+	Load_Resolve =		CombineRenderTargetAction(RenderTargetLoadAction::Load,		RenderTargetStoreAction::Resolve),
+	DontCare_Resolve =	CombineRenderTargetAction(RenderTargetLoadAction::DontCare,	RenderTargetStoreAction::Resolve),
+	NoAccess =			CombineRenderTargetAction(RenderTargetLoadAction::NoAccess,	RenderTargetStoreAction::NoAccess),
 };
 
 struct RenderPassInfo
@@ -110,7 +113,7 @@ struct RenderPassInfo
 
 	static RenderTargetStoreAction GetEndAccess(RenderPassAccess access)
 	{
-		return (RenderTargetStoreAction)((uint8)access & 0b1111);
+		return (RenderTargetStoreAction)((uint8)access & 0xF);
 	}
 
 	bool WriteUAVs = false;
@@ -164,8 +167,8 @@ public:
 	void CopyTexture(Texture* pSource, Buffer* pDestination, const D3D12_BOX& sourceRegion, uint32 sourceSubregion = 0, uint32 destinationOffset = 0);
 	void CopyTexture(Texture* pSource, Texture* pDestination, const D3D12_BOX& sourceRegion, const D3D12_BOX& destinationRegion, uint32 sourceSubregion = 0, uint32 destinationSubregion = 0);
 	void CopyBuffer(Buffer* pSource, Buffer* pDestination, uint64 size, uint64 sourceOffset, uint64 destinationOffset);
-	void InitializeBuffer(Buffer* pResource, const void* pData, uint64 dataSize, uint64 offset = 0);
-	void InitializeTexture(Texture* pResource, D3D12_SUBRESOURCE_DATA* pSubResourceDatas, uint32 firstSubResource, uint32 subResourceCount);
+	void WriteBuffer(Buffer* pResource, const void* pData, uint64 dataSize, uint64 offset = 0);
+	void WriteTexture(Texture* pResource, D3D12_SUBRESOURCE_DATA* pSubResourceDatas, uint32 firstSubResource, uint32 subResourceCount);
 
 	void Dispatch(uint32 groupCountX, uint32 groupCountY = 1, uint32 groupCountZ = 1);
 	void Dispatch(const IntVector3& groupCounts);

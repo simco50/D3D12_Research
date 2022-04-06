@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "FileWatcher.h"
+#include "Core/Paths.h"
 
 FileWatcher::FileWatcher()
 {

@@ -1,13 +1,13 @@
 #include "stdafx.h"
 #include "GpuParticles.h"
-#include "Graphics/Core/Buffer.h"
-#include "Graphics/Core/Graphics.h"
-#include "Graphics/Core/PipelineState.h"
-#include "Graphics/Core/RootSignature.h"
-#include "Graphics/Core/CommandContext.h"
-#include "Graphics/Core/GraphicsResource.h"
-#include "Graphics/Core/Texture.h"
-#include "Graphics/Core/ResourceViews.h"
+#include "Graphics/RHI/Buffer.h"
+#include "Graphics/RHI/Graphics.h"
+#include "Graphics/RHI/PipelineState.h"
+#include "Graphics/RHI/RootSignature.h"
+#include "Graphics/RHI/CommandContext.h"
+#include "Graphics/RHI/GraphicsResource.h"
+#include "Graphics/RHI/Texture.h"
+#include "Graphics/RHI/ResourceViews.h"
 #include "Graphics/RenderGraph/RenderGraph.h"
 #include "Graphics/SceneView.h"
 
@@ -38,9 +38,9 @@ GpuParticles::GpuParticles(GraphicsDevice* pDevice)
 	m_pDeadList = pDevice->CreateBuffer(particleBufferDesc, "Particles Dead List");
 	std::vector<uint32> deadList(cMaxParticleCount);
 	std::generate(deadList.begin(), deadList.end(), [n = 0]() mutable { return n++; });
-	pContext->InitializeBuffer(m_pDeadList, deadList.data(), sizeof(uint32) * deadList.size());
+	pContext->WriteBuffer(m_pDeadList, deadList.data(), sizeof(uint32) * deadList.size());
 	uint32 aliveCount = cMaxParticleCount;
-	pContext->InitializeBuffer(m_pCountersBuffer, &aliveCount, sizeof(uint32), 0);
+	pContext->WriteBuffer(m_pCountersBuffer, &aliveCount, sizeof(uint32), 0);
 
 	m_pParticleBuffer = pDevice->CreateBuffer(BufferDesc::CreateStructured(cMaxParticleCount, sizeof(ParticleData)), "Particle Buffer");
 

@@ -1,16 +1,16 @@
 #include "stdafx.h"
 #include "ImGuiRenderer.h"
-#include "Graphics/Core/CommandContext.h"
-#include "Graphics/Core/Graphics.h"
-#include "Graphics/Core/PipelineState.h"
-#include "Graphics/Core/RootSignature.h"
-#include "Graphics/Core/Texture.h"
-#include "Graphics/Core/OfflineDescriptorAllocator.h"
-#include "Graphics/SceneView.h"
+#include "RHI/CommandContext.h"
+#include "RHI/Graphics.h"
+#include "RHI/PipelineState.h"
+#include "RHI/RootSignature.h"
+#include "RHI/Texture.h"
+#include "RHI/OfflineDescriptorAllocator.h"
+#include "SceneView.h"
 #include "RenderGraph/RenderGraph.h"
 #include "ImGuizmo.h"
 #include "Core/Paths.h"
-
+#include "IconsFontAwesome4.h"
 #include "imgui_impl_dx12.h"
 #include "imgui_impl_win32.h"
 
@@ -125,7 +125,7 @@ ImGuiRenderer::ImGuiRenderer(GraphicsDevice* pDevice, WindowHandle window, uint3
 	colors[ImGuiCol_NavWindowingDimBg] = ImVec4(0.80f, 0.80f, 0.80f, 0.20f);
 	colors[ImGuiCol_ModalWindowDimBg] = ImVec4(0.80f, 0.80f, 0.80f, 0.35f);
 
-	D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = pDevice->AllocateDescriptor<D3D12_SHADER_RESOURCE_VIEW_DESC>();
+	D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = pDevice->AllocateDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 	DescriptorHandle gpuHandle = pDevice->StoreViewDescriptor(srvHandle);
 
 	ImGui_ImplWin32_Init(window);

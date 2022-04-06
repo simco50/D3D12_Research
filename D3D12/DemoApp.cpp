@@ -6,13 +6,13 @@
 #include "Graphics/DebugRenderer.h"
 #include "Graphics/Profiler.h"
 #include "Graphics/Mesh.h"
-#include "Graphics/Core/Graphics.h"
-#include "Graphics/Core/Texture.h"
-#include "Graphics/Core/CommandContext.h"
-#include "Graphics/Core/DynamicResourceAllocator.h"
-#include "Graphics/Core/Shader.h"
-#include "Graphics/Core/PipelineState.h"
-#include "Graphics/Core/ShaderBindingTable.h"
+#include "Graphics/RHI/Graphics.h"
+#include "Graphics/RHI/Texture.h"
+#include "Graphics/RHI/CommandContext.h"
+#include "Graphics/RHI/DynamicResourceAllocator.h"
+#include "Graphics/RHI/Shader.h"
+#include "Graphics/RHI/PipelineState.h"
+#include "Graphics/RHI/ShaderBindingTable.h"
 #include "Graphics/RenderGraph/RenderGraph.h"
 #include "Graphics/Techniques/GpuParticles.h"
 #include "Graphics/Techniques/RTAO.h"
@@ -30,6 +30,7 @@
 #include "Core/ConsoleVariables.h"
 #include "Core/Utils.h"
 #include "imgui_internal.h"
+#include "IconsFontAwesome4.h"
 
 static const int32 FRAME_COUNT = 3;
 static const DXGI_FORMAT DEPTH_STENCIL_SHADOW_FORMAT = DXGI_FORMAT_D32_FLOAT;
@@ -1012,7 +1013,7 @@ void DemoApp::Update()
 
 		if (Tweakables::g_RenderTerrain.GetBool())
 		{
-			m_pCBTTessellation->Execute(graph, GetCurrentRenderTarget(), GetDepthStencil(), m_SceneData);
+			m_pCBTTessellation->Execute(graph, m_SceneData, sceneTextures);
 		}
 
 		RGPassBuilder renderSky = graph.AddPass("Render Sky");
@@ -2309,31 +2310,31 @@ void DemoApp::UploadSceneData(CommandContext& context)
 	{
 		m_pDDGIVolumesBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(Math::Max(1, (int)ddgiVolumes.size()), sizeof(ShaderInterop::DDGIVolume), BufferFlag::ShaderResource), "DDGI Volumes");
 	}
-	context.InitializeBuffer(m_pDDGIVolumesBuffer, ddgiVolumes.data(), ddgiVolumes.size() * sizeof(ShaderInterop::DDGIVolume));
+	context.WriteBuffer(m_pDDGIVolumesBuffer, ddgiVolumes.data(), ddgiVolumes.size() * sizeof(ShaderInterop::DDGIVolume));
 
 	if (!m_pMeshBuffer || meshes.size() > m_pMeshBuffer->GetNumElements())
 	{
 		m_pMeshBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(Math::Max(1, (int)meshes.size()), sizeof(ShaderInterop::MeshData), BufferFlag::ShaderResource), "Meshes");
 	}
-	context.InitializeBuffer(m_pMeshBuffer, meshes.data(), meshes.size() * sizeof(ShaderInterop::MeshData));
+	context.WriteBuffer(m_pMeshBuffer, meshes.data(), meshes.size() * sizeof(ShaderInterop::MeshData));
 
 	if (!m_pMeshInstanceBuffer || meshInstances.size() > m_pMeshInstanceBuffer->GetNumElements())
 	{
 		m_pMeshInstanceBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(Math::Max(1, (int)meshInstances.size()), sizeof(ShaderInterop::MeshInstance), BufferFlag::ShaderResource), "Mesh Instances");
 	}
-	context.InitializeBuffer(m_pMeshInstanceBuffer, meshInstances.data(), meshInstances.size() * sizeof(ShaderInterop::MeshInstance));
+	context.WriteBuffer(m_pMeshInstanceBuffer, meshInstances.data(), meshInstances.size() * sizeof(ShaderInterop::MeshInstance));
 
 	if (!m_pMaterialBuffer || materials.size() > m_pMaterialBuffer->GetNumElements())
 	{
 		m_pMaterialBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(Math::Max(1, (int)materials.size()), sizeof(ShaderInterop::MaterialData), BufferFlag::ShaderResource), "Materials");
 	}
-	context.InitializeBuffer(m_pMaterialBuffer, materials.data(), materials.size() * sizeof(ShaderInterop::MaterialData));
+	context.WriteBuffer(m_pMaterialBuffer, materials.data(), materials.size() * sizeof(ShaderInterop::MaterialData));
 
 	if (!m_pTransformsBuffer || transforms.size() > m_pTransformsBuffer->GetNumElements())
 	{
 		m_pTransformsBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(Math::Max(1, (int)transforms.size()), sizeof(Matrix), BufferFlag::ShaderResource), "Transforms");
 	}
-	context.InitializeBuffer(m_pTransformsBuffer, transforms.data(), transforms.size() * sizeof(Matrix));
+	context.WriteBuffer(m_pTransformsBuffer, transforms.data(), transforms.size() * sizeof(Matrix));
 
 	std::vector<ShaderInterop::Light> lightData;
 	Utils::Transform(m_Lights, lightData, [](const Light& light) { return light.GetData(); });
@@ -2342,7 +2343,7 @@ void DemoApp::UploadSceneData(CommandContext& context)
 	{
 		m_pLightBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(Math::Max(1, (int)lightData.size()), sizeof(ShaderInterop::Light), BufferFlag::ShaderResource), "Lights");
 	}
-	context.InitializeBuffer(m_pLightBuffer, lightData.data(), lightData.size() * sizeof(ShaderInterop::Light));
+	context.WriteBuffer(m_pLightBuffer, lightData.data(), lightData.size() * sizeof(ShaderInterop::Light));
 
 	UpdateTLAS(context);
 

@@ -1,14 +1,14 @@
 #include "stdafx.h"
 #include "Mesh.h"
-#include "Graphics/Core/CommandContext.h"
-#include "Graphics/Core/Graphics.h"
-#include "Graphics/Core/Texture.h"
-#include "Graphics/Core/Buffer.h"
-#include "Graphics/Core/DynamicResourceAllocator.h"
+#include "Graphics/RHI/CommandContext.h"
+#include "Graphics/RHI/Graphics.h"
+#include "Graphics/RHI/Texture.h"
+#include "Graphics/RHI/Buffer.h"
+#include "Graphics/RHI/DynamicResourceAllocator.h"
 #include "Core/Paths.h"
 #include "Content/Image.h"
 #include "Core/Utils.h"
-#include "Core/ShaderInterop.h"
+#include "ShaderInterop.h"
 
 #pragma warning(push)
 #pragma warning(disable: 4996) //_CRT_SECURE_NO_WARNINGS

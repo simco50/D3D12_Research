@@ -35,7 +35,7 @@ void ComputeSkyCS(uint3 threadId : SV_DispatchThreadID)
 	uv.y *= PI;
 
 	float3 dir = normalize(float3(sin(uv.x) * sin(uv.y), cos(uv.y), cos(uv.x) * sin(uv.y)));
-	float3 rayStart = cView.ViewPosition.xyz;
+	float3 rayStart = cView.ViewPosition;
 	float rayLength = 1000000.0f;
 	if(0)
 	{

@@ -5,6 +5,7 @@
 #include "Core/FileWatcher.h"
 #include "dxc/dxcapi.h"
 #include "dxc/d3d12shader.h"
+#include "D3DUtils.h"
 
 namespace ShaderCompiler
 {
