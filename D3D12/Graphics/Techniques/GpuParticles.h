@@ -8,6 +8,7 @@ class CommandContext;
 class Texture;
 class RGGraph;
 struct SceneView;
+struct SceneTextures;
 
 class GpuParticles
 {

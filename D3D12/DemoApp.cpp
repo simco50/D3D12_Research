@@ -1013,7 +1013,7 @@ void DemoApp::Update()
 
 		if (Tweakables::g_RenderTerrain.GetBool())
 		{
-			m_pCBTTessellation->Execute(graph, GetCurrentRenderTarget(), GetDepthStencil(), m_SceneData);
+			m_pCBTTessellation->Execute(graph, m_SceneData, sceneTextures);
 		}
 
 		RGPassBuilder renderSky = graph.AddPass("Render Sky");

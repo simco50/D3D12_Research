@@ -52,7 +52,8 @@ CBTTessellation::CBTTessellation(GraphicsDevice* pDevice)
 	AllocateCBT();
 }
 
-void CBTTessellation::Execute(RGGraph& graph, Texture* pRenderTarget, Texture* pDepthTexture, const SceneView& resources)
+
+void CBTTessellation::Execute(RGGraph& graph, const SceneView& resources, const SceneTextures& sceneTextures)
 {
 	float scale = 100;
 	Matrix terrainTransform = Matrix::CreateScale(scale, scale * CBTSettings::HeightScale, scale) * Matrix::CreateTranslation(-scale * 0.5f, -1.5f, -scale * 0.5f);
@@ -194,16 +195,32 @@ void CBTTessellation::Execute(RGGraph& graph, Texture* pRenderTarget, Texture* p
 	cbtRender.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
 		{
 			context.InsertResourceBarrier(m_pCBTIndirectArgs, D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
-			context.InsertResourceBarrier(pDepthTexture, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+			context.InsertResourceBarrier(sceneTextures.pDepth, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+			context.InsertResourceBarrier(sceneTextures.pColorTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
+			context.InsertResourceBarrier(sceneTextures.pNormalsTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
+			context.InsertResourceBarrier(sceneTextures.pRoughnessTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
 			context.SetGraphicsRootSignature(m_pCBTRS);
 			context.SetPipelineState(CBTSettings::MeshShader ? m_pCBTRenderMeshShaderPSO : m_pCBTRenderPSO);
 
 			context.SetRootConstants(0, commonArgs);
 			context.SetRootCBV(1, updateData);
-			context.SetRootCBV(2, GetViewUniforms(resources, pRenderTarget));
+			context.SetRootCBV(2, GetViewUniforms(resources, sceneTextures.pColorTarget));
 
-			context.BeginRenderPass(RenderPassInfo(pRenderTarget, RenderPassAccess::Load_Store, pDepthTexture, RenderPassAccess::Load_Store, true));
+			RenderPassInfo renderPass;
+			renderPass.DepthStencilTarget.Access = RenderPassAccess::Load_Store;
+			renderPass.DepthStencilTarget.StencilAccess = RenderPassAccess::DontCare_DontCare;
+			renderPass.DepthStencilTarget.Target = sceneTextures.pDepth;
+			renderPass.DepthStencilTarget.Write = true;
+			renderPass.RenderTargetCount = 3;
+			renderPass.RenderTargets[0].Access = RenderPassAccess::Load_Store;
+			renderPass.RenderTargets[0].Target = sceneTextures.pColorTarget;
+			renderPass.RenderTargets[1].Access = RenderPassAccess::Load_Store;
+			renderPass.RenderTargets[1].Target = sceneTextures.pNormalsTarget;
+			renderPass.RenderTargets[2].Access = RenderPassAccess::Load_Store;
+			renderPass.RenderTargets[2].Target = sceneTextures.pRoughnessTarget;
+
+			context.BeginRenderPass(renderPass);
 			if (CBTSettings::MeshShader)
 			{
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -350,6 +367,12 @@ void CBTTessellation::SetupPipelines()
 		m_pCBTUpdatePSO = m_pDevice->CreateComputePipeline(m_pCBTRS, "CBT.hlsl", "UpdateCS", defines);
 	}
 
+	constexpr DXGI_FORMAT formats[] = {
+		DXGI_FORMAT_R16G16B16A16_FLOAT,
+		DXGI_FORMAT_R16G16_FLOAT,
+		DXGI_FORMAT_R8_UNORM,
+	};
+
 	{
 		PipelineStateInitializer psoDesc;
 		psoDesc.SetRootSignature(m_pCBTRS);
@@ -364,7 +387,7 @@ void CBTTessellation::SetupPipelines()
 			psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
 		}
 		psoDesc.SetPixelShader("CBT.hlsl", "RenderPS", defines);
-		psoDesc.SetRenderTargetFormat(DXGI_FORMAT_R16G16B16A16_FLOAT, DXGI_FORMAT_D32_FLOAT, 1);
+		psoDesc.SetRenderTargetFormats(formats, DXGI_FORMAT_D32_FLOAT, 1);
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
 		psoDesc.SetName("Draw CBT");
 		m_pCBTRenderPSO = m_pDevice->CreatePipeline(psoDesc);
@@ -377,7 +400,7 @@ void CBTTessellation::SetupPipelines()
 		psoDesc.SetAmplificationShader("CBT.hlsl", "UpdateAS", defines);
 		psoDesc.SetMeshShader("CBT.hlsl", "RenderMS", defines);
 		psoDesc.SetPixelShader("CBT.hlsl", "RenderPS", defines);
-		psoDesc.SetRenderTargetFormat(DXGI_FORMAT_R16G16B16A16_FLOAT, DXGI_FORMAT_D32_FLOAT, 1);
+		psoDesc.SetRenderTargetFormats(formats, DXGI_FORMAT_D32_FLOAT, 1);
 		psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
 		psoDesc.SetName("Draw CBT");
