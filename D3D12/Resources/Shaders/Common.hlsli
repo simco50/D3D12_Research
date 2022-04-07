@@ -372,6 +372,14 @@ float ScreenFade(float2 uv)
 	return saturate(1.0 - dot(fade, fade));
 }
 
+float Wireframe(float3 barycentrics, float thickness = 0.2f, float smoothing = 1.0f)
+{
+	float3 deltas = fwidth(barycentrics);
+	float3 bary = smoothstep(deltas * thickness, deltas * (thickness + smoothing), barycentrics);
+	float minBary = min(bary.x, min(bary.y, bary.z));
+	return minBary;
+}
+
 // Calculates rotation quaternion from input vector to the vector (0, 0, 1)
 // Input vector must be normalized!
 float4 GetRotationToZAxis(float3 input)

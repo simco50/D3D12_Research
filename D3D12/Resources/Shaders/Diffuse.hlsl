@@ -272,6 +272,7 @@ void PSMain(InterpolantsVSToPS input,
 {
 	float2 screenUV = (float2)input.Position.xy * cView.ScreenDimensionsInv;
 	float ambientOcclusion = tAO.SampleLevel(sLinearClamp, screenUV, 0).r;
+
 	float3 V = normalize(cView.ViewPosition - input.PositionWS);
 
 	MaterialData material = GetMaterial(cObject.Material);
@@ -282,9 +283,9 @@ void PSMain(InterpolantsVSToPS input,
 	N = TangentSpaceNormalMapping(surface.NormalTS, TBN);
 
 	BrdfData brdf = GetBrdfData(surface);
+	float3 positionVS = mul(float4(input.PositionWS, 1), cView.View).xyz;
 
 	float ssrWeight = 0;
-	float3 positionVS = mul(float4(input.PositionWS, 1), cView.View).xyz;
 	float3 ssr = ScreenSpaceReflections(input.Position, positionVS, N, V, brdf.Roughness, tDepth, tPreviousSceneColor, ssrWeight);
 
 	LightResult lighting = DoLight(input.Position, input.PositionWS, N, V, brdf.Diffuse, brdf.Specular, brdf.Roughness);
@@ -299,25 +300,16 @@ void PSMain(InterpolantsVSToPS input,
 	float4 scatteringTransmittance = tLightScattering.SampleLevel(sLinearClamp, float3(screenUV, fogSlice), 0);
 	outRadiance = outRadiance * scatteringTransmittance.w + scatteringTransmittance.rgb;
 
-	float3 outColor = outRadiance;
 	float reflectivity = saturate(scatteringTransmittance.w * ambientOcclusion * Square(1 - brdf.Roughness));
 
 #define DEBUG_MESHLETS 0
 #if DEBUG_MESHLETS
 	N = input.Normal;
-
-	uint Seed = SeedThread(input.ID);
-	outColor = float3(Random01(Seed), Random01(Seed), Random01(Seed));
-
-	float3 deltas = fwidth(bary);
-	float3 smoothing = deltas * 1;
-	float3 thickness = deltas * 0.2;
-	bary = smoothstep(thickness, thickness + smoothing, bary);
-	float minBary = min(bary.x, min(bary.y, bary.z));
-	outColor = outColor * saturate(minBary + 0.6);
+	uint seed = SeedThread(input.ID);
+	outRadiance = RandomColor(seed) * saturate(Wireframe(bary) + 0.6);
 #endif
 
-	output.Color = float4(outColor, surface.Opacity);
+	output.Color = float4(outRadiance, surface.Opacity);
 	output.Normal = EncodeNormalOctahedron(N);
 	output.Roughness = saturate(reflectivity - ssrWeight);
 }
