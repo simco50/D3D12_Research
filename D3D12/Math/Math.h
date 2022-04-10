@@ -129,6 +129,11 @@ namespace Math
 
 	Vector3 RandCircleVector();
 
+	inline Vector3 VectorFloor(const Vector3& v)
+	{
+		return Vector3(floorf(v.x), floorf(v.y), floorf(v.z));
+	}
+
 	inline uint32 EncodeRGBA(float r, float g, float b, float a = 1.0f)
 	{
 		uint32 output = 0;

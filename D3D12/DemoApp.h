@@ -48,6 +48,7 @@ private:
 	void UpdateTLAS(CommandContext& context);
 
 	void LoadMesh(const std::string& filePath, CommandContext& context);
+	void CreateShadowViews();
 
 	void UploadSceneData(CommandContext& context);
 

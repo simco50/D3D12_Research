@@ -50,12 +50,12 @@ DECLARE_BITMASK_TYPE(Batch::Blending)
 
 using VisibilityMask = BitField<8192>;
 
-struct ShadowData
+struct ShadowView
 {
-	Matrix LightViewProjections[MAX_SHADOW_CASTERS];
-	Vector4 CascadeDepths;
-	uint32 NumCascades;
-	uint32 ShadowMapOffset;
+	Matrix ViewProjection;
+	bool IsPerspective;
+	BoundingBox OrtographicFrustum;
+	BoundingFrustum PerspectiveFrustum;
 };
 
 struct SceneView
@@ -72,9 +72,13 @@ struct SceneView
 	RefCountPtr<Texture> pSky;
 	int FrameIndex = 0;
 	VisibilityMask VisibilityMask;
-	ShadowData ShadowData;
 	ViewTransform View;
 	BoundingBox SceneAABB;
+
+	std::vector<ShadowView> ShadowViews;
+	Vector4 ShadowCascadeDepths;
+	uint32 NumShadowCascades;
+	uint32 ShadowMapOffset;
 };
 
 struct SceneTextures

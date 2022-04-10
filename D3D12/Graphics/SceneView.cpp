@@ -77,10 +77,14 @@ ShaderInterop::ViewUniforms GetViewUniforms(const SceneView& sceneView, Texture*
 	parameters.SsrSamples = Tweakables::g_SsrSamples.Get();
 	parameters.LightCount = sceneView.pLightBuffer->GetNumElements();
 
-	memcpy(&parameters.LightViewProjections, &sceneView.ShadowData.LightViewProjections, ARRAYSIZE(parameters.LightViewProjections) * MAX_SHADOW_CASTERS);
-	parameters.CascadeDepths = sceneView.ShadowData.CascadeDepths;
-	parameters.NumCascades = sceneView.ShadowData.NumCascades;
-	parameters.ShadowMapOffset = sceneView.ShadowData.ShadowMapOffset;
+	check(sceneView.ShadowViews.size() <= MAX_SHADOW_CASTERS);
+	for (uint32 i = 0; i < sceneView.ShadowViews.size(); ++i)
+	{
+		parameters.LightViewProjections[i] = sceneView.ShadowViews[i].ViewProjection;
+	}
+	parameters.CascadeDepths = sceneView.ShadowCascadeDepths;
+	parameters.NumCascades = sceneView.NumShadowCascades;
+	parameters.ShadowMapOffset = sceneView.ShadowMapOffset;
 
 	parameters.TLASIndex = sceneView.pSceneTLAS ? sceneView.pSceneTLAS->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
 	parameters.MeshesIndex = sceneView.pMeshBuffer->GetSRVIndex();
