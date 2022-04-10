@@ -1,6 +1,7 @@
 #include "Common.hlsli"
 #include "Random.hlsli"
 #include "CBT.hlsli"
+#include "Lighting.hlsli"
 
 #define MESH_SHADER_THREAD_GROUP_SIZE 32
 #define COMPUTE_THREAD_GROUP_SIZE 256
@@ -418,7 +419,7 @@ void UpdateCS(uint threadID : SV_DispatchThreadID)
 struct VertexOut
 {
 	float4 Position : SV_Position;
-	float2 UV : TEXCOORD;
+	float3 PositionWS : POSITION;
 	uint HeapIndex : HEAP_INDEX;
 };
 
@@ -512,7 +513,7 @@ void RenderMS(
 	{
 		uint index = outputIndex * 3 + i;
 		vertices[index].Position = mul(mul(float4(tri[i], 1), cUpdateData.World), cView.ViewProjection);
-		vertices[index].UV = tri[i].xz;
+		vertices[index].PositionWS = tri[i];
 		vertices[index].HeapIndex = heapIndex;
 	}
 	triangles[outputIndex] = uint3(
@@ -549,7 +550,7 @@ void RenderGS(point uint instanceID[1] : INSTANCE_ID, inout TriangleStream<Verte
 			for(i = 0; i < 3; ++i)
 			{
 				VertexOut v;
-				v.UV = tri[i].xz;
+				v.PositionWS = tri[i];
 				v.Position = mul(mul(float4(tri[i], 1), cUpdateData.World), cView.ViewProjection);
 				v.HeapIndex = heapIndex;
 				triStream.Append(v);
@@ -568,7 +569,7 @@ void RenderVS(uint vertexID : SV_VertexID, uint instanceID : SV_InstanceID, out 
 	uint heapIndex = cbt.LeafToHeapIndex(instanceID);
 	float3 tri = GetVertices(heapIndex)[vertexID];
 
-	vertex.UV = tri.xz;
+	vertex.PositionWS = tri;
 	vertex.Position = mul(mul(float4(tri, 1), cUpdateData.World), cView.ViewProjection);
 	vertex.HeapIndex = heapIndex;
 }
@@ -581,24 +582,25 @@ struct PSOut
 	float Roughness : SV_Target2;
 };
 
-
 void RenderPS(
 	VertexOut vertex,
 	float3 bary : SV_Barycentrics,
 	out PSOut output)
 {
-	float tl = Sample2D(cCommonArgs.HeightmapIndex, sLinearClamp, vertex.UV, uint2(-1, -1)).r;
-	float t  = Sample2D(cCommonArgs.HeightmapIndex, sLinearClamp, vertex.UV, uint2( 0, -1)).r;
-	float tr = Sample2D(cCommonArgs.HeightmapIndex, sLinearClamp, vertex.UV, uint2( 1, -1)).r;
-	float l  = Sample2D(cCommonArgs.HeightmapIndex, sLinearClamp, vertex.UV, uint2(-1,  0)).r;
-	float r  = Sample2D(cCommonArgs.HeightmapIndex, sLinearClamp, vertex.UV, uint2( 1,  0)).r;
-	float bl = Sample2D(cCommonArgs.HeightmapIndex, sLinearClamp, vertex.UV, uint2(-1,  1)).r;
-	float b  = Sample2D(cCommonArgs.HeightmapIndex, sLinearClamp, vertex.UV, uint2( 0,  1)).r;
-	float br = Sample2D(cCommonArgs.HeightmapIndex, sLinearClamp, vertex.UV, uint2( 1,  1)).r;
+	float2 uv = vertex.PositionWS.xz;
+	float tl = Sample2D(cCommonArgs.HeightmapIndex, sLinearClamp, uv, uint2(-1, -1)).r;
+	float t  = Sample2D(cCommonArgs.HeightmapIndex, sLinearClamp, uv, uint2( 0, -1)).r;
+	float tr = Sample2D(cCommonArgs.HeightmapIndex, sLinearClamp, uv, uint2( 1, -1)).r;
+	float l  = Sample2D(cCommonArgs.HeightmapIndex, sLinearClamp, uv, uint2(-1,  0)).r;
+	float r  = Sample2D(cCommonArgs.HeightmapIndex, sLinearClamp, uv, uint2( 1,  0)).r;
+	float bl = Sample2D(cCommonArgs.HeightmapIndex, sLinearClamp, uv, uint2(-1,  1)).r;
+	float b  = Sample2D(cCommonArgs.HeightmapIndex, sLinearClamp, uv, uint2( 0,  1)).r;
+	float br = Sample2D(cCommonArgs.HeightmapIndex, sLinearClamp, uv, uint2( 1,  1)).r;
 
 	float dX = tr + 2 * r + br - tl - 2 * l - bl;
 	float dY = bl + 2 * b + br - tl - 2 * t - tr;
-	float3 normal = normalize(float3(dX, 1.0f / 50, dY));
+	float3 normal = normalize(float3(-dX, 1.0f, -dY));
+	normal = normalize(mul(normal, (float3x3)cUpdateData.World));
 
 	float3 color = 1;
 
@@ -607,8 +609,36 @@ void RenderPS(
 	color = float3(Random01(state), Random01(state), Random01(state));
 #endif
 
-	float3 dir = normalize(float3(1, 1, 1));
-	float3 radiance = color * saturate(dot(dir, normalize(normal)));
+	float3 worldPos = vertex.PositionWS;
+	float3 V = normalize(cView.ViewPosition - worldPos);
+
+	float3 specularColor = 0.5;
+	float roughness = 0.9f;
+	float3 diffuseColor = 0.7f;
+
+	LightResult totalResult = (LightResult)0;
+	for(uint i = 0; i < cView.LightCount; ++i)
+	{
+		Light light = GetLight(i);
+
+		float3 L = normalize(light.Position - worldPos);
+		if(light.IsDirectional)
+		{
+			L = -light.Direction;
+		}
+		LightResult result = DefaultLitBxDF(specularColor, roughness, diffuseColor, normal, V, L, 1);
+
+		float3 color = light.GetColor();
+		result.Diffuse *= color * light.Intensity;
+		result.Specular *= color * light.Intensity;
+
+		totalResult.Diffuse += result.Diffuse;
+		totalResult.Specular += result.Specular;
+	}
+
+	float3 radiance = 0;
+	radiance += totalResult.Diffuse;
+	radiance += totalResult.Specular;
 
 #if RENDER_WIREFRAME
 	float3 deltas = fwidth(bary);
