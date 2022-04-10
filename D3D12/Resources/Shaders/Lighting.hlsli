@@ -301,20 +301,35 @@ LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, floa
 
 	if(light.ShadowIndex >= 0)
 	{
-		int shadowIndex = GetShadowIndex(light, pos, wPos);
+		uint shadowIndex = GetShadowIndex(light, pos, wPos);
 
 #define VISUALIZE_CASCADES 0
 #if VISUALIZE_CASCADES
 		if(light.IsDirectional)
 		{
-			static float4 COLORS[4] = {
-				float4(1,0,0,1),
-				float4(0,1,0,1),
-				float4(0,0,1,1),
-				float4(1,0,1,1),
+			float4x4 lightViewProjection = cView.LightViewProjections[shadowIndex];
+			float4 lightPos = mul(float4(wPos, 1), lightViewProjection);
+			lightPos.xyz /= lightPos.w;
+			lightPos.x = lightPos.x / 2.0f + 0.5f;
+			lightPos.y = lightPos.y / -2.0f + 0.5f;
+			float2 uv = lightPos.xy;
+			float strength = 0.1f;
+
+			if(any(uv < 0) || any(uv) > 1)
+			{
+				float modulate = cos((float)cView.FrameIndex / 30) * 0.5f + 0.5f;
+				strength = saturate(strength + modulate * 0.2f);
+			}
+			static float3 COLORS[] = {
+				float3(1,0,0),
+				float3(0,1,0),
+				float3(0,0,1),
+				float3(1,0,1),
+				float3(0,1,1),
+				float3(1,1,0),
 			};
-			result.Diffuse += 0.4f * COLORS[shadowIndex - light.ShadowIndex].xyz;
-			result.Specular = 0;
+
+			result.Diffuse += strength * COLORS[shadowIndex - light.ShadowIndex];
 			return result;
 		}
 #endif

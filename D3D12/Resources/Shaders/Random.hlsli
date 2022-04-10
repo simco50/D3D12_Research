@@ -2,6 +2,7 @@
 
 #include "Constants.hlsli"
 #include "Common.hlsli"
+
 //-----------------------------------------------------------------------------------------
 
 // Quick And Easy GPU Random Numbers In D3D11 - Nathan Reed - 2013
@@ -49,6 +50,11 @@ float Random01(inout uint rng_state)
 uint Random(inout uint rng_state, uint minimum, uint maximum)
 {
 	return minimum + uint(float(maximum - minimum + 1) * Random01(rng_state));
+}
+
+float3 RandomColor(inout uint rng_state)
+{
+	return float3(Random01(rng_state), Random01(rng_state), Random01(rng_state));
 }
 
 //-----------------------------------------------------------------------------------------

@@ -3,6 +3,7 @@
 #include "Lighting.hlsli"
 #include "RaytracingCommon.hlsli"
 #include "Random.hlsli"
+#include "DDGICommon.hlsli"
 
 #define RAY_CONE_TEXTURE_LOD 1
 #define SECONDARY_SHADOW_RAY 1
@@ -113,13 +114,15 @@ void RayGen()
 #endif // SECONDARY_SHADOW_RAY
 				}
 
+				radiance += surface.Emissive;
+				radiance += Diffuse_Lambert(brdfData.Diffuse) * SampleDDGIIrradiance(hitLocation, N, -V);
+
 				if(attenuation <= 0.0f)
 					continue;
 
 				LightResult result = DefaultLitBxDF(brdfData.Specular, brdfData.Roughness, brdfData.Diffuse, N, V, normalize(L), attenuation);
 				radiance += result.Diffuse * light.GetColor() * light.Intensity;
 				radiance += result.Specular * light.GetColor() * light.Intensity;
-				radiance += surface.Emissive;
 			}
 		}
 		else

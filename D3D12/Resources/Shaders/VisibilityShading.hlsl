@@ -140,18 +140,18 @@ LightResult DoLight(float4 pos, float3 worldPos, float3 N, float3 V, float3 diff
 [numthreads(8, 8, 1)]
 void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 {
-	if(dispatchThreadId.x >= cView.ScreenDimensions.x || dispatchThreadId.y >= cView.ScreenDimensions.y)
+	uint2 texel = dispatchThreadId.xy;
+	if(any(texel > cView.ScreenDimensions))
 	{
 		return;
 	}
-	VisBufferData visibility = (VisBufferData)tVisibilityTexture.Load(uint3(dispatchThreadId.xy, 0));
+	VisBufferData visibility = (VisBufferData)tVisibilityTexture[texel];
 
 	float2 screenUV = ((float2)dispatchThreadId.xy + 0.5f) * cView.ScreenDimensionsInv;
-	VisBufferVertexAttribute vertex = GetVertexAttributes(screenUV, visibility);
-	float3 positionWS = vertex.Position;
-	float3 V = normalize(cView.ViewPosition - positionWS);
-
 	float ambientOcclusion = tAO.SampleLevel(sLinearClamp, screenUV, 0).r;
+
+	VisBufferVertexAttribute vertex = GetVertexAttributes(screenUV, visibility);
+	float3 V = normalize(cView.ViewPosition - vertex.Position);
 
     MeshInstance instance = GetMeshInstance(NonUniformResourceIndex(visibility.ObjectID));
 	MaterialData material = GetMaterial(NonUniformResourceIndex(instance.Material));
@@ -168,35 +168,24 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 	float ssrWeight = 0;
 	float3 ssr = ScreenSpaceReflections(pos, positionVS, N, V, brdfData.Roughness, tDepth, tPreviousSceneColor, ssrWeight);
 
-	LightResult result = DoLight(pos, positionWS, N, V, brdfData.Diffuse, brdfData.Specular, brdfData.Roughness);
+	LightResult result = DoLight(pos, vertex.Position, N, V, brdfData.Diffuse, brdfData.Specular, brdfData.Roughness);
 
 	float3 outRadiance = 0;
-	outRadiance += ambientOcclusion * Diffuse_Lambert(brdfData.Diffuse) * SampleDDGIIrradiance(positionWS, N, -V);
+	outRadiance += ambientOcclusion * Diffuse_Lambert(brdfData.Diffuse) * SampleDDGIIrradiance(vertex.Position, N, -V);
 	outRadiance += result.Diffuse + result.Specular;
-	outRadiance += surface.Emissive;
 	outRadiance += ssr;
+	outRadiance += surface.Emissive;
 
 	float reflectivity = saturate(Square(1 - brdfData.Roughness));
-
-	float3 outColor = outRadiance;
 
 #define DEBUG_MESHLETS 0
 #if DEBUG_MESHLETS
 	N = vertex.Normal;
-
-	uint Seed = SeedThread(visibility.MeshletID);
-	outColor = float3(Random01(Seed), Random01(Seed), Random01(Seed));
-
-	float3 deltas = fwidth(attributes.Barycentrics);
-	float3 smoothing = deltas * 1;
-	float3 thickness = deltas * 0.2;
-	float3 bary = smoothstep(thickness, thickness + smoothing, attributes.Barycentrics);
-	float minBary = min(bary.x, min(bary.y, bary.z));
-	outColor = outColor.xyz * saturate(minBary + 0.6);
+	uint seed = SeedThread(visibility.MeshletID);
+	outRadiance = RandomColor(seed) * saturate(Wireframe(vertex.Barycentrics) + 0.6);
 #endif
 
-	uint2 pixelIndex = dispatchThreadId.xy;
-	uColorTarget[pixelIndex] = float4(outColor, surface.Opacity);
-	uNormalsTarget[pixelIndex] = EncodeNormalOctahedron(N);
-	uRoughnessTarget[pixelIndex] = reflectivity;
+	uColorTarget[texel] = float4(outRadiance, surface.Opacity);
+	uNormalsTarget[texel] = EncodeNormalOctahedron(N);
+	uRoughnessTarget[texel] = reflectivity;
 }
