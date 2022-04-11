@@ -93,7 +93,6 @@ public:
 
 	void SetName(const char* pName);
 	void SetDepthOnlyTarget(DXGI_FORMAT dsvFormat, uint32 msaa);
-	void SetRenderTargetFormat(DXGI_FORMAT rtvFormat, DXGI_FORMAT dsvFormat, uint32 msaa);
 	void SetRenderTargetFormats(const Span<DXGI_FORMAT>& rtvFormats, DXGI_FORMAT dsvFormat, uint32 msaa);
 
 	//BlendState

@@ -180,11 +180,13 @@ void TiledForward::VisualizeLightDensity(RGGraph& graph, GraphicsDevice* pDevice
 
 			context.SetRootCBV(1, GetViewUniforms(resources, pTarget));
 
-			context.BindResource(2, 0, pTarget->GetSRV());
-			context.BindResource(2, 1, pDepth->GetSRV());
-			context.BindResource(2, 2, m_pLightGridOpaque->GetSRV());
+			context.BindResources(2, {
+				pTarget->GetSRV(),
+				pDepth->GetSRV(),
+				m_pLightGridOpaque->GetSRV(),
+				});
 
-			context.BindResource(3, 0, m_pVisualizationIntermediateTexture->GetUAV());
+			context.BindResources(3, m_pVisualizationIntermediateTexture->GetUAV());
 
 			context.Dispatch(ComputeUtils::GetNumThreadGroups(
 				pTarget->GetWidth(), 16,

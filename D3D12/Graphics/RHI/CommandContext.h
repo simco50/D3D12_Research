@@ -16,7 +16,6 @@ class ShaderBindingTable;
 class ResourceView;
 struct VertexBufferView;
 struct IndexBufferView;
-struct BufferView;
 struct DynamicAllocation;
 
 enum class CommandListContext
@@ -84,16 +83,6 @@ struct RenderPassInfo
 
 	RenderPassInfo() = default;
 
-	RenderPassInfo(Texture* pDepthBuffer, RenderPassAccess access, bool uavWrites = false)
-		: RenderTargetCount(0)
-	{
-		DepthStencilTarget.Access = access;
-		DepthStencilTarget.Target = pDepthBuffer;
-		DepthStencilTarget.StencilAccess = RenderPassAccess::NoAccess;
-		DepthStencilTarget.Write = true;
-		WriteUAVs = uavWrites;
-	}
-
 	RenderPassInfo(Texture* pRenderTarget, RenderPassAccess renderTargetAccess, Texture* pDepthBuffer, RenderPassAccess depthAccess, bool depthWrite, bool uavWrites = false, RenderPassAccess stencilAccess = RenderPassAccess::NoAccess)
 		: RenderTargetCount(1)
 	{
@@ -104,6 +93,17 @@ struct RenderPassInfo
 		DepthStencilTarget.StencilAccess = stencilAccess;
 		DepthStencilTarget.Write = depthWrite;
 		WriteUAVs = uavWrites;
+	}
+
+	static RenderPassInfo DepthOnly(Texture* pDepthTarget, RenderPassAccess depthAccess, RenderPassAccess stencilAccess = RenderPassAccess::NoAccess, bool uavWrites = false)
+	{
+		RenderPassInfo result;
+		result.DepthStencilTarget.Access = depthAccess;
+		result.DepthStencilTarget.Target = pDepthTarget;
+		result.DepthStencilTarget.StencilAccess = stencilAccess;
+		result.DepthStencilTarget.Write = true;
+		result.WriteUAVs = uavWrites;
+		return result;
 	}
 
 	static RenderTargetLoadAction GetBeginAccess(RenderPassAccess access)
@@ -150,7 +150,6 @@ namespace ComputeUtils
 class CommandContext : public GraphicsObject
 {
 public:
-
 	CommandContext(GraphicsDevice* pParent, ID3D12GraphicsCommandList* pCommandList, D3D12_COMMAND_LIST_TYPE type, GlobalOnlineDescriptorHeap* pDescriptorHeap, DynamicAllocationManager* pDynamicMemoryManager, ID3D12CommandAllocator* pAllocator);
 	~CommandContext();
 
@@ -204,7 +203,6 @@ public:
 
 	void SetGraphicsRootSignature(RootSignature* pRootSignature);
 	void SetComputeRootSignature(RootSignature* pRootSignature);
-	void BindResource(uint32 rootIndex, uint32 offset, ResourceView* pView);
 	void BindResources(uint32 rootIndex, const Span<const ResourceView*>& pViews, uint32 offset = 0);
 	void BindResources(uint32 rootIndex, const Span<D3D12_CPU_DESCRIPTOR_HANDLE>& handles, uint32 offset = 0);
 	void SetDynamicVertexBuffer(uint32 slot, uint32 elementCount, uint32 elementSize, const void* pData);

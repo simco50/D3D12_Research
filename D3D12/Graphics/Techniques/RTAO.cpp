@@ -75,7 +75,7 @@ void RTAO::Execute(RGGraph& graph, const SceneView& sceneData, SceneTextures& sc
 
 			context.SetRootConstants(0, parameters);
 			context.SetRootCBV(1, GetViewUniforms(sceneData, pRayTraceTarget));
-			context.BindResource(2, 0, pRayTraceTarget->GetUAV());
+			context.BindResources(2, pRayTraceTarget->GetUAV());
 			context.BindResources(3, {
 				sceneTextures.pDepth->GetSRV()
 				});
@@ -95,7 +95,7 @@ void RTAO::Execute(RGGraph& graph, const SceneView& sceneData, SceneTextures& sc
 
 			//context.SetRootCBV(0, parameters);
 			context.SetRootCBV(1, GetViewUniforms(sceneData, pDenoiseTarget));
-			context.BindResource(2, 0, pDenoiseTarget->GetUAV());
+			context.BindResources(2, pDenoiseTarget->GetUAV());
 			context.BindResources(3, {
 				sceneTextures.pDepth->GetSRV(),
 				m_pHistory->GetSRV(),
@@ -133,11 +133,13 @@ void RTAO::Execute(RGGraph& graph, const SceneView& sceneData, SceneTextures& sc
 
 			context.SetRootConstants(0, shaderParameters);
 			context.SetRootCBV(1, GetViewUniforms(sceneData, pTarget));
-			context.BindResource(2, 0, pTarget->GetUAV());
-			context.BindResource(3, 0, sceneTextures.pDepth->GetSRV());
-			context.BindResource(3, 1, pSource->GetSRV());
+			context.BindResources(2, pTarget->GetUAV());
+			context.BindResources(3, {
+				sceneTextures.pDepth->GetSRV(),
+				pSource->GetSRV()
+				});
 
-			context.Dispatch(Math::DivideAndRoundUp(pTarget->GetWidth(), 256), pTarget->GetHeight());
+			context.Dispatch(ComputeUtils::GetNumThreadGroups(pTarget->GetWidth(), 256, pTarget->GetHeight(), 1));
 
 			pTarget = sceneTextures.pAmbientOcclusion;
 			pSource = pRayTraceTarget;
@@ -145,13 +147,15 @@ void RTAO::Execute(RGGraph& graph, const SceneView& sceneData, SceneTextures& sc
 			context.InsertResourceBarrier(pSource, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-			context.BindResource(2, 0, pTarget->GetUAV());
-			context.BindResource(3, 0, sceneTextures.pDepth->GetSRV());
-			context.BindResource(3, 1, pSource->GetSRV());
+			context.BindResources(2, pTarget->GetUAV());
+			context.BindResources(3, {
+				sceneTextures.pDepth->GetSRV(),
+				pSource->GetSRV()
+				});
 
 			shaderParameters.Horizontal = 0;
 			context.SetRootConstants(0, shaderParameters);
-			context.Dispatch(pTarget->GetWidth(), Math::DivideAndRoundUp(pTarget->GetHeight(), 256));
+			context.Dispatch(ComputeUtils::GetNumThreadGroups(pTarget->GetWidth(), 1, pTarget->GetHeight(), 256));
 		});
 }
 

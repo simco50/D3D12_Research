@@ -412,7 +412,7 @@ void CBTTessellation::SetupPipelines()
 		psoDesc.SetRootSignature(m_pCBTRS);
 		psoDesc.SetPixelShader("CBT.hlsl", "DebugVisualizePS", defines);
 		psoDesc.SetVertexShader("CBT.hlsl", "DebugVisualizeVS", defines);
-		psoDesc.SetRenderTargetFormat(DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_UNKNOWN, 1);
+		psoDesc.SetRenderTargetFormats(DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_UNKNOWN, 1);
 		psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
 		psoDesc.SetDepthEnabled(false);
 		psoDesc.SetName("Debug Visualize CBT");

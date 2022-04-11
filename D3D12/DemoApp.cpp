@@ -452,7 +452,7 @@ void DemoApp::Update()
 					const ShadowView& shadowView = view.ShadowViews[i];
 					Texture* pShadowmap = m_ShadowMaps[i];
 					context.InsertResourceBarrier(pShadowmap, D3D12_RESOURCE_STATE_DEPTH_WRITE);
-					context.BeginRenderPass(RenderPassInfo(pShadowmap, RenderPassAccess::Clear_Store));
+					context.BeginRenderPass(RenderPassInfo::DepthOnly(pShadowmap, RenderPassAccess::Clear_Store));
 
 					view.View.ViewProjection = shadowView.ViewProjection;
 					context.SetRootCBV(1, GetViewUniforms(view, pShadowmap));
@@ -486,7 +486,7 @@ void DemoApp::Update()
 				Texture* pDepthStencil = GetDepthStencil();
 				context.InsertResourceBarrier(pDepthStencil, D3D12_RESOURCE_STATE_DEPTH_WRITE);
 
-				context.BeginRenderPass(RenderPassInfo(pDepthStencil, RenderPassAccess::Clear_Store));
+				context.BeginRenderPass(RenderPassInfo::DepthOnly(pDepthStencil, RenderPassAccess::Clear_Store));
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
 				context.SetGraphicsRootSignature(m_pCommonRS);
@@ -571,7 +571,7 @@ void DemoApp::Update()
 
 				context.SetRootConstants(0, parameters);
 				context.SetRootCBV(1, GetViewUniforms(m_SceneData));
-				context.BindResource(2, 0, ddgi.pRayBuffer->GetUAV());
+				context.BindResources(2, ddgi.pRayBuffer->GetUAV());
 
 				ShaderBindingTable bindingTable(m_pDDGITraceRaysSO);
 				bindingTable.BindRayGenShader("TraceRaysRGS");
@@ -591,7 +591,7 @@ void DemoApp::Update()
 
 				context.SetRootConstants(0, parameters);
 				context.SetRootCBV(1, GetViewUniforms(m_SceneData));
-				context.BindResource(2, 0, ddgi.pIrradiance[1]->GetUAV());
+				context.BindResources(2, ddgi.pIrradiance[1]->GetUAV());
 				context.BindResources(3, {
 					ddgi.pRayBuffer->GetSRV(),
 					});
@@ -656,7 +656,7 @@ void DemoApp::Update()
 			context.SetPipelineState(m_pRenderSkyPSO);
 
 			context.SetRootCBV(1, GetViewUniforms(m_SceneData, m_pSkyTexture));
-			context.BindResource(2, 0, m_pSkyTexture->GetUAV());
+			context.BindResources(2, m_pSkyTexture->GetUAV());
 
 			context.Dispatch(ComputeUtils::GetNumThreadGroups(m_pSkyTexture->GetWidth(), 16, m_pSkyTexture->GetHeight(), 16));
 		});
@@ -676,8 +676,8 @@ void DemoApp::Update()
 					context.SetComputeRootSignature(m_pCommonRS);
 					context.SetPipelineState(m_pResolveDepthPSO);
 
-					context.BindResource(2, 0, m_pResolvedDepthStencil->GetUAV());
-					context.BindResource(3, 0, m_pDepthStencil->GetSRV());
+					context.BindResources(2, m_pResolvedDepthStencil->GetUAV());
+					context.BindResources(3, m_pDepthStencil->GetSRV());
 
 					context.Dispatch(ComputeUtils::GetNumThreadGroups(m_pDepthStencil->GetWidth(), 16, m_pDepthStencil->GetHeight(), 16));
 
@@ -698,8 +698,8 @@ void DemoApp::Update()
 
 				context.SetRootCBV(1, GetViewUniforms(m_SceneData, m_pVelocity));
 
-				context.BindResource(2, 0, m_pVelocity->GetUAV());
-				context.BindResource(3, 0, GetDepthStencil()->GetSRV());
+				context.BindResources(2, m_pVelocity->GetUAV());
+				context.BindResources(3, GetDepthStencil()->GetSRV());
 
 				context.Dispatch(ComputeUtils::GetNumThreadGroups(m_pVelocity->GetWidth(), 8, m_pVelocity->GetHeight(), 8));
 			});
@@ -850,7 +850,7 @@ void DemoApp::Update()
 
 					context.SetRootCBV(1, GetViewUniforms(m_SceneData, m_pHDRRenderTarget));
 
-					context.BindResource(2, 0, m_pHDRRenderTarget->GetUAV());
+					context.BindResources(2, m_pHDRRenderTarget->GetUAV());
 					context.BindResources(3,
 						{
 							m_pVelocity->GetSRV(),
@@ -882,8 +882,8 @@ void DemoApp::Update()
 
 				context.SetRootCBV(1, GetViewUniforms(m_SceneData, pTarget));
 
-				context.BindResource(2, 0, pTarget->GetUAV());
-				context.BindResource(3, 0, pSource->GetSRV());
+				context.BindResources(2, pTarget->GetUAV());
+				context.BindResources(3, pSource->GetSRV());
 
 				context.Dispatch(pTarget->GetWidth(), pTarget->GetHeight());
 
@@ -896,8 +896,8 @@ void DemoApp::Update()
 					context.InsertResourceBarrier(pSource, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 					context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-					context.BindResource(2, 0, pTarget->GetUAV());
-					context.BindResource(3, 0, pSource->GetSRV());
+					context.BindResources(2, pTarget->GetUAV());
+					context.BindResources(3, pSource->GetSRV());
 
 					context.Dispatch(pTarget->GetWidth(), pTarget->GetHeight());
 				}
@@ -932,13 +932,10 @@ void DemoApp::Update()
 				parameters.TargetDimensionsInv = Vector2(1.0f / pToneMapInput->GetWidth(), 1.0f / pToneMapInput->GetHeight());
 
 				context.SetRootConstants(0, parameters);
-				context.BindResource(2, 0, pToneMapInput->GetUAV());
-				context.BindResource(3, 0, m_pHDRRenderTarget->GetSRV());
+				context.BindResources(2, pToneMapInput->GetUAV());
+				context.BindResources(3, m_pHDRRenderTarget->GetSRV());
 
-				context.Dispatch(
-					Math::DivideAndRoundUp(parameters.TargetDimensions.x, 8),
-					Math::DivideAndRoundUp(parameters.TargetDimensions.y, 8)
-				);
+				context.Dispatch(ComputeUtils::GetNumThreadGroups(parameters.TargetDimensions.x, 8, parameters.TargetDimensions.y, 8));
 			});
 
 		RGPassBuilder histogram = graph.AddPass("Luminance Histogram");
@@ -964,13 +961,10 @@ void DemoApp::Update()
 				parameters.OneOverLogLuminanceRange = 1.0f / (Tweakables::g_MaxLogLuminance.Get() - Tweakables::g_MinLogLuminance.Get());
 
 				context.SetRootConstants(0, parameters);
-				context.BindResource(2, 0, m_pLuminanceHistogram->GetUAV());
-				context.BindResource(3, 0, pToneMapInput->GetSRV());
+				context.BindResources(2, m_pLuminanceHistogram->GetUAV());
+				context.BindResources(3, pToneMapInput->GetSRV());
 
-				context.Dispatch(
-					Math::DivideAndRoundUp(pToneMapInput->GetWidth(), 16),
-					Math::DivideAndRoundUp(pToneMapInput->GetHeight(), 16)
-				);
+				context.Dispatch(ComputeUtils::GetNumThreadGroups(pToneMapInput->GetWidth(), 16, pToneMapInput->GetHeight(), 16));
 			});
 
 		RGPassBuilder avgLuminance = graph.AddPass("Average Luminance");
@@ -998,8 +992,8 @@ void DemoApp::Update()
 				parameters.Tau = Tweakables::g_Tau.Get();
 
 				context.SetRootConstants(0, parameters);
-				context.BindResource(2, 0, m_pAverageLuminance->GetUAV());
-				context.BindResource(3, 0, m_pLuminanceHistogram->GetSRV());
+				context.BindResources(2, m_pAverageLuminance->GetUAV());
+				context.BindResources(3, m_pLuminanceHistogram->GetSRV());
 
 				context.Dispatch(1);
 			});
@@ -1086,8 +1080,8 @@ void DemoApp::Update()
 							parameters.Horizontal = direction;
 
 							context.SetRootConstants(0, parameters);
-							context.BindResource(2, 0, pTargetUAVs[i]);
-							context.BindResource(3, 0, pSource->GetSRV());
+							context.BindResources(2, pTargetUAVs[i].Get());
+							context.BindResources(3, pSource->GetSRV());
 
 							IntVector3 numThreadGroups = direction == 0 ?
 								ComputeUtils::GetNumThreadGroups(width, 1, height, ThreadGroupSize) :
@@ -1126,7 +1120,7 @@ void DemoApp::Update()
 
 			context.SetRootConstants(0, constBuffer);
 			context.SetRootCBV(1, GetViewUniforms(m_SceneData, m_pTonemapTarget));
-			context.BindResource(2, 0, m_pTonemapTarget->GetUAV());
+			context.BindResources(2, m_pTonemapTarget->GetUAV());
 			context.BindResources(3, {
 				m_pHDRRenderTarget->GetSRV(),
 				m_pAverageLuminance->GetSRV(),
@@ -1160,7 +1154,7 @@ void DemoApp::Update()
 				parameters.InvTextureDimensions.y = 1.0f / m_pDebugHistogramTexture->GetHeight();
 
 				context.SetRootConstants(0, parameters);
-				context.BindResource(2, 0, m_pDebugHistogramTexture->GetUAV());
+				context.BindResources(2, m_pDebugHistogramTexture->GetUAV());
 				context.BindResources(3, {
 					m_pLuminanceHistogram->GetSRV(),
 					m_pAverageLuminance->GetSRV(),
@@ -1391,7 +1385,7 @@ void DemoApp::InitializePipelines()
 		psoDesc.SetRootSignature(m_pCommonRS);
 		psoDesc.SetVertexShader("ProceduralSky.hlsl", "VSMain");
 		psoDesc.SetPixelShader("ProceduralSky.hlsl", "PSMain");
-		psoDesc.SetRenderTargetFormat(DXGI_FORMAT_R16G16B16A16_FLOAT, DXGI_FORMAT_D32_FLOAT, 1);
+		psoDesc.SetRenderTargetFormats(DXGI_FORMAT_R16G16B16A16_FLOAT, DXGI_FORMAT_D32_FLOAT, 1);
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
 		psoDesc.SetName("Skybox");
 		m_pSkyboxPSO = m_pDevice->CreatePipeline(psoDesc);
@@ -1414,7 +1408,7 @@ void DemoApp::InitializePipelines()
 		psoDesc.SetMeshShader("VisibilityRendering.hlsl", "MSMain");
 		psoDesc.SetPixelShader("VisibilityRendering.hlsl", "PSMain");
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
-		psoDesc.SetRenderTargetFormat(DXGI_FORMAT_R32_UINT, DXGI_FORMAT_D32_FLOAT, 1);
+		psoDesc.SetRenderTargetFormats(DXGI_FORMAT_R32_UINT, DXGI_FORMAT_D32_FLOAT, 1);
 		psoDesc.SetName("Visibility Rendering");
 		m_pVisibilityRenderingPSO = m_pDevice->CreatePipeline(psoDesc);
 
@@ -1457,7 +1451,7 @@ void DemoApp::InitializePipelines()
 		psoDesc.SetVertexShader("RayTracing/DDGI.hlsl", "VisualizeIrradianceVS");
 		psoDesc.SetPixelShader("RayTracing/DDGI.hlsl", "VisualizeIrradiancePS");
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
-		psoDesc.SetRenderTargetFormat(DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_D32_FLOAT, 1);
+		psoDesc.SetRenderTargetFormats(DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_D32_FLOAT, 1);
 		psoDesc.SetName("Visualize Irradiance");
 		psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
 		m_pDDGIVisualizePSO = m_pDevice->CreatePipeline(psoDesc);

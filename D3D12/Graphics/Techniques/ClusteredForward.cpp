@@ -131,7 +131,7 @@ void ClusteredForward::ComputeLightCulling(RGGraph& graph, const SceneView& scen
 
 				context.SetRootCBV(0, constantBuffer);
 				context.SetRootCBV(1, GetViewUniforms(scene));
-				context.BindResource(2, 0, resources.pAABBs->GetUAV());
+				context.BindResources(2, resources.pAABBs->GetUAV());
 
 				//Cluster count in z is 32 so fits nicely in a wavefront on Nvidia so make groupsize in shader 32
 				constexpr uint32 threadGroupSize = 32;
@@ -168,9 +168,11 @@ void ClusteredForward::ComputeLightCulling(RGGraph& graph, const SceneView& scen
 			context.SetRootCBV(0, constantBuffer);
 
 			context.SetRootCBV(1, GetViewUniforms(scene));
-			context.BindResource(2, 0, resources.pLightIndexGrid->GetUAV());
-			context.BindResource(2, 1, resources.pLightGrid->GetUAV());
-			context.BindResource(3, 0, resources.pAABBs->GetSRV());
+			context.BindResources(2, {
+				resources.pLightIndexGrid->GetUAV(),
+				resources.pLightGrid->GetUAV()
+				});
+			context.BindResources(3, resources.pAABBs->GetSRV());
 
 			context.Dispatch(
 				ComputeUtils::GetNumThreadGroups(
@@ -217,7 +219,7 @@ void ClusteredForward::RenderVolumetricFog(RGGraph& graph, const SceneView& scen
 
 			context.SetRootCBV(0, constantBuffer);
 			context.SetRootCBV(1, GetViewUniforms(scene));
-			context.BindResource(2, 0, pDestinationVolume->GetUAV());
+			context.BindResources(2, pDestinationVolume->GetUAV());
 			context.BindResources(3, {
 				lightCullData.pLightGrid->GetSRV(),
 				lightCullData.pLightIndexGrid->GetSRV(),
@@ -243,7 +245,7 @@ void ClusteredForward::RenderVolumetricFog(RGGraph& graph, const SceneView& scen
 
 			context.SetRootCBV(0, constantBuffer);
 			context.SetRootCBV(1, GetViewUniforms(scene));
-			context.BindResource(2, 0, fogData.pFinalVolumeFog->GetUAV());
+			context.BindResources(2, fogData.pFinalVolumeFog->GetUAV());
 			context.BindResources(3, {
 				lightCullData.pLightGrid->GetSRV(),
 				lightCullData.pLightIndexGrid->GetSRV(),
@@ -423,7 +425,7 @@ void ClusteredForward::VisualizeLightDensity(RGGraph& graph, const SceneView& re
 				pDepth->GetSRV(),
 				m_pLightGrid->GetSRV(),
 				});
-			context.BindResource(3, 0, m_pVisualizationIntermediateTexture->GetUAV());
+			context.BindResources(3, m_pVisualizationIntermediateTexture->GetUAV());
 
 			context.Dispatch(ComputeUtils::GetNumThreadGroups(pTarget->GetWidth(), 16, pTarget->GetHeight(), 16));
 			context.InsertUavBarrier();
@@ -530,7 +532,7 @@ void ClusteredForward::SetupPipelines()
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
 		psoDesc.SetDepthWrite(false);
 		psoDesc.SetPixelShader("VisualizeLightClusters.hlsl", "PSMain");
-		psoDesc.SetRenderTargetFormat(DXGI_FORMAT_R16G16B16A16_FLOAT, DXGI_FORMAT_D32_FLOAT, 1);
+		psoDesc.SetRenderTargetFormats(DXGI_FORMAT_R16G16B16A16_FLOAT, DXGI_FORMAT_D32_FLOAT, 1);
 		psoDesc.SetBlendMode(BlendMode::Additive, false);
 		psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT);
 		psoDesc.SetRootSignature(m_pVisualizeLightClustersRS);

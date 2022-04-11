@@ -55,7 +55,7 @@ void DebugRenderer::Initialize(GraphicsDevice* pDevice)
 	psoDesc.SetRootSignature(m_pRS);
 	psoDesc.SetVertexShader("DebugRenderer.hlsl", "VSMain");
 	psoDesc.SetPixelShader("DebugRenderer.hlsl", "PSMain");
-	psoDesc.SetRenderTargetFormat(DXGI_FORMAT_R16G16B16A16_FLOAT, DXGI_FORMAT_D32_FLOAT, 1);
+	psoDesc.SetRenderTargetFormats(DXGI_FORMAT_R16G16B16A16_FLOAT, DXGI_FORMAT_D32_FLOAT, 1);
 	psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
 	psoDesc.SetDepthWrite(true);
 	psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);

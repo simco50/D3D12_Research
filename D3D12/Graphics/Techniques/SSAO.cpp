@@ -64,12 +64,10 @@ void SSAO::Execute(RGGraph& graph, const SceneView& sceneData, Texture* pTarget,
 
 			context.SetRootConstants(0, shaderParameters);
 			context.SetRootCBV(1, GetViewUniforms(sceneData, pTarget));
-			context.BindResource(2, 0, pTarget->GetUAV());
-			context.BindResource(3, 0, pDepth->GetSRV());
+			context.BindResources(2, pTarget->GetUAV());
+			context.BindResources(3, pDepth->GetSRV());
 
-			int dispatchGroupsX = Math::DivideAndRoundUp(pTarget->GetWidth(), 16);
-			int dispatchGroupsY = Math::DivideAndRoundUp(pTarget->GetHeight(), 16);
-			context.Dispatch(dispatchGroupsX, dispatchGroupsY);
+			context.Dispatch(ComputeUtils::GetNumThreadGroups(pTarget->GetWidth(), 16, pTarget->GetHeight(), 16));
 		});
 
 	RGPassBuilder blur = graph.AddPass("Blur SSAO");
@@ -92,18 +90,18 @@ void SSAO::Execute(RGGraph& graph, const SceneView& sceneData, Texture* pTarget,
 
 			context.SetRootConstants(0, shaderParameters);
 			context.SetRootCBV(1, GetViewUniforms(sceneData, pTarget));
-			context.BindResource(2, 0, m_pAmbientOcclusionIntermediate->GetUAV());
+			context.BindResources(2, m_pAmbientOcclusionIntermediate->GetUAV());
 			context.BindResources(3, {
 				pDepth->GetSRV(),
 				pTarget->GetSRV(),
 			});
 
-			context.Dispatch(Math::DivideAndRoundUp(m_pAmbientOcclusionIntermediate->GetWidth(), 256), m_pAmbientOcclusionIntermediate->GetHeight());
+			context.Dispatch(ComputeUtils::GetNumThreadGroups(m_pAmbientOcclusionIntermediate->GetWidth(), 256, m_pAmbientOcclusionIntermediate->GetHeight(), 1));
 
 			context.InsertResourceBarrier(m_pAmbientOcclusionIntermediate, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-			context.BindResource(2, 0, pTarget->GetUAV());
+			context.BindResources(2, pTarget->GetUAV());
 			context.BindResources(3, {
 				pDepth->GetSRV(),
 				m_pAmbientOcclusionIntermediate->GetSRV(),
@@ -111,7 +109,7 @@ void SSAO::Execute(RGGraph& graph, const SceneView& sceneData, Texture* pTarget,
 
 			shaderParameters.Horizontal = 0;
 			context.SetRootConstants(0, shaderParameters);
-			context.Dispatch(m_pAmbientOcclusionIntermediate->GetWidth(), Math::DivideAndRoundUp(m_pAmbientOcclusionIntermediate->GetHeight(), 256));
+			context.Dispatch(ComputeUtils::GetNumThreadGroups(m_pAmbientOcclusionIntermediate->GetWidth(), 1, m_pAmbientOcclusionIntermediate->GetHeight(), 256));
 		});
 }
 

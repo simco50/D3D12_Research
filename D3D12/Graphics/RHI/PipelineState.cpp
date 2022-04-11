@@ -85,11 +85,6 @@ void PipelineStateInitializer::SetDepthOnlyTarget(DXGI_FORMAT dsvFormat, uint32 
 	GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL_FORMAT>() = dsvFormat;
 }
 
-void PipelineStateInitializer::SetRenderTargetFormat(DXGI_FORMAT rtvFormat, DXGI_FORMAT dsvFormat, uint32 msaa)
-{
-	SetRenderTargetFormats(rtvFormat, dsvFormat, msaa);
-}
-
 void PipelineStateInitializer::SetRenderTargetFormats(const Span<DXGI_FORMAT>& rtvFormats, DXGI_FORMAT dsvFormat, uint32 msaa)
 {
 	D3D12_RT_FORMAT_ARRAY& formatArray = GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_RENDER_TARGET_FORMATS>();

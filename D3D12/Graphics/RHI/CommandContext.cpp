@@ -340,12 +340,6 @@ void CommandContext::SetRootCBV(uint32 rootIndex, const void* pData, uint32 data
 	}
 }
 
-void CommandContext::BindResource(uint32 rootIndex, uint32 offset, ResourceView* pView)
-{
-	D3D12_CPU_DESCRIPTOR_HANDLE handle = pView->GetDescriptor();
-	m_ShaderResourceDescriptorAllocator.SetDescriptors(rootIndex, offset, 1, &handle);
-}
-
 void CommandContext::BindResources(uint32 rootIndex, const Span<const ResourceView*>& pViews, uint32 offset)
 {
 	static D3D12_CPU_DESCRIPTOR_HANDLE descriptors[16];
