@@ -51,6 +51,11 @@ struct MaterialProperties
 	float Specular;
 };
 
+float InverseLerp(float value, float minValue, float maxValue)
+{
+	return (value - minValue) / (maxValue - minValue);
+}
+
 bool SphereInAABB(Sphere sphere, AABB aabb)
 {
 	float3 d = max(0, abs(aabb.Center.xyz - sphere.Position) - aabb.Extents.xyz);

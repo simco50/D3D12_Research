@@ -119,7 +119,7 @@ void TaskQueue::Distribute(TaskContext& context, const AsyncDistributeDelegate& 
 	{
 		groupSize = ThreadCount();
 	}
-	uint32 jobs = (uint32)ceil((float)count / groupSize);
+	uint32 jobs = (uint32)Math::Ceil((float)count / groupSize);
 	context.fetch_add(jobs);
 
 	{

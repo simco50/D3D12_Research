@@ -16,6 +16,7 @@ class PathTracing;
 class CBTTessellation;
 class UnorderedAccessView;
 class StateObject;
+class RGGraph;
 struct SubMesh;
 struct Material;
 
@@ -40,6 +41,8 @@ public:
 private:
 	void OnResizeViewport(int width, int height);
 	void Present();
+
+	void VisualizeTexture(RGGraph& graph, Texture* pTexture);
 
 	void InitializePipelines();
 	void SetupScene(CommandContext& context);
@@ -192,8 +195,19 @@ private:
 	RefCountPtr<PipelineState> m_pDDGIUpdateIrradianceDepthPSO;
 	RefCountPtr<PipelineState> m_pDDGIUpdateProbeStatesPSO;
 	RefCountPtr<PipelineState> m_pDDGIVisualizePSO;
+	
+	// Debug Visualize
+	RefCountPtr<PipelineState> m_pVisualizeTexturePSO;
+	struct TextureVisualizeData
+	{
+		RefCountPtr<Texture> pTarget;
+		float RangeMin = 0.0f;
+		float RangeMax = 1.0f;
+		bool VisibleChannels[4] = { true, true, true, true };
+		float MipLevel = 0.0f;
+		float Slice = 0.0f;
+	} m_VisualizeTextureData;
 
-	RefCountPtr<Texture> m_pVisualizeTexture;
 	SceneView m_SceneData;
 	bool m_CapturePix = false;
 };

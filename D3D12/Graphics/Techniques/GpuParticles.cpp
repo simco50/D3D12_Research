@@ -142,7 +142,7 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView& resources, Texture*
 			{
 				int32 EmitCount;
 			} parameters;
-			parameters.EmitCount = (uint32)floor(m_ParticlesToSpawn);
+			parameters.EmitCount = (int32)Math::Floor(m_ParticlesToSpawn);
 			m_ParticlesToSpawn -= parameters.EmitCount;
 
 			context.SetRootConstants(0, parameters);

@@ -1486,6 +1486,87 @@ void DemoApp::InitializePipelines()
 			}
 		}
 	}
+
+	// Texture visualize 
+	m_pVisualizeTexturePSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "ImageVisualize.hlsl", "CSMain");
+}
+
+void DemoApp::VisualizeTexture(RGGraph& graph, Texture* pTexture)
+{
+	RefCountPtr<Texture>& pTarget = m_VisualizeTextureData.pTarget;
+
+	const TextureDesc& sourceDesc = pTexture->GetDesc();
+	if (!pTarget || pTarget->GetWidth() != sourceDesc.Width || pTarget->GetHeight() != sourceDesc.Height)
+	{
+		pTarget = m_pDevice->CreateTexture(TextureDesc::Create2D(sourceDesc.Width, sourceDesc.Height, DXGI_FORMAT_R8G8B8A8_UNORM, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess), "Vis Target");
+	}
+
+	checkf(pTexture->GetWidth() == pTarget->GetWidth() && pTarget->GetHeight() == pTexture->GetHeight(), "2D dimensions must match");
+
+	if (ImGui::Begin("Visualize Texture"))
+	{
+		ImGui::Text("%s - Resolution: %dx%d", pTexture->GetName().c_str(), pTexture->GetWidth(), pTexture->GetHeight());
+		ImGui::DragFloatRange2("Range", &m_VisualizeTextureData.RangeMin, &m_VisualizeTextureData.RangeMax, 0.02f, 0, 10);
+		if (pTexture->GetMipLevels() > 1)
+		{
+			ImGui::SliderFloat("Mip", &m_VisualizeTextureData.MipLevel, 0, (float)pTexture->GetMipLevels() - 1);
+		}
+		if (pTexture->GetDepth() > 1)
+		{
+			ImGui::SliderFloat("Slice", &m_VisualizeTextureData.Slice, 0, (float)pTexture->GetDepth() - 1);
+		}
+		ImGui::Checkbox("R", &m_VisualizeTextureData.VisibleChannels[0]);
+		ImGui::SameLine();
+		ImGui::Checkbox("G", &m_VisualizeTextureData.VisibleChannels[1]);
+		ImGui::SameLine();
+		ImGui::Checkbox("B", &m_VisualizeTextureData.VisibleChannels[2]);
+		ImGui::SameLine();
+		ImGui::Checkbox("A", &m_VisualizeTextureData.VisibleChannels[3]);
+
+		ImGui::ImageAutoSize(pTarget, ImVec2((float)pTarget->GetWidth(), (float)pTarget->GetHeight()));
+	}
+	ImGui::End();
+
+	RGPassBuilder imageVis = graph.AddPass("Process Image Visualizer");
+	imageVis.NeverCull();
+	imageVis.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
+		{
+			context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+			context.InsertResourceBarrier(pTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+
+			context.SetComputeRootSignature(m_pCommonRS);
+			context.SetPipelineState(m_pVisualizeTexturePSO);
+
+			struct ConstantsData
+			{
+				Vector2 InvDimensions;
+				Vector2 ValueRange;
+				uint32 TextureSource;
+				uint32 TextureTarget;
+				TextureDimension TextureType;
+				uint32 ChannelMask;
+				float MipLevel;
+				float Slice;
+			} constants;
+
+			constants.TextureSource = pTexture->GetSRV()->GetHeapIndex();
+			constants.TextureTarget = pTarget->GetUAV()->GetHeapIndex();
+			constants.InvDimensions.x = 1.0f / pTexture->GetWidth();
+			constants.InvDimensions.y = 1.0f / pTexture->GetHeight();
+			constants.TextureType = pTexture->GetDesc().Dimensions;
+			constants.ValueRange = Vector2(m_VisualizeTextureData.RangeMin, m_VisualizeTextureData.RangeMax);
+			constants.ChannelMask =
+				(m_VisualizeTextureData.VisibleChannels[0] ? 1 : 0) << 0 |
+				(m_VisualizeTextureData.VisibleChannels[1] ? 1 : 0) << 1 |
+				(m_VisualizeTextureData.VisibleChannels[2] ? 1 : 0) << 2 |
+				(m_VisualizeTextureData.VisibleChannels[3] ? 1 : 0) << 3;
+			constants.MipLevel = m_VisualizeTextureData.MipLevel;
+			constants.Slice = m_VisualizeTextureData.Slice / pTexture->GetDepth();
+
+			context.SetRootCBV(1, constants);
+
+			context.Dispatch(ComputeUtils::GetNumThreadGroups(pTexture->GetWidth(), 16, pTexture->GetHeight(), 16));
+		});
 }
 
 void DemoApp::UpdateImGui()
@@ -1634,16 +1715,6 @@ void DemoApp::UpdateImGui()
 		ImVec2 cursor = ImGui::GetCursorPos();
 		ImGui::ImageAutoSize(m_pDebugHistogramTexture, ImVec2((float)m_pDebugHistogramTexture->GetWidth(), (float)m_pDebugHistogramTexture->GetHeight()));
 		ImGui::GetWindowDrawList()->AddText(cursor, IM_COL32(255, 255, 255, 255), Sprintf("%.2f", Tweakables::g_MinLogLuminance.Get()).c_str());
-		ImGui::End();
-	}
-
-	if (m_pVisualizeTexture)
-	{
-		if (ImGui::Begin("Visualize Texture"))
-		{
-			ImGui::Text("Resolution: %dx%d", m_pVisualizeTexture->GetWidth(), m_pVisualizeTexture->GetHeight());
-			ImGui::ImageAutoSize(m_pVisualizeTexture, ImVec2((float)m_pVisualizeTexture->GetWidth(), (float)m_pVisualizeTexture->GetHeight()));
-		}
 		ImGui::End();
 	}
 
@@ -2058,8 +2129,8 @@ void DemoApp::CreateShadowViews()
 				// Snap the cascade to the resolution of the shadowmap
 				Vector3 extents = maxExtents - minExtents;
 				Vector3 texelSize = extents / 2048;
-				minExtents = Math::VectorFloor(minExtents / texelSize) * texelSize;
-				maxExtents = Math::VectorFloor(maxExtents / texelSize) * texelSize;
+				minExtents = Math::Floor(minExtents / texelSize) * texelSize;
+				maxExtents = Math::Floor(maxExtents / texelSize) * texelSize;
 				center = (minExtents + maxExtents) * 0.5f;
 
 				// Extent the Z bounds

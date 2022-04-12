@@ -55,11 +55,6 @@ float EdgeDetection(uint2 index, uint width, uint height)
 	return lerp(1, 0, step(0.05f, length(reference - sampledValue)));
 }
 
-float InverseLerp(float value, float minValue, float maxValue)
-{
-	return (value - minValue) / (maxValue - minValue);
-}
-
 [numthreads(16, 16, 1)]
 void DebugLightDensityCS(uint3 threadId : SV_DispatchThreadID)
 {
