@@ -20,12 +20,6 @@ void MaterialCHS(inout MaterialRayPayload payload, BuiltInTriangleIntersectionAt
 [shader("anyhit")]
 void MaterialAHS(inout MaterialRayPayload payload, BuiltInTriangleIntersectionAttributes attrib)
 {
-	payload.InstanceID = InstanceID();
-	payload.PrimitiveID = PrimitiveIndex();
-	payload.HitT = RayTCurrent();
-	payload.Barycentrics = attrib.barycentrics;
-	payload.FrontFace = HitKind() == HIT_KIND_TRIANGLE_FRONT_FACE;
-	
 	MeshInstance instance = GetMeshInstance(InstanceID());
 	VertexAttribute vertex = GetVertexAttributes(instance, attrib.barycentrics, PrimitiveIndex());
 	MaterialData material = GetMaterial(instance.Material);

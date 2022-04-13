@@ -289,20 +289,17 @@ void RayGen()
 
 		float3 V = -ray.Direction;
 		float3 hitLocation = ray.Origin + ray.Direction * payload.HitT;
-		float3 geometryNormal = normalize(vertex.GeometryNormal);
-		float3 N = normalize(vertex.Normal);
+		float3 geometryNormal = vertex.GeometryNormal;
+		float3 N = vertex.Normal;
 		float4 T = vertex.Tangent;
-
-		if(dot(geometryNormal, V) < 0.0f)
-		{
+		if(!payload.IsFrontFace())
 			geometryNormal = -geometryNormal;
-		}
+
 		if(dot(geometryNormal, N) < 0.0f)
 		{
 			N = -N;
 			T.xyz = -T.xyz;
 		}
-
 		float3x3 TBN = CreateTangentToWorld(N, T);
 		N = TangentSpaceNormalMapping(surface.NormalTS, TBN);
 

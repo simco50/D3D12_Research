@@ -45,7 +45,7 @@ VertexAttribute GetVertexAttributes(MeshInstance instance, float2 attribBarycent
 	float3 edge20 = positions[2] - positions[0];
 	float3 edge21 = positions[2] - positions[1];
 	float3 edge10 = positions[1] - positions[0];
-	outData.GeometryNormal = mul(normalize(cross(edge20, edge10)), (float3x3)world);
+	outData.GeometryNormal = normalize(mul(cross(edge20, edge10), (float3x3)world));
 
 	return outData;
 }
