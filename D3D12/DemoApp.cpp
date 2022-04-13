@@ -116,7 +116,7 @@ namespace Tweakables
 	ConsoleVariable g_MaxLogLuminance("r.Exposure.MaxLogLuminance", 20.0f);
 	ConsoleVariable g_Tau("r.Exposure.Tau", 2.0f);
 	ConsoleVariable g_DrawHistogram("vis.Histogram", false);
-	ConsoleVariable g_ToneMapper("r.Tonemapper", 1);
+	ConsoleVariable g_ToneMapper("r.Tonemapper", 2);
 	ConsoleVariable g_TAA("r.Taa", true);
 
 	// Shadows
@@ -258,6 +258,16 @@ void DemoApp::SetupScene(CommandContext& context)
 		sunLight.VolumetricLighting = true;
 		m_Lights.push_back(sunLight);
 	}
+
+#if 1
+	{
+		Vector3 Position(9, 1.5f, 0);
+		Light pointLights = Light::Point(Position, 200, 10, Colors::White);
+		pointLights.CastShadows = true;
+		pointLights.VolumetricLighting = true;
+		m_Lights.push_back(pointLights);
+	}
+#endif
 
 #if 0
 	for (int i = 0; i < 5; ++i)
@@ -437,7 +447,7 @@ void DemoApp::Update()
 		m_pParticles->Simulate(graph, m_SceneData, GetDepthStencil());
 
 		// SHADOWS
-		RGPassBuilder shadows = graph.AddPass("Shadow Mapping");
+		RGPassBuilder shadows = graph.AddPass("Shadow Depths");
 		shadows.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
 			{
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -1334,7 +1344,7 @@ void DemoApp::InitializePipelines()
 		psoDesc.SetRenderTargetFormats({}, DEPTH_STENCIL_SHADOW_FORMAT, 1);
 		psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
-		psoDesc.SetDepthBias(-1, -5.0f, -4.0f);
+		psoDesc.SetDepthBias(-10, 0, -4.0f);
 		psoDesc.SetName("Shadow Mapping Opaque");
 		m_pShadowsOpaquePSO = m_pDevice->CreatePipeline(psoDesc);
 
@@ -2164,10 +2174,10 @@ void DemoApp::CreateShadowViews()
 		else if (light.Type == LightType::Point)
 		{
 			Matrix viewMatrices[] = {
-				Math::CreateLookToMatrix(light.Position, Vector3::Left, Vector3::Up),
 				Math::CreateLookToMatrix(light.Position, Vector3::Right, Vector3::Up),
-				Math::CreateLookToMatrix(light.Position, Vector3::Down, Vector3::Backward),
+				Math::CreateLookToMatrix(light.Position, Vector3::Left, Vector3::Up),
 				Math::CreateLookToMatrix(light.Position, Vector3::Up, Vector3::Forward),
+				Math::CreateLookToMatrix(light.Position, Vector3::Down, Vector3::Backward),
 				Math::CreateLookToMatrix(light.Position, Vector3::Backward, Vector3::Up),
 				Math::CreateLookToMatrix(light.Position, Vector3::Forward, Vector3::Up),
 			};
