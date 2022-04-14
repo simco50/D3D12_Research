@@ -460,7 +460,7 @@ void DemoApp::Update()
 				{
 					GPU_PROFILE_SCOPE("Light View", &context);
 					const ShadowView& shadowView = view.ShadowViews[i];
-					Texture* pShadowmap = m_ShadowMaps[i];
+					Texture* pShadowmap = shadowView.pDepthTexture;
 					context.InsertResourceBarrier(pShadowmap, D3D12_RESOURCE_STATE_DEPTH_WRITE);
 					context.BeginRenderPass(RenderPassInfo::DepthOnly(pShadowmap, RenderPassAccess::Clear_Store));
 
@@ -1730,20 +1730,17 @@ void DemoApp::UpdateImGui()
 
 	if (Tweakables::g_VisualizeShadowCascades)
 	{
-		if (m_ShadowMaps.size() >= 4)
+		float imageSize = 230;
+		if (ImGui::Begin("Shadow Cascades"))
 		{
-			float imageSize = 230;
-			if (ImGui::Begin("Shadow Cascades"))
+			const Light& sunLight = m_Lights[0];
+			for (int i = 0; i < Tweakables::g_ShadowCascades; ++i)
 			{
-				const Light& sunLight = m_Lights[0];
-				for (int i = 0; i < Tweakables::g_ShadowCascades; ++i)
-				{
-					ImGui::Image(m_ShadowMaps[sunLight.ShadowIndex + i], ImVec2(imageSize, imageSize));
-					ImGui::SameLine();
-				}
+				ImGui::Image(sunLight.ShadowMaps[i], ImVec2(imageSize, imageSize));
+				ImGui::SameLine();
 			}
-			ImGui::End();
 		}
+		ImGui::End();
 	}
 
 	if (showProfiler)
@@ -2046,7 +2043,6 @@ void DemoApp::CreateShadowViews()
 	const uint32 numCascades = Tweakables::g_ShadowCascades;
 	const float pssmLambda = Tweakables::g_PSSMFactor;
 	m_SceneData.NumShadowCascades = numCascades;
-	m_SceneData.ShadowViews.clear();
 
 	if (Tweakables::g_SDSM)
 	{
@@ -2077,6 +2073,28 @@ void DemoApp::CreateShadowViews()
 		cascadeSplits[i] = (d - nearPlane) / clipPlaneRange;
 	}
 
+	int32 shadowIndex = 0;
+	m_SceneData.ShadowViews.clear();
+	auto AddShadowView = [&](Light& light, ShadowView view, uint32 resolution, uint32 shadowMapLightIndex)
+	{
+		if (shadowMapLightIndex == 0)
+		{
+			light.MatrixIndex = shadowIndex;
+		}
+		if (shadowIndex >= m_ShadowMaps.size())
+		{
+			m_ShadowMaps.push_back(m_pDevice->CreateTexture(TextureDesc::CreateDepth(resolution, resolution, DEPTH_STENCIL_SHADOW_FORMAT, TextureFlag::DepthStencil | TextureFlag::ShaderResource, 1, ClearBinding(0.0f, 0)), "Shadow Map"));
+		}
+		RefCountPtr<Texture> pTarget = m_ShadowMaps[shadowIndex];
+
+		light.ShadowMaps.resize(Math::Max(shadowMapLightIndex + 1, (uint32)light.ShadowMaps.size()));
+		light.ShadowMaps[shadowMapLightIndex] = pTarget;
+		light.ShadowMapSize = resolution;
+		view.pDepthTexture = pTarget;
+		m_SceneData.ShadowViews.push_back(view);
+		shadowIndex++;
+	};
+
 	const Matrix vpInverse = m_pCamera->GetProjectionInverse() * m_pCamera->GetViewInverse();
 	for (size_t lightIndex = 0; lightIndex < m_Lights.size(); ++lightIndex)
 	{
@@ -2085,8 +2103,6 @@ void DemoApp::CreateShadowViews()
 		{
 			continue;
 		}
-		uint32 shadowIndex = (uint32)m_SceneData.ShadowViews.size();
-		light.ShadowIndex = shadowIndex;
 		if (light.Type == LightType::Directional)
 		{
 			// Frustum corners in world space
@@ -2156,7 +2172,7 @@ void DemoApp::CreateShadowViews()
 				shadowView.ViewProjection = lightView * projectionMatrix;
 
 				static_cast<float*>(&m_SceneData.ShadowCascadeDepths.x)[i] = nearPlane + currentCascadeSplit * (farPlane - nearPlane);
-				m_SceneData.ShadowViews.push_back(shadowView);
+				AddShadowView(light, shadowView, 2048, i);
 			}
 		}
 		else if (light.Type == LightType::Spot)
@@ -2169,7 +2185,7 @@ void DemoApp::CreateShadowViews()
 			shadowView.ViewProjection = view * projection;
 			BoundingFrustum::CreateFromMatrix(shadowView.PerspectiveFrustum, projection);
 			shadowView.PerspectiveFrustum.Transform(shadowView.PerspectiveFrustum, view.Invert());
-			m_SceneData.ShadowViews.push_back(shadowView);
+			AddShadowView(light, shadowView, 512, 0);
 		}
 		else if (light.Type == LightType::Point)
 		{
@@ -2190,33 +2206,10 @@ void DemoApp::CreateShadowViews()
 				shadowView.ViewProjection = viewMatrices[i] * projection;
 				BoundingFrustum::CreateFromMatrix(shadowView.PerspectiveFrustum, projection);
 				shadowView.PerspectiveFrustum.Transform(shadowView.PerspectiveFrustum, viewMatrices[i].Invert());
-				m_SceneData.ShadowViews.push_back(shadowView);
+				AddShadowView(light, shadowView, 512, i);
 			}
 		}
 	}
-
-	if (m_SceneData.ShadowViews.size() > (int)m_ShadowMaps.size())
-	{
-		m_ShadowMaps.resize(m_SceneData.ShadowViews.size());
-		int i = 0;
-		for (auto& pShadowMap : m_ShadowMaps)
-		{
-			int size = i < 4 ? 2048 : 512;
-			pShadowMap = m_pDevice->CreateTexture(TextureDesc::CreateDepth(size, size, DEPTH_STENCIL_SHADOW_FORMAT, TextureFlag::DepthStencil | TextureFlag::ShaderResource, 1, ClearBinding(0.0f, 0)), "Shadow Map");
-			++i;
-		}
-	}
-
-	for (Light& light : m_Lights)
-	{
-		if (light.ShadowIndex >= 0)
-		{
-			light.ShadowMapSize = m_ShadowMaps[light.ShadowIndex]->GetWidth();
-		}
-	}
-	m_SceneData.ShadowMapOffset = m_ShadowMaps[0]->GetSRVIndex();
-
-		
 }
 
 void DemoApp::UploadSceneData(CommandContext& context)

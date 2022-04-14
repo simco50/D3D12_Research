@@ -80,39 +80,22 @@ void RayGen()
 					L = 100000.0f * -light.Direction;
 				}
 
-				int shadowIndex = GetShadowIndex(light, pos, hitLocation);
-				bool castShadowRay = true;
-				if(shadowIndex >= 0)
+				if(light.CastShadows)
 				{
-					float4x4 lightViewProjection = cView.LightViewProjections[shadowIndex];
-					float4 lightPos = mul(float4(hitLocation, 1), lightViewProjection);
-					lightPos.xyz /= lightPos.w;
-					lightPos.x = lightPos.x / 2.0f + 0.5f;
-					lightPos.y = lightPos.y / -2.0f + 0.5f;
-					attenuation *= LightTextureMask(light, shadowIndex, hitLocation);
-
-					if(all(lightPos >= 0) && all(lightPos <= 1))
-					{
-						Texture2D shadowTexture = ResourceDescriptorHeap[cView.ShadowMapOffset + shadowIndex];
-						attenuation *= shadowTexture.SampleCmpLevelZero(sLinearClampComparisonGreater, lightPos.xy, lightPos.z);
-						castShadowRay = false;
-					}
+					attenuation *= LightTextureMask(light, hitLocation);
 				}
 
-				if(castShadowRay)
-				{
 #if SECONDARY_SHADOW_RAY
-					RayDesc rayDesc;
-					rayDesc.Origin = hitLocation;
-					rayDesc.Direction = normalize(L);
-					rayDesc.TMin = RAY_BIAS;
-					rayDesc.TMax = length(L);
-					RaytracingAccelerationStructure tlas = ResourceDescriptorHeap[cView.TLASIndex];
-					attenuation *= TraceOcclusionRay(rayDesc, tlas);
+				RayDesc rayDesc;
+				rayDesc.Origin = hitLocation;
+				rayDesc.Direction = normalize(L);
+				rayDesc.TMin = RAY_BIAS;
+				rayDesc.TMax = length(L);
+				RaytracingAccelerationStructure tlas = ResourceDescriptorHeap[cView.TLASIndex];
+				attenuation *= TraceOcclusionRay(rayDesc, tlas);
 #else
-					attenuation = 0.0f;
+				attenuation = 0.0f;
 #endif // SECONDARY_SHADOW_RAY
-				}
 
 				radiance += surface.Emissive;
 				radiance += Diffuse_Lambert(brdfData.Diffuse) * SampleDDGIIrradiance(hitLocation, N, -V);

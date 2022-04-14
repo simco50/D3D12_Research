@@ -1,6 +1,7 @@
 #pragma once
 #include "ShaderInterop.h"
 #include "RHI/DescriptorHandle.h"
+#include "RHI/Texture.h"
 
 enum class LightType
 {
@@ -21,8 +22,9 @@ struct Light
 	float Intensity = 1;
 	float Range = 1;
 	bool VolumetricLighting = false;
-	uint32 LightTexture = DescriptorHandle::InvalidHeapIndex;
-	int ShadowIndex = -1;
+	uint32 MatrixIndex = DescriptorHandle::InvalidHeapIndex;
+	std::vector<Texture*> ShadowMaps;
+	Texture* pLightTexture = nullptr;
 	int ShadowMapSize = 512;
 	bool CastShadows = false;
 
@@ -36,9 +38,10 @@ struct Light
 		data.Color = Math::EncodeRGBA(Colour);
 		data.Intensity = Intensity;
 		data.Range = Range;
-		data.ShadowIndex = CastShadows ? ShadowIndex : -1;
+		data.ShadowMapIndex = CastShadows && ShadowMaps.size() ? ShadowMaps[0]->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
+		data.MaskTexture = pLightTexture ? pLightTexture->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
+		data.MatrixIndex = MatrixIndex;
 		data.InvShadowSize = 1.0f / ShadowMapSize;
-		data.LightTexture = LightTexture;
 		data.IsEnabled = Intensity > 0 ? 1 : 0;
 		data.IsVolumetric = VolumetricLighting;
 		data.CastShadows = CastShadows;

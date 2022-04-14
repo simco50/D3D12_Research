@@ -56,6 +56,7 @@ struct ShadowView
 	bool IsPerspective;
 	BoundingBox OrtographicFrustum;
 	BoundingFrustum PerspectiveFrustum;
+	Texture* pDepthTexture = nullptr;
 };
 
 struct SceneView
@@ -78,7 +79,6 @@ struct SceneView
 	std::vector<ShadowView> ShadowViews;
 	Vector4 ShadowCascadeDepths;
 	uint32 NumShadowCascades;
-	uint32 ShadowMapOffset;
 };
 
 struct SceneTextures

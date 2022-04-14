@@ -126,9 +126,11 @@ namespace ShaderInterop
 		float Intensity;
 		float2 SpotlightAngles;
 		float Range;
-		int ShadowIndex;
 		float InvShadowSize;
-		uint LightTexture;
+
+		uint ShadowMapIndex;
+		uint MatrixIndex;
+		uint MaskTexture;
 
 		// flags
 		uint IsEnabled : 1;
@@ -164,8 +166,7 @@ namespace ShaderInterop
 		float4x4 LightViewProjections[MAX_SHADOW_CASTERS];
 		float4 CascadeDepths;
 		uint NumCascades;
-		uint ShadowMapOffset;
-		uint2 padd0;
+		uint3 padd0;
 
 		float4x4 View;
 		float4x4 ViewInverse;

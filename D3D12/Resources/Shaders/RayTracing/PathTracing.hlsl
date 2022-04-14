@@ -42,14 +42,7 @@ LightResult EvaluateLight(Light light, float3 worldPos, float3 V, float3 N, floa
 		return result;
 	}
 
-	float3 viewPosition = mul(float4(worldPos, 1), cView.View).xyz;
-	float4 pos = float4(0, 0, 0, viewPosition.z);
-	int shadowIndex = GetShadowIndex(light, pos, worldPos);
-	if(shadowIndex >= 0)
-	{
-		attenuation *= LightTextureMask(light, shadowIndex, worldPos);
-	}
-
+	attenuation *= LightTextureMask(light, worldPos);
 	if(attenuation <= 0.0f)
 	{
 		return result;
