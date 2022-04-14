@@ -42,56 +42,54 @@ ClusteredForward::~ClusteredForward()
 
 void ClusteredForward::OnResize(int windowWidth, int windowHeight)
 {
-	m_ClusterCountX = Math::RoundUp((float)windowWidth / gLightClusterTexelSize);
-	m_ClusterCountY = Math::RoundUp((float)windowHeight / gLightClusterTexelSize);
-
-	uint32 totalClusterCount = m_ClusterCountX * m_ClusterCountY * gLightClustersNumZ;
-	m_pAABBs = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(totalClusterCount, sizeof(Vector4) * 2), "AABBs");
-
-	m_pLightIndexGrid = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(gMaxLightsPerCluster * totalClusterCount, sizeof(uint32)), "Light Index Grid");
-	// LightGrid.x : Offset
-	// LightGrid.y : Count
-	m_pLightGrid = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(2 * totalClusterCount, sizeof(uint32)), "Light Grid");
-	m_pLightGridRawUAV = m_pDevice->CreateUAV(m_pLightGrid, BufferUAVDesc::CreateRaw());
-	m_pDebugLightGrid = m_pDevice->CreateBuffer(m_pLightGrid->GetDesc(), "Debug Light Grid");
-
-	TextureDesc volumeDesc = TextureDesc::Create3D(
-		Math::DivideAndRoundUp(windowWidth, gVolumetricFroxelTexelSize),
-		Math::DivideAndRoundUp(windowHeight, gVolumetricFroxelTexelSize),
-		gVolumetricNumZSlices,
-		DXGI_FORMAT_R16G16B16A16_FLOAT,
-		TextureFlag::ShaderResource | TextureFlag::UnorderedAccess);
-
-	m_pLightScatteringVolume[0] = m_pDevice->CreateTexture(volumeDesc, "Light Scattering Volume 0");
-	m_pLightScatteringVolume[1] = m_pDevice->CreateTexture(volumeDesc, "Light Scattering Volume 1");
-	m_pFinalVolumeFog = m_pDevice->CreateTexture(volumeDesc, "Final Light Scattering Volume");
-
-	m_ViewportDirty = true;
+	CreateLightCullingResources(m_LightCullData, IntVector2(windowWidth, windowHeight));
+	CreateVolumetricFogResources(m_VolumetricFogData, IntVector2(windowWidth, windowHeight));
 }
 
 void ClusteredForward::Execute(RGGraph& graph, const SceneView& resources, const SceneTextures& parameters)
 {
-	ClusteredLightCullData lightCullData;
-	lightCullData.ClusterCount = IntVector3(m_ClusterCountX, m_ClusterCountY, gLightClustersNumZ);
-	lightCullData.pAABBs = m_pAABBs;
-	lightCullData.pLightIndexGrid = m_pLightIndexGrid;
-	lightCullData.pLightGrid = m_pLightGrid;
-	lightCullData.pLightGridRawUAV = m_pLightGridRawUAV;
-	ComputeLightCulling(graph, resources, lightCullData);
+	ComputeLightCulling(graph, resources, m_LightCullData);
 
 	Texture* pFogVolume = GraphicsCommon::GetDefaultTexture(DefaultTexture::Black3D);
-
 	if (Tweakables::g_VolumetricFog)
 	{
-		VolumetricFogData fogData;
-		fogData.pFinalVolumeFog = m_pFinalVolumeFog;
-		fogData.pLightScatteringVolume[0] = m_pLightScatteringVolume[0];
-		fogData.pLightScatteringVolume[1] = m_pLightScatteringVolume[1];
-		RenderVolumetricFog(graph, resources, lightCullData, fogData);
-		pFogVolume = fogData.pFinalVolumeFog;
+		RenderVolumetricFog(graph, resources, m_LightCullData, m_VolumetricFogData);
+		pFogVolume = m_VolumetricFogData.pFinalVolumeFog;
 	}
 
-	RenderBasePass(graph, resources, parameters, lightCullData, pFogVolume);
+	RenderBasePass(graph, resources, parameters, m_LightCullData, pFogVolume);
+}
+
+void ClusteredForward::CreateLightCullingResources(ClusteredLightCullData& resources, const IntVector2& viewDimensions)
+{
+	resources.ClusterCount.x = Math::DivideAndRoundUp(viewDimensions.x, gLightClusterTexelSize);
+	resources.ClusterCount.y = Math::DivideAndRoundUp(viewDimensions.y, gLightClusterTexelSize);
+	resources.ClusterCount.z = gLightClustersNumZ;
+
+	uint32 totalClusterCount = resources.ClusterCount.x * resources.ClusterCount.y * resources.ClusterCount.z;
+	resources.pAABBs = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(totalClusterCount, sizeof(Vector4) * 2), "AABBs");
+
+	resources.pLightIndexGrid = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(gMaxLightsPerCluster * totalClusterCount, sizeof(uint32)), "Light Index Grid");
+	// LightGrid.x : Offset
+	// LightGrid.y : Count
+	resources.pLightGrid = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(2 * totalClusterCount, sizeof(uint32)), "Light Grid");
+	resources.pLightGridRawUAV = m_pDevice->CreateUAV(resources.pLightGrid, BufferUAVDesc::CreateRaw());
+	resources.pDebugLightGrid = m_pDevice->CreateBuffer(resources.pLightGrid->GetDesc(), "Debug Light Grid");
+	resources.IsViewDirty = true;
+}
+
+void ClusteredForward::CreateVolumetricFogResources(VolumetricFogData& resources, const IntVector2& viewDimensions)
+{
+	TextureDesc volumeDesc = TextureDesc::Create3D(
+		Math::DivideAndRoundUp(viewDimensions.x, gVolumetricFroxelTexelSize),
+		Math::DivideAndRoundUp(viewDimensions.y, gVolumetricFroxelTexelSize),
+		gVolumetricNumZSlices,
+		DXGI_FORMAT_R16G16B16A16_FLOAT,
+		TextureFlag::ShaderResource | TextureFlag::UnorderedAccess);
+
+	resources.pLightScatteringVolume[0] = m_pDevice->CreateTexture(volumeDesc, "Light Scattering Volume 0");
+	resources.pLightScatteringVolume[1] = m_pDevice->CreateTexture(volumeDesc, "Light Scattering Volume 1");
+	resources.pFinalVolumeFog = m_pDevice->CreateTexture(volumeDesc, "Final Light Scattering Volume");
 }
 
 Vector2 ComputeVolumeGridParams(float nearZ, float farZ, int numSlices)
@@ -110,8 +108,10 @@ void ClusteredForward::ComputeLightCulling(RGGraph& graph, const SceneView& scen
 	float farZ = scene.View.FarPlane;
 	resources.LightGridParams = ComputeVolumeGridParams(nearZ, farZ, gLightClustersNumZ);
 
-	if (m_ViewportDirty)
+	if (resources.IsViewDirty)
 	{
+		resources.IsViewDirty = false;
+
 		RGPassBuilder calculateAabbs = graph.AddPass("Cluster AABBs");
 		calculateAabbs.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
 			{
@@ -142,7 +142,6 @@ void ClusteredForward::ComputeLightCulling(RGGraph& graph, const SceneView& scen
 						resources.ClusterCount.z, threadGroupSize)
 				);
 			});
-		m_ViewportDirty = false;
 	}
 
 	RGPassBuilder lightCulling = graph.AddPass("Light Culling");
@@ -356,7 +355,7 @@ void ClusteredForward::RenderBasePass(RGGraph& graph, const SceneView& resources
 			{
 				if (m_DidCopyDebugClusterData == false)
 				{
-					context.CopyTexture(m_pLightGrid, m_pDebugLightGrid);
+					context.CopyTexture(lightCullData.pLightGrid, lightCullData.pDebugLightGrid);
 					m_DebugClustersViewMatrix = resources.View.View;
 					m_DebugClustersViewMatrix.Invert(m_DebugClustersViewMatrix);
 					m_DidCopyDebugClusterData = true;
@@ -373,7 +372,7 @@ void ClusteredForward::RenderBasePass(RGGraph& graph, const SceneView& resources
 				context.SetRootCBV(0, view);
 				context.BindResources(1, {
 					lightCullData.pAABBs->GetSRV(),
-					m_pDebugLightGrid->GetSRV(),
+					lightCullData.pDebugLightGrid->GetSRV(),
 					m_pHeatMapTexture->GetSRV(),
 					});
 				context.Draw(0, lightCullData.ClusterCount.x * lightCullData.ClusterCount.y * lightCullData.ClusterCount.z);
@@ -401,7 +400,7 @@ void ClusteredForward::VisualizeLightDensity(RGGraph& graph, const SceneView& re
 		{
 			context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(pDepth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-			context.InsertResourceBarrier(m_pLightGrid, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+			context.InsertResourceBarrier(m_LightCullData.pLightGrid, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(m_pVisualizationIntermediateTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
 			struct
@@ -411,7 +410,7 @@ void ClusteredForward::VisualizeLightDensity(RGGraph& graph, const SceneView& re
 				Vector2 LightGridParams;
 			} constantBuffer;
 
-			constantBuffer.ClusterDimensions = IntVector2(m_ClusterCountX, m_ClusterCountY);
+			constantBuffer.ClusterDimensions = IntVector2(m_LightCullData.ClusterCount.x, m_LightCullData.ClusterCount.y);
 			constantBuffer.ClusterSize = IntVector2(gLightClusterTexelSize, gLightClusterTexelSize);
 			constantBuffer.LightGridParams = lightGridParams;
 
@@ -423,7 +422,7 @@ void ClusteredForward::VisualizeLightDensity(RGGraph& graph, const SceneView& re
 			context.BindResources(2, {
 				pTarget->GetSRV(),
 				pDepth->GetSRV(),
-				m_pLightGrid->GetSRV(),
+				m_LightCullData.pLightGrid->GetSRV(),
 				});
 			context.BindResources(3, m_pVisualizationIntermediateTexture->GetUAV());
 
