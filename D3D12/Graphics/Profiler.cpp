@@ -156,9 +156,6 @@ void Profiler::Initialize(GraphicsDevice* pParent, uint32 numBackbuffers)
 
 	m_pRootBlock = std::make_unique<ProfileNode>("", StringHash(""), nullptr);
 	m_pCurrentBlock = m_pRootBlock.get();
-
-	ID3D12CommandQueue* pQueue = pParent->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT)->GetCommandQueue();
-	OPTICK_GPU_INIT_D3D12(pParent->GetDevice(), &pQueue, 1);
 }
 
 void Profiler::Shutdown()
@@ -223,9 +220,6 @@ void Profiler::Resolve(SwapChain* pSwapchain, GraphicsDevice* pParent, int frame
 	m_pPreviousBlock = nullptr;
 	m_pCurrentBlock->StartTimer(nullptr);
 	m_pCurrentBlock->EndTimer(nullptr);
-
-	OPTICK_GPU_FLIP(pSwapchain->GetSwapChain());
-	OPTICK_CATEGORY("Present", Optick::Category::Wait);
 }
 
 float Profiler::GetGpuTime(const uint64* pReadbackData, int timerIndex) const

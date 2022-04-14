@@ -123,12 +123,6 @@ workspace (ENGINE_NAME)
 		runtimeDependency ("Dxc/bin/dxcompiler.dll", "")
 		runtimeDependency ("Dxc/bin/dxil.dll", "")
 
-		-- Optick
-		links { "OptickCore" }
-		libdirs	"$(SolutionDir)Libraries/Optick/lib/"
-		includedirs "$(SolutionDir)Libraries/Optick/include"
-		runtimeDependency ("Optick/bin/OptickCore.dll", "")
-
 		-- DirectXMath
 		includedirs "$(SolutionDir)Libraries/DirectXMath/include"
 

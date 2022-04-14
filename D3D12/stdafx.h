@@ -26,12 +26,6 @@
 
 #include "imgui.h"
 
-#define USE_OPTICK 1
-#define OPTICK_ENABLE_TRACING 1
-#define OPTICK_ENABLE_GPU_D3D12 1
-#define OPTICK_ENABLE_GPU_VULKAN 0
-#include "optick.h"
-
 #include "Core/Defines.h"
 #include "Core/CoreTypes.h"
 #include "Core/CString.h"
