@@ -3,9 +3,9 @@
 #include "Shader.h"
 
 class RootSignature;
-class ShaderLibrary;
 class StateObject;
 class ShaderManager;
+struct ShaderLibrary;
 
 class StateObjectInitializer
 {

@@ -132,7 +132,7 @@ void StateObjectInitializer::CreateStateObjectStream(StateObjectStream& stateObj
 		D3D12_DXIL_LIBRARY_DESC* pDesc = stateObjectStream.ContentData.Allocate<D3D12_DXIL_LIBRARY_DESC>();
 		ShaderLibrary* pLibrary = pDevice->GetLibrary(library.Path.c_str(), library.Defines);
 		m_Shaders.push_back(pLibrary);
-		pDesc->DXILLibrary = CD3DX12_SHADER_BYTECODE(pLibrary->GetByteCode(), pLibrary->GetByteCodeSize());
+		pDesc->DXILLibrary = pLibrary->GetByteCode();
 		if (library.Exports.size())
 		{
 			D3D12_EXPORT_DESC* pExports = stateObjectStream.ContentData.Allocate<D3D12_EXPORT_DESC>((int)library.Exports.size());
