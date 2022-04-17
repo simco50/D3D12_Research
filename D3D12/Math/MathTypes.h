@@ -3,6 +3,7 @@
 #define __d3d12_h__
 #include "SimpleMath.h"
 using BoundingBox = DirectX::BoundingBox;
+using OrientedBoundingBox = DirectX::BoundingOrientedBox;
 using BoundingFrustum = DirectX::BoundingFrustum;
 using BoundingSphere = DirectX::BoundingSphere;
 using Vector2 = DirectX::SimpleMath::Vector2;

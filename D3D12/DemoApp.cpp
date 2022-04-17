@@ -476,17 +476,15 @@ void DemoApp::Update()
 					view.View.ViewProjection = shadowView.ViewProjection;
 					context.SetRootCBV(1, GetViewUniforms(view, pShadowmap));
 
-					VisibilityMask mask;
-					mask.SetAll();
 					{
 						GPU_PROFILE_SCOPE("Opaque", &context);
 						context.SetPipelineState(m_pShadowsOpaquePSO);
-						DrawScene(context, m_SceneData, mask, Batch::Blending::Opaque);
+						DrawScene(context, m_SceneData, shadowView.Visibility, Batch::Blending::Opaque);
 					}
 					{
 						GPU_PROFILE_SCOPE("Masked", &context);
 						context.SetPipelineState(m_pShadowsAlphaMaskPSO);
-						DrawScene(context, m_SceneData, mask, Batch::Blending::AlphaMask | Batch::Blending::AlphaBlend);
+						DrawScene(context, m_SceneData, shadowView.Visibility, Batch::Blending::AlphaMask | Batch::Blending::AlphaBlend);
 					}
 					context.EndRenderPass();
 				}
@@ -2089,6 +2087,19 @@ void DemoApp::CreateShadowViews()
 		light.ShadowMaps[shadowMapLightIndex] = pTarget;
 		light.ShadowMapSize = resolution;
 		view.pDepthTexture = pTarget;
+
+		for (const Batch& b : m_SceneData.Batches)
+		{
+			if (view.IsPerspective)
+			{
+				view.Visibility.AssignBit(b.InstanceData.World, view.PerspectiveFrustum.Contains(b.Bounds));
+			}
+			else
+			{
+				view.Visibility.AssignBit(b.InstanceData.World, view.OrtographicFrustum.Contains(b.Bounds));
+			}
+		}
+
 		m_SceneData.ShadowViews.push_back(view);
 		shadowIndex++;
 	};
@@ -2168,6 +2179,7 @@ void DemoApp::CreateShadowViews()
 				ShadowView shadowView;
 				shadowView.IsPerspective = false;
 				shadowView.ViewProjection = lightView * projectionMatrix;
+				OrientedBoundingBox::CreateFromPoints(shadowView.OrtographicFrustum, 8, frustumCornersWS, sizeof(Vector3));
 
 				static_cast<float*>(&m_SceneData.ShadowCascadeDepths.x)[i] = nearPlane + currentCascadeSplit * (farPlane - nearPlane);
 				AddShadowView(light, shadowView, 2048, i);

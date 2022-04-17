@@ -54,9 +54,10 @@ struct ShadowView
 {
 	Matrix ViewProjection;
 	bool IsPerspective;
-	BoundingBox OrtographicFrustum;
-	BoundingFrustum PerspectiveFrustum;
 	Texture* pDepthTexture = nullptr;
+	OrientedBoundingBox OrtographicFrustum;
+	BoundingFrustum PerspectiveFrustum;
+	VisibilityMask Visibility;
 };
 
 struct SceneView
