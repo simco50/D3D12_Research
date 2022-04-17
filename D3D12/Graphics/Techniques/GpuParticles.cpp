@@ -224,7 +224,7 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView& resources, Texture*
 	std::swap(m_pAliveList1, m_pAliveList2);
 }
 
-void GpuParticles::Render(RGGraph& graph, const SceneView& resources, Texture* pTarget, Texture* pDepth)
+void GpuParticles::Render(RGGraph& graph, const SceneView& view, const SceneTextures& sceneTextures)
 {
 	if (!g_Enabled)
 	{
@@ -237,16 +237,16 @@ void GpuParticles::Render(RGGraph& graph, const SceneView& resources, Texture* p
 			context.InsertResourceBarrier(m_pDrawArguments, D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
 			context.InsertResourceBarrier(m_pParticleBuffer, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(m_pAliveList1, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
-			context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
-			context.InsertResourceBarrier(pDepth, D3D12_RESOURCE_STATE_DEPTH_READ);
+			context.InsertResourceBarrier(sceneTextures.pColorTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
+			context.InsertResourceBarrier(sceneTextures.pDepth, D3D12_RESOURCE_STATE_DEPTH_READ);
 
-			context.BeginRenderPass(RenderPassInfo(pTarget, RenderPassAccess::Load_Store, pDepth, RenderPassAccess::Load_Store, false));
+			context.BeginRenderPass(RenderPassInfo(sceneTextures.pColorTarget, RenderPassAccess::Load_Store, sceneTextures.pDepth, RenderPassAccess::Load_Store, false));
 
 			context.SetPipelineState(m_pRenderParticlesPS);
 			context.SetGraphicsRootSignature(m_pRenderParticlesRS);
 
 			context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-			context.SetRootCBV(0, GetViewUniforms(resources, pTarget));
+			context.SetRootCBV(0, GetViewUniforms(view, sceneTextures.pColorTarget));
 
 			context.BindResources(1, {
 				m_pParticleBuffer->GetSRV(),

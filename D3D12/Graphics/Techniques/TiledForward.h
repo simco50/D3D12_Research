@@ -16,8 +16,8 @@ public:
 
 	void OnResize(int windowWidth, int windowHeight);
 
-	void Execute(RGGraph& graph, const SceneView& resources, const SceneTextures& parameters);
-	void VisualizeLightDensity(RGGraph& graph, GraphicsDevice* pDevice, const SceneView& resources, Texture* pTarget, Texture* pDepth);
+	void Execute(RGGraph& graph, const SceneView& view, const SceneTextures& sceneTextures);
+	void VisualizeLightDensity(RGGraph& graph, GraphicsDevice* pDevice, const SceneView& view, const SceneTextures& sceneTextures);
 
 private:
 	void SetupPipelines();

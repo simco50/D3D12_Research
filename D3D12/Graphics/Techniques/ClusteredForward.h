@@ -16,10 +16,13 @@ struct ClusteredLightCullData
 	RefCountPtr<Buffer> pAABBs;
 	RefCountPtr<Buffer> pLightIndexGrid;
 	RefCountPtr<Buffer> pLightGrid;
-	RefCountPtr<Buffer> pDebugLightGrid;
 	RefCountPtr<UnorderedAccessView> pLightGridRawUAV;
 	Vector2 LightGridParams;
 	bool IsViewDirty = true;
+
+	RefCountPtr<Buffer> pDebugLightGrid;
+	Matrix DebugClustersViewMatrix;
+	bool DirtyDebugData = true;
 };
 
 struct VolumetricFogData
@@ -37,19 +40,18 @@ public:
 	void OnResize(int windowWidth, int windowHeight);
 
 	void CreateLightCullingResources(ClusteredLightCullData& resources, const IntVector2& viewDimensions);
-	void ComputeLightCulling(RGGraph& graph, const SceneView& scene, ClusteredLightCullData& resources);
+	void ComputeLightCulling(RGGraph& graph, const SceneView& view, ClusteredLightCullData& resources);
+	void VisualizeClusters(RGGraph& graph, const SceneView& view, const SceneTextures& sceneTextures, ClusteredLightCullData& resources);
 
 	void CreateVolumetricFogResources(VolumetricFogData& resources, const IntVector2& viewDimensions);
-	void RenderVolumetricFog(RGGraph& graph, const SceneView& scene, const ClusteredLightCullData& cullData, VolumetricFogData& fogData);
+	void RenderVolumetricFog(RGGraph& graph, const SceneView& view, const ClusteredLightCullData& cullData, VolumetricFogData& fogData);
 
-	void RenderBasePass(RGGraph& graph, const SceneView& resources, const SceneTextures& parameters, const ClusteredLightCullData& lightCullData, Texture* pFogTexture);
+	void RenderBasePass(RGGraph& graph, const SceneView& view, const SceneTextures& sceneTextures, const ClusteredLightCullData& lightCullData, Texture* pFogTexture);
 
-	void Execute(RGGraph& graph, const SceneView& resources, const SceneTextures& parameters);
-	void VisualizeLightDensity(RGGraph& graph, const SceneView& resources, Texture* pTarget, Texture* pDepth);
+	void Execute(RGGraph& graph, const SceneView& view, const SceneTextures& sceneTextures);
+	void VisualizeLightDensity(RGGraph& graph, const SceneView& view, const SceneTextures& sceneTextures);
 
 private:
-	void SetupPipelines();
-
 	GraphicsDevice* m_pDevice;
 
 	RefCountPtr<Texture> m_pHeatMapTexture;
@@ -77,8 +79,6 @@ private:
 	//Cluster debug rendering
 	RefCountPtr<RootSignature> m_pVisualizeLightClustersRS;
 	RefCountPtr<PipelineState> m_pVisualizeLightClustersPSO;
-	Matrix m_DebugClustersViewMatrix;
-	bool m_DidCopyDebugClusterData = false;
 
 	//Visualize Light Count
 	RefCountPtr<RootSignature> m_pVisualizeLightsRS;

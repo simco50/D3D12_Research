@@ -262,7 +262,7 @@ void DemoApp::SetupScene(CommandContext& context)
 #if 1
 	{
 		Vector3 Position(9, 1.5f, 0);
-		Light pointLights = Light::Point(Position, 200, 10, Colors::White);
+		Light pointLights = Light::Point(Position, 5, 10, Colors::White);
 		pointLights.CastShadows = true;
 		pointLights.VolumetricLighting = true;
 		m_Lights.push_back(pointLights);
@@ -440,6 +440,15 @@ void DemoApp::Update()
 	}
 
 	RGGraph graph(m_pDevice);
+
+	SceneTextures sceneTextures;
+	sceneTextures.pAmbientOcclusion = m_pAmbientOcclusion;
+	sceneTextures.pColorTarget = GetCurrentRenderTarget();
+	sceneTextures.pDepth = GetDepthStencil();
+	sceneTextures.pNormalsTarget = m_pNormals;
+	sceneTextures.pRoughnessTarget = m_pRoughness;
+	sceneTextures.pPreviousColorTarget = m_pPreviousColor;
+	sceneTextures.pVelocity = m_pVelocity;
 
 	if (m_RenderPath == RenderPath::Clustered || m_RenderPath == RenderPath::Tiled || m_RenderPath == RenderPath::Visibility)
 	{
@@ -714,23 +723,13 @@ void DemoApp::Update()
 				context.Dispatch(ComputeUtils::GetNumThreadGroups(m_pVelocity->GetWidth(), 8, m_pVelocity->GetHeight(), 8));
 			});
 
-
-		SceneTextures sceneTextures;
-		sceneTextures.pAmbientOcclusion = m_pAmbientOcclusion;
-		sceneTextures.pColorTarget = GetCurrentRenderTarget();
-		sceneTextures.pDepth = GetDepthStencil();
-		sceneTextures.pNormalsTarget = m_pNormals;
-		sceneTextures.pRoughnessTarget = m_pRoughness;
-		sceneTextures.pPreviousColorTarget = m_pPreviousColor;
-		sceneTextures.pVelocity = m_pVelocity;
-
 		if (Tweakables::g_RaytracedAO)
 		{
 			m_pRTAO->Execute(graph, m_SceneData, sceneTextures);
 		}
 		else
 		{
-			m_pSSAO->Execute(graph, m_SceneData, m_pAmbientOcclusion, GetDepthStencil());
+			m_pSSAO->Execute(graph, m_SceneData, sceneTextures);
 		}
 
 		if (m_RenderPath == RenderPath::Tiled)
@@ -774,7 +773,7 @@ void DemoApp::Update()
 				});
 		}
 
-		m_pParticles->Render(graph, m_SceneData, GetCurrentRenderTarget(), GetDepthStencil());
+		m_pParticles->Render(graph, m_SceneData, sceneTextures);
 
 		if (Tweakables::g_RenderTerrain.GetBool())
 		{
@@ -830,19 +829,13 @@ void DemoApp::Update()
 			}
 		});
 
+	sceneTextures.pColorTarget = Tweakables::g_TAA.Get() ? m_pTAASource : m_pHDRRenderTarget;
+
 	if (m_RenderPath != RenderPath::PathTracing)
 	{
 		if (Tweakables::g_RaytracedReflections)
 		{
-			SceneTextures params;
-			params.pAmbientOcclusion = m_pAmbientOcclusion;
-			params.pColorTarget = Tweakables::g_TAA.Get() ? m_pTAASource : m_pHDRRenderTarget;
-			params.pDepth = GetDepthStencil();
-			params.pNormalsTarget = m_pNormals;
-			params.pRoughnessTarget = m_pRoughness;
-			params.pPreviousColorTarget = m_pHDRRenderTarget;
-
-			m_pRTReflections->Execute(graph, m_SceneData, params);
+			m_pRTReflections->Execute(graph, m_SceneData, sceneTextures);
 		}
 
 		if (Tweakables::g_TAA.Get())
@@ -875,6 +868,8 @@ void DemoApp::Update()
 				});
 		}
 	}
+
+	sceneTextures.pColorTarget = m_pTonemapTarget;
 
 	if (Tweakables::g_SDSM)
 	{
@@ -1179,11 +1174,11 @@ void DemoApp::Update()
 	{
 		if (m_RenderPath == RenderPath::Clustered)
 		{
-			m_pClusteredForward->VisualizeLightDensity(graph, m_SceneData, m_pTonemapTarget, GetDepthStencil());
+			m_pClusteredForward->VisualizeLightDensity(graph, m_SceneData, sceneTextures);
 		}
-		else
+		else if(m_RenderPath == RenderPath::Tiled)
 		{
-			m_pTiledForward->VisualizeLightDensity(graph, m_pDevice, m_SceneData, m_pTonemapTarget, GetDepthStencil());
+			m_pTiledForward->VisualizeLightDensity(graph, m_pDevice, m_SceneData, sceneTextures);
 		}
 	}
 
@@ -1666,6 +1661,8 @@ void DemoApp::UpdateImGui()
 
 	ImGui::SetNextWindowDockID(dockspace, ImGuiCond_FirstUseEver);
 	ImGui::Begin("Viewport", 0, ImGuiWindowFlags_NoScrollbar);
+	ImVec2 viewportPos = ImGui::GetWindowPos();
+	ImVec2 viewportSize = ImGui::GetWindowSize();
 	float widthDelta = ImGui::GetWindowContentRegionMax().x - ImGui::GetWindowContentRegionMin().x;
 	float heightDelta = ImGui::GetWindowContentRegionMax().y - ImGui::GetWindowContentRegionMin().y;
 	uint32 width = (uint32)Math::Max(16.0f, widthDelta);
@@ -1683,7 +1680,8 @@ void DemoApp::UpdateImGui()
 	{
 		//Render Color Legend
 		ImGui::SetNextWindowSize(ImVec2(60, 255));
-		ImGui::SetNextWindowPos(ImVec2((float)pViewport->Size.x - 65, (float)pViewport->Size.x - 280));
+		
+		ImGui::SetNextWindowPos(ImVec2(viewportPos.x + viewportSize.x - 65, viewportPos.y + viewportSize.y - 280));
 		ImGui::Begin("Visualize Light Density", 0, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar);
 		ImGui::SetWindowFontScale(1.2f);
 		ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(0, 0, 0, 255));

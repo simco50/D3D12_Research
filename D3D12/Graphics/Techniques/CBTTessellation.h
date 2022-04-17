@@ -16,7 +16,7 @@ class CBTTessellation
 public:
 	CBTTessellation(GraphicsDevice* pDevice);
 
-	void Execute(RGGraph& graph, const SceneView& resources, const SceneTextures& sceneTextures);
+	void Execute(RGGraph& graph, const SceneView& view, const SceneTextures& sceneTextures);
 
 private:
 	void AllocateCBT();

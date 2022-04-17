@@ -5,6 +5,7 @@ class Texture;
 class RGGraph;
 class PipelineState;
 struct SceneView;
+struct SceneTextures;
 
 class SSAO
 {
@@ -12,7 +13,7 @@ public:
 	SSAO(GraphicsDevice* pDevice);
 
 	void OnResize(int windowWidth, int windowHeight);
-	void Execute(RGGraph& graph, const SceneView& sceneData, Texture* pTarget, Texture* pDepth);
+	void Execute(RGGraph& graph, const SceneView& view, const SceneTextures& sceneTextures);
 
 private:
 	void SetupPipelines();

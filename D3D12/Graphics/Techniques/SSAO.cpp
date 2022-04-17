@@ -19,7 +19,7 @@ void SSAO::OnResize(int windowWidth, int windowHeight)
 	m_pAmbientOcclusionIntermediate = m_pDevice->CreateTexture(TextureDesc::Create2D(Math::DivideAndRoundUp(windowWidth, 2), Math::DivideAndRoundUp(windowHeight, 2), DXGI_FORMAT_R8_UNORM, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource), "Intermediate AO");
 }
 
-void SSAO::Execute(RGGraph& graph, const SceneView& sceneData, Texture* pTarget, Texture* pDepth)
+void SSAO::Execute(RGGraph& graph, const SceneView& view, const SceneTextures& sceneTextures)
 {
 	static float g_AoPower = 7;
 	static float g_AoThreshold = 0.0025f;
@@ -40,10 +40,12 @@ void SSAO::Execute(RGGraph& graph, const SceneView& sceneData, Texture* pTarget,
 
 	RG_GRAPH_SCOPE("Ambient Occlusion", graph);
 
+	RefCountPtr<Texture> pTarget = sceneTextures.pAmbientOcclusion;
+
 	RGPassBuilder ssao = graph.AddPass("SSAO");
 	ssao.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
 		{
-			context.InsertResourceBarrier(pDepth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+			context.InsertResourceBarrier(sceneTextures.pDepth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
 			context.SetComputeRootSignature(m_pSSAORS);
@@ -63,9 +65,9 @@ void SSAO::Execute(RGGraph& graph, const SceneView& sceneData, Texture* pTarget,
 			shaderParameters.Samples = g_AoSamples;
 
 			context.SetRootConstants(0, shaderParameters);
-			context.SetRootCBV(1, GetViewUniforms(sceneData, pTarget));
+			context.SetRootCBV(1, GetViewUniforms(view, pTarget));
 			context.BindResources(2, pTarget->GetUAV());
-			context.BindResources(3, pDepth->GetSRV());
+			context.BindResources(3, sceneTextures.pDepth->GetSRV());
 
 			context.Dispatch(ComputeUtils::GetNumThreadGroups(pTarget->GetWidth(), 16, pTarget->GetHeight(), 16));
 		});
@@ -89,10 +91,10 @@ void SSAO::Execute(RGGraph& graph, const SceneView& sceneData, Texture* pTarget,
 			shaderParameters.DimensionsInv = Vector2(1.0f / pTarget->GetWidth(), 1.0f / pTarget->GetHeight());
 
 			context.SetRootConstants(0, shaderParameters);
-			context.SetRootCBV(1, GetViewUniforms(sceneData, pTarget));
+			context.SetRootCBV(1, GetViewUniforms(view, pTarget));
 			context.BindResources(2, m_pAmbientOcclusionIntermediate->GetUAV());
 			context.BindResources(3, {
-				pDepth->GetSRV(),
+				sceneTextures.pDepth->GetSRV(),
 				pTarget->GetSRV(),
 			});
 
@@ -103,7 +105,7 @@ void SSAO::Execute(RGGraph& graph, const SceneView& sceneData, Texture* pTarget,
 
 			context.BindResources(2, pTarget->GetUAV());
 			context.BindResources(3, {
-				pDepth->GetSRV(),
+				sceneTextures.pDepth->GetSRV(),
 				m_pAmbientOcclusionIntermediate->GetSRV(),
 			});
 
