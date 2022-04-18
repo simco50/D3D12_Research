@@ -147,7 +147,7 @@ bool IsVisible(MeshData mesh, float4x4 world, uint meshlet)
 		}
 	}
 
-	float3 viewLocation = cView.ViewPosition;
+	float3 viewLocation = cView.ViewLocation;
 	if(dot(viewLocation - center.xyz, coneAxis) >= cullData.ConeCutoff * length(center.xyz - viewLocation) + radius)
 	{
 		return false;
@@ -270,10 +270,10 @@ void PSMain(InterpolantsVSToPS input,
 			float3 bary : SV_Barycentrics,
 			out PSOut output)
 {
-	float2 screenUV = (float2)input.Position.xy * cView.ScreenDimensionsInv;
+	float2 screenUV = (float2)input.Position.xy * cView.TargetDimensionsInv;
 	float ambientOcclusion = tAO.SampleLevel(sLinearClamp, screenUV, 0).r;
 
-	float3 V = normalize(cView.ViewPosition - input.PositionWS);
+	float3 V = normalize(cView.ViewLocation - input.PositionWS);
 
 	MaterialData material = GetMaterial(cObject.Material);
 	material.BaseColorFactor *= UIntToColor(input.Color);

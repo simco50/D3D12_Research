@@ -610,7 +610,7 @@ void RenderPS(
 #endif
 
 	float3 worldPos = vertex.PositionWS;
-	float3 V = normalize(cView.ViewPosition - worldPos);
+	float3 V = normalize(cView.ViewLocation - worldPos);
 
 	float3 specularColor = 0.5;
 	float roughness = 0.9f;

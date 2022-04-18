@@ -30,12 +30,12 @@ float4 PSMain(in InterpolantsVSToPS input) : SV_Target
 [numthreads(16, 16, 1)]
 void ComputeSkyCS(uint3 threadId : SV_DispatchThreadID)
 {
-	float2 uv = threadId.xy * cView.ScreenDimensionsInv;
+	float2 uv = threadId.xy * cView.TargetDimensionsInv;
 	uv.x *= 2 * PI;
 	uv.y *= PI;
 
 	float3 dir = normalize(float3(sin(uv.x) * sin(uv.y), cos(uv.y), cos(uv.x) * sin(uv.y)));
-	float3 rayStart = cView.ViewPosition;
+	float3 rayStart = cView.ViewLocation;
 	float rayLength = 1000000.0f;
 	if(0)
 	{

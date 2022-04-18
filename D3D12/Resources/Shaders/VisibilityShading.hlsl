@@ -141,17 +141,17 @@ LightResult DoLight(float4 pos, float3 worldPos, float3 N, float3 V, float3 diff
 void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 {
 	uint2 texel = dispatchThreadId.xy;
-	if(any(texel > cView.ScreenDimensions))
+	if(any(texel > cView.TargetDimensions))
 	{
 		return;
 	}
 	VisBufferData visibility = (VisBufferData)tVisibilityTexture[texel];
 
-	float2 screenUV = ((float2)dispatchThreadId.xy + 0.5f) * cView.ScreenDimensionsInv;
+	float2 screenUV = ((float2)dispatchThreadId.xy + 0.5f) * cView.TargetDimensionsInv;
 	float ambientOcclusion = tAO.SampleLevel(sLinearClamp, screenUV, 0).r;
 
 	VisBufferVertexAttribute vertex = GetVertexAttributes(screenUV, visibility);
-	float3 V = normalize(cView.ViewPosition - vertex.Position);
+	float3 V = normalize(cView.ViewLocation - vertex.Position);
 
     MeshInstance instance = GetMeshInstance(NonUniformResourceIndex(visibility.ObjectID));
 	MaterialData material = GetMaterial(NonUniformResourceIndex(instance.Material));

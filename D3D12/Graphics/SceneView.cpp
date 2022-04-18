@@ -47,7 +47,7 @@ ShaderInterop::ViewUniforms GetViewUniforms(const SceneView& sceneView, Texture*
 
 	parameters.PreviousViewProjection = view.PreviousViewProjection;
 	parameters.ReprojectionMatrix = premult * reprojectionMatrix * postmult;
-	parameters.ViewPosition = view.Position;
+	parameters.ViewLocation = view.Position;
 
 	DirectX::XMVECTOR nearPlane, farPlane, left, right, top, bottom;
 	view.Frustum.GetPlanes(&nearPlane, &farPlane, &right, &left, &top, &bottom);
@@ -60,8 +60,8 @@ ShaderInterop::ViewUniforms GetViewUniforms(const SceneView& sceneView, Texture*
 
 	if (pTarget)
 	{
-		parameters.ScreenDimensions = Vector2((float)pTarget->GetWidth(), (float)pTarget->GetHeight());
-		parameters.ScreenDimensionsInv = Vector2(1.0f / pTarget->GetWidth(), 1.0f / pTarget->GetHeight());
+		parameters.TargetDimensions = Vector2((float)pTarget->GetWidth(), (float)pTarget->GetHeight());
+		parameters.TargetDimensionsInv = Vector2(1.0f / pTarget->GetWidth(), 1.0f / pTarget->GetHeight());
 	}
 	parameters.ViewportDimensions = Vector2(view.Viewport.GetWidth(), view.Viewport.GetHeight());
 	parameters.ViewportDimensionsInv = Vector2(1.0f / view.Viewport.GetWidth(), 1.0f / view.Viewport.GetHeight());
@@ -80,7 +80,7 @@ ShaderInterop::ViewUniforms GetViewUniforms(const SceneView& sceneView, Texture*
 	check(sceneView.ShadowViews.size() <= MAX_SHADOW_CASTERS);
 	for (uint32 i = 0; i < sceneView.ShadowViews.size(); ++i)
 	{
-		parameters.LightViewProjections[i] = sceneView.ShadowViews[i].ViewProjection;
+		parameters.LightMatrices[i] = sceneView.ShadowViews[i].ViewProjection;
 	}
 	parameters.CascadeDepths = sceneView.ShadowCascadeDepths;
 	parameters.NumCascades = sceneView.NumShadowCascades;

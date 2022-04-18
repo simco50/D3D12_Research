@@ -387,7 +387,7 @@ float4 VisualizeIrradiancePS(InterpolantsVSToPS input) : SV_Target0
 	float3 color = float3(Random01(seed), Random01(seed), Random01(seed));
 #endif
 
-	float3 probeDirection = normalize(cView.ViewPosition - probePosition);
+	float3 probeDirection = normalize(cView.ViewLocation - probePosition);
 	if(dot(probeDirection, input.Normal) < 0.4f && !DDGIIsProbeActive(volume, probeIdx3D))
 	{
 		color = float3(1, 0, 1);

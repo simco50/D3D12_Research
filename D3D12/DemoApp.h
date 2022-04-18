@@ -55,9 +55,6 @@ private:
 
 	void UploadSceneData(CommandContext& context);
 
-	Texture* GetDepthStencil() const { return m_pDepthStencil; }
-	Texture* GetCurrentRenderTarget() const { return m_pHDRRenderTarget; }
-
 	RefCountPtr<GraphicsDevice> m_pDevice;
 	RefCountPtr<SwapChain> m_pSwapchain;
 

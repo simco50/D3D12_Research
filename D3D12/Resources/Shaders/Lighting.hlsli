@@ -67,7 +67,7 @@ float LightTextureMask(Light light, float3 worldPosition)
 	if(light.MaskTexture != INVALID_HANDLE)
 	{
 		uint matrixIndex = light.MatrixIndex;
-		float4 lightPos = mul(float4(worldPosition, 1), cView.LightViewProjections[matrixIndex]);
+		float4 lightPos = mul(float4(worldPosition, 1), cView.LightMatrices[matrixIndex]);
 		lightPos.xyz /= lightPos.w;
 		lightPos.xy = (lightPos.xy + 1) / 2;
 		mask = SampleLevel2D(light.MaskTexture, sLinearClamp, lightPos.xy, 0).r;
@@ -107,7 +107,7 @@ uint GetShadowMapIndex(Light light, float4 pos, float3 wPos)
 
 float Shadow3x3PCF(float3 wPos, int lightMatrix, int shadowMapIndex, float invShadowSize)
 {
-	float4x4 lightViewProjection = cView.LightViewProjections[lightMatrix];
+	float4x4 lightViewProjection = cView.LightMatrices[lightMatrix];
 	float4 lightPos = mul(float4(wPos, 1), lightViewProjection);
 	lightPos.xyz /= lightPos.w;
 	lightPos.x = lightPos.x / 2.0f + 0.5f;
@@ -136,7 +136,7 @@ float Shadow3x3PCF(float3 wPos, int lightMatrix, int shadowMapIndex, float invSh
 
 float ShadowNoPCF(float3 wPos, int lightMatrix, int shadowMapIndex, float invShadowSize)
 {
-	float4x4 lightViewProjection = cView.LightViewProjections[lightMatrix];
+	float4x4 lightViewProjection = cView.LightMatrices[lightMatrix];
 	float4 lightPos = mul(float4(wPos, 1), lightViewProjection);
 	lightPos.xyz /= lightPos.w;
 	lightPos.x = lightPos.x / 2.0f + 0.5f;
@@ -305,7 +305,7 @@ LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, floa
 #if VISUALIZE_CASCADES
 		if(light.IsDirectional)
 		{
-			float4x4 lightViewProjection = cView.LightViewProjections[light.MatrixIndex];
+			float4x4 lightViewProjection = cView.LightMatrices[light.MatrixIndex];
 			float4 lightPos = mul(float4(wPos, 1), lightViewProjection);
 			lightPos.xyz /= lightPos.w;
 			lightPos.x = lightPos.x / 2.0f + 0.5f;

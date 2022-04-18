@@ -10,7 +10,7 @@ Texture2D<float2> tVelocity : register(t3);
 void DenoiseCS(uint3 threadID : SV_DispatchThreadID)
 {
 	float ao = tAO[threadID.xy];
-	float2 uv = (threadID.xy + 0.5f) * cView.ScreenDimensionsInv;
+	float2 uv = (threadID.xy + 0.5f) * cView.TargetDimensionsInv;
 	float2 velocity = tVelocity.SampleLevel(sLinearClamp, uv, 0);
 	float2 reprojUV = uv + velocity;
 	float prevAO = tHistory.SampleLevel(sLinearClamp, reprojUV, 0);

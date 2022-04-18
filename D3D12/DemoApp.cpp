@@ -443,8 +443,8 @@ void DemoApp::Update()
 
 	SceneTextures sceneTextures;
 	sceneTextures.pAmbientOcclusion = m_pAmbientOcclusion;
-	sceneTextures.pColorTarget = GetCurrentRenderTarget();
-	sceneTextures.pDepth = GetDepthStencil();
+	sceneTextures.pColorTarget = m_pHDRRenderTarget;
+	sceneTextures.pDepth = m_pDepthStencil;
 	sceneTextures.pNormalsTarget = m_pNormals;
 	sceneTextures.pRoughnessTarget = m_pRoughness;
 	sceneTextures.pPreviousColorTarget = m_pPreviousColor;
@@ -453,7 +453,7 @@ void DemoApp::Update()
 	if (m_RenderPath == RenderPath::Clustered || m_RenderPath == RenderPath::Tiled || m_RenderPath == RenderPath::Visibility)
 	{
 		// PARTICLES GPU SIM
-		m_pParticles->Simulate(graph, m_SceneData, GetDepthStencil());
+		m_pParticles->Simulate(graph, m_SceneData, sceneTextures.pDepth);
 
 		// SHADOWS
 		RGPassBuilder shadows = graph.AddPass("Shadow Depths");
@@ -500,15 +500,14 @@ void DemoApp::Update()
 		RGPassBuilder prepass = graph.AddPass("Depth Prepass");
 		prepass.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
-				Texture* pDepthStencil = GetDepthStencil();
-				context.InsertResourceBarrier(pDepthStencil, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+				context.InsertResourceBarrier(sceneTextures.pDepth, D3D12_RESOURCE_STATE_DEPTH_WRITE);
 
-				context.BeginRenderPass(RenderPassInfo::DepthOnly(pDepthStencil, RenderPassAccess::Clear_Store));
+				context.BeginRenderPass(RenderPassInfo::DepthOnly(sceneTextures.pDepth, RenderPassAccess::Clear_Store));
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
 				context.SetGraphicsRootSignature(m_pCommonRS);
 
-				context.SetRootCBV(1, GetViewUniforms(m_SceneData, pDepthStencil));
+				context.SetRootCBV(1, GetViewUniforms(m_SceneData, sceneTextures.pDepth));
 
 				{
 					GPU_PROFILE_SCOPE("Opaque", &context);
@@ -529,16 +528,15 @@ void DemoApp::Update()
 		RGPassBuilder visibility = graph.AddPass("Visibility Buffer");
 		visibility.Bind([=](CommandContext& renderContext, const RGPassResources& resources)
 			{
-				Texture* pDepthStencil = GetDepthStencil();
-				renderContext.InsertResourceBarrier(pDepthStencil, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+				renderContext.InsertResourceBarrier(sceneTextures.pDepth, D3D12_RESOURCE_STATE_DEPTH_WRITE);
 				renderContext.InsertResourceBarrier(m_pVisibilityTexture, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
-				renderContext.BeginRenderPass(RenderPassInfo(m_pVisibilityTexture, RenderPassAccess::DontCare_Store, pDepthStencil, RenderPassAccess::Clear_Store, true));
+				renderContext.BeginRenderPass(RenderPassInfo(m_pVisibilityTexture, RenderPassAccess::DontCare_Store, sceneTextures.pDepth, RenderPassAccess::Clear_Store, true));
 				renderContext.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
 				renderContext.SetGraphicsRootSignature(m_pCommonRS);
 
-				renderContext.SetRootCBV(1, GetViewUniforms(m_SceneData, GetCurrentRenderTarget()));
+				renderContext.SetRootCBV(1, GetViewUniforms(m_SceneData, sceneTextures.pColorTarget));
 				{
 					GPU_PROFILE_SCOPE("Opaque", &renderContext);
 					renderContext.SetPipelineState(m_pVisibilityRenderingPSO);
@@ -707,7 +705,7 @@ void DemoApp::Update()
 		RGPassBuilder cameraMotion = graph.AddPass("Camera Motion");
 		cameraMotion.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
 			{
-				context.InsertResourceBarrier(GetDepthStencil(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+				context.InsertResourceBarrier(sceneTextures.pDepth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 				context.InsertResourceBarrier(m_pVelocity, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
 				context.SetComputeRootSignature(m_pCommonRS);
@@ -716,7 +714,7 @@ void DemoApp::Update()
 				context.SetRootCBV(1, GetViewUniforms(m_SceneData, m_pVelocity));
 
 				context.BindResources(2, m_pVelocity->GetUAV());
-				context.BindResources(3, GetDepthStencil()->GetSRV());
+				context.BindResources(3, sceneTextures.pDepth->GetSRV());
 
 				context.Dispatch(ComputeUtils::GetNumThreadGroups(m_pVelocity->GetWidth(), 8, m_pVelocity->GetHeight(), 8));
 			});
@@ -754,7 +752,7 @@ void DemoApp::Update()
 					renderContext.SetComputeRootSignature(m_pCommonRS);
 					renderContext.SetPipelineState(m_pVisibilityShadingPSO);
 
-					renderContext.SetRootCBV(1, GetViewUniforms(m_SceneData, GetCurrentRenderTarget()));
+					renderContext.SetRootCBV(1, GetViewUniforms(m_SceneData, sceneTextures.pColorTarget));
 					renderContext.BindResources(2, {
 						sceneTextures.pColorTarget->GetUAV(),
 						sceneTextures.pNormalsTarget->GetUAV(),
@@ -781,29 +779,28 @@ void DemoApp::Update()
 		RGPassBuilder renderSky = graph.AddPass("Render Sky");
 		renderSky.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
-				Texture* pDepthStencil = GetDepthStencil();
-				context.InsertResourceBarrier(pDepthStencil, D3D12_RESOURCE_STATE_DEPTH_WRITE);
-				context.InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RENDER_TARGET);
+				context.InsertResourceBarrier(sceneTextures.pDepth, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+				context.InsertResourceBarrier(sceneTextures.pColorTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
 				context.InsertResourceBarrier(m_pSkyTexture, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
-				RenderPassInfo info = RenderPassInfo(GetCurrentRenderTarget(), RenderPassAccess::Load_Store, pDepthStencil, RenderPassAccess::Load_Store, false);
+				RenderPassInfo info = RenderPassInfo(sceneTextures.pColorTarget, RenderPassAccess::Load_Store, sceneTextures.pDepth, RenderPassAccess::Load_Store, false);
 
 				context.BeginRenderPass(info);
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 				context.SetGraphicsRootSignature(m_pCommonRS);
 				context.SetPipelineState(m_pSkyboxPSO);
 
-				context.SetRootCBV(1, GetViewUniforms(m_SceneData, GetCurrentRenderTarget()));
+				context.SetRootCBV(1, GetViewUniforms(m_SceneData, sceneTextures.pColorTarget));
 				context.Draw(0, 36);
 
 				context.EndRenderPass();
 			});
 
-		DebugRenderer::Get()->Render(graph, m_SceneData, GetCurrentRenderTarget(), GetDepthStencil());
+		DebugRenderer::Get()->Render(graph, m_SceneData, sceneTextures.pColorTarget, sceneTextures.pDepth);
 	}
 	else if (m_RenderPath == RenderPath::PathTracing)
 	{
-		m_pPathTracing->Render(graph, m_SceneData, GetCurrentRenderTarget());
+		m_pPathTracing->Render(graph, m_SceneData, sceneTextures.pColorTarget);
 	}
 
 	RGPassBuilder resolve = graph.AddPass("Color Resolve");
@@ -811,10 +808,10 @@ void DemoApp::Update()
 		{
 			if (m_pHDRRenderTarget->GetDesc().SampleCount > 1)
 			{
-				context.InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_RESOLVE_SOURCE);
+				context.InsertResourceBarrier(sceneTextures.pColorTarget, D3D12_RESOURCE_STATE_RESOLVE_SOURCE);
 				Texture* pTarget = Tweakables::g_TAA.Get() ? m_pTAASource : m_pHDRRenderTarget;
 				context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_RESOLVE_DEST);
-				context.ResolveResource(GetCurrentRenderTarget(), 0, pTarget, 0, pTarget->GetFormat());
+				context.ResolveResource(sceneTextures.pColorTarget, 0, pTarget, 0, pTarget->GetFormat());
 			}
 
 			if (!Tweakables::g_TAA.Get())
@@ -857,7 +854,7 @@ void DemoApp::Update()
 							m_pVelocity->GetSRV(),
 							m_pPreviousColor->GetSRV(),
 							m_pTAASource->GetSRV(),
-							GetDepthStencil()->GetSRV(),
+							sceneTextures.pDepth->GetSRV(),
 						});
 
 					context.Dispatch(ComputeUtils::GetNumThreadGroups(m_pHDRRenderTarget->GetWidth(), 8, m_pHDRRenderTarget->GetHeight(), 8));
@@ -874,7 +871,7 @@ void DemoApp::Update()
 		RGPassBuilder depthReduce = graph.AddPass("Depth Reduce");
 		depthReduce.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
-				Texture* pSource = GetDepthStencil();
+				Texture* pSource = sceneTextures.pDepth;
 				Texture* pTarget = m_ReductionTargets[0];
 
 				context.InsertResourceBarrier(pSource, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
@@ -1014,7 +1011,7 @@ void DemoApp::Update()
 					RefCountPtr<UnorderedAccessView>* pTargetUAVs = m_pBloomUAVs.data();
 
 					context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-					context.InsertResourceBarrier(GetCurrentRenderTarget(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+					context.InsertResourceBarrier(sceneTextures.pColorTarget, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 					context.InsertResourceBarrier(m_pAverageLuminance, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
 					context.SetComputeRootSignature(m_pCommonRS);
@@ -1036,7 +1033,7 @@ void DemoApp::Update()
 						pTargetUAVs[0]
 						});
 					context.BindResources(3, {
-						GetCurrentRenderTarget()->GetSRV(),
+						sceneTextures.pColorTarget->GetSRV(),
 						m_pAverageLuminance->GetSRV(),
 						});;
 
@@ -1174,7 +1171,7 @@ void DemoApp::Update()
 		{
 			m_pClusteredForward->VisualizeLightDensity(graph, m_SceneData, sceneTextures);
 		}
-		else if(m_RenderPath == RenderPath::Tiled)
+		else if (m_RenderPath == RenderPath::Tiled)
 		{
 			m_pTiledForward->VisualizeLightDensity(graph, m_pDevice, m_SceneData, sceneTextures);
 		}
@@ -1191,12 +1188,12 @@ void DemoApp::Update()
 					context.InsertResourceBarrier(ddgi.pRayBuffer, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 					context.InsertResourceBarrier(ddgi.pIrradiance[0], D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 					context.InsertResourceBarrier(m_pTonemapTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
-					context.InsertResourceBarrier(GetDepthStencil(), D3D12_RESOURCE_STATE_DEPTH_WRITE);
+					context.InsertResourceBarrier(sceneTextures.pDepth, D3D12_RESOURCE_STATE_DEPTH_WRITE);
 					context.SetGraphicsRootSignature(m_pCommonRS);
 					context.SetPipelineState(m_pDDGIVisualizePSO);
 					context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-					context.BeginRenderPass(RenderPassInfo(m_pTonemapTarget, RenderPassAccess::Load_Store, GetDepthStencil(), RenderPassAccess::Load_Store, true));
+					context.BeginRenderPass(RenderPassInfo(m_pTonemapTarget, RenderPassAccess::Load_Store, sceneTextures.pDepth, RenderPassAccess::Load_Store, true));
 
 					struct
 					{
@@ -2179,8 +2176,9 @@ void DemoApp::CreateShadowViews()
 				ShadowView shadowView;
 				shadowView.IsPerspective = false;
 				shadowView.ViewProjection = lightView * projectionMatrix;
-				OrientedBoundingBox::CreateFromPoints(shadowView.OrtographicFrustum, 8, frustumCornersWS, sizeof(Vector3));
-
+				shadowView.OrtographicFrustum.Center = center;
+				shadowView.OrtographicFrustum.Extents = maxExtents - minExtents;
+				shadowView.OrtographicFrustum.Orientation = Quaternion::CreateFromRotationMatrix(lightView.Invert());
 				static_cast<float*>(&m_SceneData.ShadowCascadeDepths.x)[i] = nearPlane + currentCascadeSplit * (farPlane - nearPlane);
 				AddShadowView(light, shadowView, 2048, i);
 			}

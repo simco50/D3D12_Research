@@ -119,7 +119,7 @@ void InjectFogLightingCS(uint3 threadId : SV_DispatchThreadID)
 
 	float3 totalLighting = 0;
 
-	float3 V = normalize(cView.ViewPosition - worldPosition);
+	float3 V = normalize(cView.ViewLocation - worldPosition);
 	if(dot(inScattering, float3(1, 1, 1)) > 0.0f)
 	{
 		float4 pos = float4(threadId.xy, 0, z);
@@ -183,7 +183,7 @@ void AccumulateFogCS(uint3 threadId : SV_DispatchThreadID, uint groupIndex : SV_
 {
 	float3 accumulatedLight = 0;
 	float accumulatedTransmittance = 1;
-	float3 previousPosition = cView.ViewPosition;
+	float3 previousPosition = cView.ViewLocation;
 
 	for(int sliceIndex = 0; sliceIndex < cPass.ClusterDimensions.z; ++sliceIndex)
 	{

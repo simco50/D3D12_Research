@@ -163,7 +163,7 @@ namespace ShaderInterop
 
 	struct ViewUniforms
 	{
-		float4x4 LightViewProjections[MAX_SHADOW_CASTERS];
+		float4x4 LightMatrices[MAX_SHADOW_CASTERS];
 		float4 CascadeDepths;
 		uint NumCascades;
 		uint3 padd0;
@@ -176,11 +176,11 @@ namespace ShaderInterop
 		float4x4 ViewProjectionInverse;
 		float4x4 PreviousViewProjection;
 		float4x4 ReprojectionMatrix;
-		float3 ViewPosition;
+		float3 ViewLocation;
 		float padd1;
 		float4 FrustumPlanes[6];
-		float2 ScreenDimensions;
-		float2 ScreenDimensionsInv;
+		float2 TargetDimensions;
+		float2 TargetDimensionsInv;
 		float2 ViewportDimensions;
 		float2 ViewportDimensionsInv;
 		float2 ViewJitter;
