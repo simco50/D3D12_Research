@@ -508,10 +508,13 @@ void ShaderManager::AddIncludeDir(const std::string& includeDir)
 
 Shader* ShaderManager::GetShader(const char* pShaderPath, ShaderType shaderType, const char* pEntryPoint, const Span<ShaderDefine>& defines /*= {}*/, bool force /*= false*/)
 {
+	ShaderStringHash pathHash(pShaderPath);
 	ShaderStringHash hash = GetEntryPointHash(pEntryPoint, defines);
+
+	if(!force)
 	{
 		std::lock_guard lock(m_CompileMutex);
-		auto& shaderMap = m_FilepathToObjectMap[ShaderStringHash(pShaderPath)].Shaders;
+		auto& shaderMap = m_FilepathToObjectMap[pathHash].Shaders;
 		auto it = shaderMap.find(hash);
 		if (it != shaderMap.end())
 		{
@@ -545,7 +548,7 @@ Shader* ShaderManager::GetShader(const char* pShaderPath, ShaderType shaderType,
 		{
 			m_IncludeDependencyMap[ShaderStringHash(include)].insert(pShaderPath);
 		}
-		m_FilepathToObjectMap[ShaderStringHash(pShaderPath)].Shaders[hash] = pShader;
+		m_FilepathToObjectMap[pathHash].Shaders[hash] = pShader;
 	}
 
 	return pShader;
@@ -553,10 +556,13 @@ Shader* ShaderManager::GetShader(const char* pShaderPath, ShaderType shaderType,
 
 ShaderLibrary* ShaderManager::GetLibrary(const char* pShaderPath, const Span<ShaderDefine>& defines /*= {}*/, bool force /*= false*/)
 {
+	ShaderStringHash pathHash(pShaderPath);
 	ShaderStringHash hash = GetEntryPointHash("", defines);
+
+	if (!force)
 	{
 		std::lock_guard lock(m_CompileMutex);
-		auto& libraryMap = m_FilepathToObjectMap[ShaderStringHash(pShaderPath)].Libraries;
+		auto& libraryMap = m_FilepathToObjectMap[pathHash].Libraries;
 		auto it = libraryMap.find(hash);
 		if (it != libraryMap.end())
 		{
@@ -589,7 +595,7 @@ ShaderLibrary* ShaderManager::GetLibrary(const char* pShaderPath, const Span<Sha
 		{
 			m_IncludeDependencyMap[ShaderStringHash(include)].insert(pShaderPath);
 		}
-		m_FilepathToObjectMap[ShaderStringHash(pShaderPath)].Libraries[hash] = pLibrary;
+		m_FilepathToObjectMap[pathHash].Libraries[hash] = pLibrary;
 	}
 	return pLibrary;
 }

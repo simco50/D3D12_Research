@@ -2,6 +2,7 @@
 
 #include "pix3.h"
 #include "Core/Paths.h"
+#include "Core/Utils.h"
 
 #define VERIFY_HR(hr) D3D::LogHRESULT(hr, nullptr, #hr, __FILE__, __LINE__)
 #define VERIFY_HR_EX(hr, device) D3D::LogHRESULT(hr, device, #hr, __FILE__, __LINE__)
@@ -57,7 +58,7 @@ namespace D3D
 		return outString;
 	}
 
-	inline const char* CommandlistTypeToString(D3D12_COMMAND_LIST_TYPE type)
+	constexpr const char* CommandlistTypeToString(D3D12_COMMAND_LIST_TYPE type)
 	{
 #define STATE_CASE(name) case D3D12_COMMAND_LIST_TYPE_##name: return #name
 		switch (type)
@@ -82,186 +83,10 @@ namespace D3D
 			SYSTEMTIME time;
 			GetSystemTime(&time);
 			Paths::CreateDirectoryTree(Paths::SavedDir());
-			char filePath[128];
-			FormatString(filePath, ARRAYSIZE(filePath), "%sGPU_Capture_%d_%02d_%02d__%02d_%02d_%02d_%d.wpix",
-				Paths::SavedDir().c_str(),
-				time.wYear, time.wMonth, time.wDay,
-				time.wHour, time.wMinute, time.wSecond, time.wMilliseconds);
-			if (SUCCEEDED(PIXGpuCaptureNextFrames(MULTIBYTE_TO_UNICODE(filePath), numFrames)))
+			std::string filePath = Sprintf("%ssGPU_Capture_%s.wpix", Paths::SavedDir().c_str(), Utils::GetTimeString().c_str());
+			if (SUCCEEDED(PIXGpuCaptureNextFrames(MULTIBYTE_TO_UNICODE(filePath.c_str()), numFrames)))
 			{
-				E_LOG(Info, "Captured %d frames to '%s'", numFrames, filePath);
-			}
-		}
-	}
-
-	inline void DREDHandler(ID3D12Device* pDevice)
-	{
-		//D3D12_AUTO_BREADCRUMB_OP
-		constexpr const char* OpNames[] =
-		{
-			"SetMarker",
-			"BeginEvent",
-			"EndEvent",
-			"DrawInstanced",
-			"DrawIndexedInstanced",
-			"ExecuteIndirect",
-			"Dispatch",
-			"CopyBufferRegion",
-			"CopyTextureRegion",
-			"CopyResource",
-			"CopyTiles",
-			"ResolveSubresource",
-			"ClearRenderTargetView",
-			"ClearUnorderedAccessView",
-			"ClearDepthStencilView",
-			"ResourceBarrier",
-			"ExecuteBundle",
-			"Present",
-			"ResolveQueryData",
-			"BeginSubmission",
-			"EndSubmission",
-			"DecodeFrame",
-			"ProcessFrames",
-			"AtomicCopyBufferUint",
-			"AtomicCopyBufferUint64",
-			"ResolveSubresourceRegion",
-			"WriteBufferImmediate",
-			"DecodeFrame1",
-			"SetProtectedResourceSession",
-			"DecodeFrame2",
-			"ProcessFrames1",
-			"BuildRaytracingAccelerationStructure",
-			"EmitRaytracingAccelerationStructurePostBuildInfo",
-			"CopyRaytracingAccelerationStructure",
-			"DispatchRays",
-			"InitializeMetaCommand",
-			"ExecuteMetaCommand",
-			"EstimateMotion",
-			"ResolveMotionVectorHeap",
-			"SetPipelineState1",
-			"InitializeExtensionCommand",
-			"ExecuteExtensionCommand",
-			"DispatchMesh",
-			"EncodeFrame",
-			"ResolveEncoderOutputMetadata",
-		};
-		static_assert(ARRAYSIZE(OpNames) == D3D12_AUTO_BREADCRUMB_OP_RESOLVEENCODEROUTPUTMETADATA + 1, "OpNames array length mismatch");
-
-		//D3D12_DRED_ALLOCATION_TYPE
-		constexpr const char* AllocTypesNames[] =
-		{
-			"CommandQueue",
-			"CommandAllocator",
-			"PipelineState",
-			"CommandList",
-			"Fence",
-			"DescriptorHeap",
-			"Heap",
-			"Unknown",
-			"QueryHeap",
-			"CommandSignature",
-			"PipelineLibrary",
-			"VideoDecoder",
-			"Unknown",
-			"VideoProcessor",
-			"Unknown",
-			"Resource",
-			"Pass",
-			"CryptoSession",
-			"CryptoSessionPolicy",
-			"ProtectedResourceSession",
-			"VideoDecoderHeap",
-			"CommandPool",
-			"CommandRecorder",
-			"StateObjectr",
-			"MetaCommand",
-			"SchedulingGroup",
-			"VideoMotionEstimator",
-			"VideoMotionVectorHeap",
-			"VideoExtensionCommand",
-			"VideoEncoder",
-			"VideoEncoderHeap",
-		};
-		static_assert(ARRAYSIZE(AllocTypesNames) == D3D12_DRED_ALLOCATION_TYPE_VIDEO_ENCODER_HEAP - D3D12_DRED_ALLOCATION_TYPE_COMMAND_QUEUE + 1, "AllocTypes array length mismatch");
-
-		ID3D12DeviceRemovedExtendedData2* pDred = nullptr;
-		if (SUCCEEDED(pDevice->QueryInterface(IID_PPV_ARGS(&pDred))))
-		{
-			D3D12_DRED_AUTO_BREADCRUMBS_OUTPUT1 pDredAutoBreadcrumbsOutput;
-			if (SUCCEEDED(pDred->GetAutoBreadcrumbsOutput1(&pDredAutoBreadcrumbsOutput)))
-			{
-				E_LOG(Warning, "[DRED] Last tracked GPU operations:");
-
-				std::map<int32, const wchar_t*> contextStrings;
-
-				const D3D12_AUTO_BREADCRUMB_NODE1* pNode = pDredAutoBreadcrumbsOutput.pHeadAutoBreadcrumbNode;
-				while (pNode && pNode->pLastBreadcrumbValue)
-				{
-					int32 lastCompletedOp = *pNode->pLastBreadcrumbValue;
-
-					if (lastCompletedOp != (int)pNode->BreadcrumbCount && lastCompletedOp != 0)
-					{
-						E_LOG(Warning, "[DRED] Commandlist \"%s\" on CommandQueue \"%s\", %d completed of %d", pNode->pCommandListDebugNameA, pNode->pCommandQueueDebugNameA, lastCompletedOp, pNode->BreadcrumbCount);
-
-						int32 firstOp = Math::Max(lastCompletedOp - 100, 0);
-						int32 lastOp = Math::Min(lastCompletedOp + 20, int32(pNode->BreadcrumbCount) - 1);
-
-						contextStrings.clear();
-						for (uint32 breadcrumbContext = firstOp; breadcrumbContext < pNode->BreadcrumbContextsCount; ++breadcrumbContext)
-						{
-							const D3D12_DRED_BREADCRUMB_CONTEXT& context = pNode->pBreadcrumbContexts[breadcrumbContext];
-							contextStrings[context.BreadcrumbIndex] = context.pContextString;
-						}
-
-						for (int32 op = firstOp; op <= lastOp; ++op)
-						{
-							D3D12_AUTO_BREADCRUMB_OP breadcrumbOp = pNode->pCommandHistory[op];
-
-							std::string contextString;
-							auto it = contextStrings.find(op);
-							if (it != contextStrings.end())
-							{
-								contextString = Sprintf(" [%s]", UNICODE_TO_MULTIBYTE(it->second));
-							}
-
-							const char* opName = (breadcrumbOp < ARRAYSIZE(OpNames)) ? OpNames[breadcrumbOp] : "Unknown Op";
-							E_LOG(Warning, "\tOp: %d, %s%s%s", op, opName, contextString.c_str(), (op + 1 == lastCompletedOp) ? " - Last completed" : "");
-						}
-					}
-					pNode = pNode->pNext;
-				}
-			}
-
-			D3D12_DRED_PAGE_FAULT_OUTPUT2 DredPageFaultOutput;
-			if (SUCCEEDED(pDred->GetPageFaultAllocationOutput2(&DredPageFaultOutput)) && DredPageFaultOutput.PageFaultVA != 0)
-			{
-				E_LOG(Warning, "[DRED] PageFault at VA GPUAddress \"0x%x\"", DredPageFaultOutput.PageFaultVA);
-
-				const D3D12_DRED_ALLOCATION_NODE1* pNode = DredPageFaultOutput.pHeadExistingAllocationNode;
-				if (pNode)
-				{
-					E_LOG(Warning, "[DRED] Active objects with VA ranges that match the faulting VA:");
-					while (pNode)
-					{
-						uint32 alloc_type_index = pNode->AllocationType - D3D12_DRED_ALLOCATION_TYPE_COMMAND_QUEUE;
-						const TCHAR* AllocTypeName = (alloc_type_index < ARRAYSIZE(AllocTypesNames)) ? AllocTypesNames[alloc_type_index] : "Unknown Alloc";
-						E_LOG(Warning, "\tName: %s (Type: %s)", pNode->ObjectNameA, AllocTypeName);
-						pNode = pNode->pNext;
-					}
-				}
-
-				pNode = DredPageFaultOutput.pHeadRecentFreedAllocationNode;
-				if (pNode)
-				{
-					E_LOG(Warning, "[DRED] Recent freed objects with VA ranges that match the faulting VA:");
-					while (pNode)
-					{
-						uint32 allocTypeIndex = pNode->AllocationType - D3D12_DRED_ALLOCATION_TYPE_COMMAND_QUEUE;
-						const TCHAR* AllocTypeName = (allocTypeIndex < ARRAYSIZE(AllocTypesNames)) ? AllocTypesNames[allocTypeIndex] : "Unknown Alloc";
-						E_LOG(Warning, "\tName: %s (Type: %s)", pNode->ObjectNameA, AllocTypeName);
-						pNode = pNode->pNext;
-					}
-				}
+				E_LOG(Info, "Captured %d frames to '%s'", numFrames, filePath.c_str());
 			}
 		}
 	}
@@ -337,7 +162,7 @@ namespace D3D
 		return out;
 	}
 
-	inline bool IsBlockCompressFormat(DXGI_FORMAT format)
+	constexpr bool IsBlockCompressFormat(DXGI_FORMAT format)
 	{
 		switch (format)
 		{
@@ -368,7 +193,7 @@ namespace D3D
 		}
 	}
 
-	inline DXGI_FORMAT GetSrvFormatFromDepth(DXGI_FORMAT format)
+	constexpr DXGI_FORMAT GetSrvFormatFromDepth(DXGI_FORMAT format)
 	{
 		switch (format)
 		{
@@ -403,7 +228,7 @@ namespace D3D
 		}
 	}
 
-	inline DXGI_FORMAT GetDsvFormat(DXGI_FORMAT format)
+	constexpr DXGI_FORMAT GetDsvFormat(DXGI_FORMAT format)
 	{
 		switch (format)
 		{
@@ -424,13 +249,13 @@ namespace D3D
 		}
 	}
 
-	inline bool HasStencil(DXGI_FORMAT format)
+	constexpr bool HasStencil(DXGI_FORMAT format)
 	{
 		return format == DXGI_FORMAT_D24_UNORM_S8_UINT
 			|| format == DXGI_FORMAT_D32_FLOAT_S8X24_UINT;
 	}
 
-	inline int GetFormatRowDataSize(DXGI_FORMAT format, unsigned int width)
+	constexpr int GetFormatRowDataSize(DXGI_FORMAT format, unsigned int width)
 	{
 		switch (format)
 		{

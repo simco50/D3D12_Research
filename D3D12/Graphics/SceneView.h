@@ -1,11 +1,39 @@
 #pragma once
 #include "Core/BitField.h"
 #include "ShaderInterop.h"
+#include "AccelerationStructure.h"
 
 class Texture;
 class Buffer;
+class Mesh;
 class CommandContext;
+class ShaderResourceView;
+class CommandSignature;
+class GraphicsDevice;
+class Image;
 struct SubMesh;
+struct Light;
+
+struct DDGIVolume
+{
+	Vector3 Origin;
+	Vector3 Extents;
+	IntVector3 NumProbes;
+	int32 MaxNumRays;
+	int32 NumRays;
+	std::array<RefCountPtr<Texture>, 2> pIrradiance;
+	std::array<RefCountPtr<Texture>, 2> pDepth;
+	RefCountPtr<Buffer> pProbeOffset;
+	RefCountPtr<Buffer> pRayBuffer;
+	RefCountPtr<Buffer> pProbeStates;
+};
+
+struct World
+{
+	std::vector<Light> Lights;
+	std::vector<std::unique_ptr<Mesh>> Meshes;
+	std::vector<DDGIVolume> DDGIVolumes;
+};
 
 struct ViewTransform
 {
@@ -42,7 +70,6 @@ struct Batch
 	Blending BlendMode = Blending::Opaque;
 	const SubMesh* pMesh = nullptr;
 	Matrix WorldMatrix;
-	BoundingBox LocalBounds;
 	BoundingBox Bounds;
 	float Radius;
 };
@@ -67,7 +94,6 @@ struct SceneView
 	RefCountPtr<Buffer> pMaterialBuffer;
 	RefCountPtr<Buffer> pMeshBuffer;
 	RefCountPtr<Buffer> pMeshInstanceBuffer;
-	RefCountPtr<Buffer> pSceneTLAS;
 	RefCountPtr<Buffer> pTransformsBuffer;
 	RefCountPtr<Buffer> pDDGIVolumesBuffer;
 	uint32 NumDDGIVolumes = 0;
@@ -76,6 +102,7 @@ struct SceneView
 	VisibilityMask VisibilityMask;
 	ViewTransform View;
 	BoundingBox SceneAABB;
+	AccelerationStructure AccelerationStructure;
 
 	std::vector<ShadowView> ShadowViews;
 	Vector4 ShadowCascadeDepths;
@@ -93,6 +120,40 @@ struct SceneTextures
 	RefCountPtr<Texture> pVelocity;
 };
 
-void DrawScene(CommandContext& context, const SceneView& scene, const VisibilityMask& visibility, Batch::Blending blendModes);
-void DrawScene(CommandContext& context, const SceneView& scene, Batch::Blending blendModes);
-ShaderInterop::ViewUniforms GetViewUniforms(const SceneView& sceneView, Texture* pTarget = nullptr);
+namespace Renderer
+{
+	void DrawScene(CommandContext& context, const SceneView& scene, const VisibilityMask& visibility, Batch::Blending blendModes);
+	void DrawScene(CommandContext& context, const SceneView& scene, Batch::Blending blendModes);
+	ShaderInterop::ViewUniforms GetViewUniforms(const SceneView& sceneView, Texture* pTarget = nullptr);
+	void UploadSceneData(CommandContext& context, SceneView& view, World& world);
+}
+
+enum class DefaultTexture
+{
+	White2D,
+	Black2D,
+	Magenta2D,
+	Gray2D,
+	Normal2D,
+	RoughnessMetalness,
+	BlackCube,
+	Black3D,
+	ColorNoise256,
+	BlueNoise512,
+	MAX,
+};
+
+namespace GraphicsCommon
+{
+	void Create(GraphicsDevice* pDevice);
+	void Destroy();
+
+	Texture* GetDefaultTexture(DefaultTexture type);
+
+	extern RefCountPtr<CommandSignature> pIndirectDrawSignature;
+	extern RefCountPtr<CommandSignature> pIndirectDispatchSignature;
+	extern RefCountPtr<CommandSignature> pIndirectDispatchMeshSignature;
+
+	RefCountPtr<Texture> CreateTextureFromImage(CommandContext& context, Image& image, bool sRGB, const char* pName = nullptr);
+	RefCountPtr<Texture> CreateTextureFromFile(CommandContext& context, const char* pFilePath, bool sRGB, const char* pName = nullptr);
+}

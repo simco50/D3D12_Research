@@ -131,9 +131,6 @@ LRESULT Window::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		bool resized = newWidth != m_DisplayWidth || newHeight != m_DisplayHeight;
 		bool shouldResize = false;
 
-		m_DisplayWidth = LOWORD(lParam);
-		m_DisplayHeight = HIWORD(lParam);
-
 		if (wParam == SIZE_MINIMIZED)
 		{
 			OnFocusChanged.Broadcast(false);
@@ -171,7 +168,9 @@ LRESULT Window::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 		if (shouldResize && resized)
 		{
-			OnResize.Broadcast(m_DisplayWidth, m_DisplayHeight);
+			m_DisplayWidth = LOWORD(lParam);
+			m_DisplayHeight = HIWORD(lParam);
+			OnResizeOrMove.Broadcast(m_DisplayWidth, m_DisplayHeight);
 		}
 		break;
 	}
@@ -223,15 +222,9 @@ LRESULT Window::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		OnFocusChanged.Broadcast(true);
 		RECT rect;
 		GetClientRect(hWnd, &rect);
-		int newWidth = rect.right - rect.left;
-		int newHeight = rect.bottom - rect.top;
-		bool resized = newWidth != m_DisplayWidth || newHeight != m_DisplayHeight;
-		if (resized)
-		{
-			m_DisplayWidth = newWidth;
-			m_DisplayHeight = newHeight;
-			OnResize.Broadcast(newWidth, newHeight);
-		}
+		m_DisplayWidth = rect.right - rect.left;
+		m_DisplayHeight = rect.bottom - rect.top;
+		OnResizeOrMove.Broadcast(m_DisplayWidth, m_DisplayHeight);
 		m_IsResizing = false;
 		break;
 	}

@@ -87,7 +87,7 @@ DescriptorHeapBlock* GlobalOnlineDescriptorHeap::AllocateBlock()
 	for (uint32 i = 0; i < (uint32)m_ReleasedDynamicBlocks.size(); ++i)
 	{
 		DescriptorHeapBlock* pBlock = m_ReleasedDynamicBlocks[i];
-		if (GetParent()->IsFenceComplete(pBlock->FenceValue))
+		if (pBlock->SyncPoint.IsComplete())
 		{
 			std::swap(m_ReleasedDynamicBlocks[i], m_ReleasedDynamicBlocks.back());
 			m_ReleasedDynamicBlocks.pop_back();
@@ -103,10 +103,10 @@ DescriptorHeapBlock* GlobalOnlineDescriptorHeap::AllocateBlock()
 	return pBlock;
 }
 
-void GlobalOnlineDescriptorHeap::FreeBlock(uint64 fenceValue, DescriptorHeapBlock* pBlock)
+void GlobalOnlineDescriptorHeap::FreeBlock(const SyncPoint& syncPoint, DescriptorHeapBlock* pBlock)
 {
 	std::lock_guard lock(m_DynamicBlockAllocateMutex);
-	pBlock->FenceValue = fenceValue;
+	pBlock->SyncPoint = syncPoint;
 	pBlock->CurrentOffset = 0;
 	m_ReleasedDynamicBlocks.push_back(pBlock);
 }
@@ -179,11 +179,11 @@ void OnlineDescriptorAllocator::ParseRootSignature(RootSignature* pRootSignature
 	}
 }
 
-void OnlineDescriptorAllocator::ReleaseUsedHeaps(uint64 fenceValue)
+void OnlineDescriptorAllocator::ReleaseUsedHeaps(const SyncPoint& syncPoint)
 {
 	for (DescriptorHeapBlock* pBlock : m_ReleasedBlocks)
 	{
-		m_pHeapAllocator->FreeBlock(fenceValue, pBlock);
+		m_pHeapAllocator->FreeBlock(syncPoint, pBlock);
 	}
 	m_ReleasedBlocks.clear();
 }

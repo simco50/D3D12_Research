@@ -122,8 +122,8 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView& resources, Texture*
 
 	RG_GRAPH_SCOPE("Particle Simulation", graph);
 
-	RGPassBuilder prepareArguments = graph.AddPass("Prepare Arguments");
-	prepareArguments.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
+	graph.AddPass("Prepare Arguments")
+		.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
 		{
 			m_ParticlesToSpawn += (float)g_EmitCount * Time::DeltaTime();
 
@@ -146,7 +146,7 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView& resources, Texture*
 			m_ParticlesToSpawn -= parameters.EmitCount;
 
 			context.SetRootConstants(0, parameters);
-			context.SetRootCBV(1, GetViewUniforms(resources));
+			context.SetRootCBV(1, Renderer::GetViewUniforms(resources));
 
 			context.BindResources(2, uavs);
 			context.BindResources(3, srvs);
@@ -157,8 +157,8 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView& resources, Texture*
 			context.InsertResourceBarrier(m_pSimulateArguments, D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
 		});
 
-	RGPassBuilder emit = graph.AddPass("Emit");
-	emit.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
+	graph.AddPass("Emit")
+		.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
 		{
 			context.SetComputeRootSignature(m_pSimulateRS);
 			context.SetPipelineState(m_pEmitPS);
@@ -171,7 +171,7 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView& resources, Texture*
 			parameters.Origin = Vector3(150, 3, 0);
 
 			context.SetRootConstants(0, parameters);
-			context.SetRootCBV(1, GetViewUniforms(resources));
+			context.SetRootCBV(1, Renderer::GetViewUniforms(resources));
 
 			context.BindResources(2, uavs);
 			context.BindResources(3, srvs);
@@ -180,8 +180,8 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView& resources, Texture*
 			context.InsertUavBarrier();
 		});
 
-	RGPassBuilder simulate = graph.AddPass("Simulate");
-	simulate.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
+	graph.AddPass("Simulate")
+		.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
 		{
 			context.SetComputeRootSignature(m_pSimulateRS);
 			context.SetPipelineState(m_pSimulatePS);
@@ -195,7 +195,7 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView& resources, Texture*
 			parameters.ParticleLifeTime = g_LifeTime;
 
 			context.SetRootConstants(0, parameters);
-			context.SetRootCBV(1, GetViewUniforms(resources));
+			context.SetRootCBV(1, Renderer::GetViewUniforms(resources));
 
 			context.BindResources(2, uavs);
 			context.BindResources(3, srvs);
@@ -204,14 +204,14 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView& resources, Texture*
 			context.InsertUavBarrier();
 		});
 
-	RGPassBuilder simulateEnd = graph.AddPass("Simulate End");
-	simulateEnd.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
+	graph.AddPass("Simulate End")
+		.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
 		{
 			context.InsertResourceBarrier(m_pCountersBuffer, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
 			context.SetComputeRootSignature(m_pSimulateRS);
 
-			context.SetRootCBV(1, GetViewUniforms(resources));
+			context.SetRootCBV(1, Renderer::GetViewUniforms(resources));
 
 			context.BindResources(2, uavs);
 			context.BindResources(3, srvs);
@@ -231,8 +231,8 @@ void GpuParticles::Render(RGGraph& graph, const SceneView& view, const SceneText
 		return;
 	}
 
-	RGPassBuilder renderParticles = graph.AddPass("Render Particles");
-	renderParticles.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
+	graph.AddPass("Render Particles")
+		.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
 		{
 			context.InsertResourceBarrier(m_pDrawArguments, D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
 			context.InsertResourceBarrier(m_pParticleBuffer, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
@@ -246,7 +246,7 @@ void GpuParticles::Render(RGGraph& graph, const SceneView& view, const SceneText
 			context.SetGraphicsRootSignature(m_pRenderParticlesRS);
 
 			context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-			context.SetRootCBV(0, GetViewUniforms(view, sceneTextures.pColorTarget));
+			context.SetRootCBV(0, Renderer::GetViewUniforms(view, sceneTextures.pColorTarget));
 
 			context.BindResources(1, {
 				m_pParticleBuffer->GetSRV(),

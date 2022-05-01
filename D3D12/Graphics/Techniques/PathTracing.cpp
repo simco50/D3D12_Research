@@ -83,8 +83,8 @@ void PathTracing::Render(RGGraph& graph, const SceneView& view, Texture* pTarget
 
 	m_NumAccumulatedFrames++;
 
-	RGPassBuilder rt = graph.AddPass("Path Tracing");
-	rt.Bind([=](CommandContext& context, const RGPassResources& /* passResources */)
+	graph.AddPass("Path Tracing")
+		.Bind([=](CommandContext& context, const RGPassResources& /* passResources */)
 		{
 			context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
@@ -107,7 +107,7 @@ void PathTracing::Render(RGGraph& graph, const SceneView& view, Texture* pTarget
 			bindingTable.BindHitGroup("MaterialHG", 0);
 
 			context.SetRootCBV(0, parameters);
-			context.SetRootCBV(1, GetViewUniforms(view, pTarget));
+			context.SetRootCBV(1, Renderer::GetViewUniforms(view, pTarget));
 			context.BindResources(2, {
 				pTarget->GetUAV(),
 				m_pAccumulationTexture->GetUAV(),

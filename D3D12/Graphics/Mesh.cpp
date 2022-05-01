@@ -9,6 +9,7 @@
 #include "Content/Image.h"
 #include "Core/Utils.h"
 #include "ShaderInterop.h"
+#include "Graphics/SceneView.h"
 
 #pragma warning(push)
 #pragma warning(disable: 4996) //_CRT_SECURE_NO_WARNINGS
@@ -255,12 +256,12 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 							Image newImg;
 							if (newImg.Load((char*)pImage->buffer_view->buffer->data + pImage->buffer_view->offset, pImage->buffer_view->size, pImage->mime_type))
 							{
-								pTex = pDevice->CreateTextureFromImage(*pContext, newImg, srgb, pName);
+								pTex = GraphicsCommon::CreateTextureFromImage(*pContext, newImg, srgb, pName);
 							}
 						}
 						else
 						{
-							pTex = pDevice->CreateTextureFromFile(*pContext, Paths::Combine(Paths::GetDirectoryPath(pFilePath), pImage->uri).c_str(), srgb, pName);
+							pTex = GraphicsCommon::CreateTextureFromFile(*pContext, Paths::Combine(Paths::GetDirectoryPath(pFilePath), pImage->uri).c_str(), srgb, pName);
 						}
 						if (pTex.Get())
 						{

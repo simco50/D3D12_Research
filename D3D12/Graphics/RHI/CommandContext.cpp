@@ -54,13 +54,13 @@ void CommandContext::Reset()
 	}
 }
 
-uint64 CommandContext::Execute(bool wait)
+SyncPoint CommandContext::Execute(bool wait)
 {
 	CommandContext* pContexts[] = { this };
 	return Execute(pContexts, ARRAYSIZE(pContexts), wait);
 }
 
-uint64 CommandContext::Execute(CommandContext** pContexts, uint32 numContexts, bool wait)
+SyncPoint CommandContext::Execute(CommandContext** pContexts, uint32 numContexts, bool wait)
 {
 	check(numContexts > 0);
 	CommandQueue* pQueue = pContexts[0]->GetParent()->GetCommandQueue(pContexts[0]->GetType());
@@ -70,29 +70,24 @@ uint64 CommandContext::Execute(CommandContext** pContexts, uint32 numContexts, b
 			D3D::CommandlistTypeToString(pQueue->GetType()), D3D::CommandlistTypeToString(pContexts[i]->GetType()));
 		pContexts[i]->FlushResourceBarriers();
 	}
-	uint64 fenceValue = pQueue->ExecuteCommandLists(pContexts, numContexts);
-	if (wait)
-	{
-		pQueue->WaitForFence(fenceValue);
-	}
-
+	SyncPoint syncPoint = pQueue->ExecuteCommandLists(pContexts, numContexts, wait);
 	for (uint32 i = 0; i < numContexts; ++i)
 	{
-		pContexts[i]->Free(fenceValue);
+		pContexts[i]->Free(syncPoint);
 	}
-	return fenceValue;
+	return syncPoint;
 }
 
-void CommandContext::Free(uint64 fenceValue)
+void CommandContext::Free(const SyncPoint& syncPoint)
 {
-	m_pDynamicAllocator->Free(fenceValue);
-	GetParent()->GetCommandQueue(m_Type)->FreeAllocator(fenceValue, m_pAllocator);
+	m_pDynamicAllocator->Free(syncPoint);
+	GetParent()->GetCommandQueue(m_Type)->FreeAllocator(syncPoint, m_pAllocator);
 	m_pAllocator = nullptr;
 	GetParent()->FreeCommandList(this);
 
 	if (m_Type != D3D12_COMMAND_LIST_TYPE_COPY)
 	{
-		m_ShaderResourceDescriptorAllocator.ReleaseUsedHeaps(fenceValue);
+		m_ShaderResourceDescriptorAllocator.ReleaseUsedHeaps(syncPoint);
 	}
 }
 
@@ -764,110 +759,94 @@ void ResourceBarrierBatcher::Reset()
 	m_QueuedBarriers.clear();
 }
 
-CommandSignature::CommandSignature(GraphicsDevice* pParent)
-	: GraphicsObject(pParent)
+CommandSignature::CommandSignature(GraphicsDevice* pParent, ID3D12CommandSignature* pCmdSignature)
+	: GraphicsObject(pParent), m_pCommandSignature(pCmdSignature)
 {
-
 }
 
-void CommandSignature::Finalize(const char* pName)
+D3D12_COMMAND_SIGNATURE_DESC CommandSignatureInitializer::GetDesc() const
 {
-	D3D12_COMMAND_SIGNATURE_DESC desc{};
+	D3D12_COMMAND_SIGNATURE_DESC desc;
 	desc.ByteStride = m_Stride;
 	desc.NodeMask = 0;
 	desc.NumArgumentDescs = (uint32)m_ArgumentDesc.size();
 	desc.pArgumentDescs = m_ArgumentDesc.data();
-	VERIFY_HR_EX(GetParent()->GetDevice()->CreateCommandSignature(&desc, m_pRootSignature, IID_PPV_ARGS(m_pCommandSignature.GetAddressOf())), GetParent()->GetDevice());
-	D3D::SetObjectName(m_pCommandSignature.Get(), pName);
+	return desc;
 }
 
-void CommandSignature::AddDispatch()
+void CommandSignatureInitializer::AddDispatch()
 {
-	D3D12_INDIRECT_ARGUMENT_DESC desc;
+	D3D12_INDIRECT_ARGUMENT_DESC& desc = m_ArgumentDesc.emplace_back();
 	desc.Type = D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH;
-	m_ArgumentDesc.push_back(desc);
 	m_Stride += sizeof(D3D12_DISPATCH_ARGUMENTS);
-	m_IsCompute = true;
 }
 
-void CommandSignature::AddDispatchMesh()
+void CommandSignatureInitializer::AddDispatchMesh()
 {
-	D3D12_INDIRECT_ARGUMENT_DESC desc;
+	D3D12_INDIRECT_ARGUMENT_DESC& desc = m_ArgumentDesc.emplace_back();
 	desc.Type = D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH_MESH;
-	m_ArgumentDesc.push_back(desc);
 	m_Stride += sizeof(D3D12_DISPATCH_MESH_ARGUMENTS);
-	m_IsCompute = false;
 }
 
-void CommandSignature::AddDraw()
+void CommandSignatureInitializer::AddDraw()
 {
-	D3D12_INDIRECT_ARGUMENT_DESC desc;
+	D3D12_INDIRECT_ARGUMENT_DESC& desc = m_ArgumentDesc.emplace_back();
 	desc.Type = D3D12_INDIRECT_ARGUMENT_TYPE_DRAW;
-	m_ArgumentDesc.push_back(desc);
 	m_Stride += sizeof(D3D12_DRAW_ARGUMENTS);
-	m_IsCompute = false;
 }
 
-void CommandSignature::AddDrawIndexed()
+void CommandSignatureInitializer::AddDrawIndexed()
 {
-	D3D12_INDIRECT_ARGUMENT_DESC desc;
+	D3D12_INDIRECT_ARGUMENT_DESC& desc = m_ArgumentDesc.emplace_back();
 	desc.Type = D3D12_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED;
-	m_ArgumentDesc.push_back(desc);
 	m_Stride += sizeof(D3D12_DRAW_INDEXED_ARGUMENTS);
-	m_IsCompute = false;
 }
 
-void CommandSignature::AddConstants(uint32 numConstants, uint32 rootIndex, uint32 offset)
+void CommandSignatureInitializer::AddConstants(uint32 numConstants, uint32 rootIndex, uint32 offset)
 {
-	D3D12_INDIRECT_ARGUMENT_DESC desc;
+	D3D12_INDIRECT_ARGUMENT_DESC& desc = m_ArgumentDesc.emplace_back();
 	desc.Type = D3D12_INDIRECT_ARGUMENT_TYPE_CONSTANT;
 	desc.Constant.RootParameterIndex = rootIndex;
 	desc.Constant.DestOffsetIn32BitValues = offset;
 	desc.Constant.Num32BitValuesToSet = numConstants;
-	m_ArgumentDesc.push_back(desc);
 	m_Stride += numConstants * sizeof(uint32);
 }
 
-void CommandSignature::AddConstantBufferView(uint32 rootIndex)
+void CommandSignatureInitializer::AddConstantBufferView(uint32 rootIndex)
 {
-	D3D12_INDIRECT_ARGUMENT_DESC desc;
+	D3D12_INDIRECT_ARGUMENT_DESC& desc = m_ArgumentDesc.emplace_back();
 	desc.Type = D3D12_INDIRECT_ARGUMENT_TYPE_CONSTANT_BUFFER_VIEW;
 	desc.ConstantBufferView.RootParameterIndex = rootIndex;
-	m_ArgumentDesc.push_back(desc);
 	m_Stride += sizeof(uint64);
 }
 
-void CommandSignature::AddShaderResourceView(uint32 rootIndex)
+void CommandSignatureInitializer::AddShaderResourceView(uint32 rootIndex)
 {
-	D3D12_INDIRECT_ARGUMENT_DESC desc;
+	D3D12_INDIRECT_ARGUMENT_DESC& desc = m_ArgumentDesc.emplace_back();
 	desc.Type = D3D12_INDIRECT_ARGUMENT_TYPE_SHADER_RESOURCE_VIEW;
 	desc.ShaderResourceView.RootParameterIndex = rootIndex;
-	m_ArgumentDesc.push_back(desc);
 	m_Stride += 8;
 }
 
-void CommandSignature::AddUnorderedAccessView(uint32 rootIndex)
+void CommandSignatureInitializer::AddUnorderedAccessView(uint32 rootIndex)
 {
-	D3D12_INDIRECT_ARGUMENT_DESC desc;
+	D3D12_INDIRECT_ARGUMENT_DESC& desc = m_ArgumentDesc.emplace_back();
 	desc.Type = D3D12_INDIRECT_ARGUMENT_TYPE_UNORDERED_ACCESS_VIEW;
 	desc.UnorderedAccessView.RootParameterIndex = rootIndex;
-	m_ArgumentDesc.push_back(desc);
 	m_Stride += 8;
 }
 
-void CommandSignature::AddVertexBuffer(uint32 slot)
+void CommandSignatureInitializer::AddVertexBuffer(uint32 slot)
 {
-	D3D12_INDIRECT_ARGUMENT_DESC desc;
+	D3D12_INDIRECT_ARGUMENT_DESC& desc = m_ArgumentDesc.emplace_back();
 	desc.Type = D3D12_INDIRECT_ARGUMENT_TYPE_VERTEX_BUFFER_VIEW;
 	desc.VertexBuffer.Slot = slot;
-	m_ArgumentDesc.push_back(desc);
 	m_Stride += sizeof(D3D12_VERTEX_BUFFER_VIEW);
 }
 
-void CommandSignature::AddIndexBuffer()
+void CommandSignatureInitializer::AddIndexBuffer()
 {
-	D3D12_INDIRECT_ARGUMENT_DESC desc;
+	D3D12_INDIRECT_ARGUMENT_DESC& desc = m_ArgumentDesc.emplace_back();
 	desc.Type = D3D12_INDIRECT_ARGUMENT_TYPE_INDEX_BUFFER_VIEW;
-	m_ArgumentDesc.push_back(desc);
 	m_Stride += sizeof(D3D12_INDEX_BUFFER_VIEW);
 }

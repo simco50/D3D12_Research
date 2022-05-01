@@ -64,7 +64,6 @@ private:
 	// Light Culling
 	RefCountPtr<RootSignature> m_pLightCullingRS;
 	RefCountPtr<PipelineState> m_pLightCullingPSO;
-	RefCountPtr<CommandSignature> m_pLightCullingCommandSignature;
 
 	// Lighting
 	RefCountPtr<RootSignature> m_pDiffuseRS;

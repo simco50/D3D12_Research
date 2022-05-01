@@ -136,16 +136,9 @@ void Camera::UpdateMatrices() const
 
 		m_Transform.Projection.Invert(m_Transform.ProjectionInverse);
 		m_Transform.ViewProjection = m_Transform.View * m_Transform.Projection;
-		m_Dirty = false;
-
-		Matrix p = m_Transform.Projection;
-		if (m_Transform.FarPlane < m_Transform.NearPlane)
-		{
-			Math::ReverseZProjection(p);
-		}
-		BoundingFrustum::CreateFromMatrix(m_Transform.Frustum, p);
-		m_Transform.Frustum.Transform(m_Transform.Frustum, m_Transform.ViewInverse);
+		m_Transform.Frustum = Math::CreateBoundingFrustum(m_Transform.Projection, m_Transform.View);
 		m_Transform.Position = m_Position;
+		m_Dirty = false;
 	}
 }
 

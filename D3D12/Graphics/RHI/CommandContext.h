@@ -154,9 +154,9 @@ public:
 	~CommandContext();
 
 	void Reset();
-	uint64 Execute(bool wait);
-	static uint64 Execute(CommandContext** pContexts, uint32 numContexts, bool wait);
-	void Free(uint64 fenceValue);
+	SyncPoint Execute(bool wait);
+	static SyncPoint Execute(CommandContext** pContexts, uint32 numContexts, bool wait);
+	void Free(const SyncPoint& syncPoint);
 
 	void InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESOURCE_STATES state, uint32 subResource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES);
 	void InsertUavBarrier(GraphicsResource* pBuffer = nullptr);
@@ -273,7 +273,7 @@ private:
 	ID3D12GraphicsCommandList* m_pCommandList;
 	RefCountPtr<ID3D12GraphicsCommandList4> m_pRaytracingCommandList;
 	RefCountPtr<ID3D12GraphicsCommandList6> m_pMeshShadingCommandList;
-	ID3D12CommandAllocator* m_pAllocator;
+	RefCountPtr<ID3D12CommandAllocator> m_pAllocator;
 	D3D12_COMMAND_LIST_TYPE m_Type;
 	std::unordered_map<GraphicsResource*, ResourceState> m_ResourceStates;
 	CommandListContext m_CurrentCommandContext = CommandListContext::Invalid;
@@ -285,13 +285,9 @@ private:
 	StateObject* m_pCurrentSO = nullptr;
 };
 
-class CommandSignature : public GraphicsObject
+class CommandSignatureInitializer
 {
 public:
-	CommandSignature(GraphicsDevice* pParent);
-	void Finalize(const char* pName);
-
-	void SetRootSignature(ID3D12RootSignature* pRootSignature) { m_pRootSignature = pRootSignature; }
 	void AddDispatch();
 	void AddDispatchMesh();
 	void AddDraw();
@@ -303,13 +299,18 @@ public:
 	void AddVertexBuffer(uint32 slot);
 	void AddIndexBuffer();
 
-	ID3D12CommandSignature* GetCommandSignature() const { return m_pCommandSignature.Get(); }
-	bool IsCompute() const { return m_IsCompute; }
+	D3D12_COMMAND_SIGNATURE_DESC GetDesc() const;
 
 private:
-	RefCountPtr<ID3D12CommandSignature> m_pCommandSignature;
-	ID3D12RootSignature* m_pRootSignature = nullptr;
 	uint32 m_Stride = 0;
 	std::vector<D3D12_INDIRECT_ARGUMENT_DESC> m_ArgumentDesc;
-	bool m_IsCompute = false;
+};
+
+class CommandSignature : public GraphicsObject
+{
+public:
+	CommandSignature(GraphicsDevice* pParent, ID3D12CommandSignature* pCmdSignature);
+	ID3D12CommandSignature* GetCommandSignature() const { return m_pCommandSignature.Get(); }
+private:
+	RefCountPtr<ID3D12CommandSignature> m_pCommandSignature;
 };

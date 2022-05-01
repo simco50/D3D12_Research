@@ -13,11 +13,10 @@ namespace ImGui
 	void ImageAutoSize(Texture* textureId, const ImVec2& imageDimensions);
 }
 
-class ImGuiRenderer
+namespace ImGuiRenderer
 {
-public:
-	ImGuiRenderer(GraphicsDevice* pParent, WindowHandle window, uint32 numBufferedFrames);
-	~ImGuiRenderer();
+	void Initialize(GraphicsDevice* pParent, WindowHandle window);
+	void Shutdown();
 
 	void NewFrame();
 	void Render(RGGraph& graph, const SceneView& sceneData, Texture* pRenderTarget);

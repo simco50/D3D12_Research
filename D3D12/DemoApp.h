@@ -2,8 +2,8 @@
 #include "Graphics/RHI/Graphics.h"
 #include "Graphics/Light.h"
 #include "Graphics/SceneView.h"
+#include "Graphics/RHI/CommandQueue.h"
 
-class ImGuiRenderer;
 class Mesh;
 class ClusteredForward;
 class TiledForward;
@@ -36,11 +36,10 @@ public:
 	~DemoApp();
 
 	void Update();
-	void OnResize(int width, int height);
+	void OnResizeOrMove(int width, int height);
 
 private:
 	void OnResizeViewport(int width, int height);
-	void Present();
 
 	void VisualizeTexture(RGGraph& graph, Texture* pTexture);
 
@@ -48,12 +47,9 @@ private:
 	void SetupScene(CommandContext& context);
 
 	void UpdateImGui();
-	void UpdateTLAS(CommandContext& context);
 
-	void LoadMesh(const std::string& filePath, CommandContext& context);
-	void CreateShadowViews();
-
-	void UploadSceneData(CommandContext& context);
+	void LoadMesh(const std::string& filePath, CommandContext& context, World& world);
+	void CreateShadowViews(SceneView& view, World& world);
 
 	RefCountPtr<GraphicsDevice> m_pDevice;
 	RefCountPtr<SwapChain> m_pSwapchain;
@@ -72,7 +68,6 @@ private:
 	RefCountPtr<Texture> m_pRoughness;
 	std::vector<RefCountPtr<Texture>> m_ShadowMaps;
 
-	std::unique_ptr<ImGuiRenderer> m_pImGuiRenderer;
 	std::unique_ptr<ClusteredForward> m_pClusteredForward;
 	std::unique_ptr<TiledForward> m_pTiledForward;
 	std::unique_ptr<RTAO> m_pRTAO;
@@ -87,7 +82,7 @@ private:
 
 	struct ScreenshotRequest
 	{
-		uint64 Fence;
+		SyncPoint SyncPoint;
 		uint32 Width;
 		uint32 Height;
 		uint32 RowPitch;
@@ -96,9 +91,8 @@ private:
 	std::queue<ScreenshotRequest> m_ScreenshotBuffers;
 	RenderPath m_RenderPath = RenderPath::Clustered;
 
-	std::vector<std::unique_ptr<Mesh>> m_Meshes;
-	RefCountPtr<Buffer> m_pTLAS;
-	RefCountPtr<Buffer> m_pTLASScratch;
+	World m_World;
+	SceneView m_SceneData;
 
 	RefCountPtr<RootSignature> m_pCommonRS;
 
@@ -148,14 +142,6 @@ private:
 	RefCountPtr<PipelineState> m_pRenderSkyPSO;
 	RefCountPtr<Texture> m_pSkyTexture;
 
-	//Light data
-	RefCountPtr<Buffer> m_pMaterialBuffer;
-	RefCountPtr<Buffer> m_pMeshBuffer;
-	RefCountPtr<Buffer> m_pMeshInstanceBuffer;
-	RefCountPtr<Buffer> m_pTransformsBuffer;
-	std::vector<Light> m_Lights;
-	RefCountPtr<Buffer> m_pLightBuffer;
-
 	//Bloom
 	RefCountPtr<PipelineState> m_pBloomSeparatePSO;
 	RefCountPtr<PipelineState> m_pBloomMipChainPSO;
@@ -171,22 +157,6 @@ private:
 	RefCountPtr<Texture> m_pVisibilityTexture;
 
 	// DDGI
-	struct DDGIVolume
-	{
-		Vector3 Origin;
-		Vector3 Extents;
-		IntVector3 NumProbes;
-		int32 MaxNumRays;
-		int32 NumRays;
-		std::array<RefCountPtr<Texture>, 2> pIrradiance;
-		std::array<RefCountPtr<Texture>, 2> pDepth;
-		RefCountPtr<Buffer> pProbeOffset;
-		RefCountPtr<Buffer> pRayBuffer;
-		RefCountPtr<Buffer> pProbeStates;
-	};
-	std::vector<DDGIVolume> m_DDGIVolumes;
-	RefCountPtr<Buffer> m_pDDGIVolumesBuffer;
-
 	RefCountPtr<StateObject> m_pDDGITraceRaysSO;
 	RefCountPtr<PipelineState> m_pDDGIUpdateIrradianceColorPSO;
 	RefCountPtr<PipelineState> m_pDDGIUpdateIrradianceDepthPSO;
@@ -205,6 +175,5 @@ private:
 		float Slice = 0.0f;
 	} m_VisualizeTextureData;
 
-	SceneView m_SceneData;
 	bool m_CapturePix = false;
 };

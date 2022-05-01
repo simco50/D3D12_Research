@@ -22,7 +22,7 @@ public:
 	OnFocusChangedDelegate OnFocusChanged;
 
 	DECLARE_MULTICAST_DELEGATE(OnResizeDelegate, uint32, uint32);
-	OnResizeDelegate OnResize;
+	OnResizeDelegate OnResizeOrMove;
 
 	DECLARE_MULTICAST_DELEGATE(OnCharInputDelegate, uint32);
 	OnCharInputDelegate OnCharInput;

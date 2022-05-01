@@ -21,8 +21,8 @@ RTReflections::RTReflections(GraphicsDevice* pDevice)
 
 void RTReflections::Execute(RGGraph& graph, const SceneView& view, const SceneTextures& sceneTextures)
 {
-	RGPassBuilder rt = graph.AddPass("RT Reflections");
-	rt.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
+	graph.AddPass("RT Reflections")
+		.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
 		{
 			Texture* pTarget = m_pSceneColor;
 
@@ -51,7 +51,7 @@ void RTReflections::Execute(RGGraph& graph, const SceneView& view, const SceneTe
 			bindingTable.BindHitGroup("ReflectionHitGroup", 0);
 
 			context.SetRootConstants(0, parameters);
-			context.SetRootCBV(1, GetViewUniforms(view, sceneTextures.pColorTarget));
+			context.SetRootCBV(1, Renderer::GetViewUniforms(view, sceneTextures.pColorTarget));
 			context.BindResources(2, sceneTextures.pColorTarget->GetUAV());
 			context.BindResources(3, {
 				sceneTextures.pDepth->GetSRV(),

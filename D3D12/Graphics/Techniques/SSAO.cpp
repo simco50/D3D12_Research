@@ -42,8 +42,8 @@ void SSAO::Execute(RGGraph& graph, const SceneView& view, const SceneTextures& s
 
 	RefCountPtr<Texture> pTarget = sceneTextures.pAmbientOcclusion;
 
-	RGPassBuilder ssao = graph.AddPass("SSAO");
-	ssao.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
+	graph.AddPass("SSAO")
+		.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
 		{
 			context.InsertResourceBarrier(sceneTextures.pDepth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
@@ -65,15 +65,15 @@ void SSAO::Execute(RGGraph& graph, const SceneView& view, const SceneTextures& s
 			shaderParameters.Samples = g_AoSamples;
 
 			context.SetRootConstants(0, shaderParameters);
-			context.SetRootCBV(1, GetViewUniforms(view, pTarget));
+			context.SetRootCBV(1, Renderer::GetViewUniforms(view, pTarget));
 			context.BindResources(2, pTarget->GetUAV());
 			context.BindResources(3, sceneTextures.pDepth->GetSRV());
 
 			context.Dispatch(ComputeUtils::GetNumThreadGroups(pTarget->GetWidth(), 16, pTarget->GetHeight(), 16));
 		});
 
-	RGPassBuilder blur = graph.AddPass("Blur SSAO");
-	blur.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
+	graph.AddPass("Blur SSAO")
+		.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
 		{
 			context.InsertResourceBarrier(m_pAmbientOcclusionIntermediate, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 			context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
@@ -91,7 +91,7 @@ void SSAO::Execute(RGGraph& graph, const SceneView& view, const SceneTextures& s
 			shaderParameters.DimensionsInv = Vector2(1.0f / pTarget->GetWidth(), 1.0f / pTarget->GetHeight());
 
 			context.SetRootConstants(0, shaderParameters);
-			context.SetRootCBV(1, GetViewUniforms(view, pTarget));
+			context.SetRootCBV(1, Renderer::GetViewUniforms(view, pTarget));
 			context.BindResources(2, m_pAmbientOcclusionIntermediate->GetUAV());
 			context.BindResources(3, {
 				sceneTextures.pDepth->GetSRV(),

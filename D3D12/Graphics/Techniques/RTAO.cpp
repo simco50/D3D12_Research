@@ -49,8 +49,8 @@ void RTAO::Execute(RGGraph& graph, const SceneView& view, SceneTextures& sceneTe
 	Texture* pRayTraceTarget = m_Targets[0];
 	Texture* pDenoiseTarget = m_Targets[1];
 
-	RGPassBuilder rt = graph.AddPass("Trace Rays");
-	rt.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
+	graph.AddPass("Trace Rays")
+		.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
 		{
 			context.InsertResourceBarrier(sceneTextures.pDepth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(pRayTraceTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
@@ -74,7 +74,7 @@ void RTAO::Execute(RGGraph& graph, const SceneView& view, SceneTextures& sceneTe
 			bindingTable.BindMissShader("OcclusionMS", {});
 
 			context.SetRootConstants(0, parameters);
-			context.SetRootCBV(1, GetViewUniforms(view, pRayTraceTarget));
+			context.SetRootCBV(1, Renderer::GetViewUniforms(view, pRayTraceTarget));
 			context.BindResources(2, pRayTraceTarget->GetUAV());
 			context.BindResources(3, {
 				sceneTextures.pDepth->GetSRV()
@@ -83,8 +83,8 @@ void RTAO::Execute(RGGraph& graph, const SceneView& view, SceneTextures& sceneTe
 			context.DispatchRays(bindingTable, pRayTraceTarget->GetWidth(), pRayTraceTarget->GetHeight());
 		});
 
-	RGPassBuilder denoiseAO = graph.AddPass("Denoise");
-	denoiseAO.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
+	graph.AddPass("Denoise")
+		.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
 		{
 			context.InsertResourceBarrier(pRayTraceTarget, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(m_pHistory, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
@@ -94,7 +94,7 @@ void RTAO::Execute(RGGraph& graph, const SceneView& view, SceneTextures& sceneTe
 			context.SetPipelineState(m_pDenoisePSO);
 
 			//context.SetRootCBV(0, parameters);
-			context.SetRootCBV(1, GetViewUniforms(view, pDenoiseTarget));
+			context.SetRootCBV(1, Renderer::GetViewUniforms(view, pDenoiseTarget));
 			context.BindResources(2, pDenoiseTarget->GetUAV());
 			context.BindResources(3, {
 				sceneTextures.pDepth->GetSRV(),
@@ -110,8 +110,8 @@ void RTAO::Execute(RGGraph& graph, const SceneView& view, SceneTextures& sceneTe
 			context.CopyTexture(pDenoiseTarget, m_pHistory);
 		});
 
-	RGPassBuilder blur = graph.AddPass("Blur AO");
-	blur.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
+	graph.AddPass("Blur AO")
+		.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
 		{
 			Texture* pSource = pDenoiseTarget;
 			Texture* pTarget = pRayTraceTarget;
@@ -132,7 +132,7 @@ void RTAO::Execute(RGGraph& graph, const SceneView& view, SceneTextures& sceneTe
 			shaderParameters.DimensionsInv = Vector2(1.0f / pTarget->GetWidth(), 1.0f / pTarget->GetHeight());
 
 			context.SetRootConstants(0, shaderParameters);
-			context.SetRootCBV(1, GetViewUniforms(view, pTarget));
+			context.SetRootCBV(1, Renderer::GetViewUniforms(view, pTarget));
 			context.BindResources(2, pTarget->GetUAV());
 			context.BindResources(3, {
 				sceneTextures.pDepth->GetSRV(),

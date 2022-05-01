@@ -5,6 +5,7 @@
 #include "GraphicsResource.h"
 #include "ResourceViews.h"
 #include "D3DUtils.h"
+#include "Fence.h"
 
 class CommandQueue;
 class CommandContext;
@@ -27,71 +28,33 @@ class Fence;
 class GraphicsDevice;
 class CommandSignature;
 class Image;
+class CommandSignatureInitializer;
 struct TextureDesc;
 struct BufferDesc;
 
 using WindowHandle = HWND;
 
-enum class GraphicsInstanceFlags
+enum class DisplayMode
 {
-	None			= 0,
-	DebugDevice		= 1 << 0,
-	DRED			= 1 << 1,
-	GpuValidation	= 1 << 2,
-	Pix				= 1 << 3,
-};
-DECLARE_BITMASK_TYPE(GraphicsInstanceFlags);
-
-enum class DefaultTexture
-{
-	White2D,
-	Black2D,
-	Magenta2D,
-	Gray2D,
-	Normal2D,
-	RoughnessMetalness,
-	BlackCube,
-	Black3D,
-	ColorNoise256,
-	BlueNoise512,
-	MAX,
-};
-
-namespace GraphicsCommon
-{
-	Texture* GetDefaultTexture(DefaultTexture type);
-
-	extern CommandSignature* pIndirectDrawSignature;
-	extern CommandSignature* pIndirectDispatchSignature;
-	extern CommandSignature* pIndirectDispatchMeshSignature;
-}
-
-class GraphicsInstance
-{
-public:
-	GraphicsInstance(GraphicsInstanceFlags createFlags);
-	RefCountPtr<SwapChain> CreateSwapchain(GraphicsDevice* pDevice, WindowHandle pNativeWindow, uint32 width, uint32 height, uint32 numFrames, bool vsync);
-	RefCountPtr<IDXGIAdapter4> EnumerateAdapter(bool useWarp);
-	RefCountPtr<GraphicsDevice> CreateDevice(RefCountPtr<IDXGIAdapter4> pAdapter);
-
-	static GraphicsInstance CreateInstance(GraphicsInstanceFlags createFlags = GraphicsInstanceFlags::None);
-
-	bool AllowTearing() const { return m_AllowTearing; }
-
-private:
-	RefCountPtr<IDXGIFactory6> m_pFactory;
-	bool m_AllowTearing = false;
+	SDR,
+	HDR_PQ,
+	HDR_scRGB,
 };
 
 class SwapChain : public GraphicsObject
 {
 public:
-	SwapChain(GraphicsDevice* pDevice, IDXGIFactory6* pFactory, WindowHandle pNativeWindow, uint32 width, uint32 height, uint32 numFrames, bool vsync);
-	~SwapChain();
-	void OnResize(uint32 width, uint32 height);
-	void Present();
+	static constexpr uint32 NUM_FRAMES = 3;
 
+	SwapChain(GraphicsDevice* pDevice, DisplayMode displayMode, WindowHandle pNativeWindow);
+	~SwapChain();
+	void OnResizeOrMove(uint32 width, uint32 height);
+	void Present(bool vsync);
+
+	void SetDisplayMode(DisplayMode displayMode) { m_DesiredDisplayMode = displayMode; }
 	void SetVsync(bool enabled) { m_Vsync = enabled; }
+	bool DisplaySupportsHDR() const;
+
 	IDXGISwapChain4* GetSwapChain() const { return m_pSwapchain.Get(); }
 	Texture* GetBackBuffer() const { return m_Backbuffers[m_CurrentImage]; }
 	Texture* GetBackBuffer(uint32 index) const { return m_Backbuffers[index]; }
@@ -99,11 +62,26 @@ public:
 	DXGI_FORMAT GetFormat() const { return m_Format; }
 
 private:
-	std::vector<RefCountPtr<Texture>> m_Backbuffers;
+	DisplayMode m_DesiredDisplayMode;
+	SyncPoint m_PresentSyncPoint;
+	RefCountPtr<Fence> m_pPresentFence;
+	std::array<RefCountPtr<Texture>, NUM_FRAMES> m_Backbuffers;
 	RefCountPtr<IDXGISwapChain4> m_pSwapchain;
 	DXGI_FORMAT m_Format;
 	uint32 m_CurrentImage;
+	uint32 m_Width = 0;
+	uint32 m_Height = 0;
 	bool m_Vsync;
+	bool m_AllowTearing = false;
+};
+
+struct GraphicsDeviceOptions
+{
+	bool UseDebugDevice = false;
+	bool UseDRED = false;
+	bool UseGPUValidation = false;
+	bool LoadPIX = false;
+	bool UseWarp = false;
 };
 
 class GraphicsCapabilities
@@ -131,36 +109,12 @@ private:
 	CD3DX12FeatureSupport m_FeatureSupport;
 };
 
-class DeferredDeleteQueue : public GraphicsObject
-{
-private:
-	struct FencedObject
-	{
-		Fence* pFence;
-		uint64 FenceValue;
-		ID3D12Object* pResource;
-	};
-
-public:
-	DeferredDeleteQueue(GraphicsDevice* pParent);
-	~DeferredDeleteQueue();
-
-	void EnqueueResource(ID3D12Object* pResource, Fence* pFence);
-
-	void Clean();
-private:
-	std::mutex m_QueueCS;
-	std::queue<FencedObject> m_DeletionQueue;
-};
-
 class GraphicsDevice : public GraphicsObject
 {
 public:
-	GraphicsDevice(IDXGIAdapter4* pAdapter);
+	GraphicsDevice(GraphicsDeviceOptions options);
 	~GraphicsDevice();
 
-	bool IsFenceComplete(uint64 fenceValue);
-	void WaitForFence(uint64 fenceValue);
 	void TickFrame();
 	void IdleGPU();
 
@@ -175,8 +129,6 @@ public:
 
 	RefCountPtr<Texture> CreateTexture(const TextureDesc& desc, const char* pName);
 	RefCountPtr<Texture> CreateTextureForSwapchain(ID3D12Resource* pSwapchainResource);
-	RefCountPtr<Texture> CreateTextureFromImage(CommandContext& context, Image& image, bool sRGB, const char* pName = nullptr);
-	RefCountPtr<Texture> CreateTextureFromFile(CommandContext& context, const char* pFilePath, bool sRGB, const char* pName = nullptr);
 	RefCountPtr<Buffer> CreateBuffer(const BufferDesc& desc, const char* pName);
 	void ReleaseResource(ID3D12Object* pResource);
 
@@ -187,6 +139,7 @@ public:
 	RefCountPtr<UnorderedAccessView> CreateUAV(Buffer* pBuffer, const BufferUAVDesc& desc);
 	RefCountPtr<ShaderResourceView> CreateSRV(Texture* pTexture, const TextureSRVDesc& desc);
 	RefCountPtr<UnorderedAccessView> CreateUAV(Texture* pTexture, const TextureUAVDesc& desc);
+	RefCountPtr<CommandSignature> CreateCommandSignature(const CommandSignatureInitializer& signatureDesc, const char* pName, RootSignature* pRootSignature = nullptr);
 
 	Shader* GetShader(const char* pShaderPath, ShaderType shaderType, const char* entryPoint = "", const Span<ShaderDefine>& defines = {});
 	ShaderLibrary* GetLibrary(const char* pShaderPath, const Span<ShaderDefine>& defines = {});
@@ -198,22 +151,56 @@ public:
 	ShaderManager* GetShaderManager() const { return m_pShaderManager.get(); }
 	const GraphicsCapabilities& GetCapabilities() const { return m_Capabilities; }
 	Fence* GetFrameFence() const { return m_pFrameFence; }
+	IDXGIFactory6* GetFactory() const { return m_pFactory; }
 
 private:
 	bool m_IsTearingDown = false;
 	GraphicsCapabilities m_Capabilities;
 
+	RefCountPtr<IDXGIFactory6> m_pFactory;
 	RefCountPtr<ID3D12Device> m_pDevice;
 	RefCountPtr<ID3D12Device5> m_pRaytracingDevice;
+
+	class DRED
+	{
+	public:
+		DRED(GraphicsDevice* pDevice);
+		~DRED();
+
+		RefCountPtr<Fence> m_pFence;
+		HANDLE m_WaitHandle;
+	};
+	std::unique_ptr<DRED> m_pDRED;
+
 	RefCountPtr<Fence> m_pFrameFence;
 	std::array<RefCountPtr<CommandQueue>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_CommandQueues;
 	std::array<std::vector<RefCountPtr<CommandContext>>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_CommandListPool;
 	std::array<std::queue<CommandContext*>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_FreeCommandLists;
 	std::vector<RefCountPtr<ID3D12CommandList>> m_CommandLists;
-	DeferredDeleteQueue m_DeleteQueue;
 
-	HANDLE m_DeviceRemovedEvent = 0;
-	RefCountPtr<Fence> m_pDeviceRemovalFence;
+	class DeferredDeleteQueue : public GraphicsObject
+	{
+	private:
+		struct FencedObject
+		{
+			Fence* pFence;
+			uint64 FenceValue;
+			ID3D12Object* pResource;
+		};
+
+	public:
+		DeferredDeleteQueue(GraphicsDevice* pParent);
+		~DeferredDeleteQueue();
+
+		void EnqueueResource(ID3D12Object* pResource, Fence* pFence);
+
+		void Clean();
+	private:
+		std::mutex m_QueueCS;
+		std::queue<FencedObject> m_DeletionQueue;
+	};
+
+	DeferredDeleteQueue m_DeleteQueue;
 
 	std::unique_ptr<ShaderManager> m_pShaderManager;
 	RefCountPtr<GlobalOnlineDescriptorHeap> m_pGlobalViewHeap;

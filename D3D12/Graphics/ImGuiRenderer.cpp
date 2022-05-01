@@ -32,29 +32,8 @@ void ImGui::ImageAutoSize(Texture* textureId, const ImVec2& imageDimensions)
 	Image(textureId, ImVec2(width, height));
 }
 
-ImGuiRenderer::ImGuiRenderer(GraphicsDevice* pDevice, WindowHandle window, uint32 numBufferedFrames)
+void ApplyImGuiStyle()
 {
-	IMGUI_CHECKVERSION();
-	ImGui::CreateContext();
-
-	ImGuiIO& io = ImGui::GetIO();
-	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
-	io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
-
-	Paths::CreateDirectoryTree(Paths::SavedDir());
-	static std::string imguiPath = Paths::SavedDir() + "imgui.ini";
-	io.IniFilename = imguiPath.c_str();
-
-	ImFontConfig fontConfig;
-	fontConfig.OversampleH = 2;
-	fontConfig.OversampleV = 2;
-	io.Fonts->AddFontFromFileTTF("Resources/Fonts/NotoSans-Regular.ttf", 20.0f, &fontConfig);
-
-	fontConfig.MergeMode = true;
-	fontConfig.GlyphMinAdvanceX = 15.0f; // Use if you want to make the icon monospaced
-	static const ImWchar icon_ranges[] = { ICON_MIN_FA, ICON_MAX_FA, 0 };
-	io.Fonts->AddFontFromFileTTF("Resources/Fonts/" FONT_ICON_FILE_NAME_FA, 15.0f, &fontConfig, icon_ranges);
-
 	ImGuiStyle& style = ImGui::GetStyle();
 
 	style.FrameRounding = 0.0f;
@@ -121,15 +100,41 @@ ImGuiRenderer::ImGuiRenderer(GraphicsDevice* pDevice, WindowHandle window, uint3
 	colors[ImGuiCol_NavWindowingHighlight] = ImVec4(1.00f, 1.00f, 1.00f, 0.70f);
 	colors[ImGuiCol_NavWindowingDimBg] = ImVec4(0.80f, 0.80f, 0.80f, 0.20f);
 	colors[ImGuiCol_ModalWindowDimBg] = ImVec4(0.80f, 0.80f, 0.80f, 0.35f);
-
-	D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = pDevice->AllocateDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-	DescriptorHandle gpuHandle = pDevice->StoreViewDescriptor(srvHandle);
-
-	ImGui_ImplWin32_Init(window);
-	ImGui_ImplDX12_Init(pDevice->GetDevice(), numBufferedFrames, DXGI_FORMAT_R8G8B8A8_UNORM, pDevice->GetGlobalViewHeap()->GetHeap(), gpuHandle.CpuHandle, gpuHandle.GpuHandle);
 }
 
-ImGuiRenderer::~ImGuiRenderer()
+void ImGuiRenderer::Initialize(GraphicsDevice* pDevice, WindowHandle window)
+{
+	IMGUI_CHECKVERSION();
+	ImGui::CreateContext();
+
+	ImGuiIO& io = ImGui::GetIO();
+	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+	io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+
+	Paths::CreateDirectoryTree(Paths::SavedDir());
+	static std::string imguiPath = Paths::SavedDir() + "imgui.ini";
+	io.IniFilename = imguiPath.c_str();
+
+	ImFontConfig fontConfig;
+	fontConfig.OversampleH = 2;
+	fontConfig.OversampleV = 2;
+	io.Fonts->AddFontFromFileTTF("Resources/Fonts/NotoSans-Regular.ttf", 20.0f, &fontConfig);
+
+	fontConfig.MergeMode = true;
+	fontConfig.GlyphMinAdvanceX = 15.0f; // Use if you want to make the icon monospaced
+	static const ImWchar icon_ranges[] = { ICON_MIN_FA, ICON_MAX_FA, 0 };
+	io.Fonts->AddFontFromFileTTF("Resources/Fonts/" FONT_ICON_FILE_NAME_FA, 15.0f, &fontConfig, icon_ranges);
+
+	ApplyImGuiStyle();
+
+	ImGui_ImplWin32_Init(window);
+
+	D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = pDevice->AllocateDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	DescriptorHandle handle = pDevice->StoreViewDescriptor(srvHandle);
+	ImGui_ImplDX12_Init(pDevice->GetDevice(), SwapChain::NUM_FRAMES, DXGI_FORMAT_R8G8B8A8_UNORM, pDevice->GetGlobalViewHeap()->GetHeap(), handle.CpuHandle, handle.GpuHandle);
+}
+
+void ImGuiRenderer::Shutdown()
 {
 	ImGui_ImplDX12_Shutdown();
 	ImGui_ImplWin32_Shutdown();
@@ -146,13 +151,12 @@ void ImGuiRenderer::NewFrame()
 
 void ImGuiRenderer::Render(RGGraph& graph, const SceneView& sceneData, Texture* pRenderTarget)
 {
-	ImGui::Render();
-
-	RGPassBuilder renderIU = graph.AddPass("Render UI");
-	renderIU.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
+	graph.AddPass("Render UI")
+		.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
 		{
 			context.InsertResourceBarrier(pRenderTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
 			context.BeginRenderPass(RenderPassInfo(pRenderTarget, RenderPassAccess::Load_Store, nullptr, RenderPassAccess::NoAccess, false));
+			ImGui::Render();
 			ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), context.GetCommandList());
 			context.EndRenderPass();
 		});
@@ -161,8 +165,8 @@ void ImGuiRenderer::Render(RGGraph& graph, const SceneView& sceneData, Texture* 
 	ImGuiIO& io = ImGui::GetIO();
 	if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
 	{
-		RGPassBuilder renderPlatformUI = graph.AddPass("Update Platform UI");
-		renderPlatformUI.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
+		graph.AddPass("Update Platform UI")
+			.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
 			{
 				ImGui::UpdatePlatformWindows();
 				ImGui::RenderPlatformWindowsDefault(NULL, (void*)context.GetCommandList());

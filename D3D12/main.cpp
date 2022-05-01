@@ -36,7 +36,7 @@ int WINAPI WinMain(_In_ HINSTANCE /*hInstance*/, _In_opt_ HINSTANCE /*hPrevInsta
 	}
 
 	Console::Initialize();
-	CVarManager::Initialize();
+	ConsoleManager::Initialize();
 	TaskQueue::Initialize(std::thread::hardware_concurrency());
 
 	IntVector2 displayDimensions = Window::GetDisplaySize();
@@ -49,7 +49,7 @@ int WINAPI WinMain(_In_ HINSTANCE /*hInstance*/, _In_opt_ HINSTANCE /*hPrevInsta
 	app.OnKeyInput += [](uint32 character, bool isDown) { Input::Instance().UpdateKey(character, isDown); };
 	app.OnMouseInput += [](uint32 mouse, bool isDown) { Input::Instance().UpdateMouseKey(mouse, isDown); };
 	app.OnMouseMove += [](uint32 x, uint32 y) { Input::Instance().UpdateMousePosition((float)x, (float)y); };
-	app.OnResize += [&graphics](uint32 width, uint32 height) { graphics.OnResize(width, height); };
+	app.OnResizeOrMove += [&graphics](uint32 width, uint32 height) { graphics.OnResizeOrMove(width, height); };
 	app.OnMouseScroll += [](float wheel) { Input::Instance().UpdateMouseWheel(wheel); };
 
 	Time::Reset();

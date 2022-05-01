@@ -6,7 +6,7 @@
 static std::unordered_map<StringHash, IConsoleObject*> gCvarMap;
 static std::vector<IConsoleObject*> gConsoleObjects;
 
-void CVarManager::Initialize()
+void ConsoleManager::Initialize()
 {
 	std::ifstream fs(Sprintf("%sConsoleVariables.ini", Paths::SavedDir().c_str()));
 	std::string line;
@@ -16,7 +16,7 @@ void CVarManager::Initialize()
 	}
 }
 
-void CVarManager::RegisterConsoleObject(const char* pName, IConsoleObject* pObject)
+void ConsoleManager::RegisterConsoleObject(const char* pName, IConsoleObject* pObject)
 {
 	char lowerName[256];
 	CString::ToLower(pName, lowerName);
@@ -28,7 +28,7 @@ void CVarManager::RegisterConsoleObject(const char* pName, IConsoleObject* pObje
 	}
 }
 
-bool CVarManager::Execute(const char* pCommand)
+bool ConsoleManager::Execute(const char* pCommand)
 {
 	char cmdLower[1024];
 	CString::ToLower(pCommand, cmdLower);
@@ -42,7 +42,14 @@ bool CVarManager::Execute(const char* pCommand)
 		auto it = gCvarMap.find(*argList);
 		if (it != gCvarMap.end())
 		{
-			return it->second->Execute(argList + 1, numArgs - 1);
+			if (IConsoleVariable* pVariable = it->second->AsVariable())
+			{
+				pVariable->Set(argList[1]);
+			}
+			else if (IConsoleCommand* pCmd = it->second->AsCommand())
+			{
+				pCmd->Execute(argList + 1, numArgs - 1);
+			}
 		}
 		else
 		{
@@ -53,7 +60,7 @@ bool CVarManager::Execute(const char* pCommand)
 	return false;
 }
 
-IConsoleObject* CVarManager::FindConsoleObject(const char* pName)
+IConsoleObject* ConsoleManager::FindConsoleObject(const char* pName)
 {
 	char lowerName[256];
 	CString::ToLower(pName, lowerName);
@@ -61,30 +68,10 @@ IConsoleObject* CVarManager::FindConsoleObject(const char* pName)
 	return it != gCvarMap.end() ? it->second : nullptr;
 }
 
-const std::vector<IConsoleObject*>& CVarManager::GetObjects()
+const std::vector<IConsoleObject*>& ConsoleManager::GetObjects()
 {
 	return gConsoleObjects;
 }
-
-template<> int ConsoleVariable<int>::GetInt() const { return m_Value; }
-template<> float ConsoleVariable<int>::GetFloat() const { return (float)m_Value; }
-template<> bool ConsoleVariable<int>::GetBool() const { return m_Value > 0; }
-template<> std::string ConsoleVariable<int>::GetString() const { std::string out; CString::ToString(m_Value, &out); return out; }
-
-template<> int ConsoleVariable<float>::GetInt() const { return (int)m_Value; }
-template<> float ConsoleVariable<float>::GetFloat() const { return m_Value; }
-template<> bool ConsoleVariable<float>::GetBool() const { return m_Value > 0.0f; }
-template<> std::string ConsoleVariable<float>::GetString() const { std::string out; CString::ToString(m_Value, &out); return out; }
-
-template<> int ConsoleVariable<bool>::GetInt() const { return (int)m_Value; }
-template<> float ConsoleVariable<bool>::GetFloat() const { return (float)m_Value; }
-template<> bool ConsoleVariable<bool>::GetBool() const { return m_Value; }
-template<> std::string ConsoleVariable<bool>::GetString() const { return m_Value ? "True" : "False"; }
-
-template<> int ConsoleVariable<const char*>::GetInt() const { int out; CString::FromString(m_Value, out); return out; }
-template<> float ConsoleVariable<const char*>::GetFloat() const { float out; CString::FromString(m_Value, out); return out; }
-template<> bool ConsoleVariable<const char*>::GetBool() const { bool out; CString::FromString(m_Value, out); return out; }
-template<> std::string ConsoleVariable<const char*>::GetString() const { return m_Value; }
 
 void ImGuiConsole::Update(const ImVec2& position, const ImVec2& size)
 {
@@ -142,7 +129,7 @@ void ImGuiConsole::Update(const ImVec2& position, const ImVec2& size)
 			{
 				if (m_Input[0] != '\0')
 				{
-					CVarManager::Execute(m_Input.data());
+					ConsoleManager::Execute(m_Input.data());
 					m_Suggestions.clear();
 					m_History.push_back(m_Input.data());
 					m_HistoryPos = -1;
@@ -197,7 +184,7 @@ int ImGuiConsole::InputCallback(ImGuiInputTextCallbackData* pCallbackData)
 		m_Suggestions.clear();
 		if (strlen(pCallbackData->Buf) > 0)
 		{
-			CVarManager::ForEachCvar([this, pCallbackData](IConsoleObject* pObject)
+			ConsoleManager::ForEachCvar([this, pCallbackData](IConsoleObject* pObject)
 				{
 					if (_strnicmp(pObject->GetName(), pCallbackData->Buf, strlen(pCallbackData->Buf)) == 0 && m_Suggestions.size() < 10)
 					{

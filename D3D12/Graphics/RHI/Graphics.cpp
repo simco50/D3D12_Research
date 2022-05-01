@@ -14,109 +14,213 @@
 #include "StateObject.h"
 #include "Core/CommandLine.h"
 #include "pix3.h"
-#include "Content/Image.h"
 
 // Setup the Agility D3D12 SDK
 extern "C" { _declspec(dllexport) extern const UINT D3D12SDKVersion = D3D12_SDK_VERSION; }
 extern "C" { _declspec(dllexport) extern const char* D3D12SDKPath = ".\\D3D12\\"; }
 
-namespace GraphicsCommon
+GraphicsDevice::DRED::DRED(GraphicsDevice* pDevice)
 {
-	static std::array<RefCountPtr<Texture>, (uint32)DefaultTexture::MAX> DefaultTextures;
+	auto OnDeviceRemovedCallback = [](void* pContext, BOOLEAN) {
 
-	CommandSignature* pIndirectDrawSignature = nullptr;
-	CommandSignature* pIndirectDispatchSignature = nullptr;
-	CommandSignature* pIndirectDispatchMeshSignature = nullptr;
-
-	void Create(GraphicsDevice* pDevice)
-	{
-		CommandContext& context = *pDevice->AllocateCommandContext();
-
-		auto RegisterDefaultTexture = [pDevice, &context](DefaultTexture type, const char* pName, const TextureDesc& desc, uint32* pData)
+		//D3D12_AUTO_BREADCRUMB_OP
+		constexpr const char* OpNames[] =
 		{
-			RefCountPtr<Texture> pTexture = pDevice->CreateTexture(desc, pName);
-			D3D12_SUBRESOURCE_DATA data;
-			data.pData = pData;
-			data.RowPitch = D3D::GetFormatRowDataSize(desc.Format, desc.Width);
-			data.SlicePitch = data.RowPitch * desc.Width;
-			context.WriteTexture(pTexture, &data, 0, 1);
-			DefaultTextures[(int)type] = pTexture;
+			"SetMarker",
+			"BeginEvent",
+			"EndEvent",
+			"DrawInstanced",
+			"DrawIndexedInstanced",
+			"ExecuteIndirect",
+			"Dispatch",
+			"CopyBufferRegion",
+			"CopyTextureRegion",
+			"CopyResource",
+			"CopyTiles",
+			"ResolveSubresource",
+			"ClearRenderTargetView",
+			"ClearUnorderedAccessView",
+			"ClearDepthStencilView",
+			"ResourceBarrier",
+			"ExecuteBundle",
+			"Present",
+			"ResolveQueryData",
+			"BeginSubmission",
+			"EndSubmission",
+			"DecodeFrame",
+			"ProcessFrames",
+			"AtomicCopyBufferUint",
+			"AtomicCopyBufferUint64",
+			"ResolveSubresourceRegion",
+			"WriteBufferImmediate",
+			"DecodeFrame1",
+			"SetProtectedResourceSession",
+			"DecodeFrame2",
+			"ProcessFrames1",
+			"BuildRaytracingAccelerationStructure",
+			"EmitRaytracingAccelerationStructurePostBuildInfo",
+			"CopyRaytracingAccelerationStructure",
+			"DispatchRays",
+			"InitializeMetaCommand",
+			"ExecuteMetaCommand",
+			"EstimateMotion",
+			"ResolveMotionVectorHeap",
+			"SetPipelineState1",
+			"InitializeExtensionCommand",
+			"ExecuteExtensionCommand",
+			"DispatchMesh",
+			"EncodeFrame",
+			"ResolveEncoderOutputMetadata",
 		};
+		static_assert(ARRAYSIZE(OpNames) == D3D12_AUTO_BREADCRUMB_OP_RESOLVEENCODEROUTPUTMETADATA + 1, "OpNames array length mismatch");
 
-		uint32 BLACK = 0xFF000000;
-		RegisterDefaultTexture(DefaultTexture::Black2D, "Default Black", TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &BLACK);
-		uint32 WHITE = 0xFFFFFFFF;
-		RegisterDefaultTexture(DefaultTexture::White2D, "Default White", TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &WHITE);
-		uint32 MAGENTA = 0xFFFF00FF;
-		RegisterDefaultTexture(DefaultTexture::Magenta2D, "Default Magenta", TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &MAGENTA);
-		uint32 GRAY = 0xFF808080;
-		RegisterDefaultTexture(DefaultTexture::Gray2D, "Default Gray", TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &GRAY);
-		uint32 DEFAULT_NORMAL = 0xFFFF8080;
-		RegisterDefaultTexture(DefaultTexture::Normal2D, "Default Normal", TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &DEFAULT_NORMAL);
-		uint32 DEFAULT_ROUGHNESS_METALNESS = 0xFFFF80FF;
-		RegisterDefaultTexture(DefaultTexture::RoughnessMetalness, "Default Roughness/Metalness", TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &DEFAULT_ROUGHNESS_METALNESS);
-
-		uint32 BLACK_CUBE[6] = {};
-		RegisterDefaultTexture(DefaultTexture::BlackCube, "Default Black Cube", TextureDesc::CreateCube(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), BLACK_CUBE);
-
-		RegisterDefaultTexture(DefaultTexture::Black3D, "Default Black 3D", TextureDesc::Create3D(1, 1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &BLACK);
-
-		DefaultTextures[(int)DefaultTexture::ColorNoise256] = pDevice->CreateTextureFromFile(context, "Resources/Textures/Noise.png", false, "Noise");
-		DefaultTextures[(int)DefaultTexture::BlueNoise512] = pDevice->CreateTextureFromFile(context, "Resources/Textures/BlueNoise.dds", false, "Blue Noise");
-
-		context.Execute(true);
-
-		pIndirectDispatchSignature = new CommandSignature(pDevice);
-		pIndirectDispatchSignature->AddDispatch();
-		pIndirectDispatchSignature->Finalize("Default Indirect Dispatch");
-
-		pIndirectDrawSignature = new CommandSignature(pDevice);
-		pIndirectDrawSignature->AddDraw();
-		pIndirectDrawSignature->Finalize("Default Indirect Draw");
-
-		pIndirectDispatchMeshSignature = new CommandSignature(pDevice);
-		pIndirectDispatchMeshSignature->AddDispatchMesh();
-		pIndirectDispatchMeshSignature->Finalize("Default Indirect Dispatch Mesh");
-	}
-
-	void Destroy()
-	{
-		for (auto& pTexture : DefaultTextures)
+		//D3D12_DRED_ALLOCATION_TYPE
+		constexpr const char* AllocTypesNames[] =
 		{
-			pTexture.Reset();
+			"CommandQueue",
+			"CommandAllocator",
+			"PipelineState",
+			"CommandList",
+			"Fence",
+			"DescriptorHeap",
+			"Heap",
+			"Unknown",
+			"QueryHeap",
+			"CommandSignature",
+			"PipelineLibrary",
+			"VideoDecoder",
+			"Unknown",
+			"VideoProcessor",
+			"Unknown",
+			"Resource",
+			"Pass",
+			"CryptoSession",
+			"CryptoSessionPolicy",
+			"ProtectedResourceSession",
+			"VideoDecoderHeap",
+			"CommandPool",
+			"CommandRecorder",
+			"StateObjectr",
+			"MetaCommand",
+			"SchedulingGroup",
+			"VideoMotionEstimator",
+			"VideoMotionVectorHeap",
+			"VideoExtensionCommand",
+			"VideoEncoder",
+			"VideoEncoderHeap",
+		};
+		static_assert(ARRAYSIZE(AllocTypesNames) == D3D12_DRED_ALLOCATION_TYPE_VIDEO_ENCODER_HEAP - D3D12_DRED_ALLOCATION_TYPE_COMMAND_QUEUE + 1, "AllocTypes array length mismatch");
+
+		ID3D12Device* pDevice = (ID3D12Device*)pContext;
+		ID3D12DeviceRemovedExtendedData2* pDred = nullptr;
+		if (SUCCEEDED(pDevice->QueryInterface(IID_PPV_ARGS(&pDred))))
+		{
+			D3D12_DRED_AUTO_BREADCRUMBS_OUTPUT1 pDredAutoBreadcrumbsOutput;
+			if (SUCCEEDED(pDred->GetAutoBreadcrumbsOutput1(&pDredAutoBreadcrumbsOutput)))
+			{
+				E_LOG(Warning, "[DRED] Last tracked GPU operations:");
+
+				std::map<int32, const wchar_t*> contextStrings;
+
+				const D3D12_AUTO_BREADCRUMB_NODE1* pNode = pDredAutoBreadcrumbsOutput.pHeadAutoBreadcrumbNode;
+				while (pNode && pNode->pLastBreadcrumbValue)
+				{
+					int32 lastCompletedOp = *pNode->pLastBreadcrumbValue;
+
+					if (lastCompletedOp != (int)pNode->BreadcrumbCount && lastCompletedOp != 0)
+					{
+						E_LOG(Warning, "[DRED] Commandlist \"%s\" on CommandQueue \"%s\", %d completed of %d", pNode->pCommandListDebugNameA, pNode->pCommandQueueDebugNameA, lastCompletedOp, pNode->BreadcrumbCount);
+
+						int32 firstOp = Math::Max(lastCompletedOp - 100, 0);
+						int32 lastOp = Math::Min(lastCompletedOp + 20, int32(pNode->BreadcrumbCount) - 1);
+
+						contextStrings.clear();
+						for (uint32 breadcrumbContext = firstOp; breadcrumbContext < pNode->BreadcrumbContextsCount; ++breadcrumbContext)
+						{
+							const D3D12_DRED_BREADCRUMB_CONTEXT& context = pNode->pBreadcrumbContexts[breadcrumbContext];
+							contextStrings[context.BreadcrumbIndex] = context.pContextString;
+						}
+
+						for (int32 op = firstOp; op <= lastOp; ++op)
+						{
+							D3D12_AUTO_BREADCRUMB_OP breadcrumbOp = pNode->pCommandHistory[op];
+
+							std::string contextString;
+							auto it = contextStrings.find(op);
+							if (it != contextStrings.end())
+							{
+								contextString = Sprintf(" [%s]", UNICODE_TO_MULTIBYTE(it->second));
+							}
+
+							const char* opName = (breadcrumbOp < ARRAYSIZE(OpNames)) ? OpNames[breadcrumbOp] : "Unknown Op";
+							E_LOG(Warning, "\tOp: %d, %s%s%s", op, opName, contextString.c_str(), (op + 1 == lastCompletedOp) ? " - Last completed" : "");
+						}
+					}
+					pNode = pNode->pNext;
+				}
+			}
+
+			D3D12_DRED_PAGE_FAULT_OUTPUT2 DredPageFaultOutput;
+			if (SUCCEEDED(pDred->GetPageFaultAllocationOutput2(&DredPageFaultOutput)) && DredPageFaultOutput.PageFaultVA != 0)
+			{
+				E_LOG(Warning, "[DRED] PageFault at VA GPUAddress \"0x%x\"", DredPageFaultOutput.PageFaultVA);
+
+				const D3D12_DRED_ALLOCATION_NODE1* pNode = DredPageFaultOutput.pHeadExistingAllocationNode;
+				if (pNode)
+				{
+					E_LOG(Warning, "[DRED] Active objects with VA ranges that match the faulting VA:");
+					while (pNode)
+					{
+						uint32 alloc_type_index = pNode->AllocationType - D3D12_DRED_ALLOCATION_TYPE_COMMAND_QUEUE;
+						const TCHAR* AllocTypeName = (alloc_type_index < ARRAYSIZE(AllocTypesNames)) ? AllocTypesNames[alloc_type_index] : "Unknown Alloc";
+						E_LOG(Warning, "\tName: %s (Type: %s)", pNode->ObjectNameA, AllocTypeName);
+						pNode = pNode->pNext;
+					}
+				}
+
+				pNode = DredPageFaultOutput.pHeadRecentFreedAllocationNode;
+				if (pNode)
+				{
+					E_LOG(Warning, "[DRED] Recent freed objects with VA ranges that match the faulting VA:");
+					while (pNode)
+					{
+						uint32 allocTypeIndex = pNode->AllocationType - D3D12_DRED_ALLOCATION_TYPE_COMMAND_QUEUE;
+						const TCHAR* AllocTypeName = (allocTypeIndex < ARRAYSIZE(AllocTypesNames)) ? AllocTypesNames[allocTypeIndex] : "Unknown Alloc";
+						E_LOG(Warning, "\tName: %s (Type: %s)", pNode->ObjectNameA, AllocTypeName);
+						pNode = pNode->pNext;
+					}
+				}
+			}
 		}
+	};
 
-		delete pIndirectDispatchSignature;
-		delete pIndirectDrawSignature;
-		delete pIndirectDispatchMeshSignature;
-	}
-
-	Texture* GetDefaultTexture(DefaultTexture type)
-	{
-		return DefaultTextures[(int)type];
-	}
+	m_pFence = new Fence(pDevice, "Device Removed Fence");
+	m_WaitHandle = CreateEventA(nullptr, false, false, nullptr);
+	m_pFence->GetFence()->SetEventOnCompletion(UINT64_MAX, m_WaitHandle);
+	check(RegisterWaitForSingleObject(&m_WaitHandle, m_WaitHandle, OnDeviceRemovedCallback, pDevice->GetDevice(), INFINITE, 0));
 }
 
-GraphicsInstance GraphicsInstance::CreateInstance(GraphicsInstanceFlags createFlags /*= GraphicsFlags::None*/)
+GraphicsDevice::DRED::~DRED()
 {
-	return GraphicsInstance(createFlags);
+	if (m_pFence)
+	{
+		m_pFence->Signal(UINT64_MAX);
+		check(UnregisterWaitEx(m_WaitHandle, INVALID_HANDLE_VALUE));
+	}
 }
 
-GraphicsInstance::GraphicsInstance(GraphicsInstanceFlags createFlags)
+GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
+	: GraphicsObject(this), m_DeleteQueue(this)
 {
 	UINT flags = 0;
-	if (EnumHasAnyFlags(createFlags, GraphicsInstanceFlags::DebugDevice))
+	if (options.UseDebugDevice)
 	{
 		flags |= DXGI_CREATE_FACTORY_DEBUG;
 	}
-	VERIFY_HR(CreateDXGIFactory2(flags, IID_PPV_ARGS(m_pFactory.GetAddressOf())));
-	BOOL allowTearing;
-	if (SUCCEEDED(m_pFactory->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &allowTearing, sizeof(BOOL))))
-	{
-		m_AllowTearing = allowTearing;
-	}
 
-	if (EnumHasAnyFlags(createFlags, GraphicsInstanceFlags::DebugDevice))
+	VERIFY_HR(CreateDXGIFactory2(flags, IID_PPV_ARGS(m_pFactory.GetAddressOf())));
+
+	if (options.UseDebugDevice)
 	{
 		RefCountPtr<ID3D12Debug> pDebugController;
 		if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&pDebugController))))
@@ -126,7 +230,7 @@ GraphicsInstance::GraphicsInstance(GraphicsInstanceFlags createFlags)
 		}
 	}
 
-	if (EnumHasAnyFlags(createFlags, GraphicsInstanceFlags::DRED))
+	if (options.UseDRED)
 	{
 		RefCountPtr<ID3D12DeviceRemovedExtendedDataSettings1> pDredSettings;
 		if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&pDredSettings))))
@@ -139,7 +243,7 @@ GraphicsInstance::GraphicsInstance(GraphicsInstanceFlags createFlags)
 		}
 	}
 
-	if (EnumHasAnyFlags(createFlags, GraphicsInstanceFlags::GpuValidation))
+	if (options.UseGPUValidation)
 	{
 		RefCountPtr<ID3D12Debug1> pDebugController;
 		if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&pDebugController))))
@@ -149,25 +253,17 @@ GraphicsInstance::GraphicsInstance(GraphicsInstanceFlags createFlags)
 		}
 	}
 
-	if (EnumHasAnyFlags(createFlags, GraphicsInstanceFlags::Pix))
+	if (options.LoadPIX)
 	{
-		if(PIXLoadLatestWinPixGpuCapturerLibrary())
+		if (PIXLoadLatestWinPixGpuCapturerLibrary())
 		{
 			E_LOG(Warning, "Dynamically loaded PIX");
 		}
 	}
-}
 
-RefCountPtr<SwapChain> GraphicsInstance::CreateSwapchain(GraphicsDevice* pDevice, WindowHandle pNativeWindow, uint32 width, uint32 height, uint32 numFrames, bool vsync)
-{
-	return new SwapChain(pDevice, m_pFactory.Get(), pNativeWindow, width, height, numFrames, vsync);
-}
-
-RefCountPtr<IDXGIAdapter4> GraphicsInstance::EnumerateAdapter(bool useWarp)
-{
 	RefCountPtr<IDXGIAdapter4> pAdapter;
 	RefCountPtr<ID3D12Device> pDevice;
-	if (!useWarp)
+	if (!options.UseWarp)
 	{
 		uint32 adapterIndex = 0;
 		E_LOG(Info, "Adapters:");
@@ -225,35 +321,17 @@ RefCountPtr<IDXGIAdapter4> GraphicsInstance::EnumerateAdapter(bool useWarp)
 		E_LOG(Warning, "No D3D12 Adapter selected. Falling back to WARP");
 		m_pFactory->EnumWarpAdapter(IID_PPV_ARGS(pAdapter.GetAddressOf()));
 	}
-	return pAdapter;
-}
 
-RefCountPtr<GraphicsDevice> GraphicsInstance::CreateDevice(RefCountPtr<IDXGIAdapter4> pAdapter)
-{
-	return new GraphicsDevice(pAdapter.Get());
-}
-
-GraphicsDevice::GraphicsDevice(IDXGIAdapter4* pAdapter)
-	: GraphicsObject(this), m_DeleteQueue(this)
-{
 	VERIFY_HR(D3D12CreateDevice(pAdapter, D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(m_pDevice.ReleaseAndGetAddressOf())));
 	m_pDevice->QueryInterface(&m_pRaytracingDevice);
 	D3D::SetObjectName(m_pDevice.Get(), "Main Device");
 
 	m_Capabilities.Initialize(this);
 
-	auto OnDeviceRemovedCallback = [](void* pContext, BOOLEAN) {
-		GraphicsDevice* pDevice = (GraphicsDevice*)pContext;
-		std::string error = D3D::GetErrorString(DXGI_ERROR_DEVICE_REMOVED, pDevice->m_pDevice.Get());
-		D3D::DREDHandler(pDevice->GetDevice());
-		E_LOG(Error, "%s", error.c_str());
-		abort();
-	};
-
-	m_pDeviceRemovalFence = new Fence(this, UINT64_MAX, "Device Removed Fence");
-	m_DeviceRemovedEvent = CreateEventA(nullptr, false, false, nullptr);
-	m_pDeviceRemovalFence->GetFence()->SetEventOnCompletion(UINT64_MAX, m_DeviceRemovedEvent);
-	RegisterWaitForSingleObject(&m_DeviceRemovedEvent, m_DeviceRemovedEvent, OnDeviceRemovedCallback, this, INFINITE, 0);
+	if (options.UseDRED)
+	{
+		m_pDRED = std::make_unique<DRED>(this);
+	}
 
 	RefCountPtr<ID3D12InfoQueue> pInfoQueue;
 	if (SUCCEEDED(m_pDevice->QueryInterface(IID_PPV_ARGS(pInfoQueue.GetAddressOf()))))
@@ -322,7 +400,7 @@ GraphicsDevice::GraphicsDevice(IDXGIAdapter4* pAdapter)
 	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_COMPUTE] = new CommandQueue(this, D3D12_COMMAND_LIST_TYPE_COMPUTE);
 	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_COPY] = new CommandQueue(this, D3D12_COMMAND_LIST_TYPE_COPY);
 
-	m_pFrameFence = new Fence(this, 1, "Frame Fence");
+	m_pFrameFence = new Fence(this, "Frame Fence");
 
 	// Allocators
 	m_pDynamicAllocationManager = new DynamicAllocationManager(this, BufferFlag::Upload);
@@ -340,16 +418,11 @@ GraphicsDevice::GraphicsDevice(IDXGIAdapter4* pAdapter)
 	m_pShaderManager = std::make_unique<ShaderManager>(smMaj, smMin);
 	m_pShaderManager->AddIncludeDir("Resources/Shaders/");
 	m_pShaderManager->AddIncludeDir("Graphics/");
-
-	GraphicsCommon::Create(this);
 }
 
 GraphicsDevice::~GraphicsDevice()
 {
-	GraphicsCommon::Destroy();
-
 	IdleGPU();
-	check(UnregisterWait(m_DeviceRemovedEvent) != 0);
 }
 
 CommandQueue* GraphicsDevice::GetCommandQueue(D3D12_COMMAND_LIST_TYPE type) const
@@ -373,7 +446,7 @@ CommandContext* GraphicsDevice::AllocateCommandContext(D3D12_COMMAND_LIST_TYPE t
 		else
 		{
 			RefCountPtr<ID3D12CommandList> pCommandList;
-			ID3D12CommandAllocator* pAllocator = m_CommandQueues[type]->RequestAllocator();
+			RefCountPtr<ID3D12CommandAllocator> pAllocator = m_CommandQueues[type]->RequestAllocator();
 			VERIFY_HR(GetDevice()->CreateCommandList(0, type, pAllocator, nullptr, IID_PPV_ARGS(pCommandList.GetAddressOf())));
 			D3D::SetObjectName(pCommandList.Get(), Sprintf("Pooled Commandlist %d", m_CommandLists.size()).c_str());
 			m_CommandLists.push_back(std::move(pCommandList));
@@ -398,20 +471,6 @@ D3D12_CPU_DESCRIPTOR_HANDLE GraphicsDevice::AllocateDescriptor(D3D12_DESCRIPTOR_
 void GraphicsDevice::FreeDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE type, D3D12_CPU_DESCRIPTOR_HANDLE descriptor)
 {
 	m_DescriptorHeaps[type]->FreeDescriptor(descriptor);
-}
-
-bool GraphicsDevice::IsFenceComplete(uint64 fenceValue)
-{
-	D3D12_COMMAND_LIST_TYPE type = (D3D12_COMMAND_LIST_TYPE)(fenceValue >> 56);
-	CommandQueue* pQueue = GetCommandQueue(type);
-	return pQueue->GetFence()->IsComplete(fenceValue);
-}
-
-void GraphicsDevice::WaitForFence(uint64 fenceValue)
-{
-	D3D12_COMMAND_LIST_TYPE type = (D3D12_COMMAND_LIST_TYPE)(fenceValue >> 56);
-	CommandQueue* pQueue = GetCommandQueue(type);
-	pQueue->WaitForFence(fenceValue);
 }
 
 void GraphicsDevice::TickFrame()
@@ -652,52 +711,6 @@ RefCountPtr<Texture> GraphicsDevice::CreateTextureForSwapchain(ID3D12Resource* p
 	GetParent()->GetDevice()->CreateRenderTargetView(pSwapchainResource, nullptr, pTexture->m_Rtv);
 	pTexture->m_pSrv = CreateSRV(pTexture, TextureSRVDesc(0));
 	return pTexture;
-}
-
-RefCountPtr<Texture> GraphicsDevice::CreateTextureFromImage(CommandContext& context, Image& image, bool sRGB, const char* pName)
-{
-	TextureDesc desc;
-	desc.Width = image.GetWidth();
-	desc.Height = image.GetHeight();
-	desc.Format = (DXGI_FORMAT)Image::TextureFormatFromCompressionFormat(image.GetFormat(), sRGB);
-	desc.Mips = image.GetMipLevels();
-	desc.Usage = TextureFlag::ShaderResource;
-	desc.Dimensions = image.IsCubemap() ? TextureDimension::TextureCube : TextureDimension::Texture2D;
-	if (D3D::IsBlockCompressFormat(desc.Format))
-	{
-		desc.Width = Math::Max(desc.Width, 4u);
-		desc.Height = Math::Max(desc.Height, 4u);
-	}
-
-	const Image* pImg = &image;
-	std::vector<D3D12_SUBRESOURCE_DATA> subResourceData;
-	int resourceOffset = 0;
-	while (pImg)
-	{
-		subResourceData.resize(subResourceData.size() + desc.Mips);
-		for (uint32 i = 0; i < desc.Mips; ++i)
-		{
-			D3D12_SUBRESOURCE_DATA& data = subResourceData[resourceOffset++];
-			MipLevelInfo info = pImg->GetMipInfo(i);
-			data.pData = pImg->GetData(i);
-			data.RowPitch = info.RowSize;
-			data.SlicePitch = (uint64)info.RowSize * info.Width;
-		}
-		pImg = pImg->GetNextImage();
-	}
-	RefCountPtr<Texture> pTexture = CreateTexture(desc, pName ? pName : "");
-	context.WriteTexture(pTexture, subResourceData.data(), 0, (int)subResourceData.size());
-	return pTexture;
-}
-
-RefCountPtr<Texture> GraphicsDevice::CreateTextureFromFile(CommandContext& context, const char* pFilePath, bool sRGB, const char* pName)
-{
-	Image image;
-	if (image.Load(pFilePath))
-	{
-		return CreateTextureFromImage(context, image, sRGB, pName);
-	}
-	return nullptr;
 }
 
 RefCountPtr<Buffer> GraphicsDevice::CreateBuffer(const BufferDesc& desc, const char* pName)
@@ -1011,6 +1024,15 @@ RefCountPtr<UnorderedAccessView> GraphicsDevice::CreateUAV(Texture* pTexture, co
 	return new UnorderedAccessView(pTexture, descriptor, gpuDescriptor);
 }
 
+RefCountPtr<CommandSignature> GraphicsDevice::CreateCommandSignature(const CommandSignatureInitializer& signatureDesc, const char* pName, RootSignature* pRootSignature)
+{
+	RefCountPtr<ID3D12CommandSignature> pCmdSignature;
+	D3D12_COMMAND_SIGNATURE_DESC desc = signatureDesc.GetDesc();
+	VERIFY_HR_EX(GetParent()->GetDevice()->CreateCommandSignature(&desc, pRootSignature ? pRootSignature->GetRootSignature() : nullptr, IID_PPV_ARGS(pCmdSignature.GetAddressOf())), m_pDevice);
+	D3D::SetObjectName(pCmdSignature.Get(), pName);
+	return new CommandSignature(this, pCmdSignature);
+}
+
 Shader* GraphicsDevice::GetShader(const char* pShaderPath, ShaderType shaderType, const char* pEntryPoint, const Span<ShaderDefine>& defines /*= {}*/)
 {
 	return m_pShaderManager->GetShader(pShaderPath, shaderType, pEntryPoint, defines);
@@ -1021,19 +1043,19 @@ ShaderLibrary* GraphicsDevice::GetLibrary(const char* pShaderPath, const Span<Sh
 	return m_pShaderManager->GetLibrary(pShaderPath, defines);
 }
 
-DeferredDeleteQueue::DeferredDeleteQueue(GraphicsDevice* pParent)
+GraphicsDevice::DeferredDeleteQueue::DeferredDeleteQueue(GraphicsDevice* pParent)
 	: GraphicsObject(pParent)
 {
 }
 
-DeferredDeleteQueue::~DeferredDeleteQueue()
+GraphicsDevice::DeferredDeleteQueue::~DeferredDeleteQueue()
 {
 	GetParent()->IdleGPU();
 	Clean();
 	check(m_DeletionQueue.empty());
 }
 
-void DeferredDeleteQueue::EnqueueResource(ID3D12Object* pResource, Fence* pFence)
+void GraphicsDevice::DeferredDeleteQueue::EnqueueResource(ID3D12Object* pResource, Fence* pFence)
 {
 	std::scoped_lock<std::mutex> lock(m_QueueCS);
 	FencedObject object;
@@ -1043,7 +1065,7 @@ void DeferredDeleteQueue::EnqueueResource(ID3D12Object* pResource, Fence* pFence
 	m_DeletionQueue.push(object);
 }
 
-void DeferredDeleteQueue::Clean()
+void GraphicsDevice::DeferredDeleteQueue::Clean()
 {
 	std::scoped_lock<std::mutex> lock(m_QueueCS);
 	while (!m_DeletionQueue.empty())
@@ -1147,17 +1169,47 @@ bool GraphicsCapabilities::CheckUAVSupport(DXGI_FORMAT format) const
 	}
 }
 
-SwapChain::SwapChain(GraphicsDevice* pDevice, IDXGIFactory6* pFactory, WindowHandle pNativeWindow, uint32 width, uint32 height, uint32 numFrames, bool vsync)
-	: GraphicsObject(pDevice), m_Format(DXGI_FORMAT_R8G8B8A8_UNORM), m_CurrentImage(0), m_Vsync(vsync)
+DXGI_COLOR_SPACE_TYPE GetColorSpace(DisplayMode displayMode)
 {
+	switch (displayMode)
+	{
+	default:
+	case DisplayMode::SDR:			return DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709;
+	case DisplayMode::HDR_PQ:		return DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020;
+	case DisplayMode::HDR_scRGB:	return DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709;
+	}
+}
+
+DXGI_FORMAT GetSwapchainFormat(DisplayMode displayMode)
+{
+	switch (displayMode)
+	{
+	default:
+	case DisplayMode::SDR:			return DXGI_FORMAT_R8G8B8A8_UNORM;
+	case DisplayMode::HDR_PQ:		return DXGI_FORMAT_R10G10B10A2_UNORM;
+	case DisplayMode::HDR_scRGB:	return DXGI_FORMAT_R16G16B16A16_FLOAT;
+	}
+}
+
+SwapChain::SwapChain(GraphicsDevice* pDevice, DisplayMode displayMode, WindowHandle pNativeWindow)
+	: GraphicsObject(pDevice), m_DesiredDisplayMode(displayMode), m_Format(GetSwapchainFormat(displayMode)), m_CurrentImage(0)
+{
+	m_pPresentFence = new Fence(pDevice, "Present Fence");
+
+	BOOL allowTearing = FALSE;
+	if (SUCCEEDED(pDevice->GetFactory()->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &allowTearing, sizeof(BOOL))))
+	{
+		m_AllowTearing = allowTearing;
+	}
+
 	DXGI_SWAP_CHAIN_DESC1 desc{};
 	desc.AlphaMode = DXGI_ALPHA_MODE_IGNORE;
-	desc.BufferCount = numFrames;
+	desc.BufferCount = (uint32)m_Backbuffers.size();
 	desc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
 	desc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
 	desc.Format = m_Format;
-	desc.Width = width;
-	desc.Height = height;
+	desc.Width = 0;
+	desc.Height = 0;
 	desc.Scaling = DXGI_SCALING_NONE;
 	desc.Stereo = FALSE;
 	desc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
@@ -1173,8 +1225,8 @@ SwapChain::SwapChain(GraphicsDevice* pDevice, IDXGIFactory6* pFactory, WindowHan
 
 	CommandQueue* pPresentQueue = pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT);
 	RefCountPtr<IDXGISwapChain1> swapChain;
-	
-	VERIFY_HR(pFactory->CreateSwapChainForHwnd(
+
+	VERIFY_HR(pDevice->GetFactory()->CreateSwapChainForHwnd(
 		pPresentQueue->GetCommandQueue(),
 		(HWND)pNativeWindow,
 		&desc,
@@ -1184,45 +1236,103 @@ SwapChain::SwapChain(GraphicsDevice* pDevice, IDXGIFactory6* pFactory, WindowHan
 
 	m_pSwapchain.Reset();
 	swapChain->QueryInterface(&m_pSwapchain);
-	m_Backbuffers.resize(numFrames);
+
+	DXGI_SWAP_CHAIN_DESC1 Desc = {};
+	swapChain->GetDesc1(&Desc);
+	OnResizeOrMove(Desc.Width, Desc.Height);
 }
 
 SwapChain::~SwapChain()
 {
+	if (m_PresentSyncPoint)
+	{
+		m_PresentSyncPoint.Wait();
+	}
 	m_pSwapchain->SetFullscreenState(false, nullptr);
 }
 
-void SwapChain::OnResize(uint32 width, uint32 height)
+void SwapChain::OnResizeOrMove(uint32 width, uint32 height)
 {
-	for (size_t i = 0; i < m_Backbuffers.size(); ++i)
+	DisplayMode desiredDisplayMode = m_DesiredDisplayMode;
+	if (!DisplaySupportsHDR())
 	{
-		m_Backbuffers[i].Reset();
+		desiredDisplayMode = DisplayMode::SDR;
 	}
 
-	//Resize the buffers
-	DXGI_SWAP_CHAIN_DESC1 desc{};
-	m_pSwapchain->GetDesc1(&desc);
-	VERIFY_HR(m_pSwapchain->ResizeBuffers(
-		(uint32)m_Backbuffers.size(),
-		width,
-		height,
-		desc.Format,
-		desc.Flags
-	));
-
-	m_CurrentImage = 0;
-
-	//Recreate the render target views
-	for (uint32 i = 0; i < (uint32)m_Backbuffers.size(); ++i)
+	DXGI_FORMAT desiredFormat = GetSwapchainFormat(desiredDisplayMode);
+	if (desiredFormat != m_Format || width != m_Width || height != m_Height)
 	{
-		ID3D12Resource* pResource = nullptr;
-		VERIFY_HR(m_pSwapchain->GetBuffer(i, IID_PPV_ARGS(&pResource)));
-		m_Backbuffers[i] = GetParent()->CreateTextureForSwapchain(pResource);
+		m_Width = width;
+		m_Height = height;
+		m_Format = desiredFormat;
+
+		if (m_PresentSyncPoint)
+		{
+			m_PresentSyncPoint.Wait();
+			m_PresentSyncPoint = {};
+		}
+
+		for (size_t i = 0; i < m_Backbuffers.size(); ++i)
+		{
+			m_Backbuffers[i].Reset();
+		}
+
+		//Resize the buffers
+		DXGI_SWAP_CHAIN_DESC1 desc{};
+		m_pSwapchain->GetDesc1(&desc);
+
+		VERIFY_HR(m_pSwapchain->ResizeBuffers(
+			(uint32)m_Backbuffers.size(),
+			width,
+			height,
+			m_Format,
+			desc.Flags
+		));
+
+		UINT colorSpaceSupport = 0;
+		DXGI_COLOR_SPACE_TYPE colorSpace = GetColorSpace(desiredDisplayMode);
+		if (SUCCEEDED(m_pSwapchain->CheckColorSpaceSupport(colorSpace, &colorSpaceSupport)) &&
+			(colorSpaceSupport & DXGI_SWAP_CHAIN_COLOR_SPACE_SUPPORT_FLAG_PRESENT) == DXGI_SWAP_CHAIN_COLOR_SPACE_SUPPORT_FLAG_PRESENT)
+		{
+			VERIFY_HR(m_pSwapchain->SetColorSpace1(colorSpace));
+		}
+
+		//Recreate the render target views
+		for (uint32 i = 0; i < (uint32)m_Backbuffers.size(); ++i)
+		{
+			ID3D12Resource* pResource = nullptr;
+			VERIFY_HR(m_pSwapchain->GetBuffer(i, IID_PPV_ARGS(&pResource)));
+			m_Backbuffers[i] = GetParent()->CreateTextureForSwapchain(pResource);
+		}
+
+		m_CurrentImage = m_pSwapchain->GetCurrentBackBufferIndex();
 	}
 }
 
-void SwapChain::Present()
+void SwapChain::Present(bool vsync)
 {
-	m_pSwapchain->Present(m_Vsync, m_Vsync ? 0 : DXGI_PRESENT_ALLOW_TEARING);
+	m_pSwapchain->Present(vsync, !vsync && m_AllowTearing ? DXGI_PRESENT_ALLOW_TEARING : 0);
 	m_CurrentImage = m_pSwapchain->GetCurrentBackBufferIndex();
+
+	CommandQueue* pDirectQueue = GetParent()->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT);
+	uint64 fenceValue = m_pPresentFence->Signal(pDirectQueue);
+	m_PresentSyncPoint = SyncPoint(m_pPresentFence, fenceValue);
+}
+
+bool SwapChain::DisplaySupportsHDR() const
+{
+	RefCountPtr<IDXGIOutput> pOutput;
+	RefCountPtr<IDXGIOutput6> pOutput6;
+	if (SUCCEEDED(m_pSwapchain->GetContainingOutput(pOutput.GetAddressOf())))
+	{
+		if (SUCCEEDED(pOutput->QueryInterface(pOutput6.GetAddressOf())))
+		{
+			DXGI_OUTPUT_DESC1 desc;
+			if (SUCCEEDED(pOutput6->GetDesc1(&desc)))
+			{
+				return desc.ColorSpace == DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020;
+			}
+		}
+	}
+	return false;
 }

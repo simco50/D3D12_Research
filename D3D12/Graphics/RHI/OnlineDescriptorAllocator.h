@@ -3,6 +3,7 @@
 #include "GraphicsResource.h"
 #include "Core/BitField.h"
 #include "RootSignature.h"
+#include "CommandQueue.h"
 
 class CommandContext;
 enum class CommandListContext;
@@ -10,12 +11,12 @@ enum class CommandListContext;
 struct DescriptorHeapBlock
 {
 	DescriptorHeapBlock(DescriptorHandle startHandle, uint32 size)
-		: StartHandle(startHandle), Size(size), CurrentOffset(0), FenceValue(0)
+		: StartHandle(startHandle), Size(size), CurrentOffset(0)
 	{}
 	DescriptorHandle StartHandle;
 	uint32 Size;
 	uint32 CurrentOffset;
-	uint64 FenceValue;
+	SyncPoint SyncPoint;
 };
 
 class GlobalOnlineDescriptorHeap : public GraphicsObject
@@ -28,7 +29,7 @@ public:
 	void FreePersistent(uint32& heapIndex);
 
 	DescriptorHeapBlock* AllocateBlock();
-	void FreeBlock(uint64 fenceValue, DescriptorHeapBlock* pBlock);
+	void FreeBlock(const SyncPoint& syncPoint, DescriptorHeapBlock* pBlock);
 	uint32 GetBlockSize() const { return m_DynamicBlockSize; }
 
 	uint32 GetDescriptorSize() const { return m_DescriptorSize; }
@@ -67,7 +68,7 @@ public:
 	void BindStagedDescriptors(CommandContext& context, CommandListContext descriptorTableType);
 
 	void ParseRootSignature(RootSignature* pRootSignature);
-	void ReleaseUsedHeaps(uint64 fenceValue);
+	void ReleaseUsedHeaps(const SyncPoint& syncPoint);
 
 private:
 	D3D12_DESCRIPTOR_HEAP_TYPE m_Type;

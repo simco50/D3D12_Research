@@ -36,8 +36,8 @@ void TiledForward::OnResize(int windowWidth, int windowHeight)
 
 void TiledForward::Execute(RGGraph& graph, const SceneView& view, const SceneTextures& sceneTextures)
 {
-	RGPassBuilder culling = graph.AddPass("Tiled Light Culling");
-	culling.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
+	graph.AddPass("Tiled Light Culling")
+		.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
 		{
 			context.InsertResourceBarrier(sceneTextures.pDepth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(m_pLightIndexCounter, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
@@ -52,7 +52,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& view, const SceneTex
 			context.SetPipelineState(m_pComputeLightCullPSO);
 			context.SetComputeRootSignature(m_pComputeLightCullRS);
 
-			context.SetRootCBV(0, GetViewUniforms(view, sceneTextures.pDepth));
+			context.SetRootCBV(0, Renderer::GetViewUniforms(view, sceneTextures.pDepth));
 
 			context.BindResources(1, {
 				m_pLightIndexCounter->GetUAV(),
@@ -73,8 +73,8 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& view, const SceneTex
 
 	//5. BASE PASS
 	// - Render the scene using the shadow mapping result and the light culling buffers
-	RGPassBuilder basePass = graph.AddPass("Base Pass");
-	basePass.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
+	graph.AddPass("Base Pass")
+		.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
 		{
 			context.InsertResourceBarrier(m_pLightGridOpaque, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 			context.InsertResourceBarrier(m_pLightGridTransparant, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
@@ -104,7 +104,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& view, const SceneTex
 			context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 			context.SetGraphicsRootSignature(m_pDiffuseRS);
 
-			context.SetRootCBV(2, GetViewUniforms(view, sceneTextures.pColorTarget));
+			context.SetRootCBV(2, Renderer::GetViewUniforms(view, sceneTextures.pColorTarget));
 
 			{
 				GPU_PROFILE_SCOPE("Opaque", &context);
@@ -119,10 +119,10 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& view, const SceneTex
 					});
 
 				context.SetPipelineState(m_pDiffusePSO);
-				DrawScene(context, view, Batch::Blending::Opaque);
+				Renderer::DrawScene(context, view, Batch::Blending::Opaque);
 
 				context.SetPipelineState(m_pDiffuseMaskedPSO);
-				DrawScene(context, view, Batch::Blending::AlphaMask);
+				Renderer::DrawScene(context, view, Batch::Blending::AlphaMask);
 			}
 
 			{
@@ -138,7 +138,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& view, const SceneTex
 					});
 
 				context.SetPipelineState(m_pDiffuseAlphaPSO);
-				DrawScene(context, view, Batch::Blending::AlphaBlend);
+				Renderer::DrawScene(context, view, Batch::Blending::AlphaBlend);
 			}
 			context.EndRenderPass();
 		});
@@ -155,8 +155,8 @@ void TiledForward::VisualizeLightDensity(RGGraph& graph, GraphicsDevice* pDevice
 	float sliceMagicA = 0;
 	float sliceMagicB = 0;
 
-	RGPassBuilder basePass = graph.AddPass("Visualize Light Density");
-	basePass.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
+	graph.AddPass("Visualize Light Density")
+		.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
 		{
 			struct
 			{
@@ -179,7 +179,7 @@ void TiledForward::VisualizeLightDensity(RGGraph& graph, GraphicsDevice* pDevice
 
 			context.SetRootCBV(0, constantData);
 
-			context.SetRootCBV(1, GetViewUniforms(view, sceneTextures.pColorTarget));
+			context.SetRootCBV(1, Renderer::GetViewUniforms(view, sceneTextures.pColorTarget));
 
 			context.BindResources(2, {
 				sceneTextures.pColorTarget->GetSRV(),

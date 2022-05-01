@@ -86,8 +86,8 @@ void DebugRenderer::Render(RGGraph& graph, const SceneView& view, Texture* pTarg
 
 	constexpr uint32 VertexStride = sizeof(DebugLine) / 2;
 
-	RGPassBuilder pass = graph.AddPass("Debug Rendering");
-	pass.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
+	graph.AddPass("Debug Rendering")
+		.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
 		{
 			context.InsertResourceBarrier(pDepth, D3D12_RESOURCE_STATE_DEPTH_WRITE);
 			context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
@@ -95,7 +95,7 @@ void DebugRenderer::Render(RGGraph& graph, const SceneView& view, Texture* pTarg
 			context.BeginRenderPass(RenderPassInfo(pTarget, RenderPassAccess::Load_Store, pDepth, RenderPassAccess::Load_Store, false));
 			context.SetGraphicsRootSignature(m_pRS);
 
-			context.SetRootCBV(0, GetViewUniforms(view, pTarget));
+			context.SetRootCBV(0, Renderer::GetViewUniforms(view, pTarget));
 
 			if (linePrimitives != 0)
 			{

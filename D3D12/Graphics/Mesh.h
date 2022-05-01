@@ -7,6 +7,7 @@ class Texture;
 class CommandContext;
 class ShaderResourceView;
 class Mesh;
+struct World;
 
 struct SubMesh
 {
@@ -14,8 +15,8 @@ struct SubMesh
 
 	int PositionsStride = 0;
 	int MaterialId = 0;
-	DXGI_FORMAT PositionsFormat = DXGI_FORMAT_R32G32B32_FLOAT;
 
+	DXGI_FORMAT PositionsFormat = DXGI_FORMAT_R32G32B32_FLOAT;
 	VertexBufferView PositionStreamLocation;
 	VertexBufferView UVStreamLocation;
 	VertexBufferView NormalStreamLocation;

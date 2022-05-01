@@ -16,3 +16,5 @@
 } \
 
 #define validateOnce(expression) validateOncef(expression, "")
+
+#define NODISCARD [[nodiscard]]
