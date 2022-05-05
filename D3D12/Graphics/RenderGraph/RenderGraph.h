@@ -32,6 +32,9 @@ enum class RGResourceType
 	Texture,
 	Buffer,
 };
+template<typename T> struct RGResourceTypeTraits { };
+template<> struct RGResourceTypeTraits<Texture> { constexpr static RGResourceType Type = RGResourceType::Texture; };
+template<> struct RGResourceTypeTraits<Buffer> { constexpr static RGResourceType Type = RGResourceType::Buffer; };
 
 enum class RGResourceAccess
 {
@@ -59,7 +62,13 @@ struct RGResource
 	int Version = 0;
 	RGResourceType Type;
 	RefCountPtr<GraphicsResource> pPhysicalResource;
-	RGResourceAccess UseFlags = RGResourceAccess::None;
+
+	template<typename T>
+	T* GetRHI() const
+	{
+		RG_ASSERT(Type == RGResourceTypeTraits<T>::Type, "Provided type does not match resource type");
+		return static_cast<T*>(pPhysicalResource.Get());
+	}
 
 	union
 	{
@@ -100,13 +109,13 @@ public:
 	template<typename T>
 	T* Get(RGResourceHandle handle) const
 	{
-		return static_cast<T*>(GetResource(handle));
+		return GetResource(handle)->GetRHI<T>();
 	}
 
 	RenderPassInfo GetRenderPassInfo() const;
 
 private:
-	void* GetResource(RGResourceHandle handle) const;
+	const RGResource* GetResource(RGResourceHandle handle) const;
 
 	RGGraph& m_Graph;
 	RGPass& m_Pass;
@@ -132,12 +141,17 @@ public:
 		bool Write;
 	};
 
+private:
 	RGPass(RGGraph& graph, const char* pName, RGPassFlag flags, int id)
 		: Graph(graph), Flags(flags), ID(id)
 	{
 		strcpy_s(Name, pName);
 	}
 
+	RGPass(const RGPass& rhs) = delete;
+	RGPass& operator=(const RGPass& rhs) = delete;
+
+public:
 	template<typename ExecuteFn>
 	RGPass& Bind(ExecuteFn&& callback)
 	{
@@ -154,6 +168,7 @@ public:
 	RGPass& DepthStencil(RGResourceHandle& resource, RenderPassAccess depthAccess, bool write, RenderPassAccess stencilAccess = RenderPassAccess::NoAccess);
 
 private:
+
 	void Read(Span<RGResourceHandle> resources, RGResourceAccess useFlag);
 	void Write(Span<RGResourceHandle*> resources, RGResourceAccess useFlag);
 
@@ -263,7 +278,7 @@ class RGGraph
 	};
 
 public:
-	explicit RGGraph(GraphicsDevice* pDevice, TexturePool& texturePool, uint64 allocatorSize = 0xFFFF);
+	RGGraph(GraphicsDevice* pDevice, TexturePool& texturePool, uint64 allocatorSize = 0xFFFF);
 	~RGGraph();
 
 	RGGraph(const RGGraph& other) = delete;
@@ -374,7 +389,6 @@ private:
 	GraphicsDevice* m_pDevice;
 	Allocator m_Allocator;
 	SyncPoint m_LastSyncPoint;
-	bool m_ImmediateMode = false;
 
 	std::vector<RGResourceAlias> m_Aliases;
 	std::vector<RGPass*> m_RenderPasses;

@@ -45,10 +45,6 @@
       ]
     },
     {
-      "Id": "3e3a5cf0-56ee-4188-a439-5c6205a883ce",
-      "Command": "-rgimmediate"
-    },
-    {
       "Id": "19524aa9-eb3e-4cf0-9936-ef814e45c7d6",
       "Command": "-noconsole"
     }
