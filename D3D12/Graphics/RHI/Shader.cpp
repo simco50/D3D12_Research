@@ -464,10 +464,7 @@ void ShaderManager::RecompileFromFileChange(const std::string& filePath)
 ShaderManager::ShaderManager(uint8 shaderModelMaj, uint8 shaderModelMin)
 	: m_ShaderModelMajor(shaderModelMaj), m_ShaderModelMinor(shaderModelMin)
 {
-	if (CommandLine::GetBool("shaderhotreload"))
-	{
-		m_pFileWatcher = std::make_unique<FileWatcher>();
-	}
+	m_pFileWatcher = std::make_unique<FileWatcher>();
 	ShaderCompiler::LoadDXC();
 }
 

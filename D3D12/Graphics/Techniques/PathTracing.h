@@ -1,5 +1,6 @@
 #pragma once
-#include "Graphics/RHI/StateObject.h"
+#include "../RHI/StateObject.h"
+#include "../RenderGraph/RenderGraphDefinitions.h"
 
 class RootSignature;
 class StateObject;
@@ -13,8 +14,7 @@ class PathTracing
 public:
 	PathTracing(GraphicsDevice* pDevice);
 	~PathTracing();
-	void Render(RGGraph& graph, const SceneView& view, Texture* pTarget);
-	void OnResize(uint32 width, uint32 height);
+	void Render(RGGraph& graph, const SceneView& view, RGResourceHandle& target);
 	void Reset();
 	bool IsSupported();
 

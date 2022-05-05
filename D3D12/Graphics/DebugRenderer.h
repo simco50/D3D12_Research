@@ -1,4 +1,5 @@
 #pragma once
+#include "RenderGraph/RenderGraphDefinitions.h"
 
 class GraphicsDevice;
 class RootSignature;
@@ -50,7 +51,7 @@ public:
 	
 	void Initialize(GraphicsDevice* pDevice);
 	void Shutdown();
-	void Render(RGGraph& graph, const SceneView& view, Texture* pTarget, Texture* pDepth);
+	void Render(RGGraph& graph, const SceneView& view, RGResourceHandle& target, RGResourceHandle& depth);
 
 	void AddLine(const Vector3& start, const Vector3& end, const IntColor& color);
 	void AddRay(const Vector3& start, const Vector3& direction, const IntColor& color);

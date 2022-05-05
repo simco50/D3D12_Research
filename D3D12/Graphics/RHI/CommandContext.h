@@ -175,7 +175,6 @@ public:
 	void DispatchMesh(const IntVector3& groupCounts);
 	void ExecuteIndirect(CommandSignature* pCommandSignature, uint32 maxCount, Buffer* pIndirectArguments, Buffer* pCountBuffer, uint32 argumentsOffset = 0, uint32 countOffset = 0);
 	void Draw(uint32 vertexStart, uint32 vertexCount, uint32 instances = 1, uint32 instanceStart = 0);
-	void DrawIndexed(uint32 indexCount, uint32 indexStart, uint32 minVertex = 0);
 	void DrawIndexedInstanced(uint32 indexCount, uint32 indexStart, uint32 instanceCount, uint32 minVertex = 0, uint32 instanceStart = 0);
 	void DispatchRays(ShaderBindingTable& table, uint32 width = 1, uint32 height = 1, uint32 depth = 1);
 
@@ -231,9 +230,18 @@ public:
 
 	D3D12_COMMAND_LIST_TYPE GetType() const { return m_Type; }
 	const PipelineState* GetCurrentPSO() const { return m_pCurrentPSO; }
+	void ResolvePendingBarriers(CommandContext& resolveContext);
+
+private:
+	void PrepareDraw();
 
 	static bool IsTransitionAllowed(D3D12_COMMAND_LIST_TYPE commandlistType, D3D12_RESOURCE_STATES state);
-
+	D3D12_RESOURCE_STATES GetLocalResourceState(GraphicsResource* pResource, uint32 subResource) const
+	{
+		auto it = m_ResourceStates.find(pResource);
+		check(it != m_ResourceStates.end());
+		return it->second.Get(subResource);
+	}
 	struct PendingBarrier
 	{
 		GraphicsResource* pResource;
@@ -241,34 +249,9 @@ public:
 		uint32 Subresource;
 	};
 
-	Span<PendingBarrier> GetPendingBarriers() const { return m_PendingBarriers; }
-
-	D3D12_RESOURCE_STATES GetResourceState(GraphicsResource* pResource, uint32 subResource) const
-	{
-		auto it = m_ResourceStates.find(pResource);
-		check(it != m_ResourceStates.end());
-		return it->second.Get(subResource);
-	}
-
-private:
-	void PrepareDraw();
-
 	std::vector<PendingBarrier> m_PendingBarriers;
-
-	D3D12_RESOURCE_STATES GetResourceStateWithFallback(GraphicsResource* pResource, uint32 subResource) const
-	{
-		auto it = m_ResourceStates.find(pResource);
-		if (it == m_ResourceStates.end())
-		{
-			return pResource->GetResourceState(subResource);
-		}
-		return it->second.Get(subResource);
-	}
-
 	OnlineDescriptorAllocator m_ShaderResourceDescriptorAllocator;
-
 	ResourceBarrierBatcher m_BarrierBatcher;
-
 	std::unique_ptr<DynamicResourceAllocator> m_pDynamicAllocator;
 	ID3D12GraphicsCommandList* m_pCommandList;
 	RefCountPtr<ID3D12GraphicsCommandList4> m_pRaytracingCommandList;

@@ -55,6 +55,7 @@ public:
 	void SetVsync(bool enabled) { m_Vsync = enabled; }
 	bool DisplaySupportsHDR() const;
 
+	IntVector2 GetViewport() const;
 	IDXGISwapChain4* GetSwapChain() const { return m_pSwapchain.Get(); }
 	Texture* GetBackBuffer() const { return m_Backbuffers[m_CurrentImage]; }
 	Texture* GetBackBuffer(uint32 index) const { return m_Backbuffers[index]; }

@@ -10,8 +10,9 @@ class GraphicsDevice;
 #define PROFILE_BEGIN(name) Profiler::Get()->Begin(name, nullptr);
 #define PROFILE_END() Profiler::Get()->End();
 
-#define GPU_PROFILE_SCOPE(name, cmdlist) ScopeProfiler MACRO_CONCAT(profiler,__COUNTER__)(name, cmdlist)
-#define PROFILE_SCOPE(name) ScopeProfiler MACRO_CONCAT(profiler,__COUNTER__)(name, nullptr)
+#define GPU_PROFILE_SCOPE(name, cmdlist) ScopeProfiler MACRO_CONCAT(profiler,__COUNTER__)(name, cmdlist, true)
+#define GPU_PROFILE_SCOPE_CONDITIONAL(name, cmdlist, condition) ScopeProfiler MACRO_CONCAT(profiler,__COUNTER__)(name, cmdlist, condition)
+#define PROFILE_SCOPE(name) ScopeProfiler MACRO_CONCAT(profiler,__COUNTER__)(name, nullptr, true)
 
 template<typename T, uint32 SIZE>
 class TimeHistory
@@ -117,13 +118,17 @@ private:
 
 struct ScopeProfiler
 {
-	ScopeProfiler(const char* pName, CommandContext* pContext = nullptr)
+	ScopeProfiler(const char* pName, CommandContext* pContext, bool enabled)
+		: Enabled(enabled)
 	{
-		Profiler::Get()->Begin(pName, pContext);
+		if(enabled)
+			Profiler::Get()->Begin(pName, pContext);
 	}
 
 	~ScopeProfiler()
 	{
-		Profiler::Get()->End();
+		if(Enabled)
+			Profiler::Get()->End();
 	}
+	bool Enabled;
 };

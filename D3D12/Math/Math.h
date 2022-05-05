@@ -33,7 +33,7 @@ namespace Math
 	constexpr uint32 MegaBytesToBytes = 1 << 20;
 	constexpr uint32 GigaBytesToBytes = 1 << 30;
 
-	inline std::string PrettyPrintDataSize(uint32 sizeInBytes)
+	inline std::string PrettyPrintDataSize(uint64 sizeInBytes)
 	{
 		if (sizeInBytes > 1 << 30)
 		{

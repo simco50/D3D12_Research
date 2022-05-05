@@ -1,19 +1,84 @@
 #include "stdafx.h"
 #include "RenderGraph.h"
-#include <fstream>
+#include <sstream>
+
+template<typename T>
+std::string BitmaskToString(T mask, const char* (*pValueToString)(T))
+{
+	std::string outString;
+	uint32 value = (uint32)mask;
+
+	if (value == 0)
+	{
+		const char* pStr = pValueToString((T)0);
+		return pStr ? pStr : "NONE";
+	}
+
+	uint32 bitIndex = 0;
+	uint32 valueIndex = 0;
+	while (value > 0)
+	{
+		if (value & 1)
+		{
+			const char* pStr = pValueToString((T)bitIndex);
+			if (pStr)
+			{
+				if (valueIndex > 0)
+					outString += '/';
+				outString += pStr;
+				valueIndex++;
+			}
+		}
+		bitIndex++;
+		value >>= 1;
+	}
+	return outString;
+}
+
+std::string PassFlagToString(RGPassFlag flags)
+{
+	return BitmaskToString<RGPassFlag>(flags,
+		[](RGPassFlag flag) -> const char*
+		{
+			switch (flag)
+			{
+			case RGPassFlag::None: return "None";
+			case RGPassFlag::Compute: return "Compute";
+			case RGPassFlag::Raster: return "Raster";
+			case RGPassFlag::Copy: return "Copy";
+			default: return nullptr;
+			}
+		});
+}
 
 void RGGraph::DumpGraph(const char* pPath) const
 {
-	Paths::CreateDirectoryTree(pPath);
-	std::ofstream stream(pPath);
+	std::stringstream stream;
 
-	stream << "<script src=\"https://unpkg.com/mermaid@9.0.1/dist/mermaid.min.js\"></script>\n";
-	stream << "<script>mermaid.initialize({ startOnLoad:true });</script>\n";
-	stream << "<div class=\"mermaid\">\n";
+	constexpr const char* pMermaidTemplate = R"(
+			<!DOCTYPE html>
+				<html lang="en">
+				<head>
+					<meta charset="utf-8">
+					<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.1/css/all.min.css"
+						integrity="sha512-KfkfwYDsLkIlwQp6LFnl8zNdLGxu9YAA1QvwINks4PhcElQSvqcyVLLD9aMhXd13uQjoXtEKNosOWaZqXgel0g=="
+						crossorigin="anonymous" referrerpolicy="no-referrer" />
+				</head>
+				<body>
+					<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+					<script>
+						mermaid.initialize({ startOnLoad: true, flowchart: { useMaxWidth: false, htmlLabels: true }});
+					</script>
+					<div class="mermaid">
+						%s
+					</div>
+				</body>
+			</html>
+		)";
 
-	stream << "graph LR;\n";
+	stream << "graph TD;\n";
 
-	stream << "classDef referencedPass fill:#fa0,stroke:#333,stroke-width:2px;\n";
+	stream << "classDef referencedPass fill:#fa0,stroke:#333,stroke-width:4px;\n";
 	stream << "classDef unreferenced stroke:#fee,stroke-width:1px;\n";
 	stream << "classDef referencedResource fill:#bef,stroke:#333,stroke-width:2px;\n";
 	stream << "classDef importedResource fill:#9bd,stroke:#333,stroke-width:2px;\n";
@@ -27,46 +92,67 @@ void RGGraph::DumpGraph(const char* pPath) const
 	int passIndex = 0;
 	for (RGPass* pPass : m_RenderPasses)
 	{
+		if (EnumHasAnyFlags(pPass->Flags, RGPassFlag::Invisible))
+			continue;
+
 		stream << "Pass" << pPass->ID;
 		stream << "[";
-		stream << pPass->pName << "<br/>";
+		stream << pPass->Name << "<br/>";
+		stream << "Flags: " << PassFlagToString(pPass->Flags) << "<br/>";
 		stream << "Refs: " << pPass->References << "<br/>";
 		stream << "Index: " << passIndex;
 		stream << "]:::";
-		if (pPass->References == 0)
-		{
-			stream << "unreferenced";
-		}
-		else
-		{
-			stream << "referencedPass";
-		}
+
+		stream << (pPass->References ? "referencedPass" : "unreferenced");
+
 		if (pPass->References)
-		{
 			++passIndex;
-		}
+
 		stream << "\n";
 	}
 
 	//Resource declaration
 	for (const RGNode& node : m_ResourceNodes)
 	{
-		stream << "Resource" << node.pResource->m_Id << "_" << node.Version << "([";
-		stream << node.pResource->m_Name << "<br/>";
-		stream << "Id:" << node.pResource->m_Id << "<br/>";
-		stream << "Refs: " << node.pResource->m_References;
-		stream << "]):::";
-		if (node.pResource->m_References == 0)
+		if (node.Version == 0 && node.Reads == 0)
 		{
-			stream << "unreferenced";
+			continue;
 		}
-		else if (node.pResource->m_IsImported)
+
+		stream << "Resource" << node.pResource->Id << "_" << node.Version;
+		stream << (node.pResource->IsImported ? "[(" : "([");
+		stream << node.pResource->Name << "<br/>";
+		//stream << "Id:" << node.pResource->Id << "<br/>";
+		//stream << "Version: " << node.Version << "<br/>";
+
+		if (node.pResource->Type == RGResourceType::Texture)
 		{
-			stream << "importedResource";
+			const TextureDesc& desc = node.pResource->TextureDesc;
+			stream << desc.Width << "x" << desc.Height << "x" << desc.DepthOrArraySize << "<br/>";
+			stream << D3D::FormatToString(desc.Format) << "<br/>";
+			stream << "Mips: " << desc.Mips << "<br/>";
+		}
+		else if (node.pResource->Type == RGResourceType::Buffer)
+		{
+			const BufferDesc& desc = node.pResource->BufferDesc;
+			stream << Math::PrettyPrintDataSize(desc.Size) << "<br/>";
+			stream << D3D::FormatToString(desc.Format) << "<br/>";
+		}
+
+		stream << "Refs: " << node.pResource->References << "<br/>";
+
+		stream << (node.pResource->IsImported ? ")]" : "])");
+		if (node.pResource->IsImported)
+		{
+			stream << ":::importedResource";
+		}
+		else if (node.pResource->References == 0)
+		{
+			stream << ":::unreferenced";
 		}
 		else
 		{
-			stream << "referencedResource";
+			stream << ":::referencedResource";
 		}
 		stream << "\n";
 	}
@@ -74,30 +160,35 @@ void RGGraph::DumpGraph(const char* pPath) const
 	//Writes
 	for (RGPass* pPass : m_RenderPasses)
 	{
-		for (RGResourceHandle handle : pPass->Writes)
+		if (pPass->Writes.size() > 0)
 		{
-			const RGNode& node = GetResourceNode(handle);
-			stream << "Pass" << pPass->ID << " --> " << "Resource" << node.pResource->m_Id << "_" << node.Version << "\n";
-			stream << "linkStyle " << linkIndex++ << " " << writeLinkStyle << "\n";
+			stream << "Pass" << pPass->ID << " -- Write --> ";
+			for (uint32 i = 0; i < pPass->Writes.size(); ++i)
+			{
+				const RGNode& node = GetResourceNode(pPass->Writes[i]);
+				if (i != 0)
+					stream << " & ";
+				stream << "Resource" << node.pResource->Id << "_" << node.Version;
+			}
+			stream << "\nlinkStyle " << linkIndex++ << " " << writeLinkStyle << "\n";
 		}
 	}
 	stream << "\n";
 
 	//Reads
-	for (const RGNode& node : m_ResourceNodes)
+	for (RGPass* pPass : m_RenderPasses)
 	{
-		for (RGPass* pPass : m_RenderPasses)
+		if (pPass->Reads.size() > 0)
 		{
-			for (RGResourceHandle read : pPass->Reads)
+			for (uint32 i = 0; i < pPass->Reads.size(); ++i)
 			{
-				const RGNode& readNode = GetResourceNode(read);
-				if (node.Version == readNode.Version && node.pResource->m_Id == readNode.pResource->m_Id)
-				{
-					stream << "Resource" << node.pResource->m_Id << "_" << node.Version << " --> ";
-					stream << "Pass" << pPass->ID << "\n";
-					stream << "linkStyle " << linkIndex++ << " " << readLinkStyle << "\n";
-				}
+				const RGNode& readNode = GetResourceNode(pPass->Reads[i]);
+				if (i != 0)
+					stream << " & ";
+				stream << "Resource" << readNode.pResource->Id << "_" << readNode.Version;
 			}
+			stream << " -- Read --> Pass" << pPass->ID << "\n";
+			stream << "linkStyle " << linkIndex++ << " " << readLinkStyle << "\n";
 		}
 	}
 	stream << "\n";
@@ -105,10 +196,19 @@ void RGGraph::DumpGraph(const char* pPath) const
 	//Aliases
 	for (const RGResourceAlias& alias : m_Aliases)
 	{
-		stream << "Resource" << GetResourceNode(alias.From).pResource->m_Id << "_" << GetResourceNode(alias.From).Version << " --> ";
-		stream << "Resource" << GetResourceNode(alias.To).pResource->m_Id << "_" << GetResourceNode(alias.To).Version << "\n";
+		stream << "Resource" << GetResourceNode(alias.From).pResource->Id << "_" << GetResourceNode(alias.From).Version << " --> ";
+		stream << "Resource" << GetResourceNode(alias.To).pResource->Id << "_" << GetResourceNode(alias.To).Version << "\n";
 		stream << "linkStyle " << linkIndex++ << " " << aliasLinkStyle << "\n";
 		stream << "\n";
 	}
-	stream << "</div>";
+
+	std::string output = Sprintf(pMermaidTemplate, stream.str().c_str());
+	Paths::CreateDirectoryTree(pPath);
+	FILE* pFile = nullptr;
+	fopen_s(&pFile, pPath, "w");
+	if (pFile)
+	{
+		fwrite(output.c_str(), sizeof(char), output.length(), pFile);
+		fclose(pFile);
+	}
 }

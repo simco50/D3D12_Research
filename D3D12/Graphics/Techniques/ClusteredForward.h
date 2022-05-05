@@ -1,4 +1,5 @@
 #pragma once
+#include "../RenderGraph/RenderGraphDefinitions.h"
 class GraphicsDevice;
 class PipelineState;
 class RootSignature;
@@ -28,7 +29,6 @@ struct ClusteredLightCullData
 struct VolumetricFogData
 {
 	RefCountPtr<Texture> pLightScatteringVolume[2];
-	RefCountPtr<Texture> pFinalVolumeFog;
 };
 
 class ClusteredForward
@@ -41,15 +41,15 @@ public:
 
 	void CreateLightCullingResources(ClusteredLightCullData& resources, const IntVector2& viewDimensions);
 	void ComputeLightCulling(RGGraph& graph, const SceneView& view, ClusteredLightCullData& resources);
-	void VisualizeClusters(RGGraph& graph, const SceneView& view, const SceneTextures& sceneTextures, ClusteredLightCullData& resources);
+	void VisualizeClusters(RGGraph& graph, const SceneView& view, SceneTextures& sceneTextures, ClusteredLightCullData& resources);
 
 	void CreateVolumetricFogResources(VolumetricFogData& resources, const IntVector2& viewDimensions);
-	void RenderVolumetricFog(RGGraph& graph, const SceneView& view, const ClusteredLightCullData& cullData, VolumetricFogData& fogData);
+	RGResourceHandle RenderVolumetricFog(RGGraph& graph, const SceneView& view, const ClusteredLightCullData& cullData, VolumetricFogData& fogData);
 
-	void RenderBasePass(RGGraph& graph, const SceneView& view, const SceneTextures& sceneTextures, const ClusteredLightCullData& lightCullData, Texture* pFogTexture);
+	void RenderBasePass(RGGraph& graph, const SceneView& view, SceneTextures& sceneTextures, const ClusteredLightCullData& lightCullData, RGResourceHandle fogTexture);
 
-	void Execute(RGGraph& graph, const SceneView& view, const SceneTextures& sceneTextures);
-	void VisualizeLightDensity(RGGraph& graph, const SceneView& view, const SceneTextures& sceneTextures);
+	void Execute(RGGraph& graph, const SceneView& view, SceneTextures& sceneTextures);
+	void VisualizeLightDensity(RGGraph& graph, const SceneView& view, SceneTextures& sceneTextures);
 
 private:
 	GraphicsDevice* m_pDevice;
@@ -82,7 +82,6 @@ private:
 	//Visualize Light Count
 	RefCountPtr<RootSignature> m_pVisualizeLightsRS;
 	RefCountPtr<PipelineState> m_pVisualizeLightsPSO;
-	RefCountPtr<Texture> m_pVisualizationIntermediateTexture;
 
 	//Volumetric Fog
 	RefCountPtr<RootSignature> m_pVolumetricLightingRS;

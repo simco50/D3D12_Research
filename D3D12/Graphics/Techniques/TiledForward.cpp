@@ -26,177 +26,145 @@ TiledForward::TiledForward(GraphicsDevice* pDevice)
 	SetupPipelines();
 }
 
-void TiledForward::OnResize(int windowWidth, int windowHeight)
+void TiledForward::Execute(RGGraph& graph, const SceneView& view, SceneTextures& sceneTextures)
 {
-	int frustumCountX = Math::RoundUp((float)windowWidth / FORWARD_PLUS_BLOCK_SIZE);
-	int frustumCountY = Math::RoundUp((float)windowHeight / FORWARD_PLUS_BLOCK_SIZE);
-	m_pLightGridOpaque = m_pDevice->CreateTexture(TextureDesc::Create2D(frustumCountX, frustumCountY, DXGI_FORMAT_R32G32_UINT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess), "Light Grid - Opaque");
-	m_pLightGridTransparant = m_pDevice->CreateTexture(TextureDesc::Create2D(frustumCountX, frustumCountY, DXGI_FORMAT_R32G32_UINT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess), "Light Grid - Transparent");
-}
+	int frustumCountX = Math::RoundUp(view.View.Viewport.GetWidth() / FORWARD_PLUS_BLOCK_SIZE);
+	int frustumCountY = Math::RoundUp(view.View.Viewport.GetHeight() / FORWARD_PLUS_BLOCK_SIZE);
+	RGResourceHandle lightGridOpaque = graph.CreateTexture("Light Grid - Opaque", TextureDesc::Create2D(frustumCountX, frustumCountY, DXGI_FORMAT_R32G32_UINT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
+	RGResourceHandle lightGridTransparant = graph.CreateTexture("Light Grid - Transparant", TextureDesc::Create2D(frustumCountX, frustumCountY, DXGI_FORMAT_R32G32_UINT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
 
-void TiledForward::Execute(RGGraph& graph, const SceneView& view, const SceneTextures& sceneTextures)
-{
-	graph.AddPass("Tiled Light Culling")
-		.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
-		{
-			context.InsertResourceBarrier(sceneTextures.pDepth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-			context.InsertResourceBarrier(m_pLightIndexCounter, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+	graph.AddPass("Tiled Light Culling", RGPassFlag::Compute)
+		.Read(sceneTextures.Depth)
+		.Write({ &lightGridOpaque, &lightGridTransparant })
+		.Bind([=](CommandContext& context, const RGPassResources& resources)
+			{
+				Texture* pDepth = resources.Get<Texture>(sceneTextures.Depth);
+				context.InsertResourceBarrier(m_pLightIndexCounter, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+				context.InsertResourceBarrier(m_pLightIndexListBufferOpaque, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+				context.InsertResourceBarrier(m_pLightIndexListBufferTransparant, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-			context.InsertResourceBarrier(m_pLightGridOpaque, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-			context.InsertResourceBarrier(m_pLightGridTransparant, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-			context.InsertResourceBarrier(m_pLightIndexListBufferOpaque, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-			context.InsertResourceBarrier(m_pLightIndexListBufferTransparant, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+				context.ClearUavUInt(m_pLightIndexCounter, m_pLightIndexCounterRawUAV);
 
-			context.ClearUavUInt(m_pLightIndexCounter, m_pLightIndexCounterRawUAV);
+				context.SetPipelineState(m_pComputeLightCullPSO);
+				context.SetComputeRootSignature(m_pComputeLightCullRS);
 
-			context.SetPipelineState(m_pComputeLightCullPSO);
-			context.SetComputeRootSignature(m_pComputeLightCullRS);
+				context.SetRootCBV(0, Renderer::GetViewUniforms(view, pDepth));
 
-			context.SetRootCBV(0, Renderer::GetViewUniforms(view, sceneTextures.pDepth));
+				context.BindResources(1, {
+					m_pLightIndexCounter->GetUAV(),
+					m_pLightIndexListBufferOpaque->GetUAV(),
+					resources.Get<Texture>(lightGridOpaque)->GetUAV(),
+					m_pLightIndexListBufferTransparant->GetUAV(),
+					resources.Get<Texture>(lightGridTransparant)->GetUAV(),
+					});
+				context.BindResources(2, {
+					pDepth->GetSRV(),
+					});
 
-			context.BindResources(1, {
-				m_pLightIndexCounter->GetUAV(),
-				m_pLightIndexListBufferOpaque->GetUAV(),
-				m_pLightGridOpaque->GetUAV(),
-				m_pLightIndexListBufferTransparant->GetUAV(),
-				m_pLightGridTransparant->GetUAV(),
-				});
-			context.BindResources(2, {
-				sceneTextures.pDepth->GetSRV(),
-				});
-
-			context.Dispatch(ComputeUtils::GetNumThreadGroups(
-				sceneTextures.pDepth->GetWidth(), FORWARD_PLUS_BLOCK_SIZE,
-				sceneTextures.pDepth->GetHeight(), FORWARD_PLUS_BLOCK_SIZE
-			));
-		});
+				context.Dispatch(ComputeUtils::GetNumThreadGroups(
+					pDepth->GetWidth(), FORWARD_PLUS_BLOCK_SIZE,
+					pDepth->GetHeight(), FORWARD_PLUS_BLOCK_SIZE
+				));
+			});
 
 	//5. BASE PASS
 	// - Render the scene using the shadow mapping result and the light culling buffers
-	graph.AddPass("Base Pass")
-		.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
-		{
-			context.InsertResourceBarrier(m_pLightGridOpaque, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-			context.InsertResourceBarrier(m_pLightGridTransparant, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-			context.InsertResourceBarrier(m_pLightIndexListBufferOpaque, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-			context.InsertResourceBarrier(m_pLightIndexListBufferTransparant, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-			context.InsertResourceBarrier(sceneTextures.pAmbientOcclusion, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-			context.InsertResourceBarrier(sceneTextures.pPreviousColorTarget, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-			context.InsertResourceBarrier(sceneTextures.pDepth, D3D12_RESOURCE_STATE_DEPTH_READ | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-			context.InsertResourceBarrier(sceneTextures.pColorTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
-			context.InsertResourceBarrier(sceneTextures.pNormalsTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
-			context.InsertResourceBarrier(sceneTextures.pRoughnessTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
-
-			RenderPassInfo renderPass;
-			renderPass.DepthStencilTarget.Access = RenderPassAccess::Load_Store;
-			renderPass.DepthStencilTarget.StencilAccess = RenderPassAccess::DontCare_DontCare;
-			renderPass.DepthStencilTarget.Target = sceneTextures.pDepth;
-			renderPass.DepthStencilTarget.Write = false;
-			renderPass.RenderTargetCount = 3;
-			renderPass.RenderTargets[0].Access = RenderPassAccess::DontCare_Store;
-			renderPass.RenderTargets[0].Target = sceneTextures.pColorTarget;
-			renderPass.RenderTargets[1].Access = RenderPassAccess::DontCare_Store;
-			renderPass.RenderTargets[1].Target = sceneTextures.pNormalsTarget;
-			renderPass.RenderTargets[2].Access = RenderPassAccess::DontCare_Store;
-			renderPass.RenderTargets[2].Target = sceneTextures.pRoughnessTarget;
-			context.BeginRenderPass(renderPass);
-
-			context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-			context.SetGraphicsRootSignature(m_pDiffuseRS);
-
-			context.SetRootCBV(2, Renderer::GetViewUniforms(view, sceneTextures.pColorTarget));
-
+	graph.AddPass("Base Pass", RGPassFlag::Raster)
+		.Read({ sceneTextures.AmbientOcclusion, sceneTextures.PreviousColor, lightGridOpaque, lightGridTransparant })
+		.DepthStencil(sceneTextures.Depth, RenderPassAccess::Load_Store, false)
+		.RenderTarget(sceneTextures.ColorTarget, RenderPassAccess::DontCare_Store)
+		.RenderTarget(sceneTextures.Normals, RenderPassAccess::DontCare_Store)
+		.RenderTarget(sceneTextures.Roughness, RenderPassAccess::DontCare_Store)
+		.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
-				GPU_PROFILE_SCOPE("Opaque", &context);
+				Texture* pTarget = resources.Get<Texture>(sceneTextures.ColorTarget);
+				context.InsertResourceBarrier(m_pLightIndexListBufferOpaque, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+				context.InsertResourceBarrier(m_pLightIndexListBufferTransparant, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
-				context.BindResources(3, {
-					sceneTextures.pAmbientOcclusion->GetSRV(),
-					sceneTextures.pDepth->GetSRV(),
-					sceneTextures.pPreviousColorTarget->GetSRV(),
-					GraphicsCommon::GetDefaultTexture(DefaultTexture::Black3D)->GetSRV(),
-					m_pLightGridOpaque->GetSRV(),
-					m_pLightIndexListBufferOpaque->GetSRV(),
-					});
+				context.BeginRenderPass(resources.GetRenderPassInfo());
 
-				context.SetPipelineState(m_pDiffusePSO);
-				Renderer::DrawScene(context, view, Batch::Blending::Opaque);
+				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+				context.SetGraphicsRootSignature(m_pDiffuseRS);
 
-				context.SetPipelineState(m_pDiffuseMaskedPSO);
-				Renderer::DrawScene(context, view, Batch::Blending::AlphaMask);
-			}
+				context.SetRootCBV(2, Renderer::GetViewUniforms(view, pTarget));
 
-			{
-				GPU_PROFILE_SCOPE("Transparant", &context);
+				{
+					GPU_PROFILE_SCOPE("Opaque", &context);
 
-				context.BindResources(3, {
-					sceneTextures.pAmbientOcclusion->GetSRV(),
-					sceneTextures.pDepth->GetSRV(),
-					sceneTextures.pPreviousColorTarget->GetSRV(),
-					GraphicsCommon::GetDefaultTexture(DefaultTexture::Black3D)->GetSRV(),
-					m_pLightGridTransparant->GetSRV(),
-					m_pLightIndexListBufferTransparant->GetSRV(),
-					});
+					context.BindResources(3, {
+						resources.Get<Texture>(sceneTextures.AmbientOcclusion)->GetSRV(),
+						resources.Get<Texture>(sceneTextures.Depth)->GetSRV(),
+						resources.Get<Texture>(sceneTextures.PreviousColor)->GetSRV(),
+						GraphicsCommon::GetDefaultTexture(DefaultTexture::Black3D)->GetSRV(),
+						resources.Get<Texture>(lightGridOpaque)->GetSRV(),
+						m_pLightIndexListBufferOpaque->GetSRV(),
+						});
 
-				context.SetPipelineState(m_pDiffuseAlphaPSO);
-				Renderer::DrawScene(context, view, Batch::Blending::AlphaBlend);
-			}
-			context.EndRenderPass();
-		});
+					context.SetPipelineState(m_pDiffusePSO);
+					Renderer::DrawScene(context, view, Batch::Blending::Opaque);
+
+					context.SetPipelineState(m_pDiffuseMaskedPSO);
+					Renderer::DrawScene(context, view, Batch::Blending::AlphaMask);
+				}
+
+				{
+					GPU_PROFILE_SCOPE("Transparant", &context);
+
+					context.BindResources(3, {
+						resources.Get<Texture>(sceneTextures.AmbientOcclusion)->GetSRV(),
+						resources.Get<Texture>(sceneTextures.Depth)->GetSRV(),
+						resources.Get<Texture>(sceneTextures.PreviousColor)->GetSRV(),
+						GraphicsCommon::GetDefaultTexture(DefaultTexture::Black3D)->GetSRV(),
+						resources.Get<Texture>(lightGridTransparant)->GetSRV(),
+						m_pLightIndexListBufferTransparant->GetSRV(),
+						});
+
+					context.SetPipelineState(m_pDiffuseAlphaPSO);
+					Renderer::DrawScene(context, view, Batch::Blending::AlphaBlend);
+				}
+				context.EndRenderPass();
+			});
 }
 
-void TiledForward::VisualizeLightDensity(RGGraph& graph, GraphicsDevice* pDevice, const SceneView& view, const SceneTextures& sceneTextures)
+void TiledForward::VisualizeLightDensity(RGGraph& graph, GraphicsDevice* pDevice, const SceneView& view, SceneTextures& sceneTextures)
 {
-	const TextureDesc desc = sceneTextures.pColorTarget->GetDesc();
-	if (!m_pVisualizationIntermediateTexture || m_pVisualizationIntermediateTexture->GetDesc() != desc)
-	{
-		m_pVisualizationIntermediateTexture = m_pDevice->CreateTexture(desc, "LightDensity Debug Texture");
-	}
+#if 0
+	RGResourceHandle visualizationIntermediate = graph.CreateTexture("Light Density Debug Texture", graph.GetDesc(sceneTextures.ColorTarget));
 
-	float sliceMagicA = 0;
-	float sliceMagicB = 0;
+	graph.AddCopyTexturePass("Cache Scene Color", sceneTextures.ColorTarget, visualizationIntermediate);
 
-	graph.AddPass("Visualize Light Density")
-		.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
-		{
-			struct
+	graph.AddPass("Visualize Light Density", RGPassFlag::Raster)
+		.Read({ sceneTextures.Depth, visualizationIntermediate })
+		.Write(&sceneTextures.ColorTarget)
+		.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
-				IntVector2 ClusterDimensions;
-				IntVector2 ClusterSize;
-				float SliceMagicA;
-				float SliceMagicB;
-			} constantData;
+				Texture* pTarget = resources.Get<Texture>(sceneTextures.ColorTarget);
+				context.InsertResourceBarrier(m_pLightGridOpaque, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
-			constantData.SliceMagicA = sliceMagicA;
-			constantData.SliceMagicB = sliceMagicB;
+				struct
+				{
+					IntVector2 ClusterDimensions;
+					IntVector2 ClusterSize;
+					Vector2 LightGridParams;
+				} constantData;
 
-			context.SetPipelineState(m_pVisualizeLightsPSO);
-			context.SetComputeRootSignature(m_pVisualizeLightsRS);
+				context.SetPipelineState(m_pVisualizeLightsPSO);
+				context.SetComputeRootSignature(m_pVisualizeLightsRS);
+				context.SetRootCBV(0, constantData);
+				context.SetRootCBV(1, Renderer::GetViewUniforms(view, pTarget));
 
-			context.InsertResourceBarrier(sceneTextures.pColorTarget, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-			context.InsertResourceBarrier(sceneTextures.pDepth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-			context.InsertResourceBarrier(m_pLightGridOpaque, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-			context.InsertResourceBarrier(m_pVisualizationIntermediateTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+				context.BindResources(2, {
+					resources.Get<Texture>(visualizationIntermediate)->GetSRV(),
+					resources.Get<Texture>(sceneTextures.Depth)->GetSRV(),
+					m_pLightGridOpaque->GetSRV(),
+					});
+				context.BindResources(3, pTarget->GetUAV());
 
-			context.SetRootCBV(0, constantData);
-
-			context.SetRootCBV(1, Renderer::GetViewUniforms(view, sceneTextures.pColorTarget));
-
-			context.BindResources(2, {
-				sceneTextures.pColorTarget->GetSRV(),
-				sceneTextures.pDepth->GetSRV(),
-				m_pLightGridOpaque->GetSRV(),
-				});
-
-			context.BindResources(3, m_pVisualizationIntermediateTexture->GetUAV());
-
-			context.Dispatch(ComputeUtils::GetNumThreadGroups(
-				sceneTextures.pColorTarget->GetWidth(), 16,
-				sceneTextures.pColorTarget->GetHeight(), 16));
-
-			context.InsertUavBarrier();
-
-			context.CopyTexture(m_pVisualizationIntermediateTexture, sceneTextures.pColorTarget);
-		});
+				context.Dispatch(ComputeUtils::GetNumThreadGroups(
+					pTarget->GetWidth(), 16,
+					pTarget->GetHeight(), 16));
+			});
+#endif
 }
 
 void TiledForward::SetupPipelines()

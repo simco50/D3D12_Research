@@ -74,7 +74,7 @@ void DebugRenderer::Shutdown()
 	m_pRS.Reset();
 }
 
-void DebugRenderer::Render(RGGraph& graph, const SceneView& view, Texture* pTarget, Texture* pDepth)
+void DebugRenderer::Render(RGGraph& graph, const SceneView& view, RGResourceHandle& target, RGResourceHandle& depth)
 {
 	int linePrimitives = (int)m_Lines.size() * 2;
 	int trianglePrimitives = (int)m_Triangles.size() * 3;
@@ -86,33 +86,32 @@ void DebugRenderer::Render(RGGraph& graph, const SceneView& view, Texture* pTarg
 
 	constexpr uint32 VertexStride = sizeof(DebugLine) / 2;
 
-	graph.AddPass("Debug Rendering")
-		.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
-		{
-			context.InsertResourceBarrier(pDepth, D3D12_RESOURCE_STATE_DEPTH_WRITE);
-			context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
-
-			context.BeginRenderPass(RenderPassInfo(pTarget, RenderPassAccess::Load_Store, pDepth, RenderPassAccess::Load_Store, false));
-			context.SetGraphicsRootSignature(m_pRS);
-
-			context.SetRootCBV(0, Renderer::GetViewUniforms(view, pTarget));
-
-			if (linePrimitives != 0)
+	graph.AddPass("Debug Rendering", RGPassFlag::Raster)
+		.RenderTarget(target, RenderPassAccess::Load_Store)
+		.DepthStencil(depth, RenderPassAccess::Load_Store, false)
+		.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
-				context.SetDynamicVertexBuffer(0, linePrimitives, VertexStride, m_Lines.data());
-				context.SetPipelineState(m_pLinesPSO);
-				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINELIST);
-				context.Draw(0, linePrimitives);
-			}
-			if (trianglePrimitives != 0)
-			{
-				context.SetDynamicVertexBuffer(0, trianglePrimitives, VertexStride, m_Triangles.data());
-				context.SetPipelineState(m_pTrianglesPSO);
-				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-				context.Draw(0, trianglePrimitives);
-			}
-			context.EndRenderPass();
-		});
+				context.BeginRenderPass(resources.GetRenderPassInfo());
+				context.SetGraphicsRootSignature(m_pRS);
+
+				context.SetRootCBV(0, Renderer::GetViewUniforms(view, resources.Get<Texture>(target)));
+
+				if (linePrimitives != 0)
+				{
+					context.SetDynamicVertexBuffer(0, linePrimitives, VertexStride, m_Lines.data());
+					context.SetPipelineState(m_pLinesPSO);
+					context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINELIST);
+					context.Draw(0, linePrimitives);
+				}
+				if (trianglePrimitives != 0)
+				{
+					context.SetDynamicVertexBuffer(0, trianglePrimitives, VertexStride, m_Triangles.data());
+					context.SetPipelineState(m_pTrianglesPSO);
+					context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+					context.Draw(0, trianglePrimitives);
+				}
+				context.EndRenderPass();
+			});
 	m_Lines.clear();
 	m_Triangles.clear();
 }

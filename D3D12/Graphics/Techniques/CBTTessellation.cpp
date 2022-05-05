@@ -53,7 +53,7 @@ CBTTessellation::CBTTessellation(GraphicsDevice* pDevice)
 }
 
 
-void CBTTessellation::Execute(RGGraph& graph, const SceneView& view, const SceneTextures& sceneTextures)
+void CBTTessellation::Execute(RGGraph& graph, const SceneView& view, SceneTextures& sceneTextures)
 {
 	float scale = 100;
 	Matrix terrainTransform = Matrix::CreateScale(scale, scale * CBTSettings::HeightScale, scale) * Matrix::CreateTranslation(-scale * 0.5f, -1.5f, -scale * 0.5f);
@@ -150,22 +150,25 @@ void CBTTessellation::Execute(RGGraph& graph, const SceneView& view, const Scene
 	updateData.SplitMode = m_SplitMode;
 	m_SplitMode = 1 - m_SplitMode;
 
+	RGResourceHandle cbtBuffer = graph.ImportBuffer("CBT Buffer", m_pCBTBuffer);
+
 	if (m_IsDirty)
 	{
-		graph.AddPass("CBT Upload")
-			.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
+		graph.AddPass("CBT Upload", RGPassFlag::Copy)
+			.Write(&cbtBuffer)
+			.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
-				context.WriteBuffer(m_pCBTBuffer, m_CBT.GetData(), m_CBT.GetMemoryUse());
+				context.WriteBuffer(resources.Get<Buffer>(cbtBuffer), m_CBT.GetData(), m_CBT.GetMemoryUse());
 				context.FlushResourceBarriers();
 			});
 		m_IsDirty = false;
 	}
 	if (!CBTSettings::MeshShader)
 	{
-		graph.AddPass("CBT Update")
-			.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
+		graph.AddPass("CBT Update", RGPassFlag::Compute)
+			.ReadWrite(&cbtBuffer)
+			.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
-				context.InsertResourceBarrier(m_pCBTBuffer, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 				context.InsertResourceBarrier(m_pCBTIndirectArgs, D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
 				context.SetComputeRootSignature(m_pCBTRS);
 
@@ -175,12 +178,13 @@ void CBTTessellation::Execute(RGGraph& graph, const SceneView& view, const Scene
 
 				context.SetPipelineState(m_pCBTUpdatePSO);
 				context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchSignature, 1, m_pCBTIndirectArgs, nullptr, IndirectDispatchArgsOffset);
-				context.InsertUavBarrier(m_pCBTBuffer);
+				context.InsertUavBarrier(resources.Get<Buffer>(cbtBuffer));
 			});
 	}
 
-	graph.AddPass("CBT Update Indirect Args")
-		.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
+	graph.AddPass("CBT Update Indirect Args", RGPassFlag::Compute)
+		.Read(cbtBuffer)
+		.Bind([=](CommandContext& context, const RGPassResources& resources)
 		{
 			context.SetComputeRootSignature(m_pCBTRS);
 			context.SetRootConstants(0, commonArgs);
@@ -191,53 +195,42 @@ void CBTTessellation::Execute(RGGraph& graph, const SceneView& view, const Scene
 			context.Dispatch(1);
 		});
 
-	graph.AddPass("CBT Render")
-		.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
-		{
-			context.InsertResourceBarrier(m_pCBTIndirectArgs, D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
-			context.InsertResourceBarrier(sceneTextures.pDepth, D3D12_RESOURCE_STATE_DEPTH_WRITE);
-			context.InsertResourceBarrier(sceneTextures.pColorTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
-			context.InsertResourceBarrier(sceneTextures.pNormalsTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
-			context.InsertResourceBarrier(sceneTextures.pRoughnessTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
-
-			context.SetGraphicsRootSignature(m_pCBTRS);
-			context.SetPipelineState(CBTSettings::MeshShader ? m_pCBTRenderMeshShaderPSO : m_pCBTRenderPSO);
-
-			context.SetRootConstants(0, commonArgs);
-			context.SetRootCBV(1, updateData);
-			context.SetRootCBV(2, Renderer::GetViewUniforms(view, sceneTextures.pColorTarget));
-
-			RenderPassInfo renderPass;
-			renderPass.DepthStencilTarget.Access = RenderPassAccess::Load_Store;
-			renderPass.DepthStencilTarget.StencilAccess = RenderPassAccess::DontCare_DontCare;
-			renderPass.DepthStencilTarget.Target = sceneTextures.pDepth;
-			renderPass.DepthStencilTarget.Write = true;
-			renderPass.RenderTargetCount = 3;
-			renderPass.RenderTargets[0].Access = RenderPassAccess::Load_Store;
-			renderPass.RenderTargets[0].Target = sceneTextures.pColorTarget;
-			renderPass.RenderTargets[1].Access = RenderPassAccess::Load_Store;
-			renderPass.RenderTargets[1].Target = sceneTextures.pNormalsTarget;
-			renderPass.RenderTargets[2].Access = RenderPassAccess::Load_Store;
-			renderPass.RenderTargets[2].Target = sceneTextures.pRoughnessTarget;
-
-			context.BeginRenderPass(renderPass);
-			if (CBTSettings::MeshShader)
+	graph.AddPass("CBT Render", RGPassFlag::Raster)
+		.ReadWrite(&cbtBuffer)
+		.DepthStencil(sceneTextures.Depth, RenderPassAccess::Load_Store, true)
+		.RenderTarget(sceneTextures.ColorTarget, RenderPassAccess::Load_Store)
+		.RenderTarget(sceneTextures.Normals, RenderPassAccess::Load_Store)
+		.RenderTarget(sceneTextures.Roughness, RenderPassAccess::Load_Store)
+		.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
-				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-				context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchMeshSignature, 1, m_pCBTIndirectArgs, nullptr, IndirectDispatchMeshArgsOffset);
-			}
-			else
-			{
-				context.SetPrimitiveTopology(CBTSettings::GeometryShaderSubD > 0 ? D3D_PRIMITIVE_TOPOLOGY_POINTLIST : D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-				context.ExecuteIndirect(GraphicsCommon::pIndirectDrawSignature, 1, m_pCBTIndirectArgs, nullptr, IndirectDrawArgsOffset);
-			}
-			context.EndRenderPass();
-		});
+				context.InsertResourceBarrier(m_pCBTIndirectArgs, D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
+
+				context.BeginRenderPass(resources.GetRenderPassInfo());
+
+				context.SetGraphicsRootSignature(m_pCBTRS);
+				context.SetPipelineState(CBTSettings::MeshShader ? m_pCBTRenderMeshShaderPSO : m_pCBTRenderPSO);
+
+				context.SetRootConstants(0, commonArgs);
+				context.SetRootCBV(1, updateData);
+				context.SetRootCBV(2, Renderer::GetViewUniforms(view, resources.Get<Texture>(sceneTextures.ColorTarget)));
+
+				if (CBTSettings::MeshShader)
+				{
+					context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+					context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchMeshSignature, 1, m_pCBTIndirectArgs, nullptr, IndirectDispatchMeshArgsOffset);
+				}
+				else
+				{
+					context.SetPrimitiveTopology(CBTSettings::GeometryShaderSubD > 0 ? D3D_PRIMITIVE_TOPOLOGY_POINTLIST : D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+					context.ExecuteIndirect(GraphicsCommon::pIndirectDrawSignature, 1, m_pCBTIndirectArgs, nullptr, IndirectDrawArgsOffset);
+				}
+				context.EndRenderPass();
+			});
 
 	// No longer need to compute the sum reduction tree for the last 5 layers. Instead, bits in the bitfield are counted directly
 #if 0
-	graph.AddPass("CBT Sum Reduction Prepass")
-		.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
+	graph.AddPass("CBT Sum Reduction Prepass", RGPassFlag::Compute)
+		.Bind([=](CommandContext& context, const RGPassResources& resources)
 		{
 			context.SetComputeRootSignature(m_pCBTRS);
 			context.SetComputeRootConstants(0, commonArgs);
@@ -260,8 +253,9 @@ void CBTTessellation::Execute(RGGraph& graph, const SceneView& view, const Scene
 	// Because the bits in the bitfield are counted directly, we need a snapshot of the bitfield before subdivision starts
 	// Cache the bitfield in the second to last layer as it is unused memory now.
 
-	graph.AddPass("CBT Cache Bitfield")
-		.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
+	graph.AddPass("CBT Cache Bitfield", RGPassFlag::Compute)
+		.ReadWrite(&cbtBuffer)
+		.Bind([=](CommandContext& context, const RGPassResources& resources)
 		{
 			context.SetComputeRootSignature(m_pCBTRS);
 			context.SetRootConstants(0, commonArgs);
@@ -280,8 +274,9 @@ void CBTTessellation::Execute(RGGraph& graph, const SceneView& view, const Scene
 			context.Dispatch(ComputeUtils::GetNumThreadGroups(1u << currentDepth, 256 * 32));
 		});
 
-	graph.AddPass("CBT Sum Reduction")
-		.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
+	graph.AddPass("CBT Sum Reduction", RGPassFlag::Compute)
+		.ReadWrite(&cbtBuffer)
+		.Bind([=](CommandContext& context, const RGPassResources& resources)
 		{
 			context.SetComputeRootSignature(m_pCBTRS);
 			context.SetRootConstants(0, commonArgs);
@@ -310,8 +305,9 @@ void CBTTessellation::Execute(RGGraph& graph, const SceneView& view, const Scene
 		ImGui::ImageAutoSize(m_pDebugVisualizeTexture, ImVec2((float)m_pDebugVisualizeTexture->GetWidth(), (float)m_pDebugVisualizeTexture->GetHeight()));
 		ImGui::End();
 
-		graph.AddPass("CBT Debug Visualize")
-			.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
+		graph.AddPass("CBT Debug Visualize", RGPassFlag::Raster)
+			.Read(cbtBuffer)
+			.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
 				context.InsertResourceBarrier(m_pCBTIndirectArgs, D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
 				context.InsertResourceBarrier(m_pDebugVisualizeTexture, D3D12_RESOURCE_STATE_RENDER_TARGET);

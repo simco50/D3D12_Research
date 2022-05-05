@@ -2,6 +2,7 @@
 #include "Core/BitField.h"
 #include "ShaderInterop.h"
 #include "AccelerationStructure.h"
+#include "RenderGraph/RenderGraphDefinitions.h"
 
 class Texture;
 class Buffer;
@@ -111,13 +112,15 @@ struct SceneView
 
 struct SceneTextures
 {
-	RefCountPtr<Texture> pColorTarget;
-	RefCountPtr<Texture> pNormalsTarget;
-	RefCountPtr<Texture> pRoughnessTarget;
-	RefCountPtr<Texture> pDepth;
-	RefCountPtr<Texture> pAmbientOcclusion;
-	RefCountPtr<Texture> pPreviousColorTarget;
-	RefCountPtr<Texture> pVelocity;
+	RGResourceHandle VisibilityBuffer;
+	RGResourceHandle PreviousColor;
+	RGResourceHandle Roughness;
+	RGResourceHandle ColorTarget;
+	RGResourceHandle Depth;
+	RGResourceHandle ResolvedDepth;
+	RGResourceHandle Normals;
+	RGResourceHandle Velocity;
+	RGResourceHandle AmbientOcclusion;
 };
 
 namespace Renderer

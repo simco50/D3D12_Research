@@ -258,7 +258,7 @@ namespace Renderer
 			else
 			{
 				context.SetIndexBuffer(b->pMesh->IndicesLocation);
-				context.DrawIndexed(b->pMesh->IndicesLocation.Elements, 0, 0);
+				context.DrawIndexedInstanced(b->pMesh->IndicesLocation.Elements, 0, 1, 0, 0);
 			}
 		}
 	}

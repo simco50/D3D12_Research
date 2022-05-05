@@ -11,84 +11,72 @@
 #include "Graphics/SceneView.h"
 
 RTReflections::RTReflections(GraphicsDevice* pDevice)
-	: m_pDevice(pDevice)
 {
 	if (pDevice->GetCapabilities().SupportsRaytracing())
 	{
-		SetupPipelines(pDevice);
+		m_pGlobalRS = new RootSignature(pDevice);
+		m_pGlobalRS->AddRootConstants(0, 1);
+		m_pGlobalRS->AddConstantBufferView(100);
+		m_pGlobalRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 4);
+		m_pGlobalRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 4);
+		m_pGlobalRS->Finalize("Global");
+
+		StateObjectInitializer stateDesc;
+		stateDesc.Name = "RT Reflections";
+		stateDesc.RayGenShader = "RayGen";
+		stateDesc.AddLibrary("RayTracing/RTReflections.hlsl");
+		stateDesc.AddLibrary("RayTracing/SharedRaytracingLib.hlsl", { "OcclusionMS", "MaterialCHS", "MaterialAHS", "MaterialMS" });
+		stateDesc.AddHitGroup("ReflectionHitGroup", "MaterialCHS", "MaterialAHS");
+		stateDesc.AddMissShader("MaterialMS");
+		stateDesc.AddMissShader("OcclusionMiss");
+		stateDesc.MaxPayloadSize = 6 * sizeof(float);
+		stateDesc.MaxAttributeSize = 2 * sizeof(float);
+		stateDesc.MaxRecursion = 2;
+		stateDesc.pGlobalRootSignature = m_pGlobalRS;
+		m_pRtSO = pDevice->CreateStateObject(stateDesc);
 	}
 }
 
-void RTReflections::Execute(RGGraph& graph, const SceneView& view, const SceneTextures& sceneTextures)
+void RTReflections::Execute(RGGraph& graph, const SceneView& view, SceneTextures& sceneTextures)
 {
-	graph.AddPass("RT Reflections")
-		.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
-		{
-			Texture* pTarget = m_pSceneColor;
+	RGResourceHandle reflectionsTarget = graph.CreateTexture("Reflections Target", graph.GetDesc(sceneTextures.ColorTarget));
 
-			context.CopyTexture(sceneTextures.pColorTarget, pTarget);
+	graph.AddCopyTexturePass("Cache Scene Color", sceneTextures.ColorTarget, reflectionsTarget);
 
-			context.InsertResourceBarrier(sceneTextures.pDepth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-			context.InsertResourceBarrier(sceneTextures.pNormalsTarget, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-			context.InsertResourceBarrier(sceneTextures.pRoughnessTarget, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-			context.InsertResourceBarrier(sceneTextures.pColorTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-			context.InsertResourceBarrier(m_pSceneColor, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-
-			context.SetComputeRootSignature(m_pGlobalRS);
-			context.SetPipelineState(m_pRtSO);
-
-			struct
+	graph.AddPass("RT Reflections", RGPassFlag::Compute)
+		.Read({ sceneTextures.Normals, sceneTextures.Depth, sceneTextures.Roughness, reflectionsTarget })
+		.Write(&sceneTextures.ColorTarget)
+		.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
-				float ViewPixelSpreadAngle;
-			} parameters;
+				Texture* pTarget = resources.Get<Texture>(sceneTextures.ColorTarget);
 
-			parameters.ViewPixelSpreadAngle = atanf(2.0f * tanf(view.View.FoV / 2) / (float)pTarget->GetHeight());
+				context.SetComputeRootSignature(m_pGlobalRS);
+				context.SetPipelineState(m_pRtSO);
 
-			ShaderBindingTable bindingTable(m_pRtSO);
-			bindingTable.BindRayGenShader("RayGen");
-			bindingTable.BindMissShader("MaterialMS", 0);
-			bindingTable.BindMissShader("OcclusionMS", 1);
-			bindingTable.BindHitGroup("ReflectionHitGroup", 0);
+				struct
+				{
+					float ViewPixelSpreadAngle;
+				} parameters;
 
-			context.SetRootConstants(0, parameters);
-			context.SetRootCBV(1, Renderer::GetViewUniforms(view, sceneTextures.pColorTarget));
-			context.BindResources(2, sceneTextures.pColorTarget->GetUAV());
-			context.BindResources(3, {
-				sceneTextures.pDepth->GetSRV(),
-				pTarget->GetSRV(),
-				sceneTextures.pNormalsTarget->GetSRV(),
-				sceneTextures.pRoughnessTarget->GetSRV(),
-				});
+				parameters.ViewPixelSpreadAngle = atanf(2.0f * tanf(view.View.FoV / 2) / (float)pTarget->GetHeight());
 
-			context.DispatchRays(bindingTable, sceneTextures.pColorTarget->GetWidth(), sceneTextures.pColorTarget->GetHeight());
-		});
+				ShaderBindingTable bindingTable(m_pRtSO);
+				bindingTable.BindRayGenShader("RayGen");
+				bindingTable.BindMissShader("MaterialMS", 0);
+				bindingTable.BindMissShader("OcclusionMS", 1);
+				bindingTable.BindHitGroup("ReflectionHitGroup", 0);
+
+				context.SetRootConstants(0, parameters);
+				context.SetRootCBV(1, Renderer::GetViewUniforms(view, pTarget));
+				context.BindResources(2, pTarget->GetUAV());
+				context.BindResources(3, {
+					resources.Get<Texture>(sceneTextures.Depth)->GetSRV(),
+					resources.Get<Texture>(reflectionsTarget)->GetSRV(),
+					resources.Get<Texture>(sceneTextures.Normals)->GetSRV(),
+					resources.Get<Texture>(sceneTextures.Roughness)->GetSRV(),
+					});
+
+				context.DispatchRays(bindingTable, pTarget->GetWidth(), pTarget->GetHeight());
+			});
 }
 
-void RTReflections::OnResize(uint32 width, uint32 height)
-{
-	m_pSceneColor = m_pDevice->CreateTexture(TextureDesc::Create2D(width, height, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::ShaderResource, 1, 1), "SceneColor Copy");
-}
-
-void RTReflections::SetupPipelines(GraphicsDevice* pDevice)
-{
-	m_pGlobalRS = new RootSignature(pDevice);
-	m_pGlobalRS->AddRootConstants(0, 1);
-	m_pGlobalRS->AddConstantBufferView(100);
-	m_pGlobalRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 4);
-	m_pGlobalRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 4);
-	m_pGlobalRS->Finalize("Global");
-
-	StateObjectInitializer stateDesc;
-	stateDesc.Name = "RT Reflections";
-	stateDesc.RayGenShader = "RayGen";
-	stateDesc.AddLibrary("RayTracing/RTReflections.hlsl");
-	stateDesc.AddLibrary("RayTracing/SharedRaytracingLib.hlsl", { "OcclusionMS", "MaterialCHS", "MaterialAHS", "MaterialMS" });
-	stateDesc.AddHitGroup("ReflectionHitGroup", "MaterialCHS", "MaterialAHS");
-	stateDesc.AddMissShader("MaterialMS");
-	stateDesc.AddMissShader("OcclusionMiss");
-	stateDesc.MaxPayloadSize = 6 * sizeof(float);
-	stateDesc.MaxAttributeSize = 2 * sizeof(float);
-	stateDesc.MaxRecursion = 2;
-	stateDesc.pGlobalRootSignature = m_pGlobalRS;
-	m_pRtSO = pDevice->CreateStateObject(stateDesc);
-}

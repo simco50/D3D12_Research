@@ -1,4 +1,5 @@
 #pragma once
+#include "../RenderGraph/RenderGraphDefinitions.h"
 
 class GraphicsDevice;
 class Buffer;
@@ -16,8 +17,8 @@ public:
 	GpuParticles(GraphicsDevice* pDevice);
 	~GpuParticles() = default;
 
-	void Simulate(RGGraph& graph, const SceneView& view, Texture* pSourceDepth);
-	void Render(RGGraph& graph, const SceneView& view, const SceneTextures& sceneTextures);
+	void Simulate(RGGraph& graph, const SceneView& view, RGResourceHandle depth);
+	void Render(RGGraph& graph, const SceneView& view, SceneTextures& sceneTextures);
 private:
 
 	GraphicsDevice* m_pDevice;

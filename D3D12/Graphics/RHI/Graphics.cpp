@@ -362,12 +362,10 @@ GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
 		NewFilter.DenyList.NumIDs = _countof(DenyIds);
 		NewFilter.DenyList.pIDList = DenyIds;
 
-		if (CommandLine::GetBool("d3dbreakvalidation"))
-		{
-			VERIFY_HR_EX(pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, true), GetDevice());
-			VERIFY_HR_EX(pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_WARNING, true), GetDevice());
-			E_LOG(Warning, "D3D Validation Break on Severity Enabled");
-		}
+		VERIFY_HR_EX(pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, true), GetDevice());
+		VERIFY_HR_EX(pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_WARNING, true), GetDevice());
+		E_LOG(Warning, "D3D Validation Break on Severity Enabled");
+
 		pInfoQueue->PushStorageFilter(&NewFilter);
 
 		RefCountPtr<ID3D12InfoQueue1> pInfoQueue1;
@@ -1335,4 +1333,10 @@ bool SwapChain::DisplaySupportsHDR() const
 		}
 	}
 	return false;
+}
+
+IntVector2 SwapChain::GetViewport() const
+{
+	Texture* pTexture = GetBackBuffer();
+	return IntVector2(pTexture->GetWidth(), pTexture->GetHeight());
 }

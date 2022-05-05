@@ -153,8 +153,6 @@ void CommandContext::CopyTexture(GraphicsResource* pSource, GraphicsResource* pT
 {
 	checkf(pSource && pSource->GetResource(), "Source is invalid");
 	checkf(pTarget && pTarget->GetResource(), "Target is invalid");
-	InsertResourceBarrier(pSource, D3D12_RESOURCE_STATE_COPY_SOURCE);
-	InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_COPY_DEST);
 	FlushResourceBarriers();
 	m_pCommandList->CopyResource(pTarget->GetResource(), pSource->GetResource());
 }
@@ -193,20 +191,7 @@ void CommandContext::WriteTexture(Texture* pResource, D3D12_SUBRESOURCE_DATA* pS
 {
 	uint64 requiredSize = GetRequiredIntermediateSize(pResource->GetResource(), firstSubResource, subResourceCount);
 	DynamicAllocation allocation = m_pDynamicAllocator->Allocate(requiredSize, D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT);
-
-	bool resetState = false;
-	D3D12_RESOURCE_STATES previousState = GetResourceStateWithFallback(pResource, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES);
-	if (previousState != D3D12_RESOURCE_STATE_COPY_DEST)
-	{
-		resetState = true;
-		InsertResourceBarrier(pResource, D3D12_RESOURCE_STATE_COPY_DEST);
-		FlushResourceBarriers();
-	}
 	UpdateSubresources(m_pCommandList, pResource->GetResource(), allocation.pBackingResource->GetResource(), allocation.Offset, firstSubResource, subResourceCount, pSubResourceDatas);
-	if (resetState)
-	{
-		InsertResourceBarrier(pResource, previousState);
-	}
 }
 
 void CommandContext::Dispatch(uint32 groupCountX, uint32 groupCountY, uint32 groupCountZ)
@@ -394,6 +379,23 @@ bool CommandContext::IsTransitionAllowed(D3D12_COMMAND_LIST_TYPE commandlistType
 	return true;
 }
 
+void CommandContext::ResolvePendingBarriers(CommandContext& resolveContext)
+{
+	for (const CommandContext::PendingBarrier& pending : m_PendingBarriers)
+	{
+		uint32 subResource = pending.Subresource;
+		GraphicsResource* pResource = pending.pResource;
+		D3D12_RESOURCE_STATES beforeState = pResource->GetResourceState(subResource);
+		checkf(CommandContext::IsTransitionAllowed(m_Type, beforeState),
+			"Resource (%s) can not be transitioned from this state (%s) on this queue (%s). Insert a barrier on another queue before executing this one.",
+			pResource->GetName().c_str(), D3D::ResourceStateToString(beforeState).c_str(), D3D::CommandlistTypeToString(m_Type));
+
+		resolveContext.m_BarrierBatcher.AddTransition(pResource->GetResource(), beforeState, pending.State.Get(subResource), subResource);
+		pResource->SetResourceState(GetLocalResourceState(pending.pResource, subResource));
+	}
+	resolveContext.FlushResourceBarriers();
+}
+
 void CommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 {
 	checkf(!m_InRenderPass, "Already in RenderPass");
@@ -558,14 +560,6 @@ void CommandContext::Draw(uint32 vertexStart, uint32 vertexCount, uint32 instanc
 	check(m_CurrentCommandContext == CommandListContext::Graphics);
 	PrepareDraw();
 	m_pCommandList->DrawInstanced(vertexCount, instances, vertexStart, instanceStart);
-}
-
-void CommandContext::DrawIndexed(uint32 indexCount, uint32 indexStart, uint32 minVertex /*= 0*/)
-{
-	check(m_pCurrentPSO && m_pCurrentPSO->GetType() == PipelineStateType::Graphics);
-	check(m_CurrentCommandContext == CommandListContext::Graphics);
-	PrepareDraw();
-	m_pCommandList->DrawIndexedInstanced(indexCount, 1, indexStart, minVertex, 0);
 }
 
 void CommandContext::DrawIndexedInstanced(uint32 indexCount, uint32 indexStart, uint32 instanceCount, uint32 minVertex /*= 0*/, uint32 instanceStart /*= 0*/)

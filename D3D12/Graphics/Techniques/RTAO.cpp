@@ -15,19 +15,40 @@ RTAO::RTAO(GraphicsDevice* pDevice)
 {
 	if (pDevice->GetCapabilities().SupportsRaytracing())
 	{
-		SetupPipelines(pDevice);
+		m_pCommonRS = new RootSignature(pDevice);
+		m_pCommonRS->AddRootConstants(0, 4);
+		m_pCommonRS->AddConstantBufferView(100);
+		m_pCommonRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1);
+		m_pCommonRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 4);
+		m_pCommonRS->Finalize("Global");
+
+		StateObjectInitializer stateDesc;
+		stateDesc.AddLibrary("RayTracing/RTAOTraceRays.hlsl");
+		stateDesc.AddLibrary("RayTracing/SharedRaytracingLib.hlsl", { "OcclusionMS" });
+		stateDesc.Name = "RT AO";
+		stateDesc.MaxPayloadSize = sizeof(float);
+		stateDesc.pGlobalRootSignature = m_pCommonRS;
+		stateDesc.RayGenShader = "RayGen";
+		stateDesc.AddMissShader("OcclusionMS");
+		m_pTraceRaysSO = pDevice->CreateStateObject(stateDesc);
+
+		m_pDenoisePSO = pDevice->CreateComputePipeline(m_pCommonRS, "RayTracing/RTAODenoise.hlsl", "DenoiseCS");
+		m_pBilateralBlurPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "SSAOBlur.hlsl", "CSMain");
 	}
 }
 
 void RTAO::Execute(RGGraph& graph, const SceneView& view, SceneTextures& sceneTextures)
 {
-	TextureDesc aoDesc = sceneTextures.pAmbientOcclusion->GetDesc();
-	if (!m_Targets[0] || m_Targets[0]->GetDesc() != aoDesc)
+	TextureDesc aoDesc = graph.GetDesc(sceneTextures.AmbientOcclusion);
+
+	RGResourceHandle rayTraceTarget = graph.CreateTexture("AO Target 0", aoDesc);
+	RGResourceHandle denoiseTarget = graph.CreateTexture("AO Target 1", aoDesc);
+
+	if (!m_pHistory || m_pHistory->GetDesc() != aoDesc)
 	{
-		m_Targets[0] = m_pDevice->CreateTexture(aoDesc, "AO Target 0");
-		m_Targets[1] = m_pDevice->CreateTexture(aoDesc, "AO Target 1");
 		m_pHistory = m_pDevice->CreateTexture(aoDesc, "AO History");
 	}
+	RGResourceHandle aoHistory = graph.ImportTexture("AO History", m_pHistory);
 
 	static float g_AoPower = 1.0f;
 	static float g_AoRadius = 2.0f;
@@ -46,138 +67,121 @@ void RTAO::Execute(RGGraph& graph, const SceneView& view, SceneTextures& sceneTe
 
 	RG_GRAPH_SCOPE("RTAO", graph);
 
-	Texture* pRayTraceTarget = m_Targets[0];
-	Texture* pDenoiseTarget = m_Targets[1];
-
-	graph.AddPass("Trace Rays")
-		.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
-		{
-			context.InsertResourceBarrier(sceneTextures.pDepth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-			context.InsertResourceBarrier(pRayTraceTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-
-			context.SetComputeRootSignature(m_pCommonRS);
-			context.SetPipelineState(m_pTraceRaysSO);
-
-			struct
+	graph.AddPass("Trace Rays", RGPassFlag::Compute)
+		.Read(sceneTextures.Depth)
+		.Write(&rayTraceTarget)
+		.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
-				float Power;
-				float Radius;
-				uint32 Samples;
-			} parameters{};
+				Texture* pRayTraceTarget = resources.Get<Texture>(rayTraceTarget);
 
-			parameters.Power = g_AoPower;
-			parameters.Radius = g_AoRadius;
-			parameters.Samples = g_AoSamples;
+				context.SetComputeRootSignature(m_pCommonRS);
+				context.SetPipelineState(m_pTraceRaysSO);
 
-			ShaderBindingTable bindingTable(m_pTraceRaysSO);
-			bindingTable.BindRayGenShader("RayGen");
-			bindingTable.BindMissShader("OcclusionMS", {});
+				struct
+				{
+					float Power;
+					float Radius;
+					uint32 Samples;
+				} parameters{};
 
-			context.SetRootConstants(0, parameters);
-			context.SetRootCBV(1, Renderer::GetViewUniforms(view, pRayTraceTarget));
-			context.BindResources(2, pRayTraceTarget->GetUAV());
-			context.BindResources(3, {
-				sceneTextures.pDepth->GetSRV()
-				});
+				parameters.Power = g_AoPower;
+				parameters.Radius = g_AoRadius;
+				parameters.Samples = g_AoSamples;
 
-			context.DispatchRays(bindingTable, pRayTraceTarget->GetWidth(), pRayTraceTarget->GetHeight());
-		});
+				ShaderBindingTable bindingTable(m_pTraceRaysSO);
+				bindingTable.BindRayGenShader("RayGen");
+				bindingTable.BindMissShader("OcclusionMS", {});
 
-	graph.AddPass("Denoise")
-		.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
-		{
-			context.InsertResourceBarrier(pRayTraceTarget, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-			context.InsertResourceBarrier(m_pHistory, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-			context.InsertResourceBarrier(pDenoiseTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+				context.SetRootConstants(0, parameters);
+				context.SetRootCBV(1, Renderer::GetViewUniforms(view, pRayTraceTarget));
+				context.BindResources(2, pRayTraceTarget->GetUAV());
+				context.BindResources(3, {
+					resources.Get<Texture>(sceneTextures.Depth)->GetSRV(),
+					});
 
-			context.SetComputeRootSignature(m_pCommonRS);
-			context.SetPipelineState(m_pDenoisePSO);
+				context.DispatchRays(bindingTable, pRayTraceTarget->GetWidth(), pRayTraceTarget->GetHeight());
+			});
 
-			//context.SetRootCBV(0, parameters);
-			context.SetRootCBV(1, Renderer::GetViewUniforms(view, pDenoiseTarget));
-			context.BindResources(2, pDenoiseTarget->GetUAV());
-			context.BindResources(3, {
-				sceneTextures.pDepth->GetSRV(),
-				m_pHistory->GetSRV(),
-				pRayTraceTarget->GetSRV(),
-				sceneTextures.pVelocity->GetSRV(),
-				});
-
-			context.Dispatch(ComputeUtils::GetNumThreadGroups(pDenoiseTarget->GetWidth(), 8, pDenoiseTarget->GetHeight(), 8));
-
-			context.InsertResourceBarrier(pDenoiseTarget, D3D12_RESOURCE_STATE_COPY_SOURCE);
-			context.InsertResourceBarrier(m_pHistory, D3D12_RESOURCE_STATE_COPY_DEST);
-			context.CopyTexture(pDenoiseTarget, m_pHistory);
-		});
-
-	graph.AddPass("Blur AO")
-		.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
-		{
-			Texture* pSource = pDenoiseTarget;
-			Texture* pTarget = pRayTraceTarget;
-
-			context.InsertResourceBarrier(pDenoiseTarget, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
-			context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-
-			context.SetComputeRootSignature(m_pCommonRS);
-			context.SetPipelineState(m_pBilateralBlurPSO);
-
-			struct
+	graph.AddPass("Denoise", RGPassFlag::Compute)
+		.Read({ rayTraceTarget, sceneTextures.Velocity, sceneTextures.Depth, aoHistory })
+		.Write(&denoiseTarget)
+		.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
-				Vector2 DimensionsInv;
-				uint32 Horizontal;
-			} shaderParameters;
+				Texture* pDenoiseTarget = resources.Get<Texture>(denoiseTarget);
 
-			shaderParameters.Horizontal = 1;
-			shaderParameters.DimensionsInv = Vector2(1.0f / pTarget->GetWidth(), 1.0f / pTarget->GetHeight());
+				context.SetComputeRootSignature(m_pCommonRS);
+				context.SetPipelineState(m_pDenoisePSO);
 
-			context.SetRootConstants(0, shaderParameters);
-			context.SetRootCBV(1, Renderer::GetViewUniforms(view, pTarget));
-			context.BindResources(2, pTarget->GetUAV());
-			context.BindResources(3, {
-				sceneTextures.pDepth->GetSRV(),
-				pSource->GetSRV()
-				});
+				//context.SetRootCBV(0, parameters);
+				context.SetRootCBV(1, Renderer::GetViewUniforms(view, pDenoiseTarget));
+				context.BindResources(2, pDenoiseTarget->GetUAV());
+				context.BindResources(3, {
+					resources.Get<Texture>(sceneTextures.Depth)->GetSRV(),
+					resources.Get<Texture>(aoHistory)->GetSRV(),
+					resources.Get<Texture>(rayTraceTarget)->GetSRV(),
+					resources.Get<Texture>(sceneTextures.Velocity)->GetSRV(),
+					});
+				context.Dispatch(ComputeUtils::GetNumThreadGroups(pDenoiseTarget->GetWidth(), 8, pDenoiseTarget->GetHeight(), 8));
+			});
 
-			context.Dispatch(ComputeUtils::GetNumThreadGroups(pTarget->GetWidth(), 256, pTarget->GetHeight(), 1));
+	graph.AddCopyTexturePass("Store AO History", denoiseTarget, aoHistory);
 
-			pTarget = sceneTextures.pAmbientOcclusion;
-			pSource = pRayTraceTarget;
+	graph.AddPass("Blur AO - Horizontal", RGPassFlag::Compute)
+		.Read({ denoiseTarget, sceneTextures.Depth })
+		.Write(&rayTraceTarget)
+		.Bind([=](CommandContext& context, const RGPassResources& resources)
+			{
+				Texture* pTarget = resources.Get<Texture>(rayTraceTarget);
 
-			context.InsertResourceBarrier(pSource, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-			context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+				context.SetComputeRootSignature(m_pCommonRS);
+				context.SetPipelineState(m_pBilateralBlurPSO);
 
-			context.BindResources(2, pTarget->GetUAV());
-			context.BindResources(3, {
-				sceneTextures.pDepth->GetSRV(),
-				pSource->GetSRV()
-				});
+				struct
+				{
+					Vector2 DimensionsInv;
+					uint32 Horizontal;
+				} shaderParameters;
 
-			shaderParameters.Horizontal = 0;
-			context.SetRootConstants(0, shaderParameters);
-			context.Dispatch(ComputeUtils::GetNumThreadGroups(pTarget->GetWidth(), 1, pTarget->GetHeight(), 256));
-		});
-}
+				shaderParameters.Horizontal = 1;
+				shaderParameters.DimensionsInv = Vector2(1.0f / pTarget->GetWidth(), 1.0f / pTarget->GetHeight());
 
-void RTAO::SetupPipelines(GraphicsDevice* pDevice)
-{
-	m_pCommonRS = new RootSignature(pDevice);
-	m_pCommonRS->AddRootConstants(0, 4);
-	m_pCommonRS->AddConstantBufferView(100);
-	m_pCommonRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1);
-	m_pCommonRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 4);
-	m_pCommonRS->Finalize("Global");
+				context.SetRootConstants(0, shaderParameters);
+				context.SetRootCBV(1, Renderer::GetViewUniforms(view, pTarget));
+				context.BindResources(2, pTarget->GetUAV());
+				context.BindResources(3, {
+					resources.Get<Texture>(sceneTextures.Depth)->GetSRV(),
+					resources.Get<Texture>(denoiseTarget)->GetSRV()
+					});
 
-	StateObjectInitializer stateDesc;
-	stateDesc.AddLibrary("RayTracing/RTAOTraceRays.hlsl");
-	stateDesc.AddLibrary("RayTracing/SharedRaytracingLib.hlsl", { "OcclusionMS" });
-	stateDesc.Name = "RT AO";
-	stateDesc.MaxPayloadSize = sizeof(float);
-	stateDesc.pGlobalRootSignature = m_pCommonRS;
-	stateDesc.RayGenShader = "RayGen";
-	stateDesc.AddMissShader("OcclusionMS");
-	m_pTraceRaysSO = pDevice->CreateStateObject(stateDesc);
+				context.Dispatch(ComputeUtils::GetNumThreadGroups(pTarget->GetWidth(), 256, pTarget->GetHeight(), 1));
+			});
 
-	m_pDenoisePSO = pDevice->CreateComputePipeline(m_pCommonRS, "RayTracing/RTAODenoise.hlsl", "DenoiseCS");
-	m_pBilateralBlurPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "SSAOBlur.hlsl", "CSMain");
+	graph.AddPass("Blur AO - Horizontal", RGPassFlag::Compute)
+		.Read({ rayTraceTarget, sceneTextures.Depth })
+		.Write(&sceneTextures.AmbientOcclusion)
+		.Bind([=](CommandContext& context, const RGPassResources& resources)
+			{
+				Texture* pTarget = resources.Get<Texture>(sceneTextures.AmbientOcclusion);
+
+				context.SetComputeRootSignature(m_pCommonRS);
+				context.SetPipelineState(m_pBilateralBlurPSO);
+
+				struct
+				{
+					Vector2 DimensionsInv;
+					uint32 Horizontal;
+				} shaderParameters;
+
+				shaderParameters.DimensionsInv = Vector2(1.0f / pTarget->GetWidth(), 1.0f / pTarget->GetHeight());
+				shaderParameters.Horizontal = 0;
+
+				context.SetRootConstants(0, shaderParameters);
+				context.BindResources(2, pTarget->GetUAV());
+				context.BindResources(3, {
+					resources.Get<Texture>(sceneTextures.Depth)->GetSRV(),
+					resources.Get<Texture>(rayTraceTarget)->GetSRV()
+					});
+
+				context.Dispatch(ComputeUtils::GetNumThreadGroups(pTarget->GetWidth(), 1, pTarget->GetHeight(), 256));
+			});
 }
