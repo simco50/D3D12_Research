@@ -344,6 +344,11 @@ public:
 		return CreateResourceNodeT<Texture>(pResource);
 	}
 
+	RGHandle<Texture> TryImportTexture(const char* pName, Texture* pTexture)
+	{
+		return pTexture ? ImportTexture(pName, pTexture) : RGHandle<Texture>();
+	}
+
 	RGHandle<Buffer> ImportBuffer(const char* pName, Buffer* pBuffer, Buffer* pFallback = nullptr)
 	{
 		check(pBuffer || pFallback);
@@ -353,9 +358,19 @@ public:
 		return CreateResourceNodeT<Buffer>(pResource);
 	}
 
+	RGHandle<Buffer> TryImportBuffer(const char* pName, Buffer* pBuffer)
+	{
+		return pBuffer ? ImportBuffer(pName, pBuffer) : RGHandle<Buffer>();
+	}
+
 	void ExportTexture(RGHandle<Texture> handle, RefCountPtr<Texture>* pTarget)
 	{
-		m_ExportResources.push_back({ handle, pTarget });
+		m_ExportTextures.push_back({ handle, pTarget });
+	}
+
+	void ExportBuffer(RGHandle<Buffer> handle, RefCountPtr<Buffer>* pTarget)
+	{
+		m_ExportBuffers.push_back({ handle, pTarget });
 	}
 
 	bool IsValidHandle(RGHandleT handle) const
@@ -422,12 +437,14 @@ private:
 	std::vector<RGNode> m_ResourceNodes;
 	RGResourcePool& m_ResourcePool;
 
+	template<typename T>
 	struct ExportedResource
 	{
-		RGHandle<Texture> Handle;
-		RefCountPtr<Texture>* pTarget;
+		RGHandle<T> Handle;
+		RefCountPtr<T>* pTarget;
 	};
-	std::vector<ExportedResource> m_ExportResources;
+	std::vector<ExportedResource<Texture>> m_ExportTextures;
+	std::vector<ExportedResource<Buffer>> m_ExportBuffers;
 };
 
 class RGGraphScope

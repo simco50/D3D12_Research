@@ -449,21 +449,18 @@ void DemoApp::Update()
 	}
 
 	RGGraph graph(m_pDevice, *m_RenderGraphPool);
-
-	uint32 width = (uint32)m_SceneData.View.Viewport.GetWidth();
-	uint32 height = (uint32)m_SceneData.View.Viewport.GetHeight();
-
 	SceneTextures sceneTextures;
 
-	sceneTextures.VisibilityBuffer = graph.CreateTexture("Visibility Buffer", TextureDesc::CreateRenderTarget(width, height, DXGI_FORMAT_R32_UINT));
+	IntVector2 viewDimensions = m_SceneData.GetDimensions();
+	sceneTextures.VisibilityBuffer = graph.CreateTexture("Visibility Buffer", TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, DXGI_FORMAT_R32_UINT));
 	sceneTextures.PreviousColor = graph.ImportTexture("Previous Color", m_pColorHistory);
-	sceneTextures.Roughness = graph.CreateTexture("Roughness", TextureDesc::CreateRenderTarget(width, height, DXGI_FORMAT_R8_UNORM));
-	sceneTextures.ColorTarget = graph.CreateTexture("Color Target", TextureDesc::CreateRenderTarget(width, height, DXGI_FORMAT_R16G16B16A16_FLOAT));
-	sceneTextures.AmbientOcclusion = graph.CreateTexture("Ambient Occlusion", TextureDesc::Create2D(width, height, DXGI_FORMAT_R8_UNORM));
-	sceneTextures.Normals = graph.CreateTexture("Normals", TextureDesc::CreateRenderTarget(width, height, DXGI_FORMAT_R16G16_FLOAT));
-	sceneTextures.Velocity = graph.CreateTexture("Velocity", TextureDesc::CreateRenderTarget(width, height, DXGI_FORMAT_R16G16_FLOAT));
-	sceneTextures.Depth = graph.CreateTexture("Depth Stencil", TextureDesc::CreateDepth(width, height, DXGI_FORMAT_D32_FLOAT, TextureFlag::None, 1, ClearBinding(0.0f, 0)));
-	sceneTextures.ResolvedDepth = graph.CreateTexture("Resolved Depth", TextureDesc::CreateDepth(width, height, DXGI_FORMAT_D32_FLOAT, TextureFlag::None, 1, ClearBinding(0.0f, 0)));
+	sceneTextures.Roughness = graph.CreateTexture("Roughness", TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, DXGI_FORMAT_R8_UNORM));
+	sceneTextures.ColorTarget = graph.CreateTexture("Color Target", TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, DXGI_FORMAT_R16G16B16A16_FLOAT));
+	sceneTextures.AmbientOcclusion = graph.CreateTexture("Ambient Occlusion", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, DXGI_FORMAT_R8_UNORM));
+	sceneTextures.Normals = graph.CreateTexture("Normals", TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, DXGI_FORMAT_R16G16_FLOAT));
+	sceneTextures.Velocity = graph.CreateTexture("Velocity", TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, DXGI_FORMAT_R16G16_FLOAT));
+	sceneTextures.Depth = graph.CreateTexture("Depth Stencil", TextureDesc::CreateDepth(viewDimensions.x, viewDimensions.y, DXGI_FORMAT_D32_FLOAT, TextureFlag::None, 1, ClearBinding(0.0f, 0)));
+	sceneTextures.ResolvedDepth = graph.CreateTexture("Resolved Depth", TextureDesc::CreateDepth(viewDimensions.x, viewDimensions.y, DXGI_FORMAT_D32_FLOAT, TextureFlag::None, 1, ClearBinding(0.0f, 0)));
 
 	if (m_RenderPath == RenderPath::Clustered || m_RenderPath == RenderPath::Tiled || m_RenderPath == RenderPath::Visibility)
 	{
@@ -1130,7 +1127,7 @@ void DemoApp::Update()
 		}
 	}
 
-	RGHandle<Texture> tonemapTarget = graph.CreateTexture("Tonemap Target", TextureDesc::Create2D(width, height, DXGI_FORMAT_R8G8B8A8_UNORM));
+	RGHandle<Texture> tonemapTarget = graph.CreateTexture("Tonemap Target", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, DXGI_FORMAT_R8G8B8A8_UNORM));
 
 	graph.AddPass("Tonemap", RGPassFlag::Compute)
 		.Read(sceneTextures.ColorTarget)
@@ -1306,8 +1303,6 @@ void DemoApp::OnResizeViewport(int width, int height)
 
 	m_pColorHistory = m_pDevice->CreateTexture(TextureDesc::Create2D(width, height, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::ShaderResource), "Previous Color");
 	m_ColorOutput = m_pDevice->CreateTexture(TextureDesc::Create2D(width, height, DXGI_FORMAT_R8G8B8A8_UNORM), "Final Target");
-
-	m_pClusteredForward->OnResize(width, height);
 
 	for (int i = 0; i < SwapChain::NUM_FRAMES; ++i)
 	{
@@ -1759,8 +1754,7 @@ void DemoApp::UpdateImGui()
 	{
 		if (ImGui::Begin("Profiler", &showProfiler))
 		{
-			IntVector2 viewport((int)m_SceneData.View.Viewport.GetWidth(), (int)m_SceneData.View.Viewport.GetHeight());
-			ImGui::Text("MS: %4.2f | FPS: %4.2f | %d x %d", Time::DeltaTime() * 1000.0f, 1.0f / Time::DeltaTime(), viewport.x, viewport.y);
+			ImGui::Text("MS: %4.2f | FPS: %4.2f | %d x %d", Time::DeltaTime() * 1000.0f, 1.0f / Time::DeltaTime(), m_SceneData.GetDimensions().x, m_SceneData.GetDimensions().y);
 			ImGui::PlotLines("", m_FrameTimes.data(), (int)m_FrameTimes.size(), m_Frame % m_FrameTimes.size(), 0, 0.0f, 0.03f, ImVec2(ImGui::GetContentRegionAvail().x, 100));
 
 			if (ImGui::TreeNodeEx("Profiler", ImGuiTreeNodeFlags_DefaultOpen))

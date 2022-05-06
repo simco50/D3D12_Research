@@ -393,3 +393,8 @@ namespace GraphicsCommon
 		return nullptr;
 	}
 }
+
+IntVector2 SceneView::GetDimensions() const
+{
+	return IntVector2((uint32)View.Viewport.GetWidth(), (uint32)View.Viewport.GetHeight());
+}

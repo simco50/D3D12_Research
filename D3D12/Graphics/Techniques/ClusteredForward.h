@@ -19,9 +19,6 @@ struct ClusteredLightCullData
 	RGHandle<Buffer> LightGrid;
 
 	Vector2 LightGridParams;
-	bool IsViewDirty = true;
-
-	RefCountPtr<Buffer> pAABBs;
 
 	RefCountPtr<Buffer> pDebugLightGrid;
 	Matrix DebugClustersViewMatrix;
@@ -39,13 +36,9 @@ public:
 	ClusteredForward(GraphicsDevice* pDevice);
 	~ClusteredForward();
 
-	void OnResize(int windowWidth, int windowHeight);
-
-	void CreateLightCullingResources(ClusteredLightCullData& resources, const IntVector2& viewDimensions);
 	void ComputeLightCulling(RGGraph& graph, const SceneView& view, ClusteredLightCullData& resources);
 	void VisualizeClusters(RGGraph& graph, const SceneView& view, SceneTextures& sceneTextures, ClusteredLightCullData& resources);
 
-	void CreateVolumetricFogResources(VolumetricFogData& resources, const IntVector2& viewDimensions);
 	RGHandle<Texture> RenderVolumetricFog(RGGraph& graph, const SceneView& view, const ClusteredLightCullData& cullData, VolumetricFogData& fogData);
 
 	void RenderBasePass(RGGraph& graph, const SceneView& view, SceneTextures& sceneTextures, const ClusteredLightCullData& lightCullData, RGHandle<Texture> fogTexture);
