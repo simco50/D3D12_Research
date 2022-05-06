@@ -9,20 +9,6 @@ RGBlackboard& RGBlackboard::Branch()
 	return b;
 }
 
-void* RGBlackboard::GetData(StringHash h)
-{
-	auto it = m_DataMap.find(h);
-	if (it != m_DataMap.end())
-	{
-		return it->second;
-	}
-	if (m_pParent)
-	{
-		return m_pParent->GetData(h);
-	}
-	return nullptr;
-}
-
 void RGBlackboard::Merge(const RGBlackboard& other, bool overrideExisting)
 {
 	for (auto& element : other.m_DataMap)

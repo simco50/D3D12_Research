@@ -17,10 +17,9 @@ static constexpr int FORWARD_PLUS_BLOCK_SIZE = 16;
 
 struct CullBlackboardData
 {
-	RG_BLACKBOARD_DATA(CullBlackboardData);
-
 	RGResourceHandle LightGridOpaque;
 };
+RG_BLACKBOARD_DATA(CullBlackboardData);
 
 TiledForward::TiledForward(GraphicsDevice* pDevice)
 	: m_pDevice(pDevice)
@@ -189,7 +188,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& view, SceneTextures&
 				context.EndRenderPass();
 			});
 	
-	CullBlackboardData& blackboardData = graph.Blackboard().Add<CullBlackboardData>();
+	CullBlackboardData& blackboardData = graph.Blackboard.Add<CullBlackboardData>();
 	blackboardData.LightGridOpaque = lightGridOpaque;
 }
 
@@ -197,7 +196,7 @@ void TiledForward::VisualizeLightDensity(RGGraph& graph, GraphicsDevice* pDevice
 {
 	RGResourceHandle visualizationIntermediate = graph.CreateTexture("Light Density Debug Texture", graph.GetDesc(sceneTextures.ColorTarget));
 
-	CullBlackboardData& blackboardData = graph.Blackboard().Get<CullBlackboardData>();
+	const CullBlackboardData& blackboardData = graph.Blackboard.Get<CullBlackboardData>();
 	RGResourceHandle lightGridOpaque = blackboardData.LightGridOpaque;
 
 	graph.AddCopyPass("Cache Scene Color", sceneTextures.ColorTarget, visualizationIntermediate);

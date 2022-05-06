@@ -71,11 +71,6 @@ struct RGResource
 		return static_cast<T*>(pPhysicalResource.Get());
 	}
 
-	GraphicsResource* GetRHIDirect() const
-	{
-		return pPhysicalResource.Get();
-	}
-
 	union
 	{
 		TextureDesc TextureDesc;
@@ -120,7 +115,7 @@ public:
 
 	GraphicsResource* Get(RGResourceHandle handle) const
 	{
-		return GetResource(handle)->GetRHIDirect();
+		return GetResource(handle)->pPhysicalResource;
 	}
 
 	RenderPassInfo GetRenderPassInfo() const;
@@ -387,10 +382,10 @@ public:
 		return pResource->TextureDesc;
 	}
 
-	RGBlackboard& Blackboard() { return m_Blackboard; }
-
 	void PushEvent(const char* pName);
 	void PopEvent();
+
+	RGBlackboard Blackboard;
 
 private:
 	void ExecutePass(RGPass* pPass, CommandContext& context);
@@ -408,7 +403,6 @@ private:
 	Allocator m_Allocator;
 	SyncPoint m_LastSyncPoint;
 
-	RGBlackboard m_Blackboard;
 	std::vector<RGResourceAlias> m_Aliases;
 	std::vector<RGPass*> m_RenderPasses;
 	std::vector<RGResource*> m_Resources;

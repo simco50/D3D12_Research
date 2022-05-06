@@ -19,12 +19,11 @@ static constexpr int gMaxLightsPerCluster = 32;
 static constexpr int gVolumetricFroxelTexelSize = 8;
 static constexpr int gVolumetricNumZSlices = 128;
 
-struct ClusterCullBlackboardData
+struct CullBlackboardData
 {
-	RG_BLACKBOARD_DATA(ClusterCullBlackboardData);
-
 	RGResourceHandle LightGrid;
 };
+RG_BLACKBOARD_DATA(CullBlackboardData);
 
 namespace Tweakables
 {
@@ -318,7 +317,7 @@ void ClusteredForward::ComputeLightCulling(RGGraph& graph, const SceneView& view
 			);
 		});
 
-	ClusterCullBlackboardData& backboardData = graph.Blackboard().Add<ClusterCullBlackboardData>();
+	CullBlackboardData& backboardData = graph.Blackboard.Add<CullBlackboardData>();
 	backboardData.LightGrid = cullData.LightGrid;
 }
 
@@ -521,7 +520,7 @@ void ClusteredForward::VisualizeLightDensity(RGGraph& graph, const SceneView& vi
 
 	Vector2 lightGridParams = ComputeVolumeGridParams(view.View.NearPlane, view.View.FarPlane, gLightClustersNumZ);
 
-	ClusterCullBlackboardData& blackboardData = graph.Blackboard().Get<ClusterCullBlackboardData>();
+	const CullBlackboardData& blackboardData = graph.Blackboard.Get<CullBlackboardData>();
 	RGResourceHandle lightGrid = blackboardData.LightGrid;
 
 	graph.AddCopyPass("Cache Scene Color", sceneTextures.ColorTarget, visualizationIntermediate);
