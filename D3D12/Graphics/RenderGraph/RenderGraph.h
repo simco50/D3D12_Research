@@ -198,23 +198,28 @@ private:
 	int References = 0;
 };
 
-class TexturePool : public GraphicsObject
+class RGResourcePool : public GraphicsObject
 {
 public:
-	TexturePool(GraphicsDevice* pDevice)
+	RGResourcePool(GraphicsDevice* pDevice)
 		: GraphicsObject(pDevice)
 	{}
 
 	RefCountPtr<Texture> Allocate(const char* pName, const TextureDesc& desc);
+	RefCountPtr<Buffer> Allocate(const char* pName, const BufferDesc& desc);
 	void Tick();
 
 private:
-	struct PooledTexture
+	template<typename T>
+	struct PooledResource
 	{
-		RefCountPtr<Texture> pTexture;
+		RefCountPtr<T> pResource;
 		uint32 LastUsedFrame;
 	};
+	using PooledTexture = PooledResource<Texture>;
+	using PooledBuffer = PooledResource<Buffer>;
 	std::vector<PooledTexture> m_TexturePool;
+	std::vector<PooledBuffer> m_BufferPool;
 	uint32 m_FrameIndex = 0;
 };
 
@@ -279,7 +284,7 @@ class RGGraph
 	};
 
 public:
-	RGGraph(GraphicsDevice* pDevice, TexturePool& texturePool, uint64 allocatorSize = 0xFFFF);
+	RGGraph(GraphicsDevice* pDevice, RGResourcePool& resourcePool, uint64 allocatorSize = 0xFFFF);
 	~RGGraph();
 
 	RGGraph(const RGGraph& other) = delete;
@@ -398,7 +403,7 @@ private:
 	std::vector<RGPass*> m_RenderPasses;
 	std::vector<RGResource*> m_Resources;
 	std::vector<RGNode> m_ResourceNodes;
-	TexturePool& m_TexturePool;
+	RGResourcePool& m_ResourcePool;
 };
 
 class RGGraphScope

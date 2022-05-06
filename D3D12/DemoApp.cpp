@@ -199,7 +199,7 @@ DemoApp::DemoApp(WindowHandle window, const IntVector2& windowRect)
 	SetupScene(*pContext);
 	pContext->Execute(true);
 
-	m_pTexturePool = std::make_unique<TexturePool>(m_pDevice);
+	m_RenderGraphPool = std::make_unique<RGResourcePool>(m_pDevice);
 
 	Tweakables::g_RaytracedAO = m_pDevice->GetCapabilities().SupportsRaytracing() ? Tweakables::g_RaytracedAO : false;
 	Tweakables::g_RaytracedReflections = m_pDevice->GetCapabilities().SupportsRaytracing() ? Tweakables::g_RaytracedReflections : false;
@@ -306,7 +306,7 @@ void DemoApp::Update()
 	UpdateImGui();
 	m_pCamera->Update();
 
-	m_pTexturePool->Tick();
+	m_RenderGraphPool->Tick();
 
 	if (Input::Instance().IsKeyPressed('1'))
 	{
@@ -438,7 +438,7 @@ void DemoApp::Update()
 	}
 
 	{
-		RGGraph graph(m_pDevice, *m_pTexturePool);
+		RGGraph graph(m_pDevice, *m_RenderGraphPool);
 		graph.AddPass("Update GPU Scene", RGPassFlag::Copy)
 			.Bind([=](CommandContext& context, const RGPassResources& resources)
 				{
@@ -448,7 +448,7 @@ void DemoApp::Update()
 		graph.Execute();
 	}
 
-	RGGraph graph(m_pDevice, *m_pTexturePool);
+	RGGraph graph(m_pDevice, *m_RenderGraphPool);
 
 	uint32 width = (uint32)m_SceneData.View.Viewport.GetWidth();
 	uint32 height = (uint32)m_SceneData.View.Viewport.GetHeight();

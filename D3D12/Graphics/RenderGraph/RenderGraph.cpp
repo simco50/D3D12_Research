@@ -118,8 +118,8 @@ RGPass& RGGraph::AddCopyTexturePass(const char* pName, RGResourceHandle source, 
 			});
 }
 
-RGGraph::RGGraph(GraphicsDevice* pDevice, TexturePool& texturePool, uint64 allocatorSize /*= 0xFFFF*/)
-	: m_pDevice(pDevice), m_Allocator(allocatorSize), m_TexturePool(texturePool)
+RGGraph::RGGraph(GraphicsDevice* pDevice, RGResourcePool& resourcePool, uint64 allocatorSize /*= 0xFFFF*/)
+	: m_pDevice(pDevice), m_Allocator(allocatorSize), m_ResourcePool(resourcePool)
 {
 }
 
@@ -345,17 +345,20 @@ void RGGraph::PrepareResources(RGPass* pPass, CommandContext& context)
 {
 	auto IsRenderTarget = [&](const RGResource* pResource)
 	{
-		for (RGPass::RenderTargetAccess& rt : pPass->RenderTargets)
+		if (pResource->Type == RGResourceType::Texture)
 		{
-			if (GetResourceNode(rt.Resource).pResource == pResource)
-				return true;
+			for (RGPass::RenderTargetAccess& rt : pPass->RenderTargets)
+			{
+				if (GetResourceNode(rt.Resource).pResource == pResource)
+					return true;
+			}
 		}
 		return false;
 	};
 
 	auto IsDepthStencil = [&](const RGResource* pResource)
 	{
-		if(pPass->DepthStencilTarget.Resource.IsValid())
+		if(pResource->Type == RGResourceType::Texture && pPass->DepthStencilTarget.Resource.IsValid())
 			return GetResourceNode(pPass->DepthStencilTarget.Resource).pResource == pResource;
 		return false;
 	};
@@ -375,7 +378,11 @@ void RGGraph::PrepareResources(RGPass* pPass, CommandContext& context)
 		{
 			if (pResource->Type == RGResourceType::Texture)
 			{
-				pResource->pPhysicalResource = m_TexturePool.Allocate(pResource->Name, pResource->TextureDesc);
+				pResource->pPhysicalResource = m_ResourcePool.Allocate(pResource->Name, pResource->TextureDesc);
+			}
+			else if (pResource->Type == RGResourceType::Buffer)
+			{
+				pResource->pPhysicalResource = m_ResourcePool.Allocate(pResource->Name, pResource->BufferDesc);
 			}
 		}
 	};
@@ -492,11 +499,11 @@ const RGResource* RGPassResources::GetResource(RGResourceHandle handle) const
 	return m_Graph.GetResource(handle);
 }
 
-RefCountPtr<Texture> TexturePool::Allocate(const char* pName, const TextureDesc& desc)
+RefCountPtr<Texture> RGResourcePool::Allocate(const char* pName, const TextureDesc& desc)
 {
 	for (PooledTexture& texture : m_TexturePool)
 	{
-		RefCountPtr<Texture>& pTexture = texture.pTexture;
+		RefCountPtr<Texture>& pTexture = texture.pResource;
 		if (pTexture->GetNumRefs() == 1 && pTexture->GetDesc() == desc)
 		{
 			texture.LastUsedFrame = m_FrameIndex;
@@ -504,18 +511,46 @@ RefCountPtr<Texture> TexturePool::Allocate(const char* pName, const TextureDesc&
 			return pTexture;
 		}
 	}
-	return m_TexturePool.emplace_back(PooledTexture{ GetParent()->CreateTexture(desc, pName), m_FrameIndex }).pTexture;
+	return m_TexturePool.emplace_back(PooledTexture{ GetParent()->CreateTexture(desc, pName), m_FrameIndex }).pResource;
 }
 
-void TexturePool::Tick()
+RefCountPtr<Buffer> RGResourcePool::Allocate(const char* pName, const BufferDesc& desc)
+{
+	for (PooledBuffer& texture : m_BufferPool)
+	{
+		RefCountPtr<Buffer>& pBuffer = texture.pResource;
+		if (pBuffer->GetNumRefs() == 1 && pBuffer->GetDesc() == desc)
+		{
+			texture.LastUsedFrame = m_FrameIndex;
+			pBuffer->SetName(pName);
+			return pBuffer;
+		}
+	}
+	return m_BufferPool.emplace_back(PooledBuffer{ GetParent()->CreateBuffer(desc, pName), m_FrameIndex }).pResource;
+}
+
+void RGResourcePool::Tick()
 {
 	for (uint32 i = 0; i < (uint32)m_TexturePool.size();)
 	{
 		PooledTexture& texture = m_TexturePool[i];
-		if (texture.pTexture->GetNumRefs() == 1 && texture.LastUsedFrame + 5 < m_FrameIndex)
+		if (texture.pResource->GetNumRefs() == 1 && texture.LastUsedFrame + 5 < m_FrameIndex)
 		{
 			std::swap(m_TexturePool[i], m_TexturePool.back());
 			m_TexturePool.pop_back();
+		}
+		else
+		{
+			++i;
+		}
+	}
+	for (uint32 i = 0; i < (uint32)m_BufferPool.size();)
+	{
+		PooledBuffer& buffer = m_BufferPool[i];
+		if (buffer.pResource->GetNumRefs() == 1 && buffer.LastUsedFrame + 5 < m_FrameIndex)
+		{
+			std::swap(m_BufferPool[i], m_BufferPool.back());
+			m_BufferPool.pop_back();
 		}
 		else
 		{

@@ -98,6 +98,14 @@ struct BufferDesc
 
 	uint32 NumElements() const { return (uint32)(Size / ElementSize); }
 
+	bool operator==(const BufferDesc& rhs) const
+	{
+		return Size == rhs.Size &&
+			ElementSize == rhs.ElementSize &&
+			Usage == rhs.Usage &&
+			Format == rhs.Format;
+	}
+
 	uint64 Size = 0;
 	uint32 ElementSize = 0;
 	BufferFlag Usage = BufferFlag::None;

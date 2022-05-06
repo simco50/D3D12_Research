@@ -17,7 +17,7 @@ class CBTTessellation;
 class UnorderedAccessView;
 class StateObject;
 class RGGraph;
-class TexturePool;
+class RGResourcePool;
 struct SubMesh;
 struct Material;
 
@@ -54,7 +54,7 @@ private:
 
 	RefCountPtr<GraphicsDevice> m_pDevice;
 	RefCountPtr<SwapChain> m_pSwapchain;
-	std::unique_ptr<TexturePool> m_pTexturePool;
+	std::unique_ptr<RGResourcePool> m_RenderGraphPool;
 
 	uint32 m_Frame = 0;
 	std::array<float, 180> m_FrameTimes{};
