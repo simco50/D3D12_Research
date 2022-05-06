@@ -245,6 +245,13 @@ void RGGraph::Compile()
 		}
 	}
 
+	for (ExportedResource& exportResource : m_ExportResources)
+	{
+		RGResource* pResource = GetResource(exportResource.Handle);
+		// Don't release resource if exported
+		pResource->pLastAccess = nullptr;
+	}
+
 	//Set the final reference count and propagate use flags
 	for (RGNode& node : m_ResourceNodes)
 	{
@@ -318,6 +325,14 @@ SyncPoint RGGraph::Execute()
 		}
 	}
 	m_LastSyncPoint = pContext->Execute(false);
+
+	for (ExportedResource& exportResource : m_ExportResources)
+	{
+		RGResource* pResource = GetResource(exportResource.Handle);
+		if(pResource->Type == RGResourceType::Texture)
+			*exportResource.pTarget = GetResource(exportResource.Handle)->GetRHI<Texture>();
+	}
+
 	DestroyData();
 	return m_LastSyncPoint;
 }

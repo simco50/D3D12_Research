@@ -211,15 +211,7 @@ void ClusteredForward::CreateLightCullingResources(ClusteredLightCullData& resou
 
 void ClusteredForward::CreateVolumetricFogResources(VolumetricFogData& resources, const IntVector2& viewDimensions)
 {
-	TextureDesc volumeDesc = TextureDesc::Create3D(
-		Math::DivideAndRoundUp(viewDimensions.x, gVolumetricFroxelTexelSize),
-		Math::DivideAndRoundUp(viewDimensions.y, gVolumetricFroxelTexelSize),
-		gVolumetricNumZSlices,
-		DXGI_FORMAT_R16G16B16A16_FLOAT,
-		TextureFlag::ShaderResource | TextureFlag::UnorderedAccess);
 
-	resources.pLightScatteringVolume[0] = m_pDevice->CreateTexture(volumeDesc, "Light Scattering Volume 0");
-	resources.pLightScatteringVolume[1] = m_pDevice->CreateTexture(volumeDesc, "Light Scattering Volume 1");
 }
 
 Vector2 ComputeVolumeGridParams(float nearZ, float farZ, int numSlices)
@@ -362,10 +354,15 @@ RGResourceHandle ClusteredForward::RenderVolumetricFog(RGGraph& graph, const Sce
 {
 	RG_GRAPH_SCOPE("Volumetric Lighting", graph);
 
-	RGResourceHandle sourceVolume = graph.ImportTexture("Fog Source", fogData.pLightScatteringVolume[view.FrameIndex % 2]);
-	RGResourceHandle targetVolume = graph.ImportTexture("Fog Target", fogData.pLightScatteringVolume[(view.FrameIndex + 1) % 2]);
-	TextureDesc volumeDesc = graph.GetDesc(sourceVolume);
+	TextureDesc volumeDesc = TextureDesc::Create3D(
+		Math::DivideAndRoundUp((uint32)view.View.Viewport.GetWidth(), gVolumetricFroxelTexelSize),
+		Math::DivideAndRoundUp((uint32)view.View.Viewport.GetWidth(), gVolumetricFroxelTexelSize),
+		gVolumetricNumZSlices,
+		DXGI_FORMAT_R16G16B16A16_FLOAT,
+		TextureFlag::ShaderResource | TextureFlag::UnorderedAccess);
 
+	RGResourceHandle sourceVolume = graph.ImportTexture("Fog History", fogData.pFogHistory, GraphicsCommon::GetDefaultTexture(DefaultTexture::Black3D));
+	RGResourceHandle targetVolume = graph.CreateTexture("Fog Target", volumeDesc);
 	RGResourceHandle finalVolumeFog = graph.CreateTexture("Volumetric Fog", volumeDesc);
 
 	struct
@@ -412,6 +409,8 @@ RGResourceHandle ClusteredForward::RenderVolumetricFog(RGGraph& graph, const Sce
 						pTargetVolume->GetDepth(), 4)
 				);
 			});
+
+	graph.ExportTexture(targetVolume, fogData.pFogHistory.This());
 
 	graph.AddPass("Accumulate Volume Fog", RGPassFlag::Compute)
 		.Read({ targetVolume, lightCullData.LightGrid, lightCullData.LightIndexGrid })

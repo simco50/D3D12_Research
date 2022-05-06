@@ -254,7 +254,7 @@ class RGGraph
 
 		~Allocator()
 		{
-			for(size_t i = 0; i < m_NonPODAllocations.size(); ++i)
+			for (size_t i = 0; i < m_NonPODAllocations.size(); ++i)
 			{
 				m_NonPODAllocations[i]->~AllocatedObject();
 			}
@@ -329,20 +329,27 @@ public:
 		return CreateResourceNode(pResource);
 	}
 
-	RGResourceHandle ImportTexture(const char* pName, Texture* pTexture)
+	RGResourceHandle ImportTexture(const char* pName, Texture* pTexture, Texture* pFallback = nullptr)
 	{
-		check(pTexture);
+		check(pTexture || pFallback);
+		pTexture = pTexture ? pTexture : pFallback;
 		RGResource* pResource = Allocate<RGResource>(pName, (int)m_Resources.size(), pTexture->GetDesc(), pTexture);
 		m_Resources.push_back(pResource);
 		return CreateResourceNode(pResource);
 	}
 
-	RGResourceHandle ImportBuffer(const char* pName, Buffer* pBuffer)
+	RGResourceHandle ImportBuffer(const char* pName, Buffer* pBuffer, Buffer* pFallback = nullptr)
 	{
-		check(pBuffer);
+		check(pBuffer || pFallback);
+		pBuffer = pBuffer ? pBuffer : pFallback;
 		RGResource* pResource = Allocate<RGResource>(pName, (int)m_Resources.size(), pBuffer->GetDesc(), pBuffer);
 		m_Resources.push_back(pResource);
 		return CreateResourceNode(pResource);
+	}
+
+	void ExportTexture(RGResourceHandle handle, RefCountPtr<Texture>* pTarget)
+	{
+		m_ExportResources.push_back({ handle, pTarget });
 	}
 
 	bool IsValidHandle(RGResourceHandle handle) const
@@ -408,6 +415,13 @@ private:
 	std::vector<RGResource*> m_Resources;
 	std::vector<RGNode> m_ResourceNodes;
 	RGResourcePool& m_ResourcePool;
+
+	struct ExportedResource
+	{
+		RGResourceHandle Handle;
+		RefCountPtr<Texture>* pTarget;
+	};
+	std::vector<ExportedResource> m_ExportResources;
 };
 
 class RGGraphScope

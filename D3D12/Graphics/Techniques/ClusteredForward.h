@@ -30,7 +30,7 @@ struct ClusteredLightCullData
 
 struct VolumetricFogData
 {
-	RefCountPtr<Texture> pLightScatteringVolume[2];
+	RefCountPtr<Texture> pFogHistory;
 };
 
 class ClusteredForward

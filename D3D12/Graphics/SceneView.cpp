@@ -283,6 +283,8 @@ namespace GraphicsCommon
 			data.pData = pData;
 			data.RowPitch = D3D::GetFormatRowDataSize(desc.Format, desc.Width);
 			data.SlicePitch = data.RowPitch * desc.Width;
+			context.InsertResourceBarrier(pTexture, D3D12_RESOURCE_STATE_COPY_DEST);
+			context.FlushResourceBarriers();
 			context.WriteTexture(pTexture, &data, 0, 1);
 			DefaultTextures[(int)type] = pTexture;
 		};

@@ -158,6 +158,11 @@ public:
 		return ptr_;
 	}
 
+	RefCountPtr<T>* This() noexcept
+	{
+		return this;
+	}
+
 	operator T* () const
 	{
 		return ptr_;
