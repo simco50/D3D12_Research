@@ -195,8 +195,8 @@ namespace Renderer
 				ddgi.BoundsMin = ddgiVolume.Origin - ddgiVolume.Extents;
 				ddgi.ProbeSize = 2 * ddgiVolume.Extents / (Vector3((float)ddgiVolume.NumProbes.x, (float)ddgiVolume.NumProbes.y, (float)ddgiVolume.NumProbes.z) - Vector3::One);
 				ddgi.ProbeVolumeDimensions = TIntVector3<uint32>(ddgiVolume.NumProbes.x, ddgiVolume.NumProbes.y, ddgiVolume.NumProbes.z);
-				ddgi.IrradianceIndex = ddgiVolume.pIrradiance[0] ? ddgiVolume.pIrradiance[0]->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
-				ddgi.DepthIndex = ddgiVolume.pDepth[0] ? ddgiVolume.pDepth[0]->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
+				ddgi.IrradianceIndex = ddgiVolume.pIrradianceHistory ? ddgiVolume.pIrradianceHistory->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
+				ddgi.DepthIndex = ddgiVolume.pDepthHistory ? ddgiVolume.pDepthHistory->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
 				ddgi.ProbeOffsetIndex = ddgiVolume.pProbeOffset ? ddgiVolume.pProbeOffset->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
 				ddgi.ProbeStatesIndex = ddgiVolume.pProbeStates ? ddgiVolume.pProbeStates->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
 				ddgi.NumRaysPerProbe = ddgiVolume.NumRays;

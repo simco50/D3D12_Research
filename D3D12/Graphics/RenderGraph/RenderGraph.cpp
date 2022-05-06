@@ -172,7 +172,6 @@ void RGGraph::Compile()
 	//Set all the compile metadata
 	for (RGPass* pPass : m_RenderPasses)
 	{
-		RG_ASSERT(pPass->ExecuteCallback.IsBound(), "Pass '%s' is unbound", pPass->Name);
 #if 1
 		pPass->Flags |= RGPassFlag::NeverCull;
 #endif
@@ -351,17 +350,12 @@ void RGGraph::ExecutePass(RGPass* pPass, CommandContext& context)
 {
 	PrepareResources(pPass, context);
 
-	RGPassResources resources(*this, *pPass);
-
-	//#todo: Automatically insert resource barriers
-	//#todo: Check if we're in a Graphics pass and automatically call BeginRenderPass
-
+	if(pPass->ExecuteCallback.IsBound())
 	{
 		GPU_PROFILE_SCOPE_CONDITIONAL(pPass->Name, &context, !EnumHasAnyFlags(pPass->Flags, RGPassFlag::Invisible));
+		RGPassResources resources(*this, *pPass);
 		pPass->ExecuteCallback.Execute(context, resources);
 	}
-
-	//#todo: Check if we're in a Graphics pass and automatically call EndRenderPass
 
 	ReleaseResources(pPass);
 }

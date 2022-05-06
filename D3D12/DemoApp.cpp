@@ -466,13 +466,13 @@ void DemoApp::Update()
 	{
 		// SHADOWS
 		graph.AddPass("Shadow Depths", RGPassFlag::Raster)
-			.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
-				{
-					context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-					context.SetGraphicsRootSignature(m_pCommonRS);
+				.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
+					{
+						context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+						context.SetGraphicsRootSignature(m_pCommonRS);
 
-					// hack - copy the main viewport and then just modify the viewproj
-					SceneView view = m_SceneData;
+						// hack - copy the main viewport and then just modify the viewproj
+						SceneView view = m_SceneData;
 
 					for (int i = 0; i < view.ShadowViews.size(); ++i)
 					{
@@ -497,8 +497,8 @@ void DemoApp::Update()
 						}
 						context.EndRenderPass();
 					}
-				});
-	}
+					});
+		}
 
 	if (m_RenderPath == RenderPath::Clustered || m_RenderPath == RenderPath::Tiled)
 	{
@@ -588,18 +588,26 @@ void DemoApp::Update()
 
 		const uint32 numProbes = ddgi.NumProbes.x * ddgi.NumProbes.y * ddgi.NumProbes.z;
 
+		RGHandle<Buffer> rayBuffer = graph.CreateBuffer("DDGI Ray Buffer", BufferDesc::CreateTyped(numProbes * ddgi.MaxNumRays, DXGI_FORMAT_R16G16B16A16_FLOAT));
+
+		RGHandle<Texture> irradianceTarget = graph.CreateTexture("DDGI Irradiance Target", ddgi.pIrradianceHistory->GetDesc());
+		RGHandle<Texture> irradianceHistory = graph.ImportTexture("DDGI Irradiance History", ddgi.pIrradianceHistory);
+		RGHandle<Texture> depthTarget = graph.CreateTexture("DDGI Depth Target", ddgi.pDepthHistory->GetDesc());
+		RGHandle<Texture> depthHistory = graph.ImportTexture("DDGI Depth History", ddgi.pDepthHistory);
+		RGHandle<Buffer> probeStates = graph.ImportBuffer("Probe States", ddgi.pProbeStates);
+		RGHandle<Buffer> probeOffsets = graph.ImportBuffer("Probe Offsets", ddgi.pProbeOffset);
+
 		graph.AddPass("DDGI Raytrace", RGPassFlag::Compute)
-			.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
+			.Read(probeStates)
+			.Write(&rayBuffer)
+			.Bind([=](CommandContext& context, const RGPassResources& resources)
 				{
-					context.InsertResourceBarrier(ddgi.pProbeStates, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-					context.InsertResourceBarrier(ddgi.pIrradiance[0], D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-					context.InsertResourceBarrier(ddgi.pRayBuffer, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 					context.SetComputeRootSignature(m_pCommonRS);
 					context.SetPipelineState(m_pDDGITraceRaysSO);
 
 					context.SetRootConstants(0, parameters);
 					context.SetRootCBV(1, Renderer::GetViewUniforms(m_SceneData));
-					context.BindResources(2, ddgi.pRayBuffer->GetUAV());
+					context.BindResources(2, resources.Get(rayBuffer)->GetUAV());
 
 					ShaderBindingTable bindingTable(m_pDDGITraceRaysSO);
 					bindingTable.BindRayGenShader("TraceRaysRGS");
@@ -611,47 +619,48 @@ void DemoApp::Update()
 				});
 
 		graph.AddPass("DDGI Update Irradiance", RGPassFlag::Compute)
-			.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
+			.Read({ irradianceHistory, rayBuffer, probeStates })
+			.Write(&irradianceTarget)
+			.Bind([=](CommandContext& context, const RGPassResources& resources)
 				{
-					context.InsertResourceBarrier(ddgi.pIrradiance[1], D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 					context.SetComputeRootSignature(m_pCommonRS);
 					context.SetPipelineState(m_pDDGIUpdateIrradianceColorPSO);
 
 					context.SetRootConstants(0, parameters);
 					context.SetRootCBV(1, Renderer::GetViewUniforms(m_SceneData));
-					context.BindResources(2, ddgi.pIrradiance[1]->GetUAV());
+					context.BindResources(2, resources.Get(irradianceTarget)->GetUAV());
 					context.BindResources(3, {
-						ddgi.pRayBuffer->GetSRV(),
+						resources.Get(rayBuffer)->GetSRV(),
 						});
 
 					context.Dispatch(numProbes);
-					context.InsertResourceBarrier(ddgi.pIrradiance[1], D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 				});
 
 		graph.AddPass("DDGI Update Depth", RGPassFlag::Compute)
-			.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
+			.Read({ depthHistory, rayBuffer, probeStates })
+			.Write(&depthTarget)
+			.Bind([=](CommandContext& context, const RGPassResources& resources)
 				{
-					context.InsertResourceBarrier(ddgi.pDepth[1], D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 					context.SetComputeRootSignature(m_pCommonRS);
 					context.SetPipelineState(m_pDDGIUpdateIrradianceDepthPSO);
 
 					context.SetRootConstants(0, parameters);
 					context.SetRootCBV(1, Renderer::GetViewUniforms(m_SceneData));
 					context.BindResources(2, {
-						ddgi.pDepth[1]->GetUAV(),
+						resources.Get(depthTarget)->GetUAV(),
 						});
 					context.BindResources(3, {
-						ddgi.pRayBuffer->GetSRV(),
+						resources.Get(rayBuffer)->GetSRV(),
 						});
 
 					context.Dispatch(numProbes);
-					context.InsertResourceBarrier(ddgi.pDepth[1], D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 				});
 
 		graph.AddPass("DDGI Update Probe States", RGPassFlag::Compute)
-			.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
+			.Read(rayBuffer)
+			.Write({ &probeOffsets, &probeStates })
+			.Bind([=](CommandContext& context, const RGPassResources& resources)
 				{
-					context.InsertResourceBarrier(ddgi.pProbeStates, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 					context.InsertResourceBarrier(ddgi.pProbeOffset, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 					context.SetComputeRootSignature(m_pCommonRS);
 					context.SetPipelineState(m_pDDGIUpdateProbeStatesPSO);
@@ -663,17 +672,17 @@ void DemoApp::Update()
 						ddgi.pProbeOffset->GetUAV(),
 						});
 					context.BindResources(3, {
-						ddgi.pRayBuffer->GetSRV(),
+						resources.Get(rayBuffer)->GetSRV(),
 						});
 
 					context.Dispatch(ComputeUtils::GetNumThreadGroups(numProbes, 32));
-
-					context.InsertResourceBarrier(ddgi.pProbeOffset, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
-					context.InsertResourceBarrier(ddgi.pProbeStates, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 				});
 
-		std::swap(ddgi.pIrradiance[0], ddgi.pIrradiance[1]);
-		std::swap(ddgi.pDepth[0], ddgi.pDepth[1]);
+		graph.AddPass("Bindless Transition", RGPassFlag::NeverCull | RGPassFlag::Raster)
+			.Read({ depthTarget, irradianceTarget, probeStates, probeOffsets });
+
+		graph.ExportTexture(depthTarget, ddgi.pDepthHistory.This());
+		graph.ExportTexture(irradianceTarget, ddgi.pIrradianceHistory.This());
 	}
 
 	graph.AddPass("Compute Sky", RGPassFlag::Compute)
@@ -1221,8 +1230,6 @@ void DemoApp::Update()
 				.RenderTarget(sceneTextures.ColorTarget, RenderPassAccess::Load_Store)
 				.Bind([=](CommandContext& context, const RGPassResources& resources)
 					{
-						context.InsertResourceBarrier(ddgi.pRayBuffer, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
-						context.InsertResourceBarrier(ddgi.pIrradiance[0], D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 						context.SetGraphicsRootSignature(m_pCommonRS);
 						context.SetPipelineState(m_pDDGIVisualizePSO);
 						context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -1237,10 +1244,6 @@ void DemoApp::Update()
 
 						context.SetRootConstants(0, parameters);
 						context.SetRootCBV(1, Renderer::GetViewUniforms(m_SceneData));
-						context.BindResources(3, {
-							ddgi.pRayBuffer->GetSRV(),
-							});
-
 						context.Draw(0, 2880, ddgi.NumProbes.x * ddgi.NumProbes.y * ddgi.NumProbes.z);
 
 						context.EndRenderPass();
@@ -1485,19 +1488,16 @@ void DemoApp::InitializePipelines()
 		{
 			uint32 numProbes = ddgi.NumProbes.x * ddgi.NumProbes.y * ddgi.NumProbes.z;
 			ddgi.pProbeStates = m_pDevice->CreateBuffer(BufferDesc::CreateTyped(numProbes, DXGI_FORMAT_R8_UINT, BufferFlag::UnorderedAccess | BufferFlag::ShaderResource), "DDGI States Buffer");
-			ddgi.pRayBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateTyped(numProbes * ddgi.MaxNumRays, DXGI_FORMAT_R16G16B16A16_FLOAT, BufferFlag::UnorderedAccess | BufferFlag::ShaderResource), "DDGI Ray Buffer");
 			ddgi.pProbeOffset = m_pDevice->CreateBuffer(BufferDesc::CreateTyped(numProbes, DXGI_FORMAT_R16G16B16A16_FLOAT, BufferFlag::UnorderedAccess | BufferFlag::ShaderResource), "DDGI Probe Offset Buffer");
 			{
 				IntVector2 dimensions = ProbeTextureDimensions(ddgi.NumProbes, probeIrradianceTexels);
 				TextureDesc ddgiIrradianceDesc = TextureDesc::Create2D(dimensions.x, dimensions.y, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::UnorderedAccess);
-				ddgi.pIrradiance[0] = m_pDevice->CreateTexture(ddgiIrradianceDesc, "DDGI Irradiance 0");
-				ddgi.pIrradiance[1] = m_pDevice->CreateTexture(ddgiIrradianceDesc, "DDGI Irradiance 1");
+				ddgi.pIrradianceHistory = m_pDevice->CreateTexture(ddgiIrradianceDesc, "DDGI Irradiance 0");
 			}
 			{
 				IntVector2 dimensions = ProbeTextureDimensions(ddgi.NumProbes, probeDepthTexel);
 				TextureDesc ddgiDepthDesc = TextureDesc::Create2D(dimensions.x, dimensions.y, DXGI_FORMAT_R16G16_FLOAT, TextureFlag::UnorderedAccess);
-				ddgi.pDepth[0] = m_pDevice->CreateTexture(ddgiDepthDesc, "DDGI Depth 0");
-				ddgi.pDepth[1] = m_pDevice->CreateTexture(ddgiDepthDesc, "DDGI Depth 1");
+				ddgi.pDepthHistory = m_pDevice->CreateTexture(ddgiDepthDesc, "DDGI Depth 0");
 			}
 		}
 	}

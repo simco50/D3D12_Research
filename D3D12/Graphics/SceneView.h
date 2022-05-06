@@ -22,10 +22,9 @@ struct DDGIVolume
 	IntVector3 NumProbes;
 	int32 MaxNumRays;
 	int32 NumRays;
-	std::array<RefCountPtr<Texture>, 2> pIrradiance;
-	std::array<RefCountPtr<Texture>, 2> pDepth;
+	RefCountPtr<Texture> pIrradianceHistory;
+	RefCountPtr<Texture> pDepthHistory;
 	RefCountPtr<Buffer> pProbeOffset;
-	RefCountPtr<Buffer> pRayBuffer;
 	RefCountPtr<Buffer> pProbeStates;
 };
 

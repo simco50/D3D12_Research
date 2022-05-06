@@ -20,7 +20,7 @@ std::string BitmaskToString(T mask, const char* (*pValueToString)(T))
 	{
 		if (value & 1)
 		{
-			const char* pStr = pValueToString((T)bitIndex);
+			const char* pStr = pValueToString((T)(1 << bitIndex));
 			if (pStr)
 			{
 				if (valueIndex > 0)
@@ -46,6 +46,7 @@ std::string PassFlagToString(RGPassFlag flags)
 			case RGPassFlag::Compute: return "Compute";
 			case RGPassFlag::Raster: return "Raster";
 			case RGPassFlag::Copy: return "Copy";
+			case RGPassFlag::NeverCull: return "Never Cull";
 			default: return nullptr;
 			}
 		});
@@ -131,6 +132,7 @@ void RGGraph::DumpGraph(const char* pPath) const
 			stream << desc.Width << "x" << desc.Height << "x" << desc.DepthOrArraySize << "<br/>";
 			stream << D3D::FormatToString(desc.Format) << "<br/>";
 			stream << "Mips: " << desc.Mips << "<br/>";
+			stream << "Size: " << Math::PrettyPrintDataSize(D3D::GetFormatRowDataSize(desc.Format, desc.Width) * desc.Height * desc.DepthOrArraySize) << "</br>";
 		}
 		else if (node.pResource->Type == RGResourceType::Buffer)
 		{
