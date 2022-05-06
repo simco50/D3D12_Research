@@ -14,7 +14,7 @@ class PathTracing
 public:
 	PathTracing(GraphicsDevice* pDevice);
 	~PathTracing();
-	void Render(RGGraph& graph, const SceneView& view, RGResourceHandle& target);
+	void Render(RGGraph& graph, const SceneView& view, RGHandle<Texture>& target);
 	void Reset();
 	bool IsSupported();
 

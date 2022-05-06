@@ -51,7 +51,7 @@ PathTracing::~PathTracing()
 	}
 }
 
-void PathTracing::Render(RGGraph& graph, const SceneView& view, RGResourceHandle& target)
+void PathTracing::Render(RGGraph& graph, const SceneView& view, RGHandle<Texture>& target)
 {
 	if (!IsSupported())
 	{
@@ -93,7 +93,7 @@ void PathTracing::Render(RGGraph& graph, const SceneView& view, RGResourceHandle
 		.Write(&target)
 		.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
-				Texture* pTarget = resources.Get<Texture>(target);
+				Texture* pTarget = resources.Get(target);
 
 				context.SetComputeRootSignature(m_pRS);
 				context.SetPipelineState(m_pSO);

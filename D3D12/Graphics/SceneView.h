@@ -112,15 +112,15 @@ struct SceneView
 
 struct SceneTextures
 {
-	RGResourceHandle VisibilityBuffer;
-	RGResourceHandle PreviousColor;
-	RGResourceHandle Roughness;
-	RGResourceHandle ColorTarget;
-	RGResourceHandle Depth;
-	RGResourceHandle ResolvedDepth;
-	RGResourceHandle Normals;
-	RGResourceHandle Velocity;
-	RGResourceHandle AmbientOcclusion;
+	RGHandle<Texture> VisibilityBuffer;
+	RGHandle<Texture> PreviousColor;
+	RGHandle<Texture> Roughness;
+	RGHandle<Texture> ColorTarget;
+	RGHandle<Texture> Depth;
+	RGHandle<Texture> ResolvedDepth;
+	RGHandle<Texture> Normals;
+	RGHandle<Texture> Velocity;
+	RGHandle<Texture> AmbientOcclusion;
 };
 
 namespace Renderer

@@ -14,9 +14,9 @@ struct SceneTextures;
 struct ClusteredLightCullData
 {
 	IntVector3 ClusterCount;
-	RGResourceHandle AABBs;
-	RGResourceHandle LightIndexGrid;
-	RGResourceHandle LightGrid;
+	RGHandle<Buffer> AABBs;
+	RGHandle<Buffer> LightIndexGrid;
+	RGHandle<Buffer> LightGrid;
 
 	Vector2 LightGridParams;
 	bool IsViewDirty = true;
@@ -46,9 +46,9 @@ public:
 	void VisualizeClusters(RGGraph& graph, const SceneView& view, SceneTextures& sceneTextures, ClusteredLightCullData& resources);
 
 	void CreateVolumetricFogResources(VolumetricFogData& resources, const IntVector2& viewDimensions);
-	RGResourceHandle RenderVolumetricFog(RGGraph& graph, const SceneView& view, const ClusteredLightCullData& cullData, VolumetricFogData& fogData);
+	RGHandle<Texture> RenderVolumetricFog(RGGraph& graph, const SceneView& view, const ClusteredLightCullData& cullData, VolumetricFogData& fogData);
 
-	void RenderBasePass(RGGraph& graph, const SceneView& view, SceneTextures& sceneTextures, const ClusteredLightCullData& lightCullData, RGResourceHandle fogTexture);
+	void RenderBasePass(RGGraph& graph, const SceneView& view, SceneTextures& sceneTextures, const ClusteredLightCullData& lightCullData, RGHandle<Texture> fogTexture);
 
 	void Execute(RGGraph& graph, const SceneView& view, SceneTextures& sceneTextures);
 	void VisualizeLightDensity(RGGraph& graph, const SceneView& view, SceneTextures& sceneTextures);

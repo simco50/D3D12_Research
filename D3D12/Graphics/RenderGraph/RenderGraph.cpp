@@ -5,7 +5,7 @@
 #include "Graphics/Profiler.h"
 #include "Core/CommandLine.h"
 
-RGPass& RGPass::Read(Span<RGResourceHandle> resources)
+RGPass& RGPass::Read(Span<RGHandleT> resources)
 {
 	RGResourceAccess flags = RGResourceAccess::None;
 	if (EnumHasAnyFlags(Flags, RGPassFlag::Raster | RGPassFlag::Compute))
@@ -15,7 +15,7 @@ RGPass& RGPass::Read(Span<RGResourceHandle> resources)
 	return *this;
 }
 
-RGPass& RGPass::Write(Span<RGResourceHandle*> resources)
+RGPass& RGPass::Write(Span<RGHandleT*> resources)
 {
 	RGResourceAccess flags = RGResourceAccess::None;
 	if (EnumHasAnyFlags(Flags, RGPassFlag::Raster | RGPassFlag::Compute))
@@ -24,10 +24,10 @@ RGPass& RGPass::Write(Span<RGResourceHandle*> resources)
 	return *this;
 }
 
-RGPass& RGPass::ReadWrite(Span<RGResourceHandle*> resources)
+RGPass& RGPass::ReadWrite(Span<RGHandleT*> resources)
 {
 	check(EnumHasAnyFlags(Flags, RGPassFlag::Raster | RGPassFlag::Compute));
-	for (RGResourceHandle* pHandle : resources)
+	for (RGHandleT* pHandle : resources)
 	{
 		Read(*pHandle, RGResourceAccess::UAV);
 	}
@@ -43,7 +43,7 @@ void IsReadWrite(RenderPassAccess access, bool& isRead, bool& isWrite)
 	isWrite |= storeAction == RenderTargetStoreAction::Store;
 }
 
-RGPass& RGPass::RenderTarget(RGResourceHandle& resource, RenderPassAccess access)
+RGPass& RGPass::RenderTarget(RGHandle<Texture>& resource, RenderPassAccess access)
 {
 	bool read = false;
 	bool write = false;
@@ -58,7 +58,7 @@ RGPass& RGPass::RenderTarget(RGResourceHandle& resource, RenderPassAccess access
 	return *this;
 }
 
-RGPass& RGPass::DepthStencil(RGResourceHandle& resource, RenderPassAccess depthAccess, bool writeDepth, RenderPassAccess stencilAccess)
+RGPass& RGPass::DepthStencil(RGHandle<Texture>& resource, RenderPassAccess depthAccess, bool writeDepth, RenderPassAccess stencilAccess)
 {
 	RG_ASSERT(!DepthStencilTarget.Resource.IsValid(), "Depth Target already assigned");
 
@@ -76,9 +76,9 @@ RGPass& RGPass::DepthStencil(RGResourceHandle& resource, RenderPassAccess depthA
 	return *this;
 }
 
-void RGPass::Read(Span<RGResourceHandle> resources, RGResourceAccess useFlag)
+void RGPass::Read(Span<RGHandleT> resources, RGResourceAccess useFlag)
 {
-	for (RGResourceHandle resource : resources)
+	for (RGHandleT resource : resources)
 	{
 		RGNode& node = Graph.GetResourceNode(resource);
 		node.UseFlags |= useFlag;
@@ -87,9 +87,9 @@ void RGPass::Read(Span<RGResourceHandle> resources, RGResourceAccess useFlag)
 	}
 }
 
-void RGPass::Write(Span<RGResourceHandle*> resources, RGResourceAccess useFlag)
+void RGPass::Write(Span<RGHandleT*> resources, RGResourceAccess useFlag)
 {
-	for (RGResourceHandle* pHandle : resources)
+	for (RGHandleT* pHandle : resources)
 	{
 		RG_ASSERT(WritesTo(*pHandle) == false, "Pass already writes to this resource");
 		const RGNode& node = Graph.GetResourceNode(*pHandle);
@@ -107,7 +107,7 @@ void RGPass::Write(Span<RGResourceHandle*> resources, RGResourceAccess useFlag)
 	}
 }
 
-RGPass& RGGraph::AddCopyPass(const char* pName, RGResourceHandle source, RGResourceHandle& target)
+RGPass& RGGraph::AddCopyPass(const char* pName, RGHandleT source, RGHandleT& target)
 {
 	return AddPass(pName, RGPassFlag::Copy)
 		.Read(source)
@@ -178,13 +178,13 @@ void RGGraph::Compile()
 #endif
 		pPass->References = (int)pPass->Writes.size() + (int)EnumHasAllFlags(pPass->Flags, RGPassFlag::NeverCull);
 
-		for (RGResourceHandle read : pPass->Reads)
+		for (RGHandleT read : pPass->Reads)
 		{
 			RGNode& node = m_ResourceNodes[read.Index];
 			node.Reads++;
 		}
 
-		for (RGResourceHandle write : pPass->Writes)
+		for (RGHandleT write : pPass->Writes)
 		{
 			RGNode& node = m_ResourceNodes[write.Index];
 			node.pWriter = pPass;
@@ -211,7 +211,7 @@ void RGGraph::Compile()
 			--pWriter->References;
 			if (pWriter->References == 0)
 			{
-				for (RGResourceHandle resource : pWriter->Reads)
+				for (RGHandleT resource : pWriter->Reads)
 				{
 					RGNode& node = m_ResourceNodes[resource.Index];
 					--node.Reads;
@@ -229,14 +229,14 @@ void RGGraph::Compile()
 	{
 		if (pPass->References > 0)
 		{
-			for (RGResourceHandle read : pPass->Reads)
+			for (RGHandleT read : pPass->Reads)
 			{
 				RGNode& node = m_ResourceNodes[read.Index];
 				node.pResource->pFirstAccess = node.pResource->pFirstAccess ? node.pResource->pFirstAccess : pPass;
 				node.pResource->pLastAccess = pPass;
 			}
 
-			for (RGResourceHandle read : pPass->Writes)
+			for (RGHandleT read : pPass->Writes)
 			{
 				RGNode& node = m_ResourceNodes[read.Index];
 				node.pResource->pFirstAccess = node.pResource->pFirstAccess ? node.pResource->pFirstAccess : pPass;
@@ -284,7 +284,7 @@ void RGGraph::Compile()
 	}
 }
 
-RGResourceHandle RGGraph::MoveResource(RGResourceHandle From, RGResourceHandle To)
+RGHandleT RGGraph::MoveResource(RGHandleT From, RGHandleT To)
 {
 	RG_ASSERT(IsValidHandle(To), "Resource is invalid");
 	const RGNode& node = GetResourceNode(From);
@@ -380,7 +380,7 @@ void RGGraph::PrepareResources(RGPass* pPass, CommandContext& context)
 
 	auto WritesTo = [&](const RGResource* pResource)
 	{
-		for (RGResourceHandle write : pPass->Writes)
+		for (RGHandleT write : pPass->Writes)
 		{
 			if (pResource == GetResourceNode(write).pResource)
 				return true;
@@ -424,7 +424,7 @@ void RGGraph::PrepareResources(RGPass* pPass, CommandContext& context)
 
 	bool writesDepth = pPass->DepthStencilTarget.Write;
 
-	for (RGResourceHandle& handle : pPass->Writes)
+	for (RGHandleT& handle : pPass->Writes)
 	{
 		RGResource* pResource = GetResource(handle);
 		ConditionallyCreateResource(pResource);
@@ -445,7 +445,7 @@ void RGGraph::PrepareResources(RGPass* pPass, CommandContext& context)
 		}
 	}
 
-	for (RGResourceHandle& handle : pPass->Reads)
+	for (RGHandleT& handle : pPass->Reads)
 	{
 		RGResource* pResource = GetResource(handle);
 		ConditionallyCreateResource(pResource);
@@ -470,7 +470,7 @@ void RGGraph::PrepareResources(RGPass* pPass, CommandContext& context)
 
 void RGGraph::ReleaseResources(RGPass* pPass)
 {
-	for (RGResourceHandle& handle : pPass->Reads)
+	for (RGHandleT& handle : pPass->Reads)
 	{
 		RGResource* pResource = GetResource(handle);
 		if (!pResource->IsImported && pResource->Type == RGResourceType::Texture && pResource->pLastAccess == pPass)
@@ -508,7 +508,7 @@ RenderPassInfo RGPassResources::GetRenderPassInfo() const
 	return passInfo;
 }
 
-const RGResource* RGPassResources::GetResource(RGResourceHandle handle) const
+const RGResource* RGPassResources::GetResource(RGHandleT handle) const
 {
 	RG_ASSERT(m_Pass.ReadsFrom(handle) || m_Pass.WritesTo(handle), "Resource is not accessed by this pass");
 	return m_Graph.GetResource(handle);

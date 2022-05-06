@@ -108,12 +108,12 @@ public:
 	RGPassResources& operator=(const RGPassResources& other) = delete;
 
 	template<typename T>
-	T* Get(RGResourceHandle handle) const
+	T* Get(RGHandle<T> handle) const
 	{
 		return GetResource(handle)->GetRHI<T>();
 	}
 
-	GraphicsResource* Get(RGResourceHandle handle) const
+	GraphicsResource* Get(RGHandleT handle) const
 	{
 		return GetResource(handle)->pPhysicalResource;
 	}
@@ -121,7 +121,7 @@ public:
 	RenderPassInfo GetRenderPassInfo() const;
 
 private:
-	const RGResource* GetResource(RGResourceHandle handle) const;
+	const RGResource* GetResource(RGHandleT handle) const;
 
 	RGGraph& m_Graph;
 	RGPass& m_Pass;
@@ -135,13 +135,13 @@ public:
 
 	struct RenderTargetAccess
 	{
-		RGResourceHandle Resource;
+		RGHandle<Texture> Resource;
 		RenderPassAccess Access;
 	};
 
 	struct DepthStencilAccess
 	{
-		RGResourceHandle Resource;
+		RGHandle<Texture> Resource;
 		RenderPassAccess Access;
 		RenderPassAccess StencilAccess;
 		bool Write;
@@ -167,23 +167,23 @@ public:
 		return *this;
 	}
 
-	RGPass& Write(Span<RGResourceHandle*> resources);
-	RGPass& Read(Span<RGResourceHandle> resources);
-	RGPass& ReadWrite(Span<RGResourceHandle*> resources);
-	RGPass& RenderTarget(RGResourceHandle& resource, RenderPassAccess access);
-	RGPass& DepthStencil(RGResourceHandle& resource, RenderPassAccess depthAccess, bool write, RenderPassAccess stencilAccess = RenderPassAccess::NoAccess);
+	RGPass& Write(Span<RGHandleT*> resources);
+	RGPass& Read(Span<RGHandleT> resources);
+	RGPass& ReadWrite(Span<RGHandleT*> resources);
+	RGPass& RenderTarget(RGHandle<Texture>& resource, RenderPassAccess access);
+	RGPass& DepthStencil(RGHandle<Texture>& resource, RenderPassAccess depthAccess, bool write, RenderPassAccess stencilAccess = RenderPassAccess::NoAccess);
 
 private:
 
-	void Read(Span<RGResourceHandle> resources, RGResourceAccess useFlag);
-	void Write(Span<RGResourceHandle*> resources, RGResourceAccess useFlag);
+	void Read(Span<RGHandleT> resources, RGResourceAccess useFlag);
+	void Write(Span<RGHandleT*> resources, RGResourceAccess useFlag);
 
-	bool ReadsFrom(RGResourceHandle handle) const
+	bool ReadsFrom(RGHandleT handle) const
 	{
 		return std::find(Reads.begin(), Reads.end(), handle) != Reads.end();
 	}
 
-	bool WritesTo(RGResourceHandle handle) const
+	bool WritesTo(RGHandleT handle) const
 	{
 		return std::find(Writes.begin(), Writes.end(), handle) != Writes.end();
 	}
@@ -193,8 +193,8 @@ private:
 	RGGraph& Graph;
 	int ID;
 	RGPassFlag Flags;
-	std::vector<RGResourceHandle> Reads;
-	std::vector<RGResourceHandle> Writes;
+	std::vector<RGHandleT> Reads;
+	std::vector<RGHandleT> Writes;
 	std::vector<RenderTargetAccess> RenderTargets;
 	DepthStencilAccess DepthStencilTarget;
 	ExecutePassDelegate ExecuteCallback;
@@ -298,9 +298,9 @@ public:
 	void Compile();
 	SyncPoint Execute();
 	void DumpGraph(const char* pPath) const;
-	RGResourceHandle MoveResource(RGResourceHandle From, RGResourceHandle To);
+	RGHandleT MoveResource(RGHandleT From, RGHandleT To);
 
-	RGPass& AddCopyPass(const char* pName, RGResourceHandle source, RGResourceHandle& target);
+	RGPass& AddCopyPass(const char* pName, RGHandleT source, RGHandleT& target);
 
 	template<typename T, typename... Args>
 	T* Allocate(Args... args)
@@ -315,74 +315,80 @@ public:
 		return *m_RenderPasses.back();
 	}
 
-	RGResourceHandle CreateTexture(const char* pName, const TextureDesc& desc)
+	RGHandle<Texture> CreateTexture(const char* pName, const TextureDesc& desc)
 	{
 		RGResource* pResource = Allocate<RGResource>(pName, (int)m_Resources.size(), desc);
 		m_Resources.push_back(pResource);
-		return CreateResourceNode(pResource);
+		return CreateResourceNodeT<Texture>(pResource);
 	}
 
-	RGResourceHandle CreateBuffer(const char* pName, const BufferDesc& desc)
+	RGHandle<Buffer> CreateBuffer(const char* pName, const BufferDesc& desc)
 	{
 		RGResource* pResource = Allocate<RGResource>(pName, (int)m_Resources.size(), desc);
 		m_Resources.push_back(pResource);
-		return CreateResourceNode(pResource);
+		return CreateResourceNodeT<Buffer>(pResource);
 	}
 
-	RGResourceHandle ImportTexture(const char* pName, Texture* pTexture, Texture* pFallback = nullptr)
+	template<typename T>
+	RGHandle<T> CreateResourceNodeT(RGResource* pResource)
+	{
+		return RGHandle<T>(CreateResourceNode(pResource).Index);
+	}
+
+	RGHandle<Texture> ImportTexture(const char* pName, Texture* pTexture, Texture* pFallback = nullptr)
 	{
 		check(pTexture || pFallback);
 		pTexture = pTexture ? pTexture : pFallback;
 		RGResource* pResource = Allocate<RGResource>(pName, (int)m_Resources.size(), pTexture->GetDesc(), pTexture);
 		m_Resources.push_back(pResource);
-		return CreateResourceNode(pResource);
+		return CreateResourceNodeT<Texture>(pResource);
 	}
 
-	RGResourceHandle ImportBuffer(const char* pName, Buffer* pBuffer, Buffer* pFallback = nullptr)
+	RGHandle<Buffer> ImportBuffer(const char* pName, Buffer* pBuffer, Buffer* pFallback = nullptr)
 	{
 		check(pBuffer || pFallback);
 		pBuffer = pBuffer ? pBuffer : pFallback;
 		RGResource* pResource = Allocate<RGResource>(pName, (int)m_Resources.size(), pBuffer->GetDesc(), pBuffer);
 		m_Resources.push_back(pResource);
-		return CreateResourceNode(pResource);
+		return CreateResourceNodeT<Buffer>(pResource);
 	}
 
-	void ExportTexture(RGResourceHandle handle, RefCountPtr<Texture>* pTarget)
+	void ExportTexture(RGHandle<Texture> handle, RefCountPtr<Texture>* pTarget)
 	{
 		m_ExportResources.push_back({ handle, pTarget });
 	}
 
-	bool IsValidHandle(RGResourceHandle handle) const
+	bool IsValidHandle(RGHandleT handle) const
 	{
 		return handle.IsValid() && handle.Index < (int)m_ResourceNodes.size();
 	}
 
-	RGResourceHandle CreateResourceNode(RGResource* pResource)
+	RGHandleT CreateResourceNode(RGResource* pResource)
 	{
 		RGNode node(pResource);
 		m_ResourceNodes.push_back(node);
-		return RGResourceHandle((int)m_ResourceNodes.size() - 1);
+		return RGHandleT((int)m_ResourceNodes.size() - 1);
 	}
 
-	const RGNode& GetResourceNode(RGResourceHandle handle) const
+	const RGNode& GetResourceNode(RGHandleT handle) const
 	{
 		RG_ASSERT(IsValidHandle(handle), "Invalid handle");
 		return m_ResourceNodes[handle.Index];
 	}
 
-	RGNode& GetResourceNode(RGResourceHandle handle)
+	RGNode& GetResourceNode(RGHandleT handle)
 	{
 		RG_ASSERT(IsValidHandle(handle), "Invalid handle");
 		return m_ResourceNodes[handle.Index];
 	}
 
-	RGResource* GetResource(RGResourceHandle handle) const
+	RGResource* GetResource(RGHandleT handle) const
 	{
 		const RGNode& node = GetResourceNode(handle);
 		return node.pResource;
 	}
 
-	const TextureDesc& GetDesc(RGResourceHandle handle) const
+	const TextureDesc& GetDesc(RGHandleT handle) const
 	{
 		RGResource* pResource = GetResource(handle);
 		check(pResource->Type == RGResourceType::Texture);
@@ -402,8 +408,8 @@ private:
 
 	struct RGResourceAlias
 	{
-		RGResourceHandle From;
-		RGResourceHandle To;
+		RGHandleT From;
+		RGHandleT To;
 	};
 
 	GraphicsDevice* m_pDevice;
@@ -418,7 +424,7 @@ private:
 
 	struct ExportedResource
 	{
-		RGResourceHandle Handle;
+		RGHandle<Texture> Handle;
 		RefCountPtr<Texture>* pTarget;
 	};
 	std::vector<ExportedResource> m_ExportResources;

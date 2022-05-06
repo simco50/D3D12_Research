@@ -150,7 +150,7 @@ void CBTTessellation::Execute(RGGraph& graph, const SceneView& view, SceneTextur
 	updateData.SplitMode = m_SplitMode;
 	m_SplitMode = 1 - m_SplitMode;
 
-	RGResourceHandle cbtBuffer = graph.ImportBuffer("CBT Buffer", m_pCBTBuffer);
+	RGHandle<Buffer> cbtBuffer = graph.ImportBuffer("CBT Buffer", m_pCBTBuffer);
 
 	if (m_IsDirty)
 	{
@@ -158,7 +158,7 @@ void CBTTessellation::Execute(RGGraph& graph, const SceneView& view, SceneTextur
 			.Write(&cbtBuffer)
 			.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
-				context.WriteBuffer(resources.Get<Buffer>(cbtBuffer), m_CBT.GetData(), m_CBT.GetMemoryUse());
+				context.WriteBuffer(resources.Get(cbtBuffer), m_CBT.GetData(), m_CBT.GetMemoryUse());
 				context.FlushResourceBarriers();
 			});
 		m_IsDirty = false;
@@ -178,7 +178,7 @@ void CBTTessellation::Execute(RGGraph& graph, const SceneView& view, SceneTextur
 
 				context.SetPipelineState(m_pCBTUpdatePSO);
 				context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchSignature, 1, m_pCBTIndirectArgs, nullptr, IndirectDispatchArgsOffset);
-				context.InsertUavBarrier(resources.Get<Buffer>(cbtBuffer));
+				context.InsertUavBarrier(resources.Get(cbtBuffer));
 			});
 	}
 
@@ -212,7 +212,7 @@ void CBTTessellation::Execute(RGGraph& graph, const SceneView& view, SceneTextur
 
 				context.SetRootConstants(0, commonArgs);
 				context.SetRootCBV(1, updateData);
-				context.SetRootCBV(2, Renderer::GetViewUniforms(view, resources.Get<Texture>(sceneTextures.ColorTarget)));
+				context.SetRootCBV(2, Renderer::GetViewUniforms(view, resources.Get(sceneTextures.ColorTarget)));
 
 				if (CBTSettings::MeshShader)
 				{

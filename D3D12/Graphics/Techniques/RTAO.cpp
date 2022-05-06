@@ -41,14 +41,14 @@ void RTAO::Execute(RGGraph& graph, const SceneView& view, SceneTextures& sceneTe
 {
 	TextureDesc aoDesc = graph.GetDesc(sceneTextures.AmbientOcclusion);
 
-	RGResourceHandle rayTraceTarget = graph.CreateTexture("AO Target 0", aoDesc);
-	RGResourceHandle denoiseTarget = graph.CreateTexture("AO Target 1", aoDesc);
+	RGHandle<Texture> rayTraceTarget = graph.CreateTexture("AO Target 0", aoDesc);
+	RGHandle<Texture> denoiseTarget = graph.CreateTexture("AO Target 1", aoDesc);
 
 	if (!m_pHistory || m_pHistory->GetDesc() != aoDesc)
 	{
 		m_pHistory = m_pDevice->CreateTexture(aoDesc, "AO History");
 	}
-	RGResourceHandle aoHistory = graph.ImportTexture("AO History", m_pHistory);
+	RGHandle<Texture> aoHistory = graph.ImportTexture("AO History", m_pHistory);
 
 	static float g_AoPower = 1.0f;
 	static float g_AoRadius = 2.0f;
@@ -72,7 +72,7 @@ void RTAO::Execute(RGGraph& graph, const SceneView& view, SceneTextures& sceneTe
 		.Write(&rayTraceTarget)
 		.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
-				Texture* pRayTraceTarget = resources.Get<Texture>(rayTraceTarget);
+				Texture* pRayTraceTarget = resources.Get(rayTraceTarget);
 
 				context.SetComputeRootSignature(m_pCommonRS);
 				context.SetPipelineState(m_pTraceRaysSO);
@@ -96,7 +96,7 @@ void RTAO::Execute(RGGraph& graph, const SceneView& view, SceneTextures& sceneTe
 				context.SetRootCBV(1, Renderer::GetViewUniforms(view, pRayTraceTarget));
 				context.BindResources(2, pRayTraceTarget->GetUAV());
 				context.BindResources(3, {
-					resources.Get<Texture>(sceneTextures.Depth)->GetSRV(),
+					resources.Get(sceneTextures.Depth)->GetSRV(),
 					});
 
 				context.DispatchRays(bindingTable, pRayTraceTarget->GetWidth(), pRayTraceTarget->GetHeight());
@@ -107,7 +107,7 @@ void RTAO::Execute(RGGraph& graph, const SceneView& view, SceneTextures& sceneTe
 		.Write(&denoiseTarget)
 		.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
-				Texture* pDenoiseTarget = resources.Get<Texture>(denoiseTarget);
+				Texture* pDenoiseTarget = resources.Get(denoiseTarget);
 
 				context.SetComputeRootSignature(m_pCommonRS);
 				context.SetPipelineState(m_pDenoisePSO);
@@ -116,10 +116,10 @@ void RTAO::Execute(RGGraph& graph, const SceneView& view, SceneTextures& sceneTe
 				context.SetRootCBV(1, Renderer::GetViewUniforms(view, pDenoiseTarget));
 				context.BindResources(2, pDenoiseTarget->GetUAV());
 				context.BindResources(3, {
-					resources.Get<Texture>(sceneTextures.Depth)->GetSRV(),
-					resources.Get<Texture>(aoHistory)->GetSRV(),
-					resources.Get<Texture>(rayTraceTarget)->GetSRV(),
-					resources.Get<Texture>(sceneTextures.Velocity)->GetSRV(),
+					resources.Get(sceneTextures.Depth)->GetSRV(),
+					resources.Get(aoHistory)->GetSRV(),
+					resources.Get(rayTraceTarget)->GetSRV(),
+					resources.Get(sceneTextures.Velocity)->GetSRV(),
 					});
 				context.Dispatch(ComputeUtils::GetNumThreadGroups(pDenoiseTarget->GetWidth(), 8, pDenoiseTarget->GetHeight(), 8));
 			});
@@ -131,7 +131,7 @@ void RTAO::Execute(RGGraph& graph, const SceneView& view, SceneTextures& sceneTe
 		.Write(&rayTraceTarget)
 		.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
-				Texture* pTarget = resources.Get<Texture>(rayTraceTarget);
+				Texture* pTarget = resources.Get(rayTraceTarget);
 
 				context.SetComputeRootSignature(m_pCommonRS);
 				context.SetPipelineState(m_pBilateralBlurPSO);
@@ -149,8 +149,8 @@ void RTAO::Execute(RGGraph& graph, const SceneView& view, SceneTextures& sceneTe
 				context.SetRootCBV(1, Renderer::GetViewUniforms(view, pTarget));
 				context.BindResources(2, pTarget->GetUAV());
 				context.BindResources(3, {
-					resources.Get<Texture>(sceneTextures.Depth)->GetSRV(),
-					resources.Get<Texture>(denoiseTarget)->GetSRV()
+					resources.Get(sceneTextures.Depth)->GetSRV(),
+					resources.Get(denoiseTarget)->GetSRV()
 					});
 
 				context.Dispatch(ComputeUtils::GetNumThreadGroups(pTarget->GetWidth(), 256, pTarget->GetHeight(), 1));
@@ -161,7 +161,7 @@ void RTAO::Execute(RGGraph& graph, const SceneView& view, SceneTextures& sceneTe
 		.Write(&sceneTextures.AmbientOcclusion)
 		.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
-				Texture* pTarget = resources.Get<Texture>(sceneTextures.AmbientOcclusion);
+				Texture* pTarget = resources.Get(sceneTextures.AmbientOcclusion);
 
 				context.SetComputeRootSignature(m_pCommonRS);
 				context.SetPipelineState(m_pBilateralBlurPSO);
@@ -178,8 +178,8 @@ void RTAO::Execute(RGGraph& graph, const SceneView& view, SceneTextures& sceneTe
 				context.SetRootConstants(0, shaderParameters);
 				context.BindResources(2, pTarget->GetUAV());
 				context.BindResources(3, {
-					resources.Get<Texture>(sceneTextures.Depth)->GetSRV(),
-					resources.Get<Texture>(rayTraceTarget)->GetSRV()
+					resources.Get(sceneTextures.Depth)->GetSRV(),
+					resources.Get(rayTraceTarget)->GetSRV()
 					});
 
 				context.Dispatch(ComputeUtils::GetNumThreadGroups(pTarget->GetWidth(), 1, pTarget->GetHeight(), 256));

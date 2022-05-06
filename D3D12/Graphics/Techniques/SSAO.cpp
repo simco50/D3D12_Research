@@ -40,7 +40,7 @@ void SSAO::Execute(RGGraph& graph, const SceneView& view, SceneTextures& sceneTe
 		.Write(&sceneTextures.AmbientOcclusion)
 		.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
-				Texture* pTarget = resources.Get<Texture>(sceneTextures.AmbientOcclusion);
+				Texture* pTarget = resources.Get(sceneTextures.AmbientOcclusion);
 
 				context.SetComputeRootSignature(m_pSSAORS);
 				context.SetPipelineState(m_pSSAOPSO);
@@ -61,20 +61,20 @@ void SSAO::Execute(RGGraph& graph, const SceneView& view, SceneTextures& sceneTe
 				context.SetRootConstants(0, shaderParameters);
 				context.SetRootCBV(1, Renderer::GetViewUniforms(view, pTarget));
 				context.BindResources(2, pTarget->GetUAV());
-				context.BindResources(3, resources.Get<Texture>(sceneTextures.Depth)->GetSRV());
+				context.BindResources(3, resources.Get(sceneTextures.Depth)->GetSRV());
 
 				context.Dispatch(ComputeUtils::GetNumThreadGroups(pTarget->GetWidth(), 16, pTarget->GetHeight(), 16));
 			});
 
-	RGResourceHandle aoIntermediate = graph.CreateTexture("Intermediate AO", graph.GetDesc(sceneTextures.AmbientOcclusion));
+	RGHandle<Texture> aoIntermediate = graph.CreateTexture("Intermediate AO", graph.GetDesc(sceneTextures.AmbientOcclusion));
 
 	graph.AddPass("Blur SSAO - Horizonal", RGPassFlag::Compute)
 		.Read({ sceneTextures.AmbientOcclusion, sceneTextures.Depth })
 		.Write(&aoIntermediate)
 		.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
-				Texture* pTarget = resources.Get<Texture>(sceneTextures.AmbientOcclusion);
-				Texture* pBlurTarget = resources.Get<Texture>(aoIntermediate);
+				Texture* pTarget = resources.Get(sceneTextures.AmbientOcclusion);
+				Texture* pBlurTarget = resources.Get(aoIntermediate);
 
 				context.SetComputeRootSignature(m_pSSAORS);
 				context.SetPipelineState(m_pSSAOBlurPSO);
@@ -92,7 +92,7 @@ void SSAO::Execute(RGGraph& graph, const SceneView& view, SceneTextures& sceneTe
 				context.SetRootCBV(1, Renderer::GetViewUniforms(view, pTarget));
 				context.BindResources(2, pBlurTarget->GetUAV());
 				context.BindResources(3, {
-					resources.Get<Texture>(sceneTextures.Depth)->GetSRV(),
+					resources.Get(sceneTextures.Depth)->GetSRV(),
 					pTarget->GetSRV(),
 					});
 
@@ -104,8 +104,8 @@ void SSAO::Execute(RGGraph& graph, const SceneView& view, SceneTextures& sceneTe
 		.Write(&sceneTextures.AmbientOcclusion)
 		.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
-				Texture* pTarget = resources.Get<Texture>(sceneTextures.AmbientOcclusion);
-				Texture* pBlurSource = resources.Get<Texture>(aoIntermediate);
+				Texture* pTarget = resources.Get(sceneTextures.AmbientOcclusion);
+				Texture* pBlurSource = resources.Get(aoIntermediate);
 
 				context.SetComputeRootSignature(m_pSSAORS);
 				context.SetPipelineState(m_pSSAOBlurPSO);
@@ -121,7 +121,7 @@ void SSAO::Execute(RGGraph& graph, const SceneView& view, SceneTextures& sceneTe
 
 				context.BindResources(2, pTarget->GetUAV());
 				context.BindResources(3, {
-					resources.Get<Texture>(sceneTextures.Depth)->GetSRV(),
+					resources.Get(sceneTextures.Depth)->GetSRV(),
 					pBlurSource->GetSRV(),
 					});
 
