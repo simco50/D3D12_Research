@@ -40,7 +40,7 @@ public:
 	void Merge(const RGBlackboard& other, bool overrideExisting);
 
 private:
-	void* GetData(const char* hash);
+	void* GetData(StringHash hash);
 
 	std::map<StringHash, void*> m_DataMap;
 	std::vector<std::unique_ptr<RGBlackboard>> m_Children;

@@ -454,15 +454,15 @@ void DemoApp::Update()
 	uint32 height = (uint32)m_SceneData.View.Viewport.GetHeight();
 
 	SceneTextures sceneTextures;
-	sceneTextures.VisibilityBuffer = graph.CreateTexture("Visibility Buffer", TextureDesc::CreateRenderTarget(width, height, DXGI_FORMAT_R32_UINT, TextureFlag::ShaderResource));
+	sceneTextures.VisibilityBuffer = graph.CreateTexture("Visibility Buffer", TextureDesc::CreateRenderTarget(width, height, DXGI_FORMAT_R32_UINT));
 	sceneTextures.PreviousColor = graph.ImportTexture("Previous Color", m_pColorHistory);
-	sceneTextures.Roughness = graph.CreateTexture("Roughness", TextureDesc::CreateRenderTarget(width, height, DXGI_FORMAT_R8_UNORM, TextureFlag::RenderTarget | TextureFlag::UnorderedAccess | TextureFlag::ShaderResource));
-	sceneTextures.ColorTarget = graph.CreateTexture("Color Target", TextureDesc::CreateRenderTarget(width, height, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource));
-	sceneTextures.AmbientOcclusion = graph.CreateTexture("Ambient Occlusion", TextureDesc::Create2D(width, height, DXGI_FORMAT_R8_UNORM, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource));
-	sceneTextures.Normals = graph.CreateTexture("Normals", TextureDesc::CreateRenderTarget(width, height, DXGI_FORMAT_R16G16_FLOAT, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource));;
-	sceneTextures.Velocity = graph.CreateTexture("Velocity", TextureDesc::CreateRenderTarget(width, height, DXGI_FORMAT_R16G16_FLOAT, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource));
-	sceneTextures.Depth = graph.CreateTexture("Depth Stencil", TextureDesc::CreateDepth(width, height, DXGI_FORMAT_D32_FLOAT, TextureFlag::DepthStencil | TextureFlag::ShaderResource, 1, ClearBinding(0.0f, 0)));
-	sceneTextures.ResolvedDepth = graph.CreateTexture("Resolved Depth", TextureDesc::CreateDepth(width, height, DXGI_FORMAT_D32_FLOAT, TextureFlag::ShaderResource, 1, ClearBinding(0.0f, 0)));
+	sceneTextures.Roughness = graph.CreateTexture("Roughness", TextureDesc::CreateRenderTarget(width, height, DXGI_FORMAT_R8_UNORM));
+	sceneTextures.ColorTarget = graph.CreateTexture("Color Target", TextureDesc::CreateRenderTarget(width, height, DXGI_FORMAT_R16G16B16A16_FLOAT));
+	sceneTextures.AmbientOcclusion = graph.CreateTexture("Ambient Occlusion", TextureDesc::Create2D(width, height, DXGI_FORMAT_R8_UNORM));
+	sceneTextures.Normals = graph.CreateTexture("Normals", TextureDesc::CreateRenderTarget(width, height, DXGI_FORMAT_R16G16_FLOAT));
+	sceneTextures.Velocity = graph.CreateTexture("Velocity", TextureDesc::CreateRenderTarget(width, height, DXGI_FORMAT_R16G16_FLOAT));
+	sceneTextures.Depth = graph.CreateTexture("Depth Stencil", TextureDesc::CreateDepth(width, height, DXGI_FORMAT_D32_FLOAT, TextureFlag::None, 1, ClearBinding(0.0f, 0)));
+	sceneTextures.ResolvedDepth = graph.CreateTexture("Resolved Depth", TextureDesc::CreateDepth(width, height, DXGI_FORMAT_D32_FLOAT, TextureFlag::None, 1, ClearBinding(0.0f, 0)));
 
 	if (m_RenderPath == RenderPath::Clustered || m_RenderPath == RenderPath::Tiled || m_RenderPath == RenderPath::Visibility)
 	{
@@ -880,7 +880,7 @@ void DemoApp::Update()
 		IntVector3 depthSize = graph.GetDesc(sceneTextures.Depth).Size();
 		depthSize.x = Math::DivideAndRoundUp(depthSize.x, 16);
 		depthSize.y = Math::DivideAndRoundUp(depthSize.y, 16);
-		RGResourceHandle reductionTarget = graph.CreateTexture("Depth Reduction Target", TextureDesc::Create2D(depthSize.x, depthSize.y, DXGI_FORMAT_R32G32_FLOAT, TextureFlag::UnorderedAccess));
+		RGResourceHandle reductionTarget = graph.CreateTexture("Depth Reduction Target", TextureDesc::Create2D(depthSize.x, depthSize.y, DXGI_FORMAT_R32G32_FLOAT));
 
 		graph.AddPass("Depth Reduce - Setup", RGPassFlag::Compute)
 			.Read(sceneTextures.Depth)
@@ -904,7 +904,7 @@ void DemoApp::Update()
 		while (depthSize.x > 1 || depthSize.y > 1)
 		{
 			RGResourceHandle reductionSource = reductionTarget;
-			reductionTarget = graph.CreateTexture("Depth Reduction Target", TextureDesc::Create2D(depthSize.x, depthSize.y, DXGI_FORMAT_R32G32_FLOAT, TextureFlag::UnorderedAccess));
+			reductionTarget = graph.CreateTexture("Depth Reduction Target", TextureDesc::Create2D(depthSize.x, depthSize.y, DXGI_FORMAT_R32G32_FLOAT));
 
 			graph.AddPass("Depth Reduce - Subpass", RGPassFlag::Compute)
 				.Read(reductionSource)
@@ -1129,7 +1129,7 @@ void DemoApp::Update()
 		}
 	}
 
-	RGResourceHandle tonemapTarget = graph.CreateTexture("Tonemap Target", TextureDesc::Create2D(width, height, DXGI_FORMAT_R8G8B8A8_UNORM, TextureFlag::UnorderedAccess));
+	RGResourceHandle tonemapTarget = graph.CreateTexture("Tonemap Target", TextureDesc::Create2D(width, height, DXGI_FORMAT_R8G8B8A8_UNORM));
 
 	graph.AddPass("Tonemap", RGPassFlag::Compute)
 		.Read(sceneTextures.ColorTarget)

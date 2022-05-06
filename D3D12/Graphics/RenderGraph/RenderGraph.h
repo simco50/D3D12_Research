@@ -4,6 +4,7 @@
 #include "Graphics/RHI/Buffer.h"
 #include "Graphics/RHI/Fence.h"
 #include "Graphics/RHI/CommandContext.h"
+#include "Blackboard.h"
 
 #define RG_GRAPH_SCOPE(name, graph) RGGraphScope MACRO_CONCAT(rgScope_,__COUNTER__)(name, graph)
 
@@ -371,6 +372,8 @@ public:
 		return pResource->TextureDesc;
 	}
 
+	RGBlackboard& Blackboard() { return m_Blackboard; }
+
 	void PushEvent(const char* pName);
 	void PopEvent();
 
@@ -390,6 +393,7 @@ private:
 	Allocator m_Allocator;
 	SyncPoint m_LastSyncPoint;
 
+	RGBlackboard m_Blackboard;
 	std::vector<RGResourceAlias> m_Aliases;
 	std::vector<RGPass*> m_RenderPasses;
 	std::vector<RGResource*> m_Resources;
