@@ -685,19 +685,24 @@ void DemoApp::Update()
 		graph.ExportTexture(irradianceTarget, ddgi.pIrradianceHistory.This());
 	}
 
+	RGHandle<Texture> sky = graph.CreateTexture("Sky", TextureDesc::Create2D(64, 128, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
+	graph.ExportTexture(sky, m_SceneData.pSky.This());
+
 	graph.AddPass("Compute Sky", RGPassFlag::Compute)
+		.Write(&sky)
 		.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
-				context.InsertResourceBarrier(m_pSkyTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+				Texture* pSky = resources.Get(sky);
 				context.SetComputeRootSignature(m_pCommonRS);
 				context.SetPipelineState(m_pRenderSkyPSO);
 
-				context.SetRootCBV(1, Renderer::GetViewUniforms(m_SceneData, m_pSkyTexture));
-				context.BindResources(2, m_pSkyTexture->GetUAV());
+				context.SetRootCBV(1, Renderer::GetViewUniforms(m_SceneData, pSky));
+				context.BindResources(2, pSky->GetUAV());
 
-				context.Dispatch(ComputeUtils::GetNumThreadGroups(m_pSkyTexture->GetWidth(), 16, m_pSkyTexture->GetHeight(), 16));
+				context.Dispatch(ComputeUtils::GetNumThreadGroups(pSky->GetWidth(), 16, pSky->GetHeight(), 16));
+
+				context.InsertResourceBarrier(pSky, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 			});
-	m_SceneData.pSky = m_pSkyTexture;
 
 	if (m_RenderPath == RenderPath::Clustered || m_RenderPath == RenderPath::Tiled || m_RenderPath == RenderPath::Visibility)
 	{
@@ -796,12 +801,11 @@ void DemoApp::Update()
 		}
 
 		graph.AddPass("Render Sky", RGPassFlag::Raster)
+			.Read(sky)
 			.DepthStencil(sceneTextures.Depth, RenderPassAccess::Load_Store, false)
 			.RenderTarget(sceneTextures.ColorTarget, RenderPassAccess::Load_Store)
 			.Bind([=](CommandContext& context, const RGPassResources& resources)
 				{
-					context.InsertResourceBarrier(m_pSkyTexture, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-
 					context.BeginRenderPass(resources.GetRenderPassInfo());
 					context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 					context.SetGraphicsRootSignature(m_pCommonRS);
@@ -1405,7 +1409,6 @@ void DemoApp::InitializePipelines()
 		m_pSkyboxPSO = m_pDevice->CreatePipeline(psoDesc);
 
 		m_pRenderSkyPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "ProceduralSky.hlsl", "ComputeSkyCS");
-		m_pSkyTexture = m_pDevice->CreateTexture(TextureDesc::Create2D(64, 128, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess), "Sky");
 	}
 
 	//Bloom

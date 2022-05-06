@@ -130,7 +130,6 @@ private:
 	//Sky
 	RefCountPtr<PipelineState> m_pSkyboxPSO;
 	RefCountPtr<PipelineState> m_pRenderSkyPSO;
-	RefCountPtr<Texture> m_pSkyTexture;
 
 	//Bloom
 	RefCountPtr<PipelineState> m_pBloomSeparatePSO;

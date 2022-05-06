@@ -535,12 +535,12 @@ RefCountPtr<Texture> RGResourcePool::Allocate(const char* pName, const TextureDe
 
 RefCountPtr<Buffer> RGResourcePool::Allocate(const char* pName, const BufferDesc& desc)
 {
-	for (PooledBuffer& texture : m_BufferPool)
+	for (PooledBuffer& buffer : m_BufferPool)
 	{
-		RefCountPtr<Buffer>& pBuffer = texture.pResource;
+		RefCountPtr<Buffer>& pBuffer = buffer.pResource;
 		if (pBuffer->GetNumRefs() == 1 && pBuffer->GetDesc() == desc)
 		{
-			texture.LastUsedFrame = m_FrameIndex;
+			buffer.LastUsedFrame = m_FrameIndex;
 			pBuffer->SetName(pName);
 			return pBuffer;
 		}
