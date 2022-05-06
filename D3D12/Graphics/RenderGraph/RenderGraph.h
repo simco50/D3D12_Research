@@ -71,6 +71,11 @@ struct RGResource
 		return static_cast<T*>(pPhysicalResource.Get());
 	}
 
+	GraphicsResource* GetRHIDirect() const
+	{
+		return pPhysicalResource.Get();
+	}
+
 	union
 	{
 		TextureDesc TextureDesc;
@@ -111,6 +116,11 @@ public:
 	T* Get(RGResourceHandle handle) const
 	{
 		return GetResource(handle)->GetRHI<T>();
+	}
+
+	GraphicsResource* Get(RGResourceHandle handle) const
+	{
+		return GetResource(handle)->GetRHIDirect();
 	}
 
 	RenderPassInfo GetRenderPassInfo() const;
@@ -295,7 +305,7 @@ public:
 	void DumpGraph(const char* pPath) const;
 	RGResourceHandle MoveResource(RGResourceHandle From, RGResourceHandle To);
 
-	RGPass& AddCopyTexturePass(const char* pName, RGResourceHandle source, RGResourceHandle& target);
+	RGPass& AddCopyPass(const char* pName, RGResourceHandle source, RGResourceHandle& target);
 
 	template<typename T, typename... Args>
 	T* Allocate(Args... args)

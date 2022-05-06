@@ -149,7 +149,7 @@ void CommandContext::FlushResourceBarriers()
 	m_BarrierBatcher.Flush(m_pCommandList);
 }
 
-void CommandContext::CopyTexture(GraphicsResource* pSource, GraphicsResource* pTarget)
+void CommandContext::CopyResource(GraphicsResource* pSource, GraphicsResource* pTarget)
 {
 	checkf(pSource && pSource->GetResource(), "Source is invalid");
 	checkf(pTarget && pTarget->GetResource(), "Target is invalid");
@@ -547,7 +547,7 @@ void CommandContext::EndRenderPass()
 		if (ExtractEndingAccess(data.Access) == D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_RESOLVE && data.Target->GetDesc().SampleCount <= 1 && data.Target != data.ResolveTarget)
 		{
 			FlushResourceBarriers();
-			CopyTexture(data.Target, data.ResolveTarget);
+			CopyResource(data.Target, data.ResolveTarget);
 		}
 	}
 

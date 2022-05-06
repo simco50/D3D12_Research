@@ -41,7 +41,7 @@ void RTReflections::Execute(RGGraph& graph, const SceneView& view, SceneTextures
 {
 	RGResourceHandle reflectionsTarget = graph.CreateTexture("Reflections Target", graph.GetDesc(sceneTextures.ColorTarget));
 
-	graph.AddCopyTexturePass("Cache Scene Color", sceneTextures.ColorTarget, reflectionsTarget);
+	graph.AddCopyPass("Cache Scene Color", sceneTextures.ColorTarget, reflectionsTarget);
 
 	graph.AddPass("RT Reflections", RGPassFlag::Compute)
 		.Read({ sceneTextures.Normals, sceneTextures.Depth, sceneTextures.Roughness, reflectionsTarget })

@@ -107,14 +107,14 @@ void RGPass::Write(Span<RGResourceHandle*> resources, RGResourceAccess useFlag)
 	}
 }
 
-RGPass& RGGraph::AddCopyTexturePass(const char* pName, RGResourceHandle source, RGResourceHandle& target)
+RGPass& RGGraph::AddCopyPass(const char* pName, RGResourceHandle source, RGResourceHandle& target)
 {
 	return AddPass(pName, RGPassFlag::Copy)
 		.Read(source)
 		.Write(&target)
 		.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
-				context.CopyTexture(resources.Get<Texture>(source), resources.Get<Texture>(target));
+				context.CopyResource(resources.Get(source), resources.Get(target));
 			});
 }
 

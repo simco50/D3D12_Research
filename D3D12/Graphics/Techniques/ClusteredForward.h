@@ -14,12 +14,14 @@ struct SceneTextures;
 struct ClusteredLightCullData
 {
 	IntVector3 ClusterCount;
-	RefCountPtr<Buffer> pAABBs;
-	RefCountPtr<Buffer> pLightIndexGrid;
-	RefCountPtr<Buffer> pLightGrid;
-	RefCountPtr<UnorderedAccessView> pLightGridRawUAV;
+	RGResourceHandle AABBs;
+	RGResourceHandle LightIndexGrid;
+	RGResourceHandle LightGrid;
+
 	Vector2 LightGridParams;
 	bool IsViewDirty = true;
+
+	RefCountPtr<Buffer> pAABBs;
 
 	RefCountPtr<Buffer> pDebugLightGrid;
 	Matrix DebugClustersViewMatrix;

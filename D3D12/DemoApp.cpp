@@ -867,7 +867,7 @@ void DemoApp::Update()
 						context.Dispatch(ComputeUtils::GetNumThreadGroups(pTarget->GetWidth(), 8, pTarget->GetHeight(), 8));
 					});
 
-			graph.AddCopyTexturePass("Store TAA History", taaTarget, sceneTextures.PreviousColor);
+			graph.AddCopyPass("Store TAA History", taaTarget, sceneTextures.PreviousColor);
 
 			sceneTextures.ColorTarget = taaTarget;
 		}
@@ -1257,7 +1257,7 @@ void DemoApp::Update()
 		.Write(&finalOutput)
 		.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
-				context.CopyTexture(resources.Get<Texture>(sceneTextures.ColorTarget), resources.Get<Texture>(finalOutput));
+				context.CopyResource(resources.Get<Texture>(sceneTextures.ColorTarget), resources.Get<Texture>(finalOutput));
 				context.InsertResourceBarrier(resources.Get<Texture>(finalOutput), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 			});
 

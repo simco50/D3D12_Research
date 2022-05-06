@@ -162,7 +162,7 @@ public:
 	void InsertUavBarrier(GraphicsResource* pBuffer = nullptr);
 	void FlushResourceBarriers();
 
-	void CopyTexture(GraphicsResource* pSource, GraphicsResource* pTarget);
+	void CopyResource(GraphicsResource* pSource, GraphicsResource* pTarget);
 	void CopyTexture(Texture* pSource, Buffer* pDestination, const D3D12_BOX& sourceRegion, uint32 sourceSubregion = 0, uint32 destinationOffset = 0);
 	void CopyTexture(Texture* pSource, Texture* pDestination, const D3D12_BOX& sourceRegion, const D3D12_BOX& destinationRegion, uint32 sourceSubregion = 0, uint32 destinationSubregion = 0);
 	void CopyBuffer(Buffer* pSource, Buffer* pDestination, uint64 size, uint64 sourceOffset, uint64 destinationOffset);

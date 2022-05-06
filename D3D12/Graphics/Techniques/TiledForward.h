@@ -1,4 +1,5 @@
 #pragma once
+
 class RootSignature;
 class GraphicsDevice;
 class PipelineState;
@@ -18,17 +19,11 @@ public:
 	void VisualizeLightDensity(RGGraph& graph, GraphicsDevice* pDevice, const SceneView& view, SceneTextures& sceneTextures);
 
 private:
-	void SetupPipelines();
-
 	GraphicsDevice* m_pDevice;
 
 	//Light Culling
 	RefCountPtr<RootSignature> m_pComputeLightCullRS;
 	RefCountPtr<PipelineState> m_pComputeLightCullPSO;
-	RefCountPtr<Buffer> m_pLightIndexCounter;
-	RefCountPtr<UnorderedAccessView> m_pLightIndexCounterRawUAV;
-	RefCountPtr<Buffer> m_pLightIndexListBufferOpaque;
-	RefCountPtr<Buffer> m_pLightIndexListBufferTransparant;
 
 	//Diffuse
 	RefCountPtr<RootSignature> m_pDiffuseRS;
