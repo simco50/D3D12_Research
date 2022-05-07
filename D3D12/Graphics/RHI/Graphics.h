@@ -160,6 +160,7 @@ private:
 
 	RefCountPtr<IDXGIFactory6> m_pFactory;
 	RefCountPtr<ID3D12Device> m_pDevice;
+	RefCountPtr<ID3D12Device4> m_pDevice4;
 	RefCountPtr<ID3D12Device5> m_pRaytracingDevice;
 
 	class DRED

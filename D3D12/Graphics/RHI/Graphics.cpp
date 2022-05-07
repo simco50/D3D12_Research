@@ -323,7 +323,9 @@ GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
 	}
 
 	VERIFY_HR(D3D12CreateDevice(pAdapter, D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(m_pDevice.ReleaseAndGetAddressOf())));
-	m_pDevice->QueryInterface(&m_pRaytracingDevice);
+	VERIFY_HR(m_pDevice->QueryInterface(m_pDevice4.GetAddressOf()));
+	m_pDevice->QueryInterface(m_pRaytracingDevice.GetAddressOf());
+
 	D3D::SetObjectName(m_pDevice.Get(), "Main Device");
 
 	m_Capabilities.Initialize(this);
@@ -432,26 +434,24 @@ CommandContext* GraphicsDevice::AllocateCommandContext(D3D12_COMMAND_LIST_TYPE t
 {
 	int typeIndex = (int)type;
 	CommandContext* pContext = nullptr;
-
 	{
 		std::scoped_lock<std::mutex> lock(m_ContextAllocationMutex);
 		if (m_FreeCommandLists[typeIndex].size() > 0)
 		{
 			pContext = m_FreeCommandLists[typeIndex].front();
 			m_FreeCommandLists[typeIndex].pop();
-			pContext->Reset();
 		}
 		else
 		{
 			RefCountPtr<ID3D12CommandList> pCommandList;
-			RefCountPtr<ID3D12CommandAllocator> pAllocator = m_CommandQueues[type]->RequestAllocator();
-			VERIFY_HR(GetDevice()->CreateCommandList(0, type, pAllocator, nullptr, IID_PPV_ARGS(pCommandList.GetAddressOf())));
+			VERIFY_HR(m_pDevice4->CreateCommandList1(0, type, D3D12_COMMAND_LIST_FLAG_NONE, IID_PPV_ARGS(pCommandList.GetAddressOf())));
 			D3D::SetObjectName(pCommandList.Get(), Sprintf("Pooled Commandlist %d", m_CommandLists.size()).c_str());
 			m_CommandLists.push_back(std::move(pCommandList));
-			m_CommandListPool[typeIndex].emplace_back(new CommandContext(this, static_cast<ID3D12GraphicsCommandList*>(m_CommandLists.back().Get()), type, m_pGlobalViewHeap, m_pDynamicAllocationManager, pAllocator));
+			m_CommandListPool[typeIndex].emplace_back(new CommandContext(this, static_cast<ID3D12GraphicsCommandList*>(m_CommandLists.back().Get()), type, m_pGlobalViewHeap, m_pDynamicAllocationManager));
 			pContext = m_CommandListPool[typeIndex].back();
 		}
 	}
+	pContext->Reset();
 	return pContext;
 }
 

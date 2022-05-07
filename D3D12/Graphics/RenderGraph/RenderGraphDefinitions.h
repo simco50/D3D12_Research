@@ -1,13 +1,5 @@
 #pragma once
 
-#ifndef RG_ASSERT
-#define RG_ASSERT(expression, msg, ...) checkf(expression, msg, ##__VA_ARGS__)
-#endif
-
-#ifndef RG_STATIC_ASSERT
-#define RG_STATIC_ASSERT(expression, msg) static_assert(expression, msg)
-#endif
-
 struct RGHandleT
 {
 	explicit RGHandleT(uint32 id = InvalidIndex)

@@ -67,7 +67,7 @@ struct RGResource
 	template<typename T>
 	T* GetRHI() const
 	{
-		RG_ASSERT(Type == RGResourceTypeTraits<T>::Type, "Provided type does not match resource type");
+		checkf(Type == RGResourceTypeTraits<T>::Type, "Provided type does not match resource type");
 		return static_cast<T*>(pPhysicalResource.Get());
 	}
 
@@ -161,7 +161,7 @@ public:
 	template<typename ExecuteFn>
 	RGPass& Bind(ExecuteFn&& callback)
 	{
-		RG_STATIC_ASSERT(sizeof(ExecuteFn) < 4096, "The Execute callback exceeds the maximum size");
+		static_assert(sizeof(ExecuteFn) < 4096, "The Execute callback exceeds the maximum size");
 		checkf(!ExecuteCallback.IsBound(), "Pass is already bound! This may be unintentional");
 		ExecuteCallback.BindLambda(std::move(callback));
 		return *this;
@@ -387,13 +387,13 @@ public:
 
 	const RGNode& GetResourceNode(RGHandleT handle) const
 	{
-		RG_ASSERT(IsValidHandle(handle), "Invalid handle");
+		check(IsValidHandle(handle));
 		return m_ResourceNodes[handle.Index];
 	}
 
 	RGNode& GetResourceNode(RGHandleT handle)
 	{
-		RG_ASSERT(IsValidHandle(handle), "Invalid handle");
+		check(IsValidHandle(handle));
 		return m_ResourceNodes[handle.Index];
 	}
 

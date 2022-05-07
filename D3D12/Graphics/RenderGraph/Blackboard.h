@@ -17,7 +17,7 @@ public:
 	T& Add(Args&&... args)
 	{
 		constexpr StringHash hash = GetTypeHash<T>();
-		RG_ASSERT(m_DataMap.find(hash) == m_DataMap.end(), "Data type already exists in blackboard");
+		checkf(m_DataMap.find(hash) == m_DataMap.end(), "Data type already exists in blackboard");
 		std::unique_ptr<TElement<T>> pAllocation = std::make_unique<TElement<T>>(std::forward<Args&&>(args)...);
 		T& obj = pAllocation->Object;
 		m_DataMap[hash] = &obj;
@@ -34,7 +34,7 @@ public:
 		{
 			return *static_cast<const T*>(it->second);
 		}
-		RG_ASSERT(m_pParent, "Data for given type does not exist in blackboard");
+		checkf(m_pParent, "Data for given type does not exist in blackboard");
 		return m_pParent->Get<T>();
 	}
 
