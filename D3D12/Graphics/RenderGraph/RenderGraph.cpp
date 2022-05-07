@@ -476,14 +476,18 @@ void RGGraph::PrepareResources(RGPass* pPass, CommandContext& context)
 
 void RGGraph::ReleaseResources(RGPass* pPass)
 {
-	for (RGHandleT& handle : pPass->Reads)
-	{
-		RGResource* pResource = GetResource(handle);
-		if (!pResource->IsImported && pResource->Type == RGResourceType::Texture && pResource->pLastAccess == pPass)
+	auto ConditionallyReleaseResource = [&](RGResource* pResource) {
+		if (!pResource->IsImported && pResource->pLastAccess == pPass)
 		{
 			check(pResource->pPhysicalResource);
 			pResource->pPhysicalResource = nullptr;
 		}
+	};
+
+	for (RGHandleT& handle : pPass->Reads)
+	{
+		RGResource* pResource = GetResource(handle);
+		ConditionallyReleaseResource(pResource);
 	}
 }
 
