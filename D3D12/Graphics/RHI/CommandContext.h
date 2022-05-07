@@ -150,7 +150,7 @@ namespace ComputeUtils
 class CommandContext : public GraphicsObject
 {
 public:
-	CommandContext(GraphicsDevice* pParent, ID3D12GraphicsCommandList* pCommandList, D3D12_COMMAND_LIST_TYPE type, GlobalOnlineDescriptorHeap* pDescriptorHeap, DynamicAllocationManager* pDynamicMemoryManager);
+	CommandContext(GraphicsDevice* pParent, RefCountPtr<ID3D12CommandList> pCommandList, D3D12_COMMAND_LIST_TYPE type, GlobalOnlineDescriptorHeap* pDescriptorHeap, DynamicAllocationManager* pDynamicMemoryManager);
 	~CommandContext();
 
 	void Reset();
@@ -253,7 +253,8 @@ private:
 	OnlineDescriptorAllocator m_ShaderResourceDescriptorAllocator;
 	ResourceBarrierBatcher m_BarrierBatcher;
 	std::unique_ptr<DynamicResourceAllocator> m_pDynamicAllocator;
-	ID3D12GraphicsCommandList* m_pCommandList;
+	RefCountPtr<ID3D12CommandList> m_pCommandListBase;
+	RefCountPtr<ID3D12GraphicsCommandList> m_pCommandList;
 	RefCountPtr<ID3D12GraphicsCommandList4> m_pRaytracingCommandList;
 	RefCountPtr<ID3D12GraphicsCommandList6> m_pMeshShadingCommandList;
 	RefCountPtr<ID3D12CommandAllocator> m_pAllocator;
