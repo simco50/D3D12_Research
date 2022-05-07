@@ -248,13 +248,13 @@ void RGGraph::Compile()
 	{
 		RGResource* pResource = GetResource(exportResource.Handle);
 		// Don't release resource if exported
-		pResource->pLastAccess = nullptr;
+		pResource->IsExported = true;
 	}
 	for (ExportedResource<Buffer>& exportResource : m_ExportBuffers)
 	{
 		RGResource* pResource = GetResource(exportResource.Handle);
 		// Don't release resource if exported
-		pResource->pLastAccess = nullptr;
+		pResource->IsExported = true;
 	}
 
 
@@ -286,6 +286,50 @@ void RGGraph::Compile()
 				if (EnumHasAnyFlags(node.UseFlags, RGResourceAccess::SRV))
 					bufferFlags |= BufferFlag::ShaderResource;
 			}
+		}
+	}
+
+	auto ConditionallyAllocateResource = [&](const RGPass* pPass, RGResource* pResource) {
+		if (!pResource->IsImported && pResource->pFirstAccess == pPass && pResource->pResourceReference == nullptr)
+		{
+			if (pResource->Type == RGResourceType::Texture)
+			{
+				pResource->SetResource(m_ResourcePool.Allocate(pResource->Name, pResource->TextureDesc));
+			}
+			else if (pResource->Type == RGResourceType::Buffer)
+			{
+				pResource->SetResource(m_ResourcePool.Allocate(pResource->Name, pResource->BufferDesc));
+			}
+		}
+		check(pResource->pResourceReference);
+	};
+
+	auto ConditionallyReleaseResource = [&](const RGPass* pPass, RGResource* pResource) {
+		if (!pResource->IsImported && !pResource->IsExported && pResource->pLastAccess == pPass)
+		{
+			check(pResource->pResourceReference);
+			pResource->Release();
+		}
+	};
+
+	// Go through all resources accesses and allocate on first access and de-allocate on last access
+	// It's important to make the distinction between the RefCountPtr allocation and the Raw resource itself.
+	// A de-allocate returns the resource back to the pool by resetting the RefCountPtr however the Raw resource keeps a reference to it to use during execution.
+	// This is how we can "alias" resources (exact match only for now) and allocate our resources during compilation so that execution is thread-safe.
+	for (RGPass* pPass : m_RenderPasses)
+	{
+		if (pPass->References == 0)
+			continue;
+
+		for (RGHandleT read : pPass->Reads)
+		{
+			ConditionallyAllocateResource(pPass, GetResource(read));
+			ConditionallyReleaseResource(pPass, GetResource(read));
+		}
+		for (RGHandleT write : pPass->Writes)
+		{
+			ConditionallyAllocateResource(pPass, GetResource(write));
+			ConditionallyReleaseResource(pPass, GetResource(write));
 		}
 	}
 }
@@ -350,14 +394,12 @@ void RGGraph::ExecutePass(RGPass* pPass, CommandContext& context)
 {
 	PrepareResources(pPass, context);
 
-	if(pPass->ExecuteCallback.IsBound())
+	if (pPass->ExecuteCallback.IsBound())
 	{
 		GPU_PROFILE_SCOPE_CONDITIONAL(pPass->Name, &context, !EnumHasAnyFlags(pPass->Flags, RGPassFlag::Invisible));
 		RGPassResources resources(*this, *pPass);
 		pPass->ExecuteCallback.Execute(context, resources);
 	}
-
-	ReleaseResources(pPass);
 }
 
 void RGGraph::PrepareResources(RGPass* pPass, CommandContext& context)
@@ -377,7 +419,7 @@ void RGGraph::PrepareResources(RGPass* pPass, CommandContext& context)
 
 	auto IsDepthStencil = [&](const RGResource* pResource)
 	{
-		if(pResource->Type == RGResourceType::Texture && pPass->DepthStencilTarget.Resource.IsValid())
+		if (pResource->Type == RGResourceType::Texture && pPass->DepthStencilTarget.Resource.IsValid())
 			return GetResourceNode(pPass->DepthStencilTarget.Resource).pResource == pResource;
 		return false;
 	};
@@ -390,21 +432,6 @@ void RGGraph::PrepareResources(RGPass* pPass, CommandContext& context)
 				return true;
 		}
 		return false;
-	};
-
-	auto ConditionallyCreateResource = [&](RGResource* pResource) {
-		if (!pResource->IsImported && pResource->pFirstAccess == pPass && pResource->pPhysicalResource == nullptr)
-		{
-			if (pResource->Type == RGResourceType::Texture)
-			{
-				pResource->pPhysicalResource = m_ResourcePool.Allocate(pResource->Name, pResource->TextureDesc);
-			}
-			else if (pResource->Type == RGResourceType::Buffer)
-			{
-				pResource->pPhysicalResource = m_ResourcePool.Allocate(pResource->Name, pResource->BufferDesc);
-			}
-		}
-		check(pResource->pPhysicalResource);
 	};
 
 	D3D12_RESOURCE_STATES readState = D3D12_RESOURCE_STATE_COMMON;
@@ -432,34 +459,35 @@ void RGGraph::PrepareResources(RGPass* pPass, CommandContext& context)
 	for (RGHandleT& handle : pPass->Writes)
 	{
 		RGResource* pResource = GetResource(handle);
-		ConditionallyCreateResource(pResource);
+		check(pResource->pResource);
+		check(pResource->IsImported || pResource->IsExported || !pResource->pResourceReference);
 
 		if (IsDepthStencil(pResource))
 		{
-			if(writesDepth)
-				context.InsertResourceBarrier(pResource->pPhysicalResource, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+			if (writesDepth)
+				context.InsertResourceBarrier(pResource->pResource, D3D12_RESOURCE_STATE_DEPTH_WRITE);
 		}
 		else if (IsRenderTarget(pResource))
 		{
-			context.InsertResourceBarrier(pResource->pPhysicalResource, D3D12_RESOURCE_STATE_RENDER_TARGET);
+			context.InsertResourceBarrier(pResource->pResource, D3D12_RESOURCE_STATE_RENDER_TARGET);
 		}
-		else if(writeState != D3D12_RESOURCE_STATE_COMMON)
+		else if (writeState != D3D12_RESOURCE_STATE_COMMON)
 		{
 			check(!isWriteAllowed);
-			context.InsertResourceBarrier(pResource->pPhysicalResource, writeState);
+			context.InsertResourceBarrier(pResource->pResource, writeState);
 		}
 	}
 
 	for (RGHandleT& handle : pPass->Reads)
 	{
 		RGResource* pResource = GetResource(handle);
-		ConditionallyCreateResource(pResource);
-		check(pResource->pPhysicalResource);
+		check(pResource->pResource);
+		check(pResource->IsImported || pResource->IsExported || !pResource->pResourceReference);
 
 		if (IsDepthStencil(pResource))
 		{
 			if (!writesDepth)
-				context.InsertResourceBarrier(pResource->pPhysicalResource, D3D12_RESOURCE_STATE_DEPTH_READ);
+				context.InsertResourceBarrier(pResource->pResource, D3D12_RESOURCE_STATE_DEPTH_READ);
 		}
 		else if (IsRenderTarget(pResource))
 		{
@@ -467,28 +495,11 @@ void RGGraph::PrepareResources(RGPass* pPass, CommandContext& context)
 		}
 		else if (readState != D3D12_RESOURCE_STATE_COMMON && !WritesTo(pResource))
 		{
-			context.InsertResourceBarrier(pResource->pPhysicalResource, readState);
+			context.InsertResourceBarrier(pResource->pResource, readState);
 		}
 	}
 
 	context.FlushResourceBarriers();
-}
-
-void RGGraph::ReleaseResources(RGPass* pPass)
-{
-	auto ConditionallyReleaseResource = [&](RGResource* pResource) {
-		if (!pResource->IsImported && pResource->pLastAccess == pPass)
-		{
-			check(pResource->pPhysicalResource);
-			pResource->pPhysicalResource = nullptr;
-		}
-	};
-
-	for (RGHandleT& handle : pPass->Reads)
-	{
-		RGResource* pResource = GetResource(handle);
-		ConditionallyReleaseResource(pResource);
-	}
 }
 
 void RGGraph::DestroyData()

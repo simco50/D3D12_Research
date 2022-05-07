@@ -50,25 +50,40 @@ DECLARE_BITMASK_TYPE(RGResourceAccess);
 struct RGResource
 {
 	RGResource(const char* pName, int id, const TextureDesc& desc, Texture* pResource = nullptr)
-		: Name(pName), Id(id), IsImported(!!pResource), Type(RGResourceType::Texture), pPhysicalResource(pResource), TextureDesc(desc)
+		: Name(pName), Id(id), IsImported(!!pResource), Type(RGResourceType::Texture), pResourceReference(pResource), TextureDesc(desc), pResource(pResource)
 	{}
 
 	RGResource(const char* pName, int id, const BufferDesc& desc, Buffer* pResource = nullptr)
-		: Name(pName), Id(id), IsImported(!!pResource), Type(RGResourceType::Buffer), pPhysicalResource(pResource), BufferDesc(desc)
+		: Name(pName), Id(id), IsImported(!!pResource), Type(RGResourceType::Buffer), pResourceReference(pResource), BufferDesc(desc), pResource(pResource)
 	{}
+
+	void SetResource(RefCountPtr<GraphicsResource> resource)
+	{
+		pResourceReference = resource;
+		pResource = resource;
+	}
+
+	void Release()
+	{
+		pResourceReference = nullptr;
+		// pResource keeps a raw reference to use during execution
+	}
 
 	const char* Name;
 	int Id;
 	bool IsImported;
+	bool IsExported = false;
 	int Version = 0;
 	RGResourceType Type;
-	RefCountPtr<GraphicsResource> pPhysicalResource;
+	RefCountPtr<GraphicsResource> pResourceReference;
+	GraphicsResource* pResource = nullptr;
 
 	template<typename T>
 	T* GetRHI() const
 	{
 		checkf(Type == RGResourceTypeTraits<T>::Type, "Provided type does not match resource type");
-		return static_cast<T*>(pPhysicalResource.Get());
+		check(pResource);
+		return static_cast<T*>(pResource);
 	}
 
 	union
@@ -115,7 +130,7 @@ public:
 
 	GraphicsResource* Get(RGHandleT handle) const
 	{
-		return GetResource(handle)->pPhysicalResource;
+		return GetResource(handle)->pResource;
 	}
 
 	RenderPassInfo GetRenderPassInfo() const;
@@ -418,7 +433,6 @@ public:
 private:
 	void ExecutePass(RGPass* pPass, CommandContext& context);
 	void PrepareResources(RGPass* pPass, CommandContext& context);
-	void ReleaseResources(RGPass* pPass);
 	void DestroyData();
 
 	struct RGResourceAlias
