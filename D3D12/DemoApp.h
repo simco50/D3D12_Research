@@ -106,7 +106,6 @@ private:
 	RefCountPtr<PipelineState> m_pToneMapPSO;
 
 	// Eye adaptation
-	RefCountPtr<Buffer> m_pLuminanceHistogram;
 	RefCountPtr<Buffer> m_pAverageLuminance;
 	RefCountPtr<Texture> m_pDebugHistogramTexture;
 	RefCountPtr<PipelineState> m_pLuminanceHistogramPSO;
