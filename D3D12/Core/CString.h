@@ -68,12 +68,12 @@ inline int FormatStringVars(char* pBuffer, size_t bufferSize, const char* pForma
 }
 
 template<typename... Args>
-std::string Sprintf(const char* pFormat, Args... args)
+std::string Sprintf(const char* pFormat, Args&&... args)
 {
-	int length = FormatString(nullptr, 0, pFormat, args...);
+	int length = FormatString(nullptr, 0, pFormat, std::forward<Args&&>(args)...);
 	std::string str;
 	str.resize(length);
-	FormatString(str.data(), length + 1, pFormat, args...);
+	FormatString(str.data(), length + 1, pFormat, std::forward<Args&&>(args)...);
 	return str;
 }
 

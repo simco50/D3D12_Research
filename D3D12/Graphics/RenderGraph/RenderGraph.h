@@ -257,8 +257,8 @@ class RGGraph
 		struct TAllocatedObject : public AllocatedObject
 		{
 			template<typename... Args>
-			TAllocatedObject(Args... args)
-				: Object(std::forward<Args>(args)...)
+			TAllocatedObject(Args&&... args)
+				: Object(std::forward<Args&&>(args)...)
 			{}
 			T Object;
 		};
@@ -277,13 +277,13 @@ class RGGraph
 		}
 
 		template<typename T, typename ...Args>
-		T* Allocate(Args... args)
+		T* Allocate(Args&&... args)
 		{
 			using AllocatedType = std::conditional_t<std::is_pod_v<T>, T, TAllocatedObject<T>>;
 			check(m_pCurrentOffset - m_pData + sizeof(AllocatedType) < m_Size);
 			void* pData = m_pCurrentOffset;
 			m_pCurrentOffset += sizeof(AllocatedType);
-			AllocatedType* pAllocation = new (pData) AllocatedType(std::forward<Args>(args)...);
+			AllocatedType* pAllocation = new (pData) AllocatedType(std::forward<Args&&>(args)...);
 
 			if constexpr (std::is_pod_v<T>)
 			{
@@ -318,9 +318,9 @@ public:
 	RGPass& AddCopyPass(const char* pName, RGHandleT source, RGHandleT& target);
 
 	template<typename T, typename... Args>
-	T* Allocate(Args... args)
+	T* Allocate(Args&&... args)
 	{
-		return m_Allocator.Allocate<T>(std::forward<Args>(args)...);
+		return m_Allocator.Allocate<T>(std::forward<Args&&>(args)...);
 	}
 
 	RGPass& AddPass(const char* pName, RGPassFlag flags)
