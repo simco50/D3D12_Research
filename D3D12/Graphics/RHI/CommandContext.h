@@ -76,8 +76,8 @@ struct RenderPassInfo
 	struct DepthTargetInfo
 	{
 		Texture* Target = nullptr;
-		RenderPassAccess Access = RenderPassAccess::DontCare_DontCare;
-		RenderPassAccess StencilAccess = RenderPassAccess::DontCare_DontCare;
+		RenderPassAccess Access = RenderPassAccess::NoAccess;
+		RenderPassAccess StencilAccess = RenderPassAccess::NoAccess;
 		bool Write = true;
 	};
 

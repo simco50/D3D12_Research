@@ -156,7 +156,6 @@ void ImGuiRenderer::Render(RGGraph& graph, const SceneView& sceneData, Texture* 
 		{
 			context.InsertResourceBarrier(pRenderTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
 			context.BeginRenderPass(RenderPassInfo(pRenderTarget, RenderPassAccess::Load_Store, nullptr, RenderPassAccess::NoAccess, false));
-			ImGui::Render();
 			ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), context.GetCommandList());
 			context.EndRenderPass();
 		});
@@ -168,8 +167,10 @@ void ImGuiRenderer::Render(RGGraph& graph, const SceneView& sceneData, Texture* 
 		graph.AddPass("Update Platform UI", RGPassFlag::Raster)
 			.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
 			{
-				ImGui::UpdatePlatformWindows();
 				ImGui::RenderPlatformWindowsDefault(NULL, (void*)context.GetCommandList());
 			});
 	}
+
+	ImGui::Render();
+	ImGui::UpdatePlatformWindows();
 }
