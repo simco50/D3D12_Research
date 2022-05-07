@@ -22,6 +22,7 @@ static constexpr int gVolumetricNumZSlices = 128;
 struct CullBlackboardData
 {
 	RGHandle<Buffer> LightGrid;
+	Vector2 LightGridParams;
 };
 RG_BLACKBOARD_DATA(CullBlackboardData);
 
@@ -190,16 +191,6 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& view, SceneTextu
 	}
 }
 
-Vector2 ComputeVolumeGridParams(float nearZ, float farZ, int numSlices)
-{
-	Vector2 lightGridParams;
-	float n = Math::Min(nearZ, farZ);
-	float f = Math::Max(nearZ, farZ);
-	lightGridParams.x = (float)numSlices / log(f / n);
-	lightGridParams.y = ((float)numSlices * log(n)) / log(f / n);
-	return lightGridParams;
-}
-
 void ClusteredForward::ComputeLightCulling(RGGraph& graph, const SceneView& view, ClusteredLightCullData& cullData)
 {
 	RG_GRAPH_SCOPE("Light Culling", graph);
@@ -209,7 +200,10 @@ void ClusteredForward::ComputeLightCulling(RGGraph& graph, const SceneView& view
 	cullData.ClusterCount.z = gLightClustersNumZ;
 	float nearZ = view.View.NearPlane;
 	float farZ = view.View.FarPlane;
-	cullData.LightGridParams = ComputeVolumeGridParams(nearZ, farZ, gLightClustersNumZ);
+	float n = Math::Min(nearZ, farZ);
+	float f = Math::Max(nearZ, farZ);
+	cullData.LightGridParams.x = (float)gLightClustersNumZ / log(f / n);
+	cullData.LightGridParams.y = ((float)gLightClustersNumZ * log(n)) / log(f / n);
 
 	uint32 totalClusterCount = cullData.ClusterCount.x * cullData.ClusterCount.y * cullData.ClusterCount.z;
 
@@ -286,8 +280,9 @@ void ClusteredForward::ComputeLightCulling(RGGraph& graph, const SceneView& view
 			);
 		});
 
-	CullBlackboardData& backboardData = graph.Blackboard.Add<CullBlackboardData>();
-	backboardData.LightGrid = cullData.LightGrid;
+	CullBlackboardData& blackboardData = graph.Blackboard.Add<CullBlackboardData>();
+	blackboardData.LightGrid = cullData.LightGrid;
+	blackboardData.LightGridParams = cullData.LightGridParams;
 }
 
 void ClusteredForward::VisualizeClusters(RGGraph& graph, const SceneView& view, SceneTextures& sceneTextures, ClusteredLightCullData& cullData)
@@ -502,10 +497,9 @@ void ClusteredForward::VisualizeLightDensity(RGGraph& graph, const SceneView& vi
 {
 	RGHandle<Texture> visualizationIntermediate = graph.CreateTexture("Cached Scene Color", graph.GetDesc(sceneTextures.ColorTarget));
 
-	Vector2 lightGridParams = ComputeVolumeGridParams(view.View.NearPlane, view.View.FarPlane, gLightClustersNumZ);
-
 	const CullBlackboardData& blackboardData = graph.Blackboard.Get<CullBlackboardData>();
 	RGHandle<Buffer> lightGrid = blackboardData.LightGrid;
+	Vector2 lightGridParams = blackboardData.LightGridParams;
 
 	graph.AddCopyPass("Cache Scene Color", sceneTextures.ColorTarget, visualizationIntermediate);
 
