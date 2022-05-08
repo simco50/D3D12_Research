@@ -17,7 +17,7 @@ public:
 	GpuParticles(GraphicsDevice* pDevice);
 	~GpuParticles() = default;
 
-	void Simulate(RGGraph& graph, const SceneView& view, RGTexture* depth);
+	void Simulate(RGGraph& graph, const SceneView& view, RGTexture* pDepth);
 	void Render(RGGraph& graph, const SceneView& view, SceneTextures& sceneTextures);
 private:
 

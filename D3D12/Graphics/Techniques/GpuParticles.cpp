@@ -85,7 +85,7 @@ GpuParticles::GpuParticles(GraphicsDevice* pDevice)
 	}
 }
 
-void GpuParticles::Simulate(RGGraph& graph, const SceneView& view, RGTexture* depth)
+void GpuParticles::Simulate(RGGraph& graph, const SceneView& view, RGTexture* pDepth)
 {
 	if (ImGui::Begin("Parameters"))
 	{
@@ -118,7 +118,7 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView& view, RGTexture* de
 	RG_GRAPH_SCOPE("Particle Simulation", graph);
 
 	graph.AddPass("Prepare Arguments", RGPassFlag::Compute)
-		.Read(depth)
+		.Read(pDepth)
 		.Bind([=](CommandContext& context, const RGPassResources& resources)
 		{
 			m_ParticlesToSpawn += (float)g_EmitCount * Time::DeltaTime();
@@ -148,7 +148,7 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView& view, RGTexture* de
 			context.BindResources(3,
 				{
 					m_pCountersBuffer->GetSRV(),
-					depth->Get()->GetSRV(),
+					pDepth->Get()->GetSRV(),
 				});
 
 			context.Dispatch(1);
@@ -158,7 +158,7 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView& view, RGTexture* de
 		});
 
 	graph.AddPass("Emit", RGPassFlag::Compute)
-		.Read(depth)
+		.Read(pDepth)
 		.Bind([=](CommandContext& context, const RGPassResources& resources)
 		{
 			context.SetComputeRootSignature(m_pSimulateRS);
@@ -178,7 +178,7 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView& view, RGTexture* de
 			context.BindResources(3,
 				{
 					m_pCountersBuffer->GetSRV(),
-					depth->Get()->GetSRV(),
+					pDepth->Get()->GetSRV(),
 				});
 
 			context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchSignature, 1, m_pEmitArguments, m_pEmitArguments);
@@ -186,7 +186,7 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView& view, RGTexture* de
 		});
 
 	graph.AddPass("Simulate", RGPassFlag::Compute)
-		.Read(depth)
+		.Read(pDepth)
 		.Bind([=](CommandContext& context, const RGPassResources& resources)
 		{
 			context.SetComputeRootSignature(m_pSimulateRS);
@@ -207,7 +207,7 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView& view, RGTexture* de
 			context.BindResources(3,
 				{
 					m_pCountersBuffer->GetSRV(),
-					depth->Get()->GetSRV(),
+					pDepth->Get()->GetSRV(),
 				});
 
 			context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchSignature, 1, m_pSimulateArguments, nullptr);
@@ -215,7 +215,7 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView& view, RGTexture* de
 			});
 
 	graph.AddPass("Simulate End", RGPassFlag::Compute)
-		.Read(depth)
+		.Read(pDepth)
 		.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
 				context.InsertResourceBarrier(m_pCountersBuffer, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
@@ -228,7 +228,7 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView& view, RGTexture* de
 				context.BindResources(3,
 					{
 						m_pCountersBuffer->GetSRV(),
-						depth->Get()->GetSRV(),
+						pDepth->Get()->GetSRV(),
 					});
 
 			context.SetPipelineState(m_pSimulateEndPS);

@@ -86,8 +86,8 @@ public:
 	RGPass& Write(Span<RGResource*> resources);
 	RGPass& Read(Span<RGResource*> resources);
 	RGPass& ReadWrite(Span<RGResource*> resources);
-	RGPass& RenderTarget(RGTexture* resource, RenderPassAccess access);
-	RGPass& DepthStencil(RGTexture* resource, RenderPassAccess depthAccess, bool write, RenderPassAccess stencilAccess = RenderPassAccess::NoAccess);
+	RGPass& RenderTarget(RGTexture* pResource, RenderPassAccess access);
+	RGPass& DepthStencil(RGTexture* pResource, RenderPassAccess depthAccess, bool write, RenderPassAccess stencilAccess = RenderPassAccess::NoAccess);
 
 private:
 	struct RGAccess

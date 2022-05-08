@@ -41,29 +41,29 @@ RGPass& RGPass::ReadWrite(Span<RGResource*> resources)
 	return *this;
 }
 
-RGPass& RGPass::RenderTarget(RGTexture* resource, RenderPassAccess access)
+RGPass& RGPass::RenderTarget(RGTexture* pResource, RenderPassAccess access)
 {
-	Accesses.push_back({ D3D12_RESOURCE_STATE_RENDER_TARGET, resource });
-	RenderTargets.push_back({ resource, access });
+	Accesses.push_back({ D3D12_RESOURCE_STATE_RENDER_TARGET, pResource });
+	RenderTargets.push_back({ pResource, access });
 	return *this;
 }
 
-RGPass& RGPass::DepthStencil(RGTexture* resource, RenderPassAccess depthAccess, bool writeDepth, RenderPassAccess stencilAccess)
+RGPass& RGPass::DepthStencil(RGTexture* pResource, RenderPassAccess depthAccess, bool writeDepth, RenderPassAccess stencilAccess)
 {
 	checkf(!DepthStencilTarget.Resource, "Depth Target already assigned");
-	Accesses.push_back({ writeDepth ? D3D12_RESOURCE_STATE_DEPTH_WRITE : D3D12_RESOURCE_STATE_DEPTH_READ, resource });
-	DepthStencilTarget = { resource, depthAccess, stencilAccess, writeDepth };
+	Accesses.push_back({ writeDepth ? D3D12_RESOURCE_STATE_DEPTH_WRITE : D3D12_RESOURCE_STATE_DEPTH_READ, pResource });
+	DepthStencilTarget = { pResource, depthAccess, stencilAccess, writeDepth };
 	return *this;
 }
 
-RGPass& RGGraph::AddCopyPass(const char* pName, RGResource* source, RGResource* target)
+RGPass& RGGraph::AddCopyPass(const char* pName, RGResource* pSource, RGResource* pTarget)
 {
 	return AddPass(pName, RGPassFlag::Copy)
-		.Read(source)
-		.Write(target)
+		.Read(pSource)
+		.Write(pTarget)
 		.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
-				context.CopyResource(source->pResource, target->pResource);
+				context.CopyResource(pSource->pResource, pTarget->pResource);
 			});
 }
 

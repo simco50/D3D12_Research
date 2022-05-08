@@ -41,7 +41,7 @@ public:
 
 	RGTexture* RenderVolumetricFog(RGGraph& graph, const SceneView& view, const ClusteredLightCullData& cullData, VolumetricFogData& fogData);
 
-	void RenderBasePass(RGGraph& graph, const SceneView& view, SceneTextures& sceneTextures, const ClusteredLightCullData& lightCullData, RGTexture* fogTexture);
+	void RenderBasePass(RGGraph& graph, const SceneView& view, SceneTextures& sceneTextures, const ClusteredLightCullData& lightCullData, RGTexture* pFogTexture);
 
 	void Execute(RGGraph& graph, const SceneView& view, SceneTextures& sceneTextures);
 	void VisualizeLightDensity(RGGraph& graph, const SceneView& view, SceneTextures& sceneTextures);

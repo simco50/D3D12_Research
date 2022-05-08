@@ -48,10 +48,10 @@ private:
 
 public:
 	static DebugRenderer* Get();
-	
+
 	void Initialize(GraphicsDevice* pDevice);
 	void Shutdown();
-	void Render(RGGraph& graph, const SceneView& view, RGTexture* target, RGTexture* depth);
+	void Render(RGGraph& graph, const SceneView& view, RGTexture* pTarget, RGTexture* pDepth);
 
 	void AddLine(const Vector3& start, const Vector3& end, const IntColor& color);
 	void AddRay(const Vector3& start, const Vector3& direction, const IntColor& color);

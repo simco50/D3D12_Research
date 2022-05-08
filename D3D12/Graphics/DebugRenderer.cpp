@@ -74,7 +74,7 @@ void DebugRenderer::Shutdown()
 	m_pRS.Reset();
 }
 
-void DebugRenderer::Render(RGGraph& graph, const SceneView& view, RGTexture* target, RGTexture* depth)
+void DebugRenderer::Render(RGGraph& graph, const SceneView& view, RGTexture* pTarget, RGTexture* pDepth)
 {
 	int linePrimitives = (int)m_Lines.size() * 2;
 	int trianglePrimitives = (int)m_Triangles.size() * 3;
@@ -87,14 +87,14 @@ void DebugRenderer::Render(RGGraph& graph, const SceneView& view, RGTexture* tar
 	constexpr uint32 VertexStride = sizeof(DebugLine) / 2;
 
 	graph.AddPass("Debug Rendering", RGPassFlag::Raster)
-		.RenderTarget(target, RenderPassAccess::Load_Store)
-		.DepthStencil(depth, RenderPassAccess::Load_Store, false)
+		.RenderTarget(pTarget, RenderPassAccess::Load_Store)
+		.DepthStencil(pDepth, RenderPassAccess::Load_Store, false)
 		.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
 				context.BeginRenderPass(resources.GetRenderPassInfo());
 				context.SetGraphicsRootSignature(m_pRS);
 
-				context.SetRootCBV(0, Renderer::GetViewUniforms(view, target->Get()));
+				context.SetRootCBV(0, Renderer::GetViewUniforms(view, pTarget->Get()));
 
 				if (linePrimitives != 0)
 				{
