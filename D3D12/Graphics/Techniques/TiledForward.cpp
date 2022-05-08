@@ -17,7 +17,7 @@ static constexpr int FORWARD_PLUS_BLOCK_SIZE = 16;
 
 struct CullBlackboardData
 {
-	RGHandle<Texture> LightGridOpaque;
+	RGTexture* LightGridOpaque;
 };
 RG_BLACKBOARD_DATA(CullBlackboardData);
 
@@ -91,22 +91,22 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& view, SceneTextures&
 {
 	int frustumCountX = Math::DivideAndRoundUp(view.GetDimensions().x, FORWARD_PLUS_BLOCK_SIZE);
 	int frustumCountY = Math::DivideAndRoundUp(view.GetDimensions().y, FORWARD_PLUS_BLOCK_SIZE);
-	RGHandle<Texture> lightGridOpaque = graph.CreateTexture("Light Grid - Opaque", TextureDesc::Create2D(frustumCountX, frustumCountY, DXGI_FORMAT_R32G32_UINT));
-	RGHandle<Texture> lightGridTransparant = graph.CreateTexture("Light Grid - Transparant", TextureDesc::Create2D(frustumCountX, frustumCountY, DXGI_FORMAT_R32G32_UINT));
+	RGTexture* lightGridOpaque = graph.CreateTexture("Light Grid - Opaque", TextureDesc::Create2D(frustumCountX, frustumCountY, DXGI_FORMAT_R32G32_UINT));
+	RGTexture* lightGridTransparant = graph.CreateTexture("Light Grid - Transparant", TextureDesc::Create2D(frustumCountX, frustumCountY, DXGI_FORMAT_R32G32_UINT));
 
-	RGHandle<Buffer> lightIndexCounter = graph.CreateBuffer("Light Index Counter", BufferDesc::CreateStructured(2, sizeof(uint32), BufferFlag::NoBindless));
-	RGHandle<Buffer> lightIndexListOpaque = graph.CreateBuffer("Light List - Opaque", BufferDesc::CreateStructured(MAX_LIGHT_DENSITY, sizeof(uint32)));
-	RGHandle<Buffer> lightIndexListTransparant = graph.CreateBuffer("Light List - Transparant", BufferDesc::CreateStructured(MAX_LIGHT_DENSITY, sizeof(uint32)));
+	RGBuffer* lightIndexCounter = graph.CreateBuffer("Light Index Counter", BufferDesc::CreateStructured(2, sizeof(uint32), BufferFlag::NoBindless));
+	RGBuffer* lightIndexListOpaque = graph.CreateBuffer("Light List - Opaque", BufferDesc::CreateStructured(MAX_LIGHT_DENSITY, sizeof(uint32)));
+	RGBuffer* lightIndexListTransparant = graph.CreateBuffer("Light List - Transparant", BufferDesc::CreateStructured(MAX_LIGHT_DENSITY, sizeof(uint32)));
 
 	graph.AddPass("Tiled Light Culling", RGPassFlag::Compute)
 		.Read(sceneTextures.Depth)
-		.Write({ &lightGridOpaque, &lightGridTransparant, &lightIndexListOpaque, &lightIndexListTransparant})
-		.ReadWrite(&lightIndexCounter)
+		.Write({ lightGridOpaque, lightGridTransparant, lightIndexListOpaque, lightIndexListTransparant})
+		.ReadWrite(lightIndexCounter)
 		.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
-				Texture* pDepth = resources.Get(sceneTextures.Depth);
+				Texture* pDepth = sceneTextures.Depth->Get();
 
-				Buffer* pLightIndexCounter = resources.Get(lightIndexCounter);
+				Buffer* pLightIndexCounter = lightIndexCounter->Get();
 				//#todo: adhoc UAV creation
 				context.ClearUavUInt(pLightIndexCounter, m_pDevice->CreateUAV(pLightIndexCounter, BufferUAVDesc::CreateRaw()));
 
@@ -116,11 +116,11 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& view, SceneTextures&
 				context.SetRootCBV(0, Renderer::GetViewUniforms(view, pDepth));
 
 				context.BindResources(1, {
-					resources.Get(lightIndexCounter)->GetUAV(),
-					resources.Get(lightIndexListOpaque)->GetUAV(),
-					resources.Get(lightGridOpaque)->GetUAV(),
-					resources.Get(lightIndexListTransparant)->GetUAV(),
-					resources.Get(lightGridTransparant)->GetUAV(),
+					lightIndexCounter->Get()->GetUAV(),
+					lightIndexListOpaque->Get()->GetUAV(),
+					lightGridOpaque->Get()->GetUAV(),
+					lightIndexListTransparant->Get()->GetUAV(),
+					lightGridTransparant->Get()->GetUAV(),
 					});
 				context.BindResources(2, {
 					pDepth->GetSRV(),
@@ -143,7 +143,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& view, SceneTextures&
 		.RenderTarget(sceneTextures.Roughness, RenderPassAccess::DontCare_Store)
 		.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
-				Texture* pTarget = resources.Get(sceneTextures.ColorTarget);
+				Texture* pTarget = sceneTextures.ColorTarget->Get();
 
 				context.BeginRenderPass(resources.GetRenderPassInfo());
 
@@ -156,12 +156,12 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& view, SceneTextures&
 					GPU_PROFILE_SCOPE("Opaque", &context);
 
 					context.BindResources(3, {
-						resources.Get(sceneTextures.AmbientOcclusion)->GetSRV(),
-						resources.Get(sceneTextures.Depth)->GetSRV(),
-						resources.Get(sceneTextures.PreviousColor)->GetSRV(),
+						sceneTextures.AmbientOcclusion->Get()->GetSRV(),
+						sceneTextures.Depth->Get()->GetSRV(),
+						sceneTextures.PreviousColor->Get()->GetSRV(),
 						GraphicsCommon::GetDefaultTexture(DefaultTexture::Black3D)->GetSRV(),
-						resources.Get(lightGridOpaque)->GetSRV(),
-						resources.Get(lightIndexListOpaque)->GetSRV(),
+						lightGridOpaque->Get()->GetSRV(),
+						lightIndexListOpaque->Get()->GetSRV(),
 						});
 
 					context.SetPipelineState(m_pDiffusePSO);
@@ -175,12 +175,12 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& view, SceneTextures&
 					GPU_PROFILE_SCOPE("Transparant", &context);
 
 					context.BindResources(3, {
-						resources.Get(sceneTextures.AmbientOcclusion)->GetSRV(),
-						resources.Get(sceneTextures.Depth)->GetSRV(),
-						resources.Get(sceneTextures.PreviousColor)->GetSRV(),
+						sceneTextures.AmbientOcclusion->Get()->GetSRV(),
+						sceneTextures.Depth->Get()->GetSRV(),
+						sceneTextures.PreviousColor->Get()->GetSRV(),
 						GraphicsCommon::GetDefaultTexture(DefaultTexture::Black3D)->GetSRV(),
-						resources.Get(lightGridTransparant)->GetSRV(),
-						resources.Get(lightIndexListTransparant)->GetSRV(),
+						lightGridTransparant->Get()->GetSRV(),
+						lightIndexListTransparant->Get()->GetSRV(),
 						});
 
 					context.SetPipelineState(m_pDiffuseAlphaPSO);
@@ -188,26 +188,26 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& view, SceneTextures&
 				}
 				context.EndRenderPass();
 			});
-	
+
 	CullBlackboardData& blackboardData = graph.Blackboard.Add<CullBlackboardData>();
 	blackboardData.LightGridOpaque = lightGridOpaque;
 }
 
 void TiledForward::VisualizeLightDensity(RGGraph& graph, GraphicsDevice* pDevice, const SceneView& view, SceneTextures& sceneTextures)
 {
-	RGHandle<Texture> visualizationIntermediate = graph.CreateTexture("Light Density Debug Texture", graph.GetDesc(sceneTextures.ColorTarget));
+	RGTexture* visualizationIntermediate = graph.CreateTexture("Light Density Debug Texture", graph.GetDesc(sceneTextures.ColorTarget));
 
 	const CullBlackboardData& blackboardData = graph.Blackboard.Get<CullBlackboardData>();
-	RGHandle<Texture> lightGridOpaque = blackboardData.LightGridOpaque;
+	RGTexture* lightGridOpaque = blackboardData.LightGridOpaque;
 
 	graph.AddCopyPass("Cache Scene Color", sceneTextures.ColorTarget, visualizationIntermediate);
 
 	graph.AddPass("Visualize Light Density", RGPassFlag::Raster)
 		.Read({ sceneTextures.Depth, visualizationIntermediate, lightGridOpaque })
-		.Write(&sceneTextures.ColorTarget)
+		.Write(sceneTextures.ColorTarget)
 		.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
-				Texture* pTarget = resources.Get(sceneTextures.ColorTarget);
+				Texture* pTarget = sceneTextures.ColorTarget->Get();
 
 				struct
 				{
@@ -222,9 +222,9 @@ void TiledForward::VisualizeLightDensity(RGGraph& graph, GraphicsDevice* pDevice
 				context.SetRootCBV(1, Renderer::GetViewUniforms(view, pTarget));
 
 				context.BindResources(2, {
-					resources.Get(visualizationIntermediate)->GetSRV(),
-					resources.Get(sceneTextures.Depth)->GetSRV(),
-					resources.Get(lightGridOpaque)->GetSRV(),
+					visualizationIntermediate->Get()->GetSRV(),
+					sceneTextures.Depth->Get()->GetSRV(),
+					lightGridOpaque->Get()->GetSRV(),
 					});
 				context.BindResources(3, pTarget->GetUAV());
 

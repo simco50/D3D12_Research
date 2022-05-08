@@ -74,7 +74,7 @@ void DebugRenderer::Shutdown()
 	m_pRS.Reset();
 }
 
-void DebugRenderer::Render(RGGraph& graph, const SceneView& view, RGHandle<Texture>& target, RGHandle<Texture>& depth)
+void DebugRenderer::Render(RGGraph& graph, const SceneView& view, RGTexture* target, RGTexture* depth)
 {
 	int linePrimitives = (int)m_Lines.size() * 2;
 	int trianglePrimitives = (int)m_Triangles.size() * 3;
@@ -94,7 +94,7 @@ void DebugRenderer::Render(RGGraph& graph, const SceneView& view, RGHandle<Textu
 				context.BeginRenderPass(resources.GetRenderPassInfo());
 				context.SetGraphicsRootSignature(m_pRS);
 
-				context.SetRootCBV(0, Renderer::GetViewUniforms(view, resources.Get(target)));
+				context.SetRootCBV(0, Renderer::GetViewUniforms(view, target->Get()));
 
 				if (linePrimitives != 0)
 				{

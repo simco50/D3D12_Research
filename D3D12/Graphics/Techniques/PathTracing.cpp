@@ -51,14 +51,14 @@ PathTracing::~PathTracing()
 	}
 }
 
-void PathTracing::Render(RGGraph& graph, const SceneView& view, RGHandle<Texture>& target)
+void PathTracing::Render(RGGraph& graph, const SceneView& view, RGTexture* target)
 {
 	if (!IsSupported())
 	{
 		return;
 	}
 
-	TextureDesc targetDesc = graph.GetDesc(target);
+	TextureDesc targetDesc = target->DescTexture;
 	if (!m_pAccumulationTexture || m_pAccumulationTexture->GetSize() != targetDesc.Size())
 	{
 		m_pAccumulationTexture = m_pDevice->CreateTexture(TextureDesc::Create2D(targetDesc.Width, targetDesc.Height, DXGI_FORMAT_R32G32B32A32_FLOAT, TextureFlag::UnorderedAccess), "Accumulation Target");
@@ -90,10 +90,10 @@ void PathTracing::Render(RGGraph& graph, const SceneView& view, RGHandle<Texture
 	m_NumAccumulatedFrames++;
 
 	graph.AddPass("Path Tracing", RGPassFlag::Compute)
-		.Write(&target)
+		.Write(target)
 		.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
-				Texture* pTarget = resources.Get(target);
+				Texture* pTarget = target->Get();
 
 				context.SetComputeRootSignature(m_pRS);
 				context.SetPipelineState(m_pSO);

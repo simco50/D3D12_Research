@@ -5,65 +5,65 @@
 #include "Graphics/Profiler.h"
 #include "Core/CommandLine.h"
 
-RGPass& RGPass::Read(Span<RGHandleT> resources)
+RGPass& RGPass::Read(Span<RGResource*> resources)
 {
 	D3D12_RESOURCE_STATES state = D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE;
 	if (EnumHasAnyFlags(Flags, RGPassFlag::Copy))
 		state = D3D12_RESOURCE_STATE_COPY_SOURCE;
-	for (RGHandleT resource : resources)
+	for (RGResource* resource : resources)
 	{
 		Accesses.push_back({ state, resource });
 	}
 	return *this;
 }
 
-RGPass& RGPass::Write(Span<RGHandleT*> resources)
+RGPass& RGPass::Write(Span<RGResource*> resources)
 {
 	D3D12_RESOURCE_STATES state = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
 	if (EnumHasAnyFlags(Flags, RGPassFlag::Copy))
 		state = D3D12_RESOURCE_STATE_COPY_DEST;
 
-	for (RGHandleT* pHandle : resources)
+	for (RGResource* pHandle : resources)
 	{
-		Accesses.push_back({ state, *pHandle });
+		Accesses.push_back({ state, pHandle });
 	}
 
 	return *this;
 }
 
-RGPass& RGPass::ReadWrite(Span<RGHandleT*> resources)
+RGPass& RGPass::ReadWrite(Span<RGResource*> resources)
 {
 	check(EnumHasAnyFlags(Flags, RGPassFlag::Raster | RGPassFlag::Compute));
-	for (RGHandleT* pHandle : resources)
+	for (RGResource* pHandle : resources)
 	{
-		Accesses.push_back({ D3D12_RESOURCE_STATE_UNORDERED_ACCESS, *pHandle});
+		Accesses.push_back({ D3D12_RESOURCE_STATE_UNORDERED_ACCESS, pHandle});
 	}
 	return *this;
 }
 
-RGPass& RGPass::RenderTarget(RGHandle<Texture>& resource, RenderPassAccess access)
+RGPass& RGPass::RenderTarget(RGTexture* resource, RenderPassAccess access)
 {
 	Accesses.push_back({ D3D12_RESOURCE_STATE_RENDER_TARGET, resource });
 	RenderTargets.push_back({ resource, access });
 	return *this;
 }
 
-RGPass& RGPass::DepthStencil(RGHandle<Texture>& resource, RenderPassAccess depthAccess, bool writeDepth, RenderPassAccess stencilAccess)
+RGPass& RGPass::DepthStencil(RGTexture* resource, RenderPassAccess depthAccess, bool writeDepth, RenderPassAccess stencilAccess)
 {
-	checkf(!DepthStencilTarget.Resource.IsValid(), "Depth Target already assigned");
+	checkf(!DepthStencilTarget.Resource, "Depth Target already assigned");
 	Accesses.push_back({ writeDepth ? D3D12_RESOURCE_STATE_DEPTH_WRITE : D3D12_RESOURCE_STATE_DEPTH_READ, resource });
 	DepthStencilTarget = { resource, depthAccess, stencilAccess, writeDepth };
 	return *this;
 }
 
-RGPass& RGGraph::AddCopyPass(const char* pName, RGHandleT source, RGHandleT& target)
+RGPass& RGGraph::AddCopyPass(const char* pName, RGResource* source, RGResource* target)
 {
 	return AddPass(pName, RGPassFlag::Copy)
 		.Read(source)
-		.Write(&target)
+		.Write(target)
 		.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
-				context.CopyResource(resources.Get(source), resources.Get(target));
+				context.CopyResource(source->pResource, target->pResource);
 			});
 }
 
@@ -154,7 +154,7 @@ void RGGraph::Compile()
 	auto ApplyResourceFlag = [](RGResource* pResource, D3D12_RESOURCE_STATES state) {
 		if (pResource->Type == RGResourceType::Buffer)
 		{
-			BufferDesc& desc = pResource->BufferDesc;
+			BufferDesc& desc = pResource->DescBuffer;
 			if (EnumHasAnyFlags(state, D3D12_RESOURCE_STATE_UNORDERED_ACCESS))
 				desc.Usage |= BufferFlag::UnorderedAccess;
 			if (EnumHasAnyFlags(state, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE))
@@ -162,7 +162,7 @@ void RGGraph::Compile()
 		}
 		else if (pResource->Type == RGResourceType::Texture)
 		{
-			TextureDesc& desc = pResource->TextureDesc;
+			TextureDesc& desc = pResource->DescTexture;
 			if (EnumHasAnyFlags(state, D3D12_RESOURCE_STATE_UNORDERED_ACCESS))
 				desc.Usage |= TextureFlag::UnorderedAccess;
 			if (EnumHasAnyFlags(state, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE))
@@ -181,7 +181,7 @@ void RGGraph::Compile()
 		{
 			for (RGPass::RGAccess access : pPass->Accesses)
 			{
-				RGResource* pResource = GetResource(access.Resource);
+				RGResource* pResource = access.Resource;
 				pResource->pFirstAccess = pResource->pFirstAccess ? pResource->pFirstAccess : pPass;
 				pResource->pLastAccess = pPass;
 
@@ -195,11 +195,11 @@ void RGGraph::Compile()
 		{
 			if (pResource->Type == RGResourceType::Texture)
 			{
-				pResource->SetResource(m_ResourcePool.Allocate(pResource->Name, pResource->TextureDesc));
+				pResource->SetResource(m_ResourcePool.Allocate(pResource->Name, pResource->DescTexture));
 			}
 			else if (pResource->Type == RGResourceType::Buffer)
 			{
-				pResource->SetResource(m_ResourcePool.Allocate(pResource->Name, pResource->BufferDesc));
+				pResource->SetResource(m_ResourcePool.Allocate(pResource->Name, pResource->DescBuffer));
 			}
 		}
 		check(pResource->pResourceReference);
@@ -224,12 +224,12 @@ void RGGraph::Compile()
 
 		for (RGPass::RGAccess& access : pPass->Accesses)
 		{
-			ConditionallyAllocateResource(pPass, GetResource(access.Resource));
+			ConditionallyAllocateResource(pPass, access.Resource);
 		}
 
 		for (RGPass::RGAccess& access : pPass->Accesses)
 		{
-			ConditionallyReleaseResource(pPass, GetResource(access.Resource));
+			ConditionallyReleaseResource(pPass, access.Resource);
 		}
 	}
 }
@@ -269,12 +269,12 @@ SyncPoint RGGraph::Execute()
 
 	for (ExportedResource<Texture>& exportResource : m_ExportTextures)
 	{
-		*exportResource.pTarget = GetResource(exportResource.Handle)->GetRHI<Texture>();
+		*exportResource.pTarget = exportResource.pResource->Get();
 	}
 
 	for (ExportedResource<Buffer>& exportResource : m_ExportBuffers)
 	{
-		*exportResource.pTarget = GetResource(exportResource.Handle)->GetRHI<Buffer>();
+		*exportResource.pTarget = exportResource.pResource->Get();
 	}
 
 	DestroyData();
@@ -297,7 +297,7 @@ void RGGraph::PrepareResources(RGPass* pPass, CommandContext& context)
 {
 	for (const RGPass::RGAccess& access : pPass->Accesses)
 	{
-		RGResource* pResource = GetResource(access.Resource);
+		RGResource* pResource = access.Resource;
 		check(pResource->pResource);
 		check(pResource->IsImported || pResource->IsExported || !pResource->pResourceReference);
 
@@ -311,7 +311,6 @@ void RGGraph::DestroyData()
 {
 	m_RenderPasses.clear();
 	m_Resources.clear();
-	m_Aliases.clear();
 }
 
 RenderPassInfo RGPassResources::GetRenderPassInfo() const
@@ -319,23 +318,18 @@ RenderPassInfo RGPassResources::GetRenderPassInfo() const
 	RenderPassInfo passInfo;
 	for (RGPass::RenderTargetAccess renderTarget : m_Pass.RenderTargets)
 	{
-		passInfo.RenderTargets[passInfo.RenderTargetCount].Target = Get<Texture>(renderTarget.Resource);
+		passInfo.RenderTargets[passInfo.RenderTargetCount].Target = renderTarget.pResource->Get();
 		passInfo.RenderTargets[passInfo.RenderTargetCount].Access = renderTarget.Access;
 		passInfo.RenderTargetCount++;
 	}
-	if (m_Pass.DepthStencilTarget.Resource.IsValid())
+	if (m_Pass.DepthStencilTarget.Resource)
 	{
-		passInfo.DepthStencilTarget.Target = Get<Texture>(m_Pass.DepthStencilTarget.Resource);
+		passInfo.DepthStencilTarget.Target = m_Pass.DepthStencilTarget.Resource->Get();
 		passInfo.DepthStencilTarget.Access = m_Pass.DepthStencilTarget.Access;
 		passInfo.DepthStencilTarget.StencilAccess = m_Pass.DepthStencilTarget.StencilAccess;
 		passInfo.DepthStencilTarget.Write = m_Pass.DepthStencilTarget.Write;
 	}
 	return passInfo;
-}
-
-const RGResource* RGPassResources::GetResource(RGHandleT handle) const
-{
-	return m_Graph.GetResource(handle);
 }
 
 RefCountPtr<Texture> RGResourcePool::Allocate(const char* pName, const TextureDesc& desc)

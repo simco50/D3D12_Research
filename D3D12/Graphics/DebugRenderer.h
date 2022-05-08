@@ -51,7 +51,7 @@ public:
 	
 	void Initialize(GraphicsDevice* pDevice);
 	void Shutdown();
-	void Render(RGGraph& graph, const SceneView& view, RGHandle<Texture>& target, RGHandle<Texture>& depth);
+	void Render(RGGraph& graph, const SceneView& view, RGTexture* target, RGTexture* depth);
 
 	void AddLine(const Vector3& start, const Vector3& end, const IntColor& color);
 	void AddRay(const Vector3& start, const Vector3& direction, const IntColor& color);

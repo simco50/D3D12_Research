@@ -515,7 +515,7 @@ void DemoApp::Update()
 
 					context.SetGraphicsRootSignature(m_pCommonRS);
 
-					context.SetRootCBV(1, Renderer::GetViewUniforms(m_SceneData, resources.Get(sceneTextures.Depth)));
+					context.SetRootCBV(1, Renderer::GetViewUniforms(m_SceneData, sceneTextures.Depth->Get()));
 
 					{
 						GPU_PROFILE_SCOPE("Opaque", &context);
@@ -543,7 +543,7 @@ void DemoApp::Update()
 
 					context.SetGraphicsRootSignature(m_pCommonRS);
 
-					context.SetRootCBV(1, Renderer::GetViewUniforms(m_SceneData, resources.Get(sceneTextures.VisibilityBuffer)));
+					context.SetRootCBV(1, Renderer::GetViewUniforms(m_SceneData, sceneTextures.VisibilityBuffer->Get()));
 					{
 						GPU_PROFILE_SCOPE("Opaque", &context);
 						context.SetPipelineState(m_pVisibilityRenderingPSO);
@@ -588,18 +588,18 @@ void DemoApp::Update()
 
 		const uint32 numProbes = ddgi.NumProbes.x * ddgi.NumProbes.y * ddgi.NumProbes.z;
 
-		RGHandle<Buffer> rayBuffer = graph.CreateBuffer("DDGI Ray Buffer", BufferDesc::CreateTyped(numProbes * ddgi.MaxNumRays, DXGI_FORMAT_R16G16B16A16_FLOAT));
+		RGBuffer* rayBuffer = graph.CreateBuffer("DDGI Ray Buffer", BufferDesc::CreateTyped(numProbes * ddgi.MaxNumRays, DXGI_FORMAT_R16G16B16A16_FLOAT));
 
-		RGHandle<Texture> irradianceTarget = graph.CreateTexture("DDGI Irradiance Target", ddgi.pIrradianceHistory->GetDesc());
-		RGHandle<Texture> irradianceHistory = graph.ImportTexture("DDGI Irradiance History", ddgi.pIrradianceHistory);
-		RGHandle<Texture> depthTarget = graph.CreateTexture("DDGI Depth Target", ddgi.pDepthHistory->GetDesc());
-		RGHandle<Texture> depthHistory = graph.ImportTexture("DDGI Depth History", ddgi.pDepthHistory);
-		RGHandle<Buffer> probeStates = graph.ImportBuffer("Probe States", ddgi.pProbeStates);
-		RGHandle<Buffer> probeOffsets = graph.ImportBuffer("Probe Offsets", ddgi.pProbeOffset);
+		RGTexture* irradianceTarget = graph.CreateTexture("DDGI Irradiance Target", ddgi.pIrradianceHistory->GetDesc());
+		RGTexture* irradianceHistory = graph.ImportTexture("DDGI Irradiance History", ddgi.pIrradianceHistory);
+		RGTexture* depthTarget = graph.CreateTexture("DDGI Depth Target", ddgi.pDepthHistory->GetDesc());
+		RGTexture* depthHistory = graph.ImportTexture("DDGI Depth History", ddgi.pDepthHistory);
+		RGBuffer* probeStates = graph.ImportBuffer("Probe States", ddgi.pProbeStates);
+		RGBuffer* probeOffsets = graph.ImportBuffer("Probe Offsets", ddgi.pProbeOffset);
 
 		graph.AddPass("DDGI Raytrace", RGPassFlag::Compute)
 			.Read(probeStates)
-			.Write(&rayBuffer)
+			.Write(rayBuffer)
 			.Bind([=](CommandContext& context, const RGPassResources& resources)
 				{
 					context.SetComputeRootSignature(m_pCommonRS);
@@ -607,7 +607,7 @@ void DemoApp::Update()
 
 					context.SetRootConstants(0, parameters);
 					context.SetRootCBV(1, Renderer::GetViewUniforms(m_SceneData));
-					context.BindResources(2, resources.Get(rayBuffer)->GetUAV());
+					context.BindResources(2, rayBuffer->Get()->GetUAV());
 
 					ShaderBindingTable bindingTable(m_pDDGITraceRaysSO);
 					bindingTable.BindRayGenShader("TraceRaysRGS");
@@ -620,7 +620,7 @@ void DemoApp::Update()
 
 		graph.AddPass("DDGI Update Irradiance", RGPassFlag::Compute)
 			.Read({ irradianceHistory, rayBuffer, probeStates })
-			.Write(&irradianceTarget)
+			.Write(irradianceTarget)
 			.Bind([=](CommandContext& context, const RGPassResources& resources)
 				{
 					context.SetComputeRootSignature(m_pCommonRS);
@@ -628,9 +628,9 @@ void DemoApp::Update()
 
 					context.SetRootConstants(0, parameters);
 					context.SetRootCBV(1, Renderer::GetViewUniforms(m_SceneData));
-					context.BindResources(2, resources.Get(irradianceTarget)->GetUAV());
+					context.BindResources(2, irradianceTarget->Get()->GetUAV());
 					context.BindResources(3, {
-						resources.Get(rayBuffer)->GetSRV(),
+						rayBuffer->Get()->GetSRV(),
 						});
 
 					context.Dispatch(numProbes);
@@ -638,7 +638,7 @@ void DemoApp::Update()
 
 		graph.AddPass("DDGI Update Depth", RGPassFlag::Compute)
 			.Read({ depthHistory, rayBuffer, probeStates })
-			.Write(&depthTarget)
+			.Write(depthTarget)
 			.Bind([=](CommandContext& context, const RGPassResources& resources)
 				{
 					context.SetComputeRootSignature(m_pCommonRS);
@@ -647,10 +647,10 @@ void DemoApp::Update()
 					context.SetRootConstants(0, parameters);
 					context.SetRootCBV(1, Renderer::GetViewUniforms(m_SceneData));
 					context.BindResources(2, {
-						resources.Get(depthTarget)->GetUAV(),
+						depthTarget->Get()->GetUAV(),
 						});
 					context.BindResources(3, {
-						resources.Get(rayBuffer)->GetSRV(),
+						rayBuffer->Get()->GetSRV(),
 						});
 
 					context.Dispatch(numProbes);
@@ -658,7 +658,7 @@ void DemoApp::Update()
 
 		graph.AddPass("DDGI Update Probe States", RGPassFlag::Compute)
 			.Read(rayBuffer)
-			.Write({ &probeOffsets, &probeStates })
+			.Write({ probeOffsets, probeStates })
 			.Bind([=](CommandContext& context, const RGPassResources& resources)
 				{
 					context.InsertResourceBarrier(ddgi.pProbeOffset, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
@@ -672,7 +672,7 @@ void DemoApp::Update()
 						ddgi.pProbeOffset->GetUAV(),
 						});
 					context.BindResources(3, {
-						resources.Get(rayBuffer)->GetSRV(),
+						rayBuffer->Get()->GetSRV(),
 						});
 
 					context.Dispatch(ComputeUtils::GetNumThreadGroups(numProbes, 32));
@@ -685,14 +685,14 @@ void DemoApp::Update()
 		graph.ExportTexture(irradianceTarget, ddgi.pIrradianceHistory.This());
 	}
 
-	RGHandle<Texture> sky = graph.CreateTexture("Sky", TextureDesc::Create2D(64, 128, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
+	RGTexture* sky = graph.CreateTexture("Sky", TextureDesc::Create2D(64, 128, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
 	graph.ExportTexture(sky, m_SceneData.pSky.This());
 
 	graph.AddPass("Compute Sky", RGPassFlag::Compute)
-		.Write(&sky)
+		.Write(sky)
 		.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
-				Texture* pSky = resources.Get(sky);
+				Texture* pSky = sky->Get();
 				context.SetComputeRootSignature(m_pCommonRS);
 				context.SetPipelineState(m_pRenderSkyPSO);
 
@@ -712,15 +712,15 @@ void DemoApp::Update()
 		{
 			graph.AddPass("Depth Resolve", RGPassFlag::Compute)
 				.Read(sceneTextures.Depth)
-				.Write(&sceneTextures.ResolvedDepth)
+				.Write(sceneTextures.ResolvedDepth)
 				.Bind([=](CommandContext& context, const RGPassResources& resources)
 					{
-						Texture* pResolveTarget = resources.Get(sceneTextures.ResolvedDepth);
+						Texture* pResolveTarget = sceneTextures.ResolvedDepth->Get();
 						context.SetComputeRootSignature(m_pCommonRS);
 						context.SetPipelineState(m_pResolveDepthPSO);
 
 						context.BindResources(2, pResolveTarget->GetUAV());
-						context.BindResources(3, resources.Get(sceneTextures.Depth)->GetSRV());
+						context.BindResources(3, sceneTextures.Depth->Get()->GetSRV());
 
 						context.Dispatch(ComputeUtils::GetNumThreadGroups(pResolveTarget->GetWidth(), 16, pResolveTarget->GetHeight(), 16));
 					});
@@ -732,10 +732,10 @@ void DemoApp::Update()
 
 		graph.AddPass("Camera Motion", RGPassFlag::Compute)
 			.Read(sceneTextures.Depth)
-			.Write(&sceneTextures.Velocity)
+			.Write(sceneTextures.Velocity)
 			.Bind([=](CommandContext& context, const RGPassResources& resources)
 				{
-					Texture* pVelocity = resources.Get(sceneTextures.Velocity);
+					Texture* pVelocity = sceneTextures.Velocity->Get();
 
 					context.SetComputeRootSignature(m_pCommonRS);
 					context.SetPipelineState(m_pCameraMotionPSO);
@@ -743,7 +743,7 @@ void DemoApp::Update()
 					context.SetRootCBV(1, Renderer::GetViewUniforms(m_SceneData, pVelocity));
 
 					context.BindResources(2, pVelocity->GetUAV());
-					context.BindResources(3, resources.Get(sceneTextures.Depth)->GetSRV());
+					context.BindResources(3, sceneTextures.Depth->Get()->GetSRV());
 
 					context.Dispatch(ComputeUtils::GetNumThreadGroups(pVelocity->GetWidth(), 8, pVelocity->GetHeight(), 8));
 				});
@@ -769,10 +769,10 @@ void DemoApp::Update()
 		{
 			graph.AddPass("Visibility Shading", RGPassFlag::Compute)
 				.Read({ sceneTextures.VisibilityBuffer, sceneTextures.Depth, sceneTextures.AmbientOcclusion, sceneTextures.PreviousColor })
-				.Write({ &sceneTextures.Normals, &sceneTextures.ColorTarget, &sceneTextures.Roughness })
+				.Write({ sceneTextures.Normals, sceneTextures.ColorTarget, sceneTextures.Roughness })
 				.Bind([=](CommandContext& context, const RGPassResources& resources)
 					{
-						Texture* pColorTarget = resources.Get(sceneTextures.ColorTarget);
+						Texture* pColorTarget = sceneTextures.ColorTarget->Get();
 
 						context.SetComputeRootSignature(m_pCommonRS);
 						context.SetPipelineState(m_pVisibilityShadingPSO);
@@ -780,14 +780,14 @@ void DemoApp::Update()
 						context.SetRootCBV(1, Renderer::GetViewUniforms(m_SceneData, pColorTarget));
 						context.BindResources(2, {
 							pColorTarget->GetUAV(),
-							resources.Get(sceneTextures.Normals)->GetUAV(),
-							resources.Get(sceneTextures.Roughness)->GetUAV(),
+							sceneTextures.Normals->Get()->GetUAV(),
+							sceneTextures.Roughness->Get()->GetUAV(),
 							});
 						context.BindResources(3, {
-							resources.Get(sceneTextures.VisibilityBuffer)->GetSRV(),
-							resources.Get(sceneTextures.AmbientOcclusion)->GetSRV(),
-							resources.Get(sceneTextures.Depth)->GetSRV(),
-							resources.Get(sceneTextures.PreviousColor)->GetSRV(),
+							sceneTextures.VisibilityBuffer->Get()->GetSRV(),
+							sceneTextures.AmbientOcclusion->Get()->GetSRV(),
+							sceneTextures.Depth->Get()->GetSRV(),
+							sceneTextures.PreviousColor->Get()->GetSRV(),
 							});
 						context.Dispatch(ComputeUtils::GetNumThreadGroups(pColorTarget->GetWidth(), 8, pColorTarget->GetHeight(), 8));
 					});
@@ -811,7 +811,7 @@ void DemoApp::Update()
 					context.SetGraphicsRootSignature(m_pCommonRS);
 					context.SetPipelineState(m_pSkyboxPSO);
 
-					context.SetRootCBV(1, Renderer::GetViewUniforms(m_SceneData, resources.Get(sceneTextures.ColorTarget)));
+					context.SetRootCBV(1, Renderer::GetViewUniforms(m_SceneData, sceneTextures.ColorTarget->Get()));
 					context.Draw(0, 36);
 
 					context.EndRenderPass();
@@ -828,14 +828,14 @@ void DemoApp::Update()
 	if (colorDesc.SampleCount > 1)
 	{
 		colorDesc.SampleCount = 1;
-		RGHandle<Texture> resolveColor = graph.CreateTexture("Resolved Color", colorDesc);
+		RGTexture* resolveColor = graph.CreateTexture("Resolved Color", colorDesc);
 		graph.AddPass("Color Resolve", RGPassFlag::Compute)
 			.Read(sceneTextures.ColorTarget)
-			.Write(&resolveColor)
+			.Write(resolveColor)
 			.Bind([=](CommandContext& context, const RGPassResources& resources)
 				{
-					Texture* pSource = resources.Get(sceneTextures.ColorTarget);
-					Texture* pTarget = resources.Get(resolveColor);
+					Texture* pSource = sceneTextures.ColorTarget->Get();
+					Texture* pTarget = resolveColor->Get();
 					context.InsertResourceBarrier(pSource, D3D12_RESOURCE_STATE_RESOLVE_SOURCE);
 					context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_RESOLVE_DEST);
 					context.ResolveResource(pSource, 0, pTarget, 0, pTarget->GetFormat());
@@ -852,14 +852,14 @@ void DemoApp::Update()
 
 		if (Tweakables::g_TAA.Get())
 		{
-			RGHandle<Texture> taaTarget = graph.CreateTexture("TAA Target", graph.GetDesc(sceneTextures.ColorTarget));
+			RGTexture* taaTarget = graph.CreateTexture("TAA Target", graph.GetDesc(sceneTextures.ColorTarget));
 
 			graph.AddPass("Temporal Resolve", RGPassFlag::Compute)
 				.Read({ sceneTextures.Velocity, sceneTextures.Depth, sceneTextures.ColorTarget, sceneTextures.PreviousColor })
-				.Write(&taaTarget)
+				.Write(taaTarget)
 				.Bind([=](CommandContext& context, const RGPassResources& resources)
 					{
-						Texture* pTarget = resources.Get(taaTarget);
+						Texture* pTarget = taaTarget->Get();
 
 						context.SetComputeRootSignature(m_pCommonRS);
 						context.SetPipelineState(m_pTemporalResolvePSO);
@@ -869,10 +869,10 @@ void DemoApp::Update()
 						context.BindResources(2, pTarget->GetUAV());
 						context.BindResources(3,
 							{
-								resources.Get(sceneTextures.Velocity)->GetSRV(),
-								resources.Get(sceneTextures.PreviousColor)->GetSRV(),
-								resources.Get(sceneTextures.ColorTarget)->GetSRV(),
-								resources.Get(sceneTextures.Depth)->GetSRV(),
+								sceneTextures.Velocity->Get()->GetSRV(),
+								sceneTextures.PreviousColor->Get()->GetSRV(),
+								sceneTextures.ColorTarget->Get()->GetSRV(),
+								sceneTextures.Depth->Get()->GetSRV(),
 							});
 
 						context.Dispatch(ComputeUtils::GetNumThreadGroups(pTarget->GetWidth(), 8, pTarget->GetHeight(), 8));
@@ -891,15 +891,15 @@ void DemoApp::Update()
 		IntVector3 depthSize = graph.GetDesc(sceneTextures.Depth).Size();
 		depthSize.x = Math::DivideAndRoundUp(depthSize.x, 16);
 		depthSize.y = Math::DivideAndRoundUp(depthSize.y, 16);
-		RGHandle<Texture> reductionTarget = graph.CreateTexture("Depth Reduction Target", TextureDesc::Create2D(depthSize.x, depthSize.y, DXGI_FORMAT_R32G32_FLOAT));
+		RGTexture* reductionTarget = graph.CreateTexture("Depth Reduction Target", TextureDesc::Create2D(depthSize.x, depthSize.y, DXGI_FORMAT_R32G32_FLOAT));
 
 		graph.AddPass("Depth Reduce - Setup", RGPassFlag::Compute)
 			.Read(sceneTextures.Depth)
-			.Write(&reductionTarget)
+			.Write(reductionTarget)
 			.Bind([=](CommandContext& context, const RGPassResources& resources)
 				{
-					Texture* pSource = resources.Get(sceneTextures.Depth);
-					Texture* pTarget = resources.Get(reductionTarget);
+					Texture* pSource = sceneTextures.Depth->Get();
+					Texture* pTarget = reductionTarget->Get();
 
 					context.SetComputeRootSignature(m_pCommonRS);
 					context.SetPipelineState(pSource->GetDesc().SampleCount > 1 ? m_pPrepareReduceDepthMsaaPSO : m_pPrepareReduceDepthPSO);
@@ -914,18 +914,18 @@ void DemoApp::Update()
 
 		while (depthSize.x > 1 || depthSize.y > 1)
 		{
-			RGHandle<Texture> reductionSource = reductionTarget;
+			RGTexture* reductionSource = reductionTarget;
 			reductionTarget = graph.CreateTexture("Depth Reduction Target", TextureDesc::Create2D(depthSize.x, depthSize.y, DXGI_FORMAT_R32G32_FLOAT));
 
 			graph.AddPass("Depth Reduce - Subpass", RGPassFlag::Compute)
 				.Read(reductionSource)
-				.Write(&reductionTarget)
+				.Write(reductionTarget)
 				.Bind([=](CommandContext& context, const RGPassResources& resources)
 					{
-						Texture* pTarget = resources.Get(reductionTarget);
+						Texture* pTarget = reductionTarget->Get();
 						context.SetPipelineState(m_pReduceDepthPSO);
 						context.BindResources(2, pTarget->GetUAV());
-						context.BindResources(3, resources.Get(reductionSource)->GetSRV());
+						context.BindResources(3, reductionSource->Get()->GetSRV());
 						context.Dispatch(pTarget->GetWidth(), pTarget->GetHeight());
 					});
 
@@ -937,13 +937,13 @@ void DemoApp::Update()
 			.Read(reductionTarget)
 			.Bind([=](CommandContext& context, const RGPassResources& resources)
 				{
-					context.CopyTexture(resources.Get(reductionTarget), m_ReductionReadbackTargets[m_Frame % SwapChain::NUM_FRAMES], CD3DX12_BOX(0, 1));
+					context.CopyTexture(reductionTarget->Get(), m_ReductionReadbackTargets[m_Frame % SwapChain::NUM_FRAMES], CD3DX12_BOX(0, 1));
 				});
 	}
 
-	RGHandle<Buffer> luminanceHistogram = graph.CreateBuffer("Luminance Histogram", BufferDesc::CreateByteAddress(sizeof(uint32) * 256));
-	RGHandle<Buffer> averageLuminance = graph.TryImportBuffer("Average Luminance", m_pAverageLuminance);
-	if (!averageLuminance.IsValid())
+	RGBuffer* luminanceHistogram = graph.CreateBuffer("Luminance Histogram", BufferDesc::CreateByteAddress(sizeof(uint32) * 256));
+	RGBuffer* averageLuminance = graph.TryImportBuffer("Average Luminance", m_pAverageLuminance);
+	if (!averageLuminance)
 		averageLuminance = graph.CreateBuffer("Average Luminance", BufferDesc::CreateStructured(3, sizeof(float)));
 
 	{
@@ -952,14 +952,14 @@ void DemoApp::Update()
 		TextureDesc sourceDesc = graph.GetDesc(sceneTextures.ColorTarget);
 		sourceDesc.Width = Math::DivideAndRoundUp(sourceDesc.Width, 4);
 		sourceDesc.Height = Math::DivideAndRoundUp(sourceDesc.Height, 4);
-		RGHandle<Texture> downscaleTarget = graph.CreateTexture("Downscaled HDR Target", sourceDesc);
+		RGTexture* downscaleTarget = graph.CreateTexture("Downscaled HDR Target", sourceDesc);
 
 		graph.AddPass("Downsample Color", RGPassFlag::Compute)
 			.Read(sceneTextures.ColorTarget)
-			.Write(&downscaleTarget)
+			.Write(downscaleTarget)
 			.Bind([=](CommandContext& context, const RGPassResources& resources)
 				{
-					Texture* pTarget = resources.Get(downscaleTarget);
+					Texture* pTarget = downscaleTarget->Get();
 
 					context.SetComputeRootSignature(m_pCommonRS);
 					context.SetPipelineState(m_pGenerateMipsPSO);
@@ -975,18 +975,18 @@ void DemoApp::Update()
 
 					context.SetRootConstants(0, parameters);
 					context.BindResources(2, pTarget->GetUAV());
-					context.BindResources(3, resources.Get(sceneTextures.ColorTarget)->GetSRV());
+					context.BindResources(3, sceneTextures.ColorTarget->Get()->GetSRV());
 
 					context.Dispatch(ComputeUtils::GetNumThreadGroups(parameters.TargetDimensions.x, 8, parameters.TargetDimensions.y, 8));
 				});
 
 		graph.AddPass("Luminance Histogram", RGPassFlag::Compute)
 			.Read(downscaleTarget)
-			.Write(&luminanceHistogram)
+			.Write(luminanceHistogram)
 			.Bind([=](CommandContext& context, const RGPassResources& resources)
 				{
-					Texture* pColorSource = resources.Get(downscaleTarget);
-					Buffer* pHistogram = resources.Get(luminanceHistogram);
+					Texture* pColorSource = downscaleTarget->Get();
+					Buffer* pHistogram = luminanceHistogram->Get();
 
 					context.ClearUavUInt(pHistogram, pHistogram->GetUAV());
 
@@ -1016,7 +1016,7 @@ void DemoApp::Update()
 
 		graph.AddPass("Average Luminance", RGPassFlag::Compute)
 			.Read(luminanceHistogram)
-			.ReadWrite(&averageLuminance)
+			.ReadWrite(averageLuminance)
 			.Bind([=](CommandContext& context, const RGPassResources& resources)
 				{
 					context.SetComputeRootSignature(m_pCommonRS);
@@ -1038,8 +1038,8 @@ void DemoApp::Update()
 					parameters.Tau = Tweakables::g_Tau.Get();
 
 					context.SetRootConstants(0, parameters);
-					context.BindResources(2, resources.Get(averageLuminance)->GetUAV());
-					context.BindResources(3, resources.Get(luminanceHistogram)->GetSRV());
+					context.BindResources(2, averageLuminance->Get()->GetUAV());
+					context.BindResources(3, luminanceHistogram->Get()->GetSRV());
 
 					context.Dispatch(1);
 				});
@@ -1080,8 +1080,8 @@ void DemoApp::Update()
 							pTargetUAVs[0]
 							});
 						context.BindResources(3, {
-							resources.Get(sceneTextures.ColorTarget)->GetSRV(),
-							resources.Get(averageLuminance)->GetSRV(),
+							sceneTextures.ColorTarget->Get()->GetSRV(),
+							averageLuminance->Get()->GetSRV(),
 							});;
 
 						context.Dispatch(ComputeUtils::GetNumThreadGroups(pTarget->GetWidth(), 8, pTarget->GetHeight(), 8));
@@ -1146,14 +1146,14 @@ void DemoApp::Update()
 		}
 	}
 
-	RGHandle<Texture> tonemapTarget = graph.CreateTexture("Tonemap Target", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, DXGI_FORMAT_R8G8B8A8_UNORM));
+	RGTexture* tonemapTarget = graph.CreateTexture("Tonemap Target", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, DXGI_FORMAT_R8G8B8A8_UNORM));
 
 	graph.AddPass("Tonemap", RGPassFlag::Compute)
 		.Read({ sceneTextures.ColorTarget, averageLuminance })
-		.Write(&tonemapTarget)
+		.Write(tonemapTarget)
 		.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
-				Texture* pTarget = resources.Get(tonemapTarget);
+				Texture* pTarget = tonemapTarget->Get();
 				context.InsertResourceBarrier(m_pBloomTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
 				struct
@@ -1171,8 +1171,8 @@ void DemoApp::Update()
 				context.SetRootCBV(1, Renderer::GetViewUniforms(m_SceneData, pTarget));
 				context.BindResources(2, pTarget->GetUAV());
 				context.BindResources(3, {
-					resources.Get(sceneTextures.ColorTarget)->GetSRV(),
-					resources.Get(averageLuminance)->GetSRV(),
+					sceneTextures.ColorTarget->Get()->GetSRV(),
+					averageLuminance->Get()->GetSRV(),
 					Tweakables::g_Bloom.Get() ? m_pBloomTexture->GetSRV() : GraphicsCommon::GetDefaultTexture(DefaultTexture::Black2D)->GetSRV(),
 					});
 				context.Dispatch(ComputeUtils::GetNumThreadGroups(pTarget->GetWidth(), 16, pTarget->GetHeight(), 16));
@@ -1212,11 +1212,11 @@ void DemoApp::Update()
 					context.SetRootConstants(0, parameters);
 					context.BindResources(2, pTarget->GetUAV());
 					context.BindResources(3, {
-						resources.Get(luminanceHistogram)->GetSRV(),
-						resources.Get(averageLuminance)->GetSRV(),
+						luminanceHistogram->Get()->GetSRV(),
+						averageLuminance->Get()->GetSRV(),
 						});
 
-					context.Dispatch(1, resources.Get(luminanceHistogram)->GetNumElements());
+					context.Dispatch(1, luminanceHistogram->Get()->GetNumElements());
 					context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 				});
 	}
@@ -1247,7 +1247,7 @@ void DemoApp::Update()
 						context.SetPipelineState(m_pDDGIVisualizePSO);
 						context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-						context.BeginRenderPass(RenderPassInfo(resources.Get(sceneTextures.ColorTarget), RenderPassAccess::Load_Store, resources.Get(sceneTextures.Depth), RenderPassAccess::Load_Store, true));
+						context.BeginRenderPass(resources.GetRenderPassInfo());
 
 						struct
 						{
@@ -1264,15 +1264,15 @@ void DemoApp::Update()
 		}
 	}
 
-	RGHandle<Texture> finalOutput = graph.ImportTexture("Final Output", m_ColorOutput);
+	RGTexture* finalOutput = graph.ImportTexture("Final Output", m_ColorOutput);
 
 	graph.AddPass("Copy Final", RGPassFlag::Copy)
 		.Read(sceneTextures.ColorTarget)
-		.Write(&finalOutput)
+		.Write(finalOutput)
 		.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
-				context.CopyResource(resources.Get(sceneTextures.ColorTarget), resources.Get(finalOutput));
-				context.InsertResourceBarrier(resources.Get(finalOutput), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+				context.CopyResource(sceneTextures.ColorTarget->Get(), finalOutput->Get());
+				context.InsertResourceBarrier(finalOutput->Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 			});
 
 	Texture* pBackbuffer = m_pSwapchain->GetBackBuffer();
@@ -1510,7 +1510,7 @@ void DemoApp::InitializePipelines()
 		}
 	}
 
-	// Texture visualize 
+	// Texture visualize
 	m_pVisualizeTexturePSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "ImageVisualize.hlsl", "CSMain");
 }
 

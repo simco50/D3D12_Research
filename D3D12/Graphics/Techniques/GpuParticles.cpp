@@ -85,7 +85,7 @@ GpuParticles::GpuParticles(GraphicsDevice* pDevice)
 	}
 }
 
-void GpuParticles::Simulate(RGGraph& graph, const SceneView& view, RGHandle<Texture> depth)
+void GpuParticles::Simulate(RGGraph& graph, const SceneView& view, RGTexture* depth)
 {
 	if (ImGui::Begin("Parameters"))
 	{
@@ -148,7 +148,7 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView& view, RGHandle<Text
 			context.BindResources(3,
 				{
 					m_pCountersBuffer->GetSRV(),
-					resources.Get(depth)->GetSRV(),
+					depth->Get()->GetSRV(),
 				});
 
 			context.Dispatch(1);
@@ -178,7 +178,7 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView& view, RGHandle<Text
 			context.BindResources(3,
 				{
 					m_pCountersBuffer->GetSRV(),
-					resources.Get(depth)->GetSRV(),
+					depth->Get()->GetSRV(),
 				});
 
 			context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchSignature, 1, m_pEmitArguments, m_pEmitArguments);
@@ -207,7 +207,7 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView& view, RGHandle<Text
 			context.BindResources(3,
 				{
 					m_pCountersBuffer->GetSRV(),
-					resources.Get(depth)->GetSRV(),
+					depth->Get()->GetSRV(),
 				});
 
 			context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchSignature, 1, m_pSimulateArguments, nullptr);
@@ -228,7 +228,7 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView& view, RGHandle<Text
 				context.BindResources(3,
 					{
 						m_pCountersBuffer->GetSRV(),
-						resources.Get(depth)->GetSRV(),
+						depth->Get()->GetSRV(),
 					});
 
 			context.SetPipelineState(m_pSimulateEndPS);
@@ -251,7 +251,7 @@ void GpuParticles::Render(RGGraph& graph, const SceneView& view, SceneTextures& 
 		.RenderTarget(sceneTextures.ColorTarget, RenderPassAccess::Load_Store)
 		.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
-				Texture* pTarget = resources.Get(sceneTextures.ColorTarget);
+				Texture* pTarget = sceneTextures.ColorTarget->Get();
 				context.InsertResourceBarrier(m_pDrawArguments, D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
 				context.InsertResourceBarrier(m_pParticleBuffer, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 				context.InsertResourceBarrier(m_pAliveList1, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);

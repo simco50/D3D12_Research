@@ -21,7 +21,7 @@ static constexpr int gVolumetricNumZSlices = 128;
 
 struct CullBlackboardData
 {
-	RGHandle<Buffer> LightGrid;
+	RGBuffer* LightGrid;
 	Vector2 LightGridParams;
 };
 RG_BLACKBOARD_DATA(CullBlackboardData);
@@ -173,7 +173,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& view, SceneTextu
 {
 	ComputeLightCulling(graph, view, m_LightCullData);
 
-	RGHandle<Texture> fogVolume;
+	RGTexture* fogVolume = nullptr;
 	if (Tweakables::g_VolumetricFog)
 	{
 		fogVolume = RenderVolumetricFog(graph, view, m_LightCullData, m_VolumetricFogData);
@@ -210,7 +210,7 @@ void ClusteredForward::ComputeLightCulling(RGGraph& graph, const SceneView& view
 	cullData.AABBs = graph.CreateBuffer("Cluster AABBs", BufferDesc::CreateStructured(totalClusterCount, sizeof(Vector4) * 2));
 
 	graph.AddPass("Cluster AABBs", RGPassFlag::Compute)
-		.Write(&cullData.AABBs)
+		.Write(cullData.AABBs)
 		.Bind([=](CommandContext& context, const RGPassResources& resources)
 		{
 			context.SetPipelineState(m_pCreateAabbPSO);
@@ -227,7 +227,7 @@ void ClusteredForward::ComputeLightCulling(RGGraph& graph, const SceneView& view
 
 			context.SetRootCBV(0, constantBuffer);
 			context.SetRootCBV(1, Renderer::GetViewUniforms(view));
-			context.BindResources(2, resources.Get(cullData.AABBs)->GetUAV());
+			context.BindResources(2, cullData.AABBs->Get()->GetUAV());
 
 			//Cluster count in z is 32 so fits nicely in a wavefront on Nvidia so make groupsize in shader 32
 			constexpr uint32 threadGroupSize = 32;
@@ -245,14 +245,14 @@ void ClusteredForward::ComputeLightCulling(RGGraph& graph, const SceneView& view
 
 	graph.AddPass("Cull Lights", RGPassFlag::Compute)
 		.Read(cullData.AABBs)
-		.Write({ &cullData.LightGrid, &cullData.LightIndexGrid })
+		.Write({ cullData.LightGrid, cullData.LightIndexGrid })
 		.Bind([=](CommandContext& context, const RGPassResources& resources)
 		{
 			context.SetPipelineState(m_pLightCullingPSO);
 			context.SetComputeRootSignature(m_pLightCullingRS);
 
 			// Clear the light grid because we're accumulating the light count in the shader
-			Buffer* pLightGrid = resources.Get(cullData.LightGrid);
+			Buffer* pLightGrid = cullData.LightGrid->Get();
 			//#todo: adhoc UAV creation
 			context.ClearUavUInt(pLightGrid, m_pDevice->CreateUAV(pLightGrid, BufferUAVDesc::CreateRaw()));
 
@@ -267,10 +267,10 @@ void ClusteredForward::ComputeLightCulling(RGGraph& graph, const SceneView& view
 
 			context.SetRootCBV(1, Renderer::GetViewUniforms(view));
 			context.BindResources(2, {
-				resources.Get(cullData.LightIndexGrid)->GetUAV(),
-				resources.Get(cullData.LightGrid)->GetUAV(),
+				cullData.LightIndexGrid->Get()->GetUAV(),
+				cullData.LightGrid->Get()->GetUAV(),
 				});
-			context.BindResources(3, resources.Get(cullData.AABBs)->GetSRV());
+			context.BindResources(3, cullData.AABBs->Get()->GetSRV());
 
 			context.Dispatch(
 				ComputeUtils::GetNumThreadGroups(
@@ -287,9 +287,9 @@ void ClusteredForward::ComputeLightCulling(RGGraph& graph, const SceneView& view
 
 void ClusteredForward::VisualizeClusters(RGGraph& graph, const SceneView& view, SceneTextures& sceneTextures, ClusteredLightCullData& cullData)
 {
-	RGHandle<Buffer> debugLightGrid = graph.TryImportBuffer("Debug Light Grid", cullData.pDebugLightGrid);
+	RGBuffer* debugLightGrid = graph.TryImportBuffer("Debug Light Grid", cullData.pDebugLightGrid);
 
-	if (cullData.DirtyDebugData || !debugLightGrid.IsValid())
+	if (cullData.DirtyDebugData || !debugLightGrid)
 	{
 		uint32 totalClusterCount = cullData.ClusterCount.x * cullData.ClusterCount.y * cullData.ClusterCount.z;
 		debugLightGrid = graph.CreateBuffer("Debug Light Grid", BufferDesc::CreateStructured(2 * totalClusterCount, sizeof(uint32)));
@@ -311,12 +311,12 @@ void ClusteredForward::VisualizeClusters(RGGraph& graph, const SceneView& view, 
 			context.SetGraphicsRootSignature(m_pVisualizeLightClustersRS);
 			context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_POINTLIST);
 
-			ShaderInterop::ViewUniforms viewData = Renderer::GetViewUniforms(view, resources.Get(sceneTextures.ColorTarget));
+			ShaderInterop::ViewUniforms viewData = Renderer::GetViewUniforms(view, sceneTextures.ColorTarget->Get());
 			viewData.Projection = cullData.DebugClustersViewMatrix * view.View.ViewProjection;
 			context.SetRootCBV(0, viewData);
 			context.BindResources(1, {
-				resources.Get(cullData.AABBs)->GetSRV(),
-				resources.Get(debugLightGrid)->GetSRV(),
+				cullData.AABBs->Get()->GetSRV(),
+				debugLightGrid->Get()->GetSRV(),
 				m_pHeatMapTexture->GetSRV(),
 				});
 			context.Draw(0, cullData.ClusterCount.x * cullData.ClusterCount.y * cullData.ClusterCount.z);
@@ -325,7 +325,7 @@ void ClusteredForward::VisualizeClusters(RGGraph& graph, const SceneView& view, 
 		});
 }
 
-RGHandle<Texture> ClusteredForward::RenderVolumetricFog(RGGraph& graph, const SceneView& view, const ClusteredLightCullData& lightCullData, VolumetricFogData& fogData)
+RGTexture* ClusteredForward::RenderVolumetricFog(RGGraph& graph, const SceneView& view, const ClusteredLightCullData& lightCullData, VolumetricFogData& fogData)
 {
 	RG_GRAPH_SCOPE("Volumetric Lighting", graph);
 
@@ -336,9 +336,9 @@ RGHandle<Texture> ClusteredForward::RenderVolumetricFog(RGGraph& graph, const Sc
 		DXGI_FORMAT_R16G16B16A16_FLOAT,
 		TextureFlag::ShaderResource | TextureFlag::UnorderedAccess);
 
-	RGHandle<Texture> sourceVolume = graph.ImportTexture("Fog History", fogData.pFogHistory, GraphicsCommon::GetDefaultTexture(DefaultTexture::Black3D));
-	RGHandle<Texture> targetVolume = graph.CreateTexture("Fog Target", volumeDesc);
-	RGHandle<Texture> finalVolumeFog = graph.CreateTexture("Volumetric Fog", volumeDesc);
+	RGTexture* sourceVolume = graph.ImportTexture("Fog History", fogData.pFogHistory, GraphicsCommon::GetDefaultTexture(DefaultTexture::Black3D));
+	RGTexture* targetVolume = graph.CreateTexture("Fog Target", volumeDesc);
+	RGTexture* finalVolumeFog = graph.CreateTexture("Volumetric Fog", volumeDesc);
 
 	struct
 	{
@@ -360,10 +360,10 @@ RGHandle<Texture> ClusteredForward::RenderVolumetricFog(RGGraph& graph, const Sc
 
 	graph.AddPass("Inject Volume Lights", RGPassFlag::Compute)
 		.Read({ sourceVolume, lightCullData.LightGrid, lightCullData.LightIndexGrid })
-		.Write(&targetVolume)
+		.Write(targetVolume)
 		.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
-				Texture* pTargetVolume = resources.Get(targetVolume);
+				Texture* pTargetVolume = targetVolume->Get();
 
 				context.SetComputeRootSignature(m_pVolumetricLightingRS);
 				context.SetPipelineState(m_pInjectVolumeLightPSO);
@@ -372,9 +372,9 @@ RGHandle<Texture> ClusteredForward::RenderVolumetricFog(RGGraph& graph, const Sc
 				context.SetRootCBV(1, Renderer::GetViewUniforms(view));
 				context.BindResources(2, pTargetVolume->GetUAV());
 				context.BindResources(3, {
-					resources.Get(lightCullData.LightGrid)->GetSRV(),
-					resources.Get(lightCullData.LightIndexGrid)->GetSRV(),
-					resources.Get(sourceVolume)->GetSRV(),
+					lightCullData.LightGrid->Get()->GetSRV(),
+					lightCullData.LightIndexGrid->Get()->GetSRV(),
+					sourceVolume->Get()->GetSRV(),
 					});
 
 				context.Dispatch(
@@ -389,10 +389,10 @@ RGHandle<Texture> ClusteredForward::RenderVolumetricFog(RGGraph& graph, const Sc
 
 	graph.AddPass("Accumulate Volume Fog", RGPassFlag::Compute)
 		.Read({ targetVolume, lightCullData.LightGrid, lightCullData.LightIndexGrid })
-		.Write(&finalVolumeFog)
+		.Write(finalVolumeFog)
 		.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
-				Texture* pFinalFog = resources.Get(finalVolumeFog);
+				Texture* pFinalFog = finalVolumeFog->Get();
 
 				context.SetComputeRootSignature(m_pVolumetricLightingRS);
 				context.SetPipelineState(m_pAccumulateVolumeLightPSO);
@@ -401,9 +401,9 @@ RGHandle<Texture> ClusteredForward::RenderVolumetricFog(RGGraph& graph, const Sc
 				context.SetRootCBV(1, Renderer::GetViewUniforms(view));
 				context.BindResources(2, pFinalFog->GetUAV());
 				context.BindResources(3, {
-					resources.Get(lightCullData.LightGrid)->GetSRV(),
-					resources.Get(lightCullData.LightIndexGrid)->GetSRV(),
-					resources.Get(targetVolume)->GetSRV(),
+					lightCullData.LightGrid->Get()->GetSRV(),
+					lightCullData.LightIndexGrid->Get()->GetSRV(),
+					targetVolume->Get()->GetSRV(),
 					});
 
 				context.Dispatch(
@@ -414,7 +414,7 @@ RGHandle<Texture> ClusteredForward::RenderVolumetricFog(RGGraph& graph, const Sc
 	return finalVolumeFog;
 }
 
-void ClusteredForward::RenderBasePass(RGGraph& graph, const SceneView& view, SceneTextures& sceneTextures, const ClusteredLightCullData& lightCullData, RGHandle<Texture> fogTexture)
+void ClusteredForward::RenderBasePass(RGGraph& graph, const SceneView& view, SceneTextures& sceneTextures, const ClusteredLightCullData& lightCullData, RGTexture* fogTexture)
 {
 	static bool useMeshShader = false;
 	if (ImGui::Begin("Parameters"))
@@ -429,7 +429,7 @@ void ClusteredForward::RenderBasePass(RGGraph& graph, const SceneView& view, Sce
 	}
 	ImGui::End();
 
-	if (!fogTexture.IsValid())
+	if (!fogTexture)
 	{
 		fogTexture = graph.ImportTexture("Black", GraphicsCommon::GetDefaultTexture(DefaultTexture::Black3D));
 	}
@@ -461,15 +461,15 @@ void ClusteredForward::RenderBasePass(RGGraph& graph, const SceneView& view, Sce
 
 				context.SetRootCBV(1, frameData);
 
-				context.SetRootCBV(2, Renderer::GetViewUniforms(view, resources.Get(sceneTextures.ColorTarget)));
+				context.SetRootCBV(2, Renderer::GetViewUniforms(view, sceneTextures.ColorTarget->Get()));
 
 				context.BindResources(3, {
-					resources.Get(sceneTextures.AmbientOcclusion)->GetSRV(),
-					resources.Get(sceneTextures.Depth)->GetSRV(),
-					resources.Get(sceneTextures.PreviousColor)->GetSRV(),
-					resources.Get(fogTexture)->GetSRV(),
-					resources.Get(lightCullData.LightGrid)->GetSRV(),
-					resources.Get(lightCullData.LightIndexGrid)->GetSRV(),
+					sceneTextures.AmbientOcclusion->Get()->GetSRV(),
+					sceneTextures.Depth->Get()->GetSRV(),
+					sceneTextures.PreviousColor->Get()->GetSRV(),
+					fogTexture->Get()->GetSRV(),
+					lightCullData.LightGrid->Get()->GetSRV(),
+					lightCullData.LightIndexGrid->Get()->GetSRV(),
 					});
 
 				{
@@ -495,20 +495,20 @@ void ClusteredForward::RenderBasePass(RGGraph& graph, const SceneView& view, Sce
 
 void ClusteredForward::VisualizeLightDensity(RGGraph& graph, const SceneView& view, SceneTextures& sceneTextures)
 {
-	RGHandle<Texture> visualizationIntermediate = graph.CreateTexture("Cached Scene Color", graph.GetDesc(sceneTextures.ColorTarget));
+	RGTexture* visualizationIntermediate = graph.CreateTexture("Cached Scene Color", sceneTextures.ColorTarget->DescTexture);
 
 	const CullBlackboardData& blackboardData = graph.Blackboard.Get<CullBlackboardData>();
-	RGHandle<Buffer> lightGrid = blackboardData.LightGrid;
+	RGBuffer* lightGrid = blackboardData.LightGrid;
 	Vector2 lightGridParams = blackboardData.LightGridParams;
 
 	graph.AddCopyPass("Cache Scene Color", sceneTextures.ColorTarget, visualizationIntermediate);
 
 	graph.AddPass("Visualize Light Density", RGPassFlag::Compute)
 		.Read({ sceneTextures.Depth, visualizationIntermediate, lightGrid })
-		.Write(&sceneTextures.ColorTarget)
+		.Write(sceneTextures.ColorTarget)
 		.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
-				Texture* pTarget = resources.Get(sceneTextures.ColorTarget);
+				Texture* pTarget = sceneTextures.ColorTarget->Get();
 
 				struct
 				{
@@ -527,9 +527,9 @@ void ClusteredForward::VisualizeLightDensity(RGGraph& graph, const SceneView& vi
 				context.SetRootCBV(1, Renderer::GetViewUniforms(view, pTarget));
 
 				context.BindResources(2, {
-					resources.Get(visualizationIntermediate)->GetSRV(),
-					resources.Get(sceneTextures.Depth)->GetSRV(),
-					resources.Get(lightGrid)->GetSRV(),
+					visualizationIntermediate->Get()->GetSRV(),
+					sceneTextures.Depth->Get()->GetSRV(),
+					lightGrid->Get()->GetSRV(),
 					});
 				context.BindResources(3, pTarget->GetUAV());
 

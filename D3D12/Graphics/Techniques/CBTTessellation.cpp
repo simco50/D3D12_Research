@@ -150,15 +150,15 @@ void CBTTessellation::Execute(RGGraph& graph, const SceneView& view, SceneTextur
 	updateData.SplitMode = m_SplitMode;
 	m_SplitMode = 1 - m_SplitMode;
 
-	RGHandle<Buffer> cbtBuffer = graph.ImportBuffer("CBT Buffer", m_pCBTBuffer);
+	RGBuffer* cbtBuffer = graph.ImportBuffer("CBT Buffer", m_pCBTBuffer);
 
 	if (m_IsDirty)
 	{
 		graph.AddPass("CBT Upload", RGPassFlag::Copy)
-			.Write(&cbtBuffer)
+			.Write(cbtBuffer)
 			.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
-				context.WriteBuffer(resources.Get(cbtBuffer), m_CBT.GetData(), m_CBT.GetMemoryUse());
+				context.WriteBuffer(cbtBuffer->Get(), m_CBT.GetData(), m_CBT.GetMemoryUse());
 				context.FlushResourceBarriers();
 			});
 		m_IsDirty = false;
@@ -166,7 +166,7 @@ void CBTTessellation::Execute(RGGraph& graph, const SceneView& view, SceneTextur
 	if (!CBTSettings::MeshShader)
 	{
 		graph.AddPass("CBT Update", RGPassFlag::Compute)
-			.ReadWrite(&cbtBuffer)
+			.ReadWrite(cbtBuffer)
 			.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
 				context.InsertResourceBarrier(m_pCBTIndirectArgs, D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
@@ -178,7 +178,7 @@ void CBTTessellation::Execute(RGGraph& graph, const SceneView& view, SceneTextur
 
 				context.SetPipelineState(m_pCBTUpdatePSO);
 				context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchSignature, 1, m_pCBTIndirectArgs, nullptr, IndirectDispatchArgsOffset);
-				context.InsertUavBarrier(resources.Get(cbtBuffer));
+				context.InsertUavBarrier(cbtBuffer->Get());
 			});
 	}
 
@@ -196,7 +196,7 @@ void CBTTessellation::Execute(RGGraph& graph, const SceneView& view, SceneTextur
 		});
 
 	graph.AddPass("CBT Render", RGPassFlag::Raster)
-		.ReadWrite(&cbtBuffer)
+		.ReadWrite(cbtBuffer)
 		.DepthStencil(sceneTextures.Depth, RenderPassAccess::Load_Store, true)
 		.RenderTarget(sceneTextures.ColorTarget, RenderPassAccess::Load_Store)
 		.RenderTarget(sceneTextures.Normals, RenderPassAccess::Load_Store)
@@ -212,7 +212,7 @@ void CBTTessellation::Execute(RGGraph& graph, const SceneView& view, SceneTextur
 
 				context.SetRootConstants(0, commonArgs);
 				context.SetRootCBV(1, updateData);
-				context.SetRootCBV(2, Renderer::GetViewUniforms(view, resources.Get(sceneTextures.ColorTarget)));
+				context.SetRootCBV(2, Renderer::GetViewUniforms(view, sceneTextures.ColorTarget->Get()));
 
 				if (CBTSettings::MeshShader)
 				{
@@ -254,7 +254,7 @@ void CBTTessellation::Execute(RGGraph& graph, const SceneView& view, SceneTextur
 	// Cache the bitfield in the second to last layer as it is unused memory now.
 
 	graph.AddPass("CBT Cache Bitfield", RGPassFlag::Compute)
-		.ReadWrite(&cbtBuffer)
+		.ReadWrite(cbtBuffer)
 		.Bind([=](CommandContext& context, const RGPassResources& resources)
 		{
 			context.SetComputeRootSignature(m_pCBTRS);
@@ -275,7 +275,7 @@ void CBTTessellation::Execute(RGGraph& graph, const SceneView& view, SceneTextur
 		});
 
 	graph.AddPass("CBT Sum Reduction", RGPassFlag::Compute)
-		.ReadWrite(&cbtBuffer)
+		.ReadWrite(cbtBuffer)
 		.Bind([=](CommandContext& context, const RGPassResources& resources)
 		{
 			context.SetComputeRootSignature(m_pCBTRS);
