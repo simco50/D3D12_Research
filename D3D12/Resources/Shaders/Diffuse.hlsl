@@ -237,12 +237,12 @@ MaterialProperties GetMaterialProperties(MaterialData material, float2 UV)
 	properties.Opacity = baseColor.a;
 
 	properties.Metalness = material.MetalnessFactor;
-	properties.pRoughness = material.RoughnessFactor;
+	properties.Roughness = material.RoughnessFactor;
 	if(material.RoughnessMetalness != INVALID_HANDLE)
 	{
 		float4 roughnessMetalnessSample = Sample2D(material.RoughnessMetalness, sMaterialSampler, UV);
 		properties.Metalness *= roughnessMetalnessSample.b;
-		properties.pRoughness *= roughnessMetalnessSample.g;
+		properties.Roughness *= roughnessMetalnessSample.g;
 	}
 	properties.Emissive = material.EmissiveFactor.rgb;
 	if(material.Emissive != INVALID_HANDLE)
@@ -286,9 +286,9 @@ void PSMain(InterpolantsVSToPS input,
 	float3 positionVS = mul(float4(input.PositionWS, 1), cView.View).xyz;
 
 	float ssrWeight = 0;
-	float3 ssr = ScreenSpaceReflections(input.Position, positionVS, N, V, brdf.pRoughness, tDepth, tPreviousSceneColor, ssrWeight);
+	float3 ssr = ScreenSpaceReflections(input.Position, positionVS, N, V, brdf.Roughness, tDepth, tPreviousSceneColor, ssrWeight);
 
-	LightResult lighting = DoLight(input.Position, input.PositionWS, N, V, brdf.Diffuse, brdf.Specular, brdf.pRoughness);
+	LightResult lighting = DoLight(input.Position, input.PositionWS, N, V, brdf.Diffuse, brdf.Specular, brdf.Roughness);
 
 	float3 outRadiance = 0;
 	outRadiance += ambientOcclusion * Diffuse_Lambert(brdf.Diffuse) * SampleDDGIIrradiance(input.PositionWS, N, -V);
@@ -300,7 +300,7 @@ void PSMain(InterpolantsVSToPS input,
 	float4 scatteringTransmittance = tLightScattering.SampleLevel(sLinearClamp, float3(screenUV, fogSlice), 0);
 	outRadiance = outRadiance * scatteringTransmittance.w + scatteringTransmittance.rgb;
 
-	float reflectivity = saturate(scatteringTransmittance.w * ambientOcclusion * Square(1 - brdf.pRoughness));
+	float reflectivity = saturate(scatteringTransmittance.w * ambientOcclusion * Square(1 - brdf.Roughness));
 
 #define DEBUG_MESHLETS 0
 #if DEBUG_MESHLETS
@@ -311,5 +311,5 @@ void PSMain(InterpolantsVSToPS input,
 
 	output.Color = float4(outRadiance, surface.Opacity);
 	output.Normal = EncodeNormalOctahedron(N);
-	output.pRoughness = saturate(reflectivity - ssrWeight);
+	output.Roughness = saturate(reflectivity - ssrWeight);
 }

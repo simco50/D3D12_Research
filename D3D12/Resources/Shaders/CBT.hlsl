@@ -651,7 +651,7 @@ void RenderPS(
 
 	output.Color = float4(radiance, 1);
 	output.Normal = EncodeNormalOctahedron(normal);
-	output.pRoughness = 0.0f;
+	output.Roughness = 0.0f;
 }
 
 /* DEBUG VISUALIZATION TECHNIQUE */

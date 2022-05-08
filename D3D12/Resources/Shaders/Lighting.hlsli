@@ -18,7 +18,7 @@ BrdfData GetBrdfData(MaterialProperties material)
 	BrdfData data;
 	data.Diffuse = ComputeDiffuseColor(material.BaseColor, material.Metalness);
 	data.Specular = ComputeF0(material.Specular, material.BaseColor, material.Metalness);
-	data.pRoughness = material.pRoughness;
+	data.Roughness = material.Roughness;
 	return data;
 }
 

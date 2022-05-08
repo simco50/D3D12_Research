@@ -96,12 +96,12 @@ MaterialProperties GetMaterialProperties(MaterialData material, VisBufferVertexA
 	properties.Opacity = baseColor.a;
 
 	properties.Metalness = material.MetalnessFactor;
-	properties.pRoughness = material.RoughnessFactor;
+	properties.Roughness = material.RoughnessFactor;
 	if(material.RoughnessMetalness != INVALID_HANDLE)
 	{
 		float4 roughnessMetalnessSample = SampleGrad2D(NonUniformResourceIndex(material.RoughnessMetalness), sMaterialSampler, attributes.UV, attributes.DX, attributes.DY);
 		properties.Metalness *= roughnessMetalnessSample.b;
-		properties.pRoughness *= roughnessMetalnessSample.g;
+		properties.Roughness *= roughnessMetalnessSample.g;
 	}
 	properties.Emissive = material.EmissiveFactor.rgb;
 	if(material.Emissive != INVALID_HANDLE)
@@ -166,9 +166,9 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 	float4 pos = float4((float2)(dispatchThreadId.xy + 0.5f), 0, positionVS.z);
 
 	float ssrWeight = 0;
-	float3 ssr = ScreenSpaceReflections(pos, positionVS, N, V, brdfData.pRoughness, tDepth, tPreviousSceneColor, ssrWeight);
+	float3 ssr = ScreenSpaceReflections(pos, positionVS, N, V, brdfData.Roughness, tDepth, tPreviousSceneColor, ssrWeight);
 
-	LightResult result = DoLight(pos, vertex.Position, N, V, brdfData.Diffuse, brdfData.Specular, brdfData.pRoughness);
+	LightResult result = DoLight(pos, vertex.Position, N, V, brdfData.Diffuse, brdfData.Specular, brdfData.Roughness);
 
 	float3 outRadiance = 0;
 	outRadiance += ambientOcclusion * Diffuse_Lambert(brdfData.Diffuse) * SampleDDGIIrradiance(vertex.Position, N, -V);
@@ -176,7 +176,7 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 	outRadiance += ssr;
 	outRadiance += surface.Emissive;
 
-	float reflectivity = saturate(Square(1 - brdfData.pRoughness));
+	float reflectivity = saturate(Square(1 - brdfData.Roughness));
 
 #define DEBUG_MESHLETS 0
 #if DEBUG_MESHLETS
