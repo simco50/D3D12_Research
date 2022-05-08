@@ -54,6 +54,7 @@ std::string PassFlagToString(RGPassFlag flags)
 
 void RGGraph::DumpGraph(const char* pPath) const
 {
+#if 0
 	std::stringstream stream;
 
 	constexpr const char* pMermaidTemplate = R"(
@@ -213,4 +214,5 @@ void RGGraph::DumpGraph(const char* pPath) const
 		fwrite(output.c_str(), sizeof(char), output.length(), pFile);
 		fclose(pFile);
 	}
+#endif
 }
