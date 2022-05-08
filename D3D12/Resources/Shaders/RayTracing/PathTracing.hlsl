@@ -57,7 +57,7 @@ LightResult EvaluateLight(Light light, float3 worldPos, float3 V, float3 N, floa
 	attenuation *= TraceOcclusionRay(rayDesc, tlas);
 
 	L = normalize(L);
-	result = DefaultLitBxDF(brdfData.Specular, brdfData.Roughness, brdfData.Diffuse, N, V, L, attenuation);
+	result = DefaultLitBxDF(brdfData.Specular, brdfData.pRoughness, brdfData.Diffuse, N, V, L, attenuation);
 	result.Diffuse *= light.GetColor() * light.Intensity;
 	result.Specular *= light.GetColor() * light.Intensity;
 	return result;
@@ -108,14 +108,14 @@ bool EvaluateIndirectBRDF(int rayType, float2 u, BrdfData brdfData, float3 N, fl
 
 		// Weight the diffuse term based on the specular term of random microfacet normal
 		// (Diffuse == 1.0 - Fresnel)
-		float alpha = Square(brdfData.Roughness);
+		float alpha = Square(brdfData.pRoughness);
 		float3 Hspecular = SampleGGXVNDF(Vlocal, alpha.xx, u);
 		float VdotH = max(0.00001f, min(1.0f, dot(Vlocal, Hspecular)));
 		weight *= (1.0f.xxx - F_Schlick(brdfData.Specular, VdotH));
 	}
 	else if(rayType == RAY_SPECULAR)
 	{
-		float alpha = Square(brdfData.Roughness);
+		float alpha = Square(brdfData.pRoughness);
 		float alphaSquared = Square(alpha);
 
 		// Sample a microfacet normal (H) in local space
@@ -150,7 +150,7 @@ bool EvaluateIndirectBRDF(int rayType, float2 u, BrdfData brdfData, float3 N, fl
 		weight = F * G;
 
 		// Kulla17 - Energy conervation due to multiple scattering
-		float gloss = Pow4(1 - brdfData.Roughness);
+		float gloss = Pow4(1 - brdfData.pRoughness);
 		float3 DFG = EnvDFGPolynomial(brdfData.Specular, gloss, NdotV);
 		float3 energyCompensation = 1.0f + brdfData.Specular * (1.0f / DFG.y - 1.0f);
 		weight *= energyCompensation;

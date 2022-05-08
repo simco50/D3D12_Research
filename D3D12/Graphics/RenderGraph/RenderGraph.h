@@ -57,7 +57,7 @@ public:
 
 	struct DepthStencilAccess
 	{
-		RGTexture* Resource = nullptr;
+		RGTexture* pResource = nullptr;
 		RenderPassAccess Access;
 		RenderPassAccess StencilAccess;
 		bool Write;

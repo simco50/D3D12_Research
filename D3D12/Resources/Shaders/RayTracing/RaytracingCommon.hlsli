@@ -62,12 +62,12 @@ MaterialProperties GetMaterialProperties(MaterialData material, float2 UV, int m
 	properties.Opacity = baseColor.a;
 
 	properties.Metalness = material.MetalnessFactor;
-	properties.Roughness = material.RoughnessFactor;
+	properties.pRoughness = material.RoughnessFactor;
 	if(material.RoughnessMetalness != INVALID_HANDLE)
 	{
 		float4 roughnessMetalnessSample = SampleLevel2D(material.RoughnessMetalness, sMaterialSampler, UV, mipLevel);
 		properties.Metalness *= roughnessMetalnessSample.b;
-		properties.Roughness *= roughnessMetalnessSample.g;
+		properties.pRoughness *= roughnessMetalnessSample.g;
 	}
 	properties.Emissive = material.EmissiveFactor.rgb;
 	if(material.Emissive != INVALID_HANDLE)

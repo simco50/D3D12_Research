@@ -247,11 +247,11 @@ void GpuParticles::Render(RGGraph& graph, const SceneView& view, SceneTextures& 
 	}
 
 	graph.AddPass("Render Particles", RGPassFlag::Raster)
-		.DepthStencil(sceneTextures.Depth, RenderPassAccess::Load_Store, false)
-		.RenderTarget(sceneTextures.ColorTarget, RenderPassAccess::Load_Store)
+		.DepthStencil(sceneTextures.pDepth, RenderPassAccess::Load_Store, false)
+		.RenderTarget(sceneTextures.pColorTarget, RenderPassAccess::Load_Store)
 		.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
-				Texture* pTarget = sceneTextures.ColorTarget->Get();
+				Texture* pTarget = sceneTextures.pColorTarget->Get();
 				context.InsertResourceBarrier(m_pDrawArguments, D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
 				context.InsertResourceBarrier(m_pParticleBuffer, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 				context.InsertResourceBarrier(m_pAliveList1, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);

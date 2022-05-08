@@ -197,10 +197,10 @@ void CBTTessellation::Execute(RGGraph& graph, const SceneView& view, SceneTextur
 
 	graph.AddPass("CBT Render", RGPassFlag::Raster)
 		.ReadWrite(pCBTBuffer)
-		.DepthStencil(sceneTextures.Depth, RenderPassAccess::Load_Store, true)
-		.RenderTarget(sceneTextures.ColorTarget, RenderPassAccess::Load_Store)
-		.RenderTarget(sceneTextures.Normals, RenderPassAccess::Load_Store)
-		.RenderTarget(sceneTextures.Roughness, RenderPassAccess::Load_Store)
+		.DepthStencil(sceneTextures.pDepth, RenderPassAccess::Load_Store, true)
+		.RenderTarget(sceneTextures.pColorTarget, RenderPassAccess::Load_Store)
+		.RenderTarget(sceneTextures.pNormals, RenderPassAccess::Load_Store)
+		.RenderTarget(sceneTextures.pRoughness, RenderPassAccess::Load_Store)
 		.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
 				context.InsertResourceBarrier(m_pCBTIndirectArgs, D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
@@ -212,7 +212,7 @@ void CBTTessellation::Execute(RGGraph& graph, const SceneView& view, SceneTextur
 
 				context.SetRootConstants(0, commonArgs);
 				context.SetRootCBV(1, updateData);
-				context.SetRootCBV(2, Renderer::GetViewUniforms(view, sceneTextures.ColorTarget->Get()));
+				context.SetRootCBV(2, Renderer::GetViewUniforms(view, sceneTextures.pColorTarget->Get()));
 
 				if (CBTSettings::MeshShader)
 				{

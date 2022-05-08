@@ -50,7 +50,7 @@ RGPass& RGPass::RenderTarget(RGTexture* pResource, RenderPassAccess access)
 
 RGPass& RGPass::DepthStencil(RGTexture* pResource, RenderPassAccess depthAccess, bool writeDepth, RenderPassAccess stencilAccess)
 {
-	checkf(!DepthStencilTarget.Resource, "Depth Target already assigned");
+	checkf(!DepthStencilTarget.pResource, "Depth Target already assigned");
 	Accesses.push_back({ writeDepth ? D3D12_RESOURCE_STATE_DEPTH_WRITE : D3D12_RESOURCE_STATE_DEPTH_READ, pResource });
 	DepthStencilTarget = { pResource, depthAccess, stencilAccess, writeDepth };
 	return *this;
@@ -322,9 +322,9 @@ RenderPassInfo RGPassResources::GetRenderPassInfo() const
 		passInfo.RenderTargets[passInfo.RenderTargetCount].Access = renderTarget.Access;
 		passInfo.RenderTargetCount++;
 	}
-	if (m_Pass.DepthStencilTarget.Resource)
+	if (m_Pass.DepthStencilTarget.pResource)
 	{
-		passInfo.DepthStencilTarget.Target = m_Pass.DepthStencilTarget.Resource->Get();
+		passInfo.DepthStencilTarget.Target = m_Pass.DepthStencilTarget.pResource->Get();
 		passInfo.DepthStencilTarget.Access = m_Pass.DepthStencilTarget.Access;
 		passInfo.DepthStencilTarget.StencilAccess = m_Pass.DepthStencilTarget.StencilAccess;
 		passInfo.DepthStencilTarget.Write = m_Pass.DepthStencilTarget.Write;
