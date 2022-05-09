@@ -79,6 +79,7 @@ void RGGraph::DumpGraph(const char* pPath) const
 
 	stream << "graph TD;\n";
 
+	stream << "classDef neverCullPass fill:#ff5e00,stroke:#333,stroke-width:4px;\n";
 	stream << "classDef referencedPass fill:#fa0,stroke:#333,stroke-width:4px;\n";
 	stream << "classDef unreferenced stroke:#fee,stroke-width:1px;\n";
 	stream << "classDef referencedResource fill:#bef,stroke:#333,stroke-width:2px;\n";
@@ -111,13 +112,52 @@ void RGGraph::DumpGraph(const char* pPath) const
 		stream << "[";
 		stream << pPass->Name << "<br/>";
 		stream << "Flags: " << PassFlagToString(pPass->Flags) << "<br/>";
-		stream << "Index: " << passIndex++;
+		stream << "Index: " << passIndex++ << "<br/>";
 		stream << "Culled: " << (pPass->IsCulled ? "Yes" : "No") << "<br/>";
 		stream << "]:::";
 
-		stream << (pPass->IsCulled ? "unreferenced" : "referencedPass");
+		if (EnumHasAnyFlags(pPass->Flags, RGPassFlag::NeverCull))
+		{
+			stream << "neverCullPass";
+		}
+		else
+		{
+			stream << (pPass->IsCulled ? "unreferenced" : "referencedPass");
+		}
 
 		stream << "\n";
+
+		auto PrintResource = [&](RGResource* pResource, uint32 version) {
+			stream << "Resource" << pResource->Id << "_" << version;
+			stream << (pResource->IsImported ? "[(" : "([");
+			stream << pResource->Name << "<br/>";
+
+			if (pResource->Type == RGResourceType::Texture)
+			{
+				const TextureDesc& desc = static_cast<RGTexture*>(pResource)->Desc;
+				stream << "Res: " << desc.Width << "x" << desc.Height << "x" << desc.DepthOrArraySize << "<br/>";
+				stream << "Fmt: " << D3D::FormatToString(desc.Format) << "<br/>";
+				stream << "Mips: " << desc.Mips << "<br/>";
+				stream << "Size: " << Math::PrettyPrintDataSize(D3D::GetFormatRowDataSize(desc.Format, desc.Width) * desc.Height * desc.DepthOrArraySize) << "</br>";
+			}
+			else if (pResource->Type == RGResourceType::Buffer)
+			{
+				const BufferDesc& desc = static_cast<RGBuffer*>(pResource)->Desc;
+				stream << "Size: " << Math::PrettyPrintDataSize(desc.Size) << "<br/>";
+				stream << "Fmt: " << D3D::FormatToString(desc.Format) << "<br/>";
+			}
+
+			stream << (pResource->IsImported ? ")]" : "])");
+			if (pResource->IsImported)
+			{
+				stream << ":::importedResource";
+			}
+			else
+			{
+				stream << ":::referencedResource";
+			}
+			stream << "\n";
+		};
 
 
 		for (RGPass::ResourceAccess& access : pPass->Accesses)
@@ -129,50 +169,25 @@ void RGGraph::DumpGraph(const char* pPath) const
 			{
 				resourceVersions[pResource] = resourceVersion;
 
-				stream << "Resource" << pResource->Id << "_" << resourceVersion;
-				stream << (pResource->IsImported ? "[(" : "([");
-				stream << pResource->Name << "<br/>";
-
-				if (pResource->Type == RGResourceType::Texture)
-				{
-					const TextureDesc& desc = static_cast<RGTexture*>(pResource)->Desc;
-					stream << desc.Width << "x" << desc.Height << "x" << desc.DepthOrArraySize << "<br/>";
-					stream << D3D::FormatToString(desc.Format) << "<br/>";
-					stream << "Mips: " << desc.Mips << "<br/>";
-					stream << "Size: " << Math::PrettyPrintDataSize(D3D::GetFormatRowDataSize(desc.Format, desc.Width) * desc.Height * desc.DepthOrArraySize) << "</br>";
-				}
-				else if (pResource->Type == RGResourceType::Buffer)
-				{
-					const BufferDesc& desc = static_cast<RGBuffer*>(pResource)->Desc;
-					stream << Math::PrettyPrintDataSize(desc.Size) << "<br/>";
-					stream << D3D::FormatToString(desc.Format) << "<br/>";
-				}
-
-				stream << (pResource->IsImported ? ")]" : "])");
-				if (pResource->IsImported)
-				{
-					stream << ":::importedResource";
-				}
-				else
-				{
-					stream << ":::referencedResource";
-				}
-				stream << "\n";
+				if(pResource->IsImported)
+					PrintResource(pResource, resourceVersion);
 
 			}
 			resourceVersion = resourceVersions[pResource];
 
-			if ((access.Access & WriteStates) != 0)
+			if (resourceVersion > 0 || pResource->IsImported)
 			{
-				stream << "Resource" << pResource->Id << "_" << resourceVersion << " -- Read --> Pass" << pPass->ID << "\n";
+				stream << "Resource" << pResource->Id << "_" << resourceVersion << " -- " << D3D::ResourceStateToString(access.Access) << " --> Pass" << pPass->ID << "\n";
 				stream << "linkStyle " << linkIndex++ << " " << readLinkStyle << "\n";
 			}
-			if (EnumHasAllFlags(access.Access, WriteStates))
+
+			if (EnumHasAnyFlags(access.Access, WriteStates))
 			{
 				++resourceVersions[pResource];
 				resourceVersion++;
+				PrintResource(pResource, resourceVersion);
 
-				stream << "Pass" << pPass->ID << " -- Write --> " << "Resource" << pResource->Id << "_" << resourceVersion;
+				stream << "Pass" << pPass->ID << " -- " << D3D::ResourceStateToString(access.Access) << " --> " << "Resource" << pResource->Id << "_" << resourceVersion;
 				stream << "\nlinkStyle " << linkIndex++ << " " << writeLinkStyle << "\n";
 			}
 		}
