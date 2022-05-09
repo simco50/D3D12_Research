@@ -9,8 +9,20 @@ enum class RGResourceType
 	Buffer,
 };
 template<typename T> struct RGResourceTypeTraits { };
-template<> struct RGResourceTypeTraits<Texture> { constexpr static RGResourceType Type = RGResourceType::Texture; };
-template<> struct RGResourceTypeTraits<Buffer> { constexpr static RGResourceType Type = RGResourceType::Buffer; };
+
+template<>
+struct RGResourceTypeTraits<Texture>
+{
+	constexpr static RGResourceType Type = RGResourceType::Texture;
+	using TDesc = TextureDesc;
+};
+
+template<>
+struct RGResourceTypeTraits<Buffer>
+{
+	constexpr static RGResourceType Type = RGResourceType::Buffer;
+	using TDesc = BufferDesc;
+};
 
 class RGPass;
 
@@ -48,11 +60,12 @@ protected:
 	const RGPass* pLastAccess = nullptr;
 };
 
-template<typename T, typename TDesc>
+template<typename T>
 struct RGResourceT : public RGResource
 {
 public:
 	friend class RGGraph;
+	using TDesc = typename RGResourceTypeTraits<T>::TDesc;
 
 	RGResourceT(const char* pName, int id, const TDesc& desc, T* pResource = nullptr)
 		: RGResource(pName, id, RGResourceTypeTraits<T>::Type, pResource), Desc(desc)
@@ -70,5 +83,5 @@ private:
 	TDesc Desc;
 };
 
-using RGTexture = RGResourceT<Texture, TextureDesc>;
-using RGBuffer = RGResourceT<Buffer, BufferDesc>;
+using RGTexture = RGResourceT<Texture>;
+using RGBuffer = RGResourceT<Buffer>;
