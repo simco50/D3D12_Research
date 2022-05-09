@@ -495,20 +495,18 @@ void ClusteredForward::RenderBasePass(RGGraph& graph, const SceneView& view, Sce
 
 void ClusteredForward::VisualizeLightDensity(RGGraph& graph, const SceneView& view, SceneTextures& sceneTextures)
 {
-	RGTexture* pVisualizationIntermediate = graph.CreateTexture("Cached Scene Color", sceneTextures.pColorTarget->GetDesc());
+	RGTexture* pVisualizationTarget = graph.CreateTexture("Scene Color", sceneTextures.pColorTarget->GetDesc());
 
 	const CullBlackboardData& blackboardData = graph.Blackboard.Get<CullBlackboardData>();
 	RGBuffer* pLightGrid = blackboardData.pLightGrid;
 	Vector2 lightGridParams = blackboardData.LightGridParams;
 
-	graph.AddCopyPass("Cache Scene Color", sceneTextures.pColorTarget, pVisualizationIntermediate);
-
 	graph.AddPass("Visualize Light Density", RGPassFlag::Compute)
-		.Read({ sceneTextures.pDepth, pVisualizationIntermediate, pLightGrid })
-		.Write(sceneTextures.pColorTarget)
+		.Read({ sceneTextures.pDepth, sceneTextures.pColorTarget, pLightGrid })
+		.Write(pVisualizationTarget)
 		.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
-				Texture* pTarget = sceneTextures.pColorTarget->Get();
+				Texture* pTarget = pVisualizationTarget->Get();
 
 				struct
 				{
@@ -527,7 +525,7 @@ void ClusteredForward::VisualizeLightDensity(RGGraph& graph, const SceneView& vi
 				context.SetRootCBV(1, Renderer::GetViewUniforms(view, pTarget));
 
 				context.BindResources(2, {
-					pVisualizationIntermediate->Get()->GetSRV(),
+					sceneTextures.pColorTarget->Get()->GetSRV(),
 					sceneTextures.pDepth->Get()->GetSRV(),
 					pLightGrid->Get()->GetSRV(),
 					});
@@ -537,4 +535,6 @@ void ClusteredForward::VisualizeLightDensity(RGGraph& graph, const SceneView& vi
 					pTarget->GetWidth(), 16,
 					pTarget->GetHeight(), 16));
 			});
+
+	sceneTextures.pColorTarget = pVisualizationTarget;
 }

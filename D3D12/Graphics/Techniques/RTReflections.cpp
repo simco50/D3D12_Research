@@ -39,16 +39,14 @@ RTReflections::RTReflections(GraphicsDevice* pDevice)
 
 void RTReflections::Execute(RGGraph& graph, const SceneView& view, SceneTextures& sceneTextures)
 {
-	RGTexture* pReflectionsTarget = graph.CreateTexture("Reflections Target", sceneTextures.pColorTarget->GetDesc());
-
-	graph.AddCopyPass("Cache Scene Color", sceneTextures.pColorTarget, pReflectionsTarget);
+	RGTexture* pReflectionsTarget = graph.CreateTexture("Scene Color", sceneTextures.pColorTarget->GetDesc());
 
 	graph.AddPass("RT Reflections", RGPassFlag::Compute)
-		.Read({ sceneTextures.pNormals, sceneTextures.pDepth, sceneTextures.pRoughness, pReflectionsTarget })
-		.Write(sceneTextures.pColorTarget)
+		.Read({ sceneTextures.pNormals, sceneTextures.pDepth, sceneTextures.pRoughness, sceneTextures.pColorTarget })
+		.Write(pReflectionsTarget)
 		.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
-				Texture* pTarget = sceneTextures.pColorTarget->Get();
+				Texture* pTarget = pReflectionsTarget->Get();
 
 				context.SetComputeRootSignature(m_pGlobalRS);
 				context.SetPipelineState(m_pRtSO);
@@ -71,12 +69,14 @@ void RTReflections::Execute(RGGraph& graph, const SceneView& view, SceneTextures
 				context.BindResources(2, pTarget->GetUAV());
 				context.BindResources(3, {
 					sceneTextures.pDepth->Get()->GetSRV(),
-					pReflectionsTarget->Get()->GetSRV(),
+					sceneTextures.pColorTarget->Get()->GetSRV(),
 					sceneTextures.pNormals->Get()->GetSRV(),
 					sceneTextures.pRoughness->Get()->GetSRV(),
 					});
 
 				context.DispatchRays(bindingTable, pTarget->GetWidth(), pTarget->GetHeight());
 			});
+
+	sceneTextures.pColorTarget = pReflectionsTarget;
 }
 

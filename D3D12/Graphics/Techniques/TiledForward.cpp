@@ -194,19 +194,17 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& view, SceneTextures&
 
 void TiledForward::VisualizeLightDensity(RGGraph& graph, GraphicsDevice* pDevice, const SceneView& view, SceneTextures& sceneTextures)
 {
-	RGTexture* pVisualizationIntermediate = graph.CreateTexture("Light Density Debug Texture", sceneTextures.pColorTarget->GetDesc());
+	RGTexture* pVisualizationTarget = graph.CreateTexture("Scene Color", sceneTextures.pColorTarget->GetDesc());
 
 	const CullBlackboardData& blackboardData = graph.Blackboard.Get<CullBlackboardData>();
 	RGTexture* pLightGridOpaque = blackboardData.pLightGridOpaque;
 
-	graph.AddCopyPass("Cache Scene Color", sceneTextures.pColorTarget, pVisualizationIntermediate);
-
 	graph.AddPass("Visualize Light Density", RGPassFlag::Raster)
-		.Read({ sceneTextures.pDepth, pVisualizationIntermediate, pLightGridOpaque })
-		.Write(sceneTextures.pColorTarget)
+		.Read({ sceneTextures.pDepth, sceneTextures.pColorTarget, pLightGridOpaque })
+		.Write(pVisualizationTarget)
 		.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
-				Texture* pTarget = sceneTextures.pColorTarget->Get();
+				Texture* pTarget = pVisualizationTarget->Get();
 
 				struct
 				{
@@ -221,7 +219,7 @@ void TiledForward::VisualizeLightDensity(RGGraph& graph, GraphicsDevice* pDevice
 				context.SetRootCBV(1, Renderer::GetViewUniforms(view, pTarget));
 
 				context.BindResources(2, {
-					pVisualizationIntermediate->Get()->GetSRV(),
+					 sceneTextures.pColorTarget->Get()->GetSRV(),
 					sceneTextures.pDepth->Get()->GetSRV(),
 					pLightGridOpaque->Get()->GetSRV(),
 					});
@@ -231,5 +229,7 @@ void TiledForward::VisualizeLightDensity(RGGraph& graph, GraphicsDevice* pDevice
 					pTarget->GetWidth(), 16,
 					pTarget->GetHeight(), 16));
 			});
+
+	sceneTextures.pColorTarget = pVisualizationTarget;
 }
 
