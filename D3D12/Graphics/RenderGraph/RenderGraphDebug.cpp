@@ -54,7 +54,6 @@ std::string PassFlagToString(RGPassFlag flags)
 
 void RGGraph::DumpGraph(const char* pPath) const
 {
-#if 0
 	std::stringstream stream;
 
 	constexpr const char* pMermaidTemplate = R"(
@@ -87,8 +86,19 @@ void RGGraph::DumpGraph(const char* pPath) const
 
 	const char* writeLinkStyle = "stroke:#f82,stroke-width:2px;";
 	const char* readLinkStyle = "stroke:#9c9,stroke-width:2px;";
-	const char* aliasLinkStyle = "stroke:#e1c,stroke-width:3px;";
 	int linkIndex = 0;
+
+	constexpr D3D12_RESOURCE_STATES WriteStates =
+		D3D12_RESOURCE_STATE_UNORDERED_ACCESS |
+		D3D12_RESOURCE_STATE_RENDER_TARGET |
+		D3D12_RESOURCE_STATE_DEPTH_WRITE |
+		D3D12_RESOURCE_STATE_COPY_DEST |
+		D3D12_RESOURCE_STATE_RESOLVE_DEST |
+		D3D12_RESOURCE_STATE_VIDEO_DECODE_WRITE |
+		D3D12_RESOURCE_STATE_VIDEO_PROCESS_WRITE |
+		D3D12_RESOURCE_STATE_VIDEO_ENCODE_WRITE;
+
+	std::unordered_map<RGResource*, uint32> resourceVersions;
 
 	//Pass declaration
 	int passIndex = 0;
@@ -101,108 +111,71 @@ void RGGraph::DumpGraph(const char* pPath) const
 		stream << "[";
 		stream << pPass->Name << "<br/>";
 		stream << "Flags: " << PassFlagToString(pPass->Flags) << "<br/>";
-		stream << "Refs: " << pPass->References << "<br/>";
-		stream << "Index: " << passIndex;
+		stream << "Index: " << passIndex++;
+		stream << "Culled: " << (pPass->IsCulled ? "Yes" : "No") << "<br/>";
 		stream << "]:::";
 
-		stream << (pPass->References ? "referencedPass" : "unreferenced");
-
-		if (pPass->References)
-			++passIndex;
+		stream << (pPass->IsCulled ? "unreferenced" : "referencedPass");
 
 		stream << "\n";
-	}
 
-	//Resource declaration
-	for (const RGNode& node : m_ResourceNodes)
-	{
-		if (node.Version == 0 && node.Reads == 0)
-		{
-			continue;
-		}
 
-		stream << "Resource" << node.pResource->Id << "_" << node.Version;
-		stream << (node.pResource->IsImported ? "[(" : "([");
-		stream << node.pResource->Name << "<br/>";
-		//stream << "Id:" << node.pResource->Id << "<br/>";
-		//stream << "Version: " << node.Version << "<br/>";
-
-		if (node.pResource->Type == RGResourceType::Texture)
+		for (RGPass::ResourceAccess& access : pPass->Accesses)
 		{
-			const TextureDesc& desc = node.pResource->TextureDesc;
-			stream << desc.Width << "x" << desc.Height << "x" << desc.DepthOrArraySize << "<br/>";
-			stream << D3D::FormatToString(desc.Format) << "<br/>";
-			stream << "Mips: " << desc.Mips << "<br/>";
-			stream << "Size: " << Math::PrettyPrintDataSize(D3D::GetFormatRowDataSize(desc.Format, desc.Width) * desc.Height * desc.DepthOrArraySize) << "</br>";
-		}
-		else if (node.pResource->Type == RGResourceType::Buffer)
-		{
-			const BufferDesc& desc = node.pResource->BufferDesc;
-			stream << Math::PrettyPrintDataSize(desc.Size) << "<br/>";
-			stream << D3D::FormatToString(desc.Format) << "<br/>";
-		}
-
-		stream << "Refs: " << node.pResource->References << "<br/>";
-
-		stream << (node.pResource->IsImported ? ")]" : "])");
-		if (node.pResource->IsImported)
-		{
-			stream << ":::importedResource";
-		}
-		else if (node.pResource->References == 0)
-		{
-			stream << ":::unreferenced";
-		}
-		else
-		{
-			stream << ":::referencedResource";
-		}
-		stream << "\n";
-	}
-
-	//Writes
-	for (RGPass* pPass : m_RenderPasses)
-	{
-		if (pPass->Writes.size() > 0)
-		{
-			stream << "Pass" << pPass->ID << " -- Write --> ";
-			for (uint32 i = 0; i < pPass->Writes.size(); ++i)
+			RGResource* pResource = access.pResource;
+			uint32 resourceVersion = 0;
+			auto it = resourceVersions.find(pResource);
+			if (it == resourceVersions.end())
 			{
-				const RGNode& node = GetResourceNode(pPass->Writes[i]);
-				if (i != 0)
-					stream << " & ";
-				stream << "Resource" << node.pResource->Id << "_" << node.Version;
-			}
-			stream << "\nlinkStyle " << linkIndex++ << " " << writeLinkStyle << "\n";
-		}
-	}
-	stream << "\n";
+				resourceVersions[pResource] = resourceVersion;
 
-	//Reads
-	for (RGPass* pPass : m_RenderPasses)
-	{
-		if (pPass->Reads.size() > 0)
-		{
-			for (uint32 i = 0; i < pPass->Reads.size(); ++i)
+				stream << "Resource" << pResource->Id << "_" << resourceVersion;
+				stream << (pResource->IsImported ? "[(" : "([");
+				stream << pResource->Name << "<br/>";
+
+				if (pResource->Type == RGResourceType::Texture)
+				{
+					const TextureDesc& desc = static_cast<RGTexture*>(pResource)->Desc;
+					stream << desc.Width << "x" << desc.Height << "x" << desc.DepthOrArraySize << "<br/>";
+					stream << D3D::FormatToString(desc.Format) << "<br/>";
+					stream << "Mips: " << desc.Mips << "<br/>";
+					stream << "Size: " << Math::PrettyPrintDataSize(D3D::GetFormatRowDataSize(desc.Format, desc.Width) * desc.Height * desc.DepthOrArraySize) << "</br>";
+				}
+				else if (pResource->Type == RGResourceType::Buffer)
+				{
+					const BufferDesc& desc = static_cast<RGBuffer*>(pResource)->Desc;
+					stream << Math::PrettyPrintDataSize(desc.Size) << "<br/>";
+					stream << D3D::FormatToString(desc.Format) << "<br/>";
+				}
+
+				stream << (pResource->IsImported ? ")]" : "])");
+				if (pResource->IsImported)
+				{
+					stream << ":::importedResource";
+				}
+				else
+				{
+					stream << ":::referencedResource";
+				}
+				stream << "\n";
+
+			}
+			resourceVersion = resourceVersions[pResource];
+
+			if ((access.Access & WriteStates) != 0)
 			{
-				const RGNode& readNode = GetResourceNode(pPass->Reads[i]);
-				if (i != 0)
-					stream << " & ";
-				stream << "Resource" << readNode.pResource->Id << "_" << readNode.Version;
+				stream << "Resource" << pResource->Id << "_" << resourceVersion << " -- Read --> Pass" << pPass->ID << "\n";
+				stream << "linkStyle " << linkIndex++ << " " << readLinkStyle << "\n";
 			}
-			stream << " -- Read --> Pass" << pPass->ID << "\n";
-			stream << "linkStyle " << linkIndex++ << " " << readLinkStyle << "\n";
-		}
-	}
-	stream << "\n";
+			if (EnumHasAllFlags(access.Access, WriteStates))
+			{
+				++resourceVersions[pResource];
+				resourceVersion++;
 
-	//Aliases
-	for (const RGResourceAlias& alias : m_Aliases)
-	{
-		stream << "Resource" << GetResourceNode(alias.From).pResource->Id << "_" << GetResourceNode(alias.From).Version << " --> ";
-		stream << "Resource" << GetResourceNode(alias.To).pResource->Id << "_" << GetResourceNode(alias.To).Version << "\n";
-		stream << "linkStyle " << linkIndex++ << " " << aliasLinkStyle << "\n";
-		stream << "\n";
+				stream << "Pass" << pPass->ID << " -- Write --> " << "Resource" << pResource->Id << "_" << resourceVersion;
+				stream << "\nlinkStyle " << linkIndex++ << " " << writeLinkStyle << "\n";
+			}
+		}
 	}
 
 	std::string output = Sprintf(pMermaidTemplate, stream.str().c_str());
@@ -214,5 +187,4 @@ void RGGraph::DumpGraph(const char* pPath) const
 		fwrite(output.c_str(), sizeof(char), output.length(), pFile);
 		fclose(pFile);
 	}
-#endif
 }

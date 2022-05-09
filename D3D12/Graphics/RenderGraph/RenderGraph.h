@@ -29,8 +29,8 @@ DECLARE_BITMASK_TYPE(RGPassFlag);
 class RGPassResources
 {
 public:
-	RGPassResources(RGGraph& graph, RGPass& pass)
-		: m_Graph(graph), m_Pass(pass)
+	RGPassResources(RGPass& pass)
+		: m_Pass(pass)
 	{}
 
 	RGPassResources(const RGPassResources& other) = delete;
@@ -39,7 +39,6 @@ public:
 	RenderPassInfo GetRenderPassInfo() const;
 
 private:
-	RGGraph& m_Graph;
 	RGPass& m_Pass;
 };
 
@@ -90,11 +89,13 @@ public:
 	RGPass& DepthStencil(RGTexture* pResource, RenderPassAccess depthAccess, bool write, RenderPassAccess stencilAccess = RenderPassAccess::NoAccess);
 
 private:
-	struct RGAccess
+	struct ResourceAccess
 	{
+		RGResource* pResource;
 		D3D12_RESOURCE_STATES Access;
-		RGResource* Resource;
 	};
+
+	void AddAccess(RGResource* pResource, D3D12_RESOURCE_STATES state);
 
 	DECLARE_DELEGATE(ExecutePassDelegate, CommandContext& /*context*/, const RGPassResources& /*resources*/);
 	char Name[128];
@@ -103,7 +104,7 @@ private:
 	RGPassFlag Flags;
 	bool IsCulled = true;
 
-	std::vector<RGAccess> Accesses;
+	std::vector<ResourceAccess> Accesses;
 	std::vector<RGPass*> PassDependencies;
 	std::vector<RenderTargetAccess> RenderTargets;
 	DepthStencilAccess DepthStencilTarget{};
@@ -275,16 +276,6 @@ public:
 		m_ExportBuffers.push_back({ pBuffer, pTarget });
 	}
 
-	const TextureDesc& GetDesc(const RGTexture* pTexture) const
-	{
-		return pTexture->DescTexture;
-	}
-
-	const BufferDesc& GetDesc(const RGBuffer* pBuffer) const
-	{
-		return pBuffer->DescBuffer;
-	}
-
 	void PushEvent(const char* pName);
 	void PopEvent();
 
@@ -303,14 +294,19 @@ private:
 	std::vector<RGResource*> m_Resources;
 	RGResourcePool& m_ResourcePool;
 
-	template<typename T>
-	struct ExportedResource
+	struct ExportedTexture
 	{
-		RGResourceT<T>* pResource;
-		RefCountPtr<T>* pTarget;
+		RGTexture* pTexture;
+		RefCountPtr<Texture>* pTarget;
 	};
-	std::vector<ExportedResource<Texture>> m_ExportTextures;
-	std::vector<ExportedResource<Buffer>> m_ExportBuffers;
+	std::vector<ExportedTexture> m_ExportTextures;
+
+	struct ExportedBuffer
+	{
+		RGBuffer* pBuffer;
+		RefCountPtr<Buffer>* pTarget;
+	};
+	std::vector<ExportedBuffer> m_ExportBuffers;
 };
 
 class RGGraphScope

@@ -39,7 +39,7 @@ RTAO::RTAO(GraphicsDevice* pDevice)
 
 void RTAO::Execute(RGGraph& graph, const SceneView& view, SceneTextures& sceneTextures)
 {
-	TextureDesc aoDesc = sceneTextures.pAmbientOcclusion->DescTexture;
+	TextureDesc aoDesc = sceneTextures.pAmbientOcclusion->GetDesc();
 
 	RGTexture* pRayTraceTarget = graph.CreateTexture("AO Target 0", aoDesc);
 	RGTexture* pDenoiseTarget = graph.CreateTexture("AO Target 1", aoDesc);

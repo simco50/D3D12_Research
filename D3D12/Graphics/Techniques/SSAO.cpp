@@ -66,7 +66,7 @@ void SSAO::Execute(RGGraph& graph, const SceneView& view, SceneTextures& sceneTe
 				context.Dispatch(ComputeUtils::GetNumThreadGroups(pTarget->GetWidth(), 16, pTarget->GetHeight(), 16));
 			});
 
-	RGTexture* pAoIntermediate = graph.CreateTexture("Intermediate AO", graph.GetDesc(sceneTextures.pAmbientOcclusion));
+	RGTexture* pAoIntermediate = graph.CreateTexture("Intermediate AO", sceneTextures.pAmbientOcclusion->GetDesc());
 
 	graph.AddPass("Blur SSAO - Horizonal", RGPassFlag::Compute)
 		.Read({ sceneTextures.pAmbientOcclusion, sceneTextures.pDepth })

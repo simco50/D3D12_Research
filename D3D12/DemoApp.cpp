@@ -708,7 +708,7 @@ void DemoApp::Update()
 	{
 		//[WITH MSAA] DEPTH RESOLVE
 		// - If MSAA is enabled, run a compute shader to resolve the depth buffer
-		if (graph.GetDesc(sceneTextures.pDepth).SampleCount > 1)
+		if (sceneTextures.pDepth->GetDesc().SampleCount > 1)
 		{
 			graph.AddPass("Depth Resolve", RGPassFlag::Compute)
 				.Read(sceneTextures.pDepth)
@@ -824,7 +824,7 @@ void DemoApp::Update()
 		m_pPathTracing->Render(graph, m_SceneData, sceneTextures.pColorTarget);
 	}
 
-	TextureDesc colorDesc = graph.GetDesc(sceneTextures.pColorTarget);
+	TextureDesc colorDesc = sceneTextures.pColorTarget->GetDesc();
 	if (colorDesc.SampleCount > 1)
 	{
 		colorDesc.SampleCount = 1;
@@ -852,7 +852,7 @@ void DemoApp::Update()
 
 		if (Tweakables::g_TAA.Get())
 		{
-			RGTexture* pTaaTarget = graph.CreateTexture("TAA Target", graph.GetDesc(sceneTextures.pColorTarget));
+			RGTexture* pTaaTarget = graph.CreateTexture("TAA Target", sceneTextures.pColorTarget->GetDesc());
 
 			graph.AddPass("Temporal Resolve", RGPassFlag::Compute)
 				.Read({ sceneTextures.pVelocity, sceneTextures.pDepth, sceneTextures.pColorTarget, sceneTextures.pPreviousColor })
@@ -888,7 +888,7 @@ void DemoApp::Update()
 	{
 		RG_GRAPH_SCOPE("Depth Reduce", graph);
 
-		IntVector3 depthSize = graph.GetDesc(sceneTextures.pDepth).Size();
+		IntVector3 depthSize = sceneTextures.pDepth->GetDesc().Size();
 		depthSize.x = Math::DivideAndRoundUp(depthSize.x, 16);
 		depthSize.y = Math::DivideAndRoundUp(depthSize.y, 16);
 		RGTexture* pReductionTarget = graph.CreateTexture("Depth Reduction Target", TextureDesc::Create2D(depthSize.x, depthSize.y, DXGI_FORMAT_R32G32_FLOAT));
@@ -949,7 +949,7 @@ void DemoApp::Update()
 	{
 		RG_GRAPH_SCOPE("Eye Adaptation", graph);
 
-		TextureDesc sourceDesc = graph.GetDesc(sceneTextures.pColorTarget);
+		TextureDesc sourceDesc = sceneTextures.pColorTarget->GetDesc();
 		sourceDesc.Width = Math::DivideAndRoundUp(sourceDesc.Width, 4);
 		sourceDesc.Height = Math::DivideAndRoundUp(sourceDesc.Height, 4);
 		RGTexture* pDownscaleTarget = graph.CreateTexture("Downscaled HDR Target", sourceDesc);

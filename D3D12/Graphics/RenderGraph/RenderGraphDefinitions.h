@@ -14,16 +14,17 @@ template<> struct RGResourceTypeTraits<Buffer> { constexpr static RGResourceType
 
 class RGPass;
 
-struct RGResource
+class RGResource
 {
-	RGResource(const char* pName, int id, const TextureDesc& desc, Texture* pResource = nullptr)
-		: Name(pName), Id(id), IsImported(!!pResource), Type(RGResourceType::Texture), pResourceReference(pResource), DescTexture(desc), pResource(pResource)
+public:
+	friend class RGGraph;
+	friend class RGPass;
+
+	RGResource(const char* pName, int id, RGResourceType type, GraphicsResource* pResource = nullptr)
+		: Name(pName), Id(id), IsImported(!!pResource), Type(type), pResourceReference(pResource), pResource(pResource)
 	{}
 
-	RGResource(const char* pName, int id, const BufferDesc& desc, Buffer* pResource = nullptr)
-		: Name(pName), Id(id), IsImported(!!pResource), Type(RGResourceType::Buffer), pResourceReference(pResource), DescBuffer(desc), pResource(pResource)
-	{}
-
+protected:
 	void SetResource(RefCountPtr<GraphicsResource> resource)
 	{
 		pResourceReference = resource;
@@ -44,40 +45,30 @@ struct RGResource
 	RefCountPtr<GraphicsResource> pResourceReference;
 	GraphicsResource* pResource = nullptr;
 
-	template<typename T>
-	T* GetRHI() const
+	RGPass* pLastAccess = nullptr;
+};
+
+template<typename T, typename TDesc>
+struct RGResourceT : public RGResource
+{
+public:
+	friend class RGGraph;
+
+	RGResourceT(const char* pName, int id, const TDesc& desc, T* pResource = nullptr)
+		: RGResource(pName, id, RGResourceTypeTraits<T>::Type, pResource), Desc(desc)
+	{}
+
+	T* Get() const
 	{
-		checkf(Type == RGResourceTypeTraits<T>::Type, "Provided type does not match resource type");
 		check(pResource);
 		return static_cast<T*>(pResource);
 	}
 
-	union
-	{
-		TextureDesc DescTexture;
-		BufferDesc DescBuffer;
-	};
+	const TDesc& GetDesc() const { return Desc; }
 
-	RGPass* pFirstAccess = nullptr;
-	RGPass* pLastAccess = nullptr;
+private:
+	TDesc Desc;
 };
 
-template<typename T>
-struct RGResourceT : RGResource
-{
-	RGResourceT(const char* pName, int id, const TextureDesc& desc, Texture* pResource = nullptr)
-		: RGResource(pName, id, desc, pResource)
-	{}
-
-	RGResourceT(const char* pName, int id, const BufferDesc& desc, Buffer* pResource = nullptr)
-		: RGResource(pName, id, desc, pResource)
-	{}
-
-	T* Get()
-	{
-		return GetRHI<T>();
-	}
-};
-
-using RGTexture = RGResourceT<Texture>;
-using RGBuffer = RGResourceT<Buffer>;
+using RGTexture = RGResourceT<Texture, TextureDesc>;
+using RGBuffer = RGResourceT<Buffer, BufferDesc>;

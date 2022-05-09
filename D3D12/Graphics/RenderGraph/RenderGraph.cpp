@@ -5,14 +5,28 @@
 #include "Graphics/Profiler.h"
 #include "Core/CommandLine.h"
 
+bool HasWriteResourceState(D3D12_RESOURCE_STATES state)
+{
+	return EnumHasAnyFlags(state,
+		D3D12_RESOURCE_STATE_UNORDERED_ACCESS |
+		D3D12_RESOURCE_STATE_RENDER_TARGET |
+		D3D12_RESOURCE_STATE_DEPTH_WRITE |
+		D3D12_RESOURCE_STATE_COPY_DEST |
+		D3D12_RESOURCE_STATE_RESOLVE_DEST |
+		D3D12_RESOURCE_STATE_VIDEO_DECODE_WRITE |
+		D3D12_RESOURCE_STATE_VIDEO_PROCESS_WRITE |
+		D3D12_RESOURCE_STATE_VIDEO_ENCODE_WRITE
+	);
+};
+
 RGPass& RGPass::Read(Span<RGResource*> resources)
 {
 	D3D12_RESOURCE_STATES state = D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE;
 	if (EnumHasAnyFlags(Flags, RGPassFlag::Copy))
 		state = D3D12_RESOURCE_STATE_COPY_SOURCE;
-	for (RGResource* resource : resources)
+	for (RGResource* pResource : resources)
 	{
-		Accesses.push_back({ state, resource });
+		AddAccess(pResource, state);
 	}
 	return *this;
 }
@@ -23,9 +37,9 @@ RGPass& RGPass::Write(Span<RGResource*> resources)
 	if (EnumHasAnyFlags(Flags, RGPassFlag::Copy))
 		state = D3D12_RESOURCE_STATE_COPY_DEST;
 
-	for (RGResource* pHandle : resources)
+	for (RGResource* pResource : resources)
 	{
-		Accesses.push_back({ state, pHandle });
+		AddAccess(pResource, state);
 	}
 
 	return *this;
@@ -34,16 +48,16 @@ RGPass& RGPass::Write(Span<RGResource*> resources)
 RGPass& RGPass::ReadWrite(Span<RGResource*> resources)
 {
 	check(EnumHasAnyFlags(Flags, RGPassFlag::Raster | RGPassFlag::Compute));
-	for (RGResource* pHandle : resources)
+	for (RGResource* pResource : resources)
 	{
-		Accesses.push_back({ D3D12_RESOURCE_STATE_UNORDERED_ACCESS, pHandle});
+		AddAccess(pResource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 	}
 	return *this;
 }
 
 RGPass& RGPass::RenderTarget(RGTexture* pResource, RenderPassAccess access)
 {
-	Accesses.push_back({ D3D12_RESOURCE_STATE_RENDER_TARGET, pResource });
+	AddAccess(pResource, D3D12_RESOURCE_STATE_RENDER_TARGET);
 	RenderTargets.push_back({ pResource, access });
 	return *this;
 }
@@ -51,9 +65,23 @@ RGPass& RGPass::RenderTarget(RGTexture* pResource, RenderPassAccess access)
 RGPass& RGPass::DepthStencil(RGTexture* pResource, RenderPassAccess depthAccess, bool writeDepth, RenderPassAccess stencilAccess)
 {
 	checkf(!DepthStencilTarget.pResource, "Depth Target already assigned");
-	Accesses.push_back({ writeDepth ? D3D12_RESOURCE_STATE_DEPTH_WRITE : D3D12_RESOURCE_STATE_DEPTH_READ, pResource });
+	AddAccess(pResource, writeDepth ? D3D12_RESOURCE_STATE_DEPTH_WRITE : D3D12_RESOURCE_STATE_DEPTH_READ);
 	DepthStencilTarget = { pResource, depthAccess, stencilAccess, writeDepth };
 	return *this;
+}
+
+void RGPass::AddAccess(RGResource* pResource, D3D12_RESOURCE_STATES state)
+{
+	auto it = std::find_if(Accesses.begin(), Accesses.end(), [=](const ResourceAccess& access) { return pResource == access.pResource; });
+	if (it != Accesses.end())
+	{
+		checkf(!HasWriteResourceState(it->Access) || !HasWriteResourceState(state), "Resource (%s) may only have 1 write state", pResource->Name);
+		it->Access |= state;
+	}
+	else
+	{
+		Accesses.push_back({ pResource, state });
+	}
 }
 
 RGPass& RGGraph::AddCopyPass(const char* pName, RGResource* pSource, RGResource* pTarget)
@@ -79,139 +107,109 @@ RGGraph::~RGGraph()
 
 void RGGraph::Compile()
 {
-#define ENABLE_CULLING 0
+	constexpr bool PassCulling = false;
 
-#if ENABLE_CULLING
-
-	auto IsWrite = [](D3D12_RESOURCE_STATES state)
+	if (PassCulling)
 	{
-		switch (state)
+		auto WritesTo = [&](RGResource* pResource, RGPass* pPass)
 		{
-		case D3D12_RESOURCE_STATE_PRESENT:
-		case D3D12_RESOURCE_STATE_UNORDERED_ACCESS:
-		case D3D12_RESOURCE_STATE_RENDER_TARGET:
-		case D3D12_RESOURCE_STATE_DEPTH_WRITE:
-		case D3D12_RESOURCE_STATE_COPY_DEST:
-		case D3D12_RESOURCE_STATE_RESOLVE_DEST:
-			return true;
-		}
-		return false;
-	};
-
-	auto WritesTo = [&](RGHandleT handle, RGPass* pPass)
-	{
-		for (RGPass::RGAccess& access : pPass->Accesses)
-		{
-			if(IsWrite(access.Access))
-				return true;
-		}
-		return false;
-	};
-
-	std::vector<RGPass*> cullStack;
-	for (RGPass* pPass : m_RenderPasses)
-	{
-		if (EnumHasAllFlags(pPass->Flags, RGPassFlag::NeverCull))
-		{
-			cullStack.push_back(pPass);
-		}
-
-		for (RGPass::RGAccess access : pPass->Accesses)
-		{
-			for (RGPass* pIterPass : m_RenderPasses)
+			for (RGPass::ResourceAccess& access : pPass->Accesses)
 			{
-				if (pIterPass != pPass && WritesTo(access.Resource, pIterPass))
+				if (access.pResource == pResource && HasWriteResourceState(access.Access))
+					return true;
+			}
+			return false;
+		};
+
+		std::vector<RGPass*> cullStack;
+		for (RGPass* pPass : m_RenderPasses)
+		{
+			// If the pass should never cull or the pass writes to an imported resource, we add it on the stack
+			if (EnumHasAllFlags(pPass->Flags, RGPassFlag::NeverCull))
+			{
+				cullStack.push_back(pPass);
+			}
+			else
+			{
+				for (RGPass::ResourceAccess access : pPass->Accesses)
 				{
-					if (std::find(pPass->PassDependencies.begin(), pPass->PassDependencies.end(), pIterPass) == pPass->PassDependencies.end())
+					if (access.pResource->IsImported && HasWriteResourceState(access.Access))
 					{
-						pPass->PassDependencies.push_back(pIterPass);
+						cullStack.push_back(pPass);
+						break;
+					}
+				}
+			}
+
+			// Collect all passes that write to a resource which this pass accesses
+			for (RGPass::ResourceAccess access : pPass->Accesses)
+			{
+				for (RGPass* pIterPass : m_RenderPasses)
+				{
+					if (pIterPass != pPass && WritesTo(access.pResource, pIterPass))
+					{
+						if (std::find(pPass->PassDependencies.begin(), pPass->PassDependencies.end(), pIterPass) == pPass->PassDependencies.end())
+						{
+							pPass->PassDependencies.push_back(pIterPass);
+						}
 					}
 				}
 			}
 		}
-	}
 
-	while (!cullStack.empty())
-	{
-		RGPass* pPass = cullStack.back();
-		cullStack.pop_back();
-		if (pPass->IsCulled)
+		while (!cullStack.empty())
 		{
-			cullStack.insert(cullStack.end(), pPass->PassDependencies.begin(), pPass->PassDependencies.end());
+			RGPass* pPass = cullStack.back();
+			cullStack.pop_back();
+			if (pPass->IsCulled)
+			{
+				cullStack.insert(cullStack.end(), pPass->PassDependencies.begin(), pPass->PassDependencies.end());
+				pPass->IsCulled = false;
+			}
+		}
+	}
+	else
+	{
+		for (RGPass* pPass : m_RenderPasses)
+		{
 			pPass->IsCulled = false;
 		}
 	}
 
-#else
-
+	// Tell the resources when they're first/last accessed and apply usage flags
 	for (RGPass* pPass : m_RenderPasses)
 	{
-		pPass->IsCulled = false;
-	}
+		if (pPass->IsCulled)
+			continue;
 
-#endif
+		for (RGPass::ResourceAccess access : pPass->Accesses)
+		{
+			RGResource* pResource = access.pResource;
+			pResource->pLastAccess = pPass;
 
-	auto ApplyResourceFlag = [](RGResource* pResource, D3D12_RESOURCE_STATES state) {
-		if (pResource->Type == RGResourceType::Buffer)
-		{
-			BufferDesc& desc = pResource->DescBuffer;
-			if (EnumHasAnyFlags(state, D3D12_RESOURCE_STATE_UNORDERED_ACCESS))
-				desc.Usage |= BufferFlag::UnorderedAccess;
-			if (EnumHasAnyFlags(state, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE))
-				desc.Usage |= BufferFlag::ShaderResource;
-		}
-		else if (pResource->Type == RGResourceType::Texture)
-		{
-			TextureDesc& desc = pResource->DescTexture;
-			if (EnumHasAnyFlags(state, D3D12_RESOURCE_STATE_UNORDERED_ACCESS))
-				desc.Usage |= TextureFlag::UnorderedAccess;
-			if (EnumHasAnyFlags(state, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE))
-				desc.Usage |= TextureFlag::ShaderResource;
-			if (EnumHasAnyFlags(state, D3D12_RESOURCE_STATE_DEPTH_READ | D3D12_RESOURCE_STATE_DEPTH_WRITE))
-				desc.Usage |= TextureFlag::DepthStencil;
-			if (EnumHasAnyFlags(state, D3D12_RESOURCE_STATE_RENDER_TARGET))
-				desc.Usage |= TextureFlag::RenderTarget;
-		}
-	};
-
-	// Tell the resources when they're first/last accessed
-	for (RGPass* pPass : m_RenderPasses)
-	{
-		if (!pPass->IsCulled)
-		{
-			for (RGPass::RGAccess access : pPass->Accesses)
+			D3D12_RESOURCE_STATES state = access.Access;
+			if (pResource->Type == RGResourceType::Buffer)
 			{
-				RGResource* pResource = access.Resource;
-				pResource->pFirstAccess = pResource->pFirstAccess ? pResource->pFirstAccess : pPass;
-				pResource->pLastAccess = pPass;
-
-				ApplyResourceFlag(pResource, access.Access);
+				BufferDesc& desc = static_cast<RGBuffer*>(pResource)->Desc;
+				if (EnumHasAnyFlags(state, D3D12_RESOURCE_STATE_UNORDERED_ACCESS))
+					desc.Usage |= BufferFlag::UnorderedAccess;
+				if (EnumHasAnyFlags(state, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE))
+					desc.Usage |= BufferFlag::ShaderResource;
+			}
+			else if (pResource->Type == RGResourceType::Texture)
+			{
+				TextureDesc& desc = static_cast<RGTexture*>(pResource)->Desc;
+				if (EnumHasAnyFlags(state, D3D12_RESOURCE_STATE_UNORDERED_ACCESS))
+					desc.Usage |= TextureFlag::UnorderedAccess;
+				if (EnumHasAnyFlags(state, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE))
+					desc.Usage |= TextureFlag::ShaderResource;
+				if (EnumHasAnyFlags(state, D3D12_RESOURCE_STATE_DEPTH_READ | D3D12_RESOURCE_STATE_DEPTH_WRITE))
+					desc.Usage |= TextureFlag::DepthStencil;
+				if (EnumHasAnyFlags(state, D3D12_RESOURCE_STATE_RENDER_TARGET))
+					desc.Usage |= TextureFlag::RenderTarget;
 			}
 		}
 	}
-
-	auto ConditionallyAllocateResource = [&](const RGPass* pPass, RGResource* pResource) {
-		if (!pResource->IsImported && pResource->pFirstAccess == pPass && pResource->pResourceReference == nullptr)
-		{
-			if (pResource->Type == RGResourceType::Texture)
-			{
-				pResource->SetResource(m_ResourcePool.Allocate(pResource->Name, pResource->DescTexture));
-			}
-			else if (pResource->Type == RGResourceType::Buffer)
-			{
-				pResource->SetResource(m_ResourcePool.Allocate(pResource->Name, pResource->DescBuffer));
-			}
-		}
-		check(pResource->pResourceReference);
-	};
-
-	auto ConditionallyReleaseResource = [&](const RGPass* pPass, RGResource* pResource) {
-		if (!pResource->IsImported && !pResource->IsExported && pResource->pLastAccess == pPass)
-		{
-			check(pResource->pResourceReference);
-			pResource->Release();
-		}
-	};
 
 	// Go through all resources accesses and allocate on first access and de-allocate on last access
 	// It's important to make the distinction between the RefCountPtr allocation and the Raw resource itself.
@@ -222,14 +220,31 @@ void RGGraph::Compile()
 		if (pPass->IsCulled)
 			continue;
 
-		for (RGPass::RGAccess& access : pPass->Accesses)
+		for (RGPass::ResourceAccess& access : pPass->Accesses)
 		{
-			ConditionallyAllocateResource(pPass, access.Resource);
+			RGResource* pResource = access.pResource;
+			if (pResource->pResourceReference == nullptr)
+			{
+				if (pResource->Type == RGResourceType::Texture)
+				{
+					pResource->SetResource(m_ResourcePool.Allocate(pResource->Name, static_cast<RGTexture*>(pResource)->Desc));
+				}
+				else if (pResource->Type == RGResourceType::Buffer)
+				{
+					pResource->SetResource(m_ResourcePool.Allocate(pResource->Name, static_cast<RGBuffer*>(pResource)->Desc));
+				}
+			}
+			check(pResource->pResourceReference);
 		}
 
-		for (RGPass::RGAccess& access : pPass->Accesses)
+		for (RGPass::ResourceAccess& access : pPass->Accesses)
 		{
-			ConditionallyReleaseResource(pPass, access.Resource);
+			RGResource* pResource = access.pResource;
+			if (!pResource->IsImported && !pResource->IsExported && pResource->pLastAccess == pPass)
+			{
+				check(pResource->pResourceReference);
+				pResource->Release();
+			}
 		}
 	}
 }
@@ -267,14 +282,14 @@ SyncPoint RGGraph::Execute()
 	}
 	m_LastSyncPoint = pContext->Execute(false);
 
-	for (ExportedResource<Texture>& exportResource : m_ExportTextures)
+	for (ExportedTexture& exportResource : m_ExportTextures)
 	{
-		*exportResource.pTarget = exportResource.pResource->Get();
+		*exportResource.pTarget = exportResource.pTexture->Get();
 	}
 
-	for (ExportedResource<Buffer>& exportResource : m_ExportBuffers)
+	for (ExportedBuffer& exportResource : m_ExportBuffers)
 	{
-		*exportResource.pTarget = exportResource.pResource->Get();
+		*exportResource.pTarget = exportResource.pBuffer->Get();
 	}
 
 	DestroyData();
@@ -288,16 +303,16 @@ void RGGraph::ExecutePass(RGPass* pPass, CommandContext& context)
 	if (pPass->ExecuteCallback.IsBound())
 	{
 		GPU_PROFILE_SCOPE_CONDITIONAL(pPass->Name, &context, !EnumHasAnyFlags(pPass->Flags, RGPassFlag::Invisible));
-		RGPassResources resources(*this, *pPass);
+		RGPassResources resources(*pPass);
 		pPass->ExecuteCallback.Execute(context, resources);
 	}
 }
 
 void RGGraph::PrepareResources(RGPass* pPass, CommandContext& context)
 {
-	for (const RGPass::RGAccess& access : pPass->Accesses)
+	for (const RGPass::ResourceAccess& access : pPass->Accesses)
 	{
-		RGResource* pResource = access.Resource;
+		RGResource* pResource = access.pResource;
 		check(pResource->pResource);
 		check(pResource->IsImported || pResource->IsExported || !pResource->pResourceReference);
 

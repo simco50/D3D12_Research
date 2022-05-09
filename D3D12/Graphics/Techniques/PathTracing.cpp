@@ -58,7 +58,7 @@ void PathTracing::Render(RGGraph& graph, const SceneView& view, RGTexture* pTarg
 		return;
 	}
 
-	TextureDesc targetDesc = graph.GetDesc(pTarget);
+	TextureDesc targetDesc = pTarget->GetDesc();
 	if (!m_pAccumulationTexture || m_pAccumulationTexture->GetSize() != targetDesc.Size())
 	{
 		m_pAccumulationTexture = m_pDevice->CreateTexture(TextureDesc::Create2D(targetDesc.Width, targetDesc.Height, DXGI_FORMAT_R32G32B32A32_FLOAT, TextureFlag::UnorderedAccess), "Accumulation Target");

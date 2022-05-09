@@ -435,7 +435,7 @@ void ClusteredForward::RenderBasePass(RGGraph& graph, const SceneView& view, Sce
 	}
 
 	graph.AddPass("Base Pass", RGPassFlag::Raster)
-		.Read({ sceneTextures.pAmbientOcclusion, sceneTextures.pPreviousColor, pFogTexture })
+		.Read({ sceneTextures.pAmbientOcclusion, sceneTextures.pPreviousColor, pFogTexture, sceneTextures.pDepth })
 		.Read({ lightCullData.pLightGrid, lightCullData.pLightIndexGrid })
 		.DepthStencil(sceneTextures.pDepth, RenderPassAccess::Load_Store, false)
 		.RenderTarget(sceneTextures.pColorTarget, RenderPassAccess::DontCare_Store)
@@ -495,7 +495,7 @@ void ClusteredForward::RenderBasePass(RGGraph& graph, const SceneView& view, Sce
 
 void ClusteredForward::VisualizeLightDensity(RGGraph& graph, const SceneView& view, SceneTextures& sceneTextures)
 {
-	RGTexture* pVisualizationIntermediate = graph.CreateTexture("Cached Scene Color", sceneTextures.pColorTarget->DescTexture);
+	RGTexture* pVisualizationIntermediate = graph.CreateTexture("Cached Scene Color", sceneTextures.pColorTarget->GetDesc());
 
 	const CullBlackboardData& blackboardData = graph.Blackboard.Get<CullBlackboardData>();
 	RGBuffer* pLightGrid = blackboardData.pLightGrid;

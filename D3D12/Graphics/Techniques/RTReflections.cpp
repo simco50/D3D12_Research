@@ -39,7 +39,7 @@ RTReflections::RTReflections(GraphicsDevice* pDevice)
 
 void RTReflections::Execute(RGGraph& graph, const SceneView& view, SceneTextures& sceneTextures)
 {
-	RGTexture* pReflectionsTarget = graph.CreateTexture("Reflections Target", graph.GetDesc(sceneTextures.pColorTarget));
+	RGTexture* pReflectionsTarget = graph.CreateTexture("Reflections Target", sceneTextures.pColorTarget->GetDesc());
 
 	graph.AddCopyPass("Cache Scene Color", sceneTextures.pColorTarget, pReflectionsTarget);
 

@@ -194,7 +194,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& view, SceneTextures&
 
 void TiledForward::VisualizeLightDensity(RGGraph& graph, GraphicsDevice* pDevice, const SceneView& view, SceneTextures& sceneTextures)
 {
-	RGTexture* pVisualizationIntermediate = graph.CreateTexture("Light Density Debug Texture", graph.GetDesc(sceneTextures.pColorTarget));
+	RGTexture* pVisualizationIntermediate = graph.CreateTexture("Light Density Debug Texture", sceneTextures.pColorTarget->GetDesc());
 
 	const CullBlackboardData& blackboardData = graph.Blackboard.Get<CullBlackboardData>();
 	RGTexture* pLightGridOpaque = blackboardData.pLightGridOpaque;
