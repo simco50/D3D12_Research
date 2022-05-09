@@ -100,8 +100,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& view, SceneTextures&
 
 	graph.AddPass("Tiled Light Culling", RGPassFlag::Compute)
 		.Read(sceneTextures.pDepth)
-		.Write({ pLightGridOpaque, pLightGridTransparant, pLightIndexListOpaque, pLightIndexListTransparant})
-		.ReadWrite(pLightIndexCounter)
+		.Write({ pLightGridOpaque, pLightGridTransparant, pLightIndexListOpaque, pLightIndexListTransparant, pLightIndexCounter })
 		.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
 				Texture* pDepth = sceneTextures.pDepth->Get();

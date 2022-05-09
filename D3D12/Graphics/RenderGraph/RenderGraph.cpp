@@ -45,16 +45,6 @@ RGPass& RGPass::Write(Span<RGResource*> resources)
 	return *this;
 }
 
-RGPass& RGPass::ReadWrite(Span<RGResource*> resources)
-{
-	check(EnumHasAnyFlags(Flags, RGPassFlag::Raster | RGPassFlag::Compute));
-	for (RGResource* pResource : resources)
-	{
-		AddAccess(pResource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-	}
-	return *this;
-}
-
 RGPass& RGPass::RenderTarget(RGTexture* pResource, RenderPassAccess access)
 {
 	AddAccess(pResource, D3D12_RESOURCE_STATE_RENDER_TARGET);

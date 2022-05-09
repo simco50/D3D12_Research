@@ -1016,7 +1016,7 @@ void DemoApp::Update()
 
 		graph.AddPass("Average Luminance", RGPassFlag::Compute)
 			.Read(pLuminanceHistogram)
-			.ReadWrite(pAverageLuminance)
+			.Write(pAverageLuminance)
 			.Bind([=](CommandContext& context, const RGPassResources& resources)
 				{
 					context.SetComputeRootSignature(m_pCommonRS);
