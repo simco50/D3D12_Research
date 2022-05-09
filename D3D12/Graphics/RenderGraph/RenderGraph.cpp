@@ -58,7 +58,15 @@ RGPass& RGPass::ReadWrite(Span<RGResource*> resources)
 RGPass& RGPass::RenderTarget(RGTexture* pResource, RenderPassAccess access)
 {
 	AddAccess(pResource, D3D12_RESOURCE_STATE_RENDER_TARGET);
-	RenderTargets.push_back({ pResource, access });
+	RenderTargets.push_back({ pResource, access, nullptr });
+	return *this;
+}
+
+RGPass& RGPass::RenderTarget(RGTexture* pResource, RenderTargetLoadAction loadAction, RGTexture* pResolveTarget)
+{
+	AddAccess(pResource, D3D12_RESOURCE_STATE_RENDER_TARGET);
+	AddAccess(pResolveTarget, D3D12_RESOURCE_STATE_RESOLVE_DEST);
+	RenderTargets.push_back({ pResource, (RenderPassAccess)CombineRenderTargetAction(loadAction, RenderTargetStoreAction::Resolve), pResolveTarget });
 	return *this;
 }
 
@@ -72,6 +80,7 @@ RGPass& RGPass::DepthStencil(RGTexture* pResource, RenderPassAccess depthAccess,
 
 void RGPass::AddAccess(RGResource* pResource, D3D12_RESOURCE_STATES state)
 {
+	check(pResource);
 	auto it = std::find_if(Accesses.begin(), Accesses.end(), [=](const ResourceAccess& access) { return pResource == access.pResource; });
 	if (it != Accesses.end())
 	{
@@ -177,12 +186,12 @@ void RGGraph::Compile()
 	}
 
 	// Tell the resources when they're first/last accessed and apply usage flags
-	for (RGPass* pPass : m_RenderPasses)
+	for (const RGPass* pPass : m_RenderPasses)
 	{
 		if (pPass->IsCulled)
 			continue;
 
-		for (RGPass::ResourceAccess access : pPass->Accesses)
+		for (const RGPass::ResourceAccess& access : pPass->Accesses)
 		{
 			RGResource* pResource = access.pResource;
 			pResource->pLastAccess = pPass;
@@ -215,12 +224,12 @@ void RGGraph::Compile()
 	// It's important to make the distinction between the RefCountPtr allocation and the Raw resource itself.
 	// A de-allocate returns the resource back to the pool by resetting the RefCountPtr however the Raw resource keeps a reference to it to use during execution.
 	// This is how we can "alias" resources (exact match only for now) and allocate our resources during compilation so that execution is thread-safe.
-	for (RGPass* pPass : m_RenderPasses)
+	for (const RGPass* pPass : m_RenderPasses)
 	{
 		if (pPass->IsCulled)
 			continue;
 
-		for (RGPass::ResourceAccess& access : pPass->Accesses)
+		for (const RGPass::ResourceAccess& access : pPass->Accesses)
 		{
 			RGResource* pResource = access.pResource;
 			if (pResource->pResourceReference == nullptr)
@@ -237,7 +246,7 @@ void RGGraph::Compile()
 			check(pResource->pResourceReference);
 		}
 
-		for (RGPass::ResourceAccess& access : pPass->Accesses)
+		for (const RGPass::ResourceAccess& access : pPass->Accesses)
 		{
 			RGResource* pResource = access.pResource;
 			if (!pResource->IsImported && !pResource->IsExported && pResource->pLastAccess == pPass)
@@ -331,11 +340,13 @@ void RGGraph::DestroyData()
 RenderPassInfo RGPassResources::GetRenderPassInfo() const
 {
 	RenderPassInfo passInfo;
-	for (RGPass::RenderTargetAccess renderTarget : m_Pass.RenderTargets)
+	for (const RGPass::RenderTargetAccess& renderTarget : m_Pass.RenderTargets)
 	{
-		passInfo.RenderTargets[passInfo.RenderTargetCount].Target = renderTarget.pResource->Get();
-		passInfo.RenderTargets[passInfo.RenderTargetCount].Access = renderTarget.Access;
-		passInfo.RenderTargetCount++;
+		RenderPassInfo::RenderTargetInfo& targetInfo = passInfo.RenderTargets[passInfo.RenderTargetCount++];
+		targetInfo.Target = renderTarget.pResource->Get();
+		targetInfo.Access = renderTarget.Access;
+		if (renderTarget.pResolveTarget)
+			targetInfo.ResolveTarget = renderTarget.pResolveTarget->Get();
 	}
 	if (m_Pass.DepthStencilTarget.pResource)
 	{

@@ -52,6 +52,7 @@ public:
 	{
 		RGTexture* pResource = nullptr;
 		RenderPassAccess Access;
+		RGTexture* pResolveTarget = nullptr;
 	};
 
 	struct DepthStencilAccess
@@ -86,6 +87,7 @@ public:
 	RGPass& Read(Span<RGResource*> resources);
 	RGPass& ReadWrite(Span<RGResource*> resources);
 	RGPass& RenderTarget(RGTexture* pResource, RenderPassAccess access);
+	RGPass& RenderTarget(RGTexture* pResource, RenderTargetLoadAction loadAction, RGTexture* pResolveTarget);
 	RGPass& DepthStencil(RGTexture* pResource, RenderPassAccess depthAccess, bool write, RenderPassAccess stencilAccess = RenderPassAccess::NoAccess);
 
 private:

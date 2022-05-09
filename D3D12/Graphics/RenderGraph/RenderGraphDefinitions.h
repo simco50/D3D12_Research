@@ -45,7 +45,7 @@ protected:
 	RefCountPtr<GraphicsResource> pResourceReference;
 	GraphicsResource* pResource = nullptr;
 
-	RGPass* pLastAccess = nullptr;
+	const RGPass* pLastAccess = nullptr;
 };
 
 template<typename T, typename TDesc>
