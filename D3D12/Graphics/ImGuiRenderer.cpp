@@ -131,7 +131,7 @@ void ImGuiRenderer::Initialize(GraphicsDevice* pDevice, WindowHandle window)
 
 	D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = pDevice->AllocateDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 	DescriptorHandle handle = pDevice->StoreViewDescriptor(srvHandle);
-	ImGui_ImplDX12_Init(pDevice->GetDevice(), SwapChain::NUM_FRAMES + 1, DXGI_FORMAT_R8G8B8A8_UNORM, pDevice->GetGlobalViewHeap()->GetHeap(), handle.CpuHandle, handle.GpuHandle);
+	ImGui_ImplDX12_Init(pDevice->GetDevice(), SwapChain::NUM_FRAMES, DXGI_FORMAT_R8G8B8A8_UNORM, pDevice->GetGlobalViewHeap()->GetHeap(), handle.CpuHandle, handle.GpuHandle);
 }
 
 void ImGuiRenderer::Shutdown()
@@ -153,12 +153,13 @@ void ImGuiRenderer::Render(RGGraph& graph, const SceneView& sceneData, Texture* 
 {
 	graph.AddPass("Render UI", RGPassFlag::Raster)
 		.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
-		{
-			context.InsertResourceBarrier(pRenderTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
-			context.BeginRenderPass(RenderPassInfo(pRenderTarget, RenderPassAccess::Load_Store, nullptr, RenderPassAccess::NoAccess, false));
-			ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), context.GetCommandList());
-			context.EndRenderPass();
-		});
+			{
+				ImGui::Render();
+				context.InsertResourceBarrier(pRenderTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
+				context.BeginRenderPass(RenderPassInfo(pRenderTarget, RenderPassAccess::Load_Store, nullptr, RenderPassAccess::NoAccess, false));
+				ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), context.GetCommandList());
+				context.EndRenderPass();
+			});
 
 	// Update and Render additional Platform Windows
 	ImGuiIO& io = ImGui::GetIO();
@@ -166,11 +167,10 @@ void ImGuiRenderer::Render(RGGraph& graph, const SceneView& sceneData, Texture* 
 	{
 		graph.AddPass("Update Platform UI", RGPassFlag::Raster)
 			.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
-			{
-				ImGui::RenderPlatformWindowsDefault(NULL, (void*)context.GetCommandList());
-			});
+				{
+					ImGui::UpdatePlatformWindows();
+					ImGui::RenderPlatformWindowsDefault(NULL, (void*)context.GetCommandList());
+				});
 	}
 
-	ImGui::Render();
-	ImGui::UpdatePlatformWindows();
 }
