@@ -12,6 +12,7 @@ enum class BufferFlag
 	ByteAddress =			1 << 4,
 	AccelerationStructure = 1 << 5,
 	NoBindless =			1 << 6,
+	IndirectArguments =		1 << 7,
 };
 DECLARE_BITMASK_TYPE(BufferFlag)
 
@@ -92,7 +93,7 @@ struct BufferDesc
 		BufferDesc desc;
 		desc.ElementSize = sizeof(IndirectParameters);
 		desc.Size = (uint64)elements * desc.ElementSize;
-		desc.Usage = usage | BufferFlag::UnorderedAccess;
+		desc.Usage = usage | BufferFlag::UnorderedAccess | BufferFlag::IndirectArguments;
 		return desc;
 	}
 

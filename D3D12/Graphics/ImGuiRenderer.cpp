@@ -154,7 +154,6 @@ void ImGuiRenderer::Render(RGGraph& graph, Texture* pRenderTarget)
 	graph.AddPass("Render UI", RGPassFlag::Raster)
 		.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
 			{
-				ImGui::Render();
 				context.InsertResourceBarrier(pRenderTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
 				context.BeginRenderPass(RenderPassInfo(pRenderTarget, RenderPassAccess::Load_Store, nullptr, RenderPassAccess::NoAccess, false));
 				ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), context.GetCommandList());
@@ -168,9 +167,9 @@ void ImGuiRenderer::Render(RGGraph& graph, Texture* pRenderTarget)
 		graph.AddPass("Update Platform UI", RGPassFlag::Raster)
 			.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
 				{
-					ImGui::UpdatePlatformWindows();
 					ImGui::RenderPlatformWindowsDefault(NULL, (void*)context.GetCommandList());
 				});
 	}
-
+	ImGui::Render();
+	ImGui::UpdatePlatformWindows();
 }

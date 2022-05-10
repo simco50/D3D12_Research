@@ -26,7 +26,9 @@ RGPass& RGPass::Read(Span<RGResource*> resources)
 		state = D3D12_RESOURCE_STATE_COPY_SOURCE;
 	for (RGResource* pResource : resources)
 	{
-		AddAccess(pResource, state);
+		bool isIndirectArgs = pResource->Type == RGResourceType::Buffer && EnumHasAllFlags(static_cast<RGBuffer*>(pResource)->GetDesc().Usage, BufferFlag::IndirectArguments);
+
+		AddAccess(pResource, isIndirectArgs ? D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT : state);
 	}
 	return *this;
 }

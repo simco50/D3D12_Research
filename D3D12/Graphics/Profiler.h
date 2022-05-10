@@ -4,6 +4,9 @@ class Buffer;
 class CommandContext;
 class GraphicsDevice;
 
+#define WITH_PROFILING 1
+
+#if WITH_PROFILING
 #define GPU_PROFILE_BEGIN(name, cmdlist) Profiler::Get()->Begin(name, cmdlist);
 #define GPU_PROFILE_END() Profiler::Get()->End();
 
@@ -13,6 +16,17 @@ class GraphicsDevice;
 #define GPU_PROFILE_SCOPE(name, cmdlist) ScopeProfiler MACRO_CONCAT(profiler,__COUNTER__)(name, cmdlist, true)
 #define GPU_PROFILE_SCOPE_CONDITIONAL(name, cmdlist, condition) ScopeProfiler MACRO_CONCAT(profiler,__COUNTER__)(name, cmdlist, condition)
 #define PROFILE_SCOPE(name) ScopeProfiler MACRO_CONCAT(profiler,__COUNTER__)(name, nullptr, true)
+#else
+#define GPU_PROFILE_BEGIN(name, cmdlist)
+#define GPU_PROFILE_END()
+
+#define PROFILE_BEGIN(name)
+#define PROFILE_END()
+
+#define GPU_PROFILE_SCOPE(name, cmdlist)
+#define GPU_PROFILE_SCOPE_CONDITIONAL(name, cmdlist, condition)
+#define PROFILE_SCOPE(name)
+#endif
 
 template<typename T, uint32 SIZE>
 class TimeHistory

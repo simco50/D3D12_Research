@@ -443,14 +443,9 @@ void DemoApp::Update()
 	World* pWorldMut = &m_World;
 
 	{
-		RGGraph graph(m_pDevice, *m_RenderGraphPool);
-		graph.AddPass("Update GPU Scene", RGPassFlag::Copy)
-			.Bind([=](CommandContext& context, const RGPassResources& resources)
-				{
-					Renderer::UploadSceneData(context, pViewMut, pWorldMut);
-				});
-		graph.Compile();
-		graph.Execute();
+		CommandContext* pContext = m_pDevice->AllocateCommandContext();
+		Renderer::UploadSceneData(*pContext, pViewMut, pWorldMut);
+		pContext->Execute(false);
 	}
 
 	RGGraph graph(m_pDevice, *m_RenderGraphPool);
