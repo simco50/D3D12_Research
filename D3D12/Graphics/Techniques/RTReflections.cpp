@@ -37,7 +37,7 @@ RTReflections::RTReflections(GraphicsDevice* pDevice)
 	}
 }
 
-void RTReflections::Execute(RGGraph& graph, const SceneView& view, SceneTextures& sceneTextures)
+void RTReflections::Execute(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures)
 {
 	RGTexture* pReflectionsTarget = graph.CreateTexture("Scene Color", sceneTextures.pColorTarget->GetDesc());
 
@@ -56,7 +56,7 @@ void RTReflections::Execute(RGGraph& graph, const SceneView& view, SceneTextures
 					float ViewPixelSpreadAngle;
 				} parameters;
 
-				parameters.ViewPixelSpreadAngle = atanf(2.0f * tanf(view.View.FoV / 2) / (float)pTarget->GetHeight());
+				parameters.ViewPixelSpreadAngle = atanf(2.0f * tanf(pView->View.FoV / 2) / (float)pTarget->GetHeight());
 
 				ShaderBindingTable bindingTable(m_pRtSO);
 				bindingTable.BindRayGenShader("RayGen");
@@ -65,7 +65,7 @@ void RTReflections::Execute(RGGraph& graph, const SceneView& view, SceneTextures
 				bindingTable.BindHitGroup("ReflectionHitGroup", 0);
 
 				context.SetRootConstants(0, parameters);
-				context.SetRootCBV(1, Renderer::GetViewUniforms(view, pTarget));
+				context.SetRootCBV(1, Renderer::GetViewUniforms(pView, pTarget));
 				context.BindResources(2, pTarget->GetUAV());
 				context.BindResources(3, {
 					sceneTextures.pDepth->Get()->GetSRV(),

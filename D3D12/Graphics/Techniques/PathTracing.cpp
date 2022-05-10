@@ -51,7 +51,7 @@ PathTracing::~PathTracing()
 	}
 }
 
-void PathTracing::Render(RGGraph& graph, const SceneView& view, RGTexture* pTarget)
+void PathTracing::Render(RGGraph& graph, const SceneView* pView, RGTexture* pTarget)
 {
 	if (!IsSupported())
 	{
@@ -82,7 +82,7 @@ void PathTracing::Render(RGGraph& graph, const SceneView& view, RGTexture* pTarg
 	}
 	ImGui::End();
 
-	if (view.View.PreviousViewProjection != view.View.ViewProjection)
+	if (pView->View.PreviousViewProjection != pView->View.ViewProjection)
 	{
 		Reset();
 	}
@@ -114,7 +114,7 @@ void PathTracing::Render(RGGraph& graph, const SceneView& view, RGTexture* pTarg
 				bindingTable.BindHitGroup("MaterialHG", 0);
 
 				context.SetRootCBV(0, parameters);
-				context.SetRootCBV(1, Renderer::GetViewUniforms(view, pRTTarget));
+				context.SetRootCBV(1, Renderer::GetViewUniforms(pView, pRTTarget));
 				context.BindResources(2, {
 					pRTTarget->GetUAV(),
 					m_pAccumulationTexture->GetUAV(),

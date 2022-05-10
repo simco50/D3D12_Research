@@ -126,10 +126,10 @@ struct SceneTextures
 
 namespace Renderer
 {
-	void DrawScene(CommandContext& context, const SceneView& scene, const VisibilityMask& visibility, Batch::Blending blendModes);
-	void DrawScene(CommandContext& context, const SceneView& scene, Batch::Blending blendModes);
-	ShaderInterop::ViewUniforms GetViewUniforms(const SceneView& sceneView, Texture* pTarget = nullptr);
-	void UploadSceneData(CommandContext& context, SceneView& view, World& world);
+	void DrawScene(CommandContext& context, const SceneView* pView, const VisibilityMask& visibility, Batch::Blending blendModes);
+	void DrawScene(CommandContext& context, const SceneView* pView, Batch::Blending blendModes);
+	ShaderInterop::ViewUniforms GetViewUniforms(const SceneView* pView, Texture* pTarget = nullptr);
+	void UploadSceneData(CommandContext& context, SceneView* pView, World* pWorld);
 }
 
 enum class DefaultTexture

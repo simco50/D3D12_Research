@@ -85,7 +85,7 @@ GpuParticles::GpuParticles(GraphicsDevice* pDevice)
 	}
 }
 
-void GpuParticles::Simulate(RGGraph& graph, const SceneView& view, RGTexture* pDepth)
+void GpuParticles::Simulate(RGGraph& graph, const SceneView* pView, RGTexture* pDepth)
 {
 	if (ImGui::Begin("Parameters"))
 	{
@@ -142,7 +142,7 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView& view, RGTexture* pD
 			m_ParticlesToSpawn -= parameters.EmitCount;
 
 			context.SetRootConstants(0, parameters);
-			context.SetRootCBV(1, Renderer::GetViewUniforms(view));
+			context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
 
 			context.BindResources(2, uavs);
 			context.BindResources(3,
@@ -172,7 +172,7 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView& view, RGTexture* pD
 			parameters.Origin = Vector3(150, 3, 0);
 
 			context.SetRootConstants(0, parameters);
-			context.SetRootCBV(1, Renderer::GetViewUniforms(view));
+			context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
 
 			context.BindResources(2, uavs);
 			context.BindResources(3,
@@ -201,7 +201,7 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView& view, RGTexture* pD
 			parameters.ParticleLifeTime = g_LifeTime;
 
 			context.SetRootConstants(0, parameters);
-			context.SetRootCBV(1, Renderer::GetViewUniforms(view));
+			context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
 
 			context.BindResources(2, uavs);
 			context.BindResources(3,
@@ -222,7 +222,7 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView& view, RGTexture* pD
 
 				context.SetComputeRootSignature(m_pSimulateRS);
 
-				context.SetRootCBV(1, Renderer::GetViewUniforms(view));
+				context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
 
 				context.BindResources(2, uavs);
 				context.BindResources(3,
@@ -239,7 +239,7 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView& view, RGTexture* pD
 	std::swap(m_pAliveList1, m_pAliveList2);
 }
 
-void GpuParticles::Render(RGGraph& graph, const SceneView& view, SceneTextures& sceneTextures)
+void GpuParticles::Render(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures)
 {
 	if (!g_Enabled)
 	{
@@ -262,7 +262,7 @@ void GpuParticles::Render(RGGraph& graph, const SceneView& view, SceneTextures& 
 				context.SetGraphicsRootSignature(m_pRenderParticlesRS);
 
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-				context.SetRootCBV(0, Renderer::GetViewUniforms(view, pTarget));
+				context.SetRootCBV(0, Renderer::GetViewUniforms(pView, pTarget));
 
 				context.BindResources(1, {
 					m_pParticleBuffer->GetSRV(),

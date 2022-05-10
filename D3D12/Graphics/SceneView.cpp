@@ -20,15 +20,15 @@ namespace Tweakables
 
 namespace Renderer
 {
-	void DrawScene(CommandContext& context, const SceneView& scene, Batch::Blending blendModes)
+	void DrawScene(CommandContext& context, const SceneView* pView, Batch::Blending blendModes)
 	{
-		DrawScene(context, scene, scene.VisibilityMask, blendModes);
+		DrawScene(context, pView, pView->VisibilityMask, blendModes);
 	}
 
-	ShaderInterop::ViewUniforms GetViewUniforms(const SceneView& sceneView, Texture* pTarget)
+	ShaderInterop::ViewUniforms GetViewUniforms(const SceneView* pView, Texture* pTarget)
 	{
 		ShaderInterop::ViewUniforms parameters;
-		const ViewTransform& view = sceneView.View;
+		const ViewTransform& view = pView->View;
 
 		parameters.View = view.View;
 		parameters.ViewInverse = view.ViewInverse;
@@ -81,31 +81,31 @@ namespace Renderer
 		parameters.FoV = view.FoV;
 
 
-		parameters.FrameIndex = sceneView.FrameIndex;
+		parameters.FrameIndex = pView->FrameIndex;
 		parameters.SsrSamples = Tweakables::g_SsrSamples.Get();
-		parameters.LightCount = sceneView.pLightBuffer->GetNumElements();
+		parameters.LightCount = pView->pLightBuffer->GetNumElements();
 
-		check(sceneView.ShadowViews.size() <= MAX_SHADOW_CASTERS);
-		for (uint32 i = 0; i < sceneView.ShadowViews.size(); ++i)
+		check(pView->ShadowViews.size() <= MAX_SHADOW_CASTERS);
+		for (uint32 i = 0; i < pView->ShadowViews.size(); ++i)
 		{
-			parameters.LightMatrices[i] = sceneView.ShadowViews[i].ViewProjection;
+			parameters.LightMatrices[i] = pView->ShadowViews[i].ViewProjection;
 		}
-		parameters.CascadeDepths = sceneView.ShadowCascadeDepths;
-		parameters.NumCascades = sceneView.NumShadowCascades;
+		parameters.CascadeDepths = pView->ShadowCascadeDepths;
+		parameters.NumCascades = pView->NumShadowCascades;
 
-		parameters.TLASIndex = sceneView.AccelerationStructure.GetSRV() ? sceneView.AccelerationStructure.GetSRV()->GetHeapIndex() : DescriptorHandle::InvalidHeapIndex;
-		parameters.MeshesIndex = sceneView.pMeshBuffer->GetSRVIndex();
-		parameters.MaterialsIndex = sceneView.pMaterialBuffer->GetSRVIndex();
-		parameters.MeshInstancesIndex = sceneView.pMeshInstanceBuffer->GetSRVIndex();
-		parameters.TransformsIndex = sceneView.pTransformsBuffer->GetSRVIndex();
-		parameters.LightsIndex = sceneView.pLightBuffer->GetSRVIndex();
-		parameters.SkyIndex = sceneView.pSky ? sceneView.pSky->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
-		parameters.DDGIVolumesIndex = sceneView.pDDGIVolumesBuffer->GetSRVIndex();
-		parameters.NumDDGIVolumes = sceneView.NumDDGIVolumes;
+		parameters.TLASIndex = pView->AccelerationStructure.GetSRV() ? pView->AccelerationStructure.GetSRV()->GetHeapIndex() : DescriptorHandle::InvalidHeapIndex;
+		parameters.MeshesIndex = pView->pMeshBuffer->GetSRVIndex();
+		parameters.MaterialsIndex = pView->pMaterialBuffer->GetSRVIndex();
+		parameters.MeshInstancesIndex = pView->pMeshInstanceBuffer->GetSRVIndex();
+		parameters.TransformsIndex = pView->pTransformsBuffer->GetSRVIndex();
+		parameters.LightsIndex = pView->pLightBuffer->GetSRVIndex();
+		parameters.SkyIndex = pView->pSky ? pView->pSky->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
+		parameters.DDGIVolumesIndex = pView->pDDGIVolumesBuffer->GetSRVIndex();
+		parameters.NumDDGIVolumes = pView->NumDDGIVolumes;
 		return parameters;
 	}
 
-	void UploadSceneData(CommandContext& context, SceneView& view, World& world)
+	void UploadSceneData(CommandContext& context, SceneView* pView, World* pWorld)
 	{
 		std::vector<ShaderInterop::MaterialData> materials;
 		std::vector<ShaderInterop::MeshData> meshes;
@@ -113,9 +113,9 @@ namespace Renderer
 		std::vector<Batch> sceneBatches;
 		std::vector<Matrix> transforms;
 
-		view.AccelerationStructure.Reset();
+		pView->AccelerationStructure.Reset();
 
-		for (const auto& pMesh : world.Meshes)
+		for (const auto& pMesh : pWorld->Meshes)
 		{
 			for (const SubMeshInstance& node : pMesh->GetMeshInstances())
 			{
@@ -148,7 +148,7 @@ namespace Renderer
 				batch.Radius = Vector3(batch.Bounds.Extents).Length();
 				sceneBatches.push_back(batch);
 
-				view.AccelerationStructure.AddInstance(meshInstance.World, &parentMesh, batch.WorldMatrix);
+				pView->AccelerationStructure.AddInstance(meshInstance.World, &parentMesh, batch.WorldMatrix);
 			}
 
 			for (const SubMesh& subMesh : pMesh->GetMeshes())
@@ -184,12 +184,12 @@ namespace Renderer
 				materials.push_back(materialData);
 			}
 		}
-		sceneBatches.swap(view.Batches);
+		sceneBatches.swap(pView->Batches);
 
 		std::vector<ShaderInterop::DDGIVolume> ddgiVolumes;
 		if (Tweakables::g_EnableDDGI)
 		{
-			for (DDGIVolume& ddgiVolume : world.DDGIVolumes)
+			for (DDGIVolume& ddgiVolume : pWorld->DDGIVolumes)
 			{
 				ShaderInterop::DDGIVolume ddgi{};
 				ddgi.BoundsMin = ddgiVolume.Origin - ddgiVolume.Extents;
@@ -204,10 +204,10 @@ namespace Renderer
 				ddgiVolumes.push_back(ddgi);
 			}
 		}
-		view.NumDDGIVolumes = (uint32)ddgiVolumes.size();
+		pView->NumDDGIVolumes = (uint32)ddgiVolumes.size();
 
 		std::vector<ShaderInterop::Light> lightData;
-		Utils::Transform(world.Lights, lightData, [](const Light& light) { return light.GetData(); });
+		Utils::Transform(pWorld->Lights, lightData, [](const Light& light) { return light.GetData(); });
 
 		GraphicsDevice* pDevice = context.GetParent();
 		auto CopyBufferData = [&](size_t numElements, uint32 stride, const char* pName, const void* pSource, RefCountPtr<Buffer>& pTarget)
@@ -219,20 +219,20 @@ namespace Renderer
 			context.WriteBuffer(pTarget, pSource, numElements * stride);
 		};
 
-		CopyBufferData(ddgiVolumes.size(), sizeof(ShaderInterop::DDGIVolume), "DDGI Volumes", ddgiVolumes.data(), view.pDDGIVolumesBuffer);
-		CopyBufferData(meshes.size(), sizeof(ShaderInterop::MeshData), "Meshes", meshes.data(), view.pMeshBuffer);
-		CopyBufferData(meshInstances.size(), sizeof(ShaderInterop::MeshInstance), "Meshes Instances", meshInstances.data(), view.pMeshInstanceBuffer);
-		CopyBufferData(materials.size(), sizeof(ShaderInterop::MaterialData), "Materials", materials.data(), view.pMaterialBuffer);
-		CopyBufferData(transforms.size(), sizeof(Matrix), "Transforms", transforms.data(), view.pTransformsBuffer);
-		CopyBufferData(lightData.size(), sizeof(ShaderInterop::Light), "Lights", lightData.data(), view.pLightBuffer);
+		CopyBufferData(ddgiVolumes.size(), sizeof(ShaderInterop::DDGIVolume), "DDGI Volumes", ddgiVolumes.data(), pView->pDDGIVolumesBuffer);
+		CopyBufferData(meshes.size(), sizeof(ShaderInterop::MeshData), "Meshes", meshes.data(), pView->pMeshBuffer);
+		CopyBufferData(meshInstances.size(), sizeof(ShaderInterop::MeshInstance), "Meshes Instances", meshInstances.data(), pView->pMeshInstanceBuffer);
+		CopyBufferData(materials.size(), sizeof(ShaderInterop::MaterialData), "Materials", materials.data(), pView->pMaterialBuffer);
+		CopyBufferData(transforms.size(), sizeof(Matrix), "Transforms", transforms.data(), pView->pTransformsBuffer);
+		CopyBufferData(lightData.size(), sizeof(ShaderInterop::Light), "Lights", lightData.data(), pView->pLightBuffer);
 
-		view.AccelerationStructure.Build(context);
+		pView->AccelerationStructure.Build(context);
 	}
 
-	void DrawScene(CommandContext& context, const SceneView& scene, const VisibilityMask& visibility, Batch::Blending blendModes)
+	void DrawScene(CommandContext& context, const SceneView* pView, const VisibilityMask& visibility, Batch::Blending blendModes)
 	{
 		std::vector<const Batch*> meshes;
-		for (const Batch& b : scene.Batches)
+		for (const Batch& b : pView->Batches)
 		{
 			if (EnumHasAnyFlags(b.BlendMode, blendModes) && visibility.GetBit(b.InstanceData.World))
 			{
@@ -240,10 +240,10 @@ namespace Renderer
 			}
 		}
 
-		auto CompareSort = [&scene, blendModes](const Batch* a, const Batch* b)
+		auto CompareSort = [pView, blendModes](const Batch* a, const Batch* b)
 		{
-			float aDist = Vector3::DistanceSquared(a->Bounds.Center, scene.View.Position);
-			float bDist = Vector3::DistanceSquared(b->Bounds.Center, scene.View.Position);
+			float aDist = Vector3::DistanceSquared(a->Bounds.Center, pView->View.Position);
+			float bDist = Vector3::DistanceSquared(b->Bounds.Center, pView->View.Position);
 			return EnumHasAnyFlags(blendModes, Batch::Blending::AlphaBlend) ? bDist < aDist : aDist < bDist;
 		};
 		std::sort(meshes.begin(), meshes.end(), CompareSort);

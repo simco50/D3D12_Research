@@ -12,7 +12,7 @@ class SSAO
 public:
 	SSAO(GraphicsDevice* pDevice);
 
-	void Execute(RGGraph& graph, const SceneView& view, SceneTextures& sceneTextures);
+	void Execute(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures);
 
 private:
 	void SetupPipelines();

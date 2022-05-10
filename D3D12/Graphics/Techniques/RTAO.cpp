@@ -37,7 +37,7 @@ RTAO::RTAO(GraphicsDevice* pDevice)
 	}
 }
 
-void RTAO::Execute(RGGraph& graph, const SceneView& view, SceneTextures& sceneTextures)
+void RTAO::Execute(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures)
 {
 	TextureDesc aoDesc = sceneTextures.pAmbientOcclusion->GetDesc();
 
@@ -93,7 +93,7 @@ void RTAO::Execute(RGGraph& graph, const SceneView& view, SceneTextures& sceneTe
 				bindingTable.BindMissShader("OcclusionMS", {});
 
 				context.SetRootConstants(0, parameters);
-				context.SetRootCBV(1, Renderer::GetViewUniforms(view, pTarget));
+				context.SetRootCBV(1, Renderer::GetViewUniforms(pView, pTarget));
 				context.BindResources(2, pTarget->GetUAV());
 				context.BindResources(3, {
 					sceneTextures.pDepth->Get()->GetSRV(),
@@ -113,7 +113,7 @@ void RTAO::Execute(RGGraph& graph, const SceneView& view, SceneTextures& sceneTe
 				context.SetPipelineState(m_pDenoisePSO);
 
 				//context.SetRootCBV(0, parameters);
-				context.SetRootCBV(1, Renderer::GetViewUniforms(view, pTarget));
+				context.SetRootCBV(1, Renderer::GetViewUniforms(pView, pTarget));
 				context.BindResources(2, pTarget->GetUAV());
 				context.BindResources(3, {
 					sceneTextures.pDepth->Get()->GetSRV(),
@@ -146,7 +146,7 @@ void RTAO::Execute(RGGraph& graph, const SceneView& view, SceneTextures& sceneTe
 				shaderParameters.DimensionsInv = Vector2(1.0f / pTarget->GetWidth(), 1.0f / pTarget->GetHeight());
 
 				context.SetRootConstants(0, shaderParameters);
-				context.SetRootCBV(1, Renderer::GetViewUniforms(view, pTarget));
+				context.SetRootCBV(1, Renderer::GetViewUniforms(pView, pTarget));
 				context.BindResources(2, pTarget->GetUAV());
 				context.BindResources(3, {
 					sceneTextures.pDepth->Get()->GetSRV(),

@@ -15,8 +15,8 @@ class TiledForward
 public:
 	TiledForward(GraphicsDevice* pDevice);
 
-	void Execute(RGGraph& graph, const SceneView& view, SceneTextures& sceneTextures);
-	void VisualizeLightDensity(RGGraph& graph, GraphicsDevice* pDevice, const SceneView& view, SceneTextures& sceneTextures);
+	void Execute(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures);
+	void VisualizeLightDensity(RGGraph& graph, GraphicsDevice* pDevice, const SceneView* pView, SceneTextures& sceneTextures);
 
 private:
 	GraphicsDevice* m_pDevice;

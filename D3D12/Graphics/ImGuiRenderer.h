@@ -19,6 +19,6 @@ namespace ImGuiRenderer
 	void Shutdown();
 
 	void NewFrame();
-	void Render(RGGraph& graph, const SceneView& sceneData, Texture* pRenderTarget);
+	void Render(RGGraph& graph, Texture* pRenderTarget);
 };
 

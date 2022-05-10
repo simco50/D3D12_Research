@@ -10,7 +10,7 @@ class RTReflections
 {
 public:
 	RTReflections(GraphicsDevice* pDevice);
-	void Execute(RGGraph& graph, const SceneView& view, SceneTextures& sceneTextures);
+	void Execute(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures);
 
 private:
 	RefCountPtr<StateObject> m_pRtSO;

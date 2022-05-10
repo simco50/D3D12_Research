@@ -14,7 +14,7 @@ SSAO::SSAO(GraphicsDevice* pDevice)
 	SetupPipelines();
 }
 
-void SSAO::Execute(RGGraph& graph, const SceneView& view, SceneTextures& sceneTextures)
+void SSAO::Execute(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures)
 {
 	static float g_AoPower = 7;
 	static float g_AoThreshold = 0.0025f;
@@ -59,7 +59,7 @@ void SSAO::Execute(RGGraph& graph, const SceneView& view, SceneTextures& sceneTe
 				shaderParameters.Samples = g_AoSamples;
 
 				context.SetRootConstants(0, shaderParameters);
-				context.SetRootCBV(1, Renderer::GetViewUniforms(view, pTarget));
+				context.SetRootCBV(1, Renderer::GetViewUniforms(pView, pTarget));
 				context.BindResources(2, pTarget->GetUAV());
 				context.BindResources(3, sceneTextures.pDepth->Get()->GetSRV());
 
@@ -89,7 +89,7 @@ void SSAO::Execute(RGGraph& graph, const SceneView& view, SceneTextures& sceneTe
 				shaderParameters.DimensionsInv = Vector2(1.0f / pTarget->GetWidth(), 1.0f / pTarget->GetHeight());
 
 				context.SetRootConstants(0, shaderParameters);
-				context.SetRootCBV(1, Renderer::GetViewUniforms(view, pTarget));
+				context.SetRootCBV(1, Renderer::GetViewUniforms(pView, pTarget));
 				context.BindResources(2, pBlurTarget->GetUAV());
 				context.BindResources(3, {
 					sceneTextures.pDepth->Get()->GetSRV(),
@@ -119,13 +119,14 @@ void SSAO::Execute(RGGraph& graph, const SceneView& view, SceneTextures& sceneTe
 				shaderParameters.DimensionsInv = Vector2(1.0f / pTarget->GetWidth(), 1.0f / pTarget->GetHeight());
 				shaderParameters.Horizontal = 0;
 
+				context.SetRootConstants(0, shaderParameters);
+				context.SetRootCBV(1, Renderer::GetViewUniforms(pView, pTarget));
 				context.BindResources(2, pTarget->GetUAV());
 				context.BindResources(3, {
 					sceneTextures.pDepth->Get()->GetSRV(),
 					pBlurSource->GetSRV(),
 					});
 
-				context.SetRootConstants(0, shaderParameters);
 				context.Dispatch(ComputeUtils::GetNumThreadGroups(pBlurSource->GetWidth(), 1, pBlurSource->GetHeight(), 256));
 			});
 }

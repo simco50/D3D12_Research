@@ -149,7 +149,7 @@ void ImGuiRenderer::NewFrame()
 	ImGuizmo::BeginFrame();
 }
 
-void ImGuiRenderer::Render(RGGraph& graph, const SceneView& sceneData, Texture* pRenderTarget)
+void ImGuiRenderer::Render(RGGraph& graph, Texture* pRenderTarget)
 {
 	graph.AddPass("Render UI", RGPassFlag::Raster)
 		.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)

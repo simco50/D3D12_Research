@@ -87,10 +87,10 @@ TiledForward::TiledForward(GraphicsDevice* pDevice)
 	}
 }
 
-void TiledForward::Execute(RGGraph& graph, const SceneView& view, SceneTextures& sceneTextures)
+void TiledForward::Execute(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures)
 {
-	int frustumCountX = Math::DivideAndRoundUp(view.GetDimensions().x, FORWARD_PLUS_BLOCK_SIZE);
-	int frustumCountY = Math::DivideAndRoundUp(view.GetDimensions().y, FORWARD_PLUS_BLOCK_SIZE);
+	int frustumCountX = Math::DivideAndRoundUp(pView->GetDimensions().x, FORWARD_PLUS_BLOCK_SIZE);
+	int frustumCountY = Math::DivideAndRoundUp(pView->GetDimensions().y, FORWARD_PLUS_BLOCK_SIZE);
 	RGTexture* pLightGridOpaque = graph.CreateTexture("Light Grid - Opaque", TextureDesc::Create2D(frustumCountX, frustumCountY, DXGI_FORMAT_R32G32_UINT));
 	RGTexture* pLightGridTransparant = graph.CreateTexture("Light Grid - Transparant", TextureDesc::Create2D(frustumCountX, frustumCountY, DXGI_FORMAT_R32G32_UINT));
 
@@ -111,7 +111,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& view, SceneTextures&
 				context.SetPipelineState(m_pComputeLightCullPSO);
 				context.SetComputeRootSignature(m_pComputeLightCullRS);
 
-				context.SetRootCBV(0, Renderer::GetViewUniforms(view, pDepth));
+				context.SetRootCBV(0, Renderer::GetViewUniforms(pView, pDepth));
 
 				context.BindResources(1, {
 					pLightIndexCounter->Get()->GetUAV(),
@@ -148,7 +148,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& view, SceneTextures&
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 				context.SetGraphicsRootSignature(m_pDiffuseRS);
 
-				context.SetRootCBV(2, Renderer::GetViewUniforms(view, pTarget));
+				context.SetRootCBV(2, Renderer::GetViewUniforms(pView, pTarget));
 
 				{
 					GPU_PROFILE_SCOPE("Opaque", &context);
@@ -163,10 +163,10 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& view, SceneTextures&
 						});
 
 					context.SetPipelineState(m_pDiffusePSO);
-					Renderer::DrawScene(context, view, Batch::Blending::Opaque);
+					Renderer::DrawScene(context, pView, Batch::Blending::Opaque);
 
 					context.SetPipelineState(m_pDiffuseMaskedPSO);
-					Renderer::DrawScene(context, view, Batch::Blending::AlphaMask);
+					Renderer::DrawScene(context, pView, Batch::Blending::AlphaMask);
 				}
 
 				{
@@ -182,7 +182,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& view, SceneTextures&
 						});
 
 					context.SetPipelineState(m_pDiffuseAlphaPSO);
-					Renderer::DrawScene(context, view, Batch::Blending::AlphaBlend);
+					Renderer::DrawScene(context, pView, Batch::Blending::AlphaBlend);
 				}
 				context.EndRenderPass();
 			});
@@ -191,7 +191,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneView& view, SceneTextures&
 	blackboardData.pLightGridOpaque = pLightGridOpaque;
 }
 
-void TiledForward::VisualizeLightDensity(RGGraph& graph, GraphicsDevice* pDevice, const SceneView& view, SceneTextures& sceneTextures)
+void TiledForward::VisualizeLightDensity(RGGraph& graph, GraphicsDevice* pDevice, const SceneView* pView, SceneTextures& sceneTextures)
 {
 	RGTexture* pVisualizationTarget = graph.CreateTexture("Scene Color", sceneTextures.pColorTarget->GetDesc());
 
@@ -215,7 +215,7 @@ void TiledForward::VisualizeLightDensity(RGGraph& graph, GraphicsDevice* pDevice
 				context.SetPipelineState(m_pVisualizeLightsPSO);
 				context.SetComputeRootSignature(m_pVisualizeLightsRS);
 				context.SetRootCBV(0, constantData);
-				context.SetRootCBV(1, Renderer::GetViewUniforms(view, pTarget));
+				context.SetRootCBV(1, Renderer::GetViewUniforms(pView, pTarget));
 
 				context.BindResources(2, {
 					 sceneTextures.pColorTarget->Get()->GetSRV(),

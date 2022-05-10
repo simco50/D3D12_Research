@@ -169,21 +169,21 @@ ClusteredForward::~ClusteredForward()
 {
 }
 
-void ClusteredForward::Execute(RGGraph& graph, const SceneView& view, SceneTextures& sceneTextures)
+void ClusteredForward::Execute(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures)
 {
-	ComputeLightCulling(graph, view, m_LightCullData);
+	ComputeLightCulling(graph, pView, m_LightCullData);
 
 	RGTexture* pFogVolume = nullptr;
 	if (Tweakables::g_VolumetricFog)
 	{
-		pFogVolume = RenderVolumetricFog(graph, view, m_LightCullData, m_VolumetricFogData);
+		pFogVolume = RenderVolumetricFog(graph, pView, m_LightCullData, m_VolumetricFogData);
 	}
 
-	RenderBasePass(graph, view, sceneTextures, m_LightCullData, pFogVolume);
+	RenderBasePass(graph, pView, sceneTextures, m_LightCullData, pFogVolume);
 
 	if (g_VisualizeClusters)
 	{
-		VisualizeClusters(graph, view, sceneTextures, m_LightCullData);
+		VisualizeClusters(graph, pView, sceneTextures, m_LightCullData);
 	}
 	else
 	{
@@ -191,15 +191,15 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView& view, SceneTextu
 	}
 }
 
-void ClusteredForward::ComputeLightCulling(RGGraph& graph, const SceneView& view, ClusteredLightCullData& cullData)
+void ClusteredForward::ComputeLightCulling(RGGraph& graph, const SceneView* pView, ClusteredLightCullData& cullData)
 {
 	RG_GRAPH_SCOPE("Light Culling", graph);
 
-	cullData.ClusterCount.x = Math::DivideAndRoundUp(view.GetDimensions().x, gLightClusterTexelSize);
-	cullData.ClusterCount.y = Math::DivideAndRoundUp(view.GetDimensions().y, gLightClusterTexelSize);
+	cullData.ClusterCount.x = Math::DivideAndRoundUp(pView->GetDimensions().x, gLightClusterTexelSize);
+	cullData.ClusterCount.y = Math::DivideAndRoundUp(pView->GetDimensions().y, gLightClusterTexelSize);
 	cullData.ClusterCount.z = gLightClustersNumZ;
-	float nearZ = view.View.NearPlane;
-	float farZ = view.View.FarPlane;
+	float nearZ = pView->View.NearPlane;
+	float farZ = pView->View.FarPlane;
 	float n = Math::Min(nearZ, farZ);
 	float f = Math::Max(nearZ, farZ);
 	cullData.LightGridParams.x = (float)gLightClustersNumZ / log(f / n);
@@ -212,32 +212,32 @@ void ClusteredForward::ComputeLightCulling(RGGraph& graph, const SceneView& view
 	graph.AddPass("Cluster AABBs", RGPassFlag::Compute)
 		.Write(cullData.pAABBs)
 		.Bind([=](CommandContext& context, const RGPassResources& resources)
-		{
-			context.SetPipelineState(m_pCreateAabbPSO);
-			context.SetComputeRootSignature(m_pLightCullingRS);
-
-			struct
 			{
-				IntVector4 ClusterDimensions;
-				IntVector2 ClusterSize;
-			} constantBuffer;
+				context.SetPipelineState(m_pCreateAabbPSO);
+				context.SetComputeRootSignature(m_pLightCullingRS);
 
-			constantBuffer.ClusterSize = IntVector2(gLightClusterTexelSize, gLightClusterTexelSize);
-			constantBuffer.ClusterDimensions = IntVector4(cullData.ClusterCount.x, cullData.ClusterCount.y, cullData.ClusterCount.z, 0);
+				struct
+				{
+					IntVector4 ClusterDimensions;
+					IntVector2 ClusterSize;
+				} constantBuffer;
 
-			context.SetRootCBV(0, constantBuffer);
-			context.SetRootCBV(1, Renderer::GetViewUniforms(view));
-			context.BindResources(2, cullData.pAABBs->Get()->GetUAV());
+				constantBuffer.ClusterSize = IntVector2(gLightClusterTexelSize, gLightClusterTexelSize);
+				constantBuffer.ClusterDimensions = IntVector4(cullData.ClusterCount.x, cullData.ClusterCount.y, cullData.ClusterCount.z, 0);
 
-			//Cluster count in z is 32 so fits nicely in a wavefront on Nvidia so make groupsize in shader 32
-			constexpr uint32 threadGroupSize = 32;
-			context.Dispatch(
-				ComputeUtils::GetNumThreadGroups(
-					cullData.ClusterCount.x, 1,
-					cullData.ClusterCount.y, 1,
-					cullData.ClusterCount.z, threadGroupSize)
-			);
-		});
+				context.SetRootCBV(0, constantBuffer);
+				context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
+				context.BindResources(2, cullData.pAABBs->Get()->GetUAV());
+
+				//Cluster count in z is 32 so fits nicely in a wavefront on Nvidia so make groupsize in shader 32
+				constexpr uint32 threadGroupSize = 32;
+				context.Dispatch(
+					ComputeUtils::GetNumThreadGroups(
+						cullData.ClusterCount.x, 1,
+						cullData.ClusterCount.y, 1,
+						cullData.ClusterCount.z, threadGroupSize)
+				);
+			});
 
 	cullData.pLightIndexGrid = graph.CreateBuffer("Light Index Grid", BufferDesc::CreateStructured(gMaxLightsPerCluster * totalClusterCount, sizeof(uint32)));
 	// LightGrid: x : Offset | y : Count
@@ -247,45 +247,45 @@ void ClusteredForward::ComputeLightCulling(RGGraph& graph, const SceneView& view
 		.Read(cullData.pAABBs)
 		.Write({ cullData.pLightGrid, cullData.pLightIndexGrid })
 		.Bind([=](CommandContext& context, const RGPassResources& resources)
-		{
-			context.SetPipelineState(m_pLightCullingPSO);
-			context.SetComputeRootSignature(m_pLightCullingRS);
-
-			// Clear the light grid because we're accumulating the light count in the shader
-			Buffer* pLightGrid = cullData.pLightGrid->Get();
-			//#todo: adhoc UAV creation
-			context.ClearUavUInt(pLightGrid, m_pDevice->CreateUAV(pLightGrid, BufferUAVDesc::CreateRaw()));
-
-			struct
 			{
-				IntVector3 ClusterDimensions;
-			} constantBuffer;
+				context.SetPipelineState(m_pLightCullingPSO);
+				context.SetComputeRootSignature(m_pLightCullingRS);
 
-			constantBuffer.ClusterDimensions = cullData.ClusterCount;
+				// Clear the light grid because we're accumulating the light count in the shader
+				Buffer* pLightGrid = cullData.pLightGrid->Get();
+				//#todo: adhoc UAV creation
+				context.ClearUavUInt(pLightGrid, m_pDevice->CreateUAV(pLightGrid, BufferUAVDesc::CreateRaw()));
 
-			context.SetRootCBV(0, constantBuffer);
+				struct
+				{
+					IntVector3 ClusterDimensions;
+				} constantBuffer;
 
-			context.SetRootCBV(1, Renderer::GetViewUniforms(view));
-			context.BindResources(2, {
-				cullData.pLightIndexGrid->Get()->GetUAV(),
-				cullData.pLightGrid->Get()->GetUAV(),
-				});
-			context.BindResources(3, cullData.pAABBs->Get()->GetSRV());
+				constantBuffer.ClusterDimensions = cullData.ClusterCount;
 
-			context.Dispatch(
-				ComputeUtils::GetNumThreadGroups(
-					cullData.ClusterCount.x, 4,
-					cullData.ClusterCount.y, 4,
-					cullData.ClusterCount.z, 4)
-			);
-		});
+				context.SetRootCBV(0, constantBuffer);
+
+				context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
+				context.BindResources(2, {
+					cullData.pLightIndexGrid->Get()->GetUAV(),
+					cullData.pLightGrid->Get()->GetUAV(),
+					});
+				context.BindResources(3, cullData.pAABBs->Get()->GetSRV());
+
+				context.Dispatch(
+					ComputeUtils::GetNumThreadGroups(
+						cullData.ClusterCount.x, 4,
+						cullData.ClusterCount.y, 4,
+						cullData.ClusterCount.z, 4)
+				);
+			});
 
 	CullBlackboardData& blackboardData = graph.Blackboard.Add<CullBlackboardData>();
 	blackboardData.pLightGrid = cullData.pLightGrid;
 	blackboardData.LightGridParams = cullData.LightGridParams;
 }
 
-void ClusteredForward::VisualizeClusters(RGGraph& graph, const SceneView& view, SceneTextures& sceneTextures, ClusteredLightCullData& cullData)
+void ClusteredForward::VisualizeClusters(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures, ClusteredLightCullData& cullData)
 {
 	RGBuffer* pDebugLightGrid = graph.TryImportBuffer("Debug Light Grid", cullData.pDebugLightGrid);
 
@@ -294,7 +294,7 @@ void ClusteredForward::VisualizeClusters(RGGraph& graph, const SceneView& view, 
 		uint32 totalClusterCount = cullData.ClusterCount.x * cullData.ClusterCount.y * cullData.ClusterCount.z;
 		pDebugLightGrid = graph.CreateBuffer("Debug Light Grid", BufferDesc::CreateStructured(2 * totalClusterCount, sizeof(uint32)));
 		graph.AddCopyPass("Cache Debug Light Grid", cullData.pLightGrid, pDebugLightGrid);
-		cullData.DebugClustersViewMatrix = view.View.ViewInverse;
+		cullData.DebugClustersViewMatrix = pView->View.ViewInverse;
 		cullData.DirtyDebugData = false;
 		graph.ExportBuffer(pDebugLightGrid, cullData.pDebugLightGrid.This());
 	}
@@ -311,27 +311,27 @@ void ClusteredForward::VisualizeClusters(RGGraph& graph, const SceneView& view, 
 				context.SetGraphicsRootSignature(m_pVisualizeLightClustersRS);
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_POINTLIST);
 
-				ShaderInterop::ViewUniforms viewData = Renderer::GetViewUniforms(view, sceneTextures.pColorTarget->Get());
-				viewData.Projection = cullData.DebugClustersViewMatrix * view.View.ViewProjection;
+				ShaderInterop::ViewUniforms viewData = Renderer::GetViewUniforms(pView, sceneTextures.pColorTarget->Get());
+				viewData.Projection = cullData.DebugClustersViewMatrix * pView->View.ViewProjection;
 				context.SetRootCBV(0, viewData);
 				context.BindResources(1, {
 					cullData.pAABBs->Get()->GetSRV(),
 					pDebugLightGrid->Get()->GetSRV(),
 				m_pHeatMapTexture->GetSRV(),
-				});
-			context.Draw(0, cullData.ClusterCount.x * cullData.ClusterCount.y * cullData.ClusterCount.z);
+					});
+				context.Draw(0, cullData.ClusterCount.x * cullData.ClusterCount.y * cullData.ClusterCount.z);
 
-			context.EndRenderPass();
-		});
+				context.EndRenderPass();
+			});
 }
 
-RGTexture* ClusteredForward::RenderVolumetricFog(RGGraph& graph, const SceneView& view, const ClusteredLightCullData& lightCullData, VolumetricFogData& fogData)
+RGTexture* ClusteredForward::RenderVolumetricFog(RGGraph& graph, const SceneView* pView, const ClusteredLightCullData& lightCullData, VolumetricFogData& fogData)
 {
 	RG_GRAPH_SCOPE("Volumetric Lighting", graph);
 
 	TextureDesc volumeDesc = TextureDesc::Create3D(
-		Math::DivideAndRoundUp((uint32)view.GetDimensions().x, gVolumetricFroxelTexelSize),
-		Math::DivideAndRoundUp((uint32)view.GetDimensions().y, gVolumetricFroxelTexelSize),
+		Math::DivideAndRoundUp((uint32)pView->GetDimensions().x, gVolumetricFroxelTexelSize),
+		Math::DivideAndRoundUp((uint32)pView->GetDimensions().y, gVolumetricFroxelTexelSize),
 		gVolumetricNumZSlices,
 		DXGI_FORMAT_R16G16B16A16_FLOAT,
 		TextureFlag::ShaderResource | TextureFlag::UnorderedAccess);
@@ -353,7 +353,7 @@ RGTexture* ClusteredForward::RenderVolumetricFog(RGGraph& graph, const SceneView
 	constantBuffer.ClusterDimensions = IntVector3(volumeDesc.Width, volumeDesc.Height, volumeDesc.DepthOrArraySize);
 	constantBuffer.InvClusterDimensions = Vector3(1.0f / volumeDesc.Width, 1.0f / volumeDesc.Height, 1.0f / volumeDesc.DepthOrArraySize);
 	constexpr Math::HaltonSequence<32, 2> halton;
-	constantBuffer.Jitter = halton[view.FrameIndex & 31];
+	constantBuffer.Jitter = halton[pView->FrameIndex & 31];
 	constantBuffer.LightClusterSizeFactor = (float)gVolumetricFroxelTexelSize / gLightClusterTexelSize;
 	constantBuffer.LightGridParams = lightCullData.LightGridParams;
 	constantBuffer.LightClusterDimensions = IntVector2(lightCullData.ClusterCount.x, lightCullData.ClusterCount.y);
@@ -361,27 +361,27 @@ RGTexture* ClusteredForward::RenderVolumetricFog(RGGraph& graph, const SceneView
 	graph.AddPass("Inject Volume Lights", RGPassFlag::Compute)
 		.Read({ pSourceVolume, lightCullData.pLightGrid, lightCullData.pLightIndexGrid })
 		.Write(pTargetVolume)
-			.Bind([=](CommandContext& context, const RGPassResources& resources)
-				{
-					Texture* pTarget = pTargetVolume->Get();
+		.Bind([=](CommandContext& context, const RGPassResources& resources)
+			{
+				Texture* pTarget = pTargetVolume->Get();
 
-					context.SetComputeRootSignature(m_pVolumetricLightingRS);
-					context.SetPipelineState(m_pInjectVolumeLightPSO);
+				context.SetComputeRootSignature(m_pVolumetricLightingRS);
+				context.SetPipelineState(m_pInjectVolumeLightPSO);
 
-					context.SetRootCBV(0, constantBuffer);
-					context.SetRootCBV(1, Renderer::GetViewUniforms(view));
-					context.BindResources(2, pTarget->GetUAV());
-					context.BindResources(3, {
-						lightCullData.pLightGrid->Get()->GetSRV(),
-						lightCullData.pLightIndexGrid->Get()->GetSRV(),
-						pSourceVolume->Get()->GetSRV(),
-						});
+				context.SetRootCBV(0, constantBuffer);
+				context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
+				context.BindResources(2, pTarget->GetUAV());
+				context.BindResources(3, {
+					lightCullData.pLightGrid->Get()->GetSRV(),
+					lightCullData.pLightIndexGrid->Get()->GetSRV(),
+					pSourceVolume->Get()->GetSRV(),
+					});
 
-					context.Dispatch(
-						ComputeUtils::GetNumThreadGroups(
-							pTarget->GetWidth(), 8,
-							pTarget->GetHeight(), 8,
-							pTarget->GetDepth(), 4)
+				context.Dispatch(
+					ComputeUtils::GetNumThreadGroups(
+						pTarget->GetWidth(), 8,
+						pTarget->GetHeight(), 8,
+						pTarget->GetDepth(), 4)
 				);
 			});
 
@@ -398,7 +398,7 @@ RGTexture* ClusteredForward::RenderVolumetricFog(RGGraph& graph, const SceneView
 				context.SetPipelineState(m_pAccumulateVolumeLightPSO);
 
 				context.SetRootCBV(0, constantBuffer);
-				context.SetRootCBV(1, Renderer::GetViewUniforms(view));
+				context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
 				context.BindResources(2, pFinalFog->GetUAV());
 				context.BindResources(3, {
 					lightCullData.pLightGrid->Get()->GetSRV(),
@@ -414,7 +414,7 @@ RGTexture* ClusteredForward::RenderVolumetricFog(RGGraph& graph, const SceneView
 	return pFinalVolumeFog;
 }
 
-void ClusteredForward::RenderBasePass(RGGraph& graph, const SceneView& view, SceneTextures& sceneTextures, const ClusteredLightCullData& lightCullData, RGTexture* pFogTexture)
+void ClusteredForward::RenderBasePass(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures, const ClusteredLightCullData& lightCullData, RGTexture* pFogTexture)
 {
 	static bool useMeshShader = false;
 	if (ImGui::Begin("Parameters"))
@@ -461,7 +461,7 @@ void ClusteredForward::RenderBasePass(RGGraph& graph, const SceneView& view, Sce
 
 				context.SetRootCBV(1, frameData);
 
-				context.SetRootCBV(2, Renderer::GetViewUniforms(view, sceneTextures.pColorTarget->Get()));
+				context.SetRootCBV(2, Renderer::GetViewUniforms(pView, sceneTextures.pColorTarget->Get()));
 
 				context.BindResources(3, {
 					sceneTextures.pAmbientOcclusion->Get()->GetSRV(),
@@ -475,25 +475,25 @@ void ClusteredForward::RenderBasePass(RGGraph& graph, const SceneView& view, Sce
 				{
 					GPU_PROFILE_SCOPE("Opaque", &context);
 					context.SetPipelineState(useMeshShader ? m_pMeshShaderDiffusePSO : m_pDiffusePSO);
-					Renderer::DrawScene(context, view, Batch::Blending::Opaque);
+					Renderer::DrawScene(context, pView, Batch::Blending::Opaque);
 				}
 				{
 					GPU_PROFILE_SCOPE("Opaque - Masked", &context);
 					context.SetPipelineState(useMeshShader ? m_pMeshShaderDiffuseMaskedPSO : m_pDiffuseMaskedPSO);
-					Renderer::DrawScene(context, view, Batch::Blending::AlphaMask);
+					Renderer::DrawScene(context, pView, Batch::Blending::AlphaMask);
 
 				}
 				{
 					GPU_PROFILE_SCOPE("Transparant", &context);
 					context.SetPipelineState(useMeshShader ? m_pMeshShaderDiffuseTransparancyPSO : m_pDiffuseTransparancyPSO);
-					Renderer::DrawScene(context, view, Batch::Blending::AlphaBlend);
+					Renderer::DrawScene(context, pView, Batch::Blending::AlphaBlend);
 				}
 
 				context.EndRenderPass();
 			});
 }
 
-void ClusteredForward::VisualizeLightDensity(RGGraph& graph, const SceneView& view, SceneTextures& sceneTextures)
+void ClusteredForward::VisualizeLightDensity(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures)
 {
 	RGTexture* pVisualizationTarget = graph.CreateTexture("Scene Color", sceneTextures.pColorTarget->GetDesc());
 
@@ -522,7 +522,7 @@ void ClusteredForward::VisualizeLightDensity(RGGraph& graph, const SceneView& vi
 				context.SetPipelineState(m_pVisualizeLightsPSO);
 				context.SetComputeRootSignature(m_pVisualizeLightsRS);
 				context.SetRootCBV(0, constantBuffer);
-				context.SetRootCBV(1, Renderer::GetViewUniforms(view, pTarget));
+				context.SetRootCBV(1, Renderer::GetViewUniforms(pView, pTarget));
 
 				context.BindResources(2, {
 					sceneTextures.pColorTarget->Get()->GetSRV(),

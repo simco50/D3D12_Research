@@ -36,15 +36,15 @@ public:
 	ClusteredForward(GraphicsDevice* pDevice);
 	~ClusteredForward();
 
-	void ComputeLightCulling(RGGraph& graph, const SceneView& view, ClusteredLightCullData& resources);
-	void VisualizeClusters(RGGraph& graph, const SceneView& view, SceneTextures& sceneTextures, ClusteredLightCullData& resources);
+	void ComputeLightCulling(RGGraph& graph, const SceneView* pView, ClusteredLightCullData& resources);
+	void VisualizeClusters(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures, ClusteredLightCullData& resources);
 
-	RGTexture* RenderVolumetricFog(RGGraph& graph, const SceneView& view, const ClusteredLightCullData& cullData, VolumetricFogData& fogData);
+	RGTexture* RenderVolumetricFog(RGGraph& graph, const SceneView* pView, const ClusteredLightCullData& cullData, VolumetricFogData& fogData);
 
-	void RenderBasePass(RGGraph& graph, const SceneView& view, SceneTextures& sceneTextures, const ClusteredLightCullData& lightCullData, RGTexture* pFogTexture);
+	void RenderBasePass(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures, const ClusteredLightCullData& lightCullData, RGTexture* pFogTexture);
 
-	void Execute(RGGraph& graph, const SceneView& view, SceneTextures& sceneTextures);
-	void VisualizeLightDensity(RGGraph& graph, const SceneView& view, SceneTextures& sceneTextures);
+	void Execute(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures);
+	void VisualizeLightDensity(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures);
 
 private:
 	GraphicsDevice* m_pDevice;
