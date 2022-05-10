@@ -42,8 +42,88 @@ private:
 	RGPass& m_Pass;
 };
 
+class RGGraphAllocator
+{
+public:
+	struct AllocatedObject
+	{
+		virtual ~AllocatedObject() = default;
+	};
+
+	template<typename T>
+	struct TAllocatedObject : public AllocatedObject
+	{
+		template<typename... Args>
+		TAllocatedObject(Args&&... args)
+			: Object(std::forward<Args&&>(args)...)
+		{}
+		T Object;
+	};
+
+	RGGraphAllocator(uint64 size)
+		: m_Size(size), m_pData(new char[size]), m_pCurrentOffset(m_pData)
+	{}
+
+	~RGGraphAllocator()
+	{
+		for (size_t i = 0; i < m_NonPODAllocations.size(); ++i)
+		{
+			m_NonPODAllocations[i]->~AllocatedObject();
+		}
+		delete[] m_pData;
+	}
+
+	template<typename T, typename ...Args>
+	T* Allocate(Args&&... args)
+	{
+		using AllocatedType = std::conditional_t<std::is_pod_v<T>, T, TAllocatedObject<T>>;
+		check(m_pCurrentOffset - m_pData + sizeof(AllocatedType) < m_Size);
+		void* pData = m_pCurrentOffset;
+		m_pCurrentOffset += sizeof(AllocatedType);
+		AllocatedType* pAllocation = new (pData) AllocatedType(std::forward<Args&&>(args)...);
+
+		if constexpr (std::is_pod_v<T>)
+		{
+			return pAllocation;
+		}
+		else
+		{
+			m_NonPODAllocations.push_back(pAllocation);
+			return &pAllocation->Object;
+		}
+	}
+
+private:
+	std::vector<AllocatedObject*> m_NonPODAllocations;
+	uint64 m_Size;
+	char* m_pData;
+	char* m_pCurrentOffset;
+};
+
 class RGPass
 {
+private:
+	struct IRGPassCallback
+	{
+		virtual ~IRGPassCallback() = default;
+		virtual void Execute(CommandContext& context, const RGPassResources& resources) = 0;
+	};
+
+	template<typename TLambda>
+	struct RGPassCallback : public IRGPassCallback
+	{
+		RGPassCallback(TLambda&& lambda)
+			: Lambda(std::forward<TLambda&&>(lambda))
+		{}
+
+		virtual void Execute(CommandContext& context, const RGPassResources& resources)
+		{
+			(Lambda)(context, resources);
+		}
+
+		TLambda Lambda;
+	};
+
 public:
 	friend class RGGraph;
 	friend class RGPassResources;
@@ -63,9 +143,8 @@ public:
 		bool Write;
 	};
 
-private:
-	RGPass(RGGraph& graph, const char* pName, RGPassFlag flags, uint32 id)
-		: Graph(graph), Flags(flags), ID(id)
+	RGPass(RGGraph& graph, RGGraphAllocator& allocator, const char* pName, RGPassFlag flags, uint32 id)
+		: Graph(graph), Flags(flags), ID(id), Allocator(allocator)
 	{
 		strcpy_s(Name, pName);
 	}
@@ -73,13 +152,12 @@ private:
 	RGPass(const RGPass& rhs) = delete;
 	RGPass& operator=(const RGPass& rhs) = delete;
 
-public:
 	template<typename ExecuteFn>
 	RGPass& Bind(ExecuteFn&& callback)
 	{
-		static_assert(sizeof(ExecuteFn) < 4096, "The Execute callback exceeds the maximum size");
-		checkf(!ExecuteCallback.IsBound(), "Pass is already bound! This may be unintentional");
-		ExecuteCallback.BindLambda(std::move(callback));
+		static_assert(sizeof(ExecuteFn) < 1024, "The Execute callback exceeds the maximum size");
+		checkf(!pExecuteCallback, "Pass is already bound! This may be unintentional");
+		pExecuteCallback = Allocator.Allocate<RGPassCallback<ExecuteFn>>(std::forward<ExecuteFn&&>(callback));
 		return *this;
 	}
 
@@ -98,9 +176,9 @@ private:
 
 	void AddAccess(RGResource* pResource, D3D12_RESOURCE_STATES state);
 
-	DECLARE_DELEGATE(ExecutePassDelegate, CommandContext& /*context*/, const RGPassResources& /*resources*/);
 	char Name[128];
 	RGGraph& Graph;
+	RGGraphAllocator& Allocator;
 	uint32 ID;
 	RGPassFlag Flags;
 	bool IsCulled = true;
@@ -109,7 +187,7 @@ private:
 	std::vector<RGPass*> PassDependencies;
 	std::vector<RenderTargetAccess> RenderTargets;
 	DepthStencilAccess DepthStencilTarget{};
-	ExecutePassDelegate ExecuteCallback;
+	IRGPassCallback* pExecuteCallback = nullptr;
 };
 
 class RGResourcePool : public GraphicsObject
@@ -139,64 +217,6 @@ private:
 
 class RGGraph
 {
-	class Allocator
-	{
-	public:
-		struct AllocatedObject
-		{
-			virtual ~AllocatedObject() = default;
-		};
-
-		template<typename T>
-		struct TAllocatedObject : public AllocatedObject
-		{
-			template<typename... Args>
-			TAllocatedObject(Args&&... args)
-				: Object(std::forward<Args&&>(args)...)
-			{}
-			T Object;
-		};
-
-		Allocator(uint64 size)
-			: m_Size(size), m_pData(new char[size]), m_pCurrentOffset(m_pData)
-		{}
-
-		~Allocator()
-		{
-			for (size_t i = 0; i < m_NonPODAllocations.size(); ++i)
-			{
-				m_NonPODAllocations[i]->~AllocatedObject();
-			}
-			delete[] m_pData;
-		}
-
-		template<typename T, typename ...Args>
-		T* Allocate(Args&&... args)
-		{
-			using AllocatedType = std::conditional_t<std::is_pod_v<T>, T, TAllocatedObject<T>>;
-			check(m_pCurrentOffset - m_pData + sizeof(AllocatedType) < m_Size);
-			void* pData = m_pCurrentOffset;
-			m_pCurrentOffset += sizeof(AllocatedType);
-			AllocatedType* pAllocation = new (pData) AllocatedType(std::forward<Args&&>(args)...);
-
-			if constexpr (std::is_pod_v<T>)
-			{
-				return pAllocation;
-			}
-			else
-			{
-				m_NonPODAllocations.push_back(pAllocation);
-				return &pAllocation->Object;
-			}
-		}
-
-	private:
-		std::vector<AllocatedObject*> m_NonPODAllocations;
-		uint64 m_Size;
-		char* m_pData;
-		char* m_pCurrentOffset;
-	};
-
 public:
 	RGGraph(GraphicsDevice* pDevice, RGResourcePool& resourcePool, uint64 allocatorSize = 0xFFFF);
 	~RGGraph();
@@ -218,7 +238,7 @@ public:
 
 	RGPass& AddPass(const char* pName, RGPassFlag flags)
 	{
-		RGPass* pPass = Allocate<RGPass>(std::ref(*this), pName, flags, (int)m_RenderPasses.size());
+		RGPass* pPass = Allocate<RGPass>(std::ref(*this), m_Allocator, pName, flags, (int)m_RenderPasses.size());
 		m_RenderPasses.push_back(pPass);
 		return *m_RenderPasses.back();
 	}
@@ -288,7 +308,7 @@ private:
 	void DestroyData();
 
 	GraphicsDevice* m_pDevice;
-	Allocator m_Allocator;
+	RGGraphAllocator m_Allocator;
 	SyncPoint m_LastSyncPoint;
 
 	std::vector<RGPass*> m_RenderPasses;

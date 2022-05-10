@@ -299,11 +299,11 @@ void RGGraph::ExecutePass(RGPass* pPass, CommandContext& context)
 {
 	PrepareResources(pPass, context);
 
-	if (pPass->ExecuteCallback.IsBound())
+	if (pPass->pExecuteCallback)
 	{
 		GPU_PROFILE_SCOPE_CONDITIONAL(pPass->Name, &context, !EnumHasAnyFlags(pPass->Flags, RGPassFlag::Invisible));
 		RGPassResources resources(*pPass);
-		pPass->ExecuteCallback.Execute(context, resources);
+		pPass->pExecuteCallback->Execute(context, resources);
 	}
 }
 

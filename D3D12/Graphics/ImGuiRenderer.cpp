@@ -131,7 +131,7 @@ void ImGuiRenderer::Initialize(GraphicsDevice* pDevice, WindowHandle window)
 
 	D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = pDevice->AllocateDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 	DescriptorHandle handle = pDevice->StoreViewDescriptor(srvHandle);
-	ImGui_ImplDX12_Init(pDevice->GetDevice(), SwapChain::NUM_FRAMES, DXGI_FORMAT_R8G8B8A8_UNORM, pDevice->GetGlobalViewHeap()->GetHeap(), handle.CpuHandle, handle.GpuHandle);
+	ImGui_ImplDX12_Init(pDevice->GetDevice(), SwapChain::NUM_FRAMES + 1, DXGI_FORMAT_R8G8B8A8_UNORM, pDevice->GetGlobalViewHeap()->GetHeap(), handle.CpuHandle, handle.GpuHandle);
 }
 
 void ImGuiRenderer::Shutdown()
