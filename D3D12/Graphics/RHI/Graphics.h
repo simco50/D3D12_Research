@@ -64,7 +64,7 @@ public:
 
 private:
 	DisplayMode m_DesiredDisplayMode;
-	SyncPoint m_PresentSyncPoint;
+	std::array<SyncPoint, NUM_FRAMES> m_PresentSyncPoints;
 	RefCountPtr<Fence> m_pPresentFence;
 	std::array<RefCountPtr<Texture>, NUM_FRAMES> m_Backbuffers;
 	RefCountPtr<IDXGISwapChain4> m_pSwapchain;

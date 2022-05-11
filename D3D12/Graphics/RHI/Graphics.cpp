@@ -1240,10 +1240,7 @@ SwapChain::SwapChain(GraphicsDevice* pDevice, DisplayMode displayMode, WindowHan
 
 SwapChain::~SwapChain()
 {
-	if (m_PresentSyncPoint)
-	{
-		m_PresentSyncPoint.Wait();
-	}
+	m_pPresentFence->CpuWait();
 	m_pSwapchain->SetFullscreenState(false, nullptr);
 }
 
@@ -1262,11 +1259,7 @@ void SwapChain::OnResizeOrMove(uint32 width, uint32 height)
 		m_Height = height;
 		m_Format = desiredFormat;
 
-		if (m_PresentSyncPoint)
-		{
-			m_PresentSyncPoint.Wait();
-			m_PresentSyncPoint = {};
-		}
+		m_pPresentFence->CpuWait();
 
 		for (size_t i = 0; i < m_Backbuffers.size(); ++i)
 		{
@@ -1307,12 +1300,20 @@ void SwapChain::OnResizeOrMove(uint32 width, uint32 height)
 
 void SwapChain::Present(bool vsync)
 {
+	// Wait until the current backbuffer image is ready - Not doing this makes running under PIX crash
+	SyncPoint& presentSyncPoint = m_PresentSyncPoints[m_pSwapchain->GetCurrentBackBufferIndex()];
+	if (presentSyncPoint)
+	{
+		presentSyncPoint.Wait();
+	}
+
 	m_pSwapchain->Present(vsync, !vsync && m_AllowTearing ? DXGI_PRESENT_ALLOW_TEARING : 0);
 	m_CurrentImage = m_pSwapchain->GetCurrentBackBufferIndex();
 
 	CommandQueue* pDirectQueue = GetParent()->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT);
 	uint64 fenceValue = m_pPresentFence->Signal(pDirectQueue);
-	m_PresentSyncPoint = SyncPoint(m_pPresentFence, fenceValue);
+
+	presentSyncPoint = SyncPoint(m_pPresentFence, fenceValue);
 }
 
 bool SwapChain::DisplaySupportsHDR() const

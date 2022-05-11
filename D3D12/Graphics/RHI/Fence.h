@@ -14,6 +14,7 @@ public:
 	uint64 Signal(uint64 fenceValue);
 	// Stall CPU until fence value is signaled on the GPU
 	void CpuWait(uint64 fenceValue);
+	void CpuWait();
 	// Returns true if the fence has reached this value or higher
 	bool IsComplete(uint64 fenceValue);
 	// Get the fence value that will get signaled next
