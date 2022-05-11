@@ -57,24 +57,23 @@ void CommandContext::Reset()
 
 SyncPoint CommandContext::Execute(bool wait)
 {
-	CommandContext* pContexts[] = { this };
-	return Execute(pContexts, ARRAYSIZE(pContexts), wait);
+	return Execute(this, wait);
 }
 
-SyncPoint CommandContext::Execute(CommandContext** pContexts, uint32 numContexts, bool wait)
+SyncPoint CommandContext::Execute(const Span<CommandContext* const>& contexts, bool wait)
 {
-	check(numContexts > 0);
-	CommandQueue* pQueue = pContexts[0]->GetParent()->GetCommandQueue(pContexts[0]->GetType());
-	for (uint32 i = 0; i < numContexts; ++i)
+	check(contexts.GetSize() > 0);
+	CommandQueue* pQueue = contexts[0]->GetParent()->GetCommandQueue(contexts[0]->GetType());
+	for(CommandContext* pContext : contexts)
 	{
-		checkf(pContexts[i]->GetType() == pQueue->GetType(), "All commandlist types must match. Expected %s, got %s",
-			D3D::CommandlistTypeToString(pQueue->GetType()), D3D::CommandlistTypeToString(pContexts[i]->GetType()));
-		pContexts[i]->FlushResourceBarriers();
+		checkf(pContext->GetType() == pQueue->GetType(), "All commandlist types must match. Expected %s, got %s",
+			D3D::CommandlistTypeToString(pQueue->GetType()), D3D::CommandlistTypeToString(pContext->GetType()));
+		pContext->FlushResourceBarriers();
 	}
-	SyncPoint syncPoint = pQueue->ExecuteCommandLists(pContexts, numContexts, wait);
-	for (uint32 i = 0; i < numContexts; ++i)
+	SyncPoint syncPoint = pQueue->ExecuteCommandLists(contexts, wait);
+	for (CommandContext* pContext : contexts)
 	{
-		pContexts[i]->Free(syncPoint);
+		pContext->Free(syncPoint);
 	}
 	return syncPoint;
 }
@@ -188,11 +187,11 @@ void CommandContext::WriteBuffer(Buffer* pResource, const void* pData, uint64 da
 	CopyBuffer(allocation.pBackingResource, pResource, dataSize, allocation.Offset, offset);
 }
 
-void CommandContext::WriteTexture(Texture* pResource, D3D12_SUBRESOURCE_DATA* pSubResourceDatas, uint32 firstSubResource, uint32 subResourceCount)
+void CommandContext::WriteTexture(Texture* pResource, const Span<D3D12_SUBRESOURCE_DATA>& subResourceDatas, uint32 firstSubResource)
 {
-	uint64 requiredSize = GetRequiredIntermediateSize(pResource->GetResource(), firstSubResource, subResourceCount);
+	uint64 requiredSize = GetRequiredIntermediateSize(pResource->GetResource(), firstSubResource, subResourceDatas.GetSize());
 	DynamicAllocation allocation = m_pDynamicAllocator->Allocate(requiredSize, D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT);
-	UpdateSubresources(m_pCommandList, pResource->GetResource(), allocation.pBackingResource->GetResource(), allocation.Offset, firstSubResource, subResourceCount, pSubResourceDatas);
+	UpdateSubresources(m_pCommandList, pResource->GetResource(), allocation.pBackingResource->GetResource(), allocation.Offset, firstSubResource, subResourceDatas.GetSize(), subResourceDatas.GetData());
 }
 
 void CommandContext::Dispatch(uint32 groupCountX, uint32 groupCountY, uint32 groupCountZ)
@@ -659,18 +658,21 @@ void CommandContext::SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY type)
 	m_pCommandList->IASetPrimitiveTopology(type);
 }
 
-void CommandContext::SetVertexBuffers(const VertexBufferView* pVertexBuffers, uint32 bufferCount)
+void CommandContext::SetVertexBuffers(const Span<VertexBufferView>& buffers)
 {
 	constexpr uint32 MAX_VERTEX_BUFFERS = 4;
-	checkf(bufferCount < MAX_VERTEX_BUFFERS, "VertexBuffer count (%d) exceeds the maximum (%d)", bufferCount, MAX_VERTEX_BUFFERS);
+	checkf(buffers.GetSize() < MAX_VERTEX_BUFFERS, "VertexBuffer count (%d) exceeds the maximum (%d)", buffers.GetSize(), MAX_VERTEX_BUFFERS);
 	std::array<D3D12_VERTEX_BUFFER_VIEW, MAX_VERTEX_BUFFERS> views = {};
-	for (uint32 i = 0; i < bufferCount; ++i)
+
+	uint32 numViews = 0;
+	for(const VertexBufferView& view : buffers)
 	{
-		views[i].BufferLocation = pVertexBuffers[i].Location;
-		views[i].SizeInBytes = pVertexBuffers[i].Elements * pVertexBuffers[i].Stride;
-		views[i].StrideInBytes = pVertexBuffers[i].Stride;
+		views[numViews].BufferLocation = view.Location;
+		views[numViews].SizeInBytes = view.Elements * view.Stride;
+		views[numViews].StrideInBytes = view.Stride;
+		++numViews;
 	}
-	m_pCommandList->IASetVertexBuffers(0, bufferCount, views.data());
+	m_pCommandList->IASetVertexBuffers(0, buffers.GetSize(), views.data());
 }
 
 void CommandContext::SetIndexBuffer(const IndexBufferView& indexBuffer)

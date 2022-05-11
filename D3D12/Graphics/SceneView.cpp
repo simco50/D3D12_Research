@@ -285,7 +285,7 @@ namespace GraphicsCommon
 			data.SlicePitch = data.RowPitch * desc.Width;
 			context.InsertResourceBarrier(pTexture, D3D12_RESOURCE_STATE_COPY_DEST);
 			context.FlushResourceBarriers();
-			context.WriteTexture(pTexture, &data, 0, 1);
+			context.WriteTexture(pTexture, data, 0);
 			DefaultTextures[(int)type] = pTexture;
 		};
 
@@ -379,7 +379,7 @@ namespace GraphicsCommon
 			pImg = pImg->GetNextImage();
 		}
 		RefCountPtr<Texture> pTexture = pDevice->CreateTexture(desc, pName ? pName : "");
-		context.WriteTexture(pTexture, subResourceData.data(), 0, (int)subResourceData.size());
+		context.WriteTexture(pTexture, subResourceData, 0);
 		return pTexture;
 	}
 

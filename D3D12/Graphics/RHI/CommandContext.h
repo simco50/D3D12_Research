@@ -155,7 +155,7 @@ public:
 
 	void Reset();
 	SyncPoint Execute(bool wait);
-	static SyncPoint Execute(CommandContext** pContexts, uint32 numContexts, bool wait);
+	static SyncPoint Execute(const Span<CommandContext* const>& contexts, bool wait);
 	void Free(const SyncPoint& syncPoint);
 
 	void InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESOURCE_STATES state, uint32 subResource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES);
@@ -167,7 +167,7 @@ public:
 	void CopyTexture(Texture* pSource, Texture* pDestination, const D3D12_BOX& sourceRegion, const D3D12_BOX& destinationRegion, uint32 sourceSubregion = 0, uint32 destinationSubregion = 0);
 	void CopyBuffer(Buffer* pSource, Buffer* pDestination, uint64 size, uint64 sourceOffset, uint64 destinationOffset);
 	void WriteBuffer(Buffer* pResource, const void* pData, uint64 dataSize, uint64 offset = 0);
-	void WriteTexture(Texture* pResource, D3D12_SUBRESOURCE_DATA* pSubResourceDatas, uint32 firstSubResource, uint32 subResourceCount);
+	void WriteTexture(Texture* pResource, const Span<D3D12_SUBRESOURCE_DATA>& subResourceDatas, uint32 firstSubResource);
 
 	void Dispatch(uint32 groupCountX, uint32 groupCountY = 1, uint32 groupCountZ = 1);
 	void Dispatch(const IntVector3& groupCounts);
@@ -192,7 +192,7 @@ public:
 	void SetPipelineState(StateObject* pStateObject);
 
 	void SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY type);
-	void SetVertexBuffers(const VertexBufferView* pBuffers, uint32 bufferCount);
+	void SetVertexBuffers(const Span<VertexBufferView>& buffers);
 	void SetIndexBuffer(const IndexBufferView& indexBuffer);
 	void SetViewport(const FloatRect& rect, float minDepth = 0.0f, float maxDepth = 1.0f);
 	void SetScissorRect(const FloatRect& rect);
