@@ -681,12 +681,12 @@ void DemoApp::Update()
 		graph.AddPass("Bindless Transition", RGPassFlag::NeverCull | RGPassFlag::Raster)
 			.Read({ pDepthTarget, pIrradianceTarget, pProbeStates, pProbeOffsets });
 
-		graph.ExportTexture(pDepthTarget, ddgi.pDepthHistory.This());
-		graph.ExportTexture(pIrradianceTarget, ddgi.pIrradianceHistory.This());
+		graph.ExportTexture(pDepthTarget, &ddgi.pDepthHistory);
+		graph.ExportTexture(pIrradianceTarget, &ddgi.pIrradianceHistory);
 	}
 
 	RGTexture* pSky = graph.CreateTexture("Sky", TextureDesc::Create2D(64, 128, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
-	graph.ExportTexture(pSky, pViewMut->pSky.This());
+	graph.ExportTexture(pSky, &pViewMut->pSky);
 
 	graph.AddPass("Compute Sky", RGPassFlag::Compute)
 		.Write(pSky)
@@ -1044,7 +1044,7 @@ void DemoApp::Update()
 					context.Dispatch(1);
 				});
 
-		graph.ExportBuffer(pAverageLuminance, m_pAverageLuminance.This());
+		graph.ExportBuffer(pAverageLuminance, &m_pAverageLuminance);
 	}
 	{
 		if (Tweakables::g_Bloom.Get())

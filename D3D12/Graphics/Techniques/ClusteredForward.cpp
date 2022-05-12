@@ -296,7 +296,7 @@ void ClusteredForward::VisualizeClusters(RGGraph& graph, const SceneView* pView,
 		graph.AddCopyPass("Cache Debug Light Grid", cullData.pLightGrid, pDebugLightGrid);
 		cullData.DebugClustersViewMatrix = pView->View.ViewInverse;
 		cullData.DirtyDebugData = false;
-		graph.ExportBuffer(pDebugLightGrid, cullData.pDebugLightGrid.This());
+		graph.ExportBuffer(pDebugLightGrid, &cullData.pDebugLightGrid);
 	}
 
 	graph.AddPass("Visualize Clusters", RGPassFlag::Raster)
@@ -385,7 +385,7 @@ RGTexture* ClusteredForward::RenderVolumetricFog(RGGraph& graph, const SceneView
 				);
 			});
 
-	graph.ExportTexture(pTargetVolume, fogData.pFogHistory.This());
+	graph.ExportTexture(pTargetVolume, &fogData.pFogHistory);
 
 	graph.AddPass("Accumulate Volume Fog", RGPassFlag::Compute)
 		.Read({ pTargetVolume, lightCullData.pLightGrid, lightCullData.pLightIndexGrid })

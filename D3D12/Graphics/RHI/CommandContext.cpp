@@ -16,9 +16,9 @@ CommandContext::CommandContext(GraphicsDevice* pParent, RefCountPtr<ID3D12Comman
 	: GraphicsObject(pParent), m_ShaderResourceDescriptorAllocator(pDescriptorHeap), m_pCommandListBase(pCommandList), m_Type(type)
 {
 	m_pDynamicAllocator = std::make_unique<DynamicResourceAllocator>(pDynamicMemoryManager);
-	pCommandList->QueryInterface(IID_PPV_ARGS(m_pCommandList.GetAddressOf()));
-	pCommandList->QueryInterface(IID_PPV_ARGS(m_pRaytracingCommandList.GetAddressOf()));
-	pCommandList->QueryInterface(IID_PPV_ARGS(m_pMeshShadingCommandList.GetAddressOf()));
+	pCommandList.As(&m_pCommandList);
+	pCommandList.As(&m_pRaytracingCommandList);
+	pCommandList.As(&m_pMeshShadingCommandList);
 }
 
 CommandContext::~CommandContext()

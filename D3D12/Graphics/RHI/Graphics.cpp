@@ -223,7 +223,7 @@ GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
 	if (options.UseDebugDevice)
 	{
 		RefCountPtr<ID3D12Debug> pDebugController;
-		if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&pDebugController))))
+		if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(pDebugController.GetAddressOf()))))
 		{
 			pDebugController->EnableDebugLayer();
 			E_LOG(Warning, "D3D12 Debug Layer Enabled");
@@ -233,7 +233,7 @@ GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
 	if (options.UseDRED)
 	{
 		RefCountPtr<ID3D12DeviceRemovedExtendedDataSettings1> pDredSettings;
-		if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&pDredSettings))))
+		if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(pDredSettings.GetAddressOf()))))
 		{
 			// Turn on auto-breadcrumbs and page fault reporting.
 			pDredSettings->SetAutoBreadcrumbsEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
@@ -246,7 +246,7 @@ GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
 	if (options.UseGPUValidation)
 	{
 		RefCountPtr<ID3D12Debug1> pDebugController;
-		if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&pDebugController))))
+		if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(pDebugController.GetAddressOf()))))
 		{
 			pDebugController->SetEnableGPUBasedValidation(true);
 			E_LOG(Warning, "D3D12 GPU Based Validation Enabled");
@@ -279,19 +279,21 @@ GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
 			while (pAdapter->EnumOutputs(outputIndex++, pOutput.ReleaseAndGetAddressOf()) == S_OK)
 			{
 				RefCountPtr<IDXGIOutput6> pOutput1;
-				pOutput->QueryInterface(&pOutput1);
-				DXGI_OUTPUT_DESC1 outputDesc;
-				pOutput1->GetDesc1(&outputDesc);
+				if (pOutput.As<IDXGIOutput6>(&pOutput1))
+				{
+					DXGI_OUTPUT_DESC1 outputDesc;
+					pOutput1->GetDesc1(&outputDesc);
 
-				E_LOG(Info, "\t\tMonitor %d - %dx%d - HDR: %s - %d BPP - Min Lum %f - Max Lum %f - MaxFFL %f",
-					outputIndex,
-					outputDesc.DesktopCoordinates.right - outputDesc.DesktopCoordinates.left,
-					outputDesc.DesktopCoordinates.bottom - outputDesc.DesktopCoordinates.top,
-					outputDesc.ColorSpace == DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020 ? "Yes" : "No",
-					outputDesc.BitsPerColor,
-					outputDesc.MinLuminance,
-					outputDesc.MaxLuminance,
-					outputDesc.MaxFullFrameLuminance);
+					E_LOG(Info, "\t\tMonitor %d - %dx%d - HDR: %s - %d BPP - Min Lum %f - Max Lum %f - MaxFFL %f",
+						outputIndex,
+						outputDesc.DesktopCoordinates.right - outputDesc.DesktopCoordinates.left,
+						outputDesc.DesktopCoordinates.bottom - outputDesc.DesktopCoordinates.top,
+						outputDesc.ColorSpace == DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020 ? "Yes" : "No",
+						outputDesc.BitsPerColor,
+						outputDesc.MinLuminance,
+						outputDesc.MaxLuminance,
+						outputDesc.MaxFullFrameLuminance);
+				}
 			}
 		}
 		m_pFactory->EnumAdapterByGpuPreference(0, gpuPreference, IID_PPV_ARGS(pAdapter.GetAddressOf()));
@@ -308,7 +310,7 @@ GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
 			D3D_FEATURE_LEVEL_11_0
 		};
 
-		VERIFY_HR(D3D12CreateDevice(pAdapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&pDevice)));
+		VERIFY_HR(D3D12CreateDevice(pAdapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(pDevice.GetAddressOf())));
 		D3D12_FEATURE_DATA_FEATURE_LEVELS caps{};
 		caps.pFeatureLevelsRequested = featureLevels;
 		caps.NumFeatureLevels = ARRAYSIZE(featureLevels);
@@ -323,8 +325,8 @@ GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
 	}
 
 	VERIFY_HR(D3D12CreateDevice(pAdapter, D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(m_pDevice.ReleaseAndGetAddressOf())));
-	VERIFY_HR(m_pDevice->QueryInterface(m_pDevice4.GetAddressOf()));
-	m_pDevice->QueryInterface(m_pRaytracingDevice.GetAddressOf());
+	check(m_pDevice.As(&m_pDevice4));
+	m_pDevice.As(&m_pRaytracingDevice);
 
 	D3D::SetObjectName(m_pDevice.Get(), "Main Device");
 
@@ -371,7 +373,7 @@ GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
 		pInfoQueue->PushStorageFilter(&NewFilter);
 
 		RefCountPtr<ID3D12InfoQueue1> pInfoQueue1;
-		if (SUCCEEDED(pInfoQueue->QueryInterface(&pInfoQueue1)))
+		if (pInfoQueue.As(&pInfoQueue1))
 		{
 			auto MessageCallback = [](
 				D3D12_MESSAGE_CATEGORY Category,
@@ -1231,7 +1233,7 @@ SwapChain::SwapChain(GraphicsDevice* pDevice, DisplayMode displayMode, WindowHan
 		swapChain.GetAddressOf()));
 
 	m_pSwapchain.Reset();
-	swapChain->QueryInterface(&m_pSwapchain);
+	swapChain.As(&m_pSwapchain);
 
 	DXGI_SWAP_CHAIN_DESC1 Desc = {};
 	swapChain->GetDesc1(&Desc);

@@ -158,11 +158,6 @@ public:
 		return ptr_;
 	}
 
-	RefCountPtr<T>* This() noexcept
-	{
-		return this;
-	}
-
 	operator T* () const
 	{
 		return ptr_;
@@ -173,9 +168,11 @@ public:
 		return ptr_;
 	}
 
-	T** operator&()
+	template<typename K>
+	bool As(RefCountPtr<K>* pTarget)
 	{
-		return &ptr_;
+		static_assert(std::is_base_of_v<IUnknown, K> && std::is_base_of_v<IUnknown, T>, "Type must inherit from IUnknown to support As()");
+		return SUCCEEDED(ptr_->QueryInterface(IID_PPV_ARGS(pTarget->ReleaseAndGetAddressOf())));
 	}
 
 	[[nodiscard]] T* const* GetAddressOf() const noexcept
