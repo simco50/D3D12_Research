@@ -143,8 +143,9 @@ void RGGraph::DumpGraph(const char* pPath) const
 			else if (pResource->Type == RGResourceType::Buffer)
 			{
 				const BufferDesc& desc = static_cast<RGBuffer*>(pResource)->Desc;
-				stream << "Size: " << Math::PrettyPrintDataSize(desc.Size) << "<br/>";
+				stream << "Stride: " << desc.ElementSize << "<br/>";
 				stream << "Fmt: " << D3D::FormatToString(desc.Format) << "<br/>";
+				stream << "Size: " << Math::PrettyPrintDataSize(desc.Size) << "<br/>";
 			}
 
 			stream << (pResource->IsImported ? ")]" : "])");

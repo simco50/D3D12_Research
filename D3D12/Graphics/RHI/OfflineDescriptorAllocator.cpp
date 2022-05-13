@@ -10,6 +10,7 @@ OfflineDescriptorAllocator::OfflineDescriptorAllocator(GraphicsDevice* pParent, 
 
 CD3DX12_CPU_DESCRIPTOR_HANDLE OfflineDescriptorAllocator::AllocateDescriptor()
 {
+	std::lock_guard lock(m_AllocationMutex);
 	if (m_FreeHeaps.size() == 0)
 	{
 		AllocateNewHeap();
@@ -31,6 +32,7 @@ CD3DX12_CPU_DESCRIPTOR_HANDLE OfflineDescriptorAllocator::AllocateDescriptor()
 
 void OfflineDescriptorAllocator::FreeDescriptor(D3D12_CPU_DESCRIPTOR_HANDLE handle)
 {
+	std::lock_guard lock(m_AllocationMutex);
 	int heapIndex = -1;
 	for (size_t i = 0; i < m_Heaps.size(); ++i)
 	{

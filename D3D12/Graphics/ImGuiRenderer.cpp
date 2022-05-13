@@ -151,7 +151,7 @@ void ImGuiRenderer::NewFrame()
 
 void ImGuiRenderer::Render(RGGraph& graph, Texture* pRenderTarget)
 {
-	graph.AddPass("Render UI", RGPassFlag::Raster)
+	graph.AddPass("Render UI", RGPassFlag::Raster | RGPassFlag::NeverCull)
 		.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
 			{
 				context.InsertResourceBarrier(pRenderTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
@@ -164,7 +164,7 @@ void ImGuiRenderer::Render(RGGraph& graph, Texture* pRenderTarget)
 	ImGuiIO& io = ImGui::GetIO();
 	if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
 	{
-		graph.AddPass("Update Platform UI", RGPassFlag::Raster)
+		graph.AddPass("Update Platform UI", RGPassFlag::Raster | RGPassFlag::NeverCull)
 			.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
 				{
 					ImGui::RenderPlatformWindowsDefault(NULL, (void*)context.GetCommandList());
