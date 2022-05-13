@@ -18,7 +18,7 @@ GraphicsResource::~GraphicsResource()
 		}
 		else
 		{
-			GetParent()->ReleaseResource(m_pResource);
+			GetParent()->DeferReleaseObject(m_pResource);
 		}
 		m_pResource = nullptr;
 	}

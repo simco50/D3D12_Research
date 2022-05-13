@@ -14,6 +14,7 @@
 #include "StateObject.h"
 #include "Core/CommandLine.h"
 #include "pix3.h"
+#include "dxgidebug.h"
 
 // Setup the Agility D3D12 SDK
 extern "C" { _declspec(dllexport) extern const UINT D3D12SDKVersion = D3D12_SDK_VERSION; }
@@ -206,6 +207,15 @@ GraphicsDevice::DRED::~DRED()
 	{
 		m_pFence->Signal(UINT64_MAX);
 		check(UnregisterWaitEx(m_WaitHandle, INVALID_HANDLE_VALUE));
+	}
+}
+
+GraphicsDevice::LiveObjectReporter::~LiveObjectReporter()
+{
+	RefCountPtr<IDXGIDebug1> pDXGIDebug;
+	if (SUCCEEDED(DXGIGetDebugInterface1(0, IID_PPV_ARGS(pDXGIDebug.GetAddressOf()))))
+	{
+		pDXGIDebug->ReportLiveObjects(DXGI_DEBUG_ALL, DXGI_DEBUG_RLO_FLAGS(DXGI_DEBUG_RLO_SUMMARY | DXGI_DEBUG_RLO_IGNORE_INTERNAL));
 	}
 }
 
@@ -786,9 +796,12 @@ RefCountPtr<Buffer> GraphicsDevice::CreateBuffer(const BufferDesc& desc, const c
 	return pBuffer;
 }
 
-void GraphicsDevice::ReleaseResource(ID3D12Object* pResource)
+void GraphicsDevice::DeferReleaseObject(ID3D12Object* pObject)
 {
-	m_DeleteQueue.EnqueueResource(pResource, GetFrameFence());
+	if (pObject)
+	{
+		m_DeleteQueue.EnqueueResource(pObject, GetFrameFence());
+	}
 }
 
 RefCountPtr<PipelineState> GraphicsDevice::CreateComputePipeline(RefCountPtr<RootSignature>& pRootSignature, const char* pShaderPath, const char* entryPoint, const Span<ShaderDefine>& defines)

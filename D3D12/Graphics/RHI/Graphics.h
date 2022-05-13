@@ -131,7 +131,7 @@ public:
 	RefCountPtr<Texture> CreateTexture(const TextureDesc& desc, const char* pName);
 	RefCountPtr<Texture> CreateTextureForSwapchain(ID3D12Resource* pSwapchainResource);
 	RefCountPtr<Buffer> CreateBuffer(const BufferDesc& desc, const char* pName);
-	void ReleaseResource(ID3D12Object* pResource);
+	void DeferReleaseObject(ID3D12Object* pObject);
 
 	RefCountPtr<PipelineState> CreatePipeline(const PipelineStateInitializer& psoDesc);
 	RefCountPtr<PipelineState> CreateComputePipeline(RefCountPtr<RootSignature>& pRootSignature, const char* pShaderPath, const char* entryPoint = "", const Span<ShaderDefine>& defines = {});
@@ -155,6 +155,11 @@ public:
 	IDXGIFactory6* GetFactory() const { return m_pFactory; }
 
 private:
+	struct LiveObjectReporter
+	{
+		~LiveObjectReporter();
+	} Reporter;
+
 	GraphicsCapabilities m_Capabilities;
 
 	RefCountPtr<IDXGIFactory6> m_pFactory;

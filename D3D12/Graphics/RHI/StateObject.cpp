@@ -48,12 +48,14 @@ StateObject::StateObject(GraphicsDevice* pParent)
 
 void StateObject::Create(const StateObjectInitializer& initializer)
 {
+	GetParent()->DeferReleaseObject(m_pStateObject.Detach());
+
 	m_Desc = initializer;
 	StateObjectStream stateObjectStream;
 	m_Desc.CreateStateObjectStream(stateObjectStream, GetParent());
 	VERIFY_HR(GetParent()->GetRaytracingDevice()->CreateStateObject(&stateObjectStream.Desc, IID_PPV_ARGS(m_pStateObject.ReleaseAndGetAddressOf())));
-	D3D::SetObjectName(m_pStateObject.Get(), m_Desc.Name.c_str());
-	m_pStateObject->QueryInterface(m_pStateObjectProperties.GetAddressOf());
+	D3D::SetObjectName(m_pStateObject, m_Desc.Name.c_str());
+	VERIFY_HR(m_pStateObject->QueryInterface(m_pStateObjectProperties.ReleaseAndGetAddressOf()));
 	//m_Desc.SetMaxPipelineStackSize(this); #todo: This is causing trouble with recursion!
 }
 
