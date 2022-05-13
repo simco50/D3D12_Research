@@ -27,7 +27,6 @@ struct ParticleData
 };
 
 GpuParticles::GpuParticles(GraphicsDevice* pDevice)
-	: m_pDevice(pDevice)
 {
 	CommandContext* pContext = pDevice->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 

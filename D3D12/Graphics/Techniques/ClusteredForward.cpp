@@ -443,6 +443,11 @@ void ClusteredForward::RenderBasePass(RGGraph& graph, const SceneView* pView, Sc
 		.RenderTarget(sceneTextures.pRoughness, RenderPassAccess::DontCare_Store)
 		.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
+				context.BeginRenderPass(resources.GetRenderPassInfo());
+
+				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+				context.SetGraphicsRootSignature(m_pDiffuseRS);
+
 				struct
 				{
 					IntVector4 ClusterDimensions;
@@ -454,13 +459,7 @@ void ClusteredForward::RenderBasePass(RGGraph& graph, const SceneView* pView, Sc
 				frameData.ClusterSize = IntVector2(gLightClusterTexelSize, gLightClusterTexelSize);
 				frameData.LightGridParams = lightCullData.LightGridParams;
 
-				context.BeginRenderPass(resources.GetRenderPassInfo());
-
-				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-				context.SetGraphicsRootSignature(m_pDiffuseRS);
-
 				context.SetRootCBV(1, frameData);
-
 				context.SetRootCBV(2, Renderer::GetViewUniforms(pView, sceneTextures.pColorTarget->Get()));
 
 				context.BindResources(3, {

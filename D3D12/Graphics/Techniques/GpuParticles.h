@@ -21,8 +21,6 @@ public:
 	void Render(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures);
 private:
 
-	GraphicsDevice* m_pDevice;
-
 	RefCountPtr<Buffer> m_pAliveList1;
 	RefCountPtr<Buffer> m_pAliveList2;
 	RefCountPtr<Buffer> m_pDeadList;

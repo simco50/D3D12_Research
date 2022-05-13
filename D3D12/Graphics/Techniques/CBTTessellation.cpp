@@ -312,6 +312,8 @@ void CBTTessellation::Execute(RGGraph& graph, const SceneView* pView, SceneTextu
 				context.InsertResourceBarrier(m_pCBTIndirectArgs, D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
 				context.InsertResourceBarrier(m_pDebugVisualizeTexture, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
+				context.BeginRenderPass(RenderPassInfo(m_pDebugVisualizeTexture, RenderPassAccess::Load_Store, nullptr, RenderPassAccess::NoAccess, false));
+
 				context.SetGraphicsRootSignature(m_pCBTRS);
 				context.SetPipelineState(m_pCBTDebugVisualizePSO);
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -320,7 +322,6 @@ void CBTTessellation::Execute(RGGraph& graph, const SceneView* pView, SceneTextu
 				context.SetRootCBV(1, updateData);
 				context.SetRootCBV(2, Renderer::GetViewUniforms(pView, m_pDebugVisualizeTexture));
 
-				context.BeginRenderPass(RenderPassInfo(m_pDebugVisualizeTexture, RenderPassAccess::Load_Store, nullptr, RenderPassAccess::NoAccess, false));
 				context.ExecuteIndirect(GraphicsCommon::pIndirectDrawSignature, 1, m_pCBTIndirectArgs, nullptr, IndirectDrawArgsOffset);
 				context.EndRenderPass();
 			});

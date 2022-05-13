@@ -155,7 +155,6 @@ public:
 	IDXGIFactory6* GetFactory() const { return m_pFactory; }
 
 private:
-	bool m_IsTearingDown = false;
 	GraphicsCapabilities m_Capabilities;
 
 	RefCountPtr<IDXGIFactory6> m_pFactory;

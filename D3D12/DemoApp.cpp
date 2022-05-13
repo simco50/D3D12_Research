@@ -1243,11 +1243,11 @@ void DemoApp::Update()
 				.RenderTarget(sceneTextures.pColorTarget, RenderPassAccess::Load_Store)
 				.Bind([=](CommandContext& context, const RGPassResources& resources)
 					{
+						context.BeginRenderPass(resources.GetRenderPassInfo());
+
 						context.SetGraphicsRootSignature(m_pCommonRS);
 						context.SetPipelineState(m_pDDGIVisualizePSO);
 						context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-						context.BeginRenderPass(resources.GetRenderPassInfo());
 
 						struct
 						{
@@ -1320,7 +1320,7 @@ void DemoApp::OnResizeViewport(int width, int height)
 	m_pColorHistory = m_pDevice->CreateTexture(TextureDesc::Create2D(width, height, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::ShaderResource), "Previous Color");
 	m_ColorOutput = m_pDevice->CreateTexture(TextureDesc::Create2D(width, height, DXGI_FORMAT_R8G8B8A8_UNORM), "Final Target");
 
-	for (int i = 0; i < SwapChain::NUM_FRAMES; ++i)
+	for (uint32 i = 0; i < SwapChain::NUM_FRAMES; ++i)
 	{
 		RefCountPtr<Buffer> pBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateTyped(1, DXGI_FORMAT_R32G32_FLOAT, BufferFlag::Readback), "SDSM Reduction Readback Target");
 		m_ReductionReadbackTargets.push_back(std::move(pBuffer));
@@ -1608,8 +1608,8 @@ void DemoApp::UpdateImGui()
 		{
 			if (ImGui::MenuItem(ICON_FA_FILE " Load Mesh", nullptr, nullptr))
 			{
-				OPENFILENAME ofn = { 0 };
-				TCHAR szFile[260] = { 0 };
+				OPENFILENAME ofn{};
+				TCHAR szFile[260]{};
 				ofn.lStructSize = sizeof(ofn);
 				ofn.hwndOwner = m_Window;
 				ofn.lpstrFile = szFile;
@@ -1951,7 +1951,7 @@ void DemoApp::CreateShadowViews(SceneView& view, World& world)
 		{
 			light.MatrixIndex = shadowIndex;
 		}
-		if (shadowIndex >= m_ShadowMaps.size())
+		if (shadowIndex >= (int32)m_ShadowMaps.size())
 		{
 			m_ShadowMaps.push_back(m_pDevice->CreateTexture(TextureDesc::CreateDepth(resolution, resolution, DEPTH_STENCIL_SHADOW_FORMAT, TextureFlag::DepthStencil | TextureFlag::ShaderResource, 1, ClearBinding(0.0f, 0)), "Shadow Map"));
 		}

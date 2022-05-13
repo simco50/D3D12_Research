@@ -141,14 +141,12 @@ void TiledForward::Execute(RGGraph& graph, const SceneView* pView, SceneTextures
 		.RenderTarget(sceneTextures.pRoughness, RenderPassAccess::DontCare_Store)
 		.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
-				Texture* pTarget = sceneTextures.pColorTarget->Get();
-
 				context.BeginRenderPass(resources.GetRenderPassInfo());
 
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 				context.SetGraphicsRootSignature(m_pDiffuseRS);
 
-				context.SetRootCBV(2, Renderer::GetViewUniforms(pView, pTarget));
+				context.SetRootCBV(2, Renderer::GetViewUniforms(pView, sceneTextures.pColorTarget->Get()));
 
 				{
 					GPU_PROFILE_SCOPE("Opaque", &context);

@@ -44,7 +44,7 @@ private:
 	DescriptorHandle m_StartHandle;
 
 	std::mutex m_DynamicBlockAllocateMutex;
-	uint32 m_DynamicBlockSize = 0;
+	uint32 m_DynamicBlockSize;
 	uint32 m_NumDynamicDescriptors;
 	std::vector<std::unique_ptr<DescriptorHeapBlock>> m_DynamicBlocks;
 	std::vector<DescriptorHeapBlock*> m_ReleasedDynamicBlocks;
