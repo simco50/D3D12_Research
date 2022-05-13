@@ -474,7 +474,7 @@ void DemoApp::Update()
 					// hack - copy the main viewport and then just modify the viewproj
 					SceneView view = *pView;
 
-					for (int i = 0; i < view.ShadowViews.size(); ++i)
+					for (uint32 i = 0; i < (uint32)view.ShadowViews.size(); ++i)
 					{
 						GPU_PROFILE_SCOPE("Light View", &context);
 						const ShadowView& shadowView = view.ShadowViews[i];

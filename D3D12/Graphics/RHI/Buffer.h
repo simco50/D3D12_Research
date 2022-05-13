@@ -147,11 +147,11 @@ struct VertexBufferView
 struct IndexBufferView
 {
 	IndexBufferView()
-		: Location(~0ull), Elements(0), Format(DXGI_FORMAT_R32_UINT), OffsetFromStart(0)
+		: Location(~0ull), Elements(0), OffsetFromStart(0), Format(DXGI_FORMAT_R32_UINT)
 	{}
 
 	IndexBufferView(D3D12_GPU_VIRTUAL_ADDRESS location, uint32 elements, DXGI_FORMAT format, uint64 offsetFromStart)
-		: Location(location), Elements(elements), Format(format), OffsetFromStart((uint32)offsetFromStart)
+		: Location(location), Elements(elements), OffsetFromStart((uint32)offsetFromStart), Format(format)
 	{
 		checkf(offsetFromStart <= std::numeric_limits<uint32>::max(), "Buffer offset (%llx) will be stored in a 32-bit uint and does not fit.", offsetFromStart);
 	}

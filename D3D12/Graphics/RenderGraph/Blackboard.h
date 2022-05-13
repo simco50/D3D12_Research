@@ -2,7 +2,7 @@
 #include "RenderGraphDefinitions.h"
 
 #define RG_BLACKBOARD_DATA(clazz) \
-	template<> inline constexpr StringHash RGBlackboard::GetTypeHash<clazz>() { return StringHash(MACRO_CONCAT(#clazz, STRINGIFY(__COUNTER__))); }
+	template<> inline constexpr StringHash RGBlackboard::GetTypeHash<clazz>() { return StringHash(#clazz STRINGIFY(__COUNTER__)); }
 
 class RGBlackboard final
 {
@@ -45,6 +45,7 @@ public:
 	static constexpr StringHash GetTypeHash()
 	{
 		static_assert(!sizeof(T), "Type requires RG_BLACKBOARD_DATA");
+		return 0;
 	}
 
 private:

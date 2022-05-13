@@ -144,7 +144,7 @@ public:
 	};
 
 	RGPass(RGGraph& graph, RGGraphAllocator& allocator, const char* pName, RGPassFlag flags, uint32 id)
-		: Graph(graph), Flags(flags), ID(id), Allocator(allocator)
+		: Graph(graph), Allocator(allocator), ID(id), Flags(flags)
 	{
 		strcpy_s(Name, pName);
 	}

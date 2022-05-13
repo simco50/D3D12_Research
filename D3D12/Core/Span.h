@@ -25,7 +25,7 @@ public:
 		m_pValue(pValue), m_Count(size)
 	{}
 
-	template<typename size_t N>
+	template<size_t N>
 	Span(const T(&arr)[N])
 		: m_pValue(arr), m_Count(N)
 	{}
