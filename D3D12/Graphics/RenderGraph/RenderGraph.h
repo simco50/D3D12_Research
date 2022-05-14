@@ -76,13 +76,13 @@ public:
 	template<typename T, typename ...Args>
 	T* Allocate(Args&&... args)
 	{
-		using AllocatedType = std::conditional_t<std::is_pod_v<T>, T, TAllocatedObject<T>>;
+		using AllocatedType = std::conditional_t<std::is_trivial_v<T>, T, TAllocatedObject<T>>;
 		check(m_pCurrentOffset - m_pData + sizeof(AllocatedType) < m_Size);
 		void* pData = m_pCurrentOffset;
 		m_pCurrentOffset += sizeof(AllocatedType);
 		AllocatedType* pAllocation = new (pData) AllocatedType(std::forward<Args&&>(args)...);
 
-		if constexpr (std::is_pod_v<T>)
+		if constexpr (std::is_trivial_v<T>)
 		{
 			return pAllocation;
 		}
