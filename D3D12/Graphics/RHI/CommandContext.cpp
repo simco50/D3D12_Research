@@ -322,18 +322,19 @@ void CommandContext::SetRootCBV(uint32 rootIndex, const void* pData, uint32 data
 
 void CommandContext::BindResources(uint32 rootIndex, const Span<const ResourceView*>& pViews, uint32 offset)
 {
-	static D3D12_CPU_DESCRIPTOR_HANDLE descriptors[16];
+	std::array<D3D12_CPU_DESCRIPTOR_HANDLE, 16> descriptors;
+	check(pViews.GetSize() < descriptors.size());
 	for (uint32 i = 0; i < pViews.GetSize(); ++i)
 	{
 		checkf(pViews[i], "ResourceView bound to root index %d with offset %d is null", rootIndex, offset);
 		descriptors[i] = pViews[i]->GetDescriptor();
 	}
-	BindResources(rootIndex, Span< D3D12_CPU_DESCRIPTOR_HANDLE>(descriptors, pViews.GetSize()), offset);
+	BindResources(rootIndex, Span<D3D12_CPU_DESCRIPTOR_HANDLE>(descriptors.data(), pViews.GetSize()), offset);
 }
 
 void CommandContext::BindResources(uint32 rootIndex, const Span<D3D12_CPU_DESCRIPTOR_HANDLE>& handles, uint32 offset)
 {
-	m_ShaderResourceDescriptorAllocator.SetDescriptors(rootIndex, offset, handles.GetSize(), handles.GetData());
+	m_ShaderResourceDescriptorAllocator.SetDescriptors(rootIndex, offset, handles);
 }
 
 void CommandContext::SetShadingRate(D3D12_SHADING_RATE shadingRate /*= D3D12_SHADING_RATE_1X1*/)

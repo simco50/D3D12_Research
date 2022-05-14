@@ -64,7 +64,7 @@ public:
 
 	DescriptorHandle Allocate(uint32 count);
 
-	void SetDescriptors(uint32 rootIndex, uint32 offset, uint32 numHandles, const D3D12_CPU_DESCRIPTOR_HANDLE* pHandles);
+	void SetDescriptors(uint32 rootIndex, uint32 offset, const Span< D3D12_CPU_DESCRIPTOR_HANDLE>& handles);
 	void BindStagedDescriptors(CommandContext& context, CommandListContext descriptorTableType);
 
 	void ParseRootSignature(RootSignature* pRootSignature);

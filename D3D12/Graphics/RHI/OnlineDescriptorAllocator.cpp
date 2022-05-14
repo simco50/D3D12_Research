@@ -115,24 +115,24 @@ OnlineDescriptorAllocator::OnlineDescriptorAllocator(GlobalOnlineDescriptorHeap*
 {
 }
 
-void OnlineDescriptorAllocator::SetDescriptors(uint32 rootIndex, uint32 offset, uint32 numHandles, const D3D12_CPU_DESCRIPTOR_HANDLE* pHandles)
+void OnlineDescriptorAllocator::SetDescriptors(uint32 rootIndex, uint32 offset, const Span< D3D12_CPU_DESCRIPTOR_HANDLE>& handles)
 {
 	RootDescriptorEntry& entry = m_RootDescriptorTable[rootIndex];
 	if (!m_StaleRootParameters.GetBit(rootIndex))
 	{
 		uint32 tableSize = entry.TableSize;
 		checkf(tableSize != ~0u, "Descriptor table at RootIndex '%d' is unbounded and should not use the descriptor allocator", rootIndex);
-		checkf(offset + numHandles <= tableSize, "Attempted to set a descriptor (Offset: %d, Range: %d) out of the descriptor table bounds (Size: %d)", offset, numHandles, rootIndex);
+		checkf(offset + handles.GetSize() <= tableSize, "Attempted to set a descriptor (Offset: %d, Range: %d) out of the descriptor table bounds (Size: %d)", offset, handles.GetSize(), rootIndex);
 		
 		entry.Descriptor = Allocate(tableSize);
 		m_StaleRootParameters.SetBit(rootIndex);
 	}
 
 	DescriptorHandle targetHandle = entry.Descriptor.Offset(offset, m_pHeapAllocator->GetDescriptorSize());
-	for (uint32 i = 0; i < numHandles; ++i)
+	for(uint32 i = 0; i < handles.GetSize(); ++i)
 	{
-		checkf(pHandles[i].ptr != DescriptorHandle::InvalidCPUHandle.ptr, "Invalid Descriptor provided (RootIndex: %d, Offset: %d)", rootIndex, offset + i);
-		GetParent()->GetDevice()->CopyDescriptorsSimple(1, targetHandle.CpuHandle, pHandles[i], m_Type);
+		checkf(handles[i].ptr != DescriptorHandle::InvalidCPUHandle.ptr, "Invalid Descriptor provided (RootIndex: %d, Offset: %d)", rootIndex, offset + i);
+		GetParent()->GetDevice()->CopyDescriptorsSimple(1, targetHandle.CpuHandle, handles[i], m_Type);
 		targetHandle.OffsetInline(1, m_pHeapAllocator->GetDescriptorSize());
 	}
 }
@@ -141,21 +141,18 @@ void OnlineDescriptorAllocator::BindStagedDescriptors(CommandContext& context, C
 {
 	for (uint32 rootIndex : m_StaleRootParameters)
 	{
-		if (m_StaleRootParameters.GetBit(rootIndex))
+		RootDescriptorEntry& entry = m_RootDescriptorTable[rootIndex];
+		switch (descriptorTableType)
 		{
-			RootDescriptorEntry& entry = m_RootDescriptorTable[rootIndex];
-			switch (descriptorTableType)
-			{
-			case CommandListContext::Graphics:
-				context.GetCommandList()->SetGraphicsRootDescriptorTable(rootIndex, entry.Descriptor.GpuHandle);
-				break;
-			case CommandListContext::Compute:
-				context.GetCommandList()->SetComputeRootDescriptorTable(rootIndex, entry.Descriptor.GpuHandle);
-				break;
-			default:
-				noEntry();
-				break;
-			}
+		case CommandListContext::Graphics:
+			context.GetCommandList()->SetGraphicsRootDescriptorTable(rootIndex, entry.Descriptor.GpuHandle);
+			break;
+		case CommandListContext::Compute:
+			context.GetCommandList()->SetComputeRootDescriptorTable(rootIndex, entry.Descriptor.GpuHandle);
+			break;
+		default:
+			noEntry();
+			break;
 		}
 	}
 
