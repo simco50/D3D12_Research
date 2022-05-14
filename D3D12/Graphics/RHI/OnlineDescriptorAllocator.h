@@ -47,8 +47,8 @@ private:
 	uint32 m_DynamicBlockSize;
 	uint32 m_NumDynamicDescriptors;
 	std::vector<std::unique_ptr<DescriptorHeapBlock>> m_DynamicBlocks;
-	std::vector<DescriptorHeapBlock*> m_ReleasedDynamicBlocks;
-	std::queue<DescriptorHeapBlock*> m_FreeDynamicBlocks;
+	std::queue<DescriptorHeapBlock*> m_ReleasedDynamicBlocks;
+	std::vector<DescriptorHeapBlock*> m_FreeDynamicBlocks;
 
 	std::vector<uint32> m_FreePersistentHandles;
 	uint32 m_NumPersistentAllocated = 0;

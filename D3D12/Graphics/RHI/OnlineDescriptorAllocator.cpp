@@ -29,7 +29,7 @@ GlobalOnlineDescriptorHeap::GlobalOnlineDescriptorHeap(GraphicsDevice* pParent, 
 	for (uint32 i = 0; i < numBlocks; ++i)
 	{
 		m_DynamicBlocks.emplace_back(std::make_unique<DescriptorHeapBlock>(currentOffset, dynamicBlockSize));
-		m_FreeDynamicBlocks.push(m_DynamicBlocks.back().get());
+		m_FreeDynamicBlocks.push_back(m_DynamicBlocks.back().get());
 		currentOffset.OffsetInline(dynamicBlockSize, m_DescriptorSize);
 	}
 
@@ -84,22 +84,21 @@ DescriptorHeapBlock* GlobalOnlineDescriptorHeap::AllocateBlock()
 	std::lock_guard lock(m_DynamicBlockAllocateMutex);
 
 	// Check if we can free so finished blocks
-	for (uint32 i = 0; i < (uint32)m_ReleasedDynamicBlocks.size(); ++i)
+	while(!m_ReleasedDynamicBlocks.empty())
 	{
-		DescriptorHeapBlock* pBlock = m_ReleasedDynamicBlocks[i];
-		if (pBlock->SyncPoint.IsComplete())
+		DescriptorHeapBlock* pBlock = m_ReleasedDynamicBlocks.front();
+		if (!pBlock->SyncPoint.IsComplete())
 		{
-			std::swap(m_ReleasedDynamicBlocks[i], m_ReleasedDynamicBlocks.back());
-			m_ReleasedDynamicBlocks.pop_back();
-			m_FreeDynamicBlocks.push(pBlock);
-			--i;
+			break;
 		}
+		m_ReleasedDynamicBlocks.pop();
+		m_FreeDynamicBlocks.push_back(pBlock);
 	}
 
 	checkf(!m_FreeDynamicBlocks.empty(), "Ran out of descriptor heap space. Must increase the number of descriptors.");
 
-	DescriptorHeapBlock* pBlock = m_FreeDynamicBlocks.front();
-	m_FreeDynamicBlocks.pop();
+	DescriptorHeapBlock* pBlock = m_FreeDynamicBlocks.back();
+	m_FreeDynamicBlocks.pop_back();
 	return pBlock;
 }
 
@@ -108,7 +107,7 @@ void GlobalOnlineDescriptorHeap::FreeBlock(const SyncPoint& syncPoint, Descripto
 	std::lock_guard lock(m_DynamicBlockAllocateMutex);
 	pBlock->SyncPoint = syncPoint;
 	pBlock->CurrentOffset = 0;
-	m_ReleasedDynamicBlocks.push_back(pBlock);
+	m_ReleasedDynamicBlocks.push(pBlock);
 }
 
 OnlineDescriptorAllocator::OnlineDescriptorAllocator(GlobalOnlineDescriptorHeap* pGlobalHeap)
