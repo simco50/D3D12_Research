@@ -42,7 +42,7 @@ public:
 private:
 	void OnResizeViewport(int width, int height);
 
-	void VisualizeTexture(RGGraph& graph, Texture* pTexture);
+	void VisualizeTexture(RGGraph& graph, RGTexture* pTexture);
 
 	void InitializePipelines();
 	void SetupScene(CommandContext& context);
@@ -154,7 +154,7 @@ private:
 	RefCountPtr<PipelineState> m_pVisualizeTexturePSO;
 	struct TextureVisualizeData
 	{
-		RefCountPtr<Texture> pTarget;
+		RefCountPtr<Texture> pVisualizeTexture;
 		float RangeMin = 0.0f;
 		float RangeMax = 1.0f;
 		bool VisibleChannels[4] = { true, true, true, true };

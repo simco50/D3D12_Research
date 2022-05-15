@@ -1501,29 +1501,22 @@ void DemoApp::InitializePipelines()
 	m_pVisualizeTexturePSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "ImageVisualize.hlsl", "CSMain");
 }
 
-void DemoApp::VisualizeTexture(RGGraph& graph, Texture* pTexture)
+void DemoApp::VisualizeTexture(RGGraph& graph, RGTexture* pTexture)
 {
-	RefCountPtr<Texture>& pTarget = m_VisualizeTextureData.pTarget;
+	const TextureDesc& desc = pTexture->GetDesc();
+	RGTexture* pTarget = graph.CreateTexture("Visualize Target", TextureDesc::Create2D(desc.Width, desc.Height, DXGI_FORMAT_R8G8B8A8_UNORM));
 
-	const TextureDesc& sourceDesc = pTexture->GetDesc();
-	if (!pTarget || pTarget->GetWidth() != sourceDesc.Width || pTarget->GetHeight() != sourceDesc.Height)
+	if (ImGui::Begin("Visualize Texture") && m_VisualizeTextureData.pVisualizeTexture)
 	{
-		pTarget = m_pDevice->CreateTexture(TextureDesc::Create2D(sourceDesc.Width, sourceDesc.Height, DXGI_FORMAT_R8G8B8A8_UNORM, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess), "Vis Target");
-	}
-
-	checkf(pTexture->GetWidth() == pTarget->GetWidth() && pTarget->GetHeight() == pTexture->GetHeight(), "2D dimensions must match");
-
-	if (ImGui::Begin("Visualize Texture"))
-	{
-		ImGui::Text("%s - Resolution: %dx%d", pTexture->GetName().c_str(), pTexture->GetWidth(), pTexture->GetHeight());
+		ImGui::Text("%s - Resolution: %dx%d", pTexture->GetName(), desc.Width, desc.Height);
 		ImGui::DragFloatRange2("Range", &m_VisualizeTextureData.RangeMin, &m_VisualizeTextureData.RangeMax, 0.02f, 0, 10);
-		if (pTexture->GetMipLevels() > 1)
+		if (desc.Mips > 1)
 		{
-			ImGui::SliderFloat("Mip", &m_VisualizeTextureData.MipLevel, 0, (float)pTexture->GetMipLevels() - 1);
+			ImGui::SliderFloat("Mip", &m_VisualizeTextureData.MipLevel, 0, (float)desc.Mips - 1);
 		}
-		if (pTexture->GetDepth() > 1)
+		if (desc.DepthOrArraySize > 1)
 		{
-			ImGui::SliderFloat("Slice", &m_VisualizeTextureData.Slice, 0, (float)pTexture->GetDepth() - 1);
+			ImGui::SliderFloat("Slice", &m_VisualizeTextureData.Slice, 0, (float)desc.DepthOrArraySize - 1);
 		}
 		ImGui::Checkbox("R", &m_VisualizeTextureData.VisibleChannels[0]);
 		ImGui::SameLine();
@@ -1533,16 +1526,15 @@ void DemoApp::VisualizeTexture(RGGraph& graph, Texture* pTexture)
 		ImGui::SameLine();
 		ImGui::Checkbox("A", &m_VisualizeTextureData.VisibleChannels[3]);
 
-		ImGui::ImageAutoSize(pTarget, ImVec2((float)pTarget->GetWidth(), (float)pTarget->GetHeight()));
+		ImGui::ImageAutoSize(m_VisualizeTextureData.pVisualizeTexture, ImVec2((float)desc.Width, (float)desc.Height));
 	}
 	ImGui::End();
 
-	graph.AddPass("Process Image Visualizer", RGPassFlag::Compute)
+	graph.AddPass("Process Image Visualizer", RGPassFlag::Compute | RGPassFlag::NeverCull)
+		.Read(pTexture)
+		.Write(pTarget)
 		.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
 			{
-				context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-				context.InsertResourceBarrier(pTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-
 				context.SetComputeRootSignature(m_pCommonRS);
 				context.SetPipelineState(m_pVisualizeTexturePSO);
 
@@ -1558,10 +1550,11 @@ void DemoApp::VisualizeTexture(RGGraph& graph, Texture* pTexture)
 					float Slice;
 				} constants;
 
-				constants.TextureSource = pTexture->GetSRV()->GetHeapIndex();
-				constants.TextureTarget = pTarget->GetUAV()->GetHeapIndex();
-				constants.InvDimensions.x = 1.0f / pTexture->GetWidth();
-				constants.InvDimensions.y = 1.0f / pTexture->GetHeight();
+				const TextureDesc& desc = pTexture->GetDesc();
+				constants.TextureSource = pTexture->Get()->GetSRV()->GetHeapIndex();
+				constants.TextureTarget = pTarget->Get()->GetUAV()->GetHeapIndex();
+				constants.InvDimensions.x = 1.0f / desc.Width;
+				constants.InvDimensions.y = 1.0f / desc.Height;
 				constants.TextureType = pTexture->GetDesc().Dimensions;
 				constants.ValueRange = Vector2(m_VisualizeTextureData.RangeMin, m_VisualizeTextureData.RangeMax);
 				constants.ChannelMask =
@@ -1570,12 +1563,14 @@ void DemoApp::VisualizeTexture(RGGraph& graph, Texture* pTexture)
 					(m_VisualizeTextureData.VisibleChannels[2] ? 1 : 0) << 2 |
 					(m_VisualizeTextureData.VisibleChannels[3] ? 1 : 0) << 3;
 				constants.MipLevel = m_VisualizeTextureData.MipLevel;
-				constants.Slice = m_VisualizeTextureData.Slice / pTexture->GetDepth();
+				constants.Slice = m_VisualizeTextureData.Slice / desc.DepthOrArraySize;
 
 				context.SetRootCBV(1, constants);
 
-				context.Dispatch(ComputeUtils::GetNumThreadGroups(pTexture->GetWidth(), 16, pTexture->GetHeight(), 16));
+				context.Dispatch(ComputeUtils::GetNumThreadGroups(desc.Width, 16, desc.Height, 16));
 			});
+
+	graph.ExportTexture(pTarget, &m_VisualizeTextureData.pVisualizeTexture);
 }
 
 void DemoApp::UpdateImGui()

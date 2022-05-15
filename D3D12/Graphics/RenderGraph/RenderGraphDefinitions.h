@@ -36,6 +36,8 @@ public:
 		: Name(pName), ID(id), IsImported(!!pResource), Type(type), pResourceReference(pResource), pResource(pResource)
 	{}
 
+	const char* GetName() const { return Name; }
+
 protected:
 	void SetResource(RefCountPtr<GraphicsResource> resource)
 	{
