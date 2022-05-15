@@ -658,15 +658,14 @@ void DemoApp::Update()
 			.Write({ pProbeOffsets, pProbeStates })
 			.Bind([=](CommandContext& context, const RGPassResources& resources)
 				{
-					context.InsertResourceBarrier(ddgi.pProbeOffset, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 					context.SetComputeRootSignature(m_pCommonRS);
 					context.SetPipelineState(m_pDDGIUpdateProbeStatesPSO);
 
 					context.SetRootConstants(0, parameters);
 					context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
 					context.BindResources(2, {
-						ddgi.pProbeStates->GetUAV(),
-						ddgi.pProbeOffset->GetUAV(),
+						pProbeStates->Get()->GetUAV(),
+						pProbeOffsets->Get()->GetUAV(),
 						});
 					context.BindResources(3, {
 						pRayBuffer->Get()->GetSRV(),
@@ -738,7 +737,6 @@ void DemoApp::Update()
 					context.SetPipelineState(m_pCameraMotionPSO);
 
 					context.SetRootCBV(1, Renderer::GetViewUniforms(pView, pVelocity));
-
 					context.BindResources(2, pVelocity->GetUAV());
 					context.BindResources(3, sceneTextures.pDepth->Get()->GetSRV());
 
@@ -827,15 +825,11 @@ void DemoApp::Update()
 		colorDesc.SampleCount = 1;
 		RGTexture* pResolveColor = graph.CreateTexture("Resolved Color", colorDesc);
 		graph.AddPass("Color Resolve", RGPassFlag::Compute)
-			.Read(sceneTextures.pColorTarget)
-			.Write(pResolveColor)
+			.RenderTarget(sceneTextures.pColorTarget, RenderTargetLoadAction::Load, pResolveColor)
 			.Bind([=](CommandContext& context, const RGPassResources& resources)
 				{
-					Texture* pSource = sceneTextures.pColorTarget->Get();
-					Texture* pTarget = pResolveColor->Get();
-					context.InsertResourceBarrier(pSource, D3D12_RESOURCE_STATE_RESOLVE_SOURCE);
-					context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_RESOLVE_DEST);
-					context.ResolveResource(pSource, 0, pTarget, 0, pTarget->GetFormat());
+					context.BeginRenderPass(resources.GetRenderPassInfo());
+					context.EndRenderPass();
 				});
 		sceneTextures.pColorTarget = pResolveColor;
 	}
@@ -857,12 +851,10 @@ void DemoApp::Update()
 				.Bind([=](CommandContext& context, const RGPassResources& resources)
 					{
 						Texture* pTarget = pTaaTarget->Get();
-
 						context.SetComputeRootSignature(m_pCommonRS);
 						context.SetPipelineState(m_pTemporalResolvePSO);
 
 						context.SetRootCBV(1, Renderer::GetViewUniforms(pView, pTarget));
-
 						context.BindResources(2, pTarget->GetUAV());
 						context.BindResources(3,
 							{
@@ -902,7 +894,6 @@ void DemoApp::Update()
 					context.SetPipelineState(pSource->GetDesc().SampleCount > 1 ? m_pPrepareReduceDepthMsaaPSO : m_pPrepareReduceDepthPSO);
 
 					context.SetRootCBV(1, Renderer::GetViewUniforms(pView, pTarget));
-
 					context.BindResources(2, pTarget->GetUAV());
 					context.BindResources(3, pSource->GetSRV());
 
