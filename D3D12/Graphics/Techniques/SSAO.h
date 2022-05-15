@@ -1,7 +1,6 @@
 #pragma once
 class GraphicsDevice;
 class RootSignature;
-class Texture;
 class RGGraph;
 class PipelineState;
 struct SceneView;
