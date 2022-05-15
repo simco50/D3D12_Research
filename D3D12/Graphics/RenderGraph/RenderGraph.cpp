@@ -108,7 +108,7 @@ RGGraph::~RGGraph()
 
 void RGGraph::Compile()
 {
-	constexpr bool PassCulling = false;
+	constexpr bool PassCulling = true;
 
 	if (PassCulling)
 	{

@@ -116,7 +116,7 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView* pView, RGTexture* p
 
 	RG_GRAPH_SCOPE("Particle Simulation", graph);
 
-	graph.AddPass("Prepare Arguments", RGPassFlag::Compute)
+	graph.AddPass("Prepare Arguments", RGPassFlag::Compute | RGPassFlag::NeverCull)
 		.Read(pDepth)
 		.Bind([=](CommandContext& context, const RGPassResources& resources)
 		{
@@ -156,7 +156,7 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView* pView, RGTexture* p
 			context.InsertResourceBarrier(m_pSimulateArguments, D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
 		});
 
-	graph.AddPass("Emit", RGPassFlag::Compute)
+	graph.AddPass("Emit", RGPassFlag::Compute | RGPassFlag::NeverCull)
 		.Read(pDepth)
 		.Bind([=](CommandContext& context, const RGPassResources& resources)
 		{
@@ -184,7 +184,7 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView* pView, RGTexture* p
 			context.InsertUavBarrier();
 		});
 
-	graph.AddPass("Simulate", RGPassFlag::Compute)
+	graph.AddPass("Simulate", RGPassFlag::Compute | RGPassFlag::NeverCull)
 		.Read(pDepth)
 		.Bind([=](CommandContext& context, const RGPassResources& resources)
 		{
@@ -213,7 +213,7 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView* pView, RGTexture* p
 			context.InsertUavBarrier();
 			});
 
-	graph.AddPass("Simulate End", RGPassFlag::Compute)
+	graph.AddPass("Simulate End", RGPassFlag::Compute | RGPassFlag::NeverCull)
 		.Read(pDepth)
 		.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{

@@ -464,19 +464,18 @@ void DemoApp::Update()
 
 	if (m_RenderPath == RenderPath::Clustered || m_RenderPath == RenderPath::Tiled || m_RenderPath == RenderPath::Visibility)
 	{
-		// SHADOWS
-		graph.AddPass("Shadow Depths", RGPassFlag::Raster)
-			.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
-				{
-					context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-					context.SetGraphicsRootSignature(m_pCommonRS);
-
-					// hack - copy the main viewport and then just modify the viewproj
-					SceneView view = *pView;
-
-					for (uint32 i = 0; i < (uint32)view.ShadowViews.size(); ++i)
+		RG_GRAPH_SCOPE("Shadow Depths", graph);
+		for (uint32 i = 0; i < (uint32)pView->ShadowViews.size(); ++i)
+		{
+			graph.AddPass(Sprintf("View %d", i).c_str(), RGPassFlag::Raster | RGPassFlag::NeverCull)
+				.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
 					{
-						GPU_PROFILE_SCOPE("Light View", &context);
+						context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+						context.SetGraphicsRootSignature(m_pCommonRS);
+
+						// hack - copy the main viewport and then just modify the viewproj
+						SceneView view = *pView;
+
 						const ShadowView& shadowView = view.ShadowViews[i];
 						Texture* pShadowmap = shadowView.pDepthTexture;
 						context.InsertResourceBarrier(pShadowmap, D3D12_RESOURCE_STATE_DEPTH_WRITE);
@@ -496,13 +495,12 @@ void DemoApp::Update()
 							Renderer::DrawScene(context, &view, shadowView.Visibility, Batch::Blending::AlphaMask | Batch::Blending::AlphaBlend);
 						}
 						context.EndRenderPass();
-					}
-				});
+					});
 		}
+	}
 
 	if (m_RenderPath == RenderPath::Clustered || m_RenderPath == RenderPath::Tiled)
 	{
-		//DEPTH PREPASS
 		// - Depth only pass that renders the entire scene
 		// - Optimization that prevents wasteful lighting calculations during the base pass
 		// - Required for light culling
@@ -562,7 +560,6 @@ void DemoApp::Update()
 
 	if (m_RenderPath == RenderPath::Clustered || m_RenderPath == RenderPath::Tiled || m_RenderPath == RenderPath::Visibility)
 	{
-		// PARTICLES GPU SIM
 		m_pParticles->Simulate(graph, pView, sceneTextures.pDepth);
 	}
 
@@ -1046,115 +1043,114 @@ void DemoApp::Update()
 
 		graph.ExportBuffer(pAverageLuminance, &m_pAverageLuminance);
 	}
+
+	RGTexture* pBloomTexture = graph.ImportTexture("Bloom", m_pBloomTexture);
+
+	if (Tweakables::g_Bloom.Get())
 	{
-		if (Tweakables::g_Bloom.Get())
-		{
-			RG_GRAPH_SCOPE("Bloom", graph);
+		RG_GRAPH_SCOPE("Bloom", graph);
 
-			graph.AddPass("Separate Bloom", RGPassFlag::Compute)
-				.Read({ sceneTextures.pColorTarget, pAverageLuminance })
-				.Bind([=](CommandContext& context, const RGPassResources& resources)
+		graph.AddPass("Separate Bloom", RGPassFlag::Compute)
+			.Read({ sceneTextures.pColorTarget, pAverageLuminance })
+			.Write(pBloomTexture)
+			.Bind([=](CommandContext& context, const RGPassResources& resources)
+				{
+					Texture* pTarget = pBloomTexture->Get();
+					RefCountPtr<UnorderedAccessView>* pTargetUAVs = m_pBloomUAVs.data();
+
+					context.SetComputeRootSignature(m_pCommonRS);
+					context.SetPipelineState(m_pBloomSeparatePSO);
+
+					struct
 					{
-						Texture* pTarget = m_pBloomTexture;
+						float Threshold;
+						float BrightnessClamp;
+					} parameters;
 
-						RefCountPtr<UnorderedAccessView>* pTargetUAVs = m_pBloomUAVs.data();
+					parameters.Threshold = Tweakables::g_BloomThreshold;
+					parameters.BrightnessClamp = Tweakables::g_BloomMaxBrightness;
 
-						context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+					context.SetRootConstants(0, parameters);
+					context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
 
-						context.SetComputeRootSignature(m_pCommonRS);
-						context.SetPipelineState(m_pBloomSeparatePSO);
+					context.BindResources(2, {
+						pTargetUAVs[0]
+						});
+					context.BindResources(3, {
+						sceneTextures.pColorTarget->Get()->GetSRV(),
+						pAverageLuminance->Get()->GetSRV(),
+						});;
 
+					context.Dispatch(ComputeUtils::GetNumThreadGroups(pTarget->GetWidth(), 8, pTarget->GetHeight(), 8));
+				});
+
+		graph.AddPass("Bloom Mip Chain", RGPassFlag::Compute)
+			.Write(pBloomTexture)
+			.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
+				{
+					Texture* pSource = pBloomTexture->Get();
+					Texture* pTarget = m_pBloomIntermediateTexture;
+
+					RefCountPtr<UnorderedAccessView>* pSourceUAVs = m_pBloomUAVs.data();
+					RefCountPtr<UnorderedAccessView>* pTargetUAVs = m_pBloomIntermediateUAVs.data();
+
+					context.SetComputeRootSignature(m_pCommonRS);
+					context.SetPipelineState(m_pBloomMipChainPSO);
+
+					context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
+
+					uint32 width = pTarget->GetWidth() / 2;
+					uint32 height = pTarget->GetHeight() / 2;
+
+					const uint32 numMips = pTarget->GetMipLevels();
+					constexpr uint32 ThreadGroupSize = 128;
+
+					for (uint32 i = 1; i < numMips; ++i)
+					{
 						struct
 						{
-							float Threshold;
-							float BrightnessClamp;
+							uint32 SourceMip;
+							Vector2 TargetDimensionsInv;
+							uint32 Horizontal;
 						} parameters;
 
-						parameters.Threshold = Tweakables::g_BloomThreshold;
-						parameters.BrightnessClamp = Tweakables::g_BloomMaxBrightness;
+						parameters.TargetDimensionsInv = Vector2(1.0f / width, 1.0f / height);
 
-						context.SetRootConstants(0, parameters);
-						context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
-
-						context.BindResources(2, {
-							pTargetUAVs[0]
-							});
-						context.BindResources(3, {
-							sceneTextures.pColorTarget->Get()->GetSRV(),
-							pAverageLuminance->Get()->GetSRV(),
-							});;
-
-						context.Dispatch(ComputeUtils::GetNumThreadGroups(pTarget->GetWidth(), 8, pTarget->GetHeight(), 8));
-					});
-
-			graph.AddPass("Bloom Mip Chain", RGPassFlag::Compute)
-				.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
-					{
-						Texture* pSource = m_pBloomTexture;
-						Texture* pTarget = m_pBloomIntermediateTexture;
-
-						RefCountPtr<UnorderedAccessView>* pSourceUAVs = m_pBloomUAVs.data();
-						RefCountPtr<UnorderedAccessView>* pTargetUAVs = m_pBloomIntermediateUAVs.data();
-
-						context.SetComputeRootSignature(m_pCommonRS);
-						context.SetPipelineState(m_pBloomMipChainPSO);
-
-						context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
-
-						uint32 width = pTarget->GetWidth() / 2;
-						uint32 height = pTarget->GetHeight() / 2;
-
-						const uint32 numMips = pTarget->GetMipLevels();
-						constexpr uint32 ThreadGroupSize = 128;
-
-						for (uint32 i = 1; i < numMips; ++i)
+						for (uint32 direction = 0; direction < 2; ++direction)
 						{
-							struct
-							{
-								uint32 SourceMip;
-								Vector2 TargetDimensionsInv;
-								uint32 Horizontal;
-							} parameters;
+							context.InsertResourceBarrier(pSource, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+							context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-							parameters.TargetDimensionsInv = Vector2(1.0f / width, 1.0f / height);
+							parameters.SourceMip = direction == 0 ? i - 1 : i;
+							parameters.Horizontal = direction;
 
-							for (uint32 direction = 0; direction < 2; ++direction)
-							{
-								context.InsertResourceBarrier(pSource, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-								context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+							context.SetRootConstants(0, parameters);
+							context.BindResources(2, pTargetUAVs[i].Get());
+							context.BindResources(3, pSource->GetSRV());
 
-								parameters.SourceMip = direction == 0 ? i - 1 : i;
-								parameters.Horizontal = direction;
+							IntVector3 numThreadGroups = direction == 0 ?
+								ComputeUtils::GetNumThreadGroups(width, 1, height, ThreadGroupSize) :
+								ComputeUtils::GetNumThreadGroups(width, ThreadGroupSize, height, 1);
+							context.Dispatch(numThreadGroups);
 
-								context.SetRootConstants(0, parameters);
-								context.BindResources(2, pTargetUAVs[i].Get());
-								context.BindResources(3, pSource->GetSRV());
-
-								IntVector3 numThreadGroups = direction == 0 ?
-									ComputeUtils::GetNumThreadGroups(width, 1, height, ThreadGroupSize) :
-									ComputeUtils::GetNumThreadGroups(width, ThreadGroupSize, height, 1);
-								context.Dispatch(numThreadGroups);
-
-								std::swap(pSource, pTarget);
-								std::swap(pSourceUAVs, pTargetUAVs);
-							}
-
-							width /= 2;
-							height /= 2;
+							std::swap(pSource, pTarget);
+							std::swap(pSourceUAVs, pTargetUAVs);
 						}
-					});
-		}
+
+						width /= 2;
+						height /= 2;
+					}
+				});
 	}
 
 	RGTexture* pTonemapTarget = graph.CreateTexture("Tonemap Target", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, DXGI_FORMAT_R8G8B8A8_UNORM));
 
 	graph.AddPass("Tonemap", RGPassFlag::Compute)
-		.Read({ sceneTextures.pColorTarget, pAverageLuminance })
+		.Read({ sceneTextures.pColorTarget, pAverageLuminance, pBloomTexture })
 		.Write(pTonemapTarget)
 		.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
 				Texture* pTarget = pTonemapTarget->Get();
-				context.InsertResourceBarrier(m_pBloomTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
 				struct
 				{
@@ -1173,7 +1169,7 @@ void DemoApp::Update()
 				context.BindResources(3, {
 					sceneTextures.pColorTarget->Get()->GetSRV(),
 					pAverageLuminance->Get()->GetSRV(),
-					Tweakables::g_Bloom.Get() ? m_pBloomTexture->GetSRV() : GraphicsCommon::GetDefaultTexture(DefaultTexture::Black2D)->GetSRV(),
+					Tweakables::g_Bloom.Get() ? pBloomTexture->Get()->GetSRV() : GraphicsCommon::GetDefaultTexture(DefaultTexture::Black2D)->GetSRV(),
 					});
 				context.Dispatch(ComputeUtils::GetNumThreadGroups(pTarget->GetWidth(), 16, pTarget->GetHeight(), 16));
 			});
@@ -1278,7 +1274,7 @@ void DemoApp::Update()
 	Texture* pBackbuffer = m_pSwapchain->GetBackBuffer();
 	ImGuiRenderer::Render(graph, pBackbuffer);
 
-	graph.AddPass("Transition", RGPassFlag::None)
+	graph.AddPass("Transition", RGPassFlag::NeverCull)
 		.Read(sceneTextures.pColorTarget)
 		.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
