@@ -285,12 +285,16 @@ SyncPoint RGGraph::Execute()
 
 	for (ExportedTexture& exportResource : m_ExportTextures)
 	{
-		*exportResource.pTarget = exportResource.pTexture->Get();
+		RefCountPtr<Texture> pTexture = exportResource.pTexture->Get();
+		pTexture->SetName(exportResource.pTexture->Name);
+		*exportResource.pTarget = pTexture;
 	}
 
 	for (ExportedBuffer& exportResource : m_ExportBuffers)
 	{
-		*exportResource.pTarget = exportResource.pBuffer->Get();
+		RefCountPtr<Buffer> pBuffer = exportResource.pBuffer->Get();
+		pBuffer->SetName(exportResource.pBuffer->Name);
+		*exportResource.pTarget = pBuffer;
 	}
 
 	DestroyData();
@@ -314,9 +318,8 @@ void RGGraph::PrepareResources(RGPass* pPass, CommandContext& context)
 	for (const RGPass::ResourceAccess& access : pPass->Accesses)
 	{
 		RGResource* pResource = access.pResource;
-		check(pResource->pResource);
-		check(pResource->IsImported || pResource->IsExported || !pResource->pResourceReference);
-
+		checkf(pResource->pResource, "Resource was not allocated during the graph compile phase");
+		checkf(pResource->IsImported || pResource->IsExported || !pResource->pResourceReference, "If resource is not external, it's reference should be released during the graph compile phase");
 		context.InsertResourceBarrier(pResource->pResource, access.Access);
 	}
 
@@ -327,6 +330,8 @@ void RGGraph::DestroyData()
 {
 	m_RenderPasses.clear();
 	m_Resources.clear();
+	m_ExportTextures.clear();
+	m_ExportBuffers.clear();
 }
 
 RenderPassInfo RGPassResources::GetRenderPassInfo() const

@@ -228,7 +228,7 @@ public:
 	SyncPoint Execute();
 	void DumpGraph(const char* pPath) const;
 
-	RGPass& AddCopyPass(const char* pName, RGResource* source, RGResource* target);
+	RGPass& AddCopyPass(const char* pName, RGResource* pSource, RGResource* pTarget);
 
 	template<typename T, typename... Args>
 	T* Allocate(Args&&... args)
@@ -257,10 +257,9 @@ public:
 		return pResource;
 	}
 
-	RGTexture* ImportTexture(Texture* pTexture, Texture* pFallback = nullptr)
+	RGTexture* ImportTexture(Texture* pTexture)
 	{
-		check(pTexture || pFallback);
-		pTexture = pTexture ? pTexture : pFallback;
+		check(pTexture);
 		RGTexture* pResource = Allocate<RGTexture>(pTexture->GetName().c_str(), (int)m_Resources.size(), pTexture->GetDesc(), pTexture);
 		m_Resources.push_back(pResource);
 		return pResource;
@@ -271,10 +270,9 @@ public:
 		return pTexture ? ImportTexture(pTexture) : nullptr;
 	}
 
-	RGBuffer* ImportBuffer(Buffer* pBuffer, Buffer* pFallback = nullptr)
+	RGBuffer* ImportBuffer(Buffer* pBuffer)
 	{
-		check(pBuffer || pFallback);
-		pBuffer = pBuffer ? pBuffer : pFallback;
+		check(pBuffer);
 		RGBuffer* pResource = Allocate<RGBuffer>(pBuffer->GetName().c_str(), (int)m_Resources.size(), pBuffer->GetDesc(), pBuffer);
 		m_Resources.push_back(pResource);
 		return pResource;
