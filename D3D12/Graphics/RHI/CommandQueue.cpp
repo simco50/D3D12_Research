@@ -22,10 +22,9 @@ CommandQueue::CommandQueue(GraphicsDevice* pParent, D3D12_COMMAND_LIST_TYPE type
 	VERIFY_HR(m_pCommandQueue->GetTimestampFrequency(&m_TimestampFrequency));
 }
 
-SyncPoint CommandQueue::ExecuteCommandLists(CommandContext** pCommandContexts, uint32 numContexts, bool wait)
+SyncPoint CommandQueue::ExecuteCommandLists(const Span<CommandContext* const>& contexts, bool wait)
 {
-	check(pCommandContexts);
-	check(numContexts > 0);
+	check(contexts.GetSize());
 
 	// Commandlists can be recorded in parallel.
 	// The before state of a resource transition can't be known so commandlists keep local resource states
@@ -35,41 +34,20 @@ SyncPoint CommandQueue::ExecuteCommandLists(CommandContext** pCommandContexts, u
 	// The first commandlist will resolve the barriers of the next so the first one will just contain resource barriers.
 
 	std::vector<ID3D12CommandList*> commandLists;
-	commandLists.reserve(numContexts + 1);
+	commandLists.reserve(contexts.GetSize() + 1);
 
-	CommandContext* pBarrierCommandlist = nullptr;
-	CommandContext* pCurrentContext = nullptr;
-	for (uint32 i = 0; i < numContexts; ++i)
+	CommandContext* pBarrierCommandlist = GetParent()->AllocateCommandContext(m_Type);
+	CommandContext* pCurrentContext = pBarrierCommandlist;
+
+	for(CommandContext* pNextContext : contexts)
 	{
-		CommandContext* pNextContext = pCommandContexts[i];
 		check(pNextContext);
 
-		ResourceBarrierBatcher barriers;
-		for (const CommandContext::PendingBarrier& pending : pNextContext->GetPendingBarriers())
-		{
-			uint32 subResource = pending.Subresource;
-			GraphicsResource* pResource = pending.pResource;
-			D3D12_RESOURCE_STATES beforeState = pResource->GetResourceState(subResource);
-			checkf(CommandContext::IsTransitionAllowed(m_Type, beforeState), 
-				"Resource (%s) can not be transitioned from this state (%s) on this queue (%s). Insert a barrier on another queue before executing this one.", 
-				pResource->GetName().c_str(), D3D::ResourceStateToString(beforeState).c_str(), D3D::CommandlistTypeToString(m_Type));
-			barriers.AddTransition(pResource->GetResource(), beforeState, pending.State.Get(subResource), subResource);
-			pResource->SetResourceState(pNextContext->GetResourceState(pending.pResource, subResource));
-		}
-		if (barriers.HasWork())
-		{
-			if (!pCurrentContext)
-			{
-				pBarrierCommandlist = GetParent()->AllocateCommandContext(m_Type);
-				pCurrentContext = pBarrierCommandlist;
-			}
-			barriers.Flush(pCurrentContext->GetCommandList());
-		}
-		if (pCurrentContext)
-		{
-			VERIFY_HR_EX(pCurrentContext->GetCommandList()->Close(), GetParent()->GetDevice());
-			commandLists.push_back(pCurrentContext->GetCommandList());
-		}
+		pNextContext->ResolvePendingBarriers(*pCurrentContext);
+
+		VERIFY_HR_EX(pCurrentContext->GetCommandList()->Close(), GetParent()->GetDevice());
+		commandLists.push_back(pCurrentContext->GetCommandList());
+
 		pCurrentContext = pNextContext;
 	}
 	VERIFY_HR_EX(pCurrentContext->GetCommandList()->Close(), GetParent()->GetDevice());
@@ -79,10 +57,8 @@ SyncPoint CommandQueue::ExecuteCommandLists(CommandContext** pCommandContexts, u
 
 	uint64 fenceValue = m_pFence->Signal(this);
 	m_SyncPoint = SyncPoint(m_pFence, fenceValue);
-	if (pBarrierCommandlist)
-	{
-		pBarrierCommandlist->Free(m_SyncPoint);
-	}
+
+	pBarrierCommandlist->Free(m_SyncPoint);
 
 	if (wait)
 	{

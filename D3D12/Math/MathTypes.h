@@ -32,6 +32,8 @@ struct TIntVector2
 		: x((T)v.x), y((T)v.y)
 	{}
 	T x, y;
+	bool operator==(const TIntVector2& rhs) const { return x == rhs.x && y == rhs.y; }
+	bool operator!=(const TIntVector2& rhs) const { return !operator==(rhs); }
 };
 
 template<typename T>
@@ -47,6 +49,8 @@ struct TIntVector3
 		: x((T)v.x), y((T)v.y), z((T)v.z)
 	{}
 	T x, y, z;
+	bool operator==(const TIntVector3& rhs) const { return x == rhs.x && y == rhs.y && z == rhs.z; }
+	bool operator!=(const TIntVector3& rhs) const { return !operator==(rhs); }
 };
 
 template<typename T>
@@ -65,6 +69,8 @@ struct TIntVector4
 		: x(rhs.x), y(rhs.y), z(rhs.z), w(w)
 	{}
 	T x, y, z, w;
+	bool operator==(const TIntVector4& rhs) const { return x == rhs.x && y == rhs.y && z == rhs.z && w == rhs.w; }
+	bool operator!=(const TIntVector4& rhs) const { return !operator==(rhs); }
 };
 
 using IntVector2 = TIntVector2<int32>;

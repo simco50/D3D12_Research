@@ -131,7 +131,7 @@ void ImGuiRenderer::Initialize(GraphicsDevice* pDevice, WindowHandle window)
 
 	D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = pDevice->AllocateDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 	DescriptorHandle handle = pDevice->StoreViewDescriptor(srvHandle);
-	ImGui_ImplDX12_Init(pDevice->GetDevice(), SwapChain::NUM_FRAMES, DXGI_FORMAT_R8G8B8A8_UNORM, pDevice->GetGlobalViewHeap()->GetHeap(), handle.CpuHandle, handle.GpuHandle);
+	ImGui_ImplDX12_Init(pDevice->GetDevice(), SwapChain::NUM_FRAMES + 1, DXGI_FORMAT_R8G8B8A8_UNORM, pDevice->GetGlobalViewHeap()->GetHeap(), handle.CpuHandle, handle.GpuHandle);
 }
 
 void ImGuiRenderer::Shutdown()
@@ -149,27 +149,27 @@ void ImGuiRenderer::NewFrame()
 	ImGuizmo::BeginFrame();
 }
 
-void ImGuiRenderer::Render(RGGraph& graph, const SceneView& sceneData, Texture* pRenderTarget)
+void ImGuiRenderer::Render(RGGraph& graph, Texture* pRenderTarget)
 {
-	graph.AddPass("Render UI")
+	graph.AddPass("Render UI", RGPassFlag::Raster | RGPassFlag::NeverCull)
 		.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
-		{
-			context.InsertResourceBarrier(pRenderTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
-			context.BeginRenderPass(RenderPassInfo(pRenderTarget, RenderPassAccess::Load_Store, nullptr, RenderPassAccess::NoAccess, false));
-			ImGui::Render();
-			ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), context.GetCommandList());
-			context.EndRenderPass();
-		});
+			{
+				context.InsertResourceBarrier(pRenderTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
+				context.BeginRenderPass(RenderPassInfo(pRenderTarget, RenderPassAccess::Load_Store, nullptr, RenderPassAccess::NoAccess, false));
+				ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), context.GetCommandList());
+				context.EndRenderPass();
+			});
 
 	// Update and Render additional Platform Windows
 	ImGuiIO& io = ImGui::GetIO();
 	if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
 	{
-		graph.AddPass("Update Platform UI")
+		graph.AddPass("Update Platform UI", RGPassFlag::Raster | RGPassFlag::NeverCull)
 			.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
-			{
-				ImGui::UpdatePlatformWindows();
-				ImGui::RenderPlatformWindowsDefault(NULL, (void*)context.GetCommandList());
-			});
+				{
+					ImGui::RenderPlatformWindowsDefault(NULL, (void*)context.GetCommandList());
+				});
 	}
+	ImGui::Render();
+	ImGui::UpdatePlatformWindows();
 }

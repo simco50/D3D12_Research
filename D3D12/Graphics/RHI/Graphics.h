@@ -55,6 +55,7 @@ public:
 	void SetVsync(bool enabled) { m_Vsync = enabled; }
 	bool DisplaySupportsHDR() const;
 
+	IntVector2 GetViewport() const;
 	IDXGISwapChain4* GetSwapChain() const { return m_pSwapchain.Get(); }
 	Texture* GetBackBuffer() const { return m_Backbuffers[m_CurrentImage]; }
 	Texture* GetBackBuffer(uint32 index) const { return m_Backbuffers[index]; }
@@ -63,7 +64,7 @@ public:
 
 private:
 	DisplayMode m_DesiredDisplayMode;
-	SyncPoint m_PresentSyncPoint;
+	std::array<SyncPoint, NUM_FRAMES> m_PresentSyncPoints;
 	RefCountPtr<Fence> m_pPresentFence;
 	std::array<RefCountPtr<Texture>, NUM_FRAMES> m_Backbuffers;
 	RefCountPtr<IDXGISwapChain4> m_pSwapchain;
@@ -130,7 +131,7 @@ public:
 	RefCountPtr<Texture> CreateTexture(const TextureDesc& desc, const char* pName);
 	RefCountPtr<Texture> CreateTextureForSwapchain(ID3D12Resource* pSwapchainResource);
 	RefCountPtr<Buffer> CreateBuffer(const BufferDesc& desc, const char* pName);
-	void ReleaseResource(ID3D12Object* pResource);
+	void DeferReleaseObject(ID3D12Object* pObject);
 
 	RefCountPtr<PipelineState> CreatePipeline(const PipelineStateInitializer& psoDesc);
 	RefCountPtr<PipelineState> CreateComputePipeline(RefCountPtr<RootSignature>& pRootSignature, const char* pShaderPath, const char* entryPoint = "", const Span<ShaderDefine>& defines = {});
@@ -154,11 +155,16 @@ public:
 	IDXGIFactory6* GetFactory() const { return m_pFactory; }
 
 private:
-	bool m_IsTearingDown = false;
+	struct LiveObjectReporter
+	{
+		~LiveObjectReporter();
+	} Reporter;
+
 	GraphicsCapabilities m_Capabilities;
 
 	RefCountPtr<IDXGIFactory6> m_pFactory;
 	RefCountPtr<ID3D12Device> m_pDevice;
+	RefCountPtr<ID3D12Device4> m_pDevice4;
 	RefCountPtr<ID3D12Device5> m_pRaytracingDevice;
 
 	class DRED
@@ -176,7 +182,6 @@ private:
 	std::array<RefCountPtr<CommandQueue>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_CommandQueues;
 	std::array<std::vector<RefCountPtr<CommandContext>>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_CommandListPool;
 	std::array<std::queue<CommandContext*>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_FreeCommandLists;
-	std::vector<RefCountPtr<ID3D12CommandList>> m_CommandLists;
 
 	class DeferredDeleteQueue : public GraphicsObject
 	{

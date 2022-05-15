@@ -58,6 +58,11 @@ void Fence::CpuWait(uint64 fenceValue)
 	m_LastCompleted = m_pFence->GetCompletedValue();
 }
 
+void Fence::CpuWait()
+{
+	CpuWait(m_LastSignaled);
+}
+
 bool Fence::IsComplete(uint64 fenceValue)
 {
 	if (fenceValue <= m_LastCompleted)

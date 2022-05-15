@@ -9,7 +9,7 @@ class CommandQueue : public GraphicsObject
 public:
 	CommandQueue(GraphicsDevice* pParent, D3D12_COMMAND_LIST_TYPE type);
 
-	SyncPoint ExecuteCommandLists(CommandContext** pCommandContexts, uint32 numContexts, bool wait = false);
+	SyncPoint ExecuteCommandLists(const Span<CommandContext* const>& contexts, bool wait = false);
 	ID3D12CommandQueue* GetCommandQueue() const { return m_pCommandQueue.Get(); }
 
 	void InsertWait(const SyncPoint& syncPoint);

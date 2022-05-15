@@ -241,7 +241,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 			m_Materials.push_back(Material());
 			Material& material = m_Materials.back();
 
-			auto RetrieveTexture = [this, &textureMap, pDevice, pContext, pFilePath](const cgltf_texture_view texture, bool srgb) -> Texture*
+			auto RetrieveTexture = [this, &textureMap, pContext, pFilePath](const cgltf_texture_view texture, bool srgb) -> Texture*
 			{
 				if (texture.texture)
 				{
@@ -519,7 +519,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 	DynamicAllocation allocation = pContext->AllocateTransientMemory(bufferSize);
 
 	uint64 dataOffset = 0;
-	auto CopyData = [this, &dataOffset, &pContext, &allocation](const void* pSource, uint64 size)
+	auto CopyData = [&dataOffset, &allocation](const void* pSource, uint64 size)
 	{
 		checkf(dataOffset < std::numeric_limits<uint32>::max(), "Offset stored in 32-bit int");
 		memcpy(static_cast<char*>(allocation.pMappedMemory) + dataOffset, pSource, size);

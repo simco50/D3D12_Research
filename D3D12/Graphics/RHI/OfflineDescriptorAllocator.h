@@ -33,4 +33,5 @@ private:
 	uint32 m_DescriptorsPerHeap;
 	uint32 m_DescriptorSize = 0;
 	D3D12_DESCRIPTOR_HEAP_TYPE m_Type;
+	std::mutex m_AllocationMutex;
 };

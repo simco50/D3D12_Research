@@ -14,6 +14,7 @@
 #include "StateObject.h"
 #include "Core/CommandLine.h"
 #include "pix3.h"
+#include "dxgidebug.h"
 
 // Setup the Agility D3D12 SDK
 extern "C" { _declspec(dllexport) extern const UINT D3D12SDKVersion = D3D12_SDK_VERSION; }
@@ -209,6 +210,15 @@ GraphicsDevice::DRED::~DRED()
 	}
 }
 
+GraphicsDevice::LiveObjectReporter::~LiveObjectReporter()
+{
+	RefCountPtr<IDXGIDebug1> pDXGIDebug;
+	if (SUCCEEDED(DXGIGetDebugInterface1(0, IID_PPV_ARGS(pDXGIDebug.GetAddressOf()))))
+	{
+		pDXGIDebug->ReportLiveObjects(DXGI_DEBUG_ALL, DXGI_DEBUG_RLO_FLAGS(DXGI_DEBUG_RLO_SUMMARY | DXGI_DEBUG_RLO_IGNORE_INTERNAL));
+	}
+}
+
 GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
 	: GraphicsObject(this), m_DeleteQueue(this)
 {
@@ -223,7 +233,7 @@ GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
 	if (options.UseDebugDevice)
 	{
 		RefCountPtr<ID3D12Debug> pDebugController;
-		if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&pDebugController))))
+		if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(pDebugController.GetAddressOf()))))
 		{
 			pDebugController->EnableDebugLayer();
 			E_LOG(Warning, "D3D12 Debug Layer Enabled");
@@ -233,7 +243,7 @@ GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
 	if (options.UseDRED)
 	{
 		RefCountPtr<ID3D12DeviceRemovedExtendedDataSettings1> pDredSettings;
-		if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&pDredSettings))))
+		if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(pDredSettings.GetAddressOf()))))
 		{
 			// Turn on auto-breadcrumbs and page fault reporting.
 			pDredSettings->SetAutoBreadcrumbsEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
@@ -246,7 +256,7 @@ GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
 	if (options.UseGPUValidation)
 	{
 		RefCountPtr<ID3D12Debug1> pDebugController;
-		if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&pDebugController))))
+		if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(pDebugController.GetAddressOf()))))
 		{
 			pDebugController->SetEnableGPUBasedValidation(true);
 			E_LOG(Warning, "D3D12 GPU Based Validation Enabled");
@@ -279,19 +289,21 @@ GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
 			while (pAdapter->EnumOutputs(outputIndex++, pOutput.ReleaseAndGetAddressOf()) == S_OK)
 			{
 				RefCountPtr<IDXGIOutput6> pOutput1;
-				pOutput->QueryInterface(&pOutput1);
-				DXGI_OUTPUT_DESC1 outputDesc;
-				pOutput1->GetDesc1(&outputDesc);
+				if (pOutput.As<IDXGIOutput6>(&pOutput1))
+				{
+					DXGI_OUTPUT_DESC1 outputDesc;
+					pOutput1->GetDesc1(&outputDesc);
 
-				E_LOG(Info, "\t\tMonitor %d - %dx%d - HDR: %s - %d BPP - Min Lum %f - Max Lum %f - MaxFFL %f",
-					outputIndex,
-					outputDesc.DesktopCoordinates.right - outputDesc.DesktopCoordinates.left,
-					outputDesc.DesktopCoordinates.bottom - outputDesc.DesktopCoordinates.top,
-					outputDesc.ColorSpace == DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020 ? "Yes" : "No",
-					outputDesc.BitsPerColor,
-					outputDesc.MinLuminance,
-					outputDesc.MaxLuminance,
-					outputDesc.MaxFullFrameLuminance);
+					E_LOG(Info, "\t\tMonitor %d - %dx%d - HDR: %s - %d BPP - Min Lum %f - Max Lum %f - MaxFFL %f",
+						outputIndex,
+						outputDesc.DesktopCoordinates.right - outputDesc.DesktopCoordinates.left,
+						outputDesc.DesktopCoordinates.bottom - outputDesc.DesktopCoordinates.top,
+						outputDesc.ColorSpace == DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020 ? "Yes" : "No",
+						outputDesc.BitsPerColor,
+						outputDesc.MinLuminance,
+						outputDesc.MaxLuminance,
+						outputDesc.MaxFullFrameLuminance);
+				}
 			}
 		}
 		m_pFactory->EnumAdapterByGpuPreference(0, gpuPreference, IID_PPV_ARGS(pAdapter.GetAddressOf()));
@@ -308,7 +320,7 @@ GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
 			D3D_FEATURE_LEVEL_11_0
 		};
 
-		VERIFY_HR(D3D12CreateDevice(pAdapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&pDevice)));
+		VERIFY_HR(D3D12CreateDevice(pAdapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(pDevice.GetAddressOf())));
 		D3D12_FEATURE_DATA_FEATURE_LEVELS caps{};
 		caps.pFeatureLevelsRequested = featureLevels;
 		caps.NumFeatureLevels = ARRAYSIZE(featureLevels);
@@ -323,7 +335,9 @@ GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
 	}
 
 	VERIFY_HR(D3D12CreateDevice(pAdapter, D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(m_pDevice.ReleaseAndGetAddressOf())));
-	m_pDevice->QueryInterface(&m_pRaytracingDevice);
+	check(m_pDevice.As(&m_pDevice4));
+	m_pDevice.As(&m_pRaytracingDevice);
+
 	D3D::SetObjectName(m_pDevice.Get(), "Main Device");
 
 	m_Capabilities.Initialize(this);
@@ -362,16 +376,14 @@ GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
 		NewFilter.DenyList.NumIDs = _countof(DenyIds);
 		NewFilter.DenyList.pIDList = DenyIds;
 
-		if (CommandLine::GetBool("d3dbreakvalidation"))
-		{
-			VERIFY_HR_EX(pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, true), GetDevice());
-			VERIFY_HR_EX(pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_WARNING, true), GetDevice());
-			E_LOG(Warning, "D3D Validation Break on Severity Enabled");
-		}
+		VERIFY_HR_EX(pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, true), GetDevice());
+		VERIFY_HR_EX(pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_WARNING, true), GetDevice());
+		E_LOG(Warning, "D3D Validation Break on Severity Enabled");
+
 		pInfoQueue->PushStorageFilter(&NewFilter);
 
 		RefCountPtr<ID3D12InfoQueue1> pInfoQueue1;
-		if (SUCCEEDED(pInfoQueue->QueryInterface(&pInfoQueue1)))
+		if (pInfoQueue.As(&pInfoQueue1))
 		{
 			auto MessageCallback = [](
 				D3D12_MESSAGE_CATEGORY Category,
@@ -434,26 +446,22 @@ CommandContext* GraphicsDevice::AllocateCommandContext(D3D12_COMMAND_LIST_TYPE t
 {
 	int typeIndex = (int)type;
 	CommandContext* pContext = nullptr;
-
 	{
 		std::scoped_lock<std::mutex> lock(m_ContextAllocationMutex);
 		if (m_FreeCommandLists[typeIndex].size() > 0)
 		{
 			pContext = m_FreeCommandLists[typeIndex].front();
 			m_FreeCommandLists[typeIndex].pop();
-			pContext->Reset();
 		}
 		else
 		{
 			RefCountPtr<ID3D12CommandList> pCommandList;
-			RefCountPtr<ID3D12CommandAllocator> pAllocator = m_CommandQueues[type]->RequestAllocator();
-			VERIFY_HR(GetDevice()->CreateCommandList(0, type, pAllocator, nullptr, IID_PPV_ARGS(pCommandList.GetAddressOf())));
-			D3D::SetObjectName(pCommandList.Get(), Sprintf("Pooled Commandlist %d", m_CommandLists.size()).c_str());
-			m_CommandLists.push_back(std::move(pCommandList));
-			m_CommandListPool[typeIndex].emplace_back(new CommandContext(this, static_cast<ID3D12GraphicsCommandList*>(m_CommandLists.back().Get()), type, m_pGlobalViewHeap, m_pDynamicAllocationManager, pAllocator));
-			pContext = m_CommandListPool[typeIndex].back();
+			VERIFY_HR(m_pDevice4->CreateCommandList1(0, type, D3D12_COMMAND_LIST_FLAG_NONE, IID_PPV_ARGS(pCommandList.GetAddressOf())));
+			D3D::SetObjectName(pCommandList.Get(), Sprintf("Pooled %s Commandlist %d", D3D::CommandlistTypeToString(type), m_CommandListPool[typeIndex].size()).c_str());
+			pContext = m_CommandListPool[typeIndex].emplace_back(new CommandContext(this, pCommandList, type, m_pGlobalViewHeap, m_pDynamicAllocationManager));
 		}
 	}
+	pContext->Reset();
 	return pContext;
 }
 
@@ -788,9 +796,12 @@ RefCountPtr<Buffer> GraphicsDevice::CreateBuffer(const BufferDesc& desc, const c
 	return pBuffer;
 }
 
-void GraphicsDevice::ReleaseResource(ID3D12Object* pResource)
+void GraphicsDevice::DeferReleaseObject(ID3D12Object* pObject)
 {
-	m_DeleteQueue.EnqueueResource(pResource, GetFrameFence());
+	if (pObject)
+	{
+		m_DeleteQueue.EnqueueResource(pObject, GetFrameFence());
+	}
 }
 
 RefCountPtr<PipelineState> GraphicsDevice::CreateComputePipeline(RefCountPtr<RootSignature>& pRootSignature, const char* pShaderPath, const char* entryPoint, const Span<ShaderDefine>& defines)
@@ -1235,7 +1246,7 @@ SwapChain::SwapChain(GraphicsDevice* pDevice, DisplayMode displayMode, WindowHan
 		swapChain.GetAddressOf()));
 
 	m_pSwapchain.Reset();
-	swapChain->QueryInterface(&m_pSwapchain);
+	swapChain.As(&m_pSwapchain);
 
 	DXGI_SWAP_CHAIN_DESC1 Desc = {};
 	swapChain->GetDesc1(&Desc);
@@ -1244,10 +1255,7 @@ SwapChain::SwapChain(GraphicsDevice* pDevice, DisplayMode displayMode, WindowHan
 
 SwapChain::~SwapChain()
 {
-	if (m_PresentSyncPoint)
-	{
-		m_PresentSyncPoint.Wait();
-	}
+	m_pPresentFence->CpuWait();
 	m_pSwapchain->SetFullscreenState(false, nullptr);
 }
 
@@ -1266,11 +1274,7 @@ void SwapChain::OnResizeOrMove(uint32 width, uint32 height)
 		m_Height = height;
 		m_Format = desiredFormat;
 
-		if (m_PresentSyncPoint)
-		{
-			m_PresentSyncPoint.Wait();
-			m_PresentSyncPoint = {};
-		}
+		m_pPresentFence->CpuWait();
 
 		for (size_t i = 0; i < m_Backbuffers.size(); ++i)
 		{
@@ -1311,12 +1315,20 @@ void SwapChain::OnResizeOrMove(uint32 width, uint32 height)
 
 void SwapChain::Present(bool vsync)
 {
+	// Wait until the current backbuffer image is ready - Not doing this makes running under PIX crash
+	SyncPoint& presentSyncPoint = m_PresentSyncPoints[m_pSwapchain->GetCurrentBackBufferIndex()];
+	if (presentSyncPoint)
+	{
+		presentSyncPoint.Wait();
+	}
+
 	m_pSwapchain->Present(vsync, !vsync && m_AllowTearing ? DXGI_PRESENT_ALLOW_TEARING : 0);
 	m_CurrentImage = m_pSwapchain->GetCurrentBackBufferIndex();
 
 	CommandQueue* pDirectQueue = GetParent()->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT);
 	uint64 fenceValue = m_pPresentFence->Signal(pDirectQueue);
-	m_PresentSyncPoint = SyncPoint(m_pPresentFence, fenceValue);
+
+	presentSyncPoint = SyncPoint(m_pPresentFence, fenceValue);
 }
 
 bool SwapChain::DisplaySupportsHDR() const
@@ -1335,4 +1347,10 @@ bool SwapChain::DisplaySupportsHDR() const
 		}
 	}
 	return false;
+}
+
+IntVector2 SwapChain::GetViewport() const
+{
+	Texture* pTexture = GetBackBuffer();
+	return IntVector2(pTexture->GetWidth(), pTexture->GetHeight());
 }

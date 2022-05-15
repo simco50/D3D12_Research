@@ -8,16 +8,16 @@ public:
 		m_pValue(nullptr), m_Count(0)
 	{}
 
-	Span(const std::initializer_list<T>& list) :
+	Span(const std::initializer_list<std::remove_cv_t<T>>& list) :
 		m_pValue(list.begin()), m_Count((uint32)list.size())
 	{}
 
-	Span(const std::vector<T>& v) :
+	Span(const std::vector<std::remove_cv_t<T>>& v) :
 		m_pValue(v.data()), m_Count((uint32)v.size())
 	{}
 
 	template<size_t N>
-	Span(const std::array<T, N>& v) :
+	Span(const std::array<std::remove_cv_t<T>, N>& v) :
 		m_pValue(v.data()), m_Count((uint32)v.size())
 	{}
 
@@ -25,7 +25,7 @@ public:
 		m_pValue(pValue), m_Count(size)
 	{}
 
-	template<typename size_t N>
+	template<size_t N>
 	Span(const T(&arr)[N])
 		: m_pValue(arr), m_Count(N)
 	{}

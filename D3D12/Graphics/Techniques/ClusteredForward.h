@@ -1,4 +1,5 @@
 #pragma once
+#include "../RenderGraph/RenderGraphDefinitions.h"
 class GraphicsDevice;
 class PipelineState;
 class RootSignature;
@@ -13,12 +14,11 @@ struct SceneTextures;
 struct ClusteredLightCullData
 {
 	IntVector3 ClusterCount;
-	RefCountPtr<Buffer> pAABBs;
-	RefCountPtr<Buffer> pLightIndexGrid;
-	RefCountPtr<Buffer> pLightGrid;
-	RefCountPtr<UnorderedAccessView> pLightGridRawUAV;
+	RGBuffer* pAABBs;
+	RGBuffer* pLightIndexGrid;
+	RGBuffer* pLightGrid;
+
 	Vector2 LightGridParams;
-	bool IsViewDirty = true;
 
 	RefCountPtr<Buffer> pDebugLightGrid;
 	Matrix DebugClustersViewMatrix;
@@ -27,8 +27,7 @@ struct ClusteredLightCullData
 
 struct VolumetricFogData
 {
-	RefCountPtr<Texture> pLightScatteringVolume[2];
-	RefCountPtr<Texture> pFinalVolumeFog;
+	RefCountPtr<Texture> pFogHistory;
 };
 
 class ClusteredForward
@@ -37,19 +36,15 @@ public:
 	ClusteredForward(GraphicsDevice* pDevice);
 	~ClusteredForward();
 
-	void OnResize(int windowWidth, int windowHeight);
+	void ComputeLightCulling(RGGraph& graph, const SceneView* pView, ClusteredLightCullData& resources);
+	void VisualizeClusters(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures, ClusteredLightCullData& resources);
 
-	void CreateLightCullingResources(ClusteredLightCullData& resources, const IntVector2& viewDimensions);
-	void ComputeLightCulling(RGGraph& graph, const SceneView& view, ClusteredLightCullData& resources);
-	void VisualizeClusters(RGGraph& graph, const SceneView& view, const SceneTextures& sceneTextures, ClusteredLightCullData& resources);
+	RGTexture* RenderVolumetricFog(RGGraph& graph, const SceneView* pView, const ClusteredLightCullData& cullData, VolumetricFogData& fogData);
 
-	void CreateVolumetricFogResources(VolumetricFogData& resources, const IntVector2& viewDimensions);
-	void RenderVolumetricFog(RGGraph& graph, const SceneView& view, const ClusteredLightCullData& cullData, VolumetricFogData& fogData);
+	void RenderBasePass(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures, const ClusteredLightCullData& lightCullData, RGTexture* pFogTexture);
 
-	void RenderBasePass(RGGraph& graph, const SceneView& view, const SceneTextures& sceneTextures, const ClusteredLightCullData& lightCullData, Texture* pFogTexture);
-
-	void Execute(RGGraph& graph, const SceneView& view, const SceneTextures& sceneTextures);
-	void VisualizeLightDensity(RGGraph& graph, const SceneView& view, const SceneTextures& sceneTextures);
+	void Execute(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures);
+	void VisualizeLightDensity(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures);
 
 private:
 	GraphicsDevice* m_pDevice;
@@ -82,7 +77,6 @@ private:
 	//Visualize Light Count
 	RefCountPtr<RootSignature> m_pVisualizeLightsRS;
 	RefCountPtr<PipelineState> m_pVisualizeLightsPSO;
-	RefCountPtr<Texture> m_pVisualizationIntermediateTexture;
 
 	//Volumetric Fog
 	RefCountPtr<RootSignature> m_pVolumetricLightingRS;

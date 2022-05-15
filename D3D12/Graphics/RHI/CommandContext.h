@@ -76,8 +76,8 @@ struct RenderPassInfo
 	struct DepthTargetInfo
 	{
 		Texture* Target = nullptr;
-		RenderPassAccess Access = RenderPassAccess::DontCare_DontCare;
-		RenderPassAccess StencilAccess = RenderPassAccess::DontCare_DontCare;
+		RenderPassAccess Access = RenderPassAccess::NoAccess;
+		RenderPassAccess StencilAccess = RenderPassAccess::NoAccess;
 		bool Write = true;
 	};
 
@@ -150,24 +150,24 @@ namespace ComputeUtils
 class CommandContext : public GraphicsObject
 {
 public:
-	CommandContext(GraphicsDevice* pParent, ID3D12GraphicsCommandList* pCommandList, D3D12_COMMAND_LIST_TYPE type, GlobalOnlineDescriptorHeap* pDescriptorHeap, DynamicAllocationManager* pDynamicMemoryManager, ID3D12CommandAllocator* pAllocator);
+	CommandContext(GraphicsDevice* pParent, RefCountPtr<ID3D12CommandList> pCommandList, D3D12_COMMAND_LIST_TYPE type, GlobalOnlineDescriptorHeap* pDescriptorHeap, DynamicAllocationManager* pDynamicMemoryManager);
 	~CommandContext();
 
 	void Reset();
 	SyncPoint Execute(bool wait);
-	static SyncPoint Execute(CommandContext** pContexts, uint32 numContexts, bool wait);
+	static SyncPoint Execute(const Span<CommandContext* const>& contexts, bool wait);
 	void Free(const SyncPoint& syncPoint);
 
 	void InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESOURCE_STATES state, uint32 subResource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES);
 	void InsertUavBarrier(GraphicsResource* pBuffer = nullptr);
 	void FlushResourceBarriers();
 
-	void CopyTexture(GraphicsResource* pSource, GraphicsResource* pTarget);
+	void CopyResource(GraphicsResource* pSource, GraphicsResource* pTarget);
 	void CopyTexture(Texture* pSource, Buffer* pDestination, const D3D12_BOX& sourceRegion, uint32 sourceSubregion = 0, uint32 destinationOffset = 0);
 	void CopyTexture(Texture* pSource, Texture* pDestination, const D3D12_BOX& sourceRegion, const D3D12_BOX& destinationRegion, uint32 sourceSubregion = 0, uint32 destinationSubregion = 0);
 	void CopyBuffer(Buffer* pSource, Buffer* pDestination, uint64 size, uint64 sourceOffset, uint64 destinationOffset);
 	void WriteBuffer(Buffer* pResource, const void* pData, uint64 dataSize, uint64 offset = 0);
-	void WriteTexture(Texture* pResource, D3D12_SUBRESOURCE_DATA* pSubResourceDatas, uint32 firstSubResource, uint32 subResourceCount);
+	void WriteTexture(Texture* pResource, const Span<D3D12_SUBRESOURCE_DATA>& subResourceDatas, uint32 firstSubResource);
 
 	void Dispatch(uint32 groupCountX, uint32 groupCountY = 1, uint32 groupCountZ = 1);
 	void Dispatch(const IntVector3& groupCounts);
@@ -175,7 +175,6 @@ public:
 	void DispatchMesh(const IntVector3& groupCounts);
 	void ExecuteIndirect(CommandSignature* pCommandSignature, uint32 maxCount, Buffer* pIndirectArguments, Buffer* pCountBuffer, uint32 argumentsOffset = 0, uint32 countOffset = 0);
 	void Draw(uint32 vertexStart, uint32 vertexCount, uint32 instances = 1, uint32 instanceStart = 0);
-	void DrawIndexed(uint32 indexCount, uint32 indexStart, uint32 minVertex = 0);
 	void DrawIndexedInstanced(uint32 indexCount, uint32 indexStart, uint32 instanceCount, uint32 minVertex = 0, uint32 instanceStart = 0);
 	void DispatchRays(ShaderBindingTable& table, uint32 width = 1, uint32 height = 1, uint32 depth = 1);
 
@@ -193,7 +192,7 @@ public:
 	void SetPipelineState(StateObject* pStateObject);
 
 	void SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY type);
-	void SetVertexBuffers(const VertexBufferView* pBuffers, uint32 bufferCount);
+	void SetVertexBuffers(const Span<VertexBufferView>& buffers);
 	void SetIndexBuffer(const IndexBufferView& indexBuffer);
 	void SetViewport(const FloatRect& rect, float minDepth = 0.0f, float maxDepth = 1.0f);
 	void SetScissorRect(const FloatRect& rect);
@@ -231,9 +230,18 @@ public:
 
 	D3D12_COMMAND_LIST_TYPE GetType() const { return m_Type; }
 	const PipelineState* GetCurrentPSO() const { return m_pCurrentPSO; }
+	void ResolvePendingBarriers(CommandContext& resolveContext);
+
+private:
+	void PrepareDraw();
 
 	static bool IsTransitionAllowed(D3D12_COMMAND_LIST_TYPE commandlistType, D3D12_RESOURCE_STATES state);
-
+	D3D12_RESOURCE_STATES GetLocalResourceState(GraphicsResource* pResource, uint32 subResource) const
+	{
+		auto it = m_ResourceStates.find(pResource);
+		check(it != m_ResourceStates.end());
+		return it->second.Get(subResource);
+	}
 	struct PendingBarrier
 	{
 		GraphicsResource* pResource;
@@ -241,36 +249,12 @@ public:
 		uint32 Subresource;
 	};
 
-	Span<PendingBarrier> GetPendingBarriers() const { return m_PendingBarriers; }
-
-	D3D12_RESOURCE_STATES GetResourceState(GraphicsResource* pResource, uint32 subResource) const
-	{
-		auto it = m_ResourceStates.find(pResource);
-		check(it != m_ResourceStates.end());
-		return it->second.Get(subResource);
-	}
-
-private:
-	void PrepareDraw();
-
 	std::vector<PendingBarrier> m_PendingBarriers;
-
-	D3D12_RESOURCE_STATES GetResourceStateWithFallback(GraphicsResource* pResource, uint32 subResource) const
-	{
-		auto it = m_ResourceStates.find(pResource);
-		if (it == m_ResourceStates.end())
-		{
-			return pResource->GetResourceState(subResource);
-		}
-		return it->second.Get(subResource);
-	}
-
 	OnlineDescriptorAllocator m_ShaderResourceDescriptorAllocator;
-
 	ResourceBarrierBatcher m_BarrierBatcher;
-
 	std::unique_ptr<DynamicResourceAllocator> m_pDynamicAllocator;
-	ID3D12GraphicsCommandList* m_pCommandList;
+	RefCountPtr<ID3D12CommandList> m_pCommandListBase;
+	RefCountPtr<ID3D12GraphicsCommandList> m_pCommandList;
 	RefCountPtr<ID3D12GraphicsCommandList4> m_pRaytracingCommandList;
 	RefCountPtr<ID3D12GraphicsCommandList6> m_pMeshShadingCommandList;
 	RefCountPtr<ID3D12CommandAllocator> m_pAllocator;

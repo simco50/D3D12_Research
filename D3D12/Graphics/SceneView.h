@@ -2,6 +2,7 @@
 #include "Core/BitField.h"
 #include "ShaderInterop.h"
 #include "AccelerationStructure.h"
+#include "RenderGraph/RenderGraphDefinitions.h"
 
 class Texture;
 class Buffer;
@@ -21,10 +22,9 @@ struct DDGIVolume
 	IntVector3 NumProbes;
 	int32 MaxNumRays;
 	int32 NumRays;
-	std::array<RefCountPtr<Texture>, 2> pIrradiance;
-	std::array<RefCountPtr<Texture>, 2> pDepth;
+	RefCountPtr<Texture> pIrradianceHistory;
+	RefCountPtr<Texture> pDepthHistory;
 	RefCountPtr<Buffer> pProbeOffset;
-	RefCountPtr<Buffer> pRayBuffer;
 	RefCountPtr<Buffer> pProbeStates;
 };
 
@@ -107,25 +107,29 @@ struct SceneView
 	std::vector<ShadowView> ShadowViews;
 	Vector4 ShadowCascadeDepths;
 	uint32 NumShadowCascades;
+
+	IntVector2 GetDimensions() const;
 };
 
 struct SceneTextures
 {
-	RefCountPtr<Texture> pColorTarget;
-	RefCountPtr<Texture> pNormalsTarget;
-	RefCountPtr<Texture> pRoughnessTarget;
-	RefCountPtr<Texture> pDepth;
-	RefCountPtr<Texture> pAmbientOcclusion;
-	RefCountPtr<Texture> pPreviousColorTarget;
-	RefCountPtr<Texture> pVelocity;
+	RGTexture* pVisibilityBuffer;
+	RGTexture* pPreviousColor;
+	RGTexture* pRoughness;
+	RGTexture* pColorTarget;
+	RGTexture* pDepth;
+	RGTexture* pResolvedDepth;
+	RGTexture* pNormals;
+	RGTexture* pVelocity;
+	RGTexture* pAmbientOcclusion;
 };
 
 namespace Renderer
 {
-	void DrawScene(CommandContext& context, const SceneView& scene, const VisibilityMask& visibility, Batch::Blending blendModes);
-	void DrawScene(CommandContext& context, const SceneView& scene, Batch::Blending blendModes);
-	ShaderInterop::ViewUniforms GetViewUniforms(const SceneView& sceneView, Texture* pTarget = nullptr);
-	void UploadSceneData(CommandContext& context, SceneView& view, World& world);
+	void DrawScene(CommandContext& context, const SceneView* pView, const VisibilityMask& visibility, Batch::Blending blendModes);
+	void DrawScene(CommandContext& context, const SceneView* pView, Batch::Blending blendModes);
+	ShaderInterop::ViewUniforms GetViewUniforms(const SceneView* pView, Texture* pTarget = nullptr);
+	void UploadSceneData(CommandContext& context, SceneView* pView, World* pWorld);
 }
 
 enum class DefaultTexture

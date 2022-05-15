@@ -6,7 +6,7 @@
 #include "CommandQueue.h"
 
 GlobalOnlineDescriptorHeap::GlobalOnlineDescriptorHeap(GraphicsDevice* pParent, D3D12_DESCRIPTOR_HEAP_TYPE type, uint32 dynamicBlockSize, uint32 numDescriptors)
-	: GraphicsObject(pParent), m_Type(type), m_NumDynamicDescriptors(numDescriptors / 2), m_NumPersistentDescriptors(numDescriptors / 2), m_DynamicBlockSize(dynamicBlockSize)
+	: GraphicsObject(pParent), m_Type(type), m_DynamicBlockSize(dynamicBlockSize), m_NumDynamicDescriptors(numDescriptors / 2), m_NumPersistentDescriptors(numDescriptors / 2)
 {
 	checkf(dynamicBlockSize >= 32, "Block size must be at least 128 (is %d)", dynamicBlockSize);
 	checkf(m_NumDynamicDescriptors % dynamicBlockSize == 0, "Number of descriptors must be a multiple of blockSize (%d)", dynamicBlockSize);
@@ -29,7 +29,7 @@ GlobalOnlineDescriptorHeap::GlobalOnlineDescriptorHeap(GraphicsDevice* pParent, 
 	for (uint32 i = 0; i < numBlocks; ++i)
 	{
 		m_DynamicBlocks.emplace_back(std::make_unique<DescriptorHeapBlock>(currentOffset, dynamicBlockSize));
-		m_FreeDynamicBlocks.push(m_DynamicBlocks.back().get());
+		m_FreeDynamicBlocks.push_back(m_DynamicBlocks.back().get());
 		currentOffset.OffsetInline(dynamicBlockSize, m_DescriptorSize);
 	}
 
@@ -84,22 +84,21 @@ DescriptorHeapBlock* GlobalOnlineDescriptorHeap::AllocateBlock()
 	std::lock_guard lock(m_DynamicBlockAllocateMutex);
 
 	// Check if we can free so finished blocks
-	for (uint32 i = 0; i < (uint32)m_ReleasedDynamicBlocks.size(); ++i)
+	while(!m_ReleasedDynamicBlocks.empty())
 	{
-		DescriptorHeapBlock* pBlock = m_ReleasedDynamicBlocks[i];
-		if (pBlock->SyncPoint.IsComplete())
+		DescriptorHeapBlock* pBlock = m_ReleasedDynamicBlocks.front();
+		if (!pBlock->SyncPoint.IsComplete())
 		{
-			std::swap(m_ReleasedDynamicBlocks[i], m_ReleasedDynamicBlocks.back());
-			m_ReleasedDynamicBlocks.pop_back();
-			m_FreeDynamicBlocks.push(pBlock);
-			--i;
+			break;
 		}
+		m_ReleasedDynamicBlocks.pop();
+		m_FreeDynamicBlocks.push_back(pBlock);
 	}
 
 	checkf(!m_FreeDynamicBlocks.empty(), "Ran out of descriptor heap space. Must increase the number of descriptors.");
 
-	DescriptorHeapBlock* pBlock = m_FreeDynamicBlocks.front();
-	m_FreeDynamicBlocks.pop();
+	DescriptorHeapBlock* pBlock = m_FreeDynamicBlocks.back();
+	m_FreeDynamicBlocks.pop_back();
 	return pBlock;
 }
 
@@ -108,7 +107,7 @@ void GlobalOnlineDescriptorHeap::FreeBlock(const SyncPoint& syncPoint, Descripto
 	std::lock_guard lock(m_DynamicBlockAllocateMutex);
 	pBlock->SyncPoint = syncPoint;
 	pBlock->CurrentOffset = 0;
-	m_ReleasedDynamicBlocks.push_back(pBlock);
+	m_ReleasedDynamicBlocks.push(pBlock);
 }
 
 OnlineDescriptorAllocator::OnlineDescriptorAllocator(GlobalOnlineDescriptorHeap* pGlobalHeap)
@@ -116,24 +115,24 @@ OnlineDescriptorAllocator::OnlineDescriptorAllocator(GlobalOnlineDescriptorHeap*
 {
 }
 
-void OnlineDescriptorAllocator::SetDescriptors(uint32 rootIndex, uint32 offset, uint32 numHandles, const D3D12_CPU_DESCRIPTOR_HANDLE* pHandles)
+void OnlineDescriptorAllocator::SetDescriptors(uint32 rootIndex, uint32 offset, const Span< D3D12_CPU_DESCRIPTOR_HANDLE>& handles)
 {
 	RootDescriptorEntry& entry = m_RootDescriptorTable[rootIndex];
 	if (!m_StaleRootParameters.GetBit(rootIndex))
 	{
 		uint32 tableSize = entry.TableSize;
 		checkf(tableSize != ~0u, "Descriptor table at RootIndex '%d' is unbounded and should not use the descriptor allocator", rootIndex);
-		checkf(offset + numHandles <= tableSize, "Attempted to set a descriptor (Offset: %d, Range: %d) out of the descriptor table bounds (Size: %d)", offset, numHandles, rootIndex);
+		checkf(offset + handles.GetSize() <= tableSize, "Attempted to set a descriptor (Offset: %d, Range: %d) out of the descriptor table bounds (Size: %d)", offset, handles.GetSize(), rootIndex);
 		
 		entry.Descriptor = Allocate(tableSize);
 		m_StaleRootParameters.SetBit(rootIndex);
 	}
 
 	DescriptorHandle targetHandle = entry.Descriptor.Offset(offset, m_pHeapAllocator->GetDescriptorSize());
-	for (uint32 i = 0; i < numHandles; ++i)
+	for(uint32 i = 0; i < handles.GetSize(); ++i)
 	{
-		checkf(pHandles[i].ptr != DescriptorHandle::InvalidCPUHandle.ptr, "Invalid Descriptor provided (RootIndex: %d, Offset: %d)", rootIndex, offset + i);
-		GetParent()->GetDevice()->CopyDescriptorsSimple(1, targetHandle.CpuHandle, pHandles[i], m_Type);
+		checkf(handles[i].ptr != DescriptorHandle::InvalidCPUHandle.ptr, "Invalid Descriptor provided (RootIndex: %d, Offset: %d)", rootIndex, offset + i);
+		GetParent()->GetDevice()->CopyDescriptorsSimple(1, targetHandle.CpuHandle, handles[i], m_Type);
 		targetHandle.OffsetInline(1, m_pHeapAllocator->GetDescriptorSize());
 	}
 }
@@ -142,21 +141,18 @@ void OnlineDescriptorAllocator::BindStagedDescriptors(CommandContext& context, C
 {
 	for (uint32 rootIndex : m_StaleRootParameters)
 	{
-		if (m_StaleRootParameters.GetBit(rootIndex))
+		RootDescriptorEntry& entry = m_RootDescriptorTable[rootIndex];
+		switch (descriptorTableType)
 		{
-			RootDescriptorEntry& entry = m_RootDescriptorTable[rootIndex];
-			switch (descriptorTableType)
-			{
-			case CommandListContext::Graphics:
-				context.GetCommandList()->SetGraphicsRootDescriptorTable(rootIndex, entry.Descriptor.GpuHandle);
-				break;
-			case CommandListContext::Compute:
-				context.GetCommandList()->SetComputeRootDescriptorTable(rootIndex, entry.Descriptor.GpuHandle);
-				break;
-			default:
-				noEntry();
-				break;
-			}
+		case CommandListContext::Graphics:
+			context.GetCommandList()->SetGraphicsRootDescriptorTable(rootIndex, entry.Descriptor.GpuHandle);
+			break;
+		case CommandListContext::Compute:
+			context.GetCommandList()->SetComputeRootDescriptorTable(rootIndex, entry.Descriptor.GpuHandle);
+			break;
+		default:
+			noEntry();
+			break;
 		}
 	}
 

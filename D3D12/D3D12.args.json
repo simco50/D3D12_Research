@@ -11,10 +11,6 @@
           "Command": "-dred"
         },
         {
-          "Id": "015f9270-ed55-45e4-b29d-a443d3b1bb5e",
-          "Command": "-d3dbreakvalidation"
-        },
-        {
           "Id": "4de03791-1cf7-46f4-a5a7-f2e2a0bce9d2",
           "Command": "-d3ddebug"
         },
@@ -29,10 +25,6 @@
         {
           "Id": "105b6371-3768-4e96-a67d-ff8d99170742",
           "Command": "-debugshaders"
-        },
-        {
-          "Id": "90ad626d-b0a9-41aa-af1e-997b06ff37ea",
-          "Command": "-shaderhotreload"
         },
         {
           "Id": "b14291b9-8b9b-42c6-92dc-47ee31668e9d",
@@ -51,10 +43,6 @@
           "Command": "-shadersymbols"
         }
       ]
-    },
-    {
-      "Id": "3e3a5cf0-56ee-4188-a439-5c6205a883ce",
-      "Command": "-rgimmediate"
     },
     {
       "Id": "19524aa9-eb3e-4cf0-9936-ef814e45c7d6",

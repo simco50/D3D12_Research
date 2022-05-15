@@ -12,6 +12,7 @@ enum class BufferFlag
 	ByteAddress =			1 << 4,
 	AccelerationStructure = 1 << 5,
 	NoBindless =			1 << 6,
+	IndirectArguments =		1 << 7,
 };
 DECLARE_BITMASK_TYPE(BufferFlag)
 
@@ -92,11 +93,19 @@ struct BufferDesc
 		BufferDesc desc;
 		desc.ElementSize = sizeof(IndirectParameters);
 		desc.Size = (uint64)elements * desc.ElementSize;
-		desc.Usage = usage | BufferFlag::UnorderedAccess;
+		desc.Usage = usage | BufferFlag::UnorderedAccess | BufferFlag::IndirectArguments;
 		return desc;
 	}
 
 	uint32 NumElements() const { return (uint32)(Size / ElementSize); }
+
+	bool operator==(const BufferDesc& rhs) const
+	{
+		return Size == rhs.Size &&
+			ElementSize == rhs.ElementSize &&
+			Usage == rhs.Usage &&
+			Format == rhs.Format;
+	}
 
 	uint64 Size = 0;
 	uint32 ElementSize = 0;
@@ -138,11 +147,11 @@ struct VertexBufferView
 struct IndexBufferView
 {
 	IndexBufferView()
-		: Location(~0ull), Elements(0), Format(DXGI_FORMAT_R32_UINT), OffsetFromStart(0)
+		: Location(~0ull), Elements(0), OffsetFromStart(0), Format(DXGI_FORMAT_R32_UINT)
 	{}
 
 	IndexBufferView(D3D12_GPU_VIRTUAL_ADDRESS location, uint32 elements, DXGI_FORMAT format, uint64 offsetFromStart)
-		: Location(location), Elements(elements), Format(format), OffsetFromStart((uint32)offsetFromStart)
+		: Location(location), Elements(elements), OffsetFromStart((uint32)offsetFromStart), Format(format)
 	{
 		checkf(offsetFromStart <= std::numeric_limits<uint32>::max(), "Buffer offset (%llx) will be stored in a 32-bit uint and does not fit.", offsetFromStart);
 	}

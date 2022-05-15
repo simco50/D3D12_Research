@@ -14,12 +14,7 @@ SSAO::SSAO(GraphicsDevice* pDevice)
 	SetupPipelines();
 }
 
-void SSAO::OnResize(int windowWidth, int windowHeight)
-{
-	m_pAmbientOcclusionIntermediate = m_pDevice->CreateTexture(TextureDesc::Create2D(Math::DivideAndRoundUp(windowWidth, 2), Math::DivideAndRoundUp(windowHeight, 2), DXGI_FORMAT_R8_UNORM, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource), "Intermediate AO");
-}
-
-void SSAO::Execute(RGGraph& graph, const SceneView& view, const SceneTextures& sceneTextures)
+void SSAO::Execute(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures)
 {
 	static float g_AoPower = 7;
 	static float g_AoThreshold = 0.0025f;
@@ -40,79 +35,100 @@ void SSAO::Execute(RGGraph& graph, const SceneView& view, const SceneTextures& s
 
 	RG_GRAPH_SCOPE("Ambient Occlusion", graph);
 
-	RefCountPtr<Texture> pTarget = sceneTextures.pAmbientOcclusion;
-
-	graph.AddPass("SSAO")
-		.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
-		{
-			context.InsertResourceBarrier(sceneTextures.pDepth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-			context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-
-			context.SetComputeRootSignature(m_pSSAORS);
-			context.SetPipelineState(m_pSSAOPSO);
-
-			struct
+	graph.AddPass("SSAO", RGPassFlag::Compute)
+		.Read(sceneTextures.pDepth)
+		.Write(sceneTextures.pAmbientOcclusion)
+		.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
-				float Power;
-				float Radius;
-				float Threshold;
-				int Samples;
-			} shaderParameters{};
+				Texture* pTarget = sceneTextures.pAmbientOcclusion->Get();
 
-			shaderParameters.Power = g_AoPower;
-			shaderParameters.Radius = g_AoRadius;
-			shaderParameters.Threshold = g_AoThreshold;
-			shaderParameters.Samples = g_AoSamples;
+				context.SetComputeRootSignature(m_pSSAORS);
+				context.SetPipelineState(m_pSSAOPSO);
 
-			context.SetRootConstants(0, shaderParameters);
-			context.SetRootCBV(1, Renderer::GetViewUniforms(view, pTarget));
-			context.BindResources(2, pTarget->GetUAV());
-			context.BindResources(3, sceneTextures.pDepth->GetSRV());
+				struct
+				{
+					float Power;
+					float Radius;
+					float Threshold;
+					int Samples;
+				} shaderParameters{};
 
-			context.Dispatch(ComputeUtils::GetNumThreadGroups(pTarget->GetWidth(), 16, pTarget->GetHeight(), 16));
-		});
+				shaderParameters.Power = g_AoPower;
+				shaderParameters.Radius = g_AoRadius;
+				shaderParameters.Threshold = g_AoThreshold;
+				shaderParameters.Samples = g_AoSamples;
 
-	graph.AddPass("Blur SSAO")
-		.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
-		{
-			context.InsertResourceBarrier(m_pAmbientOcclusionIntermediate, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-			context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
+				context.SetRootConstants(0, shaderParameters);
+				context.SetRootCBV(1, Renderer::GetViewUniforms(pView, pTarget));
+				context.BindResources(2, pTarget->GetUAV());
+				context.BindResources(3, sceneTextures.pDepth->Get()->GetSRV());
 
-			context.SetComputeRootSignature(m_pSSAORS);
-			context.SetPipelineState(m_pSSAOBlurPSO);
-
-			struct
-			{
-				Vector2 DimensionsInv;
-				uint32 Horizontal;
-			} shaderParameters;
-
-			shaderParameters.Horizontal = 1;
-			shaderParameters.DimensionsInv = Vector2(1.0f / pTarget->GetWidth(), 1.0f / pTarget->GetHeight());
-
-			context.SetRootConstants(0, shaderParameters);
-			context.SetRootCBV(1, Renderer::GetViewUniforms(view, pTarget));
-			context.BindResources(2, m_pAmbientOcclusionIntermediate->GetUAV());
-			context.BindResources(3, {
-				sceneTextures.pDepth->GetSRV(),
-				pTarget->GetSRV(),
+				context.Dispatch(ComputeUtils::GetNumThreadGroups(pTarget->GetWidth(), 16, pTarget->GetHeight(), 16));
 			});
 
-			context.Dispatch(ComputeUtils::GetNumThreadGroups(m_pAmbientOcclusionIntermediate->GetWidth(), 256, m_pAmbientOcclusionIntermediate->GetHeight(), 1));
+	RGTexture* pAoIntermediate = graph.CreateTexture("Intermediate AO", sceneTextures.pAmbientOcclusion->GetDesc());
 
-			context.InsertResourceBarrier(m_pAmbientOcclusionIntermediate, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-			context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+	graph.AddPass("Blur SSAO - Horizonal", RGPassFlag::Compute)
+		.Read({ sceneTextures.pAmbientOcclusion, sceneTextures.pDepth })
+		.Write(pAoIntermediate)
+		.Bind([=](CommandContext& context, const RGPassResources& resources)
+			{
+				Texture* pTarget = sceneTextures.pAmbientOcclusion->Get();
+				Texture* pBlurTarget = pAoIntermediate->Get();
 
-			context.BindResources(2, pTarget->GetUAV());
-			context.BindResources(3, {
-				sceneTextures.pDepth->GetSRV(),
-				m_pAmbientOcclusionIntermediate->GetSRV(),
+				context.SetComputeRootSignature(m_pSSAORS);
+				context.SetPipelineState(m_pSSAOBlurPSO);
+
+				struct
+				{
+					Vector2 DimensionsInv;
+					uint32 Horizontal;
+				} shaderParameters;
+
+				shaderParameters.Horizontal = 1;
+				shaderParameters.DimensionsInv = Vector2(1.0f / pTarget->GetWidth(), 1.0f / pTarget->GetHeight());
+
+				context.SetRootConstants(0, shaderParameters);
+				context.SetRootCBV(1, Renderer::GetViewUniforms(pView, pTarget));
+				context.BindResources(2, pBlurTarget->GetUAV());
+				context.BindResources(3, {
+					sceneTextures.pDepth->Get()->GetSRV(),
+					pTarget->GetSRV(),
+					});
+
+				context.Dispatch(ComputeUtils::GetNumThreadGroups(pBlurTarget->GetWidth(), 256, pBlurTarget->GetHeight(), 1));
 			});
 
-			shaderParameters.Horizontal = 0;
-			context.SetRootConstants(0, shaderParameters);
-			context.Dispatch(ComputeUtils::GetNumThreadGroups(m_pAmbientOcclusionIntermediate->GetWidth(), 1, m_pAmbientOcclusionIntermediate->GetHeight(), 256));
-		});
+	graph.AddPass("Blur SSAO - Vertical", RGPassFlag::Compute)
+		.Read({ pAoIntermediate, sceneTextures.pDepth })
+		.Write(sceneTextures.pAmbientOcclusion)
+		.Bind([=](CommandContext& context, const RGPassResources& resources)
+			{
+				Texture* pTarget = sceneTextures.pAmbientOcclusion->Get();
+				Texture* pBlurSource = pAoIntermediate->Get();
+
+				context.SetComputeRootSignature(m_pSSAORS);
+				context.SetPipelineState(m_pSSAOBlurPSO);
+
+				struct
+				{
+					Vector2 DimensionsInv;
+					uint32 Horizontal;
+				} shaderParameters;
+
+				shaderParameters.DimensionsInv = Vector2(1.0f / pTarget->GetWidth(), 1.0f / pTarget->GetHeight());
+				shaderParameters.Horizontal = 0;
+
+				context.SetRootConstants(0, shaderParameters);
+				context.SetRootCBV(1, Renderer::GetViewUniforms(pView, pTarget));
+				context.BindResources(2, pTarget->GetUAV());
+				context.BindResources(3, {
+					sceneTextures.pDepth->Get()->GetSRV(),
+					pBlurSource->GetSRV(),
+					});
+
+				context.Dispatch(ComputeUtils::GetNumThreadGroups(pBlurSource->GetWidth(), 1, pBlurSource->GetHeight(), 256));
+			});
 }
 
 void SSAO::SetupPipelines()

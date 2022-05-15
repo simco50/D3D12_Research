@@ -17,6 +17,7 @@ class CBTTessellation;
 class UnorderedAccessView;
 class StateObject;
 class RGGraph;
+class RGResourcePool;
 struct SubMesh;
 struct Material;
 
@@ -53,19 +54,13 @@ private:
 
 	RefCountPtr<GraphicsDevice> m_pDevice;
 	RefCountPtr<SwapChain> m_pSwapchain;
+	std::unique_ptr<RGResourcePool> m_RenderGraphPool;
 
 	uint32 m_Frame = 0;
 	std::array<float, 180> m_FrameTimes{};
 
-	RefCountPtr<Texture> m_pHDRRenderTarget;
-	RefCountPtr<Texture> m_pPreviousColor;
-	RefCountPtr<Texture> m_pTonemapTarget;
-	RefCountPtr<Texture> m_pDepthStencil;
-	RefCountPtr<Texture> m_pResolvedDepthStencil;
-	RefCountPtr<Texture> m_pTAASource;
-	RefCountPtr<Texture> m_pVelocity;
-	RefCountPtr<Texture> m_pNormals;
-	RefCountPtr<Texture> m_pRoughness;
+	RefCountPtr<Texture> m_pColorHistory;
+	RefCountPtr<Texture> m_ColorOutput;
 	std::vector<RefCountPtr<Texture>> m_ShadowMaps;
 
 	std::unique_ptr<ClusteredForward> m_pClusteredForward;
@@ -111,16 +106,11 @@ private:
 	RefCountPtr<PipelineState> m_pToneMapPSO;
 
 	// Eye adaptation
-	RefCountPtr<Texture> m_pDownscaledColor;
-	RefCountPtr<Buffer> m_pLuminanceHistogram;
 	RefCountPtr<Buffer> m_pAverageLuminance;
 	RefCountPtr<Texture> m_pDebugHistogramTexture;
 	RefCountPtr<PipelineState> m_pLuminanceHistogramPSO;
 	RefCountPtr<PipelineState> m_pAverageLuminancePSO;
 	RefCountPtr<PipelineState> m_pDrawHistogramPSO;
-
-	//SSAO
-	RefCountPtr<Texture> m_pAmbientOcclusion;
 
 	//Mip generation
 	RefCountPtr<PipelineState> m_pGenerateMipsPSO;
@@ -129,7 +119,6 @@ private:
 	RefCountPtr<PipelineState> m_pPrepareReduceDepthPSO;
 	RefCountPtr<PipelineState> m_pPrepareReduceDepthMsaaPSO;
 	RefCountPtr<PipelineState> m_pReduceDepthPSO;
-	std::vector<RefCountPtr<Texture>> m_ReductionTargets;
 	std::vector<RefCountPtr<Buffer>> m_ReductionReadbackTargets;
 
 	//Camera motion
@@ -140,7 +129,6 @@ private:
 	//Sky
 	RefCountPtr<PipelineState> m_pSkyboxPSO;
 	RefCountPtr<PipelineState> m_pRenderSkyPSO;
-	RefCountPtr<Texture> m_pSkyTexture;
 
 	//Bloom
 	RefCountPtr<PipelineState> m_pBloomSeparatePSO;
@@ -154,7 +142,6 @@ private:
 	RefCountPtr<PipelineState> m_pVisibilityRenderingPSO;
 	RefCountPtr<PipelineState> m_pVisibilityRenderingMaskedPSO;
 	RefCountPtr<PipelineState> m_pVisibilityShadingPSO;
-	RefCountPtr<Texture> m_pVisibilityTexture;
 
 	// DDGI
 	RefCountPtr<StateObject> m_pDDGITraceRaysSO;
