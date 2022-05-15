@@ -296,6 +296,14 @@ void DemoApp::SetupScene(CommandContext& context)
 		m_Lights.push_back(spotLight);
 	}
 #endif
+
+	DDGIVolume volume;
+	volume.Origin = Vector3(-0.484151840f, 5.21196413f, 0.309524536f);
+	volume.Extents = Vector3(14.8834171f, 6.22350454f, 9.15293312f);
+	volume.NumProbes = IntVector3(16, 12, 14);
+	volume.NumRays = 128;
+	volume.MaxNumRays = 512;
+	m_World.DDGIVolumes.push_back(volume);
 }
 
 void DemoApp::Update()
@@ -585,14 +593,30 @@ void DemoApp::Update()
 
 		const uint32 numProbes = ddgi.NumProbes.x * ddgi.NumProbes.y * ddgi.NumProbes.z;
 
-		RGBuffer* pRayBuffer = graph.CreateBuffer("DDGI Ray Buffer", BufferDesc::CreateTyped(numProbes * ddgi.MaxNumRays, DXGI_FORMAT_R16G16B16A16_FLOAT));
+		// Must match with shader!
+		constexpr uint32 probeIrradianceTexels = 6;
+		constexpr uint32 probeDepthTexel = 14;
+		auto ProbeTextureDimensions = [](const IntVector3& numProbes, uint32 texelsPerProbe) {
+			uint32 width = (1 + texelsPerProbe + 1) * numProbes.y * numProbes.x;
+			uint32 height = (1 + texelsPerProbe + 1) * numProbes.z;
+			return IntVector2(width, height);
+		};
 
-		RGTexture* pIrradianceTarget = graph.CreateTexture("DDGI Irradiance Target", ddgi.pIrradianceHistory->GetDesc());
-		RGTexture* pDepthTarget = graph.CreateTexture("DDGI Depth Target", ddgi.pDepthHistory->GetDesc());
-		RGTexture* pIrradianceHistory = graph.ImportTexture(ddgi.pIrradianceHistory);
-		RGTexture* pDepthHistory = graph.ImportTexture(ddgi.pDepthHistory);
-		RGBuffer* pProbeStates = graph.ImportBuffer(ddgi.pProbeStates);
-		RGBuffer* pProbeOffsets = graph.ImportBuffer(ddgi.pProbeOffset);
+		IntVector2 ddgiIrradianceDimensions = ProbeTextureDimensions(ddgi.NumProbes, probeIrradianceTexels);
+		TextureDesc ddgiIrradianceDesc = TextureDesc::Create2D(ddgiIrradianceDimensions.x, ddgiIrradianceDimensions.y, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::UnorderedAccess);
+		RGTexture* pIrradianceTarget = graph.CreateTexture("DDGI Irradiance Target", ddgiIrradianceDesc);
+		RGTexture* pIrradianceHistory = RGUtils::CreatePersistentTexture(graph, "DDGI Irradiance History", ddgiIrradianceDesc, &ddgi.pIrradianceHistory, false);
+		graph.ExportTexture(pIrradianceTarget, &ddgi.pIrradianceHistory);
+
+		IntVector2 ddgiDepthDimensions = ProbeTextureDimensions(ddgi.NumProbes, probeDepthTexel);
+		TextureDesc ddgiDepthDesc = TextureDesc::Create2D(ddgiDepthDimensions.x, ddgiDepthDimensions.y, DXGI_FORMAT_R16G16_FLOAT, TextureFlag::UnorderedAccess);
+		RGTexture* pDepthTarget = graph.CreateTexture("DDGI Depth Target", ddgiDepthDesc);
+		RGTexture* pDepthHistory = RGUtils::CreatePersistentTexture(graph, "DDGI Depth History", ddgiDepthDesc, &ddgi.pDepthHistory, false);
+		graph.ExportTexture(pDepthTarget, &ddgi.pDepthHistory);
+
+		RGBuffer* pRayBuffer = graph.CreateBuffer("DDGI Ray Buffer", BufferDesc::CreateTyped(numProbes * ddgi.MaxNumRays, DXGI_FORMAT_R16G16B16A16_FLOAT));
+		RGBuffer* pProbeStates = RGUtils::CreatePersistentBuffer(graph, "DDGI States Buffer", BufferDesc::CreateTyped(numProbes, DXGI_FORMAT_R8_UINT), &ddgi.pProbeStates, true);
+		RGBuffer* pProbeOffsets = RGUtils::CreatePersistentBuffer(graph, "DDGI Probe Offsets", BufferDesc::CreateTyped(numProbes, DXGI_FORMAT_R16G16B16A16_FLOAT), &ddgi.pProbeOffset, true);
 
 		graph.AddPass("DDGI Raytrace", RGPassFlag::Compute)
 			.Read(pProbeStates)
@@ -676,9 +700,6 @@ void DemoApp::Update()
 
 		graph.AddPass("Bindless Transition", RGPassFlag::NeverCull | RGPassFlag::Raster)
 			.Read({ pDepthTarget, pIrradianceTarget, pProbeStates, pProbeOffsets });
-
-		graph.ExportTexture(pDepthTarget, &ddgi.pDepthHistory);
-		graph.ExportTexture(pIrradianceTarget, &ddgi.pIrradianceHistory);
 	}
 
 	RGTexture* pSky = graph.CreateTexture("Sky", TextureDesc::Create2D(64, 128, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
@@ -867,7 +888,7 @@ void DemoApp::Update()
 						context.Dispatch(ComputeUtils::GetNumThreadGroups(pTarget->GetWidth(), 8, pTarget->GetHeight(), 8));
 					});
 
-			graph.AddCopyPass("Store TAA History", pTaaTarget, sceneTextures.pPreviousColor);
+			RGUtils::AddCopyPass(graph, pTaaTarget, sceneTextures.pPreviousColor);
 
 			sceneTextures.pColorTarget = pTaaTarget;
 		}
@@ -1433,10 +1454,6 @@ void DemoApp::InitializePipelines()
 	// DDGI
 	if (m_pDevice->GetCapabilities().SupportsRaytracing())
 	{
-		// Must match with shader!
-		constexpr uint32 probeIrradianceTexels = 6;
-		constexpr uint32 probeDepthTexel = 14;
-
 		m_pDDGIUpdateIrradianceColorPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "RayTracing/DDGI.hlsl", "UpdateIrradianceCS");
 		m_pDDGIUpdateIrradianceDepthPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "RayTracing/DDGI.hlsl", "UpdateDepthCS");
 		m_pDDGIUpdateProbeStatesPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "RayTracing/DDGI.hlsl", "UpdateProbeStatesCS");
@@ -1464,37 +1481,6 @@ void DemoApp::InitializePipelines()
 		psoDesc.SetName("Visualize Irradiance");
 		psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
 		m_pDDGIVisualizePSO = m_pDevice->CreatePipeline(psoDesc);
-
-		DDGIVolume volume;
-		volume.Origin = Vector3(-0.484151840f, 5.21196413f, 0.309524536f);
-		volume.Extents = Vector3(14.8834171f, 6.22350454f, 9.15293312f);
-		volume.NumProbes = IntVector3(16, 12, 14);
-		volume.NumRays = 128;
-		volume.MaxNumRays = 512;
-		m_World.DDGIVolumes.push_back(volume);
-
-		auto ProbeTextureDimensions = [](const IntVector3& numProbes, uint32 texelsPerProbe) {
-			uint32 width = (1 + texelsPerProbe + 1) * numProbes.y * numProbes.x;
-			uint32 height = (1 + texelsPerProbe + 1) * numProbes.z;
-			return IntVector2(width, height);
-		};
-
-		for (DDGIVolume& ddgi : m_World.DDGIVolumes)
-		{
-			uint32 numProbes = ddgi.NumProbes.x * ddgi.NumProbes.y * ddgi.NumProbes.z;
-			ddgi.pProbeStates = m_pDevice->CreateBuffer(BufferDesc::CreateTyped(numProbes, DXGI_FORMAT_R8_UINT, BufferFlag::UnorderedAccess | BufferFlag::ShaderResource), "DDGI States Buffer");
-			ddgi.pProbeOffset = m_pDevice->CreateBuffer(BufferDesc::CreateTyped(numProbes, DXGI_FORMAT_R16G16B16A16_FLOAT, BufferFlag::UnorderedAccess | BufferFlag::ShaderResource), "DDGI Probe Offset Buffer");
-			{
-				IntVector2 dimensions = ProbeTextureDimensions(ddgi.NumProbes, probeIrradianceTexels);
-				TextureDesc ddgiIrradianceDesc = TextureDesc::Create2D(dimensions.x, dimensions.y, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::UnorderedAccess);
-				ddgi.pIrradianceHistory = m_pDevice->CreateTexture(ddgiIrradianceDesc, "DDGI Irradiance 0");
-			}
-			{
-				IntVector2 dimensions = ProbeTextureDimensions(ddgi.NumProbes, probeDepthTexel);
-				TextureDesc ddgiDepthDesc = TextureDesc::Create2D(dimensions.x, dimensions.y, DXGI_FORMAT_R16G16_FLOAT, TextureFlag::UnorderedAccess);
-				ddgi.pDepthHistory = m_pDevice->CreateTexture(ddgiDepthDesc, "DDGI Depth 0");
-			}
-		}
 	}
 
 	// Texture visualize

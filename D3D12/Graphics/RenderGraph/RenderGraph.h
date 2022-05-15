@@ -228,8 +228,6 @@ public:
 	SyncPoint Execute();
 	void DumpGraph(const char* pPath) const;
 
-	RGPass& AddCopyPass(const char* pName, RGResource* pSource, RGResource* pTarget);
-
 	template<typename T, typename... Args>
 	T* Allocate(Args&&... args)
 	{
@@ -283,17 +281,8 @@ public:
 		return pBuffer ? ImportBuffer(pBuffer) : nullptr;
 	}
 
-	void ExportTexture(RGTexture* pTexture , RefCountPtr<Texture>* pTarget)
-	{
-		pTexture->IsExported = true;
-		m_ExportTextures.push_back({ pTexture, pTarget });
-	}
-
-	void ExportBuffer(RGBuffer* pBuffer, RefCountPtr<Buffer>* pTarget)
-	{
-		pBuffer->IsExported = true;
-		m_ExportBuffers.push_back({ pBuffer, pTarget });
-	}
+	void ExportTexture(RGTexture* pTexture, RefCountPtr<Texture>* pTarget);
+	void ExportBuffer(RGBuffer* pBuffer, RefCountPtr<Buffer>* pTarget);
 
 	void PushEvent(const char* pName);
 	void PopEvent();
@@ -343,3 +332,10 @@ public:
 private:
 	RGGraph& m_Graph;
 };
+
+namespace RGUtils
+{
+	RGPass& AddCopyPass(RGGraph& graph, RGResource* pSource, RGResource* pTarget);
+	RGBuffer* CreatePersistentBuffer(RGGraph& graph, const char* pName, const BufferDesc& bufferDesc, RefCountPtr<Buffer>* pStorageTarget, bool doExport);
+	RGTexture* CreatePersistentTexture(RGGraph& graph, const char* pName, const TextureDesc& textureDesc, RefCountPtr<Texture>* pStorageTarget, bool doExport);
+}

@@ -37,6 +37,7 @@ public:
 	{}
 
 	const char* GetName() const { return Name; }
+	GraphicsResource* GetRaw() const { return pResource; }
 
 protected:
 	void SetResource(RefCountPtr<GraphicsResource> resource)

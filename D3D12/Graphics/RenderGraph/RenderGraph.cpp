@@ -85,17 +85,6 @@ void RGPass::AddAccess(RGResource* pResource, D3D12_RESOURCE_STATES state)
 	}
 }
 
-RGPass& RGGraph::AddCopyPass(const char* pName, RGResource* pSource, RGResource* pTarget)
-{
-	return AddPass(pName, RGPassFlag::Copy)
-		.Read(pSource)
-		.Write(pTarget)
-		.Bind([=](CommandContext& context, const RGPassResources& resources)
-			{
-				context.CopyResource(pSource->pResource, pTarget->pResource);
-			});
-}
-
 RGGraph::RGGraph(GraphicsDevice* pDevice, RGResourcePool& resourcePool, uint64 allocatorSize /*= 0xFFFF*/)
 	: m_pDevice(pDevice), m_Allocator(allocatorSize), m_ResourcePool(resourcePool)
 {
@@ -248,6 +237,22 @@ void RGGraph::Compile()
 			}
 		}
 	}
+}
+
+void RGGraph::ExportTexture(RGTexture* pTexture, RefCountPtr<Texture>* pTarget)
+{
+	auto it = std::find_if(m_ExportTextures.begin(), m_ExportTextures.end(), [&](const ExportedTexture& tex) { return tex.pTarget == pTarget; });
+	checkf(it == m_ExportTextures.end(), "Texture '%s' is exported to a target that has already been exported to by another texture ('%s').", pTexture->GetName(), it->pTexture->GetName());
+	pTexture->IsExported = true;
+	m_ExportTextures.push_back({ pTexture, pTarget });
+}
+
+void RGGraph::ExportBuffer(RGBuffer* pBuffer, RefCountPtr<Buffer>* pTarget)
+{
+	auto it = std::find_if(m_ExportBuffers.begin(), m_ExportBuffers.end(), [&](const ExportedBuffer& buff) { return buff.pTarget == pTarget; });
+	checkf(it == m_ExportBuffers.end(), "Buffer '%s' is exported to a target that has already been exported to by another texture ('%s').", pBuffer->GetName(), it->pBuffer->GetName());
+	pBuffer->IsExported = true;
+	m_ExportBuffers.push_back({ pBuffer, pTarget });
 }
 
 void RGGraph::PushEvent(const char* pName)
@@ -414,4 +419,60 @@ void RGResourcePool::Tick()
 		}
 	}
 	++m_FrameIndex;
+}
+
+namespace RGUtils
+{
+	RGPass& AddCopyPass(RGGraph& graph, RGResource* pSource, RGResource* pTarget)
+	{
+		return graph.AddPass(Sprintf("Copy [%s -> %s]", pSource->GetName(), pTarget->GetName()).c_str(), RGPassFlag::Copy)
+			.Read(pSource)
+			.Write(pTarget)
+			.Bind([=](CommandContext& context, const RGPassResources& resources)
+				{
+					context.CopyResource(pSource->GetRaw(), pTarget->GetRaw());
+				});
+	}
+
+	RGBuffer* CreatePersistentBuffer(RGGraph& graph, const char* pName, const BufferDesc& bufferDesc, RefCountPtr<Buffer>* pStorageTarget, bool doExport)
+	{
+		RGBuffer* pBuffer = nullptr;
+		if (pStorageTarget->Get())
+		{
+			BufferDesc desc = pStorageTarget->Get()->GetDesc();
+			desc.Usage = bufferDesc.Usage;
+			if (bufferDesc == desc)
+			{
+				pBuffer = graph.ImportBuffer(*pStorageTarget);
+			}
+		}
+		if (!pBuffer)
+		{
+			pBuffer = graph.CreateBuffer(pName, bufferDesc);
+			if(doExport)
+				graph.ExportBuffer(pBuffer, pStorageTarget);
+		}
+		return pBuffer;
+	}
+
+	RGTexture* CreatePersistentTexture(RGGraph& graph, const char* pName, const TextureDesc& textureDesc, RefCountPtr<Texture>* pStorageTarget, bool doExport)
+	{
+		RGTexture* pTexture = nullptr;
+		if (pStorageTarget->Get())
+		{
+			TextureDesc desc = pStorageTarget->Get()->GetDesc();
+			desc.Usage = textureDesc.Usage;
+			if (desc == textureDesc)
+			{
+				pTexture = graph.ImportTexture(*pStorageTarget);
+			}
+		}
+		if (!pTexture)
+		{
+			pTexture = graph.CreateTexture(pName, textureDesc);
+			if(doExport)
+				graph.ExportTexture(pTexture, pStorageTarget);
+		}
+		return pTexture;
+	}
 }

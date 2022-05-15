@@ -110,7 +110,7 @@ void RGGraph::DumpGraph(const char* pPath) const
 
 		stream << "Pass" << pPass->ID;
 		stream << "[";
-		stream << pPass->Name << "<br/>";
+		stream << "\"" << pPass->Name << "\"<br/>";
 		stream << "Flags: " << PassFlagToString(pPass->Flags) << "<br/>";
 		stream << "Index: " << passIndex++ << "<br/>";
 		stream << "Culled: " << (pPass->IsCulled ? "Yes" : "No") << "<br/>";
@@ -130,7 +130,7 @@ void RGGraph::DumpGraph(const char* pPath) const
 		auto PrintResource = [&](RGResource* pResource, uint32 version) {
 			stream << "Resource" << pResource->ID << "_" << version;
 			stream << (pResource->IsImported ? "[(" : "([");
-			stream << pResource->Name << "<br/>";
+			stream << "\"" << pResource->Name << "\"<br/>";
 
 			if (pResource->Type == RGResourceType::Texture)
 			{

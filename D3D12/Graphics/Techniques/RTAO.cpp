@@ -124,7 +124,7 @@ void RTAO::Execute(RGGraph& graph, const SceneView* pView, SceneTextures& sceneT
 				context.Dispatch(ComputeUtils::GetNumThreadGroups(pTarget->GetWidth(), 8, pTarget->GetHeight(), 8));
 			});
 
-	graph.AddCopyPass("Store AO History", pDenoiseTarget, pAoHistory);
+	RGUtils::AddCopyPass(graph, pDenoiseTarget, pAoHistory);
 
 	graph.AddPass("Blur AO - Horizontal", RGPassFlag::Compute)
 		.Read({ pDenoiseTarget, sceneTextures.pDepth })
