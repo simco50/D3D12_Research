@@ -11,7 +11,7 @@
 #include "Graphics/RenderGraph/RenderGraph.h"
 #include "Graphics/SceneView.h"
 
-static bool g_Enabled = true;
+static bool g_Enabled = false;
 static int32 g_EmitCount = 30;
 static float g_LifeTime = 4.0f;
 static bool g_Simulate = true;
@@ -25,6 +25,12 @@ struct ParticleData
 	Vector3 Velocity;
 	float Size;
 };
+
+struct ParticleBlackboardData
+{
+	RGBuffer* pIndirectDrawArguments;
+};
+RG_BLACKBOARD_DATA(ParticleBlackboardData);
 
 GpuParticles::GpuParticles(GraphicsDevice* pDevice)
 {
@@ -42,10 +48,6 @@ GpuParticles::GpuParticles(GraphicsDevice* pDevice)
 	pContext->WriteBuffer(m_pCountersBuffer, &aliveCount, sizeof(uint32), 0);
 
 	m_pParticleBuffer = pDevice->CreateBuffer(BufferDesc::CreateStructured(cMaxParticleCount, sizeof(ParticleData)), "Particle Buffer");
-
-	m_pEmitArguments = pDevice->CreateBuffer(BufferDesc::CreateIndirectArguments<uint32>(3), "Emit Indirect Arguments");
-	m_pSimulateArguments = pDevice->CreateBuffer(BufferDesc::CreateIndirectArguments<uint32>(3), "Simulate Indirect Arguments");
-	m_pDrawArguments = pDevice->CreateBuffer(BufferDesc::CreateIndirectArguments<uint32>(4), "Draw Indirect Arguments");
 
 	pContext->Execute(true);
 
@@ -103,139 +105,152 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView* pView, RGTexture* p
 		return;
 	}
 
-	const ResourceView* uavs[] = {
-		m_pCountersBuffer->GetUAV(),
-		m_pEmitArguments->GetUAV(),
-		m_pSimulateArguments->GetUAV(),
-		m_pDrawArguments->GetUAV(),
-		m_pDeadList->GetUAV(),
-		m_pAliveList1->GetUAV(),
-		m_pAliveList2->GetUAV(),
-		m_pParticleBuffer->GetUAV(),
-	};
-
 	RG_GRAPH_SCOPE("Particle Simulation", graph);
 
-	graph.AddPass("Prepare Arguments", RGPassFlag::Compute | RGPassFlag::NeverCull)
+	RGBuffer* pEmitArguments = graph.CreateBuffer("Emit Indirect Arguments", BufferDesc::CreateIndirectArguments<uint32>(3));
+	RGBuffer* pSimulateArguments = graph.CreateBuffer("Simulate Indirect Arguments", BufferDesc::CreateIndirectArguments<uint32>(3));
+	RGBuffer* pDrawArguments = graph.CreateBuffer("Draw Indirect Arguments", BufferDesc::CreateIndirectArguments<uint32>(4));
+
+	graph.AddPass("Prepare Arguments", RGPassFlag::Compute)
 		.Read(pDepth)
+		.Write({ pEmitArguments, pSimulateArguments })
 		.Bind([=](CommandContext& context, const RGPassResources& resources)
-		{
-			m_ParticlesToSpawn += (float)g_EmitCount * Time::DeltaTime();
-
-			context.InsertResourceBarrier(m_pDrawArguments, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-			context.InsertResourceBarrier(m_pEmitArguments, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-			context.InsertResourceBarrier(m_pSimulateArguments, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-			context.InsertResourceBarrier(m_pCountersBuffer, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-			context.InsertResourceBarrier(m_pAliveList1, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-			context.InsertResourceBarrier(m_pAliveList2, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-			context.InsertResourceBarrier(m_pParticleBuffer, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-
-			context.SetComputeRootSignature(m_pSimulateRS);
-
-			context.SetPipelineState(m_pPrepareArgumentsPS);
-			struct
 			{
-				int32 EmitCount;
-			} parameters;
-			parameters.EmitCount = (int32)Math::Floor(m_ParticlesToSpawn);
-			m_ParticlesToSpawn -= parameters.EmitCount;
+				m_ParticlesToSpawn += (float)g_EmitCount * Time::DeltaTime();
 
-			context.SetRootConstants(0, parameters);
-			context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
+				context.InsertResourceBarrier(m_pCountersBuffer, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+				context.InsertResourceBarrier(m_pAliveList1, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+				context.InsertResourceBarrier(m_pAliveList2, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+				context.InsertResourceBarrier(m_pParticleBuffer, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-			context.BindResources(2, uavs);
-			context.BindResources(3,
+				context.SetComputeRootSignature(m_pSimulateRS);
+				context.SetPipelineState(m_pPrepareArgumentsPS);
+				struct
 				{
+					int32 EmitCount;
+				} parameters;
+				parameters.EmitCount = (int32)Math::Floor(m_ParticlesToSpawn);
+				m_ParticlesToSpawn -= parameters.EmitCount;
+
+				context.SetRootConstants(0, parameters);
+				context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
+				context.BindResources(2, {
+					m_pCountersBuffer->GetUAV(),
+					m_pDeadList->GetUAV(),
+					m_pAliveList1->GetUAV(),
+					m_pAliveList2->GetUAV(),
+					m_pParticleBuffer->GetUAV(),
+					pEmitArguments->Get()->GetUAV(),
+					pSimulateArguments->Get()->GetUAV(),
+					});
+				context.BindResources(3, {
 					m_pCountersBuffer->GetSRV(),
 					pDepth->Get()->GetSRV(),
-				});
+					});
 
-			context.Dispatch(1);
-			context.InsertUavBarrier();
-			context.InsertResourceBarrier(m_pEmitArguments, D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
-			context.InsertResourceBarrier(m_pSimulateArguments, D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
-		});
-
-	graph.AddPass("Emit", RGPassFlag::Compute | RGPassFlag::NeverCull)
-		.Read(pDepth)
-		.Bind([=](CommandContext& context, const RGPassResources& resources)
-		{
-			context.SetComputeRootSignature(m_pSimulateRS);
-			context.SetPipelineState(m_pEmitPS);
-
-			struct
-			{
-				Vector3 Origin;
-			} parameters;
-
-			parameters.Origin = Vector3(150, 3, 0);
-
-			context.SetRootConstants(0, parameters);
-			context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
-
-			context.BindResources(2, uavs);
-			context.BindResources(3,
-				{
-					m_pCountersBuffer->GetSRV(),
-					pDepth->Get()->GetSRV(),
-				});
-
-			context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchSignature, 1, m_pEmitArguments, m_pEmitArguments);
-			context.InsertUavBarrier();
-		});
-
-	graph.AddPass("Simulate", RGPassFlag::Compute | RGPassFlag::NeverCull)
-		.Read(pDepth)
-		.Bind([=](CommandContext& context, const RGPassResources& resources)
-		{
-			context.SetComputeRootSignature(m_pSimulateRS);
-			context.SetPipelineState(m_pSimulatePS);
-
-			struct
-			{
-				float DeltaTime;
-				float ParticleLifeTime;
-			} parameters;
-			parameters.DeltaTime = Time::DeltaTime();
-			parameters.ParticleLifeTime = g_LifeTime;
-
-			context.SetRootConstants(0, parameters);
-			context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
-
-			context.BindResources(2, uavs);
-			context.BindResources(3,
-				{
-					m_pCountersBuffer->GetSRV(),
-					pDepth->Get()->GetSRV(),
-				});
-
-			context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchSignature, 1, m_pSimulateArguments, nullptr);
-			context.InsertUavBarrier();
+				context.Dispatch(1);
+				context.InsertUavBarrier();
 			});
 
-	graph.AddPass("Simulate End", RGPassFlag::Compute | RGPassFlag::NeverCull)
+	graph.AddPass("Emit", RGPassFlag::Compute | RGPassFlag::NeverCull)
+		.Read({ pDepth, pEmitArguments })
+		.Bind([=](CommandContext& context, const RGPassResources& resources)
+			{
+				context.SetComputeRootSignature(m_pSimulateRS);
+				context.SetPipelineState(m_pEmitPS);
+
+				struct
+				{
+					Vector3 Origin;
+				} parameters;
+
+				parameters.Origin = Vector3(1, 1, 0);
+
+				context.SetRootConstants(0, parameters);
+				context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
+				context.BindResources(2, {
+					m_pCountersBuffer->GetUAV(),
+					m_pDeadList->GetUAV(),
+					m_pAliveList1->GetUAV(),
+					m_pAliveList2->GetUAV(),
+					m_pParticleBuffer->GetUAV(),
+					});
+				context.BindResources(3, {
+					m_pCountersBuffer->GetSRV(),
+					pDepth->Get()->GetSRV(),
+					});
+
+				context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchSignature, 1, pEmitArguments->Get(), nullptr);
+				context.InsertUavBarrier();
+			});
+
+	graph.AddPass("Simulate", RGPassFlag::Compute | RGPassFlag::NeverCull)
+		.Read({ pDepth, pSimulateArguments })
+		.Bind([=](CommandContext& context, const RGPassResources& resources)
+			{
+				context.SetComputeRootSignature(m_pSimulateRS);
+				context.SetPipelineState(m_pSimulatePS);
+
+				struct
+				{
+					float DeltaTime;
+					float ParticleLifeTime;
+				} parameters;
+				parameters.DeltaTime = Time::DeltaTime();
+				parameters.ParticleLifeTime = g_LifeTime;
+
+				context.SetRootConstants(0, parameters);
+				context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
+				context.BindResources(2, {
+					m_pCountersBuffer->GetUAV(),
+					m_pDeadList->GetUAV(),
+					m_pAliveList1->GetUAV(),
+					m_pAliveList2->GetUAV(),
+					m_pParticleBuffer->GetUAV(),
+					});
+				context.BindResources(3, {
+					m_pCountersBuffer->GetSRV(),
+					pDepth->Get()->GetSRV(),
+					});
+
+				context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchSignature, 1, pSimulateArguments->Get(), nullptr);
+				context.InsertUavBarrier();
+			});
+
+	graph.AddPass("Simulate End", RGPassFlag::Compute)
 		.Read(pDepth)
+		.Write(pDrawArguments)
 		.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
 				context.InsertResourceBarrier(m_pCountersBuffer, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
 				context.SetComputeRootSignature(m_pSimulateRS);
+				context.SetPipelineState(m_pSimulateEndPS);
 
 				context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
-
-				context.BindResources(2, uavs);
-				context.BindResources(3,
-					{
-						m_pCountersBuffer->GetSRV(),
-						pDepth->Get()->GetSRV(),
+				context.BindResources(2, {
+					m_pCountersBuffer->GetUAV(),
+					m_pDeadList->GetUAV(),
+					m_pAliveList1->GetUAV(),
+					m_pAliveList2->GetUAV(),
+					m_pParticleBuffer->GetUAV(),
+					pDrawArguments->Get()->GetUAV(),
+					pDrawArguments->Get()->GetUAV(),
+					pDrawArguments->Get()->GetUAV(),
+					});
+				context.BindResources(3, {
+					m_pCountersBuffer->GetSRV(),
+					pDepth->Get()->GetSRV(),
 					});
 
-			context.SetPipelineState(m_pSimulateEndPS);
-			context.Dispatch(1);
-			context.InsertUavBarrier();
-		});
+				context.Dispatch(1);
+				context.InsertUavBarrier();
+			});
 
 	std::swap(m_pAliveList1, m_pAliveList2);
+
+	ParticleBlackboardData& data = graph.Blackboard.Add<ParticleBlackboardData>();
+	data.pIndirectDrawArguments = pDrawArguments;
 }
 
 void GpuParticles::Render(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures)
@@ -245,13 +260,17 @@ void GpuParticles::Render(RGGraph& graph, const SceneView* pView, SceneTextures&
 		return;
 	}
 
+	const ParticleBlackboardData* pData = graph.Blackboard.TryGet<ParticleBlackboardData>();
+	if (!pData)
+		return;
+
 	graph.AddPass("Render Particles", RGPassFlag::Raster)
+		.Read(pData->pIndirectDrawArguments)
 		.DepthStencil(sceneTextures.pDepth, RenderPassAccess::Load_Store, false)
 		.RenderTarget(sceneTextures.pColorTarget, RenderPassAccess::Load_Store)
 		.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
 				Texture* pTarget = sceneTextures.pColorTarget->Get();
-				context.InsertResourceBarrier(m_pDrawArguments, D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
 				context.InsertResourceBarrier(m_pParticleBuffer, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 				context.InsertResourceBarrier(m_pAliveList1, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 
@@ -267,7 +286,7 @@ void GpuParticles::Render(RGGraph& graph, const SceneView* pView, SceneTextures&
 					m_pParticleBuffer->GetSRV(),
 					m_pAliveList1->GetSRV()
 					});
-				context.ExecuteIndirect(GraphicsCommon::pIndirectDrawSignature, 1, m_pDrawArguments, nullptr);
+				context.ExecuteIndirect(GraphicsCommon::pIndirectDrawSignature, 1, pData->pIndirectDrawArguments->Get(), nullptr);
 				context.EndRenderPass();
 			});
 }

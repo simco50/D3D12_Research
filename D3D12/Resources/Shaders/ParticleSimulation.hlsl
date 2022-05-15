@@ -35,13 +35,13 @@ ConstantBuffer<EmitParameters> cEmitParams : register(b0);
 ConstantBuffer<SimulateParameters> cSimulateParams : register(b0);
 
 RWByteAddressBuffer uCounters : register(u0);
-RWByteAddressBuffer uEmitArguments : register(u1);
-RWByteAddressBuffer uSimulateArguments : register(u2);
-RWByteAddressBuffer uDrawArgumentsBuffer : register(u3);
-RWStructuredBuffer<uint> uDeadList : register(u4);
-RWStructuredBuffer<uint> uAliveList1 : register(u5);
-RWStructuredBuffer<uint> uAliveList2 : register(u6);
-RWStructuredBuffer<ParticleData> uParticleData  : register(u7);
+RWStructuredBuffer<uint> uDeadList : register(u1);
+RWStructuredBuffer<uint> uAliveList1 : register(u2);
+RWStructuredBuffer<uint> uAliveList2 : register(u3);
+RWStructuredBuffer<ParticleData> uParticleData : register(u4);
+RWByteAddressBuffer uEmitArguments : register(u5);
+RWByteAddressBuffer uSimulateArguments : register(u6);
+RWByteAddressBuffer uDrawArgumentsBuffer : register(u7);
 
 ByteAddressBuffer tCounters : register(t0);
 Texture2D tSceneDepth : register(t1);
@@ -88,8 +88,8 @@ void Emit(uint threadID : SV_DispatchThreadID)
 		ParticleData p;
 		p.LifeTime = 0;
 		p.Position = cEmitParams.Origin.xyz;
-		p.Velocity = (Random01(seed) + 1) * 30 * RandomDirection(seed);
-		p.Size = 0.15f;//(float)Random(deadSlot, 10, 30) / 100.0f;
+		p.Velocity = (RandomDirection(seed) - 0.5f) * 2;
+		p.Size = 0.02f;//(float)Random(deadSlot, 10, 30) / 100.0f;
 		uParticleData[particleIndex] = p;
 
 		uint aliveSlot;
@@ -123,12 +123,13 @@ void Simulate(uint threadID : SV_DispatchThreadID)
 					float3 normal = NormalFromDepth(tSceneDepth, sLinearClamp, uv, cView.ViewportDimensionsInv, cView.ViewProjectionInverse);
 					if(dot(normal, p.Velocity) < 0)
 					{
-						p.Velocity = reflect(p.Velocity, normal) * 0.85f;
+						uint seed = SeedThread(particleIndex);
+						p.Velocity = reflect(p.Velocity, normal) * lerp(0.85f, 0.9f, Random01(seed));
 					}
 				}
 			}
 
-			p.Velocity += float3(0, -9.81f * cSimulateParams.DeltaTime * 5, 0);
+			p.Velocity += float3(0, -9.81f * cSimulateParams.DeltaTime, 0);
 			p.Position += p.Velocity * cSimulateParams.DeltaTime;
 			p.LifeTime += cSimulateParams.DeltaTime;
 

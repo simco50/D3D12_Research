@@ -1134,7 +1134,7 @@ void DemoApp::Update()
 				});
 	}
 
-	RGTexture* pTonemapTarget = graph.CreateTexture("Tonemap Target", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, DXGI_FORMAT_R8G8B8A8_UNORM));
+	RGTexture* pTonemapTarget = graph.CreateTexture("Tonemap Target", TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, DXGI_FORMAT_R8G8B8A8_UNORM));
 
 	graph.AddPass("Tonemap", RGPassFlag::Compute)
 		.Read({ sceneTextures.pColorTarget, pAverageLuminance, pBloomTexture })
