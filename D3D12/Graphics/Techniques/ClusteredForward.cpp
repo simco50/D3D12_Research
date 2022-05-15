@@ -287,7 +287,7 @@ void ClusteredForward::ComputeLightCulling(RGGraph& graph, const SceneView* pVie
 
 void ClusteredForward::VisualizeClusters(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures, ClusteredLightCullData& cullData)
 {
-	RGBuffer* pDebugLightGrid = graph.TryImportBuffer("Debug Light Grid", cullData.pDebugLightGrid);
+	RGBuffer* pDebugLightGrid = graph.TryImportBuffer(cullData.pDebugLightGrid);
 
 	if (cullData.DirtyDebugData || !pDebugLightGrid)
 	{
@@ -336,7 +336,7 @@ RGTexture* ClusteredForward::RenderVolumetricFog(RGGraph& graph, const SceneView
 		DXGI_FORMAT_R16G16B16A16_FLOAT,
 		TextureFlag::ShaderResource | TextureFlag::UnorderedAccess);
 
-	RGTexture* pSourceVolume = graph.ImportTexture("Fog History", fogData.pFogHistory, GraphicsCommon::GetDefaultTexture(DefaultTexture::Black3D));
+	RGTexture* pSourceVolume = graph.ImportTexture(fogData.pFogHistory, GraphicsCommon::GetDefaultTexture(DefaultTexture::Black3D));
 	RGTexture* pTargetVolume = graph.CreateTexture("Fog Target", volumeDesc);
 	RGTexture* pFinalVolumeFog = graph.CreateTexture("Volumetric Fog", volumeDesc);
 
@@ -431,7 +431,7 @@ void ClusteredForward::RenderBasePass(RGGraph& graph, const SceneView* pView, Sc
 
 	if (!pFogTexture)
 	{
-		pFogTexture = graph.ImportTexture("Black", GraphicsCommon::GetDefaultTexture(DefaultTexture::Black3D));
+		pFogTexture = graph.ImportTexture(GraphicsCommon::GetDefaultTexture(DefaultTexture::Black3D));
 	}
 
 	graph.AddPass("Base Pass", RGPassFlag::Raster)

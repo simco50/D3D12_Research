@@ -48,7 +48,7 @@ void RTAO::Execute(RGGraph& graph, const SceneView* pView, SceneTextures& sceneT
 	{
 		m_pHistory = m_pDevice->CreateTexture(aoDesc, "AO History");
 	}
-	RGTexture* pAoHistory = graph.ImportTexture("AO History", m_pHistory);
+	RGTexture* pAoHistory = graph.ImportTexture(m_pHistory);
 
 	static float g_AoPower = 1.0f;
 	static float g_AoRadius = 2.0f;

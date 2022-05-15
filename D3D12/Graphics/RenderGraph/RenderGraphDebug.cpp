@@ -128,7 +128,7 @@ void RGGraph::DumpGraph(const char* pPath) const
 		stream << "\n";
 
 		auto PrintResource = [&](RGResource* pResource, uint32 version) {
-			stream << "Resource" << pResource->Id << "_" << version;
+			stream << "Resource" << pResource->ID << "_" << version;
 			stream << (pResource->IsImported ? "[(" : "([");
 			stream << pResource->Name << "<br/>";
 
@@ -178,7 +178,7 @@ void RGGraph::DumpGraph(const char* pPath) const
 
 			if (resourceVersion > 0 || pResource->IsImported)
 			{
-				stream << "Resource" << pResource->Id << "_" << resourceVersion << " -- " << D3D::ResourceStateToString(access.Access) << " --> Pass" << pPass->ID << "\n";
+				stream << "Resource" << pResource->ID << "_" << resourceVersion << " -- " << D3D::ResourceStateToString(access.Access) << " --> Pass" << pPass->ID << "\n";
 				stream << "linkStyle " << linkIndex++ << " " << readLinkStyle << "\n";
 			}
 
@@ -188,7 +188,7 @@ void RGGraph::DumpGraph(const char* pPath) const
 				resourceVersion++;
 				PrintResource(pResource, resourceVersion);
 
-				stream << "Pass" << pPass->ID << " -- " << D3D::ResourceStateToString(access.Access) << " --> " << "Resource" << pResource->Id << "_" << resourceVersion;
+				stream << "Pass" << pPass->ID << " -- " << D3D::ResourceStateToString(access.Access) << " --> " << "Resource" << pResource->ID << "_" << resourceVersion;
 				stream << "\nlinkStyle " << linkIndex++ << " " << writeLinkStyle << "\n";
 			}
 		}

@@ -33,7 +33,7 @@ public:
 	friend class RGPass;
 
 	RGResource(const char* pName, int id, RGResourceType type, GraphicsResource* pResource = nullptr)
-		: Name(pName), Id(id), IsImported(!!pResource), Type(type), pResourceReference(pResource), pResource(pResource)
+		: Name(pName), ID(id), IsImported(!!pResource), Type(type), pResourceReference(pResource), pResource(pResource)
 	{}
 
 protected:
@@ -50,13 +50,12 @@ protected:
 	}
 
 	const char* Name;
-	int Id;
+	int ID;
 	bool IsImported;
 	bool IsExported = false;
 	RGResourceType Type;
 	RefCountPtr<GraphicsResource> pResourceReference;
 	GraphicsResource* pResource = nullptr;
-
 	const RGPass* pLastAccess = nullptr;
 };
 

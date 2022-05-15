@@ -150,7 +150,7 @@ void CBTTessellation::Execute(RGGraph& graph, const SceneView* pView, SceneTextu
 	updateData.SplitMode = m_SplitMode;
 	m_SplitMode = 1 - m_SplitMode;
 
-	RGBuffer* pCBTBuffer = graph.ImportBuffer("CBT Buffer", m_pCBTBuffer);
+	RGBuffer* pCBTBuffer = graph.ImportBuffer(m_pCBTBuffer);
 
 	if (m_IsDirty)
 	{

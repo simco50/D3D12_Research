@@ -257,32 +257,32 @@ public:
 		return pResource;
 	}
 
-	RGTexture* ImportTexture(const char* pName, Texture* pTexture, Texture* pFallback = nullptr)
+	RGTexture* ImportTexture(Texture* pTexture, Texture* pFallback = nullptr)
 	{
 		check(pTexture || pFallback);
 		pTexture = pTexture ? pTexture : pFallback;
-		RGTexture* pResource = Allocate<RGTexture>(pName, (int)m_Resources.size(), pTexture->GetDesc(), pTexture);
+		RGTexture* pResource = Allocate<RGTexture>(pTexture->GetName().c_str(), (int)m_Resources.size(), pTexture->GetDesc(), pTexture);
 		m_Resources.push_back(pResource);
 		return pResource;
 	}
 
-	RGTexture* TryImportTexture(const char* pName, Texture* pTexture)
+	RGTexture* TryImportTexture(Texture* pTexture)
 	{
-		return pTexture ? ImportTexture(pName, pTexture) : nullptr;
+		return pTexture ? ImportTexture(pTexture) : nullptr;
 	}
 
-	RGBuffer* ImportBuffer(const char* pName, Buffer* pBuffer, Buffer* pFallback = nullptr)
+	RGBuffer* ImportBuffer(Buffer* pBuffer, Buffer* pFallback = nullptr)
 	{
 		check(pBuffer || pFallback);
 		pBuffer = pBuffer ? pBuffer : pFallback;
-		RGBuffer* pResource = Allocate<RGBuffer>(pName, (int)m_Resources.size(), pBuffer->GetDesc(), pBuffer);
+		RGBuffer* pResource = Allocate<RGBuffer>(pBuffer->GetName().c_str(), (int)m_Resources.size(), pBuffer->GetDesc(), pBuffer);
 		m_Resources.push_back(pResource);
 		return pResource;
 	}
 
-	RGBuffer* TryImportBuffer(const char* pName, Buffer* pBuffer)
+	RGBuffer* TryImportBuffer(Buffer* pBuffer)
 	{
-		return pBuffer ? ImportBuffer(pName, pBuffer) : nullptr;
+		return pBuffer ? ImportBuffer(pBuffer) : nullptr;
 	}
 
 	void ExportTexture(RGTexture* pTexture , RefCountPtr<Texture>* pTarget)

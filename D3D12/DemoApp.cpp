@@ -452,7 +452,7 @@ void DemoApp::Update()
 	SceneTextures sceneTextures;
 
 	IntVector2 viewDimensions = m_SceneData.GetDimensions();
-	sceneTextures.pPreviousColor =		graph.ImportTexture("Previous Color", m_pColorHistory);
+	sceneTextures.pPreviousColor =		graph.ImportTexture(m_pColorHistory);
 	sceneTextures.pVisibilityBuffer =	graph.CreateTexture("Visibility Buffer",	TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, DXGI_FORMAT_R32_UINT));
 	sceneTextures.pRoughness =			graph.CreateTexture("Roughness",			TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, DXGI_FORMAT_R8_UNORM));
 	sceneTextures.pColorTarget =		graph.CreateTexture("Color Target",			TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, DXGI_FORMAT_R16G16B16A16_FLOAT));
@@ -588,11 +588,11 @@ void DemoApp::Update()
 		RGBuffer* pRayBuffer = graph.CreateBuffer("DDGI Ray Buffer", BufferDesc::CreateTyped(numProbes * ddgi.MaxNumRays, DXGI_FORMAT_R16G16B16A16_FLOAT));
 
 		RGTexture* pIrradianceTarget = graph.CreateTexture("DDGI Irradiance Target", ddgi.pIrradianceHistory->GetDesc());
-		RGTexture* pIrradianceHistory = graph.ImportTexture("DDGI Irradiance History", ddgi.pIrradianceHistory);
 		RGTexture* pDepthTarget = graph.CreateTexture("DDGI Depth Target", ddgi.pDepthHistory->GetDesc());
-		RGTexture* pDepthHistory = graph.ImportTexture("DDGI Depth History", ddgi.pDepthHistory);
-		RGBuffer* pProbeStates = graph.ImportBuffer("Probe States", ddgi.pProbeStates);
-		RGBuffer* pProbeOffsets = graph.ImportBuffer("Probe Offsets", ddgi.pProbeOffset);
+		RGTexture* pIrradianceHistory = graph.ImportTexture(ddgi.pIrradianceHistory);
+		RGTexture* pDepthHistory = graph.ImportTexture(ddgi.pDepthHistory);
+		RGBuffer* pProbeStates = graph.ImportBuffer(ddgi.pProbeStates);
+		RGBuffer* pProbeOffsets = graph.ImportBuffer(ddgi.pProbeOffset);
 
 		graph.AddPass("DDGI Raytrace", RGPassFlag::Compute)
 			.Read(pProbeStates)
@@ -939,7 +939,7 @@ void DemoApp::Update()
 	}
 
 	RGBuffer* pLuminanceHistogram = graph.CreateBuffer("Luminance Histogram", BufferDesc::CreateByteAddress(sizeof(uint32) * 256));
-	RGBuffer* pAverageLuminance = graph.TryImportBuffer("Average Luminance", m_pAverageLuminance);
+	RGBuffer* pAverageLuminance = graph.TryImportBuffer(m_pAverageLuminance);
 	if (!pAverageLuminance)
 		pAverageLuminance = graph.CreateBuffer("Average Luminance", BufferDesc::CreateStructured(3, sizeof(float)));
 
@@ -1044,7 +1044,7 @@ void DemoApp::Update()
 		graph.ExportBuffer(pAverageLuminance, &m_pAverageLuminance);
 	}
 
-	RGTexture* pBloomTexture = graph.ImportTexture("Bloom", m_pBloomTexture);
+	RGTexture* pBloomTexture = graph.ImportTexture(m_pBloomTexture);
 
 	if (Tweakables::g_Bloom.Get())
 	{
@@ -1260,7 +1260,7 @@ void DemoApp::Update()
 		}
 	}
 
-	RGTexture* pFinalOutput = graph.ImportTexture("Final Output", m_ColorOutput);
+	RGTexture* pFinalOutput = graph.ImportTexture(m_ColorOutput);
 
 	graph.AddPass("Copy Final", RGPassFlag::Copy)
 		.Read(sceneTextures.pColorTarget)
