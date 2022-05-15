@@ -3,9 +3,6 @@
 class RootSignature;
 class GraphicsDevice;
 class PipelineState;
-class Texture;
-class Buffer;
-class UnorderedAccessView;
 class RGGraph;
 struct SceneView;
 struct SceneTextures;

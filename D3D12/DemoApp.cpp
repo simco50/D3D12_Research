@@ -685,7 +685,7 @@ void DemoApp::Update()
 	RGTexture* pSky = graph.CreateTexture("Sky", TextureDesc::Create2D(64, 128, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
 	graph.ExportTexture(pSky, &pViewMut->pSky);
 
-	graph.AddPass("Compute Sky", RGPassFlag::Compute)
+	graph.AddPass("Compute Sky", RGPassFlag::Compute | RGPassFlag::NeverCull)
 		.Write(pSky)
 		.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
