@@ -1,49 +1,40 @@
 #pragma once
+#include "../RenderGraph/RenderGraphDefinitions.h"
 
-class Graphics;
+class GraphicsDevice;
 class Buffer;
-class CommandSignature;
 class PipelineState;
 class RootSignature;
 class CommandContext;
 class Texture;
-class Camera;
 class RGGraph;
+struct SceneView;
+struct SceneTextures;
 
 class GpuParticles
 {
 public:
-	GpuParticles(Graphics* pGraphics);
-	~GpuParticles();
+	GpuParticles(GraphicsDevice* pDevice);
+	~GpuParticles() = default;
 
-	void Simulate(RGGraph& graph, Texture* pSourceDepth, const Camera& camera);
-	void Render(RGGraph& graph, Texture* pTarget, Texture* pDepth, const Camera& camera);
+	void Simulate(RGGraph& graph, const SceneView* pView, RGTexture* pDepth);
+	void Render(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures);
 private:
-	void Initialize(Graphics* pGraphics);
 
-	std::unique_ptr<Buffer> m_pAliveList1;
-	std::unique_ptr<Buffer> m_pAliveList2;
-	std::unique_ptr<Buffer> m_pDeadList;
-	std::unique_ptr<Buffer> m_pParticleBuffer;
-	std::unique_ptr<Buffer> m_pCountersBuffer;
+	RefCountPtr<Buffer> m_pAliveList1;
+	RefCountPtr<Buffer> m_pAliveList2;
+	RefCountPtr<Buffer> m_pDeadList;
+	RefCountPtr<Buffer> m_pParticleBuffer;
+	RefCountPtr<Buffer> m_pCountersBuffer;
 
-	std::unique_ptr<PipelineState> m_pPrepareArgumentsPS;
+	RefCountPtr<PipelineState> m_pPrepareArgumentsPS;
+	RefCountPtr<PipelineState> m_pEmitPS;
+	RefCountPtr<RootSignature> m_pSimulateRS;
+	RefCountPtr<PipelineState> m_pSimulatePS;
+	RefCountPtr<PipelineState> m_pSimulateEndPS;
 
-	std::unique_ptr<PipelineState> m_pEmitPS;
-	std::unique_ptr<Buffer> m_pEmitArguments;
-
-	std::unique_ptr<RootSignature> m_pSimulateRS;
-	std::unique_ptr<PipelineState> m_pSimulatePS;
-	std::unique_ptr<Buffer> m_pSimulateArguments;
-
-	std::unique_ptr<PipelineState> m_pSimulateEndPS;
-	std::unique_ptr<Buffer> m_pDrawArguments;
-
-	std::unique_ptr<CommandSignature> m_pSimpleDispatchCommandSignature;
-	std::unique_ptr<CommandSignature> m_pSimpleDrawCommandSignature;
-
-	std::unique_ptr<RootSignature> m_pRenderParticlesRS;
-	std::unique_ptr<PipelineState> m_pRenderParticlesPS;
+	RefCountPtr<RootSignature> m_pRenderParticlesRS;
+	RefCountPtr<PipelineState> m_pRenderParticlesPS;
 
 	float m_ParticlesToSpawn = 0;
 };

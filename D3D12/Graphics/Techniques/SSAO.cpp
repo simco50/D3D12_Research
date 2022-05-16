@@ -1,160 +1,145 @@
 #include "stdafx.h"
 #include "SSAO.h"
-#include "Graphics/Core/Shader.h"
-#include "Graphics/Core/PipelineState.h"
-#include "Graphics/Core/RootSignature.h"
-#include "Graphics/Core/Graphics.h"
-#include "Graphics/Core/CommandContext.h"
-#include "Graphics/Core/Texture.h"
+#include "Graphics/RHI/PipelineState.h"
+#include "Graphics/RHI/RootSignature.h"
+#include "Graphics/RHI/Graphics.h"
+#include "Graphics/RHI/CommandContext.h"
+#include "Graphics/RHI/Texture.h"
 #include "Graphics/RenderGraph/RenderGraph.h"
-#include "Scene/Camera.h"
+#include "Graphics/SceneView.h"
 
-SSAO::SSAO(Graphics* pGraphics)
+SSAO::SSAO(GraphicsDevice* pDevice)
+	: m_pDevice(pDevice)
 {
-	SetupResources(pGraphics);
-	SetupPipelines(pGraphics);
+	SetupPipelines();
 }
 
-void SSAO::OnSwapchainCreated(int windowWidth, int windowHeight)
+void SSAO::Execute(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures)
 {
-	m_pAmbientOcclusionIntermediate->Create(TextureDesc::Create2D(Math::DivideAndRoundUp(windowWidth, 2), Math::DivideAndRoundUp(windowHeight, 2), DXGI_FORMAT_R8_UNORM, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource));
-}
-
-void SSAO::Execute(RGGraph& graph, Texture* pColor, Texture* pDepth, Camera& camera)
-{
-	static float g_AoPower = 3;
+	static float g_AoPower = 7;
 	static float g_AoThreshold = 0.0025f;
-	static float g_AoRadius = 0.5f;
+	static float g_AoRadius = 0.03f;
 	static int g_AoSamples = 16;
 
-	ImGui::Begin("Parameters");
-	ImGui::Text("Ambient Occlusion");
-	ImGui::SliderFloat("Power", &g_AoPower, 0, 10);
-	ImGui::SliderFloat("Threshold", &g_AoThreshold, 0.0001f, 0.01f);
-	ImGui::SliderFloat("Radius", &g_AoRadius, 0, 2);
-	ImGui::SliderInt("Samples", &g_AoSamples, 1, 64);
+	if (ImGui::Begin("Parameters"))
+	{
+		if (ImGui::CollapsingHeader("Ambient Occlusion"))
+		{
+			ImGui::SliderFloat("Power", &g_AoPower, 0, 10);
+			ImGui::SliderFloat("Threshold", &g_AoThreshold, 0.0001f, 0.01f);
+			ImGui::SliderFloat("Radius", &g_AoRadius, 0, 2);
+			ImGui::SliderInt("Samples", &g_AoSamples, 1, 64);
+		}
+	}
 	ImGui::End();
 
 	RG_GRAPH_SCOPE("Ambient Occlusion", graph);
 
-	RGPassBuilder ssao = graph.AddPass("SSAO");
-	ssao.Bind([=](CommandContext& renderContext, const RGPassResources& passResources)
-		{
-			renderContext.InsertResourceBarrier(pDepth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-			renderContext.InsertResourceBarrier(pColor, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-
-			renderContext.SetComputeRootSignature(m_pSSAORS.get());
-			renderContext.SetPipelineState(m_pSSAOPSO.get());
-
-			struct ShaderParameters
+	graph.AddPass("SSAO", RGPassFlag::Compute)
+		.Read(sceneTextures.pDepth)
+		.Write(sceneTextures.pAmbientOcclusion)
+		.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
-				Matrix ProjectionInverse;
-				Matrix ViewInverse;
-				Matrix Projection;
-				Matrix View;
-				IntVector2 Dimensions;
-				float Near;
-				float Far;
-				float Power;
-				float Radius;
-				float Threshold;
-				int Samples;
-			} shaderParameters{};
+				Texture* pTarget = sceneTextures.pAmbientOcclusion->Get();
 
-			shaderParameters.ProjectionInverse = camera.GetProjectionInverse();
-			shaderParameters.ViewInverse = camera.GetViewInverse();
-			shaderParameters.Projection = camera.GetProjection();
-			shaderParameters.View = camera.GetView();
-			shaderParameters.Dimensions.x = pColor->GetWidth();
-			shaderParameters.Dimensions.y = pColor->GetHeight();
-			shaderParameters.Near = camera.GetNear();
-			shaderParameters.Far = camera.GetFar();
-			shaderParameters.Power = g_AoPower;
-			shaderParameters.Radius = g_AoRadius;
-			shaderParameters.Threshold = g_AoThreshold;
-			shaderParameters.Samples = g_AoSamples;
+				context.SetComputeRootSignature(m_pSSAORS);
+				context.SetPipelineState(m_pSSAOPSO);
 
-			renderContext.SetComputeDynamicConstantBufferView(0, &shaderParameters, sizeof(ShaderParameters));
-			renderContext.SetDynamicDescriptor(1, 0, pColor->GetUAV());
-			renderContext.SetDynamicDescriptor(2, 0, pDepth->GetSRV());
+				struct
+				{
+					float Power;
+					float Radius;
+					float Threshold;
+					int Samples;
+				} shaderParameters{};
 
-			int dispatchGroupsX = Math::DivideAndRoundUp(pColor->GetWidth(), 16);
-			int dispatchGroupsY = Math::DivideAndRoundUp(pColor->GetHeight(), 16);
-			renderContext.Dispatch(dispatchGroupsX, dispatchGroupsY);
-		});
+				shaderParameters.Power = g_AoPower;
+				shaderParameters.Radius = g_AoRadius;
+				shaderParameters.Threshold = g_AoThreshold;
+				shaderParameters.Samples = g_AoSamples;
 
-	RGPassBuilder blur = graph.AddPass("Blur SSAO");
-	blur.Bind([=](CommandContext& renderContext, const RGPassResources& passResources)
-		{
-			renderContext.InsertResourceBarrier(m_pAmbientOcclusionIntermediate.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-			renderContext.InsertResourceBarrier(pColor, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+				context.SetRootConstants(0, shaderParameters);
+				context.SetRootCBV(1, Renderer::GetViewUniforms(pView, pTarget));
+				context.BindResources(2, pTarget->GetUAV());
+				context.BindResources(3, sceneTextures.pDepth->Get()->GetSRV());
 
-			renderContext.SetComputeRootSignature(m_pSSAOBlurRS.get());
-			renderContext.SetPipelineState(m_pSSAOBlurPSO.get());
+				context.Dispatch(ComputeUtils::GetNumThreadGroups(pTarget->GetWidth(), 16, pTarget->GetHeight(), 16));
+			});
 
-			struct ShaderParameters
+	RGTexture* pAoIntermediate = graph.CreateTexture("Intermediate AO", sceneTextures.pAmbientOcclusion->GetDesc());
+
+	graph.AddPass("Blur SSAO - Horizonal", RGPassFlag::Compute)
+		.Read({ sceneTextures.pAmbientOcclusion, sceneTextures.pDepth })
+		.Write(pAoIntermediate)
+		.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
-				Vector2 DimensionsInv;
-				uint32 Horizontal;
-				float Far;
-				float Near;
-			} shaderParameters;
+				Texture* pTarget = sceneTextures.pAmbientOcclusion->Get();
+				Texture* pBlurTarget = pAoIntermediate->Get();
 
-			shaderParameters.Horizontal = 1;
-			shaderParameters.DimensionsInv = Vector2(1.0f / pColor->GetWidth(), 1.0f / pColor->GetHeight());
-			shaderParameters.Far = camera.GetFar();
-			shaderParameters.Near = camera.GetNear();
+				context.SetComputeRootSignature(m_pSSAORS);
+				context.SetPipelineState(m_pSSAOBlurPSO);
 
-			renderContext.SetComputeDynamicConstantBufferView(0, &shaderParameters, sizeof(ShaderParameters));
-			renderContext.SetDynamicDescriptor(1, 0, m_pAmbientOcclusionIntermediate->GetUAV());
-			renderContext.SetDynamicDescriptor(2, 0, pDepth->GetSRV());
-			renderContext.SetDynamicDescriptor(2, 1, pColor->GetSRV());
+				struct
+				{
+					Vector2 DimensionsInv;
+					uint32 Horizontal;
+				} shaderParameters;
 
-			renderContext.Dispatch(Math::DivideAndRoundUp(m_pAmbientOcclusionIntermediate->GetWidth(), 256), m_pAmbientOcclusionIntermediate->GetHeight());
+				shaderParameters.Horizontal = 1;
+				shaderParameters.DimensionsInv = Vector2(1.0f / pTarget->GetWidth(), 1.0f / pTarget->GetHeight());
 
-			renderContext.InsertResourceBarrier(m_pAmbientOcclusionIntermediate.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-			renderContext.InsertResourceBarrier(pColor, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+				context.SetRootConstants(0, shaderParameters);
+				context.SetRootCBV(1, Renderer::GetViewUniforms(pView, pTarget));
+				context.BindResources(2, pBlurTarget->GetUAV());
+				context.BindResources(3, {
+					sceneTextures.pDepth->Get()->GetSRV(),
+					pTarget->GetSRV(),
+					});
 
-			renderContext.SetDynamicDescriptor(1, 0, pColor->GetUAV());
-			renderContext.SetDynamicDescriptor(2, 0, pDepth->GetSRV());
-			renderContext.SetDynamicDescriptor(2, 1, m_pAmbientOcclusionIntermediate->GetSRV());
+				context.Dispatch(ComputeUtils::GetNumThreadGroups(pBlurTarget->GetWidth(), 256, pBlurTarget->GetHeight(), 1));
+			});
 
-			shaderParameters.Horizontal = 0;
-			renderContext.SetComputeDynamicConstantBufferView(0, &shaderParameters, sizeof(ShaderParameters));
-			renderContext.Dispatch(m_pAmbientOcclusionIntermediate->GetWidth(), Math::DivideAndRoundUp(m_pAmbientOcclusionIntermediate->GetHeight(), 256));
-		});
+	graph.AddPass("Blur SSAO - Vertical", RGPassFlag::Compute)
+		.Read({ pAoIntermediate, sceneTextures.pDepth })
+		.Write(sceneTextures.pAmbientOcclusion)
+		.Bind([=](CommandContext& context, const RGPassResources& resources)
+			{
+				Texture* pTarget = sceneTextures.pAmbientOcclusion->Get();
+				Texture* pBlurSource = pAoIntermediate->Get();
+
+				context.SetComputeRootSignature(m_pSSAORS);
+				context.SetPipelineState(m_pSSAOBlurPSO);
+
+				struct
+				{
+					Vector2 DimensionsInv;
+					uint32 Horizontal;
+				} shaderParameters;
+
+				shaderParameters.DimensionsInv = Vector2(1.0f / pTarget->GetWidth(), 1.0f / pTarget->GetHeight());
+				shaderParameters.Horizontal = 0;
+
+				context.SetRootConstants(0, shaderParameters);
+				context.SetRootCBV(1, Renderer::GetViewUniforms(pView, pTarget));
+				context.BindResources(2, pTarget->GetUAV());
+				context.BindResources(3, {
+					sceneTextures.pDepth->Get()->GetSRV(),
+					pBlurSource->GetSRV(),
+					});
+
+				context.Dispatch(ComputeUtils::GetNumThreadGroups(pBlurSource->GetWidth(), 1, pBlurSource->GetHeight(), 256));
+			});
 }
 
-void SSAO::SetupResources(Graphics* pGraphics)
+void SSAO::SetupPipelines()
 {
-	m_pAmbientOcclusionIntermediate = std::make_unique<Texture>(pGraphics, "SSAO Blurred");
-}
+	m_pSSAORS = new RootSignature(m_pDevice);
+	m_pSSAORS->AddRootConstants(0, 4);
+	m_pSSAORS->AddConstantBufferView(100);
+	m_pSSAORS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 2);
+	m_pSSAORS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2);
+	m_pSSAORS->Finalize("SSAO");
 
-void SSAO::SetupPipelines(Graphics* pGraphics)
-{
-	//SSAO
-	{
-		Shader computeShader("SSAO.hlsl", ShaderType::Compute, "CSMain");
-
-		m_pSSAORS = std::make_unique<RootSignature>();
-		m_pSSAORS->FinalizeFromShader("SSAO", computeShader, pGraphics->GetDevice());
-
-		m_pSSAOPSO = std::make_unique<PipelineState>();
-		m_pSSAOPSO->SetComputeShader(computeShader);
-		m_pSSAOPSO->SetRootSignature(m_pSSAORS->GetRootSignature());
-		m_pSSAOPSO->Finalize("SSAO PSO", pGraphics->GetDevice());
-	}
-
-	//SSAO Blur
-	{
-		Shader computeShader("SSAOBlur.hlsl", ShaderType::Compute, "CSMain");
-
-		m_pSSAOBlurRS = std::make_unique<RootSignature>();
-		m_pSSAOBlurRS->FinalizeFromShader("SSAO Blur", computeShader, pGraphics->GetDevice());
-
-		m_pSSAOBlurPSO = std::make_unique<PipelineState>();
-		m_pSSAOBlurPSO->SetComputeShader(computeShader);
-		m_pSSAOBlurPSO->SetRootSignature(m_pSSAOBlurRS->GetRootSignature());
-		m_pSSAOBlurPSO->Finalize("SSAO Blur PSO", pGraphics->GetDevice());
-	}
+	m_pSSAOPSO = m_pDevice->CreateComputePipeline(m_pSSAORS, "SSAO.hlsl", "CSMain");
+	m_pSSAOBlurPSO = m_pDevice->CreateComputePipeline(m_pSSAORS, "SSAOBlur.hlsl", "CSMain");
 }

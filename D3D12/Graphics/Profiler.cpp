@@ -1,125 +1,79 @@
 #include "stdafx.h"
 #include "Profiler.h"
-#include "Graphics/Core/Graphics.h"
-#include "Graphics/Core/CommandContext.h"
-#include "Graphics/Core/CommandQueue.h"
-#include "Graphics/Core/GraphicsBuffer.h"
-#include <pix3.h>
+#include "RHI/Graphics.h"
+#include "RHI/CommandContext.h"
+#include "RHI/CommandQueue.h"
+#include "RHI/Buffer.h"
+#include "pix3.h"
 
-void CpuTimer::Begin()
+void ProfileNode::StartTimer(CommandContext* pInContext)
 {
+	LastHitFrame = Profiler::Get()->GetFrameIndex();
+
+	pContext = pInContext;
 	LARGE_INTEGER start;
 	QueryPerformanceCounter(&start);
-	m_StartTime = start.QuadPart;
-}
+	CPUStartTime = start.QuadPart;
 
-void CpuTimer::End()
-{
-	LARGE_INTEGER end;
-	QueryPerformanceCounter(&end);
-	m_TotalTime = (float)(end.QuadPart - m_StartTime)* Profiler::Get()->GetSecondsPerCpuTick() * 1000.0f;
-}
-
-float CpuTimer::GetTime() const
-{
-	return m_TotalTime;
-}
-
-GpuTimer::GpuTimer() 
-{
-}
-
-void GpuTimer::Begin(CommandContext* pContext)
-{
-	if (m_TimerIndex == -1)
+	if (pInContext)
 	{
-		m_TimerIndex = Profiler::Get()->GetNextTimerIndex();
-	}
-	Profiler::Get()->StartGpuTimer(pContext, m_TimerIndex);
-}
-
-void GpuTimer::End(CommandContext* pContext)
-{
-	Profiler::Get()->StopGpuTimer(pContext, m_TimerIndex);
-}
-
-float GpuTimer::GetTime(const uint64* pReadbackData) const
-{
-	if (m_TimerIndex >= 0)
-	{
-		return Profiler::Get()->GetGpuTime(pReadbackData, m_TimerIndex);
-	}
-	return 0.0f;
-}
-
-void ProfileNode::StartTimer(CommandContext* pContext)
-{
-	m_CpuTimer.Begin();
-
-	if (pContext)
-	{
-		m_GpuTimer.Begin(pContext);
+		GPUTimerIndex = Profiler::Get()->GetNextTimerIndex();
+		pContext->GetCommandList()->EndQuery(Profiler::Get()->GetQueryHeap(), D3D12_QUERY_TYPE_TIMESTAMP, GPUTimerIndex * Profiler::QUERY_PAIR_NUM);
 
 #ifdef USE_PIX
-		wchar_t name[256];
-		size_t written = 0;
-		mbstowcs_s(&written, name, m_Name, 256);
-		::PIXBeginEvent(pContext->GetCommandList(), 0, name);
+		::PIXBeginEvent(pInContext->GetCommandList(), 0, MULTIBYTE_TO_UNICODE(pName));
 #endif
 	}
 }
 
-void ProfileNode::EndTimer(CommandContext* pContext)
+void ProfileNode::EndTimer()
 {
-	m_CpuTimer.End();
-	m_Processed = false;
+	LARGE_INTEGER end;
+	QueryPerformanceCounter(&end);
+	CPUEndTime = end.QuadPart;
 
 	if (pContext)
 	{
-		m_GpuTimer.End(pContext);
-
+		pContext->GetCommandList()->EndQuery(Profiler::Get()->GetQueryHeap(), D3D12_QUERY_TYPE_TIMESTAMP, GPUTimerIndex * Profiler::QUERY_PAIR_NUM + 1);
 #ifdef USE_PIX
 		::PIXEndEvent(pContext->GetCommandList());
 #endif
 	}
 }
 
-void ProfileNode::PopulateTimes(const uint64* pReadbackData, int frameIndex)
+void ProfileNode::PopulateTimes(const uint64* pReadbackData, uint64 cpuFrequency, int frameIndex)
 {
-	if (m_Processed == false)
-	{
-		m_Processed = true;
-		m_LastProcessedFrame = frameIndex;
-		float cpuTime = m_CpuTimer.GetTime();
-		m_CpuTimeHistory.AddTime(cpuTime);
-		float gpuTime = m_GpuTimer.GetTime(pReadbackData);
-		m_GpuTimeHistory.AddTime(gpuTime);
+	float cpuTime = (float)(CPUEndTime - CPUStartTime) / cpuFrequency * 1000.0f;
+	CpuHistory.AddTime(cpuTime);
 
-		for (auto& child : m_Children)
-		{
-			child->PopulateTimes(pReadbackData, frameIndex);
-		}
+	if (GPUTimerIndex >= 0)
+	{
+		check(pReadbackData);
+		uint64 start = pReadbackData[GPUTimerIndex * Profiler::QUERY_PAIR_NUM];
+		uint64 end = pReadbackData[GPUTimerIndex * Profiler::QUERY_PAIR_NUM + 1];
+		uint64 timeFrequency = pContext->GetParent()->GetCommandQueue(pContext->GetType())->GetTimestampFrequency();
+		float time = (float)(end - start) / timeFrequency * 1000.0f;
+		GpuHistory.AddTime(time);
+	}
+
+	for (auto& child : Children)
+	{
+		child->PopulateTimes(pReadbackData, cpuFrequency, frameIndex);
 	}
 }
 
-ProfileNode* ProfileNode::GetChild(const char* pName, int i)
+ProfileNode* ProfileNode::GetChild(const char* pInName, int i)
 {
-	StringHash hash(pName);
-	auto it = m_Map.find(hash);
-	if (it != m_Map.end())
+	StringHash hash(pInName);
+	auto it = Map.find(hash);
+	if (it != Map.end())
 	{
 		return it->second;
 	}
-	std::unique_ptr<ProfileNode> pNewNode = std::make_unique<ProfileNode>(pName, hash, this);
-	ProfileNode* pNode = m_Children.insert(m_Children.begin() + i, std::move(pNewNode))._Ptr->get();
-	m_Map[hash] = pNode;
+	std::unique_ptr<ProfileNode> pNewNode = std::make_unique<ProfileNode>(pInName, this);
+	ProfileNode* pNode = Children.insert(Children.begin() + i, std::move(pNewNode))._Ptr->get();
+	Map[hash] = pNode;
 	return pNode;
-}
-
-bool ProfileNode::HasChild(const char* pName)
-{
-	StringHash hash(pName);
-	return m_Map.find(hash) != m_Map.end();
 }
 
 Profiler* Profiler::Get()
@@ -128,48 +82,47 @@ Profiler* Profiler::Get()
 	return &profiler;
 }
 
-void Profiler::Initialize(Graphics* pGraphics)
+void Profiler::Initialize(GraphicsDevice* pParent)
 {
-	CD3DX12_QUERY_HEAP_DESC desc(HEAP_SIZE, D3D12_QUERY_HEAP_TYPE_TIMESTAMP);
-	VERIFY_HR_EX(pGraphics->GetDevice()->CreateQueryHeap(&desc, IID_PPV_ARGS(m_pQueryHeap.GetAddressOf())), pGraphics->GetDevice());
+	LARGE_INTEGER cpuFrequency;
+	QueryPerformanceFrequency(&cpuFrequency);
+	m_CpuTimestampFrequency = cpuFrequency.QuadPart;
+
+	D3D12_QUERY_HEAP_DESC desc{};
+	desc.Count = HEAP_SIZE;
+	desc.Type = D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
+	desc.NodeMask = 0;
+	VERIFY_HR_EX(pParent->GetDevice()->CreateQueryHeap(&desc, IID_PPV_ARGS(m_pQueryHeap.GetAddressOf())), pParent->GetDevice());
 	D3D::SetObjectName(m_pQueryHeap.Get(), "Profiler Timestamp Query Heap");
 
-	m_pReadBackBuffer = std::make_unique<Buffer>(pGraphics, "Profiling Readback Buffer");
-	m_pReadBackBuffer->Create(BufferDesc::CreateReadback(sizeof(uint64) * Graphics::FRAME_COUNT * HEAP_SIZE));
+	m_pReadBackBuffer = pParent->CreateBuffer(BufferDesc::CreateReadback(sizeof(uint64) * SwapChain::NUM_FRAMES * HEAP_SIZE), "Profiling Readback Buffer");
 
-	{
-		//GPU Frequency
-		uint64 timeStampFrequency;
-		pGraphics->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT)->GetCommandQueue()->GetTimestampFrequency(&timeStampFrequency);
-		m_SecondsPerGpuTick = 1.0f / timeStampFrequency;
-	}
-
-	{
-		//CPU Frequency
-		LARGE_INTEGER cpuFrequency;
-		QueryPerformanceFrequency(&cpuFrequency);
-		m_SecondsPerCpuTick = 1.0f / cpuFrequency.QuadPart;
-	}
-
-	m_pRootBlock = std::make_unique<ProfileNode>("", StringHash(""), nullptr);
+	m_pRootBlock = std::make_unique<ProfileNode>("Total", nullptr);
+	m_pRootBlock->StartTimer(nullptr);
 	m_pCurrentBlock = m_pRootBlock.get();
+}
+
+void Profiler::Shutdown()
+{
+	m_pReadBackBuffer.Reset();
+	m_pQueryHeap.Reset();
 }
 
 void Profiler::Begin(const char* pName, CommandContext* pContext)
 {
-	if (m_pCurrentBlock->HasChild(pName))
+	if (m_pCurrentBlock->Map.find(pName) != m_pCurrentBlock->Map.end())
 	{
 		m_pCurrentBlock = m_pCurrentBlock->GetChild(pName);
 		m_pCurrentBlock->StartTimer(pContext);
 	}
 	else
 	{
-		int i = 0;
+		uint32 i = 0;
 		if (m_pPreviousBlock)
 		{
-			for (; i < m_pCurrentBlock->GetChildCount(); ++i)
+			for (; i < m_pCurrentBlock->Children.size(); ++i)
 			{
-				if (m_pCurrentBlock->GetChild(i) == m_pPreviousBlock)
+				if (m_pCurrentBlock->Children[i].get() == m_pPreviousBlock)
 				{
 					++i;
 					break;
@@ -181,59 +134,30 @@ void Profiler::Begin(const char* pName, CommandContext* pContext)
 	}
 }
 
-void Profiler::End(CommandContext* pContext)
+void Profiler::End()
 {
-	m_pCurrentBlock->EndTimer(pContext);
+	m_pCurrentBlock->EndTimer();
 	m_pPreviousBlock = m_pCurrentBlock;
-	m_pCurrentBlock = m_pCurrentBlock->GetParent();
+	m_pCurrentBlock = m_pCurrentBlock->pParent;
 }
 
-void Profiler::Resolve(Graphics* pGraphics, int frameIndex)
+void Profiler::Resolve(GraphicsDevice* pParent)
 {
 	checkf(m_pCurrentBlock == m_pRootBlock.get(), "The current block isn't the root block then something must've gone wrong!");
 
-	//Start the resolve on the current frame
+	m_pCurrentBlock->EndTimer();
+	m_pCurrentBlock->PopulateTimes((const uint64*)m_pReadBackBuffer->GetMappedData(), m_CpuTimestampFrequency, m_CurrentReadbackFrame);
+
 	int offset = MAX_GPU_TIME_QUERIES * QUERY_PAIR_NUM * m_CurrentReadbackFrame;
-	CommandContext* pContext = pGraphics->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+	CommandContext* pContext = pParent->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 	pContext->GetCommandList()->ResolveQueryData(m_pQueryHeap.Get(), D3D12_QUERY_TYPE_TIMESTAMP, 0, m_CurrentTimer * QUERY_PAIR_NUM, m_pReadBackBuffer->GetResource(), offset * sizeof(uint64));
-	m_FenceValues[m_CurrentReadbackFrame] = pContext->Execute(false);
+	pContext->Execute(false);
 
-	if (frameIndex >= Graphics::FRAME_COUNT)
-	{
-		//Make sure the resolve from 2 frames ago is finished before we read.
-		uint32 readFromIndex = (m_CurrentReadbackFrame + Graphics::FRAME_COUNT - 1) % Graphics::FRAME_COUNT;
-		pGraphics->WaitForFence(m_FenceValues[readFromIndex]);
-
-		const uint64* pReadbackData = (uint64*)m_pReadBackBuffer->Map(0, 0, m_pReadBackBuffer->GetSize());
-		check(pReadbackData);
-		m_pCurrentBlock->PopulateTimes(pReadbackData, frameIndex - 2);
-		m_pReadBackBuffer->Unmap();
-	}
-	m_CurrentReadbackFrame = (m_CurrentReadbackFrame + 1) % Graphics::FRAME_COUNT;
-
-	m_pPreviousBlock = nullptr;
+	m_CurrentTimer = 0;
+	m_CurrentReadbackFrame = (m_CurrentReadbackFrame + 1) % SwapChain::NUM_FRAMES;
 	m_pCurrentBlock->StartTimer(nullptr);
-	m_pCurrentBlock->EndTimer(nullptr);
-}
-
-float Profiler::GetGpuTime(const uint64* pReadbackData, int timerIndex) const
-{
-	check(timerIndex >= 0);
-	check(pReadbackData);
-	uint64 start = pReadbackData[timerIndex * QUERY_PAIR_NUM];
-	uint64 end = pReadbackData[timerIndex * QUERY_PAIR_NUM + 1];
-	float time = (float)((end - start) * m_SecondsPerGpuTick * 1000.0);
-	return time;
-}
-
-void Profiler::StartGpuTimer(CommandContext* pContext, int timerIndex)
-{
-	pContext->GetCommandList()->EndQuery(Profiler::Get()->GetQueryHeap(), D3D12_QUERY_TYPE_TIMESTAMP, timerIndex * QUERY_PAIR_NUM);
-}
-
-void Profiler::StopGpuTimer(CommandContext* pContext, int timerIndex)
-{
-	pContext->GetCommandList()->EndQuery(Profiler::Get()->GetQueryHeap(), D3D12_QUERY_TYPE_TIMESTAMP, timerIndex * QUERY_PAIR_NUM + 1);
+	++m_FrameIndex;
+	m_pPreviousBlock = nullptr;
 }
 
 int32 Profiler::GetNextTimerIndex()
@@ -244,67 +168,101 @@ int32 Profiler::GetNextTimerIndex()
 
 /// IMGUI
 
-void ProfileNode::RenderImGui(int frameIndex)
+void Profiler::DrawImGui()
 {
 	ImGui::Spacing();
-	ImGui::Columns(3);
-
-	ImGui::PushID(ImGui::GetID(m_Name));
-	ImGui::Text("Event Name");
-	ImGui::NextColumn();
-	ImGui::Text("CPU (ms)");
-	ImGui::NextColumn();
-	ImGui::Text("GPU (ms)");
-	ImGui::NextColumn();
-
-	for (auto& pChild : m_Children)
+	if (ImGui::BeginTable("Profiling", 5, ImGuiTableFlags_SizingStretchProp))
 	{
-		pChild->RenderNodeImgui(frameIndex);
-	}
+		ImGui::TableSetupColumn("Event", ImGuiTableColumnFlags_None, 3);
+		ImGui::TableSetupColumn("CPU", ImGuiTableColumnFlags_None, 6);
+		ImGui::TableSetupColumn("CPU (ms)", ImGuiTableColumnFlags_None, 1);
+		ImGui::TableSetupColumn("GPU", ImGuiTableColumnFlags_None, 6);
+		ImGui::TableSetupColumn("GPU (ms)", ImGuiTableColumnFlags_None, 1);
+		ImGui::TableHeadersRow();
 
-	ImGui::PopID();
+		DrawImGui(m_pRootBlock.get());
+
+		ImGui::EndTable();
+	}
 	ImGui::Separator();
 }
 
-void ProfileNode::RenderNodeImgui(int frameIndex)
+void Profiler::DrawImGui(const ProfileNode* pNode)
 {
-	if (frameIndex - m_LastProcessedFrame < 60)
+	if (m_FrameIndex - pNode->LastHitFrame < 60)
 	{
-		ImGui::PushID(m_Hash);
+		static const ImColor CpuColor = ImColor(0, 125, 200);
+		static const ImColor GpuColor = ImColor(120, 183, 0);
+
+		ImGui::TableNextRow();
+		ImGui::TableNextColumn();
+		ImGui::PushID(pNode);
 
 		bool expand = false;
-		if (m_Children.size() > 0)
+		if (pNode->Children.size() > 0)
 		{
-			expand = ImGui::TreeNodeEx(m_Name, m_Children.size() > 2 ? ImGuiTreeNodeFlags_DefaultOpen : ImGuiTreeNodeFlags_None);
+			expand = ImGui::TreeNodeEx(pNode->pName, pNode->Children.size() > 2 ? ImGuiTreeNodeFlags_DefaultOpen : ImGuiTreeNodeFlags_None);
 		}
 		else
 		{
 			ImGui::Bullet();
-			ImGui::Selectable(m_Name);
+			ImGui::Selectable(pNode->pName);
 		}
 
-		ImGui::NextColumn();
+		ImGui::PushStyleColor(ImGuiCol_PlotLines, ImU32(CpuColor));
+		ImGui::PushStyleColor(ImGuiCol_Text, ImU32(CpuColor));
+		float cpuTime = pNode->CpuHistory.GetAverage();
 
-		float time = m_CpuTimeHistory.GetAverage();
-		ImGui::Text("%4.2f ms", time);
-		ImGui::NextColumn();
-
-		time = m_GpuTimeHistory.GetAverage();
-		if (time > 0)
+		// 0
 		{
-			ImGui::Text("%4.2f ms", time);
+			ImGui::TableNextColumn();
+			if (cpuTime > 0)
+			{
+				const float* pData;
+				uint32 offset, count;
+				pNode->CpuHistory.GetHistory(&pData, &count, &offset);
+
+				ImGui::PlotLines("", pData, count, offset, 0, 0.0f, 0.03f, ImVec2(ImGui::GetColumnWidth(), 0));
+			}
 		}
-		else
+		// 1
 		{
-			ImGui::Text("N/A");
+			ImGui::TableNextColumn();
+			ImGui::Text("%4.2f ms", cpuTime);
 		}
-		ImGui::NextColumn();
+
+		ImGui::PopStyleColor(2);
+
+		ImGui::PushStyleColor(ImGuiCol_PlotLines, ImU32(GpuColor));
+		ImGui::PushStyleColor(ImGuiCol_Text, ImU32(GpuColor));
+
+		float gpuTime = pNode->GpuHistory.GetAverage();
+		// 2
+		{
+			ImGui::TableNextColumn();
+			if (gpuTime > 0)
+			{
+				const float* pData;
+				uint32 offset, count;
+				pNode->GpuHistory.GetHistory(&pData, &count, &offset);
+
+				ImGui::PlotLines("", pData, count, offset, 0, 0.0f, 0.03f, ImVec2(ImGui::GetColumnWidth(), 0));
+			}
+		}
+
+		// 3
+		{
+			ImGui::TableNextColumn();
+			gpuTime > 0 ? ImGui::Text("%4.2f ms", gpuTime) : ImGui::Text("N/A");
+		}
+
+		ImGui::PopStyleColor(2);
 
 		if (expand)
 		{
-			for (auto& childNode : m_Children)
+			for (auto& pChild : pNode->Children)
 			{
-				childNode->RenderNodeImgui(frameIndex);
+				DrawImGui(pChild.get());
 			}
 			ImGui::TreePop();
 		}

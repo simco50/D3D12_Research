@@ -1,26 +1,47 @@
 #pragma once
 #include "Thread.h"
 
+struct FileEvent
+{
+	enum class Type
+	{
+		Modified,
+		Removed,
+		Added,
+	};
+	Type EventType;
+	std::string Path;
+	LARGE_INTEGER Time;
+};
+
 class FileWatcher
 {
 public:
 	FileWatcher();
-	virtual ~FileWatcher();
+	~FileWatcher();
 
-	bool StartWatching(const std::string& directory, const bool recursiveWatch = true);
-	void StopWatching();
-	bool GetNextChange(std::string& fileName);
+	bool StartWatching(const char* pPath, const bool recursiveWatch = true);
+	bool GetNextChange(FileEvent& fileFileEvent);
 
 private:
-	int ThreadFunction();
-	void AddChange(const std::string& fileName);
+	struct DirectoryWatch
+	{
+		~DirectoryWatch();
+		bool IsWatching = false;
+		bool Recursive;
+		HANDLE FileHandle;
+		OVERLAPPED Overlapped{};
+		std::deque<FileEvent> Changes;
+		std::array<char, 1 << 16> Buffer{};
+		std::string DirectoryPath;
+	};
 
-	static const int BUFFERSIZE = 2048;
-	bool m_Exiting = true;
-	bool m_RecursiveWatch = true;
+	int ThreadFunction();
+
+	HANDLE m_IOCP = nullptr;
+	bool m_Exiting = false;
 	std::mutex m_Mutex;
-	HANDLE m_FileHandle = nullptr;
-	LARGE_INTEGER m_TimeFrequency;
-	std::map<std::string, LARGE_INTEGER> m_Changes;
+	LARGE_INTEGER m_TimeFrequency{};
 	Thread m_Thread;
+	std::vector<std::unique_ptr<DirectoryWatch>> m_Watches;
 };

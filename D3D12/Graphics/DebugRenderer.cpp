@@ -1,12 +1,12 @@
 #include "stdafx.h"
 #include "DebugRenderer.h"
-#include "Graphics/Core/Graphics.h"
-#include "Graphics/Core/Shader.h"
-#include "Graphics/Core/PipelineState.h"
-#include "Graphics/Core/RootSignature.h"
-#include "Graphics/Core/CommandContext.h"
+#include "RHI/Graphics.h"
+#include "RHI/PipelineState.h"
+#include "RHI/RootSignature.h"
+#include "RHI/CommandContext.h"
 #include "Light.h"
 #include "RenderGraph/RenderGraph.h"
+#include "Graphics/SceneView.h"
 
 struct DebugSphere
 {
@@ -38,39 +38,43 @@ DebugRenderer* DebugRenderer::Get()
 	return &instance;
 }
 
-void DebugRenderer::Initialize(Graphics* pGraphics)
+void DebugRenderer::Initialize(GraphicsDevice* pDevice)
 {
-	CD3DX12_INPUT_ELEMENT_DESC inputElements[] = {
-		CD3DX12_INPUT_ELEMENT_DESC("POSITION", DXGI_FORMAT_R32G32B32_FLOAT),
-		CD3DX12_INPUT_ELEMENT_DESC("COLOR", DXGI_FORMAT_R32_UINT),
-	};
-
-	//Shaders
-	Shader vertexShader("DebugRenderer.hlsl", ShaderType::Vertex, "VSMain", { });
-	Shader pixelShader("DebugRenderer.hlsl", ShaderType::Pixel, "PSMain", { });
+	VertexElementLayout inputLayout;
+	inputLayout.AddVertexElement("POSITION", DXGI_FORMAT_R32G32B32_FLOAT);
+	inputLayout.AddVertexElement("COLOR", DXGI_FORMAT_R32_UINT);
 
 	//Rootsignature
-	m_pRS = std::make_unique<RootSignature>();
-	m_pRS->FinalizeFromShader("Diffuse", vertexShader, pGraphics->GetDevice());
+	m_pRS = new RootSignature(pDevice);
+	m_pRS->AddConstantBufferView(100);
+	m_pRS->Finalize("Diffuse", D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
 	//Opaque
-	m_pTrianglesPSO = std::make_unique<PipelineState>();
-	m_pTrianglesPSO->SetInputLayout(inputElements, sizeof(inputElements) / sizeof(inputElements[0]));
-	m_pTrianglesPSO->SetRootSignature(m_pRS->GetRootSignature());
-	m_pTrianglesPSO->SetVertexShader(vertexShader);
-	m_pTrianglesPSO->SetPixelShader(pixelShader);
-	m_pTrianglesPSO->SetRenderTargetFormat(Graphics::RENDER_TARGET_FORMAT, Graphics::DEPTH_STENCIL_FORMAT, pGraphics->GetMultiSampleCount());
-	m_pTrianglesPSO->SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
-	m_pTrianglesPSO->SetDepthWrite(true);
-	m_pTrianglesPSO->SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
-	m_pTrianglesPSO->Finalize("Triangle DebugRenderer PSO", pGraphics->GetDevice());
+	PipelineStateInitializer psoDesc;
+	psoDesc.SetInputLayout(inputLayout);
+	psoDesc.SetRootSignature(m_pRS);
+	psoDesc.SetVertexShader("DebugRenderer.hlsl", "VSMain");
+	psoDesc.SetPixelShader("DebugRenderer.hlsl", "PSMain");
+	psoDesc.SetRenderTargetFormats(DXGI_FORMAT_R16G16B16A16_FLOAT, DXGI_FORMAT_D32_FLOAT, 1);
+	psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
+	psoDesc.SetDepthWrite(true);
+	psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
+	psoDesc.SetName("Triangle DebugRenderer");
+	m_pTrianglesPSO = pDevice->CreatePipeline(psoDesc);
 
-	m_pLinesPSO = std::make_unique<PipelineState>(*m_pTrianglesPSO);
-	m_pLinesPSO->SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE);
-	m_pLinesPSO->Finalize("Lines DebugRenderer PSO", pGraphics->GetDevice());
+	psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE);
+	psoDesc.SetName("Lines DebugRenderer");
+	m_pLinesPSO = pDevice->CreatePipeline(psoDesc);
 }
 
-void DebugRenderer::Render(RGGraph& graph, const Matrix& viewProjection, Texture* pTarget, Texture* pDepth)
+void DebugRenderer::Shutdown()
+{
+	m_pTrianglesPSO.Reset();
+	m_pLinesPSO.Reset();
+	m_pRS.Reset();
+}
+
+void DebugRenderer::Render(RGGraph& graph, const SceneView* pView, RGTexture* pTarget, RGTexture* pDepth)
 {
 	int linePrimitives = (int)m_Lines.size() * 2;
 	int trianglePrimitives = (int)m_Triangles.size() * 3;
@@ -82,78 +86,67 @@ void DebugRenderer::Render(RGGraph& graph, const Matrix& viewProjection, Texture
 
 	constexpr uint32 VertexStride = sizeof(DebugLine) / 2;
 
-	RGPassBuilder pass = graph.AddPass("Debug Rendering");
-	pass.Bind([=](CommandContext& context, const RGPassResources& resources)
-		{
-			context.InsertResourceBarrier(pDepth, D3D12_RESOURCE_STATE_DEPTH_WRITE);
-			context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
-
-			context.BeginRenderPass(RenderPassInfo(pTarget, RenderPassAccess::Load_Store, pDepth, RenderPassAccess::Load_Store));
-			context.SetGraphicsRootSignature(m_pRS.get());
-
-			context.SetDynamicConstantBufferView(0, &viewProjection, sizeof(Matrix));
-
-			if (linePrimitives != 0)
+	graph.AddPass("Debug Rendering", RGPassFlag::Raster)
+		.RenderTarget(pTarget, RenderTargetLoadAction::Load)
+		.DepthStencil(pDepth, RenderTargetLoadAction::Load, false)
+		.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
-				context.SetDynamicVertexBuffer(0, linePrimitives, VertexStride, m_Lines.data());
-				context.SetPipelineState(m_pLinesPSO.get());
-				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINELIST);
-				context.Draw(0, linePrimitives);
-			}
-			if (trianglePrimitives != 0)
-			{
-				context.SetDynamicVertexBuffer(0, trianglePrimitives, VertexStride, m_Triangles.data());
-				context.SetPipelineState(m_pTrianglesPSO.get());
-				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-				context.Draw(0, trianglePrimitives);
-			}
-			context.EndRenderPass();
-		});
+				context.BeginRenderPass(resources.GetRenderPassInfo());
+				context.SetGraphicsRootSignature(m_pRS);
+
+				context.SetRootCBV(0, Renderer::GetViewUniforms(pView, pTarget->Get()));
+
+				if (linePrimitives != 0)
+				{
+					context.SetDynamicVertexBuffer(0, linePrimitives, VertexStride, m_Lines.data());
+					context.SetPipelineState(m_pLinesPSO);
+					context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINELIST);
+					context.Draw(0, linePrimitives);
+				}
+				if (trianglePrimitives != 0)
+				{
+					context.SetDynamicVertexBuffer(0, trianglePrimitives, VertexStride, m_Triangles.data());
+					context.SetPipelineState(m_pTrianglesPSO);
+					context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+					context.Draw(0, trianglePrimitives);
+				}
+				context.EndRenderPass();
+			});
 	m_Lines.clear();
 	m_Triangles.clear();
 }
 
-void DebugRenderer::AddLine(const Vector3& start, const Vector3& end, const Color& color)
+void DebugRenderer::AddLine(const Vector3& start, const Vector3& end, const IntColor& color)
 {
-	AddLine(start, end, color, color);
+	m_Lines.push_back(DebugLine(start, end, color));
 }
 
-void DebugRenderer::AddLine(const Vector3& start, const Vector3& end, const Color& colorStart, const Color& colorEnd)
-{
-	m_Lines.push_back(DebugLine(start, end, Math::EncodeColor(colorStart), Math::EncodeColor(colorEnd)));
-}
-
-void DebugRenderer::AddRay(const Vector3& start, const Vector3& direction, const Color& color)
+void DebugRenderer::AddRay(const Vector3& start, const Vector3& direction, const IntColor& color)
 {
 	AddLine(start, start + direction, color);
 }
 
-void DebugRenderer::AddTriangle(const Vector3& a, const Vector3& b, const Vector3& c, const Color& color, bool solid)
-{
-	AddTriangle(a, b, c, color, color, color, solid);
-}
-
-void DebugRenderer::AddTriangle(const Vector3& a, const Vector3& b, const Vector3& c, const Color& colorA, const Color& colorB, const Color& colorC, bool solid)
+void DebugRenderer::AddTriangle(const Vector3& a, const Vector3& b, const Vector3& c, const IntColor& color, bool solid)
 {
 	if (solid)
 	{
-		m_Triangles.push_back(DebugTriangle(a, b, c, Math::EncodeColor(colorA), Math::EncodeColor(colorB), Math::EncodeColor(colorC)));
+		m_Triangles.push_back(DebugTriangle(a, b, c, color));
 	}
 	else
 	{
-		AddLine(a, b, colorA);
-		AddLine(b, c, colorB);
-		AddLine(c, b, colorC);
+		AddLine(a, b, color);
+		AddLine(b, c, color);
+		AddLine(c, b, color);
 	}
 }
 
-void DebugRenderer::AddPolygon(const Vector3& a, const Vector3& b, const Vector3& c, const Vector3& d, const Color& color)
+void DebugRenderer::AddPolygon(const Vector3& a, const Vector3& b, const Vector3& c, const Vector3& d, const IntColor& color)
 {
 	AddTriangle(a, b, c, color);
 	AddTriangle(c, d, a, color);
 }
 
-void DebugRenderer::AddBox(const Vector3& position, const Vector3& extents, const Color& color, bool solid /*= false*/)
+void DebugRenderer::AddBox(const Vector3& position, const Vector3& extents, const IntColor& color, bool solid /*= false*/)
 {
 	Vector3 min(position.x - extents.x, position.y - extents.y, position.z - extents.z);
 	Vector3 max(position.x + extents.x, position.y + extents.y, position.z + extents.z);
@@ -191,12 +184,12 @@ void DebugRenderer::AddBox(const Vector3& position, const Vector3& extents, cons
 	}
 }
 
-void DebugRenderer::AddBoundingBox(const BoundingBox& boundingBox, const Color& color, bool solid /*= false*/)
+void DebugRenderer::AddBoundingBox(const BoundingBox& boundingBox, const IntColor& color, bool solid /*= false*/)
 {
 	AddBox(boundingBox.Center, boundingBox.Extents, color, solid);
 }
 
-void DebugRenderer::AddBoundingBox(const BoundingBox& boundingBox, const Matrix& transform, const Color& color, bool solid /*= false*/)
+void DebugRenderer::AddBoundingBox(const BoundingBox& boundingBox, const Matrix& transform, const IntColor& color, bool solid /*= false*/)
 {
 	const Vector3 min(boundingBox.Center.x - boundingBox.Extents.x, boundingBox.Center.y - boundingBox.Extents.y, boundingBox.Center.z - boundingBox.Extents.z);
 	const Vector3 max(boundingBox.Center.x + boundingBox.Extents.x, boundingBox.Center.y + boundingBox.Extents.y, boundingBox.Center.z + boundingBox.Extents.z);
@@ -236,7 +229,7 @@ void DebugRenderer::AddBoundingBox(const BoundingBox& boundingBox, const Matrix&
     }
 }
 
-void DebugRenderer::AddSphere(const Vector3& position, float radius,  int slices, int stacks, const Color& color, bool solid)
+void DebugRenderer::AddSphere(const Vector3& position, float radius, int slices, int stacks, const IntColor& color, bool solid)
 {
 	DebugSphere sphere(position, radius);
 
@@ -278,7 +271,7 @@ void DebugRenderer::AddSphere(const Vector3& position, float radius,  int slices
 	}
 }
 
-void DebugRenderer::AddFrustrum(const BoundingFrustum& frustrum, const Color& color)
+void DebugRenderer::AddFrustrum(const BoundingFrustum& frustrum, const IntColor& color)
 {
 	std::vector<Vector3> corners(BoundingFrustum::CORNER_COUNT);
 	frustrum.GetCorners(corners.data());
@@ -307,50 +300,70 @@ void DebugRenderer::AddAxisSystem(const Matrix& transform, float lineLength)
 	Vector3 y(Vector3::Transform(Vector3(0, lineLength, 0), newMatrix));
 	Vector3 z(Vector3::Transform(Vector3(0, 0, lineLength), newMatrix));
 
-	AddLine(origin, x, Color(1, 0, 0, 1));
-	AddLine(origin, y, Color(0, 1, 0, 1));
-	AddLine(origin, z, Color(0, 0, 1, 1));
+	AddLine(origin, x, Colors::Red);
+	AddLine(origin, y, Colors::Green);
+	AddLine(origin, z, Colors::Blue);
 }
 
-void DebugRenderer::AddWireCylinder(const Vector3& position, const Vector3& direction, float height, float radius, int segments, const Color& color)
+void DebugRenderer::AddWireCylinder(const Vector3& position, const Vector3& direction, float height, float radius, int segments, const IntColor& color)
 {
-	Vector3 d;
-	direction.Normalize(d);
+	Vector3 forward;
+	direction.Normalize(forward);
+	Vector3 up = Vector3::Up;
+	Vector3 right = forward.Cross(up);
+	right.Normalize();
+	up = right.Cross(direction);
 
-	DebugSphere sphere(position, radius);
+	Matrix rotationMatrix = Matrix(
+		Vector4(right),
+		Vector4(up),
+		Vector4(forward),
+		Vector4(0, 0, 0, 1)
+	);
+
+	Matrix world = rotationMatrix * Matrix::CreateTranslation(position);
 	float t = Math::PI * 2 / (segments + 1);
 
-	Matrix world = Matrix::CreateFromQuaternion(Math::LookRotation(d)) * Matrix::CreateTranslation(position - d * (height / 2));
 	for (int i = 0; i < segments + 1; ++i)
 	{
-		Vector3 a = Vector3::Transform(sphere.GetLocalPoint(Math::PIDIV2, i * t), world);
-		Vector3 b = Vector3::Transform(sphere.GetLocalPoint(Math::PIDIV2, (i + 1) * t), world);
-		AddLine(a, b, color, color);
-		AddLine(a + d * height, b + d * height, color, color);
-		AddLine(a, a + d * height, color, color);
+		Vector3 a = Vector3::Transform(Vector3(radius * cos(t * i), radius * sin(t * i), 0) + Vector3::Forward * height, world);
+		Vector3 b = Vector3::Transform(Vector3(radius * cos(t * (i + 1)), radius * sin(t * (i + 1)), 0) + Vector3::Forward * height, world);
+		AddLine(a, b, color);
+		AddLine(a + forward * height, b + forward * height, color);
+		AddLine(a, a + forward * height, color);
 	}
 }
 
-void DebugRenderer::AddWireCone(const Vector3& position, const Vector3& direction, float height, float angle, int segments, const Color& color)
+void DebugRenderer::AddCone(const Vector3& position, const Vector3& direction, float height, float angle, int segments, const IntColor& color, bool solid)
 {
-	Vector3 d;
-	direction.Normalize(d);
+	Vector3 forward;
+	direction.Normalize(forward);
+	Vector3 up = Vector3::Up;
+	Vector3 right = forward.Cross(up);
+	right.Normalize();
+	up = right.Cross(direction);
 
-	float radius = tan(Math::ToRadians * angle) * height;
-	DebugSphere sphere(position, radius);
+	Matrix rotationMatrix = Matrix(
+		Vector4(right),
+		Vector4(up),
+		Vector4(forward),
+		Vector4(0, 0, 0, 1)
+	);
+
+	Matrix world = rotationMatrix * Matrix::CreateTranslation(position);
+
+	float radius = tanf(0.5f * angle * Math::DegreesToRadians) * height;
 	float t = Math::PI * 2 / (segments + 1);
-
-	Matrix world = Matrix::CreateFromQuaternion(Math::LookRotation(d)) * Matrix::CreateTranslation(position);
 	for (int i = 0; i < segments + 1; ++i)
 	{
-		Vector3 a = Vector3::Transform(sphere.GetLocalPoint(Math::PIDIV2, i * t), world) + direction * height;
-		Vector3 b = Vector3::Transform(sphere.GetLocalPoint(Math::PIDIV2, (i + 1) * t), world) + direction * height;
-		AddLine(a, b, color, color);
-		AddLine(a, position, color, color);
+		Vector3 a = Vector3::Transform(Vector3(radius * cos(t * i), radius * sin(t * i), 0) + Vector3::Forward * height, world);
+		Vector3 b = Vector3::Transform(Vector3(radius * cos(t * (i + 1)), radius * sin(t * (i + 1)), 0) + Vector3::Forward * height, world);
+		AddLine(a, b, color);
+		AddLine(a, position, color);
 	}
 }
 
-void DebugRenderer::AddBone(const Matrix& matrix, float length, const Color& color)
+void DebugRenderer::AddBone(const Matrix& matrix, float length, const IntColor& color)
 {
 	float boneSize = 2;
 	Vector3 start = Vector3::Transform(Vector3(0, 0, 0), matrix);
@@ -360,29 +373,29 @@ void DebugRenderer::AddBone(const Matrix& matrix, float length, const Color& col
 	Vector3 d = Vector3::Transform(Vector3(-boneSize, -boneSize, boneSize), matrix);
 	Vector3 tip = Vector3::Transform(Vector3(0, 0, -boneSize * length), matrix);
 
-	AddTriangle(start, d, c, color, color, color, false);
-	AddTriangle(start, a, d, color, color, color, false);
-	AddTriangle(start, b, a, color, color, color, false);
-	AddTriangle(start, c, b, color, color, color, false);
-	AddTriangle(d, tip, c, color, color, color, false);
-	AddTriangle(a, tip, d, color, color, color, false);
-	AddTriangle(b, tip, a, color, color, color, false);
-	AddTriangle(c, tip, b, color, color, color, false);
+	AddTriangle(start, d, c, color, false);
+	AddTriangle(start, a, d, color, false);
+	AddTriangle(start, b, a, color, false);
+	AddTriangle(start, c, b, color, false);
+	AddTriangle(d, tip, c, color, false);
+	AddTriangle(a, tip, d, color, false);
+	AddTriangle(b, tip, a, color, false);
+	AddTriangle(c, tip, b, color, false);
 }
 
-void DebugRenderer::AddLight(const Light& light)
+void DebugRenderer::AddLight(const Light& light, const IntColor& color /*= Colors::Yellow*/)
 {
 	switch (light.Type)
 	{
 	case LightType::Directional:
-		AddWireCylinder(light.Position, light.Direction, 30.0f, 5.0f, 10, Color(1.0f, 1.0f, 0.0f, 1.0f));
+		AddWireCylinder(light.Position, light.Direction, 30.0f, 5.0f, 10, color);
 		AddAxisSystem(Matrix::CreateWorld(light.Position, -light.Direction, Vector3::Up), 1.0f);
 		break;
 	case LightType::Point:
-		AddSphere(light.Position, light.Range, 8, 8, Color(1.0f, 1.0f, 0.0f, 1.0f), false);
+		AddSphere(light.Position, light.Range, 8, 8, color, false);
 		break;
 	case LightType::Spot:
-		AddWireCone(light.Position, light.Direction, light.Range, light.UmbraAngle, 10, Color(1.0f, 1.0f, 0.0f, 1.0f));
+		AddCone(light.Position, light.Direction, light.Range, light.UmbraAngleDegrees, 10, color);
 		break;
 	default:
 		break;

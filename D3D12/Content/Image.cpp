@@ -6,46 +6,56 @@
 #define STBI_NO_PIC
 #define STBI_NO_PNM
 
-#define STB_IMAGE_IMPLEMENTATION
-#include "Stb/stb_image.h"
-#define STB_IMAGE_WRITE_IMPLEMENTATION
-#include "Stb/stb_image_write.h"
+#include "stb_image.h"
+#include "stb_image_write.h"
 #include <fstream>
 #include "Core/Paths.h"
+#include "Graphics/RHI/D3DUtils.h"
+
+Image::Image(int width, int height, ImageFormat format, void* pInitialData /*= nullptr*/)
+{
+	SetSize(width, height, GetNumChannels(format));
+	m_Format = format;
+	if (pInitialData)
+	{
+		SetData(pInitialData);
+	}
+}
 
 bool Image::Load(const char* inputStream)
 {
 	const std::string extension = Paths::GetFileExtenstion(inputStream);
 	bool success = false;
+
+	std::ifstream s(inputStream, std::ios::binary | std::ios::ate);
+	if (s.fail())
+	{
+		return false;
+	}
+
+	std::vector<char> data((size_t)s.tellg());
+	s.seekg(0);
+	s.read(data.data(), data.size());
+
 	if (extension == "dds")
 	{
-		success = LoadDds(inputStream);
+		success = LoadDDS(data.data(), (uint32)data.size());
 	}
 	//If not one of the above, load with Stbi by default (jpg, png, tga, bmp, ...)
 	else
 	{
-		success = LoadStbi(inputStream);
+		success = LoadSTB(data.data(), (uint32)data.size());
 	}
 	return success;
 }
 
-bool Image::Load(const void* pInPixels, size_t dataSize, const char* pFormatHint)
+bool Image::Load(const void* pData, size_t dataSize, const char* pFormatHint)
 {
-	m_Components = 4;
-	m_Depth = 1;
-	int components = 0;
-
-	unsigned char* pPixels = stbi_load_from_memory((stbi_uc*)pInPixels, (int)dataSize, &m_Width, &m_Height, &components, m_Components);
-	if (pPixels == nullptr)
+	if (std::string(pFormatHint).find("dds") != std::string::npos)
 	{
-		return false;
+		return LoadDDS(pData, (uint32)dataSize);
 	}
-	m_BBP = sizeof(char) * 8 * m_Components;
-	m_Format = ImageFormat::RGBA;
-	m_Pixels.resize(m_Width * m_Height * m_Components);
-	memcpy(m_Pixels.data(), pPixels, m_Pixels.size());
-	stbi_image_free(pPixels);
-	return true;
+	return LoadSTB(pData, (uint32)dataSize);
 }
 
 bool Image::SetSize(int x, int y, int components)
@@ -56,6 +66,8 @@ bool Image::SetSize(int x, int y, int components)
 	m_Components = components;
 	m_Pixels.clear();
 	m_Pixels.resize(x * y * components);
+	m_Format = ImageFormat::RGBA;
+	m_BBP = sizeof(char) * 8 * m_Components;
 
 	return true;
 }
@@ -164,11 +176,11 @@ bool Image::GetSurfaceInfo(int width, int height, int depth, int mipLevel, MipLe
 		return false;
 	}
 
-	mipLevelInfo.Width = std::max(1, width >> mipLevel);
-	mipLevelInfo.Height = std::max(1, height >> mipLevel);
-	mipLevelInfo.Depth = std::max(1, depth >> mipLevel);
+	mipLevelInfo.Width = Math::Max(1, width >> mipLevel);
+	mipLevelInfo.Height = Math::Max(1, height >> mipLevel);
+	mipLevelInfo.Depth = Math::Max(1, depth >> mipLevel);
 
-	if (m_Format == ImageFormat::RGBA || m_Format == ImageFormat::BGRA)
+	if (m_Format == ImageFormat::RGBA || m_Format == ImageFormat::BGRA || m_Format == ImageFormat::RG32 || m_Format == ImageFormat::RGBA32)
 	{
 		mipLevelInfo.RowSize = mipLevelInfo.Width * m_BBP / 8;
 		mipLevelInfo.Rows = mipLevelInfo.Height;
@@ -197,6 +209,7 @@ unsigned int Image::TextureFormatFromCompressionFormat(const ImageFormat& format
 	case ImageFormat::RGB32:	return DXGI_FORMAT_R32G32B32_FLOAT;
 	case ImageFormat::RGBA16:	return DXGI_FORMAT_R16G16B16A16_FLOAT;
 	case ImageFormat::RGBA32:	return DXGI_FORMAT_R32G32B32A32_FLOAT;
+	case ImageFormat::RG32:		return DXGI_FORMAT_R32G32_FLOAT;
 	case ImageFormat::BC1:		return sRgb ? DXGI_FORMAT_BC1_UNORM_SRGB : DXGI_FORMAT_BC1_UNORM;
 	case ImageFormat::BC2:		return sRgb ? DXGI_FORMAT_BC2_UNORM_SRGB : DXGI_FORMAT_BC2_UNORM;
 	case ImageFormat::BC3:		return sRgb ? DXGI_FORMAT_BC3_UNORM_SRGB : DXGI_FORMAT_BC3_UNORM;
@@ -210,16 +223,17 @@ unsigned int Image::TextureFormatFromCompressionFormat(const ImageFormat& format
 	}
 }
 
-bool Image::LoadStbi(const char* inputStream)
+bool Image::LoadSTB(const void* pBytes, uint32 numBytes)
 {
 	m_Components = 4;
 	m_Depth = 1;
 	int components = 0;
 
-	m_IsHdr = stbi_is_hdr(inputStream);
+	const uint8* pData = (uint8*)pBytes;
+	m_IsHdr = stbi_is_hdr_from_memory(pData, numBytes);
 	if (m_IsHdr)
 	{
-		float* pPixels = stbi_loadf(inputStream, &m_Width, &m_Height, &components, m_Components);
+		float* pPixels = stbi_loadf_from_memory(pData, numBytes, &m_Width, &m_Height, &components, m_Components);
 		if (pPixels == nullptr)
 		{
 			return false;
@@ -233,7 +247,7 @@ bool Image::LoadStbi(const char* inputStream)
 	}
 	else
 	{
-		unsigned char* pPixels = stbi_load(inputStream, &m_Width, &m_Height, &components, m_Components);
+		unsigned char* pPixels = stbi_load_from_memory(pData, numBytes, &m_Width, &m_Height, &components, m_Components);
 		if (pPixels == nullptr)
 		{
 			return false;
@@ -247,9 +261,9 @@ bool Image::LoadStbi(const char* inputStream)
 	}
 }
 
-bool Image::LoadDds(const char* inputStream)
+bool Image::LoadDDS(const void* pData, uint32 /*numBytes*/)
 {
-	std::ifstream fStream(inputStream, std::ios::binary);
+	char* pBytes = (char*)pData;
 
 	// .DDS subheader.
 #pragma pack(push,1)
@@ -328,37 +342,34 @@ bool Image::LoadDds(const char* inputStream)
 #ifndef MAKEFOURCC
 #define MAKEFOURCC(a, b, c, d) (unsigned int)((unsigned char)(a) | (unsigned char)(b) << 8 | (unsigned char)(c) << 16 | (unsigned char)(d) << 24)
 #endif
-	char magic[5];
-	magic[4] = '\0';
-	fStream.read(&magic[0], 4);
-
-	if (strcmp(magic, "DDS ") != 0)
+	constexpr const char pMagic[] = "DDS ";
+	if (memcmp(pMagic, pBytes, 4) != 0)
 	{
 		return false;
 	}
+	pBytes += 4;
 
-	FileHeader header;
-	fStream.read((char*)&header, sizeof(FileHeader));
+	const FileHeader* pHeader = (FileHeader*)pBytes;
+	pBytes += sizeof(FileHeader);
 
-	if (header.dwSize == sizeof(FileHeader) &&
-		header.ddpf.dwSize == sizeof(PixelFormatHeader))
+	if (pHeader->dwSize == sizeof(FileHeader) &&
+		pHeader->ddpf.dwSize == sizeof(PixelFormatHeader))
 	{
-		m_BBP = header.ddpf.dwRGBBitCount;
+		m_BBP = pHeader->ddpf.dwRGBBitCount;
 
-		uint32 fourCC = header.ddpf.dwFourCC;
+		uint32 fourCC = pHeader->ddpf.dwFourCC;
 		char fourCCStr[5];
 		fourCCStr[4] = '\0';
 		memcpy(fourCCStr, &fourCC, 4);
 		bool hasDxgi = fourCC == MAKEFOURCC('D', 'X', '1', '0');
-		DX10FileHeader* pDx10Header = nullptr;
+		const DX10FileHeader* pDx10Header = nullptr;
 
 		if (hasDxgi)
 		{
-			DX10FileHeader dds10Header = {};
-			pDx10Header = &dds10Header;
-			fStream.read((char*)&dds10Header, sizeof(DX10FileHeader));
+			pDx10Header = (DX10FileHeader*)pBytes;
+			pBytes += sizeof(DX10FileHeader);
 
-			switch (dds10Header.dxgiFormat)
+			switch (pDx10Header->dxgiFormat)
 			{
 			case IMAGE_FORMAT::BC1_UNORM_SRGB:
 				m_Components = 3;
@@ -402,6 +413,16 @@ bool Image::LoadDds(const char* inputStream)
 			case IMAGE_FORMAT::R8G8B8A8_UNORM:
 				m_Format = ImageFormat::RGBA;
 				break;
+			case DXGI_FORMAT_R32G32B32A32_FLOAT:
+				m_Components = 4;
+				m_Format = ImageFormat::RGBA32;
+				m_BBP = 128;
+				break;
+			case DXGI_FORMAT_R32G32_FLOAT:
+				m_Components = 2;
+				m_Format = ImageFormat::RG32;
+				m_BBP = 64;
+				break;
 			default:
 				return false;
 			}
@@ -410,6 +431,11 @@ bool Image::LoadDds(const char* inputStream)
 		{
 			switch (fourCC)
 			{
+			case MAKEFOURCC('B', 'C', '4', 'U'):
+				m_Format = ImageFormat::BC4;
+				m_Components = 1;
+				m_sRgb = false;
+				break;
 			case MAKEFOURCC('D', 'X', 'T', '1'):
 				m_Format = ImageFormat::BC1;
 				m_Components = 3;
@@ -435,7 +461,7 @@ bool Image::LoadDds(const char* inputStream)
 				if (m_BBP == 32)
 				{
 					m_Components = 4;
-#define ISBITMASK(r, g, b, a) (header.ddpf.dwRBitMask == (r) && header.ddpf.dwGBitMask == (g) && header.ddpf.dwBBitMask == (b) && header.ddpf.dwABitMask == (a))
+#define ISBITMASK(r, g, b, a) (pHeader->ddpf.dwRBitMask == (r) && pHeader->ddpf.dwGBitMask == (g) && pHeader->ddpf.dwBBitMask == (b) && pHeader->ddpf.dwABitMask == (a))
 					if (ISBITMASK(0x000000ff, 0x0000ff00, 0x00ff0000, 0xff000000))
 					{
 						m_Format = ImageFormat::RGBA;
@@ -457,7 +483,7 @@ bool Image::LoadDds(const char* inputStream)
 			}
 		}
 
-		bool isCubemap = (header.dwCaps2 & 0x0000FC00U) != 0 || (hasDxgi && (pDx10Header->miscFlag & 0x4) != 0);
+		bool isCubemap = (pHeader->dwCaps2 & 0x0000FC00U) != 0 || (hasDxgi && (pDx10Header->miscFlag & 0x4) != 0);
 		uint32 imageChainCount = 1;
 		if (isCubemap)
 		{
@@ -470,11 +496,11 @@ bool Image::LoadDds(const char* inputStream)
 			m_IsArray = true;
 		}
 		uint32 totalDataSize = 0;
-		m_MipLevels = std::max(1, (int)header.dwMipMapCount);
+		m_MipLevels = Math::Max(1, (int)pHeader->dwMipMapCount);
 		for (int mipLevel = 0; mipLevel < m_MipLevels; ++mipLevel)
 		{
 			MipLevelInfo mipInfo;
-			GetSurfaceInfo(header.dwWidth, header.dwHeight, header.dwDepth, mipLevel, mipInfo);
+			GetSurfaceInfo(pHeader->dwWidth, pHeader->dwHeight, pHeader->dwDepth, mipLevel, mipInfo);
 			m_MipLevelDataOffsets[mipLevel] = totalDataSize;
 			totalDataSize += mipInfo.DataSize;
 		}
@@ -483,12 +509,13 @@ bool Image::LoadDds(const char* inputStream)
 		for (uint32 imageIdx = 0; imageIdx < imageChainCount; ++imageIdx)
 		{
 			pCurrentImage->m_Pixels.resize(totalDataSize);
-			pCurrentImage->m_Width = header.dwWidth;
-			pCurrentImage->m_Height = header.dwHeight;
-			pCurrentImage->m_Depth = header.dwDepth;
+			pCurrentImage->m_Width = pHeader->dwWidth;
+			pCurrentImage->m_Height = pHeader->dwHeight;
+			pCurrentImage->m_Depth = pHeader->dwDepth;
 			pCurrentImage->m_Format = m_Format;
 			pCurrentImage->m_BBP = m_BBP;
-			fStream.read((char*)pCurrentImage->m_Pixels.data(), pCurrentImage->m_Pixels.size());
+			memcpy(pCurrentImage->m_Pixels.data(), pBytes, totalDataSize);
+			pBytes += totalDataSize;
 
 			if (imageIdx < imageChainCount - 1)
 			{
@@ -506,6 +533,40 @@ bool Image::LoadDds(const char* inputStream)
 
 void Image::Save(const char* pFilePath)
 {
-	int result = stbi_write_jpg(pFilePath, m_Width, m_Height, m_Components, m_Pixels.data(), 100);
-	check(result);
+	std::string extension = Paths::GetFileExtenstion(pFilePath);
+	if (extension == "png")
+	{
+		int result = stbi_write_png(pFilePath, m_Width, m_Height, m_Components, m_Pixels.data(), m_Width * 4);
+		check(result);
+	}
+	else if (extension == "jpg")
+	{
+		int result = stbi_write_jpg(pFilePath, m_Width, m_Height, m_Components, m_Pixels.data(), 70);
+		check(result);
+	}
+}
+
+int32 Image::GetNumChannels(ImageFormat format)
+{
+	switch (format)
+	{
+	case ImageFormat::RGBA16:
+	case ImageFormat::RGBA32:
+	case ImageFormat::RGBA:
+	case ImageFormat::BGRA:
+		return 4;
+	case ImageFormat::RGB32:
+		return 3;
+	case ImageFormat::BC1:
+	case ImageFormat::BC2:
+	case ImageFormat::BC3:
+	case ImageFormat::BC4:
+	case ImageFormat::BC5:
+	case ImageFormat::BC6H:
+	case ImageFormat::BC7:
+		return -1;
+	default:
+		noEntry();
+		return -1;
+	}
 }

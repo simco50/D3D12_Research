@@ -1,37 +1,28 @@
 #include "Common.hlsli"
 
-#define RootSig "CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \
-				"DescriptorTable(UAV(u0, numDescriptors = 1), visibility = SHADER_VISIBILITY_ALL), " \
-				"DescriptorTable(SRV(t0, numDescriptors = 1), visibility = SHADER_VISIBILITY_ALL), " \
-				"StaticSampler(s0, filter=FILTER_MIN_MAG_LINEAR_MIP_POINT, visibility = SHADER_VISIBILITY_ALL), "
-
 #define BLOCK_SIZE 8
 
 #define TEXTURE_STORAGE float4
 #define TEXTURE_INPUT_TYPE Texture2D<TEXTURE_STORAGE>
 #define TEXTURE_OUTPUT_TYPE RWTexture2D<TEXTURE_STORAGE>
 
-TEXTURE_OUTPUT_TYPE uOutput : register(u0);
-TEXTURE_INPUT_TYPE tInput : register(t0);
-SamplerState sSampler : register(s0);
-
-cbuffer ShaderParameters : register(b0)
+struct PassParameters
 {
-    uint2 cTargetDimensions;
-    float2 cTargetDimensionsInv;
-}
-
-struct CS_INPUT
-{
-    uint3 DispatchThreadId : SV_DISPATCHTHREADID;
+	uint2 TargetDimensions;
+	float2 TargetDimensionsInv;
 };
 
-[RootSignature(RootSig)]
+ConstantBuffer<PassParameters> cPassData : register(b0);
+
+TEXTURE_OUTPUT_TYPE uOutput : register(u0);
+TEXTURE_INPUT_TYPE tInput : register(t0);
+
+
 [numthreads(BLOCK_SIZE, BLOCK_SIZE, 1)]
-void CSMain(CS_INPUT input)
+void CSMain(uint3 threadID : SV_DispatchThreadID)
 {
-    if(input.DispatchThreadId.x < cTargetDimensions.x && input.DispatchThreadId.y < cTargetDimensions.y)
-    {
-        uOutput[input.DispatchThreadId.xy] = tInput.SampleLevel(sSampler, ((float2)input.DispatchThreadId.xy + 0.5f) * cTargetDimensionsInv, 0);
-    }
+	if(threadID.x < cPassData.TargetDimensions.x && threadID.y < cPassData.TargetDimensions.y)
+	{
+		uOutput[threadID.xy] = tInput.SampleLevel(sLinearClamp, ((float2)threadID.xy + 0.5f) * cPassData.TargetDimensionsInv, 0);
+	}
 }

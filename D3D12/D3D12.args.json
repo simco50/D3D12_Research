@@ -19,14 +19,34 @@
           "Command": "-gpuvalidation"
         },
         {
+          "Id": "af4a1a39-1845-4f6c-b427-a6aa1b6e44ca",
+          "Command": "-dumpshaders"
+        },
+        {
           "Id": "105b6371-3768-4e96-a67d-ff8d99170742",
           "Command": "-debugshaders"
+        },
+        {
+          "Id": "b14291b9-8b9b-42c6-92dc-47ee31668e9d",
+          "Command": "-warp"
+        },
+        {
+          "Id": "cd37ff2c-874f-462b-a4f4-ad7a2fba2619",
+          "Command": "-stablepowerstate"
+        },
+        {
+          "Id": "2152451a-5cea-4170-b68e-d53827a75806",
+          "Command": "-pix"
+        },
+        {
+          "Id": "aa39a7c9-9379-4120-9d1b-58c62157b82d",
+          "Command": "-shadersymbols"
         }
       ]
     },
     {
-      "Id": "3e3a5cf0-56ee-4188-a439-5c6205a883ce",
-      "Command": "-rgimmediate"
+      "Id": "19524aa9-eb3e-4cf0-9936-ef814e45c7d6",
+      "Command": "-noconsole"
     }
   ]
 }

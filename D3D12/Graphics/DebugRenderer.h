@@ -1,30 +1,41 @@
 #pragma once
+#include "RenderGraph/RenderGraphDefinitions.h"
 
-class Graphics;
+class GraphicsDevice;
 class RootSignature;
 class PipelineState;
 class RGGraph;
-class Texture;
 struct Light;
+struct SceneView;
+
+struct IntColor
+{
+	IntColor(const Color& color) : Color(Math::EncodeRGBA(color)) {}
+	IntColor(uint32 color = 0) : Color(color) {}
+	operator uint32() const { return Color; }
+	operator Color() const { return Math::DecodeRGBA(Color); }
+
+	uint32 Color;
+};
 
 class DebugRenderer
 {
 private:
 	struct DebugLine
 	{
-		DebugLine(const Vector3& start, const Vector3& end, const uint32& colorStart, const uint32& colorEnd)
-			: Start(start), ColorStart(colorStart), End(end), ColorEnd(colorEnd)
+		DebugLine(const Vector3& start, const Vector3& end, const uint32& color)
+			: Start(start), ColorA(color), End(end), ColorB(color)
 		{}
 		Vector3 Start;
-		uint32 ColorStart;
+		uint32 ColorA;
 		Vector3 End;
-		uint32 ColorEnd;
+		uint32 ColorB;
 	};
 
 	struct DebugTriangle
 	{
-		DebugTriangle(const Vector3& a, const Vector3& b, const Vector3& c, const uint32& colorA, const uint32& colorB, const uint32& colorC)
-			: A(a), ColorA(colorA), B(b), ColorB(colorB), C(c), ColorC(colorC)
+		DebugTriangle(const Vector3& a, const Vector3& b, const Vector3& c, const uint32& color)
+			: A(a), ColorA(color), B(b), ColorB(color), C(c), ColorC(color)
 		{}
 		Vector3 A;
 		uint32 ColorA;
@@ -36,33 +47,32 @@ private:
 
 public:
 	static DebugRenderer* Get();
-	
-	void Initialize(Graphics* pGraphics);
-	void Render(RGGraph& graph, const Matrix& viewProjection, Texture* pTarget, Texture* pDepth);
 
-	void AddLine(const Vector3& start, const Vector3& end, const Color& color);
-	void AddLine(const Vector3& start, const Vector3& end, const Color& colorStart, const Color& colorEnd);
-	void AddRay(const Vector3& start, const Vector3& direction, const Color& color);
-	void AddTriangle(const Vector3& a, const Vector3& b, const Vector3& c, const Color& color, bool solid = true);
-	void AddTriangle(const Vector3& a, const Vector3& b, const Vector3& c, const Color& colorA, const Color& colorB, const Color& colorC, bool solid = true);
-	void AddPolygon(const Vector3& a, const Vector3& b, const Vector3& c, const Vector3& d, const Color& color);
-	void AddBox(const Vector3& position, const Vector3& extents, const Color& color, bool solid = false);
-	void AddBoundingBox(const BoundingBox& boundingBox, const Color& color, bool solid = false);
-	void AddBoundingBox(const BoundingBox& boundingBox, const Matrix& transform, const Color& color, bool solid = false);
-	void AddSphere(const Vector3& position, float radius, int slices, int stacks, const Color& color, bool solid = false);
-	void AddFrustrum(const BoundingFrustum& frustum, const Color& color);
+	void Initialize(GraphicsDevice* pDevice);
+	void Shutdown();
+	void Render(RGGraph& graph, const SceneView* pView, RGTexture* pTarget, RGTexture* pDepth);
+
+	void AddLine(const Vector3& start, const Vector3& end, const IntColor& color);
+	void AddRay(const Vector3& start, const Vector3& direction, const IntColor& color);
+	void AddTriangle(const Vector3& a, const Vector3& b, const Vector3& c, const IntColor& color, bool solid = true);
+	void AddPolygon(const Vector3& a, const Vector3& b, const Vector3& c, const Vector3& d, const IntColor& color);
+	void AddBox(const Vector3& position, const Vector3& extents, const IntColor& color, bool solid = false);
+	void AddBoundingBox(const BoundingBox& boundingBox, const IntColor& color, bool solid = false);
+	void AddBoundingBox(const BoundingBox& boundingBox, const Matrix& transform, const IntColor& color, bool solid = false);
+	void AddSphere(const Vector3& position, float radius, int slices, int stacks, const IntColor& color, bool solid = false);
+	void AddFrustrum(const BoundingFrustum& frustum, const IntColor& color);
 	void AddAxisSystem(const Matrix& transform, float lineLength = 1.0f);
-	void AddWireCylinder(const Vector3& position, const Vector3& direction, float height, float radius, int segments, const Color& color);
-	void AddWireCone(const Vector3& position, const Vector3& direction, float height, float angle, int segments, const Color& color);
-	void AddBone(const Matrix& matrix, float length, const Color& color);
-	void AddLight(const Light& light);
+	void AddWireCylinder(const Vector3& position, const Vector3& direction, float height, float radius, int segments, const IntColor& color);
+	void AddCone(const Vector3& position, const Vector3& direction, float height, float angle, int segments, const IntColor& color, bool solid = false);
+	void AddBone(const Matrix& matrix, float length, const IntColor& color);
+	void AddLight(const Light& light, const IntColor& color = Colors::Yellow);
 
+private:
 	std::vector<DebugLine> m_Lines;
 	std::vector<DebugTriangle> m_Triangles;
 
-	std::unique_ptr<PipelineState> m_pTrianglesPSO;
-	std::unique_ptr<PipelineState> m_pLinesPSO;
-	std::unique_ptr<RootSignature> m_pRS;
-private:
+	RefCountPtr<PipelineState> m_pTrianglesPSO;
+	RefCountPtr<PipelineState> m_pLinesPSO;
+	RefCountPtr<RootSignature> m_pRS;
 	DebugRenderer() = default;
 };

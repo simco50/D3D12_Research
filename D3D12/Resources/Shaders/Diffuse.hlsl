@@ -1,284 +1,315 @@
 #include "Common.hlsli"
 #include "Lighting.hlsli"
+#include "Random.hlsli"
+#include "RayTracing/DDGICommon.hlsli"
 
 #define BLOCK_SIZE 16
 
-#define RootSig "RootFlags(ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT), " \
-				"CBV(b0, visibility=SHADER_VISIBILITY_VERTEX), " \
-				"CBV(b1, visibility=SHADER_VISIBILITY_ALL), " \
-				"CBV(b2, visibility=SHADER_VISIBILITY_PIXEL), " \
-				"DescriptorTable(SRV(t0, numDescriptors = 3), visibility=SHADER_VISIBILITY_PIXEL), " \
-				"DescriptorTable(SRV(t3, numDescriptors = 7), visibility=SHADER_VISIBILITY_PIXEL), " \
-				"DescriptorTable(SRV(t10, numDescriptors = 32, space = 1), visibility=SHADER_VISIBILITY_PIXEL), " \
-				"SRV(t500, visibility=SHADER_VISIBILITY_PIXEL), " \
-				"StaticSampler(s0, filter=FILTER_ANISOTROPIC, maxAnisotropy = 4, visibility = SHADER_VISIBILITY_PIXEL), " \
-				"StaticSampler(s1, filter=FILTER_MIN_MAG_MIP_POINT, addressU = TEXTURE_ADDRESS_CLAMP, addressV = TEXTURE_ADDRESS_CLAMP, visibility = SHADER_VISIBILITY_PIXEL), " \
-				"StaticSampler(s2, filter=FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT, visibility = SHADER_VISIBILITY_PIXEL, comparisonFunc=COMPARISON_GREATER), " \
-
-struct PerObjectData
-{
-	float4x4 World;
-};
-
 struct PerViewData
 {
-	float4x4 View;
-	float4x4 Projection;
-	float4x4 ViewProjection;
-	float4 ViewPosition;
-	float2 InvScreenDimensions;
-	float NearZ;
-	float FarZ;
-	int FrameIndex;
-	int SsrSamples;
-	int2 padd;
-#if CLUSTERED_FORWARD
-    int4 ClusterDimensions;
-    int2 ClusterSize;
+	uint4 ClusterDimensions;
+	uint2 ClusterSize;
 	float2 LightGridParams;
-#endif
 };
 
-ConstantBuffer<PerObjectData> cObjectData : register(b0);
-ConstantBuffer<PerViewData> cViewData : register(b1);
+ConstantBuffer<InstanceData> cObject : register(b0);
+ConstantBuffer<PerViewData> cPass : register(b1);
 
-struct VSInput
+struct InterpolantsVSToPS
 {
-	float3 position : POSITION;
-	float2 texCoord : TEXCOORD;
-	float3 normal : NORMAL;
-	float3 tangent : TANGENT;
-	float3 bitangent : TEXCOORD1;
+	float4 Position : SV_Position;
+	float3 PositionWS : POSITION_WS;
+	float2 UV : TEXCOORD;
+	float3 Normal : NORMAL;
+	float4 Tangent : TANGENT;
+	uint Color : TEXCOORD1;
+	uint ID : ID;
 };
 
-struct PSInput
-{
-	float4 position : SV_POSITION;
-	float3 positionWS : POSITION_WS;
-	float3 positionVS : POSITION_VS;
-	float2 texCoord : TEXCOORD;
-	float3 normal : NORMAL;
-	float3 tangent : TANGENT;
-	float3 bitangent : TEXCOORD1;
-};
-
-#if TILED_FORWARD
-Texture2D<uint2> tLightGrid : register(t3);
-#elif CLUSTERED_FORWARD
-StructuredBuffer<uint2> tLightGrid : register(t3);
-#endif
-StructuredBuffer<uint> tLightIndexList : register(t4);
+Texture2D tAO :	register(t0);
+Texture2D tDepth : register(t1);
+Texture2D tPreviousSceneColor :	register(t2);
+Texture3D<float4> tLightScattering : register(t3);
 
 #if CLUSTERED_FORWARD
+StructuredBuffer<uint> tLightGrid : register(t4);
 uint GetSliceFromDepth(float depth)
 {
-    return floor(log(depth) * cViewData.LightGridParams.x - cViewData.LightGridParams.y);
+	return floor(log(depth) * cPass.LightGridParams.x - cPass.LightGridParams.y);
 }
+#elif TILED_FORWARD
+Texture2D<uint2> tLightGrid : register(t4);
 #endif
+StructuredBuffer<uint> tLightIndexList : register(t5);
 
-LightResult DoLight(float4 pos, float3 worldPos, float3 vPos, float3 N, float3 V, float3 diffuseColor, float3 specularColor, float roughness)
+void GetLightCount(float4 screenPos, out uint lightCount, out uint startOffset)
 {
 #if TILED_FORWARD
-	uint2 tileIndex = uint2(floor(pos.xy / BLOCK_SIZE));
-	uint startOffset = tLightGrid[tileIndex].x;
-	uint lightCount = tLightGrid[tileIndex].y;
+	uint2 tileIndex = uint2(floor(screenPos.xy / BLOCK_SIZE));
+	startOffset = tLightGrid[tileIndex].x;
+	lightCount = tLightGrid[tileIndex].y;
 #elif CLUSTERED_FORWARD
-	uint3 clusterIndex3D = uint3(floor(pos.xy / cViewData.ClusterSize), GetSliceFromDepth(vPos.z));
-    uint clusterIndex1D = clusterIndex3D.x + (cViewData.ClusterDimensions.x * (clusterIndex3D.y + cViewData.ClusterDimensions.y * clusterIndex3D.z));
-	uint startOffset = tLightGrid[clusterIndex1D].x;
-	uint lightCount = tLightGrid[clusterIndex1D].y;
+	uint3 clusterIndex3D = uint3(floor(screenPos.xy / cPass.ClusterSize), GetSliceFromDepth(screenPos.w));
+	uint tileIndex = Flatten3D(clusterIndex3D, cPass.ClusterDimensions.xyz);
+	startOffset = tLightGrid[tileIndex * 2];
+	lightCount = tLightGrid[tileIndex * 2 + 1];
+#else
+	startOffset = 0;
+	lightCount = cView.LightCount;
 #endif
+}
+
+Light GetLight(uint lightIndex, uint lightOffset)
+{
+#if TILED_FORWARD || CLUSTERED_FORWARD
+	lightIndex = tLightIndexList[lightOffset + lightIndex];
+#endif
+	return GetLight(lightIndex);
+}
+
+LightResult DoLight(float4 pos, float3 worldPos, float3 N, float3 V, float3 diffuseColor, float3 specularColor, float roughness)
+{
 	LightResult totalResult = (LightResult)0;
+
+	uint lightCount, lightOffset;
+	GetLightCount(pos, lightCount, lightOffset);
 
 	for(uint i = 0; i < lightCount; ++i)
 	{
-		uint lightIndex = tLightIndexList[startOffset + i];
-		Light light = tLights[lightIndex];
-		LightResult result = DoLight(light, specularColor, diffuseColor, roughness, pos, worldPos, vPos, N, V);
+		Light light = GetLight(i, lightOffset);
+		LightResult result = DoLight(light, specularColor, diffuseColor, roughness, pos, worldPos, N, V);
+
+#define SCREEN_SPACE_SHADOWS 0
+#if SCREEN_SPACE_SHADOWS
+		float3 L = normalize(worldPos - light.Position);
+		if(light.IsDirectional)
+		{
+			L = light.Direction;
+		}
+
+		float ditherValue = InterleavedGradientNoise(pos.xy, cView.FrameIndex);
+		float length = 0.1f * pos.w * cView.ProjectionInverse[1][1];
+		float occlusion = ScreenSpaceShadows(worldPos, L, tDepth, 8, length, ditherValue);
+
+		result.Diffuse *= occlusion;
+		result.Specular *= occlusion;
+#endif
+
 		totalResult.Diffuse += result.Diffuse;
 		totalResult.Specular += result.Specular;
 	}
+
 	return totalResult;
 }
 
-[RootSignature(RootSig)]
-PSInput VSMain(VSInput input)
+InterpolantsVSToPS FetchVertexAttributes(MeshData mesh, float4x4 world, uint vertexId)
 {
-	PSInput result;
-	result.positionWS = mul(float4(input.position, 1.0f), cObjectData.World).xyz;
-	result.positionVS = mul(float4(result.positionWS, 1.0f), cViewData.View).xyz;
-	result.position = mul(float4(result.positionWS, 1.0f), cViewData.ViewProjection);
-	result.texCoord = input.texCoord;
-	result.normal = normalize(mul(input.normal, (float3x3)cObjectData.World));
-	result.tangent = normalize(mul(input.tangent, (float3x3)cObjectData.World));
-	result.bitangent = normalize(mul(input.bitangent, (float3x3)cObjectData.World));
+	InterpolantsVSToPS result;
+	float3 Position = BufferLoad<float3>(mesh.BufferIndex, vertexId, mesh.PositionsOffset);
+	result.PositionWS = mul(float4(Position, 1.0f), world).xyz;
+	result.Position = mul(float4(result.PositionWS, 1.0f), cView.ViewProjection);
+
+	result.UV = UnpackHalf2(BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.UVsOffset));
+
+	NormalData normalData = BufferLoad<NormalData>(mesh.BufferIndex, vertexId, mesh.NormalsOffset);
+	result.Normal = normalize(mul(normalData.Normal, (float3x3)world));
+	result.Tangent = float4(normalize(mul(normalData.Tangent.xyz, (float3x3)world)), normalData.Tangent.w);
+
+	result.Color = 0xFFFFFFFF;
+	if(mesh.ColorsOffset != ~0u)
+		result.Color = BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.ColorsOffset);
+	result.ID = vertexId;
+
 	return result;
 }
 
-float3 ScreenSpaceReflectionsRT(float3 positionWS, float3 positionVS, float3 N, float3 V, float R)
+struct PayloadData
 {
-	float3 ssr = 0;
-#if _INLINE_RT
-	const float roughnessThreshold = 0.7f;
-	bool ssrEnabled = R < roughnessThreshold;
-	if(ssrEnabled)
+	uint Indices[32];
+};
+
+groupshared PayloadData gsPayload;
+
+bool IsVisible(MeshData mesh, float4x4 world, uint meshlet)
+{
+	MeshletBounds cullData = BufferLoad<MeshletBounds>(mesh.BufferIndex, meshlet, mesh.MeshletBoundsOffset);
+
+	float4 center = mul(float4(cullData.Center, 1), world);
+	float3 radius3 = abs(mul(cullData.Radius.xxx, (float3x3)world));
+	float radius = Max3(radius3);
+	float3 coneAxis = normalize(mul(cullData.ConeAxis, (float3x3)world));
+
+	for(int i = 0; i < 6; ++i)
 	{
-		float3 reflectionWs = normalize(reflect(-V, N));
-		const float reflectionThreshold = 0.0f;
-		if (dot(V, reflectionWs) <= reflectionThreshold)
+		if(dot(center, cView.FrustumPlanes[i]) > radius)
 		{
-			RayDesc ray;
-			ray.Origin = positionWS;
-			ray.Direction = reflectionWs;
-			ray.TMin = 0.001;
-			ray.TMax = positionVS.z;
-
-			RayQuery<RAY_FLAG_NONE> q;
-
-			q.TraceRayInline(
-				tAccelerationStructure,
-				RAY_FLAG_NONE,
-				~0,
-				ray);
-			q.Proceed();
-
-			if(q.CommittedStatus() == COMMITTED_TRIANGLE_HIT)
-			{
-				float3 hitWS = ray.Origin + ray.Direction * q.CommittedRayT();
-				float3 hitVS = mul(float4(hitWS, 1), cViewData.View).xyz;
-				float3 texCoord = ViewToWindow(hitVS, cViewData.Projection);
-				float sceneDepth = tDepth.SampleLevel(sClampSampler, texCoord.xy, 0).r;
-				float viewDepth = texCoord.z;
-				const float thickness = 0.05f;
-				if(abs(sceneDepth - viewDepth) < thickness)
-				{
-					ssr = saturate(0.5f * tPreviousSceneColor.SampleLevel(sClampSampler, texCoord.xy, 0).xyz);
-					float2 dist = (float2(texCoord.x, 1.0f - texCoord.y) * 2.0f) - float2(1.0f, 1.0f);
-					float edgeAttenuation = (1.0 - q.CommittedRayT() / positionVS.z) * 4.0f;
-					edgeAttenuation = saturate(edgeAttenuation);
-					edgeAttenuation *= smoothstep(0.0f, 0.5f, saturate(1.0 - dot(dist, dist)));
-					ssr *= edgeAttenuation;
-				}
-			}
+			return false;
 		}
 	}
+
+	float3 viewLocation = cView.ViewLocation;
+	if(dot(viewLocation - center.xyz, coneAxis) >= cullData.ConeCutoff * length(center.xyz - viewLocation) + radius)
+	{
+		return false;
+	}
+	return true;
+}
+
+[numthreads(32, 1, 1)]
+void ASMain(uint threadID : SV_DispatchThreadID)
+{
+	bool visible = false;
+
+	MeshData mesh = GetMesh(cObject.Mesh);
+	float4x4 world = GetTransform(cObject.World);
+	if (threadID < mesh.MeshletCount)
+	{
+		visible = IsVisible(mesh, world, threadID);
+	}
+
+	if (visible)
+	{
+		uint index = WavePrefixCountBits(visible);
+		gsPayload.Indices[index] = threadID;
+	}
+
+	// Dispatch the required number of MS threadgroups to render the visible meshlets
+	uint visibleCount = WaveActiveCountBits(visible);
+	DispatchMesh(visibleCount, 1, 1, gsPayload);
+}
+
+#define NUM_MESHLET_THREADS 32
+
+[outputtopology("triangle")]
+[numthreads(NUM_MESHLET_THREADS, 1, 1)]
+void MSMain(
+	in uint groupThreadID : SV_GroupIndex,
+	in payload PayloadData payload,
+	in uint groupID : SV_GroupID,
+	out vertices InterpolantsVSToPS verts[MESHLET_MAX_VERTICES],
+	out indices uint3 triangles[MESHLET_MAX_TRIANGLES])
+{
+	MeshData mesh = GetMesh(cObject.Mesh);
+
+	uint meshletIndex = payload.Indices[groupID];
+	if(meshletIndex >= mesh.MeshletCount)
+	{
+		return;
+	}
+
+	Meshlet meshlet = BufferLoad<Meshlet>(mesh.BufferIndex, meshletIndex, mesh.MeshletOffset);
+
+	SetMeshOutputCounts(meshlet.VertexCount, meshlet.TriangleCount);
+
+	float4x4 world = GetTransform(cObject.World);
+	for(uint i = groupThreadID; i < meshlet.VertexCount; i += NUM_MESHLET_THREADS)
+	{
+		uint vertexId = BufferLoad<uint>(mesh.BufferIndex, i + meshlet.VertexOffset, mesh.MeshletVertexOffset);
+		InterpolantsVSToPS result = FetchVertexAttributes(mesh, world, vertexId);
+		result.ID = meshletIndex;
+		verts[i] = result;
+	}
+
+	for(uint i = groupThreadID; i < meshlet.TriangleCount; i += NUM_MESHLET_THREADS)
+	{
+		MeshletTriangle tri = BufferLoad<MeshletTriangle>(mesh.BufferIndex, i + meshlet.TriangleOffset, mesh.MeshletTriangleOffset);
+		triangles[i] = uint3(tri.V0, tri.V1, tri.V2);
+	}
+}
+
+InterpolantsVSToPS VSMain(uint vertexId : SV_VertexID)
+{
+	MeshData mesh = GetMesh(cObject.Mesh);
+	float4x4 world = GetTransform(cObject.World);
+	InterpolantsVSToPS result = FetchVertexAttributes(mesh, world, vertexId);
+	return result;
+}
+
+MaterialProperties GetMaterialProperties(MaterialData material, float2 UV)
+{
+	MaterialProperties properties;
+	float4 baseColor = material.BaseColorFactor;
+	if(material.Diffuse != INVALID_HANDLE)
+	{
+		baseColor *= Sample2D(material.Diffuse, sMaterialSampler, UV);
+	}
+	properties.BaseColor = baseColor.rgb;
+	properties.Opacity = baseColor.a;
+
+	properties.Metalness = material.MetalnessFactor;
+	properties.Roughness = material.RoughnessFactor;
+	if(material.RoughnessMetalness != INVALID_HANDLE)
+	{
+		float4 roughnessMetalnessSample = Sample2D(material.RoughnessMetalness, sMaterialSampler, UV);
+		properties.Metalness *= roughnessMetalnessSample.b;
+		properties.Roughness *= roughnessMetalnessSample.g;
+	}
+	properties.Emissive = material.EmissiveFactor.rgb;
+	if(material.Emissive != INVALID_HANDLE)
+	{
+		properties.Emissive *= Sample2D(material.Emissive, sMaterialSampler, UV).rgb;
+	}
+	properties.Specular = 0.5f;
+
+	properties.NormalTS = float3(0.5f, 0.5f, 1.0f);
+	if(material.Normal != INVALID_HANDLE)
+	{
+		properties.NormalTS = Sample2D(material.Normal, sMaterialSampler, UV).rgb;
+	}
+	return properties;
+}
+
+struct PSOut
+{
+ 	float4 Color : SV_Target0;
+	float2 Normal : SV_Target1;
+	float Roughness : SV_Target2;
+};
+
+void PSMain(InterpolantsVSToPS input,
+			float3 bary : SV_Barycentrics,
+			out PSOut output)
+{
+	float2 screenUV = (float2)input.Position.xy * cView.TargetDimensionsInv;
+	float ambientOcclusion = tAO.SampleLevel(sLinearClamp, screenUV, 0).r;
+
+	float3 V = normalize(cView.ViewLocation - input.PositionWS);
+
+	MaterialData material = GetMaterial(cObject.Material);
+	material.BaseColorFactor *= UIntToColor(input.Color);
+	MaterialProperties surface = GetMaterialProperties(material, input.UV);
+	float3 N = normalize(input.Normal);
+	float3x3 TBN = CreateTangentToWorld(N, float4(normalize(input.Tangent.xyz), input.Tangent.w));
+	N = TangentSpaceNormalMapping(surface.NormalTS, TBN);
+
+	BrdfData brdf = GetBrdfData(surface);
+	float3 positionVS = mul(float4(input.PositionWS, 1), cView.View).xyz;
+
+	float ssrWeight = 0;
+	float3 ssr = ScreenSpaceReflections(input.Position, positionVS, N, V, brdf.Roughness, tDepth, tPreviousSceneColor, ssrWeight);
+
+	LightResult lighting = DoLight(input.Position, input.PositionWS, N, V, brdf.Diffuse, brdf.Specular, brdf.Roughness);
+
+	float3 outRadiance = 0;
+	outRadiance += ambientOcclusion * Diffuse_Lambert(brdf.Diffuse) * SampleDDGIIrradiance(input.PositionWS, N, -V);
+	outRadiance += lighting.Diffuse + lighting.Specular;
+	outRadiance += ssr * ambientOcclusion;
+	outRadiance += surface.Emissive;
+
+	float fogSlice = sqrt((positionVS.z - cView.FarZ) / (cView.NearZ - cView.FarZ));
+	float4 scatteringTransmittance = tLightScattering.SampleLevel(sLinearClamp, float3(screenUV, fogSlice), 0);
+	outRadiance = outRadiance * scatteringTransmittance.w + scatteringTransmittance.rgb;
+
+	float reflectivity = saturate(scatteringTransmittance.w * ambientOcclusion * Square(1 - brdf.Roughness));
+
+#define DEBUG_MESHLETS 0
+#if DEBUG_MESHLETS
+	N = input.Normal;
+	uint seed = SeedThread(input.ID);
+	outRadiance = RandomColor(seed) * saturate(Wireframe(bary) + 0.6);
 #endif
-	return ssr;
-}
 
-float3 ScreenSpaceReflections(float4 position, float3 positionVS, float3 N, float3 V, float R)
-{
-	float3 ssr = 0;
-	const float roughnessThreshold = 0.7f;
-	bool ssrEnabled = R < roughnessThreshold;
-	if(ssrEnabled)
-	{
-		float reflectionThreshold = 0.0f;
-		float3 reflectionWs = normalize(reflect(-V, N));
-		if (dot(V, reflectionWs) <= reflectionThreshold)
-		{
-			uint frameIndex = cViewData.FrameIndex;
-			float jitter = InterleavedGradientNoise(position.xy, frameIndex) - 1.0f;
-			uint maxSteps = cViewData.SsrSamples.x;
-
-			float3 rayStartVS = positionVS;
-			float linearDepth = rayStartVS.z;
-			float3 reflectionVs = mul(reflectionWs, (float3x3)cViewData.View);
-			float3 rayEndVS = rayStartVS + (reflectionVs * linearDepth);
-
-			float3 rayStart = ViewToWindow(rayStartVS, cViewData.Projection);
-			float3 rayEnd = ViewToWindow(rayEndVS, cViewData.Projection);
-
-			float3 rayStep = ((rayEnd - rayStart) / float(maxSteps));
-			rayStep = rayStep / length(rayEnd.xy - rayStart.xy);
-			float3 rayPos = rayStart + (rayStep * jitter);
-			float zThickness = abs(rayStep.z);
-
-			uint hitIndex = 0;
-			float3 bestHit = rayPos;
-			float prevSceneZ = rayStart.z;
-			for (uint currStep = 0; currStep < maxSteps; currStep += 4)
-			{
-				uint4 step = float4(1, 2, 3, 4) + currStep;
-				float4 sceneZ = float4(
-					tDepth.SampleLevel(sClampSampler, rayPos.xy + rayStep.xy * step.x, 0).x,
-					tDepth.SampleLevel(sClampSampler, rayPos.xy + rayStep.xy * step.y, 0).x,
-					tDepth.SampleLevel(sClampSampler, rayPos.xy + rayStep.xy * step.z, 0).x,
-					tDepth.SampleLevel(sClampSampler, rayPos.xy + rayStep.xy * step.w, 0).x
-				);
-				float4 currentPosition = rayPos.z + rayStep.z * step;
-				uint4 zTest = abs(sceneZ - currentPosition - zThickness) < zThickness;
-				uint zMask = (((zTest.x << 0) | (zTest.y << 1)) | (zTest.z << 2)) | (zTest.w << 3);
-				if(zMask > 0)
-				{
-					uint firstHit = firstbitlow(zMask);
-					if(firstHit > 0)
-					{
-						prevSceneZ = sceneZ[firstHit - 1];
-					}
-					bestHit = rayPos + (rayStep * float(currStep + firstHit + 1));
-					float zAfter = sceneZ[firstHit] - bestHit.z;
-					float zBefore = (prevSceneZ - bestHit.z) + rayStep.z;
-					float weight = saturate(zAfter / (zAfter - zBefore));
-					float3 prevRayPos = bestHit - rayStep;
-					bestHit = (prevRayPos * weight) + (bestHit * (1.0f - weight));
-					hitIndex = currStep + firstHit;
-					break;
-				}
-				prevSceneZ = sceneZ.w;
-			}
-
-			float4 hitColor = 0;
-			if (hitIndex > 0)
-			{
-				float2 texCoord = bestHit.xy;
-				float2 distanceFromCenter = (float2(texCoord.x, texCoord.y) * 2.0f) - float2(1.0f, 1.0f);
-				float edgeAttenuation = saturate((1.0 - ((float)hitIndex / maxSteps)) * 4.0f);
-				edgeAttenuation *= smoothstep(0.0f, 0.5f, saturate(1.0 - dot(distanceFromCenter, distanceFromCenter)));
-				float3 reflectionResult = tPreviousSceneColor.SampleLevel(sClampSampler, texCoord.xy, 0).xyz;
-				hitColor = float4(reflectionResult, edgeAttenuation);
-			}
-			float roughnessMask = saturate(1.0f - (R / roughnessThreshold));
-			float ssrWeight = (hitColor.w * roughnessMask);
-			ssr = saturate(hitColor.xyz * ssrWeight);
-		}
-	}
-	return ssr;
-}
-
-float4 PSMain(PSInput input) : SV_TARGET
-{
-	float4 baseColor = tDiffuseTexture.Sample(sDiffuseSampler, input.texCoord);
-	float3 specular = 0.5f;
-	float metalness = 0;
-	float r = 0.5f;
-
-	float3 diffuseColor = ComputeDiffuseColor(baseColor.rgb, metalness);
-	float3 specularColor = ComputeF0(specular.r, baseColor.rgb, metalness);
-
-	float3x3 TBN = float3x3(normalize(input.tangent), normalize(input.bitangent), normalize(input.normal));
-	float3 N = TangentSpaceNormalMapping(tNormalTexture, sDiffuseSampler, TBN, input.texCoord, true);
-	float3 V = normalize(cViewData.ViewPosition.xyz - input.positionWS);	
-
-	float3 ssr = 0;
-	if (cViewData.SsrSamples > 0)
-	{
-		if(cViewData.SsrSamples < 32)
-		{
-			ssr = ScreenSpaceReflections(input.position, input.positionVS, N, V, r);
-		}
-		else
-		{
-			ssr = ScreenSpaceReflectionsRT(input.positionWS, input.positionVS, N, V, r);
-		}
-	}
-
-	LightResult lighting = DoLight(input.position, input.positionWS, input.positionVS, N, V, diffuseColor, specularColor, r);
-
-	float ao = tAO.SampleLevel(sDiffuseSampler, (float2)input.position.xy * cViewData.InvScreenDimensions, 0).r;
-	float3 color = lighting.Diffuse + lighting.Specular + ssr * ao; 
-	color += ApplyAmbientLight(diffuseColor, ao, tLights[0].GetColor().rgb * 0.1f);
-	color += ApplyVolumetricLighting(cViewData.ViewPosition.xyz, input.positionWS.xyz, input.position.xyz, cViewData.View, tLights[0], 10);
-	
-	return float4(color, baseColor.a);
+	output.Color = float4(outRadiance, surface.Opacity);
+	output.Normal = EncodeNormalOctahedron(N);
+	output.Roughness = saturate(reflectivity - ssrWeight);
 }

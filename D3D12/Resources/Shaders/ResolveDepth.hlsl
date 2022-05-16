@@ -1,8 +1,5 @@
 #include "Common.hlsli"
 
-#define RootSig "DescriptorTable(UAV(u0, numDescriptors = 1), visibility=SHADER_VISIBILITY_ALL), " \
-				"DescriptorTable(SRV(t0, numDescriptors = 1), visibility=SHADER_VISIBILITY_ALL), "
-
 #ifndef DEPTH_RESOLVE_MIN
 #define DEPTH_RESOLVE_MIN 1
 #endif
@@ -18,15 +15,14 @@
 Texture2DMS<float> tInputTexture : register(t0);
 RWTexture2D<float> uOutputTexture : register(u0);
 
-[RootSignature(RootSig)]
 [numthreads(16, 16, 1)]
-void CSMain(uint3 threadId : SV_DISPATCHTHREADID)
+void CSMain(uint3 threadId : SV_DispatchThreadID)
 {
 	uint2 dimensions;
 	uint sampleCount;
 	tInputTexture.GetDimensions(dimensions.x, dimensions.y, sampleCount);
 	if(threadId.x < dimensions.x && threadId.y < dimensions.y)
-    {
+	{
 		float result = 1;
 		for(uint i = 0; i < sampleCount; ++i)
 		{

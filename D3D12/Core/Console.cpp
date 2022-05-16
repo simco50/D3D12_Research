@@ -2,59 +2,60 @@
 #include "Console.h"
 #include "CommandLine.h"
 
-static HANDLE sConsoleHandle = nullptr;
+namespace Win32Console
+{
+	static HANDLE Open()
+	{
+		HANDLE handle = NULL;
+		if (AllocConsole())
+		{
+			// Redirect the CRT standard input, output, and error handles to the console
+			FILE* pCout;
+			freopen_s(&pCout, "CONIN$", "r", stdin);
+			freopen_s(&pCout, "CONOUT$", "w", stdout);
+			freopen_s(&pCout, "CONOUT$", "w", stderr);
 
+			handle = GetStdHandle(STD_OUTPUT_HANDLE);
+
+			//Disable Close-Button
+			HWND hwnd = GetConsoleWindow();
+			if (hwnd != nullptr)
+			{
+				HMENU hMenu = GetSystemMenu(hwnd, FALSE);
+				if (hMenu != nullptr)
+				{
+					DeleteMenu(hMenu, SC_CLOSE, MF_BYCOMMAND);
+				}
+			}
+		}
+		return handle;;
+	}
+
+	static void Close(HANDLE handle)
+	{
+		if(handle)
+			CloseHandle(handle);
+	}
+};
+
+static HANDLE sConsoleHandle = nullptr;
 static std::mutex sLogMutex;
 static std::queue<Console::LogEntry> sMessageQueue;
 static LogType sVerbosity;
 static std::deque<Console::LogEntry> sHistory;
 
-void InitializeConsoleWindow()
-{
-	if (AllocConsole())
-	{
-		// Redirect the CRT standard input, output, and error handles to the console
-		FILE* pCout;
-		freopen_s(&pCout, "CONIN$", "r", stdin);
-		freopen_s(&pCout, "CONOUT$", "w", stdout);
-		freopen_s(&pCout, "CONOUT$", "w", stderr);
-
-		//Clear the error state for each of the C++ standard stream objects. We need to do this, as
-		//attempts to access the standard streams before they refer to a valid target will cause the
-		//iostream objects to enter an error state. In versions of Visual Studio after 2005, this seems
-		//to always occur during startup regardless of whether anything has been read from or written to
-		//the console or not.
-		std::wcout.clear();
-		std::cout.clear();
-		std::wcerr.clear();
-		std::cerr.clear();
-		std::wcin.clear();
-		std::cin.clear();
-
-		//Set ConsoleHandle
-		sConsoleHandle = GetStdHandle(STD_OUTPUT_HANDLE);
-
-		//Disable Close-Button
-		HWND hwnd = GetConsoleWindow();
-		if (hwnd != nullptr)
-		{
-			HMENU hMenu = GetSystemMenu(hwnd, FALSE);
-			if (hMenu != nullptr)
-			{
-				DeleteMenu(hMenu, SC_CLOSE, MF_BYCOMMAND);
-			}
-		}
-	}
-}
-
 void Console::Initialize()
 {
-#if WITH_CONSOLE
 	if (CommandLine::GetBool("noconsole") == false)
 	{
-		InitializeConsoleWindow();
+		sConsoleHandle = Win32Console::Open();
 	}
-#endif
+	E_LOG(Info, "Startup");
+}
+
+void Console::Shutdown()
+{
+	Win32Console::Close(sConsoleHandle);
 }
 
 void Console::Log(const char* message, LogType type)
@@ -64,33 +65,34 @@ void Console::Log(const char* message, LogType type)
 		return;
 	}
 
-	std::stringstream stream;
+	const char* pVerbosityMessage = "";
 	switch (type)
 	{
 	case LogType::Info:
 		if (sConsoleHandle)
 			SetConsoleTextAttribute(sConsoleHandle, FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY);
-		stream << "[INFO] ";
+		pVerbosityMessage = "[INFO]";
 		break;
 	case LogType::Warning:
 		if (sConsoleHandle)
 			SetConsoleTextAttribute(sConsoleHandle, FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_INTENSITY);
-		stream << "[WARNING] ";
+		pVerbosityMessage = "[WARNING]";
 		break;
 	case LogType::Error:
 	case LogType::FatalError:
 		if (sConsoleHandle)
 			SetConsoleTextAttribute(sConsoleHandle, FOREGROUND_RED | FOREGROUND_INTENSITY);
-		stream << "[ERROR] ";
+		pVerbosityMessage = "[ERROR]";
 		break;
 	default:
 		break;
 	}
 
-	stream << message << "\n";
-	const std::string output = stream.str();
-	printf(output.c_str());
-	OutputDebugStringA(output.c_str());
+	char messageBuffer[4096];
+	FormatString(messageBuffer, ARRAYSIZE(messageBuffer), "%s %s\n", pVerbosityMessage, message);
+	printf("%s %s\n", pVerbosityMessage, message);
+	OutputDebugStringA(messageBuffer);
+
 	if (sConsoleHandle)
 	{
 		SetConsoleTextAttribute(sConsoleHandle, FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY);
@@ -122,7 +124,23 @@ void Console::Log(const char* message, LogType type)
 
 	if (type == LogType::Error)
 	{
-		__debugbreak();
+			if (IsDebuggerPresent())
+			{
+				LPCSTR msg = &message[0];
+				int res = MessageBoxA(NULL, msg, "Assert failed", MB_YESNOCANCEL | MB_ICONERROR);
+				if (res == IDYES)
+				{
+#if _MSC_VER >= 1400
+					__debugbreak();
+#else
+					_asm int 0x03;
+#endif
+				}
+				else if (res == IDCANCEL)
+				{
+					abort();
+				}
+			}
 	}
 	else if (type == LogType::FatalError)
 	{
@@ -132,10 +150,10 @@ void Console::Log(const char* message, LogType type)
 
 void Console::LogFormat(LogType type, const char* format, ...)
 {
-	static char sConvertBuffer[8196*2];
+	static char sConvertBuffer[8196];
 	va_list ap;
 	va_start(ap, format);
-	vsnprintf_s(sConvertBuffer, 8196*2, format, ap);
+	FormatStringVars(sConvertBuffer, ARRAYSIZE(sConvertBuffer), format, ap);
 	va_end(ap);
 	Log(sConvertBuffer, type);
 }

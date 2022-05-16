@@ -1,49 +1,29 @@
 #include "Common.hlsli"
-#include "CommonBindings.hlsli"
 
-#define RootSig "RootFlags(ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT), " \
-				"CBV(b0, visibility=SHADER_VISIBILITY_VERTEX), " \
-				"CBV(b1, visibility=SHADER_VISIBILITY_VERTEX), " \
-				"DescriptorTable(SRV(t0, numDescriptors = 1), visibility=SHADER_VISIBILITY_PIXEL), " \
-				"StaticSampler(s0, filter=FILTER_MIN_MAG_MIP_LINEAR, visibility = SHADER_VISIBILITY_PIXEL), "
+ConstantBuffer<InstanceData> cObject : register(b0);
 
-struct PerViewData
+struct InterpolantsVSToPS
 {
-	float4x4 ViewProjection;
+	float4 Position : SV_Position;
+	float2 UV : TEXCOORD;
 };
 
-struct PerObjectData
+InterpolantsVSToPS VSMain(uint vertexId : SV_VertexID)
 {
-	float4x4 World;
-};
+	InterpolantsVSToPS result = (InterpolantsVSToPS)0;
+	MeshData mesh = GetMesh(cObject.Mesh);
+	float4x4 world = GetTransform(cObject.World);
 
-ConstantBuffer<PerObjectData> cObjectData : register(b0);
-ConstantBuffer<PerViewData> cViewData : register(b1);
-
-struct VSInput
-{
-	float3 position : POSITION;
-	float2 texCoord : TEXCOORD;
-};
-
-struct PSInput
-{
-	float4 position : SV_POSITION;
-	float2 texCoord : TEXCOORD;
-};
-
-[RootSignature(RootSig)]
-PSInput VSMain(VSInput input)
-{
-	PSInput result = (PSInput)0;
-	result.position = mul(mul(float4(input.position, 1.0f), cObjectData.World), cViewData.ViewProjection);
-	result.texCoord = input.texCoord;
+	float3 position = BufferLoad<float3>(mesh.BufferIndex, vertexId, mesh.PositionsOffset);
+	result.Position = mul(mul(float4(position, 1.0f), world), cView.ViewProjection);
+	result.UV = UnpackHalf2(BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.UVsOffset));
 	return result;
 }
 
-void PSMain(PSInput input)
+void PSMain(InterpolantsVSToPS input)
 {
-	if(tDiffuseTexture.Sample(sDiffuseSampler, input.texCoord).a < 0.5f)
+	MaterialData material = GetMaterial(cObject.Material);
+	if(Sample2D(material.Diffuse, sMaterialSampler, input.UV).a < material.AlphaCutoff)
 	{
 		discard;
 	}

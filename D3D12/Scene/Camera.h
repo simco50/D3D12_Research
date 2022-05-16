@@ -1,11 +1,13 @@
 #pragma once
 
+#include "Graphics/SceneView.h"
+
 class Camera
 {
 public:
 	virtual ~Camera() = default;
 
-	virtual void Update() {};
+	virtual void Update();
 
 	void SetPosition(const Vector3& position);
 	void SetRotation(const Quaternion& rotation);
@@ -13,27 +15,35 @@ public:
 	const Vector3& GetPosition() const { return m_Position; }
 	const Quaternion& GetRotation() const { return m_Rotation; }
 
+	void SetViewport(const FloatRect& rect);
 	void SetDirty() { m_Dirty = true; }
 	void SetFoV(float fov);
 	void SetClippingPlanes(float nearPlane, float farPlane);
-	void SetAspectRatio(float aspectRatio);
 
 	void SetOrthographic(bool orthographic, float size = -1.0);
 
 	void SetNearPlane(float nearPlane);
 	void SetFarPlane(float farPlane);
 
-	float GetNear() const { return m_NearPlane; }
-	float GetFar() const { return m_FarPlane; }
-	float GetFoV() const { return m_FoV; }
+	void SetJitterWeight(float weight);
 
+	const ViewTransform& GetViewTransform() const { return m_Transform; }
+
+	float GetNear() const { return m_Transform.NearPlane; }
+	float GetFar() const { return m_Transform.FarPlane; }
+	float GetFoV() const { return m_Transform.FoV; }
+
+	const Vector2& GetJitter() const { return m_Transform.Jitter; }
+	const Vector2& GetPreviousJitter() const { return m_Transform.PreviousJitter; }
 	const Matrix& GetView() const;
 	const Matrix& GetProjection() const;
 	const Matrix& GetViewProjection() const;
+	Matrix GetViewProjectionInverse() const;
 	const Matrix& GetViewInverse() const;
 	const Matrix& GetProjectionInverse() const;
+	const Matrix& GetPreviousViewProjection() const { return m_Transform.PreviousViewProjection; }
 	const BoundingFrustum& GetFrustum() const;
-	Ray GetMouseRay(uint32 windowWidth, uint32 windowHeight) const;
+	Ray GetMouseRay() const;
 
 protected:
 	void OnDirty();
@@ -43,20 +53,7 @@ protected:
 private:
 	void UpdateMatrices() const;
 
-	float m_FoV = 60.0f * Math::PI / 180;
-	float m_NearPlane = 1.0f;
-	float m_FarPlane = 500.0f;
-	float m_OrthographicSize = 1;
-	float m_AspectRatio = 1.0f;
-
-	mutable Matrix m_Projection;
-	mutable Matrix m_View;
-	mutable Matrix m_ViewProjection;
-	mutable Matrix m_ViewInverse;
-	mutable Matrix m_ProjectionInverse;
-	mutable BoundingFrustum m_Frustum;
-
-	bool m_Perspective = true;
+	mutable ViewTransform m_Transform;
 	mutable bool m_Dirty = true;
 };
 

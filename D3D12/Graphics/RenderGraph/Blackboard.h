@@ -1,9 +1,11 @@
 #pragma once
 #include "RenderGraphDefinitions.h"
 
+#define RG_BLACKBOARD_DATA(clazz) \
+	template<> inline constexpr StringHash RGBlackboard::GetTypeHash<clazz>() { return StringHash(#clazz STRINGIFY(__COUNTER__)); }
+
 class RGBlackboard final
 {
-#define RG_BLACKBOARD_DATA(clazz) constexpr static const char* Type() { return #clazz; }
 public:
 	RGBlackboard() = default;
 	~RGBlackboard() = default;
@@ -11,38 +13,65 @@ public:
 	RGBlackboard(const RGBlackboard& other) = delete;
 	RGBlackboard& operator=(const RGBlackboard& other) = delete;
 
-	template<typename T>
-	T& Add()
+	template<typename T, typename... Args>
+	T& Add(Args&&... args)
 	{
-		RG_ASSERT(m_DataMap.find(T::Type()) == m_DataMap.end(), "Data type already exists in blackboard");
-		T* pData = new T();
-		m_DataMap[StringHash(T::Type())] = pData;
-		return *pData;
+		constexpr StringHash hash = GetTypeHash<T>();
+		checkf(m_DataMap.find(hash) == m_DataMap.end(), "Data type already exists in blackboard");
+		std::unique_ptr<TElement<T>> pAllocation = std::make_unique<TElement<T>>(std::forward<Args&&>(args)...);
+		T& obj = pAllocation->Object;
+		m_DataMap[hash] = &obj;
+		m_Allocations.push_back(std::move(pAllocation));
+		return obj;
 	}
 
 	template<typename T>
-	T& Get()
+	const T* TryGet() const
 	{
-		void* pData = GetData(T::Type());
-		RG_ASSERT(pData, "Data for given type does not exist in blackboard");
-		return *static_cast<T*>(pData);
+		constexpr StringHash hash = GetTypeHash<T>();
+		auto it = m_DataMap.find(hash);
+		if (it != m_DataMap.end())
+		{
+			return static_cast<const T*>(it->second);
+		}
+		return m_pParent ? m_pParent->TryGet<T>() : nullptr;
 	}
 
 	template<typename T>
 	const T& Get() const
 	{
-		void* pData = GetData(T::Type());
-		RG_ASSERT(pData, "Data for given type does not exist in blackboard");
-		return *static_cast<T*>(pData);
+		const T* pObj = TryGet<T>();
+		checkf(pObj, "Data for given type does not exist in blackboard");
+		return *pObj;
 	}
 
 	RGBlackboard& Branch();
 	void Merge(const RGBlackboard& other, bool overrideExisting);
 
+	template<typename T>
+	static constexpr StringHash GetTypeHash()
+	{
+		static_assert(!sizeof(T), "Type requires RG_BLACKBOARD_DATA");
+		return 0;
+	}
+
 private:
-	void* GetData(const char* hash);
+	struct Element
+	{
+		virtual ~Element() = default;
+	};
+	template<typename T>
+	struct TElement : public Element
+	{
+		template<typename... Args>
+		TElement(Args&&... args)
+			: Object(args...)
+		{}
+		T Object;
+	};
 
 	std::map<StringHash, void*> m_DataMap;
+	std::vector<std::unique_ptr<Element>> m_Allocations;
 	std::vector<std::unique_ptr<RGBlackboard>> m_Children;
 	RGBlackboard* m_pParent = nullptr;
 };

@@ -10,50 +10,53 @@
 
 #define BLOCK_SIZE 16
 
-#define RootSig "CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \
-				"DescriptorTable(UAV(u0, numDescriptors = 1), visibility=SHADER_VISIBILITY_ALL), " \
-				"DescriptorTable(SRV(t0, numDescriptors = 2), visibility=SHADER_VISIBILITY_ALL), " \
-
-cbuffer Parameters : register(b0)
+struct PassParameters
 {
-	float cWhitePoint;
-	uint cTonemapper;
-}
+	float WhitePoint;
+	uint Tonemapper;
+};
 
+ConstantBuffer<PassParameters> cPassData : register(b0);
 RWTexture2D<float4> uOutColor : register(u0);
 Texture2D tColor : register(t0);
 StructuredBuffer<float> tAverageLuminance : register(t1);
+Texture2D tBloom : register(t2);
 
-[RootSignature(RootSig)]
 [numthreads(BLOCK_SIZE, BLOCK_SIZE, 1)]
-void CSMain(uint3 dispatchThreadId : SV_DISPATCHTHREADID)
+void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 {
-	uint2 dimensions;
-	tColor.GetDimensions(dimensions.x, dimensions.y);
-	if(dispatchThreadId.x >= dimensions.x || dispatchThreadId.y >= dimensions.y)
+	if(dispatchThreadId.x >= cView.TargetDimensions.x || dispatchThreadId.y >= cView.TargetDimensions.y)
 	{
 		return;
 	}
 
+	float2 uv = (0.5f + dispatchThreadId.xy) * cView.TargetDimensionsInv;
+
 	float3 rgb = tColor.Load(uint3(dispatchThreadId.xy, 0)).rgb;
 
 #if TONEMAP_LUMINANCE
-    float3 xyY = sRGB_to_xyY(rgb);
+	float3 xyY = sRGB_to_xyY(rgb);
 	float value = xyY.z;
 #else
 	float3 value = rgb;
 #endif
 
-    float exposure = tAverageLuminance[2];
-	value = value * exposure;
+	float exposure = tAverageLuminance[2];
+	value = value * (exposure + 1);
 
-	switch(cTonemapper)
+	float3 bloom =
+		tBloom.SampleLevel(sLinearClamp, uv, 1.5f).rgb +
+		tBloom.SampleLevel(sLinearClamp, uv, 3.5f).rgb +
+		tBloom.SampleLevel(sLinearClamp, uv, 4.5f).rgb;
+	value += bloom / 3;
+
+	switch(cPassData.Tonemapper)
 	{
 	case TONEMAP_REINHARD:
-    	value = Reinhard(value);
+		value = Reinhard(value);
 		break;
 	case TONEMAP_REINHARD_EXTENDED:
-    	value = ReinhardExtended(value, cWhitePoint);
+		value = ReinhardExtended(value, cPassData.WhitePoint);
 		break;
 	case TONEMAP_ACES_FAST:
 		value = ACES_Fast(value);
@@ -73,7 +76,7 @@ void CSMain(uint3 dispatchThreadId : SV_DISPATCHTHREADID)
 	rgb = value;
 #endif
 
-	if(cTonemapper != TONEMAP_UNREAL3)
+	if(cPassData.Tonemapper != TONEMAP_UNREAL3)
 	{
 		rgb = LinearToSrgbFast(rgb);
 	}

@@ -1,121 +1,220 @@
 #include "stdafx.h"
 #include "FileWatcher.h"
-#include <stdlib.h>
+#include "Core/Paths.h"
 
 FileWatcher::FileWatcher()
 {
-
 }
 
 FileWatcher::~FileWatcher()
 {
-	StopWatching();
+	m_Exiting = true;
+	m_Watches.clear();
+	if (m_IOCP)
+	{
+		PostQueuedCompletionStatus(m_IOCP, 0, (ULONG_PTR)this, 0);
+		CloseHandle(m_IOCP);
+	}
 }
 
-bool FileWatcher::StartWatching(const std::string& directory, const bool recursiveWatch /*= true*/)
+bool FileWatcher::StartWatching(const char* pPath, const bool recursiveWatch /*= true*/)
 {
-	if (m_Exiting)
+	QueryPerformanceFrequency(&m_TimeFrequency);
+
+	if (!Paths::DirectoryExists(pPath))
 	{
-		QueryPerformanceFrequency(&m_TimeFrequency);
-		m_FileHandle = CreateFileA(directory.c_str(),
-			FILE_LIST_DIRECTORY,
-			FILE_SHARE_WRITE | FILE_SHARE_READ | FILE_SHARE_DELETE,
-			nullptr,
-			OPEN_EXISTING,
-			FILE_FLAG_BACKUP_SEMANTICS,
-			nullptr);
-		if (m_FileHandle != INVALID_HANDLE_VALUE)
-		{
-			m_RecursiveWatch = recursiveWatch;
-			m_Exiting = false;
-			m_Thread.RunThread([](void* pArgs) 
-				{ 
-					FileWatcher* pWatcher = (FileWatcher*)pArgs;
-					return (DWORD)pWatcher->ThreadFunction();
-				}, this);
-		}
+		E_LOG(Warning, "FileWatch failed: Directory '%s' does not exist", pPath);
 		return false;
+	}
+
+	HANDLE fileHandle = CreateFileA(pPath,
+		FILE_LIST_DIRECTORY,
+		FILE_SHARE_WRITE | FILE_SHARE_READ | FILE_SHARE_DELETE,
+		nullptr,
+		OPEN_EXISTING,
+		FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OVERLAPPED,
+		nullptr);
+
+	if (!fileHandle)
+	{
+		return false;
+	}
+
+	std::scoped_lock<std::mutex> lock(m_Mutex);
+	std::unique_ptr<DirectoryWatch> pWatch = std::make_unique<DirectoryWatch>();
+	pWatch->Recursive = recursiveWatch;
+	pWatch->FileHandle = fileHandle;
+	pWatch->DirectoryPath = pPath;
+	m_IOCP = CreateIoCompletionPort(fileHandle, m_IOCP, (ULONG_PTR)pWatch.get(), 0);
+	check(m_IOCP);
+
+	m_Watches.push_back(std::move(pWatch));
+	
+	if (!m_Thread.IsRunning())
+	{
+		m_Thread.RunThread([](void* pArgs)
+			{
+				FileWatcher* pWatcher = (FileWatcher*)pArgs;
+				return (DWORD)pWatcher->ThreadFunction();
+			}, this);
+	}
+
+	check(PostQueuedCompletionStatus(m_IOCP, 0, (ULONG_PTR)this, 0) == TRUE);
+	return true;
+}
+
+bool FileWatcher::GetNextChange(FileEvent& fileEvent)
+{
+	std::scoped_lock<std::mutex> lock(m_Mutex);
+	for (auto& pWatch : m_Watches)
+	{
+		if (pWatch->Changes.size() > 0)
+		{
+			fileEvent = pWatch->Changes[0];
+			LARGE_INTEGER currentTime;
+			QueryPerformanceCounter(&currentTime);
+			float timeDiff = ((float)currentTime.QuadPart - fileEvent.Time.QuadPart) / m_TimeFrequency.QuadPart;
+			if (timeDiff > 0.02f)
+			{
+				pWatch->Changes.pop_front();
+				return true;
+			}
+		}
 	}
 	return false;
 }
 
-void FileWatcher::StopWatching()
-{
-	m_Exiting = true;
-	CancelIoEx(m_FileHandle, nullptr);
-	CloseHandle(m_FileHandle);
-}
-
-bool FileWatcher::GetNextChange(std::string& fileName)
-{
-	std::scoped_lock<std::mutex> lock(m_Mutex);
-	if (m_Changes.size() == 0)
-	{
-		return false;
-	}
-	const std::pair<std::string, LARGE_INTEGER>& entry = *m_Changes.begin();
-	LARGE_INTEGER currentTime;
-	QueryPerformanceCounter(&currentTime);
-	float timeDiff = ((float)currentTime.QuadPart - entry.second.QuadPart) / entry.second.QuadPart * 1000000;
-	if (timeDiff < 100)
-	{
-		return false;
-	}
-	fileName = entry.first;
-	m_Changes.erase(fileName);
-	return true;
-}
-
 int FileWatcher::ThreadFunction()
 {
-	while (!m_Exiting)
+	const uint32 fileNotifyFlags =
+		FILE_NOTIFY_CHANGE_LAST_WRITE |
+		FILE_NOTIFY_CHANGE_SIZE |
+		FILE_NOTIFY_CHANGE_CREATION |
+		FILE_NOTIFY_CHANGE_FILE_NAME;
+
+	while(!m_Exiting)
 	{
-		unsigned char buffer[BUFFERSIZE];
-		DWORD bytesFilled = 0;
-		if (ReadDirectoryChangesW(m_FileHandle,
-			buffer,
-			BUFFERSIZE,
-			m_RecursiveWatch,
-			FILE_NOTIFY_CHANGE_LAST_WRITE,
-			&bytesFilled,
-			nullptr,
-			nullptr))
 		{
-			unsigned offset = 0;
+			std::scoped_lock<std::mutex> lock(m_Mutex);
 
-			while (offset < bytesFilled)
+			for (auto& pWatch : m_Watches)
 			{
-				FILE_NOTIFY_INFORMATION* record = (FILE_NOTIFY_INFORMATION*)&buffer[offset];
-
-				if (record->Action == FILE_ACTION_MODIFIED || record->Action == FILE_ACTION_RENAMED_NEW_NAME)
+				if (pWatch && !pWatch->IsWatching)
 				{
-					const wchar_t* src = record->FileName;
-					const wchar_t* end = src + record->FileNameLength / 2;
-					char fn[256];
-					size_t n;
-					wcstombs_s(&n, fn, src, 256);
-					fn[end - src] = '\0';
-					std::string filename(fn);
-					std::replace(filename.begin(), filename.end(), '\\', '/');
-					AddChange(filename);
+					DWORD bytesFilled = 0;
+					ReadDirectoryChangesW(
+						pWatch->FileHandle,
+						pWatch->Buffer.data(),
+						(DWORD)pWatch->Buffer.size(),
+						pWatch->Recursive,
+						fileNotifyFlags,
+						&bytesFilled,
+						&pWatch->Overlapped,
+						nullptr);
+					pWatch->IsWatching = true;
+				}
+			}
+		}
+
+		DWORD numBytes;
+		OVERLAPPED* ov;
+		ULONG_PTR key;
+		while (GetQueuedCompletionStatus(m_IOCP, &numBytes, &key, &ov, INFINITE))
+		{
+			if ((void*)key == this && numBytes == 0)
+			{
+				break;
+			}
+
+			if (numBytes == 0)
+			{
+				continue;
+			}
+
+			std::scoped_lock<std::mutex> lock(m_Mutex);
+			DirectoryWatch* pWatch = (DirectoryWatch*)key;
+
+			unsigned offset = 0;
+			char outString[MAX_PATH];
+			while (offset < numBytes)
+			{
+				FILE_NOTIFY_INFORMATION* pRecord = (FILE_NOTIFY_INFORMATION*)&pWatch->Buffer[offset];
+
+				int length = WideCharToMultiByte(
+					CP_ACP,
+					0,
+					pRecord->FileName,
+					pRecord->FileNameLength / sizeof(wchar_t),
+					outString,
+					MAX_PATH - 1,
+					nullptr,
+					nullptr
+				);
+
+				outString[length] = '\0';
+
+				FileEvent newEvent;
+				newEvent.Path = Paths::Combine(pWatch->DirectoryPath, outString);
+				Paths::NormalizeInline(newEvent.Path);
+
+				switch (pRecord->Action)
+				{
+				case FILE_ACTION_MODIFIED: newEvent.EventType = FileEvent::Type::Modified; break;
+				case FILE_ACTION_REMOVED: newEvent.EventType = FileEvent::Type::Removed; break;
+				case FILE_ACTION_ADDED: newEvent.EventType = FileEvent::Type::Added; break;
+				case FILE_ACTION_RENAMED_NEW_NAME: newEvent.EventType = FileEvent::Type::Added; break;
+				case FILE_ACTION_RENAMED_OLD_NAME: newEvent.EventType = FileEvent::Type::Removed; break;
 				}
 
-				if (!record->NextEntryOffset)
+				QueryPerformanceCounter(&newEvent.Time);
+
+				bool add = true;
+
+				//Some events are duplicates
+				if (pWatch->Changes.size() > 0)
+				{
+					const FileEvent& prevEvent = pWatch->Changes.front();
+					add = prevEvent.Path != newEvent.Path ||
+						prevEvent.EventType != newEvent.EventType;
+				}
+
+				if (add)
+				{
+					pWatch->Changes.push_back(newEvent);
+				}
+
+				if (!pRecord->NextEntryOffset)
 				{
 					break;
 				}
 				else
 				{
-					offset += record->NextEntryOffset;
+					offset += pRecord->NextEntryOffset;
 				}
 			}
+
+			DWORD bytesFilled = 0;
+			ReadDirectoryChangesW(
+				pWatch->FileHandle,
+				pWatch->Buffer.data(),
+				(DWORD)pWatch->Buffer.size(),
+				pWatch->Recursive,
+				fileNotifyFlags,
+				&bytesFilled,
+				&pWatch->Overlapped,
+				nullptr);
 		}
 	}
+
 	return 0;
 }
 
-void FileWatcher::AddChange(const std::string& fileName)
+FileWatcher::DirectoryWatch::~DirectoryWatch()
 {
-	std::scoped_lock<std::mutex> lock(m_Mutex);
-	QueryPerformanceCounter(&m_Changes[fileName]);
+	if (FileHandle)
+	{
+		CancelIo(FileHandle);
+		CloseHandle(FileHandle);
+		FileHandle = nullptr;
+	}
 }

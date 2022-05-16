@@ -1,131 +1,182 @@
 #include "stdafx.h"
 #include "RTAO.h"
-#include "Graphics/Core/Shader.h"
-#include "Graphics/Core/PipelineState.h"
-#include "Graphics/Core/RootSignature.h"
-#include "Graphics/Core/GraphicsBuffer.h"
-#include "Graphics/Core/Graphics.h"
-#include "Graphics/Core/CommandContext.h"
-#include "Graphics/Core/Texture.h"
-#include "Graphics/Core/RaytracingCommon.h"
+#include "Graphics/RHI/RootSignature.h"
+#include "Graphics/RHI/Graphics.h"
+#include "Graphics/RHI/CommandContext.h"
+#include "Graphics/RHI/Texture.h"
+#include "Graphics/RHI/ShaderBindingTable.h"
+#include "Graphics/RHI/StateObject.h"
+#include "Graphics/RHI/PipelineState.h"
 #include "Graphics/RenderGraph/RenderGraph.h"
-#include "Graphics/Mesh.h"
-#include "Scene/Camera.h"
+#include "Graphics/SceneView.h"
 
-RTAO::RTAO(Graphics* pGraphics)
+RTAO::RTAO(GraphicsDevice* pDevice)
+	: m_pDevice(pDevice)
 {
-	if (pGraphics->SupportsRayTracing())
+	if (pDevice->GetCapabilities().SupportsRaytracing())
 	{
-		SetupResources(pGraphics);
-		SetupPipelines(pGraphics);
+		m_pCommonRS = new RootSignature(pDevice);
+		m_pCommonRS->AddRootConstants(0, 4);
+		m_pCommonRS->AddConstantBufferView(100);
+		m_pCommonRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1);
+		m_pCommonRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 4);
+		m_pCommonRS->Finalize("Global");
+
+		StateObjectInitializer stateDesc;
+		stateDesc.AddLibrary("RayTracing/RTAOTraceRays.hlsl");
+		stateDesc.AddLibrary("RayTracing/SharedRaytracingLib.hlsl", { "OcclusionMS" });
+		stateDesc.Name = "RT AO";
+		stateDesc.MaxPayloadSize = sizeof(float);
+		stateDesc.pGlobalRootSignature = m_pCommonRS;
+		stateDesc.RayGenShader = "RayGen";
+		stateDesc.AddMissShader("OcclusionMS");
+		m_pTraceRaysSO = pDevice->CreateStateObject(stateDesc);
+
+		m_pDenoisePSO = pDevice->CreateComputePipeline(m_pCommonRS, "RayTracing/RTAODenoise.hlsl", "DenoiseCS");
+		m_pBilateralBlurPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "SSAOBlur.hlsl", "CSMain");
 	}
 }
 
-void RTAO::Execute(RGGraph& graph, Texture* pColor, Texture* pDepth, Buffer* pTLAS, Camera& camera)
+void RTAO::Execute(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures)
 {
-	static float g_AoPower = 3;
-	static float g_AoRadius = 0.5f;
+	TextureDesc aoDesc = sceneTextures.pAmbientOcclusion->GetDesc();
+
+	RGTexture* pRayTraceTarget = graph.CreateTexture("AO Target 0", aoDesc);
+	RGTexture* pDenoiseTarget = graph.CreateTexture("AO Target 1", aoDesc);
+	RGTexture* pAOHistory = RGUtils::CreatePersistentTexture(graph, "AO History", aoDesc, &m_pHistory, true);
+
+	static float g_AoPower = 1.0f;
+	static float g_AoRadius = 2.0f;
 	static int32 g_AoSamples = 1;
 
-	ImGui::Begin("Parameters");
-	ImGui::Text("Ambient Occlusion");
-	ImGui::SliderFloat("Power", &g_AoPower, 0, 10);
-	ImGui::SliderFloat("Radius", &g_AoRadius, 0.1f, 2.0f);
-	ImGui::SliderInt("Samples", &g_AoSamples, 1, 64);
+	if (ImGui::Begin("Parameters"))
+	{
+		if (ImGui::CollapsingHeader("Ambient Occlusion"))
+		{
+			ImGui::SliderFloat("Power", &g_AoPower, 0, 1);
+			ImGui::SliderFloat("Radius", &g_AoRadius, 0.1f, 4.0f);
+			ImGui::SliderInt("Samples", &g_AoSamples, 1, 64);
+		}
+	}
 	ImGui::End();
 
-	RGPassBuilder rt = graph.AddPass("RTAO");
-	rt.Bind([=](CommandContext& context, const RGPassResources& passResources)
-		{
-			context.InsertResourceBarrier(pDepth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-			context.InsertResourceBarrier(pColor, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+	RG_GRAPH_SCOPE("RTAO", graph);
 
-			context.SetComputeRootSignature(m_pGlobalRS.get());
-			context.SetPipelineState(m_pRtSO.Get());
-
-			constexpr const int numRandomVectors = 64;
-			struct Parameters
+	graph.AddPass("Trace Rays", RGPassFlag::Compute)
+		.Read(sceneTextures.pDepth)
+		.Write(pRayTraceTarget)
+		.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
-				Matrix ViewInverse;
-				Matrix ProjectionInverse;
-				Vector4 RandomVectors[numRandomVectors];
-				float Power;
-				float Radius;
-				int32 Samples;
-			} parameters{};
+				Texture* pTarget = pRayTraceTarget->Get();
 
-			static bool written = false;
-			static Vector4 randoms[numRandomVectors];
-			if (!written)
-			{
-				srand(2);
-				written = true;
-				for (int i = 0; i < numRandomVectors; ++i)
+				context.SetComputeRootSignature(m_pCommonRS);
+				context.SetPipelineState(m_pTraceRaysSO);
+
+				struct
 				{
-					randoms[i] = Vector4(Math::RandVector());
-					randoms[i].z = Math::Lerp(0.1f, 0.8f, (float)abs(randoms[i].z));
-					randoms[i].Normalize();
-					randoms[i] *= Math::Lerp(0.1f, 1.0f, (float)pow(Math::RandomRange(0, 1), 2));
-				}
-			}
-			memcpy(parameters.RandomVectors, randoms, sizeof(Vector4) * numRandomVectors);
+					float Power;
+					float Radius;
+					uint32 Samples;
+				} parameters{};
 
-			parameters.ViewInverse = camera.GetViewInverse();
-			parameters.ProjectionInverse = camera.GetProjectionInverse();
-			parameters.Power = g_AoPower;
-			parameters.Radius = g_AoRadius;
-			parameters.Samples = g_AoSamples;
+				parameters.Power = g_AoPower;
+				parameters.Radius = g_AoRadius;
+				parameters.Samples = g_AoSamples;
 
-			ShaderBindingTable bindingTable(m_pRtSO.Get());
-			bindingTable.AddRayGenEntry("RayGen", {});
-			bindingTable.AddMissEntry("Miss", {});
-			bindingTable.AddHitGroupEntry("HitGroup", {});
+				ShaderBindingTable bindingTable(m_pTraceRaysSO);
+				bindingTable.BindRayGenShader("RayGen");
+				bindingTable.BindMissShader("OcclusionMS", {});
 
-			context.SetComputeDynamicConstantBufferView(0, &parameters, sizeof(Parameters));
-			context.SetDynamicDescriptor(1, 0, pColor->GetUAV());
-			context.SetDynamicDescriptor(2, 0, pTLAS->GetSRV());
-			context.SetDynamicDescriptor(2, 1, pDepth->GetSRV());
+				context.SetRootConstants(0, parameters);
+				context.SetRootCBV(1, Renderer::GetViewUniforms(pView, pTarget));
+				context.BindResources(2, pTarget->GetUAV());
+				context.BindResources(3, {
+					sceneTextures.pDepth->Get()->GetSRV(),
+					});
 
-			context.DispatchRays(bindingTable, pColor->GetWidth(), pColor->GetHeight());
-		});
-}
+				context.DispatchRays(bindingTable, pTarget->GetWidth(), pTarget->GetHeight());
+			});
 
-void RTAO::SetupResources(Graphics* pGraphics)
-{
-}
+	graph.AddPass("Denoise", RGPassFlag::Compute)
+		.Read({ pRayTraceTarget, sceneTextures.pVelocity, sceneTextures.pDepth, pAOHistory })
+		.Write(pDenoiseTarget)
+		.Bind([=](CommandContext& context, const RGPassResources& resources)
+			{
+				Texture* pTarget = pDenoiseTarget->Get();
 
-void RTAO::SetupPipelines(Graphics* pGraphics)
-{
-	//Raytracing Pipeline
-	{
-		m_pRayGenSignature = std::make_unique<RootSignature>();
-		m_pRayGenSignature->Finalize("Ray Gen RS", pGraphics->GetDevice(), D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE);
+				context.SetComputeRootSignature(m_pCommonRS);
+				context.SetPipelineState(m_pDenoisePSO);
 
-		m_pHitSignature = std::make_unique<RootSignature>();
-		m_pHitSignature->Finalize("Hit RS", pGraphics->GetDevice(), D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE);
+				//context.SetRootCBV(0, parameters);
+				context.SetRootCBV(1, Renderer::GetViewUniforms(pView, pTarget));
+				context.BindResources(2, pTarget->GetUAV());
+				context.BindResources(3, {
+					sceneTextures.pDepth->Get()->GetSRV(),
+					pAOHistory->Get()->GetSRV(),
+					pRayTraceTarget->Get()->GetSRV(),
+					sceneTextures.pVelocity->Get()->GetSRV(),
+					});
+				context.Dispatch(ComputeUtils::GetNumThreadGroups(pTarget->GetWidth(), 8, pTarget->GetHeight(), 8));
+			});
 
-		m_pMissSignature = std::make_unique<RootSignature>();
-		m_pMissSignature->Finalize("Miss RS", pGraphics->GetDevice(), D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE);
+	RGUtils::AddCopyPass(graph, pDenoiseTarget, pAOHistory);
 
-		m_pGlobalRS = std::make_unique<RootSignature>();
-		m_pGlobalRS->SetConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_ALL);
-		m_pGlobalRS->SetDescriptorTableSimple(1, 0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, D3D12_SHADER_VISIBILITY_ALL);
-		m_pGlobalRS->SetDescriptorTableSimple(2, 0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, D3D12_SHADER_VISIBILITY_ALL);
-		m_pGlobalRS->AddStaticSampler(0, CD3DX12_STATIC_SAMPLER_DESC(0, D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP), D3D12_SHADER_VISIBILITY_ALL);
-		m_pGlobalRS->Finalize("Dummy Global RS", pGraphics->GetDevice(), D3D12_ROOT_SIGNATURE_FLAG_NONE);
+	graph.AddPass("Blur AO - Horizontal", RGPassFlag::Compute)
+		.Read({ pDenoiseTarget, sceneTextures.pDepth })
+		.Write(pRayTraceTarget)
+		.Bind([=](CommandContext& context, const RGPassResources& resources)
+			{
+				Texture* pTarget = pRayTraceTarget->Get();
 
-		ShaderLibrary shaderLibrary("RTAO.hlsl");
+				context.SetComputeRootSignature(m_pCommonRS);
+				context.SetPipelineState(m_pBilateralBlurPSO);
 
-		CD3DX12_STATE_OBJECT_HELPER stateDesc;
-		stateDesc.AddLibrary(CD3DX12_SHADER_BYTECODE(shaderLibrary.GetByteCode(), shaderLibrary.GetByteCodeSize()), { "RayGen", "ClosestHit", "Miss" });
-		stateDesc.AddHitGroup("HitGroup", "ClosestHit");
-		stateDesc.BindLocalRootSignature("RayGen", m_pRayGenSignature->GetRootSignature());
-		stateDesc.BindLocalRootSignature("Miss", m_pMissSignature->GetRootSignature());
-		stateDesc.BindLocalRootSignature("HitGroup", m_pHitSignature->GetRootSignature());
-		stateDesc.SetRaytracingShaderConfig(sizeof(float), 2 * sizeof(float));
-		stateDesc.SetRaytracingPipelineConfig(1);
-		stateDesc.SetGlobalRootSignature(m_pGlobalRS->GetRootSignature());
-		D3D12_STATE_OBJECT_DESC desc = stateDesc.Desc();
-		pGraphics->GetRaytracingDevice()->CreateStateObject(&desc, IID_PPV_ARGS(m_pRtSO.GetAddressOf()));
-	}
+				struct
+				{
+					Vector2 DimensionsInv;
+					uint32 Horizontal;
+				} shaderParameters;
+
+				shaderParameters.Horizontal = 1;
+				shaderParameters.DimensionsInv = Vector2(1.0f / pTarget->GetWidth(), 1.0f / pTarget->GetHeight());
+
+				context.SetRootConstants(0, shaderParameters);
+				context.SetRootCBV(1, Renderer::GetViewUniforms(pView, pTarget));
+				context.BindResources(2, pTarget->GetUAV());
+				context.BindResources(3, {
+					sceneTextures.pDepth->Get()->GetSRV(),
+				 pDenoiseTarget->Get()->GetSRV()
+					});
+
+				context.Dispatch(ComputeUtils::GetNumThreadGroups(pTarget->GetWidth(), 256, pTarget->GetHeight(), 1));
+			});
+
+	graph.AddPass("Blur AO - Horizontal", RGPassFlag::Compute)
+		.Read({ pRayTraceTarget, sceneTextures.pDepth })
+		.Write(sceneTextures.pAmbientOcclusion)
+		.Bind([=](CommandContext& context, const RGPassResources& resources)
+			{
+				Texture* pTarget = sceneTextures.pAmbientOcclusion->Get();
+
+				context.SetComputeRootSignature(m_pCommonRS);
+				context.SetPipelineState(m_pBilateralBlurPSO);
+
+				struct
+				{
+					Vector2 DimensionsInv;
+					uint32 Horizontal;
+				} shaderParameters;
+
+				shaderParameters.DimensionsInv = Vector2(1.0f / pTarget->GetWidth(), 1.0f / pTarget->GetHeight());
+				shaderParameters.Horizontal = 0;
+
+				context.SetRootConstants(0, shaderParameters);
+				context.BindResources(2, pTarget->GetUAV());
+				context.BindResources(3, {
+					sceneTextures.pDepth->Get()->GetSRV(),
+					pRayTraceTarget->Get()->GetSRV()
+					});
+
+				context.Dispatch(ComputeUtils::GetNumThreadGroups(pTarget->GetWidth(), 1, pTarget->GetHeight(), 256));
+			});
 }

@@ -51,9 +51,12 @@ bool DoWork(uint32 threadIndex)
 
 DWORD WINAPI WorkFunction(LPVOID lpParameter)
 {
+	wchar_t* pDescription;
+	GetThreadDescription(GetCurrentThread(), &pDescription);
+
+	size_t threadIndex = reinterpret_cast<size_t>(lpParameter);
 	while (!m_Shutdown)
 	{
-		size_t threadIndex = reinterpret_cast<size_t>(lpParameter);
 		bool didWork = DoWork((uint32)threadIndex);
 		if (!didWork)
 		{
@@ -64,17 +67,17 @@ DWORD WINAPI WorkFunction(LPVOID lpParameter)
 	return 0;
 }
 
-void TaskQueue::CreateThreads(size_t count)
+void TaskQueue::CreateThreads(uint32 count)
 {
 	m_Threads.resize(count);
-	for (size_t i = 1; i < count; ++i)
+	for (uint32 i = 1; i < count; ++i)
 	{
 		Thread& thread = m_Threads[i];
-		thread.RunThread(WorkFunction, reinterpret_cast<LPVOID>(i));
+		thread.RunThread(WorkFunction, reinterpret_cast<LPVOID>((size_t)i));
 
-		std::stringstream name;
-		name << "TaskQueue Thread " << i;
-		thread.SetName(name.str());
+		char threadName[256];
+		FormatString(threadName, ARRAYSIZE(threadName), "TaskQueue Thread %d", i);
+		thread.SetName(threadName);
 	}
 }
 
@@ -115,7 +118,7 @@ void TaskQueue::Distribute(TaskContext& context, const AsyncDistributeDelegate& 
 	{
 		groupSize = ThreadCount();
 	}
-	uint32 jobs = (uint32)ceil((float)count / groupSize);
+	uint32 jobs = (uint32)Math::Ceil((float)count / groupSize);
 	context.fetch_add(jobs);
 
 	{
@@ -124,7 +127,7 @@ void TaskQueue::Distribute(TaskContext& context, const AsyncDistributeDelegate& 
 		{
 			AsyncTask task;
 			task.pCounter = &context;
-			task.Action = AsyncTaskDelegate::CreateLambda([action, i, count, jobs, groupSize](int threadIndex)
+			task.Action = AsyncTaskDelegate::CreateLambda([action, i, count, groupSize](int threadIndex)
 				{
 					uint32 start = i * groupSize;
 					uint32 end = Math::Min(start + groupSize, count);

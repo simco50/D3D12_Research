@@ -1,59 +1,85 @@
 #pragma once
+#include "RHI/Buffer.h"
+
 class Buffer;
 class CommandContext;
 class Texture;
-class Graphics;
 class CommandContext;
+class ShaderResourceView;
+class Mesh;
+struct World;
 
-class SubMesh
+struct SubMesh
 {
-	friend class Mesh;
+	void Destroy();
 
-public:
-	~SubMesh();
+	int PositionsStride = 0;
+	int MaterialId = 0;
 
-	void Draw(CommandContext* pContext) const;
-	int GetMaterialId() const { return m_MaterialId; }
-	const BoundingBox& GetBounds() const { return m_Bounds; }
+	DXGI_FORMAT PositionsFormat = DXGI_FORMAT_R32G32B32_FLOAT;
+	VertexBufferView PositionStreamLocation;
+	VertexBufferView UVStreamLocation;
+	VertexBufferView NormalStreamLocation;
+	VertexBufferView ColorsStreamLocation;
+	IndexBufferView IndicesLocation;
+	uint32 MeshletsLocation;
+	uint32 MeshletVerticesLocation;
+	uint32 MeshletTrianglesLocation;
+	uint32 MeshletBoundsLocation;
+	uint32 NumMeshlets;
 
-	D3D12_GPU_VIRTUAL_ADDRESS GetVerticesLocation() const { return m_VerticesLocation; }
-	D3D12_GPU_VIRTUAL_ADDRESS GetIndicesLocation() const { return m_IndicesLocation; }
-	uint32 GetVertexCount() const { return m_VertexCount; }
-	uint32 GetIndexCount() const { return m_IndexCount; }
-	uint32 GetStride() const { return m_Stride; }
+	BoundingBox Bounds;
+	Mesh* pParent = nullptr;
 
-private:
-	int m_Stride = 0;
-	int m_MaterialId = 0;
-	uint32 m_IndexCount = 0;
-	uint32 m_VertexCount = 0;
-	D3D12_GPU_VIRTUAL_ADDRESS m_VerticesLocation;
-	D3D12_GPU_VIRTUAL_ADDRESS m_IndicesLocation;
-	BoundingBox m_Bounds;
-	Mesh* m_pParent;
+	Buffer* pBLAS = nullptr;
+	Buffer* pBLASScratch = nullptr;
+};
+
+struct SubMeshInstance
+{
+	int MeshIndex;
+	Matrix Transform;
+};
+
+enum class MaterialAlphaMode
+{
+	Opaque,
+	Masked,
+	Blend,
 };
 
 struct Material
 {
-	std::unique_ptr<Texture> pDiffuseTexture;
-	std::unique_ptr<Texture> pNormalTexture;
-	std::unique_ptr<Texture> pSpecularTexture;
-	std::unique_ptr<Texture> pAlphaTexture;
-	bool IsTransparent;
+	std::string Name = "Unnamed Material";
+	Color BaseColorFactor = Color(1, 1, 1, 1);
+	Color EmissiveFactor = Color(0, 0, 0, 1);
+	float MetalnessFactor = 0.0f;
+	float RoughnessFactor = 1.0f;
+	float AlphaCutoff = 0.5f;
+	Texture* pDiffuseTexture = nullptr;
+	Texture* pNormalTexture = nullptr;
+	Texture* pRoughnessMetalnessTexture = nullptr;
+	Texture* pEmissiveTexture = nullptr;
+	MaterialAlphaMode AlphaMode;
 };
 
 class Mesh
 {
 public:
-	bool Load(const char* pFilePath, Graphics* pGraphics, CommandContext* pContext);
+	~Mesh();
+	bool Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* pContext, float scale = 1.0f);
 	int GetMeshCount() const { return (int)m_Meshes.size(); }
-	SubMesh* GetMesh(const int index) const { return m_Meshes[index].get(); }
+	SubMesh& GetMesh(const int index) { return m_Meshes[index]; }
 	const Material& GetMaterial(int materialId) const { return m_Materials[materialId]; }
-
-	Buffer* GetData() const { return m_pGeometryData.get(); }
+	Span<SubMeshInstance> GetMeshInstances() const { return m_MeshInstances; }
+	Span<SubMesh> GetMeshes() const { return m_Meshes; }
+	Span<Material> GetMaterials() { return m_Materials; }
+	Buffer* GetData() const { return m_pGeometryData; }
 
 private:
-	std::vector<std::unique_ptr<SubMesh>> m_Meshes;
 	std::vector<Material> m_Materials;
-	std::unique_ptr<Buffer> m_pGeometryData;
+	RefCountPtr<Buffer> m_pGeometryData;
+	std::vector<SubMesh> m_Meshes;
+	std::vector<SubMeshInstance> m_MeshInstances;
+	std::vector<RefCountPtr<Texture>> m_Textures;
 };

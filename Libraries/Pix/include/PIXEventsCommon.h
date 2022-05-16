@@ -12,6 +12,10 @@
 #ifndef _PIXEventsCommon_H_
 #define _PIXEventsCommon_H_
 
+#if defined(XBOX) || defined(_XBOX_ONE) || defined(_DURANGO) || defined(_GAMING_XBOX) || defined(_GAMING_XBOX_SCARLETT)
+#define PIX_XBOX
+#endif
+
 #include <cstdint>
 
 #if defined(_M_X64) || defined(_M_IX86)
@@ -33,21 +37,29 @@
 // the optimization if necessary.
 //
 
+// Check for Address Sanitizer on either Clang or MSVC
+
+#if defined(__has_feature)
+#if __has_feature(address_sanitizer)
+#define PIX_ASAN_ENABLED
+#endif
+#elif defined(__SANITIZE_ADDRESS__)
+#define PIX_ASAN_ENABLED
+#endif
+
 #if defined(PIX_ENABLE_BLOCK_ARGUMENT_COPY)
 // Previously set values override everything
 # define PIX_ENABLE_BLOCK_ARGUMENT_COPY_SET 0
-#elif defined(__has_feature)
-# if __has_feature(address_sanitizer)
+#elif defined(PIX_ASAN_ENABLED)
 // Disable block argument copy when address sanitizer is enabled
-#  define PIX_ENABLE_BLOCK_ARGUMENT_COPY 0
-#  define PIX_ENABLE_BLOCK_ARGUMENT_COPY_SET 1
-# endif
+#define PIX_ENABLE_BLOCK_ARGUMENT_COPY 0
+#define PIX_ENABLE_BLOCK_ARGUMENT_COPY_SET 1
 #endif
 
 #if !defined(PIX_ENABLE_BLOCK_ARGUMENT_COPY)
 // Default to enabled.
-# define PIX_ENABLE_BLOCK_ARGUMENT_COPY 1
-# define PIX_ENABLE_BLOCK_ARGUMENT_COPY_SET 1
+#define PIX_ENABLE_BLOCK_ARGUMENT_COPY 1
+#define PIX_ENABLE_BLOCK_ARGUMENT_COPY_SET 1
 #endif
 
 struct PIXEventsBlockInfo;
@@ -59,7 +71,11 @@ struct PIXEventsThreadInfo
     UINT64* destination;
 };
 
-extern "C" UINT64 WINAPI PIXEventsReplaceBlock(PIXEventsThreadInfo* threadInfo, bool getEarliestTime) noexcept;
+#ifdef PIX_XBOX
+extern "C" UINT64 WINAPI PIXEventsReplaceBlock(bool getEarliestTime) noexcept;
+#else
+extern "C" UINT64 WINAPI PIXEventsReplaceBlock(PIXEventsThreadInfo * threadInfo, bool getEarliestTime) noexcept;
+#endif
 
 enum PIXEventType
 {
@@ -530,7 +546,7 @@ inline void PIXCopyEventArgument<PWSTR>(_Out_writes_to_ptr_(limit) UINT64*& dest
     PIXCopyEventArgument(destination, limit, (PCWSTR)argument);
 };
 
-#if defined(__d3d12_x_h__) || defined(__d3d12_h__)
+#if defined(__d3d12_x_h__) || defined(__d3d12_xs_h__) || defined(__d3d12_h__)
 
 inline void PIXSetGPUMarkerOnContext(_In_ ID3D12GraphicsCommandList* commandList, _In_reads_bytes_(size) void* data, UINT size)
 {
@@ -562,7 +578,7 @@ inline void PIXEndGPUEventOnContext(_In_ ID3D12CommandQueue* commandQueue)
     commandQueue->EndEvent();
 }
 
-#endif //__d3d12_x_h__
+#endif //__d3d12_h__
 
 template<class T> struct PIXInferScopedEventType { typedef T Type; };
 template<class T> struct PIXInferScopedEventType<const T> { typedef T Type; };

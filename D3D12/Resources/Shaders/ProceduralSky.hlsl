@@ -1,117 +1,56 @@
-#define RootSig "RootFlags(ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT), " \
-				"CBV(b0, visibility=SHADER_VISIBILITY_ALL), " \
+#include "Common.hlsli"
+#include "SkyCommon.hlsli"
+#include "Primitives.hlsli"
+#include "External/Atmosphere.hlsli"
 
-static const float4 CUBE[]=
+RWTexture2D<float4> uSky : register(u0);
+
+struct InterpolantsVSToPS
 {
-	float4(-1.0,1.0,1.0,1.0),
-	float4(-1.0,-1.0,1.0,1.0),
-	float4(-1.0,-1.0,-1.0,1.0),
-	float4(1.0,1.0,1.0,1.0),
-	float4(1.0,-1.0,1.0,1.0),
-	float4(-1.0,-1.0,1.0,1.0),
-	float4(1.0,1.0,-1.0,1.0),
-	float4(1.0,-1.0,-1.0,1.0),
-	float4(1.0,-1.0,1.0,1.0),
-	float4(-1.0,1.0,-1.0,1.0),
-	float4(-1.0,-1.0,-1.0,1.0),
-	float4(1.0,-1.0,-1.0,1.0),
-	float4(-1.0,-1.0,1.0,1.0),
-	float4(1.0,-1.0,1.0,1.0),
-	float4(1.0,-1.0,-1.0,1.0),
-	float4(1.0,1.0,1.0,1.0),
-	float4(-1.0,1.0,1.0,1.0),
-	float4(-1.0,1.0,-1.0,1.0),
-	float4(-1.0,1.0,-1.0,1.0),
-	float4(-1.0,1.0,1.0,1.0),
-	float4(-1.0,-1.0,-1.0,1.0),
-	float4(-1.0,1.0,1.0,1.0),
-	float4(1.0,1.0,1.0,1.0),
-	float4(-1.0,-1.0,1.0,1.0),
-	float4(1.0,1.0,1.0,1.0),
-	float4(1.0,1.0,-1.0,1.0),
-	float4(1.0,-1.0,1.0,1.0),
-	float4(1.0,1.0,-1.0,1.0),
-	float4(-1.0,1.0,-1.0,1.0),
-	float4(1.0,-1.0,-1.0,1.0),
-	float4(-1.0,-1.0,-1.0,1.0),
-	float4(-1.0,-1.0,1.0,1.0),
-	float4(1.0,-1.0,-1.0,1.0),
-	float4(1.0,1.0,-1.0,1.0),
-	float4(1.0,1.0,1.0,1.0),
-	float4(-1.0,1.0,-1.0,1.0),
+	float4 Position : SV_Position;
+	float3 UV : TEXCOORD;
 };
 
-cbuffer VSConstants : register(b0)
+InterpolantsVSToPS VSMain(uint vertexId : SV_VertexID)
 {
-	float4x4 cView;
-	float4x4 cProjection;
-	float3 cBias;
-	float3 cSunDirection;
-}
-
-struct VSInput
-{
-	uint vertexId : SV_VERTEXID;
-};
-
-struct VSOutput
-{
-    float4 PositionCS : SV_POSITION;
-	float3 TexCoord : TEXCOORD;
-};
-
-[RootSignature(RootSig)]
-VSOutput VSMain(in VSInput input)
-{
-	VSOutput output;
-    float3 positionVS = mul(CUBE[input.vertexId].xyz, (float3x3)cView);
-    output.PositionCS = mul(float4(positionVS, 1.0f), cProjection);
-	output.PositionCS.z = 0.0001f;
-	output.TexCoord = CUBE[input.vertexId].xyz;
+	InterpolantsVSToPS output;
+	float3 positionVS = mul(CUBE[vertexId].xyz, (float3x3)cView.View);
+	output.Position = mul(float4(positionVS, 1.0f), cView.Projection);
+	output.Position.z = 0.0001f;
+	output.UV = CUBE[vertexId].xyz;
 	return output;
 }
 
-float AngleBetween(float3 dir0, float3 dir1)
+float4 PSMain(in InterpolantsVSToPS input) : SV_Target
 {
-	return acos(dot(dir0, dir1));
+	float3 uv = normalize(input.UV);
+	return float4(GetSky(uv), 1);
 }
 
-//A Practical Analytic Model for Daylight
-//A. J. Preetham, Peter Shirley, Brian Smits
-//https://dl.acm.org/doi/pdf/10.1145/311535.311545
-
-float3 CIESky(float3 dir, float3 sunDir)
+[numthreads(16, 16, 1)]
+void ComputeSkyCS(uint3 threadId : SV_DispatchThreadID)
 {
-	float3 skyDir = float3(dir.x, saturate(dir.y), dir.z);
-	float gamma = AngleBetween(skyDir, sunDir);
-	float S = AngleBetween(sunDir, float3(0, 1, 0));
-	float theta = AngleBetween(skyDir, float3(0, 1, 0));
+	float2 uv = threadId.xy * cView.TargetDimensionsInv;
+	uv.x *= 2 * PI;
+	uv.y *= PI;
 
-	float cosTheta = cos(theta);
-	float cosS = cos(S);
-	float cosGamma = cos(gamma);
+	float3 dir = normalize(float3(sin(uv.x) * sin(uv.y), cos(uv.y), cos(uv.x) * sin(uv.y)));
+	float3 rayStart = cView.ViewLocation;
+	float rayLength = 1000000.0f;
+	if(0)
+	{
+		float2 planetIntersection = PlanetIntersection(rayStart, dir);
+		if(planetIntersection.x > 0)
+		{
+			rayLength = min(rayLength, planetIntersection.x);
+		}
+	}
+	Light sun = GetLight(0);
+	float3 lightDir = -sun.Direction;
+	float3 lightColor = sun.GetColor();
 
-	float numerator = (0.91f + 10 * exp(-3 * gamma) + 0.45 * cosGamma * cosGamma) * (1 - exp(-0.32f / cosTheta));
-	float denominator = (0.91f + 10 * exp(-3 * S) + 0.45 * cosS * cosS) * (1 - exp(-0.32f));
+	float3 transmittance;
+	float3 sky = IntegrateScattering(rayStart, dir, rayLength, lightDir, lightColor, transmittance);
 
-	float luminance = numerator / max(denominator, 0.0001f);
-
-	// Clear Sky model only calculates luminance, so we'll pick a strong blue color for the sky
-	const float3 SkyColor = float3(0.2f, 0.5f, 1.0f) * 1;
-	const float3 SunColor = float3(1.0f, 0.8f, 0.3f) * 1500;
-	const float SunWidth = 0.04f;
-
-	float3 color = SkyColor;
-
-  	// Draw a circle for the sun
-	float sunGamma = AngleBetween(dir, sunDir);
-	color = lerp(SunColor, SkyColor, saturate(abs(sunGamma) / SunWidth));
-
-	return max(color * luminance, 0);
-}
-
-float4 PSMain(in VSOutput input) : SV_Target
-{
-	float3 dir = normalize(input.TexCoord);
-	return float4(CIESky(dir, cSunDirection), 1.0f);
+	uSky[threadId.xy] = float4(sky, 1.0f);
 }

@@ -1,32 +1,89 @@
 #pragma once
 
-#define RG_DEBUG 1
+#include "Graphics/RHI/Texture.h"
+#include "Graphics/RHI/Buffer.h"
 
-#ifndef RG_DEBUG
-#define RG_DEBUG 0
-#endif
-
-#ifndef RG_ASSERT
-#define RG_ASSERT(expression, msg, ...) checkf(expression, msg, ##__VA_ARGS__)
-#endif
-
-#ifndef RG_STATIC_ASSERT
-#define RG_STATIC_ASSERT(expression, msg) static_assert(expression, msg)
-#endif
-
-struct RGResourceHandle
+enum class RGResourceType
 {
-	explicit RGResourceHandle(int id = InvalidIndex)
-		: Index(id)
+	Texture,
+	Buffer,
+};
+template<typename T> struct RGResourceTypeTraits { };
+
+template<>
+struct RGResourceTypeTraits<Texture>
+{
+	constexpr static RGResourceType Type = RGResourceType::Texture;
+	using TDesc = TextureDesc;
+};
+
+template<>
+struct RGResourceTypeTraits<Buffer>
+{
+	constexpr static RGResourceType Type = RGResourceType::Buffer;
+	using TDesc = BufferDesc;
+};
+
+class RGPass;
+
+class RGResource
+{
+public:
+	friend class RGGraph;
+	friend class RGPass;
+
+	RGResource(const char* pName, int id, RGResourceType type, GraphicsResource* pResource = nullptr)
+		: Name(pName), ID(id), IsImported(!!pResource), Type(type), pResourceReference(pResource), pResource(pResource)
 	{}
 
-	bool operator==(const RGResourceHandle& other) const { return Index == other.Index; }
-	bool operator!=(const RGResourceHandle& other) const { return Index != other.Index; }
+	const char* GetName() const { return Name; }
+	GraphicsResource* GetRaw() const { return pResource; }
 
-	constexpr static const int InvalidIndex = -1;
+protected:
+	void SetResource(RefCountPtr<GraphicsResource> resource)
+	{
+		pResourceReference = resource;
+		pResource = resource;
+	}
 
-	inline void Invalidate() { Index = InvalidIndex; }
-	inline bool IsValid() const { return Index != InvalidIndex; }
+	void Release()
+	{
+		pResourceReference = nullptr;
+		// pResource keeps a raw reference to use during execution
+	}
 
-	int Index;
+	const char* Name;
+	int ID;
+	bool IsImported;
+	bool IsExported = false;
+	RGResourceType Type;
+	RefCountPtr<GraphicsResource> pResourceReference;
+	GraphicsResource* pResource = nullptr;
+	const RGPass* pLastAccess = nullptr;
 };
+
+template<typename T>
+struct RGResourceT : public RGResource
+{
+public:
+	friend class RGGraph;
+	using TDesc = typename RGResourceTypeTraits<T>::TDesc;
+
+	RGResourceT(const char* pName, int id, const TDesc& desc, T* pResource = nullptr)
+		: RGResource(pName, id, RGResourceTypeTraits<T>::Type, pResource), Desc(desc)
+	{}
+
+	T* Get() const
+	{
+		check(pResource);
+		return static_cast<T*>(pResource);
+	}
+
+	const TDesc& GetDesc() const { return Desc; }
+
+private:
+	TDesc Desc;
+};
+
+using RGTexture = RGResourceT<Texture>;
+using RGBuffer = RGResourceT<Buffer>;

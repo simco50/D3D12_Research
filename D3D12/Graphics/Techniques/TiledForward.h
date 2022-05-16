@@ -1,51 +1,34 @@
 #pragma once
-#include "Graphics/RenderGraph/RenderGraphDefinitions.h"
-class Graphics;
+
 class RootSignature;
+class GraphicsDevice;
 class PipelineState;
-class Texture;
-class Camera;
-struct Batch;
-class CommandContext;
-class Buffer;
-class UnorderedAccessView;
 class RGGraph;
-struct ShadowData;
-struct SceneData;
+struct SceneView;
+struct SceneTextures;
 
 class TiledForward
 {
 public:
-	TiledForward(Graphics* pGraphics);
+	TiledForward(GraphicsDevice* pDevice);
 
-	void OnSwapchainCreated(int windowWidth, int windowHeight);
-
-	void Execute(RGGraph& graph, const SceneData& resources);
-	void VisualizeLightDensity(RGGraph& graph, Camera& camera, Texture* pTarget, Texture* pDepth);
+	void Execute(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures);
+	void VisualizeLightDensity(RGGraph& graph, GraphicsDevice* pDevice, const SceneView* pView, SceneTextures& sceneTextures);
 
 private:
-	void SetupResources(Graphics* pGraphics);
-	void SetupPipelines(Graphics* pGraphics);
-
-	Graphics* m_pGraphics;
+	GraphicsDevice* m_pDevice;
 
 	//Light Culling
-	std::unique_ptr<RootSignature> m_pComputeLightCullRS;
-	std::unique_ptr<PipelineState> m_pComputeLightCullPSO;
-	std::unique_ptr<Buffer> m_pLightIndexCounter;
-	UnorderedAccessView* m_pLightIndexCounterRawUAV = nullptr;
-	std::unique_ptr<Buffer> m_pLightIndexListBufferOpaque;
-	std::unique_ptr<Texture> m_pLightGridOpaque;
-	std::unique_ptr<Buffer> m_pLightIndexListBufferTransparant;
-	std::unique_ptr<Texture> m_pLightGridTransparant;
+	RefCountPtr<RootSignature> m_pComputeLightCullRS;
+	RefCountPtr<PipelineState> m_pComputeLightCullPSO;
 
 	//Diffuse
-	std::unique_ptr<RootSignature> m_pDiffuseRS;
-	std::unique_ptr<PipelineState> m_pDiffusePSO;
-	std::unique_ptr<PipelineState> m_pDiffuseAlphaPSO;
+	RefCountPtr<RootSignature> m_pDiffuseRS;
+	RefCountPtr<PipelineState> m_pDiffusePSO;
+	RefCountPtr<PipelineState> m_pDiffuseMaskedPSO;
+	RefCountPtr<PipelineState> m_pDiffuseAlphaPSO;
 
 	//Visualize Light Count
-	std::unique_ptr<RootSignature> m_pVisualizeLightsRS;
-	std::unique_ptr<PipelineState> m_pVisualizeLightsPSO;
-	std::unique_ptr<Texture> m_pVisualizationIntermediateTexture;
+	RefCountPtr<RootSignature> m_pVisualizeLightsRS;
+	RefCountPtr<PipelineState> m_pVisualizeLightsPSO;
 };

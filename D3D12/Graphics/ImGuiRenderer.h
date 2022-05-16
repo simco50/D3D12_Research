@@ -1,33 +1,24 @@
 #pragma once
-class CommandContext;
-class Graphics;
-class RootSignature;
-class PipelineState;
-class Texture;
+
+class GraphicsDevice;
 class RGGraph;
+class Texture;
+struct SceneView;
 
-DECLARE_MULTICAST_DELEGATE(ImGuiCallback);
+using WindowHandle = HWND;
 
-class ImGuiRenderer
+namespace ImGui
 {
-public:
-	ImGuiRenderer(Graphics* pGraphics);
-	~ImGuiRenderer();
+	void Image(Texture* pTexture, const ImVec2& size, const ImVec2& uv0 = ImVec2(0, 0), const ImVec2& uv1 = ImVec2(1, 1), const ImVec4& tint_col = ImVec4(1, 1, 1, 1), const ImVec4& border_col = ImVec4(0, 0, 0, 0));
+	void ImageAutoSize(Texture* textureId, const ImVec2& imageDimensions);
+}
 
-	void NewFrame(uint32 width, uint32 height);
+namespace ImGuiRenderer
+{
+	void Initialize(GraphicsDevice* pParent, WindowHandle window);
+	void Shutdown();
+
+	void NewFrame();
 	void Render(RGGraph& graph, Texture* pRenderTarget);
-	void Update();
-	DelegateHandle AddUpdateCallback(ImGuiCallbackDelegate&& callback);
-	void RemoveUpdateCallback(DelegateHandle handle);
-
-private:
-	void CreatePipeline(Graphics* pGraphics);
-	void InitializeImGui(Graphics* pGraphics);
-
-	ImGuiCallback m_UpdateCallback;
-
-	std::unique_ptr<PipelineState> m_pPipelineState;
-	std::unique_ptr<RootSignature> m_pRootSignature;
-	std::unique_ptr<Texture> m_pFontTexture;
 };
 

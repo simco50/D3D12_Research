@@ -7,30 +7,25 @@ Input& Input::Instance()
 	return i;
 }
 
-void Input::SetWindow(HWND window)
-{
-	m_pWindow = window;
-}
-
 void Input::Update()
 {
-	for (size_t i = 0; i < m_KeyStates.size(); ++i)
-	{
-		m_KeyStates[i] = (KeyState)(m_KeyStates[i] & KeyState::Down);
-	}
-	m_LastMousePosition = m_CurrentMousePosition;
+	m_CurrentKeyStates.ClearAll();
+	m_CurrentMouseStates.ClearAll();
+
 	m_MouseWheel = 0;
-	UpdateMousePosition();
+	m_MouseDelta = Vector2();
 }
 
 void Input::UpdateKey(uint32 keyCode, bool isDown)
 {
-	m_KeyStates[keyCode] = isDown ? KeyState::DownAndPressed : KeyState::None;
+	m_PersistentKeyStates.AssignBit(keyCode, isDown);
+	m_CurrentKeyStates.AssignBit(keyCode, isDown);
 }
 
 void Input::UpdateMouseKey(uint32 keyCode, bool isDown)
 {
-	m_MouseStates[keyCode] = isDown ? KeyState::DownAndPressed : KeyState::None;
+	m_PersistentMouseStates.AssignBit(keyCode, isDown);
+	m_CurrentMouseStates.AssignBit(keyCode, isDown);
 }
 
 void Input::UpdateMouseWheel(float mouseWheel)
@@ -40,38 +35,41 @@ void Input::UpdateMouseWheel(float mouseWheel)
 
 bool Input::IsKeyDown(uint32 keyCode)
 {
-	return m_KeyStates[keyCode] > KeyState::None;
+	return m_PersistentKeyStates.GetBit(keyCode);
 }
 
 bool Input::IsKeyPressed(uint32 keyCode)
 {
-	return (m_KeyStates[keyCode] & KeyState::Pressed) == KeyState::Pressed;
+	return m_PersistentKeyStates.GetBit(keyCode) && m_CurrentKeyStates.GetBit(keyCode);
 }
 
 bool Input::IsMouseDown(uint32 keyCode)
 {
-	return m_MouseStates[keyCode] > KeyState::None;
+	return m_PersistentMouseStates.GetBit(keyCode);
 }
 
 bool Input::IsMousePressed(uint32 keyCode)
 {
-	return (m_MouseStates[keyCode] & KeyState::Pressed) == KeyState::Pressed;
+	return m_PersistentMouseStates.GetBit(keyCode) && m_CurrentMouseStates.GetBit(keyCode);
 }
 
 Vector2 Input::GetMousePosition() const
 {
-	return m_LastMousePosition;
+	return m_CurrentMousePosition;
 }
 
 Vector2 Input::GetMouseDelta() const
 {
-	return m_CurrentMousePosition - m_LastMousePosition;
+	return m_MouseDelta;
 }
 
-void Input::UpdateMousePosition()
+void Input::UpdateMousePosition(float x, float y)
 {
-	POINT p;
-	::GetCursorPos(&p);
-	::ScreenToClient(m_pWindow, &p);
-	m_CurrentMousePosition = Vector2((float)p.x, (float)p.y);
+	m_MouseDelta = Vector2(x, y) - m_CurrentMousePosition;
+	m_CurrentMousePosition = Vector2(x, y);
+}
+
+void Input::UpdateMouseDelta(float x, float y)
+{
+	m_MouseDelta = Vector2(x, y);
 }

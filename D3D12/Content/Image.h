@@ -7,6 +7,7 @@ enum class ImageFormat
 	RGB32,
 	RGBA16,
 	RGBA32,
+	RG32,
 	BC1,
 	BC2,
 	BC3,
@@ -30,9 +31,12 @@ struct MipLevelInfo
 class Image final
 {
 public:
+	Image() = default;
+	Image(int width, int height, ImageFormat format, void* pInitialData = nullptr);
 	bool Load(const char* filePath);
-	bool Load(const void* pPixels, size_t dataSize, const char* pFormatHint);
+	bool Load(const void* pData, size_t dataSize, const char* pFormatHint);
 	void Save(const char* pFilePath);
+
 
 	bool SetSize(int x, int y, int components);
 	bool SetData(const void* pPixels);
@@ -63,11 +67,12 @@ public:
 
 	const Image* GetNextImage() const { return m_pNextImage.get(); }
 
+	static int32 GetNumChannels(ImageFormat format);
 	static unsigned int TextureFormatFromCompressionFormat(const ImageFormat& format, bool sRgb);
 
 private:
-	bool LoadDds(const char* inputStream);
-	bool LoadStbi(const char* inputStream);
+	bool LoadDDS(const void* pBytes, uint32 numBytes);
+	bool LoadSTB(const void* pBytes, uint32 numBytes);
 
 	int m_Width = 0;
 	int m_Height = 0;

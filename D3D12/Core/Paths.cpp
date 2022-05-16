@@ -5,9 +5,7 @@ namespace Paths
 {
 	bool IsSlash(const char c)
 	{
-		if (c == '/')
-			return true;
-		return c == '/';
+		return c == '\\' || c == '/';
 	}
 
 	std::string GetFileName(const std::string& filePath)
@@ -47,20 +45,8 @@ namespace Paths
 
 	std::string GetDirectoryPath(const std::string& filePath)
 	{
-		auto it = std::find_if(filePath.rbegin(), filePath.rend(), [](const char c)
-			{
-				return IsSlash(c);
-			});
-		if (it == filePath.rend())
-		{
-			if (filePath.rfind('.') == std::string::npos)
-			{
-				return "/";
-			}
-			return filePath;
-		}
-
-		return filePath.substr(0, it.base() - filePath.begin());
+		std::string fileName = GetFileName(filePath);
+		return filePath.substr(0, filePath.length() - fileName.length());
 	}
 
 	std::string Normalize(const std::string& filePath)
@@ -74,16 +60,32 @@ namespace Paths
 	{
 		for (char& c : filePath)
 		{
-			if (c == '/')
+			if (c == '\\')
 			{
 				c = '/';
 			}
-			c = (char)tolower(c);
 		}
 		if (filePath.find("./") == 0)
 		{
 			filePath = std::string(filePath.begin() + 2, filePath.end());
 		}
+	}
+
+	bool ResolveRelativePaths(std::string& path)
+	{
+		for (;;)
+		{
+			size_t index = path.rfind("../");
+			if (index == std::string::npos)
+				break;
+			size_t idx0 = path.rfind('/', index);
+			if (idx0 == std::string::npos)
+				return false;
+			idx0 = path.rfind('/', idx0 - 1);
+			if (idx0 != std::string::npos)
+				path = path.substr(0, idx0 + 1) + path.substr(index + 3);
+		}
+		return true;
 	}
 
 	std::string ChangeExtension(const std::string& filePath, const std::string& newExtension)
@@ -115,45 +117,37 @@ namespace Paths
 		return filePath.substr(matchLength);
 	}
 
-	void Combine(const std::vector<std::string>& elements, std::string& output)
+	void CombineInner(const char** pElements, uint32 numElements, std::string& output)
 	{
-		std::stringstream stream;
-		for (size_t i = 0; i < elements.size(); i++)
+		size_t stringLength = 0;
+		for (size_t i = 0; i < numElements; i++)
 		{
-			stream << elements[i];
-			if (i != elements.size() - 1)
+			stringLength += strlen(pElements[i]);
+		}
+		output.reserve(stringLength);
+		for (size_t i = 0; i < numElements; i++)
+		{
+			if (strlen(pElements[i]) > 0)
 			{
-				stream << "/";
+				output += pElements[i];
+				if (output.back() != '/' && i != numElements - 1)
+				{
+					output += "/";
+				}
 			}
 		}
-		output = stream.str();
 	}
 
-	std::string Combine(const std::string& a, const std::string& b)
+	bool FileExists(const char* pFilePath)
 	{
-		std::string output;
-		Combine({ a, b }, output);
-		return output;
-	}
-
-	bool FileExists(const std::string& filePath)
-	{
-#ifdef PLATFORM_WINDOWS
-		DWORD attributes = GetFileAttributes(filePath.c_str());
+		DWORD attributes = GetFileAttributesA(pFilePath);
 		return (attributes != INVALID_FILE_ATTRIBUTES && !(attributes & FILE_ATTRIBUTE_DIRECTORY));
-#else
-		return false;
-#endif
 	}
 
-	bool DirectoryExists(const std::string& filePath)
+	bool DirectoryExists(const char* pFilePath)
 	{
-#ifdef PLATFORM_WINDOWS
-		DWORD attributes = GetFileAttributes(filePath.c_str());
+		DWORD attributes = GetFileAttributesA(pFilePath);
 		return (attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY));
-#else
-		return false;
-#endif
 	}
 
 	std::string GameDir()
@@ -219,7 +213,7 @@ namespace Paths
 	std::string WorkingDirectory()
 	{
 		char path[256];
-		GetModuleFileName(nullptr, path, 256);
+		GetModuleFileNameA(nullptr, path, 256);
 		return path;
 	}
 
@@ -231,8 +225,9 @@ namespace Paths
 			if (slash > 1)
 			{
 				std::string dirToCreate = path.substr(0, slash);
-				const BOOL success = CreateDirectory(dirToCreate.c_str(), nullptr);
-				if (!success)
+				const BOOL success = CreateDirectoryA(dirToCreate.c_str(), nullptr);
+				DWORD error = GetLastError();
+				if (success != TRUE && error == ERROR_PATH_NOT_FOUND)
 				{
 					return false;
 				}

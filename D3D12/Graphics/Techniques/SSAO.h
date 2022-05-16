@@ -1,28 +1,25 @@
 #pragma once
-class Graphics;
+class GraphicsDevice;
 class RootSignature;
-class Texture;
-class Camera;
 class RGGraph;
 class PipelineState;
+struct SceneView;
+struct SceneTextures;
 
 class SSAO
 {
 public:
-	SSAO(Graphics* pGraphics);
+	SSAO(GraphicsDevice* pDevice);
 
-	void OnSwapchainCreated(int windowWidth, int windowHeight);
-
-	void Execute(RGGraph& graph, Texture* pColor, Texture* pDepth, Camera& camera);
+	void Execute(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures);
 
 private:
-	void SetupResources(Graphics* pGraphics);
-	void SetupPipelines(Graphics* pGraphics);
+	void SetupPipelines();
 
-	std::unique_ptr<Texture> m_pAmbientOcclusionIntermediate;
-	std::unique_ptr<RootSignature> m_pSSAORS;
-	std::unique_ptr<PipelineState> m_pSSAOPSO;
-	std::unique_ptr<RootSignature> m_pSSAOBlurRS;
-	std::unique_ptr<PipelineState> m_pSSAOBlurPSO;
+	GraphicsDevice* m_pDevice;
+
+	RefCountPtr<RootSignature> m_pSSAORS;
+	RefCountPtr<PipelineState> m_pSSAOPSO;
+	RefCountPtr<PipelineState> m_pSSAOBlurPSO;
 };
 

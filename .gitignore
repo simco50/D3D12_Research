@@ -1,11 +1,20 @@
+# Visual Studio ignores
 .vs/
-Debug/
-Build
 *.vcxproj
 *.filters
 *.user
 *.sln
-imgui.ini
+
+# Build output
+Debug/
+Build
+
+# UWP output
+AppPackages/
+BundleArtifacts/
+
+# Misc
+Notes/
 *.html
 *.gv
 .vscode/
@@ -13,3 +22,7 @@ imgui.ini
 _Temp/
 *.opt
 vs-chromium-project.txt
+Screenshot*.jpg
+StructLayoutSettings.json
+Saved
+D3D12/Resources/Scenes/_Local
