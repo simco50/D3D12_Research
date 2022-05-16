@@ -450,11 +450,17 @@ void DemoApp::Update()
 	SceneView* pViewMut = &m_SceneData;
 	World* pWorldMut = &m_World;
 
-	{
-		CommandContext* pContext = m_pDevice->AllocateCommandContext();
-		Renderer::UploadSceneData(*pContext, pViewMut, pWorldMut);
-		pContext->Execute(false);
-	}
+	CommandQueue* pDirectQueue = m_pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT);
+
+	CommandContext* pCopyContext = m_pDevice->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COPY);
+	m_pDevice->GetCommandQueue(pCopyContext->GetType())->InsertWait(pDirectQueue);
+	Renderer::UploadSceneData(*pCopyContext, pViewMut, pWorldMut);
+	pDirectQueue->InsertWait(pCopyContext->Execute(false));
+	
+	CommandContext* pComputeContext = m_pDevice->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COMPUTE);
+	m_pDevice->GetCommandQueue(pComputeContext->GetType())->InsertWait(pDirectQueue);
+	pViewMut->AccelerationStructure.Build(*pComputeContext);
+	pDirectQueue->InsertWait(pComputeContext->Execute(false));
 
 	RGGraph graph(m_pDevice, *m_RenderGraphPool);
 	SceneTextures sceneTextures;
