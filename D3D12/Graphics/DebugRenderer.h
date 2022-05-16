@@ -5,7 +5,6 @@ class GraphicsDevice;
 class RootSignature;
 class PipelineState;
 class RGGraph;
-class Texture;
 struct Light;
 struct SceneView;
 

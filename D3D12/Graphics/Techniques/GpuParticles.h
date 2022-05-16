@@ -28,16 +28,10 @@ private:
 	RefCountPtr<Buffer> m_pCountersBuffer;
 
 	RefCountPtr<PipelineState> m_pPrepareArgumentsPS;
-
 	RefCountPtr<PipelineState> m_pEmitPS;
-	RefCountPtr<Buffer> m_pEmitArguments;
-
 	RefCountPtr<RootSignature> m_pSimulateRS;
 	RefCountPtr<PipelineState> m_pSimulatePS;
-	RefCountPtr<Buffer> m_pSimulateArguments;
-
 	RefCountPtr<PipelineState> m_pSimulateEndPS;
-	RefCountPtr<Buffer> m_pDrawArguments;
 
 	RefCountPtr<RootSignature> m_pRenderParticlesRS;
 	RefCountPtr<PipelineState> m_pRenderParticlesPS;

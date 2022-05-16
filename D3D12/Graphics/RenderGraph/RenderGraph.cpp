@@ -5,20 +5,6 @@
 #include "Graphics/Profiler.h"
 #include "Core/CommandLine.h"
 
-bool HasWriteResourceState(D3D12_RESOURCE_STATES state)
-{
-	return EnumHasAnyFlags(state,
-		D3D12_RESOURCE_STATE_UNORDERED_ACCESS |
-		D3D12_RESOURCE_STATE_RENDER_TARGET |
-		D3D12_RESOURCE_STATE_DEPTH_WRITE |
-		D3D12_RESOURCE_STATE_COPY_DEST |
-		D3D12_RESOURCE_STATE_RESOLVE_DEST |
-		D3D12_RESOURCE_STATE_VIDEO_DECODE_WRITE |
-		D3D12_RESOURCE_STATE_VIDEO_PROCESS_WRITE |
-		D3D12_RESOURCE_STATE_VIDEO_ENCODE_WRITE
-	);
-};
-
 RGPass& RGPass::Read(Span<RGResource*> resources)
 {
 	D3D12_RESOURCE_STATES state = D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE;
@@ -47,22 +33,16 @@ RGPass& RGPass::Write(Span<RGResource*> resources)
 	return *this;
 }
 
-RGPass& RGPass::RenderTarget(RGTexture* pResource, RenderPassAccess access)
+RGPass& RGPass::RenderTarget(RGTexture* pResource, RenderTargetLoadAction loadAccess, RGTexture* pResolveTarget)
 {
 	AddAccess(pResource, D3D12_RESOURCE_STATE_RENDER_TARGET);
-	RenderTargets.push_back({ pResource, access, nullptr });
+	if(pResolveTarget && pResolveTarget != pResource)
+		AddAccess(pResolveTarget, D3D12_RESOURCE_STATE_RESOLVE_DEST);
+	RenderTargets.push_back({ pResource, loadAccess, pResolveTarget });
 	return *this;
 }
 
-RGPass& RGPass::RenderTarget(RGTexture* pResource, RenderTargetLoadAction loadAction, RGTexture* pResolveTarget)
-{
-	AddAccess(pResource, D3D12_RESOURCE_STATE_RENDER_TARGET);
-	AddAccess(pResolveTarget, D3D12_RESOURCE_STATE_RESOLVE_DEST);
-	RenderTargets.push_back({ pResource, (RenderPassAccess)CombineRenderTargetAction(loadAction, RenderTargetStoreAction::Resolve), pResolveTarget });
-	return *this;
-}
-
-RGPass& RGPass::DepthStencil(RGTexture* pResource, RenderPassAccess depthAccess, bool writeDepth, RenderPassAccess stencilAccess)
+RGPass& RGPass::DepthStencil(RGTexture* pResource, RenderTargetLoadAction depthAccess, bool writeDepth, RenderTargetLoadAction stencilAccess)
 {
 	checkf(!DepthStencilTarget.pResource, "Depth Target already assigned");
 	AddAccess(pResource, writeDepth ? D3D12_RESOURCE_STATE_DEPTH_WRITE : D3D12_RESOURCE_STATE_DEPTH_READ);
@@ -76,24 +56,13 @@ void RGPass::AddAccess(RGResource* pResource, D3D12_RESOURCE_STATES state)
 	auto it = std::find_if(Accesses.begin(), Accesses.end(), [=](const ResourceAccess& access) { return pResource == access.pResource; });
 	if (it != Accesses.end())
 	{
-		checkf(!HasWriteResourceState(it->Access) || !HasWriteResourceState(state), "Resource (%s) may only have 1 write state", pResource->Name);
+		checkf(!ResourceState::HasWriteResourceState(it->Access) || !ResourceState::HasWriteResourceState(state), "Resource (%s) may only have 1 write state", pResource->Name);
 		it->Access |= state;
 	}
 	else
 	{
 		Accesses.push_back({ pResource, state });
 	}
-}
-
-RGPass& RGGraph::AddCopyPass(const char* pName, RGResource* pSource, RGResource* pTarget)
-{
-	return AddPass(pName, RGPassFlag::Copy)
-		.Read(pSource)
-		.Write(pTarget)
-		.Bind([=](CommandContext& context, const RGPassResources& resources)
-			{
-				context.CopyResource(pSource->pResource, pTarget->pResource);
-			});
 }
 
 RGGraph::RGGraph(GraphicsDevice* pDevice, RGResourcePool& resourcePool, uint64 allocatorSize /*= 0xFFFF*/)
@@ -116,7 +85,7 @@ void RGGraph::Compile()
 		{
 			for (RGPass::ResourceAccess& access : pPass->Accesses)
 			{
-				if (access.pResource == pResource && HasWriteResourceState(access.Access))
+				if (access.pResource == pResource && ResourceState::HasWriteResourceState(access.Access))
 					return true;
 			}
 			return false;
@@ -134,7 +103,7 @@ void RGGraph::Compile()
 			{
 				for (RGPass::ResourceAccess access : pPass->Accesses)
 				{
-					if (access.pResource->IsImported && HasWriteResourceState(access.Access))
+					if (access.pResource->IsImported && ResourceState::HasWriteResourceState(access.Access))
 					{
 						cullStack.push_back(pPass);
 						break;
@@ -250,6 +219,22 @@ void RGGraph::Compile()
 	}
 }
 
+void RGGraph::ExportTexture(RGTexture* pTexture, RefCountPtr<Texture>* pTarget)
+{
+	auto it = std::find_if(m_ExportTextures.begin(), m_ExportTextures.end(), [&](const ExportedTexture& tex) { return tex.pTarget == pTarget; });
+	checkf(it == m_ExportTextures.end(), "Texture '%s' is exported to a target that has already been exported to by another texture ('%s').", pTexture->GetName(), it->pTexture->GetName());
+	pTexture->IsExported = true;
+	m_ExportTextures.push_back({ pTexture, pTarget });
+}
+
+void RGGraph::ExportBuffer(RGBuffer* pBuffer, RefCountPtr<Buffer>* pTarget)
+{
+	auto it = std::find_if(m_ExportBuffers.begin(), m_ExportBuffers.end(), [&](const ExportedBuffer& buff) { return buff.pTarget == pTarget; });
+	checkf(it == m_ExportBuffers.end(), "Buffer '%s' is exported to a target that has already been exported to by another texture ('%s').", pBuffer->GetName(), it->pBuffer->GetName());
+	pBuffer->IsExported = true;
+	m_ExportBuffers.push_back({ pBuffer, pTarget });
+}
+
 void RGGraph::PushEvent(const char* pName)
 {
 	std::string name = pName;
@@ -340,16 +325,23 @@ RenderPassInfo RGPassResources::GetRenderPassInfo() const
 	for (const RGPass::RenderTargetAccess& renderTarget : m_Pass.RenderTargets)
 	{
 		RenderPassInfo::RenderTargetInfo& targetInfo = passInfo.RenderTargets[passInfo.RenderTargetCount++];
+		RenderTargetStoreAction storeAction = RenderTargetStoreAction::Store;
+		if (renderTarget.pResolveTarget && renderTarget.pResource != renderTarget.pResolveTarget)
+			storeAction = RenderTargetStoreAction::Resolve;
+
 		targetInfo.Target = renderTarget.pResource->Get();
-		targetInfo.Access = renderTarget.Access;
+		targetInfo.Access = (RenderPassAccess)CombineRenderTargetAction(renderTarget.LoadAccess, storeAction);
 		if (renderTarget.pResolveTarget)
 			targetInfo.ResolveTarget = renderTarget.pResolveTarget->Get();
 	}
 	if (m_Pass.DepthStencilTarget.pResource)
 	{
 		passInfo.DepthStencilTarget.Target = m_Pass.DepthStencilTarget.pResource->Get();
-		passInfo.DepthStencilTarget.Access = m_Pass.DepthStencilTarget.Access;
-		passInfo.DepthStencilTarget.StencilAccess = m_Pass.DepthStencilTarget.StencilAccess;
+		RenderTargetStoreAction depthStore = m_Pass.DepthStencilTarget.LoadAccess == RenderTargetLoadAction::NoAccess ? RenderTargetStoreAction::NoAccess : RenderTargetStoreAction::Store;
+		passInfo.DepthStencilTarget.Access = (RenderPassAccess)CombineRenderTargetAction(m_Pass.DepthStencilTarget.LoadAccess, depthStore);
+
+		RenderTargetStoreAction stencilStore = m_Pass.DepthStencilTarget.StencilLoadAccess == RenderTargetLoadAction::NoAccess ? RenderTargetStoreAction::NoAccess : RenderTargetStoreAction::Store;
+		passInfo.DepthStencilTarget.StencilAccess = (RenderPassAccess)CombineRenderTargetAction(m_Pass.DepthStencilTarget.StencilLoadAccess, stencilStore);
 		passInfo.DepthStencilTarget.Write = m_Pass.DepthStencilTarget.Write;
 	}
 	return passInfo;
@@ -360,7 +352,7 @@ RefCountPtr<Texture> RGResourcePool::Allocate(const char* pName, const TextureDe
 	for (PooledTexture& texture : m_TexturePool)
 	{
 		RefCountPtr<Texture>& pTexture = texture.pResource;
-		if (pTexture->GetNumRefs() == 1 && pTexture->GetDesc() == desc)
+		if (pTexture->GetNumRefs() == 1 && pTexture->GetDesc().IsCompatible(desc))
 		{
 			texture.LastUsedFrame = m_FrameIndex;
 			pTexture->SetName(pName);
@@ -375,7 +367,7 @@ RefCountPtr<Buffer> RGResourcePool::Allocate(const char* pName, const BufferDesc
 	for (PooledBuffer& buffer : m_BufferPool)
 	{
 		RefCountPtr<Buffer>& pBuffer = buffer.pResource;
-		if (pBuffer->GetNumRefs() == 1 && pBuffer->GetDesc() == desc)
+		if (pBuffer->GetNumRefs() == 1 && pBuffer->GetDesc().IsCompatible(desc))
 		{
 			buffer.LastUsedFrame = m_FrameIndex;
 			pBuffer->SetName(pName);
@@ -387,10 +379,12 @@ RefCountPtr<Buffer> RGResourcePool::Allocate(const char* pName, const BufferDesc
 
 void RGResourcePool::Tick()
 {
+	constexpr uint32 numFrameRetention = 5;
+
 	for (uint32 i = 0; i < (uint32)m_TexturePool.size();)
 	{
 		PooledTexture& texture = m_TexturePool[i];
-		if (texture.pResource->GetNumRefs() == 1 && texture.LastUsedFrame + 5 < m_FrameIndex)
+		if (texture.pResource->GetNumRefs() == 1 && texture.LastUsedFrame + numFrameRetention < m_FrameIndex)
 		{
 			std::swap(m_TexturePool[i], m_TexturePool.back());
 			m_TexturePool.pop_back();
@@ -403,7 +397,7 @@ void RGResourcePool::Tick()
 	for (uint32 i = 0; i < (uint32)m_BufferPool.size();)
 	{
 		PooledBuffer& buffer = m_BufferPool[i];
-		if (buffer.pResource->GetNumRefs() == 1 && buffer.LastUsedFrame + 5 < m_FrameIndex)
+		if (buffer.pResource->GetNumRefs() == 1 && buffer.LastUsedFrame + numFrameRetention < m_FrameIndex)
 		{
 			std::swap(m_BufferPool[i], m_BufferPool.back());
 			m_BufferPool.pop_back();
@@ -414,4 +408,58 @@ void RGResourcePool::Tick()
 		}
 	}
 	++m_FrameIndex;
+}
+
+namespace RGUtils
+{
+	RGPass& AddCopyPass(RGGraph& graph, RGResource* pSource, RGResource* pTarget)
+	{
+		return graph.AddPass(Sprintf("Copy [%s -> %s]", pSource->GetName(), pTarget->GetName()).c_str(), RGPassFlag::Copy)
+			.Read(pSource)
+			.Write(pTarget)
+			.Bind([=](CommandContext& context, const RGPassResources& resources)
+				{
+					context.CopyResource(pSource->GetRaw(), pTarget->GetRaw());
+				});
+	}
+
+	RGBuffer* CreatePersistentBuffer(RGGraph& graph, const char* pName, const BufferDesc& bufferDesc, RefCountPtr<Buffer>* pStorageTarget, bool doExport)
+	{
+		check(pStorageTarget);
+		RGBuffer* pBuffer = nullptr;
+		if (pStorageTarget->Get())
+		{
+			if (pStorageTarget->Get()->GetDesc().IsCompatible(bufferDesc))
+			{
+				pBuffer = graph.ImportBuffer(*pStorageTarget);
+			}
+		}
+		if (!pBuffer)
+		{
+			pBuffer = graph.CreateBuffer(pName, bufferDesc);
+			if(doExport)
+				graph.ExportBuffer(pBuffer, pStorageTarget);
+		}
+		return pBuffer;
+	}
+
+	RGTexture* CreatePersistentTexture(RGGraph& graph, const char* pName, const TextureDesc& textureDesc, RefCountPtr<Texture>* pStorageTarget, bool doExport)
+	{
+		check(pStorageTarget);
+		RGTexture* pTexture = nullptr;
+		if (pStorageTarget->Get())
+		{
+			if (pStorageTarget->Get()->GetDesc().IsCompatible(textureDesc))
+			{
+				pTexture = graph.ImportTexture(*pStorageTarget);
+			}
+		}
+		if (!pTexture)
+		{
+			pTexture = graph.CreateTexture(pName, textureDesc);
+			if(doExport)
+				graph.ExportTexture(pTexture, pStorageTarget);
+		}
+		return pTexture;
+	}
 }

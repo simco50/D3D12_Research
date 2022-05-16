@@ -135,10 +135,10 @@ void TiledForward::Execute(RGGraph& graph, const SceneView* pView, SceneTextures
 	graph.AddPass("Base Pass", RGPassFlag::Raster)
 		.Read({ sceneTextures.pAmbientOcclusion, sceneTextures.pPreviousColor })
 		.Read({ pLightGridOpaque, pLightGridTransparant, pLightIndexListOpaque, pLightIndexListTransparant })
-		.DepthStencil(sceneTextures.pDepth, RenderPassAccess::Load_Store, false)
-		.RenderTarget(sceneTextures.pColorTarget, RenderPassAccess::DontCare_Store)
-		.RenderTarget(sceneTextures.pNormals, RenderPassAccess::DontCare_Store)
-		.RenderTarget(sceneTextures.pRoughness, RenderPassAccess::DontCare_Store)
+		.DepthStencil(sceneTextures.pDepth, RenderTargetLoadAction::Load, false)
+		.RenderTarget(sceneTextures.pColorTarget, RenderTargetLoadAction::DontCare)
+		.RenderTarget(sceneTextures.pNormals, RenderTargetLoadAction::DontCare)
+		.RenderTarget(sceneTextures.pRoughness, RenderTargetLoadAction::DontCare)
 		.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
 				context.BeginRenderPass(resources.GetRenderPassInfo());

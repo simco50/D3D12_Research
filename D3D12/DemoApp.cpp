@@ -296,6 +296,14 @@ void DemoApp::SetupScene(CommandContext& context)
 		m_Lights.push_back(spotLight);
 	}
 #endif
+
+	DDGIVolume volume;
+	volume.Origin = Vector3(-0.484151840f, 5.21196413f, 0.309524536f);
+	volume.Extents = Vector3(14.8834171f, 6.22350454f, 9.15293312f);
+	volume.NumProbes = IntVector3(16, 12, 14);
+	volume.NumRays = 128;
+	volume.MaxNumRays = 512;
+	m_World.DDGIVolumes.push_back(volume);
 }
 
 void DemoApp::Update()
@@ -452,7 +460,7 @@ void DemoApp::Update()
 	SceneTextures sceneTextures;
 
 	IntVector2 viewDimensions = m_SceneData.GetDimensions();
-	sceneTextures.pPreviousColor =		graph.ImportTexture(m_pColorHistory);
+	sceneTextures.pPreviousColor =		RGUtils::CreatePersistentTexture(graph, "Color History", TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, DXGI_FORMAT_R16G16B16A16_FLOAT), &m_pColorHistory, true);
 	sceneTextures.pVisibilityBuffer =	graph.CreateTexture("Visibility Buffer",	TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, DXGI_FORMAT_R32_UINT));
 	sceneTextures.pRoughness =			graph.CreateTexture("Roughness",			TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, DXGI_FORMAT_R8_UNORM));
 	sceneTextures.pColorTarget =		graph.CreateTexture("Color Target",			TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, DXGI_FORMAT_R16G16B16A16_FLOAT));
@@ -505,7 +513,7 @@ void DemoApp::Update()
 		// - Optimization that prevents wasteful lighting calculations during the base pass
 		// - Required for light culling
 		graph.AddPass("Depth Prepass", RGPassFlag::Raster)
-			.DepthStencil(sceneTextures.pDepth, RenderPassAccess::Clear_Store, true)
+			.DepthStencil(sceneTextures.pDepth, RenderTargetLoadAction::Clear, true)
 			.Bind([=](CommandContext& context, const RGPassResources& resources)
 				{
 					context.BeginRenderPass(resources.GetRenderPassInfo());
@@ -532,8 +540,8 @@ void DemoApp::Update()
 	else if (m_RenderPath == RenderPath::Visibility)
 	{
 		graph.AddPass("Visibility Buffer", RGPassFlag::Raster)
-			.DepthStencil(sceneTextures.pDepth, RenderPassAccess::Clear_Store, true)
-			.RenderTarget(sceneTextures.pVisibilityBuffer, RenderPassAccess::DontCare_Store)
+			.DepthStencil(sceneTextures.pDepth, RenderTargetLoadAction::Clear, true)
+			.RenderTarget(sceneTextures.pVisibilityBuffer, RenderTargetLoadAction::DontCare)
 			.Bind([=](CommandContext& context, const RGPassResources& resources)
 				{
 					context.BeginRenderPass(resources.GetRenderPassInfo());
@@ -585,14 +593,30 @@ void DemoApp::Update()
 
 		const uint32 numProbes = ddgi.NumProbes.x * ddgi.NumProbes.y * ddgi.NumProbes.z;
 
-		RGBuffer* pRayBuffer = graph.CreateBuffer("DDGI Ray Buffer", BufferDesc::CreateTyped(numProbes * ddgi.MaxNumRays, DXGI_FORMAT_R16G16B16A16_FLOAT));
+		// Must match with shader!
+		constexpr uint32 probeIrradianceTexels = 6;
+		constexpr uint32 probeDepthTexel = 14;
+		auto ProbeTextureDimensions = [](const IntVector3& numProbes, uint32 texelsPerProbe) {
+			uint32 width = (1 + texelsPerProbe + 1) * numProbes.y * numProbes.x;
+			uint32 height = (1 + texelsPerProbe + 1) * numProbes.z;
+			return IntVector2(width, height);
+		};
 
-		RGTexture* pIrradianceTarget = graph.CreateTexture("DDGI Irradiance Target", ddgi.pIrradianceHistory->GetDesc());
-		RGTexture* pDepthTarget = graph.CreateTexture("DDGI Depth Target", ddgi.pDepthHistory->GetDesc());
-		RGTexture* pIrradianceHistory = graph.ImportTexture(ddgi.pIrradianceHistory);
-		RGTexture* pDepthHistory = graph.ImportTexture(ddgi.pDepthHistory);
-		RGBuffer* pProbeStates = graph.ImportBuffer(ddgi.pProbeStates);
-		RGBuffer* pProbeOffsets = graph.ImportBuffer(ddgi.pProbeOffset);
+		IntVector2 ddgiIrradianceDimensions = ProbeTextureDimensions(ddgi.NumProbes, probeIrradianceTexels);
+		TextureDesc ddgiIrradianceDesc = TextureDesc::Create2D(ddgiIrradianceDimensions.x, ddgiIrradianceDimensions.y, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::UnorderedAccess);
+		RGTexture* pIrradianceTarget = graph.CreateTexture("DDGI Irradiance Target", ddgiIrradianceDesc);
+		RGTexture* pIrradianceHistory = RGUtils::CreatePersistentTexture(graph, "DDGI Irradiance History", ddgiIrradianceDesc, &ddgi.pIrradianceHistory, false);
+		graph.ExportTexture(pIrradianceTarget, &ddgi.pIrradianceHistory);
+
+		IntVector2 ddgiDepthDimensions = ProbeTextureDimensions(ddgi.NumProbes, probeDepthTexel);
+		TextureDesc ddgiDepthDesc = TextureDesc::Create2D(ddgiDepthDimensions.x, ddgiDepthDimensions.y, DXGI_FORMAT_R16G16_FLOAT, TextureFlag::UnorderedAccess);
+		RGTexture* pDepthTarget = graph.CreateTexture("DDGI Depth Target", ddgiDepthDesc);
+		RGTexture* pDepthHistory = RGUtils::CreatePersistentTexture(graph, "DDGI Depth History", ddgiDepthDesc, &ddgi.pDepthHistory, false);
+		graph.ExportTexture(pDepthTarget, &ddgi.pDepthHistory);
+
+		RGBuffer* pRayBuffer = graph.CreateBuffer("DDGI Ray Buffer", BufferDesc::CreateTyped(numProbes * ddgi.MaxNumRays, DXGI_FORMAT_R16G16B16A16_FLOAT));
+		RGBuffer* pProbeStates = RGUtils::CreatePersistentBuffer(graph, "DDGI States Buffer", BufferDesc::CreateTyped(numProbes, DXGI_FORMAT_R8_UINT), &ddgi.pProbeStates, true);
+		RGBuffer* pProbeOffsets = RGUtils::CreatePersistentBuffer(graph, "DDGI Probe Offsets", BufferDesc::CreateTyped(numProbes, DXGI_FORMAT_R16G16B16A16_FLOAT), &ddgi.pProbeOffset, true);
 
 		graph.AddPass("DDGI Raytrace", RGPassFlag::Compute)
 			.Read(pProbeStates)
@@ -658,15 +682,14 @@ void DemoApp::Update()
 			.Write({ pProbeOffsets, pProbeStates })
 			.Bind([=](CommandContext& context, const RGPassResources& resources)
 				{
-					context.InsertResourceBarrier(ddgi.pProbeOffset, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 					context.SetComputeRootSignature(m_pCommonRS);
 					context.SetPipelineState(m_pDDGIUpdateProbeStatesPSO);
 
 					context.SetRootConstants(0, parameters);
 					context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
 					context.BindResources(2, {
-						ddgi.pProbeStates->GetUAV(),
-						ddgi.pProbeOffset->GetUAV(),
+						pProbeStates->Get()->GetUAV(),
+						pProbeOffsets->Get()->GetUAV(),
 						});
 					context.BindResources(3, {
 						pRayBuffer->Get()->GetSRV(),
@@ -677,9 +700,6 @@ void DemoApp::Update()
 
 		graph.AddPass("Bindless Transition", RGPassFlag::NeverCull | RGPassFlag::Raster)
 			.Read({ pDepthTarget, pIrradianceTarget, pProbeStates, pProbeOffsets });
-
-		graph.ExportTexture(pDepthTarget, &ddgi.pDepthHistory);
-		graph.ExportTexture(pIrradianceTarget, &ddgi.pIrradianceHistory);
 	}
 
 	RGTexture* pSky = graph.CreateTexture("Sky", TextureDesc::Create2D(64, 128, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
@@ -738,7 +758,6 @@ void DemoApp::Update()
 					context.SetPipelineState(m_pCameraMotionPSO);
 
 					context.SetRootCBV(1, Renderer::GetViewUniforms(pView, pVelocity));
-
 					context.BindResources(2, pVelocity->GetUAV());
 					context.BindResources(3, sceneTextures.pDepth->Get()->GetSRV());
 
@@ -799,8 +818,8 @@ void DemoApp::Update()
 
 		graph.AddPass("Render Sky", RGPassFlag::Raster)
 			.Read(pSky)
-			.DepthStencil(sceneTextures.pDepth, RenderPassAccess::Load_Store, false)
-			.RenderTarget(sceneTextures.pColorTarget, RenderPassAccess::Load_Store)
+			.DepthStencil(sceneTextures.pDepth, RenderTargetLoadAction::Load, false)
+			.RenderTarget(sceneTextures.pColorTarget, RenderTargetLoadAction::Load)
 			.Bind([=](CommandContext& context, const RGPassResources& resources)
 				{
 					context.BeginRenderPass(resources.GetRenderPassInfo());
@@ -827,15 +846,11 @@ void DemoApp::Update()
 		colorDesc.SampleCount = 1;
 		RGTexture* pResolveColor = graph.CreateTexture("Resolved Color", colorDesc);
 		graph.AddPass("Color Resolve", RGPassFlag::Compute)
-			.Read(sceneTextures.pColorTarget)
-			.Write(pResolveColor)
+			.RenderTarget(sceneTextures.pColorTarget, RenderTargetLoadAction::Load, pResolveColor)
 			.Bind([=](CommandContext& context, const RGPassResources& resources)
 				{
-					Texture* pSource = sceneTextures.pColorTarget->Get();
-					Texture* pTarget = pResolveColor->Get();
-					context.InsertResourceBarrier(pSource, D3D12_RESOURCE_STATE_RESOLVE_SOURCE);
-					context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_RESOLVE_DEST);
-					context.ResolveResource(pSource, 0, pTarget, 0, pTarget->GetFormat());
+					context.BeginRenderPass(resources.GetRenderPassInfo());
+					context.EndRenderPass();
 				});
 		sceneTextures.pColorTarget = pResolveColor;
 	}
@@ -857,12 +872,10 @@ void DemoApp::Update()
 				.Bind([=](CommandContext& context, const RGPassResources& resources)
 					{
 						Texture* pTarget = pTaaTarget->Get();
-
 						context.SetComputeRootSignature(m_pCommonRS);
 						context.SetPipelineState(m_pTemporalResolvePSO);
 
 						context.SetRootCBV(1, Renderer::GetViewUniforms(pView, pTarget));
-
 						context.BindResources(2, pTarget->GetUAV());
 						context.BindResources(3,
 							{
@@ -875,7 +888,7 @@ void DemoApp::Update()
 						context.Dispatch(ComputeUtils::GetNumThreadGroups(pTarget->GetWidth(), 8, pTarget->GetHeight(), 8));
 					});
 
-			graph.AddCopyPass("Store TAA History", pTaaTarget, sceneTextures.pPreviousColor);
+			RGUtils::AddCopyPass(graph, pTaaTarget, sceneTextures.pPreviousColor);
 
 			sceneTextures.pColorTarget = pTaaTarget;
 		}
@@ -902,7 +915,6 @@ void DemoApp::Update()
 					context.SetPipelineState(pSource->GetDesc().SampleCount > 1 ? m_pPrepareReduceDepthMsaaPSO : m_pPrepareReduceDepthPSO);
 
 					context.SetRootCBV(1, Renderer::GetViewUniforms(pView, pTarget));
-
 					context.BindResources(2, pTarget->GetUAV());
 					context.BindResources(3, pSource->GetSRV());
 
@@ -1143,7 +1155,7 @@ void DemoApp::Update()
 				});
 	}
 
-	RGTexture* pTonemapTarget = graph.CreateTexture("Tonemap Target", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, DXGI_FORMAT_R8G8B8A8_UNORM));
+	RGTexture* pTonemapTarget = graph.CreateTexture("Tonemap Target", TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, DXGI_FORMAT_R8G8B8A8_UNORM));
 
 	graph.AddPass("Tonemap", RGPassFlag::Compute)
 		.Read({ sceneTextures.pColorTarget, pAverageLuminance, pBloomTexture })
@@ -1235,8 +1247,8 @@ void DemoApp::Update()
 		{
 			const DDGIVolume& ddgi = m_World.DDGIVolumes[i];
 			graph.AddPass("DDGI Visualize", RGPassFlag::Raster)
-				.DepthStencil(sceneTextures.pDepth, RenderPassAccess::Load_Store, true)
-				.RenderTarget(sceneTextures.pColorTarget, RenderPassAccess::Load_Store)
+				.DepthStencil(sceneTextures.pDepth, RenderTargetLoadAction::Load, true)
+				.RenderTarget(sceneTextures.pColorTarget, RenderTargetLoadAction::Load)
 				.Bind([=](CommandContext& context, const RGPassResources& resources)
 					{
 						context.BeginRenderPass(resources.GetRenderPassInfo());
@@ -1313,7 +1325,6 @@ void DemoApp::OnResizeViewport(int width, int height)
 {
 	E_LOG(Info, "Viewport resized: %dx%d", width, height);
 
-	m_pColorHistory = m_pDevice->CreateTexture(TextureDesc::Create2D(width, height, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::ShaderResource), "Previous Color");
 	m_ColorOutput = m_pDevice->CreateTexture(TextureDesc::Create2D(width, height, DXGI_FORMAT_R8G8B8A8_UNORM), "Final Target");
 
 	for (uint32 i = 0; i < SwapChain::NUM_FRAMES; ++i)
@@ -1442,10 +1453,6 @@ void DemoApp::InitializePipelines()
 	// DDGI
 	if (m_pDevice->GetCapabilities().SupportsRaytracing())
 	{
-		// Must match with shader!
-		constexpr uint32 probeIrradianceTexels = 6;
-		constexpr uint32 probeDepthTexel = 14;
-
 		m_pDDGIUpdateIrradianceColorPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "RayTracing/DDGI.hlsl", "UpdateIrradianceCS");
 		m_pDDGIUpdateIrradianceDepthPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "RayTracing/DDGI.hlsl", "UpdateDepthCS");
 		m_pDDGIUpdateProbeStatesPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "RayTracing/DDGI.hlsl", "UpdateProbeStatesCS");
@@ -1473,66 +1480,28 @@ void DemoApp::InitializePipelines()
 		psoDesc.SetName("Visualize Irradiance");
 		psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
 		m_pDDGIVisualizePSO = m_pDevice->CreatePipeline(psoDesc);
-
-		DDGIVolume volume;
-		volume.Origin = Vector3(-0.484151840f, 5.21196413f, 0.309524536f);
-		volume.Extents = Vector3(14.8834171f, 6.22350454f, 9.15293312f);
-		volume.NumProbes = IntVector3(16, 12, 14);
-		volume.NumRays = 128;
-		volume.MaxNumRays = 512;
-		m_World.DDGIVolumes.push_back(volume);
-
-		auto ProbeTextureDimensions = [](const IntVector3& numProbes, uint32 texelsPerProbe) {
-			uint32 width = (1 + texelsPerProbe + 1) * numProbes.y * numProbes.x;
-			uint32 height = (1 + texelsPerProbe + 1) * numProbes.z;
-			return IntVector2(width, height);
-		};
-
-		for (DDGIVolume& ddgi : m_World.DDGIVolumes)
-		{
-			uint32 numProbes = ddgi.NumProbes.x * ddgi.NumProbes.y * ddgi.NumProbes.z;
-			ddgi.pProbeStates = m_pDevice->CreateBuffer(BufferDesc::CreateTyped(numProbes, DXGI_FORMAT_R8_UINT, BufferFlag::UnorderedAccess | BufferFlag::ShaderResource), "DDGI States Buffer");
-			ddgi.pProbeOffset = m_pDevice->CreateBuffer(BufferDesc::CreateTyped(numProbes, DXGI_FORMAT_R16G16B16A16_FLOAT, BufferFlag::UnorderedAccess | BufferFlag::ShaderResource), "DDGI Probe Offset Buffer");
-			{
-				IntVector2 dimensions = ProbeTextureDimensions(ddgi.NumProbes, probeIrradianceTexels);
-				TextureDesc ddgiIrradianceDesc = TextureDesc::Create2D(dimensions.x, dimensions.y, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::UnorderedAccess);
-				ddgi.pIrradianceHistory = m_pDevice->CreateTexture(ddgiIrradianceDesc, "DDGI Irradiance 0");
-			}
-			{
-				IntVector2 dimensions = ProbeTextureDimensions(ddgi.NumProbes, probeDepthTexel);
-				TextureDesc ddgiDepthDesc = TextureDesc::Create2D(dimensions.x, dimensions.y, DXGI_FORMAT_R16G16_FLOAT, TextureFlag::UnorderedAccess);
-				ddgi.pDepthHistory = m_pDevice->CreateTexture(ddgiDepthDesc, "DDGI Depth 0");
-			}
-		}
 	}
 
 	// Texture visualize
 	m_pVisualizeTexturePSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "ImageVisualize.hlsl", "CSMain");
 }
 
-void DemoApp::VisualizeTexture(RGGraph& graph, Texture* pTexture)
+void DemoApp::VisualizeTexture(RGGraph& graph, RGTexture* pTexture)
 {
-	RefCountPtr<Texture>& pTarget = m_VisualizeTextureData.pTarget;
+	const TextureDesc& desc = pTexture->GetDesc();
+	RGTexture* pTarget = graph.CreateTexture("Visualize Target", TextureDesc::Create2D(desc.Width, desc.Height, DXGI_FORMAT_R8G8B8A8_UNORM));
 
-	const TextureDesc& sourceDesc = pTexture->GetDesc();
-	if (!pTarget || pTarget->GetWidth() != sourceDesc.Width || pTarget->GetHeight() != sourceDesc.Height)
+	if (ImGui::Begin("Visualize Texture") && m_VisualizeTextureData.pVisualizeTexture)
 	{
-		pTarget = m_pDevice->CreateTexture(TextureDesc::Create2D(sourceDesc.Width, sourceDesc.Height, DXGI_FORMAT_R8G8B8A8_UNORM, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess), "Vis Target");
-	}
-
-	checkf(pTexture->GetWidth() == pTarget->GetWidth() && pTarget->GetHeight() == pTexture->GetHeight(), "2D dimensions must match");
-
-	if (ImGui::Begin("Visualize Texture"))
-	{
-		ImGui::Text("%s - Resolution: %dx%d", pTexture->GetName().c_str(), pTexture->GetWidth(), pTexture->GetHeight());
+		ImGui::Text("%s - Resolution: %dx%d", pTexture->GetName(), desc.Width, desc.Height);
 		ImGui::DragFloatRange2("Range", &m_VisualizeTextureData.RangeMin, &m_VisualizeTextureData.RangeMax, 0.02f, 0, 10);
-		if (pTexture->GetMipLevels() > 1)
+		if (desc.Mips > 1)
 		{
-			ImGui::SliderFloat("Mip", &m_VisualizeTextureData.MipLevel, 0, (float)pTexture->GetMipLevels() - 1);
+			ImGui::SliderFloat("Mip", &m_VisualizeTextureData.MipLevel, 0, (float)desc.Mips - 1);
 		}
-		if (pTexture->GetDepth() > 1)
+		if (desc.DepthOrArraySize > 1)
 		{
-			ImGui::SliderFloat("Slice", &m_VisualizeTextureData.Slice, 0, (float)pTexture->GetDepth() - 1);
+			ImGui::SliderFloat("Slice", &m_VisualizeTextureData.Slice, 0, (float)desc.DepthOrArraySize - 1);
 		}
 		ImGui::Checkbox("R", &m_VisualizeTextureData.VisibleChannels[0]);
 		ImGui::SameLine();
@@ -1542,16 +1511,15 @@ void DemoApp::VisualizeTexture(RGGraph& graph, Texture* pTexture)
 		ImGui::SameLine();
 		ImGui::Checkbox("A", &m_VisualizeTextureData.VisibleChannels[3]);
 
-		ImGui::ImageAutoSize(pTarget, ImVec2((float)pTarget->GetWidth(), (float)pTarget->GetHeight()));
+		ImGui::ImageAutoSize(m_VisualizeTextureData.pVisualizeTexture, ImVec2((float)desc.Width, (float)desc.Height));
 	}
 	ImGui::End();
 
-	graph.AddPass("Process Image Visualizer", RGPassFlag::Compute)
+	graph.AddPass("Process Image Visualizer", RGPassFlag::Compute | RGPassFlag::NeverCull)
+		.Read(pTexture)
+		.Write(pTarget)
 		.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
 			{
-				context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-				context.InsertResourceBarrier(pTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-
 				context.SetComputeRootSignature(m_pCommonRS);
 				context.SetPipelineState(m_pVisualizeTexturePSO);
 
@@ -1567,10 +1535,11 @@ void DemoApp::VisualizeTexture(RGGraph& graph, Texture* pTexture)
 					float Slice;
 				} constants;
 
-				constants.TextureSource = pTexture->GetSRV()->GetHeapIndex();
-				constants.TextureTarget = pTarget->GetUAV()->GetHeapIndex();
-				constants.InvDimensions.x = 1.0f / pTexture->GetWidth();
-				constants.InvDimensions.y = 1.0f / pTexture->GetHeight();
+				const TextureDesc& desc = pTexture->GetDesc();
+				constants.TextureSource = pTexture->Get()->GetSRV()->GetHeapIndex();
+				constants.TextureTarget = pTarget->Get()->GetUAV()->GetHeapIndex();
+				constants.InvDimensions.x = 1.0f / desc.Width;
+				constants.InvDimensions.y = 1.0f / desc.Height;
 				constants.TextureType = pTexture->GetDesc().Dimensions;
 				constants.ValueRange = Vector2(m_VisualizeTextureData.RangeMin, m_VisualizeTextureData.RangeMax);
 				constants.ChannelMask =
@@ -1579,12 +1548,14 @@ void DemoApp::VisualizeTexture(RGGraph& graph, Texture* pTexture)
 					(m_VisualizeTextureData.VisibleChannels[2] ? 1 : 0) << 2 |
 					(m_VisualizeTextureData.VisibleChannels[3] ? 1 : 0) << 3;
 				constants.MipLevel = m_VisualizeTextureData.MipLevel;
-				constants.Slice = m_VisualizeTextureData.Slice / pTexture->GetDepth();
+				constants.Slice = m_VisualizeTextureData.Slice / desc.DepthOrArraySize;
 
 				context.SetRootCBV(1, constants);
 
-				context.Dispatch(ComputeUtils::GetNumThreadGroups(pTexture->GetWidth(), 16, pTexture->GetHeight(), 16));
+				context.Dispatch(ComputeUtils::GetNumThreadGroups(desc.Width, 16, desc.Height, 16));
 			});
+
+	graph.ExportTexture(pTarget, &m_VisualizeTextureData.pVisualizeTexture);
 }
 
 void DemoApp::UpdateImGui()
@@ -1686,7 +1657,7 @@ void DemoApp::UpdateImGui()
 		OnResizeViewport(width, height);
 	}
 	ImGuizmo::SetRect(ImGui::GetWindowPos().x, ImGui::GetWindowPos().y, (float)width, (float)height);
-	ImGui::Image(m_ColorOutput, ImVec2((float)width, (float)height));
+		ImGui::Image(m_ColorOutput, ImVec2((float)width, (float)height));
 	ImGui::End();
 
 	if (Tweakables::g_VisualizeLightDensity)

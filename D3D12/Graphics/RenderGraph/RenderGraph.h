@@ -131,15 +131,15 @@ public:
 	struct RenderTargetAccess
 	{
 		RGTexture* pResource = nullptr;
-		RenderPassAccess Access;
+		RenderTargetLoadAction LoadAccess;
 		RGTexture* pResolveTarget = nullptr;
 	};
 
 	struct DepthStencilAccess
 	{
 		RGTexture* pResource = nullptr;
-		RenderPassAccess Access;
-		RenderPassAccess StencilAccess;
+		RenderTargetLoadAction LoadAccess;
+		RenderTargetLoadAction StencilLoadAccess;
 		bool Write;
 	};
 
@@ -163,9 +163,8 @@ public:
 
 	RGPass& Write(Span<RGResource*> resources);
 	RGPass& Read(Span<RGResource*> resources);
-	RGPass& RenderTarget(RGTexture* pResource, RenderPassAccess access);
-	RGPass& RenderTarget(RGTexture* pResource, RenderTargetLoadAction loadAction, RGTexture* pResolveTarget);
-	RGPass& DepthStencil(RGTexture* pResource, RenderPassAccess depthAccess, bool write, RenderPassAccess stencilAccess = RenderPassAccess::NoAccess);
+	RGPass& RenderTarget(RGTexture* pResource, RenderTargetLoadAction access, RGTexture* pResolveTarget = nullptr);
+	RGPass& DepthStencil(RGTexture* pResource, RenderTargetLoadAction depthAccess, bool write, RenderTargetLoadAction stencilAccess = RenderTargetLoadAction::NoAccess);
 
 private:
 	struct ResourceAccess
@@ -228,8 +227,6 @@ public:
 	SyncPoint Execute();
 	void DumpGraph(const char* pPath) const;
 
-	RGPass& AddCopyPass(const char* pName, RGResource* pSource, RGResource* pTarget);
-
 	template<typename T, typename... Args>
 	T* Allocate(Args&&... args)
 	{
@@ -283,17 +280,8 @@ public:
 		return pBuffer ? ImportBuffer(pBuffer) : nullptr;
 	}
 
-	void ExportTexture(RGTexture* pTexture , RefCountPtr<Texture>* pTarget)
-	{
-		pTexture->IsExported = true;
-		m_ExportTextures.push_back({ pTexture, pTarget });
-	}
-
-	void ExportBuffer(RGBuffer* pBuffer, RefCountPtr<Buffer>* pTarget)
-	{
-		pBuffer->IsExported = true;
-		m_ExportBuffers.push_back({ pBuffer, pTarget });
-	}
+	void ExportTexture(RGTexture* pTexture, RefCountPtr<Texture>* pTarget);
+	void ExportBuffer(RGBuffer* pBuffer, RefCountPtr<Buffer>* pTarget);
 
 	void PushEvent(const char* pName);
 	void PopEvent();
@@ -343,3 +331,10 @@ public:
 private:
 	RGGraph& m_Graph;
 };
+
+namespace RGUtils
+{
+	RGPass& AddCopyPass(RGGraph& graph, RGResource* pSource, RGResource* pTarget);
+	RGBuffer* CreatePersistentBuffer(RGGraph& graph, const char* pName, const BufferDesc& bufferDesc, RefCountPtr<Buffer>* pStorageTarget, bool doExport);
+	RGTexture* CreatePersistentTexture(RGGraph& graph, const char* pName, const TextureDesc& textureDesc, RefCountPtr<Texture>* pStorageTarget, bool doExport);
+}

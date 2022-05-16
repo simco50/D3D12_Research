@@ -87,8 +87,8 @@ void DebugRenderer::Render(RGGraph& graph, const SceneView* pView, RGTexture* pT
 	constexpr uint32 VertexStride = sizeof(DebugLine) / 2;
 
 	graph.AddPass("Debug Rendering", RGPassFlag::Raster)
-		.RenderTarget(pTarget, RenderPassAccess::Load_Store)
-		.DepthStencil(pDepth, RenderPassAccess::Load_Store, false)
+		.RenderTarget(pTarget, RenderTargetLoadAction::Load)
+		.DepthStencil(pDepth, RenderTargetLoadAction::Load, false)
 		.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
 				context.BeginRenderPass(resources.GetRenderPassInfo());

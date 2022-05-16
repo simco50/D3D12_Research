@@ -76,6 +76,27 @@ public:
 			return m_ResourceStates[subResource];
 		}
 	}
+
+	static bool HasWriteResourceState(D3D12_RESOURCE_STATES state)
+	{
+		return EnumHasAnyFlags(state,
+			D3D12_RESOURCE_STATE_STREAM_OUT |
+			D3D12_RESOURCE_STATE_UNORDERED_ACCESS |
+			D3D12_RESOURCE_STATE_RENDER_TARGET |
+			D3D12_RESOURCE_STATE_DEPTH_WRITE |
+			D3D12_RESOURCE_STATE_COPY_DEST |
+			D3D12_RESOURCE_STATE_RESOLVE_DEST |
+			D3D12_RESOURCE_STATE_VIDEO_DECODE_WRITE |
+			D3D12_RESOURCE_STATE_VIDEO_PROCESS_WRITE |
+			D3D12_RESOURCE_STATE_VIDEO_ENCODE_WRITE
+		);
+	};
+
+	static bool CanCombineResourceState(D3D12_RESOURCE_STATES stateA, D3D12_RESOURCE_STATES stateB)
+	{
+		return !HasWriteResourceState(stateA) && !HasWriteResourceState(stateB);
+	}
+
 private:
 	std::array<D3D12_RESOURCE_STATES, D3D12_REQ_MIP_LEVELS> m_ResourceStates{};
 	D3D12_RESOURCE_STATES m_CommonState;

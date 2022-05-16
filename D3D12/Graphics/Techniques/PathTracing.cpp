@@ -58,11 +58,7 @@ void PathTracing::Render(RGGraph& graph, const SceneView* pView, RGTexture* pTar
 		return;
 	}
 
-	TextureDesc targetDesc = pTarget->GetDesc();
-	if (!m_pAccumulationTexture || m_pAccumulationTexture->GetSize() != targetDesc.Size())
-	{
-		m_pAccumulationTexture = m_pDevice->CreateTexture(TextureDesc::Create2D(targetDesc.Width, targetDesc.Height, DXGI_FORMAT_R32G32B32A32_FLOAT, TextureFlag::UnorderedAccess), "Accumulation Target");
-	}
+	RGTexture* pAccumulationTexture = RGUtils::CreatePersistentTexture(graph, "Accumulation Target", pTarget->GetDesc(), &m_pAccumulationTexture, true);
 
 	static int32 numBounces = 3;
 
@@ -90,7 +86,7 @@ void PathTracing::Render(RGGraph& graph, const SceneView* pView, RGTexture* pTar
 	m_NumAccumulatedFrames++;
 
 	graph.AddPass("Path Tracing", RGPassFlag::Compute)
-		.Write(pTarget)
+		.Write({ pTarget, pAccumulationTexture })
 		.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
 				Texture* pRTTarget = pTarget->Get();
@@ -117,7 +113,7 @@ void PathTracing::Render(RGGraph& graph, const SceneView* pView, RGTexture* pTar
 				context.SetRootCBV(1, Renderer::GetViewUniforms(pView, pRTTarget));
 				context.BindResources(2, {
 					pRTTarget->GetUAV(),
-					m_pAccumulationTexture->GetUAV(),
+					pAccumulationTexture->Get()->GetUAV(),
 					});
 
 				context.DispatchRays(bindingTable, pRTTarget->GetWidth(), pRTTarget->GetHeight());

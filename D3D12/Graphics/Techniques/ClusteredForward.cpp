@@ -287,22 +287,20 @@ void ClusteredForward::ComputeLightCulling(RGGraph& graph, const SceneView* pVie
 
 void ClusteredForward::VisualizeClusters(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures, ClusteredLightCullData& cullData)
 {
-	RGBuffer* pDebugLightGrid = graph.TryImportBuffer(cullData.pDebugLightGrid);
+	uint32 totalClusterCount = cullData.ClusterCount.x * cullData.ClusterCount.y * cullData.ClusterCount.z;
+	RGBuffer* pDebugLightGrid = RGUtils::CreatePersistentBuffer(graph, "Debug Light Grid", BufferDesc::CreateStructured(2 * totalClusterCount, sizeof(uint32)), &cullData.pDebugLightGrid, true);
 
-	if (cullData.DirtyDebugData || !pDebugLightGrid)
+	if (cullData.DirtyDebugData)
 	{
-		uint32 totalClusterCount = cullData.ClusterCount.x * cullData.ClusterCount.y * cullData.ClusterCount.z;
-		pDebugLightGrid = graph.CreateBuffer("Debug Light Grid", BufferDesc::CreateStructured(2 * totalClusterCount, sizeof(uint32)));
-		graph.AddCopyPass("Cache Debug Light Grid", cullData.pLightGrid, pDebugLightGrid);
+		RGUtils::AddCopyPass(graph, cullData.pLightGrid, pDebugLightGrid);
 		cullData.DebugClustersViewMatrix = pView->View.ViewInverse;
 		cullData.DirtyDebugData = false;
-		graph.ExportBuffer(pDebugLightGrid, &cullData.pDebugLightGrid);
 	}
 
 	graph.AddPass("Visualize Clusters", RGPassFlag::Raster)
 		.Read({ pDebugLightGrid, cullData.pAABBs })
-		.RenderTarget(sceneTextures.pColorTarget, RenderPassAccess::Load_Store)
-		.DepthStencil(sceneTextures.pDepth, RenderPassAccess::Load_Store, false)
+		.RenderTarget(sceneTextures.pColorTarget, RenderTargetLoadAction::Load)
+		.DepthStencil(sceneTextures.pDepth, RenderTargetLoadAction::Load, false)
 		.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
 				context.BeginRenderPass(resources.GetRenderPassInfo());
@@ -336,14 +334,10 @@ RGTexture* ClusteredForward::RenderVolumetricFog(RGGraph& graph, const SceneView
 		DXGI_FORMAT_R16G16B16A16_FLOAT,
 		TextureFlag::ShaderResource | TextureFlag::UnorderedAccess);
 
-	if (fogData.pFogHistory && fogData.pFogHistory->GetDesc() != volumeDesc)
-	{
-		fogData.pFogHistory = nullptr;
-	}
-
-	RGTexture* pSourceVolume = fogData.pFogHistory ? graph.ImportTexture(fogData.pFogHistory) : graph.ImportTexture(GraphicsCommon::GetDefaultTexture(DefaultTexture::Black3D));
+	RGTexture* pSourceVolume = RGUtils::CreatePersistentTexture(graph, "Fog History", volumeDesc, &fogData.pFogHistory, false);
 	RGTexture* pTargetVolume = graph.CreateTexture("Fog Target", volumeDesc);
 	RGTexture* pFinalVolumeFog = graph.CreateTexture("Volumetric Fog", volumeDesc);
+	graph.ExportTexture(pTargetVolume, &fogData.pFogHistory);
 
 	struct
 	{
@@ -389,8 +383,6 @@ RGTexture* ClusteredForward::RenderVolumetricFog(RGGraph& graph, const SceneView
 						pTarget->GetDepth(), 4)
 				);
 			});
-
-	graph.ExportTexture(pTargetVolume, &fogData.pFogHistory);
 
 	graph.AddPass("Accumulate Volume Fog", RGPassFlag::Compute)
 		.Read({ pTargetVolume, lightCullData.pLightGrid, lightCullData.pLightIndexGrid })
@@ -442,10 +434,10 @@ void ClusteredForward::RenderBasePass(RGGraph& graph, const SceneView* pView, Sc
 	graph.AddPass("Base Pass", RGPassFlag::Raster)
 		.Read({ sceneTextures.pAmbientOcclusion, sceneTextures.pPreviousColor, pFogTexture, sceneTextures.pDepth })
 		.Read({ lightCullData.pLightGrid, lightCullData.pLightIndexGrid })
-		.DepthStencil(sceneTextures.pDepth, RenderPassAccess::Load_Store, false)
-		.RenderTarget(sceneTextures.pColorTarget, RenderPassAccess::DontCare_Store)
-		.RenderTarget(sceneTextures.pNormals, RenderPassAccess::DontCare_Store)
-		.RenderTarget(sceneTextures.pRoughness, RenderPassAccess::DontCare_Store)
+		.DepthStencil(sceneTextures.pDepth, RenderTargetLoadAction::Load, false)
+		.RenderTarget(sceneTextures.pColorTarget, RenderTargetLoadAction::DontCare)
+		.RenderTarget(sceneTextures.pNormals, RenderTargetLoadAction::DontCare)
+		.RenderTarget(sceneTextures.pRoughness, RenderTargetLoadAction::DontCare)
 		.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
 				context.BeginRenderPass(resources.GetRenderPassInfo());

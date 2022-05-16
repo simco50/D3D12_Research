@@ -202,6 +202,19 @@ struct TextureDesc
 			&& Dimensions == other.Dimensions;
 	}
 
+	bool IsCompatible(const TextureDesc& other) const
+	{
+		return Width == other.Width
+			&& Height == other.Height
+			&& DepthOrArraySize == other.DepthOrArraySize
+			&& Mips == other.Mips
+			&& SampleCount == other.SampleCount
+			&& Format == other.Format
+			&& ClearBindingValue == other.ClearBindingValue
+			&& Dimensions == other.Dimensions
+			&& EnumHasAllFlags(Usage, other.Usage);
+	}
+
 	bool operator!=(const TextureDesc& other) const
 	{
 		return !operator==(other);

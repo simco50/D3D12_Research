@@ -91,7 +91,7 @@ void CommandContext::Free(const SyncPoint& syncPoint)
 	}
 }
 
-bool NeedsTransition(D3D12_RESOURCE_STATES& before, D3D12_RESOURCE_STATES& after)
+bool NeedsTransition(D3D12_RESOURCE_STATES before, D3D12_RESOURCE_STATES& after)
 {
 	//Can read from 'write' DSV
 	if (before == D3D12_RESOURCE_STATE_DEPTH_WRITE && after == D3D12_RESOURCE_STATE_DEPTH_READ)
@@ -103,10 +103,9 @@ bool NeedsTransition(D3D12_RESOURCE_STATES& before, D3D12_RESOURCE_STATES& after
 		return before != D3D12_RESOURCE_STATE_COMMON;
 	}
 	//Combine already transitioned bits
-	D3D12_RESOURCE_STATES combined = before | after;
-	if ((combined & (D3D12_RESOURCE_STATE_GENERIC_READ | D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT)) == combined)
+	if (ResourceState::CanCombineResourceState(before, after) && !EnumHasAllFlags(before, after))
 	{
-		after = combined;
+		after |= before;
 	}
 	return before != after;
 }

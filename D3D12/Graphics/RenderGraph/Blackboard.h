@@ -26,16 +26,23 @@ public:
 	}
 
 	template<typename T>
-	const T& Get() const
+	const T* TryGet() const
 	{
 		constexpr StringHash hash = GetTypeHash<T>();
 		auto it = m_DataMap.find(hash);
 		if (it != m_DataMap.end())
 		{
-			return *static_cast<const T*>(it->second);
+			return static_cast<const T*>(it->second);
 		}
-		checkf(m_pParent, "Data for given type does not exist in blackboard");
-		return m_pParent->Get<T>();
+		return m_pParent ? m_pParent->TryGet<T>() : nullptr;
+	}
+
+	template<typename T>
+	const T& Get() const
+	{
+		const T* pObj = TryGet<T>();
+		checkf(pObj, "Data for given type does not exist in blackboard");
+		return *pObj;
 	}
 
 	RGBlackboard& Branch();
