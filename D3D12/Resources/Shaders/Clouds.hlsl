@@ -93,9 +93,9 @@ float4 PSMain(PSInput input) : SV_TARGET
 	float4 color = tSceneTexture.Sample(sLinearClamp, input.texCoord);
 
 	float2 boxResult = RayBoxDistance(cPass.MinExtents, cPass.MaxExtents, ro, rd);
-	float depth = LinearizeDepth01(tDepthTexture.Sample(sLinearClamp, input.texCoord).r);
+	float depth = 100;//LinearizeDepth01(tDepthTexture.Sample(sLinearClamp, input.texCoord).r);
 	float maxDepth = depth * length(input.ray.xyz);
-	
+
 	float distanceTravelled = 0;
 	float stepSize = boxResult.y / 150;
 	float dstLimit = min(maxDepth - boxResult.x, boxResult.y);
@@ -117,8 +117,8 @@ float4 PSMain(PSInput input) : SV_TARGET
 		float density = SampleDensity(rayPos) * stepSize * densityMultiplier;
 		if(density > 0)
 		{
-			totalLight += LightMarch(rayPos, light.Direction) * stepSize * densityMultiplier * density * 3;
-			transmittance *= exp(-density * stepSize * 0.03);
+			totalLight += LightMarch(rayPos, -light.Direction) * stepSize * densityMultiplier * density;
+			transmittance *= exp(-density * stepSize);
 			if(transmittance < 0.01f)
 			{
 				break;
@@ -126,5 +126,5 @@ float4 PSMain(PSInput input) : SV_TARGET
 		}
 		distanceTravelled += stepSize;
 	}
-	return float4(color.xyz * transmittance + totalLight * light.GetColor().rgb, 1);
+	return float4(color.xyz * transmittance + totalLight * light.Intensity * light.GetColor().rgb, 1);
 }
