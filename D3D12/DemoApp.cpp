@@ -22,7 +22,7 @@
 #include "Graphics/Techniques/PathTracing.h"
 #include "Graphics/Techniques/SSAO.h"
 #include "Graphics/Techniques/CBTTessellation.h"
-#include "Graphics/Clouds.h"
+#include "Graphics/Techniques/Clouds.h"
 #include "Graphics/ImGuiRenderer.h"
 #include "Core/TaskQueue.h"
 #include "Core/CommandLine.h"
