@@ -513,7 +513,7 @@ void DemoApp::Update()
 		// - Optimization that prevents wasteful lighting calculations during the base pass
 		// - Required for light culling
 		graph.AddPass("Depth Prepass", RGPassFlag::Raster)
-			.DepthStencil(sceneTextures.pDepth, RenderPassAccess::Clear_Store, true)
+			.DepthStencil(sceneTextures.pDepth, RenderTargetLoadAction::Clear, true)
 			.Bind([=](CommandContext& context, const RGPassResources& resources)
 				{
 					context.BeginRenderPass(resources.GetRenderPassInfo());
@@ -540,8 +540,8 @@ void DemoApp::Update()
 	else if (m_RenderPath == RenderPath::Visibility)
 	{
 		graph.AddPass("Visibility Buffer", RGPassFlag::Raster)
-			.DepthStencil(sceneTextures.pDepth, RenderPassAccess::Clear_Store, true)
-			.RenderTarget(sceneTextures.pVisibilityBuffer, RenderPassAccess::DontCare_Store)
+			.DepthStencil(sceneTextures.pDepth, RenderTargetLoadAction::Clear, true)
+			.RenderTarget(sceneTextures.pVisibilityBuffer, RenderTargetLoadAction::DontCare)
 			.Bind([=](CommandContext& context, const RGPassResources& resources)
 				{
 					context.BeginRenderPass(resources.GetRenderPassInfo());
@@ -818,8 +818,8 @@ void DemoApp::Update()
 
 		graph.AddPass("Render Sky", RGPassFlag::Raster)
 			.Read(pSky)
-			.DepthStencil(sceneTextures.pDepth, RenderPassAccess::Load_Store, false)
-			.RenderTarget(sceneTextures.pColorTarget, RenderPassAccess::Load_Store)
+			.DepthStencil(sceneTextures.pDepth, RenderTargetLoadAction::Load, false)
+			.RenderTarget(sceneTextures.pColorTarget, RenderTargetLoadAction::Load)
 			.Bind([=](CommandContext& context, const RGPassResources& resources)
 				{
 					context.BeginRenderPass(resources.GetRenderPassInfo());
@@ -1247,8 +1247,8 @@ void DemoApp::Update()
 		{
 			const DDGIVolume& ddgi = m_World.DDGIVolumes[i];
 			graph.AddPass("DDGI Visualize", RGPassFlag::Raster)
-				.DepthStencil(sceneTextures.pDepth, RenderPassAccess::Load_Store, true)
-				.RenderTarget(sceneTextures.pColorTarget, RenderPassAccess::Load_Store)
+				.DepthStencil(sceneTextures.pDepth, RenderTargetLoadAction::Load, true)
+				.RenderTarget(sceneTextures.pColorTarget, RenderTargetLoadAction::Load)
 				.Bind([=](CommandContext& context, const RGPassResources& resources)
 					{
 						context.BeginRenderPass(resources.GetRenderPassInfo());

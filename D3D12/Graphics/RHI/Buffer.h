@@ -107,6 +107,14 @@ struct BufferDesc
 			Format == rhs.Format;
 	}
 
+	bool IsCompatible(const BufferDesc& rhs) const
+	{
+		return Size == rhs.Size &&
+			ElementSize == rhs.ElementSize &&
+			Format == rhs.Format &&
+			EnumHasAllFlags(Usage, rhs.Usage);
+	}
+
 	uint64 Size = 0;
 	uint32 ElementSize = 0;
 	BufferFlag Usage = BufferFlag::None;

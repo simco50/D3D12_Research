@@ -197,10 +197,10 @@ void CBTTessellation::Execute(RGGraph& graph, const SceneView* pView, SceneTextu
 
 	graph.AddPass("CBT Render", RGPassFlag::Raster)
 		.Write(pCBTBuffer)
-		.DepthStencil(sceneTextures.pDepth, RenderPassAccess::Load_Store, true)
-		.RenderTarget(sceneTextures.pColorTarget, RenderPassAccess::Load_Store)
-		.RenderTarget(sceneTextures.pNormals, RenderPassAccess::Load_Store)
-		.RenderTarget(sceneTextures.pRoughness, RenderPassAccess::Load_Store)
+		.DepthStencil(sceneTextures.pDepth, RenderTargetLoadAction::Load, true)
+		.RenderTarget(sceneTextures.pColorTarget, RenderTargetLoadAction::Load)
+		.RenderTarget(sceneTextures.pNormals, RenderTargetLoadAction::Load)
+		.RenderTarget(sceneTextures.pRoughness, RenderTargetLoadAction::Load)
 		.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
 				context.InsertResourceBarrier(m_pCBTIndirectArgs, D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);

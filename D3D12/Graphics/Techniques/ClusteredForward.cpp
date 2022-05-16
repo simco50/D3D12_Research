@@ -299,8 +299,8 @@ void ClusteredForward::VisualizeClusters(RGGraph& graph, const SceneView* pView,
 
 	graph.AddPass("Visualize Clusters", RGPassFlag::Raster)
 		.Read({ pDebugLightGrid, cullData.pAABBs })
-		.RenderTarget(sceneTextures.pColorTarget, RenderPassAccess::Load_Store)
-		.DepthStencil(sceneTextures.pDepth, RenderPassAccess::Load_Store, false)
+		.RenderTarget(sceneTextures.pColorTarget, RenderTargetLoadAction::Load)
+		.DepthStencil(sceneTextures.pDepth, RenderTargetLoadAction::Load, false)
 		.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
 				context.BeginRenderPass(resources.GetRenderPassInfo());
@@ -434,10 +434,10 @@ void ClusteredForward::RenderBasePass(RGGraph& graph, const SceneView* pView, Sc
 	graph.AddPass("Base Pass", RGPassFlag::Raster)
 		.Read({ sceneTextures.pAmbientOcclusion, sceneTextures.pPreviousColor, pFogTexture, sceneTextures.pDepth })
 		.Read({ lightCullData.pLightGrid, lightCullData.pLightIndexGrid })
-		.DepthStencil(sceneTextures.pDepth, RenderPassAccess::Load_Store, false)
-		.RenderTarget(sceneTextures.pColorTarget, RenderPassAccess::DontCare_Store)
-		.RenderTarget(sceneTextures.pNormals, RenderPassAccess::DontCare_Store)
-		.RenderTarget(sceneTextures.pRoughness, RenderPassAccess::DontCare_Store)
+		.DepthStencil(sceneTextures.pDepth, RenderTargetLoadAction::Load, false)
+		.RenderTarget(sceneTextures.pColorTarget, RenderTargetLoadAction::DontCare)
+		.RenderTarget(sceneTextures.pNormals, RenderTargetLoadAction::DontCare)
+		.RenderTarget(sceneTextures.pRoughness, RenderTargetLoadAction::DontCare)
 		.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
 				context.BeginRenderPass(resources.GetRenderPassInfo());

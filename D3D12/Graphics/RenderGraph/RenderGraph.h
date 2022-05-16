@@ -131,15 +131,15 @@ public:
 	struct RenderTargetAccess
 	{
 		RGTexture* pResource = nullptr;
-		RenderPassAccess Access;
+		RenderTargetLoadAction LoadAccess;
 		RGTexture* pResolveTarget = nullptr;
 	};
 
 	struct DepthStencilAccess
 	{
 		RGTexture* pResource = nullptr;
-		RenderPassAccess Access;
-		RenderPassAccess StencilAccess;
+		RenderTargetLoadAction LoadAccess;
+		RenderTargetLoadAction StencilLoadAccess;
 		bool Write;
 	};
 
@@ -163,9 +163,8 @@ public:
 
 	RGPass& Write(Span<RGResource*> resources);
 	RGPass& Read(Span<RGResource*> resources);
-	RGPass& RenderTarget(RGTexture* pResource, RenderPassAccess access);
-	RGPass& RenderTarget(RGTexture* pResource, RenderTargetLoadAction loadAction, RGTexture* pResolveTarget);
-	RGPass& DepthStencil(RGTexture* pResource, RenderPassAccess depthAccess, bool write, RenderPassAccess stencilAccess = RenderPassAccess::NoAccess);
+	RGPass& RenderTarget(RGTexture* pResource, RenderTargetLoadAction access, RGTexture* pResolveTarget = nullptr);
+	RGPass& DepthStencil(RGTexture* pResource, RenderTargetLoadAction depthAccess, bool write, RenderTargetLoadAction stencilAccess = RenderTargetLoadAction::NoAccess);
 
 private:
 	struct ResourceAccess

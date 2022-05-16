@@ -43,12 +43,7 @@ void RTAO::Execute(RGGraph& graph, const SceneView* pView, SceneTextures& sceneT
 
 	RGTexture* pRayTraceTarget = graph.CreateTexture("AO Target 0", aoDesc);
 	RGTexture* pDenoiseTarget = graph.CreateTexture("AO Target 1", aoDesc);
-
-	if (!m_pHistory || m_pHistory->GetDesc() != aoDesc)
-	{
-		m_pHistory = m_pDevice->CreateTexture(aoDesc, "AO History");
-	}
-	RGTexture* pAoHistory = graph.ImportTexture(m_pHistory);
+	RGTexture* pAOHistory = RGUtils::CreatePersistentTexture(graph, "AO History", aoDesc, &m_pHistory, true);
 
 	static float g_AoPower = 1.0f;
 	static float g_AoRadius = 2.0f;
@@ -103,7 +98,7 @@ void RTAO::Execute(RGGraph& graph, const SceneView* pView, SceneTextures& sceneT
 			});
 
 	graph.AddPass("Denoise", RGPassFlag::Compute)
-		.Read({ pRayTraceTarget, sceneTextures.pVelocity, sceneTextures.pDepth, pAoHistory })
+		.Read({ pRayTraceTarget, sceneTextures.pVelocity, sceneTextures.pDepth, pAOHistory })
 		.Write(pDenoiseTarget)
 		.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
@@ -117,14 +112,14 @@ void RTAO::Execute(RGGraph& graph, const SceneView* pView, SceneTextures& sceneT
 				context.BindResources(2, pTarget->GetUAV());
 				context.BindResources(3, {
 					sceneTextures.pDepth->Get()->GetSRV(),
-					pAoHistory->Get()->GetSRV(),
+					pAOHistory->Get()->GetSRV(),
 					pRayTraceTarget->Get()->GetSRV(),
 					sceneTextures.pVelocity->Get()->GetSRV(),
 					});
 				context.Dispatch(ComputeUtils::GetNumThreadGroups(pTarget->GetWidth(), 8, pTarget->GetHeight(), 8));
 			});
 
-	RGUtils::AddCopyPass(graph, pDenoiseTarget, pAoHistory);
+	RGUtils::AddCopyPass(graph, pDenoiseTarget, pAOHistory);
 
 	graph.AddPass("Blur AO - Horizontal", RGPassFlag::Compute)
 		.Read({ pDenoiseTarget, sceneTextures.pDepth })
