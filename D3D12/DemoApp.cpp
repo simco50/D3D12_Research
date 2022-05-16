@@ -460,7 +460,7 @@ void DemoApp::Update()
 	SceneTextures sceneTextures;
 
 	IntVector2 viewDimensions = m_SceneData.GetDimensions();
-	sceneTextures.pPreviousColor =		graph.ImportTexture(m_pColorHistory);
+	sceneTextures.pPreviousColor =		RGUtils::CreatePersistentTexture(graph, "Color History", TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, DXGI_FORMAT_R16G16B16A16_FLOAT), &m_pColorHistory, true);
 	sceneTextures.pVisibilityBuffer =	graph.CreateTexture("Visibility Buffer",	TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, DXGI_FORMAT_R32_UINT));
 	sceneTextures.pRoughness =			graph.CreateTexture("Roughness",			TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, DXGI_FORMAT_R8_UNORM));
 	sceneTextures.pColorTarget =		graph.CreateTexture("Color Target",			TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, DXGI_FORMAT_R16G16B16A16_FLOAT));
@@ -1325,7 +1325,6 @@ void DemoApp::OnResizeViewport(int width, int height)
 {
 	E_LOG(Info, "Viewport resized: %dx%d", width, height);
 
-	m_pColorHistory = m_pDevice->CreateTexture(TextureDesc::Create2D(width, height, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::ShaderResource), "Previous Color");
 	m_ColorOutput = m_pDevice->CreateTexture(TextureDesc::Create2D(width, height, DXGI_FORMAT_R8G8B8A8_UNORM), "Final Target");
 
 	for (uint32 i = 0; i < SwapChain::NUM_FRAMES; ++i)
@@ -1658,7 +1657,7 @@ void DemoApp::UpdateImGui()
 		OnResizeViewport(width, height);
 	}
 	ImGuizmo::SetRect(ImGui::GetWindowPos().x, ImGui::GetWindowPos().y, (float)width, (float)height);
-	ImGui::Image(m_ColorOutput, ImVec2((float)width, (float)height));
+		ImGui::Image(m_ColorOutput, ImVec2((float)width, (float)height));
 	ImGui::End();
 
 	if (Tweakables::g_VisualizeLightDensity)

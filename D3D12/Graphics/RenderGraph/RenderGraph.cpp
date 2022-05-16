@@ -5,20 +5,6 @@
 #include "Graphics/Profiler.h"
 #include "Core/CommandLine.h"
 
-bool HasWriteResourceState(D3D12_RESOURCE_STATES state)
-{
-	return EnumHasAnyFlags(state,
-		D3D12_RESOURCE_STATE_UNORDERED_ACCESS |
-		D3D12_RESOURCE_STATE_RENDER_TARGET |
-		D3D12_RESOURCE_STATE_DEPTH_WRITE |
-		D3D12_RESOURCE_STATE_COPY_DEST |
-		D3D12_RESOURCE_STATE_RESOLVE_DEST |
-		D3D12_RESOURCE_STATE_VIDEO_DECODE_WRITE |
-		D3D12_RESOURCE_STATE_VIDEO_PROCESS_WRITE |
-		D3D12_RESOURCE_STATE_VIDEO_ENCODE_WRITE
-	);
-};
-
 RGPass& RGPass::Read(Span<RGResource*> resources)
 {
 	D3D12_RESOURCE_STATES state = D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE;
@@ -50,7 +36,7 @@ RGPass& RGPass::Write(Span<RGResource*> resources)
 RGPass& RGPass::RenderTarget(RGTexture* pResource, RenderTargetLoadAction loadAccess, RGTexture* pResolveTarget)
 {
 	AddAccess(pResource, D3D12_RESOURCE_STATE_RENDER_TARGET);
-	if(pResolveTarget)
+	if(pResolveTarget && pResolveTarget != pResource)
 		AddAccess(pResolveTarget, D3D12_RESOURCE_STATE_RESOLVE_DEST);
 	RenderTargets.push_back({ pResource, loadAccess, pResolveTarget });
 	return *this;
@@ -70,7 +56,7 @@ void RGPass::AddAccess(RGResource* pResource, D3D12_RESOURCE_STATES state)
 	auto it = std::find_if(Accesses.begin(), Accesses.end(), [=](const ResourceAccess& access) { return pResource == access.pResource; });
 	if (it != Accesses.end())
 	{
-		checkf(!HasWriteResourceState(it->Access) || !HasWriteResourceState(state), "Resource (%s) may only have 1 write state", pResource->Name);
+		checkf(!ResourceState::HasWriteResourceState(it->Access) || !ResourceState::HasWriteResourceState(state), "Resource (%s) may only have 1 write state", pResource->Name);
 		it->Access |= state;
 	}
 	else
@@ -99,7 +85,7 @@ void RGGraph::Compile()
 		{
 			for (RGPass::ResourceAccess& access : pPass->Accesses)
 			{
-				if (access.pResource == pResource && HasWriteResourceState(access.Access))
+				if (access.pResource == pResource && ResourceState::HasWriteResourceState(access.Access))
 					return true;
 			}
 			return false;
@@ -117,7 +103,7 @@ void RGGraph::Compile()
 			{
 				for (RGPass::ResourceAccess access : pPass->Accesses)
 				{
-					if (access.pResource->IsImported && HasWriteResourceState(access.Access))
+					if (access.pResource->IsImported && ResourceState::HasWriteResourceState(access.Access))
 					{
 						cullStack.push_back(pPass);
 						break;
