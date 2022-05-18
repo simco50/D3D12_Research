@@ -312,7 +312,7 @@ namespace D3D
 			return DXGI_FORMAT_R16_UNORM;
 
 		default:
-			return DXGI_FORMAT_UNKNOWN;
+			return format;
 		}
 	}
 

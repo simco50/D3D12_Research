@@ -132,7 +132,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneView* pView, SceneTextures
 
 	//5. BASE PASS
 	// - Render the scene using the shadow mapping result and the light culling buffers
-	graph.AddPass("Base Pass", RGPassFlag::Raster)
+	graph.AddPass("Base Pass", RGPassFlag::Raster | RGPassFlag::AutoRenderPass)
 		.Read({ sceneTextures.pAmbientOcclusion, sceneTextures.pPreviousColor })
 		.Read({ pLightGridOpaque, pLightGridTransparant, pLightIndexListOpaque, pLightIndexListTransparant })
 		.DepthStencil(sceneTextures.pDepth, RenderTargetLoadAction::Load, false)
@@ -141,8 +141,6 @@ void TiledForward::Execute(RGGraph& graph, const SceneView* pView, SceneTextures
 		.RenderTarget(sceneTextures.pRoughness, RenderTargetLoadAction::DontCare)
 		.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
-				context.BeginRenderPass(resources.GetRenderPassInfo());
-
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 				context.SetGraphicsRootSignature(m_pDiffuseRS);
 
@@ -182,7 +180,6 @@ void TiledForward::Execute(RGGraph& graph, const SceneView* pView, SceneTextures
 					context.SetPipelineState(m_pDiffuseAlphaPSO);
 					Renderer::DrawScene(context, pView, Batch::Blending::AlphaBlend);
 				}
-				context.EndRenderPass();
 			});
 
 	CullBlackboardData& blackboardData = graph.Blackboard.Add<CullBlackboardData>();
@@ -196,7 +193,7 @@ void TiledForward::VisualizeLightDensity(RGGraph& graph, GraphicsDevice* pDevice
 	const CullBlackboardData& blackboardData = graph.Blackboard.Get<CullBlackboardData>();
 	RGTexture* pLightGridOpaque = blackboardData.pLightGridOpaque;
 
-	graph.AddPass("Visualize Light Density", RGPassFlag::Raster)
+	graph.AddPass("Visualize Light Density", RGPassFlag::Compute)
 		.Read({ sceneTextures.pDepth, sceneTextures.pColorTarget, pLightGridOpaque })
 		.Write(pVisualizationTarget)
 		.Bind([=](CommandContext& context, const RGPassResources& resources)

@@ -297,14 +297,12 @@ void ClusteredForward::VisualizeClusters(RGGraph& graph, const SceneView* pView,
 		cullData.DirtyDebugData = false;
 	}
 
-	graph.AddPass("Visualize Clusters", RGPassFlag::Raster)
+	graph.AddPass("Visualize Clusters", RGPassFlag::Raster | RGPassFlag::AutoRenderPass)
 		.Read({ pDebugLightGrid, cullData.pAABBs })
 		.RenderTarget(sceneTextures.pColorTarget, RenderTargetLoadAction::Load)
 		.DepthStencil(sceneTextures.pDepth, RenderTargetLoadAction::Load, false)
 		.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
-				context.BeginRenderPass(resources.GetRenderPassInfo());
-
 				context.SetPipelineState(m_pVisualizeLightClustersPSO);
 				context.SetGraphicsRootSignature(m_pVisualizeLightClustersRS);
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_POINTLIST);
@@ -318,8 +316,6 @@ void ClusteredForward::VisualizeClusters(RGGraph& graph, const SceneView* pView,
 				m_pHeatMapTexture->GetSRV(),
 					});
 				context.Draw(0, cullData.ClusterCount.x * cullData.ClusterCount.y * cullData.ClusterCount.z);
-
-				context.EndRenderPass();
 			});
 }
 
@@ -431,7 +427,7 @@ void ClusteredForward::RenderBasePass(RGGraph& graph, const SceneView* pView, Sc
 		pFogTexture = graph.ImportTexture(GraphicsCommon::GetDefaultTexture(DefaultTexture::Black3D));
 	}
 
-	graph.AddPass("Base Pass", RGPassFlag::Raster)
+	graph.AddPass("Base Pass", RGPassFlag::Raster | RGPassFlag::AutoRenderPass)
 		.Read({ sceneTextures.pAmbientOcclusion, sceneTextures.pPreviousColor, pFogTexture, sceneTextures.pDepth })
 		.Read({ lightCullData.pLightGrid, lightCullData.pLightIndexGrid })
 		.DepthStencil(sceneTextures.pDepth, RenderTargetLoadAction::Load, false)
@@ -440,8 +436,6 @@ void ClusteredForward::RenderBasePass(RGGraph& graph, const SceneView* pView, Sc
 		.RenderTarget(sceneTextures.pRoughness, RenderTargetLoadAction::DontCare)
 		.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
-				context.BeginRenderPass(resources.GetRenderPassInfo());
-
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 				context.SetGraphicsRootSignature(m_pDiffuseRS);
 
@@ -484,8 +478,6 @@ void ClusteredForward::RenderBasePass(RGGraph& graph, const SceneView* pView, Sc
 					context.SetPipelineState(useMeshShader ? m_pMeshShaderDiffuseTransparancyPSO : m_pDiffuseTransparancyPSO);
 					Renderer::DrawScene(context, pView, Batch::Blending::AlphaBlend);
 				}
-
-				context.EndRenderPass();
 			});
 }
 

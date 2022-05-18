@@ -138,7 +138,7 @@ void RGGraph::DumpGraph(const char* pPath) const
 				stream << "Res: " << desc.Width << "x" << desc.Height << "x" << desc.DepthOrArraySize << "<br/>";
 				stream << "Fmt: " << D3D::FormatToString(desc.Format) << "<br/>";
 				stream << "Mips: " << desc.Mips << "<br/>";
-				stream << "Size: " << Math::PrettyPrintDataSize(D3D::GetFormatRowDataSize(desc.Format, desc.Width) * desc.Height * desc.DepthOrArraySize) << "</br>";
+				stream << "Size: " << Math::PrettyPrintDataSize(D3D::GetFormatRowDataSize(D3D::GetSrvFormatFromDepth(desc.Format), desc.Width) * desc.Height * desc.DepthOrArraySize) << "</br>";
 			}
 			else if (pResource->Type == RGResourceType::Buffer)
 			{

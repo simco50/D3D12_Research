@@ -294,7 +294,19 @@ void RGGraph::ExecutePass(RGPass* pPass, CommandContext& context)
 	{
 		GPU_PROFILE_SCOPE_CONDITIONAL(pPass->Name, &context, !EnumHasAnyFlags(pPass->Flags, RGPassFlag::Invisible));
 		RGPassResources resources(*pPass);
+
+		if (EnumHasAnyFlags(pPass->Flags, RGPassFlag::AutoRenderPass))
+		{
+			checkf(EnumHasAllFlags(pPass->Flags, RGPassFlag::Raster), "Render Passes only allowed in Raster passes.");
+			context.BeginRenderPass(resources.GetRenderPassInfo());
+		}
+
 		pPass->pExecuteCallback->Execute(context, resources);
+
+		if (EnumHasAllFlags(pPass->Flags, RGPassFlag::AutoRenderPass))
+		{
+			context.EndRenderPass();
+		}
 	}
 }
 

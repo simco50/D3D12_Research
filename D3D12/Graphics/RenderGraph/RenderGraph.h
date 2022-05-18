@@ -23,6 +23,8 @@ enum class RGPassFlag
 	Invisible = 1 << 3,
 	// Makes a pass never be culled when not referenced.
 	NeverCull = 1 << 4,
+	// Automatically begin/end render pass
+	AutoRenderPass = 1 << 5,
 };
 DECLARE_BITMASK_TYPE(RGPassFlag);
 

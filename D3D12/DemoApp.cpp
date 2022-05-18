@@ -481,7 +481,9 @@ void DemoApp::Update()
 		RG_GRAPH_SCOPE("Shadow Depths", graph);
 		for (uint32 i = 0; i < (uint32)pView->ShadowViews.size(); ++i)
 		{
-			graph.AddPass(Sprintf("View %d", i).c_str(), RGPassFlag::Raster | RGPassFlag::NeverCull)
+			RGTexture* pShadowmap = graph.ImportTexture(pView->ShadowViews[i].pDepthTexture);
+			graph.AddPass(Sprintf("View %d", i).c_str(), RGPassFlag::Raster | RGPassFlag::AutoRenderPass)
+				.DepthStencil(pShadowmap, RenderTargetLoadAction::Clear, true)
 				.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
 					{
 						context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -489,14 +491,9 @@ void DemoApp::Update()
 
 						// hack - copy the main viewport and then just modify the viewproj
 						SceneView view = *pView;
-
 						const ShadowView& shadowView = view.ShadowViews[i];
-						Texture* pShadowmap = shadowView.pDepthTexture;
-						context.InsertResourceBarrier(pShadowmap, D3D12_RESOURCE_STATE_DEPTH_WRITE);
-						context.BeginRenderPass(RenderPassInfo::DepthOnly(pShadowmap, RenderPassAccess::Clear_Store));
-
 						view.View.ViewProjection = shadowView.ViewProjection;
-						context.SetRootCBV(1, Renderer::GetViewUniforms(&view, pShadowmap));
+						context.SetRootCBV(1, Renderer::GetViewUniforms(&view, pShadowmap->Get()));
 
 						{
 							GPU_PROFILE_SCOPE("Opaque", &context);
@@ -508,7 +505,6 @@ void DemoApp::Update()
 							context.SetPipelineState(m_pShadowsAlphaMaskPSO);
 							Renderer::DrawScene(context, &view, shadowView.Visibility, Batch::Blending::AlphaMask | Batch::Blending::AlphaBlend);
 						}
-						context.EndRenderPass();
 					});
 		}
 	}
@@ -518,11 +514,10 @@ void DemoApp::Update()
 		// - Depth only pass that renders the entire scene
 		// - Optimization that prevents wasteful lighting calculations during the base pass
 		// - Required for light culling
-		graph.AddPass("Depth Prepass", RGPassFlag::Raster)
+		graph.AddPass("Depth Prepass", RGPassFlag::Raster | RGPassFlag::AutoRenderPass)
 			.DepthStencil(sceneTextures.pDepth, RenderTargetLoadAction::Clear, true)
 			.Bind([=](CommandContext& context, const RGPassResources& resources)
 				{
-					context.BeginRenderPass(resources.GetRenderPassInfo());
 					context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
 					context.SetGraphicsRootSignature(m_pCommonRS);
@@ -539,20 +534,16 @@ void DemoApp::Update()
 						context.SetPipelineState(m_pDepthPrepassAlphaMaskPSO);
 						Renderer::DrawScene(context, pView, Batch::Blending::AlphaMask);
 					}
-
-					context.EndRenderPass();
 				});
 	}
 	else if (m_RenderPath == RenderPath::Visibility)
 	{
-		graph.AddPass("Visibility Buffer", RGPassFlag::Raster)
+		graph.AddPass("Visibility Buffer", RGPassFlag::Raster | RGPassFlag::AutoRenderPass)
 			.DepthStencil(sceneTextures.pDepth, RenderTargetLoadAction::Clear, true)
 			.RenderTarget(sceneTextures.pVisibilityBuffer, RenderTargetLoadAction::DontCare)
 			.Bind([=](CommandContext& context, const RGPassResources& resources)
 				{
-					context.BeginRenderPass(resources.GetRenderPassInfo());
 					context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
 					context.SetGraphicsRootSignature(m_pCommonRS);
 
 					context.SetRootCBV(1, Renderer::GetViewUniforms(pView, sceneTextures.pVisibilityBuffer->Get()));
@@ -567,8 +558,6 @@ void DemoApp::Update()
 						context.SetPipelineState(m_pVisibilityRenderingMaskedPSO);
 						Renderer::DrawScene(context, pView, Batch::Blending::AlphaMask);
 					}
-
-					context.EndRenderPass();
 				});
 	}
 
@@ -822,21 +811,18 @@ void DemoApp::Update()
 			m_pCBTTessellation->Execute(graph, pView, sceneTextures);
 		}
 
-		graph.AddPass("Render Sky", RGPassFlag::Raster)
+		graph.AddPass("Render Sky", RGPassFlag::Raster | RGPassFlag::AutoRenderPass)
 			.Read(pSky)
 			.DepthStencil(sceneTextures.pDepth, RenderTargetLoadAction::Load, false)
 			.RenderTarget(sceneTextures.pColorTarget, RenderTargetLoadAction::Load)
 			.Bind([=](CommandContext& context, const RGPassResources& resources)
 				{
-					context.BeginRenderPass(resources.GetRenderPassInfo());
 					context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 					context.SetGraphicsRootSignature(m_pCommonRS);
 					context.SetPipelineState(m_pSkyboxPSO);
 
 					context.SetRootCBV(1, Renderer::GetViewUniforms(pView, sceneTextures.pColorTarget->Get()));
 					context.Draw(0, 36);
-
-					context.EndRenderPass();
 				});
 
 		DebugRenderer::Get()->Render(graph, pView, sceneTextures.pColorTarget, sceneTextures.pDepth);
@@ -1252,13 +1238,11 @@ void DemoApp::Update()
 		for (uint32 i = 0; i < m_World.DDGIVolumes.size(); ++i)
 		{
 			const DDGIVolume& ddgi = m_World.DDGIVolumes[i];
-			graph.AddPass("DDGI Visualize", RGPassFlag::Raster)
+			graph.AddPass("DDGI Visualize", RGPassFlag::Raster | RGPassFlag::AutoRenderPass)
 				.DepthStencil(sceneTextures.pDepth, RenderTargetLoadAction::Load, true)
 				.RenderTarget(sceneTextures.pColorTarget, RenderTargetLoadAction::Load)
 				.Bind([=](CommandContext& context, const RGPassResources& resources)
 					{
-						context.BeginRenderPass(resources.GetRenderPassInfo());
-
 						context.SetGraphicsRootSignature(m_pCommonRS);
 						context.SetPipelineState(m_pDDGIVisualizePSO);
 						context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -1272,8 +1256,6 @@ void DemoApp::Update()
 						context.SetRootConstants(0, parameters);
 						context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
 						context.Draw(0, 2880, ddgi.NumProbes.x * ddgi.NumProbes.y * ddgi.NumProbes.z);
-
-						context.EndRenderPass();
 					});
 		}
 	}
