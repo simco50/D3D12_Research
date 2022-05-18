@@ -7,7 +7,6 @@ class PipelineState;
 class Texture;
 class GraphicsDevice;
 class RGGraph;
-class CommandSignature;
 struct SceneView;
 struct SceneTextures;
 

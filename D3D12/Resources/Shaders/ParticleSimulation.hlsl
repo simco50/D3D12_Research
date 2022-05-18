@@ -30,6 +30,14 @@ struct SimulateParameters
 	float ParticleLifeTime;
 };
 
+enum IndirectArgOffsets
+{
+	EmitArgs = 0 * sizeof(uint),
+	SimulateArgs = EmitArgs + 3 * sizeof(uint),
+	DrawArgs = SimulateArgs + 3 * sizeof(uint),
+	SizeArgs = DrawArgs + 4 * sizeof(uint),
+};
+
 ConstantBuffer<IndirectArgsParameters> cIndirectArgsParams : register(b0);
 ConstantBuffer<EmitParameters> cEmitParams : register(b0);
 ConstantBuffer<SimulateParameters> cSimulateParams : register(b0);
@@ -39,9 +47,7 @@ RWStructuredBuffer<uint> uDeadList : register(u1);
 RWStructuredBuffer<uint> uAliveList1 : register(u2);
 RWStructuredBuffer<uint> uAliveList2 : register(u3);
 RWStructuredBuffer<ParticleData> uParticleData : register(u4);
-RWByteAddressBuffer uEmitArguments : register(u5);
-RWByteAddressBuffer uSimulateArguments : register(u6);
-RWByteAddressBuffer uDrawArgumentsBuffer : register(u7);
+RWByteAddressBuffer uIndirectArguments : register(u5);
 
 ByteAddressBuffer tCounters : register(t0);
 Texture2D tSceneDepth : register(t1);
@@ -54,10 +60,10 @@ void UpdateSimulationParameters()
 
 	uint emitCount = min(deadCount, cIndirectArgsParams.EmitCount);
 
-	uEmitArguments.Store3(0, uint3(ceil((float)emitCount / 128), 1, 1));
+	uIndirectArguments.Store3(IndirectArgOffsets::EmitArgs, uint3(ceil((float)emitCount / 128), 1, 1));
 
 	uint simulateCount = ceil((float)(aliveParticleCount + emitCount) / 128);
-	uSimulateArguments.Store3(0, uint3(simulateCount, 1, 1));
+	uIndirectArguments.Store3(IndirectArgOffsets::SimulateArgs, uint3(simulateCount, 1, 1));
 
 	uCounters.Store(ALIVE_LIST_1_COUNTER, aliveParticleCount);
 	uCounters.Store(ALIVE_LIST_2_COUNTER, 0);
@@ -152,5 +158,5 @@ void Simulate(uint threadID : SV_DispatchThreadID)
 void SimulateEnd()
 {
 	uint particleCount = tCounters.Load(ALIVE_LIST_2_COUNTER);
-	uDrawArgumentsBuffer.Store4(0, uint4(6 * particleCount, 1, 0, 0));
+	uIndirectArguments.Store4(IndirectArgOffsets::DrawArgs, uint4(6 * particleCount, 1, 0, 0));
 }
