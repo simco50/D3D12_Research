@@ -482,9 +482,9 @@ void DemoApp::Update()
 		for (uint32 i = 0; i < (uint32)pView->ShadowViews.size(); ++i)
 		{
 			RGTexture* pShadowmap = graph.ImportTexture(pView->ShadowViews[i].pDepthTexture);
-			graph.AddPass(Sprintf("View %d", i).c_str(), RGPassFlag::Raster | RGPassFlag::AutoRenderPass)
+			graph.AddPass(Sprintf("View %d", i).c_str(), RGPassFlag::Raster)
 				.DepthStencil(pShadowmap, RenderTargetLoadAction::Clear, true)
-				.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
+				.Bind([=](CommandContext& context)
 					{
 						context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 						context.SetGraphicsRootSignature(m_pCommonRS);
@@ -514,9 +514,9 @@ void DemoApp::Update()
 		// - Depth only pass that renders the entire scene
 		// - Optimization that prevents wasteful lighting calculations during the base pass
 		// - Required for light culling
-		graph.AddPass("Depth Prepass", RGPassFlag::Raster | RGPassFlag::AutoRenderPass)
+		graph.AddPass("Depth Prepass", RGPassFlag::Raster)
 			.DepthStencil(sceneTextures.pDepth, RenderTargetLoadAction::Clear, true)
-			.Bind([=](CommandContext& context, const RGPassResources& resources)
+			.Bind([=](CommandContext& context)
 				{
 					context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
@@ -538,10 +538,10 @@ void DemoApp::Update()
 	}
 	else if (m_RenderPath == RenderPath::Visibility)
 	{
-		graph.AddPass("Visibility Buffer", RGPassFlag::Raster | RGPassFlag::AutoRenderPass)
+		graph.AddPass("Visibility Buffer", RGPassFlag::Raster)
 			.DepthStencil(sceneTextures.pDepth, RenderTargetLoadAction::Clear, true)
 			.RenderTarget(sceneTextures.pVisibilityBuffer, RenderTargetLoadAction::DontCare)
-			.Bind([=](CommandContext& context, const RGPassResources& resources)
+			.Bind([=](CommandContext& context)
 				{
 					context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 					context.SetGraphicsRootSignature(m_pCommonRS);
@@ -616,7 +616,7 @@ void DemoApp::Update()
 		graph.AddPass("DDGI Raytrace", RGPassFlag::Compute)
 			.Read(pProbeStates)
 			.Write(pRayBuffer)
-			.Bind([=](CommandContext& context, const RGPassResources& resources)
+			.Bind([=](CommandContext& context)
 				{
 					context.SetComputeRootSignature(m_pCommonRS);
 					context.SetPipelineState(m_pDDGITraceRaysSO);
@@ -637,7 +637,7 @@ void DemoApp::Update()
 		graph.AddPass("DDGI Update Irradiance", RGPassFlag::Compute)
 			.Read({ pIrradianceHistory, pRayBuffer, pProbeStates })
 			.Write(pIrradianceTarget)
-			.Bind([=](CommandContext& context, const RGPassResources& resources)
+			.Bind([=](CommandContext& context)
 				{
 					context.SetComputeRootSignature(m_pCommonRS);
 					context.SetPipelineState(m_pDDGIUpdateIrradianceColorPSO);
@@ -655,7 +655,7 @@ void DemoApp::Update()
 		graph.AddPass("DDGI Update Depth", RGPassFlag::Compute)
 			.Read({ pDepthHistory, pRayBuffer, pProbeStates })
 			.Write(pDepthTarget)
-			.Bind([=](CommandContext& context, const RGPassResources& resources)
+			.Bind([=](CommandContext& context)
 				{
 					context.SetComputeRootSignature(m_pCommonRS);
 					context.SetPipelineState(m_pDDGIUpdateIrradianceDepthPSO);
@@ -675,7 +675,7 @@ void DemoApp::Update()
 		graph.AddPass("DDGI Update Probe States", RGPassFlag::Compute)
 			.Read(pRayBuffer)
 			.Write({ pProbeOffsets, pProbeStates })
-			.Bind([=](CommandContext& context, const RGPassResources& resources)
+			.Bind([=](CommandContext& context)
 				{
 					context.SetComputeRootSignature(m_pCommonRS);
 					context.SetPipelineState(m_pDDGIUpdateProbeStatesPSO);
@@ -702,7 +702,7 @@ void DemoApp::Update()
 
 	graph.AddPass("Compute Sky", RGPassFlag::Compute | RGPassFlag::NeverCull)
 		.Write(pSky)
-		.Bind([=](CommandContext& context, const RGPassResources& resources)
+		.Bind([=](CommandContext& context)
 			{
 				Texture* pSkyTexture = pSky->Get();
 				context.SetComputeRootSignature(m_pCommonRS);
@@ -725,7 +725,7 @@ void DemoApp::Update()
 			graph.AddPass("Depth Resolve", RGPassFlag::Compute)
 				.Read(sceneTextures.pDepth)
 				.Write(sceneTextures.pResolvedDepth)
-				.Bind([=](CommandContext& context, const RGPassResources& resources)
+				.Bind([=](CommandContext& context)
 					{
 						Texture* pResolveTarget = sceneTextures.pResolvedDepth->Get();
 						context.SetComputeRootSignature(m_pCommonRS);
@@ -745,7 +745,7 @@ void DemoApp::Update()
 		graph.AddPass("Camera Motion", RGPassFlag::Compute)
 			.Read(sceneTextures.pDepth)
 			.Write(sceneTextures.pVelocity)
-			.Bind([=](CommandContext& context, const RGPassResources& resources)
+			.Bind([=](CommandContext& context)
 				{
 					Texture* pVelocity = sceneTextures.pVelocity->Get();
 
@@ -781,7 +781,7 @@ void DemoApp::Update()
 			graph.AddPass("Visibility Shading", RGPassFlag::Compute)
 				.Read({ sceneTextures.pVisibilityBuffer, sceneTextures.pDepth, sceneTextures.pAmbientOcclusion, sceneTextures.pPreviousColor })
 				.Write({ sceneTextures.pNormals, sceneTextures.pColorTarget, sceneTextures.pRoughness })
-				.Bind([=](CommandContext& context, const RGPassResources& resources)
+				.Bind([=](CommandContext& context)
 					{
 						Texture* pColorTarget = sceneTextures.pColorTarget->Get();
 
@@ -811,11 +811,11 @@ void DemoApp::Update()
 			m_pCBTTessellation->Execute(graph, pView, sceneTextures);
 		}
 
-		graph.AddPass("Render Sky", RGPassFlag::Raster | RGPassFlag::AutoRenderPass)
+		graph.AddPass("Render Sky", RGPassFlag::Raster)
 			.Read(pSky)
 			.DepthStencil(sceneTextures.pDepth, RenderTargetLoadAction::Load, false)
 			.RenderTarget(sceneTextures.pColorTarget, RenderTargetLoadAction::Load)
-			.Bind([=](CommandContext& context, const RGPassResources& resources)
+			.Bind([=](CommandContext& context)
 				{
 					context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 					context.SetGraphicsRootSignature(m_pCommonRS);
@@ -837,13 +837,7 @@ void DemoApp::Update()
 	{
 		colorDesc.SampleCount = 1;
 		RGTexture* pResolveColor = graph.CreateTexture("Resolved Color", colorDesc);
-		graph.AddPass("Color Resolve", RGPassFlag::Compute)
-			.RenderTarget(sceneTextures.pColorTarget, RenderTargetLoadAction::Load, pResolveColor)
-			.Bind([=](CommandContext& context, const RGPassResources& resources)
-				{
-					context.BeginRenderPass(resources.GetRenderPassInfo());
-					context.EndRenderPass();
-				});
+		RGUtils::AddResolvePass(graph, sceneTextures.pColorTarget, pResolveColor);
 		sceneTextures.pColorTarget = pResolveColor;
 	}
 
@@ -861,7 +855,7 @@ void DemoApp::Update()
 			graph.AddPass("Temporal Resolve", RGPassFlag::Compute)
 				.Read({ sceneTextures.pVelocity, sceneTextures.pDepth, sceneTextures.pColorTarget, sceneTextures.pPreviousColor })
 				.Write(pTaaTarget)
-				.Bind([=](CommandContext& context, const RGPassResources& resources)
+				.Bind([=](CommandContext& context)
 					{
 						Texture* pTarget = pTaaTarget->Get();
 						context.SetComputeRootSignature(m_pCommonRS);
@@ -898,7 +892,7 @@ void DemoApp::Update()
 		graph.AddPass("Depth Reduce - Setup", RGPassFlag::Compute)
 			.Read(sceneTextures.pDepth)
 			.Write(pReductionTarget)
-			.Bind([=](CommandContext& context, const RGPassResources& resources)
+			.Bind([=](CommandContext& context)
 				{
 					Texture* pSource = sceneTextures.pDepth->Get();
 					Texture* pTarget = pReductionTarget->Get();
@@ -921,7 +915,7 @@ void DemoApp::Update()
 			graph.AddPass("Depth Reduce - Subpass", RGPassFlag::Compute)
 				.Read(pReductionSource)
 				.Write(pReductionTarget)
-				.Bind([=](CommandContext& context, const RGPassResources& resources)
+				.Bind([=](CommandContext& context)
 					{
 						Texture* pTarget = pReductionTarget->Get();
 						context.SetPipelineState(m_pReduceDepthPSO);
@@ -936,7 +930,7 @@ void DemoApp::Update()
 
 		graph.AddPass("Readback Copy", RGPassFlag::Copy)
 			.Read(pReductionTarget)
-			.Bind([=](CommandContext& context, const RGPassResources& resources)
+			.Bind([=](CommandContext& context)
 				{
 					context.CopyTexture(pReductionTarget->Get(), m_ReductionReadbackTargets[m_Frame % SwapChain::NUM_FRAMES], CD3DX12_BOX(0, 1));
 				});
@@ -958,7 +952,7 @@ void DemoApp::Update()
 		graph.AddPass("Downsample Color", RGPassFlag::Compute)
 			.Read(sceneTextures.pColorTarget)
 			.Write(pDownscaleTarget)
-			.Bind([=](CommandContext& context, const RGPassResources& resources)
+			.Bind([=](CommandContext& context)
 				{
 					Texture* pTarget = pDownscaleTarget->Get();
 
@@ -984,7 +978,7 @@ void DemoApp::Update()
 		graph.AddPass("Luminance Histogram", RGPassFlag::Compute)
 			.Read(pDownscaleTarget)
 			.Write(pLuminanceHistogram)
-			.Bind([=](CommandContext& context, const RGPassResources& resources)
+			.Bind([=](CommandContext& context)
 				{
 					Texture* pColorSource = pDownscaleTarget->Get();
 					Buffer* pHistogram = pLuminanceHistogram->Get();
@@ -1018,7 +1012,7 @@ void DemoApp::Update()
 		graph.AddPass("Average Luminance", RGPassFlag::Compute)
 			.Read(pLuminanceHistogram)
 			.Write(pAverageLuminance)
-			.Bind([=](CommandContext& context, const RGPassResources& resources)
+			.Bind([=](CommandContext& context)
 				{
 					context.SetComputeRootSignature(m_pCommonRS);
 					context.SetPipelineState(m_pAverageLuminancePSO);
@@ -1057,7 +1051,7 @@ void DemoApp::Update()
 		graph.AddPass("Separate Bloom", RGPassFlag::Compute)
 			.Read({ sceneTextures.pColorTarget, pAverageLuminance })
 			.Write(pBloomTexture)
-			.Bind([=](CommandContext& context, const RGPassResources& resources)
+			.Bind([=](CommandContext& context)
 				{
 					Texture* pTarget = pBloomTexture->Get();
 					RefCountPtr<UnorderedAccessView>* pTargetUAVs = m_pBloomUAVs.data();
@@ -1090,7 +1084,7 @@ void DemoApp::Update()
 
 		graph.AddPass("Bloom Mip Chain", RGPassFlag::Compute)
 			.Write(pBloomTexture)
-			.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
+			.Bind([=](CommandContext& context)
 				{
 					Texture* pSource = pBloomTexture->Get();
 					Texture* pTarget = m_pBloomIntermediateTexture;
@@ -1152,7 +1146,7 @@ void DemoApp::Update()
 	graph.AddPass("Tonemap", RGPassFlag::Compute)
 		.Read({ sceneTextures.pColorTarget, pAverageLuminance, pBloomTexture })
 		.Write(pTonemapTarget)
-		.Bind([=](CommandContext& context, const RGPassResources& resources)
+		.Bind([=](CommandContext& context)
 			{
 				Texture* pTarget = pTonemapTarget->Get();
 
@@ -1187,7 +1181,7 @@ void DemoApp::Update()
 
 		graph.AddPass("Draw Histogram", RGPassFlag::Compute)
 			.Read({ pLuminanceHistogram, pAverageLuminance })
-			.Bind([=](CommandContext& context, const RGPassResources& resources)
+			.Bind([=](CommandContext& context)
 				{
 					Texture* pTarget = m_pDebugHistogramTexture;
 					context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
@@ -1238,10 +1232,10 @@ void DemoApp::Update()
 		for (uint32 i = 0; i < m_World.DDGIVolumes.size(); ++i)
 		{
 			const DDGIVolume& ddgi = m_World.DDGIVolumes[i];
-			graph.AddPass("DDGI Visualize", RGPassFlag::Raster | RGPassFlag::AutoRenderPass)
+			graph.AddPass("DDGI Visualize", RGPassFlag::Raster)
 				.DepthStencil(sceneTextures.pDepth, RenderTargetLoadAction::Load, true)
 				.RenderTarget(sceneTextures.pColorTarget, RenderTargetLoadAction::Load)
-				.Bind([=](CommandContext& context, const RGPassResources& resources)
+				.Bind([=](CommandContext& context)
 					{
 						context.SetGraphicsRootSignature(m_pCommonRS);
 						context.SetPipelineState(m_pDDGIVisualizePSO);
@@ -1265,7 +1259,7 @@ void DemoApp::Update()
 	graph.AddPass("Copy Final", RGPassFlag::Copy)
 		.Read(sceneTextures.pColorTarget)
 		.Write(pFinalOutput)
-		.Bind([=](CommandContext& context, const RGPassResources& resources)
+		.Bind([=](CommandContext& context)
 			{
 				context.CopyResource(sceneTextures.pColorTarget->Get(), pFinalOutput->Get());
 				context.InsertResourceBarrier(pFinalOutput->Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
@@ -1276,7 +1270,7 @@ void DemoApp::Update()
 
 	graph.AddPass("Transition", RGPassFlag::NeverCull)
 		.Read(sceneTextures.pColorTarget)
-		.Bind([=](CommandContext& context, const RGPassResources& resources)
+		.Bind([=](CommandContext& context)
 			{
 				context.InsertResourceBarrier(m_pSwapchain->GetBackBuffer(), D3D12_RESOURCE_STATE_PRESENT);
 			});
@@ -1506,7 +1500,7 @@ void DemoApp::VisualizeTexture(RGGraph& graph, RGTexture* pTexture)
 	graph.AddPass("Process Image Visualizer", RGPassFlag::Compute | RGPassFlag::NeverCull)
 		.Read(pTexture)
 		.Write(pTarget)
-		.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
+		.Bind([=](CommandContext& context)
 			{
 				context.SetComputeRootSignature(m_pCommonRS);
 				context.SetPipelineState(m_pVisualizeTexturePSO);

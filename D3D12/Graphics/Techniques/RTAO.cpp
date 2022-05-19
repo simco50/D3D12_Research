@@ -65,7 +65,7 @@ void RTAO::Execute(RGGraph& graph, const SceneView* pView, SceneTextures& sceneT
 	graph.AddPass("Trace Rays", RGPassFlag::Compute)
 		.Read(sceneTextures.pDepth)
 		.Write(pRayTraceTarget)
-		.Bind([=](CommandContext& context, const RGPassResources& resources)
+		.Bind([=](CommandContext& context)
 			{
 				Texture* pTarget = pRayTraceTarget->Get();
 
@@ -100,7 +100,7 @@ void RTAO::Execute(RGGraph& graph, const SceneView* pView, SceneTextures& sceneT
 	graph.AddPass("Denoise", RGPassFlag::Compute)
 		.Read({ pRayTraceTarget, sceneTextures.pVelocity, sceneTextures.pDepth, pAOHistory })
 		.Write(pDenoiseTarget)
-		.Bind([=](CommandContext& context, const RGPassResources& resources)
+		.Bind([=](CommandContext& context)
 			{
 				Texture* pTarget = pDenoiseTarget->Get();
 
@@ -124,7 +124,7 @@ void RTAO::Execute(RGGraph& graph, const SceneView* pView, SceneTextures& sceneT
 	graph.AddPass("Blur AO - Horizontal", RGPassFlag::Compute)
 		.Read({ pDenoiseTarget, sceneTextures.pDepth })
 		.Write(pRayTraceTarget)
-		.Bind([=](CommandContext& context, const RGPassResources& resources)
+		.Bind([=](CommandContext& context)
 			{
 				Texture* pTarget = pRayTraceTarget->Get();
 
@@ -154,7 +154,7 @@ void RTAO::Execute(RGGraph& graph, const SceneView* pView, SceneTextures& sceneT
 	graph.AddPass("Blur AO - Horizontal", RGPassFlag::Compute)
 		.Read({ pRayTraceTarget, sceneTextures.pDepth })
 		.Write(sceneTextures.pAmbientOcclusion)
-		.Bind([=](CommandContext& context, const RGPassResources& resources)
+		.Bind([=](CommandContext& context)
 			{
 				Texture* pTarget = sceneTextures.pAmbientOcclusion->Get();
 

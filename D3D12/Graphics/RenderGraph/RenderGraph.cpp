@@ -239,7 +239,7 @@ void RGGraph::PushEvent(const char* pName)
 {
 	std::string name = pName;
 	AddPass("EventPass", RGPassFlag::Invisible | RGPassFlag::NeverCull)
-		.Bind([name](CommandContext& context, const RGPassResources& resources)
+		.Bind([name](CommandContext& context)
 			{
 				GPU_PROFILE_BEGIN(name.c_str(), &context);
 			});
@@ -248,7 +248,7 @@ void RGGraph::PushEvent(const char* pName)
 void RGGraph::PopEvent()
 {
 	AddPass("EventPass", RGPassFlag::Invisible | RGPassFlag::NeverCull)
-		.Bind([](CommandContext& context, const RGPassResources& resources)
+		.Bind([](CommandContext& context)
 			{
 				GPU_PROFILE_END();
 			});
@@ -295,18 +295,15 @@ void RGGraph::ExecutePass(RGPass* pPass, CommandContext& context)
 		GPU_PROFILE_SCOPE_CONDITIONAL(pPass->Name, &context, !EnumHasAnyFlags(pPass->Flags, RGPassFlag::Invisible));
 		RGPassResources resources(*pPass);
 
-		if (EnumHasAnyFlags(pPass->Flags, RGPassFlag::AutoRenderPass))
-		{
-			checkf(EnumHasAllFlags(pPass->Flags, RGPassFlag::Raster), "Render Passes only allowed in Raster passes.");
+		bool useRenderPass = EnumHasAllFlags(pPass->Flags, RGPassFlag::Raster) && !EnumHasAllFlags(pPass->Flags, RGPassFlag::NoRenderPass);
+
+		if (useRenderPass)
 			context.BeginRenderPass(resources.GetRenderPassInfo());
-		}
 
 		pPass->pExecuteCallback->Execute(context, resources);
 
-		if (EnumHasAllFlags(pPass->Flags, RGPassFlag::AutoRenderPass))
-		{
+		if (useRenderPass)
 			context.EndRenderPass();
-		}
 	}
 }
 
@@ -429,10 +426,18 @@ namespace RGUtils
 		return graph.AddPass(Sprintf("Copy [%s -> %s]", pSource->GetName(), pTarget->GetName()).c_str(), RGPassFlag::Copy)
 			.Read(pSource)
 			.Write(pTarget)
-			.Bind([=](CommandContext& context, const RGPassResources& resources)
+			.Bind([=](CommandContext& context)
 				{
 					context.CopyResource(pSource->GetRaw(), pTarget->GetRaw());
 				});
+	}
+
+	RGPass& AddResolvePass(RGGraph& graph, RGTexture* pSource, RGTexture* pTarget)
+	{
+		return graph.AddPass(Sprintf("Resolve [%s -> %s]", pSource->GetName(), pTarget->GetName()).c_str(), RGPassFlag::Raster)
+			.RenderTarget(pSource, RenderTargetLoadAction::Load, pTarget)
+			.Bind([=](CommandContext& context)
+				{});
 	}
 
 	RGBuffer* CreatePersistentBuffer(RGGraph& graph, const char* pName, const BufferDesc& bufferDesc, RefCountPtr<Buffer>* pStorageTarget, bool doExport)

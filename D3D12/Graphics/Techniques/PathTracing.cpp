@@ -87,7 +87,7 @@ void PathTracing::Render(RGGraph& graph, const SceneView* pView, RGTexture* pTar
 
 	graph.AddPass("Path Tracing", RGPassFlag::Compute)
 		.Write({ pTarget, pAccumulationTexture })
-		.Bind([=](CommandContext& context, const RGPassResources& resources)
+		.Bind([=](CommandContext& context)
 			{
 				Texture* pRTTarget = pTarget->Get();
 

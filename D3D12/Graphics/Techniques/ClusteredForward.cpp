@@ -211,7 +211,7 @@ void ClusteredForward::ComputeLightCulling(RGGraph& graph, const SceneView* pVie
 
 	graph.AddPass("Cluster AABBs", RGPassFlag::Compute)
 		.Write(cullData.pAABBs)
-		.Bind([=](CommandContext& context, const RGPassResources& resources)
+		.Bind([=](CommandContext& context)
 			{
 				context.SetPipelineState(m_pCreateAabbPSO);
 				context.SetComputeRootSignature(m_pLightCullingRS);
@@ -246,7 +246,7 @@ void ClusteredForward::ComputeLightCulling(RGGraph& graph, const SceneView* pVie
 	graph.AddPass("Cull Lights", RGPassFlag::Compute)
 		.Read(cullData.pAABBs)
 		.Write({ cullData.pLightGrid, cullData.pLightIndexGrid })
-		.Bind([=](CommandContext& context, const RGPassResources& resources)
+		.Bind([=](CommandContext& context)
 			{
 				context.SetPipelineState(m_pLightCullingPSO);
 				context.SetComputeRootSignature(m_pLightCullingRS);
@@ -297,11 +297,11 @@ void ClusteredForward::VisualizeClusters(RGGraph& graph, const SceneView* pView,
 		cullData.DirtyDebugData = false;
 	}
 
-	graph.AddPass("Visualize Clusters", RGPassFlag::Raster | RGPassFlag::AutoRenderPass)
+	graph.AddPass("Visualize Clusters", RGPassFlag::Raster)
 		.Read({ pDebugLightGrid, cullData.pAABBs })
 		.RenderTarget(sceneTextures.pColorTarget, RenderTargetLoadAction::Load)
 		.DepthStencil(sceneTextures.pDepth, RenderTargetLoadAction::Load, false)
-		.Bind([=](CommandContext& context, const RGPassResources& resources)
+		.Bind([=](CommandContext& context)
 			{
 				context.SetPipelineState(m_pVisualizeLightClustersPSO);
 				context.SetGraphicsRootSignature(m_pVisualizeLightClustersRS);
@@ -356,7 +356,7 @@ RGTexture* ClusteredForward::RenderVolumetricFog(RGGraph& graph, const SceneView
 	graph.AddPass("Inject Volume Lights", RGPassFlag::Compute)
 		.Read({ pSourceVolume, lightCullData.pLightGrid, lightCullData.pLightIndexGrid })
 		.Write(pTargetVolume)
-		.Bind([=](CommandContext& context, const RGPassResources& resources)
+		.Bind([=](CommandContext& context)
 			{
 				Texture* pTarget = pTargetVolume->Get();
 
@@ -383,7 +383,7 @@ RGTexture* ClusteredForward::RenderVolumetricFog(RGGraph& graph, const SceneView
 	graph.AddPass("Accumulate Volume Fog", RGPassFlag::Compute)
 		.Read({ pTargetVolume, lightCullData.pLightGrid, lightCullData.pLightIndexGrid })
 		.Write(pFinalVolumeFog)
-		.Bind([=](CommandContext& context, const RGPassResources& resources)
+		.Bind([=](CommandContext& context)
 			{
 				Texture* pFinalFog = pFinalVolumeFog->Get();
 
@@ -427,14 +427,14 @@ void ClusteredForward::RenderBasePass(RGGraph& graph, const SceneView* pView, Sc
 		pFogTexture = graph.ImportTexture(GraphicsCommon::GetDefaultTexture(DefaultTexture::Black3D));
 	}
 
-	graph.AddPass("Base Pass", RGPassFlag::Raster | RGPassFlag::AutoRenderPass)
+	graph.AddPass("Base Pass", RGPassFlag::Raster)
 		.Read({ sceneTextures.pAmbientOcclusion, sceneTextures.pPreviousColor, pFogTexture, sceneTextures.pDepth })
 		.Read({ lightCullData.pLightGrid, lightCullData.pLightIndexGrid })
 		.DepthStencil(sceneTextures.pDepth, RenderTargetLoadAction::Load, false)
 		.RenderTarget(sceneTextures.pColorTarget, RenderTargetLoadAction::DontCare)
 		.RenderTarget(sceneTextures.pNormals, RenderTargetLoadAction::DontCare)
 		.RenderTarget(sceneTextures.pRoughness, RenderTargetLoadAction::DontCare)
-		.Bind([=](CommandContext& context, const RGPassResources& resources)
+		.Bind([=](CommandContext& context)
 			{
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 				context.SetGraphicsRootSignature(m_pDiffuseRS);
@@ -492,7 +492,7 @@ void ClusteredForward::VisualizeLightDensity(RGGraph& graph, const SceneView* pV
 	graph.AddPass("Visualize Light Density", RGPassFlag::Compute)
 		.Read({ sceneTextures.pDepth, sceneTextures.pColorTarget, pLightGrid })
 		.Write(pVisualizationTarget)
-		.Bind([=](CommandContext& context, const RGPassResources& resources)
+		.Bind([=](CommandContext& context)
 			{
 				Texture* pTarget = pVisualizationTarget->Get();
 

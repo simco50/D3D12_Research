@@ -120,7 +120,7 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView* pView, RGTexture* p
 	graph.AddPass("Prepare Arguments", RGPassFlag::Compute)
 		.Read(pDepth)
 		.Write({ pIndirectArgs })
-		.Bind([=](CommandContext& context, const RGPassResources& resources)
+		.Bind([=](CommandContext& context)
 			{
 				m_ParticlesToSpawn += (float)g_EmitCount * Time::DeltaTime();
 
@@ -159,7 +159,7 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView* pView, RGTexture* p
 
 	graph.AddPass("Emit", RGPassFlag::Compute | RGPassFlag::NeverCull)
 		.Read({ pDepth, pIndirectArgs })
-		.Bind([=](CommandContext& context, const RGPassResources& resources)
+		.Bind([=](CommandContext& context)
 			{
 				context.SetComputeRootSignature(m_pSimulateRS);
 				context.SetPipelineState(m_pEmitPS);
@@ -191,7 +191,7 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView* pView, RGTexture* p
 
 	graph.AddPass("Simulate", RGPassFlag::Compute | RGPassFlag::NeverCull)
 		.Read({ pDepth, pIndirectArgs })
-		.Bind([=](CommandContext& context, const RGPassResources& resources)
+		.Bind([=](CommandContext& context)
 			{
 				context.SetComputeRootSignature(m_pSimulateRS);
 				context.SetPipelineState(m_pSimulatePS);
@@ -225,7 +225,7 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView* pView, RGTexture* p
 	graph.AddPass("Simulate End", RGPassFlag::Compute)
 		.Read(pDepth)
 		.Write(pIndirectArgs)
-		.Bind([=](CommandContext& context, const RGPassResources& resources)
+		.Bind([=](CommandContext& context)
 			{
 				context.InsertResourceBarrier(m_pCountersBuffer, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 

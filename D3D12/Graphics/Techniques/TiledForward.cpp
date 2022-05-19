@@ -101,7 +101,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneView* pView, SceneTextures
 	graph.AddPass("Tiled Light Culling", RGPassFlag::Compute)
 		.Read(sceneTextures.pDepth)
 		.Write({ pLightGridOpaque, pLightGridTransparant, pLightIndexListOpaque, pLightIndexListTransparant, pLightIndexCounter })
-		.Bind([=](CommandContext& context, const RGPassResources& resources)
+		.Bind([=](CommandContext& context)
 			{
 				Texture* pDepth = sceneTextures.pDepth->Get();
 
@@ -132,14 +132,14 @@ void TiledForward::Execute(RGGraph& graph, const SceneView* pView, SceneTextures
 
 	//5. BASE PASS
 	// - Render the scene using the shadow mapping result and the light culling buffers
-	graph.AddPass("Base Pass", RGPassFlag::Raster | RGPassFlag::AutoRenderPass)
+	graph.AddPass("Base Pass", RGPassFlag::Raster)
 		.Read({ sceneTextures.pAmbientOcclusion, sceneTextures.pPreviousColor })
 		.Read({ pLightGridOpaque, pLightGridTransparant, pLightIndexListOpaque, pLightIndexListTransparant })
 		.DepthStencil(sceneTextures.pDepth, RenderTargetLoadAction::Load, false)
 		.RenderTarget(sceneTextures.pColorTarget, RenderTargetLoadAction::DontCare)
 		.RenderTarget(sceneTextures.pNormals, RenderTargetLoadAction::DontCare)
 		.RenderTarget(sceneTextures.pRoughness, RenderTargetLoadAction::DontCare)
-		.Bind([=](CommandContext& context, const RGPassResources& resources)
+		.Bind([=](CommandContext& context)
 			{
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 				context.SetGraphicsRootSignature(m_pDiffuseRS);
@@ -196,7 +196,7 @@ void TiledForward::VisualizeLightDensity(RGGraph& graph, GraphicsDevice* pDevice
 	graph.AddPass("Visualize Light Density", RGPassFlag::Compute)
 		.Read({ sceneTextures.pDepth, sceneTextures.pColorTarget, pLightGridOpaque })
 		.Write(pVisualizationTarget)
-		.Bind([=](CommandContext& context, const RGPassResources& resources)
+		.Bind([=](CommandContext& context)
 			{
 				Texture* pTarget = pVisualizationTarget->Get();
 
