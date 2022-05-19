@@ -1042,7 +1042,10 @@ void DemoApp::Update()
 		graph.ExportBuffer(pAverageLuminance, &m_pAverageLuminance);
 	}
 
-	RGTexture* pBloomTexture = graph.ImportTexture(m_pBloomTexture);
+	uint32 mips = Math::Min(5u, (uint32)log2f((float)Math::Max(viewDimensions.x, viewDimensions.y)));
+	TextureDesc bloomDesc = TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess, 1, mips);
+	RGTexture* pBloomTexture = graph.CreateTexture("Bloom", bloomDesc);
+	RGTexture* pBloomIntermediateTexture = graph.CreateTexture("Bloom Intermediate", bloomDesc);
 
 	if (Tweakables::g_Bloom.Get())
 	{
@@ -1054,8 +1057,6 @@ void DemoApp::Update()
 			.Bind([=](CommandContext& context)
 				{
 					Texture* pTarget = pBloomTexture->Get();
-					RefCountPtr<UnorderedAccessView>* pTargetUAVs = m_pBloomUAVs.data();
-
 					context.SetComputeRootSignature(m_pCommonRS);
 					context.SetPipelineState(m_pBloomSeparatePSO);
 
@@ -1072,73 +1073,70 @@ void DemoApp::Update()
 					context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
 
 					context.BindResources(2, {
-						pTargetUAVs[0]
+						pTarget->GetUAV()
 						});
 					context.BindResources(3, {
 						sceneTextures.pColorTarget->Get()->GetSRV(),
 						pAverageLuminance->Get()->GetSRV(),
-						});;
+						});
 
 					context.Dispatch(ComputeUtils::GetNumThreadGroups(pTarget->GetWidth(), 8, pTarget->GetHeight(), 8));
 				});
 
-		graph.AddPass("Bloom Mip Chain", RGPassFlag::Compute)
-			.Write(pBloomTexture)
-			.Bind([=](CommandContext& context)
+		{
+			RG_GRAPH_SCOPE("Bloom Mip Chain", graph);
+
+			RGTexture* pTarget = pBloomIntermediateTexture;
+			RGTexture* pSource = pBloomTexture;
+
+			uint32 width = bloomDesc.Width / 2;
+			uint32 height = bloomDesc.Height / 2;
+
+			const uint32 numMips = bloomDesc.Mips;
+			constexpr uint32 ThreadGroupSize = 128;
+
+			for (uint32 i = 1; i < numMips; ++i)
+			{
+				for (uint32 direction = 0; direction < 2; ++direction)
 				{
-					Texture* pSource = pBloomTexture->Get();
-					Texture* pTarget = m_pBloomIntermediateTexture;
+					graph.AddPass(Sprintf("Mip %d - %s (%s -> %s)", i, direction == 0 ? "Vertical" : "Horizontal", pSource->GetName(), pTarget->GetName()).c_str(), RGPassFlag::Compute)
+						.Read(pSource)
+						.Write(pTarget)
+						.Bind([=](CommandContext& context)
+							{
+								context.SetComputeRootSignature(m_pCommonRS);
+								context.SetPipelineState(m_pBloomMipChainPSO);
 
-					RefCountPtr<UnorderedAccessView>* pSourceUAVs = m_pBloomUAVs.data();
-					RefCountPtr<UnorderedAccessView>* pTargetUAVs = m_pBloomIntermediateUAVs.data();
+								RefCountPtr<UnorderedAccessView> pUAV = m_pDevice->CreateUAV(pTarget->Get(), TextureUAVDesc((uint8)i));
 
-					context.SetComputeRootSignature(m_pCommonRS);
-					context.SetPipelineState(m_pBloomMipChainPSO);
+								struct
+								{
+									uint32 SourceMip;
+									Vector2 TargetDimensionsInv;
+									uint32 Horizontal;
+								} parameters;
 
-					context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
+								parameters.TargetDimensionsInv = Vector2(1.0f / width, 1.0f / height);
+								parameters.SourceMip = direction == 0 ? i - 1 : i;
+								parameters.Horizontal = direction;
 
-					uint32 width = pTarget->GetWidth() / 2;
-					uint32 height = pTarget->GetHeight() / 2;
+								context.SetRootConstants(0, parameters);
+								context.BindResources(2, pUAV.Get());
+								context.BindResources(3, pSource->Get()->GetSRV());
 
-					const uint32 numMips = pTarget->GetMipLevels();
-					constexpr uint32 ThreadGroupSize = 128;
+								IntVector3 numThreadGroups = direction == 0 ?
+									ComputeUtils::GetNumThreadGroups(width, 1, height, ThreadGroupSize) :
+									ComputeUtils::GetNumThreadGroups(width, ThreadGroupSize, height, 1);
+								context.Dispatch(numThreadGroups);
 
-					for (uint32 i = 1; i < numMips; ++i)
-					{
-						struct
-						{
-							uint32 SourceMip;
-							Vector2 TargetDimensionsInv;
-							uint32 Horizontal;
-						} parameters;
+							});
+					std::swap(pSource, pTarget);
+				}
 
-						parameters.TargetDimensionsInv = Vector2(1.0f / width, 1.0f / height);
-
-						for (uint32 direction = 0; direction < 2; ++direction)
-						{
-							context.InsertResourceBarrier(pSource, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-							context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-
-							parameters.SourceMip = direction == 0 ? i - 1 : i;
-							parameters.Horizontal = direction;
-
-							context.SetRootConstants(0, parameters);
-							context.BindResources(2, pTargetUAVs[i].Get());
-							context.BindResources(3, pSource->GetSRV());
-
-							IntVector3 numThreadGroups = direction == 0 ?
-								ComputeUtils::GetNumThreadGroups(width, 1, height, ThreadGroupSize) :
-								ComputeUtils::GetNumThreadGroups(width, ThreadGroupSize, height, 1);
-							context.Dispatch(numThreadGroups);
-
-							std::swap(pSource, pTarget);
-							std::swap(pSourceUAVs, pTargetUAVs);
-						}
-
-						width /= 2;
-						height /= 2;
-					}
-				});
+				width /= 2;
+				height /= 2;
+			}
+		}
 	}
 
 	RGTexture* pTonemapTarget = graph.CreateTexture("Tonemap Target", TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, DXGI_FORMAT_R8G8B8A8_UNORM));
@@ -1313,19 +1311,6 @@ void DemoApp::OnResizeViewport(int width, int height)
 	{
 		RefCountPtr<Buffer> pBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateTyped(1, DXGI_FORMAT_R32G32_FLOAT, BufferFlag::Readback), "SDSM Reduction Readback Target");
 		m_ReductionReadbackTargets.push_back(std::move(pBuffer));
-	}
-
-	uint32 mips = Math::Min(5u, (uint32)log2f((float)Math::Max(width, height)));
-	TextureDesc bloomDesc = TextureDesc::Create2D(width, height, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess, 1, mips);
-	m_pBloomTexture = m_pDevice->CreateTexture(bloomDesc, "Bloom");
-	m_pBloomIntermediateTexture = m_pDevice->CreateTexture(bloomDesc, "Bloom Intermediate");
-
-	m_pBloomUAVs.resize(mips);
-	m_pBloomIntermediateUAVs.resize(mips);
-	for (uint32 i = 0; i < mips; ++i)
-	{
-		m_pBloomUAVs[i] = m_pDevice->CreateUAV(m_pBloomTexture, TextureUAVDesc((uint8)i));
-		m_pBloomIntermediateUAVs[i] = m_pDevice->CreateUAV(m_pBloomIntermediateTexture, TextureUAVDesc((uint8)i));
 	}
 
 	m_pCamera->SetViewport(FloatRect(0, 0, (float)width, (float)height));
