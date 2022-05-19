@@ -12,7 +12,7 @@
 PathTracing::PathTracing(GraphicsDevice* pDevice)
 	: m_pDevice(pDevice)
 {
-	if (!IsSupported())
+	if (!m_pDevice->GetCapabilities().SupportsRaytracing())
 	{
 		return;
 	}
@@ -127,5 +127,5 @@ void PathTracing::Reset()
 
 bool PathTracing::IsSupported()
 {
-	return m_pDevice->GetCapabilities().SupportsRaytracing();
+	return m_pSO != nullptr;
 }
