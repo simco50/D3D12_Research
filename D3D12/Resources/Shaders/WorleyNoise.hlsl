@@ -1,14 +1,23 @@
 #include "Common.hlsli"
+#include "Random.hlsli"
 
 struct PassParameters
 {
-	float4 Points[1024];
 	uint4 PointsPerRow[4];
+	uint4 InvertNoise;
+	float4 Persistence;
 	uint Resolution;
+	uint Seed;
 };
 
 ConstantBuffer<PassParameters> cPass : register(b0);
 RWTexture3D<float4> uOutputTexture : register(u0);
+
+float3 GetPoint(uint index)
+{
+	uint seed = SeedThread(cPass.Seed + index);
+	return float3(Random01(seed), Random01(seed), Random01(seed));
+}
 
 float WorleyNoise(float3 uvw, uint pointsPerRow)
 {
@@ -17,19 +26,16 @@ float WorleyNoise(float3 uvw, uint pointsPerRow)
 	uint3 i = floor(uvw);
 
 	float minDistSq = 1;
-	[loop]
 	for (int offsetZ = -1; offsetZ <= 1; ++offsetZ)
 	{
-		[loop]
 		for (int offsetY = -1; offsetY <= 1; ++offsetY)
 		{
-			[loop]
 			for (int offsetX = -1; offsetX <= 1; ++offsetX)
 			{
                 int3 offset = int3(offsetX, offsetY, offsetZ);
 				int3 neighbourCellWrappedId = int3(i + offset + pointsPerRow) % pointsPerRow;
-				int pointIndex = neighbourCellWrappedId.x + pointsPerRow * (neighbourCellWrappedId.y + neighbourCellWrappedId.z * pointsPerRow);
-				float3 p = cPass.Points[pointIndex % 1024].xyz + offset;
+				uint pointIndex = Flatten3D(neighbourCellWrappedId, pointsPerRow);
+				float3 p = GetPoint(pointIndex) + offset;
 				minDistSq = min(minDistSq, dot(frc - p, frc - p));
 			}
 		}
@@ -41,20 +47,24 @@ float WorleyNoise(float3 uvw, uint pointsPerRow)
 void WorleyNoiseCS(uint3 threadId : SV_DISPATCHTHREADID)
 {
 	float3 uvw = threadId.xyz / (float)cPass.Resolution;
-	float4 output = 0;
-	for(int i = 0; i < 4; ++i)
+
+	float4 noiseResult = 0;
+	for(uint channel = 0; channel < 4; ++channel)
 	{
-		float r = WorleyNoise(uvw, cPass.PointsPerRow[i].x);
-		float g = WorleyNoise(uvw, cPass.PointsPerRow[i].y);
-		float b = WorleyNoise(uvw, cPass.PointsPerRow[i].z);
-		float a = WorleyNoise(uvw, cPass.PointsPerRow[i].a);
-		float4 total = float4(r,g,b,a);
-		float persistence = 0.5f;
-		for(int j = 0; j < 4; ++j)
+		uint4 pointsPerRow = cPass.PointsPerRow[channel];
+		float persistence = cPass.Persistence[channel];
+		uint invertNoise = cPass.InvertNoise[channel];
+
+		for(uint layer = 0; layer < 4; ++layer)
 		{
-			output[i] += total[j] * persistence;
+			float noise = saturate((1 - WorleyNoise(uvw, pointsPerRow[layer])) * persistence);
+			noiseResult[channel] += noise;
 			persistence *= persistence;
 		}
+
+		if(invertNoise > 0)
+			noiseResult[channel] = 1 - noiseResult[channel];
 	}
-	uOutputTexture[threadId.xyz] = output;
+
+	uOutputTexture[threadId.xyz] = noiseResult;
 }

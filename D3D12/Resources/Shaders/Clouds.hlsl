@@ -1,4 +1,5 @@
 #include "Common.hlsli"
+#include "Random.hlsli"
 
 struct VSInput
 {
@@ -21,7 +22,6 @@ Texture2D tVerticalDensity : register(t3);
 struct PassParameters
 {
 	float4 NoiseWeights;
-	float4 FrustumCorners[4];
 
 	float3 MinExtents;
 	float padd0;
@@ -41,7 +41,11 @@ PSInput VSMain(VSInput input)
 	PSInput output;
 	output.position = float4(input.position.xy, 0, 1);
 	output.texCoord = input.texCoord;
-	output.ray = mul(cPass.FrustumCorners[int(input.position.z)], cView.ViewInverse);
+
+	float4 ray = output.position;
+	ray = mul(ray, cView.ProjectionInverse);
+	ray.xyz = mul(ray.xyz, (float3x3)cView.ViewInverse);
+	output.ray = ray;
 	return output;
 }
 
@@ -63,20 +67,19 @@ float2 RayBoxDistance(float3 boundsMin, float3 boundsMax, float3 rayOrigin, floa
 
 float SampleDensity(float3 position)
 {
-	float3 uvw = position * cPass.CloudScale + cPass.CloudOffset;
+	float3 uvw = position * 0.01;
 	float4 shape = tCloudsTexture.SampleLevel(sLinearWrap, uvw, 0);
-	float s = shape.r * cPass.NoiseWeights.x + shape.g * cPass.NoiseWeights.y + shape.b * cPass.NoiseWeights.z + shape.a * cPass.NoiseWeights.w;
-	return max(0, cPass.CloudTheshold - s) * cPass.CloudDensity;
+	float s = saturate(shape.r * cPass.NoiseWeights.x + shape.g * cPass.NoiseWeights.y + shape.b * cPass.NoiseWeights.z + shape.a * cPass.NoiseWeights.w);
+	return max(0, s - cPass.CloudTheshold) * cPass.CloudDensity;
 }
 
-float3 LightMarch(float3 position, float3 lightDirection)
+float LightMarch(float3 position, float3 lightDirection)
 {
 	float boxDistance = RayBoxDistance(cPass.MinExtents, cPass.MaxExtents, position, lightDirection).y;
-	float stepSize = boxDistance / 6;
+	uint steps = 10;
+	float stepSize = boxDistance / steps;
 	float totalDensity = 0;
-	float offset = InterleavedGradientNoise(position.xy);
-	position -= lightDirection * offset;
-	for(int i = 0; i < 6; ++i)
+	for(int i = 0; i < steps; ++i)
 	{
 		position += lightDirection * stepSize;
 		totalDensity += max(0, SampleDensity(position) * stepSize);
@@ -88,36 +91,39 @@ float3 LightMarch(float3 position, float3 lightDirection)
 
 float4 PSMain(PSInput input) : SV_TARGET
 {
-	float3 ro = cView.ViewInverse[3].xyz;
+	Light light = GetLight(0);
+	float3 ro = cView.ViewLocation;
 	float3 rd = normalize(input.ray.xyz);
+
 	float4 color = tSceneTexture.Sample(sLinearClamp, input.texCoord);
 
 	float2 boxResult = RayBoxDistance(cPass.MinExtents, cPass.MaxExtents, ro, rd);
-	float depth = 100;//LinearizeDepth01(tDepthTexture.Sample(sLinearClamp, input.texCoord).r);
+	float depth = 10000000000;//LinearizeDepth01(tDepthTexture.Sample(sLinearClamp, input.texCoord).r);
 	float maxDepth = depth * length(input.ray.xyz);
 
 	float distanceTravelled = 0;
-	float stepSize = boxResult.y / 150;
+	float stepSize = boxResult.y / 40;
 	float dstLimit = min(maxDepth - boxResult.x, boxResult.y);
 
 	float totalDensity = 0;
 	float3 totalLight = 0;
 	float transmittance = 1;
 
-	float offset = InterleavedGradientNoise(input.position.xy);
-	ro += offset - 1;
+	uint seed = SeedThread(input.position.xy, cView.ViewportDimensions, cView.FrameIndex);
 
-	Light light = GetLight(0);
+	float offset = 0;// 0.2*Random01(seed);// InterleavedGradientNoise(input.position.xy + cView.FrameIndex);
+	ro += offset;
+
 
 	while (distanceTravelled < dstLimit)
 	{
 		float3 rayPos = ro + rd * (boxResult.x + distanceTravelled);
-		float height = (cPass.MaxExtents.y - rayPos.y) / (cPass.MaxExtents.y - cPass.MinExtents.y);
-		float densityMultiplier = tVerticalDensity.Sample(sLinearClamp, float2(0, height)).r;
-		float density = SampleDensity(rayPos) * stepSize * densityMultiplier;
+		float density = SampleDensity(rayPos);
+
 		if(density > 0)
 		{
-			totalLight += LightMarch(rayPos, -light.Direction) * stepSize * densityMultiplier * density;
+			float lightTransmittance = LightMarch(rayPos, -light.Direction);
+			totalLight += density * stepSize * transmittance * lightTransmittance ;
 			transmittance *= exp(-density * stepSize);
 			if(transmittance < 0.01f)
 			{
@@ -126,5 +132,9 @@ float4 PSMain(PSInput input) : SV_TARGET
 		}
 		distanceTravelled += stepSize;
 	}
-	return float4(color.xyz * transmittance + totalLight * light.Intensity * light.GetColor().rgb, 1);
+
+	float3 cloudColor = totalLight * light.Intensity * light.GetColor().rgb;
+	float3 col = color.xyz * transmittance + cloudColor;
+
+	return float4(col, 1);
 }

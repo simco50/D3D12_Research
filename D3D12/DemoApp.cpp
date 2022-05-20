@@ -835,7 +835,8 @@ void DemoApp::Update()
 					context.EndRenderPass();
 				});
 
-		m_pClouds->Render(graph, sceneTextures, pView);
+		RGTexture* pTex = m_pClouds->Render(graph, sceneTextures, pView);
+		VisualizeTexture(graph, pTex);
 
 		DebugRenderer::Get()->Render(graph, pView, sceneTextures.pColorTarget, sceneTextures.pDepth);
 	}

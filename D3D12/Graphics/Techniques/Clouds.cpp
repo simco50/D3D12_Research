@@ -7,35 +7,10 @@
 #include "Graphics/RHI/Texture.h"
 #include "Graphics/RHI/CommandContext.h"
 #include "Graphics/RenderGraph/RenderGraph.h"
-#include "Profiler.h"
 #include "Scene/Camera.h"
-#include "ImGuiRenderer.h"
-
-static const int Resolution = 128;
-static const int MaxPoints = 1024;
-static Vector4 NoiseWeights = Vector4(0.625f, 0.225f, 0.15f, 0.05f);
-
-struct CloudParameters
-{
-	Vector4 NoiseWeights;
-	Vector4 FrustumCorners[4];
-	Vector4 MinExtents;
-	Vector4 MaxExtents;
-
-	Vector3 CloudOffset;
-
-	float CloudScale = 0.004f;
-	float CloudThreshold = 0.4f;
-	float CloudDensity = 0.3f;
-};
-
-static CloudParameters sCloudParameters;
 
 Clouds::Clouds(GraphicsDevice* pDevice)
 {
-	m_CloudBounds.Center = Vector3(0, 200, 0);
-	m_CloudBounds.Extents = Vector3(300, 20, 300);
-
 	CommandContext* pContext = pDevice->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 	{
 		m_pWorleyNoiseRS = new RootSignature(pDevice);
@@ -91,29 +66,62 @@ Clouds::Clouds(GraphicsDevice* pDevice)
 	pContext->Execute(true);
 }
 
-void Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const SceneView* pView)
+RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const SceneView* pView)
 {
-	ImGui::Begin("Parameters");
-	ImGui::Text("Clouds");
-	ImGui::SliderFloat3("Position", &m_CloudBounds.Center.x, 0, 500);
-	ImGui::SliderFloat3("Extents", &m_CloudBounds.Extents.x, 0, 500);
-	ImGui::SliderFloat("Scale", &sCloudParameters.CloudScale, 0, 0.02f);
-	ImGui::SliderFloat("Cloud Threshold", &sCloudParameters.CloudThreshold, 0, 0.5f);
-	ImGui::SliderFloat("Density", &sCloudParameters.CloudDensity, 0, 1);
-	ImGui::SliderFloat4("Noise Weights", &NoiseWeights.x, 0, 1);
-	if (ImGui::Button("Generate Noise"))
+	static int noiseSeed = 0;
+	static Vector4 noisePersistence = Vector4(0.5f, 0.5f, 0.5f, 0.5f);
+	static Vector4 noiseWeights = Vector4(0.625f, 0.225f, 0.15f, 0.05f);
+	static IntVector4 noiseDimensions[]
 	{
-		m_UpdateNoise = true;
+		IntVector4(4, 8, 10, 18),
+		IntVector4(8, 10, 12, 18),
+		IntVector4(12, 14, 16, 20),
+		IntVector4(14, 15, 19, 26),
+	};
+	static bool inverseNoise[]
+	{
+		false,
+		false,
+		false,
+		false,
+	};
+
+	static Vector3 center = Vector3(0, 10, 0);
+	static Vector3 extents = Vector3(10, 4, 10);
+	static float scale = 0.05f;
+	static float threshold = 0.4f;
+	static float density = 0.4f;
+	static Vector3 offset = Vector3::Zero;
+
+	bool isDirty = !m_pWorleyNoiseTexture;
+
+	ImGui::Begin("Parameters");
+	ImGui::Text("Noise");
+	isDirty |= ImGui::SliderInt("Noise Seed", &noiseSeed, 0, 500);
+	isDirty |= ImGui::SliderFloat4("Noise Persistence", &noisePersistence.x, 0, 1);
+
+	for (uint32 i = 0; i < ARRAYSIZE(noiseDimensions); ++i)
+	{
+		isDirty |= ImGui::Checkbox(Sprintf("Invert %d", i).c_str(), &inverseNoise[i]);
+		ImGui::SameLine();
+		isDirty |= ImGui::SliderInt4(Sprintf("Dimensions %d", i).c_str(), &noiseDimensions[i].x, 4, 40);
 	}
+
+	ImGui::Text("Clouds");
+	ImGui::InputFloat3("Position", &center.x);
+	ImGui::InputFloat3("Extents", &extents.x);
+	ImGui::InputFloat3("Offset", &offset.x);
+	ImGui::SliderFloat("Scale", &scale, 0.05f, 0.5f);
+	ImGui::SliderFloat("Cloud Threshold", &threshold, 0.0f, 1.0f);
+	ImGui::SliderFloat("Density", &density, 0, 1);
+	ImGui::SliderFloat4("Noise Weights", &noiseWeights.x, -1, 1);
 	ImGui::End();
 
-	RGTexture* pIntermediateColor = graph.CreateTexture("Intermediate Color", sceneTextures.pColorTarget->GetDesc());
+	static const int Resolution = 128;
 	RGTexture* pNoiseTexture = RGUtils::CreatePersistentTexture(graph, "Worley Noise", TextureDesc::Create3D(Resolution, Resolution, Resolution, DXGI_FORMAT_R8G8B8A8_UNORM), &m_pWorleyNoiseTexture, true);
 
-	if(m_UpdateNoise)
+	if (isDirty)
 	{
-		m_UpdateNoise = false;
-
 		graph.AddPass("Compute Noise", RGPassFlag::Compute)
 			.Write(pNoiseTexture)
 			.Bind([=](CommandContext& context, const RGPassResources& resources)
@@ -123,86 +131,80 @@ void Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const SceneVie
 
 					struct
 					{
-						Vector4 WorleyNoisePositions[MaxPoints];
-						uint32 PointsPerRow[16];
+						IntVector4 PointsPerRow[4];
+						IntVector4 Invert;
+						Vector4 Persistence;
 						uint32 Resolution;
+						uint32 Seed;
 					} Constants;
 
-					srand(0);
-					for (int i = 0; i < MaxPoints; ++i)
-					{
-						Constants.WorleyNoisePositions[i].x = Math::RandomRange(0.0f, 1.0f);
-						Constants.WorleyNoisePositions[i].y = Math::RandomRange(0.0f, 1.0f);
-						Constants.WorleyNoisePositions[i].z = Math::RandomRange(0.0f, 1.0f);
-					}
+					Constants.Seed = noiseSeed;
 					Constants.Resolution = Resolution;
-					Constants.PointsPerRow[0] = 4;
-					Constants.PointsPerRow[1] = 8;
-					Constants.PointsPerRow[2] = 10;
-					Constants.PointsPerRow[3] = 18;
-
-					Constants.PointsPerRow[0 + 4] = 8;
-					Constants.PointsPerRow[1 + 4] = 10;
-					Constants.PointsPerRow[2 + 4] = 12;
-					Constants.PointsPerRow[3 + 4] = 18;
-
-					Constants.PointsPerRow[0 + 8] = 12;
-					Constants.PointsPerRow[1 + 8] = 14;
-					Constants.PointsPerRow[2 + 8] = 16;
-					Constants.PointsPerRow[3 + 8] = 20;
-
-					Constants.PointsPerRow[0 + 12] = 14;
-					Constants.PointsPerRow[1 + 12] = 15;
-					Constants.PointsPerRow[2 + 12] = 19;
-					Constants.PointsPerRow[3 + 12] = 26;
+					for (uint32 i = 0; i < ARRAYSIZE(noiseDimensions); ++i)
+					{
+						Constants.PointsPerRow[i] = noiseDimensions[i];
+					}
+					Constants.Invert = IntVector4(inverseNoise[0], inverseNoise[1], inverseNoise[2], inverseNoise[3]);
+					Constants.Persistence = noisePersistence;
 
 					context.SetRootCBV(0, Constants);
 					context.BindResources(1, pNoiseTexture->Get()->GetUAV());
 
-					context.Dispatch(Resolution / 8, Resolution / 8, Resolution / 8);
+					context.Dispatch(
+						ComputeUtils::GetNumThreadGroups(Resolution, 8, Resolution, 8, Resolution, 8));
 				});
 	}
 
-	float fov = pView->View.FoV;
-	float aspect = (float)pView->GetDimensions().x / pView->GetDimensions().y;
-	float halfFoV = fov * 0.5f;
-	float tanFoV = tan(halfFoV);
-	Vector3 toRight = Vector3::Right * tanFoV * aspect;
-	Vector3 toTop = Vector3::Up * tanFoV;
 
-	sCloudParameters.FrustumCorners[0] = Vector4(-Vector3::Forward - toRight + toTop);
-	sCloudParameters.FrustumCorners[1] = Vector4(-Vector3::Forward + toRight + toTop);
-	sCloudParameters.FrustumCorners[2] = Vector4(-Vector3::Forward + toRight - toTop);
-	sCloudParameters.FrustumCorners[3] = Vector4(-Vector3::Forward - toRight - toTop);
-	sCloudParameters.NoiseWeights = NoiseWeights;
-	sCloudParameters.MinExtents = Vector4(Vector3(m_CloudBounds.Center) - Vector3(m_CloudBounds.Extents));
-	sCloudParameters.MaxExtents = Vector4(Vector3(m_CloudBounds.Center) + Vector3(m_CloudBounds.Extents));
+	RGTexture* pIntermediateColor = graph.CreateTexture("Intermediate Color", sceneTextures.pColorTarget->GetDesc());
 
-	{
-		graph.AddPass("Clouds", RGPassFlag::Compute)
-			.Read({ pNoiseTexture, sceneTextures.pColorTarget, sceneTextures.pDepth })
-			.RenderTarget(pIntermediateColor, RenderTargetLoadAction::Load)
-			.DepthStencil(sceneTextures.pDepth, RenderTargetLoadAction::Load, false)
-			.Bind([=](CommandContext& context, const RGPassResources& resources)
+	graph.AddPass("Clouds", RGPassFlag::Compute)
+		.Read({ pNoiseTexture, sceneTextures.pColorTarget, sceneTextures.pDepth })
+		.RenderTarget(pIntermediateColor, RenderTargetLoadAction::Load)
+		.DepthStencil(sceneTextures.pDepth, RenderTargetLoadAction::Load, false)
+		.Bind([=](CommandContext& context, const RGPassResources& resources)
+			{
+				context.BeginRenderPass(resources.GetRenderPassInfo());
+				context.SetPipelineState(m_pCloudsPS);
+				context.SetGraphicsRootSignature(m_pCloudsRS);
+				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+				struct
 				{
-					context.BeginRenderPass(resources.GetRenderPassInfo());
-					context.SetPipelineState(m_pCloudsPS);
-					context.SetGraphicsRootSignature(m_pCloudsRS);
-					context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-					context.SetRootCBV(0, sCloudParameters);
-					context.SetRootCBV(1, Renderer::GetViewUniforms(pView, pIntermediateColor->Get()));
-					context.BindResources(2,
-						{
-							sceneTextures.pColorTarget->Get()->GetSRV(),
-							sceneTextures.pDepth->Get()->GetSRV(),
-							pNoiseTexture->Get()->GetSRV(),
-							m_pVerticalDensityTexture->GetSRV(),
-						});
-					context.SetVertexBuffers(VertexBufferView(m_pQuadVertexBuffer));
-					context.Draw(0, 6);
-					context.EndRenderPass();
-				});
-	}
+					Vector4 NoiseWeights;
+					Vector4 MinExtents;
+					Vector4 MaxExtents;
+
+					Vector3 CloudOffset;
+
+					float CloudScale;
+					float CloudThreshold;
+					float CloudDensity;
+				} parameters;
+
+				parameters.NoiseWeights = noiseWeights;
+				parameters.MinExtents = Vector4(center - extents);
+				parameters.MaxExtents = Vector4(center + extents);
+				parameters.CloudOffset = offset;
+				parameters.CloudScale = scale;
+				parameters.CloudThreshold = threshold;
+				parameters.CloudDensity = density;
+
+				context.SetRootCBV(0, parameters);
+				context.SetRootCBV(1, Renderer::GetViewUniforms(pView, pIntermediateColor->Get()));
+				context.BindResources(2,
+					{
+						sceneTextures.pColorTarget->Get()->GetSRV(),
+						sceneTextures.pDepth->Get()->GetSRV(),
+						pNoiseTexture->Get()->GetSRV(),
+						m_pVerticalDensityTexture->GetSRV(),
+					});
+				context.SetVertexBuffers(VertexBufferView(m_pQuadVertexBuffer));
+				context.Draw(0, 6);
+				context.EndRenderPass();
+			});
 
 	sceneTextures.pColorTarget = pIntermediateColor;
+
+	return pNoiseTexture;
 }

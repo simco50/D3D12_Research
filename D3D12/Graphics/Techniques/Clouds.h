@@ -1,4 +1,5 @@
 #pragma once
+#include "../RenderGraph/RenderGraphDefinitions.h"
 
 class PipelineState;
 class RootSignature;
@@ -13,7 +14,7 @@ class Clouds
 {
 public:
 	Clouds(GraphicsDevice* pDevice);
-	void Render(RGGraph& graph, SceneTextures& sceneTextures, const SceneView* pView);
+	RGTexture* Render(RGGraph& graph, SceneTextures& sceneTextures, const SceneView* pView);
 	Texture* GetNoiseTexture() const { return m_pWorleyNoiseTexture; }
 
 private:
@@ -26,7 +27,5 @@ private:
 
 	RefCountPtr<Buffer> m_pQuadVertexBuffer;
 
-	bool m_UpdateNoise = true;
-	BoundingBox m_CloudBounds;
 	RefCountPtr<Texture> m_pVerticalDensityTexture;
 };
