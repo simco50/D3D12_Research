@@ -51,9 +51,17 @@ struct MaterialProperties
 	float Specular;
 };
 
-float InverseLerp(float value, float minValue, float maxValue)
+template<typename T>
+T InverseLerp(T value, T minValue, T maxValue)
 {
 	return (value - minValue) / (maxValue - minValue);
+}
+
+template<typename T>
+T Remap(T value, T inRangeMin, T inRangeMax, T outRangeMin, T outRangeMax)
+{
+	T t = InverseLerp(value, inRangeMin, inRangeMax);
+	return lerp(outRangeMin, outRangeMax, t);
 }
 
 bool SphereInAABB(Sphere sphere, AABB aabb)

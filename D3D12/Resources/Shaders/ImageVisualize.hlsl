@@ -58,7 +58,7 @@ void CSMain(uint3 threadID : SV_DispatchThreadID)
 	if(numBits == 1)
 	{
 		uint singleChannel = firstbithigh(cConstants.ChannelMask);
-		output = texSample[singleChannel];
+		output = float4(InverseLerp(texSample[singleChannel], cConstants.ValueRange.x, cConstants.ValueRange.y).xxx, 1);
 	}
 	else
 	{

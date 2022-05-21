@@ -9,6 +9,8 @@
 #include "Graphics/RenderGraph/RenderGraph.h"
 #include "Scene/Camera.h"
 
+static bool shaderDirty = false;
+
 Clouds::Clouds(GraphicsDevice* pDevice)
 {
 	CommandContext* pContext = pDevice->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
@@ -64,27 +66,16 @@ Clouds::Clouds(GraphicsDevice* pDevice)
 	m_pVerticalDensityTexture = GraphicsCommon::CreateTextureFromFile(*pContext, "Resources/Textures/CloudVerticalDensity.png", false);
 
 	pContext->Execute(true);
+
+	pDevice->GetShaderManager()->OnShaderRecompiledEvent().AddLambda([](Shader*, Shader*) {
+		shaderDirty = true;
+		});
 }
 
 RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const SceneView* pView)
 {
 	static int noiseSeed = 0;
-	static Vector4 noisePersistence = Vector4(0.5f, 0.5f, 0.5f, 0.5f);
-	static Vector4 noiseWeights = Vector4(0.625f, 0.225f, 0.15f, 0.05f);
-	static IntVector4 noiseDimensions[]
-	{
-		IntVector4(4, 8, 10, 18),
-		IntVector4(8, 10, 12, 18),
-		IntVector4(12, 14, 16, 20),
-		IntVector4(14, 15, 19, 26),
-	};
-	static bool inverseNoise[]
-	{
-		false,
-		false,
-		false,
-		false,
-	};
+	static IntVector4 noiseDimensions(4, 8, 16, 32);
 
 	static Vector3 center = Vector3(0, 10, 0);
 	static Vector3 extents = Vector3(10, 4, 10);
@@ -92,20 +83,15 @@ RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const Sc
 	static float threshold = 0.4f;
 	static float density = 0.4f;
 	static Vector3 offset = Vector3::Zero;
+	static Vector4 noiseWeights = Vector4(0.625f, 0.225f, 0.15f, 0.05f);
 
-	bool isDirty = !m_pWorleyNoiseTexture;
+	bool isDirty = !m_pWorleyNoiseTexture || shaderDirty;
+	shaderDirty = false;
 
 	ImGui::Begin("Parameters");
 	ImGui::Text("Noise");
 	isDirty |= ImGui::SliderInt("Noise Seed", &noiseSeed, 0, 500);
-	isDirty |= ImGui::SliderFloat4("Noise Persistence", &noisePersistence.x, 0, 1);
-
-	for (uint32 i = 0; i < ARRAYSIZE(noiseDimensions); ++i)
-	{
-		isDirty |= ImGui::Checkbox(Sprintf("Invert %d", i).c_str(), &inverseNoise[i]);
-		ImGui::SameLine();
-		isDirty |= ImGui::SliderInt4(Sprintf("Dimensions %d", i).c_str(), &noiseDimensions[i].x, 4, 40);
-	}
+	isDirty |= ImGui::SliderInt4("Dimensions", &noiseDimensions.x, 4, 40);
 
 	ImGui::Text("Clouds");
 	ImGui::InputFloat3("Position", &center.x);
@@ -131,21 +117,14 @@ RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const Sc
 
 					struct
 					{
-						IntVector4 PointsPerRow[4];
-						IntVector4 Invert;
-						Vector4 Persistence;
+						IntVector4 PointsPerRow;
 						uint32 Resolution;
 						uint32 Seed;
 					} Constants;
 
 					Constants.Seed = noiseSeed;
 					Constants.Resolution = Resolution;
-					for (uint32 i = 0; i < ARRAYSIZE(noiseDimensions); ++i)
-					{
-						Constants.PointsPerRow[i] = noiseDimensions[i];
-					}
-					Constants.Invert = IntVector4(inverseNoise[0], inverseNoise[1], inverseNoise[2], inverseNoise[3]);
-					Constants.Persistence = noisePersistence;
+					Constants.PointsPerRow = noiseDimensions;
 
 					context.SetRootCBV(0, Constants);
 					context.BindResources(1, pNoiseTexture->Get()->GetUAV());
