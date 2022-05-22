@@ -75,36 +75,30 @@ Clouds::Clouds(GraphicsDevice* pDevice)
 RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const SceneView* pView)
 {
 	static int noiseSeed = 0;
-	static IntVector4 noiseDimensions(4, 8, 16, 32);
+	static int noiseFrequency = 4;
 
-	static Vector3 center = Vector3(0, 10, 0);
-	static Vector3 extents = Vector3(10, 4, 10);
-	static float scale = 0.05f;
-	static float threshold = 0.4f;
-	static float density = 0.4f;
-	static Vector3 offset = Vector3::Zero;
-	static Vector4 noiseWeights = Vector4(0.625f, 0.225f, 0.15f, 0.05f);
+	static Vector3 center = Vector3(0, 50, 0);
+	static Vector3 extents = Vector3(100, 4, 100);
+	static float scale = 0.09f;
+	static float density = 1.0f;
 
 	bool isDirty = !m_pWorleyNoiseTexture || shaderDirty;
 	shaderDirty = false;
 
 	ImGui::Begin("Parameters");
 	ImGui::Text("Noise");
-	isDirty |= ImGui::SliderInt("Noise Seed", &noiseSeed, 0, 500);
-	isDirty |= ImGui::SliderInt4("Dimensions", &noiseDimensions.x, 4, 40);
+	isDirty |= ImGui::SliderInt("Seed", &noiseSeed, 0, 500);
+	isDirty |= ImGui::SliderInt("Frequency", &noiseFrequency, 2, 10);
 
 	ImGui::Text("Clouds");
 	ImGui::InputFloat3("Position", &center.x);
 	ImGui::InputFloat3("Extents", &extents.x);
-	ImGui::InputFloat3("Offset", &offset.x);
 	ImGui::SliderFloat("Scale", &scale, 0.05f, 0.5f);
-	ImGui::SliderFloat("Cloud Threshold", &threshold, 0.0f, 1.0f);
 	ImGui::SliderFloat("Density", &density, 0, 1);
-	ImGui::SliderFloat4("Noise Weights", &noiseWeights.x, -1, 1);
 	ImGui::End();
 
-	static const int Resolution = 128;
-	RGTexture* pNoiseTexture = RGUtils::CreatePersistentTexture(graph, "Worley Noise", TextureDesc::Create3D(Resolution, Resolution, Resolution, DXGI_FORMAT_R8G8B8A8_UNORM), &m_pWorleyNoiseTexture, true);
+	static const int highResolution = 128;
+	RGTexture* pNoiseTexture = RGUtils::CreatePersistentTexture(graph, "Worley Noise", TextureDesc::Create3D(highResolution, highResolution, highResolution, DXGI_FORMAT_R8G8B8A8_UNORM), &m_pWorleyNoiseTexture, true);
 
 	if (isDirty)
 	{
@@ -117,20 +111,20 @@ RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const Sc
 
 					struct
 					{
-						IntVector4 PointsPerRow;
+						uint32 Frequency;
 						uint32 Resolution;
 						uint32 Seed;
 					} Constants;
 
 					Constants.Seed = noiseSeed;
-					Constants.Resolution = Resolution;
-					Constants.PointsPerRow = noiseDimensions;
+					Constants.Resolution = highResolution;
+					Constants.Frequency = noiseFrequency;
 
 					context.SetRootCBV(0, Constants);
 					context.BindResources(1, pNoiseTexture->Get()->GetUAV());
 
 					context.Dispatch(
-						ComputeUtils::GetNumThreadGroups(Resolution, 8, Resolution, 8, Resolution, 8));
+						ComputeUtils::GetNumThreadGroups(highResolution, 8, highResolution, 8, highResolution, 8));
 				});
 	}
 
@@ -140,7 +134,6 @@ RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const Sc
 	graph.AddPass("Clouds", RGPassFlag::Compute)
 		.Read({ pNoiseTexture, sceneTextures.pColorTarget, sceneTextures.pDepth })
 		.RenderTarget(pIntermediateColor, RenderTargetLoadAction::Load)
-		.DepthStencil(sceneTextures.pDepth, RenderTargetLoadAction::Load, false)
 		.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
 				context.BeginRenderPass(resources.GetRenderPassInfo());
@@ -150,23 +143,16 @@ RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const Sc
 
 				struct
 				{
-					Vector4 NoiseWeights;
 					Vector4 MinExtents;
 					Vector4 MaxExtents;
 
-					Vector3 CloudOffset;
-
 					float CloudScale;
-					float CloudThreshold;
 					float CloudDensity;
 				} parameters;
 
-				parameters.NoiseWeights = noiseWeights;
 				parameters.MinExtents = Vector4(center - extents);
 				parameters.MaxExtents = Vector4(center + extents);
-				parameters.CloudOffset = offset;
 				parameters.CloudScale = scale;
-				parameters.CloudThreshold = threshold;
 				parameters.CloudDensity = density;
 
 				context.SetRootCBV(0, parameters);
