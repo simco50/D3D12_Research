@@ -225,8 +225,6 @@ namespace Renderer
 		CopyBufferData(materials.size(), sizeof(ShaderInterop::MaterialData), "Materials", materials.data(), pView->pMaterialBuffer);
 		CopyBufferData(transforms.size(), sizeof(Matrix), "Transforms", transforms.data(), pView->pTransformsBuffer);
 		CopyBufferData(lightData.size(), sizeof(ShaderInterop::Light), "Lights", lightData.data(), pView->pLightBuffer);
-
-		pView->AccelerationStructure.Build(context);
 	}
 
 	void DrawScene(CommandContext& context, const SceneView* pView, const VisibilityMask& visibility, Batch::Blending blendModes)

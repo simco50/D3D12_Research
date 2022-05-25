@@ -23,6 +23,8 @@ enum class RGPassFlag
 	Invisible = 1 << 3,
 	// Makes a pass never be culled when not referenced.
 	NeverCull = 1 << 4,
+	// Automatically begin/end render pass
+	NoRenderPass = 1 << 5,
 };
 DECLARE_BITMASK_TYPE(RGPassFlag);
 
@@ -112,13 +114,22 @@ private:
 	template<typename TLambda>
 	struct RGPassCallback : public IRGPassCallback
 	{
+		constexpr static bool HasPassResources = std::is_invocable<TLambda, CommandContext&, const RGPassResources&>::value;
+
 		RGPassCallback(TLambda&& lambda)
 			: Lambda(std::forward<TLambda&&>(lambda))
 		{}
 
 		virtual void Execute(CommandContext& context, const RGPassResources& resources)
 		{
-			(Lambda)(context, resources);
+			if constexpr (HasPassResources)
+			{
+				(Lambda)(context, resources);
+			}
+			else
+			{
+				(Lambda)(context);
+			}
 		}
 
 		TLambda Lambda;
@@ -158,6 +169,10 @@ public:
 		static_assert(sizeof(ExecuteFn) < 1024, "The Execute callback exceeds the maximum size");
 		checkf(!pExecuteCallback, "Pass is already bound! This may be unintentional");
 		pExecuteCallback = Allocator.Allocate<RGPassCallback<ExecuteFn>>(std::forward<ExecuteFn&&>(callback));
+		if constexpr (RGPassCallback<ExecuteFn>::HasPassResources)
+		{
+			Flags |= RGPassFlag::NoRenderPass;
+		}
 		return *this;
 	}
 
@@ -335,6 +350,7 @@ private:
 namespace RGUtils
 {
 	RGPass& AddCopyPass(RGGraph& graph, RGResource* pSource, RGResource* pTarget);
+	RGPass& AddResolvePass(RGGraph& graph, RGTexture* pSource, RGTexture* pTarget);
 	RGBuffer* CreatePersistentBuffer(RGGraph& graph, const char* pName, const BufferDesc& bufferDesc, RefCountPtr<Buffer>* pStorageTarget, bool doExport);
 	RGTexture* CreatePersistentTexture(RGGraph& graph, const char* pName, const TextureDesc& textureDesc, RefCountPtr<Texture>* pStorageTarget, bool doExport);
 }

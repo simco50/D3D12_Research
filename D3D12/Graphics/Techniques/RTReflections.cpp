@@ -44,7 +44,7 @@ void RTReflections::Execute(RGGraph& graph, const SceneView* pView, SceneTexture
 	graph.AddPass("RT Reflections", RGPassFlag::Compute)
 		.Read({ sceneTextures.pNormals, sceneTextures.pDepth, sceneTextures.pRoughness, sceneTextures.pColorTarget })
 		.Write(pReflectionsTarget)
-		.Bind([=](CommandContext& context, const RGPassResources& resources)
+		.Bind([=](CommandContext& context)
 			{
 				Texture* pTarget = pReflectionsTarget->Get();
 

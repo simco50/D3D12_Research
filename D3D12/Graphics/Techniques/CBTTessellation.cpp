@@ -156,7 +156,7 @@ void CBTTessellation::Execute(RGGraph& graph, const SceneView* pView, SceneTextu
 	{
 		graph.AddPass("CBT Upload", RGPassFlag::Copy)
 			.Write(pCBTBuffer)
-			.Bind([=](CommandContext& context, const RGPassResources& resources)
+			.Bind([=](CommandContext& context)
 			{
 				context.WriteBuffer(pCBTBuffer->Get(), m_CBT.GetData(), m_CBT.GetMemoryUse());
 				context.FlushResourceBarriers();
@@ -167,7 +167,7 @@ void CBTTessellation::Execute(RGGraph& graph, const SceneView* pView, SceneTextu
 	{
 		graph.AddPass("CBT Update", RGPassFlag::Compute)
 			.Write(pCBTBuffer)
-			.Bind([=](CommandContext& context, const RGPassResources& resources)
+			.Bind([=](CommandContext& context)
 			{
 				context.InsertResourceBarrier(m_pCBTIndirectArgs, D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
 				context.SetComputeRootSignature(m_pCBTRS);
@@ -184,7 +184,7 @@ void CBTTessellation::Execute(RGGraph& graph, const SceneView* pView, SceneTextu
 
 	graph.AddPass("CBT Update Indirect Args", RGPassFlag::Compute)
 		.Read(pCBTBuffer)
-		.Bind([=](CommandContext& context, const RGPassResources& resources)
+		.Bind([=](CommandContext& context)
 			{
 				context.SetComputeRootSignature(m_pCBTRS);
 				context.SetRootConstants(0, commonArgs);
@@ -255,7 +255,7 @@ void CBTTessellation::Execute(RGGraph& graph, const SceneView* pView, SceneTextu
 
 	graph.AddPass("CBT Cache Bitfield", RGPassFlag::Compute)
 		.Write(pCBTBuffer)
-		.Bind([=](CommandContext& context, const RGPassResources& resources)
+		.Bind([=](CommandContext& context)
 			{
 				context.SetComputeRootSignature(m_pCBTRS);
 				context.SetRootConstants(0, commonArgs);
@@ -276,7 +276,7 @@ void CBTTessellation::Execute(RGGraph& graph, const SceneView* pView, SceneTextu
 
 	graph.AddPass("CBT Sum Reduction", RGPassFlag::Compute)
 		.Write(pCBTBuffer)
-		.Bind([=](CommandContext& context, const RGPassResources& resources)
+		.Bind([=](CommandContext& context)
 			{
 				context.SetComputeRootSignature(m_pCBTRS);
 				context.SetRootConstants(0, commonArgs);

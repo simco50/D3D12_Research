@@ -5,7 +5,6 @@ class GraphicsDevice;
 class Buffer;
 class PipelineState;
 class RootSignature;
-class CommandContext;
 class Texture;
 class RGGraph;
 struct SceneView;

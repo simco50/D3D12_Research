@@ -76,6 +76,9 @@ struct TIntVector4
 using IntVector2 = TIntVector2<int32>;
 using IntVector3 = TIntVector3<int32>;
 using IntVector4 = TIntVector4<int32>;
+using UIntVector2 = TIntVector2<uint32>;
+using UIntVector3 = TIntVector3<uint32>;
+using UIntVector4 = TIntVector4<uint32>;
 
 template<typename T>
 struct TRect
