@@ -1,5 +1,6 @@
 #include "Common.hlsli"
 #include "Lighting.hlsli"
+#include "Volumetrics.hlsli"
 #include "RayTracing/DDGICommon.hlsli"
 
 struct PassData
@@ -18,13 +19,6 @@ StructuredBuffer<uint> tLightGrid : register(t0);
 StructuredBuffer<uint> tLightIndexList : register(t1);
 Texture3D<float4> tLightScattering : register(t2);
 RWTexture3D<float4> uOutLightScattering : register(u0);
-
-float HenyeyGreenstreinPhase(float LoV, float G)
-{
-	float result = 1.0f - G * G;
-	result /= (4.0f * PI * pow(1.0f + G * G - (2.0f * G) * LoV, 1.5f));
-	return result;
-}
 
 float3 GetWorldPosition(uint3 index, float offset, out float linearDepth)
 {

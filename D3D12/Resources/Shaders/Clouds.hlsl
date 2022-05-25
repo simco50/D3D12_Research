@@ -1,5 +1,6 @@
 #include "Common.hlsli"
 #include "Random.hlsli"
+#include "Volumetrics.hlsli"
 
 struct VSInput
 {
@@ -45,6 +46,20 @@ PSInput VSMain(VSInput input)
 	return output;
 }
 
+float2 RaySphereIntersect(float3 rayOrigin, float3 rayDirection, float3 sphereCenter, float sphereRadius)
+{
+    float3 oc = rayOrigin - sphereCenter;
+    float b = dot(oc, rayDirection);
+    float c = dot(oc, oc) - sphereRadius * sphereRadius;
+    float h = b * b - c;
+    if(h < 0.0)
+	{
+		return -1.0f;
+	}
+    h = sqrt(h);
+    return float2(-b - h, -b + h);
+}
+
 float2 RayBoxDistance(float3 boundsMin, float3 boundsMax, float3 rayOrigin, float3 rayDirection)
 {
 	//http://jcgt.org/published/0007/03/04/
@@ -61,35 +76,34 @@ float2 RayBoxDistance(float3 boundsMin, float3 boundsMax, float3 rayOrigin, floa
 	return float2(distanceToBox, distanceInsideBox);
 }
 
+static const float PlanetOffset = -1000.0f;
+static const float InnerAtmosphereRadius = 1050.0f;
+static const float OuterAtmosphereRadius = 1080.0f;
+
 float SampleDensity(float3 position)
 {
 	float3 uvw = 0.1f * (position + 0.01 * float3(cView.FrameIndex, 0, 0)) * cPass.CloudScale;
 	float4 lowFrequencies = tCloudsTexture.SampleLevel(sLinearWrap, uvw, 0);
 
-	float lowFrequencyFBM = 
+	float lowFrequencyFBM =
 		lowFrequencies.y * 0.625f +
 		lowFrequencies.z * 0.25f +
 		lowFrequencies.w * 0.125f;
 
-	float baseCloud = Remap(lowFrequencies.r, (1.0f - lowFrequencyFBM), 1.0f, 0.0f, 1.0f);
+	float baseCloud = saturate(Remap(lowFrequencies.r, (1.0f - lowFrequencyFBM), 1.0f, 0.0f, 1.0f));
+
+	float height = length(position - float3(0, PlanetOffset, 0));
 
 	// Density is higher at higher altitude
-	float heightGradient = saturate(InverseLerp(position.y, cPass.MinExtents.y, cPass.MaxExtents.y));
+	float heightGradient = saturate(InverseLerp(height, InnerAtmosphereRadius, OuterAtmosphereRadius));
 
 	// Vertical falloff
 	float verticalDensity = tVerticalDensity.SampleLevel(sLinearClamp, float2(0, heightGradient), 0).x;
-	
-	return baseCloud * cPass.CloudDensity * heightGradient * verticalDensity;
+
+	return saturate(baseCloud * cPass.CloudDensity * heightGradient * verticalDensity);
 }
 
-float HenyeyGreenstreinPhase(float LoV, float G)
-{
-	float result = 1.0f - G * G;
-	result /= (4.0f * PI * pow(1.0f + G * G - (2.0f * G) * LoV, 1.5f));
-	return result;
-}
-
-float Phase(float a) 
+float Phase(float a)
 {
     float forwardScattering = .8f;
     float backScattering = .3f;
@@ -101,19 +115,21 @@ float Phase(float a)
 	return baseBrightness + hgBlend * phaseFactor;
 }
 
-float LightMarch(float3 position, float3 lightDirection)
+float LightMarch(float3 rayOrigin, float3 rayDirection)
 {
 	const float lightAbsorptionTowardsSun = 1.0f;
 	const float darknessThreshold = 0.01f;
 
-	float boxDistance = RayBoxDistance(cPass.MinExtents, cPass.MaxExtents, position, lightDirection).y;
+	float outerAtmosphereHit = RaySphereIntersect(rayOrigin, rayDirection, float3(0, PlanetOffset, 0), OuterAtmosphereRadius).y;
+	float rayDistance = length(rayDirection * outerAtmosphereHit);
+
 	uint steps = 8;
-	float stepSize = boxDistance / steps;
+	float stepSize = rayDistance / steps;
 	float totalDensity = 0;
 	for(int i = 0; i < steps; ++i)
 	{
-		position += lightDirection * stepSize;
-		totalDensity += max(0, SampleDensity(position) * stepSize);
+		rayOrigin += rayDirection * stepSize;
+		totalDensity += max(0, SampleDensity(rayOrigin) * stepSize);
 	}
 
 	float transmittance = exp(-totalDensity * lightAbsorptionTowardsSun);
@@ -122,35 +138,42 @@ float LightMarch(float3 position, float3 lightDirection)
 
 float4 PSMain(PSInput input) : SV_TARGET
 {
-	Light light = GetLight(0);
-	float3 ro = cView.ViewLocation;
-	float3 rd = normalize(input.ray.xyz);
-
 	float4 color = tSceneTexture.Sample(sLinearClamp, input.texCoord);
-
-	float2 boxResult = RayBoxDistance(cPass.MinExtents, cPass.MaxExtents, ro, rd);
 	float maxDepth = LinearizeDepth(tDepthTexture.Sample(sLinearClamp, input.texCoord).r);
+	if(maxDepth < cView.NearZ)
+		return color;
+
+
+	Light light = GetLight(0);
+
+	float3 rayOrigin = cView.ViewLocation;
+	float3 rayDirection = normalize(input.ray.xyz);
+	float offset = InterleavedGradientNoise(input.position.xy + cView.FrameIndex);
+	rayOrigin += rayDirection * offset * 1;
+
+	float2 planetHit = RaySphereIntersect(rayOrigin, rayDirection, float3(0, PlanetOffset, 0), 1000);
+	if(any(planetHit > -1))
+		return 0;
+
+	float atmosphereHit = RaySphereIntersect(rayOrigin, rayDirection, float3(0, PlanetOffset, 0), InnerAtmosphereRadius).y;
+	float outerAtmosphereHit = RaySphereIntersect(rayOrigin, rayDirection, float3(0, PlanetOffset, 0), OuterAtmosphereRadius).y;
+
+	float raymarchDistance = outerAtmosphereHit - atmosphereHit;
+
+	const float stepSize = 2.0f;
 
 	float distanceTravelled = 0;
-	float stepSize = boxResult.y / 40;
-	float dstLimit = min(maxDepth - boxResult.x, boxResult.y);
 
-	float totalDensity = 0;
+	 // Phase function makes clouds brighter around sun
+    float cosAngle = dot(-rayDirection, light.Direction);
+    float phaseVal = Phase(cosAngle);
+
 	float3 totalLight = 0;
 	float transmittance = 1;
 
-	uint seed = SeedThread(input.position.xy, cView.ViewportDimensions, cView.FrameIndex);
-
-	float offset = InterleavedGradientNoise(input.position.xy + cView.FrameIndex);
-	ro += rd * offset * 10;
-
-	 // Phase function makes clouds brighter around sun
-    float cosAngle = dot(-rd, light.Direction);
-    float phaseVal = Phase(cosAngle);
-
-	while (distanceTravelled < dstLimit)
+	while (distanceTravelled < raymarchDistance)
 	{
-		float3 rayPos = ro + rd * (boxResult.x + distanceTravelled);
+		float3 rayPos = rayOrigin + rayDirection * (atmosphereHit + distanceTravelled);
 		float density = SampleDensity(rayPos);
 
 		if(density > 0)
