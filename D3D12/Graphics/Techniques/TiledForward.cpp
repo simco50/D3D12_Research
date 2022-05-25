@@ -101,7 +101,7 @@ void TiledForward::Execute(RGGraph& graph, const SceneView* pView, SceneTextures
 	graph.AddPass("Tiled Light Culling", RGPassFlag::Compute)
 		.Read(sceneTextures.pDepth)
 		.Write({ pLightGridOpaque, pLightGridTransparant, pLightIndexListOpaque, pLightIndexListTransparant, pLightIndexCounter })
-		.Bind([=](CommandContext& context, const RGPassResources& resources)
+		.Bind([=](CommandContext& context)
 			{
 				Texture* pDepth = sceneTextures.pDepth->Get();
 
@@ -139,10 +139,8 @@ void TiledForward::Execute(RGGraph& graph, const SceneView* pView, SceneTextures
 		.RenderTarget(sceneTextures.pColorTarget, RenderTargetLoadAction::DontCare)
 		.RenderTarget(sceneTextures.pNormals, RenderTargetLoadAction::DontCare)
 		.RenderTarget(sceneTextures.pRoughness, RenderTargetLoadAction::DontCare)
-		.Bind([=](CommandContext& context, const RGPassResources& resources)
+		.Bind([=](CommandContext& context)
 			{
-				context.BeginRenderPass(resources.GetRenderPassInfo());
-
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 				context.SetGraphicsRootSignature(m_pDiffuseRS);
 
@@ -182,7 +180,6 @@ void TiledForward::Execute(RGGraph& graph, const SceneView* pView, SceneTextures
 					context.SetPipelineState(m_pDiffuseAlphaPSO);
 					Renderer::DrawScene(context, pView, Batch::Blending::AlphaBlend);
 				}
-				context.EndRenderPass();
 			});
 
 	CullBlackboardData& blackboardData = graph.Blackboard.Add<CullBlackboardData>();
@@ -196,10 +193,10 @@ void TiledForward::VisualizeLightDensity(RGGraph& graph, GraphicsDevice* pDevice
 	const CullBlackboardData& blackboardData = graph.Blackboard.Get<CullBlackboardData>();
 	RGTexture* pLightGridOpaque = blackboardData.pLightGridOpaque;
 
-	graph.AddPass("Visualize Light Density", RGPassFlag::Raster)
+	graph.AddPass("Visualize Light Density", RGPassFlag::Compute)
 		.Read({ sceneTextures.pDepth, sceneTextures.pColorTarget, pLightGridOpaque })
 		.Write(pVisualizationTarget)
-		.Bind([=](CommandContext& context, const RGPassResources& resources)
+		.Bind([=](CommandContext& context)
 			{
 				Texture* pTarget = pVisualizationTarget->Get();
 

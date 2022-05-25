@@ -135,10 +135,6 @@ private:
 	//Bloom
 	RefCountPtr<PipelineState> m_pBloomSeparatePSO;
 	RefCountPtr<PipelineState> m_pBloomMipChainPSO;
-	RefCountPtr<Texture> m_pBloomTexture;
-	RefCountPtr<Texture> m_pBloomIntermediateTexture;
-	std::vector<RefCountPtr<UnorderedAccessView>> m_pBloomUAVs;
-	std::vector<RefCountPtr<UnorderedAccessView>> m_pBloomIntermediateUAVs;
 
 	// Visibility buffer
 	RefCountPtr<PipelineState> m_pVisibilityRenderingPSO;

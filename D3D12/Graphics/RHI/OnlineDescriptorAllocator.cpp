@@ -159,7 +159,7 @@ void OnlineDescriptorAllocator::BindStagedDescriptors(CommandContext& context, C
 	m_StaleRootParameters.ClearAll();
 }
 
-void OnlineDescriptorAllocator::ParseRootSignature(RootSignature* pRootSignature)
+void OnlineDescriptorAllocator::ParseRootSignature(const RootSignature* pRootSignature)
 {
 	m_RootDescriptorMask = m_Type == D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER ?
 		pRootSignature->GetSamplerTableMask() : pRootSignature->GetDescriptorTableMask();

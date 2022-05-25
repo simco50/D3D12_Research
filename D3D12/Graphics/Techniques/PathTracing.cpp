@@ -12,7 +12,7 @@
 PathTracing::PathTracing(GraphicsDevice* pDevice)
 	: m_pDevice(pDevice)
 {
-	if (!IsSupported())
+	if (!m_pDevice->GetCapabilities().SupportsRaytracing())
 	{
 		return;
 	}
@@ -87,7 +87,7 @@ void PathTracing::Render(RGGraph& graph, const SceneView* pView, RGTexture* pTar
 
 	graph.AddPass("Path Tracing", RGPassFlag::Compute)
 		.Write({ pTarget, pAccumulationTexture })
-		.Bind([=](CommandContext& context, const RGPassResources& resources)
+		.Bind([=](CommandContext& context)
 			{
 				Texture* pRTTarget = pTarget->Get();
 
@@ -127,5 +127,5 @@ void PathTracing::Reset()
 
 bool PathTracing::IsSupported()
 {
-	return m_pDevice->GetCapabilities().SupportsRaytracing();
+	return m_pSO != nullptr;
 }

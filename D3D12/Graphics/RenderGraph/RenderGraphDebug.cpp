@@ -47,6 +47,7 @@ std::string PassFlagToString(RGPassFlag flags)
 			case RGPassFlag::Raster: return "Raster";
 			case RGPassFlag::Copy: return "Copy";
 			case RGPassFlag::NeverCull: return "Never Cull";
+			case RGPassFlag::NoRenderPass: return "No Render Pass";
 			default: return nullptr;
 			}
 		});
@@ -89,16 +90,6 @@ void RGGraph::DumpGraph(const char* pPath) const
 	const char* readLinkStyle = "stroke:#9c9,stroke-width:2px;";
 	int linkIndex = 0;
 
-	constexpr D3D12_RESOURCE_STATES WriteStates =
-		D3D12_RESOURCE_STATE_UNORDERED_ACCESS |
-		D3D12_RESOURCE_STATE_RENDER_TARGET |
-		D3D12_RESOURCE_STATE_DEPTH_WRITE |
-		D3D12_RESOURCE_STATE_COPY_DEST |
-		D3D12_RESOURCE_STATE_RESOLVE_DEST |
-		D3D12_RESOURCE_STATE_VIDEO_DECODE_WRITE |
-		D3D12_RESOURCE_STATE_VIDEO_PROCESS_WRITE |
-		D3D12_RESOURCE_STATE_VIDEO_ENCODE_WRITE;
-
 	std::unordered_map<RGResource*, uint32> resourceVersions;
 
 	//Pass declaration
@@ -138,7 +129,7 @@ void RGGraph::DumpGraph(const char* pPath) const
 				stream << "Res: " << desc.Width << "x" << desc.Height << "x" << desc.DepthOrArraySize << "<br/>";
 				stream << "Fmt: " << D3D::FormatToString(desc.Format) << "<br/>";
 				stream << "Mips: " << desc.Mips << "<br/>";
-				stream << "Size: " << Math::PrettyPrintDataSize(D3D::GetFormatRowDataSize(desc.Format, desc.Width) * desc.Height * desc.DepthOrArraySize) << "</br>";
+				stream << "Size: " << Math::PrettyPrintDataSize(D3D::GetFormatRowDataSize(D3D::GetSrvFormatFromDepth(desc.Format), desc.Width) * desc.Height * desc.DepthOrArraySize) << "</br>";
 			}
 			else if (pResource->Type == RGResourceType::Buffer)
 			{
@@ -182,7 +173,7 @@ void RGGraph::DumpGraph(const char* pPath) const
 				stream << "linkStyle " << linkIndex++ << " " << readLinkStyle << "\n";
 			}
 
-			if (EnumHasAnyFlags(access.Access, WriteStates))
+			if (ResourceState::HasWriteResourceState(access.Access))
 			{
 				++resourceVersions[pResource];
 				resourceVersion++;
