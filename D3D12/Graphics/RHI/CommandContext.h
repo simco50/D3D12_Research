@@ -159,21 +159,21 @@ public:
 	void Free(const SyncPoint& syncPoint);
 
 	void InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESOURCE_STATES state, uint32 subResource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES);
-	void InsertUavBarrier(GraphicsResource* pBuffer = nullptr);
+	void InsertUavBarrier(const GraphicsResource* pBuffer = nullptr);
 	void FlushResourceBarriers();
 
-	void CopyResource(GraphicsResource* pSource, GraphicsResource* pTarget);
-	void CopyTexture(Texture* pSource, Buffer* pDestination, const D3D12_BOX& sourceRegion, uint32 sourceSubregion = 0, uint32 destinationOffset = 0);
-	void CopyTexture(Texture* pSource, Texture* pDestination, const D3D12_BOX& sourceRegion, const D3D12_BOX& destinationRegion, uint32 sourceSubregion = 0, uint32 destinationSubregion = 0);
-	void CopyBuffer(Buffer* pSource, Buffer* pDestination, uint64 size, uint64 sourceOffset, uint64 destinationOffset);
-	void WriteBuffer(Buffer* pResource, const void* pData, uint64 dataSize, uint64 offset = 0);
+	void CopyResource(const GraphicsResource* pSource, const GraphicsResource* pTarget);
+	void CopyTexture(const Texture* pSource, const Buffer* pDestination, const D3D12_BOX& sourceRegion, uint32 sourceSubregion = 0, uint32 destinationOffset = 0);
+	void CopyTexture(const Texture* pSource, const Texture* pDestination, const D3D12_BOX& sourceRegion, const D3D12_BOX& destinationRegion, uint32 sourceSubregion = 0, uint32 destinationSubregion = 0);
+	void CopyBuffer(const Buffer* pSource, const Buffer* pDestination, uint64 size, uint64 sourceOffset, uint64 destinationOffset);
+	void WriteBuffer(const Buffer* pResource, const void* pData, uint64 dataSize, uint64 offset = 0);
 	void WriteTexture(Texture* pResource, const Span<D3D12_SUBRESOURCE_DATA>& subResourceDatas, uint32 firstSubResource);
 
 	void Dispatch(uint32 groupCountX, uint32 groupCountY = 1, uint32 groupCountZ = 1);
 	void Dispatch(const IntVector3& groupCounts);
 	void DispatchMesh(uint32 groupCountX, uint32 groupCountY = 1, uint32 groupCountZ = 1);
 	void DispatchMesh(const IntVector3& groupCounts);
-	void ExecuteIndirect(CommandSignature* pCommandSignature, uint32 maxCount, Buffer* pIndirectArguments, Buffer* pCountBuffer, uint32 argumentsOffset = 0, uint32 countOffset = 0);
+	void ExecuteIndirect(const CommandSignature* pCommandSignature, uint32 maxCount, const Buffer* pIndirectArguments, const Buffer* pCountBuffer, uint32 argumentsOffset = 0, uint32 countOffset = 0);
 	void Draw(uint32 vertexStart, uint32 vertexCount, uint32 instances = 1, uint32 instanceStart = 0);
 	void DrawIndexedInstanced(uint32 indexCount, uint32 indexStart, uint32 instanceCount, uint32 minVertex = 0, uint32 instanceStart = 0);
 	void DispatchRays(ShaderBindingTable& table, uint32 width = 1, uint32 height = 1, uint32 depth = 1);
@@ -185,8 +185,8 @@ public:
 	void BeginRenderPass(const RenderPassInfo& renderPassInfo);
 	void EndRenderPass();
 
-	void ClearUavUInt(GraphicsResource* pBuffer, UnorderedAccessView* pUav, uint32* values = nullptr);
-	void ClearUavFloat(GraphicsResource* pBuffer, UnorderedAccessView* pUav, float* values = nullptr);
+	void ClearUavUInt(const GraphicsResource* pBuffer, const UnorderedAccessView* pUav, const UIntVector4& values = UIntVector4());
+	void ClearUavFloat(const GraphicsResource* pBuffer, const UnorderedAccessView* pUav, const Vector4& values = Vector4::Zero);
 
 	void SetPipelineState(PipelineState* pPipelineState);
 	void SetPipelineState(StateObject* pStateObject);
@@ -200,8 +200,8 @@ public:
 	void SetShadingRate(D3D12_SHADING_RATE shadingRate = D3D12_SHADING_RATE_1X1);
 	void SetShadingRateImage(Texture* pTexture);
 
-	void SetGraphicsRootSignature(RootSignature* pRootSignature);
-	void SetComputeRootSignature(RootSignature* pRootSignature);
+	void SetGraphicsRootSignature(const RootSignature* pRootSignature);
+	void SetComputeRootSignature(const RootSignature* pRootSignature);
 	void BindResources(uint32 rootIndex, const Span<const ResourceView*>& pViews, uint32 offset = 0);
 	void BindResources(uint32 rootIndex, const Span<D3D12_CPU_DESCRIPTOR_HANDLE>& handles, uint32 offset = 0);
 	void SetDynamicVertexBuffer(uint32 slot, uint32 elementCount, uint32 elementSize, const void* pData);

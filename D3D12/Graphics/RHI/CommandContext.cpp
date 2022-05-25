@@ -138,7 +138,7 @@ void CommandContext::InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESO
 	}
 }
 
-void CommandContext::InsertUavBarrier(GraphicsResource* pBuffer /*= nullptr*/)
+void CommandContext::InsertUavBarrier(const GraphicsResource* pBuffer /*= nullptr*/)
 {
 	m_BarrierBatcher.AddUAV(pBuffer ? pBuffer->GetResource() : nullptr);
 }
@@ -148,7 +148,7 @@ void CommandContext::FlushResourceBarriers()
 	m_BarrierBatcher.Flush(m_pCommandList);
 }
 
-void CommandContext::CopyResource(GraphicsResource* pSource, GraphicsResource* pTarget)
+void CommandContext::CopyResource(const GraphicsResource* pSource, const GraphicsResource* pTarget)
 {
 	checkf(pSource && pSource->GetResource(), "Source is invalid");
 	checkf(pTarget && pTarget->GetResource(), "Target is invalid");
@@ -156,7 +156,7 @@ void CommandContext::CopyResource(GraphicsResource* pSource, GraphicsResource* p
 	m_pCommandList->CopyResource(pTarget->GetResource(), pSource->GetResource());
 }
 
-void CommandContext::CopyTexture(Texture* pSource, Buffer* pDestination, const D3D12_BOX& sourceRegion, uint32 sourceSubresource /*= 0*/, uint32 destinationOffset /*= 0*/)
+void CommandContext::CopyTexture(const Texture* pSource, const Buffer* pDestination, const D3D12_BOX& sourceRegion, uint32 sourceSubresource /*= 0*/, uint32 destinationOffset /*= 0*/)
 {
 	D3D12_PLACED_SUBRESOURCE_FOOTPRINT textureFootprint = {};
 	D3D12_RESOURCE_DESC resourceDesc = pSource->GetResource()->GetDesc();
@@ -167,19 +167,19 @@ void CommandContext::CopyTexture(Texture* pSource, Buffer* pDestination, const D
 	m_pCommandList->CopyTextureRegion(&dstLocation, destinationOffset, 0, 0, &srcLocation, &sourceRegion);
 }
 
-void CommandContext::CopyTexture(Texture* pSource, Texture* pDestination, const D3D12_BOX& sourceRegion, const D3D12_BOX& destinationRegion, uint32 sourceSubresource /*= 0*/, uint32 destinationSubregion /*= 0*/)
+void CommandContext::CopyTexture(const Texture* pSource, const Texture* pDestination, const D3D12_BOX& sourceRegion, const D3D12_BOX& destinationRegion, uint32 sourceSubresource /*= 0*/, uint32 destinationSubregion /*= 0*/)
 {
 	CD3DX12_TEXTURE_COPY_LOCATION srcLocation(pSource->GetResource(), sourceSubresource);
 	CD3DX12_TEXTURE_COPY_LOCATION dstLocation(pDestination->GetResource(), destinationSubregion);
 	m_pCommandList->CopyTextureRegion(&dstLocation, destinationRegion.left, destinationRegion.top, destinationRegion.front, &srcLocation, &sourceRegion);
 }
 
-void CommandContext::CopyBuffer(Buffer* pSource, Buffer* pDestination, uint64 size, uint64 sourceOffset, uint64 destinationOffset)
+void CommandContext::CopyBuffer(const Buffer* pSource, const Buffer* pDestination, uint64 size, uint64 sourceOffset, uint64 destinationOffset)
 {
 	m_pCommandList->CopyBufferRegion(pDestination->GetResource(), destinationOffset, pSource->GetResource(), sourceOffset, size);
 }
 
-void CommandContext::WriteBuffer(Buffer* pResource, const void* pData, uint64 dataSize, uint64 offset)
+void CommandContext::WriteBuffer(const Buffer* pResource, const void* pData, uint64 dataSize, uint64 offset)
 {
 	DynamicAllocation allocation = m_pDynamicAllocator->Allocate(dataSize);
 	memcpy(allocation.pMappedMemory, pData, dataSize);
@@ -225,39 +225,39 @@ void CommandContext::DispatchMesh(const IntVector3& groupCounts)
 	DispatchMesh(groupCounts.x, groupCounts.y, groupCounts.z);
 }
 
-void CommandContext::ExecuteIndirect(CommandSignature* pCommandSignature, uint32 maxCount, Buffer* pIndirectArguments, Buffer* pCountBuffer, uint32 argumentsOffset /*= 0*/, uint32 countOffset /*= 0*/)
+void CommandContext::ExecuteIndirect(const CommandSignature* pCommandSignature, uint32 maxCount, const Buffer* pIndirectArguments, const Buffer* pCountBuffer, uint32 argumentsOffset /*= 0*/, uint32 countOffset /*= 0*/)
 {
 	PrepareDraw();
 	check(m_pCurrentPSO || m_pCurrentSO);
 	m_pCommandList->ExecuteIndirect(pCommandSignature->GetCommandSignature(), maxCount, pIndirectArguments->GetResource(), argumentsOffset, pCountBuffer ? pCountBuffer->GetResource() : nullptr, countOffset);
 }
 
-void CommandContext::ClearUavUInt(GraphicsResource* pBuffer, UnorderedAccessView* pUav, uint32* values /*= nullptr*/)
+void CommandContext::ClearUavUInt(const GraphicsResource* pBuffer, const UnorderedAccessView* pUav, const UIntVector4& values)
 {
 	FlushResourceBarriers();
 	DescriptorHandle gpuHandle = m_ShaderResourceDescriptorAllocator.Allocate(1);
 	GetParent()->GetDevice()->CopyDescriptorsSimple(1, gpuHandle.CpuHandle, pUav->GetDescriptor(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 	uint32 zeros[4] = { 0,0,0,0 };
-	m_pCommandList->ClearUnorderedAccessViewUint(gpuHandle.GpuHandle, pUav->GetDescriptor(), pBuffer->GetResource(), values ? values : zeros, 0, nullptr);
+	m_pCommandList->ClearUnorderedAccessViewUint(gpuHandle.GpuHandle, pUav->GetDescriptor(), pBuffer->GetResource(), &values.x, 0, nullptr);
 }
 
-void CommandContext::ClearUavFloat(GraphicsResource* pBuffer, UnorderedAccessView* pUav, float* values /*= nullptr*/)
+void CommandContext::ClearUavFloat(const GraphicsResource* pBuffer, const UnorderedAccessView* pUav, const Vector4& values)
 {
 	FlushResourceBarriers();
 	DescriptorHandle gpuHandle = m_ShaderResourceDescriptorAllocator.Allocate(1);
 	GetParent()->GetDevice()->CopyDescriptorsSimple(1, gpuHandle.CpuHandle, pUav->GetDescriptor(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 	float zeros[4] = { 0,0,0,0 };
-	m_pCommandList->ClearUnorderedAccessViewFloat(gpuHandle.GpuHandle, pUav->GetDescriptor(), pBuffer->GetResource(), values ? values : zeros, 0, nullptr);
+	m_pCommandList->ClearUnorderedAccessViewFloat(gpuHandle.GpuHandle, pUav->GetDescriptor(), pBuffer->GetResource(), &values.x, 0, nullptr);
 }
 
-void CommandContext::SetComputeRootSignature(RootSignature* pRootSignature)
+void CommandContext::SetComputeRootSignature(const RootSignature* pRootSignature)
 {
 	m_pCommandList->SetComputeRootSignature(pRootSignature->GetRootSignature());
 	m_ShaderResourceDescriptorAllocator.ParseRootSignature(pRootSignature);
 	m_CurrentCommandContext = CommandListContext::Compute;
 }
 
-void CommandContext::SetGraphicsRootSignature(RootSignature* pRootSignature)
+void CommandContext::SetGraphicsRootSignature(const RootSignature* pRootSignature)
 {
 	m_pCommandList->SetGraphicsRootSignature(pRootSignature->GetRootSignature());
 	m_ShaderResourceDescriptorAllocator.ParseRootSignature(pRootSignature);
