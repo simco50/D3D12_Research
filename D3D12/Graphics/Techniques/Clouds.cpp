@@ -131,7 +131,7 @@ RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const Sc
 
 	RGTexture* pIntermediateColor = graph.CreateTexture("Intermediate Color", sceneTextures.pColorTarget->GetDesc());
 
-	graph.AddPass("Clouds", RGPassFlag::Compute)
+	graph.AddPass("Clouds", RGPassFlag::Raster)
 		.Read({ pNoiseTexture, sceneTextures.pColorTarget, sceneTextures.pDepth })
 		.RenderTarget(pIntermediateColor, RenderTargetLoadAction::Load)
 		.Bind([=](CommandContext& context, const RGPassResources& resources)
