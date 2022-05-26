@@ -11,30 +11,38 @@
 
 static bool shaderDirty = false;
 
+GlobalResource<RootSignature> CloudShapeRS;
+GlobalResource<PipelineState> CloudShapeNoisePSO;
+GlobalResource<PipelineState> CloudDetailNoisePSO;
+
+GlobalResource<RootSignature> CloudsRS;
+GlobalResource<PipelineState> CloudsPSO;
+
 Clouds::Clouds(GraphicsDevice* pDevice)
 {
 	CommandContext* pContext = pDevice->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 	{
-		m_pWorleyNoiseRS = new RootSignature(pDevice);
-		m_pWorleyNoiseRS->AddConstantBufferView(0);
-		m_pWorleyNoiseRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1);
-		m_pWorleyNoiseRS->Finalize("Worley Noise RS");
+		CloudShapeRS = new RootSignature(pDevice);
+		CloudShapeRS->AddConstantBufferView(0);
+		CloudShapeRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1);
+		CloudShapeRS->Finalize("Worley Noise RS");
 
-		m_pWorleyNoisePS = pDevice->CreateComputePipeline(m_pWorleyNoiseRS, "WorleyNoise.hlsl", "WorleyNoiseCS");
+		CloudShapeNoisePSO = pDevice->CreateComputePipeline(CloudShapeRS, "CloudsShapes.hlsl", "CloudShapeNoiseCS");
+		CloudDetailNoisePSO = pDevice->CreateComputePipeline(CloudShapeRS, "CloudsShapes.hlsl", "CloudDetailNoiseCS");
 	}
 	{
-		m_pCloudsRS = new RootSignature(pDevice);
-		m_pCloudsRS->AddConstantBufferView(0);
-		m_pCloudsRS->AddConstantBufferView(100);
-		m_pCloudsRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 4);
-		m_pCloudsRS->Finalize("Clouds RS", D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+		CloudsRS = new RootSignature(pDevice);
+		CloudsRS->AddConstantBufferView(0);
+		CloudsRS->AddConstantBufferView(100);
+		CloudsRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 6);
+		CloudsRS->Finalize("Clouds RS", D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
 		VertexElementLayout quadIL;
 		quadIL.AddVertexElement("POSITION", DXGI_FORMAT_R32G32B32_FLOAT);
 		quadIL.AddVertexElement("TEXCOORD", DXGI_FORMAT_R32G32_FLOAT);
 
 		PipelineStateInitializer psoDesc;
-		psoDesc.SetRootSignature(m_pCloudsRS);
+		psoDesc.SetRootSignature(CloudsRS);
 		psoDesc.SetVertexShader("Clouds.hlsl", "VSMain");
 		psoDesc.SetPixelShader("Clouds.hlsl", "PSMain");
 		psoDesc.SetInputLayout(quadIL);
@@ -42,7 +50,7 @@ Clouds::Clouds(GraphicsDevice* pDevice)
 		psoDesc.SetDepthEnabled(false);
 		psoDesc.SetDepthWrite(false);
 		psoDesc.SetRenderTargetFormats(DXGI_FORMAT_R16G16B16A16_FLOAT, DXGI_FORMAT_D32_FLOAT, 1);
-		m_pCloudsPS = pDevice->CreatePipeline(psoDesc);
+		CloudsPSO = pDevice->CreatePipeline(psoDesc);
 	}
 	{
 		struct Vertex
@@ -82,7 +90,7 @@ RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const Sc
 	static float scale = 0.09f;
 	static float density = 1.0f;
 
-	bool isDirty = !m_pWorleyNoiseTexture || shaderDirty;
+	bool isDirty = !m_pShapeNoise || !m_pDetailNoise || shaderDirty;
 	shaderDirty = false;
 
 	ImGui::Begin("Parameters");
@@ -97,17 +105,19 @@ RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const Sc
 	ImGui::SliderFloat("Density", &density, 0, 1);
 	ImGui::End();
 
-	static const int highResolution = 128;
-	RGTexture* pNoiseTexture = RGUtils::CreatePersistentTexture(graph, "Worley Noise", TextureDesc::Create3D(highResolution, highResolution, highResolution, DXGI_FORMAT_R8G8B8A8_UNORM), &m_pWorleyNoiseTexture, true);
+	constexpr int shapeNoiseResolution = 128;
+	RGTexture* pNoiseTexture = RGUtils::CreatePersistentTexture(graph, "Shape Noise", TextureDesc::Create3D(shapeNoiseResolution, shapeNoiseResolution, shapeNoiseResolution, DXGI_FORMAT_R8G8B8A8_UNORM), &m_pShapeNoise, true);
+	constexpr int detailNoiseResolution = 32;
+	RGTexture* pDetailNoiseTexture = RGUtils::CreatePersistentTexture(graph, "Detail Noise", TextureDesc::Create3D(detailNoiseResolution, detailNoiseResolution, detailNoiseResolution, DXGI_FORMAT_R8G8B8A8_UNORM), &m_pDetailNoise, true);
 
 	if (isDirty)
 	{
-		graph.AddPass("Compute Noise", RGPassFlag::Compute)
+		graph.AddPass("Compute Shape Noise", RGPassFlag::Compute)
 			.Write(pNoiseTexture)
 			.Bind([=](CommandContext& context, const RGPassResources& resources)
 				{
-					context.SetPipelineState(m_pWorleyNoisePS);
-					context.SetComputeRootSignature(m_pWorleyNoiseRS);
+					context.SetPipelineState(CloudShapeNoisePSO);
+					context.SetComputeRootSignature(CloudShapeRS);
 
 					struct
 					{
@@ -117,28 +127,52 @@ RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const Sc
 					} Constants;
 
 					Constants.Seed = noiseSeed;
-					Constants.Resolution = highResolution;
+					Constants.Resolution = shapeNoiseResolution;
 					Constants.Frequency = noiseFrequency;
 
 					context.SetRootCBV(0, Constants);
 					context.BindResources(1, pNoiseTexture->Get()->GetUAV());
 
 					context.Dispatch(
-						ComputeUtils::GetNumThreadGroups(highResolution, 8, highResolution, 8, highResolution, 8));
+						ComputeUtils::GetNumThreadGroups(shapeNoiseResolution, 8, shapeNoiseResolution, 8, shapeNoiseResolution, 8));
+				});
+
+		graph.AddPass("Compute Detail Noise", RGPassFlag::Compute)
+			.Write(pDetailNoiseTexture)
+			.Bind([=](CommandContext& context, const RGPassResources& resources)
+				{
+					context.SetPipelineState(CloudDetailNoisePSO);
+					context.SetComputeRootSignature(CloudShapeRS);
+
+					struct
+					{
+						uint32 Frequency;
+						uint32 Resolution;
+						uint32 Seed;
+					} Constants;
+
+					Constants.Seed = noiseSeed;
+					Constants.Resolution = detailNoiseResolution;
+					Constants.Frequency = noiseFrequency;
+
+					context.SetRootCBV(0, Constants);
+					context.BindResources(1, pDetailNoiseTexture->Get()->GetUAV());
+
+					context.Dispatch(
+						ComputeUtils::GetNumThreadGroups(detailNoiseResolution, 8, detailNoiseResolution, 8, detailNoiseResolution, 8));
 				});
 	}
-
 
 	RGTexture* pIntermediateColor = graph.CreateTexture("Intermediate Color", sceneTextures.pColorTarget->GetDesc());
 
 	graph.AddPass("Clouds", RGPassFlag::Raster)
-		.Read({ pNoiseTexture, sceneTextures.pColorTarget, sceneTextures.pDepth })
+		.Read({ pNoiseTexture, pDetailNoiseTexture, sceneTextures.pColorTarget, sceneTextures.pDepth })
 		.RenderTarget(pIntermediateColor, RenderTargetLoadAction::Load)
 		.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
 				context.BeginRenderPass(resources.GetRenderPassInfo());
-				context.SetPipelineState(m_pCloudsPS);
-				context.SetGraphicsRootSignature(m_pCloudsRS);
+				context.SetPipelineState(CloudsPSO);
+				context.SetGraphicsRootSignature(CloudsRS);
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
 				struct
@@ -161,8 +195,9 @@ RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const Sc
 					{
 						sceneTextures.pColorTarget->Get()->GetSRV(),
 						sceneTextures.pDepth->Get()->GetSRV(),
-						pNoiseTexture->Get()->GetSRV(),
 						m_pVerticalDensityTexture->GetSRV(),
+						pNoiseTexture->Get()->GetSRV(),
+						pDetailNoiseTexture->Get()->GetSRV(),
 					});
 				context.SetVertexBuffers(VertexBufferView(m_pQuadVertexBuffer));
 				context.Draw(0, 6);
@@ -171,5 +206,5 @@ RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const Sc
 
 	sceneTextures.pColorTarget = pIntermediateColor;
 
-	return pNoiseTexture;
+	return pDetailNoiseTexture;
 }

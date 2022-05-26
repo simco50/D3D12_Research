@@ -1,6 +1,7 @@
 #include "Common.hlsli"
 #include "Random.hlsli"
 #include "Volumetrics.hlsli"
+#include "SkyCommon.hlsli"
 
 struct VSInput
 {
@@ -17,8 +18,9 @@ struct PSInput
 
 Texture2D tSceneTexture : register(t0);
 Texture2D tDepthTexture : register(t1);
-Texture3D tCloudsTexture : register(t2);
-Texture2D tVerticalDensity : register(t3);
+Texture2D tVerticalDensity : register(t2);
+Texture3D tShapeNoise : register(t3);
+Texture3D tDetailNoise : register(t4);
 
 struct PassParameters
 {
@@ -83,14 +85,22 @@ static const float OuterAtmosphereRadius = 1080.0f;
 float SampleDensity(float3 position)
 {
 	float3 uvw = 0.1f * (position + 0.01 * float3(cView.FrameIndex, 0, 0)) * cPass.CloudScale;
-	float4 lowFrequencies = tCloudsTexture.SampleLevel(sLinearWrap, uvw, 0);
+	float4 lowFrequencies = tShapeNoise.SampleLevel(sLinearWrap, uvw, 0);
 
 	float lowFrequencyFBM =
 		lowFrequencies.y * 0.625f +
 		lowFrequencies.z * 0.25f +
 		lowFrequencies.w * 0.125f;
 
+	float4 highFrequencies = 0.3 * tShapeNoise.SampleLevel(sLinearWrap, uvw * 6, 0);
+	float highFrequencyFBM =
+		highFrequencies.y * 0.625f +
+		highFrequencies.z * 0.25f +
+		highFrequencies.w * 0.125f;
+
 	float baseCloud = saturate(Remap(lowFrequencies.r, (1.0f - lowFrequencyFBM), 1.0f, 0.0f, 1.0f));
+
+	baseCloud = Remap(baseCloud, highFrequencyFBM, 1.0f, 0.0f, 1.0f);
 
 	float height = length(position - float3(0, PlanetOffset, 0));
 
@@ -101,18 +111,6 @@ float SampleDensity(float3 position)
 	float verticalDensity = tVerticalDensity.SampleLevel(sLinearClamp, float2(0, heightGradient), 0).x;
 
 	return saturate(baseCloud * cPass.CloudDensity * heightGradient * verticalDensity);
-}
-
-float Phase(float a)
-{
-    float forwardScattering = .8f;
-    float backScattering = .3f;
-    float baseBrightness = .1f;
-    float phaseFactor = .5f;
-
-	float blend = .5;
-	float hgBlend = HenyeyGreenstreinPhase(a, forwardScattering) * (1-blend) + HenyeyGreenstreinPhase(a, -backScattering) * blend;
-	return baseBrightness + hgBlend * phaseFactor;
 }
 
 float LightMarch(float3 rayOrigin, float3 rayDirection)
@@ -143,7 +141,6 @@ float4 PSMain(PSInput input) : SV_TARGET
 	if(maxDepth < cView.NearZ)
 		return color;
 
-
 	Light light = GetLight(0);
 
 	float3 rayOrigin = cView.ViewLocation;
@@ -160,13 +157,15 @@ float4 PSMain(PSInput input) : SV_TARGET
 
 	float raymarchDistance = outerAtmosphereHit - atmosphereHit;
 
-	const float stepSize = 2.0f;
+	const float stepSize = 1.0f;
 
 	float distanceTravelled = 0;
 
 	 // Phase function makes clouds brighter around sun
     float cosAngle = dot(-rayDirection, light.Direction);
-    float phaseVal = Phase(cosAngle);
+	const float forwardScattering = .8f;
+    const float backScattering = .3f;
+	float phaseVal = lerp(HenyeyGreenstreinPhase(cosAngle, forwardScattering), HenyeyGreenstreinPhase(cosAngle, backScattering), 0.5f);
 
 	float3 totalLight = 0;
 	float transmittance = 1;
@@ -190,7 +189,7 @@ float4 PSMain(PSInput input) : SV_TARGET
 	}
 
 	float3 cloudColor = totalLight * light.Intensity * light.GetColor().rgb;
-	float3 col = color.xyz * transmittance + cloudColor;
+	float3 col = color.xyz * transmittance + cloudColor + GetSky(float3(0, 1, 0)) * (1 - transmittance);
 
 	return float4(col, 1);
 }

@@ -34,6 +34,30 @@ struct BufferDesc;
 
 using WindowHandle = HWND;
 
+template<typename T>
+class GlobalResource
+{
+public:
+	GlobalResource& operator=(RefCountPtr<T>&& pResource)
+	{
+		static_assert(std::is_base_of_v<GraphicsObject, T>);
+		check(pResource);
+		check(m_pResource == nullptr);
+		m_pResource = pResource.Get();
+		pResource->GetParent()->RegisterGlobalResource(std::move(pResource));
+		return *this;
+	}
+
+	GlobalResource& operator=(const GlobalResource& rhs) = delete;
+
+	T* operator->() const { return m_pResource; }
+	operator bool() const { return m_pResource != nullptr; }
+	operator T* () const { return m_pResource; }
+
+private:
+	T* m_pResource = nullptr;
+};
+
 enum class DisplayMode
 {
 	SDR,
@@ -134,7 +158,7 @@ public:
 	void DeferReleaseObject(ID3D12Object* pObject);
 
 	RefCountPtr<PipelineState> CreatePipeline(const PipelineStateInitializer& psoDesc);
-	RefCountPtr<PipelineState> CreateComputePipeline(RefCountPtr<RootSignature>& pRootSignature, const char* pShaderPath, const char* entryPoint = "", const Span<ShaderDefine>& defines = {});
+	RefCountPtr<PipelineState> CreateComputePipeline(RootSignature* pRootSignature, const char* pShaderPath, const char* entryPoint = "", const Span<ShaderDefine>& defines = {});
 	RefCountPtr<StateObject> CreateStateObject(const StateObjectInitializer& stateDesc);
 	RefCountPtr<ShaderResourceView> CreateSRV(Buffer* pBuffer, const BufferSRVDesc& desc);
 	RefCountPtr<UnorderedAccessView> CreateUAV(Buffer* pBuffer, const BufferUAVDesc& desc);
@@ -144,6 +168,11 @@ public:
 
 	Shader* GetShader(const char* pShaderPath, ShaderType shaderType, const char* entryPoint = "", const Span<ShaderDefine>& defines = {});
 	ShaderLibrary* GetLibrary(const char* pShaderPath, const Span<ShaderDefine>& defines = {});
+
+	void RegisterGlobalResource(RefCountPtr<GraphicsObject>&& pResource)
+	{
+		m_GlobalResources.push_back(std::move(pResource));
+	}
 
 	GlobalOnlineDescriptorHeap* GetGlobalViewHeap() const { return m_pGlobalViewHeap; }
 	GlobalOnlineDescriptorHeap* GetGlobalSamplerHeap() const { return m_pGlobalSamplerHeap; }
@@ -213,6 +242,8 @@ private:
 
 	std::array<RefCountPtr<OfflineDescriptorAllocator>, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES> m_DescriptorHeaps;
 	RefCountPtr<DynamicAllocationManager> m_pDynamicAllocationManager;
+
+	std::vector<RefCountPtr<GraphicsObject>> m_GlobalResources;
 
 	std::mutex m_ContextAllocationMutex;
 };

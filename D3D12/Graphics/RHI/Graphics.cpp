@@ -804,7 +804,7 @@ void GraphicsDevice::DeferReleaseObject(ID3D12Object* pObject)
 	}
 }
 
-RefCountPtr<PipelineState> GraphicsDevice::CreateComputePipeline(RefCountPtr<RootSignature>& pRootSignature, const char* pShaderPath, const char* entryPoint, const Span<ShaderDefine>& defines)
+RefCountPtr<PipelineState> GraphicsDevice::CreateComputePipeline(RootSignature* pRootSignature, const char* pShaderPath, const char* entryPoint, const Span<ShaderDefine>& defines)
 {
 	PipelineStateInitializer desc;
 	desc.SetRootSignature(pRootSignature);
