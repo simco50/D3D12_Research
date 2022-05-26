@@ -24,13 +24,13 @@ float PerlinFBM(float3 p, uint freq, int octaves)
         freq *= 2.0f;
         amp *= G;
     }
-    
+
     return noise;
 }
 
 float WorleyFBM(float3 uvw, float frequency)
 {
-	return 
+	return
 		WorleyNoise(uvw, frequency, cPass.Seed) * 0.625f +
 		WorleyNoise(uvw, frequency * 2, cPass.Seed) * 0.25f +
 		WorleyNoise(uvw, frequency * 4, cPass.Seed) * 0.125f;
@@ -49,7 +49,7 @@ void CloudShapeNoiseCS(uint3 threadId : SV_DISPATCHTHREADID)
     // Seven octave low frequency perlin FBM
 	float perlin = PerlinFBM(uvw, 3, 7);
 	noiseResults.x = Remap(perlin, 0.0f, 1.0f, noiseResults.y, 1.0f);
-	
+
 	uOutputTexture[threadId.xyz] = noiseResults;
 }
 
@@ -63,6 +63,6 @@ void CloudDetailNoiseCS(uint3 threadId : SV_DISPATCHTHREADID)
 	noiseResults.y = WorleyFBM(uvw, cPass.Frequency * 2);
 	noiseResults.z = WorleyFBM(uvw, cPass.Frequency * 4);
 	noiseResults.w = WorleyFBM(uvw, cPass.Frequency * 8);
-	
+
 	uOutputTexture[threadId.xyz] = noiseResults;
 }

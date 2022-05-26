@@ -87,13 +87,20 @@ RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const Sc
 		float Density = 0.5f;
 		int32 NoiseSeed = 0;
 
+		float RaymarchStepSize = 15.0f;
+		int32 LightMarchSteps = 8;
+
 		int32 ShapeNoiseFrequency = 4;
 		int32 ShapeNoiseResolution = 128;
-		float ShapeNoiseScale = 0.6f;
+		float ShapeNoiseScale = 0.3f;
 
 		int32 DetailNoiseFrequency = 3;
 		int32 DetailNoiseResolution = 32;
-		float DetailNoiseScale = 7.0f;
+		float DetailNoiseScale = 3.0f;
+		float DetailNoiseInfluence = 0.4f;
+
+		float PlanetRadius = 10000;
+		Vector2 AtmosphereHeightRange = Vector2(350.0f, 700.0f);
 	};
 	static CloudParameters parameters;
 
@@ -109,8 +116,14 @@ RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const Sc
 	isDirty |= ImGui::SliderInt("Detail Noise Frequency", &parameters.DetailNoiseFrequency, 1, 10);
 	isDirty |= ImGui::SliderInt("Detail Noise Resolution", &parameters.DetailNoiseResolution, 8, 64);
 	ImGui::SliderFloat("Detail Noise Scale", &parameters.DetailNoiseScale, 2.0f, 12.0f);
+	ImGui::SliderFloat("Detail Noise Influence", &parameters.DetailNoiseInfluence, 0.0f, 1.0f);
 
+	ImGui::SliderFloat("Raymarch Step Size", &parameters.RaymarchStepSize, 1.0f, 40.0f);
+	ImGui::SliderInt("Light March Steps", &parameters.LightMarchSteps, 1, 20);
 	ImGui::SliderFloat("Density", &parameters.Density, 0, 1);
+
+	ImGui::SliderFloat("Planet Size", &parameters.PlanetRadius, 100, 100000);
+	ImGui::DragFloatRange2("Atmosphere Height", &parameters.AtmosphereHeightRange.x, &parameters.AtmosphereHeightRange.y, 1.0f, 10, 1000);
 	ImGui::End();
 
 	RGTexture* pNoiseTexture = RGUtils::CreatePersistentTexture(graph, "Shape Noise",
@@ -183,11 +196,23 @@ RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const Sc
 					float ShapeNoiseScale;
 					float DetailNoiseScale;
 					float CloudDensity;
+					float RayStepSize;
+					uint32 LightMarchSteps;
+					float PlanetRadius;
+					float AtmosphereHeightStart;
+					float AtmosphereHeightEnd;
+					float DetailNoiseInfluence;
 				} constants;
 
 				constants.ShapeNoiseScale = parameters.ShapeNoiseScale;
 				constants.DetailNoiseScale = parameters.DetailNoiseScale;
 				constants.CloudDensity = parameters.Density;
+				constants.RayStepSize = parameters.RaymarchStepSize;
+				constants.LightMarchSteps = parameters.LightMarchSteps;
+				constants.PlanetRadius = parameters.PlanetRadius;
+				constants.AtmosphereHeightStart = parameters.AtmosphereHeightRange.x;
+				constants.AtmosphereHeightEnd = parameters.AtmosphereHeightRange.y;
+				constants.DetailNoiseInfluence = parameters.DetailNoiseInfluence;
 
 				context.SetRootCBV(0, constants);
 				context.SetRootCBV(1, Renderer::GetViewUniforms(pView, pIntermediateColor->Get()));

@@ -27,6 +27,12 @@ struct PassParameters
 	float ShapeNoiseScale;
 	float DetailNoiseScale;
 	float CloudDensity;
+	float RayStepSize;
+	uint LightMarchSteps;
+	float PlanetRadius;
+	float AtmosphereHeightStart;
+	float AtmosphereHeightEnd;
+	float DetailNoiseInfluence;
 };
 
 ConstantBuffer<PassParameters> cPass : register(b0);
@@ -58,16 +64,11 @@ float2 RaySphereIntersect(float3 rayOrigin, float3 rayDirection, float3 sphereCe
     return float2(-b - h, -b + h);
 }
 
-static const float PlanetOffset = -10000.0f;
-static const float PlanetRadius = -PlanetOffset;
-static const float InnerAtmosphereRadius = 10500.0f;
-static const float OuterAtmosphereRadius = 10800.0f;
-
 float SampleDensity(float3 position)
 {
 	const float globalScale = 0.001f;
 
-	float3 uvw = globalScale * (position + 0.01 * float3(cView.FrameIndex, 0, 0));
+	float3 uvw = globalScale * (position + 0.05 * float3(cView.FrameIndex, 0, 0));
 	float4 lowFrequencies = tShapeNoise.SampleLevel(sLinearWrap, uvw * cPass.ShapeNoiseScale, 0);
 
 	float lowFrequencyFBM =
@@ -75,7 +76,7 @@ float SampleDensity(float3 position)
 		lowFrequencies.z * 0.25f +
 		lowFrequencies.w * 0.125f;
 
-	float4 highFrequencies = 0.3 * tDetailNoise.SampleLevel(sLinearWrap, uvw * cPass.DetailNoiseScale, 0);
+	float4 highFrequencies = cPass.DetailNoiseInfluence * tDetailNoise.SampleLevel(sLinearWrap, uvw * cPass.DetailNoiseScale, 0);
 	float highFrequencyFBM =
 		highFrequencies.y * 0.625f +
 		highFrequencies.z * 0.25f +
@@ -85,10 +86,10 @@ float SampleDensity(float3 position)
 
 	baseCloud = Remap(baseCloud, highFrequencyFBM, 1.0f, 0.0f, 1.0f);
 
-	float height = length(position - float3(0, PlanetOffset, 0));
+	float height = length(position - float3(0, -cPass.PlanetRadius, 0));
 
 	// Density is higher at higher altitude
-	float heightGradient = saturate(InverseLerp(height, InnerAtmosphereRadius, OuterAtmosphereRadius));
+	float heightGradient = saturate(InverseLerp(height - cPass.PlanetRadius, cPass.AtmosphereHeightStart, cPass.AtmosphereHeightEnd));
 
 	// Vertical falloff
 	float verticalDensity = tVerticalDensity.SampleLevel(sLinearClamp, float2(0, heightGradient), 0).x;
@@ -98,13 +99,10 @@ float SampleDensity(float3 position)
 
 float LightMarch(float3 rayOrigin, float3 rayDirection)
 {
-	const float lightAbsorptionTowardsSun = 1.0f;
-	const float darknessThreshold = 0.01f;
-
-	float outerAtmosphereHit = RaySphereIntersect(rayOrigin, rayDirection, float3(0, PlanetOffset, 0), OuterAtmosphereRadius).y;
+	float outerAtmosphereHit = RaySphereIntersect(rayOrigin, rayDirection, float3(0, -cPass.PlanetRadius, 0), cPass.PlanetRadius + cPass.AtmosphereHeightEnd).y;
 	float rayDistance = length(rayDirection * outerAtmosphereHit);
 
-	uint steps = 8;
+	uint steps = cPass.LightMarchSteps;
 	float stepSize = rayDistance / steps;
 	float totalDensity = 0;
 	for(int i = 0; i < steps; ++i)
@@ -113,8 +111,8 @@ float LightMarch(float3 rayOrigin, float3 rayDirection)
 		totalDensity += max(0, SampleDensity(rayOrigin) * stepSize);
 	}
 
-	float transmittance = exp(-totalDensity * lightAbsorptionTowardsSun);
-	return darknessThreshold + transmittance * (1 - darknessThreshold);
+	float transmittance = exp(-totalDensity);
+	return transmittance;
 }
 
 float4 PSMain(PSInput input) : SV_TARGET
@@ -128,19 +126,19 @@ float4 PSMain(PSInput input) : SV_TARGET
 
 	float3 rayOrigin = cView.ViewLocation;
 	float3 rayDirection = normalize(input.ray.xyz);
-	float offset = InterleavedGradientNoise(input.position.xy + cView.FrameIndex);
-	rayOrigin += rayDirection * offset * 2;
 
-	float2 planetHit = RaySphereIntersect(rayOrigin, rayDirection, float3(0, PlanetOffset, 0), PlanetRadius);
+	float2 planetHit = RaySphereIntersect(rayOrigin, rayDirection, float3(0, -cPass.PlanetRadius, 0), cPass.PlanetRadius);
 	if(any(planetHit > -1))
 		return 0;
 
-	float atmosphereHit = RaySphereIntersect(rayOrigin, rayDirection, float3(0, PlanetOffset, 0), InnerAtmosphereRadius).y;
-	float outerAtmosphereHit = RaySphereIntersect(rayOrigin, rayDirection, float3(0, PlanetOffset, 0), OuterAtmosphereRadius).y;
+	float atmosphereHit = RaySphereIntersect(rayOrigin, rayDirection, float3(0, -cPass.PlanetRadius, 0), cPass.PlanetRadius + cPass.AtmosphereHeightStart).y;
+	float outerAtmosphereHit = RaySphereIntersect(rayOrigin, rayDirection, float3(0, -cPass.PlanetRadius, 0), cPass.PlanetRadius + cPass.AtmosphereHeightEnd).y;
 
 	float raymarchDistance = outerAtmosphereHit - atmosphereHit;
 
-	const float stepSize = 15.0f;
+	float offset = InterleavedGradientNoise(input.position.xy + cView.FrameIndex);
+	rayOrigin += rayDirection * offset * 2;
+	const float stepSize = cPass.RayStepSize;
 
 	float distanceTravelled = 0;
 
