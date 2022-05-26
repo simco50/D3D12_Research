@@ -82,36 +82,51 @@ Clouds::Clouds(GraphicsDevice* pDevice)
 
 RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const SceneView* pView)
 {
-	static int noiseSeed = 0;
-	static int noiseFrequency = 4;
+	struct CloudParameters
+	{
+		float Density = 0.5f;
+		int32 NoiseSeed = 0;
 
-	static Vector3 center = Vector3(0, 50, 0);
-	static Vector3 extents = Vector3(100, 4, 100);
-	static float scale = 0.09f;
-	static float density = 1.0f;
+		int32 ShapeNoiseFrequency = 4;
+		int32 ShapeNoiseResolution = 128;
+		float ShapeNoiseScale = 0.6f;
+
+		int32 DetailNoiseFrequency = 3;
+		int32 DetailNoiseResolution = 32;
+		float DetailNoiseScale = 7.0f;
+	};
+	static CloudParameters parameters;
 
 	bool isDirty = !m_pShapeNoise || !m_pDetailNoise || shaderDirty;
 	shaderDirty = false;
 
 	ImGui::Begin("Parameters");
-	ImGui::Text("Noise");
-	isDirty |= ImGui::SliderInt("Seed", &noiseSeed, 0, 500);
-	isDirty |= ImGui::SliderInt("Frequency", &noiseFrequency, 2, 10);
+	isDirty |= ImGui::SliderInt("Seed", &parameters.NoiseSeed, 0, 100);
+	isDirty |= ImGui::SliderInt("Shape Noise Frequency", &parameters.ShapeNoiseFrequency, 1, 10);
+	isDirty |= ImGui::SliderInt("Shape Noise Resolution", &parameters.ShapeNoiseResolution, 32, 256);
+	ImGui::SliderFloat("Shape Noise Scale", &parameters.ShapeNoiseScale, 0.1f, 5.0f);
 
-	ImGui::Text("Clouds");
-	ImGui::InputFloat3("Position", &center.x);
-	ImGui::InputFloat3("Extents", &extents.x);
-	ImGui::SliderFloat("Scale", &scale, 0.05f, 0.5f);
-	ImGui::SliderFloat("Density", &density, 0, 1);
+	isDirty |= ImGui::SliderInt("Detail Noise Frequency", &parameters.DetailNoiseFrequency, 1, 10);
+	isDirty |= ImGui::SliderInt("Detail Noise Resolution", &parameters.DetailNoiseResolution, 8, 64);
+	ImGui::SliderFloat("Detail Noise Scale", &parameters.DetailNoiseScale, 2.0f, 12.0f);
+
+	ImGui::SliderFloat("Density", &parameters.Density, 0, 1);
 	ImGui::End();
 
-	constexpr int shapeNoiseResolution = 128;
-	RGTexture* pNoiseTexture = RGUtils::CreatePersistentTexture(graph, "Shape Noise", TextureDesc::Create3D(shapeNoiseResolution, shapeNoiseResolution, shapeNoiseResolution, DXGI_FORMAT_R8G8B8A8_UNORM), &m_pShapeNoise, true);
-	constexpr int detailNoiseResolution = 32;
-	RGTexture* pDetailNoiseTexture = RGUtils::CreatePersistentTexture(graph, "Detail Noise", TextureDesc::Create3D(detailNoiseResolution, detailNoiseResolution, detailNoiseResolution, DXGI_FORMAT_R8G8B8A8_UNORM), &m_pDetailNoise, true);
+	RGTexture* pNoiseTexture = RGUtils::CreatePersistentTexture(graph, "Shape Noise",
+		TextureDesc::Create3D(parameters.ShapeNoiseResolution, parameters.ShapeNoiseResolution, parameters.ShapeNoiseResolution, DXGI_FORMAT_R8G8B8A8_UNORM), &m_pShapeNoise, true);
+	RGTexture* pDetailNoiseTexture = RGUtils::CreatePersistentTexture(graph, "Detail Noise",
+		TextureDesc::Create3D(parameters.DetailNoiseResolution, parameters.DetailNoiseResolution, parameters.DetailNoiseResolution, DXGI_FORMAT_R8G8B8A8_UNORM), &m_pDetailNoise, true);
 
 	if (isDirty)
 	{
+		struct NoiseParams
+		{
+			uint32 Frequency;
+			float ResolutionInv;
+			uint32 Seed;
+		};
+
 		graph.AddPass("Compute Shape Noise", RGPassFlag::Compute)
 			.Write(pNoiseTexture)
 			.Bind([=](CommandContext& context, const RGPassResources& resources)
@@ -119,22 +134,16 @@ RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const Sc
 					context.SetPipelineState(CloudShapeNoisePSO);
 					context.SetComputeRootSignature(CloudShapeRS);
 
-					struct
-					{
-						uint32 Frequency;
-						uint32 Resolution;
-						uint32 Seed;
-					} Constants;
-
-					Constants.Seed = noiseSeed;
-					Constants.Resolution = shapeNoiseResolution;
-					Constants.Frequency = noiseFrequency;
+					NoiseParams Constants;
+					Constants.Seed = parameters.NoiseSeed;
+					Constants.ResolutionInv = 1.0f / parameters.ShapeNoiseResolution;
+					Constants.Frequency = parameters.ShapeNoiseFrequency;
 
 					context.SetRootCBV(0, Constants);
 					context.BindResources(1, pNoiseTexture->Get()->GetUAV());
 
 					context.Dispatch(
-						ComputeUtils::GetNumThreadGroups(shapeNoiseResolution, 8, shapeNoiseResolution, 8, shapeNoiseResolution, 8));
+						ComputeUtils::GetNumThreadGroups(parameters.ShapeNoiseResolution, 8, parameters.ShapeNoiseResolution, 8, parameters.ShapeNoiseResolution, 8));
 				});
 
 		graph.AddPass("Compute Detail Noise", RGPassFlag::Compute)
@@ -144,22 +153,16 @@ RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const Sc
 					context.SetPipelineState(CloudDetailNoisePSO);
 					context.SetComputeRootSignature(CloudShapeRS);
 
-					struct
-					{
-						uint32 Frequency;
-						uint32 Resolution;
-						uint32 Seed;
-					} Constants;
-
-					Constants.Seed = noiseSeed;
-					Constants.Resolution = detailNoiseResolution;
-					Constants.Frequency = noiseFrequency;
+					NoiseParams Constants;
+					Constants.Seed = parameters.NoiseSeed;
+					Constants.ResolutionInv = 1.0f / parameters.DetailNoiseResolution;
+					Constants.Frequency = parameters.DetailNoiseFrequency;
 
 					context.SetRootCBV(0, Constants);
 					context.BindResources(1, pDetailNoiseTexture->Get()->GetUAV());
 
 					context.Dispatch(
-						ComputeUtils::GetNumThreadGroups(detailNoiseResolution, 8, detailNoiseResolution, 8, detailNoiseResolution, 8));
+						ComputeUtils::GetNumThreadGroups(parameters.DetailNoiseResolution, 8, parameters.DetailNoiseResolution, 8, parameters.DetailNoiseResolution, 8));
 				});
 	}
 
@@ -177,19 +180,16 @@ RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const Sc
 
 				struct
 				{
-					Vector4 MinExtents;
-					Vector4 MaxExtents;
-
-					float CloudScale;
+					float ShapeNoiseScale;
+					float DetailNoiseScale;
 					float CloudDensity;
-				} parameters;
+				} constants;
 
-				parameters.MinExtents = Vector4(center - extents);
-				parameters.MaxExtents = Vector4(center + extents);
-				parameters.CloudScale = scale;
-				parameters.CloudDensity = density;
+				constants.ShapeNoiseScale = parameters.ShapeNoiseScale;
+				constants.DetailNoiseScale = parameters.DetailNoiseScale;
+				constants.CloudDensity = parameters.Density;
 
-				context.SetRootCBV(0, parameters);
+				context.SetRootCBV(0, constants);
 				context.SetRootCBV(1, Renderer::GetViewUniforms(pView, pIntermediateColor->Get()));
 				context.BindResources(2,
 					{

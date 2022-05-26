@@ -24,12 +24,8 @@ Texture3D tDetailNoise : register(t4);
 
 struct PassParameters
 {
-	float3 MinExtents;
-	float padd0;
-	float3 MaxExtents;
-	float padd1;
-
-	float CloudScale;
+	float ShapeNoiseScale;
+	float DetailNoiseScale;
 	float CloudDensity;
 };
 
@@ -62,37 +58,24 @@ float2 RaySphereIntersect(float3 rayOrigin, float3 rayDirection, float3 sphereCe
     return float2(-b - h, -b + h);
 }
 
-float2 RayBoxDistance(float3 boundsMin, float3 boundsMax, float3 rayOrigin, float3 rayDirection)
-{
-	//http://jcgt.org/published/0007/03/04/
-	float3 t0 = (boundsMin - rayOrigin) / rayDirection;
-	float3 t1 = (boundsMax - rayOrigin) / rayDirection;
-	float3 tMin = min(t0, t1);
-	float3 tMax = max(t0, t1);
-
-	float distanceA = max(max(tMin.x, tMin.y), tMin.z);
-	float distanceB = min(min(tMax.x, tMax.y), tMax.z);
-
-	float distanceToBox = max(0, distanceA);
-	float distanceInsideBox = max(0, distanceB - distanceToBox);
-	return float2(distanceToBox, distanceInsideBox);
-}
-
-static const float PlanetOffset = -1000.0f;
-static const float InnerAtmosphereRadius = 1050.0f;
-static const float OuterAtmosphereRadius = 1080.0f;
+static const float PlanetOffset = -10000.0f;
+static const float PlanetRadius = -PlanetOffset;
+static const float InnerAtmosphereRadius = 10500.0f;
+static const float OuterAtmosphereRadius = 10800.0f;
 
 float SampleDensity(float3 position)
 {
-	float3 uvw = 0.1f * (position + 0.01 * float3(cView.FrameIndex, 0, 0)) * cPass.CloudScale;
-	float4 lowFrequencies = tShapeNoise.SampleLevel(sLinearWrap, uvw, 0);
+	const float globalScale = 0.001f;
+
+	float3 uvw = globalScale * (position + 0.01 * float3(cView.FrameIndex, 0, 0));
+	float4 lowFrequencies = tShapeNoise.SampleLevel(sLinearWrap, uvw * cPass.ShapeNoiseScale, 0);
 
 	float lowFrequencyFBM =
 		lowFrequencies.y * 0.625f +
 		lowFrequencies.z * 0.25f +
 		lowFrequencies.w * 0.125f;
 
-	float4 highFrequencies = 0.3 * tShapeNoise.SampleLevel(sLinearWrap, uvw * 6, 0);
+	float4 highFrequencies = 0.3 * tDetailNoise.SampleLevel(sLinearWrap, uvw * cPass.DetailNoiseScale, 0);
 	float highFrequencyFBM =
 		highFrequencies.y * 0.625f +
 		highFrequencies.z * 0.25f +
@@ -146,9 +129,9 @@ float4 PSMain(PSInput input) : SV_TARGET
 	float3 rayOrigin = cView.ViewLocation;
 	float3 rayDirection = normalize(input.ray.xyz);
 	float offset = InterleavedGradientNoise(input.position.xy + cView.FrameIndex);
-	rayOrigin += rayDirection * offset * 1;
+	rayOrigin += rayDirection * offset * 2;
 
-	float2 planetHit = RaySphereIntersect(rayOrigin, rayDirection, float3(0, PlanetOffset, 0), 1000);
+	float2 planetHit = RaySphereIntersect(rayOrigin, rayDirection, float3(0, PlanetOffset, 0), PlanetRadius);
 	if(any(planetHit > -1))
 		return 0;
 
@@ -157,7 +140,7 @@ float4 PSMain(PSInput input) : SV_TARGET
 
 	float raymarchDistance = outerAtmosphereHit - atmosphereHit;
 
-	const float stepSize = 1.0f;
+	const float stepSize = 15.0f;
 
 	float distanceTravelled = 0;
 
