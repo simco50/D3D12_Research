@@ -28,6 +28,9 @@ struct TIntVector2
 	TIntVector2(T x, T y)
 		: x(x), y(y)
 	{}
+	TIntVector2(T v)
+		: TIntVector2(v, v)
+	{}
 	TIntVector2(const Vector2& v)
 		: x((T)v.x), y((T)v.y)
 	{}
@@ -45,6 +48,9 @@ struct TIntVector3
 	TIntVector3(T x, T y, T z)
 		: x(x), y(y), z(z)
 	{}
+	TIntVector3(T v)
+		: TIntVector3(v, v, v)
+	{}
 	TIntVector3(const Vector3& v)
 		: x((T)v.x), y((T)v.y), z((T)v.z)
 	{}
@@ -61,6 +67,9 @@ struct TIntVector4
 	{}
 	TIntVector4(T x, T y, T z, T w)
 		: x(x), y(y), z(z), w(w)
+	{}
+	TIntVector4(T v)
+		: TIntVector4(v, v, v, v)
 	{}
 	TIntVector4(const Vector4& v)
 		: x((T)v.x), y((T)v.y), z((T)v.z), w((T)v.w)

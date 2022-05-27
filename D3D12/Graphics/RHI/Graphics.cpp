@@ -1010,7 +1010,7 @@ RefCountPtr<UnorderedAccessView> GraphicsDevice::CreateUAV(Texture* pTexture, co
 		break;
 	case TextureDimension::Texture3D:
 		uavDesc.Texture3D.FirstWSlice = 0;
-		uavDesc.Texture3D.WSize = textureDesc.DepthOrArraySize;
+		uavDesc.Texture3D.WSize = 0xFFFFFFFF;
 		uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE3D;
 		break;
 	case TextureDimension::TextureCube:
@@ -1028,6 +1028,7 @@ RefCountPtr<UnorderedAccessView> GraphicsDevice::CreateUAV(Texture* pTexture, co
 	uavDesc.Texture2D.MipSlice = desc.MipLevel;
 	uavDesc.Texture2DArray.MipSlice = desc.MipLevel;
 	uavDesc.Texture3D.MipSlice = desc.MipLevel;
+	uavDesc.Format = pTexture->GetFormat();
 
 	D3D12_CPU_DESCRIPTOR_HANDLE descriptor = AllocateDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 	m_pDevice->CreateUnorderedAccessView(pTexture->GetResource(), nullptr, &uavDesc, descriptor);

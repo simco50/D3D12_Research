@@ -127,9 +127,9 @@ RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const Sc
 	ImGui::End();
 
 	RGTexture* pNoiseTexture = RGUtils::CreatePersistentTexture(graph, "Shape Noise",
-		TextureDesc::Create3D(parameters.ShapeNoiseResolution, parameters.ShapeNoiseResolution, parameters.ShapeNoiseResolution, DXGI_FORMAT_R8G8B8A8_UNORM), &m_pShapeNoise, true);
+		TextureDesc::Create3D(parameters.ShapeNoiseResolution, parameters.ShapeNoiseResolution, parameters.ShapeNoiseResolution, DXGI_FORMAT_R8G8B8A8_UNORM, TextureFlag::None, 1, 4), &m_pShapeNoise, true);
 	RGTexture* pDetailNoiseTexture = RGUtils::CreatePersistentTexture(graph, "Detail Noise",
-		TextureDesc::Create3D(parameters.DetailNoiseResolution, parameters.DetailNoiseResolution, parameters.DetailNoiseResolution, DXGI_FORMAT_R8G8B8A8_UNORM), &m_pDetailNoise, true);
+		TextureDesc::Create3D(parameters.DetailNoiseResolution, parameters.DetailNoiseResolution, parameters.DetailNoiseResolution, DXGI_FORMAT_R8G8B8A8_UNORM, TextureFlag::None, 1, 4), &m_pDetailNoise, true);
 
 	if (isDirty)
 	{
@@ -140,43 +140,59 @@ RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const Sc
 			uint32 Seed;
 		};
 
-		graph.AddPass("Compute Shape Noise", RGPassFlag::Compute)
-			.Write(pNoiseTexture)
-			.Bind([=](CommandContext& context, const RGPassResources& resources)
-				{
-					context.SetPipelineState(CloudShapeNoisePSO);
-					context.SetComputeRootSignature(CloudShapeRS);
+		for (uint32 i = 0; i < pNoiseTexture->GetDesc().Mips; ++i)
+		{
+			graph.AddPass("Compute Shape Noise", RGPassFlag::Compute)
+				.Write(pNoiseTexture)
+				.Bind([=](CommandContext& context, const RGPassResources& resources)
+					{
+						uint32 resolution = pNoiseTexture->GetDesc().Width >> i;
 
-					NoiseParams Constants;
-					Constants.Seed = parameters.NoiseSeed;
-					Constants.ResolutionInv = 1.0f / parameters.ShapeNoiseResolution;
-					Constants.Frequency = parameters.ShapeNoiseFrequency;
+						context.SetPipelineState(CloudShapeNoisePSO);
+						context.SetComputeRootSignature(CloudShapeRS);
 
-					context.SetRootCBV(0, Constants);
-					context.BindResources(1, pNoiseTexture->Get()->GetUAV());
+						NoiseParams Constants;
+						Constants.Seed = parameters.NoiseSeed;
+						Constants.ResolutionInv = 1.0f / resolution;
+						Constants.Frequency = parameters.ShapeNoiseFrequency;
 
-					context.Dispatch(
-						ComputeUtils::GetNumThreadGroups(parameters.ShapeNoiseResolution, 8, parameters.ShapeNoiseResolution, 8, parameters.ShapeNoiseResolution, 8));
-				});
+						// #hack - RG has no subresource resource view support yet :(
+						RefCountPtr<UnorderedAccessView> pUAV = pNoiseTexture->Get()->GetParent()->CreateUAV(pNoiseTexture->Get(), TextureUAVDesc((uint8)i));
 
-		graph.AddPass("Compute Detail Noise", RGPassFlag::Compute)
-			.Write(pDetailNoiseTexture)
-			.Bind([=](CommandContext& context, const RGPassResources& resources)
-				{
-					context.SetPipelineState(CloudDetailNoisePSO);
-					context.SetComputeRootSignature(CloudShapeRS);
+						context.SetRootCBV(0, Constants);
+						context.BindResources(1, pUAV.Get());
 
-					NoiseParams Constants;
-					Constants.Seed = parameters.NoiseSeed;
-					Constants.ResolutionInv = 1.0f / parameters.DetailNoiseResolution;
-					Constants.Frequency = parameters.DetailNoiseFrequency;
+						context.Dispatch(
+							ComputeUtils::GetNumThreadGroups(IntVector3(resolution), IntVector3(8)));
+					});
+		}
+		for (uint32 i = 0; i < pDetailNoiseTexture->GetDesc().Mips; ++i)
+		{
 
-					context.SetRootCBV(0, Constants);
-					context.BindResources(1, pDetailNoiseTexture->Get()->GetUAV());
+			graph.AddPass("Compute Detail Noise", RGPassFlag::Compute)
+				.Write(pDetailNoiseTexture)
+				.Bind([=](CommandContext& context, const RGPassResources& resources)
+					{
+						uint32 resolution = pDetailNoiseTexture->GetDesc().Width >> i;
 
-					context.Dispatch(
-						ComputeUtils::GetNumThreadGroups(parameters.DetailNoiseResolution, 8, parameters.DetailNoiseResolution, 8, parameters.DetailNoiseResolution, 8));
-				});
+						context.SetPipelineState(CloudDetailNoisePSO);
+						context.SetComputeRootSignature(CloudShapeRS);
+
+						NoiseParams Constants;
+						Constants.Seed = parameters.NoiseSeed;
+						Constants.ResolutionInv = 1.0f / resolution;
+						Constants.Frequency = parameters.DetailNoiseFrequency;
+
+						// #hack - RG has no subresource resource view support yet :(
+						RefCountPtr<UnorderedAccessView> pUAV = pDetailNoiseTexture->Get()->GetParent()->CreateUAV(pDetailNoiseTexture->Get(), TextureUAVDesc((uint8)i));
+
+						context.SetRootCBV(0, Constants);
+						context.BindResources(1, pUAV.Get());
+
+						context.Dispatch(
+							ComputeUtils::GetNumThreadGroups(IntVector3(resolution), IntVector3(8)));
+					});
+		}
 	}
 
 	RGTexture* pIntermediateColor = graph.CreateTexture("Intermediate Color", sceneTextures.pColorTarget->GetDesc());
@@ -231,5 +247,5 @@ RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const Sc
 
 	sceneTextures.pColorTarget = pIntermediateColor;
 
-	return pDetailNoiseTexture;
+	return pNoiseTexture;
 }

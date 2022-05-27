@@ -479,3 +479,19 @@ float Min3(float3 v)
 {
 	return min(v.x, min(v.y, v.z));
 }
+
+bool RaySphereIntersect(float3 rayOrigin, float3 rayDirection, float3 sphereCenter, float sphereRadius, out float2 intersection)
+{
+    float3 oc = rayOrigin - sphereCenter;
+    float b = dot(oc, rayDirection);
+    float c = dot(oc, oc) - sphereRadius * sphereRadius;
+    float h = b * b - c;
+    if(h < 0.0)
+	{
+		intersection = -1.0f;
+		return false;
+	}
+    h = sqrt(h);
+    intersection = float2(-b - h, -b + h);
+	return true;
+}

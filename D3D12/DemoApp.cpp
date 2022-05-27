@@ -441,7 +441,7 @@ void DemoApp::Update()
 					SYSTEMTIME time;
 					GetSystemTime(&time);
 					Paths::CreateDirectoryTree(Paths::ScreenshotDir());
-					img.Save(Sprintf("%sScreenshot_%s", Paths::ScreenshotDir().c_str(), Utils::GetTimeString().c_str()).c_str());
+					img.Save(Sprintf("%sScreenshot_%s.jpg", Paths::ScreenshotDir().c_str(), Utils::GetTimeString().c_str()).c_str());
 				}, taskContext);
 			m_ScreenshotBuffers.pop();
 		}

@@ -145,6 +145,15 @@ namespace ComputeUtils
 		groups.z = Math::DivideAndRoundUp(threadsZ, groupSizeZ);
 		return groups;
 	}
+
+	inline IntVector3 GetNumThreadGroups(const IntVector3& threads, const IntVector3& threadGroupSize)
+	{
+		IntVector3 groups;
+		groups.x = Math::DivideAndRoundUp(threads.x, threadGroupSize.x);
+		groups.y = Math::DivideAndRoundUp(threads.y, threadGroupSize.y);
+		groups.z = Math::DivideAndRoundUp(threads.z, threadGroupSize.z);
+		return groups;
+	}
 }
 
 class CommandContext : public GraphicsObject
