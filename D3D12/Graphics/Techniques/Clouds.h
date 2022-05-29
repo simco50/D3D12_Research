@@ -18,5 +18,4 @@ private:
 	RefCountPtr<Texture> m_pShapeNoise;
 	RefCountPtr<Texture> m_pDetailNoise;
 	RefCountPtr<Buffer> m_pQuadVertexBuffer;
-	RefCountPtr<Texture> m_pVerticalDensityTexture;
 };

@@ -9,7 +9,8 @@ struct PassParameters
 };
 
 ConstantBuffer<PassParameters> cPass : register(b0);
-RWTexture3D<float4> uOutputTexture : register(u0);
+RWTexture3D<float4> uNoiseOutput : register(u0);
+RWTexture2D<float> uHeightGradient : register(u0);
 
 // Fbm for Perlin noise based on iq's blog
 float PerlinFBM(float3 p, uint freq, int octaves)
@@ -37,7 +38,7 @@ float WorleyFBM(float3 uvw, float frequency)
 }
 
 [numthreads(8, 8, 8)]
-void CloudShapeNoiseCS(uint3 threadId : SV_DISPATCHTHREADID)
+void CloudShapeNoiseCS(uint3 threadId : SV_DispatchThreadID)
 {
 	float3 uvw = (threadId.xyz + 0.5f) * (float)cPass.ResolutionInv;
 
@@ -50,11 +51,11 @@ void CloudShapeNoiseCS(uint3 threadId : SV_DISPATCHTHREADID)
 	float perlin = PerlinFBM(uvw, 3, 7);
 	noiseResults.x = Remap(perlin, 0.0f, 1.0f, noiseResults.y, 1.0f);
 
-	uOutputTexture[threadId.xyz] = noiseResults;
+	uNoiseOutput[threadId.xyz] = noiseResults;
 }
 
 [numthreads(8, 8, 8)]
-void CloudDetailNoiseCS(uint3 threadId : SV_DISPATCHTHREADID)
+void CloudDetailNoiseCS(uint3 threadId : SV_DispatchThreadID)
 {
 	float3 uvw = (threadId.xyz + 0.5f) * (float)cPass.ResolutionInv;
 
@@ -64,5 +65,32 @@ void CloudDetailNoiseCS(uint3 threadId : SV_DISPATCHTHREADID)
 	noiseResults.z = WorleyFBM(uvw, cPass.Frequency * 4);
 	noiseResults.w = WorleyFBM(uvw, cPass.Frequency * 8);
 
-	uOutputTexture[threadId.xyz] = noiseResults;
+	uNoiseOutput[threadId.xyz] = noiseResults;
+}
+
+[numthreads(8, 8, 8)]
+void CloudHeightDensityCS(uint3 threadId : SV_DispatchThreadID)
+{
+	float3 uvw = (threadId.xyz + 0.5f) * (float)cPass.ResolutionInv;
+	float cloudType = uvw.x;
+	float height = uvw.y;
+
+	const float4 stratoGradient = float4(0.0f, 0.07f, 0.08f, 0.15f);
+	const float4 stratoCumulusGradient = float4(0.0f, 0.2f, 0.42f, 0.6f);
+	const float4 culumulusGradient = float4(0.0f, 0.08f, 0.75f, 0.98f);
+
+	float a = 1.0f - saturate(cloudType * 2.0f);
+	float b = 1.0f - abs(cloudType - 0.5f) * 2.0f;
+	float c = saturate(cloudType - 0.5f) * 2.0f;
+	float4 gradient = stratoGradient * a + stratoCumulusGradient * b + culumulusGradient * c;
+
+	float v1 = saturate(InverseLerp(height, gradient.x, gradient.y));
+	float v2 = saturate(InverseLerp(height, gradient.w, gradient.z));
+	float v = 1.0f;
+	if(height < gradient.y)
+		v = v1;
+	else if(height > gradient.z)
+		v = v2;
+
+	uHeightGradient[threadId.xy] = v;
 }

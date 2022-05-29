@@ -14,6 +14,7 @@ static bool shaderDirty = false;
 GlobalResource<RootSignature> CloudShapeRS;
 GlobalResource<PipelineState> CloudShapeNoisePSO;
 GlobalResource<PipelineState> CloudDetailNoisePSO;
+GlobalResource<PipelineState> CloudHeighDensityLUTPSO;
 
 GlobalResource<RootSignature> CloudsRS;
 GlobalResource<PipelineState> CloudsPSO;
@@ -29,6 +30,7 @@ Clouds::Clouds(GraphicsDevice* pDevice)
 
 		CloudShapeNoisePSO = pDevice->CreateComputePipeline(CloudShapeRS, "CloudsShapes.hlsl", "CloudShapeNoiseCS");
 		CloudDetailNoisePSO = pDevice->CreateComputePipeline(CloudShapeRS, "CloudsShapes.hlsl", "CloudDetailNoiseCS");
+		CloudHeighDensityLUTPSO = pDevice->CreateComputePipeline(CloudShapeRS, "CloudsShapes.hlsl", "CloudHeightDensityCS");
 	}
 	{
 		CloudsRS = new RootSignature(pDevice);
@@ -71,8 +73,6 @@ Clouds::Clouds(GraphicsDevice* pDevice)
 		pContext->WriteBuffer(m_pQuadVertexBuffer, vertices, ARRAYSIZE(vertices) * sizeof(Vertex));
 	}
 
-	m_pVerticalDensityTexture = GraphicsCommon::CreateTextureFromFile(*pContext, "Resources/Textures/CloudVerticalDensity.png", false);
-
 	pContext->Execute(true);
 
 	pDevice->GetShaderManager()->OnShaderRecompiledEvent().AddLambda([](Shader*, Shader*) {
@@ -99,6 +99,7 @@ RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const Sc
 		float DetailNoiseScale = 3.0f;
 		float DetailNoiseInfluence = 0.4f;
 
+		float CloudType = 0.9f;
 		float PlanetRadius = 60000;
 		Vector2 AtmosphereHeightRange = Vector2(350.0f, 700.0f);
 	};
@@ -121,6 +122,7 @@ RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const Sc
 	ImGui::SliderFloat("Raymarch Step Size", &parameters.RaymarchStepSize, 1.0f, 40.0f);
 	ImGui::SliderInt("Light March Steps", &parameters.LightMarchSteps, 1, 20);
 	ImGui::SliderFloat("Density", &parameters.Density, 0, 1);
+	ImGui::SliderFloat("Cloud Type", &parameters.CloudType, 0, 1);
 
 	ImGui::SliderFloat("Planet Size", &parameters.PlanetRadius, 100, 100000);
 	ImGui::DragFloatRange2("Atmosphere Height", &parameters.AtmosphereHeightRange.x, &parameters.AtmosphereHeightRange.y, 1.0f, 10, 1000);
@@ -195,10 +197,39 @@ RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const Sc
 		}
 	}
 
+	RGTexture* pHeightGradient = graph.CreateTexture("Height Gradient", TextureDesc::Create2D(128, 128, DXGI_FORMAT_R8_UNORM));
+
+	graph.AddPass("Height Gradient", RGPassFlag::Compute)
+		.Write(pHeightGradient)
+		.Bind([=](CommandContext& context, const RGPassResources& resources)
+			{
+				Texture* pTarget = pHeightGradient->Get();
+
+				context.SetPipelineState(CloudHeighDensityLUTPSO);
+				context.SetComputeRootSignature(CloudShapeRS);
+
+				struct
+				{
+					uint32 Seed;
+					float ResolutionInv;
+					uint32 Frequency;
+				} Constants;
+
+				Constants.Seed = parameters.NoiseSeed;
+				Constants.ResolutionInv = 1.0f / pTarget->GetWidth();
+				Constants.Frequency = parameters.DetailNoiseFrequency;
+
+				context.SetRootCBV(0, Constants);
+				context.BindResources(1, pTarget->GetUAV());
+
+				context.Dispatch(
+					ComputeUtils::GetNumThreadGroups(IntVector3(pTarget->GetWidth()), IntVector3(8)));
+			});
+
 	RGTexture* pIntermediateColor = graph.CreateTexture("Intermediate Color", sceneTextures.pColorTarget->GetDesc());
 
 	graph.AddPass("Clouds", RGPassFlag::Raster)
-		.Read({ pNoiseTexture, pDetailNoiseTexture, sceneTextures.pColorTarget, sceneTextures.pDepth })
+		.Read({ pNoiseTexture, pDetailNoiseTexture, pHeightGradient, sceneTextures.pColorTarget, sceneTextures.pDepth })
 		.RenderTarget(pIntermediateColor, RenderTargetLoadAction::Load)
 		.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
@@ -218,6 +249,7 @@ RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const Sc
 					float AtmosphereHeightStart;
 					float AtmosphereHeightEnd;
 					float DetailNoiseInfluence;
+					float CloudType;
 				} constants;
 
 				constants.ShapeNoiseScale = parameters.ShapeNoiseScale;
@@ -229,6 +261,7 @@ RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const Sc
 				constants.AtmosphereHeightStart = parameters.AtmosphereHeightRange.x;
 				constants.AtmosphereHeightEnd = parameters.AtmosphereHeightRange.y;
 				constants.DetailNoiseInfluence = parameters.DetailNoiseInfluence;
+				constants.CloudType = parameters.CloudType;
 
 				context.SetRootCBV(0, constants);
 				context.SetRootCBV(1, Renderer::GetViewUniforms(pView, pIntermediateColor->Get()));
@@ -236,7 +269,7 @@ RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const Sc
 					{
 						sceneTextures.pColorTarget->Get()->GetSRV(),
 						sceneTextures.pDepth->Get()->GetSRV(),
-						m_pVerticalDensityTexture->GetSRV(),
+						pHeightGradient->Get()->GetSRV(),
 						pNoiseTexture->Get()->GetSRV(),
 						pDetailNoiseTexture->Get()->GetSRV(),
 					});

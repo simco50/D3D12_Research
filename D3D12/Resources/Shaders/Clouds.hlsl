@@ -18,7 +18,7 @@ struct PSInput
 
 Texture2D tSceneTexture : register(t0);
 Texture2D tDepthTexture : register(t1);
-Texture2D tVerticalDensity : register(t2);
+Texture2D tCloudTypeDensityLUT : register(t2);
 Texture3D tShapeNoise : register(t3);
 Texture3D tDetailNoise : register(t4);
 
@@ -33,6 +33,7 @@ struct PassParameters
 	float AtmosphereHeightStart;
 	float AtmosphereHeightEnd;
 	float DetailNoiseInfluence;
+	float CloudType;
 };
 
 ConstantBuffer<PassParameters> cPass : register(b0);
@@ -94,7 +95,7 @@ float SampleDensity(float3 position, uint mipLevel)
 
 	// Density is higher at higher altitude
 	// Vertical falloff
-	float verticalDensity = tVerticalDensity.SampleLevel(sLinearClamp, float2(0, heightGradient), 0).x;
+	float verticalDensity = tCloudTypeDensityLUT.SampleLevel(sLinearClamp, float2(cPass.CloudType, heightGradient), 0).x;
 	baseCloud *= verticalDensity;
 
 	float4 highFrequencies = tDetailNoise.SampleLevel(sLinearWrap, position * cPass.DetailNoiseScale, mipLevel);
