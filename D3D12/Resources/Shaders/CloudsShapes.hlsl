@@ -86,11 +86,7 @@ void CloudHeightDensityCS(uint3 threadId : SV_DispatchThreadID)
 
 	float v1 = saturate(InverseLerp(height, gradient.x, gradient.y));
 	float v2 = saturate(InverseLerp(height, gradient.w, gradient.z));
-	float v = 1.0f;
-	if(height < gradient.y)
-		v = v1;
-	else if(height > gradient.z)
-		v = v2;
+	float v = v1 * v2;
 
 	uHeightGradient[threadId.xy] = v;
 }
