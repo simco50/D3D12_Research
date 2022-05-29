@@ -99,7 +99,7 @@ RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const Sc
 		float DetailNoiseScale = 3.0f;
 		float DetailNoiseInfluence = 0.4f;
 
-		float PlanetRadius = 10000;
+		float PlanetRadius = 60000;
 		Vector2 AtmosphereHeightRange = Vector2(350.0f, 700.0f);
 	};
 	static CloudParameters parameters;

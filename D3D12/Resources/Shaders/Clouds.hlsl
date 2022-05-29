@@ -50,66 +50,83 @@ PSInput VSMain(VSInput input)
 	return output;
 }
 
-float2 RaySphereIntersect(float3 rayOrigin, float3 rayDirection, float3 sphereCenter, float sphereRadius)
+float4 GetHeightGradient(float cloudType)
 {
-    float3 oc = rayOrigin - sphereCenter;
-    float b = dot(oc, rayDirection);
-    float c = dot(oc, oc) - sphereRadius * sphereRadius;
-    float h = b * b - c;
-    if(h < 0.0)
-	{
-		return -1.0f;
-	}
-    h = sqrt(h);
-    return float2(-b - h, -b + h);
+	const float4 CloudGradient1 = float4(0.0, 0.07, 0.08, 0.15);
+	const float4 CloudGradient2 = float4(0.0, 0.2, 0.42, 0.6);
+	const float4 CloudGradient3 = float4(0.0, 0.08, 0.75, 0.98);
+
+	float a = 1.0 - saturate(cloudType * 2.0);
+	float b = 1.0 - abs(cloudType - 0.5) * 2.0;
+	float c = saturate(cloudType - 0.5) * 2.0;
+
+	return CloudGradient1 * a + CloudGradient2 * b + CloudGradient3 * c;
 }
 
-float SampleDensity(float3 position)
+float SampleDensity(float3 position, uint mipLevel)
 {
+	float height = length(position - float3(0, -cPass.PlanetRadius, 0));
+	float heightGradient = saturate(InverseLerp(height - cPass.PlanetRadius, cPass.AtmosphereHeightStart, cPass.AtmosphereHeightEnd));
+
 	const float globalScale = 0.001f;
 
-	float3 uvw = globalScale * (position + 0.05 * float3(cView.FrameIndex, 0, 0));
-	float4 lowFrequencies = tShapeNoise.SampleLevel(sLinearWrap, uvw * cPass.ShapeNoiseScale, 0);
+	const float3 windDirection = float3(0, 0, -1);
+	const float cloudSpeed = 0.03f;
+	const float cloudTopOffset = 10.0f;
+
+	position += heightGradient * windDirection * cloudTopOffset;
+	position += (windDirection + float3(0, 0.1f, 0)) * cView.FrameIndex * cloudSpeed;
+
+	position *= globalScale;
+
+	float4 lowFrequencies = tShapeNoise.SampleLevel(sLinearWrap, position * cPass.ShapeNoiseScale, mipLevel);
 
 	float lowFrequencyFBM =
 		lowFrequencies.y * 0.625f +
 		lowFrequencies.z * 0.25f +
 		lowFrequencies.w * 0.125f;
 
-	float4 highFrequencies = cPass.DetailNoiseInfluence * tDetailNoise.SampleLevel(sLinearWrap, uvw * cPass.DetailNoiseScale, 0);
+	float baseCloud = saturate(Remap(lowFrequencies.r, (1.0f - lowFrequencyFBM), 1.0f, 0.0f, 1.0f));
+
+	//float coverage =  cPass.CloudDensity;
+	//baseCloud = Remap(baseCloud, coverage, 1.0f, 0.0f, 1.0f);
+	//baseCloud *= coverage;
+
+	// Density is higher at higher altitude
+	// Vertical falloff
+	float verticalDensity = tVerticalDensity.SampleLevel(sLinearClamp, float2(0, heightGradient), 0).x;
+	baseCloud *= verticalDensity;
+
+	float4 highFrequencies = tDetailNoise.SampleLevel(sLinearWrap, position * cPass.DetailNoiseScale, mipLevel);
 	float highFrequencyFBM =
 		highFrequencies.y * 0.625f +
 		highFrequencies.z * 0.25f +
 		highFrequencies.w * 0.125f;
 
-	float baseCloud = saturate(Remap(lowFrequencies.r, (1.0f - lowFrequencyFBM), 1.0f, 0.0f, 1.0f));
+	float highFrequencyNoise = lerp(highFrequencyFBM, 1 - highFrequencyFBM, saturate(heightGradient * 10));
 
-	baseCloud = Remap(baseCloud, highFrequencyFBM, 1.0f, 0.0f, 1.0f);
+	float finalCloud = Remap(baseCloud, highFrequencyNoise * cPass.DetailNoiseInfluence, 1.0f, 0.0f, 1.0f);
 
-	float height = length(position - float3(0, -cPass.PlanetRadius, 0));
-
-	// Density is higher at higher altitude
-	float heightGradient = saturate(InverseLerp(height - cPass.PlanetRadius, cPass.AtmosphereHeightStart, cPass.AtmosphereHeightEnd));
-
-	// Vertical falloff
-	float verticalDensity = tVerticalDensity.SampleLevel(sLinearClamp, float2(0, heightGradient), 0).x;
-
-	return saturate(baseCloud * cPass.CloudDensity * heightGradient * verticalDensity);
+	return saturate(finalCloud * 0.1f);
 }
 
 float LightMarch(float3 rayOrigin, float3 rayDirection)
 {
-	float outerAtmosphereHit = RaySphereIntersect(rayOrigin, rayDirection, float3(0, -cPass.PlanetRadius, 0), cPass.PlanetRadius + cPass.AtmosphereHeightEnd).y;
-	float rayDistance = length(rayDirection * outerAtmosphereHit);
+	const float coneSize = 50.0f;
+	float stepSize = coneSize / cPass.LightMarchSteps;
 
-	uint steps = cPass.LightMarchSteps;
-	float stepSize = rayDistance / steps;
 	float totalDensity = 0;
-	for(int i = 0; i < steps; ++i)
+
+	uint seed = SeedThread(0);
+	for(uint i = 0; i < cPass.LightMarchSteps; ++i)
 	{
-		rayOrigin += rayDirection * stepSize;
-		totalDensity += max(0, SampleDensity(rayOrigin) * stepSize);
+		float3 rnd = float3(Random01(seed), Random01(seed), Random01(seed)) / 5.0f;
+		rayOrigin += rayDirection * stepSize + (stepSize * rnd * (i + 1));
+		totalDensity += max(0, SampleDensity(rayOrigin, 0) * stepSize);
 	}
+
+	rayOrigin += rayDirection * coneSize * 2;
+	totalDensity += max(0, SampleDensity(rayOrigin, 0) * stepSize);
 
 	float transmittance = exp(-totalDensity);
 	return transmittance;
@@ -118,7 +135,7 @@ float LightMarch(float3 rayOrigin, float3 rayDirection)
 float4 PSMain(PSInput input) : SV_TARGET
 {
 	float4 color = tSceneTexture.Sample(sLinearClamp, input.texCoord);
-	float maxDepth = LinearizeDepth(tDepthTexture.Sample(sLinearClamp, input.texCoord).r);
+	float maxDepth = 10000000;//LinearizeDepth(tDepthTexture.Sample(sLinearClamp, input.texCoord).r);
 	if(maxDepth < cView.NearZ)
 		return color;
 
@@ -127,25 +144,66 @@ float4 PSMain(PSInput input) : SV_TARGET
 	float3 rayOrigin = cView.ViewLocation;
 	float3 rayDirection = normalize(input.ray.xyz);
 
-	float2 planetHit = RaySphereIntersect(rayOrigin, rayDirection, float3(0, -cPass.PlanetRadius, 0), cPass.PlanetRadius);
+	float2 planetHit;
+	RaySphereIntersect(rayOrigin, rayDirection, float3(0, -cPass.PlanetRadius, 0), cPass.PlanetRadius, planetHit);
 	if(any(planetHit > -1))
-		return 0;
+	{
+		color = 0;
+		maxDepth = length(rayDirection * planetHit.x);
+	}
 
-	float atmosphereHit = RaySphereIntersect(rayOrigin, rayDirection, float3(0, -cPass.PlanetRadius, 0), cPass.PlanetRadius + cPass.AtmosphereHeightStart).y;
-	float outerAtmosphereHit = RaySphereIntersect(rayOrigin, rayDirection, float3(0, -cPass.PlanetRadius, 0), cPass.PlanetRadius + cPass.AtmosphereHeightEnd).y;
+	float minT = -1000000.0f;
+	float maxT = -1000000.0f;
 
-	float raymarchDistance = outerAtmosphereHit - atmosphereHit;
+	float2 atmosphereHitTop;
+	if(RaySphereIntersect(rayOrigin, rayDirection, float3(0, -cPass.PlanetRadius, 0), cPass.PlanetRadius + cPass.AtmosphereHeightEnd, atmosphereHitTop))
+	{
+		float2 atmosphereHitBottom;
+		if(RaySphereIntersect(rayOrigin, rayDirection, float3(0, -cPass.PlanetRadius, 0), cPass.PlanetRadius + cPass.AtmosphereHeightStart, atmosphereHitBottom))
+		{
+			// If we see both intersection in front of us, keep the min/closest, otherwise the max/furthest
+			float TempTop = all(atmosphereHitTop > 0.0f) ? min(atmosphereHitTop.x, atmosphereHitTop.y) : max(atmosphereHitTop.x, atmosphereHitTop.y);
+			float TempBottom = all(atmosphereHitBottom > 0.0f) ? min(atmosphereHitBottom.x, atmosphereHitBottom.y) : max(atmosphereHitBottom.x, atmosphereHitBottom.y);
+
+			if (all(atmosphereHitBottom > 0.0f))
+			{
+				// But if we can see the bottom of the layer, make sure we use the camera or the highest top layer intersection
+				TempTop = max(0.0f, min(atmosphereHitTop.x, atmosphereHitTop.y));
+			}
+
+			minT = min(TempBottom, TempTop);
+			maxT = max(TempBottom, TempTop);
+		}
+		else
+		{
+			minT = atmosphereHitTop.x;
+			maxT = atmosphereHitTop.y;
+		}
+	}
+	else
+	{
+		return color;
+	}
+
+	minT = max(0.0f, minT);
+	maxT = min(maxDepth, max(0.0f, maxT));
+	if(minT >= maxT)
+	{
+		return color;
+	}
+	const float stepSize = cPass.RayStepSize;
+
+	float raymarchDistance = maxT - minT;
 
 	float offset = InterleavedGradientNoise(input.position.xy + cView.FrameIndex);
-	rayOrigin += rayDirection * offset * 2;
-	const float stepSize = cPass.RayStepSize;
+	rayOrigin += rayDirection * offset * stepSize;
 
 	float distanceTravelled = 0;
 
 	 // Phase function makes clouds brighter around sun
-    float cosAngle = dot(-rayDirection, light.Direction);
-	const float forwardScattering = .8f;
-    const float backScattering = .3f;
+    float cosAngle = dot(rayDirection, -light.Direction);
+	const float forwardScattering = 0.3f;
+    const float backScattering = -0.7f;
 	float phaseVal = lerp(HenyeyGreenstreinPhase(cosAngle, forwardScattering), HenyeyGreenstreinPhase(cosAngle, backScattering), 0.5f);
 
 	float3 totalLight = 0;
@@ -153,12 +211,13 @@ float4 PSMain(PSInput input) : SV_TARGET
 
 	while (distanceTravelled < raymarchDistance)
 	{
-		float3 rayPos = rayOrigin + rayDirection * (atmosphereHit + distanceTravelled);
-		float density = SampleDensity(rayPos);
+		float3 rayPos = rayOrigin + rayDirection * (minT + distanceTravelled);
+		float density = SampleDensity(rayPos, 0);
 
 		if(density > 0)
 		{
 			float lightTransmittance = LightMarch(rayPos, -light.Direction) * phaseVal;
+
 			totalLight += density * stepSize * transmittance * lightTransmittance;
 			transmittance *= exp(-density * stepSize);
 			if(transmittance < 0.01f)
@@ -170,7 +229,7 @@ float4 PSMain(PSInput input) : SV_TARGET
 	}
 
 	float3 cloudColor = totalLight * light.Intensity * light.GetColor().rgb;
-	float3 col = color.xyz * transmittance + cloudColor + GetSky(float3(0, 1, 0)) * (1 - transmittance);
+	float3 col = color.xyz * transmittance + cloudColor + GetSky(normalize(float3(0, 1.0f, 0))) * (1 - transmittance);
 
 	return float4(col, 1);
 }

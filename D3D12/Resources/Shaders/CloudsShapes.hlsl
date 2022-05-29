@@ -31,9 +31,9 @@ float PerlinFBM(float3 p, uint freq, int octaves)
 float WorleyFBM(float3 uvw, float frequency)
 {
 	return
-		WorleyNoise(uvw, frequency, cPass.Seed) * 0.625f +
-		WorleyNoise(uvw, frequency * 2, cPass.Seed) * 0.25f +
-		WorleyNoise(uvw, frequency * 4, cPass.Seed) * 0.125f;
+		saturate(InverseLerp(WorleyNoise(uvw, frequency, cPass.Seed), 0.1f, 0.9f)) * 0.625f +
+		saturate(InverseLerp(WorleyNoise(uvw, frequency * 2, cPass.Seed), 0.1f, 0.9f)) * 0.25f +
+		saturate(InverseLerp(WorleyNoise(uvw, frequency * 4, cPass.Seed), 0.1f, 0.9f)) * 0.125f;
 }
 
 [numthreads(8, 8, 8)]
