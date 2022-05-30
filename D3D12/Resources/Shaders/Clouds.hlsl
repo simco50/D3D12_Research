@@ -3,19 +3,7 @@
 #include "Volumetrics.hlsli"
 #include "SkyCommon.hlsli"
 
-struct VSInput
-{
-	float3 position : POSITION;
-	float2 texCoord : TEXCOORD;
-};
-
-struct PSInput
-{
-	float4 position : SV_POSITION;
-	float2 texCoord : TEXCOORD;
-	float4 ray : RAY;
-};
-
+RWTexture2D<float4> uOutput : register(u0);
 Texture2D tSceneTexture : register(t0);
 Texture2D tDepthTexture : register(t1);
 Texture2D tCloudTypeDensityLUT : register(t2);
@@ -37,19 +25,6 @@ struct PassParameters
 };
 
 ConstantBuffer<PassParameters> cPass : register(b0);
-
-PSInput VSMain(VSInput input)
-{
-	PSInput output;
-	output.position = float4(input.position.xy, 0, 1);
-	output.texCoord = input.texCoord;
-
-	float4 ray = output.position;
-	ray = mul(ray, cView.ProjectionInverse);
-	ray.xyz = mul(ray.xyz, (float3x3)cView.ViewInverse);
-	output.ray = ray;
-	return output;
-}
 
 float4 GetHeightGradient(float cloudType)
 {
@@ -124,11 +99,11 @@ float LightMarch(float3 rayOrigin, float3 rayDirection)
 	return transmittance;
 }
 
-float4 PSMain(PSInput input) : SV_TARGET
+float4 RenderClouds(float2 UV, float3 rayOrigin, float3 rayDirection, float sceneDepth)
 {
-	float2 pixel = input.texCoord * cView.ViewportDimensions;
+	float2 pixel = UV * cView.ViewportDimensions;
 
-#define DEBUG_CLOUDS 0
+#define DEBUG_CLOUDS 1
 #if DEBUG_CLOUDS
 	float2 debugUV = InverseLerp(pixel, float2(20.0f, 20.0f), float2(500.0f, 500.0f));
 	if(all(debugUV >= 0.0f) && all(debugUV <= 1.0f))
@@ -140,17 +115,13 @@ float4 PSMain(PSInput input) : SV_TARGET
 	}
 #endif
 
-
-	float4 color = tSceneTexture.Sample(sLinearClamp, input.texCoord);
-	float maxDepth = 10000000;//LinearizeDepth(tDepthTexture.Sample(sLinearClamp, input.texCoord).r);
+	float4 color = tSceneTexture.Sample(sLinearClamp, UV);
+	float maxDepth = 10000000; //sceneDepth;
 	if(maxDepth < cView.NearZ)
 		return color;
 
 	Light light = GetLight(0);
-
-	float3 rayOrigin = cView.ViewLocation;
-	float3 rayDirection = normalize(input.ray.xyz);
-
+	
 	float2 planetHit;
 	RaySphereIntersect(rayOrigin, rayDirection, float3(0, -cPass.PlanetRadius, 0), cPass.PlanetRadius, planetHit);
 	if(any(planetHit > -1))
@@ -202,7 +173,7 @@ float4 PSMain(PSInput input) : SV_TARGET
 
 	float raymarchDistance = maxT - minT;
 
-	float offset = InterleavedGradientNoise(input.position.xy + cView.FrameIndex);
+	float offset = InterleavedGradientNoise(pixel + cView.FrameIndex);
 	rayOrigin += rayDirection * offset * stepSize;
 
 	float distanceTravelled = 0;
@@ -239,4 +210,19 @@ float4 PSMain(PSInput input) : SV_TARGET
 	float3 col = color.xyz * transmittance + cloudColor + GetSky(normalize(float3(0, 1.0f, 0))) * (1 - transmittance);
 
 	return float4(col, 1);
+}
+
+[numthreads(16, 16, 1)]
+void CSMain(uint3 threadId : SV_DispatchThreadID)
+{
+	if(any(threadId.xy >= cView.TargetDimensions))
+		return;
+
+	float2 texCoord = threadId.xy * cView.TargetDimensionsInv;
+	float sceneDepth = tDepthTexture.Sample(sLinearClamp, texCoord).r;
+	float3 viewRay = normalize(ViewFromDepth(texCoord, sceneDepth, cView.ProjectionInverse));
+	float linearDepth = length(viewRay);
+	float3 rayOrigin = cView.ViewLocation;
+	float3 rayDirection = mul(viewRay, (float3x3)cView.ViewInverse);
+	uOutput[threadId.xy] = RenderClouds(texCoord, rayOrigin, rayDirection, linearDepth);
 }

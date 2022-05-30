@@ -3,7 +3,6 @@
 
 class Texture;
 class GraphicsDevice;
-class Buffer;
 class RGGraph;
 struct SceneTextures;
 struct SceneView;
@@ -17,5 +16,5 @@ public:
 private:
 	RefCountPtr<Texture> m_pShapeNoise;
 	RefCountPtr<Texture> m_pDetailNoise;
-	RefCountPtr<Buffer> m_pQuadVertexBuffer;
+	RefCountPtr<Texture> m_pCloudHeightDensityLUT;
 };
