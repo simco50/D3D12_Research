@@ -12,9 +12,11 @@ Texture3D tDetailNoise : register(t4);
 
 struct PassParameters
 {
+	float GlobalScale;
 	float ShapeNoiseScale;
 	float DetailNoiseScale;
-	float CloudDensity;
+	float Coverage;
+	float GlobalDensity;
 	float RayStepSize;
 	uint LightMarchSteps;
 	float PlanetRadius;
@@ -22,6 +24,9 @@ struct PassParameters
 	float AtmosphereHeightEnd;
 	float DetailNoiseInfluence;
 	float CloudType;
+	float3 WindDirection;
+	float WindSpeed;
+	float TopSkew;
 };
 
 ConstantBuffer<PassParameters> cPass : register(b0);
@@ -44,42 +49,37 @@ float SampleDensity(float3 position, uint mipLevel)
 	float height = length(position - float3(0, -cPass.PlanetRadius, 0));
 	float heightGradient = saturate(InverseLerp(height - cPass.PlanetRadius, cPass.AtmosphereHeightStart, cPass.AtmosphereHeightEnd));
 
-	const float globalScale = 0.001f;
+	// Wind
+	position += heightGradient * cPass.WindDirection * cPass.TopSkew;
+	position += (cPass.WindDirection + float3(0, 0.2f, 0)) * cView.FrameIndex * cPass.WindSpeed;
+	position *= cPass.GlobalScale;
 
-	const float3 windDirection = float3(0, 0, -1);
-	const float cloudSpeed = 0.03f;
-	const float cloudTopOffset = 10.0f;
-
-	position += heightGradient * windDirection * cloudTopOffset;
-	position += (windDirection + float3(0, 0.1f, 0)) * cView.FrameIndex * cloudSpeed;
-
-	position *= globalScale;
-
+	// Shape
 	float4 lowFrequencies = tShapeNoise.SampleLevel(sLinearWrap, position * cPass.ShapeNoiseScale, mipLevel);
 	float lowFrequencyFBM = dot(lowFrequencies.yzw, float3(0.625f, 0.25f, 0.125f));
-
 	float baseCloud = saturate(Remap(lowFrequencies.r, (1.0f - lowFrequencyFBM), 1.0f, 0.0f, 1.0f));
 
-	float coverage = cPass.CloudDensity;
+	// Coverage
+	float coverage = cPass.Coverage;
 	baseCloud = Remap(baseCloud, 1.0f - coverage, 1.0f, 0.0f, 1.0f);
 	baseCloud *= coverage;
 
+	// Cloud type vertical gradient
 	float verticalDensity = tCloudTypeDensityLUT.SampleLevel(sLinearClamp, float2(cPass.CloudType, heightGradient), 0).x;
 	baseCloud *= verticalDensity;
 
+	// Detail noise
 	float4 highFrequencies = tDetailNoise.SampleLevel(sLinearWrap, position * cPass.DetailNoiseScale, mipLevel);
 	float highFrequencyFBM = dot(highFrequencies.xyz, float3(0.625f, 0.25f, 0.125f));
-
 	float highFrequencyNoise = lerp(highFrequencyFBM, 1 - highFrequencyFBM, saturate(heightGradient * 10));
-
 	float finalCloud = Remap(baseCloud, highFrequencyNoise * cPass.DetailNoiseInfluence, 1.0f, 0.0f, 1.0f);
 
-	return saturate(finalCloud * 0.1f);
+	return saturate(finalCloud * cPass.GlobalDensity);
 }
 
 float LightMarch(float3 rayOrigin, float3 rayDirection)
 {
-	const float coneSize = 300.0f;
+	const float coneSize = 200.0f;
 	float stepSize = coneSize / cPass.LightMarchSteps;
 
 	float totalDensity = 0;
@@ -95,8 +95,7 @@ float LightMarch(float3 rayOrigin, float3 rayDirection)
 	rayOrigin += rayDirection * coneSize * 2;
 	totalDensity += max(0, SampleDensity(rayOrigin, 0) * stepSize);
 
-	float transmittance = exp(-totalDensity);
-	return transmittance;
+	return exp(-totalDensity);
 }
 
 float4 RenderClouds(float2 UV, float3 rayOrigin, float3 rayDirection, float sceneDepth)
@@ -105,7 +104,7 @@ float4 RenderClouds(float2 UV, float3 rayOrigin, float3 rayDirection, float scen
 
 #define DEBUG_CLOUDS 1
 #if DEBUG_CLOUDS
-	float2 debugUV = InverseLerp(pixel, float2(20.0f, 20.0f), float2(500.0f, 500.0f));
+	float2 debugUV = InverseLerp(pixel, float2(20.0f, 20.0f), float2(300.0f, 300.0f));
 	if(all(debugUV >= 0.0f) && all(debugUV <= 1.0f))
 	{
 		debugUV = (debugUV * 2.0f - 1.0f) * 1000.0f;
@@ -121,7 +120,7 @@ float4 RenderClouds(float2 UV, float3 rayOrigin, float3 rayDirection, float scen
 		return color;
 
 	Light light = GetLight(0);
-	
+
 	float2 planetHit;
 	RaySphereIntersect(rayOrigin, rayDirection, float3(0, -cPass.PlanetRadius, 0), cPass.PlanetRadius, planetHit);
 	if(any(planetHit > -1))
@@ -180,8 +179,8 @@ float4 RenderClouds(float2 UV, float3 rayOrigin, float3 rayDirection, float scen
 
 	 // Phase function makes clouds brighter around sun
     float cosAngle = dot(rayDirection, -light.Direction);
-	const float forwardScattering = 0.3f;
-    const float backScattering = -0.7f;
+	const float forwardScattering = 0.8f;
+    const float backScattering = -0.2f;
 	float phaseVal = lerp(HenyeyGreenstreinPhase(cosAngle, forwardScattering), HenyeyGreenstreinPhase(cosAngle, backScattering), 0.5f);
 
 	float3 totalLight = 0;
@@ -194,9 +193,8 @@ float4 RenderClouds(float2 UV, float3 rayOrigin, float3 rayDirection, float scen
 
 		if(density > 0)
 		{
-			float lightTransmittance = LightMarch(rayPos, -light.Direction) * phaseVal;
-
-			totalLight += density * stepSize * transmittance * lightTransmittance;
+			float lightTransmittance = LightMarch(rayPos, -light.Direction);
+			totalLight += density * stepSize * transmittance * lightTransmittance * phaseVal;
 			transmittance *= exp(-density * stepSize);
 			if(transmittance < 0.01f)
 			{
