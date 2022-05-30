@@ -84,7 +84,7 @@ RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const Sc
 {
 	struct CloudParameters
 	{
-		float Density = 0.5f;
+		float Density = 0.9f;
 		int32 NoiseSeed = 0;
 
 		float RaymarchStepSize = 15.0f;

@@ -81,28 +81,19 @@ float SampleDensity(float3 position, uint mipLevel)
 	position *= globalScale;
 
 	float4 lowFrequencies = tShapeNoise.SampleLevel(sLinearWrap, position * cPass.ShapeNoiseScale, mipLevel);
-
-	float lowFrequencyFBM =
-		lowFrequencies.y * 0.625f +
-		lowFrequencies.z * 0.25f +
-		lowFrequencies.w * 0.125f;
+	float lowFrequencyFBM = dot(lowFrequencies.yzw, float3(0.625f, 0.25f, 0.125f));
 
 	float baseCloud = saturate(Remap(lowFrequencies.r, (1.0f - lowFrequencyFBM), 1.0f, 0.0f, 1.0f));
 
-	//float coverage =  cPass.CloudDensity;
-	//baseCloud = Remap(baseCloud, coverage, 1.0f, 0.0f, 1.0f);
-	//baseCloud *= coverage;
+	float coverage = cPass.CloudDensity;
+	baseCloud = Remap(baseCloud, 1.0f - coverage, 1.0f, 0.0f, 1.0f);
+	baseCloud *= coverage;
 
-	// Density is higher at higher altitude
-	// Vertical falloff
 	float verticalDensity = tCloudTypeDensityLUT.SampleLevel(sLinearClamp, float2(cPass.CloudType, heightGradient), 0).x;
 	baseCloud *= verticalDensity;
 
 	float4 highFrequencies = tDetailNoise.SampleLevel(sLinearWrap, position * cPass.DetailNoiseScale, mipLevel);
-	float highFrequencyFBM =
-		highFrequencies.y * 0.625f +
-		highFrequencies.z * 0.25f +
-		highFrequencies.w * 0.125f;
+	float highFrequencyFBM = dot(highFrequencies.xyz, float3(0.625f, 0.25f, 0.125f));
 
 	float highFrequencyNoise = lerp(highFrequencyFBM, 1 - highFrequencyFBM, saturate(heightGradient * 10));
 
@@ -113,7 +104,7 @@ float SampleDensity(float3 position, uint mipLevel)
 
 float LightMarch(float3 rayOrigin, float3 rayDirection)
 {
-	const float coneSize = 50.0f;
+	const float coneSize = 300.0f;
 	float stepSize = coneSize / cPass.LightMarchSteps;
 
 	float totalDensity = 0;
@@ -135,6 +126,21 @@ float LightMarch(float3 rayOrigin, float3 rayDirection)
 
 float4 PSMain(PSInput input) : SV_TARGET
 {
+	float2 pixel = input.texCoord * cView.ViewportDimensions;
+
+#define DEBUG_CLOUDS 0
+#if DEBUG_CLOUDS
+	float2 debugUV = InverseLerp(pixel, float2(20.0f, 20.0f), float2(500.0f, 500.0f));
+	if(all(debugUV >= 0.0f) && all(debugUV <= 1.0f))
+	{
+		debugUV = (debugUV * 2.0f - 1.0f) * 1000.0f;
+		float height = lerp(cPass.AtmosphereHeightStart, cPass.AtmosphereHeightEnd, 0.1f);
+		float3 pos = float3(debugUV.x, height, debugUV.y);
+		return SampleDensity(pos, 0);
+	}
+#endif
+
+
 	float4 color = tSceneTexture.Sample(sLinearClamp, input.texCoord);
 	float maxDepth = 10000000;//LinearizeDepth(tDepthTexture.Sample(sLinearClamp, input.texCoord).r);
 	if(maxDepth < cView.NearZ)
