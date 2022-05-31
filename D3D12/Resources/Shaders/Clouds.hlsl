@@ -31,19 +31,6 @@ struct PassParameters
 
 ConstantBuffer<PassParameters> cPass : register(b0);
 
-float4 GetHeightGradient(float cloudType)
-{
-	const float4 CloudGradient1 = float4(0.0, 0.07, 0.08, 0.15);
-	const float4 CloudGradient2 = float4(0.0, 0.2, 0.42, 0.6);
-	const float4 CloudGradient3 = float4(0.0, 0.08, 0.75, 0.98);
-
-	float a = 1.0 - saturate(cloudType * 2.0);
-	float b = 1.0 - abs(cloudType - 0.5) * 2.0;
-	float c = saturate(cloudType - 0.5) * 2.0;
-
-	return CloudGradient1 * a + CloudGradient2 * b + CloudGradient3 * c;
-}
-
 float SampleDensity(float3 position, uint mipLevel)
 {
 	float height = length(position - float3(0, -cPass.PlanetRadius, 0));
