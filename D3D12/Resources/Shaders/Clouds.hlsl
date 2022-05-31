@@ -33,6 +33,7 @@ ConstantBuffer<PassParameters> cPass : register(b0);
 
 float SampleDensity(float3 position, uint mipLevel)
 {
+	// Relative height based on spherical planet
 	float height = length(position - float3(0, -cPass.PlanetRadius, 0));
 	float heightGradient = saturate(InverseLerp(height - cPass.PlanetRadius, cPass.AtmosphereHeightStart, cPass.AtmosphereHeightEnd));
 
@@ -85,37 +86,8 @@ float LightMarch(float3 rayOrigin, float3 rayDirection)
 	return exp(-totalDensity);
 }
 
-float4 RenderClouds(float2 UV, float3 rayOrigin, float3 rayDirection, float sceneDepth)
+float4 RenderClouds(uint2 pixel, float3 rayOrigin, float3 rayDirection, float maxDepth)
 {
-	float2 pixel = UV * cView.ViewportDimensions;
-
-#define DEBUG_CLOUDS 1
-#if DEBUG_CLOUDS
-	float2 debugUV = InverseLerp(pixel, float2(20.0f, 20.0f), float2(300.0f, 300.0f));
-	if(all(debugUV >= 0.0f) && all(debugUV <= 1.0f))
-	{
-		debugUV = (debugUV * 2.0f - 1.0f) * 1000.0f;
-		float height = lerp(cPass.AtmosphereHeightStart, cPass.AtmosphereHeightEnd, 0.1f);
-		float3 pos = float3(debugUV.x, height, debugUV.y);
-		return SampleDensity(pos, 0);
-	}
-#endif
-
-	float4 color = tSceneTexture.Sample(sLinearClamp, UV);
-	float maxDepth = 10000000; //sceneDepth;
-	if(maxDepth < cView.NearZ)
-		return color;
-
-	Light light = GetLight(0);
-
-	float2 planetHit;
-	RaySphereIntersect(rayOrigin, rayDirection, float3(0, -cPass.PlanetRadius, 0), cPass.PlanetRadius, planetHit);
-	if(any(planetHit > -1))
-	{
-		color = 0;
-		maxDepth = length(rayDirection * planetHit.x);
-	}
-
 	float minT = -1000000.0f;
 	float maxT = -1000000.0f;
 
@@ -146,23 +118,21 @@ float4 RenderClouds(float2 UV, float3 rayOrigin, float3 rayDirection, float scen
 	}
 	else
 	{
-		return color;
+		return float4(0, 0, 0, 1);
 	}
 
 	minT = max(0.0f, minT);
 	maxT = min(maxDepth, max(0.0f, maxT));
 	if(minT >= maxT)
 	{
-		return color;
+		return float4(0, 0, 0, 1);
 	}
+
+	Light light = GetLight(0);
+
 	const float stepSize = cPass.RayStepSize;
-
-	float raymarchDistance = maxT - minT;
-
 	float offset = InterleavedGradientNoise(pixel + cView.FrameIndex);
 	rayOrigin += rayDirection * offset * stepSize;
-
-	float distanceTravelled = 0;
 
 	 // Phase function makes clouds brighter around sun
     float cosAngle = dot(rayDirection, -light.Direction);
@@ -170,31 +140,27 @@ float4 RenderClouds(float2 UV, float3 rayOrigin, float3 rayDirection, float scen
     const float backScattering = -0.2f;
 	float phaseVal = lerp(HenyeyGreenstreinPhase(cosAngle, forwardScattering), HenyeyGreenstreinPhase(cosAngle, backScattering), 0.5f);
 
-	float3 totalLight = 0;
-	float transmittance = 1;
+	float3 totalScattering = 0.0f;
+	float transmittance = 1.0f;
 
-	while (distanceTravelled < raymarchDistance)
+	for(float t = minT; t <= maxT; t += stepSize)
 	{
-		float3 rayPos = rayOrigin + rayDirection * (minT + distanceTravelled);
+		float3 rayPos = rayOrigin + t * rayDirection;
 		float density = SampleDensity(rayPos, 0);
 
 		if(density > 0)
 		{
 			float lightTransmittance = LightMarch(rayPos, -light.Direction);
-			totalLight += density * stepSize * transmittance * lightTransmittance * phaseVal;
+			totalScattering += density * stepSize * transmittance * lightTransmittance * phaseVal;
 			transmittance *= exp(-density * stepSize);
 			if(transmittance < 0.01f)
 			{
 				break;
 			}
 		}
-		distanceTravelled += stepSize;
 	}
 
-	float3 cloudColor = totalLight * light.Intensity * light.GetColor().rgb;
-	float3 col = color.xyz * transmittance + cloudColor + GetSky(normalize(float3(0, 1.0f, 0))) * (1 - transmittance);
-
-	return float4(col, 1);
+	return float4(totalScattering * light.Intensity * light.GetColor().rgb, transmittance);
 }
 
 [numthreads(16, 16, 1)]
@@ -203,11 +169,37 @@ void CSMain(uint3 threadId : SV_DispatchThreadID)
 	if(any(threadId.xy >= cView.TargetDimensions))
 		return;
 
+#define DEBUG_CLOUDS 1
+#if DEBUG_CLOUDS
+	float2 debugUV = InverseLerp((float2)threadId.xy, float2(20.0f, 20.0f), float2(300.0f, 300.0f));
+	if(all(debugUV >= 0.0f) && all(debugUV <= 1.0f))
+	{
+		debugUV = (debugUV * 2.0f - 1.0f) * 1000.0f;
+		float height = lerp(cPass.AtmosphereHeightStart, cPass.AtmosphereHeightEnd, 0.1f);
+		float3 pos = float3(debugUV.x, height, debugUV.y);
+		uOutput[threadId.xy] = float4(SampleDensity(pos, 0).xxx, 1);
+		return;
+	}
+#endif
+
 	float2 texCoord = threadId.xy * cView.TargetDimensionsInv;
-	float sceneDepth = tDepthTexture.Sample(sLinearClamp, texCoord).r;
+	float4 color = tSceneTexture.SampleLevel(sLinearClamp, texCoord, 0);
+	float sceneDepth = tDepthTexture.SampleLevel(sLinearClamp, texCoord, 0).r;
 	float3 viewRay = normalize(ViewFromDepth(texCoord, sceneDepth, cView.ProjectionInverse));
-	float linearDepth = length(viewRay);
+	float linearDepth = sceneDepth == 0 ? 10000000 : length(viewRay);
 	float3 rayOrigin = cView.ViewLocation;
 	float3 rayDirection = mul(viewRay, (float3x3)cView.ViewInverse);
-	uOutput[threadId.xy] = RenderClouds(texCoord, rayOrigin, rayDirection, linearDepth);
+
+	// Physically based pitch black earth :-)
+	float2 planetHit;
+	RaySphereIntersect(rayOrigin, rayDirection, float3(0, -cPass.PlanetRadius, 0), cPass.PlanetRadius, planetHit);
+	if(any(planetHit > -1))
+	{
+		color = 0;
+		linearDepth = length(rayDirection * planetHit.x);
+	}
+
+	float4 scatteringTransmittance = RenderClouds(threadId.xy, rayOrigin, rayDirection, linearDepth);
+	float3 col = color.xyz * scatteringTransmittance.w + scatteringTransmittance.xyz + GetSky(normalize(float3(0, 1.0f, 0))) * (1 - scatteringTransmittance.w);
+	uOutput[threadId.xy] = float4(col, 1);
 }
