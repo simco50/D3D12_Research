@@ -16,8 +16,6 @@ public:
 	void Execute(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures);
 
 private:
-	GraphicsDevice* m_pDevice = nullptr;
-
 	RefCountPtr<Texture> m_pHistory;
 
 	RefCountPtr<StateObject> m_pTraceRaysSO;

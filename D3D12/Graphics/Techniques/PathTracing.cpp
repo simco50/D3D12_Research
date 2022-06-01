@@ -10,9 +10,8 @@
 #include "Graphics/SceneView.h"
 
 PathTracing::PathTracing(GraphicsDevice* pDevice)
-	: m_pDevice(pDevice)
 {
-	if (!m_pDevice->GetCapabilities().SupportsRaytracing())
+	if (!pDevice->GetCapabilities().SupportsRaytracing())
 	{
 		return;
 	}
@@ -41,14 +40,6 @@ PathTracing::PathTracing(GraphicsDevice* pDevice)
 		{
 			Reset();
 		});
-}
-
-PathTracing::~PathTracing()
-{
-	if (m_OnShaderCompiledHandle.IsValid())
-	{
-		m_pDevice->GetShaderManager()->OnLibraryRecompiledEvent().Remove(m_OnShaderCompiledHandle);
-	}
 }
 
 void PathTracing::Render(RGGraph& graph, const SceneView* pView, RGTexture* pTarget)

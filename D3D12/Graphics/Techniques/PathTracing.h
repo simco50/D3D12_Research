@@ -13,13 +13,11 @@ class PathTracing
 {
 public:
 	PathTracing(GraphicsDevice* pDevice);
-	~PathTracing();
 	void Render(RGGraph& graph, const SceneView* pView, RGTexture* pTarget);
 	void Reset();
 	bool IsSupported();
 
 private:
-	GraphicsDevice* m_pDevice;
 	RefCountPtr<RootSignature> m_pRS;
 	RefCountPtr<StateObject> m_pSO;
 

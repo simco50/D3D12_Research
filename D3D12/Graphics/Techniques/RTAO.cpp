@@ -11,7 +11,6 @@
 #include "Graphics/SceneView.h"
 
 RTAO::RTAO(GraphicsDevice* pDevice)
-	: m_pDevice(pDevice)
 {
 	if (pDevice->GetCapabilities().SupportsRaytracing())
 	{
@@ -33,7 +32,7 @@ RTAO::RTAO(GraphicsDevice* pDevice)
 		m_pTraceRaysSO = pDevice->CreateStateObject(stateDesc);
 
 		m_pDenoisePSO = pDevice->CreateComputePipeline(m_pCommonRS, "RayTracing/RTAODenoise.hlsl", "DenoiseCS");
-		m_pBilateralBlurPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "SSAOBlur.hlsl", "CSMain");
+		m_pBilateralBlurPSO = pDevice->CreateComputePipeline(m_pCommonRS, "SSAOBlur.hlsl", "CSMain");
 	}
 }
 

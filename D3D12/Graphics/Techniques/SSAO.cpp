@@ -9,9 +9,16 @@
 #include "Graphics/SceneView.h"
 
 SSAO::SSAO(GraphicsDevice* pDevice)
-	: m_pDevice(pDevice)
 {
-	SetupPipelines();
+	m_pSSAORS = new RootSignature(pDevice);
+	m_pSSAORS->AddRootConstants(0, 4);
+	m_pSSAORS->AddConstantBufferView(100);
+	m_pSSAORS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 2);
+	m_pSSAORS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2);
+	m_pSSAORS->Finalize("SSAO");
+
+	m_pSSAOPSO = pDevice->CreateComputePipeline(m_pSSAORS, "SSAO.hlsl", "CSMain");
+	m_pSSAOBlurPSO = pDevice->CreateComputePipeline(m_pSSAORS, "SSAOBlur.hlsl", "CSMain");
 }
 
 void SSAO::Execute(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures)
@@ -129,17 +136,4 @@ void SSAO::Execute(RGGraph& graph, const SceneView* pView, SceneTextures& sceneT
 
 				context.Dispatch(ComputeUtils::GetNumThreadGroups(pBlurSource->GetWidth(), 1, pBlurSource->GetHeight(), 256));
 			});
-}
-
-void SSAO::SetupPipelines()
-{
-	m_pSSAORS = new RootSignature(m_pDevice);
-	m_pSSAORS->AddRootConstants(0, 4);
-	m_pSSAORS->AddConstantBufferView(100);
-	m_pSSAORS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 2);
-	m_pSSAORS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2);
-	m_pSSAORS->Finalize("SSAO");
-
-	m_pSSAOPSO = m_pDevice->CreateComputePipeline(m_pSSAORS, "SSAO.hlsl", "CSMain");
-	m_pSSAOBlurPSO = m_pDevice->CreateComputePipeline(m_pSSAORS, "SSAOBlur.hlsl", "CSMain");
 }

@@ -14,12 +14,7 @@ public:
 	void Execute(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures);
 
 private:
-	void SetupPipelines();
-
-	GraphicsDevice* m_pDevice;
-
 	RefCountPtr<RootSignature> m_pSSAORS;
 	RefCountPtr<PipelineState> m_pSSAOPSO;
 	RefCountPtr<PipelineState> m_pSSAOBlurPSO;
 };
-

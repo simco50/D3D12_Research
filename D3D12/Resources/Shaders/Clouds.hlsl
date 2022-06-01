@@ -186,8 +186,8 @@ void CSMain(uint3 threadId : SV_DispatchThreadID)
 #endif
 
 	float2 texCoord = threadId.xy * cView.TargetDimensionsInv;
-	float4 color = tSceneTexture.SampleLevel(sLinearClamp, texCoord, 0);
-	float sceneDepth = tDepthTexture.SampleLevel(sLinearClamp, texCoord, 0).r;
+	float4 color = tSceneTexture.SampleLevel(sPointClamp, texCoord, 0);
+	float sceneDepth = tDepthTexture.SampleLevel(sPointClamp, texCoord, 0).r;
 	float3 viewRay = normalize(ViewFromDepth(texCoord, sceneDepth, cView.ProjectionInverse));
 	float linearDepth = sceneDepth == 0 ? 10000000 : length(viewRay);
 	float3 rayOrigin = cView.ViewLocation;
@@ -195,11 +195,14 @@ void CSMain(uint3 threadId : SV_DispatchThreadID)
 
 	// Physically based pitch black earth :-)
 	float2 planetHit;
-	RaySphereIntersect(rayOrigin, rayDirection, float3(0, -cPass.PlanetRadius, 0), cPass.PlanetRadius, planetHit);
-	if(any(planetHit > -1))
+	if(RaySphereIntersect(rayOrigin, rayDirection, float3(0, -cPass.PlanetRadius, 0), cPass.PlanetRadius, planetHit))
 	{
-		color = 0;
-		linearDepth = length(rayDirection * planetHit.x);
+		float hit = all(planetHit > 0) ? planetHit.x : planetHit.y;
+		if(hit > 0 && hit < linearDepth)
+		{
+			color = 0;
+			linearDepth = hit;
+		}
 	}
 
 	float4 scatteringTransmittance = RenderClouds(threadId.xy, rayOrigin, rayDirection, linearDepth);
