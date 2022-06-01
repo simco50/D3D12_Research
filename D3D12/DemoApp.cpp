@@ -132,6 +132,7 @@ namespace Tweakables
 
 	// Misc Lighting
 	ConsoleVariable g_VolumetricFog("r.VolumetricFog", true);
+	ConsoleVariable g_Clouds("r.Clouds", false);
 	ConsoleVariable g_RaytracedAO("r.Raytracing.AO", false);
 	ConsoleVariable g_VisualizeLights("vis.Lights", false);
 	ConsoleVariable g_VisualizeLightDensity("vis.LightDensity", false);
@@ -827,8 +828,11 @@ void DemoApp::Update()
 					context.Draw(0, 36);
 				});
 
-		RGTexture* pTex = m_pClouds->Render(graph, sceneTextures, pView);
-		VisualizeTexture(graph, pTex);
+		if (Tweakables::g_Clouds)
+		{
+			RGTexture* pTex = m_pClouds->Render(graph, sceneTextures, pView);
+			VisualizeTexture(graph, pTex);
+		}
 
 		DebugRenderer::Get()->Render(graph, pView, sceneTextures.pColorTarget, sceneTextures.pDepth);
 	}
@@ -1763,6 +1767,7 @@ void DemoApp::UpdateImGui()
 			ImGui::SliderFloat("Sun Temperature", &Tweakables::g_SunTemperature, 1000, 15000);
 			ImGui::SliderFloat("Sun Intensity", &Tweakables::g_SunIntensity, 0, 30);
 			ImGui::Checkbox("Volumetric Fog", &Tweakables::g_VolumetricFog.Get());
+			ImGui::Checkbox("Clouds", &Tweakables::g_Clouds.Get());
 		}
 
 		if (ImGui::CollapsingHeader("Shadows"))
