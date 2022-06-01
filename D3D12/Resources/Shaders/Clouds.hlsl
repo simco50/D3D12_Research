@@ -134,7 +134,7 @@ float4 RenderClouds(uint2 pixel, float3 rayOrigin, float3 rayDirection, float ma
 	float offset = InterleavedGradientNoise(pixel + cView.FrameIndex);
 	rayOrigin += rayDirection * offset * stepSize;
 
-	 // Phase function makes clouds brighter around sun
+	// Phase function makes clouds brighter around sun
     float cosAngle = dot(rayDirection, -light.Direction);
 	const float forwardScattering = 0.8f;
     const float backScattering = -0.2f;
@@ -143,6 +143,9 @@ float4 RenderClouds(uint2 pixel, float3 rayOrigin, float3 rayDirection, float ma
 	float3 totalScattering = 0.0f;
 	float transmittance = 1.0f;
 
+	float3 ambientColor = GetSky(normalize(float3(0, 1.0f, 0)));
+	float3 sunColor = light.Intensity * light.GetColor().rgb;
+
 	for(float t = minT; t <= maxT; t += stepSize)
 	{
 		float3 rayPos = rayOrigin + t * rayDirection;
@@ -150,8 +153,8 @@ float4 RenderClouds(uint2 pixel, float3 rayOrigin, float3 rayDirection, float ma
 
 		if(density > 0)
 		{
-			float lightTransmittance = LightMarch(rayPos, -light.Direction);
-			totalScattering += density * stepSize * transmittance * lightTransmittance * phaseVal;
+			float3 sunScattering = LightMarch(rayPos, -light.Direction) * sunColor;
+			totalScattering += density * stepSize * transmittance * (sunScattering * phaseVal + ambientColor);
 			transmittance *= exp(-density * stepSize);
 			if(transmittance < 0.01f)
 			{
@@ -160,7 +163,7 @@ float4 RenderClouds(uint2 pixel, float3 rayOrigin, float3 rayDirection, float ma
 		}
 	}
 
-	return float4(totalScattering * light.Intensity * light.GetColor().rgb, transmittance);
+	return float4(totalScattering, transmittance);
 }
 
 [numthreads(16, 16, 1)]
@@ -200,6 +203,6 @@ void CSMain(uint3 threadId : SV_DispatchThreadID)
 	}
 
 	float4 scatteringTransmittance = RenderClouds(threadId.xy, rayOrigin, rayDirection, linearDepth);
-	float3 col = color.xyz * scatteringTransmittance.w + scatteringTransmittance.xyz + GetSky(normalize(float3(0, 1.0f, 0))) * (1 - scatteringTransmittance.w);
+	float3 col = color.xyz * scatteringTransmittance.w + scatteringTransmittance.xyz;
 	uOutput[threadId.xy] = float4(col, 1);
 }
