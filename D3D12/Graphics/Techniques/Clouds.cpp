@@ -82,30 +82,35 @@ RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const Sc
 	bool isDirty = !m_pShapeNoise || !m_pDetailNoise || !m_pCloudHeightDensityLUT || shaderDirty;
 	shaderDirty = false;
 
-	ImGui::Begin("Parameters");
-	isDirty |= ImGui::SliderInt("Seed", &parameters.NoiseSeed, 0, 100);
-	isDirty |= ImGui::SliderInt("Shape Noise Frequency", &parameters.ShapeNoiseFrequency, 1, 10);
-	isDirty |= ImGui::SliderInt("Shape Noise Resolution", &parameters.ShapeNoiseResolution, 32, 256);
-	ImGui::SliderFloat("Shape Noise Scale", &parameters.ShapeNoiseScale, 0.1f, 5.0f);
+	if (ImGui::Begin("Parameters"))
+	{
+		if (ImGui::CollapsingHeader("Clouds"))
+		{
+			isDirty |= ImGui::SliderInt("Seed", &parameters.NoiseSeed, 0, 100);
+			isDirty |= ImGui::SliderInt("Shape Noise Frequency", &parameters.ShapeNoiseFrequency, 1, 10);
+			isDirty |= ImGui::SliderInt("Shape Noise Resolution", &parameters.ShapeNoiseResolution, 32, 256);
+			ImGui::SliderFloat("Shape Noise Scale", &parameters.ShapeNoiseScale, 0.1f, 5.0f);
 
-	isDirty |= ImGui::SliderInt("Detail Noise Frequency", &parameters.DetailNoiseFrequency, 1, 10);
-	isDirty |= ImGui::SliderInt("Detail Noise Resolution", &parameters.DetailNoiseResolution, 8, 64);
-	ImGui::SliderFloat("Detail Noise Scale", &parameters.DetailNoiseScale, 2.0f, 12.0f);
-	ImGui::SliderFloat("Detail Noise Influence", &parameters.DetailNoiseInfluence, 0.0f, 1.0f);
+			isDirty |= ImGui::SliderInt("Detail Noise Frequency", &parameters.DetailNoiseFrequency, 1, 10);
+			isDirty |= ImGui::SliderInt("Detail Noise Resolution", &parameters.DetailNoiseResolution, 8, 64);
+			ImGui::SliderFloat("Detail Noise Scale", &parameters.DetailNoiseScale, 2.0f, 12.0f);
+			ImGui::SliderFloat("Detail Noise Influence", &parameters.DetailNoiseInfluence, 0.0f, 1.0f);
 
-	ImGui::SliderFloat("Global Scale", &parameters.GlobalScale, 0.01f, 0.0005f);
-	ImGui::SliderFloat("Global Density", &parameters.GlobalDensity, 0.0f, 1.0f);
-	ImGui::SliderAngle("Wind Direction", &parameters.WindAngle);
-	ImGui::SliderFloat("Wind Speed", &parameters.WindSpeed, 0, 1.0f);
-	ImGui::SliderFloat("Cloud Top Skew", &parameters.CloudTopSkew, 0, 100.0f);
+			ImGui::SliderFloat("Global Scale", &parameters.GlobalScale, 0.01f, 0.0005f);
+			ImGui::SliderFloat("Global Density", &parameters.GlobalDensity, 0.0f, 1.0f);
+			ImGui::SliderAngle("Wind Direction", &parameters.WindAngle);
+			ImGui::SliderFloat("Wind Speed", &parameters.WindSpeed, 0, 1.0f);
+			ImGui::SliderFloat("Cloud Top Skew", &parameters.CloudTopSkew, 0, 100.0f);
 
-	ImGui::SliderFloat("Raymarch Step Size", &parameters.RaymarchStepSize, 1.0f, 40.0f);
-	ImGui::SliderInt("Light Steps", &parameters.LightMarchSteps, 1, 20);
-	ImGui::SliderFloat("Coverage", &parameters.Coverage, 0, 1);
-	ImGui::SliderFloat("Cloud Type", &parameters.CloudType, 0, 1);
+			ImGui::SliderFloat("Raymarch Step Size", &parameters.RaymarchStepSize, 1.0f, 40.0f);
+			ImGui::SliderInt("Light Steps", &parameters.LightMarchSteps, 1, 20);
+			ImGui::SliderFloat("Coverage", &parameters.Coverage, 0, 1);
+			ImGui::SliderFloat("Cloud Type", &parameters.CloudType, 0, 1);
 
-	ImGui::SliderFloat("Planet Size", &parameters.PlanetRadius, 100, 100000);
-	ImGui::DragFloatRange2("Atmosphere Height", &parameters.AtmosphereHeightRange.x, &parameters.AtmosphereHeightRange.y, 1.0f, 10, 1000);
+			ImGui::SliderFloat("Planet Size", &parameters.PlanetRadius, 100, 100000);
+			ImGui::DragFloatRange2("Atmosphere Height", &parameters.AtmosphereHeightRange.x, &parameters.AtmosphereHeightRange.y, 1.0f, 10, 1000);
+		}
+	}
 	ImGui::End();
 
 	RGTexture* pNoiseTexture = RGUtils::CreatePersistentTexture(graph, "Shape Noise",

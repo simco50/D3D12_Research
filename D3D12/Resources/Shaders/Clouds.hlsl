@@ -172,7 +172,7 @@ void CSMain(uint3 threadId : SV_DispatchThreadID)
 	if(any(threadId.xy >= cView.TargetDimensions))
 		return;
 
-#define DEBUG_CLOUDS 1
+#define DEBUG_CLOUDS 0
 #if DEBUG_CLOUDS
 	float2 debugUV = InverseLerp((float2)threadId.xy, float2(20.0f, 20.0f), float2(300.0f, 300.0f));
 	if(all(debugUV >= 0.0f) && all(debugUV <= 1.0f))

@@ -3,6 +3,7 @@
 #include "Graphics/Light.h"
 #include "Graphics/SceneView.h"
 #include "Graphics/RHI/CommandQueue.h"
+#include "Graphics/Profiler.h"
 
 class Mesh;
 class ClusteredForward;
@@ -58,7 +59,7 @@ private:
 	std::unique_ptr<RGResourcePool> m_RenderGraphPool;
 
 	uint32 m_Frame = 0;
-	std::array<float, 180> m_FrameTimes{};
+	TimeHistory<float, 180> m_FrameHistory;
 
 	RefCountPtr<Texture> m_pColorHistory;
 	RefCountPtr<Texture> m_ColorOutput;

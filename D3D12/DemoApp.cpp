@@ -132,7 +132,7 @@ namespace Tweakables
 
 	// Misc Lighting
 	ConsoleVariable g_VolumetricFog("r.VolumetricFog", true);
-	ConsoleVariable g_Clouds("r.Clouds", false);
+	ConsoleVariable g_Clouds("r.Clouds", true);
 	ConsoleVariable g_RaytracedAO("r.Raytracing.AO", false);
 	ConsoleVariable g_VisualizeLights("vis.Lights", false);
 	ConsoleVariable g_VisualizeLightDensity("vis.LightDensity", false);
@@ -830,8 +830,8 @@ void DemoApp::Update()
 
 		if (Tweakables::g_Clouds)
 		{
-			RGTexture* pTex = m_pClouds->Render(graph, sceneTextures, pView);
-			VisualizeTexture(graph, pTex);
+			/*RGTexture* pTex = */m_pClouds->Render(graph, sceneTextures, pView);
+			//VisualizeTexture(graph, pTex);
 		}
 
 		DebugRenderer::Get()->Render(graph, pView, sceneTextures.pColorTarget, sceneTextures.pDepth);
@@ -1536,7 +1536,7 @@ void DemoApp::VisualizeTexture(RGGraph& graph, RGTexture* pTexture)
 
 void DemoApp::UpdateImGui()
 {
-	m_FrameTimes[m_Frame % m_FrameTimes.size()] = Time::DeltaTime();
+	m_FrameHistory.AddTime(Time::DeltaTime());
 
 	static ImGuiConsole console;
 	static bool showProfiler = false;
@@ -1706,7 +1706,11 @@ void DemoApp::UpdateImGui()
 		if (ImGui::Begin("Profiler", &showProfiler))
 		{
 			ImGui::Text("MS: %4.2f | FPS: %4.2f | %d x %d", Time::DeltaTime() * 1000.0f, 1.0f / Time::DeltaTime(), m_SceneData.GetDimensions().x, m_SceneData.GetDimensions().y);
-			ImGui::PlotLines("", m_FrameTimes.data(), (int)m_FrameTimes.size(), m_Frame % m_FrameTimes.size(), 0, 0.0f, 0.03f, ImVec2(ImGui::GetContentRegionAvail().x, 100));
+
+			const float* pHistoryData;
+			uint32 historySize, historyOffset;
+			m_FrameHistory.GetHistory(&pHistoryData, &historySize, &historyOffset);
+			ImGui::PlotLines("", pHistoryData, (int)historySize, historyOffset, 0, 0.0f, 0.03f, ImVec2(ImGui::GetContentRegionAvail().x, 100));
 
 			if (ImGui::TreeNodeEx("Profiler", ImGuiTreeNodeFlags_DefaultOpen))
 			{

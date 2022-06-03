@@ -48,6 +48,11 @@ This is a personal toy renderer meant as a playground for experimenting with ide
 |---|---|
 |  ![](Images/CBT_01.jpg) | ![](Images/CBT_02.jpg) |
 
+### Volumetric Clouds
+
+|  |  |
+|---|---|
+|  ![](Images/Clouds_01.jpg) | ![](Images/Clouds_02.jpg) |
 
 ### Cascaded Shadow Maps
 
