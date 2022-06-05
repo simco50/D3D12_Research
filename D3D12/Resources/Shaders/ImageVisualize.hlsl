@@ -43,6 +43,13 @@ float4 SampleTexture(float2 uv)
 		Texture3D tex = ResourceDescriptorHeap[cConstants.TextureSource];
 		output = tex.SampleLevel(sLinearWrap, float3(uv, cConstants.Slice), cConstants.MipLevel);
 	}
+	else if(cConstants.TextureType == TextureDimension::TexCube)
+	{
+		float3 dir = mul(CUBEMAP_ROTATIONS[cConstants.Slice], normalize(float3(uv * 2 - 1, -1)));
+
+		TextureCube tex = ResourceDescriptorHeap[cConstants.TextureSource];
+		output = tex.SampleLevel(sLinearWrap, dir, cConstants.MipLevel);
+	}
 	return output;
 }
 

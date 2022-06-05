@@ -10,11 +10,6 @@
 
 #define INVALID_HANDLE 0xFFFFFFFF
 
-#define TEXTURE_1D 0
-#define TEXTURE_2D 1
-#define TEXTURE_3D 2
-#define TEXTURE_CUBE 3
-
 #define _INLINE_RT (_SM_MAJ >= 6 && _SM_MIN >= 5)
 
 #if _PAYLOAD_QUALIFIERS
@@ -27,3 +22,13 @@
 
 #define IDENTITY_MATRIX_3 float3x3(1, 0, 0, 0, 1, 0, 0, 0, 1)
 #define IDENTITY_MATRIX_4 float4x4(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1)
+
+static const float3x3 CUBEMAP_ROTATIONS[] =
+{
+	float3x3(0,0,-1, 0,-1,0, -1,0,0),   // right
+	float3x3(0,0,1, 0,-1,0, 1,0,0),     // left
+	float3x3(1,0,0, 0,0,-1, 0,1,0),     // top
+	float3x3(1,0,0, 0,0,1, 0,-1,0),     // bottom
+	float3x3(1,0,0, 0,-1,0, 0,0,-1),    // back
+	float3x3(-1,0,0, 0,-1,0, 0,0,1),    // front
+};

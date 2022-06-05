@@ -27,16 +27,6 @@ float4 PSMain(in InterpolantsVSToPS input) : SV_Target
 	return float4(GetSky(uv), 1);
 }
 
-static const float3x3 CUBEMAP_ROTATIONS[] =
-{
-    float3x3(0,0,-1, 0,-1,0, -1,0,0),   // right
-    float3x3(0,0,1, 0,-1,0, 1,0,0),     // left
-    float3x3(1,0,0, 0,0,-1, 0,1,0),     // top
-    float3x3(1,0,0, 0,0,1, 0,-1,0),     // bottom
-    float3x3(1,0,0, 0,-1,0, 0,0,-1),    // back
-    float3x3(-1,0,0, 0,-1,0, 0,0,1),    // front
-};
-
 [numthreads(16, 16, 1)]
 void ComputeSkyCS(uint3 threadId : SV_DispatchThreadID)
 {

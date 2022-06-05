@@ -154,6 +154,7 @@ private:
 	struct TextureVisualizeData
 	{
 		RefCountPtr<Texture> pVisualizeTexture;
+		int CubeFaceIndex = 0;
 		float RangeMin = 0.0f;
 		float RangeMax = 1.0f;
 		bool VisibleChannels[4] = { true, true, true, true };

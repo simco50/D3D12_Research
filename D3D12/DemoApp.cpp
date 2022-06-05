@@ -1479,6 +1479,18 @@ void DemoApp::VisualizeTexture(RGGraph& graph, RGTexture* pTexture)
 		{
 			ImGui::SliderFloat("Slice", &m_VisualizeTextureData.Slice, 0, (float)desc.DepthOrArraySize - 1);
 		}
+		if (desc.Dimensions == TextureDimension::TextureCube)
+		{
+			const char* faceNames[] = {
+				"Right",
+				"Left",
+				"Top",
+				"Bottom",
+				"Back",
+				"Front",
+			};
+			ImGui::Combo("Face", &m_VisualizeTextureData.CubeFaceIndex, faceNames, ARRAYSIZE(faceNames));
+		}
 		ImGui::Checkbox("R", &m_VisualizeTextureData.VisibleChannels[0]);
 		ImGui::SameLine();
 		ImGui::Checkbox("G", &m_VisualizeTextureData.VisibleChannels[1]);
@@ -1525,6 +1537,8 @@ void DemoApp::VisualizeTexture(RGGraph& graph, RGTexture* pTexture)
 					(m_VisualizeTextureData.VisibleChannels[3] ? 1 : 0) << 3;
 				constants.MipLevel = m_VisualizeTextureData.MipLevel;
 				constants.Slice = m_VisualizeTextureData.Slice / desc.DepthOrArraySize;
+				if(pTexture->GetDesc().Dimensions == TextureDimension::TextureCube)
+					constants.Slice = (float)m_VisualizeTextureData.CubeFaceIndex;
 
 				context.SetRootCBV(1, constants);
 
