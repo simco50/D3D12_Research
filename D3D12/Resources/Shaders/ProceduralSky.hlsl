@@ -3,7 +3,7 @@
 #include "Primitives.hlsli"
 #include "External/Atmosphere.hlsli"
 
-RWTexture2D<float4> uSky : register(u0);
+RWTexture2DArray<float4> uSky : register(u0);
 
 struct InterpolantsVSToPS
 {
@@ -27,24 +27,25 @@ float4 PSMain(in InterpolantsVSToPS input) : SV_Target
 	return float4(GetSky(uv), 1);
 }
 
+static const float3x3 CUBEMAP_ROTATIONS[] =
+{
+    float3x3(0,0,-1, 0,-1,0, -1,0,0),   // right
+    float3x3(0,0,1, 0,-1,0, 1,0,0),     // left
+    float3x3(1,0,0, 0,0,-1, 0,1,0),     // top
+    float3x3(1,0,0, 0,0,1, 0,-1,0),     // bottom
+    float3x3(1,0,0, 0,-1,0, 0,0,-1),    // back
+    float3x3(-1,0,0, 0,-1,0, 0,0,1),    // front
+};
+
 [numthreads(16, 16, 1)]
 void ComputeSkyCS(uint3 threadId : SV_DispatchThreadID)
 {
-	float2 uv = threadId.xy * cView.TargetDimensionsInv;
-	uv.x *= 2 * PI;
-	uv.y *= PI;
+	float2 uv = (threadId.xy + 0.5f) * cView.TargetDimensionsInv;
+	float3 dir = normalize(mul(CUBEMAP_ROTATIONS[threadId.z], float3(uv * 2 - 1, -1)));
 
-	float3 dir = normalize(float3(sin(uv.x) * sin(uv.y), cos(uv.y), cos(uv.x) * sin(uv.y)));
 	float3 rayStart = cView.ViewLocation;
 	float rayLength = 1000000.0f;
-	if(0)
-	{
-		float2 planetIntersection = PlanetIntersection(rayStart, dir);
-		if(planetIntersection.x > 0)
-		{
-			rayLength = min(rayLength, planetIntersection.x);
-		}
-	}
+
 	Light sun = GetLight(0);
 	float3 lightDir = -sun.Direction;
 	float3 lightColor = sun.GetColor();
@@ -52,5 +53,5 @@ void ComputeSkyCS(uint3 threadId : SV_DispatchThreadID)
 	float3 transmittance;
 	float3 sky = IntegrateScattering(rayStart, dir, rayLength, lightDir, lightColor, transmittance);
 
-	uSky[threadId.xy] = float4(sky, 1.0f);
+	uSky[threadId] = float4(sky, 1.0f);
 }

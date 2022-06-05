@@ -700,7 +700,7 @@ void DemoApp::Update()
 			.Read({ pDepthTarget, pIrradianceTarget, pProbeStates, pProbeOffsets });
 	}
 
-	RGTexture* pSky = graph.CreateTexture("Sky", TextureDesc::Create2D(64, 128, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess));
+	RGTexture* pSky = graph.CreateTexture("Sky", TextureDesc::CreateCube(64, 64, DXGI_FORMAT_R16G16B16A16_FLOAT));
 	graph.ExportTexture(pSky, &pViewMut->pSky);
 
 	graph.AddPass("Compute Sky", RGPassFlag::Compute | RGPassFlag::NeverCull)
@@ -714,7 +714,7 @@ void DemoApp::Update()
 				context.SetRootCBV(1, Renderer::GetViewUniforms(pView, pSkyTexture));
 				context.BindResources(2, pSkyTexture->GetUAV());
 
-				context.Dispatch(ComputeUtils::GetNumThreadGroups(pSkyTexture->GetWidth(), 16, pSkyTexture->GetHeight(), 16));
+				context.Dispatch(ComputeUtils::GetNumThreadGroups(pSkyTexture->GetWidth(), 16, pSkyTexture->GetHeight(), 16, 6));
 
 				context.InsertResourceBarrier(pSkyTexture, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 			});
