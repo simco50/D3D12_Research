@@ -152,7 +152,7 @@ RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const Sc
 						context.BindResources(1, pUAV.Get());
 
 						context.Dispatch(
-							ComputeUtils::GetNumThreadGroups(IntVector3(resolution), IntVector3(8)));
+							ComputeUtils::GetNumThreadGroups(Vector3i(resolution), Vector3i(8)));
 					});
 		}
 		for (uint32 i = 0; i < pDetailNoiseTexture->GetDesc().Mips; ++i)
@@ -178,7 +178,7 @@ RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const Sc
 						context.BindResources(1, pUAV.Get());
 
 						context.Dispatch(
-							ComputeUtils::GetNumThreadGroups(IntVector3(resolution), IntVector3(8)));
+							ComputeUtils::GetNumThreadGroups(Vector3i(resolution), Vector3i(8)));
 					});
 		}
 
@@ -198,7 +198,7 @@ RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const Sc
 					context.BindResources(1, pTarget->GetUAV());
 
 					context.Dispatch(
-						ComputeUtils::GetNumThreadGroups(IntVector3(pTarget->GetWidth()), IntVector3(8)));
+						ComputeUtils::GetNumThreadGroups(Vector3i(pTarget->GetWidth()), Vector3i(8)));
 				});
 	}
 

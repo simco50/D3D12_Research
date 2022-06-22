@@ -11,12 +11,12 @@ namespace ShaderInterop
 	using float3 = Vector3;
 	using float4 = Vector4;
 	using uint = uint32;
-	using uint2 = TIntVector2<uint32>;
-	using uint3 = TIntVector3<uint32>;
-	using uint4 = TIntVector4<uint32>;
-	using int2 = TIntVector2<int32>;
-	using int3 = TIntVector3<int32>;
-	using int4 = TIntVector4<int32>;
+	using uint2 = Vector2i;
+	using uint3 = Vector3i;
+	using uint4 = Vector4i;
+	using int2 = Vector2i;
+	using int3 = Vector3i;
+	using int4 = Vector4i;
 	using float4x4 = Matrix;
 
 	template<typename T> struct ConstantBuffer { T Data; };

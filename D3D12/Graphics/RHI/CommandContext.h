@@ -137,18 +137,18 @@ private:
 
 namespace ComputeUtils
 {
-	inline IntVector3 GetNumThreadGroups(uint32 threadsX = 1, uint32 groupSizeX = 1, uint32 threadsY = 1, uint32 groupSizeY = 1, uint32 threadsZ = 1, uint32 groupSizeZ = 1)
+	inline Vector3i GetNumThreadGroups(uint32 threadsX = 1, uint32 groupSizeX = 1, uint32 threadsY = 1, uint32 groupSizeY = 1, uint32 threadsZ = 1, uint32 groupSizeZ = 1)
 	{
-		IntVector3 groups;
+		Vector3i groups;
 		groups.x = Math::DivideAndRoundUp(threadsX, groupSizeX);
 		groups.y = Math::DivideAndRoundUp(threadsY, groupSizeY);
 		groups.z = Math::DivideAndRoundUp(threadsZ, groupSizeZ);
 		return groups;
 	}
 
-	inline IntVector3 GetNumThreadGroups(const IntVector3& threads, const IntVector3& threadGroupSize)
+	inline Vector3i GetNumThreadGroups(const Vector3i& threads, const Vector3i& threadGroupSize)
 	{
-		IntVector3 groups;
+		Vector3i groups;
 		groups.x = Math::DivideAndRoundUp(threads.x, threadGroupSize.x);
 		groups.y = Math::DivideAndRoundUp(threads.y, threadGroupSize.y);
 		groups.z = Math::DivideAndRoundUp(threads.z, threadGroupSize.z);
@@ -179,9 +179,9 @@ public:
 	void WriteTexture(Texture* pResource, const Span<D3D12_SUBRESOURCE_DATA>& subResourceDatas, uint32 firstSubResource);
 
 	void Dispatch(uint32 groupCountX, uint32 groupCountY = 1, uint32 groupCountZ = 1);
-	void Dispatch(const IntVector3& groupCounts);
+	void Dispatch(const Vector3i& groupCounts);
 	void DispatchMesh(uint32 groupCountX, uint32 groupCountY = 1, uint32 groupCountZ = 1);
-	void DispatchMesh(const IntVector3& groupCounts);
+	void DispatchMesh(const Vector3i& groupCounts);
 	void ExecuteIndirect(const CommandSignature* pCommandSignature, uint32 maxCount, const Buffer* pIndirectArguments, const Buffer* pCountBuffer, uint32 argumentsOffset = 0, uint32 countOffset = 0);
 	void Draw(uint32 vertexStart, uint32 vertexCount, uint32 instances = 1, uint32 instanceStart = 0);
 	void DrawIndexedInstanced(uint32 indexCount, uint32 indexStart, uint32 instanceCount, uint32 minVertex = 0, uint32 instanceStart = 0);
@@ -194,7 +194,7 @@ public:
 	void BeginRenderPass(const RenderPassInfo& renderPassInfo);
 	void EndRenderPass();
 
-	void ClearUavUInt(const GraphicsResource* pBuffer, const UnorderedAccessView* pUav, const UIntVector4& values = UIntVector4());
+	void ClearUavUInt(const GraphicsResource* pBuffer, const UnorderedAccessView* pUav, const uint32* pValues = nullptr);
 	void ClearUavFloat(const GraphicsResource* pBuffer, const UnorderedAccessView* pUav, const Vector4& values = Vector4::Zero);
 
 	void SetPipelineState(PipelineState* pPipelineState);

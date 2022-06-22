@@ -217,6 +217,22 @@ void RGGraph::Compile()
 			}
 		}
 	}
+
+	// #todo Should exported resources that are not used actually be exported?
+	for (RGResource* pResource : m_Resources)
+	{
+		if (pResource->IsExported && !pResource->pResourceReference)
+		{
+			if (pResource->Type == RGResourceType::Texture)
+			{
+				pResource->SetResource(m_ResourcePool.Allocate(pResource->Name, static_cast<RGTexture*>(pResource)->Desc));
+			}
+			else if (pResource->Type == RGResourceType::Buffer)
+			{
+				pResource->SetResource(m_ResourcePool.Allocate(pResource->Name, static_cast<RGBuffer*>(pResource)->Desc));
+			}
+		}
+	}
 }
 
 void RGGraph::ExportTexture(RGTexture* pTexture, RefCountPtr<Texture>* pTarget)
@@ -270,6 +286,7 @@ SyncPoint RGGraph::Execute()
 
 	for (ExportedTexture& exportResource : m_ExportTextures)
 	{
+		check(exportResource.pTexture->pResource);
 		RefCountPtr<Texture> pTexture = exportResource.pTexture->Get();
 		pTexture->SetName(exportResource.pTexture->Name);
 		*exportResource.pTarget = pTexture;
@@ -277,6 +294,7 @@ SyncPoint RGGraph::Execute()
 
 	for (ExportedBuffer& exportResource : m_ExportBuffers)
 	{
+		check(exportResource.pBuffer->pResource);
 		RefCountPtr<Buffer> pBuffer = exportResource.pBuffer->Get();
 		pBuffer->SetName(exportResource.pBuffer->Name);
 		*exportResource.pTarget = pBuffer;

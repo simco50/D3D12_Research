@@ -11,8 +11,8 @@ enum class BufferFlag
 	Readback =				1 << 3,
 	ByteAddress =			1 << 4,
 	AccelerationStructure = 1 << 5,
-	NoBindless =			1 << 6,
-	IndirectArguments =		1 << 7,
+	IndirectArguments =		1 << 6,
+	NoBindless =			1 << 7,
 };
 DECLARE_BITMASK_TYPE(BufferFlag)
 

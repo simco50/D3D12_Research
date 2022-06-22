@@ -206,7 +206,7 @@ void CommandContext::Dispatch(uint32 groupCountX, uint32 groupCountY, uint32 gro
 	m_pCommandList->Dispatch(groupCountX, groupCountY, groupCountZ);
 }
 
-void CommandContext::Dispatch(const IntVector3& groupCounts)
+void CommandContext::Dispatch(const Vector3i& groupCounts)
 {
 	Dispatch(groupCounts.x, groupCounts.y, groupCounts.z);
 }
@@ -220,7 +220,7 @@ void CommandContext::DispatchMesh(uint32 groupCountX, uint32 groupCountY /*= 1*/
 	m_pMeshShadingCommandList->DispatchMesh(groupCountX, groupCountY, groupCountZ);
 }
 
-void CommandContext::DispatchMesh(const IntVector3& groupCounts)
+void CommandContext::DispatchMesh(const Vector3i& groupCounts)
 {
 	DispatchMesh(groupCounts.x, groupCounts.y, groupCounts.z);
 }
@@ -232,13 +232,13 @@ void CommandContext::ExecuteIndirect(const CommandSignature* pCommandSignature, 
 	m_pCommandList->ExecuteIndirect(pCommandSignature->GetCommandSignature(), maxCount, pIndirectArguments->GetResource(), argumentsOffset, pCountBuffer ? pCountBuffer->GetResource() : nullptr, countOffset);
 }
 
-void CommandContext::ClearUavUInt(const GraphicsResource* pBuffer, const UnorderedAccessView* pUav, const UIntVector4& values)
+void CommandContext::ClearUavUInt(const GraphicsResource* pBuffer, const UnorderedAccessView* pUav, const uint32* pValues)
 {
 	FlushResourceBarriers();
 	DescriptorHandle gpuHandle = m_ShaderResourceDescriptorAllocator.Allocate(1);
 	GetParent()->GetDevice()->CopyDescriptorsSimple(1, gpuHandle.CpuHandle, pUav->GetDescriptor(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 	uint32 zeros[4] = { 0,0,0,0 };
-	m_pCommandList->ClearUnorderedAccessViewUint(gpuHandle.GpuHandle, pUav->GetDescriptor(), pBuffer->GetResource(), &values.x, 0, nullptr);
+	m_pCommandList->ClearUnorderedAccessViewUint(gpuHandle.GpuHandle, pUav->GetDescriptor(), pBuffer->GetResource(), pValues ? pValues : zeros, 0, nullptr);
 }
 
 void CommandContext::ClearUavFloat(const GraphicsResource* pBuffer, const UnorderedAccessView* pUav, const Vector4& values)

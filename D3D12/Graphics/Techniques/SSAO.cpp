@@ -23,9 +23,9 @@ SSAO::SSAO(GraphicsDevice* pDevice)
 
 void SSAO::Execute(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures)
 {
-	static float g_AoPower = 7;
+	static float g_AoPower = 1.2f;
 	static float g_AoThreshold = 0.0025f;
-	static float g_AoRadius = 0.03f;
+	static float g_AoRadius = 0.3f;
 	static int g_AoSamples = 16;
 
 	if (ImGui::Begin("Parameters"))

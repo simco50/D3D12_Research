@@ -19,75 +19,137 @@ using PackedVector2 = DirectX::PackedVector::XMHALF2;
 using PackedVector3 = DirectX::PackedVector::XMHALF4;
 using PackedVector4 = DirectX::PackedVector::XMHALF4;
 
-template<typename T>
-struct TIntVector2
+#pragma warning(push)
+#pragma warning(disable: 4201) // nonstandard extension used: nameless struct/union
+
+struct Vector2i
 {
-	TIntVector2()
+	union
+	{
+		struct
+		{
+			int32 x, y;
+		};
+		int32 Values[2];
+	};
+
+	Vector2i()
 		: x(0), y(0)
 	{}
-	TIntVector2(T x, T y)
+
+	Vector2i(int32 x, int32 y)
 		: x(x), y(y)
 	{}
-	TIntVector2(T v)
-		: TIntVector2(v, v)
+
+	Vector2i(int32 v)
+		: x(v), y(v)
 	{}
-	TIntVector2(const Vector2& v)
-		: x((T)v.x), y((T)v.y)
+
+	Vector2i(const int32* pData)
+		: x(pData[0]), y(pData[1])
 	{}
-	T x, y;
-	bool operator==(const TIntVector2& rhs) const { return x == rhs.x && y == rhs.y; }
-	bool operator!=(const TIntVector2& rhs) const { return !operator==(rhs); }
+
+	Vector2i(const Vector2& v)
+		: x((int32)v.x), y((int32)v.y)
+	{}
+
+	const int32& operator[](int index) const { return Values[index]; }
+	int32& operator[](int index) { return Values[index]; }
+
+	explicit operator Vector2() const { return Vector2((float)x, (float)y); }
+
+	static Vector2i Zero() { return Vector2i(0, 0); }
+	static Vector2i One() { return Vector2i(1, 1); }
+
+	bool operator==(const Vector2i& rhs) const { return x == rhs.x && y == rhs.y; }
+	bool operator!=(const Vector2i& rhs) const { return !operator==(rhs); }
 };
 
-template<typename T>
-struct TIntVector3
+struct Vector3i
 {
-	TIntVector3()
+	union
+	{
+		struct
+		{
+			int32 x, y, z;
+		};
+		int32 Values[3];
+	};
+
+	Vector3i()
 		: x(0), y(0), z(0)
 	{}
-	TIntVector3(T x, T y, T z)
+
+	Vector3i(int32 x, int32 y, int32 z)
 		: x(x), y(y), z(z)
 	{}
-	TIntVector3(T v)
-		: TIntVector3(v, v, v)
+
+	Vector3i(int32 v)
+		: x(v), y(v), z(v)
 	{}
-	TIntVector3(const Vector3& v)
-		: x((T)v.x), y((T)v.y), z((T)v.z)
+
+	Vector3i(const int32* pData)
+		: x(pData[0]), y(pData[1]), z(pData[2])
 	{}
-	T x, y, z;
-	bool operator==(const TIntVector3& rhs) const { return x == rhs.x && y == rhs.y && z == rhs.z; }
-	bool operator!=(const TIntVector3& rhs) const { return !operator==(rhs); }
+
+	Vector3i(const Vector3& v)
+		: x((int32)v.x), y((int32)v.y), z((int32)v.z)
+	{}
+
+	const int32& operator[](int index) const { return Values[index]; }
+	int32& operator[](int index) { return Values[index]; }
+
+	explicit operator Vector3() const { return Vector3((float)x, (float)y, (float)z); }
+
+	static Vector3i Zero() { return Vector3i(0, 0, 0); }
+	static Vector3i One() { return Vector3i(1, 1, 1); }
+
+	bool operator==(const Vector3i& rhs) const { return x == rhs.x && y == rhs.y && z == rhs.z; }
+	bool operator!=(const Vector3i& rhs) const { return !operator==(rhs); }
 };
 
-template<typename T>
-struct TIntVector4
+struct Vector4i
 {
-	TIntVector4()
+	union
+	{
+		struct
+		{
+			int32 x, y, z, w;
+		};
+		int32 Values[4];
+	};
+
+	Vector4i()
 		: x(0), y(0), z(0), w(0)
 	{}
-	TIntVector4(T x, T y, T z, T w)
+
+	Vector4i(int32 x, int32 y, int32 z, int32 w)
 		: x(x), y(y), z(z), w(w)
 	{}
-	TIntVector4(T v)
-		: TIntVector4(v, v, v, v)
-	{}
-	TIntVector4(const Vector4& v)
-		: x((T)v.x), y((T)v.y), z((T)v.z), w((T)v.w)
-	{}
-	TIntVector4(const TIntVector3<T>& rhs, T w = {})
-		: x(rhs.x), y(rhs.y), z(rhs.z), w(w)
-	{}
-	T x, y, z, w;
-	bool operator==(const TIntVector4& rhs) const { return x == rhs.x && y == rhs.y && z == rhs.z && w == rhs.w; }
-	bool operator!=(const TIntVector4& rhs) const { return !operator==(rhs); }
-};
 
-using IntVector2 = TIntVector2<int32>;
-using IntVector3 = TIntVector3<int32>;
-using IntVector4 = TIntVector4<int32>;
-using UIntVector2 = TIntVector2<uint32>;
-using UIntVector3 = TIntVector3<uint32>;
-using UIntVector4 = TIntVector4<uint32>;
+	Vector4i(int32 v)
+		: x(v), y(v), z(v), w(v)
+	{}
+
+	Vector4i(const int32* pData)
+		: x(pData[0]), y(pData[1]), z(pData[2]), w(pData[3])
+	{}
+
+	Vector4i(const Vector4& v)
+		: x((int32)v.x), y((int32)v.y), z((int32)v.z), w((int32)v.w)
+	{}
+
+	const int32& operator[](int index) const { return Values[index]; }
+	int32& operator[](int index) { return Values[index]; }
+
+	explicit operator Vector4() const { return Vector4((float)x, (float)y, (float)z, (float)w); }
+
+	static Vector4i Zero() { return Vector4i(0, 0, 0, 0); }
+	static Vector4i One() { return Vector4i(1, 1, 1, 1); }
+
+	bool operator==(const Vector4i& rhs) const { return x == rhs.x && y == rhs.y && z == rhs.z && w == rhs.w; }
+	bool operator!=(const Vector4i& rhs) const { return !operator==(rhs); }
+};
 
 template<typename T>
 struct TRect
@@ -140,3 +202,5 @@ struct TRect
 
 using FloatRect = TRect<float>;
 using IntRect = TRect<int>;
+
+#pragma warning(pop)

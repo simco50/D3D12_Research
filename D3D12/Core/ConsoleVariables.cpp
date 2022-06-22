@@ -224,7 +224,7 @@ int ImGuiConsole::InputCallback(ImGuiInputTextCallbackData* pCallbackData)
 
 		if (!m_Suggestions.empty())
 		{
-			m_SuggestionPos = Math::Clamp(m_SuggestionPos, 0, (int)m_Suggestions.size() - 1);
+			m_SuggestionPos = Math::Clamp(m_SuggestionPos, 0, m_Suggestions.size() - 1);
 
 			pCallbackData->DeleteChars((int)(pWordStart - pCallbackData->Buf), (int)(pWordEnd - pWordStart));
 			pCallbackData->InsertChars(pCallbackData->CursorPos, m_Suggestions[m_SuggestionPos]);

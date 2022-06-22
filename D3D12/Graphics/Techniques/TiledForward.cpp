@@ -202,8 +202,8 @@ void TiledForward::VisualizeLightDensity(RGGraph& graph, GraphicsDevice* pDevice
 
 				struct
 				{
-					IntVector2 ClusterDimensions;
-					IntVector2 ClusterSize;
+					Vector2i ClusterDimensions;
+					Vector2i ClusterSize;
 					Vector2 LightGridParams;
 				} constantData;
 

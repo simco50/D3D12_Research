@@ -35,7 +35,7 @@ enum class RenderPath
 class DemoApp
 {
 public:
-	DemoApp(WindowHandle window, const IntVector2& windowRect);
+	DemoApp(WindowHandle window, const Vector2i& windowRect);
 	~DemoApp();
 
 	void Update();

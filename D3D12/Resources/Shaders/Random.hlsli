@@ -78,17 +78,21 @@ float2 HammersleyPoints(uint i, uint N)
 	return float2(float(i) / float(N), VanDerCorpusSequence(i));
 }
 
-//hemisphereSample_uniform. Uniform distribution on the sphere
-float3 HemisphereSampleUniform(float u, float v)
+// Samples a direction within a hemisphere oriented along +Z axis with a *uniform* distribution
+// Source: "On the Importance of Sampling" - Matt Pharr, Ray Tracing Gems
+float3 HemisphereSampleUniform(float2 u, out float pdf)
 {
-	float phi = v * 2.0 * PI;
-	float cosTheta = 1.0 - u;
+	float phi = u.y * 2.0 * PI;
+	float cosTheta = 1.0 - u.x;
 	float sinTheta = sqrt(1.0 - cosTheta * cosTheta);
+
+	pdf = INV_2PI;
+
 	return float3(cos(phi) * sinTheta, sin(phi) * sinTheta, cosTheta);
 }
 
-// Samples a direction within a hemisphere oriented along +Z axis with a cosine-weighted distribution
-// Source: "Sampling Transformations Zoo" in Ray Tracing Gems by Shirley et al.
+// Samples a direction within a hemisphere oriented along +Z axis with a *cosine-weighted* distribution
+// Source: "Sampling Transformations Zoo" - Shirley et al. Ray Tracing Gems
 float3 HemisphereSampleCosineWeight(float2 u, out float pdf)
 {
 	float a = sqrt(u.x);

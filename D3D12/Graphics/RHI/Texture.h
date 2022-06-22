@@ -4,11 +4,10 @@
 enum class TextureFlag
 {
 	None = 0,
-	/*Dynamic		= 1 << 0, UNSUPPORTED */
-	UnorderedAccess = 1 << 1,
-	ShaderResource	= 1 << 2,
-	RenderTarget	= 1 << 3,
-	DepthStencil	= 1 << 4,
+	UnorderedAccess = 1 << 0,
+	ShaderResource	= 1 << 1,
+	RenderTarget	= 1 << 2,
+	DepthStencil	= 1 << 3,
 };
 DECLARE_BITMASK_TYPE(TextureFlag)
 
@@ -102,7 +101,7 @@ struct TextureDesc
 	ClearBinding ClearBindingValue;
 	TextureDimension Dimensions;
 
-	IntVector3 Size() const { return IntVector3(Width, Height, DepthOrArraySize); }
+	Vector3i Size() const { return Vector3i(Width, Height, DepthOrArraySize); }
 
 	static TextureDesc CreateCube(uint32 width, uint32 height, DXGI_FORMAT format, TextureFlag flags = TextureFlag::None, uint32 sampleCount = 1, uint32 mips = 1)
 	{
@@ -233,7 +232,7 @@ public:
 	uint32 GetDepth() const { return m_Desc.DepthOrArraySize; }
 	uint32 GetArraySize() const { return m_Desc.DepthOrArraySize; }
 	uint32 GetMipLevels() const { return m_Desc.Mips; }
-	IntVector3 GetSize() const { return m_Desc.Size(); }
+	Vector3i GetSize() const { return m_Desc.Size(); }
 	DXGI_FORMAT GetFormat() const { return m_Desc.Format; }
 	const ClearBinding& GetClearBinding() const { return m_Desc.ClearBindingValue; }
 	const TextureDesc& GetDesc() const { return m_Desc; }
@@ -242,7 +241,6 @@ public:
 	D3D12_CPU_DESCRIPTOR_HANDLE GetDSV(bool writeable = true) const;
 
 private:
-
 	TextureDesc m_Desc;
 
 	D3D12_CPU_DESCRIPTOR_HANDLE m_Rtv = {};

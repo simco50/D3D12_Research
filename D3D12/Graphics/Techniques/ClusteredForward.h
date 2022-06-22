@@ -13,7 +13,7 @@ struct SceneTextures;
 
 struct ClusteredLightCullData
 {
-	IntVector3 ClusterCount;
+	Vector3i ClusterCount;
 	RGBuffer* pAABBs;
 	RGBuffer* pLightIndexGrid;
 	RGBuffer* pLightGrid;

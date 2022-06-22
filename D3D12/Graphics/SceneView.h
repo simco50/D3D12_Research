@@ -19,7 +19,7 @@ struct DDGIVolume
 {
 	Vector3 Origin;
 	Vector3 Extents;
-	IntVector3 NumProbes;
+	Vector3i NumProbes;
 	int32 MaxNumRays;
 	int32 NumRays;
 	RefCountPtr<Texture> pIrradianceHistory;
@@ -108,7 +108,7 @@ struct SceneView
 	Vector4 ShadowCascadeDepths;
 	uint32 NumShadowCascades;
 
-	IntVector2 GetDimensions() const;
+	Vector2i GetDimensions() const;
 };
 
 struct SceneTextures

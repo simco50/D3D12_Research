@@ -16,14 +16,19 @@ namespace Colors
 
 namespace Math
 {
-	constexpr float PI = 3.141592654f;
-	constexpr float INVPI = 0.318309886f;
-	constexpr float INV2PI = 0.159154943f;
-	constexpr float PIDIV2 = 1.570796327f;
-	constexpr float PIDIV4 = 0.785398163f;
+	constexpr float PI = 3.14159265358979323846f;
+	constexpr float INV_PI = 0.31830988618379067154f;
+	constexpr float INV_2PI = 0.15915494309189533577f;
+	constexpr float INV_4PI = 0.07957747154594766788f;
+	constexpr float PI_DIV_2 = 1.57079632679489661923f;
+	constexpr float PI_DIV_4 = 0.78539816339744830961f;
+	constexpr float SQRT_2 = 1.41421356237309504880f;
 
 	constexpr float RadiansToDegrees = 180.0f / PI;
 	constexpr float DegreesToRadians = PI / 180.0f;
+
+	inline constexpr float Radians(float degrees) { return degrees * DegreesToRadians; }
+	inline constexpr float Degrees(float radians) { return radians * RadiansToDegrees; }
 
 	constexpr float BytesToKiloBytes = 1.0f / (1 << 10);
 	constexpr float BytesToMegaBytes = 1.0f / (1 << 20);
@@ -66,13 +71,13 @@ namespace Math
 
 	int RandomRange(int min, int max);
 
-	template<typename T>
-	constexpr T Clamp(const T value, const T low, const T high)
+	template<typename T, typename U, typename V>
+	constexpr T Clamp(const T value, const U low, const V high)
 	{
 		if (value > high)
-			return high;
+			return (T)high;
 		else if (value < low)
-			return low;
+			return (T)low;
 		return value;
 	}
 

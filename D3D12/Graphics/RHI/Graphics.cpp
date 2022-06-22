@@ -1350,8 +1350,8 @@ bool SwapChain::DisplaySupportsHDR() const
 	return false;
 }
 
-IntVector2 SwapChain::GetViewport() const
+Vector2i SwapChain::GetViewport() const
 {
 	Texture* pTexture = GetBackBuffer();
-	return IntVector2(pTexture->GetWidth(), pTexture->GetHeight());
+	return Vector2i(pTexture->GetWidth(), pTexture->GetHeight());
 }

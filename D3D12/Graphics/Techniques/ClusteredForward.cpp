@@ -218,12 +218,12 @@ void ClusteredForward::ComputeLightCulling(RGGraph& graph, const SceneView* pVie
 
 				struct
 				{
-					IntVector4 ClusterDimensions;
-					IntVector2 ClusterSize;
+					Vector4i ClusterDimensions;
+					Vector2i ClusterSize;
 				} constantBuffer;
 
-				constantBuffer.ClusterSize = IntVector2(gLightClusterTexelSize, gLightClusterTexelSize);
-				constantBuffer.ClusterDimensions = IntVector4(cullData.ClusterCount.x, cullData.ClusterCount.y, cullData.ClusterCount.z, 0);
+				constantBuffer.ClusterSize = Vector2i(gLightClusterTexelSize, gLightClusterTexelSize);
+				constantBuffer.ClusterDimensions = Vector4i(cullData.ClusterCount.x, cullData.ClusterCount.y, cullData.ClusterCount.z, 0);
 
 				context.SetRootCBV(0, constantBuffer);
 				context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
@@ -258,7 +258,7 @@ void ClusteredForward::ComputeLightCulling(RGGraph& graph, const SceneView* pVie
 
 				struct
 				{
-					IntVector3 ClusterDimensions;
+					Vector3i ClusterDimensions;
 				} constantBuffer;
 
 				constantBuffer.ClusterDimensions = cullData.ClusterCount;
@@ -337,21 +337,21 @@ RGTexture* ClusteredForward::RenderVolumetricFog(RGGraph& graph, const SceneView
 
 	struct
 	{
-		IntVector3 ClusterDimensions;
+		Vector3i ClusterDimensions;
 		float Jitter;
 		Vector3 InvClusterDimensions;
 		float LightClusterSizeFactor;
 		Vector2 LightGridParams;
-		IntVector2 LightClusterDimensions;
+		Vector2i LightClusterDimensions;
 	} constantBuffer;
 
-	constantBuffer.ClusterDimensions = IntVector3(volumeDesc.Width, volumeDesc.Height, volumeDesc.DepthOrArraySize);
+	constantBuffer.ClusterDimensions = Vector3i(volumeDesc.Width, volumeDesc.Height, volumeDesc.DepthOrArraySize);
 	constantBuffer.InvClusterDimensions = Vector3(1.0f / volumeDesc.Width, 1.0f / volumeDesc.Height, 1.0f / volumeDesc.DepthOrArraySize);
 	constexpr Math::HaltonSequence<32, 2> halton;
 	constantBuffer.Jitter = halton[pView->FrameIndex & 31];
 	constantBuffer.LightClusterSizeFactor = (float)gVolumetricFroxelTexelSize / gLightClusterTexelSize;
 	constantBuffer.LightGridParams = lightCullData.LightGridParams;
-	constantBuffer.LightClusterDimensions = IntVector2(lightCullData.ClusterCount.x, lightCullData.ClusterCount.y);
+	constantBuffer.LightClusterDimensions = Vector2i(lightCullData.ClusterCount.x, lightCullData.ClusterCount.y);
 
 	graph.AddPass("Inject Volume Lights", RGPassFlag::Compute)
 		.Read({ pSourceVolume, lightCullData.pLightGrid, lightCullData.pLightIndexGrid })
@@ -441,13 +441,13 @@ void ClusteredForward::RenderBasePass(RGGraph& graph, const SceneView* pView, Sc
 
 				struct
 				{
-					IntVector4 ClusterDimensions;
-					IntVector2 ClusterSize;
+					Vector4i ClusterDimensions;
+					Vector2i ClusterSize;
 					Vector2 LightGridParams;
 				} frameData;
 
-				frameData.ClusterDimensions = lightCullData.ClusterCount;
-				frameData.ClusterSize = IntVector2(gLightClusterTexelSize, gLightClusterTexelSize);
+				frameData.ClusterDimensions = Vector4i(lightCullData.ClusterCount.x, lightCullData.ClusterCount.y, lightCullData.ClusterCount.z, 0);
+				frameData.ClusterSize = Vector2i(gLightClusterTexelSize, gLightClusterTexelSize);
 				frameData.LightGridParams = lightCullData.LightGridParams;
 
 				context.SetRootCBV(1, frameData);
@@ -498,13 +498,13 @@ void ClusteredForward::VisualizeLightDensity(RGGraph& graph, const SceneView* pV
 
 				struct
 				{
-					IntVector2 ClusterDimensions;
-					IntVector2 ClusterSize;
+					Vector2i ClusterDimensions;
+					Vector2i ClusterSize;
 					Vector2 LightGridParams;
 				} constantBuffer;
 
-				constantBuffer.ClusterDimensions = IntVector2(m_LightCullData.ClusterCount.x, m_LightCullData.ClusterCount.y);
-				constantBuffer.ClusterSize = IntVector2(gLightClusterTexelSize, gLightClusterTexelSize);
+				constantBuffer.ClusterDimensions = Vector2i(m_LightCullData.ClusterCount.x, m_LightCullData.ClusterCount.y);
+				constantBuffer.ClusterSize = Vector2i(gLightClusterTexelSize, gLightClusterTexelSize);
 				constantBuffer.LightGridParams = lightGridParams;
 
 				context.SetPipelineState(m_pVisualizeLightsPSO);

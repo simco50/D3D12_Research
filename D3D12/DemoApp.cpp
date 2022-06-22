@@ -160,7 +160,7 @@ namespace Tweakables
 	float g_SunIntensity = 5.0f;
 }
 
-DemoApp::DemoApp(WindowHandle window, const IntVector2& windowRect)
+DemoApp::DemoApp(WindowHandle window, const Vector2i& windowRect)
 	: m_Window(window)
 {
 	m_pCamera = std::make_unique<FreeCamera>();
@@ -225,17 +225,17 @@ DemoApp::~DemoApp()
 void DemoApp::SetupScene(CommandContext& context)
 {
 	m_pCamera->SetPosition(Vector3(-1.3f, 2.4f, -1.5f));
-	m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(Math::PIDIV4, Math::PIDIV4 * 0.5f, 0));
+	m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(Math::PI_DIV_4, Math::PI_DIV_4 * 0.5f, 0));
 
 	{
 #if 1
 		m_pCamera->SetPosition(Vector3(-1.3f, 2.4f, -1.5f));
-		m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(Math::PIDIV4, Math::PIDIV4 * 0.5f, 0));
+		m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(Math::PI_DIV_4, Math::PI_DIV_4 * 0.5f, 0));
 
 		LoadMesh("Resources/Scenes/Sponza/Sponza.gltf", context, m_World);
 #elif 1
 		m_pCamera->SetPosition(Vector3(-1.3f, 2.4f, -1.5f));
-		m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(Math::PIDIV4, Math::PIDIV4 * 0.5f, 0));
+		m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(Math::PI_DIV_4, Math::PI_DIV_4 * 0.5f, 0));
 
 		LoadMesh("C:/Users/simon.coenen/Downloads/Sponza_New/Processed/Main/NewSponza_Main_Blender_glTF.gltf", context, m_World);
 		LoadMesh("C:/Users/simon.coenen/Downloads/Sponza_New/Processed/PKG_A_Curtains/NewSponza_Curtains_glTF.gltf", context, m_World);
@@ -303,7 +303,7 @@ void DemoApp::SetupScene(CommandContext& context)
 	DDGIVolume volume;
 	volume.Origin = Vector3(-0.484151840f, 5.21196413f, 0.309524536f);
 	volume.Extents = Vector3(14.8834171f, 6.22350454f, 9.15293312f);
-	volume.NumProbes = IntVector3(16, 12, 14);
+	volume.NumProbes = Vector3i(16, 12, 14);
 	volume.NumRays = 128;
 	volume.MaxNumRays = 512;
 	m_World.DDGIVolumes.push_back(volume);
@@ -347,8 +347,8 @@ void DemoApp::Update()
 
 	float costheta = cosf(Tweakables::g_SunOrientation);
 	float sintheta = sinf(Tweakables::g_SunOrientation);
-	float cosphi = cosf(Tweakables::g_SunInclination * Math::PIDIV2);
-	float sinphi = sinf(Tweakables::g_SunInclination * Math::PIDIV2);
+	float cosphi = cosf(Tweakables::g_SunInclination * Math::PI_DIV_2);
+	float sinphi = sinf(Tweakables::g_SunInclination * Math::PI_DIV_2);
 	m_World.Lights[0].Direction = -Vector3(costheta * cosphi, sinphi, sintheta * cosphi);
 	m_World.Lights[0].Colour = Math::MakeFromColorTemperature(Tweakables::g_SunTemperature);
 	m_World.Lights[0].Intensity = Tweakables::g_SunIntensity;
@@ -468,7 +468,7 @@ void DemoApp::Update()
 	RGGraph graph(m_pDevice, *m_RenderGraphPool);
 	SceneTextures sceneTextures;
 
-	IntVector2 viewDimensions = m_SceneData.GetDimensions();
+	Vector2i viewDimensions = m_SceneData.GetDimensions();
 	sceneTextures.pPreviousColor =		RGUtils::CreatePersistentTexture(graph, "Color History", TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, DXGI_FORMAT_R16G16B16A16_FLOAT), &m_pColorHistory, true);
 	sceneTextures.pVisibilityBuffer =	graph.CreateTexture("Visibility Buffer",	TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, DXGI_FORMAT_R32_UINT));
 	sceneTextures.pRoughness =			graph.CreateTexture("Roughness",			TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, DXGI_FORMAT_R8_UNORM));
@@ -594,19 +594,19 @@ void DemoApp::Update()
 		// Must match with shader!
 		constexpr uint32 probeIrradianceTexels = 6;
 		constexpr uint32 probeDepthTexel = 14;
-		auto ProbeTextureDimensions = [](const IntVector3& numProbes, uint32 texelsPerProbe) {
+		auto ProbeTextureDimensions = [](const Vector3i& numProbes, uint32 texelsPerProbe) {
 			uint32 width = (1 + texelsPerProbe + 1) * numProbes.y * numProbes.x;
 			uint32 height = (1 + texelsPerProbe + 1) * numProbes.z;
-			return IntVector2(width, height);
+			return Vector2i(width, height);
 		};
 
-		IntVector2 ddgiIrradianceDimensions = ProbeTextureDimensions(ddgi.NumProbes, probeIrradianceTexels);
+		Vector2i ddgiIrradianceDimensions = ProbeTextureDimensions(ddgi.NumProbes, probeIrradianceTexels);
 		TextureDesc ddgiIrradianceDesc = TextureDesc::Create2D(ddgiIrradianceDimensions.x, ddgiIrradianceDimensions.y, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::UnorderedAccess);
 		RGTexture* pIrradianceTarget = graph.CreateTexture("DDGI Irradiance Target", ddgiIrradianceDesc);
 		RGTexture* pIrradianceHistory = RGUtils::CreatePersistentTexture(graph, "DDGI Irradiance History", ddgiIrradianceDesc, &ddgi.pIrradianceHistory, false);
 		graph.ExportTexture(pIrradianceTarget, &ddgi.pIrradianceHistory);
 
-		IntVector2 ddgiDepthDimensions = ProbeTextureDimensions(ddgi.NumProbes, probeDepthTexel);
+		Vector2i ddgiDepthDimensions = ProbeTextureDimensions(ddgi.NumProbes, probeDepthTexel);
 		TextureDesc ddgiDepthDesc = TextureDesc::Create2D(ddgiDepthDimensions.x, ddgiDepthDimensions.y, DXGI_FORMAT_R16G16_FLOAT, TextureFlag::UnorderedAccess);
 		RGTexture* pDepthTarget = graph.CreateTexture("DDGI Depth Target", ddgiDepthDesc);
 		RGTexture* pDepthHistory = RGUtils::CreatePersistentTexture(graph, "DDGI Depth History", ddgiDepthDesc, &ddgi.pDepthHistory, false);
@@ -893,7 +893,7 @@ void DemoApp::Update()
 	{
 		RG_GRAPH_SCOPE("Depth Reduce", graph);
 
-		IntVector3 depthSize = sceneTextures.pDepth->GetDesc().Size();
+		Vector3i depthSize = sceneTextures.pDepth->GetDesc().Size();
 		depthSize.x = Math::DivideAndRoundUp(depthSize.x, 16);
 		depthSize.y = Math::DivideAndRoundUp(depthSize.y, 16);
 		RGTexture* pReductionTarget = graph.CreateTexture("Depth Reduction Target", TextureDesc::Create2D(depthSize.x, depthSize.y, DXGI_FORMAT_R32G32_FLOAT));
@@ -970,7 +970,7 @@ void DemoApp::Update()
 
 					struct
 					{
-						IntVector2 TargetDimensions;
+						Vector2i TargetDimensions;
 						Vector2 TargetDimensionsInv;
 					} parameters;
 					parameters.TargetDimensions.x = pTarget->GetWidth();
@@ -1133,7 +1133,7 @@ void DemoApp::Update()
 								context.BindResources(2, pUAV.Get());
 								context.BindResources(3, pSource->Get()->GetSRV());
 
-								IntVector3 numThreadGroups = direction == 0 ?
+								Vector3i numThreadGroups = direction == 0 ?
 									ComputeUtils::GetNumThreadGroups(width, 1, height, ThreadGroupSize) :
 									ComputeUtils::GetNumThreadGroups(width, ThreadGroupSize, height, 1);
 								context.Dispatch(numThreadGroups);
@@ -2043,7 +2043,7 @@ void DemoApp::CreateShadowViews(SceneView& view, World& world)
 				Math::CreateLookToMatrix(light.Position, Vector3::Backward, Vector3::Up),
 				Math::CreateLookToMatrix(light.Position, Vector3::Forward, Vector3::Up),
 			};
-			Matrix projection = Math::CreatePerspectiveMatrix(Math::PIDIV2, 1, light.Range, 1.0f);
+			Matrix projection = Math::CreatePerspectiveMatrix(Math::PI_DIV_2, 1, light.Range, 1.0f);
 
 			for (int i = 0; i < 6; ++i)
 			{

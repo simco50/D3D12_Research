@@ -22,17 +22,6 @@ float3x3 TangentMatrix(float3 z)
     return float3x3(x, y, z);
 }
 
-float3 RandomCosineWeightedRay(float3 n, inout uint seed)
-{
-	float2 r = float2(Random01(seed), Random01(seed));
-    float2 rand_sample = max(0.00001f, r);
-    float phi = 2.0f * PI * rand_sample.y;
-    float cos_theta = sqrt(rand_sample.x);
-    float sin_theta = sqrt(1 - rand_sample.x);
-    float3 t = float3(sin_theta * cos(phi), sin_theta * sin(phi), cos_theta);
-    return normalize(mul(t, TangentMatrix(n)));
-}
-
 [shader("raygeneration")]
 void RayGen()
 {
@@ -46,13 +35,20 @@ void RayGen()
 	float3 normal = NormalFromDepth(tSceneDepth, sLinearClamp, uv, dimInv, cView.ProjectionInverse);
 	normal = mul(normal, (float3x3)cView.ViewInverse);
 
-	uint randSeed = SeedThread(launchIndex, launchDim, cView.FrameIndex);
+	uint seed = SeedThread(launchIndex, launchDim, cView.FrameIndex);
+
+	const float3x3 tangentM = TangentMatrix(normal);
+
+	// Diffuse reflections integral is over (1 / PI) * Li * NdotL
+	// We sample a cosine weighted distribution over the hemisphere which has a PDF which conveniently cancels out the inverse PI and NdotL terms.
 
 	uint numSamples = cPass.Samples;
 	float accumulatedAo = 0.0f;
 	for(int i = 0; i < numSamples; ++i)
 	{
-		float3 randomDirection = RandomCosineWeightedRay(normal.xyz, randSeed);
+		float2 u = float2(Random01(seed), Random01(seed));
+		float pdf;
+		float3 randomDirection = mul(HemisphereSampleCosineWeight(u, pdf), tangentM);
 
 		RayDesc ray;
 		ray.Origin = world;
@@ -60,10 +56,10 @@ void RayGen()
 		ray.TMin = RAY_BIAS;
 		ray.TMax = cPass.Radius;
 		RaytracingAccelerationStructure tlas = ResourceDescriptorHeap[cView.TLASIndex];
-		float hit = !TraceOcclusionRay(ray, tlas);
+		float hit = TraceOcclusionRay(ray, tlas);
 
 		accumulatedAo += hit;
 	}
 	accumulatedAo /= numSamples;
-	uOutput[launchIndex] = 1 - accumulatedAo * cPass.Power;
+	uOutput[launchIndex] = 1 - (saturate(1 - accumulatedAo) * cPass.Power);
 }
