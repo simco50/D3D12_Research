@@ -1,3 +1,5 @@
+// Copyright (c) Microsoft Corporation. All rights reserved.
+
 /*==========================================================================;
 *
 *  Copyright (C) Microsoft Corporation.  All Rights Reserved.

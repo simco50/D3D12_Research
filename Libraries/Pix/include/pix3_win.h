@@ -1,3 +1,5 @@
+// Copyright (c) Microsoft Corporation. All rights reserved.
+
 /*==========================================================================;
  *
  *  Copyright (C) Microsoft Corporation.  All Rights Reserved.
@@ -42,8 +44,16 @@ __forceinline UINT64 PIXGetTimestampCounter()
 {
     LARGE_INTEGER time = {};
     QueryPerformanceCounter(&time);
-    return time.QuadPart;
+    return static_cast<UINT64>(time.QuadPart);
 }
+
+enum PIXHUDOptions
+{
+    PIX_HUD_SHOW_ON_ALL_WINDOWS = 0x1,
+    PIX_HUD_SHOW_ON_TARGET_WINDOW_ONLY = 0x2,
+    PIX_HUD_SHOW_ON_NO_WINDOWS = 0x4
+};
+DEFINE_ENUM_FLAG_OPERATORS(PIXHUDOptions);
 
 #if defined(USE_PIX_SUPPORTED_ARCHITECTURE) && defined(USE_PIX)
 
@@ -214,25 +224,59 @@ extern "C"  __forceinline HRESULT WINAPI PIXEndCapture(BOOL discard)
     return fn();
 }
 
+__forceinline HRESULT WINAPI PIXForceD3D11On12()
+{
+    typedef HRESULT (WINAPI* ForceD3D11On12Fn)(void);
+
+    auto fn = (ForceD3D11On12Fn)PixImpl::GetFunctionPtr("ForceD3D11On12");
+    if (fn == NULL)
+    {
+        return HRESULT_FROM_WIN32(GetLastError());
+    }
+
+    return fn();
+}
+
+__forceinline HRESULT WINAPI PIXSetHUDOptions(PIXHUDOptions hudOptions)
+{
+    typedef HRESULT(WINAPI* SetHUDOptionsFn)(PIXHUDOptions);
+
+    auto fn = (SetHUDOptionsFn)PixImpl::GetFunctionPtr("SetHUDOptions");
+    if (fn == NULL)
+    {
+        return HRESULT_FROM_WIN32(GetLastError());
+    }
+
+    return fn(hudOptions);
+}
+
 #else
 __forceinline HMODULE PIXLoadLatestWinPixGpuCapturerLibrary()
 {
     return nullptr;
 }
-__forceinline HRESULT WINAPI PIXSetTargetWindow(HWND hwnd)
+__forceinline HRESULT WINAPI PIXSetTargetWindow(HWND)
 {
     return E_NOTIMPL;
 }
 
-__forceinline HRESULT WINAPI PIXGpuCaptureNextFrames(PCWSTR fileName, UINT32 numFrames)
+__forceinline HRESULT WINAPI PIXGpuCaptureNextFrames(PCWSTR, UINT32)
 {
     return E_NOTIMPL;
 }
-extern "C"  __forceinline HRESULT WINAPI PIXBeginCapture2(DWORD captureFlags, _In_opt_ const PPIXCaptureParameters captureParameters)
+extern "C"  __forceinline HRESULT WINAPI PIXBeginCapture2(DWORD, _In_opt_ const PPIXCaptureParameters)
 {
     return E_NOTIMPL;
 }
-extern "C"  __forceinline HRESULT WINAPI PIXEndCapture(BOOL discard)
+extern "C"  __forceinline HRESULT WINAPI PIXEndCapture(BOOL)
+{
+    return E_NOTIMPL;
+}
+__forceinline HRESULT WINAPI PIXForceD3D11On12()
+{
+    return E_NOTIMPL;
+}
+__forceinline HRESULT WINAPI PIXSetHUDOptions(PIXHUDOptions)
 {
     return E_NOTIMPL;
 }
