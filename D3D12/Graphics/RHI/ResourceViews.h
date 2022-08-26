@@ -36,15 +36,17 @@ struct BufferSRVDesc
 
 struct TextureSRVDesc
 {
-	TextureSRVDesc(uint8 mipLevel = 0)
-		: MipLevel(mipLevel)
+	TextureSRVDesc(uint8 mipLevel, uint8 numMipLevels)
+		: MipLevel(mipLevel), NumMipLevels(numMipLevels)
 	{}
 
 	uint8 MipLevel;
+	uint8 NumMipLevels;
 
 	bool operator==(const TextureSRVDesc& other) const
 	{
-		return MipLevel == other.MipLevel;
+		return MipLevel == other.MipLevel &&
+			NumMipLevels == other.NumMipLevels;
 	}
 };
 

@@ -35,6 +35,7 @@ RGPass& RGPass::Write(Span<RGResource*> resources)
 
 RGPass& RGPass::RenderTarget(RGTexture* pResource, RenderTargetLoadAction loadAccess, RGTexture* pResolveTarget)
 {
+	check(EnumHasAllFlags(Flags, RGPassFlag::Raster));
 	AddAccess(pResource, D3D12_RESOURCE_STATE_RENDER_TARGET);
 	if(pResolveTarget && pResolveTarget != pResource)
 		AddAccess(pResolveTarget, D3D12_RESOURCE_STATE_RESOLVE_DEST);
@@ -44,6 +45,7 @@ RGPass& RGPass::RenderTarget(RGTexture* pResource, RenderTargetLoadAction loadAc
 
 RGPass& RGPass::DepthStencil(RGTexture* pResource, RenderTargetLoadAction depthAccess, bool writeDepth, RenderTargetLoadAction stencilAccess)
 {
+	check(EnumHasAllFlags(Flags, RGPassFlag::Raster));
 	checkf(!DepthStencilTarget.pResource, "Depth Target already assigned");
 	AddAccess(pResource, writeDepth ? D3D12_RESOURCE_STATE_DEPTH_WRITE : D3D12_RESOURCE_STATE_DEPTH_READ);
 	DepthStencilTarget = { pResource, depthAccess, stencilAccess, writeDepth };

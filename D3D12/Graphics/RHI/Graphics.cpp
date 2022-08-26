@@ -601,7 +601,7 @@ RefCountPtr<Texture> GraphicsDevice::CreateTexture(const TextureDesc& desc, cons
 
 	if (EnumHasAnyFlags(desc.Usage, TextureFlag::ShaderResource))
 	{
-		pTexture->m_pSrv = CreateSRV(pTexture, TextureSRVDesc(0));
+		pTexture->m_pSrv = CreateSRV(pTexture, TextureSRVDesc(0, (uint8)pTexture->GetMipLevels()));
 	}
 	if (EnumHasAnyFlags(desc.Usage, TextureFlag::UnorderedAccess))
 	{
@@ -718,7 +718,7 @@ RefCountPtr<Texture> GraphicsDevice::CreateTextureForSwapchain(ID3D12Resource* p
 
 	pTexture->m_Rtv = GetParent()->AllocateDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 	GetParent()->GetDevice()->CreateRenderTargetView(pSwapchainResource, nullptr, pTexture->m_Rtv);
-	pTexture->m_pSrv = CreateSRV(pTexture, TextureSRVDesc(0));
+	pTexture->m_pSrv = CreateSRV(pTexture, TextureSRVDesc(0, 1));
 	return pTexture;
 }
 
@@ -926,29 +926,29 @@ RefCountPtr<ShaderResourceView> GraphicsDevice::CreateSRV(Texture* pTexture, con
 	switch (textureDesc.Dimensions)
 	{
 	case TextureDimension::Texture1D:
-		srvDesc.Texture1D.MipLevels = textureDesc.Mips;
-		srvDesc.Texture1D.MostDetailedMip = 0;
+		srvDesc.Texture1D.MipLevels = desc.NumMipLevels;
+		srvDesc.Texture1D.MostDetailedMip = desc.MipLevel;
 		srvDesc.Texture1D.ResourceMinLODClamp = 0;
 		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE1D;
 		break;
 	case TextureDimension::Texture1DArray:
 		srvDesc.Texture1DArray.ArraySize = textureDesc.DepthOrArraySize;
 		srvDesc.Texture1DArray.FirstArraySlice = 0;
-		srvDesc.Texture1DArray.MipLevels = textureDesc.Mips;
-		srvDesc.Texture1DArray.MostDetailedMip = 0;
+		srvDesc.Texture1DArray.MipLevels = desc.NumMipLevels;
+		srvDesc.Texture1DArray.MostDetailedMip = desc.MipLevel;
 		srvDesc.Texture1DArray.ResourceMinLODClamp = 0;
 		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE1DARRAY;
 		break;
 	case TextureDimension::Texture2D:
-		srvDesc.Texture2D.MipLevels = textureDesc.Mips;
-		srvDesc.Texture2D.MostDetailedMip = 0;
+		srvDesc.Texture2D.MipLevels = desc.NumMipLevels;
+		srvDesc.Texture2D.MostDetailedMip = desc.MipLevel;
 		srvDesc.Texture2D.PlaneSlice = 0;
 		srvDesc.Texture2D.ResourceMinLODClamp = 0;
 		srvDesc.ViewDimension = textureDesc.SampleCount > 1 ? D3D12_SRV_DIMENSION_TEXTURE2DMS : D3D12_SRV_DIMENSION_TEXTURE2D;
 		break;
 	case TextureDimension::Texture2DArray:
-		srvDesc.Texture2DArray.MipLevels = textureDesc.Mips;
-		srvDesc.Texture2DArray.MostDetailedMip = 0;
+		srvDesc.Texture2DArray.MipLevels = desc.NumMipLevels;
+		srvDesc.Texture2DArray.MostDetailedMip = desc.MipLevel;
 		srvDesc.Texture2DArray.PlaneSlice = 0;
 		srvDesc.Texture2DArray.ResourceMinLODClamp = 0;
 		srvDesc.Texture2DArray.ArraySize = textureDesc.DepthOrArraySize;
@@ -956,20 +956,20 @@ RefCountPtr<ShaderResourceView> GraphicsDevice::CreateSRV(Texture* pTexture, con
 		srvDesc.ViewDimension = textureDesc.SampleCount > 1 ? D3D12_SRV_DIMENSION_TEXTURE2DMSARRAY : D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
 		break;
 	case TextureDimension::Texture3D:
-		srvDesc.Texture3D.MipLevels = textureDesc.Mips;
-		srvDesc.Texture3D.MostDetailedMip = 0;
+		srvDesc.Texture3D.MipLevels = desc.NumMipLevels;
+		srvDesc.Texture3D.MostDetailedMip = desc.MipLevel;
 		srvDesc.Texture3D.ResourceMinLODClamp = 0;
 		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE3D;
 		break;
 	case TextureDimension::TextureCube:
-		srvDesc.TextureCube.MipLevels = textureDesc.Mips;
-		srvDesc.TextureCube.MostDetailedMip = 0;
+		srvDesc.TextureCube.MipLevels = desc.NumMipLevels;
+		srvDesc.TextureCube.MostDetailedMip = desc.MipLevel;
 		srvDesc.TextureCube.ResourceMinLODClamp = 0;
 		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
 		break;
 	case TextureDimension::TextureCubeArray:
-		srvDesc.TextureCubeArray.MipLevels = textureDesc.Mips;
-		srvDesc.TextureCubeArray.MostDetailedMip = 0;
+		srvDesc.TextureCubeArray.MipLevels = desc.NumMipLevels;
+		srvDesc.TextureCubeArray.MostDetailedMip = desc.MipLevel;
 		srvDesc.TextureCubeArray.ResourceMinLODClamp = 0;
 		srvDesc.TextureCubeArray.First2DArrayFace = 0;
 		srvDesc.TextureCubeArray.NumCubes = textureDesc.DepthOrArraySize;
