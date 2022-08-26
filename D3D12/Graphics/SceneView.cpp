@@ -279,7 +279,7 @@ namespace GraphicsCommon
 			RefCountPtr<Texture> pTexture = pDevice->CreateTexture(desc, pName);
 			D3D12_SUBRESOURCE_DATA data;
 			data.pData = pData;
-			data.RowPitch = GetFormatRowByteSize(desc.Format, desc.Width);
+			data.RowPitch = GetFormatByteSize(desc.Format, desc.Width);
 			data.SlicePitch = data.RowPitch * desc.Width;
 			context.InsertResourceBarrier(pTexture, D3D12_RESOURCE_STATE_COPY_DEST);
 			context.FlushResourceBarriers();

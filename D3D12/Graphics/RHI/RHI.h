@@ -92,10 +92,7 @@ struct FormatInfo
 	uint8 BytesPerBlock;
 	uint8 BlockSize;
 	FormatType Type;
-	bool RedChannel : 1;
-	bool GreenChannel : 1;
-	bool BlueChannel : 1;
-	bool AlphaChannel : 1;
+	uint32 NumComponents;
 	bool IsDepth : 1;
 	bool IsStencil : 1;
 	bool IsSigned : 1;
@@ -104,43 +101,6 @@ struct FormatInfo
 };
 
 const FormatInfo& GetFormatInfo(ResourceFormat format);
-const uint32 GetFormatRowByteSize(ResourceFormat format, uint32 width);
-
-inline constexpr ResourceFormat SRVFormatFromDepth(ResourceFormat format)
-{
-	switch (format)
-	{
-		// 32-bit Z w/ Stencil
-	case ResourceFormat::D32S8:
-	case ResourceFormat::X32G8_UINT:
-		return ResourceFormat::R32_FLOAT;
-		// No Stencil
-	case ResourceFormat::D32_FLOAT:
-	case ResourceFormat::R32_FLOAT:
-		return ResourceFormat::R32_FLOAT;
-		// 24-bit Z
-	case ResourceFormat::D24S8:
-	case ResourceFormat::X24G8_UINT:
-		return ResourceFormat::D24S8;
-		// 16-bit Z w/o Stencil
-	case ResourceFormat::D16_UNORM:
-	case ResourceFormat::R16_UNORM:
-		return ResourceFormat::R16_UNORM;
-	default:
-		return format;
-	}
-}
-
-
-inline constexpr ResourceFormat DSVFormat(ResourceFormat format)
-{
-	switch (format)
-	{
-	case ResourceFormat::R32_FLOAT:
-		return ResourceFormat::D32_FLOAT;
-	case ResourceFormat::R16_UNORM:
-		return ResourceFormat::D16_UNORM;
-	default:
-		return format;
-	}
-}
+const uint32 GetFormatByteSize(ResourceFormat format, uint32 width, uint32 height = 1, uint32 depth = 1);
+ResourceFormat SRVFormatFromDepth(ResourceFormat format);
+ResourceFormat DSVFormat(ResourceFormat format);
