@@ -85,7 +85,7 @@ struct TextureDesc
 		DepthOrArraySize(1),
 		Mips(1), 
 		SampleCount(1), 
-		Format(DXGI_FORMAT_UNKNOWN), 
+		Format(ResourceFormat::Unknown), 
 		Usage(TextureFlag::None),
 		ClearBindingValue(ClearBinding()),
 		Dimensions(TextureDimension::Texture2D)
@@ -96,14 +96,14 @@ struct TextureDesc
 	uint32 DepthOrArraySize;
 	uint32 Mips;
 	uint32 SampleCount;
-	DXGI_FORMAT Format;
+	ResourceFormat Format;
 	TextureFlag Usage;
 	ClearBinding ClearBindingValue;
 	TextureDimension Dimensions;
 
 	Vector3i Size() const { return Vector3i(Width, Height, DepthOrArraySize); }
 
-	static TextureDesc CreateCube(uint32 width, uint32 height, DXGI_FORMAT format, TextureFlag flags = TextureFlag::None, uint32 sampleCount = 1, uint32 mips = 1)
+	static TextureDesc CreateCube(uint32 width, uint32 height, ResourceFormat format, TextureFlag flags = TextureFlag::None, uint32 sampleCount = 1, uint32 mips = 1)
 	{
 		check(width);
 		check(height);
@@ -120,7 +120,7 @@ struct TextureDesc
 		return desc;
 	}
 
-	static TextureDesc Create2D(uint32 width, uint32 height, DXGI_FORMAT format, TextureFlag flags = TextureFlag::None, uint32 sampleCount = 1, uint32 mips = 1)
+	static TextureDesc Create2D(uint32 width, uint32 height, ResourceFormat format, TextureFlag flags = TextureFlag::None, uint32 sampleCount = 1, uint32 mips = 1)
 	{
 		check(width);
 		check(height);
@@ -137,7 +137,7 @@ struct TextureDesc
 		return desc;
 	}
 
-	static TextureDesc Create3D(uint32 width, uint32 height, uint32 depth, DXGI_FORMAT format, TextureFlag flags = TextureFlag::None, uint32 sampleCount = 1, uint32 mips = 1)
+	static TextureDesc Create3D(uint32 width, uint32 height, uint32 depth, ResourceFormat format, TextureFlag flags = TextureFlag::None, uint32 sampleCount = 1, uint32 mips = 1)
 	{
 		check(width);
 		check(height);
@@ -154,7 +154,7 @@ struct TextureDesc
 		return desc;
 	}
 
-	static TextureDesc CreateDepth(uint32 width, uint32 height, DXGI_FORMAT format, TextureFlag flags = TextureFlag::None, uint32 sampleCount = 1, const ClearBinding& clearBinding = ClearBinding(1, 0))
+	static TextureDesc CreateDepth(uint32 width, uint32 height, ResourceFormat format, TextureFlag flags = TextureFlag::None, uint32 sampleCount = 1, const ClearBinding& clearBinding = ClearBinding(1, 0))
 	{
 		check(width);
 		check(height);
@@ -171,7 +171,7 @@ struct TextureDesc
 		return desc;
 	}
 
-	static TextureDesc CreateRenderTarget(uint32 width, uint32 height, DXGI_FORMAT format, TextureFlag flags = TextureFlag::None, uint32 sampleCount = 1, const ClearBinding& clearBinding = ClearBinding(Color(0, 0, 0)))
+	static TextureDesc CreateRenderTarget(uint32 width, uint32 height, ResourceFormat format, TextureFlag flags = TextureFlag::None, uint32 sampleCount = 1, const ClearBinding& clearBinding = ClearBinding(Color(0, 0, 0)))
 	{
 		check(width);
 		check(height);
@@ -233,7 +233,7 @@ public:
 	uint32 GetArraySize() const { return m_Desc.DepthOrArraySize; }
 	uint32 GetMipLevels() const { return m_Desc.Mips; }
 	Vector3i GetSize() const { return m_Desc.Size(); }
-	DXGI_FORMAT GetFormat() const { return m_Desc.Format; }
+	ResourceFormat GetFormat() const { return m_Desc.Format; }
 	const ClearBinding& GetClearBinding() const { return m_Desc.ClearBindingValue; }
 	const TextureDesc& GetDesc() const { return m_Desc; }
 

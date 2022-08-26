@@ -4,7 +4,7 @@
 #include "DescriptorHandle.h"
 #include "GraphicsResource.h"
 #include "ResourceViews.h"
-#include "D3DUtils.h"
+#include "D3D.h"
 #include "Fence.h"
 
 class CommandQueue;

@@ -37,12 +37,12 @@ void AccelerationStructure::Build(CommandContext& context)
 				}
 				geometryDesc.Triangles.IndexBuffer = pMesh->IndicesLocation.Location;
 				geometryDesc.Triangles.IndexCount = pMesh->IndicesLocation.Elements;
-				geometryDesc.Triangles.IndexFormat = pMesh->IndicesLocation.Format;
+				geometryDesc.Triangles.IndexFormat = D3D::ConvertFormat(pMesh->IndicesLocation.Format);
 				geometryDesc.Triangles.Transform3x4 = 0;
 				geometryDesc.Triangles.VertexBuffer.StartAddress = pMesh->PositionStreamLocation.Location;
 				geometryDesc.Triangles.VertexBuffer.StrideInBytes = pMesh->PositionStreamLocation.Stride;
 				geometryDesc.Triangles.VertexCount = pMesh->PositionStreamLocation.Elements;
-				geometryDesc.Triangles.VertexFormat = pMesh->PositionsFormat;
+				geometryDesc.Triangles.VertexFormat = D3D::ConvertFormat(pMesh->PositionsFormat);
 
 				D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS prebuildInfo{};
 				prebuildInfo.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;

@@ -2,7 +2,7 @@
 #include "CommandQueue.h"
 #include "Graphics.h"
 #include "CommandContext.h"
-#include "D3DUtils.h"
+#include "D3D.h"
 
 CommandQueue::CommandQueue(GraphicsDevice* pParent, D3D12_COMMAND_LIST_TYPE type)
 	: GraphicsObject(pParent),

@@ -41,8 +41,8 @@ DebugRenderer* DebugRenderer::Get()
 void DebugRenderer::Initialize(GraphicsDevice* pDevice)
 {
 	VertexElementLayout inputLayout;
-	inputLayout.AddVertexElement("POSITION", DXGI_FORMAT_R32G32B32_FLOAT);
-	inputLayout.AddVertexElement("COLOR", DXGI_FORMAT_R32_UINT);
+	inputLayout.AddVertexElement("POSITION", ResourceFormat::RGB32_FLOAT);
+	inputLayout.AddVertexElement("COLOR", ResourceFormat::R32_UINT);
 
 	//Rootsignature
 	m_pRS = new RootSignature(pDevice);
@@ -55,7 +55,7 @@ void DebugRenderer::Initialize(GraphicsDevice* pDevice)
 	psoDesc.SetRootSignature(m_pRS);
 	psoDesc.SetVertexShader("DebugRenderer.hlsl", "VSMain");
 	psoDesc.SetPixelShader("DebugRenderer.hlsl", "PSMain");
-	psoDesc.SetRenderTargetFormats(DXGI_FORMAT_R16G16B16A16_FLOAT, DXGI_FORMAT_D32_FLOAT, 1);
+	psoDesc.SetRenderTargetFormats(ResourceFormat::RGBA16_FLOAT, ResourceFormat::D32_FLOAT, 1);
 	psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
 	psoDesc.SetDepthWrite(true);
 	psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);

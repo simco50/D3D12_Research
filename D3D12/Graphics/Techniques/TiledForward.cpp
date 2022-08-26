@@ -44,10 +44,10 @@ TiledForward::TiledForward(GraphicsDevice* pDevice)
 		m_pDiffuseRS->Finalize("Diffuse");
 
 		{
-			constexpr DXGI_FORMAT formats[] = {
-				DXGI_FORMAT_R16G16B16A16_FLOAT,
-				DXGI_FORMAT_R16G16_FLOAT,
-				DXGI_FORMAT_R8_UNORM,
+			constexpr ResourceFormat formats[] = {
+				ResourceFormat::RGBA16_FLOAT,
+				ResourceFormat::RG16_FLOAT,
+				ResourceFormat::R8_UNORM,
 			};
 
 			//Opaque
@@ -55,7 +55,7 @@ TiledForward::TiledForward(GraphicsDevice* pDevice)
 			psoDesc.SetRootSignature(m_pDiffuseRS);
 			psoDesc.SetVertexShader("Diffuse.hlsl", "VSMain", { "TILED_FORWARD" });
 			psoDesc.SetPixelShader("Diffuse.hlsl", "PSMain", { "TILED_FORWARD" });
-			psoDesc.SetRenderTargetFormats(formats, DXGI_FORMAT_D32_FLOAT, 1);
+			psoDesc.SetRenderTargetFormats(formats, ResourceFormat::D32_FLOAT, 1);
 			psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_EQUAL);
 			psoDesc.SetDepthWrite(false);
 			psoDesc.SetName("Diffuse");
@@ -91,8 +91,8 @@ void TiledForward::Execute(RGGraph& graph, const SceneView* pView, SceneTextures
 {
 	int frustumCountX = Math::DivideAndRoundUp(pView->GetDimensions().x, FORWARD_PLUS_BLOCK_SIZE);
 	int frustumCountY = Math::DivideAndRoundUp(pView->GetDimensions().y, FORWARD_PLUS_BLOCK_SIZE);
-	RGTexture* pLightGridOpaque = graph.CreateTexture("Light Grid - Opaque", TextureDesc::Create2D(frustumCountX, frustumCountY, DXGI_FORMAT_R32G32_UINT));
-	RGTexture* pLightGridTransparant = graph.CreateTexture("Light Grid - Transparant", TextureDesc::Create2D(frustumCountX, frustumCountY, DXGI_FORMAT_R32G32_UINT));
+	RGTexture* pLightGridOpaque = graph.CreateTexture("Light Grid - Opaque", TextureDesc::Create2D(frustumCountX, frustumCountY, ResourceFormat::RG32_UINT));
+	RGTexture* pLightGridTransparant = graph.CreateTexture("Light Grid - Transparant", TextureDesc::Create2D(frustumCountX, frustumCountY, ResourceFormat::RG32_UINT));
 
 	RGBuffer* pLightIndexCounter = graph.CreateBuffer("Light Index Counter", BufferDesc::CreateStructured(2, sizeof(uint32), BufferFlag::NoBindless));
 	RGBuffer* pLightIndexListOpaque = graph.CreateBuffer("Light List - Opaque", BufferDesc::CreateStructured(MAX_LIGHT_DENSITY, sizeof(uint32)));

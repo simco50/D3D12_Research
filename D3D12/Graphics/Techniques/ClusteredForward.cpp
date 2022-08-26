@@ -61,10 +61,10 @@ ClusteredForward::ClusteredForward(GraphicsDevice* pDevice)
 		m_pDiffuseRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 8);
 		m_pDiffuseRS->Finalize("Diffuse");
 
-		constexpr DXGI_FORMAT formats[] = {
-			DXGI_FORMAT_R16G16B16A16_FLOAT,
-			DXGI_FORMAT_R16G16_FLOAT,
-			DXGI_FORMAT_R8_UNORM,
+		constexpr ResourceFormat formats[] = {
+			ResourceFormat::RGBA16_FLOAT,
+			ResourceFormat::RG16_FLOAT,
+			ResourceFormat::R8_UNORM,
 		};
 
 		{
@@ -76,7 +76,7 @@ ClusteredForward::ClusteredForward(GraphicsDevice* pDevice)
 			psoDesc.SetPixelShader("Diffuse.hlsl", "PSMain", { "CLUSTERED_FORWARD" });
 			psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_EQUAL);
 			psoDesc.SetDepthWrite(false);
-			psoDesc.SetRenderTargetFormats(formats, DXGI_FORMAT_D32_FLOAT, 1);
+			psoDesc.SetRenderTargetFormats(formats, ResourceFormat::D32_FLOAT, 1);
 			psoDesc.SetName("Diffuse (Opaque)");
 			m_pDiffusePSO = pDevice->CreatePipeline(psoDesc);
 
@@ -103,7 +103,7 @@ ClusteredForward::ClusteredForward(GraphicsDevice* pDevice)
 			psoDesc.SetPixelShader("Diffuse.hlsl", "PSMain", { "CLUSTERED_FORWARD" });
 			psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_EQUAL);
 			psoDesc.SetDepthWrite(false);
-			psoDesc.SetRenderTargetFormats(formats, DXGI_FORMAT_D32_FLOAT, 1);
+			psoDesc.SetRenderTargetFormats(formats, ResourceFormat::D32_FLOAT, 1);
 			psoDesc.SetName("Diffuse (Opaque)");
 			m_pMeshShaderDiffusePSO = pDevice->CreatePipeline(psoDesc);
 
@@ -131,7 +131,7 @@ ClusteredForward::ClusteredForward(GraphicsDevice* pDevice)
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
 		psoDesc.SetDepthWrite(false);
 		psoDesc.SetPixelShader("VisualizeLightClusters.hlsl", "PSMain");
-		psoDesc.SetRenderTargetFormats(DXGI_FORMAT_R16G16B16A16_FLOAT, DXGI_FORMAT_D32_FLOAT, 1);
+		psoDesc.SetRenderTargetFormats(ResourceFormat::RGBA16_FLOAT, ResourceFormat::D32_FLOAT, 1);
 		psoDesc.SetBlendMode(BlendMode::Additive, false);
 		psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT);
 		psoDesc.SetRootSignature(m_pVisualizeLightClustersRS);
@@ -327,7 +327,7 @@ RGTexture* ClusteredForward::RenderVolumetricFog(RGGraph& graph, const SceneView
 		Math::DivideAndRoundUp((uint32)pView->GetDimensions().x, gVolumetricFroxelTexelSize),
 		Math::DivideAndRoundUp((uint32)pView->GetDimensions().y, gVolumetricFroxelTexelSize),
 		gVolumetricNumZSlices,
-		DXGI_FORMAT_R16G16B16A16_FLOAT,
+		ResourceFormat::RGBA16_FLOAT,
 		TextureFlag::ShaderResource | TextureFlag::UnorderedAccess);
 
 	RGTexture* pSourceVolume = RGUtils::CreatePersistentTexture(graph, "Fog History", volumeDesc, &fogData.pFogHistory, false);

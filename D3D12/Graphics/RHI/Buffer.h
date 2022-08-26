@@ -1,6 +1,6 @@
 #pragma once
 #include "GraphicsResource.h"
-#include "D3DUtils.h"
+#include "D3D.h"
 
 enum class BufferFlag
 {
@@ -76,11 +76,12 @@ struct BufferDesc
 		return desc;
 	}
 
-	static BufferDesc CreateTyped(uint32 elementCount, DXGI_FORMAT format, BufferFlag usage = BufferFlag::ShaderResource | BufferFlag::UnorderedAccess)
+	static BufferDesc CreateTyped(uint32 elementCount, ResourceFormat format, BufferFlag usage = BufferFlag::ShaderResource | BufferFlag::UnorderedAccess)
 	{
-		check(!D3D::IsBlockCompressFormat(format));
+		const FormatInfo& info = GetFormatInfo(format);
+		check(!info.IsBC);
 		BufferDesc desc;
-		desc.ElementSize = D3D::GetFormatRowDataSize(format, 1);
+		desc.ElementSize = info.BytesPerBlock;
 		desc.Size = (uint64)elementCount * desc.ElementSize;
 		desc.Format = format;
 		desc.Usage = usage;
@@ -118,7 +119,7 @@ struct BufferDesc
 	uint64 Size = 0;
 	uint32 ElementSize = 0;
 	BufferFlag Usage = BufferFlag::None;
-	DXGI_FORMAT Format = DXGI_FORMAT_UNKNOWN;
+	ResourceFormat Format = ResourceFormat::Unknown;
 };
 
 class Buffer : public GraphicsResource
@@ -159,10 +160,10 @@ struct VertexBufferView
 struct IndexBufferView
 {
 	IndexBufferView()
-		: Location(~0ull), Elements(0), OffsetFromStart(0), Format(DXGI_FORMAT_R32_UINT)
+		: Location(~0ull), Elements(0), OffsetFromStart(0), Format(ResourceFormat::R32_UINT)
 	{}
 
-	IndexBufferView(D3D12_GPU_VIRTUAL_ADDRESS location, uint32 elements, DXGI_FORMAT format, uint64 offsetFromStart)
+	IndexBufferView(D3D12_GPU_VIRTUAL_ADDRESS location, uint32 elements, ResourceFormat format, uint64 offsetFromStart)
 		: Location(location), Elements(elements), OffsetFromStart((uint32)offsetFromStart), Format(format)
 	{
 		checkf(offsetFromStart <= std::numeric_limits<uint32>::max(), "Buffer offset (%llx) will be stored in a 32-bit uint and does not fit.", offsetFromStart);
@@ -170,11 +171,11 @@ struct IndexBufferView
 
 	uint32 Stride() const
 	{
-		return D3D::GetFormatRowDataSize(Format, 1);
+		return GetFormatInfo(Format).BytesPerBlock;
 	}
 
 	D3D12_GPU_VIRTUAL_ADDRESS Location;
 	uint32 Elements;
 	uint32 OffsetFromStart;
-	DXGI_FORMAT Format;
+	ResourceFormat Format;
 };

@@ -19,12 +19,12 @@ VertexElementLayout& VertexElementLayout::operator=(const VertexElementLayout& r
 	return *this;
 }
 
-void VertexElementLayout::AddVertexElement(const char* pSemantic, DXGI_FORMAT format, uint32 semanticIndex /*= 0*/, uint32 byteOffset /*= D3D12_APPEND_ALIGNED_ELEMENT*/, uint32 inputSlot /*= 0*/)
+void VertexElementLayout::AddVertexElement(const char* pSemantic, ResourceFormat format, uint32 semanticIndex /*= 0*/, uint32 byteOffset /*= D3D12_APPEND_ALIGNED_ELEMENT*/, uint32 inputSlot /*= 0*/)
 {
 	check(strcpy_s(m_SemanticNames[m_NumElements], pSemantic) == 0);
 	D3D12_INPUT_ELEMENT_DESC& element = m_ElementDesc[m_NumElements];
 	element.AlignedByteOffset = byteOffset;
-	element.Format = format;
+	element.Format = D3D::ConvertFormat(format);
 	element.InputSlot = inputSlot;
 	element.InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA;
 	element.InstanceDataStepRate = 0;
@@ -33,12 +33,12 @@ void VertexElementLayout::AddVertexElement(const char* pSemantic, DXGI_FORMAT fo
 	++m_NumElements;
 }
 
-void VertexElementLayout::AddInstanceElement(const char* pSemantic, DXGI_FORMAT format, uint32 semanticIndex, uint32 byteOffset, uint32 inputSlot, uint32 stepRate)
+void VertexElementLayout::AddInstanceElement(const char* pSemantic, ResourceFormat format, uint32 semanticIndex, uint32 byteOffset, uint32 inputSlot, uint32 stepRate)
 {
 	check(strcpy_s(m_SemanticNames[m_NumElements], pSemantic) == 0);
 	D3D12_INPUT_ELEMENT_DESC& element = m_ElementDesc[m_NumElements];
 	element.AlignedByteOffset = byteOffset;
-	element.Format = format;
+	element.Format = D3D::ConvertFormat(format);
 	element.InputSlot = inputSlot;
 	element.InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA;
 	element.InstanceDataStepRate = stepRate;
@@ -74,7 +74,7 @@ void PipelineStateInitializer::SetName(const char* pName)
 	m_Name = pName;
 }
 
-void PipelineStateInitializer::SetDepthOnlyTarget(DXGI_FORMAT dsvFormat, uint32 msaa)
+void PipelineStateInitializer::SetDepthOnlyTarget(ResourceFormat dsvFormat, uint32 msaa)
 {
 	D3D12_RT_FORMAT_ARRAY& formatArray = GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_RENDER_TARGET_FORMATS>();
 	formatArray.NumRenderTargets = 0;
@@ -82,22 +82,22 @@ void PipelineStateInitializer::SetDepthOnlyTarget(DXGI_FORMAT dsvFormat, uint32 
 	sampleDesc.Count = msaa;
 	sampleDesc.Quality = 0;
 	GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_RASTERIZER>().MultisampleEnable = msaa > 1;
-	GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL_FORMAT>() = dsvFormat;
+	GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL_FORMAT>() = D3D::ConvertFormat(dsvFormat);
 }
 
-void PipelineStateInitializer::SetRenderTargetFormats(const Span<DXGI_FORMAT>& rtvFormats, DXGI_FORMAT dsvFormat, uint32 msaa)
+void PipelineStateInitializer::SetRenderTargetFormats(const Span<ResourceFormat>& rtvFormats, ResourceFormat dsvFormat, uint32 msaa)
 {
 	D3D12_RT_FORMAT_ARRAY& formatArray = GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_RENDER_TARGET_FORMATS>();
-	for (DXGI_FORMAT format : rtvFormats)
+	for (ResourceFormat format : rtvFormats)
 	{
-		formatArray.RTFormats[formatArray.NumRenderTargets++] = format;
+		formatArray.RTFormats[formatArray.NumRenderTargets++] = D3D::ConvertFormat(format);
 	}
 	formatArray.NumRenderTargets = rtvFormats.GetSize();
 	DXGI_SAMPLE_DESC& sampleDesc = GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_SAMPLE_DESC>();
 	sampleDesc.Count = msaa;
 	sampleDesc.Quality = 0;
 	GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_RASTERIZER>().MultisampleEnable = msaa > 1;
-	GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL_FORMAT>() = dsvFormat;
+	GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL_FORMAT>() = D3D::ConvertFormat(dsvFormat);
 }
 
 void PipelineStateInitializer::SetBlendMode(const BlendMode& blendMode, bool /*alphaToCoverage*/)

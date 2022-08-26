@@ -8,27 +8,27 @@ class GraphicsResource;
 
 struct BufferUAVDesc
 {
-	BufferUAVDesc(DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN, bool raw = false, bool counter = false)
+	BufferUAVDesc(ResourceFormat format = ResourceFormat::Unknown, bool raw = false, bool counter = false)
 		: Format(format), Raw(raw), Counter(counter)
 	{}
 
 	static BufferUAVDesc CreateRaw()
 	{
-		return BufferUAVDesc(DXGI_FORMAT_UNKNOWN, true, false);
+		return BufferUAVDesc(ResourceFormat::Unknown, true, false);
 	}
 
-	DXGI_FORMAT Format;
+	ResourceFormat Format;
 	bool Raw;
 	bool Counter;
 };
 
 struct BufferSRVDesc
 {
-	BufferSRVDesc(DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN, bool raw = false, uint32 elementOffset = 0, uint32 numElements = 0)
+	BufferSRVDesc(ResourceFormat format = ResourceFormat::Unknown, bool raw = false, uint32 elementOffset = 0, uint32 numElements = 0)
 		: Format(format), Raw(raw), ElementOffset(elementOffset), NumElements(numElements)
 	{}
 
-	DXGI_FORMAT Format;
+	ResourceFormat Format;
 	bool Raw;
 	uint32 ElementOffset;
 	uint32 NumElements;

@@ -279,7 +279,7 @@ namespace GraphicsCommon
 			RefCountPtr<Texture> pTexture = pDevice->CreateTexture(desc, pName);
 			D3D12_SUBRESOURCE_DATA data;
 			data.pData = pData;
-			data.RowPitch = D3D::GetFormatRowDataSize(desc.Format, desc.Width);
+			data.RowPitch = GetFormatRowByteSize(desc.Format, desc.Width);
 			data.SlicePitch = data.RowPitch * desc.Width;
 			context.InsertResourceBarrier(pTexture, D3D12_RESOURCE_STATE_COPY_DEST);
 			context.FlushResourceBarriers();
@@ -288,22 +288,22 @@ namespace GraphicsCommon
 		};
 
 		uint32 BLACK = 0xFF000000;
-		RegisterDefaultTexture(DefaultTexture::Black2D, "Default Black", TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &BLACK);
+		RegisterDefaultTexture(DefaultTexture::Black2D, "Default Black", TextureDesc::Create2D(1, 1, ResourceFormat::RGBA8_UNORM), &BLACK);
 		uint32 WHITE = 0xFFFFFFFF;
-		RegisterDefaultTexture(DefaultTexture::White2D, "Default White", TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &WHITE);
+		RegisterDefaultTexture(DefaultTexture::White2D, "Default White", TextureDesc::Create2D(1, 1, ResourceFormat::RGBA8_UNORM), &WHITE);
 		uint32 MAGENTA = 0xFFFF00FF;
-		RegisterDefaultTexture(DefaultTexture::Magenta2D, "Default Magenta", TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &MAGENTA);
+		RegisterDefaultTexture(DefaultTexture::Magenta2D, "Default Magenta", TextureDesc::Create2D(1, 1, ResourceFormat::RGBA8_UNORM), &MAGENTA);
 		uint32 GRAY = 0xFF808080;
-		RegisterDefaultTexture(DefaultTexture::Gray2D, "Default Gray", TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &GRAY);
+		RegisterDefaultTexture(DefaultTexture::Gray2D, "Default Gray", TextureDesc::Create2D(1, 1, ResourceFormat::RGBA8_UNORM), &GRAY);
 		uint32 DEFAULT_NORMAL = 0xFFFF8080;
-		RegisterDefaultTexture(DefaultTexture::Normal2D, "Default Normal", TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &DEFAULT_NORMAL);
+		RegisterDefaultTexture(DefaultTexture::Normal2D, "Default Normal", TextureDesc::Create2D(1, 1, ResourceFormat::RGBA8_UNORM), &DEFAULT_NORMAL);
 		uint32 DEFAULT_ROUGHNESS_METALNESS = 0xFFFF80FF;
-		RegisterDefaultTexture(DefaultTexture::RoughnessMetalness, "Default Roughness/Metalness", TextureDesc::Create2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &DEFAULT_ROUGHNESS_METALNESS);
+		RegisterDefaultTexture(DefaultTexture::RoughnessMetalness, "Default Roughness/Metalness", TextureDesc::Create2D(1, 1, ResourceFormat::RGBA8_UNORM), &DEFAULT_ROUGHNESS_METALNESS);
 
 		uint32 BLACK_CUBE[6] = {};
-		RegisterDefaultTexture(DefaultTexture::BlackCube, "Default Black Cube", TextureDesc::CreateCube(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), BLACK_CUBE);
+		RegisterDefaultTexture(DefaultTexture::BlackCube, "Default Black Cube", TextureDesc::CreateCube(1, 1, ResourceFormat::RGBA8_UNORM), BLACK_CUBE);
 
-		RegisterDefaultTexture(DefaultTexture::Black3D, "Default Black 3D", TextureDesc::Create3D(1, 1, 1, DXGI_FORMAT_R8G8B8A8_UNORM), &BLACK);
+		RegisterDefaultTexture(DefaultTexture::Black3D, "Default Black 3D", TextureDesc::Create3D(1, 1, 1, ResourceFormat::RGBA8_UNORM), &BLACK);
 
 		DefaultTextures[(int)DefaultTexture::ColorNoise256] = CreateTextureFromFile(context, "Resources/Textures/Noise.png", false, "Noise");
 		DefaultTextures[(int)DefaultTexture::BlueNoise512] = CreateTextureFromFile(context, "Resources/Textures/BlueNoise.dds", false, "Blue Noise");
@@ -350,11 +350,11 @@ namespace GraphicsCommon
 		TextureDesc desc;
 		desc.Width = image.GetWidth();
 		desc.Height = image.GetHeight();
-		desc.Format = (DXGI_FORMAT)Image::TextureFormatFromCompressionFormat(image.GetFormat(), sRGB);
+		desc.Format = Image::TextureFormatFromCompressionFormat(image.GetFormat(), sRGB);
 		desc.Mips = image.GetMipLevels();
 		desc.Usage = TextureFlag::ShaderResource;
 		desc.Dimensions = image.IsCubemap() ? TextureDimension::TextureCube : TextureDimension::Texture2D;
-		if (D3D::IsBlockCompressFormat(desc.Format))
+		if (GetFormatInfo(desc.Format).IsBC)
 		{
 			desc.Width = Math::Max(desc.Width, 4u);
 			desc.Height = Math::Max(desc.Height, 4u);

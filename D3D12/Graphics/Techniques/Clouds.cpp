@@ -114,11 +114,11 @@ RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const Sc
 	ImGui::End();
 
 	RGTexture* pNoiseTexture = RGUtils::CreatePersistentTexture(graph, "Shape Noise",
-		TextureDesc::Create3D(parameters.ShapeNoiseResolution, parameters.ShapeNoiseResolution, parameters.ShapeNoiseResolution, DXGI_FORMAT_R8G8B8A8_UNORM, TextureFlag::None, 1, 4), &m_pShapeNoise, true);
+		TextureDesc::Create3D(parameters.ShapeNoiseResolution, parameters.ShapeNoiseResolution, parameters.ShapeNoiseResolution, ResourceFormat::RGBA8_UNORM, TextureFlag::None, 1, 4), &m_pShapeNoise, true);
 	RGTexture* pDetailNoiseTexture = RGUtils::CreatePersistentTexture(graph, "Detail Noise",
-		TextureDesc::Create3D(parameters.DetailNoiseResolution, parameters.DetailNoiseResolution, parameters.DetailNoiseResolution, DXGI_FORMAT_R8G8B8A8_UNORM, TextureFlag::None, 1, 4), &m_pDetailNoise, true);
+		TextureDesc::Create3D(parameters.DetailNoiseResolution, parameters.DetailNoiseResolution, parameters.DetailNoiseResolution, ResourceFormat::RGBA8_UNORM, TextureFlag::None, 1, 4), &m_pDetailNoise, true);
 	RGTexture* pCloudTypeLUT = RGUtils::CreatePersistentTexture(graph, "Height Gradient",
-		TextureDesc::Create2D(128, 128, DXGI_FORMAT_R8_UNORM), &m_pCloudHeightDensityLUT, true);
+		TextureDesc::Create2D(128, 128, ResourceFormat::R8_UNORM), &m_pCloudHeightDensityLUT, true);
 
 	if (isDirty)
 	{

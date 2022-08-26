@@ -127,15 +127,15 @@ void RGGraph::DumpGraph(const char* pPath) const
 			{
 				const TextureDesc& desc = static_cast<RGTexture*>(pResource)->Desc;
 				stream << "Res: " << desc.Width << "x" << desc.Height << "x" << desc.DepthOrArraySize << "<br/>";
-				stream << "Fmt: " << D3D::FormatToString(desc.Format) << "<br/>";
+				stream << "Fmt: " << GetFormatInfo(desc.Format).pName << "<br/>";
 				stream << "Mips: " << desc.Mips << "<br/>";
-				stream << "Size: " << Math::PrettyPrintDataSize(D3D::GetFormatRowDataSize(D3D::GetSrvFormatFromDepth(desc.Format), desc.Width) * desc.Height * desc.DepthOrArraySize) << "</br>";
+				stream << "Size: " << Math::PrettyPrintDataSize(GetFormatRowByteSize(desc.Format, desc.Width) * desc.Height * desc.DepthOrArraySize) << "</br>";
 			}
 			else if (pResource->Type == RGResourceType::Buffer)
 			{
 				const BufferDesc& desc = static_cast<RGBuffer*>(pResource)->Desc;
 				stream << "Stride: " << desc.ElementSize << "<br/>";
-				stream << "Fmt: " << D3D::FormatToString(desc.Format) << "<br/>";
+				stream << "Fmt: " << GetFormatInfo(desc.Format).pName << "<br/>";
 				stream << "Size: " << Math::PrettyPrintDataSize(desc.Size) << "<br/>";
 			}
 

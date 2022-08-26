@@ -33,7 +33,7 @@
 #include "imgui_internal.h"
 #include "IconsFontAwesome4.h"
 
-static const DXGI_FORMAT DEPTH_STENCIL_SHADOW_FORMAT = DXGI_FORMAT_D32_FLOAT;
+static const ResourceFormat DEPTH_STENCIL_SHADOW_FORMAT = ResourceFormat::D32_FLOAT;
 
 void EditTransform(const Camera& camera, Matrix& matrix)
 {
@@ -469,15 +469,15 @@ void DemoApp::Update()
 	SceneTextures sceneTextures;
 
 	Vector2i viewDimensions = m_SceneData.GetDimensions();
-	sceneTextures.pPreviousColor =		RGUtils::CreatePersistentTexture(graph, "Color History", TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, DXGI_FORMAT_R16G16B16A16_FLOAT), &m_pColorHistory, true);
-	sceneTextures.pVisibilityBuffer =	graph.CreateTexture("Visibility Buffer",	TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, DXGI_FORMAT_R32_UINT));
-	sceneTextures.pRoughness =			graph.CreateTexture("Roughness",			TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, DXGI_FORMAT_R8_UNORM));
-	sceneTextures.pColorTarget =		graph.CreateTexture("Color Target",			TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, DXGI_FORMAT_R16G16B16A16_FLOAT));
-	sceneTextures.pAmbientOcclusion =	graph.CreateTexture("Ambient Occlusion",	TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, DXGI_FORMAT_R8_UNORM));
-	sceneTextures.pNormals =			graph.CreateTexture("Normals",				TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, DXGI_FORMAT_R16G16_FLOAT));
-	sceneTextures.pVelocity =			graph.CreateTexture("Velocity",				TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, DXGI_FORMAT_R16G16_FLOAT));
-	sceneTextures.pDepth =				graph.CreateTexture("Depth Stencil",		TextureDesc::CreateDepth(viewDimensions.x, viewDimensions.y, DXGI_FORMAT_D32_FLOAT, TextureFlag::None, 1, ClearBinding(0.0f, 0)));
-	sceneTextures.pResolvedDepth =		graph.CreateTexture("Resolved Depth",		TextureDesc::CreateDepth(viewDimensions.x, viewDimensions.y, DXGI_FORMAT_D32_FLOAT, TextureFlag::None, 1, ClearBinding(0.0f, 0)));
+	sceneTextures.pPreviousColor =		RGUtils::CreatePersistentTexture(graph, "Color History", TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, ResourceFormat::RGBA16_FLOAT), &m_pColorHistory, true);
+	sceneTextures.pVisibilityBuffer =	graph.CreateTexture("Visibility Buffer",	TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, ResourceFormat::R32_UINT));
+	sceneTextures.pRoughness =			graph.CreateTexture("Roughness",			TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, ResourceFormat::R8_UNORM));
+	sceneTextures.pColorTarget =		graph.CreateTexture("Color Target",			TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, ResourceFormat::RGBA16_FLOAT));
+	sceneTextures.pAmbientOcclusion =	graph.CreateTexture("Ambient Occlusion",	TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, ResourceFormat::R8_UNORM));
+	sceneTextures.pNormals =			graph.CreateTexture("Normals",				TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, ResourceFormat::RG16_FLOAT));
+	sceneTextures.pVelocity =			graph.CreateTexture("Velocity",				TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, ResourceFormat::RG16_FLOAT));
+	sceneTextures.pDepth =				graph.CreateTexture("Depth Stencil",		TextureDesc::CreateDepth(viewDimensions.x, viewDimensions.y, ResourceFormat::D32_FLOAT, TextureFlag::None, 1, ClearBinding(0.0f, 0)));
+	sceneTextures.pResolvedDepth =		graph.CreateTexture("Resolved Depth",		TextureDesc::CreateDepth(viewDimensions.x, viewDimensions.y, ResourceFormat::D32_FLOAT, TextureFlag::None, 1, ClearBinding(0.0f, 0)));
 
 	if (m_RenderPath == RenderPath::Clustered || m_RenderPath == RenderPath::Tiled || m_RenderPath == RenderPath::Visibility)
 	{
@@ -601,20 +601,20 @@ void DemoApp::Update()
 		};
 
 		Vector2i ddgiIrradianceDimensions = ProbeTextureDimensions(ddgi.NumProbes, probeIrradianceTexels);
-		TextureDesc ddgiIrradianceDesc = TextureDesc::Create2D(ddgiIrradianceDimensions.x, ddgiIrradianceDimensions.y, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::UnorderedAccess);
+		TextureDesc ddgiIrradianceDesc = TextureDesc::Create2D(ddgiIrradianceDimensions.x, ddgiIrradianceDimensions.y, ResourceFormat::RGBA16_FLOAT, TextureFlag::UnorderedAccess);
 		RGTexture* pIrradianceTarget = graph.CreateTexture("DDGI Irradiance Target", ddgiIrradianceDesc);
 		RGTexture* pIrradianceHistory = RGUtils::CreatePersistentTexture(graph, "DDGI Irradiance History", ddgiIrradianceDesc, &ddgi.pIrradianceHistory, false);
 		graph.ExportTexture(pIrradianceTarget, &ddgi.pIrradianceHistory);
 
 		Vector2i ddgiDepthDimensions = ProbeTextureDimensions(ddgi.NumProbes, probeDepthTexel);
-		TextureDesc ddgiDepthDesc = TextureDesc::Create2D(ddgiDepthDimensions.x, ddgiDepthDimensions.y, DXGI_FORMAT_R16G16_FLOAT, TextureFlag::UnorderedAccess);
+		TextureDesc ddgiDepthDesc = TextureDesc::Create2D(ddgiDepthDimensions.x, ddgiDepthDimensions.y, ResourceFormat::RG16_FLOAT, TextureFlag::UnorderedAccess);
 		RGTexture* pDepthTarget = graph.CreateTexture("DDGI Depth Target", ddgiDepthDesc);
 		RGTexture* pDepthHistory = RGUtils::CreatePersistentTexture(graph, "DDGI Depth History", ddgiDepthDesc, &ddgi.pDepthHistory, false);
 		graph.ExportTexture(pDepthTarget, &ddgi.pDepthHistory);
 
-		RGBuffer* pRayBuffer = graph.CreateBuffer("DDGI Ray Buffer", BufferDesc::CreateTyped(numProbes * ddgi.MaxNumRays, DXGI_FORMAT_R16G16B16A16_FLOAT));
-		RGBuffer* pProbeStates = RGUtils::CreatePersistentBuffer(graph, "DDGI States Buffer", BufferDesc::CreateTyped(numProbes, DXGI_FORMAT_R8_UINT), &ddgi.pProbeStates, true);
-		RGBuffer* pProbeOffsets = RGUtils::CreatePersistentBuffer(graph, "DDGI Probe Offsets", BufferDesc::CreateTyped(numProbes, DXGI_FORMAT_R16G16B16A16_FLOAT), &ddgi.pProbeOffset, true);
+		RGBuffer* pRayBuffer = graph.CreateBuffer("DDGI Ray Buffer", BufferDesc::CreateTyped(numProbes * ddgi.MaxNumRays, ResourceFormat::RGBA16_FLOAT));
+		RGBuffer* pProbeStates = RGUtils::CreatePersistentBuffer(graph, "DDGI States Buffer", BufferDesc::CreateTyped(numProbes, ResourceFormat::R8_UINT), &ddgi.pProbeStates, true);
+		RGBuffer* pProbeOffsets = RGUtils::CreatePersistentBuffer(graph, "DDGI Probe Offsets", BufferDesc::CreateTyped(numProbes, ResourceFormat::RGBA16_FLOAT), &ddgi.pProbeOffset, true);
 
 		graph.AddPass("DDGI Raytrace", RGPassFlag::Compute)
 			.Read(pProbeStates)
@@ -700,7 +700,7 @@ void DemoApp::Update()
 			.Read({ pDepthTarget, pIrradianceTarget, pProbeStates, pProbeOffsets });
 	}
 
-	RGTexture* pSky = graph.CreateTexture("Sky", TextureDesc::CreateCube(64, 64, DXGI_FORMAT_R16G16B16A16_FLOAT));
+	RGTexture* pSky = graph.CreateTexture("Sky", TextureDesc::CreateCube(64, 64, ResourceFormat::RGBA16_FLOAT));
 	graph.ExportTexture(pSky, &pViewMut->pSky);
 
 	graph.AddPass("Compute Sky", RGPassFlag::Compute | RGPassFlag::NeverCull)
@@ -896,7 +896,7 @@ void DemoApp::Update()
 		Vector3i depthSize = sceneTextures.pDepth->GetDesc().Size();
 		depthSize.x = Math::DivideAndRoundUp(depthSize.x, 16);
 		depthSize.y = Math::DivideAndRoundUp(depthSize.y, 16);
-		RGTexture* pReductionTarget = graph.CreateTexture("Depth Reduction Target", TextureDesc::Create2D(depthSize.x, depthSize.y, DXGI_FORMAT_R32G32_FLOAT));
+		RGTexture* pReductionTarget = graph.CreateTexture("Depth Reduction Target", TextureDesc::Create2D(depthSize.x, depthSize.y, ResourceFormat::RG32_FLOAT));
 
 		graph.AddPass("Depth Reduce - Setup", RGPassFlag::Compute)
 			.Read(sceneTextures.pDepth)
@@ -919,7 +919,7 @@ void DemoApp::Update()
 		while (depthSize.x > 1 || depthSize.y > 1)
 		{
 			RGTexture* pReductionSource = pReductionTarget;
-			pReductionTarget = graph.CreateTexture("Depth Reduction Target", TextureDesc::Create2D(depthSize.x, depthSize.y, DXGI_FORMAT_R32G32_FLOAT));
+			pReductionTarget = graph.CreateTexture("Depth Reduction Target", TextureDesc::Create2D(depthSize.x, depthSize.y, ResourceFormat::RG32_FLOAT));
 
 			graph.AddPass("Depth Reduce - Subpass", RGPassFlag::Compute)
 				.Read(pReductionSource)
@@ -1052,7 +1052,7 @@ void DemoApp::Update()
 	}
 
 	uint32 mips = Math::Min(5u, (uint32)log2f((float)Math::Max(viewDimensions.x, viewDimensions.y)));
-	TextureDesc bloomDesc = TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, DXGI_FORMAT_R16G16B16A16_FLOAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess, 1, mips);
+	TextureDesc bloomDesc = TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, ResourceFormat::RGBA16_FLOAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess, 1, mips);
 	RGTexture* pBloomTexture = graph.CreateTexture("Bloom", bloomDesc);
 	RGTexture* pBloomIntermediateTexture = graph.CreateTexture("Bloom Intermediate", bloomDesc);
 
@@ -1148,7 +1148,7 @@ void DemoApp::Update()
 		}
 	}
 
-	RGTexture* pTonemapTarget = graph.CreateTexture("Tonemap Target", TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, DXGI_FORMAT_R8G8B8A8_UNORM));
+	RGTexture* pTonemapTarget = graph.CreateTexture("Tonemap Target", TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, ResourceFormat::RGBA8_UNORM));
 
 	graph.AddPass("Tonemap", RGPassFlag::Compute)
 		.Read({ sceneTextures.pColorTarget, pAverageLuminance, pBloomTexture })
@@ -1184,7 +1184,7 @@ void DemoApp::Update()
 	if (Tweakables::g_DrawHistogram.Get())
 	{
 		if(!m_pDebugHistogramTexture)
-			m_pDebugHistogramTexture = m_pDevice->CreateTexture(TextureDesc::Create2D(256 * 4, 256, DXGI_FORMAT_R8G8B8A8_UNORM, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess), "Debug Histogram");
+			m_pDebugHistogramTexture = m_pDevice->CreateTexture(TextureDesc::Create2D(256 * 4, 256, ResourceFormat::RGBA8_UNORM, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess), "Debug Histogram");
 
 		graph.AddPass("Draw Histogram", RGPassFlag::Compute)
 			.Read({ pLuminanceHistogram, pAverageLuminance })
@@ -1314,11 +1314,11 @@ void DemoApp::OnResizeViewport(int width, int height)
 {
 	E_LOG(Info, "Viewport resized: %dx%d", width, height);
 
-	m_ColorOutput = m_pDevice->CreateTexture(TextureDesc::Create2D(width, height, DXGI_FORMAT_R8G8B8A8_UNORM), "Final Target");
+	m_ColorOutput = m_pDevice->CreateTexture(TextureDesc::Create2D(width, height, ResourceFormat::RGBA8_UNORM), "Final Target");
 
 	for (uint32 i = 0; i < SwapChain::NUM_FRAMES; ++i)
 	{
-		RefCountPtr<Buffer> pBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateTyped(1, DXGI_FORMAT_R32G32_FLOAT, BufferFlag::Readback), "SDSM Reduction Readback Target");
+		RefCountPtr<Buffer> pBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateTyped(1, ResourceFormat::RG32_FLOAT, BufferFlag::Readback), "SDSM Reduction Readback Target");
 		m_ReductionReadbackTargets.push_back(std::move(pBuffer));
 	}
 
@@ -1358,7 +1358,7 @@ void DemoApp::InitializePipelines()
 		psoDesc.SetRootSignature(m_pCommonRS);
 		psoDesc.SetVertexShader("DepthOnly.hlsl", "VSMain");
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
-		psoDesc.SetRenderTargetFormats({}, DXGI_FORMAT_D32_FLOAT, 1);
+		psoDesc.SetRenderTargetFormats({}, ResourceFormat::D32_FLOAT, 1);
 		psoDesc.SetName("Depth Prepass Opaque");
 		m_pDepthPrepassOpaquePSO = m_pDevice->CreatePipeline(psoDesc);
 
@@ -1390,7 +1390,7 @@ void DemoApp::InitializePipelines()
 		psoDesc.SetRootSignature(m_pCommonRS);
 		psoDesc.SetVertexShader("ProceduralSky.hlsl", "VSMain");
 		psoDesc.SetPixelShader("ProceduralSky.hlsl", "PSMain");
-		psoDesc.SetRenderTargetFormats(DXGI_FORMAT_R16G16B16A16_FLOAT, DXGI_FORMAT_D32_FLOAT, 1);
+		psoDesc.SetRenderTargetFormats(ResourceFormat::RGBA16_FLOAT, ResourceFormat::D32_FLOAT, 1);
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
 		psoDesc.SetDepthWrite(false);
 		psoDesc.SetName("Skybox");
@@ -1413,7 +1413,7 @@ void DemoApp::InitializePipelines()
 		psoDesc.SetMeshShader("VisibilityRendering.hlsl", "MSMain");
 		psoDesc.SetPixelShader("VisibilityRendering.hlsl", "PSMain");
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
-		psoDesc.SetRenderTargetFormats(DXGI_FORMAT_R32_UINT, DXGI_FORMAT_D32_FLOAT, 1);
+		psoDesc.SetRenderTargetFormats(ResourceFormat::R32_UINT, ResourceFormat::D32_FLOAT, 1);
 		psoDesc.SetName("Visibility Rendering");
 		m_pVisibilityRenderingPSO = m_pDevice->CreatePipeline(psoDesc);
 
@@ -1452,7 +1452,7 @@ void DemoApp::InitializePipelines()
 		psoDesc.SetVertexShader("RayTracing/DDGI.hlsl", "VisualizeIrradianceVS");
 		psoDesc.SetPixelShader("RayTracing/DDGI.hlsl", "VisualizeIrradiancePS");
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
-		psoDesc.SetRenderTargetFormats(DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_D32_FLOAT, 1);
+		psoDesc.SetRenderTargetFormats(ResourceFormat::RGBA8_UNORM, ResourceFormat::D32_FLOAT, 1);
 		psoDesc.SetName("Visualize Irradiance");
 		psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
 		m_pDDGIVisualizePSO = m_pDevice->CreatePipeline(psoDesc);
@@ -1465,7 +1465,7 @@ void DemoApp::InitializePipelines()
 void DemoApp::VisualizeTexture(RGGraph& graph, RGTexture* pTexture)
 {
 	const TextureDesc& desc = pTexture->GetDesc();
-	RGTexture* pTarget = graph.CreateTexture("Visualize Target", TextureDesc::Create2D(desc.Width, desc.Height, DXGI_FORMAT_R8G8B8A8_UNORM));
+	RGTexture* pTarget = graph.CreateTexture("Visualize Target", TextureDesc::Create2D(desc.Width, desc.Height, ResourceFormat::RGBA8_UNORM));
 
 	if (ImGui::Begin("Visualize Texture") && m_VisualizeTextureData.pVisualizeTexture)
 	{

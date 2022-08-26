@@ -364,10 +364,10 @@ void CBTTessellation::SetupPipelines()
 		m_pCBTUpdatePSO = m_pDevice->CreateComputePipeline(m_pCBTRS, "CBT.hlsl", "UpdateCS", defines);
 	}
 
-	constexpr DXGI_FORMAT formats[] = {
-		DXGI_FORMAT_R16G16B16A16_FLOAT,
-		DXGI_FORMAT_R16G16_FLOAT,
-		DXGI_FORMAT_R8_UNORM,
+	constexpr ResourceFormat formats[] = {
+		ResourceFormat::RGBA16_FLOAT,
+		ResourceFormat::RG16_FLOAT,
+		ResourceFormat::R8_UNORM,
 	};
 
 	{
@@ -384,7 +384,7 @@ void CBTTessellation::SetupPipelines()
 			psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
 		}
 		psoDesc.SetPixelShader("CBT.hlsl", "RenderPS", defines);
-		psoDesc.SetRenderTargetFormats(formats, DXGI_FORMAT_D32_FLOAT, 1);
+		psoDesc.SetRenderTargetFormats(formats, ResourceFormat::D32_FLOAT, 1);
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
 		psoDesc.SetName("Draw CBT");
 		m_pCBTRenderPSO = m_pDevice->CreatePipeline(psoDesc);
@@ -397,7 +397,7 @@ void CBTTessellation::SetupPipelines()
 		psoDesc.SetAmplificationShader("CBT.hlsl", "UpdateAS", defines);
 		psoDesc.SetMeshShader("CBT.hlsl", "RenderMS", defines);
 		psoDesc.SetPixelShader("CBT.hlsl", "RenderPS", defines);
-		psoDesc.SetRenderTargetFormats(formats, DXGI_FORMAT_D32_FLOAT, 1);
+		psoDesc.SetRenderTargetFormats(formats, ResourceFormat::D32_FLOAT, 1);
 		psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
 		psoDesc.SetName("Draw CBT");
@@ -409,7 +409,7 @@ void CBTTessellation::SetupPipelines()
 		psoDesc.SetRootSignature(m_pCBTRS);
 		psoDesc.SetPixelShader("CBT.hlsl", "DebugVisualizePS", defines);
 		psoDesc.SetVertexShader("CBT.hlsl", "DebugVisualizeVS", defines);
-		psoDesc.SetRenderTargetFormats(DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_UNKNOWN, 1);
+		psoDesc.SetRenderTargetFormats(ResourceFormat::RGBA8_UNORM, ResourceFormat::Unknown, 1);
 		psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
 		psoDesc.SetDepthEnabled(false);
 		psoDesc.SetName("Debug Visualize CBT");
@@ -423,7 +423,7 @@ void CBTTessellation::CreateResources()
 	m_pHeightmap = GraphicsCommon::CreateTextureFromFile(*pContext, "Resources/Terrain.dds", false, "Terrain Heightmap");
 	pContext->Execute(true);
 
-	m_pDebugVisualizeTexture = m_pDevice->CreateTexture(TextureDesc::CreateRenderTarget(1024, 1024, DXGI_FORMAT_R8G8B8A8_UNORM, TextureFlag::ShaderResource), "CBT Visualize Texture");
+	m_pDebugVisualizeTexture = m_pDevice->CreateTexture(TextureDesc::CreateRenderTarget(1024, 1024, ResourceFormat::RGBA8_UNORM, TextureFlag::ShaderResource), "CBT Visualize Texture");
 	m_pCBTIndirectArgs = m_pDevice->CreateBuffer(BufferDesc::CreateIndirectArguments<uint32>(10), "CBT Indirect Args");
 }
 

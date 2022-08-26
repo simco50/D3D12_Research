@@ -36,8 +36,8 @@ public:
 	VertexElementLayout(const VertexElementLayout& rhs);
 	VertexElementLayout& operator=(const VertexElementLayout& rhs);
 
-	void AddVertexElement(const char* pSemantic, DXGI_FORMAT format, uint32 semanticIndex = 0, uint32 byteOffset = D3D12_APPEND_ALIGNED_ELEMENT, uint32 inputSlot = 0);
-	void AddInstanceElement(const char* pSemantic, DXGI_FORMAT format, uint32 semanticIndex, uint32 byteOffset, uint32 inputSlot, uint32 stepRate);
+	void AddVertexElement(const char* pSemantic, ResourceFormat format, uint32 semanticIndex = 0, uint32 byteOffset = D3D12_APPEND_ALIGNED_ELEMENT, uint32 inputSlot = 0);
+	void AddInstanceElement(const char* pSemantic, ResourceFormat format, uint32 semanticIndex, uint32 byteOffset, uint32 inputSlot, uint32 stepRate);
 
 	const D3D12_INPUT_ELEMENT_DESC* GetElements() const { return m_ElementDesc.data(); }
 	uint32 GetNumElements() const { return m_NumElements; }
@@ -92,8 +92,8 @@ public:
 	PipelineStateInitializer();
 
 	void SetName(const char* pName);
-	void SetDepthOnlyTarget(DXGI_FORMAT dsvFormat, uint32 msaa);
-	void SetRenderTargetFormats(const Span<DXGI_FORMAT>& rtvFormats, DXGI_FORMAT dsvFormat, uint32 msaa);
+	void SetDepthOnlyTarget(ResourceFormat dsvFormat, uint32 msaa);
+	void SetRenderTargetFormats(const Span<ResourceFormat>& rtvFormats, ResourceFormat dsvFormat, uint32 msaa);
 
 	//BlendState
 	void SetBlendMode(const BlendMode& blendMode, bool alphaToCoverage);

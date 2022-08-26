@@ -519,25 +519,26 @@ RefCountPtr<Texture> GraphicsDevice::CreateTexture(const TextureDesc& desc, cons
 {
 	auto GetResourceDesc = [](const TextureDesc& textureDesc)
 	{
-		uint32 width = D3D::IsBlockCompressFormat(textureDesc.Format) ? Math::Clamp(textureDesc.Width, 0u, textureDesc.Width) : textureDesc.Width;
-		uint32 height = D3D::IsBlockCompressFormat(textureDesc.Format) ? Math::Clamp(textureDesc.Height, 0u, textureDesc.Height) : textureDesc.Height;
+		const FormatInfo& info = GetFormatInfo(textureDesc.Format);
+		uint32 width = info.IsBC ? Math::Clamp(textureDesc.Width, 0u, textureDesc.Width) : textureDesc.Width;
+		uint32 height = info.IsBC ? Math::Clamp(textureDesc.Height, 0u, textureDesc.Height) : textureDesc.Height;
 		D3D12_RESOURCE_DESC desc{};
 		switch (textureDesc.Dimensions)
 		{
 		case TextureDimension::Texture1D:
 		case TextureDimension::Texture1DArray:
-			desc = CD3DX12_RESOURCE_DESC::Tex1D(textureDesc.Format, width, (uint16)textureDesc.DepthOrArraySize, (uint16)textureDesc.Mips, D3D12_RESOURCE_FLAG_NONE, D3D12_TEXTURE_LAYOUT_UNKNOWN);
+			desc = CD3DX12_RESOURCE_DESC::Tex1D(D3D::ConvertFormat(textureDesc.Format), width, (uint16)textureDesc.DepthOrArraySize, (uint16)textureDesc.Mips, D3D12_RESOURCE_FLAG_NONE, D3D12_TEXTURE_LAYOUT_UNKNOWN);
 			break;
 		case TextureDimension::Texture2D:
 		case TextureDimension::Texture2DArray:
-			desc = CD3DX12_RESOURCE_DESC::Tex2D(textureDesc.Format, width, height, (uint16)textureDesc.DepthOrArraySize, (uint16)textureDesc.Mips, textureDesc.SampleCount, 0, D3D12_RESOURCE_FLAG_NONE, D3D12_TEXTURE_LAYOUT_UNKNOWN);
+			desc = CD3DX12_RESOURCE_DESC::Tex2D(D3D::ConvertFormat(textureDesc.Format), width, height, (uint16)textureDesc.DepthOrArraySize, (uint16)textureDesc.Mips, textureDesc.SampleCount, 0, D3D12_RESOURCE_FLAG_NONE, D3D12_TEXTURE_LAYOUT_UNKNOWN);
 			break;
 		case TextureDimension::TextureCube:
 		case TextureDimension::TextureCubeArray:
-			desc = CD3DX12_RESOURCE_DESC::Tex2D(textureDesc.Format, width, height, (uint16)textureDesc.DepthOrArraySize * 6, (uint16)textureDesc.Mips, textureDesc.SampleCount, 0, D3D12_RESOURCE_FLAG_NONE, D3D12_TEXTURE_LAYOUT_UNKNOWN);
+			desc = CD3DX12_RESOURCE_DESC::Tex2D(D3D::ConvertFormat(textureDesc.Format), width, height, (uint16)textureDesc.DepthOrArraySize * 6, (uint16)textureDesc.Mips, textureDesc.SampleCount, 0, D3D12_RESOURCE_FLAG_NONE, D3D12_TEXTURE_LAYOUT_UNKNOWN);
 			break;
 		case TextureDimension::Texture3D:
-			desc = CD3DX12_RESOURCE_DESC::Tex3D(textureDesc.Format, width, height, (uint16)textureDesc.DepthOrArraySize, (uint16)textureDesc.Mips, D3D12_RESOURCE_FLAG_NONE, D3D12_TEXTURE_LAYOUT_UNKNOWN);
+			desc = CD3DX12_RESOURCE_DESC::Tex3D(D3D::ConvertFormat(textureDesc.Format), width, height, (uint16)textureDesc.DepthOrArraySize, (uint16)textureDesc.Mips, D3D12_RESOURCE_FLAG_NONE, D3D12_TEXTURE_LAYOUT_UNKNOWN);
 			break;
 		default:
 			noEntry();
@@ -570,7 +571,7 @@ RefCountPtr<Texture> GraphicsDevice::CreateTexture(const TextureDesc& desc, cons
 
 	D3D12_CLEAR_VALUE* pClearValue = nullptr;
 	D3D12_CLEAR_VALUE clearValue = {};
-	clearValue.Format = desc.Format;
+	clearValue.Format = D3D::ConvertFormat(desc.Format);
 
 	if (EnumHasAnyFlags(desc.Usage, TextureFlag::RenderTarget))
 	{
@@ -612,7 +613,7 @@ RefCountPtr<Texture> GraphicsDevice::CreateTexture(const TextureDesc& desc, cons
 		pTexture->m_Rtv = GetParent()->AllocateDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 
 		D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = {};
-		rtvDesc.Format = desc.Format;
+		rtvDesc.Format = D3D::ConvertFormat(desc.Format);
 		switch (desc.Dimensions)
 		{
 		case TextureDimension::Texture1D:
@@ -656,7 +657,7 @@ RefCountPtr<Texture> GraphicsDevice::CreateTexture(const TextureDesc& desc, cons
 		pTexture->m_ReadOnlyDsv = GetParent()->AllocateDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
 
 		D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
-		dsvDesc.Format = D3D::GetDsvFormat(desc.Format);
+		dsvDesc.Format = D3D::ConvertFormat(DSVFormat(desc.Format));
 		switch (desc.Dimensions)
 		{
 		case TextureDimension::Texture1D:
@@ -704,7 +705,7 @@ RefCountPtr<Texture> GraphicsDevice::CreateTextureForSwapchain(ID3D12Resource* p
 	TextureDesc desc;
 	desc.Width = (uint32)resourceDesc.Width;
 	desc.Height = (uint32)resourceDesc.Height;
-	desc.Format = resourceDesc.Format;
+	desc.Format = ResourceFormat::Unknown;
 	desc.ClearBindingValue = ClearBinding(Colors::Black);
 	desc.Mips = resourceDesc.MipLevels;
 	desc.SampleCount = resourceDesc.SampleDesc.Count;
@@ -781,7 +782,7 @@ RefCountPtr<Buffer> GraphicsDevice::CreateBuffer(const BufferDesc& desc, const c
 	}
 
 	bool isRaw = EnumHasAnyFlags(desc.Usage, BufferFlag::ByteAddress);
-	bool withCounter = !isRaw && desc.Format == DXGI_FORMAT_UNKNOWN;
+	bool withCounter = !isRaw && desc.Format == ResourceFormat::Unknown;
 
 	//#todo: Temp code. Pull out views from buffer
 	if (EnumHasAnyFlags(desc.Usage, BufferFlag::ShaderResource | BufferFlag::AccelerationStructure))
@@ -858,8 +859,8 @@ RefCountPtr<ShaderResourceView> GraphicsDevice::CreateSRV(Buffer* pBuffer, const
 		}
 		else
 		{
-			srvDesc.Format = desc.Format;
-			srvDesc.Buffer.StructureByteStride = desc.Format == DXGI_FORMAT_UNKNOWN ? bufferDesc.ElementSize : 0;
+			srvDesc.Format = D3D::ConvertFormat(desc.Format);
+			srvDesc.Buffer.StructureByteStride = desc.Format == ResourceFormat::Unknown ? bufferDesc.ElementSize : 0;
 			srvDesc.Buffer.FirstElement = desc.ElementOffset;
 			srvDesc.Buffer.NumElements = desc.NumElements > 0 ? desc.NumElements : bufferDesc.NumElements();
 		}
@@ -879,7 +880,7 @@ RefCountPtr<UnorderedAccessView> GraphicsDevice::CreateUAV(Buffer* pBuffer, cons
 	const BufferDesc& bufferDesc = pBuffer->GetDesc();
 
 	D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
-	uavDesc.Format = desc.Format;
+	uavDesc.Format = D3D::ConvertFormat(desc.Format);
 	uavDesc.Buffer.CounterOffsetInBytes = 0;
 	uavDesc.Buffer.FirstElement = 0;
 	uavDesc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_NONE;
@@ -920,7 +921,7 @@ RefCountPtr<ShaderResourceView> GraphicsDevice::CreateSRV(Texture* pTexture, con
 
 	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
 	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-	srvDesc.Format = D3D::GetSrvFormatFromDepth(textureDesc.Format);
+	srvDesc.Format = D3D::ConvertFormat(SRVFormatFromDepth(textureDesc.Format));
 
 	switch (textureDesc.Dimensions)
 	{
@@ -1028,7 +1029,7 @@ RefCountPtr<UnorderedAccessView> GraphicsDevice::CreateUAV(Texture* pTexture, co
 	uavDesc.Texture2D.MipSlice = desc.MipLevel;
 	uavDesc.Texture2DArray.MipSlice = desc.MipLevel;
 	uavDesc.Texture3D.MipSlice = desc.MipLevel;
-	uavDesc.Format = pTexture->GetFormat();
+	uavDesc.Format = D3D::ConvertFormat(pTexture->GetFormat());
 
 	D3D12_CPU_DESCRIPTOR_HANDLE descriptor = AllocateDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 	m_pDevice->CreateUnorderedAccessView(pTexture->GetResource(), nullptr, &uavDesc, descriptor);

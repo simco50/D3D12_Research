@@ -1,5 +1,7 @@
 #pragma once
 
+#include "RHI.h"
+
 class GraphicsDevice;
 class UnorderedAccessView;
 class ShaderResourceView;

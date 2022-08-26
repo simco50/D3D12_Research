@@ -534,7 +534,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 		SubMesh subMesh;
 		subMesh.Bounds = bounds;
 		subMesh.MaterialId = meshData.MaterialIndex;
-		subMesh.PositionsFormat = DXGI_FORMAT_R32G32B32_FLOAT;
+		subMesh.PositionsFormat = ResourceFormat::RGB32_FLOAT;
 		subMesh.PositionsStride = sizeof(VS_Position);
 
 		subMesh.PositionStreamLocation = VertexBufferView(m_pGeometryData->GetGpuHandle() + dataOffset, (uint32)meshData.PositionsStream.size(), sizeof(VS_Position), dataOffset);
@@ -560,7 +560,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 
 		if (meshData.PositionsStream.size() < std::numeric_limits<uint16>::max())
 		{
-			subMesh.IndicesLocation = IndexBufferView(m_pGeometryData->GetGpuHandle() + dataOffset, (uint32)meshData.Indices.size(), DXGI_FORMAT_R16_UINT, dataOffset);
+			subMesh.IndicesLocation = IndexBufferView(m_pGeometryData->GetGpuHandle() + dataOffset, (uint32)meshData.Indices.size(), ResourceFormat::R16_UINT, dataOffset);
 			std::vector<uint16> indicesStream;
 			indicesStream.reserve(meshData.Indices.size());
 			Utils::Transform(meshData.Indices, indicesStream, [](const uint32 value) -> uint16 { assert(value < std::numeric_limits<uint16>::max());  return (uint16)value; });
@@ -568,7 +568,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 		}
 		else
 		{
-			subMesh.IndicesLocation = IndexBufferView(m_pGeometryData->GetGpuHandle() + dataOffset, (uint32)meshData.Indices.size(), DXGI_FORMAT_R32_UINT, dataOffset);
+			subMesh.IndicesLocation = IndexBufferView(m_pGeometryData->GetGpuHandle() + dataOffset, (uint32)meshData.Indices.size(), ResourceFormat::R32_UINT, dataOffset);
 			CopyData(meshData.Indices.data(), sizeof(uint32) * meshData.Indices.size());
 		}
 

@@ -435,7 +435,7 @@ void CommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 		check(renderPassInfo.DepthStencilTarget.Target);
 		check(renderPassInfo.DepthStencilTarget.Target->GetClearBinding().BindingValue == ClearBinding::ClearBindingValue::DepthStencil);
 		renderPassDepthStencilDesc.DepthBeginningAccess.Clear.ClearValue.DepthStencil.Depth = renderPassInfo.DepthStencilTarget.Target->GetClearBinding().DepthStencil.Depth;
-		renderPassDepthStencilDesc.DepthBeginningAccess.Clear.ClearValue.Format = renderPassInfo.DepthStencilTarget.Target->GetFormat();
+		renderPassDepthStencilDesc.DepthBeginningAccess.Clear.ClearValue.Format = D3D::ConvertFormat(renderPassInfo.DepthStencilTarget.Target->GetFormat());
 	}
 	renderPassDepthStencilDesc.DepthEndingAccess.Type = ExtractEndingAccess(renderPassInfo.DepthStencilTarget.Access);
 	if (renderPassDepthStencilDesc.DepthEndingAccess.Type == D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_DISCARD)
@@ -448,7 +448,7 @@ void CommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 		check(renderPassInfo.DepthStencilTarget.Target);
 		check(renderPassInfo.DepthStencilTarget.Target->GetClearBinding().BindingValue == ClearBinding::ClearBindingValue::DepthStencil);
 		renderPassDepthStencilDesc.StencilBeginningAccess.Clear.ClearValue.DepthStencil.Stencil = renderPassInfo.DepthStencilTarget.Target->GetClearBinding().DepthStencil.Stencil;
-		renderPassDepthStencilDesc.StencilBeginningAccess.Clear.ClearValue.Format = renderPassInfo.DepthStencilTarget.Target->GetFormat();
+		renderPassDepthStencilDesc.StencilBeginningAccess.Clear.ClearValue.Format = D3D::ConvertFormat(renderPassInfo.DepthStencilTarget.Target->GetFormat());
 	}
 	renderPassDepthStencilDesc.StencilEndingAccess.Type = ExtractEndingAccess(renderPassInfo.DepthStencilTarget.StencilAccess);
 	if (renderPassInfo.DepthStencilTarget.Target)
@@ -473,7 +473,7 @@ void CommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 			clearValue.Color[1] = clearColor.y;
 			clearValue.Color[2] = clearColor.z;
 			clearValue.Color[3] = clearColor.w;
-			clearValue.Format = data.Target->GetFormat();
+			clearValue.Format = D3D::ConvertFormat(data.Target->GetFormat());
 		}
 
 		D3D12_RENDER_PASS_ENDING_ACCESS_TYPE endingAccess = ExtractEndingAccess(data.Access);
@@ -490,7 +490,7 @@ void CommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 		{
 			checkf(data.ResolveTarget, "Expected ResolveTarget because ending access is 'Resolve'");
 			InsertResourceBarrier(data.ResolveTarget, D3D12_RESOURCE_STATE_RESOLVE_DEST);
-			renderTargetDescs[i].EndingAccess.Resolve.Format = data.Target->GetFormat();
+			renderTargetDescs[i].EndingAccess.Resolve.Format = D3D::ConvertFormat(data.Target->GetFormat());
 			renderTargetDescs[i].EndingAccess.Resolve.pDstResource = data.ResolveTarget->GetResource();
 			renderTargetDescs[i].EndingAccess.Resolve.pSrcResource = data.Target->GetResource();
 			renderTargetDescs[i].EndingAccess.Resolve.PreserveResolveSource = false;
@@ -679,7 +679,7 @@ void CommandContext::SetIndexBuffer(const IndexBufferView& indexBuffer)
 {
 	D3D12_INDEX_BUFFER_VIEW view;
 	view.BufferLocation = indexBuffer.Location;
-	view.Format = indexBuffer.Format;
+	view.Format = D3D::ConvertFormat(indexBuffer.Format);
 	view.SizeInBytes = indexBuffer.Stride() * indexBuffer.Elements;
 	m_pCommandList->IASetIndexBuffer(&view);
 }

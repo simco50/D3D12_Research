@@ -1,7 +1,7 @@
 #include "stdafx.h"
 #include "Fence.h"
 #include "CommandQueue.h"
-#include "D3DUtils.h"
+#include "D3D.h"
 #include "Graphics.h"
 
 Fence::Fence(GraphicsDevice* pParent, const char* pName, uint64 fenceValue)
