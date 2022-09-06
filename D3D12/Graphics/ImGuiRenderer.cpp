@@ -19,7 +19,7 @@ void ImGui::Image(Texture* pTexture, const ImVec2& size, const ImVec2& uv0, cons
 	ImGui::Image((void*)pTexture->GetSRV()->GetGPUView(), size, uv0, uv1, tint_col, border_col);
 }
 
-void ImGui::ImageAutoSize(Texture* textureId, const ImVec2& imageDimensions)
+ImVec2 ImGui::ImageAutoSize(Texture* textureId, const ImVec2& imageDimensions)
 {
 	ImVec2 windowSize = GetContentRegionAvail();
 	float width = windowSize.x;
@@ -29,7 +29,9 @@ void ImGui::ImageAutoSize(Texture* textureId, const ImVec2& imageDimensions)
 		width = imageDimensions.x / imageDimensions.y * windowSize.y;
 		height = windowSize.y;
 	}
-	Image(textureId, ImVec2(width, height));
+	ImVec2 size(width, height);
+	Image(textureId, size);
+	return size;
 }
 
 void ApplyImGuiStyle()

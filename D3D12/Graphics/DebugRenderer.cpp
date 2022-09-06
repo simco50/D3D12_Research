@@ -88,7 +88,7 @@ void DebugRenderer::Render(RGGraph& graph, const SceneView* pView, RGTexture* pT
 
 	graph.AddPass("Debug Rendering", RGPassFlag::Raster)
 		.RenderTarget(pTarget, RenderTargetLoadAction::Load)
-		.DepthStencil(pDepth, RenderTargetLoadAction::Load, false)
+		.DepthStencil(pDepth, RenderTargetLoadAction::Load, true)
 		.Bind([=](CommandContext& context)
 			{
 				context.SetGraphicsRootSignature(m_pRS);
@@ -173,11 +173,11 @@ void DebugRenderer::AddBox(const Vector3& position, const Vector3& extents, cons
 	}
 	else
 	{
-		AddPolygon(min, v1, v2, v3, color);
+		AddPolygon(v3, v2, v1, min, color);
 		AddPolygon(v4, v5, max, v6, color);
 		AddPolygon(min, v4, v6, v3, color);
-		AddPolygon(v1, v5, max, v2, color);
-		AddPolygon(v3, v2, max, v6, color);
+		AddPolygon(v2, max, v5, v1, color);
+		AddPolygon(v6, max, v2, v3, color);
 		AddPolygon(min, v1, v5, v4, color);
 	}
 }

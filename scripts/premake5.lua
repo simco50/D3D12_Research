@@ -42,19 +42,17 @@ workspace (ENGINE_NAME)
 	flags {"MultiProcessorCompile", "ShadowedVariables", "FatalWarnings"}
 	rtti "Off"
 	warnings "Extra"
-	justmycode "Off"
-	editAndContinue "Off"
 	system "windows"
 	conformancemode "On"
 	defines { "PLATFORM_WINDOWS=1", "WIN32" }
 	targetdir (ROOT .. "Build/$(ProjectName)_$(Platform)_$(Configuration)")
 	objdir (ROOT .. "Build/Intermediate/$(ProjectName)_$(Platform)_$(Configuration)")
-
+	
 	--Unreferenced variable
 	disablewarnings {"4100"}
 	
 	filter "configurations:Debug"
- 		runtime "Debug"
+		runtime "Debug"
 		defines { "_DEBUG" }
 		optimize ("Off")
 		--inlining "Explicit"
