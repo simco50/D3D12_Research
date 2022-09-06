@@ -4,57 +4,6 @@
 #include "Graphics.h"
 #include "RootSignature.h"
 
-VertexElementLayout::VertexElementLayout(const VertexElementLayout& rhs)
-	: m_ElementDesc(rhs.m_ElementDesc), m_SemanticNames(rhs.m_SemanticNames), m_NumElements(rhs.m_NumElements)
-{
-	FixupStrings();
-}
-
-VertexElementLayout& VertexElementLayout::operator=(const VertexElementLayout& rhs)
-{
-	m_ElementDesc = rhs.m_ElementDesc;
-	m_SemanticNames = rhs.m_SemanticNames;
-	m_NumElements = rhs.m_NumElements;
-	FixupStrings();
-	return *this;
-}
-
-void VertexElementLayout::AddVertexElement(const char* pSemantic, ResourceFormat format, uint32 semanticIndex /*= 0*/, uint32 byteOffset /*= D3D12_APPEND_ALIGNED_ELEMENT*/, uint32 inputSlot /*= 0*/)
-{
-	check(strcpy_s(m_SemanticNames[m_NumElements], pSemantic) == 0);
-	D3D12_INPUT_ELEMENT_DESC& element = m_ElementDesc[m_NumElements];
-	element.AlignedByteOffset = byteOffset;
-	element.Format = D3D::ConvertFormat(format);
-	element.InputSlot = inputSlot;
-	element.InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA;
-	element.InstanceDataStepRate = 0;
-	element.SemanticIndex = semanticIndex;
-	element.SemanticName = m_SemanticNames[m_NumElements];
-	++m_NumElements;
-}
-
-void VertexElementLayout::AddInstanceElement(const char* pSemantic, ResourceFormat format, uint32 semanticIndex, uint32 byteOffset, uint32 inputSlot, uint32 stepRate)
-{
-	check(strcpy_s(m_SemanticNames[m_NumElements], pSemantic) == 0);
-	D3D12_INPUT_ELEMENT_DESC& element = m_ElementDesc[m_NumElements];
-	element.AlignedByteOffset = byteOffset;
-	element.Format = D3D::ConvertFormat(format);
-	element.InputSlot = inputSlot;
-	element.InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA;
-	element.InstanceDataStepRate = stepRate;
-	element.SemanticIndex = semanticIndex;
-	element.SemanticName = m_SemanticNames[m_NumElements];
-	++m_NumElements;
-}
-
-void VertexElementLayout::FixupStrings()
-{
-	for (size_t i = 0; i < m_ElementDesc.size(); ++i)
-	{
-		m_ElementDesc[i].SemanticName = m_SemanticNames[i];
-	}
-}
-
 PipelineStateInitializer::PipelineStateInitializer()
 {
 	m_pSubobjectData.resize(sizeof(CD3DX12_PIPELINE_STATE_STREAM2));
@@ -238,12 +187,25 @@ void PipelineStateInitializer::SetDepthBias(int depthBias, float depthBiasClamp,
 	rsDesc.DepthBiasClamp = depthBiasClamp;
 }
 
-void PipelineStateInitializer::SetInputLayout(const VertexElementLayout& layout)
+void PipelineStateInitializer::SetInputLayout(const Span<VertexElementDesc>& layout)
 {
 	D3D12_INPUT_LAYOUT_DESC& ilDesc = GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_INPUT_LAYOUT>();
-	m_InputLayout = layout;
-	ilDesc.NumElements = (uint32)m_InputLayout.GetNumElements();
-	ilDesc.pInputElementDescs = m_InputLayout.GetElements();
+
+	m_IlDesc.clear();
+	for (const VertexElementDesc& element : layout)
+	{
+		D3D12_INPUT_ELEMENT_DESC& desc = m_IlDesc.emplace_back();
+		desc.AlignedByteOffset = element.ByteOffset;
+		desc.Format = D3D::ConvertFormat(element.Format);
+		desc.InputSlot = 0;
+		desc.InputSlotClass = element.InstanceStepRate > 0 ? D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA : D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA;
+		desc.InstanceDataStepRate = element.InstanceStepRate;
+		desc.SemanticIndex = 0;
+		desc.SemanticName = element.pSemantic;
+	}
+
+	ilDesc.NumElements = (uint32)m_IlDesc.size();
+	ilDesc.pInputElementDescs = m_IlDesc.data();
 }
 
 void PipelineStateInitializer::SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE topology)
@@ -495,10 +457,10 @@ void PipelineState::Create(const PipelineStateInitializer& initializer)
 	VERIFY_HR_EX(GetParent()->GetDevice()->QueryInterface(IID_PPV_ARGS(pDevice2.GetAddressOf())), GetParent()->GetDevice());
 
 	m_Desc = initializer;
-	if (initializer.m_InputLayout.GetNumElements() > 0)
+	if (m_Desc.m_IlDesc.size() > 0)
 	{
 		D3D12_INPUT_LAYOUT_DESC& ilDesc = m_Desc.GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_INPUT_LAYOUT>();
-		ilDesc.pInputElementDescs = m_Desc.m_InputLayout.GetElements();
+		ilDesc.pInputElementDescs = m_Desc.m_IlDesc.data();
 	}
 
 	D3D12_PIPELINE_STATE_STREAM_DESC streamDesc = m_Desc.GetDesc(GetParent());

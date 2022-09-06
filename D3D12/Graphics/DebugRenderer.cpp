@@ -40,10 +40,6 @@ DebugRenderer* DebugRenderer::Get()
 
 void DebugRenderer::Initialize(GraphicsDevice* pDevice)
 {
-	VertexElementLayout inputLayout;
-	inputLayout.AddVertexElement("POSITION", ResourceFormat::RGB32_FLOAT);
-	inputLayout.AddVertexElement("COLOR", ResourceFormat::R32_UINT);
-
 	//Rootsignature
 	m_pRS = new RootSignature(pDevice);
 	m_pRS->AddConstantBufferView(100);
@@ -51,7 +47,11 @@ void DebugRenderer::Initialize(GraphicsDevice* pDevice)
 
 	//Opaque
 	PipelineStateInitializer psoDesc;
-	psoDesc.SetInputLayout(inputLayout);
+	psoDesc.SetInputLayout(
+		{
+			{ "POSITION", ResourceFormat::RGB32_FLOAT },
+			{ "COLOR", ResourceFormat::R32_UINT },
+		});
 	psoDesc.SetRootSignature(m_pRS);
 	psoDesc.SetVertexShader("DebugRenderer.hlsl", "VSMain");
 	psoDesc.SetPixelShader("DebugRenderer.hlsl", "PSMain");
