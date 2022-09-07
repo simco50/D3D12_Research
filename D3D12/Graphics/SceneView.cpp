@@ -35,6 +35,7 @@ namespace Renderer
 		parameters.Projection = view.Projection;
 		parameters.ProjectionInverse = view.ProjectionInverse;
 		parameters.ViewProjection = view.ViewProjection;
+		parameters.ViewProjectionPrev = view.ViewProjectionPrev;
 		parameters.ViewProjectionInverse = view.ProjectionInverse * view.ViewInverse;
 
 		Matrix reprojectionMatrix = parameters.ViewProjectionInverse * view.PreviousViewProjection;
@@ -73,7 +74,7 @@ namespace Renderer
 		}
 		parameters.ViewportDimensions = Vector2(view.Viewport.GetWidth(), view.Viewport.GetHeight());
 		parameters.ViewportDimensionsInv = Vector2(1.0f / view.Viewport.GetWidth(), 1.0f / view.Viewport.GetHeight());
-
+		parameters.HZBDimensions = pView->HZBDimensions;
 		parameters.ViewJitter.x = view.PreviousJitter.x - view.Jitter.x;
 		parameters.ViewJitter.y = -(view.PreviousJitter.y - view.Jitter.y);
 		parameters.NearZ = view.NearPlane;

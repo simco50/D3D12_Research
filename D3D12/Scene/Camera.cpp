@@ -112,6 +112,11 @@ void Camera::UpdateMatrices() const
 {
 	if (m_Dirty)
 	{
+		if (m_UpdatePrevMatrices)
+		{
+			m_Transform.ViewProjectionPrev = m_Transform.ViewProjection;
+		}
+
 		m_Transform.ViewInverse = Matrix::CreateFromQuaternion(m_Rotation) * Matrix::CreateTranslation(m_Position);
 		m_Transform.ViewInverse.Invert(m_Transform.View);
 		float aspect = m_Transform.Viewport.GetWidth() / m_Transform.Viewport.GetHeight();

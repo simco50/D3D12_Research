@@ -40,6 +40,7 @@ struct ViewTransform
 	Matrix Projection;
 	Matrix View;
 	Matrix ViewProjection;
+	Matrix ViewProjectionPrev;
 	Matrix ViewInverse;
 	Matrix ProjectionInverse;
 	Matrix PreviousViewProjection;
@@ -99,6 +100,7 @@ struct SceneView
 	uint32 NumDDGIVolumes = 0;
 	RefCountPtr<Texture> pSky;
 	int FrameIndex = 0;
+	Vector2 HZBDimensions;
 	VisibilityMask VisibilityMask;
 	ViewTransform View;
 	BoundingBox SceneAABB;
@@ -122,6 +124,7 @@ struct SceneTextures
 	RGTexture* pNormals;
 	RGTexture* pVelocity;
 	RGTexture* pAmbientOcclusion;
+	RGTexture* pHZB;
 };
 
 namespace Renderer

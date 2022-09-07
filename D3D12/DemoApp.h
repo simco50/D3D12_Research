@@ -62,6 +62,7 @@ private:
 	TimeHistory<float, 180> m_FrameHistory;
 
 	RefCountPtr<Texture> m_pColorHistory;
+	RefCountPtr<Texture> m_pHZB;
 	RefCountPtr<Texture> m_ColorOutput;
 	std::vector<RefCountPtr<Texture>> m_ShadowMaps;
 
@@ -148,6 +149,9 @@ private:
 	RefCountPtr<PipelineState> m_pDDGIUpdateIrradianceDepthPSO;
 	RefCountPtr<PipelineState> m_pDDGIUpdateProbeStatesPSO;
 	RefCountPtr<PipelineState> m_pDDGIVisualizePSO;
+
+	//HZB
+	RefCountPtr<PipelineState> m_pHZBCreatePSO;
 	
 	// Debug Visualize
 	RefCountPtr<PipelineState> m_pVisualizeTexturePSO;

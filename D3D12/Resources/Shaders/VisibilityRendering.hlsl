@@ -1,8 +1,11 @@
 #include "Common.hlsli"
 #include "Random.hlsli"
 #include "VisibilityBuffer.hlsli"
+#include "HZB.hlsli"
 
 ConstantBuffer<InstanceData> cObject : register(b0);
+
+Texture2D<float> tHZB : register(t0);
 
 bool IsVisible(MeshData mesh, float4x4 world, uint meshlet)
 {
@@ -13,12 +16,10 @@ bool IsVisible(MeshData mesh, float4x4 world, uint meshlet)
 	float radius = Max3(radius3);
 	float3 coneAxis = normalize(mul(cullData.ConeAxis, (float3x3)world));
 
-	for(int i = 0; i < 6; ++i)
+	HZBCullData hzbData = HZBCull(center.xyz, radius3, tHZB);
+	if(!hzbData.IsVisible)
 	{
-		if(dot(center, cView.FrustumPlanes[i]) > radius)
-		{
-			return false;
-		}
+		return false;
 	}
 
 	float3 viewLocation = cView.ViewLocation;

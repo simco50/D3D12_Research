@@ -170,8 +170,8 @@ DemoApp::DemoApp(WindowHandle window, const Vector2i& windowRect)
 	E_LOG(Info, "Graphics::InitD3D()");
 
 	GraphicsDeviceOptions options;
-	options.UseDebugDevice = CommandLine::GetBool("d3ddebug") || _DEBUG;
-	options.UseDRED = CommandLine::GetBool("dred") || _DEBUG;
+	options.UseDebugDevice = CommandLine::GetBool("d3ddebug");
+	options.UseDRED = CommandLine::GetBool("dred");
 	options.LoadPIX = CommandLine::GetBool("pix");
 	options.UseGPUValidation = CommandLine::GetBool("gpuvalidation");
 	options.UseWarp = CommandLine::GetBool("warp");
@@ -319,21 +319,24 @@ void DemoApp::Update()
 
 	m_RenderGraphPool->Tick();
 
-	if (Input::Instance().IsKeyPressed('1'))
+	if (!ImGui::IsAnyItemActive())
 	{
-		m_RenderPath = RenderPath::Clustered;
-	}
-	else if (Input::Instance().IsKeyPressed('2'))
-	{
-		m_RenderPath = RenderPath::Tiled;
-	}
-	else if (Input::Instance().IsKeyPressed('3') && m_pVisibilityRenderingPSO)
-	{
-		m_RenderPath = RenderPath::Visibility;
-	}
-	else if (Input::Instance().IsKeyPressed('4') && m_pPathTracing->IsSupported())
-	{
-		m_RenderPath = RenderPath::PathTracing;
+		if (Input::Instance().IsKeyPressed('1'))
+		{
+			m_RenderPath = RenderPath::Clustered;
+		}
+		else if (Input::Instance().IsKeyPressed('2'))
+		{
+			m_RenderPath = RenderPath::Tiled;
+		}
+		else if (Input::Instance().IsKeyPressed('3') && m_pVisibilityRenderingPSO)
+		{
+			m_RenderPath = RenderPath::Visibility;
+		}
+		else if (Input::Instance().IsKeyPressed('4') && m_pPathTracing->IsSupported())
+		{
+			m_RenderPath = RenderPath::PathTracing;
+		}
 	}
 
 	if (Tweakables::g_RenderObjectBounds)
@@ -468,16 +471,23 @@ void DemoApp::Update()
 	RGGraph graph(m_pDevice, *m_RenderGraphPool);
 	SceneTextures sceneTextures;
 
-	Vector2i viewDimensions = m_SceneData.GetDimensions();
-	sceneTextures.pPreviousColor =		RGUtils::CreatePersistentTexture(graph, "Color History", TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, ResourceFormat::RGBA16_FLOAT), &m_pColorHistory, true);
-	sceneTextures.pVisibilityBuffer =	graph.CreateTexture("Visibility Buffer",	TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, ResourceFormat::R32_UINT));
-	sceneTextures.pRoughness =			graph.CreateTexture("Roughness",			TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, ResourceFormat::R8_UNORM));
-	sceneTextures.pColorTarget =		graph.CreateTexture("Color Target",			TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, ResourceFormat::RGBA16_FLOAT));
-	sceneTextures.pAmbientOcclusion =	graph.CreateTexture("Ambient Occlusion",	TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, ResourceFormat::R8_UNORM));
-	sceneTextures.pNormals =			graph.CreateTexture("Normals",				TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, ResourceFormat::RG16_FLOAT));
-	sceneTextures.pVelocity =			graph.CreateTexture("Velocity",				TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, ResourceFormat::RG16_FLOAT));
-	sceneTextures.pDepth =				graph.CreateTexture("Depth Stencil",		TextureDesc::CreateDepth(viewDimensions.x, viewDimensions.y, ResourceFormat::D32_FLOAT, TextureFlag::None, 1, ClearBinding(0.0f, 0)));
-	sceneTextures.pResolvedDepth =		graph.CreateTexture("Resolved Depth",		TextureDesc::CreateDepth(viewDimensions.x, viewDimensions.y, ResourceFormat::D32_FLOAT, TextureFlag::None, 1, ClearBinding(0.0f, 0)));
+	const Vector2i viewDimensions = m_SceneData.GetDimensions();
+	const uint32 hzbMipsX = Math::Max(1u, (uint32)Math::Ceil(log2f((float)viewDimensions.x)) - 1);
+	const uint32 hzbMipsY = Math::Max(1u, (uint32)Math::Ceil(log2f((float)viewDimensions.y)) - 1);
+	const uint32 hzbMips = Math::Max(hzbMipsX, hzbMipsY);
+	const Vector2i hzbDimensions(1 << hzbMipsX, 1 << hzbMipsY);
+	m_SceneData.HZBDimensions = Vector2((float)hzbDimensions.x, (float)hzbDimensions.y);
+
+	sceneTextures.pPreviousColor =		RGUtils::CreatePersistentTexture(graph, "Color History",	TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, ResourceFormat::RGBA16_FLOAT), &m_pColorHistory, true);
+	sceneTextures.pVisibilityBuffer =	graph.CreateTexture("Visibility Buffer",					TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, ResourceFormat::R32_UINT));
+	sceneTextures.pRoughness =			graph.CreateTexture("Roughness",							TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, ResourceFormat::R8_UNORM));
+	sceneTextures.pColorTarget =		graph.CreateTexture("Color Target",							TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, ResourceFormat::RGBA16_FLOAT));
+	sceneTextures.pAmbientOcclusion =	graph.CreateTexture("Ambient Occlusion",					TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, ResourceFormat::R8_UNORM));
+	sceneTextures.pNormals =			graph.CreateTexture("Normals",								TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, ResourceFormat::RG16_FLOAT));
+	sceneTextures.pVelocity =			graph.CreateTexture("Velocity",								TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, ResourceFormat::RG16_FLOAT));
+	sceneTextures.pDepth =				graph.CreateTexture("Depth Stencil",						TextureDesc::CreateDepth(viewDimensions.x, viewDimensions.y, ResourceFormat::D32_FLOAT, TextureFlag::None, 1, ClearBinding(0.0f, 0)));
+	sceneTextures.pResolvedDepth =		graph.CreateTexture("Resolved Depth",						TextureDesc::CreateDepth(viewDimensions.x, viewDimensions.y, ResourceFormat::D32_FLOAT, TextureFlag::None, 1, ClearBinding(0.0f, 0)));
+	sceneTextures.pHZB =				RGUtils::CreatePersistentTexture(graph, "HZB",				TextureDesc::Create2D(hzbDimensions.x, hzbDimensions.y, ResourceFormat::R32_FLOAT, TextureFlag::None, 1, hzbMips), &m_pHZB, true);
 
 	if (m_RenderPath == RenderPath::Clustered || m_RenderPath == RenderPath::Tiled || m_RenderPath == RenderPath::Visibility)
 	{
@@ -542,6 +552,7 @@ void DemoApp::Update()
 	else if (m_RenderPath == RenderPath::Visibility)
 	{
 		graph.AddPass("Visibility Buffer", RGPassFlag::Raster)
+			.Read(sceneTextures.pHZB)
 			.DepthStencil(sceneTextures.pDepth, RenderTargetLoadAction::Clear, true)
 			.RenderTarget(sceneTextures.pVisibilityBuffer, RenderTargetLoadAction::DontCare)
 			.Bind([=](CommandContext& context)
@@ -550,6 +561,7 @@ void DemoApp::Update()
 					context.SetGraphicsRootSignature(m_pCommonRS);
 
 					context.SetRootCBV(1, Renderer::GetViewUniforms(pView, sceneTextures.pVisibilityBuffer->Get()));
+					context.BindResources(3, sceneTextures.pHZB->Get()->GetSRV());
 					{
 						GPU_PROFILE_SCOPE("Opaque", &context);
 						context.SetPipelineState(m_pVisibilityRenderingPSO);
@@ -562,6 +574,62 @@ void DemoApp::Update()
 						Renderer::DrawScene(context, pView, Batch::Blending::AlphaMask);
 					}
 				});
+
+
+		if (!m_pCamera->GetLockPrevTransform())
+		{
+			RG_GRAPH_SCOPE("HZB", graph);
+			Vector2i currentDimensions = hzbDimensions;
+
+			struct Parameters
+			{
+				Vector2 DimensionsInv;
+			};
+
+			graph.AddPass("HZB Create", RGPassFlag::Compute | RGPassFlag::NeverCull)
+				.Read(sceneTextures.pDepth)
+				.Write(sceneTextures.pHZB)
+				.Bind([=](CommandContext& context)
+					{
+						context.SetComputeRootSignature(m_pCommonRS);
+						context.SetPipelineState(m_pHZBCreatePSO);
+
+						Parameters parameters;
+						parameters.DimensionsInv = Vector2(1.0f / currentDimensions.x, 1.0f / currentDimensions.y);
+						context.SetRootConstants(0, parameters);
+						context.BindResources(2, sceneTextures.pHZB->Get()->GetUAV());
+						context.BindResources(3, sceneTextures.pDepth->Get()->GetSRV());
+						context.Dispatch(ComputeUtils::GetNumThreadGroups(currentDimensions.x, 16, currentDimensions.y, 16));
+					});
+
+			currentDimensions.x >>= 1;
+			currentDimensions.y >>= 1;
+
+			for (uint32 mipLevel = 1; mipLevel < hzbMips; ++mipLevel)
+			{
+				graph.AddPass("HZB Reduce", RGPassFlag::Compute | RGPassFlag::NeverCull)
+					.Write(sceneTextures.pHZB)
+					.Bind([=](CommandContext& context)
+						{
+							context.SetComputeRootSignature(m_pCommonRS);
+							context.SetPipelineState(m_pHZBCreatePSO);
+
+							Parameters parameters;
+							parameters.DimensionsInv = Vector2(1.0f / currentDimensions.x, 1.0f / currentDimensions.y);
+							context.SetRootConstants(0, parameters);
+							RefCountPtr<UnorderedAccessView> pUAV = m_pDevice->CreateUAV(sceneTextures.pHZB->Get(), TextureUAVDesc((uint8)mipLevel));
+							context.BindResources(2, pUAV.Get());
+							RefCountPtr<ShaderResourceView> pSRV = m_pDevice->CreateSRV(sceneTextures.pHZB->Get(), TextureSRVDesc((uint8)mipLevel - 1, 1));
+							context.BindResources(3, pSRV.Get());
+							context.Dispatch(ComputeUtils::GetNumThreadGroups(currentDimensions.x, 16, currentDimensions.y, 16));
+						});
+
+				currentDimensions.x >>= 1;
+				currentDimensions.y >>= 1;
+			}
+		}
+
+		VisualizeTexture(graph, sceneTextures.pHZB);
 	}
 
 	if (m_RenderPath == RenderPath::Clustered || m_RenderPath == RenderPath::Tiled || m_RenderPath == RenderPath::Visibility)
@@ -1458,7 +1526,8 @@ void DemoApp::InitializePipelines()
 		m_pDDGIVisualizePSO = m_pDevice->CreatePipeline(psoDesc);
 	}
 
-	// Texture visualize
+	m_pHZBCreatePSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "HZB.hlsl", "HZBCreateCS");
+
 	m_pVisualizeTexturePSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "ImageVisualize.hlsl", "CSMain");
 }
 
@@ -1775,6 +1844,12 @@ void DemoApp::UpdateImGui()
 			{
 				m_pCamera->SetFarPlane(farNear.x);
 				m_pCamera->SetNearPlane(farNear.y);
+			}
+
+			bool lockView = m_pCamera->GetLockPrevTransform();
+			if (ImGui::Checkbox("Lock View Transform", &lockView))
+			{
+				m_pCamera->SetLockPrevTransform(lockView);
 			}
 		}
 

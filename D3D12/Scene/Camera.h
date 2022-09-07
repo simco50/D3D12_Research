@@ -26,6 +26,8 @@ public:
 	void SetFarPlane(float farPlane);
 
 	void SetJitterWeight(float weight);
+	void SetLockPrevTransform(bool lock) { m_UpdatePrevMatrices = !lock; }
+	bool GetLockPrevTransform() const { return !m_UpdatePrevMatrices; }
 
 	const ViewTransform& GetViewTransform() const { return m_Transform; }
 
@@ -53,6 +55,7 @@ protected:
 private:
 	void UpdateMatrices() const;
 
+	bool m_UpdatePrevMatrices = true;
 	mutable ViewTransform m_Transform;
 	mutable bool m_Dirty = true;
 };
