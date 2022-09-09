@@ -487,7 +487,7 @@ void DemoApp::Update()
 	sceneTextures.pVelocity =			graph.CreateTexture("Velocity",								TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, ResourceFormat::RG16_FLOAT));
 	sceneTextures.pDepth =				graph.CreateTexture("Depth Stencil",						TextureDesc::CreateDepth(viewDimensions.x, viewDimensions.y, ResourceFormat::D32_FLOAT, TextureFlag::None, 1, ClearBinding(0.0f, 0)));
 	sceneTextures.pResolvedDepth =		graph.CreateTexture("Resolved Depth",						TextureDesc::CreateDepth(viewDimensions.x, viewDimensions.y, ResourceFormat::D32_FLOAT, TextureFlag::None, 1, ClearBinding(0.0f, 0)));
-	sceneTextures.pHZB =				RGUtils::CreatePersistentTexture(graph, "HZB",				TextureDesc::Create2D(hzbDimensions.x, hzbDimensions.y, ResourceFormat::R32_FLOAT, TextureFlag::None, 1, hzbMips), &m_pHZB, true);
+	sceneTextures.pHZB =				RGUtils::CreatePersistentTexture(graph, "HZB",				TextureDesc::Create2D(hzbDimensions.x, hzbDimensions.y, ResourceFormat::R32_FLOAT, TextureFlag::UnorderedAccess, 1, hzbMips), &m_pHZB, true);
 
 	if (m_RenderPath == RenderPath::Clustered || m_RenderPath == RenderPath::Tiled || m_RenderPath == RenderPath::Visibility)
 	{
@@ -1477,16 +1477,16 @@ void DemoApp::InitializePipelines()
 		//Pipeline state
 		PipelineStateInitializer psoDesc;
 		psoDesc.SetRootSignature(m_pCommonRS);
-		psoDesc.SetAmplificationShader("VisibilityRendering.hlsl", "ASMain");
-		psoDesc.SetMeshShader("VisibilityRendering.hlsl", "MSMain");
-		psoDesc.SetPixelShader("VisibilityRendering.hlsl", "PSMain");
+		psoDesc.SetAmplificationShader("VisibilityBuffer.hlsl", "ASMain");
+		psoDesc.SetMeshShader("VisibilityBuffer.hlsl", "MSMain");
+		psoDesc.SetPixelShader("VisibilityBuffer.hlsl", "PSMain");
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
 		psoDesc.SetRenderTargetFormats(ResourceFormat::R32_UINT, ResourceFormat::D32_FLOAT, 1);
 		psoDesc.SetName("Visibility Rendering");
 		m_pVisibilityRenderingPSO = m_pDevice->CreatePipeline(psoDesc);
 
 		psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
-		psoDesc.SetPixelShader("VisibilityRendering.hlsl", "PSMain", { "ALPHA_TEST" });
+		psoDesc.SetPixelShader("VisibilityBuffer.hlsl", "PSMain", { "ALPHA_TEST" });
 		psoDesc.SetName("Visibility Rendering Masked");
 		m_pVisibilityRenderingMaskedPSO = m_pDevice->CreatePipeline(psoDesc);
 

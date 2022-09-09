@@ -9,21 +9,26 @@ Texture2D<float> tHZB : register(t0);
 
 bool IsVisible(MeshData mesh, float4x4 world, uint meshlet)
 {
-	MeshletBounds cullData = BufferLoad<MeshletBounds>(mesh.BufferIndex, meshlet, mesh.MeshletBoundsOffset);
+	MeshletBounds bounds = BufferLoad<MeshletBounds>(mesh.BufferIndex, meshlet, mesh.MeshletBoundsOffset);
 
-	float4 center = mul(float4(cullData.Center, 1), world);
-	float3 radius3 = abs(mul(cullData.Radius.xxx, (float3x3)world));
+	float4 center = mul(float4(bounds.Center, 1), world);
+	float3 radius3 = abs(mul(bounds.Radius.xxx, (float3x3)world));
 	float radius = Max3(radius3);
-	float3 coneAxis = normalize(mul(cullData.ConeAxis, (float3x3)world));
+	float3 coneAxis = normalize(mul(bounds.ConeAxis, (float3x3)world));
 
-	HZBCullData hzbData = HZBCull(center.xyz, radius3, tHZB);
-	if(!hzbData.IsVisible)
+	FrustumCullData cullData = FrustumCull(center.xyz, radius3, cView.ViewProjectionPrev);
+	if(!cullData.IsVisible)
+	{
+		return false;
+	}
+
+	if(!HZBCull(cullData, tHZB))
 	{
 		return false;
 	}
 
 	float3 viewLocation = cView.ViewLocation;
-	if(dot(viewLocation - center.xyz, coneAxis) >= cullData.ConeCutoff * length(center.xyz - viewLocation) + radius)
+	if(dot(viewLocation - center.xyz, coneAxis) >= bounds.ConeCutoff * length(center.xyz - viewLocation) + radius)
 	{
 		return false;
 	}

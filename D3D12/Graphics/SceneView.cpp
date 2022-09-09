@@ -231,6 +231,7 @@ namespace Renderer
 	void DrawScene(CommandContext& context, const SceneView* pView, const VisibilityMask& visibility, Batch::Blending blendModes)
 	{
 		std::vector<const Batch*> meshes;
+		meshes.reserve(pView->Batches.size());
 		for (const Batch& b : pView->Batches)
 		{
 			if (EnumHasAnyFlags(b.BlendMode, blendModes) && visibility.GetBit(b.InstanceData.World))
