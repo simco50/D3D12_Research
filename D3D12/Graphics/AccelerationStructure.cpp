@@ -84,8 +84,7 @@ void AccelerationStructure::Build(CommandContext& context, const SceneView& view
 				context.InsertUavBarrier(pMesh->pBLAS);
 
 				pMesh->pBLAS = pBLAS.Detach();
-
-				m_QueuedRequests.push_back({ &pMesh->pBLAS });
+				m_QueuedRequests.push_back(&pMesh->pBLAS);
 			}
 
 			if (pMesh->pBLAS)
@@ -131,6 +130,8 @@ void AccelerationStructure::Build(CommandContext& context, const SceneView& view
 			//E_LOG(Info, "Built %d BLAS instances. %d vertices", numBuiltBLAS, numBLASBuiltVertices);
 		}
 
+		ProcessCompaction(context);
+
 		D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS prebuildInfo{};
 		prebuildInfo.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
 		prebuildInfo.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
@@ -161,8 +162,6 @@ void AccelerationStructure::Build(CommandContext& context, const SceneView& view
 
 		pCmd->BuildRaytracingAccelerationStructure(&asDesc, 0, nullptr);
 		context.InsertUavBarrier(m_pTLAS);
-
-		ProcessCompaction(context);
 	}
 }
 
@@ -187,22 +186,21 @@ void AccelerationStructure::ProcessCompaction(CommandContext& context)
 		}
 
 		const uint64* pPostCompactSizes = static_cast<uint64*>(m_pPostBuildInfoReadbackBuffer->GetMappedData());
-		for (const CompactionRequest& request : m_ActiveRequests)
+		for (Buffer** pSourceBLAS: m_ActiveRequests)
 		{
 			uint64 size = *pPostCompactSizes++;
-			Buffer* pSourceBLAS = *request.pBLAS;
 			RefCountPtr<Buffer> pTargetBLAS = context.GetParent()->CreateBuffer(BufferDesc::CreateBLAS(size), "BLAS.Compacted");
-			context.GetRaytracingCommandList()->CopyRaytracingAccelerationStructure(pTargetBLAS->GetGpuHandle(), pSourceBLAS->GetGpuHandle(), D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_COMPACT);
-			delete* request.pBLAS;
-			*request.pBLAS = pTargetBLAS.Detach();
+			context.GetRaytracingCommandList()->CopyRaytracingAccelerationStructure(pTargetBLAS->GetGpuHandle(), (*pSourceBLAS)->GetGpuHandle(), D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_COMPACT);
+			delete *pSourceBLAS;
+			*pSourceBLAS = pTargetBLAS.Detach();
 		}
 		//E_LOG(Info, "Compacted %d BLAS instances", m_ActiveRequests.size());
 		m_ActiveRequests.clear();
 	}
 
-	for (CompactionRequest& request : m_QueuedRequests)
+	for (Buffer** pSourceBLAS : m_QueuedRequests)
 	{
-		m_ActiveRequests.push_back({ request.pBLAS });
+		m_ActiveRequests.push_back(pSourceBLAS);
 		if (m_ActiveRequests.size() >= Tweakables::gMaxNumCompactionsPerFrame)
 		{
 			break;
@@ -222,9 +220,9 @@ void AccelerationStructure::ProcessCompaction(CommandContext& context)
 
 		std::vector<D3D12_GPU_VIRTUAL_ADDRESS> blasAddresses;
 		blasAddresses.reserve(m_ActiveRequests.size());
-		for (CompactionRequest& request : m_ActiveRequests)
+		for (Buffer** pSourceBLAS : m_ActiveRequests)
 		{
-			blasAddresses.push_back((*request.pBLAS)->GetGpuHandle());
+			blasAddresses.push_back((*pSourceBLAS)->GetGpuHandle());
 		}
 		D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_DESC desc;
 		desc.DestBuffer = m_pPostBuildInfoBuffer->GetGpuHandle();

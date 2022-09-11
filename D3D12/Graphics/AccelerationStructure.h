@@ -22,10 +22,6 @@ private:
 	RefCountPtr<Buffer> m_pPostBuildInfoBuffer;
 	RefCountPtr<Buffer> m_pPostBuildInfoReadbackBuffer;
 	SyncPoint m_PostBuildInfoFence;
-	struct CompactionRequest
-	{
-		Buffer** pBLAS;
-	};
-	std::vector<CompactionRequest> m_QueuedRequests;
-	std::vector<CompactionRequest> m_ActiveRequests;
+	std::vector<Buffer**> m_QueuedRequests;
+	std::vector<Buffer**> m_ActiveRequests;
 };
