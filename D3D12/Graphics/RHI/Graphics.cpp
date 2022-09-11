@@ -903,7 +903,7 @@ RefCountPtr<UnorderedAccessView> GraphicsDevice::CreateUAV(Buffer* pBuffer, cons
 	if (desc.Counter)
 	{
 		std::string name = pBuffer->GetName() + " - Counter";
-		pCounter = GetParent()->GetParent()->CreateBuffer(BufferDesc::CreateByteAddress(4), name.c_str());
+		pCounter = GetParent()->GetParent()->CreateBuffer(BufferDesc::CreateByteAddress(4, bufferDesc.Usage & BufferFlag::NoBindless), name.c_str());
 	}
 
 	D3D12_CPU_DESCRIPTOR_HANDLE descriptor = AllocateDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);

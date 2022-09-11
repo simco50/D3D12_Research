@@ -32,7 +32,6 @@ struct SubMesh
 	Mesh* pParent = nullptr;
 
 	Buffer* pBLAS = nullptr;
-	Buffer* pBLASScratch = nullptr;
 };
 
 struct SubMeshInstance

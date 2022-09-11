@@ -598,5 +598,4 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 void SubMesh::Destroy()
 {
 	delete pBLAS;
-	delete pBLASScratch;
 }

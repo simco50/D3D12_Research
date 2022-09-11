@@ -113,7 +113,7 @@ public:
 	GraphicsResource(GraphicsDevice* pParent, ID3D12Resource* pResource);
 	~GraphicsResource();
 
-	void* GetMappedData() const { return m_pMappedData; }
+	void* GetMappedData() const { check(m_pMappedData); return m_pMappedData; }
 	void SetImmediateDelete(bool immediate) { m_ImmediateDelete = immediate; }
 
 	void SetName(const char* pName);

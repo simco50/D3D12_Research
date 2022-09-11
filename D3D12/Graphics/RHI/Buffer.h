@@ -44,7 +44,7 @@ struct BufferDesc
 
 	static BufferDesc CreateReadback(uint64 size)
 	{
-		return CreateBuffer(size, BufferFlag::Readback);
+		return CreateBuffer(size, BufferFlag::Readback | BufferFlag::NoBindless);
 	}
 
 	static BufferDesc CreateByteAddress(uint64 bytes, BufferFlag usage = BufferFlag::ShaderResource)
@@ -57,7 +57,17 @@ struct BufferDesc
 		return desc;
 	}
 
-	static BufferDesc CreateAccelerationStructure(uint64 bytes)
+	static BufferDesc CreateBLAS(uint64 bytes)
+	{
+		check(bytes % 4 == 0);
+		BufferDesc desc;
+		desc.Size = bytes;
+		desc.ElementSize = 4;
+		desc.Usage = desc.Usage | BufferFlag::AccelerationStructure | BufferFlag::UnorderedAccess | BufferFlag::NoBindless;
+		return desc;
+	}
+
+	static BufferDesc CreateTLAS(uint64 bytes)
 	{
 		check(bytes % 4 == 0);
 		BufferDesc desc;
