@@ -4,14 +4,18 @@
 #include "RHI/CommandContext.h"
 #include "RHI/Buffer.h"
 #include "RHI/DynamicResourceAllocator.h"
+#include "SceneView.h"
 #include "Mesh.h"
+#include "Core/ConsoleVariables.h"
 
-void AccelerationStructure::AddInstance(uint32 ID, SubMesh* pMesh, const Matrix& transform)
+namespace Tweakables
 {
-	m_Instances.push_back(Instance{ ID, pMesh, transform });
+	static const uint32 gMaxNumBLASVerticesPerFrame = 100'000;
+
+	extern ConsoleVariable<float> g_TLASBoundsThreshold;
 }
 
-void AccelerationStructure::Build(CommandContext& context)
+void AccelerationStructure::Build(CommandContext& context, const SceneView& view)
 {
 	GraphicsDevice* pDevice = context.GetParent();
 	if (pDevice->GetCapabilities().SupportsRaytracing())
@@ -21,12 +25,17 @@ void AccelerationStructure::Build(CommandContext& context)
 		D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAGS buildFlags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
 		std::vector<D3D12_RAYTRACING_INSTANCE_DESC> instanceDescs;
 
-		for (const Instance& instance : m_Instances)
+		uint32 numBLASBuiltVertices = 0;
+
+		for (const Batch& batch : view.Batches)
 		{
-			SubMesh* pMesh = instance.pMesh;
+			SubMesh* pMesh = batch.pMesh;
 			Mesh* pParentMesh = pMesh->pParent;
-			if (!pMesh->pBLAS)
+
+			if (!pMesh->pBLAS && numBLASBuiltVertices < Tweakables::gMaxNumBLASVerticesPerFrame)
 			{
+				numBLASBuiltVertices += pMesh->PositionStreamLocation.Elements;
+
 				const Material& material = pParentMesh->GetMaterial(pMesh->MaterialId);
 				D3D12_RAYTRACING_GEOMETRY_DESC geometryDesc{};
 				geometryDesc.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
@@ -72,41 +81,42 @@ void AccelerationStructure::Build(CommandContext& context)
 				pMesh->pBLASScratch = pBLASScratch.Detach();
 			}
 
-#if 0
-			if (m_RenderPath != RenderPath::PathTracing)
+			if (pMesh->pBLAS)
 			{
-				// Cull object that are small to the viewer - Deligiannis2019
-				Vector3 cameraVec = (batch.Bounds.Center - view.View.Position);
-				float angle = tanf(batch.Radius / cameraVec.Length());
-				if (angle < Tweakables::g_TLASBoundsThreshold && cameraVec.Length() > batch.Radius)
+				//if (m_RenderPath != RenderPath::PathTracing)
 				{
-					continue;
+					// Cull object that are small to the viewer - Deligiannis2019
+					Vector3 cameraVec = (batch.Bounds.Center - view.View.Position);
+					float angle = tanf(batch.Radius / cameraVec.Length());
+					if (angle < Tweakables::g_TLASBoundsThreshold && cameraVec.Length() > batch.Radius)
+					{
+						continue;
+					}
 				}
+
+				D3D12_RAYTRACING_INSTANCE_DESC instanceDesc{};
+				instanceDesc.AccelerationStructure = pMesh->pBLAS->GetGpuHandle();
+				instanceDesc.Flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE;
+				instanceDesc.InstanceContributionToHitGroupIndex = 0;
+				instanceDesc.InstanceID = batch.InstanceData.World;
+				instanceDesc.InstanceMask = 0xFF;
+
+				// Hack
+				if (batch.WorldMatrix.Determinant() < 0)
+				{
+					instanceDesc.Flags |= D3D12_RAYTRACING_INSTANCE_FLAG_TRIANGLE_FRONT_COUNTERCLOCKWISE;
+				}
+
+				//The layout of Transform is a transpose of how affine matrices are typically stored in memory. Instead of four 3-vectors, Transform is laid out as three 4-vectors.
+				auto ApplyTransform = [](const Matrix& m, D3D12_RAYTRACING_INSTANCE_DESC& desc)
+				{
+					Matrix transpose = m.Transpose();
+					memcpy(&desc.Transform, &transpose, sizeof(float) * 12);
+				};
+
+				ApplyTransform(batch.WorldMatrix, instanceDesc);
+				instanceDescs.push_back(instanceDesc);
 			}
-#endif
-
-			D3D12_RAYTRACING_INSTANCE_DESC instanceDesc{};
-			instanceDesc.AccelerationStructure = pMesh->pBLAS->GetGpuHandle();
-			instanceDesc.Flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE;
-			instanceDesc.InstanceContributionToHitGroupIndex = 0;
-			instanceDesc.InstanceID = instance.ID;
-			instanceDesc.InstanceMask = 0xFF;
-
-			// Hack
-			if (instance.Transform.Determinant() < 0)
-			{
-				instanceDesc.Flags |= D3D12_RAYTRACING_INSTANCE_FLAG_TRIANGLE_FRONT_COUNTERCLOCKWISE;
-			}
-
-			//The layout of Transform is a transpose of how affine matrices are typically stored in memory. Instead of four 3-vectors, Transform is laid out as three 4-vectors.
-			auto ApplyTransform = [](const Matrix& m, D3D12_RAYTRACING_INSTANCE_DESC& desc)
-			{
-				Matrix transpose = m.Transpose();
-				memcpy(&desc.Transform, &transpose, sizeof(float) * 12);
-			};
-
-			ApplyTransform(instance.Transform, instanceDesc);
-			instanceDescs.push_back(instanceDesc);
 		}
 
 		D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS prebuildInfo{};
@@ -151,7 +161,3 @@ ShaderResourceView* AccelerationStructure::GetSRV() const
 	return nullptr;
 }
 
-void AccelerationStructure::Reset()
-{
-	m_Instances.clear();
-}

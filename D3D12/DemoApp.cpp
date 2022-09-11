@@ -465,7 +465,7 @@ void DemoApp::Update()
 	
 	CommandContext* pComputeContext = m_pDevice->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COMPUTE);
 	m_pDevice->GetCommandQueue(pComputeContext->GetType())->InsertWait(pDirectQueue);
-	pViewMut->AccelerationStructure.Build(*pComputeContext);
+	pViewMut->AccelerationStructure.Build(*pComputeContext, *pView);
 	pDirectQueue->InsertWait(pComputeContext->Execute(false));
 
 	RGGraph graph(m_pDevice, *m_RenderGraphPool);

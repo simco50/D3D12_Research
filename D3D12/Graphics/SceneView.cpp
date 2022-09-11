@@ -114,8 +114,6 @@ namespace Renderer
 		std::vector<Batch> sceneBatches;
 		std::vector<Matrix> transforms;
 
-		pView->AccelerationStructure.Reset();
-
 		for (const auto& pMesh : pWorld->Meshes)
 		{
 			for (const SubMeshInstance& node : pMesh->GetMeshInstances())
@@ -148,8 +146,6 @@ namespace Renderer
 				parentMesh.Bounds.Transform(batch.Bounds, batch.WorldMatrix);
 				batch.Radius = Vector3(batch.Bounds.Extents).Length();
 				sceneBatches.push_back(batch);
-
-				pView->AccelerationStructure.AddInstance(meshInstance.World, &parentMesh, batch.WorldMatrix);
 			}
 
 			for (const SubMesh& subMesh : pMesh->GetMeshes())

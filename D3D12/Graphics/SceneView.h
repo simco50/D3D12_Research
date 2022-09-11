@@ -69,7 +69,7 @@ struct Batch
 	};
 	ShaderInterop::InstanceData InstanceData;
 	Blending BlendMode = Blending::Opaque;
-	const SubMesh* pMesh = nullptr;
+	SubMesh* pMesh = nullptr;
 	Matrix WorldMatrix;
 	BoundingBox Bounds;
 	float Radius;
