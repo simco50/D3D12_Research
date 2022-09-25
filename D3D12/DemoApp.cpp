@@ -458,13 +458,13 @@ void DemoApp::Update()
 
 	CommandQueue* pDirectQueue = m_pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT);
 
+	m_pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY)->InsertWait(pDirectQueue);
 	CommandContext* pCopyContext = m_pDevice->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COPY);
-	m_pDevice->GetCommandQueue(pCopyContext->GetType())->InsertWait(pDirectQueue);
 	Renderer::UploadSceneData(*pCopyContext, pViewMut, pWorldMut);
 	pDirectQueue->InsertWait(pCopyContext->Execute(false));
 	
+	m_pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COMPUTE)->InsertWait(pDirectQueue);
 	CommandContext* pComputeContext = m_pDevice->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COMPUTE);
-	m_pDevice->GetCommandQueue(pComputeContext->GetType())->InsertWait(pDirectQueue);
 	pViewMut->AccelerationStructure.Build(*pComputeContext, *pView);
 	pDirectQueue->InsertWait(pComputeContext->Execute(false));
 

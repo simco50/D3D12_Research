@@ -17,6 +17,8 @@ private:
 
 	RefCountPtr<Buffer> m_pTLAS;
 	RefCountPtr<Buffer> m_pScratch;
+	RefCountPtr<Buffer> m_pBLASInstancesTargetBuffer;
+	RefCountPtr<Buffer> m_pBLASInstancesSourceBuffer;
 
 	// Compaction
 	RefCountPtr<Buffer> m_pPostBuildInfoBuffer;

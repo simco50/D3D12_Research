@@ -8,6 +8,8 @@
 #include "Mesh.h"
 #include "Profiler.h"
 #include "Core/ConsoleVariables.h"
+#include "RHI/PipelineState.h"
+#include "RHI/RootSignature.h"
 
 namespace Tweakables
 {
@@ -17,8 +19,23 @@ namespace Tweakables
 	extern ConsoleVariable<float> g_TLASBoundsThreshold;
 }
 
+static GlobalResource<RootSignature> gCommonRS;
+static GlobalResource<PipelineState> gUpdateTLASPSO;
+
 void AccelerationStructure::Build(CommandContext& context, const SceneView& view)
 {
+	if (!gCommonRS)
+	{
+		gCommonRS = new RootSignature(context.GetParent());
+		gCommonRS->AddRootConstants(0, 1);
+		gCommonRS->AddConstantBufferView(100);
+		gCommonRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1);
+		gCommonRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1);
+		gCommonRS->Finalize("Update TLAS");
+
+		gUpdateTLASPSO = context.GetParent()->CreateComputePipeline(gCommonRS, "UpdateTLAS.hlsl", "UpdateTLASCS");
+	}
+
 	GraphicsDevice* pDevice = context.GetParent();
 	if (pDevice->GetCapabilities().SupportsRaytracing())
 	{
@@ -27,10 +44,18 @@ void AccelerationStructure::Build(CommandContext& context, const SceneView& view
 		ID3D12GraphicsCommandList4* pCmd = context.GetRaytracingCommandList();
 
 		D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAGS buildFlags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
-		std::vector<D3D12_RAYTRACING_INSTANCE_DESC> instanceDescs;
 
 		uint32 numBLASBuiltVertices = 0;
 		uint32 numBuiltBLAS = 0;
+
+		struct BLASInstance
+		{
+			uint64 GPUAddress;
+			uint32 WorldMatrix;
+			uint32 Flags;
+		};
+		std::vector<BLASInstance> blasInstances;
+		blasInstances.reserve(view.Batches.size());
 
 		for (const Batch& batch : view.Batches)
 		{
@@ -100,28 +125,14 @@ void AccelerationStructure::Build(CommandContext& context, const SceneView& view
 					}
 				}
 
-				D3D12_RAYTRACING_INSTANCE_DESC instanceDesc{};
-				instanceDesc.AccelerationStructure = pMesh->pBLAS->GetGpuHandle();
-				instanceDesc.Flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE;
-				instanceDesc.InstanceContributionToHitGroupIndex = 0;
-				instanceDesc.InstanceID = batch.InstanceData.World;
-				instanceDesc.InstanceMask = 0xFF;
-
-				// Hack
+				BLASInstance& blasInstance = blasInstances.emplace_back();
+				blasInstance.GPUAddress = pMesh->pBLAS->GetGpuHandle();
+				blasInstance.Flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE;
+				blasInstance.WorldMatrix = batch.InstanceData.World;
 				if (batch.WorldMatrix.Determinant() < 0)
 				{
-					instanceDesc.Flags |= D3D12_RAYTRACING_INSTANCE_FLAG_TRIANGLE_FRONT_COUNTERCLOCKWISE;
+					blasInstance.Flags |= D3D12_RAYTRACING_INSTANCE_FLAG_TRIANGLE_FRONT_COUNTERCLOCKWISE;
 				}
-
-				//The layout of Transform is a transpose of how affine matrices are typically stored in memory. Instead of four 3-vectors, Transform is laid out as three 4-vectors.
-				auto ApplyTransform = [](const Matrix& m, D3D12_RAYTRACING_INSTANCE_DESC& desc)
-				{
-					Matrix transpose = m.Transpose();
-					memcpy(&desc.Transform, &transpose, sizeof(float) * 12);
-				};
-
-				ApplyTransform(batch.WorldMatrix, instanceDesc);
-				instanceDescs.push_back(instanceDesc);
 			}
 		}
 
@@ -130,38 +141,69 @@ void AccelerationStructure::Build(CommandContext& context, const SceneView& view
 			//E_LOG(Info, "Built %d BLAS instances. %d vertices", numBuiltBLAS, numBLASBuiltVertices);
 		}
 
-		ProcessCompaction(context);
-
-		D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS prebuildInfo{};
-		prebuildInfo.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
-		prebuildInfo.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
-		prebuildInfo.Flags = buildFlags;
-		prebuildInfo.NumDescs = (uint32)instanceDescs.size();
-
-		D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO info{};
-		pDevice->GetRaytracingDevice()->GetRaytracingAccelerationStructurePrebuildInfo(&prebuildInfo, &info);
-
-		if (!m_pTLAS || m_pTLAS->GetSize() < info.ResultDataMaxSizeInBytes)
 		{
-			m_pScratch = pDevice->CreateBuffer(BufferDesc::CreateByteAddress(Math::AlignUp<uint64>(info.ScratchDataSizeInBytes, D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BYTE_ALIGNMENT)), "TLAS.ScratchBuffer");
-			m_pTLAS = pDevice->CreateBuffer(BufferDesc::CreateTLAS(Math::AlignUp<uint64>(info.ResultDataMaxSizeInBytes, D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BYTE_ALIGNMENT)), "TLAS.Buffer");
+			GPU_PROFILE_SCOPE("BLAS Compaction", &context);
+			ProcessCompaction(context);
 		}
 
-		DynamicAllocation allocation = context.AllocateTransientMemory(instanceDescs.size() * sizeof(D3D12_RAYTRACING_INSTANCE_DESC));
-		memcpy(allocation.pMappedMemory, instanceDescs.data(), instanceDescs.size() * sizeof(D3D12_RAYTRACING_INSTANCE_DESC));
+		if(!blasInstances.empty())
+		{
+			GPU_PROFILE_SCOPE("TLAS Data Generation", &context);
 
-		D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC asDesc{};
-		asDesc.DestAccelerationStructureData = m_pTLAS->GetGpuHandle();
-		asDesc.ScratchAccelerationStructureData = m_pScratch->GetGpuHandle();
-		asDesc.Inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
-		asDesc.Inputs.Flags = buildFlags;
-		asDesc.Inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
-		asDesc.Inputs.InstanceDescs = allocation.GpuHandle;
-		asDesc.Inputs.NumDescs = (uint32)instanceDescs.size();
-		asDesc.SourceAccelerationStructureData = 0;
+			D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS prebuildInfo{};
+			prebuildInfo.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
+			prebuildInfo.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
+			prebuildInfo.Flags = buildFlags;
+			prebuildInfo.NumDescs = (uint32)blasInstances.size();
 
-		pCmd->BuildRaytracingAccelerationStructure(&asDesc, 0, nullptr);
-		context.InsertUavBarrier(m_pTLAS);
+			D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO info{};
+			pDevice->GetRaytracingDevice()->GetRaytracingAccelerationStructurePrebuildInfo(&prebuildInfo, &info);
+
+			uint32 numInstances = Math::AlignUp((uint32)blasInstances.size(), 128u);
+			if (!m_pBLASInstancesSourceBuffer || m_pBLASInstancesSourceBuffer->GetNumElements() < numInstances)
+			{
+				m_pBLASInstancesSourceBuffer = pDevice->CreateBuffer(BufferDesc::CreateStructured(numInstances, sizeof(D3D12_RAYTRACING_INSTANCE_DESC)), "TLAS.BLASInstanceTargetDescs");
+				m_pBLASInstancesTargetBuffer = pDevice->CreateBuffer(BufferDesc::CreateStructured(numInstances, sizeof(D3D12_RAYTRACING_INSTANCE_DESC)), "TLAS.BLASInstanceTargetDescs");
+			}
+
+			context.InsertResourceBarrier(m_pBLASInstancesSourceBuffer, D3D12_RESOURCE_STATE_COPY_DEST);
+			context.WriteBuffer(m_pBLASInstancesSourceBuffer, blasInstances.data(), sizeof(BLASInstance) * blasInstances.size());
+			context.InsertResourceBarrier(m_pBLASInstancesSourceBuffer, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+
+			if (!m_pTLAS || m_pTLAS->GetSize() < info.ResultDataMaxSizeInBytes)
+			{
+				m_pScratch = pDevice->CreateBuffer(BufferDesc::CreateByteAddress(Math::AlignUp<uint64>(info.ScratchDataSizeInBytes, D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BYTE_ALIGNMENT)), "TLAS.ScratchBuffer");
+				m_pTLAS = pDevice->CreateBuffer(BufferDesc::CreateTLAS(Math::AlignUp<uint64>(info.ResultDataMaxSizeInBytes, D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BYTE_ALIGNMENT)), "TLAS.Buffer");
+			}
+
+			context.SetComputeRootSignature(gCommonRS);
+			context.SetPipelineState(gUpdateTLASPSO);
+			context.SetRootConstants(0, (uint32)blasInstances.size());
+			context.SetRootCBV(1, Renderer::GetViewUniforms(&view));
+			context.BindResources(2, m_pBLASInstancesTargetBuffer->GetUAV());
+			context.BindResources(3, m_pBLASInstancesSourceBuffer->GetSRV());
+			context.Dispatch(ComputeUtils::GetNumThreadGroups((uint32)blasInstances.size(), 32));
+
+			context.InsertUavBarrier(m_pBLASInstancesTargetBuffer);
+			context.FlushResourceBarriers();
+		}
+
+		{
+			GPU_PROFILE_SCOPE("Build TLAS", &context);
+
+			D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC asDesc{};
+			asDesc.DestAccelerationStructureData = m_pTLAS->GetGpuHandle();
+			asDesc.ScratchAccelerationStructureData = m_pScratch->GetGpuHandle();
+			asDesc.Inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
+			asDesc.Inputs.Flags = buildFlags;
+			asDesc.Inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
+			asDesc.Inputs.InstanceDescs = m_pBLASInstancesTargetBuffer->GetGpuHandle();
+			asDesc.Inputs.NumDescs = (uint32)blasInstances.size();
+			asDesc.SourceAccelerationStructureData = 0;
+
+			pCmd->BuildRaytracingAccelerationStructure(&asDesc, 0, nullptr);
+			context.InsertUavBarrier(m_pTLAS);
+		}
 	}
 }
 
@@ -176,8 +218,6 @@ ShaderResourceView* AccelerationStructure::GetSRV() const
 
 void AccelerationStructure::ProcessCompaction(CommandContext& context)
 {
-	GPU_PROFILE_SCOPE("BLAS Compaction", &context);
-
 	if (!m_ActiveRequests.empty())
 	{
 		if (!m_PostBuildInfoFence.IsComplete())
