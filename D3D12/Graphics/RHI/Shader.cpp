@@ -429,10 +429,10 @@ void ShaderManager::RecompileFromFileChange(const std::string& filePath)
 				for (auto shader : objectMap.Shaders)
 				{
 					Shader* pOldShader = shader.second;
-					Shader* pNewShader = GetShader(dependency.c_str(), pOldShader->Type, pOldShader->pEntryPoint, pOldShader->Defines, true);
+					Shader* pNewShader = GetShader(dependency.c_str(), pOldShader->Type, pOldShader->EntryPoint.c_str(), pOldShader->Defines, true);
 					if (pNewShader)
 					{
-						E_LOG(Info, "Reloaded shader: \"%s - %s\"", dependency.c_str(), pNewShader->pEntryPoint);
+						E_LOG(Info, "Reloaded shader: \"%s - %s\"", dependency.c_str(), pNewShader->EntryPoint.c_str());
 						m_OnShaderRecompiledEvent.Broadcast(pOldShader, pNewShader);
 						m_Shaders.remove_if([pOldShader](const std::unique_ptr<Shader>& pS) { return pS.get() == pOldShader; });
 					}

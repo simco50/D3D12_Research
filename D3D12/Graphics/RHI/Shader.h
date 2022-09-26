@@ -40,10 +40,10 @@ struct ShaderLibrary
 struct Shader : public ShaderLibrary
 {
 	Shader(const ShaderBlob& shaderBlob, ShaderType shaderType, const char* pEntryPoint, const Span<ShaderDefine>& defines)
-		: ShaderLibrary(shaderBlob, defines), Type(shaderType), pEntryPoint(pEntryPoint)
+		: ShaderLibrary(shaderBlob, defines), Type(shaderType), EntryPoint(pEntryPoint)
 	{}
 	ShaderType Type;
-	const char* pEntryPoint;
+	std::string EntryPoint;
 };
 
 class ShaderManager

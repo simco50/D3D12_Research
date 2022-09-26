@@ -284,7 +284,7 @@ D3D12_PIPELINE_STATE_STREAM_DESC PipelineStateInitializer::GetDesc(GraphicsDevic
 				GetByteCode((ShaderType)i) = pShader->GetByteCode();
 				if (m_Name.empty())
 				{
-					m_Name = Sprintf("%s (Unnamed)", pShader->pEntryPoint);
+					m_Name = Sprintf("%s (Unnamed)", pShader->EntryPoint.c_str());
 				}
 			}
 

@@ -165,6 +165,7 @@ void CommandContext::CopyTexture(const Texture* pSource, const Buffer* pDestinat
 
 	CD3DX12_TEXTURE_COPY_LOCATION srcLocation(pSource->GetResource(), sourceSubresource);
 	CD3DX12_TEXTURE_COPY_LOCATION dstLocation(pDestination->GetResource(), textureFootprint);
+	FlushResourceBarriers();
 	m_pCommandList->CopyTextureRegion(&dstLocation, destinationOffset, 0, 0, &srcLocation, &sourceRegion);
 }
 
@@ -173,6 +174,7 @@ void CommandContext::CopyTexture(const Texture* pSource, const Texture* pDestina
 	FlushResourceBarriers();
 	CD3DX12_TEXTURE_COPY_LOCATION srcLocation(pSource->GetResource(), sourceSubresource);
 	CD3DX12_TEXTURE_COPY_LOCATION dstLocation(pDestination->GetResource(), destinationSubregion);
+	FlushResourceBarriers();
 	m_pCommandList->CopyTextureRegion(&dstLocation, destinationRegion.left, destinationRegion.top, destinationRegion.front, &srcLocation, &sourceRegion);
 }
 
