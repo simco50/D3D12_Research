@@ -7,6 +7,7 @@
 #include "Core/ConsoleVariables.h"
 #include "Core/Window.h"
 #include "DemoApp.h"
+#include "Content/Font.h"
 
 #ifdef _DEBUG
 #define _CRTDBG_MAP_ALLOC
@@ -36,6 +37,18 @@ int WINAPI WinMain(_In_ HINSTANCE /*hInstance*/, _In_opt_ HINSTANCE /*hPrevInsta
 	}
 
 	Console::Initialize();
+
+	{
+		GraphicsDeviceOptions options;
+		options.UseDebugDevice = true;
+		options.UseDRED = true;
+		RefCountPtr<GraphicsDevice> pDevice = new GraphicsDevice(options);
+		FontTest(pDevice);
+	}
+
+#if 0
+
+
 	ConsoleManager::Initialize();
 	TaskQueue::Initialize(std::thread::hardware_concurrency());
 
@@ -63,6 +76,7 @@ int WINAPI WinMain(_In_ HINSTANCE /*hInstance*/, _In_opt_ HINSTANCE /*hPrevInsta
 
 	TaskQueue::Shutdown();
 	Console::Shutdown();
+#endif
 
 	return 0;
 }
