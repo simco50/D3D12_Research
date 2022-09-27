@@ -77,10 +77,12 @@ struct FontGlyph
 	uint32 LeftBearing;
 	uint32 RightBearing;
 	Vector2i AtlasLocation;
+	Vector2i Inc;
 };
 
 struct Font
 {
+	const char* pName;
 	std::vector<FontGlyph> Glyphs;
 	uint32 Ascent;
 	uint32 Descent;
@@ -155,6 +157,7 @@ static bool ProcessFont(Font& outFont, const FontCreateSettings& config)
 	outFont.Ascent = pMetric->otmAscent;
 	outFont.Descent = pMetric->otmDescent;
 	outFont.Height = config.Height;
+	outFont.pName = config.pName;
 
 	const uint32 numCharacters = 256;
 
@@ -184,6 +187,7 @@ static bool ProcessFont(Font& outFont, const FontCreateSettings& config)
 		glyph.AdvanceWidth = abc.abcB;
 		glyph.RightBearing = abc.abcC;
 		glyph.Width = abc.abcA + abc.abcB + abc.abcC;
+		glyph.Inc = Vector2i(metrics.gmCellIncX, metrics.gmCellIncY);
 
 		BinaryReader reader(pDataBuffer, requiredSize);
 		while (!reader.AtTheEnd())
@@ -394,11 +398,12 @@ void RasterTestGPU(GraphicsDevice* pDevice, Font& font, const Vector2i& resoluti
 	psoDesc.SetPixelShader("RasterizeGlyph.hlsl", "RenderGlyphPS");
 	psoDesc.SetRenderTargetFormats(ResourceFormat::RGBA8_UNORM, ResourceFormat::Unknown, 1);
 	psoDesc.SetDepthEnabled(false);
+	psoDesc.SetBlendMode(BlendMode::Alpha, false);
 	psoDesc.SetRootSignature(pRS);
 	psoDesc.SetName("TestAtlasCS");
 	RefCountPtr<PipelineState> pTestAtlasPSO = pDevice->CreatePipeline(psoDesc);
 
-	RefCountPtr<Texture> pGlyph = pDevice->CreateTexture(TextureDesc::Create2D(resolution.x, resolution.y, ResourceFormat::RGBA8_UNORM, TextureFlag::UnorderedAccess), "Glyph");
+	RefCountPtr<Texture> pGlyph = pDevice->CreateTexture(TextureDesc::Create2D(resolution.x, resolution.y, ResourceFormat::R8_UNORM, TextureFlag::UnorderedAccess), "Glyph");
 
 	CommandContext* pContext = pDevice->AllocateCommandContext();
 
@@ -460,7 +465,7 @@ void RasterTestGPU(GraphicsDevice* pDevice, Font& font, const Vector2i& resoluti
 	pContext->InsertResourceBarrier(pGlyphDataBuffer, D3D12_RESOURCE_STATE_COPY_DEST);
 	pContext->WriteBuffer(pGlyphDataBuffer, glyphData.data(), glyphData.size() * sizeof(GlyphData));
 
-	RefCountPtr<Texture> pTestTarget = pDevice->CreateTexture(TextureDesc::CreateRenderTarget(1024, 256, ResourceFormat::RGBA8_UNORM, TextureFlag::UnorderedAccess), "Test Target");
+	RefCountPtr<Texture> pTestTarget = pDevice->CreateTexture(TextureDesc::CreateRenderTarget(1024, 256, ResourceFormat::RGBA8_UNORM, TextureFlag::UnorderedAccess, 1, ClearBinding(Color(1, 1, 1, 1))), "Test Target");
 	{
 		::PIXBeginEvent(pContext->GetCommandList(), 0, MULTIBYTE_TO_UNICODE("Render"));
 
@@ -490,15 +495,17 @@ void RasterTestGPU(GraphicsDevice* pDevice, Font& font, const Vector2i& resoluti
 		} parameters;
 
 		uint32 instanceIdx = 0;
-		float width = 0;
-		const char* pText = "Lieeeefje liefje liefje";
+		Vector2 location;
+		std::string t = Sprintf("%s - Height: %dpx", font.pName, font.Height);
+		const char* pText = t.c_str();
 		while (*pText)
 		{
 			GlyphInstance& instance = parameters.Instances[instanceIdx++];
 			instance.GlyphIndex = *pText++;
 			FontGlyph& glyph = font.Glyphs[instance.GlyphIndex];
-			instance.Position = Vector2(width - glyph.OriginOffset.x, glyph.OriginOffset.y);
-			width += font.Glyphs[instance.GlyphIndex].Width;
+			instance.Position = Vector2(location.x - glyph.OriginOffset.x, location.y + glyph.OriginOffset.y);
+			location.x += font.Glyphs[instance.GlyphIndex].Inc.x;
+			location.y += font.Glyphs[instance.GlyphIndex].Inc.y;
 		}
 
 		parameters.AtlasDimensionsInv = Vector2(1.0f / pGlyph->GetWidth(), 1.0f / pGlyph->GetHeight());

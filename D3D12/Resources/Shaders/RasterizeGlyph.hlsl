@@ -17,7 +17,7 @@ struct PassParameters
 };
 
 ConstantBuffer<PassParameters> cPass : register(b0);
-RWTexture2D<float4> uOutput : register(u0);
+RWTexture2D<float> uOutput : register(u0);
 
 uint IsInside(float2 location)
 {
@@ -42,10 +42,6 @@ uint IsInside(float2 location)
 	return isInside;
 }
 
-static const int2 MSAA_1_Locations[] = {
-	int2(0, 0)
-};
-
 static const int2 MSAA_16_Locations[] = {
 	int2(1, 1), int2(-1, -3), int2(-3, 2), int2(4, -1),
 	int2(-5, -2), int2(2, 5), int2(5, 3), int2(3, -5),
@@ -60,6 +56,10 @@ static const int2 MSAA_8_Locations[] = {
 
 static const int2 MSAA_4_Locations[] = {
 	int2(-2, -6), int2(6, -2), int2(-6, 2), int2(2, 6),
+};
+
+static const int2 MSAA_1_Locations[] = {
+	int2(0, 0)
 };
 
 [numthreads(8, 8, 1)]
@@ -79,13 +79,8 @@ void RasterizeGlyphCS(uint3 threadID : SV_DispatchThreadID)
 		float2 location = sampleCenter + MSAA_16_Locations[sampleIndex] / 16.0f;
 		insideSamples += IsInside(location / cPass.Scale);
 	}
-	float3 shade = (float)insideSamples / numSamples;
-
-	if(any(pixelIndex == 0) || any(pixelIndex + 1 == cPass.GlyphDimensions))
-	{
-		//shade = float3(1, 0, 0);
-	}
-	uOutput[pixelIndex + cPass.Location] = float4(shade.xyz, 1);
+	float shade = (float)insideSamples / numSamples;
+	uOutput[pixelIndex + cPass.Location] = shade;
 }
 
 struct Glyph
@@ -110,7 +105,7 @@ struct RenderData
 	float2 TargetDimensionsInv;
 };
 
-Texture2D<float4> tFontAtlas : register(t0);
+Texture2D<float> tFontAtlas : register(t0);
 StructuredBuffer<Glyph> tGlyphData : register(t1);
 ConstantBuffer<RenderData> cData : register(b0);
 
@@ -140,5 +135,6 @@ float4 RenderGlyphPS(
 	float2 uv : TEXCOORD
 	) : SV_Target
 {
-	return tFontAtlas.SampleLevel(sLinearClamp, uv, 0);
+	float alpha = tFontAtlas.SampleLevel(sLinearClamp, uv, 0);
+	return float4(1-alpha.xxx, alpha);
 }
