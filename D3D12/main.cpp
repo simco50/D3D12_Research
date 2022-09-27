@@ -38,13 +38,7 @@ int WINAPI WinMain(_In_ HINSTANCE /*hInstance*/, _In_opt_ HINSTANCE /*hPrevInsta
 
 	Console::Initialize();
 
-	{
-		GraphicsDeviceOptions options;
-		options.UseDebugDevice = true;
-		options.UseDRED = true;
-		RefCountPtr<GraphicsDevice> pDevice = new GraphicsDevice(options);
-		FontTest(pDevice);
-	}
+	FontTest();
 
 #if 0
 
