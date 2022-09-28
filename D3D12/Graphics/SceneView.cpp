@@ -204,7 +204,28 @@ namespace Renderer
 		pView->NumDDGIVolumes = (uint32)ddgiVolumes.size();
 
 		std::vector<ShaderInterop::Light> lightData;
-		Utils::Transform(pWorld->Lights, lightData, [](const Light& light) { return light.GetData(); });
+		lightData.reserve(pWorld->Lights.size());
+		for (const Light& light : pWorld->Lights)
+		{
+			ShaderInterop::Light& data = lightData.emplace_back();
+			data.Position = light.Position;
+			data.Direction = light.Direction;
+			data.SpotlightAngles.x = cos(light.PenumbraAngleDegrees * Math::DegreesToRadians / 2.0f);
+			data.SpotlightAngles.y = cos(light.UmbraAngleDegrees * Math::DegreesToRadians / 2.0f);
+			data.Color = Math::EncodeRGBA(light.Colour);
+			data.Intensity = light.Intensity;
+			data.Range = light.Range;
+			data.ShadowMapIndex = light.CastShadows && light.ShadowMaps.size() ? light.ShadowMaps[0]->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
+			data.MaskTexture = light.pLightTexture ? light.pLightTexture->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
+			data.MatrixIndex = light.MatrixIndex;
+			data.InvShadowSize = 1.0f / light.ShadowMapSize;
+			data.IsEnabled = light.Intensity > 0 ? 1 : 0;
+			data.IsVolumetric = light.VolumetricLighting;
+			data.CastShadows = light.CastShadows;
+			data.IsPoint = light.Type == LightType::Point;
+			data.IsSpot = light.Type == LightType::Spot;
+			data.IsDirectional = light.Type == LightType::Directional;
+		}
 
 		GraphicsDevice* pDevice = context.GetParent();
 		auto CopyBufferData = [&](size_t numElements, uint32 stride, const char* pName, const void* pSource, RefCountPtr<Buffer>& pTarget)
