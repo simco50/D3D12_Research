@@ -19,17 +19,17 @@ struct DescriptorHeapBlock
 	SyncPoint SyncPoint;
 };
 
-class GlobalOnlineDescriptorHeap : public GraphicsObject
+class GPUDescriptorHeap : public GraphicsObject
 {
 public:
-	GlobalOnlineDescriptorHeap(GraphicsDevice* pParent, D3D12_DESCRIPTOR_HEAP_TYPE type, uint32 dynamicBlockSize, uint32 numDescriptors);
+	GPUDescriptorHeap(GraphicsDevice* pParent, D3D12_DESCRIPTOR_HEAP_TYPE type, uint32 dynamicBlockSize, uint32 numDescriptors);
 
 	DescriptorHandle AllocatePersistent();
 	void FreePersistent(uint32& heapIndex);
 
-	DescriptorHeapBlock* AllocateBlock();
-	void FreeBlock(const SyncPoint& syncPoint, DescriptorHeapBlock* pBlock);
-	uint32 GetBlockSize() const { return m_DynamicBlockSize; }
+	DescriptorHeapBlock* AllocateDynamicBlock();
+	void FreeDynamicBlock(const SyncPoint& syncPoint, DescriptorHeapBlock* pBlock);
+	uint32 GetDynamicBlockSize() const { return m_DynamicBlockSize; }
 
 	uint32 GetDescriptorSize() const { return m_DescriptorSize; }
 	ID3D12DescriptorHeap* GetHeap() const { return m_pHeap.Get(); }
@@ -56,10 +56,10 @@ private:
 	std::queue<std::pair<uint32, uint64>> m_PersistentDeletionQueue;
 };
 
-class OnlineDescriptorAllocator : public GraphicsObject
+class DynamicGPUDescriptorAllocator : public GraphicsObject
 {
 public:
-	OnlineDescriptorAllocator(GlobalOnlineDescriptorHeap* pGlobalHeap);
+	DynamicGPUDescriptorAllocator(GPUDescriptorHeap* pGlobalHeap);
 
 	DescriptorHandle Allocate(uint32 count);
 
@@ -81,7 +81,7 @@ private:
 	RootSignatureMask m_RootDescriptorMask {};
 	RootSignatureMask m_StaleRootParameters {};
 
-	GlobalOnlineDescriptorHeap* m_pHeapAllocator;
+	GPUDescriptorHeap* m_pHeapAllocator;
 	DescriptorHeapBlock* m_pCurrentHeapBlock = nullptr;
 	std::vector<DescriptorHeapBlock*> m_ReleasedBlocks;
 };

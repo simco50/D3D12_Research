@@ -9,7 +9,6 @@
 
 class CommandQueue;
 class CommandContext;
-class OfflineDescriptorAllocator;
 class DynamicAllocationManager;
 class GraphicsResource;
 class RootSignature;
@@ -20,14 +19,13 @@ class ShaderManager;
 class PipelineStateInitializer;
 class StateObject;
 class StateObjectInitializer;
-class GlobalOnlineDescriptorHeap;
+class GPUDescriptorHeap;
+class CPUDescriptorHeap;
 class ResourceView;
 class SwapChain;
-class OnlineDescriptorAllocator;
 class Fence;
 class GraphicsDevice;
 class CommandSignature;
-class Image;
 class CommandSignatureInitializer;
 struct TextureDesc;
 struct BufferDesc;
@@ -174,8 +172,8 @@ public:
 		m_GlobalResources.push_back(std::move(pResource));
 	}
 
-	GlobalOnlineDescriptorHeap* GetGlobalViewHeap() const { return m_pGlobalViewHeap; }
-	GlobalOnlineDescriptorHeap* GetGlobalSamplerHeap() const { return m_pGlobalSamplerHeap; }
+	GPUDescriptorHeap* GetGlobalViewHeap() const { return m_pGlobalViewHeap; }
+	GPUDescriptorHeap* GetGlobalSamplerHeap() const { return m_pGlobalSamplerHeap; }
 	ID3D12Device* GetDevice() const { return m_pDevice.Get(); }
 	ID3D12Device5* GetRaytracingDevice() const { return m_pRaytracingDevice.Get(); }
 	ShaderManager* GetShaderManager() const { return m_pShaderManager.get(); }
@@ -237,10 +235,10 @@ private:
 	DeferredDeleteQueue m_DeleteQueue;
 
 	std::unique_ptr<ShaderManager> m_pShaderManager;
-	RefCountPtr<GlobalOnlineDescriptorHeap> m_pGlobalViewHeap;
-	RefCountPtr<GlobalOnlineDescriptorHeap> m_pGlobalSamplerHeap;
+	RefCountPtr<GPUDescriptorHeap> m_pGlobalViewHeap;
+	RefCountPtr<GPUDescriptorHeap> m_pGlobalSamplerHeap;
 
-	std::array<RefCountPtr<OfflineDescriptorAllocator>, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES> m_DescriptorHeaps;
+	std::array<RefCountPtr<CPUDescriptorHeap>, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES> m_DescriptorHeaps;
 	RefCountPtr<DynamicAllocationManager> m_pDynamicAllocationManager;
 
 	std::vector<RefCountPtr<GraphicsObject>> m_GlobalResources;

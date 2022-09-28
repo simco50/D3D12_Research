@@ -1,10 +1,10 @@
 #pragma once
 #include "GraphicsResource.h"
-#include "OnlineDescriptorAllocator.h"
+#include "GPUDescriptorHeap.h"
 
 class GraphicsResource;
 class Texture;
-class OnlineDescriptorAllocator;
+class DynamicGPUDescriptorAllocator;
 class RootSignature;
 class PipelineState;
 class StateObject;
@@ -159,7 +159,7 @@ namespace ComputeUtils
 class CommandContext : public GraphicsObject
 {
 public:
-	CommandContext(GraphicsDevice* pParent, RefCountPtr<ID3D12CommandList> pCommandList, D3D12_COMMAND_LIST_TYPE type, GlobalOnlineDescriptorHeap* pDescriptorHeap, DynamicAllocationManager* pDynamicMemoryManager);
+	CommandContext(GraphicsDevice* pParent, RefCountPtr<ID3D12CommandList> pCommandList, D3D12_COMMAND_LIST_TYPE type, GPUDescriptorHeap* pDescriptorHeap, DynamicAllocationManager* pDynamicMemoryManager);
 	~CommandContext();
 
 	void Reset();
@@ -259,7 +259,7 @@ private:
 	};
 
 	std::vector<PendingBarrier> m_PendingBarriers;
-	OnlineDescriptorAllocator m_ShaderResourceDescriptorAllocator;
+	DynamicGPUDescriptorAllocator m_ShaderResourceDescriptorAllocator;
 	ResourceBarrierBatcher m_BarrierBatcher;
 	std::unique_ptr<DynamicResourceAllocator> m_pDynamicAllocator;
 	RefCountPtr<ID3D12CommandList> m_pCommandListBase;

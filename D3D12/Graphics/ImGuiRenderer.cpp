@@ -5,7 +5,7 @@
 #include "RHI/PipelineState.h"
 #include "RHI/RootSignature.h"
 #include "RHI/Texture.h"
-#include "RHI/OfflineDescriptorAllocator.h"
+#include "RHI/CPUDescriptorHeap.h"
 #include "SceneView.h"
 #include "RenderGraph/RenderGraph.h"
 #include "ImGuizmo.h"

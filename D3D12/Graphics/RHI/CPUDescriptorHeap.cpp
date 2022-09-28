@@ -1,20 +1,20 @@
 #include "stdafx.h"
-#include "OfflineDescriptorAllocator.h"
+#include "CPUDescriptorHeap.h"
 #include "Graphics.h"
 
-OfflineDescriptorAllocator::OfflineDescriptorAllocator(GraphicsDevice* pParent, D3D12_DESCRIPTOR_HEAP_TYPE type, uint32 descriptorsPerHeap)
+CPUDescriptorHeap::CPUDescriptorHeap(GraphicsDevice* pParent, D3D12_DESCRIPTOR_HEAP_TYPE type, uint32 descriptorsPerHeap)
 	: GraphicsObject(pParent), m_FreeList(descriptorsPerHeap), m_DescriptorsPerHeap(descriptorsPerHeap), m_Type(type)
 {
 	m_DescriptorSize = pParent->GetDevice()->GetDescriptorHandleIncrementSize(type);
 }
 
-OfflineDescriptorAllocator::~OfflineDescriptorAllocator()
+CPUDescriptorHeap::~CPUDescriptorHeap()
 {
 	//#todo: ImGui descriptor leaks
 	//checkf(m_FreeList.GetNumAllocations() == 0, "Leaked descriptors");
 }
 
-CD3DX12_CPU_DESCRIPTOR_HANDLE OfflineDescriptorAllocator::AllocateDescriptor()
+CD3DX12_CPU_DESCRIPTOR_HANDLE CPUDescriptorHeap::AllocateDescriptor()
 {
 	std::lock_guard lock(m_AllocationMutex);
 
@@ -31,7 +31,7 @@ CD3DX12_CPU_DESCRIPTOR_HANDLE OfflineDescriptorAllocator::AllocateDescriptor()
 	return outHandle;
 }
 
-void OfflineDescriptorAllocator::FreeDescriptor(D3D12_CPU_DESCRIPTOR_HANDLE handle)
+void CPUDescriptorHeap::FreeDescriptor(D3D12_CPU_DESCRIPTOR_HANDLE handle)
 {
 	std::lock_guard lock(m_AllocationMutex);
 	int heapIndex = -1;
@@ -54,7 +54,7 @@ void OfflineDescriptorAllocator::FreeDescriptor(D3D12_CPU_DESCRIPTOR_HANDLE hand
 	m_FreeList.Free(heapIndex * m_DescriptorsPerHeap + elementIndex);
 }
 
-void OfflineDescriptorAllocator::AllocateNewHeap()
+void CPUDescriptorHeap::AllocateNewHeap()
 {
 	D3D12_DESCRIPTOR_HEAP_DESC desc = {};
 	desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;

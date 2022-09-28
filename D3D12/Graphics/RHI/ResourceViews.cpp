@@ -3,7 +3,7 @@
 #include "Graphics.h"
 #include "Buffer.h"
 #include "Texture.h"
-#include "OfflineDescriptorAllocator.h"
+#include "CPUDescriptorHeap.h"
 
 ResourceView::ResourceView(GraphicsResource* pParent, D3D12_CPU_DESCRIPTOR_HANDLE cpuDescriptor, DescriptorHandle gpuDescriptor)
 	: GraphicsObject(pParent->GetParent()), m_pResource(pParent), m_Descriptor(cpuDescriptor), m_GpuDescriptor(gpuDescriptor)

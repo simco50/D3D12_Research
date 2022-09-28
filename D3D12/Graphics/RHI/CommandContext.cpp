@@ -3,7 +3,7 @@
 #include "Graphics.h"
 #include "CommandQueue.h"
 #include "DynamicResourceAllocator.h"
-#include "OnlineDescriptorAllocator.h"
+#include "GPUDescriptorHeap.h"
 #include "PipelineState.h"
 #include "RootSignature.h"
 #include "Buffer.h"
@@ -12,7 +12,7 @@
 #include "ShaderBindingTable.h"
 #include "StateObject.h"
 
-CommandContext::CommandContext(GraphicsDevice* pParent, RefCountPtr<ID3D12CommandList> pCommandList, D3D12_COMMAND_LIST_TYPE type, GlobalOnlineDescriptorHeap* pDescriptorHeap, DynamicAllocationManager* pDynamicMemoryManager)
+CommandContext::CommandContext(GraphicsDevice* pParent, RefCountPtr<ID3D12CommandList> pCommandList, D3D12_COMMAND_LIST_TYPE type, GPUDescriptorHeap* pDescriptorHeap, DynamicAllocationManager* pDynamicMemoryManager)
 	: GraphicsObject(pParent), m_ShaderResourceDescriptorAllocator(pDescriptorHeap), m_pCommandListBase(pCommandList), m_Type(type)
 {
 	m_pDynamicAllocator = std::make_unique<DynamicResourceAllocator>(pDynamicMemoryManager);
