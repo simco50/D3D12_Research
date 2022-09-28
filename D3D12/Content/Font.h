@@ -363,28 +363,127 @@ void RasterizeGlyphGPU(CommandContext* pContext, const FontGlyph& glyph, float s
 	pContext->Dispatch(ComputeUtils::GetNumThreadGroups(parameters.GlyphDimensions.x, 8, parameters.GlyphDimensions.y, 8));
 }
 
+class QueryHeap : public GraphicsObject
+{
+public:
+	struct Query
+	{
+		uint32 Index;
+	};
+
+	static uint32 GetTypeSize(D3D12_QUERY_HEAP_TYPE type)
+	{
+		switch (type)
+		{
+		case D3D12_QUERY_HEAP_TYPE_PIPELINE_STATISTICS: return sizeof(D3D12_QUERY_DATA_PIPELINE_STATISTICS);
+		case D3D12_QUERY_HEAP_TYPE_PIPELINE_STATISTICS1: return sizeof(D3D12_QUERY_DATA_PIPELINE_STATISTICS1);
+		case D3D12_QUERY_HEAP_TYPE_OCCLUSION: return sizeof(uint64);
+		case D3D12_QUERY_HEAP_TYPE_TIMESTAMP: return sizeof(uint64);
+		case D3D12_QUERY_HEAP_TYPE_COPY_QUEUE_TIMESTAMP: return sizeof(uint64);
+		default: noEntry(); return 0;
+		}
+	}
+
+	static D3D12_QUERY_TYPE GetQueryType(D3D12_QUERY_HEAP_TYPE type)
+	{
+		switch (type)
+		{
+		case D3D12_QUERY_HEAP_TYPE_PIPELINE_STATISTICS: return D3D12_QUERY_TYPE_PIPELINE_STATISTICS;
+		case D3D12_QUERY_HEAP_TYPE_PIPELINE_STATISTICS1: return D3D12_QUERY_TYPE_PIPELINE_STATISTICS1;
+		case D3D12_QUERY_HEAP_TYPE_OCCLUSION: return D3D12_QUERY_TYPE_BINARY_OCCLUSION;
+		case D3D12_QUERY_HEAP_TYPE_TIMESTAMP: return D3D12_QUERY_TYPE_TIMESTAMP;
+		case D3D12_QUERY_HEAP_TYPE_COPY_QUEUE_TIMESTAMP: D3D12_QUERY_TYPE_TIMESTAMP;
+		default: noEntry(); return D3D12_QUERY_TYPE_BINARY_OCCLUSION;
+		}
+	}
+
+	QueryHeap(GraphicsDevice* pDevice, D3D12_QUERY_HEAP_TYPE type, uint32 size)
+		: GraphicsObject(pDevice), m_Type(type), m_ElementSize(GetTypeSize(type)), m_AllocatedQueries(0)
+	{
+		if (GetQueryType(m_Type) == D3D12_QUERY_TYPE_TIMESTAMP)
+		{
+			size *= 2;
+		}
+
+		D3D12_QUERY_HEAP_DESC desc{};
+		desc.Count = size;
+		desc.Type = type;
+		desc.NodeMask = 0;
+		VERIFY_HR(pDevice->GetDevice()->CreateQueryHeap(&desc, IID_PPV_ARGS(m_pHeap.GetAddressOf())));
+
+		m_pReadbackBuffer = pDevice->CreateBuffer(BufferDesc::CreateReadback(m_ElementSize * size), "QueryHeap Readback Buffer");
+
+		m_Queries.resize(size);
+		uint32 i = 0;
+		std::generate(m_Queries.begin(), m_Queries.end(), [&i]() -> Query { return { i++ }; });
+	}
+
+	void Resolve(CommandContext* pContext)
+	{
+		uint32 numQueries = m_AllocatedQueries;
+		if (GetQueryType(m_Type) == D3D12_QUERY_TYPE_TIMESTAMP)
+		{
+			numQueries *= 2;
+		}
+		pContext->GetCommandList()->ResolveQueryData(m_pHeap, GetQueryType(m_Type), 0, numQueries, m_pReadbackBuffer->GetResource(), 0);
+		pContext->GetParent()->GetFrameFence()->GetCurrentValue();
+		m_AllocatedQueries = 0;
+	}
+
+	Query* Begin(CommandContext* pContext)
+	{
+		Query* pQuery = &m_Queries[m_AllocatedQueries];
+		m_AllocatedQueries++;
+		if (GetQueryType(m_Type) == D3D12_QUERY_TYPE_TIMESTAMP)
+		{
+			pContext->GetCommandList()->EndQuery(m_pHeap, GetQueryType(m_Type), 2 * pQuery->Index);
+		}
+		else
+		{
+			pContext->GetCommandList()->BeginQuery(m_pHeap, GetQueryType(m_Type), pQuery->Index);
+		}
+		return pQuery;
+	}
+
+	void End(CommandContext* pContext, Query* pQuery)
+	{
+		if (GetQueryType(m_Type) == D3D12_QUERY_TYPE_TIMESTAMP)
+		{
+			pContext->GetCommandList()->EndQuery(m_pHeap, GetQueryType(m_Type), 2 * pQuery->Index + 1);
+		}
+		else
+		{
+			pContext->GetCommandList()->EndQuery(m_pHeap, GetQueryType(m_Type), pQuery->Index);
+		}
+	}
+
+	template<typename T>
+	const T& GetData(uint32 index, bool secondValue)
+	{
+		const T* pData = (T*)m_pReadbackBuffer->GetMappedData();
+		if (GetQueryType(m_Type) == D3D12_QUERY_TYPE_TIMESTAMP)
+		{
+			uint32 offset = secondValue ? 1 : 0;
+			return pData[2 * index + offset];
+		}
+		return pData[index];
+	}
+
+private:
+	RefCountPtr<ID3D12QueryHeap> m_pHeap;
+	RefCountPtr<Buffer> m_pReadbackBuffer;
+	std::vector<Query> m_Queries;
+	uint32 m_AllocatedQueries;
+	D3D12_QUERY_HEAP_TYPE m_Type;
+	uint32 m_ElementSize;
+};
+
 void RasterTestGPU(GraphicsDevice* pDevice, Font& font, const Vector2i& resolution, float scale)
 {
 	PIXBeginCapture(PIX_CAPTURE_GPU, nullptr);
 
-	RefCountPtr<ID3D12QueryHeap> pTimingHeap;
-	RefCountPtr<Buffer> pTimingBuffer = pDevice->CreateBuffer(BufferDesc::CreateReadback(sizeof(uint64) * 2), "Timing Readback Buffer");
-	{
-		D3D12_QUERY_HEAP_DESC desc{};
-		desc.Count = 2;
-		desc.Type = D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
-		desc.NodeMask = 0;
-		VERIFY_HR(pDevice->GetDevice()->CreateQueryHeap(&desc, IID_PPV_ARGS(pTimingHeap.GetAddressOf())));
-	}
-	RefCountPtr<ID3D12QueryHeap> pStatsHeap;
-	RefCountPtr<Buffer> pStatsBuffer = pDevice->CreateBuffer(BufferDesc::CreateReadback(sizeof(D3D12_QUERY_DATA_PIPELINE_STATISTICS1) * 1), "Stats Readback Buffer");
-	{
-		D3D12_QUERY_HEAP_DESC desc{};
-		desc.Count = 1;
-		desc.Type = D3D12_QUERY_HEAP_TYPE_PIPELINE_STATISTICS1;
-		desc.NodeMask = 0;
-		VERIFY_HR(pDevice->GetDevice()->CreateQueryHeap(&desc, IID_PPV_ARGS(pStatsHeap.GetAddressOf())));
-	}
+	RefCountPtr<QueryHeap> pPipelineStatsHeap = new QueryHeap(pDevice, D3D12_QUERY_HEAP_TYPE_PIPELINE_STATISTICS1, 2);
+	RefCountPtr<QueryHeap> pTimingStatsHeap = new QueryHeap(pDevice, D3D12_QUERY_HEAP_TYPE_TIMESTAMP, 128);
 
 	RefCountPtr<RootSignature> pRS = new RootSignature(pDevice);
 	pRS->AddConstantBufferView(0);
@@ -407,11 +506,9 @@ void RasterTestGPU(GraphicsDevice* pDevice, Font& font, const Vector2i& resoluti
 
 	CommandContext* pContext = pDevice->AllocateCommandContext();
 
-	{
-		uint32 values[] = { 0, 0 ,0 , 0xFFFFFFFF };
-		pContext->InsertResourceBarrier(pGlyph, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-		pContext->ClearUavUInt(pGlyph, pGlyph->GetUAV(), values);
-	}
+	uint32 values[] = { 0, 0, 0, 0xFFFFFFFF };
+	pContext->InsertResourceBarrier(pGlyph, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+	pContext->ClearUavUInt(pGlyph, pGlyph->GetUAV(), values);
 
 	::PIXBeginEvent(pContext->GetCommandList(), 0, MULTIBYTE_TO_UNICODE("Raster"));
 	pContext->SetComputeRootSignature(pRS);
@@ -419,10 +516,6 @@ void RasterTestGPU(GraphicsDevice* pDevice, Font& font, const Vector2i& resoluti
 	{
 		pContext->SetPipelineState(pRasterGlyphPSO);
 		pContext->BindResources(1, pGlyph->GetUAV());
-
-		pContext->GetCommandList()->EndQuery(pTimingHeap, D3D12_QUERY_TYPE_TIMESTAMP, 0);
-		pContext->GetCommandList()->BeginQuery(pStatsHeap, D3D12_QUERY_TYPE_PIPELINE_STATISTICS1, 0);
-
 		const uint32 spacing = 1;
 		Vector2i location;
 
@@ -430,6 +523,9 @@ void RasterTestGPU(GraphicsDevice* pDevice, Font& font, const Vector2i& resoluti
 		uint32 count = 0;
 		for (FontGlyph& glyph : font.Glyphs)
 		{
+			std::string text = Sprintf("Rasterize '%c' - %d lines", glyph.Letter, glyph.Lines.size());
+			::PIXBeginEvent(pContext->GetCommandList(), 0, MULTIBYTE_TO_UNICODE(text.c_str()));
+
 			if (location.x + glyph.AdvanceWidth * scale + spacing > resolution.x)
 			{
 				location.x = 0;
@@ -441,11 +537,12 @@ void RasterTestGPU(GraphicsDevice* pDevice, Font& font, const Vector2i& resoluti
 			glyph.AtlasLocation = location;
 			location.x += (uint32)(glyph.AdvanceWidth * scale);
 			count += (uint32)(glyph.AdvanceWidth * scale) * font.Height;
+
+			::PIXEndEvent(pContext->GetCommandList());
 		}
 	}
 
 	::PIXEndEvent(pContext->GetCommandList());
-
 
 	struct GlyphData
 	{
@@ -468,6 +565,8 @@ void RasterTestGPU(GraphicsDevice* pDevice, Font& font, const Vector2i& resoluti
 	RefCountPtr<Texture> pTestTarget = pDevice->CreateTexture(TextureDesc::CreateRenderTarget(1024, 256, ResourceFormat::RGBA8_UNORM, TextureFlag::UnorderedAccess, 1, ClearBinding(Color(1, 1, 1, 1))), "Test Target");
 	{
 		::PIXBeginEvent(pContext->GetCommandList(), 0, MULTIBYTE_TO_UNICODE("Render"));
+		QueryHeap::Query* pQ = pPipelineStatsHeap->Begin(pContext);
+		QueryHeap::Query* pTimeQuery = pTimingStatsHeap->Begin(pContext);
 
 		pContext->InsertResourceBarrier(pGlyph, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 		pContext->InsertResourceBarrier(pGlyphDataBuffer, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
@@ -495,7 +594,7 @@ void RasterTestGPU(GraphicsDevice* pDevice, Font& font, const Vector2i& resoluti
 		} parameters;
 
 		uint32 instanceIdx = 0;
-		Vector2 location;
+		Vector2 cursor;
 		std::string t = Sprintf("%s - Height: %dpx", font.pName, font.Height);
 		const char* pText = t.c_str();
 		while (*pText)
@@ -503,9 +602,8 @@ void RasterTestGPU(GraphicsDevice* pDevice, Font& font, const Vector2i& resoluti
 			GlyphInstance& instance = parameters.Instances[instanceIdx++];
 			instance.GlyphIndex = *pText++;
 			FontGlyph& glyph = font.Glyphs[instance.GlyphIndex];
-			instance.Position = Vector2(location.x - glyph.OriginOffset.x, location.y + glyph.OriginOffset.y);
-			location.x += font.Glyphs[instance.GlyphIndex].Inc.x;
-			location.y += font.Glyphs[instance.GlyphIndex].Inc.y;
+			instance.Position = cursor + Vector2((float) - glyph.OriginOffset.x, (float)glyph.OriginOffset.y);
+			cursor += Vector2(glyph.Inc);
 		}
 
 		parameters.AtlasDimensionsInv = Vector2(1.0f / pGlyph->GetWidth(), 1.0f / pGlyph->GetHeight());
@@ -521,14 +619,14 @@ void RasterTestGPU(GraphicsDevice* pDevice, Font& font, const Vector2i& resoluti
 		pContext->Draw(0, 4, instanceIdx);
 
 		pContext->EndRenderPass();
+
+		pTimingStatsHeap->End(pContext, pTimeQuery);
+		pPipelineStatsHeap->End(pContext, pQ);
 		::PIXEndEvent(pContext->GetCommandList());
 	}
 
-	pContext->GetCommandList()->EndQuery(pTimingHeap, D3D12_QUERY_TYPE_TIMESTAMP, 1);
-	pContext->GetCommandList()->EndQuery(pStatsHeap, D3D12_QUERY_TYPE_PIPELINE_STATISTICS1, 0);
-
-	pContext->GetCommandList()->ResolveQueryData(pTimingHeap, D3D12_QUERY_TYPE_TIMESTAMP, 0, 2, pTimingBuffer->GetResource(), 0);
-	pContext->GetCommandList()->ResolveQueryData(pStatsHeap, D3D12_QUERY_TYPE_PIPELINE_STATISTICS1, 0, 1, pStatsBuffer->GetResource(), 0);
+	pPipelineStatsHeap->Resolve(pContext);
+	pTimingStatsHeap->Resolve(pContext);
 
 	D3D12_RESOURCE_DESC resourceDesc = pTestTarget->GetResource()->GetDesc();
 	D3D12_PLACED_SUBRESOURCE_FOOTPRINT textureFootprint = {};
@@ -552,13 +650,14 @@ void RasterTestGPU(GraphicsDevice* pDevice, Font& font, const Vector2i& resoluti
 	}
 	img.Save("OutputGPU.png");
 
-	uint64 * pQueryResults = (uint64*)pTimingBuffer->GetMappedData();
+	uint64 begin = pTimingStatsHeap->GetData<uint64>(0, false);
+	uint64 end = pTimingStatsHeap->GetData<uint64>(0, true);
 	uint64 freq = pContext->GetParent()->GetCommandQueue(pContext->GetType())->GetTimestampFrequency();
-	float time = (float)(pQueryResults[1] - pQueryResults[0]) / freq * 1000.0f;
+	float time = (float)(end - begin) / freq * 1000.0f;
 	E_LOG(Info, "Raster Time: %f ms", time);
 	
-	//D3D12_QUERY_DATA_PIPELINE_STATISTICS1 * pStatsResults = (D3D12_QUERY_DATA_PIPELINE_STATISTICS1*)pStatsBuffer->GetMappedData();
-
+	const D3D12_QUERY_DATA_PIPELINE_STATISTICS1& stats = pPipelineStatsHeap->GetData<D3D12_QUERY_DATA_PIPELINE_STATISTICS1>(0, false);
+	stats;
 	PIXEndCapture(false);
 }
 
@@ -575,7 +674,7 @@ inline void FontTest()
 	Vector2i resolution(1024, 1024);
 
 	GraphicsDeviceOptions options;
-	options.UseDebugDevice = true;
+	//options.UseDebugDevice = true;
 	//options.UseDRED = true;
 	//options.LoadPIX = true;
 	RefCountPtr<GraphicsDevice> pDevice = new GraphicsDevice(options);
