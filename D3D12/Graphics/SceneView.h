@@ -67,9 +67,9 @@ struct Batch
 		AlphaMask = 2,
 		AlphaBlend = 4,
 	};
-	ShaderInterop::InstanceData InstanceData;
+	uint32 InstanceID;
 	Blending BlendMode = Blending::Opaque;
-	SubMesh* pMesh = nullptr;
+	SubMesh* pMesh;
 	Matrix WorldMatrix;
 	BoundingBox Bounds;
 	float Radius;
@@ -94,8 +94,7 @@ struct SceneView
 	RefCountPtr<Buffer> pLightBuffer;
 	RefCountPtr<Buffer> pMaterialBuffer;
 	RefCountPtr<Buffer> pMeshBuffer;
-	RefCountPtr<Buffer> pMeshInstanceBuffer;
-	RefCountPtr<Buffer> pTransformsBuffer;
+	RefCountPtr<Buffer> pDrawInstanceBuffer;
 	RefCountPtr<Buffer> pDDGIVolumesBuffer;
 	uint32 NumDDGIVolumes = 0;
 	RefCountPtr<Texture> pSky;

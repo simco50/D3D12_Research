@@ -23,7 +23,7 @@ SamplerComparisonState sLinearWrapComparisonGreater :		register(s21);
 template<typename T>
 T BufferLoad(uint bufferIndex, uint elementIndex, uint byteOffset = 0)
 {
-	ByteAddressBuffer buffer = ResourceDescriptorHeap[bufferIndex];
+	ByteAddressBuffer buffer = ResourceDescriptorHeap[NonUniformResourceIndex(bufferIndex)];
 	return buffer.Load<T>(elementIndex * sizeof(T) + byteOffset);
 }
 
@@ -45,34 +45,28 @@ float4 SampleGrad2D(int index, SamplerState s, float2 uv,  float2 ddx, float2 dd
 	return tex.SampleGrad(s, uv, ddx, ddy, offset);
 }
 
-MeshInstance GetMeshInstance(uint index)
+InstanceData GetInstance(uint index)
 {
-	StructuredBuffer<MeshInstance> meshes = ResourceDescriptorHeap[cView.MeshInstancesIndex];
-	return meshes[index];
+	StructuredBuffer<InstanceData> meshes = ResourceDescriptorHeap[cView.DrawInstancesIndex];
+	return meshes[NonUniformResourceIndex(index)];
 }
 
 MeshData GetMesh(uint index)
 {
 	StructuredBuffer<MeshData> meshes = ResourceDescriptorHeap[cView.MeshesIndex];
-	return meshes[index];
+	return meshes[NonUniformResourceIndex(index)];
 }
 
 MaterialData GetMaterial(uint index)
 {
 	StructuredBuffer<MaterialData> materials = ResourceDescriptorHeap[cView.MaterialsIndex];
-	return materials[index];
-}
-
-float4x4 GetTransform(uint index)
-{
-	StructuredBuffer<float4x4> transforms = ResourceDescriptorHeap[cView.TransformsIndex];
-	return transforms[index];
+	return materials[NonUniformResourceIndex(index)];
 }
 
 Light GetLight(uint index)
 {
 	StructuredBuffer<Light> lights = ResourceDescriptorHeap[cView.LightsIndex];
-	return lights[index];
+	return lights[NonUniformResourceIndex(index)];
 }
 
 uint3 GetPrimitive(MeshData mesh, uint primitiveIndex)

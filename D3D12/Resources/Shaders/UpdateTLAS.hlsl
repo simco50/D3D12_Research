@@ -9,7 +9,7 @@ struct PassParameters
 struct BLASInstance
 {
 	D3D12_GPU_VIRTUAL_ADDRESS AccelerationStructure;
-	uint MatrixIndex;
+	uint InstanceID;
 	uint Flags;
 };
 
@@ -22,15 +22,15 @@ void UpdateTLASCS(uint threadID : SV_DispatchThreadID)
 {
 	if(threadID < cPass.NumInstances)
 	{
-		BLASInstance instance = tInputInstances[threadID];
+		BLASInstance blasDesc = tInputInstances[threadID];
 		D3D12_RAYTRACING_INSTANCE_DESC output;
-		output.InstanceID = instance.MatrixIndex;
+		output.InstanceID = blasDesc.InstanceID;
 		output.InstanceMask = 0xFF;
 		output.InstanceContributionToHitGroupIndex = 0;
-		output.Flags = instance.Flags;
-		output.AccelerationStructure = instance.AccelerationStructure;
-		float4x4 world = GetTransform(instance.MatrixIndex);
-		output.Transform = (float3x4)transpose(world);
+		output.Flags = blasDesc.Flags;
+		output.AccelerationStructure = blasDesc.AccelerationStructure;
+		InstanceData instance = GetInstance(blasDesc.InstanceID);
+		output.Transform = (float3x4)transpose(instance.LocalToWorld);
 		uOutputInstances[threadID] = output;
 	}
 }

@@ -381,7 +381,7 @@ void DemoApp::Update()
 		BoundingFrustum frustum = m_pCamera->GetFrustum();
 		for (const Batch& b : m_SceneData.Batches)
 		{
-			m_SceneData.VisibilityMask.AssignBit(b.InstanceData.World, frustum.Contains(b.Bounds));
+			m_SceneData.VisibilityMask.AssignBit(b.InstanceID, frustum.Contains(b.Bounds));
 			if (boundsSet)
 			{
 				BoundingBox::CreateMerged(m_SceneData.SceneAABB, m_SceneData.SceneAABB, b.Bounds);
@@ -2003,11 +2003,11 @@ void DemoApp::CreateShadowViews(SceneView& view, World& world)
 		{
 			if (shadowView.IsPerspective)
 			{
-				shadowView.Visibility.AssignBit(b.InstanceData.World, shadowView.PerspectiveFrustum.Contains(b.Bounds));
+				shadowView.Visibility.AssignBit(b.InstanceID, shadowView.PerspectiveFrustum.Contains(b.Bounds));
 			}
 			else
 			{
-				shadowView.Visibility.AssignBit(b.InstanceData.World, shadowView.OrtographicFrustum.Contains(b.Bounds));
+				shadowView.Visibility.AssignBit(b.InstanceID, shadowView.OrtographicFrustum.Contains(b.Bounds));
 			}
 		}
 

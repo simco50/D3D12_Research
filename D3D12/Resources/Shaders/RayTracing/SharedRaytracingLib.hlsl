@@ -20,9 +20,9 @@ void MaterialCHS(inout MaterialRayPayload payload, BuiltInTriangleIntersectionAt
 [shader("anyhit")]
 void MaterialAHS(inout MaterialRayPayload payload, BuiltInTriangleIntersectionAttributes attrib)
 {
-	MeshInstance instance = GetMeshInstance(InstanceID());
+	InstanceData instance = GetInstance(InstanceID());
 	VertexAttribute vertex = GetVertexAttributes(instance, attrib.barycentrics, PrimitiveIndex());
-	MaterialData material = GetMaterial(instance.Material);
+	MaterialData material = GetMaterial(instance.MaterialIndex);
 	MaterialProperties surface = GetMaterialProperties(material, vertex.UV, 0);
 
 	uint seed = SeedThread(DispatchRaysIndex().xy, DispatchRaysDimensions().xy, cView.FrameIndex);

@@ -58,9 +58,9 @@ void TraceRaysRGS()
 
 		if(payload.IsFrontFace())
 		{
-			MeshInstance instance = GetMeshInstance(payload.InstanceID);
+			InstanceData instance = GetInstance(payload.InstanceID);
 			VertexAttribute vertex = GetVertexAttributes(instance, payload.Barycentrics, payload.PrimitiveID);
-			MaterialData material = GetMaterial(instance.Material);
+			MaterialData material = GetMaterial(instance.MaterialIndex);
 			const uint textureMipLevel = 6;
 			MaterialProperties surface = GetMaterialProperties(material, vertex.UV, textureMipLevel);
 			BrdfData brdfData = GetBrdfData(surface);

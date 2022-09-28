@@ -89,14 +89,19 @@ namespace ShaderInterop
 		//uint ConeS8;
 	};
 
-	struct MeshInstance
+	struct InstanceData
 	{
-		uint Material;
-		uint Mesh;
-		uint World;
+		uint ID;
+		uint MaterialIndex;
+		uint MeshIndex;
+		uint padding;
+		float4x4 LocalToWorld;
 	};
 
-	typedef MeshInstance InstanceData;
+	struct InstanceIndex
+	{
+		uint ID;
+	};
 
 	inline float4 UIntToColor(uint c)
 	{
@@ -195,14 +200,13 @@ namespace ShaderInterop
 		uint LightCount;
 		uint NumDDGIVolumes;
 
-		uint TLASIndex;
+		uint DrawInstancesIndex;
 		uint MeshesIndex;
 		uint MaterialsIndex;
-		uint MeshInstancesIndex;
-		uint TransformsIndex;
 		uint LightsIndex;
 		uint SkyIndex;
 		uint DDGIVolumesIndex;
+		uint TLASIndex;
 	};
 
 #ifdef __cplusplus

@@ -14,12 +14,11 @@ struct VertexAttribute
 	uint Color;
 };
 
-VertexAttribute GetVertexAttributes(MeshInstance instance, float2 attribBarycentrics, uint primitiveIndex)
+VertexAttribute GetVertexAttributes(InstanceData instance, float2 attribBarycentrics, uint primitiveIndex)
 {
-	float4x4 world = GetTransform(NonUniformResourceIndex(instance.World));
 	float3 barycentrics = float3((1.0f - attribBarycentrics.x - attribBarycentrics.y), attribBarycentrics.x, attribBarycentrics.y);
 
-	MeshData mesh = GetMesh(instance.Mesh);
+	MeshData mesh = GetMesh(instance.MeshIndex);
 	uint3 indices = GetPrimitive(mesh, primitiveIndex);
 	VertexAttribute outData = (VertexAttribute)0;
 
@@ -38,14 +37,14 @@ VertexAttribute GetVertexAttributes(MeshInstance instance, float2 attribBarycent
 		else
 			outData.Color = 0xFFFFFFFF;
 	}
-	outData.Normal = normalize(mul(outData.Normal, (float3x3)world));
-	outData.Tangent.xyz = normalize(mul(outData.Tangent.xyz, (float3x3)world));
+	outData.Normal = normalize(mul(outData.Normal, (float3x3)instance.LocalToWorld));
+	outData.Tangent.xyz = normalize(mul(outData.Tangent.xyz, (float3x3)instance.LocalToWorld));
 
 	// Calculate geometry normal from triangle vertices positions
 	float3 edge20 = positions[2] - positions[0];
 	float3 edge21 = positions[2] - positions[1];
 	float3 edge10 = positions[1] - positions[0];
-	outData.GeometryNormal = normalize(mul(cross(edge20, edge10), (float3x3)world));
+	outData.GeometryNormal = normalize(mul(cross(edge20, edge10), (float3x3)instance.LocalToWorld));
 
 	return outData;
 }
@@ -200,9 +199,9 @@ float TraceOcclusionRay(
 		{
 			case CANDIDATE_NON_OPAQUE_TRIANGLE:
 			{
-				MeshInstance instance = GetMeshInstance(q.CandidateInstanceID());
+				InstanceData instance = GetInstance(q.CandidateInstanceID());
 				VertexAttribute vertex = GetVertexAttributes(instance, q.CandidateTriangleBarycentrics(), q.CandidatePrimitiveIndex());
-				MaterialData material = GetMaterial(instance.Material);
+				MaterialData material = GetMaterial(instance.MaterialIndex);
 				MaterialProperties surface = GetMaterialProperties(material, vertex.UV, 0);
 				if(surface.Opacity > material.AlphaCutoff)
 				{
@@ -264,9 +263,9 @@ MaterialRayPayload TraceMaterialRay(
 		{
 			case CANDIDATE_NON_OPAQUE_TRIANGLE:
 			{
-				MeshInstance instance = GetMeshInstance(q.CandidateInstanceID());
+				InstanceData instance = GetInstance(q.CandidateInstanceID());
 				VertexAttribute vertex = GetVertexAttributes(instance, q.CandidateTriangleBarycentrics(), q.CandidatePrimitiveIndex());
-				MaterialData material = GetMaterial(instance.Material);
+				MaterialData material = GetMaterial(instance.MaterialIndex);
 				MaterialProperties surface = GetMaterialProperties(material, vertex.UV, 0);
 				if(surface.Opacity > material.AlphaCutoff)
 				{

@@ -3,7 +3,7 @@
 #include "VisibilityBuffer.hlsli"
 #include "HZB.hlsli"
 
-ConstantBuffer<InstanceData> cObject : register(b0);
+ConstantBuffer<InstanceIndex> cObject : register(b0);
 
 Texture2D<float> tHZB : register(t0);
 
@@ -49,11 +49,11 @@ void ASMain(uint threadID : SV_DispatchThreadID)
 {
 	bool visible = false;
 
-	MeshData mesh = GetMesh(cObject.Mesh);
-	float4x4 world = GetTransform(cObject.World);
+	InstanceData instance = GetInstance(cObject.ID);
+	MeshData mesh = GetMesh(instance.MeshIndex);
 	if (threadID < mesh.MeshletCount)
 	{
-		visible = IsVisible(mesh, world, threadID);
+		visible = IsVisible(mesh, instance.LocalToWorld, threadID);
 	}
 
 	if (visible)
@@ -101,7 +101,8 @@ void MSMain(
 	out indices uint3 triangles[MESHLET_MAX_TRIANGLES],
 	out primitives PrimitiveAttribute primitives[MESHLET_MAX_TRIANGLES])
 {
-	MeshData mesh = GetMesh(cObject.Mesh);
+	InstanceData instance = GetInstance(cObject.ID);
+	MeshData mesh = GetMesh(instance.MeshIndex);
 
 	uint meshletIndex = payload.Indices[groupID];
 	if(meshletIndex >= mesh.MeshletCount)
@@ -113,11 +114,10 @@ void MSMain(
 
 	SetMeshOutputCounts(meshlet.VertexCount, meshlet.TriangleCount);
 
-	float4x4 world = GetTransform(cObject.World);
 	for(uint i = groupThreadID; i < meshlet.VertexCount; i += NUM_MESHLET_THREADS)
 	{
 		uint vertexId = BufferLoad<uint>(mesh.BufferIndex, i + meshlet.VertexOffset, mesh.MeshletVertexOffset);
-		VertexAttribute result = FetchVertexAttributes(mesh, world, vertexId);
+		VertexAttribute result = FetchVertexAttributes(mesh, instance.LocalToWorld, vertexId);
 		verts[i] = result;
 	}
 
@@ -137,8 +137,9 @@ VisBufferData PSMain(
     VertexAttribute vertexData,
     PrimitiveAttribute primitiveData) : SV_TARGET0
 {
+	InstanceData instance = GetInstance(cObject.ID);
 #ifdef ALPHA_TEST
-	MaterialData material = GetMaterial(cObject.Material);
+	MaterialData material = GetMaterial(instance.MaterialIndex);
 	float opacity = material.BaseColorFactor.a;
 	if(material.Diffuse != INVALID_HANDLE)
 	{
@@ -151,7 +152,7 @@ VisBufferData PSMain(
 #endif
 
 	VisBufferData Data;
-	Data.ObjectID = cObject.World;
+	Data.ObjectID = instance.ID;
 	Data.PrimitiveID = primitiveData.PrimitiveID;
 	Data.MeshletID = primitiveData.MeshletID;
 	return Data;

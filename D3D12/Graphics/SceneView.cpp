@@ -97,8 +97,7 @@ namespace Renderer
 		parameters.TLASIndex = pView->AccelerationStructure.GetSRV() ? pView->AccelerationStructure.GetSRV()->GetHeapIndex() : DescriptorHandle::InvalidHeapIndex;
 		parameters.MeshesIndex = pView->pMeshBuffer->GetSRVIndex();
 		parameters.MaterialsIndex = pView->pMaterialBuffer->GetSRVIndex();
-		parameters.MeshInstancesIndex = pView->pMeshInstanceBuffer->GetSRVIndex();
-		parameters.TransformsIndex = pView->pTransformsBuffer->GetSRVIndex();
+		parameters.DrawInstancesIndex = pView->pDrawInstanceBuffer->GetSRVIndex();
 		parameters.LightsIndex = pView->pLightBuffer->GetSRVIndex();
 		parameters.SkyIndex = pView->pSky ? pView->pSky->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
 		parameters.DDGIVolumesIndex = pView->pDDGIVolumesBuffer->GetSRVIndex();
@@ -110,9 +109,9 @@ namespace Renderer
 	{
 		std::vector<ShaderInterop::MaterialData> materials;
 		std::vector<ShaderInterop::MeshData> meshes;
-		std::vector<ShaderInterop::MeshInstance> meshInstances;
+		std::vector<ShaderInterop::InstanceData> meshInstances;
 		std::vector<Batch> sceneBatches;
-		std::vector<Matrix> transforms;
+		uint32 instanceID = 0;
 
 		for (const auto& pMesh : pWorld->Meshes)
 		{
@@ -120,13 +119,12 @@ namespace Renderer
 			{
 				SubMesh& parentMesh = pMesh->GetMesh(node.MeshIndex);
 				const Material& meshMaterial = pMesh->GetMaterial(parentMesh.MaterialId);
-				ShaderInterop::MeshInstance meshInstance;
-				meshInstance.Mesh = (uint32)meshes.size() + node.MeshIndex;
-				meshInstance.Material = (uint32)materials.size() + parentMesh.MaterialId;
-				meshInstance.World = (uint32)transforms.size();
+				ShaderInterop::InstanceData meshInstance;
+				meshInstance.ID = instanceID++;
+				meshInstance.MeshIndex = (uint32)meshes.size() + node.MeshIndex;
+				meshInstance.MaterialIndex = (uint32)materials.size() + parentMesh.MaterialId;
+				meshInstance.LocalToWorld = node.Transform;
 				meshInstances.push_back(meshInstance);
-
-				transforms.push_back(node.Transform);
 
 				auto GetBlendMode = [](MaterialAlphaMode mode) {
 					switch (mode)
@@ -139,7 +137,7 @@ namespace Renderer
 				};
 
 				Batch batch;
-				batch.InstanceData = meshInstance;
+				batch.InstanceID = meshInstance.ID;
 				batch.pMesh = &parentMesh;
 				batch.BlendMode = GetBlendMode(meshMaterial.AlphaMode);
 				batch.WorldMatrix = node.Transform;
@@ -239,9 +237,8 @@ namespace Renderer
 
 		CopyBufferData(ddgiVolumes.size(), sizeof(ShaderInterop::DDGIVolume), "DDGI Volumes", ddgiVolumes.data(), pView->pDDGIVolumesBuffer);
 		CopyBufferData(meshes.size(), sizeof(ShaderInterop::MeshData), "Meshes", meshes.data(), pView->pMeshBuffer);
-		CopyBufferData(meshInstances.size(), sizeof(ShaderInterop::MeshInstance), "Meshes Instances", meshInstances.data(), pView->pMeshInstanceBuffer);
+		CopyBufferData(meshInstances.size(), sizeof(ShaderInterop::InstanceData), "Draw Instances", meshInstances.data(), pView->pDrawInstanceBuffer);
 		CopyBufferData(materials.size(), sizeof(ShaderInterop::MaterialData), "Materials", materials.data(), pView->pMaterialBuffer);
-		CopyBufferData(transforms.size(), sizeof(Matrix), "Transforms", transforms.data(), pView->pTransformsBuffer);
 		CopyBufferData(lightData.size(), sizeof(ShaderInterop::Light), "Lights", lightData.data(), pView->pLightBuffer);
 	}
 
@@ -251,7 +248,7 @@ namespace Renderer
 		meshes.reserve(pView->Batches.size());
 		for (const Batch& b : pView->Batches)
 		{
-			if (EnumHasAnyFlags(b.BlendMode, blendModes) && visibility.GetBit(b.InstanceData.World))
+			if (EnumHasAnyFlags(b.BlendMode, blendModes) && visibility.GetBit(b.InstanceID))
 			{
 				meshes.push_back(&b);
 			}
@@ -267,7 +264,7 @@ namespace Renderer
 
 		for (const Batch* b : meshes)
 		{
-			context.SetRootConstants(0, b->InstanceData);
+			context.SetRootConstants(0, b->InstanceID);
 			if (context.GetCurrentPSO()->GetType() == PipelineStateType::Mesh)
 			{
 				context.DispatchMesh(ComputeUtils::GetNumThreadGroups(b->pMesh->NumMeshlets, 32));

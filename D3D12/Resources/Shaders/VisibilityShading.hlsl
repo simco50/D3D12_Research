@@ -66,9 +66,8 @@ VisBufferVertexAttribute GetVertexAttributes(MeshData mesh, float4x4 world, uint
 
 VisBufferVertexAttribute GetVertexAttributes(float2 screenUV, VisBufferData visibility)
 {
-	MeshInstance instance = GetMeshInstance(NonUniformResourceIndex(visibility.ObjectID));
-	MeshData mesh = GetMesh(NonUniformResourceIndex(instance.Mesh));
-	float4x4 world = GetTransform(NonUniformResourceIndex(instance.World));
+	InstanceData instance = GetInstance(visibility.ObjectID);
+	MeshData mesh = GetMesh(instance.MeshIndex);
 
 	uint primitiveID = visibility.PrimitiveID;
 	uint meshletIndex = visibility.MeshletID;
@@ -81,7 +80,7 @@ VisBufferVertexAttribute GetVertexAttributes(float2 screenUV, VisBufferData visi
 		BufferLoad<uint>(mesh.BufferIndex, tri.V2 + meshlet.VertexOffset, mesh.MeshletVertexOffset)
 	);
 
-	return GetVertexAttributes(mesh, world, indices, screenUV);
+	return GetVertexAttributes(mesh, instance.LocalToWorld, indices, screenUV);
 }
 
 MaterialProperties GetMaterialProperties(MaterialData material, VisBufferVertexAttribute attributes)
@@ -153,8 +152,8 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 	VisBufferVertexAttribute vertex = GetVertexAttributes(screenUV, visibility);
 	float3 V = normalize(cView.ViewLocation - vertex.Position);
 
-    MeshInstance instance = GetMeshInstance(NonUniformResourceIndex(visibility.ObjectID));
-	MaterialData material = GetMaterial(NonUniformResourceIndex(instance.Material));
+    InstanceData instance = GetInstance(visibility.ObjectID);
+	MaterialData material = GetMaterial(instance.MaterialIndex);
 	material.BaseColorFactor *= UIntToColor(vertex.Color);
 	MaterialProperties surface = GetMaterialProperties(material, vertex);
 	float3 N = vertex.Normal;
