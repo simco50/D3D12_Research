@@ -10,16 +10,10 @@ Texture::Texture(GraphicsDevice* pParent, const TextureDesc& desc, ID3D12Resourc
 Texture::~Texture()
 {
 	if (m_Rtv.ptr != 0)
-	{
-		bool isRTV = EnumHasAnyFlags(m_Desc.Usage, TextureFlag::RenderTarget);
-		GetParent()->FreeDescriptor(isRTV ? D3D12_DESCRIPTOR_HEAP_TYPE_RTV : D3D12_DESCRIPTOR_HEAP_TYPE_DSV, m_Rtv);
-		m_Rtv.ptr = 0;
-	}
+		GetParent()->FreeCPUDescriptor(EnumHasAnyFlags(m_Desc.Usage, TextureFlag::RenderTarget) ? D3D12_DESCRIPTOR_HEAP_TYPE_RTV : D3D12_DESCRIPTOR_HEAP_TYPE_DSV, m_Rtv);
+
 	if (m_ReadOnlyDsv.ptr != 0)
-	{
-		GetParent()->FreeDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_DSV, m_ReadOnlyDsv);
-		m_ReadOnlyDsv.ptr = 0;
-	}
+		GetParent()->FreeCPUDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_DSV, m_ReadOnlyDsv);
 }
 
 D3D12_CPU_DESCRIPTOR_HANDLE Texture::GetDSV(bool writeable /*= true*/) const

@@ -15,6 +15,7 @@
 #include <fstream>
 //Misc
 #include <mutex>
+#include <numeric>
 
 #define USE_PIX 1
 

@@ -23,6 +23,7 @@ class GPUDescriptorHeap : public GraphicsObject
 {
 public:
 	GPUDescriptorHeap(GraphicsDevice* pParent, D3D12_DESCRIPTOR_HEAP_TYPE type, uint32 dynamicBlockSize, uint32 numDescriptors);
+	~GPUDescriptorHeap();
 
 	DescriptorHandle AllocatePersistent();
 	void FreePersistent(uint32& heapIndex);
@@ -37,6 +38,9 @@ public:
 	DescriptorHandle GetStartHandle() const { return m_StartHandle; }
 
 private:
+	void CleanupPersistent();
+	void CleanupDynamic();
+
 	RefCountPtr<ID3D12DescriptorHeap> m_pHeap;
 	D3D12_DESCRIPTOR_HEAP_TYPE m_Type;
 	uint32 m_DescriptorSize = 0;
@@ -49,8 +53,7 @@ private:
 	std::queue<DescriptorHeapBlock*> m_ReleasedDynamicBlocks;
 	std::vector<DescriptorHeapBlock*> m_FreeDynamicBlocks;
 
-	std::vector<uint32> m_FreePersistentHandles;
-	uint32 m_NumPersistentAllocated = 0;
+	FreeList<false> m_PersistentHandles;
 	uint32 m_NumPersistentDescriptors;
 	std::mutex m_AllocationLock;
 	std::queue<std::pair<uint32, uint64>> m_PersistentDeletionQueue;

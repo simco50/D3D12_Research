@@ -104,3 +104,53 @@ const FormatInfo& GetFormatInfo(ResourceFormat format);
 const uint32 GetFormatByteSize(ResourceFormat format, uint32 width, uint32 height = 1, uint32 depth = 1);
 ResourceFormat SRVFormatFromDepth(ResourceFormat format);
 ResourceFormat DSVFormat(ResourceFormat format);
+
+template<bool ThreadSafe>
+struct FreeList
+{
+public:
+	FreeList(uint32 chunkSize, bool canResize = true)
+		: m_NumAllocations(0), m_ChunkSize(chunkSize), m_CanResize(canResize)
+	{
+		m_FreeList.resize(chunkSize);
+		std::iota(m_FreeList.begin(), m_FreeList.end(), 0);
+	}
+
+	uint32 Allocate()
+	{
+		std::scoped_lock lock(m_Mutex);
+		if (m_NumAllocations + 1 > m_FreeList.size())
+		{
+			check(m_CanResize);
+			uint32 size = (uint32)m_FreeList.size();
+			m_FreeList.resize(size + m_ChunkSize);
+			std::iota(m_FreeList.begin() + size, m_FreeList.end(), size);
+		}
+		return m_FreeList[m_NumAllocations++];
+	}
+
+	void Free(uint32 index)
+	{
+		std::scoped_lock lock(m_Mutex);
+		check(m_NumAllocations > 0);
+		--m_NumAllocations;
+		m_FreeList[m_NumAllocations] = index;
+	}
+
+	uint32 GetNumAllocations() const { return m_NumAllocations; }
+	bool CanAllocate() const { return m_NumAllocations < m_FreeList.size(); }
+
+private:
+	struct DummyMutex
+	{
+		void lock() {}
+		void unlock() {}
+	};
+	using TMutex = std::conditional_t<ThreadSafe, std::mutex, DummyMutex>;
+
+	std::vector<uint32> m_FreeList;
+	uint32 m_NumAllocations;
+	uint32 m_ChunkSize;
+	TMutex m_Mutex;
+	bool m_CanResize;
+};

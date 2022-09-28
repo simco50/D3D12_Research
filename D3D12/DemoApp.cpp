@@ -216,7 +216,7 @@ DemoApp::DemoApp(WindowHandle window, const Vector2i& windowRect)
 DemoApp::~DemoApp()
 {
 	m_pDevice->IdleGPU();
-	ImGuiRenderer::Shutdown();
+	ImGuiRenderer::Shutdown(m_pDevice);
 	GraphicsCommon::Destroy();
 	DebugRenderer::Get()->Shutdown();
 	Profiler::Get()->Shutdown();

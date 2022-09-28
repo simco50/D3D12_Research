@@ -6,7 +6,7 @@
 #include "CommandQueue.h"
 
 GPUDescriptorHeap::GPUDescriptorHeap(GraphicsDevice* pParent, D3D12_DESCRIPTOR_HEAP_TYPE type, uint32 dynamicBlockSize, uint32 numDescriptors)
-	: GraphicsObject(pParent), m_Type(type), m_DynamicBlockSize(dynamicBlockSize), m_NumDynamicDescriptors(numDescriptors / 2), m_NumPersistentDescriptors(numDescriptors / 2)
+	: GraphicsObject(pParent), m_Type(type), m_DynamicBlockSize(dynamicBlockSize), m_NumDynamicDescriptors(numDescriptors / 2), m_NumPersistentDescriptors(numDescriptors / 2), m_PersistentHandles(numDescriptors / 2, false)
 {
 	checkf(dynamicBlockSize >= 32, "Block size must be at least 128 (is %d)", dynamicBlockSize);
 	checkf(m_NumDynamicDescriptors % dynamicBlockSize == 0, "Number of descriptors must be a multiple of blockSize (%d)", dynamicBlockSize);
@@ -18,7 +18,7 @@ GPUDescriptorHeap::GPUDescriptorHeap(GraphicsDevice* pParent, D3D12_DESCRIPTOR_H
 	desc.NumDescriptors = numDescriptors;
 	desc.Type = type;
 	pParent->GetDevice()->CreateDescriptorHeap(&desc, IID_PPV_ARGS(m_pHeap.GetAddressOf()));
-	D3D::SetObjectName(m_pHeap.Get(), type == D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV ? "Global CBV/SRV/UAV Heap" : "Global Sampler Heap");
+	D3D::SetObjectName(m_pHeap.Get(), type == D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV ? "GPU CBV/SRV/UAV Heap" : "GPU Sampler Heap");
 
 	m_DescriptorSize = pParent->GetDevice()->GetDescriptorHandleIncrementSize(type);
 	m_StartHandle = DescriptorHandle(m_pHeap->GetCPUDescriptorHandleForHeapStart(), 0, m_pHeap->GetGPUDescriptorHandleForHeapStart());
@@ -32,40 +32,28 @@ GPUDescriptorHeap::GPUDescriptorHeap(GraphicsDevice* pParent, D3D12_DESCRIPTOR_H
 		m_FreeDynamicBlocks.push_back(m_DynamicBlocks.back().get());
 		currentOffset.OffsetInline(dynamicBlockSize, m_DescriptorSize);
 	}
+}
 
-	m_FreePersistentHandles.resize(m_NumPersistentDescriptors);
-	int i = 0;
-	auto generate = [&i]() { return i++; };
-	std::generate(m_FreePersistentHandles.begin() + m_NumPersistentAllocated, m_FreePersistentHandles.end(), generate);
+GPUDescriptorHeap::~GPUDescriptorHeap()
+{
+	CleanupPersistent();
+	checkf(m_PersistentHandles.GetNumAllocations() == 0, "Not all persistent GPU descriptors are freed.");
+
+	CleanupDynamic();
+	checkf(m_ReleasedDynamicBlocks.size() == 0, "Not all dynamic GPU descriptors are freed.");
 }
 
 DescriptorHandle GPUDescriptorHeap::AllocatePersistent()
 {
 	std::lock_guard lock(m_AllocationLock);
 
-	if(m_NumPersistentAllocated >= m_NumPersistentDescriptors)
+	if (!m_PersistentHandles.CanAllocate())
 	{
-		while (m_PersistentDeletionQueue.size())
-		{
-			const auto& f = m_PersistentDeletionQueue.front();
-			if (GetParent()->GetFrameFence()->IsComplete(f.second))
-			{
-				--m_NumPersistentAllocated;
-				m_FreePersistentHandles[m_NumPersistentAllocated] = f.first;
-				m_PersistentDeletionQueue.pop();
-			}
-			else
-			{
-				break;
-			}
-		}
+		CleanupPersistent();
 	}
 
-	checkf(m_NumPersistentAllocated < m_NumPersistentDescriptors, "Out of persistent descriptors (%d), increase heap size", m_NumPersistentDescriptors);
-
-	uint32 index = m_FreePersistentHandles[m_NumPersistentAllocated];
-	++m_NumPersistentAllocated;
-	return m_StartHandle.Offset(index, m_DescriptorSize);
+	checkf(m_PersistentHandles.CanAllocate(), "Out of persistent descriptor heap space (%d), increase heap size", m_NumPersistentDescriptors);
+	return m_StartHandle.Offset(m_PersistentHandles.Allocate(), m_DescriptorSize);
 }
 
 void GPUDescriptorHeap::FreePersistent(uint32& heapIndex)
@@ -80,19 +68,12 @@ DescriptorHeapBlock* GPUDescriptorHeap::AllocateDynamicBlock()
 {
 	std::lock_guard lock(m_DynamicBlockAllocateMutex);
 
-	// Check if we can free so finished blocks
-	while(!m_ReleasedDynamicBlocks.empty())
+	if (m_FreeDynamicBlocks.empty())
 	{
-		DescriptorHeapBlock* pBlock = m_ReleasedDynamicBlocks.front();
-		if (!pBlock->SyncPoint.IsComplete())
-		{
-			break;
-		}
-		m_ReleasedDynamicBlocks.pop();
-		m_FreeDynamicBlocks.push_back(pBlock);
+		CleanupDynamic();
 	}
 
-	checkf(!m_FreeDynamicBlocks.empty(), "Ran out of descriptor heap space. Must increase the number of descriptors.");
+	checkf(!m_FreeDynamicBlocks.empty(), "Ran out of dynamic descriptor heap space (%d). Increase heap size.", m_NumDynamicDescriptors);
 
 	DescriptorHeapBlock* pBlock = m_FreeDynamicBlocks.back();
 	m_FreeDynamicBlocks.pop_back();
@@ -105,6 +86,37 @@ void GPUDescriptorHeap::FreeDynamicBlock(const SyncPoint& syncPoint, DescriptorH
 	pBlock->SyncPoint = syncPoint;
 	pBlock->CurrentOffset = 0;
 	m_ReleasedDynamicBlocks.push(pBlock);
+}
+
+void GPUDescriptorHeap::CleanupDynamic()
+{
+	while (!m_ReleasedDynamicBlocks.empty())
+	{
+		DescriptorHeapBlock* pBlock = m_ReleasedDynamicBlocks.front();
+		if (!pBlock->SyncPoint.IsComplete())
+		{
+			break;
+		}
+		m_ReleasedDynamicBlocks.pop();
+		m_FreeDynamicBlocks.push_back(pBlock);
+	}
+}
+
+void GPUDescriptorHeap::CleanupPersistent()
+{
+	while (m_PersistentDeletionQueue.size())
+	{
+		const auto& f = m_PersistentDeletionQueue.front();
+		if (GetParent()->GetFrameFence()->IsComplete(f.second))
+		{
+			m_PersistentHandles.Free(f.first);
+			m_PersistentDeletionQueue.pop();
+		}
+		else
+		{
+			break;
+		}
+	}
 }
 
 DynamicGPUDescriptorAllocator::DynamicGPUDescriptorAllocator(GPUDescriptorHeap* pGlobalHeap)

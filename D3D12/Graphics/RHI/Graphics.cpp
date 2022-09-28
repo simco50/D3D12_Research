@@ -467,12 +467,12 @@ void GraphicsDevice::FreeCommandList(CommandContext* pCommandList)
 	m_FreeCommandLists[(int)pCommandList->GetType()].push(pCommandList);
 }
 
-D3D12_CPU_DESCRIPTOR_HANDLE GraphicsDevice::AllocateDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE type)
+D3D12_CPU_DESCRIPTOR_HANDLE GraphicsDevice::AllocateCPUDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE type)
 {
 	return m_DescriptorHeaps[type]->AllocateDescriptor();
 }
 
-void GraphicsDevice::FreeDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE type, D3D12_CPU_DESCRIPTOR_HANDLE descriptor)
+void GraphicsDevice::FreeCPUDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE type, D3D12_CPU_DESCRIPTOR_HANDLE descriptor)
 {
 	m_DescriptorHeaps[type]->FreeDescriptor(descriptor);
 }
@@ -496,14 +496,14 @@ void GraphicsDevice::IdleGPU()
 	}
 }
 
-DescriptorHandle GraphicsDevice::StoreViewDescriptor(D3D12_CPU_DESCRIPTOR_HANDLE view)
+DescriptorHandle GraphicsDevice::RegisterGlobalResourceView(D3D12_CPU_DESCRIPTOR_HANDLE view)
 {
 	DescriptorHandle handle = m_pGlobalViewHeap->AllocatePersistent();
 	m_pDevice->CopyDescriptorsSimple(1, handle.CpuHandle, view, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 	return handle;
 }
 
-void GraphicsDevice::FreeViewDescriptor(DescriptorHandle& handle)
+void GraphicsDevice::UnregisterGlobalResourceView(DescriptorHandle& handle)
 {
 	if (handle.HeapIndex != DescriptorHandle::InvalidHeapIndex)
 	{
@@ -606,7 +606,7 @@ RefCountPtr<Texture> GraphicsDevice::CreateTexture(const TextureDesc& desc, cons
 	}
 	if (EnumHasAnyFlags(desc.Usage, TextureFlag::RenderTarget))
 	{
-		pTexture->m_Rtv = GetParent()->AllocateDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+		pTexture->m_Rtv = GetParent()->AllocateCPUDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 
 		D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = {};
 		rtvDesc.Format = D3D::ConvertFormat(desc.Format);
@@ -649,8 +649,8 @@ RefCountPtr<Texture> GraphicsDevice::CreateTexture(const TextureDesc& desc, cons
 	}
 	else if (EnumHasAnyFlags(desc.Usage, TextureFlag::DepthStencil))
 	{
-		pTexture->m_Rtv = GetParent()->AllocateDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
-		pTexture->m_ReadOnlyDsv = GetParent()->AllocateDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
+		pTexture->m_Rtv = GetParent()->AllocateCPUDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
+		pTexture->m_ReadOnlyDsv = GetParent()->AllocateCPUDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
 
 		D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
 		dsvDesc.Format = D3D::ConvertFormat(DSVFormat(desc.Format));
@@ -712,7 +712,7 @@ RefCountPtr<Texture> GraphicsDevice::CreateTextureForSwapchain(ID3D12Resource* p
 	pTexture->SetName("Backbuffer");
 	pTexture->SetResourceState(D3D12_RESOURCE_STATE_PRESENT);
 
-	pTexture->m_Rtv = GetParent()->AllocateDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+	pTexture->m_Rtv = GetParent()->AllocateCPUDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 	GetParent()->GetDevice()->CreateRenderTargetView(pSwapchainResource, nullptr, pTexture->m_Rtv);
 	pTexture->m_pSrv = CreateSRV(pTexture, TextureSRVDesc(0, 1));
 	return pTexture;
@@ -829,7 +829,7 @@ RefCountPtr<ShaderResourceView> GraphicsDevice::CreateSRV(Buffer* pBuffer, const
 	check(pBuffer);
 	const BufferDesc& bufferDesc = pBuffer->GetDesc();
 
-	D3D12_CPU_DESCRIPTOR_HANDLE descriptor = AllocateDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	D3D12_CPU_DESCRIPTOR_HANDLE descriptor = AllocateCPUDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
 	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
 	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
@@ -866,7 +866,7 @@ RefCountPtr<ShaderResourceView> GraphicsDevice::CreateSRV(Buffer* pBuffer, const
 
 	DescriptorHandle gpuDescriptor;
 	if(!EnumHasAnyFlags(bufferDesc.Usage, BufferFlag::NoBindless))
-		gpuDescriptor = StoreViewDescriptor(descriptor);
+		gpuDescriptor = RegisterGlobalResourceView(descriptor);
 	return new ShaderResourceView(pBuffer, descriptor, gpuDescriptor);
 }
 
@@ -902,11 +902,11 @@ RefCountPtr<UnorderedAccessView> GraphicsDevice::CreateUAV(Buffer* pBuffer, cons
 		pCounter = GetParent()->GetParent()->CreateBuffer(BufferDesc::CreateByteAddress(4, bufferDesc.Usage & BufferFlag::NoBindless), name.c_str());
 	}
 
-	D3D12_CPU_DESCRIPTOR_HANDLE descriptor = AllocateDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	D3D12_CPU_DESCRIPTOR_HANDLE descriptor = AllocateCPUDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 	m_pDevice->CreateUnorderedAccessView(pBuffer->GetResource(), pCounter ? pCounter->GetResource() : nullptr, &uavDesc, descriptor);
 	DescriptorHandle gpuDescriptor;
 	if (!EnumHasAnyFlags(bufferDesc.Usage, BufferFlag::NoBindless))
-		gpuDescriptor = StoreViewDescriptor(descriptor);
+		gpuDescriptor = RegisterGlobalResourceView(descriptor);
 	return new UnorderedAccessView(pBuffer, descriptor, gpuDescriptor, pCounter);
 }
 
@@ -975,9 +975,9 @@ RefCountPtr<ShaderResourceView> GraphicsDevice::CreateSRV(Texture* pTexture, con
 		break;
 	}
 
-	D3D12_CPU_DESCRIPTOR_HANDLE descriptor = AllocateDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	D3D12_CPU_DESCRIPTOR_HANDLE descriptor = AllocateCPUDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 	m_pDevice->CreateShaderResourceView(pTexture->GetResource(), &srvDesc, descriptor);
-	DescriptorHandle gpuDescriptor = StoreViewDescriptor(descriptor);
+	DescriptorHandle gpuDescriptor = RegisterGlobalResourceView(descriptor);
 	return new ShaderResourceView(pTexture, descriptor, gpuDescriptor);
 }
 
@@ -1027,9 +1027,9 @@ RefCountPtr<UnorderedAccessView> GraphicsDevice::CreateUAV(Texture* pTexture, co
 	uavDesc.Texture3D.MipSlice = desc.MipLevel;
 	uavDesc.Format = D3D::ConvertFormat(pTexture->GetFormat());
 
-	D3D12_CPU_DESCRIPTOR_HANDLE descriptor = AllocateDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	D3D12_CPU_DESCRIPTOR_HANDLE descriptor = AllocateCPUDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 	m_pDevice->CreateUnorderedAccessView(pTexture->GetResource(), nullptr, &uavDesc, descriptor);
-	DescriptorHandle gpuDescriptor = StoreViewDescriptor(descriptor);
+	DescriptorHandle gpuDescriptor = RegisterGlobalResourceView(descriptor);
 	return new UnorderedAccessView(pTexture, descriptor, gpuDescriptor);
 }
 
