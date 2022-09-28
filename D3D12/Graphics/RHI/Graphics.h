@@ -206,6 +206,10 @@ private:
 	std::unique_ptr<DRED> m_pDRED;
 
 	RefCountPtr<Fence> m_pFrameFence;
+
+	RefCountPtr<GPUDescriptorHeap> m_pGlobalViewHeap;
+	RefCountPtr<GPUDescriptorHeap> m_pGlobalSamplerHeap;
+
 	std::array<RefCountPtr<CommandQueue>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_CommandQueues;
 	std::array<std::vector<RefCountPtr<CommandContext>>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_CommandListPool;
 	std::array<std::queue<CommandContext*>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_FreeCommandLists;
@@ -235,9 +239,6 @@ private:
 	DeferredDeleteQueue m_DeleteQueue;
 
 	std::unique_ptr<ShaderManager> m_pShaderManager;
-	RefCountPtr<GPUDescriptorHeap> m_pGlobalViewHeap;
-	RefCountPtr<GPUDescriptorHeap> m_pGlobalSamplerHeap;
-
 	std::array<RefCountPtr<CPUDescriptorHeap>, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES> m_DescriptorHeaps;
 	RefCountPtr<DynamicAllocationManager> m_pDynamicAllocationManager;
 

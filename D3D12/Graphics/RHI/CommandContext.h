@@ -160,7 +160,6 @@ class CommandContext : public GraphicsObject
 {
 public:
 	CommandContext(GraphicsDevice* pParent, RefCountPtr<ID3D12CommandList> pCommandList, D3D12_COMMAND_LIST_TYPE type, GPUDescriptorHeap* pDescriptorHeap, DynamicAllocationManager* pDynamicMemoryManager);
-	~CommandContext();
 
 	void Reset();
 	SyncPoint Execute(bool wait);

@@ -21,11 +21,6 @@ CommandContext::CommandContext(GraphicsDevice* pParent, RefCountPtr<ID3D12Comman
 	pCommandList.As(&m_pMeshShadingCommandList);
 }
 
-CommandContext::~CommandContext()
-{
-
-}
-
 void CommandContext::Reset()
 {
 	check(m_pCommandList);

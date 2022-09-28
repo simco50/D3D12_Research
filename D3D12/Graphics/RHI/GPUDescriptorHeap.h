@@ -63,6 +63,7 @@ class DynamicGPUDescriptorAllocator : public GraphicsObject
 {
 public:
 	DynamicGPUDescriptorAllocator(GPUDescriptorHeap* pGlobalHeap);
+	~DynamicGPUDescriptorAllocator();
 
 	DescriptorHandle Allocate(uint32 count);
 

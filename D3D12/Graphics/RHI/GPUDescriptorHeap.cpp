@@ -18,7 +18,7 @@ GPUDescriptorHeap::GPUDescriptorHeap(GraphicsDevice* pParent, D3D12_DESCRIPTOR_H
 	desc.NumDescriptors = numDescriptors;
 	desc.Type = type;
 	pParent->GetDevice()->CreateDescriptorHeap(&desc, IID_PPV_ARGS(m_pHeap.GetAddressOf()));
-	D3D::SetObjectName(m_pHeap.Get(), type == D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV ? "GPU CBV/SRV/UAV Heap" : "GPU Sampler Heap");
+	D3D::SetObjectName(m_pHeap.Get(), type == D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV ? "GPU CBV/SRV/UAV Descriptor Heap" : "GPU Sampler Descriptor Heap");
 
 	m_DescriptorSize = pParent->GetDevice()->GetDescriptorHandleIncrementSize(type);
 	m_StartHandle = DescriptorHandle(m_pHeap->GetCPUDescriptorHandleForHeapStart(), 0, m_pHeap->GetGPUDescriptorHandleForHeapStart());
@@ -41,12 +41,12 @@ GPUDescriptorHeap::~GPUDescriptorHeap()
 
 	CleanupDynamic();
 	checkf(m_ReleasedDynamicBlocks.size() == 0, "Not all dynamic GPU descriptors are freed.");
+	checkf(m_FreeDynamicBlocks.size() == m_DynamicBlocks.size(), "Not all dynamic GPU descriptor blocks are freed.");
 }
 
 DescriptorHandle GPUDescriptorHeap::AllocatePersistent()
 {
 	std::lock_guard lock(m_AllocationLock);
-
 	if (!m_PersistentHandles.CanAllocate())
 	{
 		CleanupPersistent();
@@ -67,14 +67,12 @@ void GPUDescriptorHeap::FreePersistent(uint32& heapIndex)
 DescriptorHeapBlock* GPUDescriptorHeap::AllocateDynamicBlock()
 {
 	std::lock_guard lock(m_DynamicBlockAllocateMutex);
-
 	if (m_FreeDynamicBlocks.empty())
 	{
 		CleanupDynamic();
 	}
 
 	checkf(!m_FreeDynamicBlocks.empty(), "Ran out of dynamic descriptor heap space (%d). Increase heap size.", m_NumDynamicDescriptors);
-
 	DescriptorHeapBlock* pBlock = m_FreeDynamicBlocks.back();
 	m_FreeDynamicBlocks.pop_back();
 	return pBlock;
@@ -122,6 +120,17 @@ void GPUDescriptorHeap::CleanupPersistent()
 DynamicGPUDescriptorAllocator::DynamicGPUDescriptorAllocator(GPUDescriptorHeap* pGlobalHeap)
 	: GraphicsObject(pGlobalHeap->GetParent()), m_Type(pGlobalHeap->GetType()), m_pHeapAllocator(pGlobalHeap)
 {
+}
+
+DynamicGPUDescriptorAllocator::~DynamicGPUDescriptorAllocator()
+{
+	if (m_pCurrentHeapBlock)
+	{
+		m_ReleasedBlocks.push_back(m_pCurrentHeapBlock);
+	}
+	Fence* pFrameFence = GetParent()->GetFrameFence();
+	SyncPoint syncPoint(pFrameFence, pFrameFence->GetLastSignaledValue());
+	ReleaseUsedHeaps(syncPoint);
 }
 
 void DynamicGPUDescriptorAllocator::SetDescriptors(uint32 rootIndex, uint32 offset, const Span< D3D12_CPU_DESCRIPTOR_HANDLE>& handles)
