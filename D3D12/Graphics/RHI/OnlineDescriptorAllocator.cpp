@@ -43,18 +43,21 @@ DescriptorHandle GlobalOnlineDescriptorHeap::AllocatePersistent()
 {
 	std::lock_guard lock(m_AllocationLock);
 
-	while (m_PersistentDeletionQueue.size())
+	if(m_NumPersistentAllocated >= m_NumPersistentDescriptors)
 	{
-		const auto& f = m_PersistentDeletionQueue.front();
-		if (GetParent()->GetFrameFence()->IsComplete(f.second))
+		while (m_PersistentDeletionQueue.size())
 		{
-			--m_NumPersistentAllocated;
-			m_FreePersistentHandles[m_NumPersistentAllocated] = f.first;
-			m_PersistentDeletionQueue.pop();
-		}
-		else
-		{
-			break;
+			const auto& f = m_PersistentDeletionQueue.front();
+			if (GetParent()->GetFrameFence()->IsComplete(f.second))
+			{
+				--m_NumPersistentAllocated;
+				m_FreePersistentHandles[m_NumPersistentAllocated] = f.first;
+				m_PersistentDeletionQueue.pop();
+			}
+			else
+			{
+				break;
+			}
 		}
 	}
 
@@ -65,15 +68,9 @@ DescriptorHandle GlobalOnlineDescriptorHeap::AllocatePersistent()
 	return m_StartHandle.Offset(index, m_DescriptorSize);
 }
 
-void GlobalOnlineDescriptorHeap::FreePersistent(DescriptorHandle& handle)
-{
-	check(!handle.IsNull());
-	FreePersistent(handle.HeapIndex);
-	handle.Reset();
-}
-
 void GlobalOnlineDescriptorHeap::FreePersistent(uint32& heapIndex)
 {
+	check(heapIndex != DescriptorHandle::InvalidHeapIndex);
 	std::lock_guard lock(m_AllocationLock);
 	m_PersistentDeletionQueue.emplace(heapIndex, GetParent()->GetFrameFence()->GetCurrentValue());
 	heapIndex = DescriptorHandle::InvalidHeapIndex;

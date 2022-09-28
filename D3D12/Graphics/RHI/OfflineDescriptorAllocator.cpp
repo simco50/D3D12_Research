@@ -3,30 +3,31 @@
 #include "Graphics.h"
 
 OfflineDescriptorAllocator::OfflineDescriptorAllocator(GraphicsDevice* pParent, D3D12_DESCRIPTOR_HEAP_TYPE type, uint32 descriptorsPerHeap)
-	: GraphicsObject(pParent), m_DescriptorsPerHeap(descriptorsPerHeap), m_Type(type)
+	: GraphicsObject(pParent), m_FreeList(descriptorsPerHeap), m_DescriptorsPerHeap(descriptorsPerHeap), m_Type(type)
 {
 	m_DescriptorSize = pParent->GetDevice()->GetDescriptorHandleIncrementSize(type);
+}
+
+OfflineDescriptorAllocator::~OfflineDescriptorAllocator()
+{
+	//#todo: ImGui descriptor leaks
+	//checkf(m_FreeList.GetNumAllocations() == 0, "Leaked descriptors");
 }
 
 CD3DX12_CPU_DESCRIPTOR_HANDLE OfflineDescriptorAllocator::AllocateDescriptor()
 {
 	std::lock_guard lock(m_AllocationMutex);
-	if (m_FreeHeaps.size() == 0)
+
+	CD3DX12_CPU_DESCRIPTOR_HANDLE outHandle{};
+	uint32 index = m_FreeList.Allocate();
+	uint32 heapIndex = index / m_DescriptorsPerHeap;
+	uint32 elementIndex = index % m_DescriptorsPerHeap;
+	if (heapIndex >= m_Heaps.size())
 	{
 		AllocateNewHeap();
 	}
-	std::list<Heap::Range>& freeRange = m_Heaps[m_FreeHeaps.front()]->FreeRanges;
-	Heap::Range& range = freeRange.front();
-	CD3DX12_CPU_DESCRIPTOR_HANDLE outHandle = range.Begin;
-	range.Begin.Offset(m_DescriptorSize);
-	if (range.Begin == range.End)
-	{
-		freeRange.erase(freeRange.begin());
-		if (freeRange.size() == 0)
-		{
-			m_FreeHeaps.remove(m_FreeHeaps.front());
-		}
-	}
+	outHandle = CD3DX12_CPU_DESCRIPTOR_HANDLE(m_Heaps[heapIndex]->GetCPUDescriptorHandleForHeapStart());
+	outHandle.Offset(elementIndex, m_DescriptorSize);
 	return outHandle;
 }
 
@@ -34,54 +35,23 @@ void OfflineDescriptorAllocator::FreeDescriptor(D3D12_CPU_DESCRIPTOR_HANDLE hand
 {
 	std::lock_guard lock(m_AllocationMutex);
 	int heapIndex = -1;
+
 	for (size_t i = 0; i < m_Heaps.size(); ++i)
 	{
-		D3D12_CPU_DESCRIPTOR_HANDLE start = m_Heaps[i]->pHeap->GetCPUDescriptorHandleForHeapStart();
-		if (handle.ptr >= start.ptr && handle.ptr < start.ptr + m_DescriptorSize * m_DescriptorsPerHeap)
+		D3D12_CPU_DESCRIPTOR_HANDLE start = m_Heaps[i]->GetCPUDescriptorHandleForHeapStart();
+		bool isInRange = handle.ptr >= start.ptr && handle.ptr < start.ptr + m_DescriptorSize * m_DescriptorsPerHeap;
+		bool isAligned = (handle.ptr - start.ptr) % m_DescriptorSize == 0;
+		if (isInRange && isAligned)
 		{
 			heapIndex = (int)i;
 			break;
 		}
 	}
+
 	check(heapIndex >= 0);
-	Heap* pHeap = m_Heaps[heapIndex];
-
-	Heap::Range newRange{
-		CD3DX12_CPU_DESCRIPTOR_HANDLE(handle),
-		CD3DX12_CPU_DESCRIPTOR_HANDLE(handle, m_DescriptorSize)
-	};
-
-	bool found = false;
-	for (auto range = pHeap->FreeRanges.begin(); range != pHeap->FreeRanges.end() && found == false; ++range)
-	{
-		if (range->Begin.ptr == handle.ptr + m_DescriptorSize)
-		{
-			range->Begin = handle;
-			found = true;
-		}
-		else if (range->End.ptr == handle.ptr)
-		{
-			range->End.ptr += m_DescriptorSize;
-			found = true;
-		}
-		else
-		{
-			if (range->Begin.ptr > handle.ptr)
-			{
-				pHeap->FreeRanges.insert(range, newRange);
-				found = true;
-			}
-		}
-	}
-
-	if (!found)
-	{
-		if (pHeap->FreeRanges.size() == 0)
-		{
-			m_FreeHeaps.push_back(heapIndex);
-		}
-		pHeap->FreeRanges.push_back(newRange);
-	}
+	ID3D12DescriptorHeap* pHeap = m_Heaps[heapIndex];
+	uint32 elementIndex = (uint32)((handle.ptr - pHeap->GetCPUDescriptorHandleForHeapStart().ptr) / m_DescriptorSize);
+	m_FreeList.Free(heapIndex * m_DescriptorsPerHeap + elementIndex);
 }
 
 void OfflineDescriptorAllocator::AllocateNewHeap()
@@ -92,16 +62,8 @@ void OfflineDescriptorAllocator::AllocateNewHeap()
 	desc.NumDescriptors = m_DescriptorsPerHeap;
 	desc.Type = m_Type;
 
-	RefCountPtr<Heap> pHeap = new Heap(GetParent());
-	GetParent()->GetDevice()->CreateDescriptorHeap(&desc, IID_PPV_ARGS(pHeap->pHeap.GetAddressOf()));
-	D3D::SetObjectName(pHeap->pHeap.Get(), "Offline Pooled Descriptor Heap");
-	CD3DX12_CPU_DESCRIPTOR_HANDLE Begin = CD3DX12_CPU_DESCRIPTOR_HANDLE(pHeap->pHeap->GetCPUDescriptorHandleForHeapStart());
-	pHeap->FreeRanges.push_back(Heap::Range{ Begin, CD3DX12_CPU_DESCRIPTOR_HANDLE(Begin, m_DescriptorsPerHeap, m_DescriptorSize) });
+	RefCountPtr<ID3D12DescriptorHeap> pHeap;
+	GetParent()->GetDevice()->CreateDescriptorHeap(&desc, IID_PPV_ARGS(pHeap.GetAddressOf()));
+	D3D::SetObjectName(pHeap, "Offline Descriptor Heap");
 	m_Heaps.push_back(pHeap);
-	m_FreeHeaps.push_back((int)m_Heaps.size() - 1);
-}
-
-Heap::Heap(GraphicsDevice* pParent)
-	: GraphicsObject(pParent)
-{
 }

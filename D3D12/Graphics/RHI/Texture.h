@@ -226,6 +226,7 @@ public:
 	friend class GraphicsDevice;
 
 	Texture(GraphicsDevice* pParent, const TextureDesc& desc, ID3D12Resource* pResource);
+	~Texture();
 
 	uint32 GetWidth() const { return m_Desc.Width; }
 	uint32 GetHeight() const { return m_Desc.Height; }

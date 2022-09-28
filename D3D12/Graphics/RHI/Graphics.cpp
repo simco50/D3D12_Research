@@ -400,30 +400,26 @@ GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
 		}
 	}
 
-	bool setStablePowerState = CommandLine::GetBool("stablepowerstate");
-	if (setStablePowerState)
+	if (CommandLine::GetBool("stablepowerstate"))
 	{
-		D3D12EnableExperimentalFeatures(0, nullptr, nullptr, nullptr);
-		m_pDevice->SetStablePowerState(TRUE);
+		VERIFY_HR(D3D12EnableExperimentalFeatures(0, nullptr, nullptr, nullptr));
+		VERIFY_HR(m_pDevice->SetStablePowerState(TRUE));
 	}
-
-	//Create all the required command queues
-	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_DIRECT] = new CommandQueue(this, D3D12_COMMAND_LIST_TYPE_DIRECT);
-	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_COMPUTE] = new CommandQueue(this, D3D12_COMMAND_LIST_TYPE_COMPUTE);
-	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_COPY] = new CommandQueue(this, D3D12_COMMAND_LIST_TYPE_COPY);
 
 	m_pFrameFence = new Fence(this, "Frame Fence");
 
-	// Allocators
-	m_pDynamicAllocationManager = new DynamicAllocationManager(this, BufferFlag::Upload);
-	m_pGlobalViewHeap = new GlobalOnlineDescriptorHeap(this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 256, 8192);
-	m_pGlobalSamplerHeap = new GlobalOnlineDescriptorHeap(this, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, 32, 2048);
+	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_DIRECT] =	new CommandQueue(this, D3D12_COMMAND_LIST_TYPE_DIRECT);
+	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_COMPUTE] =	new CommandQueue(this, D3D12_COMMAND_LIST_TYPE_COMPUTE);
+	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_COPY] =		new CommandQueue(this, D3D12_COMMAND_LIST_TYPE_COPY);
 
-	check(m_DescriptorHeaps.size() == D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES);
-	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV] = new OfflineDescriptorAllocator(this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 256);
-	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER] = new OfflineDescriptorAllocator(this, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, 128);
-	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_RTV] = new OfflineDescriptorAllocator(this, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, 128);
-	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_DSV] = new OfflineDescriptorAllocator(this, D3D12_DESCRIPTOR_HEAP_TYPE_DSV, 64);
+	m_pDynamicAllocationManager =	new DynamicAllocationManager(this, BufferFlag::Upload);
+	m_pGlobalViewHeap =				new GlobalOnlineDescriptorHeap(this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 256, 8192);
+	m_pGlobalSamplerHeap =			new GlobalOnlineDescriptorHeap(this, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, 32, 2048);
+
+	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV] =	new OfflineDescriptorAllocator(this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 256);
+	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER] =		new OfflineDescriptorAllocator(this, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, 128);
+	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_RTV] =			new OfflineDescriptorAllocator(this, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, 128);
+	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_DSV] =			new OfflineDescriptorAllocator(this, D3D12_DESCRIPTOR_HEAP_TYPE_DSV, 64);
 
 	uint8 smMaj, smMin;
 	m_Capabilities.GetShaderModel(smMaj, smMin);

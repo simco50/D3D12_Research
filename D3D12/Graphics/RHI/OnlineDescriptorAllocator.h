@@ -25,7 +25,6 @@ public:
 	GlobalOnlineDescriptorHeap(GraphicsDevice* pParent, D3D12_DESCRIPTOR_HEAP_TYPE type, uint32 dynamicBlockSize, uint32 numDescriptors);
 
 	DescriptorHandle AllocatePersistent();
-	void FreePersistent(DescriptorHandle& handle);
 	void FreePersistent(uint32& heapIndex);
 
 	DescriptorHeapBlock* AllocateBlock();
