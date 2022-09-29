@@ -200,7 +200,7 @@ namespace ShaderInterop
 		uint LightCount;
 		uint NumDDGIVolumes;
 
-		uint DrawInstancesIndex;
+		uint InstancesIndex;
 		uint MeshesIndex;
 		uint MaterialsIndex;
 		uint LightsIndex;

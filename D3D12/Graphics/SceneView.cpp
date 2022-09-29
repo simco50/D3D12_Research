@@ -97,7 +97,7 @@ namespace Renderer
 		parameters.TLASIndex = pView->AccelerationStructure.GetSRV() ? pView->AccelerationStructure.GetSRV()->GetHeapIndex() : DescriptorHandle::InvalidHeapIndex;
 		parameters.MeshesIndex = pView->pMeshBuffer->GetSRVIndex();
 		parameters.MaterialsIndex = pView->pMaterialBuffer->GetSRVIndex();
-		parameters.DrawInstancesIndex = pView->pDrawInstanceBuffer->GetSRVIndex();
+		parameters.InstancesIndex = pView->pInstanceBuffer->GetSRVIndex();
 		parameters.LightsIndex = pView->pLightBuffer->GetSRVIndex();
 		parameters.SkyIndex = pView->pSky ? pView->pSky->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
 		parameters.DDGIVolumesIndex = pView->pDDGIVolumesBuffer->GetSRVIndex();
@@ -226,20 +226,21 @@ namespace Renderer
 		}
 
 		GraphicsDevice* pDevice = context.GetParent();
-		auto CopyBufferData = [&](size_t numElements, uint32 stride, const char* pName, const void* pSource, RefCountPtr<Buffer>& pTarget)
+		auto CopyBufferData = [&](uint32 numElements, uint32 stride, const char* pName, const void* pSource, RefCountPtr<Buffer>& pTarget)
 		{
-			if (!pTarget || numElements > pTarget->GetNumElements())
+			uint32 desiredElements = Math::AlignUp(Math::Max(1u, numElements), 8u);
+			if (!pTarget || desiredElements > pTarget->GetNumElements())
 			{
-				pTarget = pDevice->CreateBuffer(BufferDesc::CreateStructured(Math::Max(1u, (uint32)numElements), stride, BufferFlag::ShaderResource), pName);
+				pTarget = pDevice->CreateBuffer(BufferDesc::CreateStructured(desiredElements, stride, BufferFlag::ShaderResource), pName);
 			}
 			context.WriteBuffer(pTarget, pSource, numElements * stride);
 		};
 
-		CopyBufferData(ddgiVolumes.size(), sizeof(ShaderInterop::DDGIVolume), "DDGI Volumes", ddgiVolumes.data(), pView->pDDGIVolumesBuffer);
-		CopyBufferData(meshes.size(), sizeof(ShaderInterop::MeshData), "Meshes", meshes.data(), pView->pMeshBuffer);
-		CopyBufferData(meshInstances.size(), sizeof(ShaderInterop::InstanceData), "Draw Instances", meshInstances.data(), pView->pDrawInstanceBuffer);
-		CopyBufferData(materials.size(), sizeof(ShaderInterop::MaterialData), "Materials", materials.data(), pView->pMaterialBuffer);
-		CopyBufferData(lightData.size(), sizeof(ShaderInterop::Light), "Lights", lightData.data(), pView->pLightBuffer);
+		CopyBufferData((uint32)ddgiVolumes.size(), sizeof(ShaderInterop::DDGIVolume), "DDGI Volumes", ddgiVolumes.data(), pView->pDDGIVolumesBuffer);
+		CopyBufferData((uint32)meshes.size(), sizeof(ShaderInterop::MeshData), "Meshes", meshes.data(), pView->pMeshBuffer);
+		CopyBufferData((uint32)meshInstances.size(), sizeof(ShaderInterop::InstanceData), "Instances", meshInstances.data(), pView->pInstanceBuffer);
+		CopyBufferData((uint32)materials.size(), sizeof(ShaderInterop::MaterialData), "Materials", materials.data(), pView->pMaterialBuffer);
+		CopyBufferData((uint32)lightData.size(), sizeof(ShaderInterop::Light), "Lights", lightData.data(), pView->pLightBuffer);
 	}
 
 	void DrawScene(CommandContext& context, const SceneView* pView, const VisibilityMask& visibility, Batch::Blending blendModes)

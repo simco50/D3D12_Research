@@ -10,34 +10,37 @@ class RGGraph;
 struct SceneView;
 struct SceneTextures;
 
+struct CBTData
+{
+	bool IsDirty = true;
+	uint32 SplitMode = 0;
+	RefCountPtr<Texture> pHeightmap;
+	RefCountPtr<Buffer> pCBTBuffer;
+	RefCountPtr<Buffer> pCBTIndirectArgs;
+	RefCountPtr<Texture> pDebugVisualizeTexture;
+};
+
 class CBTTessellation
 {
 public:
 	CBTTessellation(GraphicsDevice* pDevice);
 
-	void Execute(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures);
+	void Execute(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures)
+	{
+		Execute(graph, m_CBTData, pView, sceneTextures);
+	}
+
+	void Execute(RGGraph& graph, CBTData& data, const SceneView* pView, SceneTextures& sceneTextures);
 
 private:
-	void AllocateCBT();
-	void SetupPipelines();
-	void CreateResources();
-
+	void SetupPipelines(GraphicsDevice* pDevice);
+	void CreateResources(GraphicsDevice* pDevice);
 	void DemoCpuCBT();
 
 	GraphicsDevice* m_pDevice;
-
-	CBT m_CBT;
-	bool m_IsDirty = true;
-	BoundingFrustum m_CachedFrustum;
-	Matrix m_CachedViewMatrix;
-	uint32 m_SplitMode = 0;
-
-	RefCountPtr<Texture> m_pHeightmap;
+	CBTData m_CBTData;
 
 	RefCountPtr<RootSignature> m_pCBTRS;
-	RefCountPtr<Buffer> m_pCBTBuffer;
-	RefCountPtr<Buffer> m_pCBTIndirectArgs;
-	RefCountPtr<Texture> m_pDebugVisualizeTexture;
 	RefCountPtr<PipelineState> m_pCBTIndirectArgsPSO;
 	RefCountPtr<PipelineState> m_pCBTCacheBitfieldPSO;
 	RefCountPtr<PipelineState> m_pCBTSumReductionPSO;

@@ -94,7 +94,7 @@ struct SceneView
 	RefCountPtr<Buffer> pLightBuffer;
 	RefCountPtr<Buffer> pMaterialBuffer;
 	RefCountPtr<Buffer> pMeshBuffer;
-	RefCountPtr<Buffer> pDrawInstanceBuffer;
+	RefCountPtr<Buffer> pInstanceBuffer;
 	RefCountPtr<Buffer> pDDGIVolumesBuffer;
 	uint32 NumDDGIVolumes = 0;
 	RefCountPtr<Texture> pSky;

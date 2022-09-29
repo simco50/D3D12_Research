@@ -2,6 +2,7 @@
 #include "Random.hlsli"
 #include "CBT.hlsli"
 #include "Lighting.hlsli"
+#include "D3D12.hlsli"
 
 #define MESH_SHADER_THREAD_GROUP_SIZE 32
 #define COMPUTE_THREAD_GROUP_SIZE 256
@@ -59,35 +60,39 @@ void PrepareDispatchArgsCS(uint threadID : SV_DispatchThreadID)
 	RWByteAddressBuffer cbtBuffer = ResourceDescriptorHeap[cCommonArgs.CBTIndex];
 	cbt.Init(cbtBuffer, cCommonArgs.NumElements);
 
+	RWByteAddressBuffer uIndirectArgs = ResourceDescriptorHeap[cCommonArgs.IndirectArgsIndex];
 	uint offset = 0;
 
-	RWByteAddressBuffer uIndirectArgs = ResourceDescriptorHeap[cCommonArgs.IndirectArgsIndex];
-
 	// Dispatch args
-	uint numThreads = ceil((float)cbt.NumNodes() / COMPUTE_THREAD_GROUP_SIZE);
-	uIndirectArgs.Store(offset + 0, numThreads);
-	uIndirectArgs.Store(offset + 4, 1);
-	uIndirectArgs.Store(offset + 8, 1);
-
-	offset += sizeof(uint3);
+	{
+		D3D12_DISPATCH_ARGUMENTS args;
+		args.ThreadGroupCountX = ceil((float)cbt.NumNodes() / COMPUTE_THREAD_GROUP_SIZE);
+		args.ThreadGroupCountY = 1;
+		args.ThreadGroupCountZ = 1;
+		uIndirectArgs.Store(offset, args);
+		offset += sizeof(D3D12_DISPATCH_ARGUMENTS);
+	}
 
 	// Task/mesh shader args
-	uint numMeshThreads = ceil((float)cbt.NumNodes() / MESH_SHADER_THREAD_GROUP_SIZE);
-	uIndirectArgs.Store(offset + 0, numMeshThreads);
-	uIndirectArgs.Store(offset + 4, 1);
-	uIndirectArgs.Store(offset + 8, 1);
-
-	offset += sizeof(uint3);
+	{
+		D3D12_DISPATCH_ARGUMENTS args;
+		args.ThreadGroupCountX = ceil((float)cbt.NumNodes() / MESH_SHADER_THREAD_GROUP_SIZE);
+		args.ThreadGroupCountY = 1;
+		args.ThreadGroupCountZ = 1;
+		uIndirectArgs.Store(offset, args);
+		offset += sizeof(D3D12_DISPATCH_ARGUMENTS);
+	}
 
 	// Draw args
-	uint numVertices = 3;
-	uint numInstances = cbt.NumNodes();
-	uIndirectArgs.Store(offset + 0, numVertices);
-	uIndirectArgs.Store(offset + 4, numInstances);
-	uIndirectArgs.Store(offset + 8, 0);
-	uIndirectArgs.Store(offset + 12, 0);
-
-	offset += sizeof(uint4);
+	{
+		D3D12_DRAW_ARGUMENTS args;
+		args.VertexCountPerInstance = 3;
+		args.InstanceCount = cbt.NumNodes();
+		args.StartVertexLocation = 0;
+		args.StartInstanceLocation = 0;
+		uIndirectArgs.Store(offset, args);
+		offset += sizeof(D3D12_DRAW_ARGUMENTS);
+	}
 }
 
 /* SUM REDUCTION ALGORITHM */

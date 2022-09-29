@@ -47,13 +47,11 @@ CBTTessellation::CBTTessellation(GraphicsDevice* pDevice)
 		CBTSettings::MeshShader = false;
 	}
 
-	CreateResources();
-	SetupPipelines();
-	AllocateCBT();
+	CreateResources(pDevice);
+	SetupPipelines(pDevice);
 }
 
-
-void CBTTessellation::Execute(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures)
+void CBTTessellation::Execute(RGGraph& graph, CBTData& data, const SceneView* pView, SceneTextures& sceneTextures)
 {
 	float scale = 100;
 	Matrix terrainTransform = Matrix::CreateScale(scale, scale * CBTSettings::HeightScale, scale) * Matrix::CreateTranslation(-scale * 0.5f, -1.5f, -scale * 0.5f);
@@ -65,13 +63,13 @@ void CBTTessellation::Execute(RGGraph& graph, const SceneView* pView, SceneTextu
 			ImGui::SliderFloat("Height Scale", &CBTSettings::HeightScale, 0.1f, 2.0f);
 			if (ImGui::SliderInt("CBT Depth", &CBTSettings::CBTDepth, 10, 28))
 			{
-				AllocateCBT();
+				data.IsDirty = true;
 			}
 			int& subd = CBTSettings::MeshShader ? CBTSettings::MeshShaderSubD : CBTSettings::GeometryShaderSubD;
 			int maxSubD = CBTSettings::MeshShader ? 3 : 2;
 			if (ImGui::SliderInt("Triangle SubD", &subd, 0, maxSubD))
 			{
-				SetupPipelines();
+				SetupPipelines(m_pDevice);
 			}
 			ImGui::SliderFloat("Screen Size Bias", &CBTSettings::ScreenSizeBias, 0, 15);
 			ImGui::SliderFloat("Heightmap Variance Bias", &CBTSettings::HeightmapVarianceBias, 0, 0.1f);
@@ -81,30 +79,29 @@ void CBTTessellation::Execute(RGGraph& graph, const SceneView* pView, SceneTextu
 			{
 				ImGui::Checkbox("Mesh Shader", &CBTSettings::MeshShader);
 			}
-			ImGui::Checkbox("Freeze Camera", &CBTSettings::FreezeCamera);
 			if (ImGui::Checkbox("Wireframe", &CBTSettings::Wireframe))
 			{
-				SetupPipelines();
+				SetupPipelines(m_pDevice);
 			}
 			if (ImGui::Checkbox("Color Levels", &CBTSettings::ColorLevels))
 			{
-				SetupPipelines();
+				SetupPipelines(m_pDevice);
 			}
 			if (ImGui::Checkbox("Frustum Cull", &CBTSettings::FrustumCull))
 			{
-				SetupPipelines();
+				SetupPipelines(m_pDevice);
 			}
 			if (ImGui::Checkbox("Displacement LOD", &CBTSettings::DisplacementLOD))
 			{
-				SetupPipelines();
+				SetupPipelines(m_pDevice);
 			}
 			if (ImGui::Checkbox("Distance LOD", &CBTSettings::DistanceLOD))
 			{
-				SetupPipelines();
+				SetupPipelines(m_pDevice);
 			}
 			if (ImGui::Checkbox("Always Subdivide", &CBTSettings::AlwaysSubdivide))
 			{
-				SetupPipelines();
+				SetupPipelines(m_pDevice);
 			}
 		}
 	}
@@ -117,10 +114,36 @@ void CBTTessellation::Execute(RGGraph& graph, const SceneView* pView, SceneTextu
 
 	RG_GRAPH_SCOPE("CBT", graph);
 
-	if (!CBTSettings::FreezeCamera)
+	RGBuffer* pCBTBuffer = graph.TryImportBuffer(data.pCBTBuffer);
+
+	if (data.IsDirty || !pCBTBuffer)
 	{
-		m_CachedFrustum = pView->View.Frustum;
-		m_CachedViewMatrix = pView->View.View;
+		uint32 size = CBT::ComputeSize(CBTSettings::CBTDepth);
+		data.pCBTBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateByteAddress(size, BufferFlag::ShaderResource | BufferFlag::UnorderedAccess), "CBT");
+		pCBTBuffer = graph.ImportBuffer(data.pCBTBuffer);
+		data.IsDirty = false;
+
+		graph.AddPass("CBT Upload", RGPassFlag::Compute)
+			.Write(pCBTBuffer)
+			.Bind([=](CommandContext& context)
+				{
+					context.ClearUavUInt(pCBTBuffer->Get(), pCBTBuffer->Get()->GetUAV());
+					
+					uint32 bitfieldBytes = (1 << CBTSettings::CBTDepth) / 32;
+					uint32 offset0 = size - bitfieldBytes;
+					uint32 offset1 = size - (bitfieldBytes / 2);
+
+					D3D12_GPU_VIRTUAL_ADDRESS base = pCBTBuffer->Get()->GetGpuHandle();
+					D3D12_WRITEBUFFERIMMEDIATE_PARAMETER params[] =
+					{
+						{ base + 0,			1u << CBTSettings::CBTDepth		},
+						{ base + offset0,	1u << 31u						},
+						{ base + offset1,	1u << 31u						},
+					};
+					context.InsertResourceBarrier(pCBTBuffer->Get(), D3D12_RESOURCE_STATE_COPY_DEST);
+					context.FlushResourceBarriers();
+					context.GetRaytracingCommandList()->WriteBufferImmediate(ARRAYSIZE(params), params, nullptr);
+				});
 	}
 
 	struct CommonArgs
@@ -130,10 +153,10 @@ void CBTTessellation::Execute(RGGraph& graph, const SceneView* pView, SceneTextu
 		int32 CBTIndex;
 		int32 IndirectArgsIndex;
 	} commonArgs;
-	commonArgs.NumElements = (uint32)m_pCBTBuffer->GetSize() / sizeof(uint32);
-	commonArgs.HeightmapIndex = m_pHeightmap->GetSRVIndex();
-	commonArgs.CBTIndex = m_pCBTBuffer->GetUAVIndex();
-	commonArgs.IndirectArgsIndex = m_pCBTIndirectArgs->GetUAVIndex();
+	commonArgs.NumElements = (uint32)data.pCBTBuffer->GetSize() / sizeof(uint32);
+	commonArgs.HeightmapIndex = data.pHeightmap->GetSRVIndex();
+	commonArgs.CBTIndex = data.pCBTBuffer->GetUAVIndex();
+	commonArgs.IndirectArgsIndex = data.pCBTIndirectArgs->GetUAVIndex();
 
 	struct UpdateData
 	{
@@ -144,32 +167,21 @@ void CBTTessellation::Execute(RGGraph& graph, const SceneView* pView, SceneTextu
 		uint32 SplitMode;
 	} updateData;
 	updateData.World = terrainTransform;
-	updateData.HeightmapSizeInv = 1.0f / m_pHeightmap->GetWidth();
+	updateData.HeightmapSizeInv = 1.0f / data.pHeightmap->GetWidth();
 	updateData.ScreenSizeBias = CBTSettings::ScreenSizeBias;
 	updateData.HeightmapVarianceBias = CBTSettings::HeightmapVarianceBias;
-	updateData.SplitMode = m_SplitMode;
-	m_SplitMode = 1 - m_SplitMode;
+	updateData.SplitMode = data.SplitMode;
+	data.SplitMode = 1 - data.SplitMode;
 
-	RGBuffer* pCBTBuffer = graph.ImportBuffer(m_pCBTBuffer);
+	RGBuffer* pIndirectArgs = graph.ImportBuffer(data.pCBTIndirectArgs);
 
-	if (m_IsDirty)
-	{
-		graph.AddPass("CBT Upload", RGPassFlag::Copy)
-			.Write(pCBTBuffer)
-			.Bind([=](CommandContext& context)
-			{
-				context.WriteBuffer(pCBTBuffer->Get(), m_CBT.GetData(), m_CBT.GetMemoryUse());
-				context.FlushResourceBarriers();
-			});
-		m_IsDirty = false;
-	}
 	if (!CBTSettings::MeshShader)
 	{
 		graph.AddPass("CBT Update", RGPassFlag::Compute)
-			.Write(pCBTBuffer)
+			.Write({ pCBTBuffer })
+			.Read({ pIndirectArgs })
 			.Bind([=](CommandContext& context)
 			{
-				context.InsertResourceBarrier(m_pCBTIndirectArgs, D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
 				context.SetComputeRootSignature(m_pCBTRS);
 
 				context.SetRootConstants(0, commonArgs);
@@ -177,34 +189,33 @@ void CBTTessellation::Execute(RGGraph& graph, const SceneView* pView, SceneTextu
 				context.SetRootCBV(2, Renderer::GetViewUniforms(pView));
 
 				context.SetPipelineState(m_pCBTUpdatePSO);
-				context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchSignature, 1, m_pCBTIndirectArgs, nullptr, IndirectDispatchArgsOffset);
+				context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchSignature, 1, pIndirectArgs->Get(), nullptr, IndirectDispatchArgsOffset);
 				context.InsertUavBarrier(pCBTBuffer->Get());
 			});
 	}
 
 	graph.AddPass("CBT Update Indirect Args", RGPassFlag::Compute)
-		.Read(pCBTBuffer)
+		.Read({ pCBTBuffer })
+		.Write({ pIndirectArgs })
 		.Bind([=](CommandContext& context)
 			{
 				context.SetComputeRootSignature(m_pCBTRS);
 				context.SetRootConstants(0, commonArgs);
 				context.SetRootCBV(2, Renderer::GetViewUniforms(pView));
 
-				context.InsertResourceBarrier(m_pCBTIndirectArgs, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 				context.SetPipelineState(m_pCBTIndirectArgsPSO);
 				context.Dispatch(1);
 			});
 
 	graph.AddPass("CBT Render", RGPassFlag::Raster)
 		.Write(pCBTBuffer)
+		.Read(pIndirectArgs)
 		.DepthStencil(sceneTextures.pDepth, RenderTargetLoadAction::Load, true)
 		.RenderTarget(sceneTextures.pColorTarget, RenderTargetLoadAction::Load)
 		.RenderTarget(sceneTextures.pNormals, RenderTargetLoadAction::Load)
 		.RenderTarget(sceneTextures.pRoughness, RenderTargetLoadAction::Load)
 		.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
-				context.InsertResourceBarrier(m_pCBTIndirectArgs, D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
-
 				context.BeginRenderPass(resources.GetRenderPassInfo());
 
 				context.SetGraphicsRootSignature(m_pCBTRS);
@@ -217,12 +228,12 @@ void CBTTessellation::Execute(RGGraph& graph, const SceneView* pView, SceneTextu
 				if (CBTSettings::MeshShader)
 				{
 					context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-					context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchMeshSignature, 1, m_pCBTIndirectArgs, nullptr, IndirectDispatchMeshArgsOffset);
+					context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchMeshSignature, 1, pIndirectArgs->Get(), nullptr, IndirectDispatchMeshArgsOffset);
 				}
 				else
 				{
 					context.SetPrimitiveTopology(CBTSettings::GeometryShaderSubD > 0 ? D3D_PRIMITIVE_TOPOLOGY_POINTLIST : D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-					context.ExecuteIndirect(GraphicsCommon::pIndirectDrawSignature, 1, m_pCBTIndirectArgs, nullptr, IndirectDrawArgsOffset);
+					context.ExecuteIndirect(GraphicsCommon::pIndirectDrawSignature, 1, pIndirectArgs->Get(), nullptr, IndirectDrawArgsOffset);
 				}
 				context.EndRenderPass();
 			});
@@ -295,24 +306,23 @@ void CBTTessellation::Execute(RGGraph& graph, const SceneView* pView, SceneTextu
 
 					context.SetPipelineState(m_pCBTSumReductionPSO);
 					context.Dispatch(ComputeUtils::GetNumThreadGroups(1 << currentDepth, 256));
-					context.InsertUavBarrier(m_pCBTBuffer);
+					context.InsertUavBarrier(pCBTBuffer->Get());
 				}
 			});
 
 	if (CBTSettings::DebugVisualize)
 	{
 		ImGui::Begin("CBT");
-		ImGui::ImageAutoSize(m_pDebugVisualizeTexture, ImVec2((float)m_pDebugVisualizeTexture->GetWidth(), (float)m_pDebugVisualizeTexture->GetHeight()));
+		ImGui::ImageAutoSize(data.pDebugVisualizeTexture, ImVec2((float)data.pDebugVisualizeTexture->GetWidth(), (float)data.pDebugVisualizeTexture->GetHeight()));
 		ImGui::End();
 
 		graph.AddPass("CBT Debug Visualize", RGPassFlag::Raster)
-			.Read(pCBTBuffer)
+			.Read({ pCBTBuffer, pIndirectArgs })
 			.Bind([=](CommandContext& context, const RGPassResources& resources)
 			{
-				context.InsertResourceBarrier(m_pCBTIndirectArgs, D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
-				context.InsertResourceBarrier(m_pDebugVisualizeTexture, D3D12_RESOURCE_STATE_RENDER_TARGET);
+				context.InsertResourceBarrier(data.pDebugVisualizeTexture, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
-				context.BeginRenderPass(RenderPassInfo(m_pDebugVisualizeTexture, RenderPassAccess::Load_Store, nullptr, RenderPassAccess::NoAccess, false));
+				context.BeginRenderPass(RenderPassInfo(data.pDebugVisualizeTexture, RenderPassAccess::Load_Store, nullptr, RenderPassAccess::NoAccess, false));
 
 				context.SetGraphicsRootSignature(m_pCBTRS);
 				context.SetPipelineState(m_pCBTDebugVisualizePSO);
@@ -320,23 +330,15 @@ void CBTTessellation::Execute(RGGraph& graph, const SceneView* pView, SceneTextu
 
 				context.SetRootConstants(0, commonArgs);
 				context.SetRootCBV(1, updateData);
-				context.SetRootCBV(2, Renderer::GetViewUniforms(pView, m_pDebugVisualizeTexture));
+				context.SetRootCBV(2, Renderer::GetViewUniforms(pView, data.pDebugVisualizeTexture));
 
-				context.ExecuteIndirect(GraphicsCommon::pIndirectDrawSignature, 1, m_pCBTIndirectArgs, nullptr, IndirectDrawArgsOffset);
+				context.ExecuteIndirect(GraphicsCommon::pIndirectDrawSignature, 1, pIndirectArgs->Get(), nullptr, IndirectDrawArgsOffset);
 				context.EndRenderPass();
 			});
 	}
 }
 
-void CBTTessellation::AllocateCBT()
-{
-	m_CBT.InitBare(CBTSettings::CBTDepth, 1);
-	uint32 size = m_CBT.GetMemoryUse();
-	m_pCBTBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateByteAddress(size, BufferFlag::ShaderResource | BufferFlag::UnorderedAccess), "CBT");
-	m_IsDirty = true;
-}
-
-void CBTTessellation::SetupPipelines()
+void CBTTessellation::SetupPipelines(GraphicsDevice* pDevice)
 {
 	std::vector<ShaderDefine> defines = {
 		ShaderDefine("RENDER_WIREFRAME", CBTSettings::Wireframe ? 1 : 0),
@@ -350,18 +352,18 @@ void CBTTessellation::SetupPipelines()
 		ShaderDefine("COLOR_LEVELS", CBTSettings::ColorLevels ? 1 : 0),
 	};
 
-	m_pCBTRS = new RootSignature(m_pDevice);
+	m_pCBTRS = new RootSignature(pDevice);
 	m_pCBTRS->AddRootConstants<Vector4i>(0);
 	m_pCBTRS->AddConstantBufferView(1);
 	m_pCBTRS->AddConstantBufferView(100);
 	m_pCBTRS->Finalize("CBT");
 
 	{
-		m_pCBTIndirectArgsPSO = m_pDevice->CreateComputePipeline(m_pCBTRS, "CBT.hlsl", "PrepareDispatchArgsCS", defines);
-		m_pCBTSumReductionFirstPassPSO = m_pDevice->CreateComputePipeline(m_pCBTRS, "CBT.hlsl", "SumReductionFirstPassCS", defines);
-		m_pCBTSumReductionPSO = m_pDevice->CreateComputePipeline(m_pCBTRS, "CBT.hlsl", "SumReductionCS", defines);
-		m_pCBTCacheBitfieldPSO = m_pDevice->CreateComputePipeline(m_pCBTRS, "CBT.hlsl", "CacheBitfieldCS", defines);
-		m_pCBTUpdatePSO = m_pDevice->CreateComputePipeline(m_pCBTRS, "CBT.hlsl", "UpdateCS", defines);
+		m_pCBTIndirectArgsPSO = pDevice->CreateComputePipeline(m_pCBTRS, "CBT.hlsl", "PrepareDispatchArgsCS", defines);
+		m_pCBTSumReductionFirstPassPSO = pDevice->CreateComputePipeline(m_pCBTRS, "CBT.hlsl", "SumReductionFirstPassCS", defines);
+		m_pCBTSumReductionPSO = pDevice->CreateComputePipeline(m_pCBTRS, "CBT.hlsl", "SumReductionCS", defines);
+		m_pCBTCacheBitfieldPSO = pDevice->CreateComputePipeline(m_pCBTRS, "CBT.hlsl", "CacheBitfieldCS", defines);
+		m_pCBTUpdatePSO = pDevice->CreateComputePipeline(m_pCBTRS, "CBT.hlsl", "UpdateCS", defines);
 	}
 
 	constexpr ResourceFormat formats[] = {
@@ -387,10 +389,10 @@ void CBTTessellation::SetupPipelines()
 		psoDesc.SetRenderTargetFormats(formats, ResourceFormat::D32_FLOAT, 1);
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
 		psoDesc.SetName("Draw CBT");
-		m_pCBTRenderPSO = m_pDevice->CreatePipeline(psoDesc);
+		m_pCBTRenderPSO = pDevice->CreatePipeline(psoDesc);
 	}
 
-	if (m_pDevice->GetCapabilities().SupportsMeshShading())
+	if (pDevice->GetCapabilities().SupportsMeshShading())
 	{
 		PipelineStateInitializer psoDesc;
 		psoDesc.SetRootSignature(m_pCBTRS);
@@ -401,7 +403,7 @@ void CBTTessellation::SetupPipelines()
 		psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
 		psoDesc.SetName("Draw CBT");
-		m_pCBTRenderMeshShaderPSO = m_pDevice->CreatePipeline(psoDesc);
+		m_pCBTRenderMeshShaderPSO = pDevice->CreatePipeline(psoDesc);
 	}
 
 	{
@@ -413,18 +415,18 @@ void CBTTessellation::SetupPipelines()
 		psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
 		psoDesc.SetDepthEnabled(false);
 		psoDesc.SetName("Debug Visualize CBT");
-		m_pCBTDebugVisualizePSO = m_pDevice->CreatePipeline(psoDesc);
+		m_pCBTDebugVisualizePSO = pDevice->CreatePipeline(psoDesc);
 	}
 }
 
-void CBTTessellation::CreateResources()
+void CBTTessellation::CreateResources(GraphicsDevice* pDevice)
 {
-	CommandContext* pContext = m_pDevice->AllocateCommandContext();
-	m_pHeightmap = GraphicsCommon::CreateTextureFromFile(*pContext, "Resources/Terrain.dds", false, "Terrain Heightmap");
+	CommandContext* pContext = pDevice->AllocateCommandContext();
+	m_CBTData.pHeightmap = GraphicsCommon::CreateTextureFromFile(*pContext, "Resources/Terrain.dds", false, "Terrain Heightmap");
 	pContext->Execute(true);
 
-	m_pDebugVisualizeTexture = m_pDevice->CreateTexture(TextureDesc::CreateRenderTarget(1024, 1024, ResourceFormat::RGBA8_UNORM, TextureFlag::ShaderResource), "CBT Visualize Texture");
-	m_pCBTIndirectArgs = m_pDevice->CreateBuffer(BufferDesc::CreateIndirectArguments<uint32>(10), "CBT Indirect Args");
+	m_CBTData.pDebugVisualizeTexture = pDevice->CreateTexture(TextureDesc::CreateRenderTarget(1024, 1024, ResourceFormat::RGBA8_UNORM, TextureFlag::ShaderResource), "CBT Visualize Texture");
+	m_CBTData.pCBTIndirectArgs = pDevice->CreateBuffer(BufferDesc::CreateIndirectArguments<uint32>(10), "CBT Indirect Args");
 }
 
 void CBTTessellation::DemoCpuCBT()
@@ -436,6 +438,7 @@ void CBTTessellation::DemoCpuCBT()
 	static float scale = 600;
 	static int maxDepth = 7;
 	static bool init = false;
+	static bool splitMode = true;
 
 	static CBT cbt;
 	if (ImGui::SliderInt("Max Depth", &maxDepth, 5, 12) || !init)
@@ -452,7 +455,7 @@ void CBTTessellation::DemoCpuCBT()
 	ImGui::Checkbox("Merging", &merging);
 	ImGui::SameLine();
 
-	ImGui::Text("Size: %s", Math::PrettyPrintDataSize(cbt.GetMemoryUse()).c_str());
+	ImGui::Text("Size: %s", Math::PrettyPrintDataSize(CBT::ComputeSize(cbt.GetMaxDepth())).c_str());
 
 	ImVec2 cPos = ImGui::GetCursorScreenPos();
 
@@ -519,7 +522,7 @@ void CBTTessellation::DemoCpuCBT()
 		PROFILE_SCOPE("CBT Update");
 		cbt.IterateLeaves([&](uint32 heapIndex)
 			{
-				if (m_SplitMode)
+				if (splitMode)
 				{
 					if (splitting && LEB::PointInTriangle(mousePos, heapIndex, scale))
 					{
@@ -539,6 +542,8 @@ void CBTTessellation::DemoCpuCBT()
 					}
 				}
 			});
+
+		splitMode = !splitMode;
 
 		cbt.SumReduction();
 	}

@@ -10,7 +10,7 @@ public:
 	static uint32 ComputeSize(uint32 maxDepth)
 	{
 		uint32 numBits = 1u << (maxDepth + 2);
-		return numBits / NumBitsPerElement;
+		return sizeof(uint32) * (numBits / NumBitsPerElement);
 	}
 
 	void InitBare(uint32 maxDepth, uint32 initialDepth)
@@ -18,7 +18,7 @@ public:
 		assert(initialDepth <= maxDepth);
 
 		Storage.clear();
-		Storage.resize(ComputeSize(maxDepth));
+		Storage.resize(ComputeSize(maxDepth) / sizeof(uint32));
 		Storage[0] |= 1 << maxDepth;
 
 		uint32 minRange = 1u << initialDepth;
@@ -261,11 +261,6 @@ public:
 	uint32 NumBitfieldBits() const
 	{
 		return (1u << GetMaxDepth());
-	}
-
-	uint32 GetMemoryUse() const
-	{
-		return (uint32)Storage.size() * sizeof(StorageType);
 	}
 
 	// Utility functions

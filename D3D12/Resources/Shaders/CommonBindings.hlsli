@@ -47,7 +47,7 @@ float4 SampleGrad2D(int index, SamplerState s, float2 uv,  float2 ddx, float2 dd
 
 InstanceData GetInstance(uint index)
 {
-	StructuredBuffer<InstanceData> meshes = ResourceDescriptorHeap[cView.DrawInstancesIndex];
+	StructuredBuffer<InstanceData> meshes = ResourceDescriptorHeap[cView.InstancesIndex];
 	return meshes[NonUniformResourceIndex(index)];
 }
 
