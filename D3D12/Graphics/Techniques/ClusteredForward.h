@@ -11,7 +11,7 @@ class RGGraph;
 struct SceneView;
 struct SceneTextures;
 
-struct ClusteredLightCullData
+struct LightCullData3D
 {
 	Vector3i ClusterCount;
 	RGBuffer* pAABBs;
@@ -36,12 +36,12 @@ public:
 	ClusteredForward(GraphicsDevice* pDevice);
 	~ClusteredForward();
 
-	void ComputeLightCulling(RGGraph& graph, const SceneView* pView, ClusteredLightCullData& resources);
-	void VisualizeClusters(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures, ClusteredLightCullData& resources);
+	void ComputeLightCulling(RGGraph& graph, const SceneView* pView, LightCullData3D& resources);
+	void VisualizeClusters(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures, LightCullData3D& resources);
 
-	RGTexture* RenderVolumetricFog(RGGraph& graph, const SceneView* pView, const ClusteredLightCullData& cullData, VolumetricFogData& fogData);
+	RGTexture* RenderVolumetricFog(RGGraph& graph, const SceneView* pView, const LightCullData3D& cullData, VolumetricFogData& fogData);
 
-	void RenderBasePass(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures, const ClusteredLightCullData& lightCullData, RGTexture* pFogTexture);
+	void RenderBasePass(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures, const LightCullData3D& lightCullData, RGTexture* pFogTexture);
 
 	void Execute(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures);
 	void VisualizeLightDensity(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures);
@@ -51,7 +51,7 @@ private:
 
 	RefCountPtr<Texture> m_pHeatMapTexture;
 
-	ClusteredLightCullData m_LightCullData;
+	LightCullData3D m_LightCullData;
 	VolumetricFogData m_VolumetricFogData;
 
 	// AABB
@@ -83,4 +83,3 @@ private:
 	RefCountPtr<PipelineState> m_pInjectVolumeLightPSO;
 	RefCountPtr<PipelineState> m_pAccumulateVolumeLightPSO;
 };
-

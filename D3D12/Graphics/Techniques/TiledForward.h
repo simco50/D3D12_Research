@@ -1,34 +1,46 @@
 #pragma once
+#include "Graphics/RenderGraph/RenderGraphDefinitions.h"
+#include "Graphics/RenderGraph/Blackboard.h"
 
 class RootSignature;
 class GraphicsDevice;
 class PipelineState;
 class RGGraph;
+
 struct SceneView;
 struct SceneTextures;
+
+struct LightCull2DData
+{
+	RGTexture* pLightGridOpaque;
+	RGTexture* pLightGridTransparant;
+
+	RGBuffer* pLightIndexCounter;
+	RGBuffer* pLightIndexListOpaque;
+	RGBuffer* pLightIndexListTransparant;
+};
+RG_BLACKBOARD_DATA(LightCull2DData);
 
 class TiledForward
 {
 public:
 	TiledForward(GraphicsDevice* pDevice);
 
+	void ComputeLightCulling(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures, LightCull2DData& resources);
+	void RenderBasePass(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures, const LightCull2DData& lightCullData, RGTexture* pFogTexture);
+
 	void Execute(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures);
 	void VisualizeLightDensity(RGGraph& graph, GraphicsDevice* pDevice, const SceneView* pView, SceneTextures& sceneTextures);
 
 private:
 	GraphicsDevice* m_pDevice;
+	RefCountPtr<RootSignature> m_pCommonRS;
 
-	//Light Culling
-	RefCountPtr<RootSignature> m_pComputeLightCullRS;
 	RefCountPtr<PipelineState> m_pComputeLightCullPSO;
 
-	//Diffuse
-	RefCountPtr<RootSignature> m_pDiffuseRS;
 	RefCountPtr<PipelineState> m_pDiffusePSO;
 	RefCountPtr<PipelineState> m_pDiffuseMaskedPSO;
 	RefCountPtr<PipelineState> m_pDiffuseAlphaPSO;
 
-	//Visualize Light Count
-	RefCountPtr<RootSignature> m_pVisualizeLightsRS;
 	RefCountPtr<PipelineState> m_pVisualizeLightsPSO;
 };

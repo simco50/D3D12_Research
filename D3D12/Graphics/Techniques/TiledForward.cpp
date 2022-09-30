@@ -15,112 +15,94 @@
 static constexpr int MAX_LIGHT_DENSITY = 72000;
 static constexpr int FORWARD_PLUS_BLOCK_SIZE = 16;
 
-struct CullBlackboardData
-{
-	RGTexture* pLightGridOpaque;
-};
-RG_BLACKBOARD_DATA(CullBlackboardData);
-
 TiledForward::TiledForward(GraphicsDevice* pDevice)
 	: m_pDevice(pDevice)
 {
-	// Light culling
+	m_pCommonRS = new RootSignature(m_pDevice);
+	m_pCommonRS->AddRootConstants(0, 6);
+	m_pCommonRS->AddConstantBufferView(100);
+	m_pCommonRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 6);
+	m_pCommonRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 6);
+	m_pCommonRS->Finalize("Common");
+
 	{
-		m_pComputeLightCullRS = new RootSignature(m_pDevice);
-		m_pComputeLightCullRS->AddConstantBufferView(100);
-		m_pComputeLightCullRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 5);
-		m_pComputeLightCullRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2);
-		m_pComputeLightCullRS->Finalize("Tiled Light Culling");
-		m_pComputeLightCullPSO = m_pDevice->CreateComputePipeline(m_pComputeLightCullRS, "LightCulling.hlsl", "CSMain");
+		constexpr ResourceFormat formats[] = {
+			ResourceFormat::RGBA16_FLOAT,
+			ResourceFormat::RG16_FLOAT,
+			ResourceFormat::R8_UNORM,
+		};
+
+		//Opaque
+		PipelineStateInitializer psoDesc;
+		psoDesc.SetRootSignature(m_pCommonRS);
+		psoDesc.SetVertexShader("Diffuse.hlsl", "VSMain", { "TILED_FORWARD" });
+		psoDesc.SetPixelShader("Diffuse.hlsl", "PSMain", { "TILED_FORWARD" });
+		psoDesc.SetRenderTargetFormats(formats, ResourceFormat::D32_FLOAT, 1);
+		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_EQUAL);
+		psoDesc.SetDepthWrite(false);
+		psoDesc.SetName("Forward Pass - Opaque");
+		m_pDiffusePSO = m_pDevice->CreatePipeline(psoDesc);
+
+		//Alpha Mask
+		psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
+		psoDesc.SetName("Forward Pass - Opaque Masked");
+		m_pDiffuseMaskedPSO = m_pDevice->CreatePipeline(psoDesc);
+
+		//Transparant
+		psoDesc.SetBlendMode(BlendMode::Alpha, false);
+		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
+		psoDesc.SetName("Forward Pass - Transparent");
+		m_pDiffuseAlphaPSO = m_pDevice->CreatePipeline(psoDesc);
 	}
 
-	// Shading pipelines
-	{
-		m_pDiffuseRS = new RootSignature(m_pDevice);
-		m_pDiffuseRS->AddRootConstants(0, 3);
-		m_pDiffuseRS->AddConstantBufferView(1);
-		m_pDiffuseRS->AddConstantBufferView(100);
-		m_pDiffuseRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 8);
-		m_pDiffuseRS->Finalize("Diffuse");
-
-		{
-			constexpr ResourceFormat formats[] = {
-				ResourceFormat::RGBA16_FLOAT,
-				ResourceFormat::RG16_FLOAT,
-				ResourceFormat::R8_UNORM,
-			};
-
-			//Opaque
-			PipelineStateInitializer psoDesc;
-			psoDesc.SetRootSignature(m_pDiffuseRS);
-			psoDesc.SetVertexShader("Diffuse.hlsl", "VSMain", { "TILED_FORWARD" });
-			psoDesc.SetPixelShader("Diffuse.hlsl", "PSMain", { "TILED_FORWARD" });
-			psoDesc.SetRenderTargetFormats(formats, ResourceFormat::D32_FLOAT, 1);
-			psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_EQUAL);
-			psoDesc.SetDepthWrite(false);
-			psoDesc.SetName("Diffuse");
-			m_pDiffusePSO = m_pDevice->CreatePipeline(psoDesc);
-
-			//Alpha Mask
-			psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
-			psoDesc.SetName("Diffuse Masked");
-			m_pDiffuseMaskedPSO = m_pDevice->CreatePipeline(psoDesc);
-
-			//Transparant
-			psoDesc.SetBlendMode(BlendMode::Alpha, false);
-			psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
-			psoDesc.SetName("Diffuse (Alpha)");
-			m_pDiffuseAlphaPSO = m_pDevice->CreatePipeline(psoDesc);
-		}
-	}
-
-	// Light count visualization
-	{
-		m_pVisualizeLightsRS = new RootSignature(m_pDevice);
-		m_pVisualizeLightsRS->AddConstantBufferView(0);
-		m_pVisualizeLightsRS->AddConstantBufferView(100);
-		m_pVisualizeLightsRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3);
-		m_pVisualizeLightsRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 3);
-		m_pVisualizeLightsRS->Finalize("Light Density Visualization");
-
-		m_pVisualizeLightsPSO = m_pDevice->CreateComputePipeline(m_pVisualizeLightsRS, "VisualizeLightCount.hlsl", "DebugLightDensityCS", { "TILED_FORWARD" });
-	}
+	m_pComputeLightCullPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "LightCulling.hlsl", "CSMain");
+	m_pVisualizeLightsPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "VisualizeLightCount.hlsl", "DebugLightDensityCS", { "TILED_FORWARD" });
 }
 
 void TiledForward::Execute(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures)
 {
+	LightCull2DData lightCullData;
+	ComputeLightCulling(graph, pView, sceneTextures, lightCullData);
+
+	RenderBasePass(graph, pView, sceneTextures, lightCullData, nullptr);
+}
+
+void TiledForward::ComputeLightCulling(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures, LightCull2DData& resources)
+{
 	int frustumCountX = Math::DivideAndRoundUp(pView->GetDimensions().x, FORWARD_PLUS_BLOCK_SIZE);
 	int frustumCountY = Math::DivideAndRoundUp(pView->GetDimensions().y, FORWARD_PLUS_BLOCK_SIZE);
-	RGTexture* pLightGridOpaque = graph.CreateTexture("Light Grid - Opaque", TextureDesc::Create2D(frustumCountX, frustumCountY, ResourceFormat::RG32_UINT));
-	RGTexture* pLightGridTransparant = graph.CreateTexture("Light Grid - Transparant", TextureDesc::Create2D(frustumCountX, frustumCountY, ResourceFormat::RG32_UINT));
+	resources.pLightGridOpaque = graph.CreateTexture("Light Grid - Opaque", TextureDesc::Create2D(frustumCountX, frustumCountY, ResourceFormat::RG32_UINT));
+	resources.pLightGridTransparant = graph.CreateTexture("Light Grid - Transparant", TextureDesc::Create2D(frustumCountX, frustumCountY, ResourceFormat::RG32_UINT));
 
-	RGBuffer* pLightIndexCounter = graph.CreateBuffer("Light Index Counter", BufferDesc::CreateStructured(2, sizeof(uint32), BufferFlag::NoBindless));
-	RGBuffer* pLightIndexListOpaque = graph.CreateBuffer("Light List - Opaque", BufferDesc::CreateStructured(MAX_LIGHT_DENSITY, sizeof(uint32)));
-	RGBuffer* pLightIndexListTransparant = graph.CreateBuffer("Light List - Transparant", BufferDesc::CreateStructured(MAX_LIGHT_DENSITY, sizeof(uint32)));
+	resources.pLightIndexCounter = graph.CreateBuffer("Light Index Counter", BufferDesc::CreateStructured(2, sizeof(uint32), BufferFlag::NoBindless));
+	resources.pLightIndexListOpaque = graph.CreateBuffer("Light List - Opaque", BufferDesc::CreateStructured(MAX_LIGHT_DENSITY, sizeof(uint32)));
+	resources.pLightIndexListTransparant = graph.CreateBuffer("Light List - Transparant", BufferDesc::CreateStructured(MAX_LIGHT_DENSITY, sizeof(uint32)));
 
-	graph.AddPass("Tiled Light Culling", RGPassFlag::Compute)
+	graph.AddPass("2D Light Culling", RGPassFlag::Compute)
 		.Read(sceneTextures.pDepth)
-		.Write({ pLightGridOpaque, pLightGridTransparant, pLightIndexListOpaque, pLightIndexListTransparant, pLightIndexCounter })
+		.Write({ resources.pLightGridOpaque, resources.pLightIndexListOpaque })
+		.Write({ resources.pLightGridTransparant, resources.pLightIndexListTransparant })
+		.Write({ resources.pLightIndexCounter })
 		.Bind([=](CommandContext& context)
 			{
 				Texture* pDepth = sceneTextures.pDepth->Get();
 
 				//#todo: adhoc UAV creation
-				context.ClearUavUInt(pLightIndexCounter->Get(), m_pDevice->CreateUAV(pLightIndexCounter->Get(), BufferUAVDesc::CreateRaw()));
+				context.ClearUavUInt(resources.pLightIndexCounter->Get(), m_pDevice->CreateUAV(resources.pLightIndexCounter->Get(), BufferUAVDesc::CreateRaw()));
 
+				context.SetComputeRootSignature(m_pCommonRS);
 				context.SetPipelineState(m_pComputeLightCullPSO);
-				context.SetComputeRootSignature(m_pComputeLightCullRS);
 
-				context.SetRootCBV(0, Renderer::GetViewUniforms(pView, pDepth));
+				context.SetRootCBV(1, Renderer::GetViewUniforms(pView, pDepth));
 
-				context.BindResources(1, {
-					pLightIndexCounter->Get()->GetUAV(),
-					pLightIndexListOpaque->Get()->GetUAV(),
-					pLightGridOpaque->Get()->GetUAV(),
-					pLightIndexListTransparant->Get()->GetUAV(),
-					pLightGridTransparant->Get()->GetUAV(),
-					});
 				context.BindResources(2, {
+					resources.pLightIndexCounter->Get()->GetUAV(),
+					resources.pLightIndexListOpaque->Get()->GetUAV(),
+					resources.pLightGridOpaque->Get()->GetUAV(),
+					resources.pLightIndexListTransparant->Get()->GetUAV(),
+					resources.pLightGridTransparant->Get()->GetUAV(),
+					});
+				context.BindResources(3, {
 					pDepth->GetSRV(),
 					});
 
@@ -129,12 +111,13 @@ void TiledForward::Execute(RGGraph& graph, const SceneView* pView, SceneTextures
 					pDepth->GetHeight(), FORWARD_PLUS_BLOCK_SIZE
 				));
 			});
+}
 
-	//5. BASE PASS
-	// - Render the scene using the shadow mapping result and the light culling buffers
-	graph.AddPass("Base Pass", RGPassFlag::Raster)
+void TiledForward::RenderBasePass(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures, const LightCull2DData& lightCullData, RGTexture* pFogTexture)
+{
+	graph.AddPass("Forward Pass", RGPassFlag::Raster)
 		.Read({ sceneTextures.pAmbientOcclusion, sceneTextures.pPreviousColor })
-		.Read({ pLightGridOpaque, pLightGridTransparant, pLightIndexListOpaque, pLightIndexListTransparant })
+		.Read({ lightCullData.pLightGridOpaque, lightCullData.pLightGridTransparant, lightCullData.pLightIndexListOpaque, lightCullData.pLightIndexListTransparant })
 		.DepthStencil(sceneTextures.pDepth, RenderTargetLoadAction::Load, false)
 		.RenderTarget(sceneTextures.pColorTarget, RenderTargetLoadAction::DontCare)
 		.RenderTarget(sceneTextures.pNormals, RenderTargetLoadAction::DontCare)
@@ -142,55 +125,60 @@ void TiledForward::Execute(RGGraph& graph, const SceneView* pView, SceneTextures
 		.Bind([=](CommandContext& context)
 			{
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-				context.SetGraphicsRootSignature(m_pDiffuseRS);
+				context.SetGraphicsRootSignature(m_pCommonRS);
 
-				context.SetRootCBV(2, Renderer::GetViewUniforms(pView, sceneTextures.pColorTarget->Get()));
+				context.SetRootCBV(1, Renderer::GetViewUniforms(pView, sceneTextures.pColorTarget->Get()));
 
 				{
-					GPU_PROFILE_SCOPE("Opaque", &context);
-
 					context.BindResources(3, {
 						sceneTextures.pAmbientOcclusion->Get()->GetSRV(),
 						sceneTextures.pDepth->Get()->GetSRV(),
 						sceneTextures.pPreviousColor->Get()->GetSRV(),
 						GraphicsCommon::GetDefaultTexture(DefaultTexture::Black3D)->GetSRV(),
-						pLightGridOpaque->Get()->GetSRV(),
-						pLightIndexListOpaque->Get()->GetSRV(),
+						lightCullData.pLightGridOpaque->Get()->GetSRV(),
+						lightCullData.pLightIndexListOpaque->Get()->GetSRV(),
 						});
 
-					context.SetPipelineState(m_pDiffusePSO);
-					Renderer::DrawScene(context, pView, Batch::Blending::Opaque);
+					{
+						GPU_PROFILE_SCOPE("Opaque", &context);
+						context.SetPipelineState(m_pDiffusePSO);
+						Renderer::DrawScene(context, pView, Batch::Blending::Opaque);
+					}
 
-					context.SetPipelineState(m_pDiffuseMaskedPSO);
-					Renderer::DrawScene(context, pView, Batch::Blending::AlphaMask);
+					{
+						GPU_PROFILE_SCOPE("Opaque Masked", &context);
+						context.SetPipelineState(m_pDiffuseMaskedPSO);
+						Renderer::DrawScene(context, pView, Batch::Blending::AlphaMask);
+					}
 				}
 
 				{
-					GPU_PROFILE_SCOPE("Transparant", &context);
-
 					context.BindResources(3, {
 						sceneTextures.pAmbientOcclusion->Get()->GetSRV(),
 						sceneTextures.pDepth->Get()->GetSRV(),
 						sceneTextures.pPreviousColor->Get()->GetSRV(),
 						GraphicsCommon::GetDefaultTexture(DefaultTexture::Black3D)->GetSRV(),
-						pLightGridTransparant->Get()->GetSRV(),
-						pLightIndexListTransparant->Get()->GetSRV(),
+						lightCullData.pLightGridTransparant->Get()->GetSRV(),
+						lightCullData.pLightIndexListTransparant->Get()->GetSRV(),
 						});
 
-					context.SetPipelineState(m_pDiffuseAlphaPSO);
-					Renderer::DrawScene(context, pView, Batch::Blending::AlphaBlend);
+					{
+						GPU_PROFILE_SCOPE("Transparant", &context);
+						context.SetPipelineState(m_pDiffuseAlphaPSO);
+						Renderer::DrawScene(context, pView, Batch::Blending::AlphaBlend);
+					}
 				}
 			});
 
-	CullBlackboardData& blackboardData = graph.Blackboard.Add<CullBlackboardData>();
-	blackboardData.pLightGridOpaque = pLightGridOpaque;
+	LightCull2DData& blackboardData = graph.Blackboard.Add<LightCull2DData>();
+	blackboardData.pLightGridOpaque = lightCullData.pLightGridOpaque;
 }
 
 void TiledForward::VisualizeLightDensity(RGGraph& graph, GraphicsDevice* pDevice, const SceneView* pView, SceneTextures& sceneTextures)
 {
 	RGTexture* pVisualizationTarget = graph.CreateTexture("Scene Color", sceneTextures.pColorTarget->GetDesc());
 
-	const CullBlackboardData& blackboardData = graph.Blackboard.Get<CullBlackboardData>();
+	const LightCull2DData& blackboardData = graph.Blackboard.Get<LightCull2DData>();
 	RGTexture* pLightGridOpaque = blackboardData.pLightGridOpaque;
 
 	graph.AddPass("Visualize Light Density", RGPassFlag::Compute)
@@ -208,16 +196,16 @@ void TiledForward::VisualizeLightDensity(RGGraph& graph, GraphicsDevice* pDevice
 				} constantData;
 
 				context.SetPipelineState(m_pVisualizeLightsPSO);
-				context.SetComputeRootSignature(m_pVisualizeLightsRS);
-				context.SetRootCBV(0, constantData);
+				context.SetComputeRootSignature(m_pCommonRS);
+				context.SetRootConstants(0, constantData);
 				context.SetRootCBV(1, Renderer::GetViewUniforms(pView, pTarget));
 
-				context.BindResources(2, {
-					 sceneTextures.pColorTarget->Get()->GetSRV(),
+				context.BindResources(3, {
+					sceneTextures.pColorTarget->Get()->GetSRV(),
 					sceneTextures.pDepth->Get()->GetSRV(),
 					pLightGridOpaque->Get()->GetSRV(),
 					});
-				context.BindResources(3, pTarget->GetUAV());
+				context.BindResources(2, pTarget->GetUAV());
 
 				context.Dispatch(ComputeUtils::GetNumThreadGroups(
 					pTarget->GetWidth(), 16,

@@ -63,7 +63,7 @@ void CBTTessellation::Execute(RGGraph& graph, CBTData& data, const SceneView* pV
 			ImGui::SliderFloat("Height Scale", &CBTSettings::HeightScale, 0.1f, 2.0f);
 			if (ImGui::SliderInt("CBT Depth", &CBTSettings::CBTDepth, 10, 28))
 			{
-				data.IsDirty = true;
+				data.pCBTBuffer = nullptr;
 			}
 			int& subd = CBTSettings::MeshShader ? CBTSettings::MeshShaderSubD : CBTSettings::GeometryShaderSubD;
 			int maxSubD = CBTSettings::MeshShader ? 3 : 2;
@@ -109,40 +109,27 @@ void CBTTessellation::Execute(RGGraph& graph, CBTData& data, const SceneView* pV
 
 	if (CBTSettings::CpuDemo)
 	{
-		DemoCpuCBT();
+		CBTDemo();
 	}
 
 	RG_GRAPH_SCOPE("CBT", graph);
 
 	RGBuffer* pCBTBuffer = graph.TryImportBuffer(data.pCBTBuffer);
 
-	if (data.IsDirty || !pCBTBuffer)
+	if (!pCBTBuffer)
 	{
 		uint32 size = CBT::ComputeSize(CBTSettings::CBTDepth);
 		data.pCBTBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateByteAddress(size, BufferFlag::ShaderResource | BufferFlag::UnorderedAccess), "CBT");
 		pCBTBuffer = graph.ImportBuffer(data.pCBTBuffer);
-		data.IsDirty = false;
 
 		graph.AddPass("CBT Upload", RGPassFlag::Compute)
-			.Write(pCBTBuffer)
+			.Write({ pCBTBuffer })
 			.Bind([=](CommandContext& context)
 				{
-					context.ClearUavUInt(pCBTBuffer->Get(), pCBTBuffer->Get()->GetUAV());
-					
-					uint32 bitfieldBytes = (1 << CBTSettings::CBTDepth) / 32;
-					uint32 offset0 = size - bitfieldBytes;
-					uint32 offset1 = size - (bitfieldBytes / 2);
-
-					D3D12_GPU_VIRTUAL_ADDRESS base = pCBTBuffer->Get()->GetGpuHandle();
-					D3D12_WRITEBUFFERIMMEDIATE_PARAMETER params[] =
-					{
-						{ base + 0,			1u << CBTSettings::CBTDepth		},
-						{ base + offset0,	1u << 31u						},
-						{ base + offset1,	1u << 31u						},
-					};
+					CBT cbt;
+					cbt.InitBare(CBTSettings::CBTDepth, 1);
 					context.InsertResourceBarrier(pCBTBuffer->Get(), D3D12_RESOURCE_STATE_COPY_DEST);
-					context.FlushResourceBarriers();
-					context.GetRaytracingCommandList()->WriteBufferImmediate(ARRAYSIZE(params), params, nullptr);
+					context.WriteBuffer(pCBTBuffer->Get(), cbt.GetData(), size);
 				});
 	}
 
@@ -214,10 +201,8 @@ void CBTTessellation::Execute(RGGraph& graph, CBTData& data, const SceneView* pV
 		.RenderTarget(sceneTextures.pColorTarget, RenderTargetLoadAction::Load)
 		.RenderTarget(sceneTextures.pNormals, RenderTargetLoadAction::Load)
 		.RenderTarget(sceneTextures.pRoughness, RenderTargetLoadAction::Load)
-		.Bind([=](CommandContext& context, const RGPassResources& resources)
+		.Bind([=](CommandContext& context)
 			{
-				context.BeginRenderPass(resources.GetRenderPassInfo());
-
 				context.SetGraphicsRootSignature(m_pCBTRS);
 				context.SetPipelineState(CBTSettings::MeshShader ? m_pCBTRenderMeshShaderPSO : m_pCBTRenderPSO);
 
@@ -235,7 +220,6 @@ void CBTTessellation::Execute(RGGraph& graph, CBTData& data, const SceneView* pV
 					context.SetPrimitiveTopology(CBTSettings::GeometryShaderSubD > 0 ? D3D_PRIMITIVE_TOPOLOGY_POINTLIST : D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 					context.ExecuteIndirect(GraphicsCommon::pIndirectDrawSignature, 1, pIndirectArgs->Get(), nullptr, IndirectDrawArgsOffset);
 				}
-				context.EndRenderPass();
 			});
 
 	// No longer need to compute the sum reduction tree for the last 5 layers. Instead, bits in the bitfield are counted directly
@@ -429,7 +413,7 @@ void CBTTessellation::CreateResources(GraphicsDevice* pDevice)
 	m_CBTData.pCBTIndirectArgs = pDevice->CreateBuffer(BufferDesc::CreateIndirectArguments<uint32>(10), "CBT Indirect Args");
 }
 
-void CBTTessellation::DemoCpuCBT()
+void CBTTessellation::CBTDemo()
 {
 	PROFILE_SCOPE("CPU CBT Demo");
 

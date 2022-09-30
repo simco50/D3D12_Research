@@ -12,7 +12,6 @@ struct SceneTextures;
 
 struct CBTData
 {
-	bool IsDirty = true;
 	uint32 SplitMode = 0;
 	RefCountPtr<Texture> pHeightmap;
 	RefCountPtr<Buffer> pCBTBuffer;
@@ -31,11 +30,11 @@ public:
 	}
 
 	void Execute(RGGraph& graph, CBTData& data, const SceneView* pView, SceneTextures& sceneTextures);
+	static void CBTDemo();
 
 private:
 	void SetupPipelines(GraphicsDevice* pDevice);
 	void CreateResources(GraphicsDevice* pDevice);
-	void DemoCpuCBT();
 
 	GraphicsDevice* m_pDevice;
 	CBTData m_CBTData;

@@ -532,11 +532,9 @@ void DemoApp::Update()
 			.Bind([=](CommandContext& context)
 				{
 					context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
 					context.SetGraphicsRootSignature(m_pCommonRS);
 
 					context.SetRootCBV(1, Renderer::GetViewUniforms(pView, sceneTextures.pDepth->Get()));
-
 					{
 						GPU_PROFILE_SCOPE("Opaque", &context);
 						context.SetPipelineState(m_pDepthPrepassOpaquePSO);
@@ -560,14 +558,13 @@ void DemoApp::Update()
 					context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 					context.SetGraphicsRootSignature(m_pCommonRS);
 
-					context.SetRootCBV(1, Renderer::GetViewUniforms(pView, sceneTextures.pVisibilityBuffer->Get()));
+					context.SetRootCBV(1, Renderer::GetViewUniforms(pView, sceneTextures.pDepth->Get()));
 					context.BindResources(3, sceneTextures.pHZB->Get()->GetSRV());
 					{
 						GPU_PROFILE_SCOPE("Opaque", &context);
 						context.SetPipelineState(m_pVisibilityRenderingPSO);
 						Renderer::DrawScene(context, pView, Batch::Blending::Opaque);
 					}
-
 					{
 						GPU_PROFILE_SCOPE("Opaque Masked", &context);
 						context.SetPipelineState(m_pVisibilityRenderingMaskedPSO);
