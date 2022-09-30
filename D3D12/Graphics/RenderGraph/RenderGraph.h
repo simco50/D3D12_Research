@@ -298,6 +298,18 @@ public:
 	void ExportTexture(RGTexture* pTexture, RefCountPtr<Texture>* pTarget);
 	void ExportBuffer(RGBuffer* pBuffer, RefCountPtr<Buffer>* pTarget);
 
+	RGTexture* FindTexture(const char* pName) const
+	{
+		for (RGResource* pResource : m_Resources)
+		{
+			if (pResource->Type == RGResourceType::Texture && strcmp(pResource->GetName(), pName) == 0)
+			{
+				return (RGTexture*)pResource;
+			}
+		}
+		return nullptr;
+	}
+
 	void PushEvent(const char* pName);
 	void PopEvent();
 

@@ -155,6 +155,9 @@ namespace Tweakables
 	bool g_Screenshot = false;
 	ConsoleCommand<> gScreenshot("Screenshot", []() { g_Screenshot = true; });
 
+	std::string VisualizeTextureName = "";
+	ConsoleCommand<const char*> gVisualizeTexture("vis", [](const char* pName) { VisualizeTextureName = pName; });
+
 	// Lighting
 	float g_SunInclination = 0.79f;
 	float g_SunOrientation = -1.503f;
@@ -172,27 +175,30 @@ DemoApp::DemoApp(WindowHandle window, const Vector2i& windowRect)
 	E_LOG(Info, "Graphics::InitD3D()");
 
 	GraphicsDeviceOptions options;
-	options.UseDebugDevice = CommandLine::GetBool("d3ddebug");
-	options.UseDRED = CommandLine::GetBool("dred");
-	options.LoadPIX = CommandLine::GetBool("pix");
-	options.UseGPUValidation = CommandLine::GetBool("gpuvalidation");
-	options.UseWarp = CommandLine::GetBool("warp");
+	options.UseDebugDevice =	CommandLine::GetBool("d3ddebug");
+	options.UseDRED =			CommandLine::GetBool("dred");
+	options.LoadPIX =			CommandLine::GetBool("pix");
+	options.UseGPUValidation =	CommandLine::GetBool("gpuvalidation");
+	options.UseWarp =			CommandLine::GetBool("warp");
 	m_pDevice = new GraphicsDevice(options);
 	m_pSwapchain = new SwapChain(m_pDevice, DisplayMode::SDR, window);
 
 	GraphicsCommon::Create(m_pDevice);
+
+	m_RenderGraphPool = std::make_unique<RGResourcePool>(m_pDevice);
+
 	ImGuiRenderer::Initialize(m_pDevice, window);
+	m_pClouds =				std::make_unique<Clouds>(m_pDevice);
+	m_pClusteredForward =	std::make_unique<ClusteredForward>(m_pDevice);
+	m_pTiledForward =		std::make_unique<TiledForward>(m_pDevice);
+	m_pRTReflections =		std::make_unique<RTReflections>(m_pDevice);
+	m_pRTAO =				std::make_unique<RTAO>(m_pDevice);
+	m_pSSAO =				std::make_unique<SSAO>(m_pDevice);
+	m_pParticles =			std::make_unique<GpuParticles>(m_pDevice);
+	m_pPathTracing =		std::make_unique<PathTracing>(m_pDevice);
+	m_pCBTTessellation =	std::make_unique<CBTTessellation>(m_pDevice);
 
-	m_pClouds = std::make_unique<Clouds>(m_pDevice);
-	m_pClusteredForward = std::make_unique<ClusteredForward>(m_pDevice);
-	m_pTiledForward = std::make_unique<TiledForward>(m_pDevice);
-	m_pRTReflections = std::make_unique<RTReflections>(m_pDevice);
-	m_pRTAO = std::make_unique<RTAO>(m_pDevice);
-	m_pSSAO = std::make_unique<SSAO>(m_pDevice);
-	m_pParticles = std::make_unique<GpuParticles>(m_pDevice);
-	m_pPathTracing = std::make_unique<PathTracing>(m_pDevice);
-	m_pCBTTessellation = std::make_unique<CBTTessellation>(m_pDevice);
-
+	InitializePipelines();
 	Profiler::Get()->Initialize(m_pDevice);
 	DebugRenderer::Get()->Initialize(m_pDevice);
 
@@ -200,11 +206,9 @@ DemoApp::DemoApp(WindowHandle window, const Vector2i& windowRect)
 	OnResizeViewport(windowRect.x, windowRect.y);
 
 	CommandContext* pContext = m_pDevice->AllocateCommandContext();
-	InitializePipelines();
 	SetupScene(*pContext);
 	pContext->Execute(true);
 
-	m_RenderGraphPool = std::make_unique<RGResourcePool>(m_pDevice);
 
 	Tweakables::g_RaytracedAO = m_pDevice->GetCapabilities().SupportsRaytracing() ? Tweakables::g_RaytracedAO : false;
 	Tweakables::g_RaytracedReflections = m_pDevice->GetCapabilities().SupportsRaytracing() ? Tweakables::g_RaytracedReflections : false;
@@ -1001,6 +1005,7 @@ void DemoApp::Update()
 					.Bind([=](CommandContext& context)
 						{
 							Texture* pTarget = pReductionTarget->Get();
+							context.SetComputeRootSignature(m_pCommonRS);
 							context.SetPipelineState(m_pReduceDepthPSO);
 							context.BindResources(2, pTarget->GetUAV());
 							context.BindResources(3, pReductionSource->Get()->GetSRV());
@@ -1345,6 +1350,15 @@ void DemoApp::Update()
 					context.CopyResource(sceneTextures.pColorTarget->Get(), pFinalOutput->Get());
 					context.InsertResourceBarrier(pFinalOutput->Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 				});
+
+		if (!Tweakables::VisualizeTextureName.empty())
+		{
+			RGTexture* pVisualizeTexture = graph.FindTexture(Tweakables::VisualizeTextureName.c_str());
+			if (pVisualizeTexture)
+			{
+				VisualizeTexture(graph, pVisualizeTexture);
+			}
+		}
 
 		Texture* pBackbuffer = m_pSwapchain->GetBackBuffer();
 		ImGuiRenderer::Render(graph, pBackbuffer);
@@ -1718,7 +1732,7 @@ void DemoApp::UpdateImGui()
 		OnResizeViewport(width, height);
 	}
 	ImGuizmo::SetRect(ImGui::GetWindowPos().x, ImGui::GetWindowPos().y, (float)width, (float)height);
-		ImGui::Image(m_ColorOutput, ImVec2((float)width, (float)height));
+	ImGui::Image(m_ColorOutput, ImVec2((float)width, (float)height));
 	ImGui::End();
 
 	if (Tweakables::g_VisualizeLightDensity)
