@@ -246,7 +246,7 @@ void DemoApp::SetupScene(CommandContext& context)
 		LoadMesh("C:/Users/simon.coenen/Downloads/Sponza_New/Processed/Main/NewSponza_Main_Blender_glTF.gltf", context, m_World);
 		LoadMesh("C:/Users/simon.coenen/Downloads/Sponza_New/Processed/PKG_A_Curtains/NewSponza_Curtains_glTF.gltf", context, m_World);
 		LoadMesh("C:/Users/simon.coenen/Downloads/Sponza_New/Processed/PKG_B_Ivy/NewSponza_IvyGrowth_glTF.gltf", context, m_World);
-		LoadMesh("C:/Users/simon.coenen/Downloads/Sponza_New/Processed/PKG_D_Candles/NewSponza_100sOfCandles_glTF_OmniLights.gltf", context, m_World);
+		//LoadMesh("C:/Users/simon.coenen/Downloads/Sponza_New/Processed/PKG_D_Candles/NewSponza_100sOfCandles_glTF_OmniLights.gltf", context, m_World);
 		//LoadMesh("C:/Users/simon.coenen/Downloads/Sponza_New/PKG_C_Trees/NewSponza_CypressTree_glTF.gltf", context);
 #elif 0
 

@@ -108,6 +108,7 @@ struct SceneView
 	std::vector<ShadowView> ShadowViews;
 	Vector4 ShadowCascadeDepths;
 	uint32 NumShadowCascades;
+	uint32 NumLights;
 
 	Vector2i GetDimensions() const;
 };

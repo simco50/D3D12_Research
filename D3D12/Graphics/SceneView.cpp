@@ -81,10 +81,9 @@ namespace Renderer
 		parameters.FarZ = view.FarPlane;
 		parameters.FoV = view.FoV;
 
-
 		parameters.FrameIndex = pView->FrameIndex;
 		parameters.SsrSamples = Tweakables::g_SsrSamples.Get();
-		parameters.LightCount = pView->pLightBuffer->GetNumElements();
+		parameters.LightCount = pView->NumLights;
 
 		check(pView->ShadowViews.size() <= MAX_SHADOW_CASTERS);
 		for (uint32 i = 0; i < pView->ShadowViews.size(); ++i)
@@ -224,6 +223,7 @@ namespace Renderer
 			data.IsSpot = light.Type == LightType::Spot;
 			data.IsDirectional = light.Type == LightType::Directional;
 		}
+		pView->NumLights = (uint32)pWorld->Lights.size();
 
 		GraphicsDevice* pDevice = context.GetParent();
 		auto CopyBufferData = [&](uint32 numElements, uint32 stride, const char* pName, const void* pSource, RefCountPtr<Buffer>& pTarget)

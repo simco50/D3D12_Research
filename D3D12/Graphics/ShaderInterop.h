@@ -7,17 +7,17 @@ namespace ShaderInterop
 #define MAX_SHADOW_CASTERS 32
 
 #ifdef __cplusplus
-	using float2 = Vector2;
-	using float3 = Vector3;
-	using float4 = Vector4;
-	using uint = uint32;
-	using uint2 = Vector2i;
-	using uint3 = Vector3i;
-	using uint4 = Vector4i;
-	using int2 = Vector2i;
-	using int3 = Vector3i;
-	using int4 = Vector4i;
-	using float4x4 = Matrix;
+	using float2 =		Vector2;
+	using float3 =		Vector3;
+	using float4 =		Vector4;
+	using uint =		uint32;
+	using uint2 =		Vector2i;
+	using uint3 =		Vector3i;
+	using uint4 =		Vector4i;
+	using int2 =		Vector2i;
+	using int3 =		Vector3i;
+	using int4 =		Vector4i;
+	using float4x4 =	Matrix;
 
 	template<typename T> struct ConstantBuffer { T Data; };
 #endif
@@ -113,16 +113,6 @@ namespace ShaderInterop
 		);
 	}
 
-	inline bool EnumHasAnyFlag(uint value, uint mask)
-	{
-		return (value & mask) != 0;
-	}
-
-	inline bool EnumHasAllFlags(uint value, uint mask)
-	{
-		return (value & mask) == mask;
-	}
-
 	struct Light
 	{
 		float3 Position;
@@ -148,9 +138,6 @@ namespace ShaderInterop
 #ifndef __cplusplus
 		float3 GetColor() { return UIntToColor(Color).rgb; }
 #endif
-
-		bool PointAttenuation() { return IsPoint || IsSpot; }
-		bool DirectionalAttenuation() { return IsSpot; }
 	};
 
 	struct DDGIVolume

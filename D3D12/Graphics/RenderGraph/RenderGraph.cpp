@@ -276,13 +276,16 @@ void RGGraph::PopEvent()
 SyncPoint RGGraph::Execute()
 {
 	CommandContext* pContext = m_pDevice->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
-	for (uint32 passIndex = 0; passIndex < (uint32)m_RenderPasses.size(); ++passIndex)
 	{
-		RGPass* pPass = m_RenderPasses[passIndex];
-
-		if (!pPass->IsCulled)
+		GPU_PROFILE_SCOPE("Render", pContext);
+		for (uint32 passIndex = 0; passIndex < (uint32)m_RenderPasses.size(); ++passIndex)
 		{
-			ExecutePass(pPass, *pContext);
+			RGPass* pPass = m_RenderPasses[passIndex];
+
+			if (!pPass->IsCulled)
+			{
+				ExecutePass(pPass, *pContext);
+			}
 		}
 	}
 	m_LastSyncPoint = pContext->Execute(false);
