@@ -24,6 +24,10 @@ void ProfileNode::StartTimer(CommandContext* pInContext)
 		::PIXBeginEvent(pInContext->GetCommandList(), 0, MULTIBYTE_TO_UNICODE(pName));
 #endif
 	}
+	else
+	{
+		::PIXBeginEvent(~0ull, pName);
+	}
 }
 
 void ProfileNode::EndTimer()
@@ -38,6 +42,10 @@ void ProfileNode::EndTimer()
 #ifdef USE_PIX
 		::PIXEndEvent(pContext->GetCommandList());
 #endif
+	}
+	else
+	{
+		::PIXEndEvent();
 	}
 }
 

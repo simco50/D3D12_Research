@@ -107,9 +107,13 @@ namespace Renderer
 	void UploadSceneData(CommandContext& context, SceneView* pView, World* pWorld)
 	{
 		std::vector<ShaderInterop::MaterialData> materials;
+		materials.reserve(128);
 		std::vector<ShaderInterop::MeshData> meshes;
+		meshes.reserve(128);
 		std::vector<ShaderInterop::InstanceData> meshInstances;
+		meshInstances.reserve(pView->Batches.size());
 		std::vector<Batch> sceneBatches;
+		sceneBatches.reserve(pView->Batches.size());
 		uint32 instanceID = 0;
 
 		for (const auto& pMesh : pWorld->Meshes)
@@ -118,12 +122,11 @@ namespace Renderer
 			{
 				SubMesh& parentMesh = pMesh->GetMesh(node.MeshIndex);
 				const Material& meshMaterial = pMesh->GetMaterial(parentMesh.MaterialId);
-				ShaderInterop::InstanceData meshInstance;
+				ShaderInterop::InstanceData& meshInstance = meshInstances.emplace_back();
 				meshInstance.ID = instanceID++;
 				meshInstance.MeshIndex = (uint32)meshes.size() + node.MeshIndex;
 				meshInstance.MaterialIndex = (uint32)materials.size() + parentMesh.MaterialId;
 				meshInstance.LocalToWorld = node.Transform;
-				meshInstances.push_back(meshInstance);
 
 				auto GetBlendMode = [](MaterialAlphaMode mode) {
 					switch (mode)
@@ -135,19 +138,18 @@ namespace Renderer
 					return Batch::Blending::Opaque;
 				};
 
-				Batch batch;
+				Batch& batch = sceneBatches.emplace_back();
 				batch.InstanceID = meshInstance.ID;
 				batch.pMesh = &parentMesh;
 				batch.BlendMode = GetBlendMode(meshMaterial.AlphaMode);
 				batch.WorldMatrix = node.Transform;
 				parentMesh.Bounds.Transform(batch.Bounds, batch.WorldMatrix);
 				batch.Radius = Vector3(batch.Bounds.Extents).Length();
-				sceneBatches.push_back(batch);
 			}
 
 			for (const SubMesh& subMesh : pMesh->GetMeshes())
 			{
-				ShaderInterop::MeshData mesh;
+				ShaderInterop::MeshData& mesh = meshes.emplace_back();
 				mesh.BufferIndex = pMesh->GetData()->GetSRVIndex();
 				mesh.IndexByteSize = subMesh.IndicesLocation.Stride();
 				mesh.IndicesOffset = (uint32)subMesh.IndicesLocation.OffsetFromStart;
@@ -155,17 +157,17 @@ namespace Renderer
 				mesh.NormalsOffset = (uint32)subMesh.NormalStreamLocation.OffsetFromStart;
 				mesh.ColorsOffset = (uint32)subMesh.ColorsStreamLocation.OffsetFromStart;
 				mesh.UVsOffset = (uint32)subMesh.UVStreamLocation.OffsetFromStart;
+
 				mesh.MeshletOffset = subMesh.MeshletsLocation;
 				mesh.MeshletVertexOffset = subMesh.MeshletVerticesLocation;
 				mesh.MeshletTriangleOffset = subMesh.MeshletTrianglesLocation;
 				mesh.MeshletBoundsOffset = subMesh.MeshletBoundsLocation;
 				mesh.MeshletCount = subMesh.NumMeshlets;
-				meshes.push_back(mesh);
 			}
 
 			for (const Material& material : pMesh->GetMaterials())
 			{
-				ShaderInterop::MaterialData materialData;
+				ShaderInterop::MaterialData& materialData = materials.emplace_back();
 				materialData.Diffuse = material.pDiffuseTexture ? material.pDiffuseTexture->GetSRVIndex() : -1;
 				materialData.Normal = material.pNormalTexture ? material.pNormalTexture->GetSRVIndex() : -1;
 				materialData.RoughnessMetalness = material.pRoughnessMetalnessTexture ? material.pRoughnessMetalnessTexture->GetSRVIndex() : -1;
@@ -175,7 +177,6 @@ namespace Renderer
 				materialData.RoughnessFactor = material.RoughnessFactor;
 				materialData.EmissiveFactor = material.EmissiveFactor;
 				materialData.AlphaCutoff = material.AlphaCutoff;
-				materials.push_back(materialData);
 			}
 		}
 		sceneBatches.swap(pView->Batches);
@@ -183,9 +184,10 @@ namespace Renderer
 		std::vector<ShaderInterop::DDGIVolume> ddgiVolumes;
 		if (Tweakables::g_EnableDDGI)
 		{
+			ddgiVolumes.reserve(pWorld->DDGIVolumes.size());
 			for (DDGIVolume& ddgiVolume : pWorld->DDGIVolumes)
 			{
-				ShaderInterop::DDGIVolume ddgi{};
+				ShaderInterop::DDGIVolume& ddgi = ddgiVolumes.emplace_back();
 				ddgi.BoundsMin = ddgiVolume.Origin - ddgiVolume.Extents;
 				ddgi.ProbeSize = 2 * ddgiVolume.Extents / (Vector3((float)ddgiVolume.NumProbes.x, (float)ddgiVolume.NumProbes.y, (float)ddgiVolume.NumProbes.z) - Vector3::One);
 				ddgi.ProbeVolumeDimensions = Vector3i(ddgiVolume.NumProbes.x, ddgiVolume.NumProbes.y, ddgiVolume.NumProbes.z);
@@ -195,7 +197,6 @@ namespace Renderer
 				ddgi.ProbeStatesIndex = ddgiVolume.pProbeStates ? ddgiVolume.pProbeStates->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
 				ddgi.NumRaysPerProbe = ddgiVolume.NumRays;
 				ddgi.MaxRaysPerProbe = ddgiVolume.MaxNumRays;
-				ddgiVolumes.push_back(ddgi);
 			}
 		}
 		pView->NumDDGIVolumes = (uint32)ddgiVolumes.size();
