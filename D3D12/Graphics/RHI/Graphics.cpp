@@ -1205,22 +1205,23 @@ SwapChain::SwapChain(GraphicsDevice* pDevice, DisplayMode displayMode, WindowHan
 {
 	m_pPresentFence = new Fence(pDevice, "Present Fence");
 
+	DXGI_SWAP_CHAIN_DESC1 desc{};
 	BOOL allowTearing = FALSE;
 	if (SUCCEEDED(pDevice->GetFactory()->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &allowTearing, sizeof(BOOL))))
 	{
 		m_AllowTearing = allowTearing;
+		desc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
 	}
-
-	DXGI_SWAP_CHAIN_DESC1 desc{};
 	desc.AlphaMode = DXGI_ALPHA_MODE_IGNORE;
 	desc.BufferCount = (uint32)m_Backbuffers.size();
 	desc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-	desc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
 	desc.Format = m_Format;
 	desc.Width = 0;
 	desc.Height = 0;
 	desc.Scaling = DXGI_SCALING_NONE;
 	desc.Stereo = FALSE;
+	// The compositor can use DirectFlip, where it uses the application's back buffer as the entire display back buffer.
+	// With DXGI_SWAP_EFFECT_FLIP_DISCARD, the compositor can _could_ still perform this optimization, by drawing other content onto the application's back buffer.
 	desc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
 	desc.SampleDesc.Count = 1;
 	desc.SampleDesc.Quality = 0;
@@ -1311,7 +1312,7 @@ void SwapChain::OnResizeOrMove(uint32 width, uint32 height)
 	}
 }
 
-void SwapChain::Present(bool vsync)
+void SwapChain::Present()
 {
 	// Wait until the current backbuffer image is ready - Not doing this makes running under PIX crash
 	SyncPoint& presentSyncPoint = m_PresentSyncPoints[m_pSwapchain->GetCurrentBackBufferIndex()];
@@ -1320,7 +1321,7 @@ void SwapChain::Present(bool vsync)
 		presentSyncPoint.Wait();
 	}
 
-	m_pSwapchain->Present(vsync, !vsync && m_AllowTearing ? DXGI_PRESENT_ALLOW_TEARING : 0);
+	m_pSwapchain->Present(m_Vsync ? 1 : 0, !m_Vsync && m_AllowTearing ? DXGI_PRESENT_ALLOW_TEARING : 0);
 	m_CurrentImage = m_pSwapchain->GetCurrentBackBufferIndex();
 
 	CommandQueue* pDirectQueue = GetParent()->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT);

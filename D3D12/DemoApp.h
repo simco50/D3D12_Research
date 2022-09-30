@@ -165,6 +165,4 @@ private:
 		float MipLevel = 0.0f;
 		float Slice = 0.0f;
 	} m_VisualizeTextureData;
-
-	bool m_CapturePix = false;
 };

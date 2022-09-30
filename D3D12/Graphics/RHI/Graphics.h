@@ -71,10 +71,10 @@ public:
 	SwapChain(GraphicsDevice* pDevice, DisplayMode displayMode, WindowHandle pNativeWindow);
 	~SwapChain();
 	void OnResizeOrMove(uint32 width, uint32 height);
-	void Present(bool vsync);
+	void Present();
 
 	void SetDisplayMode(DisplayMode displayMode) { m_DesiredDisplayMode = displayMode; }
-	void SetVsync(bool enabled) { m_Vsync = enabled; }
+	void SetVSync(bool enabled) { m_Vsync = enabled; }
 	bool DisplaySupportsHDR() const;
 
 	Vector2i GetViewport() const;
@@ -83,8 +83,10 @@ public:
 	Texture* GetBackBuffer(uint32 index) const { return m_Backbuffers[index]; }
 	uint32 GetBackbufferIndex() const { return m_CurrentImage; }
 	DXGI_FORMAT GetFormat() const { return m_Format; }
+	bool GetVSync() const { return m_Vsync; }
 
 private:
+	WindowHandle m_Window;
 	DisplayMode m_DesiredDisplayMode;
 	std::array<SyncPoint, NUM_FRAMES> m_PresentSyncPoints;
 	RefCountPtr<Fence> m_pPresentFence;
@@ -94,7 +96,7 @@ private:
 	uint32 m_CurrentImage;
 	uint32 m_Width = 0;
 	uint32 m_Height = 0;
-	bool m_Vsync;
+	bool m_Vsync = true;
 	bool m_AllowTearing = false;
 };
 
