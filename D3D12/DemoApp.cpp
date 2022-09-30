@@ -971,10 +971,10 @@ void DemoApp::Update()
 		{
 			RG_GRAPH_SCOPE("Depth Reduce", graph);
 
-			Vector3i depthSize = sceneTextures.pDepth->GetDesc().Size();
-			depthSize.x = Math::DivideAndRoundUp(depthSize.x, 16);
-			depthSize.y = Math::DivideAndRoundUp(depthSize.y, 16);
-			RGTexture* pReductionTarget = graph.CreateTexture("Depth Reduction Target", TextureDesc::Create2D(depthSize.x, depthSize.y, ResourceFormat::RG32_FLOAT));
+			Vector3i depthTarget = sceneTextures.pDepth->GetDesc().Size();
+			depthTarget.x = Math::Max(depthTarget.x / 16, 1);
+			depthTarget.y = Math::Max(depthTarget.y / 16, 1);
+			RGTexture* pReductionTarget = graph.CreateTexture("Depth Reduction Target", TextureDesc::Create2D(depthTarget.x, depthTarget.y, ResourceFormat::RG32_FLOAT));
 
 			graph.AddPass("Depth Reduce - Setup", RGPassFlag::Compute)
 				.Read(sceneTextures.pDepth)
@@ -994,10 +994,10 @@ void DemoApp::Update()
 						context.Dispatch(pTarget->GetWidth(), pTarget->GetHeight());
 					});
 
-			while (depthSize.x > 1 || depthSize.y > 1)
+			for(;;)
 			{
 				RGTexture* pReductionSource = pReductionTarget;
-				pReductionTarget = graph.CreateTexture("Depth Reduction Target", TextureDesc::Create2D(depthSize.x, depthSize.y, ResourceFormat::RG32_FLOAT));
+				pReductionTarget = graph.CreateTexture("Depth Reduction Target", TextureDesc::Create2D(depthTarget.x, depthTarget.y, ResourceFormat::RG32_FLOAT));
 
 				graph.AddPass("Depth Reduce - Subpass", RGPassFlag::Compute)
 					.Read(pReductionSource)
@@ -1012,11 +1012,14 @@ void DemoApp::Update()
 							context.Dispatch(pTarget->GetWidth(), pTarget->GetHeight());
 						});
 
-				depthSize.x = Math::DivideAndRoundUp(depthSize.x, 16);
-				depthSize.y = Math::DivideAndRoundUp(depthSize.y, 16);
+				if (depthTarget.x == 1 && depthTarget.y == 1)
+					break;
+
+				depthTarget.x = Math::Max(1, depthTarget.x / 16);
+				depthTarget.y = Math::Max(1, depthTarget.y / 16);
 			}
 
-			graph.AddPass("Readback Copy", RGPassFlag::Copy)
+			graph.AddPass("Readback Copy", RGPassFlag::Copy | RGPassFlag::NeverCull)
 				.Read(pReductionTarget)
 				.Bind([=](CommandContext& context)
 					{
@@ -1401,8 +1404,7 @@ void DemoApp::OnResizeViewport(int width, int height)
 
 	for (uint32 i = 0; i < SwapChain::NUM_FRAMES; ++i)
 	{
-		RefCountPtr<Buffer> pBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateTyped(1, ResourceFormat::RG32_FLOAT, BufferFlag::Readback), "SDSM Reduction Readback Target");
-		m_ReductionReadbackTargets.push_back(std::move(pBuffer));
+		m_ReductionReadbackTargets[i] = m_pDevice->CreateBuffer(BufferDesc::CreateTyped(1, ResourceFormat::RG32_FLOAT, BufferFlag::Readback), "SDSM Reduction Readback Target");
 	}
 
 	m_pCamera->SetViewport(FloatRect(0, 0, (float)width, (float)height));
