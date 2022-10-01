@@ -105,7 +105,7 @@ public:
 	void Begin(const char* pName, CommandContext* pContext = nullptr);
 	void End();
 
-	void Resolve(GraphicsDevice* pParent);
+	void Resolve(CommandContext* pContext);
 
 	int32 GetNextTimerIndex();
 	ID3D12QueryHeap* GetQueryHeap() const { return m_pQueryHeap.Get(); }

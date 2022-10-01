@@ -209,14 +209,9 @@ DemoApp::DemoApp(WindowHandle window, const Vector2i& windowRect)
 	SetupScene(*pContext);
 	pContext->Execute(true);
 
-
-	Tweakables::g_RaytracedAO = m_pDevice->GetCapabilities().SupportsRaytracing() ? Tweakables::g_RaytracedAO : false;
-	Tweakables::g_RaytracedReflections = m_pDevice->GetCapabilities().SupportsRaytracing() ? Tweakables::g_RaytracedReflections : false;
-
-	if (m_RenderPath == RenderPath::Visibility && !m_pDevice->GetCapabilities().SupportsMeshShading())
-		m_RenderPath = RenderPath::Clustered;
-	else if (m_RenderPath == RenderPath::PathTracing && !m_pDevice->GetCapabilities().SupportsRaytracing())
-		m_RenderPath = RenderPath::Clustered;
+	constexpr RenderPath defaultRenderPath = RenderPath::Clustered;
+	m_RenderPath = m_RenderPath == RenderPath::Visibility && m_pDevice->GetCapabilities().SupportsMeshShading() ? m_RenderPath : defaultRenderPath;
+	m_RenderPath = m_RenderPath == RenderPath::PathTracing && m_pDevice->GetCapabilities().SupportsRaytracing() ? m_RenderPath : defaultRenderPath;
 }
 
 DemoApp::~DemoApp()
@@ -317,10 +312,11 @@ void DemoApp::SetupScene(CommandContext& context)
 
 void DemoApp::Update()
 {
-	Profiler::Get()->Resolve(m_pDevice);
+	CommandContext* pContext = m_pDevice->AllocateCommandContext();
+	Profiler::Get()->Resolve(pContext);
 
 	{
-		PROFILE_SCOPE("Update");
+		GPU_PROFILE_SCOPE("Update", pContext);
 		m_pDevice->GetShaderManager()->ConditionallyReloadShaders();
 		ImGuiRenderer::NewFrame();
 		UpdateImGui();
@@ -328,24 +324,29 @@ void DemoApp::Update()
 		m_pCamera->Update();
 		m_RenderGraphPool->Tick();
 
-		if (!ImGui::IsAnyItemActive())
 		{
-			if (Input::Instance().IsKeyPressed('1'))
+			if (!ImGui::IsAnyItemActive())
 			{
-				m_RenderPath = RenderPath::Clustered;
+				if (Input::Instance().IsKeyPressed('1'))
+				{
+					m_RenderPath = RenderPath::Clustered;
+				}
+				else if (Input::Instance().IsKeyPressed('2'))
+				{
+					m_RenderPath = RenderPath::Tiled;
+				}
+				else if (Input::Instance().IsKeyPressed('3') && m_pDevice->GetCapabilities().SupportsMeshShading())
+				{
+					m_RenderPath = RenderPath::Visibility;
+				}
+				else if (Input::Instance().IsKeyPressed('4') && m_pDevice->GetCapabilities().SupportsRaytracing())
+				{
+					m_RenderPath = RenderPath::PathTracing;
+				}
 			}
-			else if (Input::Instance().IsKeyPressed('2'))
-			{
-				m_RenderPath = RenderPath::Tiled;
-			}
-			else if (Input::Instance().IsKeyPressed('3') && m_pVisibilityRenderingPSO)
-			{
-				m_RenderPath = RenderPath::Visibility;
-			}
-			else if (Input::Instance().IsKeyPressed('4') && m_pPathTracing->IsSupported())
-			{
-				m_RenderPath = RenderPath::PathTracing;
-			}
+
+			Tweakables::g_RaytracedAO = m_pDevice->GetCapabilities().SupportsRaytracing() ? Tweakables::g_RaytracedAO : false;
+			Tweakables::g_RaytracedReflections = m_pDevice->GetCapabilities().SupportsRaytracing() ? Tweakables::g_RaytracedReflections : false;
 		}
 
 		if (Tweakables::g_RenderObjectBounds)
@@ -401,18 +402,28 @@ void DemoApp::Update()
 					boundsSet = true;
 				}
 			}
-		}
 
-		////////////////////////////////
-		// LET THE RENDERING BEGIN!
-		////////////////////////////////
+			for (ShadowView& shadowView : m_SceneData.ShadowViews)
+			{
+				for (const Batch& b : m_SceneData.Batches)
+				{
+					if (shadowView.IsPerspective)
+					{
+						shadowView.Visibility.AssignBit(b.InstanceID, shadowView.PerspectiveFrustum.Contains(b.Bounds));
+					}
+					else
+					{
+						shadowView.Visibility.AssignBit(b.InstanceID, shadowView.OrtographicFrustum.Contains(b.Bounds));
+					}
+				}
+			}
+		}
 
 		{
 			if (Tweakables::g_Screenshot)
 			{
 				Tweakables::g_Screenshot = false;
 
-				CommandContext* pContext = m_pDevice->AllocateCommandContext();
 				Texture* pSource = m_ColorOutput;
 				D3D12_PLACED_SUBRESOURCE_FOOTPRINT textureFootprint = {};
 				D3D12_RESOURCE_DESC resourceDesc = m_ColorOutput->GetResource()->GetDesc();
@@ -422,13 +433,14 @@ void DemoApp::Update()
 				pContext->InsertResourceBarrier(pScreenshotBuffer, D3D12_RESOURCE_STATE_COPY_DEST);
 				pContext->CopyTexture(m_ColorOutput, pScreenshotBuffer, CD3DX12_BOX(0, 0, m_ColorOutput->GetWidth(), m_ColorOutput->GetHeight()));
 
-				ScreenshotRequest request;
+				Fence* pFence = m_pDevice->GetFrameFence();
+				ScreenshotRequest& request = m_ScreenshotBuffers.emplace();
 				request.Width = pSource->GetWidth();
 				request.Height = pSource->GetHeight();
 				request.RowPitch = textureFootprint.Footprint.RowPitch;
 				request.pBuffer = pScreenshotBuffer;
-				request.SyncPoint = pContext->Execute(false);
-				m_ScreenshotBuffers.emplace(request);
+				request.SyncPoint = SyncPoint(pFence, pFence->GetCurrentValue());
+
 			}
 
 			if (!m_ScreenshotBuffers.empty())
@@ -468,23 +480,35 @@ void DemoApp::Update()
 		World* pWorldMut = &m_World;
 
 		{
-			PROFILE_SCOPE("Prepare Scene Data");
+			// Other queues are super slow on CPU with debug layer for some reason
+			const bool asyncCompute = false;
+			if (asyncCompute)
+			{
+				CommandQueue* pDirectQueue = m_pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT);
+				CommandQueue* pComputeQueue = m_pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COMPUTE);
+				CommandQueue* pCopyQueue = m_pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY);
 
-			CommandQueue* pDirectQueue = m_pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT);
+				pCopyQueue->InsertWait(pDirectQueue);
 
-			m_pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY)->InsertWait(pDirectQueue);
-			CommandContext* pCopyContext = m_pDevice->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COPY);
-			Renderer::UploadSceneData(*pCopyContext, pViewMut, pWorldMut);
-			pDirectQueue->InsertWait(pCopyContext->Execute(false));
+				CommandContext* pCopyContext = m_pDevice->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COPY);
+				Renderer::UploadSceneData(*pCopyContext, pViewMut, pWorldMut);
 
-			m_pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COMPUTE)->InsertWait(pDirectQueue);
-			CommandContext* pComputeContext = m_pDevice->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COMPUTE);
-			pViewMut->AccelerationStructure.Build(*pComputeContext, *pView);
-			pDirectQueue->InsertWait(pComputeContext->Execute(false));
+				pCopyContext->Execute(false);
+				pComputeQueue->InsertWait(pCopyQueue);
+				CommandContext* pComputeContext = m_pDevice->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COMPUTE);
+				pViewMut->AccelerationStructure.Build(*pComputeContext, *pView);
+
+				pComputeContext->Execute(false);
+				pDirectQueue->InsertWait(pComputeQueue);
+			}
+			else
+			{
+				Renderer::UploadSceneData(*pContext, pViewMut, pWorldMut);
+				pViewMut->AccelerationStructure.Build(*pContext, *pView);
+			}
 		}
 
-		RGGraph graph(m_pDevice, *m_RenderGraphPool);
-		SceneTextures sceneTextures;
+		RGGraph graph(*m_RenderGraphPool);
 
 		const Vector2i viewDimensions = m_SceneData.GetDimensions();
 		const uint32 hzbMipsX = Math::Max(1u, (uint32)Math::Ceil(log2f((float)viewDimensions.x)) - 1);
@@ -493,6 +517,7 @@ void DemoApp::Update()
 		const Vector2i hzbDimensions(1 << hzbMipsX, 1 << hzbMipsY);
 		m_SceneData.HZBDimensions = Vector2((float)hzbDimensions.x, (float)hzbDimensions.y);
 
+		SceneTextures sceneTextures;
 		sceneTextures.pPreviousColor =		RGUtils::CreatePersistentTexture(graph, "Color History",	TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, ResourceFormat::RGBA16_FLOAT), &m_pColorHistory, true);
 		sceneTextures.pVisibilityBuffer =	graph.CreateTexture("Visibility Buffer",					TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, ResourceFormat::R32_UINT));
 		sceneTextures.pRoughness =			graph.CreateTexture("Roughness",							TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, ResourceFormat::R8_UNORM));
@@ -598,7 +623,7 @@ void DemoApp::Update()
 					Vector2 DimensionsInv;
 				};
 
-				graph.AddPass("HZB Create", RGPassFlag::Compute | RGPassFlag::NeverCull)
+				graph.AddPass("HZB Create", RGPassFlag::Compute)
 					.Read(sceneTextures.pDepth)
 					.Write(sceneTextures.pHZB)
 					.Bind([=](CommandContext& context)
@@ -619,7 +644,7 @@ void DemoApp::Update()
 
 				for (uint32 mipLevel = 1; mipLevel < hzbMips; ++mipLevel)
 				{
-					graph.AddPass("HZB Reduce", RGPassFlag::Compute | RGPassFlag::NeverCull)
+					graph.AddPass("HZB Reduce", RGPassFlag::Compute)
 						.Write(sceneTextures.pHZB)
 						.Bind([=](CommandContext& context)
 							{
@@ -1379,8 +1404,11 @@ void DemoApp::Update()
 			graph.DumpGraph(Sprintf("%sRenderGraph.html", Paths::SavedDir().c_str()).c_str());
 			Tweakables::g_DumpRenderGraph = false;
 		}
-		graph.Execute();
+		graph.Execute(pContext);
+
 	}
+
+	pContext->Execute(false);
 
 	{
 		PROFILE_SCOPE("Present");
@@ -2020,19 +2048,6 @@ void DemoApp::CreateShadowViews(SceneView& view, World& world)
 		light.ShadowMaps[shadowMapLightIndex] = pTarget;
 		light.ShadowMapSize = resolution;
 		shadowView.pDepthTexture = pTarget;
-
-		for (const Batch& b : view.Batches)
-		{
-			if (shadowView.IsPerspective)
-			{
-				shadowView.Visibility.AssignBit(b.InstanceID, shadowView.PerspectiveFrustum.Contains(b.Bounds));
-			}
-			else
-			{
-				shadowView.Visibility.AssignBit(b.InstanceID, shadowView.OrtographicFrustum.Contains(b.Bounds));
-			}
-		}
-
 		view.ShadowViews.push_back(shadowView);
 		shadowIndex++;
 	};

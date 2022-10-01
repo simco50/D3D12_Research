@@ -11,6 +11,7 @@
 #include "Light.h"
 #include "Core/ConsoleVariables.h"
 #include "Content/Image.h"
+#include "Profiler.h"
 
 namespace Tweakables
 {
@@ -106,6 +107,8 @@ namespace Renderer
 
 	void UploadSceneData(CommandContext& context, SceneView* pView, World* pWorld)
 	{
+		PROFILE_SCOPE("Upload Scene Data");
+
 		std::vector<ShaderInterop::MaterialData> materials;
 		materials.reserve(128);
 		std::vector<ShaderInterop::MeshData> meshes;

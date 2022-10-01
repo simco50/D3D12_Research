@@ -68,8 +68,8 @@ void RGPass::AddAccess(RGResource* pResource, D3D12_RESOURCE_STATES state)
 	}
 }
 
-RGGraph::RGGraph(GraphicsDevice* pDevice, RGResourcePool& resourcePool, uint64 allocatorSize /*= 0xFFFF*/)
-	: m_pDevice(pDevice), m_Allocator(allocatorSize), m_ResourcePool(resourcePool)
+RGGraph::RGGraph(RGResourcePool& resourcePool, uint64 allocatorSize /*= 0xFFFF*/)
+	: m_Allocator(allocatorSize), m_ResourcePool(resourcePool)
 {
 }
 
@@ -273,11 +273,10 @@ void RGGraph::PopEvent()
 			});
 }
 
-SyncPoint RGGraph::Execute()
+void RGGraph::Execute(CommandContext* pContext)
 {
-	CommandContext* pContext = m_pDevice->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
+	GPU_PROFILE_SCOPE("Render", pContext);
 	{
-		GPU_PROFILE_SCOPE("Render", pContext);
 		for (uint32 passIndex = 0; passIndex < (uint32)m_RenderPasses.size(); ++passIndex)
 		{
 			RGPass* pPass = m_RenderPasses[passIndex];
@@ -288,7 +287,6 @@ SyncPoint RGGraph::Execute()
 			}
 		}
 	}
-	m_LastSyncPoint = pContext->Execute(false);
 
 	for (ExportedTexture& exportResource : m_ExportTextures)
 	{
@@ -307,7 +305,6 @@ SyncPoint RGGraph::Execute()
 	}
 
 	DestroyData();
-	return m_LastSyncPoint;
 }
 
 void RGGraph::ExecutePass(RGPass* pPass, CommandContext& context)

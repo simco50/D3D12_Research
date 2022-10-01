@@ -232,14 +232,14 @@ private:
 class RGGraph
 {
 public:
-	RGGraph(GraphicsDevice* pDevice, RGResourcePool& resourcePool, uint64 allocatorSize = 0xFFFF);
+	RGGraph(RGResourcePool& resourcePool, uint64 allocatorSize = 0xFFFF);
 	~RGGraph();
 
 	RGGraph(const RGGraph& other) = delete;
 	RGGraph& operator=(const RGGraph& other) = delete;
 
 	void Compile();
-	SyncPoint Execute();
+	void Execute(CommandContext* pContext);
 	void DumpGraph(const char* pPath) const;
 
 	template<typename T, typename... Args>
