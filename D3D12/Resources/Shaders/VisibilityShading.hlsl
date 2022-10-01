@@ -140,10 +140,9 @@ LightResult DoLight(float4 pos, float3 worldPos, float3 N, float3 V, float3 diff
 void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 {
 	uint2 texel = dispatchThreadId.xy;
-	if(any(texel > cView.TargetDimensions))
-	{
+	if(any(texel >= cView.TargetDimensions))
 		return;
-	}
+
 	VisBufferData visibility = (VisBufferData)tVisibilityTexture[texel];
 
 	float2 screenUV = ((float2)dispatchThreadId.xy + 0.5f) * cView.TargetDimensionsInv;

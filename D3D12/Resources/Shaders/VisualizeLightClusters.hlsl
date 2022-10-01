@@ -38,9 +38,8 @@ InterpolantsGSToPS VSMain(uint vertexId : SV_VertexID)
 void GSMain(point InterpolantsGSToPS input[1], inout TriangleStream<InterpolantsVSToPS> outputStream)
 {
 	if(input[0].lightCount == 0)
-	{
 		return;
-	}
+
 	float4 center = input[0].center;
 	float4 extents = input[0].extents;
 

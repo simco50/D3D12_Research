@@ -29,9 +29,7 @@ void TraceRaysRGS()
 
 	// If the probe is inactive, just trace the stable rays to determine if we have to re-activate the probe
 	if(!DDGIIsProbeActive(volume, probeIdx3D) && rayIndex >= DDGI_NUM_STABLE_RAYS)
-	{
 		return;
-	}
 
 	float3 probePosition = GetDDGIProbePosition(volume, probeIdx3D);
 	const float maxDepth = Max3(volume.ProbeSize) * 2;
