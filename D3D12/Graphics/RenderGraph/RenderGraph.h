@@ -19,12 +19,10 @@ enum class RGPassFlag
 	Compute =	1 << 1,
 	// Pass that performs a copy resource operation. Does not play well with Raster/Compute passes
 	Copy =		1 << 2,
-	// Makes the pass invisible to profiling. Useful for adding debug markers
-	Invisible = 1 << 3,
 	// Makes a pass never be culled when not referenced.
-	NeverCull = 1 << 4,
+	NeverCull = 1 << 3,
 	// Automatically begin/end render pass
-	NoRenderPass = 1 << 5,
+	NoRenderPass = 1 << 4,
 };
 DECLARE_BITMASK_TYPE(RGPassFlag);
 
@@ -196,6 +194,8 @@ private:
 	uint32 ID;
 	RGPassFlag Flags;
 	bool IsCulled = true;
+	uint32 m_NumEventsToEnd = 0;
+	std::vector<std::string> m_EventsToStart;
 
 	std::vector<ResourceAccess> Accesses;
 	std::vector<RGPass*> PassDependencies;
@@ -251,6 +251,13 @@ public:
 	RGPass& AddPass(const char* pName, RGPassFlag flags)
 	{
 		RGPass* pPass = Allocate<RGPass>(std::ref(*this), m_Allocator, pName, flags, (int)m_RenderPasses.size());
+
+		for(const std::string& eventName : m_Events)
+		{
+			pPass->m_EventsToStart.push_back(eventName);
+		}
+		m_Events.clear();
+
 		m_RenderPasses.push_back(pPass);
 		return *m_RenderPasses.back();
 	}
@@ -320,7 +327,8 @@ private:
 	void PrepareResources(RGPass* pPass, CommandContext& context);
 	void DestroyData();
 
-	GraphicsDevice* m_pDevice;
+	std::vector<std::string> m_Events;
+
 	RGGraphAllocator m_Allocator;
 	SyncPoint m_LastSyncPoint;
 

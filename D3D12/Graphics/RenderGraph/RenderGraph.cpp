@@ -12,9 +12,11 @@ RGPass& RGPass::Read(Span<RGResource*> resources)
 		state = D3D12_RESOURCE_STATE_COPY_SOURCE;
 	for (RGResource* pResource : resources)
 	{
-		bool isIndirectArgs = pResource->Type == RGResourceType::Buffer && EnumHasAllFlags(static_cast<RGBuffer*>(pResource)->GetDesc().Usage, BufferFlag::IndirectArguments);
-
-		AddAccess(pResource, isIndirectArgs ? D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT : state);
+		if (pResource)
+		{
+			bool isIndirectArgs = pResource->Type == RGResourceType::Buffer && EnumHasAllFlags(static_cast<RGBuffer*>(pResource)->GetDesc().Usage, BufferFlag::IndirectArguments);
+			AddAccess(pResource, isIndirectArgs ? D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT : state);
+		}
 	}
 	return *this;
 }
@@ -27,7 +29,10 @@ RGPass& RGPass::Write(Span<RGResource*> resources)
 
 	for (RGResource* pResource : resources)
 	{
-		AddAccess(pResource, state);
+		if (pResource)
+		{
+			AddAccess(pResource, state);
+		}
 	}
 
 	return *this;
@@ -80,7 +85,7 @@ RGGraph::~RGGraph()
 
 void RGGraph::Compile()
 {
-	constexpr bool PassCulling = true;
+	constexpr bool PassCulling = false;
 
 	if (PassCulling)
 	{
@@ -256,21 +261,19 @@ void RGGraph::ExportBuffer(RGBuffer* pBuffer, RefCountPtr<Buffer>* pTarget)
 
 void RGGraph::PushEvent(const char* pName)
 {
-	std::string name = pName;
-	AddPass("EventPass", RGPassFlag::Invisible | RGPassFlag::NeverCull)
-		.Bind([name](CommandContext& context)
-			{
-				GPU_PROFILE_BEGIN(name.c_str(), &context);
-			});
+	m_Events.push_back(pName);
 }
 
 void RGGraph::PopEvent()
 {
-	AddPass("EventPass", RGPassFlag::Invisible | RGPassFlag::NeverCull)
-		.Bind([](CommandContext& context)
-			{
-				GPU_PROFILE_END();
-			});
+	if (!m_Events.empty())
+	{
+		m_Events.pop_back();
+	}
+	else
+	{
+		++m_RenderPasses.back()->m_NumEventsToEnd;
+	}
 }
 
 void RGGraph::Execute(CommandContext* pContext)
@@ -309,11 +312,16 @@ void RGGraph::Execute(CommandContext* pContext)
 
 void RGGraph::ExecutePass(RGPass* pPass, CommandContext& context)
 {
+	for (const std::string& event : pPass->m_EventsToStart)
+	{
+		GPU_PROFILE_BEGIN(event.c_str(), &context);
+	}
+
 	PrepareResources(pPass, context);
 
-	if (pPass->pExecuteCallback)
+	if(pPass->pExecuteCallback)
 	{
-		GPU_PROFILE_SCOPE_CONDITIONAL(pPass->Name, &context, !EnumHasAnyFlags(pPass->Flags, RGPassFlag::Invisible));
+		GPU_PROFILE_SCOPE(pPass->Name, &context);
 		RGPassResources resources(*pPass);
 
 		bool useRenderPass = EnumHasAllFlags(pPass->Flags, RGPassFlag::Raster) && !EnumHasAllFlags(pPass->Flags, RGPassFlag::NoRenderPass);
@@ -325,6 +333,11 @@ void RGGraph::ExecutePass(RGPass* pPass, CommandContext& context)
 
 		if (useRenderPass)
 			context.EndRenderPass();
+	}
+
+	while (pPass->m_NumEventsToEnd--)
+	{
+		GPU_PROFILE_END();
 	}
 }
 

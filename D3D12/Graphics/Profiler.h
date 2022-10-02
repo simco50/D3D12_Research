@@ -14,7 +14,6 @@ class GraphicsDevice;
 #define PROFILE_END() Profiler::Get()->End();
 
 #define GPU_PROFILE_SCOPE(name, cmdlist) ScopeProfiler MACRO_CONCAT(profiler,__COUNTER__)(name, cmdlist, true)
-#define GPU_PROFILE_SCOPE_CONDITIONAL(name, cmdlist, condition) ScopeProfiler MACRO_CONCAT(profiler,__COUNTER__)(name, cmdlist, condition)
 #define PROFILE_SCOPE(name) ScopeProfiler MACRO_CONCAT(profiler,__COUNTER__)(name, nullptr, true)
 #else
 #define GPU_PROFILE_BEGIN(name, cmdlist)
