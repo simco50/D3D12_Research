@@ -125,11 +125,6 @@ namespace Renderer
 			{
 				SubMesh& parentMesh = pMesh->GetMesh(node.MeshIndex);
 				const Material& meshMaterial = pMesh->GetMaterial(parentMesh.MaterialId);
-				ShaderInterop::InstanceData& meshInstance = meshInstances.emplace_back();
-				meshInstance.ID = instanceID++;
-				meshInstance.MeshIndex = (uint32)meshes.size() + node.MeshIndex;
-				meshInstance.MaterialIndex = (uint32)materials.size() + parentMesh.MaterialId;
-				meshInstance.LocalToWorld = node.Transform;
 
 				auto GetBlendMode = [](MaterialAlphaMode mode) {
 					switch (mode)
@@ -142,12 +137,22 @@ namespace Renderer
 				};
 
 				Batch& batch = sceneBatches.emplace_back();
-				batch.InstanceID = meshInstance.ID;
+				batch.InstanceID = instanceID;
 				batch.pMesh = &parentMesh;
 				batch.BlendMode = GetBlendMode(meshMaterial.AlphaMode);
 				batch.WorldMatrix = node.Transform;
 				parentMesh.Bounds.Transform(batch.Bounds, batch.WorldMatrix);
 				batch.Radius = Vector3(batch.Bounds.Extents).Length();
+
+				ShaderInterop::InstanceData& meshInstance = meshInstances.emplace_back();
+				meshInstance.ID = instanceID;
+				meshInstance.MeshIndex = (uint32)meshes.size() + node.MeshIndex;
+				meshInstance.MaterialIndex = (uint32)materials.size() + parentMesh.MaterialId;
+				meshInstance.LocalToWorld = node.Transform;
+				meshInstance.BoundsCenter = batch.Bounds.Center;
+				meshInstance.BoundsExtent = batch.Bounds.Extents;
+
+				++instanceID;
 			}
 
 			for (const SubMesh& subMesh : pMesh->GetMeshes())

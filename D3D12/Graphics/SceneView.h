@@ -158,6 +158,7 @@ namespace GraphicsCommon
 	Texture* GetDefaultTexture(DefaultTexture type);
 
 	extern RefCountPtr<CommandSignature> pIndirectDrawSignature;
+	extern RefCountPtr<CommandSignature> pIndirectDrawIndexedSignature;
 	extern RefCountPtr<CommandSignature> pIndirectDispatchSignature;
 	extern RefCountPtr<CommandSignature> pIndirectDispatchMeshSignature;
 

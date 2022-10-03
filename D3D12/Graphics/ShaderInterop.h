@@ -91,11 +91,13 @@ namespace ShaderInterop
 
 	struct InstanceData
 	{
+		float4x4 LocalToWorld;
+		float3 BoundsCenter;
+		uint : 32;
+		float3 BoundsExtent;
 		uint ID;
 		uint MaterialIndex;
 		uint MeshIndex;
-		uint padding;
-		float4x4 LocalToWorld;
 	};
 
 	struct InstanceIndex
