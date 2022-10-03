@@ -165,6 +165,90 @@ namespace Tweakables
 	float g_SunIntensity = 5.0f;
 }
 
+GlobalResource<RootSignature> pCommonRS;
+GlobalResource<PipelineState> pCullInstancesPhase1PSO;
+GlobalResource<PipelineState> pBuildDrawArgsPhase1PSO;
+GlobalResource<PipelineState> pCullAndDrawPhase1PSO;
+GlobalResource<PipelineState> pBuildCullArgsPhase2PSO;
+GlobalResource<PipelineState> pCullAndDrawPhase2PSO;
+GlobalResource<PipelineState> pBuildDrawArgsPhase2PSO;
+
+void Render(RGGraph& graph, GraphicsDevice* pDevice, const SceneView* pView)
+{
+	uint32 maxNumInstances = 1024;
+	uint32 maxNumClusters = 8192;
+	RGBuffer* pClustersToProcess = graph.CreateBuffer("ClustersToProcess", BufferDesc::CreateStructured(maxNumClusters, sizeof(uint32) * 2));
+	RGBuffer* pClustersToProcessCounter = graph.CreateBuffer("ClustersToProcessCounter", BufferDesc::CreateTyped(1, ResourceFormat::R32_UINT));
+	RGBuffer* pCulledInstances = graph.CreateBuffer("CulledInstances", BufferDesc::CreateStructured(maxNumInstances, sizeof(uint32)));
+	RGBuffer* pCulledInstancesCounter = graph.CreateBuffer("CulledInstancesCounter", BufferDesc::CreateTyped(1, ResourceFormat::R32_UINT));
+	RGBuffer* pCulledClusters = graph.CreateBuffer("CulledClusters", BufferDesc::CreateStructured(maxNumClusters, sizeof(uint32) * 2));
+	RGBuffer* pCulledClustersCounter = graph.CreateBuffer("CulledClustersCounter", BufferDesc::CreateTyped(1, ResourceFormat::R32_UINT));
+
+	graph.AddPass("Cull Instances", RGPassFlag::Compute)
+		.Write({ pClustersToProcess, pClustersToProcessCounter, pCulledInstances, pCulledInstancesCounter })
+		.Bind([=](CommandContext& context)
+			{
+				context.ClearUavUInt(pClustersToProcessCounter->Get(), pClustersToProcessCounter->Get()->GetUAV());
+				context.ClearUavUInt(pCulledInstancesCounter->Get(), pCulledInstancesCounter->Get()->GetUAV());
+				context.InsertUavBarrier();
+
+				context.SetComputeRootSignature(pCommonRS);
+				context.SetPipelineState(pCullInstancesPhase1PSO);
+
+				context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
+				context.BindResources(2, {
+					pClustersToProcess->Get()->GetUAV(),
+					pClustersToProcessCounter->Get()->GetUAV(),
+					pCulledInstances->Get()->GetUAV(),
+					pCulledInstancesCounter->Get()->GetUAV(),
+					});
+				context.Dispatch(ComputeUtils::GetNumThreadGroups((uint32)pView->Batches.size(), 64));
+			});
+
+	RGBuffer* pDispatchMeshBuffer = graph.CreateBuffer("Dispatch Mesh Args", BufferDesc::CreateIndirectArguments<D3D12_DISPATCH_MESH_ARGUMENTS>(1));
+
+	graph.AddPass("Build Dispatch Arguments", RGPassFlag::Compute)
+		.Read(pClustersToProcessCounter)
+		.Write(pDispatchMeshBuffer)
+		.Bind([=](CommandContext& context)
+			{
+				context.SetComputeRootSignature(pCommonRS);
+				context.SetPipelineState(pBuildDrawArgsPhase1PSO);
+
+				context.BindResources(2, pDispatchMeshBuffer->Get()->GetUAV());
+				context.BindResources(3, pClustersToProcessCounter->Get()->GetSRV(), 1);
+				context.Dispatch(1);
+			});
+
+	RGTexture* pDepth = graph.CreateTexture("Depth", TextureDesc::CreateDepth(1024, 1024, ResourceFormat::D32_FLOAT, TextureFlag::None, 1, ClearBinding(0.0f, 0)));
+	RGTexture* pRenderTarget = graph.CreateTexture("Color", TextureDesc::CreateRenderTarget(1024, 1024, ResourceFormat::R32_UINT));
+
+	graph.AddPass("Cull and Draw Meshlets", RGPassFlag::Raster)
+		.Read({ pClustersToProcess, pClustersToProcessCounter, pDispatchMeshBuffer })
+		.Write({ pCulledClusters, pCulledClustersCounter })
+		.DepthStencil(pDepth, RenderTargetLoadAction::Clear, true)
+		.RenderTarget(pRenderTarget, RenderTargetLoadAction::DontCare)
+		.Bind([=](CommandContext& context)
+			{
+				context.ClearUavUInt(pCulledClustersCounter->Get(), pCulledClustersCounter->Get()->GetUAV());
+				context.InsertUavBarrier();
+
+				context.SetGraphicsRootSignature(pCommonRS);
+				context.SetPipelineState(pCullAndDrawPhase1PSO);
+
+				context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
+				context.BindResources(2, {
+					pCulledClusters->Get()->GetUAV(),
+					pCulledClustersCounter->Get()->GetUAV(),
+					}, 4);
+				context.BindResources(3, {
+					pClustersToProcess->Get()->GetSRV(),
+					pClustersToProcessCounter->Get()->GetSRV(),
+					});
+				context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchMeshSignature, 1, pDispatchMeshBuffer->Get(), nullptr);
+			});
+}
+
 DemoApp::DemoApp(WindowHandle window, const Vector2i& windowRect)
 	: m_Window(window)
 {
@@ -182,6 +266,28 @@ DemoApp::DemoApp(WindowHandle window, const Vector2i& windowRect)
 	options.UseWarp =			CommandLine::GetBool("warp");
 	m_pDevice = new GraphicsDevice(options);
 	m_pSwapchain = new SwapChain(m_pDevice, DisplayMode::SDR, window);
+
+	{
+		pCommonRS = new RootSignature(m_pDevice);
+		pCommonRS->AddRootConstants(0, 8);
+		pCommonRS->AddConstantBufferView(100);
+		pCommonRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 7);
+		pCommonRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 6);
+		pCommonRS->Finalize("Common");
+
+		pCullInstancesPhase1PSO = m_pDevice->CreateComputePipeline(pCommonRS, "MeshletCull.hlsl", "CullInstancesCS", { "OCCLUSION_FIRST_PASS=1" });
+		pBuildDrawArgsPhase1PSO = m_pDevice->CreateComputePipeline(pCommonRS, "MeshletCull.hlsl", "BuildMeshShaderIndirectArgs", { "OCCLUSION_FIRST_PASS=1" });
+
+		PipelineStateInitializer psoDesc;
+		psoDesc.SetRootSignature(pCommonRS);
+		psoDesc.SetAmplificationShader("MeshletCull.hlsl", "CullAndDrawMeshletsAS", { "OCCLUSION_FIRST_PASS=1" });
+		psoDesc.SetMeshShader("MeshletCull.hlsl", "MSMain");
+		psoDesc.SetPixelShader("MeshletCull.hlsl", "PSMain");
+		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
+		psoDesc.SetRenderTargetFormats(ResourceFormat::R32_UINT, ResourceFormat::D32_FLOAT, 1);
+		psoDesc.SetName("Visibility Rendering");
+		pCullAndDrawPhase1PSO = m_pDevice->CreatePipeline(psoDesc);
+	}
 
 	GraphicsCommon::Create(m_pDevice);
 
@@ -205,9 +311,11 @@ DemoApp::DemoApp(WindowHandle window, const Vector2i& windowRect)
 	OnResizeOrMove(windowRect.x, windowRect.y);
 	OnResizeViewport(windowRect.x, windowRect.y);
 
-	CommandContext* pContext = m_pDevice->AllocateCommandContext();
-	SetupScene(*pContext);
-	pContext->Execute(true);
+	{
+		CommandContext* pContext = m_pDevice->AllocateCommandContext();
+		SetupScene(*pContext);
+		pContext->Execute(true);
+	}
 
 	constexpr RenderPath defaultRenderPath = RenderPath::Clustered;
 	m_RenderPath = m_RenderPath == RenderPath::Visibility && m_pDevice->GetCapabilities().SupportsMeshShading() ? m_RenderPath : defaultRenderPath;
@@ -528,6 +636,8 @@ void DemoApp::Update()
 		sceneTextures.pDepth =				graph.CreateTexture("Depth Stencil",						TextureDesc::CreateDepth(viewDimensions.x, viewDimensions.y, ResourceFormat::D32_FLOAT, TextureFlag::None, 1, ClearBinding(0.0f, 0)));
 		sceneTextures.pResolvedDepth =		graph.CreateTexture("Resolved Depth",						TextureDesc::CreateDepth(viewDimensions.x, viewDimensions.y, ResourceFormat::D32_FLOAT, TextureFlag::None, 1, ClearBinding(0.0f, 0)));
 		sceneTextures.pHZB =				RGUtils::CreatePersistentTexture(graph, "HZB",				TextureDesc::Create2D(hzbDimensions.x, hzbDimensions.y, ResourceFormat::R32_FLOAT, TextureFlag::UnorderedAccess, 1, hzbMips), &m_pHZB, true);
+
+		Render(graph, m_pDevice, pView);
 
 		if (m_RenderPath == RenderPath::Clustered || m_RenderPath == RenderPath::Tiled || m_RenderPath == RenderPath::Visibility)
 		{

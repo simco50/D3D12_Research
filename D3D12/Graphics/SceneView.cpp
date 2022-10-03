@@ -83,6 +83,7 @@ namespace Renderer
 		parameters.FoV = view.FoV;
 
 		parameters.FrameIndex = pView->FrameIndex;
+		parameters.NumInstances = (uint32)pView->Batches.size();
 		parameters.SsrSamples = Tweakables::g_SsrSamples.Get();
 		parameters.LightCount = pView->NumLights;
 
@@ -149,8 +150,8 @@ namespace Renderer
 				meshInstance.MeshIndex = (uint32)meshes.size() + node.MeshIndex;
 				meshInstance.MaterialIndex = (uint32)materials.size() + parentMesh.MaterialId;
 				meshInstance.LocalToWorld = node.Transform;
-				meshInstance.BoundsCenter = batch.Bounds.Center;
-				meshInstance.BoundsExtent = batch.Bounds.Extents;
+				meshInstance.BoundsOrigin = batch.Bounds.Center;
+				meshInstance.BoundsExtents = batch.Bounds.Extents;
 
 				++instanceID;
 			}
