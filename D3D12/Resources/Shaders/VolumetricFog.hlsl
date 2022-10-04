@@ -66,7 +66,7 @@ void InjectFogLightingCS(uint3 threadId : SV_DispatchThreadID)
 
 	// Compute reprojected UVW
 	float3 voxelCenterWS = GetWorldPosition(cellIndex, 0.5f);
-	float4 reprojNDC = mul(float4(voxelCenterWS, 1), cView.PreviousViewProjection);
+	float4 reprojNDC = mul(float4(voxelCenterWS, 1), cView.ViewProjectionPrev);
 	reprojNDC.xyz /= reprojNDC.w;
 	float3 reprojUV = float3(reprojNDC.x * 0.5f + 0.5f, -reprojNDC.y * 0.5f + 0.5f, reprojNDC.z);
 	reprojUV.z = LinearizeDepth(reprojUV.z);

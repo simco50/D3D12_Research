@@ -45,4 +45,11 @@
 		</Expand>
 	</Type>
 
+	<Type Name="D3D12_RESOURCE_BARRIER">
+		<DisplayString Condition="Type == D3D12_RESOURCE_BARRIER_TYPE_TRANSITION">Transition - Before: "{Transition.StateBefore}" After: "{Transition.StateAfter}"</DisplayString>
+		<DisplayString Condition="Type == D3D12_RESOURCE_BARRIER_TYPE_ALIASING">Transition - Before: "{Aliasing.pResourceBefore}" After: "{Aliasing.pResourceAfter}"</DisplayString>
+		<DisplayString Condition="Type == D3D12_RESOURCE_BARRIER_TYPE_UAV">Transition - Resource: "{UAV.pResource}"</DisplayString>
+		<DisplayString>Invalid</DisplayString>
+	</Type>
+
 </AutoVisualizer>

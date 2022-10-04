@@ -33,8 +33,10 @@ public:
 	friend class RGPass;
 
 	RGResource(const char* pName, int id, RGResourceType type, GraphicsResource* pResource = nullptr)
-		: Name(pName), ID(id), IsImported(!!pResource), Type(type), pResourceReference(pResource), pResource(pResource)
-	{}
+		: ID(id), IsImported(!!pResource), Type(type), pResourceReference(pResource), pResource(pResource)
+	{
+		strcpy_s(Name, pName);
+	}
 
 	const char* GetName() const { return Name; }
 	GraphicsResource* GetRaw() const { return pResource; }
@@ -52,7 +54,7 @@ protected:
 		// pResource keeps a raw reference to use during execution
 	}
 
-	const char* Name;
+	char Name[128];
 	int ID;
 	bool IsImported;
 	bool IsExported = false;

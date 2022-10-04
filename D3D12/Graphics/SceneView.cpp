@@ -37,9 +37,10 @@ namespace Renderer
 		parameters.ProjectionInverse = view.ProjectionInverse;
 		parameters.ViewProjection = view.ViewProjection;
 		parameters.ViewProjectionPrev = view.ViewProjectionPrev;
+		parameters.ViewProjectionFrozen = view.ViewProjectionFrozen;
 		parameters.ViewProjectionInverse = view.ProjectionInverse * view.ViewInverse;
 
-		Matrix reprojectionMatrix = parameters.ViewProjectionInverse * view.PreviousViewProjection;
+		Matrix reprojectionMatrix = parameters.ViewProjectionInverse * view.ViewProjectionPrev;
 		// Transform from uv to clip space: texcoord * 2 - 1
 		Matrix premult = {
 			2.0f, 0, 0, 0,
@@ -55,7 +56,6 @@ namespace Renderer
 			0.5f, 0.5f, 0, 1
 		};
 
-		parameters.PreviousViewProjection = view.PreviousViewProjection;
 		parameters.ReprojectionMatrix = premult * reprojectionMatrix * postmult;
 		parameters.ViewLocation = view.Position;
 

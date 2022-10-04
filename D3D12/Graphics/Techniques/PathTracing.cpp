@@ -69,7 +69,7 @@ void PathTracing::Render(RGGraph& graph, const SceneView* pView, RGTexture* pTar
 	}
 	ImGui::End();
 
-	if (pView->View.PreviousViewProjection != pView->View.ViewProjection)
+	if (pView->View.ViewProjectionPrev != pView->View.ViewProjection)
 	{
 		Reset();
 	}

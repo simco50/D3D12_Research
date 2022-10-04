@@ -7,55 +7,11 @@
 #define OCCLUSION_FIRST_PASS 1
 #endif
 
-uint DivideAndRoundUp(uint x, uint y)
-{
-	return (x + y - 1) / y;
-}
-
 struct VisibleCluster
 {
     uint InstanceID;
     uint ClusterIndex;
 };
-
-bool IsClusterVisible(VisibleCluster cluster)
-{
-	InstanceData instance = GetInstance(cluster.InstanceID);
-	MeshData mesh = GetMesh(instance.ID);
-	MeshletBounds bounds = BufferLoad<MeshletBounds>(mesh.BufferIndex, cluster.ClusterIndex, mesh.MeshletBoundsOffset);
-
-	float4x4 world = instance.LocalToWorld;
-	float4 center = mul(float4(bounds.Center, 1), world);
-	float3 radius3 = abs(mul(bounds.Radius.xxx, (float3x3)world));
-	float radius = Max3(radius3);
-	float3 coneAxis = normalize(mul(bounds.ConeAxis, (float3x3)world));
-
-	FrustumCullData cullData = FrustumCull(center.xyz, radius3, cView.ViewProjectionPrev);
-	if(!cullData.IsVisible)
-	{
-		return false;
-	}
-
-#if 0
-	if(!HZBCull(cullData, tHZB))
-	{
-		return false;
-	}
-#endif
-
-	float3 viewLocation = cView.ViewLocation;
-	if(dot(viewLocation - center.xyz, coneAxis) >= bounds.ConeCutoff * length(center.xyz - viewLocation) + radius)
-	{
-		return false;
-	}
-	return true;
-}
-
-bool IsInstanceVisible(InstanceData instance)
-{
-	FrustumCullData cullData = FrustumCull(instance.BoundsOrigin, instance.BoundsExtents, cView.ViewProjection);
-    return cullData.IsVisible;
-}
 
 RWStructuredBuffer<VisibleCluster> uClustersToProcess : register(u0);
 RWBuffer<uint> uCounter_ClustersToProcess : register(u1);
@@ -70,7 +26,36 @@ RWStructuredBuffer<D3D12_DISPATCH_ARGUMENTS> uDispatchArguments : register(u0);
 
 StructuredBuffer<VisibleCluster> tClustersToProcess : register(t0);
 Buffer<uint> tCounter_ClustersToProcess : register(t1);
-StructuredBuffer<uint> tInstancesToProcess : register(t2);
+
+StructuredBuffer<uint> tInstancesToProcess : register(t0);
+Buffer<uint> tCounter_CulledInstances : register(t1);
+
+Texture2D<float> tHZB : register(t2);
+
+uint DivideAndRoundUp(uint x, uint y)
+{
+	return (x + y - 1) / y;
+}
+
+bool IsClusterVisible(VisibleCluster cluster)
+{
+	InstanceData instance = GetInstance(cluster.InstanceID);
+	MeshData mesh = GetMesh(instance.ID);
+	MeshletBounds bounds = BufferLoad<MeshletBounds>(mesh.BufferIndex, cluster.ClusterIndex, mesh.MeshletBoundsOffset);
+
+	float4x4 world = instance.LocalToWorld;
+	float4 center = mul(float4(bounds.Center, 1), world);
+	float3 radius3 = abs(mul(bounds.Radius.xxx, (float3x3)world));
+	float radius = Max3(radius3);
+	float3 coneAxis = normalize(mul(bounds.ConeAxis, (float3x3)world));
+
+	float3 viewLocation = cView.ViewLocation;
+	if(dot(viewLocation - center.xyz, coneAxis) >= bounds.ConeCutoff * length(center.xyz - viewLocation) + radius)
+	{
+		return false;
+	}
+	return true;
+}
 
 [numthreads(64, 1, 1)]
 void CullInstancesCS(uint threadID : SV_DispatchThreadID)
@@ -78,7 +63,7 @@ void CullInstancesCS(uint threadID : SV_DispatchThreadID)
 #if OCCLUSION_FIRST_PASS
     uint numInstances = cView.NumInstances;
 #else
-    uint numInstances = uCounter_CulledInstances[0];
+    uint numInstances = tCounter_CulledInstances[0];
 #endif
 
     if(threadID >= numInstances)
@@ -93,8 +78,28 @@ void CullInstancesCS(uint threadID : SV_DispatchThreadID)
 #endif
 
     MeshData mesh = GetMesh(instance.ID);
-    bool visible = IsInstanceVisible(instance);
-    if(visible)
+
+	FrustumCullData cullData = FrustumCull(instance.BoundsOrigin, instance.BoundsExtents, cView.ViewProjection);
+	bool isVisible = cullData.IsVisible;
+	bool wasVisible = true;
+
+	if(isVisible)
+	{
+#if OCCLUSION_FIRST_PASS
+		FrustumCullData prevCullData = FrustumCull(instance.BoundsOrigin, instance.BoundsExtents, cView.ViewProjectionPrev);
+		wasVisible = HZBCull(prevCullData, tHZB);
+		if(!wasVisible)
+		{
+			uint elementOffset = 0;
+			InterlockedAdd(uCounter_CulledInstances[0], 1, elementOffset);
+			uCulledInstances[elementOffset] = instance.ID;
+		}
+#else
+		isVisible = HZBCull(cullData, tHZB);
+#endif
+	}
+
+    if(isVisible && wasVisible)
     {
         uint elementOffset;
         InterlockedAdd(uCounter_ClustersToProcess[0], mesh.MeshletCount, elementOffset);
@@ -106,23 +111,16 @@ void CullInstancesCS(uint threadID : SV_DispatchThreadID)
             uClustersToProcess[elementOffset + i] = cluster;
         }
     }
-
-#if OCCLUSION_FIRST_PASS
-    else
-    {
-        uint elementOffset = 0;
-        InterlockedAdd(uCounter_CulledInstances[0], 1, elementOffset);
-        uCulledInstances[elementOffset] = instance.ID;
-    }
-#endif
 }
+
+#define NUM_AS_THREADS 32
 
 [numthreads(1, 1, 1)]
 void BuildMeshShaderIndirectArgs(uint threadID : SV_DispatchThreadID)
 {
     uint numMeshlets = tCounter_ClustersToProcess[0];
     D3D12_DISPATCH_ARGUMENTS args;
-    args.ThreadGroupCountX = DivideAndRoundUp(numMeshlets, 32);
+    args.ThreadGroupCountX = DivideAndRoundUp(numMeshlets, NUM_AS_THREADS);
     args.ThreadGroupCountY = 1;
     args.ThreadGroupCountZ = 1;
     uDispatchArguments[0] = args;
@@ -131,15 +129,13 @@ void BuildMeshShaderIndirectArgs(uint threadID : SV_DispatchThreadID)
 [numthreads(1, 1, 1)]
 void BuildInstanceCullIndirectArgs(uint threadID : SV_DispatchThreadID)
 {
-    uint numInstances = uCounter_CulledInstances[0];
+    uint numInstances = tCounter_CulledInstances[0];
     D3D12_DISPATCH_ARGUMENTS args;
     args.ThreadGroupCountX = DivideAndRoundUp(numInstances, 64);
     args.ThreadGroupCountY = 1;
     args.ThreadGroupCountZ = 1;
     uDispatchArguments[0] = args;
 }
-
-#define NUM_AS_THREADS 32
 
 struct PayloadData
 {
@@ -150,33 +146,54 @@ struct PayloadData
 groupshared PayloadData gsPayload;
 
 #if __SHADER_TARGET_STAGE == __SHADER_STAGE_AMPLIFICATION
-[numthreads(32, 1, 1)]
+[numthreads(NUM_AS_THREADS, 1, 1)]
 void CullAndDrawMeshletsAS(uint threadID : SV_DispatchThreadID)
 {
-	bool visible = false;
+	bool shouldSubmit = false;
 
 	if(threadID < tCounter_ClustersToProcess[0])
 	{
 		VisibleCluster cluster = tClustersToProcess[threadID];
-		visible = IsClusterVisible(cluster);
+		InstanceData instance = GetInstance(cluster.InstanceID);
+		MeshData mesh = GetMesh(instance.ID);
+		MeshletBounds bounds = BufferLoad<MeshletBounds>(mesh.BufferIndex, cluster.ClusterIndex, mesh.MeshletBoundsOffset);
 
-		if(visible)
+		float4x4 world = instance.LocalToWorld;
+		float4 center = mul(float4(bounds.Center, 1), world);
+		float3 radius3 = abs(mul(bounds.Radius.xxx, (float3x3)world));
+		float radius = Max3(radius3);
+		float3 coneAxis = normalize(mul(bounds.ConeAxis, (float3x3)world));
+
+		FrustumCullData cullData = FrustumCull(center.xyz, radius3, cView.ViewProjection);
+		bool isVisible = cullData.IsVisible;
+		bool wasVisible = true;
+
+		if(isVisible)
 		{
-			uint index = WavePrefixCountBits(visible);
+#if OCCLUSION_FIRST_PASS
+			FrustumCullData prevCullData = FrustumCull(center.xyz, radius3, cView.ViewProjectionPrev);
+			wasVisible = HZBCull(prevCullData, tHZB);
+			if(!wasVisible)
+			{
+				uint elementOffset;
+				InterlockedAdd(uCounter_CulledClusters[0], 1, elementOffset);
+				uCulledClusters[elementOffset] = cluster;
+			}
+#else
+			isVisible = HZBCull(cullData, tHZB);
+#endif
+		}
+
+		shouldSubmit = isVisible && wasVisible;
+		if(shouldSubmit)
+		{
+			uint index = WavePrefixCountBits(shouldSubmit);
 			gsPayload.InstanceIndices[index] = cluster.InstanceID;
 			gsPayload.MeshletIndices[index] = cluster.ClusterIndex;
 		}
-#if OCCLUSION_FIRST_PASS
-		else
-		{
-			uint elementOffset;
-			InterlockedAdd(uCounter_CulledClusters[0], 1, elementOffset);
-			uCulledClusters[elementOffset] = cluster;
-		}
-#endif
 	}
 
-	uint visibleCount = WaveActiveCountBits(visible);
+	uint visibleCount = WaveActiveCountBits(shouldSubmit);
 	DispatchMesh(visibleCount, 1, 1, gsPayload);
 }
 #endif

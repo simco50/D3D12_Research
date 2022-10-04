@@ -168,8 +168,8 @@ namespace ShaderInterop
 		float4x4 ProjectionInverse;
 		float4x4 ViewProjection;
 		float4x4 ViewProjectionPrev;
+		float4x4 ViewProjectionFrozen;
 		float4x4 ViewProjectionInverse;
-		float4x4 PreviousViewProjection;
 		float4x4 ReprojectionMatrix;
 		float3 ViewLocation;
 		float padd1;

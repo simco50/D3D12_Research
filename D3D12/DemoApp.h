@@ -53,6 +53,9 @@ private:
 
 	void LoadMesh(const std::string& filePath, CommandContext& context, World& world);
 	void CreateShadowViews(SceneView& view, World& world);
+	
+	void BuildHZB(RGGraph& graph, RGTexture* pDepth, RGTexture** pOutHZB, const SceneView* pView);
+	void RenderVisibilityBufferGPUDriven(RGGraph& graph, GraphicsDevice* pDevice, SceneTextures& sceneTextures, const SceneView* pView);
 
 	RefCountPtr<GraphicsDevice> m_pDevice;
 	RefCountPtr<SwapChain> m_pSwapchain;
@@ -88,7 +91,7 @@ private:
 		RefCountPtr<Buffer> pBuffer;
 	};
 	std::queue<ScreenshotRequest> m_ScreenshotBuffers;
-	RenderPath m_RenderPath = RenderPath::Clustered;
+	RenderPath m_RenderPath = RenderPath::Visibility;
 
 	World m_World;
 	SceneView m_SceneData;

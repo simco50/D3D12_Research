@@ -317,22 +317,23 @@ void RGGraph::ExecutePass(RGPass* pPass, CommandContext& context)
 		GPU_PROFILE_BEGIN(event.c_str(), &context);
 	}
 
-	PrepareResources(pPass, context);
-
-	if(pPass->pExecuteCallback)
 	{
 		GPU_PROFILE_SCOPE(pPass->Name, &context);
-		RGPassResources resources(*pPass);
+		PrepareResources(pPass, context);
+		if (pPass->pExecuteCallback)
+		{
+			RGPassResources resources(*pPass);
 
-		bool useRenderPass = EnumHasAllFlags(pPass->Flags, RGPassFlag::Raster) && !EnumHasAllFlags(pPass->Flags, RGPassFlag::NoRenderPass);
+			bool useRenderPass = EnumHasAllFlags(pPass->Flags, RGPassFlag::Raster) && !EnumHasAllFlags(pPass->Flags, RGPassFlag::NoRenderPass);
 
-		if (useRenderPass)
-			context.BeginRenderPass(resources.GetRenderPassInfo());
+			if (useRenderPass)
+				context.BeginRenderPass(resources.GetRenderPassInfo());
 
-		pPass->pExecuteCallback->Execute(context, resources);
+			pPass->pExecuteCallback->Execute(context, resources);
 
-		if (useRenderPass)
-			context.EndRenderPass();
+			if (useRenderPass)
+				context.EndRenderPass();
+		}
 	}
 
 	while (pPass->m_NumEventsToEnd--)

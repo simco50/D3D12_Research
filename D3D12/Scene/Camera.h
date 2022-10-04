@@ -43,7 +43,7 @@ public:
 	Matrix GetViewProjectionInverse() const;
 	const Matrix& GetViewInverse() const;
 	const Matrix& GetProjectionInverse() const;
-	const Matrix& GetPreviousViewProjection() const { return m_Transform.PreviousViewProjection; }
+	const Matrix& GetPreviousViewProjection() const { return m_Transform.ViewProjectionPrev; }
 	const BoundingFrustum& GetFrustum() const;
 	Ray GetMouseRay() const;
 

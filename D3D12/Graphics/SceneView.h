@@ -41,9 +41,9 @@ struct ViewTransform
 	Matrix View;
 	Matrix ViewProjection;
 	Matrix ViewProjectionPrev;
+	Matrix ViewProjectionFrozen;
 	Matrix ViewInverse;
 	Matrix ProjectionInverse;
-	Matrix PreviousViewProjection;
 	bool Perspective = true;
 	Vector3 Position;
 

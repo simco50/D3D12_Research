@@ -114,7 +114,7 @@ void Camera::UpdateMatrices() const
 	{
 		if (m_UpdatePrevMatrices)
 		{
-			m_Transform.ViewProjectionPrev = m_Transform.ViewProjection;
+			m_Transform.ViewProjectionFrozen = m_Transform.ViewProjection;
 		}
 
 		m_Transform.ViewInverse = Matrix::CreateFromQuaternion(m_Rotation) * Matrix::CreateTranslation(m_Position);
@@ -149,7 +149,7 @@ void Camera::UpdateMatrices() const
 
 void Camera::Update()
 {
-	m_Transform.PreviousViewProjection = GetViewProjection();
+	m_Transform.ViewProjectionPrev = m_Transform.ViewProjection;
 	m_Transform.PreviousJitter = m_Transform.Jitter;
 	++m_Transform.JitterIndex;
 }
