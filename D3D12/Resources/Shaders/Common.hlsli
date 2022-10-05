@@ -480,6 +480,11 @@ float Min3(float3 v)
 	return min(v.x, min(v.y, v.z));
 }
 
+uint DivideAndRoundUp(uint x, uint y)
+{
+	return (x + y - 1) / y;
+}
+
 bool RaySphereIntersect(float3 rayOrigin, float3 rayDirection, float3 sphereCenter, float sphereRadius, out float2 intersection)
 {
     float3 oc = rayOrigin - sphereCenter;

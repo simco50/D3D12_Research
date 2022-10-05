@@ -22,133 +22,136 @@ using PackedVector4 = DirectX::PackedVector::XMHALF4;
 #pragma warning(push)
 #pragma warning(disable: 4201) // nonstandard extension used: nameless struct/union
 
-struct Vector2i
+template<typename T>
+struct TVector2
 {
 	union
 	{
 		struct
 		{
-			int32 x, y;
+			T x, y;
 		};
-		int32 Values[2];
+		T Values[2];
 	};
 
-	Vector2i()
+	TVector2()
 		: x(0), y(0)
 	{}
 
-	Vector2i(int32 x, int32 y)
+	TVector2(T x, T y)
 		: x(x), y(y)
 	{}
 
-	Vector2i(int32 v)
+	TVector2(T v)
 		: x(v), y(v)
 	{}
 
-	Vector2i(const int32* pData)
+	TVector2(const T* pData)
 		: x(pData[0]), y(pData[1])
 	{}
 
-	Vector2i(const Vector2& v)
-		: x((int32)v.x), y((int32)v.y)
+	TVector2(const Vector2& v)
+		: x((T)v.x), y((T)v.y)
 	{}
 
-	const int32& operator[](int index) const { return Values[index]; }
-	int32& operator[](int index) { return Values[index]; }
+	const T& operator[](int index) const { return Values[index]; }
+	T& operator[](int index) { return Values[index]; }
 
 	explicit operator Vector2() const { return Vector2((float)x, (float)y); }
 
-	static Vector2i Zero() { return Vector2i(0, 0); }
-	static Vector2i One() { return Vector2i(1, 1); }
+	static TVector2 Zero() { return TVector2(0, 0); }
+	static TVector2 One() { return TVector2(1, 1); }
 
-	bool operator==(const Vector2i& rhs) const { return x == rhs.x && y == rhs.y; }
-	bool operator!=(const Vector2i& rhs) const { return !operator==(rhs); }
+	bool operator==(const TVector2& rhs) const { return x == rhs.x && y == rhs.y; }
+	bool operator!=(const TVector2& rhs) const { return !operator==(rhs); }
 };
 
-struct Vector3i
+template<typename T>
+struct TVector3
 {
 	union
 	{
 		struct
 		{
-			int32 x, y, z;
+			T x, y, z;
 		};
-		int32 Values[3];
+		T Values[3];
 	};
 
-	Vector3i()
+	TVector3()
 		: x(0), y(0), z(0)
 	{}
 
-	Vector3i(int32 x, int32 y, int32 z)
+	TVector3(T x, T y, T z)
 		: x(x), y(y), z(z)
 	{}
 
-	Vector3i(int32 v)
+	TVector3(T v)
 		: x(v), y(v), z(v)
 	{}
 
-	Vector3i(const int32* pData)
+	TVector3(const T* pData)
 		: x(pData[0]), y(pData[1]), z(pData[2])
 	{}
 
-	Vector3i(const Vector3& v)
-		: x((int32)v.x), y((int32)v.y), z((int32)v.z)
+	TVector3(const Vector3& v)
+		: x((T)v.x), y((T)v.y), z((T)v.z)
 	{}
 
-	const int32& operator[](int index) const { return Values[index]; }
-	int32& operator[](int index) { return Values[index]; }
+	const T& operator[](int index) const { return Values[index]; }
+	T& operator[](int index) { return Values[index]; }
 
 	explicit operator Vector3() const { return Vector3((float)x, (float)y, (float)z); }
 
-	static Vector3i Zero() { return Vector3i(0, 0, 0); }
-	static Vector3i One() { return Vector3i(1, 1, 1); }
+	static TVector3 Zero() { return TVector3(0, 0, 0); }
+	static TVector3 One() { return TVector3(1, 1, 1); }
 
-	bool operator==(const Vector3i& rhs) const { return x == rhs.x && y == rhs.y && z == rhs.z; }
-	bool operator!=(const Vector3i& rhs) const { return !operator==(rhs); }
+	bool operator==(const TVector3& rhs) const { return x == rhs.x && y == rhs.y && z == rhs.z; }
+	bool operator!=(const TVector3& rhs) const { return !operator==(rhs); }
 };
 
-struct Vector4i
+template<typename T>
+struct TVector4
 {
 	union
 	{
 		struct
 		{
-			int32 x, y, z, w;
+			T x, y, z, w;
 		};
-		int32 Values[4];
+		T Values[4];
 	};
 
-	Vector4i()
+	TVector4()
 		: x(0), y(0), z(0), w(0)
 	{}
 
-	Vector4i(int32 x, int32 y, int32 z, int32 w)
+	TVector4(T x, T y, T z, T w)
 		: x(x), y(y), z(z), w(w)
 	{}
 
-	Vector4i(int32 v)
+	TVector4(T v)
 		: x(v), y(v), z(v), w(v)
 	{}
 
-	Vector4i(const int32* pData)
+	TVector4(const T* pData)
 		: x(pData[0]), y(pData[1]), z(pData[2]), w(pData[3])
 	{}
 
-	Vector4i(const Vector4& v)
-		: x((int32)v.x), y((int32)v.y), z((int32)v.z), w((int32)v.w)
+	TVector4(const Vector4& v)
+		: x((T)v.x), y((T)v.y), z((T)v.z), w((T)v.w)
 	{}
 
-	const int32& operator[](int index) const { return Values[index]; }
-	int32& operator[](int index) { return Values[index]; }
+	const T& operator[](int index) const { return Values[index]; }
+	T& operator[](int index) { return Values[index]; }
 
 	explicit operator Vector4() const { return Vector4((float)x, (float)y, (float)z, (float)w); }
 
-	static Vector4i Zero() { return Vector4i(0, 0, 0, 0); }
-	static Vector4i One() { return Vector4i(1, 1, 1, 1); }
+	static TVector4 Zero() { return TVector4(0, 0, 0, 0); }
+	static TVector4 One() { return TVector4(1, 1, 1, 1); }
 
-	bool operator==(const Vector4i& rhs) const { return x == rhs.x && y == rhs.y && z == rhs.z && w == rhs.w; }
-	bool operator!=(const Vector4i& rhs) const { return !operator==(rhs); }
+	bool operator==(const TVector4& rhs) const { return x == rhs.x && y == rhs.y && z == rhs.z && w == rhs.w; }
+	bool operator!=(const TVector4& rhs) const { return !operator==(rhs); }
 };
 
 template<typename T>
@@ -202,5 +205,13 @@ struct TRect
 
 using FloatRect = TRect<float>;
 using IntRect = TRect<int>;
+
+using Vector2i = TVector2<int32>;
+using Vector3i = TVector3<int32>;
+using Vector4i = TVector4<int32>;
+
+using Vector2u = TVector2<uint32>;
+using Vector3u = TVector3<uint32>;
+using Vector4u = TVector4<uint32>;
 
 #pragma warning(pop)

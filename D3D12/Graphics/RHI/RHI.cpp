@@ -85,7 +85,9 @@ const FormatInfo& GetFormatInfo(ResourceFormat format)
 const uint32 GetFormatByteSize(ResourceFormat format, uint32 width, uint32 height, uint32 depth)
 {
 	const FormatInfo& info = GetFormatInfo(format);
-	return (width / info.BlockSize) * (height / info.BlockSize) * depth * info.BytesPerBlock;
+	if(info.BlockSize > 0)
+		return (width / info.BlockSize) * (height / info.BlockSize) * depth * info.BytesPerBlock;
+	return 0;
 }
 
 ResourceFormat SRVFormatFromDepth(ResourceFormat format)

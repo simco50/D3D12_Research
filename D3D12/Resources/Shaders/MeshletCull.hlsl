@@ -32,29 +32,13 @@ Buffer<uint> tCounter_CulledInstances : register(t1);
 
 Texture2D<float> tHZB : register(t2);
 
-uint DivideAndRoundUp(uint x, uint y)
+template<typename T>
+void InterlockedAdd_WaveOps(T bufferResource, uint elementIndex, out uint originalValue)
 {
-	return (x + y - 1) / y;
-}
-
-bool IsClusterVisible(VisibleCluster cluster)
-{
-	InstanceData instance = GetInstance(cluster.InstanceID);
-	MeshData mesh = GetMesh(instance.ID);
-	MeshletBounds bounds = BufferLoad<MeshletBounds>(mesh.BufferIndex, cluster.ClusterIndex, mesh.MeshletBoundsOffset);
-
-	float4x4 world = instance.LocalToWorld;
-	float4 center = mul(float4(bounds.Center, 1), world);
-	float3 radius3 = abs(mul(bounds.Radius.xxx, (float3x3)world));
-	float radius = Max3(radius3);
-	float3 coneAxis = normalize(mul(bounds.ConeAxis, (float3x3)world));
-
-	float3 viewLocation = cView.ViewLocation;
-	if(dot(viewLocation - center.xyz, coneAxis) >= bounds.ConeCutoff * length(center.xyz - viewLocation) + radius)
-	{
-		return false;
-	}
-	return true;
+	uint numValues = WaveActiveCountBits(true);
+	if(WaveIsFirstLane())
+		InterlockedAdd(bufferResource[elementIndex], numValues, originalValue);
+	originalValue = WaveReadLaneFirst(originalValue) + WavePrefixCountBits(true);
 }
 
 [numthreads(64, 1, 1)]
@@ -91,7 +75,7 @@ void CullInstancesCS(uint threadID : SV_DispatchThreadID)
 		if(!wasVisible)
 		{
 			uint elementOffset = 0;
-			InterlockedAdd(uCounter_CulledInstances[0], 1, elementOffset);
+			InterlockedAdd_WaveOps(uCounter_CulledInstances, 0, elementOffset);
 			uCulledInstances[elementOffset] = instance.ID;
 		}
 #else
@@ -172,11 +156,14 @@ void CullAndDrawMeshletsAS(uint threadID : SV_DispatchThreadID)
 		{
 #if OCCLUSION_FIRST_PASS
 			FrustumCullData prevCullData = FrustumCull(center.xyz, radius3, cView.ViewProjectionPrev);
-			wasVisible = HZBCull(prevCullData, tHZB);
+			if(prevCullData.IsVisible)
+			{
+				wasVisible = HZBCull(prevCullData, tHZB);
+			}
 			if(!wasVisible)
 			{
 				uint elementOffset;
-				InterlockedAdd(uCounter_CulledClusters[0], 1, elementOffset);
+				InterlockedAdd_WaveOps(uCounter_CulledClusters, 0, elementOffset);
 				uCulledClusters[elementOffset] = cluster;
 			}
 #else

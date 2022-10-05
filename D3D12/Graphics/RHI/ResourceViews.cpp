@@ -24,17 +24,7 @@ ShaderResourceView::ShaderResourceView(GraphicsResource* pParent, D3D12_CPU_DESC
 {
 }
 
-UnorderedAccessView::UnorderedAccessView(GraphicsResource* pParent, D3D12_CPU_DESCRIPTOR_HANDLE cpuDescriptor, DescriptorHandle gpuDescriptor, Buffer* pCounter)
-	: ResourceView(pParent, cpuDescriptor, gpuDescriptor), m_pCounter(pCounter)
+UnorderedAccessView::UnorderedAccessView(GraphicsResource* pParent, D3D12_CPU_DESCRIPTOR_HANDLE cpuDescriptor, DescriptorHandle gpuDescriptor)
+	: ResourceView(pParent, cpuDescriptor, gpuDescriptor)
 {
-}
-
-UnorderedAccessView* UnorderedAccessView::GetCounterUAV() const
-{
-	return m_pCounter ? m_pCounter->GetUAV() : nullptr;
-}
-
-ShaderResourceView* UnorderedAccessView::GetCounterSRV() const
-{
-	return m_pCounter ? m_pCounter->GetSRV() : nullptr;
 }

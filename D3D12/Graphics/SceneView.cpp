@@ -58,6 +58,7 @@ namespace Renderer
 
 		parameters.ReprojectionMatrix = premult * reprojectionMatrix * postmult;
 		parameters.ViewLocation = view.Position;
+		parameters.ViewLocationPrev = view.PositionPrev;
 
 		DirectX::XMVECTOR nearPlane, farPlane, left, right, top, bottom;
 		view.Frustum.GetPlanes(&nearPlane, &farPlane, &right, &left, &top, &bottom);
@@ -199,7 +200,7 @@ namespace Renderer
 				ShaderInterop::DDGIVolume& ddgi = ddgiVolumes.emplace_back();
 				ddgi.BoundsMin = ddgiVolume.Origin - ddgiVolume.Extents;
 				ddgi.ProbeSize = 2 * ddgiVolume.Extents / (Vector3((float)ddgiVolume.NumProbes.x, (float)ddgiVolume.NumProbes.y, (float)ddgiVolume.NumProbes.z) - Vector3::One);
-				ddgi.ProbeVolumeDimensions = Vector3i(ddgiVolume.NumProbes.x, ddgiVolume.NumProbes.y, ddgiVolume.NumProbes.z);
+				ddgi.ProbeVolumeDimensions = Vector3u(ddgiVolume.NumProbes.x, ddgiVolume.NumProbes.y, ddgiVolume.NumProbes.z);
 				ddgi.IrradianceIndex = ddgiVolume.pIrradianceHistory ? ddgiVolume.pIrradianceHistory->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
 				ddgi.DepthIndex = ddgiVolume.pDepthHistory ? ddgiVolume.pDepthHistory->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
 				ddgi.ProbeOffsetIndex = ddgiVolume.pProbeOffset ? ddgiVolume.pProbeOffset->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;

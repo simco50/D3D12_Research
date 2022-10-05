@@ -46,6 +46,7 @@ struct ViewTransform
 	Matrix ProjectionInverse;
 	bool Perspective = true;
 	Vector3 Position;
+	Vector3 PositionPrev;
 
 	FloatRect Viewport;
 	float FoV = 60.0f * Math::PI / 180;

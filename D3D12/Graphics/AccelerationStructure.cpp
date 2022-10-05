@@ -106,7 +106,6 @@ void AccelerationStructure::Build(CommandContext& context, const SceneView& view
 				asDesc.SourceAccelerationStructureData = 0;
 
 				pCmd->BuildRaytracingAccelerationStructure(&asDesc, 0, nullptr);
-				context.InsertUavBarrier(pMesh->pBLAS);
 
 				pMesh->pBLAS = pBLAS.Detach();
 				m_QueuedRequests.push_back(&pMesh->pBLAS);

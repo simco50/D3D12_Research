@@ -88,12 +88,5 @@ public:
 class UnorderedAccessView : public ResourceView
 {
 public:
-	UnorderedAccessView(GraphicsResource* pParent, D3D12_CPU_DESCRIPTOR_HANDLE cpuDescriptor, DescriptorHandle gpuDescriptor, Buffer* pCounter = nullptr);
-
-	Buffer* GetCounter() const { return m_pCounter; }
-	UnorderedAccessView* GetCounterUAV() const;
-	ShaderResourceView* GetCounterSRV() const;
-
-private:
-	RefCountPtr<Buffer> m_pCounter;
+	UnorderedAccessView(GraphicsResource* pParent, D3D12_CPU_DESCRIPTOR_HANDLE cpuDescriptor, DescriptorHandle gpuDescriptor);
 };

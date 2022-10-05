@@ -11,9 +11,9 @@ namespace ShaderInterop
 	using float3 =		Vector3;
 	using float4 =		Vector4;
 	using uint =		uint32;
-	using uint2 =		Vector2i;
-	using uint3 =		Vector3i;
-	using uint4 =		Vector4i;
+	using uint2 =		Vector2u;
+	using uint3 =		Vector3u;
+	using uint4 =		Vector4u;
 	using int2 =		Vector2i;
 	using int3 =		Vector3i;
 	using int4 =		Vector4i;
@@ -68,7 +68,7 @@ namespace ShaderInterop
 		uint V0 : 10;
 		uint V1 : 10;
 		uint V2 : 10;
-		uint padding : 2;
+		uint : 2;
 	};
 
 	struct Meshlet
@@ -160,7 +160,9 @@ namespace ShaderInterop
 		float4x4 LightMatrices[MAX_SHADOW_CASTERS];
 		float4 CascadeDepths;
 		uint NumCascades;
-		uint3 padd0;
+		uint : 32;
+		uint : 32;
+		uint : 32;
 
 		float4x4 View;
 		float4x4 ViewInverse;
@@ -172,7 +174,9 @@ namespace ShaderInterop
 		float4x4 ViewProjectionInverse;
 		float4x4 ReprojectionMatrix;
 		float3 ViewLocation;
-		float padd1;
+		uint : 32;
+		float3 ViewLocationPrev;
+		uint : 32;
 		float4 FrustumPlanes[6];
 		float2 TargetDimensions;
 		float2 TargetDimensionsInv;

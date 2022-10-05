@@ -46,10 +46,16 @@
 	</Type>
 
 	<Type Name="D3D12_RESOURCE_BARRIER">
-		<DisplayString Condition="Type == D3D12_RESOURCE_BARRIER_TYPE_TRANSITION">Transition - Before: "{Transition.StateBefore}" After: "{Transition.StateAfter}"</DisplayString>
-		<DisplayString Condition="Type == D3D12_RESOURCE_BARRIER_TYPE_ALIASING">Transition - Before: "{Aliasing.pResourceBefore}" After: "{Aliasing.pResourceAfter}"</DisplayString>
-		<DisplayString Condition="Type == D3D12_RESOURCE_BARRIER_TYPE_UAV">Transition - Resource: "{UAV.pResource}"</DisplayString>
+		<DisplayString Condition="Type == D3D12_RESOURCE_BARRIER_TYPE_TRANSITION">Transition | Resource: "{(void*)Transition.pResource}" | Before: "{Transition.StateBefore}" | After: "{Transition.StateAfter}"</DisplayString>
+		<DisplayString Condition="Type == D3D12_RESOURCE_BARRIER_TYPE_ALIASING">Alias | Before: "{(void*)Aliasing.pResourceBefore}" | After: "{(void*)Aliasing.pResourceAfter}"</DisplayString>
+		<DisplayString Condition="Type == D3D12_RESOURCE_BARRIER_TYPE_UAV">UAV | Resource: "{(void*)UAV.pResource}"</DisplayString>
 		<DisplayString>Invalid</DisplayString>
+		<Expand>
+			<Item Name="Transition" Condition="Type == D3D12_RESOURCE_BARRIER_TYPE_TRANSITION">Transition</Item>
+			<Item Name="Aliasing" Condition="Type == D3D12_RESOURCE_BARRIER_TYPE_ALIASING">Aliasing</Item>
+			<Item Name="UAV" Condition="Type == D3D12_RESOURCE_BARRIER_TYPE_UAV">UAV</Item>
+			<Item Name="Flags">Flags</Item>
+		</Expand>
 	</Type>
 
 </AutoVisualizer>

@@ -181,7 +181,7 @@ public:
 	void Dispatch(const Vector3i& groupCounts);
 	void DispatchMesh(uint32 groupCountX, uint32 groupCountY = 1, uint32 groupCountZ = 1);
 	void DispatchMesh(const Vector3i& groupCounts);
-	void ExecuteIndirect(const CommandSignature* pCommandSignature, uint32 maxCount, const Buffer* pIndirectArguments, const Buffer* pCountBuffer, uint32 argumentsOffset = 0, uint32 countOffset = 0);
+	void ExecuteIndirect(const CommandSignature* pCommandSignature, uint32 maxCount, const Buffer* pIndirectArguments, const Buffer* pCountBuffer = nullptr, uint32 argumentsOffset = 0, uint32 countOffset = 0);
 	void Draw(uint32 vertexStart, uint32 vertexCount, uint32 instances = 1, uint32 instanceStart = 0);
 	void DrawIndexedInstanced(uint32 indexCount, uint32 indexStart, uint32 instanceCount, uint32 minVertex = 0, uint32 instanceStart = 0);
 	void DispatchRays(ShaderBindingTable& table, uint32 width = 1, uint32 height = 1, uint32 depth = 1);
@@ -193,8 +193,8 @@ public:
 	void BeginRenderPass(const RenderPassInfo& renderPassInfo);
 	void EndRenderPass();
 
-	void ClearUavUInt(const GraphicsResource* pBuffer, const UnorderedAccessView* pUav, const uint32* pValues = nullptr);
-	void ClearUavFloat(const GraphicsResource* pBuffer, const UnorderedAccessView* pUav, const Vector4& values = Vector4::Zero);
+	void ClearUavUInt(const GraphicsResource* pBuffer, const UnorderedAccessView* pUav = nullptr, const Vector4u& values = Vector4u::Zero());
+	void ClearUavFloat(const GraphicsResource* pBuffer, const UnorderedAccessView* pUav = nullptr, const Vector4& values = Vector4::Zero);
 
 	void SetPipelineState(PipelineState* pPipelineState);
 	void SetPipelineState(StateObject* pStateObject);

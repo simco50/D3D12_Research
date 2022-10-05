@@ -237,21 +237,31 @@ void CommandContext::ExecuteIndirect(const CommandSignature* pCommandSignature, 
 	m_pCommandList->ExecuteIndirect(pCommandSignature->GetCommandSignature(), maxCount, pIndirectArguments->GetResource(), argumentsOffset, pCountBuffer ? pCountBuffer->GetResource() : nullptr, countOffset);
 }
 
-void CommandContext::ClearUavUInt(const GraphicsResource* pBuffer, const UnorderedAccessView* pUav, const uint32* pValues)
+void CommandContext::ClearUavUInt(const GraphicsResource* pBuffer, const UnorderedAccessView* pUav, const Vector4u& values)
 {
-	FlushResourceBarriers();
+	if (!pUav)
+		pUav = pBuffer->GetUAV();
+	check(pBuffer);
+	check(pUav);
+
 	DescriptorHandle gpuHandle = m_ShaderResourceDescriptorAllocator.Allocate(1);
 	GetParent()->GetDevice()->CopyDescriptorsSimple(1, gpuHandle.CpuHandle, pUav->GetDescriptor(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-	uint32 zeros[4] = { 0,0,0,0 };
-	m_pCommandList->ClearUnorderedAccessViewUint(gpuHandle.GpuHandle, pUav->GetDescriptor(), pBuffer->GetResource(), pValues ? pValues : zeros, 0, nullptr);
+
+	FlushResourceBarriers();
+	m_pCommandList->ClearUnorderedAccessViewUint(gpuHandle.GpuHandle, pUav->GetDescriptor(), pBuffer->GetResource(), &values.x, 0, nullptr);
 }
 
 void CommandContext::ClearUavFloat(const GraphicsResource* pBuffer, const UnorderedAccessView* pUav, const Vector4& values)
 {
-	FlushResourceBarriers();
+	if (!pUav)
+		pUav = pBuffer->GetUAV();
+	check(pBuffer);
+	check(pUav);
+
 	DescriptorHandle gpuHandle = m_ShaderResourceDescriptorAllocator.Allocate(1);
 	GetParent()->GetDevice()->CopyDescriptorsSimple(1, gpuHandle.CpuHandle, pUav->GetDescriptor(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-	float zeros[4] = { 0,0,0,0 };
+
+	FlushResourceBarriers();
 	m_pCommandList->ClearUnorderedAccessViewFloat(gpuHandle.GpuHandle, pUav->GetDescriptor(), pBuffer->GetResource(), &values.x, 0, nullptr);
 }
 

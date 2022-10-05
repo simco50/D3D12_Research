@@ -895,19 +895,12 @@ RefCountPtr<UnorderedAccessView> GraphicsDevice::CreateUAV(Buffer* pBuffer, cons
 		uavDesc.Buffer.StructureByteStride = uavDesc.Format == DXGI_FORMAT_UNKNOWN ? bufferDesc.ElementSize : 0;
 	}
 
-	RefCountPtr<Buffer> pCounter;
-	if (desc.Counter)
-	{
-		std::string name = pBuffer->GetName() + " - Counter";
-		pCounter = GetParent()->GetParent()->CreateBuffer(BufferDesc::CreateByteAddress(4, bufferDesc.Usage & BufferFlag::NoBindless), name.c_str());
-	}
-
 	D3D12_CPU_DESCRIPTOR_HANDLE descriptor = AllocateCPUDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-	m_pDevice->CreateUnorderedAccessView(pBuffer->GetResource(), pCounter ? pCounter->GetResource() : nullptr, &uavDesc, descriptor);
+	m_pDevice->CreateUnorderedAccessView(pBuffer->GetResource(), nullptr, &uavDesc, descriptor);
 	DescriptorHandle gpuDescriptor;
 	if (!EnumHasAnyFlags(bufferDesc.Usage, BufferFlag::NoBindless))
 		gpuDescriptor = RegisterGlobalResourceView(descriptor);
-	return new UnorderedAccessView(pBuffer, descriptor, gpuDescriptor, pCounter);
+	return new UnorderedAccessView(pBuffer, descriptor, gpuDescriptor);
 }
 
 RefCountPtr<ShaderResourceView> GraphicsDevice::CreateSRV(Texture* pTexture, const TextureSRVDesc& desc)

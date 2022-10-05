@@ -149,6 +149,7 @@ void Camera::UpdateMatrices() const
 
 void Camera::Update()
 {
+	m_Transform.PositionPrev = m_Transform.Position;
 	m_Transform.ViewProjectionPrev = m_Transform.ViewProjection;
 	m_Transform.PreviousJitter = m_Transform.Jitter;
 	++m_Transform.JitterIndex;

@@ -142,7 +142,7 @@ namespace Tweakables
 	ConsoleVariable g_VisualizeDDGI("vis.DDGI", false);
 	ConsoleVariable g_RenderObjectBounds("r.vis.ObjectBounds", false);
 
-	ConsoleVariable g_RaytracedReflections("r.Raytracing.Reflections", true);
+	ConsoleVariable g_RaytracedReflections("r.Raytracing.Reflections", false);
 	ConsoleVariable g_TLASBoundsThreshold("r.Raytracing.TLASBoundsThreshold", 1.0f * Math::DegreesToRadians);
 	ConsoleVariable g_SsrSamples("r.SSRSamples", 8);
 	ConsoleVariable g_RenderTerrain("r.Terrain", false);
@@ -241,27 +241,33 @@ void DemoApp::RenderVisibilityBufferGPUDriven(RGGraph& graph, GraphicsDevice* pD
 {
 	RG_GRAPH_SCOPE("Visibility Buffer (GPU Driven)", graph);
 
-	uint32 maxNumInstances = 10*4096;
-	uint32 maxNumClusters = 10*8192;
-	RGBuffer* pClustersToProcess =			graph.CreateBuffer("ClustersToProcess",			BufferDesc::CreateStructured(maxNumClusters, sizeof(uint32) * 2));
-	RGBuffer* pClustersToProcessCounter =	graph.CreateBuffer("ClustersToProcessCounter",	BufferDesc::CreateTyped(1, ResourceFormat::R32_UINT));
-	RGBuffer* pCulledInstances =			graph.CreateBuffer("CulledInstances",			BufferDesc::CreateStructured(maxNumInstances, sizeof(uint32)));
-	RGBuffer* pCulledInstancesCounter =		graph.CreateBuffer("CulledInstancesCounter",	BufferDesc::CreateTyped(1, ResourceFormat::R32_UINT));
-	RGBuffer* pCulledClusters =				graph.CreateBuffer("CulledClusters",			BufferDesc::CreateStructured(maxNumClusters, sizeof(uint32) * 2));
-	RGBuffer* pCulledClustersCounter =		graph.CreateBuffer("CulledClustersCounter",		BufferDesc::CreateTyped(1, ResourceFormat::R32_UINT));
+	constexpr uint32 maxNumInstances	= 1 << 14;
+	constexpr uint32 maxNumClusters		= 1 << 18;
+	BufferDesc counterDesc = BufferDesc::CreateTyped(1, ResourceFormat::R32_UINT);
+	RGBuffer* pClustersToProcess =			graph.CreateBuffer("Clusters To Process",				BufferDesc::CreateStructured(maxNumClusters, sizeof(uint32) * 2));
+	RGBuffer* pClustersToProcessCounter =	graph.CreateBuffer("Clusters To Process - Counter",		counterDesc);
+	RGBuffer* pCulledClusters =				graph.CreateBuffer("Culled Clusters",					BufferDesc::CreateStructured(maxNumClusters, sizeof(uint32) * 2));
+	RGBuffer* pCulledClustersCounter =		graph.CreateBuffer("Culled Clusters - Counter",			counterDesc);
+	RGBuffer* pCulledInstances =			graph.CreateBuffer("Culled Instances",					BufferDesc::CreateStructured(maxNumInstances, sizeof(uint32)));
+	RGBuffer* pCulledInstancesCounter =		graph.CreateBuffer("Culled Instances - Counter",		counterDesc);
 
 	{
 		RG_GRAPH_SCOPE("Phase 1", graph);
 
-		graph.AddPass("Cull Instances", RGPassFlag::Compute)
-			.Write({ pClustersToProcess, pClustersToProcessCounter, pCulledInstances, pCulledInstancesCounter, pCulledClustersCounter })
+		graph.AddPass("Clear Counters", RGPassFlag::Compute)
+			.Write({ pClustersToProcessCounter, pCulledInstancesCounter, pCulledClustersCounter })
 			.Bind([=](CommandContext& context)
 				{
-					context.ClearUavUInt(pClustersToProcessCounter->Get(), pClustersToProcessCounter->Get()->GetUAV());
-					context.ClearUavUInt(pCulledInstancesCounter->Get(), pCulledInstancesCounter->Get()->GetUAV());
-					context.ClearUavUInt(pCulledClustersCounter->Get(), pCulledClustersCounter->Get()->GetUAV());
+					context.ClearUavUInt(pClustersToProcessCounter->Get());
+					context.ClearUavUInt(pCulledInstancesCounter->Get());
+					context.ClearUavUInt(pCulledClustersCounter->Get());
 					context.InsertUavBarrier();
+				});
 
+		graph.AddPass("Cull Instances", RGPassFlag::Compute)
+			.Write({ pClustersToProcess, pClustersToProcessCounter, pCulledInstances, pCulledInstancesCounter })
+			.Bind([=](CommandContext& context)
+				{
 					context.SetComputeRootSignature(pCommonRS);
 					context.SetPipelineState(pCullInstancesPhase1PSO);
 
@@ -278,8 +284,7 @@ void DemoApp::RenderVisibilityBufferGPUDriven(RGGraph& graph, GraphicsDevice* pD
 					context.InsertUavBarrier();
 				});
 
-		RGBuffer* pDispatchMeshBuffer = graph.CreateBuffer("Dispatch Mesh Args", BufferDesc::CreateIndirectArguments<D3D12_DISPATCH_MESH_ARGUMENTS>(1));
-
+		RGBuffer* pDispatchMeshBuffer = graph.CreateBuffer("ExecuteIndirect - Draw and Cull - DispatchMesh Argument", BufferDesc::CreateIndirectArguments<D3D12_DISPATCH_MESH_ARGUMENTS>(1));
 		graph.AddPass("Build DispatchMesh Arguments", RGPassFlag::Compute)
 			.Read(pClustersToProcessCounter)
 			.Write(pDispatchMeshBuffer)
@@ -295,7 +300,7 @@ void DemoApp::RenderVisibilityBufferGPUDriven(RGGraph& graph, GraphicsDevice* pD
 					context.InsertUavBarrier();
 				});
 
-		graph.AddPass("Cull and Draw Meshlets", RGPassFlag::Raster)
+		graph.AddPass("Cull and Draw Clusters", RGPassFlag::Raster)
 			.Read({ pClustersToProcess, pClustersToProcessCounter, pDispatchMeshBuffer })
 			.Read({ sceneTextures.pHZB })
 			.Write({ pCulledClusters, pCulledClustersCounter })
@@ -316,20 +321,16 @@ void DemoApp::RenderVisibilityBufferGPUDriven(RGGraph& graph, GraphicsDevice* pD
 						pClustersToProcessCounter->Get()->GetSRV(),
 						sceneTextures.pHZB->Get()->GetSRV(),
 						});
-					context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchMeshSignature, 1, pDispatchMeshBuffer->Get(), nullptr);
-
-					context.InsertUavBarrier();
+					context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchMeshSignature, 1, pDispatchMeshBuffer->Get());
 				});
 
 		BuildHZB(graph, sceneTextures.pDepth, &sceneTextures.pHZB, pView);
 	}
 
-	if(1)
 	{
 		RG_GRAPH_SCOPE("Phase 2", graph);
 
-		RGBuffer* pDispatchBuffer = graph.CreateBuffer("Dispatch Cull Args", BufferDesc::CreateIndirectArguments<D3D12_DISPATCH_ARGUMENTS>(1));
-
+		RGBuffer* pDispatchBuffer = graph.CreateBuffer("ExecuteIndirect - Instance Culling - Dispatch Arguments", BufferDesc::CreateIndirectArguments<D3D12_DISPATCH_ARGUMENTS>(1));
 		graph.AddPass("Build Instance Cull Arguments", RGPassFlag::Compute)
 			.Read({ pCulledInstancesCounter })
 			.Write({ pDispatchBuffer })
@@ -338,18 +339,12 @@ void DemoApp::RenderVisibilityBufferGPUDriven(RGGraph& graph, GraphicsDevice* pD
 					context.SetComputeRootSignature(pCommonRS);
 					context.SetPipelineState(pBuildCullArgsPhase2PSO);
 
-					context.BindResources(2, {
-						pDispatchBuffer->Get()->GetUAV(),
-						});
-					context.BindResources(3, {
-						pCulledInstancesCounter->Get()->GetSRV(),
-						}, 1);
-
+					context.BindResources(2, pDispatchBuffer->Get()->GetUAV());
+					context.BindResources(3, pCulledInstancesCounter->Get()->GetSRV(), 1);
 					context.Dispatch(1);
 
 					context.InsertUavBarrier();
 				});
-
 		
 		graph.AddPass("Cull Instances", RGPassFlag::Compute)
 			.Read(sceneTextures.pHZB)
@@ -371,14 +366,13 @@ void DemoApp::RenderVisibilityBufferGPUDriven(RGGraph& graph, GraphicsDevice* pD
 						sceneTextures.pHZB->Get()->GetSRV(),
 						});
 
-					context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchSignature, 1, pDispatchBuffer->Get(), nullptr);
+					context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchSignature, 1, pDispatchBuffer->Get());
 
 					context.InsertUavBarrier();
 				});
 
 
-		RGBuffer* pDispatchMeshBuffer = graph.CreateBuffer("Dispatch Mesh Args", BufferDesc::CreateIndirectArguments<D3D12_DISPATCH_MESH_ARGUMENTS>(1));
-
+		RGBuffer* pDispatchMeshBuffer = graph.CreateBuffer("ExecuteIndirect - Draw and Cull - DispatchMesh Argument", BufferDesc::CreateIndirectArguments<D3D12_DISPATCH_MESH_ARGUMENTS>(1));
 		graph.AddPass("Build DispatchMesh Arguments", RGPassFlag::Compute)
 			.Read(pCulledClustersCounter)
 			.Write(pDispatchMeshBuffer)
@@ -394,7 +388,7 @@ void DemoApp::RenderVisibilityBufferGPUDriven(RGGraph& graph, GraphicsDevice* pD
 					context.InsertUavBarrier();
 				});
 
-		graph.AddPass("Cull and Draw Meshlets", RGPassFlag::Raster)
+		graph.AddPass("Cull and Draw Clusters", RGPassFlag::Raster)
 			.Read(sceneTextures.pHZB)
 			.Read({ pCulledClusters, pCulledClustersCounter, pDispatchMeshBuffer })
 			.DepthStencil(sceneTextures.pDepth, RenderTargetLoadAction::Load, true)
@@ -410,9 +404,7 @@ void DemoApp::RenderVisibilityBufferGPUDriven(RGGraph& graph, GraphicsDevice* pD
 						pCulledClustersCounter->Get()->GetSRV(),
 						sceneTextures.pHZB->Get()->GetSRV(),
 						});
-					context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchMeshSignature, 1, pDispatchMeshBuffer->Get(), nullptr);
-
-					context.InsertUavBarrier();
+					context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchMeshSignature, 1, pDispatchMeshBuffer->Get());
 				});
 
 		BuildHZB(graph, sceneTextures.pDepth, &sceneTextures.pHZB, pView);
@@ -457,6 +449,7 @@ DemoApp::DemoApp(WindowHandle window, const Vector2i& windowRect)
 		psoDesc.SetRenderTargetFormats(ResourceFormat::R32_UINT, ResourceFormat::D32_FLOAT, 1);
 		psoDesc.SetName("Visibility Rendering");
 		pCullAndDrawPhase1PSO = m_pDevice->CreatePipeline(psoDesc);
+
 		psoDesc.SetAmplificationShader("MeshletCull.hlsl", "CullAndDrawMeshletsAS", { "OCCLUSION_FIRST_PASS=0" });
 		pCullAndDrawPhase2PSO = m_pDevice->CreatePipeline(psoDesc);
 
@@ -690,7 +683,6 @@ void DemoApp::Update()
 
 		{
 			PROFILE_SCOPE("Frustum Culling");
-			if (0)
 			{
 				BoundingFrustum frustum = m_pCamera->GetFrustum();
 				for (const Batch& b : m_SceneData.Batches)
