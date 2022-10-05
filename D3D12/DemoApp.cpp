@@ -149,6 +149,9 @@ namespace Tweakables
 
 	ConsoleVariable g_FreezeClusterCulling("r.FreezeClusterCulling", false);
 
+	ConsoleVariable g_GPUDrivenRender("r.GPUDrivenRender", true);
+	ConsoleVariable g_GPUDrivenRenderPhase2("r.GPUDrivenRender.Phase2", true);
+
 	// Misc
 	bool g_DumpRenderGraph = false;
 	ConsoleCommand<> gDumpRenderGraph("DumpRenderGraph", []() { g_DumpRenderGraph = true; });
@@ -243,6 +246,15 @@ void DemoApp::RenderVisibilityBufferGPUDriven(RGGraph& graph, GraphicsDevice* pD
 
 	constexpr uint32 maxNumInstances	= 1 << 14;
 	constexpr uint32 maxNumClusters		= 1 << 18;
+
+	check(pView->Batches.size() <= maxNumInstances);
+	uint32 numClusters = 0;
+	for (const Batch& b : pView->Batches)
+	{
+		numClusters += b.pMesh->NumMeshlets;
+	}
+	check(numClusters <= maxNumClusters);
+
 	BufferDesc counterDesc = BufferDesc::CreateTyped(1, ResourceFormat::R32_UINT);
 	RGBuffer* pClustersToProcess =			graph.CreateBuffer("Clusters To Process",				BufferDesc::CreateStructured(maxNumClusters, sizeof(uint32) * 2));
 	RGBuffer* pClustersToProcessCounter =	graph.CreateBuffer("Clusters To Process - Counter",		counterDesc);
@@ -327,6 +339,7 @@ void DemoApp::RenderVisibilityBufferGPUDriven(RGGraph& graph, GraphicsDevice* pD
 		BuildHZB(graph, sceneTextures.pDepth, &sceneTextures.pHZB, pView);
 	}
 
+	if(Tweakables::g_GPUDrivenRenderPhase2)
 	{
 		RG_GRAPH_SCOPE("Phase 2", graph);
 
@@ -486,8 +499,10 @@ DemoApp::DemoApp(WindowHandle window, const Vector2i& windowRect)
 	}
 
 	constexpr RenderPath defaultRenderPath = RenderPath::Clustered;
-	m_RenderPath = m_RenderPath == RenderPath::Visibility && m_pDevice->GetCapabilities().SupportsMeshShading() ? m_RenderPath : defaultRenderPath;
-	m_RenderPath = m_RenderPath == RenderPath::PathTracing && m_pDevice->GetCapabilities().SupportsRaytracing() ? m_RenderPath : defaultRenderPath;
+	if (m_RenderPath == RenderPath::Visibility)
+		m_RenderPath = m_pDevice->GetCapabilities().SupportsMeshShading() ? m_RenderPath : defaultRenderPath;
+	if(m_RenderPath == RenderPath::PathTracing)
+		m_RenderPath = m_pDevice->GetCapabilities().SupportsRaytracing() ? m_RenderPath : defaultRenderPath;
 }
 
 DemoApp::~DemoApp()
@@ -870,7 +885,11 @@ void DemoApp::Update()
 		}
 		else if (m_RenderPath == RenderPath::Visibility)
 		{
-			if (0)
+			if (Tweakables::g_GPUDrivenRender)
+			{
+				RenderVisibilityBufferGPUDriven(graph, m_pDevice, sceneTextures, pView);
+			}
+			else
 			{
 				graph.AddPass("Visibility Buffer", RGPassFlag::Raster)
 					.Read(sceneTextures.pHZB)
@@ -895,12 +914,7 @@ void DemoApp::Update()
 							}
 						});
 
-
 				BuildHZB(graph, sceneTextures.pDepth, &sceneTextures.pHZB, pView);
-			}
-			else
-			{
-				RenderVisibilityBufferGPUDriven(graph, m_pDevice, sceneTextures, pView);
 			}
 		}
 
@@ -2118,6 +2132,9 @@ void DemoApp::UpdateImGui()
 					}
 					return true;
 				}, nullptr, (int)RenderPath::MAX);
+
+			ImGui::Checkbox("GPU Driven Render", &Tweakables::g_GPUDrivenRender.Get());
+			ImGui::Checkbox("GPU Driven Render - Phase 2", &Tweakables::g_GPUDrivenRenderPhase2.Get());
 
 			ImGui::Text("Camera");
 			ImGui::Text("Location: [%.2f, %.2f, %.2f]", m_pCamera->GetPosition().x, m_pCamera->GetPosition().y, m_pCamera->GetPosition().z);

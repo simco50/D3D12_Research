@@ -209,6 +209,7 @@ void ImGuiRenderer::Render(RGGraph& graph, RGTexture* pRenderTarget)
 			{
 				context.SetGraphicsRootSignature(gImGuiRS);
 				context.SetPipelineState(gImGuiPSO);
+				context.SetPrimitiveTopology(D3D10_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
 				ImDrawData* pDrawData = ImGui::GetDrawData();
 
