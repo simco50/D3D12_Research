@@ -6,18 +6,13 @@
 #include "RHI/RootSignature.h"
 #include "RHI/Texture.h"
 #include "RHI/CPUDescriptorHeap.h"
+#include "RHI/DynamicResourceAllocator.h"
 #include "SceneView.h"
 #include "RenderGraph/RenderGraph.h"
 #include "ImGuizmo.h"
 #include "Core/Paths.h"
 #include "IconsFontAwesome4.h"
-#include "imgui_impl_dx12.h"
 #include "imgui_impl_win32.h"
-
-void ImGui::Image(Texture* pTexture, const ImVec2& size, const ImVec2& uv0, const ImVec2& uv1, const ImVec4& tint_col, const ImVec4& border_col)
-{
-	ImGui::Image((void*)pTexture->GetSRV()->GetGPUView(), size, uv0, uv1, tint_col, border_col);
-}
 
 ImVec2 ImGui::ImageAutoSize(Texture* textureId, const ImVec2& imageDimensions)
 {
@@ -104,8 +99,9 @@ void ApplyImGuiStyle()
 	colors[ImGuiCol_ModalWindowDimBg] = ImVec4(0.80f, 0.80f, 0.80f, 0.35f);
 }
 
-static D3D12_CPU_DESCRIPTOR_HANDLE gFontCPUDescriptor;
-static DescriptorHandle gFontGPUDescriptor;
+GlobalResource<PipelineState> gImGuiPSO;
+GlobalResource<RootSignature> gImGuiRS;
+GlobalResource<Texture> gFontTexture;
 
 void ImGuiRenderer::Initialize(GraphicsDevice* pDevice, WindowHandle window)
 {
@@ -114,7 +110,7 @@ void ImGuiRenderer::Initialize(GraphicsDevice* pDevice, WindowHandle window)
 
 	ImGuiIO& io = ImGui::GetIO();
 	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
-	io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+	//io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
 
 	Paths::CreateDirectoryTree(Paths::SavedDir());
 	static std::string imguiPath = Paths::SavedDir() + "imgui.ini";
@@ -130,54 +126,146 @@ void ImGuiRenderer::Initialize(GraphicsDevice* pDevice, WindowHandle window)
 	static const ImWchar icon_ranges[] = { ICON_MIN_FA, ICON_MAX_FA, 0 };
 	io.Fonts->AddFontFromFileTTF("Resources/Fonts/" FONT_ICON_FILE_NAME_FA, 15.0f, &fontConfig, icon_ranges);
 
+	unsigned char* pPixels;
+	int width, height;
+	io.Fonts->GetTexDataAsRGBA32(&pPixels, &height, &width);
+	gFontTexture = pDevice->CreateTexture(TextureDesc::Create2D(width, height, ResourceFormat::RGBA8_UNORM), "ImGui Font");
+	CommandContext* pContext = pDevice->AllocateCommandContext();
+	D3D12_SUBRESOURCE_DATA data;
+	data.pData = pPixels;
+	data.RowPitch = GetFormatByteSize(ResourceFormat::RGBA8_UNORM, width);
+	data.SlicePitch = GetFormatByteSize(ResourceFormat::RGBA8_UNORM, width, height);
+	pContext->WriteTexture(gFontTexture, data, 0);
+	pContext->Execute(true);
+
+	gImGuiRS = new RootSignature(pDevice);
+	gImGuiRS->AddConstantBufferView(0, D3D12_SHADER_VISIBILITY_VERTEX);
+	gImGuiRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, D3D12_SHADER_VISIBILITY_PIXEL);
+	gImGuiRS->Finalize("ImGui RS", D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+
+	PipelineStateInitializer psoDesc;
+	psoDesc.SetInputLayout({
+		{ "POSITION", ResourceFormat::RG32_FLOAT },
+		{ "TEXCOORD", ResourceFormat::RG32_FLOAT },
+		{ "COLOR", ResourceFormat::RGBA8_UNORM },
+		});
+	psoDesc.SetRootSignature(gImGuiRS);
+	psoDesc.SetVertexShader("ImGui.hlsl", "VSMain");
+	psoDesc.SetPixelShader("ImGui.hlsl", "PSMain");
+	psoDesc.SetBlendMode(BlendMode::Alpha, false);
+	psoDesc.SetDepthWrite(false);
+	psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_ALWAYS);
+	psoDesc.SetRenderTargetFormats(ResourceFormat::RGBA8_UNORM, ResourceFormat::Unknown, 1);
+	psoDesc.SetName("ImGui");
+	gImGuiPSO = pDevice->CreatePipeline(psoDesc);
+
 	ApplyImGuiStyle();
 
 	ImGui_ImplWin32_Init(window);
-
-	gFontCPUDescriptor = pDevice->AllocateCPUDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-	gFontGPUDescriptor = pDevice->RegisterGlobalResourceView(gFontCPUDescriptor);
-	ImGui_ImplDX12_Init(pDevice->GetDevice(), SwapChain::NUM_FRAMES + 1, DXGI_FORMAT_R8G8B8A8_UNORM, pDevice->GetGlobalViewHeap()->GetHeap(), gFontGPUDescriptor.CpuHandle, gFontGPUDescriptor.GpuHandle);
 }
 
 void ImGuiRenderer::Shutdown(GraphicsDevice* pDevice)
 {
-	ImGui_ImplDX12_Shutdown();
 	ImGui_ImplWin32_Shutdown();
 	ImGui::DestroyContext();
-
-	pDevice->UnregisterGlobalResourceView(gFontGPUDescriptor);
-	pDevice->FreeCPUDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, gFontCPUDescriptor);
 }
 
 void ImGuiRenderer::NewFrame()
 {
-	ImGui_ImplDX12_NewFrame();
 	ImGui_ImplWin32_NewFrame();
 	ImGui::NewFrame();
 	ImGuizmo::BeginFrame();
 }
 
-void ImGuiRenderer::Render(RGGraph& graph, Texture* pRenderTarget)
+void ImGuiRenderer::Render(RGGraph& graph, RGTexture* pRenderTarget)
 {
-	graph.AddPass("Render UI", RGPassFlag::Raster | RGPassFlag::NeverCull | RGPassFlag::NoRenderPass)
+	ImGui::Render();
+
+	RG_GRAPH_SCOPE("UI", graph);
+
+	graph.AddPass("Transitions", RGPassFlag::NeverCull)
 		.Bind([=](CommandContext& context)
 			{
-				context.InsertResourceBarrier(pRenderTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
-				context.BeginRenderPass(RenderPassInfo(pRenderTarget, RenderPassAccess::Load_Store, nullptr, RenderPassAccess::NoAccess, false));
-				ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), context.GetCommandList());
-				context.EndRenderPass();
+				ImDrawData* pDrawData = ImGui::GetDrawData();
+				ImVec2 clip_off = pDrawData->DisplayPos;
+				for (int cmdList = 0; cmdList < pDrawData->CmdListsCount; ++cmdList)
+				{
+					const ImDrawList* pList = pDrawData->CmdLists[cmdList];
+					for (int cmd = 0; cmd < pList->CmdBuffer.Size; ++cmd)
+					{
+						const ImDrawCmd* pCmd = &pList->CmdBuffer[cmd];
+						Texture* pTexture = (Texture*)pCmd->GetTexID();
+						if (pTexture)
+						{
+							context.InsertResourceBarrier(pTexture, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+						}
+					}
+				}
 			});
 
-	// Update and Render additional Platform Windows
-	ImGuiIO& io = ImGui::GetIO();
-	if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
-	{
-		graph.AddPass("Update Platform UI", RGPassFlag::Raster | RGPassFlag::NeverCull | RGPassFlag::NoRenderPass)
-			.Bind([=](CommandContext& context)
+	graph.AddPass("Render", RGPassFlag::Raster)
+		.RenderTarget(pRenderTarget, RenderTargetLoadAction::Load)
+		.Bind([=](CommandContext& context)
+			{
+				context.SetGraphicsRootSignature(gImGuiRS);
+				context.SetPipelineState(gImGuiPSO);
+
+				ImDrawData* pDrawData = ImGui::GetDrawData();
+
+				const FloatRect vp(
+					pDrawData->DisplayPos.x,
+					pDrawData->DisplayPos.y,
+					pDrawData->DisplayPos.x + pDrawData->DisplaySize.x,
+					pDrawData->DisplayPos.y + pDrawData->DisplaySize.y);
+
+				context.SetViewport(vp);
+
+				Matrix projection = Math::CreateOrthographicOffCenterMatrix(vp.Left, vp.Right, vp.Bottom, vp.Top, 0, 1);
+				context.SetRootCBV(0, projection);
+
+				uint32 vertexOffset = 0;
+				DynamicAllocation vertexData = context.AllocateTransientMemory(sizeof(ImDrawVert) * pDrawData->TotalVtxCount);
+				context.SetVertexBuffers(VertexBufferView(vertexData.GpuHandle, pDrawData->TotalVtxCount, sizeof(ImDrawVert), 0));
+
+				uint32 indexOffset = 0;
+				DynamicAllocation indexData = context.AllocateTransientMemory(sizeof(ImDrawIdx) * pDrawData->TotalIdxCount);
+				context.SetIndexBuffer(IndexBufferView(indexData.GpuHandle, pDrawData->TotalIdxCount, ResourceFormat::R16_UINT, 0));
+
+				ImVec2 clipOff = pDrawData->DisplayPos;
+				for (int cmdList = 0; cmdList < pDrawData->CmdListsCount; ++cmdList)
 				{
-					ImGui::RenderPlatformWindowsDefault(NULL, (void*)context.GetCommandList());
-				});
-	}
-	ImGui::Render();
-	ImGui::UpdatePlatformWindows();
+					const ImDrawList* pList = pDrawData->CmdLists[cmdList];
+
+					memcpy((char*)vertexData.pMappedMemory + vertexOffset * sizeof(ImDrawVert), pList->VtxBuffer.Data, pList->VtxBuffer.Size * sizeof(ImDrawVert));
+					memcpy((char*)indexData.pMappedMemory + indexOffset * sizeof(ImDrawIdx), pList->IdxBuffer.Data, pList->IdxBuffer.Size * sizeof(ImDrawIdx));
+
+					for (int cmd = 0; cmd < pList->CmdBuffer.Size; ++cmd)
+					{
+						const ImDrawCmd* pCmd = &pList->CmdBuffer[cmd];
+						if (pCmd->UserCallback)
+						{
+							pCmd->UserCallback(pList, pCmd);
+						}
+						else
+						{
+							ImVec2 clip_min(pCmd->ClipRect.x - clipOff.x, pCmd->ClipRect.y - clipOff.y);
+							ImVec2 clip_max(pCmd->ClipRect.z - clipOff.x, pCmd->ClipRect.w - clipOff.y);
+							if (clip_max.x <= clip_min.x || clip_max.y <= clip_min.y)
+								continue;
+
+							Texture* pTexture = (Texture*)pCmd->GetTexID();
+							if (!pTexture)
+								pTexture = gFontTexture;
+
+							context.BindResources(1, pTexture->GetSRV());
+							context.SetScissorRect(FloatRect(clip_min.x, clip_min.y, clip_max.x, clip_max.y));
+							context.DrawIndexedInstanced(pCmd->ElemCount, pCmd->IdxOffset + indexOffset, 1, pCmd->VtxOffset + vertexOffset, 0);
+						}
+					}
+
+					vertexOffset += pList->VtxBuffer.Size;
+					indexOffset += pList->IdxBuffer.Size;
+				}
+			});
+
 }

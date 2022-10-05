@@ -1634,7 +1634,7 @@ void DemoApp::Update()
 		}
 
 		Texture* pBackbuffer = m_pSwapchain->GetBackBuffer();
-		ImGuiRenderer::Render(graph, pBackbuffer);
+		ImGuiRenderer::Render(graph, graph.ImportTexture(pBackbuffer));
 
 		graph.AddPass("Transition", RGPassFlag::NeverCull)
 			.Read(sceneTextures.pColorTarget)
