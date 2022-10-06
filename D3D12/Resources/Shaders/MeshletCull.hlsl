@@ -8,25 +8,25 @@
 #define OCCLUSION_FIRST_PASS 1
 #endif
 
-struct VisibleCluster
+struct MeshletCandidate
 {
     uint InstanceID;
-    uint ClusterIndex;
+    uint MeshletIndex;
 };
 
-RWStructuredBuffer<VisibleCluster> uClustersToProcess : register(u0);
-RWBuffer<uint> uCounter_ClustersToProcess : register(u1);
+RWStructuredBuffer<MeshletCandidate> uMeshletsToProcess : register(u0);
+RWBuffer<uint> uCounter_MeshletsToProcess : register(u1);
 
 RWStructuredBuffer<uint> uCulledInstances : register(u2);
 RWBuffer<uint> uCounter_CulledInstances : register(u3);
 
-RWStructuredBuffer<VisibleCluster> uCulledClusters : register(u4);
-RWBuffer<uint> uCounter_CulledClusters : register(u5);
+RWStructuredBuffer<MeshletCandidate> uCulledMeshlets : register(u4);
+RWBuffer<uint> uCounter_CulledMeshlets : register(u5);
 
 RWStructuredBuffer<D3D12_DISPATCH_ARGUMENTS> uDispatchArguments : register(u0);
 
-StructuredBuffer<VisibleCluster> tClustersToProcess : register(t0);
-Buffer<uint> tCounter_ClustersToProcess : register(t1);
+StructuredBuffer<MeshletCandidate> tMeshletsToProcess : register(t0);
+Buffer<uint> tCounter_MeshletsToProcess : register(t1);
 
 StructuredBuffer<uint> tInstancesToProcess : register(t0);
 Buffer<uint> tCounter_CulledInstances : register(t1);
@@ -78,13 +78,13 @@ void CullInstancesCS(uint threadID : SV_DispatchThreadID)
     if(isVisible && wasVisible)
     {
         uint elementOffset;
-        InterlockedAdd_Varying_WaveOps(uCounter_ClustersToProcess, 0, mesh.MeshletCount, elementOffset);
+        InterlockedAdd_Varying_WaveOps(uCounter_MeshletsToProcess, 0, mesh.MeshletCount, elementOffset);
         for(uint i = 0; i < mesh.MeshletCount; ++i)
         {
-            VisibleCluster cluster;
-            cluster.InstanceID = instance.ID;
-            cluster.ClusterIndex = i;
-            uClustersToProcess[elementOffset + i] = cluster;
+            MeshletCandidate meshlet;
+            meshlet.InstanceID = instance.ID;
+            meshlet.MeshletIndex = i;
+            uMeshletsToProcess[elementOffset + i] = meshlet;
         }
     }
 }
@@ -94,7 +94,7 @@ void CullInstancesCS(uint threadID : SV_DispatchThreadID)
 [numthreads(1, 1, 1)]
 void BuildMeshShaderIndirectArgs(uint threadID : SV_DispatchThreadID)
 {
-    uint numMeshlets = tCounter_ClustersToProcess[0];
+    uint numMeshlets = tCounter_MeshletsToProcess[0];
     D3D12_DISPATCH_ARGUMENTS args;
     args.ThreadGroupCountX = DivideAndRoundUp(numMeshlets, NUM_AS_THREADS);
     args.ThreadGroupCountY = 1;
@@ -115,7 +115,7 @@ void BuildInstanceCullIndirectArgs(uint threadID : SV_DispatchThreadID)
 
 struct PayloadData
 {
-	uint InstanceIndices[NUM_AS_THREADS];
+	uint InstanceIDs[NUM_AS_THREADS];
 	uint MeshletIndices[NUM_AS_THREADS];
 };
 
@@ -127,12 +127,12 @@ void CullAndDrawMeshletsAS(uint threadID : SV_DispatchThreadID)
 {
 	bool shouldSubmit = false;
 
-	if(threadID < tCounter_ClustersToProcess[0])
+	if(threadID < tCounter_MeshletsToProcess[0])
 	{
-		VisibleCluster cluster = tClustersToProcess[threadID];
-		InstanceData instance = GetInstance(cluster.InstanceID);
+		MeshletCandidate meshlet = tMeshletsToProcess[threadID];
+		InstanceData instance = GetInstance(meshlet.InstanceID);
 		MeshData mesh = GetMesh(instance.MeshIndex);
-		MeshletBounds bounds = BufferLoad<MeshletBounds>(mesh.BufferIndex, cluster.ClusterIndex, mesh.MeshletBoundsOffset);
+		MeshletBounds bounds = BufferLoad<MeshletBounds>(mesh.BufferIndex, meshlet.MeshletIndex, mesh.MeshletBoundsOffset);
 
 		float4x4 world = instance.LocalToWorld;
 		float4 center = mul(float4(bounds.Center, 1), world);
@@ -155,8 +155,8 @@ void CullAndDrawMeshletsAS(uint threadID : SV_DispatchThreadID)
 			if(!wasVisible)
 			{
 				uint elementOffset;
-				InterlockedAdd_WaveOps(uCounter_CulledClusters, 0, elementOffset);
-				uCulledClusters[elementOffset] = cluster;
+				InterlockedAdd_WaveOps(uCounter_CulledMeshlets, 0, elementOffset);
+				uCulledMeshlets[elementOffset] = meshlet;
 			}
 #else
 			isVisible = HZBCull(cullData, tHZB);
@@ -167,8 +167,8 @@ void CullAndDrawMeshletsAS(uint threadID : SV_DispatchThreadID)
 		if(shouldSubmit)
 		{
 			uint index = WavePrefixCountBits(shouldSubmit);
-			gsPayload.InstanceIndices[index] = cluster.InstanceID;
-			gsPayload.MeshletIndices[index] = cluster.ClusterIndex;
+			gsPayload.InstanceIDs[index] = meshlet.InstanceID;
+			gsPayload.MeshletIndices[index] = meshlet.MeshletIndex;
 		}
 	}
 
@@ -213,7 +213,7 @@ void MSMain(
 	out indices uint3 triangles[MESHLET_MAX_TRIANGLES],
 	out primitives PrimitiveAttribute primitives[MESHLET_MAX_TRIANGLES])
 {
-	uint instanceID = payload.InstanceIndices[groupID];
+	uint instanceID = payload.InstanceIDs[groupID];
 	uint meshletIndex = payload.MeshletIndices[groupID];
 
 	InstanceData instance = GetInstance(instanceID);
