@@ -107,7 +107,7 @@ void AccelerationStructure::Build(CommandContext& context, const SceneView& view
 
 				pCmd->BuildRaytracingAccelerationStructure(&asDesc, 0, nullptr);
 
-				pMesh->pBLAS = pBLAS.Detach();
+				pMesh->pBLAS = pBLAS;
 				m_QueuedRequests.push_back(&pMesh->pBLAS);
 			}
 
@@ -145,7 +145,7 @@ void AccelerationStructure::Build(CommandContext& context, const SceneView& view
 			ProcessCompaction(context);
 		}
 
-		if(!blasInstances.empty())
+		if(!blasInstances.empty() || !m_pTLAS)
 		{
 			GPU_PROFILE_SCOPE("TLAS Data Generation", &context);
 
@@ -158,33 +158,36 @@ void AccelerationStructure::Build(CommandContext& context, const SceneView& view
 			D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO info{};
 			pDevice->GetRaytracingDevice()->GetRaytracingAccelerationStructurePrebuildInfo(&prebuildInfo, &info);
 
-			uint32 numInstances = Math::AlignUp((uint32)blasInstances.size(), 128u);
-			if (!m_pBLASInstancesSourceBuffer || m_pBLASInstancesSourceBuffer->GetNumElements() < numInstances)
-			{
-				m_pBLASInstancesSourceBuffer = pDevice->CreateBuffer(BufferDesc::CreateStructured(numInstances, sizeof(D3D12_RAYTRACING_INSTANCE_DESC)), "TLAS.BLASInstanceTargetDescs");
-				m_pBLASInstancesTargetBuffer = pDevice->CreateBuffer(BufferDesc::CreateStructured(numInstances, sizeof(D3D12_RAYTRACING_INSTANCE_DESC)), "TLAS.BLASInstanceTargetDescs");
-			}
-
-			context.InsertResourceBarrier(m_pBLASInstancesSourceBuffer, D3D12_RESOURCE_STATE_COPY_DEST);
-			context.WriteBuffer(m_pBLASInstancesSourceBuffer, blasInstances.data(), sizeof(BLASInstance) * blasInstances.size());
-			context.InsertResourceBarrier(m_pBLASInstancesSourceBuffer, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-
 			if (!m_pTLAS || m_pTLAS->GetSize() < info.ResultDataMaxSizeInBytes)
 			{
 				m_pScratch = pDevice->CreateBuffer(BufferDesc::CreateByteAddress(Math::AlignUp<uint64>(info.ScratchDataSizeInBytes, D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BYTE_ALIGNMENT)), "TLAS.ScratchBuffer");
 				m_pTLAS = pDevice->CreateBuffer(BufferDesc::CreateTLAS(Math::AlignUp<uint64>(info.ResultDataMaxSizeInBytes, D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BYTE_ALIGNMENT)), "TLAS.Buffer");
 			}
 
-			context.SetComputeRootSignature(gCommonRS);
-			context.SetPipelineState(gUpdateTLASPSO);
-			context.SetRootConstants(0, (uint32)blasInstances.size());
-			context.SetRootCBV(1, Renderer::GetViewUniforms(&view));
-			context.BindResources(2, m_pBLASInstancesTargetBuffer->GetUAV());
-			context.BindResources(3, m_pBLASInstancesSourceBuffer->GetSRV());
-			context.Dispatch(ComputeUtils::GetNumThreadGroups((uint32)blasInstances.size(), 32));
+			uint32 numInstances = Math::AlignUp(Math::Max(1u, (uint32)blasInstances.size()), 128u);
+			if (!m_pBLASInstancesSourceBuffer || m_pBLASInstancesSourceBuffer->GetNumElements() < numInstances)
+			{
+				m_pBLASInstancesSourceBuffer = pDevice->CreateBuffer(BufferDesc::CreateStructured(numInstances, sizeof(D3D12_RAYTRACING_INSTANCE_DESC)), "TLAS.BLASInstanceTargetDescs");
+				m_pBLASInstancesTargetBuffer = pDevice->CreateBuffer(BufferDesc::CreateStructured(numInstances, sizeof(D3D12_RAYTRACING_INSTANCE_DESC)), "TLAS.BLASInstanceTargetDescs");
+			}
+			
+			if (!blasInstances.empty())
+			{
+				context.InsertResourceBarrier(m_pBLASInstancesSourceBuffer, D3D12_RESOURCE_STATE_COPY_DEST);
+				context.WriteBuffer(m_pBLASInstancesSourceBuffer, blasInstances.data(), sizeof(BLASInstance) * blasInstances.size());
+				context.InsertResourceBarrier(m_pBLASInstancesSourceBuffer, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
-			context.InsertUavBarrier(m_pBLASInstancesTargetBuffer);
-			context.FlushResourceBarriers();
+				context.SetComputeRootSignature(gCommonRS);
+				context.SetPipelineState(gUpdateTLASPSO);
+				context.SetRootConstants(0, (uint32)blasInstances.size());
+				context.SetRootCBV(1, Renderer::GetViewUniforms(&view));
+				context.BindResources(2, m_pBLASInstancesTargetBuffer->GetUAV());
+				context.BindResources(3, m_pBLASInstancesSourceBuffer->GetSRV());
+				context.Dispatch(ComputeUtils::GetNumThreadGroups((uint32)blasInstances.size(), 32));
+
+				context.InsertUavBarrier(m_pBLASInstancesTargetBuffer);
+				context.FlushResourceBarriers();
+			}
 		}
 
 		{
@@ -225,19 +228,18 @@ void AccelerationStructure::ProcessCompaction(CommandContext& context)
 		}
 
 		const uint64* pPostCompactSizes = static_cast<uint64*>(m_pPostBuildInfoReadbackBuffer->GetMappedData());
-		for (Buffer** pSourceBLAS: m_ActiveRequests)
+		for (RefCountPtr<Buffer>* pSourceBLAS: m_ActiveRequests)
 		{
 			uint64 size = *pPostCompactSizes++;
 			RefCountPtr<Buffer> pTargetBLAS = context.GetParent()->CreateBuffer(BufferDesc::CreateBLAS(size), "BLAS.Compacted");
 			context.GetRaytracingCommandList()->CopyRaytracingAccelerationStructure(pTargetBLAS->GetGpuHandle(), (*pSourceBLAS)->GetGpuHandle(), D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_COMPACT);
-			delete *pSourceBLAS;
-			*pSourceBLAS = pTargetBLAS.Detach();
+			*pSourceBLAS = pTargetBLAS;
 		}
 		//E_LOG(Info, "Compacted %d BLAS instances", m_ActiveRequests.size());
 		m_ActiveRequests.clear();
 	}
 
-	for (Buffer** pSourceBLAS : m_QueuedRequests)
+	for (RefCountPtr<Buffer>* pSourceBLAS : m_QueuedRequests)
 	{
 		m_ActiveRequests.push_back(pSourceBLAS);
 		if (m_ActiveRequests.size() >= Tweakables::gMaxNumCompactionsPerFrame)
@@ -259,7 +261,7 @@ void AccelerationStructure::ProcessCompaction(CommandContext& context)
 
 		std::vector<D3D12_GPU_VIRTUAL_ADDRESS> blasAddresses;
 		blasAddresses.reserve(m_ActiveRequests.size());
-		for (Buffer** pSourceBLAS : m_ActiveRequests)
+		for (RefCountPtr<Buffer>* pSourceBLAS : m_ActiveRequests)
 		{
 			blasAddresses.push_back((*pSourceBLAS)->GetGpuHandle());
 		}

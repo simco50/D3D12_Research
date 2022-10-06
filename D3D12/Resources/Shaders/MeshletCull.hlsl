@@ -32,6 +32,9 @@ Buffer<uint> tCounter_CulledInstances : register(t1);
 
 Texture2D<float> tHZB : register(t2);
 
+#define WAVE_OPS 1
+
+#if WAVE_OPS
 template<typename T>
 void InterlockedAdd_WaveOps(T bufferResource, uint elementIndex, out uint originalValue)
 {
@@ -40,6 +43,28 @@ void InterlockedAdd_WaveOps(T bufferResource, uint elementIndex, out uint origin
 		InterlockedAdd(bufferResource[elementIndex], numValues, originalValue);
 	originalValue = WaveReadLaneFirst(originalValue) + WavePrefixCountBits(true);
 }
+
+template<typename T>
+void InterlockedAdd_Varying_WaveOps(T bufferResource, uint elementIndex, uint numValues, out uint originalValue)
+{
+	uint count = WaveActiveSum(numValues);
+	if(WaveIsFirstLane())
+		InterlockedAdd(bufferResource[elementIndex], count, originalValue);
+	originalValue = WaveReadLaneFirst(originalValue) + WavePrefixSum(numValues);
+}
+#else
+template<typename T>
+void InterlockedAdd_WaveOps(T bufferResource, uint elementIndex, out uint originalValue)
+{
+	InterlockedAdd(bufferResource[elementIndex], originalValue);
+}
+
+template<typename T>
+void InterlockedAdd_Varying_WaveOps(T bufferResource, uint elementIndex, uint numValues, out uint originalValue)
+{
+	InterlockedAdd(bufferResource[elementIndex], originalValue);
+}
+#endif
 
 [numthreads(64, 1, 1)]
 void CullInstancesCS(uint threadID : SV_DispatchThreadID)
@@ -61,7 +86,7 @@ void CullInstancesCS(uint threadID : SV_DispatchThreadID)
     InstanceData instance = GetInstance(tInstancesToProcess[threadID]);
 #endif
 
-    MeshData mesh = GetMesh(instance.ID);
+    MeshData mesh = GetMesh(instance.MeshIndex);
 
 	FrustumCullData cullData = FrustumCull(instance.BoundsOrigin, instance.BoundsExtents, cView.ViewProjection);
 	bool isVisible = cullData.IsVisible;
@@ -86,7 +111,7 @@ void CullInstancesCS(uint threadID : SV_DispatchThreadID)
     if(isVisible && wasVisible)
     {
         uint elementOffset;
-        InterlockedAdd(uCounter_ClustersToProcess[0], mesh.MeshletCount, elementOffset);
+        InterlockedAdd_Varying_WaveOps(uCounter_ClustersToProcess, 0, mesh.MeshletCount, elementOffset);
         for(uint i = 0; i < mesh.MeshletCount; ++i)
         {
             VisibleCluster cluster;
@@ -139,7 +164,7 @@ void CullAndDrawMeshletsAS(uint threadID : SV_DispatchThreadID)
 	{
 		VisibleCluster cluster = tClustersToProcess[threadID];
 		InstanceData instance = GetInstance(cluster.InstanceID);
-		MeshData mesh = GetMesh(instance.ID);
+		MeshData mesh = GetMesh(instance.MeshIndex);
 		MeshletBounds bounds = BufferLoad<MeshletBounds>(mesh.BufferIndex, cluster.ClusterIndex, mesh.MeshletBoundsOffset);
 
 		float4x4 world = instance.LocalToWorld;
@@ -200,11 +225,12 @@ struct VertexAttribute
 
 VertexAttribute FetchVertexAttributes(MeshData mesh, float4x4 world, uint vertexId)
 {
-	VertexAttribute result;
+	VertexAttribute result = (VertexAttribute)0;
 	float3 Position = BufferLoad<float3>(mesh.BufferIndex, vertexId, mesh.PositionsOffset);
 	float3 positionWS = mul(float4(Position, 1.0f), world).xyz;
 	result.Position = mul(float4(positionWS, 1.0f), cView.ViewProjection);
-	result.UV = UnpackHalf2(BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.UVsOffset));
+	if(mesh.UVsOffset != 0xFFFFFFFF)
+		result.UV = UnpackHalf2(BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.UVsOffset));
 	return result;
 }
 

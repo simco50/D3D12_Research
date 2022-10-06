@@ -31,7 +31,7 @@ struct SubMesh
 	BoundingBox Bounds;
 	Mesh* pParent = nullptr;
 
-	Buffer* pBLAS = nullptr;
+	RefCountPtr<Buffer> pBLAS;
 };
 
 struct SubMeshInstance

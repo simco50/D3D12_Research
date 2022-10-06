@@ -23,10 +23,6 @@
 
 Mesh::~Mesh()
 {
-	for (SubMesh& subMesh : m_Meshes)
-	{
-		subMesh.Destroy();
-	}
 }
 
 bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* pContext, float uniformScale /*= 1.0f*/)
@@ -470,7 +466,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 		meshData.MeshletVertices.resize(last.vertex_offset + last.vertex_count);
 		meshData.Meshlets.resize(meshlet_count);
 		meshData.MeshletBounds.resize(meshlet_count);
-		meshData.MeshletTriangles.resize(meshlet_triangles.size());
+		meshData.MeshletTriangles.resize(meshlet_triangles.size() / 3);
 
 		uint32 triangleOffset = 0;
 		for (size_t i = 0; i < meshlet_count; ++i)
@@ -500,7 +496,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 			outMeshlet.TriangleOffset = triangleOffset;
 			outMeshlet.VertexCount = meshlet.vertex_count;
 			outMeshlet.VertexOffset = meshlet.vertex_offset;
-			triangleOffset += meshlet.triangle_count * 3;
+			triangleOffset += meshlet.triangle_count;
 		}
 		meshData.MeshletTriangles.resize(triangleOffset);
 
@@ -546,17 +542,20 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 		subMesh.NormalStreamLocation = VertexBufferView(m_pGeometryData->GetGpuHandle() + dataOffset, (uint32)meshData.NormalsStream.size(), sizeof(VS_Normal), dataOffset);
 		CopyData(meshData.NormalsStream.data(), sizeof(VS_Normal) * meshData.NormalsStream.size());
 
-		if (meshData.ColorsStream.size() > 0)
+		if (!meshData.ColorsStream.empty())
 		{
 			subMesh.ColorsStreamLocation = VertexBufferView(m_pGeometryData->GetGpuHandle() + dataOffset, (uint32)meshData.ColorsStream.size(), sizeof(uint32), dataOffset);
 			CopyData(meshData.ColorsStream.data(), sizeof(uint32) * meshData.ColorsStream.size());
 		}
 
-		subMesh.UVStreamLocation = VertexBufferView(m_pGeometryData->GetGpuHandle() + dataOffset, (uint32)meshData.UVsStream.size(), sizeof(VS_UV), dataOffset);
-		std::vector<VS_UV> uvStream;
-		uvStream.reserve(meshData.UVsStream.size());
-		Utils::Transform(meshData.UVsStream, uvStream, [](const Vector2& value) -> VS_UV { return { PackedVector2(value.x, value.y) }; });
-		CopyData(uvStream.data(), sizeof(VS_UV)* uvStream.size());
+		if (!meshData.UVsStream.empty())
+		{
+			subMesh.UVStreamLocation = VertexBufferView(m_pGeometryData->GetGpuHandle() + dataOffset, (uint32)meshData.UVsStream.size(), sizeof(VS_UV), dataOffset);
+			std::vector<VS_UV> uvStream;
+			uvStream.reserve(meshData.UVsStream.size());
+			Utils::Transform(meshData.UVsStream, uvStream, [](const Vector2& value) -> VS_UV { return { PackedVector2(value.x, value.y) }; });
+			CopyData(uvStream.data(), sizeof(VS_UV) * uvStream.size());
+		}
 
 		if (meshData.PositionsStream.size() < std::numeric_limits<uint16>::max())
 		{
@@ -595,7 +594,3 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 	return true;
 }
 
-void SubMesh::Destroy()
-{
-	delete pBLAS;
-}

@@ -24,6 +24,6 @@ private:
 	RefCountPtr<Buffer> m_pPostBuildInfoBuffer;
 	RefCountPtr<Buffer> m_pPostBuildInfoReadbackBuffer;
 	SyncPoint m_PostBuildInfoFence;
-	std::vector<Buffer**> m_QueuedRequests;
-	std::vector<Buffer**> m_ActiveRequests;
+	std::vector<RefCountPtr<Buffer>*> m_QueuedRequests;
+	std::vector<RefCountPtr<Buffer>*> m_ActiveRequests;
 };
