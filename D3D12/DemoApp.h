@@ -20,6 +20,7 @@ class StateObject;
 class RGGraph;
 class RGResourcePool;
 class Clouds;
+class VisibilityBuffer;
 struct SubMesh;
 struct Material;
 
@@ -54,9 +55,6 @@ private:
 	void LoadMesh(const std::string& filePath, CommandContext& context, World& world);
 	void CreateShadowViews(SceneView& view, World& world);
 	
-	void BuildHZB(RGGraph& graph, RGTexture* pDepth, RGTexture** pOutHZB, const SceneView* pView);
-	void RenderVisibilityBufferGPUDriven(RGGraph& graph, GraphicsDevice* pDevice, SceneTextures& sceneTextures, const SceneView* pView);
-
 	RefCountPtr<GraphicsDevice> m_pDevice;
 	RefCountPtr<SwapChain> m_pSwapchain;
 	std::unique_ptr<RGResourcePool> m_RenderGraphPool;
@@ -78,6 +76,7 @@ private:
 	std::unique_ptr<CBTTessellation> m_pCBTTessellation;
 	std::unique_ptr<GpuParticles> m_pParticles;
 	std::unique_ptr<Clouds> m_pClouds;
+	std::unique_ptr<VisibilityBuffer> m_pVisibilityBuffer;
 
 	WindowHandle m_Window = nullptr;
 	std::unique_ptr<Camera> m_pCamera;
@@ -153,9 +152,6 @@ private:
 	RefCountPtr<PipelineState> m_pDDGIUpdateProbeStatesPSO;
 	RefCountPtr<PipelineState> m_pDDGIVisualizePSO;
 
-	//HZB
-	RefCountPtr<PipelineState> m_pHZBCreatePSO;
-	
 	// Debug Visualize
 	RefCountPtr<PipelineState> m_pVisualizeTexturePSO;
 	struct TextureVisualizeData

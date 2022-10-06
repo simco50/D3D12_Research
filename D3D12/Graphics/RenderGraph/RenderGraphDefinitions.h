@@ -3,6 +3,8 @@
 #include "Graphics/RHI/Texture.h"
 #include "Graphics/RHI/Buffer.h"
 
+class RGGraph;
+
 enum class RGResourceType
 {
 	Texture,
