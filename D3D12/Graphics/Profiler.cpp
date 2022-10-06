@@ -179,7 +179,7 @@ void Profiler::DrawImGui()
 	ImGui::Spacing();
 	if (ImGui::BeginTable("Profiling", 5, ImGuiTableFlags_SizingStretchProp))
 	{
-		ImGui::TableSetupColumn("Event", ImGuiTableColumnFlags_None, 3);
+		ImGui::TableSetupColumn("Event", ImGuiTableColumnFlags_None, 5);
 		ImGui::TableSetupColumn("CPU", ImGuiTableColumnFlags_None, 6);
 		ImGui::TableSetupColumn("CPU (ms)", ImGuiTableColumnFlags_None, 1);
 		ImGui::TableSetupColumn("GPU", ImGuiTableColumnFlags_None, 6);

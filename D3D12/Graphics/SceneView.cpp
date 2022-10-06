@@ -109,7 +109,7 @@ namespace Renderer
 
 	void UploadSceneData(CommandContext& context, SceneView* pView, World* pWorld)
 	{
-		PROFILE_SCOPE("Upload Scene Data");
+		GPU_PROFILE_SCOPE("Upload Scene Data", &context);
 
 		std::vector<ShaderInterop::MaterialData> materials;
 		materials.reserve(128);
