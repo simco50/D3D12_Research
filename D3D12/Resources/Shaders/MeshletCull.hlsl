@@ -119,7 +119,8 @@ void BuildInstanceCullIndirectArgs(uint threadID : SV_DispatchThreadID)
 
 struct PayloadData
 {
-	MeshletCandidate Meshlets[NUM_AS_THREADS];
+	uint InstanceIDs[NUM_AS_THREADS];
+	uint MeshletIndices[NUM_AS_THREADS];
 };
 
 groupshared PayloadData gsPayload;
@@ -170,7 +171,8 @@ void CullAndDrawMeshletsAS(uint threadID : SV_DispatchThreadID)
 		if(shouldSubmit)
 		{
 			uint index = WavePrefixCountBits(shouldSubmit);
-			gsPayload.Meshlets[index] = meshlet;
+			gsPayload.InstanceIDs[index] = meshlet.InstanceID;
+			gsPayload.MeshletIndices[index] = meshlet.MeshletIndex;
 		}
 	}
 
@@ -219,9 +221,8 @@ void MSMain(
 	out indices uint3 triangles[MESHLET_MAX_TRIANGLES],
 	out primitives PrimitiveAttribute primitives[MESHLET_MAX_TRIANGLES])
 {
-	MeshletCandidate candidate = payload.Meshlets[groupID];
-	uint instanceID = candidate.InstanceID;
-	uint meshletIndex = candidate.MeshletIndex;
+	uint meshletIndex = payload.MeshletIndices[groupID];
+	uint instanceID = payload.InstanceIDs[groupID];
 
 	InstanceData instance = GetInstance(instanceID);
 	MeshData mesh = GetMesh(instance.MeshIndex);
