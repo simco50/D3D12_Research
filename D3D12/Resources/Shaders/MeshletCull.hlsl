@@ -8,6 +8,10 @@
 #define OCCLUSION_FIRST_PASS 1
 #endif
 
+#ifndef ALPHA_MASK
+#define ALPHA_MASK 0
+#endif
+
 struct MeshletCandidate
 {
     uint InstanceID;
@@ -115,8 +119,7 @@ void BuildInstanceCullIndirectArgs(uint threadID : SV_DispatchThreadID)
 
 struct PayloadData
 {
-	uint InstanceIDs[NUM_AS_THREADS];
-	uint MeshletIndices[NUM_AS_THREADS];
+	MeshletCandidate Meshlets[NUM_AS_THREADS];
 };
 
 groupshared PayloadData gsPayload;
@@ -167,8 +170,7 @@ void CullAndDrawMeshletsAS(uint threadID : SV_DispatchThreadID)
 		if(shouldSubmit)
 		{
 			uint index = WavePrefixCountBits(shouldSubmit);
-			gsPayload.InstanceIDs[index] = meshlet.InstanceID;
-			gsPayload.MeshletIndices[index] = meshlet.MeshletIndex;
+			gsPayload.Meshlets[index] = meshlet;
 		}
 	}
 
@@ -187,7 +189,9 @@ struct PrimitiveAttribute
 struct VertexAttribute
 {
 	float4 Position : SV_Position;
+#if ALPHA_MASK
 	float2 UV : TEXCOORD;
+#endif
 };
 
 VertexAttribute FetchVertexAttributes(MeshData mesh, float4x4 world, uint vertexId)
@@ -196,8 +200,10 @@ VertexAttribute FetchVertexAttributes(MeshData mesh, float4x4 world, uint vertex
 	float3 Position = BufferLoad<float3>(mesh.BufferIndex, vertexId, mesh.PositionsOffset);
 	float3 positionWS = mul(float4(Position, 1.0f), world).xyz;
 	result.Position = mul(float4(positionWS, 1.0f), cView.ViewProjection);
+#if ALPHA_MASK
 	if(mesh.UVsOffset != 0xFFFFFFFF)
 		result.UV = UnpackHalf2(BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.UVsOffset));
+#endif
 	return result;
 }
 
@@ -213,8 +219,9 @@ void MSMain(
 	out indices uint3 triangles[MESHLET_MAX_TRIANGLES],
 	out primitives PrimitiveAttribute primitives[MESHLET_MAX_TRIANGLES])
 {
-	uint instanceID = payload.InstanceIDs[groupID];
-	uint meshletIndex = payload.MeshletIndices[groupID];
+	MeshletCandidate candidate = payload.Meshlets[groupID];
+	uint instanceID = candidate.InstanceID;
+	uint meshletIndex = candidate.MeshletIndex;
 
 	InstanceData instance = GetInstance(instanceID);
 	MeshData mesh = GetMesh(instance.MeshIndex);
@@ -246,6 +253,14 @@ VisBufferData PSMain(
     VertexAttribute vertexData,
     PrimitiveAttribute primitiveData) : SV_TARGET0
 {
+#if ALPHA_MASK
+	InstanceData instance = GetInstance(primitiveData.InstanceID);
+	MaterialData material = GetMaterial(instance.MaterialIndex);
+	float opacity = Sample2D(material.Diffuse, sMaterialSampler, vertexData.UV).w;
+	if(opacity < material.AlphaCutoff)
+		discard;
+#endif
+
 	VisBufferData Data;
 	Data.ObjectID = primitiveData.InstanceID;
 	Data.PrimitiveID = primitiveData.PrimitiveID;
