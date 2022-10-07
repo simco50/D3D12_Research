@@ -9,6 +9,10 @@
 #include "../Mesh.h"
 #include "Core/ConsoleVariables.h"
 
+#define A_CPU 1
+#include "ffx_a.h"
+#include "ffx_spd.h"
+
 namespace Tweakables
 {
 	extern ConsoleVariable<bool> g_GPUDrivenRenderPhase2;
@@ -19,7 +23,7 @@ VisibilityBuffer::VisibilityBuffer(GraphicsDevice* pDevice)
 	m_pCommonRS = new RootSignature(pDevice);
 	m_pCommonRS->AddRootConstants(0, 8);
 	m_pCommonRS->AddConstantBufferView(100);
-	m_pCommonRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 7);
+	m_pCommonRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 14);
 	m_pCommonRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 6);
 	m_pCommonRS->Finalize("Common");
 
@@ -42,6 +46,8 @@ VisibilityBuffer::VisibilityBuffer(GraphicsDevice* pDevice)
 	m_pBuildCullArgsPhase2PSO = pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "BuildInstanceCullIndirectArgs", { "OCCLUSION_FIRST_PASS=0" });
 	m_pCullInstancesPhase2PSO = pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "CullInstancesCS", { "OCCLUSION_FIRST_PASS=0" });
 
+	pDevice->GetShaderManager()->AddIncludeDir("External/SPD/");
+	m_pHZBInitializePSO = pDevice->CreateComputePipeline(m_pCommonRS, "HZB.hlsl", "HZBInitCS");
 	m_pHZBCreatePSO = pDevice->CreateComputePipeline(m_pCommonRS, "HZB.hlsl", "HZBCreateCS");
 }
 
@@ -60,21 +66,19 @@ void VisibilityBuffer::BuildHZB(RGGraph& graph, RGTexture* pDepth, RGTexture** p
 	RGTexture* pHZB = *pOutHZB;
 
 	Vector2i currentDimensions = hzbDimensions;
-
-	struct Parameters
-	{
-		Vector2 DimensionsInv;
-	};
-
 	graph.AddPass("HZB Create", RGPassFlag::Compute)
 		.Read(pDepth)
 		.Write(pHZB)
 		.Bind([=](CommandContext& context)
 			{
 				context.SetComputeRootSignature(m_pCommonRS);
-				context.SetPipelineState(m_pHZBCreatePSO);
+				context.SetPipelineState(m_pHZBInitializePSO);
 
-				Parameters parameters;
+				struct
+				{
+					Vector2 DimensionsInv;
+				} parameters;
+
 				parameters.DimensionsInv = Vector2(1.0f / currentDimensions.x, 1.0f / currentDimensions.y);
 				context.SetRootConstants(0, parameters);
 				context.BindResources(2, pHZB->Get()->GetUAV());
@@ -82,31 +86,52 @@ void VisibilityBuffer::BuildHZB(RGGraph& graph, RGTexture* pDepth, RGTexture** p
 				context.Dispatch(ComputeUtils::GetNumThreadGroups(currentDimensions.x, 16, currentDimensions.y, 16));
 			});
 
-	currentDimensions.x >>= 1;
-	currentDimensions.y >>= 1;
+	RGBuffer* pSPDCounter = graph.CreateBuffer("SPD Counter", BufferDesc::CreateByteAddress(sizeof(uint32)));
 
-	for (uint32 mipLevel = 1; mipLevel < hzbMips; ++mipLevel)
-	{
-		graph.AddPass("HZB Reduce", RGPassFlag::Compute)
-			.Write(pHZB)
-			.Bind([=](CommandContext& context)
+	graph.AddPass("HZB Mips", RGPassFlag::Compute)
+		.Write({ pHZB, pSPDCounter })
+		.Bind([=](CommandContext& context)
+			{
+				context.ClearUavUInt(pSPDCounter->Get());
+				context.InsertUavBarrier();
+
+				context.SetComputeRootSignature(m_pCommonRS);
+				context.SetPipelineState(m_pHZBCreatePSO);
+
+				TRect<uint32> rect(0, 0, hzbDimensions.x, hzbDimensions.y);
+
+				Vector2u dispatchThreadGroupCountXY;
+				Vector2u workGroupOffset;
+				Vector2u numWorkGroupsAndMips;
+				uint32 mips = pHZB->GetDesc().Mips;
+
+				SpdSetup(
+					&dispatchThreadGroupCountXY.x,
+					&workGroupOffset.x,
+					&numWorkGroupsAndMips.x,
+					&rect.Left,
+					mips - 1);
+
+				struct
 				{
-					context.SetComputeRootSignature(m_pCommonRS);
-					context.SetPipelineState(m_pHZBCreatePSO);
+					uint32 NumMips;
+					uint32 NumWorkGroups;
+					Vector2u WorkGroupOffset;
+				} parameters;
+				parameters.NumMips = numWorkGroupsAndMips[1];
+				parameters.NumWorkGroups = numWorkGroupsAndMips[0];
+				parameters.WorkGroupOffset.x = workGroupOffset[0];
+				parameters.WorkGroupOffset.y = workGroupOffset[1];
 
-					Parameters parameters;
-					parameters.DimensionsInv = Vector2(1.0f / currentDimensions.x, 1.0f / currentDimensions.y);
-					context.SetRootConstants(0, parameters);
-					RefCountPtr<UnorderedAccessView> pUAV = context.GetParent()->CreateUAV(pHZB->Get(), TextureUAVDesc((uint8)mipLevel));
-					context.BindResources(2, pUAV.Get());
-					RefCountPtr<ShaderResourceView> pSRV = context.GetParent()->CreateSRV(pHZB->Get(), TextureSRVDesc((uint8)mipLevel - 1, 1));
-					context.BindResources(3, pSRV.Get());
-					context.Dispatch(ComputeUtils::GetNumThreadGroups(currentDimensions.x, 16, currentDimensions.y, 16));
-				});
-
-		currentDimensions.x >>= 1;
-		currentDimensions.y >>= 1;
-	}
+				context.SetRootConstants(0, parameters);
+				context.BindResources(2, pSPDCounter->Get()->GetUAV(), 0);
+				context.BindResources(2, pHZB->Get()->GetUAV(), 1);
+				for (uint8 mipIndex = 1; mipIndex < mips; ++mipIndex)
+				{
+					context.BindResources(2, context.GetParent()->CreateUAV(pHZB->Get(), TextureUAVDesc(mipIndex)).Get(), mipIndex + 1);
+				}
+				context.Dispatch(dispatchThreadGroupCountXY.x, dispatchThreadGroupCountXY.y);
+			});
 }
 
 RGTexture* VisibilityBuffer::Render(RGGraph& graph, const SceneView* pView, RGTexture* pDepth)

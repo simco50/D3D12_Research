@@ -48,8 +48,10 @@ workspace (ENGINE_NAME)
 	targetdir (ROOT .. "Build/$(ProjectName)_$(Platform)_$(Configuration)")
 	objdir (ROOT .. "Build/Intermediate/$(ProjectName)_$(Platform)_$(Configuration)")
 	
-	--Unreferenced variable
+	-- Unreferenced variable
 	disablewarnings {"4100"}
+	-- unreferenced function with internal linkage has been removed
+	disablewarnings {"4505"}
 	
 	filter "configurations:Debug"
 		runtime "Debug"
