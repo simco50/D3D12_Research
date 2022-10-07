@@ -55,7 +55,7 @@ void VisibilityBuffer::BuildHZB(RGGraph& graph, RGTexture* pDepth, RGTexture** p
 	const Vector2i hzbDimensions(1 << hzbMipsX, 1 << hzbMipsY);
 	if (*pOutHZB == nullptr)
 	{
-		*pOutHZB = graph.CreateTexture(Sprintf("HZB (%s)", pDepth->GetName()).c_str(), TextureDesc::Create2D(hzbDimensions.x, hzbDimensions.y, ResourceFormat::RG32_UINT, TextureFlag::UnorderedAccess, 1, hzbMips));
+		*pOutHZB = graph.CreateTexture(Sprintf("HZB (%s)", pDepth->GetName()).c_str(), TextureDesc::Create2D(hzbDimensions.x, hzbDimensions.y, ResourceFormat::R32_FLOAT, TextureFlag::UnorderedAccess, 1, hzbMips));
 	}
 	RGTexture* pHZB = *pOutHZB;
 
