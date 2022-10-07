@@ -20,6 +20,8 @@ class StateObject;
 class RGGraph;
 class RGResourcePool;
 class Clouds;
+class PipelineState;
+class GPUDebugRenderer;
 struct SubMesh;
 struct Material;
 
@@ -75,6 +77,7 @@ private:
 	std::unique_ptr<CBTTessellation> m_pCBTTessellation;
 	std::unique_ptr<GpuParticles> m_pParticles;
 	std::unique_ptr<Clouds> m_pClouds;
+	std::unique_ptr<GPUDebugRenderer> m_pGPUDebugRenderer;
 
 	WindowHandle m_Window = nullptr;
 	std::unique_ptr<Camera> m_pCamera;

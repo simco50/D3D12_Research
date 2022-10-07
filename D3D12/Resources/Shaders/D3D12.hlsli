@@ -17,3 +17,11 @@ struct D3D12_RAYTRACING_INSTANCE_DESC
     uint Flags : 8;
     D3D12_GPU_VIRTUAL_ADDRESS AccelerationStructure;
 };
+
+struct D3D12_DRAW_ARGUMENTS
+{
+    uint VertexCountPerInstance;
+    uint InstanceCount;
+    uint StartVertexLocation;
+    uint StartInstanceLocation;
+} ;

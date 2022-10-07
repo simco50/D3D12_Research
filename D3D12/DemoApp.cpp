@@ -23,6 +23,7 @@
 #include "Graphics/Techniques/SSAO.h"
 #include "Graphics/Techniques/CBTTessellation.h"
 #include "Graphics/Techniques/Clouds.h"
+#include "Graphics/Techniques/GPUDebugRenderer.h"
 #include "Graphics/ImGuiRenderer.h"
 #include "Core/TaskQueue.h"
 #include "Core/CommandLine.h"
@@ -190,6 +191,12 @@ DemoApp::DemoApp(WindowHandle window, const Vector2i& windowRect)
 	m_pParticles = std::make_unique<GpuParticles>(m_pDevice);
 	m_pPathTracing = std::make_unique<PathTracing>(m_pDevice);
 	m_pCBTTessellation = std::make_unique<CBTTessellation>(m_pDevice);
+
+	FontCreateSettings fontSettings;
+	fontSettings.pName = "Verdana";
+	fontSettings.Height = 24;
+	fontSettings.Bold = true;
+	m_pGPUDebugRenderer = std::make_unique<GPUDebugRenderer>(m_pDevice, fontSettings);
 
 	Profiler::Get()->Initialize(m_pDevice);
 	DebugRenderer::Get()->Initialize(m_pDevice);
@@ -1328,6 +1335,8 @@ void DemoApp::Update()
 					});
 		}
 	}
+
+	m_pGPUDebugRenderer->Render(graph, sceneTextures.pColorTarget);
 
 	RGTexture* pFinalOutput = graph.ImportTexture(m_ColorOutput);
 

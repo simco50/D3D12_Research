@@ -1,4 +1,7 @@
 #include "Common.hlsli"
+#include "D3D12.hlsli"
+#include "GPUFont.hlsli"
+#include "Random.hlsli"
 
 struct Line
 {
@@ -83,43 +86,44 @@ void RasterizeGlyphCS(uint3 threadID : SV_DispatchThreadID)
 	uOutput[pixelIndex + cPass.Location] = shade;
 }
 
-struct Glyph
-{
-	uint2 Location;
-	uint2 Offset;
-	uint2 Dimensions;
-};
+RWStructuredBuffer<D3D12_DRAW_ARGUMENTS> uDrawArgs : register(u0);
+Buffer<uint> tGlyphCounter : register(t0);
 
-struct GlyphInstance
+[numthreads(1, 1, 1)]
+void BuildIndirectDrawArgsCS(uint threadID : SV_DispatchThreadID)
 {
-	float2 Position;
-	uint GlyphIndex;
-	uint padd;
-};
+	D3D12_DRAW_ARGUMENTS args;
+	args.VertexCountPerInstance = 4;
+	args.InstanceCount = tGlyphCounter[0];
+	args.StartVertexLocation = 0;
+	args.StartInstanceLocation = 0;
+	uDrawArgs[0] = args;
+}
 
 struct RenderData
 {
-	GlyphInstance Instances[128];
 	float2 AtlasDimensionsInv;
 	float2 TargetDimensions;
 	float2 TargetDimensionsInv;
 };
 
+ConstantBuffer<RenderData> cData : register(b0);
 Texture2D<float> tFontAtlas : register(t0);
 StructuredBuffer<Glyph> tGlyphData : register(t1);
-ConstantBuffer<RenderData> cData : register(b0);
+StructuredBuffer<GlyphInstance> tGlyphInstances : register(t2);
 
 void RenderGlyphVS(
 	uint vertexID : SV_VertexID,
 	uint instanceID : SV_InstanceID,
 	out float4 position : SV_Position,
-	out float2 uv : TEXCOORD
+	out float2 uv : TEXCOORD,
+	out uint color : COLOR
 	)
 {
-	uv = float2(vertexID % 2,vertexID / 2);
+	uv = float2(vertexID % 2, vertexID / 2);
 
-	GlyphInstance instance = cData.Instances[instanceID];
-	Glyph glyph = tGlyphData[instance.GlyphIndex];
+	GlyphInstance instance = tGlyphInstances[instanceID];
+	Glyph glyph = tGlyphData[instance.Character];
 
 	float2 pos = float2(uv.x, uv.y);
 	pos *= glyph.Dimensions;
@@ -128,13 +132,36 @@ void RenderGlyphVS(
 
 	position = float4(pos * float2(2, -2) + float2(-1, 1), 0, 1);
 	uv = (uv * glyph.Dimensions + glyph.Location) * cData.AtlasDimensionsInv;
+	color = instance.Color;
 }
 
 float4 RenderGlyphPS(
 	float4 position : SV_Position,
-	float2 uv : TEXCOORD
+	float2 uv : TEXCOORD,
+	uint color : COLOR
 	) : SV_Target
 {
 	float alpha = tFontAtlas.SampleLevel(sLinearClamp, uv, 0);
-	return float4(1-alpha.xxx, alpha);
+	float4 c = alpha * UIntToColor(color);
+	return float4(c.rgb, alpha);
+}
+
+struct PokeData
+{
+	uint Value;
+};
+
+ConstantBuffer<PokeData> cPoke : register(b100);
+
+[numthreads(1, 1, 1)]
+void PokeTextCS(uint threadId : SV_DispatchThreadID)
+{
+	float2 position = 50;
+	uint seed = SeedThread(cPoke.Value);
+
+	PrintText('T', 'h', 'e', ' ', position, XORShift(seed));
+	PrintText('A', 'n', 's', 'w', 'e', 'r', position, XORShift(seed));
+	NewLine(position, 50);
+	PrintText('i', 's', '.', '.', '.', ' ', position, XORShift(seed));
+	PrintInt(cPoke.Value, position, XORShift(seed));
 }
