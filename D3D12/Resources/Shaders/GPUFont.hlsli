@@ -20,7 +20,7 @@ struct TextWriter
 	float2 StartLocation;
 	float2 CursorLocation;
 
-	void Character(uint character, uint color)
+	void Text(uint character, uint color)
 	{
 		StructuredBuffer<Glyph> glyphBuffer = ResourceDescriptorHeap[cView.GlyphDataIndex];
 		RWStructuredBuffer<uint> counterBuffer = ResourceDescriptorHeap[cView.GlyphCounterIndex];
@@ -49,14 +49,14 @@ struct TextWriter
 
 	void Text(uint a, uint b, uint color)
 	{
-		Character(a, color);
-		Character(b, color);
+		Text(a, color);
+		Text(b, color);
 	}
 
 	void Text(uint a, uint b, uint c, uint color)
 	{
 		Text(a, b, color);
-		Character(c, color);
+		Text(c, color);
 	}
 
 	void Text(uint a, uint b, uint c, uint d, uint color)
@@ -87,7 +87,7 @@ struct TextWriter
 	{
 		if(value < 0)
 		{
-			Character('-', color);
+			Text('-', color);
 			value = -value;
 		}
 		uint length = value > 0 ? log10(value) + 1 : 1;
@@ -96,7 +96,7 @@ struct TextWriter
 		while(length > 0)
 		{
 			uint digit = value / divider;
-			Character('0' + digit, color);
+			Text('0' + digit, color);
 			--length;
 
 			value = value - digit * divider;
@@ -118,7 +118,7 @@ struct TextWriter
 		{
 			int v0 = floor(abs(value));
 			Int(sign(value) * v0, color);
-			Character('.', color);
+			Text('.', color);
 			int v1 = floor(frac(value) * 10000);
 			Int(v1, color);
 		}
