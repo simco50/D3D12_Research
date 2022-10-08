@@ -7,39 +7,6 @@
 #include "Content/Image.h"
 #include "Graphics/SceneView.h"
 
-struct BinaryReader
-{
-	BinaryReader(const void* pBuffer, uint32 bufferSize)
-		: Size(bufferSize), pBuffer(pBuffer), pCurrent(pBuffer)
-	{}
-
-	template<typename T>
-	const T* Read(uint32* pOutRead = nullptr)
-	{
-		const T* pV = static_cast<const T*>(pCurrent);
-		pCurrent = (char*)pCurrent + sizeof(T);
-		if (pOutRead)
-		{
-			*pOutRead += sizeof(T);
-		}
-		return pV;
-	}
-
-	void Advance(uint32 numBytes)
-	{
-		pCurrent = (char*)pCurrent + numBytes;
-	}
-
-	bool AtTheEnd() const
-	{
-		return (char*)pCurrent >= (char*)pBuffer + Size;
-	}
-
-	uint32 Size;
-	const void* pBuffer;
-	const void* pCurrent;
-};
-
 GPUDebugRenderer::GPUDebugRenderer(GraphicsDevice* pDevice, const FontCreateSettings& fontSettings)
 {
 	m_pCommonRS = new RootSignature(pDevice);
@@ -161,6 +128,39 @@ void GPUDebugRenderer::GetGlobalIndices(GPUDebugRenderData* pData) const
 	pData->RenderDataUAV = m_pRenderDataBuffer->GetUAVIndex();
 	pData->FontDataSRV = m_pGlyphData->GetSRVIndex();
 }
+
+struct BinaryReader
+{
+	BinaryReader(const void* pBuffer, uint32 bufferSize)
+		: Size(bufferSize), pBuffer(pBuffer), pCurrent(pBuffer)
+	{}
+
+	template<typename T>
+	const T* Read(uint32* pOutRead = nullptr)
+	{
+		const T* pV = static_cast<const T*>(pCurrent);
+		pCurrent = (char*)pCurrent + sizeof(T);
+		if (pOutRead)
+		{
+			*pOutRead += sizeof(T);
+		}
+		return pV;
+	}
+
+	void Advance(uint32 numBytes)
+	{
+		pCurrent = (char*)pCurrent + numBytes;
+	}
+
+	bool AtTheEnd() const
+	{
+		return (char*)pCurrent >= (char*)pBuffer + Size;
+	}
+
+	uint32 Size;
+	const void* pBuffer;
+	const void* pCurrent;
+};
 
 bool GPUDebugRenderer::ProcessFont(Font& outFont, const FontCreateSettings& config)
 {
