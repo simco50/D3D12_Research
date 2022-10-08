@@ -83,11 +83,13 @@ GPUDebugRenderer::GPUDebugRenderer(GraphicsDevice* pDevice, const FontCreateSett
 
 void GPUDebugRenderer::Render(RGGraph& graph, RGTexture* pTarget)
 {
+	RG_GRAPH_SCOPE("GPU Debug Render", graph);
+
 #define TESTING 1
 #if TESTING
 	static float testValue = 0.0f;
 	testValue += 0.01f;
-	graph.AddPass("GPU Debug Render Test", RGPassFlag::Compute)
+	graph.AddPass("Text Test", RGPassFlag::Compute)
 		.Bind([=](CommandContext& context)
 			{
 				uint32 value = (uint32)testValue;
@@ -110,7 +112,7 @@ void GPUDebugRenderer::Render(RGGraph& graph, RGTexture* pTarget)
 	RGBuffer* pSubmittedCharactersCounter = graph.ImportBuffer(m_pSubmittedCharactersCounter);
 
 	RGBuffer* pDrawArgs = graph.CreateBuffer("Indirect Draw Args", BufferDesc::CreateIndirectArguments<D3D12_DRAW_ARGUMENTS>(1));
-	graph.AddPass("Render GPU Texture", RGPassFlag::Compute)
+	graph.AddPass("Build Draw Args", RGPassFlag::Compute)
 		.Read(pSubmittedCharactersCounter)
 		.Write(pDrawArgs)
 		.Bind([=](CommandContext& context)
@@ -123,7 +125,7 @@ void GPUDebugRenderer::Render(RGGraph& graph, RGTexture* pTarget)
 				context.Dispatch(1);
 			});
 
-	graph.AddPass("Render GPU Texture", RGPassFlag::Raster)
+	graph.AddPass("Render Text", RGPassFlag::Raster)
 		.Read({ pSubmittedCharacters, pSubmittedCharactersCounter, pDrawArgs })
 		.RenderTarget(pTarget, RenderTargetLoadAction::Load)
 		.Bind([=](CommandContext& context)

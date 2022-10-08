@@ -19,74 +19,109 @@ RWStructuredBuffer<GlyphInstance> uGlyphInstances : register(u0);
 RWBuffer<uint> uGlyphInstancesCounter : register(u1);
 StructuredBuffer<Glyph> tGlyphBuffer : register(t0);
 
-void PrintCharacter(uint character, inout float2 position, uint color = 0xFFFFFFFF)
+struct TextWriter
 {
-	uint offset;
-	InterlockedAdd(uGlyphInstancesCounter[0], 1, offset);
-	GlyphInstance instance = (GlyphInstance)0;
-	instance.Position = position;
-	instance.Character = character;
-	instance.Color = color;
-	uGlyphInstances[offset] = instance;
+	float2 StartLocation;
+	float2 CursorLocation;
 
-	Glyph glyph = tGlyphBuffer[character];
-	position.x += glyph.Width;
-}
-
-void NewLine(inout float2 position, uint x)
-{
-	Glyph glyph = tGlyphBuffer[0];
-	position.y += glyph.Dimensions.y;
-	position.x = x;
-}
-
-void PrintText(uint a, uint b, inout float2 position, uint color = 0xFFFFFFFF)
-{
-	PrintCharacter(a, position, color);
-	PrintCharacter(b, position, color);
-}
-
-void PrintText(uint a, uint b, uint c, inout float2 position, uint color = 0xFFFFFFFF)
-{
-	PrintText(a, b, position, color);
-	PrintCharacter(c, position, color);
-}
-
-void PrintText(uint a, uint b, uint c, uint d, inout float2 position, uint color = 0xFFFFFFFF)
-{
-	PrintText(a, b, position, color);
-	PrintText(c, d, position, color);
-}
-
-void PrintText(uint a, uint b, uint c, uint d, uint e, inout float2 position, uint color = 0xFFFFFFFF)
-{
-	PrintText(a, b, c, position, color);
-	PrintText(d, e, position, color);
-}
-
-void PrintText(uint a, uint b, uint c, uint d, uint e, uint f, inout float2 position, uint color = 0xFFFFFFFF)
-{
-	PrintText(a, b, c, position, color);
-	PrintText(d, e, f, position, color);
-}
-
-void PrintInt(int value, inout float2 position, uint color = 0xFFFFFFFF)
-{
-	if(value < 0)
+	void Character(uint character, uint color)
 	{
-		PrintCharacter('-', position, color);
-		value = -value;
-	}
-	uint length = value > 0 ? log10(value) + 1 : 1;
-	uint divider = round(pow(10, length - 1));
+		Glyph glyph = tGlyphBuffer[character];
 
-	while(length > 0)
+		uint offset;
+		InterlockedAdd(uGlyphInstancesCounter[0], 1, offset);
+		GlyphInstance instance = (GlyphInstance)0;
+		instance.Position = CursorLocation;
+		instance.Character = character;
+		instance.Color = color;
+		uGlyphInstances[offset] = instance;
+
+		CursorLocation.x += glyph.Width;
+	}
+
+	void NewLine()
 	{
-		uint digit = value / divider;
-		PrintCharacter('0' + digit, position, color);
-		--length;
-
-		value = value - digit * divider;
-		divider /= 10;
+		Glyph glyph = tGlyphBuffer[0];
+		CursorLocation.y += glyph.Dimensions.y;
+		CursorLocation.x = StartLocation.x;
 	}
+
+	void Text(uint a, uint b, uint color)
+	{
+		Character(a, color);
+		Character(b, color);
+	}
+
+	void Text(uint a, uint b, uint c, uint color)
+	{
+		Text(a, b, color);
+		Character(c, color);
+	}
+
+	void Text(uint a, uint b, uint c, uint d, uint color)
+	{
+		Text(a, b, color);
+		Text(c, d, color);
+	}
+
+	void Text(uint a, uint b, uint c, uint d, uint e, uint color)
+	{
+		Text(a, b, c, color);
+		Text(d, e, color);
+	}
+
+	void Text(uint a, uint b, uint c, uint d, uint e, uint f, uint color)
+	{
+		Text(a, b, c, color);
+		Text(d, e, f, color);
+	}
+
+	void Int(int value, uint color)
+	{
+		if(value < 0)
+		{
+			Character('-', color);
+			value = -value;
+		}
+		uint length = value > 0 ? log10(value) + 1 : 1;
+		uint divider = round(pow(10, length - 1));
+
+		while(length > 0)
+		{
+			uint digit = value / divider;
+			Character('0' + digit, color);
+			--length;
+
+			value = value - digit * divider;
+			divider /= 10;
+		}
+	}
+
+	void Float(float value, uint color)
+	{
+		if(isnan(value))
+		{
+			Text('N', 'a', 'N', color);
+		}
+		else if(!isfinite(value))
+		{
+			Text('I', 'N', 'F', color);
+		}
+		else
+		{
+			int v0 = floor(abs(value));
+			Int(sign(value) * v0, color);
+			Character('.', color);
+			int v1 = floor(frac(value) * 10000);
+			Int(v1, color);
+		}
+	}
+};
+
+TextWriter CreateTextWriter(float2 position)
+{
+	TextWriter writer;
+	writer.StartLocation = position;
+	writer.CursorLocation = position;
+	return writer;
 }

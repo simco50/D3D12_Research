@@ -156,12 +156,10 @@ ConstantBuffer<PokeData> cPoke : register(b100);
 [numthreads(1, 1, 1)]
 void PokeTextCS(uint threadId : SV_DispatchThreadID)
 {
-	float2 position = 50;
-	uint seed = SeedThread(cPoke.Value);
-
-	PrintText('T', 'h', 'e', ' ', position, XORShift(seed));
-	PrintText('A', 'n', 's', 'w', 'e', 'r', position, XORShift(seed));
-	NewLine(position, 50);
-	PrintText('i', 's', '.', '.', '.', ' ', position, XORShift(seed));
-	PrintInt(cPoke.Value, position, XORShift(seed));
+	TextWriter writer = CreateTextWriter(float2(50, 50));
+	writer.Text('T', 'h', 'e', ' ', 0xFFFFFFFF);
+	writer.Text('A', 'n', 's', 'w', 'e', 'r', 0xFFFFFFFF);
+	writer.NewLine();
+	writer.Text('i', 's', '.', '.', '.', ' ', 0xFFFFFFFF);
+	writer.Int(cPoke.Value, 0xFFFFFFFF);
 }
