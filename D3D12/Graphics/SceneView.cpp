@@ -102,6 +102,11 @@ namespace Renderer
 		parameters.SkyIndex = pView->pSky ? pView->pSky->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
 		parameters.DDGIVolumesIndex = pView->pDDGIVolumesBuffer->GetSRVIndex();
 		parameters.NumDDGIVolumes = pView->NumDDGIVolumes;
+
+		parameters.GlyphInstancesIndex = pView->DebugRenderData.CharacterInstancesUAV;
+		parameters.GlyphCounterIndex = pView->DebugRenderData.CharacterCounterUAV;
+		parameters.GlyphDataIndex = pView->DebugRenderData.CharacterDataSRV;
+
 		return parameters;
 	}
 

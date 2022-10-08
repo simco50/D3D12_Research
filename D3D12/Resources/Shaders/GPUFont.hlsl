@@ -19,7 +19,7 @@ struct PassParameters
 	Line Lines[512];
 };
 
-ConstantBuffer<PassParameters> cPass : register(b0);
+ConstantBuffer<PassParameters> cPass : register(b1);
 RWTexture2D<float> uOutput : register(u0);
 
 uint IsInside(float2 location)
@@ -145,22 +145,4 @@ float4 RenderGlyphPS(
 	float alpha = tFontAtlas.SampleLevel(sLinearClamp, uv, 0);
 	float4 c = alpha * UIntToColor(color);
 	return float4(c.rgb, alpha);
-}
-
-struct PokeData
-{
-	uint Value;
-};
-
-ConstantBuffer<PokeData> cPoke : register(b100);
-
-[numthreads(1, 1, 1)]
-void PokeTextCS(uint threadId : SV_DispatchThreadID)
-{
-	TextWriter writer = CreateTextWriter(float2(50, 50));
-	writer.Text('T', 'h', 'e', ' ', 0xFFFFFFFF);
-	writer.Text('A', 'n', 's', 'w', 'e', 'r', 0xFFFFFFFF);
-	writer.NewLine();
-	writer.Text('i', 's', '.', '.', '.', ' ', 0xFFFFFFFF);
-	writer.Int(cPoke.Value, 0xFFFFFFFF);
 }

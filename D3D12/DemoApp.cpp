@@ -204,7 +204,7 @@ DemoApp::DemoApp(WindowHandle window, const Vector2i& windowRect)
 	fontSettings.Height = 24;
 	fontSettings.Bold = true;
 	m_pGPUDebugRenderer = std::make_unique<GPUDebugRenderer>(m_pDevice, fontSettings);
-
+	m_pGPUDebugRenderer->GetGlobalIndices(&m_SceneData.DebugRenderData);
 
 	InitializePipelines();
 	Profiler::Get()->Initialize(m_pDevice);

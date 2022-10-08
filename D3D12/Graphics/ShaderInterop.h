@@ -196,6 +196,10 @@ namespace ShaderInterop
 		uint SkyIndex;
 		uint DDGIVolumesIndex;
 		uint TLASIndex;
+
+		uint GlyphInstancesIndex;
+		uint GlyphCounterIndex;
+		uint GlyphDataIndex;
 	};
 
 #ifdef __cplusplus

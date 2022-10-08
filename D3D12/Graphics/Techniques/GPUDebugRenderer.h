@@ -22,6 +22,13 @@ struct FontCreateSettings
 	void (*pFreeFn)(void* pMemory) = [](void* pMemory) -> void { delete[] pMemory; };
 };
 
+struct GPUDebugRenderData
+{
+	uint32 CharacterInstancesUAV;
+	uint32 CharacterCounterUAV;
+	uint32 CharacterDataSRV;
+};
+
 class GPUDebugRenderer
 {
 public:
@@ -32,11 +39,7 @@ public:
 
 	void Render(RGGraph& graph, RGTexture* pTarget);
 
-	uint32 GetTextBuffers(Buffer** pOutCharactersBuffer, Buffer** pOutCharactersCounter) const
-	{
-		*pOutCharactersBuffer = m_pSubmittedCharacters;
-		*pOutCharactersCounter = m_pSubmittedCharactersCounter;
-	}
+	void GetGlobalIndices(GPUDebugRenderData* pData) const;
 
 private:
 	struct Line
@@ -78,7 +81,6 @@ private:
 	RefCountPtr<PipelineState> m_pRasterizeGlyphPSO;
 	RefCountPtr<PipelineState> m_pRenderGlyphPSO;
 	RefCountPtr<PipelineState> m_pBuildIndirectDrawArgsPSO;
-	RefCountPtr<PipelineState> m_pPokeTextPSO;
 
 	RefCountPtr<Buffer> m_pSubmittedCharacters;
 	RefCountPtr<Buffer> m_pSubmittedCharactersCounter;

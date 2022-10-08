@@ -43,8 +43,8 @@ struct BinaryReader
 GPUDebugRenderer::GPUDebugRenderer(GraphicsDevice* pDevice, const FontCreateSettings& fontSettings)
 {
 	m_pCommonRS = new RootSignature(pDevice);
-	m_pCommonRS->AddRootConstants(100, 8);
-	m_pCommonRS->AddConstantBufferView(0);
+	m_pCommonRS->AddRootConstants(0, 8);
+	m_pCommonRS->AddConstantBufferView(1);
 	m_pCommonRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 4);
 	m_pCommonRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 4);
 	m_pCommonRS->Finalize("Common");
@@ -62,8 +62,6 @@ GPUDebugRenderer::GPUDebugRenderer(GraphicsDevice* pDevice, const FontCreateSett
 
 	m_pBuildIndirectDrawArgsPSO = pDevice->CreateComputePipeline(m_pCommonRS, "GPUFont.hlsl", "BuildIndirectDrawArgsCS");
 
-	m_pPokeTextPSO = pDevice->CreateComputePipeline(m_pCommonRS, "GPUFont.hlsl", "PokeTextCS");
-
 	struct CharacterElement
 	{
 		Vector2 Location;
@@ -80,33 +78,9 @@ GPUDebugRenderer::GPUDebugRenderer(GraphicsDevice* pDevice, const FontCreateSett
 	pContext->Execute(true);
 }
 
-
 void GPUDebugRenderer::Render(RGGraph& graph, RGTexture* pTarget)
 {
 	RG_GRAPH_SCOPE("GPU Debug Render", graph);
-
-#define TESTING 1
-#if TESTING
-	static float testValue = 0.0f;
-	testValue += 0.01f;
-	graph.AddPass("Text Test", RGPassFlag::Compute)
-		.Bind([=](CommandContext& context)
-			{
-				uint32 value = (uint32)testValue;
-
-				context.SetComputeRootSignature(m_pCommonRS);
-				context.SetPipelineState(m_pPokeTextPSO);
-				context.SetRootConstants(0, value);
-				context.BindResources(2, {
-					m_pSubmittedCharacters->GetUAV(),
-					m_pSubmittedCharactersCounter->GetUAV(),
-					});
-				context.BindResources(3, {
-					m_pGlyphData->GetSRV(),
-					});
-				context.Dispatch(1);
-			});
-#endif
 
 	RGBuffer* pSubmittedCharacters = graph.ImportBuffer(m_pSubmittedCharacters);
 	RGBuffer* pSubmittedCharactersCounter = graph.ImportBuffer(m_pSubmittedCharactersCounter);
@@ -145,7 +119,7 @@ void GPUDebugRenderer::Render(RGGraph& graph, RGTexture* pTarget)
 				parameters.AtlasDimensionsInv = Vector2(1.0f / m_pFontAtlas->GetWidth(), 1.0f / m_pFontAtlas->GetHeight());
 				parameters.TargetDimensions = Vector2((float)pTarget->GetDesc().Width, (float)pTarget->GetDesc().Height);
 				parameters.TargetDimensionsInv = Vector2(1.0f / pTarget->GetDesc().Width, 1.0f / pTarget->GetDesc().Height);
-				context.SetRootCBV(1, parameters);
+				context.SetRootConstants(0, parameters);
 
 				context.BindResources(3, {
 					m_pFontAtlas->GetSRV(),
@@ -155,6 +129,13 @@ void GPUDebugRenderer::Render(RGGraph& graph, RGTexture* pTarget)
 
 				context.ExecuteIndirect(GraphicsCommon::pIndirectDrawSignature, 1, pDrawArgs->Get(), nullptr);
 			});
+}
+
+void GPUDebugRenderer::GetGlobalIndices(GPUDebugRenderData* pData) const
+{
+	pData->CharacterInstancesUAV = m_pSubmittedCharacters->GetUAVIndex();
+	pData->CharacterCounterUAV = m_pSubmittedCharactersCounter->GetUAVIndex();
+	pData->CharacterDataSRV = m_pGlyphData->GetSRVIndex();
 }
 
 bool GPUDebugRenderer::ProcessFont(Font& outFont, const FontCreateSettings& config)
