@@ -1,19 +1,45 @@
 #include "Common.hlsli"
 
-struct GlyphInstance
+static const uint TEXT_COUNTER_OFFSET = 0;
+static const uint TEXT_INSTANCES_OFFSET = 4;
+
+struct Glyph
+{
+	uint2 Location;
+	int2 Offset;
+	uint2 Dimensions;
+	uint Width;
+};
+
+struct CharacterInstance
 {
 	float2 Position;
 	uint Character;
 	uint Color;
 };
 
-struct Glyph
+void WriteChar(CharacterInstance instance, RWStructuredBuffer<uint> renderData)
 {
-	uint2 Location;
-	uint2 Offset;
-	uint2 Dimensions;
-	uint Width;
-};
+	uint offset;
+	InterlockedAdd(renderData[TEXT_COUNTER_OFFSET], 1, offset);
+	offset *= sizeof(CharacterInstance);
+	offset += TEXT_INSTANCES_OFFSET;
+	renderData[offset++] = instance.Position.x;
+	renderData[offset++] = instance.Position.y;
+	renderData[offset++] = instance.Character;
+	renderData[offset++] = instance.Color;
+}
+
+CharacterInstance ReadChar(uint index, StructuredBuffer<uint> renderData)
+{
+	CharacterInstance instance;
+	uint offset = index * sizeof(CharacterInstance) + TEXT_INSTANCES_OFFSET;
+	instance.Position.x = renderData[offset++];
+	instance.Position.y = renderData[offset++];
+	instance.Character = renderData[offset++];
+	instance.Color = renderData[offset++];
+	return instance;
+}
 
 struct TextWriter
 {
@@ -22,26 +48,22 @@ struct TextWriter
 
 	void Text(uint character, uint color)
 	{
-		StructuredBuffer<Glyph> glyphBuffer = ResourceDescriptorHeap[cView.GlyphDataIndex];
-		RWStructuredBuffer<uint> counterBuffer = ResourceDescriptorHeap[cView.GlyphCounterIndex];
-		RWStructuredBuffer<GlyphInstance> instanceBuffer = ResourceDescriptorHeap[cView.GlyphInstancesIndex];
-
+		StructuredBuffer<Glyph> glyphBuffer = ResourceDescriptorHeap[cView.FontDataIndex];
 		Glyph glyph = glyphBuffer[character];
 
-		uint offset;
-		InterlockedAdd(counterBuffer[0], 1, offset);
-		GlyphInstance instance = (GlyphInstance)0;
-		instance.Position = CursorLocation;
+		RWStructuredBuffer<uint> debugData = ResourceDescriptorHeap[cView.DebugRenderDataIndex];
+		CharacterInstance instance;
+		instance.Position = CursorLocation + int2(-glyph.Offset.x, glyph.Offset.y);
 		instance.Character = character;
 		instance.Color = color;
-		instanceBuffer[offset] = instance;
+		WriteChar(instance, debugData);
 
 		CursorLocation.x += glyph.Width;
 	}
 
 	void NewLine()
 	{
-		StructuredBuffer<Glyph> glyphBuffer = ResourceDescriptorHeap[cView.GlyphDataIndex];
+		StructuredBuffer<Glyph> glyphBuffer = ResourceDescriptorHeap[cView.FontDataIndex];
 		Glyph glyph = glyphBuffer[0];
 		CursorLocation.y += glyph.Dimensions.y;
 		CursorLocation.x = StartLocation.x;

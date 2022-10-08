@@ -24,17 +24,13 @@ struct FontCreateSettings
 
 struct GPUDebugRenderData
 {
-	uint32 CharacterInstancesUAV;
-	uint32 CharacterCounterUAV;
-	uint32 CharacterDataSRV;
+	uint32 RenderDataUAV;
+	uint32 FontDataSRV;
 };
 
 class GPUDebugRenderer
 {
 public:
-	static constexpr uint32 MAX_CHARACTERS = 256;
-	static constexpr uint32 ATLAS_RESOLUTION = 2048;
-
 	GPUDebugRenderer(GraphicsDevice* pDevice, const FontCreateSettings& fontSettings);
 
 	void Render(RGGraph& graph, RGTexture* pTarget);
@@ -82,8 +78,7 @@ private:
 	RefCountPtr<PipelineState> m_pRenderGlyphPSO;
 	RefCountPtr<PipelineState> m_pBuildIndirectDrawArgsPSO;
 
-	RefCountPtr<Buffer> m_pSubmittedCharacters;
-	RefCountPtr<Buffer> m_pSubmittedCharactersCounter;
+	RefCountPtr<Buffer> m_pRenderDataBuffer;
 
 	RefCountPtr<Texture> m_pFontAtlas;
 	RefCountPtr<Buffer> m_pGlyphData;

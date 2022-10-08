@@ -197,9 +197,8 @@ namespace ShaderInterop
 		uint DDGIVolumesIndex;
 		uint TLASIndex;
 
-		uint GlyphInstancesIndex;
-		uint GlyphCounterIndex;
-		uint GlyphDataIndex;
+		uint DebugRenderDataIndex;
+		uint FontDataIndex;
 	};
 
 #ifdef __cplusplus

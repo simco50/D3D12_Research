@@ -1,7 +1,7 @@
 #include "Common.hlsli"
 #include "D3D12.hlsli"
-#include "GPUFont.hlsli"
 #include "Random.hlsli"
+#include "ShaderDebugRender.hlsli"
 
 struct Line
 {
@@ -86,19 +86,19 @@ void RasterizeGlyphCS(uint3 threadID : SV_DispatchThreadID)
 	uOutput[pixelIndex + cPass.Location] = shade;
 }
 
-RWStructuredBuffer<D3D12_DRAW_ARGUMENTS> uDrawArgs : register(u0);
-RWStructuredBuffer<uint> uGlyphCounter : register(u1);
+RWStructuredBuffer<uint> uRenderData : register(u0);
+RWStructuredBuffer<D3D12_DRAW_ARGUMENTS> uDrawArgs : register(u1);
 
 [numthreads(1, 1, 1)]
 void BuildIndirectDrawArgsCS(uint threadID : SV_DispatchThreadID)
 {
 	D3D12_DRAW_ARGUMENTS args;
 	args.VertexCountPerInstance = 4;
-	args.InstanceCount = uGlyphCounter[0];
+	args.InstanceCount = uRenderData[TEXT_COUNTER_OFFSET];
 	args.StartVertexLocation = 0;
 	args.StartInstanceLocation = 0;
 	uDrawArgs[0] = args;
-	uGlyphCounter[0] = 0;
+	uRenderData[TEXT_COUNTER_OFFSET] = 0;
 }
 
 struct RenderData
@@ -111,7 +111,7 @@ struct RenderData
 ConstantBuffer<RenderData> cData : register(b0);
 Texture2D<float> tFontAtlas : register(t0);
 StructuredBuffer<Glyph> tGlyphData : register(t1);
-StructuredBuffer<GlyphInstance> tGlyphInstances : register(t2);
+StructuredBuffer<uint> tRenderData : register(t2);
 
 void RenderGlyphVS(
 	uint vertexID : SV_VertexID,
@@ -123,7 +123,9 @@ void RenderGlyphVS(
 {
 	uv = float2(vertexID % 2, vertexID / 2);
 
-	GlyphInstance instance = tGlyphInstances[instanceID];
+	CharacterInstance instance = ReadChar(instanceID, tRenderData);
+	color = instance.Color;
+
 	Glyph glyph = tGlyphData[instance.Character];
 
 	float2 pos = float2(uv.x, uv.y);
@@ -133,7 +135,6 @@ void RenderGlyphVS(
 
 	position = float4(pos * float2(2, -2) + float2(-1, 1), 0, 1);
 	uv = (uv * glyph.Dimensions + glyph.Location) * cData.AtlasDimensionsInv;
-	color = instance.Color;
 }
 
 float4 RenderGlyphPS(

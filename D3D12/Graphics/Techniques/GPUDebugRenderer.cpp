@@ -48,11 +48,11 @@ GPUDebugRenderer::GPUDebugRenderer(GraphicsDevice* pDevice, const FontCreateSett
 	m_pCommonRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 4);
 	m_pCommonRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 4);
 	m_pCommonRS->Finalize("Common");
-	m_pRasterizeGlyphPSO = pDevice->CreateComputePipeline(m_pCommonRS, "GPUFont.hlsl", "RasterizeGlyphCS");
+	m_pRasterizeGlyphPSO = pDevice->CreateComputePipeline(m_pCommonRS, "ShaderDebugRender.hlsl", "RasterizeGlyphCS");
 
 	PipelineStateInitializer psoDesc;
-	psoDesc.SetVertexShader("GPUFont.hlsl", "RenderGlyphVS");
-	psoDesc.SetPixelShader("GPUFont.hlsl", "RenderGlyphPS");
+	psoDesc.SetVertexShader("ShaderDebugRender.hlsl", "RenderGlyphVS");
+	psoDesc.SetPixelShader("ShaderDebugRender.hlsl", "RenderGlyphPS");
 	psoDesc.SetRenderTargetFormats(ResourceFormat::RGBA8_UNORM, ResourceFormat::Unknown, 1);
 	psoDesc.SetDepthEnabled(false);
 	psoDesc.SetBlendMode(BlendMode::Alpha, false);
@@ -60,20 +60,30 @@ GPUDebugRenderer::GPUDebugRenderer(GraphicsDevice* pDevice, const FontCreateSett
 	psoDesc.SetName("Render Glyphs");
 	m_pRenderGlyphPSO = pDevice->CreatePipeline(psoDesc);
 
-	m_pBuildIndirectDrawArgsPSO = pDevice->CreateComputePipeline(m_pCommonRS, "GPUFont.hlsl", "BuildIndirectDrawArgsCS");
+	m_pBuildIndirectDrawArgsPSO = pDevice->CreateComputePipeline(m_pCommonRS, "ShaderDebugRender.hlsl", "BuildIndirectDrawArgsCS");
 
-	struct CharacterElement
+	struct CharacterInstance
 	{
 		Vector2 Location;
 		uint32 Color;
 		uint32 Padding;
 	};
 
-	m_pSubmittedCharacters = pDevice->CreateBuffer(BufferDesc::CreateStructured(MAX_CHARACTERS, sizeof(CharacterElement)), "Submitted Characters");
-	m_pSubmittedCharactersCounter = pDevice->CreateBuffer(BufferDesc::CreateStructured(1, sizeof(uint32)), "Submitted Characters Counter");
+	constexpr uint32 MAX_CHARACTERS = 256;
+
+	struct RenderData
+	{
+		uint32 CharacterCounter;
+		uint32 padding[3];
+		CharacterInstance Characters[MAX_CHARACTERS];
+	};
+
+	m_pRenderDataBuffer = pDevice->CreateBuffer(BufferDesc::CreateStructured(sizeof(RenderData) / sizeof(uint32), sizeof(uint32)), "Shader Debug Render Data");
 
 	CommandContext* pContext = pDevice->AllocateCommandContext();
 	ProcessFont(m_Font, fontSettings);
+
+	constexpr uint32 ATLAS_RESOLUTION = 1024;
 	BuildFontAtlas(*pContext, Vector2i(ATLAS_RESOLUTION, ATLAS_RESOLUTION), 1);
 	pContext->Execute(true);
 }
@@ -82,32 +92,30 @@ void GPUDebugRenderer::Render(RGGraph& graph, RGTexture* pTarget)
 {
 	RG_GRAPH_SCOPE("GPU Debug Render", graph);
 
-	RGBuffer* pSubmittedCharacters = graph.ImportBuffer(m_pSubmittedCharacters);
-	RGBuffer* pSubmittedCharactersCounter = graph.ImportBuffer(m_pSubmittedCharactersCounter);
+	RGBuffer* pRenderData = graph.ImportBuffer(m_pRenderDataBuffer);
 
 	RGBuffer* pDrawArgs = graph.CreateBuffer("Indirect Draw Args", BufferDesc::CreateIndirectArguments<D3D12_DRAW_ARGUMENTS>(1));
 	graph.AddPass("Build Draw Args", RGPassFlag::Compute)
-		.Write({ pDrawArgs, pSubmittedCharactersCounter })
+		.Write({ pDrawArgs, pRenderData })
 		.Bind([=](CommandContext& context)
 			{
 				context.SetComputeRootSignature(m_pCommonRS);
 				context.SetPipelineState(m_pBuildIndirectDrawArgsPSO);
 
 				context.BindResources(2, {
+					pRenderData->Get()->GetUAV(),
 					pDrawArgs->Get()->GetUAV(),
-					pSubmittedCharactersCounter->Get()->GetUAV(),
 					});
 				context.Dispatch(1);
 			});
 
 	graph.AddPass("Render Text", RGPassFlag::Raster)
-		.Read({ pSubmittedCharacters, pSubmittedCharactersCounter, pDrawArgs })
+		.Read({ pRenderData, pDrawArgs })
 		.RenderTarget(pTarget, RenderTargetLoadAction::Load)
 		.Bind([=](CommandContext& context)
 			{
 				context.SetGraphicsRootSignature(m_pCommonRS);
 				context.SetPipelineState(m_pRenderGlyphPSO);
-
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
 
 				struct
@@ -124,18 +132,16 @@ void GPUDebugRenderer::Render(RGGraph& graph, RGTexture* pTarget)
 				context.BindResources(3, {
 					m_pFontAtlas->GetSRV(),
 					m_pGlyphData->GetSRV(),
-					pSubmittedCharacters->Get()->GetSRV()
+					pRenderData->Get()->GetSRV()
 					});
-
 				context.ExecuteIndirect(GraphicsCommon::pIndirectDrawSignature, 1, pDrawArgs->Get(), nullptr);
 			});
 }
 
 void GPUDebugRenderer::GetGlobalIndices(GPUDebugRenderData* pData) const
 {
-	pData->CharacterInstancesUAV = m_pSubmittedCharacters->GetUAVIndex();
-	pData->CharacterCounterUAV = m_pSubmittedCharactersCounter->GetUAVIndex();
-	pData->CharacterDataSRV = m_pGlyphData->GetSRVIndex();
+	pData->RenderDataUAV = m_pRenderDataBuffer->GetUAVIndex();
+	pData->FontDataSRV = m_pGlyphData->GetSRVIndex();
 }
 
 bool GPUDebugRenderer::ProcessFont(Font& outFont, const FontCreateSettings& config)
@@ -315,7 +321,7 @@ void GPUDebugRenderer::BuildFontAtlas(CommandContext& context, const Vector2i& r
 	Font& font = m_Font;
 	uint32 values[] = { 0, 0, 0, 0xFFFFFFFF };
 
-	m_pFontAtlas = context.GetParent()->CreateTexture(TextureDesc::Create2D(ATLAS_RESOLUTION, 2048, ResourceFormat::R8_UNORM, TextureFlag::UnorderedAccess), "Font Atlas");
+	m_pFontAtlas = context.GetParent()->CreateTexture(TextureDesc::Create2D(resolution.x, resolution.y, ResourceFormat::R8_UNORM, TextureFlag::UnorderedAccess), "Font Atlas");
 	context.InsertResourceBarrier(m_pFontAtlas, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 	context.ClearUavUInt(m_pFontAtlas, m_pFontAtlas->GetUAV(), values);
 

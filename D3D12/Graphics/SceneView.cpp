@@ -103,9 +103,8 @@ namespace Renderer
 		parameters.DDGIVolumesIndex = pView->pDDGIVolumesBuffer->GetSRVIndex();
 		parameters.NumDDGIVolumes = pView->NumDDGIVolumes;
 
-		parameters.GlyphInstancesIndex = pView->DebugRenderData.CharacterInstancesUAV;
-		parameters.GlyphCounterIndex = pView->DebugRenderData.CharacterCounterUAV;
-		parameters.GlyphDataIndex = pView->DebugRenderData.CharacterDataSRV;
+		parameters.FontDataIndex = pView->DebugRenderData.FontDataSRV;
+		parameters.DebugRenderDataIndex = pView->DebugRenderData.RenderDataUAV;
 
 		return parameters;
 	}
