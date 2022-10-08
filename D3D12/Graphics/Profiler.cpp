@@ -24,6 +24,10 @@ void ProfileNode::StartTimer(CommandContext* pInContext)
 		::PIXBeginEvent(pInContext->GetCommandList(), 0, MULTIBYTE_TO_UNICODE(pName));
 #endif
 	}
+	else
+	{
+		::PIXBeginEvent(~0ull, pName);
+	}
 }
 
 void ProfileNode::EndTimer()
@@ -38,6 +42,10 @@ void ProfileNode::EndTimer()
 #ifdef USE_PIX
 		::PIXEndEvent(pContext->GetCommandList());
 #endif
+	}
+	else
+	{
+		::PIXEndEvent();
 	}
 }
 
@@ -141,7 +149,7 @@ void Profiler::End()
 	m_pCurrentBlock = m_pCurrentBlock->pParent;
 }
 
-void Profiler::Resolve(GraphicsDevice* pParent)
+void Profiler::Resolve(CommandContext* pContext)
 {
 	checkf(m_pCurrentBlock == m_pRootBlock.get(), "The current block isn't the root block then something must've gone wrong!");
 
@@ -149,9 +157,7 @@ void Profiler::Resolve(GraphicsDevice* pParent)
 	m_pCurrentBlock->PopulateTimes((const uint64*)m_pReadBackBuffer->GetMappedData(), m_CpuTimestampFrequency, m_CurrentReadbackFrame);
 
 	int offset = MAX_GPU_TIME_QUERIES * QUERY_PAIR_NUM * m_CurrentReadbackFrame;
-	CommandContext* pContext = pParent->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 	pContext->GetCommandList()->ResolveQueryData(m_pQueryHeap.Get(), D3D12_QUERY_TYPE_TIMESTAMP, 0, m_CurrentTimer * QUERY_PAIR_NUM, m_pReadBackBuffer->GetResource(), offset * sizeof(uint64));
-	pContext->Execute(false);
 
 	m_CurrentTimer = 0;
 	m_CurrentReadbackFrame = (m_CurrentReadbackFrame + 1) % SwapChain::NUM_FRAMES;

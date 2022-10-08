@@ -9,7 +9,6 @@
 
 class CommandQueue;
 class CommandContext;
-class OfflineDescriptorAllocator;
 class DynamicAllocationManager;
 class GraphicsResource;
 class RootSignature;
@@ -20,14 +19,13 @@ class ShaderManager;
 class PipelineStateInitializer;
 class StateObject;
 class StateObjectInitializer;
-class GlobalOnlineDescriptorHeap;
+class GPUDescriptorHeap;
+class CPUDescriptorHeap;
 class ResourceView;
 class SwapChain;
-class OnlineDescriptorAllocator;
 class Fence;
 class GraphicsDevice;
 class CommandSignature;
-class Image;
 class CommandSignatureInitializer;
 struct TextureDesc;
 struct BufferDesc;
@@ -73,10 +71,10 @@ public:
 	SwapChain(GraphicsDevice* pDevice, DisplayMode displayMode, WindowHandle pNativeWindow);
 	~SwapChain();
 	void OnResizeOrMove(uint32 width, uint32 height);
-	void Present(bool vsync);
+	void Present();
 
 	void SetDisplayMode(DisplayMode displayMode) { m_DesiredDisplayMode = displayMode; }
-	void SetVsync(bool enabled) { m_Vsync = enabled; }
+	void SetVSync(bool enabled) { m_Vsync = enabled; }
 	bool DisplaySupportsHDR() const;
 
 	Vector2i GetViewport() const;
@@ -85,8 +83,10 @@ public:
 	Texture* GetBackBuffer(uint32 index) const { return m_Backbuffers[index]; }
 	uint32 GetBackbufferIndex() const { return m_CurrentImage; }
 	DXGI_FORMAT GetFormat() const { return m_Format; }
+	bool GetVSync() const { return m_Vsync; }
 
 private:
+	WindowHandle m_Window;
 	DisplayMode m_DesiredDisplayMode;
 	std::array<SyncPoint, NUM_FRAMES> m_PresentSyncPoints;
 	RefCountPtr<Fence> m_pPresentFence;
@@ -96,7 +96,7 @@ private:
 	uint32 m_CurrentImage;
 	uint32 m_Width = 0;
 	uint32 m_Height = 0;
-	bool m_Vsync;
+	bool m_Vsync = true;
 	bool m_AllowTearing = false;
 };
 
@@ -147,10 +147,10 @@ public:
 	CommandContext* AllocateCommandContext(D3D12_COMMAND_LIST_TYPE type = D3D12_COMMAND_LIST_TYPE_DIRECT);
 	void FreeCommandList(CommandContext* pCommandList);
 
-	D3D12_CPU_DESCRIPTOR_HANDLE AllocateDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE type);
-	void FreeDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE type, D3D12_CPU_DESCRIPTOR_HANDLE descriptor);
-	DescriptorHandle StoreViewDescriptor(D3D12_CPU_DESCRIPTOR_HANDLE view);
-	void FreeViewDescriptor(DescriptorHandle& heapIndex);
+	D3D12_CPU_DESCRIPTOR_HANDLE AllocateCPUDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE type);
+	void FreeCPUDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE type, D3D12_CPU_DESCRIPTOR_HANDLE descriptor);
+	DescriptorHandle RegisterGlobalResourceView(D3D12_CPU_DESCRIPTOR_HANDLE view);
+	void UnregisterGlobalResourceView(DescriptorHandle& heapIndex);
 
 	RefCountPtr<Texture> CreateTexture(const TextureDesc& desc, const char* pName);
 	RefCountPtr<Texture> CreateTextureForSwapchain(ID3D12Resource* pSwapchainResource);
@@ -174,8 +174,8 @@ public:
 		m_GlobalResources.push_back(std::move(pResource));
 	}
 
-	GlobalOnlineDescriptorHeap* GetGlobalViewHeap() const { return m_pGlobalViewHeap; }
-	GlobalOnlineDescriptorHeap* GetGlobalSamplerHeap() const { return m_pGlobalSamplerHeap; }
+	GPUDescriptorHeap* GetGlobalViewHeap() const { return m_pGlobalViewHeap; }
+	GPUDescriptorHeap* GetGlobalSamplerHeap() const { return m_pGlobalSamplerHeap; }
 	ID3D12Device* GetDevice() const { return m_pDevice.Get(); }
 	ID3D12Device5* GetRaytracingDevice() const { return m_pRaytracingDevice.Get(); }
 	ShaderManager* GetShaderManager() const { return m_pShaderManager.get(); }
@@ -208,6 +208,10 @@ private:
 	std::unique_ptr<DRED> m_pDRED;
 
 	RefCountPtr<Fence> m_pFrameFence;
+
+	RefCountPtr<GPUDescriptorHeap> m_pGlobalViewHeap;
+	RefCountPtr<GPUDescriptorHeap> m_pGlobalSamplerHeap;
+
 	std::array<RefCountPtr<CommandQueue>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_CommandQueues;
 	std::array<std::vector<RefCountPtr<CommandContext>>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_CommandListPool;
 	std::array<std::queue<CommandContext*>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_FreeCommandLists;
@@ -237,10 +241,7 @@ private:
 	DeferredDeleteQueue m_DeleteQueue;
 
 	std::unique_ptr<ShaderManager> m_pShaderManager;
-	RefCountPtr<GlobalOnlineDescriptorHeap> m_pGlobalViewHeap;
-	RefCountPtr<GlobalOnlineDescriptorHeap> m_pGlobalSamplerHeap;
-
-	std::array<RefCountPtr<OfflineDescriptorAllocator>, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES> m_DescriptorHeaps;
+	std::array<RefCountPtr<CPUDescriptorHeap>, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES> m_DescriptorHeaps;
 	RefCountPtr<DynamicAllocationManager> m_pDynamicAllocationManager;
 
 	std::vector<RefCountPtr<GraphicsObject>> m_GlobalResources;

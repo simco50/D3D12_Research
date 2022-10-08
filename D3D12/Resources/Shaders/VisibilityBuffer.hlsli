@@ -3,8 +3,8 @@
 struct VisBufferData
 {
 	uint PrimitiveID : 7;
-	uint MeshletID : 11;
-	uint ObjectID : 14;
+	uint MeshletID : 13;
+	uint ObjectID : 12;
 };
 
 template<typename T>

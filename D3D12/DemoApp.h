@@ -126,7 +126,7 @@ private:
 	RefCountPtr<PipelineState> m_pPrepareReduceDepthPSO;
 	RefCountPtr<PipelineState> m_pPrepareReduceDepthMsaaPSO;
 	RefCountPtr<PipelineState> m_pReduceDepthPSO;
-	std::vector<RefCountPtr<Buffer>> m_ReductionReadbackTargets;
+	std::array<RefCountPtr<Buffer>, SwapChain::NUM_FRAMES> m_ReductionReadbackTargets;
 
 	//Camera motion
 	RefCountPtr<PipelineState> m_pCameraMotionPSO;
@@ -168,6 +168,4 @@ private:
 		float MipLevel = 0.0f;
 		float Slice = 0.0f;
 	} m_VisualizeTextureData;
-
-	bool m_CapturePix = false;
 };

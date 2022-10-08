@@ -11,6 +11,7 @@
 #include "Light.h"
 #include "Core/ConsoleVariables.h"
 #include "Content/Image.h"
+#include "Profiler.h"
 
 namespace Tweakables
 {
@@ -81,10 +82,9 @@ namespace Renderer
 		parameters.FarZ = view.FarPlane;
 		parameters.FoV = view.FoV;
 
-
 		parameters.FrameIndex = pView->FrameIndex;
 		parameters.SsrSamples = Tweakables::g_SsrSamples.Get();
-		parameters.LightCount = pView->pLightBuffer->GetNumElements();
+		parameters.LightCount = pView->NumLights;
 
 		check(pView->ShadowViews.size() <= MAX_SHADOW_CASTERS);
 		for (uint32 i = 0; i < pView->ShadowViews.size(); ++i)
@@ -97,8 +97,7 @@ namespace Renderer
 		parameters.TLASIndex = pView->AccelerationStructure.GetSRV() ? pView->AccelerationStructure.GetSRV()->GetHeapIndex() : DescriptorHandle::InvalidHeapIndex;
 		parameters.MeshesIndex = pView->pMeshBuffer->GetSRVIndex();
 		parameters.MaterialsIndex = pView->pMaterialBuffer->GetSRVIndex();
-		parameters.MeshInstancesIndex = pView->pMeshInstanceBuffer->GetSRVIndex();
-		parameters.TransformsIndex = pView->pTransformsBuffer->GetSRVIndex();
+		parameters.InstancesIndex = pView->pInstanceBuffer->GetSRVIndex();
 		parameters.LightsIndex = pView->pLightBuffer->GetSRVIndex();
 		parameters.SkyIndex = pView->pSky ? pView->pSky->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
 		parameters.DDGIVolumesIndex = pView->pDDGIVolumesBuffer->GetSRVIndex();
@@ -108,11 +107,17 @@ namespace Renderer
 
 	void UploadSceneData(CommandContext& context, SceneView* pView, World* pWorld)
 	{
+		PROFILE_SCOPE("Upload Scene Data");
+
 		std::vector<ShaderInterop::MaterialData> materials;
+		materials.reserve(128);
 		std::vector<ShaderInterop::MeshData> meshes;
-		std::vector<ShaderInterop::MeshInstance> meshInstances;
+		meshes.reserve(128);
+		std::vector<ShaderInterop::InstanceData> meshInstances;
+		meshInstances.reserve(pView->Batches.size());
 		std::vector<Batch> sceneBatches;
-		std::vector<Matrix> transforms;
+		sceneBatches.reserve(pView->Batches.size());
+		uint32 instanceID = 0;
 
 		for (const auto& pMesh : pWorld->Meshes)
 		{
@@ -120,13 +125,6 @@ namespace Renderer
 			{
 				SubMesh& parentMesh = pMesh->GetMesh(node.MeshIndex);
 				const Material& meshMaterial = pMesh->GetMaterial(parentMesh.MaterialId);
-				ShaderInterop::MeshInstance meshInstance;
-				meshInstance.Mesh = (uint32)meshes.size() + node.MeshIndex;
-				meshInstance.Material = (uint32)materials.size() + parentMesh.MaterialId;
-				meshInstance.World = (uint32)transforms.size();
-				meshInstances.push_back(meshInstance);
-
-				transforms.push_back(node.Transform);
 
 				auto GetBlendMode = [](MaterialAlphaMode mode) {
 					switch (mode)
@@ -138,19 +136,28 @@ namespace Renderer
 					return Batch::Blending::Opaque;
 				};
 
-				Batch batch;
-				batch.InstanceData = meshInstance;
+				Batch& batch = sceneBatches.emplace_back();
+				batch.InstanceID = instanceID;
 				batch.pMesh = &parentMesh;
 				batch.BlendMode = GetBlendMode(meshMaterial.AlphaMode);
 				batch.WorldMatrix = node.Transform;
 				parentMesh.Bounds.Transform(batch.Bounds, batch.WorldMatrix);
 				batch.Radius = Vector3(batch.Bounds.Extents).Length();
-				sceneBatches.push_back(batch);
+
+				ShaderInterop::InstanceData& meshInstance = meshInstances.emplace_back();
+				meshInstance.ID = instanceID;
+				meshInstance.MeshIndex = (uint32)meshes.size() + node.MeshIndex;
+				meshInstance.MaterialIndex = (uint32)materials.size() + parentMesh.MaterialId;
+				meshInstance.LocalToWorld = node.Transform;
+				meshInstance.BoundsCenter = batch.Bounds.Center;
+				meshInstance.BoundsExtent = batch.Bounds.Extents;
+
+				++instanceID;
 			}
 
 			for (const SubMesh& subMesh : pMesh->GetMeshes())
 			{
-				ShaderInterop::MeshData mesh;
+				ShaderInterop::MeshData& mesh = meshes.emplace_back();
 				mesh.BufferIndex = pMesh->GetData()->GetSRVIndex();
 				mesh.IndexByteSize = subMesh.IndicesLocation.Stride();
 				mesh.IndicesOffset = (uint32)subMesh.IndicesLocation.OffsetFromStart;
@@ -158,17 +165,17 @@ namespace Renderer
 				mesh.NormalsOffset = (uint32)subMesh.NormalStreamLocation.OffsetFromStart;
 				mesh.ColorsOffset = (uint32)subMesh.ColorsStreamLocation.OffsetFromStart;
 				mesh.UVsOffset = (uint32)subMesh.UVStreamLocation.OffsetFromStart;
+
 				mesh.MeshletOffset = subMesh.MeshletsLocation;
 				mesh.MeshletVertexOffset = subMesh.MeshletVerticesLocation;
 				mesh.MeshletTriangleOffset = subMesh.MeshletTrianglesLocation;
 				mesh.MeshletBoundsOffset = subMesh.MeshletBoundsLocation;
 				mesh.MeshletCount = subMesh.NumMeshlets;
-				meshes.push_back(mesh);
 			}
 
 			for (const Material& material : pMesh->GetMaterials())
 			{
-				ShaderInterop::MaterialData materialData;
+				ShaderInterop::MaterialData& materialData = materials.emplace_back();
 				materialData.Diffuse = material.pDiffuseTexture ? material.pDiffuseTexture->GetSRVIndex() : -1;
 				materialData.Normal = material.pNormalTexture ? material.pNormalTexture->GetSRVIndex() : -1;
 				materialData.RoughnessMetalness = material.pRoughnessMetalnessTexture ? material.pRoughnessMetalnessTexture->GetSRVIndex() : -1;
@@ -178,7 +185,6 @@ namespace Renderer
 				materialData.RoughnessFactor = material.RoughnessFactor;
 				materialData.EmissiveFactor = material.EmissiveFactor;
 				materialData.AlphaCutoff = material.AlphaCutoff;
-				materials.push_back(materialData);
 			}
 		}
 		sceneBatches.swap(pView->Batches);
@@ -186,9 +192,10 @@ namespace Renderer
 		std::vector<ShaderInterop::DDGIVolume> ddgiVolumes;
 		if (Tweakables::g_EnableDDGI)
 		{
+			ddgiVolumes.reserve(pWorld->DDGIVolumes.size());
 			for (DDGIVolume& ddgiVolume : pWorld->DDGIVolumes)
 			{
-				ShaderInterop::DDGIVolume ddgi{};
+				ShaderInterop::DDGIVolume& ddgi = ddgiVolumes.emplace_back();
 				ddgi.BoundsMin = ddgiVolume.Origin - ddgiVolume.Extents;
 				ddgi.ProbeSize = 2 * ddgiVolume.Extents / (Vector3((float)ddgiVolume.NumProbes.x, (float)ddgiVolume.NumProbes.y, (float)ddgiVolume.NumProbes.z) - Vector3::One);
 				ddgi.ProbeVolumeDimensions = Vector3i(ddgiVolume.NumProbes.x, ddgiVolume.NumProbes.y, ddgiVolume.NumProbes.z);
@@ -198,30 +205,51 @@ namespace Renderer
 				ddgi.ProbeStatesIndex = ddgiVolume.pProbeStates ? ddgiVolume.pProbeStates->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
 				ddgi.NumRaysPerProbe = ddgiVolume.NumRays;
 				ddgi.MaxRaysPerProbe = ddgiVolume.MaxNumRays;
-				ddgiVolumes.push_back(ddgi);
 			}
 		}
 		pView->NumDDGIVolumes = (uint32)ddgiVolumes.size();
 
 		std::vector<ShaderInterop::Light> lightData;
-		Utils::Transform(pWorld->Lights, lightData, [](const Light& light) { return light.GetData(); });
+		lightData.reserve(pWorld->Lights.size());
+		for (const Light& light : pWorld->Lights)
+		{
+			ShaderInterop::Light& data = lightData.emplace_back();
+			data.Position = light.Position;
+			data.Direction = light.Direction;
+			data.SpotlightAngles.x = cos(light.PenumbraAngleDegrees * Math::DegreesToRadians / 2.0f);
+			data.SpotlightAngles.y = cos(light.UmbraAngleDegrees * Math::DegreesToRadians / 2.0f);
+			data.Color = Math::EncodeRGBA(light.Colour);
+			data.Intensity = light.Intensity;
+			data.Range = light.Range;
+			data.ShadowMapIndex = light.CastShadows && light.ShadowMaps.size() ? light.ShadowMaps[0]->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
+			data.MaskTexture = light.pLightTexture ? light.pLightTexture->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
+			data.MatrixIndex = light.MatrixIndex;
+			data.InvShadowSize = 1.0f / light.ShadowMapSize;
+			data.IsEnabled = light.Intensity > 0 ? 1 : 0;
+			data.IsVolumetric = light.VolumetricLighting;
+			data.CastShadows = light.CastShadows;
+			data.IsPoint = light.Type == LightType::Point;
+			data.IsSpot = light.Type == LightType::Spot;
+			data.IsDirectional = light.Type == LightType::Directional;
+		}
+		pView->NumLights = (uint32)pWorld->Lights.size();
 
 		GraphicsDevice* pDevice = context.GetParent();
-		auto CopyBufferData = [&](size_t numElements, uint32 stride, const char* pName, const void* pSource, RefCountPtr<Buffer>& pTarget)
+		auto CopyBufferData = [&](uint32 numElements, uint32 stride, const char* pName, const void* pSource, RefCountPtr<Buffer>& pTarget)
 		{
-			if (!pTarget || numElements > pTarget->GetNumElements())
+			uint32 desiredElements = Math::AlignUp(Math::Max(1u, numElements), 8u);
+			if (!pTarget || desiredElements > pTarget->GetNumElements())
 			{
-				pTarget = pDevice->CreateBuffer(BufferDesc::CreateStructured(Math::Max(1u, (uint32)numElements), stride, BufferFlag::ShaderResource), pName);
+				pTarget = pDevice->CreateBuffer(BufferDesc::CreateStructured(desiredElements, stride, BufferFlag::ShaderResource), pName);
 			}
 			context.WriteBuffer(pTarget, pSource, numElements * stride);
 		};
 
-		CopyBufferData(ddgiVolumes.size(), sizeof(ShaderInterop::DDGIVolume), "DDGI Volumes", ddgiVolumes.data(), pView->pDDGIVolumesBuffer);
-		CopyBufferData(meshes.size(), sizeof(ShaderInterop::MeshData), "Meshes", meshes.data(), pView->pMeshBuffer);
-		CopyBufferData(meshInstances.size(), sizeof(ShaderInterop::MeshInstance), "Meshes Instances", meshInstances.data(), pView->pMeshInstanceBuffer);
-		CopyBufferData(materials.size(), sizeof(ShaderInterop::MaterialData), "Materials", materials.data(), pView->pMaterialBuffer);
-		CopyBufferData(transforms.size(), sizeof(Matrix), "Transforms", transforms.data(), pView->pTransformsBuffer);
-		CopyBufferData(lightData.size(), sizeof(ShaderInterop::Light), "Lights", lightData.data(), pView->pLightBuffer);
+		CopyBufferData((uint32)ddgiVolumes.size(), sizeof(ShaderInterop::DDGIVolume), "DDGI Volumes", ddgiVolumes.data(), pView->pDDGIVolumesBuffer);
+		CopyBufferData((uint32)meshes.size(), sizeof(ShaderInterop::MeshData), "Meshes", meshes.data(), pView->pMeshBuffer);
+		CopyBufferData((uint32)meshInstances.size(), sizeof(ShaderInterop::InstanceData), "Instances", meshInstances.data(), pView->pInstanceBuffer);
+		CopyBufferData((uint32)materials.size(), sizeof(ShaderInterop::MaterialData), "Materials", materials.data(), pView->pMaterialBuffer);
+		CopyBufferData((uint32)lightData.size(), sizeof(ShaderInterop::Light), "Lights", lightData.data(), pView->pLightBuffer);
 	}
 
 	void DrawScene(CommandContext& context, const SceneView* pView, const VisibilityMask& visibility, Batch::Blending blendModes)
@@ -230,7 +258,7 @@ namespace Renderer
 		meshes.reserve(pView->Batches.size());
 		for (const Batch& b : pView->Batches)
 		{
-			if (EnumHasAnyFlags(b.BlendMode, blendModes) && visibility.GetBit(b.InstanceData.World))
+			if (EnumHasAnyFlags(b.BlendMode, blendModes) && visibility.GetBit(b.InstanceID))
 			{
 				meshes.push_back(&b);
 			}
@@ -246,7 +274,7 @@ namespace Renderer
 
 		for (const Batch* b : meshes)
 		{
-			context.SetRootConstants(0, b->InstanceData);
+			context.SetRootConstants(0, b->InstanceID);
 			if (context.GetCurrentPSO()->GetType() == PipelineStateType::Mesh)
 			{
 				context.DispatchMesh(ComputeUtils::GetNumThreadGroups(b->pMesh->NumMeshlets, 32));

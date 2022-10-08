@@ -1,7 +1,5 @@
 #pragma once
-#include "ShaderInterop.h"
-#include "RHI/DescriptorHandle.h"
-#include "RHI/Texture.h"
+class Texture;
 
 enum class LightType
 {
@@ -27,29 +25,6 @@ struct Light
 	Texture* pLightTexture = nullptr;
 	int ShadowMapSize = 512;
 	bool CastShadows = false;
-
-	ShaderInterop::Light GetData() const
-	{
-		ShaderInterop::Light data;
-		data.Position = Position;
-		data.Direction = Direction;
-		data.SpotlightAngles.x = cos(PenumbraAngleDegrees * Math::DegreesToRadians / 2.0f);
-		data.SpotlightAngles.y = cos(UmbraAngleDegrees * Math::DegreesToRadians / 2.0f);
-		data.Color = Math::EncodeRGBA(Colour);
-		data.Intensity = Intensity;
-		data.Range = Range;
-		data.ShadowMapIndex = CastShadows && ShadowMaps.size() ? ShadowMaps[0]->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
-		data.MaskTexture = pLightTexture ? pLightTexture->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
-		data.MatrixIndex = MatrixIndex;
-		data.InvShadowSize = 1.0f / ShadowMapSize;
-		data.IsEnabled = Intensity > 0 ? 1 : 0;
-		data.IsVolumetric = VolumetricLighting;
-		data.CastShadows = CastShadows;
-		data.IsPoint = Type == LightType::Point;
-		data.IsSpot = Type == LightType::Spot;
-		data.IsDirectional = Type == LightType::Directional;
-		return data;
-	}
 
 	static Light Directional(const Vector3& position, const Vector3& direction, float intensity = 1.0f, const Color& color = Colors::White)
 	{

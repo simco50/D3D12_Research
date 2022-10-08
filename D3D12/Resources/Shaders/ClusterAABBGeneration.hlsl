@@ -26,9 +26,8 @@ void GenerateAABBs(uint3 threadID : SV_DispatchThreadID)
 {
 	uint3 clusterIndex3D = threadID;
 	if(clusterIndex3D.z >= cPass.ClusterDimensions.z)
-	{
 		return;
-	}
+
 	uint clusterIndex1D = Flatten3D(clusterIndex3D, cPass.ClusterDimensions.xyz);
 
 	float2 minPoint_SS = float2(clusterIndex3D.x * cPass.ClusterSize.x, clusterIndex3D.y * cPass.ClusterSize.y);

@@ -1,12 +1,12 @@
 #include "stdafx.h"
-#include "OnlineDescriptorAllocator.h"
+#include "GPUDescriptorHeap.h"
 #include "Graphics.h"
 #include "RootSignature.h"
 #include "CommandContext.h"
 #include "CommandQueue.h"
 
-GlobalOnlineDescriptorHeap::GlobalOnlineDescriptorHeap(GraphicsDevice* pParent, D3D12_DESCRIPTOR_HEAP_TYPE type, uint32 dynamicBlockSize, uint32 numDescriptors)
-	: GraphicsObject(pParent), m_Type(type), m_DynamicBlockSize(dynamicBlockSize), m_NumDynamicDescriptors(numDescriptors / 2), m_NumPersistentDescriptors(numDescriptors / 2)
+GPUDescriptorHeap::GPUDescriptorHeap(GraphicsDevice* pParent, D3D12_DESCRIPTOR_HEAP_TYPE type, uint32 dynamicBlockSize, uint32 numDescriptors)
+	: GraphicsObject(pParent), m_Type(type), m_DynamicBlockSize(dynamicBlockSize), m_NumDynamicDescriptors(numDescriptors / 2), m_NumPersistentDescriptors(numDescriptors / 2), m_PersistentHandles(numDescriptors / 2, false)
 {
 	checkf(dynamicBlockSize >= 32, "Block size must be at least 128 (is %d)", dynamicBlockSize);
 	checkf(m_NumDynamicDescriptors % dynamicBlockSize == 0, "Number of descriptors must be a multiple of blockSize (%d)", dynamicBlockSize);
@@ -18,7 +18,7 @@ GlobalOnlineDescriptorHeap::GlobalOnlineDescriptorHeap(GraphicsDevice* pParent, 
 	desc.NumDescriptors = numDescriptors;
 	desc.Type = type;
 	pParent->GetDevice()->CreateDescriptorHeap(&desc, IID_PPV_ARGS(m_pHeap.GetAddressOf()));
-	D3D::SetObjectName(m_pHeap.Get(), type == D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV ? "Global CBV/SRV/UAV Heap" : "Global Sampler Heap");
+	D3D::SetObjectName(m_pHeap.Get(), type == D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV ? "GPU CBV/SRV/UAV Descriptor Heap" : "GPU Sampler Descriptor Heap");
 
 	m_DescriptorSize = pParent->GetDevice()->GetDescriptorHandleIncrementSize(type);
 	m_StartHandle = DescriptorHandle(m_pHeap->GetCPUDescriptorHandleForHeapStart(), 0, m_pHeap->GetGPUDescriptorHandleForHeapStart());
@@ -32,59 +32,63 @@ GlobalOnlineDescriptorHeap::GlobalOnlineDescriptorHeap(GraphicsDevice* pParent, 
 		m_FreeDynamicBlocks.push_back(m_DynamicBlocks.back().get());
 		currentOffset.OffsetInline(dynamicBlockSize, m_DescriptorSize);
 	}
-
-	m_FreePersistentHandles.resize(m_NumPersistentDescriptors);
-	int i = 0;
-	auto generate = [&i]() { return i++; };
-	std::generate(m_FreePersistentHandles.begin() + m_NumPersistentAllocated, m_FreePersistentHandles.end(), generate);
 }
 
-DescriptorHandle GlobalOnlineDescriptorHeap::AllocatePersistent()
+GPUDescriptorHeap::~GPUDescriptorHeap()
+{
+	CleanupPersistent();
+	checkf(m_PersistentHandles.GetNumAllocations() == 0, "Not all persistent GPU descriptors are freed.");
+
+	CleanupDynamic();
+	checkf(m_ReleasedDynamicBlocks.size() == 0, "Not all dynamic GPU descriptors are freed.");
+	checkf(m_FreeDynamicBlocks.size() == m_DynamicBlocks.size(), "Not all dynamic GPU descriptor blocks are freed.");
+}
+
+DescriptorHandle GPUDescriptorHeap::AllocatePersistent()
 {
 	std::lock_guard lock(m_AllocationLock);
-
-	while (m_PersistentDeletionQueue.size())
+	if (!m_PersistentHandles.CanAllocate())
 	{
-		const auto& f = m_PersistentDeletionQueue.front();
-		if (GetParent()->GetFrameFence()->IsComplete(f.second))
-		{
-			--m_NumPersistentAllocated;
-			m_FreePersistentHandles[m_NumPersistentAllocated] = f.first;
-			m_PersistentDeletionQueue.pop();
-		}
-		else
-		{
-			break;
-		}
+		CleanupPersistent();
 	}
 
-	checkf(m_NumPersistentAllocated < m_NumPersistentDescriptors, "Out of persistent descriptors (%d), increase heap size", m_NumPersistentDescriptors);
-
-	uint32 index = m_FreePersistentHandles[m_NumPersistentAllocated];
-	++m_NumPersistentAllocated;
-	return m_StartHandle.Offset(index, m_DescriptorSize);
+	checkf(m_PersistentHandles.CanAllocate(), "Out of persistent descriptor heap space (%d), increase heap size", m_NumPersistentDescriptors);
+	return m_StartHandle.Offset(m_PersistentHandles.Allocate(), m_DescriptorSize);
 }
 
-void GlobalOnlineDescriptorHeap::FreePersistent(DescriptorHandle& handle)
+void GPUDescriptorHeap::FreePersistent(uint32& heapIndex)
 {
-	check(!handle.IsNull());
-	FreePersistent(handle.HeapIndex);
-	handle.Reset();
-}
-
-void GlobalOnlineDescriptorHeap::FreePersistent(uint32& heapIndex)
-{
+	check(heapIndex != DescriptorHandle::InvalidHeapIndex);
 	std::lock_guard lock(m_AllocationLock);
 	m_PersistentDeletionQueue.emplace(heapIndex, GetParent()->GetFrameFence()->GetCurrentValue());
 	heapIndex = DescriptorHandle::InvalidHeapIndex;
 }
 
-DescriptorHeapBlock* GlobalOnlineDescriptorHeap::AllocateBlock()
+DescriptorHeapBlock* GPUDescriptorHeap::AllocateDynamicBlock()
 {
 	std::lock_guard lock(m_DynamicBlockAllocateMutex);
+	if (m_FreeDynamicBlocks.empty())
+	{
+		CleanupDynamic();
+	}
 
-	// Check if we can free so finished blocks
-	while(!m_ReleasedDynamicBlocks.empty())
+	checkf(!m_FreeDynamicBlocks.empty(), "Ran out of dynamic descriptor heap space (%d). Increase heap size.", m_NumDynamicDescriptors);
+	DescriptorHeapBlock* pBlock = m_FreeDynamicBlocks.back();
+	m_FreeDynamicBlocks.pop_back();
+	return pBlock;
+}
+
+void GPUDescriptorHeap::FreeDynamicBlock(const SyncPoint& syncPoint, DescriptorHeapBlock* pBlock)
+{
+	std::lock_guard lock(m_DynamicBlockAllocateMutex);
+	pBlock->SyncPoint = syncPoint;
+	pBlock->CurrentOffset = 0;
+	m_ReleasedDynamicBlocks.push(pBlock);
+}
+
+void GPUDescriptorHeap::CleanupDynamic()
+{
+	while (!m_ReleasedDynamicBlocks.empty())
 	{
 		DescriptorHeapBlock* pBlock = m_ReleasedDynamicBlocks.front();
 		if (!pBlock->SyncPoint.IsComplete())
@@ -94,28 +98,42 @@ DescriptorHeapBlock* GlobalOnlineDescriptorHeap::AllocateBlock()
 		m_ReleasedDynamicBlocks.pop();
 		m_FreeDynamicBlocks.push_back(pBlock);
 	}
-
-	checkf(!m_FreeDynamicBlocks.empty(), "Ran out of descriptor heap space. Must increase the number of descriptors.");
-
-	DescriptorHeapBlock* pBlock = m_FreeDynamicBlocks.back();
-	m_FreeDynamicBlocks.pop_back();
-	return pBlock;
 }
 
-void GlobalOnlineDescriptorHeap::FreeBlock(const SyncPoint& syncPoint, DescriptorHeapBlock* pBlock)
+void GPUDescriptorHeap::CleanupPersistent()
 {
-	std::lock_guard lock(m_DynamicBlockAllocateMutex);
-	pBlock->SyncPoint = syncPoint;
-	pBlock->CurrentOffset = 0;
-	m_ReleasedDynamicBlocks.push(pBlock);
+	while (m_PersistentDeletionQueue.size())
+	{
+		const auto& f = m_PersistentDeletionQueue.front();
+		if (GetParent()->GetFrameFence()->IsComplete(f.second))
+		{
+			m_PersistentHandles.Free(f.first);
+			m_PersistentDeletionQueue.pop();
+		}
+		else
+		{
+			break;
+		}
+	}
 }
 
-OnlineDescriptorAllocator::OnlineDescriptorAllocator(GlobalOnlineDescriptorHeap* pGlobalHeap)
+DynamicGPUDescriptorAllocator::DynamicGPUDescriptorAllocator(GPUDescriptorHeap* pGlobalHeap)
 	: GraphicsObject(pGlobalHeap->GetParent()), m_Type(pGlobalHeap->GetType()), m_pHeapAllocator(pGlobalHeap)
 {
 }
 
-void OnlineDescriptorAllocator::SetDescriptors(uint32 rootIndex, uint32 offset, const Span< D3D12_CPU_DESCRIPTOR_HANDLE>& handles)
+DynamicGPUDescriptorAllocator::~DynamicGPUDescriptorAllocator()
+{
+	if (m_pCurrentHeapBlock)
+	{
+		m_ReleasedBlocks.push_back(m_pCurrentHeapBlock);
+	}
+	Fence* pFrameFence = GetParent()->GetFrameFence();
+	SyncPoint syncPoint(pFrameFence, pFrameFence->GetLastSignaledValue());
+	ReleaseUsedHeaps(syncPoint);
+}
+
+void DynamicGPUDescriptorAllocator::SetDescriptors(uint32 rootIndex, uint32 offset, const Span< D3D12_CPU_DESCRIPTOR_HANDLE>& handles)
 {
 	RootDescriptorEntry& entry = m_RootDescriptorTable[rootIndex];
 	if (!m_StaleRootParameters.GetBit(rootIndex))
@@ -137,7 +155,7 @@ void OnlineDescriptorAllocator::SetDescriptors(uint32 rootIndex, uint32 offset, 
 	}
 }
 
-void OnlineDescriptorAllocator::BindStagedDescriptors(CommandContext& context, CommandListContext descriptorTableType)
+void DynamicGPUDescriptorAllocator::BindStagedDescriptors(CommandContext& context, CommandListContext descriptorTableType)
 {
 	for (uint32 rootIndex : m_StaleRootParameters)
 	{
@@ -159,7 +177,7 @@ void OnlineDescriptorAllocator::BindStagedDescriptors(CommandContext& context, C
 	m_StaleRootParameters.ClearAll();
 }
 
-void OnlineDescriptorAllocator::ParseRootSignature(const RootSignature* pRootSignature)
+void DynamicGPUDescriptorAllocator::ParseRootSignature(const RootSignature* pRootSignature)
 {
 	m_RootDescriptorMask = m_Type == D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER ?
 		pRootSignature->GetSamplerTableMask() : pRootSignature->GetDescriptorTableMask();
@@ -175,16 +193,16 @@ void OnlineDescriptorAllocator::ParseRootSignature(const RootSignature* pRootSig
 	}
 }
 
-void OnlineDescriptorAllocator::ReleaseUsedHeaps(const SyncPoint& syncPoint)
+void DynamicGPUDescriptorAllocator::ReleaseUsedHeaps(const SyncPoint& syncPoint)
 {
 	for (DescriptorHeapBlock* pBlock : m_ReleasedBlocks)
 	{
-		m_pHeapAllocator->FreeBlock(syncPoint, pBlock);
+		m_pHeapAllocator->FreeDynamicBlock(syncPoint, pBlock);
 	}
 	m_ReleasedBlocks.clear();
 }
 
-DescriptorHandle OnlineDescriptorAllocator::Allocate(uint32 descriptorCount)
+DescriptorHandle DynamicGPUDescriptorAllocator::Allocate(uint32 descriptorCount)
 {
 	if (!m_pCurrentHeapBlock || m_pCurrentHeapBlock->Size - m_pCurrentHeapBlock->CurrentOffset < descriptorCount)
 	{
@@ -192,7 +210,7 @@ DescriptorHandle OnlineDescriptorAllocator::Allocate(uint32 descriptorCount)
 		{
 			m_ReleasedBlocks.push_back(m_pCurrentHeapBlock);
 		}
-		m_pCurrentHeapBlock = m_pHeapAllocator->AllocateBlock();
+		m_pCurrentHeapBlock = m_pHeapAllocator->AllocateDynamicBlock();
 	}
 
 	DescriptorHandle handle = m_pCurrentHeapBlock->StartHandle.Offset(m_pCurrentHeapBlock->CurrentOffset, m_pHeapAllocator->GetDescriptorSize());

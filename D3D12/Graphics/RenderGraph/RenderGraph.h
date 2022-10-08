@@ -19,12 +19,10 @@ enum class RGPassFlag
 	Compute =	1 << 1,
 	// Pass that performs a copy resource operation. Does not play well with Raster/Compute passes
 	Copy =		1 << 2,
-	// Makes the pass invisible to profiling. Useful for adding debug markers
-	Invisible = 1 << 3,
 	// Makes a pass never be culled when not referenced.
-	NeverCull = 1 << 4,
+	NeverCull = 1 << 3,
 	// Automatically begin/end render pass
-	NoRenderPass = 1 << 5,
+	NoRenderPass = 1 << 4,
 };
 DECLARE_BITMASK_TYPE(RGPassFlag);
 
@@ -196,6 +194,8 @@ private:
 	uint32 ID;
 	RGPassFlag Flags;
 	bool IsCulled = true;
+	uint32 m_NumEventsToEnd = 0;
+	std::vector<std::string> m_EventsToStart;
 
 	std::vector<ResourceAccess> Accesses;
 	std::vector<RGPass*> PassDependencies;
@@ -232,14 +232,14 @@ private:
 class RGGraph
 {
 public:
-	RGGraph(GraphicsDevice* pDevice, RGResourcePool& resourcePool, uint64 allocatorSize = 0xFFFF);
+	RGGraph(RGResourcePool& resourcePool, uint64 allocatorSize = 0xFFFF);
 	~RGGraph();
 
 	RGGraph(const RGGraph& other) = delete;
 	RGGraph& operator=(const RGGraph& other) = delete;
 
 	void Compile();
-	SyncPoint Execute();
+	void Execute(CommandContext* pContext);
 	void DumpGraph(const char* pPath) const;
 
 	template<typename T, typename... Args>
@@ -251,6 +251,13 @@ public:
 	RGPass& AddPass(const char* pName, RGPassFlag flags)
 	{
 		RGPass* pPass = Allocate<RGPass>(std::ref(*this), m_Allocator, pName, flags, (int)m_RenderPasses.size());
+
+		for(const std::string& eventName : m_Events)
+		{
+			pPass->m_EventsToStart.push_back(eventName);
+		}
+		m_Events.clear();
+
 		m_RenderPasses.push_back(pPass);
 		return *m_RenderPasses.back();
 	}
@@ -298,6 +305,18 @@ public:
 	void ExportTexture(RGTexture* pTexture, RefCountPtr<Texture>* pTarget);
 	void ExportBuffer(RGBuffer* pBuffer, RefCountPtr<Buffer>* pTarget);
 
+	RGTexture* FindTexture(const char* pName) const
+	{
+		for (RGResource* pResource : m_Resources)
+		{
+			if (pResource->Type == RGResourceType::Texture && strcmp(pResource->GetName(), pName) == 0)
+			{
+				return (RGTexture*)pResource;
+			}
+		}
+		return nullptr;
+	}
+
 	void PushEvent(const char* pName);
 	void PopEvent();
 
@@ -308,7 +327,8 @@ private:
 	void PrepareResources(RGPass* pPass, CommandContext& context);
 	void DestroyData();
 
-	GraphicsDevice* m_pDevice;
+	std::vector<std::string> m_Events;
+
 	RGGraphAllocator m_Allocator;
 	SyncPoint m_LastSyncPoint;
 

@@ -5,7 +5,7 @@
 #include "RHI/PipelineState.h"
 #include "RHI/RootSignature.h"
 #include "RHI/Texture.h"
-#include "RHI/OfflineDescriptorAllocator.h"
+#include "RHI/CPUDescriptorHeap.h"
 #include "SceneView.h"
 #include "RenderGraph/RenderGraph.h"
 #include "ImGuizmo.h"
@@ -104,6 +104,9 @@ void ApplyImGuiStyle()
 	colors[ImGuiCol_ModalWindowDimBg] = ImVec4(0.80f, 0.80f, 0.80f, 0.35f);
 }
 
+static D3D12_CPU_DESCRIPTOR_HANDLE gFontCPUDescriptor;
+static DescriptorHandle gFontGPUDescriptor;
+
 void ImGuiRenderer::Initialize(GraphicsDevice* pDevice, WindowHandle window)
 {
 	IMGUI_CHECKVERSION();
@@ -131,16 +134,19 @@ void ImGuiRenderer::Initialize(GraphicsDevice* pDevice, WindowHandle window)
 
 	ImGui_ImplWin32_Init(window);
 
-	D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = pDevice->AllocateDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-	DescriptorHandle handle = pDevice->StoreViewDescriptor(srvHandle);
-	ImGui_ImplDX12_Init(pDevice->GetDevice(), SwapChain::NUM_FRAMES + 1, DXGI_FORMAT_R8G8B8A8_UNORM, pDevice->GetGlobalViewHeap()->GetHeap(), handle.CpuHandle, handle.GpuHandle);
+	gFontCPUDescriptor = pDevice->AllocateCPUDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	gFontGPUDescriptor = pDevice->RegisterGlobalResourceView(gFontCPUDescriptor);
+	ImGui_ImplDX12_Init(pDevice->GetDevice(), SwapChain::NUM_FRAMES + 1, DXGI_FORMAT_R8G8B8A8_UNORM, pDevice->GetGlobalViewHeap()->GetHeap(), gFontGPUDescriptor.CpuHandle, gFontGPUDescriptor.GpuHandle);
 }
 
-void ImGuiRenderer::Shutdown()
+void ImGuiRenderer::Shutdown(GraphicsDevice* pDevice)
 {
 	ImGui_ImplDX12_Shutdown();
 	ImGui_ImplWin32_Shutdown();
 	ImGui::DestroyContext();
+
+	pDevice->UnregisterGlobalResourceView(gFontGPUDescriptor);
+	pDevice->FreeCPUDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, gFontCPUDescriptor);
 }
 
 void ImGuiRenderer::NewFrame()

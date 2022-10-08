@@ -29,9 +29,7 @@ void TraceRaysRGS()
 
 	// If the probe is inactive, just trace the stable rays to determine if we have to re-activate the probe
 	if(!DDGIIsProbeActive(volume, probeIdx3D) && rayIndex >= DDGI_NUM_STABLE_RAYS)
-	{
 		return;
-	}
 
 	float3 probePosition = GetDDGIProbePosition(volume, probeIdx3D);
 	const float maxDepth = Max3(volume.ProbeSize) * 2;
@@ -58,9 +56,9 @@ void TraceRaysRGS()
 
 		if(payload.IsFrontFace())
 		{
-			MeshInstance instance = GetMeshInstance(payload.InstanceID);
+			InstanceData instance = GetInstance(payload.InstanceID);
 			VertexAttribute vertex = GetVertexAttributes(instance, payload.Barycentrics, payload.PrimitiveID);
-			MaterialData material = GetMaterial(instance.Material);
+			MaterialData material = GetMaterial(instance.MaterialIndex);
 			const uint textureMipLevel = 6;
 			MaterialProperties surface = GetMaterialProperties(material, vertex.UV, textureMipLevel);
 			BrdfData brdfData = GetBrdfData(surface);

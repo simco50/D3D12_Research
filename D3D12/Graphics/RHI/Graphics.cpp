@@ -2,7 +2,7 @@
 #include "Graphics.h"
 #include "CommandQueue.h"
 #include "CommandContext.h"
-#include "OfflineDescriptorAllocator.h"
+#include "CPUDescriptorHeap.h"
 #include "GraphicsResource.h"
 #include "RootSignature.h"
 #include "PipelineState.h"
@@ -400,30 +400,26 @@ GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
 		}
 	}
 
-	bool setStablePowerState = CommandLine::GetBool("stablepowerstate");
-	if (setStablePowerState)
+	if (CommandLine::GetBool("stablepowerstate"))
 	{
-		D3D12EnableExperimentalFeatures(0, nullptr, nullptr, nullptr);
-		m_pDevice->SetStablePowerState(TRUE);
+		VERIFY_HR(D3D12EnableExperimentalFeatures(0, nullptr, nullptr, nullptr));
+		VERIFY_HR(m_pDevice->SetStablePowerState(TRUE));
 	}
-
-	//Create all the required command queues
-	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_DIRECT] = new CommandQueue(this, D3D12_COMMAND_LIST_TYPE_DIRECT);
-	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_COMPUTE] = new CommandQueue(this, D3D12_COMMAND_LIST_TYPE_COMPUTE);
-	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_COPY] = new CommandQueue(this, D3D12_COMMAND_LIST_TYPE_COPY);
 
 	m_pFrameFence = new Fence(this, "Frame Fence");
 
-	// Allocators
-	m_pDynamicAllocationManager = new DynamicAllocationManager(this, BufferFlag::Upload);
-	m_pGlobalViewHeap = new GlobalOnlineDescriptorHeap(this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 256, 8192);
-	m_pGlobalSamplerHeap = new GlobalOnlineDescriptorHeap(this, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, 32, 2048);
+	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_DIRECT] =	new CommandQueue(this, D3D12_COMMAND_LIST_TYPE_DIRECT);
+	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_COMPUTE] =	new CommandQueue(this, D3D12_COMMAND_LIST_TYPE_COMPUTE);
+	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_COPY] =		new CommandQueue(this, D3D12_COMMAND_LIST_TYPE_COPY);
 
-	check(m_DescriptorHeaps.size() == D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES);
-	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV] = new OfflineDescriptorAllocator(this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 256);
-	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER] = new OfflineDescriptorAllocator(this, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, 128);
-	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_RTV] = new OfflineDescriptorAllocator(this, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, 128);
-	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_DSV] = new OfflineDescriptorAllocator(this, D3D12_DESCRIPTOR_HEAP_TYPE_DSV, 64);
+	m_pDynamicAllocationManager =	new DynamicAllocationManager(this, BufferFlag::Upload);
+	m_pGlobalViewHeap =				new GPUDescriptorHeap(this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 256, 8192);
+	m_pGlobalSamplerHeap =			new GPUDescriptorHeap(this, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, 32, 2048);
+
+	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV] =	new CPUDescriptorHeap(this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 256);
+	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER] =		new CPUDescriptorHeap(this, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, 128);
+	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_RTV] =			new CPUDescriptorHeap(this, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, 128);
+	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_DSV] =			new CPUDescriptorHeap(this, D3D12_DESCRIPTOR_HEAP_TYPE_DSV, 64);
 
 	uint8 smMaj, smMin;
 	m_Capabilities.GetShaderModel(smMaj, smMin);
@@ -471,12 +467,12 @@ void GraphicsDevice::FreeCommandList(CommandContext* pCommandList)
 	m_FreeCommandLists[(int)pCommandList->GetType()].push(pCommandList);
 }
 
-D3D12_CPU_DESCRIPTOR_HANDLE GraphicsDevice::AllocateDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE type)
+D3D12_CPU_DESCRIPTOR_HANDLE GraphicsDevice::AllocateCPUDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE type)
 {
 	return m_DescriptorHeaps[type]->AllocateDescriptor();
 }
 
-void GraphicsDevice::FreeDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE type, D3D12_CPU_DESCRIPTOR_HANDLE descriptor)
+void GraphicsDevice::FreeCPUDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE type, D3D12_CPU_DESCRIPTOR_HANDLE descriptor)
 {
 	m_DescriptorHeaps[type]->FreeDescriptor(descriptor);
 }
@@ -500,14 +496,14 @@ void GraphicsDevice::IdleGPU()
 	}
 }
 
-DescriptorHandle GraphicsDevice::StoreViewDescriptor(D3D12_CPU_DESCRIPTOR_HANDLE view)
+DescriptorHandle GraphicsDevice::RegisterGlobalResourceView(D3D12_CPU_DESCRIPTOR_HANDLE view)
 {
 	DescriptorHandle handle = m_pGlobalViewHeap->AllocatePersistent();
 	m_pDevice->CopyDescriptorsSimple(1, handle.CpuHandle, view, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 	return handle;
 }
 
-void GraphicsDevice::FreeViewDescriptor(DescriptorHandle& handle)
+void GraphicsDevice::UnregisterGlobalResourceView(DescriptorHandle& handle)
 {
 	if (handle.HeapIndex != DescriptorHandle::InvalidHeapIndex)
 	{
@@ -610,7 +606,7 @@ RefCountPtr<Texture> GraphicsDevice::CreateTexture(const TextureDesc& desc, cons
 	}
 	if (EnumHasAnyFlags(desc.Usage, TextureFlag::RenderTarget))
 	{
-		pTexture->m_Rtv = GetParent()->AllocateDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+		pTexture->m_Rtv = GetParent()->AllocateCPUDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 
 		D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = {};
 		rtvDesc.Format = D3D::ConvertFormat(desc.Format);
@@ -653,8 +649,8 @@ RefCountPtr<Texture> GraphicsDevice::CreateTexture(const TextureDesc& desc, cons
 	}
 	else if (EnumHasAnyFlags(desc.Usage, TextureFlag::DepthStencil))
 	{
-		pTexture->m_Rtv = GetParent()->AllocateDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
-		pTexture->m_ReadOnlyDsv = GetParent()->AllocateDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
+		pTexture->m_Rtv = GetParent()->AllocateCPUDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
+		pTexture->m_ReadOnlyDsv = GetParent()->AllocateCPUDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
 
 		D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
 		dsvDesc.Format = D3D::ConvertFormat(DSVFormat(desc.Format));
@@ -716,7 +712,7 @@ RefCountPtr<Texture> GraphicsDevice::CreateTextureForSwapchain(ID3D12Resource* p
 	pTexture->SetName("Backbuffer");
 	pTexture->SetResourceState(D3D12_RESOURCE_STATE_PRESENT);
 
-	pTexture->m_Rtv = GetParent()->AllocateDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+	pTexture->m_Rtv = GetParent()->AllocateCPUDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 	GetParent()->GetDevice()->CreateRenderTargetView(pSwapchainResource, nullptr, pTexture->m_Rtv);
 	pTexture->m_pSrv = CreateSRV(pTexture, TextureSRVDesc(0, 1));
 	return pTexture;
@@ -833,7 +829,7 @@ RefCountPtr<ShaderResourceView> GraphicsDevice::CreateSRV(Buffer* pBuffer, const
 	check(pBuffer);
 	const BufferDesc& bufferDesc = pBuffer->GetDesc();
 
-	D3D12_CPU_DESCRIPTOR_HANDLE descriptor = AllocateDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	D3D12_CPU_DESCRIPTOR_HANDLE descriptor = AllocateCPUDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
 	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
 	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
@@ -870,7 +866,7 @@ RefCountPtr<ShaderResourceView> GraphicsDevice::CreateSRV(Buffer* pBuffer, const
 
 	DescriptorHandle gpuDescriptor;
 	if(!EnumHasAnyFlags(bufferDesc.Usage, BufferFlag::NoBindless))
-		gpuDescriptor = StoreViewDescriptor(descriptor);
+		gpuDescriptor = RegisterGlobalResourceView(descriptor);
 	return new ShaderResourceView(pBuffer, descriptor, gpuDescriptor);
 }
 
@@ -906,11 +902,11 @@ RefCountPtr<UnorderedAccessView> GraphicsDevice::CreateUAV(Buffer* pBuffer, cons
 		pCounter = GetParent()->GetParent()->CreateBuffer(BufferDesc::CreateByteAddress(4, bufferDesc.Usage & BufferFlag::NoBindless), name.c_str());
 	}
 
-	D3D12_CPU_DESCRIPTOR_HANDLE descriptor = AllocateDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	D3D12_CPU_DESCRIPTOR_HANDLE descriptor = AllocateCPUDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 	m_pDevice->CreateUnorderedAccessView(pBuffer->GetResource(), pCounter ? pCounter->GetResource() : nullptr, &uavDesc, descriptor);
 	DescriptorHandle gpuDescriptor;
 	if (!EnumHasAnyFlags(bufferDesc.Usage, BufferFlag::NoBindless))
-		gpuDescriptor = StoreViewDescriptor(descriptor);
+		gpuDescriptor = RegisterGlobalResourceView(descriptor);
 	return new UnorderedAccessView(pBuffer, descriptor, gpuDescriptor, pCounter);
 }
 
@@ -979,9 +975,9 @@ RefCountPtr<ShaderResourceView> GraphicsDevice::CreateSRV(Texture* pTexture, con
 		break;
 	}
 
-	D3D12_CPU_DESCRIPTOR_HANDLE descriptor = AllocateDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	D3D12_CPU_DESCRIPTOR_HANDLE descriptor = AllocateCPUDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 	m_pDevice->CreateShaderResourceView(pTexture->GetResource(), &srvDesc, descriptor);
-	DescriptorHandle gpuDescriptor = StoreViewDescriptor(descriptor);
+	DescriptorHandle gpuDescriptor = RegisterGlobalResourceView(descriptor);
 	return new ShaderResourceView(pTexture, descriptor, gpuDescriptor);
 }
 
@@ -1031,9 +1027,9 @@ RefCountPtr<UnorderedAccessView> GraphicsDevice::CreateUAV(Texture* pTexture, co
 	uavDesc.Texture3D.MipSlice = desc.MipLevel;
 	uavDesc.Format = D3D::ConvertFormat(pTexture->GetFormat());
 
-	D3D12_CPU_DESCRIPTOR_HANDLE descriptor = AllocateDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	D3D12_CPU_DESCRIPTOR_HANDLE descriptor = AllocateCPUDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 	m_pDevice->CreateUnorderedAccessView(pTexture->GetResource(), nullptr, &uavDesc, descriptor);
-	DescriptorHandle gpuDescriptor = StoreViewDescriptor(descriptor);
+	DescriptorHandle gpuDescriptor = RegisterGlobalResourceView(descriptor);
 	return new UnorderedAccessView(pTexture, descriptor, gpuDescriptor);
 }
 
@@ -1097,8 +1093,7 @@ void GraphicsCapabilities::Initialize(GraphicsDevice* pDevice)
 {
 	m_pDevice = pDevice;
 
-	check(m_FeatureSupport.Init(pDevice->GetDevice()) == S_OK);
-	checkf(m_FeatureSupport.ResourceHeapTier() >= D3D12_RESOURCE_HEAP_TIER_2, "Device does not support Resource Heap Tier 2 or higher. Tier 1 is not supported");
+	VERIFY_HR(m_FeatureSupport.Init(pDevice->GetDevice()));
 	checkf(m_FeatureSupport.ResourceBindingTier() >= D3D12_RESOURCE_BINDING_TIER_3, "Device does not support Resource Binding Tier 3 or higher. Tier 2 and under is not supported.");
 	checkf(m_FeatureSupport.HighestShaderModel() >= D3D_SHADER_MODEL_6_6, "Device does not support SM 6.6 which is required for dynamic indexing");
 	checkf(m_FeatureSupport.WaveOps(), "Device does not support wave ops which is required.");
@@ -1209,22 +1204,23 @@ SwapChain::SwapChain(GraphicsDevice* pDevice, DisplayMode displayMode, WindowHan
 {
 	m_pPresentFence = new Fence(pDevice, "Present Fence");
 
+	DXGI_SWAP_CHAIN_DESC1 desc{};
 	BOOL allowTearing = FALSE;
 	if (SUCCEEDED(pDevice->GetFactory()->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &allowTearing, sizeof(BOOL))))
 	{
 		m_AllowTearing = allowTearing;
+		desc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
 	}
-
-	DXGI_SWAP_CHAIN_DESC1 desc{};
 	desc.AlphaMode = DXGI_ALPHA_MODE_IGNORE;
 	desc.BufferCount = (uint32)m_Backbuffers.size();
 	desc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-	desc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
 	desc.Format = m_Format;
 	desc.Width = 0;
 	desc.Height = 0;
 	desc.Scaling = DXGI_SCALING_NONE;
 	desc.Stereo = FALSE;
+	// The compositor can use DirectFlip, where it uses the application's back buffer as the entire display back buffer.
+	// With DXGI_SWAP_EFFECT_FLIP_DISCARD, the compositor can _could_ still perform this optimization, by drawing other content onto the application's back buffer.
 	desc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
 	desc.SampleDesc.Count = 1;
 	desc.SampleDesc.Quality = 0;
@@ -1315,7 +1311,7 @@ void SwapChain::OnResizeOrMove(uint32 width, uint32 height)
 	}
 }
 
-void SwapChain::Present(bool vsync)
+void SwapChain::Present()
 {
 	// Wait until the current backbuffer image is ready - Not doing this makes running under PIX crash
 	SyncPoint& presentSyncPoint = m_PresentSyncPoints[m_pSwapchain->GetCurrentBackBufferIndex()];
@@ -1324,7 +1320,7 @@ void SwapChain::Present(bool vsync)
 		presentSyncPoint.Wait();
 	}
 
-	m_pSwapchain->Present(vsync, !vsync && m_AllowTearing ? DXGI_PRESENT_ALLOW_TEARING : 0);
+	m_pSwapchain->Present(m_Vsync ? 1 : 0, !m_Vsync && m_AllowTearing ? DXGI_PRESENT_ALLOW_TEARING : 0);
 	m_CurrentImage = m_pSwapchain->GetCurrentBackBufferIndex();
 
 	CommandQueue* pDirectQueue = GetParent()->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT);

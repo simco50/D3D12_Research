@@ -150,11 +150,11 @@ float GetAttenuation(Light light, float3 wPos)
 {
 	float attentuation = 1.0f;
 
-	if(light.PointAttenuation())
+	if(light.IsPoint || light.IsSpot)
 	{
 		float3 L = light.Position - wPos;
 		attentuation *= RadialAttenuation(L, light.Range);
-		if(light.DirectionalAttenuation())
+		if(light.IsSpot)
 		{
 			attentuation *= DirectionalAttenuation(L, light.Direction, light.SpotlightAngles.y, light.SpotlightAngles.x);
 		}

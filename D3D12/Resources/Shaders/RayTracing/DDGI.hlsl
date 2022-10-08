@@ -61,9 +61,7 @@ void UpdateIrradianceCS(
 	// Early exit could be dangerous here as we have rely on groupshared memory
 	// However the entire group will short-circuit if the probe is inactive so should be fine.
 	if(!DDGIIsProbeActive(volume, probeCoordinates))
-	{
 		return;
-	}
 
 	uint2 texelLocation = GetDDGIProbeTexel(volume, probeCoordinates, DDGI_PROBE_IRRADIANCE_TEXELS);
 	uint2 cornerTexelLocation = texelLocation - 1u;
@@ -155,9 +153,7 @@ void UpdateDepthCS(
 	// Early exit could be dangerous here as we have rely on groupshared memory
 	// However the entire group will short-circuit if the probe is inactive so should be fine.
 	if(!DDGIIsProbeActive(volume, probeCoordinates))
-	{
 		return;
-	}
 
 	uint2 texelLocation = GetDDGIProbeTexel(volume, probeCoordinates, DDGI_PROBE_DEPTH_TEXELS);
 	uint2 cornerTexelLocation = texelLocation - 1u;

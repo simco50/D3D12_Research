@@ -12,7 +12,7 @@ struct PerViewData
 	float2 LightGridParams;
 };
 
-ConstantBuffer<InstanceData> cObject : register(b0);
+ConstantBuffer<InstanceIndex> cObject : register(b0);
 ConstantBuffer<PerViewData> cPass : register(b1);
 
 struct InterpolantsVSToPS
@@ -160,11 +160,11 @@ void ASMain(uint threadID : SV_DispatchThreadID)
 {
 	bool visible = false;
 
-	MeshData mesh = GetMesh(cObject.Mesh);
-	float4x4 world = GetTransform(cObject.World);
+	InstanceData instance = GetInstance(cObject.ID);
+	MeshData mesh = GetMesh(instance.MeshIndex);;
 	if (threadID < mesh.MeshletCount)
 	{
-		visible = IsVisible(mesh, world, threadID);
+		visible = IsVisible(mesh, instance.LocalToWorld, threadID);
 	}
 
 	if (visible)
@@ -189,23 +189,21 @@ void MSMain(
 	out vertices InterpolantsVSToPS verts[MESHLET_MAX_VERTICES],
 	out indices uint3 triangles[MESHLET_MAX_TRIANGLES])
 {
-	MeshData mesh = GetMesh(cObject.Mesh);
+	InstanceData instance = GetInstance(cObject.ID);
+	MeshData mesh = GetMesh(instance.MeshIndex);
 
 	uint meshletIndex = payload.Indices[groupID];
 	if(meshletIndex >= mesh.MeshletCount)
-	{
 		return;
-	}
 
 	Meshlet meshlet = BufferLoad<Meshlet>(mesh.BufferIndex, meshletIndex, mesh.MeshletOffset);
 
 	SetMeshOutputCounts(meshlet.VertexCount, meshlet.TriangleCount);
 
-	float4x4 world = GetTransform(cObject.World);
 	for(uint i = groupThreadID; i < meshlet.VertexCount; i += NUM_MESHLET_THREADS)
 	{
 		uint vertexId = BufferLoad<uint>(mesh.BufferIndex, i + meshlet.VertexOffset, mesh.MeshletVertexOffset);
-		InterpolantsVSToPS result = FetchVertexAttributes(mesh, world, vertexId);
+		InterpolantsVSToPS result = FetchVertexAttributes(mesh, instance.LocalToWorld, vertexId);
 		result.ID = meshletIndex;
 		verts[i] = result;
 	}
@@ -219,9 +217,9 @@ void MSMain(
 
 InterpolantsVSToPS VSMain(uint vertexId : SV_VertexID)
 {
-	MeshData mesh = GetMesh(cObject.Mesh);
-	float4x4 world = GetTransform(cObject.World);
-	InterpolantsVSToPS result = FetchVertexAttributes(mesh, world, vertexId);
+	InstanceData instance = GetInstance(cObject.ID);
+	MeshData mesh = GetMesh(instance.MeshIndex);
+	InterpolantsVSToPS result = FetchVertexAttributes(mesh, instance.LocalToWorld, vertexId);
 	return result;
 }
 
@@ -275,7 +273,8 @@ void PSMain(InterpolantsVSToPS input,
 
 	float3 V = normalize(cView.ViewLocation - input.PositionWS);
 
-	MaterialData material = GetMaterial(cObject.Material);
+	InstanceData instance = GetInstance(cObject.ID);
+	MaterialData material = GetMaterial(instance.MaterialIndex);
 	material.BaseColorFactor *= UIntToColor(input.Color);
 	MaterialProperties surface = GetMaterialProperties(material, input.UV);
 	float3 N = normalize(input.Normal);

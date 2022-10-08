@@ -7,17 +7,17 @@ namespace ShaderInterop
 #define MAX_SHADOW_CASTERS 32
 
 #ifdef __cplusplus
-	using float2 = Vector2;
-	using float3 = Vector3;
-	using float4 = Vector4;
-	using uint = uint32;
-	using uint2 = Vector2i;
-	using uint3 = Vector3i;
-	using uint4 = Vector4i;
-	using int2 = Vector2i;
-	using int3 = Vector3i;
-	using int4 = Vector4i;
-	using float4x4 = Matrix;
+	using float2 =		Vector2;
+	using float3 =		Vector3;
+	using float4 =		Vector4;
+	using uint =		uint32;
+	using uint2 =		Vector2i;
+	using uint3 =		Vector3i;
+	using uint4 =		Vector4i;
+	using int2 =		Vector2i;
+	using int3 =		Vector3i;
+	using int4 =		Vector4i;
+	using float4x4 =	Matrix;
 
 	template<typename T> struct ConstantBuffer { T Data; };
 #endif
@@ -89,14 +89,21 @@ namespace ShaderInterop
 		//uint ConeS8;
 	};
 
-	struct MeshInstance
+	struct InstanceData
 	{
-		uint Material;
-		uint Mesh;
-		uint World;
+		float4x4 LocalToWorld;
+		float3 BoundsCenter;
+		uint : 32;
+		float3 BoundsExtent;
+		uint ID;
+		uint MaterialIndex;
+		uint MeshIndex;
 	};
 
-	typedef MeshInstance InstanceData;
+	struct InstanceIndex
+	{
+		uint ID;
+	};
 
 	inline float4 UIntToColor(uint c)
 	{
@@ -106,16 +113,6 @@ namespace ShaderInterop
 			(float)(((c >> 8) & 0xFF) / 255.0f),
 			(float)(((c >> 0) & 0xFF) / 255.0f)
 		);
-	}
-
-	inline bool EnumHasAnyFlag(uint value, uint mask)
-	{
-		return (value & mask) != 0;
-	}
-
-	inline bool EnumHasAllFlags(uint value, uint mask)
-	{
-		return (value & mask) == mask;
 	}
 
 	struct Light
@@ -143,9 +140,6 @@ namespace ShaderInterop
 #ifndef __cplusplus
 		float3 GetColor() { return UIntToColor(Color).rgb; }
 #endif
-
-		bool PointAttenuation() { return IsPoint || IsSpot; }
-		bool DirectionalAttenuation() { return IsSpot; }
 	};
 
 	struct DDGIVolume
@@ -195,14 +189,13 @@ namespace ShaderInterop
 		uint LightCount;
 		uint NumDDGIVolumes;
 
-		uint TLASIndex;
+		uint InstancesIndex;
 		uint MeshesIndex;
 		uint MaterialsIndex;
-		uint MeshInstancesIndex;
-		uint TransformsIndex;
 		uint LightsIndex;
 		uint SkyIndex;
 		uint DDGIVolumesIndex;
+		uint TLASIndex;
 	};
 
 #ifdef __cplusplus

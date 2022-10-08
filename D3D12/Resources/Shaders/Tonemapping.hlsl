@@ -25,10 +25,8 @@ Texture2D tBloom : register(t2);
 [numthreads(BLOCK_SIZE, BLOCK_SIZE, 1)]
 void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 {
-	if(dispatchThreadId.x >= cView.TargetDimensions.x || dispatchThreadId.y >= cView.TargetDimensions.y)
-	{
+	if(any(dispatchThreadId.xy >= cView.TargetDimensions))
 		return;
-	}
 
 	float2 uv = (0.5f + dispatchThreadId.xy) * cView.TargetDimensionsInv;
 

@@ -96,9 +96,6 @@ void RGGraph::DumpGraph(const char* pPath) const
 	int passIndex = 0;
 	for (RGPass* pPass : m_RenderPasses)
 	{
-		if (EnumHasAnyFlags(pPass->Flags, RGPassFlag::Invisible))
-			continue;
-
 		stream << "Pass" << pPass->ID;
 		stream << "[";
 		stream << "\"" << pPass->Name << "\"<br/>";

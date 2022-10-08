@@ -15,8 +15,8 @@ namespace ImGui
 
 namespace ImGuiRenderer
 {
-	void Initialize(GraphicsDevice* pParent, WindowHandle window);
-	void Shutdown();
+	void Initialize(GraphicsDevice* pDevice, WindowHandle window);
+	void Shutdown(GraphicsDevice* pDevice);
 
 	void NewFrame();
 	void Render(RGGraph& graph, Texture* pRenderTarget);

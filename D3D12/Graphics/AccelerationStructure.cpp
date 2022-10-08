@@ -128,7 +128,7 @@ void AccelerationStructure::Build(CommandContext& context, const SceneView& view
 				BLASInstance& blasInstance = blasInstances.emplace_back();
 				blasInstance.GPUAddress = pMesh->pBLAS->GetGpuHandle();
 				blasInstance.Flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE;
-				blasInstance.WorldMatrix = batch.InstanceData.World;
+				blasInstance.WorldMatrix = batch.InstanceID;
 				if (batch.WorldMatrix.Determinant() < 0)
 				{
 					blasInstance.Flags |= D3D12_RAYTRACING_INSTANCE_FLAG_TRIANGLE_FRONT_COUNTERCLOCKWISE;

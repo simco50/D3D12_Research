@@ -31,7 +31,7 @@ void ConsoleManager::RegisterConsoleObject(const char* pName, IConsoleObject* pO
 bool ConsoleManager::Execute(const char* pCommand)
 {
 	char cmdLower[1024];
-	CString::ToLower(pCommand, cmdLower);
+	strcpy_s(cmdLower, pCommand);
 	CString::TrimSpaces(cmdLower);
 
 	const char* argList[16];
@@ -39,7 +39,10 @@ bool ConsoleManager::Execute(const char* pCommand)
 	int numArgs = CString::SplitString(cmdLower, buffer, &argList[0], ARRAYSIZE(argList), true, ' ');
 	if (numArgs > 0)
 	{
-		auto it = gCvarMap.find(*argList);
+		char cmd[128];
+		CString::ToLower(argList[0], cmd);
+
+		auto it = gCvarMap.find(cmd);
 		if (it != gCvarMap.end())
 		{
 			if (IConsoleVariable* pVariable = it->second->AsVariable())

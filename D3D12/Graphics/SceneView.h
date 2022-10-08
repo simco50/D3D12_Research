@@ -67,9 +67,9 @@ struct Batch
 		AlphaMask = 2,
 		AlphaBlend = 4,
 	};
-	ShaderInterop::InstanceData InstanceData;
+	uint32 InstanceID;
 	Blending BlendMode = Blending::Opaque;
-	SubMesh* pMesh = nullptr;
+	SubMesh* pMesh;
 	Matrix WorldMatrix;
 	BoundingBox Bounds;
 	float Radius;
@@ -94,8 +94,7 @@ struct SceneView
 	RefCountPtr<Buffer> pLightBuffer;
 	RefCountPtr<Buffer> pMaterialBuffer;
 	RefCountPtr<Buffer> pMeshBuffer;
-	RefCountPtr<Buffer> pMeshInstanceBuffer;
-	RefCountPtr<Buffer> pTransformsBuffer;
+	RefCountPtr<Buffer> pInstanceBuffer;
 	RefCountPtr<Buffer> pDDGIVolumesBuffer;
 	uint32 NumDDGIVolumes = 0;
 	RefCountPtr<Texture> pSky;
@@ -109,6 +108,7 @@ struct SceneView
 	std::vector<ShadowView> ShadowViews;
 	Vector4 ShadowCascadeDepths;
 	uint32 NumShadowCascades;
+	uint32 NumLights;
 
 	Vector2i GetDimensions() const;
 };
@@ -158,6 +158,7 @@ namespace GraphicsCommon
 	Texture* GetDefaultTexture(DefaultTexture type);
 
 	extern RefCountPtr<CommandSignature> pIndirectDrawSignature;
+	extern RefCountPtr<CommandSignature> pIndirectDrawIndexedSignature;
 	extern RefCountPtr<CommandSignature> pIndirectDispatchSignature;
 	extern RefCountPtr<CommandSignature> pIndirectDispatchMeshSignature;
 

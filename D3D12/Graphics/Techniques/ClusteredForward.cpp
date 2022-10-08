@@ -191,7 +191,7 @@ void ClusteredForward::Execute(RGGraph& graph, const SceneView* pView, SceneText
 	}
 }
 
-void ClusteredForward::ComputeLightCulling(RGGraph& graph, const SceneView* pView, ClusteredLightCullData& cullData)
+void ClusteredForward::ComputeLightCulling(RGGraph& graph, const SceneView* pView, LightCullData3D& cullData)
 {
 	RG_GRAPH_SCOPE("Light Culling", graph);
 
@@ -285,7 +285,7 @@ void ClusteredForward::ComputeLightCulling(RGGraph& graph, const SceneView* pVie
 	blackboardData.LightGridParams = cullData.LightGridParams;
 }
 
-void ClusteredForward::VisualizeClusters(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures, ClusteredLightCullData& cullData)
+void ClusteredForward::VisualizeClusters(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures, LightCullData3D& cullData)
 {
 	uint32 totalClusterCount = cullData.ClusterCount.x * cullData.ClusterCount.y * cullData.ClusterCount.z;
 	RGBuffer* pDebugLightGrid = RGUtils::CreatePersistentBuffer(graph, "Debug Light Grid", BufferDesc::CreateStructured(2 * totalClusterCount, sizeof(uint32)), &cullData.pDebugLightGrid, true);
@@ -319,7 +319,7 @@ void ClusteredForward::VisualizeClusters(RGGraph& graph, const SceneView* pView,
 			});
 }
 
-RGTexture* ClusteredForward::RenderVolumetricFog(RGGraph& graph, const SceneView* pView, const ClusteredLightCullData& lightCullData, VolumetricFogData& fogData)
+RGTexture* ClusteredForward::RenderVolumetricFog(RGGraph& graph, const SceneView* pView, const LightCullData3D& lightCullData, VolumetricFogData& fogData)
 {
 	RG_GRAPH_SCOPE("Volumetric Lighting", graph);
 
@@ -407,7 +407,7 @@ RGTexture* ClusteredForward::RenderVolumetricFog(RGGraph& graph, const SceneView
 	return pFinalVolumeFog;
 }
 
-void ClusteredForward::RenderBasePass(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures, const ClusteredLightCullData& lightCullData, RGTexture* pFogTexture)
+void ClusteredForward::RenderBasePass(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures, const LightCullData3D& lightCullData, RGTexture* pFogTexture)
 {
 	static bool useMeshShader = false;
 	if (ImGui::Begin("Parameters"))

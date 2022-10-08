@@ -12,9 +12,11 @@ RGPass& RGPass::Read(Span<RGResource*> resources)
 		state = D3D12_RESOURCE_STATE_COPY_SOURCE;
 	for (RGResource* pResource : resources)
 	{
-		bool isIndirectArgs = pResource->Type == RGResourceType::Buffer && EnumHasAllFlags(static_cast<RGBuffer*>(pResource)->GetDesc().Usage, BufferFlag::IndirectArguments);
-
-		AddAccess(pResource, isIndirectArgs ? D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT : state);
+		if (pResource)
+		{
+			bool isIndirectArgs = pResource->Type == RGResourceType::Buffer && EnumHasAllFlags(static_cast<RGBuffer*>(pResource)->GetDesc().Usage, BufferFlag::IndirectArguments);
+			AddAccess(pResource, isIndirectArgs ? D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT : state);
+		}
 	}
 	return *this;
 }
@@ -27,7 +29,10 @@ RGPass& RGPass::Write(Span<RGResource*> resources)
 
 	for (RGResource* pResource : resources)
 	{
-		AddAccess(pResource, state);
+		if (pResource)
+		{
+			AddAccess(pResource, state);
+		}
 	}
 
 	return *this;
@@ -58,6 +63,7 @@ void RGPass::AddAccess(RGResource* pResource, D3D12_RESOURCE_STATES state)
 	auto it = std::find_if(Accesses.begin(), Accesses.end(), [=](const ResourceAccess& access) { return pResource == access.pResource; });
 	if (it != Accesses.end())
 	{
+		checkf(!EnumHasAllFlags(it->Access, state), "Redundant state set on resource '%s'", pResource->Name);
 		checkf(!ResourceState::HasWriteResourceState(it->Access) || !ResourceState::HasWriteResourceState(state), "Resource (%s) may only have 1 write state", pResource->Name);
 		it->Access |= state;
 	}
@@ -67,8 +73,8 @@ void RGPass::AddAccess(RGResource* pResource, D3D12_RESOURCE_STATES state)
 	}
 }
 
-RGGraph::RGGraph(GraphicsDevice* pDevice, RGResourcePool& resourcePool, uint64 allocatorSize /*= 0xFFFF*/)
-	: m_pDevice(pDevice), m_Allocator(allocatorSize), m_ResourcePool(resourcePool)
+RGGraph::RGGraph(RGResourcePool& resourcePool, uint64 allocatorSize /*= 0xFFFF*/)
+	: m_Allocator(allocatorSize), m_ResourcePool(resourcePool)
 {
 }
 
@@ -255,36 +261,35 @@ void RGGraph::ExportBuffer(RGBuffer* pBuffer, RefCountPtr<Buffer>* pTarget)
 
 void RGGraph::PushEvent(const char* pName)
 {
-	std::string name = pName;
-	AddPass("EventPass", RGPassFlag::Invisible | RGPassFlag::NeverCull)
-		.Bind([name](CommandContext& context)
-			{
-				GPU_PROFILE_BEGIN(name.c_str(), &context);
-			});
+	m_Events.push_back(pName);
 }
 
 void RGGraph::PopEvent()
 {
-	AddPass("EventPass", RGPassFlag::Invisible | RGPassFlag::NeverCull)
-		.Bind([](CommandContext& context)
-			{
-				GPU_PROFILE_END();
-			});
+	if (!m_Events.empty())
+	{
+		m_Events.pop_back();
+	}
+	else
+	{
+		++m_RenderPasses.back()->m_NumEventsToEnd;
+	}
 }
 
-SyncPoint RGGraph::Execute()
+void RGGraph::Execute(CommandContext* pContext)
 {
-	CommandContext* pContext = m_pDevice->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
-	for (uint32 passIndex = 0; passIndex < (uint32)m_RenderPasses.size(); ++passIndex)
+	GPU_PROFILE_SCOPE("Render", pContext);
 	{
-		RGPass* pPass = m_RenderPasses[passIndex];
-
-		if (!pPass->IsCulled)
+		for (uint32 passIndex = 0; passIndex < (uint32)m_RenderPasses.size(); ++passIndex)
 		{
-			ExecutePass(pPass, *pContext);
+			RGPass* pPass = m_RenderPasses[passIndex];
+
+			if (!pPass->IsCulled)
+			{
+				ExecutePass(pPass, *pContext);
+			}
 		}
 	}
-	m_LastSyncPoint = pContext->Execute(false);
 
 	for (ExportedTexture& exportResource : m_ExportTextures)
 	{
@@ -303,16 +308,20 @@ SyncPoint RGGraph::Execute()
 	}
 
 	DestroyData();
-	return m_LastSyncPoint;
 }
 
 void RGGraph::ExecutePass(RGPass* pPass, CommandContext& context)
 {
+	for (const std::string& event : pPass->m_EventsToStart)
+	{
+		GPU_PROFILE_BEGIN(event.c_str(), &context);
+	}
+
 	PrepareResources(pPass, context);
 
-	if (pPass->pExecuteCallback)
+	if(pPass->pExecuteCallback)
 	{
-		GPU_PROFILE_SCOPE_CONDITIONAL(pPass->Name, &context, !EnumHasAnyFlags(pPass->Flags, RGPassFlag::Invisible));
+		GPU_PROFILE_SCOPE(pPass->Name, &context);
 		RGPassResources resources(*pPass);
 
 		bool useRenderPass = EnumHasAllFlags(pPass->Flags, RGPassFlag::Raster) && !EnumHasAllFlags(pPass->Flags, RGPassFlag::NoRenderPass);
@@ -324,6 +333,11 @@ void RGGraph::ExecutePass(RGPass* pPass, CommandContext& context)
 
 		if (useRenderPass)
 			context.EndRenderPass();
+	}
+
+	while (pPass->m_NumEventsToEnd--)
+	{
+		GPU_PROFILE_END();
 	}
 }
 
