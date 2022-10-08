@@ -76,30 +76,8 @@ GPUDebugRenderer::GPUDebugRenderer(GraphicsDevice* pDevice, const FontCreateSett
 		psoDesc.SetName("Render Lines");
 		m_pRenderLinesPSO = pDevice->CreatePipeline(psoDesc);
 	}
-	struct CharacterInstance
-	{
-		Vector2 Position;
-		uint32 Character;
-		uint32 Color;
-	};
 
-	struct LineInstance
-	{
-		Vector3 A;
-		Vector3 B;
-		uint32 Color;
-	};
-
-	struct RenderData
-	{
-		uint32 CharacterCounter;
-		uint32 LineCounter;
-		uint32 padding[2];
-		CharacterInstance Characters[512];
-		LineInstance Lines[512];
-	};
-
-	m_pRenderDataBuffer = pDevice->CreateBuffer(BufferDesc::CreateStructured(sizeof(RenderData) / sizeof(uint32), sizeof(uint32)), "Shader Debug Render Data");
+	m_pRenderDataBuffer = pDevice->CreateBuffer(BufferDesc::CreateByteAddress(4ull * Math::MegaBytesToBytes), "Shader Debug Render Data");
 
 	CommandContext* pContext = pDevice->AllocateCommandContext();
 	ProcessFont(m_Font, fontSettings);

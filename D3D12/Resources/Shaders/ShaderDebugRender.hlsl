@@ -86,26 +86,28 @@ void RasterizeGlyphCS(uint3 threadID : SV_DispatchThreadID)
 	uOutput[pixelIndex + cPass.Location] = shade;
 }
 
-RWStructuredBuffer<uint> uRenderData : register(u0);
+RWByteAddressBuffer uRenderData : register(u0);
 RWStructuredBuffer<D3D12_DRAW_ARGUMENTS> uDrawArgs : register(u1);
 
 [numthreads(1, 1, 1)]
 void BuildIndirectDrawArgsCS(uint threadID : SV_DispatchThreadID)
 {
-	uint offset = 0;
+	uint numCharacters = uRenderData.Load(TEXT_COUNTER_OFFSET * 4);
+	uRenderData.Store(TEXT_COUNTER_OFFSET * 4, 0);
+	uint numLines = uRenderData.Load(LINE_COUNTER_OFFSET * 4);
+	uRenderData.Store(LINE_COUNTER_OFFSET * 4, 0);
 
+	uint offset = 0;
 	D3D12_DRAW_ARGUMENTS args = (D3D12_DRAW_ARGUMENTS)0;
 	{
 		args.VertexCountPerInstance = 4;
-		args.InstanceCount = uRenderData[TEXT_COUNTER_OFFSET];
+		args.InstanceCount = numCharacters;
 		uDrawArgs[offset++] = args;
-		uRenderData[TEXT_COUNTER_OFFSET] = 0;
 	}
 	{
 		args.VertexCountPerInstance = 2;
-		args.InstanceCount = uRenderData[LINE_COUNTER_OFFSET];
+		args.InstanceCount = numLines;
 		uDrawArgs[offset++] = args;
-		uRenderData[LINE_COUNTER_OFFSET] = 0;
 	}
 }
 
@@ -119,7 +121,13 @@ struct RenderData
 ConstantBuffer<RenderData> cData : register(b0);
 Texture2D<float> tFontAtlas : register(t0);
 StructuredBuffer<Glyph> tGlyphData : register(t1);
-StructuredBuffer<uint> tRenderData : register(t2);
+ByteAddressBuffer tRenderData : register(t2);
+
+CharacterInstance GetChar(uint index, ByteAddressBuffer renderData)
+{
+	uint offset = index * sizeof(CharacterInstance) + TEXT_INSTANCES_OFFSET;
+	return renderData.Load<CharacterInstance>(offset * 4);
+}
 
 void RenderGlyphVS(
 	uint vertexID : SV_VertexID,
@@ -154,6 +162,12 @@ float4 RenderGlyphPS(
 	float alpha = tFontAtlas.SampleLevel(sLinearClamp, uv, 0);
 	float4 c = alpha * UIntToColor(color);
 	return float4(c.rgb, alpha);
+}
+
+LineInstance GetLine(uint index, ByteAddressBuffer renderData)
+{
+	uint offset = index * sizeof(LineInstance) + LINE_INSTANCES_OFFSET;
+	return renderData.Load<LineInstance>(offset * 4);
 }
 
 void RenderLineVS(

@@ -28,58 +28,48 @@ struct Glyph
 	uint Width;
 };
 
-void DrawChar(CharacterInstance instance)
+void DrawChar(float2 position, uint character, uint color = 0xFFFFFFFF)
 {
-	RWStructuredBuffer<uint> renderData = ResourceDescriptorHeap[cView.DebugRenderDataIndex];
+	RWByteAddressBuffer renderData = ResourceDescriptorHeap[cView.DebugRenderDataIndex];
 	uint offset;
-	InterlockedAdd(renderData[TEXT_COUNTER_OFFSET], 1, offset);
+	renderData.InterlockedAdd(TEXT_COUNTER_OFFSET * 4, 1, offset);
 	offset *= sizeof(CharacterInstance);
 	offset += TEXT_INSTANCES_OFFSET;
-	renderData[offset++] = instance.Position.x;
-	renderData[offset++] = instance.Position.y;
-	renderData[offset++] = instance.Character;
-	renderData[offset++] = instance.Color;
-}
-
-CharacterInstance GetChar(uint index, StructuredBuffer<uint> renderData)
-{
 	CharacterInstance instance;
-	uint offset = index * sizeof(CharacterInstance) + TEXT_INSTANCES_OFFSET;
-	instance.Position.x = renderData[offset++];
-	instance.Position.y = renderData[offset++];
-	instance.Character = renderData[offset++];
-	instance.Color = renderData[offset++];
-	return instance;
+	instance.Position = position;
+	instance.Character = character;
+	instance.Color = color;
+	renderData.Store(offset * 4, instance);
 }
 
 void DrawLine(float3 a, float3 b, uint color = 0xFFFFFFFF)
 {
-	RWStructuredBuffer<uint> renderData = ResourceDescriptorHeap[cView.DebugRenderDataIndex];
+	RWByteAddressBuffer renderData = ResourceDescriptorHeap[cView.DebugRenderDataIndex];
 	uint offset;
-	InterlockedAdd(renderData[LINE_COUNTER_OFFSET], 1, offset);
+	renderData.InterlockedAdd(LINE_COUNTER_OFFSET * 4, 1, offset);
 	offset *= sizeof(LineInstance);
 	offset += LINE_INSTANCES_OFFSET;
-	renderData[offset++] = asuint(a.x);
-	renderData[offset++] = asuint(a.y);
-	renderData[offset++] = asuint(a.z);
-	renderData[offset++] = asuint(b.x);
-	renderData[offset++] = asuint(b.y);
-	renderData[offset++] = asuint(b.z);
-	renderData[offset++] = color;
+	LineInstance instance;
+	instance.A = a;
+	instance.B = b;
+	instance.Color = color;
+	renderData.Store(offset * 4, instance);
 }
 
-LineInstance GetLine(uint index, StructuredBuffer<uint> renderData)
+void DrawCube(float3 center, float3 extents, uint color = 0xFFFFFFFF)
 {
-	LineInstance instance;
-	uint offset = index * sizeof(LineInstance) + LINE_INSTANCES_OFFSET;
-	instance.A.x = asfloat(renderData[offset++]);
-	instance.A.y = asfloat(renderData[offset++]);
-	instance.A.z = asfloat(renderData[offset++]);
-	instance.B.x = asfloat(renderData[offset++]);
-	instance.B.y = asfloat(renderData[offset++]);
-	instance.B.z = asfloat(renderData[offset++]);
-	instance.Color = renderData[offset++];
-	return instance;
+	DrawLine(center + float3(-1, -1, -1) * extents, center + float3(1, -1, -1) * extents, color);
+	DrawLine(center + float3(-1, -1, -1) * extents, center + float3(-1, 1, -1) * extents, color);
+	DrawLine(center + float3(-1, -1, -1) * extents, center + float3(-1, -1, 1) * extents, color);
+	DrawLine(center + float3(1, 1, 1) * extents, center + float3(1, 1, -1) * extents, color);
+	DrawLine(center + float3(1, 1, 1) * extents, center + float3(-1, 1, 1) * extents, color);
+	DrawLine(center + float3(1, 1, 1) * extents, center + float3(1, -1, 1) * extents, color);
+	DrawLine(center + float3(-1, 1, 1) * extents, center + float3(-1, -1, 1) * extents, color);
+	DrawLine(center + float3(1, 1, -1) * extents, center + float3(1, -1, -1) * extents, color);
+	DrawLine(center + float3(1, -1, 1) * extents, center + float3(-1, -1, 1) * extents, color);
+	DrawLine(center + float3(1, -1, -1) * extents, center + float3(1, -1, 1) * extents, color);
+	DrawLine(center + float3(-1, 1, -1) * extents, center + float3(1, 1, -1) * extents, color);
+	DrawLine(center + float3(-1, 1, -1) * extents, center + float3(-1, 1, 1) * extents, color);
 }
 
 struct TextWriter
@@ -92,11 +82,10 @@ struct TextWriter
 		StructuredBuffer<Glyph> glyphBuffer = ResourceDescriptorHeap[cView.FontDataIndex];
 		Glyph glyph = glyphBuffer[character];
 
-		CharacterInstance instance;
-		instance.Position = CursorLocation + int2(-glyph.Offset.x, glyph.Offset.y);
-		instance.Character = character;
-		instance.Color = color;
-		DrawChar(instance);
+		DrawChar(
+			CursorLocation + int2(-glyph.Offset.x, glyph.Offset.y),
+			character,
+			color);
 
 		CursorLocation.x += glyph.Width;
 	}
@@ -145,7 +134,13 @@ struct TextWriter
 		Text(d, e, f, g, color);
 	}
 
-	void Int(int value, uint color)
+	void Text(uint a, uint b, uint c, uint d, uint e, uint f, uint g, uint h, uint color)
+	{
+		Text(a, b, c, d, color);
+		Text(e, f, g, h, color);
+	}
+
+	void Int(int value, uint color = 0xFFFFFFFF)
 	{
 		if(value < 0)
 		{
@@ -166,7 +161,34 @@ struct TextWriter
 		}
 	}
 
-	void Float(float value, uint color)
+	void Float(float2 value, uint color = 0xFFFFFFFF)
+	{
+		Float(value.x, color);
+		Text(',', ' ', color);
+		Float(value.y, color);
+	}
+
+	void Float(float3 value, uint color = 0xFFFFFFFF)
+	{
+		Float(value.x, color);
+		Text(',', ' ', color);
+		Float(value.y, color);
+		Text(',', ' ', color);
+		Float(value.z, color);
+	}
+
+	void Float(float4 value, uint color = 0xFFFFFFFF)
+	{
+		Float(value.x, color);
+		Text(',', ' ', color);
+		Float(value.y, color);
+		Text(',', ' ', color);
+		Float(value.z, color);
+		Text(',', ' ', color);
+		Float(value.w, color);
+	}
+
+	void Float(float value, uint color = 0xFFFFFFFF)
 	{
 		if(isnan(value))
 		{

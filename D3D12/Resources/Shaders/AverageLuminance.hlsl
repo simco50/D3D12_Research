@@ -1,5 +1,6 @@
 #include "Common.hlsli"
 #include "TonemappingCommon.hlsli"
+#include "ShaderDebugRender.hlsli"
 
 #define HISTOGRAM_AVERAGE_THREADS_PER_DIMENSION 16
 
@@ -47,9 +48,29 @@ void CSMain(uint groupIndex : SV_GroupIndex)
 		float weightedAverageLuminance = exp2(((weightedLogAverage / (NUM_HISTOGRAM_BINS - 1)) * cPassParameters.LogLuminanceRange) + cPassParameters.MinLogLuminance);
 		float luminanceLastFrame = uLuminanceOutput[0];
 		float adaptedLuminance = Adaption(luminanceLastFrame, weightedAverageLuminance, cPassParameters.TimeDelta, cPassParameters.Tau);
+		float exposure = Exposure(EV100FromLuminance(adaptedLuminance));
 
 		uLuminanceOutput[0] = adaptedLuminance;
 		uLuminanceOutput[1] = weightedAverageLuminance;
-		uLuminanceOutput[2] = Exposure(EV100FromLuminance(adaptedLuminance));
+		uLuminanceOutput[2] = exposure;
+
+#define DEBUG 0
+#if DEBUG
+		uint color = 0xFFFFFFFF;
+		TextWriter writer = CreateTextWriter(20);
+		writer.Text('A', 'd', 'a', 'p', 't', 'e', 'd', color);
+		writer.Text(' ', 'L', 'u', 'm', ':', ' ', color);
+		writer.Float(adaptedLuminance, color);
+		writer.NewLine();
+		writer.Text('A', 'v', 'e', 'r', 'a', 'g', 'e', color);
+		writer.Text(' ', 'L', 'u', 'm', ':', ' ', color);
+		writer.Float(weightedAverageLuminance, color);
+		writer.NewLine();
+		writer.Text('A', 'u', 't', 'o', ' ', color);
+		writer.Text('E', 'x', 'p', 'o', 's', 'u', 'r', 'e', color);
+		writer.Text(':', ' ', color);
+		writer.Float(exposure, color);
+		writer.NewLine();
+#endif
 	}
 }
