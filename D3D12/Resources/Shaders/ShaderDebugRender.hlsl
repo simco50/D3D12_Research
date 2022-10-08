@@ -19,7 +19,7 @@ struct PassParameters
 	Line Lines[512];
 };
 
-ConstantBuffer<PassParameters> cPass : register(b1);
+ConstantBuffer<PassParameters> cPass : register(b100);
 RWTexture2D<float> uOutput : register(u0);
 
 uint IsInside(float2 location)
@@ -92,13 +92,21 @@ RWStructuredBuffer<D3D12_DRAW_ARGUMENTS> uDrawArgs : register(u1);
 [numthreads(1, 1, 1)]
 void BuildIndirectDrawArgsCS(uint threadID : SV_DispatchThreadID)
 {
-	D3D12_DRAW_ARGUMENTS args;
-	args.VertexCountPerInstance = 4;
-	args.InstanceCount = uRenderData[TEXT_COUNTER_OFFSET];
-	args.StartVertexLocation = 0;
-	args.StartInstanceLocation = 0;
-	uDrawArgs[0] = args;
-	uRenderData[TEXT_COUNTER_OFFSET] = 0;
+	uint offset = 0;
+
+	D3D12_DRAW_ARGUMENTS args = (D3D12_DRAW_ARGUMENTS)0;
+	{
+		args.VertexCountPerInstance = 4;
+		args.InstanceCount = uRenderData[TEXT_COUNTER_OFFSET];
+		uDrawArgs[offset++] = args;
+		uRenderData[TEXT_COUNTER_OFFSET] = 0;
+	}
+	{
+		args.VertexCountPerInstance = 2;
+		args.InstanceCount = uRenderData[LINE_COUNTER_OFFSET];
+		uDrawArgs[offset++] = args;
+		uRenderData[LINE_COUNTER_OFFSET] = 0;
+	}
 }
 
 struct RenderData
@@ -123,7 +131,7 @@ void RenderGlyphVS(
 {
 	uv = float2(vertexID % 2, vertexID / 2);
 
-	CharacterInstance instance = ReadChar(instanceID, tRenderData);
+	CharacterInstance instance = GetChar(instanceID, tRenderData);
 	color = instance.Color;
 
 	Glyph glyph = tGlyphData[instance.Character];
@@ -146,4 +154,25 @@ float4 RenderGlyphPS(
 	float alpha = tFontAtlas.SampleLevel(sLinearClamp, uv, 0);
 	float4 c = alpha * UIntToColor(color);
 	return float4(c.rgb, alpha);
+}
+
+void RenderLineVS(
+	uint vertexID : SV_VertexID,
+	uint instanceID : SV_InstanceID,
+	out float4 position : SV_Position,
+	out uint color : COLOR
+	)
+{
+	LineInstance instance = GetLine(instanceID, tRenderData);
+	color = instance.Color;
+	float3 wPos = vertexID == 0 ? instance.A : instance.B;
+	position = mul(float4(wPos, 1), cView.ViewProjection);
+}
+
+float4 RenderLinePS(
+	float4 position : SV_POSITION,
+	uint color : COLOR
+	) : SV_TARGET
+{
+	return UIntToColor(color);
 }

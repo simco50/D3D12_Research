@@ -1376,7 +1376,7 @@ void DemoApp::Update()
 			}
 		}
 
-		m_pGPUDebugRenderer->Render(graph, sceneTextures.pColorTarget);
+		m_pGPUDebugRenderer->Render(graph, pView, sceneTextures.pColorTarget, sceneTextures.pDepth);
 
 		RGTexture* pFinalOutput = graph.ImportTexture(m_ColorOutput);
 

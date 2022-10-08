@@ -7,6 +7,7 @@ class Texture;
 class Buffer;
 class PipelineState;
 class RootSignature;
+struct SceneView;
 
 struct FontCreateSettings
 {
@@ -33,7 +34,7 @@ class GPUDebugRenderer
 public:
 	GPUDebugRenderer(GraphicsDevice* pDevice, const FontCreateSettings& fontSettings);
 
-	void Render(RGGraph& graph, RGTexture* pTarget);
+	void Render(RGGraph& graph, const SceneView* pView, RGTexture* pTarget, RGTexture* pDepth);
 
 	void GetGlobalIndices(GPUDebugRenderData* pData) const;
 
@@ -75,8 +76,9 @@ private:
 	RefCountPtr<RootSignature> m_pCommonRS;
 
 	RefCountPtr<PipelineState> m_pRasterizeGlyphPSO;
-	RefCountPtr<PipelineState> m_pRenderGlyphPSO;
 	RefCountPtr<PipelineState> m_pBuildIndirectDrawArgsPSO;
+	RefCountPtr<PipelineState> m_pRenderTextPSO;
+	RefCountPtr<PipelineState> m_pRenderLinesPSO;
 
 	RefCountPtr<Buffer> m_pRenderDataBuffer;
 

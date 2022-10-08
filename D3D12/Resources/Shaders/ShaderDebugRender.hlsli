@@ -1,7 +1,24 @@
 #include "Common.hlsli"
 
+struct CharacterInstance
+{
+	float2 Position;
+	uint Character;
+	uint Color;
+};
+
+struct LineInstance
+{
+	float3 A;
+	float3 B;
+	uint Color;
+};
+
 static const uint TEXT_COUNTER_OFFSET = 0;
-static const uint TEXT_INSTANCES_OFFSET = 4;
+static const uint LINE_COUNTER_OFFSET = 1;
+static const uint DATA_OFFSET = 4;
+static const uint TEXT_INSTANCES_OFFSET = DATA_OFFSET;
+static const uint LINE_INSTANCES_OFFSET = TEXT_INSTANCES_OFFSET + 256 * sizeof(CharacterInstance);
 
 struct Glyph
 {
@@ -11,15 +28,9 @@ struct Glyph
 	uint Width;
 };
 
-struct CharacterInstance
+void DrawChar(CharacterInstance instance)
 {
-	float2 Position;
-	uint Character;
-	uint Color;
-};
-
-void WriteChar(CharacterInstance instance, RWStructuredBuffer<uint> renderData)
-{
+	RWStructuredBuffer<uint> renderData = ResourceDescriptorHeap[cView.DebugRenderDataIndex];
 	uint offset;
 	InterlockedAdd(renderData[TEXT_COUNTER_OFFSET], 1, offset);
 	offset *= sizeof(CharacterInstance);
@@ -30,13 +41,43 @@ void WriteChar(CharacterInstance instance, RWStructuredBuffer<uint> renderData)
 	renderData[offset++] = instance.Color;
 }
 
-CharacterInstance ReadChar(uint index, StructuredBuffer<uint> renderData)
+CharacterInstance GetChar(uint index, StructuredBuffer<uint> renderData)
 {
 	CharacterInstance instance;
 	uint offset = index * sizeof(CharacterInstance) + TEXT_INSTANCES_OFFSET;
 	instance.Position.x = renderData[offset++];
 	instance.Position.y = renderData[offset++];
 	instance.Character = renderData[offset++];
+	instance.Color = renderData[offset++];
+	return instance;
+}
+
+void DrawLine(float3 a, float3 b, uint color = 0xFFFFFFFF)
+{
+	RWStructuredBuffer<uint> renderData = ResourceDescriptorHeap[cView.DebugRenderDataIndex];
+	uint offset;
+	InterlockedAdd(renderData[LINE_COUNTER_OFFSET], 1, offset);
+	offset *= sizeof(LineInstance);
+	offset += LINE_INSTANCES_OFFSET;
+	renderData[offset++] = asuint(a.x);
+	renderData[offset++] = asuint(a.y);
+	renderData[offset++] = asuint(a.z);
+	renderData[offset++] = asuint(b.x);
+	renderData[offset++] = asuint(b.y);
+	renderData[offset++] = asuint(b.z);
+	renderData[offset++] = color;
+}
+
+LineInstance GetLine(uint index, StructuredBuffer<uint> renderData)
+{
+	LineInstance instance;
+	uint offset = index * sizeof(LineInstance) + LINE_INSTANCES_OFFSET;
+	instance.A.x = asfloat(renderData[offset++]);
+	instance.A.y = asfloat(renderData[offset++]);
+	instance.A.z = asfloat(renderData[offset++]);
+	instance.B.x = asfloat(renderData[offset++]);
+	instance.B.y = asfloat(renderData[offset++]);
+	instance.B.z = asfloat(renderData[offset++]);
 	instance.Color = renderData[offset++];
 	return instance;
 }
@@ -51,12 +92,11 @@ struct TextWriter
 		StructuredBuffer<Glyph> glyphBuffer = ResourceDescriptorHeap[cView.FontDataIndex];
 		Glyph glyph = glyphBuffer[character];
 
-		RWStructuredBuffer<uint> debugData = ResourceDescriptorHeap[cView.DebugRenderDataIndex];
 		CharacterInstance instance;
 		instance.Position = CursorLocation + int2(-glyph.Offset.x, glyph.Offset.y);
 		instance.Character = character;
 		instance.Color = color;
-		WriteChar(instance, debugData);
+		DrawChar(instance);
 
 		CursorLocation.x += glyph.Width;
 	}
