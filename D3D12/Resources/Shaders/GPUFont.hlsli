@@ -16,7 +16,7 @@ struct Glyph
 };
 
 RWStructuredBuffer<GlyphInstance> uGlyphInstances : register(u0);
-RWBuffer<uint> uGlyphInstancesCounter : register(u1);
+RWStructuredBuffer<uint> uGlyphInstancesCounter : register(u1);
 StructuredBuffer<Glyph> tGlyphBuffer : register(t0);
 
 struct TextWriter

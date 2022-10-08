@@ -16,7 +16,7 @@ struct PassParameters
 	uint2 GlyphDimensions;
 	uint NumLines;
 	float Scale;
-	Line Lines[1024];
+	Line Lines[512];
 };
 
 ConstantBuffer<PassParameters> cPass : register(b0);
@@ -87,17 +87,18 @@ void RasterizeGlyphCS(uint3 threadID : SV_DispatchThreadID)
 }
 
 RWStructuredBuffer<D3D12_DRAW_ARGUMENTS> uDrawArgs : register(u0);
-Buffer<uint> tGlyphCounter : register(t0);
+RWStructuredBuffer<uint> uGlyphCounter : register(u1);
 
 [numthreads(1, 1, 1)]
 void BuildIndirectDrawArgsCS(uint threadID : SV_DispatchThreadID)
 {
 	D3D12_DRAW_ARGUMENTS args;
 	args.VertexCountPerInstance = 4;
-	args.InstanceCount = tGlyphCounter[0];
+	args.InstanceCount = uGlyphCounter[0];
 	args.StartVertexLocation = 0;
 	args.StartInstanceLocation = 0;
 	uDrawArgs[0] = args;
+	uGlyphCounter[0] = 0;
 }
 
 struct RenderData

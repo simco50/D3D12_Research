@@ -72,7 +72,7 @@ GPUDebugRenderer::GPUDebugRenderer(GraphicsDevice* pDevice, const FontCreateSett
 	};
 
 	m_pSubmittedCharacters = pDevice->CreateBuffer(BufferDesc::CreateStructured(MAX_CHARACTERS, sizeof(CharacterElement)), "Submitted Characters");
-	m_pSubmittedCharactersCounter = pDevice->CreateBuffer(BufferDesc::CreateTyped(1, ResourceFormat::R32_UINT), "Submitted Characters Counter");
+	m_pSubmittedCharactersCounter = pDevice->CreateBuffer(BufferDesc::CreateStructured(1, sizeof(uint32)), "Submitted Characters Counter");
 
 	CommandContext* pContext = pDevice->AllocateCommandContext();
 	ProcessFont(m_Font, fontSettings);
@@ -113,15 +113,16 @@ void GPUDebugRenderer::Render(RGGraph& graph, RGTexture* pTarget)
 
 	RGBuffer* pDrawArgs = graph.CreateBuffer("Indirect Draw Args", BufferDesc::CreateIndirectArguments<D3D12_DRAW_ARGUMENTS>(1));
 	graph.AddPass("Build Draw Args", RGPassFlag::Compute)
-		.Read(pSubmittedCharactersCounter)
-		.Write(pDrawArgs)
+		.Write({ pDrawArgs, pSubmittedCharactersCounter })
 		.Bind([=](CommandContext& context)
 			{
 				context.SetComputeRootSignature(m_pCommonRS);
 				context.SetPipelineState(m_pBuildIndirectDrawArgsPSO);
 
-				context.BindResources(2, pDrawArgs->Get()->GetUAV());
-				context.BindResources(3, pSubmittedCharactersCounter->Get()->GetSRV());
+				context.BindResources(2, {
+					pDrawArgs->Get()->GetUAV(),
+					pSubmittedCharactersCounter->Get()->GetUAV(),
+					});
 				context.Dispatch(1);
 			});
 
@@ -153,13 +154,6 @@ void GPUDebugRenderer::Render(RGGraph& graph, RGTexture* pTarget)
 					});
 
 				context.ExecuteIndirect(GraphicsCommon::pIndirectDrawSignature, 1, pDrawArgs->Get(), nullptr);
-			});
-
-	graph.AddPass("Clear Counter", RGPassFlag::Compute)
-		.Write({ pSubmittedCharactersCounter, pSubmittedCharacters })
-		.Bind([=](CommandContext& context)
-			{
-				context.ClearUavUInt(pSubmittedCharactersCounter->Get(), pSubmittedCharactersCounter->Get()->GetUAV());
 			});
 }
 
@@ -364,20 +358,21 @@ void GPUDebugRenderer::BuildFontAtlas(CommandContext& context, const Vector2i& r
 
 		location.x += spacing;
 
-		struct Parameters
+		struct
 		{
 			Vector2i Location;
 			uint32 pad[2];
 			Vector2i GlyphDimensions;
 			uint32 NumLines;
 			float Scale;
-			Line Lines[1024];
+			Line Lines[512];
 		} parameters;
 
 		parameters.Location = location;
 		parameters.GlyphDimensions = Vector2i((uint32)(glyph.AdvanceWidth * scale), (uint32)(glyph.Height * scale));
 		parameters.NumLines = (uint32)glyph.Lines.size();
 		parameters.Scale = scale;
+		check(glyph.Lines.size() <= ARRAYSIZE(parameters.Lines));
 		memcpy(parameters.Lines, glyph.Lines.data(), sizeof(Line) * glyph.Lines.size());
 
 		context.SetRootCBV(1, parameters);
