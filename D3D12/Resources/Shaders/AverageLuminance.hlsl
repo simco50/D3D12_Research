@@ -54,22 +54,19 @@ void CSMain(uint groupIndex : SV_GroupIndex)
 		uLuminanceOutput[1] = weightedAverageLuminance;
 		uLuminanceOutput[2] = exposure;
 
-#define DEBUG 0
+#define DEBUG 1
 #if DEBUG
-		uint color = 0xFFFFFFFF;
 		TextWriter writer = CreateTextWriter(20);
-		writer.Text('A', 'd', 'a', 'p', 't', 'e', 'd', color);
-		writer.Text(' ', 'L', 'u', 'm', ':', ' ', color);
-		writer.Float(adaptedLuminance, color);
+		writer = writer + 'A' + 'd' + 'a' + 'p' + 't' + 'e' + 'd' + ' ';
+		writer = writer + 'L' + 'u' + 'm' + ':' + ' ' + adaptedLuminance;
 		writer.NewLine();
-		writer.Text('A', 'v', 'e', 'r', 'a', 'g', 'e', color);
-		writer.Text(' ', 'L', 'u', 'm', ':', ' ', color);
-		writer.Float(weightedAverageLuminance, color);
+
+		writer = writer + 'A' + 'v' + 'e' + 'r' + 'a' + 'g' + 'e' + ' ';
+		writer = writer + 'L' + 'u' + 'm' + ':' + ' ' + weightedAverageLuminance;
 		writer.NewLine();
-		writer.Text('A', 'u', 't', 'o', ' ', color);
-		writer.Text('E', 'x', 'p', 'o', 's', 'u', 'r', 'e', color);
-		writer.Text(':', ' ', color);
-		writer.Float(exposure, color);
+
+		writer = writer + 'A' + 'u' + 't' + 'o' + ' ';
+		writer = writer + 'E' + 'x' + 'p' + 'o' + 's' + 'u' + 'r' + 'e' + ':' + ' ' + exposure;
 		writer.NewLine();
 #endif
 	}
