@@ -24,6 +24,7 @@ private:
 	RefCountPtr<PipelineState> m_pBuildCullArgsPhase2PSO;
 	RefCountPtr<PipelineState> m_pCullInstancesPhase2PSO;
 	RefCountPtr<PipelineState> m_pCullAndDrawPhase2PSO;
+	RefCountPtr<PipelineState> m_pPrintStatsPSO;
 
 	RefCountPtr<PipelineState> m_pHZBInitializePSO;
 	RefCountPtr<PipelineState> m_pHZBCreatePSO;

@@ -54,7 +54,7 @@ void CSMain(uint groupIndex : SV_GroupIndex)
 		uLuminanceOutput[1] = weightedAverageLuminance;
 		uLuminanceOutput[2] = exposure;
 
-#define DEBUG 1
+#define DEBUG 0
 #if DEBUG
 		TextWriter writer = CreateTextWriter(20);
 		writer = writer + 'A' + 'd' + 'a' + 'p' + 't' + 'e' + 'd' + ' ';

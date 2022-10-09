@@ -3,6 +3,7 @@
 #include "D3D12.hlsli"
 #include "VisibilityBuffer.hlsli"
 #include "WaveOps.hlsli"
+#include "ShaderDebugRender.hlsli"
 
 #ifndef OCCLUSION_FIRST_PASS
 #define OCCLUSION_FIRST_PASS 1
@@ -267,4 +268,42 @@ VisBufferData PSMain(
 	Data.PrimitiveID = primitiveData.PrimitiveID;
 	Data.MeshletID = primitiveData.MeshletID;
 	return Data;
+}
+
+[numthreads(1, 1, 1)]
+void PrintStatsCS(uint threadId : SV_DispatchThreadID)
+{
+	uint numInstances = cView.NumInstances;
+	uint occludedInstances = uCounter_CulledInstances[0];
+	uint visibleInstances = numInstances - occludedInstances;
+	uint phase1Meshlets = uCounter_MeshletsToProcess[0];
+	uint phase2Meshlets = uCounter_CulledMeshlets[0];
+
+	TextWriter writer = CreateTextWriter(float2(20, 20));
+
+	writer = writer + 'S' + 'c' + 'e' + 'n'  + 'e'  + ' ';
+	writer = writer + 'i' + 'n' + 's' + 't'  + 'a'  + 'n'  + 'c'  + 'e'  + 's' + ' ';
+	writer.Int(numInstances);
+	writer.NewLine();
+
+	writer = writer + '-' + '-' + '-' + 'P' + 'h' + 'a' + 's' + 'e' + ' ' + '1' + '-' + '-' + '-';
+	writer.NewLine();
+
+	writer = writer + 'O' + 'c' + 'c' + 'l'  + 'u'  + 'd'  + 'e'  + 'd' + ' ';
+	writer = writer + 'i' + 'n' + 's' + 't'  + 'a'  + 'n'  + 'c'  + 'e'  + 's' + ' ';
+	writer.Int(occludedInstances);
+	writer.NewLine();
+
+	writer = writer + 'P' + 'r' + 'o' + 'c'  + 'e'  + 's'  + 's'  + 'e' + 'd' + ' ';
+	writer = writer + 'm' + 'e' + 's' + 'h'  + 'l'  + 'e'  + 't'  + 's' + ' ';
+	writer.Int(phase1Meshlets);
+	writer.NewLine();
+
+	writer = writer + '-' + '-' + '-' + 'P' + 'h' + 'a' + 's' + 'e' + ' ' + '2' + '-' + '-' + '-';
+	writer.NewLine();
+
+	writer = writer + 'P' + 'r' + 'o' + 'c'  + 'e'  + 's'  + 's'  + 'e' + 'd' + ' ';
+	writer = writer + 'm' + 'e' + 's' + 'h'  + 'l'  + 'e'  + 't'  + 's' + ' ';
+	writer.Int(phase2Meshlets);
+	writer.NewLine();
 }

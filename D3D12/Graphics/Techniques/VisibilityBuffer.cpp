@@ -13,11 +13,6 @@
 #include "ffx_a.h"
 #include "ffx_spd.h"
 
-namespace Tweakables
-{
-	extern ConsoleVariable<bool> g_GPUDrivenRenderPhase2;
-}
-
 VisibilityBuffer::VisibilityBuffer(GraphicsDevice* pDevice)
 {
 	m_pCommonRS = new RootSignature(pDevice);
@@ -45,6 +40,8 @@ VisibilityBuffer::VisibilityBuffer(GraphicsDevice* pDevice)
 
 	m_pBuildCullArgsPhase2PSO = pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "BuildInstanceCullIndirectArgs", { "OCCLUSION_FIRST_PASS=0" });
 	m_pCullInstancesPhase2PSO = pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "CullInstancesCS", { "OCCLUSION_FIRST_PASS=0" });
+
+	m_pPrintStatsPSO = pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "PrintStatsCS");
 
 	pDevice->GetShaderManager()->AddIncludeDir("External/SPD/");
 	m_pHZBInitializePSO = pDevice->CreateComputePipeline(m_pCommonRS, "HZB.hlsl", "HZBInitCS");
@@ -74,12 +71,12 @@ void VisibilityBuffer::Render(RGGraph& graph, const SceneView* pView, RGTexture*
 	check(numMeshlets <= maxNumMeshlets);
 
 	BufferDesc counterDesc = BufferDesc::CreateTyped(1, ResourceFormat::R32_UINT);
-	RGBuffer* pMeshletsToProcess = graph.CreateBuffer("Meshlets To Process", BufferDesc::CreateStructured(maxNumMeshlets, sizeof(uint32) * 2));
-	RGBuffer* pMeshletsToProcessCounter = graph.CreateBuffer("Meshlets To Process - Counter", counterDesc);
-	RGBuffer* pCulledMeshlets = graph.CreateBuffer("Culled Meshlets", BufferDesc::CreateStructured(maxNumMeshlets, sizeof(uint32) * 2));
-	RGBuffer* pCulledMeshletsCounter = graph.CreateBuffer("Culled Meshlets - Counter", counterDesc);
-	RGBuffer* pCulledInstances = graph.CreateBuffer("Culled Instances", BufferDesc::CreateStructured(maxNumInstances, sizeof(uint32)));
-	RGBuffer* pCulledInstancesCounter = graph.CreateBuffer("Culled Instances - Counter", counterDesc);
+	RGBuffer* pMeshletsToProcess =			graph.CreateBuffer("GPURender.MeshletsToProcess", BufferDesc::CreateStructured(maxNumMeshlets, sizeof(uint32) * 2));
+	RGBuffer* pMeshletsToProcessCounter =	graph.CreateBuffer("GPURender.MeshletsToProcess.Counter", counterDesc);
+	RGBuffer* pCulledMeshlets =				graph.CreateBuffer("GPURender.CulledMeshlets", BufferDesc::CreateStructured(maxNumMeshlets, sizeof(uint32) * 2));
+	RGBuffer* pCulledMeshletsCounter =		graph.CreateBuffer("GPURender.CulledMeshlets.Counter", counterDesc);
+	RGBuffer* pCulledInstances =			graph.CreateBuffer("GPURender.CulledInstances", BufferDesc::CreateStructured(maxNumInstances, sizeof(uint32)));
+	RGBuffer* pCulledInstancesCounter =		graph.CreateBuffer("GPURender.CulledInstances.Counter", counterDesc);
 
 	{
 		RG_GRAPH_SCOPE("Phase 1", graph);
@@ -115,7 +112,7 @@ void VisibilityBuffer::Render(RGGraph& graph, const SceneView* pView, RGTexture*
 					context.InsertUavBarrier();
 				});
 
-		RGBuffer* pDispatchMeshBuffer = graph.CreateBuffer("ExecuteIndirect - Draw and Cull - DispatchMesh Argument", BufferDesc::CreateIndirectArguments<D3D12_DISPATCH_MESH_ARGUMENTS>(1));
+		RGBuffer* pDispatchMeshBuffer = graph.CreateBuffer("GPURender.DispatchMeshArgs", BufferDesc::CreateIndirectArguments<D3D12_DISPATCH_MESH_ARGUMENTS>(1));
 		graph.AddPass("Build DispatchMesh Arguments", RGPassFlag::Compute)
 			.Read(pMeshletsToProcessCounter)
 			.Write(pDispatchMeshBuffer)
@@ -158,11 +155,10 @@ void VisibilityBuffer::Render(RGGraph& graph, const SceneView* pView, RGTexture*
 		BuildHZB(graph, pDepth, &pHZB, &m_pHZB);
 	}
 
-	if (Tweakables::g_GPUDrivenRenderPhase2)
 	{
 		RG_GRAPH_SCOPE("Phase 2", graph);
 
-		RGBuffer* pDispatchBuffer = graph.CreateBuffer("ExecuteIndirect - Instance Culling - Dispatch Arguments", BufferDesc::CreateIndirectArguments<D3D12_DISPATCH_ARGUMENTS>(1));
+		RGBuffer* pDispatchBuffer = graph.CreateBuffer("GPURender.DispatchArgs", BufferDesc::CreateIndirectArguments<D3D12_DISPATCH_ARGUMENTS>(1));
 		graph.AddPass("Build Instance Cull Arguments", RGPassFlag::Compute)
 			.Read({ pCulledInstancesCounter })
 			.Write({ pDispatchBuffer })
@@ -204,7 +200,7 @@ void VisibilityBuffer::Render(RGGraph& graph, const SceneView* pView, RGTexture*
 				});
 
 
-		RGBuffer* pDispatchMeshBuffer = graph.CreateBuffer("ExecuteIndirect - Draw and Cull - DispatchMesh Argument", BufferDesc::CreateIndirectArguments<D3D12_DISPATCH_MESH_ARGUMENTS>(1));
+		RGBuffer* pDispatchMeshBuffer = graph.CreateBuffer("GPURender.DispatchMeshArgs", BufferDesc::CreateIndirectArguments<D3D12_DISPATCH_MESH_ARGUMENTS>(1));
 		graph.AddPass("Build DispatchMesh Arguments", RGPassFlag::Compute)
 			.Read(pCulledMeshletsCounter)
 			.Write(pDispatchMeshBuffer)
@@ -242,6 +238,26 @@ void VisibilityBuffer::Render(RGGraph& graph, const SceneView* pView, RGTexture*
 		BuildHZB(graph, pDepth, &pHZB);
 	}
 
+#if 0
+	graph.AddPass("Print Stats", RGPassFlag::Compute)
+		.Read({ pCulledInstancesCounter, pCulledMeshletsCounter, pMeshletsToProcessCounter })
+		.Bind([=](CommandContext& context)
+			{
+				context.SetComputeRootSignature(m_pCommonRS);
+				context.SetPipelineState(m_pPrintStatsPSO);
+
+				context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
+				context.BindResources(2, {
+					pMeshletsToProcessCounter->Get()->GetUAV(),
+					pMeshletsToProcessCounter->Get()->GetUAV(),
+					pCulledInstancesCounter->Get()->GetUAV(),
+					pCulledInstancesCounter->Get()->GetUAV(),
+					pCulledMeshletsCounter->Get()->GetUAV(),
+					pCulledMeshletsCounter->Get()->GetUAV(),
+					});
+				context.Dispatch(1);
+			});
+#endif
 
 	*pOutVisibilityBuffer = pVisibilityBuffer;
 	*pOutHZB = pHZB;

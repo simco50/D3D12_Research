@@ -149,10 +149,7 @@ namespace Tweakables
 	ConsoleVariable g_SsrSamples("r.SSRSamples", 8);
 	ConsoleVariable g_RenderTerrain("r.Terrain", false);
 
-	ConsoleVariable g_FreezeClusterCulling("r.FreezeClusterCulling", false);
-
 	ConsoleVariable g_GPUDrivenRender("r.GPUDrivenRender", true);
-	ConsoleVariable g_GPUDrivenRenderPhase2("r.GPUDrivenRender.Phase2", true);
 
 	// Misc
 	bool g_DumpRenderGraph = false;
@@ -1861,7 +1858,6 @@ void DemoApp::UpdateImGui()
 				}, nullptr, (int)RenderPath::MAX);
 
 			ImGui::Checkbox("GPU Driven Render", &Tweakables::g_GPUDrivenRender.Get());
-			ImGui::Checkbox("GPU Driven Render - Phase 2", &Tweakables::g_GPUDrivenRenderPhase2.Get());
 
 			ImGui::Text("Camera");
 			ImGui::Text("Location: [%.2f, %.2f, %.2f]", m_pCamera->GetPosition().x, m_pCamera->GetPosition().y, m_pCamera->GetPosition().z);
@@ -1944,7 +1940,6 @@ void DemoApp::UpdateImGui()
 			ImGui::SliderInt("SSR Samples", &Tweakables::g_SsrSamples.Get(), 0, 32);
 			ImGui::Checkbox("Object Bounds", &Tweakables::g_RenderObjectBounds.Get());
 			ImGui::Checkbox("Render Terrain", &Tweakables::g_RenderTerrain.Get());
-			ImGui::Checkbox("Freeze Cluster Culling", &Tweakables::g_FreezeClusterCulling.Get());
 		}
 
 		if (ImGui::CollapsingHeader("Raytracing"))
