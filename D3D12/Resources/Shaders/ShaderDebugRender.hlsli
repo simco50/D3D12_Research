@@ -90,7 +90,7 @@ void DrawCube(float3 center, float3 extents, uint color)
 struct TextWriter
 {
 	float2 StartLocation;
-	float2 CursorLocation;
+	float2 Cursor;
 	uint Color;
 
 	void SetColor(FontColor color)
@@ -104,19 +104,19 @@ struct TextWriter
 		Glyph glyph = glyphBuffer[character];
 
 		DrawChar(
-			CursorLocation + int2(-glyph.Offset.x, glyph.Offset.y),
+			Cursor + int2(-glyph.Offset.x, glyph.Offset.y),
 			character,
 			Color);
 
-		CursorLocation.x += glyph.Width;
+		Cursor.x += glyph.Width;
 	}
 
 	void NewLine()
 	{
 		StructuredBuffer<Glyph> glyphBuffer = ResourceDescriptorHeap[cView.FontDataIndex];
 		Glyph glyph = glyphBuffer[0];
-		CursorLocation.y += glyph.Dimensions.y;
-		CursorLocation.x = StartLocation.x;
+		Cursor.y += glyph.Dimensions.y;
+		Cursor.x = StartLocation.x;
 	}
 
 	void Text(uint a, uint b)
@@ -234,7 +234,7 @@ struct TextWriter
 		Text(character);
 		TextWriter writer;
 		writer.StartLocation = StartLocation;
-		writer.CursorLocation = CursorLocation;
+		writer.Cursor = Cursor;
 		writer.Color = Color;
 		return writer;
 	}
@@ -244,7 +244,7 @@ struct TextWriter
 		Float(value);
 		TextWriter writer;
 		writer.StartLocation = StartLocation;
-		writer.CursorLocation = CursorLocation;
+		writer.Cursor = Cursor;
 		writer.Color = Color;
 		return writer;
 	}
@@ -254,7 +254,7 @@ TextWriter CreateTextWriter(float2 position, FontColor color = MakeFontColor(1))
 {
 	TextWriter writer;
 	writer.StartLocation = position;
-	writer.CursorLocation = position;
+	writer.Cursor = position;
 	writer.Color = color.Color;
 	return writer;
 }

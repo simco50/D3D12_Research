@@ -606,7 +606,12 @@ void DemoApp::Update()
 		{
 			if (Tweakables::g_GPUDrivenRender)
 			{
-				sceneTextures.pVisibilityBuffer = m_pVisibilityBuffer->Render(graph, pView, sceneTextures.pDepth);
+				m_pVisibilityBuffer->Render(
+					graph,
+					pView,
+					sceneTextures.pDepth,
+					&sceneTextures.pVisibilityBuffer,
+					&sceneTextures.pHZB);
 			}
 			else
 			{
@@ -639,8 +644,8 @@ void DemoApp::Update()
 
 				m_pVisibilityBuffer->BuildHZB(graph, sceneTextures.pDepth, &sceneTextures.pHZB);
 				graph.ExportTexture(sceneTextures.pHZB, &m_pHZB);
-				m_SceneData.HZBDimensions = Vector2((float)sceneTextures.pHZB->GetDesc().Width, (float)sceneTextures.pHZB->GetDesc().Height);
 			}
+			m_SceneData.HZBDimensions = Vector2((float)sceneTextures.pHZB->GetDesc().Width, (float)sceneTextures.pHZB->GetDesc().Height);
 		}
 
 		if (m_RenderPath == RenderPath::Clustered || m_RenderPath == RenderPath::Tiled || m_RenderPath == RenderPath::Visibility)

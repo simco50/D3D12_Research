@@ -11,7 +11,7 @@ class VisibilityBuffer
 {
 public:
 	VisibilityBuffer(GraphicsDevice* pDevice);
-	RGTexture* Render(RGGraph& graph, const SceneView* pView, RGTexture* pDepth);
+	void Render(RGGraph& graph, const SceneView* pView, RGTexture* pDepth, RGTexture** pOutVisibilityBuffer, RGTexture** pOutHZB);
 	void BuildHZB(RGGraph& graph, RGTexture* pDepth, RGTexture** pOutHZB);
 
 private:
