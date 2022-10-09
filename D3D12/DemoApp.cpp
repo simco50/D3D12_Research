@@ -201,8 +201,7 @@ DemoApp::DemoApp(WindowHandle window, const Vector2i& windowRect)
 
 	FontCreateSettings fontSettings;
 	fontSettings.pName = "Verdana";
-	fontSettings.Height = 24;
-	fontSettings.Bold = true;
+	fontSettings.Height = 22;
 	m_pGPUDebugRenderer = std::make_unique<GPUDebugRenderer>(m_pDevice, fontSettings);
 	m_pGPUDebugRenderer->GetGlobalIndices(&m_SceneData.DebugRenderData);
 

@@ -28,7 +28,22 @@ struct Glyph
 	uint Width;
 };
 
-void DrawChar(float2 position, uint character, uint color = 0xFFFFFFFF)
+struct FontColor
+{
+	uint Color;
+};
+
+FontColor MakeFontColor(float4 color)
+{
+	FontColor clr = (FontColor)0;
+	clr.Color |= (uint)(saturate(color.r) * 255.0f) << 0u;
+	clr.Color |= (uint)(saturate(color.g) * 255.0f) << 8u;
+	clr.Color |= (uint)(saturate(color.b) * 255.0f) << 16u;
+	clr.Color |= (uint)(saturate(color.a) * 255.0f) << 24u;
+	return clr;
+}
+
+void DrawChar(float2 position, uint character, uint color)
 {
 	RWByteAddressBuffer renderData = ResourceDescriptorHeap[cView.DebugRenderDataIndex];
 	uint offset;
@@ -42,7 +57,7 @@ void DrawChar(float2 position, uint character, uint color = 0xFFFFFFFF)
 	renderData.Store(offset * 4, instance);
 }
 
-void DrawLine(float3 a, float3 b, uint color = 0xFFFFFFFF)
+void DrawLine(float3 a, float3 b, uint color)
 {
 	RWByteAddressBuffer renderData = ResourceDescriptorHeap[cView.DebugRenderDataIndex];
 	uint offset;
@@ -56,7 +71,7 @@ void DrawLine(float3 a, float3 b, uint color = 0xFFFFFFFF)
 	renderData.Store(offset * 4, instance);
 }
 
-void DrawCube(float3 center, float3 extents, uint color = 0xFFFFFFFF)
+void DrawCube(float3 center, float3 extents, uint color)
 {
 	DrawLine(center + float3(-1, -1, -1) * extents, center + float3(1, -1, -1) * extents, color);
 	DrawLine(center + float3(-1, -1, -1) * extents, center + float3(-1, 1, -1) * extents, color);
@@ -76,8 +91,14 @@ struct TextWriter
 {
 	float2 StartLocation;
 	float2 CursorLocation;
+	uint Color;
 
-	void Text(uint character, uint color)
+	void SetColor(FontColor color)
+	{
+		Color = color.Color;
+	}
+
+	void Text(uint character)
 	{
 		StructuredBuffer<Glyph> glyphBuffer = ResourceDescriptorHeap[cView.FontDataIndex];
 		Glyph glyph = glyphBuffer[character];
@@ -85,7 +106,7 @@ struct TextWriter
 		DrawChar(
 			CursorLocation + int2(-glyph.Offset.x, glyph.Offset.y),
 			character,
-			color);
+			Color);
 
 		CursorLocation.x += glyph.Width;
 	}
@@ -98,53 +119,53 @@ struct TextWriter
 		CursorLocation.x = StartLocation.x;
 	}
 
-	void Text(uint a, uint b, uint color)
+	void Text(uint a, uint b)
 	{
-		Text(a, color);
-		Text(b, color);
+		Text(a);
+		Text(b);
 	}
 
-	void Text(uint a, uint b, uint c, uint color)
+	void Text(uint a, uint b, uint c)
 	{
-		Text(a, b, color);
-		Text(c, color);
+		Text(a, b);
+		Text(c);
 	}
 
-	void Text(uint a, uint b, uint c, uint d, uint color)
+	void Text(uint a, uint b, uint c, uint d)
 	{
-		Text(a, b, color);
-		Text(c, d, color);
+		Text(a, b, c);
+		Text(d);
 	}
 
-	void Text(uint a, uint b, uint c, uint d, uint e, uint color)
+	void Text(uint a, uint b, uint c, uint d, uint e)
 	{
-		Text(a, b, c, color);
-		Text(d, e, color);
+		Text(a, b, c, d);
+		Text(e);
 	}
 
-	void Text(uint a, uint b, uint c, uint d, uint e, uint f, uint color)
+	void Text(uint a, uint b, uint c, uint d, uint e, uint f)
 	{
-		Text(a, b, c, color);
-		Text(d, e, f, color);
+		Text(a, b, c, d, e);
+		Text(f);
 	}
 
-	void Text(uint a, uint b, uint c, uint d, uint e, uint f, uint g, uint color)
+	void Text(uint a, uint b, uint c, uint d, uint e, uint f, uint g)
 	{
-		Text(a, b, c, color);
-		Text(d, e, f, g, color);
+		Text(a, b, c, d, e, f);
+		Text(g);
 	}
 
-	void Text(uint a, uint b, uint c, uint d, uint e, uint f, uint g, uint h, uint color)
+	void Text(uint a, uint b, uint c, uint d, uint e, uint f, uint g, uint h)
 	{
-		Text(a, b, c, d, color);
-		Text(e, f, g, h, color);
+		Text(a, b, c, d, e, f, g);
+		Text(h);
 	}
 
-	void Int(int value, uint color = 0xFFFFFFFF)
+	void Int(int value)
 	{
 		if(value < 0)
 		{
-			Text('-', color);
+			Text('-');
 			value = -value;
 		}
 		uint length = value > 0 ? log10(value) + 1 : 1;
@@ -153,7 +174,7 @@ struct TextWriter
 		while(length > 0)
 		{
 			uint digit = value / divider;
-			Text('0' + digit, color);
+			Text('0' + digit);
 			--length;
 
 			value = value - digit * divider;
@@ -161,58 +182,79 @@ struct TextWriter
 		}
 	}
 
-	void Float(float2 value, uint color = 0xFFFFFFFF)
-	{
-		Float(value.x, color);
-		Text(',', ' ', color);
-		Float(value.y, color);
-	}
-
-	void Float(float3 value, uint color = 0xFFFFFFFF)
-	{
-		Float(value.x, color);
-		Text(',', ' ', color);
-		Float(value.y, color);
-		Text(',', ' ', color);
-		Float(value.z, color);
-	}
-
-	void Float(float4 value, uint color = 0xFFFFFFFF)
-	{
-		Float(value.x, color);
-		Text(',', ' ', color);
-		Float(value.y, color);
-		Text(',', ' ', color);
-		Float(value.z, color);
-		Text(',', ' ', color);
-		Float(value.w, color);
-	}
-
-	void Float(float value, uint color = 0xFFFFFFFF)
+	void Float(float value)
 	{
 		if(isnan(value))
 		{
-			Text('N', 'a', 'N', color);
+			Text('N', 'a', 'N');
 		}
 		else if(!isfinite(value))
 		{
-			Text('I', 'N', 'F', color);
+			Text('I', 'N', 'F');
 		}
 		else
 		{
 			int v0 = floor(abs(value));
-			Int(sign(value) * v0, color);
-			Text('.', color);
+			Int(sign(value) * v0);
+			Text('.');
 			int v1 = floor(frac(value) * 10000);
-			Int(v1, color);
+			Int(v1);
 		}
+	}
+
+	void Float(float2 value)
+	{
+		Float(value.x);
+		Text(',', ' ');
+		Float(value.y);
+	}
+
+	void Float(float3 value)
+	{
+		Float(value.x);
+		Text(',', ' ');
+		Float(value.y);
+		Text(',', ' ');
+		Float(value.z);
+	}
+
+	void Float(float4 value)
+	{
+		Float(value.x);
+		Text(',', ' ');
+		Float(value.y);
+		Text(',', ' ');
+		Float(value.z);
+		Text(',', ' ');
+		Float(value.w);
+	}
+
+	TextWriter operator+(uint character)
+	{
+		Text(character);
+		TextWriter writer;
+		writer.StartLocation = StartLocation;
+		writer.CursorLocation = CursorLocation;
+		writer.Color = Color;
+		return writer;
+	}
+
+	TextWriter operator+(float value)
+	{
+		Float(value);
+		TextWriter writer;
+		writer.StartLocation = StartLocation;
+		writer.CursorLocation = CursorLocation;
+		writer.Color = Color;
+		return writer;
 	}
 };
 
-TextWriter CreateTextWriter(float2 position)
+TextWriter CreateTextWriter(float2 position, FontColor color = MakeFontColor(1))
 {
 	TextWriter writer;
 	writer.StartLocation = position;
 	writer.CursorLocation = position;
+	writer.Color = color.Color;
 	return writer;
 }
