@@ -3,6 +3,7 @@
 #include "ShaderInterop.h"
 #include "AccelerationStructure.h"
 #include "RenderGraph/RenderGraphDefinitions.h"
+#include "Techniques/GPUDebugRenderer.h"
 
 class Texture;
 class Buffer;
@@ -105,6 +106,7 @@ struct SceneView
 	ViewTransform View;
 	BoundingBox SceneAABB;
 	AccelerationStructure AccelerationStructure;
+	GPUDebugRenderData DebugRenderData;
 
 	std::vector<ShadowView> ShadowViews;
 	Vector4 ShadowCascadeDepths;

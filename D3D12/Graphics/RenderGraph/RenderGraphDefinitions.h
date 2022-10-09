@@ -27,6 +27,7 @@ struct RGResourceTypeTraits<Buffer>
 };
 
 class RGPass;
+class RGGraph;
 
 class RGResource
 {

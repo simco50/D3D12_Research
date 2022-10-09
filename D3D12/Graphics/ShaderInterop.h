@@ -201,6 +201,9 @@ namespace ShaderInterop
 		uint SkyIndex;
 		uint DDGIVolumesIndex;
 		uint TLASIndex;
+
+		uint DebugRenderDataIndex;
+		uint FontDataIndex;
 	};
 
 #ifdef __cplusplus
