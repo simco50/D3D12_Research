@@ -14,11 +14,15 @@ struct LineInstance
 	uint Color;
 };
 
+// Must match .cpp!
+static const uint MAX_NUM_COUNTERS = 4;
+static const uint MAX_NUM_TEXT = 1024;
+static const uint MAX_NUM_LINES = 4096;
+
 static const uint TEXT_COUNTER_OFFSET = 0;
-static const uint LINE_COUNTER_OFFSET = 1;
-static const uint DATA_OFFSET = 4;
-static const uint TEXT_INSTANCES_OFFSET = DATA_OFFSET;
-static const uint LINE_INSTANCES_OFFSET = TEXT_INSTANCES_OFFSET + 256 * sizeof(CharacterInstance);
+static const uint LINE_COUNTER_OFFSET = 4;
+static const uint TEXT_INSTANCES_OFFSET = MAX_NUM_COUNTERS * sizeof(uint);
+static const uint LINE_INSTANCES_OFFSET = TEXT_INSTANCES_OFFSET + MAX_NUM_TEXT * sizeof(CharacterInstance);
 
 struct Glyph
 {
@@ -43,35 +47,40 @@ FontColor MakeFontColor(float4 color)
 	return clr;
 }
 
-void DrawChar(float2 position, uint character, uint color)
+void DrawChar(float2 position, uint character, uint color = 0xFFFFFFFF)
 {
-	RWByteAddressBuffer renderData = ResourceDescriptorHeap[cView.DebugRenderDataIndex];
-	uint offset;
-	renderData.InterlockedAdd(TEXT_COUNTER_OFFSET * 4, 1, offset);
-	offset *= sizeof(CharacterInstance);
-	offset += TEXT_INSTANCES_OFFSET;
 	CharacterInstance instance;
 	instance.Position = position;
 	instance.Character = character;
 	instance.Color = color;
-	renderData.Store(offset * 4, instance);
-}
 
-void DrawLine(float3 a, float3 b, uint color)
-{
 	RWByteAddressBuffer renderData = ResourceDescriptorHeap[cView.DebugRenderDataIndex];
 	uint offset;
-	renderData.InterlockedAdd(LINE_COUNTER_OFFSET * 4, 1, offset);
-	offset *= sizeof(LineInstance);
-	offset += LINE_INSTANCES_OFFSET;
+	renderData.InterlockedAdd(TEXT_COUNTER_OFFSET, 1, offset);
+	renderData.Store(TEXT_INSTANCES_OFFSET + offset * sizeof(CharacterInstance), instance);
+}
+
+void DrawLine(float3 a, float3 b, uint color = 0xFFFFFFFF)
+{
 	LineInstance instance;
 	instance.A = a;
 	instance.B = b;
 	instance.Color = color;
-	renderData.Store(offset * 4, instance);
+
+	RWByteAddressBuffer renderData = ResourceDescriptorHeap[cView.DebugRenderDataIndex];
+	uint offset;
+	renderData.InterlockedAdd(LINE_COUNTER_OFFSET, 1, offset);
+	renderData.Store(LINE_INSTANCES_OFFSET + offset * sizeof(LineInstance), instance);
 }
 
-void DrawCube(float3 center, float3 extents, uint color)
+void DrawAxisBase(float3 position, float3x3 rotation, float axisLength = 0.25f, uint color = 0xFFFFFFFF)
+{
+	DrawLine(position, position + axisLength * normalize(mul(float3(1, 0, 0), rotation)), 0xFF0000FF);
+	DrawLine(position, position + axisLength * normalize(mul(float3(0, 1, 0), rotation)), 0x00FF00FF);
+	DrawLine(position, position + axisLength * normalize(mul(float3(0, 0, 1), rotation)), 0x0000FFFF);
+}
+
+void DrawCube(float3 center, float3 extents, uint color = 0xFFFFFFFF)
 {
 	DrawLine(center + float3(-1, -1, -1) * extents, center + float3(1, -1, -1) * extents, color);
 	DrawLine(center + float3(-1, -1, -1) * extents, center + float3(-1, 1, -1) * extents, color);

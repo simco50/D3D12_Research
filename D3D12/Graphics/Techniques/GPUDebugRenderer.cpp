@@ -44,7 +44,27 @@ GPUDebugRenderer::GPUDebugRenderer(GraphicsDevice* pDevice, const FontCreateSett
 		m_pRenderLinesPSO = pDevice->CreatePipeline(psoDesc);
 	}
 
-	m_pRenderDataBuffer = pDevice->CreateBuffer(BufferDesc::CreateByteAddress(4ull * Math::MegaBytesToBytes), "Shader Debug Render Data");
+	struct Data
+	{
+		uint32 Counters[4];
+
+		struct CharacterInstance
+		{
+			Vector2 Position;
+			uint32 Character;
+			uint32 Color;
+		} Characters[1024];
+
+		struct LineInstance
+		{
+			Vector3 A;
+			Vector3 B;
+			uint32 Color;
+		} Lines[4096];
+	};
+
+	constexpr uint32 bufferSize = sizeof(Data);
+	m_pRenderDataBuffer = pDevice->CreateBuffer(BufferDesc::CreateByteAddress(bufferSize), "Shader Debug Render Data");
 
 	CommandContext* pContext = pDevice->AllocateCommandContext();
 	ProcessFont(m_Font, fontSettings);
@@ -66,6 +86,8 @@ void GPUDebugRenderer::Render(RGGraph& graph, const SceneView* pView, RGTexture*
 		.Write({ pDrawArgs, pRenderData })
 		.Bind([=](CommandContext& context)
 			{
+				context.InsertUavBarrier();
+
 				context.SetComputeRootSignature(m_pCommonRS);
 				context.SetPipelineState(m_pBuildIndirectDrawArgsPSO);
 
@@ -120,6 +142,8 @@ void GPUDebugRenderer::Render(RGGraph& graph, const SceneView* pView, RGTexture*
 					pRenderData->Get()->GetSRV()
 					});
 				context.ExecuteIndirect(GraphicsCommon::pIndirectDrawSignature, 1, pDrawArgs->Get(), nullptr, sizeof(D3D12_DRAW_ARGUMENTS) * 1);
+
+				context.InsertResourceBarrier(pRenderData->Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 			});
 }
 

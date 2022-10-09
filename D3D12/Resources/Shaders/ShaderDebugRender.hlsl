@@ -1,6 +1,5 @@
 #include "Common.hlsli"
 #include "D3D12.hlsli"
-#include "Random.hlsli"
 #include "ShaderDebugRender.hlsli"
 
 struct Line
@@ -92,10 +91,10 @@ RWStructuredBuffer<D3D12_DRAW_ARGUMENTS> uDrawArgs : register(u1);
 [numthreads(1, 1, 1)]
 void BuildIndirectDrawArgsCS(uint threadID : SV_DispatchThreadID)
 {
-	uint numCharacters = uRenderData.Load(TEXT_COUNTER_OFFSET * 4);
-	uRenderData.Store(TEXT_COUNTER_OFFSET * 4, 0);
-	uint numLines = uRenderData.Load(LINE_COUNTER_OFFSET * 4);
-	uRenderData.Store(LINE_COUNTER_OFFSET * 4, 0);
+	uint numCharacters = uRenderData.Load(TEXT_COUNTER_OFFSET);
+	uRenderData.Store(TEXT_COUNTER_OFFSET, 0);
+	uint numLines = uRenderData.Load(LINE_COUNTER_OFFSET);
+	uRenderData.Store(LINE_COUNTER_OFFSET, 0);
 
 	uint offset = 0;
 	D3D12_DRAW_ARGUMENTS args = (D3D12_DRAW_ARGUMENTS)0;
@@ -125,8 +124,8 @@ ByteAddressBuffer tRenderData : register(t2);
 
 CharacterInstance GetChar(uint index, ByteAddressBuffer renderData)
 {
-	uint offset = index * sizeof(CharacterInstance) + TEXT_INSTANCES_OFFSET;
-	return renderData.Load<CharacterInstance>(offset * 4);
+	uint offset = index * sizeof(CharacterInstance);
+	return renderData.Load<CharacterInstance>(TEXT_INSTANCES_OFFSET + offset);
 }
 
 void RenderGlyphVS(
@@ -166,8 +165,8 @@ float4 RenderGlyphPS(
 
 LineInstance GetLine(uint index, ByteAddressBuffer renderData)
 {
-	uint offset = index * sizeof(LineInstance) + LINE_INSTANCES_OFFSET;
-	return renderData.Load<LineInstance>(offset * 4);
+	uint offset = index * sizeof(LineInstance);
+	return renderData.Load<LineInstance>(LINE_INSTANCES_OFFSET + offset);
 }
 
 void RenderLineVS(
