@@ -57,9 +57,8 @@ void VisibilityBuffer::Render(RGGraph& graph, const SceneView* pView, RGTexture*
 
 	FloatRect viewport = pView->View.Viewport;
 
-	RGTexture* pHZB = graph.TryImportTexture(m_pHZB);
-	if (!pHZB)
-		BuildHZB(graph, pDepth, &pHZB);
+	RGTexture* pHZB = nullptr;
+	BuildHZB(graph, pDepth, &pHZB, &m_pHZB);
 
 	RGTexture* pVisibilityBuffer = graph.CreateTexture("Visibility", TextureDesc::CreateRenderTarget((uint32)viewport.GetWidth(), (uint32)viewport.GetHeight(), ResourceFormat::R32_UINT));
 
@@ -156,7 +155,7 @@ void VisibilityBuffer::Render(RGGraph& graph, const SceneView* pView, RGTexture*
 					context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchMeshSignature, 1, pDispatchMeshBuffer->Get());
 				});
 
-		BuildHZB(graph, pDepth, &pHZB);
+		BuildHZB(graph, pDepth, &pHZB, &m_pHZB);
 	}
 
 	if (Tweakables::g_GPUDrivenRenderPhase2)
@@ -243,15 +242,16 @@ void VisibilityBuffer::Render(RGGraph& graph, const SceneView* pView, RGTexture*
 		BuildHZB(graph, pDepth, &pHZB);
 	}
 
-	graph.ExportTexture(pHZB, &m_pHZB);
 
 	*pOutVisibilityBuffer = pVisibilityBuffer;
 	*pOutHZB = pHZB;
 }
 
-void VisibilityBuffer::BuildHZB(RGGraph& graph, RGTexture* pDepth, RGTexture** pOutHZB)
+void VisibilityBuffer::BuildHZB(RGGraph& graph, RGTexture* pDepth, RGTexture** pOutHZB, RefCountPtr<Texture>* pExportTarget)
 {
 	RG_GRAPH_SCOPE("HZB", graph);
+
+	check(*pOutHZB || pExportTarget);
 
 	const uint32 hzbMipsX = Math::Max(1u, (uint32)Math::Ceil(log2f((float)pDepth->GetDesc().Width)) - 1);
 	const uint32 hzbMipsY = Math::Max(1u, (uint32)Math::Ceil(log2f((float)pDepth->GetDesc().Height)) - 1);
@@ -259,7 +259,7 @@ void VisibilityBuffer::BuildHZB(RGGraph& graph, RGTexture* pDepth, RGTexture** p
 	const Vector2i hzbDimensions(1 << hzbMipsX, 1 << hzbMipsY);
 	if (*pOutHZB == nullptr)
 	{
-		*pOutHZB = graph.CreateTexture(Sprintf("HZB (%s)", pDepth->GetName()).c_str(), TextureDesc::Create2D(hzbDimensions.x, hzbDimensions.y, ResourceFormat::R32_FLOAT, TextureFlag::UnorderedAccess, 1, hzbMips));
+		*pOutHZB = RGUtils::CreatePersistentTexture(graph, "HZB", TextureDesc::Create2D(hzbDimensions.x, hzbDimensions.y, ResourceFormat::R32_FLOAT, TextureFlag::UnorderedAccess, 1, hzbMips), pExportTarget, true);
 	}
 	RGTexture* pHZB = *pOutHZB;
 

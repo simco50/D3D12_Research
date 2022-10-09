@@ -423,6 +423,7 @@ GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
 
 	uint8 smMaj, smMin;
 	m_Capabilities.GetShaderModel(smMaj, smMin);
+	E_LOG(Info, "Shader Model %d.%d", smMaj, smMin);
 	m_pShaderManager = std::make_unique<ShaderManager>(smMaj, smMin);
 	m_pShaderManager->AddIncludeDir("Resources/Shaders/");
 	m_pShaderManager->AddIncludeDir("Graphics/");

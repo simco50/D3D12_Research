@@ -615,9 +615,7 @@ void DemoApp::Update()
 			}
 			else
 			{
-				sceneTextures.pHZB = graph.TryImportTexture(m_pHZB);
-				if (!sceneTextures.pHZB)
-					m_pVisibilityBuffer->BuildHZB(graph, sceneTextures.pDepth, &sceneTextures.pHZB);
+				m_pVisibilityBuffer->BuildHZB(graph, sceneTextures.pDepth, &sceneTextures.pHZB, &m_pHZB);
 
 				graph.AddPass("Visibility Buffer", RGPassFlag::Raster)
 					.Read(sceneTextures.pHZB)
@@ -643,7 +641,6 @@ void DemoApp::Update()
 						});
 
 				m_pVisibilityBuffer->BuildHZB(graph, sceneTextures.pDepth, &sceneTextures.pHZB);
-				graph.ExportTexture(sceneTextures.pHZB, &m_pHZB);
 			}
 			m_SceneData.HZBDimensions = Vector2((float)sceneTextures.pHZB->GetDesc().Width, (float)sceneTextures.pHZB->GetDesc().Height);
 		}
