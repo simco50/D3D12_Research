@@ -111,6 +111,7 @@ void ImGuiRenderer::Initialize(GraphicsDevice* pDevice, WindowHandle window)
 	ImGuiIO& io = ImGui::GetIO();
 	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 	//io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+	io.BackendFlags |= ImGuiBackendFlags_RendererHasVtxOffset;
 
 	Paths::CreateDirectoryTree(Paths::SavedDir());
 	static std::string imguiPath = Paths::SavedDir() + "imgui.ini";
