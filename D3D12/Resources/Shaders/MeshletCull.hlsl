@@ -5,6 +5,23 @@
 #include "WaveOps.hlsli"
 #include "ShaderDebugRender.hlsli"
 
+/*
+	-- 2 Phase Occlusion Culling --
+
+	Works under the assumption that it's likely that objects visible in the previous frame, will be visible this frame.
+
+	In Phase 1, we render all objects that were visible last frame by testing against the previous HZB.
+	Occluded objects are stored in a list, to be processed later.
+	The HZB is constructed from the current result.
+	Phase 2 tests all previously occluded objects against the new HZB and renders unoccluded.
+	The HZB is constructed again from this result to be used in the next frame.
+
+	Cull both on a per-instance level as on a per-meshlet level.
+	Leverage Mesh/Amplification shaders to drive per-meshlet culling.
+
+	https://advances.realtimerendering.com/s2015/aaltonenhaar_siggraph2015_combined_final_footer_220dpi.pdf
+*/
+
 #ifndef OCCLUSION_FIRST_PASS
 #define OCCLUSION_FIRST_PASS 1
 #endif
@@ -13,88 +30,96 @@
 #define ALPHA_MASK 0
 #endif
 
+#define NUM_AS_THREADS 32
+#define NUM_MESHLET_THREADS 32
+#define NUM_CULL_INSTANCES_THREADS 64
+
 struct MeshletCandidate
 {
     uint InstanceID;
     uint MeshletIndex;
 };
 
-RWStructuredBuffer<MeshletCandidate> uMeshletsToProcess : register(u0);
-RWBuffer<uint> uCounter_MeshletsToProcess : register(u1);
+RWStructuredBuffer<MeshletCandidate> uMeshletCandidates : 			register(u0);
+RWBuffer<uint> uCounter_MeshletCandidates : 						register(u1);
+RWStructuredBuffer<uint> uOccludedInstances : 						register(u2);
+RWBuffer<uint> uCounter_OccludedInstances : 						register(u3);
+RWStructuredBuffer<MeshletCandidate> uOccludedMeshlets : 			register(u4);
+RWBuffer<uint> uCounter_OccludedMeshlets : 							register(u5);
 
-RWStructuredBuffer<uint> uCulledInstances : register(u2);
-RWBuffer<uint> uCounter_CulledInstances : register(u3);
+RWStructuredBuffer<D3D12_DISPATCH_ARGUMENTS> uDispatchArguments : 	register(u0);
 
-RWStructuredBuffer<MeshletCandidate> uCulledMeshlets : register(u4);
-RWBuffer<uint> uCounter_CulledMeshlets : register(u5);
+StructuredBuffer<MeshletCandidate> tMeshletsToProcess : 			register(t0);
+Buffer<uint> tCounter_MeshletsToProcess : 							register(t1);
+StructuredBuffer<uint> tInstancesToProcess : 						register(t0);
+Buffer<uint> tCounter_OccludedInstances : 							register(t1);
 
-RWStructuredBuffer<D3D12_DISPATCH_ARGUMENTS> uDispatchArguments : register(u0);
+Texture2D<float> tHZB : 											register(t2);
 
-StructuredBuffer<MeshletCandidate> tMeshletsToProcess : register(t0);
-Buffer<uint> tCounter_MeshletsToProcess : register(t1);
-
-StructuredBuffer<uint> tInstancesToProcess : register(t0);
-Buffer<uint> tCounter_CulledInstances : register(t1);
-
-Texture2D<float> tHZB : register(t2);
-
-[numthreads(64, 1, 1)]
-void CullInstancesCS(uint threadID : SV_DispatchThreadID)
+uint GetNumInstances()
 {
 #if OCCLUSION_FIRST_PASS
-    uint numInstances = cView.NumInstances;
+    return cView.NumInstances;
 #else
-    uint numInstances = tCounter_CulledInstances[0];
+    return tCounter_OccludedInstances[0];
 #endif
+}
 
-    if(threadID >= numInstances)
-    {
-        return;
-    }
-
+InstanceData GetInstanceForThread(uint threadID)
+{
 #if OCCLUSION_FIRST_PASS
-    InstanceData instance = GetInstance(threadID);
+    return GetInstance(threadID);
 #else
-    InstanceData instance = GetInstance(tInstancesToProcess[threadID]);
+	return GetInstance(tInstancesToProcess[threadID]);
 #endif
+}
 
+[numthreads(NUM_CULL_INSTANCES_THREADS, 1, 1)]
+void CullInstancesCS(uint threadID : SV_DispatchThreadID)
+{
+	uint numInstances = GetNumInstances();
+    if(threadID >= numInstances)
+        return;
+
+    InstanceData instance = GetInstanceForThread(threadID);
     MeshData mesh = GetMesh(instance.MeshIndex);
 
 	FrustumCullData cullData = FrustumCull(instance.BoundsOrigin, instance.BoundsExtents, cView.ViewProjection);
 	bool isVisible = cullData.IsVisible;
-	bool wasVisible = true;
+	bool wasOccluded = false;
 
 	if(isVisible)
 	{
 #if OCCLUSION_FIRST_PASS
 		FrustumCullData prevCullData = FrustumCull(instance.BoundsOrigin, instance.BoundsExtents, cView.ViewProjectionPrev);
-		wasVisible = HZBCull(prevCullData, tHZB);
-		if(!wasVisible)
+		wasOccluded = !HZBCull(prevCullData, tHZB);
+
+		// If the instance was occluded the previous frame, we can't be sure it's still occluded this frame.
+		// Add it to the list to re-test in the second phase.
+		if(wasOccluded)
 		{
 			uint elementOffset = 0;
-			InterlockedAdd_WaveOps(uCounter_CulledInstances, 0, elementOffset);
-			uCulledInstances[elementOffset] = instance.ID;
+			InterlockedAdd_WaveOps(uCounter_OccludedInstances, 0, elementOffset);
+			uOccludedInstances[elementOffset] = instance.ID;
 		}
 #else
 		isVisible = HZBCull(cullData, tHZB);
 #endif
 	}
 
-    if(isVisible && wasVisible)
+    if(isVisible && !wasOccluded)
     {
         uint elementOffset;
-        InterlockedAdd_Varying_WaveOps(uCounter_MeshletsToProcess, 0, mesh.MeshletCount, elementOffset);
+        InterlockedAdd_Varying_WaveOps(uCounter_MeshletCandidates, 0, mesh.MeshletCount, elementOffset);
         for(uint i = 0; i < mesh.MeshletCount; ++i)
         {
             MeshletCandidate meshlet;
             meshlet.InstanceID = instance.ID;
             meshlet.MeshletIndex = i;
-            uMeshletsToProcess[elementOffset + i] = meshlet;
+            uMeshletCandidates[elementOffset + i] = meshlet;
         }
     }
 }
-
-#define NUM_AS_THREADS 32
 
 [numthreads(1, 1, 1)]
 void BuildMeshShaderIndirectArgs(uint threadID : SV_DispatchThreadID)
@@ -108,9 +133,9 @@ void BuildMeshShaderIndirectArgs(uint threadID : SV_DispatchThreadID)
 [numthreads(1, 1, 1)]
 void BuildInstanceCullIndirectArgs(uint threadID : SV_DispatchThreadID)
 {
-    uint numInstances = tCounter_CulledInstances[0];
+    uint numInstances = tCounter_OccludedInstances[0];
     D3D12_DISPATCH_ARGUMENTS args;
-    args.ThreadGroupCount = uint3(DivideAndRoundUp(numInstances, 64), 1, 1);
+    args.ThreadGroupCount = uint3(DivideAndRoundUp(numInstances, NUM_CULL_INSTANCES_THREADS), 1, 1);
     uDispatchArguments[0] = args;
 }
 
@@ -122,12 +147,31 @@ struct PayloadData
 
 groupshared PayloadData gsPayload;
 
+FrustumCullData CullMeshlet(uint id, MeshletBounds bounds, float4x4 localToWorld, float4x4 viewProjection, float3 viewLocation)
+{
+	float3 boundsOrigin = mul(float4(bounds.Center, 1), localToWorld).xyz;
+	float3 boundsExtents = abs(mul(bounds.Radius.xxx, (float3x3)localToWorld));
+
+	FrustumCullData cullData = FrustumCull(boundsOrigin, boundsExtents, viewProjection);
+
+#define CONE_CULL 0
+#if CONE_CULL
+	if(cullData.IsVisible)
+	{
+		float radius = Max3(boundsExtents);
+		float3 coneAxis = normalize(mul(bounds.ConeAxis, (float3x3)localToWorld));
+		cullData.IsVisible &= !(dot(viewLocation - boundsOrigin, coneAxis) >= bounds.ConeCutoff * length(boundsOrigin - viewLocation) + radius);
+	}
+#endif
+
+	return cullData;
+}
+
 #if __SHADER_TARGET_STAGE == __SHADER_STAGE_AMPLIFICATION
 [numthreads(NUM_AS_THREADS, 1, 1)]
 void CullAndDrawMeshletsAS(uint threadID : SV_DispatchThreadID)
 {
 	bool shouldSubmit = false;
-
 	if(threadID < tCounter_MeshletsToProcess[0])
 	{
 		MeshletCandidate meshlet = tMeshletsToProcess[threadID];
@@ -135,36 +179,33 @@ void CullAndDrawMeshletsAS(uint threadID : SV_DispatchThreadID)
 		MeshData mesh = GetMesh(instance.MeshIndex);
 		MeshletBounds bounds = BufferLoad<MeshletBounds>(mesh.BufferIndex, meshlet.MeshletIndex, mesh.MeshletBoundsOffset);
 
-		float4x4 world = instance.LocalToWorld;
-		float4 center = mul(float4(bounds.Center, 1), world);
-		float3 radius3 = abs(mul(bounds.Radius.xxx, (float3x3)world));
-		float radius = Max3(radius3);
-		float3 coneAxis = normalize(mul(bounds.ConeAxis, (float3x3)world));
-
-		FrustumCullData cullData = FrustumCull(center.xyz, radius3, cView.ViewProjection);
+		FrustumCullData cullData = CullMeshlet(threadID, bounds, instance.LocalToWorld, cView.ViewProjection, cView.ViewLocation);
 		bool isVisible = cullData.IsVisible;
-		bool wasVisible = true;
+		bool wasOccluded = false;
 
 		if(isVisible)
 		{
 #if OCCLUSION_FIRST_PASS
-			FrustumCullData prevCullData = FrustumCull(center.xyz, radius3, cView.ViewProjectionPrev);
+			FrustumCullData prevCullData = CullMeshlet(threadID, bounds, instance.LocalToWorld, cView.ViewProjectionPrev, cView.ViewLocationPrev);
 			if(prevCullData.IsVisible)
 			{
-				wasVisible = HZBCull(prevCullData, tHZB);
+				wasOccluded = !HZBCull(prevCullData, tHZB);
 			}
-			if(!wasVisible)
+
+			// If the meshlet was occluded the previous frame, we can't be sure it's still occluded this frame.
+			// Add it to the list to re-test in the second phase.
+			if(wasOccluded)
 			{
 				uint elementOffset;
-				InterlockedAdd_WaveOps(uCounter_CulledMeshlets, 0, elementOffset);
-				uCulledMeshlets[elementOffset] = meshlet;
+				InterlockedAdd_WaveOps(uCounter_OccludedMeshlets, 0, elementOffset);
+				uOccludedMeshlets[elementOffset] = meshlet;
 			}
 #else
 			isVisible = HZBCull(cullData, tHZB);
 #endif
 		}
 
-		shouldSubmit = isVisible && wasVisible;
+		shouldSubmit = isVisible && !wasOccluded;
 		if(shouldSubmit)
 		{
 			uint index = WavePrefixCountBits(shouldSubmit);
@@ -181,8 +222,8 @@ void CullAndDrawMeshletsAS(uint threadID : SV_DispatchThreadID)
 struct PrimitiveAttribute
 {
 	uint PrimitiveID : SV_PrimitiveID;
-	uint MeshletID : MESHLET_ID;
-	uint InstanceID : INSTANCE_ID;
+	uint MeshletID : MeshletID;
+	uint InstanceID : InstanceID;
 };
 
 struct VertexAttribute
@@ -206,14 +247,12 @@ VertexAttribute FetchVertexAttributes(MeshData mesh, float4x4 world, uint vertex
 	return result;
 }
 
-#define NUM_MESHLET_THREADS 32
-
 [outputtopology("triangle")]
 [numthreads(NUM_MESHLET_THREADS, 1, 1)]
 void MSMain(
 	in uint groupThreadID : SV_GroupIndex,
-	in payload PayloadData payload,
 	in uint groupID : SV_GroupID,
+	in payload PayloadData payload,
 	out vertices VertexAttribute verts[MESHLET_MAX_VERTICES],
 	out indices uint3 triangles[MESHLET_MAX_TRIANGLES],
 	out primitives PrimitiveAttribute primitives[MESHLET_MAX_TRIANGLES])
@@ -270,14 +309,14 @@ VisBufferData PSMain(
 void PrintStatsCS(uint threadId : SV_DispatchThreadID)
 {
 	uint numInstances = cView.NumInstances;
-	uint occludedInstances = uCounter_CulledInstances[0];
+	uint occludedInstances = uCounter_OccludedInstances[0];
 	uint visibleInstances = numInstances - occludedInstances;
-	uint phase1Meshlets = uCounter_MeshletsToProcess[0];
-	uint phase2Meshlets = uCounter_CulledMeshlets[0];
+	uint phase1Meshlets = uCounter_MeshletCandidates[0];
+	uint phase2Meshlets = uCounter_OccludedMeshlets[0];
 
 	TextWriter writer = CreateTextWriter(float2(20, 20));
 
-	writer = writer + 'S' + 'c' + 'e' + 'n'  + 'e'  + ' ';
+	writer = writer + 'T' + 'o' + 't' + 'a'  + 'l'  + ' ';
 	writer = writer + 'i' + 'n' + 's' + 't'  + 'a'  + 'n'  + 'c'  + 'e'  + 's' + ' ';
 	writer.Int(numInstances);
 	writer.NewLine();

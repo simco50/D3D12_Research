@@ -26,13 +26,13 @@ void InterlockedAdd_Varying_WaveOps(T bufferResource, uint elementIndex, uint nu
 template<typename T>
 void InterlockedAdd_WaveOps(T bufferResource, uint elementIndex, out uint originalValue)
 {
-	InterlockedAdd(bufferResource[elementIndex], originalValue);
+	InterlockedAdd(bufferResource[elementIndex], 1, originalValue);
 }
 
 template<typename T>
 void InterlockedAdd_Varying_WaveOps(T bufferResource, uint elementIndex, uint numValues, out uint originalValue)
 {
-	InterlockedAdd(bufferResource[elementIndex], originalValue);
+	InterlockedAdd(bufferResource[elementIndex], numValues, originalValue);
 }
 
 #endif

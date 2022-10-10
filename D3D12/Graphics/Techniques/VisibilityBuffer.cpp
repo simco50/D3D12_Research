@@ -52,46 +52,45 @@ void VisibilityBuffer::Render(RGGraph& graph, const SceneView* pView, RGTexture*
 {
 	RG_GRAPH_SCOPE("Visibility Buffer (GPU Driven)", graph);
 
-	FloatRect viewport = pView->View.Viewport;
-
-	RGTexture* pHZB = InitHZB(graph, pDepth->GetDesc().Size2D(), &m_pHZB);
-	RGTexture* pVisibilityBuffer = graph.CreateTexture("Visibility", TextureDesc::CreateRenderTarget((uint32)viewport.GetWidth(), (uint32)viewport.GetHeight(), ResourceFormat::R32_UINT));
+	TextureDesc depthDesc = pDepth->GetDesc();
+	RGTexture* pHZB = InitHZB(graph, depthDesc.Size2D(), &m_pHZB);
+	RGTexture* pVisibilityBuffer = graph.CreateTexture("Visibility", TextureDesc::CreateRenderTarget(depthDesc.Width, depthDesc.Height, ResourceFormat::R32_UINT));
 
 	constexpr uint32 maxNumInstances = 1 << 14;
 	constexpr uint32 maxNumMeshlets = 1 << 20;
 
-	check(pView->Batches.size() <= maxNumInstances);
 	uint32 numMeshlets = 0;
 	for (const Batch& b : pView->Batches)
 	{
 		numMeshlets += b.pMesh->NumMeshlets;
 	}
+	check(pView->Batches.size() <= maxNumInstances);
 	check(numMeshlets <= maxNumMeshlets);
 
-	BufferDesc counterDesc = BufferDesc::CreateTyped(1, ResourceFormat::R32_UINT);
-	RGBuffer* pMeshletsToProcess =			graph.CreateBuffer("GPURender.MeshletsToProcess", BufferDesc::CreateStructured(maxNumMeshlets, sizeof(uint32) * 2));
-	RGBuffer* pMeshletsToProcessCounter =	graph.CreateBuffer("GPURender.MeshletsToProcess.Counter", counterDesc);
-	RGBuffer* pCulledMeshlets =				graph.CreateBuffer("GPURender.CulledMeshlets", BufferDesc::CreateStructured(maxNumMeshlets, sizeof(uint32) * 2));
-	RGBuffer* pCulledMeshletsCounter =		graph.CreateBuffer("GPURender.CulledMeshlets.Counter", counterDesc);
-	RGBuffer* pCulledInstances =			graph.CreateBuffer("GPURender.CulledInstances", BufferDesc::CreateStructured(maxNumInstances, sizeof(uint32)));
-	RGBuffer* pCulledInstancesCounter =		graph.CreateBuffer("GPURender.CulledInstances.Counter", counterDesc);
+	const BufferDesc counterDesc = BufferDesc::CreateTyped(1, ResourceFormat::R32_UINT);
+	RGBuffer* pMeshletCandidates =			graph.CreateBuffer("GPURender.MeshletCandidates", BufferDesc::CreateStructured(maxNumMeshlets, sizeof(uint32) * 2));
+	RGBuffer* pMeshletCandidatesCounter =	graph.CreateBuffer("GPURender.MeshletCandidates.Counter", counterDesc);
+	RGBuffer* pOccludedMeshlets =			graph.CreateBuffer("GPURender.OccludedMeshlets", BufferDesc::CreateStructured(maxNumMeshlets, sizeof(uint32) * 2));
+	RGBuffer* pOccludedMeshletsCounter =	graph.CreateBuffer("GPURender.OccludedMeshlets.Counter", counterDesc);
+	RGBuffer* pOccludedInstances =			graph.CreateBuffer("GPURender.OccludedInstances", BufferDesc::CreateStructured(maxNumInstances, sizeof(uint32)));
+	RGBuffer* pOccludedInstancesCounter =	graph.CreateBuffer("GPURender.OccludedInstances.Counter", counterDesc);
 
 	{
 		RG_GRAPH_SCOPE("Phase 1", graph);
 
 		graph.AddPass("Clear Counters", RGPassFlag::Compute)
-			.Write({ pMeshletsToProcessCounter, pCulledInstancesCounter, pCulledMeshletsCounter })
+			.Write({ pMeshletCandidatesCounter, pOccludedInstancesCounter, pOccludedMeshletsCounter })
 			.Bind([=](CommandContext& context)
 				{
-					context.ClearUavUInt(pMeshletsToProcessCounter->Get());
-					context.ClearUavUInt(pCulledInstancesCounter->Get());
-					context.ClearUavUInt(pCulledMeshletsCounter->Get());
+					context.ClearUavUInt(pMeshletCandidatesCounter->Get());
+					context.ClearUavUInt(pOccludedInstancesCounter->Get());
+					context.ClearUavUInt(pOccludedMeshletsCounter->Get());
 					context.InsertUavBarrier();
 				});
 
 		graph.AddPass("Cull Instances", RGPassFlag::Compute)
 			.Read(pHZB)
-			.Write({ pMeshletsToProcess, pMeshletsToProcessCounter, pCulledInstances, pCulledInstancesCounter })
+			.Write({ pMeshletCandidates, pMeshletCandidatesCounter, pOccludedInstances, pOccludedInstancesCounter })
 			.Bind([=](CommandContext& context)
 				{
 					context.SetComputeRootSignature(m_pCommonRS);
@@ -99,10 +98,10 @@ void VisibilityBuffer::Render(RGGraph& graph, const SceneView* pView, RGTexture*
 
 					context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
 					context.BindResources(2, {
-						pMeshletsToProcess->Get()->GetUAV(),
-						pMeshletsToProcessCounter->Get()->GetUAV(),
-						pCulledInstances->Get()->GetUAV(),
-						pCulledInstancesCounter->Get()->GetUAV(),
+						pMeshletCandidates->Get()->GetUAV(),
+						pMeshletCandidatesCounter->Get()->GetUAV(),
+						pOccludedInstances->Get()->GetUAV(),
+						pOccludedInstancesCounter->Get()->GetUAV(),
 						});
 					context.BindResources(3, pHZB->Get()->GetSRV(), 2);
 					context.Dispatch(ComputeUtils::GetNumThreadGroups((uint32)pView->Batches.size(), 64));
@@ -112,7 +111,7 @@ void VisibilityBuffer::Render(RGGraph& graph, const SceneView* pView, RGTexture*
 
 		RGBuffer* pDispatchMeshBuffer = graph.CreateBuffer("GPURender.DispatchMeshArgs", BufferDesc::CreateIndirectArguments<D3D12_DISPATCH_MESH_ARGUMENTS>(1));
 		graph.AddPass("Build DispatchMesh Arguments", RGPassFlag::Compute)
-			.Read(pMeshletsToProcessCounter)
+			.Read(pMeshletCandidatesCounter)
 			.Write(pDispatchMeshBuffer)
 			.Bind([=](CommandContext& context)
 				{
@@ -120,16 +119,16 @@ void VisibilityBuffer::Render(RGGraph& graph, const SceneView* pView, RGTexture*
 					context.SetPipelineState(m_pBuildDrawArgsPhase1PSO);
 
 					context.BindResources(2, pDispatchMeshBuffer->Get()->GetUAV());
-					context.BindResources(3, pMeshletsToProcessCounter->Get()->GetSRV(), 1);
+					context.BindResources(3, pMeshletCandidatesCounter->Get()->GetSRV(), 1);
 					context.Dispatch(1);
 
 					context.InsertUavBarrier();
 				});
 
 		graph.AddPass("Cull and Draw Meshlets", RGPassFlag::Raster)
-			.Read({ pMeshletsToProcess, pMeshletsToProcessCounter, pDispatchMeshBuffer })
+			.Read({ pMeshletCandidates, pMeshletCandidatesCounter, pDispatchMeshBuffer })
 			.Read({ pHZB })
-			.Write({ pCulledMeshlets, pCulledMeshletsCounter })
+			.Write({ pOccludedMeshlets, pOccludedMeshletsCounter })
 			.DepthStencil(pDepth, RenderTargetLoadAction::Clear, true)
 			.RenderTarget(pVisibilityBuffer, RenderTargetLoadAction::DontCare)
 			.Bind([=](CommandContext& context)
@@ -139,12 +138,12 @@ void VisibilityBuffer::Render(RGGraph& graph, const SceneView* pView, RGTexture*
 
 					context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
 					context.BindResources(2, {
-						pCulledMeshlets->Get()->GetUAV(),
-						pCulledMeshletsCounter->Get()->GetUAV(),
+						pOccludedMeshlets->Get()->GetUAV(),
+						pOccludedMeshletsCounter->Get()->GetUAV(),
 						}, 4);
 					context.BindResources(3, {
-						pMeshletsToProcess->Get()->GetSRV(),
-						pMeshletsToProcessCounter->Get()->GetSRV(),
+						pMeshletCandidates->Get()->GetSRV(),
+						pMeshletCandidatesCounter->Get()->GetSRV(),
 						pHZB->Get()->GetSRV(),
 						});
 					context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchMeshSignature, 1, pDispatchMeshBuffer->Get());
@@ -158,7 +157,7 @@ void VisibilityBuffer::Render(RGGraph& graph, const SceneView* pView, RGTexture*
 
 		RGBuffer* pDispatchBuffer = graph.CreateBuffer("GPURender.DispatchArgs", BufferDesc::CreateIndirectArguments<D3D12_DISPATCH_ARGUMENTS>(1));
 		graph.AddPass("Build Instance Cull Arguments", RGPassFlag::Compute)
-			.Read({ pCulledInstancesCounter })
+			.Read({ pOccludedInstancesCounter })
 			.Write({ pDispatchBuffer })
 			.Bind([=](CommandContext& context)
 				{
@@ -166,7 +165,7 @@ void VisibilityBuffer::Render(RGGraph& graph, const SceneView* pView, RGTexture*
 					context.SetPipelineState(m_pBuildCullArgsPhase2PSO);
 
 					context.BindResources(2, pDispatchBuffer->Get()->GetUAV());
-					context.BindResources(3, pCulledInstancesCounter->Get()->GetSRV(), 1);
+					context.BindResources(3, pOccludedInstancesCounter->Get()->GetSRV(), 1);
 					context.Dispatch(1);
 
 					context.InsertUavBarrier();
@@ -174,8 +173,8 @@ void VisibilityBuffer::Render(RGGraph& graph, const SceneView* pView, RGTexture*
 
 		graph.AddPass("Cull Instances", RGPassFlag::Compute)
 			.Read(pHZB)
-			.Read({ pCulledInstances, pCulledInstancesCounter, pDispatchBuffer })
-			.Write({ pCulledMeshlets, pCulledMeshletsCounter })
+			.Read({ pOccludedInstances, pOccludedInstancesCounter, pDispatchBuffer })
+			.Write({ pOccludedMeshlets, pOccludedMeshletsCounter })
 			.Bind([=](CommandContext& context)
 				{
 					context.SetComputeRootSignature(m_pCommonRS);
@@ -183,12 +182,12 @@ void VisibilityBuffer::Render(RGGraph& graph, const SceneView* pView, RGTexture*
 
 					context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
 					context.BindResources(2, {
-						pCulledMeshlets->Get()->GetUAV(),
-						pCulledMeshletsCounter->Get()->GetUAV(),
+						pOccludedMeshlets->Get()->GetUAV(),
+						pOccludedMeshletsCounter->Get()->GetUAV(),
 						});
 					context.BindResources(3, {
-						pCulledInstances->Get()->GetSRV(),
-						pCulledInstancesCounter->Get()->GetSRV(),
+						pOccludedInstances->Get()->GetSRV(),
+						pOccludedInstancesCounter->Get()->GetSRV(),
 						pHZB->Get()->GetSRV(),
 						});
 
@@ -200,7 +199,7 @@ void VisibilityBuffer::Render(RGGraph& graph, const SceneView* pView, RGTexture*
 
 		RGBuffer* pDispatchMeshBuffer = graph.CreateBuffer("GPURender.DispatchMeshArgs", BufferDesc::CreateIndirectArguments<D3D12_DISPATCH_MESH_ARGUMENTS>(1));
 		graph.AddPass("Build DispatchMesh Arguments", RGPassFlag::Compute)
-			.Read(pCulledMeshletsCounter)
+			.Read(pOccludedMeshletsCounter)
 			.Write(pDispatchMeshBuffer)
 			.Bind([=](CommandContext& context)
 				{
@@ -208,7 +207,7 @@ void VisibilityBuffer::Render(RGGraph& graph, const SceneView* pView, RGTexture*
 					context.SetPipelineState(m_pBuildDrawArgsPhase1PSO);
 
 					context.BindResources(2, pDispatchMeshBuffer->Get()->GetUAV());
-					context.BindResources(3, pCulledMeshletsCounter->Get()->GetSRV(), 1);
+					context.BindResources(3, pOccludedMeshletsCounter->Get()->GetSRV(), 1);
 					context.Dispatch(1);
 
 					context.InsertUavBarrier();
@@ -216,7 +215,7 @@ void VisibilityBuffer::Render(RGGraph& graph, const SceneView* pView, RGTexture*
 
 		graph.AddPass("Cull and Draw Meshlets", RGPassFlag::Raster)
 			.Read(pHZB)
-			.Read({ pCulledMeshlets, pCulledMeshletsCounter, pDispatchMeshBuffer })
+			.Read({ pOccludedMeshlets, pOccludedMeshletsCounter, pDispatchMeshBuffer })
 			.DepthStencil(pDepth, RenderTargetLoadAction::Load, true)
 			.RenderTarget(pVisibilityBuffer, RenderTargetLoadAction::Load)
 			.Bind([=](CommandContext& context)
@@ -226,8 +225,8 @@ void VisibilityBuffer::Render(RGGraph& graph, const SceneView* pView, RGTexture*
 
 					context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
 					context.BindResources(3, {
-						pCulledMeshlets->Get()->GetSRV(),
-						pCulledMeshletsCounter->Get()->GetSRV(),
+						pOccludedMeshlets->Get()->GetSRV(),
+						pOccludedMeshletsCounter->Get()->GetSRV(),
 						pHZB->Get()->GetSRV(),
 						});
 					context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchMeshSignature, 1, pDispatchMeshBuffer->Get());
@@ -238,7 +237,7 @@ void VisibilityBuffer::Render(RGGraph& graph, const SceneView* pView, RGTexture*
 
 #if 1
 	graph.AddPass("Print Stats", RGPassFlag::Compute)
-		.Read({ pCulledInstancesCounter, pCulledMeshletsCounter, pMeshletsToProcessCounter })
+		.Read({ pOccludedInstancesCounter, pOccludedMeshletsCounter, pMeshletCandidatesCounter })
 		.Bind([=](CommandContext& context)
 			{
 				context.SetComputeRootSignature(m_pCommonRS);
@@ -246,12 +245,12 @@ void VisibilityBuffer::Render(RGGraph& graph, const SceneView* pView, RGTexture*
 
 				context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
 				context.BindResources(2, {
-					pMeshletsToProcessCounter->Get()->GetUAV(),
-					pMeshletsToProcessCounter->Get()->GetUAV(),
-					pCulledInstancesCounter->Get()->GetUAV(),
-					pCulledInstancesCounter->Get()->GetUAV(),
-					pCulledMeshletsCounter->Get()->GetUAV(),
-					pCulledMeshletsCounter->Get()->GetUAV(),
+					pMeshletCandidatesCounter->Get()->GetUAV(),
+					pMeshletCandidatesCounter->Get()->GetUAV(),
+					pOccludedInstancesCounter->Get()->GetUAV(),
+					pOccludedInstancesCounter->Get()->GetUAV(),
+					pOccludedMeshletsCounter->Get()->GetUAV(),
+					pOccludedMeshletsCounter->Get()->GetUAV(),
 					});
 				context.Dispatch(1);
 			});
@@ -289,7 +288,6 @@ void VisibilityBuffer::BuildHZB(RGGraph& graph, RGTexture* pDepth, RGTexture* pH
 	RG_GRAPH_SCOPE("HZB", graph);
 
 	const Vector2i hzbDimensions = pHZB->GetDesc().Size2D();
-	Vector2i currentDimensions = hzbDimensions;
 
 	graph.AddPass("HZB Create", RGPassFlag::Compute)
 		.Read(pDepth)
@@ -304,11 +302,11 @@ void VisibilityBuffer::BuildHZB(RGGraph& graph, RGTexture* pDepth, RGTexture* pH
 					Vector2 DimensionsInv;
 				} parameters;
 
-				parameters.DimensionsInv = Vector2(1.0f / currentDimensions.x, 1.0f / currentDimensions.y);
+				parameters.DimensionsInv = Vector2(1.0f / hzbDimensions.x, 1.0f / hzbDimensions.y);
 				context.SetRootConstants(0, parameters);
 				context.BindResources(2, pHZB->Get()->GetUAV());
 				context.BindResources(3, pDepth->Get()->GetSRV());
-				context.Dispatch(ComputeUtils::GetNumThreadGroups(currentDimensions.x, 16, currentDimensions.y, 16));
+				context.Dispatch(ComputeUtils::GetNumThreadGroups(hzbDimensions.x, 16, hzbDimensions.y, 16));
 			});
 
 	RGBuffer* pSPDCounter = graph.CreateBuffer("SPD Counter", BufferDesc::CreateByteAddress(sizeof(uint32)));
