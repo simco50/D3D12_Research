@@ -145,7 +145,7 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 
 	VisBufferData visibility = (VisBufferData)tVisibilityTexture[texel];
 
-	float2 screenUV = ((float2)dispatchThreadId.xy + 0.5f) * cView.TargetDimensionsInv;
+	float2 screenUV = ((float2)texel.xy + 0.5f) * cView.TargetDimensionsInv;
 	float ambientOcclusion = tAO.SampleLevel(sLinearClamp, screenUV, 0).r;
 
 	VisBufferVertexAttribute vertex = GetVertexAttributes(screenUV, visibility);
@@ -161,7 +161,7 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 
 	BrdfData brdfData = GetBrdfData(surface);
 	float3 positionVS = mul(float4(vertex.Position, 1), cView.View).xyz;
-	float4 pos = float4((float2)(dispatchThreadId.xy + 0.5f), 0, positionVS.z);
+	float4 pos = float4((float2)(texel.xy + 0.5f), 0, positionVS.z);
 
 	float ssrWeight = 0;
 	float3 ssr = ScreenSpaceReflections(pos, positionVS, N, V, brdfData.Roughness, tDepth, tPreviousSceneColor, ssrWeight);

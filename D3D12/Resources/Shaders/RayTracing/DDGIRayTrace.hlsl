@@ -37,18 +37,16 @@ void TraceRaysRGS()
 
 	RaytracingAccelerationStructure TLAS = ResourceDescriptorHeap[cView.TLASIndex];
 
-	float3 direction = DDGIGetRayDirection(rayIndex, volume.NumRaysPerProbe, randomRotation);
-
 	RayDesc ray;
 	ray.Origin = probePosition;
-	ray.Direction = direction;
+	ray.Direction = DDGIGetRayDirection(rayIndex, volume.NumRaysPerProbe, randomRotation);
 	ray.TMin = RAY_BIAS;
 	ray.TMax = FLT_MAX;
 	RaytracingAccelerationStructure tlas = ResourceDescriptorHeap[cView.TLASIndex];
 	MaterialRayPayload payload = TraceMaterialRay(ray, tlas);
 
-	float3 radiance = 0;
 	float depth = maxDepth;
+	float3 radiance = 0;
 
 	if(payload.IsHit())
 	{
@@ -63,7 +61,7 @@ void TraceRaysRGS()
 			MaterialProperties surface = GetMaterialProperties(material, vertex.UV, textureMipLevel);
 			BrdfData brdfData = GetBrdfData(surface);
 
-			float3 hitLocation = probePosition + direction * payload.HitT;
+			float3 hitLocation = probePosition + ray.Direction * payload.HitT;
 			float3 N = vertex.Normal;
 
 			for(uint lightIndex = 0; lightIndex < cView.LightCount; ++lightIndex)
@@ -95,7 +93,7 @@ void TraceRaysRGS()
 			}
 
 			radiance += surface.Emissive;
-			radiance += Diffuse_Lambert(min(brdfData.Diffuse, 0.9f)) * SampleDDGIIrradiance(hitLocation, N, direction);
+			radiance += Diffuse_Lambert(min(brdfData.Diffuse, 0.9f)) * SampleDDGIIrradiance(hitLocation, N, ray.Direction);
 		}
 		else
 		{
@@ -105,7 +103,7 @@ void TraceRaysRGS()
 	}
 	else
 	{
-		radiance = GetSky(direction);
+		radiance = GetSky(ray.Direction);
 	}
 
 	uRayHitInfo[probeIdx * volume.MaxRaysPerProbe + rayIndex] = float4(radiance, depth);

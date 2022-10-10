@@ -20,9 +20,7 @@ struct D3D12_RAYTRACING_INSTANCE_DESC
 
 struct D3D12_DISPATCH_ARGUMENTS
 {
-	uint ThreadGroupCountX;
-	uint ThreadGroupCountY;
-	uint ThreadGroupCountZ;
+	uint3 ThreadGroupCount;
 };
 
 struct D3D12_DRAW_ARGUMENTS

@@ -66,9 +66,7 @@ void PrepareDispatchArgsCS(uint threadID : SV_DispatchThreadID)
 	// Dispatch args
 	{
 		D3D12_DISPATCH_ARGUMENTS args;
-		args.ThreadGroupCountX = ceil((float)cbt.NumNodes() / COMPUTE_THREAD_GROUP_SIZE);
-		args.ThreadGroupCountY = 1;
-		args.ThreadGroupCountZ = 1;
+		args.ThreadGroupCount = uint3(ceil((float)cbt.NumNodes() / COMPUTE_THREAD_GROUP_SIZE), 1, 1);
 		uIndirectArgs.Store(offset, args);
 		offset += sizeof(D3D12_DISPATCH_ARGUMENTS);
 	}
@@ -76,9 +74,7 @@ void PrepareDispatchArgsCS(uint threadID : SV_DispatchThreadID)
 	// Task/mesh shader args
 	{
 		D3D12_DISPATCH_ARGUMENTS args;
-		args.ThreadGroupCountX = ceil((float)cbt.NumNodes() / MESH_SHADER_THREAD_GROUP_SIZE);
-		args.ThreadGroupCountY = 1;
-		args.ThreadGroupCountZ = 1;
+		args.ThreadGroupCount = uint3(ceil((float)cbt.NumNodes() / MESH_SHADER_THREAD_GROUP_SIZE), 1, 1);
 		uIndirectArgs.Store(offset, args);
 		offset += sizeof(D3D12_DISPATCH_ARGUMENTS);
 	}

@@ -101,9 +101,7 @@ void BuildMeshShaderIndirectArgs(uint threadID : SV_DispatchThreadID)
 {
     uint numMeshlets = tCounter_MeshletsToProcess[0];
     D3D12_DISPATCH_ARGUMENTS args;
-    args.ThreadGroupCountX = DivideAndRoundUp(numMeshlets, NUM_AS_THREADS);
-    args.ThreadGroupCountY = 1;
-    args.ThreadGroupCountZ = 1;
+    args.ThreadGroupCount = uint3(DivideAndRoundUp(numMeshlets, NUM_AS_THREADS), 1, 1);
     uDispatchArguments[0] = args;
 }
 
@@ -112,9 +110,7 @@ void BuildInstanceCullIndirectArgs(uint threadID : SV_DispatchThreadID)
 {
     uint numInstances = tCounter_CulledInstances[0];
     D3D12_DISPATCH_ARGUMENTS args;
-    args.ThreadGroupCountX = DivideAndRoundUp(numInstances, 64);
-    args.ThreadGroupCountY = 1;
-    args.ThreadGroupCountZ = 1;
+    args.ThreadGroupCount = uint3(DivideAndRoundUp(numInstances, 64), 1, 1);
     uDispatchArguments[0] = args;
 }
 
