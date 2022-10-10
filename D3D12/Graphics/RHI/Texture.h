@@ -102,6 +102,7 @@ struct TextureDesc
 	TextureDimension Dimensions;
 
 	Vector3i Size() const { return Vector3i(Width, Height, DepthOrArraySize); }
+	Vector2i Size2D() const { return Vector2i(Width, Height); }
 
 	static TextureDesc CreateCube(uint32 width, uint32 height, ResourceFormat format, TextureFlag flags = TextureFlag::None, uint32 sampleCount = 1, uint32 mips = 1)
 	{
@@ -233,7 +234,6 @@ public:
 	uint32 GetDepth() const { return m_Desc.DepthOrArraySize; }
 	uint32 GetArraySize() const { return m_Desc.DepthOrArraySize; }
 	uint32 GetMipLevels() const { return m_Desc.Mips; }
-	Vector3i GetSize() const { return m_Desc.Size(); }
 	ResourceFormat GetFormat() const { return m_Desc.Format; }
 	const ClearBinding& GetClearBinding() const { return m_Desc.ClearBindingValue; }
 	const TextureDesc& GetDesc() const { return m_Desc; }

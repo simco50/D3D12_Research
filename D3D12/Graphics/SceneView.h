@@ -101,7 +101,7 @@ struct SceneView
 	uint32 NumDDGIVolumes = 0;
 	RefCountPtr<Texture> pSky;
 	int FrameIndex = 0;
-	Vector2 HZBDimensions;
+	Vector2i HZBDimensions;
 	VisibilityMask VisibilityMask;
 	ViewTransform View;
 	BoundingBox SceneAABB;

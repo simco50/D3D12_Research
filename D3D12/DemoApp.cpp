@@ -612,7 +612,7 @@ void DemoApp::Update()
 			}
 			else
 			{
-				m_pVisibilityBuffer->BuildHZB(graph, sceneTextures.pDepth, &sceneTextures.pHZB, &m_pHZB);
+				sceneTextures.pHZB = m_pVisibilityBuffer->InitHZB(graph, sceneTextures.pDepth->GetDesc().Size2D(), &m_pHZB);
 
 				graph.AddPass("Visibility Buffer", RGPassFlag::Raster)
 					.Read(sceneTextures.pHZB)
@@ -637,9 +637,9 @@ void DemoApp::Update()
 							}
 						});
 
-				m_pVisibilityBuffer->BuildHZB(graph, sceneTextures.pDepth, &sceneTextures.pHZB);
+				m_pVisibilityBuffer->BuildHZB(graph, sceneTextures.pDepth, sceneTextures.pHZB);
 			}
-			m_SceneData.HZBDimensions = Vector2((float)sceneTextures.pHZB->GetDesc().Width, (float)sceneTextures.pHZB->GetDesc().Height);
+			m_SceneData.HZBDimensions = sceneTextures.pHZB->GetDesc().Size2D();
 		}
 
 		if (m_RenderPath == RenderPath::Clustered || m_RenderPath == RenderPath::Tiled || m_RenderPath == RenderPath::Visibility)
@@ -971,7 +971,7 @@ void DemoApp::Update()
 		{
 			RG_GRAPH_SCOPE("Depth Reduce", graph);
 
-			Vector3i depthTarget = sceneTextures.pDepth->GetDesc().Size();
+			Vector2i depthTarget = sceneTextures.pDepth->GetDesc().Size2D();
 			depthTarget.x = Math::Max(depthTarget.x / 16, 1);
 			depthTarget.y = Math::Max(depthTarget.y / 16, 1);
 			RGTexture* pReductionTarget = graph.CreateTexture("Depth Reduction Target", TextureDesc::Create2D(depthTarget.x, depthTarget.y, ResourceFormat::RG32_FLOAT));

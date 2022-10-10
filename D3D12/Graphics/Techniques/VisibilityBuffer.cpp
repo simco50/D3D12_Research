@@ -54,9 +54,7 @@ void VisibilityBuffer::Render(RGGraph& graph, const SceneView* pView, RGTexture*
 
 	FloatRect viewport = pView->View.Viewport;
 
-	RGTexture* pHZB = nullptr;
-	BuildHZB(graph, pDepth, &pHZB, &m_pHZB);
-
+	RGTexture* pHZB = InitHZB(graph, pDepth->GetDesc().Size2D(), &m_pHZB);
 	RGTexture* pVisibilityBuffer = graph.CreateTexture("Visibility", TextureDesc::CreateRenderTarget((uint32)viewport.GetWidth(), (uint32)viewport.GetHeight(), ResourceFormat::R32_UINT));
 
 	constexpr uint32 maxNumInstances = 1 << 14;
@@ -152,7 +150,7 @@ void VisibilityBuffer::Render(RGGraph& graph, const SceneView* pView, RGTexture*
 					context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchMeshSignature, 1, pDispatchMeshBuffer->Get());
 				});
 
-		BuildHZB(graph, pDepth, &pHZB, &m_pHZB);
+		BuildHZB(graph, pDepth, pHZB);
 	}
 
 	{
@@ -235,10 +233,10 @@ void VisibilityBuffer::Render(RGGraph& graph, const SceneView* pView, RGTexture*
 					context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchMeshSignature, 1, pDispatchMeshBuffer->Get());
 				});
 
-		BuildHZB(graph, pDepth, &pHZB);
+		BuildHZB(graph, pDepth, pHZB);
 	}
 
-#if 0
+#if 1
 	graph.AddPass("Print Stats", RGPassFlag::Compute)
 		.Read({ pCulledInstancesCounter, pCulledMeshletsCounter, pMeshletsToProcessCounter })
 		.Bind([=](CommandContext& context)
@@ -263,23 +261,36 @@ void VisibilityBuffer::Render(RGGraph& graph, const SceneView* pView, RGTexture*
 	*pOutHZB = pHZB;
 }
 
-void VisibilityBuffer::BuildHZB(RGGraph& graph, RGTexture* pDepth, RGTexture** pOutHZB, RefCountPtr<Texture>* pExportTarget)
+RGTexture* VisibilityBuffer::InitHZB(RGGraph& graph, const Vector2i& viewDimensions, RefCountPtr<Texture>* pExportTarget) const
+{
+	RGTexture* pHZB = nullptr;
+	if (pExportTarget && *pExportTarget)
+		pHZB = graph.TryImportTexture(*pExportTarget);
+
+	const uint32 hzbMipsX = Math::Max(1u, (uint32)Math::Ceil(log2f((float)viewDimensions.x)));
+	const uint32 hzbMipsY = Math::Max(1u, (uint32)Math::Ceil(log2f((float)viewDimensions.y)));
+	const uint32 hzbMips = Math::Max(hzbMipsX, hzbMipsY);
+	const Vector2i hzbDimensions(1 << (hzbMipsX - 1), 1 << (hzbMipsY - 1));
+	TextureDesc desc = TextureDesc::Create2D(hzbDimensions.x, hzbDimensions.y, ResourceFormat::R32_FLOAT, TextureFlag::UnorderedAccess, 1, hzbMips);
+
+	if (!pHZB || pHZB->GetDesc() != desc)
+	{
+		pHZB = graph.CreateTexture("HZB", desc);
+		if (pExportTarget)
+		{
+			graph.ExportTexture(pHZB, pExportTarget);
+		}
+	}
+	return pHZB;
+}
+
+void VisibilityBuffer::BuildHZB(RGGraph& graph, RGTexture* pDepth, RGTexture* pHZB)
 {
 	RG_GRAPH_SCOPE("HZB", graph);
 
-	check(*pOutHZB || pExportTarget);
-
-	const uint32 hzbMipsX = Math::Max(1u, (uint32)Math::Ceil(log2f((float)pDepth->GetDesc().Width)) - 1);
-	const uint32 hzbMipsY = Math::Max(1u, (uint32)Math::Ceil(log2f((float)pDepth->GetDesc().Height)) - 1);
-	const uint32 hzbMips = Math::Max(hzbMipsX, hzbMipsY);
-	const Vector2i hzbDimensions(1 << hzbMipsX, 1 << hzbMipsY);
-	if (*pOutHZB == nullptr)
-	{
-		*pOutHZB = RGUtils::CreatePersistentTexture(graph, "HZB", TextureDesc::Create2D(hzbDimensions.x, hzbDimensions.y, ResourceFormat::R32_FLOAT, TextureFlag::UnorderedAccess, 1, hzbMips), pExportTarget, true);
-	}
-	RGTexture* pHZB = *pOutHZB;
-
+	const Vector2i hzbDimensions = pHZB->GetDesc().Size2D();
 	Vector2i currentDimensions = hzbDimensions;
+
 	graph.AddPass("HZB Create", RGPassFlag::Compute)
 		.Read(pDepth)
 		.Write(pHZB)
