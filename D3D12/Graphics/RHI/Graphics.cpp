@@ -723,10 +723,7 @@ RefCountPtr<Buffer> GraphicsDevice::CreateBuffer(const BufferDesc& desc, const c
 {
 	auto GetResourceDesc = [](const BufferDesc& bufferDesc)
 	{
-		D3D12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Buffer(
-			Math::AlignUp<uint64>(bufferDesc.Size, D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT),
-			D3D12_RESOURCE_FLAG_NONE
-		);
+		D3D12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Buffer(bufferDesc.Size, D3D12_RESOURCE_FLAG_NONE);
 		if (EnumHasAnyFlags(bufferDesc.Usage, BufferFlag::ShaderResource | BufferFlag::AccelerationStructure) == false)
 		{
 			desc.Flags |= D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;

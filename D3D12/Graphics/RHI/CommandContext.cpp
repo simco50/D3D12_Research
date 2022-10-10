@@ -155,9 +155,14 @@ void CommandContext::CopyTexture(const Texture* pSource, const Buffer* pTarget, 
 {
 	checkf(pSource && pSource->GetResource(), "Source is invalid");
 	checkf(pTarget && pTarget->GetResource(), "Target is invalid");
-	D3D12_PLACED_SUBRESOURCE_FOOTPRINT textureFootprint = {};
-	D3D12_RESOURCE_DESC resourceDesc = pSource->GetResource()->GetDesc();
-	GetParent()->GetDevice()->GetCopyableFootprints(&resourceDesc, 0, 1, 0, &textureFootprint, nullptr, nullptr, nullptr);
+
+	D3D12_PLACED_SUBRESOURCE_FOOTPRINT textureFootprint;
+	textureFootprint.Offset = 0;
+	textureFootprint.Footprint.Width = sourceRegion.right - sourceRegion.left;
+	textureFootprint.Footprint.Depth = sourceRegion.back - sourceRegion.front;
+	textureFootprint.Footprint.Height = sourceRegion.bottom - sourceRegion.top;
+	textureFootprint.Footprint.Format = D3D::ConvertFormat(pSource->GetFormat());
+	textureFootprint.Footprint.RowPitch = Math::AlignUp<uint32>(GetFormatByteSize(pSource->GetFormat(), textureFootprint.Footprint.Width), D3D12_TEXTURE_DATA_PITCH_ALIGNMENT);
 
 	CD3DX12_TEXTURE_COPY_LOCATION srcLocation(pSource->GetResource(), sourceSubresource);
 	CD3DX12_TEXTURE_COPY_LOCATION dstLocation(pTarget->GetResource(), textureFootprint);
