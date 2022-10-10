@@ -6,6 +6,7 @@
 #include "Graphics/RenderGraph/RenderGraph.h"
 #include "Content/Image.h"
 #include "Graphics/SceneView.h"
+#include "stb_rect_pack.h"
 
 GPUDebugRenderer::GPUDebugRenderer(GraphicsDevice* pDevice, const FontCreateSettings& fontSettings)
 {
@@ -69,8 +70,8 @@ GPUDebugRenderer::GPUDebugRenderer(GraphicsDevice* pDevice, const FontCreateSett
 	CommandContext* pContext = pDevice->AllocateCommandContext();
 	ProcessFont(m_Font, fontSettings);
 
-	constexpr uint32 ATLAS_RESOLUTION = 1024;
-	BuildFontAtlas(*pContext, Vector2i(ATLAS_RESOLUTION, ATLAS_RESOLUTION), 1);
+	constexpr uint32 ATLAS_RESOLUTION = 512;
+	BuildFontAtlas(*pContext, Vector2i(ATLAS_RESOLUTION, ATLAS_RESOLUTION));
 	pContext->Execute(true);
 }
 
@@ -264,7 +265,7 @@ bool GPUDebugRenderer::ProcessFont(Font& outFont, const FontCreateSettings& conf
 		Vector2 offset = Vector2((float)-metrics.gmptGlyphOrigin.x, (float)metrics.gmBlackBoxY - metrics.gmptGlyphOrigin.y);
 
 		FontGlyph& glyph = outFont.Glyphs.emplace_back();
-		glyph.Letter = (char)letter;
+		glyph.Letter = letter;
 		glyph.OriginOffset = offset;
 		glyph.Height = config.Height;
 		glyph.Blackbox = Vector2i(metrics.gmBlackBoxX, metrics.gmBlackBoxY);
@@ -358,59 +359,9 @@ bool GPUDebugRenderer::ProcessFont(Font& outFont, const FontCreateSettings& conf
 	return true;
 }
 
-void GPUDebugRenderer::BuildFontAtlas(CommandContext& context, const Vector2i& resolution, float scale)
+void GPUDebugRenderer::BuildFontAtlas(CommandContext& context, const Vector2i& resolution)
 {
 	Font& font = m_Font;
-	uint32 values[] = { 0, 0, 0, 0xFFFFFFFF };
-
-	m_pFontAtlas = context.GetParent()->CreateTexture(TextureDesc::Create2D(resolution.x, resolution.y, ResourceFormat::R8_UNORM, TextureFlag::UnorderedAccess), "Font Atlas");
-	context.InsertResourceBarrier(m_pFontAtlas, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-	context.ClearUavUInt(m_pFontAtlas, m_pFontAtlas->GetUAV(), values);
-
-	context.SetComputeRootSignature(m_pCommonRS);
-	context.SetPipelineState(m_pRasterizeGlyphPSO);
-
-	context.BindResources(2, m_pFontAtlas->GetUAV());
-
-	const uint32 spacing = 1;
-	Vector2i location;
-
-	location.y += spacing;
-	uint32 count = 0;
-	for (FontGlyph& glyph : font.Glyphs)
-	{
-		if (location.x + glyph.AdvanceWidth * scale + spacing > resolution.x)
-		{
-			location.x = 0;
-			location.y += (uint32)(font.Height * scale) + spacing;
-		}
-
-		location.x += spacing;
-
-		struct
-		{
-			Vector2i Location;
-			uint32 pad[2];
-			Vector2i GlyphDimensions;
-			uint32 NumLines;
-			float Scale;
-			Line Lines[512];
-		} parameters;
-
-		parameters.Location = location;
-		parameters.GlyphDimensions = Vector2i((uint32)(glyph.AdvanceWidth * scale), (uint32)(glyph.Height * scale));
-		parameters.NumLines = (uint32)glyph.Lines.size();
-		parameters.Scale = scale;
-		check(glyph.Lines.size() <= ARRAYSIZE(parameters.Lines));
-		memcpy(parameters.Lines, glyph.Lines.data(), sizeof(Line) * glyph.Lines.size());
-
-		context.SetRootCBV(1, parameters);
-		context.Dispatch(ComputeUtils::GetNumThreadGroups(parameters.GlyphDimensions.x, 8, parameters.GlyphDimensions.y, 8));
-
-		glyph.AtlasLocation = location;
-		location.x += (uint32)(glyph.AdvanceWidth * scale);
-		count += (uint32)(glyph.AdvanceWidth * scale) * font.Height;
-	}
 
 	struct GlyphData
 	{
@@ -420,16 +371,71 @@ void GPUDebugRenderer::BuildFontAtlas(CommandContext& context, const Vector2i& r
 		uint32 Width;
 	};
 	std::vector<GlyphData> glyphData;
-	for (const FontGlyph& glyph : m_Font.Glyphs)
+
 	{
-		GlyphData& data = glyphData.emplace_back();
-		data.Dimensions = Vector2i(glyph.AdvanceWidth, glyph.Height);
-		data.Width = glyph.Width;
-		data.Offset = glyph.OriginOffset;
-		data.Location = glyph.AtlasLocation;
+		std::vector<stbrp_rect> packRects;
+		for (FontGlyph& glyph : font.Glyphs)
+		{
+			stbrp_rect& packRect = packRects.emplace_back();
+			packRect.id = glyph.Letter;
+			packRect.w = (uint16)glyph.AdvanceWidth;
+			packRect.h = (uint16)font.Height;
+		}
+
+		std::vector<stbrp_node> nodes(resolution.x);
+		stbrp_context packContext;
+
+		stbrp_init_target(&packContext, resolution.x, resolution.y, nodes.data(), (int32)nodes.size());
+		stbrp_pack_rects(&packContext, packRects.data(), (int32)packRects.size());
+
+		for (const stbrp_rect& packRect : packRects)
+		{
+			const FontGlyph& glyph = m_Font.Glyphs[packRect.id];
+			GlyphData& data = glyphData.emplace_back();
+			data.Dimensions.x = packRect.w;
+			data.Dimensions.y = packRect.h;
+			data.Location.x = packRect.x;
+			data.Location.y = packRect.y;
+			data.Offset = glyph.OriginOffset;
+			data.Width = glyph.Width;
+		}
+
+		m_pGlyphData = context.GetParent()->CreateBuffer(BufferDesc::CreateStructured((uint32)glyphData.size(), sizeof(GlyphData)), "Glyph Data");
+		context.InsertResourceBarrier(m_pGlyphData, D3D12_RESOURCE_STATE_COPY_DEST);
+		context.WriteBuffer(m_pGlyphData, glyphData.data(), glyphData.size() * sizeof(GlyphData));
+		context.InsertResourceBarrier(m_pGlyphData, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 	}
 
-	m_pGlyphData = context.GetParent()->CreateBuffer(BufferDesc::CreateStructured(256, sizeof(GlyphData)), "Glyph Data");
-	context.InsertResourceBarrier(m_pGlyphData, D3D12_RESOURCE_STATE_COPY_DEST);
-	context.WriteBuffer(m_pGlyphData, glyphData.data(), glyphData.size() * sizeof(GlyphData));
+	{
+		m_pFontAtlas = context.GetParent()->CreateTexture(TextureDesc::Create2D(resolution.x, resolution.y, ResourceFormat::R8_UNORM, TextureFlag::UnorderedAccess), "Font Atlas");
+		context.InsertResourceBarrier(m_pFontAtlas, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+		context.ClearUavUInt(m_pFontAtlas, m_pFontAtlas->GetUAV(), TVector4<uint32>(0, 0, 0, 0xFFFFFFFF));
+
+		context.SetComputeRootSignature(m_pCommonRS);
+		context.SetPipelineState(m_pRasterizeGlyphPSO);
+
+		context.BindResources(2, m_pFontAtlas->GetUAV());
+
+		for (FontGlyph& glyph : font.Glyphs)
+		{
+			GlyphData& gpuData = glyphData[(uint32)glyph.Letter];
+
+			struct
+			{
+				Vector2i Location;
+				Vector2i GlyphDimensions;
+				Line Lines[512];
+				uint32 NumLines;
+			} parameters;
+
+			parameters.Location = gpuData.Location;
+			parameters.GlyphDimensions = gpuData.Dimensions;
+			parameters.NumLines = (uint32)glyph.Lines.size();
+			check(glyph.Lines.size() <= ARRAYSIZE(parameters.Lines));
+			memcpy(parameters.Lines, glyph.Lines.data(), sizeof(Line) * glyph.Lines.size());
+
+			context.SetRootCBV(1, parameters);
+			context.Dispatch(ComputeUtils::GetNumThreadGroups(parameters.GlyphDimensions.x, 8, parameters.GlyphDimensions.y, 8));
+		}
+	}
 }

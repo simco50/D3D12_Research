@@ -11,11 +11,9 @@ struct Line
 struct PassParameters
 {
 	uint2 Location;
-	uint2 pad;
 	uint2 GlyphDimensions;
-	uint NumLines;
-	float Scale;
 	Line Lines[512];
+	uint NumLines;
 };
 
 ConstantBuffer<PassParameters> cPass : register(b100);
@@ -79,7 +77,7 @@ void RasterizeGlyphCS(uint3 threadID : SV_DispatchThreadID)
 	for(uint sampleIndex = 0; sampleIndex < numSamples; ++sampleIndex)
 	{
 		float2 location = sampleCenter + MSAA_16_Locations[sampleIndex] / 16.0f;
-		insideSamples += IsInside(location / cPass.Scale);
+		insideSamples += IsInside(location);
 	}
 	float shade = (float)insideSamples / numSamples;
 	uOutput[pixelIndex + cPass.Location] = shade;

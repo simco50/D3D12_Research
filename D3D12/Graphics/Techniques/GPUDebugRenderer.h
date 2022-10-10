@@ -46,7 +46,7 @@ private:
 
 	struct FontGlyph
 	{
-		char Letter;
+		uint32 Letter;
 		std::vector<Line> Lines;
 		Vector2i OriginOffset;
 		Vector2i Blackbox;
@@ -69,7 +69,7 @@ private:
 	};
 
 	bool ProcessFont(Font& outFont, const FontCreateSettings& config);
-	void BuildFontAtlas(CommandContext& context, const Vector2i& resolution, float scale);
+	void BuildFontAtlas(CommandContext& context, const Vector2i& resolution);
 
 	Font m_Font;
 
