@@ -105,8 +105,6 @@ void VisibilityBuffer::Render(RGGraph& graph, const SceneView* pView, RGTexture*
 						});
 					context.BindResources(3, pHZB->Get()->GetSRV(), 2);
 					context.Dispatch(ComputeUtils::GetNumThreadGroups((uint32)pView->Batches.size(), 64));
-
-					context.InsertUavBarrier();
 				});
 
 		RGBuffer* pDispatchMeshBuffer = graph.CreateBuffer("GPURender.DispatchMeshArgs", BufferDesc::CreateIndirectArguments<D3D12_DISPATCH_MESH_ARGUMENTS>(1));
@@ -121,8 +119,6 @@ void VisibilityBuffer::Render(RGGraph& graph, const SceneView* pView, RGTexture*
 					context.BindResources(2, pDispatchMeshBuffer->Get()->GetUAV());
 					context.BindResources(3, pMeshletCandidatesCounter->Get()->GetSRV(), 1);
 					context.Dispatch(1);
-
-					context.InsertUavBarrier();
 				});
 
 		graph.AddPass("Cull and Draw Meshlets", RGPassFlag::Raster)
@@ -167,8 +163,6 @@ void VisibilityBuffer::Render(RGGraph& graph, const SceneView* pView, RGTexture*
 					context.BindResources(2, pDispatchBuffer->Get()->GetUAV());
 					context.BindResources(3, pOccludedInstancesCounter->Get()->GetSRV(), 1);
 					context.Dispatch(1);
-
-					context.InsertUavBarrier();
 				});
 
 		graph.AddPass("Cull Instances", RGPassFlag::Compute)
@@ -192,8 +186,6 @@ void VisibilityBuffer::Render(RGGraph& graph, const SceneView* pView, RGTexture*
 						});
 
 					context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchSignature, 1, pDispatchBuffer->Get());
-
-					context.InsertUavBarrier();
 				});
 
 
@@ -209,8 +201,6 @@ void VisibilityBuffer::Render(RGGraph& graph, const SceneView* pView, RGTexture*
 					context.BindResources(2, pDispatchMeshBuffer->Get()->GetUAV());
 					context.BindResources(3, pOccludedMeshletsCounter->Get()->GetSRV(), 1);
 					context.Dispatch(1);
-
-					context.InsertUavBarrier();
 				});
 
 		graph.AddPass("Cull and Draw Meshlets", RGPassFlag::Raster)

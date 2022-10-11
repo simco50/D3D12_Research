@@ -16,7 +16,7 @@ GPUDebugRenderer::GPUDebugRenderer(GraphicsDevice* pDevice, const FontCreateSett
 	m_pCommonRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 4);
 	m_pCommonRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 4);
 	m_pCommonRS->Finalize("Common");
-	m_pRasterizeGlyphPSO = pDevice->CreateComputePipeline(m_pCommonRS, "ShaderDebugRender.hlsl", "RasterizeGlyphCS");
+	m_pRasterizeGlyphPSO = pDevice->CreateComputePipeline(m_pCommonRS, "RasterizeFont.hlsl", "RasterizeGlyphCS");
 
 	m_pBuildIndirectDrawArgsPSO = pDevice->CreateComputePipeline(m_pCommonRS, "ShaderDebugRender.hlsl", "BuildIndirectDrawArgsCS");
 
@@ -111,12 +111,10 @@ void GPUDebugRenderer::Render(RGGraph& graph, const SceneView* pView, RGTexture*
 				struct
 				{
 					Vector2 AtlasDimensionsInv;
-					Vector2 TargetDimensions;
 					Vector2 TargetDimensionsInv;
 				} parameters;
-				parameters.AtlasDimensionsInv = Vector2(1.0f / m_pFontAtlas->GetWidth(), 1.0f / m_pFontAtlas->GetHeight());
-				parameters.TargetDimensions = Vector2((float)pTarget->GetDesc().Width, (float)pTarget->GetDesc().Height);
-				parameters.TargetDimensionsInv = Vector2(1.0f / pTarget->GetDesc().Width, 1.0f / pTarget->GetDesc().Height);
+				parameters.AtlasDimensionsInv = Vector2::One / Vector2(m_pFontAtlas->GetDesc().Size2D());
+				parameters.TargetDimensionsInv = Vector2::One / Vector2(pTarget->GetDesc().Size2D());
 				context.SetRootConstants(0, parameters);
 				context.BindResources(3, {
 					m_pFontAtlas->GetSRV(),
