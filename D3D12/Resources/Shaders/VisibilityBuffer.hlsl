@@ -10,21 +10,11 @@ Texture2D<float> tHZB : register(t0);
 bool IsVisible(MeshData mesh, float4x4 world, uint meshlet)
 {
 	MeshletBounds bounds = BufferLoad<MeshletBounds>(mesh.BufferIndex, meshlet, mesh.MeshletBoundsOffset);
-
-	float4 center = mul(float4(bounds.Center, 1), world);
-	float3 extents = abs(mul(bounds.Extents, (float3x3)world));
-
-	FrustumCullData cullData = FrustumCull(center.xyz, extents, cView.ViewProjectionPrev);
+	FrustumCullData cullData = FrustumCull(bounds.Center, bounds.Extents, world, cView.ViewProjection);
 	if(!cullData.IsVisible)
 	{
 		return false;
 	}
-
-	if(!HZBCull(cullData, tHZB))
-	{
-		return false;
-	}
-
 	return true;
 }
 

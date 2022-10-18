@@ -82,6 +82,15 @@ FrustumCullData FrustumCull(float3 aabbCenter, float3 aabbExtents, float4x4 worl
 	return data;
 }
 
+FrustumCullData FrustumCull(float3 aabbCenter, float3 aabbExtents, float4x4 localToWorld, float4x4 worldToClip)
+{
+	// Transform bounds to world space
+	aabbExtents = mul(aabbExtents, (float3x3)localToWorld);
+	aabbCenter = mul(float4(aabbCenter, 1), localToWorld).xyz;
+
+	return FrustumCull(aabbCenter, aabbExtents, worldToClip);
+}
+
 bool HZBCull(FrustumCullData cullData, Texture2D<float> hzbTexture)
 {
 	float4 rect = saturate(float4(cullData.RectMin.xy, cullData.RectMax.xy) * float2(0.5f, -0.5f).xyxy + 0.5f).xwzy;
@@ -89,9 +98,6 @@ bool HZBCull(FrustumCullData cullData, Texture2D<float> hzbTexture)
 	float2 rectSize = abs(rectPixels.zw - rectPixels.xy);
 	uint mip = ceil(log2(max(rectSize.x, rectSize.y)));
 
-#if _SM_MAJ >= 6 && _SM_MIN >= 7
-	bool isOccluded = hzbTexture.SampleCmpLevel(sLinearClampComparisonGreater, rect.xw, cullData.RectMax.z, mip) > 0;
-#else
 	float4 depths = 1;
 	depths.x = hzbTexture.SampleLevel(sPointClamp, rect.xw, mip);
 	depths.y = hzbTexture.SampleLevel(sPointClamp, rect.zw, mip);
@@ -99,7 +105,6 @@ bool HZBCull(FrustumCullData cullData, Texture2D<float> hzbTexture)
 	depths.w = hzbTexture.SampleLevel(sPointClamp, rect.xy, mip);
 	float depth = min(min3(depths.x, depths.y, depths.z), depths.w);
 	bool isOccluded = cullData.RectMax.z < depth;
-#endif
 
 	return cullData.IsVisible && !isOccluded;
 }

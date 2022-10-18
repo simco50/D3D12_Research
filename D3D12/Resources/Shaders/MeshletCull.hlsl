@@ -27,7 +27,11 @@
 #endif
 
 #ifndef ALPHA_MASK
-#define ALPHA_MASK 0
+#define ALPHA_MASK 1
+#endif
+
+#ifndef DEPTH_ONLY
+#define DEPTH_ONLY 0
 #endif
 
 #define NUM_AS_THREADS 32
@@ -158,17 +162,14 @@ void CullAndDrawMeshletsAS(uint threadID : SV_DispatchThreadID)
 		InstanceData instance = GetInstance(meshlet.InstanceID);
 		MeshData mesh = GetMesh(instance.MeshIndex);
 		MeshletBounds bounds = BufferLoad<MeshletBounds>(mesh.BufferIndex, meshlet.MeshletIndex, mesh.MeshletBoundsOffset);
-		float3 boundsOrigin = mul(float4(bounds.Center, 1), instance.LocalToWorld).xyz;
-		float3 boundsExtents = abs(mul(bounds.Extents, (float3x3)instance.LocalToWorld));
-
-		FrustumCullData cullData = FrustumCull(boundsOrigin, boundsExtents, cView.ViewProjection);
+		FrustumCullData cullData = FrustumCull(bounds.Center, bounds.Extents, instance.LocalToWorld, cView.ViewProjection);
 		bool isVisible = cullData.IsVisible;
 		bool wasOccluded = false;
 
 		if(isVisible)
 		{
 #if OCCLUSION_FIRST_PASS
-			FrustumCullData prevCullData = FrustumCull(boundsOrigin, boundsExtents, cView.ViewProjectionPrev);
+			FrustumCullData prevCullData = FrustumCull(bounds.Center, bounds.Extents, instance.LocalToWorld, cView.ViewProjectionPrev);
 			if(prevCullData.IsVisible)
 			{
 				wasOccluded = !HZBCull(prevCullData, tHZB);
@@ -268,9 +269,13 @@ void MSMain(
 	}
 }
 
-VisBufferData PSMain(
+void PSMain(
     VertexAttribute vertexData,
-    PrimitiveAttribute primitiveData) : SV_TARGET0
+    PrimitiveAttribute primitiveData
+#if !DEPTH_ONLY
+	, out VisBufferData visBufferData : SV_TARGET0
+#endif
+	)
 {
 #if ALPHA_MASK
 	InstanceData instance = GetInstance(primitiveData.InstanceID);
@@ -280,11 +285,11 @@ VisBufferData PSMain(
 		discard;
 #endif
 
-	VisBufferData Data;
-	Data.ObjectID = primitiveData.InstanceID;
-	Data.PrimitiveID = primitiveData.PrimitiveID;
-	Data.MeshletID = primitiveData.MeshletID;
-	return Data;
+#if !DEPTH_ONLY
+	visBufferData.ObjectID = primitiveData.InstanceID;
+	visBufferData.PrimitiveID = primitiveData.PrimitiveID;
+	visBufferData.MeshletID = primitiveData.MeshletID;
+#endif
 }
 
 [numthreads(1, 1, 1)]

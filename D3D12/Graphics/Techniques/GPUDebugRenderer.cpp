@@ -36,7 +36,7 @@ GPUDebugRenderer::GPUDebugRenderer(GraphicsDevice* pDevice, const FontCreateSett
 		psoDesc.SetVertexShader("ShaderDebugRender.hlsl", "RenderLineVS");
 		psoDesc.SetPixelShader("ShaderDebugRender.hlsl", "RenderLinePS");
 		psoDesc.SetRenderTargetFormats(ResourceFormat::RGBA8_UNORM, ResourceFormat::D32_FLOAT, 1);
-		psoDesc.SetDepthEnabled(true);
+		psoDesc.SetDepthEnabled(false);
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
 		psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE);
 		psoDesc.SetBlendMode(BlendMode::Alpha, false);
@@ -61,7 +61,7 @@ GPUDebugRenderer::GPUDebugRenderer(GraphicsDevice* pDevice, const FontCreateSett
 			Vector3 A;
 			Vector3 B;
 			uint32 Color;
-		} Lines[4096];
+		} Lines[8192];
 	};
 
 	constexpr uint32 bufferSize = sizeof(Data);
