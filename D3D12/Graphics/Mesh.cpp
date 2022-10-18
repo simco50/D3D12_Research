@@ -443,30 +443,28 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 			meshopt_remapVertexBuffer(meshData.ColorsStream.data(), meshData.ColorsStream.data(), meshData.ColorsStream.size(), sizeof(uint32), &remap[0]);
 
 		// Meshlet generation
-		const size_t max_vertices = ShaderInterop::MESHLET_MAX_VERTICES;
-		const size_t max_triangles = ShaderInterop::MESHLET_MAX_TRIANGLES;
-		const float cone_weight = 0.5f;
+		const size_t maxVertices = ShaderInterop::MESHLET_MAX_VERTICES;
+		const size_t maxTriangles = ShaderInterop::MESHLET_MAX_TRIANGLES;
+		const size_t maxMeshlets = meshopt_buildMeshletsBound(meshData.Indices.size(), maxVertices, maxTriangles);
 
-		size_t max_meshlets = meshopt_buildMeshletsBound(meshData.Indices.size(), max_vertices, max_triangles);
+		meshData.Meshlets.resize(maxMeshlets);
+		meshData.MeshletVertices.resize(maxMeshlets * maxVertices);
 
-		meshData.Meshlets.resize(max_meshlets);
-		meshData.MeshletVertices.resize(max_meshlets * max_vertices);
+		std::vector<unsigned char> meshletTriangles(maxMeshlets * maxTriangles * 3);
+		std::vector<meshopt_Meshlet> meshlets(maxMeshlets);
 
-		std::vector<unsigned char> meshlet_triangles(max_meshlets* max_triangles * 3);
-		std::vector<meshopt_Meshlet> meshlets(max_meshlets);
-
-		size_t meshlet_count = meshopt_buildMeshlets(meshlets.data(), meshData.MeshletVertices.data(), meshlet_triangles.data(),
-			meshData.Indices.data(), meshData.Indices.size(), &meshData.PositionsStream[0].x, meshData.PositionsStream.size(), sizeof(Vector3), max_vertices, max_triangles, cone_weight);
+		size_t meshlet_count = meshopt_buildMeshlets(meshlets.data(), meshData.MeshletVertices.data(), meshletTriangles.data(),
+			meshData.Indices.data(), meshData.Indices.size(), &meshData.PositionsStream[0].x, meshData.PositionsStream.size(), sizeof(Vector3), maxVertices, maxTriangles, 0);
 
 		// Trimming
 		const meshopt_Meshlet& last = meshlets[meshlet_count - 1];
-		meshlet_triangles.resize(last.triangle_offset + ((last.triangle_count * 3 + 3) & ~3));
+		meshletTriangles.resize(last.triangle_offset + ((last.triangle_count * 3 + 3) & ~3));
 		meshlets.resize(meshlet_count);
 
 		meshData.MeshletVertices.resize(last.vertex_offset + last.vertex_count);
 		meshData.Meshlets.resize(meshlet_count);
 		meshData.MeshletBounds.resize(meshlet_count);
-		meshData.MeshletTriangles.resize(meshlet_triangles.size() / 3);
+		meshData.MeshletTriangles.resize(meshletTriangles.size() / 3);
 
 		uint32 triangleOffset = 0;
 		for (size_t i = 0; i < meshlet_count; ++i)
@@ -477,7 +475,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 			Vector3 max = Vector3(-FLT_MAX, -FLT_MAX, -FLT_MAX);
 			for (uint32 k = 0; k < meshlet.triangle_count * 3; ++k)
 			{
-				uint32 idx = meshData.MeshletVertices[meshlet.vertex_offset + meshlet_triangles[meshlet.triangle_offset + k]];
+				uint32 idx = meshData.MeshletVertices[meshlet.vertex_offset + meshletTriangles[meshlet.triangle_offset + k]];
 				const Vector3& p = meshData.PositionsStream[idx];
 				max = Vector3::Max(max, p);
 				min = Vector3::Min(min, p);
@@ -487,11 +485,13 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 			outBounds.Extents = (max - min) / 2;
 
 			// Encode triangles and get rid of 4 byte padding
+			unsigned char* pSourceTriangles = meshletTriangles.data() + meshlet.triangle_offset;
 			for (uint32 triIdx = 0; triIdx < meshlet.triangle_count; ++triIdx)
 			{
-				meshData.MeshletTriangles[triIdx + triangleOffset].V0 = meshlet_triangles[triIdx * 3 + 0 + meshlet.triangle_offset];
-				meshData.MeshletTriangles[triIdx + triangleOffset].V1 = meshlet_triangles[triIdx * 3 + 1 + meshlet.triangle_offset];
-				meshData.MeshletTriangles[triIdx + triangleOffset].V2 = meshlet_triangles[triIdx * 3 + 2 + meshlet.triangle_offset];
+				ShaderInterop::MeshletTriangle& tri = meshData.MeshletTriangles[triIdx + triangleOffset];
+				tri.V0 = *pSourceTriangles++;
+				tri.V1 = *pSourceTriangles++;
+				tri.V2 = *pSourceTriangles++;
 			}
 
 			ShaderInterop::Meshlet& outMeshlet = meshData.Meshlets[i];

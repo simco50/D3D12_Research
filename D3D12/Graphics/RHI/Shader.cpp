@@ -180,6 +180,7 @@ namespace ShaderCompiler
 		else
 #endif
 		{
+			arguments.AddArgument("-disable-payload-qualifiers");
 			arguments.AddDefine("_PAYLOAD_QUALIFIERS", "0");
 		}
 

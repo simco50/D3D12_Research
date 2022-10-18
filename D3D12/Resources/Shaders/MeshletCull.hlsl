@@ -22,6 +22,8 @@
 	https://advances.realtimerendering.com/s2015/aaltonenhaar_siggraph2015_combined_final_footer_220dpi.pdf
 */
 
+#define VISUALIZE_OCCLUDED 1
+
 #ifndef OCCLUSION_FIRST_PASS
 #define OCCLUSION_FIRST_PASS 1
 #endif
@@ -123,6 +125,13 @@ void CullInstancesCS(uint threadID : SV_DispatchThreadID)
             uMeshletCandidates[elementOffset + i] = meshlet;
         }
     }
+
+#if VISUALIZE_OCCLUDED
+	if(wasOccluded)
+	{
+		DrawCube(instance.BoundsOrigin, instance.BoundsExtents, 0x00FF00FF);
+	}
+#endif
 }
 
 [numthreads(1, 1, 1)]
