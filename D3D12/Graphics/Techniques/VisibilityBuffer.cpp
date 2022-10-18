@@ -38,7 +38,7 @@ VisibilityBuffer::VisibilityBuffer(GraphicsDevice* pDevice)
 	psoDesc.SetAmplificationShader("MeshletCull.hlsl", "CullAndDrawMeshletsAS", { "OCCLUSION_FIRST_PASS=0" });
 	m_pCullAndDrawPhase2PSO = pDevice->CreatePipeline(psoDesc);
 
-	m_pBuildCullArgsPhase2PSO = pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "BuildInstanceCullIndirectArgs", { "OCCLUSION_FIRST_PASS=0" });
+	m_pBuildCullArgsPhase2PSO = pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "BuildInstanceCullIndirectArgs");
 	m_pCullInstancesPhase2PSO = pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "CullInstancesCS", { "OCCLUSION_FIRST_PASS=0" });
 
 	m_pPrintStatsPSO = pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "PrintStatsCS");

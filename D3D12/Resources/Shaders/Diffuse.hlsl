@@ -2,6 +2,7 @@
 #include "Lighting.hlsli"
 #include "Random.hlsli"
 #include "RayTracing/DDGICommon.hlsli"
+#include "HZB.hlsli"
 
 #define BLOCK_SIZE 16
 
@@ -132,26 +133,17 @@ groupshared PayloadData gsPayload;
 
 bool IsVisible(MeshData mesh, float4x4 world, uint meshlet)
 {
-	MeshletBounds cullData = BufferLoad<MeshletBounds>(mesh.BufferIndex, meshlet, mesh.MeshletBoundsOffset);
+	MeshletBounds bounds = BufferLoad<MeshletBounds>(mesh.BufferIndex, meshlet, mesh.MeshletBoundsOffset);
 
-	float4 center = mul(float4(cullData.Center, 1), world);
-	float3 radius3 = abs(mul(cullData.Radius.xxx, (float3x3)world));
-	float radius = Max3(radius3);
-	float3 coneAxis = normalize(mul(cullData.ConeAxis, (float3x3)world));
+	float4 center = mul(float4(bounds.Center, 1), world);
+	float3 extents = abs(mul(bounds.Extents, (float3x3)world));
 
-	for(int i = 0; i < 6; ++i)
-	{
-		if(dot(center, cView.FrustumPlanes[i]) > radius)
-		{
-			return false;
-		}
-	}
-
-	float3 viewLocation = cView.ViewLocation;
-	if(dot(viewLocation - center.xyz, coneAxis) >= cullData.ConeCutoff * length(center.xyz - viewLocation) + radius)
+	FrustumCullData cullData = FrustumCull(center.xyz, extents, cView.ViewProjectionPrev);
+	if(!cullData.IsVisible)
 	{
 		return false;
 	}
+
 	return true;
 }
 

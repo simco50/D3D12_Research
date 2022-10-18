@@ -472,16 +472,19 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 		for (size_t i = 0; i < meshlet_count; ++i)
 		{
 			const meshopt_Meshlet& meshlet = meshlets[i];
-			const meshopt_Bounds bounds = meshopt_computeMeshletBounds(&meshData.MeshletVertices[meshlet.vertex_offset], &meshlet_triangles[meshlet.triangle_offset],
-				meshlet.triangle_count, &meshData.PositionsStream[0].x, meshData.PositionsStream.size(), sizeof(Vector3));
 
+			Vector3 min = Vector3(FLT_MAX, FLT_MAX, FLT_MAX);
+			Vector3 max = Vector3(-FLT_MAX, -FLT_MAX, -FLT_MAX);
+			for (uint32 k = 0; k < meshlet.triangle_count * 3; ++k)
+			{
+				uint32 idx = meshData.MeshletVertices[meshlet.vertex_offset + meshlet_triangles[meshlet.triangle_offset + k]];
+				const Vector3& p = meshData.PositionsStream[idx];
+				max = Vector3::Max(max, p);
+				min = Vector3::Min(min, p);
+			}
 			ShaderInterop::MeshletBounds& outBounds = meshData.MeshletBounds[i];
-			outBounds.Center = Vector3(bounds.center);
-			//outBounds.ConeApex = Vector3(bounds.cone_apex);
-			outBounds.ConeAxis = Vector3(bounds.cone_axis);
-			outBounds.Radius = bounds.radius;
-			outBounds.ConeCutoff = bounds.cone_cutoff;
-			//memcpy(&outBounds.ConeS8, &bounds.cone_axis_s8, sizeof(uint32));
+			outBounds.Center = (max + min) / 2;
+			outBounds.Extents = (max - min) / 2;
 
 			// Encode triangles and get rid of 4 byte padding
 			for (uint32 triIdx = 0; triIdx < meshlet.triangle_count; ++triIdx)

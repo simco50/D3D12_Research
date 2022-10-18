@@ -147,26 +147,6 @@ struct PayloadData
 
 groupshared PayloadData gsPayload;
 
-FrustumCullData CullMeshlet(uint id, MeshletBounds bounds, float4x4 localToWorld, float4x4 viewProjection, float3 viewLocation)
-{
-	float3 boundsOrigin = mul(float4(bounds.Center, 1), localToWorld).xyz;
-	float3 boundsExtents = abs(mul(bounds.Radius.xxx, (float3x3)localToWorld));
-
-	FrustumCullData cullData = FrustumCull(boundsOrigin, boundsExtents, viewProjection);
-
-#define CONE_CULL 0
-#if CONE_CULL
-	if(cullData.IsVisible)
-	{
-		float radius = Max3(boundsExtents);
-		float3 coneAxis = normalize(mul(bounds.ConeAxis, (float3x3)localToWorld));
-		cullData.IsVisible &= !(dot(viewLocation - boundsOrigin, coneAxis) >= bounds.ConeCutoff * length(boundsOrigin - viewLocation) + radius);
-	}
-#endif
-
-	return cullData;
-}
-
 #if __SHADER_TARGET_STAGE == __SHADER_STAGE_AMPLIFICATION
 [numthreads(NUM_AS_THREADS, 1, 1)]
 void CullAndDrawMeshletsAS(uint threadID : SV_DispatchThreadID)
@@ -178,15 +158,17 @@ void CullAndDrawMeshletsAS(uint threadID : SV_DispatchThreadID)
 		InstanceData instance = GetInstance(meshlet.InstanceID);
 		MeshData mesh = GetMesh(instance.MeshIndex);
 		MeshletBounds bounds = BufferLoad<MeshletBounds>(mesh.BufferIndex, meshlet.MeshletIndex, mesh.MeshletBoundsOffset);
+		float3 boundsOrigin = mul(float4(bounds.Center, 1), instance.LocalToWorld).xyz;
+		float3 boundsExtents = abs(mul(bounds.Extents, (float3x3)instance.LocalToWorld));
 
-		FrustumCullData cullData = CullMeshlet(threadID, bounds, instance.LocalToWorld, cView.ViewProjection, cView.ViewLocation);
+		FrustumCullData cullData = FrustumCull(boundsOrigin, boundsExtents, cView.ViewProjection);
 		bool isVisible = cullData.IsVisible;
 		bool wasOccluded = false;
 
 		if(isVisible)
 		{
 #if OCCLUSION_FIRST_PASS
-			FrustumCullData prevCullData = CullMeshlet(threadID, bounds, instance.LocalToWorld, cView.ViewProjectionPrev, cView.ViewLocationPrev);
+			FrustumCullData prevCullData = FrustumCull(boundsOrigin, boundsExtents, cView.ViewProjectionPrev);
 			if(prevCullData.IsVisible)
 			{
 				wasOccluded = !HZBCull(prevCullData, tHZB);

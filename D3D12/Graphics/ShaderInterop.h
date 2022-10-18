@@ -82,11 +82,7 @@ namespace ShaderInterop
 	struct MeshletBounds
 	{
 		float3 Center;
-		float Radius;
-		//float3 ConeApex;
-		float3 ConeAxis;
-		float ConeCutoff;
-		//uint ConeS8;
+		float3 Extents;
 	};
 
 	struct InstanceData

@@ -72,13 +72,13 @@ AF4 SpdReduce4(AF4 v0, AF4 v1, AF4 v2, AF4 v3)
 #include "ffx_spd.h"
 
 [numthreads(256, 1, 1)]
-void HZBCreateCS(uint3 WorkGroupId : SV_GroupID, uint LocalThreadIndex : SV_GroupIndex) 
+void HZBCreateCS(uint3 WorkGroupId : SV_GroupID, uint LocalThreadIndex : SV_GroupIndex)
 {
     SpdDownsample(
-        AU2(WorkGroupId.xy), 
+        AU2(WorkGroupId.xy),
         AU1(LocalThreadIndex),
-        AU1(cConstants.Mips), 
-        AU1(cConstants.NumWorkGroups), 
+        AU1(cConstants.Mips),
+        AU1(cConstants.NumWorkGroups),
         AU1(WorkGroupId.z)
         );
 }

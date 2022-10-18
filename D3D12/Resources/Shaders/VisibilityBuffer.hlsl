@@ -12,11 +12,9 @@ bool IsVisible(MeshData mesh, float4x4 world, uint meshlet)
 	MeshletBounds bounds = BufferLoad<MeshletBounds>(mesh.BufferIndex, meshlet, mesh.MeshletBoundsOffset);
 
 	float4 center = mul(float4(bounds.Center, 1), world);
-	float3 radius3 = abs(mul(bounds.Radius.xxx, (float3x3)world));
-	float radius = Max3(radius3);
-	float3 coneAxis = normalize(mul(bounds.ConeAxis, (float3x3)world));
+	float3 extents = abs(mul(bounds.Extents, (float3x3)world));
 
-	FrustumCullData cullData = FrustumCull(center.xyz, radius3, cView.ViewProjectionPrev);
+	FrustumCullData cullData = FrustumCull(center.xyz, extents, cView.ViewProjectionPrev);
 	if(!cullData.IsVisible)
 	{
 		return false;
@@ -27,11 +25,6 @@ bool IsVisible(MeshData mesh, float4x4 world, uint meshlet)
 		return false;
 	}
 
-	float3 viewLocation = cView.ViewLocation;
-	if(dot(viewLocation - center.xyz, coneAxis) >= bounds.ConeCutoff * length(center.xyz - viewLocation) + radius)
-	{
-		return false;
-	}
 	return true;
 }
 
