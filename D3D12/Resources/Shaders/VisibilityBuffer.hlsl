@@ -5,8 +5,6 @@
 
 ConstantBuffer<InstanceIndex> cObject : register(b0);
 
-Texture2D<float> tHZB : register(t0);
-
 bool IsVisible(MeshData mesh, float4x4 world, uint meshlet)
 {
 	MeshletBounds bounds = BufferLoad<MeshletBounds>(mesh.BufferIndex, meshlet, mesh.MeshletBoundsOffset);

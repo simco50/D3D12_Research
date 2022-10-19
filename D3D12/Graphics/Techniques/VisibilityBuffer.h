@@ -11,14 +11,12 @@ class VisibilityBuffer
 {
 public:
 	VisibilityBuffer(GraphicsDevice* pDevice);
-	void Render(RGGraph& graph, const SceneView* pView, RGTexture* pDepth, RGTexture** pOutVisibilityBuffer, RGTexture** pOutHZB);
+	void Render(RGGraph& graph, const SceneView* pView, RGTexture* pDepth, RGTexture** pOutVisibilityBuffer, RGTexture** pOutHZB, RefCountPtr<Texture>* pHZBExport);
 
 	RGTexture* InitHZB(RGGraph& graph, const Vector2i& viewDimensions, RefCountPtr<Texture>* pExportTarget = nullptr) const;
 	void BuildHZB(RGGraph& graph, RGTexture* pDepth, RGTexture* pHZB);
 
 private:
-	RefCountPtr<Texture> m_pHZB;
-
 	RefCountPtr<RootSignature> m_pCommonRS;
 	RefCountPtr<PipelineState> m_pCullInstancesPhase1PSO;
 	RefCountPtr<PipelineState> m_pBuildDrawArgsPhase1PSO;

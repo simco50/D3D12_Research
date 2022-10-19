@@ -48,12 +48,12 @@ VisibilityBuffer::VisibilityBuffer(GraphicsDevice* pDevice)
 	m_pHZBCreatePSO = pDevice->CreateComputePipeline(m_pCommonRS, "HZB.hlsl", "HZBCreateCS");
 }
 
-void VisibilityBuffer::Render(RGGraph& graph, const SceneView* pView, RGTexture* pDepth, RGTexture** pOutVisibilityBuffer, RGTexture** pOutHZB)
+void VisibilityBuffer::Render(RGGraph& graph, const SceneView* pView, RGTexture* pDepth, RGTexture** pOutVisibilityBuffer, RGTexture** pOutHZB, RefCountPtr<Texture>* pHZBExport)
 {
 	RG_GRAPH_SCOPE("Visibility Buffer (GPU Driven)", graph);
 
 	TextureDesc depthDesc = pDepth->GetDesc();
-	RGTexture* pHZB = InitHZB(graph, depthDesc.Size2D(), &m_pHZB);
+	RGTexture* pHZB = InitHZB(graph, depthDesc.Size2D(), pHZBExport);
 	RGTexture* pVisibilityBuffer = graph.CreateTexture("Visibility", TextureDesc::CreateRenderTarget(depthDesc.Width, depthDesc.Height, ResourceFormat::R32_UINT));
 
 	constexpr uint32 maxNumInstances = 1 << 14;
@@ -311,19 +311,16 @@ void VisibilityBuffer::BuildHZB(RGGraph& graph, RGTexture* pDepth, RGTexture* pH
 				context.SetComputeRootSignature(m_pCommonRS);
 				context.SetPipelineState(m_pHZBCreatePSO);
 
-				TRect<uint32> rect(0, 0, hzbDimensions.x, hzbDimensions.y);
-
-				Vector2u dispatchThreadGroupCountXY;
-				Vector2u workGroupOffset;
-				Vector2u numWorkGroupsAndMips;
-				uint32 mips = pHZB->GetDesc().Mips;
+				varAU2(dispatchThreadGroupCountXY);
+				varAU2(workGroupOffset);
+				varAU2(numWorkGroupsAndMips);
+				varAU4(rectInfo) = initAU4(0, 0, (uint32)hzbDimensions.x, (uint32)hzbDimensions.y);
 
 				SpdSetup(
-					&dispatchThreadGroupCountXY.x,
-					&workGroupOffset.x,
-					&numWorkGroupsAndMips.x,
-					&rect.Left,
-					mips - 1);
+					dispatchThreadGroupCountXY,
+					workGroupOffset,
+					numWorkGroupsAndMips,
+					rectInfo);
 
 				struct
 				{
@@ -339,10 +336,10 @@ void VisibilityBuffer::BuildHZB(RGGraph& graph, RGTexture* pDepth, RGTexture* pH
 				context.SetRootConstants(0, parameters);
 				context.BindResources(2, pSPDCounter->Get()->GetUAV(), 0);
 				context.BindResources(2, pHZB->Get()->GetUAV(), 1);
-				for (uint8 mipIndex = 1; mipIndex < mips; ++mipIndex)
+				for (uint8 mipIndex = 1; mipIndex < numWorkGroupsAndMips[1]; ++mipIndex)
 				{
 					context.BindResources(2, context.GetParent()->CreateUAV(pHZB->Get(), TextureUAVDesc(mipIndex)).Get(), mipIndex + 1);
 				}
-				context.Dispatch(dispatchThreadGroupCountXY.x, dispatchThreadGroupCountXY.y);
+				context.Dispatch(dispatchThreadGroupCountXY[0], dispatchThreadGroupCountXY[1]);
 			});
 }

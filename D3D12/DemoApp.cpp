@@ -608,12 +608,12 @@ void DemoApp::Update()
 					pView,
 					sceneTextures.pDepth,
 					&sceneTextures.pVisibilityBuffer,
-					&sceneTextures.pHZB);
+					&sceneTextures.pHZB,
+					&m_pHZB);
+				m_SceneData.HZBDimensions = sceneTextures.pHZB->GetDesc().Size2D();
 			}
 			else
 			{
-				sceneTextures.pHZB = m_pVisibilityBuffer->InitHZB(graph, sceneTextures.pDepth->GetDesc().Size2D(), &m_pHZB);
-
 				graph.AddPass("Visibility Buffer", RGPassFlag::Raster)
 					.Read(sceneTextures.pHZB)
 					.DepthStencil(sceneTextures.pDepth, RenderTargetLoadAction::Clear, true)
@@ -624,7 +624,6 @@ void DemoApp::Update()
 							context.SetGraphicsRootSignature(m_pCommonRS);
 
 							context.SetRootCBV(1, Renderer::GetViewUniforms(pView, sceneTextures.pDepth->Get()));
-							context.BindResources(3, sceneTextures.pHZB->Get()->GetSRV());
 							{
 								GPU_PROFILE_SCOPE("Opaque", &context);
 								context.SetPipelineState(m_pVisibilityRenderingPSO);
@@ -636,10 +635,7 @@ void DemoApp::Update()
 								Renderer::DrawScene(context, pView, Batch::Blending::AlphaMask);
 							}
 						});
-
-				m_pVisibilityBuffer->BuildHZB(graph, sceneTextures.pDepth, sceneTextures.pHZB);
 			}
-			m_SceneData.HZBDimensions = sceneTextures.pHZB->GetDesc().Size2D();
 		}
 
 		if (m_RenderPath == RenderPath::Clustered || m_RenderPath == RenderPath::Tiled || m_RenderPath == RenderPath::Visibility)
