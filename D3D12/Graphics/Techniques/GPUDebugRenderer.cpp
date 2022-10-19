@@ -61,6 +61,7 @@ GPUDebugRenderer::GPUDebugRenderer(GraphicsDevice* pDevice, const FontCreateSett
 			Vector3 A;
 			Vector3 B;
 			uint32 Color;
+			uint32 ScreenSpace;
 		} Lines[8192];
 	};
 

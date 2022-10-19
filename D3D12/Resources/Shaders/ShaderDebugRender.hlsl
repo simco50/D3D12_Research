@@ -85,7 +85,15 @@ void RenderLineVS(
 	LineInstance instance =  tRenderData.Load<LineInstance>(LINE_INSTANCES_OFFSET + offset);
 
 	float3 wPos = vertexID == 0 ? instance.A : instance.B;
-	position = mul(float4(wPos, 1), cView.ViewProjection);
+	if(instance.ScreenSpace)
+	{
+		position = float4(wPos.xy * 2 - 1, 0, 1);
+		position.y *= -1;
+	}
+	else
+	{
+		position = mul(float4(wPos, 1), cView.ViewProjection);
+	}
 	color = instance.Color;
 }
 

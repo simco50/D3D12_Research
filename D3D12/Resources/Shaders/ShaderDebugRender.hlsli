@@ -12,6 +12,7 @@ struct LineInstance
 	float3 A;
 	float3 B;
 	uint Color;
+	uint ScreenSpace;
 };
 
 // Must match .cpp!
@@ -66,6 +67,7 @@ void DrawLine(float3 a, float3 b, uint color = 0xFFFFFFFF)
 	instance.A = a;
 	instance.B = b;
 	instance.Color = color;
+	instance.ScreenSpace = 0;
 
 	RWByteAddressBuffer renderData = ResourceDescriptorHeap[cView.DebugRenderDataIndex];
 	uint offset;
@@ -95,6 +97,29 @@ void DrawCube(float3 center, float3 extents, uint color = 0xFFFFFFFF)
 	DrawLine(center + float3(-1, 1, -1) * extents, center + float3(1, 1, -1) * extents, color);
 	DrawLine(center + float3(-1, 1, -1) * extents, center + float3(-1, 1, 1) * extents, color);
 }
+
+void DrawScreenLine(float2 a, float2 b, uint color = 0xFFFFFFFF)
+{
+	LineInstance instance;
+	instance.A = float3(a, 0);
+	instance.B = float3(b, 0);
+	instance.Color = color;
+	instance.ScreenSpace = 1;
+
+	RWByteAddressBuffer renderData = ResourceDescriptorHeap[cView.DebugRenderDataIndex];
+	uint offset;
+	renderData.InterlockedAdd(LINE_COUNTER_OFFSET, 1, offset);
+	renderData.Store(LINE_INSTANCES_OFFSET + offset * sizeof(LineInstance), instance);
+}
+
+void DrawRect(float2 a, float2 b, uint color = 0xFFFFFFFF)
+{
+	DrawScreenLine(float2(a.x, a.y), float2(b.x, a.y), color);
+	DrawScreenLine(float2(a.x, a.y), float2(a.x, b.y), color);
+	DrawScreenLine(float2(b.x, a.y), float2(b.x, b.y), color);
+	DrawScreenLine(float2(a.x, b.y), float2(b.x, b.y), color);
+}
+
 
 struct TextWriter
 {
