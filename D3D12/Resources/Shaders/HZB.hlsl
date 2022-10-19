@@ -28,9 +28,9 @@ struct SpdConstants
     float2 WorkGroupOffset;
 };
 
-globallycoherent RWByteAddressBuffer uSpdGlobalAtomic : register(u0);
-RWTexture2D<float4> uSource : register(u1);
-globallycoherent RWTexture2D<float4> uDestination[12] : register(u2);
+globallycoherent RWBuffer<uint> uSpdGlobalAtomic : register(u0);
+RWTexture2D<float> uSource : register(u1);
+globallycoherent RWTexture2D<float> uDestination[12] : register(u2);
 
 ConstantBuffer<SpdConstants> cConstants : register(b0);
 
@@ -39,7 +39,7 @@ ConstantBuffer<SpdConstants> cConstants : register(b0);
 #include "ffx_a.h"
 
 // Define LDS variables
-groupshared AF4 spdIntermediate[16][16];
+groupshared AF1 spdIntermediate[16][16];
 groupshared AU1 spdCounter;
 
 // if subgroup operations are not supported / can't use SM6.0
@@ -52,16 +52,16 @@ AF4 SpdLoadSourceImage(ASU2 tex, AU1 slice) { return uSource[tex]; }
 AF4 SpdLoad(ASU2 tex, AU1 slice) { return uDestination[5][tex]; }
 
 // Define the store function
-void SpdStore(ASU2 pix, AF4 value, AU1 mip, AU1 slice) { uDestination[mip][pix] = value; }
+void SpdStore(ASU2 pix, AF4 value, AU1 mip, AU1 slice) { uDestination[mip][pix] = value.x; }
 
 // Define the atomic Counter increase function
-void SpdIncreaseAtomicCounter(AU1 slice) { uSpdGlobalAtomic.InterlockedAdd(0, 1, spdCounter); }
+void SpdIncreaseAtomicCounter(AU1 slice) { InterlockedAdd(uSpdGlobalAtomic[slice], 1, spdCounter); }
 AU1 SpdGetAtomicCounter() { return spdCounter;}
-void SpdResetAtomicCounter(AU1 slice) { uSpdGlobalAtomic.Store(0, 0); }
+void SpdResetAtomicCounter(AU1 slice) { uSpdGlobalAtomic[slice] = 0; }
 
 // Define the LDS load and store functions
 AF4 SpdLoadIntermediate(AU1 x, AU1 y) { return spdIntermediate[x][y]; }
-void SpdStoreIntermediate(AU1 x, AU1 y, AF4 value) { spdIntermediate[x][y] = value; }
+void SpdStoreIntermediate(AU1 x, AU1 y, AF4 value) { spdIntermediate[x][y] = value.x; }
 
 // HZB reduction function. Takes as input the four 2x2 values and returns 1 output value
 AF4 SpdReduce4(AF4 v0, AF4 v1, AF4 v2, AF4 v3)

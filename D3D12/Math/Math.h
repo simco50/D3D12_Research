@@ -216,6 +216,18 @@ namespace Math
 		return (uint32)Ceil((float)nominator / denominator);
 	}
 
+	inline uint32 NextPowerOfTwo(uint32 v)
+	{
+		v--;
+		v |= v >> 1;
+		v |= v >> 2;
+		v |= v >> 4;
+		v |= v >> 8;
+		v |= v >> 16;
+		v++;
+		return v;
+	}
+
 	Color MakeFromColorTemperature(float Temp);
 
 	struct Halton

@@ -256,11 +256,11 @@ RGTexture* VisibilityBuffer::InitHZB(RGGraph& graph, const Vector2i& viewDimensi
 	if (pExportTarget && *pExportTarget)
 		pHZB = graph.TryImportTexture(*pExportTarget);
 
-	const uint32 hzbMipsX = Math::Max(1u, (uint32)Math::Ceil(log2f((float)viewDimensions.x)));
-	const uint32 hzbMipsY = Math::Max(1u, (uint32)Math::Ceil(log2f((float)viewDimensions.y)));
-	const uint32 hzbMips = Math::Max(hzbMipsX, hzbMipsY);
-	const Vector2i hzbDimensions(1 << (hzbMipsX - 1), 1 << (hzbMipsY - 1));
-	TextureDesc desc = TextureDesc::Create2D(hzbDimensions.x, hzbDimensions.y, ResourceFormat::R32_FLOAT, TextureFlag::UnorderedAccess, 1, hzbMips);
+	Vector2i hzbDimensions;
+	hzbDimensions.x = Math::Max(Math::NextPowerOfTwo(viewDimensions.x) >> 1u, 1u);
+	hzbDimensions.y = Math::Max(Math::NextPowerOfTwo(viewDimensions.y) >> 1u, 1u);
+	uint32 numMips = (uint32)Math::Floor(log2f((float)Math::Max(hzbDimensions.x, hzbDimensions.y)));
+	TextureDesc desc = TextureDesc::Create2D(hzbDimensions.x, hzbDimensions.y, ResourceFormat::R32_FLOAT, TextureFlag::UnorderedAccess, 1, numMips);
 
 	if (!pHZB || pHZB->GetDesc() != desc)
 	{
@@ -299,7 +299,7 @@ void VisibilityBuffer::BuildHZB(RGGraph& graph, RGTexture* pDepth, RGTexture* pH
 				context.Dispatch(ComputeUtils::GetNumThreadGroups(hzbDimensions.x, 16, hzbDimensions.y, 16));
 			});
 
-	RGBuffer* pSPDCounter = graph.CreateBuffer("SPD Counter", BufferDesc::CreateByteAddress(sizeof(uint32)));
+	RGBuffer* pSPDCounter = graph.CreateBuffer("SPD Counter", BufferDesc::CreateTyped(1, ResourceFormat::R32_UINT));
 
 	graph.AddPass("HZB Mips", RGPassFlag::Compute)
 		.Write({ pHZB, pSPDCounter })
@@ -320,7 +320,8 @@ void VisibilityBuffer::BuildHZB(RGGraph& graph, RGTexture* pDepth, RGTexture* pH
 					dispatchThreadGroupCountXY,
 					workGroupOffset,
 					numWorkGroupsAndMips,
-					rectInfo);
+					rectInfo,
+					pHZB->GetDesc().Mips - 1);
 
 				struct
 				{
@@ -334,11 +335,12 @@ void VisibilityBuffer::BuildHZB(RGGraph& graph, RGTexture* pDepth, RGTexture* pH
 				parameters.WorkGroupOffset.y = workGroupOffset[1];
 
 				context.SetRootConstants(0, parameters);
-				context.BindResources(2, pSPDCounter->Get()->GetUAV(), 0);
-				context.BindResources(2, pHZB->Get()->GetUAV(), 1);
-				for (uint8 mipIndex = 1; mipIndex < numWorkGroupsAndMips[1]; ++mipIndex)
+				uint32 uavIndex = 0;
+				context.BindResources(2, pSPDCounter->Get()->GetUAV(), uavIndex++);
+				context.BindResources(2, pHZB->Get()->GetUAV(), uavIndex++);
+				for (uint8 mipIndex = 1; mipIndex < pHZB->GetDesc().Mips; ++mipIndex)
 				{
-					context.BindResources(2, context.GetParent()->CreateUAV(pHZB->Get(), TextureUAVDesc(mipIndex)).Get(), mipIndex + 1);
+					context.BindResources(2, context.GetParent()->CreateUAV(pHZB->Get(), TextureUAVDesc(mipIndex)).Get(), uavIndex++);
 				}
 				context.Dispatch(dispatchThreadGroupCountXY[0], dispatchThreadGroupCountXY[1]);
 			});

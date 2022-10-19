@@ -28,29 +28,31 @@ ConstantBuffer<ConstantsData> cConstants : register(b100);
 float4 SampleTexture(float2 uv)
 {
 	SamplerState samplerState = sPointClamp;
+	//float mip = floor(cConstants.MipLevel);
+	float mip = cConstants.MipLevel;
 
 	float4 output = float4(1, 0, 1, 1);
 	if(cConstants.TextureType == TextureDimension::Tex1D)
 	{
 		Texture1D tex = ResourceDescriptorHeap[cConstants.TextureSource];
-		output = tex.SampleLevel(samplerState, uv.x, cConstants.MipLevel);
+		output = tex.SampleLevel(samplerState, uv.x, mip);
 	}
 	else if(cConstants.TextureType == TextureDimension::Tex2D)
 	{
 		Texture2D tex = ResourceDescriptorHeap[cConstants.TextureSource];
-		output = tex.SampleLevel(samplerState, uv, cConstants.MipLevel);
+		output = tex.SampleLevel(samplerState, uv, mip);
 	}
 	else if(cConstants.TextureType == TextureDimension::Tex3D)
 	{
 		Texture3D tex = ResourceDescriptorHeap[cConstants.TextureSource];
-		output = tex.SampleLevel(samplerState, float3(uv, cConstants.Slice), cConstants.MipLevel);
+		output = tex.SampleLevel(samplerState, float3(uv, cConstants.Slice), mip);
 	}
 	else if(cConstants.TextureType == TextureDimension::TexCube)
 	{
 		float3 dir = mul(CUBEMAP_ROTATIONS[cConstants.Slice], normalize(float3(uv * 2 - 1, -1)));
 
 		TextureCube tex = ResourceDescriptorHeap[cConstants.TextureSource];
-		output = tex.SampleLevel(samplerState, dir, cConstants.MipLevel);
+		output = tex.SampleLevel(samplerState, dir, mip);
 	}
 	return output;
 }
