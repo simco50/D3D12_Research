@@ -100,6 +100,25 @@ void GPUDebugRenderer::Render(RGGraph& graph, const SceneView* pView, RGTexture*
 				context.Dispatch(1);
 			});
 
+	graph.AddPass("Render Lines", RGPassFlag::Raster)
+		.Read({ pRenderData, pDrawArgs })
+		.RenderTarget(pTarget, RenderTargetLoadAction::Load)
+		.DepthStencil(pDepth, RenderTargetLoadAction::Load, false)
+		.Bind([=](CommandContext& context)
+			{
+				context.SetGraphicsRootSignature(m_pCommonRS);
+				context.SetPipelineState(m_pRenderLinesPSO);
+				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINELIST);
+
+				context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
+				context.BindResources(3, {
+					m_pFontAtlas->GetSRV(),
+					m_pGlyphData->GetSRV(),
+					pRenderData->Get()->GetSRV()
+					});
+				context.ExecuteIndirect(GraphicsCommon::pIndirectDrawSignature, 1, pDrawArgs->Get(), nullptr, sizeof(D3D12_DRAW_ARGUMENTS) * 1);
+			});
+
 	graph.AddPass("Render Text", RGPassFlag::Raster)
 		.Read({ pRenderData, pDrawArgs })
 		.RenderTarget(pTarget, RenderTargetLoadAction::Load)
@@ -123,25 +142,6 @@ void GPUDebugRenderer::Render(RGGraph& graph, const SceneView* pView, RGTexture*
 					pRenderData->Get()->GetSRV()
 					});
 				context.ExecuteIndirect(GraphicsCommon::pIndirectDrawSignature, 1, pDrawArgs->Get(), nullptr, sizeof(D3D12_DRAW_ARGUMENTS) * 0);
-			});
-
-	graph.AddPass("Render Lines", RGPassFlag::Raster)
-		.Read({ pRenderData, pDrawArgs })
-		.RenderTarget(pTarget, RenderTargetLoadAction::Load)
-		.DepthStencil(pDepth, RenderTargetLoadAction::Load, false)
-		.Bind([=](CommandContext& context)
-			{
-				context.SetGraphicsRootSignature(m_pCommonRS);
-				context.SetPipelineState(m_pRenderLinesPSO);
-				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINELIST);
-
-				context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
-				context.BindResources(3, {
-					m_pFontAtlas->GetSRV(),
-					m_pGlyphData->GetSRV(),
-					pRenderData->Get()->GetSRV()
-					});
-				context.ExecuteIndirect(GraphicsCommon::pIndirectDrawSignature, 1, pDrawArgs->Get(), nullptr, sizeof(D3D12_DRAW_ARGUMENTS) * 1);
 
 				context.InsertResourceBarrier(pRenderData->Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 			});

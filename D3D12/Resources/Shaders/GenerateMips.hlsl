@@ -17,11 +17,10 @@ ConstantBuffer<PassParameters> cPassData : register(b0);
 TEXTURE_OUTPUT_TYPE uOutput : register(u0);
 TEXTURE_INPUT_TYPE tInput : register(t0);
 
-
 [numthreads(BLOCK_SIZE, BLOCK_SIZE, 1)]
 void CSMain(uint3 threadID : SV_DispatchThreadID)
 {
-	if(threadID.x < cPassData.TargetDimensions.x && threadID.y < cPassData.TargetDimensions.y)
+	if(all(threadID.xy < cPassData.TargetDimensions))
 	{
 		uOutput[threadID.xy] = tInput.SampleLevel(sLinearClamp, ((float2)threadID.xy + 0.5f) * cPassData.TargetDimensionsInv, 0);
 	}

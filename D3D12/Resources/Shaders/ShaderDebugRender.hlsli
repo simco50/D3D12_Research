@@ -112,8 +112,22 @@ void DrawScreenLine(float2 a, float2 b, uint color = 0xFFFFFFFF)
 	renderData.Store(LINE_INSTANCES_OFFSET + offset * sizeof(LineInstance), instance);
 }
 
-void DrawRect(float2 a, float2 b, uint color = 0xFFFFFFFF)
+enum class RectMode
 {
+	MinMax,
+	CenterExtents,
+};
+
+void DrawRect(float2 a, float2 b, RectMode mode = RectMode::MinMax, uint color = 0xFFFFFFFF)
+{
+	if(mode == RectMode::CenterExtents)
+	{
+		float2 minP = a - b;
+		float2 maxP = a + b;
+		a = minP;
+		b = maxP;
+	}
+
 	DrawScreenLine(float2(a.x, a.y), float2(b.x, a.y), color);
 	DrawScreenLine(float2(a.x, a.y), float2(a.x, b.y), color);
 	DrawScreenLine(float2(b.x, a.y), float2(b.x, b.y), color);

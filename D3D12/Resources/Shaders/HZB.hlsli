@@ -1,4 +1,5 @@
 #include "Common.hlsli"
+#include "ShaderDebugRender.hlsli"
 
 struct FrustumCullData
 {
@@ -91,20 +92,111 @@ FrustumCullData FrustumCull(float3 aabbCenter, float3 aabbExtents, float4x4 loca
 	return FrustumCull(aabbCenter, aabbExtents, worldToClip);
 }
 
-bool HZBCull(FrustumCullData cullData, Texture2D<float> hzbTexture)
+uint ComputeHZBMip(int4 rectPixels, int texelCoverage)
 {
-	float4 rect = saturate(float4(cullData.RectMin.xy, cullData.RectMax.xy) * float2(0.5f, -0.5f).xyxy + 0.5f).xwzy;
-	float4 rectPixels = rect * cView.HZBDimensions.xyxy;
-	float2 rectSize = abs(rectPixels.zw - rectPixels.xy);
-	uint mip = ceil(log2(max(rectSize.x, rectSize.y)));
+	int2 rectSize = rectPixels.zw - rectPixels.xy;
+	int mipOffset = (int)log2((float)texelCoverage) - 1;
+	int2 mipLevelXY = firstbithigh(rectSize);
+	int mip = max(max(mipLevelXY.x, mipLevelXY.y) - mipOffset, 0);
+	if(any((rectPixels.zw >> mip) - (rectPixels.xy >> mip) >= texelCoverage))
+	{
+		++mip;
+	}
+	return mip;
+}
 
-	float4 depths = 1;
-	depths.x = hzbTexture.SampleLevel(sPointClamp, rect.xw, mip);
-	depths.y = hzbTexture.SampleLevel(sPointClamp, rect.zw, mip);
-	depths.z = hzbTexture.SampleLevel(sPointClamp, rect.zy, mip);
-	depths.w = hzbTexture.SampleLevel(sPointClamp, rect.xy, mip);
-	float depth = min(min3(depths.x, depths.y, depths.z), depths.w);
-	bool isOccluded = cullData.RectMax.z < depth;
+#define HZB_DEBUG_RENDER 0
+
+bool HZBCull(FrustumCullData cullData, Texture2D<float> hzbTexture, bool debug = false)
+{
+	const uint hzbTexelCoverage = 4;
+
+	// Convert NDC to UV
+	float4 rect = saturate(float4(cullData.RectMin.xy, cullData.RectMax.xy) * float2(0.5f, -0.5f).xyxy + 0.5f).xwzy;
+	// Convert to texel indices. Contract bounds to only account for the area overlapping texel centres
+	int4 rectPixels = int4(rect * cView.HZBDimensions.xyxy + float4(0.5f, 0.5f, -0.5f, -0.5f));
+	rectPixels = int4(rectPixels.xy, max(rectPixels.xy, rectPixels.zw));
+	int mip = ComputeHZBMip(rectPixels, hzbTexelCoverage);
+	rectPixels >>= mip;
+	float2 texelSize = 1.0f / cView.HZBDimensions * (1u << mip);
+
+	float maxDepth = cullData.RectMax.z;
+
+	float4 xCoords = (min(rectPixels.x + float4(0, 1, 2, 3), rectPixels.z) + 0.5f) * texelSize.x;
+	float4 yCoords = (min(rectPixels.y + float4(0, 1, 2, 3), rectPixels.w) + 0.5f) * texelSize.y;
+
+	float depth00 = hzbTexture.SampleLevel(sPointClamp, float2(xCoords.x, yCoords.x), mip);
+	float depth10 = hzbTexture.SampleLevel(sPointClamp, float2(xCoords.y, yCoords.x), mip);
+	float depth20 = hzbTexture.SampleLevel(sPointClamp, float2(xCoords.z, yCoords.x), mip);
+	float depth30 = hzbTexture.SampleLevel(sPointClamp, float2(xCoords.w, yCoords.x), mip);
+
+	float depth01 = hzbTexture.SampleLevel(sPointClamp, float2(xCoords.x, yCoords.y), mip);
+	float depth11 = hzbTexture.SampleLevel(sPointClamp, float2(xCoords.y, yCoords.y), mip);
+	float depth21 = hzbTexture.SampleLevel(sPointClamp, float2(xCoords.z, yCoords.y), mip);
+	float depth31 = hzbTexture.SampleLevel(sPointClamp, float2(xCoords.w, yCoords.y), mip);
+
+	float depth02 = hzbTexture.SampleLevel(sPointClamp, float2(xCoords.x, yCoords.z), mip);
+	float depth12 = hzbTexture.SampleLevel(sPointClamp, float2(xCoords.y, yCoords.z), mip);
+	float depth22 = hzbTexture.SampleLevel(sPointClamp, float2(xCoords.z, yCoords.z), mip);
+	float depth32 = hzbTexture.SampleLevel(sPointClamp, float2(xCoords.w, yCoords.z), mip);
+
+	float depth03 = hzbTexture.SampleLevel(sPointClamp, float2(xCoords.x, yCoords.w), mip);
+	float depth13 = hzbTexture.SampleLevel(sPointClamp, float2(xCoords.y, yCoords.w), mip);
+	float depth23 = hzbTexture.SampleLevel(sPointClamp, float2(xCoords.z, yCoords.w), mip);
+	float depth33 = hzbTexture.SampleLevel(sPointClamp, float2(xCoords.w, yCoords.w), mip);
+
+	float depth =
+		min4(
+			min4(depth00, depth10, depth20, depth30),
+			min4(depth01, depth11, depth21, depth31),
+			min4(depth02, depth12, depth22, depth32),
+			min4(depth03, depth13, depth23, depth33)
+		);
+
+	bool isOccluded = depth > maxDepth;
+
+#if HZB_DEBUG_RENDER
+	if(debug)
+	{
+		uint color = isOccluded ? 0xFF0000FF : 0x00FF00FF;
+		DrawRect(rect.xy, rect.zw, RectMode::MinMax, color);
+		TextWriter writer = CreateTextWriter(rect.xy * cView.ViewportDimensions);
+		writer = writer + 'H' + 'Z' + 'B' + ' ' + 'M' + 'I' + 'P' + ':' + ' ';
+		writer.Int(mip);
+
+		uint gridColor = 0xFFFFFF33;
+		for(float y = 0; y < 1; y += texelSize.y)
+		{
+			DrawScreenLine(float2(0, y), float2(1, y), gridColor);
+
+			for(float x = 0; x < 1; x += texelSize.x)
+			{
+				DrawScreenLine(float2(x, 0), float2(x, 1), gridColor);
+			}
+		}
+
+		float2 rectSize = cView.ViewportDimensionsInv * 3;
+		DrawRect(float2(xCoords.x, yCoords.x), rectSize, RectMode::CenterExtents, 0x00FF00FF);
+		DrawRect(float2(xCoords.y, yCoords.x), rectSize, RectMode::CenterExtents, 0x00FF00FF);
+		DrawRect(float2(xCoords.z, yCoords.x), rectSize, RectMode::CenterExtents, 0x00FF00FF);
+		DrawRect(float2(xCoords.w, yCoords.x), rectSize, RectMode::CenterExtents, 0x00FF00FF);
+
+		DrawRect(float2(xCoords.x, yCoords.y), rectSize, RectMode::CenterExtents, 0x00FF00FF);
+		DrawRect(float2(xCoords.y, yCoords.y), rectSize, RectMode::CenterExtents, 0x00FF00FF);
+		DrawRect(float2(xCoords.z, yCoords.y), rectSize, RectMode::CenterExtents, 0x00FF00FF);
+		DrawRect(float2(xCoords.w, yCoords.y), rectSize, RectMode::CenterExtents, 0x00FF00FF);
+
+		DrawRect(float2(xCoords.x, yCoords.z), rectSize, RectMode::CenterExtents, 0x00FF00FF);
+		DrawRect(float2(xCoords.y, yCoords.z), rectSize, RectMode::CenterExtents, 0x00FF00FF);
+		DrawRect(float2(xCoords.z, yCoords.z), rectSize, RectMode::CenterExtents, 0x00FF00FF);
+		DrawRect(float2(xCoords.w, yCoords.z), rectSize, RectMode::CenterExtents, 0x00FF00FF);
+
+		DrawRect(float2(xCoords.x, yCoords.w), rectSize, RectMode::CenterExtents, 0x00FF00FF);
+		DrawRect(float2(xCoords.y, yCoords.w), rectSize, RectMode::CenterExtents, 0x00FF00FF);
+		DrawRect(float2(xCoords.z, yCoords.w), rectSize, RectMode::CenterExtents, 0x00FF00FF);
+		DrawRect(float2(xCoords.w, yCoords.w), rectSize, RectMode::CenterExtents, 0x00FF00FF);
+	}
+#endif
 
 	return cullData.IsVisible && !isOccluded;
 }

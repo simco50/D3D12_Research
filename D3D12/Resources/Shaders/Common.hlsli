@@ -306,6 +306,12 @@ T min3(T a, T b, T c)
 }
 
 template<typename T>
+T min4(T a, T b, T c, T d)
+{
+	return min3(a, b, min(c, d));
+}
+
+template<typename T>
 T max3(T a, T b, T c)
 {
 	return max(max(a, b), c);
