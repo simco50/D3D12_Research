@@ -158,12 +158,22 @@ bool HZBCull(FrustumCullData cullData, Texture2D<float> hzbTexture, bool debug =
 #if HZB_DEBUG_RENDER
 	if(debug)
 	{
-		uint color = isOccluded ? 0xFF0000FF : 0x00FF00FF;
-		DrawRect(rect.xy, rect.zw, RectMode::MinMax, color);
+		DrawRect(rect.xy, rect.zw, RectMode::MinMax, 0xFF0000FF);
 		TextWriter writer = CreateTextWriter(rect.xy * cView.ViewportDimensions);
-		writer = writer + 'H' + 'Z' + 'B' + ' ' + 'M' + 'I' + 'P' + ':' + ' ';
+		writer = writer + 'H' + 'Z' + 'B' + ' ' + 'm' + 'i' + 'p' + ':' + ' ';
 		writer.Int(mip);
-
+		writer.NewLine();
+		writer = writer + 'V' + 'i' + 's' + 'i' + 'b' + 'l' + 'e' + ':' + ' ';
+		if(isOccluded)
+		{
+			writer.SetColor(0xFF0000FF);
+			writer = writer + 'N' + 'o';
+		}
+		else
+		{
+			writer.SetColor(0x00FF00FF);
+			writer = writer + 'Y' + 'e' + 's';
+		}
 		uint gridColor = 0xFFFFFF33;
 		for(float y = 0; y < 1; y += texelSize.y)
 		{

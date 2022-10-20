@@ -134,16 +134,15 @@ void DrawRect(float2 a, float2 b, RectMode mode = RectMode::MinMax, uint color =
 	DrawScreenLine(float2(a.x, b.y), float2(b.x, b.y), color);
 }
 
-
 struct TextWriter
 {
 	float2 StartLocation;
 	float2 Cursor;
 	uint Color;
 
-	void SetColor(FontColor color)
+	void SetColor(uint color)
 	{
-		Color = color.Color;
+		Color = color;
 	}
 
 	void Text(uint character)
