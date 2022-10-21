@@ -23,7 +23,7 @@
 #include "Graphics/Techniques/SSAO.h"
 #include "Graphics/Techniques/CBTTessellation.h"
 #include "Graphics/Techniques/Clouds.h"
-#include "Graphics/Techniques/GPUDebugRenderer.h"
+#include "Graphics/Techniques/ShaderDebugRenderer.h"
 #include "Graphics/Techniques/VisibilityBuffer.h"
 #include "Graphics/ImGuiRenderer.h"
 #include "Core/TaskQueue.h"
@@ -204,8 +204,8 @@ DemoApp::DemoApp(WindowHandle window, const Vector2i& windowRect)
 	FontCreateSettings fontSettings;
 	fontSettings.pName = "Verdana";
 	fontSettings.Height = 22;
-	m_pGPUDebugRenderer = std::make_unique<GPUDebugRenderer>(m_pDevice, fontSettings);
-	m_pGPUDebugRenderer->GetGlobalIndices(&m_SceneData.DebugRenderData);
+	m_pShaderDebugRenderer = std::make_unique<ShaderDebugRenderer>(m_pDevice, fontSettings);
+	m_pShaderDebugRenderer->GetGlobalIndices(&m_SceneData.DebugRenderData);
 
 	InitializePipelines();
 	Profiler::Get()->Initialize(m_pDevice);
@@ -1339,7 +1339,7 @@ void DemoApp::Update()
 			}
 		}
 
-		m_pGPUDebugRenderer->Render(graph, pView, sceneTextures.pColorTarget, sceneTextures.pDepth);
+		m_pShaderDebugRenderer->Render(graph, pView, sceneTextures.pColorTarget, sceneTextures.pDepth);
 
 		RGTexture* pFinalOutput = graph.ImportTexture(m_ColorOutput);
 

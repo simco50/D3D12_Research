@@ -260,7 +260,7 @@ RGTexture* VisibilityBuffer::InitHZB(RGGraph& graph, const Vector2i& viewDimensi
 	hzbDimensions.x = Math::Max(Math::NextPowerOfTwo(viewDimensions.x) >> 1u, 1u);
 	hzbDimensions.y = Math::Max(Math::NextPowerOfTwo(viewDimensions.y) >> 1u, 1u);
 	uint32 numMips = (uint32)Math::Floor(log2f((float)Math::Max(hzbDimensions.x, hzbDimensions.y)));
-	TextureDesc desc = TextureDesc::Create2D(hzbDimensions.x, hzbDimensions.y, ResourceFormat::R32_FLOAT, TextureFlag::UnorderedAccess, 1, numMips);
+	TextureDesc desc = TextureDesc::Create2D(hzbDimensions.x, hzbDimensions.y, ResourceFormat::R16_FLOAT, TextureFlag::UnorderedAccess, 1, numMips);
 
 	if (!pHZB || pHZB->GetDesc() != desc)
 	{

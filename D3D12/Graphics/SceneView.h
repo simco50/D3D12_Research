@@ -3,7 +3,7 @@
 #include "ShaderInterop.h"
 #include "AccelerationStructure.h"
 #include "RenderGraph/RenderGraphDefinitions.h"
-#include "Techniques/GPUDebugRenderer.h"
+#include "Techniques/ShaderDebugRenderer.h"
 
 class Texture;
 class Buffer;

@@ -29,10 +29,10 @@ struct GPUDebugRenderData
 	uint32 FontDataSRV;
 };
 
-class GPUDebugRenderer
+class ShaderDebugRenderer
 {
 public:
-	GPUDebugRenderer(GraphicsDevice* pDevice, const FontCreateSettings& fontSettings);
+	ShaderDebugRenderer(GraphicsDevice* pDevice, const FontCreateSettings& fontSettings);
 
 	void Render(RGGraph& graph, const SceneView* pView, RGTexture* pTarget, RGTexture* pDepth);
 

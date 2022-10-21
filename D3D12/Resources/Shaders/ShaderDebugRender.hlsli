@@ -229,6 +229,27 @@ struct TextWriter
 		}
 	}
 
+	void Int(int2 value)
+	{
+		Int(value.x);
+		Text(',', ' ');
+		Int(value.y);
+	}
+
+	void Int(int3 value)
+	{
+		Int(value.xy);
+		Text(',', ' ');
+		Int(value.z);
+	}
+
+	void Int(int4 value)
+	{
+		Int(value.xyz);
+		Text(',', ' ');
+		Int(value.w);
+	}
+
 	void Float(float value)
 	{
 		if(isnan(value))
@@ -258,42 +279,37 @@ struct TextWriter
 
 	void Float(float3 value)
 	{
-		Float(value.x);
-		Text(',', ' ');
-		Float(value.y);
+		Float(value.xy);
 		Text(',', ' ');
 		Float(value.z);
 	}
 
 	void Float(float4 value)
 	{
-		Float(value.x);
-		Text(',', ' ');
-		Float(value.y);
-		Text(',', ' ');
-		Float(value.z);
+		Float(value.xyz);
 		Text(',', ' ');
 		Float(value.w);
+	}
+
+	TextWriter This()
+	{
+		TextWriter writer;
+		writer.StartLocation = StartLocation;
+		writer.Cursor = Cursor;
+		writer.Color = Color;
+		return writer;
 	}
 
 	TextWriter operator+(uint character)
 	{
 		Text(character);
-		TextWriter writer;
-		writer.StartLocation = StartLocation;
-		writer.Cursor = Cursor;
-		writer.Color = Color;
-		return writer;
+		return This();
 	}
 
 	TextWriter operator+(float value)
 	{
 		Float(value);
-		TextWriter writer;
-		writer.StartLocation = StartLocation;
-		writer.Cursor = Cursor;
-		writer.Color = Color;
-		return writer;
+		return This();
 	}
 };
 

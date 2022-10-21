@@ -21,7 +21,7 @@ class RGGraph;
 class RGResourcePool;
 class Clouds;
 class PipelineState;
-class GPUDebugRenderer;
+class ShaderDebugRenderer;
 class VisibilityBuffer;
 struct SubMesh;
 struct Material;
@@ -78,7 +78,7 @@ private:
 	std::unique_ptr<CBTTessellation> m_pCBTTessellation;
 	std::unique_ptr<GpuParticles> m_pParticles;
 	std::unique_ptr<Clouds> m_pClouds;
-	std::unique_ptr<GPUDebugRenderer> m_pGPUDebugRenderer;
+	std::unique_ptr<ShaderDebugRenderer> m_pShaderDebugRenderer;
 	std::unique_ptr<VisibilityBuffer> m_pVisibilityBuffer;
 
 	WindowHandle m_Window = nullptr;

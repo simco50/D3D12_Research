@@ -1,5 +1,5 @@
 #include "stdafx.h"
-#include "GPUDebugRenderer.h"
+#include "ShaderDebugRenderer.h"
 #include "Graphics/RHI/CommandContext.h"
 #include "Graphics/RHI/Graphics.h"
 #include "Graphics/RHI/PipelineState.h"
@@ -8,7 +8,7 @@
 #include "Graphics/SceneView.h"
 #include "stb_rect_pack.h"
 
-GPUDebugRenderer::GPUDebugRenderer(GraphicsDevice* pDevice, const FontCreateSettings& fontSettings)
+ShaderDebugRenderer::ShaderDebugRenderer(GraphicsDevice* pDevice, const FontCreateSettings& fontSettings)
 {
 	m_pCommonRS = new RootSignature(pDevice);
 	m_pCommonRS->AddRootConstants(0, 8);
@@ -76,7 +76,7 @@ GPUDebugRenderer::GPUDebugRenderer(GraphicsDevice* pDevice, const FontCreateSett
 	pContext->Execute(true);
 }
 
-void GPUDebugRenderer::Render(RGGraph& graph, const SceneView* pView, RGTexture* pTarget, RGTexture* pDepth)
+void ShaderDebugRenderer::Render(RGGraph& graph, const SceneView* pView, RGTexture* pTarget, RGTexture* pDepth)
 {
 	RG_GRAPH_SCOPE("GPU Debug Render", graph);
 
@@ -148,7 +148,7 @@ void GPUDebugRenderer::Render(RGGraph& graph, const SceneView* pView, RGTexture*
 			});
 }
 
-void GPUDebugRenderer::GetGlobalIndices(GPUDebugRenderData* pData) const
+void ShaderDebugRenderer::GetGlobalIndices(GPUDebugRenderData* pData) const
 {
 	pData->RenderDataUAV = m_pRenderDataBuffer->GetUAVIndex();
 	pData->FontDataSRV = m_pGlyphData->GetSRVIndex();
@@ -187,7 +187,7 @@ struct BinaryReader
 	const void* pCurrent;
 };
 
-bool GPUDebugRenderer::ProcessFont(Font& outFont, const FontCreateSettings& config)
+bool ShaderDebugRenderer::ProcessFont(Font& outFont, const FontCreateSettings& config)
 {
 	auto ConvertPt = [](const POINTFX& point, const Vector2& origin)
 	{
@@ -359,7 +359,7 @@ bool GPUDebugRenderer::ProcessFont(Font& outFont, const FontCreateSettings& conf
 	return true;
 }
 
-void GPUDebugRenderer::BuildFontAtlas(CommandContext& context, const Vector2i& resolution)
+void ShaderDebugRenderer::BuildFontAtlas(CommandContext& context, const Vector2i& resolution)
 {
 	Font& font = m_Font;
 
