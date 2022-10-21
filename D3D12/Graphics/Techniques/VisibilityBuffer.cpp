@@ -225,7 +225,7 @@ void VisibilityBuffer::Render(RGGraph& graph, const SceneView* pView, RGTexture*
 		BuildHZB(graph, pDepth, pHZB);
 	}
 
-#if 1
+#if 0
 	graph.AddPass("Print Stats", RGPassFlag::Compute)
 		.Read({ pOccludedInstancesCounter, pOccludedMeshletsCounter, pMeshletCandidatesCounter })
 		.Bind([=](CommandContext& context)

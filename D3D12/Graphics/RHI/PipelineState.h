@@ -117,7 +117,6 @@ public:
 	void SetAmplificationShader(const char* pShaderPath, const char* entryPoint = "", const Span<ShaderDefine>& defines = {});
 
 	D3D12_PIPELINE_STATE_STREAM_DESC GetDesc(GraphicsDevice* pDevice);
-	std::string DebugPrint();
 
 private:
 	template<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE ObjectType>

@@ -22,14 +22,15 @@
 	https://advances.realtimerendering.com/s2015/aaltonenhaar_siggraph2015_combined_final_footer_220dpi.pdf
 */
 
-#define VISUALIZE_OCCLUDED 1
+// Debug draw bounding box around occluded instances
+#define VISUALIZE_OCCLUDED 0
 
 #ifndef OCCLUSION_FIRST_PASS
 #define OCCLUSION_FIRST_PASS 1
 #endif
 
 #ifndef ALPHA_MASK
-#define ALPHA_MASK 1
+#define ALPHA_MASK 0
 #endif
 
 #ifndef DEPTH_ONLY
@@ -46,10 +47,13 @@ struct MeshletCandidate
     uint MeshletIndex;
 };
 
+// List of meshlets to cull/render in Phase 1 and 2
 RWStructuredBuffer<MeshletCandidate> uMeshletCandidates : 			register(u0);
 RWBuffer<uint> uCounter_MeshletCandidates : 						register(u1);
+// List of instances occluded in previous frame to consider in Phase 2
 RWStructuredBuffer<uint> uOccludedInstances : 						register(u2);
 RWBuffer<uint> uCounter_OccludedInstances : 						register(u3);
+// List of meshlets occluded in previous frame to consider in Phase 2
 RWStructuredBuffer<MeshletCandidate> uOccludedMeshlets : 			register(u4);
 RWBuffer<uint> uCounter_OccludedMeshlets : 							register(u5);
 
@@ -113,6 +117,7 @@ void CullInstancesCS(uint threadID : SV_DispatchThreadID)
 #endif
 	}
 
+	// If instance is visible and wasn't occluded in the previous frame, submit it
     if(isVisible && !wasOccluded)
     {
         uint elementOffset;
@@ -197,6 +202,7 @@ void CullAndDrawMeshletsAS(uint threadID : SV_DispatchThreadID)
 #endif
 		}
 
+		// If meshlet is visible and wasn't occluded in the previous frame, submit it
 		shouldSubmit = isVisible && !wasOccluded;
 		if(shouldSubmit)
 		{
