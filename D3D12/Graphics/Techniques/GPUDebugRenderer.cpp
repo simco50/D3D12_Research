@@ -101,7 +101,7 @@ void GPUDebugRenderer::Render(RGGraph& graph, const SceneView* pView, RGTexture*
 			});
 
 	graph.AddPass("Render Lines", RGPassFlag::Raster)
-		.Read({ pRenderData, pDrawArgs })
+		.Read({ pRenderData, pDrawArgs, pDepth })
 		.RenderTarget(pTarget, RenderTargetLoadAction::Load)
 		.DepthStencil(pDepth, RenderTargetLoadAction::Load, false)
 		.Bind([=](CommandContext& context)
@@ -110,11 +110,12 @@ void GPUDebugRenderer::Render(RGGraph& graph, const SceneView* pView, RGTexture*
 				context.SetPipelineState(m_pRenderLinesPSO);
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINELIST);
 
-				context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
+				context.SetRootCBV(1, Renderer::GetViewUniforms(pView, pTarget->Get()));
 				context.BindResources(3, {
 					m_pFontAtlas->GetSRV(),
 					m_pGlyphData->GetSRV(),
-					pRenderData->Get()->GetSRV()
+					pRenderData->Get()->GetSRV(),
+					pDepth->Get()->GetSRV(),
 					});
 				context.ExecuteIndirect(GraphicsCommon::pIndirectDrawSignature, 1, pDrawArgs->Get(), nullptr, sizeof(D3D12_DRAW_ARGUMENTS) * 1);
 			});

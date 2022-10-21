@@ -37,6 +37,7 @@ ConstantBuffer<RenderData> cData : register(b0);
 Texture2D<float> tFontAtlas : register(t0);
 StructuredBuffer<Glyph> tGlyphData : register(t1);
 ByteAddressBuffer tRenderData : register(t2);
+Texture2D<float> tDepth : register(t3);
 
 void RenderGlyphVS(
 	uint vertexID : SV_VertexID,
@@ -78,7 +79,7 @@ void RenderLineVS(
 	uint vertexID : SV_VertexID,
 	uint instanceID : SV_InstanceID,
 	out float4 position : SV_Position,
-	out uint color : COLOR
+	out float4 color : COLOR
 	)
 {
 	uint offset = instanceID * sizeof(LineInstance);
@@ -87,20 +88,28 @@ void RenderLineVS(
 	float3 wPos = vertexID == 0 ? instance.A : instance.B;
 	if(instance.ScreenSpace)
 	{
-		position = float4(wPos.xy * 2 - 1, 0, 1);
+		position = float4(wPos.xy * 2 - 1, 1, 1);
 		position.y *= -1;
 	}
 	else
 	{
 		position = mul(float4(wPos, 1), cView.ViewProjection);
 	}
-	color = instance.Color;
+	color = UIntToColor(instance.Color);
 }
 
 float4 RenderLinePS(
 	float4 position : SV_POSITION,
-	uint color : COLOR
+	float4 color : COLOR
 	) : SV_TARGET
 {
-	return UIntToColor(color);
+	uint2 pixel = position.xy;
+	float2 uv = pixel.xy * cView.TargetDimensionsInv;
+	float depth = tDepth.SampleLevel(sLinearClamp, uv, 0);
+
+	bool occluded = depth > position.z;
+	float checkers = any(pixel % 2 == 0) ? 1.0f : 0.0f;
+	float alpha = occluded ? checkers * 0.7f : 1.0f;
+
+	return float4(color.xyz, color.w * alpha);
 }

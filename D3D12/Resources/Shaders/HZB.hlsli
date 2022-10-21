@@ -109,7 +109,7 @@ uint ComputeHZBMip(int4 rectPixels, int texelCoverage)
 
 bool HZBCull(FrustumCullData cullData, Texture2D<float> hzbTexture, bool debug = false)
 {
-	const uint hzbTexelCoverage = 4;
+	static const uint hzbTexelCoverage = 4;
 
 	// Convert NDC to UV
 	float4 rect = saturate(float4(cullData.RectMin.xy, cullData.RectMax.xy) * float2(0.5f, -0.5f).xyxy + 0.5f).xwzy;
@@ -121,37 +121,50 @@ bool HZBCull(FrustumCullData cullData, Texture2D<float> hzbTexture, bool debug =
 	float2 texelSize = 1.0f / cView.HZBDimensions * (1u << mip);
 
 	float maxDepth = cullData.RectMax.z;
+	float depth = 0;
 
-	float4 xCoords = (min(rectPixels.x + float4(0, 1, 2, 3), rectPixels.z) + 0.5f) * texelSize.x;
-	float4 yCoords = (min(rectPixels.y + float4(0, 1, 2, 3), rectPixels.w) + 0.5f) * texelSize.y;
+	if(hzbTexelCoverage == 4)
+	{
+		float4 xCoords = (min(rectPixels.x + float4(0, 1, 2, 3), rectPixels.z) + 0.5f) * texelSize.x;
+		float4 yCoords = (min(rectPixels.y + float4(0, 1, 2, 3), rectPixels.w) + 0.5f) * texelSize.y;
 
-	float depth00 = hzbTexture.SampleLevel(sPointClamp, float2(xCoords.x, yCoords.x), mip);
-	float depth10 = hzbTexture.SampleLevel(sPointClamp, float2(xCoords.y, yCoords.x), mip);
-	float depth20 = hzbTexture.SampleLevel(sPointClamp, float2(xCoords.z, yCoords.x), mip);
-	float depth30 = hzbTexture.SampleLevel(sPointClamp, float2(xCoords.w, yCoords.x), mip);
+		float depth00 = hzbTexture.SampleLevel(sPointClamp, float2(xCoords.x, yCoords.x), mip);
+		float depth10 = hzbTexture.SampleLevel(sPointClamp, float2(xCoords.y, yCoords.x), mip);
+		float depth20 = hzbTexture.SampleLevel(sPointClamp, float2(xCoords.z, yCoords.x), mip);
+		float depth30 = hzbTexture.SampleLevel(sPointClamp, float2(xCoords.w, yCoords.x), mip);
 
-	float depth01 = hzbTexture.SampleLevel(sPointClamp, float2(xCoords.x, yCoords.y), mip);
-	float depth11 = hzbTexture.SampleLevel(sPointClamp, float2(xCoords.y, yCoords.y), mip);
-	float depth21 = hzbTexture.SampleLevel(sPointClamp, float2(xCoords.z, yCoords.y), mip);
-	float depth31 = hzbTexture.SampleLevel(sPointClamp, float2(xCoords.w, yCoords.y), mip);
+		float depth01 = hzbTexture.SampleLevel(sPointClamp, float2(xCoords.x, yCoords.y), mip);
+		float depth11 = hzbTexture.SampleLevel(sPointClamp, float2(xCoords.y, yCoords.y), mip);
+		float depth21 = hzbTexture.SampleLevel(sPointClamp, float2(xCoords.z, yCoords.y), mip);
+		float depth31 = hzbTexture.SampleLevel(sPointClamp, float2(xCoords.w, yCoords.y), mip);
 
-	float depth02 = hzbTexture.SampleLevel(sPointClamp, float2(xCoords.x, yCoords.z), mip);
-	float depth12 = hzbTexture.SampleLevel(sPointClamp, float2(xCoords.y, yCoords.z), mip);
-	float depth22 = hzbTexture.SampleLevel(sPointClamp, float2(xCoords.z, yCoords.z), mip);
-	float depth32 = hzbTexture.SampleLevel(sPointClamp, float2(xCoords.w, yCoords.z), mip);
+		float depth02 = hzbTexture.SampleLevel(sPointClamp, float2(xCoords.x, yCoords.z), mip);
+		float depth12 = hzbTexture.SampleLevel(sPointClamp, float2(xCoords.y, yCoords.z), mip);
+		float depth22 = hzbTexture.SampleLevel(sPointClamp, float2(xCoords.z, yCoords.z), mip);
+		float depth32 = hzbTexture.SampleLevel(sPointClamp, float2(xCoords.w, yCoords.z), mip);
 
-	float depth03 = hzbTexture.SampleLevel(sPointClamp, float2(xCoords.x, yCoords.w), mip);
-	float depth13 = hzbTexture.SampleLevel(sPointClamp, float2(xCoords.y, yCoords.w), mip);
-	float depth23 = hzbTexture.SampleLevel(sPointClamp, float2(xCoords.z, yCoords.w), mip);
-	float depth33 = hzbTexture.SampleLevel(sPointClamp, float2(xCoords.w, yCoords.w), mip);
+		float depth03 = hzbTexture.SampleLevel(sPointClamp, float2(xCoords.x, yCoords.w), mip);
+		float depth13 = hzbTexture.SampleLevel(sPointClamp, float2(xCoords.y, yCoords.w), mip);
+		float depth23 = hzbTexture.SampleLevel(sPointClamp, float2(xCoords.z, yCoords.w), mip);
+		float depth33 = hzbTexture.SampleLevel(sPointClamp, float2(xCoords.w, yCoords.w), mip);
 
-	float depth =
-		min4(
-			min4(depth00, depth10, depth20, depth30),
-			min4(depth01, depth11, depth21, depth31),
-			min4(depth02, depth12, depth22, depth32),
-			min4(depth03, depth13, depth23, depth33)
-		);
+		depth =
+			min4(
+				min4(depth00, depth10, depth20, depth30),
+				min4(depth01, depth11, depth21, depth31),
+				min4(depth02, depth12, depth22, depth32),
+				min4(depth03, depth13, depth23, depth33)
+			);
+	}
+	else if(hzbTexelCoverage == 2)
+	{
+		float depth00 = hzbTexture.SampleLevel(sPointClamp, (rectPixels.xy + 0.5f) * texelSize, mip);
+		float depth10 = hzbTexture.SampleLevel(sPointClamp, (rectPixels.zy + 0.5f) * texelSize, mip);
+		float depth01 = hzbTexture.SampleLevel(sPointClamp, (rectPixels.xw + 0.5f) * texelSize, mip);
+		float depth11 = hzbTexture.SampleLevel(sPointClamp, (rectPixels.zw + 0.5f) * texelSize, mip);
+
+		depth = min4(depth00, depth10, depth01, depth11);
+	}
 
 	bool isOccluded = depth > maxDepth;
 
@@ -186,25 +199,38 @@ bool HZBCull(FrustumCullData cullData, Texture2D<float> hzbTexture, bool debug =
 		}
 
 		float2 rectSize = cView.ViewportDimensionsInv * 3;
-		DrawRect(float2(xCoords.x, yCoords.x), rectSize, RectMode::CenterExtents, 0x00FF00FF);
-		DrawRect(float2(xCoords.y, yCoords.x), rectSize, RectMode::CenterExtents, 0x00FF00FF);
-		DrawRect(float2(xCoords.z, yCoords.x), rectSize, RectMode::CenterExtents, 0x00FF00FF);
-		DrawRect(float2(xCoords.w, yCoords.x), rectSize, RectMode::CenterExtents, 0x00FF00FF);
+		if(hzbTexelCoverage == 4)
+		{
+			float4 xCoords = (min(rectPixels.x + float4(0, 1, 2, 3), rectPixels.z) + 0.5f) * texelSize.x;
+			float4 yCoords = (min(rectPixels.y + float4(0, 1, 2, 3), rectPixels.w) + 0.5f) * texelSize.y;
 
-		DrawRect(float2(xCoords.x, yCoords.y), rectSize, RectMode::CenterExtents, 0x00FF00FF);
-		DrawRect(float2(xCoords.y, yCoords.y), rectSize, RectMode::CenterExtents, 0x00FF00FF);
-		DrawRect(float2(xCoords.z, yCoords.y), rectSize, RectMode::CenterExtents, 0x00FF00FF);
-		DrawRect(float2(xCoords.w, yCoords.y), rectSize, RectMode::CenterExtents, 0x00FF00FF);
+			DrawRect(float2(xCoords.x, yCoords.x), rectSize, RectMode::CenterExtents, 0x00FF00FF);
+			DrawRect(float2(xCoords.y, yCoords.x), rectSize, RectMode::CenterExtents, 0x00FF00FF);
+			DrawRect(float2(xCoords.z, yCoords.x), rectSize, RectMode::CenterExtents, 0x00FF00FF);
+			DrawRect(float2(xCoords.w, yCoords.x), rectSize, RectMode::CenterExtents, 0x00FF00FF);
 
-		DrawRect(float2(xCoords.x, yCoords.z), rectSize, RectMode::CenterExtents, 0x00FF00FF);
-		DrawRect(float2(xCoords.y, yCoords.z), rectSize, RectMode::CenterExtents, 0x00FF00FF);
-		DrawRect(float2(xCoords.z, yCoords.z), rectSize, RectMode::CenterExtents, 0x00FF00FF);
-		DrawRect(float2(xCoords.w, yCoords.z), rectSize, RectMode::CenterExtents, 0x00FF00FF);
+			DrawRect(float2(xCoords.x, yCoords.y), rectSize, RectMode::CenterExtents, 0x00FF00FF);
+			DrawRect(float2(xCoords.y, yCoords.y), rectSize, RectMode::CenterExtents, 0x00FF00FF);
+			DrawRect(float2(xCoords.z, yCoords.y), rectSize, RectMode::CenterExtents, 0x00FF00FF);
+			DrawRect(float2(xCoords.w, yCoords.y), rectSize, RectMode::CenterExtents, 0x00FF00FF);
 
-		DrawRect(float2(xCoords.x, yCoords.w), rectSize, RectMode::CenterExtents, 0x00FF00FF);
-		DrawRect(float2(xCoords.y, yCoords.w), rectSize, RectMode::CenterExtents, 0x00FF00FF);
-		DrawRect(float2(xCoords.z, yCoords.w), rectSize, RectMode::CenterExtents, 0x00FF00FF);
-		DrawRect(float2(xCoords.w, yCoords.w), rectSize, RectMode::CenterExtents, 0x00FF00FF);
+			DrawRect(float2(xCoords.x, yCoords.z), rectSize, RectMode::CenterExtents, 0x00FF00FF);
+			DrawRect(float2(xCoords.y, yCoords.z), rectSize, RectMode::CenterExtents, 0x00FF00FF);
+			DrawRect(float2(xCoords.z, yCoords.z), rectSize, RectMode::CenterExtents, 0x00FF00FF);
+			DrawRect(float2(xCoords.w, yCoords.z), rectSize, RectMode::CenterExtents, 0x00FF00FF);
+
+			DrawRect(float2(xCoords.x, yCoords.w), rectSize, RectMode::CenterExtents, 0x00FF00FF);
+			DrawRect(float2(xCoords.y, yCoords.w), rectSize, RectMode::CenterExtents, 0x00FF00FF);
+			DrawRect(float2(xCoords.z, yCoords.w), rectSize, RectMode::CenterExtents, 0x00FF00FF);
+			DrawRect(float2(xCoords.w, yCoords.w), rectSize, RectMode::CenterExtents, 0x00FF00FF);
+		}
+		else if(hzbTexelCoverage == 2)
+		{
+			DrawRect((rectPixels.xy + 0.5f) * texelSize, rectSize, RectMode::CenterExtents, 0x00FF00FF);
+			DrawRect((rectPixels.zy + 0.5f) * texelSize, rectSize, RectMode::CenterExtents, 0x00FF00FF);
+			DrawRect((rectPixels.xw + 0.5f) * texelSize, rectSize, RectMode::CenterExtents, 0x00FF00FF);
+			DrawRect((rectPixels.zw + 0.5f) * texelSize, rectSize, RectMode::CenterExtents, 0x00FF00FF);
+		}
 	}
 #endif
 
