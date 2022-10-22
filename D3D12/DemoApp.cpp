@@ -127,7 +127,7 @@ namespace Tweakables
 	ConsoleVariable g_SDSM("r.Shadows.SDSM", false);
 	ConsoleVariable g_VisualizeShadowCascades("vis.ShadowCascades", false);
 	ConsoleVariable g_ShadowCascades("r.Shadows.CascadeCount", 4);
-	ConsoleVariable g_PSSMFactor("r.Shadow.PSSMFactor", 1.0f);
+	ConsoleVariable g_PSSMFactor("r.Shadow.PSSMFactor", 0.85f);
 
 	// Bloom
 	ConsoleVariable g_Bloom("r.Bloom", true);
@@ -245,8 +245,9 @@ void DemoApp::SetupScene(CommandContext& context)
 #if 1
 		m_pCamera->SetPosition(Vector3(-1.3f, 2.4f, -1.5f));
 		m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(Math::PI_DIV_4, Math::PI_DIV_4 * 0.5f, 0));
-
-		LoadMesh("Resources/Scenes/Sponza/Sponza.gltf", context, m_World);
+		
+		LoadMesh("D:/References/GltfScenes/CornellBox/cornell_box.gltf", context, m_World);
+		//LoadMesh("Resources/Scenes/Sponza/Sponza.gltf", context, m_World);
 #elif 1
 		m_pCamera->SetPosition(Vector3(-1.3f, 2.4f, -1.5f));
 		m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(Math::PI_DIV_4, Math::PI_DIV_4 * 0.5f, 0));
@@ -2012,7 +2013,7 @@ void DemoApp::CreateShadowViews(SceneView& view, World& world)
 		}
 		if (shadowIndex >= (int32)m_ShadowMaps.size())
 		{
-			m_ShadowMaps.push_back(m_pDevice->CreateTexture(TextureDesc::CreateDepth(resolution, resolution, DEPTH_STENCIL_SHADOW_FORMAT, TextureFlag::DepthStencil | TextureFlag::ShaderResource, 1, ClearBinding(0.0f, 0)), "Shadow Map"));
+			m_ShadowMaps.push_back(m_pDevice->CreateTexture(TextureDesc::CreateDepth(resolution, resolution, DEPTH_STENCIL_SHADOW_FORMAT, TextureFlag::DepthStencil | TextureFlag::ShaderResource, 1, ClearBinding(0.0f, 0)), Sprintf("Shadow Map %d", (uint32)m_ShadowMaps.size()).c_str()));
 		}
 		RefCountPtr<Texture> pTarget = m_ShadowMaps[shadowIndex];
 
@@ -2101,6 +2102,7 @@ void DemoApp::CreateShadowViews(SceneView& view, World& world)
 				shadowView.ViewProjection = lightView * projectionMatrix;
 				shadowView.OrtographicFrustum.Center = center;
 				shadowView.OrtographicFrustum.Extents = maxExtents - minExtents;
+				shadowView.OrtographicFrustum.Extents.z *= 10;
 				shadowView.OrtographicFrustum.Orientation = Quaternion::CreateFromRotationMatrix(lightView.Invert());
 				static_cast<float*>(&view.ShadowCascadeDepths.x)[i] = nearPlane + currentCascadeSplit * (farPlane - nearPlane);
 				AddShadowView(light, shadowView, 2048, i);
@@ -2108,7 +2110,7 @@ void DemoApp::CreateShadowViews(SceneView& view, World& world)
 		}
 		else if (light.Type == LightType::Spot)
 		{
-			Matrix projection = Math::CreatePerspectiveMatrix(light.UmbraAngleDegrees * Math::DegreesToRadians, 1.0f, light.Range*100, 1.0f);
+			Matrix projection = Math::CreatePerspectiveMatrix(light.UmbraAngleDegrees * Math::DegreesToRadians, 1.0f, light.Range, 0.001f);
 			Matrix lightView = Math::CreateLookToMatrix(light.Position, light.Direction, light.Direction == Vector3::Up ? Vector3::Right : Vector3::Up);
 
 			ShadowView shadowView;
@@ -2127,7 +2129,7 @@ void DemoApp::CreateShadowViews(SceneView& view, World& world)
 				Math::CreateLookToMatrix(light.Position, Vector3::Backward, Vector3::Up),
 				Math::CreateLookToMatrix(light.Position, Vector3::Forward, Vector3::Up),
 			};
-			Matrix projection = Math::CreatePerspectiveMatrix(Math::PI_DIV_2, 1, light.Range, 1.0f);
+			Matrix projection = Math::CreatePerspectiveMatrix(Math::PI_DIV_2, 1, light.Range, 0.001f);
 
 			for (int i = 0; i < 6; ++i)
 			{
