@@ -18,13 +18,10 @@ public:
 
 private:
 	RefCountPtr<RootSignature> m_pCommonRS;
-	RefCountPtr<PipelineState> m_pCullInstancesPhase1PSO;
-	RefCountPtr<PipelineState> m_pBuildDrawArgsPhase1PSO;
-	RefCountPtr<PipelineState> m_pBuildDrawArgsPhase2PSO;
-	RefCountPtr<PipelineState> m_pCullAndDrawPhase1PSO;
-	RefCountPtr<PipelineState> m_pBuildCullArgsPhase2PSO;
-	RefCountPtr<PipelineState> m_pCullInstancesPhase2PSO;
-	RefCountPtr<PipelineState> m_pCullAndDrawPhase2PSO;
+	RefCountPtr<PipelineState> m_pCullInstancesPSO[2];
+	RefCountPtr<PipelineState> m_pBuildDrawArgsPSO[2];
+	RefCountPtr<PipelineState> m_pCullAndDrawPSO[2];
+	RefCountPtr<PipelineState> m_pBuildCullArgsPSO;
 	RefCountPtr<PipelineState> m_pPrintStatsPSO;
 
 	RefCountPtr<PipelineState> m_pHZBInitializePSO;

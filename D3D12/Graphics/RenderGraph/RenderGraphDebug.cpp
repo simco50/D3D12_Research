@@ -134,6 +134,7 @@ void RGGraph::DumpGraph(const char* pPath) const
 				stream << "Stride: " << desc.ElementSize << "<br/>";
 				stream << "Fmt: " << GetFormatInfo(desc.Format).pName << "<br/>";
 				stream << "Size: " << Math::PrettyPrintDataSize(desc.Size) << "<br/>";
+				stream << "Elements: " << desc.NumElements() << "<br/>";
 			}
 
 			stream << (pResource->IsImported ? ")]" : "])");

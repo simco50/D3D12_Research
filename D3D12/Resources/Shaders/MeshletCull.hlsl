@@ -163,7 +163,7 @@ void CullInstancesCS(uint threadID : SV_DispatchThreadID)
 }
 
 [numthreads(1, 1, 1)]
-void BuildMeshShaderIndirectArgs(uint threadID : SV_DispatchThreadID)
+void BuildMeshShaderIndirectArgs()
 {
     uint numMeshlets = tCounter_MeshletCandidates[MeshletCounterIndex];
     D3D12_DISPATCH_ARGUMENTS args;
@@ -172,7 +172,7 @@ void BuildMeshShaderIndirectArgs(uint threadID : SV_DispatchThreadID)
 }
 
 [numthreads(1, 1, 1)]
-void BuildInstanceCullIndirectArgs(uint threadID : SV_DispatchThreadID)
+void BuildInstanceCullIndirectArgs()
 {
     uint numInstances = tCounter_OccludedInstances[0];
     D3D12_DISPATCH_ARGUMENTS args;
@@ -341,7 +341,7 @@ void PSMain(
 }
 
 [numthreads(1, 1, 1)]
-void PrintStatsCS(uint threadId : SV_DispatchThreadID)
+void PrintStatsCS()
 {
 	uint numInstances = cView.NumInstances;
 	uint numMeshlets = 0;

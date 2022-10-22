@@ -1179,14 +1179,14 @@ DXGI_COLOR_SPACE_TYPE GetColorSpace(DisplayMode displayMode)
 	}
 }
 
-DXGI_FORMAT GetSwapchainFormat(DisplayMode displayMode)
+ResourceFormat GetSwapchainFormat(DisplayMode displayMode)
 {
 	switch (displayMode)
 	{
 	default:
-	case DisplayMode::SDR:			return DXGI_FORMAT_R8G8B8A8_UNORM;
-	case DisplayMode::HDR_PQ:		return DXGI_FORMAT_R10G10B10A2_UNORM;
-	case DisplayMode::HDR_scRGB:	return DXGI_FORMAT_R16G16B16A16_FLOAT;
+	case DisplayMode::SDR:			return ResourceFormat::RGBA8_UNORM;
+	case DisplayMode::HDR_PQ:		return ResourceFormat::RGB10A2_UNORM;
+	case DisplayMode::HDR_scRGB:	return ResourceFormat::RGBA16_FLOAT;
 	}
 }
 
@@ -1205,7 +1205,7 @@ SwapChain::SwapChain(GraphicsDevice* pDevice, DisplayMode displayMode, WindowHan
 	desc.AlphaMode = DXGI_ALPHA_MODE_IGNORE;
 	desc.BufferCount = (uint32)m_Backbuffers.size();
 	desc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-	desc.Format = m_Format;
+	desc.Format = D3D::ConvertFormat(m_Format);
 	desc.Width = 0;
 	desc.Height = 0;
 	desc.Scaling = DXGI_SCALING_NONE;
@@ -1256,7 +1256,7 @@ void SwapChain::OnResizeOrMove(uint32 width, uint32 height)
 		desiredDisplayMode = DisplayMode::SDR;
 	}
 
-	DXGI_FORMAT desiredFormat = GetSwapchainFormat(desiredDisplayMode);
+	ResourceFormat desiredFormat = GetSwapchainFormat(desiredDisplayMode);
 	if (desiredFormat != m_Format || width != m_Width || height != m_Height)
 	{
 		m_Width = width;
@@ -1278,7 +1278,7 @@ void SwapChain::OnResizeOrMove(uint32 width, uint32 height)
 			(uint32)m_Backbuffers.size(),
 			width,
 			height,
-			m_Format,
+			D3D::ConvertFormat(m_Format),
 			desc.Flags
 		));
 

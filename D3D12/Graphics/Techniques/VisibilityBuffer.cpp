@@ -35,15 +35,15 @@ VisibilityBuffer::VisibilityBuffer(GraphicsDevice* pDevice)
 	psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
 	psoDesc.SetRenderTargetFormats(ResourceFormat::R32_UINT, ResourceFormat::D32_FLOAT, 1);
 	psoDesc.SetName("Visibility Rendering");
-	m_pCullAndDrawPhase1PSO = pDevice->CreatePipeline(psoDesc);
+	m_pCullAndDrawPSO[0] = pDevice->CreatePipeline(psoDesc);
 	psoDesc.SetAmplificationShader("MeshletCull.hlsl", "CullAndDrawMeshletsAS", { "OCCLUSION_FIRST_PASS=0" });
-	m_pCullAndDrawPhase2PSO = pDevice->CreatePipeline(psoDesc);
+	m_pCullAndDrawPSO[1] = pDevice->CreatePipeline(psoDesc);
 
-	m_pBuildCullArgsPhase2PSO =	pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "BuildInstanceCullIndirectArgs");
-	m_pCullInstancesPhase2PSO =	pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "CullInstancesCS", { "OCCLUSION_FIRST_PASS=0" });
-	m_pCullInstancesPhase1PSO =	pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "CullInstancesCS", { "OCCLUSION_FIRST_PASS=1" });
-	m_pBuildDrawArgsPhase1PSO =	pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "BuildMeshShaderIndirectArgs", { "OCCLUSION_FIRST_PASS=1" });
-	m_pBuildDrawArgsPhase2PSO =	pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "BuildMeshShaderIndirectArgs", { "OCCLUSION_FIRST_PASS=0" });
+	m_pBuildCullArgsPSO =		pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "BuildInstanceCullIndirectArgs");
+	m_pCullInstancesPSO[0] =	pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "CullInstancesCS", {"OCCLUSION_FIRST_PASS=1"});
+	m_pCullInstancesPSO[1] =	pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "CullInstancesCS", {"OCCLUSION_FIRST_PASS=0"});
+	m_pBuildDrawArgsPSO[0] =	pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "BuildMeshShaderIndirectArgs", {"OCCLUSION_FIRST_PASS=1"});
+	m_pBuildDrawArgsPSO[1] =	pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "BuildMeshShaderIndirectArgs", {"OCCLUSION_FIRST_PASS=0"});
 	m_pPrintStatsPSO =			pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "PrintStatsCS");
 
 	pDevice->GetShaderManager()->AddIncludeDir("External/SPD/");
@@ -93,7 +93,7 @@ void VisibilityBuffer::Render(RGGraph& graph, const SceneView* pView, RGTexture*
 			.Bind([=](CommandContext& context)
 				{
 					context.SetComputeRootSignature(m_pCommonRS);
-					context.SetPipelineState(m_pCullInstancesPhase1PSO);
+					context.SetPipelineState(m_pCullInstancesPSO[0]);
 
 					context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
 					context.BindResources(2, {
@@ -113,7 +113,7 @@ void VisibilityBuffer::Render(RGGraph& graph, const SceneView* pView, RGTexture*
 			.Bind([=](CommandContext& context)
 				{
 					context.SetComputeRootSignature(m_pCommonRS);
-					context.SetPipelineState(m_pBuildDrawArgsPhase1PSO);
+					context.SetPipelineState(m_pBuildDrawArgsPSO[0]);
 
 					context.BindResources(2, pDispatchMeshBuffer->Get()->GetUAV());
 					context.BindResources(3, pMeshletCandidatesCounter->Get()->GetSRV(), 1);
@@ -129,7 +129,7 @@ void VisibilityBuffer::Render(RGGraph& graph, const SceneView* pView, RGTexture*
 			.Bind([=](CommandContext& context)
 				{
 					context.SetGraphicsRootSignature(m_pCommonRS);
-					context.SetPipelineState(m_pCullAndDrawPhase1PSO);
+					context.SetPipelineState(m_pCullAndDrawPSO[0]);
 
 					context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
 					context.BindResources(2, {
@@ -154,7 +154,7 @@ void VisibilityBuffer::Render(RGGraph& graph, const SceneView* pView, RGTexture*
 			.Bind([=](CommandContext& context)
 				{
 					context.SetComputeRootSignature(m_pCommonRS);
-					context.SetPipelineState(m_pBuildCullArgsPhase2PSO);
+					context.SetPipelineState(m_pBuildCullArgsPSO);
 
 					context.BindResources(2, pDispatchBuffer->Get()->GetUAV());
 					context.BindResources(3, pOccludedInstancesCounter->Get()->GetSRV(), 2);
@@ -168,7 +168,7 @@ void VisibilityBuffer::Render(RGGraph& graph, const SceneView* pView, RGTexture*
 			.Bind([=](CommandContext& context)
 				{
 					context.SetComputeRootSignature(m_pCommonRS);
-					context.SetPipelineState(m_pCullInstancesPhase2PSO);
+					context.SetPipelineState(m_pCullInstancesPSO[1]);
 
 					context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
 					context.BindResources(2, {
@@ -193,7 +193,7 @@ void VisibilityBuffer::Render(RGGraph& graph, const SceneView* pView, RGTexture*
 			.Bind([=](CommandContext& context)
 				{
 					context.SetComputeRootSignature(m_pCommonRS);
-					context.SetPipelineState(m_pBuildDrawArgsPhase2PSO);
+					context.SetPipelineState(m_pBuildDrawArgsPSO[1]);
 
 					context.BindResources(2, pDispatchMeshBuffer->Get()->GetUAV());
 					context.BindResources(3, pMeshletCandidatesCounter->Get()->GetSRV(), 1);
@@ -209,7 +209,7 @@ void VisibilityBuffer::Render(RGGraph& graph, const SceneView* pView, RGTexture*
 			.Bind([=](CommandContext& context)
 				{
 					context.SetGraphicsRootSignature(m_pCommonRS);
-					context.SetPipelineState(m_pCullAndDrawPhase2PSO);
+					context.SetPipelineState(m_pCullAndDrawPSO[1]);
 
 					context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
 					context.BindResources(2, {

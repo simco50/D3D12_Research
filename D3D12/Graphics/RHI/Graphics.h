@@ -82,7 +82,7 @@ public:
 	Texture* GetBackBuffer() const { return m_Backbuffers[m_CurrentImage]; }
 	Texture* GetBackBuffer(uint32 index) const { return m_Backbuffers[index]; }
 	uint32 GetBackbufferIndex() const { return m_CurrentImage; }
-	DXGI_FORMAT GetFormat() const { return m_Format; }
+	ResourceFormat GetFormat() const { return m_Format; }
 	bool GetVSync() const { return m_Vsync; }
 
 private:
@@ -92,7 +92,7 @@ private:
 	RefCountPtr<Fence> m_pPresentFence;
 	std::array<RefCountPtr<Texture>, NUM_FRAMES> m_Backbuffers;
 	RefCountPtr<IDXGISwapChain4> m_pSwapchain;
-	DXGI_FORMAT m_Format;
+	ResourceFormat m_Format;
 	uint32 m_CurrentImage;
 	uint32 m_Width = 0;
 	uint32 m_Height = 0;
