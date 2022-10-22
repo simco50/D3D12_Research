@@ -1770,7 +1770,7 @@ void DemoApp::UpdateImGui()
 		ImGui::End();
 	}
 
-	console.Update(ImVec2(300, (float)pViewport->Size.x), ImVec2((float)pViewport->Size.x - 300 * 2, 250));
+	console.Update();
 
 	if (showImguiDemo)
 	{

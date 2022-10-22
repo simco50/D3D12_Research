@@ -13,6 +13,11 @@
 #include "ffx_a.h"
 #include "ffx_spd.h"
 
+namespace Tweakables
+{
+	ConsoleVariable CullDebugStats("r.CullingStats", false);
+}
+
 VisibilityBuffer::VisibilityBuffer(GraphicsDevice* pDevice)
 {
 	m_pCommonRS = new RootSignature(pDevice);
@@ -21,10 +26,6 @@ VisibilityBuffer::VisibilityBuffer(GraphicsDevice* pDevice)
 	m_pCommonRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 14);
 	m_pCommonRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 6);
 	m_pCommonRS->Finalize("Common");
-
-	m_pCullInstancesPhase1PSO = pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "CullInstancesCS", { "OCCLUSION_FIRST_PASS=1" });
-	m_pBuildDrawArgsPhase1PSO = pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "BuildMeshShaderIndirectArgs", { "OCCLUSION_FIRST_PASS=1" });
-	m_pBuildDrawArgsPhase2PSO = pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "BuildMeshShaderIndirectArgs", { "OCCLUSION_FIRST_PASS=0" });
 
 	PipelineStateInitializer psoDesc;
 	psoDesc.SetRootSignature(m_pCommonRS);
@@ -35,18 +36,19 @@ VisibilityBuffer::VisibilityBuffer(GraphicsDevice* pDevice)
 	psoDesc.SetRenderTargetFormats(ResourceFormat::R32_UINT, ResourceFormat::D32_FLOAT, 1);
 	psoDesc.SetName("Visibility Rendering");
 	m_pCullAndDrawPhase1PSO = pDevice->CreatePipeline(psoDesc);
-
 	psoDesc.SetAmplificationShader("MeshletCull.hlsl", "CullAndDrawMeshletsAS", { "OCCLUSION_FIRST_PASS=0" });
 	m_pCullAndDrawPhase2PSO = pDevice->CreatePipeline(psoDesc);
 
-	m_pBuildCullArgsPhase2PSO = pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "BuildInstanceCullIndirectArgs");
-	m_pCullInstancesPhase2PSO = pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "CullInstancesCS", { "OCCLUSION_FIRST_PASS=0" });
-
-	m_pPrintStatsPSO = pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "PrintStatsCS");
+	m_pBuildCullArgsPhase2PSO =	pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "BuildInstanceCullIndirectArgs");
+	m_pCullInstancesPhase2PSO =	pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "CullInstancesCS", { "OCCLUSION_FIRST_PASS=0" });
+	m_pCullInstancesPhase1PSO =	pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "CullInstancesCS", { "OCCLUSION_FIRST_PASS=1" });
+	m_pBuildDrawArgsPhase1PSO =	pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "BuildMeshShaderIndirectArgs", { "OCCLUSION_FIRST_PASS=1" });
+	m_pBuildDrawArgsPhase2PSO =	pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "BuildMeshShaderIndirectArgs", { "OCCLUSION_FIRST_PASS=0" });
+	m_pPrintStatsPSO =			pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "PrintStatsCS");
 
 	pDevice->GetShaderManager()->AddIncludeDir("External/SPD/");
-	m_pHZBInitializePSO = pDevice->CreateComputePipeline(m_pCommonRS, "HZB.hlsl", "HZBInitCS");
-	m_pHZBCreatePSO = pDevice->CreateComputePipeline(m_pCommonRS, "HZB.hlsl", "HZBCreateCS");
+	m_pHZBInitializePSO =		pDevice->CreateComputePipeline(m_pCommonRS, "HZB.hlsl", "HZBInitCS");
+	m_pHZBCreatePSO =			pDevice->CreateComputePipeline(m_pCommonRS, "HZB.hlsl", "HZBCreateCS");
 }
 
 void VisibilityBuffer::Render(RGGraph& graph, const SceneView* pView, RGTexture* pDepth, RGTexture** pOutVisibilityBuffer, RGTexture** pOutHZB, RefCountPtr<Texture>* pHZBExport)
@@ -223,22 +225,23 @@ void VisibilityBuffer::Render(RGGraph& graph, const SceneView* pView, RGTexture*
 		BuildHZB(graph, pDepth, pHZB);
 	}
 
-#if 0
-	graph.AddPass("Print Stats", RGPassFlag::Compute)
-		.Read({ pOccludedInstancesCounter, pMeshletCandidatesCounter })
-		.Bind([=](CommandContext& context)
-			{
-				context.SetComputeRootSignature(m_pCommonRS);
-				context.SetPipelineState(m_pPrintStatsPSO);
+	if (Tweakables::CullDebugStats)
+	{
+		graph.AddPass("Print Stats", RGPassFlag::Compute)
+			.Read({ pOccludedInstancesCounter, pMeshletCandidatesCounter })
+			.Bind([=](CommandContext& context)
+				{
+					context.SetComputeRootSignature(m_pCommonRS);
+					context.SetPipelineState(m_pPrintStatsPSO);
 
-				context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
-				context.BindResources(3, {
-					pMeshletCandidatesCounter->Get()->GetSRV(),
-					pOccludedInstancesCounter->Get()->GetSRV(),
-					}, 1);
-				context.Dispatch(1);
-			});
-#endif
+					context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
+					context.BindResources(3, {
+						pMeshletCandidatesCounter->Get()->GetSRV(),
+						pOccludedInstancesCounter->Get()->GetSRV(),
+						}, 1);
+					context.Dispatch(1);
+				});
+	}
 
 	*pOutVisibilityBuffer = pVisibilityBuffer;
 	*pOutHZB = pHZB;

@@ -270,7 +270,7 @@ private:
 class ImGuiConsole
 {
 public:
-	void Update(const ImVec2& position, const ImVec2& size);
+	void Update();
 	bool& IsVisible() { return m_ShowConsole; }
 
 private:
