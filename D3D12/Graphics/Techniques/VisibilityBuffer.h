@@ -20,6 +20,7 @@ private:
 	RefCountPtr<RootSignature> m_pCommonRS;
 	RefCountPtr<PipelineState> m_pCullInstancesPhase1PSO;
 	RefCountPtr<PipelineState> m_pBuildDrawArgsPhase1PSO;
+	RefCountPtr<PipelineState> m_pBuildDrawArgsPhase2PSO;
 	RefCountPtr<PipelineState> m_pCullAndDrawPhase1PSO;
 	RefCountPtr<PipelineState> m_pBuildCullArgsPhase2PSO;
 	RefCountPtr<PipelineState> m_pCullInstancesPhase2PSO;

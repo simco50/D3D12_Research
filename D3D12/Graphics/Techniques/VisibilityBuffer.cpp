@@ -24,6 +24,7 @@ VisibilityBuffer::VisibilityBuffer(GraphicsDevice* pDevice)
 
 	m_pCullInstancesPhase1PSO = pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "CullInstancesCS", { "OCCLUSION_FIRST_PASS=1" });
 	m_pBuildDrawArgsPhase1PSO = pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "BuildMeshShaderIndirectArgs", { "OCCLUSION_FIRST_PASS=1" });
+	m_pBuildDrawArgsPhase2PSO = pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "BuildMeshShaderIndirectArgs", { "OCCLUSION_FIRST_PASS=0" });
 
 	PipelineStateInitializer psoDesc;
 	psoDesc.SetRootSignature(m_pCommonRS);
@@ -67,24 +68,20 @@ void VisibilityBuffer::Render(RGGraph& graph, const SceneView* pView, RGTexture*
 	check(pView->Batches.size() <= maxNumInstances);
 	check(numMeshlets <= maxNumMeshlets);
 
-	const BufferDesc counterDesc = BufferDesc::CreateTyped(1, ResourceFormat::R32_UINT);
 	RGBuffer* pMeshletCandidates =			graph.CreateBuffer("GPURender.MeshletCandidates", BufferDesc::CreateStructured(maxNumMeshlets, sizeof(uint32) * 2));
-	RGBuffer* pMeshletCandidatesCounter =	graph.CreateBuffer("GPURender.MeshletCandidates.Counter", counterDesc);
-	RGBuffer* pOccludedMeshlets =			graph.CreateBuffer("GPURender.OccludedMeshlets", BufferDesc::CreateStructured(maxNumMeshlets, sizeof(uint32) * 2));
-	RGBuffer* pOccludedMeshletsCounter =	graph.CreateBuffer("GPURender.OccludedMeshlets.Counter", counterDesc);
+	RGBuffer* pMeshletCandidatesCounter =	graph.CreateBuffer("GPURender.MeshletCandidates.Counter", BufferDesc::CreateTyped(3, ResourceFormat::R32_UINT));
 	RGBuffer* pOccludedInstances =			graph.CreateBuffer("GPURender.OccludedInstances", BufferDesc::CreateStructured(maxNumInstances, sizeof(uint32)));
-	RGBuffer* pOccludedInstancesCounter =	graph.CreateBuffer("GPURender.OccludedInstances.Counter", counterDesc);
+	RGBuffer* pOccludedInstancesCounter =	graph.CreateBuffer("GPURender.OccludedInstances.Counter", BufferDesc::CreateTyped(1, ResourceFormat::R32_UINT));
 
 	{
 		RG_GRAPH_SCOPE("Phase 1", graph);
 
 		graph.AddPass("Clear Counters", RGPassFlag::Compute)
-			.Write({ pMeshletCandidatesCounter, pOccludedInstancesCounter, pOccludedMeshletsCounter })
+			.Write({ pMeshletCandidatesCounter, pOccludedInstancesCounter })
 			.Bind([=](CommandContext& context)
 				{
 					context.ClearUavUInt(pMeshletCandidatesCounter->Get());
 					context.ClearUavUInt(pOccludedInstancesCounter->Get());
-					context.ClearUavUInt(pOccludedMeshletsCounter->Get());
 					context.InsertUavBarrier();
 				});
 
@@ -103,7 +100,7 @@ void VisibilityBuffer::Render(RGGraph& graph, const SceneView* pView, RGTexture*
 						pOccludedInstances->Get()->GetUAV(),
 						pOccludedInstancesCounter->Get()->GetUAV(),
 						});
-					context.BindResources(3, pHZB->Get()->GetSRV(), 2);
+					context.BindResources(3, pHZB->Get()->GetSRV(), 3);
 					context.Dispatch(ComputeUtils::GetNumThreadGroups((uint32)pView->Batches.size(), 64));
 				});
 
@@ -122,9 +119,9 @@ void VisibilityBuffer::Render(RGGraph& graph, const SceneView* pView, RGTexture*
 				});
 
 		graph.AddPass("Cull and Draw Meshlets", RGPassFlag::Raster)
-			.Read({ pMeshletCandidates, pMeshletCandidatesCounter, pDispatchMeshBuffer })
+			.Read({ pDispatchMeshBuffer })
 			.Read({ pHZB })
-			.Write({ pOccludedMeshlets, pOccludedMeshletsCounter })
+			.Write({ pMeshletCandidates, pMeshletCandidatesCounter })
 			.DepthStencil(pDepth, RenderTargetLoadAction::Clear, true)
 			.RenderTarget(pVisibilityBuffer, RenderTargetLoadAction::DontCare)
 			.Bind([=](CommandContext& context)
@@ -134,20 +131,17 @@ void VisibilityBuffer::Render(RGGraph& graph, const SceneView* pView, RGTexture*
 
 					context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
 					context.BindResources(2, {
-						pOccludedMeshlets->Get()->GetUAV(),
-						pOccludedMeshletsCounter->Get()->GetUAV(),
-						}, 4);
-					context.BindResources(3, {
-						pMeshletCandidates->Get()->GetSRV(),
-						pMeshletCandidatesCounter->Get()->GetSRV(),
-						pHZB->Get()->GetSRV(),
+						pMeshletCandidates->Get()->GetUAV(),
+						pMeshletCandidatesCounter->Get()->GetUAV(),
 						});
+					context.BindResources(3, {
+						pHZB->Get()->GetSRV(),
+						}, 3);
 					context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchMeshSignature, 1, pDispatchMeshBuffer->Get());
 				});
 
 		BuildHZB(graph, pDepth, pHZB);
 	}
-
 	{
 		RG_GRAPH_SCOPE("Phase 2", graph);
 
@@ -161,14 +155,14 @@ void VisibilityBuffer::Render(RGGraph& graph, const SceneView* pView, RGTexture*
 					context.SetPipelineState(m_pBuildCullArgsPhase2PSO);
 
 					context.BindResources(2, pDispatchBuffer->Get()->GetUAV());
-					context.BindResources(3, pOccludedInstancesCounter->Get()->GetSRV(), 1);
+					context.BindResources(3, pOccludedInstancesCounter->Get()->GetSRV(), 2);
 					context.Dispatch(1);
 				});
 
 		graph.AddPass("Cull Instances", RGPassFlag::Compute)
 			.Read(pHZB)
 			.Read({ pOccludedInstances, pOccludedInstancesCounter, pDispatchBuffer })
-			.Write({ pOccludedMeshlets, pOccludedMeshletsCounter })
+			.Write({ pMeshletCandidates, pMeshletCandidatesCounter })
 			.Bind([=](CommandContext& context)
 				{
 					context.SetComputeRootSignature(m_pCommonRS);
@@ -176,11 +170,12 @@ void VisibilityBuffer::Render(RGGraph& graph, const SceneView* pView, RGTexture*
 
 					context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
 					context.BindResources(2, {
-						pOccludedMeshlets->Get()->GetUAV(),
-						pOccludedMeshletsCounter->Get()->GetUAV(),
+						pMeshletCandidates->Get()->GetUAV(),
+						pMeshletCandidatesCounter->Get()->GetUAV(),
 						});
 					context.BindResources(3, {
 						pOccludedInstances->Get()->GetSRV(),
+						pOccludedInstancesCounter->Get()->GetSRV(),
 						pOccludedInstancesCounter->Get()->GetSRV(),
 						pHZB->Get()->GetSRV(),
 						});
@@ -191,21 +186,22 @@ void VisibilityBuffer::Render(RGGraph& graph, const SceneView* pView, RGTexture*
 
 		RGBuffer* pDispatchMeshBuffer = graph.CreateBuffer("GPURender.DispatchMeshArgs", BufferDesc::CreateIndirectArguments<D3D12_DISPATCH_MESH_ARGUMENTS>(1));
 		graph.AddPass("Build DispatchMesh Arguments", RGPassFlag::Compute)
-			.Read(pOccludedMeshletsCounter)
+			.Read(pMeshletCandidatesCounter)
 			.Write(pDispatchMeshBuffer)
 			.Bind([=](CommandContext& context)
 				{
 					context.SetComputeRootSignature(m_pCommonRS);
-					context.SetPipelineState(m_pBuildDrawArgsPhase1PSO);
+					context.SetPipelineState(m_pBuildDrawArgsPhase2PSO);
 
 					context.BindResources(2, pDispatchMeshBuffer->Get()->GetUAV());
-					context.BindResources(3, pOccludedMeshletsCounter->Get()->GetSRV(), 1);
+					context.BindResources(3, pMeshletCandidatesCounter->Get()->GetSRV(), 1);
 					context.Dispatch(1);
 				});
 
 		graph.AddPass("Cull and Draw Meshlets", RGPassFlag::Raster)
 			.Read(pHZB)
-			.Read({ pOccludedMeshlets, pOccludedMeshletsCounter, pDispatchMeshBuffer })
+			.Write({ pMeshletCandidates, pMeshletCandidatesCounter })
+			.Read({ pDispatchMeshBuffer })
 			.DepthStencil(pDepth, RenderTargetLoadAction::Load, true)
 			.RenderTarget(pVisibilityBuffer, RenderTargetLoadAction::Load)
 			.Bind([=](CommandContext& context)
@@ -214,11 +210,13 @@ void VisibilityBuffer::Render(RGGraph& graph, const SceneView* pView, RGTexture*
 					context.SetPipelineState(m_pCullAndDrawPhase2PSO);
 
 					context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
-					context.BindResources(3, {
-						pOccludedMeshlets->Get()->GetSRV(),
-						pOccludedMeshletsCounter->Get()->GetSRV(),
-						pHZB->Get()->GetSRV(),
+					context.BindResources(2, {
+						pMeshletCandidates->Get()->GetUAV(),
+						pMeshletCandidatesCounter->Get()->GetUAV(),
 						});
+					context.BindResources(3, {
+						pHZB->Get()->GetSRV(),
+						}, 3);
 					context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchMeshSignature, 1, pDispatchMeshBuffer->Get());
 				});
 
@@ -227,21 +225,17 @@ void VisibilityBuffer::Render(RGGraph& graph, const SceneView* pView, RGTexture*
 
 #if 0
 	graph.AddPass("Print Stats", RGPassFlag::Compute)
-		.Read({ pOccludedInstancesCounter, pOccludedMeshletsCounter, pMeshletCandidatesCounter })
+		.Read({ pOccludedInstancesCounter, pMeshletCandidatesCounter })
 		.Bind([=](CommandContext& context)
 			{
 				context.SetComputeRootSignature(m_pCommonRS);
 				context.SetPipelineState(m_pPrintStatsPSO);
 
 				context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
-				context.BindResources(2, {
-					pMeshletCandidatesCounter->Get()->GetUAV(),
-					pMeshletCandidatesCounter->Get()->GetUAV(),
-					pOccludedInstancesCounter->Get()->GetUAV(),
-					pOccludedInstancesCounter->Get()->GetUAV(),
-					pOccludedMeshletsCounter->Get()->GetUAV(),
-					pOccludedMeshletsCounter->Get()->GetUAV(),
-					});
+				context.BindResources(3, {
+					pMeshletCandidatesCounter->Get()->GetSRV(),
+					pOccludedInstancesCounter->Get()->GetSRV(),
+					}, 1);
 				context.Dispatch(1);
 			});
 #endif
