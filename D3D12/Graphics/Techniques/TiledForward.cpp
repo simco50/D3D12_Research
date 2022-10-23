@@ -59,14 +59,6 @@ TiledForward::TiledForward(GraphicsDevice* pDevice)
 	m_pVisualizeLightsPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "VisualizeLightCount.hlsl", "DebugLightDensityCS", { "TILED_FORWARD" });
 }
 
-void TiledForward::Execute(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures)
-{
-	LightCull2DData lightCullData;
-	ComputeLightCulling(graph, pView, sceneTextures, lightCullData);
-
-	RenderBasePass(graph, pView, sceneTextures, lightCullData, nullptr);
-}
-
 void TiledForward::ComputeLightCulling(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures, LightCull2DData& resources)
 {
 	int frustumCountX = Math::DivideAndRoundUp(pView->GetDimensions().x, FORWARD_PLUS_BLOCK_SIZE);
@@ -116,7 +108,7 @@ void TiledForward::ComputeLightCulling(RGGraph& graph, const SceneView* pView, S
 void TiledForward::RenderBasePass(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures, const LightCull2DData& lightCullData, RGTexture* pFogTexture)
 {
 	graph.AddPass("Forward Pass", RGPassFlag::Raster)
-		.Read({ sceneTextures.pAmbientOcclusion, sceneTextures.pPreviousColor })
+		.Read({ sceneTextures.pAmbientOcclusion, sceneTextures.pPreviousColor, pFogTexture })
 		.Read({ lightCullData.pLightGridOpaque, lightCullData.pLightGridTransparant, lightCullData.pLightIndexListOpaque, lightCullData.pLightIndexListTransparant })
 		.DepthStencil(sceneTextures.pDepth, RenderTargetLoadAction::Load, false)
 		.RenderTarget(sceneTextures.pColorTarget, RenderTargetLoadAction::DontCare)
@@ -134,7 +126,7 @@ void TiledForward::RenderBasePass(RGGraph& graph, const SceneView* pView, SceneT
 						sceneTextures.pAmbientOcclusion->Get()->GetSRV(),
 						sceneTextures.pDepth->Get()->GetSRV(),
 						sceneTextures.pPreviousColor->Get()->GetSRV(),
-						GraphicsCommon::GetDefaultTexture(DefaultTexture::Black3D)->GetSRV(),
+						pFogTexture->Get()->GetSRV(),
 						lightCullData.pLightGridOpaque->Get()->GetSRV(),
 						lightCullData.pLightIndexListOpaque->Get()->GetSRV(),
 						});
@@ -157,7 +149,7 @@ void TiledForward::RenderBasePass(RGGraph& graph, const SceneView* pView, SceneT
 						sceneTextures.pAmbientOcclusion->Get()->GetSRV(),
 						sceneTextures.pDepth->Get()->GetSRV(),
 						sceneTextures.pPreviousColor->Get()->GetSRV(),
-						GraphicsCommon::GetDefaultTexture(DefaultTexture::Black3D)->GetSRV(),
+						pFogTexture->Get()->GetSRV(),
 						lightCullData.pLightGridTransparant->Get()->GetSRV(),
 						lightCullData.pLightIndexListTransparant->Get()->GetSRV(),
 						});
@@ -169,17 +161,12 @@ void TiledForward::RenderBasePass(RGGraph& graph, const SceneView* pView, SceneT
 					}
 				}
 			});
-
-	LightCull2DData& blackboardData = graph.Blackboard.Add<LightCull2DData>();
-	blackboardData.pLightGridOpaque = lightCullData.pLightGridOpaque;
 }
 
-void TiledForward::VisualizeLightDensity(RGGraph& graph, GraphicsDevice* pDevice, const SceneView* pView, SceneTextures& sceneTextures)
+void TiledForward::VisualizeLightDensity(RGGraph& graph, GraphicsDevice* pDevice, const SceneView* pView, SceneTextures& sceneTextures, const LightCull2DData& lightCullData)
 {
 	RGTexture* pVisualizationTarget = graph.CreateTexture("Scene Color", sceneTextures.pColorTarget->GetDesc());
-
-	const LightCull2DData& blackboardData = graph.Blackboard.Get<LightCull2DData>();
-	RGTexture* pLightGridOpaque = blackboardData.pLightGridOpaque;
+	RGTexture* pLightGridOpaque = lightCullData.pLightGridOpaque;
 
 	graph.AddPass("Visualize Light Density", RGPassFlag::Compute)
 		.Read({ sceneTextures.pDepth, sceneTextures.pColorTarget, pLightGridOpaque })

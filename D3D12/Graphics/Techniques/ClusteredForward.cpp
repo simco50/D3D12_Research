@@ -19,19 +19,6 @@ static constexpr int gMaxLightsPerCluster = 32;
 static constexpr int gVolumetricFroxelTexelSize = 8;
 static constexpr int gVolumetricNumZSlices = 128;
 
-struct CullBlackboardData
-{
-	RGBuffer* pLightGrid = nullptr;
-	Vector2 LightGridParams;
-};
-RG_BLACKBOARD_DATA(CullBlackboardData);
-
-namespace Tweakables
-{
-	extern ConsoleVariable<bool> g_VolumetricFog;
-}
-bool g_VisualizeClusters = false;
-
 ClusteredForward::ClusteredForward(GraphicsDevice* pDevice)
 	: m_pDevice(pDevice)
 {
@@ -169,29 +156,7 @@ ClusteredForward::~ClusteredForward()
 {
 }
 
-void ClusteredForward::Execute(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures)
-{
-	ComputeLightCulling(graph, pView, m_LightCullData);
-
-	RGTexture* pFogVolume = nullptr;
-	if (Tweakables::g_VolumetricFog)
-	{
-		pFogVolume = RenderVolumetricFog(graph, pView, m_LightCullData, m_VolumetricFogData);
-	}
-
-	RenderBasePass(graph, pView, sceneTextures, m_LightCullData, pFogVolume);
-
-	if (g_VisualizeClusters)
-	{
-		VisualizeClusters(graph, pView, sceneTextures, m_LightCullData);
-	}
-	else
-	{
-		m_LightCullData.DirtyDebugData = true;
-	}
-}
-
-void ClusteredForward::ComputeLightCulling(RGGraph& graph, const SceneView* pView, LightCullData3D& cullData)
+void ClusteredForward::ComputeLightCulling(RGGraph& graph, const SceneView* pView, LightCull3DData& cullData)
 {
 	RG_GRAPH_SCOPE("Light Culling", graph);
 
@@ -279,13 +244,9 @@ void ClusteredForward::ComputeLightCulling(RGGraph& graph, const SceneView* pVie
 						cullData.ClusterCount.z, 4)
 				);
 			});
-
-	CullBlackboardData& blackboardData = graph.Blackboard.Add<CullBlackboardData>();
-	blackboardData.pLightGrid = cullData.pLightGrid;
-	blackboardData.LightGridParams = cullData.LightGridParams;
 }
 
-void ClusteredForward::VisualizeClusters(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures, LightCullData3D& cullData)
+void ClusteredForward::VisualizeClusters(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures, LightCull3DData& cullData)
 {
 	uint32 totalClusterCount = cullData.ClusterCount.x * cullData.ClusterCount.y * cullData.ClusterCount.z;
 	RGBuffer* pDebugLightGrid = RGUtils::CreatePersistentBuffer(graph, "Debug Light Grid", BufferDesc::CreateStructured(2 * totalClusterCount, sizeof(uint32)), &cullData.pDebugLightGrid, true);
@@ -319,7 +280,7 @@ void ClusteredForward::VisualizeClusters(RGGraph& graph, const SceneView* pView,
 			});
 }
 
-RGTexture* ClusteredForward::RenderVolumetricFog(RGGraph& graph, const SceneView* pView, const LightCullData3D& lightCullData, VolumetricFogData& fogData)
+RGTexture* ClusteredForward::RenderVolumetricFog(RGGraph& graph, const SceneView* pView, const LightCull3DData& lightCullData, VolumetricFogData& fogData)
 {
 	RG_GRAPH_SCOPE("Volumetric Lighting", graph);
 
@@ -407,7 +368,7 @@ RGTexture* ClusteredForward::RenderVolumetricFog(RGGraph& graph, const SceneView
 	return pFinalVolumeFog;
 }
 
-void ClusteredForward::RenderBasePass(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures, const LightCullData3D& lightCullData, RGTexture* pFogTexture)
+void ClusteredForward::RenderBasePass(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures, const LightCull3DData& lightCullData, RGTexture* pFogTexture)
 {
 	static bool useMeshShader = false;
 	if (ImGui::Begin("Parameters"))
@@ -421,11 +382,6 @@ void ClusteredForward::RenderBasePass(RGGraph& graph, const SceneView* pView, Sc
 		}
 	}
 	ImGui::End();
-
-	if (!pFogTexture)
-	{
-		pFogTexture = graph.ImportTexture(GraphicsCommon::GetDefaultTexture(DefaultTexture::Black3D));
-	}
 
 	graph.AddPass("Base Pass", RGPassFlag::Raster)
 		.Read({ sceneTextures.pAmbientOcclusion, sceneTextures.pPreviousColor, pFogTexture, sceneTextures.pDepth })
@@ -481,13 +437,13 @@ void ClusteredForward::RenderBasePass(RGGraph& graph, const SceneView* pView, Sc
 			});
 }
 
-void ClusteredForward::VisualizeLightDensity(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures)
+void ClusteredForward::VisualizeLightDensity(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures, const LightCull3DData& lightCullData)
 {
 	RGTexture* pVisualizationTarget = graph.CreateTexture("Scene Color", sceneTextures.pColorTarget->GetDesc());
 
-	const CullBlackboardData& blackboardData = graph.Blackboard.Get<CullBlackboardData>();
-	RGBuffer* pLightGrid = blackboardData.pLightGrid;
-	Vector2 lightGridParams = blackboardData.LightGridParams;
+	RGBuffer* pLightGrid = lightCullData.pLightGrid;
+	Vector2 lightGridParams = lightCullData.LightGridParams;
+	Vector3i clusterCount = lightCullData.ClusterCount;
 
 	graph.AddPass("Visualize Light Density", RGPassFlag::Compute)
 		.Read({ sceneTextures.pDepth, sceneTextures.pColorTarget, pLightGrid })
@@ -503,7 +459,7 @@ void ClusteredForward::VisualizeLightDensity(RGGraph& graph, const SceneView* pV
 					Vector2 LightGridParams;
 				} constantBuffer;
 
-				constantBuffer.ClusterDimensions = Vector2i(m_LightCullData.ClusterCount.x, m_LightCullData.ClusterCount.y);
+				constantBuffer.ClusterDimensions = Vector2i(clusterCount.x, clusterCount.y);
 				constantBuffer.ClusterSize = Vector2i(gLightClusterTexelSize, gLightClusterTexelSize);
 				constantBuffer.LightGridParams = lightGridParams;
 

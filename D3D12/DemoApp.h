@@ -4,10 +4,10 @@
 #include "Graphics/SceneView.h"
 #include "Graphics/RHI/CommandQueue.h"
 #include "Graphics/Profiler.h"
+#include "Graphics/Techniques/ClusteredForward.h"
+#include "Graphics/Techniques/TiledForward.h"
 
 class Mesh;
-class ClusteredForward;
-class TiledForward;
 class Camera;
 class RTAO;
 class RTReflections;
@@ -80,6 +80,10 @@ private:
 	std::unique_ptr<Clouds> m_pClouds;
 	std::unique_ptr<ShaderDebugRenderer> m_pShaderDebugRenderer;
 	std::unique_ptr<GPUDrivenRenderer> m_pGPUDrivenRenderer;
+
+	LightCull2DData m_LightCull2DData;
+	LightCull3DData m_LightCull3DData;
+	VolumetricFogData m_FogData;
 
 	WindowHandle m_Window = nullptr;
 	std::unique_ptr<Camera> m_pCamera;

@@ -19,7 +19,6 @@ struct LightCull2DData
 	RGBuffer* pLightIndexListOpaque;
 	RGBuffer* pLightIndexListTransparant;
 };
-RG_BLACKBOARD_DATA(LightCull2DData);
 
 class TiledForward
 {
@@ -29,8 +28,7 @@ public:
 	void ComputeLightCulling(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures, LightCull2DData& resources);
 	void RenderBasePass(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures, const LightCull2DData& lightCullData, RGTexture* pFogTexture);
 
-	void Execute(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures);
-	void VisualizeLightDensity(RGGraph& graph, GraphicsDevice* pDevice, const SceneView* pView, SceneTextures& sceneTextures);
+	void VisualizeLightDensity(RGGraph& graph, GraphicsDevice* pDevice, const SceneView* pView, SceneTextures& sceneTextures, const LightCull2DData& lightCullData);
 
 private:
 	GraphicsDevice* m_pDevice;

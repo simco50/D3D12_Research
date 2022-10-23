@@ -842,13 +842,26 @@ void DemoApp::Update()
 				m_pSSAO->Execute(graph, pView, sceneTextures);
 			}
 
+			m_pClusteredForward->ComputeLightCulling(graph, pView, m_LightCull3DData);
+
+			RGTexture* pFog = nullptr;
+			if (Tweakables::g_VolumetricFog)
+			{
+				pFog = m_pClusteredForward->RenderVolumetricFog(graph, pView, m_LightCull3DData, m_FogData);
+			}
+			else
+			{
+				pFog = graph.ImportTexture(GraphicsCommon::GetDefaultTexture(DefaultTexture::Black3D));
+			}
+
 			if (m_RenderPath == RenderPath::Tiled)
 			{
-				m_pTiledForward->Execute(graph, pView, sceneTextures);
+				m_pTiledForward->ComputeLightCulling(graph, pView, sceneTextures, m_LightCull2DData);
+				m_pTiledForward->RenderBasePass(graph, pView, sceneTextures, m_LightCull2DData, pFog);
 			}
 			else if (m_RenderPath == RenderPath::Clustered)
 			{
-				m_pClusteredForward->Execute(graph, pView, sceneTextures);
+				m_pClusteredForward->RenderBasePass(graph, pView, sceneTextures, m_LightCull3DData, pFog);
 			}
 			else if (m_RenderPath == RenderPath::Visibility)
 			{
@@ -1297,11 +1310,11 @@ void DemoApp::Update()
 		{
 			if (m_RenderPath == RenderPath::Clustered)
 			{
-				m_pClusteredForward->VisualizeLightDensity(graph, pView, sceneTextures);
+				m_pClusteredForward->VisualizeLightDensity(graph, pView, sceneTextures, m_LightCull3DData);
 			}
 			else if (m_RenderPath == RenderPath::Tiled)
 			{
-				m_pTiledForward->VisualizeLightDensity(graph, m_pDevice, pView, sceneTextures);
+				m_pTiledForward->VisualizeLightDensity(graph, m_pDevice, pView, sceneTextures, m_LightCull2DData);
 			}
 		}
 
@@ -1924,8 +1937,6 @@ void DemoApp::UpdateImGui()
 			ImGui::Checkbox("TAA", &Tweakables::g_TAA.Get());
 			ImGui::Checkbox("Debug Render Lights", &Tweakables::g_VisualizeLights.Get());
 			ImGui::Checkbox("Visualize Light Density", &Tweakables::g_VisualizeLightDensity.Get());
-			extern bool g_VisualizeClusters;
-			ImGui::Checkbox("Visualize Clusters", &g_VisualizeClusters);
 			ImGui::SliderInt("SSR Samples", &Tweakables::g_SsrSamples.Get(), 0, 32);
 			ImGui::Checkbox("Object Bounds", &Tweakables::g_RenderObjectBounds.Get());
 			ImGui::Checkbox("Render Terrain", &Tweakables::g_RenderTerrain.Get());
