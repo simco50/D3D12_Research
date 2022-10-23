@@ -22,7 +22,7 @@ class RGResourcePool;
 class Clouds;
 class PipelineState;
 class ShaderDebugRenderer;
-class VisibilityBuffer;
+class GPUDrivenRenderer;
 struct SubMesh;
 struct Material;
 
@@ -79,7 +79,7 @@ private:
 	std::unique_ptr<GpuParticles> m_pParticles;
 	std::unique_ptr<Clouds> m_pClouds;
 	std::unique_ptr<ShaderDebugRenderer> m_pShaderDebugRenderer;
-	std::unique_ptr<VisibilityBuffer> m_pVisibilityBuffer;
+	std::unique_ptr<GPUDrivenRenderer> m_pGPUDrivenRenderer;
 
 	WindowHandle m_Window = nullptr;
 	std::unique_ptr<Camera> m_pCamera;

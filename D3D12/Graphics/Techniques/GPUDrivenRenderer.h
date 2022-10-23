@@ -7,10 +7,10 @@ class PipelineState;
 class Texture;
 struct SceneView;
 
-class VisibilityBuffer
+class GPUDrivenRenderer
 {
 public:
-	VisibilityBuffer(GraphicsDevice* pDevice);
+	GPUDrivenRenderer(GraphicsDevice* pDevice);
 	void Render(RGGraph& graph, const SceneView* pView, RGTexture* pDepth, RGTexture** pOutVisibilityBuffer, RGTexture** pOutHZB, RefCountPtr<Texture>* pHZBExport);
 
 	RGTexture* InitHZB(RGGraph& graph, const Vector2i& viewDimensions, RefCountPtr<Texture>* pExportTarget = nullptr) const;

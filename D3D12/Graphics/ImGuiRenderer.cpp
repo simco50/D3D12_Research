@@ -37,9 +37,10 @@ void ApplyImGuiStyle()
 	style.GrabRounding = 1.0f;
 	style.WindowRounding = 0.0f;
 	style.IndentSpacing = 10.0f;
-	style.ScrollbarSize = 16.0f;
-	style.WindowPadding = ImVec2(5, 5);
+	style.ScrollbarSize = 12.0f;
+	style.WindowPadding = ImVec2(2, 2);
 	style.FramePadding = ImVec2(2, 2);
+	style.ItemSpacing = ImVec2(6, 2);
 
 	ImVec4* colors = ImGui::GetStyle().Colors;
 	colors[ImGuiCol_Text] = ImVec4(0.95f, 0.95f, 0.95f, 1.00f);

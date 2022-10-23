@@ -24,7 +24,7 @@
 #include "Graphics/Techniques/CBTTessellation.h"
 #include "Graphics/Techniques/Clouds.h"
 #include "Graphics/Techniques/ShaderDebugRenderer.h"
-#include "Graphics/Techniques/VisibilityBuffer.h"
+#include "Graphics/Techniques/GPUDrivenRenderer.h"
 #include "Graphics/ImGuiRenderer.h"
 #include "Core/TaskQueue.h"
 #include "Core/CommandLine.h"
@@ -190,16 +190,16 @@ DemoApp::DemoApp(WindowHandle window, const Vector2i& windowRect)
 	m_RenderGraphPool = std::make_unique<RGResourcePool>(m_pDevice);
 
 	ImGuiRenderer::Initialize(m_pDevice, window);
-	m_pVisibilityBuffer =	std::make_unique<VisibilityBuffer>(m_pDevice);
-	m_pClouds =				std::make_unique<Clouds>(m_pDevice);
-	m_pClusteredForward =	std::make_unique<ClusteredForward>(m_pDevice);
-	m_pTiledForward =		std::make_unique<TiledForward>(m_pDevice);
-	m_pRTReflections =		std::make_unique<RTReflections>(m_pDevice);
-	m_pRTAO =				std::make_unique<RTAO>(m_pDevice);
-	m_pSSAO =				std::make_unique<SSAO>(m_pDevice);
-	m_pParticles =			std::make_unique<GpuParticles>(m_pDevice);
-	m_pPathTracing =		std::make_unique<PathTracing>(m_pDevice);
-	m_pCBTTessellation =	std::make_unique<CBTTessellation>(m_pDevice);
+	m_pGPUDrivenRenderer = std::make_unique<GPUDrivenRenderer>(m_pDevice);
+	m_pClouds = std::make_unique<Clouds>(m_pDevice);
+	m_pClusteredForward = std::make_unique<ClusteredForward>(m_pDevice);
+	m_pTiledForward = std::make_unique<TiledForward>(m_pDevice);
+	m_pRTReflections = std::make_unique<RTReflections>(m_pDevice);
+	m_pRTAO = std::make_unique<RTAO>(m_pDevice);
+	m_pSSAO = std::make_unique<SSAO>(m_pDevice);
+	m_pParticles = std::make_unique<GpuParticles>(m_pDevice);
+	m_pPathTracing = std::make_unique<PathTracing>(m_pDevice);
+	m_pCBTTessellation = std::make_unique<CBTTessellation>(m_pDevice);
 
 	FontCreateSettings fontSettings;
 	fontSettings.pName = "Verdana";
@@ -223,7 +223,7 @@ DemoApp::DemoApp(WindowHandle window, const Vector2i& windowRect)
 	constexpr RenderPath defaultRenderPath = RenderPath::Clustered;
 	if (m_RenderPath == RenderPath::Visibility)
 		m_RenderPath = m_pDevice->GetCapabilities().SupportsMeshShading() ? m_RenderPath : defaultRenderPath;
-	if(m_RenderPath == RenderPath::PathTracing)
+	if (m_RenderPath == RenderPath::PathTracing)
 		m_RenderPath = m_pDevice->GetCapabilities().SupportsRaytracing() ? m_RenderPath : defaultRenderPath;
 }
 
@@ -245,7 +245,7 @@ void DemoApp::SetupScene(CommandContext& context)
 #if 1
 		m_pCamera->SetPosition(Vector3(-1.3f, 2.4f, -1.5f));
 		m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(Math::PI_DIV_4, Math::PI_DIV_4 * 0.5f, 0));
-		
+
 		LoadMesh("Resources/Scenes/Sponza/Sponza.gltf", context, m_World);
 #elif 1
 		m_pCamera->SetPosition(Vector3(-1.3f, 2.4f, -1.5f));
@@ -531,15 +531,15 @@ void DemoApp::Update()
 		const Vector2i viewDimensions = m_SceneData.GetDimensions();
 
 		SceneTextures sceneTextures;
-		sceneTextures.pPreviousColor =		RGUtils::CreatePersistentTexture(graph, "Color History",	TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, ResourceFormat::RGBA16_FLOAT), &m_pColorHistory, true);
-		sceneTextures.pVisibilityBuffer =	graph.CreateTexture("Visibility Buffer",					TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, ResourceFormat::R32_UINT));
-		sceneTextures.pRoughness =			graph.CreateTexture("Roughness",							TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, ResourceFormat::R8_UNORM));
-		sceneTextures.pColorTarget =		graph.CreateTexture("Color Target",							TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, ResourceFormat::RGBA16_FLOAT));
-		sceneTextures.pAmbientOcclusion =	graph.CreateTexture("Ambient Occlusion",					TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, ResourceFormat::R8_UNORM));
-		sceneTextures.pNormals =			graph.CreateTexture("Normals",								TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, ResourceFormat::RG16_FLOAT));
-		sceneTextures.pVelocity =			graph.CreateTexture("Velocity",								TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, ResourceFormat::RG16_FLOAT));
-		sceneTextures.pDepth =				graph.CreateTexture("Depth Stencil",						TextureDesc::CreateDepth(viewDimensions.x, viewDimensions.y, ResourceFormat::D32_FLOAT, TextureFlag::None, 1, ClearBinding(0.0f, 0)));
-		sceneTextures.pResolvedDepth =		graph.CreateTexture("Resolved Depth",						TextureDesc::CreateDepth(viewDimensions.x, viewDimensions.y, ResourceFormat::D32_FLOAT, TextureFlag::None, 1, ClearBinding(0.0f, 0)));
+		sceneTextures.pPreviousColor = RGUtils::CreatePersistentTexture(graph, "Color History", TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, ResourceFormat::RGBA16_FLOAT), &m_pColorHistory, true);
+		sceneTextures.pVisibilityBuffer = graph.CreateTexture("Visibility Buffer", TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, ResourceFormat::R32_UINT));
+		sceneTextures.pRoughness = graph.CreateTexture("Roughness", TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, ResourceFormat::R8_UNORM));
+		sceneTextures.pColorTarget = graph.CreateTexture("Color Target", TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, ResourceFormat::RGBA16_FLOAT));
+		sceneTextures.pAmbientOcclusion = graph.CreateTexture("Ambient Occlusion", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, ResourceFormat::R8_UNORM));
+		sceneTextures.pNormals = graph.CreateTexture("Normals", TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, ResourceFormat::RG16_FLOAT));
+		sceneTextures.pVelocity = graph.CreateTexture("Velocity", TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, ResourceFormat::RG16_FLOAT));
+		sceneTextures.pDepth = graph.CreateTexture("Depth Stencil", TextureDesc::CreateDepth(viewDimensions.x, viewDimensions.y, ResourceFormat::D32_FLOAT, TextureFlag::None, 1, ClearBinding(0.0f, 0)));
+		sceneTextures.pResolvedDepth = graph.CreateTexture("Resolved Depth", TextureDesc::CreateDepth(viewDimensions.x, viewDimensions.y, ResourceFormat::D32_FLOAT, TextureFlag::None, 1, ClearBinding(0.0f, 0)));
 
 		RGTexture* pSky = graph.CreateTexture("Sky", TextureDesc::CreateCube(64, 64, ResourceFormat::RGBA16_FLOAT));
 		graph.ExportTexture(pSky, &pViewMut->pSky);
@@ -601,7 +601,7 @@ void DemoApp::Update()
 				{
 					if (Tweakables::g_GPUDrivenRender)
 					{
-						m_pVisibilityBuffer->Render(
+						m_pGPUDrivenRenderer->Render(
 							graph,
 							pView,
 							sceneTextures.pDepth,
@@ -1713,7 +1713,7 @@ void DemoApp::UpdateImGui()
 	}
 
 	ImGui::SetNextWindowDockID(dockspace, ImGuiCond_FirstUseEver);
-	ImGui::Begin("Viewport", 0, ImGuiWindowFlags_NoScrollbar);
+	ImGui::Begin(ICON_FA_DESKTOP " Viewport", 0, ImGuiWindowFlags_NoScrollbar);
 	ImVec2 viewportPos = ImGui::GetWindowPos();
 	ImVec2 viewportSize = ImGui::GetWindowSize();
 	float widthDelta = ImGui::GetWindowContentRegionMax().x - ImGui::GetWindowContentRegionMin().x;

@@ -1,5 +1,5 @@
 #include "stdafx.h"
-#include "VisibilityBuffer.h"
+#include "GPUDrivenRenderer.h"
 #include "../RHI/Graphics.h"
 #include "../RHI/PipelineState.h"
 #include "../RHI/RootSignature.h"
@@ -18,7 +18,7 @@ namespace Tweakables
 	ConsoleVariable CullDebugStats("r.CullingStats", false);
 }
 
-VisibilityBuffer::VisibilityBuffer(GraphicsDevice* pDevice)
+GPUDrivenRenderer::GPUDrivenRenderer(GraphicsDevice* pDevice)
 {
 	m_pCommonRS = new RootSignature(pDevice);
 	m_pCommonRS->AddRootConstants(0, 8);
@@ -51,7 +51,7 @@ VisibilityBuffer::VisibilityBuffer(GraphicsDevice* pDevice)
 	m_pHZBCreatePSO =			pDevice->CreateComputePipeline(m_pCommonRS, "HZB.hlsl", "HZBCreateCS");
 }
 
-void VisibilityBuffer::Render(RGGraph& graph, const SceneView* pView, RGTexture* pDepth, RGTexture** pOutVisibilityBuffer, RGTexture** pOutHZB, RefCountPtr<Texture>* pHZBExport)
+void GPUDrivenRenderer::Render(RGGraph& graph, const SceneView* pView, RGTexture* pDepth, RGTexture** pOutVisibilityBuffer, RGTexture** pOutHZB, RefCountPtr<Texture>* pHZBExport)
 {
 	RG_GRAPH_SCOPE("Visibility Buffer (GPU Driven)", graph);
 
@@ -247,7 +247,7 @@ void VisibilityBuffer::Render(RGGraph& graph, const SceneView* pView, RGTexture*
 	*pOutHZB = pHZB;
 }
 
-RGTexture* VisibilityBuffer::InitHZB(RGGraph& graph, const Vector2i& viewDimensions, RefCountPtr<Texture>* pExportTarget) const
+RGTexture* GPUDrivenRenderer::InitHZB(RGGraph& graph, const Vector2i& viewDimensions, RefCountPtr<Texture>* pExportTarget) const
 {
 	RGTexture* pHZB = nullptr;
 	if (pExportTarget && *pExportTarget)
@@ -270,7 +270,7 @@ RGTexture* VisibilityBuffer::InitHZB(RGGraph& graph, const Vector2i& viewDimensi
 	return pHZB;
 }
 
-void VisibilityBuffer::BuildHZB(RGGraph& graph, RGTexture* pDepth, RGTexture* pHZB)
+void GPUDrivenRenderer::BuildHZB(RGGraph& graph, RGTexture* pDepth, RGTexture* pHZB)
 {
 	RG_GRAPH_SCOPE("HZB", graph);
 
