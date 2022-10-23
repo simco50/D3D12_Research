@@ -562,34 +562,36 @@ void DemoApp::Update()
 
 		if (m_RenderPath != RenderPath::PathTracing)
 		{
-			RG_GRAPH_SCOPE("Shadow Depths", graph);
-			for (uint32 i = 0; i < (uint32)pView->ShadowViews.size(); ++i)
 			{
-				RGTexture* pShadowmap = graph.ImportTexture(pView->ShadowViews[i].pDepthTexture);
-				graph.AddPass(Sprintf("View %d", i).c_str(), RGPassFlag::Raster)
-					.DepthStencil(pShadowmap, RenderTargetLoadAction::Clear, true)
-					.Bind([=](CommandContext& context)
-						{
-							context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-							context.SetGraphicsRootSignature(m_pCommonRS);
-
-							// hack - copy the main viewport and then just modify the viewproj
-							SceneView view = *pView;
-							const ShadowView& shadowView = view.ShadowViews[i];
-							view.View.ViewProjection = shadowView.ViewProjection;
-							context.SetRootCBV(1, Renderer::GetViewUniforms(&view, pShadowmap->Get()));
-
+				RG_GRAPH_SCOPE("Shadow Depths", graph);
+				for (uint32 i = 0; i < (uint32)pView->ShadowViews.size(); ++i)
+				{
+					RGTexture* pShadowmap = graph.ImportTexture(pView->ShadowViews[i].pDepthTexture);
+					graph.AddPass(Sprintf("View %d", i).c_str(), RGPassFlag::Raster)
+						.DepthStencil(pShadowmap, RenderTargetLoadAction::Clear, true)
+						.Bind([=](CommandContext& context)
 							{
-								GPU_PROFILE_SCOPE("Opaque", &context);
-								context.SetPipelineState(m_pShadowsOpaquePSO);
-								Renderer::DrawScene(context, &view, shadowView.Visibility, Batch::Blending::Opaque);
-							}
-							{
-								GPU_PROFILE_SCOPE("Masked", &context);
-								context.SetPipelineState(m_pShadowsAlphaMaskPSO);
-								Renderer::DrawScene(context, &view, shadowView.Visibility, Batch::Blending::AlphaMask | Batch::Blending::AlphaBlend);
-							}
-						});
+								context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+								context.SetGraphicsRootSignature(m_pCommonRS);
+
+								// hack - copy the main viewport and then just modify the viewproj
+								SceneView view = *pView;
+								const ShadowView& shadowView = view.ShadowViews[i];
+								view.View.ViewProjection = shadowView.ViewProjection;
+								context.SetRootCBV(1, Renderer::GetViewUniforms(&view, pShadowmap->Get()));
+
+								{
+									GPU_PROFILE_SCOPE("Opaque", &context);
+									context.SetPipelineState(m_pShadowsOpaquePSO);
+									Renderer::DrawScene(context, &view, shadowView.Visibility, Batch::Blending::Opaque);
+								}
+								{
+									GPU_PROFILE_SCOPE("Masked", &context);
+									context.SetPipelineState(m_pShadowsAlphaMaskPSO);
+									Renderer::DrawScene(context, &view, shadowView.Visibility, Batch::Blending::AlphaMask | Batch::Blending::AlphaBlend);
+								}
+							});
+				}
 			}
 
 			const bool doPrepass = true;
@@ -866,6 +868,7 @@ void DemoApp::Update()
 			else if (m_RenderPath == RenderPath::Visibility)
 			{
 				graph.AddPass("Visibility Shading", RGPassFlag::Compute)
+					.Read({ pFog })
 					.Read({ sceneTextures.pVisibilityBuffer, sceneTextures.pDepth, sceneTextures.pAmbientOcclusion, sceneTextures.pPreviousColor })
 					.Write({ sceneTextures.pNormals, sceneTextures.pColorTarget, sceneTextures.pRoughness })
 					.Bind([=](CommandContext& context)
@@ -886,6 +889,7 @@ void DemoApp::Update()
 								sceneTextures.pAmbientOcclusion->Get()->GetSRV(),
 								sceneTextures.pDepth->Get()->GetSRV(),
 								sceneTextures.pPreviousColor->Get()->GetSRV(),
+								pFog->Get()->GetSRV(),
 								});
 							context.Dispatch(ComputeUtils::GetNumThreadGroups(pColorTarget->GetWidth(), 8, pColorTarget->GetHeight(), 8));
 						});

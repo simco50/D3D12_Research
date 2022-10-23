@@ -370,18 +370,7 @@ RGTexture* ClusteredForward::RenderVolumetricFog(RGGraph& graph, const SceneView
 
 void ClusteredForward::RenderBasePass(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures, const LightCull3DData& lightCullData, RGTexture* pFogTexture)
 {
-	static bool useMeshShader = false;
-	if (ImGui::Begin("Parameters"))
-	{
-		if (ImGui::CollapsingHeader("Base Pass"))
-		{
-			if (ImGui::Checkbox("Mesh Shader", &useMeshShader))
-			{
-				useMeshShader = m_pMeshShaderDiffusePSO ? useMeshShader : false;
-			}
-		}
-	}
-	ImGui::End();
+	static constexpr bool useMeshShader = false;
 
 	graph.AddPass("Base Pass", RGPassFlag::Raster)
 		.Read({ sceneTextures.pAmbientOcclusion, sceneTextures.pPreviousColor, pFogTexture, sceneTextures.pDepth })

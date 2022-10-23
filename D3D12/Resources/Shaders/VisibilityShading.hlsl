@@ -8,6 +8,7 @@ Texture2D<uint> tVisibilityTexture : register(t0);
 Texture2D tAO :	register(t1);
 Texture2D tDepth : register(t2);
 Texture2D tPreviousSceneColor :	register(t3);
+Texture3D<float4> tFog : register(t4);
 
 RWTexture2D<float4> uColorTarget : register(u0);
 RWTexture2D<float2> uNormalsTarget : register(u1);
@@ -173,6 +174,10 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 	outRadiance += result.Diffuse + result.Specular;
 	outRadiance += ssr;
 	outRadiance += surface.Emissive;
+
+	float fogSlice = sqrt((positionVS.z - cView.FarZ) / (cView.NearZ - cView.FarZ));
+	float4 scatteringTransmittance = tFog.SampleLevel(sLinearClamp, float3(screenUV, fogSlice), 0);
+	outRadiance = outRadiance * scatteringTransmittance.w + scatteringTransmittance.rgb;
 
 	float reflectivity = saturate(Square(1 - brdfData.Roughness));
 
