@@ -184,6 +184,7 @@ void ImGuiConsole::Update()
 								strncpy_s(m_Input.data(), (int)m_Input.size(), m_Suggestions[i], strlen(m_Suggestions[i]));
 								m_Suggestions.clear();
 								m_AutoCompleted = true;
+								m_FocusConsole = true;
 								break;
 							}
 						}

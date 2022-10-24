@@ -169,6 +169,7 @@ void ClusteredForward::ComputeLightCulling(RGGraph& graph, const SceneView* pVie
 	float f = Math::Max(nearZ, farZ);
 	cullData.LightGridParams.x = (float)gLightClustersNumZ / log(f / n);
 	cullData.LightGridParams.y = ((float)gLightClustersNumZ * log(n)) / log(f / n);
+	cullData.ClusterSize = gLightClusterTexelSize;
 
 	uint32 totalClusterCount = cullData.ClusterCount.x * cullData.ClusterCount.y * cullData.ClusterCount.z;
 

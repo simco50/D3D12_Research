@@ -17,6 +17,7 @@ struct LightCull3DData
 	RGBuffer* pAABBs;
 	RGBuffer* pLightIndexGrid;
 	RGBuffer* pLightGrid;
+	uint32 ClusterSize;
 
 	Vector2 LightGridParams;
 

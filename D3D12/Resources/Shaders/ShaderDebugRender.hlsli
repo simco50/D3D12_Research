@@ -85,15 +85,6 @@ namespace Private
 	}
 }
 
-void DrawChar(float2 position, uint character, uint color = 0xFFFFFFFF)
-{
-	uint offset;
-	if(Private::ReserveCharacters(1, offset))
-	{
-		Private::AddCharacter(character, position, color, offset);
-	}
-}
-
 void DrawLine(float3 a, float3 b, uint color = 0xFFFFFFFF)
 {
 	uint offset;
@@ -218,17 +209,24 @@ struct TextWriter
 		Color = color;
 	}
 
-	void Text(uint character)
+	void Text_(uint character, uint offset)
 	{
 		StructuredBuffer<Glyph> glyphBuffer = ResourceDescriptorHeap[cView.FontDataIndex];
 		Glyph glyph = glyphBuffer[character];
 
-		DrawChar(
-			Cursor + int2(-glyph.Offset.x, glyph.Offset.y),
-			character,
-			Color);
-
+		float2 position = Cursor + int2(-glyph.Offset.x, glyph.Offset.y);
 		Cursor.x += glyph.Width;
+
+		Private::AddCharacter(character, position, Color, offset);
+	}
+
+	void Text(uint character)
+	{
+		uint offset;
+		if(Private::ReserveCharacters(1, offset))
+		{
+			Text_(character, offset);
+		}
 	}
 
 	void NewLine()
