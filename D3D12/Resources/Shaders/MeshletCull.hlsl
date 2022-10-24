@@ -110,14 +110,14 @@ void CullInstancesCS(uint threadID : SV_DispatchThreadID)
     InstanceData instance = GetInstanceForThread(threadID);
     MeshData mesh = GetMesh(instance.MeshIndex);
 
-	FrustumCullData cullData = FrustumCull(instance.BoundsOrigin, instance.BoundsExtents, cView.ViewProjection);
+	FrustumCullData cullData = FrustumCull(instance.LocalBoundsOrigin, instance.LocalBoundsExtents, instance.LocalToWorld, cView.ViewProjection);
 	bool isVisible = cullData.IsVisible;
 	bool wasOccluded = false;
 
 	if(isVisible)
 	{
 #if OCCLUSION_FIRST_PASS
-		FrustumCullData prevCullData = FrustumCull(instance.BoundsOrigin, instance.BoundsExtents, cView.ViewProjectionPrev);
+		FrustumCullData prevCullData = FrustumCull(instance.LocalBoundsOrigin, instance.LocalBoundsExtents, instance.LocalToWorld, cView.ViewProjectionPrev);
 		wasOccluded = !HZBCull(prevCullData, tHZB);
 
 		// If the instance was occluded the previous frame, we can't be sure it's still occluded this frame.
@@ -157,7 +157,7 @@ void CullInstancesCS(uint threadID : SV_DispatchThreadID)
 #if VISUALIZE_OCCLUDED
 	if(wasOccluded)
 	{
-		DrawCube(instance.BoundsOrigin, instance.BoundsExtents, 0x00FF00FF);
+		DrawOBB(instance.LocalBoundsOrigin, instance.LocalBoundsExtents, instance.LocalToWorld, 0x00FF00FF);
 	}
 #endif
 }

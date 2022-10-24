@@ -17,12 +17,12 @@ void BuildIndirectDrawArgsCS(uint threadID : SV_DispatchThreadID)
 	D3D12_DRAW_ARGUMENTS args = (D3D12_DRAW_ARGUMENTS)0;
 	{
 		args.VertexCountPerInstance = 4;
-		args.InstanceCount = numCharacters;
+		args.InstanceCount = min(numCharacters, MAX_NUM_TEXT);
 		uDrawArgs[offset++] = args;
 	}
 	{
 		args.VertexCountPerInstance = 2;
-		args.InstanceCount = numLines;
+		args.InstanceCount = min(numLines, MAX_NUM_LINES);
 		uDrawArgs[offset++] = args;
 	}
 }

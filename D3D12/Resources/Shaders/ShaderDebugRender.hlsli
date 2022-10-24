@@ -33,83 +33,152 @@ struct Glyph
 	uint Width;
 };
 
-struct FontColor
+namespace Private
 {
-	uint Color;
-};
+	bool ReserveLines(uint numLines, out uint offset)
+	{
+		RWByteAddressBuffer renderData = ResourceDescriptorHeap[cView.DebugRenderDataIndex];
+		renderData.InterlockedAdd(LINE_COUNTER_OFFSET, numLines, offset);
+		return offset + numLines < MAX_NUM_LINES;
+	}
 
-FontColor MakeFontColor(float4 color)
-{
-	FontColor clr = (FontColor)0;
-	clr.Color |= (uint)(saturate(color.r) * 255.0f) << 0u;
-	clr.Color |= (uint)(saturate(color.g) * 255.0f) << 8u;
-	clr.Color |= (uint)(saturate(color.b) * 255.0f) << 16u;
-	clr.Color |= (uint)(saturate(color.a) * 255.0f) << 24u;
-	return clr;
+	void AddLine(float3 a, float3 b, uint color, uint offset)
+	{
+		LineInstance instance;
+		instance.A = a;
+		instance.B = b;
+		instance.Color = color;
+		instance.ScreenSpace = 0;
+
+		RWByteAddressBuffer renderData = ResourceDescriptorHeap[cView.DebugRenderDataIndex];
+		renderData.Store(LINE_INSTANCES_OFFSET + offset * sizeof(LineInstance), instance);
+	}
+
+	void AddLine(float2 a, float2 b, uint color, uint offset)
+	{
+		LineInstance instance;
+		instance.A = float3(a, 0);
+		instance.B = float3(b, 0);
+		instance.Color = color;
+		instance.ScreenSpace = 1;
+
+		RWByteAddressBuffer renderData = ResourceDescriptorHeap[cView.DebugRenderDataIndex];
+		renderData.Store(LINE_INSTANCES_OFFSET + offset * sizeof(LineInstance), instance);
+	}
+
+	bool ReserveCharacters(uint numCharacters, out uint offset)
+	{
+		RWByteAddressBuffer renderData = ResourceDescriptorHeap[cView.DebugRenderDataIndex];
+		renderData.InterlockedAdd(TEXT_COUNTER_OFFSET, numCharacters, offset);
+		return offset + numCharacters < MAX_NUM_TEXT;
+	}
+
+	void AddCharacter(uint character, float2 position, uint color, uint offset)
+	{
+		CharacterInstance instance;
+		instance.Position = position;
+		instance.Character = character;
+		instance.Color = color;
+
+		RWByteAddressBuffer renderData = ResourceDescriptorHeap[cView.DebugRenderDataIndex];
+		renderData.Store(TEXT_INSTANCES_OFFSET + offset * sizeof(CharacterInstance), instance);
+	}
 }
 
 void DrawChar(float2 position, uint character, uint color = 0xFFFFFFFF)
 {
-	CharacterInstance instance;
-	instance.Position = position;
-	instance.Character = character;
-	instance.Color = color;
-
-	RWByteAddressBuffer renderData = ResourceDescriptorHeap[cView.DebugRenderDataIndex];
 	uint offset;
-	renderData.InterlockedAdd(TEXT_COUNTER_OFFSET, 1, offset);
-	renderData.Store(TEXT_INSTANCES_OFFSET + offset * sizeof(CharacterInstance), instance);
+	if(Private::ReserveCharacters(1, offset))
+	{
+		Private::AddCharacter(character, position, color, offset);
+	}
 }
 
 void DrawLine(float3 a, float3 b, uint color = 0xFFFFFFFF)
 {
-	LineInstance instance;
-	instance.A = a;
-	instance.B = b;
-	instance.Color = color;
-	instance.ScreenSpace = 0;
-
-	RWByteAddressBuffer renderData = ResourceDescriptorHeap[cView.DebugRenderDataIndex];
 	uint offset;
-	renderData.InterlockedAdd(LINE_COUNTER_OFFSET, 1, offset);
-	renderData.Store(LINE_INSTANCES_OFFSET + offset * sizeof(LineInstance), instance);
+	if(Private::ReserveLines(1, offset))
+	{
+		Private::AddLine(a, b, color, offset);
+	}
 }
 
 void DrawAxisBase(float3 position, float3x3 rotation, float axisLength = 0.25f, uint color = 0xFFFFFFFF)
 {
-	DrawLine(position, position + axisLength * normalize(mul(float3(1, 0, 0), rotation)), 0xFF0000FF);
-	DrawLine(position, position + axisLength * normalize(mul(float3(0, 1, 0), rotation)), 0x00FF00FF);
-	DrawLine(position, position + axisLength * normalize(mul(float3(0, 0, 1), rotation)), 0x0000FFFF);
+	uint offset;
+	if(Private::ReserveLines(3, offset))
+	{
+		Private::AddLine(position, position + axisLength * normalize(mul(float3(1, 0, 0), rotation)), 0xFF0000FF, offset++);
+		Private::AddLine(position, position + axisLength * normalize(mul(float3(0, 1, 0), rotation)), 0x00FF00FF, offset++);
+		Private::AddLine(position, position + axisLength * normalize(mul(float3(0, 0, 1), rotation)), 0x0000FFFF, offset++);
+	}
 }
 
-void DrawCube(float3 center, float3 extents, uint color = 0xFFFFFFFF)
+void DrawAABB(float3 center, float3 extents, uint color = 0xFFFFFFFF)
 {
-	DrawLine(center + float3(-1, -1, -1) * extents, center + float3(1, -1, -1) * extents, color);
-	DrawLine(center + float3(-1, -1, -1) * extents, center + float3(-1, 1, -1) * extents, color);
-	DrawLine(center + float3(-1, -1, -1) * extents, center + float3(-1, -1, 1) * extents, color);
-	DrawLine(center + float3(1, 1, 1) * extents, center + float3(1, 1, -1) * extents, color);
-	DrawLine(center + float3(1, 1, 1) * extents, center + float3(-1, 1, 1) * extents, color);
-	DrawLine(center + float3(1, 1, 1) * extents, center + float3(1, -1, 1) * extents, color);
-	DrawLine(center + float3(-1, 1, 1) * extents, center + float3(-1, -1, 1) * extents, color);
-	DrawLine(center + float3(1, 1, -1) * extents, center + float3(1, -1, -1) * extents, color);
-	DrawLine(center + float3(1, -1, 1) * extents, center + float3(-1, -1, 1) * extents, color);
-	DrawLine(center + float3(1, -1, -1) * extents, center + float3(1, -1, 1) * extents, color);
-	DrawLine(center + float3(-1, 1, -1) * extents, center + float3(1, 1, -1) * extents, color);
-	DrawLine(center + float3(-1, 1, -1) * extents, center + float3(-1, 1, 1) * extents, color);
+	uint offset;
+	if(Private::ReserveLines(12, offset))
+	{
+		const float3 p0 = center + float3(-1, -1, -1) * extents;
+		const float3 p1 = center + float3(1, -1, -1) * extents;
+		const float3 p2 = center + float3(-1, 1, -1) * extents;
+		const float3 p3 = center + float3(-1, -1, 1) * extents;
+		const float3 p4 = center + float3(1, 1, 1) * extents;
+		const float3 p5 = center + float3(1, 1, -1) * extents;
+		const float3 p6 = center + float3(-1, 1, 1) * extents;
+		const float3 p7 = center + float3(1, -1, 1) * extents;
+
+		Private::AddLine(p0, p1, color, offset++);
+		Private::AddLine(p0, p2, color, offset++);
+		Private::AddLine(p0, p3, color, offset++);
+		Private::AddLine(p4, p5, color, offset++);
+		Private::AddLine(p4, p6, color, offset++);
+		Private::AddLine(p4, p7, color, offset++);
+		Private::AddLine(p6, p3, color, offset++);
+		Private::AddLine(p5, p1, color, offset++);
+		Private::AddLine(p7, p3, color, offset++);
+		Private::AddLine(p1, p7, color, offset++);
+		Private::AddLine(p2, p5, color, offset++);
+		Private::AddLine(p2, p6, color, offset++);
+	}
+}
+
+void DrawOBB(float3 center, float3 extents, float4x4 world, uint color = 0xFFFFFFFF)
+{
+	uint offset;
+	if(Private::ReserveLines(12, offset))
+	{
+		const float3 p0 = mul(float4(center + float3(-1, -1, -1) * extents, 1), world).xyz;
+		const float3 p1 = mul(float4(center + float3(1, -1, -1) * extents, 1), world).xyz;
+		const float3 p2 = mul(float4(center + float3(-1, 1, -1) * extents, 1), world).xyz;
+		const float3 p3 = mul(float4(center + float3(-1, -1, 1) * extents, 1), world).xyz;
+		const float3 p4 = mul(float4(center + float3(1, 1, 1) * extents, 1), world).xyz;
+		const float3 p5 = mul(float4(center + float3(1, 1, -1) * extents, 1), world).xyz;
+		const float3 p6 = mul(float4(center + float3(-1, 1, 1) * extents, 1), world).xyz;
+		const float3 p7 = mul(float4(center + float3(1, -1, 1) * extents, 1), world).xyz;
+
+		Private::AddLine(p0, p1, color, offset++);
+		Private::AddLine(p0, p2, color, offset++);
+		Private::AddLine(p0, p3, color, offset++);
+		Private::AddLine(p4, p5, color, offset++);
+		Private::AddLine(p4, p6, color, offset++);
+		Private::AddLine(p4, p7, color, offset++);
+		Private::AddLine(p6, p3, color, offset++);
+		Private::AddLine(p5, p1, color, offset++);
+		Private::AddLine(p7, p3, color, offset++);
+		Private::AddLine(p1, p7, color, offset++);
+		Private::AddLine(p2, p5, color, offset++);
+		Private::AddLine(p2, p6, color, offset++);
+	}
 }
 
 void DrawScreenLine(float2 a, float2 b, uint color = 0xFFFFFFFF)
 {
-	LineInstance instance;
-	instance.A = float3(a, 0);
-	instance.B = float3(b, 0);
-	instance.Color = color;
-	instance.ScreenSpace = 1;
-
-	RWByteAddressBuffer renderData = ResourceDescriptorHeap[cView.DebugRenderDataIndex];
 	uint offset;
-	renderData.InterlockedAdd(LINE_COUNTER_OFFSET, 1, offset);
-	renderData.Store(LINE_INSTANCES_OFFSET + offset * sizeof(LineInstance), instance);
+	if(Private::ReserveLines(1, offset))
+	{
+		Private::AddLine(a, b, color, offset++);
+	}
 }
 
 enum class RectMode
@@ -120,18 +189,22 @@ enum class RectMode
 
 void DrawRect(float2 a, float2 b, RectMode mode = RectMode::MinMax, uint color = 0xFFFFFFFF)
 {
-	if(mode == RectMode::CenterExtents)
+	uint offset;
+	if(Private::ReserveLines(4, offset))
 	{
-		float2 minP = a - b;
-		float2 maxP = a + b;
-		a = minP;
-		b = maxP;
-	}
+		if(mode == RectMode::CenterExtents)
+		{
+			float2 minP = a - b;
+			float2 maxP = a + b;
+			a = minP;
+			b = maxP;
+		}
 
-	DrawScreenLine(float2(a.x, a.y), float2(b.x, a.y), color);
-	DrawScreenLine(float2(a.x, a.y), float2(a.x, b.y), color);
-	DrawScreenLine(float2(b.x, a.y), float2(b.x, b.y), color);
-	DrawScreenLine(float2(a.x, b.y), float2(b.x, b.y), color);
+		Private::AddLine(float2(a.x, a.y), float2(b.x, a.y), color, offset++);
+		Private::AddLine(float2(a.x, a.y), float2(a.x, b.y), color, offset++);
+		Private::AddLine(float2(b.x, a.y), float2(b.x, b.y), color, offset++);
+		Private::AddLine(float2(a.x, b.y), float2(b.x, b.y), color, offset++);
+	}
 }
 
 struct TextWriter
@@ -313,11 +386,11 @@ struct TextWriter
 	}
 };
 
-TextWriter CreateTextWriter(float2 position, FontColor color = MakeFontColor(1))
+TextWriter CreateTextWriter(float2 position, uint color = 0xFFFFFFFF)
 {
 	TextWriter writer;
 	writer.StartLocation = position;
 	writer.Cursor = position;
-	writer.Color = color.Color;
+	writer.Color = color;
 	return writer;
 }
