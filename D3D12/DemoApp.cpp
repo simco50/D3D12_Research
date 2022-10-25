@@ -149,8 +149,6 @@ namespace Tweakables
 	ConsoleVariable g_SsrSamples("r.SSRSamples", 8);
 	ConsoleVariable g_RenderTerrain("r.Terrain", false);
 
-	ConsoleVariable g_GPUDrivenRender("r.GPUDrivenRender", true);
-
 	// Misc
 	bool g_DumpRenderGraph = false;
 	ConsoleCommand<> gDumpRenderGraph("DumpRenderGraph", []() { g_DumpRenderGraph = true; });
@@ -248,12 +246,12 @@ void DemoApp::SetupScene(CommandContext& context)
 
 		LoadMesh("Resources/Scenes/Sponza/Sponza.gltf", context, m_World);
 #elif 1
-		m_pCamera->SetPosition(Vector3(-1.3f, 2.4f, -1.5f));
+		m_pCamera->SetPosition(Vector3(-5.64f, 8.32f, -3.12f));
 		m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(Math::PI_DIV_4, Math::PI_DIV_4 * 0.5f, 0));
 
-		LoadMesh("C:/Users/simon.coenen/Downloads/Sponza_New/Processed/Main/NewSponza_Main_Blender_glTF.gltf", context, m_World);
-		LoadMesh("C:/Users/simon.coenen/Downloads/Sponza_New/Processed/PKG_A_Curtains/NewSponza_Curtains_glTF.gltf", context, m_World);
-		LoadMesh("C:/Users/simon.coenen/Downloads/Sponza_New/Processed/PKG_B_Ivy/NewSponza_IvyGrowth_glTF.gltf", context, m_World);
+		LoadMesh("D:/References/GltfScenes/IntelSponza/Main/NewSponza_Main_Blender_glTF.gltf", context, m_World);
+		LoadMesh("D:/References/GltfScenes/IntelSponza/PKG_A_Curtains/NewSponza_Curtains_glTF.gltf", context, m_World);
+		LoadMesh("D:/References/GltfScenes/IntelSponza/PKG_B_Ivy/NewSponza_IvyGrowth_glTF.gltf", context, m_World);
 		//LoadMesh("C:/Users/simon.coenen/Downloads/Sponza_New/Processed/PKG_D_Candles/NewSponza_100sOfCandles_glTF_OmniLights.gltf", context, m_World);
 		//LoadMesh("C:/Users/simon.coenen/Downloads/Sponza_New/PKG_C_Trees/NewSponza_CypressTree_glTF.gltf", context);
 #elif 0
@@ -532,7 +530,6 @@ void DemoApp::Update()
 
 		SceneTextures sceneTextures;
 		sceneTextures.pPreviousColor = RGUtils::CreatePersistentTexture(graph, "Color History", TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, ResourceFormat::RGBA16_FLOAT), &m_pColorHistory, true);
-		sceneTextures.pVisibilityBuffer = graph.CreateTexture("Visibility Buffer", TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, ResourceFormat::R32_UINT));
 		sceneTextures.pRoughness = graph.CreateTexture("Roughness", TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, ResourceFormat::R8_UNORM));
 		sceneTextures.pColorTarget = graph.CreateTexture("Color Target", TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, ResourceFormat::RGBA16_FLOAT));
 		sceneTextures.pAmbientOcclusion = graph.CreateTexture("Ambient Occlusion", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, ResourceFormat::R8_UNORM));
@@ -597,45 +594,20 @@ void DemoApp::Update()
 			const bool doPrepass = true;
 			const bool needVisibilityBuffer = m_RenderPath == RenderPath::Visibility;
 
+			RGBuffer* pMeshletCandidates = nullptr;
 			if (doPrepass)
 			{
 				if (needVisibilityBuffer)
 				{
-					if (Tweakables::g_GPUDrivenRender)
-					{
-						m_pGPUDrivenRenderer->Render(
-							graph,
-							pView,
-							sceneTextures.pDepth,
-							&sceneTextures.pVisibilityBuffer,
-							&sceneTextures.pHZB,
-							&m_pHZB);
-						m_SceneData.HZBDimensions = sceneTextures.pHZB->GetDesc().Size2D();
-					}
-					else
-					{
-						graph.AddPass("Visibility Buffer", RGPassFlag::Raster)
-							.Read(sceneTextures.pHZB)
-							.DepthStencil(sceneTextures.pDepth, RenderTargetLoadAction::Clear, true)
-							.RenderTarget(sceneTextures.pVisibilityBuffer, RenderTargetLoadAction::DontCare)
-							.Bind([=](CommandContext& context)
-								{
-									context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-									context.SetGraphicsRootSignature(m_pCommonRS);
-
-									context.SetRootCBV(1, Renderer::GetViewUniforms(pView, sceneTextures.pDepth->Get()));
-									{
-										GPU_PROFILE_SCOPE("Opaque", &context);
-										context.SetPipelineState(m_pVisibilityRenderingPSO);
-										Renderer::DrawScene(context, pView, Batch::Blending::Opaque);
-									}
-									{
-										GPU_PROFILE_SCOPE("Opaque Masked", &context);
-										context.SetPipelineState(m_pVisibilityRenderingMaskedPSO);
-										Renderer::DrawScene(context, pView, Batch::Blending::AlphaMask);
-									}
-								});
-					}
+					m_pGPUDrivenRenderer->Render(
+						graph,
+						pView,
+						sceneTextures.pDepth,
+						&sceneTextures.pVisibilityBuffer,
+						&sceneTextures.pHZB,
+						&m_pHZB,
+						&pMeshletCandidates);
+					m_SceneData.HZBDimensions = sceneTextures.pHZB->GetDesc().Size2D();
 				}
 				else
 				{
@@ -868,7 +840,7 @@ void DemoApp::Update()
 			else if (m_RenderPath == RenderPath::Visibility)
 			{
 				graph.AddPass("Visibility Shading", RGPassFlag::Compute)
-					.Read({ pFog })
+					.Read({ pFog, pMeshletCandidates })
 					.Read({ sceneTextures.pVisibilityBuffer, sceneTextures.pDepth, sceneTextures.pAmbientOcclusion, sceneTextures.pPreviousColor })
 					.Write({ sceneTextures.pNormals, sceneTextures.pColorTarget, sceneTextures.pRoughness })
 					.Bind([=](CommandContext& context)
@@ -890,6 +862,7 @@ void DemoApp::Update()
 								sceneTextures.pDepth->Get()->GetSRV(),
 								sceneTextures.pPreviousColor->Get()->GetSRV(),
 								pFog->Get()->GetSRV(),
+								pMeshletCandidates->Get()->GetSRV(),
 								});
 							context.Dispatch(ComputeUtils::GetNumThreadGroups(pColorTarget->GetWidth(), 8, pColorTarget->GetHeight(), 8));
 						});
@@ -1499,28 +1472,8 @@ void DemoApp::InitializePipelines()
 	m_pBloomSeparatePSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "Bloom.hlsl", "SeparateBloomCS");
 	m_pBloomMipChainPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "Bloom.hlsl", "BloomMipChainCS");
 
-	//Visibility Rendering
-	if (m_pDevice->GetCapabilities().SupportsMeshShading())
-	{
-		//Pipeline state
-		PipelineStateInitializer psoDesc;
-		psoDesc.SetRootSignature(m_pCommonRS);
-		psoDesc.SetAmplificationShader("VisibilityBuffer.hlsl", "ASMain");
-		psoDesc.SetMeshShader("VisibilityBuffer.hlsl", "MSMain");
-		psoDesc.SetPixelShader("VisibilityBuffer.hlsl", "PSMain");
-		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
-		psoDesc.SetRenderTargetFormats(ResourceFormat::R32_UINT, ResourceFormat::D32_FLOAT, 1);
-		psoDesc.SetName("Visibility Rendering");
-		m_pVisibilityRenderingPSO = m_pDevice->CreatePipeline(psoDesc);
-
-		psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
-		psoDesc.SetPixelShader("VisibilityBuffer.hlsl", "PSMain", { "ALPHA_TEST" });
-		psoDesc.SetName("Visibility Rendering Masked");
-		m_pVisibilityRenderingMaskedPSO = m_pDevice->CreatePipeline(psoDesc);
-
-		//Visibility Shading
-		m_pVisibilityShadingPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "VisibilityShading.hlsl", "CSMain");
-	}
+	//Visibility Shading
+	m_pVisibilityShadingPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "VisibilityShading.hlsl", "CSMain");
 
 	// DDGI
 	if (m_pDevice->GetCapabilities().SupportsRaytracing())
@@ -1862,8 +1815,6 @@ void DemoApp::UpdateImGui()
 					}
 					return true;
 				}, nullptr, (int)RenderPath::MAX);
-
-			ImGui::Checkbox("GPU Driven Render", &Tweakables::g_GPUDrivenRender.Get());
 
 			ImGui::Text("Camera");
 			ImGui::Text("Location: [%.2f, %.2f, %.2f]", m_pCamera->GetPosition().x, m_pCamera->GetPosition().y, m_pCamera->GetPosition().z);

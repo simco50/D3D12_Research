@@ -9,6 +9,7 @@ Texture2D tAO :	register(t1);
 Texture2D tDepth : register(t2);
 Texture2D tPreviousSceneColor :	register(t3);
 Texture3D<float4> tFog : register(t4);
+StructuredBuffer<MeshletCandidate> tMeshletCandidates : register(t5);
 
 RWTexture2D<float4> uColorTarget : register(u0);
 RWTexture2D<float2> uNormalsTarget : register(u1);
@@ -65,13 +66,8 @@ VisBufferVertexAttribute GetVertexAttributes(MeshData mesh, float4x4 world, uint
 	return outVertex;
 }
 
-VisBufferVertexAttribute GetVertexAttributes(float2 screenUV, VisBufferData visibility)
+VisBufferVertexAttribute GetVertexAttributes(float2 screenUV, InstanceData instance, MeshData mesh, uint meshletIndex, uint primitiveID)
 {
-	InstanceData instance = GetInstance(visibility.ObjectID);
-	MeshData mesh = GetMesh(instance.MeshIndex);
-
-	uint primitiveID = visibility.PrimitiveID;
-	uint meshletIndex = visibility.MeshletID;
 	Meshlet meshlet = BufferLoad<Meshlet>(mesh.BufferIndex, meshletIndex, mesh.MeshletOffset);
 	MeshletTriangle tri = BufferLoad<MeshletTriangle>(mesh.BufferIndex, primitiveID + meshlet.TriangleOffset, mesh.MeshletTriangleOffset);
 
@@ -146,14 +142,19 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 
 	VisBufferData visibility = (VisBufferData)tVisibilityTexture[texel];
 
+	MeshletCandidate candidate = tMeshletCandidates[visibility.MeshletCandidateIndex];
+    InstanceData instance = GetInstance(candidate.InstanceID);
+	MaterialData material = GetMaterial(instance.MaterialIndex);
+	MeshData mesh = GetMesh(instance.MeshIndex);
+	uint meshletIndex = candidate.MeshletIndex;
+	uint primitiveID = visibility.PrimitiveID;
+
 	float2 screenUV = ((float2)texel.xy + 0.5f) * cView.TargetDimensionsInv;
 	float ambientOcclusion = tAO.SampleLevel(sLinearClamp, screenUV, 0).r;
 
-	VisBufferVertexAttribute vertex = GetVertexAttributes(screenUV, visibility);
+	VisBufferVertexAttribute vertex = GetVertexAttributes(screenUV, instance, mesh, meshletIndex, primitiveID);
 	float3 V = normalize(cView.ViewLocation - vertex.Position);
 
-    InstanceData instance = GetInstance(visibility.ObjectID);
-	MaterialData material = GetMaterial(instance.MaterialIndex);
 	material.BaseColorFactor *= UIntToColor(vertex.Color);
 	MaterialProperties surface = GetMaterialProperties(material, vertex);
 	float3 N = vertex.Normal;

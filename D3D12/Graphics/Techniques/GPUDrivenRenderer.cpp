@@ -51,9 +51,9 @@ GPUDrivenRenderer::GPUDrivenRenderer(GraphicsDevice* pDevice)
 	m_pHZBCreatePSO =			pDevice->CreateComputePipeline(m_pCommonRS, "HZB.hlsl", "HZBCreateCS");
 }
 
-void GPUDrivenRenderer::Render(RGGraph& graph, const SceneView* pView, RGTexture* pDepth, RGTexture** pOutVisibilityBuffer, RGTexture** pOutHZB, RefCountPtr<Texture>* pHZBExport)
+void GPUDrivenRenderer::Render(RGGraph& graph, const SceneView* pView, RGTexture* pDepth, RGTexture** pOutVisibilityBuffer, RGTexture** pOutHZB, RefCountPtr<Texture>* pHZBExport, RGBuffer** pOutMeshletCandidates)
 {
-	RG_GRAPH_SCOPE("Visibility Buffer (GPU Driven)", graph);
+	RG_GRAPH_SCOPE("Rasterize (Visibility Buffer)", graph);
 
 	TextureDesc depthDesc = pDepth->GetDesc();
 	RGTexture* pHZB = InitHZB(graph, depthDesc.Size2D(), pHZBExport);
@@ -245,6 +245,7 @@ void GPUDrivenRenderer::Render(RGGraph& graph, const SceneView* pView, RGTexture
 
 	*pOutVisibilityBuffer = pVisibilityBuffer;
 	*pOutHZB = pHZB;
+	*pOutMeshletCandidates = pMeshletCandidates;
 }
 
 RGTexture* GPUDrivenRenderer::InitHZB(RGGraph& graph, const Vector2i& viewDimensions, RefCountPtr<Texture>* pExportTarget) const

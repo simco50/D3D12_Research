@@ -1,10 +1,17 @@
 #pragma once
 
+// Meshlet which is a candidate for visibility culling
+struct MeshletCandidate
+{
+    uint InstanceID;
+    uint MeshletIndex;
+};
+
 struct VisBufferData
 {
+	// Indirection into MeshletCandidatesBuffer containing InstanceID/MeshletIndex pair
+	uint MeshletCandidateIndex : 25;
 	uint PrimitiveID : 7;
-	uint MeshletID : 13;
-	uint ObjectID : 12;
 };
 
 template<typename T>

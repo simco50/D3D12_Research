@@ -279,6 +279,7 @@ D3D12_PIPELINE_STATE_STREAM_DESC PipelineStateInitializer::GetDesc(GraphicsDevic
 		if (desc.Path.length() > 0)
 		{
 			pShader = pDevice->GetShaderManager()->GetShader(desc.Path.c_str(), (ShaderType)i, desc.EntryPoint.c_str(), desc.Defines);
+			check(pShader);
 			if (pShader)
 			{
 				GetByteCode((ShaderType)i) = pShader->GetByteCode();

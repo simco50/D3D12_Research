@@ -58,12 +58,6 @@ static const bool IsPhase1 = false;
 static const bool IsPhase2 = true;
 #endif
 
-struct MeshletCandidate
-{
-    uint InstanceID;
-    uint MeshletIndex;
-};
-
 RWStructuredBuffer<MeshletCandidate> uMeshletCandidates : 			register(u0);
 RWBuffer<uint> uCounter_MeshletCandidates : 						register(u1);
 RWStructuredBuffer<uint> uOccludedInstances : 						register(u2);
@@ -182,8 +176,7 @@ void BuildInstanceCullIndirectArgs()
 
 struct PayloadData
 {
-	uint InstanceIDs[NUM_AS_THREADS];
-	uint MeshletIndices[NUM_AS_THREADS];
+	uint CandidateIndices[NUM_AS_THREADS];
 };
 
 groupshared PayloadData gsPayload;
@@ -196,10 +189,11 @@ void CullAndDrawMeshletsAS(uint threadID : SV_DispatchThreadID)
 	if(threadID < uCounter_MeshletCandidates[MeshletCounterIndex])
 	{
 		// Phase 2 meshlets are queued up from the back
-		MeshletCandidate meshlet = uMeshletCandidates[GetMeshletIndex(threadID, IsPhase2)];
-		InstanceData instance = GetInstance(meshlet.InstanceID);
+		uint candidateIndex = GetMeshletIndex(threadID, IsPhase2);
+		MeshletCandidate candidate = uMeshletCandidates[candidateIndex];
+		InstanceData instance = GetInstance(candidate.InstanceID);
 		MeshData mesh = GetMesh(instance.MeshIndex);
-		MeshletBounds bounds = BufferLoad<MeshletBounds>(mesh.BufferIndex, meshlet.MeshletIndex, mesh.MeshletBoundsOffset);
+		MeshletBounds bounds = BufferLoad<MeshletBounds>(mesh.BufferIndex, candidate.MeshletIndex, mesh.MeshletBoundsOffset);
 		FrustumCullData cullData = FrustumCull(bounds.Center, bounds.Extents, instance.LocalToWorld, cView.ViewProjection);
 		bool isVisible = cullData.IsVisible;
 		bool wasOccluded = false;
@@ -227,7 +221,7 @@ void CullAndDrawMeshletsAS(uint threadID : SV_DispatchThreadID)
 					uint elementOffset;
 					InterlockedAdd_WaveOps(uCounter_MeshletCandidates, COUNTER_PHASE2_MESHLETS, elementOffset);
 					// Phase 2 meshlets are queued up from the back
-					uMeshletCandidates[GetMeshletIndex(elementOffset, true)] = meshlet;
+					uMeshletCandidates[GetMeshletIndex(elementOffset, true)] = candidate;
 				}
 			}
 #else
@@ -240,8 +234,7 @@ void CullAndDrawMeshletsAS(uint threadID : SV_DispatchThreadID)
 		if(shouldSubmit)
 		{
 			uint index = WavePrefixCountBits(shouldSubmit);
-			gsPayload.InstanceIDs[index] = meshlet.InstanceID;
-			gsPayload.MeshletIndices[index] = meshlet.MeshletIndex;
+			gsPayload.CandidateIndices[index] = candidateIndex;
 		}
 	}
 
@@ -253,8 +246,7 @@ void CullAndDrawMeshletsAS(uint threadID : SV_DispatchThreadID)
 struct PrimitiveAttribute
 {
 	uint PrimitiveID : SV_PrimitiveID;
-	uint MeshletID : MeshletID;
-	uint InstanceID : InstanceID;
+	uint CandidateIndex : CANDIDATE_INDEX;
 };
 
 struct VertexAttribute
@@ -288,12 +280,12 @@ void MSMain(
 	out indices uint3 triangles[MESHLET_MAX_TRIANGLES],
 	out primitives PrimitiveAttribute primitives[MESHLET_MAX_TRIANGLES])
 {
-	uint meshletIndex = payload.MeshletIndices[groupID];
-	uint instanceID = payload.InstanceIDs[groupID];
+	uint candidateIndex = payload.CandidateIndices[groupID];
+	MeshletCandidate candidate = uMeshletCandidates[candidateIndex];
 
-	InstanceData instance = GetInstance(instanceID);
+	InstanceData instance = GetInstance(candidate.InstanceID);
 	MeshData mesh = GetMesh(instance.MeshIndex);
-	Meshlet meshlet = BufferLoad<Meshlet>(mesh.BufferIndex, meshletIndex, mesh.MeshletOffset);
+	Meshlet meshlet = BufferLoad<Meshlet>(mesh.BufferIndex, candidate.MeshletIndex, mesh.MeshletOffset);
 
 	SetMeshOutputCounts(meshlet.VertexCount, meshlet.TriangleCount);
 
@@ -311,8 +303,7 @@ void MSMain(
 
 		PrimitiveAttribute pri;
 		pri.PrimitiveID = i;
-		pri.MeshletID = meshletIndex;
-		pri.InstanceID = instanceID;
+		pri.CandidateIndex = candidateIndex;
 		primitives[i] = pri;
 	}
 }
@@ -326,17 +317,19 @@ void PSMain(
 	)
 {
 #if ALPHA_MASK
-	InstanceData instance = GetInstance(primitiveData.InstanceID);
+	MeshletCandidate candidate = uMeshletCandidates[primitiveData.CandidateIndex];
+	InstanceData instance = GetInstance(candidate.InstanceID);
 	MaterialData material = GetMaterial(instance.MaterialIndex);
-	float opacity = Sample2D(material.Diffuse, sMaterialSampler, vertexData.UV).w;
+	float opacity = material.BaseColorFactor.a;
+	if(material.Diffuse != INVALID_HANDLE)
+		opacity = Sample2D(material.Diffuse, sMaterialSampler, vertexData.UV).w;
 	if(opacity < material.AlphaCutoff)
 		discard;
 #endif
 
 #if !DEPTH_ONLY
-	visBufferData.ObjectID = primitiveData.InstanceID;
+	visBufferData.MeshletCandidateIndex = primitiveData.CandidateIndex;
 	visBufferData.PrimitiveID = primitiveData.PrimitiveID;
-	visBufferData.MeshletID = primitiveData.MeshletID;
 #endif
 }
 

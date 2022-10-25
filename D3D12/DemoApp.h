@@ -148,8 +148,6 @@ private:
 	RefCountPtr<PipelineState> m_pBloomMipChainPSO;
 
 	// Visibility buffer
-	RefCountPtr<PipelineState> m_pVisibilityRenderingPSO;
-	RefCountPtr<PipelineState> m_pVisibilityRenderingMaskedPSO;
 	RefCountPtr<PipelineState> m_pVisibilityShadingPSO;
 
 	// DDGI
