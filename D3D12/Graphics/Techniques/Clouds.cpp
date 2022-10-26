@@ -145,11 +145,8 @@ RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const Sc
 						constants.ResolutionInv = 1.0f / resolution;
 						constants.Frequency = parameters.ShapeNoiseFrequency;
 
-						// #hack - RG has no subresource resource view support yet :(
-						RefCountPtr<UnorderedAccessView> pUAV = pNoiseTexture->Get()->GetParent()->CreateUAV(pNoiseTexture->Get(), TextureUAVDesc((uint8)i));
-
 						context.SetRootCBV(0, constants);
-						context.BindResources(1, pUAV.Get());
+						context.BindResources(1, pNoiseTexture->Get()->GetSubResourceUAV(i));
 
 						context.Dispatch(
 							ComputeUtils::GetNumThreadGroups(Vector3i(resolution), Vector3i(8)));
@@ -171,11 +168,8 @@ RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const Sc
 						constants.ResolutionInv = 1.0f / resolution;
 						constants.Frequency = parameters.DetailNoiseFrequency;
 
-						// #hack - RG has no subresource resource view support yet :(
-						RefCountPtr<UnorderedAccessView> pUAV = pDetailNoiseTexture->Get()->GetParent()->CreateUAV(pDetailNoiseTexture->Get(), TextureUAVDesc((uint8)i));
-
 						context.SetRootCBV(0, constants);
-						context.BindResources(1, pUAV.Get());
+						context.BindResources(1, pDetailNoiseTexture->Get()->GetSubResourceUAV(i));
 
 						context.Dispatch(
 							ComputeUtils::GetNumThreadGroups(Vector3i(resolution), Vector3i(8)));

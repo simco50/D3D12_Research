@@ -330,13 +330,14 @@ void GPUDrivenRenderer::BuildHZB(RGGraph& graph, RGTexture* pDepth, RGTexture* p
 				varAU2(workGroupOffset);
 				varAU2(numWorkGroupsAndMips);
 				varAU4(rectInfo) = initAU4(0, 0, (uint32)hzbDimensions.x, (uint32)hzbDimensions.y);
+				uint32 mips = pHZB->GetDesc().Mips;
 
 				SpdSetup(
 					dispatchThreadGroupCountXY,
 					workGroupOffset,
 					numWorkGroupsAndMips,
 					rectInfo,
-					pHZB->GetDesc().Mips - 1);
+					mips - 1);
 
 				struct
 				{
@@ -352,10 +353,10 @@ void GPUDrivenRenderer::BuildHZB(RGGraph& graph, RGTexture* pDepth, RGTexture* p
 				context.SetRootConstants(0, parameters);
 				uint32 uavIndex = 0;
 				context.BindResources(2, pSPDCounter->Get()->GetUAV(), uavIndex++);
-				context.BindResources(2, pHZB->Get()->GetUAV(), uavIndex++);
-				for (uint8 mipIndex = 1; mipIndex < pHZB->GetDesc().Mips; ++mipIndex)
+				context.BindResources(2, pHZB->Get()->GetSubResourceUAV(6), uavIndex++);
+				for (uint8 mipIndex = 0; mipIndex < mips; ++mipIndex)
 				{
-					context.BindResources(2, context.GetParent()->CreateUAV(pHZB->Get(), TextureUAVDesc(mipIndex)).Get(), uavIndex++);
+					context.BindResources(2, pHZB->Get()->GetSubResourceUAV(mipIndex), uavIndex++);
 				}
 				context.Dispatch(dispatchThreadGroupCountXY[0], dispatchThreadGroupCountXY[1]);
 			});

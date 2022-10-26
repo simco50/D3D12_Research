@@ -1177,8 +1177,6 @@ void DemoApp::Update()
 									context.SetComputeRootSignature(m_pCommonRS);
 									context.SetPipelineState(m_pBloomMipChainPSO);
 
-									RefCountPtr<UnorderedAccessView> pUAV = m_pDevice->CreateUAV(pTarget->Get(), TextureUAVDesc((uint8)i));
-
 									struct
 									{
 										uint32 SourceMip;
@@ -1191,7 +1189,7 @@ void DemoApp::Update()
 									parameters.Horizontal = direction;
 
 									context.SetRootConstants(0, parameters);
-									context.BindResources(2, pUAV.Get());
+									context.BindResources(2, pTarget->Get()->GetSubResourceUAV(i));
 									context.BindResources(3, pSource->Get()->GetSRV());
 
 									Vector3i numThreadGroups = direction == 0 ?

@@ -240,9 +240,11 @@ public:
 
 	D3D12_CPU_DESCRIPTOR_HANDLE GetRTV() const;
 	D3D12_CPU_DESCRIPTOR_HANDLE GetDSV(bool writeable = true) const;
+	UnorderedAccessView* GetSubResourceUAV(uint32 subresourceIndex);
 
 private:
 	TextureDesc m_Desc;
+	std::vector<RefCountPtr<UnorderedAccessView>> m_SubresourceUAVs;
 
 	D3D12_CPU_DESCRIPTOR_HANDLE m_Rtv = {};
 	D3D12_CPU_DESCRIPTOR_HANDLE m_ReadOnlyDsv = {};

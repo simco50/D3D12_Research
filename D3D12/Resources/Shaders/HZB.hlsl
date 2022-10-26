@@ -29,8 +29,8 @@ struct SpdConstants
 };
 
 globallycoherent RWBuffer<uint> uSpdGlobalAtomic : register(u0);
-RWTexture2D<float> uSource : register(u1);
-globallycoherent RWTexture2D<float> uDestination[12] : register(u2);
+globallycoherent RWTexture2D<float> uDestination6 : register(u1);
+RWTexture2D<float> uDestination[12] : register(u2);
 
 ConstantBuffer<SpdConstants> cConstants : register(b0);
 
@@ -46,13 +46,23 @@ groupshared AU1 spdCounter;
 // #define SPD_NO_WAVE_OPERATIONS
 
 // AU1 slice parameter is for Cube textures and texture2DArray
-AF4 SpdLoadSourceImage(ASU2 tex, AU1 slice) { return uSource[tex]; }
+AF4 SpdLoadSourceImage(ASU2 tex, AU1 slice) { return uDestination[0][tex]; }
 
 // SpdLoad() takes a 32-bit signed integer 2D coordinate and loads color.
-AF4 SpdLoad(ASU2 tex, AU1 slice) { return uDestination[5][tex]; }
+AF4 SpdLoad(ASU2 tex, AU1 slice) { return uDestination6[tex]; }
 
 // Define the store function
-void SpdStore(ASU2 pix, AF4 value, AU1 mip, AU1 slice) { uDestination[mip][pix] = value.x; }
+void SpdStore(ASU2 pix, AF4 value, AU1 mip, AU1 slice)
+{
+	if(mip == 5)
+	{
+
+		uDestination6[pix] = value.x;
+		return;
+	}
+
+	uDestination[mip + 1][pix] = value.x;
+}
 
 // Define the atomic Counter increase function
 void SpdIncreaseAtomicCounter(AU1 slice) { InterlockedAdd(uSpdGlobalAtomic[slice], 1, spdCounter); }
