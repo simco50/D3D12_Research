@@ -333,10 +333,10 @@ struct TextWriter
 		}
 		else
 		{
-			int v0 = floor(abs(value));
-			Int(sign(value) * v0);
+			float v = abs(value);
+			Int(sign(value) * floor(v));
 			Text('.');
-			int v1 = floor(frac(value) * 10000);
+			int v1 = floor(frac(v) * 10000);
 			Int(v1);
 		}
 	}
