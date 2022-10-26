@@ -22,29 +22,65 @@ float3 DecodeNormalOctahedron(float2 p)
 	return normalize(n);
 }
 
-float2 UnpackHalf2(in uint value)
+uint Pack_RG16_FLOAT(float2 value)
 {
-	float2 retVal;
-	retVal.x = f16tof32(value.x);
-	retVal.y = f16tof32(value.x >> 16);
-	return retVal;
+	uint2 packed = f32tof16(value);
+	return packed.x | (packed.y << 16u);
 }
 
-float4 UnpackHalf4(in uint2 value)
+float2 Unpack_RG16_FLOAT(uint value)
 {
-	float4 retVal;
-	retVal.x = f16tof32(value.x);
-	retVal.y = f16tof32(value.x >> 16);
-	retVal.z = f16tof32(value.y);
-	retVal.w = f16tof32(value.y >> 16);
-	return retVal;
+	return f16tof32(uint2(value & 0xFFFF, value >> 16));
 }
 
-float3 UnpackHalf3(in uint2 value)
+uint2 Pack_RGBA16_FLOAT(float4 value)
 {
-	float3 retVal;
-	retVal.x = f16tof32(value.x);
-	retVal.y = f16tof32(value.x >> 16);
-	retVal.z = f16tof32(value.y);
-	return retVal;
+	uint4 packed = f32tof16(value);
+	return uint2(packed.x | (packed.y << 16u), packed.z | (packed.w << 16u));
+}
+
+float4 Pack_RGBA16_FLOAT(uint2 value)
+{
+	return f16tof32(uint4(value.x & 0xFFFF, value.x >> 16, value.y & 0xFFFF, value.y >> 16));
+}
+
+uint Pack_RGBA8_UNORM(float4 value)
+{
+	uint4 packed = uint4(round(saturate(value) * 255.0));
+    return packed.x | (packed.y << 8) | (packed.z << 16) | (packed.w << 24);
+}
+
+float4 Unpack_RGBA8_UNORM(uint value)
+{
+    uint4 packed = uint4(value & 0xff, (value >> 8) & 0xff, (value >> 16) & 0xff, value >> 24);
+    return float4(packed) / 255.0;
+}
+
+uint Pack_RGBA8_SNORM(float4 value)
+{
+    int4 packed = int4(round(clamp(value, -1.0, 1.0) * 127.0)) & 0xff;
+    return uint(packed.x | (packed.y << 8) | (packed.z << 16) | (packed.w << 24));
+}
+
+float4 Unpack_RGBA8_SNORM(uint value)
+{
+    int sValue = int(value);
+    int4 packed = int4(sValue << 24, sValue << 16, sValue << 8, sValue) >> 24;
+    return clamp(float4(packed) / 127.0, -1.0, 1.0);
+}
+
+uint Pack_R11G11B10_FLOAT(float3 rgb)
+{
+	uint r = (f32tof16(rgb.x) << 17) & 0xFFE00000;
+	uint g = (f32tof16(rgb.y) << 6) & 0x001FFC00;
+	uint b = (f32tof16(rgb.z) >> 5) & 0x000003FF;
+	return r | g | b;
+}
+
+float3 Unpack_R11G11B10_FLOAT(uint rgb)
+{
+	float r = f16tof32((rgb >> 17) & 0x7FF0);
+	float g = f16tof32((rgb >> 6) & 0x7FF0);
+	float b = f16tof32((rgb << 5) & 0x7FE0);
+	return float3(r, g, b);
 }

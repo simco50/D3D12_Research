@@ -110,7 +110,7 @@ InterpolantsVSToPS FetchVertexAttributes(MeshData mesh, float4x4 world, uint ver
 	result.PositionWS = mul(float4(Position, 1.0f), world).xyz;
 	result.Position = mul(float4(result.PositionWS, 1.0f), cView.ViewProjection);
 
-	result.UV = UnpackHalf2(BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.UVsOffset));
+	result.UV = Unpack_RG16_FLOAT(BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.UVsOffset));
 
 	NormalData normalData = BufferLoad<NormalData>(mesh.BufferIndex, vertexId, mesh.NormalsOffset);
 	result.Normal = normalize(mul(normalData.Normal, (float3x3)world));

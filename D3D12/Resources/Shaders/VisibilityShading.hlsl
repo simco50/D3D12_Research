@@ -36,7 +36,7 @@ VisBufferVertexAttribute GetVertexAttributes(MeshData mesh, float4x4 world, uint
 	{
 		uint vertexId = indices[i];
 		positions[i] = mul(float4(BufferLoad<float3>(mesh.BufferIndex, vertexId, mesh.PositionsOffset), 1), world).xyz;
-        vertices[i].UV = UnpackHalf2(BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.UVsOffset));
+        vertices[i].UV = Unpack_RG16_FLOAT(BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.UVsOffset));
         NormalData normalData = BufferLoad<NormalData>(mesh.BufferIndex, vertexId, mesh.NormalsOffset);
         vertices[i].Normal = normalData.Normal;
         vertices[i].Tangent = normalData.Tangent;

@@ -28,7 +28,7 @@ VertexAttribute GetVertexAttributes(InstanceData instance, float2 attribBarycent
 	{
 		uint vertexId = indices[i];
 		positions[i] = BufferLoad<float3>(mesh.BufferIndex, vertexId, mesh.PositionsOffset);
-		outData.UV += UnpackHalf2(BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.UVsOffset)) * barycentrics[i];
+		outData.UV += Unpack_RG16_FLOAT(BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.UVsOffset)) * barycentrics[i];
 		NormalData normalData = BufferLoad<NormalData>(mesh.BufferIndex, vertexId, mesh.NormalsOffset);
 		outData.Normal += normalData.Normal * barycentrics[i];
 		outData.Tangent += normalData.Tangent * barycentrics[i];

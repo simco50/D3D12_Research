@@ -206,14 +206,9 @@ namespace Math
 		return Vector3(c.x, c.y, c.z) * exp2(exponent);
 	}
 
-	inline int32 RoundUp(float value)
-	{
-		return (int32)Ceil(value);
-	}
-
 	inline uint32 DivideAndRoundUp(uint32 nominator, uint32 denominator)
 	{
-		return (uint32)Ceil((float)nominator / denominator);
+		return (nominator + denominator - 1) / denominator;
 	}
 
 	inline uint32 NextPowerOfTwo(uint32 v)
