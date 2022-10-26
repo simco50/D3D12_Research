@@ -71,9 +71,9 @@ Buffer<uint> tCounter_OccludedInstances : 							register(t2);
 
 Texture2D<float> tHZB : 											register(t3);
 
-uint GetMeshletIndex(uint index, bool phase2)
+uint GetMeshletCandidateOffset(bool phase2)
 {
-	return phase2 ? MAX_NUM_MESHLETS - index - 1 : index;
+	return phase2 ? uCounter_MeshletCandidates[COUNTER_PHASE1_MESHLETS] : 0;
 }
 
 uint GetNumInstances()
@@ -136,15 +136,16 @@ void CullInstancesCS(uint threadID : SV_DispatchThreadID)
 		uint clampedNumMeshlets = min(globalMeshletIndex + mesh.MeshletCount, MAX_NUM_MESHLETS);
 		uint numMeshletsToAdd = max(clampedNumMeshlets - globalMeshletIndex, 0);
 
-		// Meshlets from Phase 1 are writting from the front, Phase 2 meshlets are written from the back
 		uint elementOffset;
-        InterlockedAdd_Varying_WaveOps(uCounter_MeshletCandidates, MeshletCounterIndex, numMeshletsToAdd, elementOffset);
+		InterlockedAdd_Varying_WaveOps(uCounter_MeshletCandidates, MeshletCounterIndex, numMeshletsToAdd, elementOffset);
+	
+		uint meshletCandidateOffset = GetMeshletCandidateOffset(IsPhase2);
 		for(uint i = 0; i < numMeshletsToAdd; ++i)
 		{
 			MeshletCandidate meshlet;
-            meshlet.InstanceID = instance.ID;
-            meshlet.MeshletIndex = i;
-            uMeshletCandidates[GetMeshletIndex(elementOffset + i, IsPhase2)] = meshlet;
+			meshlet.InstanceID = instance.ID;
+			meshlet.MeshletIndex = i;
+			uMeshletCandidates[meshletCandidateOffset + elementOffset + i] = meshlet;
 		}
     }
 
@@ -188,8 +189,7 @@ void CullAndDrawMeshletsAS(uint threadID : SV_DispatchThreadID)
 	bool shouldSubmit = false;
 	if(threadID < uCounter_MeshletCandidates[MeshletCounterIndex])
 	{
-		// Phase 2 meshlets are queued up from the back
-		uint candidateIndex = GetMeshletIndex(threadID, IsPhase2);
+		uint candidateIndex = GetMeshletCandidateOffset(IsPhase2) + threadID;
 		MeshletCandidate candidate = uMeshletCandidates[candidateIndex];
 		InstanceData instance = GetInstance(candidate.InstanceID);
 		MeshData mesh = GetMesh(instance.MeshIndex);
@@ -220,8 +220,7 @@ void CullAndDrawMeshletsAS(uint threadID : SV_DispatchThreadID)
 				{
 					uint elementOffset;
 					InterlockedAdd_WaveOps(uCounter_MeshletCandidates, COUNTER_PHASE2_MESHLETS, elementOffset);
-					// Phase 2 meshlets are queued up from the back
-					uMeshletCandidates[GetMeshletIndex(elementOffset, true)] = candidate;
+					uMeshletCandidates[GetMeshletCandidateOffset(true) + elementOffset] = candidate;
 				}
 			}
 #else
@@ -265,7 +264,7 @@ VertexAttribute FetchVertexAttributes(MeshData mesh, float4x4 world, uint vertex
 	result.Position = mul(float4(positionWS, 1.0f), cView.ViewProjection);
 #if ALPHA_MASK
 	if(mesh.UVsOffset != 0xFFFFFFFF)
-		result.UV = UnpackHalf2(BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.UVsOffset));
+		result.UV = Unpack_RG16_FLOAT(BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.UVsOffset));
 #endif
 	return result;
 }
