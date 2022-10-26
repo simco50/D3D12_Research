@@ -16,6 +16,9 @@
 namespace Tweakables
 {
 	ConsoleVariable CullDebugStats("r.CullingStats", false);
+
+	constexpr uint32 MaxNumMeshlets = 1 << 20u;
+	constexpr uint32 MaxNumInstances = 1 << 14u;
 }
 
 GPUDrivenRenderer::GPUDrivenRenderer(GraphicsDevice* pDevice)
@@ -27,24 +30,36 @@ GPUDrivenRenderer::GPUDrivenRenderer(GraphicsDevice* pDevice)
 	m_pCommonRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 6);
 	m_pCommonRS->Finalize("Common");
 
+	ShaderDefineHelper defines;
+	defines.Set("OCCLUSION_FIRST_PASS", true);
+	defines.Set("MAX_NUM_MESHLETS", Tweakables::MaxNumMeshlets);
+	defines.Set("MAX_NUM_INSTANCES", Tweakables::MaxNumInstances);
+	
 	PipelineStateInitializer psoDesc;
 	psoDesc.SetRootSignature(m_pCommonRS);
-	psoDesc.SetAmplificationShader("MeshletCull.hlsl", "CullAndDrawMeshletsAS", { "OCCLUSION_FIRST_PASS=1" });
-	psoDesc.SetMeshShader("MeshletCull.hlsl", "MSMain");
-	psoDesc.SetPixelShader("MeshletCull.hlsl", "PSMain");
+	psoDesc.SetAmplificationShader("MeshletCull.hlsl", "CullAndDrawMeshletsAS", *defines);
+	psoDesc.SetMeshShader("MeshletCull.hlsl", "MSMain", *defines);
+	psoDesc.SetPixelShader("MeshletCull.hlsl", "PSMain", *defines);
 	psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
 	psoDesc.SetRenderTargetFormats(ResourceFormat::R32_UINT, ResourceFormat::D32_FLOAT, 1);
 	psoDesc.SetName("Visibility Rendering");
 	m_pCullAndDrawPSO[0] = pDevice->CreatePipeline(psoDesc);
-	psoDesc.SetAmplificationShader("MeshletCull.hlsl", "CullAndDrawMeshletsAS", { "OCCLUSION_FIRST_PASS=0" });
+
+	defines.Set("OCCLUSION_FIRST_PASS", false);
+	psoDesc.SetAmplificationShader("MeshletCull.hlsl", "CullAndDrawMeshletsAS", *defines);
 	m_pCullAndDrawPSO[1] = pDevice->CreatePipeline(psoDesc);
 
-	m_pBuildCullArgsPSO =		pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "BuildInstanceCullIndirectArgs");
-	m_pCullInstancesPSO[0] =	pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "CullInstancesCS", {"OCCLUSION_FIRST_PASS=1"});
-	m_pCullInstancesPSO[1] =	pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "CullInstancesCS", {"OCCLUSION_FIRST_PASS=0"});
-	m_pBuildDrawArgsPSO[0] =	pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "BuildMeshShaderIndirectArgs", {"OCCLUSION_FIRST_PASS=1"});
-	m_pBuildDrawArgsPSO[1] =	pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "BuildMeshShaderIndirectArgs", {"OCCLUSION_FIRST_PASS=0"});
-	m_pPrintStatsPSO =			pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "PrintStatsCS");
+	m_pBuildCullArgsPSO = pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "BuildInstanceCullIndirectArgs", *defines);
+
+	defines.Set("OCCLUSION_FIRST_PASS", true);
+	m_pCullInstancesPSO[0] = pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "CullInstancesCS", *defines);
+	m_pBuildDrawArgsPSO[0] = pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "BuildMeshShaderIndirectArgs", *defines);
+
+	defines.Set("OCCLUSION_FIRST_PASS", false);
+	m_pCullInstancesPSO[1] =	pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "CullInstancesCS", *defines);
+	m_pBuildDrawArgsPSO[1] =	pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "BuildMeshShaderIndirectArgs", *defines);
+
+	m_pPrintStatsPSO =			pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "PrintStatsCS", *defines);
 
 	pDevice->GetShaderManager()->AddIncludeDir("External/SPD/");
 	m_pHZBInitializePSO =		pDevice->CreateComputePipeline(m_pCommonRS, "HZB.hlsl", "HZBInitCS");
@@ -59,9 +74,10 @@ void GPUDrivenRenderer::Render(RGGraph& graph, const SceneView* pView, RGTexture
 	RGTexture* pHZB = InitHZB(graph, depthDesc.Size2D(), pHZBExport);
 	RGTexture* pVisibilityBuffer = graph.CreateTexture("Visibility", TextureDesc::CreateRenderTarget(depthDesc.Width, depthDesc.Height, ResourceFormat::R32_UINT));
 
-	constexpr uint32 maxNumInstances = 1 << 14;
-	constexpr uint32 maxNumMeshlets = 1 << 20;
+	constexpr uint32 maxNumInstances = Tweakables::MaxNumInstances;
+	constexpr uint32 maxNumMeshlets = Tweakables::MaxNumMeshlets;
 
+#if 0
 	uint32 numMeshlets = 0;
 	for (const Batch& b : pView->Batches)
 	{
@@ -69,6 +85,7 @@ void GPUDrivenRenderer::Render(RGGraph& graph, const SceneView* pView, RGTexture
 	}
 	check(pView->Batches.size() <= maxNumInstances);
 	check(numMeshlets <= maxNumMeshlets);
+#endif
 
 	RGBuffer* pMeshletCandidates =			graph.CreateBuffer("GPURender.MeshletCandidates", BufferDesc::CreateStructured(maxNumMeshlets, sizeof(uint32) * 2));
 	RGBuffer* pMeshletCandidatesCounter =	graph.CreateBuffer("GPURender.MeshletCandidates.Counter", BufferDesc::CreateTyped(3, ResourceFormat::R32_UINT));

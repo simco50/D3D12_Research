@@ -25,6 +25,62 @@ struct ShaderDefine
 	std::string Value;
 };
 
+class ShaderDefineHelper
+{
+public:
+	void Set(const char* pName, const char* pValue)
+	{
+		Get(pName).Value = pValue;
+	}
+	void Set(const char* pName, uint32 value)
+	{
+		Get(pName).Value = Sprintf("%d", value);
+	}
+	void Set(const char* pName, int32 value)
+	{
+		Get(pName).Value = Sprintf("%d", value);
+	}
+	void Set(const char* pName, bool value)
+	{
+		Get(pName).Value = value ? "1" : "0";
+	}
+
+	std::vector<ShaderDefine> operator*() const
+	{
+		std::vector<ShaderDefine> defines;
+		defines.reserve(Defines.size());
+		for (const DefineData& v : Defines)
+		{
+			ShaderDefine& define = defines.emplace_back();
+			define.Value = Sprintf("%s=%s", v.Name, v.Value.c_str());
+		}
+		return defines;
+	}
+
+private:
+	struct DefineData
+	{
+		StringHash Hash;
+		const char* Name;
+		std::string Value;
+	};
+
+	DefineData& Get(const char* pName)
+	{
+		StringHash hash(pName);
+		for (DefineData& v : Defines)
+		{
+			if (v.Hash == hash)
+			{
+				return v;
+			}
+		}
+		return Defines.emplace_back(DefineData{ hash, pName, "" });
+	}
+
+	std::vector<DefineData> Defines;
+};
+
 struct ShaderLibrary
 {
 	ShaderLibrary(const ShaderBlob& shaderBlob, const Span<ShaderDefine>& defines)

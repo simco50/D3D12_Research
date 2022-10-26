@@ -324,17 +324,16 @@ void CBTTessellation::Execute(RGGraph& graph, CBTData& data, const SceneView* pV
 
 void CBTTessellation::SetupPipelines(GraphicsDevice* pDevice)
 {
-	std::vector<ShaderDefine> defines = {
-		ShaderDefine("RENDER_WIREFRAME", CBTSettings::Wireframe ? 1 : 0),
-		ShaderDefine("FRUSTUM_CULL", CBTSettings::FrustumCull ? 1 : 0),
-		ShaderDefine("DISPLACEMENT_LOD", CBTSettings::DisplacementLOD ? 1 : 0),
-		ShaderDefine("DISTANCE_LOD", CBTSettings::DistanceLOD ? 1 : 0),
-		ShaderDefine("DEBUG_ALWAYS_SUBDIVIDE", CBTSettings::AlwaysSubdivide ? 1 : 0),
-		ShaderDefine("MESH_SHADER_SUBD_LEVEL", Math::Min(CBTSettings::MeshShaderSubD * 2, 6)),
-		ShaderDefine("GEOMETRY_SHADER_SUBD_LEVEL", Math::Min(CBTSettings::GeometryShaderSubD * 2, 4)),
-		ShaderDefine("AMPLIFICATION_SHADER_SUBD_LEVEL", Math::Max(CBTSettings::MeshShaderSubD * 2 - 6, 0)),
-		ShaderDefine("COLOR_LEVELS", CBTSettings::ColorLevels ? 1 : 0),
-	};
+	ShaderDefineHelper defines;
+	defines.Set("RENDER_WIREFRAME", CBTSettings::Wireframe);
+	defines.Set("FRUSTUM_CULL", CBTSettings::FrustumCull);
+	defines.Set("DISPLACEMENT_LOD", CBTSettings::DisplacementLOD);
+	defines.Set("DISTANCE_LOD", CBTSettings::DistanceLOD);
+	defines.Set("DEBUG_ALWAYS_SUBDIVIDE", CBTSettings::AlwaysSubdivide);
+	defines.Set("MESH_SHADER_SUBD_LEVEL", Math::Min(CBTSettings::MeshShaderSubD * 2, 6));
+	defines.Set("GEOMETRY_SHADER_SUBD_LEVEL", Math::Min(CBTSettings::GeometryShaderSubD * 2, 4));
+	defines.Set("AMPLIFICATION_SHADER_SUBD_LEVEL", Math::Max(CBTSettings::MeshShaderSubD * 2 - 6, 0));
+	defines.Set("COLOR_LEVELS", CBTSettings::ColorLevels);
 
 	m_pCBTRS = new RootSignature(pDevice);
 	m_pCBTRS->AddRootConstants<Vector4i>(0);
@@ -343,11 +342,11 @@ void CBTTessellation::SetupPipelines(GraphicsDevice* pDevice)
 	m_pCBTRS->Finalize("CBT");
 
 	{
-		m_pCBTIndirectArgsPSO = pDevice->CreateComputePipeline(m_pCBTRS, "CBT.hlsl", "PrepareDispatchArgsCS", defines);
-		m_pCBTSumReductionFirstPassPSO = pDevice->CreateComputePipeline(m_pCBTRS, "CBT.hlsl", "SumReductionFirstPassCS", defines);
-		m_pCBTSumReductionPSO = pDevice->CreateComputePipeline(m_pCBTRS, "CBT.hlsl", "SumReductionCS", defines);
-		m_pCBTCacheBitfieldPSO = pDevice->CreateComputePipeline(m_pCBTRS, "CBT.hlsl", "CacheBitfieldCS", defines);
-		m_pCBTUpdatePSO = pDevice->CreateComputePipeline(m_pCBTRS, "CBT.hlsl", "UpdateCS", defines);
+		m_pCBTIndirectArgsPSO = pDevice->CreateComputePipeline(m_pCBTRS, "CBT.hlsl", "PrepareDispatchArgsCS", *defines);
+		m_pCBTSumReductionFirstPassPSO = pDevice->CreateComputePipeline(m_pCBTRS, "CBT.hlsl", "SumReductionFirstPassCS", *defines);
+		m_pCBTSumReductionPSO = pDevice->CreateComputePipeline(m_pCBTRS, "CBT.hlsl", "SumReductionCS", *defines);
+		m_pCBTCacheBitfieldPSO = pDevice->CreateComputePipeline(m_pCBTRS, "CBT.hlsl", "CacheBitfieldCS", *defines);
+		m_pCBTUpdatePSO = pDevice->CreateComputePipeline(m_pCBTRS, "CBT.hlsl", "UpdateCS", *defines);
 	}
 
 	constexpr ResourceFormat formats[] = {
@@ -359,17 +358,17 @@ void CBTTessellation::SetupPipelines(GraphicsDevice* pDevice)
 	{
 		PipelineStateInitializer psoDesc;
 		psoDesc.SetRootSignature(m_pCBTRS);
-		psoDesc.SetVertexShader("CBT.hlsl", "RenderVS", defines);
+		psoDesc.SetVertexShader("CBT.hlsl", "RenderVS", *defines);
 		if (CBTSettings::GeometryShaderSubD > 0)
 		{
-			psoDesc.SetGeometryShader("CBT.hlsl", "RenderGS", defines);
+			psoDesc.SetGeometryShader("CBT.hlsl", "RenderGS", *defines);
 			psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT);
 		}
 		else
 		{
 			psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
 		}
-		psoDesc.SetPixelShader("CBT.hlsl", "RenderPS", defines);
+		psoDesc.SetPixelShader("CBT.hlsl", "RenderPS", *defines);
 		psoDesc.SetRenderTargetFormats(formats, ResourceFormat::D32_FLOAT, 1);
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
 		psoDesc.SetName("Draw CBT");
@@ -380,9 +379,9 @@ void CBTTessellation::SetupPipelines(GraphicsDevice* pDevice)
 	{
 		PipelineStateInitializer psoDesc;
 		psoDesc.SetRootSignature(m_pCBTRS);
-		psoDesc.SetAmplificationShader("CBT.hlsl", "UpdateAS", defines);
-		psoDesc.SetMeshShader("CBT.hlsl", "RenderMS", defines);
-		psoDesc.SetPixelShader("CBT.hlsl", "RenderPS", defines);
+		psoDesc.SetAmplificationShader("CBT.hlsl", "UpdateAS", *defines);
+		psoDesc.SetMeshShader("CBT.hlsl", "RenderMS", *defines);
+		psoDesc.SetPixelShader("CBT.hlsl", "RenderPS", *defines);
 		psoDesc.SetRenderTargetFormats(formats, ResourceFormat::D32_FLOAT, 1);
 		psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
@@ -393,8 +392,8 @@ void CBTTessellation::SetupPipelines(GraphicsDevice* pDevice)
 	{
 		PipelineStateInitializer psoDesc;
 		psoDesc.SetRootSignature(m_pCBTRS);
-		psoDesc.SetPixelShader("CBT.hlsl", "DebugVisualizePS", defines);
-		psoDesc.SetVertexShader("CBT.hlsl", "DebugVisualizeVS", defines);
+		psoDesc.SetPixelShader("CBT.hlsl", "DebugVisualizePS", *defines);
+		psoDesc.SetVertexShader("CBT.hlsl", "DebugVisualizeVS", *defines);
 		psoDesc.SetRenderTargetFormats(ResourceFormat::RGBA8_UNORM, ResourceFormat::Unknown, 1);
 		psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
 		psoDesc.SetDepthEnabled(false);
