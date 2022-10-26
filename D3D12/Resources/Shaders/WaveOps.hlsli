@@ -5,11 +5,11 @@
 #if WAVE_OPS
 
 template<typename T>
-void InterlockedAdd_WaveOps(T bufferResource, uint elementIndex, out uint originalValue)
+void InterlockedAdd_WaveOps(T bufferResource, uint elementIndex, uint numValues, out uint originalValue)
 {
-	uint numValues = WaveActiveCountBits(true);
+	uint count = WaveActiveCountBits(true) * numValues;
 	if(WaveIsFirstLane())
-		InterlockedAdd(bufferResource[elementIndex], numValues, originalValue);
+		InterlockedAdd(bufferResource[elementIndex], count, originalValue);
 	originalValue = WaveReadLaneFirst(originalValue) + WavePrefixCountBits(true);
 }
 
@@ -24,9 +24,9 @@ void InterlockedAdd_Varying_WaveOps(T bufferResource, uint elementIndex, uint nu
 #else
 
 template<typename T>
-void InterlockedAdd_WaveOps(T bufferResource, uint elementIndex, out uint originalValue)
+void InterlockedAdd_WaveOps(T bufferResource, uint elementIndex, uint numValues, out uint originalValue)
 {
-	InterlockedAdd(bufferResource[elementIndex], 1, originalValue);
+	InterlockedAdd(bufferResource[elementIndex], numValues, originalValue);
 }
 
 template<typename T>

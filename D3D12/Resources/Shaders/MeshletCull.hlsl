@@ -119,7 +119,7 @@ void CullInstancesCS(uint threadID : SV_DispatchThreadID)
 		if(wasOccluded)
 		{
 			uint elementOffset = 0;
-			InterlockedAdd_WaveOps(uCounter_OccludedInstances, 0, elementOffset);
+			InterlockedAdd_WaveOps(uCounter_OccludedInstances, 0, 1, elementOffset);
 			uOccludedInstances[elementOffset] = instance.ID;
 		}
 #else
@@ -213,13 +213,11 @@ void CullAndDrawMeshletsAS(uint threadID : SV_DispatchThreadID)
 			{
 				// Limit how many meshlets we're writing based on the buffer size
 				uint globalMeshletIndex;
-        		InterlockedAdd_WaveOps(uCounter_MeshletCandidates, COUNTER_TOTAL_MESHLETS, globalMeshletIndex);
-				uint clampedNumMeshlets = min(globalMeshletIndex + mesh.MeshletCount, MAX_NUM_MESHLETS);
-				uint numMeshletsToAdd = max(clampedNumMeshlets - globalMeshletIndex, 0);
-				if(numMeshletsToAdd)
+        		InterlockedAdd_WaveOps(uCounter_MeshletCandidates, COUNTER_TOTAL_MESHLETS, 1, globalMeshletIndex);
+				if(globalMeshletIndex < MAX_NUM_MESHLETS)
 				{
 					uint elementOffset;
-					InterlockedAdd_WaveOps(uCounter_MeshletCandidates, COUNTER_PHASE2_MESHLETS, elementOffset);
+					InterlockedAdd_WaveOps(uCounter_MeshletCandidates, COUNTER_PHASE2_MESHLETS, 1, elementOffset);
 					uMeshletCandidates[GetMeshletCandidateOffset(true) + elementOffset] = candidate;
 				}
 			}
