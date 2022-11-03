@@ -58,7 +58,7 @@ void TraceRaysRGS()
 			VertexAttribute vertex = GetVertexAttributes(instance, payload.Barycentrics, payload.PrimitiveID);
 			MaterialData material = GetMaterial(instance.MaterialIndex);
 			const uint textureMipLevel = 6;
-			MaterialProperties surface = GetMaterialProperties(material, vertex.UV, textureMipLevel);
+			MaterialProperties surface = EvaluateMaterial(material, vertex, textureMipLevel);
 			BrdfData brdfData = GetBrdfData(surface);
 
 			float3 hitLocation = probePosition + ray.Direction * payload.HitT;

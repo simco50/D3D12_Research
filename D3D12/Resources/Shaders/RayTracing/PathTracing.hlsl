@@ -277,13 +277,13 @@ void RayGen()
 		InstanceData instance = GetInstance(payload.InstanceID);
 		VertexAttribute vertex = GetVertexAttributes(instance, payload.Barycentrics, payload.PrimitiveID);
 		MaterialData material = GetMaterial(instance.MaterialIndex);
-		MaterialProperties surface = GetMaterialProperties(material, vertex.UV, 0);
+		MaterialProperties surface = EvaluateMaterial(material, vertex, 0);
 		BrdfData brdfData = GetBrdfData(surface);
 
 		float3 V = -ray.Direction;
 		float3 hitLocation = ray.Origin + ray.Direction * payload.HitT;
 		float3 geometryNormal = vertex.GeometryNormal;
-		float3 N = vertex.Normal;
+		float3 N = surface.Normal;
 		float4 T = vertex.Tangent;
 		if(!payload.IsFrontFace())
 			geometryNormal = -geometryNormal;
@@ -293,8 +293,6 @@ void RayGen()
 			N = -N;
 			T.xyz = -T.xyz;
 		}
-		float3x3 TBN = CreateTangentToWorld(N, T);
-		N = TangentSpaceNormalMapping(surface.NormalTS, TBN);
 
 		// The Emissive properties is like a light source and directly applied on top
 		radiance += throughput * surface.Emissive;

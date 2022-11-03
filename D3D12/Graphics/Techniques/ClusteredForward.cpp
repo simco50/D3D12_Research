@@ -207,7 +207,7 @@ void ClusteredForward::ComputeLightCulling(RGGraph& graph, const SceneView* pVie
 
 	cullData.pLightIndexGrid = graph.Create("Light Index Grid", BufferDesc::CreateStructured(gMaxLightsPerCluster * totalClusterCount, sizeof(uint32)));
 	// LightGrid: x : Offset | y : Count
-	cullData.pLightGrid = graph.Create("Light Grid", BufferDesc::CreateStructured(2 * totalClusterCount, sizeof(uint32), BufferFlag::NoBindless));
+	cullData.pLightGrid = graph.Create("Light Grid", BufferDesc::CreateStructured(2 * totalClusterCount, sizeof(uint32)));
 
 	graph.AddPass("Cull Lights", RGPassFlag::Compute)
 		.Read(cullData.pAABBs)

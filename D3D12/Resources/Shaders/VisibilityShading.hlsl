@@ -80,10 +80,10 @@ VisBufferVertexAttribute GetVertexAttributes(float2 screenUV, InstanceData insta
 	return GetVertexAttributes(mesh, instance.LocalToWorld, indices, screenUV);
 }
 
-MaterialProperties GetMaterialProperties(MaterialData material, VisBufferVertexAttribute attributes)
+MaterialProperties EvaluateMaterial(MaterialData material, VisBufferVertexAttribute attributes)
 {
 	MaterialProperties properties;
-	float4 baseColor = material.BaseColorFactor;
+	float4 baseColor = material.BaseColorFactor * UIntToColor(attributes.Color);
 	if(material.Diffuse != INVALID_HANDLE)
 	{
 		baseColor *= SampleGrad2D(NonUniformResourceIndex(material.Diffuse), sMaterialSampler, attributes.UV, attributes.DX, attributes.DY);
@@ -106,10 +106,12 @@ MaterialProperties GetMaterialProperties(MaterialData material, VisBufferVertexA
 	}
 	properties.Specular = 0.5f;
 
-	properties.NormalTS = float3(0.5f, 0.5f, 1.0f);
+	properties.Normal = attributes.Normal;
 	if(material.Normal != INVALID_HANDLE)
 	{
-		properties.NormalTS = SampleGrad2D(NonUniformResourceIndex(material.Normal), sMaterialSampler, attributes.UV, attributes.DX, attributes.DY).rgb;
+		float3 normalTS = SampleGrad2D(NonUniformResourceIndex(material.Normal), sMaterialSampler, attributes.UV, attributes.DX, attributes.DY).rgb;
+		float3x3 TBN = CreateTangentToWorld(properties.Normal, float4(normalize(attributes.Tangent.xyz), attributes.Tangent.w));
+		properties.Normal = TangentSpaceNormalMapping(normalTS, TBN);
 	}
 	return properties;
 }
@@ -155,23 +157,18 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 	VisBufferVertexAttribute vertex = GetVertexAttributes(screenUV, instance, mesh, meshletIndex, primitiveID);
 	float3 V = normalize(cView.ViewLocation - vertex.Position);
 
-	material.BaseColorFactor *= UIntToColor(vertex.Color);
-	MaterialProperties surface = GetMaterialProperties(material, vertex);
-	float3 N = vertex.Normal;
-	float3x3 TBN = CreateTangentToWorld(N, float4(normalize(vertex.Tangent.xyz), vertex.Tangent.w));
-	N = TangentSpaceNormalMapping(surface.NormalTS, TBN);
-
+	MaterialProperties surface = EvaluateMaterial(material, vertex);
 	BrdfData brdfData = GetBrdfData(surface);
 	float3 positionVS = mul(float4(vertex.Position, 1), cView.View).xyz;
 	float4 pos = float4((float2)(texel.xy + 0.5f), 0, positionVS.z);
 
 	float ssrWeight = 0;
-	float3 ssr = ScreenSpaceReflections(pos, positionVS, N, V, brdfData.Roughness, tDepth, tPreviousSceneColor, ssrWeight);
+	float3 ssr = ScreenSpaceReflections(pos, positionVS, surface.Normal, V, brdfData.Roughness, tDepth, tPreviousSceneColor, ssrWeight);
 
-	LightResult result = DoLight(pos, vertex.Position, N, V, brdfData.Diffuse, brdfData.Specular, brdfData.Roughness);
+	LightResult result = DoLight(pos, vertex.Position, surface.Normal, V, brdfData.Diffuse, brdfData.Specular, brdfData.Roughness);
 
 	float3 outRadiance = 0;
-	outRadiance += ambientOcclusion * Diffuse_Lambert(brdfData.Diffuse) * SampleDDGIIrradiance(vertex.Position, N, -V);
+	outRadiance += ambientOcclusion * Diffuse_Lambert(brdfData.Diffuse) * SampleDDGIIrradiance(vertex.Position, surface.Normal, -V);
 	outRadiance += result.Diffuse + result.Specular;
 	outRadiance += ssr;
 	outRadiance += surface.Emissive;
@@ -184,12 +181,11 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 
 #define DEBUG_MESHLETS 0
 #if DEBUG_MESHLETS
-	N = vertex.Normal;
 	uint seed = SeedThread(visibility.MeshletID);
 	outRadiance = RandomColor(seed) * saturate(Wireframe(vertex.Barycentrics) + 0.6);
 #endif
 
 	uColorTarget[texel] = float4(outRadiance, surface.Opacity);
-	uNormalsTarget[texel] = EncodeNormalOctahedron(N);
+	uNormalsTarget[texel] = EncodeNormalOctahedron(surface.Normal);
 	uRoughnessTarget[texel] = reflectivity;
 }

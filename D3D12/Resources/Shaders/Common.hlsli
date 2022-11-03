@@ -43,7 +43,7 @@ struct Ray
 struct MaterialProperties
 {
 	float3 BaseColor;
-	float3 NormalTS;
+	float3 Normal;
 	float Metalness;
 	float3 Emissive;
 	float Roughness;

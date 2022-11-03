@@ -2,6 +2,7 @@
 
 #include "Common.hlsli"
 #include "Random.hlsli"
+#include "Lighting.hlsli"
 
 #define RAY_BIAS 1.0e-2f
 
@@ -49,13 +50,13 @@ VertexAttribute GetVertexAttributes(InstanceData instance, float2 attribBarycent
 	return outData;
 }
 
-MaterialProperties GetMaterialProperties(MaterialData material, float2 UV, int mipLevel)
+MaterialProperties EvaluateMaterial(MaterialData material, VertexAttribute attributes, int mipLevel)
 {
 	MaterialProperties properties;
-	float4 baseColor = material.BaseColorFactor;
+	float4 baseColor = material.BaseColorFactor * UIntToColor(attributes.Color);
 	if(material.Diffuse != INVALID_HANDLE)
 	{
-		baseColor *= SampleLevel2D(material.Diffuse, sMaterialSampler, UV, mipLevel);
+		baseColor *= SampleLevel2D(material.Diffuse, sMaterialSampler, attributes.UV, mipLevel);
 	}
 	properties.BaseColor = baseColor.rgb;
 	properties.Opacity = baseColor.a;
@@ -64,22 +65,25 @@ MaterialProperties GetMaterialProperties(MaterialData material, float2 UV, int m
 	properties.Roughness = material.RoughnessFactor;
 	if(material.RoughnessMetalness != INVALID_HANDLE)
 	{
-		float4 roughnessMetalnessSample = SampleLevel2D(material.RoughnessMetalness, sMaterialSampler, UV, mipLevel);
+		float4 roughnessMetalnessSample = SampleLevel2D(material.RoughnessMetalness, sMaterialSampler, attributes.UV, mipLevel);
 		properties.Metalness *= roughnessMetalnessSample.b;
 		properties.Roughness *= roughnessMetalnessSample.g;
 	}
 	properties.Emissive = material.EmissiveFactor.rgb;
 	if(material.Emissive != INVALID_HANDLE)
 	{
-		properties.Emissive *= SampleLevel2D(material.Emissive, sMaterialSampler, UV, mipLevel).rgb;
+		properties.Emissive *= SampleLevel2D(material.Emissive, sMaterialSampler, attributes.UV, mipLevel).rgb;
 	}
 	properties.Specular = 0.5f;
 
-	properties.NormalTS = float3(0.5f, 0.5f, 1.0f);
+	properties.Normal = attributes.Normal;
 	if(material.Normal != INVALID_HANDLE)
 	{
-		properties.NormalTS = SampleLevel2D(material.Normal, sMaterialSampler, UV, mipLevel).rgb;
+		float3 normalTS = SampleLevel2D(material.Normal, sMaterialSampler, attributes.UV, mipLevel).rgb;
+		float3x3 TBN = CreateTangentToWorld(properties.Normal, float4(normalize(attributes.Tangent.xyz), attributes.Tangent.w));
+		properties.Normal = TangentSpaceNormalMapping(normalTS, TBN);
 	}
+
 	return properties;
 }
 
@@ -202,7 +206,7 @@ float TraceOcclusionRay(
 				InstanceData instance = GetInstance(q.CandidateInstanceID());
 				VertexAttribute vertex = GetVertexAttributes(instance, q.CandidateTriangleBarycentrics(), q.CandidatePrimitiveIndex());
 				MaterialData material = GetMaterial(instance.MaterialIndex);
-				MaterialProperties surface = GetMaterialProperties(material, vertex.UV, 0);
+				MaterialProperties surface = EvaluateMaterial(material, vertex, 0);
 				if(surface.Opacity > material.AlphaCutoff)
 				{
 					q.CommitNonOpaqueTriangleHit();
@@ -266,7 +270,7 @@ MaterialRayPayload TraceMaterialRay(
 				InstanceData instance = GetInstance(q.CandidateInstanceID());
 				VertexAttribute vertex = GetVertexAttributes(instance, q.CandidateTriangleBarycentrics(), q.CandidatePrimitiveIndex());
 				MaterialData material = GetMaterial(instance.MaterialIndex);
-				MaterialProperties surface = GetMaterialProperties(material, vertex.UV, 0);
+				MaterialProperties surface = EvaluateMaterial(material, vertex, 0);
 				if(surface.Opacity > material.AlphaCutoff)
 				{
 					q.CommitNonOpaqueTriangleHit();

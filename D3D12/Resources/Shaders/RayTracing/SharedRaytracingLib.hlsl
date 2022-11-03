@@ -23,7 +23,7 @@ void MaterialAHS(inout MaterialRayPayload payload, BuiltInTriangleIntersectionAt
 	InstanceData instance = GetInstance(InstanceID());
 	VertexAttribute vertex = GetVertexAttributes(instance, attrib.barycentrics, PrimitiveIndex());
 	MaterialData material = GetMaterial(instance.MaterialIndex);
-	MaterialProperties surface = GetMaterialProperties(material, vertex.UV, 0);
+	MaterialProperties surface = EvaluateMaterial(material, vertex, 0);
 
 	uint seed = SeedThread(DispatchRaysIndex().xy, DispatchRaysDimensions().xy, cView.FrameIndex);
 	if(surface.Opacity < Random01(seed))

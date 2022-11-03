@@ -119,7 +119,6 @@ InterpolantsVSToPS FetchVertexAttributes(MeshData mesh, float4x4 world, uint ver
 	result.Color = 0xFFFFFFFF;
 	if(mesh.ColorsOffset != ~0u)
 		result.Color = BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.ColorsOffset);
-	result.ID = vertexId;
 
 	return result;
 }
@@ -211,13 +210,13 @@ InterpolantsVSToPS VSMain(uint vertexId : SV_VertexID)
 	return result;
 }
 
-MaterialProperties GetMaterialProperties(MaterialData material, float2 UV)
+MaterialProperties EvaluateMaterial(MaterialData material, InterpolantsVSToPS attributes)
 {
 	MaterialProperties properties;
-	float4 baseColor = material.BaseColorFactor;
+	float4 baseColor = material.BaseColorFactor * UIntToColor(attributes.Color);
 	if(material.Diffuse != INVALID_HANDLE)
 	{
-		baseColor *= Sample2D(material.Diffuse, sMaterialSampler, UV);
+		baseColor *= Sample2D(material.Diffuse, sMaterialSampler, attributes.UV);
 	}
 	properties.BaseColor = baseColor.rgb;
 	properties.Opacity = baseColor.a;
@@ -226,21 +225,23 @@ MaterialProperties GetMaterialProperties(MaterialData material, float2 UV)
 	properties.Roughness = material.RoughnessFactor;
 	if(material.RoughnessMetalness != INVALID_HANDLE)
 	{
-		float4 roughnessMetalnessSample = Sample2D(material.RoughnessMetalness, sMaterialSampler, UV);
+		float4 roughnessMetalnessSample = Sample2D(material.RoughnessMetalness, sMaterialSampler, attributes.UV);
 		properties.Metalness *= roughnessMetalnessSample.b;
 		properties.Roughness *= roughnessMetalnessSample.g;
 	}
 	properties.Emissive = material.EmissiveFactor.rgb;
 	if(material.Emissive != INVALID_HANDLE)
 	{
-		properties.Emissive *= Sample2D(material.Emissive, sMaterialSampler, UV).rgb;
+		properties.Emissive *= Sample2D(material.Emissive, sMaterialSampler, attributes.UV).rgb;
 	}
 	properties.Specular = 0.5f;
 
-	properties.NormalTS = float3(0.5f, 0.5f, 1.0f);
+	properties.Normal = attributes.Normal;
 	if(material.Normal != INVALID_HANDLE)
 	{
-		properties.NormalTS = Sample2D(material.Normal, sMaterialSampler, UV).rgb;
+		float3 normalTS = Sample2D(material.Normal, sMaterialSampler, attributes.UV).rgb;
+		float3x3 TBN = CreateTangentToWorld(properties.Normal, float4(normalize(attributes.Tangent.xyz), attributes.Tangent.w));
+		properties.Normal = TangentSpaceNormalMapping(normalTS, TBN);
 	}
 	return properties;
 }
@@ -263,22 +264,18 @@ void PSMain(InterpolantsVSToPS input,
 
 	InstanceData instance = GetInstance(cObject.ID);
 	MaterialData material = GetMaterial(instance.MaterialIndex);
-	material.BaseColorFactor *= UIntToColor(input.Color);
-	MaterialProperties surface = GetMaterialProperties(material, input.UV);
-	float3 N = normalize(input.Normal);
-	float3x3 TBN = CreateTangentToWorld(N, float4(normalize(input.Tangent.xyz), input.Tangent.w));
-	N = TangentSpaceNormalMapping(surface.NormalTS, TBN);
 
+	MaterialProperties surface = EvaluateMaterial(material, input);
 	BrdfData brdf = GetBrdfData(surface);
 	float3 positionVS = mul(float4(input.PositionWS, 1), cView.View).xyz;
 
 	float ssrWeight = 0;
-	float3 ssr = ScreenSpaceReflections(input.Position, positionVS, N, V, brdf.Roughness, tDepth, tPreviousSceneColor, ssrWeight);
+	float3 ssr = ScreenSpaceReflections(input.Position, positionVS, surface.Normal, V, brdf.Roughness, tDepth, tPreviousSceneColor, ssrWeight);
 
-	LightResult lighting = DoLight(input.Position, input.PositionWS, N, V, brdf.Diffuse, brdf.Specular, brdf.Roughness);
+	LightResult lighting = DoLight(input.Position, input.PositionWS, surface.Normal, V, brdf.Diffuse, brdf.Specular, brdf.Roughness);
 
 	float3 outRadiance = 0;
-	outRadiance += ambientOcclusion * Diffuse_Lambert(brdf.Diffuse) * SampleDDGIIrradiance(input.PositionWS, N, -V);
+	outRadiance += ambientOcclusion * Diffuse_Lambert(brdf.Diffuse) * SampleDDGIIrradiance(input.PositionWS, surface.Normal, -V);
 	outRadiance += lighting.Diffuse + lighting.Specular;
 	outRadiance += ssr * ambientOcclusion;
 	outRadiance += surface.Emissive;
@@ -289,14 +286,7 @@ void PSMain(InterpolantsVSToPS input,
 
 	float reflectivity = saturate(scatteringTransmittance.w * ambientOcclusion * Square(1 - brdf.Roughness));
 
-#define DEBUG_MESHLETS 0
-#if DEBUG_MESHLETS
-	N = input.Normal;
-	uint seed = SeedThread(input.ID);
-	outRadiance = RandomColor(seed) * saturate(Wireframe(bary) + 0.6);
-#endif
-
 	output.Color = float4(outRadiance, surface.Opacity);
-	output.Normal = EncodeNormalOctahedron(N);
+	output.Normal = EncodeNormalOctahedron(surface.Normal);
 	output.Roughness = saturate(reflectivity - ssrWeight);
 }

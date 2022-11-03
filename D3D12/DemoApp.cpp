@@ -929,6 +929,7 @@ void DemoApp::Update()
 						Buffer* pHistogram = pLuminanceHistogram->Get();
 
 						context.ClearUAVu(pHistogram, pHistogram->GetUAV());
+						context.InsertUavBarrier(pHistogram);
 
 						context.SetComputeRootSignature(m_pCommonRS);
 						context.SetPipelineState(m_pLuminanceHistogramPSO);
@@ -1128,6 +1129,7 @@ void DemoApp::Update()
 						context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
 						context.ClearUAVf(pTarget, pTarget->GetUAV());
+						context.InsertUavBarrier(pTarget);
 
 						context.SetPipelineState(m_pDrawHistogramPSO);
 						context.SetComputeRootSignature(m_pCommonRS);
