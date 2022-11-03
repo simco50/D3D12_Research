@@ -262,21 +262,21 @@ public:
 		return *m_RenderPasses.back();
 	}
 
-	RGTexture* CreateTexture(const char* pName, const TextureDesc& desc)
+	RGTexture* Create(const char* pName, const TextureDesc& desc)
 	{
 		RGTexture* pResource = Allocate<RGTexture>(pName, (int)m_Resources.size(), desc);
 		m_Resources.emplace_back(pResource);
 		return pResource;
 	}
 
-	RGBuffer* CreateBuffer(const char* pName, const BufferDesc& desc)
+	RGBuffer* Create(const char* pName, const BufferDesc& desc)
 	{
 		RGBuffer* pResource = Allocate<RGBuffer>(pName, (int)m_Resources.size(), desc);
 		m_Resources.push_back(pResource);
 		return pResource;
 	}
 
-	RGTexture* ImportTexture(Texture* pTexture)
+	RGTexture* Import(Texture* pTexture)
 	{
 		check(pTexture);
 		RGTexture* pResource = Allocate<RGTexture>(pTexture->GetName().c_str(), (int)m_Resources.size(), pTexture->GetDesc(), pTexture);
@@ -284,12 +284,12 @@ public:
 		return pResource;
 	}
 
-	RGTexture* TryImportTexture(Texture* pTexture)
+	RGTexture* TryImport(Texture* pTexture)
 	{
-		return pTexture ? ImportTexture(pTexture) : nullptr;
+		return pTexture ? Import(pTexture) : nullptr;
 	}
 
-	RGBuffer* ImportBuffer(Buffer* pBuffer)
+	RGBuffer* Import(Buffer* pBuffer)
 	{
 		check(pBuffer);
 		RGBuffer* pResource = Allocate<RGBuffer>(pBuffer->GetName().c_str(), (int)m_Resources.size(), pBuffer->GetDesc(), pBuffer);
@@ -297,13 +297,13 @@ public:
 		return pResource;
 	}
 
-	RGBuffer* TryImportBuffer(Buffer* pBuffer)
+	RGBuffer* TryImport(Buffer* pBuffer)
 	{
-		return pBuffer ? ImportBuffer(pBuffer) : nullptr;
+		return pBuffer ? Import(pBuffer) : nullptr;
 	}
 
-	void ExportTexture(RGTexture* pTexture, RefCountPtr<Texture>* pTarget);
-	void ExportBuffer(RGBuffer* pBuffer, RefCountPtr<Buffer>* pTarget);
+	void Export(RGTexture* pTexture, RefCountPtr<Texture>* pTarget);
+	void Export(RGBuffer* pBuffer, RefCountPtr<Buffer>* pTarget);
 
 	RGTexture* FindTexture(const char* pName) const
 	{
@@ -371,6 +371,6 @@ namespace RGUtils
 {
 	RGPass& AddCopyPass(RGGraph& graph, RGResource* pSource, RGResource* pTarget);
 	RGPass& AddResolvePass(RGGraph& graph, RGTexture* pSource, RGTexture* pTarget);
-	RGBuffer* CreatePersistentBuffer(RGGraph& graph, const char* pName, const BufferDesc& bufferDesc, RefCountPtr<Buffer>* pStorageTarget, bool doExport);
-	RGTexture* CreatePersistentTexture(RGGraph& graph, const char* pName, const TextureDesc& textureDesc, RefCountPtr<Texture>* pStorageTarget, bool doExport);
+	RGBuffer* CreatePersistent(RGGraph& graph, const char* pName, const BufferDesc& bufferDesc, RefCountPtr<Buffer>* pStorageTarget, bool doExport);
+	RGTexture* CreatePersistent(RGGraph& graph, const char* pName, const TextureDesc& textureDesc, RefCountPtr<Texture>* pStorageTarget, bool doExport);
 }

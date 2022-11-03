@@ -193,8 +193,8 @@ public:
 	void BeginRenderPass(const RenderPassInfo& renderPassInfo);
 	void EndRenderPass();
 
-	void ClearUavUInt(const GraphicsResource* pBuffer, const UnorderedAccessView* pUav = nullptr, const Vector4u& values = Vector4u::Zero());
-	void ClearUavFloat(const GraphicsResource* pBuffer, const UnorderedAccessView* pUav = nullptr, const Vector4& values = Vector4::Zero);
+	void ClearUAVu(const GraphicsResource* pBuffer, const UnorderedAccessView* pUav = nullptr, const Vector4u& values = Vector4u::Zero());
+	void ClearUAVf(const GraphicsResource* pBuffer, const UnorderedAccessView* pUav = nullptr, const Vector4& values = Vector4::Zero);
 
 	void SetPipelineState(PipelineState* pPipelineState);
 	void SetPipelineState(StateObject* pStateObject);

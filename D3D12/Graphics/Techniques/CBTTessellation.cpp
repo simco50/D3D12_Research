@@ -114,13 +114,13 @@ void CBTTessellation::Execute(RGGraph& graph, CBTData& data, const SceneView* pV
 
 	RG_GRAPH_SCOPE("CBT", graph);
 
-	RGBuffer* pCBTBuffer = graph.TryImportBuffer(data.pCBTBuffer);
+	RGBuffer* pCBTBuffer = graph.TryImport(data.pCBTBuffer);
 
 	if (!pCBTBuffer)
 	{
 		uint32 size = CBT::ComputeSize(CBTSettings::CBTDepth);
 		data.pCBTBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateByteAddress(size, BufferFlag::ShaderResource | BufferFlag::UnorderedAccess), "CBT");
-		pCBTBuffer = graph.ImportBuffer(data.pCBTBuffer);
+		pCBTBuffer = graph.Import(data.pCBTBuffer);
 
 		graph.AddPass("CBT Upload", RGPassFlag::Compute)
 			.Write({ pCBTBuffer })
@@ -160,7 +160,7 @@ void CBTTessellation::Execute(RGGraph& graph, CBTData& data, const SceneView* pV
 	updateData.SplitMode = data.SplitMode;
 	data.SplitMode = 1 - data.SplitMode;
 
-	RGBuffer* pIndirectArgs = graph.ImportBuffer(data.pCBTIndirectArgs);
+	RGBuffer* pIndirectArgs = graph.Import(data.pCBTIndirectArgs);
 
 	if (!CBTSettings::MeshShader)
 	{

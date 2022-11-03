@@ -115,7 +115,7 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView* pView, RGTexture* p
 
 	RG_GRAPH_SCOPE("Particle Simulation", graph);
 
-	RGBuffer* pIndirectArgs = graph.CreateBuffer("Indirect Arguments", BufferDesc::CreateIndirectArguments<uint32>(IndirectArgOffsets::Size));
+	RGBuffer* pIndirectArgs = graph.Create("Indirect Arguments", BufferDesc::CreateIndirectArguments<uint32>(IndirectArgOffsets::Size));
 
 	graph.AddPass("Prepare Arguments", RGPassFlag::Compute)
 		.Read(pDepth)

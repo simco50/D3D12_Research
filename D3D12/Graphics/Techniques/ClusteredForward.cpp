@@ -173,7 +173,7 @@ void ClusteredForward::ComputeLightCulling(RGGraph& graph, const SceneView* pVie
 
 	uint32 totalClusterCount = cullData.ClusterCount.x * cullData.ClusterCount.y * cullData.ClusterCount.z;
 
-	cullData.pAABBs = graph.CreateBuffer("Cluster AABBs", BufferDesc::CreateStructured(totalClusterCount, sizeof(Vector4) * 2));
+	cullData.pAABBs = graph.Create("Cluster AABBs", BufferDesc::CreateStructured(totalClusterCount, sizeof(Vector4) * 2));
 
 	graph.AddPass("Cluster AABBs", RGPassFlag::Compute)
 		.Write(cullData.pAABBs)
@@ -205,9 +205,9 @@ void ClusteredForward::ComputeLightCulling(RGGraph& graph, const SceneView* pVie
 				);
 			});
 
-	cullData.pLightIndexGrid = graph.CreateBuffer("Light Index Grid", BufferDesc::CreateStructured(gMaxLightsPerCluster * totalClusterCount, sizeof(uint32)));
+	cullData.pLightIndexGrid = graph.Create("Light Index Grid", BufferDesc::CreateStructured(gMaxLightsPerCluster * totalClusterCount, sizeof(uint32)));
 	// LightGrid: x : Offset | y : Count
-	cullData.pLightGrid = graph.CreateBuffer("Light Grid", BufferDesc::CreateStructured(2 * totalClusterCount, sizeof(uint32), BufferFlag::NoBindless));
+	cullData.pLightGrid = graph.Create("Light Grid", BufferDesc::CreateStructured(2 * totalClusterCount, sizeof(uint32), BufferFlag::NoBindless));
 
 	graph.AddPass("Cull Lights", RGPassFlag::Compute)
 		.Read(cullData.pAABBs)
@@ -220,7 +220,7 @@ void ClusteredForward::ComputeLightCulling(RGGraph& graph, const SceneView* pVie
 				// Clear the light grid because we're accumulating the light count in the shader
 				Buffer* pLightGrid = cullData.pLightGrid->Get();
 				//#todo: adhoc UAV creation
-				context.ClearUavUInt(pLightGrid, m_pDevice->CreateUAV(pLightGrid, BufferUAVDesc::CreateRaw()));
+				context.ClearUAVu(pLightGrid, m_pDevice->CreateUAV(pLightGrid, BufferUAVDesc::CreateRaw()));
 
 				struct
 				{
@@ -250,7 +250,7 @@ void ClusteredForward::ComputeLightCulling(RGGraph& graph, const SceneView* pVie
 void ClusteredForward::VisualizeClusters(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures, LightCull3DData& cullData)
 {
 	uint32 totalClusterCount = cullData.ClusterCount.x * cullData.ClusterCount.y * cullData.ClusterCount.z;
-	RGBuffer* pDebugLightGrid = RGUtils::CreatePersistentBuffer(graph, "Debug Light Grid", BufferDesc::CreateStructured(2 * totalClusterCount, sizeof(uint32)), &cullData.pDebugLightGrid, true);
+	RGBuffer* pDebugLightGrid = RGUtils::CreatePersistent(graph, "Debug Light Grid", BufferDesc::CreateStructured(2 * totalClusterCount, sizeof(uint32)), &cullData.pDebugLightGrid, true);
 
 	if (cullData.DirtyDebugData)
 	{
@@ -292,10 +292,10 @@ RGTexture* ClusteredForward::RenderVolumetricFog(RGGraph& graph, const SceneView
 		ResourceFormat::RGBA16_FLOAT,
 		TextureFlag::ShaderResource | TextureFlag::UnorderedAccess);
 
-	RGTexture* pSourceVolume = RGUtils::CreatePersistentTexture(graph, "Fog History", volumeDesc, &fogData.pFogHistory, false);
-	RGTexture* pTargetVolume = graph.CreateTexture("Fog Target", volumeDesc);
-	RGTexture* pFinalVolumeFog = graph.CreateTexture("Volumetric Fog", volumeDesc);
-	graph.ExportTexture(pTargetVolume, &fogData.pFogHistory);
+	RGTexture* pSourceVolume = RGUtils::CreatePersistent(graph, "Fog History", volumeDesc, &fogData.pFogHistory, false);
+	RGTexture* pTargetVolume = graph.Create("Fog Target", volumeDesc);
+	RGTexture* pFinalVolumeFog = graph.Create("Volumetric Fog", volumeDesc);
+	graph.Export(pTargetVolume, &fogData.pFogHistory);
 
 	struct
 	{
@@ -429,7 +429,7 @@ void ClusteredForward::RenderBasePass(RGGraph& graph, const SceneView* pView, Sc
 
 void ClusteredForward::VisualizeLightDensity(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures, const LightCull3DData& lightCullData)
 {
-	RGTexture* pVisualizationTarget = graph.CreateTexture("Scene Color", sceneTextures.pColorTarget->GetDesc());
+	RGTexture* pVisualizationTarget = graph.Create("Scene Color", sceneTextures.pColorTarget->GetDesc());
 
 	RGBuffer* pLightGrid = lightCullData.pLightGrid;
 	Vector2 lightGridParams = lightCullData.LightGridParams;

@@ -72,7 +72,7 @@ void GPUDrivenRenderer::Render(RGGraph& graph, const SceneView* pView, RGTexture
 
 	TextureDesc depthDesc = pDepth->GetDesc();
 	RGTexture* pHZB = InitHZB(graph, depthDesc.Size2D(), pHZBExport);
-	RGTexture* pVisibilityBuffer = graph.CreateTexture("Visibility", TextureDesc::CreateRenderTarget(depthDesc.Width, depthDesc.Height, ResourceFormat::R32_UINT));
+	RGTexture* pVisibilityBuffer = graph.Create("Visibility", TextureDesc::CreateRenderTarget(depthDesc.Width, depthDesc.Height, ResourceFormat::R32_UINT));
 
 	constexpr uint32 maxNumInstances = Tweakables::MaxNumInstances;
 	constexpr uint32 maxNumMeshlets = Tweakables::MaxNumMeshlets;
@@ -87,10 +87,10 @@ void GPUDrivenRenderer::Render(RGGraph& graph, const SceneView* pView, RGTexture
 	check(numMeshlets <= maxNumMeshlets);
 #endif
 
-	RGBuffer* pMeshletCandidates =			graph.CreateBuffer("GPURender.MeshletCandidates", BufferDesc::CreateStructured(maxNumMeshlets, sizeof(uint32) * 2));
-	RGBuffer* pMeshletCandidatesCounter =	graph.CreateBuffer("GPURender.MeshletCandidates.Counter", BufferDesc::CreateTyped(3, ResourceFormat::R32_UINT));
-	RGBuffer* pOccludedInstances =			graph.CreateBuffer("GPURender.OccludedInstances", BufferDesc::CreateStructured(maxNumInstances, sizeof(uint32)));
-	RGBuffer* pOccludedInstancesCounter =	graph.CreateBuffer("GPURender.OccludedInstances.Counter", BufferDesc::CreateTyped(1, ResourceFormat::R32_UINT));
+	RGBuffer* pMeshletCandidates =			graph.Create("GPURender.MeshletCandidates", BufferDesc::CreateStructured(maxNumMeshlets, sizeof(uint32) * 2));
+	RGBuffer* pMeshletCandidatesCounter =	graph.Create("GPURender.MeshletCandidates.Counter", BufferDesc::CreateTyped(3, ResourceFormat::R32_UINT));
+	RGBuffer* pOccludedInstances =			graph.Create("GPURender.OccludedInstances", BufferDesc::CreateStructured(maxNumInstances, sizeof(uint32)));
+	RGBuffer* pOccludedInstancesCounter =	graph.Create("GPURender.OccludedInstances.Counter", BufferDesc::CreateTyped(1, ResourceFormat::R32_UINT));
 
 	{
 		RG_GRAPH_SCOPE("Phase 1", graph);
@@ -99,8 +99,8 @@ void GPUDrivenRenderer::Render(RGGraph& graph, const SceneView* pView, RGTexture
 			.Write({ pMeshletCandidatesCounter, pOccludedInstancesCounter })
 			.Bind([=](CommandContext& context)
 				{
-					context.ClearUavUInt(pMeshletCandidatesCounter->Get());
-					context.ClearUavUInt(pOccludedInstancesCounter->Get());
+					context.ClearUAVu(pMeshletCandidatesCounter->Get());
+					context.ClearUAVu(pOccludedInstancesCounter->Get());
 					context.InsertUavBarrier();
 				});
 
@@ -123,7 +123,7 @@ void GPUDrivenRenderer::Render(RGGraph& graph, const SceneView* pView, RGTexture
 					context.Dispatch(ComputeUtils::GetNumThreadGroups((uint32)pView->Batches.size(), 64));
 				});
 
-		RGBuffer* pDispatchMeshBuffer = graph.CreateBuffer("GPURender.DispatchMeshArgs", BufferDesc::CreateIndirectArguments<D3D12_DISPATCH_MESH_ARGUMENTS>(1));
+		RGBuffer* pDispatchMeshBuffer = graph.Create("GPURender.DispatchMeshArgs", BufferDesc::CreateIndirectArguments<D3D12_DISPATCH_MESH_ARGUMENTS>(1));
 		graph.AddPass("Build DispatchMesh Arguments", RGPassFlag::Compute)
 			.Read(pMeshletCandidatesCounter)
 			.Write(pDispatchMeshBuffer)
@@ -164,7 +164,7 @@ void GPUDrivenRenderer::Render(RGGraph& graph, const SceneView* pView, RGTexture
 	{
 		RG_GRAPH_SCOPE("Phase 2", graph);
 
-		RGBuffer* pDispatchBuffer = graph.CreateBuffer("GPURender.DispatchArgs", BufferDesc::CreateIndirectArguments<D3D12_DISPATCH_ARGUMENTS>(1));
+		RGBuffer* pDispatchBuffer = graph.Create("GPURender.DispatchArgs", BufferDesc::CreateIndirectArguments<D3D12_DISPATCH_ARGUMENTS>(1));
 		graph.AddPass("Build Instance Cull Arguments", RGPassFlag::Compute)
 			.Read({ pOccludedInstancesCounter })
 			.Write({ pDispatchBuffer })
@@ -203,7 +203,7 @@ void GPUDrivenRenderer::Render(RGGraph& graph, const SceneView* pView, RGTexture
 				});
 
 
-		RGBuffer* pDispatchMeshBuffer = graph.CreateBuffer("GPURender.DispatchMeshArgs", BufferDesc::CreateIndirectArguments<D3D12_DISPATCH_MESH_ARGUMENTS>(1));
+		RGBuffer* pDispatchMeshBuffer = graph.Create("GPURender.DispatchMeshArgs", BufferDesc::CreateIndirectArguments<D3D12_DISPATCH_MESH_ARGUMENTS>(1));
 		graph.AddPass("Build DispatchMesh Arguments", RGPassFlag::Compute)
 			.Read(pMeshletCandidatesCounter)
 			.Write(pDispatchMeshBuffer)
@@ -269,7 +269,7 @@ RGTexture* GPUDrivenRenderer::InitHZB(RGGraph& graph, const Vector2i& viewDimens
 {
 	RGTexture* pHZB = nullptr;
 	if (pExportTarget && *pExportTarget)
-		pHZB = graph.TryImportTexture(*pExportTarget);
+		pHZB = graph.TryImport(*pExportTarget);
 
 	Vector2i hzbDimensions;
 	hzbDimensions.x = Math::Max(Math::NextPowerOfTwo(viewDimensions.x) >> 1u, 1u);
@@ -279,10 +279,10 @@ RGTexture* GPUDrivenRenderer::InitHZB(RGGraph& graph, const Vector2i& viewDimens
 
 	if (!pHZB || pHZB->GetDesc() != desc)
 	{
-		pHZB = graph.CreateTexture("HZB", desc);
+		pHZB = graph.Create("HZB", desc);
 		if (pExportTarget)
 		{
-			graph.ExportTexture(pHZB, pExportTarget);
+			graph.Export(pHZB, pExportTarget);
 		}
 	}
 	return pHZB;
@@ -314,13 +314,13 @@ void GPUDrivenRenderer::BuildHZB(RGGraph& graph, RGTexture* pDepth, RGTexture* p
 				context.Dispatch(ComputeUtils::GetNumThreadGroups(hzbDimensions.x, 16, hzbDimensions.y, 16));
 			});
 
-	RGBuffer* pSPDCounter = graph.CreateBuffer("SPD Counter", BufferDesc::CreateTyped(1, ResourceFormat::R32_UINT));
+	RGBuffer* pSPDCounter = graph.Create("SPD Counter", BufferDesc::CreateTyped(1, ResourceFormat::R32_UINT));
 
 	graph.AddPass("HZB Mips", RGPassFlag::Compute)
 		.Write({ pHZB, pSPDCounter })
 		.Bind([=](CommandContext& context)
 			{
-				context.ClearUavUInt(pSPDCounter->Get());
+				context.ClearUAVu(pSPDCounter->Get());
 				context.InsertUavBarrier();
 
 				context.SetComputeRootSignature(m_pCommonRS);

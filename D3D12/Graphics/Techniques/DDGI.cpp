@@ -85,19 +85,19 @@ void DDGI::Execute(RGGraph& graph, const SceneView* pView, World* pWorld)
 
 		Vector2i ddgiIrradianceDimensions = ProbeTextureDimensions(ddgi.NumProbes, probeIrradianceTexels);
 		TextureDesc ddgiIrradianceDesc = TextureDesc::Create2D(ddgiIrradianceDimensions.x, ddgiIrradianceDimensions.y, ResourceFormat::RGBA16_FLOAT, TextureFlag::UnorderedAccess);
-		RGTexture* pIrradianceTarget = graph.CreateTexture("DDGI Irradiance Target", ddgiIrradianceDesc);
-		RGTexture* pIrradianceHistory = RGUtils::CreatePersistentTexture(graph, "DDGI Irradiance History", ddgiIrradianceDesc, &ddgi.pIrradianceHistory, false);
-		graph.ExportTexture(pIrradianceTarget, &ddgi.pIrradianceHistory);
+		RGTexture* pIrradianceTarget = graph.Create("DDGI Irradiance Target", ddgiIrradianceDesc);
+		RGTexture* pIrradianceHistory = RGUtils::CreatePersistent(graph, "DDGI Irradiance History", ddgiIrradianceDesc, &ddgi.pIrradianceHistory, false);
+		graph.Export(pIrradianceTarget, &ddgi.pIrradianceHistory);
 
 		Vector2i ddgiDepthDimensions = ProbeTextureDimensions(ddgi.NumProbes, probeDepthTexel);
 		TextureDesc ddgiDepthDesc = TextureDesc::Create2D(ddgiDepthDimensions.x, ddgiDepthDimensions.y, ResourceFormat::RG16_FLOAT, TextureFlag::UnorderedAccess);
-		RGTexture* pDepthTarget = graph.CreateTexture("DDGI Depth Target", ddgiDepthDesc);
-		RGTexture* pDepthHistory = RGUtils::CreatePersistentTexture(graph, "DDGI Depth History", ddgiDepthDesc, &ddgi.pDepthHistory, false);
-		graph.ExportTexture(pDepthTarget, &ddgi.pDepthHistory);
+		RGTexture* pDepthTarget = graph.Create("DDGI Depth Target", ddgiDepthDesc);
+		RGTexture* pDepthHistory = RGUtils::CreatePersistent(graph, "DDGI Depth History", ddgiDepthDesc, &ddgi.pDepthHistory, false);
+		graph.Export(pDepthTarget, &ddgi.pDepthHistory);
 
-		RGBuffer* pRayBuffer = graph.CreateBuffer("DDGI Ray Buffer", BufferDesc::CreateTyped(numProbes * ddgi.MaxNumRays, ResourceFormat::RGBA16_FLOAT));
-		RGBuffer* pProbeStates = RGUtils::CreatePersistentBuffer(graph, "DDGI States Buffer", BufferDesc::CreateTyped(numProbes, ResourceFormat::R8_UINT), &ddgi.pProbeStates, true);
-		RGBuffer* pProbeOffsets = RGUtils::CreatePersistentBuffer(graph, "DDGI Probe Offsets", BufferDesc::CreateTyped(numProbes, ResourceFormat::RGBA16_FLOAT), &ddgi.pProbeOffset, true);
+		RGBuffer* pRayBuffer = graph.Create("DDGI Ray Buffer", BufferDesc::CreateTyped(numProbes * ddgi.MaxNumRays, ResourceFormat::RGBA16_FLOAT));
+		RGBuffer* pProbeStates = RGUtils::CreatePersistent(graph, "DDGI States Buffer", BufferDesc::CreateTyped(numProbes, ResourceFormat::R8_UINT), &ddgi.pProbeStates, true);
+		RGBuffer* pProbeOffsets = RGUtils::CreatePersistent(graph, "DDGI Probe Offsets", BufferDesc::CreateTyped(numProbes, ResourceFormat::RGBA16_FLOAT), &ddgi.pProbeOffset, true);
 
 		graph.AddPass("DDGI Raytrace", RGPassFlag::Compute)
 			.Read(pProbeStates)

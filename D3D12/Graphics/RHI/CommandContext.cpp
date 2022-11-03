@@ -242,7 +242,7 @@ void CommandContext::ExecuteIndirect(const CommandSignature* pCommandSignature, 
 	m_pCommandList->ExecuteIndirect(pCommandSignature->GetCommandSignature(), maxCount, pIndirectArguments->GetResource(), argumentsOffset, pCountBuffer ? pCountBuffer->GetResource() : nullptr, countOffset);
 }
 
-void CommandContext::ClearUavUInt(const GraphicsResource* pBuffer, const UnorderedAccessView* pUav, const Vector4u& values)
+void CommandContext::ClearUAVu(const GraphicsResource* pBuffer, const UnorderedAccessView* pUav, const Vector4u& values)
 {
 	if (!pUav)
 		pUav = pBuffer->GetUAV();
@@ -256,7 +256,7 @@ void CommandContext::ClearUavUInt(const GraphicsResource* pBuffer, const Unorder
 	m_pCommandList->ClearUnorderedAccessViewUint(gpuHandle.GpuHandle, pUav->GetDescriptor(), pBuffer->GetResource(), &values.x, 0, nullptr);
 }
 
-void CommandContext::ClearUavFloat(const GraphicsResource* pBuffer, const UnorderedAccessView* pUav, const Vector4& values)
+void CommandContext::ClearUAVf(const GraphicsResource* pBuffer, const UnorderedAccessView* pUav, const Vector4& values)
 {
 	if (!pUav)
 		pUav = pBuffer->GetUAV();

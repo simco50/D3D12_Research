@@ -40,9 +40,9 @@ void RTAO::Execute(RGGraph& graph, const SceneView* pView, SceneTextures& sceneT
 {
 	TextureDesc aoDesc = sceneTextures.pAmbientOcclusion->GetDesc();
 
-	RGTexture* pRayTraceTarget = graph.CreateTexture("AO Target 0", aoDesc);
-	RGTexture* pDenoiseTarget = graph.CreateTexture("AO Target 1", aoDesc);
-	RGTexture* pAOHistory = RGUtils::CreatePersistentTexture(graph, "AO History", aoDesc, &m_pHistory, true);
+	RGTexture* pRayTraceTarget = graph.Create("AO Target 0", aoDesc);
+	RGTexture* pDenoiseTarget = graph.Create("AO Target 1", aoDesc);
+	RGTexture* pAOHistory = RGUtils::CreatePersistent(graph, "AO History", aoDesc, &m_pHistory, true);
 
 	static float g_AoPower = 1.0f;
 	static float g_AoRadius = 2.0f;

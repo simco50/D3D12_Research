@@ -80,9 +80,9 @@ void ShaderDebugRenderer::Render(RGGraph& graph, const SceneView* pView, RGTextu
 {
 	RG_GRAPH_SCOPE("GPU Debug Render", graph);
 
-	RGBuffer* pRenderData = graph.ImportBuffer(m_pRenderDataBuffer);
+	RGBuffer* pRenderData = graph.Import(m_pRenderDataBuffer);
 
-	RGBuffer* pDrawArgs = graph.CreateBuffer("Indirect Draw Args", BufferDesc::CreateIndirectArguments<D3D12_DRAW_ARGUMENTS>(2));
+	RGBuffer* pDrawArgs = graph.Create("Indirect Draw Args", BufferDesc::CreateIndirectArguments<D3D12_DRAW_ARGUMENTS>(2));
 
 	graph.AddPass("Build Draw Args", RGPassFlag::Compute)
 		.Write({ pDrawArgs, pRenderData })
@@ -409,7 +409,7 @@ void ShaderDebugRenderer::BuildFontAtlas(CommandContext& context, const Vector2i
 	{
 		m_pFontAtlas = context.GetParent()->CreateTexture(TextureDesc::Create2D(resolution.x, resolution.y, ResourceFormat::R8_UNORM, TextureFlag::UnorderedAccess), "Font Atlas");
 		context.InsertResourceBarrier(m_pFontAtlas, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-		context.ClearUavUInt(m_pFontAtlas, m_pFontAtlas->GetUAV(), TVector4<uint32>(0, 0, 0, 0xFFFFFFFF));
+		context.ClearUAVu(m_pFontAtlas, m_pFontAtlas->GetUAV(), TVector4<uint32>(0, 0, 0, 0xFFFFFFFF));
 
 		context.SetComputeRootSignature(m_pCommonRS);
 		context.SetPipelineState(m_pRasterizeGlyphPSO);

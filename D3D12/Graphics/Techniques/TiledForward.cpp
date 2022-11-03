@@ -63,12 +63,12 @@ void TiledForward::ComputeLightCulling(RGGraph& graph, const SceneView* pView, S
 {
 	int frustumCountX = Math::DivideAndRoundUp(pView->GetDimensions().x, FORWARD_PLUS_BLOCK_SIZE);
 	int frustumCountY = Math::DivideAndRoundUp(pView->GetDimensions().y, FORWARD_PLUS_BLOCK_SIZE);
-	resources.pLightGridOpaque = graph.CreateTexture("Light Grid - Opaque", TextureDesc::Create2D(frustumCountX, frustumCountY, ResourceFormat::RG32_UINT));
-	resources.pLightGridTransparant = graph.CreateTexture("Light Grid - Transparant", TextureDesc::Create2D(frustumCountX, frustumCountY, ResourceFormat::RG32_UINT));
+	resources.pLightGridOpaque = graph.Create("Light Grid - Opaque", TextureDesc::Create2D(frustumCountX, frustumCountY, ResourceFormat::RG32_UINT));
+	resources.pLightGridTransparant = graph.Create("Light Grid - Transparant", TextureDesc::Create2D(frustumCountX, frustumCountY, ResourceFormat::RG32_UINT));
 
-	resources.pLightIndexCounter = graph.CreateBuffer("Light Index Counter", BufferDesc::CreateStructured(2, sizeof(uint32), BufferFlag::NoBindless));
-	resources.pLightIndexListOpaque = graph.CreateBuffer("Light List - Opaque", BufferDesc::CreateStructured(MAX_LIGHT_DENSITY, sizeof(uint32)));
-	resources.pLightIndexListTransparant = graph.CreateBuffer("Light List - Transparant", BufferDesc::CreateStructured(MAX_LIGHT_DENSITY, sizeof(uint32)));
+	resources.pLightIndexCounter = graph.Create("Light Index Counter", BufferDesc::CreateStructured(2, sizeof(uint32), BufferFlag::NoBindless));
+	resources.pLightIndexListOpaque = graph.Create("Light List - Opaque", BufferDesc::CreateStructured(MAX_LIGHT_DENSITY, sizeof(uint32)));
+	resources.pLightIndexListTransparant = graph.Create("Light List - Transparant", BufferDesc::CreateStructured(MAX_LIGHT_DENSITY, sizeof(uint32)));
 
 	graph.AddPass("2D Light Culling", RGPassFlag::Compute)
 		.Read(sceneTextures.pDepth)
@@ -80,7 +80,7 @@ void TiledForward::ComputeLightCulling(RGGraph& graph, const SceneView* pView, S
 				Texture* pDepth = sceneTextures.pDepth->Get();
 
 				//#todo: adhoc UAV creation
-				context.ClearUavUInt(resources.pLightIndexCounter->Get(), m_pDevice->CreateUAV(resources.pLightIndexCounter->Get(), BufferUAVDesc::CreateRaw()));
+				context.ClearUAVu(resources.pLightIndexCounter->Get(), m_pDevice->CreateUAV(resources.pLightIndexCounter->Get(), BufferUAVDesc::CreateRaw()));
 
 				context.SetComputeRootSignature(m_pCommonRS);
 				context.SetPipelineState(m_pComputeLightCullPSO);
@@ -165,7 +165,7 @@ void TiledForward::RenderBasePass(RGGraph& graph, const SceneView* pView, SceneT
 
 void TiledForward::VisualizeLightDensity(RGGraph& graph, GraphicsDevice* pDevice, const SceneView* pView, SceneTextures& sceneTextures, const LightCull2DData& lightCullData)
 {
-	RGTexture* pVisualizationTarget = graph.CreateTexture("Scene Color", sceneTextures.pColorTarget->GetDesc());
+	RGTexture* pVisualizationTarget = graph.Create("Scene Color", sceneTextures.pColorTarget->GetDesc());
 	RGTexture* pLightGridOpaque = lightCullData.pLightGridOpaque;
 
 	graph.AddPass("Visualize Light Density", RGPassFlag::Compute)

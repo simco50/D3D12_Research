@@ -243,7 +243,7 @@ void RGGraph::Compile()
 	}
 }
 
-void RGGraph::ExportTexture(RGTexture* pTexture, RefCountPtr<Texture>* pTarget)
+void RGGraph::Export(RGTexture* pTexture, RefCountPtr<Texture>* pTarget)
 {
 	auto it = std::find_if(m_ExportTextures.begin(), m_ExportTextures.end(), [&](const ExportedTexture& tex) { return tex.pTarget == pTarget; });
 	checkf(it == m_ExportTextures.end(), "Texture '%s' is exported to a target that has already been exported to by another texture ('%s').", pTexture->GetName(), it->pTexture->GetName());
@@ -251,7 +251,7 @@ void RGGraph::ExportTexture(RGTexture* pTexture, RefCountPtr<Texture>* pTarget)
 	m_ExportTextures.push_back({ pTexture, pTarget });
 }
 
-void RGGraph::ExportBuffer(RGBuffer* pBuffer, RefCountPtr<Buffer>* pTarget)
+void RGGraph::Export(RGBuffer* pBuffer, RefCountPtr<Buffer>* pTarget)
 {
 	auto it = std::find_if(m_ExportBuffers.begin(), m_ExportBuffers.end(), [&](const ExportedBuffer& buff) { return buff.pTarget == pTarget; });
 	checkf(it == m_ExportBuffers.end(), "Buffer '%s' is exported to a target that has already been exported to by another texture ('%s').", pBuffer->GetName(), it->pBuffer->GetName());
@@ -475,7 +475,7 @@ namespace RGUtils
 				{});
 	}
 
-	RGBuffer* CreatePersistentBuffer(RGGraph& graph, const char* pName, const BufferDesc& bufferDesc, RefCountPtr<Buffer>* pStorageTarget, bool doExport)
+	RGBuffer* CreatePersistent(RGGraph& graph, const char* pName, const BufferDesc& bufferDesc, RefCountPtr<Buffer>* pStorageTarget, bool doExport)
 	{
 		check(pStorageTarget);
 		RGBuffer* pBuffer = nullptr;
@@ -483,19 +483,19 @@ namespace RGUtils
 		{
 			if (pStorageTarget->Get()->GetDesc().IsCompatible(bufferDesc))
 			{
-				pBuffer = graph.ImportBuffer(*pStorageTarget);
+				pBuffer = graph.Import(*pStorageTarget);
 			}
 		}
 		if (!pBuffer)
 		{
-			pBuffer = graph.CreateBuffer(pName, bufferDesc);
+			pBuffer = graph.Create(pName, bufferDesc);
 			if(doExport)
-				graph.ExportBuffer(pBuffer, pStorageTarget);
+				graph.Export(pBuffer, pStorageTarget);
 		}
 		return pBuffer;
 	}
 
-	RGTexture* CreatePersistentTexture(RGGraph& graph, const char* pName, const TextureDesc& textureDesc, RefCountPtr<Texture>* pStorageTarget, bool doExport)
+	RGTexture* CreatePersistent(RGGraph& graph, const char* pName, const TextureDesc& textureDesc, RefCountPtr<Texture>* pStorageTarget, bool doExport)
 	{
 		check(pStorageTarget);
 		RGTexture* pTexture = nullptr;
@@ -503,14 +503,14 @@ namespace RGUtils
 		{
 			if (pStorageTarget->Get()->GetDesc().IsCompatible(textureDesc))
 			{
-				pTexture = graph.ImportTexture(*pStorageTarget);
+				pTexture = graph.TryImport(*pStorageTarget);
 			}
 		}
 		if (!pTexture)
 		{
-			pTexture = graph.CreateTexture(pName, textureDesc);
+			pTexture = graph.Create(pName, textureDesc);
 			if(doExport)
-				graph.ExportTexture(pTexture, pStorageTarget);
+				graph.Export(pTexture, pStorageTarget);
 		}
 		return pTexture;
 	}

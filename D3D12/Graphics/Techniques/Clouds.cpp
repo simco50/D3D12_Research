@@ -113,11 +113,11 @@ RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const Sc
 	}
 	ImGui::End();
 
-	RGTexture* pNoiseTexture = RGUtils::CreatePersistentTexture(graph, "Shape Noise",
+	RGTexture* pNoiseTexture = RGUtils::CreatePersistent(graph, "Shape Noise",
 		TextureDesc::Create3D(parameters.ShapeNoiseResolution, parameters.ShapeNoiseResolution, parameters.ShapeNoiseResolution, ResourceFormat::RGBA8_UNORM, TextureFlag::None, 1, 4), &m_pShapeNoise, true);
-	RGTexture* pDetailNoiseTexture = RGUtils::CreatePersistentTexture(graph, "Detail Noise",
+	RGTexture* pDetailNoiseTexture = RGUtils::CreatePersistent(graph, "Detail Noise",
 		TextureDesc::Create3D(parameters.DetailNoiseResolution, parameters.DetailNoiseResolution, parameters.DetailNoiseResolution, ResourceFormat::RGBA8_UNORM, TextureFlag::None, 1, 4), &m_pDetailNoise, true);
-	RGTexture* pCloudTypeLUT = RGUtils::CreatePersistentTexture(graph, "Height Gradient",
+	RGTexture* pCloudTypeLUT = RGUtils::CreatePersistent(graph, "Height Gradient",
 		TextureDesc::Create2D(128, 128, ResourceFormat::R8_UNORM), &m_pCloudHeightDensityLUT, true);
 
 	if (isDirty)
@@ -196,7 +196,7 @@ RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const Sc
 				});
 	}
 
-	RGTexture* pIntermediateColor = graph.CreateTexture("Intermediate Color", sceneTextures.pColorTarget->GetDesc());
+	RGTexture* pIntermediateColor = graph.Create("Intermediate Color", sceneTextures.pColorTarget->GetDesc());
 
 	graph.AddPass("Clouds", RGPassFlag::Compute)
 		.Read({ pNoiseTexture, pDetailNoiseTexture, pCloudTypeLUT, sceneTextures.pColorTarget, sceneTextures.pDepth })
