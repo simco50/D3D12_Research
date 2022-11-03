@@ -4,6 +4,7 @@
 #include "AccelerationStructure.h"
 #include "RenderGraph/RenderGraphDefinitions.h"
 #include "Techniques/ShaderDebugRenderer.h"
+#include "Techniques/DDGI.h"
 
 class Texture;
 class Buffer;
@@ -15,19 +16,6 @@ class GraphicsDevice;
 class Image;
 struct SubMesh;
 struct Light;
-
-struct DDGIVolume
-{
-	Vector3 Origin;
-	Vector3 Extents;
-	Vector3i NumProbes;
-	int32 MaxNumRays;
-	int32 NumRays;
-	RefCountPtr<Texture> pIrradianceHistory;
-	RefCountPtr<Texture> pDepthHistory;
-	RefCountPtr<Buffer> pProbeOffset;
-	RefCountPtr<Buffer> pProbeStates;
-};
 
 struct World
 {

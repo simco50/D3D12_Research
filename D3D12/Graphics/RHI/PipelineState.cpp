@@ -37,11 +37,13 @@ void PipelineStateInitializer::SetDepthOnlyTarget(ResourceFormat dsvFormat, uint
 void PipelineStateInitializer::SetRenderTargetFormats(const Span<ResourceFormat>& rtvFormats, ResourceFormat dsvFormat, uint32 msaa)
 {
 	D3D12_RT_FORMAT_ARRAY& formatArray = GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_RENDER_TARGET_FORMATS>();
+	// Validation layer bug - Throws error about RT Format even if NumRenderTargets == 0.
+	memset(formatArray.RTFormats, 0, sizeof(DXGI_FORMAT) * ARRAYSIZE(formatArray.RTFormats));
+	formatArray.NumRenderTargets = 0;
 	for (ResourceFormat format : rtvFormats)
 	{
 		formatArray.RTFormats[formatArray.NumRenderTargets++] = D3D::ConvertFormat(format);
 	}
-	formatArray.NumRenderTargets = rtvFormats.GetSize();
 	DXGI_SAMPLE_DESC& sampleDesc = GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_SAMPLE_DESC>();
 	sampleDesc.Count = msaa;
 	sampleDesc.Quality = 0;

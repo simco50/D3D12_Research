@@ -23,6 +23,7 @@ class Clouds;
 class PipelineState;
 class ShaderDebugRenderer;
 class GPUDrivenRenderer;
+class DDGI;
 struct SubMesh;
 struct Material;
 
@@ -80,6 +81,7 @@ private:
 	std::unique_ptr<Clouds> m_pClouds;
 	std::unique_ptr<ShaderDebugRenderer> m_pShaderDebugRenderer;
 	std::unique_ptr<GPUDrivenRenderer> m_pGPUDrivenRenderer;
+	std::unique_ptr<DDGI> m_pDDGI;
 
 	LightCull2DData m_LightCull2DData;
 	LightCull3DData m_LightCull3DData;
@@ -149,13 +151,6 @@ private:
 
 	// Visibility buffer
 	RefCountPtr<PipelineState> m_pVisibilityShadingPSO;
-
-	// DDGI
-	RefCountPtr<StateObject> m_pDDGITraceRaysSO;
-	RefCountPtr<PipelineState> m_pDDGIUpdateIrradianceColorPSO;
-	RefCountPtr<PipelineState> m_pDDGIUpdateIrradianceDepthPSO;
-	RefCountPtr<PipelineState> m_pDDGIUpdateProbeStatesPSO;
-	RefCountPtr<PipelineState> m_pDDGIVisualizePSO;
 
 	// Debug Visualize
 	RefCountPtr<PipelineState> m_pVisualizeTexturePSO;

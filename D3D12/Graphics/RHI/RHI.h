@@ -1,5 +1,12 @@
 #pragma once
 
+class GraphicsDevice;
+class PipelineState;
+class StateObject;
+class Texture;
+class Buffer;
+class RootSignature;
+
 enum class ResourceFormat
 {
 	Unknown,
