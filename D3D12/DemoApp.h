@@ -151,6 +151,8 @@ private:
 
 	// Visibility buffer
 	RefCountPtr<PipelineState> m_pVisibilityShadingPSO;
+	RefCountPtr<PipelineState> m_pVisibilityDebugRenderPSO;
+	uint32 m_VisibilityDebugRenderMode = 0;
 
 	// Debug Visualize
 	RefCountPtr<PipelineState> m_pVisualizeTexturePSO;

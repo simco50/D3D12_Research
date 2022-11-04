@@ -106,7 +106,6 @@ struct SceneView
 
 struct SceneTextures
 {
-	RGTexture* pVisibilityBuffer = nullptr;
 	RGTexture* pPreviousColor = nullptr;
 	RGTexture* pRoughness = nullptr;
 	RGTexture* pColorTarget = nullptr;
@@ -115,7 +114,6 @@ struct SceneTextures
 	RGTexture* pNormals = nullptr;
 	RGTexture* pVelocity = nullptr;
 	RGTexture* pAmbientOcclusion = nullptr;
-	RGTexture* pHZB = nullptr;
 };
 
 namespace Renderer

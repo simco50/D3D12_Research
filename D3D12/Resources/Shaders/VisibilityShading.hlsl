@@ -28,14 +28,24 @@ struct VisBufferVertexAttribute
 	float3 Barycentrics;
 };
 
-VisBufferVertexAttribute GetVertexAttributes(MeshData mesh, float4x4 world, uint3 indices, float2 screenUV)
+VisBufferVertexAttribute GetVertexAttributes(float2 screenUV, InstanceData instance, uint meshletIndex, uint primitiveID)
 {
+	MeshData mesh = GetMesh(instance.MeshIndex);
+	Meshlet meshlet = BufferLoad<Meshlet>(mesh.BufferIndex, meshletIndex, mesh.MeshletOffset);
+	MeshletTriangle tri = BufferLoad<MeshletTriangle>(mesh.BufferIndex, primitiveID + meshlet.TriangleOffset, mesh.MeshletTriangleOffset);
+
+	uint3 indices = uint3(
+		BufferLoad<uint>(mesh.BufferIndex, tri.V0 + meshlet.VertexOffset, mesh.MeshletVertexOffset),
+		BufferLoad<uint>(mesh.BufferIndex, tri.V1 + meshlet.VertexOffset, mesh.MeshletVertexOffset),
+		BufferLoad<uint>(mesh.BufferIndex, tri.V2 + meshlet.VertexOffset, mesh.MeshletVertexOffset)
+	);
+
 	VisBufferVertexAttribute vertices[3];
 	float3 positions[3];
 	for(uint i = 0; i < 3; ++i)
 	{
 		uint vertexId = indices[i];
-		positions[i] = mul(float4(BufferLoad<float3>(mesh.BufferIndex, vertexId, mesh.PositionsOffset), 1), world).xyz;
+		positions[i] = mul(float4(BufferLoad<float3>(mesh.BufferIndex, vertexId, mesh.PositionsOffset), 1), instance.LocalToWorld).xyz;
         vertices[i].UV = Unpack_RG16_FLOAT(BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.UVsOffset));
         NormalData normalData = BufferLoad<NormalData>(mesh.BufferIndex, vertexId, mesh.NormalsOffset);
         vertices[i].Normal = normalData.Normal;
@@ -55,29 +65,15 @@ VisBufferVertexAttribute GetVertexAttributes(MeshData mesh, float4x4 world, uint
 
 	VisBufferVertexAttribute outVertex;
 	outVertex.UV = BaryInterpolate(vertices[0].UV, vertices[1].UV, vertices[2].UV, bary.Barycentrics);
-    outVertex.Normal = normalize(mul(BaryInterpolate(vertices[0].Normal, vertices[1].Normal, vertices[2].Normal, bary.Barycentrics), (float3x3)world));
+    outVertex.Normal = normalize(mul(BaryInterpolate(vertices[0].Normal, vertices[1].Normal, vertices[2].Normal, bary.Barycentrics), (float3x3)instance.LocalToWorld));
 	float4 tangent = BaryInterpolate(vertices[0].Tangent, vertices[1].Tangent, vertices[2].Tangent, bary.Barycentrics);
-    outVertex.Tangent = float4(normalize(mul(tangent.xyz, (float3x3)world)), tangent.w);
+    outVertex.Tangent = float4(normalize(mul(tangent.xyz, (float3x3)instance.LocalToWorld)), tangent.w);
 	outVertex.Color = vertices[0].Color;
     outVertex.Position = BaryInterpolate(positions[0], positions[1], positions[2], bary.Barycentrics);
 	outVertex.DX = BaryInterpolate(vertices[0].UV, vertices[1].UV, vertices[2].UV, bary.DDX_Barycentrics);
 	outVertex.DY = BaryInterpolate(vertices[0].UV, vertices[1].UV, vertices[2].UV, bary.DDY_Barycentrics);
 	outVertex.Barycentrics = bary.Barycentrics;
 	return outVertex;
-}
-
-VisBufferVertexAttribute GetVertexAttributes(float2 screenUV, InstanceData instance, MeshData mesh, uint meshletIndex, uint primitiveID)
-{
-	Meshlet meshlet = BufferLoad<Meshlet>(mesh.BufferIndex, meshletIndex, mesh.MeshletOffset);
-	MeshletTriangle tri = BufferLoad<MeshletTriangle>(mesh.BufferIndex, primitiveID + meshlet.TriangleOffset, mesh.MeshletTriangleOffset);
-
-	uint3 indices = uint3(
-		BufferLoad<uint>(mesh.BufferIndex, tri.V0 + meshlet.VertexOffset, mesh.MeshletVertexOffset),
-		BufferLoad<uint>(mesh.BufferIndex, tri.V1 + meshlet.VertexOffset, mesh.MeshletVertexOffset),
-		BufferLoad<uint>(mesh.BufferIndex, tri.V2 + meshlet.VertexOffset, mesh.MeshletVertexOffset)
-	);
-
-	return GetVertexAttributes(mesh, instance.LocalToWorld, indices, screenUV);
 }
 
 MaterialProperties EvaluateMaterial(MaterialData material, VisBufferVertexAttribute attributes)
@@ -141,27 +137,25 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 	uint2 texel = dispatchThreadId.xy;
 	if(any(texel >= cView.TargetDimensions))
 		return;
-
-	VisBufferData visibility = (VisBufferData)tVisibilityTexture[texel];
-
-	MeshletCandidate candidate = tMeshletCandidates[visibility.MeshletCandidateIndex];
-    InstanceData instance = GetInstance(candidate.InstanceID);
-	MaterialData material = GetMaterial(instance.MaterialIndex);
-	MeshData mesh = GetMesh(instance.MeshIndex);
-	uint meshletIndex = candidate.MeshletIndex;
-	uint primitiveID = visibility.PrimitiveID;
-
 	float2 screenUV = ((float2)texel.xy + 0.5f) * cView.TargetDimensionsInv;
 	float ambientOcclusion = tAO.SampleLevel(sLinearClamp, screenUV, 0).r;
 
-	VisBufferVertexAttribute vertex = GetVertexAttributes(screenUV, instance, mesh, meshletIndex, primitiveID);
-	float3 V = normalize(cView.ViewLocation - vertex.Position);
+	VisBufferData visibility = (VisBufferData)tVisibilityTexture[texel];
+	MeshletCandidate candidate = tMeshletCandidates[visibility.MeshletCandidateIndex];
+    InstanceData instance = GetInstance(candidate.InstanceID);
 
+	// Vertex Shader
+	VisBufferVertexAttribute vertex = GetVertexAttributes(screenUV, instance, candidate.MeshletIndex, visibility.PrimitiveID);
+
+	// Surface Shader
+	MaterialData material = GetMaterial(instance.MaterialIndex);
 	MaterialProperties surface = EvaluateMaterial(material, vertex);
 	BrdfData brdfData = GetBrdfData(surface);
+	
 	float3 positionVS = mul(float4(vertex.Position, 1), cView.View).xyz;
 	float4 pos = float4((float2)(texel.xy + 0.5f), 0, positionVS.z);
 
+	float3 V = normalize(cView.ViewLocation - vertex.Position);
 	float ssrWeight = 0;
 	float3 ssr = ScreenSpaceReflections(pos, positionVS, surface.Normal, V, brdfData.Roughness, tDepth, tPreviousSceneColor, ssrWeight);
 
@@ -179,13 +173,50 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 
 	float reflectivity = saturate(Square(1 - brdfData.Roughness));
 
-#define DEBUG_MESHLETS 0
-#if DEBUG_MESHLETS
-	uint seed = SeedThread(visibility.MeshletID);
-	outRadiance = RandomColor(seed) * saturate(Wireframe(vertex.Barycentrics) + 0.6);
-#endif
-
 	uColorTarget[texel] = float4(outRadiance, surface.Opacity);
 	uNormalsTarget[texel] = EncodeNormalOctahedron(surface.Normal);
 	uRoughnessTarget[texel] = reflectivity;
+}
+
+struct DebugRenderData
+{
+	uint Mode;
+};
+
+ConstantBuffer<DebugRenderData> cDebugRenderData : register(b0);
+
+[numthreads(8, 8, 1)]
+void DebugRenderCS(uint3 dispatchThreadId : SV_DispatchThreadID)
+{
+	uint2 texel = dispatchThreadId.xy;
+	if(any(texel >= cView.TargetDimensions))
+		return;
+
+	VisBufferData visibility = (VisBufferData)tVisibilityTexture[texel];
+	MeshletCandidate candidate = tMeshletCandidates[visibility.MeshletCandidateIndex];
+	InstanceData instance = GetInstance(candidate.InstanceID);
+	uint meshletIndex = candidate.MeshletIndex;
+	uint primitiveID = visibility.PrimitiveID;
+
+	float2 screenUV = ((float2)texel.xy + 0.5f) * cView.TargetDimensionsInv;
+	VisBufferVertexAttribute vertex = GetVertexAttributes(screenUV, instance, meshletIndex, primitiveID);
+
+	float3 color = 0;
+	if(cDebugRenderData.Mode == 1)
+	{
+		uint seed = SeedThread(candidate.InstanceID);
+		color = RandomColor(seed);
+	}
+	else if(cDebugRenderData.Mode == 2)
+	{
+		uint seed = SeedThread(meshletIndex);
+		color = RandomColor(seed);
+	}
+	else if(cDebugRenderData.Mode == 3)
+	{
+		uint seed = SeedThread(primitiveID);
+		color = RandomColor(seed);
+	}
+
+	uColorTarget[texel] = float4(color * saturate(Wireframe(vertex.Barycentrics) + 0.8), 1);
 }

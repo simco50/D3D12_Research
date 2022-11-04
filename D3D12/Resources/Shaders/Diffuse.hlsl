@@ -260,15 +260,15 @@ void PSMain(InterpolantsVSToPS input,
 	float2 screenUV = (float2)input.Position.xy * cView.TargetDimensionsInv;
 	float ambientOcclusion = tAO.SampleLevel(sLinearClamp, screenUV, 0).r;
 
-	float3 V = normalize(cView.ViewLocation - input.PositionWS);
-
 	InstanceData instance = GetInstance(cObject.ID);
+	
 	MaterialData material = GetMaterial(instance.MaterialIndex);
-
 	MaterialProperties surface = EvaluateMaterial(material, input);
 	BrdfData brdf = GetBrdfData(surface);
+	
 	float3 positionVS = mul(float4(input.PositionWS, 1), cView.View).xyz;
 
+	float3 V = normalize(cView.ViewLocation - input.PositionWS);
 	float ssrWeight = 0;
 	float3 ssr = ScreenSpaceReflections(input.Position, positionVS, surface.Normal, V, brdf.Roughness, tDepth, tPreviousSceneColor, ssrWeight);
 

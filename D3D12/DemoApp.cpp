@@ -150,6 +150,8 @@ namespace Tweakables
 	ConsoleVariable g_RenderTerrain("r.Terrain", false);
 
 	// Misc
+	ConsoleVariable CullDebugStats("r.CullingStats", false);
+
 	bool g_DumpRenderGraph = false;
 	ConsoleCommand<> gDumpRenderGraph("DumpRenderGraph", []() { g_DumpRenderGraph = true; });
 	bool g_Screenshot = false;
@@ -537,7 +539,6 @@ void DemoApp::Update()
 		sceneTextures.pNormals = graph.Create("Normals", TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, ResourceFormat::RG16_FLOAT));
 		sceneTextures.pVelocity = graph.Create("Velocity", TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, ResourceFormat::RG16_FLOAT));
 		sceneTextures.pDepth = graph.Create("Depth Stencil", TextureDesc::CreateDepth(viewDimensions.x, viewDimensions.y, ResourceFormat::D32_FLOAT, TextureFlag::None, 1, ClearBinding(0.0f, 0)));
-		sceneTextures.pResolvedDepth = graph.Create("Resolved Depth", TextureDesc::CreateDepth(viewDimensions.x, viewDimensions.y, ResourceFormat::D32_FLOAT, TextureFlag::None, 1, ClearBinding(0.0f, 0)));
 
 		RGTexture* pSky = graph.Create("Sky", TextureDesc::CreateCube(64, 64, ResourceFormat::RGBA16_FLOAT));
 		graph.Export(pSky, &pViewMut->pSky);
@@ -558,6 +559,7 @@ void DemoApp::Update()
 					context.InsertResourceBarrier(pSkyTexture, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 				});
 
+		RasterResult rasterResult;
 		if (m_RenderPath != RenderPath::PathTracing)
 		{
 			{
@@ -595,7 +597,7 @@ void DemoApp::Update()
 			const bool doPrepass = true;
 			const bool needVisibilityBuffer = m_RenderPath == RenderPath::Visibility;
 
-			RGBuffer* pMeshletCandidates = nullptr;
+			RasterContext rasterContext(graph, "Prepass", sceneTextures.pDepth, &m_pHZB, RasterType::VisibilityBuffer);
 			if (doPrepass)
 			{
 				if (needVisibilityBuffer)
@@ -603,12 +605,14 @@ void DemoApp::Update()
 					m_pGPUDrivenRenderer->Render(
 						graph,
 						pView,
-						sceneTextures.pDepth,
-						&sceneTextures.pVisibilityBuffer,
-						&sceneTextures.pHZB,
-						&m_pHZB,
-						&pMeshletCandidates);
-					m_SceneData.HZBDimensions = sceneTextures.pHZB->GetDesc().Size2D();
+						rasterContext,
+						rasterResult);
+					m_SceneData.HZBDimensions = rasterResult.pHZB->GetDesc().Size2D();
+
+					if (Tweakables::CullDebugStats)
+					{
+						m_pGPUDrivenRenderer->PrintStats(graph, pView, rasterContext);
+					}
 				}
 				else
 				{
@@ -645,6 +649,8 @@ void DemoApp::Update()
 			// - If MSAA is enabled, run a compute shader to resolve the depth buffer
 			if (sceneTextures.pDepth->GetDesc().SampleCount > 1)
 			{
+				sceneTextures.pResolvedDepth = graph.Create("Resolved Depth", TextureDesc::CreateDepth(viewDimensions.x, viewDimensions.y, ResourceFormat::D32_FLOAT, TextureFlag::None, 1, ClearBinding(0.0f, 0)));
+
 				graph.AddPass("Depth Resolve", RGPassFlag::Compute)
 					.Read(sceneTextures.pDepth)
 					.Write(sceneTextures.pResolvedDepth)
@@ -715,8 +721,8 @@ void DemoApp::Update()
 			else if (m_RenderPath == RenderPath::Visibility)
 			{
 				graph.AddPass("Visibility Shading", RGPassFlag::Compute)
-					.Read({ pFog, pMeshletCandidates })
-					.Read({ sceneTextures.pVisibilityBuffer, sceneTextures.pDepth, sceneTextures.pAmbientOcclusion, sceneTextures.pPreviousColor })
+					.Read({ pFog, rasterResult.pMeshletCandidates })
+					.Read({ rasterResult.pVisibilityBuffer, sceneTextures.pDepth, sceneTextures.pAmbientOcclusion, sceneTextures.pPreviousColor })
 					.Write({ sceneTextures.pNormals, sceneTextures.pColorTarget, sceneTextures.pRoughness })
 					.Bind([=](CommandContext& context)
 						{
@@ -732,12 +738,12 @@ void DemoApp::Update()
 								sceneTextures.pRoughness->Get()->GetUAV(),
 								});
 							context.BindResources(3, {
-								sceneTextures.pVisibilityBuffer->Get()->GetSRV(),
+								rasterResult.pVisibilityBuffer->Get()->GetSRV(),
 								sceneTextures.pAmbientOcclusion->Get()->GetSRV(),
 								sceneTextures.pDepth->Get()->GetSRV(),
 								sceneTextures.pPreviousColor->Get()->GetSRV(),
 								pFog->Get()->GetSRV(),
-								pMeshletCandidates->Get()->GetSRV(),
+								rasterResult.pMeshletCandidates->Get()->GetSRV(),
 								});
 							context.Dispatch(ComputeUtils::GetNumThreadGroups(pColorTarget->GetWidth(), 8, pColorTarget->GetHeight(), 8));
 						});
@@ -882,9 +888,7 @@ void DemoApp::Update()
 		}
 
 		RGBuffer* pLuminanceHistogram = graph.Create("Luminance Histogram", BufferDesc::CreateByteAddress(sizeof(uint32) * 256));
-		RGBuffer* pAverageLuminance = graph.TryImport(m_pAverageLuminance);
-		if (!pAverageLuminance)
-			pAverageLuminance = graph.Create("Average Luminance", BufferDesc::CreateStructured(3, sizeof(float)));
+		RGBuffer* pAverageLuminance = RGUtils::CreatePersistent(graph, "Average Luminance", BufferDesc::CreateStructured(3, sizeof(float)), &m_pAverageLuminance, true);
 
 		{
 			RG_GRAPH_SCOPE("Eye Adaptation", graph);
@@ -984,8 +988,6 @@ void DemoApp::Update()
 
 						context.Dispatch(1);
 					});
-
-			graph.Export(pAverageLuminance, &m_pAverageLuminance);
 		}
 
 		uint32 mips = Math::Min(5u, (uint32)log2f((float)Math::Max(viewDimensions.x, viewDimensions.y)));
@@ -1175,6 +1177,28 @@ void DemoApp::Update()
 			m_pDDGI->RenderVisualization(graph, pView, pWorldMut, sceneTextures);
 		}
 
+		if (m_RenderPath == RenderPath::Visibility && m_VisibilityDebugRenderMode > 0)
+		{
+			graph.AddPass("Visibility Debug Render", RGPassFlag::Compute)
+				.Read({ rasterResult.pVisibilityBuffer, rasterResult.pMeshletCandidates })
+				.Write({ sceneTextures.pColorTarget })
+				.Bind([=](CommandContext& context)
+					{
+						Texture* pColorTarget = sceneTextures.pColorTarget->Get();
+
+						context.SetComputeRootSignature(m_pCommonRS);
+						context.SetPipelineState(m_pVisibilityDebugRenderPSO);
+
+						uint32 mode = m_VisibilityDebugRenderMode;
+						context.SetRootConstants(0, mode);
+						context.SetRootCBV(1, Renderer::GetViewUniforms(pView, pColorTarget));
+						context.BindResources(2, pColorTarget->GetUAV());
+						context.BindResources(3, rasterResult.pVisibilityBuffer->Get()->GetSRV(), 0);
+						context.BindResources(3, rasterResult.pMeshletCandidates->Get()->GetSRV(), 5);
+						context.Dispatch(ComputeUtils::GetNumThreadGroups(pColorTarget->GetWidth(), 8, pColorTarget->GetHeight(), 8));
+					});
+		}
+
 		m_pShaderDebugRenderer->Render(graph, pView, sceneTextures.pColorTarget, sceneTextures.pDepth);
 
 		RGTexture* pFinalOutput = graph.TryImport(m_ColorOutput);
@@ -1327,6 +1351,7 @@ void DemoApp::InitializePipelines()
 
 	//Visibility Shading
 	m_pVisibilityShadingPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "VisibilityShading.hlsl", "CSMain");
+	m_pVisibilityDebugRenderPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "VisibilityShading.hlsl", "DebugRenderCS");
 
 	m_pVisualizeTexturePSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "ImageVisualize.hlsl", "CSMain");
 }
@@ -1636,6 +1661,21 @@ void DemoApp::UpdateImGui()
 					}
 					return true;
 				}, nullptr, (int)RenderPath::MAX);
+
+			if (m_RenderPath == RenderPath::Visibility)
+			{
+				ImGui::Combo("VisBuffer Debug View", (int*)&m_VisibilityDebugRenderMode, [](void* /*data*/, int index, const char** outText)
+					{
+						switch (index)
+						{
+						case 0:	*outText = "Off"; return true;
+						case 1:	*outText = "InstanceID"; return true;
+						case 2:	*outText = "MeshletID"; return true;
+						case 3:	*outText = "PrimitiveID"; return true;
+						}
+						return false;
+					}, nullptr, 4);
+			}
 
 			ImGui::Text("Camera");
 			ImGui::Text("Location: [%.2f, %.2f, %.2f]", m_pCamera->GetPosition().x, m_pCamera->GetPosition().y, m_pCamera->GetPosition().z);
