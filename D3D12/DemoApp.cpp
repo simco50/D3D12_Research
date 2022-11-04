@@ -1202,6 +1202,7 @@ void DemoApp::Update()
 		if (!Tweakables::VisualizeTextureName.empty())
 		{
 			RGTexture* pVisualizeTexture = graph.FindTexture(Tweakables::VisualizeTextureName.c_str());
+			m_VisualizeTextureData.Enabled = !!pVisualizeTexture;
 			if (pVisualizeTexture)
 			{
 				VisualizeTexture(graph, pVisualizeTexture);
@@ -1347,42 +1348,8 @@ void DemoApp::VisualizeTexture(RGGraph& graph, RGTexture* pTexture)
 {
 	const TextureDesc& desc = pTexture->GetDesc();
 	RGTexture* pTarget = graph.Create("Visualize Target", TextureDesc::Create2D(desc.Width, desc.Height, ResourceFormat::RGBA8_UNORM));
-
-	if (ImGui::Begin("Visualize Texture") && m_VisualizeTextureData.pVisualizeTexture)
-	{
-		ImGui::Text("%s - Resolution: %dx%d", pTexture->GetName(), desc.Width, desc.Height);
-		ImGui::DragFloatRange2("Range", &m_VisualizeTextureData.RangeMin, &m_VisualizeTextureData.RangeMax, 0.02f, 0, 10);
-		if (desc.Mips > 1)
-		{
-			ImGui::SliderFloat("Mip", &m_VisualizeTextureData.MipLevel, 0, (float)desc.Mips - 1);
-		}
-		if (desc.DepthOrArraySize > 1)
-		{
-			ImGui::SliderFloat("Slice", &m_VisualizeTextureData.Slice, 0, (float)desc.DepthOrArraySize - 1);
-		}
-		if (desc.Dimensions == TextureDimension::TextureCube)
-		{
-			const char* faceNames[] = {
-				"Right",
-				"Left",
-				"Top",
-				"Bottom",
-				"Back",
-				"Front",
-			};
-			ImGui::Combo("Face", &m_VisualizeTextureData.CubeFaceIndex, faceNames, ARRAYSIZE(faceNames));
-		}
-		ImGui::Checkbox("R", &m_VisualizeTextureData.VisibleChannels[0]);
-		ImGui::SameLine();
-		ImGui::Checkbox("G", &m_VisualizeTextureData.VisibleChannels[1]);
-		ImGui::SameLine();
-		ImGui::Checkbox("B", &m_VisualizeTextureData.VisibleChannels[2]);
-		ImGui::SameLine();
-		ImGui::Checkbox("A", &m_VisualizeTextureData.VisibleChannels[3]);
-
-		ImGui::ImageAutoSize(m_VisualizeTextureData.pVisualizeTexture, ImVec2((float)desc.Width, (float)desc.Height));
-	}
-	ImGui::End();
+	m_VisualizeTextureData.SourceName = pTexture->GetName();
+	m_VisualizeTextureData.SourceDesc = pTexture->GetDesc();
 
 	graph.AddPass("Process Image Visualizer", RGPassFlag::Compute | RGPassFlag::NeverCull)
 		.Read(pTexture)
@@ -1530,7 +1497,62 @@ void DemoApp::UpdateImGui()
 	}
 	ImGuizmo::SetRect(ImGui::GetWindowPos().x, ImGui::GetWindowPos().y, (float)width, (float)height);
 	ImGui::Image(m_ColorOutput, ImVec2((float)width, (float)height));
+	ImVec2 viewportImageOrigin = ImGui::GetItemRectMin();
+	ImVec2 viewportImageSize = ImGui::GetItemRectSize();
 	ImGui::End();
+
+	if (m_VisualizeTextureData.Enabled)
+	{
+		if (ImGui::Begin("Visualize Texture"))
+		{
+			TextureDesc& desc = m_VisualizeTextureData.SourceDesc;
+			ImGui::Text("%s - Resolution: %dx%d", m_VisualizeTextureData.SourceName.c_str(), desc.Width, desc.Height);
+			ImGui::DragFloatRange2("Range", &m_VisualizeTextureData.RangeMin, &m_VisualizeTextureData.RangeMax, 0.02f, 0, 10);
+			if (desc.Mips > 1)
+			{
+				ImGui::SliderFloat("Mip", &m_VisualizeTextureData.MipLevel, 0, (float)desc.Mips - 1);
+			}
+			if (desc.DepthOrArraySize > 1)
+			{
+				ImGui::SliderFloat("Slice", &m_VisualizeTextureData.Slice, 0, (float)desc.DepthOrArraySize - 1);
+			}
+			if (desc.Dimensions == TextureDimension::TextureCube)
+			{
+				const char* faceNames[] = {
+					"Right",
+					"Left",
+					"Top",
+					"Bottom",
+					"Back",
+					"Front",
+				};
+				ImGui::Combo("Face", &m_VisualizeTextureData.CubeFaceIndex, faceNames, ARRAYSIZE(faceNames));
+			}
+			ImGui::Checkbox("R", &m_VisualizeTextureData.VisibleChannels[0]);
+			ImGui::SameLine();
+			ImGui::Checkbox("G", &m_VisualizeTextureData.VisibleChannels[1]);
+			ImGui::SameLine();
+			ImGui::Checkbox("B", &m_VisualizeTextureData.VisibleChannels[2]);
+			ImGui::SameLine();
+			ImGui::Checkbox("A", &m_VisualizeTextureData.VisibleChannels[3]);
+
+			static bool xray = false;
+			ImGui::Checkbox("X-ray", &xray);
+			if (xray)
+			{
+				ImVec2 size = ImGui::GetContentRegionAvail();
+				ImVec2 imageLocation = ImGui::GetCursorScreenPos();
+				ImVec2 uv0 = (imageLocation - viewportImageOrigin) / ImVec2((float)width, (float)height);
+				ImVec2 uv1 = uv0 + size / ImVec2((float)width, (float)height);
+				ImGui::Image(m_VisualizeTextureData.pVisualizeTexture, size, uv0, uv1);
+			}
+			else
+			{
+				ImGui::Image(m_VisualizeTextureData.pVisualizeTexture, ImGui::GetAutoSize(ImVec2((float)desc.Width, (float)desc.Height)));
+			}
+		}
+		ImGui::End();
+	}
 
 	if (Tweakables::g_VisualizeLightDensity)
 	{
@@ -1577,7 +1599,8 @@ void DemoApp::UpdateImGui()
 	{
 		ImGui::Begin("Luminance Histogram");
 		ImVec2 cursor = ImGui::GetCursorPos();
-		ImGui::ImageAutoSize(m_pDebugHistogramTexture, ImVec2((float)m_pDebugHistogramTexture->GetWidth(), (float)m_pDebugHistogramTexture->GetHeight()));
+		ImVec2 size = ImGui::GetAutoSize(ImVec2((float)m_pDebugHistogramTexture->GetWidth(), (float)m_pDebugHistogramTexture->GetHeight()));
+		ImGui::Image(m_pDebugHistogramTexture, size);
 		ImGui::GetWindowDrawList()->AddText(cursor, IM_COL32(255, 255, 255, 255), Sprintf("%.2f", Tweakables::g_MinLogLuminance.Get()).c_str());
 		ImGui::End();
 	}

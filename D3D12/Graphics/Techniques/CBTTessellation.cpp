@@ -297,7 +297,8 @@ void CBTTessellation::Execute(RGGraph& graph, CBTData& data, const SceneView* pV
 	if (CBTSettings::DebugVisualize)
 	{
 		ImGui::Begin("CBT");
-		ImGui::ImageAutoSize(data.pDebugVisualizeTexture, ImVec2((float)data.pDebugVisualizeTexture->GetWidth(), (float)data.pDebugVisualizeTexture->GetHeight()));
+		ImVec2 size = ImGui::GetAutoSize(ImVec2((float)data.pDebugVisualizeTexture->GetWidth(), (float)data.pDebugVisualizeTexture->GetHeight()));
+		ImGui::Image(data.pDebugVisualizeTexture, size);
 		ImGui::End();
 
 		graph.AddPass("CBT Debug Visualize", RGPassFlag::Raster)

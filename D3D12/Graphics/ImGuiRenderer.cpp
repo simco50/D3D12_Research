@@ -14,19 +14,17 @@
 #include "IconsFontAwesome4.h"
 #include "imgui_impl_win32.h"
 
-ImVec2 ImGui::ImageAutoSize(Texture* textureId, const ImVec2& imageDimensions)
+ImVec2 ImGui::GetAutoSize(const ImVec2& dimensions)
 {
 	ImVec2 windowSize = GetContentRegionAvail();
 	float width = windowSize.x;
-	float height = windowSize.x * imageDimensions.y / imageDimensions.x;
-	if (imageDimensions.x / windowSize.x < imageDimensions.y / windowSize.y)
+	float height = windowSize.x * dimensions.y / dimensions.x;
+	if (dimensions.x / windowSize.x < dimensions.y / windowSize.y)
 	{
-		width = imageDimensions.x / imageDimensions.y * windowSize.y;
+		width = dimensions.x / dimensions.y * windowSize.y;
 		height = windowSize.y;
 	}
-	ImVec2 size(width, height);
-	Image(textureId, size);
-	return size;
+	return ImVec2(width, height);
 }
 
 void ApplyImGuiStyle()
@@ -272,3 +270,4 @@ void ImGuiRenderer::Render(RGGraph& graph, RGTexture* pRenderTarget)
 			});
 
 }
+

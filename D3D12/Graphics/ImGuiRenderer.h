@@ -11,7 +11,7 @@ using WindowHandle = HWND;
 
 namespace ImGui
 {
-	ImVec2 ImageAutoSize(Texture* textureId, const ImVec2& imageDimensions);
+	ImVec2 GetAutoSize(const ImVec2& dimensions);
 }
 
 namespace ImGuiRenderer

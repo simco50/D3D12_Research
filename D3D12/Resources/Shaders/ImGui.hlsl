@@ -33,5 +33,6 @@ InterpolantsVSToPS VSMain(VertexInput input)
 
 float4 PSMain(InterpolantsVSToPS input) : SV_Target
 {
-	return input.Color * tTexture.Sample(sLinearClamp, input.UV);
+	float4 color = tTexture.Sample(sLinearBorder, input.UV);
+	return input.Color * color;
 }

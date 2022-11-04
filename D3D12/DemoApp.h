@@ -158,6 +158,9 @@ private:
 	RefCountPtr<PipelineState> m_pVisualizeTexturePSO;
 	struct TextureVisualizeData
 	{
+		bool Enabled = false;
+		std::string SourceName;
+		TextureDesc SourceDesc;
 		RefCountPtr<Texture> pVisualizeTexture;
 		int CubeFaceIndex = 0;
 		float RangeMin = 0.0f;
