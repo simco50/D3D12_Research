@@ -4,8 +4,6 @@
 #include "ShadingModels.hlsli"
 #include "SkyCommon.hlsli"
 
-#define SUPPORT_BC5 1
-
 struct BrdfData
 {
 	float3 Diffuse;
@@ -51,10 +49,7 @@ float3 UnpackBC5Normal(float2 packedNormal)
 
 float3 TangentSpaceNormalMapping(float3 sampledNormal, float3x3 TBN)
 {
-	float3 normal = sampledNormal;
-#if SUPPORT_BC5
-	normal = UnpackBC5Normal(sampledNormal.xy);
-#endif
+	float3 normal = UnpackBC5Normal(sampledNormal.xy);
 	normal.xy = sampledNormal.xy * 2.0f - 1.0f;
 	normal.y = -normal.y;
 	normal = normalize(normal);
@@ -75,22 +70,21 @@ float LightTextureMask(Light light, float3 worldPosition)
 	return mask;
 }
 
-uint GetShadowMapIndex(Light light, float4 pos, float3 wPos)
+uint GetShadowMapIndex(Light light, float3 worldPosition, float viewDepth, float dither)
 {
 	if(light.IsDirectional)
 	{
-		float4 splits = pos.w > cView.CascadeDepths;
+		float4 splits = viewDepth > cView.CascadeDepths;
 		float4 cascades = cView.CascadeDepths > 0;
 		int cascadeIndex = min(dot(splits, cascades), cView.NumCascades - 1);
 
 		const float cascadeFadeTheshold = 0.1f;
 		float nextSplit = cView.CascadeDepths[cascadeIndex];
 		float splitRange = cascadeIndex == 0 ? nextSplit : nextSplit - cView.CascadeDepths[cascadeIndex - 1];
-		float fadeFactor = (nextSplit - pos.w) / splitRange;
+		float fadeFactor = (nextSplit - viewDepth) / splitRange;
 		if(fadeFactor <= cascadeFadeTheshold && cascadeIndex < cView.NumCascades - 1)
 		{
 			float lerpAmount = smoothstep(0.0f, cascadeFadeTheshold, fadeFactor);
-			float dither = InterleavedGradientNoise(pos.xy);
 			if(lerpAmount < dither)
 			{
 				cascadeIndex++;
@@ -100,7 +94,7 @@ uint GetShadowMapIndex(Light light, float4 pos, float3 wPos)
 	}
 	else if(light.IsPoint)
 	{
-		return GetCubeFaceIndex(wPos - light.Position);
+		return GetCubeFaceIndex(worldPosition - light.Position);
 	}
 	return 0;
 }
@@ -115,11 +109,11 @@ float Shadow3x3PCF(float3 wPos, int lightMatrix, int shadowMapIndex, float invSh
 	float2 uv = lightPos.xy;
 	Texture2D shadowTexture = ResourceDescriptorHeap[NonUniformResourceIndex(shadowMapIndex)];
 
-	const float Dilation = 2.0f;
-	float d1 = Dilation * invShadowSize * 0.125f;
-	float d2 = Dilation * invShadowSize * 0.875f;
-	float d3 = Dilation * invShadowSize * 0.625f;
-	float d4 = Dilation * invShadowSize * 0.375f;
+	const float dilation = 2.0f;
+	float d1 = dilation * invShadowSize * 0.125f;
+	float d2 = dilation * invShadowSize * 0.875f;
+	float d3 = dilation * invShadowSize * 0.625f;
+	float d4 = dilation * invShadowSize * 0.375f;
 	float result = (
 		2.0f * shadowTexture.SampleCmpLevelZero(sLinearClampComparisonGreater, uv, lightPos.z) +
 		shadowTexture.SampleCmpLevelZero(sLinearClampComparisonGreater, uv + float2(-d2,  d1), lightPos.z) +
@@ -146,31 +140,35 @@ float ShadowNoPCF(float3 wPos, int lightMatrix, int shadowMapIndex, float invSha
 	return shadowTexture.SampleCmpLevelZero(sLinearClampComparisonGreater, uv, lightPos.z);
 }
 
-float GetAttenuation(Light light, float3 wPos)
+float GetAttenuation(Light light, float3 worldPosition, out float3 L)
 {
-	float attentuation = 1.0f;
-
+	float attenuation = 1.0f;
+	L = -light.Direction;
 	if(light.IsPoint || light.IsSpot)
 	{
-		float3 L = light.Position - wPos;
-		attentuation *= RadialAttenuation(L, light.Range);
+		L = light.Position - worldPosition;
+		attenuation *= RadialAttenuation(L, light.Range);
 		if(light.IsSpot)
 		{
-			attentuation *= DirectionalAttenuation(L, light.Direction, light.SpotlightAngles.y, light.SpotlightAngles.x);
+			attenuation *= DirectionalAttenuation(L, light.Direction, light.SpotlightAngles.y, light.SpotlightAngles.x);
 		}
+
+		float distSq = dot(L, L);
+		L *= rsqrt(distSq);
+
 	}
 
-	return attentuation;
+	if(attenuation > 0.0f && light.CastShadows)
+	{
+		attenuation *= LightTextureMask(light, worldPosition);
+	}
+
+	return attenuation;
 }
 
-float3 ApplyAmbientLight(float3 diffuse, float ao)
+float ScreenSpaceShadows(float3 worldPosition, float3 lightDirection, Texture2D<float> depthTexture, int stepCount, float rayLength, float ditherOffset)
 {
-	return ao * diffuse * GetSky(float3(0, 1, 0)).rgb * 0.1f;
-}
-
-float ScreenSpaceShadows(float3 worldPos, float3 lightDirection, Texture2D depthTexture, int stepCount, float rayLength, float ditherOffset)
-{
-	float4 rayStartPS = mul(float4(worldPos, 1), cView.ViewProjection);
+	float4 rayStartPS = mul(float4(worldPosition, 1), cView.ViewProjection);
 	float4 rayDirPS = mul(float4(-lightDirection * rayLength, 0), cView.ViewProjection);
 	float4 rayEndPS = rayStartPS + rayDirPS;
 	rayStartPS.xyz /= rayStartPS.w;
@@ -207,7 +205,7 @@ float ScreenSpaceShadows(float3 worldPos, float3 lightDirection, Texture2D depth
 	return 1.0f - occlusion;
 }
 
-float3 ScreenSpaceReflections(float4 Position, float3 PositionVS, float3 N, float3 V, float R, Texture2D depthTexture, Texture2D previousSceneColor, inout float ssrWeight)
+float3 ScreenSpaceReflections(float3 worldPosition, float3 N, float3 V, float R, Texture2D<float> depthTexture, Texture2D previousSceneColor, float dither, inout float ssrWeight)
 {
 	float3 ssr = 0;
 	const float roughnessThreshold = 0.7f;
@@ -218,10 +216,10 @@ float3 ScreenSpaceReflections(float4 Position, float3 PositionVS, float3 N, floa
 		float3 reflectionWs = normalize(reflect(-V, N));
 		if (dot(V, reflectionWs) <= reflectionThreshold)
 		{
-			float jitter = InterleavedGradientNoise(Position.xy, cView.FrameIndex) - 1.0f;
+			float jitter = dither - 1.0f;
 			uint maxSteps = cView.SsrSamples;
 
-			float3 rayStartVS = PositionVS;
+			float3 rayStartVS = mul(float4(worldPosition, 1), cView.ViewInverse).xyz;
 			float linearDepth = rayStartVS.z;
 			float3 reflectionVs = mul(reflectionWs, (float3x3)cView.View);
 			float3 rayEndVS = rayStartVS + (reflectionVs * linearDepth);
@@ -287,26 +285,25 @@ float3 ScreenSpaceReflections(float4 Position, float3 PositionVS, float3 N, floa
 	return ssr;
 }
 
-LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, float roughness, float4 pos, float3 wPos, float3 N, float3 V)
+LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, float R, float3 N, float3 V, float3 worldPosition, float linearDepth, float dither)
 {
 	LightResult result = (LightResult)0;
 
-	float attenuation = GetAttenuation(light, wPos);
-	if(attenuation <= 0)
-	{
+	float3 L;
+	float attenuation = GetAttenuation(light, worldPosition, L);
+	if(attenuation <= 0.0f)
 		return result;
-	}
 
 	if(light.CastShadows)
 	{
-		uint shadowIndex = GetShadowMapIndex(light, pos, wPos);
+		uint shadowIndex = GetShadowMapIndex(light, worldPosition, linearDepth, dither);
 
 #define VISUALIZE_CASCADES 0
 #if VISUALIZE_CASCADES
 		if(light.IsDirectional)
 		{
 			float4x4 lightViewProjection = cView.LightMatrices[light.MatrixIndex];
-			float4 lightPos = mul(float4(wPos, 1), lightViewProjection);
+			float4 lightPos = mul(float4(worldPosition, 1), lightViewProjection);
 			lightPos.xyz /= lightPos.w;
 			lightPos.x = lightPos.x / 2.0f + 0.5f;
 			lightPos.y = lightPos.y / -2.0f + 0.5f;
@@ -330,20 +327,12 @@ LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, floa
 		}
 #endif
 
-		attenuation *= LightTextureMask(light, wPos);
-		attenuation *= Shadow3x3PCF(wPos, light.MatrixIndex + shadowIndex, light.ShadowMapIndex + shadowIndex, light.InvShadowSize);
+		attenuation *= Shadow3x3PCF(worldPosition, light.MatrixIndex + shadowIndex, light.ShadowMapIndex + shadowIndex, light.InvShadowSize);
 		if(attenuation <= 0)
-		{
 			return result;
-		}
 	}
 
-	float3 L = normalize(light.Position - wPos);
-	if(light.IsDirectional)
-	{
-		L = -light.Direction;
-	}
-	result = DefaultLitBxDF(specularColor, roughness, diffuseColor, N, V, L, attenuation);
+	result = DefaultLitBxDF(specularColor, R, diffuseColor, N, V, L, attenuation);
 
 	float3 color = light.GetColor();
 	result.Diffuse *= color * light.Intensity;

@@ -67,23 +67,14 @@ void TraceRaysRGS()
 			for(uint lightIndex = 0; lightIndex < cView.LightCount; ++lightIndex)
 			{
 				Light light = GetLight(lightIndex);
-				float attenuation = GetAttenuation(light, hitLocation);
+
+				float3 L;
+				float attenuation = GetAttenuation(light, hitLocation, L);
 				if(attenuation <= 0.0f)
 					continue;
 
-				float3 L = light.Position - hitLocation;
-				if(light.IsDirectional)
-				{
-					L = 100000.0f * -light.Direction;
-				}
-
-				RayDesc ray;
-				ray.Origin = hitLocation;
-				ray.Direction = normalize(L);
-				ray.TMin = RAY_BIAS;
-				ray.TMax = length(L);
-				RaytracingAccelerationStructure tlas = ResourceDescriptorHeap[cView.TLASIndex];
-				attenuation *= TraceOcclusionRay(ray, tlas);
+				RayDesc rayDesc = CreateLightOcclusionRay(light, hitLocation);
+				attenuation *= TraceOcclusionRay(rayDesc, tlas);
 
 				if(attenuation <= 0.0f)
 					continue;

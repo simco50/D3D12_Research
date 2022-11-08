@@ -49,6 +49,16 @@ float4 SampleTexture(float2 uv)
 	}
 	else if(cConstants.TextureType == TextureDimension::TexCube)
 	{
+		static const float3x3 CUBEMAP_ROTATIONS[] =
+		{
+			float3x3(0,0,-1, 0,-1,0, -1,0,0),   // right
+			float3x3(0,0,1, 0,-1,0, 1,0,0),     // left
+			float3x3(1,0,0, 0,0,-1, 0,1,0),     // top
+			float3x3(1,0,0, 0,0,1, 0,-1,0),     // bottom
+			float3x3(1,0,0, 0,-1,0, 0,0,-1),    // back
+			float3x3(-1,0,0, 0,-1,0, 0,0,1),    // front
+		};
+
 		float3 dir = mul(CUBEMAP_ROTATIONS[cConstants.Slice], normalize(float3(uv * 2 - 1, -1)));
 
 		TextureCube tex = ResourceDescriptorHeap[cConstants.TextureSource];

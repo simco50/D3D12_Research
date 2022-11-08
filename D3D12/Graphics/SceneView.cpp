@@ -155,6 +155,7 @@ namespace Renderer
 				meshInstance.MeshIndex = (uint32)meshes.size() + node.MeshIndex;
 				meshInstance.MaterialIndex = (uint32)materials.size() + parentMesh.MaterialId;
 				meshInstance.LocalToWorld = node.Transform;
+				meshInstance.LocalToWorldPrev = node.Transform; //#todo
 				meshInstance.LocalBoundsOrigin = parentMesh.Bounds.Center;
 				meshInstance.LocalBoundsExtents = parentMesh.Bounds.Extents;
 
@@ -221,7 +222,7 @@ namespace Renderer
 		{
 			ShaderInterop::Light& data = lightData.emplace_back();
 			data.Position = light.Position;
-			data.Direction = light.Direction;
+			data.Direction = Vector3::Transform(Vector3::Forward, light.Rotation);
 			data.SpotlightAngles.x = cos(light.PenumbraAngleDegrees * Math::DegreesToRadians / 2.0f);
 			data.SpotlightAngles.y = cos(light.UmbraAngleDegrees * Math::DegreesToRadians / 2.0f);
 			data.Color = Math::EncodeRGBA(light.Colour);

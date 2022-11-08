@@ -12,7 +12,7 @@ enum class LightType
 struct Light
 {
 	Vector3 Position = Vector3::Zero;
-	Vector3 Direction = Vector3::Forward;
+	Quaternion Rotation = Quaternion::Identity;
 	LightType Type = LightType::MAX;
 	float UmbraAngleDegrees = 0;
 	float PenumbraAngleDegrees = 0;
@@ -22,7 +22,7 @@ struct Light
 	bool VolumetricLighting = false;
 	uint32 MatrixIndex = DescriptorHandle::InvalidHeapIndex;
 	std::vector<Texture*> ShadowMaps;
-	Texture* pLightTexture = nullptr;
+	RefCountPtr<Texture> pLightTexture = nullptr;
 	int ShadowMapSize = 512;
 	bool CastShadows = false;
 
@@ -30,10 +30,11 @@ struct Light
 	{
 		Light l{};
 		l.Position = position;
-		l.Direction = direction;
+		l.Rotation = Quaternion::LookRotation(direction, Vector3::Up);
 		l.Type = LightType::Directional;
 		l.Intensity = intensity;
 		l.Colour = color;
+		l.Range = std::numeric_limits<float>::max();
 		return l;
 	}
 
@@ -53,7 +54,7 @@ struct Light
 		Light l{};
 		l.Position = position;
 		l.Range = range;
-		l.Direction = direction;
+		l.Rotation = Quaternion::LookRotation(direction, Vector3::Up);
 		l.PenumbraAngleDegrees = penumbraAngleInDegrees;
 		l.UmbraAngleDegrees = umbraAngleInDegrees;
 		l.Type = LightType::Spot;

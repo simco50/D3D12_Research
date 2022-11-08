@@ -112,12 +112,11 @@ void InjectFogLightingCS(uint3 threadId : SV_DispatchThreadID)
 	cellDensity = cellDensity;
 
 	float3 totalLighting = 0;
+	float dither = InterleavedGradientNoise(threadId.xy);
 
 	float3 V = normalize(cView.ViewLocation - worldPosition);
 	if(dot(inScattering, float3(1, 1, 1)) > 0.0f)
 	{
-		float4 pos = float4(threadId.xy, 0, z);
-
 		// Iterate over all the lights and light the froxel
 		uint tileIndex = GetLightCluster(threadId.xy, z);
 		uint lightOffset = tLightGrid[tileIndex * 2];
@@ -129,24 +128,19 @@ void InjectFogLightingCS(uint3 threadId : SV_DispatchThreadID)
 			Light light = GetLight(lightIndex);
 			if(light.IsEnabled && light.IsVolumetric)
 			{
-				float attenuation = GetAttenuation(light, worldPosition);
+				float3 L;
+				float attenuation = GetAttenuation(light, worldPosition, L);
 				if(attenuation <= 0.0f)
-				{
 					continue;
-				}
 
 				if(light.CastShadows)
 				{
-					int shadowIndex = GetShadowMapIndex(light, pos, worldPosition);
+					int shadowIndex = GetShadowMapIndex(light, worldPosition, z, dither);
 					attenuation *= ShadowNoPCF(worldPosition, light.MatrixIndex + shadowIndex, light.ShadowMapIndex + shadowIndex, light.InvShadowSize);
-					attenuation *= LightTextureMask(light, worldPosition);
 				}
+				if(attenuation <= 0.0f)
+					continue;
 
-				float3 L = normalize(light.Position - worldPosition);
-				if(light.IsDirectional)
-				{
-					L = normalize(light.Direction);
-				}
 				float VdotL = dot(V, L);
 				float3 lightColor = light.GetColor() * light.Intensity;
 

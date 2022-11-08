@@ -27,8 +27,8 @@ struct InterpolantsVSToPS
 	uint ID : ID;
 };
 
-Texture2D tAO :	register(t0);
-Texture2D tDepth : register(t1);
+Texture2D<float> tAO :	register(t0);
+Texture2D<float> tDepth : register(t1);
 Texture2D tPreviousSceneColor :	register(t2);
 Texture3D<float4> tLightScattering : register(t3);
 
@@ -43,14 +43,14 @@ Texture2D<uint2> tLightGrid : register(t4);
 #endif
 StructuredBuffer<uint> tLightIndexList : register(t5);
 
-void GetLightCount(float4 screenPos, out uint lightCount, out uint startOffset)
+void GetLightCount(float2 pixel, float linearDepth, out uint lightCount, out uint startOffset)
 {
 #if TILED_FORWARD
-	uint2 tileIndex = uint2(floor(screenPos.xy / BLOCK_SIZE));
+	uint2 tileIndex = uint2(floor(pixel / BLOCK_SIZE));
 	startOffset = tLightGrid[tileIndex].x;
 	lightCount = tLightGrid[tileIndex].y;
 #elif CLUSTERED_FORWARD
-	uint3 clusterIndex3D = uint3(floor(screenPos.xy / cPass.ClusterSize), GetSliceFromDepth(screenPos.w));
+	uint3 clusterIndex3D = uint3(floor(pixel / cPass.ClusterSize), GetSliceFromDepth(linearDepth));
 	uint tileIndex = Flatten3D(clusterIndex3D, cPass.ClusterDimensions.xyz);
 	startOffset = tLightGrid[tileIndex * 2];
 	lightCount = tLightGrid[tileIndex * 2 + 1];
@@ -68,17 +68,17 @@ Light GetLight(uint lightIndex, uint lightOffset)
 	return GetLight(lightIndex);
 }
 
-LightResult DoLight(float4 pos, float3 worldPos, float3 N, float3 V, float3 diffuseColor, float3 specularColor, float roughness)
+LightResult DoLight(float3 specularColor, float R, float3 diffuseColor, float3 N, float3 V, float3 worldPos, float2 pixel, float linearDepth, float dither)
 {
 	LightResult totalResult = (LightResult)0;
 
 	uint lightCount, lightOffset;
-	GetLightCount(pos, lightCount, lightOffset);
+	GetLightCount(pixel, linearDepth, lightCount, lightOffset);
 
 	for(uint i = 0; i < lightCount; ++i)
 	{
 		Light light = GetLight(i, lightOffset);
-		LightResult result = DoLight(light, specularColor, diffuseColor, roughness, pos, worldPos, N, V);
+		LightResult result = DoLight(light, specularColor, diffuseColor, R, N, V, worldPos, linearDepth, dither);
 
 #define SCREEN_SPACE_SHADOWS 0
 #if SCREEN_SPACE_SHADOWS
@@ -88,9 +88,8 @@ LightResult DoLight(float4 pos, float3 worldPos, float3 N, float3 V, float3 diff
 			L = light.Direction;
 		}
 
-		float ditherValue = InterleavedGradientNoise(pos.xy, cView.FrameIndex);
 		float length = 0.1f * pos.w * cView.ProjectionInverse[1][1];
-		float occlusion = ScreenSpaceShadows(worldPos, L, tDepth, 8, length, ditherValue);
+		float occlusion = ScreenSpaceShadows(worldPos, L, tDepth, 8, length, dither);
 
 		result.Diffuse *= occlusion;
 		result.Specular *= occlusion;
@@ -258,33 +257,33 @@ void PSMain(InterpolantsVSToPS input,
 			out PSOut output)
 {
 	float2 screenUV = (float2)input.Position.xy * cView.TargetDimensionsInv;
-	float ambientOcclusion = tAO.SampleLevel(sLinearClamp, screenUV, 0).r;
+	float ambientOcclusion = tAO.SampleLevel(sLinearClamp, screenUV, 0);
+	float linearDepth = LinearizeDepth(tDepth.SampleLevel(sLinearClamp, screenUV, 0));
+	float dither = InterleavedGradientNoise(input.Position.xy);
 
 	InstanceData instance = GetInstance(cObject.ID);
 	
 	MaterialData material = GetMaterial(instance.MaterialIndex);
 	MaterialProperties surface = EvaluateMaterial(material, input);
-	BrdfData brdf = GetBrdfData(surface);
+	BrdfData brdfData = GetBrdfData(surface);
 	
-	float3 positionVS = mul(float4(input.PositionWS, 1), cView.View).xyz;
-
 	float3 V = normalize(cView.ViewLocation - input.PositionWS);
 	float ssrWeight = 0;
-	float3 ssr = ScreenSpaceReflections(input.Position, positionVS, surface.Normal, V, brdf.Roughness, tDepth, tPreviousSceneColor, ssrWeight);
+	float3 ssr = ScreenSpaceReflections(input.PositionWS, surface.Normal, V, brdfData.Roughness, tDepth, tPreviousSceneColor, dither, ssrWeight);
 
-	LightResult lighting = DoLight(input.Position, input.PositionWS, surface.Normal, V, brdf.Diffuse, brdf.Specular, brdf.Roughness);
+	LightResult lighting = DoLight(brdfData.Specular, brdfData.Roughness, brdfData.Diffuse, surface.Normal, V, input.PositionWS, input.Position.xy, linearDepth, dither);
 
 	float3 outRadiance = 0;
-	outRadiance += ambientOcclusion * Diffuse_Lambert(brdf.Diffuse) * SampleDDGIIrradiance(input.PositionWS, surface.Normal, -V);
+	outRadiance += ambientOcclusion * Diffuse_Lambert(brdfData.Diffuse) * SampleDDGIIrradiance(input.PositionWS, surface.Normal, -V);
 	outRadiance += lighting.Diffuse + lighting.Specular;
 	outRadiance += ssr * ambientOcclusion;
 	outRadiance += surface.Emissive;
 
-	float fogSlice = sqrt((positionVS.z - cView.FarZ) / (cView.NearZ - cView.FarZ));
+	float fogSlice = sqrt((linearDepth - cView.FarZ) / (cView.NearZ - cView.FarZ));
 	float4 scatteringTransmittance = tLightScattering.SampleLevel(sLinearClamp, float3(screenUV, fogSlice), 0);
 	outRadiance = outRadiance * scatteringTransmittance.w + scatteringTransmittance.rgb;
 
-	float reflectivity = saturate(scatteringTransmittance.w * ambientOcclusion * Square(1 - brdf.Roughness));
+	float reflectivity = saturate(scatteringTransmittance.w * ambientOcclusion * Square(1 - brdfData.Roughness));
 
 	output.Color = float4(outRadiance, surface.Opacity);
 	output.Normal = EncodeNormalOctahedron(surface.Normal);

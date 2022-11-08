@@ -64,34 +64,16 @@ void RayGen()
 			float3 hitLocation = worldPosition + R * payload.HitT;
 			float3 N = vertex.Normal;
 
-			float3 viewPosition = mul(float4(hitLocation, 1), cView.View).xyz;
-			float4 pos = float4(0, 0, 0, viewPosition.z);
-
 			for(uint lightIndex = 0; lightIndex < cView.LightCount; ++lightIndex)
 			{
 				Light light = GetLight(lightIndex);
-				float attenuation = GetAttenuation(light, hitLocation);
+				float3 L;
+				float attenuation = GetAttenuation(light, hitLocation, L);
 				if(attenuation <= 0.0f)
 					continue;
 
-				float3 L = light.Position - hitLocation;
-				if(light.IsDirectional)
-				{
-					L = 100000.0f * -light.Direction;
-				}
-
-				if(light.CastShadows)
-				{
-					attenuation *= LightTextureMask(light, hitLocation);
-				}
-
 #if SECONDARY_SHADOW_RAY
-				RayDesc rayDesc;
-				rayDesc.Origin = hitLocation;
-				rayDesc.Direction = normalize(L);
-				rayDesc.TMin = RAY_BIAS;
-				rayDesc.TMax = length(L);
-				RaytracingAccelerationStructure tlas = ResourceDescriptorHeap[cView.TLASIndex];
+				RayDesc rayDesc = CreateLightOcclusionRay(light, hitLocation);
 				attenuation *= TraceOcclusionRay(rayDesc, tlas);
 #else
 				attenuation = 0.0f;
@@ -103,7 +85,7 @@ void RayGen()
 				if(attenuation <= 0.0f)
 					continue;
 
-				LightResult result = DefaultLitBxDF(brdfData.Specular, brdfData.Roughness, brdfData.Diffuse, N, V, normalize(L), attenuation);
+				LightResult result = DefaultLitBxDF(brdfData.Specular, brdfData.Roughness, brdfData.Diffuse, N, V, L, attenuation);
 				radiance += result.Diffuse * light.GetColor() * light.Intensity;
 				radiance += result.Specular * light.GetColor() * light.Intensity;
 			}

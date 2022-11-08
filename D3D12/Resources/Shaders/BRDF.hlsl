@@ -1,4 +1,4 @@
-#define PI 3.141592
+#include "Constants.hlsli"
 
 struct Lighting
 {

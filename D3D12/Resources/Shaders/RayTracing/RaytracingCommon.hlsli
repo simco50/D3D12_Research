@@ -167,6 +167,24 @@ void OffsetRay(inout RayDesc ray, float3 geometryNormal)
 		abs(ray.Origin.z) < origin ? ray.Origin.z + float_scale * geometryNormal.z : p_i.z);
 }
 
+RayDesc CreateLightOcclusionRay(Light light, float3 worldPosition)
+{
+	RayDesc rayDesc;
+	rayDesc.Origin = worldPosition;
+	rayDesc.TMin = RAY_BIAS;
+	if(light.IsPoint || light.IsSpot)
+	{
+		rayDesc.Direction = light.Position - worldPosition;
+		rayDesc.TMax = 1;
+	}
+	else
+	{
+		rayDesc.Direction = -light.Direction;
+		rayDesc.TMax = FLT_MAX;
+	}
+	return rayDesc;
+}
+
 struct RAYPAYLOAD OcclusionPayload
 {
 	float HitT RAYQUALIFIER(read(caller) : write(caller, miss));

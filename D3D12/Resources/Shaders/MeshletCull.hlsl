@@ -108,7 +108,7 @@ void CullInstancesCS(uint threadID : SV_DispatchThreadID)
 	if(isVisible)
 	{
 #if OCCLUSION_FIRST_PASS
-		FrustumCullData prevCullData = FrustumCull(instance.LocalBoundsOrigin, instance.LocalBoundsExtents, instance.LocalToWorld, cView.ViewProjectionPrev);
+		FrustumCullData prevCullData = FrustumCull(instance.LocalBoundsOrigin, instance.LocalBoundsExtents, instance.LocalToWorldPrev, cView.ViewProjectionPrev);
 		wasOccluded = !HZBCull(prevCullData, tHZB);
 
 		// If the instance was occluded the previous frame, we can't be sure it's still occluded this frame.
@@ -198,7 +198,7 @@ void CullAndDrawMeshletsAS(uint threadID : SV_DispatchThreadID)
 		if(isVisible)
 		{
 #if OCCLUSION_FIRST_PASS
-			FrustumCullData prevCullData = FrustumCull(bounds.Center, bounds.Extents, instance.LocalToWorld, cView.ViewProjectionPrev);
+			FrustumCullData prevCullData = FrustumCull(bounds.Center, bounds.Extents, instance.LocalToWorldPrev, cView.ViewProjectionPrev);
 			if(prevCullData.IsVisible)
 			{
 				wasOccluded = !HZBCull(prevCullData, tHZB);

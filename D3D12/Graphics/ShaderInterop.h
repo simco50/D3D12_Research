@@ -88,6 +88,7 @@ namespace ShaderInterop
 	struct InstanceData
 	{
 		float4x4 LocalToWorld;
+		float4x4 LocalToWorldPrev;
 		float3 LocalBoundsOrigin;
 		uint : 32;
 		float3 LocalBoundsExtents;

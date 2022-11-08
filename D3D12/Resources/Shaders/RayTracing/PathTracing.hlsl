@@ -25,38 +25,15 @@ ConstantBuffer<PassParameters> cPass : register(b0);
 LightResult EvaluateLight(Light light, float3 worldPos, float3 V, float3 N, float3 geometryNormal, BrdfData brdfData)
 {
 	LightResult result = (LightResult)0;
-	float attenuation = GetAttenuation(light, worldPos);
+	float3 L;
+	float attenuation = GetAttenuation(light, worldPos, L);
 	if(attenuation <= 0.0f)
-	{
 		return result;
-	}
 
-	float3 L = light.Position - worldPos;
-	if(light.IsDirectional)
-	{
-		L = 100000.0f * -light.Direction;
-	}
-
-	if(attenuation <= 0.0f)
-	{
-		return result;
-	}
-
-	attenuation *= LightTextureMask(light, worldPos);
-	if(attenuation <= 0.0f)
-	{
-		return result;
-	}
-
-	RayDesc rayDesc;
-	rayDesc.Origin = worldPos;
-	rayDesc.Direction = normalize(L);
-	rayDesc.TMin = RAY_BIAS;
-	rayDesc.TMax = length(L);
+	RayDesc rayDesc = CreateLightOcclusionRay(light, worldPos);
 	RaytracingAccelerationStructure tlas = ResourceDescriptorHeap[cView.TLASIndex];
 	attenuation *= TraceOcclusionRay(rayDesc, tlas);
 
-	L = normalize(L);
 	result = DefaultLitBxDF(brdfData.Specular, brdfData.Roughness, brdfData.Diffuse, N, V, L, attenuation);
 	result.Diffuse *= light.GetColor() * light.Intensity;
 	result.Specular *= light.GetColor() * light.Intensity;
@@ -214,16 +191,8 @@ bool SampleLightRIS(inout uint seed, float3 position, float3 N, out int lightInd
 		SampleSourceLight(seed, candidate, sourcePdf);
 
 		Light light = GetLight(candidate);
-		float3 L = normalize(light.Position - position);
-		if(light.IsDirectional)
-		{
-			L = -light.Direction;
-		}
-		if(dot(N, L) < 0.0f)
-		{
-			continue;
-		}
-		float targetPdf = GetLuminance(GetAttenuation(light, position) * light.GetColor());
+		float3 L;
+		float targetPdf = GetLuminance(GetAttenuation(light, position, L) * light.GetColor());
 		float risWeight = targetPdf / sourcePdf;
 		reservoir.TotalWeight += risWeight;
 

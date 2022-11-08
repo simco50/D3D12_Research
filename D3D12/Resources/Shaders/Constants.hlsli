@@ -16,16 +16,6 @@ static const uint INVALID_HANDLE = 0xFFFFFFFF;
 static const float3x3 IDENTITY_MATRIX_3 = float3x3(1, 0, 0, 0, 1, 0, 0, 0, 1);
 static const float4x4 IDENTITY_MATRIX_4 = float4x4(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);
 
-static const float3x3 CUBEMAP_ROTATIONS[] =
-{
-	float3x3(0,0,-1, 0,-1,0, -1,0,0),   // right
-	float3x3(0,0,1, 0,-1,0, 1,0,0),     // left
-	float3x3(1,0,0, 0,0,-1, 0,1,0),     // top
-	float3x3(1,0,0, 0,0,1, 0,-1,0),     // bottom
-	float3x3(1,0,0, 0,-1,0, 0,0,-1),    // back
-	float3x3(-1,0,0, 0,-1,0, 0,0,1),    // front
-};
-
 #define _INLINE_RT (_SM_MAJ >= 6 && _SM_MIN >= 5)
 
 #if _PAYLOAD_QUALIFIERS

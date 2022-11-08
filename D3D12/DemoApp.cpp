@@ -135,6 +135,7 @@ namespace Tweakables
 	ConsoleVariable g_BloomMaxBrightness("r.Bloom.MaxBrightness", 8.0f);
 
 	// Misc Lighting
+	ConsoleVariable g_Sky("r.Sky", true);
 	ConsoleVariable g_VolumetricFog("r.VolumetricFog", true);
 	ConsoleVariable g_Clouds("r.Clouds", true);
 	ConsoleVariable g_RaytracedAO("r.Raytracing.AO", false);
@@ -162,7 +163,7 @@ namespace Tweakables
 
 	// Lighting
 	float g_SunInclination = 0.79f;
-	float g_SunOrientation = -1.503f;
+	float g_SunOrientation = -0.15f;
 	float g_SunTemperature = 5900.0f;
 	float g_SunIntensity = 5.0f;
 }
@@ -280,48 +281,34 @@ void DemoApp::SetupScene(CommandContext& context)
 	}
 
 	{
-		Vector3 Position(-150, 160, -10);
-		Vector3 Direction;
-		Position.Normalize(Direction);
-		Light sunLight = Light::Directional(Position, -Direction, 10);
+		Light sunLight = Light::Directional(Vector3::Zero, Vector3::Down, 10);
 		sunLight.CastShadows = true;
 		sunLight.VolumetricLighting = true;
 		m_World.Lights.push_back(sunLight);
 	}
-
-#if 1
 	{
-		Vector3 Position(9, 1.5f, 0);
-		Light pointLights = Light::Point(Position, 5, 10, Colors::White);
-		pointLights.CastShadows = true;
-		pointLights.VolumetricLighting = true;
-		m_World.Lights.push_back(pointLights);
-	}
-#endif
+		Light spot = Light::Spot(Vector3(0, 0, 0), 4.0f, Vector3::Down, 70.0f, 50.0f, 30.0f);
+		spot.CastShadows = true;
+		spot.VolumetricLighting = true;
+		spot.pLightTexture = GraphicsCommon::CreateTextureFromFile(context, "Resources/Textures/LightProjector.png", false, "Light Cookie");
 
-#if 0
-	for (int i = 0; i < 5; ++i)
+		spot.Position = Vector3(9.5, 3, 3.5);
+		m_World.Lights.push_back(spot);
+		spot.Position = Vector3(-9.5, 3, 3.5);
+		m_World.Lights.push_back(spot);
+		spot.Position = Vector3(9.5, 3, -3.5);
+		m_World.Lights.push_back(spot);
+		spot.Position = Vector3(-9.5, 3, -3.5);
+		m_World.Lights.push_back(spot);
+	}
 	{
-		Vector3 loc(
-			Math::RandomRange(-10.0f, 10.0f),
-			Math::RandomRange(-4.0f, 5.0f),
-			Math::RandomRange(-10.0f, 10.0f)
-		);
-		Light spotLight = Light::Spot(loc, 100, Vector3(0, 1, 0), 65, 50, 1000, Color(Math::RandomRange(0.0f, 1.0f), Math::RandomRange(0.0f, 1.0f), Math::RandomRange(0.0f, 1.0f), 1.0f));
-		spotLight.CastShadows = true;
-		//spotLight.LightTexture = m_pDevice->RegisterBindlessResource(m_pLightCookie.get(), GetDefaultTexture(DefaultTexture::White2D));
-		spotLight.VolumetricLighting = true;
-		m_Lights.push_back(spotLight);
+		DDGIVolume& volume = m_World.DDGIVolumes.emplace_back();
+		volume.Origin = Vector3(-0.484151840f, 5.21196413f, 0.309524536f);
+		volume.Extents = Vector3(14.8834171f, 6.22350454f, 9.15293312f);
+		volume.NumProbes = Vector3i(16, 12, 14);
+		volume.NumRays = 128;
+		volume.MaxNumRays = 512;
 	}
-#endif
-
-	DDGIVolume volume;
-	volume.Origin = Vector3(-0.484151840f, 5.21196413f, 0.309524536f);
-	volume.Extents = Vector3(14.8834171f, 6.22350454f, 9.15293312f);
-	volume.NumProbes = Vector3i(16, 12, 14);
-	volume.NumRays = 128;
-	volume.MaxNumRays = 512;
-	m_World.DDGIVolumes.push_back(volume);
 }
 
 void DemoApp::Update()
@@ -372,20 +359,10 @@ void DemoApp::Update()
 			}
 		}
 
-		float costheta = cosf(Tweakables::g_SunOrientation);
-		float sintheta = sinf(Tweakables::g_SunOrientation);
-		float cosphi = cosf(Tweakables::g_SunInclination * Math::PI_DIV_2);
-		float sinphi = sinf(Tweakables::g_SunInclination * Math::PI_DIV_2);
-		m_World.Lights[0].Direction = -Vector3(costheta * cosphi, sinphi, sintheta * cosphi);
-		m_World.Lights[0].Colour = Math::MakeFromColorTemperature(Tweakables::g_SunTemperature);
-		m_World.Lights[0].Intensity = Tweakables::g_SunIntensity;
-
-		if (m_World.DDGIVolumes.size() > 0)
-		{
-			DDGIVolume& volume = m_World.DDGIVolumes[0];
-			volume.Origin = m_SceneData.SceneAABB.Center;
-			volume.Extents = 1.1f * Vector3(m_SceneData.SceneAABB.Extents);
-		}
+		Light& sun = m_World.Lights.front();
+		sun.Rotation = Quaternion::CreateFromYawPitchRoll(-Tweakables::g_SunOrientation, Tweakables::g_SunInclination * Math::PI_DIV_2, 0);
+		sun.Colour = Math::MakeFromColorTemperature(Tweakables::g_SunTemperature);
+		sun.Intensity = Tweakables::g_SunIntensity;
 
 		if (Tweakables::g_VisualizeLights)
 		{
@@ -411,6 +388,13 @@ void DemoApp::Update()
 				m_SceneData.SceneAABB = b.Bounds;
 				boundsSet = true;
 			}
+		}
+
+		if (m_World.DDGIVolumes.size() > 0)
+		{
+			DDGIVolume& volume = m_World.DDGIVolumes[0];
+			volume.Origin = m_SceneData.SceneAABB.Center;
+			volume.Extents = 1.1f * Vector3(m_SceneData.SceneAABB.Extents);
 		}
 
 		m_SceneData.VisibilityMask.SetAll();
@@ -540,24 +524,27 @@ void DemoApp::Update()
 		sceneTextures.pVelocity = graph.Create("Velocity", TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, ResourceFormat::RG16_FLOAT));
 		sceneTextures.pDepth = graph.Create("Depth Stencil", TextureDesc::CreateDepth(viewDimensions.x, viewDimensions.y, ResourceFormat::D32_FLOAT, TextureFlag::None, 1, ClearBinding(0.0f, 0)));
 
-		RGTexture* pSky = graph.Create("Sky", TextureDesc::CreateCube(64, 64, ResourceFormat::RGBA16_FLOAT));
+		RGTexture* pSky = graph.Import(GraphicsCommon::GetDefaultTexture(DefaultTexture::BlackCube));
+		if (Tweakables::g_Sky)
+		{
+			pSky = graph.Create("Sky", TextureDesc::CreateCube(64, 64, ResourceFormat::RGBA16_FLOAT));
+			graph.AddPass("Compute Sky", RGPassFlag::Compute | RGPassFlag::NeverCull)
+				.Write(pSky)
+				.Bind([=](CommandContext& context)
+					{
+						Texture* pSkyTexture = pSky->Get();
+						context.SetComputeRootSignature(m_pCommonRS);
+						context.SetPipelineState(m_pRenderSkyPSO);
+
+						context.SetRootCBV(1, Renderer::GetViewUniforms(pView, pSkyTexture));
+						context.BindResources(2, pSkyTexture->GetUAV());
+
+						context.Dispatch(ComputeUtils::GetNumThreadGroups(pSkyTexture->GetWidth(), 16, pSkyTexture->GetHeight(), 16, 6));
+
+						context.InsertResourceBarrier(pSkyTexture, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
+					});
+		}
 		graph.Export(pSky, &pViewMut->pSky);
-
-		graph.AddPass("Compute Sky", RGPassFlag::Compute | RGPassFlag::NeverCull)
-			.Write(pSky)
-			.Bind([=](CommandContext& context)
-				{
-					Texture* pSkyTexture = pSky->Get();
-					context.SetComputeRootSignature(m_pCommonRS);
-					context.SetPipelineState(m_pRenderSkyPSO);
-
-					context.SetRootCBV(1, Renderer::GetViewUniforms(pView, pSkyTexture));
-					context.BindResources(2, pSkyTexture->GetUAV());
-
-					context.Dispatch(ComputeUtils::GetNumThreadGroups(pSkyTexture->GetWidth(), 16, pSkyTexture->GetHeight(), 16, 6));
-
-					context.InsertResourceBarrier(pSkyTexture, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
-				});
 
 		RasterResult rasterResult;
 		if (m_RenderPath != RenderPath::PathTracing)
@@ -1698,12 +1685,13 @@ void DemoApp::UpdateImGui()
 			}
 		}
 
-		if (ImGui::CollapsingHeader("Sky"))
+		if (ImGui::CollapsingHeader("Atmosphere"))
 		{
 			ImGui::SliderFloat("Sun Orientation", &Tweakables::g_SunOrientation, -Math::PI, Math::PI);
 			ImGui::SliderFloat("Sun Inclination", &Tweakables::g_SunInclination, 0, 1);
 			ImGui::SliderFloat("Sun Temperature", &Tweakables::g_SunTemperature, 1000, 15000);
 			ImGui::SliderFloat("Sun Intensity", &Tweakables::g_SunIntensity, 0, 30);
+			ImGui::Checkbox("Sky", &Tweakables::g_Sky.Get());
 			ImGui::Checkbox("Volumetric Fog", &Tweakables::g_VolumetricFog.Get());
 			ImGui::Checkbox("Clouds", &Tweakables::g_Clouds.Get());
 		}
@@ -1865,7 +1853,7 @@ void DemoApp::CreateShadowViews(SceneView& view, World& world)
 				Vector3::Transform(Vector3(1, -1, 1), vpInverse),
 				Vector3::Transform(Vector3(1, -1, 0), vpInverse),
 			};
-			const Matrix lightView = Math::CreateLookToMatrix(Vector3::Zero, light.Direction, Vector3::Up);
+			const Matrix lightView = Matrix::CreateFromQuaternion(light.Rotation).Invert();
 
 			for (int i = 0; i < Tweakables::g_ShadowCascades; ++i)
 			{
@@ -1929,8 +1917,8 @@ void DemoApp::CreateShadowViews(SceneView& view, World& world)
 		}
 		else if (light.Type == LightType::Spot)
 		{
-			Matrix projection = Math::CreatePerspectiveMatrix(light.UmbraAngleDegrees * Math::DegreesToRadians, 1.0f, light.Range, 0.001f);
-			Matrix lightView = Math::CreateLookToMatrix(light.Position, light.Direction, light.Direction == Vector3::Up ? Vector3::Right : Vector3::Up);
+			const Matrix projection = Math::CreatePerspectiveMatrix(light.UmbraAngleDegrees * Math::DegreesToRadians, 1.0f, light.Range, 0.001f);
+			const Matrix lightView = (Matrix::CreateFromQuaternion(light.Rotation) * Matrix::CreateTranslation(light.Position)).Invert();
 
 			ShadowView shadowView;
 			shadowView.IsPerspective = true;

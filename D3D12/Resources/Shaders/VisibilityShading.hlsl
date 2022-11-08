@@ -5,8 +5,8 @@
 #include "RayTracing/DDGICommon.hlsli"
 
 Texture2D<uint> tVisibilityTexture : register(t0);
-Texture2D tAO :	register(t1);
-Texture2D tDepth : register(t2);
+Texture2D<float> tAO :	register(t1);
+Texture2D<float> tDepth : register(t2);
 Texture2D tPreviousSceneColor :	register(t3);
 Texture3D<float4> tFog : register(t4);
 StructuredBuffer<MeshletCandidate> tMeshletCandidates : register(t5);
@@ -112,17 +112,16 @@ MaterialProperties EvaluateMaterial(MaterialData material, VisBufferVertexAttrib
 	return properties;
 }
 
-LightResult DoLight(float4 pos, float3 worldPos, float3 N, float3 V, float3 diffuseColor, float3 specularColor, float roughness)
+LightResult DoLight(float3 specularColor, float R, float3 diffuseColor, float3 N, float3 V, float3 worldPos, float linearDepth, float dither)
 {
-	uint lightCount = cView.LightCount;
-
 	LightResult totalResult = (LightResult)0;
 
+	uint lightCount = cView.LightCount;
 	for(uint i = 0; i < lightCount; ++i)
 	{
 		uint lightIndex = i;
 		Light light = GetLight(lightIndex);
-		LightResult result = DoLight(light, specularColor, diffuseColor, roughness, pos, worldPos, N, V);
+		LightResult result = DoLight(light, specularColor, diffuseColor, R, N, V, worldPos, linearDepth, dither);
 
 		totalResult.Diffuse += result.Diffuse;
 		totalResult.Specular += result.Specular;
@@ -138,7 +137,9 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 	if(any(texel >= cView.TargetDimensions))
 		return;
 	float2 screenUV = ((float2)texel.xy + 0.5f) * cView.TargetDimensionsInv;
-	float ambientOcclusion = tAO.SampleLevel(sLinearClamp, screenUV, 0).r;
+	float ambientOcclusion = tAO.SampleLevel(sLinearClamp, screenUV, 0);
+	float linearDepth = LinearizeDepth(tDepth.SampleLevel(sLinearClamp, screenUV, 0));
+	float dither = InterleavedGradientNoise(texel.xy);
 
 	VisBufferData visibility = (VisBufferData)tVisibilityTexture[texel];
 	MeshletCandidate candidate = tMeshletCandidates[visibility.MeshletCandidateIndex];
@@ -152,14 +153,11 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 	MaterialProperties surface = EvaluateMaterial(material, vertex);
 	BrdfData brdfData = GetBrdfData(surface);
 	
-	float3 positionVS = mul(float4(vertex.Position, 1), cView.View).xyz;
-	float4 pos = float4((float2)(texel.xy + 0.5f), 0, positionVS.z);
-
 	float3 V = normalize(cView.ViewLocation - vertex.Position);
 	float ssrWeight = 0;
-	float3 ssr = ScreenSpaceReflections(pos, positionVS, surface.Normal, V, brdfData.Roughness, tDepth, tPreviousSceneColor, ssrWeight);
+	float3 ssr = ScreenSpaceReflections(vertex.Position, surface.Normal, V, brdfData.Roughness, tDepth, tPreviousSceneColor, dither, ssrWeight);
 
-	LightResult result = DoLight(pos, vertex.Position, surface.Normal, V, brdfData.Diffuse, brdfData.Specular, brdfData.Roughness);
+	LightResult result = DoLight(brdfData.Specular, brdfData.Roughness, brdfData.Diffuse, surface.Normal, V, vertex.Position, linearDepth, dither);
 
 	float3 outRadiance = 0;
 	outRadiance += ambientOcclusion * Diffuse_Lambert(brdfData.Diffuse) * SampleDDGIIrradiance(vertex.Position, surface.Normal, -V);
@@ -167,7 +165,7 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 	outRadiance += ssr;
 	outRadiance += surface.Emissive;
 
-	float fogSlice = sqrt((positionVS.z - cView.FarZ) / (cView.NearZ - cView.FarZ));
+	float fogSlice = sqrt((linearDepth - cView.FarZ) / (cView.NearZ - cView.FarZ));
 	float4 scatteringTransmittance = tFog.SampleLevel(sLinearClamp, float3(screenUV, fogSlice), 0);
 	outRadiance = outRadiance * scatteringTransmittance.w + scatteringTransmittance.rgb;
 

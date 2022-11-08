@@ -30,6 +30,16 @@ float4 PSMain(in InterpolantsVSToPS input) : SV_Target
 [numthreads(16, 16, 1)]
 void ComputeSkyCS(uint3 threadId : SV_DispatchThreadID)
 {
+	static const float3x3 CUBEMAP_ROTATIONS[] =
+	{
+		float3x3(0,0,-1, 0,-1,0, -1,0,0),   // right
+		float3x3(0,0,1, 0,-1,0, 1,0,0),     // left
+		float3x3(1,0,0, 0,0,-1, 0,1,0),     // top
+		float3x3(1,0,0, 0,0,1, 0,-1,0),     // bottom
+		float3x3(1,0,0, 0,-1,0, 0,0,-1),    // back
+		float3x3(-1,0,0, 0,-1,0, 0,0,1),    // front
+	};
+
 	float2 uv = (threadId.xy + 0.5f) * cView.TargetDimensionsInv;
 	float3 dir = normalize(mul(CUBEMAP_ROTATIONS[threadId.z], float3(uv * 2 - 1, -1)));
 
