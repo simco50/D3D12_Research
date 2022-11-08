@@ -1,25 +1,22 @@
 #include "stdafx.h"
 #include "PathTracing.h"
-#include "Graphics/Core/Graphics.h"
-#include "Graphics/Core/Texture.h"
-#include "Graphics/Core/StateObject.h"
-#include "Graphics/Core/RootSignature.h"
+#include "Graphics/RHI/Graphics.h"
+#include "Graphics/RHI/Texture.h"
+#include "Graphics/RHI/StateObject.h"
+#include "Graphics/RHI/RootSignature.h"
 #include "Graphics/RenderGraph/RenderGraph.h"
-#include "Graphics/Core/CommandContext.h"
-#include "Graphics/Core/ShaderBindingTable.h"
+#include "Graphics/RHI/CommandContext.h"
+#include "Graphics/RHI/ShaderBindingTable.h"
 #include "Graphics/SceneView.h"
 
 PathTracing::PathTracing(GraphicsDevice* pDevice)
-	: m_pDevice(pDevice)
 {
-	if (!IsSupported())
+	if (!pDevice->GetCapabilities().SupportsRaytracing())
 	{
 		return;
 	}
 
-	ShaderLibrary* pLibrary = pDevice->GetLibrary("PathTracing.hlsl");
-
-	m_pRS = std::make_unique<RootSignature>(pDevice);
+	m_pRS = new RootSignature(pDevice);
 	m_pRS->AddConstantBufferView(0);
 	m_pRS->AddConstantBufferView(100);
 	m_pRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 2);
@@ -28,14 +25,15 @@ PathTracing::PathTracing(GraphicsDevice* pDevice)
 	StateObjectInitializer desc{};
 	desc.Name = "Path Tracing";
 	desc.MaxRecursion = 1;
-	desc.MaxPayloadSize = 13 * sizeof(float);
+	desc.MaxPayloadSize = 6 * sizeof(float);
 	desc.MaxAttributeSize = 2 * sizeof(float);
 	desc.Type = D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE;
-	desc.AddLibrary(pLibrary);
-	desc.AddHitGroup("PrimaryHG", "PrimaryCHS", "PrimaryAHS");
-	desc.AddMissShader("PrimaryMS");
-	desc.AddMissShader("ShadowMS");
-	desc.pGlobalRootSignature = m_pRS.get();
+	desc.AddLibrary("RayTracing/PathTracing.hlsl");
+	desc.AddLibrary("RayTracing/SharedRaytracingLib.hlsl", {"OcclusionMS", "MaterialCHS", "MaterialAHS", "MaterialMS"});
+	desc.AddHitGroup("MaterialHG", "MaterialCHS", "MaterialAHS");
+	desc.AddMissShader("MaterialMS");
+	desc.AddMissShader("OcclusionMiss");
+	desc.pGlobalRootSignature = m_pRS;
 	m_pSO = pDevice->CreateStateObject(desc);
 
 	m_OnShaderCompiledHandle = pDevice->GetShaderManager()->OnLibraryRecompiledEvent().AddLambda([this](ShaderLibrary*, ShaderLibrary*)
@@ -44,20 +42,14 @@ PathTracing::PathTracing(GraphicsDevice* pDevice)
 		});
 }
 
-PathTracing::~PathTracing()
-{
-	if (m_OnShaderCompiledHandle.IsValid())
-	{
-		m_pDevice->GetShaderManager()->OnLibraryRecompiledEvent().Remove(m_OnShaderCompiledHandle);
-	}
-}
-
-void PathTracing::Render(RGGraph& graph, const SceneView& sceneData, Texture* pTarget)
+void PathTracing::Render(RGGraph& graph, const SceneView* pView, RGTexture* pTarget)
 {
 	if (!IsSupported())
 	{
 		return;
 	}
+
+	RGTexture* pAccumulationTexture = RGUtils::CreatePersistent(graph, "Accumulation Target", pTarget->GetDesc(), &m_pAccumulationTexture, true);
 
 	static int32 numBounces = 3;
 
@@ -77,56 +69,46 @@ void PathTracing::Render(RGGraph& graph, const SceneView& sceneData, Texture* pT
 	}
 	ImGui::End();
 
-	if (sceneData.View.PreviousViewProjection != sceneData.View.ViewProjection)
+	if (pView->View.ViewProjectionPrev != pView->View.ViewProjection)
 	{
 		Reset();
 	}
 
 	m_NumAccumulatedFrames++;
 
-	RGPassBuilder rt = graph.AddPass("Path Tracing");
-	rt.Bind([=](CommandContext& context, const RGPassResources& /* passResources */)
-		{
-			context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-
-			context.SetComputeRootSignature(m_pRS.get());
-			context.SetPipelineState(m_pSO);
-
-			struct Parameters
+	graph.AddPass("Path Tracing", RGPassFlag::Compute)
+		.Write({ pTarget, pAccumulationTexture })
+		.Bind([=](CommandContext& context)
 			{
-				uint32 NumBounces;
-				uint32 AccumulatedFrames;
-			} parameters{};
+				Texture* pRTTarget = pTarget->Get();
 
-			parameters.NumBounces = numBounces;
-			parameters.AccumulatedFrames = m_NumAccumulatedFrames;
+				context.SetComputeRootSignature(m_pRS);
+				context.SetPipelineState(m_pSO);
 
-			ShaderBindingTable bindingTable(m_pSO);
-			bindingTable.BindRayGenShader("RayGen");
-			bindingTable.BindMissShader("PrimaryMS", 0);
-			bindingTable.BindMissShader("ShadowMS", 1);
-			bindingTable.BindHitGroup("PrimaryHG", 0);
+				struct
+				{
+					uint32 NumBounces;
+					uint32 AccumulatedFrames;
+				} parameters;
 
-			const D3D12_CPU_DESCRIPTOR_HANDLE uavs[] = {
-				pTarget->GetUAV()->GetDescriptor(),
-				m_pAccumulationTexture->GetUAV()->GetDescriptor(),
-			};
+				parameters.NumBounces = numBounces;
+				parameters.AccumulatedFrames = m_NumAccumulatedFrames;
 
-			context.SetRootCBV(0, parameters);
-			context.SetRootCBV(1, GetViewUniforms(sceneData, pTarget));
-			context.BindResources(2, 0, uavs, ARRAYSIZE(uavs));
+				ShaderBindingTable bindingTable(m_pSO);
+				bindingTable.BindRayGenShader("RayGen");
+				bindingTable.BindMissShader("MaterialMS", 0);
+				bindingTable.BindMissShader("OcclusionMS", 1);
+				bindingTable.BindHitGroup("MaterialHG", 0);
 
-			context.DispatchRays(bindingTable, pTarget->GetWidth(), pTarget->GetHeight());
-		});
-}
+				context.SetRootCBV(0, parameters);
+				context.SetRootCBV(1, Renderer::GetViewUniforms(pView, pRTTarget));
+				context.BindResources(2, {
+					pRTTarget->GetUAV(),
+					pAccumulationTexture->Get()->GetUAV(),
+					});
 
-void PathTracing::OnResize(uint32 width, uint32 height)
-{
-	if (!IsSupported())
-	{
-		return;
-	}
-	m_pAccumulationTexture = m_pDevice->CreateTexture(TextureDesc::Create2D(width, height, DXGI_FORMAT_R32G32B32A32_FLOAT, TextureFlag::UnorderedAccess), "Accumulation Target");
+				context.DispatchRays(bindingTable, pRTTarget->GetWidth(), pRTTarget->GetHeight());
+			});
 }
 
 void PathTracing::Reset()
@@ -136,5 +118,5 @@ void PathTracing::Reset()
 
 bool PathTracing::IsSupported()
 {
-	return m_pDevice->GetCapabilities().SupportsRaytracing();
+	return m_pSO != nullptr;
 }

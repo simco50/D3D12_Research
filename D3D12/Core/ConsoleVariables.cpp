@@ -2,11 +2,12 @@
 #include "ConsoleVariables.h"
 #include "Core/Input.h"
 #include "Paths.h"
+#include "imgui_internal.h"
 
 static std::unordered_map<StringHash, IConsoleObject*> gCvarMap;
 static std::vector<IConsoleObject*> gConsoleObjects;
 
-void CVarManager::Initialize()
+void ConsoleManager::Initialize()
 {
 	std::ifstream fs(Sprintf("%sConsoleVariables.ini", Paths::SavedDir().c_str()));
 	std::string line;
@@ -16,7 +17,7 @@ void CVarManager::Initialize()
 	}
 }
 
-void CVarManager::RegisterConsoleObject(const char* pName, IConsoleObject* pObject)
+void ConsoleManager::RegisterConsoleObject(const char* pName, IConsoleObject* pObject)
 {
 	char lowerName[256];
 	CString::ToLower(pName, lowerName);
@@ -28,10 +29,10 @@ void CVarManager::RegisterConsoleObject(const char* pName, IConsoleObject* pObje
 	}
 }
 
-bool CVarManager::Execute(const char* pCommand)
+bool ConsoleManager::Execute(const char* pCommand)
 {
 	char cmdLower[1024];
-	CString::ToLower(pCommand, cmdLower);
+	strcpy_s(cmdLower, pCommand);
 	CString::TrimSpaces(cmdLower);
 
 	const char* argList[16];
@@ -39,10 +40,20 @@ bool CVarManager::Execute(const char* pCommand)
 	int numArgs = CString::SplitString(cmdLower, buffer, &argList[0], ARRAYSIZE(argList), true, ' ');
 	if (numArgs > 0)
 	{
-		auto it = gCvarMap.find(*argList);
+		char cmd[128];
+		CString::ToLower(argList[0], cmd);
+
+		auto it = gCvarMap.find(cmd);
 		if (it != gCvarMap.end())
 		{
-			return it->second->Execute(argList + 1, numArgs - 1);
+			if (IConsoleVariable* pVariable = it->second->AsVariable())
+			{
+				pVariable->Set(argList[1]);
+			}
+			else if (IConsoleCommand* pCmd = it->second->AsCommand())
+			{
+				pCmd->Execute(argList + 1, numArgs - 1);
+			}
 		}
 		else
 		{
@@ -53,7 +64,7 @@ bool CVarManager::Execute(const char* pCommand)
 	return false;
 }
 
-IConsoleObject* CVarManager::FindConsoleObject(const char* pName)
+IConsoleObject* ConsoleManager::FindConsoleObject(const char* pName)
 {
 	char lowerName[256];
 	CString::ToLower(pName, lowerName);
@@ -61,32 +72,12 @@ IConsoleObject* CVarManager::FindConsoleObject(const char* pName)
 	return it != gCvarMap.end() ? it->second : nullptr;
 }
 
-const std::vector<IConsoleObject*>& CVarManager::GetObjects()
+const std::vector<IConsoleObject*>& ConsoleManager::GetObjects()
 {
 	return gConsoleObjects;
 }
 
-template<> int ConsoleVariable<int>::GetInt() const { return m_Value; }
-template<> float ConsoleVariable<int>::GetFloat() const { return (float)m_Value; }
-template<> bool ConsoleVariable<int>::GetBool() const { return m_Value > 0; }
-template<> std::string ConsoleVariable<int>::GetString() const { std::string out; CString::ToString(m_Value, &out); return out; }
-
-template<> int ConsoleVariable<float>::GetInt() const { return (int)m_Value; }
-template<> float ConsoleVariable<float>::GetFloat() const { return m_Value; }
-template<> bool ConsoleVariable<float>::GetBool() const { return m_Value > 0.0f; }
-template<> std::string ConsoleVariable<float>::GetString() const { std::string out; CString::ToString(m_Value, &out); return out; }
-
-template<> int ConsoleVariable<bool>::GetInt() const { return (int)m_Value; }
-template<> float ConsoleVariable<bool>::GetFloat() const { return (float)m_Value; }
-template<> bool ConsoleVariable<bool>::GetBool() const { return m_Value; }
-template<> std::string ConsoleVariable<bool>::GetString() const { return m_Value ? "True" : "False"; }
-
-template<> int ConsoleVariable<const char*>::GetInt() const { int out; CString::FromString(m_Value, out); return out; }
-template<> float ConsoleVariable<const char*>::GetFloat() const { float out; CString::FromString(m_Value, out); return out; }
-template<> bool ConsoleVariable<const char*>::GetBool() const { bool out; CString::FromString(m_Value, out); return out; }
-template<> std::string ConsoleVariable<const char*>::GetString() const { return m_Value; }
-
-void ImGuiConsole::Update(const ImVec2& position, const ImVec2& size)
+void ImGuiConsole::Update()
 {
 	if (Input::Instance().IsKeyPressed(VK_OEM_3))
 	{
@@ -98,93 +89,111 @@ void ImGuiConsole::Update(const ImVec2& position, const ImVec2& size)
 	{
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0);
 
-		if (ImGui::Begin("Output Log", &m_ShowConsole))
+		ImVec2 viewSize = ImGui::GetIO().DisplaySize;
+		ImVec2 widgetSize = ImVec2(600, 300);
+
+		ImGui::SetNextWindowPos(ImVec2(viewSize.x / 2, viewSize.y), 0, ImVec2(0.5f, 1.0f));
+		ImGui::SetNextWindowSize(widgetSize);
+
+		uint32 windowFlags =
+			ImGuiWindowFlags_NoMove |
+			ImGuiWindowFlags_NoDecoration |
+			ImGuiWindowFlags_NoDocking;
+
+		if (ImGui::Begin("Output Log", &m_ShowConsole, windowFlags))
 		{
-			for (const Console::LogEntry& entry : Console::GetHistory())
+			if (ImGui::BeginChild("History", ImVec2(0, -ImGui::GetTextLineHeightWithSpacing())))
 			{
-				switch (entry.Type)
+				for (const Console::LogEntry& entry : Console::GetHistory())
 				{
-				case LogType::VeryVerbose:
-				case LogType::Verbose:
-				case LogType::Info:
-					ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 1, 1, 1));
-					ImGui::TextWrapped("[Info] %s", entry.Message.c_str());
-					break;
-				case LogType::Warning:
-					ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 1, 0, 1));
-					ImGui::TextWrapped("[Warning] %s", entry.Message.c_str());
-					break;
-				case LogType::Error:
-				case LogType::FatalError:
-					ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 0, 0, 1));
-					ImGui::TextWrapped("[Error] %s", entry.Message.c_str());
-					break;
-				}
-				ImGui::PopStyleColor();
-			}
-
-			int inputFlags =
-				ImGuiInputTextFlags_EnterReturnsTrue |
-				ImGuiInputTextFlags_CallbackHistory |
-				ImGuiInputTextFlags_CallbackCompletion |
-				ImGuiInputTextFlags_CallbackCharFilter |
-				ImGuiInputTextFlags_CallbackEdit |
-				ImGuiInputTextFlags_CallbackAlways;
-
-			auto inputCallback = [](ImGuiInputTextCallbackData* pData)
-			{
-				ImGuiConsole* pConsole = (ImGuiConsole*)pData->UserData;
-				return pConsole->InputCallback(pData);
-			};
-
-			ImGui::PushItemWidth(size.x);
-			if (ImGui::InputText("", m_Input.data(), (int)m_Input.size(), inputFlags, inputCallback, this))
-			{
-				if (m_Input[0] != '\0')
-				{
-					CVarManager::Execute(m_Input.data());
-					m_Suggestions.clear();
-					m_History.push_back(m_Input.data());
-					m_HistoryPos = -1;
-					m_SuggestionPos = -1;
-					m_Input[0] = '\0';
-					m_FocusConsole = false;
-				}
-			}
-			if (m_FocusConsole)
-			{
-				m_FocusConsole = false;
-				ImGui::SetKeyboardFocusHere();
-			}
-
-			ImGui::PopItemWidth();
-
-			if (!m_Suggestions.empty())
-			{
-				ImVec2 pos = ImGui::GetCursorScreenPos();
-				ImGui::SetNextWindowPos(ImVec2(pos.x, pos.y - ImGui::GetFontSize() * 2), 0, ImVec2(0, 1));
-				if (ImGui::Begin("Suggestions", 0, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_AlwaysAutoResize))
-				{
-					for (uint32 i = 0; i < (uint32)m_Suggestions.size(); ++i)
+					switch (entry.Type)
 					{
-						if (ImGui::Selectable(m_Suggestions[i], i == (uint32)m_SuggestionPos))
-						{
-							m_SuggestionPos = (int)i;
-							strncpy_s(m_Input.data(), (int)m_Input.size(), m_Suggestions[i], strlen(m_Suggestions[i]));
-							m_Suggestions.clear();
-							m_AutoCompleted = true;
-							ImGui::SetKeyboardFocusHere();
-							break;
-						}
+					case LogType::VeryVerbose:
+					case LogType::Verbose:
+					case LogType::Info:
+						ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 1, 1, 1));
+						ImGui::TextWrapped("[Info] %s", entry.Message.c_str());
+						break;
+					case LogType::Warning:
+						ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 1, 0, 1));
+						ImGui::TextWrapped("[Warning] %s", entry.Message.c_str());
+						break;
+					case LogType::Error:
+					case LogType::FatalError:
+						ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 0, 0, 1));
+						ImGui::TextWrapped("[Error] %s", entry.Message.c_str());
+						break;
 					}
-					ImGui::End();
+					ImGui::PopStyleColor();
+				}
+				ImGui::SetScrollHereY();
+			}
+			ImGui::EndChild();
+
+			if (ImGui::BeginChild("Command"))
+			{
+				int inputFlags =
+					ImGuiInputTextFlags_EnterReturnsTrue |
+					ImGuiInputTextFlags_CallbackHistory |
+					ImGuiInputTextFlags_CallbackCompletion |
+					ImGuiInputTextFlags_CallbackCharFilter |
+					ImGuiInputTextFlags_CallbackEdit |
+					ImGuiInputTextFlags_CallbackAlways;
+
+				auto inputCallback = [](ImGuiInputTextCallbackData* pData)
+				{
+					ImGuiConsole* pConsole = (ImGuiConsole*)pData->UserData;
+					return pConsole->InputCallback(pData);
+				};
+
+				ImGui::PushItemWidth(widgetSize.x);
+				if (ImGui::InputText("##ConsoleInput", m_Input.data(), (int)m_Input.size(), inputFlags, inputCallback, this))
+				{
+					if (m_Input[0] != '\0')
+					{
+						ConsoleManager::Execute(m_Input.data());
+						m_Suggestions.clear();
+						m_History.push_back(m_Input.data());
+						m_HistoryPos = -1;
+						m_SuggestionPos = -1;
+						m_Input[0] = '\0';
+						m_FocusConsole = false;
+					}
+				}
+				if (m_FocusConsole)
+				{
+					m_FocusConsole = false;
+					ImGui::SetKeyboardFocusHere(-1);
+				}
+
+				ImGui::PopItemWidth();
+
+				if (!m_Suggestions.empty())
+				{
+					ImVec2 pos = ImGui::GetCursorScreenPos();
+
+					ImGui::SetNextWindowPos(ImVec2(pos.x, pos.y - ImGui::GetTextLineHeightWithSpacing()), 0, ImVec2(0, 1));
+					ImGui::SetNextWindowSize(ImVec2(widgetSize.x / 2, 0));
+					if (ImGui::Begin("Suggestions", 0, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_AlwaysAutoResize))
+					{
+						for (uint32 i = 0; i < (uint32)m_Suggestions.size(); ++i)
+						{
+							if (ImGui::Selectable(m_Suggestions[i], i == (uint32)m_SuggestionPos))
+							{
+								m_SuggestionPos = (int)i;
+								strncpy_s(m_Input.data(), (int)m_Input.size(), m_Suggestions[i], strlen(m_Suggestions[i]));
+								m_Suggestions.clear();
+								m_AutoCompleted = true;
+								m_FocusConsole = true;
+								break;
+							}
+						}
+						ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
+						ImGui::End();
+					}
 				}
 			}
-
-			if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY())
-			{
-				ImGui::SetScrollHereY(1.0f);
-			}
+			ImGui::EndChild();
 		}
 		ImGui::End();
 		ImGui::PopStyleVar();
@@ -197,7 +206,7 @@ int ImGuiConsole::InputCallback(ImGuiInputTextCallbackData* pCallbackData)
 		m_Suggestions.clear();
 		if (strlen(pCallbackData->Buf) > 0)
 		{
-			CVarManager::ForEachCvar([this, pCallbackData](IConsoleObject* pObject)
+			ConsoleManager::ForEachCvar([this, pCallbackData](IConsoleObject* pObject)
 				{
 					if (_strnicmp(pObject->GetName(), pCallbackData->Buf, strlen(pCallbackData->Buf)) == 0 && m_Suggestions.size() < 10)
 					{
@@ -237,7 +246,7 @@ int ImGuiConsole::InputCallback(ImGuiInputTextCallbackData* pCallbackData)
 
 		if (!m_Suggestions.empty())
 		{
-			m_SuggestionPos = Math::Clamp(m_SuggestionPos, 0, (int)m_Suggestions.size() - 1);
+			m_SuggestionPos = Math::Clamp(m_SuggestionPos, 0, m_Suggestions.size() - 1);
 
 			pCallbackData->DeleteChars((int)(pWordStart - pCallbackData->Buf), (int)(pWordEnd - pWordStart));
 			pCallbackData->InsertChars(pCallbackData->CursorPos, m_Suggestions[m_SuggestionPos]);

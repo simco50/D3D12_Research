@@ -1,24 +1,41 @@
 #pragma once
-#include "Core/DescriptorHandle.h"
 #include "Core/BitField.h"
-#include "Core/ShaderInterop.h"
-#include "Light.h"
+#include "ShaderInterop.h"
+#include "AccelerationStructure.h"
+#include "RenderGraph/RenderGraphDefinitions.h"
+#include "Techniques/ShaderDebugRenderer.h"
+#include "Techniques/DDGI.h"
 
 class Texture;
 class Buffer;
+class Mesh;
 class CommandContext;
+class ShaderResourceView;
+class CommandSignature;
+class GraphicsDevice;
+class Image;
 struct SubMesh;
+struct Light;
+
+struct World
+{
+	std::vector<Light> Lights;
+	std::vector<std::unique_ptr<Mesh>> Meshes;
+	std::vector<DDGIVolume> DDGIVolumes;
+};
 
 struct ViewTransform
 {
 	Matrix Projection;
 	Matrix View;
 	Matrix ViewProjection;
+	Matrix ViewProjectionPrev;
+	Matrix ViewProjectionFrozen;
 	Matrix ViewInverse;
 	Matrix ProjectionInverse;
-	Matrix PreviousViewProjection;
 	bool Perspective = true;
 	Vector3 Position;
+	Vector3 PositionPrev;
 
 	FloatRect Viewport;
 	float FoV = 60.0f * Math::PI / 180;
@@ -40,41 +57,100 @@ struct Batch
 		AlphaMask = 2,
 		AlphaBlend = 4,
 	};
-	ShaderInterop::InstanceData InstanceData;
+	uint32 InstanceID;
 	Blending BlendMode = Blending::Opaque;
-	const SubMesh* pMesh = nullptr;
+	SubMesh* pMesh;
 	Matrix WorldMatrix;
-	BoundingBox LocalBounds;
 	BoundingBox Bounds;
 	float Radius;
 };
 DECLARE_BITMASK_TYPE(Batch::Blending)
 
-using VisibilityMask = BitField<2048>;
+using VisibilityMask = BitField<8192>;
 
-struct ShadowData
+struct ShadowView
 {
-	Matrix LightViewProjections[MAX_SHADOW_CASTERS];
-	Vector4 CascadeDepths;
-	uint32 NumCascades;
-	uint32 ShadowMapOffset;
+	Matrix ViewProjection;
+	bool IsPerspective;
+	Texture* pDepthTexture = nullptr;
+	OrientedBoundingBox OrtographicFrustum;
+	BoundingFrustum PerspectiveFrustum;
+	VisibilityMask Visibility;
 };
 
 struct SceneView
 {
 	std::vector<Batch> Batches;
-	Buffer* pLightBuffer = nullptr;
-	Buffer* pMaterialBuffer = nullptr;
-	Buffer* pMeshBuffer = nullptr;
-	Buffer* pMeshInstanceBuffer = nullptr;
-	Buffer* pSceneTLAS = nullptr;
-	Buffer* pTransformsBuffer = nullptr;
+	RefCountPtr<Buffer> pLightBuffer;
+	RefCountPtr<Buffer> pMaterialBuffer;
+	RefCountPtr<Buffer> pMeshBuffer;
+	RefCountPtr<Buffer> pInstanceBuffer;
+	RefCountPtr<Buffer> pDDGIVolumesBuffer;
+	uint32 NumDDGIVolumes = 0;
+	RefCountPtr<Texture> pSky;
 	int FrameIndex = 0;
+	Vector2i HZBDimensions;
 	VisibilityMask VisibilityMask;
-	ShadowData ShadowData;
 	ViewTransform View;
+	BoundingBox SceneAABB;
+	AccelerationStructure AccelerationStructure;
+	GPUDebugRenderData DebugRenderData;
+
+	std::vector<ShadowView> ShadowViews;
+	Vector4 ShadowCascadeDepths;
+	uint32 NumShadowCascades;
+	uint32 NumLights;
+
+	Vector2i GetDimensions() const;
 };
 
-void DrawScene(CommandContext& context, const SceneView& scene, const VisibilityMask& visibility, Batch::Blending blendModes);
-void DrawScene(CommandContext& context, const SceneView& scene, Batch::Blending blendModes);
-ShaderInterop::ViewUniforms GetViewUniforms(const SceneView& sceneView, Texture* pTarget = nullptr);
+struct SceneTextures
+{
+	RGTexture* pPreviousColor = nullptr;
+	RGTexture* pRoughness = nullptr;
+	RGTexture* pColorTarget = nullptr;
+	RGTexture* pDepth = nullptr;
+	RGTexture* pResolvedDepth = nullptr;
+	RGTexture* pNormals = nullptr;
+	RGTexture* pVelocity = nullptr;
+	RGTexture* pAmbientOcclusion = nullptr;
+};
+
+namespace Renderer
+{
+	void DrawScene(CommandContext& context, const SceneView* pView, const VisibilityMask& visibility, Batch::Blending blendModes);
+	void DrawScene(CommandContext& context, const SceneView* pView, Batch::Blending blendModes);
+	ShaderInterop::ViewUniforms GetViewUniforms(const SceneView* pView, Texture* pTarget = nullptr);
+	void UploadSceneData(CommandContext& context, SceneView* pView, World* pWorld);
+}
+
+enum class DefaultTexture
+{
+	White2D,
+	Black2D,
+	Magenta2D,
+	Gray2D,
+	Normal2D,
+	RoughnessMetalness,
+	BlackCube,
+	Black3D,
+	ColorNoise256,
+	BlueNoise512,
+	MAX,
+};
+
+namespace GraphicsCommon
+{
+	void Create(GraphicsDevice* pDevice);
+	void Destroy();
+
+	Texture* GetDefaultTexture(DefaultTexture type);
+
+	extern RefCountPtr<CommandSignature> pIndirectDrawSignature;
+	extern RefCountPtr<CommandSignature> pIndirectDrawIndexedSignature;
+	extern RefCountPtr<CommandSignature> pIndirectDispatchSignature;
+	extern RefCountPtr<CommandSignature> pIndirectDispatchMeshSignature;
+
+	RefCountPtr<Texture> CreateTextureFromImage(CommandContext& context, Image& image, bool sRGB, const char* pName = nullptr);
+	RefCountPtr<Texture> CreateTextureFromFile(CommandContext& context, const char* pFilePath, bool sRGB, const char* pName = nullptr);
+}

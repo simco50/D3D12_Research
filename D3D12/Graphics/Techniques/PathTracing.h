@@ -1,4 +1,6 @@
 #pragma once
+#include "../RHI/StateObject.h"
+#include "../RenderGraph/RenderGraphDefinitions.h"
 
 class RootSignature;
 class StateObject;
@@ -11,18 +13,15 @@ class PathTracing
 {
 public:
 	PathTracing(GraphicsDevice* pDevice);
-	~PathTracing();
-	void Render(RGGraph& graph, const SceneView& scene, Texture* pTarget);
-	void OnResize(uint32 width, uint32 height);
+	void Render(RGGraph& graph, const SceneView* pView, RGTexture* pTarget);
 	void Reset();
 	bool IsSupported();
 
 private:
-	GraphicsDevice* m_pDevice;
-	std::unique_ptr<RootSignature> m_pRS;
-	StateObject* m_pSO = nullptr;
+	RefCountPtr<RootSignature> m_pRS;
+	RefCountPtr<StateObject> m_pSO;
 
-	std::unique_ptr<Texture> m_pAccumulationTexture;
+	RefCountPtr<Texture> m_pAccumulationTexture;
 	DelegateHandle m_OnShaderCompiledHandle;
 	int m_NumAccumulatedFrames = 1;
 };

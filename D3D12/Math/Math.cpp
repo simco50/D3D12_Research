@@ -101,6 +101,16 @@ namespace Math
 #endif
 	}
 
+	BoundingFrustum CreateBoundingFrustum(const Matrix& projection, const Matrix& view)
+	{
+		BoundingFrustum frustum;
+		BoundingFrustum::CreateFromMatrix(frustum, projection);
+		if (frustum.Far < frustum.Near)
+			std::swap(frustum.Far, frustum.Near);
+		frustum.Transform(frustum, view.Invert());
+		return frustum;
+	}
+
 	void GetProjectionClipPlanes(const Matrix& projection, float& nearZ, float& farZ)
 	{
 		nearZ = -projection._43 / projection._33;

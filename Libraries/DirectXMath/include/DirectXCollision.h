@@ -32,10 +32,12 @@ namespace DirectX
     struct BoundingOrientedBox;
     struct BoundingFrustum;
 
+#ifdef _MSC_VER
 #pragma warning(push)
 #pragma warning(disable:4324 4820)
     // C4324: alignment padding warnings
     // C4820: Off by default noise
+#endif
 
     //-------------------------------------------------------------------------------------
     // Bounding sphere
@@ -87,7 +89,7 @@ namespace DirectX
             _In_ GXMVECTOR Plane3, _In_ HXMVECTOR Plane4, _In_ HXMVECTOR Plane5) const noexcept;
         // Test sphere against six planes (see BoundingFrustum::GetPlanes)
 
-    // Static methods
+        // Static methods
         static void CreateMerged(_Out_ BoundingSphere& Out, _In_ const BoundingSphere& S1, _In_ const BoundingSphere& S2) noexcept;
 
         static void CreateFromBoundingBox(_Out_ BoundingSphere& Out, _In_ const BoundingBox& box) noexcept;
@@ -104,7 +106,7 @@ namespace DirectX
     //-------------------------------------------------------------------------------------
     struct BoundingBox
     {
-        static const size_t CORNER_COUNT = 8;
+        static constexpr size_t CORNER_COUNT = 8;
 
         XMFLOAT3 Center;            // Center of the box.
         XMFLOAT3 Extents;           // Distance from the center to each side.
@@ -153,7 +155,7 @@ namespace DirectX
             _In_ GXMVECTOR Plane3, _In_ HXMVECTOR Plane4, _In_ HXMVECTOR Plane5) const noexcept;
         // Test box against six planes (see BoundingFrustum::GetPlanes)
 
-    // Static methods
+        // Static methods
         static void CreateMerged(_Out_ BoundingBox& Out, _In_ const BoundingBox& b1, _In_ const BoundingBox& b2) noexcept;
 
         static void CreateFromSphere(_Out_ BoundingBox& Out, _In_ const BoundingSphere& sh) noexcept;
@@ -168,7 +170,7 @@ namespace DirectX
     //-------------------------------------------------------------------------------------
     struct BoundingOrientedBox
     {
-        static const size_t CORNER_COUNT = 8;
+        static constexpr size_t CORNER_COUNT = 8;
 
         XMFLOAT3 Center;            // Center of the box.
         XMFLOAT3 Extents;           // Distance from the center to each side.
@@ -183,8 +185,8 @@ namespace DirectX
         BoundingOrientedBox(BoundingOrientedBox&&) = default;
         BoundingOrientedBox& operator=(BoundingOrientedBox&&) = default;
 
-        constexpr BoundingOrientedBox(_In_ const XMFLOAT3& _Center, _In_ const XMFLOAT3& _Extents, _In_ const XMFLOAT4& _Orientation) noexcept
-            : Center(_Center), Extents(_Extents), Orientation(_Orientation) {}
+        constexpr BoundingOrientedBox(_In_ const XMFLOAT3& center, _In_ const XMFLOAT3& extents, _In_ const XMFLOAT4& orientation) noexcept
+            : Center(center), Extents(extents), Orientation(orientation) {}
 
         // Methods
         void    XM_CALLCONV     Transform(_Out_ BoundingOrientedBox& Out, _In_ FXMMATRIX M) const noexcept;
@@ -218,7 +220,7 @@ namespace DirectX
             _In_ GXMVECTOR Plane3, _In_ HXMVECTOR Plane4, _In_ HXMVECTOR Plane5) const noexcept;
         // Test OrientedBox against six planes (see BoundingFrustum::GetPlanes)
 
-    // Static methods
+        // Static methods
         static void CreateFromBoundingBox(_Out_ BoundingOrientedBox& Out, _In_ const BoundingBox& box) noexcept;
 
         static void CreateFromPoints(_Out_ BoundingOrientedBox& Out, _In_ size_t Count,
@@ -230,7 +232,7 @@ namespace DirectX
     //-------------------------------------------------------------------------------------
     struct BoundingFrustum
     {
-        static const size_t CORNER_COUNT = 8;
+        static constexpr size_t CORNER_COUNT = 8;
 
         XMFLOAT3 Origin;            // Origin of the frustum (and projection).
         XMFLOAT4 Orientation;       // Quaternion representing rotation.
@@ -252,12 +254,12 @@ namespace DirectX
         BoundingFrustum(BoundingFrustum&&) = default;
         BoundingFrustum& operator=(BoundingFrustum&&) = default;
 
-        constexpr BoundingFrustum(_In_ const XMFLOAT3& _Origin, _In_ const XMFLOAT4& _Orientation,
-            _In_ float _RightSlope, _In_ float _LeftSlope, _In_ float _TopSlope, _In_ float _BottomSlope,
-            _In_ float _Near, _In_ float _Far) noexcept
-            : Origin(_Origin), Orientation(_Orientation),
-            RightSlope(_RightSlope), LeftSlope(_LeftSlope), TopSlope(_TopSlope), BottomSlope(_BottomSlope),
-            Near(_Near), Far(_Far) {}
+        constexpr BoundingFrustum(_In_ const XMFLOAT3& origin, _In_ const XMFLOAT4& orientation,
+            _In_ float rightSlope, _In_ float leftSlope, _In_ float topSlope, _In_ float bottomSlope,
+            _In_ float nearPlane, _In_ float farPlane) noexcept
+            : Origin(origin), Orientation(orientation),
+            RightSlope(rightSlope), LeftSlope(leftSlope), TopSlope(topSlope), BottomSlope(bottomSlope),
+            Near(nearPlane), Far(farPlane) {}
         BoundingFrustum(_In_ CXMMATRIX Projection, bool rhcoords = false) noexcept;
 
         // Methods
@@ -297,7 +299,7 @@ namespace DirectX
             _Out_opt_ XMVECTOR* LeftPlane, _Out_opt_ XMVECTOR* TopPlane, _Out_opt_ XMVECTOR* BottomPlane) const noexcept;
         // Create 6 Planes representation of Frustum
 
-    // Static methods
+        // Static methods
         static void     XM_CALLCONV     CreateFromMatrix(_Out_ BoundingFrustum& Out, _In_ FXMMATRIX Projection, bool rhcoords = false) noexcept;
     };
 
@@ -321,7 +323,9 @@ namespace DirectX
         // Test a triangle against six planes at once (see BoundingFrustum::GetPlanes)
     }
 
+#ifdef _MSC_VER
 #pragma warning(pop)
+#endif
 
     /****************************************************************************
      *
@@ -329,12 +333,13 @@ namespace DirectX
      *
      ****************************************************************************/
 
+#ifdef _MSC_VER
 #pragma warning(push)
 #pragma warning(disable : 4068 4365 4616 6001)
      // C4068/4616: ignore unknown pragmas
      // C4365: Off by default noise
      // C6001: False positives
-
+#endif
 #ifdef _PREFAST_
 #pragma prefast(push)
 #pragma prefast(disable : 25000, "FXMVECTOR is 16 bytes")
@@ -346,8 +351,9 @@ namespace DirectX
 #ifdef _PREFAST_
 #pragma prefast(pop)
 #endif
-
+#ifdef _MSC_VER
 #pragma warning(pop)
+#endif
 
 } // namespace DirectX
 

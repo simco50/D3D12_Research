@@ -1,19 +1,16 @@
-#include "CommonBindings.hlsli"
+#include "Common.hlsli"
 #include "Lighting.hlsli"
-
-#define RootSig ROOT_SIG("CBV(b0), " \
-		"CBV(b100), " \
-		"DescriptorTable(UAV(u0, numDescriptors = 1)), " \
-		"DescriptorTable(SRV(t0, numDescriptors = 3))")
+#include "Volumetrics.hlsli"
+#include "RayTracing/DDGICommon.hlsli"
 
 struct PassData
 {
-	int3 ClusterDimensions;
+	uint3 ClusterDimensions;
 	float Jitter;
 	float3 InvClusterDimensions;
 	float LightClusterSizeFactor;
 	float2 LightGridParams;
-	int2 LightClusterDimensions;
+	uint2 LightClusterDimensions;
 };
 
 ConstantBuffer<PassData> cPass : register(b0);
@@ -22,13 +19,6 @@ StructuredBuffer<uint> tLightGrid : register(t0);
 StructuredBuffer<uint> tLightIndexList : register(t1);
 Texture3D<float4> tLightScattering : register(t2);
 RWTexture3D<float4> uOutLightScattering : register(u0);
-
-float HenyeyGreenstreinPhase(float LoV, float G)
-{
-	float result = 1.0f - G * G;
-	result /= (4.0f * PI * pow(1.0f + G * G - (2.0f * G) * LoV, 1.5f));
-	return result;
-}
 
 float3 GetWorldPosition(uint3 index, float offset, out float linearDepth)
 {
@@ -54,7 +44,7 @@ uint GetLightCluster(uint2 fogCellIndex, float depth)
 {
 	uint slice = GetLightClusterSliceFromDepth(depth);
 	uint3 clusterIndex3D = uint3(floor(fogCellIndex * cPass.LightClusterSizeFactor), slice);
-	return clusterIndex3D.x + (cPass.LightClusterDimensions.x * (clusterIndex3D.y + cPass.LightClusterDimensions.y * clusterIndex3D.z));
+	return Flatten3D(clusterIndex3D, uint3(cPass.LightClusterDimensions, 0));
 }
 
 struct FogVolume
@@ -66,7 +56,6 @@ struct FogVolume
 	float DensityBase;
 };
 
-[RootSignature(RootSig)]
 [numthreads(8, 8, 4)]
 void InjectFogLightingCS(uint3 threadId : SV_DispatchThreadID)
 {
@@ -77,10 +66,10 @@ void InjectFogLightingCS(uint3 threadId : SV_DispatchThreadID)
 
 	// Compute reprojected UVW
 	float3 voxelCenterWS = GetWorldPosition(cellIndex, 0.5f);
-	float4 reprojNDC = mul(float4(voxelCenterWS, 1), cView.PreviousViewProjection);
+	float4 reprojNDC = mul(float4(voxelCenterWS, 1), cView.ViewProjectionPrev);
 	reprojNDC.xyz /= reprojNDC.w;
 	float3 reprojUV = float3(reprojNDC.x * 0.5f + 0.5f, -reprojNDC.y * 0.5f + 0.5f, reprojNDC.z);
-	reprojUV.z = LinearizeDepth(reprojUV.z, cView.NearZ, cView.FarZ);
+	reprojUV.z = LinearizeDepth(reprojUV.z);
 	reprojUV.z = sqrt((reprojUV.z - cView.FarZ) / (cView.NearZ - cView.FarZ));
 	float4 prevScattering = tLightScattering.SampleLevel(sLinearClamp, reprojUV, 0);
 
@@ -94,7 +83,7 @@ void InjectFogLightingCS(uint3 threadId : SV_DispatchThreadID)
 	fogVolumes[0].Extents = float3(100, 100, 100);
 	fogVolumes[0].Color = float3(1, 1, 1);
 	fogVolumes[0].DensityBase = 0;
-	fogVolumes[0].DensityChange = 0.1f;
+	fogVolumes[0].DensityChange = 0.03f;
 
 	uint i;
 	for(i = 0; i < numFogVolumes; ++i)
@@ -123,12 +112,11 @@ void InjectFogLightingCS(uint3 threadId : SV_DispatchThreadID)
 	cellDensity = cellDensity;
 
 	float3 totalLighting = 0;
+	float dither = InterleavedGradientNoise(threadId.xy);
 
+	float3 V = normalize(cView.ViewLocation - worldPosition);
 	if(dot(inScattering, float3(1, 1, 1)) > 0.0f)
 	{
-		float3 V = normalize(cView.ViewPosition.xyz - worldPosition);
-		float4 pos = float4(threadId.xy, 0, z);
-
 		// Iterate over all the lights and light the froxel
 		uint tileIndex = GetLightCluster(threadId.xy, z);
 		uint lightOffset = tLightGrid[tileIndex * 2];
@@ -140,33 +128,28 @@ void InjectFogLightingCS(uint3 threadId : SV_DispatchThreadID)
 			Light light = GetLight(lightIndex);
 			if(light.IsEnabled && light.IsVolumetric)
 			{
-				float attenuation = GetAttenuation(light, worldPosition);
+				float3 L;
+				float attenuation = GetAttenuation(light, worldPosition, L);
 				if(attenuation <= 0.0f)
-				{
 					continue;
-				}
 
 				if(light.CastShadows)
 				{
-					int shadowIndex = GetShadowIndex(light, pos, worldPosition);
-					attenuation *= ShadowNoPCF(worldPosition, shadowIndex, light.InvShadowSize);
-					attenuation *= LightTextureMask(light, shadowIndex, worldPosition);
+					int shadowIndex = GetShadowMapIndex(light, worldPosition, z, dither);
+					attenuation *= ShadowNoPCF(worldPosition, light.MatrixIndex + shadowIndex, light.ShadowMapIndex + shadowIndex, light.InvShadowSize);
 				}
+				if(attenuation <= 0.0f)
+					continue;
 
-				float3 L = normalize(light.Position - worldPosition);
-				if(light.IsDirectional)
-				{
-					L = normalize(light.Direction);
-				}
 				float VdotL = dot(V, L);
-				float4 lightColor = light.GetColor() * light.Intensity;
+				float3 lightColor = light.GetColor() * light.Intensity;
 
-				totalLighting += attenuation * lightColor.xyz * saturate(HenyeyGreenstreinPhase(VdotL, 0.3f));
+				totalLighting += attenuation * lightColor * saturate(HenyeyGreenstreinPhase(VdotL, 0.3f));
 			}
 		}
 	}
 
-	totalLighting += ApplyAmbientLight(1, 1, GetLight(0).GetColor().rgb).x;
+	totalLighting += (SampleDDGIIrradiance(worldPosition, -V, -V) / PI);
 
 	float blendFactor = 0.05f;
 	if(any(reprojUV < 0.05f) || any(reprojUV > 0.95f))
@@ -183,13 +166,12 @@ void InjectFogLightingCS(uint3 threadId : SV_DispatchThreadID)
 	uOutLightScattering[threadId] = newScattering;
 }
 
-[RootSignature(RootSig)]
 [numthreads(8, 8, 1)]
 void AccumulateFogCS(uint3 threadId : SV_DispatchThreadID, uint groupIndex : SV_GroupIndex)
 {
 	float3 accumulatedLight = 0;
 	float accumulatedTransmittance = 1;
-	float3 previousPosition = cView.ViewPosition.xyz;
+	float3 previousPosition = cView.ViewLocation;
 
 	for(int sliceIndex = 0; sliceIndex < cPass.ClusterDimensions.z; ++sliceIndex)
 	{

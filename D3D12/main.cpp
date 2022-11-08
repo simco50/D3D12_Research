@@ -1,6 +1,5 @@
 #include "stdafx.h"
 
-#include "Graphics/Core/Graphics.h"
 #include "Core/Input.h"
 #include "Core/Console.h"
 #include "Core/CommandLine.h"
@@ -37,31 +36,31 @@ int WINAPI WinMain(_In_ HINSTANCE /*hInstance*/, _In_opt_ HINSTANCE /*hPrevInsta
 	}
 
 	Console::Initialize();
-	CVarManager::Initialize();
+	ConsoleManager::Initialize();
 	TaskQueue::Initialize(std::thread::hardware_concurrency());
 
-	Window app(1920, 1080);
+	Vector2i displayDimensions = Window::GetDisplaySize();
+
+	Window app((int)(displayDimensions.x * 0.7f), (int)(displayDimensions.y * 0.7f));
 	app.SetTitle("D3D12");
 
-	DemoApp graphics(app.GetNativeWindow(), app.GetRect(), 1);
+	DemoApp graphics(app.GetNativeWindow(), app.GetRect());
 
 	app.OnKeyInput += [](uint32 character, bool isDown) { Input::Instance().UpdateKey(character, isDown); };
 	app.OnMouseInput += [](uint32 mouse, bool isDown) { Input::Instance().UpdateMouseKey(mouse, isDown); };
 	app.OnMouseMove += [](uint32 x, uint32 y) { Input::Instance().UpdateMousePosition((float)x, (float)y); };
-	app.OnResize += [&graphics](uint32 width, uint32 height) { graphics.OnResize(width, height); };
+	app.OnResizeOrMove += [&graphics](uint32 width, uint32 height) { graphics.OnResizeOrMove(width, height); };
 	app.OnMouseScroll += [](float wheel) { Input::Instance().UpdateMouseWheel(wheel); };
 
 	Time::Reset();
 
 	while (app.PollMessages())
 	{
-		OPTICK_FRAME("MainThread");
 		Time::Tick();
 		graphics.Update();
 		Input::Instance().Update();
 	}
 
-	OPTICK_SHUTDOWN();
 	TaskQueue::Shutdown();
 	Console::Shutdown();
 

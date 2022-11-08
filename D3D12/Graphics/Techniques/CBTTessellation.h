@@ -7,43 +7,45 @@ class PipelineState;
 class Texture;
 class GraphicsDevice;
 class RGGraph;
-class CommandSignature;
 struct SceneView;
+struct SceneTextures;
+
+struct CBTData
+{
+	uint32 SplitMode = 0;
+	RefCountPtr<Texture> pHeightmap;
+	RefCountPtr<Buffer> pCBTBuffer;
+	RefCountPtr<Buffer> pCBTIndirectArgs;
+	RefCountPtr<Texture> pDebugVisualizeTexture;
+};
 
 class CBTTessellation
 {
 public:
 	CBTTessellation(GraphicsDevice* pDevice);
 
-	void Execute(RGGraph& graph, Texture* pRenderTarget, Texture* pDepthTexture, const SceneView& resources);
+	void Execute(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures)
+	{
+		Execute(graph, m_CBTData, pView, sceneTextures);
+	}
+
+	void Execute(RGGraph& graph, CBTData& data, const SceneView* pView, SceneTextures& sceneTextures);
+	static void CBTDemo();
 
 private:
-	void AllocateCBT();
-	void SetupPipelines();
-	void CreateResources();
-
-	void DemoCpuCBT();
+	void SetupPipelines(GraphicsDevice* pDevice);
+	void CreateResources(GraphicsDevice* pDevice);
 
 	GraphicsDevice* m_pDevice;
+	CBTData m_CBTData;
 
-	CBT m_CBT;
-	bool m_IsDirty = true;
-	BoundingFrustum m_CachedFrustum;
-	Matrix m_CachedViewMatrix;
-	uint32 m_SplitMode = 0;
-
-	std::unique_ptr<Texture> m_pHeightmap;
-
-	std::unique_ptr<RootSignature> m_pCBTRS;
-	std::unique_ptr<Buffer> m_pCBTBuffer;
-	std::unique_ptr<Buffer> m_pCBTIndirectArgs;
-	std::unique_ptr<Texture> m_pDebugVisualizeTexture;
-	PipelineState* m_pCBTIndirectArgsPSO = nullptr;
-	PipelineState* m_pCBTCacheBitfieldPSO = nullptr;
-	PipelineState* m_pCBTSumReductionPSO = nullptr;
-	PipelineState* m_pCBTSumReductionFirstPassPSO = nullptr;
-	PipelineState* m_pCBTUpdatePSO = nullptr;
-	PipelineState* m_pCBTDebugVisualizePSO = nullptr;
-	PipelineState* m_pCBTRenderPSO = nullptr;
-	PipelineState* m_pCBTRenderMeshShaderPSO = nullptr;
+	RefCountPtr<RootSignature> m_pCBTRS;
+	RefCountPtr<PipelineState> m_pCBTIndirectArgsPSO;
+	RefCountPtr<PipelineState> m_pCBTCacheBitfieldPSO;
+	RefCountPtr<PipelineState> m_pCBTSumReductionPSO;
+	RefCountPtr<PipelineState> m_pCBTSumReductionFirstPassPSO;
+	RefCountPtr<PipelineState> m_pCBTUpdatePSO;
+	RefCountPtr<PipelineState> m_pCBTDebugVisualizePSO;
+	RefCountPtr<PipelineState> m_pCBTRenderPSO;
+	RefCountPtr<PipelineState> m_pCBTRenderMeshShaderPSO;
 };

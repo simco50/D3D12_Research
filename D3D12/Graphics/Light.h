@@ -1,6 +1,5 @@
 #pragma once
-#include "Graphics/Core/ShaderInterop.h"
-#include "Graphics/Core/DescriptorHandle.h"
+class Texture;
 
 enum class LightType
 {
@@ -13,7 +12,7 @@ enum class LightType
 struct Light
 {
 	Vector3 Position = Vector3::Zero;
-	Vector3 Direction = Vector3::Forward;
+	Quaternion Rotation = Quaternion::Identity;
 	LightType Type = LightType::MAX;
 	float UmbraAngleDegrees = 0;
 	float PenumbraAngleDegrees = 0;
@@ -21,41 +20,21 @@ struct Light
 	float Intensity = 1;
 	float Range = 1;
 	bool VolumetricLighting = false;
-	uint32 LightTexture = DescriptorHandle::InvalidHeapIndex;
-	int ShadowIndex = -1;
+	uint32 MatrixIndex = DescriptorHandle::InvalidHeapIndex;
+	std::vector<Texture*> ShadowMaps;
+	RefCountPtr<Texture> pLightTexture = nullptr;
 	int ShadowMapSize = 512;
 	bool CastShadows = false;
-
-	ShaderInterop::Light GetData() const
-	{
-		ShaderInterop::Light data;
-		data.Position = Position;
-		data.Direction = Direction;
-		data.SpotlightAngles.x = cos(PenumbraAngleDegrees * Math::DegreesToRadians / 2.0f);
-		data.SpotlightAngles.y = cos(UmbraAngleDegrees * Math::DegreesToRadians / 2.0f);
-		data.Color = Math::EncodeRGBA(Colour);
-		data.Intensity = Intensity;
-		data.Range = Range;
-		data.ShadowIndex = CastShadows ? ShadowIndex : -1;
-		data.InvShadowSize = 1.0f / ShadowMapSize;
-		data.LightTexture = LightTexture;
-		data.IsEnabled = Intensity > 0 ? 1 : 0;
-		data.IsVolumetric = VolumetricLighting;
-		data.CastShadows = CastShadows;
-		data.IsPoint = Type == LightType::Point;
-		data.IsSpot = Type == LightType::Spot;
-		data.IsDirectional = Type == LightType::Directional;
-		return data;
-	}
 
 	static Light Directional(const Vector3& position, const Vector3& direction, float intensity = 1.0f, const Color& color = Colors::White)
 	{
 		Light l{};
 		l.Position = position;
-		l.Direction = direction;
+		l.Rotation = Quaternion::LookRotation(direction, Vector3::Up);
 		l.Type = LightType::Directional;
 		l.Intensity = intensity;
 		l.Colour = color;
+		l.Range = std::numeric_limits<float>::max();
 		return l;
 	}
 
@@ -75,7 +54,7 @@ struct Light
 		Light l{};
 		l.Position = position;
 		l.Range = range;
-		l.Direction = direction;
+		l.Rotation = Quaternion::LookRotation(direction, Vector3::Up);
 		l.PenumbraAngleDegrees = penumbraAngleInDegrees;
 		l.UmbraAngleDegrees = umbraAngleInDegrees;
 		l.Type = LightType::Spot;

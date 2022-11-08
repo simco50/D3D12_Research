@@ -1,4 +1,4 @@
-#include "CommonBindings.hlsli"
+#include "Common.hlsli"
 #include "TonemappingCommon.hlsli"
 #include "Color.hlsli"
 
@@ -9,11 +9,6 @@
 #define TONEMAP_UNCHARTED2 4
 
 #define BLOCK_SIZE 16
-
-#define RootSig ROOT_SIG("CBV(b0), " \
-				"CBV(b100), " \
-				"DescriptorTable(UAV(u0, numDescriptors = 1)), " \
-				"DescriptorTable(SRV(t0, numDescriptors = 3))")
 
 struct PassParameters
 {
@@ -27,16 +22,13 @@ Texture2D tColor : register(t0);
 StructuredBuffer<float> tAverageLuminance : register(t1);
 Texture2D tBloom : register(t2);
 
-[RootSignature(RootSig)]
 [numthreads(BLOCK_SIZE, BLOCK_SIZE, 1)]
 void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 {
-	if(dispatchThreadId.x >= cView.ScreenDimensions.x || dispatchThreadId.y >= cView.ScreenDimensions.y)
-	{
+	if(any(dispatchThreadId.xy >= cView.TargetDimensions))
 		return;
-	}
 
-	float2 uv = (0.5f + dispatchThreadId.xy) * cView.ScreenDimensionsInv;
+	float2 uv = (0.5f + dispatchThreadId.xy) * cView.TargetDimensionsInv;
 
 	float3 rgb = tColor.Load(uint3(dispatchThreadId.xy, 0)).rgb;
 

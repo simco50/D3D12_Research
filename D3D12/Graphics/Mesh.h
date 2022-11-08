@@ -1,5 +1,5 @@
 #pragma once
-#include "Core/Buffer.h"
+#include "RHI/Buffer.h"
 
 class Buffer;
 class CommandContext;
@@ -7,6 +7,7 @@ class Texture;
 class CommandContext;
 class ShaderResourceView;
 class Mesh;
+struct World;
 
 struct SubMesh
 {
@@ -14,11 +15,12 @@ struct SubMesh
 
 	int PositionsStride = 0;
 	int MaterialId = 0;
-	DXGI_FORMAT PositionsFormat = DXGI_FORMAT_R32G32B32_FLOAT;
 
+	ResourceFormat PositionsFormat = ResourceFormat::RGB32_FLOAT;
 	VertexBufferView PositionStreamLocation;
 	VertexBufferView UVStreamLocation;
 	VertexBufferView NormalStreamLocation;
+	VertexBufferView ColorsStreamLocation;
 	IndexBufferView IndicesLocation;
 	uint32 MeshletsLocation;
 	uint32 MeshletVerticesLocation;
@@ -29,8 +31,7 @@ struct SubMesh
 	BoundingBox Bounds;
 	Mesh* pParent = nullptr;
 
-	Buffer* pBLAS = nullptr;
-	Buffer* pBLASScratch = nullptr;
+	RefCountPtr<Buffer> pBLAS;
 };
 
 struct SubMeshInstance
@@ -51,7 +52,7 @@ struct Material
 	std::string Name = "Unnamed Material";
 	Color BaseColorFactor = Color(1, 1, 1, 1);
 	Color EmissiveFactor = Color(0, 0, 0, 1);
-	float MetalnessFactor = 1.0f;
+	float MetalnessFactor = 0.0f;
 	float RoughnessFactor = 1.0f;
 	float AlphaCutoff = 0.5f;
 	Texture* pDiffuseTexture = nullptr;
@@ -69,15 +70,15 @@ public:
 	int GetMeshCount() const { return (int)m_Meshes.size(); }
 	SubMesh& GetMesh(const int index) { return m_Meshes[index]; }
 	const Material& GetMaterial(int materialId) const { return m_Materials[materialId]; }
-	const std::vector<SubMeshInstance>& GetMeshInstances() const { return m_MeshInstances; }
-	const std::vector<SubMesh>& GetMeshes() const { return m_Meshes; }
-	std::vector<Material>& GetMaterials() { return m_Materials; }
-	Buffer* GetData() const { return m_pGeometryData.get(); }
+	Span<SubMeshInstance> GetMeshInstances() const { return m_MeshInstances; }
+	Span<SubMesh> GetMeshes() const { return m_Meshes; }
+	Span<Material> GetMaterials() { return m_Materials; }
+	Buffer* GetData() const { return m_pGeometryData; }
 
 private:
 	std::vector<Material> m_Materials;
-	std::unique_ptr<Buffer> m_pGeometryData;
+	RefCountPtr<Buffer> m_pGeometryData;
 	std::vector<SubMesh> m_Meshes;
 	std::vector<SubMeshInstance> m_MeshInstances;
-	std::vector<std::unique_ptr<Texture>> m_Textures;
+	std::vector<RefCountPtr<Texture>> m_Textures;
 };

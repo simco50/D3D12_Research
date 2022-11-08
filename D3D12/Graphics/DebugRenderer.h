@@ -1,10 +1,10 @@
 #pragma once
+#include "RenderGraph/RenderGraphDefinitions.h"
 
 class GraphicsDevice;
 class RootSignature;
 class PipelineState;
 class RGGraph;
-class Texture;
 struct Light;
 struct SceneView;
 
@@ -47,10 +47,10 @@ private:
 
 public:
 	static DebugRenderer* Get();
-	
+
 	void Initialize(GraphicsDevice* pDevice);
 	void Shutdown();
-	void Render(RGGraph& graph, const SceneView& view, Texture* pTarget, Texture* pDepth);
+	void Render(RGGraph& graph, const SceneView* pView, RGTexture* pTarget, RGTexture* pDepth);
 
 	void AddLine(const Vector3& start, const Vector3& end, const IntColor& color);
 	void AddRay(const Vector3& start, const Vector3& direction, const IntColor& color);
@@ -62,8 +62,8 @@ public:
 	void AddSphere(const Vector3& position, float radius, int slices, int stacks, const IntColor& color, bool solid = false);
 	void AddFrustrum(const BoundingFrustum& frustum, const IntColor& color);
 	void AddAxisSystem(const Matrix& transform, float lineLength = 1.0f);
-	void AddWireCylinder(const Vector3& position, const Vector3& direction, float height, float radius, int segments, const IntColor& color);
-	void AddCone(const Vector3& position, const Vector3& direction, float height, float angle, int segments, const IntColor& color, bool solid = false);
+	void AddWireCylinder(const Vector3& position, const Quaternion& rotation, float height, float radius, int segments, const IntColor& color);
+	void AddCone(const Vector3& position, const Quaternion& rotation, float height, float angle, int segments, const IntColor& color, bool solid = false);
 	void AddBone(const Matrix& matrix, float length, const IntColor& color);
 	void AddLight(const Light& light, const IntColor& color = Colors::Yellow);
 
@@ -71,8 +71,8 @@ private:
 	std::vector<DebugLine> m_Lines;
 	std::vector<DebugTriangle> m_Triangles;
 
-	PipelineState* m_pTrianglesPSO = nullptr;
-	PipelineState* m_pLinesPSO = nullptr;
-	std::unique_ptr<RootSignature> m_pRS;
+	RefCountPtr<PipelineState> m_pTrianglesPSO;
+	RefCountPtr<PipelineState> m_pLinesPSO;
+	RefCountPtr<RootSignature> m_pRS;
 	DebugRenderer() = default;
 };

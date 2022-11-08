@@ -1,8 +1,5 @@
-#include "CommonBindings.hlsli"
-
-#define RootSig ROOT_SIG("RootFlags(ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT), " \
-				"CBV(b100, visibility=SHADER_VISIBILITY_VERTEX), " \
-				"DescriptorTable(SRV(t0, numDescriptors = 2), visibility=SHADER_VISIBILITY_VERTEX)")
+#include "Common.hlsli"
+#include "Raytracing/DDGICommon.hlsli"
 
 struct ParticleData
 {
@@ -18,6 +15,7 @@ StructuredBuffer<uint> tAliveList : register(t1);
 struct InterpolantsVSToPS
 {
 	float4 Position : SV_Position;
+	float3 PositionWS : POSITION;
 	float2 UV : TEXCOORD;
 	float4 Color : COLOR;
 };
@@ -31,7 +29,6 @@ static const float3 BILLBOARD[] = {
 	float3(1, 1, 0),	// 5
 };
 
-[RootSignature(RootSig)]
 InterpolantsVSToPS VSMain(uint vertexId : SV_VertexID)
 {
 	InterpolantsVSToPS output;
@@ -45,6 +42,7 @@ InterpolantsVSToPS VSMain(uint vertexId : SV_VertexID)
 
 	output.Position = float4(mul(q, (float3x3)cView.ViewInverse), 1);
 	output.Position.xyz += particle.Position;
+	output.PositionWS = output.Position.xyz;
 	output.Position = mul(output.Position, cView.View);
 	output.Position = mul(output.Position, cView.Projection);
 	output.Color = float4(10000, 0, 1, 1);
@@ -55,6 +53,11 @@ InterpolantsVSToPS VSMain(uint vertexId : SV_VertexID)
 
 float4 PSMain(InterpolantsVSToPS input) : SV_Target
 {
-	float alpha = 1 - saturate(2 * length(input.UV.xy - 0.5f));
-	return float4(1, 1, 1, alpha);
+	float alpha = saturate(2 * length(input.UV.xy - 0.5f)) < 1;
+
+	float3 radiance = 0;
+	float3 V = normalize(cView.ViewLocation - input.PositionWS);
+	radiance += SampleDDGIIrradiance(input.PositionWS, V, V) / PI;
+
+	return float4(radiance, alpha);
 }

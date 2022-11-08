@@ -1,24 +1,23 @@
 #pragma once
 #include "Graphics/RenderGraph/RenderGraphDefinitions.h"
+#include "Graphics/RenderGraph/Blackboard.h"
+
 class RootSignature;
 class GraphicsDevice;
 class PipelineState;
-class Texture;
-class Buffer;
-class UnorderedAccessView;
 class RGGraph;
-struct SceneView;
 
-struct TiledForwardParameters
+struct SceneView;
+struct SceneTextures;
+
+struct LightCull2DData
 {
-	Texture* pColorTarget;
-	Texture* pResolvedColorTarget;
-	Texture* pNormalsTarget;
-	Texture* pResolvedNormalsTarget;
-	Texture* pDepth;
-	Texture* pResolvedDepth;
-	Texture* pAmbientOcclusion;
-	Texture* pPreviousColorTarget;
+	RGTexture* pLightGridOpaque;
+	RGTexture* pLightGridTransparant;
+
+	RGBuffer* pLightIndexCounter;
+	RGBuffer* pLightIndexListOpaque;
+	RGBuffer* pLightIndexListTransparant;
 };
 
 class TiledForward
@@ -26,34 +25,20 @@ class TiledForward
 public:
 	TiledForward(GraphicsDevice* pDevice);
 
-	void OnResize(int windowWidth, int windowHeight);
+	void ComputeLightCulling(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures, LightCull2DData& resources);
+	void RenderBasePass(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures, const LightCull2DData& lightCullData, RGTexture* pFogTexture);
 
-	void Execute(RGGraph& graph, const SceneView& resources, const TiledForwardParameters& parameters);
-	void VisualizeLightDensity(RGGraph& graph, GraphicsDevice* pDevice, const SceneView& resources, Texture* pTarget, Texture* pDepth);
+	void VisualizeLightDensity(RGGraph& graph, GraphicsDevice* pDevice, const SceneView* pView, SceneTextures& sceneTextures, const LightCull2DData& lightCullData);
 
 private:
-	void SetupPipelines();
-
 	GraphicsDevice* m_pDevice;
+	RefCountPtr<RootSignature> m_pCommonRS;
 
-	//Light Culling
-	std::unique_ptr<RootSignature> m_pComputeLightCullRS;
-	PipelineState* m_pComputeLightCullPSO = nullptr;
-	std::unique_ptr<Buffer> m_pLightIndexCounter;
-	UnorderedAccessView* m_pLightIndexCounterRawUAV = nullptr;
-	std::unique_ptr<Buffer> m_pLightIndexListBufferOpaque;
-	std::unique_ptr<Texture> m_pLightGridOpaque;
-	std::unique_ptr<Buffer> m_pLightIndexListBufferTransparant;
-	std::unique_ptr<Texture> m_pLightGridTransparant;
+	RefCountPtr<PipelineState> m_pComputeLightCullPSO;
 
-	//Diffuse
-	std::unique_ptr<RootSignature> m_pDiffuseRS;
-	PipelineState* m_pDiffusePSO = nullptr;
-	PipelineState* m_pDiffuseMaskedPSO = nullptr;
-	PipelineState* m_pDiffuseAlphaPSO = nullptr;
+	RefCountPtr<PipelineState> m_pDiffusePSO;
+	RefCountPtr<PipelineState> m_pDiffuseMaskedPSO;
+	RefCountPtr<PipelineState> m_pDiffuseAlphaPSO;
 
-	//Visualize Light Count
-	std::unique_ptr<RootSignature> m_pVisualizeLightsRS;
-	PipelineState* m_pVisualizeLightsPSO = nullptr;
-	std::unique_ptr<Texture> m_pVisualizationIntermediateTexture;
+	RefCountPtr<PipelineState> m_pVisualizeLightsPSO;
 };

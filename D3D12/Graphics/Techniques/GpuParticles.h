@@ -1,13 +1,14 @@
 #pragma once
+#include "../RenderGraph/RenderGraphDefinitions.h"
 
 class GraphicsDevice;
 class Buffer;
 class PipelineState;
 class RootSignature;
-class CommandContext;
 class Texture;
 class RGGraph;
 struct SceneView;
+struct SceneTextures;
 
 class GpuParticles
 {
@@ -15,32 +16,24 @@ public:
 	GpuParticles(GraphicsDevice* pDevice);
 	~GpuParticles() = default;
 
-	void Simulate(RGGraph& graph, const SceneView& resources, Texture* pSourceDepth);
-	void Render(RGGraph& graph, const SceneView& resources, Texture* pTarget, Texture* pDepth);
+	void Simulate(RGGraph& graph, const SceneView* pView, RGTexture* pDepth);
+	void Render(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures);
 private:
 
-	GraphicsDevice* m_pDevice;
+	RefCountPtr<Buffer> m_pAliveList1;
+	RefCountPtr<Buffer> m_pAliveList2;
+	RefCountPtr<Buffer> m_pDeadList;
+	RefCountPtr<Buffer> m_pParticleBuffer;
+	RefCountPtr<Buffer> m_pCountersBuffer;
 
-	std::unique_ptr<Buffer> m_pAliveList1;
-	std::unique_ptr<Buffer> m_pAliveList2;
-	std::unique_ptr<Buffer> m_pDeadList;
-	std::unique_ptr<Buffer> m_pParticleBuffer;
-	std::unique_ptr<Buffer> m_pCountersBuffer;
+	RefCountPtr<PipelineState> m_pPrepareArgumentsPS;
+	RefCountPtr<PipelineState> m_pEmitPS;
+	RefCountPtr<RootSignature> m_pSimulateRS;
+	RefCountPtr<PipelineState> m_pSimulatePS;
+	RefCountPtr<PipelineState> m_pSimulateEndPS;
 
-	PipelineState* m_pPrepareArgumentsPS = nullptr;
-
-	PipelineState* m_pEmitPS = nullptr;
-	std::unique_ptr<Buffer> m_pEmitArguments;
-
-	std::unique_ptr<RootSignature> m_pSimulateRS;
-	PipelineState* m_pSimulatePS = nullptr;
-	std::unique_ptr<Buffer> m_pSimulateArguments;
-
-	PipelineState* m_pSimulateEndPS = nullptr;
-	std::unique_ptr<Buffer> m_pDrawArguments;
-
-	std::unique_ptr<RootSignature> m_pRenderParticlesRS;
-	PipelineState* m_pRenderParticlesPS = nullptr;
+	RefCountPtr<RootSignature> m_pRenderParticlesRS;
+	RefCountPtr<PipelineState> m_pRenderParticlesPS;
 
 	float m_ParticlesToSpawn = 0;
 };

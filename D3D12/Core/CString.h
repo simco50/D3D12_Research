@@ -1,6 +1,47 @@
 #pragma once
 #include "stb_sprintf.h"
 
+template<typename CharSource, typename CharDest>
+inline size_t StringConvert(const CharSource* pSource, CharDest* pDestination, int destinationSize);
+
+template<>
+inline size_t StringConvert(const wchar_t* pSource, char* pDestination, int destinationSize)
+{
+	size_t converted = 0;
+	wcstombs_s(&converted, pDestination, destinationSize, pSource, destinationSize);
+	return converted;
+}
+
+template<>
+inline size_t StringConvert(const char* pSource, wchar_t* pDestination, int destinationSize)
+{
+	size_t converted = 0;
+	mbstowcs_s(&converted, pDestination, destinationSize, pSource, destinationSize);
+	return converted;
+}
+
+template<typename CharSource, typename CharDest>
+struct StringConverter
+{
+	StringConverter(const CharSource* pStr)
+		: m_String{}
+	{
+		StringConvert<CharSource, CharDest>(pStr, m_String, 128);
+	}
+
+	CharDest* Get() { return m_String; }
+
+	const CharDest* operator*() const { return m_String; }
+private:
+	CharDest m_String[128];
+};
+
+using UnicodeToMultibyte = StringConverter<wchar_t, char>;
+using MultibyteToUnicode = StringConverter<char, wchar_t>;
+#define UNICODE_TO_MULTIBYTE(input) UnicodeToMultibyte(input).Get()
+#define MULTIBYTE_TO_UNICODE(input) MultibyteToUnicode(input).Get()
+
+
 inline int FormatString(char* pBuffer, int bufferSize, const char* pFormat, ...)
 {
 	va_list args;
@@ -27,12 +68,12 @@ inline int FormatStringVars(char* pBuffer, size_t bufferSize, const char* pForma
 }
 
 template<typename... Args>
-std::string Sprintf(const char* pFormat, Args... args)
+std::string Sprintf(const char* pFormat, Args&&... args)
 {
-	int length = FormatString(nullptr, 0, pFormat, args...);
+	int length = FormatString(nullptr, 0, pFormat, std::forward<Args&&>(args)...);
 	std::string str;
 	str.resize(length);
-	FormatString(str.data(), length + 1, pFormat, args...);
+	FormatString(str.data(), length + 1, pFormat, std::forward<Args&&>(args)...);
 	return str;
 }
 
@@ -42,23 +83,34 @@ namespace CString
 
 	bool StrCmp(const char* pStrA, const char* pStrB, bool caseSensitive);
 
-	inline void ToUpper(const char* pStr, char* pOut)
+	constexpr inline char ToLower(char c)
+	{
+		return c >= 'A' && c <= 'Z' ? c - ('Z' - 'z') : c;
+	}
+
+	constexpr inline char ToUpper(char c)
+	{
+		return c >= 'a' && c <= 'z' ? c + ('Z' - 'z') : c;
+	}
+
+	constexpr inline void ToUpper(const char* pStr, char* pOut)
 	{
 		while (*pStr)
 		{
-			*pOut++ = (char)toupper(*pStr++);
+			*pOut++ = (char)ToUpper(*pStr++);
 		}
 		*pOut = '\0';
 	}
 
-	inline void ToLower(const char* pStr, char* pOut)
+	constexpr inline void ToLower(const char* pStr, char* pOut)
 	{
 		while (*pStr)
 		{
-			*pOut++ = (char)tolower(*pStr++);
+			*pOut++ = (char)ToLower(*pStr++);
 		}
 		*pOut = '\0';
 	}
+
 
 	template<int I>
 	int SplitString(const char* pStr, char(&buffer)[I], const char** pOut, int maxArgs, bool considerQuotes, char delimiter)

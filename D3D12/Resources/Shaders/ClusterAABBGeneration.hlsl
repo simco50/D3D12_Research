@@ -1,8 +1,4 @@
-#include "CommonBindings.hlsli"
-
-#define RootSig ROOT_SIG("CBV(b0), " \
-				"CBV(b100)," \
-				"DescriptorTable(UAV(u0, numDescriptors = 1))")
+#include "Common.hlsli"
 
 struct PassParameters
 {
@@ -25,22 +21,20 @@ float3 LineFromOriginZIntersection(float3 lineFromOrigin, float depth)
 	return t * lineFromOrigin;
 }
 
-[RootSignature(RootSig)]
 [numthreads(1, 1, 32)]
 void GenerateAABBs(uint3 threadID : SV_DispatchThreadID)
 {
 	uint3 clusterIndex3D = threadID;
 	if(clusterIndex3D.z >= cPass.ClusterDimensions.z)
-	{
 		return;
-	}
-	uint clusterIndex1D = clusterIndex3D.x + (clusterIndex3D.y * cPass.ClusterDimensions.x) + (clusterIndex3D.z * (cPass.ClusterDimensions.x * cPass.ClusterDimensions.y));
+
+	uint clusterIndex1D = Flatten3D(clusterIndex3D, cPass.ClusterDimensions.xyz);
 
 	float2 minPoint_SS = float2(clusterIndex3D.x * cPass.ClusterSize.x, clusterIndex3D.y * cPass.ClusterSize.y);
 	float2 maxPoint_SS = float2((clusterIndex3D.x + 1) * cPass.ClusterSize.x, (clusterIndex3D.y + 1) * cPass.ClusterSize.y);
 
-	float3 minPoint_VS = ScreenToView(float4(minPoint_SS, 0, 1), cView.ScreenDimensionsInv, cView.ProjectionInverse).xyz;
-	float3 maxPoint_VS = ScreenToView(float4(maxPoint_SS, 0, 1), cView.ScreenDimensionsInv, cView.ProjectionInverse).xyz;
+	float3 minPoint_VS = ScreenToView(float4(minPoint_SS, 0, 1), cView.ViewportDimensionsInv, cView.ProjectionInverse).xyz;
+	float3 maxPoint_VS = ScreenToView(float4(maxPoint_SS, 0, 1), cView.ViewportDimensionsInv, cView.ProjectionInverse).xyz;
 
 	float farZ = GetDepthFromSlice(clusterIndex3D.z);
 	float nearZ = GetDepthFromSlice(clusterIndex3D.z + 1);

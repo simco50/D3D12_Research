@@ -1,3 +1,5 @@
+// Copyright (c) Microsoft Corporation. All rights reserved.
+
 /*==========================================================================;
  *
  *  Copyright (C) Microsoft Corporation.  All Rights Reserved.
@@ -20,7 +22,7 @@
 // PIXEventsThreadInfo is defined in PIXEventsCommon.h
 struct PIXEventsThreadInfo;
 
-extern "C" PIXEventsThreadInfo* PIXGetThreadInfo() noexcept;
+extern "C" PIXEventsThreadInfo* WINAPI PIXGetThreadInfo() noexcept;
 
 #if defined(USE_PIX) && defined(USE_PIX_SUPPORTED_ARCHITECTURE)
 // Notifies PIX that an event handle was set as a result of a D3D12 fence being signaled.
@@ -42,8 +44,16 @@ __forceinline UINT64 PIXGetTimestampCounter()
 {
     LARGE_INTEGER time = {};
     QueryPerformanceCounter(&time);
-    return time.QuadPart;
+    return static_cast<UINT64>(time.QuadPart);
 }
+
+enum PIXHUDOptions
+{
+    PIX_HUD_SHOW_ON_ALL_WINDOWS = 0x1,
+    PIX_HUD_SHOW_ON_TARGET_WINDOW_ONLY = 0x2,
+    PIX_HUD_SHOW_ON_NO_WINDOWS = 0x4
+};
+DEFINE_ENUM_FLAG_OPERATORS(PIXHUDOptions);
 
 #if defined(USE_PIX_SUPPORTED_ARCHITECTURE) && defined(USE_PIX)
 
@@ -51,7 +61,7 @@ __forceinline UINT64 PIXGetTimestampCounter()
 
 namespace PixImpl
 {
-    __forceinline FARPROC GetFunctionPtr(LPCSTR fnName) noexcept
+    __forceinline void * GetFunctionPtr(LPCSTR fnName) noexcept
     {
         HMODULE module = GetModuleHandleW(L"WinPixGpuCapturer.dll");
         if (module == NULL)
@@ -108,6 +118,8 @@ __forceinline HMODULE PIXLoadLatestWinPixGpuCapturerLibrary()
     WIN32_FIND_DATAW findData;
     bool foundPixInstallation = false;
     wchar_t newestVersionFound[MAX_PATH];
+    wchar_t output[MAX_PATH];
+    wchar_t possibleOutput[MAX_PATH];
 
     HANDLE hFind = FindFirstFileW(pixSearchPath, &findData);
     if (hFind != INVALID_HANDLE_VALUE)
@@ -119,8 +131,19 @@ __forceinline HMODULE PIXLoadLatestWinPixGpuCapturerLibrary()
             {
                 if (!foundPixInstallation || wcscmp(newestVersionFound, findData.cFileName) <= 0)
                 {
-                    foundPixInstallation = true;
-                    PIXERRORCHECK(StringCchCopyW(newestVersionFound, _countof(newestVersionFound), findData.cFileName));
+                    // length - 1 to get rid of the wildcard character in the search path
+                    PIXERRORCHECK(StringCchCopyNW(possibleOutput, MAX_PATH, pixSearchPath, wcslen(pixSearchPath) - 1));
+                    PIXERRORCHECK(StringCchCatW(possibleOutput, MAX_PATH, findData.cFileName));
+                    PIXERRORCHECK(StringCchCatW(possibleOutput, MAX_PATH, L"\\WinPixGpuCapturer.dll"));
+
+                    DWORD result = GetFileAttributesW(possibleOutput);
+
+                    if (result != INVALID_FILE_ATTRIBUTES && !(result & FILE_ATTRIBUTE_DIRECTORY))
+                    {
+                        foundPixInstallation = true;
+                        PIXERRORCHECK(StringCchCopyW(newestVersionFound, _countof(newestVersionFound), findData.cFileName));
+                        PIXERRORCHECK(StringCchCopyW(output, _countof(possibleOutput), possibleOutput));
+                    }
                 }
             }
         } while (FindNextFileW(hFind, &findData) != 0);
@@ -133,12 +156,6 @@ __forceinline HMODULE PIXLoadLatestWinPixGpuCapturerLibrary()
         SetLastError(ERROR_FILE_NOT_FOUND);
         return nullptr;
     }
-
-    wchar_t output[MAX_PATH];
-    // length - 1 to get rid of the wildcard character in the search path
-    PIXERRORCHECK(StringCchCopyNW(output, MAX_PATH, pixSearchPath, wcslen(pixSearchPath) - 1));
-    PIXERRORCHECK(StringCchCatW(output, MAX_PATH, newestVersionFound));
-    PIXERRORCHECK(StringCchCatW(output, MAX_PATH, L"\\WinPixGpuCapturer.dll"));
 
     return LoadLibraryW(output);
 }
@@ -207,25 +224,59 @@ extern "C"  __forceinline HRESULT WINAPI PIXEndCapture(BOOL discard)
     return fn();
 }
 
+__forceinline HRESULT WINAPI PIXForceD3D11On12()
+{
+    typedef HRESULT (WINAPI* ForceD3D11On12Fn)(void);
+
+    auto fn = (ForceD3D11On12Fn)PixImpl::GetFunctionPtr("ForceD3D11On12");
+    if (fn == NULL)
+    {
+        return HRESULT_FROM_WIN32(GetLastError());
+    }
+
+    return fn();
+}
+
+__forceinline HRESULT WINAPI PIXSetHUDOptions(PIXHUDOptions hudOptions)
+{
+    typedef HRESULT(WINAPI* SetHUDOptionsFn)(PIXHUDOptions);
+
+    auto fn = (SetHUDOptionsFn)PixImpl::GetFunctionPtr("SetHUDOptions");
+    if (fn == NULL)
+    {
+        return HRESULT_FROM_WIN32(GetLastError());
+    }
+
+    return fn(hudOptions);
+}
+
 #else
 __forceinline HMODULE PIXLoadLatestWinPixGpuCapturerLibrary()
 {
     return nullptr;
 }
-__forceinline HRESULT WINAPI PIXSetTargetWindow(HWND hwnd)
+__forceinline HRESULT WINAPI PIXSetTargetWindow(HWND)
 {
     return E_NOTIMPL;
 }
 
-__forceinline HRESULT WINAPI PIXGpuCaptureNextFrames(PCWSTR fileName, UINT32 numFrames)
+__forceinline HRESULT WINAPI PIXGpuCaptureNextFrames(PCWSTR, UINT32)
 {
     return E_NOTIMPL;
 }
-extern "C"  __forceinline HRESULT WINAPI PIXBeginCapture2(DWORD captureFlags, _In_opt_ const PPIXCaptureParameters captureParameters)
+extern "C"  __forceinline HRESULT WINAPI PIXBeginCapture2(DWORD, _In_opt_ const PPIXCaptureParameters)
 {
     return E_NOTIMPL;
 }
-extern "C"  __forceinline HRESULT WINAPI PIXEndCapture(BOOL discard)
+extern "C"  __forceinline HRESULT WINAPI PIXEndCapture(BOOL)
+{
+    return E_NOTIMPL;
+}
+__forceinline HRESULT WINAPI PIXForceD3D11On12()
+{
+    return E_NOTIMPL;
+}
+__forceinline HRESULT WINAPI PIXSetHUDOptions(PIXHUDOptions)
 {
     return E_NOTIMPL;
 }

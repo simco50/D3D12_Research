@@ -1,4 +1,4 @@
-#include "CommonBindings.hlsli"
+#include "Common.hlsli"
 #include "TonemappingCommon.hlsli"
 #include "Color.hlsli"
 
@@ -31,10 +31,6 @@
 #define TAA_LUMINANCE_WEIGHT		0						   // [Lottes]
 #define TAA_DILATE_VELOCITY		 1
 
-#define RootSig ROOT_SIG("CBV(b100), " \
-				"DescriptorTable(UAV(u0, numDescriptors = 1)), " \
-				"DescriptorTable(SRV(t0, numDescriptors = 4))")
-
 Texture2D tVelocity : register(t0);
 Texture2D tPreviousColor : register(t1);
 Texture2D tCurrentColor : register(t2);
@@ -52,7 +48,7 @@ float4 ClipAABB(float3 aabb_min, float3 aabb_max, float4 p, float4 q)
 	float4 v_clip = q - float4(p_clip, p.w);
 	float3 v_unit = v_clip.xyz / e_clip;
 	float3 a_unit = abs(v_unit);
-	float ma_unit = max(a_unit.x, max(a_unit.y, a_unit.z));
+	float ma_unit = Max3(a_unit);
 
 	if (ma_unit > 1.0)
 	{
@@ -110,11 +106,11 @@ float3 FilterHistory(Texture2D tex, SamplerState textureSampler, float2 uv, floa
 	float2 w3 =		 c  * f3 -				c * f2;
 
 	float2 w12 = w1 + w2;
-	float2 tc12 = cView.ScreenDimensionsInv * (centerPosition + w2 / w12);
+	float2 tc12 = cView.TargetDimensionsInv * (centerPosition + w2 / w12);
 	float3 centerColor = SampleColor(tex, textureSampler, float2(tc12.x, tc12.y));
 
-	float2 tc0 = cView.ScreenDimensionsInv * (centerPosition - 1.0);
-	float2 tc3 = cView.ScreenDimensionsInv * (centerPosition + 2.0);
+	float2 tc0 = cView.TargetDimensionsInv * (centerPosition - 1.0);
+	float2 tc3 = cView.TargetDimensionsInv * (centerPosition + 2.0);
 	float3 color = SampleColor(tex, textureSampler, float2(tc12.x, tc0.y )) * (w12.x * w0.y ) +
 				   SampleColor(tex, textureSampler, float2(tc0.x,  tc12.y)) * (w0.x  * w12.y) +
 				   centerColor											  * (w12.x * w12.y) +
@@ -184,7 +180,6 @@ float4 SampleTextureCatmullRom(in Texture2D<float4> tex, in SamplerState texture
 groupshared float3 gsColors[GSM_SIZE];
 groupshared float gsDepths[GSM_SIZE];
 
-[RootSignature(RootSig)]
 [numthreads(THREAD_GROUP_ROW_SIZE, THREAD_GROUP_ROW_SIZE, 1)]
 void CSMain(
 	uint3 ThreadId : SV_DispatchThreadID,
@@ -192,7 +187,7 @@ void CSMain(
 	uint3 GroupThreadId : SV_GroupThreadID,
 	uint3 GroupId : SV_GroupID)
 {
-	const float2 dxdy = cView.ScreenDimensionsInv;
+	const float2 dxdy = cView.TargetDimensionsInv;
 	uint2 pixelIndex = ThreadId.xy;
 	float2 uv = dxdy * ((float2)pixelIndex + 0.5f);
 	float2 dimensions;
@@ -339,6 +334,9 @@ void CSMain(
 	currColor = Reinhard(currColor);
 	prevColor = Reinhard(prevColor);
 #endif
+
+	if(any(uvReproj < 0) || any(uvReproj > 1))
+		blendFactor = 1;
 
 	currColor = lerp(prevColor, currColor, blendFactor);
 

@@ -1,9 +1,4 @@
-#include "CommonBindings.hlsli"
-
-#define RootSig ROOT_SIG("CBV(b0), " \
-				"CBV(b100), " \
-				"DescriptorTable(SRV(t0, numDescriptors = 3)), " \
-				"DescriptorTable(UAV(u0, numDescriptors = 1))")
+#include "Common.hlsli"
 
 #define BLOCK_SIZE 16
 
@@ -40,7 +35,7 @@ static float4 DEBUG_COLORS[] = {
 
 float EdgeDetection(uint2 index, uint width, uint height)
 {
-	float reference = LinearizeDepth01(tSceneDepth.Load(uint3(index, 0)), cView.NearZ, cView.FarZ);
+	float reference = LinearizeDepth(tSceneDepth.Load(uint3(index, 0)));
 	uint2 offsets[8] = {
 		uint2(-1, -1),
 		uint2(-1, 0),
@@ -54,18 +49,12 @@ float EdgeDetection(uint2 index, uint width, uint height)
 	float sampledValue = 0;
 	for(int j = 0; j < 8; j++)
 	{
-		sampledValue += LinearizeDepth01(tSceneDepth.Load(uint3(index + offsets[j], 0)), cView.NearZ, cView.FarZ);
+		sampledValue += LinearizeDepth(tSceneDepth.Load(uint3(index + offsets[j], 0)));
 	}
 	sampledValue /= 8;
-	return lerp(1, 0, step(0.0002f, length(reference - sampledValue)));
+	return lerp(1, 0, step(0.05f, length(reference - sampledValue)));
 }
 
-float InverseLerp(float value, float minValue, float maxValue)
-{
-	return (value - minValue) / (maxValue - minValue);
-}
-
-[RootSignature(RootSig)]
 [numthreads(16, 16, 1)]
 void DebugLightDensityCS(uint3 threadId : SV_DispatchThreadID)
 {
@@ -79,45 +68,13 @@ void DebugLightDensityCS(uint3 threadId : SV_DispatchThreadID)
 		uint lightCount = tLightGrid[tileIndex].y;
 		uOutput[threadId.xy] = EdgeDetection(threadId.xy, width, height) * DEBUG_COLORS[min(9, lightCount)];
 #elif CLUSTERED_FORWARD
-
-#if 0
-		float fov = cFoV / 2.0;
-		float height = 300.0;
-
-		int2 pos = threadId.xy;
-		pos.y = (720 - pos.y);
-		pos -= uint2(1240, 720) / 2.0;
-		pos.y += 150.0;
-
-		float angle = atan2(pos.x, pos.y);
-		if(angle > -fov && angle < fov && pos.y < height)
-		{
-			float angleNormalized = InverseLerp(angle, -fov, fov);
-			int widthSlice = floor(angleNormalized * cPass.ClusterDimensions.x);
-
-			float viewDepth = (float)pos.y / height * (cView.NearZ - cView.FarZ) + cView.FarZ;
-			uint slice = floor(log(viewDepth) * cPass.LightGridParams.x - cPass.LightGridParams.y);
-			uint lightCount = 0;
-			for(uint i = 0; i < cPass.ClusterDimensions.y; ++i)
-			{
-				uint3 clusterIndex3D = uint3(widthSlice, i, slice);
-				uint clusterIndex1D = clusterIndex3D.x + (cPass.ClusterDimensions.x * (clusterIndex3D.y + cPass.ClusterDimensions.y * clusterIndex3D.z));
-				lightCount = max(lightCount, tLightGrid[clusterIndex1D].y);
-			}
-			uOutput[threadId.xy] = float4(DEBUG_COLORS[min(9, lightCount)]);
-		}
-		else
-#endif
-		{
-
-			float depth = tSceneDepth.Load(uint3(threadId.xy, 0));
-			float viewDepth = LinearizeDepth(depth, cView.NearZ, cView.FarZ);
-			uint slice = floor(log(viewDepth) * cPass.LightGridParams.x - cPass.LightGridParams.y);
-			uint3 clusterIndex3D = uint3(floor(threadId.xy / cPass.ClusterSize), slice);
-			uint clusterIndex1D = clusterIndex3D.x + (cPass.ClusterDimensions.x * (clusterIndex3D.y + cPass.ClusterDimensions.y * clusterIndex3D.z));
-			uint lightCount = tLightGrid[clusterIndex1D].y;
-			uOutput[threadId.xy] = EdgeDetection(threadId.xy, width, height) * DEBUG_COLORS[min(9, lightCount)];
-		}
+		float depth = tSceneDepth.Load(uint3(threadId.xy, 0));
+		float viewDepth = LinearizeDepth(depth, cView.NearZ, cView.FarZ);
+		uint slice = floor(log(viewDepth) * cPass.LightGridParams.x - cPass.LightGridParams.y);
+		uint3 clusterIndex3D = uint3(floor(threadId.xy / cPass.ClusterSize), slice);
+		uint clusterIndex1D = clusterIndex3D.x + (cPass.ClusterDimensions.x * (clusterIndex3D.y + cPass.ClusterDimensions.y * clusterIndex3D.z));
+		uint lightCount = tLightGrid[clusterIndex1D].y;
+		uOutput[threadId.xy] = EdgeDetection(threadId.xy, width, height) * DEBUG_COLORS[min(9, lightCount)];
 #endif
 	}
 }

@@ -1,24 +1,25 @@
 #pragma once
-class Mesh;
 class GraphicsDevice;
 class RootSignature;
 class Texture;
-class CommandContext;
 class RGGraph;
-class Buffer;
 class StateObject;
+class PipelineState;
 struct SceneView;
+struct SceneTextures;
 
 class RTAO
 {
 public:
 	RTAO(GraphicsDevice* pDevice);
 
-	void Execute(RGGraph& graph, const SceneView& sceneData, Texture* pTarget, Texture* pDepth);
+	void Execute(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures);
 
 private:
-	void SetupPipelines(GraphicsDevice* pDevice);
+	RefCountPtr<Texture> m_pHistory;
 
-	StateObject* m_pRtSO = nullptr;
-	std::unique_ptr<RootSignature> m_pGlobalRS;
+	RefCountPtr<StateObject> m_pTraceRaysSO;
+	RefCountPtr<RootSignature> m_pCommonRS;
+	RefCountPtr<PipelineState> m_pDenoisePSO;
+	RefCountPtr<PipelineState> m_pBilateralBlurPSO;
 };

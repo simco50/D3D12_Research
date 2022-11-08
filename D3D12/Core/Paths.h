@@ -2,6 +2,12 @@
 
 namespace Paths
 {
+	namespace Private
+	{
+		inline const char* GetCharPtr(const char* pStr) { return pStr; }
+		inline const char* GetCharPtr(const std::string& str) { return str.c_str(); }
+	}
+
 	bool IsSlash(const char c);
 
 	std::string GetFileName(const std::string& filePath);
@@ -11,16 +17,25 @@ namespace Paths
 
 	std::string Normalize(const std::string& filePath);
 	void NormalizeInline(std::string& filePath);
+	bool ResolveRelativePaths(std::string& path);
 
 	std::string ChangeExtension(const std::string& filePath, const std::string& newExtension);
 
 	std::string MakeRelativePath(const std::string& basePath, const std::string& filePath);
 
-	std::string Combine(const std::string& a, const std::string& b);
-	void Combine(const std::vector<std::string>& elements, std::string& output);
+	void CombineInner(const char** pElements, uint32 numElements, std::string& output);
 
-	bool FileExists(const std::string& filePath);
-	bool DirectoryExists(const std::string& filePath);
+	template<typename ...Args>
+	std::string Combine(Args&&... args)
+	{
+		const char* paths[] = { Private::GetCharPtr(std::forward<Args>(args))... };
+		std::string result;
+		CombineInner(paths, ARRAYSIZE(paths), result);
+		return result;
+	}
+
+	bool FileExists(const char* pFilePath);
+	bool DirectoryExists(const char* pFilePath);
 
 	std::string GameDir();
 

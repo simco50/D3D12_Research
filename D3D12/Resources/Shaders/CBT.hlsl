@@ -1,6 +1,8 @@
-#include "CommonBindings.hlsli"
+#include "Common.hlsli"
 #include "Random.hlsli"
 #include "CBT.hlsli"
+#include "Lighting.hlsli"
+#include "D3D12.hlsli"
 
 #define MESH_SHADER_THREAD_GROUP_SIZE 32
 #define COMPUTE_THREAD_GROUP_SIZE 256
@@ -55,37 +57,38 @@ ConstantBuffer<UpdateData> cUpdateData : register(b1);
 void PrepareDispatchArgsCS(uint threadID : SV_DispatchThreadID)
 {
 	CBT cbt;
-	cbt.Init(uRWBufferTable[cCommonArgs.CBTIndex], cCommonArgs.NumElements);
+	RWByteAddressBuffer cbtBuffer = ResourceDescriptorHeap[cCommonArgs.CBTIndex];
+	cbt.Init(cbtBuffer, cCommonArgs.NumElements);
 
+	RWByteAddressBuffer uIndirectArgs = ResourceDescriptorHeap[cCommonArgs.IndirectArgsIndex];
 	uint offset = 0;
 
-	RWByteAddressBuffer uIndirectArgs = uRWBufferTable[cCommonArgs.IndirectArgsIndex];
-
 	// Dispatch args
-	uint numThreads = ceil((float)cbt.NumNodes() / COMPUTE_THREAD_GROUP_SIZE);
-	uIndirectArgs.Store(offset + 0, numThreads);
-	uIndirectArgs.Store(offset + 4, 1);
-	uIndirectArgs.Store(offset + 8, 1);
-
-	offset += sizeof(uint3);
+	{
+		D3D12_DISPATCH_ARGUMENTS args;
+		args.ThreadGroupCount = uint3(ceil((float)cbt.NumNodes() / COMPUTE_THREAD_GROUP_SIZE), 1, 1);
+		uIndirectArgs.Store(offset, args);
+		offset += sizeof(D3D12_DISPATCH_ARGUMENTS);
+	}
 
 	// Task/mesh shader args
-	uint numMeshThreads = ceil((float)cbt.NumNodes() / MESH_SHADER_THREAD_GROUP_SIZE);
-	uIndirectArgs.Store(offset + 0, numMeshThreads);
-	uIndirectArgs.Store(offset + 4, 1);
-	uIndirectArgs.Store(offset + 8, 1);
-
-	offset += sizeof(uint3);
+	{
+		D3D12_DISPATCH_ARGUMENTS args;
+		args.ThreadGroupCount = uint3(ceil((float)cbt.NumNodes() / MESH_SHADER_THREAD_GROUP_SIZE), 1, 1);
+		uIndirectArgs.Store(offset, args);
+		offset += sizeof(D3D12_DISPATCH_ARGUMENTS);
+	}
 
 	// Draw args
-	uint numVertices = 3;
-	uint numInstances = cbt.NumNodes();
-	uIndirectArgs.Store(offset + 0, numVertices);
-	uIndirectArgs.Store(offset + 4, numInstances);
-	uIndirectArgs.Store(offset + 8, 0);
-	uIndirectArgs.Store(offset + 12, 0);
-
-	offset += sizeof(uint4);
+	{
+		D3D12_DRAW_ARGUMENTS args;
+		args.VertexCountPerInstance = 3;
+		args.InstanceCount = cbt.NumNodes();
+		args.StartVertexLocation = 0;
+		args.StartInstanceLocation = 0;
+		uIndirectArgs.Store(offset, args);
+		offset += sizeof(D3D12_DRAW_ARGUMENTS);
+	}
 }
 
 /* SUM REDUCTION ALGORITHM */
@@ -134,7 +137,8 @@ static uint SUM_REDUCTION_LUT[] = {
 void SumReductionCS(uint threadID : SV_DispatchThreadID, uint groupThreadID : SV_GroupThreadID, uint groupIndex : SV_GroupID)
 {
 	CBT cbt;
-	cbt.Init(uRWBufferTable[cCommonArgs.CBTIndex], cCommonArgs.NumElements);
+	RWByteAddressBuffer cbtBuffer = ResourceDescriptorHeap[cCommonArgs.CBTIndex];
+	cbt.Init(cbtBuffer, cCommonArgs.NumElements);
 	uint count = 1u << cSumReductionData.Depth;
 	uint index = threadID;
 	if(index < count)
@@ -180,7 +184,8 @@ void SumReductionCS(uint threadID : SV_DispatchThreadID, uint groupThreadID : SV
 void SumReductionCS(uint threadID : SV_DispatchThreadID)
 {
 	CBT cbt;
-	cbt.Init(uRWBufferTable[cCommonArgs.CBTIndex], cCommonArgs.NumElements);
+	RWByteAddressBuffer cbtBuffer = ResourceDescriptorHeap[cCommonArgs.CBTIndex];
+	cbt.Init(cbtBuffer, cCommonArgs.NumElements);
 	uint count = 1u << cSumReductionData.Depth;
 	uint index = threadID;
 	if(index < count)
@@ -199,7 +204,8 @@ void SumReductionCS(uint threadID : SV_DispatchThreadID)
 void CacheBitfieldCS(uint threadID : SV_DispatchThreadID)
 {
 	CBT cbt;
-	cbt.Init(uRWBufferTable[cCommonArgs.CBTIndex], cCommonArgs.NumElements);
+	RWByteAddressBuffer cbtBuffer = ResourceDescriptorHeap[cCommonArgs.CBTIndex];
+	cbt.Init(cbtBuffer, cCommonArgs.NumElements);
 	uint depth = cSumReductionData.Depth;
 	uint count = 1u << depth;
 	uint elementCount = count >> 5u;
@@ -218,7 +224,8 @@ void CacheBitfieldCS(uint threadID : SV_DispatchThreadID)
 void SumReductionFirstPassCS(uint threadID : SV_DispatchThreadID)
 {
 	CBT cbt;
-	cbt.Init(uRWBufferTable[cCommonArgs.CBTIndex], cCommonArgs.NumElements);
+	RWByteAddressBuffer cbtBuffer = ResourceDescriptorHeap[cCommonArgs.CBTIndex];
+	cbt.Init(cbtBuffer, cCommonArgs.NumElements);
 	uint depth = cSumReductionData.Depth;
 	uint count = 1u << depth;
 	uint thread = threadID << 5u;
@@ -378,7 +385,8 @@ float3x3 GetVertices(uint heapIndex)
 void UpdateCS(uint threadID : SV_DispatchThreadID)
 {
 	CBT cbt;
-	cbt.Init(uRWBufferTable[cCommonArgs.CBTIndex], cCommonArgs.NumElements);
+	RWByteAddressBuffer cbtBuffer = ResourceDescriptorHeap[cCommonArgs.CBTIndex];
+	cbt.Init(cbtBuffer, cCommonArgs.NumElements);
 	if(threadID < cbt.NumNodes())
 	{
 		uint heapIndex = cbt.LeafToHeapIndex(threadID);
@@ -412,7 +420,7 @@ void UpdateCS(uint threadID : SV_DispatchThreadID)
 struct VertexOut
 {
 	float4 Position : SV_Position;
-	float2 UV : TEXCOORD;
+	float3 PositionWS : POSITION;
 	uint HeapIndex : HEAP_INDEX;
 };
 
@@ -441,7 +449,8 @@ groupshared ASPayload gsPayload;
 void UpdateAS(uint threadID : SV_DispatchThreadID)
 {
 	CBT cbt;
-	cbt.Init(uRWBufferTable[cCommonArgs.CBTIndex], cCommonArgs.NumElements);
+	RWByteAddressBuffer cbtBuffer = ResourceDescriptorHeap[cCommonArgs.CBTIndex];
+	cbt.Init(cbtBuffer, cCommonArgs.NumElements);
 	bool isVisible = false;
 	uint heapIndex = 0;
 
@@ -505,7 +514,7 @@ void RenderMS(
 	{
 		uint index = outputIndex * 3 + i;
 		vertices[index].Position = mul(mul(float4(tri[i], 1), cUpdateData.World), cView.ViewProjection);
-		vertices[index].UV = tri[i].xz;
+		vertices[index].PositionWS = tri[i];
 		vertices[index].HeapIndex = heapIndex;
 	}
 	triangles[outputIndex] = uint3(
@@ -527,7 +536,8 @@ uint RenderVS(uint instanceID : SV_InstanceID) : INSTANCE_ID
 void RenderGS(point uint instanceID[1] : INSTANCE_ID, inout TriangleStream<VertexOut> triStream)
 {
 	CBT cbt;
-	cbt.Init(uRWBufferTable[cCommonArgs.CBTIndex], cCommonArgs.NumElements);
+	RWByteAddressBuffer cbtBuffer = ResourceDescriptorHeap[cCommonArgs.CBTIndex];
+	cbt.Init(cbtBuffer, cCommonArgs.NumElements);
 	uint heapIndex = cbt.LeafToHeapIndex(instanceID[0]);
 
 	for(uint d = 0; d < GEOMETRY_SHADER_SUB_D; ++d)
@@ -541,7 +551,7 @@ void RenderGS(point uint instanceID[1] : INSTANCE_ID, inout TriangleStream<Verte
 			for(i = 0; i < 3; ++i)
 			{
 				VertexOut v;
-				v.UV = tri[i].xz;
+				v.PositionWS = tri[i];
 				v.Position = mul(mul(float4(tri[i], 1), cUpdateData.World), cView.ViewProjection);
 				v.HeapIndex = heapIndex;
 				triStream.Append(v);
@@ -554,33 +564,44 @@ void RenderGS(point uint instanceID[1] : INSTANCE_ID, inout TriangleStream<Verte
 void RenderVS(uint vertexID : SV_VertexID, uint instanceID : SV_InstanceID, out VertexOut vertex)
 {
 	CBT cbt;
-	cbt.Init(uRWBufferTable[cCommonArgs.CBTIndex], cCommonArgs.NumElements);
+	RWByteAddressBuffer cbtBuffer = ResourceDescriptorHeap[cCommonArgs.CBTIndex];
+	cbt.Init(cbtBuffer, cCommonArgs.NumElements);
 
 	uint heapIndex = cbt.LeafToHeapIndex(instanceID);
 	float3 tri = GetVertices(heapIndex)[vertexID];
 
-	vertex.UV = tri.xz;
+	vertex.PositionWS = tri;
 	vertex.Position = mul(mul(float4(tri, 1), cUpdateData.World), cView.ViewProjection);
 	vertex.HeapIndex = heapIndex;
 }
 #endif
 
-float4 RenderPS(
-	VertexOut vertex,
-	float3 bary : SV_Barycentrics) : SV_Target
+struct PSOut
 {
-	float tl = Sample2D(cCommonArgs.HeightmapIndex, sLinearClamp, vertex.UV, uint2(-1, -1)).r;
-	float t  = Sample2D(cCommonArgs.HeightmapIndex, sLinearClamp, vertex.UV, uint2( 0, -1)).r;
-	float tr = Sample2D(cCommonArgs.HeightmapIndex, sLinearClamp, vertex.UV, uint2( 1, -1)).r;
-	float l  = Sample2D(cCommonArgs.HeightmapIndex, sLinearClamp, vertex.UV, uint2(-1,  0)).r;
-	float r  = Sample2D(cCommonArgs.HeightmapIndex, sLinearClamp, vertex.UV, uint2( 1,  0)).r;
-	float bl = Sample2D(cCommonArgs.HeightmapIndex, sLinearClamp, vertex.UV, uint2(-1,  1)).r;
-	float b  = Sample2D(cCommonArgs.HeightmapIndex, sLinearClamp, vertex.UV, uint2( 0,  1)).r;
-	float br = Sample2D(cCommonArgs.HeightmapIndex, sLinearClamp, vertex.UV, uint2( 1,  1)).r;
+ 	float4 Color : SV_Target0;
+	float2 Normal : SV_Target1;
+	float Roughness : SV_Target2;
+};
+
+void RenderPS(
+	VertexOut vertex,
+	float3 bary : SV_Barycentrics,
+	out PSOut output)
+{
+	float2 uv = vertex.PositionWS.xz;
+	float tl = Sample2D(cCommonArgs.HeightmapIndex, sLinearClamp, uv, uint2(-1, -1)).r;
+	float t  = Sample2D(cCommonArgs.HeightmapIndex, sLinearClamp, uv, uint2( 0, -1)).r;
+	float tr = Sample2D(cCommonArgs.HeightmapIndex, sLinearClamp, uv, uint2( 1, -1)).r;
+	float l  = Sample2D(cCommonArgs.HeightmapIndex, sLinearClamp, uv, uint2(-1,  0)).r;
+	float r  = Sample2D(cCommonArgs.HeightmapIndex, sLinearClamp, uv, uint2( 1,  0)).r;
+	float bl = Sample2D(cCommonArgs.HeightmapIndex, sLinearClamp, uv, uint2(-1,  1)).r;
+	float b  = Sample2D(cCommonArgs.HeightmapIndex, sLinearClamp, uv, uint2( 0,  1)).r;
+	float br = Sample2D(cCommonArgs.HeightmapIndex, sLinearClamp, uv, uint2( 1,  1)).r;
 
 	float dX = tr + 2 * r + br - tl - 2 * l - bl;
 	float dY = bl + 2 * b + br - tl - 2 * t - tr;
-	float3 normal = normalize(float3(dX, 1.0f / 50, dY));
+	float3 normal = normalize(float3(-dX, 1.0f, -dY));
+	normal = normalize(mul(normal, (float3x3)cUpdateData.World));
 
 	float3 color = 1;
 
@@ -589,8 +610,36 @@ float4 RenderPS(
 	color = float3(Random01(state), Random01(state), Random01(state));
 #endif
 
-	float3 dir = normalize(float3(1, 1, 1));
-	float4 output = float4(color * saturate(dot(dir, normalize(normal))), 1);
+	float3 worldPos = vertex.PositionWS;
+	float3 V = normalize(cView.ViewLocation - worldPos);
+
+	float3 specularColor = 0.5;
+	float roughness = 0.9f;
+	float3 diffuseColor = 0.7f;
+
+	LightResult totalResult = (LightResult)0;
+	for(uint i = 0; i < cView.LightCount; ++i)
+	{
+		Light light = GetLight(i);
+
+		float3 L = normalize(light.Position - worldPos);
+		if(light.IsDirectional)
+		{
+			L = -light.Direction;
+		}
+		LightResult result = DefaultLitBxDF(specularColor, roughness, diffuseColor, normal, V, L, 1);
+
+		float3 color = light.GetColor();
+		result.Diffuse *= color * light.Intensity;
+		result.Specular *= color * light.Intensity;
+
+		totalResult.Diffuse += result.Diffuse;
+		totalResult.Specular += result.Specular;
+	}
+
+	float3 radiance = 0;
+	radiance += totalResult.Diffuse;
+	radiance += totalResult.Specular;
 
 #if RENDER_WIREFRAME
 	float3 deltas = fwidth(bary);
@@ -598,9 +647,12 @@ float4 RenderPS(
 	float3 thickness = deltas * 0.2;
 	bary = smoothstep(thickness, thickness + smoothing, bary);
 	float minBary = min(bary.x, min(bary.y, bary.z));
-	output.xyz *= saturate(minBary + 0.5f);
+	radiance *= saturate(minBary + 0.5f);
 #endif
-	return output;
+
+	output.Color = float4(radiance, 1);
+	output.Normal = EncodeNormalOctahedron(normal);
+	output.Roughness = 0.0f;
 }
 
 /* DEBUG VISUALIZATION TECHNIQUE */
@@ -612,7 +664,8 @@ void DebugVisualizeVS(
 	out float4 color : COLOR)
 {
 	CBT cbt;
-	cbt.Init(uRWBufferTable[cCommonArgs.CBTIndex], cCommonArgs.NumElements);
+	RWByteAddressBuffer cbtBuffer = ResourceDescriptorHeap[cCommonArgs.CBTIndex];
+	cbt.Init(cbtBuffer, cCommonArgs.NumElements);
 
 	uint heapIndex = cbt.LeafToHeapIndex(instanceID);
 

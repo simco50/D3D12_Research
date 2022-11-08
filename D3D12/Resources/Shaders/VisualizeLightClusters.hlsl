@@ -1,7 +1,4 @@
-#include "CommonBindings.hlsli"
-
-#define RootSigVS ROOT_SIG("CBV(b100), " \
-				"DescriptorTable(SRV(t0, numDescriptors = 3))")
+#include "Common.hlsli"
 
 #define MAX_LIGHTS_PER_BUCKET 10
 
@@ -23,7 +20,6 @@ struct InterpolantsVSToPS
 	float4 color : COLOR;
 };
 
-[RootSignature(RootSigVS)]
 InterpolantsGSToPS VSMain(uint vertexId : SV_VertexID)
 {
 	InterpolantsGSToPS result;
@@ -42,9 +38,8 @@ InterpolantsGSToPS VSMain(uint vertexId : SV_VertexID)
 void GSMain(point InterpolantsGSToPS input[1], inout TriangleStream<InterpolantsVSToPS> outputStream)
 {
 	if(input[0].lightCount == 0)
-	{
 		return;
-	}
+
 	float4 center = input[0].center;
 	float4 extents = input[0].extents;
 

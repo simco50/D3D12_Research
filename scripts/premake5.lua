@@ -42,19 +42,19 @@ workspace (ENGINE_NAME)
 	flags {"MultiProcessorCompile", "ShadowedVariables", "FatalWarnings"}
 	rtti "Off"
 	warnings "Extra"
-	justmycode "Off"
-	editAndContinue "Off"
 	system "windows"
 	conformancemode "On"
 	defines { "PLATFORM_WINDOWS=1", "WIN32" }
 	targetdir (ROOT .. "Build/$(ProjectName)_$(Platform)_$(Configuration)")
 	objdir (ROOT .. "Build/Intermediate/$(ProjectName)_$(Platform)_$(Configuration)")
-
-	--Unreferenced variable
+	
+	-- Unreferenced variable
 	disablewarnings {"4100"}
+	-- unreferenced function with internal linkage has been removed
+	disablewarnings {"4505"}
 	
 	filter "configurations:Debug"
- 		runtime "Debug"
+		runtime "Debug"
 		defines { "_DEBUG" }
 		optimize ("Off")
 		--inlining "Explicit"
@@ -78,6 +78,8 @@ workspace (ENGINE_NAME)
 		location (ROOT .. ENGINE_NAME)
 		pchheader ("stdafx.h")
 		pchsource (ROOT .. ENGINE_NAME .. "/stdafx.cpp")
+		systemversion (WIN_SDK)
+		kind "WindowedApp"
 
 		includedirs { "$(ProjectDir)" }
 
@@ -87,9 +89,6 @@ workspace (ENGINE_NAME)
 			includedirs ("$(ProjectDir)External/" .. dir)
 		end
 
-		systemversion (WIN_SDK)
-		kind "WindowedApp"
-
 		files
 		{ 
 			(SOURCE_DIR .. "**.h"),
@@ -98,14 +97,7 @@ workspace (ENGINE_NAME)
 			(SOURCE_DIR .. "**.inl"),
 			(SOURCE_DIR .. "**.c"),
 			(SOURCE_DIR .. "**.natvis"),
-			(SOURCE_DIR .. "**.hlsl*"),
 			(SOURCE_DIR .. "**.editorconfig"),
-		}
-
-		vpaths
-		{
-			{["Shaders/Include"] = (SOURCE_DIR .. "**.hlsli")},
-			{["Shaders/Source"] = (SOURCE_DIR .. "**.hlsl")},
 		}
 
 		filter ("files:" .. SOURCE_DIR .. "External/**")
@@ -119,7 +111,7 @@ workspace (ENGINE_NAME)
 		includedirs "$(SolutionDir)Libraries/D3D12/include"
 		runtimeDependency("D3D12/bin/D3D12Core.dll", "D3D12")
 		runtimeDependency("D3D12/bin/d3d12SDKLayers.dll", "D3D12")
-		links {	"d3d12.lib", "dxgi" }
+		links {	"d3d12.lib", "dxgi", "dxguid" }
 
 		-- Pix
 		includedirs "$(SolutionDir)Libraries/Pix/include"
@@ -131,12 +123,6 @@ workspace (ENGINE_NAME)
 		includedirs "$(SolutionDir)Libraries/Dxc/include"
 		runtimeDependency ("Dxc/bin/dxcompiler.dll", "")
 		runtimeDependency ("Dxc/bin/dxil.dll", "")
-
-		-- Optick
-		links { "OptickCore" }
-		libdirs	"$(SolutionDir)Libraries/Optick/lib/"
-		includedirs "$(SolutionDir)Libraries/Optick/include"
-		runtimeDependency ("Optick/bin/OptickCore.dll", "")
 
 		-- DirectXMath
 		includedirs "$(SolutionDir)Libraries/DirectXMath/include"

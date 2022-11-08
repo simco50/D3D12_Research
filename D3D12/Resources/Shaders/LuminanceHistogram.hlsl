@@ -1,9 +1,5 @@
-#include "CommonBindings.hlsli"
+#include "Common.hlsli"
 #include "TonemappingCommon.hlsli"
-
-#define RootSig ROOT_SIG("CBV(b0), " \
-				"DescriptorTable(UAV(u0, numDescriptors = 1))," \
-				"DescriptorTable(SRV(t0, numDescriptors = 1))")
 
 #define EPSILON 0.0001f
 #define HISTOGRAM_THREADS_PER_DIMENSION 16
@@ -36,7 +32,6 @@ uint HDRToHistogramBin(float3 hdrColor)
 
 groupshared uint HistogramShared[NUM_HISTOGRAM_BINS];
 
-[RootSignature(RootSig)]
 [numthreads(HISTOGRAM_THREADS_PER_DIMENSION, HISTOGRAM_THREADS_PER_DIMENSION, 1)]
 void CSMain(uint groupIndex : SV_GroupIndex, uint3 threadId : SV_DispatchThreadID)
 {

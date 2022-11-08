@@ -1,73 +1,45 @@
 #include "stdafx.h"
 #include "ImGuiRenderer.h"
-#include "Graphics/Core/CommandContext.h"
-#include "Graphics/Core/Graphics.h"
-#include "Graphics/Core/PipelineState.h"
-#include "Graphics/Core/RootSignature.h"
-#include "Graphics/Core/Shader.h"
-#include "Graphics/Core/Texture.h"
-#include "Graphics/Core/OfflineDescriptorAllocator.h"
-#include "Graphics/SceneView.h"
+#include "RHI/CommandContext.h"
+#include "RHI/Graphics.h"
+#include "RHI/PipelineState.h"
+#include "RHI/RootSignature.h"
+#include "RHI/Texture.h"
+#include "RHI/CPUDescriptorHeap.h"
+#include "RHI/DynamicResourceAllocator.h"
+#include "SceneView.h"
 #include "RenderGraph/RenderGraph.h"
-#include "Core/Input.h"
 #include "ImGuizmo.h"
 #include "imnodes.h"
 #include "Core/Paths.h"
-
-#include "imgui_impl_dx12.h"
+#include "IconsFontAwesome4.h"
 #include "imgui_impl_win32.h"
 
-void ImGui::Image(Texture* pTexture, const ImVec2& size, const ImVec2& uv0, const ImVec2& uv1, const ImVec4& tint_col, const ImVec4& border_col)
-{
-	ImGui::Image((void*)pTexture->GetSRV()->GetGPUView(), size, uv0, uv1, tint_col, border_col);
-}
-
-void ImGui::ImageAutoSize(Texture* textureId, const ImVec2& imageDimensions)
+ImVec2 ImGui::GetAutoSize(const ImVec2& dimensions)
 {
 	ImVec2 windowSize = GetContentRegionAvail();
 	float width = windowSize.x;
-	float height = windowSize.x * imageDimensions.y / imageDimensions.x;
-	if (imageDimensions.x / windowSize.x < imageDimensions.y / windowSize.y)
+	float height = windowSize.x * dimensions.y / dimensions.x;
+	if (dimensions.x / windowSize.x < dimensions.y / windowSize.y)
 	{
-		width = imageDimensions.x / imageDimensions.y * windowSize.y;
+		width = dimensions.x / dimensions.y * windowSize.y;
 		height = windowSize.y;
 	}
-	Image(textureId, ImVec2(width, height));
+	return ImVec2(width, height);
 }
 
-ImGuiRenderer::ImGuiRenderer(GraphicsDevice* pDevice, WindowHandle window, uint32 numBufferedFrames)
+void ApplyImGuiStyle()
 {
-	IMGUI_CHECKVERSION();
-	ImGui::CreateContext();
-	ImNodes::CreateContext();
-
-	ImGuiIO& io = ImGui::GetIO();
-	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
-	io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
-
-	Paths::CreateDirectoryTree(Paths::SavedDir());
-	static std::string imguiPath = Paths::SavedDir() + "imgui.ini";
-	io.IniFilename = imguiPath.c_str();
-
-	ImFontConfig fontConfig;
-	fontConfig.OversampleH = 2;
-	fontConfig.OversampleV = 2;
-	io.Fonts->AddFontFromFileTTF("Resources/Fonts/NotoSans-Regular.ttf", 20.0f, &fontConfig);
-
-	fontConfig.MergeMode = true;
-	fontConfig.GlyphMinAdvanceX = 15.0f; // Use if you want to make the icon monospaced
-	static const ImWchar icon_ranges[] = { ICON_MIN_FA, ICON_MAX_FA, 0 };
-	io.Fonts->AddFontFromFileTTF("Resources/Fonts/" FONT_ICON_FILE_NAME_FA, 15.0f, &fontConfig, icon_ranges);
-
 	ImGuiStyle& style = ImGui::GetStyle();
 
 	style.FrameRounding = 0.0f;
 	style.GrabRounding = 1.0f;
 	style.WindowRounding = 0.0f;
 	style.IndentSpacing = 10.0f;
-	style.ScrollbarSize = 16.0f;
-	style.WindowPadding = ImVec2(5, 5);
+	style.ScrollbarSize = 12.0f;
+	style.WindowPadding = ImVec2(2, 2);
 	style.FramePadding = ImVec2(2, 2);
+	style.ItemSpacing = ImVec2(6, 2);
 
 	ImVec4* colors = ImGui::GetStyle().Colors;
 	colors[ImGuiCol_Text] = ImVec4(0.95f, 0.95f, 0.95f, 1.00f);
@@ -125,53 +97,180 @@ ImGuiRenderer::ImGuiRenderer(GraphicsDevice* pDevice, WindowHandle window, uint3
 	colors[ImGuiCol_NavWindowingHighlight] = ImVec4(1.00f, 1.00f, 1.00f, 0.70f);
 	colors[ImGuiCol_NavWindowingDimBg] = ImVec4(0.80f, 0.80f, 0.80f, 0.20f);
 	colors[ImGuiCol_ModalWindowDimBg] = ImVec4(0.80f, 0.80f, 0.80f, 0.35f);
-
-	D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = pDevice->AllocateDescriptor<D3D12_SHADER_RESOURCE_VIEW_DESC>();
-	DescriptorHandle gpuHandle = pDevice->StoreViewDescriptor(srvHandle);
-
-	ImGui_ImplWin32_Init(window);
-	ImGui_ImplDX12_Init(pDevice->GetDevice(), numBufferedFrames, DXGI_FORMAT_R8G8B8A8_UNORM, pDevice->GetGlobalViewHeap()->GetHeap(), gpuHandle.CpuHandle, gpuHandle.GpuHandle);
 }
 
-ImGuiRenderer::~ImGuiRenderer()
+GlobalResource<PipelineState> gImGuiPSO;
+GlobalResource<RootSignature> gImGuiRS;
+GlobalResource<Texture> gFontTexture;
+
+void ImGuiRenderer::Initialize(GraphicsDevice* pDevice, WindowHandle window)
 {
-	ImGui_ImplDX12_Shutdown();
+	IMGUI_CHECKVERSION();
+	ImGui::CreateContext();
+	ImNodes::CreateContext();
+
+	ImGuiIO& io = ImGui::GetIO();
+	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+	//io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+	io.BackendFlags |= ImGuiBackendFlags_RendererHasVtxOffset;
+
+	Paths::CreateDirectoryTree(Paths::SavedDir());
+	static std::string imguiPath = Paths::SavedDir() + "imgui.ini";
+	io.IniFilename = imguiPath.c_str();
+
+	ImFontConfig fontConfig;
+	fontConfig.OversampleH = 2;
+	fontConfig.OversampleV = 2;
+	io.Fonts->AddFontFromFileTTF("Resources/Fonts/NotoSans-Regular.ttf", 20.0f, &fontConfig);
+
+	fontConfig.MergeMode = true;
+	fontConfig.GlyphMinAdvanceX = 15.0f; // Use if you want to make the icon monospaced
+	static const ImWchar icon_ranges[] = { ICON_MIN_FA, ICON_MAX_FA, 0 };
+	io.Fonts->AddFontFromFileTTF("Resources/Fonts/" FONT_ICON_FILE_NAME_FA, 15.0f, &fontConfig, icon_ranges);
+
+	unsigned char* pPixels;
+	int width, height;
+	io.Fonts->GetTexDataAsRGBA32(&pPixels, &height, &width);
+	gFontTexture = pDevice->CreateTexture(TextureDesc::Create2D(width, height, ResourceFormat::RGBA8_UNORM), "ImGui Font");
+	CommandContext* pContext = pDevice->AllocateCommandContext();
+	D3D12_SUBRESOURCE_DATA data;
+	data.pData = pPixels;
+	data.RowPitch = GetFormatByteSize(ResourceFormat::RGBA8_UNORM, width);
+	data.SlicePitch = GetFormatByteSize(ResourceFormat::RGBA8_UNORM, width, height);
+	pContext->WriteTexture(gFontTexture, data, 0);
+	pContext->Execute(true);
+
+	gImGuiRS = new RootSignature(pDevice);
+	gImGuiRS->AddConstantBufferView(0, D3D12_SHADER_VISIBILITY_VERTEX);
+	gImGuiRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, D3D12_SHADER_VISIBILITY_PIXEL);
+	gImGuiRS->Finalize("ImGui RS", D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+
+	PipelineStateInitializer psoDesc;
+	psoDesc.SetInputLayout({
+		{ "POSITION", ResourceFormat::RG32_FLOAT },
+		{ "TEXCOORD", ResourceFormat::RG32_FLOAT },
+		{ "COLOR", ResourceFormat::RGBA8_UNORM },
+		});
+	psoDesc.SetRootSignature(gImGuiRS);
+	psoDesc.SetVertexShader("ImGui.hlsl", "VSMain");
+	psoDesc.SetPixelShader("ImGui.hlsl", "PSMain");
+	psoDesc.SetBlendMode(BlendMode::Alpha, false);
+	psoDesc.SetDepthWrite(false);
+	psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_ALWAYS);
+	psoDesc.SetRenderTargetFormats(ResourceFormat::RGBA8_UNORM, ResourceFormat::Unknown, 1);
+	psoDesc.SetName("ImGui");
+	gImGuiPSO = pDevice->CreatePipeline(psoDesc);
+
+	ApplyImGuiStyle();
+
+	ImGui_ImplWin32_Init(window);
+}
+
+void ImGuiRenderer::Shutdown(GraphicsDevice* pDevice)
+{
 	ImGui_ImplWin32_Shutdown();
 	ImNodes::DestroyContext();
 	ImGui::DestroyContext();
 }
 
-void ImGuiRenderer::NewFrame(uint32 width, uint32 height)
+void ImGuiRenderer::NewFrame()
 {
-	ImGui_ImplDX12_NewFrame();
 	ImGui_ImplWin32_NewFrame();
 	ImGui::NewFrame();
 	ImGuizmo::BeginFrame();
 }
 
-void ImGuiRenderer::Render(RGGraph& graph, const SceneView& sceneData, Texture* pRenderTarget)
+void ImGuiRenderer::Render(RGGraph& graph, RGTexture* pRenderTarget)
 {
 	ImGui::Render();
 
-	RGPassBuilder renderIU = graph.AddPass("Render UI");
-	renderIU.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
-		{
-			context.InsertResourceBarrier(pRenderTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
-			context.BeginRenderPass(RenderPassInfo(pRenderTarget, RenderPassAccess::Load_Store, nullptr, RenderPassAccess::NoAccess, false));
-			ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), context.GetCommandList());
-			context.EndRenderPass();
-		});
+	RG_GRAPH_SCOPE("UI", graph);
 
-	// Update and Render additional Platform Windows
-	ImGuiIO& io = ImGui::GetIO();
-	if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
-	{
-		RGPassBuilder renderPlatformUI = graph.AddPass("Update Platform UI");
-		renderPlatformUI.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
+	graph.AddPass("Transitions", RGPassFlag::NeverCull)
+		.Bind([=](CommandContext& context)
 			{
-				ImGui::UpdatePlatformWindows();
-				ImGui::RenderPlatformWindowsDefault(NULL, (void*)context.GetCommandList());
-
+				ImDrawData* pDrawData = ImGui::GetDrawData();
+				ImVec2 clip_off = pDrawData->DisplayPos;
+				for (int cmdList = 0; cmdList < pDrawData->CmdListsCount; ++cmdList)
+				{
+					const ImDrawList* pList = pDrawData->CmdLists[cmdList];
+					for (int cmd = 0; cmd < pList->CmdBuffer.Size; ++cmd)
+					{
+						const ImDrawCmd* pCmd = &pList->CmdBuffer[cmd];
+						Texture* pTexture = (Texture*)pCmd->GetTexID();
+						if (pTexture)
+						{
+							context.InsertResourceBarrier(pTexture, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+						}
+					}
+				}
 			});
-	}
+
+	graph.AddPass("Render", RGPassFlag::Raster)
+		.RenderTarget(pRenderTarget, RenderTargetLoadAction::Load)
+		.Bind([=](CommandContext& context)
+			{
+				context.SetGraphicsRootSignature(gImGuiRS);
+				context.SetPipelineState(gImGuiPSO);
+				context.SetPrimitiveTopology(D3D10_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+				ImDrawData* pDrawData = ImGui::GetDrawData();
+
+				const FloatRect vp(
+					pDrawData->DisplayPos.x,
+					pDrawData->DisplayPos.y,
+					pDrawData->DisplayPos.x + pDrawData->DisplaySize.x,
+					pDrawData->DisplayPos.y + pDrawData->DisplaySize.y);
+
+				context.SetViewport(vp);
+
+				Matrix projection = Math::CreateOrthographicOffCenterMatrix(vp.Left, vp.Right, vp.Bottom, vp.Top, 0, 1);
+				context.SetRootCBV(0, projection);
+
+				uint32 vertexOffset = 0;
+				DynamicAllocation vertexData = context.AllocateTransientMemory(sizeof(ImDrawVert) * pDrawData->TotalVtxCount);
+				context.SetVertexBuffers(VertexBufferView(vertexData.GpuHandle, pDrawData->TotalVtxCount, sizeof(ImDrawVert), 0));
+
+				uint32 indexOffset = 0;
+				DynamicAllocation indexData = context.AllocateTransientMemory(sizeof(ImDrawIdx) * pDrawData->TotalIdxCount);
+				context.SetIndexBuffer(IndexBufferView(indexData.GpuHandle, pDrawData->TotalIdxCount, ResourceFormat::R16_UINT, 0));
+
+				ImVec2 clipOff = pDrawData->DisplayPos;
+				for (int cmdList = 0; cmdList < pDrawData->CmdListsCount; ++cmdList)
+				{
+					const ImDrawList* pList = pDrawData->CmdLists[cmdList];
+
+					memcpy((char*)vertexData.pMappedMemory + vertexOffset * sizeof(ImDrawVert), pList->VtxBuffer.Data, pList->VtxBuffer.Size * sizeof(ImDrawVert));
+					memcpy((char*)indexData.pMappedMemory + indexOffset * sizeof(ImDrawIdx), pList->IdxBuffer.Data, pList->IdxBuffer.Size * sizeof(ImDrawIdx));
+
+					for (int cmd = 0; cmd < pList->CmdBuffer.Size; ++cmd)
+					{
+						const ImDrawCmd* pCmd = &pList->CmdBuffer[cmd];
+						if (pCmd->UserCallback)
+						{
+							pCmd->UserCallback(pList, pCmd);
+						}
+						else
+						{
+							ImVec2 clip_min(pCmd->ClipRect.x - clipOff.x, pCmd->ClipRect.y - clipOff.y);
+							ImVec2 clip_max(pCmd->ClipRect.z - clipOff.x, pCmd->ClipRect.w - clipOff.y);
+							if (clip_max.x <= clip_min.x || clip_max.y <= clip_min.y)
+								continue;
+
+							Texture* pTexture = (Texture*)pCmd->GetTexID();
+							if (!pTexture)
+								pTexture = gFontTexture;
+
+							context.BindResources(1, pTexture->GetSRV());
+							context.SetScissorRect(FloatRect(clip_min.x, clip_min.y, clip_max.x, clip_max.y));
+							context.DrawIndexedInstanced(pCmd->ElemCount, pCmd->IdxOffset + indexOffset, 1, pCmd->VtxOffset + vertexOffset, 0);
+						}
+					}
+
+					vertexOffset += pList->VtxBuffer.Size;
+					indexOffset += pList->IdxBuffer.Size;
+				}
+			});
+
 }
+

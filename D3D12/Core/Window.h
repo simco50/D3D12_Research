@@ -9,18 +9,20 @@ public:
 
 	~Window();
 
+	static Vector2i GetDisplaySize();
+
 	bool PollMessages();
 
 	void SetTitle(const char* pTitle);
 
 	HWND GetNativeWindow() const { return m_Window; }
-	IntVector2 GetRect() const { return IntVector2(m_DisplayWidth, m_DisplayHeight); }
+	Vector2i GetRect() const { return Vector2i(m_DisplayWidth, m_DisplayHeight); }
 
 	DECLARE_MULTICAST_DELEGATE(OnFocusChangedDelegate, bool);
 	OnFocusChangedDelegate OnFocusChanged;
 
 	DECLARE_MULTICAST_DELEGATE(OnResizeDelegate, uint32, uint32);
-	OnResizeDelegate OnResize;
+	OnResizeDelegate OnResizeOrMove;
 
 	DECLARE_MULTICAST_DELEGATE(OnCharInputDelegate, uint32);
 	OnCharInputDelegate OnCharInput;

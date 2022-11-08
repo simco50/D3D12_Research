@@ -1,9 +1,5 @@
-#include "CommonBindings.hlsli"
+#include "Common.hlsli"
 #include "Constants.hlsli"
-
-#define RootSig ROOT_SIG("CBV(b100), " \
-				"DescriptorTable(UAV(u0, numDescriptors = 5)), " \
-				"DescriptorTable(SRV(t0, numDescriptors = 1))")
 
 #define MAX_LIGHTS_PER_TILE 256
 #define BLOCK_SIZE 16
@@ -68,7 +64,6 @@ uint CreateLightMask(float depthRangeMin, float depthRange, Sphere sphere)
 	return mask;
 }
 
-[RootSignature(RootSig)]
 [numthreads(BLOCK_SIZE, BLOCK_SIZE, 1)]
 void CSMain(uint3 groupId : SV_GroupID, uint3 threadID : SV_DispatchThreadID, uint groupIndex : SV_GroupIndex)
 {
@@ -106,14 +101,14 @@ void CSMain(uint3 groupId : SV_GroupID, uint3 threadID : SV_DispatchThreadID, ui
 	if(groupIndex == 0)
 	{
 		float3 viewSpace[8];
-		viewSpace[0] = ScreenToView(float4(groupId.xy * BLOCK_SIZE, fMinDepth, 1.0f), cView.ScreenDimensionsInv, cView.ProjectionInverse).xyz;
-		viewSpace[1] = ScreenToView(float4(float2(groupId.x + 1, groupId.y) * BLOCK_SIZE, fMinDepth, 1.0f), cView.ScreenDimensionsInv, cView.ProjectionInverse).xyz;
-		viewSpace[2] = ScreenToView(float4(float2(groupId.x, groupId.y + 1) * BLOCK_SIZE, fMinDepth, 1.0f), cView.ScreenDimensionsInv, cView.ProjectionInverse).xyz;
-		viewSpace[3] = ScreenToView(float4(float2(groupId.x + 1, groupId.y + 1) * BLOCK_SIZE, fMinDepth, 1.0f), cView.ScreenDimensionsInv, cView.ProjectionInverse).xyz;
-		viewSpace[4] = ScreenToView(float4(groupId.xy * BLOCK_SIZE, fMaxDepth, 1.0f), cView.ScreenDimensionsInv, cView.ProjectionInverse).xyz;
-		viewSpace[5] = ScreenToView(float4(float2(groupId.x + 1, groupId.y) * BLOCK_SIZE, fMaxDepth, 1.0f), cView.ScreenDimensionsInv, cView.ProjectionInverse).xyz;
-		viewSpace[6] = ScreenToView(float4(float2(groupId.x, groupId.y + 1) * BLOCK_SIZE, fMaxDepth, 1.0f), cView.ScreenDimensionsInv, cView.ProjectionInverse).xyz;
-		viewSpace[7] = ScreenToView(float4(float2(groupId.x + 1, groupId.y + 1) * BLOCK_SIZE, fMaxDepth, 1.0f), cView.ScreenDimensionsInv, cView.ProjectionInverse).xyz;
+		viewSpace[0] = ScreenToView(float4(groupId.xy * BLOCK_SIZE, fMinDepth, 1.0f), cView.TargetDimensionsInv, cView.ProjectionInverse).xyz;
+		viewSpace[1] = ScreenToView(float4(float2(groupId.x + 1, groupId.y) * BLOCK_SIZE, fMinDepth, 1.0f), cView.TargetDimensionsInv, cView.ProjectionInverse).xyz;
+		viewSpace[2] = ScreenToView(float4(float2(groupId.x, groupId.y + 1) * BLOCK_SIZE, fMinDepth, 1.0f), cView.TargetDimensionsInv, cView.ProjectionInverse).xyz;
+		viewSpace[3] = ScreenToView(float4(float2(groupId.x + 1, groupId.y + 1) * BLOCK_SIZE, fMinDepth, 1.0f), cView.TargetDimensionsInv, cView.ProjectionInverse).xyz;
+		viewSpace[4] = ScreenToView(float4(groupId.xy * BLOCK_SIZE, fMaxDepth, 1.0f), cView.TargetDimensionsInv, cView.ProjectionInverse).xyz;
+		viewSpace[5] = ScreenToView(float4(float2(groupId.x + 1, groupId.y) * BLOCK_SIZE, fMaxDepth, 1.0f), cView.TargetDimensionsInv, cView.ProjectionInverse).xyz;
+		viewSpace[6] = ScreenToView(float4(float2(groupId.x, groupId.y + 1) * BLOCK_SIZE, fMaxDepth, 1.0f), cView.TargetDimensionsInv, cView.ProjectionInverse).xyz;
+		viewSpace[7] = ScreenToView(float4(float2(groupId.x + 1, groupId.y + 1) * BLOCK_SIZE, fMaxDepth, 1.0f), cView.TargetDimensionsInv, cView.ProjectionInverse).xyz;
 
 		GroupFrustum.Planes[0] = CalculatePlane(float3(0, 0, 0), viewSpace[6], viewSpace[4]);
 		GroupFrustum.Planes[1] = CalculatePlane(float3(0, 0, 0), viewSpace[5], viewSpace[7]);
@@ -132,12 +127,12 @@ void CSMain(uint3 groupId : SV_GroupID, uint3 threadID : SV_DispatchThreadID, ui
 	}
 
 	// Convert depth values to view space.
-	float minDepthVS = ScreenToView(float4(0, 0, fMinDepth, 1), cView.ScreenDimensionsInv, cView.ProjectionInverse).z;
-	float maxDepthVS = ScreenToView(float4(0, 0, fMaxDepth, 1), cView.ScreenDimensionsInv, cView.ProjectionInverse).z;
-	float nearClipVS = ScreenToView(float4(0, 0, 1, 1), cView.ScreenDimensionsInv, cView.ProjectionInverse).z;
+	float minDepthVS = ScreenToView(float4(0, 0, fMinDepth, 1), cView.TargetDimensionsInv, cView.ProjectionInverse).z;
+	float maxDepthVS = ScreenToView(float4(0, 0, fMaxDepth, 1), cView.TargetDimensionsInv, cView.ProjectionInverse).z;
+	float nearClipVS = ScreenToView(float4(0, 0, 1, 1), cView.TargetDimensionsInv, cView.ProjectionInverse).z;
 
 #if SPLITZ_CULLING
-	float depthVS = ScreenToView(float4(0, 0, fDepth, 1), cView.ScreenDimensionsInv, cView.ProjectionInverse).z;
+	float depthVS = ScreenToView(float4(0, 0, fDepth, 1), cView.TargetDimensionsInv, cView.ProjectionInverse).z;
 	float depthRange = 31.0f / (maxDepthVS - minDepthVS);
 	uint cellIndex = max(0, min(31, floor((depthVS - minDepthVS) * depthRange)));
 	InterlockedOr(DepthMask, 1u << cellIndex);

@@ -1,28 +1,20 @@
 #pragma once
 class GraphicsDevice;
 class RootSignature;
-class Texture;
 class RGGraph;
 class PipelineState;
 struct SceneView;
+struct SceneTextures;
 
 class SSAO
 {
 public:
 	SSAO(GraphicsDevice* pDevice);
 
-	void OnResize(int windowWidth, int windowHeight);
-	void Execute(RGGraph& graph, const SceneView& sceneData, Texture* pTarget, Texture* pDepth);
+	void Execute(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures);
 
 private:
-	void SetupPipelines();
-
-	GraphicsDevice* m_pDevice;
-
-	std::unique_ptr<Texture> m_pAmbientOcclusionIntermediate;
-	std::unique_ptr<RootSignature> m_pSSAORS;
-	PipelineState* m_pSSAOPSO = nullptr;
-	std::unique_ptr<RootSignature> m_pSSAOBlurRS;
-	PipelineState* m_pSSAOBlurPSO = nullptr;
+	RefCountPtr<RootSignature> m_pSSAORS;
+	RefCountPtr<PipelineState> m_pSSAOPSO;
+	RefCountPtr<PipelineState> m_pSSAOBlurPSO;
 };
-

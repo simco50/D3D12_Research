@@ -6,3 +6,6 @@
 
 #define STB_SPRINTF_IMPLEMENTATION
 #include "stb_sprintf.h"
+
+#define STB_RECT_PACK_IMPLEMENTATION
+#include "stb_rect_pack.h"

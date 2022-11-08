@@ -16,15 +16,14 @@ Window::Window(uint32 width, uint32 height)
 	wc.hCursor = LoadCursorA(nullptr, IDC_ARROW);
 	check(RegisterClassExA(&wc));
 
-	int displayWidth = GetSystemMetrics(SM_CXSCREEN);
-	int displayHeight = GetSystemMetrics(SM_CYSCREEN);
+	Vector2i displayDimensions = GetDisplaySize();
 
 	DWORD windowStyle = WS_OVERLAPPEDWINDOW;
 	RECT windowRect = { 0, 0, (LONG)width, (LONG)height };
 	AdjustWindowRect(&windowRect, windowStyle, false);
 
-	int x = (displayWidth - width) / 2;
-	int y = (displayHeight - height) / 2;
+	int x = (displayDimensions.x - width) / 2;
+	int y = (displayDimensions.y - height) / 2;
 
 	m_Window = CreateWindowExA(
 		0,
@@ -50,6 +49,13 @@ Window::~Window()
 {
 	CloseWindow(m_Window);
 	UnregisterClassA(WINDOW_CLASS_NAME, GetModuleHandleA(nullptr));
+}
+
+Vector2i Window::GetDisplaySize()
+{
+	int displayWidth = GetSystemMetrics(SM_CXSCREEN);
+	int displayHeight = GetSystemMetrics(SM_CYSCREEN);
+	return Vector2i(displayWidth, displayHeight);
 }
 
 bool Window::PollMessages()
@@ -125,9 +131,6 @@ LRESULT Window::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		bool resized = newWidth != m_DisplayWidth || newHeight != m_DisplayHeight;
 		bool shouldResize = false;
 
-		m_DisplayWidth = LOWORD(lParam);
-		m_DisplayHeight = HIWORD(lParam);
-
 		if (wParam == SIZE_MINIMIZED)
 		{
 			OnFocusChanged.Broadcast(false);
@@ -165,7 +168,9 @@ LRESULT Window::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 		if (shouldResize && resized)
 		{
-			OnResize.Broadcast(m_DisplayWidth, m_DisplayHeight);
+			m_DisplayWidth = LOWORD(lParam);
+			m_DisplayHeight = HIWORD(lParam);
+			OnResizeOrMove.Broadcast(m_DisplayWidth, m_DisplayHeight);
 		}
 		break;
 	}
@@ -217,15 +222,9 @@ LRESULT Window::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		OnFocusChanged.Broadcast(true);
 		RECT rect;
 		GetClientRect(hWnd, &rect);
-		int newWidth = rect.right - rect.left;
-		int newHeight = rect.bottom - rect.top;
-		bool resized = newWidth != m_DisplayWidth || newHeight != m_DisplayHeight;
-		if (resized)
-		{
-			m_DisplayWidth = newWidth;
-			m_DisplayHeight = newHeight;
-			OnResize.Broadcast(newWidth, newHeight);
-		}
+		m_DisplayWidth = rect.right - rect.left;
+		m_DisplayHeight = rect.bottom - rect.top;
+		OnResizeOrMove.Broadcast(m_DisplayWidth, m_DisplayHeight);
 		m_IsResizing = false;
 		break;
 	}

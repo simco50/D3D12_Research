@@ -1,46 +1,9 @@
-#include "CommonBindings.hlsli"
+#include "Common.hlsli"
 #include "SkyCommon.hlsli"
-#include "Atmosphere.hlsli"
+#include "Primitives.hlsli"
+#include "External/Atmosphere.hlsli"
 
-static const float4 CUBE[]=
-{
-	float4(-1.0,1.0,1.0,1.0),
-	float4(-1.0,-1.0,1.0,1.0),
-	float4(-1.0,-1.0,-1.0,1.0),
-	float4(1.0,1.0,1.0,1.0),
-	float4(1.0,-1.0,1.0,1.0),
-	float4(-1.0,-1.0,1.0,1.0),
-	float4(1.0,1.0,-1.0,1.0),
-	float4(1.0,-1.0,-1.0,1.0),
-	float4(1.0,-1.0,1.0,1.0),
-	float4(-1.0,1.0,-1.0,1.0),
-	float4(-1.0,-1.0,-1.0,1.0),
-	float4(1.0,-1.0,-1.0,1.0),
-	float4(-1.0,-1.0,1.0,1.0),
-	float4(1.0,-1.0,1.0,1.0),
-	float4(1.0,-1.0,-1.0,1.0),
-	float4(1.0,1.0,1.0,1.0),
-	float4(-1.0,1.0,1.0,1.0),
-	float4(-1.0,1.0,-1.0,1.0),
-	float4(-1.0,1.0,-1.0,1.0),
-	float4(-1.0,1.0,1.0,1.0),
-	float4(-1.0,-1.0,-1.0,1.0),
-	float4(-1.0,1.0,1.0,1.0),
-	float4(1.0,1.0,1.0,1.0),
-	float4(-1.0,-1.0,1.0,1.0),
-	float4(1.0,1.0,1.0,1.0),
-	float4(1.0,1.0,-1.0,1.0),
-	float4(1.0,-1.0,1.0,1.0),
-	float4(1.0,1.0,-1.0,1.0),
-	float4(-1.0,1.0,-1.0,1.0),
-	float4(1.0,-1.0,-1.0,1.0),
-	float4(-1.0,-1.0,-1.0,1.0),
-	float4(-1.0,-1.0,1.0,1.0),
-	float4(1.0,-1.0,-1.0,1.0),
-	float4(1.0,1.0,-1.0,1.0),
-	float4(1.0,1.0,1.0,1.0),
-	float4(-1.0,1.0,-1.0,1.0),
-};
+RWTexture2DArray<float4> uSky : register(u0);
 
 struct InterpolantsVSToPS
 {
@@ -60,6 +23,35 @@ InterpolantsVSToPS VSMain(uint vertexId : SV_VertexID)
 
 float4 PSMain(in InterpolantsVSToPS input) : SV_Target
 {
-	float3 dir = normalize(input.UV);
-	return float4(GetSky(dir), 1.0f);
+	float3 uv = normalize(input.UV);
+	return float4(GetSky(uv), 1);
+}
+
+[numthreads(16, 16, 1)]
+void ComputeSkyCS(uint3 threadId : SV_DispatchThreadID)
+{
+	static const float3x3 CUBEMAP_ROTATIONS[] =
+	{
+		float3x3(0,0,-1, 0,-1,0, -1,0,0),   // right
+		float3x3(0,0,1, 0,-1,0, 1,0,0),     // left
+		float3x3(1,0,0, 0,0,-1, 0,1,0),     // top
+		float3x3(1,0,0, 0,0,1, 0,-1,0),     // bottom
+		float3x3(1,0,0, 0,-1,0, 0,0,-1),    // back
+		float3x3(-1,0,0, 0,-1,0, 0,0,1),    // front
+	};
+
+	float2 uv = (threadId.xy + 0.5f) * cView.TargetDimensionsInv;
+	float3 dir = normalize(mul(CUBEMAP_ROTATIONS[threadId.z], float3(uv * 2 - 1, -1)));
+
+	float3 rayStart = cView.ViewLocation;
+	float rayLength = 1000000.0f;
+
+	Light sun = GetLight(0);
+	float3 lightDir = -sun.Direction;
+	float3 lightColor = sun.GetColor();
+
+	float3 transmittance;
+	float3 sky = IntegrateScattering(rayStart, dir, rayLength, lightDir, lightColor, transmittance);
+
+	uSky[threadId] = float4(sky, 1.0f);
 }

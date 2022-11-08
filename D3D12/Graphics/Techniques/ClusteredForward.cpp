@@ -1,15 +1,13 @@
 #include "stdafx.h"
 #include "ClusteredForward.h"
-#include "Graphics/Core/Shader.h"
-#include "Graphics/Core/PipelineState.h"
-#include "Graphics/Core/RootSignature.h"
-#include "Graphics/Core/Buffer.h"
-#include "Graphics/Core/Graphics.h"
-#include "Graphics/Core/CommandContext.h"
-#include "Graphics/Core/Texture.h"
-#include "Graphics/Core/ResourceViews.h"
+#include "Graphics/RHI/PipelineState.h"
+#include "Graphics/RHI/RootSignature.h"
+#include "Graphics/RHI/Buffer.h"
+#include "Graphics/RHI/Graphics.h"
+#include "Graphics/RHI/CommandContext.h"
+#include "Graphics/RHI/Texture.h"
+#include "Graphics/RHI/ResourceViews.h"
 #include "Graphics/RenderGraph/RenderGraph.h"
-#include "Graphics/Mesh.h"
 #include "Graphics/Profiler.h"
 #include "Graphics/SceneView.h"
 #include "Core/ConsoleVariables.h"
@@ -21,589 +19,456 @@ static constexpr int gMaxLightsPerCluster = 32;
 static constexpr int gVolumetricFroxelTexelSize = 8;
 static constexpr int gVolumetricNumZSlices = 128;
 
-namespace Tweakables
-{
-	extern ConsoleVariable<int> g_SsrSamples;
-	extern ConsoleVariable<bool> g_VolumetricFog;
-}
-bool g_VisualizeClusters = false;
-
 ClusteredForward::ClusteredForward(GraphicsDevice* pDevice)
 	: m_pDevice(pDevice)
 {
-	SetupPipelines();
-
 	CommandContext* pContext = pDevice->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
-	m_pHeatMapTexture = std::make_unique<Texture>(pDevice, "Heatmap Texture");
-	m_pHeatMapTexture->Create(pContext, "Resources/Textures/Heatmap.png");
+	m_pHeatMapTexture = GraphicsCommon::CreateTextureFromFile(*pContext, "Resources/Textures/Heatmap.png", true, "Color Heatmap");
 	pContext->Execute(true);
+
+	//Light Culling
+	{
+		m_pLightCullingRS = new RootSignature(pDevice);
+		m_pLightCullingRS->AddConstantBufferView(0);
+		m_pLightCullingRS->AddConstantBufferView(100);
+		m_pLightCullingRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 2);
+		m_pLightCullingRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2);
+		m_pLightCullingRS->Finalize("Light Culling");
+
+		m_pCreateAabbPSO = pDevice->CreateComputePipeline(m_pLightCullingRS, "ClusterAABBGeneration.hlsl", "GenerateAABBs");
+		m_pLightCullingPSO = pDevice->CreateComputePipeline(m_pLightCullingRS, "ClusteredLightCulling.hlsl", "LightCulling");
+	}
+
+	//Diffuse
+	{
+		m_pDiffuseRS = new RootSignature(pDevice);
+		m_pDiffuseRS->AddRootConstants(0, 3);
+		m_pDiffuseRS->AddConstantBufferView(1);
+		m_pDiffuseRS->AddConstantBufferView(100);
+		m_pDiffuseRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 8);
+		m_pDiffuseRS->Finalize("Diffuse");
+
+		constexpr ResourceFormat formats[] = {
+			ResourceFormat::RGBA16_FLOAT,
+			ResourceFormat::RG16_FLOAT,
+			ResourceFormat::R8_UNORM,
+		};
+
+		{
+			//Opaque
+			PipelineStateInitializer psoDesc;
+			psoDesc.SetRootSignature(m_pDiffuseRS);
+			psoDesc.SetBlendMode(BlendMode::Replace, false);
+			psoDesc.SetVertexShader("Diffuse.hlsl", "VSMain", { "CLUSTERED_FORWARD" });
+			psoDesc.SetPixelShader("Diffuse.hlsl", "PSMain", { "CLUSTERED_FORWARD" });
+			psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_EQUAL);
+			psoDesc.SetDepthWrite(false);
+			psoDesc.SetRenderTargetFormats(formats, ResourceFormat::D32_FLOAT, 1);
+			psoDesc.SetName("Diffuse (Opaque)");
+			m_pDiffusePSO = pDevice->CreatePipeline(psoDesc);
+
+			//Opaque Masked
+			psoDesc.SetName("Diffuse Masked (Opaque)");
+			psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
+			m_pDiffuseMaskedPSO = pDevice->CreatePipeline(psoDesc);
+
+			//Transparant
+			psoDesc.SetName("Diffuse (Transparant)");
+			psoDesc.SetBlendMode(BlendMode::Alpha, false);
+			psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
+			m_pDiffuseTransparancyPSO = pDevice->CreatePipeline(psoDesc);
+		}
+
+		if (pDevice->GetCapabilities().SupportsMeshShading())
+		{
+			//Opaque
+			PipelineStateInitializer psoDesc;
+			psoDesc.SetRootSignature(m_pDiffuseRS);
+			psoDesc.SetBlendMode(BlendMode::Replace, false);
+			psoDesc.SetMeshShader("Diffuse.hlsl", "MSMain", { "CLUSTERED_FORWARD" });
+			psoDesc.SetAmplificationShader("Diffuse.hlsl", "ASMain", { "CLUSTERED_FORWARD" });
+			psoDesc.SetPixelShader("Diffuse.hlsl", "PSMain", { "CLUSTERED_FORWARD" });
+			psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_EQUAL);
+			psoDesc.SetDepthWrite(false);
+			psoDesc.SetRenderTargetFormats(formats, ResourceFormat::D32_FLOAT, 1);
+			psoDesc.SetName("Diffuse (Opaque)");
+			m_pMeshShaderDiffusePSO = pDevice->CreatePipeline(psoDesc);
+
+			//Opaque Masked
+			psoDesc.SetName("Diffuse Masked (Opaque)");
+			psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
+			m_pMeshShaderDiffuseMaskedPSO = pDevice->CreatePipeline(psoDesc);
+
+			//Transparant
+			psoDesc.SetName("Diffuse (Transparant)");
+			psoDesc.SetBlendMode(BlendMode::Alpha, false);
+			psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
+			m_pMeshShaderDiffuseTransparancyPSO = pDevice->CreatePipeline(psoDesc);
+		}
+	}
+
+	//Cluster debug rendering
+	{
+		m_pVisualizeLightClustersRS = new RootSignature(pDevice);
+		m_pVisualizeLightClustersRS->AddConstantBufferView(100);
+		m_pVisualizeLightClustersRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3);
+		m_pVisualizeLightClustersRS->Finalize("Visualize Light Clusters");
+
+		PipelineStateInitializer psoDesc;
+		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
+		psoDesc.SetDepthWrite(false);
+		psoDesc.SetPixelShader("VisualizeLightClusters.hlsl", "PSMain");
+		psoDesc.SetRenderTargetFormats(ResourceFormat::RGBA16_FLOAT, ResourceFormat::D32_FLOAT, 1);
+		psoDesc.SetBlendMode(BlendMode::Additive, false);
+		psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT);
+		psoDesc.SetRootSignature(m_pVisualizeLightClustersRS);
+		psoDesc.SetVertexShader("VisualizeLightClusters.hlsl", "VSMain");
+		psoDesc.SetGeometryShader("VisualizeLightClusters.hlsl", "GSMain");
+		psoDesc.SetName("Visualize Light Clusters");
+		m_pVisualizeLightClustersPSO = pDevice->CreatePipeline(psoDesc);
+	}
+
+	{
+		m_pVisualizeLightsRS = new RootSignature(pDevice);
+		m_pVisualizeLightsRS->AddConstantBufferView(0);
+		m_pVisualizeLightsRS->AddConstantBufferView(100);
+		m_pVisualizeLightsRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3);
+		m_pVisualizeLightsRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 3);
+		m_pVisualizeLightsRS->Finalize("Light Density Visualization");
+
+		m_pVisualizeLightsPSO = pDevice->CreateComputePipeline(m_pVisualizeLightsRS, "VisualizeLightCount.hlsl", "DebugLightDensityCS", { "CLUSTERED_FORWARD" });
+	}
+
+	{
+		m_pVolumetricLightingRS = new RootSignature(pDevice);
+		m_pVolumetricLightingRS->AddConstantBufferView(0);
+		m_pVolumetricLightingRS->AddConstantBufferView(100);
+		m_pVolumetricLightingRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 3);
+		m_pVolumetricLightingRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3);
+		m_pVolumetricLightingRS->Finalize("Inject Fog Lighting");
+
+		m_pInjectVolumeLightPSO = pDevice->CreateComputePipeline(m_pVolumetricLightingRS, "VolumetricFog.hlsl", "InjectFogLightingCS");
+		m_pAccumulateVolumeLightPSO = pDevice->CreateComputePipeline(m_pVolumetricLightingRS, "VolumetricFog.hlsl", "AccumulateFogCS");
+	}
 }
 
 ClusteredForward::~ClusteredForward()
 {
 }
 
-void ClusteredForward::OnResize(int windowWidth, int windowHeight)
+void ClusteredForward::ComputeLightCulling(RGGraph& graph, const SceneView* pView, LightCull3DData& cullData)
 {
-	m_ClusterCountX = Math::RoundUp((float)windowWidth / gLightClusterTexelSize);
-	m_ClusterCountY = Math::RoundUp((float)windowHeight / gLightClusterTexelSize);
+	RG_GRAPH_SCOPE("Light Culling", graph);
 
-	uint32 totalClusterCount = m_ClusterCountX * m_ClusterCountY * gLightClustersNumZ;
-	m_pAABBs = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(totalClusterCount, sizeof(Vector4) * 2), "AABBs");
-
-	m_pLightIndexGrid = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(gMaxLightsPerCluster * totalClusterCount, sizeof(uint32)), "Light Index Grid");
-	// LightGrid.x : Offset
-	// LightGrid.y : Count
-	m_pLightGrid = m_pDevice->CreateBuffer(BufferDesc::CreateStructured(2 * totalClusterCount, sizeof(uint32)), "Light Grid");
-	m_pLightGridRawUAV = nullptr;
-	m_pLightGrid->CreateUAV(&m_pLightGridRawUAV, BufferUAVDesc::CreateRaw());
-	m_pDebugLightGrid = m_pDevice->CreateBuffer(m_pLightGrid->GetDesc(), "Debug Light Grid");
-
-	TextureDesc volumeDesc = TextureDesc::Create3D(
-		Math::DivideAndRoundUp(windowWidth, gVolumetricFroxelTexelSize),
-		Math::DivideAndRoundUp(windowHeight, gVolumetricFroxelTexelSize),
-		gVolumetricNumZSlices,
-		DXGI_FORMAT_R16G16B16A16_FLOAT,
-		TextureFlag::ShaderResource | TextureFlag::UnorderedAccess);
-
-	m_pLightScatteringVolume[0] = m_pDevice->CreateTexture(volumeDesc, "Light Scattering Volume 0");
-	m_pLightScatteringVolume[1] = m_pDevice->CreateTexture(volumeDesc, "Light Scattering Volume 1");
-	m_pFinalVolumeFog = m_pDevice->CreateTexture(volumeDesc, "Final Light Scattering Volume");
-
-	m_ViewportDirty = true;
-}
-
-Vector2 ComputeVolumeGridParams(float nearZ, float farZ, int numSlices)
-{
-	Vector2 lightGridParams;
+	cullData.ClusterCount.x = Math::DivideAndRoundUp(pView->GetDimensions().x, gLightClusterTexelSize);
+	cullData.ClusterCount.y = Math::DivideAndRoundUp(pView->GetDimensions().y, gLightClusterTexelSize);
+	cullData.ClusterCount.z = gLightClustersNumZ;
+	float nearZ = pView->View.NearPlane;
+	float farZ = pView->View.FarPlane;
 	float n = Math::Min(nearZ, farZ);
 	float f = Math::Max(nearZ, farZ);
-	lightGridParams.x = (float)numSlices / log(f / n);
-	lightGridParams.y = ((float)numSlices * log(n)) / log(f / n);
-	return lightGridParams;
-}
+	cullData.LightGridParams.x = (float)gLightClustersNumZ / log(f / n);
+	cullData.LightGridParams.y = ((float)gLightClustersNumZ * log(n)) / log(f / n);
+	cullData.ClusterSize = gLightClusterTexelSize;
 
-void ClusteredForward::Execute(RGGraph& graph, const SceneView& resources, const ClusteredForwardParameters& parameters)
-{
-	RG_GRAPH_SCOPE("Clustered Lighting", graph);
+	uint32 totalClusterCount = cullData.ClusterCount.x * cullData.ClusterCount.y * cullData.ClusterCount.z;
 
-	static bool useMeshShader = true;
-	if (ImGui::Begin("Parameters"))
-	{
-		if (ImGui::CollapsingHeader("Base Pass"))
-		{
-			if (ImGui::Checkbox("Mesh Shader", &useMeshShader))
+	cullData.pAABBs = graph.Create("Cluster AABBs", BufferDesc::CreateStructured(totalClusterCount, sizeof(Vector4) * 2));
+
+	graph.AddPass("Cluster AABBs", RGPassFlag::Compute)
+		.Write(cullData.pAABBs)
+		.Bind([=](CommandContext& context)
 			{
-				useMeshShader = m_pMeshShaderDiffusePSO ? useMeshShader : false;
-			}
-		}
-	}
-	ImGui::End();
-
-	Vector2 screenDimensions((float)parameters.pColorTarget->GetWidth(), (float)parameters.pColorTarget->GetHeight());
-	float nearZ = resources.View.NearPlane;
-	float farZ = resources.View.FarPlane;
-	Vector2 lightGridParams = ComputeVolumeGridParams(nearZ, farZ, gLightClustersNumZ);
-
-	if (m_ViewportDirty)
-	{
-		RGPassBuilder calculateAabbs = graph.AddPass("Cluster AABBs");
-		calculateAabbs.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
-			{
-				context.InsertResourceBarrier(m_pAABBs.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-
 				context.SetPipelineState(m_pCreateAabbPSO);
-				context.SetComputeRootSignature(m_pCreateAabbRS.get());
+				context.SetComputeRootSignature(m_pLightCullingRS);
 
-				struct ConstantBuffer
+				struct
 				{
-					IntVector4 ClusterDimensions;
-					IntVector2 ClusterSize;
+					Vector4i ClusterDimensions;
+					Vector2i ClusterSize;
 				} constantBuffer;
 
-				constantBuffer.ClusterSize = IntVector2(gLightClusterTexelSize, gLightClusterTexelSize);
-				constantBuffer.ClusterDimensions = IntVector4(m_ClusterCountX, m_ClusterCountY, gLightClustersNumZ, 0);
+				constantBuffer.ClusterSize = Vector2i(gLightClusterTexelSize, gLightClusterTexelSize);
+				constantBuffer.ClusterDimensions = Vector4i(cullData.ClusterCount.x, cullData.ClusterCount.y, cullData.ClusterCount.z, 0);
 
 				context.SetRootCBV(0, constantBuffer);
-				context.SetRootCBV(1, GetViewUniforms(resources, parameters.pDepth));
-				context.BindResource(2, 0, m_pAABBs->GetUAV());
+				context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
+				context.BindResources(2, cullData.pAABBs->Get()->GetUAV());
 
 				//Cluster count in z is 32 so fits nicely in a wavefront on Nvidia so make groupsize in shader 32
 				constexpr uint32 threadGroupSize = 32;
 				context.Dispatch(
 					ComputeUtils::GetNumThreadGroups(
-						m_ClusterCountX, 1,
-						m_ClusterCountY, 1,
-						gLightClustersNumZ, threadGroupSize)
-				);
-			});
-		m_ViewportDirty = false;
-	}
-
-	RGPassBuilder lightCulling = graph.AddPass("Light Culling");
-	lightCulling.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
-		{
-			context.SetPipelineState(m_pLightCullingPSO);
-			context.SetComputeRootSignature(m_pLightCullingRS.get());
-
-			context.InsertResourceBarrier(m_pAABBs.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-			context.InsertResourceBarrier(m_pLightGrid.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-			context.InsertResourceBarrier(m_pLightIndexGrid.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-
-			// Clear the light grid because we're accumulating the light count in the shader
-			context.ClearUavUInt(m_pLightGrid.get(), m_pLightGridRawUAV);
-
-			struct ConstantBuffer
-			{
-				IntVector3 ClusterDimensions;
-			} constantBuffer{};
-
-			constantBuffer.ClusterDimensions = IntVector3(m_ClusterCountX, m_ClusterCountY, gLightClustersNumZ);
-
-			context.SetRootCBV(0, constantBuffer);
-
-			context.SetRootCBV(1, GetViewUniforms(resources));
-
-			context.BindResource(2, 0, m_pAABBs->GetSRV());
-
-			context.BindResource(3, 0, m_pLightIndexGrid->GetUAV());
-			context.BindResource(3, 1, m_pLightGrid->GetUAV());
-
-			constexpr uint32 threadGroupSize = 4;
-			context.Dispatch(
-				ComputeUtils::GetNumThreadGroups(
-					m_ClusterCountX, threadGroupSize,
-					m_ClusterCountY, threadGroupSize,
-					gLightClustersNumZ, threadGroupSize)
-			);
-		});
-
-	Texture* pFogVolume = GraphicsCommon::GetDefaultTexture(DefaultTexture::Black3D);
-
-	if(Tweakables::g_VolumetricFog)
-	{
-		RG_GRAPH_SCOPE("Volumetric Lighting", graph);
-
-		pFogVolume = m_pFinalVolumeFog.get();
-
-		Texture* pSourceVolume = m_pLightScatteringVolume[resources.FrameIndex % 2].get();
-		Texture* pDestinationVolume = m_pLightScatteringVolume[(resources.FrameIndex + 1) % 2].get();
-
-		struct ConstantBuffer
-		{
-			IntVector3 ClusterDimensions;
-			float Jitter;
-			Vector3 InvClusterDimensions;
-			float LightClusterSizeFactor;
-			Vector2 LightGridParams;
-			IntVector2 LightClusterDimensions;
-		} constantBuffer{};
-
-		constantBuffer.ClusterDimensions = IntVector3(pDestinationVolume->GetWidth(), pDestinationVolume->GetHeight(), pDestinationVolume->GetDepth());
-		constantBuffer.InvClusterDimensions = Vector3(1.0f / pDestinationVolume->GetWidth(), 1.0f / pDestinationVolume->GetHeight(), 1.0f / pDestinationVolume->GetDepth());
-		constexpr Math::HaltonSequence<1024, 2> halton;
-		constantBuffer.Jitter = halton[resources.FrameIndex & 1023];
-		constantBuffer.LightClusterSizeFactor = (float)gVolumetricFroxelTexelSize / gLightClusterTexelSize;
-		constantBuffer.LightGridParams = lightGridParams;
-		constantBuffer.LightClusterDimensions = IntVector2(m_ClusterCountX, m_ClusterCountY);
-
-		RGPassBuilder injectVolumeLighting = graph.AddPass("Inject Volume Lights");
-		injectVolumeLighting.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
-			{
-				context.InsertResourceBarrier(pSourceVolume, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-				context.InsertResourceBarrier(pDestinationVolume, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-
-				context.SetComputeRootSignature(m_pVolumetricLightingRS.get());
-				context.SetPipelineState(m_pInjectVolumeLightPSO);
-
-				D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
-					m_pLightGrid->GetSRV()->GetDescriptor(),
-					m_pLightIndexGrid->GetSRV()->GetDescriptor(),
-					pSourceVolume->GetSRV()->GetDescriptor(),
-				};
-
-				context.SetRootCBV(0, constantBuffer);
-				context.SetRootCBV(1, GetViewUniforms(resources));
-				context.BindResource(2, 0, pDestinationVolume->GetUAV());
-				context.BindResources(3, 0, srvs, ARRAYSIZE(srvs));
-
-				constexpr uint32 threadGroupSizeXY = 8;
-				constexpr uint32 threadGroupSizeZ = 4;
-
-				context.Dispatch(
-					ComputeUtils::GetNumThreadGroups(
-						pDestinationVolume->GetWidth(), threadGroupSizeXY,
-						pDestinationVolume->GetHeight(), threadGroupSizeXY,
-						pDestinationVolume->GetDepth(), threadGroupSizeZ)
+						cullData.ClusterCount.x, 1,
+						cullData.ClusterCount.y, 1,
+						cullData.ClusterCount.z, threadGroupSize)
 				);
 			});
 
-		RGPassBuilder accumulateFog = graph.AddPass("Accumulate Volume Fog");
-		accumulateFog.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
+	cullData.pLightIndexGrid = graph.Create("Light Index Grid", BufferDesc::CreateStructured(gMaxLightsPerCluster * totalClusterCount, sizeof(uint32)));
+	// LightGrid: x : Offset | y : Count
+	cullData.pLightGrid = graph.Create("Light Grid", BufferDesc::CreateStructured(2 * totalClusterCount, sizeof(uint32)));
+
+	graph.AddPass("Cull Lights", RGPassFlag::Compute)
+		.Read(cullData.pAABBs)
+		.Write({ cullData.pLightGrid, cullData.pLightIndexGrid })
+		.Bind([=](CommandContext& context)
 			{
-				context.InsertResourceBarrier(pDestinationVolume, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-				context.InsertResourceBarrier(m_pFinalVolumeFog.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+				context.SetPipelineState(m_pLightCullingPSO);
+				context.SetComputeRootSignature(m_pLightCullingRS);
 
-				context.SetComputeRootSignature(m_pVolumetricLightingRS.get());
-				context.SetPipelineState(m_pAccumulateVolumeLightPSO);
+				// Clear the light grid because we're accumulating the light count in the shader
+				Buffer* pLightGrid = cullData.pLightGrid->Get();
+				//#todo: adhoc UAV creation
+				context.ClearUAVu(pLightGrid, m_pDevice->CreateUAV(pLightGrid, BufferUAVDesc::CreateRaw()));
 
-				//float values[] = { 0,0,0,0 };
-				//context.ClearUavFloat(m_pFinalVolumeFog.get(), m_pFinalVolumeFog->GetUAV(), values);
-
-				D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
-					m_pLightGrid->GetSRV()->GetDescriptor(),
-					m_pLightIndexGrid->GetSRV()->GetDescriptor(),
-					pDestinationVolume->GetSRV()->GetDescriptor(),
-				};
-
-				context.SetRootCBV(0, constantBuffer);
-				context.SetRootCBV(1, GetViewUniforms(resources));
-				context.BindResource(2, 0, m_pFinalVolumeFog->GetUAV());
-				context.BindResources(3, 0, srvs, ARRAYSIZE(srvs));
-
-				constexpr uint32 threadGroupSize = 8;
-
-				context.Dispatch(
-					ComputeUtils::GetNumThreadGroups(
-						pDestinationVolume->GetWidth(), threadGroupSize,
-						pDestinationVolume->GetHeight(), threadGroupSize));
-			});
-	}
-
-	RGPassBuilder basePass = graph.AddPass("Base Pass");
-	basePass.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
-		{
-			struct PerFrameData
-			{
-				IntVector4 ClusterDimensions;
-				IntVector2 ClusterSize;
-				Vector2 LightGridParams;
-			} frameData{};
-
-			frameData.ClusterDimensions = IntVector4(m_ClusterCountX, m_ClusterCountY, gLightClustersNumZ, 0);
-			frameData.ClusterSize = IntVector2(gLightClusterTexelSize, gLightClusterTexelSize);
-			frameData.LightGridParams = lightGridParams;
-
-			context.InsertResourceBarrier(m_pLightGrid.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-			context.InsertResourceBarrier(m_pLightIndexGrid.get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-			context.InsertResourceBarrier(parameters.pAmbientOcclusion, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-			context.InsertResourceBarrier(parameters.pPreviousColorTarget, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-			context.InsertResourceBarrier(parameters.pResolvedDepth, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-			context.InsertResourceBarrier(pFogVolume, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-
-			context.InsertResourceBarrier(parameters.pDepth, D3D12_RESOURCE_STATE_DEPTH_READ);
-			context.InsertResourceBarrier(parameters.pColorTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
-			context.InsertResourceBarrier(parameters.pNormalsTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
-
-			RenderPassInfo renderPass;
-			renderPass.DepthStencilTarget.Access = RenderPassAccess::Load_Store;
-			renderPass.DepthStencilTarget.StencilAccess = RenderPassAccess::DontCare_DontCare;
-			renderPass.DepthStencilTarget.Target = parameters.pDepth;
-			renderPass.DepthStencilTarget.Write = false;
-			renderPass.RenderTargetCount = 2;
-			renderPass.RenderTargets[0].Access = RenderPassAccess::Clear_Store;
-			renderPass.RenderTargets[0].Target = parameters.pColorTarget;
-			renderPass.RenderTargets[1].Access = parameters.pNormalsTarget->GetDesc().SampleCount > 1 ? RenderPassAccess::Clear_Resolve : RenderPassAccess::Clear_Store;
-			renderPass.RenderTargets[1].Target = parameters.pNormalsTarget;
-			renderPass.RenderTargets[1].ResolveTarget = parameters.pResolvedNormalsTarget;
-			context.BeginRenderPass(renderPass);
-
-			context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-			context.SetGraphicsRootSignature(m_pDiffuseRS.get());
-
-			context.SetRootCBV(1, frameData);
-
-			context.SetRootCBV(2, GetViewUniforms(resources, parameters.pColorTarget));
-
-			D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
-				parameters.pAmbientOcclusion->GetSRV()->GetDescriptor(),
-				parameters.pResolvedDepth->GetSRV()->GetDescriptor(),
-				parameters.pPreviousColorTarget->GetSRV()->GetDescriptor(),
-				pFogVolume->GetSRV()->GetDescriptor(),
-				m_pLightGrid->GetSRV()->GetDescriptor(),
-				m_pLightIndexGrid->GetSRV()->GetDescriptor(),
-			};
-			context.BindResources(3, 0, srvs, ARRAYSIZE(srvs));
-
-			{
-				GPU_PROFILE_SCOPE("Opaque", &context);
-				context.SetPipelineState(useMeshShader ? m_pMeshShaderDiffusePSO : m_pDiffusePSO);
-				DrawScene(context, resources, Batch::Blending::Opaque);
-			}
-			{
-				GPU_PROFILE_SCOPE("Opaque - Masked", &context);
-				context.SetPipelineState(useMeshShader ? m_pMeshShaderDiffuseMaskedPSO : m_pDiffuseMaskedPSO);
-				DrawScene(context, resources, Batch::Blending::AlphaMask);
-
-			}
-			{
-				GPU_PROFILE_SCOPE("Transparant", &context);
-				context.SetPipelineState(useMeshShader ? m_pMeshShaderDiffuseTransparancyPSO : m_pDiffuseTransparancyPSO);
-				DrawScene(context, resources, Batch::Blending::AlphaBlend);
-			}
-
-			context.EndRenderPass();
-		});
-
-	if (g_VisualizeClusters)
-	{
-		RGPassBuilder visualize = graph.AddPass("Visualize Clusters");
-		visualize.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
-			{
-				if (m_DidCopyDebugClusterData == false)
+				struct
 				{
-					context.CopyTexture(m_pLightGrid.get(), m_pDebugLightGrid.get());
-					m_DebugClustersViewMatrix = resources.View.View;
-					m_DebugClustersViewMatrix.Invert(m_DebugClustersViewMatrix);
-					m_DidCopyDebugClusterData = true;
-				}
+					Vector3i ClusterDimensions;
+				} constantBuffer;
 
-				context.BeginRenderPass(RenderPassInfo(parameters.pColorTarget, RenderPassAccess::Load_Store, parameters.pDepth, RenderPassAccess::Load_Store, false));
+				constantBuffer.ClusterDimensions = cullData.ClusterCount;
 
+				context.SetRootCBV(0, constantBuffer);
+
+				context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
+				context.BindResources(2, {
+					cullData.pLightIndexGrid->Get()->GetUAV(),
+					cullData.pLightGrid->Get()->GetUAV(),
+					});
+				context.BindResources(3, cullData.pAABBs->Get()->GetSRV());
+
+				context.Dispatch(
+					ComputeUtils::GetNumThreadGroups(
+						cullData.ClusterCount.x, 4,
+						cullData.ClusterCount.y, 4,
+						cullData.ClusterCount.z, 4)
+				);
+			});
+}
+
+void ClusteredForward::VisualizeClusters(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures, LightCull3DData& cullData)
+{
+	uint32 totalClusterCount = cullData.ClusterCount.x * cullData.ClusterCount.y * cullData.ClusterCount.z;
+	RGBuffer* pDebugLightGrid = RGUtils::CreatePersistent(graph, "Debug Light Grid", BufferDesc::CreateStructured(2 * totalClusterCount, sizeof(uint32)), &cullData.pDebugLightGrid, true);
+
+	if (cullData.DirtyDebugData)
+	{
+		RGUtils::AddCopyPass(graph, cullData.pLightGrid, pDebugLightGrid);
+		cullData.DebugClustersViewMatrix = pView->View.ViewInverse;
+		cullData.DirtyDebugData = false;
+	}
+
+	graph.AddPass("Visualize Clusters", RGPassFlag::Raster)
+		.Read({ pDebugLightGrid, cullData.pAABBs })
+		.RenderTarget(sceneTextures.pColorTarget, RenderTargetLoadAction::Load)
+		.DepthStencil(sceneTextures.pDepth, RenderTargetLoadAction::Load, false)
+		.Bind([=](CommandContext& context)
+			{
 				context.SetPipelineState(m_pVisualizeLightClustersPSO);
-				context.SetGraphicsRootSignature(m_pVisualizeLightClustersRS.get());
+				context.SetGraphicsRootSignature(m_pVisualizeLightClustersRS);
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_POINTLIST);
 
-				ShaderInterop::ViewUniforms view = GetViewUniforms(resources, parameters.pColorTarget);
-				view.Projection = m_DebugClustersViewMatrix * resources.View.ViewProjection;
-				context.SetRootCBV(0, view);
-
-				D3D12_CPU_DESCRIPTOR_HANDLE srvs[] = {
-					m_pAABBs->GetSRV()->GetDescriptor(),
-					m_pDebugLightGrid->GetSRV()->GetDescriptor(),
-					m_pHeatMapTexture->GetSRV()->GetDescriptor(),
-				};
-				context.BindResources(1, 0, srvs, ARRAYSIZE(srvs));
-
-				context.Draw(0, m_ClusterCountX * m_ClusterCountY * gLightClustersNumZ);
-
-				context.EndRenderPass();
+				ShaderInterop::ViewUniforms viewData = Renderer::GetViewUniforms(pView, sceneTextures.pColorTarget->Get());
+				viewData.Projection = cullData.DebugClustersViewMatrix * pView->View.ViewProjection;
+				context.SetRootCBV(0, viewData);
+				context.BindResources(1, {
+					cullData.pAABBs->Get()->GetSRV(),
+					pDebugLightGrid->Get()->GetSRV(),
+				m_pHeatMapTexture->GetSRV(),
+					});
+				context.Draw(0, cullData.ClusterCount.x * cullData.ClusterCount.y * cullData.ClusterCount.z);
 			});
-	}
-	else
-	{
-		m_DidCopyDebugClusterData = false;
-	}
 }
 
-void ClusteredForward::VisualizeLightDensity(RGGraph& graph, const SceneView& resources, Texture* pTarget, Texture* pDepth)
+RGTexture* ClusteredForward::RenderVolumetricFog(RGGraph& graph, const SceneView* pView, const LightCull3DData& lightCullData, VolumetricFogData& fogData)
 {
-	if (!m_pVisualizationIntermediateTexture || m_pVisualizationIntermediateTexture->GetDesc() != pTarget->GetDesc())
+	RG_GRAPH_SCOPE("Volumetric Lighting", graph);
+
+	TextureDesc volumeDesc = TextureDesc::Create3D(
+		Math::DivideAndRoundUp((uint32)pView->GetDimensions().x, gVolumetricFroxelTexelSize),
+		Math::DivideAndRoundUp((uint32)pView->GetDimensions().y, gVolumetricFroxelTexelSize),
+		gVolumetricNumZSlices,
+		ResourceFormat::RGBA16_FLOAT,
+		TextureFlag::ShaderResource | TextureFlag::UnorderedAccess);
+
+	RGTexture* pSourceVolume = RGUtils::CreatePersistent(graph, "Fog History", volumeDesc, &fogData.pFogHistory, false);
+	RGTexture* pTargetVolume = graph.Create("Fog Target", volumeDesc);
+	RGTexture* pFinalVolumeFog = graph.Create("Volumetric Fog", volumeDesc);
+	graph.Export(pTargetVolume, &fogData.pFogHistory);
+
+	struct
 	{
-		m_pVisualizationIntermediateTexture = m_pDevice->CreateTexture(pTarget->GetDesc(), "Light Density Debug Texture");
-	}
+		Vector3i ClusterDimensions;
+		float Jitter;
+		Vector3 InvClusterDimensions;
+		float LightClusterSizeFactor;
+		Vector2 LightGridParams;
+		Vector2i LightClusterDimensions;
+	} constantBuffer;
 
-	Vector2 screenDimensions((float)pTarget->GetWidth(), (float)pTarget->GetHeight());
-	float nearZ = resources.View.NearPlane;
-	float farZ = resources.View.FarPlane;
-	Vector2 lightGridParams = ComputeVolumeGridParams(nearZ, farZ, gLightClustersNumZ);
+	constantBuffer.ClusterDimensions = Vector3i(volumeDesc.Width, volumeDesc.Height, volumeDesc.DepthOrArraySize);
+	constantBuffer.InvClusterDimensions = Vector3(1.0f / volumeDesc.Width, 1.0f / volumeDesc.Height, 1.0f / volumeDesc.DepthOrArraySize);
+	constexpr Math::HaltonSequence<32, 2> halton;
+	constantBuffer.Jitter = halton[pView->FrameIndex & 31];
+	constantBuffer.LightClusterSizeFactor = (float)gVolumetricFroxelTexelSize / gLightClusterTexelSize;
+	constantBuffer.LightGridParams = lightCullData.LightGridParams;
+	constantBuffer.LightClusterDimensions = Vector2i(lightCullData.ClusterCount.x, lightCullData.ClusterCount.y);
 
-	RGPassBuilder basePass = graph.AddPass("Visualize Light Density");
-	basePass.Bind([=](CommandContext& context, const RGPassResources& /*passResources*/)
-		{
-			struct ConstantBuffer
+	graph.AddPass("Inject Volume Lights", RGPassFlag::Compute)
+		.Read({ pSourceVolume, lightCullData.pLightGrid, lightCullData.pLightIndexGrid })
+		.Write(pTargetVolume)
+		.Bind([=](CommandContext& context)
 			{
-				IntVector2 ClusterDimensions;
-				IntVector2 ClusterSize;
-				Vector2 LightGridParams;
-			} constantBuffer;
+				Texture* pTarget = pTargetVolume->Get();
 
-			constantBuffer.ClusterDimensions = IntVector2(m_ClusterCountX, m_ClusterCountY);
-			constantBuffer.ClusterSize = IntVector2(gLightClusterTexelSize, gLightClusterTexelSize);
-			constantBuffer.LightGridParams = lightGridParams;
+				context.SetComputeRootSignature(m_pVolumetricLightingRS);
+				context.SetPipelineState(m_pInjectVolumeLightPSO);
 
-			context.SetPipelineState(m_pVisualizeLightsPSO);
-			context.SetComputeRootSignature(m_pVisualizeLightsRS.get());
+				context.SetRootCBV(0, constantBuffer);
+				context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
+				context.BindResources(2, pTarget->GetUAV());
+				context.BindResources(3, {
+					lightCullData.pLightGrid->Get()->GetSRV(),
+					lightCullData.pLightIndexGrid->Get()->GetSRV(),
+					pSourceVolume->Get()->GetSRV(),
+					});
 
-			context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-			context.InsertResourceBarrier(pDepth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-			context.InsertResourceBarrier(m_pLightGrid.get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-			context.InsertResourceBarrier(m_pVisualizationIntermediateTexture.get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+				context.Dispatch(
+					ComputeUtils::GetNumThreadGroups(
+						pTarget->GetWidth(), 8,
+						pTarget->GetHeight(), 8,
+						pTarget->GetDepth(), 4)
+				);
+			});
 
-			context.SetRootCBV(0, constantBuffer);
-			context.SetRootCBV(1, GetViewUniforms(resources, pTarget));
+	graph.AddPass("Accumulate Volume Fog", RGPassFlag::Compute)
+		.Read({ pTargetVolume, lightCullData.pLightGrid, lightCullData.pLightIndexGrid })
+		.Write(pFinalVolumeFog)
+		.Bind([=](CommandContext& context)
+			{
+				Texture* pFinalFog = pFinalVolumeFog->Get();
 
-			context.BindResource(2, 0, pTarget->GetSRV());
-			context.BindResource(2, 1, pDepth->GetSRV());
-			context.BindResource(2, 2, m_pLightGrid->GetSRV());
+				context.SetComputeRootSignature(m_pVolumetricLightingRS);
+				context.SetPipelineState(m_pAccumulateVolumeLightPSO);
 
-			context.BindResource(3, 0, m_pVisualizationIntermediateTexture->GetUAV());
+				context.SetRootCBV(0, constantBuffer);
+				context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
+				context.BindResources(2, pFinalFog->GetUAV());
+				context.BindResources(3, {
+					lightCullData.pLightGrid->Get()->GetSRV(),
+					lightCullData.pLightIndexGrid->Get()->GetSRV(),
+					pTargetVolume->Get()->GetSRV(),
+					});
 
-			context.Dispatch(
-				ComputeUtils::GetNumThreadGroups(
-					pTarget->GetWidth(), 16,
-					pTarget->GetHeight(), 16)
-			);
-			context.InsertUavBarrier();
-
-			context.CopyTexture(m_pVisualizationIntermediateTexture.get(), pTarget);
-		});
+				context.Dispatch(
+					ComputeUtils::GetNumThreadGroups(
+						pFinalFog->GetWidth(), 8,
+						pFinalFog->GetHeight(), 8));
+			});
+	return pFinalVolumeFog;
 }
 
-void ClusteredForward::SetupPipelines()
+void ClusteredForward::RenderBasePass(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures, const LightCull3DData& lightCullData, RGTexture* pFogTexture)
 {
-	//AABB
-	{
-		Shader* pComputeShader = m_pDevice->GetShader("ClusterAABBGeneration.hlsl", ShaderType::Compute, "GenerateAABBs");
+	static constexpr bool useMeshShader = false;
 
-		m_pCreateAabbRS = std::make_unique<RootSignature>(m_pDevice);
-		m_pCreateAabbRS->FinalizeFromShader("Create AABB", pComputeShader);
+	graph.AddPass("Base Pass", RGPassFlag::Raster)
+		.Read({ sceneTextures.pAmbientOcclusion, sceneTextures.pPreviousColor, pFogTexture, sceneTextures.pDepth })
+		.Read({ lightCullData.pLightGrid, lightCullData.pLightIndexGrid })
+		.DepthStencil(sceneTextures.pDepth, RenderTargetLoadAction::Load, false)
+		.RenderTarget(sceneTextures.pColorTarget, RenderTargetLoadAction::DontCare)
+		.RenderTarget(sceneTextures.pNormals, RenderTargetLoadAction::DontCare)
+		.RenderTarget(sceneTextures.pRoughness, RenderTargetLoadAction::DontCare)
+		.Bind([=](CommandContext& context)
+			{
+				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+				context.SetGraphicsRootSignature(m_pDiffuseRS);
 
-		PipelineStateInitializer psoDesc;
-		psoDesc.SetComputeShader(pComputeShader);
-		psoDesc.SetRootSignature(m_pCreateAabbRS->GetRootSignature());
-		psoDesc.SetName("Create AABB");
-		m_pCreateAabbPSO = m_pDevice->CreatePipeline(psoDesc);
-	}
+				struct
+				{
+					Vector4i ClusterDimensions;
+					Vector2i ClusterSize;
+					Vector2 LightGridParams;
+				} frameData;
 
-	//Light Culling
-	{
-		Shader* pComputeShader = m_pDevice->GetShader("ClusteredLightCulling.hlsl", ShaderType::Compute, "LightCulling");
+				frameData.ClusterDimensions = Vector4i(lightCullData.ClusterCount.x, lightCullData.ClusterCount.y, lightCullData.ClusterCount.z, 0);
+				frameData.ClusterSize = Vector2i(gLightClusterTexelSize, gLightClusterTexelSize);
+				frameData.LightGridParams = lightCullData.LightGridParams;
 
-		m_pLightCullingRS = std::make_unique<RootSignature>(m_pDevice);
-		m_pLightCullingRS->FinalizeFromShader("Light Culling", pComputeShader);
+				context.SetRootCBV(1, frameData);
+				context.SetRootCBV(2, Renderer::GetViewUniforms(pView, sceneTextures.pColorTarget->Get()));
 
-		PipelineStateInitializer psoDesc;
-		psoDesc.SetComputeShader(pComputeShader);
-		psoDesc.SetRootSignature(m_pLightCullingRS->GetRootSignature());
-		psoDesc.SetName("Light Culling");
-		m_pLightCullingPSO = m_pDevice->CreatePipeline(psoDesc);
+				context.BindResources(3, {
+					sceneTextures.pAmbientOcclusion->Get()->GetSRV(),
+					sceneTextures.pDepth->Get()->GetSRV(),
+					sceneTextures.pPreviousColor->Get()->GetSRV(),
+					pFogTexture->Get()->GetSRV(),
+					lightCullData.pLightGrid->Get()->GetSRV(),
+					lightCullData.pLightIndexGrid->Get()->GetSRV(),
+					});
 
-		m_pLightCullingCommandSignature = std::make_unique<CommandSignature>(m_pDevice);
-		m_pLightCullingCommandSignature->AddDispatch();
-		m_pLightCullingCommandSignature->Finalize("Light Culling Command Signature");
-	}
+				{
+					GPU_PROFILE_SCOPE("Opaque", &context);
+					context.SetPipelineState(useMeshShader ? m_pMeshShaderDiffusePSO : m_pDiffusePSO);
+					Renderer::DrawScene(context, pView, Batch::Blending::Opaque);
+				}
+				{
+					GPU_PROFILE_SCOPE("Opaque - Masked", &context);
+					context.SetPipelineState(useMeshShader ? m_pMeshShaderDiffuseMaskedPSO : m_pDiffuseMaskedPSO);
+					Renderer::DrawScene(context, pView, Batch::Blending::AlphaMask);
 
-	//Diffuse
-	{
-		Shader* pVertexShader = m_pDevice->GetShader("Diffuse.hlsl", ShaderType::Vertex, "VSMain", { "CLUSTERED_FORWARD" });
-		Shader* pPixelShader = m_pDevice->GetShader("Diffuse.hlsl", ShaderType::Pixel, "PSMain", { "CLUSTERED_FORWARD" });
+				}
+				{
+					GPU_PROFILE_SCOPE("Transparant", &context);
+					context.SetPipelineState(useMeshShader ? m_pMeshShaderDiffuseTransparancyPSO : m_pDiffuseTransparancyPSO);
+					Renderer::DrawScene(context, pView, Batch::Blending::AlphaBlend);
+				}
+			});
+}
 
-		Shader* pMeshShader = m_pDevice->GetShader("Diffuse.hlsl", ShaderType::Mesh, "MSMain", { "CLUSTERED_FORWARD" });
-		Shader* pAmplificationShader = m_pDevice->GetShader("Diffuse.hlsl", ShaderType::Amplification, "ASMain", { "CLUSTERED_FORWARD" });
+void ClusteredForward::VisualizeLightDensity(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures, const LightCull3DData& lightCullData)
+{
+	RGTexture* pVisualizationTarget = graph.Create("Scene Color", sceneTextures.pColorTarget->GetDesc());
 
-		m_pDiffuseRS = std::make_unique<RootSignature>(m_pDevice);
-		m_pDiffuseRS->FinalizeFromShader("Diffuse", pVertexShader);
+	RGBuffer* pLightGrid = lightCullData.pLightGrid;
+	Vector2 lightGridParams = lightCullData.LightGridParams;
+	Vector3i clusterCount = lightCullData.ClusterCount;
 
-		DXGI_FORMAT formats[] = {
-			DXGI_FORMAT_R16G16B16A16_FLOAT,
-			DXGI_FORMAT_R16G16B16A16_FLOAT,
-		};
+	graph.AddPass("Visualize Light Density", RGPassFlag::Compute)
+		.Read({ sceneTextures.pDepth, sceneTextures.pColorTarget, pLightGrid })
+		.Write(pVisualizationTarget)
+		.Bind([=](CommandContext& context)
+			{
+				Texture* pTarget = pVisualizationTarget->Get();
 
-		{
-			//Opaque
-			PipelineStateInitializer psoDesc;
-			psoDesc.SetRootSignature(m_pDiffuseRS->GetRootSignature());
-			psoDesc.SetBlendMode(BlendMode::Replace, false);
-			psoDesc.SetVertexShader(pVertexShader);
-			psoDesc.SetPixelShader(pPixelShader);
-			psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_EQUAL);
-			psoDesc.SetDepthWrite(false);
-			psoDesc.SetRenderTargetFormats(formats, ARRAYSIZE(formats), DXGI_FORMAT_D32_FLOAT, /* m_pDevice->GetMultiSampleCount() */ 1);
-			psoDesc.SetName("Diffuse (Opaque)");
-			m_pDiffusePSO = m_pDevice->CreatePipeline(psoDesc);
+				struct
+				{
+					Vector2i ClusterDimensions;
+					Vector2i ClusterSize;
+					Vector2 LightGridParams;
+				} constantBuffer;
 
-			//Opaque Masked
-			psoDesc.SetName("Diffuse Masked (Opaque)");
-			psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
-			m_pDiffuseMaskedPSO = m_pDevice->CreatePipeline(psoDesc);
+				constantBuffer.ClusterDimensions = Vector2i(clusterCount.x, clusterCount.y);
+				constantBuffer.ClusterSize = Vector2i(gLightClusterTexelSize, gLightClusterTexelSize);
+				constantBuffer.LightGridParams = lightGridParams;
 
-			//Transparant
-			psoDesc.SetName("Diffuse (Transparant)");
-			psoDesc.SetBlendMode(BlendMode::Alpha, false);
-			psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
-			m_pDiffuseTransparancyPSO = m_pDevice->CreatePipeline(psoDesc);
-		}
+				context.SetPipelineState(m_pVisualizeLightsPSO);
+				context.SetComputeRootSignature(m_pVisualizeLightsRS);
+				context.SetRootCBV(0, constantBuffer);
+				context.SetRootCBV(1, Renderer::GetViewUniforms(pView, pTarget));
 
-		if(m_pDevice->GetCapabilities().MeshShaderSupport >= D3D12_MESH_SHADER_TIER_1)
-		{
-			//Opaque
-			PipelineStateInitializer psoDesc;
-			psoDesc.SetRootSignature(m_pDiffuseRS->GetRootSignature());
-			psoDesc.SetBlendMode(BlendMode::Replace, false);
-			psoDesc.SetMeshShader(pMeshShader);
-			psoDesc.SetAmplificationShader(pAmplificationShader);
-			psoDesc.SetPixelShader(pPixelShader);
-			psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_EQUAL);
-			psoDesc.SetDepthWrite(false);
-			psoDesc.SetRenderTargetFormats(formats, ARRAYSIZE(formats), DXGI_FORMAT_D32_FLOAT, /* m_pDevice->GetMultiSampleCount() */ 1);
-			psoDesc.SetName("Diffuse (Opaque)");
-			m_pMeshShaderDiffusePSO = m_pDevice->CreatePipeline(psoDesc);
+				context.BindResources(2, {
+					sceneTextures.pColorTarget->Get()->GetSRV(),
+					sceneTextures.pDepth->Get()->GetSRV(),
+					pLightGrid->Get()->GetSRV(),
+					});
+				context.BindResources(3, pTarget->GetUAV());
 
-			//Opaque Masked
-			psoDesc.SetName("Diffuse Masked (Opaque)");
-			psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
-			m_pMeshShaderDiffuseMaskedPSO = m_pDevice->CreatePipeline(psoDesc);
+				context.Dispatch(ComputeUtils::GetNumThreadGroups(
+					pTarget->GetWidth(), 16,
+					pTarget->GetHeight(), 16));
+			});
 
-			//Transparant
-			psoDesc.SetName("Diffuse (Transparant)");
-			psoDesc.SetBlendMode(BlendMode::Alpha, false);
-			psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
-			m_pMeshShaderDiffuseTransparancyPSO = m_pDevice->CreatePipeline(psoDesc);
-		}
-	}
-
-	//Cluster debug rendering
-	{
-		Shader* pVertexShader = m_pDevice->GetShader("VisualizeLightClusters.hlsl", ShaderType::Vertex, "VSMain");
-		Shader* pGeometryShader = m_pDevice->GetShader("VisualizeLightClusters.hlsl", ShaderType::Geometry, "GSMain");
-		Shader* pPixelShader = m_pDevice->GetShader("VisualizeLightClusters.hlsl", ShaderType::Pixel, "PSMain");
-
-		m_pVisualizeLightClustersRS = std::make_unique<RootSignature>(m_pDevice);
-
-		PipelineStateInitializer psoDesc;
-		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
-		psoDesc.SetDepthWrite(false);
-		psoDesc.SetPixelShader(pPixelShader);
-		psoDesc.SetRenderTargetFormat(DXGI_FORMAT_R16G16B16A16_FLOAT, DXGI_FORMAT_D32_FLOAT, /* m_pDevice->GetMultiSampleCount() */ 1);
-		psoDesc.SetBlendMode(BlendMode::Additive, false);
-
-		m_pVisualizeLightClustersRS->FinalizeFromShader("Visualize Light Clusters", pVertexShader);
-
-		psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT);
-		psoDesc.SetRootSignature(m_pVisualizeLightClustersRS->GetRootSignature());
-		psoDesc.SetVertexShader(pVertexShader);
-		psoDesc.SetGeometryShader(pGeometryShader);
-		psoDesc.SetName("Visualize Light Clusters");
-		m_pVisualizeLightClustersPSO = m_pDevice->CreatePipeline(psoDesc);
-	}
-
-	{
-		Shader* pComputeShader = m_pDevice->GetShader("VisualizeLightCount.hlsl", ShaderType::Compute, "DebugLightDensityCS", { "CLUSTERED_FORWARD" });
-
-		m_pVisualizeLightsRS = std::make_unique<RootSignature>(m_pDevice);
-		m_pVisualizeLightsRS->FinalizeFromShader("Light Density Visualization", pComputeShader);
-
-		PipelineStateInitializer psoDesc;
-		psoDesc.SetComputeShader(pComputeShader);
-		psoDesc.SetRootSignature(m_pVisualizeLightsRS->GetRootSignature());
-		psoDesc.SetName("Light Density Visualization");
-		m_pVisualizeLightsPSO = m_pDevice->CreatePipeline(psoDesc);
-	}
-
-	{
-		Shader* pComputeShader = m_pDevice->GetShader("VolumetricFog.hlsl", ShaderType::Compute, "InjectFogLightingCS", { });
-
-		m_pVolumetricLightingRS = std::make_unique<RootSignature>(m_pDevice);
-		m_pVolumetricLightingRS->FinalizeFromShader("Inject Fog Lighting", pComputeShader);
-
-		{
-			PipelineStateInitializer psoDesc;
-			psoDesc.SetComputeShader(pComputeShader);
-			psoDesc.SetRootSignature(m_pVolumetricLightingRS->GetRootSignature());
-			psoDesc.SetName("Inject Fog Lighting");
-			m_pInjectVolumeLightPSO = m_pDevice->CreatePipeline(psoDesc);
-		}
-
-		{
-			Shader* pAccumulateComputeShader = m_pDevice->GetShader("VolumetricFog.hlsl", ShaderType::Compute, "AccumulateFogCS", { });
-
-			PipelineStateInitializer psoDesc;
-			psoDesc.SetComputeShader(pAccumulateComputeShader);
-			psoDesc.SetRootSignature(m_pVolumetricLightingRS->GetRootSignature());
-			psoDesc.SetName("Accumulate Fog Lighting");
-			m_pAccumulateVolumeLightPSO = m_pDevice->CreatePipeline(psoDesc);
-		}
-
-	}
+	sceneTextures.pColorTarget = pVisualizationTarget;
 }

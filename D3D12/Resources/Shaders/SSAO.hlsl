@@ -1,17 +1,11 @@
-#include "CommonBindings.hlsli"
+#include "Common.hlsli"
 #include "Random.hlsli"
 
 #define SSAO_SAMPLES 64
 #define BLOCK_SIZE 16
 
-#define RootSig ROOT_SIG("CBV(b0), " \
-				"CBV(b100), " \
-				"DescriptorTable(UAV(u0, numDescriptors = 1)), " \
-				"DescriptorTable(SRV(t0, numDescriptors = 1))")
-
 struct PassData
 {
-	uint2 Dimensions;
 	float AoPower;
 	float AoRadius;
 	float AoDepthThreshold;
@@ -31,36 +25,46 @@ struct CS_INPUT
 	uint GroupIndex : SV_GroupIndex;
 };
 
-[RootSignature(RootSig)]
+float3x3 TangentMatrix(float3 z)
+{
+    float3 ref = abs(dot(z, float3(0, 1, 0))) > 0.99f ? float3(0, 0, 1) : float3(0, 1, 0);
+    float3 x = normalize(cross(ref, z));
+    float3 y = cross(z, x);
+    return float3x3(x, y, z);
+}
+
 [numthreads(BLOCK_SIZE, BLOCK_SIZE, 1)]
 void CSMain(CS_INPUT input)
 {
-	float2 dimInv = rcp((float2)cPass.Dimensions);
-	float2 uv = (float2)input.DispatchThreadId.xy * dimInv;
+	float2 uv = ((float2)input.DispatchThreadId.xy + 0.5f) * cView.TargetDimensionsInv;
 	float depth = tDepthTexture.SampleLevel(sLinearClamp, uv, 0).r;
-	float3 normal = NormalFromDepth(tDepthTexture, sLinearClamp, uv, dimInv, cView.ProjectionInverse);
+	float3 normal = NormalFromDepth(tDepthTexture, sLinearClamp, uv, cView.TargetDimensionsInv, cView.ProjectionInverse);
 	float3 viewPos = ViewFromDepth(uv.xy, depth, cView.ProjectionInverse).xyz;
 
-	uint state = SeedThread(input.DispatchThreadId.xy, cPass.Dimensions, cView.FrameIndex);
-	float3 randomVec = float3(Random01(state), Random01(state), Random01(state)) * 2.0f - 1.0f;
-	float3 tangent = normalize(randomVec - normal * dot(randomVec, normal));
-	float3 bitangent = cross(tangent, normal);
-	float3x3 TBN = float3x3(tangent, bitangent, normal);
+	uint seed = SeedThread(input.DispatchThreadId.xy, cView.TargetDimensions, cView.FrameIndex);
+	float3 randomVec = float3(Random01(seed), Random01(seed), Random01(seed)) * 2.0f - 1.0f;
+	float3x3 TBN = TangentMatrix(normal);
+
+	// Diffuse reflections integral is over (1 / PI) * Li * NdotL
+	// We sample a cosine weighted distribution over the hemisphere which has a PDF which conveniently cancels out the inverse PI and NdotL terms.
 
 	float occlusion = 0;
 
 	for(int i = 0; i < cPass.AoSamples; ++i)
 	{
-		float2 point2d = HammersleyPoints(i, cPass.AoSamples);
-		float3 hemispherePoint = HemisphereSampleUniform(point2d.x, point2d.y);
+		float2 u = float2(Random01(seed), Random01(seed));
+		float pdf;
+		float3 hemispherePoint = HemisphereSampleCosineWeight(u, pdf);
 		float3 vpos = viewPos + mul(hemispherePoint, TBN) * cPass.AoRadius;
 		float4 newTexCoord = mul(float4(vpos, 1), cView.Projection);
 		newTexCoord.xyz /= newTexCoord.w;
 		newTexCoord.xy = newTexCoord.xy * float2(0.5f, -0.5f) + float2(0.5f, 0.5f);
-		if(newTexCoord.x >= 0 && newTexCoord.x <= 1 && newTexCoord.y >= 0 && newTexCoord.y <= 1)
+
+		// Make sure we're not sampling outside the screen
+		if(all(newTexCoord.xy >= 0) && all(newTexCoord.xy <= 1))
 		{
 			float sampleDepth = tDepthTexture.SampleLevel(sLinearClamp, newTexCoord.xy, 0).r;
-			float depthVpos = LinearizeDepth(sampleDepth, cView.NearZ, cView.FarZ);
+			float depthVpos = LinearizeDepth(sampleDepth);
 			float rangeCheck = smoothstep(0.0f, 1.0f, cPass.AoRadius / (viewPos.z - depthVpos));
 			occlusion += (vpos.z >= depthVpos + cPass.AoDepthThreshold) * rangeCheck;
 		}

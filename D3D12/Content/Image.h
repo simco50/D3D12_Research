@@ -1,4 +1,5 @@
 #pragma once
+#include "Graphics/RHI/RHI.h"
 
 enum class ImageFormat
 {
@@ -68,7 +69,7 @@ public:
 	const Image* GetNextImage() const { return m_pNextImage.get(); }
 
 	static int32 GetNumChannels(ImageFormat format);
-	static unsigned int TextureFormatFromCompressionFormat(const ImageFormat& format, bool sRgb);
+	static ResourceFormat TextureFormatFromCompressionFormat(const ImageFormat& format, bool sRgb);
 
 private:
 	bool LoadDDS(const void* pBytes, uint32 numBytes);

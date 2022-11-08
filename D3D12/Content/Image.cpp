@@ -85,7 +85,8 @@ bool Image::SetData(const void* pData, uint32 offsetInBytes, uint32 sizeInBytes)
 
 bool Image::SetPixel(int x, int y, const Color& color)
 {
-	checkf(!D3D::IsBlockCompressFormat((DXGI_FORMAT)TextureFormatFromCompressionFormat(m_Format, m_sRgb)), "Can't set pixel data from block compressed texture");
+	const FormatInfo& info = GetFormatInfo(TextureFormatFromCompressionFormat(m_Format, m_sRgb));
+	checkf(!info.IsBC, "Can't get pixel data from block compressed texture");
 	if (x + y * m_Width >= (int)m_Pixels.size())
 	{
 		return false;
@@ -100,7 +101,8 @@ bool Image::SetPixel(int x, int y, const Color& color)
 
 bool Image::SetPixelInt(int x, int y, unsigned int color)
 {
-	checkf(!D3D::IsBlockCompressFormat((DXGI_FORMAT)TextureFormatFromCompressionFormat(m_Format, m_sRgb)), "Can't set pixel data from block compressed texture");
+	const FormatInfo& info = GetFormatInfo(TextureFormatFromCompressionFormat(m_Format, m_sRgb));
+	checkf(!info.IsBC, "Can't get pixel data from block compressed texture");
 	if (x + y * m_Width >= (int)m_Pixels.size())
 	{
 		return false;
@@ -115,7 +117,8 @@ bool Image::SetPixelInt(int x, int y, unsigned int color)
 
 Color Image::GetPixel(int x, int y) const
 {
-	checkf(!D3D::IsBlockCompressFormat((DXGI_FORMAT)TextureFormatFromCompressionFormat(m_Format, m_sRgb)), "Can't get pixel data from block compressed texture");
+	const FormatInfo& info = GetFormatInfo(TextureFormatFromCompressionFormat(m_Format, m_sRgb));
+	checkf(!info.IsBC, "Can't get pixel data from block compressed texture");
 	Color c = {};
 	if (x + y * m_Width >= (int)m_Pixels.size())
 	{
@@ -131,7 +134,8 @@ Color Image::GetPixel(int x, int y) const
 
 unsigned int Image::GetPixelInt(int x, int y) const
 {
-	checkf(!D3D::IsBlockCompressFormat((DXGI_FORMAT)TextureFormatFromCompressionFormat(m_Format, m_sRgb)), "Can't get pixel data from block compressed texture");
+	const FormatInfo& info = GetFormatInfo(TextureFormatFromCompressionFormat(m_Format, m_sRgb));
+	checkf(!info.IsBC, "Can't get pixel data from block compressed texture");
 	unsigned int c = 0;
 	if (x + y * m_Width >= (int)m_Pixels.size())
 	{
@@ -199,26 +203,26 @@ bool Image::GetSurfaceInfo(int width, int height, int depth, int mipLevel, MipLe
 	return true;
 }
 
-unsigned int Image::TextureFormatFromCompressionFormat(const ImageFormat& format, bool sRgb)
+ResourceFormat Image::TextureFormatFromCompressionFormat(const ImageFormat& format, bool sRgb)
 {
 	switch (format)
 	{
-	case ImageFormat::RGBA:		return sRgb ? DXGI_FORMAT_R8G8B8A8_UNORM_SRGB : DXGI_FORMAT_R8G8B8A8_UNORM;
-	case ImageFormat::BGRA:		return sRgb ? DXGI_FORMAT_B8G8R8A8_UNORM_SRGB : DXGI_FORMAT_B8G8R8A8_UNORM;
-	case ImageFormat::RGB32:	return DXGI_FORMAT_R32G32B32_FLOAT;
-	case ImageFormat::RGBA16:	return DXGI_FORMAT_R16G16B16A16_FLOAT;
-	case ImageFormat::RGBA32:	return DXGI_FORMAT_R32G32B32A32_FLOAT;
-	case ImageFormat::RG32:		return DXGI_FORMAT_R32G32_FLOAT;
-	case ImageFormat::BC1:		return sRgb ? DXGI_FORMAT_BC1_UNORM_SRGB : DXGI_FORMAT_BC1_UNORM;
-	case ImageFormat::BC2:		return sRgb ? DXGI_FORMAT_BC2_UNORM_SRGB : DXGI_FORMAT_BC2_UNORM;
-	case ImageFormat::BC3:		return sRgb ? DXGI_FORMAT_BC3_UNORM_SRGB : DXGI_FORMAT_BC3_UNORM;
-	case ImageFormat::BC4:		return DXGI_FORMAT_BC4_UNORM;
-	case ImageFormat::BC5:		return DXGI_FORMAT_BC5_UNORM;
-	case ImageFormat::BC6H:		return DXGI_FORMAT_BC6H_UF16;
-	case ImageFormat::BC7:		return sRgb ? DXGI_FORMAT_BC7_UNORM_SRGB : DXGI_FORMAT_BC7_UNORM;
+	case ImageFormat::RGBA:		return sRgb ? ResourceFormat::RGBA8_UNORM_SRGB : ResourceFormat::RGBA8_UNORM;
+	case ImageFormat::BGRA:		return sRgb ? ResourceFormat::BGRA8_UNORM_SRGB : ResourceFormat::BGRA8_UNORM;
+	case ImageFormat::RGB32:	return ResourceFormat::RGB32_FLOAT;
+	case ImageFormat::RGBA16:	return ResourceFormat::RGBA16_FLOAT;
+	case ImageFormat::RGBA32:	return ResourceFormat::RGBA32_FLOAT;
+	case ImageFormat::RG32:		return ResourceFormat::RG32_FLOAT;
+	case ImageFormat::BC1:		return sRgb ? ResourceFormat::BC1_UNORM_SRGB : ResourceFormat::BC1_UNORM;
+	case ImageFormat::BC2:		return sRgb ? ResourceFormat::BC2_UNORM_SRGB : ResourceFormat::BC2_UNORM;
+	case ImageFormat::BC3:		return sRgb ? ResourceFormat::BC3_UNORM_SRGB : ResourceFormat::BC3_UNORM;
+	case ImageFormat::BC4:		return ResourceFormat::BC4_UNORM;
+	case ImageFormat::BC5:		return ResourceFormat::BC5_UNORM;
+	case ImageFormat::BC6H:		return ResourceFormat::BC6H_UFLOAT;
+	case ImageFormat::BC7:		return sRgb ? ResourceFormat::BC7_UNORM_SRGB : ResourceFormat::BC7_UNORM;
 	default:
 		noEntry();
-		return DXGI_FORMAT_UNKNOWN;
+		return ResourceFormat::Unknown;
 	}
 }
 

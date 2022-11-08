@@ -16,14 +16,19 @@ namespace Colors
 
 namespace Math
 {
-	constexpr float PI = 3.141592654f;
-	constexpr float INVPI = 0.318309886f;
-	constexpr float INV2PI = 0.159154943f;
-	constexpr float PIDIV2 = 1.570796327f;
-	constexpr float PIDIV4 = 0.785398163f;
+	constexpr float PI = 3.14159265358979323846f;
+	constexpr float INV_PI = 0.31830988618379067154f;
+	constexpr float INV_2PI = 0.15915494309189533577f;
+	constexpr float INV_4PI = 0.07957747154594766788f;
+	constexpr float PI_DIV_2 = 1.57079632679489661923f;
+	constexpr float PI_DIV_4 = 0.78539816339744830961f;
+	constexpr float SQRT_2 = 1.41421356237309504880f;
 
 	constexpr float RadiansToDegrees = 180.0f / PI;
 	constexpr float DegreesToRadians = PI / 180.0f;
+
+	inline constexpr float Radians(float degrees) { return degrees * DegreesToRadians; }
+	inline constexpr float Degrees(float radians) { return radians * RadiansToDegrees; }
 
 	constexpr float BytesToKiloBytes = 1.0f / (1 << 10);
 	constexpr float BytesToMegaBytes = 1.0f / (1 << 20);
@@ -33,7 +38,7 @@ namespace Math
 	constexpr uint32 MegaBytesToBytes = 1 << 20;
 	constexpr uint32 GigaBytesToBytes = 1 << 30;
 
-	inline std::string PrettyPrintDataSize(uint32 sizeInBytes)
+	inline std::string PrettyPrintDataSize(uint64 sizeInBytes)
 	{
 		if (sizeInBytes > 1 << 30)
 		{
@@ -66,13 +71,13 @@ namespace Math
 
 	int RandomRange(int min, int max);
 
-	template<typename T>
-	constexpr T Clamp(const T value, const T low, const T high)
+	template<typename T, typename U, typename V>
+	constexpr T Clamp(const T value, const U low, const V high)
 	{
 		if (value > high)
-			return high;
+			return (T)high;
 		else if (value < low)
-			return low;
+			return (T)low;
 		return value;
 	}
 
@@ -107,6 +112,7 @@ namespace Math
 	Matrix CreateOrthographicMatrix(float width, float height, float nearPlane, float farPlane);
 	Matrix CreateOrthographicOffCenterMatrix(float left, float right, float bottom, float top, float nearPlane, float farPlane);
 	Matrix CreateLookToMatrix(const Vector3& position, const Vector3& direction, const Vector3& up);
+	BoundingFrustum CreateBoundingFrustum(const Matrix& projection, const Matrix& view = Matrix::Identity);
 
 	void GetProjectionClipPlanes(const Matrix& projection, float& nearPlane, float& farPlane);
 	void ReverseZProjection(Matrix& projection);
@@ -128,6 +134,30 @@ namespace Math
 	Vector3 RandVector();
 
 	Vector3 RandCircleVector();
+
+	template<typename T>
+	inline T Floor(const T& v)
+	{
+		return (T)floor(v);
+	}
+
+	template<>
+	inline Vector3 Floor(const Vector3& v)
+	{
+		return Vector3(Floor(v.x), Floor(v.y), Floor(v.z));
+	}
+
+	template<typename T>
+	inline T Ceil(const T& v)
+	{
+		return (T)ceil(v);
+	}
+
+	template<>
+	inline Vector3 Ceil(const Vector3& v)
+	{
+		return Vector3(Ceil(v.x), Ceil(v.y), Ceil(v.z));
+	}
 
 	inline uint32 EncodeRGBA(float r, float g, float b, float a = 1.0f)
 	{
@@ -160,7 +190,7 @@ namespace Math
 	inline uint32 EncodeRGBE(const Vector3& color)
 	{
 		float maxComponent = Max(Max(color.x, color.y), color.z);
-		float exponent = ceilf(log2(maxComponent));
+		float exponent = Ceil(log2(maxComponent));
 		uint32 output = 0;
 		output |= (unsigned char)(color.x / exp2(exponent) * 255) << 24;
 		output |= (unsigned char)(color.y / exp2(exponent) * 255) << 16;
@@ -176,14 +206,21 @@ namespace Math
 		return Vector3(c.x, c.y, c.z) * exp2(exponent);
 	}
 
-	inline int32 RoundUp(float value)
-	{
-		return (int32)ceilf(value);
-	}
-
 	inline uint32 DivideAndRoundUp(uint32 nominator, uint32 denominator)
 	{
-		return (uint32)ceilf((float)nominator / denominator);
+		return (nominator + denominator - 1) / denominator;
+	}
+
+	inline uint32 NextPowerOfTwo(uint32 v)
+	{
+		v--;
+		v |= v >> 1;
+		v |= v >> 2;
+		v |= v >> 4;
+		v |= v >> 8;
+		v |= v >> 16;
+		v++;
+		return v;
 	}
 
 	Color MakeFromColorTemperature(float Temp);

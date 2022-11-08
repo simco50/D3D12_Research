@@ -1,10 +1,9 @@
 #include "stdafx.h"
 #include "DebugRenderer.h"
-#include "Graphics/Core/Graphics.h"
-#include "Graphics/Core/Shader.h"
-#include "Graphics/Core/PipelineState.h"
-#include "Graphics/Core/RootSignature.h"
-#include "Graphics/Core/CommandContext.h"
+#include "RHI/Graphics.h"
+#include "RHI/PipelineState.h"
+#include "RHI/RootSignature.h"
+#include "RHI/CommandContext.h"
 #include "Light.h"
 #include "RenderGraph/RenderGraph.h"
 #include "Graphics/SceneView.h"
@@ -41,25 +40,22 @@ DebugRenderer* DebugRenderer::Get()
 
 void DebugRenderer::Initialize(GraphicsDevice* pDevice)
 {
-	VertexElementLayout inputLayout;
-	inputLayout.AddVertexElement("POSITION", DXGI_FORMAT_R32G32B32_FLOAT);
-	inputLayout.AddVertexElement("COLOR", DXGI_FORMAT_R32_UINT);
-
-	//Shaders
-	Shader* pVertexShader = pDevice->GetShader("DebugRenderer.hlsl", ShaderType::Vertex, "VSMain");
-	Shader* pPixelShader = pDevice->GetShader("DebugRenderer.hlsl", ShaderType::Pixel, "PSMain");
-
 	//Rootsignature
-	m_pRS = std::make_unique<RootSignature>(pDevice);
-	m_pRS->FinalizeFromShader("Diffuse", pVertexShader);
+	m_pRS = new RootSignature(pDevice);
+	m_pRS->AddConstantBufferView(100);
+	m_pRS->Finalize("Diffuse", D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
 	//Opaque
 	PipelineStateInitializer psoDesc;
-	psoDesc.SetInputLayout(inputLayout);
-	psoDesc.SetRootSignature(m_pRS->GetRootSignature());
-	psoDesc.SetVertexShader(pVertexShader);
-	psoDesc.SetPixelShader(pPixelShader);
-	psoDesc.SetRenderTargetFormat(DXGI_FORMAT_R16G16B16A16_FLOAT, DXGI_FORMAT_D32_FLOAT, /* pDevice->GetMultiSampleCount() */ 1);
+	psoDesc.SetInputLayout(
+		{
+			{ "POSITION", ResourceFormat::RGB32_FLOAT },
+			{ "COLOR", ResourceFormat::R32_UINT },
+		});
+	psoDesc.SetRootSignature(m_pRS);
+	psoDesc.SetVertexShader("DebugRenderer.hlsl", "VSMain");
+	psoDesc.SetPixelShader("DebugRenderer.hlsl", "PSMain");
+	psoDesc.SetRenderTargetFormats(ResourceFormat::RGBA16_FLOAT, ResourceFormat::D32_FLOAT, 1);
 	psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
 	psoDesc.SetDepthWrite(true);
 	psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
@@ -73,10 +69,12 @@ void DebugRenderer::Initialize(GraphicsDevice* pDevice)
 
 void DebugRenderer::Shutdown()
 {
-	m_pRS.reset();
+	m_pTrianglesPSO.Reset();
+	m_pLinesPSO.Reset();
+	m_pRS.Reset();
 }
 
-void DebugRenderer::Render(RGGraph& graph, const SceneView& view, Texture* pTarget, Texture* pDepth)
+void DebugRenderer::Render(RGGraph& graph, const SceneView* pView, RGTexture* pTarget, RGTexture* pDepth)
 {
 	int linePrimitives = (int)m_Lines.size() * 2;
 	int trianglePrimitives = (int)m_Triangles.size() * 3;
@@ -88,33 +86,30 @@ void DebugRenderer::Render(RGGraph& graph, const SceneView& view, Texture* pTarg
 
 	constexpr uint32 VertexStride = sizeof(DebugLine) / 2;
 
-	RGPassBuilder pass = graph.AddPass("Debug Rendering");
-	pass.Bind([=](CommandContext& context, const RGPassResources& /*resources*/)
-		{
-			context.InsertResourceBarrier(pDepth, D3D12_RESOURCE_STATE_DEPTH_WRITE);
-			context.InsertResourceBarrier(pTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
-
-			context.BeginRenderPass(RenderPassInfo(pTarget, RenderPassAccess::Load_Store, pDepth, RenderPassAccess::Load_Store, false));
-			context.SetGraphicsRootSignature(m_pRS.get());
-
-			context.SetRootCBV(0, GetViewUniforms(view, pTarget));
-
-			if (linePrimitives != 0)
+	graph.AddPass("Debug Rendering", RGPassFlag::Raster)
+		.RenderTarget(pTarget, RenderTargetLoadAction::Load)
+		.DepthStencil(pDepth, RenderTargetLoadAction::Load, true)
+		.Bind([=](CommandContext& context)
 			{
-				context.SetDynamicVertexBuffer(0, linePrimitives, VertexStride, m_Lines.data());
-				context.SetPipelineState(m_pLinesPSO);
-				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINELIST);
-				context.Draw(0, linePrimitives);
-			}
-			if (trianglePrimitives != 0)
-			{
-				context.SetDynamicVertexBuffer(0, trianglePrimitives, VertexStride, m_Triangles.data());
-				context.SetPipelineState(m_pTrianglesPSO);
-				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-				context.Draw(0, trianglePrimitives);
-			}
-			context.EndRenderPass();
-		});
+				context.SetGraphicsRootSignature(m_pRS);
+
+				context.SetRootCBV(0, Renderer::GetViewUniforms(pView, pTarget->Get()));
+
+				if (linePrimitives != 0)
+				{
+					context.SetDynamicVertexBuffer(0, linePrimitives, VertexStride, m_Lines.data());
+					context.SetPipelineState(m_pLinesPSO);
+					context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINELIST);
+					context.Draw(0, linePrimitives);
+				}
+				if (trianglePrimitives != 0)
+				{
+					context.SetDynamicVertexBuffer(0, trianglePrimitives, VertexStride, m_Triangles.data());
+					context.SetPipelineState(m_pTrianglesPSO);
+					context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+					context.Draw(0, trianglePrimitives);
+				}
+			});
 	m_Lines.clear();
 	m_Triangles.clear();
 }
@@ -178,11 +173,11 @@ void DebugRenderer::AddBox(const Vector3& position, const Vector3& extents, cons
 	}
 	else
 	{
-		AddPolygon(min, v1, v2, v3, color);
+		AddPolygon(v3, v2, v1, min, color);
 		AddPolygon(v4, v5, max, v6, color);
 		AddPolygon(min, v4, v6, v3, color);
-		AddPolygon(v1, v5, max, v2, color);
-		AddPolygon(v3, v2, max, v6, color);
+		AddPolygon(v2, max, v5, v1, color);
+		AddPolygon(v6, max, v2, v3, color);
 		AddPolygon(min, v1, v5, v4, color);
 	}
 }
@@ -295,72 +290,42 @@ void DebugRenderer::AddFrustrum(const BoundingFrustum& frustrum, const IntColor&
 
 void DebugRenderer::AddAxisSystem(const Matrix& transform, float lineLength)
 {
-	Matrix newMatrix = Matrix::CreateScale(Math::ScaleFromMatrix(transform));
-	newMatrix.Invert(newMatrix);
-	newMatrix *= transform;
 	Vector3 origin(Vector3::Transform(Vector3(), transform));
-	Vector3 x(Vector3::Transform(Vector3(lineLength, 0, 0), newMatrix));
-	Vector3 y(Vector3::Transform(Vector3(0, lineLength, 0), newMatrix));
-	Vector3 z(Vector3::Transform(Vector3(0, 0, lineLength), newMatrix));
+	Vector3 x(Vector3::Transform(Vector3(lineLength, 0, 0), transform));
+	Vector3 y(Vector3::Transform(Vector3(0, lineLength, 0), transform));
+	Vector3 z(Vector3::Transform(Vector3(0, 0, lineLength), transform));
 
 	AddLine(origin, x, Colors::Red);
 	AddLine(origin, y, Colors::Green);
 	AddLine(origin, z, Colors::Blue);
 }
 
-void DebugRenderer::AddWireCylinder(const Vector3& position, const Vector3& direction, float height, float radius, int segments, const IntColor& color)
+void DebugRenderer::AddWireCylinder(const Vector3& position, const Quaternion& rotation, float height, float radius, int segments, const IntColor& color)
 {
-	Vector3 forward;
-	direction.Normalize(forward);
-	Vector3 up = Vector3::Up;
-	Vector3 right = forward.Cross(up);
-	right.Normalize();
-	up = right.Cross(direction);
-
-	Matrix rotationMatrix = Matrix(
-		Vector4(right),
-		Vector4(up),
-		Vector4(forward),
-		Vector4(0, 0, 0, 1)
-	);
-
-	Matrix world = rotationMatrix * Matrix::CreateTranslation(position);
+	Vector3 forward = Vector3::Transform(Vector3::UnitZ, rotation);
+	Matrix world = Matrix::CreateFromQuaternion(rotation) * Matrix::CreateTranslation(position);
 	float t = Math::PI * 2 / (segments + 1);
 
 	for (int i = 0; i < segments + 1; ++i)
 	{
-		Vector3 a = Vector3::Transform(Vector3(radius * cos(t * i), radius * sin(t * i), 0) + Vector3::Forward * height, world);
-		Vector3 b = Vector3::Transform(Vector3(radius * cos(t * (i + 1)), radius * sin(t * (i + 1)), 0) + Vector3::Forward * height, world);
-		AddLine(a, b, color);
+		Vector3 a = Vector3::Transform(Vector3(radius * cos(t * i), radius * sin(t * i), 0), world);
+		Vector3 b = Vector3::Transform(Vector3(radius * cos(t * (i + 1)), radius * sin(t * (i + 1)), 0), world);
+		AddLine(a - forward * height, b - forward * height, color);
 		AddLine(a + forward * height, b + forward * height, color);
-		AddLine(a, a + forward * height, color);
+		AddLine(a + forward * height, a - forward * height, color);
 	}
 }
 
-void DebugRenderer::AddCone(const Vector3& position, const Vector3& direction, float height, float angle, int segments, const IntColor& color, bool solid)
+void DebugRenderer::AddCone(const Vector3& position, const Quaternion& rotation, float height, float angle, int segments, const IntColor& color, bool solid)
 {
-	Vector3 forward;
-	direction.Normalize(forward);
-	Vector3 up = Vector3::Up;
-	Vector3 right = forward.Cross(up);
-	right.Normalize();
-	up = right.Cross(direction);
-
-	Matrix rotationMatrix = Matrix(
-		Vector4(right),
-		Vector4(up),
-		Vector4(forward),
-		Vector4(0, 0, 0, 1)
-	);
-
-	Matrix world = rotationMatrix * Matrix::CreateTranslation(position);
+	Matrix world = Matrix::CreateFromQuaternion(rotation) * Matrix::CreateTranslation(position);
 
 	float radius = tanf(0.5f * angle * Math::DegreesToRadians) * height;
 	float t = Math::PI * 2 / (segments + 1);
 	for (int i = 0; i < segments + 1; ++i)
 	{
-		Vector3 a = Vector3::Transform(Vector3(radius * cos(t * i), radius * sin(t * i), 0) + Vector3::Forward * height, world);
-		Vector3 b = Vector3::Transform(Vector3(radius * cos(t * (i + 1)), radius * sin(t * (i + 1)), 0) + Vector3::Forward * height, world);
+		Vector3 a = Vector3::Transform(Vector3(radius * cos(t * i), radius * sin(t * i), height), world);
+		Vector3 b = Vector3::Transform(Vector3(radius * cos(t * (i + 1)), radius * sin(t * (i + 1)), height), world);
 		AddLine(a, b, color);
 		AddLine(a, position, color);
 	}
@@ -391,14 +356,14 @@ void DebugRenderer::AddLight(const Light& light, const IntColor& color /*= Color
 	switch (light.Type)
 	{
 	case LightType::Directional:
-		AddWireCylinder(light.Position, light.Direction, 30.0f, 5.0f, 10, color);
-		AddAxisSystem(Matrix::CreateWorld(light.Position, -light.Direction, Vector3::Up), 1.0f);
+		AddWireCylinder(light.Position, light.Rotation, 4.0f, 2.0f, 10, color);
+		AddAxisSystem(Matrix::CreateFromQuaternion(light.Rotation) * Matrix::CreateTranslation(light.Position), 1.0f);
 		break;
 	case LightType::Point:
 		AddSphere(light.Position, light.Range, 8, 8, color, false);
 		break;
 	case LightType::Spot:
-		AddCone(light.Position, light.Direction, light.Range, light.UmbraAngleDegrees, 10, color);
+		AddCone(light.Position, light.Rotation, light.Range, light.UmbraAngleDegrees, 10, color);
 		break;
 	default:
 		break;

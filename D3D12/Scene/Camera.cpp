@@ -80,7 +80,7 @@ const Matrix& Camera::GetViewProjection() const
 	return m_Transform.ViewProjection;
 }
 
-const Matrix Camera::GetViewProjectionInverse() const
+Matrix Camera::GetViewProjectionInverse() const
 {
 	return GetProjectionInverse() * GetViewInverse();
 }
@@ -112,6 +112,11 @@ void Camera::UpdateMatrices() const
 {
 	if (m_Dirty)
 	{
+		if (m_UpdatePrevMatrices)
+		{
+			m_Transform.ViewProjectionFrozen = m_Transform.ViewProjection;
+		}
+
 		m_Transform.ViewInverse = Matrix::CreateFromQuaternion(m_Rotation) * Matrix::CreateTranslation(m_Position);
 		m_Transform.ViewInverse.Invert(m_Transform.View);
 		float aspect = m_Transform.Viewport.GetWidth() / m_Transform.Viewport.GetHeight();
@@ -136,22 +141,16 @@ void Camera::UpdateMatrices() const
 
 		m_Transform.Projection.Invert(m_Transform.ProjectionInverse);
 		m_Transform.ViewProjection = m_Transform.View * m_Transform.Projection;
-		m_Dirty = false;
-
-		Matrix p = m_Transform.Projection;
-		if (m_Transform.FarPlane < m_Transform.NearPlane)
-		{
-			Math::ReverseZProjection(p);
-		}
-		BoundingFrustum::CreateFromMatrix(m_Transform.Frustum, p);
-		m_Transform.Frustum.Transform(m_Transform.Frustum, m_Transform.ViewInverse);
+		m_Transform.Frustum = Math::CreateBoundingFrustum(m_Transform.Projection, m_Transform.View);
 		m_Transform.Position = m_Position;
+		m_Dirty = false;
 	}
 }
 
 void Camera::Update()
 {
-	m_Transform.PreviousViewProjection = GetViewProjection();
+	m_Transform.PositionPrev = m_Transform.Position;
+	m_Transform.ViewProjectionPrev = m_Transform.ViewProjection;
 	m_Transform.PreviousJitter = m_Transform.Jitter;
 	++m_Transform.JitterIndex;
 }
@@ -185,13 +184,13 @@ void FreeCamera::Update()
 	OnDirty();
 }
 
-Ray Camera::GetMouseRay(uint32 windowWidth, uint32 windowHeight) const
+Ray Camera::GetMouseRay() const
 {
 	Ray ray;
 	Vector2 mousePos = Input::Instance().GetMousePosition();
 	Vector2 ndc;
-	float hw = (float)windowWidth / 2.0f;
-	float hh = (float)windowHeight / 2.0f;
+	float hw = (float)m_Transform.Viewport.GetWidth() / 2.0f;
+	float hh = (float)m_Transform.Viewport.GetHeight() / 2.0f;
 	ndc.x = (mousePos.x - hw) / hw;
 	ndc.y = (hh - mousePos.y) / hh;
 

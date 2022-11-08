@@ -26,6 +26,8 @@ public:
 	void SetFarPlane(float farPlane);
 
 	void SetJitterWeight(float weight);
+	void SetLockPrevTransform(bool lock) { m_UpdatePrevMatrices = !lock; }
+	bool GetLockPrevTransform() const { return !m_UpdatePrevMatrices; }
 
 	const ViewTransform& GetViewTransform() const { return m_Transform; }
 
@@ -38,12 +40,12 @@ public:
 	const Matrix& GetView() const;
 	const Matrix& GetProjection() const;
 	const Matrix& GetViewProjection() const;
-	const Matrix GetViewProjectionInverse() const;
+	Matrix GetViewProjectionInverse() const;
 	const Matrix& GetViewInverse() const;
 	const Matrix& GetProjectionInverse() const;
-	const Matrix& GetPreviousViewProjection() const { return m_Transform.PreviousViewProjection; }
+	const Matrix& GetPreviousViewProjection() const { return m_Transform.ViewProjectionPrev; }
 	const BoundingFrustum& GetFrustum() const;
-	Ray GetMouseRay(uint32 windowWidth, uint32 windowHeight) const;
+	Ray GetMouseRay() const;
 
 protected:
 	void OnDirty();
@@ -53,6 +55,7 @@ protected:
 private:
 	void UpdateMatrices() const;
 
+	bool m_UpdatePrevMatrices = true;
 	mutable ViewTransform m_Transform;
 	mutable bool m_Dirty = true;
 };

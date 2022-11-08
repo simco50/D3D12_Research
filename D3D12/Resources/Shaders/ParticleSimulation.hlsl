@@ -1,10 +1,5 @@
 #include "Random.hlsli"
-#include "CommonBindings.hlsli"
-
-#define RootSig ROOT_SIG("CBV(b0), " \
-				"CBV(b100), " \
-				"DescriptorTable(UAV(u0, numDescriptors = 8)), " \
-				"DescriptorTable(SRV(t0, numDescriptors = 2))")
+#include "Common.hlsli"
 
 struct ParticleData
 {
@@ -35,23 +30,28 @@ struct SimulateParameters
 	float ParticleLifeTime;
 };
 
+enum IndirectArgOffsets
+{
+	EmitArgs = 0 * sizeof(uint),
+	SimulateArgs = EmitArgs + 3 * sizeof(uint),
+	DrawArgs = SimulateArgs + 3 * sizeof(uint),
+	SizeArgs = DrawArgs + 4 * sizeof(uint),
+};
+
 ConstantBuffer<IndirectArgsParameters> cIndirectArgsParams : register(b0);
 ConstantBuffer<EmitParameters> cEmitParams : register(b0);
 ConstantBuffer<SimulateParameters> cSimulateParams : register(b0);
 
 RWByteAddressBuffer uCounters : register(u0);
-RWByteAddressBuffer uEmitArguments : register(u1);
-RWByteAddressBuffer uSimulateArguments : register(u2);
-RWByteAddressBuffer uDrawArgumentsBuffer : register(u3);
-RWStructuredBuffer<uint> uDeadList : register(u4);
-RWStructuredBuffer<uint> uAliveList1 : register(u5);
-RWStructuredBuffer<uint> uAliveList2 : register(u6);
-RWStructuredBuffer<ParticleData> uParticleData  : register(u7);
+RWStructuredBuffer<uint> uDeadList : register(u1);
+RWStructuredBuffer<uint> uAliveList1 : register(u2);
+RWStructuredBuffer<uint> uAliveList2 : register(u3);
+RWStructuredBuffer<ParticleData> uParticleData : register(u4);
+RWByteAddressBuffer uIndirectArguments : register(u5);
 
 ByteAddressBuffer tCounters : register(t0);
 Texture2D tSceneDepth : register(t1);
 
-[RootSignature(RootSig)]
 [numthreads(1, 1, 1)]
 void UpdateSimulationParameters()
 {
@@ -60,10 +60,10 @@ void UpdateSimulationParameters()
 
 	uint emitCount = min(deadCount, cIndirectArgsParams.EmitCount);
 
-	uEmitArguments.Store3(0, uint3(ceil((float)emitCount / 128), 1, 1));
+	uIndirectArguments.Store3(IndirectArgOffsets::EmitArgs, uint3(ceil((float)emitCount / 128), 1, 1));
 
 	uint simulateCount = ceil((float)(aliveParticleCount + emitCount) / 128);
-	uSimulateArguments.Store3(0, uint3(simulateCount, 1, 1));
+	uIndirectArguments.Store3(IndirectArgOffsets::SimulateArgs, uint3(simulateCount, 1, 1));
 
 	uCounters.Store(ALIVE_LIST_1_COUNTER, aliveParticleCount);
 	uCounters.Store(ALIVE_LIST_2_COUNTER, 0);
@@ -94,8 +94,8 @@ void Emit(uint threadID : SV_DispatchThreadID)
 		ParticleData p;
 		p.LifeTime = 0;
 		p.Position = cEmitParams.Origin.xyz;
-		p.Velocity = (Random01(seed) + 1) * 30 * RandomDirection(seed);
-		p.Size = 0.15f;//(float)Random(deadSlot, 10, 30) / 100.0f;
+		p.Velocity = (RandomDirection(seed) - 0.5f) * 2;
+		p.Size = 0.02f;//(float)Random(deadSlot, 10, 30) / 100.0f;
 		uParticleData[particleIndex] = p;
 
 		uint aliveSlot;
@@ -121,7 +121,7 @@ void Simulate(uint threadID : SV_DispatchThreadID)
 			{
 				float2 uv = screenPos.xy * float2(0.5f, -0.5f) + 0.5f;
 				float depth = tSceneDepth.SampleLevel(sLinearClamp, uv, 0).r;
-				float linearDepth = LinearizeDepth(depth, cView.NearZ, cView.FarZ);
+				float linearDepth = LinearizeDepth(depth);
 				const float thickness = 1;
 
 				if(screenPos.w + p.Size > linearDepth && screenPos.w - p.Size - thickness < linearDepth)
@@ -129,12 +129,13 @@ void Simulate(uint threadID : SV_DispatchThreadID)
 					float3 normal = NormalFromDepth(tSceneDepth, sLinearClamp, uv, cView.ViewportDimensionsInv, cView.ViewProjectionInverse);
 					if(dot(normal, p.Velocity) < 0)
 					{
-						p.Velocity = reflect(p.Velocity, normal) * 0.85f;
+						uint seed = SeedThread(particleIndex);
+						p.Velocity = reflect(p.Velocity, normal) * lerp(0.85f, 0.9f, Random01(seed));
 					}
 				}
 			}
 
-			p.Velocity += float3(0, -9.81f * cSimulateParams.DeltaTime * 5, 0);
+			p.Velocity += float3(0, -9.81f * cSimulateParams.DeltaTime, 0);
 			p.Position += p.Velocity * cSimulateParams.DeltaTime;
 			p.LifeTime += cSimulateParams.DeltaTime;
 
@@ -157,5 +158,5 @@ void Simulate(uint threadID : SV_DispatchThreadID)
 void SimulateEnd()
 {
 	uint particleCount = tCounters.Load(ALIVE_LIST_2_COUNTER);
-	uDrawArgumentsBuffer.Store4(0, uint4(6 * particleCount, 1, 0, 0));
+	uIndirectArguments.Store4(IndirectArgOffsets::DrawArgs, uint4(6 * particleCount, 1, 0, 0));
 }
