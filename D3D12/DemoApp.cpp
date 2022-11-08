@@ -1105,6 +1105,8 @@ void DemoApp::Update()
 
 		sceneTextures.pColorTarget = pTonemapTarget;
 
+		DebugRenderer::Get()->AddBox(Vector3(0, 1.5f, 0), Vector3(1, 1, 0.01f), Colors::White, true);
+
 		if (Tweakables::g_DrawHistogram.Get())
 		{
 			if(!m_pDebugHistogramTexture)

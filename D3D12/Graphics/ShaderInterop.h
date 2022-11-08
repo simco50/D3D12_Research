@@ -199,6 +199,8 @@ namespace ShaderInterop
 		uint DDGIVolumesIndex;
 		uint TLASIndex;
 
+		uint LTCAmplitudeIndex;
+		uint LTCMatrixIndex;
 		uint DebugRenderDataIndex;
 		uint FontDataIndex;
 	};

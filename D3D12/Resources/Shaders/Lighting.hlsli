@@ -3,6 +3,7 @@
 #include "Common.hlsli"
 #include "ShadingModels.hlsli"
 #include "SkyCommon.hlsli"
+#include "LTC.hlsli"
 
 struct BrdfData
 {
@@ -68,6 +69,29 @@ float LightTextureMask(Light light, float3 worldPosition)
 		mask = SampleLevel2D(light.MaskTexture, sLinearClamp, lightPos.xy, 0).r;
 	}
 	return mask;
+}
+
+LightResult DoRectLight(float4 points[4], float3 specularColor, float3 diffuseColor, float roughness, float3 wPos, float3 N, float3 V)
+{
+	float2 lutUv = LTC_Coords(dot(N, V), roughness);
+
+	float3x3 identity = float3x3(
+		float3(1, 0, 0),
+		float3(0, 1, 0),
+		float3(0, 0, 1)
+	);
+
+	float3 diffuse = LTC_Evaluate(N, V, wPos, identity, points, false);
+	float2 t2 = SampleLevel2D(cView.LTCAmplitudeIndex, sLinearClamp, lutUv, 0).xy;
+
+	float3x3 Minv = LTC_Matrix(lutUv);
+	float3 spec = LTC_Evaluate(N, V, wPos, Minv, points, false);
+	spec *= specularColor * t2.x + (1.0 - specularColor) * t2.y;
+
+	LightResult result = (LightResult)0;
+	result.Specular = spec;
+	result.Diffuse = diffuseColor * diffuse;
+	return result;
 }
 
 uint GetShadowMapIndex(Light light, float3 worldPosition, float viewDepth, float dither)

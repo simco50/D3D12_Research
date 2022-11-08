@@ -116,6 +116,26 @@ LightResult DoLight(float3 specularColor, float R, float3 diffuseColor, float3 N
 {
 	LightResult totalResult = (LightResult)0;
 
+#if 1
+	float4 points[4] = {
+		float4(1, -1, 0, 1),
+		float4(1, 1, 0, 1),
+		float4(-1, 1, 0, 1),
+		float4(-1, -1, 0, 1),
+	};
+
+	float4x4 m = IDENTITY_MATRIX_4;
+	m[3][1] = 1.5;
+
+	for(int j = 0; j < 4; ++j)
+	{
+		points[j] = mul(points[j], m);
+	}
+	LightResult rectLighting = DoRectLight(points, specularColor, diffuseColor, R, worldPos, N, V);
+	totalResult.Specular += rectLighting.Specular;
+	totalResult.Diffuse += rectLighting.Diffuse;
+#endif
+
 	uint lightCount = cView.LightCount;
 	for(uint i = 0; i < lightCount; ++i)
 	{
@@ -152,7 +172,7 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 	MaterialData material = GetMaterial(instance.MaterialIndex);
 	MaterialProperties surface = EvaluateMaterial(material, vertex);
 	BrdfData brdfData = GetBrdfData(surface);
-	
+
 	float3 V = normalize(cView.ViewLocation - vertex.Position);
 	float ssrWeight = 0;
 	float3 ssr = ScreenSpaceReflections(vertex.Position, surface.Normal, V, brdfData.Roughness, tDepth, tPreviousSceneColor, dither, ssrWeight);

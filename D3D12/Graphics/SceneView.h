@@ -86,6 +86,8 @@ struct SceneView
 	RefCountPtr<Buffer> pMeshBuffer;
 	RefCountPtr<Buffer> pInstanceBuffer;
 	RefCountPtr<Buffer> pDDGIVolumesBuffer;
+	RefCountPtr<Texture> pLTCMatrixTexture;
+	RefCountPtr<Texture> pLTCAmplitudeTexture;
 	uint32 NumDDGIVolumes = 0;
 	RefCountPtr<Texture> pSky;
 	int FrameIndex = 0;

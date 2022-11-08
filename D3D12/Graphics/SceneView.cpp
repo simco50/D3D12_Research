@@ -105,6 +105,8 @@ namespace Renderer
 		parameters.DDGIVolumesIndex = pView->pDDGIVolumesBuffer->GetSRVIndex();
 		parameters.NumDDGIVolumes = pView->NumDDGIVolumes;
 
+		parameters.LTCAmplitudeIndex = pView->pLTCAmplitudeTexture->GetSRVIndex();
+		parameters.LTCMatrixIndex = pView->pLTCMatrixTexture->GetSRVIndex();
 		parameters.FontDataIndex = pView->DebugRenderData.FontDataSRV;
 		parameters.DebugRenderDataIndex = pView->DebugRenderData.RenderDataUAV;
 
@@ -257,6 +259,12 @@ namespace Renderer
 		CopyBufferData((uint32)meshInstances.size(), sizeof(ShaderInterop::InstanceData), "Instances", meshInstances.data(), pView->pInstanceBuffer);
 		CopyBufferData((uint32)materials.size(), sizeof(ShaderInterop::MaterialData), "Materials", materials.data(), pView->pMaterialBuffer);
 		CopyBufferData((uint32)lightData.size(), sizeof(ShaderInterop::Light), "Lights", lightData.data(), pView->pLightBuffer);
+
+		if (!pView->pLTCAmplitudeTexture)
+		{
+			pView->pLTCAmplitudeTexture = GraphicsCommon::CreateTextureFromFile(context, "Resources/Textures/ltc_amp.dds", false, "LTC Amplitude");
+			pView->pLTCMatrixTexture = GraphicsCommon::CreateTextureFromFile(context, "Resources/Textures/ltc_mat.dds", false, "LTC Matrix");
+		}
 	}
 
 	void DrawScene(CommandContext& context, const SceneView* pView, const VisibilityMask& visibility, Batch::Blending blendModes)
