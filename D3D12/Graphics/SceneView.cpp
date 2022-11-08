@@ -104,6 +104,8 @@ namespace Renderer
 		parameters.SkyIndex = pView->pSky ? pView->pSky->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
 		parameters.DDGIVolumesIndex = pView->pDDGIVolumesBuffer->GetSRVIndex();
 		parameters.NumDDGIVolumes = pView->NumDDGIVolumes;
+		parameters.DecalsIndex = pView->pDecalsBuffer->GetSRVIndex();
+		parameters.NumDecals = pView->NumDecals;
 
 		parameters.FontDataIndex = pView->DebugRenderData.FontDataSRV;
 		parameters.DebugRenderDataIndex = pView->DebugRenderData.RenderDataUAV;
@@ -241,6 +243,17 @@ namespace Renderer
 		}
 		pView->NumLights = (uint32)pWorld->Lights.size();
 
+		std::vector<ShaderInterop::Decal> decals;
+		decals.reserve(pWorld->Decals.size());
+		for (const Decal& decal : pWorld->Decals)
+		{
+			ShaderInterop::Decal& data = decals.emplace_back();
+			data.BaseColorIndex = decal.pBaseColorTexture ? decal.pBaseColorTexture->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
+			data.NormalIndex = decal.pNormalTexture ? decal.pNormalTexture->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
+			data.WorldToLocal = decal.LocalToWorld.Invert();
+		}
+		pView->NumDecals = (uint32)pWorld->Decals.size();
+
 		GraphicsDevice* pDevice = context.GetParent();
 		auto CopyBufferData = [&](uint32 numElements, uint32 stride, const char* pName, const void* pSource, RefCountPtr<Buffer>& pTarget)
 		{
@@ -252,6 +265,7 @@ namespace Renderer
 			context.WriteBuffer(pTarget, pSource, numElements * stride);
 		};
 
+		CopyBufferData((uint32)decals.size(), sizeof(ShaderInterop::Decal), "Decals", decals.data(), pView->pDecalsBuffer);
 		CopyBufferData((uint32)ddgiVolumes.size(), sizeof(ShaderInterop::DDGIVolume), "DDGI Volumes", ddgiVolumes.data(), pView->pDDGIVolumesBuffer);
 		CopyBufferData((uint32)meshes.size(), sizeof(ShaderInterop::MeshData), "Meshes", meshes.data(), pView->pMeshBuffer);
 		CopyBufferData((uint32)meshInstances.size(), sizeof(ShaderInterop::InstanceData), "Instances", meshInstances.data(), pView->pInstanceBuffer);

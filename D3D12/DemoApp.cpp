@@ -309,6 +309,11 @@ void DemoApp::SetupScene(CommandContext& context)
 		volume.NumRays = 128;
 		volume.MaxNumRays = 512;
 	}
+	{
+		Decal& decal = m_World.Decals.emplace_back();
+		decal.pBaseColorTexture = GraphicsCommon::CreateTextureFromFile(context, "Resources/Textures/Shark.png", true, "Light Cookie");
+		decal.LocalToWorld = Matrix::CreateTranslation(Vector3(-0.4f, 1.2f, 2.0f));
+	}
 }
 
 void DemoApp::Update()

@@ -115,7 +115,6 @@ MaterialProperties EvaluateMaterial(MaterialData material, VisBufferVertexAttrib
 LightResult DoLight(float3 specularColor, float R, float3 diffuseColor, float3 N, float3 V, float3 worldPos, float linearDepth, float dither)
 {
 	LightResult totalResult = (LightResult)0;
-
 	uint lightCount = cView.LightCount;
 	for(uint i = 0; i < lightCount; ++i)
 	{
@@ -128,6 +127,37 @@ LightResult DoLight(float3 specularColor, float R, float3 diffuseColor, float3 N
 	}
 
 	return totalResult;
+}
+
+void ApplyDecals(float3 worldPosition, inout MaterialProperties surface)
+{
+	StructuredBuffer<Decal> decals = ResourceDescriptorHeap[cView.DecalsIndex];
+	for(uint i = 0; i < cView.NumDecals; ++i)
+	{
+		Decal decal = decals[NonUniformResourceIndex(i)];
+
+		float4 dPos = mul(float4(worldPosition, 1), decal.WorldToLocal);
+		float3 decalTexCoord = dPos.xyz * float3(0.5f, -0.5f, 0.5f) + 0.5f;
+		float4 decalAccumulation = 0;
+
+		if(all(decalTexCoord >= 0) && all(decalTexCoord <= 1))
+		{
+			float3 ddxPos = ddx(worldPosition);
+			float3 ddyPos = ddy(worldPosition);
+			float2 decalDx = mul(ddxPos, (float3x3)decal.WorldToLocal).xy;
+			float2 decalDy = mul(ddyPos, (float3x3)decal.WorldToLocal).xy;
+
+			float4 decalColor = SampleGrad2D(decal.BaseColorIndex, sMaterialSampler, decalTexCoord.xy, decalDx, decalDy);
+			float edge = 1 - pow(saturate(abs(dPos.z)), 8);
+			decalColor.a *= edge;
+
+			decalAccumulation.rgb = (1 - decalColor.a) * decalAccumulation.rgb + decalColor.a * decalColor.rgb;
+			decalAccumulation.a += decalColor.a;
+
+			surface.BaseColor = lerp(surface.BaseColor, decalAccumulation.rgb, decalAccumulation.a);
+			surface.Roughness = lerp(surface.Roughness, 0.9f, decalAccumulation.a);
+		}
+	}
 }
 
 [numthreads(8, 8, 1)]
@@ -151,8 +181,9 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 	// Surface Shader
 	MaterialData material = GetMaterial(instance.MaterialIndex);
 	MaterialProperties surface = EvaluateMaterial(material, vertex);
+	ApplyDecals(vertex.Position, surface);
 	BrdfData brdfData = GetBrdfData(surface);
-	
+
 	float3 V = normalize(cView.ViewLocation - vertex.Position);
 	float ssrWeight = 0;
 	float3 ssr = ScreenSpaceReflections(vertex.Position, surface.Normal, V, brdfData.Roughness, tDepth, tPreviousSceneColor, dither, ssrWeight);

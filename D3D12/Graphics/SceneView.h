@@ -17,8 +17,16 @@ class Image;
 struct SubMesh;
 struct Light;
 
+struct Decal
+{
+	RefCountPtr<Texture> pBaseColorTexture;
+	RefCountPtr<Texture> pNormalTexture;
+	Matrix LocalToWorld;
+};
+
 struct World
 {
+	std::vector<Decal> Decals;
 	std::vector<Light> Lights;
 	std::vector<std::unique_ptr<Mesh>> Meshes;
 	std::vector<DDGIVolume> DDGIVolumes;
@@ -85,8 +93,10 @@ struct SceneView
 	RefCountPtr<Buffer> pMaterialBuffer;
 	RefCountPtr<Buffer> pMeshBuffer;
 	RefCountPtr<Buffer> pInstanceBuffer;
+	RefCountPtr<Buffer> pDecalsBuffer;
 	RefCountPtr<Buffer> pDDGIVolumesBuffer;
 	uint32 NumDDGIVolumes = 0;
+	uint32 NumDecals = 0;
 	RefCountPtr<Texture> pSky;
 	int FrameIndex = 0;
 	Vector2i HZBDimensions;

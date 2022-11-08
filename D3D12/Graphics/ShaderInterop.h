@@ -139,6 +139,13 @@ namespace ShaderInterop
 #endif
 	};
 
+	struct Decal
+	{
+		float4x4 WorldToLocal;
+		uint BaseColorIndex;
+		uint NormalIndex;
+	};
+
 	struct DDGIVolume
 	{
 		float3 BoundsMin;
@@ -190,6 +197,7 @@ namespace ShaderInterop
 		uint SsrSamples;
 		uint LightCount;
 		uint NumDDGIVolumes;
+		uint NumDecals;
 
 		uint InstancesIndex;
 		uint MeshesIndex;
@@ -198,6 +206,7 @@ namespace ShaderInterop
 		uint SkyIndex;
 		uint DDGIVolumesIndex;
 		uint TLASIndex;
+		uint DecalsIndex;
 
 		uint DebugRenderDataIndex;
 		uint FontDataIndex;
