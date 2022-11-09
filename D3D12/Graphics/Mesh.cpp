@@ -170,7 +170,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 						Color verColor;
 						LdrDecodeARGB(vertexColor, &verColor.x);
 						FixBaseColor(verColor);
-						mesh.ColorsStream[j] = Math::EncodeRGBA(verColor);
+						mesh.ColorsStream[j] = Math::Pack_RGBA8_UNORM(verColor);
 					}
 				}
 
@@ -393,7 +393,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 						{
 							Color color;
 							check(cgltf_accessor_read_float(attribute.data, i, &color.x, 4));
-							meshData.ColorsStream[i] = Math::EncodeRGBA(color);
+							meshData.ColorsStream[i] = Math::Pack_RGBA8_UNORM(color);
 						}
 					}
 					else
@@ -538,7 +538,6 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 		subMesh.Bounds = bounds;
 		subMesh.MaterialId = meshData.MaterialIndex;
 		subMesh.PositionsFormat = ResourceFormat::RGB32_FLOAT;
-		subMesh.PositionsStride = sizeof(VS_Position);
 
 		subMesh.PositionStreamLocation = VertexBufferView(m_pGeometryData->GetGpuHandle() + dataOffset, (uint32)meshData.PositionsStream.size(), sizeof(VS_Position), dataOffset);
 		std::vector<VS_Position> positionStream;

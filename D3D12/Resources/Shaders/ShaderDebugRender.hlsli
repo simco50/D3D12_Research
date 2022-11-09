@@ -42,24 +42,24 @@ namespace Private
 		return offset + numLines < MAX_NUM_LINES;
 	}
 
-	void AddLine(float3 a, float3 b, uint color, uint offset)
+	void AddLine(float3 a, float3 b, float4 color, uint offset)
 	{
 		LineInstance instance;
 		instance.A = a;
 		instance.B = b;
-		instance.Color = color;
+		instance.Color = Pack_RGBA8_UNORM(color);
 		instance.ScreenSpace = 0;
 
 		RWByteAddressBuffer renderData = ResourceDescriptorHeap[cView.DebugRenderDataIndex];
 		renderData.Store(LINE_INSTANCES_OFFSET + offset * sizeof(LineInstance), instance);
 	}
 
-	void AddLine(float2 a, float2 b, uint color, uint offset)
+	void AddLine(float2 a, float2 b, float4 color, uint offset)
 	{
 		LineInstance instance;
 		instance.A = float3(a, 0);
 		instance.B = float3(b, 0);
-		instance.Color = color;
+		instance.Color = Pack_RGBA8_UNORM(color);
 		instance.ScreenSpace = 1;
 
 		RWByteAddressBuffer renderData = ResourceDescriptorHeap[cView.DebugRenderDataIndex];
@@ -73,19 +73,19 @@ namespace Private
 		return offset + numCharacters < MAX_NUM_TEXT;
 	}
 
-	void AddCharacter(uint character, float2 position, uint color, uint offset)
+	void AddCharacter(uint character, float2 position, float4 color, uint offset)
 	{
 		CharacterInstance instance;
 		instance.Position = position;
 		instance.Character = character;
-		instance.Color = color;
+		instance.Color = Pack_RGBA8_UNORM(color);
 
 		RWByteAddressBuffer renderData = ResourceDescriptorHeap[cView.DebugRenderDataIndex];
 		renderData.Store(TEXT_INSTANCES_OFFSET + offset * sizeof(CharacterInstance), instance);
 	}
 }
 
-void DrawLine(float3 a, float3 b, uint color = 0xFFFFFFFF)
+void DrawLine(float3 a, float3 b, float4 color = float4(1, 1, 1, 1))
 {
 	uint offset;
 	if(Private::ReserveLines(1, offset))
@@ -94,7 +94,7 @@ void DrawLine(float3 a, float3 b, uint color = 0xFFFFFFFF)
 	}
 }
 
-void DrawAxisBase(float3 position, float3x3 rotation, float axisLength = 0.25f, uint color = 0xFFFFFFFF)
+void DrawAxisBase(float3 position, float3x3 rotation, float axisLength = 0.25f, float4 color = float4(1, 1, 1, 1))
 {
 	uint offset;
 	if(Private::ReserveLines(3, offset))
@@ -105,7 +105,7 @@ void DrawAxisBase(float3 position, float3x3 rotation, float axisLength = 0.25f, 
 	}
 }
 
-void DrawAABB(float3 center, float3 extents, uint color = 0xFFFFFFFF)
+void DrawAABB(float3 center, float3 extents, float4 color = float4(1, 1, 1, 1))
 {
 	uint offset;
 	if(Private::ReserveLines(12, offset))
@@ -134,7 +134,7 @@ void DrawAABB(float3 center, float3 extents, uint color = 0xFFFFFFFF)
 	}
 }
 
-void DrawOBB(float3 center, float3 extents, float4x4 world, uint color = 0xFFFFFFFF)
+void DrawOBB(float3 center, float3 extents, float4x4 world, float4 color = float4(1, 1, 1, 1))
 {
 	uint offset;
 	if(Private::ReserveLines(12, offset))
@@ -163,7 +163,7 @@ void DrawOBB(float3 center, float3 extents, float4x4 world, uint color = 0xFFFFF
 	}
 }
 
-void DrawScreenLine(float2 a, float2 b, uint color = 0xFFFFFFFF)
+void DrawScreenLine(float2 a, float2 b, float4 color = float4(1, 1, 1, 1))
 {
 	uint offset;
 	if(Private::ReserveLines(1, offset))
@@ -178,7 +178,7 @@ enum class RectMode
 	CenterExtents,
 };
 
-void DrawRect(float2 a, float2 b, RectMode mode = RectMode::MinMax, uint color = 0xFFFFFFFF)
+void DrawRect(float2 a, float2 b, RectMode mode = RectMode::MinMax, float4 color = float4(1, 1, 1, 1))
 {
 	uint offset;
 	if(Private::ReserveLines(4, offset))
@@ -202,9 +202,9 @@ struct TextWriter
 {
 	float2 StartLocation;
 	float2 Cursor;
-	uint Color;
+	float4 Color;
 
-	void SetColor(uint color)
+	void SetColor(float4 color)
 	{
 		Color = color;
 	}
@@ -384,7 +384,7 @@ struct TextWriter
 	}
 };
 
-TextWriter CreateTextWriter(float2 position, uint color = 0xFFFFFFFF)
+TextWriter CreateTextWriter(float2 position, float4 color = float4(1, 1, 1, 1))
 {
 	TextWriter writer;
 	writer.StartLocation = position;

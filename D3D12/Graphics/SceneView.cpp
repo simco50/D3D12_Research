@@ -224,7 +224,7 @@ namespace Renderer
 			data.Direction = Vector3::Transform(Vector3::Forward, light.Rotation);
 			data.SpotlightAngles.x = cos(light.PenumbraAngleDegrees * Math::DegreesToRadians / 2.0f);
 			data.SpotlightAngles.y = cos(light.UmbraAngleDegrees * Math::DegreesToRadians / 2.0f);
-			data.Color = Math::EncodeRGBA(light.Colour);
+			data.Color = Math::Pack_RGBA8_UNORM(light.Colour);
 			data.Intensity = light.Intensity;
 			data.Range = light.Range;
 			data.ShadowMapIndex = light.CastShadows && light.ShadowMaps.size() ? light.ShadowMaps[0]->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;

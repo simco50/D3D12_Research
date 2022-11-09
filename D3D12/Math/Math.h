@@ -159,52 +159,9 @@ namespace Math
 		return Vector3(Ceil(v.x), Ceil(v.y), Ceil(v.z));
 	}
 
-	inline uint32 EncodeRGBA(float r, float g, float b, float a = 1.0f)
-	{
-		uint32 output = 0;
-		//unsigned int layout: RRRR GGGG BBBB AAAA
-		output |= (unsigned char)(Clamp01(r) * 255.0f) << 24;
-		output |= (unsigned char)(Clamp01(g) * 255.0f) << 16;
-		output |= (unsigned char)(Clamp01(b) * 255.0f) << 8;
-		output |= (unsigned char)(Clamp01(a) * 255.0f) << 0;
-		return output;
-	}
-
-	inline uint32 EncodeRGBA(const Color& color)
-	{
-		return EncodeRGBA(color.x, color.y, color.z, color.w);
-	}
-
-	inline Color DecodeRGBA(uint32 color)
-	{
-		Color output;
-		constexpr float rcp_255 = 1.0f / 255.0f;
-		//unsigned int layout: RRRR GGGG BBBB AAAA
-		output.x = (float)((color >> 24) & 0xFF) * rcp_255;
-		output.y = (float)((color >> 16) & 0xFF) * rcp_255;
-		output.z = (float)((color >> 8) & 0xFF) * rcp_255;
-		output.w = (float)((color >> 0) & 0xFF) * rcp_255;
-		return output;
-	}
-
-	inline uint32 EncodeRGBE(const Vector3& color)
-	{
-		float maxComponent = Max(Max(color.x, color.y), color.z);
-		float exponent = Ceil(log2(maxComponent));
-		uint32 output = 0;
-		output |= (unsigned char)(color.x / exp2(exponent) * 255) << 24;
-		output |= (unsigned char)(color.y / exp2(exponent) * 255) << 16;
-		output |= (unsigned char)(color.z / exp2(exponent) * 255) << 8;
-		output |= (unsigned char)((exponent + 128)) << 0;
-		return output;
-	}
-
-	inline Vector3 DecodeRGBE(uint32 encoded)
-	{
-		Color c = DecodeRGBA(encoded);
-		float exponent = c.w * 255 - 128;
-		return Vector3(c.x, c.y, c.z) * exp2(exponent);
-	}
+	/*
+		Packing/Encoding Functions
+	*/
 
 	inline uint16 F32toF16(float value)
 	{
@@ -221,19 +178,48 @@ namespace Math
 		return Vector2u(Pack_RG16_FLOAT(Vector2(v.x, v.y)), Pack_RG16_FLOAT(Vector2(v.z, v.w)));
 	}
 
-	constexpr inline uint16 F32toSNORM(float value)
+	constexpr inline uint16 Encode_R16_SNORM(float value)
 	{
 		return static_cast<uint16>(Clamp(value >= 0.0f ? (value * 32767.0f + 0.5f) : (value * 32767.0f - 0.5f), -32768.0f, 32767.0f));
 	}
 
 	constexpr inline uint32 Pack_RG16_SNORM(const Vector2& v)
 	{
-		return F32toSNORM(Clamp(v.x, -1.0f, 1.0f)) | (F32toSNORM(Clamp(v.y, -1.0f, 1.0f)) << 16u);
+		return Encode_R16_SNORM(Clamp(v.x, -1.0f, 1.0f)) | (Encode_R16_SNORM(Clamp(v.y, -1.0f, 1.0f)) << 16u);
 	}
 
 	constexpr inline Vector2u Pack_RGBA16_SNORM(const Vector4& v)
 	{
 		return Vector2u(Pack_RG16_SNORM(Vector2(v.x, v.y)), Pack_RG16_SNORM(Vector2(v.z, v.w)));
+	}
+
+	constexpr inline uint32 Pack_RGBA8_SNORM(const Vector4& v)
+	{
+		return
+			((uint8)(Clamp(v.x, -1.0f, 1.0) * 127.0f) << 0) |
+			((uint8)(Clamp(v.y, -1.0f, 1.0) * 127.0f) << 8) |
+			((uint8)(Clamp(v.z, -1.0f, 1.0) * 127.0f) << 16) |
+			((uint8)(Clamp(v.w, -1.0f, 1.0) * 127.0f) << 24);
+	}
+
+	constexpr inline uint32 Pack_RGBA8_UNORM(const Vector4& v)
+	{
+		return
+			((uint8)(Clamp(v.x, 0.0f, 1.0) * 255.0f) << 0) |
+			((uint8)(Clamp(v.y, 0.0f, 1.0) * 255.0f) << 8) |
+			((uint8)(Clamp(v.z, 0.0f, 1.0) * 255.0f) << 16) |
+			((uint8)(Clamp(v.w, 0.0f, 1.0) * 255.0f) << 24);
+	}
+
+	constexpr inline Vector4 Unpack_RGBA8_UNORM(uint32 v)
+	{
+		constexpr float rcp_255 = 1.0f / 255.0f;
+		return Vector4(
+			(float)((v << 24) >> 24) * rcp_255,
+			(float)((v << 16) >> 24) * rcp_255,
+			(float)((v << 8) >> 24) * rcp_255,
+			(float)((v << 0) >> 24) * rcp_255
+		);
 	}
 
 	inline uint32 Pack_R11G11B10_FLOAT(const Vector3& xyz)
@@ -242,6 +228,25 @@ namespace Math
 		uint32 g = (F32toF16(xyz.y) << 6) & 0x001FFC00;
 		uint32 b = (F32toF16(xyz.z) >> 5) & 0x000003FF;
 		return r | g | b;
+	}
+
+	inline uint32 Pack_RGBE8_UNORM(const Vector3& color)
+	{
+		float maxComponent = Max(Max(color.x, color.y), color.z);
+		float exponent = Ceil(log2(maxComponent));
+		uint32 output = 0;
+		output |= (unsigned char)(color.x / exp2(exponent) * 255) << 24;
+		output |= (unsigned char)(color.y / exp2(exponent) * 255) << 16;
+		output |= (unsigned char)(color.z / exp2(exponent) * 255) << 8;
+		output |= (unsigned char)((exponent + 128)) << 0;
+		return output;
+	}
+
+	inline Vector3 Unpack_RGBE8_UNORM(uint32 encoded)
+	{
+		Color c = Unpack_RGBA8_UNORM(encoded);
+		float exponent = c.w * 255 - 128;
+		return Vector3(c.x, c.y, c.z) * exp2(exponent);
 	}
 
 	constexpr inline uint32 DivideAndRoundUp(uint32 nominator, uint32 denominator)

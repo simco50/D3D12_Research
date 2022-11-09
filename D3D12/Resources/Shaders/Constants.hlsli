@@ -11,6 +11,15 @@ static const float PI_DIV_2 = 1.57079632679489661923;
 static const float PI_DIV_4 = 0.78539816339744830961;
 static const float SQRT_2   = 1.41421356237309504880;
 
+namespace Colors
+{
+	static const float4 Red = float4(1, 0, 0, 1);
+	static const float4 Green = float4(0, 1, 0, 1);
+	static const float4 Blue = float4(0, 0, 1, 1);
+	static const float4 Black = float4(0, 0, 0, 1);
+	static const float4 White = float4(1, 1, 1, 1);
+}
+
 static const uint INVALID_HANDLE = 0xFFFFFFFF;
 
 static const float3x3 IDENTITY_MATRIX_3 = float3x3(1, 0, 0, 0, 1, 0, 0, 0, 1);

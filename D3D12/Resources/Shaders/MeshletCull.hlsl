@@ -135,7 +135,7 @@ void CullInstancesCS(uint threadID : SV_DispatchThreadID)
 
 		uint elementOffset;
 		InterlockedAdd_Varying_WaveOps(uCounter_MeshletCandidates, MeshletCounterIndex, numMeshletsToAdd, elementOffset);
-	
+
 		uint meshletCandidateOffset = GetMeshletCandidateOffset(IsPhase2);
 		for(uint i = 0; i < numMeshletsToAdd; ++i)
 		{
@@ -149,7 +149,7 @@ void CullInstancesCS(uint threadID : SV_DispatchThreadID)
 #if VISUALIZE_OCCLUDED
 	if(wasOccluded)
 	{
-		DrawOBB(instance.LocalBoundsOrigin, instance.LocalBoundsExtents, instance.LocalToWorld, 0x00FF00FF);
+		DrawOBB(instance.LocalBoundsOrigin, instance.LocalBoundsExtents, instance.LocalToWorld, Colors::Green);
 	}
 #endif
 }

@@ -53,7 +53,7 @@ VertexAttribute GetVertexAttributes(InstanceData instance, float2 attribBarycent
 MaterialProperties EvaluateMaterial(MaterialData material, VertexAttribute attributes, int mipLevel)
 {
 	MaterialProperties properties;
-	float4 baseColor = material.BaseColorFactor * UIntToColor(attributes.Color);
+	float4 baseColor = material.BaseColorFactor * Unpack_RGBA8_UNORM(attributes.Color);
 	if(material.Diffuse != INVALID_HANDLE)
 	{
 		baseColor *= SampleLevel2D(material.Diffuse, sMaterialSampler, attributes.UV, mipLevel);

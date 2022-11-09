@@ -100,16 +100,6 @@ namespace ShaderInterop
 		uint ID;
 	};
 
-	inline float4 UIntToColor(uint c)
-	{
-		return float4(
-			(float)(((c >> 24) & 0xFF) / 255.0f),
-			(float)(((c >> 16) & 0xFF) / 255.0f),
-			(float)(((c >> 8) & 0xFF) / 255.0f),
-			(float)(((c >> 0) & 0xFF) / 255.0f)
-		);
-	}
-
 	struct Light
 	{
 		float3 Position;
@@ -133,7 +123,7 @@ namespace ShaderInterop
 		uint CastShadows : 1;
 
 #ifndef __cplusplus
-		float3 GetColor() { return UIntToColor(Color).rgb; }
+		float3 GetColor() { return unpack_u8u32(Color).rgb / 255.0f; }
 #endif
 	};
 

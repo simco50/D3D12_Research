@@ -71,7 +71,7 @@ float4 RenderGlyphPS(
 	) : SV_Target
 {
 	float alpha = tFontAtlas.SampleLevel(sLinearClamp, uv, 0);
-	float4 c = alpha * UIntToColor(color);
+	float4 c = alpha * Unpack_RGBA8_UNORM(color);
 	return float4(c.rgb, alpha);
 }
 
@@ -95,7 +95,7 @@ void RenderLineVS(
 	{
 		position = mul(float4(wPos, 1), cView.ViewProjection);
 	}
-	color = UIntToColor(instance.Color);
+	color = Unpack_RGBA8_UNORM(instance.Color);
 }
 
 float4 RenderLinePS(
