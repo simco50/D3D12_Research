@@ -37,10 +37,9 @@ namespace Renderer
 		parameters.ProjectionInverse = view.ProjectionInverse;
 		parameters.ViewProjection = view.ViewProjection;
 		parameters.ViewProjectionPrev = view.ViewProjectionPrev;
-		parameters.ViewProjectionFrozen = view.ViewProjectionFrozen;
 		parameters.ViewProjectionInverse = view.ProjectionInverse * view.ViewInverse;
 
-		Matrix reprojectionMatrix = parameters.ViewProjectionInverse * view.ViewProjectionPrev;
+		Matrix reprojectionMatrix = parameters.ViewProjectionInverse * parameters.ViewProjectionPrev;
 		// Transform from uv to clip space: texcoord * 2 - 1
 		Matrix premult = {
 			2.0f, 0, 0, 0,
@@ -55,8 +54,8 @@ namespace Renderer
 			0, 0, 1, 0,
 			0.5f, 0.5f, 0, 1
 		};
-
 		parameters.ReprojectionMatrix = premult * reprojectionMatrix * postmult;
+
 		parameters.ViewLocation = view.Position;
 		parameters.ViewLocationPrev = view.PositionPrev;
 
@@ -77,8 +76,8 @@ namespace Renderer
 		parameters.ViewportDimensions = Vector2(view.Viewport.GetWidth(), view.Viewport.GetHeight());
 		parameters.ViewportDimensionsInv = Vector2(1.0f / view.Viewport.GetWidth(), 1.0f / view.Viewport.GetHeight());
 		parameters.HZBDimensions = pView->HZBDimensions;
-		parameters.ViewJitter.x = view.PreviousJitter.x - view.Jitter.x;
-		parameters.ViewJitter.y = -(view.PreviousJitter.y - view.Jitter.y);
+		parameters.ViewJitter = view.Jitter;
+		parameters.ViewJitterPrev = view.JitterPrev;
 		parameters.NearZ = view.NearPlane;
 		parameters.FarZ = view.FarPlane;
 		parameters.FoV = view.FoV;

@@ -167,7 +167,6 @@ namespace ShaderInterop
 		float4x4 ProjectionInverse;
 		float4x4 ViewProjection;
 		float4x4 ViewProjectionPrev;
-		float4x4 ViewProjectionFrozen;
 		float4x4 ViewProjectionInverse;
 		float4x4 ReprojectionMatrix;
 		float3 ViewLocation;
@@ -180,6 +179,7 @@ namespace ShaderInterop
 		float2 ViewportDimensions;
 		float2 ViewportDimensionsInv;
 		float2 ViewJitter;
+		float2 ViewJitterPrev;
 		int2 HZBDimensions;
 		float NearZ;
 		float FarZ;

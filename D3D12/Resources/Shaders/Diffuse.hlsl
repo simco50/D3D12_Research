@@ -24,7 +24,6 @@ struct InterpolantsVSToPS
 	float3 Normal : NORMAL;
 	float4 Tangent : TANGENT;
 	uint Color : TEXCOORD1;
-	uint ID : ID;
 };
 
 Texture2D<float> tAO :	register(t0);
@@ -190,7 +189,6 @@ void MSMain(
 	{
 		uint vertexId = BufferLoad<uint>(mesh.BufferIndex, i + meshlet.VertexOffset, mesh.MeshletVertexOffset);
 		InterpolantsVSToPS result = FetchVertexAttributes(mesh, instance.LocalToWorld, vertexId);
-		result.ID = meshletIndex;
 		verts[i] = result;
 	}
 

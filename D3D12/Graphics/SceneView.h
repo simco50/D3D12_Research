@@ -30,7 +30,6 @@ struct ViewTransform
 	Matrix View;
 	Matrix ViewProjection;
 	Matrix ViewProjectionPrev;
-	Matrix ViewProjectionFrozen;
 	Matrix ViewInverse;
 	Matrix ProjectionInverse;
 	bool Perspective = true;
@@ -43,9 +42,8 @@ struct ViewTransform
 	float FarPlane = 500.0f;
 	float OrthographicSize = 1;
 	int JitterIndex = 0;
-	float JitterWeight = 0.5f;
 	Vector2 Jitter;
-	Vector2 PreviousJitter;
+	Vector2 JitterPrev;
 	BoundingFrustum Frustum;
 };
 

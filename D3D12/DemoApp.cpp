@@ -322,6 +322,7 @@ void DemoApp::Update()
 		ImGuiRenderer::NewFrame();
 		UpdateImGui();
 
+		m_pCamera->SetJitter(Tweakables::g_TAA);
 		m_pCamera->Update();
 		m_RenderGraphPool->Tick();
 
@@ -1699,12 +1700,6 @@ void DemoApp::UpdateImGui()
 			{
 				m_pCamera->SetFarPlane(farNear.x);
 				m_pCamera->SetNearPlane(farNear.y);
-			}
-
-			bool lockView = m_pCamera->GetLockPrevTransform();
-			if (ImGui::Checkbox("Lock View Transform", &lockView))
-			{
-				m_pCamera->SetLockPrevTransform(lockView);
 			}
 		}
 
