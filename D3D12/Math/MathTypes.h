@@ -14,11 +14,6 @@ using Quaternion = DirectX::SimpleMath::Quaternion;
 using Color = DirectX::SimpleMath::Color;
 using Ray = DirectX::SimpleMath::Ray;
 
-#include <DirectXPackedVector.h>
-using PackedVector2 = DirectX::PackedVector::XMHALF2;
-using PackedVector3 = DirectX::PackedVector::XMHALF4;
-using PackedVector4 = DirectX::PackedVector::XMHALF4;
-
 #pragma warning(push)
 #pragma warning(disable: 4201) // nonstandard extension used: nameless struct/union
 
@@ -34,23 +29,23 @@ struct TVector2
 		T Values[2];
 	};
 
-	TVector2()
+	constexpr TVector2()
 		: x(0), y(0)
 	{}
 
-	TVector2(T x, T y)
+	constexpr TVector2(T x, T y)
 		: x(x), y(y)
 	{}
 
-	TVector2(T v)
+	constexpr TVector2(T v)
 		: x(v), y(v)
 	{}
 
-	TVector2(const T* pData)
+	constexpr TVector2(const T* pData)
 		: x(pData[0]), y(pData[1])
 	{}
 
-	TVector2(const Vector2& v)
+	constexpr TVector2(const Vector2& v)
 		: x((T)v.x), y((T)v.y)
 	{}
 
@@ -78,23 +73,23 @@ struct TVector3
 		T Values[3];
 	};
 
-	TVector3()
+	constexpr TVector3()
 		: x(0), y(0), z(0)
 	{}
 
-	TVector3(T x, T y, T z)
+	constexpr TVector3(T x, T y, T z)
 		: x(x), y(y), z(z)
 	{}
 
-	TVector3(T v)
+	constexpr TVector3(T v)
 		: x(v), y(v), z(v)
 	{}
 
-	TVector3(const T* pData)
+	constexpr TVector3(const T* pData)
 		: x(pData[0]), y(pData[1]), z(pData[2])
 	{}
 
-	TVector3(const Vector3& v)
+	constexpr TVector3(const Vector3& v)
 		: x((T)v.x), y((T)v.y), z((T)v.z)
 	{}
 
@@ -122,23 +117,23 @@ struct TVector4
 		T Values[4];
 	};
 
-	TVector4()
+	constexpr TVector4()
 		: x(0), y(0), z(0), w(0)
 	{}
 
-	TVector4(T x, T y, T z, T w)
+	constexpr TVector4(T x, T y, T z, T w)
 		: x(x), y(y), z(z), w(w)
 	{}
 
-	TVector4(T v)
+	constexpr TVector4(T v)
 		: x(v), y(v), z(v), w(v)
 	{}
 
-	TVector4(const T* pData)
+	constexpr TVector4(const T* pData)
 		: x(pData[0]), y(pData[1]), z(pData[2]), w(pData[3])
 	{}
 
-	TVector4(const Vector4& v)
+	constexpr TVector4(const Vector4& v)
 		: x((T)v.x), y((T)v.y), z((T)v.z), w((T)v.w)
 	{}
 

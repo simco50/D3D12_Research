@@ -18,8 +18,6 @@ namespace ShaderInterop
 	using int3 =		Vector3i;
 	using int4 =		Vector4i;
 	using float4x4 =	Matrix;
-
-	template<typename T> struct ConstantBuffer { T Data; };
 #endif
 
 	static const int MESHLET_MAX_TRIANGLES = 124;
@@ -42,8 +40,8 @@ namespace ShaderInterop
 	// The normals vertex stream data
 	struct NormalData
 	{
-		float3 Normal;
-		float4 Tangent;
+		uint2 Normal;
+		uint2 Tangent;
 	};
 
 	struct MeshData

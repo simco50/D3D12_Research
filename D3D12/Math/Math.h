@@ -206,12 +206,50 @@ namespace Math
 		return Vector3(c.x, c.y, c.z) * exp2(exponent);
 	}
 
-	inline uint32 DivideAndRoundUp(uint32 nominator, uint32 denominator)
+	inline uint16 F32toF16(float value)
+	{
+		return DirectX::PackedVector::XMConvertFloatToHalf(value);
+	}
+
+	inline uint32 Pack_RG16_FLOAT(const Vector2& v)
+	{
+		return F32toF16(v.x) | (F32toF16(v.y) << 16u);
+	}
+
+	inline Vector2u Pack_RGBA16_FLOAT(const Vector4& v)
+	{
+		return Vector2u(Pack_RG16_FLOAT(Vector2(v.x, v.y)), Pack_RG16_FLOAT(Vector2(v.z, v.w)));
+	}
+
+	constexpr inline uint16 F32toSNORM(float value)
+	{
+		return static_cast<uint16>(Clamp(value >= 0.0f ? (value * 32767.0f + 0.5f) : (value * 32767.0f - 0.5f), -32768.0f, 32767.0f));
+	}
+
+	constexpr inline uint32 Pack_RG16_SNORM(const Vector2& v)
+	{
+		return F32toSNORM(Clamp(v.x, -1.0f, 1.0f)) | (F32toSNORM(Clamp(v.y, -1.0f, 1.0f)) << 16u);
+	}
+
+	constexpr inline Vector2u Pack_RGBA16_SNORM(const Vector4& v)
+	{
+		return Vector2u(Pack_RG16_SNORM(Vector2(v.x, v.y)), Pack_RG16_SNORM(Vector2(v.z, v.w)));
+	}
+
+	inline uint32 Pack_R11G11B10_FLOAT(const Vector3& xyz)
+	{
+		uint32 r = (F32toF16(xyz.x) << 17) & 0xFFE00000;
+		uint32 g = (F32toF16(xyz.y) << 6) & 0x001FFC00;
+		uint32 b = (F32toF16(xyz.z) >> 5) & 0x000003FF;
+		return r | g | b;
+	}
+
+	constexpr inline uint32 DivideAndRoundUp(uint32 nominator, uint32 denominator)
 	{
 		return (nominator + denominator - 1) / denominator;
 	}
 
-	inline uint32 NextPowerOfTwo(uint32 v)
+	constexpr inline uint32 NextPowerOfTwo(uint32 v)
 	{
 		v--;
 		v |= v >> 1;

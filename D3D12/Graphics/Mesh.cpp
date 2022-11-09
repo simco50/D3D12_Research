@@ -34,13 +34,13 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 
 	struct VS_UV
 	{
-		PackedVector2 UV = PackedVector2(0.0f, 0.0f);
+		uint32 UV = 0xFFFFFFFF;
 	};
 
 	struct VS_Normal
 	{
-		Vector3 Normal = Vector3::Forward;
-		Vector4 Tangent = Vector4(1, 0, 0, 1);
+		Vector2u Normal = Math::Pack_RGBA16_SNORM(Vector4(Vector3::Forward));
+		Vector2u Tangent = Math::Pack_RGBA16_SNORM(Vector4(1, 0, 0, 1));
 	};
 
 	struct MeshData
@@ -163,7 +163,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 				for (int j = 0; j < (int)pPart->Vertices.size(); ++j)
 				{
 					mesh.PositionsStream[j] = Vector3(pPart->Vertices[j].x, pPart->Vertices[j].y, pPart->Vertices[j].z);
-					mesh.NormalsStream[j] = {Vector3(pPart->Normals[j].x, pPart->Normals[j].y, pPart->Normals[j].z), Vector4(1, 0, 0, 1)};
+					mesh.NormalsStream[j] = { Math::Pack_RGBA16_SNORM(Vector4(pPart->Normals[j].x, pPart->Normals[j].y, pPart->Normals[j].z, 0)), Math::Pack_RGBA16_SNORM(Vector4(1, 0, 0, 1)) };
 					if (pPart->IsMultiMaterial)
 					{
 						uint32 vertexColor = LdrResolveVertexColor(instance.Color, pPart->Colors[j], &context);
@@ -363,7 +363,9 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 						meshData.NormalsStream.resize(attribute.data->count);
 						for (size_t i = 0; i < attribute.data->count; ++i)
 						{
-							check(cgltf_accessor_read_float(attribute.data, i, &meshData.NormalsStream[i].Normal.x, 3));
+							Vector3 normal;
+							check(cgltf_accessor_read_float(attribute.data, i, &normal.x, 3));
+							meshData.NormalsStream[i].Normal = Math::Pack_RGBA16_SNORM(Vector4(normal));
 						}
 					}
 					else if (strcmp(pName, "TANGENT") == 0)
@@ -371,7 +373,9 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 						meshData.NormalsStream.resize(attribute.data->count);
 						for (size_t i = 0; i < attribute.data->count; ++i)
 						{
-							check(cgltf_accessor_read_float(attribute.data, i, &meshData.NormalsStream[i].Tangent.x, 4));
+							Vector4 tangent;
+							check(cgltf_accessor_read_float(attribute.data, i, &tangent.x, 4));
+							meshData.NormalsStream[i].Tangent = Math::Pack_RGBA16_SNORM(tangent);
 						}
 					}
 					else if (strcmp(pName, "TEXCOORD_0") == 0)
@@ -556,7 +560,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 			subMesh.UVStreamLocation = VertexBufferView(m_pGeometryData->GetGpuHandle() + dataOffset, (uint32)meshData.UVsStream.size(), sizeof(VS_UV), dataOffset);
 			std::vector<VS_UV> uvStream;
 			uvStream.reserve(meshData.UVsStream.size());
-			Utils::Transform(meshData.UVsStream, uvStream, [](const Vector2& value) -> VS_UV { return { PackedVector2(value.x, value.y) }; });
+			Utils::Transform(meshData.UVsStream, uvStream, [](const Vector2& value) -> VS_UV { return { Math::Pack_RG16_FLOAT(value) }; });
 			CopyData(uvStream.data(), sizeof(VS_UV) * uvStream.size());
 		}
 
