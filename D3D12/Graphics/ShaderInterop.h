@@ -40,8 +40,8 @@ namespace ShaderInterop
 	// The normals vertex stream data
 	struct NormalData
 	{
-		uint2 Normal;
-		uint2 Tangent;
+		uint Normal;
+		uint Tangent;
 	};
 
 	struct MeshData

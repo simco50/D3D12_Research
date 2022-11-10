@@ -111,9 +111,9 @@ InterpolantsVSToPS FetchVertexAttributes(MeshData mesh, float4x4 world, uint ver
 	result.UV = Unpack_RG16_FLOAT(BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.UVsOffset));
 
 	NormalData normalData = BufferLoad<NormalData>(mesh.BufferIndex, vertexId, mesh.NormalsOffset);
-	float3 normal = Unpack_RGBA16_SNORM(normalData.Normal).xyz;
+	float3 normal = Unpack_RGB10A2_SNORM(normalData.Normal).xyz;
 	result.Normal = normalize(mul(normal, (float3x3)world));
-	float4 tangent = Unpack_RGBA16_SNORM(normalData.Tangent);
+	float4 tangent = Unpack_RGB10A2_SNORM(normalData.Tangent);
 	result.Tangent = float4(normalize(mul(tangent.xyz, (float3x3)world)), tangent.w);
 
 	result.Color = 0xFFFFFFFF;

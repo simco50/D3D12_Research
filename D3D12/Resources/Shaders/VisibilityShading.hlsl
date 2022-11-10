@@ -48,8 +48,8 @@ VisBufferVertexAttribute GetVertexAttributes(float2 screenUV, InstanceData insta
 		positions[i] = mul(float4(BufferLoad<float3>(mesh.BufferIndex, vertexId, mesh.PositionsOffset), 1), instance.LocalToWorld).xyz;
         vertices[i].UV = Unpack_RG16_FLOAT(BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.UVsOffset));
         NormalData normalData = BufferLoad<NormalData>(mesh.BufferIndex, vertexId, mesh.NormalsOffset);
-        vertices[i].Normal = Unpack_RGBA16_SNORM(normalData.Normal).xyz;
-        vertices[i].Tangent = Unpack_RGBA16_SNORM(normalData.Tangent);
+        vertices[i].Normal = Unpack_RGB10A2_SNORM(normalData.Normal).xyz;
+        vertices[i].Tangent = Unpack_RGB10A2_SNORM(normalData.Tangent);
 		if(mesh.ColorsOffset != ~0u)
 			vertices[i].Color = BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.ColorsOffset);
 		else

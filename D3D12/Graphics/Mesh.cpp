@@ -34,13 +34,13 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 
 	struct VS_UV
 	{
-		uint32 UV = 0xFFFFFFFF;
+		uint32 UV = 0x0;
 	};
 
 	struct VS_Normal
 	{
-		Vector2u Normal = Math::Pack_RGBA16_SNORM(Vector4(Vector3::Forward));
-		Vector2u Tangent = Math::Pack_RGBA16_SNORM(Vector4(1, 0, 0, 1));
+		uint32 Normal = Math::Pack_RGB10A2_SNORM(Vector4(Vector3::Forward));
+		uint32 Tangent = Math::Pack_RGB10A2_SNORM(Vector4(1, 0, 0, 1));
 	};
 
 	struct MeshData
@@ -163,7 +163,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 				for (int j = 0; j < (int)pPart->Vertices.size(); ++j)
 				{
 					mesh.PositionsStream[j] = Vector3(pPart->Vertices[j].x, pPart->Vertices[j].y, pPart->Vertices[j].z);
-					mesh.NormalsStream[j] = { Math::Pack_RGBA16_SNORM(Vector4(pPart->Normals[j].x, pPart->Normals[j].y, pPart->Normals[j].z, 0)), Math::Pack_RGBA16_SNORM(Vector4(1, 0, 0, 1)) };
+					mesh.NormalsStream[j] = { Math::Pack_RGB10A2_SNORM(Vector4(pPart->Normals[j].x, pPart->Normals[j].y, pPart->Normals[j].z, 0)), Math::Pack_RGB10A2_SNORM(Vector4(1, 0, 0, 1)) };
 					if (pPart->IsMultiMaterial)
 					{
 						uint32 vertexColor = LdrResolveVertexColor(instance.Color, pPart->Colors[j], &context);
@@ -314,7 +314,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 			material.EmissiveFactor.x = gltfMaterial.emissive_factor[0];
 			material.EmissiveFactor.y = gltfMaterial.emissive_factor[1];
 			material.EmissiveFactor.z = gltfMaterial.emissive_factor[2];
-			if(useEmissiveStrength)
+			if (useEmissiveStrength)
 				material.EmissiveFactor *= gltfMaterial.emissive_strength.emissive_strength;
 			material.pNormalTexture = RetrieveTexture(gltfMaterial.normal_texture, false);
 			if (gltfMaterial.name)
@@ -365,7 +365,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 						{
 							Vector3 normal;
 							check(cgltf_accessor_read_float(attribute.data, i, &normal.x, 3));
-							meshData.NormalsStream[i].Normal = Math::Pack_RGBA16_SNORM(Vector4(normal));
+							meshData.NormalsStream[i].Normal = Math::Pack_RGB10A2_SNORM(Vector4(normal));
 						}
 					}
 					else if (strcmp(pName, "TANGENT") == 0)
@@ -375,7 +375,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 						{
 							Vector4 tangent;
 							check(cgltf_accessor_read_float(attribute.data, i, &tangent.x, 4));
-							meshData.NormalsStream[i].Tangent = Math::Pack_RGBA16_SNORM(tangent);
+							meshData.NormalsStream[i].Tangent = Math::Pack_RGB10A2_SNORM(tangent);
 						}
 					}
 					else if (strcmp(pName, "TEXCOORD_0") == 0)

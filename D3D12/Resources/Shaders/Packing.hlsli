@@ -103,3 +103,15 @@ float3 Unpack_R11G11B10_FLOAT(uint rgb)
 	float b = f16tof32((rgb << 5) & 0x7FE0);
 	return float3(r, g, b);
 }
+
+float4 Unpack_RGB10A2_SNORM(uint value)
+{
+	const float scaleXYZ = 1.0f / 511.0f;
+	int sValue = int(value);
+	return float4(
+		((sValue << 22) >> 22) * scaleXYZ,
+		((sValue << 12) >> 22) * scaleXYZ,
+		((sValue << 2) >> 22) * scaleXYZ,
+		((sValue << 0) >> 30) * 1.0f
+	);
+}

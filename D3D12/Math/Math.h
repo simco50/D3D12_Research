@@ -193,22 +193,22 @@ namespace Math
 		return Vector2u(Pack_RG16_SNORM(Vector2(v.x, v.y)), Pack_RG16_SNORM(Vector2(v.z, v.w)));
 	}
 
-	constexpr inline uint32 Pack_RGBA8_SNORM(const Vector4& v)
+	inline uint32 Pack_RGBA8_SNORM(const Vector4& v)
 	{
 		return
-			((uint8)(Clamp(v.x, -1.0f, 1.0) * 127.0f) << 0) |
-			((uint8)(Clamp(v.y, -1.0f, 1.0) * 127.0f) << 8) |
-			((uint8)(Clamp(v.z, -1.0f, 1.0) * 127.0f) << 16) |
-			((uint8)(Clamp(v.w, -1.0f, 1.0) * 127.0f) << 24);
+			((uint8)roundf(Clamp(v.x, -1.0f, 1.0) * 127.0f) << 0) |
+			((uint8)roundf(Clamp(v.y, -1.0f, 1.0) * 127.0f) << 8) |
+			((uint8)roundf(Clamp(v.z, -1.0f, 1.0) * 127.0f) << 16) |
+			((uint8)roundf(Clamp(v.w, -1.0f, 1.0) * 127.0f) << 24);
 	}
 
-	constexpr inline uint32 Pack_RGBA8_UNORM(const Vector4& v)
+	inline uint32 Pack_RGBA8_UNORM(const Vector4& v)
 	{
 		return
-			((uint8)(Clamp(v.x, 0.0f, 1.0) * 255.0f) << 0) |
-			((uint8)(Clamp(v.y, 0.0f, 1.0) * 255.0f) << 8) |
-			((uint8)(Clamp(v.z, 0.0f, 1.0) * 255.0f) << 16) |
-			((uint8)(Clamp(v.w, 0.0f, 1.0) * 255.0f) << 24);
+			((uint8)roundf(Clamp(v.x, 0.0f, 1.0) * 255.0f) << 0) |
+			((uint8)roundf(Clamp(v.y, 0.0f, 1.0) * 255.0f) << 8) |
+			((uint8)roundf(Clamp(v.z, 0.0f, 1.0) * 255.0f) << 16) |
+			((uint8)roundf(Clamp(v.w, 0.0f, 1.0) * 255.0f) << 24);
 	}
 
 	constexpr inline Vector4 Unpack_RGBA8_UNORM(uint32 v)
@@ -247,6 +247,27 @@ namespace Math
 		Color c = Unpack_RGBA8_UNORM(encoded);
 		float exponent = c.w * 255 - 128;
 		return Vector3(c.x, c.y, c.z) * exp2(exponent);
+	}
+
+	inline uint32 Pack_RGB10A2_SNORM(const Vector4& v)
+	{
+		return
+			((int32)(roundf(Clamp(v.x, -1.0f, 1.0f) * 511.0f)) & 0x3FF) << 0 |
+			((int32)(roundf(Clamp(v.y, -1.0f, 1.0f) * 511.0f)) & 0x3FF) << 10 |
+			((int32)(roundf(Clamp(v.z, -1.0f, 1.0f) * 511.0f)) & 0x3FF) << 20 |
+			((int32)roundf(Clamp(v.w, -1.0f, 1.0f)) << 30);
+	}
+
+	inline Vector4 Unpack_RGB10A2_SNORM(uint32 v)
+	{
+		const float scaleXYZ = 1.0f / 511.0f;
+		int32 signedV = (int32)v;
+		return Vector4(
+			((signedV << 22) >> 22) * scaleXYZ,
+			((signedV << 12) >> 22) * scaleXYZ,
+			((signedV << 2) >> 22) * scaleXYZ,
+			((signedV << 0) >> 30) * 1.0f
+		);
 	}
 
 	constexpr inline uint32 DivideAndRoundUp(uint32 nominator, uint32 denominator)
