@@ -205,7 +205,7 @@ float ScreenSpaceShadows(float3 worldPosition, float3 lightDirection, Texture2D<
 	return 1.0f - occlusion;
 }
 
-float3 ScreenSpaceReflections(float3 worldPosition, float3 N, float3 V, float R, Texture2D<float> depthTexture, Texture2D previousSceneColor, float dither, inout float ssrWeight)
+float3 ScreenSpaceReflections(float3 worldPosition, float3 N, float3 V, float R, Texture2D<float> depthTexture, Texture2D<float4> previousSceneColor, float dither, inout float ssrWeight)
 {
 	float3 ssr = 0;
 	const float roughnessThreshold = 0.7f;
@@ -219,7 +219,7 @@ float3 ScreenSpaceReflections(float3 worldPosition, float3 N, float3 V, float R,
 			float jitter = dither - 1.0f;
 			uint maxSteps = cView.SsrSamples;
 
-			float3 rayStartVS = mul(float4(worldPosition, 1), cView.ViewInverse).xyz;
+			float3 rayStartVS = mul(float4(worldPosition, 1), cView.View).xyz;
 			float linearDepth = rayStartVS.z;
 			float3 reflectionVs = mul(reflectionWs, (float3x3)cView.View);
 			float3 rayEndVS = rayStartVS + (reflectionVs * linearDepth);
