@@ -46,6 +46,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 	struct MeshData
 	{
 		uint32 MaterialIndex = 0;
+		float ScaleFactor = 1;
 
 		std::vector<Vector3> PositionsStream;
 		std::vector<VS_Normal> NormalsStream;
@@ -401,6 +402,18 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 						validateOncef(false, "GLTF - Attribute '%s' is unsupported", pName);
 					}
 				}
+
+				for (const Vector3& position : meshData.PositionsStream)
+				{
+					meshData.ScaleFactor = Math::Max(fabs(position.x), meshData.ScaleFactor);
+					meshData.ScaleFactor = Math::Max(fabs(position.y), meshData.ScaleFactor);
+					meshData.ScaleFactor = Math::Max(fabs(position.z), meshData.ScaleFactor);
+				}
+				for (Vector3& position : meshData.PositionsStream)
+				{
+					position /= meshData.ScaleFactor;
+					check(fabs(position.x) <= 1.0f && fabs(position.y) <= 1.0f && fabs(position.z) <= 1.0f);
+				}
 				meshDatas.push_back(meshData);
 			}
 			meshToPrimitives[&mesh] = primitives;
@@ -410,23 +423,22 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 		{
 			const cgltf_node& node = pGltfData->nodes[i];
 
-			cgltf_float matrix[16];
-			cgltf_node_transform_world(&node, matrix);
-
 			if (node.mesh)
 			{
-				SubMeshInstance newNode;
-				newNode.Transform = Matrix(matrix) * Matrix::CreateScale(uniformScale, uniformScale, -uniformScale);
+				Matrix localToWorld;
+				cgltf_node_transform_world(&node, &localToWorld.m[0][0]);
+
 				for (int primitive : meshToPrimitives[node.mesh])
 				{
+					const MeshData& meshData = meshDatas[primitive];
+					SubMeshInstance& newNode = m_MeshInstances.emplace_back();
 					newNode.MeshIndex = primitive;
-					m_MeshInstances.push_back(newNode);
+					newNode.Transform = Matrix::CreateScale(meshData.ScaleFactor) * localToWorld * Matrix::CreateScale(uniformScale, uniformScale, -uniformScale);
 				}
 			}
 		}
 
 		cgltf_free(pGltfData);
-
 	}
 
 	uint64 bufferSize = 0;
