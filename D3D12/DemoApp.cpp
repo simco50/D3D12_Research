@@ -322,7 +322,7 @@ void DemoApp::Update()
 		ImGuiRenderer::NewFrame();
 		UpdateImGui();
 
-		m_pCamera->SetJitter(Tweakables::g_TAA);
+		m_pCamera->SetJitter(Tweakables::g_TAA && m_RenderPath != RenderPath::PathTracing);
 		m_pCamera->Update();
 		m_RenderGraphPool->Tick();
 

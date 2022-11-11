@@ -339,50 +339,22 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 					const cgltf_attribute& attribute = primitive.attributes[attrIdx];
 					const char* pName = attribute.name;
 
-					if (strcmp(pName, "POSITION") == 0)
+					auto ReadAttributeData = [&](const char* pStreamName, auto& stream, uint32 numComponents)
 					{
-						meshData.PositionsStream.resize(attribute.data->count);
-						for (size_t i = 0; i < attribute.data->count; ++i)
+						if (strcmp(pName, pStreamName) == 0)
 						{
-							check(cgltf_accessor_read_float(attribute.data, i, &meshData.PositionsStream[i].x, 3));
+							stream.resize(attribute.data->count);
+							for (size_t i = 0; i < attribute.data->count; ++i)
+							{
+								check(cgltf_accessor_read_float(attribute.data, i, &stream[i].x, numComponents));
+							}
 						}
-					}
-					else if (strcmp(pName, "NORMAL") == 0)
-					{
-						meshData.NormalsStream.resize(attribute.data->count);
-						for (size_t i = 0; i < attribute.data->count; ++i)
-						{
-							check(cgltf_accessor_read_float(attribute.data, i, &meshData.NormalsStream[i].x, 3));
-						}
-					}
-					else if (strcmp(pName, "TANGENT") == 0)
-					{
-						meshData.TangentsStream.resize(attribute.data->count);
-						for (size_t i = 0; i < attribute.data->count; ++i)
-						{
-							check(cgltf_accessor_read_float(attribute.data, i, &meshData.TangentsStream[i].x, 4));
-						}
-					}
-					else if (strcmp(pName, "TEXCOORD_0") == 0)
-					{
-						meshData.UVsStream.resize(attribute.data->count);
-						for (size_t i = 0; i < attribute.data->count; ++i)
-						{
-							check(cgltf_accessor_read_float(attribute.data, i, &meshData.UVsStream[i].x, 2));
-						}
-					}
-					else if (strcmp(pName, "COLOR_0") == 0)
-					{
-						meshData.ColorsStream.resize(attribute.data->count);
-						for (size_t i = 0; i < attribute.data->count; ++i)
-						{
-							check(cgltf_accessor_read_float(attribute.data, i, &meshData.ColorsStream[i].x, 4));
-						}
-					}
-					else
-					{
-						validateOncef(false, "GLTF - Attribute '%s' is unsupported", pName);
-					}
+					};
+					ReadAttributeData("POSITION", meshData.PositionsStream, 3);
+					ReadAttributeData("NORMAL", meshData.NormalsStream, 3);
+					ReadAttributeData("TANGENT", meshData.TangentsStream, 4);
+					ReadAttributeData("TEXCOORD_0", meshData.UVsStream, 2);
+					ReadAttributeData("COLOR_0", meshData.ColorsStream, 4);
 				}
 
 				for (const Vector3& position : meshData.PositionsStream)
@@ -423,11 +395,33 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 		cgltf_free(pGltfData);
 	}
 
+	constexpr uint64 bufferAlignment = 16;
 	uint64 bufferSize = 0;
-	struct TVertexPositionStream { Vector2u P; };
-	struct TVertexNormalStream { uint32 N; uint32 T; };
-	struct TVertexColorStream { uint32 C; };
-	struct TVertexUVStream { uint32 UV; };
+	using TVertexPositionStream = Vector2u;
+	using TVertexNormalStream = Vector2u;
+	using TVertexColorStream = uint32;
+	using TVertexUVStream = uint32;
+
+	struct DefaultVertex
+	{
+		Vector3 Position;
+		Vector3 Normal;
+		Vector4 Tangent;
+		Vector2 UV;
+		uint32 Color;
+	};
+
+	struct PackedVertex
+	{
+		TVertexPositionStream Position;
+		TVertexNormalStream Normal;
+		TVertexUVStream UV;
+		TVertexColorStream Color;
+	};
+
+	constexpr size_t DefaultVertexSize = sizeof(DefaultVertex);
+	constexpr size_t PackedVertexSize = sizeof(PackedVertex);
+	constexpr size_t SizeDiff = DefaultVertexSize - PackedVertexSize;
 
 	for (MeshData& meshData : meshDatas)
 	{
@@ -506,27 +500,28 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 		}
 		meshData.MeshletTriangles.resize(triangleOffset);
 
-		bufferSize += Math::AlignUp<uint64>(meshData.Indices.size() * sizeof(uint32), 16);
-		bufferSize += Math::AlignUp<uint64>(meshData.PositionsStream.size() * sizeof(TVertexPositionStream), 16);
-		bufferSize += Math::AlignUp<uint64>(meshData.UVsStream.size() * sizeof(TVertexUVStream), 16);
-		bufferSize += Math::AlignUp<uint64>(meshData.NormalsStream.size() * sizeof(TVertexNormalStream), 16);
-		bufferSize += Math::AlignUp<uint64>(meshData.ColorsStream.size() * sizeof(TVertexColorStream), 16);
+		bufferSize += Math::AlignUp<uint64>(meshData.Indices.size() * sizeof(uint32), bufferAlignment);
+		bufferSize += Math::AlignUp<uint64>(meshData.PositionsStream.size() * sizeof(TVertexPositionStream), bufferAlignment);
+		bufferSize += Math::AlignUp<uint64>(meshData.UVsStream.size() * sizeof(TVertexUVStream), bufferAlignment);
+		bufferSize += Math::AlignUp<uint64>(meshData.NormalsStream.size() * sizeof(TVertexNormalStream), bufferAlignment);
+		bufferSize += Math::AlignUp<uint64>(meshData.ColorsStream.size() * sizeof(TVertexColorStream), bufferAlignment);
 
-		bufferSize += Math::AlignUp<uint64>(meshData.Meshlets.size() * sizeof(ShaderInterop::Meshlet), 16);
-		bufferSize += Math::AlignUp<uint64>(meshData.MeshletVertices.size() * sizeof(uint32), 16);
-		bufferSize += Math::AlignUp<uint64>(meshData.MeshletTriangles.size() * sizeof(ShaderInterop::MeshletTriangle), 16);
-		bufferSize += Math::AlignUp<uint64>(meshData.MeshletBounds.size() * sizeof(ShaderInterop::MeshletBounds), 16);
+		bufferSize += Math::AlignUp<uint64>(meshData.Meshlets.size() * sizeof(ShaderInterop::Meshlet), bufferAlignment);
+		bufferSize += Math::AlignUp<uint64>(meshData.MeshletVertices.size() * sizeof(uint32), bufferAlignment);
+		bufferSize += Math::AlignUp<uint64>(meshData.MeshletTriangles.size() * sizeof(ShaderInterop::MeshletTriangle), bufferAlignment);
+		bufferSize += Math::AlignUp<uint64>(meshData.MeshletBounds.size() * sizeof(ShaderInterop::MeshletBounds), bufferAlignment);
 	}
 
+	checkf(bufferSize < std::numeric_limits<uint32>::max(), "Offset stored in 32-bit int");
 	m_pGeometryData = pDevice->CreateBuffer(BufferDesc::CreateBuffer(bufferSize, BufferFlag::ShaderResource | BufferFlag::ByteAddress), "Geometry Buffer");
 	DynamicAllocation allocation = pContext->AllocateTransientMemory(bufferSize);
+	char* pMappedMemory = (char*)allocation.pMappedMemory;
 
 	uint64 dataOffset = 0;
 	auto CopyData = [&dataOffset, &allocation](const void* pSource, uint64 size)
 	{
-		checkf(dataOffset < std::numeric_limits<uint32>::max(), "Offset stored in 32-bit int");
 		memcpy(static_cast<char*>(allocation.pMappedMemory) + dataOffset, pSource, size);
-		dataOffset = Math::AlignUp(dataOffset + size, 16ull);
+		dataOffset = Math::AlignUp(dataOffset + size, bufferAlignment);
 	};
 
 	for (const MeshData& meshData : meshDatas)
@@ -541,57 +536,60 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 
 		{
 			subMesh.PositionStreamLocation = VertexBufferView(m_pGeometryData->GetGpuHandle() + dataOffset, (uint32)meshData.PositionsStream.size(), sizeof(TVertexPositionStream), dataOffset);
-			std::vector<TVertexPositionStream> positionStream;
-			positionStream.reserve(meshData.PositionsStream.size());
-			Utils::Transform(meshData.PositionsStream, positionStream, [](const Vector3& value) -> TVertexPositionStream { return { Math::Pack_RGBA16_SNORM(Vector4(value)) }; });
-			CopyData(positionStream.data(), sizeof(TVertexPositionStream) * meshData.PositionsStream.size());
+			TVertexPositionStream* pTarget = (TVertexPositionStream*)(pMappedMemory + dataOffset);
+			for (const Vector3& position : meshData.PositionsStream)
+			{
+				*pTarget++ = { Math::Pack_RGBA16_SNORM(Vector4(position)) };
+			}
+			dataOffset = Math::AlignUp(dataOffset + meshData.PositionsStream.size() * sizeof(TVertexPositionStream), bufferAlignment);
 		}
 
 		{
 			subMesh.NormalStreamLocation = VertexBufferView(m_pGeometryData->GetGpuHandle() + dataOffset, (uint32)meshData.NormalsStream.size(), sizeof(TVertexNormalStream), dataOffset);
-			std::vector<TVertexNormalStream> normalStream;
-			normalStream.reserve(meshData.NormalsStream.size());
+			TVertexNormalStream* pTarget = (TVertexNormalStream*)(pMappedMemory + dataOffset);
 			for (size_t i = 0; i < meshData.NormalsStream.size(); ++i)
 			{
-				Vector4 tangent = meshData.TangentsStream.empty() ? Vector4(1, 0, 0, 1) : meshData.TangentsStream[i];
-				normalStream.push_back({
+				*pTarget++ = {
 						Math::Pack_RGB10A2_SNORM(Vector4(meshData.NormalsStream[i])),
-						Math::Pack_RGB10A2_SNORM(tangent),
-					});
+						Math::Pack_RGB10A2_SNORM(meshData.TangentsStream.empty() ? Vector4(1, 0, 0, 1) : meshData.TangentsStream[i])
+				};
 			}
-			CopyData(normalStream.data(), sizeof(TVertexNormalStream) * normalStream.size());
+			dataOffset = Math::AlignUp(dataOffset + meshData.NormalsStream.size() * sizeof(TVertexNormalStream), bufferAlignment);
 		}
 
 		if (!meshData.ColorsStream.empty())
 		{
 			subMesh.ColorsStreamLocation = VertexBufferView(m_pGeometryData->GetGpuHandle() + dataOffset, (uint32)meshData.ColorsStream.size(), sizeof(TVertexColorStream), dataOffset);
-			std::vector<TVertexColorStream> colorStream;
-			colorStream.reserve(meshData.ColorsStream.size());
-			Utils::Transform(meshData.ColorsStream, colorStream, [](const Vector4& value) -> TVertexColorStream { return { Math::Pack_RGBA8_UNORM(value) }; });
-			CopyData(colorStream.data(), sizeof(TVertexColorStream)* colorStream.size());
+			TVertexColorStream* pTarget = (TVertexColorStream*)(pMappedMemory + dataOffset);
+			for (const Vector4& color : meshData.ColorsStream)
+			{
+				*pTarget++ = { Math::Pack_RGBA8_UNORM(color) };
+			}
+			dataOffset = Math::AlignUp(dataOffset + meshData.ColorsStream.size() * sizeof(TVertexColorStream), bufferAlignment);
 		}
 
 		if (!meshData.UVsStream.empty())
 		{
 			subMesh.UVStreamLocation = VertexBufferView(m_pGeometryData->GetGpuHandle() + dataOffset, (uint32)meshData.UVsStream.size(), sizeof(TVertexUVStream), dataOffset);
-			std::vector<TVertexUVStream> uvStream;
-			uvStream.reserve(meshData.UVsStream.size());
-			Utils::Transform(meshData.UVsStream, uvStream, [](const Vector2& value) -> TVertexUVStream { return { Math::Pack_RG16_FLOAT(value) }; });
-			CopyData(uvStream.data(), sizeof(TVertexUVStream) * uvStream.size());
+			TVertexUVStream* pTarget = (TVertexUVStream*)(pMappedMemory + dataOffset);
+			for (const Vector2& uv : meshData.UVsStream)
+			{
+				*pTarget++ = { Math::Pack_RG16_FLOAT(uv) };
+			}
+			dataOffset = Math::AlignUp(dataOffset + meshData.UVsStream.size() * sizeof(TVertexUVStream), bufferAlignment);
 		}
 
-		if (meshData.PositionsStream.size() < std::numeric_limits<uint16>::max())
 		{
-			subMesh.IndicesLocation = IndexBufferView(m_pGeometryData->GetGpuHandle() + dataOffset, (uint32)meshData.Indices.size(), ResourceFormat::R16_UINT, dataOffset);
-			std::vector<uint16> indicesStream;
-			indicesStream.reserve(meshData.Indices.size());
-			Utils::Transform(meshData.Indices, indicesStream, [](const uint32 value) -> uint16 { assert(value < std::numeric_limits<uint16>::max());  return (uint16)value; });
-			CopyData(indicesStream.data(), sizeof(uint16) * indicesStream.size());
-		}
-		else
-		{
-			subMesh.IndicesLocation = IndexBufferView(m_pGeometryData->GetGpuHandle() + dataOffset, (uint32)meshData.Indices.size(), ResourceFormat::R32_UINT, dataOffset);
-			CopyData(meshData.Indices.data(), sizeof(uint32) * meshData.Indices.size());
+			bool smallIndices = meshData.PositionsStream.size() < std::numeric_limits<uint16>::max();
+			uint32 indexSize = smallIndices ? sizeof(uint16) : sizeof(uint32);
+			subMesh.IndicesLocation = IndexBufferView(m_pGeometryData->GetGpuHandle() + dataOffset, (uint32)meshData.Indices.size(), smallIndices ? ResourceFormat::R16_UINT : ResourceFormat::R32_UINT, dataOffset);
+			char* pTarget = (char*)(pMappedMemory + dataOffset);
+			for (uint32 index : meshData.Indices)
+			{
+				memcpy(pTarget, &index, indexSize);
+				pTarget += indexSize;
+			}
+			dataOffset = Math::AlignUp(dataOffset + meshData.Indices.size() * indexSize, bufferAlignment);
 		}
 
 		subMesh.MeshletsLocation = (uint32)dataOffset;
