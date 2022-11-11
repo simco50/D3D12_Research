@@ -104,7 +104,7 @@ LightResult DoLight(float3 specularColor, float R, float3 diffuseColor, float3 N
 InterpolantsVSToPS FetchVertexAttributes(MeshData mesh, float4x4 world, uint vertexId)
 {
 	InterpolantsVSToPS result;
-	float3 Position = BufferLoad<float3>(mesh.BufferIndex, vertexId, mesh.PositionsOffset);
+	float3 Position = Unpack_RGBA16_SNORM(BufferLoad<uint2>(mesh.BufferIndex, vertexId, mesh.PositionsOffset)).xyz;
 	result.PositionWS = mul(float4(Position, 1.0f), world).xyz;
 	result.Position = mul(float4(result.PositionWS, 1.0f), cView.ViewProjection);
 

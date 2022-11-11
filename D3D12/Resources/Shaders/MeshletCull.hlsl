@@ -254,8 +254,8 @@ struct VertexAttribute
 VertexAttribute FetchVertexAttributes(MeshData mesh, float4x4 world, uint vertexId)
 {
 	VertexAttribute result = (VertexAttribute)0;
-	float3 Position = BufferLoad<float3>(mesh.BufferIndex, vertexId, mesh.PositionsOffset);
-	float3 positionWS = mul(float4(Position, 1.0f), world).xyz;
+	float3 position = Unpack_RGBA16_SNORM(BufferLoad<uint2>(mesh.BufferIndex, vertexId, mesh.PositionsOffset)).xyz;
+	float3 positionWS = mul(float4(position, 1.0f), world).xyz;
 	result.Position = mul(float4(positionWS, 1.0f), cView.ViewProjection);
 #if ALPHA_MASK
 	if(mesh.UVsOffset != 0xFFFFFFFF)

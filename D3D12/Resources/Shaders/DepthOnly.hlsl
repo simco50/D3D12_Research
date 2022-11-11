@@ -14,7 +14,7 @@ InterpolantsVSToPS VSMain(uint vertexId : SV_VertexID)
 	InstanceData instance = GetInstance(cObject.ID);
 	MeshData mesh = GetMesh(instance.MeshIndex);
 
-	float3 position = BufferLoad<float3>(mesh.BufferIndex, vertexId, mesh.PositionsOffset);
+	float3 position = Unpack_RGBA16_SNORM(BufferLoad<uint2>(mesh.BufferIndex, vertexId, mesh.PositionsOffset)).xyz;
 	result.Position = mul(mul(float4(position, 1.0f), instance.LocalToWorld), cView.ViewProjection);
 	result.UV = Unpack_RG16_FLOAT(BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.UVsOffset));
 	return result;
