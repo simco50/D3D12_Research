@@ -402,27 +402,6 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 	using TVertexColorStream = uint32;
 	using TVertexUVStream = uint32;
 
-	struct DefaultVertex
-	{
-		Vector3 Position;
-		Vector3 Normal;
-		Vector4 Tangent;
-		Vector2 UV;
-		uint32 Color;
-	};
-
-	struct PackedVertex
-	{
-		TVertexPositionStream Position;
-		TVertexNormalStream Normal;
-		TVertexUVStream UV;
-		TVertexColorStream Color;
-	};
-
-	constexpr size_t DefaultVertexSize = sizeof(DefaultVertex);
-	constexpr size_t PackedVertexSize = sizeof(PackedVertex);
-	constexpr size_t SizeDiff = DefaultVertexSize - PackedVertexSize;
-
 	for (MeshData& meshData : meshDatas)
 	{
 		meshopt_optimizeVertexCache(meshData.Indices.data(), meshData.Indices.data(), meshData.Indices.size(), meshData.PositionsStream.size());
