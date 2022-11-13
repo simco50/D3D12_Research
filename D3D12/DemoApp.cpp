@@ -131,8 +131,6 @@ namespace Tweakables
 
 	// Bloom
 	ConsoleVariable g_Bloom("r.Bloom", true);
-	ConsoleVariable g_BloomThreshold("r.Bloom.Threshold", 4.0f);
-	ConsoleVariable g_BloomMaxBrightness("r.Bloom.MaxBrightness", 8.0f);
 
 	// Misc Lighting
 	ConsoleVariable g_Sky("r.Sky", true);
@@ -978,99 +976,91 @@ void DemoApp::Update()
 					});
 		}
 
-		uint32 mips = Math::Min(5u, (uint32)log2f((float)Math::Max(viewDimensions.x, viewDimensions.y)));
-		TextureDesc bloomDesc = TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, ResourceFormat::RGBA16_FLOAT, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess, 1, mips);
-		RGTexture* pBloomTexture = graph.Create("Bloom", bloomDesc);
-		RGTexture* pBloomIntermediateTexture = graph.Create("Bloom Intermediate", bloomDesc);
+		RGTexture* pBloomTexture = graph.Import(GraphicsCommon::GetDefaultTexture(DefaultTexture::Black2D));
 
 		if (Tweakables::g_Bloom.Get())
 		{
 			RG_GRAPH_SCOPE("Bloom", graph);
 
-			graph.AddPass("Separate Bloom", RGPassFlag::Compute)
-				.Read({ sceneTextures.pColorTarget, pAverageLuminance })
-				.Write(pBloomTexture)
-				.Bind([=](CommandContext& context)
-					{
-						Texture* pTarget = pBloomTexture->Get();
-						context.SetComputeRootSignature(m_pCommonRS);
-						context.SetPipelineState(m_pBloomSeparatePSO);
+			uint32 numPasses = 6;
 
-						struct
-						{
-							float Threshold;
-							float BrightnessClamp;
-						} parameters;
+			Vector2u bloomDimensions = Vector2u(viewDimensions.x >> 1, viewDimensions.y >> 1);
 
-						parameters.Threshold = Tweakables::g_BloomThreshold;
-						parameters.BrightnessClamp = Tweakables::g_BloomMaxBrightness;
+			RGTexture* pSourceTexture = sceneTextures.pColorTarget;
+			Vector2u targetDimensions = bloomDimensions;
+			RGTexture* pDownscaleTarget = graph.Create("Downscale Target", TextureDesc::Create2D(targetDimensions.x, targetDimensions.y, ResourceFormat::RGBA16_FLOAT, TextureFlag::None, 1, numPasses));
 
-						context.SetRootConstants(0, parameters);
-						context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
-
-						context.BindResources(2, {
-							pTarget->GetUAV()
-							});
-						context.BindResources(3, {
-							sceneTextures.pColorTarget->Get()->GetSRV(),
-							pAverageLuminance->Get()->GetSRV(),
-							});
-
-						context.Dispatch(ComputeUtils::GetNumThreadGroups(pTarget->GetWidth(), 8, pTarget->GetHeight(), 8));
-					});
-
+			for (uint32 i = 0; i < pDownscaleTarget->GetDesc().Mips; ++i)
 			{
-				RG_GRAPH_SCOPE("Bloom Mip Chain", graph);
-
-				RGTexture* pTarget = pBloomIntermediateTexture;
-				RGTexture* pSource = pBloomTexture;
-
-				uint32 width = bloomDesc.Width / 2;
-				uint32 height = bloomDesc.Height / 2;
-
-				const uint32 numMips = bloomDesc.Mips;
-				constexpr uint32 ThreadGroupSize = 128;
-
-				for (uint32 i = 1; i < numMips; ++i)
+				graph.AddPass(Sprintf("Downsample [%dx%d > %dx%d]", targetDimensions.x << 1, targetDimensions.y << 1, targetDimensions.x, targetDimensions.y).c_str(), RGPassFlag::Compute)
+					.Write(pDownscaleTarget)
+					.Bind([=](CommandContext& context)
+						{
+							context.SetComputeRootSignature(m_pCommonRS);
+				context.SetPipelineState(m_pBloomDownsamplePSO);
+				struct
 				{
-					for (uint32 direction = 0; direction < 2; ++direction)
-					{
-						graph.AddPass(Sprintf("Mip %d - %s (%s -> %s)", i, direction == 0 ? "Vertical" : "Horizontal", pSource->GetName(), pTarget->GetName()).c_str(), RGPassFlag::Compute)
-							.Read(pSource)
-							.Write(pTarget)
-							.Bind([=](CommandContext& context)
-								{
-									context.SetComputeRootSignature(m_pCommonRS);
-									context.SetPipelineState(m_pBloomMipChainPSO);
+					Vector2 TargetDimensionsInv;
+					uint32 SourceMip;
+				} parameters;
+				parameters.TargetDimensionsInv = Vector2(1.0f / targetDimensions.x, 1.0f / targetDimensions.y);
+				parameters.SourceMip = i == 0 ? 0 : i - 1;
 
-									struct
-									{
-										uint32 SourceMip;
-										Vector2 TargetDimensionsInv;
-										uint32 Horizontal;
-									} parameters;
+				context.SetRootConstants(0, parameters);
+				context.BindResources(2, pDownscaleTarget->Get()->GetSubResourceUAV(i));
+				context.BindResources(3, pSourceTexture->Get()->GetSRV());
+				context.Dispatch(ComputeUtils::GetNumThreadGroups(targetDimensions.x, 8, targetDimensions.y, 8));
+				context.InsertUavBarrier();
+						});
 
-									parameters.TargetDimensionsInv = Vector2(1.0f / width, 1.0f / height);
-									parameters.SourceMip = direction == 0 ? i - 1 : i;
-									parameters.Horizontal = direction;
-
-									context.SetRootConstants(0, parameters);
-									context.BindResources(2, pTarget->Get()->GetSubResourceUAV(i));
-									context.BindResources(3, pSource->Get()->GetSRV());
-
-									Vector3i numThreadGroups = direction == 0 ?
-										ComputeUtils::GetNumThreadGroups(width, 1, height, ThreadGroupSize) :
-										ComputeUtils::GetNumThreadGroups(width, ThreadGroupSize, height, 1);
-									context.Dispatch(numThreadGroups);
-
-								});
-						std::swap(pSource, pTarget);
-					}
-
-					width /= 2;
-					height /= 2;
-				}
+				pSourceTexture = pDownscaleTarget;
+				targetDimensions.x >>= 1;
+				targetDimensions.y >>= 1;
 			}
+
+			RGTexture* pUpscaleTarget = graph.Create("Upscale Target", TextureDesc::Create2D(bloomDimensions.x, bloomDimensions.y, ResourceFormat::RGBA16_FLOAT, TextureFlag::None, 1, numPasses - 1));
+			RGTexture* pPreviousSource = pDownscaleTarget;
+
+			targetDimensions.x = pUpscaleTarget->GetDesc().Width >> (pUpscaleTarget->GetDesc().Mips - 1);
+			targetDimensions.y = pUpscaleTarget->GetDesc().Height >> (pUpscaleTarget->GetDesc().Mips - 1);
+
+			for (int32 i = numPasses - 2; i >= 0; --i)
+			{
+				graph.AddPass(Sprintf("Upsample [%dx%d > %dx%d]", targetDimensions.x >> 1, targetDimensions.y >> 1, targetDimensions.x, targetDimensions.y).c_str(), RGPassFlag::Compute)
+					.Read(pDownscaleTarget)
+					.Write(pUpscaleTarget)
+					.Bind([=](CommandContext& context)
+						{
+							context.SetComputeRootSignature(m_pCommonRS);
+				context.SetPipelineState(m_pBloomUpsamplePSO);
+				struct
+				{
+					Vector2 TargetDimensionsInv;
+					uint32 SourceCurrentMip;
+					uint32 SourcePreviousMip;
+					float Radius;
+				} parameters;
+				parameters.TargetDimensionsInv = Vector2(1.0f / targetDimensions.x, 1.0f / targetDimensions.y);
+				parameters.SourceCurrentMip = i;
+				parameters.SourcePreviousMip = i + 1;
+				parameters.Radius = 0.85f;
+
+				context.SetRootConstants(0, parameters);
+				context.BindResources(2, pUpscaleTarget->Get()->GetSubResourceUAV(i));
+				context.BindResources(3, {
+					pDownscaleTarget->Get()->GetSRV(),
+					pPreviousSource->Get()->GetSRV(),
+					});
+				context.Dispatch(ComputeUtils::GetNumThreadGroups(targetDimensions.x, 8, targetDimensions.y, 8));
+				context.InsertUavBarrier();
+						});
+
+				pPreviousSource = pUpscaleTarget;
+				targetDimensions.x <<= 1;
+				targetDimensions.y <<= 1;
+			}
+
+			pBloomTexture = pUpscaleTarget;
 		}
 
 		RGTexture* pTonemapTarget = graph.Create("Tonemap Target", TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, ResourceFormat::RGBA8_UNORM));
@@ -1099,7 +1089,7 @@ void DemoApp::Update()
 					context.BindResources(3, {
 						sceneTextures.pColorTarget->Get()->GetSRV(),
 						pAverageLuminance->Get()->GetSRV(),
-						Tweakables::g_Bloom.Get() ? pBloomTexture->Get()->GetSRV() : GraphicsCommon::GetDefaultTexture(DefaultTexture::Black2D)->GetSRV(),
+						pBloomTexture->Get()->GetSRV(),
 						});
 					context.Dispatch(ComputeUtils::GetNumThreadGroups(pTarget->GetWidth(), 16, pTarget->GetHeight(), 16));
 				});
@@ -1335,8 +1325,8 @@ void DemoApp::InitializePipelines()
 	}
 
 	//Bloom
-	m_pBloomSeparatePSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "Bloom.hlsl", "SeparateBloomCS");
-	m_pBloomMipChainPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "Bloom.hlsl", "BloomMipChainCS");
+	m_pBloomDownsamplePSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "Bloom.hlsl", "DownsampleCS");
+	m_pBloomUpsamplePSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "Bloom.hlsl", "UpsampleCS");
 
 	//Visibility Shading
 	m_pVisibilityShadingPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "VisibilityShading.hlsl", "CSMain");
@@ -1347,6 +1337,7 @@ void DemoApp::InitializePipelines()
 
 void DemoApp::VisualizeTexture(RGGraph& graph, RGTexture* pTexture)
 {
+	m_VisualizeTextureData.Enabled = true;
 	const TextureDesc& desc = pTexture->GetDesc();
 	RGTexture* pTarget = graph.Create("Visualize Target", TextureDesc::Create2D(desc.Width, desc.Height, ResourceFormat::RGBA8_UNORM));
 	m_VisualizeTextureData.SourceName = pTexture->GetName();
@@ -1724,8 +1715,6 @@ void DemoApp::UpdateImGui()
 		if (ImGui::CollapsingHeader("Bloom"))
 		{
 			ImGui::Checkbox("Enabled", &Tweakables::g_Bloom.Get());
-			ImGui::SliderFloat("Brightness Threshold", &Tweakables::g_BloomThreshold.Get(), 0, 5);
-			ImGui::SliderFloat("Max Brightness", &Tweakables::g_BloomMaxBrightness.Get(), 1, 100);
 		}
 		if (ImGui::CollapsingHeader("Exposure/Tonemapping"))
 		{

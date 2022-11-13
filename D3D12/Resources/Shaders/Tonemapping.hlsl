@@ -31,6 +31,8 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 	float2 uv = (0.5f + dispatchThreadId.xy) * cView.TargetDimensionsInv;
 
 	float3 rgb = tColor.Load(uint3(dispatchThreadId.xy, 0)).rgb;
+	float3 bloom = tBloom.SampleLevel(sLinearClamp, uv, 0).rgb;
+	rgb = lerp(rgb, bloom, 0.3f);
 
 #if TONEMAP_LUMINANCE
 	float3 xyY = sRGB_to_xyY(rgb);
@@ -41,12 +43,6 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 
 	float exposure = tAverageLuminance[2];
 	value = value * (exposure + 1);
-
-	float3 bloom =
-		tBloom.SampleLevel(sLinearClamp, uv, 1.5f).rgb +
-		tBloom.SampleLevel(sLinearClamp, uv, 3.5f).rgb +
-		tBloom.SampleLevel(sLinearClamp, uv, 4.5f).rgb;
-	value += bloom / 3;
 
 	switch(cPassData.Tonemapper)
 	{

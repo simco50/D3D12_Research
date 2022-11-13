@@ -1,114 +1,79 @@
 #include "Common.hlsli"
 
-struct SeparateData
-{
-	float Threshold;
-	float BrightnessClamp;
-};
-
-struct MipChainData
-{
-	uint SourceMip;
-	float2 TargetDimensionsInv;
-	int Horizontal;
-};
-
-ConstantBuffer<SeparateData> cSeparateData : register(b0);
-ConstantBuffer<MipChainData> cMipData : register(b0);
-
 Texture2D<float4> tSource : register(t0);
-StructuredBuffer<float> tAverageLuminance : register(t1);
+Texture2D<float4> tPreviousSource : register(t1);
 RWTexture2D<float4> uTarget : register(u0);
 
-[numthreads(8, 8, 1)]
-void SeparateBloomCS(uint3 threadId : SV_DispatchThreadID)
+struct DownsampleParams
 {
-	float2 UV = (0.5f + threadId.xy) * cView.ViewportDimensionsInv;
-	float4 color = 0;
-	color += tSource.SampleLevel(sLinearClamp, UV, 0, int2(-1, -1));
-	color += tSource.SampleLevel(sLinearClamp, UV, 0, int2(1, -1));
-	color += tSource.SampleLevel(sLinearClamp, UV, 0, int2(-1, 1));
-	color += tSource.SampleLevel(sLinearClamp, UV, 0, int2(1, 1));
-	color *= 0.25f;
+	float2 TargetDimensionsInv;
+	uint SourceMip;
+};
+ConstantBuffer<DownsampleParams> cDownsampleParams : register(b0);
 
-	float exposure = tAverageLuminance[2];
-	color *= exposure;
+[numthreads(8, 8, 1)]
+void DownsampleCS(uint3 threadId : SV_DispatchThreadID)
+{
+	float2 UV = (threadId.xy + 0.5f) * cDownsampleParams.TargetDimensionsInv;
 
-	color = min(color, cSeparateData.BrightnessClamp);
-	color = max(color - cSeparateData.Threshold, 0);
+	const int2 sampleOffsets[] = {
+		int2(-1.0f,  1.0f), int2(1.0f,  1.0f),
+		int2(-1.0f, -1.0f), int2(1.0f, -1.0f),
 
-	uTarget[threadId.xy] = float4(color.rgb, 1);
+		int2(-2.0f,  2.0f), int2(0.0f,  2.0f), int2(2.0f,  2.0f),
+		int2(-2.0f,  0.0f), int2(0.0f,  0.0f), int2(2.0f,  0.0f),
+		int2(-2.0f, -2.0f), int2(0.0f, -2.0f), int2(2.0f, -2.0f),
+	};
+
+	const float sampleWeights[] = {
+		0.125f, 0.125f,
+		0.125f, 0.125f,
+
+		0.0555555f, 0.0555555f, 0.0555555f,
+		0.0555555f, 0.0555555f, 0.0555555f,
+		0.0555555f, 0.0555555f, 0.0555555f,
+	};
+	float3 outColor = 0;
+	[unroll]
+	for(uint i = 0; i < 13; ++i)
+	{
+		outColor += sampleWeights[i] * tSource.SampleLevel(sLinearClamp, UV, cDownsampleParams.SourceMip, sampleOffsets[i]).xyz;
+	}
+	uTarget[threadId.xy] = float4(outColor, 1);
 }
 
-#define THREAD_GROUP_SIZE (128)
-#define KERNEL_LENGTH (16)
-#define BLUR_WEIGHTS (2 * KERNEL_LENGTH + 1)
-#define GS_CACHE_SIZE (KERNEL_LENGTH + THREAD_GROUP_SIZE + KERNEL_LENGTH)
-
-static const float s_BlurWeights[BLUR_WEIGHTS] = {
-	0.004013,
-	0.005554,
-	0.007527,
-	0.00999,
-	0.012984,
-	0.016524,
-	0.020594,
-	0.025133,
-	0.030036,
-	0.035151,
-	0.040283,
-	0.045207,
-	0.049681,
-	0.053463,
-	0.056341,
-	0.058141,
-	0.058754,
-	0.058141,
-	0.056341,
-	0.053463,
-	0.049681,
-	0.045207,
-	0.040283,
-	0.035151,
-	0.030036,
-	0.025133,
-	0.020594,
-	0.016524,
-	0.012984,
-	0.00999,
-	0.007527,
-	0.005554,
-	0.004013
-};
-
-groupshared float4 gsSampleCache[GS_CACHE_SIZE];
-
-[numthreads(THREAD_GROUP_SIZE, 1, 1)]
-void BloomMipChainCS(uint3 groupId : SV_GroupID, uint groupIndex : SV_GroupIndex)
+struct UpsampleParams
 {
-	float2 direction = float2(cMipData.Horizontal, 1 - cMipData.Horizontal);
-	uint2 multiplier = direction * THREAD_GROUP_SIZE + 1 * (1 - direction);
-	uint2 groupBegin = groupId.xy * multiplier;
+	float2 TargetDimensionsInv;
+	uint SourceCurrentMip;
+	uint SourcePreviousMip;
+	float Radius;
+};
+ConstantBuffer<UpsampleParams> cUpsampleParams : register(b0);
 
-	int i;
-	for (i = groupIndex; i < GS_CACHE_SIZE; i += THREAD_GROUP_SIZE)
+[numthreads(8, 8, 1)]
+void UpsampleCS(uint3 threadId : SV_DispatchThreadID)
+{
+	float2 UV = (threadId.xy + 0.5f) * cUpsampleParams.TargetDimensionsInv;
+	float3 currentColor = tSource.SampleLevel(sLinearClamp, UV, cUpsampleParams.SourceCurrentMip).xyz;
+
+	const int2 sampleOffsets[] = {
+        int2( -1.0f,  1.0f ), int2(  0.0f,  1.0f ), int2(  1.0f,  1.0f ),
+        int2( -1.0f,  0.0f ), int2(  0.0f,  0.0f ), int2(  1.0f,  0.0f ),
+        int2( -1.0f, -1.0f ), int2(  0.0f, -1.0f ), int2(  1.0f, -1.0f )
+    };
+
+    const float sampleWeights[] = {
+        0.0625f, 0.125f, 0.0625f,
+        0.125f,  0.25f,  0.125f,
+        0.0625f, 0.125f, 0.0625f
+    };
+	float3 outColor = 0;
+	[unroll]
+	for(uint i = 0; i < 9; ++i)
 	{
-		float2 uv = ((float2)groupBegin + 0.5f + direction * (i - KERNEL_LENGTH)) * cMipData.TargetDimensionsInv;
-		gsSampleCache[i] = tSource.SampleLevel(sLinearClamp, uv, cMipData.SourceMip);
+		outColor += sampleWeights[i] * tPreviousSource.SampleLevel(sLinearClamp, UV, cUpsampleParams.SourcePreviousMip, sampleOffsets[i]).xyz;
 	}
 
-	GroupMemoryBarrierWithGroupSync();
-
-	uint center = groupIndex + KERNEL_LENGTH;
-	float4 currentSample = gsSampleCache[center];
-
-	float4 value = 0;
-	for(i = 0; i < BLUR_WEIGHTS; ++i)
-	{
-		uint samplePoint = center + i - KERNEL_LENGTH;
-		value += gsSampleCache[samplePoint] * s_BlurWeights[i];
-	}
-
-	int2 pixel = groupBegin + groupIndex * direction;
-	uTarget[pixel] = value;
+	uTarget[threadId.xy] = float4(lerp(currentColor, outColor, cUpsampleParams.Radius) , 1);
 }

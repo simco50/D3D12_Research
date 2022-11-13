@@ -146,8 +146,8 @@ private:
 	RefCountPtr<PipelineState> m_pRenderSkyPSO;
 
 	//Bloom
-	RefCountPtr<PipelineState> m_pBloomSeparatePSO;
-	RefCountPtr<PipelineState> m_pBloomMipChainPSO;
+	RefCountPtr<PipelineState> m_pBloomDownsamplePSO;
+	RefCountPtr<PipelineState> m_pBloomUpsamplePSO;
 
 	// Visibility buffer
 	RefCountPtr<PipelineState> m_pVisibilityShadingPSO;
