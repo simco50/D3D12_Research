@@ -131,6 +131,9 @@ namespace Tweakables
 
 	// Bloom
 	ConsoleVariable g_Bloom("r.Bloom", true);
+	ConsoleVariable g_BloomIntensity("r.Bloom.Intensity", 1.0f);
+	ConsoleVariable g_BloomBlendFactor("r.Bloom.BlendFactor", 0.3f);
+	ConsoleVariable g_BloomInteralBlendFactor("r.Bloom.InteralBlendFactor", 0.85f);
 
 	// Misc Lighting
 	ConsoleVariable g_Sky("r.Sky", true);
@@ -1043,7 +1046,7 @@ void DemoApp::Update()
 				parameters.TargetDimensionsInv = Vector2(1.0f / targetDimensions.x, 1.0f / targetDimensions.y);
 				parameters.SourceCurrentMip = i;
 				parameters.SourcePreviousMip = i + 1;
-				parameters.Radius = 0.85f;
+				parameters.Radius = Tweakables::g_BloomInteralBlendFactor;
 
 				context.SetRootConstants(0, parameters);
 				context.BindResources(2, pUpscaleTarget->Get()->GetSubResourceUAV(i));
@@ -1076,14 +1079,18 @@ void DemoApp::Update()
 					{
 						float WhitePoint;
 						uint32 Tonemapper;
-					} constBuffer;
-					constBuffer.WhitePoint = Tweakables::g_WhitePoint.Get();
-					constBuffer.Tonemapper = Tweakables::g_ToneMapper.Get();
+						float BloomIntensity;
+						float BloomBlendFactor;
+					} parameters;
+					parameters.WhitePoint = Tweakables::g_WhitePoint.Get();
+					parameters.Tonemapper = Tweakables::g_ToneMapper.Get();
+					parameters.BloomIntensity = Tweakables::g_BloomIntensity.Get();
+					parameters.BloomBlendFactor = Tweakables::g_Bloom ? Tweakables::g_BloomBlendFactor.Get() : 0.0f;
 
 					context.SetPipelineState(m_pToneMapPSO);
 					context.SetComputeRootSignature(m_pCommonRS);
 
-					context.SetRootConstants(0, constBuffer);
+					context.SetRootConstants(0, parameters);
 					context.SetRootCBV(1, Renderer::GetViewUniforms(pView, pTarget));
 					context.BindResources(2, pTarget->GetUAV());
 					context.BindResources(3, {
@@ -1715,6 +1722,9 @@ void DemoApp::UpdateImGui()
 		if (ImGui::CollapsingHeader("Bloom"))
 		{
 			ImGui::Checkbox("Enabled", &Tweakables::g_Bloom.Get());
+			ImGui::SliderFloat("Intensity", &Tweakables::g_BloomIntensity.Get(), 0.0f, 4.0f);
+			ImGui::SliderFloat("Blend Factor", &Tweakables::g_BloomBlendFactor.Get(), 0.0f, 1.0f);
+			ImGui::SliderFloat("Internal Blend Factor", &Tweakables::g_BloomInteralBlendFactor.Get(), 0.0f, 1.0f);
 		}
 		if (ImGui::CollapsingHeader("Exposure/Tonemapping"))
 		{

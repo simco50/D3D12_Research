@@ -14,6 +14,8 @@ struct PassParameters
 {
 	float WhitePoint;
 	uint Tonemapper;
+	float BloomIntensity;
+	float BloomBlendFactor;
 };
 
 ConstantBuffer<PassParameters> cPassData : register(b0);
@@ -31,8 +33,8 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 	float2 uv = (0.5f + dispatchThreadId.xy) * cView.TargetDimensionsInv;
 
 	float3 rgb = tColor.Load(uint3(dispatchThreadId.xy, 0)).rgb;
-	float3 bloom = tBloom.SampleLevel(sLinearClamp, uv, 0).rgb;
-	rgb = lerp(rgb, bloom, 0.3f);
+	float3 bloom = tBloom.SampleLevel(sLinearClamp, uv, 0).rgb * cPassData.BloomIntensity;
+	rgb = lerp(rgb, bloom, cPassData.BloomBlendFactor);
 
 #if TONEMAP_LUMINANCE
 	float3 xyY = sRGB_to_xyY(rgb);
