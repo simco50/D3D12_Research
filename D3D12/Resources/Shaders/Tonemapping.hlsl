@@ -16,6 +16,7 @@ struct PassParameters
 	uint Tonemapper;
 	float BloomIntensity;
 	float BloomBlendFactor;
+	float3 LensDirtTint;
 };
 
 ConstantBuffer<PassParameters> cPassData : register(b0);
@@ -23,6 +24,7 @@ RWTexture2D<float4> uOutColor : register(u0);
 Texture2D tColor : register(t0);
 StructuredBuffer<float> tAverageLuminance : register(t1);
 Texture2D tBloom : register(t2);
+Texture2D tLensDirt : register(t3);
 
 [numthreads(BLOCK_SIZE, BLOCK_SIZE, 1)]
 void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
@@ -33,8 +35,13 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 	float2 uv = (0.5f + dispatchThreadId.xy) * cView.TargetDimensionsInv;
 
 	float3 rgb = tColor.Load(uint3(dispatchThreadId.xy, 0)).rgb;
-	float3 bloom = tBloom.SampleLevel(sLinearClamp, uv, 0).rgb * cPassData.BloomIntensity;
-	rgb = lerp(rgb, bloom, cPassData.BloomBlendFactor);
+
+	if(cPassData.BloomIntensity >= 1)
+	{
+		float3 lensDirt = tLensDirt.SampleLevel(sLinearClamp, uv, 0).rgb * cPassData.LensDirtTint;
+		float3 bloom = tBloom.SampleLevel(sLinearClamp, uv, 0).rgb * cPassData.BloomIntensity;
+		rgb = lerp(rgb, bloom, saturate(cPassData.BloomBlendFactor + lensDirt));
+	}
 
 #if TONEMAP_LUMINANCE
 	float3 xyY = sRGB_to_xyY(rgb);

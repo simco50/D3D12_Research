@@ -119,6 +119,8 @@ private:
 
 	//Tonemapping
 	RefCountPtr<PipelineState> m_pToneMapPSO;
+	RefCountPtr<Texture> m_pLensDirtTexture;
+	Vector3 m_LensDirtTint = Vector3::One;
 
 	// Eye adaptation
 	RefCountPtr<Buffer> m_pAverageLuminance;

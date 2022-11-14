@@ -310,6 +310,8 @@ void DemoApp::SetupScene(CommandContext& context)
 		volume.NumRays = 128;
 		volume.MaxNumRays = 512;
 	}
+
+	m_pLensDirtTexture = GraphicsCommon::CreateTextureFromFile(context, "Resources/Textures/LensDirt.dds", true, "Lens Dirt");
 }
 
 void DemoApp::Update()
@@ -1119,11 +1121,13 @@ void DemoApp::Update()
 						uint32 Tonemapper;
 						float BloomIntensity;
 						float BloomBlendFactor;
+						Vector3 LensDirtTint;
 					} parameters;
 					parameters.WhitePoint = Tweakables::g_WhitePoint.Get();
 					parameters.Tonemapper = Tweakables::g_ToneMapper.Get();
-					parameters.BloomIntensity = Tweakables::g_BloomIntensity.Get();
-					parameters.BloomBlendFactor = Tweakables::g_Bloom ? Tweakables::g_BloomBlendFactor.Get() : 0.0f;
+					parameters.BloomIntensity = Tweakables::g_Bloom ? Tweakables::g_BloomIntensity.Get() : 0.0f;
+					parameters.BloomBlendFactor = Tweakables::g_BloomBlendFactor.Get();
+					parameters.LensDirtTint = m_LensDirtTint;
 
 					context.SetPipelineState(m_pToneMapPSO);
 					context.SetComputeRootSignature(m_pCommonRS);
@@ -1135,6 +1139,7 @@ void DemoApp::Update()
 						sceneTextures.pColorTarget->Get()->GetSRV(),
 						pAverageLuminance->Get()->GetSRV(),
 						pBloomTexture->Get()->GetSRV(),
+						m_pLensDirtTexture->GetSRV(),
 						});
 					context.Dispatch(ComputeUtils::GetNumThreadGroups(pTarget->GetWidth(), 16, pTarget->GetHeight(), 16));
 				});
@@ -1715,9 +1720,10 @@ void DemoApp::UpdateImGui()
 		if (ImGui::CollapsingHeader("Bloom"))
 		{
 			ImGui::Checkbox("Enabled", &Tweakables::g_Bloom.Get());
-			ImGui::SliderFloat("Intensity", &Tweakables::g_BloomIntensity.Get(), 0.0f, 4.0f);
+			ImGui::SliderFloat("Intensity", &Tweakables::g_BloomIntensity.Get(), 1.0f, 4.0f);
 			ImGui::SliderFloat("Blend Factor", &Tweakables::g_BloomBlendFactor.Get(), 0.0f, 1.0f);
 			ImGui::SliderFloat("Internal Blend Factor", &Tweakables::g_BloomInteralBlendFactor.Get(), 0.0f, 1.0f);
+			ImGui::ColorEdit3("Lens Dirt Tint", &m_LensDirtTint.x, ImGuiColorEditFlags_HDR | ImGuiColorEditFlags_Float);
 		}
 		if (ImGui::CollapsingHeader("Exposure/Tonemapping"))
 		{
