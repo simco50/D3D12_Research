@@ -985,17 +985,21 @@ void DemoApp::Update()
 		{
 			RG_GRAPH_SCOPE("Bloom", graph);
 
-			uint32 numPasses = 6;
+			auto ComputeNumMips = [](uint32 width, uint32 height) -> uint32
+			{
+				return (uint32)Math::Floor(log2f((float)Math::Max(width, height))) + 1u;
+			};
 
 			Vector2u bloomDimensions = Vector2u(viewDimensions.x >> 1, viewDimensions.y >> 1);
+			const uint32 mipBias = 3;
+			uint32 numMips = ComputeNumMips(bloomDimensions.x, bloomDimensions.y) - mipBias;
+			RGTexture* pDownscaleTarget = graph.Create("Downscale Target", TextureDesc::Create2D(bloomDimensions.x, bloomDimensions.y, ResourceFormat::RGBA16_FLOAT, TextureFlag::None, 1, numMips));
 
 			RGTexture* pSourceTexture = sceneTextures.pColorTarget;
-			Vector2u targetDimensions = bloomDimensions;
-			RGTexture* pDownscaleTarget = graph.Create("Downscale Target", TextureDesc::Create2D(targetDimensions.x, targetDimensions.y, ResourceFormat::RGBA16_FLOAT, TextureFlag::None, 1, numPasses));
-
-			for (uint32 i = 0; i < pDownscaleTarget->GetDesc().Mips; ++i)
+			for (uint32 i = 0; i < numMips; ++i)
 			{
-				graph.AddPass(Sprintf("Downsample [%dx%d > %dx%d]", targetDimensions.x << 1, targetDimensions.y << 1, targetDimensions.x, targetDimensions.y).c_str(), RGPassFlag::Compute)
+				Vector2u targetDimensions(Math::Max(1u, bloomDimensions.x >> i), Math::Max(1u, bloomDimensions.y >> i));
+				graph.AddPass(Sprintf("Downsample %d [%dx%d > %dx%d]", i, targetDimensions.x << 1, targetDimensions.y << 1, targetDimensions.x, targetDimensions.y).c_str(), RGPassFlag::Compute)
 					.Write(pDownscaleTarget)
 					.Bind([=](CommandContext& context)
 						{
@@ -1017,19 +1021,15 @@ void DemoApp::Update()
 						});
 
 				pSourceTexture = pDownscaleTarget;
-				targetDimensions.x >>= 1;
-				targetDimensions.y >>= 1;
 			}
 
-			RGTexture* pUpscaleTarget = graph.Create("Upscale Target", TextureDesc::Create2D(bloomDimensions.x, bloomDimensions.y, ResourceFormat::RGBA16_FLOAT, TextureFlag::None, 1, numPasses - 1));
+			RGTexture* pUpscaleTarget = graph.Create("Upscale Target", TextureDesc::Create2D(bloomDimensions.x, bloomDimensions.y, ResourceFormat::RGBA16_FLOAT, TextureFlag::None, 1, numMips - 1));
 			RGTexture* pPreviousSource = pDownscaleTarget;
 
-			targetDimensions.x = pUpscaleTarget->GetDesc().Width >> (pUpscaleTarget->GetDesc().Mips - 1);
-			targetDimensions.y = pUpscaleTarget->GetDesc().Height >> (pUpscaleTarget->GetDesc().Mips - 1);
-
-			for (int32 i = numPasses - 2; i >= 0; --i)
+			for (int32 i = numMips - 2; i >= 0; --i)
 			{
-				graph.AddPass(Sprintf("Upsample [%dx%d > %dx%d]", targetDimensions.x >> 1, targetDimensions.y >> 1, targetDimensions.x, targetDimensions.y).c_str(), RGPassFlag::Compute)
+				Vector2u targetDimensions(Math::Max(1u, bloomDimensions.x >> i), Math::Max(1u, bloomDimensions.y >> i));
+				graph.AddPass(Sprintf("UpsampleCombine %d [%dx%d > %dx%d]", numMips - 2 - i, Math::Max(1u, targetDimensions.x >> 1), Math::Max(1u, targetDimensions.y >> 1), targetDimensions.x, targetDimensions.y).c_str(), RGPassFlag::Compute)
 					.Read(pDownscaleTarget)
 					.Write(pUpscaleTarget)
 					.Bind([=](CommandContext& context)
@@ -1059,8 +1059,6 @@ void DemoApp::Update()
 						});
 
 				pPreviousSource = pUpscaleTarget;
-				targetDimensions.x <<= 1;
-				targetDimensions.y <<= 1;
 			}
 
 			pBloomTexture = pUpscaleTarget;

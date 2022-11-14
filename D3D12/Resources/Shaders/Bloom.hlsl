@@ -1,5 +1,9 @@
 #include "Common.hlsli"
 
+// Based on
+// http://www.iryoku.com/next-generation-post-processing-in-call-of-duty-advanced-warfare
+// https://www.froyok.fr/blog/2021-12-ue4-custom-bloom/
+
 Texture2D<float4> tSource : register(t0);
 Texture2D<float4> tPreviousSource : register(t1);
 RWTexture2D<float4> uTarget : register(u0);
@@ -35,7 +39,7 @@ void DownsampleCS(uint3 threadId : SV_DispatchThreadID)
 	};
 	float3 outColor = 0;
 	[unroll]
-	for(uint i = 0; i < 13; ++i)
+	for(uint i = 0; i < ArraySize(sampleOffsets); ++i)
 	{
 		outColor += sampleWeights[i] * tSource.SampleLevel(sLinearClamp, UV, cDownsampleParams.SourceMip, sampleOffsets[i]).xyz;
 	}
@@ -70,7 +74,7 @@ void UpsampleCS(uint3 threadId : SV_DispatchThreadID)
     };
 	float3 outColor = 0;
 	[unroll]
-	for(uint i = 0; i < 9; ++i)
+	for(uint i = 0; i < ArraySize(sampleOffsets); ++i)
 	{
 		outColor += sampleWeights[i] * tPreviousSource.SampleLevel(sLinearClamp, UV, cUpsampleParams.SourcePreviousMip, sampleOffsets[i]).xyz;
 	}

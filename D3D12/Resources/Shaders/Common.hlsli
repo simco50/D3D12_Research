@@ -317,6 +317,12 @@ T max3(T a, T b, T c)
 	return max(max(a, b), c);
 }
 
+template<typename T, uint N>
+uint ArraySize(T arr[N])
+{
+	return N;
+}
+
 //This is still not totally exact as pow() has imprecisions
 float SrgbToLinear(float y)
 {
