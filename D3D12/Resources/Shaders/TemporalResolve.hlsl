@@ -2,34 +2,30 @@
 #include "TonemappingCommon.hlsli"
 #include "Color.hlsli"
 
-#define HISTORY_REJECT_NONE			 0
+#define HISTORY_REJECT_NONE			 	0
 #define HISTORY_REJECT_CLAMP			1
-#define HISTORY_REJECT_CLIP			 2 // [Karis14]
+#define HISTORY_REJECT_CLIP			 	2 // [Karis14]
 #define HISTORY_REJECT_VARIANCE_CLIP	3 // [Salvi16]
 
 #define HISTORY_RESOLVE_BILINEAR		0
-#define HISTORY_RESOLVE_CATMULL_ROM	 1
+#define HISTORY_RESOLVE_CATMULL_ROM	 	1
 
-#define COLOR_SPACE_RGB				 0
-#define COLOR_SPACE_YCOCG			   1 // [Karis14]
+#define COLOR_SPACE_RGB					0
+#define COLOR_SPACE_YCOCG			  	1 // [Karis14]
 
 #define MIN_BLEND_FACTOR				0.05
 #define MAX_BLEND_FACTOR				0.12
 
-#ifndef TAA_TEST
-#define TAA_TEST 0
-#endif
-
-#define TAA_COLOR_SPACE			 COLOR_SPACE_YCOCG		   // Color space to use for neighborhood clamping
-#define TAA_HISTORY_REJECT_METHOD   HISTORY_REJECT_CLIP		 // Use neighborhood clipping to reject history samples
-#define TAA_RESOLVE_METHOD		  HISTORY_RESOLVE_CATMULL_ROM // History resolve filter
-#define TAA_REPROJECT			   1						   // Use per pixel velocity to reproject
-#define TAA_TONEMAP				 0						   // Tonemap before resolving history to prevent high luminance pixels from overpowering
-#define TAA_AABB_ROUNDED			1						   // Use combine 3x3 neighborhood with plus-pattern neighborhood
-#define TAA_VELOCITY_CORRECT		0						   // Reduce blend factor when the subpixel motion is high to reduce blur under motion
-#define TAA_DEBUG_RED_HISTORY	   0
-#define TAA_LUMINANCE_WEIGHT		0						   // [Lottes]
-#define TAA_DILATE_VELOCITY		 1
+#define TAA_COLOR_SPACE			 		COLOR_SPACE_YCOCG		   		// Color space to use for neighborhood clamping
+#define TAA_HISTORY_REJECT_METHOD   	HISTORY_REJECT_CLIP		 		// Use neighborhood clipping to reject history samples
+#define TAA_RESOLVE_METHOD		  		HISTORY_RESOLVE_CATMULL_ROM 	// History resolve filter
+#define TAA_REPROJECT			  		1						   		// Use per pixel velocity to reproject
+#define TAA_TONEMAP				 		0						   		// Tonemap before resolving history to prevent high luminance pixels from overpowering
+#define TAA_AABB_ROUNDED				1						   		// Use combine 3x3 neighborhood with plus-pattern neighborhood
+#define TAA_VELOCITY_CORRECT			0						   		// Reduce blend factor when the subpixel motion is high to reduce blur under motion
+#define TAA_DEBUG_RED_HISTORY	   		0
+#define TAA_LUMINANCE_WEIGHT			0						   		// [Lottes]
+#define TAA_DILATE_VELOCITY		 		1
 
 Texture2D tVelocity : register(t0);
 Texture2D tPreviousColor : register(t1);
