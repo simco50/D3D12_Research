@@ -144,6 +144,9 @@ namespace GraphicsCommon
 
 	Texture* GetDefaultTexture(DefaultTexture type);
 
+	constexpr static ResourceFormat ShadowFormat = ResourceFormat::D16_UNORM;
+	constexpr static ResourceFormat DepthStencilFormat = ResourceFormat::D32_FLOAT;
+
 	extern RefCountPtr<CommandSignature> pIndirectDrawSignature;
 	extern RefCountPtr<CommandSignature> pIndirectDrawIndexedSignature;
 	extern RefCountPtr<CommandSignature> pIndirectDispatchSignature;

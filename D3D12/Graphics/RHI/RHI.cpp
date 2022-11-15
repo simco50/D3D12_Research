@@ -51,12 +51,7 @@ static constexpr FormatInfo sFormatInfo[] = {
     { ResourceFormat::RGBA32_UINT,       "RGBA32_UINT",       16,  1, FormatType::Integer,      4, false, false, false, false, false },
     { ResourceFormat::RGBA32_SINT,       "RGBA32_SINT",       16,  1, FormatType::Integer,      4, false, false, true,  false, false },
     { ResourceFormat::RGBA32_FLOAT,      "RGBA32_FLOAT",      16,  1, FormatType::Float,        4, false, false, true,  false, false },
-    { ResourceFormat::D16_UNORM,         "D16_UNORM",         2,   1, FormatType::DepthStencil, 1, true,  false, false, false, false },
-    { ResourceFormat::D24S8,             "D24S8",             4,   1, FormatType::DepthStencil, 1, true,  true,  false, false, false },
-    { ResourceFormat::X24G8_UINT,        "X24G8_UINT",        4,   1, FormatType::Integer,      1, false, true,  false, false, false },
-    { ResourceFormat::D32_FLOAT,         "D32",               4,   1, FormatType::DepthStencil, 1, true,  false, false, false, false },
-    { ResourceFormat::D32S8,             "D32S8",             8,   1, FormatType::DepthStencil, 1, true,  true,  false, false, false },
-    { ResourceFormat::X32G8_UINT,        "X32G8_UINT",        8,   1, FormatType::Integer,      1, false, true,  false, false, false },
+    
     { ResourceFormat::BC1_UNORM,         "BC1_UNORM",         8,   4, FormatType::Normalized,   3, false, false, false, false, true  },
     { ResourceFormat::BC1_UNORM_SRGB,    "BC1_UNORM_SRGB",    8,   4, FormatType::Normalized,   3, false, false, false, true,  true  },
     { ResourceFormat::BC2_UNORM,         "BC2_UNORM",         16,  4, FormatType::Normalized,   4, false, false, false, false, true  },
@@ -71,9 +66,25 @@ static constexpr FormatInfo sFormatInfo[] = {
     { ResourceFormat::BC6H_SFLOAT,       "BC6H_SFLOAT",       16,  4, FormatType::Float,        3, false, false, true,  false, true  },
     { ResourceFormat::BC7_UNORM,         "BC7_UNORM",         16,  4, FormatType::Normalized,   4, false, false, false, false, true  },
     { ResourceFormat::BC7_UNORM_SRGB,    "BC7_UNORM_SRGB",    16,  4, FormatType::Normalized,   4, false, false, false, true,  true  },
+
+	{ ResourceFormat::D16_UNORM,         "D16_UNORM",         2,   1, FormatType::DepthStencil, 1, true,  false, false, false, false },
+	{ ResourceFormat::D32_FLOAT,         "D32",               4,   1, FormatType::DepthStencil, 1, true,  false, false, false, false },
+	{ ResourceFormat::D24S8,             "D24S8",             4,   1, FormatType::DepthStencil, 1, true,  true,  false, false, false },
+	{ ResourceFormat::D32S8,             "D32S8",             8,   1, FormatType::DepthStencil, 1, true,  true,  false, false, false },
 };
 
 static_assert(ARRAYSIZE(sFormatInfo) == (uint32)ResourceFormat::Num);
+
+constexpr bool TestEnumValues()
+{
+	for (uint32 i = 0; i < ARRAYSIZE(sFormatInfo); ++i)
+	{
+		if (sFormatInfo[i].Format != (ResourceFormat)i)
+			return false;
+	}
+	return true;
+}
+static_assert(TestEnumValues());
 
 const FormatInfo& GetFormatInfo(ResourceFormat format)
 {
@@ -94,36 +105,20 @@ ResourceFormat SRVFormatFromDepth(ResourceFormat format)
 {
 	switch (format)
 	{
-		// 32-bit Z w/ Stencil
-	case ResourceFormat::D32S8:
-	case ResourceFormat::X32G8_UINT:
-		return ResourceFormat::R32_FLOAT;
-		// No Stencil
-	case ResourceFormat::D32_FLOAT:
-	case ResourceFormat::R32_FLOAT:
-		return ResourceFormat::R32_FLOAT;
-		// 24-bit Z
-	case ResourceFormat::D24S8:
-	case ResourceFormat::X24G8_UINT:
-		return ResourceFormat::D24S8;
-		// 16-bit Z w/o Stencil
-	case ResourceFormat::D16_UNORM:
-	case ResourceFormat::R16_UNORM:
-		return ResourceFormat::R16_UNORM;
-	default:
-		return format;
+	case ResourceFormat::D32S8:			return ResourceFormat::R32_FLOAT;
+	case ResourceFormat::D32_FLOAT:		return ResourceFormat::R32_FLOAT;
+	case ResourceFormat::D24S8:			return ResourceFormat::D24S8;
+	case ResourceFormat::D16_UNORM:		return ResourceFormat::R16_UNORM;
 	}
+	return format;
 }
 
 ResourceFormat DSVFormat(ResourceFormat format)
 {
 	switch (format)
 	{
-	case ResourceFormat::R32_FLOAT:
-		return ResourceFormat::D32_FLOAT;
-	case ResourceFormat::R16_UNORM:
-		return ResourceFormat::D16_UNORM;
-	default:
-		return format;
+	case ResourceFormat::R32_FLOAT:		return ResourceFormat::D32_FLOAT;
+	case ResourceFormat::R16_UNORM:		return ResourceFormat::D16_UNORM;
 	}
+	return format;
 }

@@ -37,7 +37,7 @@ TiledForward::TiledForward(GraphicsDevice* pDevice)
 		psoDesc.SetRootSignature(m_pCommonRS);
 		psoDesc.SetVertexShader("Diffuse.hlsl", "VSMain", { "TILED_FORWARD" });
 		psoDesc.SetPixelShader("Diffuse.hlsl", "PSMain", { "TILED_FORWARD" });
-		psoDesc.SetRenderTargetFormats(formats, ResourceFormat::D32_FLOAT, 1);
+		psoDesc.SetRenderTargetFormats(formats, GraphicsCommon::DepthStencilFormat, 1);
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_EQUAL);
 		psoDesc.SetDepthWrite(false);
 		psoDesc.SetName("Forward Pass - Opaque");

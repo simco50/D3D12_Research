@@ -59,13 +59,6 @@ enum class ResourceFormat
 	RGBA32_SINT,
 	RGBA32_FLOAT,
 
-	D16_UNORM,
-	D24S8,
-	X24G8_UINT,
-	D32_FLOAT,
-	D32S8,
-	X32G8_UINT,
-
 	BC1_UNORM,
 	BC1_UNORM_SRGB,
 	BC2_UNORM,
@@ -80,6 +73,11 @@ enum class ResourceFormat
 	BC6H_SFLOAT,
 	BC7_UNORM,
 	BC7_UNORM_SRGB,
+
+	D16_UNORM,
+	D32_FLOAT,
+	D24S8,
+	D32S8,
 
 	Num,
 };
