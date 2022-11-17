@@ -1043,20 +1043,20 @@ void DemoApp::Update()
 					.Bind([=](CommandContext& context)
 						{
 							context.SetComputeRootSignature(m_pCommonRS);
-				context.SetPipelineState(m_pBloomDownsamplePSO);
-				struct
-				{
-					Vector2 TargetDimensionsInv;
-					uint32 SourceMip;
-				} parameters;
-				parameters.TargetDimensionsInv = Vector2(1.0f / targetDimensions.x, 1.0f / targetDimensions.y);
-				parameters.SourceMip = i == 0 ? 0 : i - 1;
+							context.SetPipelineState(i == 0 ? m_pBloomDownsampleKarisAveragePSO : m_pBloomDownsamplePSO);
+							struct
+							{
+								Vector2 TargetDimensionsInv;
+								uint32 SourceMip;
+							} parameters;
+							parameters.TargetDimensionsInv = Vector2(1.0f / targetDimensions.x, 1.0f / targetDimensions.y);
+							parameters.SourceMip = i == 0 ? 0 : i - 1;
 
-				context.SetRootConstants(0, parameters);
-				context.BindResources(2, pDownscaleTarget->Get()->GetSubResourceUAV(i));
-				context.BindResources(3, pSourceTexture->Get()->GetSRV());
-				context.Dispatch(ComputeUtils::GetNumThreadGroups(targetDimensions.x, 8, targetDimensions.y, 8));
-				context.InsertUavBarrier();
+							context.SetRootConstants(0, parameters);
+							context.BindResources(2, pDownscaleTarget->Get()->GetSubResourceUAV(i));
+							context.BindResources(3, pSourceTexture->Get()->GetSRV());
+							context.Dispatch(ComputeUtils::GetNumThreadGroups(targetDimensions.x, 8, targetDimensions.y, 8));
+							context.InsertUavBarrier();
 						});
 
 				pSourceTexture = pDownscaleTarget;
@@ -1074,27 +1074,27 @@ void DemoApp::Update()
 					.Bind([=](CommandContext& context)
 						{
 							context.SetComputeRootSignature(m_pCommonRS);
-				context.SetPipelineState(m_pBloomUpsamplePSO);
-				struct
-				{
-					Vector2 TargetDimensionsInv;
-					uint32 SourceCurrentMip;
-					uint32 SourcePreviousMip;
-					float Radius;
-				} parameters;
-				parameters.TargetDimensionsInv = Vector2(1.0f / targetDimensions.x, 1.0f / targetDimensions.y);
-				parameters.SourceCurrentMip = i;
-				parameters.SourcePreviousMip = i + 1;
-				parameters.Radius = Tweakables::g_BloomInteralBlendFactor;
+							context.SetPipelineState(m_pBloomUpsamplePSO);
+							struct
+							{
+								Vector2 TargetDimensionsInv;
+								uint32 SourceCurrentMip;
+								uint32 SourcePreviousMip;
+								float Radius;
+							} parameters;
+							parameters.TargetDimensionsInv = Vector2(1.0f / targetDimensions.x, 1.0f / targetDimensions.y);
+							parameters.SourceCurrentMip = i;
+							parameters.SourcePreviousMip = i + 1;
+							parameters.Radius = Tweakables::g_BloomInteralBlendFactor;
 
-				context.SetRootConstants(0, parameters);
-				context.BindResources(2, pUpscaleTarget->Get()->GetSubResourceUAV(i));
-				context.BindResources(3, {
-					pDownscaleTarget->Get()->GetSRV(),
-					pPreviousSource->Get()->GetSRV(),
-					});
-				context.Dispatch(ComputeUtils::GetNumThreadGroups(targetDimensions.x, 8, targetDimensions.y, 8));
-				context.InsertUavBarrier();
+							context.SetRootConstants(0, parameters);
+							context.BindResources(2, pUpscaleTarget->Get()->GetSubResourceUAV(i));
+							context.BindResources(3, {
+								pDownscaleTarget->Get()->GetSRV(),
+								pPreviousSource->Get()->GetSRV(),
+								});
+							context.Dispatch(ComputeUtils::GetNumThreadGroups(targetDimensions.x, 8, targetDimensions.y, 8));
+							context.InsertUavBarrier();
 						});
 
 				pPreviousSource = pUpscaleTarget;
@@ -1329,6 +1329,7 @@ void DemoApp::InitializePipelines()
 
 	//Bloom
 	m_pBloomDownsamplePSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "Bloom.hlsl", "DownsampleCS");
+	m_pBloomDownsampleKarisAveragePSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "Bloom.hlsl", "DownsampleCS", {"KARIS_AVERAGE=1"});
 	m_pBloomUpsamplePSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "Bloom.hlsl", "UpsampleCS");
 
 	//Visibility Shading

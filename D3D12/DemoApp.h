@@ -149,6 +149,7 @@ private:
 
 	//Bloom
 	RefCountPtr<PipelineState> m_pBloomDownsamplePSO;
+	RefCountPtr<PipelineState> m_pBloomDownsampleKarisAveragePSO;
 	RefCountPtr<PipelineState> m_pBloomUpsamplePSO;
 
 	// Visibility buffer
