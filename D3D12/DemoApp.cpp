@@ -1123,7 +1123,7 @@ void DemoApp::Update()
 					} parameters;
 					parameters.WhitePoint = Tweakables::g_WhitePoint.Get();
 					parameters.Tonemapper = Tweakables::g_ToneMapper.Get();
-					parameters.BloomIntensity = Tweakables::g_Bloom ? Tweakables::g_BloomIntensity.Get() : 0.0f;
+					parameters.BloomIntensity = Tweakables::g_BloomIntensity.Get();
 					parameters.BloomBlendFactor = Tweakables::g_BloomBlendFactor.Get();
 					parameters.LensDirtTint = m_LensDirtTint;
 
@@ -1719,7 +1719,7 @@ void DemoApp::UpdateImGui()
 		if (ImGui::CollapsingHeader("Bloom"))
 		{
 			ImGui::Checkbox("Enabled", &Tweakables::g_Bloom.Get());
-			ImGui::SliderFloat("Intensity", &Tweakables::g_BloomIntensity.Get(), 1.0f, 4.0f);
+			ImGui::SliderFloat("Intensity", &Tweakables::g_BloomIntensity.Get(), 0.0f, 4.0f);
 			ImGui::SliderFloat("Blend Factor", &Tweakables::g_BloomBlendFactor.Get(), 0.0f, 1.0f);
 			ImGui::SliderFloat("Internal Blend Factor", &Tweakables::g_BloomInteralBlendFactor.Get(), 0.0f, 1.0f);
 			ImGui::ColorEdit3("Lens Dirt Tint", &m_LensDirtTint.x, ImGuiColorEditFlags_HDR | ImGuiColorEditFlags_Float);
