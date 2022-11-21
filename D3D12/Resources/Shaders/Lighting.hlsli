@@ -189,7 +189,7 @@ float ScreenSpaceShadows(float3 worldPosition, float3 lightDirection, Texture2D<
 	for(uint i = 0; i < stepCount; ++i)
 	{
 		float3 rayPos = rayStartPS.xyz + n * rayStep;
-		float depth = depthTexture.SampleLevel(sLinearClamp, rayPos.xy * float2(0.5f, -0.5f) + float2(0.5f, 0.5f), 0).r;
+		float depth = depthTexture.SampleLevel(sPointClamp, rayPos.xy * float2(0.5f, -0.5f) + float2(0.5f, 0.5f), 0).r;
 		float diff = rayPos.z - depth;
 
 		bool hit = abs(diff + tolerance) < tolerance;
@@ -239,10 +239,10 @@ float3 ScreenSpaceReflections(float3 worldPosition, float3 N, float3 V, float R,
 			{
 				uint4 step = float4(1, 2, 3, 4) + currStep;
 				float4 sceneZ = float4(
-					depthTexture.SampleLevel(sLinearClamp, rayPos.xy + rayStep.xy * step.x, 0).x,
-					depthTexture.SampleLevel(sLinearClamp, rayPos.xy + rayStep.xy * step.y, 0).x,
-					depthTexture.SampleLevel(sLinearClamp, rayPos.xy + rayStep.xy * step.z, 0).x,
-					depthTexture.SampleLevel(sLinearClamp, rayPos.xy + rayStep.xy * step.w, 0).x
+					depthTexture.SampleLevel(sPointClamp, rayPos.xy + rayStep.xy * step.x, 0).x,
+					depthTexture.SampleLevel(sPointClamp, rayPos.xy + rayStep.xy * step.y, 0).x,
+					depthTexture.SampleLevel(sPointClamp, rayPos.xy + rayStep.xy * step.z, 0).x,
+					depthTexture.SampleLevel(sPointClamp, rayPos.xy + rayStep.xy * step.w, 0).x
 				);
 				float4 currentPosition = rayPos.z + rayStep.z * step;
 				uint4 zTest = abs(sceneZ - currentPosition - zThickness) < zThickness;
