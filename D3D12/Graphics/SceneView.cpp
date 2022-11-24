@@ -424,7 +424,7 @@ namespace GraphicsCommon
 	}
 }
 
-Vector2i SceneView::GetDimensions() const
+Vector2u SceneView::GetDimensions() const
 {
-	return Vector2i((uint32)View.Viewport.GetWidth(), (uint32)View.Viewport.GetHeight());
+	return Vector2u((uint32)View.Viewport.GetWidth(), (uint32)View.Viewport.GetHeight());
 }

@@ -272,13 +272,13 @@ void GPUDrivenRenderer::PrintStats(RGGraph& graph, const SceneView* pView, const
 			});
 }
 
-RGTexture* GPUDrivenRenderer::InitHZB(RGGraph& graph, const Vector2i& viewDimensions, RefCountPtr<Texture>* pExportTarget) const
+RGTexture* GPUDrivenRenderer::InitHZB(RGGraph& graph, const Vector2u& viewDimensions, RefCountPtr<Texture>* pExportTarget) const
 {
 	RGTexture* pHZB = nullptr;
 	if (pExportTarget && *pExportTarget)
 		pHZB = graph.TryImport(*pExportTarget);
 
-	Vector2i hzbDimensions;
+	Vector2u hzbDimensions;
 	hzbDimensions.x = Math::Max(Math::NextPowerOfTwo(viewDimensions.x) >> 1u, 1u);
 	hzbDimensions.y = Math::Max(Math::NextPowerOfTwo(viewDimensions.y) >> 1u, 1u);
 	uint32 numMips = (uint32)Math::Floor(log2f((float)Math::Max(hzbDimensions.x, hzbDimensions.y)));
@@ -299,7 +299,7 @@ void GPUDrivenRenderer::BuildHZB(RGGraph& graph, RGTexture* pDepth, RGTexture* p
 {
 	RG_GRAPH_SCOPE("HZB", graph);
 
-	const Vector2i hzbDimensions = pHZB->GetDesc().Size2D();
+	const Vector2u hzbDimensions = pHZB->GetDesc().Size2D();
 
 	graph.AddPass("HZB Create", RGPassFlag::Compute)
 		.Read(pDepth)

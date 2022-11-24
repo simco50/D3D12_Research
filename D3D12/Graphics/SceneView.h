@@ -87,7 +87,7 @@ struct SceneView
 	uint32 NumDDGIVolumes = 0;
 	RefCountPtr<Texture> pSky;
 	int FrameIndex = 0;
-	Vector2i HZBDimensions;
+	Vector2u HZBDimensions;
 	VisibilityMask VisibilityMask;
 	ViewTransform View;
 	BoundingBox SceneAABB;
@@ -99,7 +99,7 @@ struct SceneView
 	uint32 NumShadowCascades;
 	uint32 NumLights;
 
-	Vector2i GetDimensions() const;
+	Vector2u GetDimensions() const;
 };
 
 struct SceneTextures

@@ -515,7 +515,7 @@ void DemoApp::Update()
 
 		RGGraph graph(*m_RenderGraphPool);
 
-		const Vector2i viewDimensions = m_SceneData.GetDimensions();
+		const Vector2u viewDimensions = m_SceneData.GetDimensions();
 
 		SceneTextures sceneTextures;
 		sceneTextures.pPreviousColor =		RGUtils::CreatePersistent(graph, "Color History", TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, ResourceFormat::RGBA16_FLOAT), &m_pColorHistory, true);
@@ -631,9 +631,9 @@ void DemoApp::Update()
 			{
 				RG_GRAPH_SCOPE("Depth Reduce", graph);
 
-				Vector2i depthTarget = sceneTextures.pDepth->GetDesc().Size2D();
-				depthTarget.x = Math::Max(depthTarget.x / 16, 1);
-				depthTarget.y = Math::Max(depthTarget.y / 16, 1);
+				Vector2u depthTarget = sceneTextures.pDepth->GetDesc().Size2D();
+				depthTarget.x = Math::Max(depthTarget.x / 16u, 1u);
+				depthTarget.y = Math::Max(depthTarget.y / 16u, 1u);
 				RGTexture* pReductionTarget = graph.Create("Depth Reduction Target", TextureDesc::Create2D(depthTarget.x, depthTarget.y, ResourceFormat::RG32_FLOAT));
 
 				graph.AddPass("Depth Reduce - Setup", RGPassFlag::Compute)
@@ -675,8 +675,8 @@ void DemoApp::Update()
 							if (depthTarget.x == 1 && depthTarget.y == 1)
 								break;
 
-							depthTarget.x = Math::Max(1, depthTarget.x / 16);
-							depthTarget.y = Math::Max(1, depthTarget.y / 16);
+							depthTarget.x = Math::Max(1u, depthTarget.x / 16);
+							depthTarget.y = Math::Max(1u, depthTarget.y / 16);
 				}
 
 				graph.AddPass("Readback Copy", RGPassFlag::Copy | RGPassFlag::NeverCull)
@@ -1484,8 +1484,8 @@ void DemoApp::UpdateImGui()
 	ImVec2 viewportSize = ImGui::GetWindowSize();
 	float widthDelta = ImGui::GetWindowContentRegionMax().x - ImGui::GetWindowContentRegionMin().x;
 	float heightDelta = ImGui::GetWindowContentRegionMax().y - ImGui::GetWindowContentRegionMin().y;
-	uint32 width = (uint32)Math::Max(16.0f, widthDelta);
-	uint32 height = (uint32)Math::Max(16.0f, heightDelta);
+	uint32 viewportWidth = (uint32)Math::Max(16.0f, widthDelta);
+	uint32 viewportHeight = (uint32)Math::Max(16.0f, heightDelta);
 
 	if (width != m_ColorOutput->GetWidth() || height != m_ColorOutput->GetHeight())
 	{

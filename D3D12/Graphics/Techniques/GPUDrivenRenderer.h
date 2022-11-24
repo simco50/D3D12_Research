@@ -42,7 +42,7 @@ public:
 	void PrintStats(RGGraph& graph, const SceneView* pView, const RasterContext& rasterContext);
 
 private:
-	RGTexture* InitHZB(RGGraph& graph, const Vector2i& viewDimensions, RefCountPtr<Texture>* pExportTarget = nullptr) const;
+	RGTexture* InitHZB(RGGraph& graph, const Vector2u& viewDimensions, RefCountPtr<Texture>* pExportTarget = nullptr) const;
 	void BuildHZB(RGGraph& graph, RGTexture* pDepth, RGTexture* pHZB);
 
 	RefCountPtr<RootSignature> m_pCommonRS;

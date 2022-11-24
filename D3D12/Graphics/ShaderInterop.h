@@ -168,7 +168,7 @@ namespace ShaderInterop
 		float2 ViewportDimensionsInv;
 		float2 ViewJitter;
 		float2 ViewJitterPrev;
-		int2 HZBDimensions;
+		uint2 HZBDimensions;
 		float NearZ;
 		float FarZ;
 		float FoV;

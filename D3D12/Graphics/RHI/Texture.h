@@ -101,8 +101,8 @@ struct TextureDesc
 	ClearBinding ClearBindingValue;
 	TextureDimension Dimensions;
 
-	Vector3i Size() const { return Vector3i(Width, Height, DepthOrArraySize); }
-	Vector2i Size2D() const { return Vector2i(Width, Height); }
+	Vector3u Size() const { return Vector3u(Width, Height, DepthOrArraySize); }
+	Vector2u Size2D() const { return Vector2u(Width, Height); }
 
 	static TextureDesc CreateCube(uint32 width, uint32 height, ResourceFormat format, TextureFlag flags = TextureFlag::None, uint32 sampleCount = 1, uint32 mips = 1)
 	{
