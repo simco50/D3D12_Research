@@ -123,6 +123,7 @@ void ImGuiRenderer::Initialize(GraphicsDevice* pDevice, WindowHandle window)
 
 	fontConfig.MergeMode = true;
 	fontConfig.GlyphMinAdvanceX = 15.0f; // Use if you want to make the icon monospaced
+	fontConfig.PixelSnapH = true;
 	static const ImWchar icon_ranges[] = { ICON_MIN_FA, ICON_MAX_FA, 0 };
 	io.Fonts->AddFontFromFileTTF("Resources/Fonts/" FONT_ICON_FILE_NAME_FA, 15.0f, &fontConfig, icon_ranges);
 
@@ -156,6 +157,7 @@ void ImGuiRenderer::Initialize(GraphicsDevice* pDevice, WindowHandle window)
 	psoDesc.SetDepthWrite(false);
 	psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_ALWAYS);
 	psoDesc.SetRenderTargetFormats(ResourceFormat::RGBA8_UNORM, ResourceFormat::Unknown, 1);
+	psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
 	psoDesc.SetName("ImGui");
 	gImGuiPSO = pDevice->CreatePipeline(psoDesc);
 
@@ -209,7 +211,7 @@ void ImGuiRenderer::Render(RGGraph& graph, RGTexture* pRenderTarget)
 			{
 				context.SetGraphicsRootSignature(gImGuiRS);
 				context.SetPipelineState(gImGuiPSO);
-				context.SetPrimitiveTopology(D3D10_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
 				ImDrawData* pDrawData = ImGui::GetDrawData();
 
