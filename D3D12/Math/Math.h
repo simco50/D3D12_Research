@@ -103,9 +103,9 @@ namespace Math
 		return (value + ((T)alignment - 1)) & ~(alignment - 1);
 	}
 
-	float Lerp(float a, float b, float t);
-
-	float InverseLerp(float a, float b, float value);
+	float Lerp(float t, float a, float b);
+	float InverseLerp(float value, float rangeMin, float rangeMax);
+	float RemapRange(float value, float sourceRangeMin, float sourceRangeMax, float targetRangeMin, float targetRangeMax);
 
 	Matrix CreatePerspectiveMatrix(float FoV, float aspectRatio, float nearPlane, float farPlane);
 	Matrix CreatePerspectiveOffCenterMatrix(float left, float right, float bottom, float top, float nearPlane, float farPlane);

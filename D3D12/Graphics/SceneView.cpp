@@ -376,7 +376,7 @@ namespace GraphicsCommon
 		return DefaultTextures[(int)type];
 	}
 
-	RefCountPtr<Texture> CreateTextureFromImage(CommandContext& context, Image& image, bool sRGB, const char* pName)
+	RefCountPtr<Texture> CreateTextureFromImage(CommandContext& context, const Image& image, bool sRGB, const char* pName)
 	{
 		GraphicsDevice* pDevice = context.GetParent();
 		TextureDesc desc;
@@ -409,6 +409,7 @@ namespace GraphicsCommon
 			pImg = pImg->GetNextImage();
 		}
 		RefCountPtr<Texture> pTexture = pDevice->CreateTexture(desc, pName ? pName : "");
+		context.InsertResourceBarrier(pTexture, D3D12_RESOURCE_STATE_COPY_DEST);
 		context.WriteTexture(pTexture, subResourceData, 0);
 		return pTexture;
 	}

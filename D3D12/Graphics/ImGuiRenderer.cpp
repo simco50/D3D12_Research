@@ -13,18 +13,56 @@
 #include "Core/Paths.h"
 #include "IconsFontAwesome4.h"
 #include "imgui_impl_win32.h"
+#include "imgui_internal.h"
 
-ImVec2 ImGui::GetAutoSize(const ImVec2& dimensions)
+namespace ImGui
 {
-	ImVec2 windowSize = GetContentRegionAvail();
-	float width = windowSize.x;
-	float height = windowSize.x * dimensions.y / dimensions.x;
-	if (dimensions.x / windowSize.x < dimensions.y / windowSize.y)
+	ImVec2 GetAutoSize(const ImVec2& dimensions)
 	{
-		width = dimensions.x / dimensions.y * windowSize.y;
-		height = windowSize.y;
+		ImVec2 windowSize = GetContentRegionAvail();
+		float width = windowSize.x;
+		float height = windowSize.x * dimensions.y / dimensions.x;
+		if (dimensions.x / windowSize.x < dimensions.y / windowSize.y)
+		{
+			width = dimensions.x / dimensions.y * windowSize.y;
+			height = windowSize.y;
+		}
+		return ImVec2(width, height);
 	}
-	return ImVec2(width, height);
+
+	bool ToggleButton(const char* pText, bool* pValue, const ImVec2& size)
+	{
+		PushStyleColor(ImGuiCol_Button, *pValue ? ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive) : ImGui::GetStyleColorVec4(ImGuiCol_Button));
+		PushStyleColor(ImGuiCol_ButtonHovered, *pValue ? ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive) : ImGui::GetStyleColorVec4(ImGuiCol_ButtonHovered));
+		PushStyleColor(ImGuiCol_ButtonActive, *pValue ? ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive) : ImGui::GetStyleColorVec4(ImGuiCol_Button));
+		bool clicked = false;
+		if (Button(pText, size))
+		{
+			*pValue = !*pValue;
+			clicked = true;
+		}
+		PopStyleColor(3);
+		return clicked;
+	}
+
+	DisabledWidgetScope::DisabledWidgetScope(bool isEnabled)
+		: IsEnabled(isEnabled)
+	{
+		if (!IsEnabled)
+		{
+			ImGui::PushStyleVar(ImGuiStyleVar_Alpha, ImGui::GetStyle().Alpha * 0.5f);
+			ImGui::PushItemFlag(ImGuiItemFlags_Disabled, true);
+		}
+	}
+
+	DisabledWidgetScope::~DisabledWidgetScope()
+	{
+		if (!IsEnabled)
+		{
+			ImGui::PopStyleVar();
+			ImGui::PopItemFlag();
+		}
+	}
 }
 
 void ApplyImGuiStyle()

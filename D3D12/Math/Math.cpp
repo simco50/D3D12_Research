@@ -16,14 +16,21 @@ namespace Math
 		return min + rand() % (max - min + 1);
 	}
 
-	float Lerp(float a, float b, float t)
+	float Lerp(float t, float a, float b)
 	{
 		return a + t * (b - a);
 	}
 
-	float InverseLerp(float a, float b, float value)
+	float InverseLerp(float value, float rangeMin, float rangeMax)
 	{
-		return (value - a) / (b - a);
+		return (value - rangeMin) / (rangeMax - rangeMin);
+	}
+
+	float RemapRange(float value, float sourceRangeMin, float sourceRangeMax, float targetRangeMin, float targetRangeMax)
+	{
+		value = Clamp(value, sourceRangeMin, sourceRangeMax);
+		float t = InverseLerp(value, sourceRangeMin, sourceRangeMax);
+		return Lerp(t, targetRangeMin, targetRangeMax);
 	}
 
 	// Create left-handed DX style perspective matrix

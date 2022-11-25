@@ -11,7 +11,7 @@
 #include <fstream>
 #include "Core/Paths.h"
 
-Image::Image(int width, int height, ImageFormat format, void* pInitialData /*= nullptr*/)
+Image::Image(int width, int height, ImageFormat format, const void* pInitialData /*= nullptr*/)
 {
 	SetSize(width, height, GetNumChannels(format));
 	m_Format = format;

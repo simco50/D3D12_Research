@@ -12,6 +12,14 @@ using WindowHandle = HWND;
 namespace ImGui
 {
 	ImVec2 GetAutoSize(const ImVec2& dimensions);
+	bool ToggleButton(const char* pText, bool* pValue, const ImVec2& size = ImVec2(0, 0));
+
+	struct DisabledWidgetScope
+	{
+		DisabledWidgetScope(bool isEnabled);
+		~DisabledWidgetScope();
+		bool IsEnabled;
+	};
 }
 
 namespace ImGuiRenderer

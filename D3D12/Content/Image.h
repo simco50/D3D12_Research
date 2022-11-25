@@ -33,7 +33,7 @@ class Image final
 {
 public:
 	Image() = default;
-	Image(int width, int height, ImageFormat format, void* pInitialData = nullptr);
+	Image(int width, int height, ImageFormat format, const void* pInitialData = nullptr);
 	bool Load(const char* filePath);
 	bool Load(const void* pData, size_t dataSize, const char* pFormatHint);
 	void Save(const char* pFilePath);
