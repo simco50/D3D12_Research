@@ -24,7 +24,7 @@ VisualizeTexture::VisualizeTexture(GraphicsDevice* pDevice)
 		0xFFFFFFFF, 0xFF000000,
 		0xFF000000, 0xFFFFFFFF
 	};
-	m_pCheckerPattern = GraphicsCommon::CreateTextureFromImage(context, Image(2, 2, ImageFormat::RGBA, checkerPixels), false, "Checker Pattern");
+	m_pCheckerPattern = GraphicsCommon::CreateTextureFromImage(context, Image(2, 2, 1, ResourceFormat::RGBA8_UNORM, 1, checkerPixels), false, "Checker Pattern");
 	context.Execute(false);
 }
 
@@ -66,7 +66,7 @@ void VisualizeTexture::Capture(RGGraph& graph, RGTexture* pTexture)
 				} constants;
 
 				const TextureDesc& desc = pTexture->GetDesc();
-				const FormatInfo& formatInfo = GetFormatInfo(desc.Format);
+				const FormatInfo& formatInfo = RHI::GetFormatInfo(desc.Format);
 
 				constants.TextureSource = pTexture->Get()->GetSRV()->GetHeapIndex();
 				constants.TextureTarget = pTarget->Get()->GetUAV()->GetHeapIndex();
@@ -120,7 +120,7 @@ void VisualizeTexture::RenderUI(const ImVec2& viewportOrigin, const ImVec2& view
 		{
 			ImGui::PushID("VisualizeTexture");
 			TextureDesc& desc = SourceDesc;
-			const FormatInfo& formatInfo = GetFormatInfo(desc.Format);
+			const FormatInfo& formatInfo = RHI::GetFormatInfo(desc.Format);
 			Vector2u mipSize(desc.Width >> MipLevel, desc.Height >> MipLevel);
 
 			{

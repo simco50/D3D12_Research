@@ -154,8 +154,8 @@ void ImGuiRenderer::Initialize(GraphicsDevice* pDevice, WindowHandle window)
 	CommandContext* pContext = pDevice->AllocateCommandContext();
 	D3D12_SUBRESOURCE_DATA data;
 	data.pData = pPixels;
-	data.RowPitch = GetFormatByteSize(ResourceFormat::RGBA8_UNORM, width);
-	data.SlicePitch = GetFormatByteSize(ResourceFormat::RGBA8_UNORM, width, height);
+	data.RowPitch = RHI::GetRowPitch(ResourceFormat::RGBA8_UNORM, width);
+	data.SlicePitch = RHI::GetSlicePitch(ResourceFormat::RGBA8_UNORM, width, height);
 	pContext->WriteTexture(gFontTexture, data, 0);
 	pContext->Execute(true);
 

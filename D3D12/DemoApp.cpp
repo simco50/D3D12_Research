@@ -460,8 +460,7 @@ void DemoApp::Update()
 					TaskQueue::Execute([request](uint32)
 						{
 							char* pData = (char*)request.pBuffer->GetMappedData();
-							Image img;
-							img.SetSize(request.Width, request.Height, 4);
+							Image img(request.Width, request.Height, 1, ResourceFormat::RGBA8_UNORM, 1);
 							uint32 imageRowPitch = request.Width * 4;
 							uint32 targetOffset = 0;
 							for (uint32 i = 0; i < request.Height; ++i)

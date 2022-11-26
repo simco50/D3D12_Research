@@ -8,6 +8,7 @@ enum class TextureFlag
 	ShaderResource	= 1 << 1,
 	RenderTarget	= 1 << 2,
 	DepthStencil	= 1 << 3,
+	sRGB			= 1 << 4,
 };
 DECLARE_BITMASK_TYPE(TextureFlag)
 

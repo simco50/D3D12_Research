@@ -311,8 +311,8 @@ namespace GraphicsCommon
 			RefCountPtr<Texture> pTexture = pDevice->CreateTexture(desc, pName);
 			D3D12_SUBRESOURCE_DATA data;
 			data.pData = pData;
-			data.RowPitch = GetFormatByteSize(desc.Format, desc.Width);
-			data.SlicePitch = data.RowPitch * desc.Width;
+			data.RowPitch = RHI::GetRowPitch(desc.Format, desc.Width);
+			data.SlicePitch = RHI::GetSlicePitch(desc.Format, desc.Width, desc.Height);
 			context.InsertResourceBarrier(pTexture, D3D12_RESOURCE_STATE_COPY_DEST);
 			context.FlushResourceBarriers();
 			context.WriteTexture(pTexture, data, 0);
@@ -382,29 +382,30 @@ namespace GraphicsCommon
 		TextureDesc desc;
 		desc.Width = image.GetWidth();
 		desc.Height = image.GetHeight();
-		desc.Format = Image::TextureFormatFromCompressionFormat(image.GetFormat(), sRGB);
+		desc.Format = image.GetFormat();
 		desc.Mips = image.GetMipLevels();
 		desc.Usage = TextureFlag::ShaderResource;
+		if (sRGB)
+		{
+			desc.Usage |= TextureFlag::sRGB;
+		}
 		desc.Dimensions = image.IsCubemap() ? TextureDimension::TextureCube : TextureDimension::Texture2D;
-		if (GetFormatInfo(desc.Format).IsBC)
+		if (RHI::GetFormatInfo(desc.Format).IsBC)
 		{
 			desc.Width = Math::Max(desc.Width, 4u);
 			desc.Height = Math::Max(desc.Height, 4u);
 		}
 
-		const Image* pImg = &image;
 		std::vector<D3D12_SUBRESOURCE_DATA> subResourceData;
-		int resourceOffset = 0;
+		const Image* pImg = &image;
 		while (pImg)
 		{
-			subResourceData.resize(subResourceData.size() + desc.Mips);
 			for (uint32 i = 0; i < desc.Mips; ++i)
 			{
-				D3D12_SUBRESOURCE_DATA& data = subResourceData[resourceOffset++];
-				MipLevelInfo info = pImg->GetMipInfo(i);
+				D3D12_SUBRESOURCE_DATA& data = subResourceData.emplace_back();
 				data.pData = pImg->GetData(i);
-				data.RowPitch = info.RowSize;
-				data.SlicePitch = (uint64)info.RowSize * info.Width;
+				data.RowPitch = RHI::GetRowPitch(image.GetFormat(), desc.Width, i);
+				data.SlicePitch = RHI::GetSlicePitch(image.GetFormat(), desc.Width, desc.Height, i);
 			}
 			pImg = pImg->GetNextImage();
 		}

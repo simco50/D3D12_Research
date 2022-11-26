@@ -124,15 +124,15 @@ void RGGraph::DumpGraph(const char* pPath) const
 			{
 				const TextureDesc& desc = static_cast<RGTexture*>(pResource)->Desc;
 				stream << "Res: " << desc.Width << "x" << desc.Height << "x" << desc.DepthOrArraySize << "<br/>";
-				stream << "Fmt: " << GetFormatInfo(desc.Format).pName << "<br/>";
+				stream << "Fmt: " << RHI::GetFormatInfo(desc.Format).pName << "<br/>";
 				stream << "Mips: " << desc.Mips << "<br/>";
-				stream << "Size: " << Math::PrettyPrintDataSize(GetFormatByteSize(desc.Format, desc.Width) * desc.Height * desc.DepthOrArraySize) << "</br>";
+				stream << "Size: " << Math::PrettyPrintDataSize(RHI::GetTextureByteSize(desc.Format, desc.Width, desc.Height, desc.DepthOrArraySize)) << "</br>";
 			}
 			else if (pResource->Type == RGResourceType::Buffer)
 			{
 				const BufferDesc& desc = static_cast<RGBuffer*>(pResource)->Desc;
 				stream << "Stride: " << desc.ElementSize << "<br/>";
-				stream << "Fmt: " << GetFormatInfo(desc.Format).pName << "<br/>";
+				stream << "Fmt: " << RHI::GetFormatInfo(desc.Format).pName << "<br/>";
 				stream << "Size: " << Math::PrettyPrintDataSize(desc.Size) << "<br/>";
 				stream << "Elements: " << desc.NumElements() << "<br/>";
 			}
