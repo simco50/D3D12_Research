@@ -17,18 +17,17 @@ struct ConstantsData
 	float2 ValueRange;
 	uint TextureSource;
     uint TextureTarget;
-	uint TextureType;
+	TextureDimension TextureType;
 	uint ChannelMask;
 	float MipLevel;
 	float Slice;
 };
 
-ConstantBuffer<ConstantsData> cConstants : register(b100);
+ConstantBuffer<ConstantsData> cConstants : register(b0);
 
 float4 SampleTexture(float2 uv)
 {
 	SamplerState samplerState = sPointClamp;
-	//float mip = floor(cConstants.MipLevel);
 	float mip = cConstants.MipLevel;
 
 	float4 output = float4(1, 0, 1, 1);
@@ -67,7 +66,7 @@ float4 SampleTexture(float2 uv)
 	return output;
 }
 
-[numthreads(16, 16, 1)]
+[numthreads(8, 8, 1)]
 void CSMain(uint3 threadID : SV_DispatchThreadID)
 {
     float2 uv = (threadID.xy + 0.5f) * cConstants.InvDimensions;

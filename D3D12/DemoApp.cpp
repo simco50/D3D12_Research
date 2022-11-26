@@ -25,6 +25,7 @@
 #include "Graphics/Techniques/Clouds.h"
 #include "Graphics/Techniques/ShaderDebugRenderer.h"
 #include "Graphics/Techniques/GPUDrivenRenderer.h"
+#include "Graphics/Techniques/VisualizeTexture.h"
 #include "Graphics/ImGuiRenderer.h"
 #include "Core/TaskQueue.h"
 #include "Core/CommandLine.h"
@@ -201,6 +202,7 @@ DemoApp::DemoApp(WindowHandle window, const Vector2i& windowRect)
 	m_pParticles = std::make_unique<GpuParticles>(m_pDevice);
 	m_pPathTracing = std::make_unique<PathTracing>(m_pDevice);
 	m_pCBTTessellation = std::make_unique<CBTTessellation>(m_pDevice);
+	m_pVisualizeTexture = std::make_unique<VisualizeTexture>(m_pDevice);
 
 	FontCreateSettings fontSettings;
 	fontSettings.pName = "Verdana";
@@ -429,14 +431,14 @@ void DemoApp::Update()
 			{
 				Tweakables::g_Screenshot = false;
 
-				Texture* pSource = m_ColorOutput;
+				Texture* pSource = m_pColorOutput;
 				D3D12_PLACED_SUBRESOURCE_FOOTPRINT textureFootprint = {};
-				D3D12_RESOURCE_DESC resourceDesc = m_ColorOutput->GetResource()->GetDesc();
+				D3D12_RESOURCE_DESC resourceDesc = m_pColorOutput->GetResource()->GetDesc();
 				m_pDevice->GetDevice()->GetCopyableFootprints(&resourceDesc, 0, 1, 0, &textureFootprint, nullptr, nullptr, nullptr);
 				RefCountPtr<Buffer> pScreenshotBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateReadback(textureFootprint.Footprint.RowPitch * textureFootprint.Footprint.Height), "Screenshot Texture");
-				pContext->InsertResourceBarrier(m_ColorOutput, D3D12_RESOURCE_STATE_COPY_SOURCE);
+				pContext->InsertResourceBarrier(m_pColorOutput, D3D12_RESOURCE_STATE_COPY_SOURCE);
 				pContext->InsertResourceBarrier(pScreenshotBuffer, D3D12_RESOURCE_STATE_COPY_DEST);
-				pContext->CopyTexture(m_ColorOutput, pScreenshotBuffer, CD3DX12_BOX(0, 0, m_ColorOutput->GetWidth(), m_ColorOutput->GetHeight()));
+				pContext->CopyTexture(m_pColorOutput, pScreenshotBuffer, CD3DX12_BOX(0, 0, m_pColorOutput->GetWidth(), m_pColorOutput->GetHeight()));
 
 				Fence* pFence = m_pDevice->GetFrameFence();
 				ScreenshotRequest& request = m_ScreenshotBuffers.emplace();
@@ -1103,8 +1105,7 @@ void DemoApp::Update()
 			pBloomTexture = pUpscaleTarget;
 		}
 
-		// RGTexture* pTonemapTarget = graph.Create("Tonemap Target", TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, ResourceFormat::RGBA8_UNORM));
-		RGTexture* pTonemapTarget = graph.Import(m_ColorOutput);
+		RGTexture* pTonemapTarget = graph.Create("Tonemap Target", TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, ResourceFormat::RGBA8_UNORM));
 
 		graph.AddPass("Tonemap", RGPassFlag::Compute)
 			.Read({ sceneTextures.pColorTarget, pAverageLuminance, pBloomTexture })
@@ -1192,12 +1193,10 @@ void DemoApp::Update()
 		if (!Tweakables::VisualizeTextureName.empty())
 		{
 			RGTexture* pVisualizeTexture = graph.FindTexture(Tweakables::VisualizeTextureName.c_str());
-			m_VisualizeTextureData.Enabled = !!pVisualizeTexture;
-			if (pVisualizeTexture)
-			{
-				VisualizeTexture(graph, pVisualizeTexture);
-			}
+			m_pVisualizeTexture->Capture(graph, pVisualizeTexture);
 		}
+
+		graph.Export(sceneTextures.pColorTarget, &m_pColorOutput);
 
 		/*
 			UI & Present
@@ -1242,8 +1241,6 @@ void DemoApp::OnResizeOrMove(int width, int height)
 void DemoApp::OnResizeViewport(int width, int height)
 {
 	E_LOG(Info, "Viewport resized: %dx%d", width, height);
-
-	m_ColorOutput = m_pDevice->CreateTexture(TextureDesc::CreateRenderTarget(width, height, ResourceFormat::RGBA8_UNORM, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource), "Final Target");
 
 	for (uint32 i = 0; i < SwapChain::NUM_FRAMES; ++i)
 	{
@@ -1335,62 +1332,9 @@ void DemoApp::InitializePipelines()
 	//Visibility Shading
 	m_pVisibilityShadingPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "VisibilityShading.hlsl", "CSMain");
 	m_pVisibilityDebugRenderPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "VisibilityShading.hlsl", "DebugRenderCS");
-
-	m_pVisualizeTexturePSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "ImageVisualize.hlsl", "CSMain");
 }
 
-void DemoApp::VisualizeTexture(RGGraph& graph, RGTexture* pTexture)
-{
-	m_VisualizeTextureData.Enabled = true;
-	const TextureDesc& desc = pTexture->GetDesc();
-	RGTexture* pTarget = graph.Create("Visualize Target", TextureDesc::Create2D(desc.Width, desc.Height, ResourceFormat::RGBA8_UNORM));
-	m_VisualizeTextureData.SourceName = pTexture->GetName();
-	m_VisualizeTextureData.SourceDesc = pTexture->GetDesc();
 
-	graph.AddPass("Process Image Visualizer", RGPassFlag::Compute | RGPassFlag::NeverCull)
-		.Read(pTexture)
-		.Write(pTarget)
-		.Bind([=](CommandContext& context)
-			{
-				context.SetComputeRootSignature(m_pCommonRS);
-				context.SetPipelineState(m_pVisualizeTexturePSO);
-
-				struct ConstantsData
-				{
-					Vector2 InvDimensions;
-					Vector2 ValueRange;
-					uint32 TextureSource;
-					uint32 TextureTarget;
-					TextureDimension TextureType;
-					uint32 ChannelMask;
-					float MipLevel;
-					float Slice;
-				} constants;
-
-				const TextureDesc& desc = pTexture->GetDesc();
-				constants.TextureSource = pTexture->Get()->GetSRV()->GetHeapIndex();
-				constants.TextureTarget = pTarget->Get()->GetUAV()->GetHeapIndex();
-				constants.InvDimensions.x = 1.0f / desc.Width;
-				constants.InvDimensions.y = 1.0f / desc.Height;
-				constants.TextureType = pTexture->GetDesc().Dimensions;
-				constants.ValueRange = Vector2(m_VisualizeTextureData.RangeMin, m_VisualizeTextureData.RangeMax);
-				constants.ChannelMask =
-					(m_VisualizeTextureData.VisibleChannels[0] ? 1 : 0) << 0 |
-					(m_VisualizeTextureData.VisibleChannels[1] ? 1 : 0) << 1 |
-					(m_VisualizeTextureData.VisibleChannels[2] ? 1 : 0) << 2 |
-					(m_VisualizeTextureData.VisibleChannels[3] ? 1 : 0) << 3;
-				constants.MipLevel = m_VisualizeTextureData.MipLevel;
-				constants.Slice = m_VisualizeTextureData.Slice / desc.DepthOrArraySize;
-				if(pTexture->GetDesc().Dimensions == TextureDimension::TextureCube)
-					constants.Slice = (float)m_VisualizeTextureData.CubeFaceIndex;
-
-				context.SetRootCBV(1, constants);
-
-				context.Dispatch(ComputeUtils::GetNumThreadGroups(desc.Width, 16, desc.Height, 16));
-			});
-
-	graph.Export(pTarget, &m_VisualizeTextureData.pVisualizeTexture);
-}
 
 void DemoApp::UpdateImGui()
 {
@@ -1478,111 +1422,59 @@ void DemoApp::UpdateImGui()
 		ImGui::EndMainMenuBar();
 	}
 
+
 	ImGui::SetNextWindowDockID(dockspace, ImGuiCond_FirstUseEver);
 	ImGui::Begin(ICON_FA_DESKTOP " Viewport", 0, ImGuiWindowFlags_NoScrollbar);
 	ImVec2 viewportPos = ImGui::GetWindowPos();
 	ImVec2 viewportSize = ImGui::GetWindowSize();
-	float widthDelta = ImGui::GetWindowContentRegionMax().x - ImGui::GetWindowContentRegionMin().x;
-	float heightDelta = ImGui::GetWindowContentRegionMax().y - ImGui::GetWindowContentRegionMin().y;
-	uint32 viewportWidth = (uint32)Math::Max(16.0f, widthDelta);
-	uint32 viewportHeight = (uint32)Math::Max(16.0f, heightDelta);
-
-	if (width != m_ColorOutput->GetWidth() || height != m_ColorOutput->GetHeight())
+	ImVec2 imageSize = ImMax(ImGui::GetContentRegionAvail(), ImVec2(16.0f, 16.0f));
+	if (m_pColorOutput)
 	{
-		OnResizeViewport(width, height);
-	}
-	ImGuizmo::SetRect(ImGui::GetWindowPos().x, ImGui::GetWindowPos().y, (float)width, (float)height);
-	ImGui::Image(m_ColorOutput, ImVec2((float)width, (float)height));
-	ImVec2 viewportImageOrigin = ImGui::GetItemRectMin();
-	ImVec2 viewportImageSize = ImGui::GetItemRectSize();
-	ImGui::End();
-
-	if (m_VisualizeTextureData.Enabled)
-	{
-		if (ImGui::Begin("Visualize Texture"))
+		if (imageSize.x != m_pColorOutput->GetWidth() || imageSize.y != m_pColorOutput->GetHeight())
 		{
-			TextureDesc& desc = m_VisualizeTextureData.SourceDesc;
-			ImGui::Text("%s - Resolution: %dx%d", m_VisualizeTextureData.SourceName.c_str(), desc.Width, desc.Height);
-			ImGui::DragFloatRange2("Range", &m_VisualizeTextureData.RangeMin, &m_VisualizeTextureData.RangeMax, 0.02f, 0, 10);
-			if (desc.Mips > 1)
-			{
-				ImGui::SliderFloat("Mip", &m_VisualizeTextureData.MipLevel, 0, (float)desc.Mips - 1);
-			}
-			if (desc.DepthOrArraySize > 1)
-			{
-				ImGui::SliderFloat("Slice", &m_VisualizeTextureData.Slice, 0, (float)desc.DepthOrArraySize - 1);
-			}
-			if (desc.Dimensions == TextureDimension::TextureCube)
-			{
-				const char* faceNames[] = {
-					"Right",
-					"Left",
-					"Top",
-					"Bottom",
-					"Back",
-					"Front",
-				};
-				ImGui::Combo("Face", &m_VisualizeTextureData.CubeFaceIndex, faceNames, ARRAYSIZE(faceNames));
-			}
-			ImGui::Checkbox("R", &m_VisualizeTextureData.VisibleChannels[0]);
-			ImGui::SameLine();
-			ImGui::Checkbox("G", &m_VisualizeTextureData.VisibleChannels[1]);
-			ImGui::SameLine();
-			ImGui::Checkbox("B", &m_VisualizeTextureData.VisibleChannels[2]);
-			ImGui::SameLine();
-			ImGui::Checkbox("A", &m_VisualizeTextureData.VisibleChannels[3]);
-
-			static bool xray = false;
-			ImGui::Checkbox("X-ray", &xray);
-			if (xray)
-			{
-				ImVec2 size = ImGui::GetContentRegionAvail();
-				ImVec2 imageLocation = ImGui::GetCursorScreenPos();
-				ImVec2 uv0 = (imageLocation - viewportImageOrigin) / ImVec2((float)width, (float)height);
-				ImVec2 uv1 = uv0 + size / ImVec2((float)width, (float)height);
-				ImGui::Image(m_VisualizeTextureData.pVisualizeTexture, size, uv0, uv1);
-			}
-			else
-			{
-				ImGui::Image(m_VisualizeTextureData.pVisualizeTexture, ImGui::GetAutoSize(ImVec2((float)desc.Width, (float)desc.Height)));
-			}
+			OnResizeViewport((int)imageSize.x, (int)imageSize.y);
 		}
-		ImGui::End();
+		ImGui::Image(m_pColorOutput, imageSize);
 	}
+	ImVec2 viewportOrigin = ImGui::GetItemRectMin();
+	ImVec2 viewportExtents = ImGui::GetItemRectSize();
 
 	if (Tweakables::g_VisualizeLightDensity)
 	{
 		//Render Color Legend
-		ImGui::SetNextWindowSize(ImVec2(60, 255));
-
-		ImGui::SetNextWindowPos(ImVec2(viewportPos.x + viewportSize.x - 65, viewportPos.y + viewportSize.y - 280));
-		ImGui::Begin("Visualize Light Density", 0, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar);
-		ImGui::SetWindowFontScale(1.2f);
-		ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(0, 0, 0, 255));
-		static uint32 DEBUG_COLORS[] = {
-			IM_COL32(0,4,141, 255),
-			IM_COL32(5,10,255, 255),
-			IM_COL32(0,164,255, 255),
-			IM_COL32(0,255,189, 255),
-			IM_COL32(0,255,41, 255),
-			IM_COL32(117,254,1, 255),
-			IM_COL32(255,239,0, 255),
-			IM_COL32(255,86,0, 255),
-			IM_COL32(204,3,0, 255),
-			IM_COL32(65,0,1, 255),
-		};
-
-		for (uint32 i = 0; i < ARRAYSIZE(DEBUG_COLORS); ++i)
+		static ImColor DEBUG_COLORS[] =
 		{
-			char number[16];
-			FormatString(number, ARRAYSIZE(number), "%d", i);
-			ImGui::PushStyleColor(ImGuiCol_Button, DEBUG_COLORS[i]);
-			ImGui::Button(number, ImVec2(40, 20));
-			ImGui::PopStyleColor();
+			ImColor(0,4,141, 255),
+			ImColor(5,10,255, 255),
+			ImColor(0,164,255, 255),
+			ImColor(0,255,189, 255),
+			ImColor(0,255,41, 255),
+			ImColor(117,254,1, 255),
+			ImColor(255,239,0, 255),
+			ImColor(255,86,0, 255),
+			ImColor(204,3,0, 255),
+			ImColor(65,0,1, 255),
+		};
+		uint32 numColors = ARRAYSIZE(DEBUG_COLORS);
+
+		ImVec2 iconSize(40.0f, 30.0f);
+
+		ImDrawList* pDrawList = ImGui::GetWindowDrawList();
+		ImVec2 p = viewportPos + viewportSize - ImVec2(iconSize.x, iconSize.y * (float)numColors) - ImVec2(10.0f, 10.0f);
+		for (uint32 i = 0; i < numColors; ++i)
+		{
+			pDrawList->AddRectFilled(p, p + iconSize, DEBUG_COLORS[i]);
+			char text[2];
+			text[0] = '0' + (char)i;
+			text[1] = 0;
+			pDrawList->AddText(p + ImVec2(iconSize.x / 2, 0), ImColor(1.0f, 1.0f, 1.0f, 1.0f), text);
+			p += ImVec2(0, iconSize.y);
 		}
-		ImGui::PopStyleColor();
-		ImGui::End();
 	}
+	ImGui::End();
+
+	ImGuizmo::SetRect(viewportOrigin.x, viewportOrigin.y, viewportExtents.x, viewportExtents.y);
+	m_pVisualizeTexture->RenderUI(viewportOrigin, viewportExtents);
 
 	console.Update();
 
@@ -1603,13 +1495,12 @@ void DemoApp::UpdateImGui()
 
 	if (Tweakables::g_VisualizeShadowCascades)
 	{
-		float imageSize = 230;
 		if (ImGui::Begin("Shadow Cascades"))
 		{
 			const Light& sunLight = m_World.Lights[0];
 			for (int i = 0; i < Tweakables::g_ShadowCascades; ++i)
 			{
-				ImGui::Image(sunLight.ShadowMaps[i], ImVec2(imageSize, imageSize));
+				ImGui::Image(sunLight.ShadowMaps[i], ImVec2(230, 230));
 				ImGui::SameLine();
 			}
 		}

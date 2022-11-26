@@ -44,25 +44,6 @@ namespace ImGui
 		PopStyleColor(3);
 		return clicked;
 	}
-
-	DisabledWidgetScope::DisabledWidgetScope(bool isEnabled)
-		: IsEnabled(isEnabled)
-	{
-		if (!IsEnabled)
-		{
-			ImGui::PushStyleVar(ImGuiStyleVar_Alpha, ImGui::GetStyle().Alpha * 0.5f);
-			ImGui::PushItemFlag(ImGuiItemFlags_Disabled, true);
-		}
-	}
-
-	DisabledWidgetScope::~DisabledWidgetScope()
-	{
-		if (!IsEnabled)
-		{
-			ImGui::PopStyleVar();
-			ImGui::PopItemFlag();
-		}
-	}
 }
 
 void ApplyImGuiStyle()
@@ -162,6 +143,7 @@ void ImGuiRenderer::Initialize(GraphicsDevice* pDevice, WindowHandle window)
 	fontConfig.MergeMode = true;
 	fontConfig.GlyphMinAdvanceX = 15.0f; // Use if you want to make the icon monospaced
 	fontConfig.PixelSnapH = true;
+	fontConfig.GlyphOffset.y -= 2.5f;
 	static const ImWchar icon_ranges[] = { ICON_MIN_FA, ICON_MAX_FA, 0 };
 	io.Fonts->AddFontFromFileTTF("Resources/Fonts/" FONT_ICON_FILE_NAME_FA, 15.0f, &fontConfig, icon_ranges);
 
