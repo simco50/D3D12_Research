@@ -40,7 +40,7 @@ void Init( inout BxDFContext Context, half3 N, half3 V, half3 L )
 
 float3 Diffuse_Lambert( float3 DiffuseColor )
 {
-	return DiffuseColor * (1 / PI);
+	return DiffuseColor * INV_PI;
 }
 
 // GGX / Trowbridge-Reitz

@@ -78,10 +78,7 @@ void RayGen()
 #else
 				attenuation = 0.0f;
 #endif // SECONDARY_SHADOW_RAY
-
-				radiance += surface.Emissive;
-				radiance += Diffuse_Lambert(brdfData.Diffuse) * SampleDDGIIrradiance(hitLocation, N, -V);
-
+				
 				if(attenuation <= 0.0f)
 					continue;
 
@@ -89,6 +86,9 @@ void RayGen()
 				radiance += result.Diffuse * light.GetColor() * light.Intensity;
 				radiance += result.Specular * light.GetColor() * light.Intensity;
 			}
+
+			radiance += surface.Emissive;
+			radiance += Diffuse_Lambert(brdfData.Diffuse) * SampleDDGIIrradiance(hitLocation, N, -V);
 		}
 		else
 		{
