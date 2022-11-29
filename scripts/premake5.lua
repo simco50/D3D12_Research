@@ -3,26 +3,7 @@ require "vstudio"
 ENGINE_NAME = "D3D12"
 ROOT = "../"
 SOURCE_DIR = ROOT .. ENGINE_NAME .. "/"
-WIN_SDK = "10.0.19041.0"
-
--- Address Sanitizer API
-
-premake.api.register{
-	name="enableASAN",
-	scope="config",
-	kind="string",
-	allowed={"true", "false"}
-}
-
-premake.override(premake.vstudio.vc2010, "configurationProperties", function(base, cfg)
-	local m = premake.vstudio.vc2010
-	m.propertyGroup(cfg, "Configuration")
-	premake.callArray(m.elements.configurationProperties, cfg)
-	if cfg.enableASAN then
-	   m.element("EnableASAN", nil, cfg.enableASAN)
-	end
-	premake.pop('</PropertyGroup>')
-end)
+WIN_SDK = "latest"
 
 function runtimeDependency(source, destination)
 	postbuildcommands { ("{COPY} \"$(SolutionDir)Libraries/" .. source .. "\" \"$(OutDir)" .. destination .. "/\"") }
@@ -56,21 +37,22 @@ workspace (ENGINE_NAME)
 	filter "configurations:Debug"
 		runtime "Debug"
 		defines { "_DEBUG" }
-		optimize ("Off")
+		optimize "Off"
 		--inlining "Explicit"
 
 	filter "configurations:Release"
  		runtime "Release"
 		defines { "RELEASE" }
-		optimize ("Full")
+		optimize "Full"
 		flags { "NoIncrementalLink" }
 
 	filter "configurations:DebugASAN"
  		runtime "Debug"
 		defines { "_DEBUG" }
-		optimize ("Off")
-		flags{ "NoRuntimeChecks", "NoIncrementalLink"}
-		enableASAN "true"
+		optimize "Off"
+		flags { "NoRuntimeChecks", "NoIncrementalLink"}
+		sanitize { "Address" }
+		removeflags {"FatalWarnings"}
 
 	filter {}
 
