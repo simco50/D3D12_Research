@@ -165,7 +165,7 @@ void VisualizeTexture::RenderUI(const ImVec2& viewportOrigin, const ImVec2& view
 				std::vector<std::string> mipTexts(desc.Mips);
 				for (uint32 i = 0; i < desc.Mips; ++i)
 				{
-					mipTexts[i] = Sprintf("%d - %dx%d", i, desc.Width >> i, desc.Height >> i);
+					mipTexts[i] = Sprintf("%d - %dx%d", i, Math::Max(1u, desc.Width >> i), Math::Max(1u, desc.Height >> i));
 				}
 				ImGui::AlignTextToFramePadding();
 				ImGui::Text("Mip");
