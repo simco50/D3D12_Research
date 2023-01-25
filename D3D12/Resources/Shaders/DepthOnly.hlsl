@@ -1,5 +1,10 @@
 #include "Common.hlsli"
 
+struct InstanceIndex
+{
+	uint ID;
+};
+
 ConstantBuffer<InstanceIndex> cObject : register(b0);
 
 struct InterpolantsVSToPS

@@ -41,8 +41,8 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 
 		std::vector<ShaderInterop::Meshlet> Meshlets;
 		std::vector<uint32> MeshletVertices;
-		std::vector<ShaderInterop::MeshletTriangle> MeshletTriangles;
-		std::vector<ShaderInterop::MeshletBounds> MeshletBounds;
+		std::vector<ShaderInterop::Meshlet::Triangle> MeshletTriangles;
+		std::vector<ShaderInterop::Meshlet::Bounds> MeshletBounds;
 	};
 
 	std::vector<MeshData> meshDatas;
@@ -456,7 +456,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 				max = Vector3::Max(max, p);
 				min = Vector3::Min(min, p);
 			}
-			ShaderInterop::MeshletBounds& outBounds = meshData.MeshletBounds[i];
+			ShaderInterop::Meshlet::Bounds& outBounds = meshData.MeshletBounds[i];
 			outBounds.Center = (max + min) / 2;
 			outBounds.Extents = (max - min) / 2;
 
@@ -464,7 +464,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 			unsigned char* pSourceTriangles = meshletTriangles.data() + meshlet.triangle_offset;
 			for (uint32 triIdx = 0; triIdx < meshlet.triangle_count; ++triIdx)
 			{
-				ShaderInterop::MeshletTriangle& tri = meshData.MeshletTriangles[triIdx + triangleOffset];
+				ShaderInterop::Meshlet::Triangle& tri = meshData.MeshletTriangles[triIdx + triangleOffset];
 				tri.V0 = *pSourceTriangles++;
 				tri.V1 = *pSourceTriangles++;
 				tri.V2 = *pSourceTriangles++;
@@ -487,8 +487,8 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 
 		bufferSize += Math::AlignUp<uint64>(meshData.Meshlets.size() * sizeof(ShaderInterop::Meshlet), bufferAlignment);
 		bufferSize += Math::AlignUp<uint64>(meshData.MeshletVertices.size() * sizeof(uint32), bufferAlignment);
-		bufferSize += Math::AlignUp<uint64>(meshData.MeshletTriangles.size() * sizeof(ShaderInterop::MeshletTriangle), bufferAlignment);
-		bufferSize += Math::AlignUp<uint64>(meshData.MeshletBounds.size() * sizeof(ShaderInterop::MeshletBounds), bufferAlignment);
+		bufferSize += Math::AlignUp<uint64>(meshData.MeshletTriangles.size() * sizeof(ShaderInterop::Meshlet::Triangle), bufferAlignment);
+		bufferSize += Math::AlignUp<uint64>(meshData.MeshletBounds.size() * sizeof(ShaderInterop::Meshlet::Bounds), bufferAlignment);
 	}
 
 	checkf(bufferSize < std::numeric_limits<uint32>::max(), "Offset stored in 32-bit int");
@@ -578,10 +578,10 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 		CopyData(meshData.MeshletVertices.data(), sizeof(uint32) * meshData.MeshletVertices.size());
 
 		subMesh.MeshletTrianglesLocation = (uint32)dataOffset;
-		CopyData(meshData.MeshletTriangles.data(), sizeof(ShaderInterop::MeshletTriangle) * meshData.MeshletTriangles.size());
+		CopyData(meshData.MeshletTriangles.data(), sizeof(ShaderInterop::Meshlet::Triangle) * meshData.MeshletTriangles.size());
 
 		subMesh.MeshletBoundsLocation = (uint32)dataOffset;
-		CopyData(meshData.MeshletBounds.data(), sizeof(ShaderInterop::MeshletBounds) * meshData.MeshletBounds.size());
+		CopyData(meshData.MeshletBounds.data(), sizeof(ShaderInterop::Meshlet::Bounds) * meshData.MeshletBounds.size());
 
 		subMesh.NumMeshlets = (uint32)meshData.Meshlets.size();
 

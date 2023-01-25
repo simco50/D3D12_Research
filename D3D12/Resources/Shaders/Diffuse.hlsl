@@ -13,6 +13,11 @@ struct PerViewData
 	float2 LightGridParams;
 };
 
+struct InstanceIndex
+{
+	uint ID;
+};
+
 ConstantBuffer<InstanceIndex> cObject : register(b0);
 ConstantBuffer<PerViewData> cPass : register(b1);
 
@@ -110,10 +115,9 @@ InterpolantsVSToPS FetchVertexAttributes(MeshData mesh, float4x4 world, uint ver
 
 	result.UV = Unpack_RG16_FLOAT(BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.UVsOffset));
 
-	NormalData normalData = BufferLoad<NormalData>(mesh.BufferIndex, vertexId, mesh.NormalsOffset);
-	float3 normal = Unpack_RGB10A2_SNORM(normalData.Normal).xyz;
-	result.Normal = normalize(mul(normal, (float3x3)world));
-	float4 tangent = Unpack_RGB10A2_SNORM(normalData.Tangent);
+	uint2 normalData = BufferLoad<uint2>(mesh.BufferIndex, vertexId, mesh.NormalsOffset);
+	result.Normal = normalize(mul(Unpack_RGB10A2_SNORM(normalData.x).xyz, (float3x3)world));
+	float4 tangent = Unpack_RGB10A2_SNORM(normalData.y);
 	result.Tangent = float4(normalize(mul(tangent.xyz, (float3x3)world)), tangent.w);
 
 	result.Color = 0xFFFFFFFF;
@@ -132,7 +136,7 @@ groupshared PayloadData gsPayload;
 
 bool IsVisible(MeshData mesh, float4x4 world, uint meshlet)
 {
-	MeshletBounds bounds = BufferLoad<MeshletBounds>(mesh.BufferIndex, meshlet, mesh.MeshletBoundsOffset);
+	Meshlet::Bounds bounds = BufferLoad<Meshlet::Bounds>(mesh.BufferIndex, meshlet, mesh.MeshletBoundsOffset);
 	FrustumCullData cullData = FrustumCull(bounds.Center, bounds.Extents, world, cView.ViewProjection);
 	if(!cullData.IsVisible)
 	{
@@ -196,7 +200,7 @@ void MSMain(
 
 	for(uint i = groupThreadID; i < meshlet.TriangleCount; i += NUM_MESHLET_THREADS)
 	{
-		MeshletTriangle tri = BufferLoad<MeshletTriangle>(mesh.BufferIndex, i + meshlet.TriangleOffset, mesh.MeshletTriangleOffset);
+		Meshlet::Triangle tri = BufferLoad<Meshlet::Triangle>(mesh.BufferIndex, i + meshlet.TriangleOffset, mesh.MeshletTriangleOffset);
 		triangles[i] = uint3(tri.V0, tri.V1, tri.V2);
 	}
 }

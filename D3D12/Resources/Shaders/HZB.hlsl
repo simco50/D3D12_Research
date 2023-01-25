@@ -36,7 +36,7 @@ ConstantBuffer<SpdConstants> cConstants : register(b0);
 
 #define A_GPU 1
 #define A_HLSL 1
-#include "ffx_a.h"
+#include "Interop/SPD/ffx_a.h"
 
 // Define LDS variables
 groupshared AF1 spdIntermediate[16][16];
@@ -79,7 +79,7 @@ AF4 SpdReduce4(AF4 v0, AF4 v1, AF4 v2, AF4 v3)
     return min(v0, min(v1, min(v2, v3)));
 }
 
-#include "ffx_spd.h"
+#include "Interop/SPD/ffx_spd.h"
 
 [numthreads(256, 1, 1)]
 void HZBCreateCS(uint3 WorkGroupId : SV_GroupID, uint LocalThreadIndex : SV_GroupIndex)

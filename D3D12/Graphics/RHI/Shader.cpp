@@ -499,8 +499,14 @@ void ShaderManager::AddIncludeDir(const std::string& includeDir)
 	m_IncludeDirs.push_back(includeDir);
 	if (m_pFileWatcher)
 	{
-		m_pFileWatcher->StartWatching(includeDir.c_str(), true);
-		E_LOG(Info, "Shader Hot-Reload enabled for: \"%s\"", includeDir.c_str());
+		if (m_pFileWatcher->StartWatching(includeDir.c_str(), true))
+		{
+			E_LOG(Info, "Shader Hot-Reload enabled for: \"%s\"", includeDir.c_str());
+		}
+		else
+		{
+			E_LOG(Warning, "Shader Hot-Reload for \"%s\" failed.", includeDir.c_str());
+		}
 	}
 }
 

@@ -32,7 +32,7 @@ VisBufferVertexAttribute GetVertexAttributes(float2 screenUV, InstanceData insta
 {
 	MeshData mesh = GetMesh(instance.MeshIndex);
 	Meshlet meshlet = BufferLoad<Meshlet>(mesh.BufferIndex, meshletIndex, mesh.MeshletOffset);
-	MeshletTriangle tri = BufferLoad<MeshletTriangle>(mesh.BufferIndex, primitiveID + meshlet.TriangleOffset, mesh.MeshletTriangleOffset);
+	Meshlet::Triangle tri = BufferLoad<Meshlet::Triangle>(mesh.BufferIndex, primitiveID + meshlet.TriangleOffset, mesh.MeshletTriangleOffset);
 
 	uint3 indices = uint3(
 		BufferLoad<uint>(mesh.BufferIndex, tri.V0 + meshlet.VertexOffset, mesh.MeshletVertexOffset),
@@ -48,9 +48,9 @@ VisBufferVertexAttribute GetVertexAttributes(float2 screenUV, InstanceData insta
 		float3 position = Unpack_RGBA16_SNORM(BufferLoad<uint2>(mesh.BufferIndex, vertexId, mesh.PositionsOffset)).xyz;
 		positions[i] = mul(float4(position, 1), instance.LocalToWorld).xyz;
         vertices[i].UV = Unpack_RG16_FLOAT(BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.UVsOffset));
-        NormalData normalData = BufferLoad<NormalData>(mesh.BufferIndex, vertexId, mesh.NormalsOffset);
-        vertices[i].Normal = Unpack_RGB10A2_SNORM(normalData.Normal).xyz;
-        vertices[i].Tangent = Unpack_RGB10A2_SNORM(normalData.Tangent);
+        uint2 normalData = BufferLoad<uint2>(mesh.BufferIndex, vertexId, mesh.NormalsOffset);
+        vertices[i].Normal = Unpack_RGB10A2_SNORM(normalData.x).xyz;
+        vertices[i].Tangent = Unpack_RGB10A2_SNORM(normalData.y);
 		if(mesh.ColorsOffset != ~0u)
 			vertices[i].Color = BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.ColorsOffset);
 		else
@@ -153,7 +153,7 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 	MaterialData material = GetMaterial(instance.MaterialIndex);
 	MaterialProperties surface = EvaluateMaterial(material, vertex);
 	BrdfData brdfData = GetBrdfData(surface);
-	
+
 	float3 V = normalize(cView.ViewLocation - vertex.Position);
 	float ssrWeight = 0;
 	float3 ssr = ScreenSpaceReflections(vertex.Position, surface.Normal, V, brdfData.Roughness, tDepth, tPreviousSceneColor, dither, ssrWeight);

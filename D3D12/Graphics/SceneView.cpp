@@ -87,7 +87,7 @@ namespace Renderer
 		parameters.SsrSamples = Tweakables::g_SsrSamples.Get();
 		parameters.LightCount = pView->NumLights;
 
-		check(pView->ShadowViews.size() <= MAX_SHADOW_CASTERS);
+		check(pView->ShadowViews.size() <= ShaderInterop::MAX_SHADOW_CASTERS);
 		for (uint32 i = 0; i < pView->ShadowViews.size(); ++i)
 		{
 			parameters.LightMatrices[i] = pView->ShadowViews[i].ViewProjection;

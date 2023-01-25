@@ -10,8 +10,8 @@
 #include "Core/ConsoleVariables.h"
 
 #define A_CPU 1
-#include "ffx_a.h"
-#include "ffx_spd.h"
+#include "SPD/ffx_a.h"
+#include "SPD/ffx_spd.h"
 
 namespace Tweakables
 {
@@ -59,7 +59,6 @@ GPUDrivenRenderer::GPUDrivenRenderer(GraphicsDevice* pDevice)
 
 	m_pPrintStatsPSO =			pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "PrintStatsCS", *defines);
 
-	pDevice->GetShaderManager()->AddIncludeDir("External/SPD/");
 	m_pHZBInitializePSO =		pDevice->CreateComputePipeline(m_pCommonRS, "HZB.hlsl", "HZBInitCS");
 	m_pHZBCreatePSO =			pDevice->CreateComputePipeline(m_pCommonRS, "HZB.hlsl", "HZBCreateCS");
 }

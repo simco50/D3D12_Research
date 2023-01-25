@@ -30,9 +30,9 @@ VertexAttribute GetVertexAttributes(InstanceData instance, float2 attribBarycent
 		uint vertexId = indices[i];
 		positions[i] = Unpack_RGBA16_SNORM(BufferLoad<uint2>(mesh.BufferIndex, vertexId, mesh.PositionsOffset)).xyz;
 		outData.UV += Unpack_RG16_FLOAT(BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.UVsOffset)) * barycentrics[i];
-		NormalData normalData = BufferLoad<NormalData>(mesh.BufferIndex, vertexId, mesh.NormalsOffset);
-		outData.Normal += Unpack_RGB10A2_SNORM(normalData.Normal).xyz * barycentrics[i];
-		outData.Tangent += Unpack_RGB10A2_SNORM(normalData.Tangent) * barycentrics[i];
+		uint2 normalData = BufferLoad<uint2>(mesh.BufferIndex, vertexId, mesh.NormalsOffset);
+		outData.Normal += Unpack_RGB10A2_SNORM(normalData.x).xyz * barycentrics[i];
+		outData.Tangent += Unpack_RGB10A2_SNORM(normalData.y) * barycentrics[i];
 		if(mesh.ColorsOffset != ~0u)
 			outData.Color = BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.ColorsOffset);
 		else

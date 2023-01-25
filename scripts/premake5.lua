@@ -88,6 +88,8 @@ workspace (ENGINE_NAME)
 			warnings "Default"
 		filter {}
 
+		includedirs "$(ProjectDir)Resources/Shaders/Interop"
+
 		-- D3D12
 		includedirs "$(SolutionDir)Libraries/D3D12/include"
 		runtimeDependency("D3D12/bin/D3D12Core.dll", "D3D12")
