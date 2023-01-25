@@ -3,28 +3,9 @@
 #include "CommonBindings.hlsli"
 #include "Packing.hlsli"
 
-struct Plane
-{
-	float3 Normal;
-	float DistanceToOrigin;
-};
-
-struct Frustum
-{
-	Plane Planes[4];
-};
-
 struct Sphere
 {
 	float3 Position;
-	float Radius;
-};
-
-struct Cone
-{
-	float3 Tip;
-	float Height;
-	float3 Direction;
 	float Radius;
 };
 
@@ -32,12 +13,6 @@ struct AABB
 {
 	float4 Center;
 	float4 Extents;
-};
-
-struct Ray
-{
-	float3 Origin;
-	float3 Direction;
 };
 
 struct MaterialProperties
@@ -69,60 +44,6 @@ bool SphereInAABB(Sphere sphere, AABB aabb)
 	float3 d = max(0, abs(aabb.Center.xyz - sphere.Position) - aabb.Extents.xyz);
 	float distanceSq = dot(d, d);
 	return distanceSq <= sphere.Radius * sphere.Radius;
-}
-
-bool SphereBehindPlane(Sphere sphere, Plane plane)
-{
-	return dot(plane.Normal, sphere.Position) - plane.DistanceToOrigin < -sphere.Radius;
-}
-
-bool PointBehindPlane(float3 p, Plane plane)
-{
-	return dot(plane.Normal, p) - plane.DistanceToOrigin < 0;
-}
-
-bool ConeBehindPlane(Cone cone, Plane plane)
-{
-	float3 furthestPointDirection = cross(cross(plane.Normal, cone.Direction), cone.Direction);
-	float3 furthestPointOnCircle = cone.Tip + cone.Direction * cone.Height - furthestPointDirection * cone.Radius;
-	return PointBehindPlane(cone.Tip, plane) && PointBehindPlane(furthestPointOnCircle, plane);
-}
-
-bool ConeInFrustum(Cone cone, Frustum frustum, float zNear, float zFar)
-{
-	Plane nearPlane, farPlane;
-	nearPlane.Normal = float3(0, 0, 1);
-	nearPlane.DistanceToOrigin = zNear;
-	farPlane.Normal = float3(0, 0, -1);
-	farPlane.DistanceToOrigin = -zFar;
-
-	bool inside = !(ConeBehindPlane(cone, nearPlane) || ConeBehindPlane(cone, farPlane));
-	for(int i = 0; i < 4 && inside; ++i)
-	{
-		inside = !ConeBehindPlane(cone, frustum.Planes[i]);
-	}
-	return inside;
-}
-
-bool SphereInFrustum(Sphere sphere, Frustum frustum, float depthNear, float depthFar)
-{
-	bool inside = !(sphere.Position.z + sphere.Radius < depthNear || sphere.Position.z - sphere.Radius > depthFar);
-	for(int i = 0; i < 4 && inside; ++i)
-	{
-		inside = !SphereBehindPlane(sphere, frustum.Planes[i]);
-	}
-	return inside;
-}
-
-Plane CalculatePlane(float3 a, float3 b, float3 c)
-{
-	float3 v0 = b - a;
-	float3 v1 = c - a;
-
-	Plane plane;
-	plane.Normal = normalize(cross(v1, v0));
-	plane.DistanceToOrigin = dot(plane.Normal, a);
-	return plane;
 }
 
 // Convert clip space (-1, 1) coordinates to view space
@@ -280,12 +201,16 @@ void AABBFromMinMax(inout AABB aabb, float3 minimum, float3 maximum)
 }
 
 template<typename T>
+T Square(T x)
+{
+	return x * x;
+}
+template<typename T>
 T Pow4(T x)
 {
 	T xx = x * x;
 	return xx * xx;
 }
-
 template<typename T>
 T Pow5(T x)
 {
@@ -294,27 +219,61 @@ T Pow5(T x)
 }
 
 template<typename T>
-T Square(T x)
+T Max(T a, T b)
 {
-	return x * x;
+	return max(a, b);
+}
+template<typename T>
+T Max(T a, T b, T c)
+{
+	return max(a, max(b, c));
+}
+template<typename T>
+T Max(T a, T b, T c, T d)
+{
+	return max(max(a, b), max(c, d));
 }
 
 template<typename T>
-T min3(T a, T b, T c)
+T Min(T a, T b)
 {
-	return min(min(a, b), c);
+	return min(a, b);
+}
+template<typename T>
+T Min(T a, T b, T c)
+{
+	return min(a, min(b, c));
+}
+template<typename T>
+T Min(T a, T b, T c, T d)
+{
+	return min(min(a, b), min(c, d));
 }
 
-template<typename T>
-T min4(T a, T b, T c, T d)
+float MaxComponent(float2 v)
 {
-	return min3(a, b, min(c, d));
+	return max(v.x, v.y);
+}
+float MaxComponent(float3 v)
+{
+	return max(v.x, max(v.y, v.z));
+}
+float MaxComponent(float4 v)
+{
+	return max(max(v.x, v.y), max(v.z, v.w));
 }
 
-template<typename T>
-T max3(T a, T b, T c)
+float MinComponent(float2 v)
 {
-	return max(max(a, b), c);
+	return min(v.x, v.y);
+}
+float MinComponent(float3 v)
+{
+	return min(v.x, min(v.y, v.z));
+}
+float MinComponent(float4 v)
+{
+	return min(min(v.x, v.y), min(v.z, v.w));
 }
 
 template<typename T, uint N>
@@ -323,39 +282,21 @@ uint ArraySize(T arr[N])
 	return N;
 }
 
-//This is still not totally exact as pow() has imprecisions
-float SrgbToLinear(float y)
+template<typename T>
+T LinearToSRGB(T linearRGB)
 {
-	if(y <= 0.04045f)
-	{
-		return y / 12.92f;
-	}
-	return pow((y + 0.055f) / 1.055f, 2.4f);
+	return pow(linearRGB, 1.0f / 2.2f);
 }
 
-float SrgbToLinearFast(float y)
+template<typename T>
+T SRGBToLinear(T srgb)
 {
-	return pow(y, 2.2f);
+	return pow(srgb, 2.2f);
 }
 
-//This is still not totally exact as pow() has imprecisions
-float LinearToSrgb(float x)
+float GetLuminance(float3 color)
 {
-	if(x <= 0.00313008)
-	{
-		return 12.92f * x;
-	}
-	return 1.055f * pow(x, 1.0f/ 2.4f) - 0.055f;
-}
-
-float LinearToSrgbFast(float x)
-{
-	return pow(x, 1.0f / 2.2f);
-}
-
-float3 LinearToSrgbFast(float3 rgb)
-{
-	return pow(rgb, 1.0f / 2.2f);
+	return dot(color, float3(0.2126729, 0.7151522, 0.0721750));
 }
 
 uint GetCubeFaceIndex(const float3 v)
@@ -403,32 +344,6 @@ float Wireframe(float3 barycentrics, float thickness = 0.2f, float smoothing = 1
 	float3 bary = smoothstep(deltas * thickness, deltas * (thickness + smoothing), barycentrics);
 	float minBary = min(bary.x, min(bary.y, bary.z));
 	return minBary;
-}
-
-// Calculates rotation quaternion from input vector to the vector (0, 0, 1)
-// Input vector must be normalized!
-float4 GetRotationToZAxis(float3 input)
-{
-	// Handle special case when input is exact or near opposite of (0, 0, 1)
-	if (input.z < -0.99999f)
-	{
-		return float4(1.0f, 0.0f, 0.0f, 0.0f);
-	}
-	return normalize(float4(input.y, -input.x, 0.0f, 1.0f + input.z));
-}
-
-// Returns the quaternion with inverted rotation
-float4 InvertRotation(float4 q)
-{
-	return float4(-q.x, -q.y, -q.z, q.w);
-}
-
-// Optimized point rotation using quaternion
-// Source: https://gamedev.stackexchange.com/questions/28395/rotating-vector3-by-a-quaternion
-float3 RotatePoint(float4 q, float3 v)
-{
-	float3 qAxis = float3(q.x, q.y, q.z);
-	return 2.0f * dot(qAxis, v) * qAxis + (q.w * q.w - dot(qAxis, qAxis)) * v + 2.0f * q.w * cross(qAxis, v);
 }
 
 // From keijiro: 3x3 Rotation matrix with an angle and an arbitrary vector
@@ -480,16 +395,6 @@ uint3 UnFlatten3D(uint index, uint3 dimensions)
 	outIndex.y = index / dimensions.x;
 	outIndex.x = index % dimensions.x;
 	return outIndex;
-}
-
-float Max3(float3 v)
-{
-	return max(v.x, max(v.y, v.z));
-}
-
-float Min3(float3 v)
-{
-	return min(v.x, min(v.y, v.z));
 }
 
 uint DivideAndRoundUp(uint x, uint y)

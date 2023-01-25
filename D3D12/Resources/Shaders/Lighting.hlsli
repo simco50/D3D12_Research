@@ -2,7 +2,6 @@
 
 #include "Common.hlsli"
 #include "ShadingModels.hlsli"
-#include "SkyCommon.hlsli"
 
 struct BrdfData
 {
@@ -283,6 +282,13 @@ float3 ScreenSpaceReflections(float3 worldPosition, float3 N, float3 V, float R,
 		}
 	}
 	return ssr;
+}
+
+float3 GetSky(float3 rayDir)
+{
+	float3 uv = normalize(rayDir);
+	TextureCube<float4> skyTexture = ResourceDescriptorHeap[cView.SkyIndex];
+	return skyTexture.SampleLevel(sLinearWrap, uv, 0).rgb;
 }
 
 LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, float R, float3 N, float3 V, float3 worldPosition, float linearDepth, float dither)

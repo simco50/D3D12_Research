@@ -91,7 +91,7 @@ float3 DDGIComputeBias(DDGIVolume volume, float3 normal, float3 viewDirection, f
 	const float viewBiasMultiplier = 0.8f;
 	const float axialDistanceMultiplier = 0.75f;
 	return (normal * normalBiasMultiplier + viewDirection * viewBiasMultiplier) *
-		axialDistanceMultiplier * Min3(volume.ProbeSize) * b;
+		axialDistanceMultiplier * MinComponent(volume.ProbeSize) * b;
 }
 
 float4 SampleDDGIIrradiance(DDGIVolume volume, float3 position, float3 direction, float3 cameraDirection)

@@ -1,5 +1,4 @@
 #include "Common.hlsli"
-#include "TonemappingCommon.hlsli"
 #include "Color.hlsli"
 
 #define HISTORY_REJECT_NONE			 	0
@@ -44,7 +43,7 @@ float4 ClipAABB(float3 aabb_min, float3 aabb_max, float4 p, float4 q)
 	float4 v_clip = q - float4(p_clip, p.w);
 	float3 v_unit = v_clip.xyz / e_clip;
 	float3 a_unit = abs(v_unit);
-	float ma_unit = Max3(a_unit);
+	float ma_unit = MaxComponent(a_unit);
 
 	if (ma_unit > 1.0)
 	{

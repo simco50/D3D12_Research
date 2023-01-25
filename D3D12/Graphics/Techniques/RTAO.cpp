@@ -32,7 +32,7 @@ RTAO::RTAO(GraphicsDevice* pDevice)
 		m_pTraceRaysSO = pDevice->CreateStateObject(stateDesc);
 
 		m_pDenoisePSO = pDevice->CreateComputePipeline(m_pCommonRS, "RayTracing/RTAODenoise.hlsl", "DenoiseCS");
-		m_pBilateralBlurPSO = pDevice->CreateComputePipeline(m_pCommonRS, "SSAOBlur.hlsl", "CSMain");
+		m_pBilateralBlurPSO = pDevice->CreateComputePipeline(m_pCommonRS, "PostProcessing/SSAOBlur.hlsl", "CSMain");
 	}
 }
 

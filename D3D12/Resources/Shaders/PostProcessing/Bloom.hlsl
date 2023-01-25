@@ -1,5 +1,4 @@
 #include "Common.hlsli"
-#include "TonemappingCommon.hlsli"
 
 // Based on
 // http://www.iryoku.com/next-generation-post-processing-in-call-of-duty-advanced-warfare

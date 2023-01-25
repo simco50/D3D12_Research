@@ -1,5 +1,4 @@
 #include "Common.hlsli"
-#include "TonemappingCommon.hlsli"
 
 #define BACKGROUND_COLOR float4(0, 0, 0, 0.6f)
 #define FOREGROUND_COLOR float4(1, 0, 0, 0.8f)

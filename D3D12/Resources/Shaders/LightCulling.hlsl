@@ -5,6 +5,25 @@
 #define BLOCK_SIZE 16
 #define SPLITZ_CULLING 1
 
+struct Plane
+{
+	float3 Normal;
+	float DistanceToOrigin;
+};
+
+struct Frustum
+{
+	Plane Planes[4];
+};
+
+struct Cone
+{
+	float3 Tip;
+	float Height;
+	float3 Direction;
+	float Radius;
+};
+
 Texture2D tDepthTexture : register(t0);
 
 globallycoherent RWStructuredBuffer<uint> uLightIndexCounter : register(u0);
@@ -30,6 +49,60 @@ groupshared uint TransparantLightList[MAX_LIGHTS_PER_TILE];
 #if SPLITZ_CULLING
 groupshared uint DepthMask;
 #endif
+
+bool SphereBehindPlane(Sphere sphere, Plane plane)
+{
+	return dot(plane.Normal, sphere.Position) - plane.DistanceToOrigin < -sphere.Radius;
+}
+
+bool PointBehindPlane(float3 p, Plane plane)
+{
+	return dot(plane.Normal, p) - plane.DistanceToOrigin < 0;
+}
+
+bool ConeBehindPlane(Cone cone, Plane plane)
+{
+	float3 furthestPointDirection = cross(cross(plane.Normal, cone.Direction), cone.Direction);
+	float3 furthestPointOnCircle = cone.Tip + cone.Direction * cone.Height - furthestPointDirection * cone.Radius;
+	return PointBehindPlane(cone.Tip, plane) && PointBehindPlane(furthestPointOnCircle, plane);
+}
+
+bool ConeInFrustum(Cone cone, Frustum frustum, float zNear, float zFar)
+{
+	Plane nearPlane, farPlane;
+	nearPlane.Normal = float3(0, 0, 1);
+	nearPlane.DistanceToOrigin = zNear;
+	farPlane.Normal = float3(0, 0, -1);
+	farPlane.DistanceToOrigin = -zFar;
+
+	bool inside = !(ConeBehindPlane(cone, nearPlane) || ConeBehindPlane(cone, farPlane));
+	for(int i = 0; i < 4 && inside; ++i)
+	{
+		inside = !ConeBehindPlane(cone, frustum.Planes[i]);
+	}
+	return inside;
+}
+
+bool SphereInFrustum(Sphere sphere, Frustum frustum, float depthNear, float depthFar)
+{
+	bool inside = !(sphere.Position.z + sphere.Radius < depthNear || sphere.Position.z - sphere.Radius > depthFar);
+	for(int i = 0; i < 4 && inside; ++i)
+	{
+		inside = !SphereBehindPlane(sphere, frustum.Planes[i]);
+	}
+	return inside;
+}
+
+Plane CalculatePlane(float3 a, float3 b, float3 c)
+{
+	float3 v0 = b - a;
+	float3 v1 = c - a;
+
+	Plane plane;
+	plane.Normal = normalize(cross(v1, v0));
+	plane.DistanceToOrigin = dot(plane.Normal, a);
+	return plane;
+}
 
 void AddLightForOpaque(uint lightIndex)
 {

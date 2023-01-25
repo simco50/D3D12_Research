@@ -1,5 +1,4 @@
 #include "Common.hlsli"
-#include "TonemappingCommon.hlsli"
 #include "ShaderDebugRender.hlsli"
 
 #define HISTOGRAM_AVERAGE_THREADS_PER_DIMENSION 16
@@ -18,6 +17,20 @@ RWStructuredBuffer<float> uLuminanceOutput : register(u0);
 ConstantBuffer<PassParameters> cPassParameters : register(b0);
 
 groupshared float gHistogramShared[NUM_HISTOGRAM_BINS];
+
+float EV100FromLuminance(float luminance)
+{
+	//https://google.github.io/filament/Filament.md.html#imagingpipeline/physicallybasedcamera/exposurevalue
+	const float K = 12.5f; //Reflected-light meter constant
+	const float ISO = 100.0f;
+	return log2(luminance * (ISO / K));
+}
+
+float Exposure(float ev100)
+{
+	//https://google.github.io/filament/Filament.md.html#imagingpipeline/physicallybasedcamera/exposurevalue
+	return 1.0f / (pow(2.0f, ev100) * 1.2f);
+}
 
 float Adaption(float current, float target, float dt, float speed)
 {

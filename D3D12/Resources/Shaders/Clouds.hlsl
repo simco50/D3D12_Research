@@ -1,7 +1,7 @@
 #include "Common.hlsli"
 #include "Random.hlsli"
+#include "Lighting.hlsli"
 #include "Volumetrics.hlsli"
-#include "SkyCommon.hlsli"
 
 RWTexture2D<float4> uOutput : register(u0);
 Texture2D tSceneTexture : register(t0);

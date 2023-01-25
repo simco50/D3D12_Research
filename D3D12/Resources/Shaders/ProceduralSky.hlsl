@@ -1,5 +1,5 @@
 #include "Common.hlsli"
-#include "SkyCommon.hlsli"
+#include "Lighting.hlsli"
 #include "Primitives.hlsli"
 #include "External/Atmosphere.hlsli"
 

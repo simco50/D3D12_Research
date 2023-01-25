@@ -1292,9 +1292,12 @@ void DemoApp::InitializePipelines()
 		m_pDepthPrepassAlphaMaskPSO = m_pDevice->CreatePipeline(psoDesc);
 	}
 
-	m_pLuminanceHistogramPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "LuminanceHistogram.hlsl", "CSMain");
-	m_pDrawHistogramPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "DrawLuminanceHistogram.hlsl", "DrawLuminanceHistogram");
-	m_pAverageLuminancePSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "AverageLuminance.hlsl", "CSMain");
+	ShaderDefineHelper tonemapperDefines;
+	tonemapperDefines.Set("NUM_HISTOGRAM_BINS", 256);
+	m_pLuminanceHistogramPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "LuminanceHistogram.hlsl", "CSMain", *tonemapperDefines);
+	m_pDrawHistogramPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "DrawLuminanceHistogram.hlsl", "DrawLuminanceHistogram", *tonemapperDefines);
+	m_pAverageLuminancePSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "AverageLuminance.hlsl", "CSMain", *tonemapperDefines);
+	m_pToneMapPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "PostProcessing/Tonemapping.hlsl", "CSMain", *tonemapperDefines);
 
 	//Depth resolve
 	m_pResolveDepthPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "ResolveDepth.hlsl", "CSMain", { "DEPTH_RESOLVE_MIN" });
@@ -1302,9 +1305,8 @@ void DemoApp::InitializePipelines()
 	m_pPrepareReduceDepthMsaaPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "ReduceDepth.hlsl", "PrepareReduceDepth", { "WITH_MSAA" });
 	m_pReduceDepthPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "ReduceDepth.hlsl", "ReduceDepth");
 
-	m_pToneMapPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "Tonemapping.hlsl", "CSMain");
 	m_pCameraMotionPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "CameraMotionVectors.hlsl", "CSMain");
-	m_pTemporalResolvePSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "TemporalResolve.hlsl", "CSMain");
+	m_pTemporalResolvePSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "PostProcessing/TemporalResolve.hlsl", "CSMain");
 
 	m_pGenerateMipsPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "GenerateMips.hlsl", "CSMain");
 
@@ -1324,9 +1326,9 @@ void DemoApp::InitializePipelines()
 	}
 
 	//Bloom
-	m_pBloomDownsamplePSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "Bloom.hlsl", "DownsampleCS");
-	m_pBloomDownsampleKarisAveragePSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "Bloom.hlsl", "DownsampleCS", {"KARIS_AVERAGE=1"});
-	m_pBloomUpsamplePSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "Bloom.hlsl", "UpsampleCS");
+	m_pBloomDownsamplePSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "PostProcessing/Bloom.hlsl", "DownsampleCS");
+	m_pBloomDownsampleKarisAveragePSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "PostProcessing/Bloom.hlsl", "DownsampleCS", {"KARIS_AVERAGE=1"});
+	m_pBloomUpsamplePSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "PostProcessing/Bloom.hlsl", "UpsampleCS");
 
 	//Visibility Shading
 	m_pVisibilityShadingPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "VisibilityShading.hlsl", "CSMain");

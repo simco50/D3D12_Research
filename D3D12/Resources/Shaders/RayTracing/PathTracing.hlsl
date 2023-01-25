@@ -3,7 +3,6 @@
 #include "Lighting.hlsli"
 #include "RaytracingCommon.hlsli"
 #include "Random.hlsli"
-#include "TonemappingCommon.hlsli"
 
 #define MIN_BOUNCES 3
 #define RIS_CANDIDATES_LIGHTS 8
@@ -51,6 +50,32 @@ float BRDFProbability(BrdfData brdfData, float3 N, float3 V)
 	float diffuse = diffuseReflectance * (1.0f - fresnel);
 	float p = (specular / max(0.0001f, (specular + diffuse)));
 	return clamp(p, 0.1f, 0.9f);
+}
+
+// Calculates rotation quaternion from input vector to the vector (0, 0, 1)
+// Input vector must be normalized!
+float4 GetRotationToZAxis(float3 input)
+{
+	// Handle special case when input is exact or near opposite of (0, 0, 1)
+	if (input.z < -0.99999f)
+	{
+		return float4(1.0f, 0.0f, 0.0f, 0.0f);
+	}
+	return normalize(float4(input.y, -input.x, 0.0f, 1.0f + input.z));
+}
+
+// Returns the quaternion with inverted rotation
+float4 InvertRotation(float4 q)
+{
+	return float4(-q.x, -q.y, -q.z, q.w);
+}
+
+// Optimized point rotation using quaternion
+// Source: https://gamedev.stackexchange.com/questions/28395/rotating-vector3-by-a-quaternion
+float3 RotatePoint(float4 q, float3 v)
+{
+	float3 qAxis = float3(q.x, q.y, q.z);
+	return 2.0f * dot(qAxis, v) * qAxis + (q.w * q.w - dot(qAxis, qAxis)) * v + 2.0f * q.w * cross(qAxis, v);
 }
 
 // Indirect light BRDF evaluation

@@ -17,8 +17,8 @@ SSAO::SSAO(GraphicsDevice* pDevice)
 	m_pSSAORS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2);
 	m_pSSAORS->Finalize("SSAO");
 
-	m_pSSAOPSO = pDevice->CreateComputePipeline(m_pSSAORS, "SSAO.hlsl", "CSMain");
-	m_pSSAOBlurPSO = pDevice->CreateComputePipeline(m_pSSAORS, "SSAOBlur.hlsl", "CSMain");
+	m_pSSAOPSO = pDevice->CreateComputePipeline(m_pSSAORS, "PostProcessing/SSAO.hlsl", "CSMain");
+	m_pSSAOBlurPSO = pDevice->CreateComputePipeline(m_pSSAORS, "PostProcessing/SSAOBlur.hlsl", "CSMain");
 }
 
 void SSAO::Execute(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures)

@@ -143,21 +143,21 @@ bool IsVisible(MeshData mesh, float4x4 world, uint meshlet)
 }
 
 [numthreads(32, 1, 1)]
-void ASMain(uint threadID : SV_DispatchThreadID)
+void ASMain(uint threadId : SV_DispatchThreadID)
 {
 	bool visible = false;
 
 	InstanceData instance = GetInstance(cObject.ID);
 	MeshData mesh = GetMesh(instance.MeshIndex);;
-	if (threadID < mesh.MeshletCount)
+	if (threadId < mesh.MeshletCount)
 	{
-		visible = IsVisible(mesh, instance.LocalToWorld, threadID);
+		visible = IsVisible(mesh, instance.LocalToWorld, threadId);
 	}
 
 	if (visible)
 	{
 		uint index = WavePrefixCountBits(visible);
-		gsPayload.Indices[index] = threadID;
+		gsPayload.Indices[index] = threadId;
 	}
 
 	// Dispatch the required number of MS threadgroups to render the visible meshlets
@@ -262,11 +262,11 @@ void PSMain(InterpolantsVSToPS input,
 	float dither = InterleavedGradientNoise(input.Position.xy);
 
 	InstanceData instance = GetInstance(cObject.ID);
-	
+
 	MaterialData material = GetMaterial(instance.MaterialIndex);
 	MaterialProperties surface = EvaluateMaterial(material, input);
 	BrdfData brdfData = GetBrdfData(surface);
-	
+
 	float3 V = normalize(cView.ViewLocation - input.PositionWS);
 	float ssrWeight = 0;
 	float3 ssr = ScreenSpaceReflections(input.PositionWS, surface.Normal, V, brdfData.Roughness, tDepth, tPreviousSceneColor, dither, ssrWeight);
