@@ -523,7 +523,6 @@ void DemoApp::Update()
 		sceneTextures.pDepth =				graph.Create("Depth Stencil", TextureDesc::CreateDepth(viewDimensions.x, viewDimensions.y, GraphicsCommon::DepthStencilFormat, TextureFlag::None, 1, ClearBinding(0.0f, 0)));
 		sceneTextures.pRoughness =			graph.Create("Roughness", TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, ResourceFormat::R8_UNORM));
 		sceneTextures.pColorTarget =		graph.Create("Color Target", TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, ResourceFormat::RGBA16_FLOAT));
-		sceneTextures.pAmbientOcclusion =	graph.Create("Ambient Occlusion", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, ResourceFormat::R8_UNORM));
 		sceneTextures.pNormals =			graph.Create("Normals", TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, ResourceFormat::RG16_FLOAT));
 		sceneTextures.pVelocity =			graph.Create("Velocity", TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, ResourceFormat::RG16_FLOAT));
 
@@ -738,25 +737,22 @@ void DemoApp::Update()
 						context.Dispatch(ComputeUtils::GetNumThreadGroups(pVelocity->GetWidth(), 8, pVelocity->GetHeight(), 8));
 					});
 
+			sceneTextures.pAmbientOcclusion = graph.Import(GraphicsCommon::GetDefaultTexture(DefaultTexture::White2D));
 			if (Tweakables::g_RaytracedAO)
 			{
 				m_pRTAO->Execute(graph, pView, sceneTextures);
 			}
 			else
 			{
-				m_pSSAO->Execute(graph, pView, sceneTextures);
+				sceneTextures.pAmbientOcclusion = m_pSSAO->Execute(graph, pView, sceneTextures);
 			}
 
 			m_pClusteredForward->ComputeLightCulling(graph, pView, m_LightCull3DData);
 
-			RGTexture* pFog = nullptr;
+			RGTexture* pFog = graph.Import(GraphicsCommon::GetDefaultTexture(DefaultTexture::Black3D));
 			if (Tweakables::g_VolumetricFog)
 			{
 				pFog = m_pClusteredForward->RenderVolumetricFog(graph, pView, m_LightCull3DData, m_FogData);
-			}
-			else
-			{
-				pFog = graph.TryImport(GraphicsCommon::GetDefaultTexture(DefaultTexture::Black3D));
 			}
 
 			if (m_RenderPath == RenderPath::Tiled)

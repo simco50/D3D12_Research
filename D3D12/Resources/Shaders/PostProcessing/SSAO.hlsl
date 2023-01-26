@@ -29,13 +29,13 @@ float3x3 TangentMatrix(float3 z)
 void CSMain(uint3 threadId : SV_DispatchThreadID)
 {
 	float2 uv = ((float2)threadId.xy + 0.5f) * cView.TargetDimensionsInv;
-	float depth = tDepthTexture.SampleLevel(sLinearClamp, uv, 0).r;
-	float3 normal = NormalFromDepth(tDepthTexture, sLinearClamp, uv, cView.TargetDimensionsInv, cView.ProjectionInverse);
+	float depth = tDepthTexture.SampleLevel(sPointClamp, uv, 0).r;
+	float3 viewNormal = NormalFromDepth(uv, tDepthTexture);
 	float3 viewPos = ViewFromDepth(uv.xy, depth, cView.ProjectionInverse).xyz;
 
 	uint seed = SeedThread(threadId.xy, cView.TargetDimensions, cView.FrameIndex);
 	float3 randomVec = float3(Random01(seed), Random01(seed), Random01(seed)) * 2.0f - 1.0f;
-	float3x3 TBN = TangentMatrix(normal);
+	float3x3 TBN = TangentMatrix(viewNormal);
 
 	// Diffuse reflections integral is over (1 / PI) * Li * NdotL
 	// We sample a cosine weighted distribution over the hemisphere which has a PDF which conveniently cancels out the inverse PI and NdotL terms.
