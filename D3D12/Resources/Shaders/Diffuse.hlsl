@@ -3,6 +3,7 @@
 #include "Random.hlsli"
 #include "RayTracing/DDGICommon.hlsli"
 #include "HZB.hlsli"
+#include "Noise.hlsli"
 
 #define BLOCK_SIZE 16
 

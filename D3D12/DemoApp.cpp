@@ -1146,7 +1146,7 @@ void DemoApp::Update()
 
 		if (Tweakables::g_VisualizeLightDensity)
 		{
-			if (m_RenderPath == RenderPath::Clustered)
+			if (m_RenderPath == RenderPath::Clustered || m_RenderPath == RenderPath::Visibility)
 			{
 				m_pClusteredForward->VisualizeLightDensity(graph, pView, sceneTextures, m_LightCull3DData);
 			}

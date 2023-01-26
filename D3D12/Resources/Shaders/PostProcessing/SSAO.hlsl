@@ -13,7 +13,7 @@ struct PassData
 };
 
 ConstantBuffer<PassData> cPass : register(b0);
-Texture2D tDepthTexture : register(t0);
+Texture2D<float> tDepthTexture : register(t0);
 
 RWTexture2D<float> uAmbientOcclusion : register(u0);
 
@@ -29,7 +29,7 @@ float3x3 TangentMatrix(float3 z)
 void CSMain(uint3 threadId : SV_DispatchThreadID)
 {
 	float2 uv = ((float2)threadId.xy + 0.5f) * cView.TargetDimensionsInv;
-	float depth = tDepthTexture.SampleLevel(sPointClamp, uv, 0).r;
+	float depth = tDepthTexture.SampleLevel(sPointClamp, uv, 0);
 	float3 viewNormal = NormalFromDepth(uv, tDepthTexture);
 	float3 viewPos = ViewFromDepth(uv.xy, depth, cView.ProjectionInverse).xyz;
 

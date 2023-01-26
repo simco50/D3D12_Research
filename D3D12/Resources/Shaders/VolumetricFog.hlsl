@@ -2,6 +2,7 @@
 #include "Lighting.hlsli"
 #include "Volumetrics.hlsli"
 #include "RayTracing/DDGICommon.hlsli"
+#include "Noise.hlsli"
 
 struct PassData
 {

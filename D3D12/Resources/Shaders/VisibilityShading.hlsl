@@ -3,6 +3,7 @@
 #include "Lighting.hlsli"
 #include "VisibilityBuffer.hlsli"
 #include "RayTracing/DDGICommon.hlsli"
+#include "Noise.hlsli"
 
 Texture2D<uint> tVisibilityTexture : register(t0);
 Texture2D<float> tAO :	register(t1);

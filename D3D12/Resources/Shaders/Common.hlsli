@@ -46,6 +46,32 @@ bool SphereInAABB(Sphere sphere, AABB aabb)
 	return distanceSq <= sphere.Radius * sphere.Radius;
 }
 
+//View space depth [0, 1]
+float LinearizeDepth01(float z, float near, float far)
+{
+	return far / (far + z * (near - far));
+}
+float LinearizeDepth01(float z)
+{
+	return cView.FarZ / (cView.FarZ + z * (cView.NearZ - cView.FarZ));
+}
+
+//View space depth [0, far plane]
+float LinearizeDepth(float z, float near, float far)
+{
+	return near * LinearizeDepth01(z, near, far);
+}
+float LinearizeDepth(float z)
+{
+	return cView.NearZ * LinearizeDepth01(z, cView.NearZ, cView.FarZ);
+}
+
+// View space depth [0, far plane] to NDC [0, 1]
+float LinearDepthToNDC(float z, float4x4 projection)
+{
+	return (z * projection[2][2] + projection[3][2]) / z;
+}
+
 // Convert clip space (-1, 1) coordinates to view space
 float3 ClipToView(float4 clip, float4x4 projectionInverse)
 {
@@ -72,6 +98,14 @@ float3 ViewFromDepth(float2 uv, float depth, float4x4 projectionInverse)
 	return ClipToView(clip, projectionInverse);
 }
 
+float3 ViewFromDepth(float2 uv, Texture2D<float> depthTexture)
+{
+	float4 clip = float4(float2(uv.x, 1.0f - uv.y) * 2.0f - 1.0f, 0.0f, 1.0f) * cView.NearZ;
+	float3 viewRay = mul(clip, cView.ProjectionInverse).xyz;
+	float depth = depthTexture.SampleLevel(sPointClamp, uv, 0);
+	return viewRay * LinearizeDepth01(depth);
+}
+
 float3 WorldFromDepth(float2 uv, float depth, float4x4 viewProjectionInverse)
 {
 	float4 clip = float4(float2(uv.x, 1.0f - uv.y) * 2.0f - 1.0f, depth, 1.0f);
@@ -81,26 +115,26 @@ float3 WorldFromDepth(float2 uv, float depth, float4x4 viewProjectionInverse)
 
 #define NORMAL_RECONSTRUCTION_METHOD 0
 
-float3 NormalFromDepth(float2 uv, Texture2D depthTexture)
+float3 NormalFromDepth(float2 uv, Texture2D<float> depthTexture)
 {
 	SamplerState depthSampler = sPointClamp;
 	float2 invDimensions = cView.ViewportDimensionsInv;
 	float4x4 inverseProjection = cView.ProjectionInverse;
 
 #if NORMAL_RECONSTRUCTION_METHOD == 0
-	float3 vpos0 = ViewFromDepth(uv, depthTexture.SampleLevel(depthSampler, uv, 0).x, inverseProjection);
-	float3 vpos1 = ViewFromDepth(uv + float2(1, 0) * invDimensions, depthTexture.SampleLevel(depthSampler, uv + float2(1, 0) * invDimensions, 0).x, inverseProjection);
-	float3 vpos2 = ViewFromDepth(uv + float2(0, -1) * invDimensions, depthTexture.SampleLevel(depthSampler, uv + float2(0, -1) * invDimensions, 0).x, inverseProjection);
+	float3 vpos0 = ViewFromDepth(uv, depthTexture);
+	float3 vpos1 = ViewFromDepth(uv + float2(1, 0) * invDimensions, depthTexture);
+	float3 vpos2 = ViewFromDepth(uv + float2(0, -1) * invDimensions, depthTexture);
 	float3 viewNormal = normalize(cross(vpos2 - vpos0, vpos1 - vpos0));
 
 #elif NORMAL_RECONSTRUCTION_METHOD == 1
 	// János Turánszki' - Improved Normal Reconstruction
 	// https://wickedengine.net/2019/09/22/improved-normal-reconstruction-from-depth/
-	float3 vposc = ViewFromDepth(uv, depthTexture.SampleLevel(depthSampler, uv, 0).x, inverseProjection);
-	float3 vposl = ViewFromDepth(uv + float2(-1, 0) * invDimensions, depthTexture.SampleLevel(depthSampler, uv + float2(-1, 0) * invDimensions, 0).x, inverseProjection);
-	float3 vposr = ViewFromDepth(uv + float2(1, 0) * invDimensions, depthTexture.SampleLevel(depthSampler, uv + float2(1, 0) * invDimensions, 0).x, inverseProjection);
-	float3 vposd = ViewFromDepth(uv + float2(0, -1) * invDimensions, depthTexture.SampleLevel(depthSampler, uv + float2(0, -1) * invDimensions, 0).x, inverseProjection);
-	float3 vposu = ViewFromDepth(uv + float2(0, 1) * invDimensions, depthTexture.SampleLevel(depthSampler, uv + float2(0, 1) * invDimensions, 0).x, inverseProjection);
+	float3 vposc = ViewFromDepth(uv, depthTexture);
+	float3 vposl = ViewFromDepth(uv + float2(-1, 0) * invDimensions, depthTexture);
+	float3 vposr = ViewFromDepth(uv + float2(1, 0) * invDimensions, depthTexture);
+	float3 vposd = ViewFromDepth(uv + float2(0, -1) * invDimensions, depthTexture);
+	float3 vposu = ViewFromDepth(uv + float2(0, 1) * invDimensions, depthTexture);
 
 	float3 l = vposc - vposl;
 	float3 r = vposr - vposc;
@@ -115,11 +149,11 @@ float3 NormalFromDepth(float2 uv, Texture2D depthTexture)
 #elif NORMAL_RECONSTRUCTION_METHOD == 2
 	// Yuwen Wu - Accurate Normal Reconstruction
 	// https://atyuwen.github.io/posts/normal-reconstruction/
-	float3 vposc = ViewFromDepth(uv, depthTexture.SampleLevel(depthSampler, uv, 0).x, inverseProjection);
-	float3 vposl = ViewFromDepth(uv + float2(-1, 0) * invDimensions, depthTexture.SampleLevel(depthSampler, uv + float2(-1, 0) * invDimensions, 0).x, inverseProjection);
-	float3 vposr = ViewFromDepth(uv + float2(1, 0) * invDimensions, depthTexture.SampleLevel(depthSampler, uv + float2(1, 0) * invDimensions, 0).x, inverseProjection);
-	float3 vposd = ViewFromDepth(uv + float2(0, -1) * invDimensions, depthTexture.SampleLevel(depthSampler, uv + float2(0, -1) * invDimensions, 0).x, inverseProjection);
-	float3 vposu = ViewFromDepth(uv + float2(0, 1) * invDimensions, depthTexture.SampleLevel(depthSampler, uv + float2(0, 1) * invDimensions, 0).x, inverseProjection);
+	float3 vposc = ViewFromDepth(uv, depthTexture);
+	float3 vposl = ViewFromDepth(uv + float2(-1, 0) * invDimensions, depthTexture);
+	float3 vposr = ViewFromDepth(uv + float2(1, 0) * invDimensions, depthTexture);
+	float3 vposd = ViewFromDepth(uv + float2(0, -1) * invDimensions, depthTexture);
+	float3 vposu = ViewFromDepth(uv + float2(0, 1) * invDimensions, depthTexture);
 
 	float3 l = vposc - vposl;
 	float3 r = vposr - vposc;
@@ -164,32 +198,6 @@ float3 ScreenToView(float4 screen, float2 screenDimensionsInv, float4x4 projecti
 	// Convert to normalized texture coordinates
 	float2 screenNormalized = screen.xy * screenDimensionsInv;
 	return ViewFromDepth(screenNormalized, screen.z, projectionInverse);
-}
-
-//View space depth [0, 1]
-float LinearizeDepth01(float z, float near, float far)
-{
-	return far / (far + z * (near - far));
-}
-float LinearizeDepth01(float z)
-{
-	return cView.FarZ / (cView.FarZ + z * (cView.NearZ - cView.FarZ));
-}
-
-//View space depth [0, far plane]
-float LinearizeDepth(float z, float near, float far)
-{
-	return near * LinearizeDepth01(z, near, far);
-}
-float LinearizeDepth(float z)
-{
-	return cView.NearZ * LinearizeDepth01(z, cView.NearZ, cView.FarZ);
-}
-
-// View space depth [0, far plane] to NDC [0, 1]
-float LinearDepthToNDC(float z, float4x4 projection)
-{
-	return (z * projection[2][2] + projection[3][2]) / z;
 }
 
 void AABBFromMinMax(inout AABB aabb, float3 minimum, float3 maximum)
@@ -316,20 +324,6 @@ uint GetCubeFaceIndex(const float3 v)
 	return faceIndex;
 }
 
-//From "NEXT GENERATION POST PROCESSING IN CALL OF DUTY: ADVANCED WARFARE"
-//http://advances.realtimerendering.com/s2014/index.html
-float InterleavedGradientNoise(float2 uv)
-{
-	const float3 magic = float3(0.06711056f, 0.00583715f, 52.9829189f);
-	return frac(magic.z * frac(dot(uv, magic.xy)));
-}
-float InterleavedGradientNoise(float2 uv, float offset)
-{
-	uv += offset * (float2(47, 17) * 0.695f);
-	const float3 magic = float3( 0.06711056f, 0.00583715f, 52.9829189f );
-	return frac(magic.z * frac(dot(uv, magic.xy)));
-}
-
 float ScreenFade(float2 uv)
 {
 	float2 fade = max(12.0f * abs(uv - 0.5f) - 5.0f, 0.0f);
@@ -398,20 +392,4 @@ uint3 UnFlatten3D(uint index, uint3 dimensions)
 uint DivideAndRoundUp(uint x, uint y)
 {
 	return (x + y - 1) / y;
-}
-
-bool RaySphereIntersect(float3 rayOrigin, float3 rayDirection, float3 sphereCenter, float sphereRadius, out float2 intersection)
-{
-    float3 oc = rayOrigin - sphereCenter;
-    float b = dot(oc, rayDirection);
-    float c = dot(oc, oc) - sphereRadius * sphereRadius;
-    float h = b * b - c;
-    if(h < 0.0)
-	{
-		intersection = -1.0f;
-		return false;
-	}
-    h = sqrt(h);
-    intersection = float2(-b - h, -b + h);
-	return true;
 }

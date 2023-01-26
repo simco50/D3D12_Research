@@ -3,7 +3,7 @@
 #include "Random.hlsli"
 
 RWTexture2D<float> uOutput : register(u0);
-Texture2D tSceneDepth : register(t0);
+Texture2D<float> tSceneDepth : register(t0);
 
 struct PassData
 {
