@@ -1,5 +1,4 @@
 #include "Common.hlsli"
-#include "TonemappingCommon.hlsli"
 #include "Color.hlsli"
 
 #define TONEMAP_REINHARD 0
@@ -14,6 +13,9 @@ struct PassParameters
 {
 	float WhitePoint;
 	uint Tonemapper;
+	float BloomIntensity;
+	float BloomBlendFactor;
+	float3 LensDirtTint;
 };
 
 ConstantBuffer<PassParameters> cPassData : register(b0);
@@ -21,6 +23,59 @@ RWTexture2D<float4> uOutColor : register(u0);
 Texture2D tColor : register(t0);
 StructuredBuffer<float> tAverageLuminance : register(t1);
 Texture2D tBloom : register(t2);
+Texture2D tLensDirt : register(t3);
+
+template<typename T>
+T Reinhard(T x)
+{
+	return x / (1.0 + x);
+}
+
+template<typename T>
+T InverseReinhard(T x)
+{
+	return x / (1.0 - x);
+}
+
+template<typename T>
+T ReinhardExtended(T x, float MaxWhite)
+{
+	return (x * (1.0 + x / Square(MaxWhite)) ) / (1.0 + x);
+}
+
+template<typename T>
+T ACES_Fast(T x)
+{
+	// Narkowicz 2015, "ACES Filmic Tone Mapping Curve"
+	const float a = 2.51;
+	const float b = 0.03;
+	const float c = 2.43;
+	const float d = 0.59;
+	const float e = 0.14;
+	return (x * (a * x + b)) / (x * (c * x + d) + e);
+}
+
+template<typename T>
+T Unreal3(T x)
+{
+	// Unreal 3, Documentation: "Color Grading"
+	// Adapted to be close to Tonemap_ACES, with similar range
+	// Gamma 2.2 correction is baked in, don't use with sRGB conversion!
+	return x / (x + 0.155) * 1.019;
+}
+
+template<typename T>
+T Uncharted2(T x)
+{
+	const float A = 0.15;
+	const float B = 0.50;
+	const float C = 0.10;
+	const float D = 0.20;
+	const float E = 0.02;
+	const float F = 0.30;
+	const float W = 11.2;
+	return ((x*(A*x+C*B)+D*E)/(x*(A*x+B)+D*F))-E/F;
+}
 
 [numthreads(BLOCK_SIZE, BLOCK_SIZE, 1)]
 void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
@@ -32,6 +87,13 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 
 	float3 rgb = tColor.Load(uint3(dispatchThreadId.xy, 0)).rgb;
 
+	if(cPassData.BloomIntensity >= 0)
+	{
+		float3 lensDirt = tLensDirt.SampleLevel(sLinearClamp, float2(uv.x, 1.0f - uv.y), 0).rgb * cPassData.LensDirtTint;
+		float3 bloom = tBloom.SampleLevel(sLinearClamp, uv, 0).rgb * cPassData.BloomIntensity;
+		rgb = lerp(rgb, bloom + bloom * lensDirt, cPassData.BloomBlendFactor);
+	}
+
 #if TONEMAP_LUMINANCE
 	float3 xyY = sRGB_to_xyY(rgb);
 	float value = xyY.z;
@@ -41,12 +103,6 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 
 	float exposure = tAverageLuminance[2];
 	value = value * (exposure + 1);
-
-	float3 bloom =
-		tBloom.SampleLevel(sLinearClamp, uv, 1.5f).rgb +
-		tBloom.SampleLevel(sLinearClamp, uv, 3.5f).rgb +
-		tBloom.SampleLevel(sLinearClamp, uv, 4.5f).rgb;
-	value += bloom / 3;
 
 	switch(cPassData.Tonemapper)
 	{
@@ -76,7 +132,7 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 
 	if(cPassData.Tonemapper != TONEMAP_UNREAL3)
 	{
-		rgb = LinearToSrgbFast(rgb);
+		rgb = LinearToSRGB(rgb);
 	}
 	uOutColor[dispatchThreadId.xy] = float4(rgb, 1);
 }

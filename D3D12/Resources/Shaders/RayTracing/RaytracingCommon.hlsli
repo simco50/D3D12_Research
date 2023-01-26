@@ -28,11 +28,11 @@ VertexAttribute GetVertexAttributes(InstanceData instance, float2 attribBarycent
 	for(int i = 0; i < 3; ++i)
 	{
 		uint vertexId = indices[i];
-		positions[i] = BufferLoad<float3>(mesh.BufferIndex, vertexId, mesh.PositionsOffset);
+		positions[i] = Unpack_RGBA16_SNORM(BufferLoad<uint2>(mesh.BufferIndex, vertexId, mesh.PositionsOffset)).xyz;
 		outData.UV += Unpack_RG16_FLOAT(BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.UVsOffset)) * barycentrics[i];
-		NormalData normalData = BufferLoad<NormalData>(mesh.BufferIndex, vertexId, mesh.NormalsOffset);
-		outData.Normal += normalData.Normal * barycentrics[i];
-		outData.Tangent += normalData.Tangent * barycentrics[i];
+		uint2 normalData = BufferLoad<uint2>(mesh.BufferIndex, vertexId, mesh.NormalsOffset);
+		outData.Normal += Unpack_RGB10A2_SNORM(normalData.x).xyz * barycentrics[i];
+		outData.Tangent += Unpack_RGB10A2_SNORM(normalData.y) * barycentrics[i];
 		if(mesh.ColorsOffset != ~0u)
 			outData.Color = BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.ColorsOffset);
 		else
@@ -53,7 +53,7 @@ VertexAttribute GetVertexAttributes(InstanceData instance, float2 attribBarycent
 MaterialProperties EvaluateMaterial(MaterialData material, VertexAttribute attributes, int mipLevel)
 {
 	MaterialProperties properties;
-	float4 baseColor = material.BaseColorFactor * UIntToColor(attributes.Color);
+	float4 baseColor = material.BaseColorFactor * Unpack_RGBA8_UNORM(attributes.Color);
 	if(material.Diffuse != INVALID_HANDLE)
 	{
 		baseColor *= SampleLevel2D(material.Diffuse, sMaterialSampler, attributes.UV, mipLevel);

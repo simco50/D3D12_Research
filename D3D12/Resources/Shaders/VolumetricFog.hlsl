@@ -2,6 +2,7 @@
 #include "Lighting.hlsli"
 #include "Volumetrics.hlsli"
 #include "RayTracing/DDGICommon.hlsli"
+#include "Noise.hlsli"
 
 struct PassData
 {
@@ -92,7 +93,7 @@ void InjectFogLightingCS(uint3 threadId : SV_DispatchThreadID)
 
 		float3 posFogLocal = (worldPosition - fogVolume.Location) / fogVolume.Extents;
 		float heightNormalized = posFogLocal.y * 0.5f + 0.5f;
-		if(min3(posFogLocal.x, posFogLocal.y, posFogLocal.z) < -1 || max3(posFogLocal.x, posFogLocal.y, posFogLocal.z) > 1)
+		if(Min(posFogLocal.x, posFogLocal.y, posFogLocal.z) < -1 || Max(posFogLocal.x, posFogLocal.y, posFogLocal.z) > 1)
 		{
 			continue;
 		}

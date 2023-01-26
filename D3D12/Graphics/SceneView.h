@@ -38,7 +38,6 @@ struct ViewTransform
 	Matrix View;
 	Matrix ViewProjection;
 	Matrix ViewProjectionPrev;
-	Matrix ViewProjectionFrozen;
 	Matrix ViewInverse;
 	Matrix ProjectionInverse;
 	bool Perspective = true;
@@ -51,9 +50,8 @@ struct ViewTransform
 	float FarPlane = 500.0f;
 	float OrthographicSize = 1;
 	int JitterIndex = 0;
-	float JitterWeight = 0.5f;
 	Vector2 Jitter;
-	Vector2 PreviousJitter;
+	Vector2 JitterPrev;
 	BoundingFrustum Frustum;
 };
 
@@ -99,7 +97,7 @@ struct SceneView
 	uint32 NumDecals = 0;
 	RefCountPtr<Texture> pSky;
 	int FrameIndex = 0;
-	Vector2i HZBDimensions;
+	Vector2u HZBDimensions;
 	VisibilityMask VisibilityMask;
 	ViewTransform View;
 	BoundingBox SceneAABB;
@@ -111,7 +109,7 @@ struct SceneView
 	uint32 NumShadowCascades;
 	uint32 NumLights;
 
-	Vector2i GetDimensions() const;
+	Vector2u GetDimensions() const;
 };
 
 struct SceneTextures
@@ -156,11 +154,14 @@ namespace GraphicsCommon
 
 	Texture* GetDefaultTexture(DefaultTexture type);
 
+	constexpr static ResourceFormat ShadowFormat = ResourceFormat::D16_UNORM;
+	constexpr static ResourceFormat DepthStencilFormat = ResourceFormat::D32_FLOAT;
+
 	extern RefCountPtr<CommandSignature> pIndirectDrawSignature;
 	extern RefCountPtr<CommandSignature> pIndirectDrawIndexedSignature;
 	extern RefCountPtr<CommandSignature> pIndirectDispatchSignature;
 	extern RefCountPtr<CommandSignature> pIndirectDispatchMeshSignature;
 
-	RefCountPtr<Texture> CreateTextureFromImage(CommandContext& context, Image& image, bool sRGB, const char* pName = nullptr);
+	RefCountPtr<Texture> CreateTextureFromImage(CommandContext& context, const Image& image, bool sRGB, const char* pName = nullptr);
 	RefCountPtr<Texture> CreateTextureFromFile(CommandContext& context, const char* pFilePath, bool sRGB, const char* pName = nullptr);
 }

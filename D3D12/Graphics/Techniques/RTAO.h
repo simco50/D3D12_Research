@@ -1,8 +1,8 @@
 #pragma once
+#include "../RenderGraph/RenderGraphDefinitions.h"
 class GraphicsDevice;
 class RootSignature;
 class Texture;
-class RGGraph;
 class StateObject;
 class PipelineState;
 struct SceneView;
@@ -13,7 +13,7 @@ class RTAO
 public:
 	RTAO(GraphicsDevice* pDevice);
 
-	void Execute(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures);
+	RGTexture* Execute(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures);
 
 private:
 	RefCountPtr<Texture> m_pHistory;

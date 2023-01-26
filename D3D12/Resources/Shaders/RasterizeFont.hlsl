@@ -71,7 +71,7 @@ void RasterizeGlyphCS(uint3 threadID : SV_DispatchThreadID)
 	sampleCenter.y = cPass.GlyphDimensions.y - sampleCenter.y;
 
 	uint insideSamples = 0;
-	const uint numSamples = 16;
+	const uint numSamples = ArraySize(MSAA_16_Locations);
 	for(uint sampleIndex = 0; sampleIndex < numSamples; ++sampleIndex)
 	{
 		float2 location = sampleCenter + MSAA_16_Locations[sampleIndex] / 16.0f;

@@ -25,8 +25,6 @@ static constexpr FormatInfo sFormatInfo[] = {
     { ResourceFormat::RGBA8_UNORM,       "RGBA8_UNORM",       4,   1, FormatType::Normalized,   4, false, false, false, false, false },
     { ResourceFormat::RGBA8_SNORM,		 "RGBA8_SNORM",       4,   1, FormatType::Normalized,   4, false, false, false, false, false },
     { ResourceFormat::BGRA8_UNORM,       "BGRA8_UNORM",       4,   1, FormatType::Normalized,   4, false, false, false, false, false },
-    { ResourceFormat::RGBA8_UNORM_SRGB,  "SRGBA8_UNORM_SRGB", 4,   1, FormatType::Normalized,   4, false, false, false, true , false },
-    { ResourceFormat::BGRA8_UNORM_SRGB,  "SBGRA8_UNORM_SRGB", 4,   1, FormatType::Normalized,   4, false, false, false, false, false },
     { ResourceFormat::RGB10A2_UNORM,	 "R10GBA2_UNORM", 	  4,   1, FormatType::Normalized,   4, false, false, false, false, false },
     { ResourceFormat::R11G11B10_FLOAT,   "R11G11B10_FLOAT",   4,   1, FormatType::Float,        3, false, false, false, false, false },
     { ResourceFormat::RG16_UINT,         "RG16_UINT",         4,   1, FormatType::Integer,      2, false, false, false, false, false },
@@ -51,18 +49,10 @@ static constexpr FormatInfo sFormatInfo[] = {
     { ResourceFormat::RGBA32_UINT,       "RGBA32_UINT",       16,  1, FormatType::Integer,      4, false, false, false, false, false },
     { ResourceFormat::RGBA32_SINT,       "RGBA32_SINT",       16,  1, FormatType::Integer,      4, false, false, true,  false, false },
     { ResourceFormat::RGBA32_FLOAT,      "RGBA32_FLOAT",      16,  1, FormatType::Float,        4, false, false, true,  false, false },
-    { ResourceFormat::D16_UNORM,         "D16_UNORM",         2,   1, FormatType::DepthStencil, 1, true,  false, false, false, false },
-    { ResourceFormat::D24S8,             "D24S8",             4,   1, FormatType::DepthStencil, 1, true,  true,  false, false, false },
-    { ResourceFormat::X24G8_UINT,        "X24G8_UINT",        4,   1, FormatType::Integer,      1, false, true,  false, false, false },
-    { ResourceFormat::D32_FLOAT,         "D32",               4,   1, FormatType::DepthStencil, 1, true,  false, false, false, false },
-    { ResourceFormat::D32S8,             "D32S8",             8,   1, FormatType::DepthStencil, 1, true,  true,  false, false, false },
-    { ResourceFormat::X32G8_UINT,        "X32G8_UINT",        8,   1, FormatType::Integer,      1, false, true,  false, false, false },
+    
     { ResourceFormat::BC1_UNORM,         "BC1_UNORM",         8,   4, FormatType::Normalized,   3, false, false, false, false, true  },
-    { ResourceFormat::BC1_UNORM_SRGB,    "BC1_UNORM_SRGB",    8,   4, FormatType::Normalized,   3, false, false, false, true,  true  },
     { ResourceFormat::BC2_UNORM,         "BC2_UNORM",         16,  4, FormatType::Normalized,   4, false, false, false, false, true  },
-    { ResourceFormat::BC2_UNORM_SRGB,    "BC2_UNORM_SRGB",    16,  4, FormatType::Normalized,   4, false, false, false, true,  true  },
     { ResourceFormat::BC3_UNORM,         "BC3_UNORM",         16,  4, FormatType::Normalized,   4, false, false, false, false, true  },
-    { ResourceFormat::BC3_UNORM_SRGB,    "BC3_UNORM_SRGB",    16,  4, FormatType::Normalized,   4, false, false, false, true,  true  },
     { ResourceFormat::BC4_UNORM,         "BC4_UNORM",         8,   4, FormatType::Normalized,   1, false, false, false, false, true  },
     { ResourceFormat::BC4_SNORM,         "BC4_SNORM",         8,   4, FormatType::Normalized,   1, false, false, false, false, true  },
     { ResourceFormat::BC5_UNORM,         "BC5_UNORM",         16,  4, FormatType::Normalized,   2, false, false, false, false, true  },
@@ -70,60 +60,106 @@ static constexpr FormatInfo sFormatInfo[] = {
     { ResourceFormat::BC6H_UFLOAT,       "BC6H_UFLOAT",       16,  4, FormatType::Float,        3, false, false, false, false, true  },
     { ResourceFormat::BC6H_SFLOAT,       "BC6H_SFLOAT",       16,  4, FormatType::Float,        3, false, false, true,  false, true  },
     { ResourceFormat::BC7_UNORM,         "BC7_UNORM",         16,  4, FormatType::Normalized,   4, false, false, false, false, true  },
-    { ResourceFormat::BC7_UNORM_SRGB,    "BC7_UNORM_SRGB",    16,  4, FormatType::Normalized,   4, false, false, false, true,  true  },
+
+	{ ResourceFormat::D16_UNORM,         "D16_UNORM",         2,   1, FormatType::DepthStencil, 1, true,  false, false, false, false },
+	{ ResourceFormat::D32_FLOAT,         "D32",               4,   1, FormatType::DepthStencil, 1, true,  false, false, false, false },
+	{ ResourceFormat::D24S8,             "D24S8",             4,   1, FormatType::DepthStencil, 1, true,  true,  false, false, false },
+	{ ResourceFormat::D32S8,             "D32S8",             8,   1, FormatType::DepthStencil, 1, true,  true,  false, false, false },
 };
 
 static_assert(ARRAYSIZE(sFormatInfo) == (uint32)ResourceFormat::Num);
 
-const FormatInfo& GetFormatInfo(ResourceFormat format)
+constexpr bool TestEnumValues()
 {
-	const FormatInfo& info = sFormatInfo[(uint32)format];
-	check(info.Format == format);
-	return info;
-}
-
-const uint32 GetFormatByteSize(ResourceFormat format, uint32 width, uint32 height, uint32 depth)
-{
-	const FormatInfo& info = GetFormatInfo(format);
-	if(info.BlockSize > 0)
-		return (width / info.BlockSize) * (height / info.BlockSize) * depth * info.BytesPerBlock;
-	return 0;
-}
-
-ResourceFormat SRVFormatFromDepth(ResourceFormat format)
-{
-	switch (format)
+	for (uint32 i = 0; i < ARRAYSIZE(sFormatInfo); ++i)
 	{
-		// 32-bit Z w/ Stencil
-	case ResourceFormat::D32S8:
-	case ResourceFormat::X32G8_UINT:
-		return ResourceFormat::R32_FLOAT;
-		// No Stencil
-	case ResourceFormat::D32_FLOAT:
-	case ResourceFormat::R32_FLOAT:
-		return ResourceFormat::R32_FLOAT;
-		// 24-bit Z
-	case ResourceFormat::D24S8:
-	case ResourceFormat::X24G8_UINT:
-		return ResourceFormat::D24S8;
-		// 16-bit Z w/o Stencil
-	case ResourceFormat::D16_UNORM:
-	case ResourceFormat::R16_UNORM:
-		return ResourceFormat::R16_UNORM;
-	default:
+		if (sFormatInfo[i].Format != (ResourceFormat)i)
+			return false;
+	}
+	return true;
+}
+static_assert(TestEnumValues());
+
+namespace RHI
+{
+	const FormatInfo& GetFormatInfo(ResourceFormat format)
+	{
+		const FormatInfo& info = sFormatInfo[(uint32)format];
+		check(info.Format == format);
+		return info;
+	}
+
+	const uint32 GetFormatByteSize(ResourceFormat format, uint32 width, uint32 height, uint32 depth)
+	{
+		const FormatInfo& info = GetFormatInfo(format);
+		if (info.BlockSize > 0)
+		{
+			if (info.IsBC)
+			{
+				return Math::DivideAndRoundUp(width, 4) * height * depth * info.BytesPerBlock / info.BlockSize / info.BlockSize;
+			}
+			return width * height * depth * info.BytesPerBlock / info.BlockSize / info.BlockSize;
+		}
+		return 0;
+	}
+
+	uint64 GetRowPitch(ResourceFormat format, uint32 width, uint32 mipIndex)
+	{
+		const FormatInfo& info = GetFormatInfo(format);
+		if (info.BlockSize > 0)
+		{
+			uint64 numBlocks = Math::Max(1u, Math::DivideAndRoundUp(width >> mipIndex, info.BlockSize));
+			return numBlocks * info.BytesPerBlock;
+		}
+		return 0;
+	}
+
+	uint64 GetSlicePitch(ResourceFormat format, uint32 width, uint32 height, uint32 mipIndex)
+	{
+		const FormatInfo& info = GetFormatInfo(format);
+		if (info.BlockSize > 0)
+		{
+			uint64 numBlocksX = Math::Max(1u, Math::DivideAndRoundUp(width >> mipIndex, info.BlockSize));
+			uint64 numBlocksY = Math::Max(1u, Math::DivideAndRoundUp(height >> mipIndex, info.BlockSize));
+			return numBlocksX * numBlocksY * info.BytesPerBlock;
+		}
+		return 0;
+	}
+
+	uint64 RHI:: GetTextureMipByteSize(ResourceFormat format, uint32 width, uint32 height, uint32 depth, uint32 mipIndex)
+	{
+		return GetSlicePitch(format, width, height, mipIndex) * Math::Max(1u, depth >> mipIndex);
+	}
+
+	uint64 GetTextureByteSize(ResourceFormat format, uint32 width, uint32 height, uint32 depth, uint32 numMips)
+	{
+		uint64 size = 0;
+		for (uint32 mipLevel = 0; mipLevel < numMips; ++mipLevel)
+		{
+			size += RHI:: GetTextureMipByteSize(format, width, height, depth, mipLevel);
+		}
+		return size;
+	}
+
+	ResourceFormat SRVFormatFromDepth(ResourceFormat format)
+	{
+		switch (format)
+		{
+		case ResourceFormat::D32S8:			return ResourceFormat::R32_FLOAT;
+		case ResourceFormat::D32_FLOAT:		return ResourceFormat::R32_FLOAT;
+		case ResourceFormat::D24S8:			return ResourceFormat::D24S8;
+		case ResourceFormat::D16_UNORM:		return ResourceFormat::R16_UNORM;
+		}
 		return format;
 	}
-}
 
-ResourceFormat DSVFormat(ResourceFormat format)
-{
-	switch (format)
+	ResourceFormat DSVFormat(ResourceFormat format)
 	{
-	case ResourceFormat::R32_FLOAT:
-		return ResourceFormat::D32_FLOAT;
-	case ResourceFormat::R16_UNORM:
-		return ResourceFormat::D16_UNORM;
-	default:
+		switch (format)
+		{
+		case ResourceFormat::R32_FLOAT:		return ResourceFormat::D32_FLOAT;
+		case ResourceFormat::R16_UNORM:		return ResourceFormat::D16_UNORM;
+		}
 		return format;
 	}
 }

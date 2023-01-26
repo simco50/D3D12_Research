@@ -50,7 +50,7 @@ RWStructuredBuffer<ParticleData> uParticleData : register(u4);
 RWByteAddressBuffer uIndirectArguments : register(u5);
 
 ByteAddressBuffer tCounters : register(t0);
-Texture2D tSceneDepth : register(t1);
+Texture2D<float> tSceneDepth : register(t1);
 
 [numthreads(1, 1, 1)]
 void UpdateSimulationParameters()
@@ -120,13 +120,14 @@ void Simulate(uint threadID : SV_DispatchThreadID)
 			if(screenPos.x > -1 && screenPos.y < 1 && screenPos.y > -1 && screenPos.y < 1)
 			{
 				float2 uv = screenPos.xy * float2(0.5f, -0.5f) + 0.5f;
-				float depth = tSceneDepth.SampleLevel(sLinearClamp, uv, 0).r;
+				float depth = tSceneDepth.SampleLevel(sPointClamp, uv, 0);
 				float linearDepth = LinearizeDepth(depth);
 				const float thickness = 1;
 
 				if(screenPos.w + p.Size > linearDepth && screenPos.w - p.Size - thickness < linearDepth)
 				{
-					float3 normal = NormalFromDepth(tSceneDepth, sLinearClamp, uv, cView.ViewportDimensionsInv, cView.ViewProjectionInverse);
+					float3 viewNormal = NormalFromDepth(uv, tSceneDepth);
+					float3 normal = mul(viewNormal, (float3x3)cView.ViewInverse);
 					if(dot(normal, p.Velocity) < 0)
 					{
 						uint seed = SeedThread(particleIndex);

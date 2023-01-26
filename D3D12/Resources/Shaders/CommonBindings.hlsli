@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Constants.hlsli"
-#include "ShaderInterop.h"
+#include "Interop/InteropMain.h"
 
 //CBVs
 ConstantBuffer<ViewUniforms> cView : 						register(b100);

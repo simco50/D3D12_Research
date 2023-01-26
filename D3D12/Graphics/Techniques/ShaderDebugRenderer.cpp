@@ -35,7 +35,7 @@ ShaderDebugRenderer::ShaderDebugRenderer(GraphicsDevice* pDevice, const FontCrea
 		PipelineStateInitializer psoDesc;
 		psoDesc.SetVertexShader("ShaderDebugRender.hlsl", "RenderLineVS");
 		psoDesc.SetPixelShader("ShaderDebugRender.hlsl", "RenderLinePS");
-		psoDesc.SetRenderTargetFormats(ResourceFormat::RGBA8_UNORM, ResourceFormat::D32_FLOAT, 1);
+		psoDesc.SetRenderTargetFormats(ResourceFormat::RGBA8_UNORM, GraphicsCommon::DepthStencilFormat, 1);
 		psoDesc.SetDepthEnabled(false);
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
 		psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE);

@@ -28,19 +28,19 @@ FrustumCullData FrustumCull(float3 aabbCenter, float3 aabbExtents, float4x4 worl
 	float4 pos011 = pos010 + axis[2];
 	float4 pos111 = pos110 + axis[2];
 
-	float minW = min3(min3(pos000.w, pos100.w, pos010.w),
-				min3(pos110.w, pos001.w, pos101.w),
+	float minW = Min(Min(pos000.w, pos100.w, pos010.w),
+				Min(pos110.w, pos001.w, pos101.w),
 				min(pos011.w, pos111.w));
 
-	float maxW = max3(max3(pos000.w, pos100.w, pos010.w),
-					max3(pos110.w, pos001.w, pos101.w),
+	float maxW = Max(Max(pos000.w, pos100.w, pos010.w),
+					Max(pos110.w, pos001.w, pos101.w),
 					max(pos011.w, pos111.w));
 
 	// Plane inequalities
-	float4 planeMins = min3(
-						min3(float4(pos000.xy, -pos000.xy) - pos000.w, float4(pos001.xy, -pos001.xy) - pos001.w, float4(pos010.xy, -pos010.xy) - pos010.w),
-						min3(float4(pos100.xy, -pos100.xy) - pos100.w, float4(pos110.xy, -pos110.xy) - pos110.w, float4(pos011.xy, -pos011.xy) - pos011.w),
-						min3(float4(pos101.xy, -pos101.xy) - pos101.w, float4(pos111.xy, -pos111.xy) - pos111.w, float4(1, 1, 1, 1))
+	float4 planeMins = Min(
+						Min(float4(pos000.xy, -pos000.xy) - pos000.w, float4(pos001.xy, -pos001.xy) - pos001.w, float4(pos010.xy, -pos010.xy) - pos010.w),
+						Min(float4(pos100.xy, -pos100.xy) - pos100.w, float4(pos110.xy, -pos110.xy) - pos110.w, float4(pos011.xy, -pos011.xy) - pos011.w),
+						Min(float4(pos101.xy, -pos101.xy) - pos101.w, float4(pos111.xy, -pos111.xy) - pos111.w, float4(1, 1, 1, 1))
 						);
 
 	// Screen space AABB
@@ -53,16 +53,16 @@ FrustumCullData FrustumCull(float3 aabbCenter, float3 aabbExtents, float4x4 worl
 	float3 ssPos011 = pos011.xyz / pos011.w;
 	float3 ssPos111 = pos111.xyz / pos111.w;
 
-	data.RectMin = min3(
-					min3(ssPos000, ssPos100, ssPos010),
-					min3(ssPos110, ssPos001, ssPos101),
-					min3(ssPos011, ssPos111, float3(1, 1, 1))
+	data.RectMin = Min(
+					Min(ssPos000, ssPos100, ssPos010),
+					Min(ssPos110, ssPos001, ssPos101),
+					Min(ssPos011, ssPos111, float3(1, 1, 1))
 					);
 
-	data.RectMax = max3(
-					max3(ssPos000, ssPos100, ssPos010),
-					max3(ssPos110, ssPos001, ssPos101),
-					max3(ssPos011, ssPos111, float3(-1, -1, -1))
+	data.RectMax = Max(
+					Max(ssPos000, ssPos100, ssPos010),
+					Max(ssPos110, ssPos001, ssPos101),
+					Max(ssPos011, ssPos111, float3(-1, -1, -1))
 					);
 
 	data.IsVisible &= data.RectMax.z > 0;
@@ -149,11 +149,11 @@ bool HZBCull(FrustumCullData cullData, Texture2D<float> hzbTexture, bool debug =
 		float depth33 = hzbTexture.SampleLevel(sPointClamp, float2(xCoords.w, yCoords.w), mip);
 
 		depth =
-			min4(
-				min4(depth00, depth10, depth20, depth30),
-				min4(depth01, depth11, depth21, depth31),
-				min4(depth02, depth12, depth22, depth32),
-				min4(depth03, depth13, depth23, depth33)
+			Min(
+				Min(depth00, depth10, depth20, depth30),
+				Min(depth01, depth11, depth21, depth31),
+				Min(depth02, depth12, depth22, depth32),
+				Min(depth03, depth13, depth23, depth33)
 			);
 	}
 	else if(hzbTexelCoverage == 2)
@@ -163,7 +163,7 @@ bool HZBCull(FrustumCullData cullData, Texture2D<float> hzbTexture, bool debug =
 		float depth01 = hzbTexture.SampleLevel(sPointClamp, (rectPixels.xw + 0.5f) * texelSize, mip);
 		float depth11 = hzbTexture.SampleLevel(sPointClamp, (rectPixels.zw + 0.5f) * texelSize, mip);
 
-		depth = min4(depth00, depth10, depth01, depth11);
+		depth = Min(depth00, depth10, depth01, depth11);
 	}
 
 	bool isOccluded = depth > maxDepth;
@@ -171,7 +171,7 @@ bool HZBCull(FrustumCullData cullData, Texture2D<float> hzbTexture, bool debug =
 #if HZB_DEBUG_RENDER
 	if(debug)
 	{
-		DrawRect(rect.xy, rect.zw, RectMode::MinMax, 0xFF0000FF);
+		DrawRect(rect.xy, rect.zw, RectMode::MinMax, Colors::Red);
 		TextWriter writer = CreateTextWriter(rect.xy * cView.ViewportDimensions);
 		writer = writer + 'H' + 'Z' + 'B' + ' ' + 'm' + 'i' + 'p' + ':' + ' ';
 		writer.Int(mip);
@@ -179,12 +179,12 @@ bool HZBCull(FrustumCullData cullData, Texture2D<float> hzbTexture, bool debug =
 		writer = writer + 'V' + 'i' + 's' + 'i' + 'b' + 'l' + 'e' + ':' + ' ';
 		if(isOccluded)
 		{
-			writer.SetColor(0xFF0000FF);
+			writer.SetColor(Colors::Red);
 			writer = writer + 'N' + 'o';
 		}
 		else
 		{
-			writer.SetColor(0x00FF00FF);
+			writer.SetColor(Colors::Green);
 			writer = writer + 'Y' + 'e' + 's';
 		}
 		uint gridColor = 0xFFFFFF33;
@@ -204,32 +204,32 @@ bool HZBCull(FrustumCullData cullData, Texture2D<float> hzbTexture, bool debug =
 			float4 xCoords = (min(rectPixels.x + float4(0, 1, 2, 3), rectPixels.z) + 0.5f) * texelSize.x;
 			float4 yCoords = (min(rectPixels.y + float4(0, 1, 2, 3), rectPixels.w) + 0.5f) * texelSize.y;
 
-			DrawRect(float2(xCoords.x, yCoords.x), rectSize, RectMode::CenterExtents, 0x00FF00FF);
-			DrawRect(float2(xCoords.y, yCoords.x), rectSize, RectMode::CenterExtents, 0x00FF00FF);
-			DrawRect(float2(xCoords.z, yCoords.x), rectSize, RectMode::CenterExtents, 0x00FF00FF);
-			DrawRect(float2(xCoords.w, yCoords.x), rectSize, RectMode::CenterExtents, 0x00FF00FF);
+			DrawRect(float2(xCoords.x, yCoords.x), rectSize, RectMode::CenterExtents, Colors::Green);
+			DrawRect(float2(xCoords.y, yCoords.x), rectSize, RectMode::CenterExtents, Colors::Green);
+			DrawRect(float2(xCoords.z, yCoords.x), rectSize, RectMode::CenterExtents, Colors::Green);
+			DrawRect(float2(xCoords.w, yCoords.x), rectSize, RectMode::CenterExtents, Colors::Green);
 
-			DrawRect(float2(xCoords.x, yCoords.y), rectSize, RectMode::CenterExtents, 0x00FF00FF);
-			DrawRect(float2(xCoords.y, yCoords.y), rectSize, RectMode::CenterExtents, 0x00FF00FF);
-			DrawRect(float2(xCoords.z, yCoords.y), rectSize, RectMode::CenterExtents, 0x00FF00FF);
-			DrawRect(float2(xCoords.w, yCoords.y), rectSize, RectMode::CenterExtents, 0x00FF00FF);
+			DrawRect(float2(xCoords.x, yCoords.y), rectSize, RectMode::CenterExtents, Colors::Green);
+			DrawRect(float2(xCoords.y, yCoords.y), rectSize, RectMode::CenterExtents, Colors::Green);
+			DrawRect(float2(xCoords.z, yCoords.y), rectSize, RectMode::CenterExtents, Colors::Green);
+			DrawRect(float2(xCoords.w, yCoords.y), rectSize, RectMode::CenterExtents, Colors::Green);
 
-			DrawRect(float2(xCoords.x, yCoords.z), rectSize, RectMode::CenterExtents, 0x00FF00FF);
-			DrawRect(float2(xCoords.y, yCoords.z), rectSize, RectMode::CenterExtents, 0x00FF00FF);
-			DrawRect(float2(xCoords.z, yCoords.z), rectSize, RectMode::CenterExtents, 0x00FF00FF);
-			DrawRect(float2(xCoords.w, yCoords.z), rectSize, RectMode::CenterExtents, 0x00FF00FF);
+			DrawRect(float2(xCoords.x, yCoords.z), rectSize, RectMode::CenterExtents, Colors::Green);
+			DrawRect(float2(xCoords.y, yCoords.z), rectSize, RectMode::CenterExtents, Colors::Green);
+			DrawRect(float2(xCoords.z, yCoords.z), rectSize, RectMode::CenterExtents, Colors::Green);
+			DrawRect(float2(xCoords.w, yCoords.z), rectSize, RectMode::CenterExtents, Colors::Green);
 
-			DrawRect(float2(xCoords.x, yCoords.w), rectSize, RectMode::CenterExtents, 0x00FF00FF);
-			DrawRect(float2(xCoords.y, yCoords.w), rectSize, RectMode::CenterExtents, 0x00FF00FF);
-			DrawRect(float2(xCoords.z, yCoords.w), rectSize, RectMode::CenterExtents, 0x00FF00FF);
-			DrawRect(float2(xCoords.w, yCoords.w), rectSize, RectMode::CenterExtents, 0x00FF00FF);
+			DrawRect(float2(xCoords.x, yCoords.w), rectSize, RectMode::CenterExtents, Colors::Green);
+			DrawRect(float2(xCoords.y, yCoords.w), rectSize, RectMode::CenterExtents, Colors::Green);
+			DrawRect(float2(xCoords.z, yCoords.w), rectSize, RectMode::CenterExtents, Colors::Green);
+			DrawRect(float2(xCoords.w, yCoords.w), rectSize, RectMode::CenterExtents, Colors::Green);
 		}
 		else if(hzbTexelCoverage == 2)
 		{
-			DrawRect((rectPixels.xy + 0.5f) * texelSize, rectSize, RectMode::CenterExtents, 0x00FF00FF);
-			DrawRect((rectPixels.zy + 0.5f) * texelSize, rectSize, RectMode::CenterExtents, 0x00FF00FF);
-			DrawRect((rectPixels.xw + 0.5f) * texelSize, rectSize, RectMode::CenterExtents, 0x00FF00FF);
-			DrawRect((rectPixels.zw + 0.5f) * texelSize, rectSize, RectMode::CenterExtents, 0x00FF00FF);
+			DrawRect((rectPixels.xy + 0.5f) * texelSize, rectSize, RectMode::CenterExtents, Colors::Green);
+			DrawRect((rectPixels.zy + 0.5f) * texelSize, rectSize, RectMode::CenterExtents, Colors::Green);
+			DrawRect((rectPixels.xw + 0.5f) * texelSize, rectSize, RectMode::CenterExtents, Colors::Green);
+			DrawRect((rectPixels.zw + 0.5f) * texelSize, rectSize, RectMode::CenterExtents, Colors::Green);
 		}
 	}
 #endif

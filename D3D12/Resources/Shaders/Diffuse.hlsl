@@ -3,6 +3,7 @@
 #include "Random.hlsli"
 #include "RayTracing/DDGICommon.hlsli"
 #include "HZB.hlsli"
+#include "Noise.hlsli"
 
 #define BLOCK_SIZE 16
 
@@ -11,6 +12,11 @@ struct PerViewData
 	uint4 ClusterDimensions;
 	uint2 ClusterSize;
 	float2 LightGridParams;
+};
+
+struct InstanceIndex
+{
+	uint ID;
 };
 
 ConstantBuffer<InstanceIndex> cObject : register(b0);
@@ -24,7 +30,6 @@ struct InterpolantsVSToPS
 	float3 Normal : NORMAL;
 	float4 Tangent : TANGENT;
 	uint Color : TEXCOORD1;
-	uint ID : ID;
 };
 
 Texture2D<float> tAO :	register(t0);
@@ -105,15 +110,16 @@ LightResult DoLight(float3 specularColor, float R, float3 diffuseColor, float3 N
 InterpolantsVSToPS FetchVertexAttributes(MeshData mesh, float4x4 world, uint vertexId)
 {
 	InterpolantsVSToPS result;
-	float3 Position = BufferLoad<float3>(mesh.BufferIndex, vertexId, mesh.PositionsOffset);
+	float3 Position = Unpack_RGBA16_SNORM(BufferLoad<uint2>(mesh.BufferIndex, vertexId, mesh.PositionsOffset)).xyz;
 	result.PositionWS = mul(float4(Position, 1.0f), world).xyz;
 	result.Position = mul(float4(result.PositionWS, 1.0f), cView.ViewProjection);
 
 	result.UV = Unpack_RG16_FLOAT(BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.UVsOffset));
 
-	NormalData normalData = BufferLoad<NormalData>(mesh.BufferIndex, vertexId, mesh.NormalsOffset);
-	result.Normal = normalize(mul(normalData.Normal, (float3x3)world));
-	result.Tangent = float4(normalize(mul(normalData.Tangent.xyz, (float3x3)world)), normalData.Tangent.w);
+	uint2 normalData = BufferLoad<uint2>(mesh.BufferIndex, vertexId, mesh.NormalsOffset);
+	result.Normal = normalize(mul(Unpack_RGB10A2_SNORM(normalData.x).xyz, (float3x3)world));
+	float4 tangent = Unpack_RGB10A2_SNORM(normalData.y);
+	result.Tangent = float4(normalize(mul(tangent.xyz, (float3x3)world)), tangent.w);
 
 	result.Color = 0xFFFFFFFF;
 	if(mesh.ColorsOffset != ~0u)
@@ -131,7 +137,7 @@ groupshared PayloadData gsPayload;
 
 bool IsVisible(MeshData mesh, float4x4 world, uint meshlet)
 {
-	MeshletBounds bounds = BufferLoad<MeshletBounds>(mesh.BufferIndex, meshlet, mesh.MeshletBoundsOffset);
+	Meshlet::Bounds bounds = BufferLoad<Meshlet::Bounds>(mesh.BufferIndex, meshlet, mesh.MeshletBoundsOffset);
 	FrustumCullData cullData = FrustumCull(bounds.Center, bounds.Extents, world, cView.ViewProjection);
 	if(!cullData.IsVisible)
 	{
@@ -142,21 +148,21 @@ bool IsVisible(MeshData mesh, float4x4 world, uint meshlet)
 }
 
 [numthreads(32, 1, 1)]
-void ASMain(uint threadID : SV_DispatchThreadID)
+void ASMain(uint threadId : SV_DispatchThreadID)
 {
 	bool visible = false;
 
 	InstanceData instance = GetInstance(cObject.ID);
 	MeshData mesh = GetMesh(instance.MeshIndex);;
-	if (threadID < mesh.MeshletCount)
+	if (threadId < mesh.MeshletCount)
 	{
-		visible = IsVisible(mesh, instance.LocalToWorld, threadID);
+		visible = IsVisible(mesh, instance.LocalToWorld, threadId);
 	}
 
 	if (visible)
 	{
 		uint index = WavePrefixCountBits(visible);
-		gsPayload.Indices[index] = threadID;
+		gsPayload.Indices[index] = threadId;
 	}
 
 	// Dispatch the required number of MS threadgroups to render the visible meshlets
@@ -190,13 +196,12 @@ void MSMain(
 	{
 		uint vertexId = BufferLoad<uint>(mesh.BufferIndex, i + meshlet.VertexOffset, mesh.MeshletVertexOffset);
 		InterpolantsVSToPS result = FetchVertexAttributes(mesh, instance.LocalToWorld, vertexId);
-		result.ID = meshletIndex;
 		verts[i] = result;
 	}
 
 	for(uint i = groupThreadID; i < meshlet.TriangleCount; i += NUM_MESHLET_THREADS)
 	{
-		MeshletTriangle tri = BufferLoad<MeshletTriangle>(mesh.BufferIndex, i + meshlet.TriangleOffset, mesh.MeshletTriangleOffset);
+		Meshlet::Triangle tri = BufferLoad<Meshlet::Triangle>(mesh.BufferIndex, i + meshlet.TriangleOffset, mesh.MeshletTriangleOffset);
 		triangles[i] = uint3(tri.V0, tri.V1, tri.V2);
 	}
 }
@@ -212,7 +217,7 @@ InterpolantsVSToPS VSMain(uint vertexId : SV_VertexID)
 MaterialProperties EvaluateMaterial(MaterialData material, InterpolantsVSToPS attributes)
 {
 	MaterialProperties properties;
-	float4 baseColor = material.BaseColorFactor * UIntToColor(attributes.Color);
+	float4 baseColor = material.BaseColorFactor * Unpack_RGBA8_UNORM(attributes.Color);
 	if(material.Diffuse != INVALID_HANDLE)
 	{
 		baseColor *= Sample2D(material.Diffuse, sMaterialSampler, attributes.UV);
@@ -262,11 +267,11 @@ void PSMain(InterpolantsVSToPS input,
 	float dither = InterleavedGradientNoise(input.Position.xy);
 
 	InstanceData instance = GetInstance(cObject.ID);
-	
+
 	MaterialData material = GetMaterial(instance.MaterialIndex);
 	MaterialProperties surface = EvaluateMaterial(material, input);
 	BrdfData brdfData = GetBrdfData(surface);
-	
+
 	float3 V = normalize(cView.ViewLocation - input.PositionWS);
 	float ssrWeight = 0;
 	float3 ssr = ScreenSpaceReflections(input.PositionWS, surface.Normal, V, brdfData.Roughness, tDepth, tPreviousSceneColor, dither, ssrWeight);

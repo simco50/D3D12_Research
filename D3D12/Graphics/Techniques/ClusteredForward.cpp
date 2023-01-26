@@ -63,7 +63,7 @@ ClusteredForward::ClusteredForward(GraphicsDevice* pDevice)
 			psoDesc.SetPixelShader("Diffuse.hlsl", "PSMain", { "CLUSTERED_FORWARD" });
 			psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_EQUAL);
 			psoDesc.SetDepthWrite(false);
-			psoDesc.SetRenderTargetFormats(formats, ResourceFormat::D32_FLOAT, 1);
+			psoDesc.SetRenderTargetFormats(formats, GraphicsCommon::DepthStencilFormat, 1);
 			psoDesc.SetName("Diffuse (Opaque)");
 			m_pDiffusePSO = pDevice->CreatePipeline(psoDesc);
 
@@ -90,7 +90,7 @@ ClusteredForward::ClusteredForward(GraphicsDevice* pDevice)
 			psoDesc.SetPixelShader("Diffuse.hlsl", "PSMain", { "CLUSTERED_FORWARD" });
 			psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_EQUAL);
 			psoDesc.SetDepthWrite(false);
-			psoDesc.SetRenderTargetFormats(formats, ResourceFormat::D32_FLOAT, 1);
+			psoDesc.SetRenderTargetFormats(formats, GraphicsCommon::DepthStencilFormat, 1);
 			psoDesc.SetName("Diffuse (Opaque)");
 			m_pMeshShaderDiffusePSO = pDevice->CreatePipeline(psoDesc);
 
@@ -118,7 +118,7 @@ ClusteredForward::ClusteredForward(GraphicsDevice* pDevice)
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
 		psoDesc.SetDepthWrite(false);
 		psoDesc.SetPixelShader("VisualizeLightClusters.hlsl", "PSMain");
-		psoDesc.SetRenderTargetFormats(ResourceFormat::RGBA16_FLOAT, ResourceFormat::D32_FLOAT, 1);
+		psoDesc.SetRenderTargetFormats(ResourceFormat::RGBA16_FLOAT, GraphicsCommon::DepthStencilFormat, 1);
 		psoDesc.SetBlendMode(BlendMode::Additive, false);
 		psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT);
 		psoDesc.SetRootSignature(m_pVisualizeLightClustersRS);

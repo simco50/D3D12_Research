@@ -24,6 +24,7 @@ class PipelineState;
 class ShaderDebugRenderer;
 class GPUDrivenRenderer;
 class DDGI;
+class VisualizeTexture;
 struct SubMesh;
 struct Material;
 
@@ -48,8 +49,6 @@ public:
 private:
 	void OnResizeViewport(int width, int height);
 
-	void VisualizeTexture(RGGraph& graph, RGTexture* pTexture);
-
 	void InitializePipelines();
 	void SetupScene(CommandContext& context);
 
@@ -67,7 +66,7 @@ private:
 
 	RefCountPtr<Texture> m_pColorHistory;
 	RefCountPtr<Texture> m_pHZB;
-	RefCountPtr<Texture> m_ColorOutput;
+	RefCountPtr<Texture> m_pColorOutput;
 	std::vector<RefCountPtr<Texture>> m_ShadowMaps;
 
 	std::unique_ptr<ClusteredForward> m_pClusteredForward;
@@ -82,6 +81,7 @@ private:
 	std::unique_ptr<ShaderDebugRenderer> m_pShaderDebugRenderer;
 	std::unique_ptr<GPUDrivenRenderer> m_pGPUDrivenRenderer;
 	std::unique_ptr<DDGI> m_pDDGI;
+	std::unique_ptr<VisualizeTexture> m_pVisualizeTexture;
 
 	LightCull2DData m_LightCull2DData;
 	LightCull3DData m_LightCull3DData;
@@ -119,6 +119,8 @@ private:
 
 	//Tonemapping
 	RefCountPtr<PipelineState> m_pToneMapPSO;
+	RefCountPtr<Texture> m_pLensDirtTexture;
+	Vector3 m_LensDirtTint = Vector3::One;
 
 	// Eye adaptation
 	RefCountPtr<Buffer> m_pAverageLuminance;
@@ -146,27 +148,12 @@ private:
 	RefCountPtr<PipelineState> m_pRenderSkyPSO;
 
 	//Bloom
-	RefCountPtr<PipelineState> m_pBloomSeparatePSO;
-	RefCountPtr<PipelineState> m_pBloomMipChainPSO;
+	RefCountPtr<PipelineState> m_pBloomDownsamplePSO;
+	RefCountPtr<PipelineState> m_pBloomDownsampleKarisAveragePSO;
+	RefCountPtr<PipelineState> m_pBloomUpsamplePSO;
 
 	// Visibility buffer
 	RefCountPtr<PipelineState> m_pVisibilityShadingPSO;
 	RefCountPtr<PipelineState> m_pVisibilityDebugRenderPSO;
 	uint32 m_VisibilityDebugRenderMode = 0;
-
-	// Debug Visualize
-	RefCountPtr<PipelineState> m_pVisualizeTexturePSO;
-	struct TextureVisualizeData
-	{
-		bool Enabled = false;
-		std::string SourceName;
-		TextureDesc SourceDesc;
-		RefCountPtr<Texture> pVisualizeTexture;
-		int CubeFaceIndex = 0;
-		float RangeMin = 0.0f;
-		float RangeMax = 1.0f;
-		bool VisibleChannels[4] = { true, true, true, true };
-		float MipLevel = 0.0f;
-		float Slice = 0.0f;
-	} m_VisualizeTextureData;
 };

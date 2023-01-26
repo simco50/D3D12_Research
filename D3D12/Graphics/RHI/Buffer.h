@@ -88,7 +88,7 @@ struct BufferDesc
 
 	static BufferDesc CreateTyped(uint32 elementCount, ResourceFormat format, BufferFlag usage = BufferFlag::ShaderResource | BufferFlag::UnorderedAccess)
 	{
-		const FormatInfo& info = GetFormatInfo(format);
+		const FormatInfo& info = RHI::GetFormatInfo(format);
 		check(!info.IsBC);
 		BufferDesc desc;
 		desc.ElementSize = info.BytesPerBlock;
@@ -181,7 +181,7 @@ struct IndexBufferView
 
 	uint32 Stride() const
 	{
-		return GetFormatInfo(Format).BytesPerBlock;
+		return RHI::GetFormatInfo(Format).BytesPerBlock;
 	}
 
 	D3D12_GPU_VIRTUAL_ADDRESS Location;

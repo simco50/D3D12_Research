@@ -370,7 +370,7 @@ void CBTTessellation::SetupPipelines(GraphicsDevice* pDevice)
 			psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
 		}
 		psoDesc.SetPixelShader("CBT.hlsl", "RenderPS", *defines);
-		psoDesc.SetRenderTargetFormats(formats, ResourceFormat::D32_FLOAT, 1);
+		psoDesc.SetRenderTargetFormats(formats, GraphicsCommon::DepthStencilFormat, 1);
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
 		psoDesc.SetName("Draw CBT");
 		m_pCBTRenderPSO = pDevice->CreatePipeline(psoDesc);
@@ -383,7 +383,7 @@ void CBTTessellation::SetupPipelines(GraphicsDevice* pDevice)
 		psoDesc.SetAmplificationShader("CBT.hlsl", "UpdateAS", *defines);
 		psoDesc.SetMeshShader("CBT.hlsl", "RenderMS", *defines);
 		psoDesc.SetPixelShader("CBT.hlsl", "RenderPS", *defines);
-		psoDesc.SetRenderTargetFormats(formats, ResourceFormat::D32_FLOAT, 1);
+		psoDesc.SetRenderTargetFormats(formats, GraphicsCommon::DepthStencilFormat, 1);
 		psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
 		psoDesc.SetName("Draw CBT");

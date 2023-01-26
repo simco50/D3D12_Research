@@ -1,5 +1,4 @@
 #include "Common.hlsli"
-#include "TonemappingCommon.hlsli"
 
 #define EPSILON 0.0001f
 #define HISTOGRAM_THREADS_PER_DIMENSION 16

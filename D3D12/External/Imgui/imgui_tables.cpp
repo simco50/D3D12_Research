@@ -1,4 +1,4 @@
-// dear imgui, v1.89 WIP
+// dear imgui, v1.89.1
 // (tables and columns code)
 
 /*
@@ -1171,8 +1171,8 @@ void ImGui::TableUpdateBorders(ImGuiTable* table)
 
         ImGuiID column_id = TableGetColumnResizeID(table, column_n, table->InstanceCurrent);
         ImRect hit_rect(column->MaxX - hit_half_width, hit_y1, column->MaxX + hit_half_width, border_y2_hit);
+        ItemAdd(hit_rect, column_id, NULL, ImGuiItemFlags_NoNav);
         //GetForegroundDrawList()->AddRect(hit_rect.Min, hit_rect.Max, IM_COL32(255, 0, 0, 100));
-        KeepAliveID(column_id);
 
         bool hovered = false, held = false;
         bool pressed = ButtonBehavior(hit_rect, column_id, &hovered, &held, ImGuiButtonFlags_FlattenChildren | ImGuiButtonFlags_AllowItemOverlap | ImGuiButtonFlags_PressedOnClick | ImGuiButtonFlags_PressedOnDoubleClick | ImGuiButtonFlags_NoNavFocus);
@@ -3070,15 +3070,15 @@ void ImGui::TableDrawContextMenu(ImGuiTable* table)
         if (column != NULL)
         {
             const bool can_resize = !(column->Flags & ImGuiTableColumnFlags_NoResize) && column->IsEnabled;
-            if (MenuItem("Size column to fit###SizeOne", NULL, false, can_resize))
+            if (MenuItem(LocalizeGetMsg(ImGuiLocKey_TableSizeOne), NULL, false, can_resize)) // "###SizeOne"
                 TableSetColumnWidthAutoSingle(table, column_n);
         }
 
         const char* size_all_desc;
         if (table->ColumnsEnabledFixedCount == table->ColumnsEnabledCount && (table->Flags & ImGuiTableFlags_SizingMask_) != ImGuiTableFlags_SizingFixedSame)
-            size_all_desc = "Size all columns to fit###SizeAll";        // All fixed
+            size_all_desc = LocalizeGetMsg(ImGuiLocKey_TableSizeAllFit);        // "###SizeAll" All fixed
         else
-            size_all_desc = "Size all columns to default###SizeAll";    // All stretch or mixed
+            size_all_desc = LocalizeGetMsg(ImGuiLocKey_TableSizeAllDefault);    // "###SizeAll" All stretch or mixed
         if (MenuItem(size_all_desc, NULL))
             TableSetColumnWidthAutoAll(table);
         want_separator = true;
@@ -3087,7 +3087,7 @@ void ImGui::TableDrawContextMenu(ImGuiTable* table)
     // Ordering
     if (table->Flags & ImGuiTableFlags_Reorderable)
     {
-        if (MenuItem("Reset order", NULL, false, !table->IsDefaultDisplayOrder))
+        if (MenuItem(LocalizeGetMsg(ImGuiLocKey_TableResetOrder), NULL, false, !table->IsDefaultDisplayOrder))
             table->IsResetDisplayOrderRequest = true;
         want_separator = true;
     }
@@ -4022,8 +4022,7 @@ void ImGui::EndColumns()
             const ImGuiID column_id = columns->ID + ImGuiID(n);
             const float column_hit_hw = COLUMNS_HIT_RECT_HALF_WIDTH;
             const ImRect column_hit_rect(ImVec2(x - column_hit_hw, y1), ImVec2(x + column_hit_hw, y2));
-            KeepAliveID(column_id);
-            if (IsClippedEx(column_hit_rect, column_id)) // FIXME: Can be removed or replaced with a lower-level test
+            if (!ItemAdd(column_hit_rect, column_id, NULL, ImGuiItemFlags_NoNav))
                 continue;
 
             bool hovered = false, held = false;

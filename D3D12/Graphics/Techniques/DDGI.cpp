@@ -43,7 +43,7 @@ DDGI::DDGI(GraphicsDevice* pDevice)
 		psoDesc.SetVertexShader("RayTracing/DDGI.hlsl", "VisualizeIrradianceVS");
 		psoDesc.SetPixelShader("RayTracing/DDGI.hlsl", "VisualizeIrradiancePS");
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
-		psoDesc.SetRenderTargetFormats(ResourceFormat::RGBA8_UNORM, ResourceFormat::D32_FLOAT, 1);
+		psoDesc.SetRenderTargetFormats(ResourceFormat::RGBA8_UNORM, GraphicsCommon::DepthStencilFormat, 1);
 		psoDesc.SetName("Visualize Irradiance");
 		psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
 		m_pDDGIVisualizePSO = pDevice->CreatePipeline(psoDesc);

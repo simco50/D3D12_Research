@@ -10,10 +10,10 @@ struct SceneView;
 
 struct IntColor
 {
-	IntColor(const Color& color) : Color(Math::EncodeRGBA(color)) {}
+	IntColor(const Color& color) : Color(Math::Pack_RGBA8_UNORM(color)) {}
 	IntColor(uint32 color = 0) : Color(color) {}
 	operator uint32() const { return Color; }
-	operator Color() const { return Math::DecodeRGBA(Color); }
+	operator Color() const { return Math::Unpack_RGBA8_UNORM(Color); }
 
 	uint32 Color;
 };

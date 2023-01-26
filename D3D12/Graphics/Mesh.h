@@ -11,9 +11,6 @@ struct World;
 
 struct SubMesh
 {
-	void Destroy();
-
-	int PositionsStride = 0;
 	int MaterialId = 0;
 
 	ResourceFormat PositionsFormat = ResourceFormat::RGB32_FLOAT;

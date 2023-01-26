@@ -32,8 +32,6 @@ enum class ResourceFormat
 	RGBA8_UNORM,
 	RGBA8_SNORM,
 	BGRA8_UNORM,
-	RGBA8_UNORM_SRGB,
-	BGRA8_UNORM_SRGB,
 	RGB10A2_UNORM,
 	R11G11B10_FLOAT,
 	RG16_UINT,
@@ -59,19 +57,9 @@ enum class ResourceFormat
 	RGBA32_SINT,
 	RGBA32_FLOAT,
 
-	D16_UNORM,
-	D24S8,
-	X24G8_UINT,
-	D32_FLOAT,
-	D32S8,
-	X32G8_UINT,
-
 	BC1_UNORM,
-	BC1_UNORM_SRGB,
 	BC2_UNORM,
-	BC2_UNORM_SRGB,
 	BC3_UNORM,
-	BC3_UNORM_SRGB,
 	BC4_UNORM,
 	BC4_SNORM,
 	BC5_UNORM,
@@ -79,7 +67,11 @@ enum class ResourceFormat
 	BC6H_UFLOAT,
 	BC6H_SFLOAT,
 	BC7_UNORM,
-	BC7_UNORM_SRGB,
+
+	D16_UNORM,
+	D32_FLOAT,
+	D24S8,
+	D32S8,
 
 	Num,
 };
@@ -107,10 +99,17 @@ struct FormatInfo
 	bool IsBC : 1;
 };
 
-const FormatInfo& GetFormatInfo(ResourceFormat format);
-const uint32 GetFormatByteSize(ResourceFormat format, uint32 width, uint32 height = 1, uint32 depth = 1);
-ResourceFormat SRVFormatFromDepth(ResourceFormat format);
-ResourceFormat DSVFormat(ResourceFormat format);
+namespace RHI
+{
+	const FormatInfo& GetFormatInfo(ResourceFormat format);
+	ResourceFormat SRVFormatFromDepth(ResourceFormat format);
+	ResourceFormat DSVFormat(ResourceFormat format);
+
+	uint64 GetRowPitch(ResourceFormat format, uint32 width, uint32 mipIndex = 0);
+	uint64 GetSlicePitch(ResourceFormat format, uint32 width, uint32 height, uint32 mipIndex = 0);
+	uint64 GetTextureMipByteSize(ResourceFormat format, uint32 width, uint32 height, uint32 depth, uint32 mipIndex);
+	uint64 GetTextureByteSize(ResourceFormat format, uint32 width, uint32 height, uint32 depth = 1, uint32 numMips = 1);
+}
 
 template<bool ThreadSafe>
 struct FreeList

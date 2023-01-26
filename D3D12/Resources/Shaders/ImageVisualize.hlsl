@@ -17,18 +17,17 @@ struct ConstantsData
 	float2 ValueRange;
 	uint TextureSource;
     uint TextureTarget;
-	uint TextureType;
+	TextureDimension TextureType;
 	uint ChannelMask;
 	float MipLevel;
 	float Slice;
 };
 
-ConstantBuffer<ConstantsData> cConstants : register(b100);
+ConstantBuffer<ConstantsData> cConstants : register(b0);
 
 float4 SampleTexture(float2 uv)
 {
 	SamplerState samplerState = sPointClamp;
-	//float mip = floor(cConstants.MipLevel);
 	float mip = cConstants.MipLevel;
 
 	float4 output = float4(1, 0, 1, 1);
@@ -67,25 +66,26 @@ float4 SampleTexture(float2 uv)
 	return output;
 }
 
-[numthreads(16, 16, 1)]
+[numthreads(8, 8, 1)]
 void CSMain(uint3 threadID : SV_DispatchThreadID)
 {
     float2 uv = (threadID.xy + 0.5f) * cConstants.InvDimensions;
 	RWTexture2D<float4> target = ResourceDescriptorHeap[cConstants.TextureTarget];
 	float4 texSample = SampleTexture(uv);
-
+	float2 range = cConstants.ValueRange;
+	
 	float4 output = 0;
 	uint numBits = countbits(cConstants.ChannelMask);
 	if(numBits == 1)
 	{
 		uint singleChannel = firstbithigh(cConstants.ChannelMask);
-		output = float4(InverseLerp(texSample[singleChannel], cConstants.ValueRange.x, cConstants.ValueRange.y).xxx, 1);
+		output = float4(InverseLerp(texSample[singleChannel], range.x, range.y).xxx, 1);
 	}
 	else
 	{
-		output.r = ((cConstants.ChannelMask >> 0) & 1) * InverseLerp(texSample[0], cConstants.ValueRange.x, cConstants.ValueRange.y);
-		output.g = ((cConstants.ChannelMask >> 1) & 1) * InverseLerp(texSample[1], cConstants.ValueRange.x, cConstants.ValueRange.y);
-		output.b = ((cConstants.ChannelMask >> 2) & 1) * InverseLerp(texSample[2], cConstants.ValueRange.x, cConstants.ValueRange.y);
+		output.r = ((cConstants.ChannelMask >> 0) & 1) * InverseLerp(texSample[0], range.x, range.y);
+		output.g = ((cConstants.ChannelMask >> 1) & 1) * InverseLerp(texSample[1], range.x, range.y);
+		output.b = ((cConstants.ChannelMask >> 2) & 1) * InverseLerp(texSample[2], range.x, range.y);
 		output.a = (cConstants.ChannelMask >> 3) & 1 ? texSample.a : 1.0f;
 	}
 	target[threadID.xy] = output;

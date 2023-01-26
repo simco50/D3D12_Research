@@ -56,9 +56,9 @@ void Camera::SetFarPlane(float farPlane)
 	OnDirty();
 }
 
-void Camera::SetJitterWeight(float weight)
+void Camera::SetJitter(bool jitter)
 {
-	m_Transform.JitterWeight = weight;
+	m_Jitter = jitter;
 	OnDirty();
 }
 
@@ -112,11 +112,6 @@ void Camera::UpdateMatrices() const
 {
 	if (m_Dirty)
 	{
-		if (m_UpdatePrevMatrices)
-		{
-			m_Transform.ViewProjectionFrozen = m_Transform.ViewProjection;
-		}
-
 		m_Transform.ViewInverse = Matrix::CreateFromQuaternion(m_Rotation) * Matrix::CreateTranslation(m_Position);
 		m_Transform.ViewInverse.Invert(m_Transform.View);
 		float aspect = m_Transform.Viewport.GetWidth() / m_Transform.Viewport.GetHeight();
@@ -129,20 +124,26 @@ void Camera::UpdateMatrices() const
 			m_Transform.Projection = Math::CreateOrthographicMatrix(m_Transform.OrthographicSize * aspect, m_Transform.OrthographicSize, m_Transform.NearPlane, m_Transform.FarPlane);
 		}
 
-#if 0
-		constexpr Math::HaltonSequence<16, 2> x;
-		constexpr Math::HaltonSequence<16, 3> y;
+		if (m_Jitter)
+		{
+			constexpr Math::HaltonSequence<16, 2> x;
+			constexpr Math::HaltonSequence<16, 3> y;
 
-		m_Transform.Jitter.x = m_Transform.JitterWeight * x[m_Transform.JitterIndex];
-		m_Transform.Jitter.y = m_Transform.JitterWeight * y[m_Transform.JitterIndex];
-		m_Transform.Projection.m[2][0] += (m_Transform.Jitter.x * 2.0f - 1.0f) / m_Transform.Viewport.GetWidth();
-		m_Transform.Projection.m[2][1] += (m_Transform.Jitter.y * 2.0f - 1.0f) / m_Transform.Viewport.GetHeight();
-#endif
+			m_Transform.Jitter.x = (x[m_Transform.JitterIndex] * 2.0f - 1.0f) / m_Transform.Viewport.GetWidth();
+			m_Transform.Jitter.y = (y[m_Transform.JitterIndex] * 2.0f - 1.0f) / m_Transform.Viewport.GetHeight();
+			m_Transform.Projection.m[2][0] += m_Transform.Jitter.x;
+			m_Transform.Projection.m[2][1] += m_Transform.Jitter.y;
+		}
+		else
+		{
+			m_Transform.Jitter = Vector2::Zero;
+		}
 
 		m_Transform.Projection.Invert(m_Transform.ProjectionInverse);
 		m_Transform.ViewProjection = m_Transform.View * m_Transform.Projection;
 		m_Transform.Frustum = Math::CreateBoundingFrustum(m_Transform.Projection, m_Transform.View);
 		m_Transform.Position = m_Position;
+
 		m_Dirty = false;
 	}
 }
@@ -151,7 +152,7 @@ void Camera::Update()
 {
 	m_Transform.PositionPrev = m_Transform.Position;
 	m_Transform.ViewProjectionPrev = m_Transform.ViewProjection;
-	m_Transform.PreviousJitter = m_Transform.Jitter;
+	m_Transform.JitterPrev = m_Transform.Jitter;
 	++m_Transform.JitterIndex;
 }
 

@@ -17,7 +17,7 @@ InterpolantsVSToPS VSMain(VertexInput input)
 	InterpolantsVSToPS output = (InterpolantsVSToPS)0;
 
 	output.Position = mul(float4(input.Position, 1.0f), cView.ViewProjection);
-	output.Color = UIntToColor(input.Color);
+	output.Color = Unpack_RGBA8_UNORM(input.Color);
 
 	return output;
 }

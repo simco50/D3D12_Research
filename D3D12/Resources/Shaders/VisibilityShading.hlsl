@@ -3,6 +3,7 @@
 #include "Lighting.hlsli"
 #include "VisibilityBuffer.hlsli"
 #include "RayTracing/DDGICommon.hlsli"
+#include "Noise.hlsli"
 
 Texture2D<uint> tVisibilityTexture : register(t0);
 Texture2D<float> tAO :	register(t1);
@@ -32,7 +33,7 @@ VisBufferVertexAttribute GetVertexAttributes(float2 screenUV, InstanceData insta
 {
 	MeshData mesh = GetMesh(instance.MeshIndex);
 	Meshlet meshlet = BufferLoad<Meshlet>(mesh.BufferIndex, meshletIndex, mesh.MeshletOffset);
-	MeshletTriangle tri = BufferLoad<MeshletTriangle>(mesh.BufferIndex, primitiveID + meshlet.TriangleOffset, mesh.MeshletTriangleOffset);
+	Meshlet::Triangle tri = BufferLoad<Meshlet::Triangle>(mesh.BufferIndex, primitiveID + meshlet.TriangleOffset, mesh.MeshletTriangleOffset);
 
 	uint3 indices = uint3(
 		BufferLoad<uint>(mesh.BufferIndex, tri.V0 + meshlet.VertexOffset, mesh.MeshletVertexOffset),
@@ -45,11 +46,12 @@ VisBufferVertexAttribute GetVertexAttributes(float2 screenUV, InstanceData insta
 	for(uint i = 0; i < 3; ++i)
 	{
 		uint vertexId = indices[i];
-		positions[i] = mul(float4(BufferLoad<float3>(mesh.BufferIndex, vertexId, mesh.PositionsOffset), 1), instance.LocalToWorld).xyz;
+		float3 position = Unpack_RGBA16_SNORM(BufferLoad<uint2>(mesh.BufferIndex, vertexId, mesh.PositionsOffset)).xyz;
+		positions[i] = mul(float4(position, 1), instance.LocalToWorld).xyz;
         vertices[i].UV = Unpack_RG16_FLOAT(BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.UVsOffset));
-        NormalData normalData = BufferLoad<NormalData>(mesh.BufferIndex, vertexId, mesh.NormalsOffset);
-        vertices[i].Normal = normalData.Normal;
-        vertices[i].Tangent = normalData.Tangent;
+        uint2 normalData = BufferLoad<uint2>(mesh.BufferIndex, vertexId, mesh.NormalsOffset);
+        vertices[i].Normal = Unpack_RGB10A2_SNORM(normalData.x).xyz;
+        vertices[i].Tangent = Unpack_RGB10A2_SNORM(normalData.y);
 		if(mesh.ColorsOffset != ~0u)
 			vertices[i].Color = BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.ColorsOffset);
 		else
@@ -79,7 +81,7 @@ VisBufferVertexAttribute GetVertexAttributes(float2 screenUV, InstanceData insta
 MaterialProperties EvaluateMaterial(MaterialData material, VisBufferVertexAttribute attributes)
 {
 	MaterialProperties properties;
-	float4 baseColor = material.BaseColorFactor * UIntToColor(attributes.Color);
+	float4 baseColor = material.BaseColorFactor * Unpack_RGBA8_UNORM(attributes.Color);
 	if(material.Diffuse != INVALID_HANDLE)
 	{
 		baseColor *= SampleGrad2D(NonUniformResourceIndex(material.Diffuse), sMaterialSampler, attributes.UV, attributes.DX, attributes.DY);

@@ -13,18 +13,37 @@
 #include "Core/Paths.h"
 #include "IconsFontAwesome4.h"
 #include "imgui_impl_win32.h"
+#include "imgui_internal.h"
 
-ImVec2 ImGui::GetAutoSize(const ImVec2& dimensions)
+namespace ImGui
 {
-	ImVec2 windowSize = GetContentRegionAvail();
-	float width = windowSize.x;
-	float height = windowSize.x * dimensions.y / dimensions.x;
-	if (dimensions.x / windowSize.x < dimensions.y / windowSize.y)
+	ImVec2 GetAutoSize(const ImVec2& dimensions)
 	{
-		width = dimensions.x / dimensions.y * windowSize.y;
-		height = windowSize.y;
+		ImVec2 windowSize = GetContentRegionAvail();
+		float width = windowSize.x;
+		float height = windowSize.x * dimensions.y / dimensions.x;
+		if (dimensions.x / windowSize.x < dimensions.y / windowSize.y)
+		{
+			width = dimensions.x / dimensions.y * windowSize.y;
+			height = windowSize.y;
+		}
+		return ImVec2(width, height);
 	}
-	return ImVec2(width, height);
+
+	bool ToggleButton(const char* pText, bool* pValue, const ImVec2& size)
+	{
+		PushStyleColor(ImGuiCol_Button, *pValue ? ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive) : ImGui::GetStyleColorVec4(ImGuiCol_Button));
+		PushStyleColor(ImGuiCol_ButtonHovered, *pValue ? ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive) : ImGui::GetStyleColorVec4(ImGuiCol_ButtonHovered));
+		PushStyleColor(ImGuiCol_ButtonActive, *pValue ? ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive) : ImGui::GetStyleColorVec4(ImGuiCol_Button));
+		bool clicked = false;
+		if (Button(pText, size))
+		{
+			*pValue = !*pValue;
+			clicked = true;
+		}
+		PopStyleColor(3);
+		return clicked;
+	}
 }
 
 void ApplyImGuiStyle()
@@ -123,6 +142,8 @@ void ImGuiRenderer::Initialize(GraphicsDevice* pDevice, WindowHandle window)
 
 	fontConfig.MergeMode = true;
 	fontConfig.GlyphMinAdvanceX = 15.0f; // Use if you want to make the icon monospaced
+	fontConfig.PixelSnapH = true;
+	fontConfig.GlyphOffset.y -= 2.5f;
 	static const ImWchar icon_ranges[] = { ICON_MIN_FA, ICON_MAX_FA, 0 };
 	io.Fonts->AddFontFromFileTTF("Resources/Fonts/" FONT_ICON_FILE_NAME_FA, 15.0f, &fontConfig, icon_ranges);
 
@@ -133,8 +154,8 @@ void ImGuiRenderer::Initialize(GraphicsDevice* pDevice, WindowHandle window)
 	CommandContext* pContext = pDevice->AllocateCommandContext();
 	D3D12_SUBRESOURCE_DATA data;
 	data.pData = pPixels;
-	data.RowPitch = GetFormatByteSize(ResourceFormat::RGBA8_UNORM, width);
-	data.SlicePitch = GetFormatByteSize(ResourceFormat::RGBA8_UNORM, width, height);
+	data.RowPitch = RHI::GetRowPitch(ResourceFormat::RGBA8_UNORM, width);
+	data.SlicePitch = RHI::GetSlicePitch(ResourceFormat::RGBA8_UNORM, width, height);
 	pContext->WriteTexture(gFontTexture, data, 0);
 	pContext->Execute(true);
 
@@ -156,6 +177,7 @@ void ImGuiRenderer::Initialize(GraphicsDevice* pDevice, WindowHandle window)
 	psoDesc.SetDepthWrite(false);
 	psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_ALWAYS);
 	psoDesc.SetRenderTargetFormats(ResourceFormat::RGBA8_UNORM, ResourceFormat::Unknown, 1);
+	psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
 	psoDesc.SetName("ImGui");
 	gImGuiPSO = pDevice->CreatePipeline(psoDesc);
 
@@ -209,7 +231,7 @@ void ImGuiRenderer::Render(RGGraph& graph, RGTexture* pRenderTarget)
 			{
 				context.SetGraphicsRootSignature(gImGuiRS);
 				context.SetPipelineState(gImGuiPSO);
-				context.SetPrimitiveTopology(D3D10_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
 				ImDrawData* pDrawData = ImGui::GetDrawData();
 

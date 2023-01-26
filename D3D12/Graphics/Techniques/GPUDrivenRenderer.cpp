@@ -10,8 +10,8 @@
 #include "Core/ConsoleVariables.h"
 
 #define A_CPU 1
-#include "ffx_a.h"
-#include "ffx_spd.h"
+#include "SPD/ffx_a.h"
+#include "SPD/ffx_spd.h"
 
 namespace Tweakables
 {
@@ -39,7 +39,7 @@ GPUDrivenRenderer::GPUDrivenRenderer(GraphicsDevice* pDevice)
 	psoDesc.SetMeshShader("MeshletCull.hlsl", "MSMain", *defines);
 	psoDesc.SetPixelShader("MeshletCull.hlsl", "PSMain", *defines);
 	psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
-	psoDesc.SetRenderTargetFormats(ResourceFormat::R32_UINT, ResourceFormat::D32_FLOAT, 1);
+	psoDesc.SetRenderTargetFormats(ResourceFormat::R32_UINT, GraphicsCommon::DepthStencilFormat, 1);
 	psoDesc.SetName("Visibility Rendering");
 	m_pCullAndDrawPSO[0] = pDevice->CreatePipeline(psoDesc);
 
@@ -59,7 +59,6 @@ GPUDrivenRenderer::GPUDrivenRenderer(GraphicsDevice* pDevice)
 
 	m_pPrintStatsPSO =			pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "PrintStatsCS", *defines);
 
-	pDevice->GetShaderManager()->AddIncludeDir("External/SPD/");
 	m_pHZBInitializePSO =		pDevice->CreateComputePipeline(m_pCommonRS, "HZB.hlsl", "HZBInitCS");
 	m_pHZBCreatePSO =			pDevice->CreateComputePipeline(m_pCommonRS, "HZB.hlsl", "HZBCreateCS");
 }
@@ -272,13 +271,13 @@ void GPUDrivenRenderer::PrintStats(RGGraph& graph, const SceneView* pView, const
 			});
 }
 
-RGTexture* GPUDrivenRenderer::InitHZB(RGGraph& graph, const Vector2i& viewDimensions, RefCountPtr<Texture>* pExportTarget) const
+RGTexture* GPUDrivenRenderer::InitHZB(RGGraph& graph, const Vector2u& viewDimensions, RefCountPtr<Texture>* pExportTarget) const
 {
 	RGTexture* pHZB = nullptr;
 	if (pExportTarget && *pExportTarget)
 		pHZB = graph.TryImport(*pExportTarget);
 
-	Vector2i hzbDimensions;
+	Vector2u hzbDimensions;
 	hzbDimensions.x = Math::Max(Math::NextPowerOfTwo(viewDimensions.x) >> 1u, 1u);
 	hzbDimensions.y = Math::Max(Math::NextPowerOfTwo(viewDimensions.y) >> 1u, 1u);
 	uint32 numMips = (uint32)Math::Floor(log2f((float)Math::Max(hzbDimensions.x, hzbDimensions.y)));
@@ -299,7 +298,7 @@ void GPUDrivenRenderer::BuildHZB(RGGraph& graph, RGTexture* pDepth, RGTexture* p
 {
 	RG_GRAPH_SCOPE("HZB", graph);
 
-	const Vector2i hzbDimensions = pHZB->GetDesc().Size2D();
+	const Vector2u hzbDimensions = pHZB->GetDesc().Size2D();
 
 	graph.AddPass("HZB Create", RGPassFlag::Compute)
 		.Read(pDepth)

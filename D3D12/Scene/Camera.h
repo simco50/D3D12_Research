@@ -25,9 +25,7 @@ public:
 	void SetNearPlane(float nearPlane);
 	void SetFarPlane(float farPlane);
 
-	void SetJitterWeight(float weight);
-	void SetLockPrevTransform(bool lock) { m_UpdatePrevMatrices = !lock; }
-	bool GetLockPrevTransform() const { return !m_UpdatePrevMatrices; }
+	void SetJitter(bool jitter);
 
 	const ViewTransform& GetViewTransform() const { return m_Transform; }
 
@@ -35,8 +33,6 @@ public:
 	float GetFar() const { return m_Transform.FarPlane; }
 	float GetFoV() const { return m_Transform.FoV; }
 
-	const Vector2& GetJitter() const { return m_Transform.Jitter; }
-	const Vector2& GetPreviousJitter() const { return m_Transform.PreviousJitter; }
 	const Matrix& GetView() const;
 	const Matrix& GetProjection() const;
 	const Matrix& GetViewProjection() const;
@@ -55,7 +51,7 @@ protected:
 private:
 	void UpdateMatrices() const;
 
-	bool m_UpdatePrevMatrices = true;
+	bool m_Jitter = true;
 	mutable ViewTransform m_Transform;
 	mutable bool m_Dirty = true;
 };

@@ -376,6 +376,7 @@ GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
 		NewFilter.DenyList.NumIDs = _countof(DenyIds);
 		NewFilter.DenyList.pIDList = DenyIds;
 
+		VERIFY_HR_EX(pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_CORRUPTION, true), GetDevice());
 		VERIFY_HR_EX(pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, true), GetDevice());
 		VERIFY_HR_EX(pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_WARNING, true), GetDevice());
 		E_LOG(Warning, "D3D Validation Break on Severity Enabled");
@@ -426,7 +427,6 @@ GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
 	E_LOG(Info, "Shader Model %d.%d", smMaj, smMin);
 	m_pShaderManager = std::make_unique<ShaderManager>(smMaj, smMin);
 	m_pShaderManager->AddIncludeDir("Resources/Shaders/");
-	m_pShaderManager->AddIncludeDir("Graphics/");
 }
 
 GraphicsDevice::~GraphicsDevice()
@@ -516,26 +516,28 @@ RefCountPtr<Texture> GraphicsDevice::CreateTexture(const TextureDesc& desc, cons
 {
 	auto GetResourceDesc = [](const TextureDesc& textureDesc)
 	{
-		const FormatInfo& info = GetFormatInfo(textureDesc.Format);
+		const FormatInfo& info = RHI::GetFormatInfo(textureDesc.Format);
 		uint32 width = info.IsBC ? Math::Clamp(textureDesc.Width, 0u, textureDesc.Width) : textureDesc.Width;
 		uint32 height = info.IsBC ? Math::Clamp(textureDesc.Height, 0u, textureDesc.Height) : textureDesc.Height;
+		DXGI_FORMAT format = D3D::ConvertFormat(textureDesc.Format);
+
 		D3D12_RESOURCE_DESC desc{};
 		switch (textureDesc.Dimensions)
 		{
 		case TextureDimension::Texture1D:
 		case TextureDimension::Texture1DArray:
-			desc = CD3DX12_RESOURCE_DESC::Tex1D(D3D::ConvertFormat(textureDesc.Format), width, (uint16)textureDesc.DepthOrArraySize, (uint16)textureDesc.Mips, D3D12_RESOURCE_FLAG_NONE, D3D12_TEXTURE_LAYOUT_UNKNOWN);
+			desc = CD3DX12_RESOURCE_DESC::Tex1D(format, width, (uint16)textureDesc.DepthOrArraySize, (uint16)textureDesc.Mips, D3D12_RESOURCE_FLAG_NONE, D3D12_TEXTURE_LAYOUT_UNKNOWN);
 			break;
 		case TextureDimension::Texture2D:
 		case TextureDimension::Texture2DArray:
-			desc = CD3DX12_RESOURCE_DESC::Tex2D(D3D::ConvertFormat(textureDesc.Format), width, height, (uint16)textureDesc.DepthOrArraySize, (uint16)textureDesc.Mips, textureDesc.SampleCount, 0, D3D12_RESOURCE_FLAG_NONE, D3D12_TEXTURE_LAYOUT_UNKNOWN);
+			desc = CD3DX12_RESOURCE_DESC::Tex2D(format, width, height, (uint16)textureDesc.DepthOrArraySize, (uint16)textureDesc.Mips, textureDesc.SampleCount, 0, D3D12_RESOURCE_FLAG_NONE, D3D12_TEXTURE_LAYOUT_UNKNOWN);
 			break;
 		case TextureDimension::TextureCube:
 		case TextureDimension::TextureCubeArray:
-			desc = CD3DX12_RESOURCE_DESC::Tex2D(D3D::ConvertFormat(textureDesc.Format), width, height, (uint16)textureDesc.DepthOrArraySize * 6, (uint16)textureDesc.Mips, textureDesc.SampleCount, 0, D3D12_RESOURCE_FLAG_NONE, D3D12_TEXTURE_LAYOUT_UNKNOWN);
+			desc = CD3DX12_RESOURCE_DESC::Tex2D(format, width, height, (uint16)textureDesc.DepthOrArraySize * 6, (uint16)textureDesc.Mips, textureDesc.SampleCount, 0, D3D12_RESOURCE_FLAG_NONE, D3D12_TEXTURE_LAYOUT_UNKNOWN);
 			break;
 		case TextureDimension::Texture3D:
-			desc = CD3DX12_RESOURCE_DESC::Tex3D(D3D::ConvertFormat(textureDesc.Format), width, height, (uint16)textureDesc.DepthOrArraySize, (uint16)textureDesc.Mips, D3D12_RESOURCE_FLAG_NONE, D3D12_TEXTURE_LAYOUT_UNKNOWN);
+			desc = CD3DX12_RESOURCE_DESC::Tex3D(format, width, height, (uint16)textureDesc.DepthOrArraySize, (uint16)textureDesc.Mips, D3D12_RESOURCE_FLAG_NONE, D3D12_TEXTURE_LAYOUT_UNKNOWN);
 			break;
 		default:
 			noEntry();
@@ -654,7 +656,7 @@ RefCountPtr<Texture> GraphicsDevice::CreateTexture(const TextureDesc& desc, cons
 		pTexture->m_ReadOnlyDsv = GetParent()->AllocateCPUDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
 
 		D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
-		dsvDesc.Format = D3D::ConvertFormat(DSVFormat(desc.Format));
+		dsvDesc.Format = D3D::ConvertFormat(RHI::DSVFormat(desc.Format));
 		switch (desc.Dimensions)
 		{
 		case TextureDimension::Texture1D:
@@ -908,7 +910,25 @@ RefCountPtr<ShaderResourceView> GraphicsDevice::CreateSRV(Texture* pTexture, con
 
 	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
 	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-	srvDesc.Format = D3D::ConvertFormat(SRVFormatFromDepth(textureDesc.Format));
+
+	auto AdjustFormatSRGB = [](DXGI_FORMAT format, bool sRGB)
+	{
+		if (sRGB)
+		{
+			switch (format)
+			{
+			case DXGI_FORMAT_B8G8R8A8_UNORM:		return DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
+			case DXGI_FORMAT_R8G8B8A8_UNORM:		return DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+			case DXGI_FORMAT_BC1_UNORM:				return DXGI_FORMAT_BC1_UNORM_SRGB;
+			case DXGI_FORMAT_BC2_UNORM:				return DXGI_FORMAT_BC2_UNORM_SRGB;
+			case DXGI_FORMAT_BC3_UNORM:				return DXGI_FORMAT_BC3_UNORM_SRGB;
+			case DXGI_FORMAT_BC7_UNORM:				return DXGI_FORMAT_BC7_UNORM_SRGB;
+			};
+		}
+		return format;
+	};
+
+	srvDesc.Format = AdjustFormatSRGB(D3D::ConvertFormat(RHI::SRVFormatFromDepth(textureDesc.Format)), EnumHasAllFlags(textureDesc.Usage, TextureFlag::sRGB));
 
 	switch (textureDesc.Dimensions)
 	{

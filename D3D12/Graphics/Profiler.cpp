@@ -177,7 +177,7 @@ int32 Profiler::GetNextTimerIndex()
 void Profiler::DrawImGui()
 {
 	ImGui::Spacing();
-	if (ImGui::BeginTable("Profiling", 5, ImGuiTableFlags_SizingStretchProp))
+	if (ImGui::BeginTable("Profiling", 5, ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_Resizable))
 	{
 		ImGui::TableSetupColumn("Event", ImGuiTableColumnFlags_None, 5);
 		ImGui::TableSetupColumn("CPU", ImGuiTableColumnFlags_None, 6);

@@ -4,7 +4,6 @@
 #include "Primitives.hlsli"
 #include "DDGICommon.hlsli"
 #include "Random.hlsli"
-#include "TonemappingCommon.hlsli"
 
 struct PassParameters
 {
@@ -377,7 +376,7 @@ float4 VisualizeIrradiancePS(InterpolantsVSToPS input) : SV_Target0
 	float2 uv = GetDDGIProbeUV(volume, probeIdx3D, input.Normal, DDGI_PROBE_DEPTH_TEXELS);
 	Texture2D<float> tDepthMap = ResourceDescriptorHeap[volume.DepthIndex];
 	float depth = tDepthMap.SampleLevel(sLinearClamp, uv, 0);
-	float3 color = depth.xxx / (Max3(volume.ProbeSize) * 3);
+	float3 color = depth.xxx / (MaxComponent(volume.ProbeSize) * 3);
 #elif VISUALIZE_MODE == VISUALIZE_MODE_UNIQUE_COLOR
 	uint seed = SeedThread(input.ProbeIndex);
 	float3 color = float3(Random01(seed), Random01(seed), Random01(seed));

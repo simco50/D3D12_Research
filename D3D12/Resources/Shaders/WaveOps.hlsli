@@ -1,5 +1,9 @@
 #pragma once
 
+/*
+	Helper functions that accelerate atomic write operations between threads using wave operations.
+*/
+
 #define WAVE_OPS 1
 
 #if WAVE_OPS

@@ -37,10 +37,9 @@ namespace Renderer
 		parameters.ProjectionInverse = view.ProjectionInverse;
 		parameters.ViewProjection = view.ViewProjection;
 		parameters.ViewProjectionPrev = view.ViewProjectionPrev;
-		parameters.ViewProjectionFrozen = view.ViewProjectionFrozen;
 		parameters.ViewProjectionInverse = view.ProjectionInverse * view.ViewInverse;
 
-		Matrix reprojectionMatrix = parameters.ViewProjectionInverse * view.ViewProjectionPrev;
+		Matrix reprojectionMatrix = parameters.ViewProjectionInverse * parameters.ViewProjectionPrev;
 		// Transform from uv to clip space: texcoord * 2 - 1
 		Matrix premult = {
 			2.0f, 0, 0, 0,
@@ -55,8 +54,8 @@ namespace Renderer
 			0, 0, 1, 0,
 			0.5f, 0.5f, 0, 1
 		};
-
 		parameters.ReprojectionMatrix = premult * reprojectionMatrix * postmult;
+
 		parameters.ViewLocation = view.Position;
 		parameters.ViewLocationPrev = view.PositionPrev;
 
@@ -77,8 +76,8 @@ namespace Renderer
 		parameters.ViewportDimensions = Vector2(view.Viewport.GetWidth(), view.Viewport.GetHeight());
 		parameters.ViewportDimensionsInv = Vector2(1.0f / view.Viewport.GetWidth(), 1.0f / view.Viewport.GetHeight());
 		parameters.HZBDimensions = pView->HZBDimensions;
-		parameters.ViewJitter.x = view.PreviousJitter.x - view.Jitter.x;
-		parameters.ViewJitter.y = -(view.PreviousJitter.y - view.Jitter.y);
+		parameters.ViewJitter = view.Jitter;
+		parameters.ViewJitterPrev = view.JitterPrev;
 		parameters.NearZ = view.NearPlane;
 		parameters.FarZ = view.FarPlane;
 		parameters.FoV = view.FoV;
@@ -88,7 +87,7 @@ namespace Renderer
 		parameters.SsrSamples = Tweakables::g_SsrSamples.Get();
 		parameters.LightCount = pView->NumLights;
 
-		check(pView->ShadowViews.size() <= MAX_SHADOW_CASTERS);
+		check(pView->ShadowViews.size() <= ShaderInterop::MAX_SHADOW_CASTERS);
 		for (uint32 i = 0; i < pView->ShadowViews.size(); ++i)
 		{
 			parameters.LightMatrices[i] = pView->ShadowViews[i].ViewProjection;
@@ -227,7 +226,7 @@ namespace Renderer
 			data.Direction = Vector3::Transform(Vector3::Forward, light.Rotation);
 			data.SpotlightAngles.x = cos(light.PenumbraAngleDegrees * Math::DegreesToRadians / 2.0f);
 			data.SpotlightAngles.y = cos(light.UmbraAngleDegrees * Math::DegreesToRadians / 2.0f);
-			data.Color = Math::EncodeRGBA(light.Colour);
+			data.Color = Math::Pack_RGBA8_UNORM(light.Colour);
 			data.Intensity = light.Intensity;
 			data.Range = light.Range;
 			data.ShadowMapIndex = light.CastShadows && light.ShadowMaps.size() ? light.ShadowMaps[0]->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
@@ -236,7 +235,7 @@ namespace Renderer
 			data.InvShadowSize = 1.0f / light.ShadowMapSize;
 			data.IsEnabled = light.Intensity > 0 ? 1 : 0;
 			data.IsVolumetric = light.VolumetricLighting;
-			data.CastShadows = light.CastShadows;
+			data.CastShadows = light.ShadowMaps.size() && light.CastShadows;
 			data.IsPoint = light.Type == LightType::Point;
 			data.IsSpot = light.Type == LightType::Spot;
 			data.IsDirectional = light.Type == LightType::Directional;
@@ -326,8 +325,8 @@ namespace GraphicsCommon
 			RefCountPtr<Texture> pTexture = pDevice->CreateTexture(desc, pName);
 			D3D12_SUBRESOURCE_DATA data;
 			data.pData = pData;
-			data.RowPitch = GetFormatByteSize(desc.Format, desc.Width);
-			data.SlicePitch = data.RowPitch * desc.Width;
+			data.RowPitch = RHI::GetRowPitch(desc.Format, desc.Width);
+			data.SlicePitch = RHI::GetSlicePitch(desc.Format, desc.Width, desc.Height);
 			context.InsertResourceBarrier(pTexture, D3D12_RESOURCE_STATE_COPY_DEST);
 			context.FlushResourceBarriers();
 			context.WriteTexture(pTexture, data, 0);
@@ -391,39 +390,41 @@ namespace GraphicsCommon
 		return DefaultTextures[(int)type];
 	}
 
-	RefCountPtr<Texture> CreateTextureFromImage(CommandContext& context, Image& image, bool sRGB, const char* pName)
+	RefCountPtr<Texture> CreateTextureFromImage(CommandContext& context, const Image& image, bool sRGB, const char* pName)
 	{
 		GraphicsDevice* pDevice = context.GetParent();
 		TextureDesc desc;
 		desc.Width = image.GetWidth();
 		desc.Height = image.GetHeight();
-		desc.Format = Image::TextureFormatFromCompressionFormat(image.GetFormat(), sRGB);
+		desc.Format = image.GetFormat();
 		desc.Mips = image.GetMipLevels();
 		desc.Usage = TextureFlag::ShaderResource;
+		if (sRGB)
+		{
+			desc.Usage |= TextureFlag::sRGB;
+		}
 		desc.Dimensions = image.IsCubemap() ? TextureDimension::TextureCube : TextureDimension::Texture2D;
-		if (GetFormatInfo(desc.Format).IsBC)
+		if (RHI::GetFormatInfo(desc.Format).IsBC)
 		{
 			desc.Width = Math::Max(desc.Width, 4u);
 			desc.Height = Math::Max(desc.Height, 4u);
 		}
 
-		const Image* pImg = &image;
 		std::vector<D3D12_SUBRESOURCE_DATA> subResourceData;
-		int resourceOffset = 0;
+		const Image* pImg = &image;
 		while (pImg)
 		{
-			subResourceData.resize(subResourceData.size() + desc.Mips);
 			for (uint32 i = 0; i < desc.Mips; ++i)
 			{
-				D3D12_SUBRESOURCE_DATA& data = subResourceData[resourceOffset++];
-				MipLevelInfo info = pImg->GetMipInfo(i);
+				D3D12_SUBRESOURCE_DATA& data = subResourceData.emplace_back();
 				data.pData = pImg->GetData(i);
-				data.RowPitch = info.RowSize;
-				data.SlicePitch = (uint64)info.RowSize * info.Width;
+				data.RowPitch = RHI::GetRowPitch(image.GetFormat(), desc.Width, i);
+				data.SlicePitch = RHI::GetSlicePitch(image.GetFormat(), desc.Width, desc.Height, i);
 			}
 			pImg = pImg->GetNextImage();
 		}
 		RefCountPtr<Texture> pTexture = pDevice->CreateTexture(desc, pName ? pName : "");
+		context.InsertResourceBarrier(pTexture, D3D12_RESOURCE_STATE_COPY_DEST);
 		context.WriteTexture(pTexture, subResourceData, 0);
 		return pTexture;
 	}
@@ -439,7 +440,7 @@ namespace GraphicsCommon
 	}
 }
 
-Vector2i SceneView::GetDimensions() const
+Vector2u SceneView::GetDimensions() const
 {
-	return Vector2i((uint32)View.Viewport.GetWidth(), (uint32)View.Viewport.GetHeight());
+	return Vector2u((uint32)View.Viewport.GetWidth(), (uint32)View.Viewport.GetHeight());
 }

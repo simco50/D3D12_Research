@@ -2,7 +2,6 @@
 
 #include "Common.hlsli"
 #include "ShadingModels.hlsli"
-#include "SkyCommon.hlsli"
 
 struct BrdfData
 {
@@ -189,7 +188,7 @@ float ScreenSpaceShadows(float3 worldPosition, float3 lightDirection, Texture2D<
 	for(uint i = 0; i < stepCount; ++i)
 	{
 		float3 rayPos = rayStartPS.xyz + n * rayStep;
-		float depth = depthTexture.SampleLevel(sLinearClamp, rayPos.xy * float2(0.5f, -0.5f) + float2(0.5f, 0.5f), 0).r;
+		float depth = depthTexture.SampleLevel(sPointClamp, rayPos.xy * float2(0.5f, -0.5f) + float2(0.5f, 0.5f), 0).r;
 		float diff = rayPos.z - depth;
 
 		bool hit = abs(diff + tolerance) < tolerance;
@@ -205,7 +204,7 @@ float ScreenSpaceShadows(float3 worldPosition, float3 lightDirection, Texture2D<
 	return 1.0f - occlusion;
 }
 
-float3 ScreenSpaceReflections(float3 worldPosition, float3 N, float3 V, float R, Texture2D<float> depthTexture, Texture2D previousSceneColor, float dither, inout float ssrWeight)
+float3 ScreenSpaceReflections(float3 worldPosition, float3 N, float3 V, float R, Texture2D<float> depthTexture, Texture2D<float4> previousSceneColor, float dither, inout float ssrWeight)
 {
 	float3 ssr = 0;
 	const float roughnessThreshold = 0.7f;
@@ -219,7 +218,7 @@ float3 ScreenSpaceReflections(float3 worldPosition, float3 N, float3 V, float R,
 			float jitter = dither - 1.0f;
 			uint maxSteps = cView.SsrSamples;
 
-			float3 rayStartVS = mul(float4(worldPosition, 1), cView.ViewInverse).xyz;
+			float3 rayStartVS = mul(float4(worldPosition, 1), cView.View).xyz;
 			float linearDepth = rayStartVS.z;
 			float3 reflectionVs = mul(reflectionWs, (float3x3)cView.View);
 			float3 rayEndVS = rayStartVS + (reflectionVs * linearDepth);
@@ -239,10 +238,10 @@ float3 ScreenSpaceReflections(float3 worldPosition, float3 N, float3 V, float R,
 			{
 				uint4 step = float4(1, 2, 3, 4) + currStep;
 				float4 sceneZ = float4(
-					depthTexture.SampleLevel(sLinearClamp, rayPos.xy + rayStep.xy * step.x, 0).x,
-					depthTexture.SampleLevel(sLinearClamp, rayPos.xy + rayStep.xy * step.y, 0).x,
-					depthTexture.SampleLevel(sLinearClamp, rayPos.xy + rayStep.xy * step.z, 0).x,
-					depthTexture.SampleLevel(sLinearClamp, rayPos.xy + rayStep.xy * step.w, 0).x
+					depthTexture.SampleLevel(sPointClamp, rayPos.xy + rayStep.xy * step.x, 0).x,
+					depthTexture.SampleLevel(sPointClamp, rayPos.xy + rayStep.xy * step.y, 0).x,
+					depthTexture.SampleLevel(sPointClamp, rayPos.xy + rayStep.xy * step.z, 0).x,
+					depthTexture.SampleLevel(sPointClamp, rayPos.xy + rayStep.xy * step.w, 0).x
 				);
 				float4 currentPosition = rayPos.z + rayStep.z * step;
 				uint4 zTest = abs(sceneZ - currentPosition - zThickness) < zThickness;
@@ -283,6 +282,13 @@ float3 ScreenSpaceReflections(float3 worldPosition, float3 N, float3 V, float R,
 		}
 	}
 	return ssr;
+}
+
+float3 GetSky(float3 rayDir)
+{
+	float3 uv = normalize(rayDir);
+	TextureCube<float4> skyTexture = ResourceDescriptorHeap[cView.SkyIndex];
+	return skyTexture.SampleLevel(sLinearWrap, uv, 0).rgb;
 }
 
 LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, float R, float3 N, float3 V, float3 worldPosition, float linearDepth, float dither)

@@ -32,7 +32,7 @@ void TraceRaysRGS()
 		return;
 
 	float3 probePosition = GetDDGIProbePosition(volume, probeIdx3D);
-	const float maxDepth = Max3(volume.ProbeSize) * 2;
+	const float maxDepth = MaxComponent(volume.ProbeSize) * 2;
 	float3x3 randomRotation = AngleAxis3x3(cPass.RandomAngle, cPass.RandomVector);
 
 	RaytracingAccelerationStructure TLAS = ResourceDescriptorHeap[cView.TLASIndex];
