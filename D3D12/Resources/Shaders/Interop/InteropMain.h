@@ -1,4 +1,8 @@
 
+#define CONCAT_IMPL( x, y ) x##y
+#define MACRO_CONCAT( x, y ) CONCAT_IMPL( x, y )
+#define PAD uint MACRO_CONCAT(padding, __COUNTER__)
+
 static const int MAX_SHADOW_CASTERS = 32;
 static const int MESHLET_MAX_TRIANGLES = 124;
 static const int MESHLET_MAX_VERTICES = 64;
@@ -113,9 +117,9 @@ struct ViewUniforms
 	float4x4 LightMatrices[MAX_SHADOW_CASTERS];
 	float4 CascadeDepths;
 	uint NumCascades;
-	uint : 32;
-	uint : 32;
-	uint : 32;
+	PAD;
+	PAD;
+	PAD;
 
 	float4x4 View;
 	float4x4 ViewInverse;
@@ -126,9 +130,9 @@ struct ViewUniforms
 	float4x4 ViewProjectionInverse;
 	float4x4 ReprojectionMatrix;
 	float3 ViewLocation;
-	uint : 32;
+	PAD;
 	float3 ViewLocationPrev;
-	uint : 32;
+	PAD;
 	float4 FrustumPlanes[6];
 	float2 TargetDimensions;
 	float2 TargetDimensionsInv;

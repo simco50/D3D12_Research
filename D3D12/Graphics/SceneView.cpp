@@ -233,7 +233,7 @@ namespace Renderer
 			data.InvShadowSize = 1.0f / light.ShadowMapSize;
 			data.IsEnabled = light.Intensity > 0 ? 1 : 0;
 			data.IsVolumetric = light.VolumetricLighting;
-			data.CastShadows = light.CastShadows;
+			data.CastShadows = light.ShadowMaps.size() && light.CastShadows;
 			data.IsPoint = light.Type == LightType::Point;
 			data.IsSpot = light.Type == LightType::Spot;
 			data.IsDirectional = light.Type == LightType::Directional;

@@ -244,42 +244,7 @@ void DemoApp::SetupScene(CommandContext& context)
 	m_pCamera->SetPosition(Vector3(-1.3f, 2.4f, -1.5f));
 	m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(Math::PI_DIV_4, Math::PI_DIV_4 * 0.5f, 0));
 
-	{
-#if 1
-		m_pCamera->SetPosition(Vector3(-1.3f, 2.4f, -1.5f));
-		m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(Math::PI_DIV_4, Math::PI_DIV_4 * 0.5f, 0));
-
-		LoadMesh("Resources/Scenes/Sponza/Sponza.gltf", context, m_World);
-#elif 1
-		m_pCamera->SetPosition(Vector3(-5.64f, 8.32f, -3.12f));
-		m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(Math::PI_DIV_4, Math::PI_DIV_4 * 0.5f, 0));
-
-		LoadMesh("D:/References/GltfScenes/IntelSponza/Main/NewSponza_Main_Blender_glTF.gltf", context, m_World);
-		LoadMesh("D:/References/GltfScenes/IntelSponza/PKG_A_Curtains/NewSponza_Curtains_glTF.gltf", context, m_World);
-		LoadMesh("D:/References/GltfScenes/IntelSponza/PKG_B_Ivy/NewSponza_IvyGrowth_glTF.gltf", context, m_World);
-		//LoadMesh("C:/Users/simon.coenen/Downloads/Sponza_New/Processed/PKG_D_Candles/NewSponza_100sOfCandles_glTF_OmniLights.gltf", context, m_World);
-		//LoadMesh("C:/Users/simon.coenen/Downloads/Sponza_New/PKG_C_Trees/NewSponza_CypressTree_glTF.gltf", context);
-#elif 0
-
-		// Hardcode the camera of the scene :-)
-		Matrix m(
-			0.868393660f, 8.00937414e-08f, -0.495875478f, 0,
-			0.0342082977f, 0.997617662f, 0.0599068627f, 0,
-			0.494694114f, -0.0689857975f, 0.866324782f, 0,
-			0, 0, 0, 1
-		);
-
-		m_pCamera->SetPosition(Vector3(-2.22535753f, 0.957680941f, -5.52742338f));
-		m_pCamera->SetFoV(68.75f * Math::PI / 180.0f);
-		m_pCamera->SetRotation(Quaternion::CreateFromRotationMatrix(m));
-
-		LoadMesh("D:/References/GltfScenes/bathroom_pt/LAZIENKA.gltf", context);
-#elif 1
-		LoadMesh("D:/References/GltfScenes/Sphere/scene.gltf", context);
-#elif 0
-		LoadMesh("D:/References/GltfScenes/BlenderSplash/MyScene.gltf", context);
-#endif
-	}
+	LoadMesh("Resources/Scenes/Sponza/Sponza.gltf", context, m_World);
 
 	{
 		Light sunLight = Light::Directional(Vector3::Zero, Vector3::Down, 10);
@@ -1743,6 +1708,7 @@ void DemoApp::CreateShadowViews(SceneView& view, World& world)
 		{
 			continue;
 		}
+		light.ShadowMaps.clear();
 		if (light.Type == LightType::Directional)
 		{
 			// Frustum corners in world space
@@ -1820,7 +1786,11 @@ void DemoApp::CreateShadowViews(SceneView& view, World& world)
 		}
 		else if (light.Type == LightType::Spot)
 		{
-			const Matrix projection = Math::CreatePerspectiveMatrix(light.UmbraAngleDegrees * Math::DegreesToRadians, 1.0f, light.Range, 0.001f);
+			BoundingBox box(light.Position, Vector3(light.Range));
+			if (!m_pCamera->GetFrustum().Contains(box))
+				continue;
+
+			const Matrix projection = Math::CreatePerspectiveMatrix(light.UmbraAngleDegrees * Math::DegreesToRadians, 1.0f, light.Range, 0.01f);
 			const Matrix lightView = (Matrix::CreateFromQuaternion(light.Rotation) * Matrix::CreateTranslation(light.Position)).Invert();
 
 			ShadowView shadowView;
@@ -1831,6 +1801,10 @@ void DemoApp::CreateShadowViews(SceneView& view, World& world)
 		}
 		else if (light.Type == LightType::Point)
 		{
+			BoundingSphere sphere(light.Position, light.Range);
+			if (!m_pCamera->GetFrustum().Contains(sphere))
+				continue;
+
 			Matrix viewMatrices[] = {
 				Math::CreateLookToMatrix(light.Position, Vector3::Right, Vector3::Up),
 				Math::CreateLookToMatrix(light.Position, Vector3::Left, Vector3::Up),
@@ -1839,7 +1813,7 @@ void DemoApp::CreateShadowViews(SceneView& view, World& world)
 				Math::CreateLookToMatrix(light.Position, Vector3::Backward, Vector3::Up),
 				Math::CreateLookToMatrix(light.Position, Vector3::Forward, Vector3::Up),
 			};
-			Matrix projection = Math::CreatePerspectiveMatrix(Math::PI_DIV_2, 1, light.Range, 0.001f);
+			Matrix projection = Math::CreatePerspectiveMatrix(Math::PI_DIV_2, 1, light.Range, 0.01f);
 
 			for (int i = 0; i < 6; ++i)
 			{

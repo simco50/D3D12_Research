@@ -186,7 +186,7 @@ void VisualizeTexture::RenderUI(const ImVec2& viewportOrigin, const ImVec2& view
 			{
 				Group group;
 
-				ImGui::BeginDisabled(desc.DepthOrArraySize <= 1);
+				ImGui::BeginDisabled(desc.Dimensions != TextureDimension::TextureCube && desc.Dimensions != TextureDimension::TextureCubeArray);
 				ImGui::SameLine();
 				ImGui::AlignTextToFramePadding();
 				ImGui::Text("Slice/Face");
