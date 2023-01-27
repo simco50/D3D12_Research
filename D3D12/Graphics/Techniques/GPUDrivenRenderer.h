@@ -52,6 +52,7 @@ private:
 	RefCountPtr<PipelineState> m_pBuildCullArgsPSO;
 	RefCountPtr<PipelineState> m_pPrintStatsPSO;
 
+	RefCountPtr<RootSignature> m_pHZBRS;
 	RefCountPtr<PipelineState> m_pHZBInitializePSO;
 	RefCountPtr<PipelineState> m_pHZBCreatePSO;
 };

@@ -24,7 +24,7 @@ GPUDrivenRenderer::GPUDrivenRenderer(GraphicsDevice* pDevice)
 	m_pCommonRS = new RootSignature(pDevice);
 	m_pCommonRS->AddRootConstants(0, 8);
 	m_pCommonRS->AddConstantBufferView(100);
-	m_pCommonRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 14);
+	m_pCommonRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 6);
 	m_pCommonRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 6);
 	m_pCommonRS->Finalize("Common");
 
@@ -59,8 +59,17 @@ GPUDrivenRenderer::GPUDrivenRenderer(GraphicsDevice* pDevice)
 
 	m_pPrintStatsPSO =			pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "PrintStatsCS", *defines);
 
-	m_pHZBInitializePSO =		pDevice->CreateComputePipeline(m_pCommonRS, "HZB.hlsl", "HZBInitCS");
-	m_pHZBCreatePSO =			pDevice->CreateComputePipeline(m_pCommonRS, "HZB.hlsl", "HZBCreateCS");
+	{
+		m_pHZBRS = new RootSignature(pDevice);
+		m_pHZBRS->AddRootConstants(0, 8);
+		m_pHZBRS->AddConstantBufferView(100);
+		m_pHZBRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 14);
+		m_pHZBRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 6);
+		m_pHZBRS->Finalize("HZB");
+
+		m_pHZBInitializePSO = pDevice->CreateComputePipeline(m_pHZBRS, "HZB.hlsl", "HZBInitCS");
+		m_pHZBCreatePSO = pDevice->CreateComputePipeline(m_pHZBRS, "HZB.hlsl", "HZBCreateCS");
+	}
 }
 
 RasterContext::RasterContext(RGGraph& graph, const std::string contextString, RGTexture* pDepth, RefCountPtr<Texture>* pPreviousHZB, RasterType type)
@@ -305,7 +314,7 @@ void GPUDrivenRenderer::BuildHZB(RGGraph& graph, RGTexture* pDepth, RGTexture* p
 		.Write(pHZB)
 		.Bind([=](CommandContext& context)
 			{
-				context.SetComputeRootSignature(m_pCommonRS);
+				context.SetComputeRootSignature(m_pHZBRS);
 				context.SetPipelineState(m_pHZBInitializePSO);
 
 				struct
@@ -329,7 +338,7 @@ void GPUDrivenRenderer::BuildHZB(RGGraph& graph, RGTexture* pDepth, RGTexture* p
 				context.ClearUAVu(pSPDCounter->Get());
 				context.InsertUavBarrier();
 
-				context.SetComputeRootSignature(m_pCommonRS);
+				context.SetComputeRootSignature(m_pHZBRS);
 				context.SetPipelineState(m_pHZBCreatePSO);
 
 				varAU2(dispatchThreadGroupCountXY);
