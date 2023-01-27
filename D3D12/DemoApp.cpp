@@ -1401,38 +1401,6 @@ void DemoApp::UpdateImGui()
 	ImVec2 viewportOrigin = ImGui::GetItemRectMin();
 	ImVec2 viewportExtents = ImGui::GetItemRectSize();
 
-	if (Tweakables::g_VisualizeLightDensity)
-	{
-		//Render Color Legend
-		static ImColor DEBUG_COLORS[] =
-		{
-			ImColor(0,4,141, 255),
-			ImColor(5,10,255, 255),
-			ImColor(0,164,255, 255),
-			ImColor(0,255,189, 255),
-			ImColor(0,255,41, 255),
-			ImColor(117,254,1, 255),
-			ImColor(255,239,0, 255),
-			ImColor(255,86,0, 255),
-			ImColor(204,3,0, 255),
-			ImColor(65,0,1, 255),
-		};
-		uint32 numColors = ARRAYSIZE(DEBUG_COLORS);
-
-		ImVec2 iconSize(40.0f, 30.0f);
-
-		ImDrawList* pDrawList = ImGui::GetWindowDrawList();
-		ImVec2 p = viewportPos + viewportSize - ImVec2(iconSize.x, iconSize.y * (float)numColors) - ImVec2(10.0f, 10.0f);
-		for (uint32 i = 0; i < numColors; ++i)
-		{
-			pDrawList->AddRectFilled(p, p + iconSize, DEBUG_COLORS[i]);
-			char text[2];
-			text[0] = '0' + (char)i;
-			text[1] = 0;
-			pDrawList->AddText(p + ImVec2(iconSize.x / 2, 0), ImColor(1.0f, 1.0f, 1.0f, 1.0f), text);
-			p += ImVec2(0, iconSize.y);
-		}
-	}
 	ImGui::End();
 
 	ImGuizmo::SetRect(viewportOrigin.x, viewportOrigin.y, viewportExtents.x, viewportExtents.y);
