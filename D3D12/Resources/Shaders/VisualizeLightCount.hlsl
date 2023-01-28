@@ -21,33 +21,35 @@ Texture2D<uint2> tLightGrid : register(t2);
 StructuredBuffer<uint2> tLightGrid : register(t2);
 #endif
 
-float EdgeDetection(uint2 pixel)
+static int2 SobelWeights[] = {
+	int2(1,  1), int2(0,  2), int2(-1,  1),
+	int2(2,  0), int2(0,  0), int2(-2,  0),
+	int2(1, -1), int2(0, -2), int2(-1, -1),
+};
+
+static int2 SobelOffsets[] = {
+	int2(-1,  1), int2(0,  1), int2(1,  1),
+	int2(-1,  0), int2(0,  0), int2(1,  0),
+	int2(-1, -1), int2(0, -1), int2(1, -1),
+};
+
+float3 ApplyEdgeDetection(uint2 pixel, float3 color)
 {
-	float reference = LinearizeDepth(tSceneDepth.Load(uint3(pixel, 0)));
-	uint2 offsets[8] = {
-		uint2(-1, -1),
-		uint2(-1, 0),
-		uint2(-1, 1),
-		uint2(0, -1),
-		uint2(0, 1),
-		uint2(1, -1),
-		uint2(1, 0),
-		uint2(1, 1)
-	};
-	float sampledValue = 0;
-	for(int j = 0; j < 8; j++)
+	float2 depthGrad = 0.0f;
+	for(uint i = 0; i < ArraySize(SobelWeights); ++i)
 	{
-		sampledValue += LinearizeDepth(tSceneDepth.Load(uint3(pixel + offsets[j], 0)));
+		float linearDepth = LinearizeDepth(tSceneDepth.Load(uint3(pixel + SobelOffsets[i], 0)));
+		float logDepth = log2(linearDepth + 1.0f) * 5.0f;
+		depthGrad += SobelWeights[i] * logDepth;
 	}
-	sampledValue /= 8;
-	return lerp(1, 0, step(0.05f, length(reference - sampledValue)));
+	float edge = saturate(MaxComponent(abs(depthGrad)));
+	return color * (1.0f - edge * 0.5f);
 }
 
-float4 GetColor(uint2 pixel, uint lightCount)
+float3 GetColor(uint2 pixel, uint lightCount)
 {
-	float edge = EdgeDetection(pixel);
-	float3 color = Magma(saturate(0.1f *  lightCount));
-	return float4(edge * color, 1.0f);
+	float3 color = Inferno(saturate(0.1f *  lightCount));
+	return ApplyEdgeDetection(pixel, color);
 }
 
 [numthreads(16, 16, 1)]
@@ -67,6 +69,6 @@ void DebugLightDensityCS(uint3 threadId : SV_DispatchThreadID)
 	uint clusterIndex1D = clusterIndex3D.x + (cPass.ClusterDimensions.x * (clusterIndex3D.y + cPass.ClusterDimensions.y * clusterIndex3D.z));
 	uint lightCount = tLightGrid[clusterIndex1D].y;
 #endif
-	uOutput[threadId.xy] = GetColor(threadId.xy, lightCount);
+	uOutput[threadId.xy] = float4(GetColor(threadId.xy, lightCount), 1);
 
 }
