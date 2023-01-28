@@ -1142,8 +1142,10 @@ void DemoApp::Update()
 						context.SetRootConstants(0, mode);
 						context.SetRootCBV(1, Renderer::GetViewUniforms(pView, pColorTarget));
 						context.BindResources(2, pColorTarget->GetUAV());
-						context.BindResources(3, rasterResult.pVisibilityBuffer->Get()->GetSRV(), 0);
-						context.BindResources(3, rasterResult.pMeshletCandidates->Get()->GetSRV(), 5);
+						context.BindResources(3, {
+							rasterResult.pVisibilityBuffer->Get()->GetSRV(),
+							rasterResult.pMeshletCandidates->Get()->GetSRV(),
+							});
 						context.Dispatch(ComputeUtils::GetNumThreadGroups(pColorTarget->GetWidth(), 8, pColorTarget->GetHeight(), 8));
 					});
 		}
@@ -1293,7 +1295,7 @@ void DemoApp::InitializePipelines()
 
 	//Visibility Shading
 	m_pVisibilityShadingPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "VisibilityShading.hlsl", "CSMain");
-	m_pVisibilityDebugRenderPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "VisibilityShading.hlsl", "DebugRenderCS");
+	m_pVisibilityDebugRenderPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "VisibilityDebugView.hlsl", "DebugRenderCS");
 }
 
 
