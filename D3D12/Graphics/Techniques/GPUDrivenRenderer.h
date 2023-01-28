@@ -45,6 +45,8 @@ private:
 	RGTexture* InitHZB(RGGraph& graph, const Vector2u& viewDimensions, RefCountPtr<Texture>* pExportTarget = nullptr) const;
 	void BuildHZB(RGGraph& graph, RGTexture* pDepth, RGTexture* pHZB);
 
+	void CullAndRasterize(RGGraph& graph, const SceneView* pView, bool isFirstPhase, const RasterContext& context, RasterResult& outResult);
+
 	RefCountPtr<RootSignature> m_pCommonRS;
 	RefCountPtr<PipelineState> m_pCullInstancesPSO[2];
 	RefCountPtr<PipelineState> m_pBuildDrawArgsPSO[2];
