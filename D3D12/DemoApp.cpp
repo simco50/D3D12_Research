@@ -732,7 +732,7 @@ void DemoApp::Update()
 			else if (m_RenderPath == RenderPath::Visibility)
 			{
 				graph.AddPass("Visibility Shading", RGPassFlag::Compute)
-					.Read({ pFog, rasterResult.pMeshletCandidates })
+					.Read({ pFog, rasterResult.pVisibleMeshlets})
 					.Read({ rasterResult.pVisibilityBuffer, sceneTextures.pDepth, sceneTextures.pAmbientOcclusion, sceneTextures.pPreviousColor })
 					.Write({ sceneTextures.pNormals, sceneTextures.pColorTarget, sceneTextures.pRoughness })
 					.Bind([=](CommandContext& context)
@@ -754,7 +754,7 @@ void DemoApp::Update()
 								sceneTextures.pDepth->Get()->GetSRV(),
 								sceneTextures.pPreviousColor->Get()->GetSRV(),
 								pFog->Get()->GetSRV(),
-								rasterResult.pMeshletCandidates->Get()->GetSRV(),
+								rasterResult.pVisibleMeshlets->Get()->GetSRV(),
 								});
 							context.Dispatch(ComputeUtils::GetNumThreadGroups(pColorTarget->GetWidth(), 8, pColorTarget->GetHeight(), 8));
 						});
@@ -1129,7 +1129,7 @@ void DemoApp::Update()
 		if (m_RenderPath == RenderPath::Visibility && m_VisibilityDebugRenderMode > 0)
 		{
 			graph.AddPass("Visibility Debug Render", RGPassFlag::Compute)
-				.Read({ rasterResult.pVisibilityBuffer, rasterResult.pMeshletCandidates })
+				.Read({ rasterResult.pVisibilityBuffer, rasterResult.pVisibleMeshlets })
 				.Write({ sceneTextures.pColorTarget })
 				.Bind([=](CommandContext& context)
 					{
@@ -1144,7 +1144,7 @@ void DemoApp::Update()
 						context.BindResources(2, pColorTarget->GetUAV());
 						context.BindResources(3, {
 							rasterResult.pVisibilityBuffer->Get()->GetSRV(),
-							rasterResult.pMeshletCandidates->Get()->GetSRV(),
+							rasterResult.pVisibleMeshlets->Get()->GetSRV(),
 							});
 						context.Dispatch(ComputeUtils::GetNumThreadGroups(pColorTarget->GetWidth(), 8, pColorTarget->GetHeight(), 8));
 					});

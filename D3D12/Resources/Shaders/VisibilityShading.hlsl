@@ -10,7 +10,7 @@ Texture2D<float> tAO :	register(t1);
 Texture2D<float> tDepth : register(t2);
 Texture2D tPreviousSceneColor :	register(t3);
 Texture3D<float4> tFog : register(t4);
-StructuredBuffer<MeshletCandidate> tMeshletCandidates : register(t5);
+StructuredBuffer<MeshletCandidate> tVisibleMeshlets : register(t5);
 
 RWTexture2D<float4> uColorTarget : register(u0);
 RWTexture2D<float2> uNormalsTarget : register(u1);
@@ -82,7 +82,7 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 	float dither = InterleavedGradientNoise(texel.xy);
 
 	VisBufferData visibility = (VisBufferData)tVisibilityTexture[texel];
-	MeshletCandidate candidate = tMeshletCandidates[visibility.MeshletCandidateIndex];
+	MeshletCandidate candidate = tVisibleMeshlets[visibility.MeshletCandidateIndex];
     InstanceData instance = GetInstance(candidate.InstanceID);
 
 	// Vertex Shader

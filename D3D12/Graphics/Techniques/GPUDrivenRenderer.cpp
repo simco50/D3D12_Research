@@ -29,35 +29,34 @@ GPUDrivenRenderer::GPUDrivenRenderer(GraphicsDevice* pDevice)
 	m_pCommonRS->Finalize("Common");
 
 	ShaderDefineHelper defines;
-	defines.Set("OCCLUSION_FIRST_PASS", true);
 	defines.Set("MAX_NUM_MESHLETS", Tweakables::MaxNumMeshlets);
 	defines.Set("MAX_NUM_INSTANCES", Tweakables::MaxNumInstances);
 	
 	PipelineStateInitializer psoDesc;
 	psoDesc.SetRootSignature(m_pCommonRS);
-	psoDesc.SetAmplificationShader("MeshletCull.hlsl", "CullAndDrawMeshletsAS", *defines);
 	psoDesc.SetMeshShader("MeshletCull.hlsl", "MSMain", *defines);
 	psoDesc.SetPixelShader("MeshletCull.hlsl", "PSMain", *defines);
 	psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
 	psoDesc.SetRenderTargetFormats(ResourceFormat::R32_UINT, GraphicsCommon::DepthStencilFormat, 1);
 	psoDesc.SetName("Visibility Rendering");
-	m_pCullAndDrawPSO[0] = pDevice->CreatePipeline(psoDesc);
 
-	defines.Set("OCCLUSION_FIRST_PASS", false);
-	psoDesc.SetAmplificationShader("MeshletCull.hlsl", "CullAndDrawMeshletsAS", *defines);
-	m_pCullAndDrawPSO[1] = pDevice->CreatePipeline(psoDesc);
-
-	m_pBuildCullArgsPSO = pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "BuildInstanceCullIndirectArgs", *defines);
+	m_pBuildCullArgsPSO =			pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "BuildInstanceCullIndirectArgs", *defines);
 
 	defines.Set("OCCLUSION_FIRST_PASS", true);
-	m_pCullInstancesPSO[0] = pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "CullInstancesCS", *defines);
-	m_pBuildDrawArgsPSO[0] = pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "BuildMeshShaderIndirectArgs", *defines);
+	m_pDrawMeshletsPSO[0] =			pDevice->CreatePipeline(psoDesc);
+	m_pBuildMeshletCullArgsPSO[0] = pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "BuildMeshletCullIndirectArgs", *defines);
+	m_pCullInstancesPSO[0] =		pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "CullInstancesCS", *defines);
+	m_pCullMeshletsPSO[0] =			pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "CullMeshletsCS", *defines);
+	m_pBuildDrawArgsPSO[0] =		pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "BuildMeshShaderIndirectArgs", *defines);
 
 	defines.Set("OCCLUSION_FIRST_PASS", false);
-	m_pCullInstancesPSO[1] =	pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "CullInstancesCS", *defines);
-	m_pBuildDrawArgsPSO[1] =	pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "BuildMeshShaderIndirectArgs", *defines);
+	m_pDrawMeshletsPSO[1] =			pDevice->CreatePipeline(psoDesc);
+	m_pBuildMeshletCullArgsPSO[1] = pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "BuildMeshletCullIndirectArgs", *defines);
+	m_pCullInstancesPSO[1] =		pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "CullInstancesCS", *defines);
+	m_pCullMeshletsPSO[1] =			pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "CullMeshletsCS", *defines);
+	m_pBuildDrawArgsPSO[1] =		pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "BuildMeshShaderIndirectArgs", *defines);
 
-	m_pPrintStatsPSO =			pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "PrintStatsCS", *defines);
+	m_pPrintStatsPSO =				pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "PrintStatsCS", *defines);
 
 	{
 		m_pHZBRS = new RootSignature(pDevice);
@@ -67,8 +66,8 @@ GPUDrivenRenderer::GPUDrivenRenderer(GraphicsDevice* pDevice)
 		m_pHZBRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 6);
 		m_pHZBRS->Finalize("HZB");
 
-		m_pHZBInitializePSO = pDevice->CreateComputePipeline(m_pHZBRS, "HZB.hlsl", "HZBInitCS");
-		m_pHZBCreatePSO = pDevice->CreateComputePipeline(m_pHZBRS, "HZB.hlsl", "HZBCreateCS");
+		m_pHZBInitializePSO =		pDevice->CreateComputePipeline(m_pHZBRS, "HZB.hlsl", "HZBInitCS");
+		m_pHZBCreatePSO =			pDevice->CreateComputePipeline(m_pHZBRS, "HZB.hlsl", "HZBCreateCS");
 	}
 }
 
@@ -78,27 +77,43 @@ RasterContext::RasterContext(RGGraph& graph, const std::string contextString, RG
 	constexpr uint32 maxNumInstances = Tweakables::MaxNumInstances;
 	constexpr uint32 maxNumMeshlets = Tweakables::MaxNumMeshlets;
 
-	pMeshletCandidates = graph.Create("GPURender.MeshletCandidates", BufferDesc::CreateStructured(maxNumMeshlets, sizeof(uint32) * 2));
-	pMeshletCandidatesCounter = graph.Create("GPURender.MeshletCandidates.Counter", BufferDesc::CreateTyped(3, ResourceFormat::R32_UINT));
+	// 0: Num Total
+	// 1: Num Phase 1
+	// 2: Num Phase 2
+	constexpr uint32 meshletCounterSize = 3;
+
+	struct MeshletCandidate
+	{
+		uint32 InstanceID;
+		uint32 MeshletIndex;
+	};
+
+	const BufferDesc meshletCandidateDesc = BufferDesc::CreateStructured(maxNumMeshlets, sizeof(MeshletCandidate));
+	const BufferDesc meshletCandidateCounterDesc = BufferDesc::CreateTyped(meshletCounterSize, ResourceFormat::R32_UINT);
+	pCandidateMeshlets = graph.Create("GPURender.MeshletCandidates", meshletCandidateDesc);
+	pCandidateMeshletsCounter = graph.Create("GPURender.MeshletCandidates.Counter", meshletCandidateCounterDesc);
+	pVisibleMeshlets = graph.Create("GPURender.VisibleCandidates", meshletCandidateDesc);
+	pVisibleMeshletsCounter = graph.Create("GPURender.VisibleCandidates.Counter", meshletCandidateCounterDesc);
+
 	pOccludedInstances = graph.Create("GPURender.OccludedInstances", BufferDesc::CreateStructured(maxNumInstances, sizeof(uint32)));
 	pOccludedInstancesCounter = graph.Create("GPURender.OccludedInstances.Counter", BufferDesc::CreateTyped(1, ResourceFormat::R32_UINT));
 }
 
 void GPUDrivenRenderer::CullAndRasterize(RGGraph& graph, const SceneView* pView, bool isFirstPhase, const RasterContext& rasterContext, RasterResult& outResult)
 {
-	RGBuffer* pDispatchBuffer = nullptr;
+	RGBuffer* pInstanceCullArgs = nullptr;
 	if(!isFirstPhase)
 	{
-		pDispatchBuffer = graph.Create("GPURender.DispatchArgs", BufferDesc::CreateIndirectArguments<D3D12_DISPATCH_ARGUMENTS>(1));
+		pInstanceCullArgs = graph.Create("GPURender.InstanceCullArgs", BufferDesc::CreateIndirectArguments<D3D12_DISPATCH_ARGUMENTS>(1));
 		graph.AddPass("Build Instance Cull Arguments", RGPassFlag::Compute)
 			.Read({ rasterContext.pOccludedInstancesCounter })
-			.Write({ pDispatchBuffer })
+			.Write({ pInstanceCullArgs })
 			.Bind([=](CommandContext& context)
 				{
 					context.SetComputeRootSignature(m_pCommonRS);
 					context.SetPipelineState(m_pBuildCullArgsPSO);
 
-					context.BindResources(2, pDispatchBuffer->Get()->GetUAV());
+					context.BindResources(2, pInstanceCullArgs->Get()->GetUAV());
 					context.BindResources(3, rasterContext.pOccludedInstancesCounter->Get()->GetSRV(), 2);
 					context.Dispatch(1);
 				});
@@ -106,7 +121,7 @@ void GPUDrivenRenderer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 
 	RGPass& cullInstancePass = graph.AddPass("Cull Instances", RGPassFlag::Compute)
 		.Read(outResult.pHZB)
-		.Write({ rasterContext.pMeshletCandidates, rasterContext.pMeshletCandidatesCounter, rasterContext.pOccludedInstances, rasterContext.pOccludedInstancesCounter })
+		.Write({ rasterContext.pCandidateMeshlets, rasterContext.pCandidateMeshletsCounter, rasterContext.pOccludedInstances, rasterContext.pOccludedInstancesCounter })
 		.Bind([=](CommandContext& context)
 			{
 				context.SetComputeRootSignature(m_pCommonRS);
@@ -114,14 +129,14 @@ void GPUDrivenRenderer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 
 				context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
 				context.BindResources(2, {
-					rasterContext.pMeshletCandidates->Get()->GetUAV(),
-					rasterContext.pMeshletCandidatesCounter->Get()->GetUAV(),
+					rasterContext.pCandidateMeshlets->Get()->GetUAV(),
+					rasterContext.pCandidateMeshletsCounter->Get()->GetUAV(),
 					rasterContext.pOccludedInstances->Get()->GetUAV(),
 					rasterContext.pOccludedInstancesCounter->Get()->GetUAV(),
 					});
 				context.BindResources(3, {
 					rasterContext.pOccludedInstances->Get()->GetSRV(),
-					rasterContext.pMeshletCandidatesCounter->Get()->GetSRV(),
+					rasterContext.pCandidateMeshletsCounter->Get()->GetSRV(),
 					rasterContext.pOccludedInstancesCounter->Get()->GetSRV(),
 					outResult.pHZB->Get()->GetSRV(),
 					});
@@ -129,47 +144,81 @@ void GPUDrivenRenderer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 				if(isFirstPhase)
 					context.Dispatch(ComputeUtils::GetNumThreadGroups((uint32)pView->Batches.size(), 64));
 				else
-					context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchSignature, 1, pDispatchBuffer->Get());
+					context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchSignature, 1, pInstanceCullArgs->Get());
 			});
 	if (!isFirstPhase)
-		cullInstancePass.Read(pDispatchBuffer);
+		cullInstancePass.Read(pInstanceCullArgs);
 
-	RGBuffer* pDispatchMeshBuffer = graph.Create("GPURender.DispatchMeshArgs", BufferDesc::CreateIndirectArguments<D3D12_DISPATCH_MESH_ARGUMENTS>(1));
+	RGBuffer* pMeshletCullArgs = graph.Create("GPURender.MeshletCullArgs", BufferDesc::CreateIndirectArguments<D3D12_DISPATCH_ARGUMENTS>(1));
+	graph.AddPass("Build Meshlet Cull Arguments", RGPassFlag::Compute)
+		.Read(rasterContext.pCandidateMeshletsCounter)
+		.Write(pMeshletCullArgs)
+		.Bind([=](CommandContext& context)
+			{
+				context.SetComputeRootSignature(m_pCommonRS);
+				context.SetPipelineState(m_pBuildMeshletCullArgsPSO[isFirstPhase ? 0 : 1]);
+
+				context.BindResources(2, pMeshletCullArgs->Get()->GetUAV());
+				context.BindResources(3, rasterContext.pCandidateMeshletsCounter->Get()->GetSRV(), 1);
+				context.Dispatch(1);
+			});
+
+	graph.AddPass("Cull Meshlets", RGPassFlag::Compute)
+		.Read({ pMeshletCullArgs })
+		.Read({ outResult.pHZB })
+		.Write({ rasterContext.pCandidateMeshlets, rasterContext.pCandidateMeshletsCounter, rasterContext.pVisibleMeshlets, rasterContext.pVisibleMeshletsCounter })
+		.Bind([=](CommandContext& context)
+			{
+				context.SetComputeRootSignature(m_pCommonRS);
+				context.SetPipelineState(m_pCullMeshletsPSO[isFirstPhase ? 0 : 1]);
+
+				context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
+				context.BindResources(2, {
+					rasterContext.pCandidateMeshlets->Get()->GetUAV(),
+					rasterContext.pCandidateMeshletsCounter->Get()->GetUAV(),
+					rasterContext.pOccludedInstances->Get()->GetUAV(),
+					rasterContext.pOccludedInstancesCounter->Get()->GetUAV(),
+					rasterContext.pVisibleMeshlets->Get()->GetUAV(),
+					rasterContext.pVisibleMeshletsCounter->Get()->GetUAV(),
+					});
+				context.BindResources(3, {
+					outResult.pHZB->Get()->GetSRV(),
+					}, 3);
+				context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchSignature, 1, pMeshletCullArgs->Get());
+			});
+
+	RGBuffer* pDispatchMeshArgs = graph.Create("GPURender.DispatchMeshArgs", BufferDesc::CreateIndirectArguments<D3D12_DISPATCH_MESH_ARGUMENTS>(1));
 	graph.AddPass("Build DispatchMesh Arguments", RGPassFlag::Compute)
-		.Read(rasterContext.pMeshletCandidatesCounter)
-		.Write(pDispatchMeshBuffer)
+		.Read(rasterContext.pVisibleMeshletsCounter)
+		.Write(pDispatchMeshArgs)
 		.Bind([=](CommandContext& context)
 			{
 				context.SetComputeRootSignature(m_pCommonRS);
 				context.SetPipelineState(m_pBuildDrawArgsPSO[isFirstPhase ? 0 : 1]);
 
-				context.BindResources(2, pDispatchMeshBuffer->Get()->GetUAV());
-				context.BindResources(3, rasterContext.pMeshletCandidatesCounter->Get()->GetSRV(), 1);
+				context.BindResources(2, pDispatchMeshArgs->Get()->GetUAV());
+				context.BindResources(3, rasterContext.pVisibleMeshletsCounter->Get()->GetSRV(), 3);
 				context.Dispatch(1);
 			});
 
-	RGPass& drawPass = graph.AddPass("Cull and Draw Meshlets", RGPassFlag::Raster)
-		.Read({ pDispatchMeshBuffer })
-		.Read({ outResult.pHZB })
-		.Write({ rasterContext.pMeshletCandidates, rasterContext.pMeshletCandidatesCounter })
+		RGPass& drawPass = graph.AddPass("Draw Meshlets", RGPassFlag::Raster)
+		.Read({ pDispatchMeshArgs })
+		.Read({ rasterContext.pVisibleMeshlets, rasterContext.pVisibleMeshletsCounter })
 		.DepthStencil(rasterContext.pDepth, isFirstPhase ? RenderTargetLoadAction::Clear : RenderTargetLoadAction::Load, true)
 		.Bind([=](CommandContext& context)
 			{
 				context.SetGraphicsRootSignature(m_pCommonRS);
-				context.SetPipelineState(m_pCullAndDrawPSO[isFirstPhase ? 0 : 1]);
+				context.SetPipelineState(m_pDrawMeshletsPSO[isFirstPhase ? 0 : 1]);
 
 				context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
-				context.BindResources(2, {
-					rasterContext.pMeshletCandidates->Get()->GetUAV(),
-					rasterContext.pMeshletCandidatesCounter->Get()->GetUAV(),
-					});
 				context.BindResources(3, {
-					outResult.pHZB->Get()->GetSRV(),
+					rasterContext.pVisibleMeshletsCounter->Get()->GetSRV(),
+					rasterContext.pVisibleMeshlets->Get()->GetSRV(),
 					}, 3);
-				context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchMeshSignature, 1, pDispatchMeshBuffer->Get());
+				context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchMeshSignature, 1, pDispatchMeshArgs->Get());
 			});
 	if (rasterContext.Type == RasterType::VisibilityBuffer)
-		drawPass.RenderTarget(outResult.pVisibilityBuffer, isFirstPhase ? RenderTargetLoadAction::DontCare : RenderTargetLoadAction::Load);
+		drawPass.RenderTarget(outResult.pVisibilityBuffer, isFirstPhase ? RenderTargetLoadAction::Clear : RenderTargetLoadAction::Load);
 
 	BuildHZB(graph, rasterContext.pDepth, outResult.pHZB);
 }
@@ -197,11 +246,12 @@ void GPUDrivenRenderer::Render(RGGraph& graph, const SceneView* pView, const Ras
 #endif
 
 	graph.AddPass("Clear Counters", RGPassFlag::Compute)
-	.Write({ rasterContext.pMeshletCandidatesCounter, rasterContext.pOccludedInstancesCounter })
+	.Write({ rasterContext.pCandidateMeshletsCounter, rasterContext.pOccludedInstancesCounter, rasterContext.pVisibleMeshletsCounter })
 	.Bind([=](CommandContext& context)
 		{
-			context.ClearUAVu(rasterContext.pMeshletCandidatesCounter->Get());
+			context.ClearUAVu(rasterContext.pCandidateMeshletsCounter->Get());
 			context.ClearUAVu(rasterContext.pOccludedInstancesCounter->Get());
+			context.ClearUAVu(rasterContext.pVisibleMeshletsCounter->Get());
 			context.InsertUavBarrier();
 		});
 
@@ -214,13 +264,13 @@ void GPUDrivenRenderer::Render(RGGraph& graph, const SceneView* pView, const Ras
 		CullAndRasterize(graph, pView, false, rasterContext, outResult);
 	}
 
-	outResult.pMeshletCandidates = rasterContext.pMeshletCandidates;
+	outResult.pVisibleMeshlets = rasterContext.pVisibleMeshlets;
 }
 
 void GPUDrivenRenderer::PrintStats(RGGraph& graph, const SceneView* pView, const RasterContext& rasterContext)
 {
 	graph.AddPass("Print Stats", RGPassFlag::Compute)
-		.Read({ rasterContext.pOccludedInstancesCounter, rasterContext.pMeshletCandidatesCounter })
+		.Read({ rasterContext.pOccludedInstancesCounter, rasterContext.pCandidateMeshletsCounter, rasterContext.pVisibleMeshletsCounter })
 		.Bind([=](CommandContext& context)
 			{
 				context.SetComputeRootSignature(m_pCommonRS);
@@ -228,8 +278,9 @@ void GPUDrivenRenderer::PrintStats(RGGraph& graph, const SceneView* pView, const
 
 				context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
 				context.BindResources(3, {
-					rasterContext.pMeshletCandidatesCounter->Get()->GetSRV(),
+					rasterContext.pCandidateMeshletsCounter->Get()->GetSRV(),
 					rasterContext.pOccludedInstancesCounter->Get()->GetSRV(),
+					rasterContext.pVisibleMeshletsCounter->Get()->GetSRV(),
 					}, 1);
 				context.Dispatch(1);
 			});

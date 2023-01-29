@@ -21,15 +21,17 @@ struct RasterContext
 	RefCountPtr<Texture>* pPreviousHZB = nullptr;
 	RasterType Type;
 
-	RGBuffer* pMeshletCandidates = nullptr;
-	RGBuffer* pMeshletCandidatesCounter = nullptr;
+	RGBuffer* pCandidateMeshlets = nullptr;
+	RGBuffer* pCandidateMeshletsCounter = nullptr;
+	RGBuffer* pVisibleMeshlets = nullptr;
+	RGBuffer* pVisibleMeshletsCounter = nullptr;
 	RGBuffer* pOccludedInstances = nullptr;
 	RGBuffer* pOccludedInstancesCounter = nullptr;
 };
 
 struct RasterResult
 {
-	RGBuffer* pMeshletCandidates = nullptr;
+	RGBuffer* pVisibleMeshlets = nullptr;
 	RGTexture* pVisibilityBuffer = nullptr;
 	RGTexture* pHZB = nullptr;
 };
@@ -50,9 +52,13 @@ private:
 	RefCountPtr<RootSignature> m_pCommonRS;
 	RefCountPtr<PipelineState> m_pCullInstancesPSO[2];
 	RefCountPtr<PipelineState> m_pBuildDrawArgsPSO[2];
-	RefCountPtr<PipelineState> m_pCullAndDrawPSO[2];
+	RefCountPtr<PipelineState> m_pBuildMeshletCullArgsPSO[2];
 	RefCountPtr<PipelineState> m_pBuildCullArgsPSO;
 	RefCountPtr<PipelineState> m_pPrintStatsPSO;
+
+	RefCountPtr<PipelineState> m_pCullMeshletsPSO[2];
+	RefCountPtr<PipelineState> m_pDrawMeshletsPSO[2];
+
 
 	RefCountPtr<RootSignature> m_pHZBRS;
 	RefCountPtr<PipelineState> m_pHZBInitializePSO;

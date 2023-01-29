@@ -37,7 +37,6 @@
 #define DEPTH_ONLY 0
 #endif
 
-#define NUM_AS_THREADS 32
 #define NUM_MESHLET_THREADS 32
 #define NUM_CULL_INSTANCES_THREADS 64
 
@@ -55,22 +54,25 @@ static const bool IsPhase1 = false;
 static const bool IsPhase2 = true;
 #endif
 
-RWStructuredBuffer<MeshletCandidate> uMeshletCandidates : 			register(u0);
-RWBuffer<uint> uCounter_MeshletCandidates : 						register(u1);
-RWStructuredBuffer<uint> uOccludedInstances : 						register(u2);
+RWStructuredBuffer<MeshletCandidate> uCandidateMeshlets : 			register(u0);
+RWBuffer<uint> uCounter_CandidateMeshlets : 						register(u1);
+RWStructuredBuffer<uint> uPhaseTwoInstances : 						register(u2);
 RWBuffer<uint> uCounter_OccludedInstances : 						register(u3);
+RWStructuredBuffer<MeshletCandidate> uVisibleMeshlets :				register(u4);
+RWBuffer<uint> uCounter_VisibleMeshlets : 							register(u5);
 
 RWStructuredBuffer<D3D12_DISPATCH_ARGUMENTS> uDispatchArguments : 	register(u0);
 
-StructuredBuffer<uint> tInstancesToProcess : 						register(t0);
-Buffer<uint> tCounter_MeshletCandidates : 							register(t1);
-Buffer<uint> tCounter_OccludedInstances : 							register(t2);
-
+StructuredBuffer<uint> tPhaseTwoInstances : 						register(t0);
+Buffer<uint> tCounter_CandidateMeshlets : 							register(t1);
+Buffer<uint> tCounter_PhaseTwoInstances : 							register(t2);
+Buffer<uint> tCounter_VisibleMeshlets : 							register(t3);
+StructuredBuffer<MeshletCandidate> tVisibleMeshlets : 				register(t4);
 Texture2D<float> tHZB : 											register(t3);
 
-uint GetMeshletCandidateOffset(bool phase2)
+uint GetCandidateMeshletOffset(bool phase2)
 {
-	return phase2 ? uCounter_MeshletCandidates[COUNTER_PHASE1_MESHLETS] : 0;
+	return phase2 ? uCounter_CandidateMeshlets[COUNTER_PHASE1_MESHLETS] : 0u;
 }
 
 uint GetNumInstances()
@@ -78,7 +80,7 @@ uint GetNumInstances()
 #if OCCLUSION_FIRST_PASS
     return cView.NumInstances;
 #else
-    return tCounter_OccludedInstances[0];
+    return tCounter_PhaseTwoInstances[0];
 #endif
 }
 
@@ -87,7 +89,7 @@ InstanceData GetInstanceForThread(uint threadID)
 #if OCCLUSION_FIRST_PASS
     return GetInstance(threadID);
 #else
-	return GetInstance(tInstancesToProcess[threadID]);
+	return GetInstance(tPhaseTwoInstances[threadID]);
 #endif
 }
 
@@ -117,7 +119,7 @@ void CullInstancesCS(uint threadID : SV_DispatchThreadID)
 		{
 			uint elementOffset = 0;
 			InterlockedAdd_WaveOps(uCounter_OccludedInstances, 0, 1, elementOffset);
-			uOccludedInstances[elementOffset] = instance.ID;
+			uPhaseTwoInstances[elementOffset] = instance.ID;
 		}
 #else
 		isVisible = HZBCull(cullData, tHZB);
@@ -129,20 +131,20 @@ void CullInstancesCS(uint threadID : SV_DispatchThreadID)
     {
 		// Limit meshlet count to how large our buffer is
 		uint globalMeshletIndex;
-        InterlockedAdd_Varying_WaveOps(uCounter_MeshletCandidates, COUNTER_TOTAL_MESHLETS, mesh.MeshletCount, globalMeshletIndex);
+        InterlockedAdd_Varying_WaveOps(uCounter_CandidateMeshlets, COUNTER_TOTAL_MESHLETS, mesh.MeshletCount, globalMeshletIndex);
 		uint clampedNumMeshlets = min(globalMeshletIndex + mesh.MeshletCount, MAX_NUM_MESHLETS);
 		uint numMeshletsToAdd = max(clampedNumMeshlets - globalMeshletIndex, 0);
 
 		uint elementOffset;
-		InterlockedAdd_Varying_WaveOps(uCounter_MeshletCandidates, MeshletCounterIndex, numMeshletsToAdd, elementOffset);
+		InterlockedAdd_Varying_WaveOps(uCounter_CandidateMeshlets, MeshletCounterIndex, numMeshletsToAdd, elementOffset);
 
-		uint meshletCandidateOffset = GetMeshletCandidateOffset(IsPhase2);
+		uint meshletCandidateOffset = GetCandidateMeshletOffset(IsPhase2);
 		for(uint i = 0; i < numMeshletsToAdd; ++i)
 		{
 			MeshletCandidate meshlet;
 			meshlet.InstanceID = instance.ID;
 			meshlet.MeshletIndex = i;
-			uMeshletCandidates[meshletCandidateOffset + elementOffset + i] = meshlet;
+			uCandidateMeshlets[meshletCandidateOffset + elementOffset + i] = meshlet;
 		}
     }
 
@@ -155,39 +157,39 @@ void CullInstancesCS(uint threadID : SV_DispatchThreadID)
 }
 
 [numthreads(1, 1, 1)]
-void BuildMeshShaderIndirectArgs()
+void BuildMeshletCullIndirectArgs()
 {
-    uint numMeshlets = tCounter_MeshletCandidates[MeshletCounterIndex];
+    uint numMeshlets = tCounter_CandidateMeshlets[MeshletCounterIndex];
     D3D12_DISPATCH_ARGUMENTS args;
-    args.ThreadGroupCount = uint3(DivideAndRoundUp(numMeshlets, NUM_AS_THREADS), 1, 1);
+    args.ThreadGroupCount = uint3(DivideAndRoundUp(numMeshlets, NUM_CULL_INSTANCES_THREADS), 1, 1);
     uDispatchArguments[0] = args;
 }
 
 [numthreads(1, 1, 1)]
 void BuildInstanceCullIndirectArgs()
 {
-    uint numInstances = tCounter_OccludedInstances[0];
+    uint numInstances = tCounter_PhaseTwoInstances[0];
     D3D12_DISPATCH_ARGUMENTS args;
     args.ThreadGroupCount = uint3(DivideAndRoundUp(numInstances, NUM_CULL_INSTANCES_THREADS), 1, 1);
     uDispatchArguments[0] = args;
 }
 
-struct PayloadData
+[numthreads(1, 1, 1)]
+void BuildMeshShaderIndirectArgs()
 {
-	uint CandidateIndices[NUM_AS_THREADS];
-};
+    uint numMeshlets = tCounter_VisibleMeshlets[MeshletCounterIndex];
+    D3D12_DISPATCH_ARGUMENTS args;
+    args.ThreadGroupCount = uint3(numMeshlets, 1, 1);
+    uDispatchArguments[0] = args;
+}
 
-groupshared PayloadData gsPayload;
-
-#if __SHADER_TARGET_STAGE == __SHADER_STAGE_AMPLIFICATION
-[numthreads(NUM_AS_THREADS, 1, 1)]
-void CullAndDrawMeshletsAS(uint threadID : SV_DispatchThreadID)
+[numthreads(NUM_CULL_INSTANCES_THREADS, 1, 1)]
+void CullMeshletsCS(uint threadID : SV_DispatchThreadID)
 {
-	bool shouldSubmit = false;
-	if(threadID < uCounter_MeshletCandidates[MeshletCounterIndex])
+	if(threadID < uCounter_CandidateMeshlets[MeshletCounterIndex])
 	{
-		uint candidateIndex = GetMeshletCandidateOffset(IsPhase2) + threadID;
-		MeshletCandidate candidate = uMeshletCandidates[candidateIndex];
+		uint candidateIndex = GetCandidateMeshletOffset(IsPhase2) + threadID;
+		MeshletCandidate candidate = uCandidateMeshlets[candidateIndex];
 		InstanceData instance = GetInstance(candidate.InstanceID);
 		MeshData mesh = GetMesh(instance.MeshIndex);
 		Meshlet::Bounds bounds = BufferLoad<Meshlet::Bounds>(mesh.BufferIndex, candidate.MeshletIndex, mesh.MeshletBoundsOffset);
@@ -210,12 +212,12 @@ void CullAndDrawMeshletsAS(uint threadID : SV_DispatchThreadID)
 			{
 				// Limit how many meshlets we're writing based on the buffer size
 				uint globalMeshletIndex;
-        		InterlockedAdd_WaveOps(uCounter_MeshletCandidates, COUNTER_TOTAL_MESHLETS, 1, globalMeshletIndex);
+        		InterlockedAdd_WaveOps(uCounter_CandidateMeshlets, COUNTER_TOTAL_MESHLETS, 1, globalMeshletIndex);
 				if(globalMeshletIndex < MAX_NUM_MESHLETS)
 				{
 					uint elementOffset;
-					InterlockedAdd_WaveOps(uCounter_MeshletCandidates, COUNTER_PHASE2_MESHLETS, 1, elementOffset);
-					uMeshletCandidates[GetMeshletCandidateOffset(true) + elementOffset] = candidate;
+					InterlockedAdd_WaveOps(uCounter_CandidateMeshlets, COUNTER_PHASE2_MESHLETS, 1, elementOffset);
+					uCandidateMeshlets[GetCandidateMeshletOffset(true) + elementOffset] = candidate;
 				}
 			}
 #else
@@ -224,18 +226,18 @@ void CullAndDrawMeshletsAS(uint threadID : SV_DispatchThreadID)
 		}
 
 		// If meshlet is visible and wasn't occluded in the previous frame, submit it
-		shouldSubmit = isVisible && !wasOccluded;
-		if(shouldSubmit)
+		if(isVisible && !wasOccluded)
 		{
-			uint index = WavePrefixCountBits(shouldSubmit);
-			gsPayload.CandidateIndices[index] = candidateIndex;
+			uint elementOffset;
+			InterlockedAdd_WaveOps(uCounter_VisibleMeshlets, MeshletCounterIndex, 1, elementOffset);
+
+#if !OCCLUSION_FIRST_PASS
+			elementOffset += uCounter_VisibleMeshlets[COUNTER_PHASE1_MESHLETS];
+#endif
+			uVisibleMeshlets[elementOffset] = candidate;
 		}
 	}
-
-	uint visibleCount = WaveActiveCountBits(shouldSubmit);
-	DispatchMesh(visibleCount, 1, 1, gsPayload);
 }
-#endif
 
 struct PrimitiveAttribute
 {
@@ -269,14 +271,16 @@ VertexAttribute FetchVertexAttributes(MeshData mesh, float4x4 world, uint vertex
 void MSMain(
 	in uint groupThreadID : SV_GroupIndex,
 	in uint groupID : SV_GroupID,
-	in payload PayloadData payload,
 	out vertices VertexAttribute verts[MESHLET_MAX_VERTICES],
 	out indices uint3 triangles[MESHLET_MAX_TRIANGLES],
 	out primitives PrimitiveAttribute primitives[MESHLET_MAX_TRIANGLES])
 {
-	uint candidateIndex = payload.CandidateIndices[groupID];
-	MeshletCandidate candidate = uMeshletCandidates[candidateIndex];
+	uint meshletIndex = groupID;
+#if !OCCLUSION_FIRST_PASS
+	meshletIndex += tCounter_VisibleMeshlets[COUNTER_PHASE1_MESHLETS];
+#endif
 
+	MeshletCandidate candidate = tVisibleMeshlets[meshletIndex];
 	InstanceData instance = GetInstance(candidate.InstanceID);
 	MeshData mesh = GetMesh(instance.MeshIndex);
 	Meshlet meshlet = BufferLoad<Meshlet>(mesh.BufferIndex, candidate.MeshletIndex, mesh.MeshletOffset);
@@ -297,7 +301,7 @@ void MSMain(
 
 		PrimitiveAttribute pri;
 		pri.PrimitiveID = i;
-		pri.CandidateIndex = candidateIndex;
+		pri.CandidateIndex = groupID;
 		primitives[i] = pri;
 	}
 }
@@ -311,7 +315,7 @@ void PSMain(
 	)
 {
 #if ALPHA_MASK
-	MeshletCandidate candidate = uMeshletCandidates[primitiveData.CandidateIndex];
+	MeshletCandidate candidate = tVisibleMeshlets[primitiveData.CandidateIndex];
 	InstanceData instance = GetInstance(candidate.InstanceID);
 	MaterialData material = GetMaterial(instance.MaterialIndex);
 	float opacity = material.BaseColorFactor.a;
@@ -339,11 +343,13 @@ void PrintStatsCS()
 		numMeshlets += mesh.MeshletCount;
 	}
 
-	uint occludedInstances = tCounter_OccludedInstances[0];
+	uint occludedInstances = tCounter_PhaseTwoInstances[0];
 	uint visibleInstances = numInstances - occludedInstances;
-	uint processedMeshlets = tCounter_MeshletCandidates[0];
-	uint phase1Meshlets = tCounter_MeshletCandidates[COUNTER_PHASE1_MESHLETS];
-	uint phase2Meshlets = tCounter_MeshletCandidates[COUNTER_PHASE2_MESHLETS];
+	uint processedMeshlets = tCounter_CandidateMeshlets[COUNTER_TOTAL_MESHLETS];
+	uint phase1CandidateMeshlets = tCounter_CandidateMeshlets[COUNTER_PHASE1_MESHLETS];
+	uint phase2CandidateMeshlets = tCounter_CandidateMeshlets[COUNTER_PHASE2_MESHLETS];
+	uint phase1VisibleMeshlets = tCounter_VisibleMeshlets[COUNTER_PHASE1_MESHLETS];
+	uint phase2VisibleMeshlets = tCounter_VisibleMeshlets[COUNTER_PHASE2_MESHLETS];
 
 	TextWriter writer = CreateTextWriter(float2(20, 20));
 
@@ -370,7 +376,12 @@ void PrintStatsCS()
 
 	writer = writer + 'P' + 'r' + 'o' + 'c'  + 'e'  + 's'  + 's'  + 'e' + 'd' + ' ';
 	writer = writer + 'm' + 'e' + 's' + 'h'  + 'l'  + 'e'  + 't'  + 's' + ' ';
-	writer.Int(phase1Meshlets);
+	writer.Int(phase1CandidateMeshlets);
+	writer.NewLine();
+
+	writer = writer + 'V' + 'i' + 's' + 'i' + 'b' + 'l' + 'e' + ' ';
+	writer = writer + 'm' + 'e' + 's' + 'h'  + 'l'  + 'e'  + 't'  + 's'  + ' ';
+	writer.Int(phase1VisibleMeshlets);
 	writer.NewLine();
 
 	writer = writer + '-' + '-' + '-' + 'P' + 'h' + 'a' + 's' + 'e' + ' ' + '2' + '-' + '-' + '-';
@@ -383,6 +394,11 @@ void PrintStatsCS()
 
 	writer = writer + 'P' + 'r' + 'o' + 'c'  + 'e'  + 's'  + 's'  + 'e' + 'd' + ' ';
 	writer = writer + 'm' + 'e' + 's' + 'h'  + 'l'  + 'e'  + 't'  + 's' + ' ';
-	writer.Int(phase2Meshlets);
+	writer.Int(phase2CandidateMeshlets);
+	writer.NewLine();
+
+	writer = writer + 'V' + 'i' + 's' + 'i' + 'b' + 'l' + 'e' + ' ';
+	writer = writer + 'm' + 'e' + 's' + 'h'  + 'l'  + 'e'  + 't'  + 's'  + ' ';
+	writer.Int(phase2VisibleMeshlets);
 	writer.NewLine();
 }
