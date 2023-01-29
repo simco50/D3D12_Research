@@ -297,7 +297,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 				material.BaseColorFactor.z = gltfMaterial.pbr_specular_glossiness.diffuse_factor[2];
 				material.BaseColorFactor.w = gltfMaterial.pbr_specular_glossiness.diffuse_factor[3];
 			}
-			material.AlphaCutoff = gltfMaterial.alpha_cutoff;
+			material.AlphaCutoff = gltfMaterial.alpha_mode == cgltf_alpha_mode_mask ? gltfMaterial.alpha_cutoff : 1.0f;
 			material.AlphaMode = GetAlphaMode(gltfMaterial.alpha_mode);
 			material.pEmissiveTexture = RetrieveTexture(gltfMaterial.emissive_texture, true);
 			material.EmissiveFactor.x = gltfMaterial.emissive_factor[0];

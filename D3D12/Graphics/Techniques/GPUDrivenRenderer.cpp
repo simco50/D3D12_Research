@@ -56,6 +56,10 @@ GPUDrivenRenderer::GPUDrivenRenderer(GraphicsDevice* pDevice)
 	m_pCullMeshletsPSO[1] =			pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "CullMeshletsCS", *defines);
 	m_pBuildDrawArgsPSO[1] =		pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "BuildMeshShaderIndirectArgs", *defines);
 
+	m_pMeshletClassify =			pDevice->CreateComputePipeline(m_pCommonRS, "MeshletBinning.hlsl", "ClassifyMeshletsCS");
+	m_pMeshletAllocateBinRanges =	pDevice->CreateComputePipeline(m_pCommonRS, "MeshletBinning.hlsl", "AllocateBinRangesCS");
+	m_pMeshletWriteBins =			pDevice->CreateComputePipeline(m_pCommonRS, "MeshletBinning.hlsl", "WriteBinsCS");
+
 	m_pPrintStatsPSO =				pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "PrintStatsCS", *defines);
 
 	{
@@ -186,6 +190,83 @@ void GPUDrivenRenderer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 					}, 3);
 				context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchSignature, 1, pMeshletCullArgs->Get());
 			});
+
+	if(isFirstPhase)
+	{
+		constexpr uint32 numBins = 32;
+		RGBuffer* pMeshletCounts = graph.Create("Meshlet Counts", BufferDesc::CreateTyped(numBins, ResourceFormat::R32_UINT));
+		RGBuffer* pGlobalCount = graph.Create("Global Count", BufferDesc::CreateTyped(1, ResourceFormat::R32_UINT));
+
+		graph.AddPass("Clears", RGPassFlag::Compute)
+			.Write({ pMeshletCounts, pGlobalCount })
+			.Bind([=](CommandContext& context)
+				{
+					context.ClearUAVu(pMeshletCounts->Get());
+					context.ClearUAVu(pGlobalCount->Get());
+				});
+
+		graph.AddPass("Classify", RGPassFlag::Compute)
+			.Read({ rasterContext.pVisibleMeshletsCounter, rasterContext.pVisibleMeshlets })
+			.Write(pMeshletCounts)
+			.Bind([=](CommandContext& context)
+				{
+					context.SetComputeRootSignature(m_pCommonRS);
+					context.SetPipelineState(m_pMeshletClassify);
+					context.BindResources(2, pMeshletCounts->Get()->GetUAV());
+					context.BindResources(3, {
+						rasterContext.pVisibleMeshlets->Get()->GetSRV(),
+						rasterContext.pVisibleMeshletsCounter->Get()->GetSRV(),
+						});
+					context.Dispatch(256);
+				});
+
+		RGBuffer* pMeshletOffsetAndCounts = graph.Create("Meshlet offset and counts", BufferDesc::CreateStructured(64, sizeof(Vector2u)));
+
+		graph.AddPass("Allocate Bins", RGPassFlag::Compute)
+			.Read({ pMeshletCounts })
+			.Write({ pGlobalCount, pMeshletOffsetAndCounts })
+			.Bind([=](CommandContext& context)
+				{
+					context.SetComputeRootSignature(m_pCommonRS);
+					context.SetPipelineState(m_pMeshletAllocateBinRanges);
+
+					struct
+					{
+						uint32 NumBins;
+					} params;
+					params.NumBins = numBins;
+					context.SetRootConstants(0, params);
+					context.BindResources(2, {
+						pMeshletOffsetAndCounts->Get()->GetUAV(),
+						pGlobalCount->Get()->GetUAV(),
+						});
+					context.BindResources(3, pMeshletCounts->Get()->GetSRV());
+					context.Dispatch(ComputeUtils::GetNumThreadGroups(numBins, 64));
+				});
+
+		constexpr uint32 maxNumMeshlets = Tweakables::MaxNumMeshlets;
+		RGBuffer* pBinnedMeshlets = graph.Create("BinnedMeshlets", BufferDesc::CreateStructured(maxNumMeshlets, sizeof(uint32)));
+
+		graph.AddPass("Write Bins", RGPassFlag::Compute)
+			.Read({ rasterContext.pVisibleMeshletsCounter, rasterContext.pVisibleMeshlets })
+			.Write({ pMeshletOffsetAndCounts, pBinnedMeshlets })
+			.Bind([=](CommandContext& context)
+				{
+					context.SetComputeRootSignature(m_pCommonRS);
+					context.SetPipelineState(m_pMeshletWriteBins);
+
+					context.BindResources(2, {
+						pMeshletOffsetAndCounts->Get()->GetUAV(),
+						pBinnedMeshlets->Get()->GetUAV(),
+						});
+					context.BindResources(3, {
+						rasterContext.pVisibleMeshlets->Get()->GetSRV(),
+						rasterContext.pVisibleMeshletsCounter->Get()->GetSRV(),
+						});
+					context.Dispatch(256);
+				});
+	}
+
 
 	RGBuffer* pDispatchMeshArgs = graph.Create("GPURender.DispatchMeshArgs", BufferDesc::CreateIndirectArguments<D3D12_DISPATCH_MESH_ARGUMENTS>(1));
 	graph.AddPass("Build DispatchMesh Arguments", RGPassFlag::Compute)

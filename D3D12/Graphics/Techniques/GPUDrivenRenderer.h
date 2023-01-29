@@ -59,6 +59,9 @@ private:
 	RefCountPtr<PipelineState> m_pCullMeshletsPSO[2];
 	RefCountPtr<PipelineState> m_pDrawMeshletsPSO[2];
 
+	RefCountPtr<PipelineState> m_pMeshletClassify;
+	RefCountPtr<PipelineState> m_pMeshletAllocateBinRanges;
+	RefCountPtr<PipelineState> m_pMeshletWriteBins;
 
 	RefCountPtr<RootSignature> m_pHZBRS;
 	RefCountPtr<PipelineState> m_pHZBInitializePSO;
