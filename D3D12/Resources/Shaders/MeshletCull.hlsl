@@ -40,16 +40,20 @@
 #define NUM_MESHLET_THREADS 32
 #define NUM_CULL_INSTANCES_THREADS 64
 
-#define COUNTER_TOTAL_MESHLETS 0
-#define COUNTER_PHASE1_MESHLETS 1
-#define COUNTER_PHASE2_MESHLETS 2
+#define COUNTER_TOTAL_CANDIDATE_MESHLETS 0
+#define COUNTER_PHASE1_CANDIDATE_MESHLETS 1
+#define COUNTER_PHASE2_CANDIDATE_MESHLETS 2
+#define COUNTER_PHASE1_VISIBLE_MESHLETS 0
+#define COUNTER_PHASE2_VISIBLE_MESHLETS 3
 
 #if OCCLUSION_FIRST_PASS
-static const int MeshletCounterIndex = COUNTER_PHASE1_MESHLETS;
+static const int MeshletCounterIndex = COUNTER_PHASE1_CANDIDATE_MESHLETS;
+static const int VisibleMeshletCounter = COUNTER_PHASE1_VISIBLE_MESHLETS;
 static const bool IsPhase1 = true;
 static const bool IsPhase2 = false;
 #else
-static const int MeshletCounterIndex = COUNTER_PHASE2_MESHLETS;
+static const int MeshletCounterIndex = COUNTER_PHASE2_CANDIDATE_MESHLETS;
+static const int VisibleMeshletCounter = COUNTER_PHASE2_VISIBLE_MESHLETS;
 static const bool IsPhase1 = false;
 static const bool IsPhase2 = true;
 #endif
@@ -57,7 +61,7 @@ static const bool IsPhase2 = true;
 RWStructuredBuffer<MeshletCandidate> uCandidateMeshlets : 			register(u0);
 RWBuffer<uint> uCounter_CandidateMeshlets : 						register(u1);
 RWStructuredBuffer<uint> uPhaseTwoInstances : 						register(u2);
-RWBuffer<uint> uCounter_OccludedInstances : 						register(u3);
+RWBuffer<uint> uCounter_PhaseTwoInstances : 						register(u3);
 RWStructuredBuffer<MeshletCandidate> uVisibleMeshlets :				register(u4);
 RWBuffer<uint> uCounter_VisibleMeshlets : 							register(u5);
 
@@ -70,9 +74,27 @@ Buffer<uint> tCounter_VisibleMeshlets : 							register(t3);
 StructuredBuffer<MeshletCandidate> tVisibleMeshlets : 				register(t4);
 Texture2D<float> tHZB : 											register(t3);
 
+[numthreads(1, 1, 1)]
+void ClearUAVs()
+{
+	uCounter_CandidateMeshlets[0] = 0;
+	uCounter_CandidateMeshlets[1] = 0;
+	uCounter_CandidateMeshlets[2] = 0;
+
+	uCounter_VisibleMeshlets[0] = 0;
+	uCounter_VisibleMeshlets[1] = 1;
+	uCounter_VisibleMeshlets[2] = 1;
+
+	uCounter_VisibleMeshlets[3] = 0;
+	uCounter_VisibleMeshlets[4] = 1;
+	uCounter_VisibleMeshlets[5] = 1;
+
+	uCounter_PhaseTwoInstances[0] = 0;
+}
+
 uint GetCandidateMeshletOffset(bool phase2)
 {
-	return phase2 ? uCounter_CandidateMeshlets[COUNTER_PHASE1_MESHLETS] : 0u;
+	return phase2 ? uCounter_CandidateMeshlets[COUNTER_PHASE1_CANDIDATE_MESHLETS] : 0u;
 }
 
 uint GetNumInstances()
@@ -118,7 +140,7 @@ void CullInstancesCS(uint threadID : SV_DispatchThreadID)
 		if(wasOccluded)
 		{
 			uint elementOffset = 0;
-			InterlockedAdd_WaveOps(uCounter_OccludedInstances, 0, 1, elementOffset);
+			InterlockedAdd_WaveOps(uCounter_PhaseTwoInstances, 0, 1, elementOffset);
 			uPhaseTwoInstances[elementOffset] = instance.ID;
 		}
 #else
@@ -131,7 +153,7 @@ void CullInstancesCS(uint threadID : SV_DispatchThreadID)
     {
 		// Limit meshlet count to how large our buffer is
 		uint globalMeshletIndex;
-        InterlockedAdd_Varying_WaveOps(uCounter_CandidateMeshlets, COUNTER_TOTAL_MESHLETS, mesh.MeshletCount, globalMeshletIndex);
+        InterlockedAdd_Varying_WaveOps(uCounter_CandidateMeshlets, COUNTER_TOTAL_CANDIDATE_MESHLETS, mesh.MeshletCount, globalMeshletIndex);
 		uint clampedNumMeshlets = min(globalMeshletIndex + mesh.MeshletCount, MAX_NUM_MESHLETS);
 		uint numMeshletsToAdd = max(clampedNumMeshlets - globalMeshletIndex, 0);
 
@@ -174,15 +196,6 @@ void BuildInstanceCullIndirectArgs()
     uDispatchArguments[0] = args;
 }
 
-[numthreads(1, 1, 1)]
-void BuildMeshShaderIndirectArgs()
-{
-    uint numMeshlets = tCounter_VisibleMeshlets[MeshletCounterIndex];
-    D3D12_DISPATCH_ARGUMENTS args;
-    args.ThreadGroupCount = uint3(numMeshlets, 1, 1);
-    uDispatchArguments[0] = args;
-}
-
 [numthreads(NUM_CULL_INSTANCES_THREADS, 1, 1)]
 void CullMeshletsCS(uint threadID : SV_DispatchThreadID)
 {
@@ -212,11 +225,11 @@ void CullMeshletsCS(uint threadID : SV_DispatchThreadID)
 			{
 				// Limit how many meshlets we're writing based on the buffer size
 				uint globalMeshletIndex;
-        		InterlockedAdd_WaveOps(uCounter_CandidateMeshlets, COUNTER_TOTAL_MESHLETS, 1, globalMeshletIndex);
+        		InterlockedAdd_WaveOps(uCounter_CandidateMeshlets, COUNTER_TOTAL_CANDIDATE_MESHLETS, 1, globalMeshletIndex);
 				if(globalMeshletIndex < MAX_NUM_MESHLETS)
 				{
 					uint elementOffset;
-					InterlockedAdd_WaveOps(uCounter_CandidateMeshlets, COUNTER_PHASE2_MESHLETS, 1, elementOffset);
+					InterlockedAdd_WaveOps(uCounter_CandidateMeshlets, COUNTER_PHASE2_CANDIDATE_MESHLETS, 1, elementOffset);
 					uCandidateMeshlets[GetCandidateMeshletOffset(true) + elementOffset] = candidate;
 				}
 			}
@@ -229,10 +242,10 @@ void CullMeshletsCS(uint threadID : SV_DispatchThreadID)
 		if(isVisible && !wasOccluded)
 		{
 			uint elementOffset;
-			InterlockedAdd_WaveOps(uCounter_VisibleMeshlets, MeshletCounterIndex, 1, elementOffset);
+			InterlockedAdd_WaveOps(uCounter_VisibleMeshlets, VisibleMeshletCounter, 1, elementOffset);
 
 #if !OCCLUSION_FIRST_PASS
-			elementOffset += uCounter_VisibleMeshlets[COUNTER_PHASE1_MESHLETS];
+			elementOffset += uCounter_VisibleMeshlets[COUNTER_PHASE1_VISIBLE_MESHLETS];
 #endif
 			uVisibleMeshlets[elementOffset] = candidate;
 		}
@@ -277,7 +290,7 @@ void MSMain(
 {
 	uint meshletIndex = groupID;
 #if !OCCLUSION_FIRST_PASS
-	meshletIndex += tCounter_VisibleMeshlets[COUNTER_PHASE1_MESHLETS];
+	meshletIndex += tCounter_VisibleMeshlets[COUNTER_PHASE1_VISIBLE_MESHLETS];
 #endif
 
 	MeshletCandidate candidate = tVisibleMeshlets[meshletIndex];
@@ -345,11 +358,11 @@ void PrintStatsCS()
 
 	uint occludedInstances = tCounter_PhaseTwoInstances[0];
 	uint visibleInstances = numInstances - occludedInstances;
-	uint processedMeshlets = tCounter_CandidateMeshlets[COUNTER_TOTAL_MESHLETS];
-	uint phase1CandidateMeshlets = tCounter_CandidateMeshlets[COUNTER_PHASE1_MESHLETS];
-	uint phase2CandidateMeshlets = tCounter_CandidateMeshlets[COUNTER_PHASE2_MESHLETS];
-	uint phase1VisibleMeshlets = tCounter_VisibleMeshlets[COUNTER_PHASE1_MESHLETS];
-	uint phase2VisibleMeshlets = tCounter_VisibleMeshlets[COUNTER_PHASE2_MESHLETS];
+	uint processedMeshlets = tCounter_CandidateMeshlets[COUNTER_TOTAL_CANDIDATE_MESHLETS];
+	uint phase1CandidateMeshlets = tCounter_CandidateMeshlets[COUNTER_PHASE1_CANDIDATE_MESHLETS];
+	uint phase2CandidateMeshlets = tCounter_CandidateMeshlets[COUNTER_PHASE2_CANDIDATE_MESHLETS];
+	uint phase1VisibleMeshlets = tCounter_VisibleMeshlets[COUNTER_PHASE1_VISIBLE_MESHLETS];
+	uint phase2VisibleMeshlets = tCounter_VisibleMeshlets[COUNTER_PHASE2_VISIBLE_MESHLETS];
 
 	TextWriter writer = CreateTextWriter(float2(20, 20));
 

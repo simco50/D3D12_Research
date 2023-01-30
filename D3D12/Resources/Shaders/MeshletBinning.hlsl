@@ -2,6 +2,7 @@
 #include "VisibilityBuffer.hlsli"
 #include "WaveOps.hlsli"
 #include "ShaderDebugRender.hlsli"
+#include "D3D12.hlsli"
 
 struct AllocateParameters
 {
@@ -13,10 +14,25 @@ RWBuffer<uint> uMeshletCounts : register(u0);
 RWStructuredBuffer<uint2> uMeshletOffsetAndCounts : register(u0);
 RWBuffer<uint> uGlobalMeshletCounter : register(u1);
 RWStructuredBuffer<uint> uBinnedMeshlets : register(u1);
+RWStructuredBuffer<D3D12_DISPATCH_ARGUMENTS> uDispatchArguments : register(u2);
 
 StructuredBuffer<MeshletCandidate> tVisibleMeshlets : register(t0);
 Buffer<uint> tCounter_VisibleMeshlets : register(t1);
 Buffer<uint> tMeshletCounts : register(t0);
+
+[numthreads(1, 1, 1)]
+void PrepareArgsCS()
+{
+	for(uint i = 0; i < cAllocateParams.NumBins; ++i)
+	{
+		uMeshletCounts[i] = 0;
+	}
+	uGlobalMeshletCounter[0] = 0;
+
+	D3D12_DISPATCH_ARGUMENTS args;
+    args.ThreadGroupCount = uint3(DivideAndRoundUp(tCounter_VisibleMeshlets[0], 64), 1, 1);
+    uDispatchArguments[0] = args;
+}
 
 uint GetBin(uint meshletIndex)
 {
@@ -29,7 +45,7 @@ uint GetBin(uint meshletIndex)
 [numthreads(64, 1, 1)]
 void ClassifyMeshletsCS(uint threadID : SV_DispatchThreadID)
 {
-	if(threadID >= tCounter_VisibleMeshlets[1])
+	if(threadID >= tCounter_VisibleMeshlets[0])
 		return;
 
 	uint bin = GetBin(threadID);
@@ -69,7 +85,7 @@ void AllocateBinRangesCS(uint threadID : SV_DispatchThreadID)
 void WriteBinsCS(uint threadID : SV_DispatchThreadID)
 {
 	uint meshletIndex = threadID;
-	if(meshletIndex >= tCounter_VisibleMeshlets[1])
+	if(meshletIndex >= tCounter_VisibleMeshlets[0])
 		return;
 
 	uint binIndex = GetBin(meshletIndex);

@@ -50,8 +50,9 @@ private:
 	void CullAndRasterize(RGGraph& graph, const SceneView* pView, bool isFirstPhase, const RasterContext& context, RasterResult& outResult);
 
 	RefCountPtr<RootSignature> m_pCommonRS;
+	
+	RefCountPtr<PipelineState> m_pClearUAVsPSO;
 	RefCountPtr<PipelineState> m_pCullInstancesPSO[2];
-	RefCountPtr<PipelineState> m_pBuildDrawArgsPSO[2];
 	RefCountPtr<PipelineState> m_pBuildMeshletCullArgsPSO[2];
 	RefCountPtr<PipelineState> m_pBuildCullArgsPSO;
 	RefCountPtr<PipelineState> m_pPrintStatsPSO;
@@ -59,6 +60,7 @@ private:
 	RefCountPtr<PipelineState> m_pCullMeshletsPSO[2];
 	RefCountPtr<PipelineState> m_pDrawMeshletsPSO[2];
 
+	RefCountPtr<PipelineState> m_pMeshletBinPrepareArgs;
 	RefCountPtr<PipelineState> m_pMeshletClassify;
 	RefCountPtr<PipelineState> m_pMeshletAllocateBinRanges;
 	RefCountPtr<PipelineState> m_pMeshletWriteBins;
