@@ -37,28 +37,48 @@ GPUDrivenRenderer::GPUDrivenRenderer(GraphicsDevice* pDevice)
 
 	PipelineStateInitializer psoDesc;
 	psoDesc.SetRootSignature(m_pCommonRS);
-	psoDesc.SetMeshShader("MeshletCull.hlsl", "MSMain", *defines);
 	psoDesc.SetPixelShader("MeshletCull.hlsl", "PSMain", *defines);
 	psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
 	psoDesc.SetRenderTargetFormats(ResourceFormat::R32_UINT, GraphicsCommon::DepthStencilFormat, 1);
 	psoDesc.SetName("Visibility Rendering");
 
 	defines.Set("OCCLUSION_FIRST_PASS", true);
+	defines.Set("ALPHA_MASK", false);
+	psoDesc.SetCullMode(D3D12_CULL_MODE_BACK);
+	psoDesc.SetMeshShader("MeshletCull.hlsl", "MSMain", *defines);
+	psoDesc.SetPixelShader("MeshletCull.hlsl", "PSMain", *defines);
 	m_pDrawMeshletsPSO[0] =			pDevice->CreatePipeline(psoDesc);
+	defines.Set("ALPHA_MASK", true);
+	psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
+	psoDesc.SetMeshShader("MeshletCull.hlsl", "MSMain", *defines);
+	psoDesc.SetPixelShader("MeshletCull.hlsl", "PSMain", *defines);
+	m_pDrawMeshletsPSO[2] =			pDevice->CreatePipeline(psoDesc);
 	m_pBuildMeshletCullArgsPSO[0] = pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "BuildMeshletCullIndirectArgs", *defines);
 	m_pCullInstancesPSO[0] =		pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "CullInstancesCS", *defines);
 	m_pCullMeshletsPSO[0] =			pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "CullMeshletsCS", *defines);
+	m_pMeshletBinPrepareArgs[0] =	pDevice->CreateComputePipeline(m_pCommonRS, "MeshletBinning.hlsl", "PrepareArgsCS", *defines);
+	m_pMeshletClassify[0] =			pDevice->CreateComputePipeline(m_pCommonRS, "MeshletBinning.hlsl", "ClassifyMeshletsCS", *defines);
+	m_pMeshletWriteBins[0] =		pDevice->CreateComputePipeline(m_pCommonRS, "MeshletBinning.hlsl", "WriteBinsCS", *defines);
 
 	defines.Set("OCCLUSION_FIRST_PASS", false);
+	defines.Set("ALPHA_MASK", false);
+	psoDesc.SetCullMode(D3D12_CULL_MODE_BACK);
+	psoDesc.SetMeshShader("MeshletCull.hlsl", "MSMain", *defines);
+	psoDesc.SetPixelShader("MeshletCull.hlsl", "PSMain", *defines);
 	m_pDrawMeshletsPSO[1] =			pDevice->CreatePipeline(psoDesc);
+	defines.Set("ALPHA_MASK", true);
+	psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
+	psoDesc.SetMeshShader("MeshletCull.hlsl", "MSMain", *defines);
+	psoDesc.SetPixelShader("MeshletCull.hlsl", "PSMain", *defines);
+	m_pDrawMeshletsPSO[3] =			pDevice->CreatePipeline(psoDesc);
 	m_pBuildMeshletCullArgsPSO[1] = pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "BuildMeshletCullIndirectArgs", *defines);
 	m_pCullInstancesPSO[1] =		pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "CullInstancesCS", *defines);
 	m_pCullMeshletsPSO[1] =			pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "CullMeshletsCS", *defines);
+	m_pMeshletBinPrepareArgs[1] =	pDevice->CreateComputePipeline(m_pCommonRS, "MeshletBinning.hlsl", "PrepareArgsCS", *defines);
+	m_pMeshletClassify[1] =			pDevice->CreateComputePipeline(m_pCommonRS, "MeshletBinning.hlsl", "ClassifyMeshletsCS", *defines);
+	m_pMeshletWriteBins[1] =		pDevice->CreateComputePipeline(m_pCommonRS, "MeshletBinning.hlsl", "WriteBinsCS", *defines);
 
-	m_pMeshletBinPrepareArgs =		pDevice->CreateComputePipeline(m_pCommonRS, "MeshletBinning.hlsl", "PrepareArgsCS");
-	m_pMeshletClassify =			pDevice->CreateComputePipeline(m_pCommonRS, "MeshletBinning.hlsl", "ClassifyMeshletsCS");
 	m_pMeshletAllocateBinRanges =	pDevice->CreateComputePipeline(m_pCommonRS, "MeshletBinning.hlsl", "AllocateBinRangesCS");
-	m_pMeshletWriteBins =			pDevice->CreateComputePipeline(m_pCommonRS, "MeshletBinning.hlsl", "WriteBinsCS");
 
 	m_pPrintStatsPSO =				pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "PrintStatsCS", *defines);
 
@@ -187,120 +207,127 @@ void GPUDrivenRenderer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 				context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchSignature, 1, pMeshletCullArgs->Get());
 			});
 
-	if(isFirstPhase)
-	{
-		RG_GRAPH_SCOPE("Classify Shader Types", graph);
+	constexpr uint32 numBins = 2;
+	RGBuffer* pMeshletCounts = graph.Create("Meshlet Counts", BufferDesc::CreateTyped(numBins, ResourceFormat::R32_UINT));
+	RGBuffer* pGlobalCount = graph.Create("Global Count", BufferDesc::CreateTyped(1, ResourceFormat::R32_UINT));
+	RGBuffer* pClassifyArgs = graph.Create("GPURender.ClassificationArgs", BufferDesc::CreateIndirectArguments<D3D12_DISPATCH_ARGUMENTS>(1));
 
-		constexpr uint32 numBins = 2;
-		RGBuffer* pMeshletCounts = graph.Create("Meshlet Counts", BufferDesc::CreateTyped(numBins, ResourceFormat::R32_UINT));
-		RGBuffer* pGlobalCount = graph.Create("Global Count", BufferDesc::CreateTyped(1, ResourceFormat::R32_UINT));
-		RGBuffer* pClassifyArgs = graph.Create("GPURender.ClassificationArgs", BufferDesc::CreateIndirectArguments<D3D12_DISPATCH_ARGUMENTS>(1));
+	graph.AddPass("Clear UAVs", RGPassFlag::Compute)
+		.Write({ pMeshletCounts, pGlobalCount, pClassifyArgs })
+		.Read(rasterContext.pVisibleMeshletsCounter)
+		.Bind([=](CommandContext& context)
+			{
+				context.SetComputeRootSignature(m_pCommonRS);
+				context.SetPipelineState(m_pMeshletBinPrepareArgs[isFirstPhase ? 0 : 1]);
 
-		graph.AddPass("Clear UAVs", RGPassFlag::Compute)
-			.Write({ pMeshletCounts, pGlobalCount, pClassifyArgs })
-			.Read(rasterContext.pVisibleMeshletsCounter)
-			.Bind([=](CommandContext& context)
+				struct
 				{
-					context.SetComputeRootSignature(m_pCommonRS);
-					context.SetPipelineState(m_pMeshletBinPrepareArgs);
+					uint32 NumBins;
+				} params;
+				params.NumBins = numBins;
+				context.SetRootConstants(0, params);
+				context.BindResources(2, {
+					pMeshletCounts->Get()->GetUAV(),
+					pGlobalCount->Get()->GetUAV(),
+					pClassifyArgs->Get()->GetUAV(),
+					});
+				context.BindResources(3, {
+					rasterContext.pVisibleMeshletsCounter->Get()->GetSRV(),
+					}, 1);
+				context.Dispatch(1);
+				context.InsertUavBarrier();
+			});
 
-					struct
-					{
-						uint32 NumBins;
-					} params;
-					params.NumBins = numBins;
-					context.SetRootConstants(0, params);
-					context.BindResources(2, {
-						pMeshletCounts->Get()->GetUAV(),
-						pGlobalCount->Get()->GetUAV(),
-						pClassifyArgs->Get()->GetUAV(),
-						});
-					context.BindResources(3, {
-						rasterContext.pVisibleMeshletsCounter->Get()->GetSRV(),
-						}, 1);
-					context.Dispatch(1);
-					context.InsertUavBarrier();
-				});
+	graph.AddPass("Count Bins", RGPassFlag::Compute)
+		.Read(pClassifyArgs)
+		.Read({ rasterContext.pVisibleMeshletsCounter, rasterContext.pVisibleMeshlets })
+		.Write(pMeshletCounts)
+		.Bind([=](CommandContext& context)
+			{
+				context.SetComputeRootSignature(m_pCommonRS);
+				context.SetPipelineState(m_pMeshletClassify[isFirstPhase ? 0 : 1]);
+				context.BindResources(2, pMeshletCounts->Get()->GetUAV());
+				context.BindResources(3, {
+					rasterContext.pVisibleMeshlets->Get()->GetSRV(),
+					rasterContext.pVisibleMeshletsCounter->Get()->GetSRV(),
+					});
+				context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchSignature, 1, pClassifyArgs->Get());
+			});
 
-		graph.AddPass("Count Bins", RGPassFlag::Compute)
-			.Read(pClassifyArgs)
-			.Read({ rasterContext.pVisibleMeshletsCounter, rasterContext.pVisibleMeshlets })
-			.Write(pMeshletCounts)
-			.Bind([=](CommandContext& context)
+	RGBuffer* pMeshletOffsetAndCounts = graph.Create("Meshlet offset and counts", BufferDesc::CreateStructured(numBins, sizeof(Vector4u), BufferFlag::UnorderedAccess | BufferFlag::ShaderResource | BufferFlag::IndirectArguments));
+
+	graph.AddPass("Compute Bin Offsets", RGPassFlag::Compute)
+		.Read({ pMeshletCounts })
+		.Write({ pGlobalCount, pMeshletOffsetAndCounts })
+		.Bind([=](CommandContext& context)
+			{
+				context.SetComputeRootSignature(m_pCommonRS);
+				context.SetPipelineState(m_pMeshletAllocateBinRanges);
+
+				struct
 				{
-					context.SetComputeRootSignature(m_pCommonRS);
-					context.SetPipelineState(m_pMeshletClassify);
-					context.BindResources(2, pMeshletCounts->Get()->GetUAV());
-					context.BindResources(3, {
-						rasterContext.pVisibleMeshlets->Get()->GetSRV(),
-						rasterContext.pVisibleMeshletsCounter->Get()->GetSRV(),
-						});
-					context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchSignature, 1, pClassifyArgs->Get());
-				});
+					uint32 NumBins;
+				} params;
+				params.NumBins = numBins;
+				context.SetRootConstants(0, params);
+				context.BindResources(2, {
+					pMeshletOffsetAndCounts->Get()->GetUAV(),
+					pGlobalCount->Get()->GetUAV(),
+					});
+				context.BindResources(3, pMeshletCounts->Get()->GetSRV());
+				context.Dispatch(ComputeUtils::GetNumThreadGroups(numBins, 64));
+			});
 
-		RGBuffer* pMeshletOffsetAndCounts = graph.Create("Meshlet offset and counts", BufferDesc::CreateStructured(64, sizeof(Vector2u)));
+	constexpr uint32 maxNumMeshlets = Tweakables::MaxNumMeshlets;
+	RGBuffer* pBinnedMeshlets = graph.Create("BinnedMeshlets", BufferDesc::CreateStructured(maxNumMeshlets, sizeof(uint32)));
 
-		graph.AddPass("Compute Bin Offsets", RGPassFlag::Compute)
-			.Read({ pMeshletCounts })
-			.Write({ pGlobalCount, pMeshletOffsetAndCounts })
-			.Bind([=](CommandContext& context)
-				{
-					context.SetComputeRootSignature(m_pCommonRS);
-					context.SetPipelineState(m_pMeshletAllocateBinRanges);
+	graph.AddPass("Export Bins", RGPassFlag::Compute)
+		.Read(pClassifyArgs)
+		.Read({ rasterContext.pVisibleMeshletsCounter, rasterContext.pVisibleMeshlets })
+		.Write({ pMeshletOffsetAndCounts, pBinnedMeshlets })
+		.Bind([=](CommandContext& context)
+			{
+				context.SetComputeRootSignature(m_pCommonRS);
+				context.SetPipelineState(m_pMeshletWriteBins[isFirstPhase ? 0 : 1]);
 
-					struct
-					{
-						uint32 NumBins;
-					} params;
-					params.NumBins = numBins;
-					context.SetRootConstants(0, params);
-					context.BindResources(2, {
-						pMeshletOffsetAndCounts->Get()->GetUAV(),
-						pGlobalCount->Get()->GetUAV(),
-						});
-					context.BindResources(3, pMeshletCounts->Get()->GetSRV());
-					context.Dispatch(ComputeUtils::GetNumThreadGroups(numBins, 64));
-				});
-
-		constexpr uint32 maxNumMeshlets = Tweakables::MaxNumMeshlets;
-		RGBuffer* pBinnedMeshlets = graph.Create("BinnedMeshlets", BufferDesc::CreateStructured(maxNumMeshlets, sizeof(uint32)));
-
-		graph.AddPass("Export Bins", RGPassFlag::Compute)
-			.Read(pClassifyArgs)
-			.Read({ rasterContext.pVisibleMeshletsCounter, rasterContext.pVisibleMeshlets })
-			.Write({ pMeshletOffsetAndCounts, pBinnedMeshlets })
-			.Bind([=](CommandContext& context)
-				{
-					context.SetComputeRootSignature(m_pCommonRS);
-					context.SetPipelineState(m_pMeshletWriteBins);
-
-					context.BindResources(2, {
-						pMeshletOffsetAndCounts->Get()->GetUAV(),
-						pBinnedMeshlets->Get()->GetUAV(),
-						});
-					context.BindResources(3, {
-						rasterContext.pVisibleMeshlets->Get()->GetSRV(),
-						rasterContext.pVisibleMeshletsCounter->Get()->GetSRV(),
-						});
-					context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchSignature, 1, pClassifyArgs->Get());
-				});
-	}
+				context.BindResources(2, {
+					pMeshletOffsetAndCounts->Get()->GetUAV(),
+					pBinnedMeshlets->Get()->GetUAV(),
+					});
+				context.BindResources(3, {
+					rasterContext.pVisibleMeshlets->Get()->GetSRV(),
+					rasterContext.pVisibleMeshletsCounter->Get()->GetSRV(),
+					});
+				context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchSignature, 1, pClassifyArgs->Get());
+			});
 
 	RGPass& drawPass = graph.AddPass("Rasterize", RGPassFlag::Raster)
-	.Read({ rasterContext.pVisibleMeshlets, rasterContext.pVisibleMeshletsCounter })
-	.DepthStencil(rasterContext.pDepth, isFirstPhase ? RenderTargetLoadAction::Clear : RenderTargetLoadAction::Load, true)
-	.Bind([=](CommandContext& context)
-		{
-			context.SetGraphicsRootSignature(m_pCommonRS);
-			context.SetPipelineState(m_pDrawMeshletsPSO[isFirstPhase ? 0 : 1]);
+		.Read({ rasterContext.pVisibleMeshlets, pMeshletOffsetAndCounts, pBinnedMeshlets })
+		.DepthStencil(rasterContext.pDepth, isFirstPhase ? RenderTargetLoadAction::Clear : RenderTargetLoadAction::Load, true)
+		.Bind([=](CommandContext& context)
+			{
+				context.SetGraphicsRootSignature(m_pCommonRS);
+				context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
+				context.BindResources(3, {
+					pBinnedMeshlets->Get()->GetSRV(),
+					pMeshletOffsetAndCounts->Get()->GetSRV(),
+					rasterContext.pVisibleMeshlets->Get()->GetSRV(),
+					}, 2);
 
-			context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
-			context.BindResources(3, {
-				rasterContext.pVisibleMeshletsCounter->Get()->GetSRV(),
-				rasterContext.pVisibleMeshlets->Get()->GetSRV(),
-				}, 3);
-			context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchMeshSignature, 1, rasterContext.pVisibleMeshletsCounter->Get());
-		});
+				for (uint32 binIndex = 0; binIndex < numBins; ++binIndex)
+				{
+					struct
+					{
+						uint32 BinIndex;
+					} params;
+					params.BinIndex = binIndex;
+					context.SetRootConstants(0, params);
+					uint32 psoOffset = (isFirstPhase ? 0 : 1) + (binIndex == 1 ? 2 : 0);
+					context.SetPipelineState(m_pDrawMeshletsPSO[psoOffset]);
+					context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchMeshSignature, 1, pMeshletOffsetAndCounts->Get(), nullptr, sizeof(Vector4u) * binIndex);
+				}
+			});
+
 	if (rasterContext.Type == RasterType::VisibilityBuffer)
 		drawPass.RenderTarget(outResult.pVisibilityBuffer, isFirstPhase ? RenderTargetLoadAction::Clear : RenderTargetLoadAction::Load);
 

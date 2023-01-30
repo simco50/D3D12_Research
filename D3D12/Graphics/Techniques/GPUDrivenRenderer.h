@@ -58,12 +58,12 @@ private:
 	RefCountPtr<PipelineState> m_pPrintStatsPSO;
 
 	RefCountPtr<PipelineState> m_pCullMeshletsPSO[2];
-	RefCountPtr<PipelineState> m_pDrawMeshletsPSO[2];
+	RefCountPtr<PipelineState> m_pDrawMeshletsPSO[4];
 
-	RefCountPtr<PipelineState> m_pMeshletBinPrepareArgs;
-	RefCountPtr<PipelineState> m_pMeshletClassify;
+	RefCountPtr<PipelineState> m_pMeshletBinPrepareArgs[2];
+	RefCountPtr<PipelineState> m_pMeshletClassify[2];
 	RefCountPtr<PipelineState> m_pMeshletAllocateBinRanges;
-	RefCountPtr<PipelineState> m_pMeshletWriteBins;
+	RefCountPtr<PipelineState> m_pMeshletWriteBins[2];
 
 	RefCountPtr<RootSignature> m_pHZBRS;
 	RefCountPtr<PipelineState> m_pHZBInitializePSO;

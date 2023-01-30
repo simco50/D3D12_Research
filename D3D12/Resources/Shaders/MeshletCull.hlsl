@@ -74,6 +74,15 @@ Buffer<uint> tCounter_VisibleMeshlets : 							register(t3);
 StructuredBuffer<MeshletCandidate> tVisibleMeshlets : 				register(t4);
 Texture2D<float> tHZB : 											register(t3);
 
+StructuredBuffer<uint> tBinnedMeshlets : 							register(t2);
+StructuredBuffer<uint4> tMeshletBinData :							register(t3);
+
+struct RasterParams
+{
+	uint BinIndex;
+};
+ConstantBuffer<RasterParams> cRasterParams : register(b0);
+
 [numthreads(1, 1, 1)]
 void ClearUAVs()
 {
@@ -289,9 +298,8 @@ void MSMain(
 	out primitives PrimitiveAttribute primitives[MESHLET_MAX_TRIANGLES])
 {
 	uint meshletIndex = groupID;
-#if !OCCLUSION_FIRST_PASS
-	meshletIndex += tCounter_VisibleMeshlets[COUNTER_PHASE1_VISIBLE_MESHLETS];
-#endif
+	meshletIndex += tMeshletBinData[cRasterParams.BinIndex].w;
+	meshletIndex = tBinnedMeshlets[meshletIndex];
 
 	MeshletCandidate candidate = tVisibleMeshlets[meshletIndex];
 	InstanceData instance = GetInstance(candidate.InstanceID);
@@ -314,7 +322,7 @@ void MSMain(
 
 		PrimitiveAttribute pri;
 		pri.PrimitiveID = i;
-		pri.CandidateIndex = groupID;
+		pri.CandidateIndex = meshletIndex;
 		primitives[i] = pri;
 	}
 }
