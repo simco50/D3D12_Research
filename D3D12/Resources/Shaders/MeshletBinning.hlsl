@@ -94,8 +94,13 @@ void AllocateBinRangesCS(uint threadID : SV_DispatchThreadID)
 	InterlockedAdd(uGlobalMeshletCounter[0], numMeshlets, offset);
 	uMeshletOffsetAndCounts[bin] = uint4(0, 1, 1, offset);
 
+#if 0
 	TextWriter writer = CreateTextWriter(float2(10, threadID * 25 + 10 + cBinningParams.IsSecondPhase * 100));
+	writer = writer + 'B' + 'i' + 'n' + ' ';
+	writer.Int(bin);
+	writer = writer + ':' + ' ';
 	writer.Int(numMeshlets);
+#endif
 }
 
 [numthreads(64, 1, 1)]
