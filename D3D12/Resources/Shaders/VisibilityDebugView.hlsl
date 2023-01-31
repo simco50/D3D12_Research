@@ -31,6 +31,7 @@ void DebugRenderCS(uint3 dispatchThreadId : SV_DispatchThreadID)
 	float2 screenUV = ((float2)texel.xy + 0.5f) * cView.TargetDimensionsInv;
 	VisBufferVertexAttribute vertex = GetVertexAttributes(screenUV, instance, meshletIndex, primitiveID);
 
+	bool enableWireframe = true;
 	float3 color = 0;
 	if(cDebugRenderData.Mode == 1)
 	{
@@ -50,9 +51,15 @@ void DebugRenderCS(uint3 dispatchThreadId : SV_DispatchThreadID)
 	else if(cDebugRenderData.Mode == 4)
 	{
 		uint overdraw = tDebugData[texel];
-		color = Magma(saturate(0.05f * overdraw));
+		color = Viridis(saturate(0.05f * overdraw));
+		if(texel.y > cView.ViewportDimensions.y - 50)
+		{
+			enableWireframe = false;
+			color = Viridis(screenUV.x);
+		}
 	}
 
-
-	uColorTarget[texel] = float4(color * saturate(Wireframe(vertex.Barycentrics) + 0.8), 1);
+	if(enableWireframe)
+		color *= saturate(Wireframe(vertex.Barycentrics) + 0.8);
+	uColorTarget[texel] = float4(color, 1);
 }
