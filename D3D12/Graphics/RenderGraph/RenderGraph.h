@@ -174,8 +174,8 @@ public:
 		return *this;
 	}
 
-	RGPass& Write(Span<RGResource*> resources);
-	RGPass& Read(Span<RGResource*> resources);
+	RGPass& Write(Span<RGResource*> resources, bool condition = true);
+	RGPass& Read(Span<RGResource*> resources, bool condition = true);
 	RGPass& RenderTarget(RGTexture* pResource, RenderTargetLoadAction access, RGTexture* pResolveTarget = nullptr);
 	RGPass& DepthStencil(RGTexture* pResource, RenderTargetLoadAction depthAccess, bool write, RenderTargetLoadAction stencilAccess = RenderTargetLoadAction::NoAccess);
 

@@ -20,6 +20,7 @@ struct RasterContext
 	RGTexture* pDepth = nullptr;
 	RefCountPtr<Texture>* pPreviousHZB = nullptr;
 	RasterType Type;
+	bool EnableDebug = false;
 
 	RGBuffer* pCandidateMeshlets = nullptr;
 	RGBuffer* pCandidateMeshletsCounter = nullptr;
@@ -34,6 +35,7 @@ struct RasterResult
 	RGBuffer* pVisibleMeshlets = nullptr;
 	RGTexture* pVisibilityBuffer = nullptr;
 	RGTexture* pHZB = nullptr;
+	RGTexture* pDebugData = nullptr;
 };
 
 class GPUDrivenRenderer
@@ -59,6 +61,7 @@ private:
 
 	RefCountPtr<PipelineState> m_pCullMeshletsPSO[2];
 	RefCountPtr<PipelineState> m_pDrawMeshletsPSO[2];
+	RefCountPtr<PipelineState> m_pDrawMeshletsDebugModePSO[2];
 
 	RefCountPtr<PipelineState> m_pMeshletBinPrepareArgs;
 	RefCountPtr<PipelineState> m_pMeshletClassify;

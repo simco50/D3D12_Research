@@ -5,8 +5,11 @@
 #include "Graphics/Profiler.h"
 #include "Core/CommandLine.h"
 
-RGPass& RGPass::Read(Span<RGResource*> resources)
+RGPass& RGPass::Read(Span<RGResource*> resources, bool condition)
 {
+	if (!condition)
+		return *this;
+
 	D3D12_RESOURCE_STATES state = D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE;
 	if (EnumHasAnyFlags(Flags, RGPassFlag::Copy))
 		state = D3D12_RESOURCE_STATE_COPY_SOURCE;
@@ -21,8 +24,11 @@ RGPass& RGPass::Read(Span<RGResource*> resources)
 	return *this;
 }
 
-RGPass& RGPass::Write(Span<RGResource*> resources)
+RGPass& RGPass::Write(Span<RGResource*> resources, bool condition)
 {
+	if (!condition)
+		return *this;
+
 	D3D12_RESOURCE_STATES state = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
 	if (EnumHasAnyFlags(Flags, RGPassFlag::Copy))
 		state = D3D12_RESOURCE_STATE_COPY_DEST;

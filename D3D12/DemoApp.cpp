@@ -552,6 +552,7 @@ void DemoApp::Update()
 			const bool needVisibilityBuffer = m_RenderPath == RenderPath::Visibility;
 
 			RasterContext rasterContext(graph, "Prepass", sceneTextures.pDepth, &m_pHZB, RasterType::VisibilityBuffer);
+			rasterContext.EnableDebug = m_VisibilityDebugRenderMode > 0;
 			if (doPrepass)
 			{
 				if (needVisibilityBuffer)
@@ -1145,6 +1146,7 @@ void DemoApp::Update()
 						context.BindResources(3, {
 							rasterResult.pVisibilityBuffer->Get()->GetSRV(),
 							rasterResult.pVisibleMeshlets->Get()->GetSRV(),
+							rasterResult.pDebugData->Get()->GetSRV(),
 							});
 						context.Dispatch(ComputeUtils::GetNumThreadGroups(pColorTarget->GetWidth(), 8, pColorTarget->GetHeight(), 8));
 					});
@@ -1501,9 +1503,10 @@ void DemoApp::UpdateImGui()
 						case 1:	*outText = "InstanceID"; return true;
 						case 2:	*outText = "MeshletID"; return true;
 						case 3:	*outText = "PrimitiveID"; return true;
+						case 4:	*outText = "Overdraw"; return true;
 						}
 						return false;
-					}, nullptr, 4);
+					}, nullptr, 5);
 			}
 
 			ImGui::Text("Camera");

@@ -46,15 +46,23 @@ GPUDrivenRenderer::GPUDrivenRenderer(GraphicsDevice* pDevice)
 
 	// Permutation without alpha masking
 	defines.Set("ALPHA_MASK", false);
+	defines.Set("ENABLE_DEBUG_DATA", false);
 	psoDesc.SetMeshShader("MeshletCull.hlsl", "MSMain", *defines);
 	psoDesc.SetPixelShader("MeshletCull.hlsl", "PSMain", *defines);
 	m_pDrawMeshletsPSO[0] =			pDevice->CreatePipeline(psoDesc);
+	defines.Set("ENABLE_DEBUG_DATA", true);
+	psoDesc.SetPixelShader("MeshletCull.hlsl", "PSMain", *defines);
+	m_pDrawMeshletsDebugModePSO[0] =pDevice->CreatePipeline(psoDesc);
 	// Permutation with alpha masking
+	defines.Set("ALPHA_MASK", false);
 	defines.Set("ALPHA_MASK", true);
 	psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
 	psoDesc.SetMeshShader("MeshletCull.hlsl", "MSMain", *defines);
 	psoDesc.SetPixelShader("MeshletCull.hlsl", "PSMain", *defines);
 	m_pDrawMeshletsPSO[1] =			pDevice->CreatePipeline(psoDesc);
+	defines.Set("ENABLE_DEBUG_DATA", true);
+	psoDesc.SetPixelShader("MeshletCull.hlsl", "PSMain", *defines);
+	m_pDrawMeshletsDebugModePSO[1] =pDevice->CreatePipeline(psoDesc);
 
 	defines.Set("OCCLUSION_FIRST_PASS", true);
 	m_pBuildMeshletCullArgsPSO[0] = pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "BuildMeshletCullIndirectArgs", *defines);
@@ -295,11 +303,15 @@ void GPUDrivenRenderer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 
 	RGPass& drawPass = graph.AddPass("Rasterize", RGPassFlag::Raster)
 		.Read({ rasterContext.pVisibleMeshlets, pMeshletOffsetAndCounts, pBinnedMeshlets })
+		.Write(outResult.pDebugData, outResult.pDebugData != nullptr)
 		.DepthStencil(rasterContext.pDepth, isFirstPhase ? RenderTargetLoadAction::Clear : RenderTargetLoadAction::Load, true)
 		.Bind([=](CommandContext& context)
 			{
 				context.SetGraphicsRootSignature(m_pCommonRS);
+
 				context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
+				if (outResult.pDebugData)
+					context.BindResources(2, outResult.pDebugData->Get()->GetUAV());
 				context.BindResources(3, {
 					pBinnedMeshlets->Get()->GetSRV(),
 					pMeshletOffsetAndCounts->Get()->GetSRV(),
@@ -314,7 +326,7 @@ void GPUDrivenRenderer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 					} params;
 					params.BinIndex = binIndex;
 					context.SetRootConstants(0, params);
-					context.SetPipelineState(m_pDrawMeshletsPSO[binIndex]);
+					context.SetPipelineState(rasterContext.EnableDebug ? m_pDrawMeshletsDebugModePSO[binIndex] : m_pDrawMeshletsPSO[binIndex]);
 					context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchMeshSignature, 1, pMeshletOffsetAndCounts->Get(), nullptr, sizeof(Vector4u) * binIndex);
 				}
 			});
@@ -328,13 +340,18 @@ void GPUDrivenRenderer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 void GPUDrivenRenderer::Render(RGGraph& graph, const SceneView* pView, const RasterContext& rasterContext, RasterResult& outResult)
 {
 	RG_GRAPH_SCOPE("Rasterize (Visibility Buffer)", graph);
-	TextureDesc depthDesc = rasterContext.pDepth->GetDesc();
+	Vector2u dimensions = pView->GetDimensions();
 
-	outResult.pHZB = InitHZB(graph, depthDesc.Size2D(), rasterContext.pPreviousHZB);
+	outResult.pHZB = InitHZB(graph, dimensions, rasterContext.pPreviousHZB);
 	outResult.pVisibilityBuffer = nullptr;
 	if (rasterContext.Type == RasterType::VisibilityBuffer)
 	{
-		outResult.pVisibilityBuffer = graph.Create("Visibility", TextureDesc::CreateRenderTarget(depthDesc.Width, depthDesc.Height, ResourceFormat::R32_UINT));
+		outResult.pVisibilityBuffer = graph.Create("Visibility", TextureDesc::CreateRenderTarget(dimensions.x, dimensions.y, ResourceFormat::R32_UINT));
+	}
+
+	if (rasterContext.EnableDebug)
+	{
+		outResult.pDebugData = graph.Create("Debug Data", TextureDesc::Create2D(dimensions.x, dimensions.y, ResourceFormat::R32_UINT));
 	}
 
 #if 0
@@ -349,10 +366,14 @@ void GPUDrivenRenderer::Render(RGGraph& graph, const SceneView* pView, const Ras
 
 	graph.AddPass("Clear UAVs", RGPassFlag::Compute)
 	.Write({ rasterContext.pCandidateMeshletsCounter, rasterContext.pOccludedInstancesCounter, rasterContext.pVisibleMeshletsCounter })
+	.Write(outResult.pDebugData, outResult.pDebugData != nullptr)
 	.Bind([=](CommandContext& context)
 		{
 			context.SetComputeRootSignature(m_pCommonRS);
 			context.SetPipelineState(m_pClearUAVsPSO);
+
+			if (outResult.pDebugData)
+				context.ClearUAVu(outResult.pDebugData->Get());
 
 			context.BindResources(2, {
 				rasterContext.pCandidateMeshletsCounter->Get()->GetUAV(),

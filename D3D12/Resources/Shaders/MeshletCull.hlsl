@@ -37,6 +37,10 @@
 #define DEPTH_ONLY 0
 #endif
 
+#ifndef ENABLE_DEBUG_DATA
+#define ENABLE_DEBUG_DATA 0
+#endif
+
 #define NUM_MESHLET_THREADS 32
 #define NUM_CULL_INSTANCES_THREADS 64
 
@@ -62,6 +66,7 @@ RWStructuredBuffer<MeshletCandidate> uVisibleMeshlets :				register(u4);
 RWBuffer<uint> uCounter_VisibleMeshlets : 							register(u5);
 
 RWStructuredBuffer<D3D12_DISPATCH_ARGUMENTS> uDispatchArguments : 	register(u0);
+RWTexture2D<uint> uDebugData : 										register(u0);
 
 StructuredBuffer<uint> tPhaseTwoInstances : 						register(t0);
 Buffer<uint> tCounter_CandidateMeshlets : 							register(t1);
@@ -341,6 +346,10 @@ void PSMain(
 #if !DEPTH_ONLY
 	visBufferData.MeshletCandidateIndex = primitiveData.CandidateIndex;
 	visBufferData.PrimitiveID = primitiveData.PrimitiveID;
+#endif
+
+#if ENABLE_DEBUG_DATA
+	InterlockedAdd(uDebugData[(uint2)vertexData.Position.xy], 1);
 #endif
 }
 
