@@ -5,7 +5,7 @@
 #include "D3D12.hlsli"
 
 #define COUNTER_PHASE1_VISIBLE_MESHLETS 0
-#define COUNTER_PHASE2_VISIBLE_MESHLETS 3
+#define COUNTER_PHASE2_VISIBLE_MESHLETS 1
 
 struct BinningParameters
 {
@@ -105,11 +105,28 @@ void WriteBinsCS(uint threadID : SV_DispatchThreadID)
 	if(meshletIndex >= GetNumMeshlets())
 		return;
 
-	uint binIndex = GetBin(meshletIndex);
+	uint bin = GetBin(meshletIndex);
 
-	uint offset = uMeshletOffsetAndCounts[binIndex].w;
+	uint offset = uMeshletOffsetAndCounts[bin].w;
 	uint meshletOffset;
-	InterlockedAdd(uMeshletOffsetAndCounts[binIndex].x, 1, meshletOffset);
+
+	bool finished = false;
+	while(WaveActiveAnyTrue(!finished))
+	{
+		if(!finished)
+		{
+			const uint firstBin = WaveReadLaneFirst(bin);
+			if(firstBin == bin)
+			{
+				uint originalValue;
+				uint count = WaveActiveCountBits(true);
+				if(WaveIsFirstLane())
+					InterlockedAdd(uMeshletOffsetAndCounts[firstBin].x, count, originalValue);
+				meshletOffset = WaveReadLaneFirst(originalValue) + WavePrefixCountBits(true);
+				finished = true;
+			}
+		}
+	}
 
 	if(cBinningParams.IsSecondPhase)
 	{

@@ -44,7 +44,7 @@
 #define COUNTER_PHASE1_CANDIDATE_MESHLETS 1
 #define COUNTER_PHASE2_CANDIDATE_MESHLETS 2
 #define COUNTER_PHASE1_VISIBLE_MESHLETS 0
-#define COUNTER_PHASE2_VISIBLE_MESHLETS 3
+#define COUNTER_PHASE2_VISIBLE_MESHLETS 1
 
 #if OCCLUSION_FIRST_PASS
 static const int MeshletCounterIndex = COUNTER_PHASE1_CANDIDATE_MESHLETS;
@@ -87,12 +87,7 @@ void ClearUAVs()
 	uCounter_CandidateMeshlets[2] = 0;
 
 	uCounter_VisibleMeshlets[0] = 0;
-	uCounter_VisibleMeshlets[1] = 1;
-	uCounter_VisibleMeshlets[2] = 1;
-
-	uCounter_VisibleMeshlets[3] = 0;
-	uCounter_VisibleMeshlets[4] = 1;
-	uCounter_VisibleMeshlets[5] = 1;
+	uCounter_VisibleMeshlets[1] = 0;
 
 	uCounter_PhaseTwoInstances[0] = 0;
 }

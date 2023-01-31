@@ -21,6 +21,9 @@ namespace Tweakables
 
 GPUDrivenRenderer::GPUDrivenRenderer(GraphicsDevice* pDevice)
 {
+	if (!pDevice->GetCapabilities().SupportsMeshShading())
+		return;
+
 	m_pCommonRS = new RootSignature(pDevice);
 	m_pCommonRS->AddRootConstants(0, 8);
 	m_pCommonRS->AddConstantBufferView(100);
@@ -100,8 +103,8 @@ RasterContext::RasterContext(RGGraph& graph, const std::string contextString, RG
 	// 0: Num Total | 1: Num Phase 1 | 2: Num Phase 2
 	pCandidateMeshletsCounter = graph.Create("GPURender.CandidateMeshlets.Counter", BufferDesc::CreateTyped(3, ResourceFormat::R32_UINT));
 	pVisibleMeshlets = graph.Create("GPURender.VisibleMeshlets", meshletCandidateDesc);
-	// Also used as dispatch arguments (Num Phase 1, 1, 1) | (Num Phase 2, 1, 1)
-	pVisibleMeshletsCounter = graph.Create("GPURender.VisibleMeshlets.Counter", BufferDesc::CreateTyped(6, ResourceFormat::R32_UINT, BufferFlag::IndirectArguments | BufferFlag::ShaderResource | BufferFlag::UnorderedAccess));
+	// 0: Num Phase 1 | 1: Num Phase 2
+	pVisibleMeshletsCounter = graph.Create("GPURender.VisibleMeshlets.Counter", BufferDesc::CreateTyped(2, ResourceFormat::R32_UINT));
 
 	pOccludedInstances = graph.Create("GPURender.OccludedInstances", BufferDesc::CreateStructured(maxNumInstances, sizeof(uint32)));
 	pOccludedInstancesCounter = graph.Create("GPURender.OccludedInstances.Counter", BufferDesc::CreateTyped(1, ResourceFormat::R32_UINT));
@@ -317,7 +320,7 @@ void GPUDrivenRenderer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 			});
 
 	if (rasterContext.Type == RasterType::VisibilityBuffer)
-		drawPass.RenderTarget(outResult.pVisibilityBuffer, isFirstPhase ? RenderTargetLoadAction::Clear : RenderTargetLoadAction::Load);
+		drawPass.RenderTarget(outResult.pVisibilityBuffer, isFirstPhase ? RenderTargetLoadAction::DontCare : RenderTargetLoadAction::Load);
 
 	BuildHZB(graph, rasterContext.pDepth, outResult.pHZB);
 }
