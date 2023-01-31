@@ -49,13 +49,9 @@
 #if OCCLUSION_FIRST_PASS
 static const int MeshletCounterIndex = COUNTER_PHASE1_CANDIDATE_MESHLETS;
 static const int VisibleMeshletCounter = COUNTER_PHASE1_VISIBLE_MESHLETS;
-static const bool IsPhase1 = true;
-static const bool IsPhase2 = false;
 #else
 static const int MeshletCounterIndex = COUNTER_PHASE2_CANDIDATE_MESHLETS;
 static const int VisibleMeshletCounter = COUNTER_PHASE2_VISIBLE_MESHLETS;
-static const bool IsPhase1 = false;
-static const bool IsPhase2 = true;
 #endif
 
 RWStructuredBuffer<MeshletCandidate> uCandidateMeshlets : 			register(u0);
@@ -169,7 +165,7 @@ void CullInstancesCS(uint threadID : SV_DispatchThreadID)
 		uint elementOffset;
 		InterlockedAdd_Varying_WaveOps(uCounter_CandidateMeshlets, MeshletCounterIndex, numMeshletsToAdd, elementOffset);
 
-		uint meshletCandidateOffset = GetCandidateMeshletOffset(IsPhase2);
+		uint meshletCandidateOffset = GetCandidateMeshletOffset(!OCCLUSION_FIRST_PASS);
 		for(uint i = 0; i < numMeshletsToAdd; ++i)
 		{
 			MeshletCandidate meshlet;
@@ -210,7 +206,7 @@ void CullMeshletsCS(uint threadID : SV_DispatchThreadID)
 {
 	if(threadID < uCounter_CandidateMeshlets[MeshletCounterIndex])
 	{
-		uint candidateIndex = GetCandidateMeshletOffset(IsPhase2) + threadID;
+		uint candidateIndex = GetCandidateMeshletOffset(!OCCLUSION_FIRST_PASS) + threadID;
 		MeshletCandidate candidate = uCandidateMeshlets[candidateIndex];
 		InstanceData instance = GetInstance(candidate.InstanceID);
 		MeshData mesh = GetMesh(instance.MeshIndex);
@@ -298,6 +294,7 @@ void MSMain(
 	out primitives PrimitiveAttribute primitives[MESHLET_MAX_TRIANGLES])
 {
 	uint meshletIndex = groupID;
+	// Find actual meshlet index by offsetting based on classification data
 	meshletIndex += tMeshletBinData[cRasterParams.BinIndex].w;
 	meshletIndex = tBinnedMeshlets[meshletIndex];
 

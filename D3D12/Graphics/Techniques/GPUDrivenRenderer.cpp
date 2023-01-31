@@ -37,48 +37,36 @@ GPUDrivenRenderer::GPUDrivenRenderer(GraphicsDevice* pDevice)
 
 	PipelineStateInitializer psoDesc;
 	psoDesc.SetRootSignature(m_pCommonRS);
-	psoDesc.SetPixelShader("MeshletCull.hlsl", "PSMain", *defines);
 	psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
 	psoDesc.SetRenderTargetFormats(ResourceFormat::R32_UINT, GraphicsCommon::DepthStencilFormat, 1);
 	psoDesc.SetName("Visibility Rendering");
 
-	defines.Set("OCCLUSION_FIRST_PASS", true);
+	// Permutation without alpha masking
 	defines.Set("ALPHA_MASK", false);
-	psoDesc.SetCullMode(D3D12_CULL_MODE_BACK);
 	psoDesc.SetMeshShader("MeshletCull.hlsl", "MSMain", *defines);
 	psoDesc.SetPixelShader("MeshletCull.hlsl", "PSMain", *defines);
 	m_pDrawMeshletsPSO[0] =			pDevice->CreatePipeline(psoDesc);
+	// Permutation with alpha masking
 	defines.Set("ALPHA_MASK", true);
 	psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
-	psoDesc.SetMeshShader("MeshletCull.hlsl", "MSMain", *defines);
-	psoDesc.SetPixelShader("MeshletCull.hlsl", "PSMain", *defines);
-	m_pDrawMeshletsPSO[2] =			pDevice->CreatePipeline(psoDesc);
-	m_pBuildMeshletCullArgsPSO[0] = pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "BuildMeshletCullIndirectArgs", *defines);
-	m_pCullInstancesPSO[0] =		pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "CullInstancesCS", *defines);
-	m_pCullMeshletsPSO[0] =			pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "CullMeshletsCS", *defines);
-	m_pMeshletBinPrepareArgs[0] =	pDevice->CreateComputePipeline(m_pCommonRS, "MeshletBinning.hlsl", "PrepareArgsCS", *defines);
-	m_pMeshletClassify[0] =			pDevice->CreateComputePipeline(m_pCommonRS, "MeshletBinning.hlsl", "ClassifyMeshletsCS", *defines);
-	m_pMeshletWriteBins[0] =		pDevice->CreateComputePipeline(m_pCommonRS, "MeshletBinning.hlsl", "WriteBinsCS", *defines);
-
-	defines.Set("OCCLUSION_FIRST_PASS", false);
-	defines.Set("ALPHA_MASK", false);
-	psoDesc.SetCullMode(D3D12_CULL_MODE_BACK);
 	psoDesc.SetMeshShader("MeshletCull.hlsl", "MSMain", *defines);
 	psoDesc.SetPixelShader("MeshletCull.hlsl", "PSMain", *defines);
 	m_pDrawMeshletsPSO[1] =			pDevice->CreatePipeline(psoDesc);
-	defines.Set("ALPHA_MASK", true);
-	psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
-	psoDesc.SetMeshShader("MeshletCull.hlsl", "MSMain", *defines);
-	psoDesc.SetPixelShader("MeshletCull.hlsl", "PSMain", *defines);
-	m_pDrawMeshletsPSO[3] =			pDevice->CreatePipeline(psoDesc);
+
+	defines.Set("OCCLUSION_FIRST_PASS", true);
+	m_pBuildMeshletCullArgsPSO[0] = pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "BuildMeshletCullIndirectArgs", *defines);
+	m_pCullInstancesPSO[0] =		pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "CullInstancesCS", *defines);
+	m_pCullMeshletsPSO[0] =			pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "CullMeshletsCS", *defines);
+
+	defines.Set("OCCLUSION_FIRST_PASS", false);
 	m_pBuildMeshletCullArgsPSO[1] = pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "BuildMeshletCullIndirectArgs", *defines);
 	m_pCullInstancesPSO[1] =		pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "CullInstancesCS", *defines);
 	m_pCullMeshletsPSO[1] =			pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "CullMeshletsCS", *defines);
-	m_pMeshletBinPrepareArgs[1] =	pDevice->CreateComputePipeline(m_pCommonRS, "MeshletBinning.hlsl", "PrepareArgsCS", *defines);
-	m_pMeshletClassify[1] =			pDevice->CreateComputePipeline(m_pCommonRS, "MeshletBinning.hlsl", "ClassifyMeshletsCS", *defines);
-	m_pMeshletWriteBins[1] =		pDevice->CreateComputePipeline(m_pCommonRS, "MeshletBinning.hlsl", "WriteBinsCS", *defines);
 
+	m_pMeshletBinPrepareArgs =		pDevice->CreateComputePipeline(m_pCommonRS, "MeshletBinning.hlsl", "PrepareArgsCS", *defines);
 	m_pMeshletAllocateBinRanges =	pDevice->CreateComputePipeline(m_pCommonRS, "MeshletBinning.hlsl", "AllocateBinRangesCS");
+	m_pMeshletClassify =			pDevice->CreateComputePipeline(m_pCommonRS, "MeshletBinning.hlsl", "ClassifyMeshletsCS", *defines);
+	m_pMeshletWriteBins =			pDevice->CreateComputePipeline(m_pCommonRS, "MeshletBinning.hlsl", "WriteBinsCS", *defines);
 
 	m_pPrintStatsPSO =				pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "PrintStatsCS", *defines);
 
@@ -212,20 +200,23 @@ void GPUDrivenRenderer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 	RGBuffer* pGlobalCount = graph.Create("Global Count", BufferDesc::CreateTyped(1, ResourceFormat::R32_UINT));
 	RGBuffer* pClassifyArgs = graph.Create("GPURender.ClassificationArgs", BufferDesc::CreateIndirectArguments<D3D12_DISPATCH_ARGUMENTS>(1));
 
+	struct ClassifyParams
+	{
+		uint32 NumBins;
+		uint32 IsSecondPhase;
+	} classifyParams;
+	classifyParams.NumBins = numBins;
+	classifyParams.IsSecondPhase = !isFirstPhase;
+
 	graph.AddPass("Clear UAVs", RGPassFlag::Compute)
 		.Write({ pMeshletCounts, pGlobalCount, pClassifyArgs })
 		.Read(rasterContext.pVisibleMeshletsCounter)
 		.Bind([=](CommandContext& context)
 			{
 				context.SetComputeRootSignature(m_pCommonRS);
-				context.SetPipelineState(m_pMeshletBinPrepareArgs[isFirstPhase ? 0 : 1]);
+				context.SetPipelineState(m_pMeshletBinPrepareArgs);
 
-				struct
-				{
-					uint32 NumBins;
-				} params;
-				params.NumBins = numBins;
-				context.SetRootConstants(0, params);
+				context.SetRootConstants(0, classifyParams);
 				context.BindResources(2, {
 					pMeshletCounts->Get()->GetUAV(),
 					pGlobalCount->Get()->GetUAV(),
@@ -245,7 +236,9 @@ void GPUDrivenRenderer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 		.Bind([=](CommandContext& context)
 			{
 				context.SetComputeRootSignature(m_pCommonRS);
-				context.SetPipelineState(m_pMeshletClassify[isFirstPhase ? 0 : 1]);
+				context.SetPipelineState(m_pMeshletClassify);
+
+				context.SetRootConstants(0, classifyParams);
 				context.BindResources(2, pMeshletCounts->Get()->GetUAV());
 				context.BindResources(3, {
 					rasterContext.pVisibleMeshlets->Get()->GetSRV(),
@@ -264,12 +257,7 @@ void GPUDrivenRenderer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 				context.SetComputeRootSignature(m_pCommonRS);
 				context.SetPipelineState(m_pMeshletAllocateBinRanges);
 
-				struct
-				{
-					uint32 NumBins;
-				} params;
-				params.NumBins = numBins;
-				context.SetRootConstants(0, params);
+				context.SetRootConstants(0, classifyParams);
 				context.BindResources(2, {
 					pMeshletOffsetAndCounts->Get()->GetUAV(),
 					pGlobalCount->Get()->GetUAV(),
@@ -288,8 +276,9 @@ void GPUDrivenRenderer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 		.Bind([=](CommandContext& context)
 			{
 				context.SetComputeRootSignature(m_pCommonRS);
-				context.SetPipelineState(m_pMeshletWriteBins[isFirstPhase ? 0 : 1]);
+				context.SetPipelineState(m_pMeshletWriteBins);
 
+				context.SetRootConstants(0, classifyParams);
 				context.BindResources(2, {
 					pMeshletOffsetAndCounts->Get()->GetUAV(),
 					pBinnedMeshlets->Get()->GetUAV(),
@@ -322,8 +311,7 @@ void GPUDrivenRenderer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 					} params;
 					params.BinIndex = binIndex;
 					context.SetRootConstants(0, params);
-					uint32 psoOffset = (isFirstPhase ? 0 : 1) + (binIndex == 1 ? 2 : 0);
-					context.SetPipelineState(m_pDrawMeshletsPSO[psoOffset]);
+					context.SetPipelineState(m_pDrawMeshletsPSO[binIndex]);
 					context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchMeshSignature, 1, pMeshletOffsetAndCounts->Get(), nullptr, sizeof(Vector4u) * binIndex);
 				}
 			});
