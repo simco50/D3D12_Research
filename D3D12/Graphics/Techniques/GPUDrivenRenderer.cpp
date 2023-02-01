@@ -54,15 +54,15 @@ GPUDrivenRenderer::GPUDrivenRenderer(GraphicsDevice* pDevice)
 	psoDesc.SetPixelShader("MeshletCull.hlsl", "PSMain", *defines);
 	m_pDrawMeshletsDebugModePSO[0] =pDevice->CreatePipeline(psoDesc);
 	// Permutation with alpha masking
-	defines.Set("ALPHA_MASK", false);
 	defines.Set("ALPHA_MASK", true);
+	defines.Set("ENABLE_DEBUG_DATA", false);
 	psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
 	psoDesc.SetMeshShader("MeshletCull.hlsl", "MSMain", *defines);
 	psoDesc.SetPixelShader("MeshletCull.hlsl", "PSMain", *defines);
 	m_pDrawMeshletsPSO[1] =			pDevice->CreatePipeline(psoDesc);
 	defines.Set("ENABLE_DEBUG_DATA", true);
 	psoDesc.SetPixelShader("MeshletCull.hlsl", "PSMain", *defines);
-	m_pDrawMeshletsDebugModePSO[1] =pDevice->CreatePipeline(psoDesc);
+	m_pDrawMeshletsDebugModePSO[1] = pDevice->CreatePipeline(psoDesc);
 
 	defines.Set("OCCLUSION_FIRST_PASS", true);
 	m_pBuildMeshletCullArgsPSO[0] = pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "BuildMeshletCullIndirectArgs", *defines);
