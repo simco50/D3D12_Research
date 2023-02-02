@@ -153,9 +153,9 @@ void InjectFogLightingCS(uint3 threadId : SV_DispatchThreadID)
 	totalLighting += (SampleDDGIIrradiance(worldPosition, -V, -V) / PI);
 
 	float blendFactor = 0.05f;
-	if(any(reprojUV < 0.05f) || any(reprojUV > 0.95f))
+	if(any(reprojUV < 0.0f) || any(reprojUV > 1.0f))
 	{
-		blendFactor = 1.0f;
+		blendFactor = 0.25f;
 	}
 
 	float4 newScattering = float4(inScattering * totalLighting, cellDensity);

@@ -186,14 +186,24 @@ void VisualizeTexture::RenderUI(const ImVec2& viewportOrigin, const ImVec2& view
 			{
 				Group group;
 
-				ImGui::BeginDisabled(desc.Dimensions != TextureDimension::TextureCube && desc.Dimensions != TextureDimension::TextureCubeArray);
+				ImGui::BeginDisabled(desc.Dimensions != TextureDimension::TextureCube && desc.Dimensions != TextureDimension::TextureCubeArray && desc.Dimensions != TextureDimension::Texture3D);
 				ImGui::SameLine();
 				ImGui::AlignTextToFramePadding();
-				ImGui::Text("Slice/Face");
-				ImGui::SameLine();
-				constexpr const char* faceNames[] = { "Right", "Left", "Top", "Bottom", "Back", "Front" };
-				ImGui::SetNextItemWidth(100);
-				ImGui::Combo("##SliceFace", &CubeFaceIndex, faceNames, ARRAYSIZE(faceNames));
+				if (desc.Dimensions == TextureDimension::Texture3D)
+				{
+					ImGui::Text("Slice");
+					ImGui::SameLine();
+					ImGui::SetNextItemWidth(100);
+					ImGui::SliderFloat("##SliceNr", &Slice, 0, (float)desc.DepthOrArraySize - 1, "%.2f");
+				}
+				else
+				{
+					ImGui::Text("Face");
+					ImGui::SameLine();
+					constexpr const char* faceNames[] = { "Right", "Left", "Top", "Bottom", "Back", "Front" };
+					ImGui::SetNextItemWidth(100);
+					ImGui::Combo("##SliceFace", &CubeFaceIndex, faceNames, ARRAYSIZE(faceNames));
+				}
 				ImGui::EndDisabled();
 			}
 

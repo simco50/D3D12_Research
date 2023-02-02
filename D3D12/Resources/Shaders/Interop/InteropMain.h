@@ -103,14 +103,14 @@ struct Light
 struct DDGIVolume
 {
 	float3 BoundsMin;
-	uint DepthIndex;
+	uint NumRaysPerProbe;
 	float3 ProbeSize;
-	uint IrradianceIndex;
+	uint MaxRaysPerProbe;
 	uint3 ProbeVolumeDimensions;
+	uint IrradianceIndex;
+	uint DepthIndex;
 	uint ProbeOffsetIndex;
 	uint ProbeStatesIndex;
-	uint NumRaysPerProbe;
-	uint MaxRaysPerProbe;
 };
 
 struct ViewUniforms
