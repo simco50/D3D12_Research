@@ -33,6 +33,8 @@ workspace (ENGINE_NAME)
 	disablewarnings {"4100"}
 	-- unreferenced function with internal linkage has been removed
 	disablewarnings {"4505"}
+	-- nonstandard extension used: nameless struct/union
+	disablewarnings {"4201"}
 	
 	filter "configurations:Debug"
 		runtime "Debug"

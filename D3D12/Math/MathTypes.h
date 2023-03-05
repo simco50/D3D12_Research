@@ -14,9 +14,6 @@ using Quaternion = DirectX::SimpleMath::Quaternion;
 using Color = DirectX::SimpleMath::Color;
 using Ray = DirectX::SimpleMath::Ray;
 
-#pragma warning(push)
-#pragma warning(disable: 4201) // nonstandard extension used: nameless struct/union
-
 template<typename T>
 struct TVector2
 {
@@ -208,5 +205,3 @@ using Vector4i = TVector4<int32>;
 using Vector2u = TVector2<uint32>;
 using Vector3u = TVector3<uint32>;
 using Vector4u = TVector4<uint32>;
-
-#pragma warning(pop)
