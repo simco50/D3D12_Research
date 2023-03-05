@@ -306,7 +306,7 @@ void GPUDrivenRenderer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 
 	RGPass& drawPass = graph.AddPass("Rasterize", RGPassFlag::Raster)
 		.Read({ rasterContext.pVisibleMeshlets, pMeshletOffsetAndCounts, pBinnedMeshlets })
-		.Write(outResult.pDebugData, outResult.pDebugData != nullptr)
+		.Write(outResult.pDebugData)
 		.DepthStencil(rasterContext.pDepth, isFirstPhase ? RenderTargetLoadAction::Clear : RenderTargetLoadAction::Load, true)
 		.Bind([=](CommandContext& context)
 			{
@@ -336,6 +336,8 @@ void GPUDrivenRenderer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 
 	if (rasterContext.Type == RasterType::VisibilityBuffer)
 		drawPass.RenderTarget(outResult.pVisibilityBuffer, isFirstPhase ? RenderTargetLoadAction::DontCare : RenderTargetLoadAction::Load);
+	if (outResult.pDebugData)
+		drawPass.Write(outResult.pDebugData);
 
 	BuildHZB(graph, rasterContext.pDepth, outResult.pHZB);
 }
@@ -367,28 +369,29 @@ void GPUDrivenRenderer::Render(RGGraph& graph, const SceneView* pView, const Ras
 	check(numMeshlets <= maxNumMeshlets);
 #endif
 
-	graph.AddPass("Clear UAVs", RGPassFlag::Compute)
-	.Write({ rasterContext.pCandidateMeshletsCounter, rasterContext.pOccludedInstancesCounter, rasterContext.pVisibleMeshletsCounter })
-	.Write(outResult.pDebugData, outResult.pDebugData != nullptr)
-	.Bind([=](CommandContext& context)
-		{
-			context.SetComputeRootSignature(m_pCommonRS);
-			context.SetPipelineState(m_pClearUAVsPSO);
+	RGPass& clearPass = graph.AddPass("Clear UAVs", RGPassFlag::Compute)
+		.Write({ rasterContext.pCandidateMeshletsCounter, rasterContext.pOccludedInstancesCounter, rasterContext.pVisibleMeshletsCounter })
+		.Bind([=](CommandContext& context)
+			{
+				context.SetComputeRootSignature(m_pCommonRS);
+				context.SetPipelineState(m_pClearUAVsPSO);
 
-			if (outResult.pDebugData)
-				context.ClearUAVu(outResult.pDebugData->Get());
+				if (outResult.pDebugData)
+					context.ClearUAVu(outResult.pDebugData->Get());
 
-			context.BindResources(2, {
-				rasterContext.pCandidateMeshletsCounter->Get()->GetUAV(),
-				rasterContext.pCandidateMeshletsCounter->Get()->GetUAV(),
-				rasterContext.pOccludedInstancesCounter->Get()->GetUAV(),
-				rasterContext.pOccludedInstancesCounter->Get()->GetUAV(),
-				rasterContext.pVisibleMeshletsCounter->Get()->GetUAV(),
-				rasterContext.pVisibleMeshletsCounter->Get()->GetUAV(),
-				});
-			context.Dispatch(1);
-			context.InsertUavBarrier();
-		});
+				context.BindResources(2, {
+					rasterContext.pCandidateMeshletsCounter->Get()->GetUAV(),
+					rasterContext.pCandidateMeshletsCounter->Get()->GetUAV(),
+					rasterContext.pOccludedInstancesCounter->Get()->GetUAV(),
+					rasterContext.pOccludedInstancesCounter->Get()->GetUAV(),
+					rasterContext.pVisibleMeshletsCounter->Get()->GetUAV(),
+					rasterContext.pVisibleMeshletsCounter->Get()->GetUAV(),
+					});
+				context.Dispatch(1);
+				context.InsertUavBarrier();
+			});
+	if (outResult.pDebugData)
+		clearPass.Write(outResult.pDebugData);
 
 	{
 		RG_GRAPH_SCOPE("Phase 1", graph);
