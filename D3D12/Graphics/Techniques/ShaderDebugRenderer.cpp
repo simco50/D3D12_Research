@@ -49,19 +49,19 @@ ShaderDebugRenderer::ShaderDebugRenderer(GraphicsDevice* pDevice, const FontCrea
 	{
 		uint32 Counters[4];
 
-		struct CharacterInstance
+		struct PackedCharacterInstance
 		{
-			Vector2 Position;
+			uint32 Position;
 			uint32 Character;
 			uint32 Color;
 		} Characters[1024];
 
-		struct LineInstance
+		struct PackedLineInstance
 		{
 			Vector3 A;
+			uint32 ColorA;
 			Vector3 B;
-			uint32 Color;
-			uint32 ScreenSpace;
+			uint32 ColorB;
 		} Lines[8192];
 	};
 

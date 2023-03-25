@@ -44,13 +44,13 @@ void RenderGlyphVS(
 	uint instanceID : SV_InstanceID,
 	out float4 position : SV_Position,
 	out float2 uv : TEXCOORD,
-	out uint color : COLOR
+	out float4 color : COLOR
 	)
 {
 	uv = float2(vertexID % 2, vertexID / 2);
 
-	uint offset = instanceID * sizeof(CharacterInstance);
-	CharacterInstance instance = tRenderData.Load<CharacterInstance>(TEXT_INSTANCES_OFFSET + offset);
+	uint offset = instanceID * sizeof(PackedCharacterInstance);
+	CharacterInstance instance = UnpackCharacterInstance(tRenderData.Load<PackedCharacterInstance>(TEXT_INSTANCES_OFFSET + offset));
 
 	Glyph glyph = tGlyphData[instance.Character];
 
@@ -67,11 +67,11 @@ void RenderGlyphVS(
 float4 RenderGlyphPS(
 	float4 position : SV_Position,
 	float2 uv : TEXCOORD,
-	uint color : COLOR
+	float4 color : COLOR
 	) : SV_Target
 {
 	float alpha = tFontAtlas.SampleLevel(sLinearClamp, uv, 0);
-	float4 c = alpha * Unpack_RGBA8_UNORM(color);
+	float4 c = alpha * color;
 	return float4(c.rgb, alpha);
 }
 
@@ -82,9 +82,10 @@ void RenderLineVS(
 	out float4 color : COLOR
 	)
 {
-	uint offset = instanceID * sizeof(LineInstance);
-	LineInstance instance =  tRenderData.Load<LineInstance>(LINE_INSTANCES_OFFSET + offset);
+	uint offset = instanceID * sizeof(PackedLineInstance);
+	LineInstance instance = UnpackLineInstance(tRenderData.Load<PackedLineInstance>(LINE_INSTANCES_OFFSET + offset));
 
+	color = vertexID == 0 ? instance.ColorA : instance.ColorB;
 	float3 wPos = vertexID == 0 ? instance.A : instance.B;
 	if(instance.ScreenSpace)
 	{
@@ -95,7 +96,6 @@ void RenderLineVS(
 	{
 		position = mul(float4(wPos, 1), cView.ViewProjection);
 	}
-	color = Unpack_RGBA8_UNORM(instance.Color);
 }
 
 float4 RenderLinePS(
