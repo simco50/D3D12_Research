@@ -55,5 +55,7 @@ namespace Paths
 
 	std::string WorkingDirectory();
 
+	void GetFileTime(const char* pFilePath, uint64& creationTime, uint64& lastAccessTime, uint64& modificationTime);
+
 	bool CreateDirectoryTree(const std::string& path);
 };

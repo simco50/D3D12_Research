@@ -6,6 +6,8 @@
 #include "dxc/dxcapi.h"
 #include "dxc/d3d12shader.h"
 #include "D3D.h"
+#include "Core/Serializer.h"
+#include "Graphics/Profiler.h"
 
 namespace ShaderCompiler
 {
@@ -66,32 +68,119 @@ namespace ShaderCompiler
 		E_LOG(Info, "Loaded %s", pCompilerPath);
 	}
 
-	bool TryLoadFile(const char* pFilePath, const std::vector<std::string>& includeDirs, RefCountPtr<IDxcBlobEncoding>& file, std::string* pFullPath)
+	bool ResolveFilePath(const CompileJob& job, std::string& outPath)
 	{
-		for (const std::string& includeDir : includeDirs)
+		for (const std::string& includeDir : job.IncludeDirs)
 		{
-			std::string path = Paths::Combine(includeDir, pFilePath);
-			if (Paths::FileExists(path.c_str()))
+			outPath = Paths::Combine(includeDir, job.FilePath);
+			if (Paths::FileExists(outPath.c_str()))
 			{
-				if (SUCCEEDED(pUtils->LoadFile(MULTIBYTE_TO_UNICODE(path.c_str()), nullptr, file.GetAddressOf())))
-				{
-					*pFullPath = path;
-					break;
-				}
+				return true;
 			}
 		}
-		return file.Get();
-	};
+		outPath = "";
+		return false;
+	}
 
-	CompileResult Compile(const CompileJob& compileJob)
+	std::string GetCachePath(const CompileJob& compileJob)
+	{
+		std::string defineKey;
+		for (const ShaderDefine& define : compileJob.Defines)
+		{
+			defineKey += define.Value;
+		}
+		StringHash hash(defineKey.c_str());
+		
+		std::string path = Sprintf(
+			"%s%s_%s_%u.bin",
+			Paths::ShaderCacheDir().c_str(),
+			Paths::GetFileNameWithoutExtension(compileJob.FilePath).c_str(),
+			compileJob.EntryPoint.c_str(),
+			hash.m_Hash
+		);
+		return path;
+	}
+
+	bool TryLoadFromCache(CompileJob& compileJob, CompileResult& result)
+	{
+		// See if the cache file exists
+		std::string path = GetCachePath(compileJob);
+		if (!Paths::FileExists(path.c_str()))
+			return false;
+
+		std::string shaderFullPath;
+		if(!ResolveFilePath(compileJob, shaderFullPath))
+			return false;
+
+		// Check if the shader source is not newer than the cached file
+		uint64 cacheTime, temp;
+		Paths::GetFileTime(path.c_str(), temp, temp, cacheTime);
+
+		auto TestFileTime = [&](const char* pFilePath) {
+			uint64 shaderTime;
+			Paths::GetFileTime(pFilePath, temp, temp, shaderTime);
+			return cacheTime >= shaderTime;
+		};
+
+		if (!TestFileTime(shaderFullPath.c_str()))
+			return false;
+		
+		Serializer s;
+		s.Open(path.c_str(), Serializer::Mode::Read);
+		s.Serialize(result.Includes);
+
+		// Test if includes sources are not newer than the cached file
+		for (std::string& include : result.Includes)
+		{
+			if (!TestFileTime(include.c_str()))
+				return false;
+		}
+
+		uint32 size = 0;
+		void* pData = nullptr;
+		s.Serialize(pData, size);
+		pUtils->CreateBlob(pData, size, DXC_CP_ACP, (IDxcBlobEncoding**)result.pBlob.GetAddressOf());
+		delete[] pData;
+
+		return true;
+	}
+
+	bool SaveToCache(CompileJob& compileJob, CompileResult& result)
+	{
+		std::string path = GetCachePath(compileJob);
+		Paths::CreateDirectoryTree(path);
+
+		Serializer s;
+		s.Open(path.c_str(), Serializer::Mode::Write);
+		s.Serialize(result.Includes);
+		void* pBlob = result.pBlob->GetBufferPointer();
+		uint32 size = (uint32)result.pBlob->GetBufferSize();
+		s.Serialize(pBlob, size);
+		return true;
+	}
+
+	CompileResult Compile(CompileJob& compileJob)
 	{
 		CompileResult result;
 
+		if (TryLoadFromCache(compileJob, result))
+		{
+			E_LOG(Info, "Loaded shader '%s.%s' from cache.", compileJob.FilePath.c_str(), compileJob.EntryPoint.c_str());
+			return result;
+		}
+
+		TimeScope timer;
 		RefCountPtr<IDxcBlobEncoding> pSource;
 		std::string fullPath;
-		if (!TryLoadFile(compileJob.FilePath.c_str(), compileJob.IncludeDirs, pSource, &fullPath))
+		if (!ResolveFilePath(compileJob, fullPath))
 		{
 			result.ErrorMessage = Sprintf("Failed to open file '%s'", compileJob.FilePath.c_str());
+			return result;
+		}
+
+		if (!SUCCEEDED(pUtils->LoadFile(MULTIBYTE_TO_UNICODE(fullPath.c_str()), 0, pSource.GetAddressOf())))
+		{
+			result.ErrorMessage = Sprintf("Failed to load file '%s'", fullPath.c_str());
 			return result;
 		}
 
@@ -400,6 +489,9 @@ namespace ShaderCompiler
 			result.Includes.push_back(includePath);
 		}
 
+		check(SaveToCache(compileJob, result));
+		E_LOG(Warning, "Missing cached shader. Compile time: %.1fms ('%s.%s')", timer.Stop() * 1000, compileJob.FilePath.c_str(), compileJob.EntryPoint.c_str());
+
 		return result;
 	}
 }
@@ -433,7 +525,6 @@ void ShaderManager::RecompileFromFileChange(const std::string& filePath)
 					Shader* pNewShader = GetShader(dependency.c_str(), pOldShader->Type, pOldShader->EntryPoint.c_str(), pOldShader->Defines, true);
 					if (pNewShader)
 					{
-						E_LOG(Info, "Reloaded shader: \"%s - %s\"", dependency.c_str(), pNewShader->EntryPoint.c_str());
 						m_OnShaderRecompiledEvent.Broadcast(pOldShader, pNewShader);
 						m_Shaders.remove_if([pOldShader](const std::unique_ptr<Shader>& pS) { return pS.get() == pOldShader; });
 					}
@@ -448,7 +539,6 @@ void ShaderManager::RecompileFromFileChange(const std::string& filePath)
 					ShaderLibrary* pNewLibrary = GetLibrary(dependency.c_str(), pOldLibrary->Defines, true);
 					if (pNewLibrary)
 					{
-						E_LOG(Info, "Reloaded library: \"%s\"", dependency.c_str());
 						m_OnLibraryRecompiledEvent.Broadcast(pOldLibrary, pNewLibrary);
 						m_Libraries.remove_if([pOldLibrary](const std::unique_ptr<ShaderLibrary>& pS) { return pS.get() == pOldLibrary; });
 					}

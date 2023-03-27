@@ -213,7 +213,8 @@ void CommandContext::Dispatch(uint32 groupCountX, uint32 groupCountY, uint32 gro
 		groupCountZ <= D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION,
 		"Dispatch group size (%d x %d x %d) can not exceed %d", groupCountX, groupCountY, groupCountZ, D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION);
 	PrepareDraw();
-	m_pCommandList->Dispatch(groupCountX, groupCountY, groupCountZ);
+	if(groupCountX > 0 && groupCountY > 0 && groupCountZ > 0)
+		m_pCommandList->Dispatch(groupCountX, groupCountY, groupCountZ);
 }
 
 void CommandContext::Dispatch(const Vector3i& groupCounts)

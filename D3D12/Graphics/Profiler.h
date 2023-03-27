@@ -27,6 +27,26 @@ class GraphicsDevice;
 #define PROFILE_SCOPE(name)
 #endif
 
+class TimeScope
+{
+public:
+	TimeScope()
+	{
+		QueryPerformanceFrequency(&m_Frequency);
+		QueryPerformanceCounter(&m_StartTime);
+	}
+
+	float Stop()
+	{
+		LARGE_INTEGER endTime;
+		QueryPerformanceCounter(&endTime);
+		return (float)((double)endTime.QuadPart - m_StartTime.QuadPart) / m_Frequency.QuadPart;
+	}
+
+private:
+	LARGE_INTEGER m_StartTime, m_Frequency;
+};
+
 template<typename T, uint32 SIZE>
 class TimeHistory
 {

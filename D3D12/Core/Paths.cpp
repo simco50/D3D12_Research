@@ -217,6 +217,17 @@ namespace Paths
 		return path;
 	}
 
+	void GetFileTime(const char* pFilePath, uint64& creationTime, uint64& lastAccessTime, uint64& modificationTime)
+	{
+		HANDLE file = ::CreateFileA(pFilePath, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
+		FILETIME cTime, aTime, mTime;
+		::GetFileTime(file, &cTime, &aTime, &mTime);
+		creationTime = (uint64)(LARGE_INTEGER{ cTime.dwLowDateTime, (long)cTime.dwHighDateTime }.QuadPart * 1e-7);
+		lastAccessTime = (uint64)(LARGE_INTEGER{ aTime.dwLowDateTime, (long)aTime.dwHighDateTime }.QuadPart * 1e-7);
+		modificationTime = (uint64)(LARGE_INTEGER{ mTime.dwLowDateTime, (long)mTime.dwHighDateTime }.QuadPart * 1e-7);
+		CloseHandle(file);
+	}
+
 	bool CreateDirectoryTree(const std::string& path)
 	{
 		size_t slash = path.find('/', 0);

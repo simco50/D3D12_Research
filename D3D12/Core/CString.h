@@ -183,6 +183,7 @@ namespace CString
 
 	inline void ToString(char val, std::string* pOut) { *pOut = Sprintf("%c", val); }
 	inline void ToString(int val, std::string* pOut) { *pOut = Sprintf("%d", val); }
+	inline void ToString(uint32 val, std::string* pOut) { *pOut = Sprintf("%u", val); }
 	inline void ToString(float val, std::string* pOut) { *pOut = Sprintf("%.3f", val); }
 	inline void ToString(double val, std::string* pOut) { *pOut = Sprintf("%.3f", val); }
 	inline void ToString(const char* val, std::string* pOut) { *pOut = val; }
