@@ -1058,9 +1058,9 @@ Shader* GraphicsDevice::GetShader(const char* pShaderPath, ShaderType shaderType
 	return m_pShaderManager->GetShader(pShaderPath, shaderType, pEntryPoint, defines);
 }
 
-ShaderLibrary* GraphicsDevice::GetLibrary(const char* pShaderPath, const Span<ShaderDefine>& defines /*= {}*/)
+Shader* GraphicsDevice::GetLibrary(const char* pShaderPath, const Span<ShaderDefine>& defines /*= {}*/)
 {
-	return m_pShaderManager->GetLibrary(pShaderPath, defines);
+	return m_pShaderManager->GetShader(pShaderPath, ShaderType::MAX, nullptr, defines);
 }
 
 GraphicsDevice::DeferredDeleteQueue::DeferredDeleteQueue(GraphicsDevice* pParent)

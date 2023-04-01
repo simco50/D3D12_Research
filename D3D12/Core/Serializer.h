@@ -52,7 +52,7 @@ public:
 	template<typename T>
 	void Serialize(T& v)
 	{
-		static_assert(std::is_pod<T>::value);
+		static_assert(std::is_trivially_copyable_v<T>);
 		if (m_Mode == Mode::Read)
 		{
 			Read(&v, sizeof(T));

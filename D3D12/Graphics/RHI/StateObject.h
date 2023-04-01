@@ -5,7 +5,7 @@
 class RootSignature;
 class StateObject;
 class ShaderManager;
-struct ShaderLibrary;
+struct Shader;
 
 class StateObjectInitializer
 {
@@ -50,7 +50,7 @@ private:
 		std::vector<ShaderDefine> Defines;
 		std::vector<std::string> Exports;
 	};
-	std::vector<ShaderLibrary*> m_Shaders;
+	std::vector<Shader*> m_Shaders;
 	std::vector<LibraryExports> m_Libraries;
 	std::vector<HitGroupDefinition> m_HitGroups;
 	std::vector<LibraryShaderExport> m_MissShaders;
@@ -72,7 +72,7 @@ public:
 	ID3D12StateObjectProperties* GetStateObjectProperties() const { return m_pStateObjectProperties.Get(); }
 
 private:
-	void OnLibraryReloaded(ShaderLibrary* pOldShaderLibrary, ShaderLibrary* pNewShaderLibrary);
+	void OnLibraryReloaded(Shader* pLibrary);
 
 	bool m_NeedsReload = false;
 	RefCountPtr<ID3D12StateObject> m_pStateObject;

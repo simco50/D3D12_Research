@@ -344,14 +344,14 @@ void PipelineState::ConditionallyReload()
 	}
 }
 
-void PipelineState::OnShaderReloaded(Shader* pOldShader, Shader* pNewShader)
+void PipelineState::OnShaderReloaded(Shader* pShader)
 {
-	for (Shader*& pShader : m_Desc.m_Shaders)
+	for (Shader*& pCurrentShader : m_Desc.m_Shaders)
 	{
-		if (pShader && pShader == pOldShader)
+		if (pCurrentShader && pCurrentShader == pShader)
 		{
-			pShader = pNewShader;
 			m_NeedsReload = true;
+			break;
 		}
 	}
 }

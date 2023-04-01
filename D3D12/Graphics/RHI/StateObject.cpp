@@ -43,7 +43,7 @@ private:
 StateObject::StateObject(GraphicsDevice* pParent)
 	: GraphicsObject(pParent)
 {
-	m_ReloadHandle = pParent->GetShaderManager()->OnLibraryRecompiledEvent().AddRaw(this, &StateObject::OnLibraryReloaded);
+	m_ReloadHandle = pParent->GetShaderManager()->OnShaderRecompiledEvent().AddRaw(this, &StateObject::OnLibraryReloaded);
 }
 
 void StateObject::Create(const StateObjectInitializer& initializer)
@@ -69,14 +69,14 @@ void StateObject::ConditionallyReload()
 	}
 }
 
-void StateObject::OnLibraryReloaded(ShaderLibrary* pOldShaderLibrary, ShaderLibrary* pNewShaderLibrary)
+void StateObject::OnLibraryReloaded(Shader* pLibrary)
 {
-	for (ShaderLibrary*& pLibrary : m_Desc.m_Shaders)
+	for (Shader* pCurrentLibrary : m_Desc.m_Shaders)
 	{
-		if (pLibrary == pOldShaderLibrary)
+		if (pLibrary == pCurrentLibrary)
 		{
-			pLibrary = pNewShaderLibrary;
 			m_NeedsReload = true;
+			break;
 		}
 	}
 }
@@ -132,7 +132,7 @@ void StateObjectInitializer::CreateStateObjectStream(StateObjectStream& stateObj
 	for (const LibraryExports& library : m_Libraries)
 	{
 		D3D12_DXIL_LIBRARY_DESC* pDesc = stateObjectStream.ContentData.Allocate<D3D12_DXIL_LIBRARY_DESC>();
-		ShaderLibrary* pLibrary = pDevice->GetLibrary(library.Path.c_str(), library.Defines);
+		Shader* pLibrary = pDevice->GetLibrary(library.Path.c_str(), library.Defines);
 		m_Shaders.push_back(pLibrary);
 		pDesc->DXILLibrary = CD3DX12_SHADER_BYTECODE(pLibrary->pByteCode->GetBufferPointer(), pLibrary->pByteCode->GetBufferSize());
 		if (library.Exports.size())

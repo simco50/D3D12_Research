@@ -36,10 +36,7 @@ PathTracing::PathTracing(GraphicsDevice* pDevice)
 	desc.pGlobalRootSignature = m_pRS;
 	m_pSO = pDevice->CreateStateObject(desc);
 
-	m_OnShaderCompiledHandle = pDevice->GetShaderManager()->OnLibraryRecompiledEvent().AddLambda([this](ShaderLibrary*, ShaderLibrary*)
-		{
-			Reset();
-		});
+	m_OnShaderCompiledHandle = pDevice->GetShaderManager()->OnShaderRecompiledEvent().AddLambda([this](Shader*) { Reset(); });
 }
 
 void PathTracing::Render(RGGraph& graph, const SceneView* pView, RGTexture* pTarget)

@@ -167,7 +167,7 @@ public:
 	RefCountPtr<CommandSignature> CreateCommandSignature(const CommandSignatureInitializer& signatureDesc, const char* pName, RootSignature* pRootSignature = nullptr);
 
 	Shader* GetShader(const char* pShaderPath, ShaderType shaderType, const char* entryPoint = "", const Span<ShaderDefine>& defines = {});
-	ShaderLibrary* GetLibrary(const char* pShaderPath, const Span<ShaderDefine>& defines = {});
+	Shader* GetLibrary(const char* pShaderPath, const Span<ShaderDefine>& defines = {});
 
 	void RegisterGlobalResource(RefCountPtr<GraphicsObject>&& pResource)
 	{

@@ -42,10 +42,7 @@ Clouds::Clouds(GraphicsDevice* pDevice)
 		CloudsPSO = pDevice->CreateComputePipeline(CloudsRS, "Clouds.hlsl", "CSMain");
 	}
 
-	pDevice->GetShaderManager()->OnShaderRecompiledEvent().AddLambda([](Shader*, Shader*)
-		{
-			shaderDirty = true;
-		});
+	pDevice->GetShaderManager()->OnShaderRecompiledEvent().AddLambda([](Shader*) { shaderDirty = true; });
 }
 
 RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const SceneView* pView)

@@ -167,7 +167,7 @@ public:
 	PipelineStateType GetType() const { return m_Desc.m_Type; }
 
 private:
-	void OnShaderReloaded(Shader* pOldShader, Shader* pNewShader);
+	void OnShaderReloaded(Shader* pShader);
 	RefCountPtr<ID3D12PipelineState> m_pPipelineState;
 
 	PipelineStateInitializer m_Desc;
