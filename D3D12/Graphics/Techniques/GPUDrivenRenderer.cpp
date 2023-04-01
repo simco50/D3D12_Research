@@ -336,8 +336,6 @@ void GPUDrivenRenderer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 
 	if (rasterContext.Type == RasterType::VisibilityBuffer)
 		drawPass.RenderTarget(outResult.pVisibilityBuffer, isFirstPhase ? RenderTargetLoadAction::DontCare : RenderTargetLoadAction::Load);
-	if (outResult.pDebugData)
-		drawPass.Write(outResult.pDebugData);
 
 	BuildHZB(graph, rasterContext.pDepth, outResult.pHZB);
 }

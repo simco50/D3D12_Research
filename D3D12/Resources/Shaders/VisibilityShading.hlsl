@@ -5,12 +5,22 @@
 #include "RayTracing/DDGICommon.hlsli"
 #include "Noise.hlsli"
 
+struct PerViewData
+{
+	uint4 ClusterDimensions;
+	uint2 ClusterSize;
+	float2 LightGridParams;
+};
+ConstantBuffer<PerViewData> cPass : register(b0);
+
 Texture2D<uint> tVisibilityTexture : register(t0);
 Texture2D<float> tAO :	register(t1);
 Texture2D<float> tDepth : register(t2);
 Texture2D tPreviousSceneColor :	register(t3);
 Texture3D<float4> tFog : register(t4);
 StructuredBuffer<MeshletCandidate> tVisibleMeshlets : register(t5);
+StructuredBuffer<uint> tLightGrid : register(t6);
+StructuredBuffer<uint> tLightIndexList : register(t7);
 
 RWTexture2D<float4> uColorTarget : register(u0);
 RWTexture2D<float2> uNormalsTarget : register(u1);
@@ -52,15 +62,35 @@ MaterialProperties EvaluateMaterial(MaterialData material, VisBufferVertexAttrib
 	return properties;
 }
 
-LightResult DoLight(float3 specularColor, float R, float3 diffuseColor, float3 N, float3 V, float3 worldPos, float linearDepth, float dither)
+uint GetSliceFromDepth(float depth)
+{
+	return floor(log(depth) * cPass.LightGridParams.x - cPass.LightGridParams.y);
+}
+
+void GetLightCount(float2 pixel, float linearDepth, out uint lightCount, out uint startOffset)
+{
+	uint3 clusterIndex3D = uint3(floor(pixel / cPass.ClusterSize), GetSliceFromDepth(linearDepth));
+	uint tileIndex = Flatten3D(clusterIndex3D, cPass.ClusterDimensions.xyz);
+	startOffset = tLightGrid[tileIndex * 2];
+	lightCount = tLightGrid[tileIndex * 2 + 1];
+}
+
+Light GetLight(uint lightIndex, uint lightOffset)
+{
+	lightIndex = tLightIndexList[lightOffset + lightIndex];
+	return GetLight(lightIndex);
+}
+
+LightResult DoLight(float3 specularColor, float R, float3 diffuseColor, float3 N, float3 V, float3 worldPos, float2 pixel, float linearDepth, float dither)
 {
 	LightResult totalResult = (LightResult)0;
 
-	uint lightCount = cView.LightCount;
+	uint lightCount, lightOffset;
+	GetLightCount(pixel, linearDepth, lightCount, lightOffset);
+
 	for(uint i = 0; i < lightCount; ++i)
 	{
-		uint lightIndex = i;
-		Light light = GetLight(lightIndex);
+		Light light = GetLight(i, lightOffset);
 		LightResult result = DoLight(light, specularColor, diffuseColor, R, N, V, worldPos, linearDepth, dither);
 
 		totalResult.Diffuse += result.Diffuse;
@@ -97,7 +127,7 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 	float ssrWeight = 0;
 	float3 ssr = ScreenSpaceReflections(vertex.Position, surface.Normal, V, brdfData.Roughness, tDepth, tPreviousSceneColor, dither, ssrWeight);
 
-	LightResult result = DoLight(brdfData.Specular, brdfData.Roughness, brdfData.Diffuse, surface.Normal, V, vertex.Position, linearDepth, dither);
+	LightResult result = DoLight(brdfData.Specular, brdfData.Roughness, brdfData.Diffuse, surface.Normal, V, vertex.Position, texel.xy, linearDepth, dither);
 
 	float3 outRadiance = 0;
 	outRadiance += ambientOcclusion * Diffuse_Lambert(brdfData.Diffuse) * SampleDDGIIrradiance(vertex.Position, surface.Normal, -V);

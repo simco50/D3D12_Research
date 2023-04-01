@@ -191,18 +191,18 @@ DemoApp::DemoApp(WindowHandle window, const Vector2i& windowRect)
 	m_RenderGraphPool = std::make_unique<RGResourcePool>(m_pDevice);
 
 	ImGuiRenderer::Initialize(m_pDevice, window);
-	m_pGPUDrivenRenderer = std::make_unique<GPUDrivenRenderer>(m_pDevice);
-	m_pDDGI = std::make_unique<DDGI>(m_pDevice);
-	m_pClouds = std::make_unique<Clouds>(m_pDevice);
-	m_pClusteredForward = std::make_unique<ClusteredForward>(m_pDevice);
-	m_pTiledForward = std::make_unique<TiledForward>(m_pDevice);
-	m_pRTReflections = std::make_unique<RTReflections>(m_pDevice);
-	m_pRTAO = std::make_unique<RTAO>(m_pDevice);
-	m_pSSAO = std::make_unique<SSAO>(m_pDevice);
-	m_pParticles = std::make_unique<GpuParticles>(m_pDevice);
-	m_pPathTracing = std::make_unique<PathTracing>(m_pDevice);
-	m_pCBTTessellation = std::make_unique<CBTTessellation>(m_pDevice);
-	m_pVisualizeTexture = std::make_unique<VisualizeTexture>(m_pDevice);
+	m_pGPUDrivenRenderer	= std::make_unique<GPUDrivenRenderer>(m_pDevice);
+	m_pDDGI					= std::make_unique<DDGI>(m_pDevice);
+	m_pClouds				= std::make_unique<Clouds>(m_pDevice);
+	m_pClusteredForward		= std::make_unique<ClusteredForward>(m_pDevice);
+	m_pTiledForward			= std::make_unique<TiledForward>(m_pDevice);
+	m_pRTReflections		= std::make_unique<RTReflections>(m_pDevice);
+	m_pRTAO					= std::make_unique<RTAO>(m_pDevice);
+	m_pSSAO					= std::make_unique<SSAO>(m_pDevice);
+	m_pParticles			= std::make_unique<GpuParticles>(m_pDevice);
+	m_pPathTracing			= std::make_unique<PathTracing>(m_pDevice);
+	m_pCBTTessellation		= std::make_unique<CBTTessellation>(m_pDevice);
+	m_pVisualizeTexture		= std::make_unique<VisualizeTexture>(m_pDevice);
 
 	FontCreateSettings fontSettings;
 	fontSettings.pName = "Verdana";
@@ -253,7 +253,7 @@ void DemoApp::SetupScene(CommandContext& context)
 		m_World.Lights.push_back(sunLight);
 	}
 	{
-		Light spot = Light::Spot(Vector3(0, 0, 0), 4.0f, Vector3::Down, 70.0f, 50.0f, 30.0f);
+		Light spot = Light::Spot(Vector3(0, 0, 0), 4.0f, Vector3::Down, 70.0f, 50.0f, 100.0f);
 		spot.CastShadows = true;
 		spot.VolumetricLighting = true;
 		spot.pLightTexture = GraphicsCommon::CreateTextureFromFile(context, "Resources/Textures/LightProjector.png", false, "Light Cookie");
@@ -735,6 +735,7 @@ void DemoApp::Update()
 				graph.AddPass("Visibility Shading", RGPassFlag::Compute)
 					.Read({ pFog, rasterResult.pVisibleMeshlets})
 					.Read({ rasterResult.pVisibilityBuffer, sceneTextures.pDepth, sceneTextures.pAmbientOcclusion, sceneTextures.pPreviousColor })
+					.Read({ m_LightCull3DData.pLightGrid, m_LightCull3DData.pLightIndexGrid })
 					.Write({ sceneTextures.pNormals, sceneTextures.pColorTarget, sceneTextures.pRoughness })
 					.Bind([=](CommandContext& context)
 						{
@@ -743,6 +744,17 @@ void DemoApp::Update()
 							context.SetComputeRootSignature(m_pCommonRS);
 							context.SetPipelineState(m_pVisibilityShadingPSO);
 
+							struct
+							{
+								Vector4u ClusterDimensions;
+								Vector2u ClusterSize;
+								Vector2 LightGridParams;
+							} parameters;
+							parameters.ClusterDimensions = Vector4u(m_LightCull3DData.ClusterCount.x, m_LightCull3DData.ClusterCount.y, m_LightCull3DData.ClusterCount.z, 0);
+							parameters.ClusterSize = m_LightCull3DData.ClusterSize;
+							parameters.LightGridParams = m_LightCull3DData.LightGridParams;
+
+							context.BindRootCBV(0, parameters);
 							context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pColorTarget));
 							context.BindResources(2, {
 								pColorTarget->GetUAV(),
@@ -756,6 +768,9 @@ void DemoApp::Update()
 								sceneTextures.pPreviousColor->Get()->GetSRV(),
 								pFog->Get()->GetSRV(),
 								rasterResult.pVisibleMeshlets->Get()->GetSRV(),
+								m_LightCull3DData.pLightGrid->Get()->GetSRV(),
+								m_LightCull3DData.pLightIndexGrid->Get()->GetSRV(),
+
 								});
 							context.Dispatch(ComputeUtils::GetNumThreadGroups(pColorTarget->GetWidth(), 8, pColorTarget->GetHeight(), 8));
 						});
@@ -1221,7 +1236,7 @@ void DemoApp::InitializePipelines()
 	m_pCommonRS->AddRootConstants(0, 8);
 	m_pCommonRS->AddConstantBufferView(100);
 	m_pCommonRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 6);
-	m_pCommonRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 6);
+	m_pCommonRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 8);
 	m_pCommonRS->Finalize("Common");
 
 	//Shadow mapping - Vertex shader-only pass that writes to the depth buffer using the light matrix
@@ -1259,21 +1274,21 @@ void DemoApp::InitializePipelines()
 
 	ShaderDefineHelper tonemapperDefines;
 	tonemapperDefines.Set("NUM_HISTOGRAM_BINS", 256);
-	m_pLuminanceHistogramPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "LuminanceHistogram.hlsl", "CSMain", *tonemapperDefines);
-	m_pDrawHistogramPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "DrawLuminanceHistogram.hlsl", "DrawLuminanceHistogram", *tonemapperDefines);
-	m_pAverageLuminancePSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "AverageLuminance.hlsl", "CSMain", *tonemapperDefines);
-	m_pToneMapPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "PostProcessing/Tonemapping.hlsl", "CSMain", *tonemapperDefines);
+	m_pLuminanceHistogramPSO		= m_pDevice->CreateComputePipeline(m_pCommonRS, "LuminanceHistogram.hlsl", "CSMain", *tonemapperDefines);
+	m_pDrawHistogramPSO				= m_pDevice->CreateComputePipeline(m_pCommonRS, "DrawLuminanceHistogram.hlsl", "DrawLuminanceHistogram", *tonemapperDefines);
+	m_pAverageLuminancePSO			= m_pDevice->CreateComputePipeline(m_pCommonRS, "AverageLuminance.hlsl", "CSMain", *tonemapperDefines);
+	m_pToneMapPSO					= m_pDevice->CreateComputePipeline(m_pCommonRS, "PostProcessing/Tonemapping.hlsl", "CSMain", *tonemapperDefines);
 
 	//Depth resolve
-	m_pResolveDepthPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "ResolveDepth.hlsl", "CSMain", { "DEPTH_RESOLVE_MIN" });
-	m_pPrepareReduceDepthPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "ReduceDepth.hlsl", "PrepareReduceDepth");
-	m_pPrepareReduceDepthMsaaPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "ReduceDepth.hlsl", "PrepareReduceDepth", { "WITH_MSAA" });
-	m_pReduceDepthPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "ReduceDepth.hlsl", "ReduceDepth");
+	m_pResolveDepthPSO				= m_pDevice->CreateComputePipeline(m_pCommonRS, "ResolveDepth.hlsl", "CSMain", { "DEPTH_RESOLVE_MIN" });
+	m_pPrepareReduceDepthPSO		= m_pDevice->CreateComputePipeline(m_pCommonRS, "ReduceDepth.hlsl", "PrepareReduceDepth");
+	m_pPrepareReduceDepthMsaaPSO	= m_pDevice->CreateComputePipeline(m_pCommonRS, "ReduceDepth.hlsl", "PrepareReduceDepth", { "WITH_MSAA" });
+	m_pReduceDepthPSO				= m_pDevice->CreateComputePipeline(m_pCommonRS, "ReduceDepth.hlsl", "ReduceDepth");
 
-	m_pCameraMotionPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "CameraMotionVectors.hlsl", "CSMain");
-	m_pTemporalResolvePSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "PostProcessing/TemporalResolve.hlsl", "CSMain");
+	m_pCameraMotionPSO				= m_pDevice->CreateComputePipeline(m_pCommonRS, "CameraMotionVectors.hlsl", "CSMain");
+	m_pTemporalResolvePSO			= m_pDevice->CreateComputePipeline(m_pCommonRS, "PostProcessing/TemporalResolve.hlsl", "CSMain");
 
-	m_pGenerateMipsPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "GenerateMips.hlsl", "CSMain");
+	m_pGenerateMipsPSO				= m_pDevice->CreateComputePipeline(m_pCommonRS, "GenerateMips.hlsl", "CSMain");
 
 	//Sky
 	{
@@ -1291,13 +1306,13 @@ void DemoApp::InitializePipelines()
 	}
 
 	//Bloom
-	m_pBloomDownsamplePSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "PostProcessing/Bloom.hlsl", "DownsampleCS");
-	m_pBloomDownsampleKarisAveragePSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "PostProcessing/Bloom.hlsl", "DownsampleCS", {"KARIS_AVERAGE=1"});
-	m_pBloomUpsamplePSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "PostProcessing/Bloom.hlsl", "UpsampleCS");
+	m_pBloomDownsamplePSO				= m_pDevice->CreateComputePipeline(m_pCommonRS, "PostProcessing/Bloom.hlsl", "DownsampleCS");
+	m_pBloomDownsampleKarisAveragePSO	= m_pDevice->CreateComputePipeline(m_pCommonRS, "PostProcessing/Bloom.hlsl", "DownsampleCS", {"KARIS_AVERAGE=1"});
+	m_pBloomUpsamplePSO					= m_pDevice->CreateComputePipeline(m_pCommonRS, "PostProcessing/Bloom.hlsl", "UpsampleCS");
 
 	//Visibility Shading
-	m_pVisibilityShadingPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "VisibilityShading.hlsl", "CSMain");
-	m_pVisibilityDebugRenderPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "VisibilityDebugView.hlsl", "DebugRenderCS");
+	m_pVisibilityShadingPSO				= m_pDevice->CreateComputePipeline(m_pCommonRS, "VisibilityShading.hlsl", "CSMain");
+	m_pVisibilityDebugRenderPSO			= m_pDevice->CreateComputePipeline(m_pCommonRS, "VisibilityDebugView.hlsl", "DebugRenderCS");
 }
 
 
