@@ -9,9 +9,6 @@
 #include "Graphics/RenderGraph/RenderGraph.h"
 #include "Scene/Camera.h"
 
-static bool shaderDirty = false;
-
-GlobalResource<RootSignature> CloudShapeRS;
 GlobalResource<PipelineState> CloudShapeNoisePSO;
 GlobalResource<PipelineState> CloudDetailNoisePSO;
 GlobalResource<PipelineState> CloudHeighDensityLUTPSO;
@@ -21,28 +18,21 @@ GlobalResource<PipelineState> CloudsPSO;
 
 Clouds::Clouds(GraphicsDevice* pDevice)
 {
-	{
-		CloudShapeRS = new RootSignature(pDevice);
-		CloudShapeRS->AddConstantBufferView(0);
-		CloudShapeRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1);
-		CloudShapeRS->Finalize("Worley Noise RS");
+	CloudsRS = new RootSignature(pDevice);
+	CloudsRS->AddConstantBufferView(0);
+	CloudsRS->AddConstantBufferView(100);
+	CloudsRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1);
+	CloudsRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 5);
+	CloudsRS->Finalize("Clouds RS");
 
-		CloudShapeNoisePSO = pDevice->CreateComputePipeline(CloudShapeRS, "CloudsShapes.hlsl", "CloudShapeNoiseCS");
-		CloudDetailNoisePSO = pDevice->CreateComputePipeline(CloudShapeRS, "CloudsShapes.hlsl", "CloudDetailNoiseCS");
-		CloudHeighDensityLUTPSO = pDevice->CreateComputePipeline(CloudShapeRS, "CloudsShapes.hlsl", "CloudHeightDensityCS");
-	}
-	{
-		CloudsRS = new RootSignature(pDevice);
-		CloudsRS->AddConstantBufferView(0);
-		CloudsRS->AddConstantBufferView(100);
-		CloudsRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 6);
-		CloudsRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1);
-		CloudsRS->Finalize("Clouds RS");
+	const char* pCloudShapesShader = "CloudsShapes.hlsl";
+	CloudShapeNoisePSO		= pDevice->CreateComputePipeline(CloudsRS, pCloudShapesShader, "CloudShapeNoiseCS");
+	CloudDetailNoisePSO		= pDevice->CreateComputePipeline(CloudsRS, pCloudShapesShader, "CloudDetailNoiseCS");
+	CloudHeighDensityLUTPSO = pDevice->CreateComputePipeline(CloudsRS, pCloudShapesShader, "CloudHeightDensityCS");
 
-		CloudsPSO = pDevice->CreateComputePipeline(CloudsRS, "Clouds.hlsl", "CSMain");
-	}
+	CloudsPSO = pDevice->CreateComputePipeline(CloudsRS, "Clouds.hlsl", "CSMain");
 
-	pDevice->GetShaderManager()->OnShaderRecompiledEvent().AddLambda([](Shader*) { shaderDirty = true; });
+	pDevice->GetShaderManager()->OnShaderRecompiledEvent().AddLambda([this](Shader*) { m_pShapeNoise = nullptr; });
 }
 
 RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const SceneView* pView)
@@ -76,8 +66,7 @@ RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const Sc
 	};
 	static CloudParameters parameters;
 
-	bool isDirty = !m_pShapeNoise || !m_pDetailNoise || !m_pCloudHeightDensityLUT || shaderDirty;
-	shaderDirty = false;
+	bool isDirty = !m_pShapeNoise || !m_pDetailNoise || !m_pCloudHeightDensityLUT;
 
 	if (ImGui::Begin("Parameters"))
 	{
@@ -134,8 +123,8 @@ RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const Sc
 					{
 						uint32 resolution = pNoiseTexture->GetDesc().Width >> i;
 
+						context.SetComputeRootSignature(CloudsRS);
 						context.SetPipelineState(CloudShapeNoisePSO);
-						context.SetComputeRootSignature(CloudShapeRS);
 
 						NoiseParams constants;
 						constants.Seed = parameters.NoiseSeed;
@@ -143,7 +132,7 @@ RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const Sc
 						constants.Frequency = parameters.ShapeNoiseFrequency;
 
 						context.SetRootCBV(0, constants);
-						context.BindResources(1, pNoiseTexture->Get()->GetSubResourceUAV(i));
+						context.BindResources(2, pNoiseTexture->Get()->GetSubResourceUAV(i));
 
 						context.Dispatch(
 							ComputeUtils::GetNumThreadGroups(Vector3i(resolution), Vector3i(8)));
@@ -157,8 +146,8 @@ RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const Sc
 					{
 						uint32 resolution = pDetailNoiseTexture->GetDesc().Width >> i;
 
+						context.SetComputeRootSignature(CloudsRS);
 						context.SetPipelineState(CloudDetailNoisePSO);
-						context.SetComputeRootSignature(CloudShapeRS);
 
 						NoiseParams constants;
 						constants.Seed = parameters.NoiseSeed;
@@ -166,7 +155,7 @@ RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const Sc
 						constants.Frequency = parameters.DetailNoiseFrequency;
 
 						context.SetRootCBV(0, constants);
-						context.BindResources(1, pDetailNoiseTexture->Get()->GetSubResourceUAV(i));
+						context.BindResources(2, pDetailNoiseTexture->Get()->GetSubResourceUAV(i));
 
 						context.Dispatch(
 							ComputeUtils::GetNumThreadGroups(Vector3i(resolution), Vector3i(8)));
@@ -179,14 +168,14 @@ RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const Sc
 				{
 					Texture* pTarget = pCloudTypeLUT->Get();
 
+					context.SetComputeRootSignature(CloudsRS);
 					context.SetPipelineState(CloudHeighDensityLUTPSO);
-					context.SetComputeRootSignature(CloudShapeRS);
 
 					NoiseParams constants;
 					constants.ResolutionInv = 1.0f / pTarget->GetWidth();
 
 					context.SetRootCBV(0, constants);
-					context.BindResources(1, pTarget->GetUAV());
+					context.BindResources(2, pTarget->GetUAV());
 
 					context.Dispatch(
 						ComputeUtils::GetNumThreadGroups(Vector3i(pTarget->GetWidth()), Vector3i(8)));
@@ -202,8 +191,8 @@ RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const Sc
 			{
 				Texture* pTarget = pIntermediateColor->Get();
 
-				context.SetPipelineState(CloudsPSO);
 				context.SetComputeRootSignature(CloudsRS);
+				context.SetPipelineState(CloudsPSO);
 
 				struct
 				{
@@ -242,7 +231,8 @@ RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const Sc
 
 				context.SetRootCBV(0, constants);
 				context.SetRootCBV(1, Renderer::GetViewUniforms(pView, pTarget));
-				context.BindResources(2,
+				context.BindResources(2, pTarget->GetUAV());
+				context.BindResources(3,
 					{
 						sceneTextures.pColorTarget->Get()->GetSRV(),
 						sceneTextures.pDepth->Get()->GetSRV(),
@@ -250,7 +240,6 @@ RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const Sc
 						pNoiseTexture->Get()->GetSRV(),
 						pDetailNoiseTexture->Get()->GetSRV(),
 					});
-				context.BindResources(3, pTarget->GetUAV());
 				context.Dispatch(
 					ComputeUtils::GetNumThreadGroups(pTarget->GetWidth(), 16, pTarget->GetHeight(), 16));
 			});
