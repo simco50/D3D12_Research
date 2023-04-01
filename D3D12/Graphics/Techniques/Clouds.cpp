@@ -131,7 +131,7 @@ RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const Sc
 						constants.ResolutionInv = 1.0f / resolution;
 						constants.Frequency = parameters.ShapeNoiseFrequency;
 
-						context.SetRootCBV(0, constants);
+						context.BindRootCBV(0, constants);
 						context.BindResources(2, pNoiseTexture->Get()->GetSubResourceUAV(i));
 
 						context.Dispatch(
@@ -154,7 +154,7 @@ RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const Sc
 						constants.ResolutionInv = 1.0f / resolution;
 						constants.Frequency = parameters.DetailNoiseFrequency;
 
-						context.SetRootCBV(0, constants);
+						context.BindRootCBV(0, constants);
 						context.BindResources(2, pDetailNoiseTexture->Get()->GetSubResourceUAV(i));
 
 						context.Dispatch(
@@ -174,7 +174,7 @@ RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const Sc
 					NoiseParams constants;
 					constants.ResolutionInv = 1.0f / pTarget->GetWidth();
 
-					context.SetRootCBV(0, constants);
+					context.BindRootCBV(0, constants);
 					context.BindResources(2, pTarget->GetUAV());
 
 					context.Dispatch(
@@ -229,8 +229,8 @@ RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const Sc
 				constants.WindSpeed = parameters.WindSpeed;
 				constants.TopSkew = parameters.CloudTopSkew;
 
-				context.SetRootCBV(0, constants);
-				context.SetRootCBV(1, Renderer::GetViewUniforms(pView, pTarget));
+				context.BindRootCBV(0, constants);
+				context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pTarget));
 				context.BindResources(2, pTarget->GetUAV());
 				context.BindResources(3,
 					{

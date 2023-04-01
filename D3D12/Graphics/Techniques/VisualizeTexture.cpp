@@ -85,7 +85,7 @@ void VisualizeTexture::Capture(RGGraph& graph, RGTexture* pTexture)
 				if (pTexture->GetDesc().Dimensions == TextureDimension::TextureCube)
 					constants.Slice = (float)CubeFaceIndex;
 
-				cmdContext.SetRootCBV(0, constants);
+				cmdContext.BindRootCBV(0, constants);
 				cmdContext.Dispatch(ComputeUtils::GetNumThreadGroups(desc.Width, 8, desc.Height, 8));
 			});
 	

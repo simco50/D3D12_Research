@@ -107,8 +107,8 @@ void DDGI::Execute(RGGraph& graph, const SceneView* pView, World* pWorld)
 					context.SetComputeRootSignature(m_pCommonRS);
 					context.SetPipelineState(m_pDDGITraceRaysSO);
 
-					context.SetRootConstants(0, parameters);
-					context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
+					context.BindRootCBV(0, parameters);
+					context.BindRootCBV(1, Renderer::GetViewUniforms(pView));
 					context.BindResources(2, pRayBuffer->Get()->GetUAV());
 
 					ShaderBindingTable bindingTable(m_pDDGITraceRaysSO);
@@ -128,8 +128,8 @@ void DDGI::Execute(RGGraph& graph, const SceneView* pView, World* pWorld)
 					context.SetComputeRootSignature(m_pCommonRS);
 					context.SetPipelineState(m_pDDGIUpdateIrradianceColorPSO);
 
-					context.SetRootConstants(0, parameters);
-					context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
+					context.BindRootCBV(0, parameters);
+					context.BindRootCBV(1, Renderer::GetViewUniforms(pView));
 					context.BindResources(2, pIrradianceTarget->Get()->GetUAV());
 					context.BindResources(3, {
 						pRayBuffer->Get()->GetSRV(),
@@ -146,8 +146,8 @@ void DDGI::Execute(RGGraph& graph, const SceneView* pView, World* pWorld)
 					context.SetComputeRootSignature(m_pCommonRS);
 					context.SetPipelineState(m_pDDGIUpdateIrradianceDepthPSO);
 
-					context.SetRootConstants(0, parameters);
-					context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
+					context.BindRootCBV(0, parameters);
+					context.BindRootCBV(1, Renderer::GetViewUniforms(pView));
 					context.BindResources(2, {
 						pDepthTarget->Get()->GetUAV(),
 						});
@@ -166,8 +166,8 @@ void DDGI::Execute(RGGraph& graph, const SceneView* pView, World* pWorld)
 					context.SetComputeRootSignature(m_pCommonRS);
 					context.SetPipelineState(m_pDDGIUpdateProbeStatesPSO);
 
-					context.SetRootConstants(0, parameters);
-					context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
+					context.BindRootCBV(0, parameters);
+					context.BindRootCBV(1, Renderer::GetViewUniforms(pView));
 					context.BindResources(2, {
 						pProbeStates->Get()->GetUAV(),
 						pProbeOffsets->Get()->GetUAV(),
@@ -204,8 +204,8 @@ void DDGI::RenderVisualization(RGGraph& graph, const SceneView* pView, const Wor
 					} parameters;
 					parameters.VolumeIndex = i;
 
-					context.SetRootConstants(0, parameters);
-					context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
+					context.BindRootCBV(0, parameters);
+					context.BindRootCBV(1, Renderer::GetViewUniforms(pView));
 					context.Draw(0, 2880, ddgi.NumProbes.x * ddgi.NumProbes.y * ddgi.NumProbes.z);
 				});
 	}

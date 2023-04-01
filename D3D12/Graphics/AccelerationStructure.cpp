@@ -179,8 +179,8 @@ void AccelerationStructure::Build(CommandContext& context, const SceneView& view
 
 				context.SetComputeRootSignature(gCommonRS);
 				context.SetPipelineState(gUpdateTLASPSO);
-				context.SetRootConstants(0, (uint32)blasInstances.size());
-				context.SetRootCBV(1, Renderer::GetViewUniforms(&view));
+				context.BindRootCBV(0, (uint32)blasInstances.size());
+				context.BindRootCBV(1, Renderer::GetViewUniforms(&view));
 				context.BindResources(2, m_pBLASInstancesTargetBuffer->GetUAV());
 				context.BindResources(3, m_pBLASInstancesSourceBuffer->GetSRV());
 				context.Dispatch(ComputeUtils::GetNumThreadGroups((uint32)blasInstances.size(), 32));

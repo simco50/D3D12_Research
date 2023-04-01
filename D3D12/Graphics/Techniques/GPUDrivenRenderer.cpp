@@ -146,7 +146,7 @@ void GPUDrivenRenderer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 				context.SetComputeRootSignature(m_pCommonRS);
 				context.SetPipelineState(m_pCullInstancesPSO[isFirstPhase ? 0 : 1]);
 
-				context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
+				context.BindRootCBV(1, Renderer::GetViewUniforms(pView));
 				context.BindResources(2, {
 					rasterContext.pCandidateMeshlets->Get()->GetUAV(),
 					rasterContext.pCandidateMeshletsCounter->Get()->GetUAV(),
@@ -191,7 +191,7 @@ void GPUDrivenRenderer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 				context.SetComputeRootSignature(m_pCommonRS);
 				context.SetPipelineState(m_pCullMeshletsPSO[isFirstPhase ? 0 : 1]);
 
-				context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
+				context.BindRootCBV(1, Renderer::GetViewUniforms(pView));
 				context.BindResources(2, {
 					rasterContext.pCandidateMeshlets->Get()->GetUAV(),
 					rasterContext.pCandidateMeshletsCounter->Get()->GetUAV(),
@@ -234,7 +234,7 @@ void GPUDrivenRenderer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 					context.SetComputeRootSignature(m_pCommonRS);
 					context.SetPipelineState(m_pMeshletBinPrepareArgs);
 
-					context.SetRootConstants(0, classifyParams);
+					context.BindRootCBV(0, classifyParams);
 					context.BindResources(2, {
 						pMeshletCounts->Get()->GetUAV(),
 						pGlobalCount->Get()->GetUAV(),
@@ -256,7 +256,7 @@ void GPUDrivenRenderer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 					context.SetComputeRootSignature(m_pCommonRS);
 					context.SetPipelineState(m_pMeshletClassify);
 
-					context.SetRootConstants(0, classifyParams);
+					context.BindRootCBV(0, classifyParams);
 					context.BindResources(2, pMeshletCounts->Get()->GetUAV());
 					context.BindResources(3, {
 						rasterContext.pVisibleMeshlets->Get()->GetSRV(),
@@ -273,7 +273,7 @@ void GPUDrivenRenderer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 					context.SetComputeRootSignature(m_pCommonRS);
 					context.SetPipelineState(m_pMeshletAllocateBinRanges);
 
-					context.SetRootConstants(0, classifyParams);
+					context.BindRootCBV(0, classifyParams);
 					context.BindResources(2, {
 						pMeshletOffsetAndCounts->Get()->GetUAV(),
 						pGlobalCount->Get()->GetUAV(),
@@ -291,7 +291,7 @@ void GPUDrivenRenderer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 					context.SetComputeRootSignature(m_pCommonRS);
 					context.SetPipelineState(m_pMeshletWriteBins);
 
-					context.SetRootConstants(0, classifyParams);
+					context.BindRootCBV(0, classifyParams);
 					context.BindResources(2, {
 						pMeshletOffsetAndCounts->Get()->GetUAV(),
 						pBinnedMeshlets->Get()->GetUAV(),
@@ -312,7 +312,7 @@ void GPUDrivenRenderer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 			{
 				context.SetGraphicsRootSignature(m_pCommonRS);
 
-				context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
+				context.BindRootCBV(1, Renderer::GetViewUniforms(pView));
 				if (outResult.pDebugData)
 					context.BindResources(2, outResult.pDebugData->Get()->GetUAV());
 				context.BindResources(3, {
@@ -328,7 +328,7 @@ void GPUDrivenRenderer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 						uint32 BinIndex;
 					} params;
 					params.BinIndex = binIndex;
-					context.SetRootConstants(0, params);
+					context.BindRootCBV(0, params);
 					context.SetPipelineState(rasterContext.EnableDebug ? m_pDrawMeshletsDebugModePSO[binIndex] : m_pDrawMeshletsPSO[binIndex]);
 					context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchMeshSignature, 1, pMeshletOffsetAndCounts->Get(), nullptr, sizeof(Vector4u) * binIndex);
 				}
@@ -377,7 +377,7 @@ void GPUDrivenRenderer::Render(RGGraph& graph, const SceneView* pView, const Ras
 				context.SetPipelineState(m_pClearUAVsPSO);
 
 				if (outResult.pDebugData)
-					context.ClearUAVu(outResult.pDebugData->Get());
+					context.ClearUAVu(outResult.pDebugData->Get()->GetUAV());
 
 				context.BindResources(2, {
 					rasterContext.pCandidateMeshletsCounter->Get()->GetUAV(),
@@ -414,7 +414,7 @@ void GPUDrivenRenderer::PrintStats(RGGraph& graph, const SceneView* pView, const
 				context.SetComputeRootSignature(m_pCommonRS);
 				context.SetPipelineState(m_pPrintStatsPSO);
 
-				context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
+				context.BindRootCBV(1, Renderer::GetViewUniforms(pView));
 				context.BindResources(3, {
 					rasterContext.pCandidateMeshletsCounter->Get()->GetSRV(),
 					rasterContext.pOccludedInstancesCounter->Get()->GetSRV(),
@@ -467,7 +467,7 @@ void GPUDrivenRenderer::BuildHZB(RGGraph& graph, RGTexture* pDepth, RGTexture* p
 				} parameters;
 
 				parameters.DimensionsInv = Vector2(1.0f / hzbDimensions.x, 1.0f / hzbDimensions.y);
-				context.SetRootConstants(0, parameters);
+				context.BindRootCBV(0, parameters);
 				context.BindResources(2, pHZB->Get()->GetUAV());
 				context.BindResources(3, pDepth->Get()->GetSRV());
 				context.Dispatch(ComputeUtils::GetNumThreadGroups(hzbDimensions.x, 16, hzbDimensions.y, 16));
@@ -479,7 +479,7 @@ void GPUDrivenRenderer::BuildHZB(RGGraph& graph, RGTexture* pDepth, RGTexture* p
 		.Write({ pHZB, pSPDCounter })
 		.Bind([=](CommandContext& context)
 			{
-				context.ClearUAVu(pSPDCounter->Get());
+				context.ClearUAVu(pSPDCounter->Get()->GetUAV());
 				context.InsertUavBarrier();
 
 				context.SetComputeRootSignature(m_pHZBRS);
@@ -509,7 +509,7 @@ void GPUDrivenRenderer::BuildHZB(RGGraph& graph, RGTexture* pDepth, RGTexture* p
 				parameters.WorkGroupOffset.x = workGroupOffset[0];
 				parameters.WorkGroupOffset.y = workGroupOffset[1];
 
-				context.SetRootConstants(0, parameters);
+				context.BindRootCBV(0, parameters);
 				uint32 uavIndex = 0;
 				context.BindResources(2, pSPDCounter->Get()->GetUAV(), uavIndex++);
 				context.BindResources(2, pHZB->Get()->GetSubResourceUAV(6), uavIndex++);

@@ -126,7 +126,10 @@ inline HRESULT PIXGpuCaptureNextFrames(PCWSTR, UINT32) { return S_OK; }
 inline HRESULT PIXSetTargetWindow(HWND) { return S_OK; }
 inline HRESULT PIXForceD3D11On12() { return S_OK; }
 inline HRESULT WINAPI PIXSetHUDOptions(PIXHUDOptions) { return S_OK; }
+inline bool WINAPI PIXIsAttachedForGpuCapture() { return false; }
+inline HINSTANCE WINAPI PIXOpenCaptureInUI(PCWSTR) { return 0; }
 inline HMODULE PIXLoadLatestWinPixGpuCapturerLibrary() { return nullptr; }
+inline HMODULE PIXLoadLatestWinPixTimingCapturerLibrary() { return nullptr; }
 inline DWORD PIXGetCaptureState() { return 0; }
 inline void PIXReportCounter(_In_ PCWSTR, float) {}
 inline void PIXNotifyWakeFromFenceSignal(_In_ HANDLE) {}

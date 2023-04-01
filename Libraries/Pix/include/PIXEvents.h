@@ -59,7 +59,7 @@ namespace PIXEventsDetail
     };
 
     template<>
-    struct PIXEventTypeInferer<void>
+    struct PIXEventTypeInferer<>
     {
         static constexpr PIXEventType Begin() { return PIXEvent_BeginEvent_NoArgs; }
         static constexpr PIXEventType SetMarker() { return PIXEvent_SetMarker_NoArgs; }

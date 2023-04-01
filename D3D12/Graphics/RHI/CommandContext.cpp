@@ -38,6 +38,7 @@ void CommandContext::Reset()
 
 	m_pCurrentPSO = nullptr;
 	m_pCurrentSO = nullptr;
+	m_pCurrentRS = nullptr;
 
 	if (m_Type != D3D12_COMMAND_LIST_TYPE_COPY)
 	{
@@ -243,32 +244,24 @@ void CommandContext::ExecuteIndirect(const CommandSignature* pCommandSignature, 
 	m_pCommandList->ExecuteIndirect(pCommandSignature->GetCommandSignature(), maxCount, pIndirectArguments->GetResource(), argumentsOffset, pCountBuffer ? pCountBuffer->GetResource() : nullptr, countOffset);
 }
 
-void CommandContext::ClearUAVu(const GraphicsResource* pBuffer, const UnorderedAccessView* pUav, const Vector4u& values)
+void CommandContext::ClearUAVu(const UnorderedAccessView* pUAV, const Vector4u& values)
 {
-	if (!pUav)
-		pUav = pBuffer->GetUAV();
-	check(pBuffer);
-	check(pUav);
-
+	check(pUAV);
 	DescriptorHandle gpuHandle = m_ShaderResourceDescriptorAllocator.Allocate(1);
-	GetParent()->GetDevice()->CopyDescriptorsSimple(1, gpuHandle.CpuHandle, pUav->GetDescriptor(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	GetParent()->GetDevice()->CopyDescriptorsSimple(1, gpuHandle.CpuHandle, pUAV->GetDescriptor(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
 	FlushResourceBarriers();
-	m_pCommandList->ClearUnorderedAccessViewUint(gpuHandle.GpuHandle, pUav->GetDescriptor(), pBuffer->GetResource(), &values.x, 0, nullptr);
+	m_pCommandList->ClearUnorderedAccessViewUint(gpuHandle.GpuHandle, pUAV->GetDescriptor(), pUAV->GetResource()->GetResource(), &values.x, 0, nullptr);
 }
 
-void CommandContext::ClearUAVf(const GraphicsResource* pBuffer, const UnorderedAccessView* pUav, const Vector4& values)
+void CommandContext::ClearUAVf(const UnorderedAccessView* pUAV, const Vector4& values)
 {
-	if (!pUav)
-		pUav = pBuffer->GetUAV();
-	check(pBuffer);
-	check(pUav);
-
+	check(pUAV);
 	DescriptorHandle gpuHandle = m_ShaderResourceDescriptorAllocator.Allocate(1);
-	GetParent()->GetDevice()->CopyDescriptorsSimple(1, gpuHandle.CpuHandle, pUav->GetDescriptor(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	GetParent()->GetDevice()->CopyDescriptorsSimple(1, gpuHandle.CpuHandle, pUAV->GetDescriptor(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
 	FlushResourceBarriers();
-	m_pCommandList->ClearUnorderedAccessViewFloat(gpuHandle.GpuHandle, pUav->GetDescriptor(), pBuffer->GetResource(), &values.x, 0, nullptr);
+	m_pCommandList->ClearUnorderedAccessViewFloat(gpuHandle.GpuHandle, pUAV->GetDescriptor(), pUAV->GetResource()->GetResource(), &values.x, 0, nullptr);
 }
 
 void CommandContext::SetComputeRootSignature(const RootSignature* pRootSignature)
@@ -276,6 +269,7 @@ void CommandContext::SetComputeRootSignature(const RootSignature* pRootSignature
 	m_pCommandList->SetComputeRootSignature(pRootSignature->GetRootSignature());
 	m_ShaderResourceDescriptorAllocator.ParseRootSignature(pRootSignature);
 	m_CurrentCommandContext = CommandListContext::Compute;
+	m_pCurrentRS = pRootSignature;
 }
 
 void CommandContext::SetGraphicsRootSignature(const RootSignature* pRootSignature)
@@ -283,60 +277,49 @@ void CommandContext::SetGraphicsRootSignature(const RootSignature* pRootSignatur
 	m_pCommandList->SetGraphicsRootSignature(pRootSignature->GetRootSignature());
 	m_ShaderResourceDescriptorAllocator.ParseRootSignature(pRootSignature);
 	m_CurrentCommandContext = CommandListContext::Graphics;
+	m_pCurrentRS = pRootSignature;
 }
 
-void CommandContext::SetRootSRV(uint32 rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address)
+void CommandContext::BindRootSRV(uint32 rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address)
 {
 	check(m_CurrentCommandContext != CommandListContext::Invalid);
 	if (m_CurrentCommandContext == CommandListContext::Graphics)
-	{
 		m_pCommandList->SetGraphicsRootShaderResourceView(rootIndex, address);
-	}
 	else
-	{
 		m_pCommandList->SetComputeRootShaderResourceView(rootIndex, address);
-	}
 }
 
-void CommandContext::SetRootUAV(uint32 rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address)
+void CommandContext::BindRootUAV(uint32 rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address)
 {
 	check(m_CurrentCommandContext != CommandListContext::Invalid);
 	if (m_CurrentCommandContext == CommandListContext::Graphics)
-	{
 		m_pCommandList->SetGraphicsRootUnorderedAccessView(rootIndex, address);
-	}
 	else
-	{
 		m_pCommandList->SetComputeRootUnorderedAccessView(rootIndex, address);
-	}
-}
-
-void CommandContext::SetRootConstants(uint32 rootIndex, uint32 count, const void* pConstants)
-{
-	check(m_CurrentCommandContext != CommandListContext::Invalid);
-	if (m_CurrentCommandContext == CommandListContext::Graphics)
-	{
-		m_pCommandList->SetGraphicsRoot32BitConstants(rootIndex, count, pConstants, 0);
-	}
-	else
-	{
-		m_pCommandList->SetComputeRoot32BitConstants(rootIndex, count, pConstants, 0);
-	}
 }
 
 void CommandContext::SetRootCBV(uint32 rootIndex, const void* pData, uint32 dataSize)
 {
 	check(m_CurrentCommandContext != CommandListContext::Invalid);
-	DynamicAllocation allocation = m_pDynamicAllocator->Allocate(dataSize);
-	memcpy(allocation.pMappedMemory, pData, dataSize);
 
-	if (m_CurrentCommandContext == CommandListContext::Graphics)
+	bool isRootConstants = m_pCurrentRS->GetRootConstantsMask().GetBit(rootIndex);
+	if (isRootConstants)
 	{
-		m_pCommandList->SetGraphicsRootConstantBufferView(rootIndex, allocation.GpuHandle);
+		check(dataSize % sizeof(uint32) == 0);
+		if (m_CurrentCommandContext == CommandListContext::Graphics)
+			m_pCommandList->SetGraphicsRoot32BitConstants(rootIndex, dataSize / sizeof(uint32), pData, 0);
+		else
+			m_pCommandList->SetComputeRoot32BitConstants(rootIndex, dataSize / sizeof(uint32), pData, 0);
 	}
 	else
 	{
-		m_pCommandList->SetComputeRootConstantBufferView(rootIndex, allocation.GpuHandle);
+		DynamicAllocation allocation = m_pDynamicAllocator->Allocate(dataSize);
+		memcpy(allocation.pMappedMemory, pData, dataSize);
+
+		if (m_CurrentCommandContext == CommandListContext::Graphics)
+			m_pCommandList->SetGraphicsRootConstantBufferView(rootIndex, allocation.GpuHandle);
+		else
+			m_pCommandList->SetComputeRootConstantBufferView(rootIndex, allocation.GpuHandle);
 	}
 }
 
@@ -649,31 +632,6 @@ void CommandContext::SetPipelineState(StateObject* pStateObject)
 	}
 }
 
-void CommandContext::SetDynamicVertexBuffer(uint32 rootIndex, uint32 elementCount, uint32 elementSize, const void* pData)
-{
-	uint32 bufferSize = elementCount * elementSize;
-	DynamicAllocation allocation = m_pDynamicAllocator->Allocate(bufferSize);
-	memcpy(allocation.pMappedMemory, pData, bufferSize);
-	D3D12_VERTEX_BUFFER_VIEW view = {};
-	view.BufferLocation = allocation.GpuHandle;
-	view.SizeInBytes = bufferSize;
-	view.StrideInBytes = elementSize;
-	m_pCommandList->IASetVertexBuffers(rootIndex, 1, &view);
-}
-
-void CommandContext::SetDynamicIndexBuffer(uint32 elementCount, const void* pData, bool smallIndices /*= false*/)
-{
-	uint32 stride = smallIndices ? sizeof(uint16) : sizeof(uint32);
-	uint32 bufferSize = elementCount * stride;
-	DynamicAllocation allocation = m_pDynamicAllocator->Allocate(bufferSize);
-	memcpy(allocation.pMappedMemory, pData, bufferSize);
-	D3D12_INDEX_BUFFER_VIEW view = {};
-	view.BufferLocation = allocation.GpuHandle;
-	view.SizeInBytes = bufferSize;
-	view.Format = smallIndices ? DXGI_FORMAT_R16_UINT : DXGI_FORMAT_R32_UINT;
-	m_pCommandList->IASetIndexBuffer(&view);
-}
-
 void CommandContext::SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY type)
 {
 	m_pCommandList->IASetPrimitiveTopology(type);
@@ -716,6 +674,31 @@ void CommandContext::SetViewport(const FloatRect& rect, float minDepth /*= 0.0f*
 	viewport.MaxDepth = maxDepth;
 	m_pCommandList->RSSetViewports(1, &viewport);
 	SetScissorRect(rect);
+}
+
+
+void CommandContext::BindDynamicVertexBuffer(uint32 rootIndex, uint32 elementCount, uint32 elementSize, const void* pData)
+{
+	uint32 bufferSize = elementCount * elementSize;
+	DynamicAllocation allocation = AllocateTransientMemory(bufferSize);
+	memcpy(allocation.pMappedMemory, pData, bufferSize);
+	D3D12_VERTEX_BUFFER_VIEW view = {};
+	view.BufferLocation = allocation.GpuHandle;
+	view.SizeInBytes = bufferSize;
+	view.StrideInBytes = elementSize;
+	m_pCommandList->IASetVertexBuffers(rootIndex, 1, &view);
+}
+
+void CommandContext::BindDynamicIndexBuffer(uint32 elementCount, const void* pData, ResourceFormat format)
+{
+	uint32 bufferSize = (uint32)RHI::GetRowPitch(format, elementCount);
+	DynamicAllocation allocation = AllocateTransientMemory(bufferSize);
+	memcpy(allocation.pMappedMemory, pData, bufferSize);
+	D3D12_INDEX_BUFFER_VIEW view = {};
+	view.BufferLocation = allocation.GpuHandle;
+	view.SizeInBytes = bufferSize;
+	view.Format = D3D::ConvertFormat(format);
+	m_pCommandList->IASetIndexBuffer(&view);
 }
 
 void CommandContext::SetScissorRect(const FloatRect& rect)

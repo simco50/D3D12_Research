@@ -1272,9 +1272,7 @@ void SwapChain::OnResizeOrMove(uint32 width, uint32 height)
 {
 	DisplayMode desiredDisplayMode = m_DesiredDisplayMode;
 	if (!DisplaySupportsHDR())
-	{
 		desiredDisplayMode = DisplayMode::SDR;
-	}
 
 	ResourceFormat desiredFormat = GetSwapchainFormat(desiredDisplayMode);
 	if (desiredFormat != m_Format || width != m_Width || height != m_Height)
@@ -1327,9 +1325,7 @@ void SwapChain::Present()
 	// Wait until the current backbuffer image is ready - Not doing this makes running under PIX crash
 	SyncPoint& presentSyncPoint = m_PresentSyncPoints[m_pSwapchain->GetCurrentBackBufferIndex()];
 	if (presentSyncPoint)
-	{
 		presentSyncPoint.Wait();
-	}
 
 	m_pSwapchain->Present(m_Vsync ? 1 : 0, !m_Vsync && m_AllowTearing ? DXGI_PRESENT_ALLOW_TEARING : 0);
 	m_CurrentImage = m_pSwapchain->GetCurrentBackBufferIndex();
@@ -1350,9 +1346,7 @@ bool SwapChain::DisplaySupportsHDR() const
 		{
 			DXGI_OUTPUT_DESC1 desc;
 			if (SUCCEEDED(pOutput6->GetDesc1(&desc)))
-			{
 				return desc.ColorSpace == DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020;
-			}
 		}
 	}
 	return false;

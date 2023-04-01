@@ -138,8 +138,8 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView* pView, RGTexture* p
 				parameters.EmitCount = (int32)Math::Floor(m_ParticlesToSpawn);
 				m_ParticlesToSpawn -= parameters.EmitCount;
 
-				context.SetRootConstants(0, parameters);
-				context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
+				context.BindRootCBV(0, parameters);
+				context.BindRootCBV(1, Renderer::GetViewUniforms(pView));
 				context.BindResources(2, {
 					m_pCountersBuffer->GetUAV(),
 					m_pDeadList->GetUAV(),
@@ -171,8 +171,8 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView* pView, RGTexture* p
 
 				parameters.Origin = Vector3(1, 1, 0);
 
-				context.SetRootConstants(0, parameters);
-				context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
+				context.BindRootCBV(0, parameters);
+				context.BindRootCBV(1, Renderer::GetViewUniforms(pView));
 				context.BindResources(2, {
 					m_pCountersBuffer->GetUAV(),
 					m_pDeadList->GetUAV(),
@@ -204,8 +204,8 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView* pView, RGTexture* p
 				parameters.DeltaTime = Time::DeltaTime();
 				parameters.ParticleLifeTime = g_LifeTime;
 
-				context.SetRootConstants(0, parameters);
-				context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
+				context.BindRootCBV(0, parameters);
+				context.BindRootCBV(1, Renderer::GetViewUniforms(pView));
 				context.BindResources(2, {
 					m_pCountersBuffer->GetUAV(),
 					m_pDeadList->GetUAV(),
@@ -232,7 +232,7 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView* pView, RGTexture* p
 				context.SetComputeRootSignature(m_pSimulateRS);
 				context.SetPipelineState(m_pSimulateEndPS);
 
-				context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
+				context.BindRootCBV(1, Renderer::GetViewUniforms(pView));
 				context.BindResources(2, {
 					m_pCountersBuffer->GetUAV(),
 					m_pDeadList->GetUAV(),
@@ -283,7 +283,7 @@ void GpuParticles::Render(RGGraph& graph, const SceneView* pView, SceneTextures&
 				context.SetGraphicsRootSignature(m_pRenderParticlesRS);
 
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-				context.SetRootCBV(0, Renderer::GetViewUniforms(pView, pTarget));
+				context.BindRootCBV(0, Renderer::GetViewUniforms(pView, pTarget));
 
 				context.BindResources(1, {
 					m_pParticleBuffer->GetSRV(),

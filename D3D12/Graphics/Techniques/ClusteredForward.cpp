@@ -191,8 +191,8 @@ void ClusteredForward::ComputeLightCulling(RGGraph& graph, const SceneView* pVie
 				constantBuffer.ClusterSize = Vector2i(gLightClusterTexelSize, gLightClusterTexelSize);
 				constantBuffer.ClusterDimensions = Vector4i(cullData.ClusterCount.x, cullData.ClusterCount.y, cullData.ClusterCount.z, 0);
 
-				context.SetRootCBV(0, constantBuffer);
-				context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
+				context.BindRootCBV(0, constantBuffer);
+				context.BindRootCBV(1, Renderer::GetViewUniforms(pView));
 				context.BindResources(2, cullData.pAABBs->Get()->GetUAV());
 
 				//Cluster count in z is 32 so fits nicely in a wavefront on Nvidia so make groupsize in shader 32
@@ -220,7 +220,7 @@ void ClusteredForward::ComputeLightCulling(RGGraph& graph, const SceneView* pVie
 				// Clear the light grid because we're accumulating the light count in the shader
 				Buffer* pLightGrid = cullData.pLightGrid->Get();
 				//#todo: adhoc UAV creation
-				context.ClearUAVu(pLightGrid, m_pDevice->CreateUAV(pLightGrid, BufferUAVDesc::CreateRaw()));
+				context.ClearUAVu(m_pDevice->CreateUAV(pLightGrid, BufferUAVDesc::CreateRaw()));
 
 				struct
 				{
@@ -229,9 +229,9 @@ void ClusteredForward::ComputeLightCulling(RGGraph& graph, const SceneView* pVie
 
 				constantBuffer.ClusterDimensions = cullData.ClusterCount;
 
-				context.SetRootCBV(0, constantBuffer);
+				context.BindRootCBV(0, constantBuffer);
 
-				context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
+				context.BindRootCBV(1, Renderer::GetViewUniforms(pView));
 				context.BindResources(2, {
 					cullData.pLightIndexGrid->Get()->GetUAV(),
 					cullData.pLightGrid->Get()->GetUAV(),
@@ -271,7 +271,7 @@ void ClusteredForward::VisualizeClusters(RGGraph& graph, const SceneView* pView,
 
 				ShaderInterop::ViewUniforms viewData = Renderer::GetViewUniforms(pView, sceneTextures.pColorTarget->Get());
 				viewData.Projection = cullData.DebugClustersViewMatrix * pView->View.ViewProjection;
-				context.SetRootCBV(0, viewData);
+				context.BindRootCBV(0, viewData);
 				context.BindResources(1, {
 					cullData.pAABBs->Get()->GetSRV(),
 					pDebugLightGrid->Get()->GetSRV(),
@@ -325,8 +325,8 @@ RGTexture* ClusteredForward::RenderVolumetricFog(RGGraph& graph, const SceneView
 				context.SetComputeRootSignature(m_pVolumetricLightingRS);
 				context.SetPipelineState(m_pInjectVolumeLightPSO);
 
-				context.SetRootCBV(0, constantBuffer);
-				context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
+				context.BindRootCBV(0, constantBuffer);
+				context.BindRootCBV(1, Renderer::GetViewUniforms(pView));
 				context.BindResources(2, pTarget->GetUAV());
 				context.BindResources(3, {
 					lightCullData.pLightGrid->Get()->GetSRV(),
@@ -352,8 +352,8 @@ RGTexture* ClusteredForward::RenderVolumetricFog(RGGraph& graph, const SceneView
 				context.SetComputeRootSignature(m_pVolumetricLightingRS);
 				context.SetPipelineState(m_pAccumulateVolumeLightPSO);
 
-				context.SetRootCBV(0, constantBuffer);
-				context.SetRootCBV(1, Renderer::GetViewUniforms(pView));
+				context.BindRootCBV(0, constantBuffer);
+				context.BindRootCBV(1, Renderer::GetViewUniforms(pView));
 				context.BindResources(2, pFinalFog->GetUAV());
 				context.BindResources(3, {
 					lightCullData.pLightGrid->Get()->GetSRV(),
@@ -396,8 +396,8 @@ void ClusteredForward::RenderBasePass(RGGraph& graph, const SceneView* pView, Sc
 				frameData.ClusterSize = Vector2i(gLightClusterTexelSize, gLightClusterTexelSize);
 				frameData.LightGridParams = lightCullData.LightGridParams;
 
-				context.SetRootCBV(1, frameData);
-				context.SetRootCBV(2, Renderer::GetViewUniforms(pView, sceneTextures.pColorTarget->Get()));
+				context.BindRootCBV(1, frameData);
+				context.BindRootCBV(2, Renderer::GetViewUniforms(pView, sceneTextures.pColorTarget->Get()));
 
 				context.BindResources(3, {
 					sceneTextures.pAmbientOcclusion->Get()->GetSRV(),
@@ -455,8 +455,8 @@ void ClusteredForward::VisualizeLightDensity(RGGraph& graph, const SceneView* pV
 
 				context.SetPipelineState(m_pVisualizeLightsPSO);
 				context.SetComputeRootSignature(m_pVisualizeLightsRS);
-				context.SetRootCBV(0, constantBuffer);
-				context.SetRootCBV(1, Renderer::GetViewUniforms(pView, pTarget));
+				context.BindRootCBV(0, constantBuffer);
+				context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pTarget));
 
 				context.BindResources(2, {
 					sceneTextures.pColorTarget->Get()->GetSRV(),

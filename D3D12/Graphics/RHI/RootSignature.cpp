@@ -151,6 +151,10 @@ void RootSignature::Finalize(const char* pName, D3D12_ROOT_SIGNATURE_FLAGS flags
 				m_DescriptorTableSizes[i] = range.NumDescriptors;
 			}
 		}
+		else if (rootParameter.ParameterType == D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS)
+		{
+			m_RootConstantsMask.SetBit((uint32)i);
+		}
 	}
 
 	if (!EnumHasAnyFlags(flags, D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE))

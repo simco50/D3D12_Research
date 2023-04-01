@@ -67,8 +67,8 @@ RGTexture* SSAO::Execute(RGGraph& graph, const SceneView* pView, SceneTextures& 
 				shaderParameters.Threshold = g_AoThreshold;
 				shaderParameters.Samples = g_AoSamples;
 
-				context.SetRootConstants(0, shaderParameters);
-				context.SetRootCBV(1, Renderer::GetViewUniforms(pView, pTarget));
+				context.BindRootCBV(0, shaderParameters);
+				context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pTarget));
 				context.BindResources(2, pTarget->GetUAV());
 				context.BindResources(3, sceneTextures.pDepth->Get()->GetSRV());
 
@@ -97,8 +97,8 @@ RGTexture* SSAO::Execute(RGGraph& graph, const SceneView* pView, SceneTextures& 
 				shaderParameters.Horizontal = 1;
 				shaderParameters.DimensionsInv = Vector2(1.0f / pTarget->GetWidth(), 1.0f / pTarget->GetHeight());
 
-				context.SetRootConstants(0, shaderParameters);
-				context.SetRootCBV(1, Renderer::GetViewUniforms(pView, pTarget));
+				context.BindRootCBV(0, shaderParameters);
+				context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pTarget));
 				context.BindResources(2, pBlurTarget->GetUAV());
 				context.BindResources(3, {
 					sceneTextures.pDepth->Get()->GetSRV(),
@@ -128,8 +128,8 @@ RGTexture* SSAO::Execute(RGGraph& graph, const SceneView* pView, SceneTextures& 
 				shaderParameters.DimensionsInv = Vector2(1.0f / pTarget->GetWidth(), 1.0f / pTarget->GetHeight());
 				shaderParameters.Horizontal = 0;
 
-				context.SetRootConstants(0, shaderParameters);
-				context.SetRootCBV(1, Renderer::GetViewUniforms(pView, pTarget));
+				context.BindRootCBV(0, shaderParameters);
+				context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pTarget));
 				context.BindResources(2, pTarget->GetUAV());
 				context.BindResources(3, {
 					sceneTextures.pDepth->Get()->GetSRV(),

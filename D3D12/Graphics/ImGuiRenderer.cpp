@@ -244,7 +244,7 @@ void ImGuiRenderer::Render(RGGraph& graph, RGTexture* pRenderTarget)
 				context.SetViewport(vp);
 
 				Matrix projection = Math::CreateOrthographicOffCenterMatrix(vp.Left, vp.Right, vp.Bottom, vp.Top, 0, 1);
-				context.SetRootCBV(0, projection);
+				context.BindRootCBV(0, projection);
 
 				uint32 vertexOffset = 0;
 				DynamicAllocation vertexData = context.AllocateTransientMemory(sizeof(ImDrawVert) * pDrawData->TotalVtxCount);

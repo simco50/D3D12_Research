@@ -85,8 +85,8 @@ RGTexture* RTAO::Execute(RGGraph& graph, const SceneView* pView, SceneTextures& 
 				bindingTable.BindRayGenShader("RayGen");
 				bindingTable.BindMissShader("OcclusionMS", {});
 
-				context.SetRootConstants(0, parameters);
-				context.SetRootCBV(1, Renderer::GetViewUniforms(pView, pTarget));
+				context.BindRootCBV(0, parameters);
+				context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pTarget));
 				context.BindResources(2, pTarget->GetUAV());
 				context.BindResources(3, {
 					sceneTextures.pDepth->Get()->GetSRV(),
@@ -105,7 +105,7 @@ RGTexture* RTAO::Execute(RGGraph& graph, const SceneView* pView, SceneTextures& 
 				context.SetPipelineState(m_pDenoisePSO);
 
 				//context.SetRootCBV(0, parameters);
-				context.SetRootCBV(1, Renderer::GetViewUniforms(pView, pTarget));
+				context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pTarget));
 				context.BindResources(2, pTarget->GetUAV());
 				context.BindResources(3, {
 					sceneTextures.pDepth->Get()->GetSRV(),
@@ -136,8 +136,8 @@ RGTexture* RTAO::Execute(RGGraph& graph, const SceneView* pView, SceneTextures& 
 				shaderParameters.Horizontal = 1;
 				shaderParameters.DimensionsInv = Vector2(1.0f / pTarget->GetWidth(), 1.0f / pTarget->GetHeight());
 
-				context.SetRootConstants(0, shaderParameters);
-				context.SetRootCBV(1, Renderer::GetViewUniforms(pView, pTarget));
+				context.BindRootCBV(0, shaderParameters);
+				context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pTarget));
 				context.BindResources(2, pTarget->GetUAV());
 				context.BindResources(3, {
 					sceneTextures.pDepth->Get()->GetSRV(),
@@ -166,7 +166,7 @@ RGTexture* RTAO::Execute(RGGraph& graph, const SceneView* pView, SceneTextures& 
 				shaderParameters.DimensionsInv = Vector2(1.0f / pTarget->GetWidth(), 1.0f / pTarget->GetHeight());
 				shaderParameters.Horizontal = 0;
 
-				context.SetRootConstants(0, shaderParameters);
+				context.BindRootCBV(0, shaderParameters);
 				context.BindResources(2, pTarget->GetUAV());
 				context.BindResources(3, {
 					sceneTextures.pDepth->Get()->GetSRV(),

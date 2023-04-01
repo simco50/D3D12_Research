@@ -40,12 +40,10 @@ public:
 
 	const RootSignatureMask& GetSamplerTableMask() const { return m_SamplerMask; }
 	const RootSignatureMask& GetDescriptorTableMask() const { return m_DescriptorTableMask; }
+	const RootSignatureMask& GetRootConstantsMask() const { return m_RootConstantsMask; }
 	const std::array<uint32, MAX_NUM_ROOT_PARAMETERS>& GetDescriptorTableSizes() const { return m_DescriptorTableSizes; }
 
 	uint32 GetDWordSize() const;
-	uint32 GetBindlessViewIndex() const { return m_BindlessViewsIndex; }
-	uint32 GetBindlessSamplerIndex() const { return m_BindlessSamplersIndex; }
-
 private:
 
 	CD3DX12_ROOT_PARAMETER& Get(uint32 index)
@@ -70,7 +68,6 @@ private:
 
 	RootSignatureMask m_DescriptorTableMask;
 	RootSignatureMask m_SamplerMask;
+	RootSignatureMask m_RootConstantsMask;
 	uint32 m_NumParameters;
-	uint32 m_BindlessViewsIndex;
-	uint32 m_BindlessSamplersIndex;
 };

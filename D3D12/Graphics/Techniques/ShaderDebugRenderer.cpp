@@ -16,14 +16,16 @@ ShaderDebugRenderer::ShaderDebugRenderer(GraphicsDevice* pDevice, const FontCrea
 	m_pCommonRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 4);
 	m_pCommonRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 4);
 	m_pCommonRS->Finalize("Common");
+
 	m_pRasterizeGlyphPSO = pDevice->CreateComputePipeline(m_pCommonRS, "RasterizeFont.hlsl", "RasterizeGlyphCS");
 
-	m_pBuildIndirectDrawArgsPSO = pDevice->CreateComputePipeline(m_pCommonRS, "ShaderDebugRender.hlsl", "BuildIndirectDrawArgsCS");
+	const char* pDebugRenderPath = "ShaderDebugRender.hlsl";
+	m_pBuildIndirectDrawArgsPSO = pDevice->CreateComputePipeline(m_pCommonRS, pDebugRenderPath, "BuildIndirectDrawArgsCS");
 
 	{
 		PipelineStateInitializer psoDesc;
-		psoDesc.SetVertexShader("ShaderDebugRender.hlsl", "RenderGlyphVS");
-		psoDesc.SetPixelShader("ShaderDebugRender.hlsl", "RenderGlyphPS");
+		psoDesc.SetVertexShader(pDebugRenderPath, "RenderGlyphVS");
+		psoDesc.SetPixelShader(pDebugRenderPath, "RenderGlyphPS");
 		psoDesc.SetRenderTargetFormats(ResourceFormat::RGBA8_UNORM, ResourceFormat::Unknown, 1);
 		psoDesc.SetDepthEnabled(false);
 		psoDesc.SetBlendMode(BlendMode::Alpha, false);
@@ -33,8 +35,8 @@ ShaderDebugRenderer::ShaderDebugRenderer(GraphicsDevice* pDevice, const FontCrea
 	}
 	{
 		PipelineStateInitializer psoDesc;
-		psoDesc.SetVertexShader("ShaderDebugRender.hlsl", "RenderLineVS");
-		psoDesc.SetPixelShader("ShaderDebugRender.hlsl", "RenderLinePS");
+		psoDesc.SetVertexShader(pDebugRenderPath, "RenderLineVS");
+		psoDesc.SetPixelShader(pDebugRenderPath, "RenderLinePS");
 		psoDesc.SetRenderTargetFormats(ResourceFormat::RGBA8_UNORM, GraphicsCommon::DepthStencilFormat, 1);
 		psoDesc.SetDepthEnabled(false);
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
@@ -54,7 +56,7 @@ ShaderDebugRenderer::ShaderDebugRenderer(GraphicsDevice* pDevice, const FontCrea
 			uint32 Position;
 			uint32 Character;
 			uint32 Color;
-		} Characters[1024];
+		} Characters[8192];
 
 		struct PackedLineInstance
 		{
@@ -110,7 +112,7 @@ void ShaderDebugRenderer::Render(RGGraph& graph, const SceneView* pView, RGTextu
 				context.SetPipelineState(m_pRenderLinesPSO);
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINELIST);
 
-				context.SetRootCBV(1, Renderer::GetViewUniforms(pView, pTarget->Get()));
+				context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pTarget->Get()));
 				context.BindResources(3, {
 					m_pFontAtlas->GetSRV(),
 					m_pGlyphData->GetSRV(),
@@ -136,7 +138,7 @@ void ShaderDebugRenderer::Render(RGGraph& graph, const SceneView* pView, RGTextu
 				} parameters;
 				parameters.AtlasDimensionsInv = Vector2::One / Vector2(m_pFontAtlas->GetDesc().Size2D());
 				parameters.TargetDimensionsInv = Vector2::One / Vector2(pTarget->GetDesc().Size2D());
-				context.SetRootConstants(0, parameters);
+				context.BindRootCBV(0, parameters);
 				context.BindResources(3, {
 					m_pFontAtlas->GetSRV(),
 					m_pGlyphData->GetSRV(),
@@ -409,7 +411,7 @@ void ShaderDebugRenderer::BuildFontAtlas(CommandContext& context, const Vector2i
 	{
 		m_pFontAtlas = context.GetParent()->CreateTexture(TextureDesc::Create2D(resolution.x, resolution.y, ResourceFormat::R8_UNORM, TextureFlag::UnorderedAccess), "Font Atlas");
 		context.InsertResourceBarrier(m_pFontAtlas, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-		context.ClearUAVu(m_pFontAtlas, m_pFontAtlas->GetUAV(), TVector4<uint32>(0, 0, 0, 0xFFFFFFFF));
+		context.ClearUAVu(m_pFontAtlas->GetUAV(), Vector4u(0, 0, 0, 0xFFFFFFFF));
 
 		context.SetComputeRootSignature(m_pCommonRS);
 		context.SetPipelineState(m_pRasterizeGlyphPSO);
@@ -434,7 +436,7 @@ void ShaderDebugRenderer::BuildFontAtlas(CommandContext& context, const Vector2i
 			check(glyph.Lines.size() <= ARRAYSIZE(parameters.Lines));
 			memcpy(parameters.Lines, glyph.Lines.data(), sizeof(Line) * glyph.Lines.size());
 
-			context.SetRootCBV(1, parameters);
+			context.BindRootCBV(1, parameters);
 			context.Dispatch(ComputeUtils::GetNumThreadGroups(parameters.GlyphDimensions.x, 8, parameters.GlyphDimensions.y, 8));
 		}
 	}

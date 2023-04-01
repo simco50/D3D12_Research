@@ -80,12 +80,12 @@ void TiledForward::ComputeLightCulling(RGGraph& graph, const SceneView* pView, S
 				Texture* pDepth = sceneTextures.pDepth->Get();
 
 				//#todo: adhoc UAV creation
-				context.ClearUAVu(resources.pLightIndexCounter->Get(), m_pDevice->CreateUAV(resources.pLightIndexCounter->Get(), BufferUAVDesc::CreateRaw()));
+				context.ClearUAVu(m_pDevice->CreateUAV(resources.pLightIndexCounter->Get(), BufferUAVDesc::CreateRaw()));
 
 				context.SetComputeRootSignature(m_pCommonRS);
 				context.SetPipelineState(m_pComputeLightCullPSO);
 
-				context.SetRootCBV(1, Renderer::GetViewUniforms(pView, pDepth));
+				context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pDepth));
 
 				context.BindResources(2, {
 					resources.pLightIndexCounter->Get()->GetUAV(),
@@ -119,7 +119,7 @@ void TiledForward::RenderBasePass(RGGraph& graph, const SceneView* pView, SceneT
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 				context.SetGraphicsRootSignature(m_pCommonRS);
 
-				context.SetRootCBV(1, Renderer::GetViewUniforms(pView, sceneTextures.pColorTarget->Get()));
+				context.BindRootCBV(1, Renderer::GetViewUniforms(pView, sceneTextures.pColorTarget->Get()));
 
 				{
 					context.BindResources(3, {
@@ -182,11 +182,11 @@ void TiledForward::VisualizeLightDensity(RGGraph& graph, GraphicsDevice* pDevice
 					Vector2 LightGridParams;
 				} constantData;
 
-				context.SetPipelineState(m_pVisualizeLightsPSO);
 				context.SetComputeRootSignature(m_pCommonRS);
-				context.SetRootConstants(0, constantData);
-				context.SetRootCBV(1, Renderer::GetViewUniforms(pView, pTarget));
+				context.SetPipelineState(m_pVisualizeLightsPSO);
 
+				context.BindRootCBV(0, constantData);
+				context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pTarget));
 				context.BindResources(3, {
 					sceneTextures.pColorTarget->Get()->GetSRV(),
 					sceneTextures.pDepth->Get()->GetSRV(),

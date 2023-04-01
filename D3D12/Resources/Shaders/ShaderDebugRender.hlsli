@@ -72,9 +72,8 @@ LineInstance UnpackLineInstance(PackedLineInstance p)
 	return l;
 }
 
-// Must match .cpp!
 static const uint MAX_NUM_COUNTERS = 4;
-static const uint MAX_NUM_TEXT = 1024;
+static const uint MAX_NUM_TEXT = 8192;
 static const uint MAX_NUM_LINES = 8192;
 
 static const uint TEXT_COUNTER_OFFSET = 0;

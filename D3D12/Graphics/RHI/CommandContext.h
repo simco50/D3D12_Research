@@ -193,8 +193,8 @@ public:
 	void BeginRenderPass(const RenderPassInfo& renderPassInfo);
 	void EndRenderPass();
 
-	void ClearUAVu(const GraphicsResource* pBuffer, const UnorderedAccessView* pUav = nullptr, const Vector4u& values = Vector4u::Zero());
-	void ClearUAVf(const GraphicsResource* pBuffer, const UnorderedAccessView* pUav = nullptr, const Vector4& values = Vector4::Zero);
+	void ClearUAVu(const UnorderedAccessView* pUAV, const Vector4u& values = Vector4u::Zero());
+	void ClearUAVf(const UnorderedAccessView* pUAV, const Vector4& values = Vector4::Zero);
 
 	void SetPipelineState(PipelineState* pPipelineState);
 	void SetPipelineState(StateObject* pStateObject);
@@ -210,22 +210,16 @@ public:
 
 	void SetGraphicsRootSignature(const RootSignature* pRootSignature);
 	void SetComputeRootSignature(const RootSignature* pRootSignature);
+
+	void BindDynamicVertexBuffer(uint32 slot, uint32 elementCount, uint32 elementSize, const void* pData);
+	void BindDynamicIndexBuffer(uint32 elementCount, const void* pData, ResourceFormat format);
 	void BindResources(uint32 rootIndex, const Span<const ResourceView*>& pViews, uint32 offset = 0);
 	void BindResources(uint32 rootIndex, const Span<D3D12_CPU_DESCRIPTOR_HANDLE>& handles, uint32 offset = 0);
-	void SetDynamicVertexBuffer(uint32 slot, uint32 elementCount, uint32 elementSize, const void* pData);
-	void SetDynamicIndexBuffer(uint32 elementCount, const void* pData, bool smallIndices = false);
-	void SetRootSRV(uint32 rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address);
-	void SetRootUAV(uint32 rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address);
-	void SetRootConstants(uint32 rootIndex, uint32 count, const void* pConstants);
-	template<typename T>
-	void SetRootConstants(uint32 rootIndex, const T& data)
-	{
-		static_assert(!std::is_pointer<T>::value, "Provided type is a pointer. This is probably unintentional.");
-		SetRootConstants(rootIndex, sizeof(T) / sizeof(int32), &data);
-	}
+	void BindRootSRV(uint32 rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address);
+	void BindRootUAV(uint32 rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address);
 	void SetRootCBV(uint32 rootIndex, const void* pData, uint32 dataSize);
 	template<typename T>
-	void SetRootCBV(uint32 rootIndex, const T& data)
+	void BindRootCBV(uint32 rootIndex, const T& data)
 	{
 		static_assert(!std::is_pointer<T>::value, "Provided type is a pointer. This is probably unintentional.");
 		SetRootCBV(rootIndex, &data, sizeof(T));
@@ -275,6 +269,7 @@ private:
 
 	PipelineState* m_pCurrentPSO = nullptr;
 	StateObject* m_pCurrentSO = nullptr;
+	const RootSignature* m_pCurrentRS = nullptr;
 };
 
 class CommandSignatureInitializer

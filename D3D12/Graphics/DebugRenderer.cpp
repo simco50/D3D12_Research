@@ -93,18 +93,18 @@ void DebugRenderer::Render(RGGraph& graph, const SceneView* pView, RGTexture* pT
 			{
 				context.SetGraphicsRootSignature(m_pRS);
 
-				context.SetRootCBV(0, Renderer::GetViewUniforms(pView, pTarget->Get()));
+				context.BindRootCBV(0, Renderer::GetViewUniforms(pView, pTarget->Get()));
 
 				if (linePrimitives != 0)
 				{
-					context.SetDynamicVertexBuffer(0, linePrimitives, VertexStride, m_Lines.data());
+					context.BindDynamicVertexBuffer(0, linePrimitives, VertexStride, m_Lines.data());
 					context.SetPipelineState(m_pLinesPSO);
 					context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINELIST);
 					context.Draw(0, linePrimitives);
 				}
 				if (trianglePrimitives != 0)
 				{
-					context.SetDynamicVertexBuffer(0, trianglePrimitives, VertexStride, m_Triangles.data());
+					context.BindDynamicVertexBuffer(0, trianglePrimitives, VertexStride, m_Triangles.data());
 					context.SetPipelineState(m_pTrianglesPSO);
 					context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 					context.Draw(0, trianglePrimitives);

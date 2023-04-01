@@ -171,9 +171,9 @@ void CBTTessellation::Execute(RGGraph& graph, CBTData& data, const SceneView* pV
 			{
 				context.SetComputeRootSignature(m_pCBTRS);
 
-				context.SetRootConstants(0, commonArgs);
-				context.SetRootCBV(1, updateData);
-				context.SetRootCBV(2, Renderer::GetViewUniforms(pView));
+				context.BindRootCBV(0, commonArgs);
+				context.BindRootCBV(1, updateData);
+				context.BindRootCBV(2, Renderer::GetViewUniforms(pView));
 
 				context.SetPipelineState(m_pCBTUpdatePSO);
 				context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchSignature, 1, pIndirectArgs->Get(), nullptr, IndirectDispatchArgsOffset);
@@ -187,8 +187,8 @@ void CBTTessellation::Execute(RGGraph& graph, CBTData& data, const SceneView* pV
 		.Bind([=](CommandContext& context)
 			{
 				context.SetComputeRootSignature(m_pCBTRS);
-				context.SetRootConstants(0, commonArgs);
-				context.SetRootCBV(2, Renderer::GetViewUniforms(pView));
+				context.BindRootCBV(0, commonArgs);
+				context.BindRootCBV(2, Renderer::GetViewUniforms(pView));
 
 				context.SetPipelineState(m_pCBTIndirectArgsPSO);
 				context.Dispatch(1);
@@ -206,9 +206,9 @@ void CBTTessellation::Execute(RGGraph& graph, CBTData& data, const SceneView* pV
 				context.SetGraphicsRootSignature(m_pCBTRS);
 				context.SetPipelineState(CBTSettings::MeshShader ? m_pCBTRenderMeshShaderPSO : m_pCBTRenderPSO);
 
-				context.SetRootConstants(0, commonArgs);
-				context.SetRootCBV(1, updateData);
-				context.SetRootCBV(2, Renderer::GetViewUniforms(pView, sceneTextures.pColorTarget->Get()));
+				context.BindRootCBV(0, commonArgs);
+				context.BindRootCBV(1, updateData);
+				context.BindRootCBV(2, Renderer::GetViewUniforms(pView, sceneTextures.pColorTarget->Get()));
 
 				if (CBTSettings::MeshShader)
 				{
@@ -253,7 +253,7 @@ void CBTTessellation::Execute(RGGraph& graph, CBTData& data, const SceneView* pV
 		.Bind([=](CommandContext& context)
 			{
 				context.SetComputeRootSignature(m_pCBTRS);
-				context.SetRootConstants(0, commonArgs);
+				context.BindRootCBV(0, commonArgs);
 
 				struct SumReductionData
 				{
@@ -262,8 +262,8 @@ void CBTTessellation::Execute(RGGraph& graph, CBTData& data, const SceneView* pV
 				int32 currentDepth = CBTSettings::CBTDepth;
 
 				reductionArgs.Depth = currentDepth;
-				context.SetRootCBV(1, reductionArgs);
-				context.SetRootCBV(2, Renderer::GetViewUniforms(pView));
+				context.BindRootCBV(1, reductionArgs);
+				context.BindRootCBV(2, Renderer::GetViewUniforms(pView));
 
 				context.SetPipelineState(m_pCBTCacheBitfieldPSO);
 				context.Dispatch(ComputeUtils::GetNumThreadGroups(1u << currentDepth, 256 * 32));
@@ -274,8 +274,8 @@ void CBTTessellation::Execute(RGGraph& graph, CBTData& data, const SceneView* pV
 		.Bind([=](CommandContext& context)
 			{
 				context.SetComputeRootSignature(m_pCBTRS);
-				context.SetRootConstants(0, commonArgs);
-				context.SetRootCBV(2, Renderer::GetViewUniforms(pView));
+				context.BindRootCBV(0, commonArgs);
+				context.BindRootCBV(2, Renderer::GetViewUniforms(pView));
 
 				struct SumReductionData
 				{
@@ -286,7 +286,7 @@ void CBTTessellation::Execute(RGGraph& graph, CBTData& data, const SceneView* pV
 				for (currentDepth = currentDepth - 1; currentDepth >= 0; --currentDepth)
 				{
 					reductionArgs.Depth = currentDepth;
-					context.SetRootCBV(1, reductionArgs);
+					context.BindRootCBV(1, reductionArgs);
 
 					context.SetPipelineState(m_pCBTSumReductionPSO);
 					context.Dispatch(ComputeUtils::GetNumThreadGroups(1 << currentDepth, 256));
@@ -313,9 +313,9 @@ void CBTTessellation::Execute(RGGraph& graph, CBTData& data, const SceneView* pV
 				context.SetPipelineState(m_pCBTDebugVisualizePSO);
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-				context.SetRootConstants(0, commonArgs);
-				context.SetRootCBV(1, updateData);
-				context.SetRootCBV(2, Renderer::GetViewUniforms(pView, data.pDebugVisualizeTexture));
+				context.BindRootCBV(0, commonArgs);
+				context.BindRootCBV(1, updateData);
+				context.BindRootCBV(2, Renderer::GetViewUniforms(pView, data.pDebugVisualizeTexture));
 
 				context.ExecuteIndirect(GraphicsCommon::pIndirectDrawSignature, 1, pIndirectArgs->Get(), nullptr, IndirectDrawArgsOffset);
 				context.EndRenderPass();

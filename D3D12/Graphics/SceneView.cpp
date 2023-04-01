@@ -280,7 +280,7 @@ namespace Renderer
 
 		for (const Batch* b : meshes)
 		{
-			context.SetRootConstants(0, b->InstanceID);
+			context.BindRootCBV(0, b->InstanceID);
 			if (context.GetCurrentPSO()->GetType() == PipelineStateType::Mesh)
 			{
 				context.DispatchMesh(ComputeUtils::GetNumThreadGroups(b->pMesh->NumMeshlets, 32));
