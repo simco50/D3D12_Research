@@ -83,21 +83,13 @@ private:
 
 struct ShaderLibrary
 {
-	ShaderLibrary(const ShaderBlob& shaderBlob, const Span<ShaderDefine>& defines)
-		: pByteCode(shaderBlob), Defines(defines.Copy())
-	{}
-
-	D3D12_SHADER_BYTECODE GetByteCode() const { return { pByteCode->GetBufferPointer(), pByteCode->GetBufferSize() }; };
-
+	uint64 Hash[2];
 	ShaderBlob pByteCode;
 	std::vector<ShaderDefine> Defines;
 };
 
 struct Shader : public ShaderLibrary
 {
-	Shader(const ShaderBlob& shaderBlob, ShaderType shaderType, const char* pEntryPoint, const Span<ShaderDefine>& defines)
-		: ShaderLibrary(shaderBlob, defines), Type(shaderType), EntryPoint(pEntryPoint)
-	{}
 	ShaderType Type;
 	std::string EntryPoint;
 };
@@ -130,11 +122,8 @@ private:
 
 	std::unique_ptr<FileWatcher> m_pFileWatcher;
 
-	using ShaderPtr = std::unique_ptr<Shader>;
-	using LibraryPtr = std::unique_ptr<ShaderLibrary>;
-
-	std::list<ShaderPtr> m_Shaders;
-	std::list<LibraryPtr> m_Libraries;
+	std::vector<Shader*> m_Shaders;
+	std::vector<ShaderLibrary*> m_Libraries;
 
 	std::unordered_map<ShaderStringHash, std::unordered_set<std::string>> m_IncludeDependencyMap;
 

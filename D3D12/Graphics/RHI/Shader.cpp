@@ -32,10 +32,13 @@ namespace ShaderCompiler
 
 	struct CompileResult
 	{
+		static constexpr int Version = 3;
+
 		std::string ErrorMessage;
 		ShaderBlob pBlob;
 		RefCountPtr<IUnknown> pReflection;
 		std::vector<std::string> Includes;
+		uint64 ShaderHash[2];
 
 		bool Success() const { return pBlob.Get() && ErrorMessage.length() == 0; }
 	};
@@ -127,6 +130,12 @@ namespace ShaderCompiler
 		
 		Serializer s;
 		s.Open(path.c_str(), Serializer::Mode::Read);
+		uint32 version = 0;
+		s.Serialize(version);
+		if (version != CompileResult::Version)
+			return false;
+
+		s.Serialize(result.ShaderHash);
 		s.Serialize(result.Includes);
 
 		// Test if includes sources are not newer than the cached file
@@ -152,6 +161,9 @@ namespace ShaderCompiler
 
 		Serializer s;
 		s.Open(path.c_str(), Serializer::Mode::Write);
+		uint32 version = CompileResult::Version;
+		s.Serialize(version);
+		s.Serialize(result.ShaderHash);
 		s.Serialize(result.Includes);
 		void* pBlob = result.pBlob->GetBufferPointer();
 		uint32 size = (uint32)result.pBlob->GetBufferSize();
@@ -454,6 +466,16 @@ namespace ShaderCompiler
 			}
 		}
 
+		// Hash
+		{
+			RefCountPtr<IDxcBlob> pHash;
+			if (SUCCEEDED(pCompileResult->GetOutput(DXC_OUT_SHADER_HASH, IID_PPV_ARGS(pHash.GetAddressOf()), nullptr)))
+			{
+				DxcShaderHash* pHashBuf = (DxcShaderHash*)pHash->GetBufferPointer();
+				memcpy(result.ShaderHash, pHashBuf->HashDigest, sizeof(uint64) * 2);
+			}
+		}
+
 		//Symbols
 		{
 			RefCountPtr<IDxcBlobUtf16> pDebugDataPath;
@@ -526,7 +548,6 @@ void ShaderManager::RecompileFromFileChange(const std::string& filePath)
 					if (pNewShader)
 					{
 						m_OnShaderRecompiledEvent.Broadcast(pOldShader, pNewShader);
-						m_Shaders.remove_if([pOldShader](const std::unique_ptr<Shader>& pS) { return pS.get() == pOldShader; });
 					}
 					else
 					{
@@ -540,7 +561,6 @@ void ShaderManager::RecompileFromFileChange(const std::string& filePath)
 					if (pNewLibrary)
 					{
 						m_OnLibraryRecompiledEvent.Broadcast(pOldLibrary, pNewLibrary);
-						m_Libraries.remove_if([pOldLibrary](const std::unique_ptr<ShaderLibrary>& pS) { return pS.get() == pOldLibrary; });
 					}
 					else
 					{
@@ -561,6 +581,10 @@ ShaderManager::ShaderManager(uint8 shaderModelMaj, uint8 shaderModelMin)
 
 ShaderManager::~ShaderManager()
 {
+	for (Shader* pShader : m_Shaders)
+		delete pShader;
+	for (ShaderLibrary* pLibrary : m_Libraries)
+		delete pLibrary;
 }
 
 void ShaderManager::ConditionallyReloadShaders()
@@ -636,8 +660,14 @@ Shader* ShaderManager::GetShader(const char* pShaderPath, ShaderType shaderType,
 	Shader* pShader = nullptr;
 	{
 		std::lock_guard lock(m_CompileMutex);
-		m_Shaders.push_back(std::make_unique<Shader>(result.pBlob, shaderType, pEntryPoint, defines));
-		pShader = m_Shaders.back().get();
+
+		pShader = m_Shaders.emplace_back(new Shader());
+		pShader->Defines = defines.Copy();
+		pShader->EntryPoint = pEntryPoint;
+		pShader->Type = shaderType;
+		pShader->pByteCode = result.pBlob;
+		memcpy(pShader->Hash, result.ShaderHash, sizeof(uint64) * 2);
+
 		for (const std::string& include : result.Includes)
 		{
 			m_IncludeDependencyMap[ShaderStringHash(include)].insert(pShaderPath);
@@ -683,8 +713,12 @@ ShaderLibrary* ShaderManager::GetLibrary(const char* pShaderPath, const Span<Sha
 	ShaderLibrary* pLibrary = nullptr;
 	{
 		std::lock_guard lock(m_CompileMutex);
-		m_Libraries.push_back(std::make_unique<ShaderLibrary>(result.pBlob, defines));
-		pLibrary = m_Libraries.back().get();
+
+		pLibrary = m_Libraries.emplace_back(new ShaderLibrary());
+		pLibrary->Defines = defines.Copy();
+		pLibrary->pByteCode = result.pBlob;
+		memcpy(pLibrary->Hash, result.ShaderHash, sizeof(uint64) * 2);
+
 		for (const std::string& include : result.Includes)
 		{
 			m_IncludeDependencyMap[ShaderStringHash(include)].insert(pShaderPath);

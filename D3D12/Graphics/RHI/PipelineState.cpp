@@ -284,7 +284,7 @@ D3D12_PIPELINE_STATE_STREAM_DESC PipelineStateInitializer::GetDesc(GraphicsDevic
 			check(pShader);
 			if (pShader)
 			{
-				GetByteCode((ShaderType)i) = pShader->GetByteCode();
+				GetByteCode((ShaderType)i) = CD3DX12_SHADER_BYTECODE(pShader->pByteCode->GetBufferPointer(), pShader->pByteCode->GetBufferSize());
 				if (m_Name.empty())
 				{
 					m_Name = Sprintf("%s (Unnamed)", pShader->EntryPoint.c_str());
@@ -311,6 +311,7 @@ PipelineState::PipelineState(GraphicsDevice* pParent)
 PipelineState::~PipelineState()
 {
 	GetParent()->GetShaderManager()->OnShaderRecompiledEvent().Remove(m_ReloadHandle);
+	GetParent()->DeferReleaseObject(m_pPipelineState.Detach());
 }
 
 void PipelineState::Create(const PipelineStateInitializer& initializer)
